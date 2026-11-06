@@ -401,7 +401,9 @@ fn validate_id_token(a: *mem.Arena, id_token: str, ex: Expectations) -> Validati
     if has_nbf && now + skew < nbf { ret rejected("token not yet valid") }
     let (iat, has_iat) = number_claim(claims, "iat")
     if has_iat && iat - skew > now { ret rejected("issued in the future") }
-    if ex.nonce.len > 0usize {
+    // Required: a caller that lost its nonce must not silently lose replay protection.
+    if ex.nonce.len == 0usize { ret rejected("nonce-not-configured") }
+    if true {
         var seen = ""
         let nv = ir.value_of(claims, "nonce")
         if ir.truthy(nv) {
@@ -519,19 +521,11 @@ fn lower_ascii(a: *mem.Arena, s: str) -> str {
 // Whether an assertion may be linked to, or provisioned as, a local account.
 fn link_policy(a: *mem.Arena, p: Profile, verified_domains: []const str, existing_account: bool, allow_unverified_email_link: bool) -> Link {
     if !p.has_email { ret Link { action: "deny", reason: "no-email-in-assertion" } }
-    // The text after the last `@`; more than one `@` is not a usable address.
+    // The text after the LAST `@`: `victim@corp.com@evil.net` belongs to evil.net.
     var domain = ""
-    var at = 0usize
-    var at_count = 0usize
-    while at < p.email.len {
-        if p.email[at] == 64u8 { at_count += 1usize }
-        at += 1usize
-    }
-    if at_count == 1usize {
-        var cut = 0usize
-        while cut < p.email.len && p.email[cut] != 64u8 { cut += 1usize }
-        domain = p.email[cut + 1usize..p.email.len]
-    }
+    var cut = p.email.len
+    while cut > 0usize && p.email[cut - 1usize] != 64u8 { cut -= 1usize }
+    if cut > 0usize { domain = p.email[cut..p.email.len] }
     let want = lower_ascii(a, domain)
     var verified = false
     var i = 0usize
@@ -541,6 +535,9 @@ fn link_policy(a: *mem.Arena, p: Profile, verified_domains: []const str, existin
     }
     if !existing_account {
         if !verified { ret Link { action: "deny", reason: "unverified-domain" } }
+        // Provisioning for an unverified address would let a user claim any address in
+        // the verified domain.
+        if !p.email_verified { ret Link { action: "deny", reason: "unverified-email-cannot-provision" } }
         ret Link { action: "provision", reason: "new-user-in-verified-domain" }
     }
     if !p.email_verified && !allow_unverified_email_link {
@@ -561,5 +558,7 @@ fn build_logout_url(a: *mem.Arena, config: Config, id_token_hint: str, post_logo
     if query.len == 0usize { ret Url { valid: true, missing: zero, url: config.end_session_endpoint } }
     ret Url { valid: true, missing: zero, url: join(a, join(a, config.end_session_endpoint, "?"), query) }
 }
+
+
 
 
