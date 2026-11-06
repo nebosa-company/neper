@@ -1419,6 +1419,17 @@ static void parse_integer_value(Compiler *c, Token *token, Expr *expr) {
         }
         value = value * (unsigned)base + digit;
     }
+    /* A suffixed literal must fit its own type: 300u8 is E-TYPE-0004, not a wrap. */
+    if (suffix) {
+        int bits = atoi(suffix + 1);
+        int is_signed = suffix[0] == 'i';
+        uint64_t limit;
+        if (bits == 0 || bits >= 64) limit = is_signed ? UINT64_C(9223372036854775808) : UINT64_MAX;
+        else if (is_signed) limit = (UINT64_C(1) << (bits - 1));
+        else limit = (UINT64_C(1) << bits) - 1;
+        if (value > limit)
+            diagnostic_at(c, token, "E-TYPE-0004", "integer literal is not representable");
+    }
     expr->as.integer = (int64_t)value;
     expr->type = suffix ? type_make(TY_INT, suffix) : type_make(TY_UNTYPED_INT, "");
 }
@@ -5351,7 +5362,7 @@ static void collect_traps_expr(Compiler *c, Function *fn, Expr *expr) {
         /* Past the table a site would be emitted as np_trap_site_-1 and the assembler
            would refuse the whole program with an undefined symbol; say so here instead. */
         fprintf(stderr, "neper: error[E-LIMIT-9999]: the bootstrap's %d trap sites are used up at %s:%d:%d\n",
-                MAX_TRAP_SITES, c->source_path, expr->token.line, expr->token.column);
+                MAX_TRAP_SITES, token_source_path(c, &expr->token), expr->token.line, expr->token.column);
         exit(1);
     }
     if (kind && c->program.trap_site_count < MAX_TRAP_SITES) {
@@ -5362,8 +5373,8 @@ static void collect_traps_expr(Compiler *c, Function *fn, Expr *expr) {
         copy_text(site->function, sizeof(site->function), fn->name, strlen(fn->name));
         snprintf(site->message, sizeof(site->message),
                  "%s:%d:%d: trap[%s]: %s\n  at %s (%s:%d:%d)\n",
-                 c->source_path, expr->token.line, expr->token.column, kind, detail,
-                 fn->name, c->source_path, expr->token.line, expr->token.column);
+                 token_source_path(c, &expr->token), expr->token.line, expr->token.column, kind, detail,
+                 fn->name, token_source_path(c, &expr->token), expr->token.line, expr->token.column);
         site->message_length = strlen(site->message);
         expr->trap_id = c->program.trap_site_count++;
     }
@@ -5406,7 +5417,9 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
             case ST_BIND: collect_traps_expr(c, fn, statement->as.bind.value); break;
             case ST_MULTI_BIND: case ST_MULTI_ASSIGN:
                 collect_traps_expr(c, fn, statement->as.multi.call); break;
-            case ST_ASSIGN: collect_traps_expr(c, fn, statement->as.assign.value); break;
+            case ST_ASSIGN:
+                collect_traps_expr(c, fn, statement->as.assign.target);
+                collect_traps_expr(c, fn, statement->as.assign.value); break;
             case ST_INDEX_ASSIGN:
                 collect_traps_expr(c, fn, statement->as.index_assign.target);
                 collect_traps_expr(c, fn, statement->as.index_assign.value);
@@ -8095,7 +8108,12 @@ int main(int argc, char **argv) {
     windows = 0;
 #endif
     if (output) copy_text(exe_path, sizeof(exe_path), output, strlen(output));
-    else replace_extension(exe_path, sizeof(exe_path), source_path, windows ? ".exe" : "");
+    else {
+        replace_extension(exe_path, sizeof(exe_path), source_path, windows ? ".exe" : "");
+        /* An extension-less source keeps its own name: linking onto it would overwrite
+           the source file. Give the executable a distinct default instead. */
+        if (strcmp(exe_path, source_path) == 0) snprintf(exe_path, sizeof(exe_path), "%s.out", source_path);
+    }
     if (asm_output) copy_text(asm_path, sizeof(asm_path), asm_output, strlen(asm_output));
     else replace_extension(asm_path, sizeof(asm_path), exe_path, windows ? ".asm" : ".s");
     replace_extension(obj_path, sizeof(obj_path), exe_path, windows ? ".obj" : ".o");
