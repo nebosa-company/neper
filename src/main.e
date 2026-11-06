@@ -15224,7 +15224,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                     report.build.ran = true
                     report.build.run_ms = (nptest_now() - report.build.started) / 1000000usize
                     report.build.exit_code = status
-                    if report.build.on { try stats.print(a, &report.build, &loaded, &resolver, &checker, &builder) }
+                    if report.build.on { try stats.print(a, &report.build, &loaded, &resolver, &checker, &builder, host_target(a)) }
                     if run_error != ok {
                         try emit_command_diagnostic(&report, "E-CLI-9999", "the executable could not be run")
                         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
@@ -15257,13 +15257,13 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                     ret write_all(&report, ",\"diagnostics\":0}}\n")
                 }
                 if report.json {
-                    if report.build.on { try stats.print(a, &report.build, &loaded, &resolver, &checker, &builder) }
+                    if report.build.on { try stats.print(a, &report.build, &loaded, &resolver, &checker, &builder, host_target(a)) }
                     try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"executable\":")
                     try write_json_string(&report, args[6usize])
                     ret write_all(&report, ",\"diagnostics\":0}}\n")
                 }
                 try io.print("executable written\n")
-                if report.build.on { try stats.print(a, &report.build, &loaded, &resolver, &checker, &builder) }
+                if report.build.on { try stats.print(a, &report.build, &loaded, &resolver, &checker, &builder, host_target(a)) }
                 ret ok
             }
             if emit_object {

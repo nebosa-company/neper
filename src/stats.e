@@ -8,6 +8,7 @@
 use e.io
 use e.mem
 use e.os
+use e.str
 use check
 use graph
 use nir
@@ -258,7 +259,9 @@ fn row_ms(b: *Build, name: str, ms: usize) -> err {
 }
 
 fn row_bytes(b: *Build, name: str, bytes: usize) -> err {
-    ret row_unit(b, "", name, bytes / 1048576usize, "MB", "_mb")
+    // Round up: a nonzero size under 1 MiB must not read as 0 MB.
+    let mb = (bytes + 1048575usize) / 1048576usize
+    ret row_unit(b, "", name, mb, "MB", "_mb")
 }
 
 fn row_text(b: *Build, name: str, value: str) -> err {
@@ -361,14 +364,21 @@ fn count_nodes(a: *mem.Arena, g: *graph.Graph) -> (graph.FrontCounts, err) {
 }
 
 // The host by the shape of its current directory, as the driver tells it (D348).
-fn host_name(a: *mem.Arena) -> str {
+// The host the driver resolved, not a cwd-shape guess.
+fn host_name(a: *mem.Arena, host: str) -> str {
     if platform.triple().len != 0usize { ret "WASI wasm32" }
+    if str.eq(host, "x64-linux") { ret "Linux x64" }
+    if str.eq(host, "aarch64-linux") { ret "Linux aarch64" }
+    if str.eq(host, "x64-macos") { ret "macOS x64" }
+    if str.eq(host, "aarch64-macos") { ret "macOS aarch64" }
+    if str.eq(host, "x64-windows") { ret "Windows x64" }
+    if str.eq(host, "aarch64-windows") { ret "Windows aarch64" }
     let (cwd, cwd_error) = os.current_dir(a)
     if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 { ret "Linux x64" }
     ret "Windows x64"
 }
 
-fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *check.Checker, builder: *nir.Builder) -> err {
+fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *check.Checker, builder: *nir.Builder, host: str) -> err {
     // Lines, per module and in all.
     var all: Lines = zero
     let (sizes, sizes_error) = mem.alloc[usize](a, g.count + 1usize)
@@ -459,7 +469,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try row_unit(b, "", "largest module", g.largest_bytes, "bytes", "_bytes")
     if b.release { try row_text(b, "compile mode", "RELEASE") } else { try row_text(b, "compile mode", "DEBUG") }
     try row_text(b, "compiler version", "0.1.0")
-    try row_text(b, "host", host_name(a))
+    try row_text(b, "host", host_name(a, host))
     if b.json {
         try row_text(b, "target arch", b.arch)
         try row_text(b, "target os", b.target_os)
@@ -536,58 +546,58 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     if !b.full { ret close(b) }
 
     if !b.json { try out(b, "\nPool | Capacity | Used\n") }
-    try pool_row(b, "resolver symbols", b.pools[POOL_SYMBOLS], r.count)
-    try pool_row(b, "resolver tokens (per module)", b.pools[POOL_RESOLVER_TOKENS], 0usize)
-    try pool_row(b, "resolver locals", b.pools[POOL_RESOLVER_LOCALS], 0usize)
-    try pool_row(b, "resolver name index entries", b.pools[POOL_RESOLVER_INDEX], r.names.count)
-    try pool_row(b, "checker functions", b.pools[POOL_FUNCTIONS], c.function_count)
-    try pool_row(b, "checker parameters", b.pools[POOL_PARAMETERS], c.parameter_count)
-    try pool_row(b, "checker return types", b.pools[POOL_RETURN_TYPES], c.return_type_count)
-    try pool_row(b, "checker types", b.pools[POOL_TYPES], c.type_count)
-    try pool_row(b, "checker aggregates", b.pools[POOL_AGGREGATES], c.aggregate_count)
-    try pool_row(b, "checker aggregate fields", b.pools[POOL_AGGREGATE_FIELDS], c.aggregate_field_count)
-    try pool_row(b, "checker aliases", b.pools[POOL_ALIASES], c.alias_count)
-    try pool_row(b, "checker constants", b.pools[POOL_CONSTANTS], c.constant_count)
-    try pool_row(b, "checker constant exprs", b.pools[POOL_CONSTANT_EXPRS], c.constant_expr_count)
-    try pool_row(b, "checker globals", b.pools[POOL_GLOBALS], c.global_count)
-    try pool_row(b, "checker generic arguments", b.pools[POOL_GENERIC_ARGUMENTS], c.generic_argument_count)
-    try pool_row(b, "checker comptime parameters", b.pools[POOL_COMPTIME_PARAMETERS], c.comptime_parameter_count)
-    try pool_row(b, "checker checked switches", b.pools[POOL_CHECKED_SWITCHES], 0usize)
-    try pool_row(b, "checker diagnostics", b.pools[POOL_DIAGNOSTICS], c.diagnostic_count)
-    try pool_row(b, "checker tokens (per module)", b.pools[POOL_CHECKER_TOKENS], 0usize)
-    try pool_row(b, "checker locals", b.pools[POOL_CHECKER_LOCALS], 0usize)
-    try pool_row(b, "checker declaration index entries", b.pools[POOL_CHECKER_INDEX], c.names.count)
-    try pool_row(b, "nir functions", b.pools[POOL_NIR_FUNCTIONS], builder.function_count)
+    try pool_row(b, "resolver symbols", b.pools[POOL_SYMBOLS], r.count, true)
+    try pool_row(b, "resolver tokens (per module)", b.pools[POOL_RESOLVER_TOKENS], 0usize, false)
+    try pool_row(b, "resolver locals", b.pools[POOL_RESOLVER_LOCALS], 0usize, false)
+    try pool_row(b, "resolver name index entries", b.pools[POOL_RESOLVER_INDEX], r.names.count, true)
+    try pool_row(b, "checker functions", b.pools[POOL_FUNCTIONS], c.function_count, true)
+    try pool_row(b, "checker parameters", b.pools[POOL_PARAMETERS], c.parameter_count, true)
+    try pool_row(b, "checker return types", b.pools[POOL_RETURN_TYPES], c.return_type_count, true)
+    try pool_row(b, "checker types", b.pools[POOL_TYPES], c.type_count, true)
+    try pool_row(b, "checker aggregates", b.pools[POOL_AGGREGATES], c.aggregate_count, true)
+    try pool_row(b, "checker aggregate fields", b.pools[POOL_AGGREGATE_FIELDS], c.aggregate_field_count, true)
+    try pool_row(b, "checker aliases", b.pools[POOL_ALIASES], c.alias_count, true)
+    try pool_row(b, "checker constants", b.pools[POOL_CONSTANTS], c.constant_count, true)
+    try pool_row(b, "checker constant exprs", b.pools[POOL_CONSTANT_EXPRS], c.constant_expr_count, true)
+    try pool_row(b, "checker globals", b.pools[POOL_GLOBALS], c.global_count, true)
+    try pool_row(b, "checker generic arguments", b.pools[POOL_GENERIC_ARGUMENTS], c.generic_argument_count, true)
+    try pool_row(b, "checker comptime parameters", b.pools[POOL_COMPTIME_PARAMETERS], c.comptime_parameter_count, true)
+    try pool_row(b, "checker checked switches", b.pools[POOL_CHECKED_SWITCHES], 0usize, false)
+    try pool_row(b, "checker diagnostics", b.pools[POOL_DIAGNOSTICS], c.diagnostic_count, true)
+    try pool_row(b, "checker tokens (per module)", b.pools[POOL_CHECKER_TOKENS], 0usize, false)
+    try pool_row(b, "checker locals", b.pools[POOL_CHECKER_LOCALS], 0usize, false)
+    try pool_row(b, "checker declaration index entries", b.pools[POOL_CHECKER_INDEX], c.names.count, true)
+    try pool_row(b, "nir functions", b.pools[POOL_NIR_FUNCTIONS], builder.function_count, true)
     // The body pools hold one module at a time on the executable path (D314): the
     // capacity is per module, the used column is the whole program's.
-    try pool_row(b, "nir blocks", b.pools[POOL_NIR_BLOCKS], builder.block_count + builder.block_total)
-    try pool_row(b, "nir instructions", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_count + builder.instruction_total)
-    try pool_row(b, "nir instructions, largest module", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_peak)
-    try pool_row(b, "nir operands", b.pools[POOL_NIR_OPERANDS], builder.operand_count + builder.operand_total)
-    try pool_row(b, "nir function refs", b.pools[POOL_NIR_REFS], builder.function_ref_count)
-    try pool_row(b, "nir strings", b.pools[POOL_NIR_STRINGS], builder.string_count)
-    try pool_row(b, "nir globals", b.pools[POOL_NIR_GLOBALS], builder.global_count)
-    try pool_row(b, "nir ref index entries", b.pools[POOL_NIR_INDEX], builder.ref_names.count)
-    try pool_row(b, "lowering bindings", b.pools[POOL_BINDINGS], 0usize)
-    try pool_row(b, "machine code buffer bytes", b.pools[POOL_MACHINE], 0usize)
-    try pool_row(b, "image buffer bytes", b.pools[POOL_IMAGE], b.image_bytes)
-    try pool_row(b, "line entries", b.pools[POOL_LINE_ENTRIES], 0usize)
-    try pool_row(b, "relocations", b.pools[POOL_RELOCATIONS], 0usize)
+    try pool_row(b, "nir blocks", b.pools[POOL_NIR_BLOCKS], builder.block_count + builder.block_total, true)
+    try pool_row(b, "nir instructions", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_count + builder.instruction_total, true)
+    try pool_row(b, "nir instructions, largest module", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_peak, true)
+    try pool_row(b, "nir operands", b.pools[POOL_NIR_OPERANDS], builder.operand_count + builder.operand_total, true)
+    try pool_row(b, "nir function refs", b.pools[POOL_NIR_REFS], builder.function_ref_count, true)
+    try pool_row(b, "nir strings", b.pools[POOL_NIR_STRINGS], builder.string_count, true)
+    try pool_row(b, "nir globals", b.pools[POOL_NIR_GLOBALS], builder.global_count, true)
+    try pool_row(b, "nir ref index entries", b.pools[POOL_NIR_INDEX], builder.ref_names.count, true)
+    try pool_row(b, "lowering bindings", b.pools[POOL_BINDINGS], 0usize, false)
+    try pool_row(b, "machine code buffer bytes", b.pools[POOL_MACHINE], 0usize, false)
+    try pool_row(b, "image buffer bytes", b.pools[POOL_IMAGE], b.image_bytes, true)
+    try pool_row(b, "line entries", b.pools[POOL_LINE_ENTRIES], 0usize, false)
+    try pool_row(b, "relocations", b.pools[POOL_RELOCATIONS], 0usize, false)
     ret close(b)
 }
 
 // A pool's two columns, or its two keys (D476): `pool_<name>_capacity` and
 // `pool_<name>_used`, the second `null` where the table leaves it blank.
-fn pool_row(b: *Build, name: str, capacity: usize, used: usize) -> err {
+fn pool_row(b: *Build, name: str, capacity: usize, used: usize, has_used: bool) -> err {
     if b.json {
         try row_unit(b, "pool ", name, capacity, "", "_capacity")
         try row_named(b, "pool ", name, "_used")
-        if used != 0usize { try number(b, used) } else { try out(b, "null") }
+        if has_used { try number(b, used) } else { try out(b, "null") }
         ret ok
     }
     try row(b, name)
     try number(b, capacity)
     try out(b, " | ")
-    if used != 0usize { try number(b, used) }
+    if has_used { try number(b, used) }
     ret out(b, "\n")
 }
