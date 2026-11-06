@@ -1527,8 +1527,18 @@ fn draw_account(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.F
         dots += 1usize
     }
     try compose_field(a, builder, s, faces, 1usize, "Password", masked, 144.0, 44.0)
-    try ui.pill(a, builder, &s.hits, faces, 1760usize, 16.0, 212.0, 186.0, 46.0, "Sign in", ui.amber(), 17.0)
-    try ui.pill(a, builder, &s.hits, faces, 1761usize, 210.0, 212.0, 186.0, 46.0, "Cancel", ui.soft(), 17.0)
+    // The master password of the sealed account store (#257 item 10).
+    let typed_master = ui.field_text(a, &s.master)
+    var masked_master = ""
+    var master_dots = 0usize
+    while master_dots < typed_master.len && master_dots < 16usize {
+        masked_master = ui.join(a, masked_master, "*", "")
+        master_dots += 1usize
+    }
+    try compose_field(a, builder, s, faces, 2usize, "Master", masked_master, 16.0, 120.0)
+    try ui.pill(a, builder, &s.hits, faces, 1762usize, 16.0, 212.0, 186.0, 46.0, "Unlock", ui.soft(), 17.0)
+    try ui.pill(a, builder, &s.hits, faces, 1760usize, 16.0, 280.0, 186.0, 46.0, "Sign in", ui.amber(), 17.0)
+    try ui.pill(a, builder, &s.hits, faces, 1761usize, 210.0, 280.0, 186.0, 46.0, "Cancel", ui.soft(), 17.0)
     try ui.keyboard(a, builder, &s.hits, faces, "Next")
     ret ok
 }
@@ -1712,35 +1722,105 @@ fn store_sealed_account(a: *mem.Arena, s: *State, slot: usize, addr: usize, len:
     ret vaultfs.write(ui.join(a, "/v/", name, ""), mem.address_of(&record[0usize]), length)
 }
 
-// (C158) The accounts after the built-in one are kept in /mail_accounts as `user<TAB>password<LF>` lines.
-fn save_accounts(s: *State) {
-    var buf: [128]u8 = zero
-    var n = 0usize
+// One "user<TAB>password" record from its bytes.
+fn account_from_bytes(buf: []u8, n: usize) -> Account {
+    var c: Account = zero
+    var tab = 0usize
+    while tab < n && buf[tab] != 9u8 { tab += 1usize }
+    var k = 0usize
+    while k < tab && k < 16usize {
+        c.user[k] = buf[k]
+        k += 1usize
+    }
+    c.user_len = k
+    k = 0usize
+    while tab + 1usize + k < n && k < 16usize {
+        c.pass[k] = buf[tab + 1usize + k]
+        k += 1usize
+    }
+    c.pass_len = k
+    ret c
+}
+
+// (C158) The accounts after the built-in one are sealed per slot under /v (the key from the master
+// password); without an unlocked vault nothing is written (#257 item 10).
+fn save_accounts(a: *mem.Arena, s: *State) {
+    if !s.keyed {
+        ui.say("mail locked: unlock on the account screen\n")
+        ret
+    }
     var i = 1usize
     while i < s.account_total {
         let c = s.accounts[i]
+        var line: [64]u8 = zero
+        var n = 0usize
         var k = 0usize
-        while k < c.user_len {
-            buf[n] = c.user[k]
+        while k < c.user_len && n < 30usize {
+            line[n] = c.user[k]
             n += 1usize
             k += 1usize
         }
-        buf[n] = 9u8
+        line[n] = 9u8
         n += 1usize
         k = 0usize
-        while k < c.pass_len {
-            buf[n] = c.pass[k]
+        while k < c.pass_len && n < 62usize {
+            line[n] = c.pass[k]
             n += 1usize
             k += 1usize
         }
-        buf[n] = 10u8
-        n += 1usize
+        let stored = store_sealed_account(a, s, i, mem.address_of(&line[0usize]), n)
         i += 1usize
     }
-    let written = vaultfs.write_big("/mail_accounts", mem.address_of(&buf[0usize]), n)
+    // Anything still in the legacy file has been sealed; the file is gone after the migration.
+    let dropped = vaultfs.remove("/mail_accounts")
 }
 
-fn load_accounts(s: *State) -> usize {
+// Seal every legacy plaintext account line into its slot and remove /mail_accounts: one-way and
+// idempotent (#257 item 10).
+fn migrate_accounts(a: *mem.Arena, s: *State) -> usize {
+    var buf: [128]u8 = zero
+    let (n, found) = vaultfs.read_big("/mail_accounts", mem.address_of(&buf[0usize]), 128usize)
+    if !found || n == 0usize { ret 0usize }
+    var moved = 0usize
+    var at = 0usize
+    var slot = 1usize
+    while at < n && slot < MAX_ACCOUNTS {
+        var end = at
+        while end < n && buf[end] != 10u8 { end += 1usize }
+        if end > at && store_sealed_account(a, s, slot, mem.address_of(&buf[0usize]) + at, end - at) {
+            moved += 1usize
+            slot += 1usize
+        }
+        at = end + 1usize
+    }
+    if moved > 0usize {
+        let dropped = vaultfs.remove("/mail_accounts")
+    }
+    ret moved
+}
+
+fn load_accounts(a: *mem.Arena, s: *State) -> usize {
+    if s.keyed {
+        var loaded = 0usize
+        var slot = 1usize
+        while slot < MAX_ACCOUNTS {
+            var sealed_buf: [128]u8 = zero
+            let (sealed_n, sealed_found) = load_sealed_account(a, s, slot, mem.address_of(&sealed_buf[0usize]), 128usize)
+            if sealed_found {
+                s.accounts[s.account_total] = account_from_bytes(sealed_buf[0usize..sealed_n], sealed_n)
+                s.account_total += 1usize
+                loaded += 1usize
+            }
+            slot += 1usize
+        }
+        ret loaded
+    }
+    // Locked: do not silently show no accounts when sealed records exist.
+    let (sealed_exists, sealed_is_dir) = vaultfs.probe("/v/m1")
+    if sealed_exists {
+        ui.say("mail locked: unlock on the account screen\n")
+        ret 0usize
+    }
     var buf: [128]u8 = zero
     let (n, found) = vaultfs.read_big("/mail_accounts", mem.address_of(&buf[0usize]), 128usize)
     if !found || n == 0usize { ret 0usize }
@@ -1866,15 +1946,33 @@ fn act(a: *mem.Arena, kit: *appkit.Kit, s: *State, id: usize) -> bool {
     if s.screen == ACCOUNT_SCREEN {
         if ui.is_key(id) {
             if id == 1205usize {
-                if s.focus == 0usize { s.focus = 1usize }
+                if s.focus < 2usize { s.focus += 1usize } else { s.focus = 0usize }
                 ret true
             }
             var field = &s.form_user
             if s.focus == 1usize { field = &s.form_pass }
+            if s.focus == 2usize { field = &s.master }
             ret ui.field_key(field, id, false)
         }
-        if id >= 1500usize && id < 1502usize {
+        if id >= 1500usize && id < 1503usize {
             s.focus = id - 1500usize
+            ret true
+        }
+        if id == 1762usize {
+            let unlock_code = unlock_mail_vault(a, s)
+            if unlock_code == 0usize {
+                let moved = migrate_accounts(a, s)
+                let reloaded = load_accounts(a, s)
+                ui.say("mail vault unlocked, migrated ")
+                ui.say_num(moved)
+                ui.say(" accounts ")
+                ui.say_num(reloaded)
+                ui.say("\n")
+            } else if unlock_code == 1usize {
+                ui.say("mail vault wrong password\n")
+            } else {
+                ui.say("mail vault absent\n")
+            }
             ret true
         }
         if id == 1761usize {
@@ -1905,7 +2003,7 @@ fn act(a: *mem.Arena, kit: *appkit.Kit, s: *State, id: usize) -> bool {
             }
             s.accounts[slot].pass_len = p
             s.account_total += 1usize
-            save_accounts(s)
+            save_accounts(a, s)
             s.account = slot
             s.box = 0usize
             s.box_total = 0usize
@@ -2199,7 +2297,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     s.box_lens[0usize] = inbox_name.len
     s.box_total = 1usize
-    let restored = load_accounts(&s)
+    let restored = load_accounts(a, &s)
     if restored > 0usize {
         ui.say("mail accounts ")
         ui.say_num(s.account_total)
