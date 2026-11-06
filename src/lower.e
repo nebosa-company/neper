@@ -53,7 +53,8 @@ type Deferred = struct {
 }
 
 type DeferState = struct {
-    entries: [256]Deferred,
+    // Sized past the old 256, which refused a valid function with 300 `defer`s.
+    entries: [2048]Deferred,
     count: usize,
 }
 
@@ -4670,7 +4671,7 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             if child_position > 0usize {
                 if *argument_count == arguments.len { ret check.ArgumentCount }
                 let child_index = parse.child_index_at(tree, at)
-                var saved: [33]usize = zero
+                var saved: [96]usize = zero
                 var saved_callee = 0usize
                 var pending = false
                 if !into_c && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, child_index, builder) {
@@ -4771,7 +4772,7 @@ fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     var call: check.CallInfo = zero
     // A format string may carry 32 verbs, so a call may carry 32 arguments plus the
     // arena: the checker already allows it and this is what lowering has to match.
-    var arguments: [33]usize = zero
+    var arguments: [96]usize = zero
     var argument_count = 0usize
     var callee = 0usize
     let arguments_error = lower_call_arguments(c, g, tree, module_index, node, builder, bindings, binding_count, false, &call, &callee, arguments[..], &argument_count)
@@ -6503,7 +6504,15 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if opcode == .ShiftLeft || opcode == .ShiftRight { expected = check.invalid_type() }
         let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], expected, builder, bindings, binding_count)
         if right_error != ok { ret right_error }
-        if opcode != .ShiftLeft && opcode != .ShiftRight && !check.type_equal(c, place_type, right_type) { ret check.InvalidType }
+        var compound_right = right
+        if builder.spirv && (opcode == .ShiftLeft || opcode == .ShiftRight) {
+            let compound_width = check.integer_width(place_type)
+            let (compound_mask, compound_mask_error) = emit_device_constant(builder, right_type, compound_width - 1usize, token)
+            if compound_mask_error != ok { ret compound_mask_error }
+            let (compound_masked, compound_masked_error) = emit_device_binary(builder, .BitAnd, right_type, right, compound_mask, token)
+            if compound_masked_error != ok { ret compound_masked_error }
+            compound_right = compound_masked
+        }
         let (resumed_current, current_error) = frame_resume_temporary(c, place_type, current, current_slot, before, token, builder)
         if current_error != ok { ret current_error }
         let (resumed_address, resume_error) = frame_resume_temporary(c, pointer_type, address, address_slot, before, token, builder)
@@ -6511,7 +6520,7 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         let (binary_instruction, value, binary_error) = nir.emit(builder, opcode, place_type, true, 0usize, c.tokens[usize(node.token_start)])
         if binary_error != ok { ret binary_error }
         try nir.add_operand(builder, binary_instruction, resumed_current)
-        try nir.add_operand(builder, binary_instruction, right)
+        try nir.add_operand(builder, binary_instruction, compound_right)
         if builder.spirv && place_type.kind == .Integer && (opcode == .Divide || opcode == .Remainder) {
             let division_error = emit_device_divide_guards(builder, place_type, resumed_current, right, token)
             if division_error != ok { ret division_error }
@@ -7361,7 +7370,7 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let (body_block_index, body_block_error) = nir.begin_block(builder)
     if body_block_error != ok || body_block_index != body_block { ret nir.InvalidControlFlow }
     try kernel_loop_tick(builder, module_index, c.tokens[usize(node.token_start)])
-    var break_storage: [256]usize = zero
+    var break_storage: [2048]usize = zero
     var control = LoopControl { active: true, continue_target: condition_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
     let proved = proof_open(c, g, tree, module_index, condition_index, body_index, builder, bindings, *binding_count)
     let body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
@@ -7503,7 +7512,7 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     let local_checkpoint = c.local_count
     let binding_checkpoint = *binding_count
     try bind_value(c, g, module_index, name, element_type, results.values[0usize], results.addresses[0usize], false, builder, bindings, binding_count)
-    var break_storage: [256]usize = zero
+    var break_storage: [2048]usize = zero
     var control = LoopControl { active: true, continue_target: condition_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
     let lowered_body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
     c.local_count = local_checkpoint
@@ -7869,7 +7878,6 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
         if overflow_error != ok { ret (0usize, result_type, overflow_error) }
     }
     ret (result, result_type, ok)
-    ret (0usize, check.invalid_type(), check.Unsupported)
 }
 // The lane-wise shapes one vector instruction covers: a sixteen-byte operand -- the
 // width SSE2 and NEON both have -- whose lane type and operator name a single packed
@@ -8546,7 +8554,7 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     } else {
         try bind_value(c, g, module_index, names[0usize], counter_type, body_counter, false, false, builder, bindings, binding_count)
     }
-    var break_storage: [256]usize = zero
+    var break_storage: [2048]usize = zero
     var control = LoopControl { active: true, continue_target: increment_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
     let body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
     c.local_count = local_checkpoint
@@ -8782,7 +8790,7 @@ fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         compared = loaded
         compare_type = tag.ty
     }
-    var break_storage: [256]usize = zero
+    var break_storage: [2048]usize = zero
     var control = LoopControl { active: true, continue_target: outer_control.continue_target, break_defer_base: defers.count, continue_defer_base: outer_control.continue_defer_base, breaks: break_storage[..], break_count: 0usize }
     var default_arm: syntax.Node = zero
     var has_default = false
@@ -11186,5 +11194,7 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     ret ok
 }
+
+
 
 
