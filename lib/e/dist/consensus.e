@@ -63,8 +63,10 @@ fn pool_take(p: *Pool, at: usize) -> Message {
     ret m
 }
 
-// Remove and answer the oldest message (FIFO delivery).
+// Remove and answer the oldest message (FIFO delivery); an empty pool answers a zero message.
 fn pool_pop(p: *Pool) -> Message {
+    var empty: Message = zero
+    if p.len == 0usize { ret empty }
     let m = p.items[0usize]
     var i = 1usize
     while i < p.len {
@@ -109,7 +111,10 @@ fn raft_cluster(nodes: []Node, seed: u64, timeout_min: u64, timeout_max: u64, he
 }
 
 fn reset_timeout(c: *Cluster, n: *Node, now: u64) {
-    n.timeout_at = now + c.timeout_min + rand.pcg64_bounded(&c.rng, c.timeout_max - c.timeout_min + 1u64)
+    // A misconfigured range must not underflow the bounded draw.
+    var span = 1u64
+    if c.timeout_max >= c.timeout_min { span = c.timeout_max - c.timeout_min + 1u64 }
+    n.timeout_at = now + c.timeout_min + rand.pcg64_bounded(&c.rng, span)
 }
 
 fn last_index(n: *const Node) -> u64 { ret n.snap_index + u64(n.log_len) }
@@ -982,3 +987,5 @@ fn raft_replicate(c: *Cluster, node: usize, now: u64, value: i64, up: u64, out: 
     }
     ret (c.nodes[node].commit, ok)
 }
+
+

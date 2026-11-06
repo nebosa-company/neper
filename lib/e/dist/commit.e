@@ -41,8 +41,10 @@ fn pool_push(p: *Pool, m: Message) -> err {
     ret ok
 }
 
-// Remove and answer the oldest message.
+// Remove and answer the oldest message; an empty pool answers a zero message.
 fn pool_pop(p: *Pool) -> Message {
+    var empty: Message = zero
+    if p.len == 0usize { ret empty }
     let m = p.items[0usize]
     var i = 1usize
     while i < p.len {
