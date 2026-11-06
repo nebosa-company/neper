@@ -15088,6 +15088,8 @@ type Layer = enum u8 { Default, File, Env, Flag }
 type Format = enum u8 { Ini, Json }
 type Entry = struct { key: str, value: str, layer: Layer }
 type Config = struct { entries: []Entry, count: usize }
+fn save_layer(a: *mem.Arena, c: *const Config, layer: Layer) -> ([]Entry, err)
+fn restore_layer(c: *Config, layer: Layer, saved: []const Entry)
 error Full
 error Missing
 error Invalid
@@ -23792,6 +23794,7 @@ fn is_ws(c: u8) -> bool
 fn trim(s: str) -> str
 fn parse_i64(s: str) -> (i64, bool)
 fn parse_facts(a: *mem.Arena, stdout: str) -> json.Value
+fn fact_name_ok(s: str) -> bool
 fn custom_fact_script(a: *mem.Arena, names: []const str, commands: []const str) -> str
 fn sanitize(a: *mem.Arena, token: str) -> str
 fn bad(a: *mem.Arena, what: str) -> Doc
@@ -30004,7 +30007,6 @@ fn pratt(tokens: []const Token, text: str, ops: []const Op, t: *Ast) -> (u32, er
 fn pratt_expr(p: *Parser, t: *Ast, min_bp: u8) -> (u32, err)
 fn recursive_descent(tokens: []const Token, text: str, t: *Ast) -> (u32, err)
 fn peek_char(p: *const Parser, c: u8) -> bool
-fn rd_binary(p: *Parser, t: *Ast, lhs: u32, rhs: u32) -> (u32, err)
 fn rd_expr(p: *Parser, t: *Ast) -> (u32, err)
 fn rd_term(p: *Parser, t: *Ast) -> (u32, err)
 fn rd_unary(p: *Parser, t: *Ast) -> (u32, err)
