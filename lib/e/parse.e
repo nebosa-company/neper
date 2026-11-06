@@ -25,6 +25,12 @@ type Ast = struct { kind: []u8, a: []u32, b: []u32, tok: []u32, used: usize }
 // `evaluate`'s explicit postorder stack: one frame per nesting level, so the cap
 // is also the deepest expression it can fold (8192).
 const MAX_EVAL_DEPTH: usize = 8192usize
+// A recursive-descent or Pratt parenthesis/prefix nest deeper than this is refused
+// before the native stack is exhausted.
+const MAX_PARSE_DEPTH: usize = 1024usize
+// Earley's nullable table (and every grammar symbol it indexes) is bounded by this,
+// not by a 64-bit mask: symbol ids may run past 64.
+const MAX_SYMBOLS: usize = 4096usize
 type EvalFrame = struct { node: u32, phase: u8, left: f64, right: f64 }
 type Grammar = struct { lhs: []const u32, rhs: []const u32, rule_start: []const usize, terminals: u32 }
 type Item = struct { rule: u32, dot: u32, origin: u32 }
@@ -293,13 +299,14 @@ fn pratt(tokens: []const Token, text: str, ops: []const Op, t: *Ast) -> (u32, er
         i += 1usize
     }
     var p = Parser { tokens: tokens, text: text, ops: ops, pos: 0usize }
-    let (root, e) = pratt_expr(&p, t, 0u8)
+    let (root, e) = pratt_expr(&p, t, 0u8, 0usize)
     if e != ok { ret (0u32, e) }
     if p.pos != tokens.len { ret (0u32, Invalid) }
     ret (root, ok)
 }
 
-fn pratt_expr(p: *Parser, t: *Ast, min_bp: u8) -> (u32, err) {
+fn pratt_expr(p: *Parser, t: *Ast, min_bp: u8, depth: usize) -> (u32, err) {
+    if depth > MAX_PARSE_DEPTH { ret (0u32, TooSmall) }
     if p.pos >= p.tokens.len { ret (0u32, Invalid) }
     let first = p.tokens[p.pos]
     p.pos += 1usize
@@ -309,7 +316,7 @@ fn pratt_expr(p: *Parser, t: *Ast, min_bp: u8) -> (u32, err) {
         if e != ok { ret (0u32, e) }
         lhs = leaf
     } else if is_char(p.text, first, 40u8) {
-        let (inner, e) = pratt_expr(p, t, 0u8)
+        let (inner, e) = pratt_expr(p, t, 0u8, depth + 1usize)
         if e != ok { ret (0u32, e) }
         if p.pos >= p.tokens.len || !is_char(p.text, p.tokens[p.pos], 41u8) { ret (0u32, Invalid) }
         p.pos += 1usize
@@ -318,7 +325,7 @@ fn pratt_expr(p: *Parser, t: *Ast, min_bp: u8) -> (u32, err) {
         let (k, found) = find_op(p.ops, p.text, first, PREFIX)
         if !found { ret (0u32, Invalid) }
         let op_at = u32(p.pos - 1usize)
-        let (rhs, e) = pratt_expr(p, t, 2u8 * p.ops[k].prec + 1u8)
+        let (rhs, e) = pratt_expr(p, t, 2u8 * p.ops[k].prec + 1u8, depth + 1usize)
         if e != ok { ret (0u32, e) }
         let (node, node_error) = ast_node(t, NODE_PREFIX, rhs, 0u32, op_at)
         if node_error != ok { ret (0u32, node_error) }
@@ -345,7 +352,7 @@ fn pratt_expr(p: *Parser, t: *Ast, min_bp: u8) -> (u32, err) {
         if p.ops[k].right { rbp = lbp }
         let op_at = u32(p.pos)
         p.pos += 1usize
-        let (rhs, e) = pratt_expr(p, t, rbp)
+        let (rhs, e) = pratt_expr(p, t, rbp, depth + 1usize)
         if e != ok { ret (0u32, e) }
         let (node, node_error) = ast_node(t, NODE_INFIX, lhs, rhs, op_at)
         if node_error != ok { ret (0u32, node_error) }
@@ -362,7 +369,7 @@ fn recursive_descent(tokens: []const Token, text: str, t: *Ast) -> (u32, err) {
     var p: Parser = zero
     p.tokens = tokens
     p.text = text
-    let (root, e) = rd_expr(&p, t)
+    let (root, e) = rd_expr(&p, t, 0usize)
     if e != ok { ret (0u32, e) }
     if p.pos != tokens.len { ret (0u32, Invalid) }
     ret (root, ok)
@@ -372,13 +379,14 @@ fn peek_char(p: *const Parser, c: u8) -> bool {
     ret p.pos < p.tokens.len && is_char(p.text, p.tokens[p.pos], c)
 }
 
-fn rd_expr(p: *Parser, t: *Ast) -> (u32, err) {
-    var (lhs, e) = rd_term(p, t)
+fn rd_expr(p: *Parser, t: *Ast, depth: usize) -> (u32, err) {
+    if depth > MAX_PARSE_DEPTH { ret (0u32, TooSmall) }
+    var (lhs, e) = rd_term(p, t, depth)
     if e != ok { ret (0u32, e) }
     while peek_char(p, 43u8) || peek_char(p, 45u8) {
         p.pos += 1usize
         let op_at = p.pos
-        let (rhs, rhs_error) = rd_term(p, t)
+        let (rhs, rhs_error) = rd_term(p, t, depth)
         if rhs_error != ok { ret (0u32, rhs_error) }
         let (node, node_error) = ast_node(t, NODE_INFIX, lhs, rhs, u32(op_at - 1usize))
         if node_error != ok { ret (0u32, node_error) }
@@ -387,13 +395,13 @@ fn rd_expr(p: *Parser, t: *Ast) -> (u32, err) {
     ret (lhs, ok)
 }
 
-fn rd_term(p: *Parser, t: *Ast) -> (u32, err) {
-    var (lhs, e) = rd_unary(p, t)
+fn rd_term(p: *Parser, t: *Ast, depth: usize) -> (u32, err) {
+    var (lhs, e) = rd_unary(p, t, depth)
     if e != ok { ret (0u32, e) }
     while peek_char(p, 42u8) || peek_char(p, 47u8) {
         p.pos += 1usize
         let op_at = p.pos
-        let (rhs, rhs_error) = rd_unary(p, t)
+        let (rhs, rhs_error) = rd_unary(p, t, depth)
         if rhs_error != ok { ret (0u32, rhs_error) }
         let (node, node_error) = ast_node(t, NODE_INFIX, lhs, rhs, u32(op_at - 1usize))
         if node_error != ok { ret (0u32, node_error) }
@@ -402,32 +410,33 @@ fn rd_term(p: *Parser, t: *Ast) -> (u32, err) {
     ret (lhs, ok)
 }
 
-fn rd_unary(p: *Parser, t: *Ast) -> (u32, err) {
+fn rd_unary(p: *Parser, t: *Ast, depth: usize) -> (u32, err) {
+    if depth > MAX_PARSE_DEPTH { ret (0u32, TooSmall) }
     if peek_char(p, 45u8) {
         p.pos += 1usize
         let op_at = p.pos
-        let (inner, e) = rd_unary(p, t)
+        let (inner, e) = rd_unary(p, t, depth + 1usize)
         if e != ok { ret (0u32, e) }
         let (node, node_error) = ast_node(t, NODE_PREFIX, inner, 0u32, u32(op_at - 1usize))
         ret (node, node_error)
     }
-    let (node, e) = rd_power(p, t)
+    let (node, e) = rd_power(p, t, depth)
     ret (node, e)
 }
 
-fn rd_power(p: *Parser, t: *Ast) -> (u32, err) {
-    let (base, e) = rd_atom(p, t)
+fn rd_power(p: *Parser, t: *Ast, depth: usize) -> (u32, err) {
+    let (base, e) = rd_atom(p, t, depth)
     if e != ok { ret (0u32, e) }
     if !peek_char(p, 94u8) { ret (base, ok) }
     p.pos += 1usize
     let op_at = p.pos
-    let (exponent, exponent_error) = rd_unary(p, t)
+    let (exponent, exponent_error) = rd_unary(p, t, depth + 1usize)
     if exponent_error != ok { ret (0u32, exponent_error) }
     let (node, node_error) = ast_node(t, NODE_INFIX, base, exponent, u32(op_at - 1usize))
     ret (node, node_error)
 }
 
-fn rd_atom(p: *Parser, t: *Ast) -> (u32, err) {
+fn rd_atom(p: *Parser, t: *Ast, depth: usize) -> (u32, err) {
     if p.pos >= p.tokens.len { ret (0u32, Invalid) }
     let tok = p.tokens[p.pos]
     if tok.kind == INT || tok.kind == IDENT {
@@ -437,7 +446,7 @@ fn rd_atom(p: *Parser, t: *Ast) -> (u32, err) {
     }
     if !is_char(p.text, tok, 40u8) { ret (0u32, Invalid) }
     p.pos += 1usize
-    let (inner, e) = rd_expr(p, t)
+    let (inner, e) = rd_expr(p, t, depth + 1usize)
     if e != ok { ret (0u32, e) }
     if !peek_char(p, 41u8) { ret (0u32, Invalid) }
     p.pos += 1usize
@@ -601,33 +610,39 @@ fn cyk(g: *const Grammar, start: u32, sentence: []const u32, chart: []u64) -> (b
     ret (((chart[(n - 1usize) * n] >> start) & 1u64) == 1u64, ok)
 }
 
-// Bit `s` set when non-terminal `s` derives the empty string (symbols
-// beyond 64 never count as nullable).
-fn nullable_set(g: *const Grammar) -> u64 {
-    var mask = 0u64
+// `out[s]` set when non-terminal `s` derives the empty string; every symbol must fit
+// `MAX_SYMBOLS` (validated by the caller, which also bounds `out`).
+fn nullable_fill(g: *const Grammar, out: []bool) -> err {
+    var s = 0usize
+    while s < out.len {
+        out[s] = false
+        s += 1usize
+    }
     var changed = true
     let rules = rule_count(g)
     while changed {
         changed = false
         var r = 0usize
         while r < rules {
-            if g.lhs[r] < 64u32 && ((mask >> g.lhs[r]) & 1u64) == 0u64 {
+            let lhs = usize(g.lhs[r])
+            if lhs >= out.len { ret Invalid }
+            if !out[lhs] {
                 var all = true
                 var k = 0usize
                 while k < rule_len(g, r) {
-                    let s = rule_symbol(g, r, k)
-                    if s >= 64u32 || ((mask >> s) & 1u64) == 0u64 { all = false }
+                    let sym = rule_symbol(g, r, k)
+                    if usize(sym) >= out.len || !out[usize(sym)] { all = false }
                     k += 1usize
                 }
                 if all {
-                    mask |= 1u64 << g.lhs[r]
+                    out[lhs] = true
                     changed = true
                 }
             }
             r += 1usize
         }
     }
-    ret mask
+    ret ok
 }
 
 // Append `it` to the set starting at `items[from..]` unless already present.
@@ -648,8 +663,22 @@ fn earley_run(g: *const Grammar, start: u32, sentence: []const u32, items: []Ite
     if !grammar_valid(g) { ret (0usize, Invalid) }
     let n = sentence.len
     if sets.len < n + 2usize { ret (0usize, TooSmall) }
-    let nullable = nullable_set(g)
     let rules = rule_count(g)
+    // Validate every symbol once; a grammar past the nullable table is refused rather
+    // than silently dropping epsilon rules for high symbol ids.
+    var check_rule = 0usize
+    while check_rule < rules {
+        if usize(g.lhs[check_rule]) >= MAX_SYMBOLS { ret (0usize, Invalid) }
+        var sym_at = 0usize
+        while sym_at < rule_len(g, check_rule) {
+            if usize(rule_symbol(g, check_rule, sym_at)) >= MAX_SYMBOLS { ret (0usize, Invalid) }
+            sym_at += 1usize
+        }
+        check_rule += 1usize
+    }
+    var nullable: [MAX_SYMBOLS]bool = zero
+    let nullable_error = nullable_fill(g, nullable[0..])
+    if nullable_error != ok { ret (0usize, nullable_error) }
     var used = 0usize
     sets[0usize] = 0usize
     var r = 0usize
@@ -679,7 +708,7 @@ fn earley_run(g: *const Grammar, start: u32, sentence: []const u32, items: []Ite
                         }
                         r += 1usize
                     }
-                    if sym < 64u32 && ((nullable >> sym) & 1u64) == 1u64 {
+                    if nullable[usize(sym)] {
                         let (grown, e) = earley_add(items, sets[k], used, Item { rule: it.rule, dot: it.dot + 1u32, origin: it.origin })
                         if e != ok { ret (used, e) }
                         used = grown

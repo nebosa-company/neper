@@ -346,6 +346,51 @@ fn main(a: *mem.Arena, args: []str) -> err {
         dt += 1usize
     }
 
+    // 13: Earley honours an epsilon rule for a symbol id past 64 (terminals come first,
+    // so a 65-terminal grammar puts the nullable non-terminal at 65).
+    var high_lhs: [2]u32 = zero
+    high_lhs[0] = 65u32
+    high_lhs[1] = 66u32
+    var high_rhs: [1]u32 = zero
+    high_rhs[0] = 65u32
+    var high_starts: [3]usize = zero
+    high_starts[0] = 0usize
+    high_starts[1] = 0usize
+    high_starts[2] = 1usize
+    let high_grammar = parse.grammar(high_lhs[..], high_rhs[..], high_starts[..], 65u32)
+    var high_items: [8]parse.Item = zero
+    var high_sets: [2]usize = zero
+    let (high_ok, _, high_error) = parse.earley(&high_grammar, 66u32, high_rhs[0usize..0usize], high_items[..], high_sets[..])
+    if high_error != ok || !high_ok { os.exit(60i32) }
+
+    // 14: a prefix run deeper than MAX_PARSE_DEPTH is TooSmall in both parsers, not a
+    // native-stack overflow.
+    let depth_count = 1100usize
+    let (depth_text, depth_text_error) = mem.alloc[u8](a, depth_count)
+    if depth_text_error != ok { os.exit(61i32) }
+    let (depth_tokens, depth_tokens_error) = mem.alloc[parse.Token](a, depth_count)
+    if depth_tokens_error != ok { os.exit(61i32) }
+    var di = 0usize
+    while di < depth_count {
+        depth_text[di] = 45u8
+        depth_tokens[di] = parse.Token { kind: parse.OP, start: di, len: 1usize }
+        di += 1usize
+    }
+    let (dkind, dk_error) = mem.alloc[u8](a, depth_count * 2usize + 2usize)
+    if dk_error != ok { os.exit(61i32) }
+    let (dleft, dl_error) = mem.alloc[u32](a, depth_count * 2usize + 2usize)
+    if dl_error != ok { os.exit(61i32) }
+    let (dright, dr_error) = mem.alloc[u32](a, depth_count * 2usize + 2usize)
+    if dr_error != ok { os.exit(61i32) }
+    let (dtok, dtok_error) = mem.alloc[u32](a, depth_count * 2usize + 2usize)
+    if dtok_error != ok { os.exit(61i32) }
+    var depth_ast = parse.ast(dkind, dleft, dright, dtok)
+    let (_, pratt_depth) = parse.pratt(depth_tokens, depth_text, ops[..], &depth_ast)
+    if pratt_depth != parse.TooSmall { os.exit(62i32) }
+    var depth_ast2 = parse.ast(dkind, dleft, dright, dtok)
+    let (_, rd_depth) = parse.recursive_descent(depth_tokens, depth_text, &depth_ast2)
+    if rd_depth != parse.TooSmall { os.exit(63i32) }
+
     try io.print("parse ok\n")
     ret ok
 }
