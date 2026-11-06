@@ -65,7 +65,7 @@ fn handle_of(a: *mem.Arena, key: str, t: *const Task) -> (str, err) {
 fn authorize(a: *mem.Arena, key: str, t: *const Task, handle: str, caller: str, now: usize) -> (str, err) {
     let (expected, handle_error) = handle_of(a, key, t)
     if handle_error != ok { ret ("", handle_error) }
-    if !str.eq(expected, handle) { ret ("unknown-handle", ok) }
+    if !contract.timing_safe_equal(expected, handle) { ret ("unknown-handle", ok) }
     if !str.eq(caller, t.owner) { ret ("denied", ok) }
     if now > t.expires { ret ("expired", ok) }
     ret ("ok", ok)
@@ -218,7 +218,7 @@ fn supply_input(a: *mem.Arena, key: str, t: *Task, token: str, now: usize) -> (s
     if canonical_error != ok { ret ("malformed", ok) }
     let (expected, expected_error) = contract.hex_of(a, mac.hmac_sha256(key, canonical))
     if expected_error != ok { ret ("", expected_error) }
-    if !str.eq(expected, values[5]) { ret ("bad-mac", ok) }
+    if !contract.timing_safe_equal(expected, values[5]) { ret ("bad-mac", ok) }
     if !str.eq(values[0], t.id) { ret ("wrong-task", ok) }
     if !str.eq(values[1], t.operation) { ret ("wrong-operation", ok) }
     if !str.eq(values[2], t.policy) { ret ("wrong-policy", ok) }

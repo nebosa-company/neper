@@ -289,7 +289,7 @@ fn integrate(a: *mem.Arena, bundles: []const Bundle, current_base: str) -> (Inte
             while ex < x.edits.len {
                 var ey = 0usize
                 while ey < y.edits.len {
-                    if str.eq(x.edits[ex].path, y.edits[ey].path) && x.edits[ex].start < y.edits[ey].end && y.edits[ey].start < x.edits[ex].end {
+                    if str.eq(x.edits[ex].path, y.edits[ey].path) && ((x.edits[ex].start < y.edits[ey].end && y.edits[ey].start < x.edits[ex].end) || x.edits[ex].start == y.edits[ey].start) {
                         let (text, text_error) = cause(a, "overlap", x.edits[ex].path, i, j, true)
                         if text_error != ok { ret (zero, text_error) }
                         push(&conflict, text)

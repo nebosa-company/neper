@@ -340,4 +340,8 @@ fn parse(a: *mem.Arena, text: str) -> (Environment, err) {
 
 // Whether a run at `level` can verify an obligation that requires `required`: hermetic satisfies every requirement,
 // observed satisfies observed and uncontrolled ones, and an uncontrolled run satisfies only an uncontrolled one.
-fn permits(level: str, required: str) -> bool { ret rank_of(level) <= rank_of(required) }
+fn permits(level: str, required: str) -> bool {
+    // An unknown requirement is not satisfied by anything (#53).
+    if !str.eq(required, "hermetic") && !str.eq(required, "observed") && !str.eq(required, "uncontrolled") { ret false }
+    ret rank_of(level) <= rank_of(required)
+}

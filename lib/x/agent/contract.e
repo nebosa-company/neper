@@ -222,6 +222,19 @@ fn write_value(a: *mem.Arena, b: *str.Builder, v: json.Value) -> err {
 }
 
 // The canonical text of a JSON value: keys in byte order, no whitespace, integers only.
+// A constant-time equality for secrets (handles and macs): lengths first, then every byte
+// is compared, so a mismatch does not stop at the first differing one.
+fn timing_safe_equal(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var diff = 0u8
+    var at = 0usize
+    while at < a.len {
+        diff = diff | (a[at] ^ b[at])
+        at += 1usize
+    }
+    ret diff == 0u8
+}
+
 fn canonical_json(a: *mem.Arena, v: json.Value) -> (str, err) {
     let (b, builder_error) = str.builder(a, 256usize)
     if builder_error != ok { ret ("", builder_error) }

@@ -337,7 +337,7 @@ fn approval_status(a: *mem.Arena, key: str, token: str, policy_hash: str, effect
     if canonical_error != ok { ret ("malformed", ok) }
     let (expected, expected_error) = contract.hex_of(a, mac.hmac_sha256(key, canonical))
     if expected_error != ok { ret ("", expected_error) }
-    if !str.eq(expected, token_mac) { ret ("bad-mac", ok) }
+    if !contract.timing_safe_equal(expected, token_mac) { ret ("bad-mac", ok) }
     if !str.eq(token_policy, policy_hash) { ret ("wrong-policy", ok) }
     if !str.eq(token_effect, effect) || !str.eq(token_scope, scope) { ret ("wrong-scope", ok) }
     if now > expires { ret ("expired", ok) }

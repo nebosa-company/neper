@@ -132,7 +132,7 @@ def integrate(bundles, current_base):
             x, y = bundles[i], bundles[j]
             for px, sx, ex in x["edits"]:
                 for py, sy, ey in y["edits"]:
-                    if px == py and sx < ey and sy < ex:
+                    if px == py and ((sx < ey and sy < ex) or sx == sy):
                         conflict.append("overlap:%s:%d:%d" % (px, i, j))
             for nx in x["ids"]:
                 for ny in y["ids"]:
