@@ -271,11 +271,17 @@ fn write_event(b: *str.Builder, ev: *const Event) -> err {
         try push_key(b, false, "message")
         try push_json_string(b, ev.message)
     }
-    if ev.err_type.len != 0usize {
+    // An exception with frames is worth sending even when the caller left the type empty;
+    // an untitled one is reported as "Error" rather than losing the stacktrace.
+    if ev.err_type.len != 0usize || ev.frames.len != 0usize {
         try push_key(b, false, "exception")
         try str.push(b, "{\"values\":[{")
         try push_key(b, true, "type")
-        try push_json_string(b, ev.err_type)
+        if ev.err_type.len != 0usize {
+            try push_json_string(b, ev.err_type)
+        } else {
+            try push_json_string(b, "Error")
+        }
         try push_key(b, false, "value")
         try push_json_string(b, ev.err_value)
         if ev.frames.len != 0usize {
@@ -397,6 +403,9 @@ fn parse_seconds(s: str, fallback: i64) -> i64 {
 // number is skipped, as sentry-sdk does.
 fn parse_rate_limits(header: str, now: i64, out: []Limit) -> usize {
     var n = 0usize
+    // When `out` fills, a dropped `error` category would let the next envelope through;
+    // remember the longest dropped pause and fold it into a global (empty-category) limit.
+    var dropped: i64 = 0i64
     var at = 0usize
     while at <= header.len {
         let end = find_byte(header, at, 44u8)
@@ -416,18 +425,32 @@ fn parse_rate_limits(header: str, now: i64, out: []Limit) -> usize {
             if n < out.len {
                 out[n] = Limit { category: "", until: until }
                 n += 1usize
+            } else if until > dropped {
+                dropped = until
             }
         } else {
             var cp = 0usize
             while cp <= cats.len {
                 let ce = find_byte(cats, cp, 59u8)
-                if n < out.len && ce > cp {
-                    out[n] = Limit { category: cats[cp..ce], until: until }
-                    n += 1usize
+                if ce > cp {
+                    if n < out.len {
+                        out[n] = Limit { category: cats[cp..ce], until: until }
+                        n += 1usize
+                    } else if until > dropped {
+                        dropped = until
+                    }
                 }
                 cp = ce + 1usize
             }
         }
+    }
+    if dropped > 0i64 && out.len > 0usize {
+        var last = out.len - 1usize
+        if n < out.len { last = n }
+        var until_value = out[last].until
+        if n < out.len { n += 1usize }
+        if dropped > until_value { until_value = dropped }
+        out[last] = Limit { category: "", until: until_value }
     }
     ret n
 }
@@ -608,7 +631,7 @@ fn flush(c: *Client, now: i64, max_send: usize) -> (usize, err) {
             // a success may still carry limits (sentry sends them on 200 too)
             let (rl, has_rl) = header_value(resp.headers, "X-Sentry-Rate-Limits")
             if has_rl {
-                var limits: [8]Limit = zero
+                var limits: [32]Limit = zero
                 let n = parse_rate_limits(rl, now, limits[0..])
                 var k = 0usize
                 while k < n {
@@ -623,7 +646,7 @@ fn flush(c: *Client, now: i64, max_send: usize) -> (usize, err) {
                 let (rl2, has_rl2) = header_value(resp.headers, "X-Sentry-Rate-Limits")
                 let (ra, has_ra) = header_value(resp.headers, "Retry-After")
                 if has_rl2 {
-                    var limits2: [8]Limit = zero
+                    var limits2: [32]Limit = zero
                     let n2 = parse_rate_limits(rl2, now, limits2[0..])
                     var found = false
                     var k2 = 0usize
@@ -703,6 +726,11 @@ fn load_queue(c: *Client, s: *store.Store, key: str) -> err {
     if get_error != ok { ret get_error }
     if data.len < 8usize || !str.eq(data[0..4], "NRQ1") { ret Corrupt }
     let n = usize(get_u32(data, 4usize))
+    // Validate the whole blob before enqueueing any of it, so a later Corrupt cannot
+    // leave a partial queue that a retry would enqueue again.
+    if n > (data.len - 8usize) / 4usize { ret Corrupt }
+    let (parts, parts_error) = mem.alloc[str](c.a, n)
+    if parts_error != ok { ret parts_error }
     var at = 8usize
     var i = 0usize
     while i < n {
@@ -710,17 +738,24 @@ fn load_queue(c: *Client, s: *store.Store, key: str) -> err {
         let len = usize(get_u32(data, at))
         at += 4usize
         if len > data.len - at { ret Corrupt }
-        try enqueue(c, data[at..at + len])
+        parts[i] = data[at..at + len]
         at += len
         i += 1usize
     }
     if at != data.len { ret Corrupt }
+    i = 0usize
+    while i < n {
+        try enqueue(c, parts[i])
+        i += 1usize
+    }
     ret ok
 }
 
 // ---- capture from a running program ---------------------------------------------------------
 
-// An event for an error occurring now: the backtrace of the caller, innermost first, in `frames`.
+// An event for an error occurring now. `frames` is where `e.debug.backtrace` writes; that
+// is a documented stub today (debug.e), so the event carries no stacktrace until the frame
+// walk lands. A caller may pass its own frames instead.
 fn capture_here(c: *Client, level: str, err_type: str, err_value: str, id: str, release: str, now: i64, frames: []debug.Frame) -> err {
     let got = debug.backtrace(frames)
     let ev = Event { id: id, timestamp: now, level: level, message: "", err_type: err_type, err_value: err_value, frames: got, release: release, environment: "", tags: zero }

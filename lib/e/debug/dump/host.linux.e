@@ -52,7 +52,7 @@ fn write_core(a: *mem.Arena, pid: u32, path: str) -> err {
     try str.push(&b, path)
     try str.push(&b, "' ")
     try str.push_u32(&b, id)
-    try str.push(&b, " >/dev/null 2>&1 && mv '")
+    try str.push(&b, " >/dev/null && mv -- '")
     try str.push(&b, path)
     try str.push(&b, ".")
     try str.push_u32(&b, id)

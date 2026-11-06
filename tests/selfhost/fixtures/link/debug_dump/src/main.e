@@ -294,12 +294,24 @@ fn check_windows_open(a: *mem.Arena) -> i32 {
     ret 0i32
 }
 
+// #61: a core path whose name starts with `-` must reach mv as a path, not an option.
+fn check_dash_path(a: *mem.Arena) -> i32 {
+    when target.os == .Linux {
+        let result = dump.write_core(a, 0u32, "-neper-core-test")
+        if result == host.NotFound { ret 0i32 }
+        if result != ok { ret 62i32 }
+        if fs.remove_file(a, "-neper-core-test") != ok { ret 63i32 }
+    }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var code = check_core(a)
     if code == 0i32 { code = check_core_refusals(a) }
     if code == 0i32 { code = check_minidump(a) }
     if code == 0i32 { code = check_minidump_refusals(a) }
     if code == 0i32 { code = check_real(a) }
+    if code == 0i32 { code = check_dash_path(a) }
     if code == 0i32 { code = check_windows_open(a) }
     if code != 0i32 { os.exit(code) }
     try io.print("debug dump ok\n")

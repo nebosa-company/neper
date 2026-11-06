@@ -349,6 +349,27 @@ fn queue(a: *mem.Arena) -> i32 {
     // damage is refused
     if store.put(&s, a, "reports/bad", "NRQ1\x05\x00\x00\x00") != ok { ret 2311i32 }
     if report.load_queue(&d, &s, "reports/bad") != report.Corrupt { ret 2312i32 }
+    // #61: a blob whose first envelope parses and whose second is truncated is refused
+    // whole; nothing from it may remain queued for a retry to duplicate.
+    if store.put(&s, a, "reports/partial", "NRQ1\x02\x00\x00\x00\x03\x00\x00\x00abc") != ok { ret 2318i32 }
+    if report.load_queue(&d, &s, "reports/partial") != report.Corrupt { ret 2319i32 }
+    if report.pending(&d) != 0usize { ret 2320i32 }
+    // #61: an exception with frames is sent even when the caller left the type empty.
+    var one_frame: [1]debug.Frame = zero
+    one_frame[0] = debug.Frame { address: 4198400usize, function: "main.fail", file: "src/main.e", line: 12u32 }
+    let untyped = report.Event { id: id_n(4usize), timestamp: 1i64, level: "error", message: "", err_type: "", err_value: "boom", frames: one_frame[0..1], release: "", environment: "", tags: zero }
+    let (typed_json, typed_error) = report.event_json(a, &untyped)
+    if typed_error != ok || !str.contains(typed_json, "\"stacktrace\"") || !str.contains(typed_json, "\"type\":\"Error\"") { ret 2321i32 }
+    // #61: categories beyond the caller's storage must not drop an `error` pause silently.
+    var slim: [2]report.Limit = zero
+    let slim_n = report.parse_rate_limits("60:a;b;c;d;e;f;g;h;error", 100i64, slim[0..])
+    var saw_global = false
+    var k3 = 0usize
+    while k3 < slim_n {
+        if slim[k3].category.len == 0usize && slim[k3].until > 100i64 { saw_global = true }
+        k3 += 1usize
+    }
+    if !saw_global { ret 2322i32 }
     // an envelope larger than the byte budget is refused outright
     var tiny = new_fake(200u16)
     let (t0, client_error3) = make_client(a, &tiny, 8usize, 40usize)
