@@ -53,8 +53,8 @@ type Deferred = struct {
 }
 
 type DeferState = struct {
-    // Sized past the old 256, which refused a valid function with 300 `defer`s.
-    entries: [2048]Deferred,
+    // Allocated per lowering from the function's token span (issue #191 item 6).
+    entries: []Deferred,
     count: usize,
 }
 
@@ -9282,7 +9282,10 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
         generic_at = check.function_row(c, generic_at + 1usize)
     }
     builder.spirv = true
-    var defers: DeferState = zero
+    let defer_cap = usize(function.source_end) - usize(function.source_start) + 8usize
+    let (defer_entries, defer_alloc_error) = mem.alloc[Deferred](c.arena, defer_cap)
+    if defer_alloc_error != ok { ret defer_alloc_error }
+    var defers = DeferState { entries: defer_entries, count: 0usize }
     var lowered = lower_function_index(c, g, tree, module_index, node, function_index, builder, signatures, bindings, &defers)
     let (pending, has_pending) = pending_instance(c, module_index)
     if lowered == ok && has_pending {
@@ -11004,7 +11007,9 @@ fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize
 
 fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     if module_index >= g.count { ret FunctionNotFound }
-    var defers: DeferState = zero
+    let (defer_entries, defer_alloc_error) = mem.alloc[Deferred](c.arena, g.modules[module_index].text.len + 8usize)
+    if defer_alloc_error != ok { ret defer_alloc_error }
+    var defers = DeferState { entries: defer_entries, count: 0usize }
     var tree: parse.Tree = zero
     try graph.parse_module(g, module_index, &tree)
     try check.tokenize_module(c, g, module_index)
@@ -11211,6 +11216,7 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     ret ok
 }
+
 
 
 
