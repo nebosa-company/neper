@@ -255,6 +255,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     bad_queries[1usize] = 99u32
     var bad_answers: [1]u32 = zero
     if tree.lca_offline[u8](a, &g, &t, bad_queries[..], bad_answers[..]) != tree.InvalidNode { os.exit(8i32) }
+    // 486: an odd-length flattened query list is rejected, not truncated to complete pairs.
+    var odd_queries: [3]u32 = zero
+    odd_queries[0usize] = 0u32
+    odd_queries[1usize] = 1u32
+    odd_queries[2usize] = 2u32
+    var odd_answers: [1]u32 = zero
+    if tree.lca_offline[u8](a, &g, &t, odd_queries[..], odd_answers[..]) != tree.InvalidNode { os.exit(9i32) }
 
     try io.print("algo graph tree ok\n")
     ret ok
