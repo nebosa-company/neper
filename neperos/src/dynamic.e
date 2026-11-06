@@ -244,6 +244,7 @@ fn draw_home(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Face
     if s.revoked_state == 1usize { revoked_line = ui.join(a, ui.join(a, "Revocation list: ", ui.number(a, s.revoked_count), " listed, signed by the server"), "", "") }
     if s.revoked_state == 2usize { revoked_line = "Revocation list: the server did not answer" }
     if s.revoked_state == 3usize { revoked_line = "Revocation list refused: not signed by the server" }
+    if s.revoked_state == 4usize { revoked_line = "Revocation list could not be stored (too large or the vault refused)" }
     if revoked_line.len > 0usize { try ui.put(a, builder, faces.grotesk, 11.0, revoked_line, 24.0, 214.0, ui.light_muted()) }
     try ui.put(a, builder, faces.jost, 15.0, "Your apps", 24.0, 232.0, ui.light_muted())
     var i = 0usize
@@ -754,10 +755,23 @@ fn fetch_revocations(a: *mem.Arena, s: *State) {
         if list[i] == 10u8 { entries += 1usize }
         i += 1usize
     }
-    if list.len > 0usize && list.len <= 512usize {
-        if vaultfs.write("/revoked", mem.address_of(&list[0usize]), list.len) {
-            ui.say("dynamic revocations kept\n")
+    // The shell reads at most 1024 bytes of /revoked; a list that does not fit is reported
+    // rather than silently dropped, and the serial high-water is not advanced so the next
+    // fetch retries.
+    if list.len > 1024usize {
+        s.revoked_count = entries
+        s.revoked_state = 4usize
+        ui.say("dynamic revocations too large\n")
+        ret
+    }
+    if list.len > 0usize {
+        if !vaultfs.write("/revoked", mem.address_of(&list[0usize]), list.len) {
+            s.revoked_count = entries
+            s.revoked_state = 4usize
+            ui.say("dynamic revocations not stored\n")
+            ret
         }
+        ui.say("dynamic revocations kept\n")
     }
     if serial > high {
         var serial_storage: [4]u8 = zero
@@ -1038,3 +1052,4 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     ret ok
 }
+

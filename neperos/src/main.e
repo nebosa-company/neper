@@ -996,7 +996,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // (#289) `-append ... --test-input-cap` marks a test boot: aux slot 7 is set for the driver
     // servers, and only then does the input server keep its 600-event harness bound.
+    // `--development` marks any other test boot that needs the development package key
+    // (#179): a production image trusts no key the repository seed signed.
     if bootargs_error == ok && has_word(bootargs, "--test-input-cap") { driver_flag = 1usize }
+    if bootargs_error == ok && has_word(bootargs, "--development") { driver_flag = 1usize }
     enumerate_pci(tree)
     let (pci_host, pci_host_error) = pci.find(tree)
     // Every virtio driver now runs at EL0 as a user-mode server (D2138, D2139): the kernel only

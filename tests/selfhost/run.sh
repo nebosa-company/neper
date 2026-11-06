@@ -11970,7 +11970,7 @@ greeting"
         [ "$kind" = installfixture ] || continue
         if [ "$delay" != 0 ]; then export NEPEROS_TAP_DELAY="$delay"; else unset NEPEROS_TAP_DELAY; fi
         last_marker="${markers##*;;}"
-        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$package_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" - 0 "$taps" 2>&1 < /dev/null)
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$package_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified --development" "$last_marker" - 0 "$taps" 2>&1 < /dev/null)
         remaining="$boot"
         pending="$markers"
         while [ -n "$pending" ]; do
@@ -12140,7 +12140,7 @@ greeting"
             install_archive="$crater_archive"
         fi
         last_marker="${markers##*;;}"
-        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$install_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified" "$last_marker" "$install_disk" 0 "$taps" 2>&1 < /dev/null)
+        boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$install_archive" tablet "$test_build/shell-$fixture.serial" "$port" "compositor bigarena unified --development" "$last_marker" "$install_disk" 0 "$taps" 2>&1 < /dev/null)
         remaining="$boot"
         pending="$markers"
         while [ -n "$pending" ]; do

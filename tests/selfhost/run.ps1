@@ -12255,7 +12255,7 @@ if ($neperosQemu) {
         if ($fields[0] -ne 'installfixture') { continue }
         $fixture = $fields[1]
         if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
-        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $packageArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) '-' 0 $fields[4] 2>&1) -join "`n"
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $packageArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified --development' (($fields[5] -split ';;')[-1]) '-' 0 $fields[4] 2>&1) -join "`n"
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
     }
@@ -12369,7 +12369,7 @@ if ($neperosQemu) {
         $revokedDisk = Join-Path $testBuild "shell-$fixture.disk"
         & python (Join-Path $repo 'scripts\make_fs_image.py') $revokedDisk 8 ('/revoked=' + $revokedList) | Out-Null
         if ($fields[3] -ne '0') { $env:NEPEROS_TAP_DELAY = $fields[3] } else { Remove-Item Env:NEPEROS_TAP_DELAY -ErrorAction SilentlyContinue }
-        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $packageArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified' (($fields[5] -split ';;')[-1]) $revokedDisk 0 $fields[4] 2>&1) -join "`n"
+        $boot = (& python $inputScript $neperosQemu.Source $neperosDisplayImage $packageArchive tablet (Join-Path $testBuild "shell-$fixture.serial") $fields[2] 'compositor bigarena unified --development' (($fields[5] -split ';;')[-1]) $revokedDisk 0 $fields[4] 2>&1) -join "`n"
         $pattern = '(?s)' + (($fields[5] -split ';;' | ForEach-Object { [regex]::Escape($_) }) -join '.*')
         if ($boot -notmatch $pattern) { throw "NeperOS $fixture fixture did not reach its markers ($($fields[6])): $boot" }
     }
