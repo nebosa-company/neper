@@ -48,6 +48,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let open = "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"properties\":{\"name\":\"O\"},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[0,0],[1,0],[1,1],[0,1],[0,0.5]]]}}]}"
     let (_, open_error) = geojson.read(a, open, "name")
     if open_error != geojson.Invalid { os.exit(12i32) }
+    // #794: equal lon/lat but a different closing altitude is still an open ring.
+    let altitude = "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"properties\":{\"name\":\"H\"},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[0,0,10],[1,0,10],[1,1,10],[0,1,10],[0,0,20]]]}}]}"
+    let (_, altitude_error) = geojson.read(a, altitude, "name")
+    if altitude_error != geojson.Invalid { os.exit(23i32) }
     let short = "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"properties\":{\"name\":\"S\"},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[[0,0],[1,0],[0,0]]]}}]}"
     let (_, short_error) = geojson.read(a, short, "name")
     if short_error != geojson.Invalid { os.exit(13i32) }

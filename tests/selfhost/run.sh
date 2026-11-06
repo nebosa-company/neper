@@ -6614,6 +6614,12 @@ ui_clipboard_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 chmod +x "$test_build/ui-clipboard-selfhost"
 ui_clipboard_output=$("$test_build/ui-clipboard-selfhost")
 [ "$ui_clipboard_output" = 'ui clipboard ok' ]
+# Pixel-art sprites (D893 family): colour/code slices and dither parity are validated before any index.
+ui_winpx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_winpx/src/main.e" "$repo" x64 linux "$test_build/ui-winpx-selfhost")
+[ "$ui_winpx_written" = 'executable written' ]
+chmod +x "$test_build/ui-winpx-selfhost"
+ui_winpx_output=$("$test_build/ui-winpx-selfhost")
+[ "$ui_winpx_output" = 'ui winpx ok' ]
 # File and document access (D894/D895, widget plan P4-07): refusals first, `Unsupported` without dialogs.
 ui_file_access_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ui_file_access/src/main.e" "$repo" x64 linux "$test_build/ui-file-access-selfhost")
 [ "$ui_file_access_written" = 'executable written' ]

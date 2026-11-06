@@ -7066,6 +7066,12 @@ $uiClipboardWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $uiClipboardWritten -ne 'executable written') { throw 'ui_clipboard emission failed' }
 $uiClipboardOutput = & $uiClipboardPath
 if ($LASTEXITCODE -ne 0 -or $uiClipboardOutput -ne 'ui clipboard ok') { throw "the clipboard controllers answered wrongly: exit $LASTEXITCODE" }
+# Pixel-art sprites (D893 family): colour/code slices and dither parity are validated before any index.
+$uiWinpxPath = Join-Path $testBuild 'ui-winpx-selfhost.exe'
+$uiWinpxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_winpx\src\main.e') $repo 'x64' 'windows' $uiWinpxPath
+if ($LASTEXITCODE -ne 0 -or $uiWinpxWritten -ne 'executable written') { throw 'ui_winpx emission failed' }
+$uiWinpxOutput = & $uiWinpxPath
+if ($LASTEXITCODE -ne 0 -or $uiWinpxOutput -ne 'ui winpx ok') { throw "ui_winpx answered wrongly: exit $LASTEXITCODE" }
 # File and document access (D894/D895, widget plan P4-07): refusals before the host is asked,
 # and the recent list refusing a missing document; no dialog is shown in the suite.
 $uiFileAccessPath = Join-Path $testBuild 'ui-file-access-selfhost.exe'

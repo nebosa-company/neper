@@ -32,6 +32,7 @@ type ServerJob = struct {
     config: tls.ServerConfig,
     selected: str,
     failure: err,
+    fatal: bool,
 }
 
 fn serve(job: *ServerJob) {
@@ -52,13 +53,20 @@ fn serve(job: *ServerJob) {
     var request: [4]u8 = zero
     job.failure = io.read_exact(&secure_source, request[0..])
     if job.failure != ok || !same_bytes(request[0..], "ping") { ret }
+    if job.fatal {
+        // #637: a fatal-level close_notify must reach the client as an error, not EOF.
+        let state = mem.cast[*tls.State](stream.state)
+        let alert: [2]u8 = [2]u8{ 2, 0 }
+        job.failure = tls.send_protected(state, &state.write_keys, 21u8, alert[0..])
+        ret
+    }
     var secure_sink = tls.writer(&stream)
     job.failure = io.write_all(&secure_sink, "pong")
     if job.failure == ok { job.failure = tls.close(&stream) }
 }
 
-fn live_handshake(a: *mem.Arena, server_read: *os.File, client_write: *os.File, client_read: *os.File, server_write: *os.File, server_config: tls.ServerConfig, client_config: tls.ClientConfig, client_selected: *str, server_selected: *str) -> err {
-    var server_job = ServerJob { reading: server_read, writing: server_write, config: server_config, selected: "", failure: ok }
+fn live_handshake(a: *mem.Arena, server_read: *os.File, client_write: *os.File, client_read: *os.File, server_write: *os.File, server_config: tls.ServerConfig, client_config: tls.ClientConfig, fatal: bool, client_selected: *str, server_selected: *str) -> err {
+    var server_job = ServerJob { reading: server_read, writing: server_write, config: server_config, selected: "", failure: ok, fatal: fatal }
     let (server_thread, thread_error) = os.thread_create[ServerJob](serve, &server_job, 8388608usize)
     if thread_error != ok { ret thread_error }
     let client_source = io.file_reader(client_read)
@@ -70,11 +78,16 @@ fn live_handshake(a: *mem.Arena, server_read: *os.File, client_write: *os.File, 
     var live_sink = tls.writer(&live_stream)
     if io.write_all(&live_sink, "ping") != ok { os.exit(26i32) }
     var live_source = tls.reader(&live_stream)
-    var reply: [4]u8 = zero
-    if io.read_exact(&live_source, reply[0..]) != ok || !same_bytes(reply[0..], "pong") { os.exit(27i32) }
     var after_close: [1]u8 = zero
-    let (_, end_error) = io.read(&live_source, after_close[0..])
-    if end_error != io.End { os.exit(28i32) }
+    if fatal {
+        let (_, alert_error) = io.read(&live_source, after_close[0..])
+        if alert_error != tls.Protocol { os.exit(55i32) }
+    } else {
+        var reply: [4]u8 = zero
+        if io.read_exact(&live_source, reply[0..]) != ok || !same_bytes(reply[0..], "pong") { os.exit(27i32) }
+        let (_, end_error) = io.read(&live_source, after_close[0..])
+        if end_error != io.End { os.exit(28i32) }
+    }
     if tls.close(&live_stream) != ok || tls.close(&live_stream) != ok { os.exit(29i32) }
     let (_, closed_write_error) = io.write(&live_sink, "x")
     if closed_write_error != tls.Closed { os.exit(30i32) }
@@ -491,10 +504,29 @@ fn main(a: *mem.Arena) -> err {
     var client_selected = ""
     var server_selected = ""
     let live_config = tls.ClientConfig { server_name: "example.com", trust_roots: mid_der, alpn: client_protocols[0..], entropy: client_entropy[0..], now: time.Timestamp { nanos: 1780272000000000000i64 } }
-    let live_error = live_handshake(a, &server_read, &client_write, &client_read, &server_write, credential_config, live_config, &client_selected, &server_selected)
+    let live_error = live_handshake(a, &server_read, &client_write, &client_read, &server_write, credential_config, live_config, false, &client_selected, &server_selected)
     if live_error != ok { os.exit(25i32) }
     if !same_bytes(client_selected, "h2") || !same_bytes(server_selected, "h2") { os.exit(23i32) }
     if os.close(server_read) != ok || os.close(client_write) != ok || os.close(client_read) != ok || os.close(server_write) != ok { os.exit(24i32) }
+
+    // #637: a fatal-level close_notify is a protocol error, not a clean io.End.
+    var fatal_server_read: os.File = zero
+    var fatal_client_write: os.File = zero
+    let (fatal_server_read_open, fatal_client_write_open, fatal_c2s_error) = os.pipe()
+    if fatal_c2s_error != ok { os.exit(56i32) }
+    fatal_server_read = fatal_server_read_open
+    fatal_client_write = fatal_client_write_open
+    var fatal_client_read: os.File = zero
+    var fatal_server_write: os.File = zero
+    let (fatal_client_read_open, fatal_server_write_open, fatal_s2c_error) = os.pipe()
+    if fatal_s2c_error != ok { os.exit(56i32) }
+    fatal_client_read = fatal_client_read_open
+    fatal_server_write = fatal_server_write_open
+    var fatal_client_selected = ""
+    var fatal_server_selected = ""
+    let fatal_error = live_handshake(a, &fatal_server_read, &fatal_client_write, &fatal_client_read, &fatal_server_write, credential_config, live_config, true, &fatal_client_selected, &fatal_server_selected)
+    if fatal_error != ok { os.exit(56i32) }
+    if os.close(fatal_server_read) != ok || os.close(fatal_client_write) != ok || os.close(fatal_client_read) != ok || os.close(fatal_server_write) != ok { os.exit(57i32) }
 
     // The full HTTP helper owns one authenticated connection end to end.
     let (loopback, loopback_error) = net.parse_ip("127.0.0.1")
