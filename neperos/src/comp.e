@@ -102,8 +102,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         frame = os.recv(APP, NO_SLOT)
     }
     composite(gpu.fb, gpu.width, gpu.height, SURFACE_X, SURFACE_Y)
-    // Flush only the app's surface rectangle -- the damage -- not the whole display.
-    let present_error = virtio.gpu_present_rect(gpu, SURFACE_X, SURFACE_Y, SURFACE_W, SURFACE_H)
+    // Flush only the app's surface rectangle -- the damage -- not the whole display, and
+    // clamped to the scanout: a display smaller than the surface must not ask the device
+    // for pixels outside its resource.
+    var present_w = SURFACE_W
+    if SURFACE_X + present_w > gpu.width { present_w = gpu.width - SURFACE_X }
+    var present_h = SURFACE_H
+    if SURFACE_Y + present_h > gpu.height { present_h = gpu.height - SURFACE_Y }
+    let present_error = virtio.gpu_present_rect(gpu, SURFACE_X, SURFACE_Y, present_w, present_h)
     if present_error != ok {
         say("comp present failed\n")
         ret ok
@@ -123,7 +129,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if answer == 4usize { answer = os.recv(APP, NO_SLOT) }
             if answer == 1usize {
                 composite(gpu.fb, gpu.width, gpu.height, SURFACE_X, SURFACE_Y)
-                let next_error = virtio.gpu_present_rect(gpu, SURFACE_X, SURFACE_Y, SURFACE_W, SURFACE_H)
+                let next_error = virtio.gpu_present_rect(gpu, SURFACE_X, SURFACE_Y, present_w, present_h)
                 if next_error == ok { say("comp composited again\n") }
             }
         }

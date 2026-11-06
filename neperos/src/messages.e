@@ -167,13 +167,13 @@ type State = struct {
     hit_total: usize,
 }
 
-// The minute since the epoch now, never earlier than three days in (so a sample "yesterday" exists
-// even when the clock reads zero).
+// The minute since the epoch now, never earlier than seven days in: the oldest sample
+// is 8000 minutes old, so a lower floor made append_msg's subtraction underflow.
 fn now_minutes() -> usize {
     var minutes = 0usize
     let (wall, wall_error) = time.now()
     if wall_error == ok { minutes = usize(wall.nanos / 1000000000i64) / 60usize }
-    if minutes < 4320usize { minutes = 4320usize }
+    if minutes < 10080usize { minutes = 10080usize }
     ret minutes
 }
 
@@ -199,7 +199,10 @@ fn append_msg(s: *State, c: usize, body: str, mine: bool, ago: usize) {
     }
     m.length = i
     m.mine = mine
-    let stamp = s.now_minutes - ago
+    // Clamp as well as flooring the clock: a sample older than the base sits at the
+    // start instead of underflowing (trap) or wrapping (garbage day/minute).
+    var stamp = 0usize
+    if ago < s.now_minutes { stamp = s.now_minutes - ago }
     m.day = stamp / 1440usize
     m.minute = stamp % 1440usize
     s.convs[c].msgs[at] = m
