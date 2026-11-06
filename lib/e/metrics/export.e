@@ -218,6 +218,22 @@ fn push_escaped(b: *str.Builder, s: str, quotes: bool) -> err {
     ret ok
 }
 
+// A label set is valid when no name repeats; for a histogram the synthetic `le`
+// bucket label is reserved, so a caller label with that name is invalid too.
+fn labels_valid(labels: []const Label, histogram: bool) -> bool {
+    var i = 0usize
+    while i < labels.len {
+        let nm = labels[i].name
+        if histogram && str.eq(nm, "le") { ret false }
+        var j = i + 1usize
+        while j < labels.len {
+            if str.eq(nm, labels[j].name) { ret false }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}
 // `{a="1",le="0.5",z="x"}` -- the labels in name order with `extra` slotted in; nothing at
 // all for an empty set.
 fn push_labels(b: *str.Builder, labels: []const Label, extra_name: str, extra_value: str) -> err {
@@ -279,6 +295,13 @@ fn push_value_line(b: *str.Builder, name: str, suffix: str, labels: []const Labe
 
 // The samples as Prometheus text (`openmetrics` false) or OpenMetrics text with its `# EOF`.
 fn render_text(a: *mem.Arena, samples: []const Sample, openmetrics: bool) -> (str, err) {
+    // Malformed label sets are refused before any output: a duplicate name or a
+    // histogram label named `le` would render an exposition Prometheus rejects.
+    var vi = 0usize
+    while vi < samples.len {
+        if !labels_valid(samples[vi].labels, samples[vi].kind == .Histogram) { ret ("", Invalid) }
+        vi += 1usize
+    }
     var need = 512usize
     var i = 0usize
     while i < samples.len {
@@ -461,6 +484,12 @@ fn payload_capacity(samples: []const Sample, extra: usize) -> usize {
 // become one metric with a data point per series. `start_ns` and `time_ns` are Unix
 // nanoseconds, and both stay nonzero.
 fn render_otlp_metrics(a: *mem.Arena, resource: []const Label, scope: str, samples: []const Sample, start_ns: u64, time_ns: u64) -> (str, err) {
+    if !labels_valid(resource, false) { ret ("", Invalid) }
+    var vi = 0usize
+    while vi < samples.len {
+        if !labels_valid(samples[vi].labels, samples[vi].kind == .Histogram) { ret ("", Invalid) }
+        vi += 1usize
+    }
     var extra = scope.len * 2usize + 64usize
     var r = 0usize
     while r < resource.len {

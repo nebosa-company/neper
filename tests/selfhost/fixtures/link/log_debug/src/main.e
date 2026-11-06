@@ -150,11 +150,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     escaped_sinks[0usize] = log.console_sink(&escaped_handle)
     var escaped_logger = log.logger(escaped_sinks[..], .Trace)
     var escaped_fields: [1]log.Field = zero
-    escaped_fields[0usize] = log.Field { name: "key\n", value: log.Value{ String: "value\r\t\x01" } }
+    escaped_fields[0usize] = log.Field { name: "key\n", value: log.Value{ String: "value\r\t\x01\x1b" } }
     if log.write(&escaped_logger, .Info, "message\nnext", escaped_fields[..]) != ok { os.exit(37) }
     if os.close(escaped_handle) != ok { os.exit(38) }
     let (escaped_contents, escaped_read_error) = fs.read_file(a, "log-escaped-fixture.txt", 1024usize)
-    if escaped_read_error != ok || !str.ends_with(escaped_contents, " INFO message\\nnext key\\n=value\\r\\t\\x01\n") { os.exit(39) }
+    if escaped_read_error != ok || !str.ends_with(escaped_contents, " INFO message\\nnext key\\n=value\\r\\t\\x01\\x1b\n") { os.exit(39) }
     var newlines = 0usize
     var escaped_at = 0usize
     while escaped_at < escaped_contents.len {

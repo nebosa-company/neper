@@ -3404,6 +3404,30 @@ fn nones() -> []const u64 {
     ret z[0usize..0usize]
 }
 
+// #653: duplicate label names and a histogram label named `le` are refused, in
+// text and OTLP alike, instead of rendering an exposition with repeated keys.
+fn guard_checks(a: *mem.Arena) -> u32 {
+    var dupl: [2]x.Label = [2]x.Label{ x.Label{ name: "k", value: "1" }, x.Label{ name: "k", value: "2" } }
+    var none: [0]x.Label = zero
+    var no_bounds: [0]f64 = zero
+    var no_buckets: [0]u64 = zero
+    var one_bucket: [1]u64 = zero
+    var s: [1]x.Sample = zero
+    s[0usize] = x.Sample{ name: "m", help: "", kind: x.Kind.Gauge, labels: dupl[0usize..2usize], value: 1.0, bounds: no_bounds[0usize..0usize], buckets: no_buckets[0usize..0usize], sum: 0.0 }
+    let (_, e1) = x.render_text(a, s[0usize..1usize], false)
+    if e1 != x.Invalid { ret 1u32 }
+    var le_name: [1]x.Label = [1]x.Label{ x.Label{ name: "le", value: "0.5" } }
+    s[0usize] = x.Sample{ name: "h", help: "", kind: x.Kind.Histogram, labels: le_name[0usize..1usize], value: 0.0, bounds: no_bounds[0usize..0usize], buckets: one_bucket[0usize..1usize], sum: 0.0 }
+    let (_, e2) = x.render_text(a, s[0usize..1usize], false)
+    if e2 != x.Invalid { ret 2u32 }
+    s[0usize] = x.Sample{ name: "g", help: "", kind: x.Kind.Gauge, labels: none[0usize..0usize], value: 1.0, bounds: no_bounds[0usize..0usize], buckets: no_buckets[0usize..0usize], sum: 0.0 }
+    let (_, e3) = x.render_otlp_metrics(a, dupl[0usize..2usize], "s", s[0usize..1usize], 1u64, 2u64)
+    if e3 != x.Invalid { ret 3u32 }
+    let (_, e4) = x.render_otlp_metrics(a, none[0usize..0usize], "s", s[0usize..1usize], 1u64, 2u64)
+    if e4 != ok { ret 4u32 }
+    ret 0u32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if !case_0(a) { os.exit(1i32) }
     if !case_1(a) { os.exit(2i32) }
@@ -3537,6 +3561,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !case_129(a) { os.exit(130i32) }
     let sc = static_checks(a)
     if sc != 0u32 { os.exit(i32(100u32 + sc)) }
+    let gc = guard_checks(a)
+    if gc != 0u32 { os.exit(i32(200u32 + gc)) }
     try io.print("metrics export ok")
     ret ok
 }
