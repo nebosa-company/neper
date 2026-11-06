@@ -601,7 +601,53 @@ fn local(name: str) -> str {
 }
 
 fn is_element(nodes: []const xml.Node, n: usize, name: str) -> bool {
-    ret nodes[n].kind == .Element && str.eq(local(nodes[n].name), name)
+    if nodes[n].kind != .Element || !str.eq(local(nodes[n].name), name) { ret false }
+    // Resolve the element's prefix through the in-scope xmlns bindings: only
+    // SpreadsheetML main (and the package relationships for Relationship) is accepted,
+    // so a foreign:sheet/foreign:c/foreign:si from an unrelated namespace is rejected.
+    let (uri, has_uri) = element_uri(nodes, n)
+    if !has_uri {
+        // No in-scope binding: an unqualified legacy element is accepted, a prefixed one is not.
+        var k = 0usize
+        while k < nodes[n].name.len {
+            if nodes[n].name[k] == 58u8 { ret false }
+            k += 1usize
+        }
+        ret true
+    }
+    if str.eq(name, "Relationship") { ret str.eq(uri, "http://schemas.openxmlformats.org/package/2006/relationships") }
+    ret str.eq(uri, "http://schemas.openxmlformats.org/spreadsheetml/2006/main")
+}
+
+// The namespace URI bound to the element name's prefix, walking up the xmlns declarations.
+fn element_uri(nodes: []const xml.Node, n: usize) -> (str, bool) {
+    let name = nodes[n].name
+    var cut = name.len
+    var i = 0usize
+    while i < name.len {
+        if name[i] == 58u8 { cut = i }
+        i += 1usize
+    }
+    let prefix = name[0usize..cut]
+    var cur = n
+    var depth = 0usize
+    while cur < nodes.len && depth < 64usize {
+        var a = 0usize
+        while a < nodes[cur].attributes.len {
+            let aname = nodes[cur].attributes[a].name
+            if prefix.len == 0usize {
+                if str.eq(aname, "xmlns") { ret (nodes[cur].attributes[a].value, true) }
+            } else if aname.len == 6usize + prefix.len && str.eq(aname[0usize..6usize], "xmlns:") && str.eq(aname[6usize..], prefix) {
+                ret (nodes[cur].attributes[a].value, true)
+            }
+            a += 1usize
+        }
+        let parent = usize(nodes[cur].parent)
+        if parent == cur || parent >= nodes.len { break }
+        cur = parent
+        depth += 1usize
+    }
+    ret ("", false)
 }
 
 // The attribute of an element whose local name is `name`, whatever its prefix.
