@@ -8870,9 +8870,13 @@ fn artifact_identity(a: *mem.Arena, old: []const u8, old_error: err, text_now: s
     // The key is a candidate (D507, H15): the hit is proved by the bytes, or it is a
     // source change like any other.
     if !artifact_source_verified(a, old, text_now, sha_now) { ret (1u8, false) }
+    // No identity means the compiler cannot prove it wrote this artifact: rebuild it
+    // rather than trusting an artifact whose enum numbering/diagnostic tables may be
+    // from another compiler build (the #1634 warm-cache failure).
+    if compiler_identity == 0usize { ret (9u8, false) }
     // The compiler that wrote it is not this one (D398, H15): its code generation may
     // differ, so the artifact is rebuilt, whatever its source says.
-    if compiler_identity != 0usize && old_compiler != compiler_identity {
+    if old_compiler != compiler_identity {
         // The same compiler under other options (D431, H15): the top byte of the
         // identity is the inline cap, so a cap's artifacts are that cap's.
         if (old_compiler & OPTIONS_MASK) == (compiler_identity & OPTIONS_MASK) { ret (8u8, false) }
@@ -9792,6 +9796,16 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     if lower_error == nir.Capacity {
         try write_capacity_diagnostic(&message, builder, checker.failure_name)
         ret emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, "E-TYPE-9999", message_storage[..message.count])
+    }
+    // The lowering tables are fixed: name the limit instead of the bare error.
+    if lower_error == check.Capacity || lower_error == check.ArgumentCount {
+        try write_all(&message, "the lowering tables are full: ")
+        if lower_error == check.ArgumentCount {
+            try write_all(&message, "a call has more than 32 arguments")
+        } else {
+            try write_all(&message, "one block tracks at most 256 defers/breaks, 33 call results, 512 enum decisions and 32 tagged-union fields")
+        }
+        ret emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, "E-LIMIT-9999", message_storage[..message.count])
     }
     try write_all(&message, "cannot lower `")
     try write_all(&message, checker.failure_name)
@@ -15316,3 +15330,4 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     os.exit(1i32)
     ret ok
 }
+
