@@ -11,7 +11,9 @@
 
 use e.sync
 
-type Call = struct { key: str, used: bool, done: bool, forgotten: bool, waiters: u32, value: str, failure: err }
+// `generation` lets a forgotten execution be detached from its slot: a leader whose
+// generation no longer matches does not publish into the slot a replacement now owns (#1608).
+type Call = struct { key: str, used: bool, done: bool, forgotten: bool, waiters: u32, value: str, failure: err, generation: u64 }
 type Group = struct { lock: sync.Mutex, finished: sync.Condition, calls: []Call }
 error Full
 
@@ -39,7 +41,10 @@ fn same(a: str, b: str) -> bool {
 fn find(g: *Group, key: str) -> usize {
     var i = 0usize
     while i < g.calls.len {
-        if g.calls[i].used && !g.calls[i].forgotten && same(g.calls[i].key, key) { ret i }
+        // A done slot is not a join target: its key may already be freed, and a caller
+        // arriving after the leader finished must start a new execution, not take the
+        // previous result (#7).
+        if g.calls[i].used && !g.calls[i].forgotten && !g.calls[i].done && same(g.calls[i].key, key) { ret i }
         i += 1usize
     }
     ret g.calls.len
@@ -69,11 +74,26 @@ fn do(g: *Group, key: str, ctx: *void, f: fn(*void) -> (str, err)) -> (str, bool
         sync.mutex_unlock(&g.lock)
         ret (value, true, failure)
     }
-    let slot = free_slot(g)
+    var slot = free_slot(g)
     if slot >= g.calls.len {
-        sync.mutex_unlock(&g.lock)
-        ret ("", false, Full)
+        // #1608: a forgotten execution with no waiters can be detached, so the next
+        // caller starts the promised replacement even in a one-slot group. Its leader
+        // still returns its own result; it just must not publish into the reused slot.
+        var i = 0usize
+        while i < g.calls.len {
+            if g.calls[i].used && g.calls[i].forgotten && g.calls[i].waiters == 0u32 {
+                slot = i
+                break
+            }
+            i += 1usize
+        }
+        if slot >= g.calls.len {
+            sync.mutex_unlock(&g.lock)
+            ret ("", false, Full)
+        }
+        g.calls[slot].generation += 1u64
     }
+    let generation = g.calls[slot].generation
     g.calls[slot].used = true
     g.calls[slot].done = false
     g.calls[slot].forgotten = false
@@ -82,6 +102,12 @@ fn do(g: *Group, key: str, ctx: *void, f: fn(*void) -> (str, err)) -> (str, bool
     sync.mutex_unlock(&g.lock)
     let (value, failure) = f(ctx)
     sync.mutex_lock(&g.lock)
+    if g.calls[slot].generation != generation || !g.calls[slot].used {
+        // Detached while running: the slot belongs to a replacement, so only this
+        // leader's own caller sees the result.
+        sync.mutex_unlock(&g.lock)
+        ret (value, false, failure)
+    }
     g.calls[slot].value = value
     g.calls[slot].failure = failure
     g.calls[slot].done = true

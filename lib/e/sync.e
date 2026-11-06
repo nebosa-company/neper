@@ -38,7 +38,11 @@ const COUNT_MAX: u32 = 4294967295u32
 fn deadline_for(timeout: time.Duration) -> i64 {
     let (start, clock_error) = time.monotonic()
     if clock_error != ok { ret 0i64 }
-    ret start.nanos + time.as_nanos(timeout)
+    let added = time.as_nanos(timeout)
+    // Saturate instead of wrapping: a caller cannot ask for "forever" with a negative
+    // duration, so a huge timeout must mean "far away", not an instant timeout (#7).
+    if added > 0i64 && start.nanos > 9223372036854775807i64 - added { ret 9223372036854775807i64 }
+    ret start.nanos + added
 }
 
 fn remaining_for(deadline: i64) -> i64 {

@@ -215,6 +215,56 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let released7 = sync.semaphore_post(&w4.hold, 1u32)
     let joined5 = thread.join_all(group5)
     if joined5 != ok { os.exit(26i32) }
+    // #7: a huge timeout saturates at I64_MAX instead of wrapping to an immediate one.
+    let huge_duration = time.Duration { nanos: 9223372036854775807i64 }
+    if sync.deadline_for(huge_duration) != 9223372036854775807i64 { os.exit(32i32) }
+    // #7: a done slot is not a join target, even while a waiter still holds it.
+    var done_slots: [1]flight.Call = zero
+    var done_group = flight.group(done_slots[0usize..1usize])
+    done_group.calls[0usize] = flight.Call { key: "done", used: true, done: true, forgotten: false, waiters: 1u32, value: "old", failure: ok, generation: 0u64 }
+    if flight.find(&done_group, "done") != 1usize { os.exit(31i32) }
+    // #1608: a one-slot group starts the promised replacement after forget while the
+    // first leader is still running.
+    var one: [1]flight.Call = zero
+    var only = flight.group(one[0usize..1usize])
+    var w6: Work = zero
+    w6.hold = sync.semaphore(0u32)
+    w6.entered = sync.semaphore(0u32)
+    w6.label = "replacement"
+    var leader6: Caller = zero
+    leader6.g = &only
+    leader6.work = &w6
+    leader6.key = "r"
+    let (callers6, callers6_error) = mem.alloc[Caller](a, 1usize)
+    if callers6_error != ok { os.exit(33i32) }
+    callers6[0usize] = leader6
+    let (group6, spawn6_error) = start(a, callers6)
+    if spawn6_error != ok { os.exit(34i32) }
+    sync.semaphore_wait(&w6.entered)
+    flight.forget(&only, "r")
+    var replacement: Caller = zero
+    replacement.g = &only
+    replacement.work = &w6
+    replacement.key = "r"
+    let (callers7, callers7_error) = mem.alloc[Caller](a, 1usize)
+    if callers7_error != ok { os.exit(35i32) }
+    callers7[0usize] = replacement
+    let (group7, spawn7_error) = start(a, callers7)
+    if spawn7_error != ok { os.exit(36i32) }
+    // The replacement is either running (post-fix) or refused (pre-fix); wait for either.
+    var nap = sync.semaphore(0u32)
+    var spins = 0usize
+    while atomic.load(&w6.runs, .Acquire) < 2u32 && atomic.load(&callers7[0usize].done, .Acquire) == 0u32 && spins < 400usize {
+        let slept = sync.semaphore_wait_for(&nap, time.millis(5i64))
+        spins += 1usize
+    }
+    let released8 = sync.semaphore_post(&w6.hold, 2u32)
+    let joined6 = thread.join_all(group6)
+    let joined7 = thread.join_all(group7)
+    if joined6 != ok || joined7 != ok { os.exit(37i32) }
+    if atomic.load(&w6.runs, .Acquire) != 2u32 { os.exit(27i32) }
+    if callers7[0usize].failure != ok || callers7[0usize].joint { os.exit(28i32) }
+    if !text_is(callers7[0usize].value, "replacement") { os.exit(29i32) }
     try io.print("sync flight ok")
     ret ok
 }
