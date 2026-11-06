@@ -5,7 +5,7 @@
 // The allocator's sixteen registers are six the calls clobber, x9-x14, then ten the
 // callee keeps, x19-x28. None is an argument register, so a call writes x0-x7 without
 // parking anything, and every fixed sequence below works in registers no value lives
-// in: x0-x8 and x15-x17. x8 addresses a far frame slot, x16 and x17 are the scratch
+// in: x0-x8 and x15-x17. x16 and x17 are the scratch
 // pair x64 has in r10 and r11, and x15 a third. x18, the platform register, is left
 // alone. Float values live in general registers as bits, as on x64, and borrow v16
 // and v17 for an operation.
@@ -24,7 +24,7 @@ use codegen_x64
 const A64_S0: usize = 16usize
 const A64_S1: usize = 17usize
 const A64_S2: usize = 15usize
-const A64_FAR: usize = 8usize
+
 const A64_FP: usize = 29usize
 const A64_LINK: usize = 30usize
 const A64_STACK: usize = 31usize
@@ -44,15 +44,22 @@ fn pool_register(index: usize) -> (usize, err) {
 fn slot_load(output: *emit_x64.Buffer, rt: usize, slot: usize) -> err {
     let offset = (slot + 1usize) * 8usize
     if offset <= 256usize { ret emit_a64.load_below(output, rt, A64_FP, offset, 8usize, false) }
-    try emit_a64.sub_immediate(output, A64_FAR, A64_FP, offset)
-    ret emit_a64.load_offset(output, rt, A64_FAR, 0usize, 8usize, false)
+    // The address is built in the destination, so no argument or result register is
+    // borrowed for it (#260).
+    try emit_a64.sub_immediate(output, rt, A64_FP, offset)
+    ret emit_a64.load_offset(output, rt, rt, 0usize, 8usize, false)
 }
 
 fn slot_store(output: *emit_x64.Buffer, rt: usize, slot: usize) -> err {
     let offset = (slot + 1usize) * 8usize
     if offset <= 256usize { ret emit_a64.store_below(output, rt, A64_FP, offset, 8usize) }
-    try emit_a64.sub_immediate(output, A64_FAR, A64_FP, offset)
-    ret emit_a64.store_offset(output, rt, A64_FAR, 0usize, 8usize)
+    // x8 carries a C callback result address, so the address scratch is one of the
+    // non-argument scratch registers and never `rt` itself (#260).
+    var address = A64_S2
+    if rt == A64_S2 { address = A64_S1 }
+    if rt == A64_S1 { address = A64_S0 }
+    try emit_a64.sub_immediate(output, address, A64_FP, offset)
+    ret emit_a64.store_offset(output, rt, address, 0usize, 8usize)
 }
 
 fn slot_address(output: *emit_x64.Buffer, rd: usize, slot: usize) -> err {
@@ -981,7 +988,7 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
         try emit_a64.float_compare(output, A64_S0, A64_S1, double)
         // Strictly above a bound outside the range; at or above one that is the minimum.
         var condition = emit_a64.A64_GT
-        if signed && (width == 64usize || !double) { condition = emit_a64.A64_GE }
+        if signed && (width == 64usize || (width == 32usize && !double)) { condition = emit_a64.A64_GE }
         try emit_guarded_trap(builder, current, instruction.site, instruction.path, condition, "narrow", "a float outside ", "", "", 0usize, false, 0usize, 0usize, instruction.ty.name, context)
     }
     try emit_a64.integer_from_float(output, destination, A64_S0, !signed, double)
@@ -1601,6 +1608,8 @@ fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, stack
         let width = codegen_x64.float_width(incoming)
         let place = place_argument(incoming, &integers, &floats, &stacked, &index)
         if place == 0usize || place == 3usize {
+            let int_width = codegen_x64.integer_width(incoming)
+            if int_width != 0usize && int_width < 64usize { try emit_a64.extend_integer(output, index, index, int_width, codegen_x64.signed_integer(incoming)) }
             try slot_store(output, index, stack_slots + at)
         } else {
             if place == 1usize {
@@ -1608,6 +1617,8 @@ fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, stack
             } else {
                 try emit_a64.load_offset(output, A64_S0, A64_FP, 16usize + index * 8usize, 8usize, false)
             }
+            let int_width = codegen_x64.integer_width(incoming)
+            if width == 0usize && int_width != 0usize && int_width < 64usize { try emit_a64.extend_integer(output, A64_S0, A64_S0, int_width, codegen_x64.signed_integer(incoming)) }
             try slot_store(output, A64_S0, stack_slots + at)
         }
         at += 1usize

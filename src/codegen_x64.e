@@ -1676,8 +1676,8 @@ fn float_bound_bits(width: usize, signed: bool, upper: bool, wide: bool) -> usiz
         if width == 32usize { ret 13970166044105375744usize }
         ret 14114281232179134464usize
     }
-    if width == 8usize { ret 3271557120usize }
-    if width == 16usize { ret 3338665984usize }
+    if width == 8usize { ret 3271622656usize }
+    if width == 16usize { ret 3338666240usize }
     if width == 32usize { ret 3472883712usize }
     ret 3741319168usize
 }
@@ -1713,7 +1713,7 @@ fn emit_float_saturation(destination: usize, into: check.Type, wide: bool, outpu
     let low_compare_error = emit_x64.float_compare(output, 0usize, 1usize, wide)
     if low_compare_error != ok { ret (0usize, low_compare_error) }
     var low_condition = 6usize
-    if signed && (width == 64usize || !wide) { low_condition = 2usize }
+    if signed && (width == 64usize || (width == 32usize && !wide)) { low_condition = 2usize }
     let (too_low, low_error) = emit_x64.jump_condition(output, low_condition)
     if low_error != ok { ret (0usize, low_error) }
     let (in_range, range_error) = emit_x64.jump(output)
@@ -1765,7 +1765,7 @@ fn emit_float_range_check(builder: *nir.Builder, current: nir.Function, site: ni
     // Strictly above the bound passes when the bound itself is outside the range;
     // at or above passes when the bound is the minimum.
     var condition = 7usize
-    if signed && (width == 64usize || !wide) { condition = 3usize }
+    if signed && (width == 64usize || (width == 32usize && !wide)) { condition = 3usize }
     let (above_low, low_error) = emit_x64.jump_condition(output, condition)
     if low_error != ok { ret low_error }
     try emit_trap(builder, current, site, token_path, "narrow", "a float outside ", "", "", 0usize, false, 0usize, 0usize, into.name, context)
@@ -2133,6 +2133,10 @@ fn prologue_parameters(builder: *nir.Builder, current: nir.Function, abi: Abi, s
             }
         } else {
             try emit_x64.load_frame_argument(output, 10usize, incoming_stack_displacement(abi, stack_index))
+            if width == 0usize {
+                let int_width = integer_width(incoming)
+                if int_width != 0usize && int_width < 64usize { try emit_x64.normalize_integer(output, 10usize, 10usize, int_width, signed_integer(incoming)) }
+            }
             try emit_x64.store_stack(output, stack_slots + at, 10usize)
         }
         at += 1usize
@@ -2200,6 +2204,8 @@ fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, abi: 
         }
         if in_register {
             if width == 0usize {
+                let int_width = integer_width(incoming)
+                if int_width != 0usize && int_width < 64usize { try emit_x64.normalize_integer(output, register, register, int_width, signed_integer(incoming)) }
                 try emit_x64.store_stack(output, stack_slots + at, register)
             } else {
                 try emit_x64.move_from_float(output, 10usize, register, width == 64usize)
@@ -2207,6 +2213,10 @@ fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, abi: 
             }
         } else {
             try emit_x64.load_frame_argument(output, 10usize, incoming_stack_displacement(abi, stack_index))
+            if width == 0usize {
+                let int_width = integer_width(incoming)
+                if int_width != 0usize && int_width < 64usize { try emit_x64.normalize_integer(output, 10usize, 10usize, int_width, signed_integer(incoming)) }
+            }
             try emit_x64.store_stack(output, stack_slots + at, 10usize)
         }
         at += 1usize
