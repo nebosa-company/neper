@@ -189,6 +189,12 @@ fn load_zero(s: *State) -> bool {
     }
     s.zero_x = f32(i64(bx) - 2147483648i64) / 1000.0
     s.zero_y = f32(i64(by) - 2147483648i64) / 1000.0
+    // A corrupt or foreign /level can decode any angle: keep it in the physical roll range so a later
+    // float-to-usize print cannot trap (#293).
+    if s.zero_x < 0.0 - 180.0 { s.zero_x = 0.0 - 180.0 }
+    if s.zero_x > 180.0 { s.zero_x = 180.0 }
+    if s.zero_y < 0.0 - 180.0 { s.zero_y = 0.0 - 180.0 }
+    if s.zero_y > 180.0 { s.zero_y = 180.0 }
     ret true
 }
 
@@ -578,6 +584,8 @@ fn poll_once(s: *State) -> usize {
     let (gcount, gfirst, gdenied) = sensorclient.read(sensorclient.KIND_GYROSCOPE, gyr[0usize..32usize])
     if denied || gdenied {
         s.streamed = false
+        // A denied stream during a self-test leaves "Measuring..." forever: end the test instead.
+        s.testing = false
         ui.say("level stream denied\n")
         ret 0usize
     }
@@ -617,6 +625,12 @@ fn poll_once(s: *State) -> usize {
                 while s.marks < 4usize && index * 1000usize / s.rate >= mark_ms(s.marks) {
                     report_mark(s, s.marks)
                     s.marks += 1usize
+                }
+                // The recording ends at its last checkpoint: return to the phone's own sensor.
+                if s.marks >= 4usize {
+                    s.replay = false
+                    s.filtering = false
+                    let restarted = start_streams(s, sensorclient.SOURCE_LIVE)
                 }
             }
         }
@@ -686,13 +700,19 @@ fn act(s: *State, id: usize) -> bool {
         ret true
     }
     if id == 113usize {
-        // Replay the recorded session from its start, from a clean filter and no calibration in the way.
+        // Replay the recorded session from its start; a second tap returns to the live sensor. The
+        // calibration is kept in both directions (#293).
+        if s.replay {
+            s.replay = false
+            s.filtering = false
+            let restarted = start_streams(s, sensorclient.SOURCE_LIVE)
+            ui.say("level replay stopped\n")
+            ret true
+        }
         s.replay = true
         s.marks = 0usize
         s.filtering = false
         s.testing = false
-        s.zero_x = 0.0
-        s.zero_y = 0.0
         s.held = false
         s.armed = false
         s.was_level = false
@@ -736,8 +756,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var s: State = zero
-    s.kx = control.kalman_new(0.001f64, 0.003f64, 0.03f64)
-    s.ky = control.kalman_new(0.001f64, 0.003f64, 0.03f64)
+    let (start_kx, start_kx_error) = control.kalman_new(0.001f64, 0.003f64, 0.03f64)
+    if start_kx_error != ok {
+        ui.say("level filter setup failed\n")
+        ret ok
+    }
+    s.kx = start_kx
+    let (start_ky, start_ky_error) = control.kalman_new(0.001f64, 0.003f64, 0.03f64)
+    if start_ky_error != ok {
+        ui.say("level filter setup failed\n")
+        ret ok
+    }
+    s.ky = start_ky
     s.shown = 9999usize
     if !start_streams(&s, sensorclient.SOURCE_LIVE) {
         step_tick(&s)
@@ -746,7 +776,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if load_zero(&s) {
         ui.say("level kept ")
-        ui.say_num(usize(s.zero_x * 10.0 + 1000.0))
+        say_signed(i64(s.zero_x * 1000.0))
         ui.say("\n")
     }
     if !show(a, &kit, &s) {

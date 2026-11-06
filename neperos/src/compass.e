@@ -208,17 +208,19 @@ fn finish_calibration(s: *State) {
     }
     let spread = math.sqrt[f64](var_sum / f64(n))
     s.spread_nt = usize(spread + 0.5f64)
-    s.spread_pct100 = usize(spread / mean * 10000.0f64 + 0.5f64)
+    // A still device gives every radius 0, so mean is 0: the percentage is undefined, not a trap (#292).
+    s.spread_pct100 = 0usize
+    if mean > 0.0f64 { s.spread_pct100 = usize(spread / mean * 10000.0f64 + 0.5f64) }
     ui.say("compass calibrated ")
-    ui.say_num(usize(rounded(ox)))
+    say_signed(rounded(ox))
     ui.say(" ")
     say_signed(rounded(oy))
     ui.say(" ")
-    ui.say_num(usize(rounded(oz)))
+    say_signed(rounded(oz))
     ui.say(" spread ")
     ui.say_num(s.spread_nt)
     ui.say(" nT of ")
-    ui.say_num(usize(mean + 0.5f64))
+    if mean > 0.0f64 { ui.say_num(usize(mean + 0.5f64)) } else { ui.say_num(0usize) }
     ui.say("\n")
 }
 
@@ -290,9 +292,7 @@ fn take_fix(s: *State) {
         if first {
             ui.say("compass fix ")
             if source == sensorclient.SOURCE_GPS { ui.say("gps ") } else { ui.say("network ") }
-            say_signed(lat / 1000i64)
-            ui.say(" ")
-            say_signed(lon / 1000i64)
+            // The coordinates stay in the app: the log is captured by the harness and the host (#292).
             ui.say(" accuracy ")
             ui.say_num(accuracy)
             ui.say("\n")
@@ -480,10 +480,13 @@ fn act(s: *State, id: usize) -> bool {
     }
     if id == 103usize {
         s.calibrating = false
-        if s.streamed && s.cal_n >= 14usize {
-            finish_calibration(s)
+        if s.streamed {
+            // Done with real samples only: fewer than 14 poses means no calibration, not a fit to
+            // simulated data added on top of whatever arrived (#292).
+            if s.cal_n >= 14usize { finish_calibration(s) }
         } else {
             // No stream (a machine without the server): the same fourteen directions computed here.
+            s.cal_n = 0usize
             var k = 0usize
             let f = magnetic.field(sensor_sim.place_latitude(), sensor_sim.place_longitude(), 0.056f64, sensor_sim.model_year())
             while k < 112usize {
