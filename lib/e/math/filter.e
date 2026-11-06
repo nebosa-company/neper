@@ -50,7 +50,9 @@ fn mat_transpose(a: []const f64, out: []f64, r: usize, c: usize) {
 
 // Gauss-Jordan inverse of an `n x n` matrix into `out`; `scratch.len >= n * n`.
 fn mat_inverse(a: []const f64, out: []f64, n: usize, scratch: []f64) -> err {
-    if scratch.len < n * n { ret TooSmall }
+    // n * n must fit, and every buffer must hold the whole matrix before any indexing.
+    if n != 0usize && n > 18446744073709551615usize / n { ret TooSmall }
+    if a.len < n * n || out.len < n * n || scratch.len < n * n { ret TooSmall }
     var work = scratch[..n * n]
     var i = 0usize
     while i < n * n {
@@ -481,6 +483,9 @@ fn ukf[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), observe: 
 
 // The lower Cholesky factor of a symmetric positive-definite matrix.
 fn cholesky(p: []const f64, n: usize, out: []f64) -> err {
+    // Both buffers must hold the whole n x n matrix before clearing or indexing it.
+    if n != 0usize && n > 18446744073709551615usize / n { ret TooSmall }
+    if p.len < n * n || out.len < n * n { ret TooSmall }
     var i = 0usize
     while i < n * n {
         out[i] = 0.0f64
