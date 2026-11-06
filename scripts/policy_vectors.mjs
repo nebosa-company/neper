@@ -195,7 +195,10 @@ for (let i = 0; i < lines.length; i += size) {
 }
 const funcs = chunks.map((c, i) => `fn vectors_${i}() -> str {\n    ret ${c}\n}\n`).join('\n');
 const calls = chunks.map((_, i) => `    if run_chunk(a, vectors_${i}()) != 0u8 { os.exit(${i + 1}i32) }\n`).join('');
-const template = readFileSync(resolve(here, 'policy_fixture_template.e'), 'utf8');
+// `policy_fixture_template.e` belongs to the x.agent.policy generator
+// (scripts/policy_reference.py); net_policy has its own template so the two cannot
+// overwrite each other's fixture structure (run_chunk and the net checks are here).
+const template = readFileSync(resolve(here, 'net_policy_fixture_template.e'), 'utf8');
 const outText = template.replace('//__VECTOR_FUNCTIONS__\n', () => `${funcs}\n`).replace('    //__VECTOR_CALLS__\n', () => calls);
 const target = resolve(here, '..', 'tests/selfhost/fixtures/link/net_policy/src/main.e');
 mkdirSync(dirname(target), { recursive: true });
