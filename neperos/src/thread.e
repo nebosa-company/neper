@@ -50,7 +50,7 @@ type Cap = struct { kind: u8, rights: u8, object: usize, parent: usize }
 // sentinel, and `waiting_child` the child it is blocked reaping (NONE otherwise).
 // (D2157) `detached` marks a thread (from os.thread_detach) whose slot is freed the moment it
 // exits rather than kept for a join -- a thread nobody will reap.
-type Thread = struct { state: u8, name: str, ttbr: usize, caps: [16]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize, detached: usize, window: usize, deadline: usize, app: usize, stack_va: usize, stack_pages: usize }
+type Thread = struct { state: u8, name: str, ttbr: usize, caps: [16]Cap, frame: a64.Frame, parent: usize, exit_code: usize, waiting_child: usize, detached: usize, window: usize, deadline: usize, app: usize, stack_va: usize, stack_pages: usize, owns_space: bool }
 
 // The exit code of a process the kernel killed for a fault, which its parent's reap returns.
 const FAULT_CODE: usize = 18446744073709551615usize
@@ -122,7 +122,7 @@ fn add(space: vm.Space, name: str, arg_table: usize, arg_count: usize) -> usize 
     var empty: [16]Cap = zero
     // The parent is whatever thread is current: none at boot (where `current` is NONE), the
     // launcher under the `launch` system call, so a later `reap` on this child finds its parent.
-    threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: space.size, deadline: 0usize, app: 0usize, stack_va: 0usize, stack_pages: 0usize }
+    threads[slot] = Thread { state: READY, name: name, ttbr: space.ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: space.size, owns_space: true, deadline: 0usize, app: 0usize, stack_va: 0usize, stack_pages: 0usize }
     live += 1usize
     ret slot
 }
@@ -177,7 +177,7 @@ fn add_in_space(ttbr: usize, name: str, elr: usize, arg0: usize, arg1: usize, st
         // (D4810) And its app number: a thread of an installed app is that app to whoever it sends to.
         inherited_app = threads[current].app
     }
-    threads[slot] = Thread { state: READY, name: name, ttbr: ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: inherited, deadline: 0usize, app: inherited_app, stack_va: 0usize, stack_pages: 0usize }
+    threads[slot] = Thread { state: READY, name: name, ttbr: ttbr, caps: empty, frame: frame, parent: current, exit_code: 0usize, waiting_child: NONE, detached: 0usize, window: inherited, owns_space: false, deadline: 0usize, app: inherited_app, stack_va: 0usize, stack_pages: 0usize }
     live += 1usize
     ret slot
 }
@@ -185,6 +185,17 @@ fn add_in_space(ttbr: usize, name: str, elr: usize, arg0: usize, arg1: usize, st
 // (D2157) `detach(t)` (system call 15): give up the right to join thread `t`. A thread already
 // exited is freed now; one still running is marked so it frees itself on exit. x0 is 0, or all-ones
 // for a thread that is not the caller's.
+// Free a slot for reuse: a stack this thread mapped is unmapped, and a process root's
+// (not a thread_create child's shared) window goes back to vm's spare list.
+fn free_slot(index: usize) {
+    if threads[index].stack_pages != 0usize {
+        vm.unmap_stack(threads[index].ttbr, threads[index].stack_va, threads[index].stack_pages)
+        threads[index].stack_pages = 0usize
+    }
+    threads[index].state = FREE
+    if threads[index].owns_space { vm.release(threads[index].ttbr) }
+}
+
 fn detach(frame: *a64.Frame) {
     let t = usize(frame.x[0usize])
     if current == NONE || t >= MAX_THREADS || threads[t].parent != current {
@@ -192,7 +203,7 @@ fn detach(frame: *a64.Frame) {
         ret
     }
     if threads[t].state == EXITED {
-        threads[t].state = FREE
+        free_slot(t)
     } else {
         threads[t].detached = 1usize
     }
@@ -295,8 +306,7 @@ fn finish_current(frame: *a64.Frame, code: usize) -> bool {
     // (D2157) A detached thread is reaped by no one, so free its slot at once; otherwise record the
     // code and wake a parent blocked joining it.
     if threads[gone].detached != 0usize {
-        threads[gone].state = FREE
-        vm.release(threads[gone].ttbr)
+        free_slot(gone)
     } else {
         wake_reaper(gone)
     }
@@ -316,8 +326,7 @@ fn wake_reaper(child: usize) {
         threads[parent].frame.x[0usize] = u64(threads[child].exit_code)
         threads[parent].waiting_child = NONE
         threads[parent].state = READY
-        threads[child].state = FREE
-        vm.release(threads[child].ttbr)
+        free_slot(child)
     }
 }
 
@@ -333,7 +342,7 @@ fn reap(frame: *a64.Frame) {
     }
     if threads[child].state == EXITED {
         frame.x[0usize] = u64(threads[child].exit_code)
-        threads[child].state = FREE
+        free_slot(child)
         ret
     }
     threads[current].waiting_child = child
