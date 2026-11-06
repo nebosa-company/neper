@@ -27,7 +27,7 @@ type Entry = struct { name: str, size: u64, crc32: u32, has_crc: bool, directory
 type Coder = struct { id: u64, props: [8]u8, props_len: usize }
 type Folder = struct { coders: [4]Coder, ncoders: usize, bind_in: [3]usize, bind_out: [3]usize, nbind: usize, main_out: usize, sizes: [4]u64, crc: u32, has_crc: bool, nsub: usize, first_sub: usize, pack_coder: usize }
 type Cur = struct { data: []const u8, at: usize, bad: bool }
-type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, folders: []Folder, pack_pos: []u64, pack_size: []u64, sub_size: []u64, sub_crc: []u32, sub_has: []bool, entries: []Entry, cache_folder: usize, cache: []u8, cached: bool }
+type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, folders: []Folder, pack_pos: []u64, pack_size: []u64, pack_has: []bool, pack_crc: []u32, sub_size: []u64, sub_crc: []u32, sub_has: []bool, entries: []Entry, cache_folder: usize, cache: []u8, cached: bool }
 type Archive = struct { state: *void }
 
 error Invalid
@@ -140,10 +140,16 @@ fn parse_pack_info(c: *Cur, st: *State) -> err {
     if pos_error != ok { ret pos_error }
     let (size, size_error) = mem.alloc[u64](st.a, n + 1usize)
     if size_error != ok { ret size_error }
+    let (pack_has, pack_has_error) = mem.alloc[bool](st.a, n + 1usize)
+    if pack_has_error != ok { ret pack_has_error }
+    let (pack_crc, pack_crc_error) = mem.alloc[u32](st.a, n + 1usize)
+    if pack_crc_error != ok { ret pack_crc_error }
     var i = 0usize
     while i < n {
         size[i] = 0u64
         pos[i] = 0u64
+        pack_has[i] = false
+        pack_crc[i] = 0u32
         i += 1usize
     }
     while true {
@@ -162,13 +168,7 @@ fn parse_pack_info(c: *Cur, st: *State) -> err {
                 i += 1usize
             }
         } else if id == 10u64 {
-            let ignored_has = [1]bool{ false }
-            var has: [1]bool = zero
-            let (hv, hv_error) = mem.alloc[bool](st.a, n + 1usize)
-            if hv_error != ok { ret hv_error }
-            let (cv, cv_error) = mem.alloc[u32](st.a, n + 1usize)
-            if cv_error != ok { ret cv_error }
-            let digest_error = rd_digests(st.a, c, n, hv, cv)
+            let digest_error = rd_digests(st.a, c, n, pack_has, pack_crc)
             if digest_error != ok { ret digest_error }
         } else {
             ret Invalid
@@ -176,6 +176,8 @@ fn parse_pack_info(c: *Cur, st: *State) -> err {
     }
     st.pack_pos = pos[..n]
     st.pack_size = size[..n]
+    st.pack_has = pack_has[..n]
+    st.pack_crc = pack_crc[..n]
     ret ok
 }
 
@@ -691,10 +693,23 @@ fn decode_out(st: *State, f: *Folder, folder_index: usize, out_index: usize, dep
         let start = st.pack_pos[folder_index]
         let length = st.pack_size[folder_index]
         if start > u64(st.data.len) || length > u64(st.data.len) - start { ret (nothing, Invalid) }
+        let pack_check = verify_pack_crc(st, folder_index)
+        if pack_check != ok { ret (nothing, pack_check) }
         input = st.data[usize(start)..usize(start + length)]
     }
     let (out, failure) = run_coder(st.a, f.coders[out_index], input, usize(size))
     ret (out, failure)
+}
+
+// #592: a packed stream that carries a PackInfo CRC32 digest must match before its coder runs.
+fn verify_pack_crc(st: *State, index: usize) -> err {
+    if index >= st.pack_has.len || !st.pack_has[index] { ret ok }
+    if index >= st.pack_pos.len || index >= st.pack_size.len { ret Invalid }
+    let start = st.pack_pos[index]
+    let length = st.pack_size[index]
+    if start > u64(st.data.len) || length > u64(st.data.len) - start { ret Invalid }
+    if hash.crc32(st.data[usize(start)..usize(start + length)]) != st.pack_crc[index] { ret Checksum }
+    ret ok
 }
 
 fn decode_folder(st: *State, index: usize) -> ([]u8, err) {

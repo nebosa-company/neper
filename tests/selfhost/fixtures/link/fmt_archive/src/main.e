@@ -681,6 +681,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     pack_blob[11usize] = u8((start_crc >> 24u32) & 255u32)
     let (pack_archive, pack_error) = sevenzip.open(a, pack_blob[0usize..40usize], sevenzip.default_limits())
     if pack_error != sevenzip.Invalid { die(282i32) }
+    // #592: a PackInfo CRC32 for a packed stream is checked; an absent digest is fine.
+    var digest_data: [3]u8 = zero
+    digest_data[0usize] = 97u8
+    digest_data[1usize] = 98u8
+    digest_data[2usize] = 99u8
+    var digest_has: [1]bool = zero
+    digest_has[0usize] = true
+    var digest_crc: [1]u32 = zero
+    digest_crc[0usize] = hash.crc32(digest_data[0usize..3usize])
+    var digest_pos: [1]u64 = zero
+    var digest_size: [1]u64 = zero
+    digest_size[0usize] = 3u64
+    var no_folders: [0]sevenzip.Folder = zero
+    var no_sub_size: [0]u64 = zero
+    var no_sub_crc: [0]u32 = zero
+    var no_sub_has: [0]bool = zero
+    var no_entries: [0]sevenzip.Entry = zero
+    var no_cache: [0]u8 = zero
+    var digest_state = sevenzip.State { a: a, data: digest_data[0usize..3usize], limits: sevenzip.default_limits(), folders: no_folders[0usize..0usize], pack_pos: digest_pos[0usize..], pack_size: digest_size[0usize..], pack_has: digest_has[0usize..], pack_crc: digest_crc[0usize..], sub_size: no_sub_size[0usize..0usize], sub_crc: no_sub_crc[0usize..0usize], sub_has: no_sub_has[0usize..0usize], entries: no_entries[0usize..0usize], cache_folder: 0usize, cache: no_cache[0usize..0usize], cached: false }
+    if sevenzip.verify_pack_crc(&digest_state, 0usize) != ok { die(288i32) }
+    digest_crc[0usize] = digest_crc[0usize] ^ 1u32
+    if sevenzip.verify_pack_crc(&digest_state, 0usize) != sevenzip.Checksum { die(289i32) }
+    digest_has[0usize] = false
+    if sevenzip.verify_pack_crc(&digest_state, 0usize) != ok { die(290i32) }
     try io.print("fmt archive ok\n")
     ret ok
 }
