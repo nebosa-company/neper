@@ -727,6 +727,9 @@ fn parse_datetime(v: []const u8) -> (i64, bool) {
     let (month, month_ok) = digits_at(v, 5usize, 2usize)
     let (day, day_ok) = digits_at(v, 8usize, 2usize)
     if !year_ok || !month_ok || !day_ok || v[4usize] != 45u8 || v[7usize] != 45u8 { ret (0i64, false) }
+    // i64 nanoseconds hold 1678-2261 only; MySQL's usual 9999-12-31 sentinel must fall back
+    // to text rather than wrap (#56).
+    if year < 1678i64 || year > 2261i64 { ret (0i64, false) }
     if month < 1i64 || month > 12i64 || day < 1i64 || day > time.days_in_month(year, month) { ret (0i64, false) }
     var nanos = time.days_from_civil(year, month, day) * 86400000000000i64
     if v.len == 10usize { ret (nanos, true) }

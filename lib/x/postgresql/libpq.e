@@ -923,7 +923,12 @@ fn decode(r: *Reader, oid: u32, v: []const u8) -> (db.Value, err) {
             value = db.Value{ Text: infinite_day_text }
             ret (value, infinite_day_error)
         }
-        value = db.Value{ Time: time.Instant { nanos: (day + EPOCH_DAYS) * 86400000000000i64 } }
+        // A `date` beyond what i64 nanoseconds holds (1678-2261) must not wrap: report it
+        // as unsupported instead, as timestamp_value does (#57).
+        let epoch_day = day + EPOCH_DAYS
+        let day_limit = I64_MAX / 86400000000000i64
+        if epoch_day > day_limit || epoch_day < 0i64 - day_limit { ret (value, refuse(r.conn, "a date lies outside what time.Instant holds", db.Unsupported)) }
+        value = db.Value{ Time: time.Instant { nanos: epoch_day * 86400000000000i64 } }
         ret (value, ok)
     }
     if oid == OID_NUMERIC {

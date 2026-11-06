@@ -217,6 +217,13 @@ fn oracle_mysql(a: *mem.Arena) -> i32 {
     if p4 { ret 70i32 }
     let (n5, p5) = mysql.parse_datetime("2023-11-14 22:13:20.5")
     if !p5 || n5 != 1700000000500000000i64 { ret 71i32 }
+    // #56: a DATETIME outside 1678-2261 must not overflow; it comes back as text instead.
+    let (n6, p6) = mysql.parse_datetime("9999-12-31 23:59:59")
+    if p6 { ret 72i32 }
+    let (n7, p7) = mysql.parse_datetime("1600-01-01 00:00:00")
+    if p7 { ret 73i32 }
+    let (n8, p8) = mysql.parse_datetime("2261-01-01 00:00:00")
+    if !p8 || n8 <= 0i64 { ret 74i32 }
 
     // Column kinds: TINYINT(1) is a boolean, BIGINT UNSIGNED may pass i64, binary strings are
     // bytes, DECIMAL is text.
