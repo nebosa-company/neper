@@ -179,7 +179,13 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
         try emit_x64.little_u64(output, 0usize)
         slot += 1usize
     }
-    let globals_offset = link_elf.align_up_to(output.count, 8usize)
+    var area_alignment = 1usize
+    var alignment_at = 0usize
+    while alignment_at < builder.global_count {
+        if builder.globals[alignment_at].live && builder.globals[alignment_at].alignment > area_alignment { area_alignment = builder.globals[alignment_at].alignment }
+        alignment_at += 1usize
+    }
+    let globals_offset = link_elf.align_up_to(output.count, area_alignment)
     try link_elf.pad_to(output, globals_offset)
     let globals_size = nir.global_area_size(builder)
     try link_elf.append_globals(builder, output, globals_offset)

@@ -566,7 +566,13 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     }
     // Module-scope `var`s follow the loader's own slots in the same writable segment: this path
     // already has one, so there is nothing to add to the headers -- only more of it.
-    let globals_offset = align_up_to(output.count, 8usize)
+    var area_alignment = 1usize
+    var alignment_at = 0usize
+    while alignment_at < builder.global_count {
+        if builder.globals[alignment_at].live && builder.globals[alignment_at].alignment > area_alignment { area_alignment = builder.globals[alignment_at].alignment }
+        alignment_at += 1usize
+    }
+    let globals_offset = align_up_to(output.count, area_alignment)
     try pad_to(output, globals_offset)
     let globals_size = nir.global_area_size(builder)
     try append_globals(builder, output, globals_offset)
