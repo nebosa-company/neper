@@ -856,7 +856,9 @@ fn parse_files_info(c: *Cur, st: *State) -> err {
             }
             named = true
         }
-        if c.bad { ret Invalid }
+        // Over-reading a property (a short bit vector, say) must fail rather than be
+        // rewound to `end`, which would hide the bytes it consumed from the next property.
+        if c.bad || c.at > end { ret Invalid }
         c.at = end
     }
     if !named { ret Invalid }
