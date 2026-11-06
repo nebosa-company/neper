@@ -1721,8 +1721,10 @@ neper_os_thread_create:
     b.hs .Lthread_size_ok
     mov x22, x9
 .Lthread_size_ok:
+    // One guard page below the header: an overflow faults there instead of
+    // corrupting the join words and running into whatever is below.
+    add x1, x22, #4096
     mov x0, #0
-    mov x1, x22
     mov x2, #3
     mov x3, #0x22
     mov x4, #-1
@@ -1730,8 +1732,14 @@ neper_os_thread_create:
     mov x8, #222
     svc #0
     tbnz x0, #63, .Lthread_create_failed
-    mov x9, x0
-    str x22, [x9, #8]
+    add x9, x0, #4096
+    add x10, x22, #4096
+    str x10, [x9, #8]
+    mov x1, #4096
+    mov x2, #0
+    mov x8, #226
+    svc #0
+    tbnz x0, #63, .Lthread_create_unmap
     add x10, x9, x22
     and x10, x10, #-16
     sub x10, x10, #16
@@ -1761,8 +1769,8 @@ neper_os_thread_create:
     mov x8, #93
     svc #0
 .Lthread_create_unmap:
-    mov x0, x9
-    mov x1, x22
+    sub x0, x9, #4096
+    add x1, x22, #4096
     mov x8, #215
     svc #0
 .Lthread_create_failed:
@@ -1792,7 +1800,7 @@ neper_os_thread_join:
     svc #0
     b .Lthread_join_wait
 .Lthread_join_done:
-    mov x0, x9
+    sub x0, x9, #4096
     mov x1, x10
     mov x8, #215
     svc #0
@@ -1815,12 +1823,13 @@ neper_os_thread_detach:
 // execve; a child whose exec fails ends with 127.
 .global neper_os_spawn
 neper_os_spawn:
-    stp x29, x30, [sp, #-80]!
+    stp x29, x30, [sp, #-112]!
     mov x29, sp
     stp x19, x20, [sp, #16]
     stp x21, x22, [sp, #32]
     stp x23, x24, [sp, #48]
     stp x25, x26, [sp, #64]
+    stp x27, x28, [sp, #80]
     mov x19, x0
     mov x20, x1
     ldp x21, x22, [x2]
@@ -1863,6 +1872,73 @@ neper_os_spawn:
     b .Lspawn_copy_argument
 .Lspawn_copied:
     str xzr, [x25, x22, lsl #3]
+    // The environment comes from /proc/self/environ: this runtime has no saved
+    // startup envp, and a child must inherit the parent's variables (#30).
+    mov x0, x20
+    mov x1, #65536
+    mov x2, #8
+    bl np_alloc
+    cbz x0, .Lspawn_noenv
+    mov x27, x0
+    mov x0, #-100
+    adr x1, .Lspawn_environ_path
+    mov x2, #0
+    mov x3, #0
+    mov x8, #56
+    svc #0
+    tbnz x0, #63, .Lspawn_noenv
+    mov x9, x0
+    mov x10, #0
+.Lspawn_env_read:
+    mov x0, x9
+    add x1, x27, x10
+    mov x2, #65536
+    sub x2, x2, x10
+    cbz x2, .Lspawn_env_read_done
+    mov x8, #63
+    svc #0
+    tbnz x0, #63, .Lspawn_env_read_done
+    cbz x0, .Lspawn_env_read_done
+    add x10, x10, x0
+    b .Lspawn_env_read
+.Lspawn_env_read_done:
+    mov x0, x9
+    mov x8, #57
+    svc #0
+    cbz x10, .Lspawn_noenv
+    mov x0, x20
+    mov x1, #32768
+    mov x2, #8
+    bl np_alloc
+    cbz x0, .Lspawn_noenv
+    mov x28, x0
+    add x13, x27, x10
+    mov x12, x27
+    mov x11, #0
+.Lspawn_env_parse:
+    cmp x12, x13
+    b.hs .Lspawn_env_parsed
+    ldrb w14, [x12]
+    cbz w14, .Lspawn_env_skip
+    str x12, [x28, x11, lsl #3]
+    add x11, x11, #1
+    cmp x11, #4095
+    b.hs .Lspawn_env_parsed
+.Lspawn_env_find:
+    ldrb w14, [x12]
+    cbz w14, .Lspawn_env_skip
+    add x12, x12, #1
+    b .Lspawn_env_find
+.Lspawn_env_skip:
+    add x12, x12, #1
+    b .Lspawn_env_parse
+.Lspawn_env_parsed:
+    str xzr, [x28, x11, lsl #3]
+    mov x22, x28
+    b .Lspawn_env_built
+.Lspawn_noenv:
+    mov x22, #0
+.Lspawn_env_built:
     mov x0, #17
     mov x1, #0
     mov x2, #0
@@ -1901,7 +1977,7 @@ neper_os_spawn:
 .Lspawn_exec:
     ldr x0, [x25]
     mov x1, x25
-    mov x2, #0
+    mov x2, x22
     mov x8, #221
     svc #0
     mov x0, #127
@@ -1924,12 +2000,16 @@ neper_os_spawn:
     movk w9, #0x6979, lsl #16
     str w9, [x19, #8]
 .Lspawn_done:
+    ldp x27, x28, [sp, #80]
     ldp x25, x26, [sp, #64]
     ldp x23, x24, [sp, #48]
     ldp x21, x22, [sp, #32]
     ldp x19, x20, [sp, #16]
-    ldp x29, x30, [sp], #80
+    ldp x29, x30, [sp], #112
     ret
+
+.Lspawn_environ_path:
+    .asciz "/proc/self/environ"
 
 // os.wait(proc: *Proc) -> (i32, err): the exit status, or 128 plus the signal that ended it.
 .global neper_os_wait
