@@ -22817,109 +22817,6 @@ A WOFF 1.0 font decoder (L043): `to_sfnt` reads the 44-byte header and the 20-by
 
 ```neper
 fn monday_type(key: str) -> (str, bool)
-fn airtable_type(key: str) -> (str, bool)
-fn quickbase_type(key: str) -> (str, bool)
-fn airtable_view_type(key: str) -> str
-fn monday_view_type(key: str) -> str
-```
-
-The importer type maps (L044), generated from Appdor's `src/importers` by `scripts/typemaps_gen.mjs`: `monday_type`, `airtable_type` and `quickbase_type` map a source field type to an Appdor field type (false when unlisted, where the importer falls back to text), and `monday_view_type` and `airtable_view_type` map a view type, anything unlisted being a `grid`. Checked against the maps themselves on both hosts (D2347).
-
-### `e.fmt.xlsx`
-
-```neper
-type Kind = enum u8 { Empty, Text, Number, Bool, Date, BadDate }
-type Cell = struct { kind: Kind, text: str, number: f64, flag: bool, year: i64, month: u32, day: u32, hour: u32, minute: u32, second: u32 }
-type Renamed = struct { index: usize, from: str, to: str }
-type Table = struct { headers: []const str, rows: []const []const str, header_row: usize, skipped_rows: usize, renamed: []const Renamed }
-type Sheet = struct { name: str, grid: []const []const Cell }
-type Pin = struct { name: str, row: i64 }
-type Named = struct { name: str, table: Table }
-type Formula = struct { reference: str, column: i64, row: i64, formula: str }
-type FormulaCell = struct { reference: str, has_formula: bool, formula: str }
-type Description = struct { names: []const str, chosen: str, has_chosen: bool, ignored: []const str, needs_choice: bool }
-
-const HEADER_SCAN_ROWS: usize = 10usize
-
-fn empty_cell() -> Cell
-fn text_cell(s: str) -> Cell
-fn number_cell(n: f64) -> Cell
-fn bool_cell(b: bool) -> Cell
-fn date_cell(year: i64, month: u32, day: u32, hour: u32, minute: u32, second: u32) -> Cell
-fn bad_date_cell() -> Cell
-fn js_trim(s: str) -> str
-fn pad2(a: *mem.Arena, n: u32) -> str
-fn normalize_cell(a: *mem.Arena, c: Cell) -> str
-fn filled_cells(a: *mem.Arena, row: []const Cell) -> usize
-fn detect_header_row(a: *mem.Arena, grid: []const []const Cell) -> usize
-fn last_filled(a: *mem.Arena, row: []const Cell) -> usize
-fn last_filled_text(row: []const str) -> usize
-fn resolve_headers(a: *mem.Arena, raw: []const str, width: usize) -> ([]str, err)
-fn empty_table() -> Table
-fn sheet_to_table(a: *mem.Arena, grid: []const []const Cell, pin: i64) -> (Table, err)
-fn workbook_to_tables(a: *mem.Arena, sheets: []const Sheet, pins: []const Pin) -> ([]Named, err)
-fn parse_cell_ref(ref: str) -> (i64, i64, bool)
-fn sheet_formulas(a: *mem.Arena, cells: []const FormulaCell) -> ([]Formula, err)
-fn describe_sheets(a: *mem.Arena, names_in: []const str, requested: str) -> (Description, err)
-const MAX_TABLE_CELLS: usize = 1048576usize
-error TooLarge
-fn header_used(out: []const str, candidate: str) -> bool
-```
-
-Spreadsheet sheet-to-table normalisation (L044), after Appdor's `src/io/xlsx.js`: a sheet already read into typed `Cell` values becomes headers and string rows (`sheet_to_table`, `workbook_to_tables`), with a zero kept as `0`, a boolean as `true`/`false`, a date as its local `YYYY-MM-DD` (and ` HH:MM:SS` off midnight), the header row found by `detect_header_row` (the first of the first ten rows filling more than half of the widest), blank and duplicate headings renamed by the CSV rule (`resolve_headers`), and the width taken from the last filled column. Also `parse_cell_ref`, `sheet_formulas` and `describe_sheets`. The OOXML container is not read: Appdor leaves that to SheetJS. Checked against Appdor's own functions over 700 cases (with `x.migrate.typemaps`) on both hosts (D2347).
-
-### `e.fmt.xlsx.book`
-
-```neper
-error BadSheetName
-error BadLayout
-error BadCell
-error BadText
-error TooLarge
-error NoWorkbook
-error BadWorkbook
-
-type Width = struct { column: u32, chars: f64 }
-type Merge = struct { row: u32, column: u32, rows: u32, columns: u32 }
-type Layout = struct { widths: []const Width, merges: []const Merge, bold_header: bool }
-type Shared = struct { slots: []u32, strings: []str, unique: usize, references: usize }
-
-const MAX_ROWS: usize = 1048576usize
-const MAX_COLUMNS: usize = 16384usize
-const MAX_TEXT_POINTS: usize = 32767usize
-const MAX_NAME_POINTS: usize = 31usize
-const MAX_SHEETS: usize = 255usize
-const FREE: u32 = 4294967295u32
-
-fn ns_main() -> str
-fn no_layout() -> Layout
-fn days_from_civil(year: i64, month: u32, day: u32) -> i64
-fn civil_from_days(days: i64) -> (i64, u32, u32)
-fn leap_year(year: i64) -> bool
-fn month_days(year: i64, month: u32) -> u32
-fn serial_days(year: i64, month: u32, day: u32) -> (i64, bool)
-fn push_escaped(b: *str.Builder, s: str, attribute: bool) -> err
-fn push_ref(b: *str.Builder, column: usize, row: usize) -> err
-fn push_number(b: *str.Builder, v: f64) -> err
-fn finite(v: f64) -> bool
-fn clean_text(s: str) -> bool
-fn valid_sheet_name(name: str) -> bool
-fn shared_index(s: *Shared, value: str) -> u32
-fn needs_preserve(value: str) -> bool
-fn check_sheet(sheet: xlsx.Sheet, layout: Layout) -> (usize, err)
-fn sheet_xml(a: *mem.Arena, sheet: xlsx.Sheet, layout: Layout, sst_table: *Shared) -> (str, err)
-fn styles_xml() -> str
-fn content_types_xml(a: *mem.Arena, sheet_count: usize) -> (str, err)
-fn root_rels_xml() -> str
-fn workbook_xml(a: *mem.Arena, sheets: []const xlsx.Sheet) -> (str, err)
-fn workbook_rels_xml(a: *mem.Arena, sheet_count: usize) -> (str, err)
-fn shared_strings_xml(a: *mem.Arena, sst_table: *const Shared) -> (str, err)
-fn encode(a: *mem.Arena, sheets: []const xlsx.Sheet, layouts: []const Layout) -> ([]u8, err)
-fn sheet_part_name(a: *mem.Arena, index: usize) -> (str, err)
-fn local(name: str) -> str
-fn qualified_attribute(element: *const xml.Node, name: str) -> (str, bool)
-fn part_name(a: *mem.Arena, path: str) -> (str, err)
-fn is_element(nodes: []const xml.Node, n: usize, name: str) -> bool
 fn attr(node: *const xml.Node, name: str) -> (str, bool)
 fn parent_index(nodes: []const xml.Node, n: usize) -> usize
 fn code_is_date(code: str) -> bool
@@ -33451,6 +33348,8 @@ const LIMIT_TOTAL: u64 = 33554432u64
 fn source_read(ctx: *void, dst: []u8) -> (usize, err)
 fn source_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err)
 fn local(name: str) -> str
+fn qualified_attribute(element: *const xml.Node, name: str) -> (str, bool)
+fn part_name(a: *mem.Arena, path: str) -> (str, err)
 fn open_package(a: *mem.Arena, data: []const u8) -> (zip.Archive, err)
 fn find(archive: *zip.Archive, name: str) -> (usize, bool)
 type Collected = struct { texts: []str, styles: []str, lists: []bool }
