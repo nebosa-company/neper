@@ -132,6 +132,10 @@ fn parse_pack_info(c: *Cur, st: *State) -> err {
     let base = rd_number(c)
     let n = rd_count(c, st.limits.entries)
     if c.bad { ret Invalid }
+    // The start header is 32 bytes: a PackPos at or past the end of that part cannot be
+    // trusted, and adding 32 must not wrap into the header (#590). Checked even when no
+    // `id == 9` size table follows.
+    if u64(st.data.len) < 32u64 || base > u64(st.data.len) - 32u64 { ret Invalid }
     let (pos, pos_error) = mem.alloc[u64](st.a, n + 1usize)
     if pos_error != ok { ret pos_error }
     let (size, size_error) = mem.alloc[u64](st.a, n + 1usize)
@@ -147,7 +151,6 @@ fn parse_pack_info(c: *Cur, st: *State) -> err {
         if c.bad { ret Invalid }
         if id == 0u64 { break }
         if id == 9u64 {
-            if base > u64(st.data.len) { ret Invalid }
             var at = 32u64 + base
             i = 0usize
             while i < n {

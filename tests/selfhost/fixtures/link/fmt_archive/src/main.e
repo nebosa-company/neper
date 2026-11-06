@@ -649,6 +649,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
         die(281i32)
     }
     mem.reset(a, repeat_mark)
+    // #590: a PackPos base inside the start header's 32-byte prefix but past the file
+    // must be refused before 32 + base is computed; an empty PackInfo used to accept it.
+    var pack_blob: [48]u8 = zero
+    pack_blob[0usize] = 55u8
+    pack_blob[1usize] = 122u8
+    pack_blob[2usize] = 188u8
+    pack_blob[3usize] = 175u8
+    pack_blob[4usize] = 39u8
+    pack_blob[5usize] = 28u8
+    pack_blob[6usize] = 0u8
+    pack_blob[7usize] = 4u8
+    pack_blob[20usize] = 8u8
+    pack_blob[32usize] = 1u8
+    pack_blob[33usize] = 4u8
+    pack_blob[34usize] = 6u8
+    pack_blob[35usize] = 40u8
+    pack_blob[36usize] = 0u8
+    pack_blob[37usize] = 0u8
+    pack_blob[38usize] = 0u8
+    pack_blob[39usize] = 0u8
+    let header_crc = hash.crc32(pack_blob[32usize..40usize])
+    pack_blob[28usize] = u8(header_crc & 255u32)
+    pack_blob[29usize] = u8((header_crc >> 8u32) & 255u32)
+    pack_blob[30usize] = u8((header_crc >> 16u32) & 255u32)
+    pack_blob[31usize] = u8((header_crc >> 24u32) & 255u32)
+    let start_crc = hash.crc32(pack_blob[12usize..32usize])
+    pack_blob[8usize] = u8(start_crc & 255u32)
+    pack_blob[9usize] = u8((start_crc >> 8u32) & 255u32)
+    pack_blob[10usize] = u8((start_crc >> 16u32) & 255u32)
+    pack_blob[11usize] = u8((start_crc >> 24u32) & 255u32)
+    let (pack_archive, pack_error) = sevenzip.open(a, pack_blob[0usize..40usize], sevenzip.default_limits())
+    if pack_error != sevenzip.Invalid { die(282i32) }
     try io.print("fmt archive ok\n")
     ret ok
 }
