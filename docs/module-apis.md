@@ -5157,6 +5157,7 @@ error Iterations
 const NONE: u32 = 4294967295u32
 
 fn vec3(x: f64, y: f64, z: f64) -> Vec3
+fn power_quaternion(m: []const f64, seed: [4]f64) -> ([4]f64, f64)
 fn add(a: Vec3, b: Vec3) -> Vec3
 fn sub(a: Vec3, b: Vec3) -> Vec3
 fn scale(a: Vec3, s: f64) -> Vec3
