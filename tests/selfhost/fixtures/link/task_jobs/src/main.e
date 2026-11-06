@@ -48,6 +48,10 @@ fn gen_backoff() -> i32 {
     if jobs.retry_delay(exp, 5u32, 1u64) != 16000i64 { ret 105i32 }
     if jobs.retry_delay(exp, 6u32, 1u64) != 32000i64 { ret 106i32 }
     if jobs.retry_delay(exp, 7u32, 1u64) != 60000i64 { ret 107i32 }
+    // #4.5: absurd attempt counts saturate at the i64 maximum instead of wrapping negative.
+    let big_base = jobs.Policy { kind: jobs.BACKOFF_EXPONENTIAL, base_ms: 1000000000i64, cap_ms: 0i64, jitter_ms: 0i64 }
+    if jobs.retry_delay(big_base, 40u32, 1u64) != 9223372036854775807i64 { ret 170i32 }
+    if jobs.retry_delay(hf, 60000u32, 1u64) != 9223372036854775807i64 { ret 171i32 }
     if jobs.retry_delay(exp, 8u32, 1u64) != 60000i64 { ret 108i32 }
     if jobs.retry_delay(jit, 1u32, 3u64) != 647i64 { ret 109i32 }
     if jobs.retry_delay(jit, 2u32, 3u64) != 1034i64 { ret 110i32 }

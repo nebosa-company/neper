@@ -299,7 +299,10 @@ fn work_stealing[Ctx: type](a: *mem.Arena, workers: usize, ctx: *Ctx, task: fn(*
 // on a full queue. Every node's task runs after all of its predecessors'; a cycle leaves
 // nodes unrun and is `Invalid` once everything runnable has finished. Only one DAG run
 // may configure a pool at a time; a competing call is `Invalid`, while ordinary queued
-// work remains ordinary work and can run alongside it.
+// work remains ordinary work and can run alongside it. The pool must be otherwise idle:
+// `submit`/`try_submit` from another thread while a DAG runs would see the DAG tables.
+// ponytail: documented precondition rather than an atomic dag_nodes; make it atomic if
+// concurrent submit during a DAG becomes a real use.
 fn run_dag[Ctx: type](p: *Pool[Ctx], deps: []const u32, dep_starts: []const usize, indegree: []Atomic[u32]) -> err {
     let s = state_of[Ctx](p)
     if dep_starts.len == 0usize { ret Invalid }

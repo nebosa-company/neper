@@ -91,16 +91,30 @@ fn keep(a: *mem.Arena, s: str) -> (str, err) {
 fn retry_delay(p: Policy, attempt: u32, id: u64) -> i64 {
     let seed = i64((id * 1000003u64 + u64(attempt) * 7919u64) % 1000000u64)
     var delay = 0i64
+    // Saturate rather than wrap: a wrapped delay goes negative and the job retries hot.
+    let delay_max = 9223372036854775807i64
     if p.kind == BACKOFF_HANGFIRE {
         let k = i64(attempt) - 1i64
-        let seconds = k * k * k * k + 15i64 + (seed % 30i64) * i64(attempt)
-        delay = seconds * 1000i64
+        if k > 55000i64 {
+            delay = delay_max
+        } else {
+            let seconds = k * k * k * k + 15i64 + (seed % 30i64) * i64(attempt)
+            if seconds > 9223372036854775i64 { delay = delay_max } else { delay = seconds * 1000i64 }
+        }
     } else {
         var steps = attempt
         if steps > 0u32 { steps -= 1u32 }
         if steps > 40u32 { steps = 40u32 }
-        delay = p.base_ms * (1i64 << u64(steps))
-        if p.jitter_ms > 0i64 { delay += seed % (p.jitter_ms + 1i64) }
+        let factor = 1i64 << u64(steps)
+        if p.base_ms > 0i64 && p.base_ms > delay_max / factor {
+            delay = delay_max
+        } else {
+            delay = p.base_ms * factor
+            if p.jitter_ms > 0i64 {
+                let jitter = seed % (p.jitter_ms + 1i64)
+                if jitter > 0i64 && delay > delay_max - jitter { delay = delay_max } else { delay += jitter }
+            }
+        }
     }
     if p.cap_ms > 0i64 && delay > p.cap_ms { delay = p.cap_ms }
     ret delay
@@ -160,7 +174,12 @@ fn fail_at(q: *Queue, at: usize, now: i64, message: str) -> (u8, err) {
         ret (STATE_DEAD, ok)
     }
     q.jobs[at].state = STATE_RETRY
-    q.jobs[at].run_at = now + retry_delay(q.policy, q.jobs[at].attempts, q.jobs[at].id) * MS
+    // Clamp the millisecond delay to the nanosecond range before multiplying.
+    var delay_ms = retry_delay(q.policy, q.jobs[at].attempts, q.jobs[at].id)
+    if delay_ms > 9223372036854i64 { delay_ms = 9223372036854i64 }
+    var due = delay_ms * MS
+    if due <= 0i64 { due = 9223372036854775807i64 } else { due += now }
+    q.jobs[at].run_at = due
     ret (STATE_RETRY, ok)
 }
 
@@ -294,7 +313,6 @@ fn recurring_set(q: *Queue, id: str, expr: str, offset_minutes: i32, name: str, 
     if !found {
         if q.nrec >= q.recs.len { ret Full }
         at = q.nrec
-        q.nrec += 1usize
     }
     let (id_copy, e1) = keep(q.a, id)
     if e1 != ok { ret e1 }
@@ -305,6 +323,8 @@ fn recurring_set(q: *Queue, id: str, expr: str, offset_minutes: i32, name: str, 
     let (payload_copy, e4) = keep(q.a, payload)
     if e4 != ok { ret e4 }
     q.recs[at] = Recurring { id: id_copy, expr: expr_copy, offset_minutes: offset_minutes, name: name_copy, payload: payload_copy, max_attempts: max_attempts, misfire: misfire, grace_ms: grace_ms, next_fire: first.nanos, last_fire: 0i64, active: true, sched: sched }
+    // Counted only after every fallible copy: a zeroed record in the blob makes load Corrupt.
+    if !found { q.nrec += 1usize }
     ret ok
 }
 
