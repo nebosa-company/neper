@@ -19,7 +19,10 @@
 // deadline and keeps the envelope; another 4xx drops it as rejected; a 5xx or a transport
 // failure keeps it, stops the flush and backs the next attempt off 1 s, 2 s, 4 s ... up to 60 s.
 // The offline queue persists through an `e.store` key. Time is the caller's clock: every
-// operation that needs it takes `now` in nanoseconds.
+// operation that needs it takes `now` in nanoseconds. The queue's storage is arena-allocated and
+// `max_items`/`max_bytes` bound only the live queue: every capture (the JSON, the envelope and its
+// kept copy) and every flush attempt grows the caller's arena, and popped or sent envelopes are
+// not reclaimed, so a long-running process must reset or recycle that arena.
 //
 // Not here: sessions, transactions, breadcrumbs, a hub with scopes, TLS-less `https` (a DSN with
 // `https` is parsed, and sent through the `Transport` the caller supplies; `tls_transport`

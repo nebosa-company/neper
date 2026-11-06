@@ -67,13 +67,22 @@ fn write_core(a: *mem.Arena, pid: u32, path: str) -> err {
     command.program = "/bin/sh"
     command.args = args[..]
     command.inherit_env = true
-    if id == own { let allowed = os.syscall(SYS_PRCTL, PR_SET_PTRACER, ~0usize, 0usize, 0usize, 0usize, 0usize) }
+    var ptracer_relaxed = false
+    if id == own {
+        let allowed = os.syscall(SYS_PRCTL, PR_SET_PTRACER, ~0usize, 0usize, 0usize, 0usize, 0usize)
+        ptracer_relaxed = true
+    }
+    // Every exit path, including a failed spawn, must relax Yama's ptrace_scope again.
+    defer {
+        if ptracer_relaxed {
+            let reset = os.syscall(SYS_PRCTL, PR_SET_PTRACER, 0usize, 0usize, 0usize, 0usize, 0usize)
+        }
+    }
     var streams: proc.Streams = zero
     let (child0, spawn_error) = proc.spawn(a, command, streams)
     if spawn_error != ok { ret spawn_error }
     var child = child0
     let (status, wait_error) = proc.wait(&child)
-    if id == own { let reset = os.syscall(SYS_PRCTL, PR_SET_PTRACER, 0usize, 0usize, 0usize, 0usize, 0usize) }
     if wait_error != ok { ret wait_error }
     if status == 127i32 { ret NotFound }
     if status != 0i32 { ret Failed }

@@ -220,10 +220,27 @@ fn push_escaped(b: *str.Builder, s: str, quotes: bool) -> err {
 
 // A label set is valid when no name repeats; for a histogram the synthetic `le`
 // bucket label is reserved, so a caller label with that name is invalid too.
+fn name_valid(s: str, metric: bool) -> bool {
+    if s.len == 0usize { ret false }
+    var i = 0usize
+    while i < s.len {
+        let c = s[i]
+        let alpha = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 95u8
+        let digit = c >= 48u8 && c <= 57u8
+        let colon = metric && c == 58u8
+        if i == 0usize {
+            if !(alpha || colon) { ret false }
+        } else if !(alpha || digit || colon) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 fn labels_valid(labels: []const Label, histogram: bool) -> bool {
     var i = 0usize
     while i < labels.len {
         let nm = labels[i].name
+        if !name_valid(nm, false) { ret false }
         if histogram && str.eq(nm, "le") { ret false }
         var j = i + 1usize
         while j < labels.len {
@@ -234,6 +251,21 @@ fn labels_valid(labels: []const Label, histogram: bool) -> bool {
     }
     ret true
 }
+// OTLP attribute keys are not Prometheus label names (dots are legal), so only duplicate
+// keys are refused there.
+fn attributes_valid(labels: []const Label) -> bool {
+    var i = 0usize
+    while i < labels.len {
+        var j = i + 1usize
+        while j < labels.len {
+            if str.eq(labels[i].name, labels[j].name) { ret false }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}
+
 // `{a="1",le="0.5",z="x"}` -- the labels in name order with `extra` slotted in; nothing at
 // all for an empty set.
 fn push_labels(b: *str.Builder, labels: []const Label, extra_name: str, extra_value: str) -> err {
@@ -299,6 +331,7 @@ fn render_text(a: *mem.Arena, samples: []const Sample, openmetrics: bool) -> (st
     // histogram label named `le` would render an exposition Prometheus rejects.
     var vi = 0usize
     while vi < samples.len {
+        if !name_valid(samples[vi].name, true) { ret ("", Invalid) }
         if !labels_valid(samples[vi].labels, samples[vi].kind == .Histogram) { ret ("", Invalid) }
         vi += 1usize
     }
@@ -320,11 +353,14 @@ fn render_text(a: *mem.Arena, samples: []const Sample, openmetrics: bool) -> (st
     if be != ok { ret ("", be) }
     var b = b0
     i = 0usize
+    var prev_base = ""
+    var prev_kind = Kind.Gauge
+    var have_prev = false
     while i < samples.len {
         let s = samples[i]
         var base = s.name
         if s.kind == .Counter && ends_with_total(base) { base = base[0usize..base.len - 6usize] }
-        if i == 0usize || !str.eq(samples[i - 1usize].name, s.name) {
+        if !have_prev || !str.eq(prev_base, base) || prev_kind != s.kind {
             try str.push(&b, "# HELP ")
             try str.push(&b, base)
             if s.kind == .Counter && !openmetrics { try str.push(&b, "_total") }
@@ -338,6 +374,9 @@ fn render_text(a: *mem.Arena, samples: []const Sample, openmetrics: bool) -> (st
             if s.kind == .Gauge { try str.push(&b, " gauge\n") }
             if s.kind == .Histogram { try str.push(&b, " histogram\n") }
         }
+        prev_base = base
+        prev_kind = s.kind
+        have_prev = true
         if s.kind == .Counter {
             try push_value_line(&b, base, "_total", s.labels, "", s.value)
         }
@@ -370,11 +409,65 @@ fn render_text(a: *mem.Arena, samples: []const Sample, openmetrics: bool) -> (st
     ret (str.done(&b), ok)
 }
 
-// The scrape answer for an `Accept` header: OpenMetrics when the client asks for it, else
-// Prometheus text 0.0.4.
+// The quality of `target` in an `Accept` header: the highest matching q-value, 0 when the
+// media range is absent or explicitly refused; `*/*` applies to any target.
+fn accept_quality(accept: str, wanted_type: str) -> f64 {
+    var best = 0.0f64
+    var at = 0usize
+    while at <= accept.len {
+        var end = at
+        while end < accept.len && accept[end] != 44u8 { end += 1usize }
+        var name = accept[at..end]
+        var quality = 1.0f64
+        let (semi, has_params) = str.find(name, ";")
+        if has_params {
+            quality = 0.0f64
+            let (qpos, has_q) = str.find(name, "q=")
+            if has_q {
+                var k = qpos + 2usize
+                while k < name.len && name[k] != 59u8 && name[k] != 32u8 {
+                    if name[k] >= 48u8 && name[k] <= 57u8 { quality = quality * 10.0f64 + f64(name[k] - 48u8) }
+                    if name[k] == 46u8 {
+                        quality = quality / 10.0f64
+                        var fr = 0.1f64
+                        var d = k + 1usize
+                        while d < name.len && name[d] >= 48u8 && name[d] <= 57u8 {
+                            quality += f64(name[d] - 48u8) * fr
+                            fr = fr / 10.0f64
+                            d += 1usize
+                        }
+                        k = d
+                        break
+                    }
+                    k += 1usize
+                }
+            } else {
+                quality = 1.0f64
+            }
+            name = name[0usize..semi]
+        }
+        var trimmed = name
+        while trimmed.len > 0usize && trimmed[0usize] == 32u8 { trimmed = trimmed[1usize..] }
+        while trimmed.len > 0usize && trimmed[trimmed.len - 1usize] == 32u8 { trimmed = trimmed[0usize..trimmed.len - 1usize] }
+        if str.eq(trimmed, wanted_type) || str.eq(trimmed, "*/*") {
+            if quality > best { best = quality }
+        }
+        if end >= accept.len { break }
+        at = end + 1usize
+    }
+    ret best
+}
+
+// The scrape answer for an `Accept` header: OpenMetrics when the client asks for it with a
+// quality at least that of text/plain, else Prometheus text 0.0.4.
 fn scrape(a: *mem.Arena, samples: []const Sample, accept: str) -> (Scrape, err) {
     var out: Scrape = zero
-    let (_, wants) = str.find(accept, "application/openmetrics-text")
+    var wants = false
+    if accept.len > 0usize {
+        let om = accept_quality(accept, "application/openmetrics-text")
+        let txt = accept_quality(accept, "text/plain")
+        wants = om > 0.0f64 && om >= txt
+    }
     let (body, e) = render_text(a, samples, wants)
     if e != ok { ret (out, e) }
     out.body = body
@@ -484,10 +577,20 @@ fn payload_capacity(samples: []const Sample, extra: usize) -> usize {
 // become one metric with a data point per series. `start_ns` and `time_ns` are Unix
 // nanoseconds, and both stay nonzero.
 fn render_otlp_metrics(a: *mem.Arena, resource: []const Label, scope: str, samples: []const Sample, start_ns: u64, time_ns: u64) -> (str, err) {
-    if !labels_valid(resource, false) { ret ("", Invalid) }
+    if !attributes_valid(resource) { ret ("", Invalid) }
     var vi = 0usize
     while vi < samples.len {
-        if !labels_valid(samples[vi].labels, samples[vi].kind == .Histogram) { ret ("", Invalid) }
+        if !name_valid(samples[vi].name, true) { ret ("", Invalid) }
+        if !attributes_valid(samples[vi].labels) { ret ("", Invalid) }
+        if samples[vi].kind == .Histogram {
+            if samples[vi].buckets.len != samples[vi].bounds.len + 1usize { ret ("", Invalid) }
+            // Buckets are cumulative: a decreasing step would underflow the per-bucket count.
+            var mk = 1usize
+            while mk < samples[vi].buckets.len {
+                if samples[vi].buckets[mk] < samples[vi].buckets[mk - 1usize] { ret ("", Invalid) }
+                mk += 1usize
+            }
+        }
         vi += 1usize
     }
     var extra = scope.len * 2usize + 64usize

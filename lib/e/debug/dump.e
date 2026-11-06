@@ -306,8 +306,20 @@ fn parse_minidump(a: *mem.Arena, bytes: []const u8) -> (Dump, err) {
         let size = le(bytes, entry + 4usize, 4usize)
         let rva = le(bytes, entry + 8usize, 4usize)
         if !fits(bytes, rva, size) { ret (d, OutOfBounds) }
-        if kind == 5u64 && size >= 4u64 { region_count += le(bytes, usize(rva), 4usize) }
-        if kind == 9u64 && size >= 16u64 { region_count += le(bytes, usize(rva), 8usize) }
+        if kind == 5u64 && size >= 4u64 {
+            let count = le(bytes, usize(rva), 4usize)
+            // MemoryList: a 4-byte count then 16-byte entries.
+            if count > (size - 4u64) / 16u64 { ret (d, OutOfBounds) }
+            if count > 18446744073709551615u64 - region_count { ret (d, OutOfBounds) }
+            region_count += count
+        }
+        if kind == 9u64 && size >= 16u64 {
+            let count = le(bytes, usize(rva), 8usize)
+            // Memory64List: an 8-byte count, an 8-byte base, then 16-byte entries.
+            if count > (size - 16u64) / 16u64 { ret (d, OutOfBounds) }
+            if count > 18446744073709551615u64 - region_count { ret (d, OutOfBounds) }
+            region_count += count
+        }
         s += 1usize
     }
     if region_count > u64(bytes.len) / 16u64 { ret (d, OutOfBounds) }
