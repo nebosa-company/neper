@@ -1658,6 +1658,16 @@ fn push_piece(bd: *Builder, p: Piece) {
     let pushed = list.push[Piece](&bd.pieces, p)
 }
 
+// Whether a piece's text is nothing but spaces (a preserved-space piece, which hangs rather than moving to the next line).
+fn all_space_text(t: str) -> bool {
+    if t.len == 0usize { ret true }
+    var i = 0usize
+    while i < t.len {
+        if t[i] != 32u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
 fn is_space_byte(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 12u8 || c == 13u8 }
 
 fn spacing_extra(s: *const style.Style, text: str) -> f64 {
@@ -2514,6 +2524,13 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
             }
             if p.kind == .Text && (pws.overflow_wrap != .Normal || pws.word_break == .BreakWord) {
                 if split_piece(x, j, lim - pos) { continue }
+            }
+            // Nothing before this piece can break, but the line already has content and wrapping is allowed: the piece
+            // starts the next line instead of overflowing this one. Tabs and preserved spaces are not moved - they hang at
+            // the end of the line (`white-space: break-spaces`), and `pre`/`nowrap` keep overflowing by definition.
+            if pws.white_space != .Pre && pws.white_space != .Nowrap && p.kind != .Tab && !all_space_text(p.text) {
+                out.end = j
+                ret out
             }
         } else if pos + needed > lim + 0.01f64 && !has_content && p.kind == .Text && (pws.overflow_wrap != .Normal || pws.word_break == .BreakWord) {
             if split_piece(x, j, lim) { continue }
