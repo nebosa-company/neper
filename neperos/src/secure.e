@@ -54,7 +54,7 @@ const STORAGE_DISK: usize = 2usize
 // The PBKDF2 rounds a new vault stores: low enough that the key comes in a few seconds on the emulated core the
 // tests run on, far below what a real phone should use; a vault keeps its own count, so raising this only
 // affects the vaults created afterwards.
-const ITERATIONS: u32 = 20000u32
+const ITERATIONS: u32 = 210000u32
 const JOB_NONE: usize = 0usize
 const JOB_CREATE: usize = 1usize
 const JOB_UNLOCK: usize = 2usize
@@ -487,8 +487,9 @@ fn generator_length(s: *State) -> usize {
 }
 
 // (C170) A new password of the chosen length (12, 16 or 24) from the letters and digits that cannot be mistaken for
-// each other, plus symbols when asked. The bytes come from the random server, taken only when they fall below the
-// largest multiple of the alphabet's size (no modulo bias); a machine without the server falls back on a small LCG.
+// each other, plus symbols when asked. The bytes come from the random server, refilled as needed, and taken only
+// when they fall below the largest multiple of the alphabet's size (no modulo bias). Without the server it
+// refuses: an unseeded fallback would be the same password on every boot (#178).
 fn generate(a: *mem.Arena, s: *State) -> str {
     var alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     if s.gen_symbols { alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789-_!@#$%&*?" }
@@ -496,25 +497,27 @@ fn generate(a: *mem.Arena, s: *State) -> str {
     let (buffer, buffer_error) = mem.alloc[u8](a, 24usize)
     if buffer_error != ok { ret "" }
     var random: [64]u8 = zero
-    let drawn = vaultfs.random(mem.address_of(&random[0usize]), 8usize)
+    if !vaultfs.random(mem.address_of(&random[0usize]), 8usize) {
+        set_note(s, "No random source on this machine")
+        ret ""
+    }
     let limit = (256usize / alphabet.len) * alphabet.len
     var i = 0usize
-    var at = 0usize
+    var at = 64usize
     while i < length {
-        var picked = false
-        while drawn && !picked && at < 64usize {
-            let v = usize(random[at])
-            at += 1usize
-            if v < limit {
-                buffer[i] = alphabet[v % alphabet.len]
-                picked = true
+        if at >= 64usize {
+            if !vaultfs.random(mem.address_of(&random[0usize]), 8usize) {
+                set_note(s, "The random source stopped")
+                ret ""
             }
+            at = 0usize
         }
-        if !picked {
-            s.seed = (s.seed * 1103515245usize + 12345usize) & 2147483647usize
-            buffer[i] = alphabet[(s.seed >> 8usize) % alphabet.len]
+        let v = usize(random[at])
+        at += 1usize
+        if v < limit {
+            buffer[i] = alphabet[v % alphabet.len]
+            i += 1usize
         }
-        i += 1usize
     }
     ret buffer[0usize..length]
 }
@@ -918,25 +921,7 @@ fn export_codes(a: *mem.Arena, s: *State, plain: bool) -> bool {
     ui.say(" ")
     ui.say_num(length)
     ui.say("\n")
-    var shown = 0usize
-    start = 0usize
-    while start < body.len && shown < 2usize {
-        var end = start
-        while end < body.len && body[end] != 10u8 { end += 1usize }
-        // `say_text` writes at most 40 bytes (and copies them where the console can read them): the line goes out in
-        // pieces of 32.
-        ui.say("secure uri ")
-        var piece_at = start
-        while piece_at < end {
-            var piece_end = piece_at + 32usize
-            if piece_end > end { piece_end = end }
-            ui.say_text(ui.text_of(a, body[piece_at..], piece_end - piece_at))
-            piece_at = piece_end
-        }
-        ui.say("\n")
-        shown += 1usize
-        start = end + 1usize
-    }
+    // The sealed body's URIs carry the TOTP secrets; never print them to the console (#178).
     set_note(s, ui.join(a, ui.join(a, "Sealed ", ui.number(a, lines), " codes in /export.sealed"), "", ""))
     ret true
 }
@@ -1035,6 +1020,16 @@ fn breach_check(a: *mem.Arena, password: str) -> (usize, usize) {
     ret (0usize, 0usize)
 }
 
+// Zero a field's bytes, not just its length, so a typed password does not stay in memory.
+fn wipe_field(f: *ui.Field) {
+    var i = 0usize
+    while i < 160usize {
+        f.bytes[i] = 0u8
+        i += 1usize
+    }
+    f.len = 0usize
+}
+
 // Forget what is on the screen and in memory: with a vault on disk the entries and the key are wiped and come back
 // only by unlocking (the records are read again); the sample vault only returns to its lock screen.
 fn lock_now(s: *State) {
@@ -1056,15 +1051,16 @@ fn lock_now(s: *State) {
         s.keyed = false
     }
     s.screen = LOCK_SCREEN
-    s.master.len = 0usize
+    wipe_field(&s.master)
+    wipe_field(&s.first)
     s.message_len = 0usize
     s.note_len = 0usize
     s.reveal = false
     s.open = NONE
     s.edit = NONE
-    s.f0.len = 0usize
-    s.f1.len = 0usize
-    s.f2.len = 0usize
+    wipe_field(&s.f0)
+    wipe_field(&s.f1)
+    wipe_field(&s.f2)
 }
 
 // ----------------------------------------------------------------------------------------------
