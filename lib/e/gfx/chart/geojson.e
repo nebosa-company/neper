@@ -115,6 +115,32 @@ fn key_of(feature: json.Value, key: str) -> (str, err) {
     ret ("", Invalid)
 }
 
+// Whether two positions agree in every ordinate, altitude included (#794).
+fn ordinate(v: json.Value) -> (f64, bool) {
+    switch v {
+    case .Number as n:
+        let (value, value_error) = json.number_f64(n)
+        if value_error != ok { ret (0.0f64, false) }
+        ret (value, true)
+    default:
+        ret (0.0f64, false)
+    }
+}
+
+fn same_position(x: json.Value, y: json.Value) -> bool {
+    let (xs, xa) = items(x)
+    let (ys, ya) = items(y)
+    if !xa || !ya || xs.len != ys.len { ret false }
+    var i = 0usize
+    while i < xs.len {
+        let (xn, xok) = ordinate(xs[i])
+        let (yn, yok) = ordinate(ys[i])
+        if !xok || !yok || xn != yn { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // One polygon's rings, counted into `at` and written into `m` when `fill`.
 fn add_polygon(polygon: json.Value, region: usize, m: *Map, at: *Counts, fill: bool) -> err {
     let (rings, is_rings) = items(polygon)
@@ -127,7 +153,8 @@ fn add_polygon(polygon: json.Value, region: usize, m: *Map, at: *Counts, fill: b
         if first_error != ok { ret first_error }
         let (last_lon, last_lat, last_error) = position(positions[positions.len - 1usize])
         if last_error != ok { ret last_error }
-        if first_lon != last_lon || first_lat != last_lat { ret Invalid }
+        // A ring is closed only when every ordinate matches, not just lon/lat (#794).
+        if !same_position(positions[0usize], positions[positions.len - 1usize]) { ret Invalid }
         let count = positions.len - 1usize
         if fill {
             m.rings[at.rings] = chart.MapRing { region: region, first: at.vertices, count: count, hole: r > 0usize }
