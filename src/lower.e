@@ -7232,7 +7232,7 @@ fn proof_covers(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     var at = builder.proof_count
     while at > 0usize {
         at = at - 1usize
-        if builder.proof_ok[at] && check.same(builder.proof_index[at], index_name) && proof_same_length(builder, builder.proof_base[at], base_name) && usize(node.token_start) < builder.proof_first_assign[at] && offset <= builder.proof_slack[at] { ret true }
+        if builder.proof_ok[at] && check.same(builder.proof_index[at], index_name) && proof_same_length(builder, builder.proof_base[at], base_name) && usize(node.token_start) < builder.proof_first_assign[at] && offset <= builder.proof_slack[at] && (offset == 0usize || !builder.release) { ret true }
     }
     ret false
 }
