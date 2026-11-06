@@ -1840,6 +1840,9 @@ fn search_rows(a: *mem.Arena, key: widget.Key, t: *const control.Theme, query: s
         total += groups[g].suggestions.len
         g += 1usize
     }
+    // Suggestion keys are `key + 1 + row`, while `key + 4096` and `key + 4097` are the
+    // fallback and status rows; a longer list would duplicate those keys (#781).
+    if total > 4095usize { ret (zero, TooLarge) }
     let (parts, parts_error) = mem.alloc[widget.Node](a, total + groups.len + 3usize)
     if parts_error != ok { ret (zero, TooLarge) }
     var n = 0usize
