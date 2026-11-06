@@ -211,7 +211,8 @@ fn write_user(frame: *a64.Frame) {
     let ptr = usize(frame.x[0usize])
     let len = usize(frame.x[1usize])
     frame.x[0usize] = 0u64
-    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + thread.current_window() { ret }
+    // Order the check so a huge len cannot wrap: len past the window is out at once.
+    if len > thread.current_window() || ptr < vm.USER_BASE || ptr - vm.USER_BASE > thread.current_window() - len { ret }
     var buffer: [256]u8 = zero
     var done = 0usize
     while done < len {
@@ -364,7 +365,8 @@ fn device_write(frame: *a64.Frame) {
     let len = usize(frame.x[2usize])
     frame.x[0usize] = 18446744073709551615u64
     if !allowed { ret }
-    if ptr < vm.USER_BASE || ptr + len > vm.USER_BASE + thread.current_window() { ret }
+    // Order the check so a huge len cannot wrap: len past the window is out at once.
+    if len > thread.current_window() || ptr < vm.USER_BASE || ptr - vm.USER_BASE > thread.current_window() - len { ret }
     var i = 0usize
     while i < len {
         if console_ns16550 { ns16550.put(uart, console_shift, os.load8(ptr + i)) } else { pl011.put(uart, os.load8(ptr + i)) }

@@ -32,7 +32,32 @@ const POLLS: usize = 4000000usize
 
 // `arp_waiting` gates learning the gateway's MAC: a reply is trusted only while a
 // resolution we started is outstanding, so a late or forged reply cannot re-point it.
-type Stack = struct { net: virtio.Net, mac: u64, ip: u32, mask: u32, gw: u32, dns: u32, dns_port: u16, gw_mac: u64, ident: u16, arp_waiting: bool }
+type Stack = struct { net: virtio.Net, mac: u64, ip: u32, mask: u32, gw: u32, dns: u32, dns_port: u16, gw_mac: u64, ident: u16, arp_waiting: bool, seed: u64 }
+
+// A 64-bit seed from eight bytes of the net server's entropy device; a zero seed would
+// make the LCG degenerate, so fall back to the golden ratio constant.
+fn seed_from(at: usize) -> u64 {
+    var seed = 0u64
+    var i = 0usize
+    while i < 8usize {
+        seed = seed | (u64(os.load8(at + i)) << u64(i * 8usize))
+        i += 1usize
+    }
+    if seed == 0u64 { seed = 12297829382473034410u64 }
+    ret seed
+}
+
+// The stack's draw for DNS ids/ports, DHCP xids and TCP ISS/ports. ponytail: an LCG over
+// the entropy seed, not a CSPRNG -- enough to make the 4-tuple unguessable per boot, not
+// for key material.
+fn next_random(st: *Stack) -> u32 {
+    st.seed = st.seed *% 6364136223846793005u64 +% 1442695040888963407u64
+    ret u32(st.seed >> 32u64)
+}
+
+fn random_port(st: *Stack) -> u16 {
+    ret 49152u16 + u16(next_random(st) % 16384u32)
+}
 
 fn put16(at: usize, value: u16) {
     os.store8(at, u8(value >> 8u16))
@@ -132,10 +157,10 @@ fn say_ip(ip: u32) {
 }
 
 // Bring the interface up: the driver opened, no address yet.
-fn attach(device: virtio.Device) -> (Stack, err) {
+fn attach(device: virtio.Device, seed: u64) -> (Stack, err) {
     let (net, net_error) = virtio.net_open(device)
     if net_error != ok { ret (zero, net_error) }
-    ret (Stack { net: net, mac: net.mac, ip: 0u32, mask: 0u32, gw: 0u32, dns: 0u32, dns_port: 53u16, gw_mac: BROADCAST, ident: 1u16, arp_waiting: false }, ok)
+    ret (Stack { net: net, mac: net.mac, ip: 0u32, mask: 0u32, gw: 0u32, dns: 0u32, dns_port: 53u16, gw_mac: BROADCAST, ident: 1u16, arp_waiting: false, seed: seed }, ok)
 }
 
 // ---- Ethernet and ARP ----
@@ -359,7 +384,7 @@ fn dhcp_send(st: *Stack, kind: u8, want: u32, server: u32) -> err {
     os.store8(at, 1u8)
     os.store8(at + 1usize, 1u8)
     os.store8(at + 2usize, 6u8)
-    put32(at + 4usize, 1397965394u32)
+    put32(at + 4usize, next_random(st))
     put16(at + 10usize, 32768u16)
     put_mac(at + 28usize, st.mac)
     put32(at + 236usize, 1669485411u32)
@@ -458,7 +483,8 @@ fn resolve(st: *Stack, name: str) -> (u32, err) {
     var attempt = 0usize
     while attempt < 3usize {
         let at = udp_payload(st)
-        let id = 4660u16 + u16(attempt)
+        let id = u16(next_random(st) & 65535u32)
+        let query_port = random_port(st)
         put16(at, id)
         put16(at + 2usize, 256u16)
         put16(at + 4usize, 1u16)
@@ -485,14 +511,14 @@ fn resolve(st: *Stack, name: str) -> (u32, err) {
         put16(o + 1usize, 1u16)
         put16(o + 3usize, 1u16)
         o += 5usize
-        let send_error = udp_send(st, 53000u16, st.dns, st.dns_port, o - at)
+        let send_error = udp_send(st, query_port, st.dns, st.dns_port, o - at)
         if send_error != ok { ret (0u32, send_error) }
         var spins = 0usize
         while spins < POLLS {
             let (proto, src, payload, len) = poll(st)
             // Only the configured resolver may answer: a forged reply from another host
             // is ignored even if it guesses the port and id.
-            if proto == PROTO_UDP && src == st.dns && len >= UDP_HDR + 12usize && get16(payload) == st.dns_port && get16(payload + 2usize) == 53000u16 {
+            if proto == PROTO_UDP && src == st.dns && len >= UDP_HDR + 12usize && get16(payload) == st.dns_port && get16(payload + 2usize) == query_port {
                 let msg = payload + UDP_HDR
                 let msg_len = len - UDP_HDR
                 if get16(msg) == id {

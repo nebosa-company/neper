@@ -27,9 +27,6 @@ const ESTABLISHED: u8 = 2u8
 
 type Conn = struct { st: *inet.Stack, lport: u16, rip: u32, rport: u16, snd_nxt: u32, snd_una: u32, rcv_nxt: u32, ring: usize, head: usize, count: usize, state: u8, peer_fin: bool, reset: bool, peer_window: usize }
 
-var next_port: u16 = 49152u16
-var next_iss: u32 = 1000u32
-
 // True when sequence number `a` is at or after `b` (within half the sequence space).
 fn at_or_after(a: u32, b: u32) -> bool {
     ret (a -% b) < 2147483648u32
@@ -140,11 +137,12 @@ fn pump(c: *Conn) {
 
 // Open a connection to `rip`:`rport`, with `ring` the address of a RING-byte buffer for incoming data.
 fn connect(st: *inet.Stack, rip: u32, rport: u16, ring: usize) -> (Conn, err) {
-    var c = Conn { st: st, lport: next_port, rip: rip, rport: rport, snd_nxt: next_iss, snd_una: next_iss, rcv_nxt: 0u32, ring: ring, head: 0usize, count: 0usize, state: SYN_SENT, peer_fin: false, reset: false, peer_window: 0usize }
-    // Wrap inside the ephemeral range instead of trapping at 65535.
-    next_port = next_port +% 1u16
-    if next_port < 49152u16 { next_port = 49152u16 }
-    next_iss = next_iss +% 64000u32
+    // The ephemeral port and the initial send sequence number come from the stack's
+    // entropy-seeded draw, not a boot-time counter: an on-link attacker cannot predict
+    // the 4-tuple or the sequence space.
+    let lport = inet.random_port(st)
+    let iss = inet.next_random(st)
+    var c = Conn { st: st, lport: lport, rip: rip, rport: rport, snd_nxt: iss, snd_una: iss, rcv_nxt: 0u32, ring: ring, head: 0usize, count: 0usize, state: SYN_SENT, peer_fin: false, reset: false, peer_window: 0usize }
     var attempt = 0usize
     while attempt < 4usize {
         let send_error = emit(&c, SYN, c.snd_una, 0usize, 0usize)

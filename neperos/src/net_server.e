@@ -255,7 +255,11 @@ fn joined_is(index: usize) -> bool {
 fn main(a: *mem.Arena, args: []str) -> err {
     let device = read_device()
     var s: Session = zero
-    let (st, open_error) = inet.attach(device)
+    // The stack's own randomness (DNS id, DHCP xid, TCP ISS/port) comes from the
+    // entropy device, since the kernel-layer modules have no source of their own.
+    var entropy: [64]u8 = zero
+    fetch_entropy(mem.address_of(&entropy[0usize]))
+    let (st, open_error) = inet.attach(device, inet.seed_from(mem.address_of(&entropy[0usize])))
     if open_error == ok {
         s.st = st
         s.present = true
