@@ -127,6 +127,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if focused != 0i32 || !has_third || third.id != 3u32 || third.action != 0u8 { os.exit(25i32) }
     let (_, has_fourth) = os.accessibility_take(w)
     if has_fourth { os.exit(26i32) }
+    // #616: the request ring holds eight; the next request is refused with a failure
+    // HRESULT, not reported as S_OK, and nothing is enqueued.
+    var ring_at = 0usize
+    while ring_at < 8usize {
+        if os.uia_invoke(save - 8usize + 24usize) != 0i32 { os.exit(34i32) }
+        ring_at += 1usize
+    }
+    if os.uia_invoke(save - 8usize + 24usize) == 0i32 { os.exit(35i32) }
+    ring_at = 0usize
+    while ring_at < 8usize {
+        let (_, has_ring) = os.accessibility_take(w)
+        if !has_ring { os.exit(36i32) }
+        ring_at += 1usize
+    }
+    let (_, has_ninth) = os.accessibility_take(w)
+    if has_ninth { os.exit(37i32) }
     // Focus: the focused record is what the root reports.
     nodes[2].flags = 2u16
     if os.accessibility_publish(w, nodes[0..]) != ok { os.exit(27i32) }

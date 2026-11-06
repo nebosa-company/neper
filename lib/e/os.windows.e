@@ -4146,6 +4146,9 @@ const UIA_E_ELEMENT_NOT_AVAILABLE: u32 = 2147746305u32
 const UIA_E_ELEMENT_NOT_ENABLED: u32 = 2147746304u32
 const UIA_E_NO_INTERFACE: u32 = 2147500034u32
 const UIA_E_OUT_OF_MEMORY: u32 = 2147942414u32
+// E_FAIL when the request ring is full: the action was not queued, so the accessibility
+// client sees a failure rather than a false S_OK.
+const UIA_E_FAIL: u32 = 2147500037u32
 // The bits of `e.ui.accessibility`'s flags and actions the bridge reads.
 const UIA_DISABLED: u16 = 1u16
 const UIA_FOCUSED: u16 = 2u16
@@ -4785,7 +4788,7 @@ fn uia_request(this: usize, action: u8, text: *const u16) -> i32 {
     let s = &uia_stores[e.store]
     let n = &s.nodes[index]
     if n.flags & UIA_DISABLED != 0u16 && action != UIA_DO_FOCUS { ret mem.bitcast[i32](UIA_E_ELEMENT_NOT_ENABLED) }
-    if uia_request_count >= UIA_REQUESTS { ret 0i32 }
+    if uia_request_count >= UIA_REQUESTS { ret mem.bitcast[i32](UIA_E_FAIL) }
     let r = &uia_requests[(uia_request_head + uia_request_count) % UIA_REQUESTS]
     r.handle = s.handle
     r.id = n.id
