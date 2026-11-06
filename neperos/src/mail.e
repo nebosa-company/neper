@@ -214,13 +214,11 @@ fn net_reader() -> io.Reader { ret io.Reader { ctx: nil, read: net_read } }
 
 fn net_writer() -> io.Writer { ret io.Writer { ctx: nil, write: net_write, flush: net_flush } }
 
-// Connect to the test mail host: TLS first (the chain is checked against the roots and the test CA), plain text
-// when that port is not answered. The result is the network result and whether the link is TLS.
+// Connect to the test mail host over TLS only: the chain is checked against the roots and the test CA, and a
+// TLS or certificate failure refuses the account instead of downgrading to plaintext credentials (#257 item 9).
 fn mail_connect(tls_port: u16, plain_port: u16) -> (usize, bool) {
     let secure_result = netclient.connect("neper.test", tls_port, true)
-    if secure_result == netproto.R_OK { ret (secure_result, true) }
-    let plain_result = netclient.connect("neper.test", plain_port, false)
-    ret (plain_result, false)
+    ret (secure_result, secure_result == netproto.R_OK)
 }
 
 // Fetch the INBOX over IMAP and make it the app's inbox: the number of messages, or 0 when there is no server or
@@ -243,6 +241,28 @@ fn disposition_name(disposition: str) -> str {
         at += 1usize
     }
     ret ""
+}
+
+// (C158) A Content-Disposition file name made safe to place under /Downloads: only letters, digits,
+// '.', '-' and '_' survive (everything else becomes '_'), leading dots are stripped, the result is
+// capped at 63 bytes, and an empty result becomes "attachment" (#257 item 12).
+fn safe_download_name(a: *mem.Arena, raw: str) -> str {
+    if raw.len == 0usize { ret "attachment" }
+    let (out, out_error) = mem.alloc[u8](a, raw.len + 1usize)
+    if out_error != ok { ret "attachment" }
+    var n = 0usize
+    var i = 0usize
+    while i < raw.len && n < 63usize {
+        let c = raw[i]
+        let plain = (c >= 97u8 && c <= 122u8) || (c >= 65u8 && c <= 90u8) || (c >= 48u8 && c <= 57u8) || c == 46u8 || c == 45u8 || c == 95u8
+        if plain { out[n] = c } else { out[n] = 95u8 }
+        n += 1usize
+        i += 1usize
+    }
+    var start = 0usize
+    while start < n && out[start] == 46u8 { start += 1usize }
+    if start == n { ret "attachment" }
+    ret out[start..n]
 }
 
 // (C158) The first attachment of a multipart/mixed message: a part whose Content-Disposition is `attachment`, its
@@ -272,36 +292,24 @@ fn find_attachment(a: *mem.Arena, headers: []const mime.Header, body: io.Reader)
         let (disposition, has_disposition) = mime.header(part.headers, "Content-Disposition")
         if has_disposition && extract.starts_fold(disposition, 0usize, "attachment") {
             let file_name = disposition_name(disposition)
-            let (raw_room, raw_error) = mem.alloc[u8](a, 24576usize)
+            // The whole encoded part up to 1 MiB: a larger attachment is truncated here, and
+            // its decoded length (not the encoded one) is what save_attachment reports.
+            let (raw_room, raw_error) = mem.alloc[u8](a, 1048576usize)
             if raw_error != ok { ret ("", "", false) }
             var part_body = part.body
             var got = 0usize
             var more = true
-            while more && got < 24576usize {
-                let (count, read_error) = io.read(&part_body, raw_room[got..24576usize])
+            while more && got < 1048576usize {
+                let (count, read_error) = io.read(&part_body, raw_room[got..1048576usize])
                 if read_error != ok || count == 0usize { more = false } else { got += count }
             }
             var data = raw_room[0usize..got]
             let (encoding, has_encoding) = mime.header(part.headers, "Content-Transfer-Encoding")
-            if has_encoding && extract.starts_fold(encoding, 0usize, "base64") {
-                // Whitespace out, then decoded.
-                var clean = raw_room[0usize..0usize]
-                var w = 0usize
-                var r = 0usize
-                while r < got {
-                    let c = raw_room[r]
-                    if c != 10u8 && c != 13u8 && c != 32u8 {
-                        raw_room[w] = c
-                        w += 1usize
-                    }
-                    r += 1usize
-                }
-                clean = raw_room[0usize..w]
-                let (room, room_error) = mem.alloc[u8](a, w / 4usize * 3usize + 3usize)
-                if room_error != ok { ret ("", "", false) }
-                let (decoded, decode_error) = bytes.base64_decode(room, clean, .Standard)
+            // base64 and quoted-printable both decoded by the shared decoder; anything else is raw.
+            if has_encoding {
+                let (decoded, decode_error) = extract.decode_body(a, raw_room[0usize..got], "", encoding)
                 if decode_error != ok { ret ("", "", false) }
-                data = decoded
+                ret (file_name, decoded, true)
             }
             ret (file_name, data, true)
         }
@@ -964,7 +972,7 @@ fn open_in_document(a: *mem.Arena, s: *State, i: usize, attachment: bool) -> boo
         if message_error != ok { ret false }
         let (file_name, data, found) = find_attachment(a, message.headers, message.body)
         if !found || data.len == 0usize { ret false }
-        path = ui.join(a, "/Downloads/", file_name, "")
+        path = ui.join(a, "/Downloads/", safe_download_name(a, file_name), "")
         data_text = data
     } else {
         var found: Found = zero
@@ -1060,7 +1068,7 @@ fn remote_archive(a: *mem.Arena, s: *State, uid: usize) -> bool {
 fn save_attachment(a: *mem.Arena, s: *State, i: usize) -> usize {
     let m = s.mails[i]
     let name = ui.text_of(a, m.att_name[0usize..], m.att_name_len)
-    let dest = ui.join(a, "/Downloads/", name, "")
+    let dest = ui.join(a, "/Downloads/", safe_download_name(a, name), "")
     let made_dir = vaultfs.mkdir("/Downloads")
     var written = false
     if m.remote {
