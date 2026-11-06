@@ -30,7 +30,7 @@ const MAX_ATTRIBUTES_PER_ELEMENT: usize = 64usize
 const MAX_WRITER_DEPTH: usize = 256usize
 
 // Open element names are kept on a stack of at most `max_depth` entries.
-type State = struct { a: *mem.Arena, source: []const u8, at: usize, options: Options, stack: []str, depth: usize, pending_end: str, has_pending: bool, started: bool, finished: bool, xml_decl_allowed: bool }
+type State = struct { a: *mem.Arena, source: []const u8, at: usize, options: Options, stack: []str, depth: usize, pending_end: str, has_pending: bool, started: bool, finished: bool, xml_decl_allowed: bool, rooted: bool }
 
 fn slurp(a: *mem.Arena, source: io.Reader) -> ([]u8, err) {
     let (contents, read_error) = slurp_with_limit(a, source, DEFAULT_MAX_BYTES)
@@ -471,6 +471,11 @@ fn reader_next_err(r: *Reader) -> (Event, bool, err) {
             at = value_end + 1usize
         }
         at = skip_space(source, at)
+        // One document element: a start tag while no element is open may appear once.
+        if s.depth == 0usize {
+            if s.rooted { ret (zero, false, Invalid) }
+            s.rooted = true
+        }
         var empty = false
         if source[at] == 47u8 {
             empty = true
@@ -594,6 +599,7 @@ fn stream(a: *mem.Arena, source: []const u8, options: Options) -> (Reader, err) 
     s.options = effective_options
     s.stack = stack
     s.depth = 0usize
+    s.rooted = false
     s.has_pending = false
     s.started = false
     s.finished = false
