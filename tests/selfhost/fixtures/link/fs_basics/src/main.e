@@ -770,6 +770,30 @@ fn main(a: *mem.Arena) -> err {
     let (allowed, allowed_error) = fs.read_file(a, "np-fs/one.txt", 11usize)
     if allowed_error != ok { os.exit(38i32) }
     if allowed.len != 11usize { os.exit(39i32) }
+    // #106: a 10000-byte file is longer than the 8192-byte first guess; the read grows to
+    // End rather than stopping at the stat size, an exact limit is allowed, and one byte
+    // less is refused.
+    let (grow_bytes, grow_alloc) = mem.alloc[u8](a, 10000usize)
+    if grow_alloc != ok { os.exit(264i32) }
+    var grow_i = 0usize
+    while grow_i < 10000usize {
+        grow_bytes[grow_i] = 97u8
+        grow_i += 1usize
+    }
+    if fs.write_file(a, "np-fs/grow.txt", grow_bytes[..]) != ok { os.exit(264i32) }
+    let (grow_read, grow_error) = fs.read_file(a, "np-fs/grow.txt", 0usize)
+    if grow_error != ok || grow_read.len != 10000usize || grow_read[9999usize] != 97u8 { os.exit(265i32) }
+    let (grow_exact, grow_exact_error) = fs.read_file(a, "np-fs/grow.txt", 10000usize)
+    if grow_exact_error != ok || grow_exact.len != 10000usize { os.exit(265i32) }
+    let (_, grow_short_error) = fs.read_file(a, "np-fs/grow.txt", 9999usize)
+    if grow_short_error != fs.Invalid { os.exit(266i32) }
+    if fs.remove_file(a, "np-fs/grow.txt") != ok { os.exit(266i32) }
+    // A procfs file reports st_size 0 and still has content; only reading to End returns
+    // it. Linux only: the path does not exist on the other hosts.
+    when target.os == .Linux {
+        let (proc_bytes, proc_error) = fs.read_file(a, "/proc/self/cmdline", 0usize)
+        if proc_error != ok || proc_bytes.len == 0usize { os.exit(267i32) }
+    }
     // Host file sizes are u64, but read buffers are target-sized.  On wasm32,
     // a 4 GiB stat result must be refused before it can narrow to an empty read.
     let (_, helper_limit_error) = fs.size_for_read(11u64, 10usize)

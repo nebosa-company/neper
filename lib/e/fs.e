@@ -419,12 +419,59 @@ fn make_dirs_at(a: *mem.Arena, r: *const Root, relative_path: str) -> err {
 }
 
 // A host's byte count is u64 while an arena allocation is indexed by usize.
-// Refuse a count the target cannot represent before narrowing it or applying a cap.
+// The stat size is only the first guess at a capacity: it may be zero for
+// procfs-like files and stale for a growing one, so `read_stream` reads to End
+// and enforces `limit` on the bytes actually seen.
 fn size_for_read(size: u64, limit: usize) -> (usize, err) {
     if mem.size_of[usize]() == 4usize && size > 4294967295u64 { ret (0usize, Invalid) }
     let usable = usize(size)
     if limit != 0usize && usable > limit { ret (0usize, Invalid) }
     ret (usable, ok)
+}
+
+// Every byte up to End, growing the arena buffer from `guess` when a file is
+// longer than its stat said (a short `limit` is `Invalid`, never a short read).
+fn read_stream(a: *mem.Arena, file: os.File, guess: usize, limit: usize, detail: *os.ErrorDetail, path_text: str, record: bool) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    var capacity = guess
+    if capacity < 8192usize { capacity = 8192usize }
+    if limit != 0usize && capacity > limit { capacity = limit }
+    let (first, first_error) = mem.alloc[u8](a, capacity)
+    if first_error != ok { ret (nothing, first_error) }
+    var bytes = first
+    capacity = bytes.len
+    var filled = 0usize
+    while true {
+        if filled == capacity {
+            if limit != 0usize && capacity >= limit {
+                // At the cap: one more byte decides between an exact fit (End) and overflow.
+                var probe: [1]u8 = zero
+                let (count, probe_error) = os.read(file, probe[..])
+                if probe_error != ok {
+                    if record { *detail = os.last_error_detail("read", path_text) }
+                    ret (nothing, from_os(probe_error))
+                }
+                if count == 0usize { ret (bytes[0usize..filled], ok) }
+                ret (nothing, Invalid)
+            }
+            if capacity > (0usize -% 1usize) / 2usize { ret (nothing, Invalid) }
+            var next = capacity * 2usize
+            if limit != 0usize && next > limit { next = limit }
+            let (grown, grow_error) = mem.alloc[u8](a, next)
+            if grow_error != ok { ret (nothing, grow_error) }
+            mem.copy[u8](grown[0usize..filled], bytes[0usize..filled])
+            bytes = grown
+            capacity = next
+        }
+        let (count, read_error) = os.read(file, bytes[filled..capacity])
+        if read_error != ok {
+            if record { *detail = os.last_error_detail("read", path_text) }
+            ret (nothing, from_os(read_error))
+        }
+        if count == 0usize { ret (bytes[0usize..filled], ok) }
+        filled += count
+    }
+    ret (nothing, ok)
 }
 
 // Read through the root handle. The host's stat and open both refuse symlinks, and the
@@ -440,24 +487,15 @@ fn read_file_at(a: *mem.Arena, r: *const Root, relative_path: str, limit: usize)
     flags.read = true
     let (file, open_error) = os.open_at(a, r.dir, relative_path, flags, .NoSymlinks)
     if open_error != ok { ret (nothing, from_os(open_error)) }
-    let (bytes, allocation_error) = mem.alloc[u8](a, size)
-    if allocation_error != ok {
+    var unread: os.ErrorDetail = zero
+    let (bytes, read_error) = read_stream(a, file, size, limit, &unread, relative_path, false)
+    if read_error != ok {
         let ignored = os.close(file)
-        ret (nothing, allocation_error)
-    }
-    var filled = 0usize
-    while filled < size {
-        let (read_count, read_error) = os.read(file, bytes[filled..size])
-        if read_error != ok {
-            let ignored = os.close(file)
-            ret (nothing, from_os(read_error))
-        }
-        if read_count == 0usize { break }
-        filled += read_count
+        ret (nothing, read_error)
     }
     let close_error = os.close(file)
     if close_error != ok { ret (nothing, from_os(close_error)) }
-    ret (bytes[0usize..filled], ok)
+    ret (bytes, ok)
 }
 
 // Write through one rooted open. Parent creation and the final create/truncate both stay
@@ -624,7 +662,9 @@ fn move(a: *mem.Arena, src: str, dst: str) -> err {
 
 // `limit` caps what will be allocated. A file larger than it is `Invalid` rather than a
 // short read, because a caller that gets fewer bytes than the file holds has no way to
-// tell that from the whole of a shorter file. `limit == 0` means no cap.
+// tell that from the whole of a shorter file. `limit == 0` means no cap. The stat size is
+// only a first capacity: the read goes to End, so procfs files (size zero) and growing
+// files are complete.
 fn read_file(a: *mem.Arena, path_text: str, limit: usize) -> ([]u8, err) {
     var nothing: []u8 = zero
     let (info, stat_error) = os.stat(a, path_text)
@@ -636,26 +676,15 @@ fn read_file(a: *mem.Arena, path_text: str, limit: usize) -> ([]u8, err) {
     flags.read = true
     let (file, open_error) = os.open(a, path_text, flags)
     if open_error != ok { ret (nothing, from_os(open_error)) }
-    let (bytes, allocation_error) = mem.alloc[u8](a, size)
-    if allocation_error != ok {
+    var unread: os.ErrorDetail = zero
+    let (bytes, read_error) = read_stream(a, file, size, limit, &unread, path_text, false)
+    if read_error != ok {
         let ignored = os.close(file)
-        ret (nothing, allocation_error)
-    }
-    var filled = 0usize
-    while filled < size {
-        let (read_count, read_error) = os.read(file, bytes[filled..size])
-        if read_error != ok {
-            let ignored = os.close(file)
-            ret (nothing, from_os(read_error))
-        }
-        // A file that shrank between the size and the read: what was read is what
-        // there is, and the answer is that much of it.
-        if read_count == 0usize { break }
-        filled += read_count
+        ret (nothing, read_error)
     }
     let close_error = os.close(file)
     if close_error != ok { ret (nothing, from_os(close_error)) }
-    ret (bytes[0usize..filled], ok)
+    ret (bytes, ok)
 }
 
 // The file is created if it is not there and truncated if it is, so what it holds
@@ -975,28 +1004,17 @@ fn read_file_detail(a: *mem.Arena, path_text: str, limit: usize, detail: *os.Err
     flags.read = true
     let (file, open_error) = os.open_detail(a, path_text, flags, detail)
     if open_error != ok { ret (nothing, from_os(open_error)) }
-    let (bytes, allocation_error) = mem.alloc[u8](a, size)
-    if allocation_error != ok {
+    let (bytes, read_error) = read_stream(a, file, size, limit, detail, path_text, true)
+    if read_error != ok {
         let ignored = os.close(file)
-        ret (nothing, allocation_error)
-    }
-    var filled = 0usize
-    while filled < size {
-        let (read_count, read_error) = os.read(file, bytes[filled..size])
-        if read_error != ok {
-            *detail = os.last_error_detail("read", path_text)
-            let ignored = os.close(file)
-            ret (nothing, from_os(read_error))
-        }
-        if read_count == 0usize { break }
-        filled += read_count
+        ret (nothing, read_error)
     }
     let close_error = os.close(file)
     if close_error != ok {
         *detail = os.last_error_detail("close", path_text)
         ret (nothing, from_os(close_error))
     }
-    ret (bytes[0usize..filled], ok)
+    ret (bytes, ok)
 }
 
 fn write_file_detail(a: *mem.Arena, path_text: str, data: []const u8, detail: *os.ErrorDetail) -> err {
