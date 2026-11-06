@@ -744,6 +744,9 @@ type Checker = struct {
     resources_on: bool,
     // The `@nocheck` blocks the statement being checked sits in (D919).
     nocheck_depth: usize,
+    // Set while a negated integer literal is being checked: its magnitude may exceed the
+    // positive maximum (i32's -2147483648), and the unary arm validates the negation.
+    skip_literal_range: bool,
     // The explain records (D359), when the command asked for them.
     explains: []Explain,
     explain_count: usize,
@@ -13683,7 +13686,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         // A literal applied to an integer context must fit that type: `let x: u8 = 300`
         // is E-TYPE-0004 instead of a silent wrap at lowering. The parsed type is
         // untyped for an unsuffixed literal, so only the value is checked.
-        if context_error == ok && token.kind == .Integer && literal.kind == .Integer {
+        if context_error == ok && !c.skip_literal_range && token.kind == .Integer && literal.kind == .Integer {
             let (magnitude, parsed_type, value_error) = integer_literal_value(c, text, node)
             if value_error == ok {
                 let value = normalized_integer(magnitude, false)
@@ -13971,8 +13974,31 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             let (result_type, context_error) = apply_context(c, element, expected)
             ret (result_type, context_error)
         }
+        // A negated integer literal is validated against the negative value: `-2147483648`
+        // is a valid i32 even though its magnitude alone is not, while `-300` in a u8 is
+        // not. The literal's own positive-magnitude check is skipped while it is checked.
+        var negated_literal = false
+        if op == .PunctMinus && expected.kind == .Integer {
+            let minus_child = tree.nodes[child_index]
+            if minus_child.kind == .LiteralExpr && c.tokens[usize(minus_child.token_start)].kind == .Integer {
+                c.skip_literal_range = true
+                negated_literal = true
+            }
+        }
         let (value_type, value_error) = check_expr(c, g, tree, module_index, child_index, expected)
+        if negated_literal { c.skip_literal_range = false }
         if value_error != ok { ret (invalid_type(), value_error) }
+        if negated_literal {
+            let minus_child = tree.nodes[child_index]
+            let (negated_magnitude, negated_type, negated_error) = integer_literal_value(c, text, minus_child)
+            if negated_error == ok {
+                let negated_value = normalized_integer(negated_magnitude, true)
+                if !integer_representable(negated_value, expected) {
+                    record_failure(c, module_index, node, .IntegerLiteralRange, expected.name, expected.name)
+                    ret (invalid_type(), InvalidType)
+                }
+            }
+        }
         // `-` of an unsigned value is not a negation the type can hold (the interpreter
         // path rejects it the same way); it is InvalidOperator rather than a wrap.
         if op == .PunctMinus && is_integer(value_type) && unsigned_integer_type(value_type) { ret (invalid_type(), InvalidOperator) }
