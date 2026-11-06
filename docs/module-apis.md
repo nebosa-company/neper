@@ -16301,6 +16301,7 @@ fn new_cookie_jar(a: *mem.Arena, block_third_party: bool) -> CookieJar
 fn jar_remove_at(j: *CookieJar, at: usize)
 fn jar_find(j: *CookieJar, c: Cookie) -> i64
 fn domain_matches(a: *mem.Arena, host: str, domain: str) -> bool
+fn public_suffix(d: str) -> bool
 fn registrable_domain_jar(a: *mem.Arena, host: str) -> str
 fn partition_key_for(a: *mem.Arena, u: Url) -> (str, bool)
 fn is_third_party(a: *mem.Arena, u: Url, partition_key: str, has_partition: bool) -> bool

@@ -1801,6 +1801,53 @@ fn default_cookie_path(request: str) -> str {
 }
 
 // Processes one `Set-Cookie` header received for `url`; `partition_key` is the top-frame site when known.
+// Whether `d` is a public suffix a Domain cookie must not scope to. This is an explicit
+// policy boundary, not the full PSL: single-label names and the common multi-label
+// country suffixes are rejected; an unknown suffix still falls back to the two-label
+// registrable-domain rule (#905).
+fn public_suffix(d: str) -> bool {
+    if d.len == 0usize { ret true }
+    var dots = 0usize
+    var i = 0usize
+    while i < d.len {
+        if d[i] == 46u8 { dots += 1usize }
+        i += 1usize
+    }
+    if dots == 0usize { ret true }
+    if str.eq(d, "co.uk") { ret true }
+    if str.eq(d, "org.uk") { ret true }
+    if str.eq(d, "ac.uk") { ret true }
+    if str.eq(d, "gov.uk") { ret true }
+    if str.eq(d, "com.au") { ret true }
+    if str.eq(d, "net.au") { ret true }
+    if str.eq(d, "org.au") { ret true }
+    if str.eq(d, "co.jp") { ret true }
+    if str.eq(d, "ne.jp") { ret true }
+    if str.eq(d, "or.jp") { ret true }
+    if str.eq(d, "com.br") { ret true }
+    if str.eq(d, "com.cn") { ret true }
+    if str.eq(d, "com.hk") { ret true }
+    if str.eq(d, "com.tw") { ret true }
+    if str.eq(d, "com.sg") { ret true }
+    if str.eq(d, "co.nz") { ret true }
+    if str.eq(d, "co.za") { ret true }
+    if str.eq(d, "co.in") { ret true }
+    if str.eq(d, "co.kr") { ret true }
+    if str.eq(d, "co.il") { ret true }
+    if str.eq(d, "com.mx") { ret true }
+    if str.eq(d, "com.ar") { ret true }
+    if str.eq(d, "com.co") { ret true }
+    if str.eq(d, "com.pe") { ret true }
+    if str.eq(d, "com.ua") { ret true }
+    if str.eq(d, "com.tr") { ret true }
+    if str.eq(d, "co.id") { ret true }
+    if str.eq(d, "com.my") { ret true }
+    if str.eq(d, "com.ph") { ret true }
+    if str.eq(d, "com.vn") { ret true }
+    if str.eq(d, "co.th") { ret true }
+    ret false
+}
+
 fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, partition_key: str, has_partition_key: bool, now_ms: i64) {
     let parts_end = index_of(header, 59u8)
     var first = header
@@ -1851,7 +1898,7 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
                 has_domain_attr = true
                 var d = lower(a, trim(attr[7usize..]))
                 if str.starts_with(d, ".") { d = d[1usize..] }
-                if domain_matches(a, request.host, d) {
+                if domain_matches(a, request.host, d) && !public_suffix(d) {
                     domain = d
                     host_only = false
                 }
