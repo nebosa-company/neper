@@ -295,10 +295,10 @@ fn compose_identifier(a: *mem.Arena, identity: []const str, name_property: str, 
                 let msg = join(a, join(a, "composite identifier needs '", prop), "' (the parent) as an attribute — set it, typically to ${resources.<parent>.name}")
                 ret Text { valid: false, message: join(a, join(a, join(a, "in resource '", petcow_type), "': "), msg), value: "" }
             }
-            if str.contains(part, "|") {
-                let msg = join(a, join(a, "'", prop), "' contains '|', which Cloud Control uses to separate identifier components")
-                ret Text { valid: false, message: join(a, join(a, join(a, "in resource '", petcow_type), "': "), msg), value: "" }
-            }
+        }
+        if str.contains(part, "|") {
+            let msg = join(a, join(a, "'", prop), "' contains '|', which Cloud Control uses to separate identifier components")
+            ret Text { valid: false, message: join(a, join(a, join(a, "in resource '", petcow_type), "': "), msg), value: "" }
         }
         if i > 0usize { out = join(a, out, "|") }
         out = join(a, out, part)

@@ -511,7 +511,14 @@ fn status(kind: u8, message: str) -> Status { ret Status { kind: kind, message: 
 // 0 done, 1 failed, 2 pending. `error` wins over `done`.
 fn operation_status(a: *mem.Arena, op: json.Value) -> Status {
     let (e, has_error) = ir.get(op, "error")
-    if has_error {
+    var failed = has_error
+    switch e {
+    case .Null:
+        failed = false
+    default:
+        failed = has_error
+    }
+    if failed {
         let (text, ce) = chain.canonical_json(a, e)
         ret status(1u8, text)
     }
@@ -719,7 +726,7 @@ fn to_observed(a: *mem.Arena, def: Def, body: json.Value) -> (Observed, bool) {
             has_real_id = true
         }
     }
-    ret (Observed { name: name, type_name: def.type_name, attributes: parse_attrs(a, def, body), has_real_id: has_real_id, real_id: real_id, managed: str.starts_with(name, "petcow-") }, true)
+    ret (Observed { name: name, type_name: def.type_name, attributes: parse_attrs(a, def, body), has_real_id: has_real_id, real_id: real_id, managed: is_managed(a, def, body) }, true)
 }
 
 // --- polling budgets -------------------------------------------------------------------------------------------
@@ -778,6 +785,7 @@ fn alias_key(a: *mem.Arena, alias: str, type_name: str) -> str { ret join(a, joi
 // Registers a type; false (the reference panics) on a duplicate.
 fn register(r: *Registry, type_name: str) -> bool {
     if contains_at(r.types, r.type_count, type_name) { ret false }
+    if r.type_count >= r.types.len { ret false }
     r.types[r.type_count] = type_name
     r.type_count += 1usize
     ret true
@@ -786,6 +794,7 @@ fn register(r: *Registry, type_name: str) -> bool {
 fn register_aliased(a: *mem.Arena, r: *Registry, alias: str, type_name: str) -> bool {
     let key = alias_key(a, alias, type_name)
     if contains_at(r.aliased, r.aliased_count, key) { ret false }
+    if r.aliased_count >= r.aliased.len { ret false }
     r.aliased[r.aliased_count] = key
     r.aliased_count += 1usize
     ret true
@@ -794,6 +803,7 @@ fn register_aliased(a: *mem.Arena, r: *Registry, alias: str, type_name: str) -> 
 // A bridged Terraform provider; `native_equivalent` (empty for none) names the native type it also serves.
 fn register_bridged(r: *Registry, type_name: str, native_equivalent: str) -> bool {
     if !contains_at(r.bridged, r.bridged_count, type_name) {
+        if r.bridged_count >= r.bridged.len { ret false }
         r.bridged[r.bridged_count] = type_name
         r.bridged_count += 1usize
     }
@@ -804,11 +814,13 @@ fn register_bridged(r: *Registry, type_name: str, native_equivalent: str) -> boo
             if str.eq(r.equiv_native[i], native_equivalent) { at = i }
             i += 1usize
         }
+        if at >= r.equiv_native.len || at >= r.equiv_bridged.len { ret false }
         r.equiv_native[at] = native_equivalent
         r.equiv_bridged[at] = type_name
         if at == r.equiv_count { r.equiv_count += 1usize }
     }
     if contains_at(r.types, r.type_count, type_name) { ret false }
+    if r.type_count >= r.types.len { ret false }
     r.types[r.type_count] = type_name
     r.type_count += 1usize
     ret true
@@ -816,6 +828,7 @@ fn register_bridged(r: *Registry, type_name: str, native_equivalent: str) -> boo
 
 fn prefer_bridged(r: *Registry, native_type: str) {
     if !contains_at(r.preferred, r.preferred_count, native_type) {
+        if r.preferred_count >= r.preferred.len { ret }
         r.preferred[r.preferred_count] = native_type
         r.preferred_count += 1usize
     }

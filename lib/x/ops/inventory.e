@@ -113,8 +113,30 @@ fn parse_facts(a: *mem.Arena, stdout: str) -> json.Value {
     ret ir.obj_value(&out)
 }
 
+// A fact name is safe to interpolate into the shell script only when it is an identifier.
+fn fact_name_ok(s: str) -> bool {
+    if s.len == 0usize { ret false }
+    var i = 0usize
+    while i < s.len {
+        let c = s[i]
+        let alpha = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 95u8
+        let digit = c >= 48u8 && c <= 57u8
+        if i == 0usize {
+            if !alpha { ret false }
+        } else if !(alpha || digit) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // A shell script that prints each declared fact's first output line, in name order.
 fn custom_fact_script(a: *mem.Arena, names: []const str, commands: []const str) -> str {
+    if commands.len != names.len { ret "" }
+    var vi = 0usize
+    while vi < names.len {
+        if !fact_name_ok(names[vi]) { ret "" }
+        vi += 1usize
+    }
     let (order, e) = mem.alloc[usize](a, names.len + 1usize)
     var i = 0usize
     while i < names.len {
@@ -514,8 +536,12 @@ fn synthesize_hosts(a: *mem.Arena, source: Source, observed: []const Observed) -
             if has_t {
                 let (ts, t_text) = ir.string_of(tv)
                 if t_text {
-                    gout[gn] = sanitize(a, ts)
-                    gn += 1usize
+                    let clean = sanitize(a, ts)
+                    // A tag with no [a-z0-9] must not become a group named "".
+                    if clean.len > 0usize {
+                        gout[gn] = clean
+                        gn += 1usize
+                    }
                 }
             }
         }
