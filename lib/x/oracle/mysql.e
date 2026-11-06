@@ -35,7 +35,9 @@ use e.db
 use e.bytes as octets
 use x.oracle.mysqlclient
 
-type Options = struct { host: str, port: u16, user: str, password: str, database: str }
+// The MYSQL_OPT_SSL_MODE enum values (mysql.h: SSL_MODE_*).
+type SslMode = enum u8 { Default, Disabled, Preferred, Required, VerifyCa, VerifyIdentity }
+type Options = struct { host: str, port: u16, user: str, password: str, database: str, ssl_mode: SslMode, ssl_ca: str }
 type Detail = struct { code: u32, sqlstate: str, message: str }
 error CannotConnect
 error Failed
@@ -50,6 +52,8 @@ type Tx = struct { conn: *Conn }
 type Scan = struct { placeholders: usize, statements: usize }
 
 const MYSQL_SET_CHARSET_NAME: i32 = 7i32
+const MYSQL_OPT_SSL_MODE: i32 = 43i32
+const MYSQL_OPT_SSL_CA: i32 = 14i32
 // CLIENT_MULTI_STATEMENTS | CLIENT_MULTI_RESULTS
 const CLIENT_FLAGS: usize = 196608usize
 const UNSIGNED_FLAG: u32 = 32u32
@@ -107,6 +111,41 @@ fn open(a: *mem.Arena, options: Options) -> (db.Connection, err) {
         mem.reset(a, mark)
         mysqlclient.close(handle)
         ret (connection, db.Unsupported)
+    }
+    // TLS is opt-in and set before the handshake: the SSL mode (an unsigned int) and the
+    // CA path (a NUL-terminated string). The client default is "preferred".
+    let mode_code = ssl_mode_code(options.ssl_mode)
+    if mode_code != 0u32 {
+        let (mode_bytes, mode_error) = mem.alloc[u8](a, 4usize)
+        if mode_error != ok {
+            mem.reset(a, mark)
+            mysqlclient.close(handle)
+            ret (connection, db.Unsupported)
+        }
+        mode_bytes[0usize] = u8(mode_code & 255u32)
+        mode_bytes[1usize] = u8((mode_code >> 8u32) & 255u32)
+        mode_bytes[2usize] = u8((mode_code >> 16u32) & 255u32)
+        mode_bytes[3usize] = u8((mode_code >> 24u32) & 255u32)
+        let mode_set = mysqlclient.options(handle, MYSQL_OPT_SSL_MODE, &mode_bytes[0usize])
+        if mode_set != 0i32 {
+            mem.reset(a, mark)
+            mysqlclient.close(handle)
+            ret (connection, db.Unsupported)
+        }
+    }
+    if options.ssl_ca.len > 0usize {
+        let (ca, ca_error) = c_copy(a, options.ssl_ca)
+        if ca_error != ok {
+            mem.reset(a, mark)
+            mysqlclient.close(handle)
+            ret (connection, db.Unsupported)
+        }
+        let ca_set = mysqlclient.options(handle, MYSQL_OPT_SSL_CA, &ca[0usize])
+        if ca_set != 0i32 {
+            mem.reset(a, mark)
+            mysqlclient.close(handle)
+            ret (connection, db.Unsupported)
+        }
     }
     let connected = mysqlclient.real_connect(handle, host, user, password, database, u32(options.port), 0usize, CLIENT_FLAGS)
     mem.reset(a, mark)
@@ -229,6 +268,16 @@ fn mapped(code: u32, state: []const u8) -> err {
 // --- foreign memory
 
 // A NUL-terminated copy's address, or 0 for an empty string (the library's default).
+// The wire value for MYSQL_OPT_SSL_MODE; 0 leaves the option unset (the client default).
+fn ssl_mode_code(mode: SslMode) -> u32 {
+    if mode == .Disabled { ret 1u32 }
+    if mode == .Preferred { ret 2u32 }
+    if mode == .Required { ret 3u32 }
+    if mode == .VerifyCa { ret 4u32 }
+    if mode == .VerifyIdentity { ret 5u32 }
+    ret 0u32
+}
+
 fn c_optional(a: *mem.Arena, s: str) -> (usize, err) {
     if s.len == 0usize { ret (0usize, ok) }
     let (bytes, bytes_error) = c_copy(a, s)
