@@ -714,13 +714,59 @@ fn multi_paxos_step(m: *MultiPaxos, node: usize, msg: *const Message, out: *Pool
         r.kind = .Promise
         r.term = msg.term
         r.index = free
-        ret pool_push(out, r)
+        let sent = pool_push(out, r)
+        if sent != ok { ret sent }
+        // Carry every accepted slot value back too, so a new leader can re-propose it
+        // instead of skipping the slot: the bare promise names only the free slot.
+        var a = 0usize
+        while a < n.slot_n.len {
+            if n.slot_n[a] != 0u64 {
+                var carried: Message = zero
+                carried.from = u32(node)
+                carried.to = msg.from
+                carried.kind = .Promise
+                carried.term = msg.term
+                carried.index = u64(a)
+                carried.value = n.slot_value[a]
+                carried.flag = true
+                let pushed = pool_push(out, carried)
+                if pushed != ok { ret pushed }
+            }
+            a += 1usize
+        }
+        ret ok
     }
     if msg.kind == .Promise {
         if n.leading || msg.term != n.ballot { ret ok }
+        if msg.flag {
+            // An accepted value reported in a Promise: remember it for re-proposal.
+            if usize(msg.index) >= n.proposed.len { ret TooSmall }
+            n.proposed[usize(msg.index)] = msg.value
+            ret ok
+        }
         n.promises |= mask_bit(msg.from)
         if msg.index > n.next_slot { n.next_slot = msg.index }
-        if simple_majority(n.promises, m.nodes.len) { n.leading = true }
+        if simple_majority(n.promises, m.nodes.len) {
+            n.leading = true
+            // Re-propose every value this leader has (including ones recovered from
+            // promises), so accepted-but-undecided slots are completed, not stranded.
+            var slot = 0u64
+            while slot < n.next_slot {
+                if n.proposed[usize(slot)] != 0i64 {
+                    n.accept_mask[usize(slot)] = 0u64
+                    n.decided[usize(slot)] = false
+                    var again: Message = zero
+                    again.from = u32(node)
+                    again.kind = .Accept
+                    again.term = n.ballot
+                    again.index = slot
+                    again.value = n.proposed[usize(slot)]
+                    let pushed = to_all(m.nodes.len, out, again)
+                    if pushed != ok { ret pushed }
+                }
+                slot += 1u64
+            }
+        }
         ret ok
     }
     if msg.kind == .Accept {
@@ -1012,5 +1058,6 @@ fn raft_replicate(c: *Cluster, node: usize, now: u64, value: i64, up: u64, out: 
     }
     ret (c.nodes[node].commit, ok)
 }
+
 
 
