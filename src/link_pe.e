@@ -379,10 +379,10 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u32(output, 16usize)
     try pad_to(output, 272usize)
     try emit_x64.little_u32(output, idata_address)
-    try emit_x64.little_u32(output, 40usize)
+    try emit_x64.little_u32(output, import_descriptors_size(builder))
     try pad_to(output, 360usize)
     try emit_x64.little_u32(output, import_address_address)
-    try emit_x64.little_u32(output, 120usize)
+    try emit_x64.little_u32(output, import_thunks_size(builder))
     try pad_to(output, 392usize)
 
     try append_name(output, ".text", 8usize)
