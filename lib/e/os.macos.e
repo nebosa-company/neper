@@ -1094,52 +1094,59 @@ fn watch_path(a: *mem.Arena, base: str, name: str) -> (str, err) {
 // being read is skipped; the top one failing is the caller's error.
 const WATCH_QUEUE: usize = 64usize
 
-fn watch_collect(a: *mem.Arena, base: str, recursive: bool) -> ([]DirEntry, err) {
+fn watch_collect(a: *mem.Arena, base: str, recursive: bool) -> ([]DirEntry, bool, err) {
     var none: []DirEntry = zero
     let (out, out_error) = mem.alloc[DirEntry](a, WATCH_ENTRIES)
-    if out_error != ok { ret (none, OutOfMemory) }
+    if out_error != ok { ret (none, false, OutOfMemory) }
     let (queue, queue_error) = mem.alloc[str](a, WATCH_QUEUE)
-    if queue_error != ok { ret (none, OutOfMemory) }
+    if queue_error != ok { ret (none, false, OutOfMemory) }
     queue[0usize] = ""
     var head = 0usize
     var tail = 1usize
     var count = 0usize
+    var truncated = false
     while head < tail && count < WATCH_ENTRIES {
         let relative = queue[head]
         head += 1usize
         var directory = base
         if relative.len != 0usize {
             let (joined, join_error) = watch_path(a, base, relative)
-            if join_error != ok { ret (none, join_error) }
+            if join_error != ok { ret (none, false, join_error) }
             directory = joined
         }
         let (listing, listing_error) = readdir(a, directory)
         if listing_error != ok {
-            if head == 1usize { ret (none, listing_error) }
+            if head == 1usize { ret (none, false, listing_error) }
             // A nested directory that vanished (ENOENT) is skipped, as the rescan drops
             // it; any other failure (permission, I/O) is reported so the incomplete
             // listing is not diffed into false Removed events for live descendants.
             if listing_error == NotFound { continue }
-            ret (none, listing_error)
+            ret (none, false, listing_error)
         }
         var at = 0usize
         while at < listing.len && count < WATCH_ENTRIES {
             var name = listing[at].name
             if relative.len != 0usize {
                 let (nested, nested_error) = watch_path(a, relative, name)
-                if nested_error != ok { ret (none, nested_error) }
+                if nested_error != ok { ret (none, false, nested_error) }
                 name = nested
             }
             out[count] = DirEntry { name: name, kind: listing[at].kind }
             count += 1usize
-            if recursive && listing[at].kind == .Dir && tail < WATCH_QUEUE {
-                queue[tail] = name
-                tail += 1usize
+            if recursive && listing[at].kind == .Dir {
+                if tail < WATCH_QUEUE {
+                    queue[tail] = name
+                    tail += 1usize
+                } else {
+                    truncated = true
+                }
             }
             at += 1usize
         }
+        if at < listing.len { truncated = true }
     }
-    ret (out[0usize..count], ok)
+    if head < tail { truncated = true }
+    ret (out[0usize..count], truncated, ok)
 }
 
 fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
@@ -1178,7 +1185,8 @@ fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
     }
     state.directory = usize(directory)
     // The first snapshot: what is there now is not news.
-    let (listing, listing_error) = watch_collect(a, path, recursive)
+    let (listing, truncated_first, listing_error) = watch_collect(a, path, recursive)
+    let _ = truncated_first
     if listing_error != ok {
         let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
         let closed_directory = syscall(SYS_CLOSE, usize(directory), 0usize, 0usize, 0usize, 0usize, 0usize)
@@ -1224,7 +1232,7 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
     if events.len == 0usize { ret (0usize, ok) }
     while true {
         let checkpoint = mem.mark(a)
-        let (listing, listing_error) = watch_collect(a, state.base, state.recursive)
+        let (listing, truncated, listing_error) = watch_collect(a, state.base, state.recursive)
         if listing_error != ok {
             mem.reset(a, checkpoint)
             ret (0usize, listing_error)
@@ -1317,6 +1325,14 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
                 }
                 gone += 1usize
             }
+        }
+        // The snapshot cannot cover everything: say so instead of blocking on an untracked path (#1585).
+        if truncated && produced < events.len {
+            var overflow: WatchEvent = zero
+            overflow.action = .Overflow
+            overflow.path = state.base
+            events[produced] = overflow
+            produced += 1usize
         }
         if produced != 0usize { ret (produced, ok) }
         mem.reset(a, checkpoint)

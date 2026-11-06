@@ -14,6 +14,7 @@
 
 use e.mem
 use e.os
+use e.str
 
 fn ends_with(text: str, tail: str) -> bool {
     if text.len < tail.len { ret false }
@@ -134,6 +135,51 @@ fn main(a: *mem.Arena) -> err {
     if recovered_error != ok || !recovered { os.exit(40i32) }
     if os.watch_close(failing) != ok { os.exit(42i32) }
 
+    // #1585: more entries than the macOS snapshot holds must signal Overflow rather than
+    // silently missing a change to an untracked entry.
+    if os.mkdir(a, "np-watch/many") != ok { os.exit(43i32) }
+    var many_index = 0usize
+    while many_index < 300usize {
+        let (many_name, many_name_error) = str.builder(a, 64usize)
+        if many_name_error != ok { os.exit(43i32) }
+        var many_builder = many_name
+        if str.push(&many_builder, "np-watch/many/f") != ok || str.push_u64(&many_builder, u64(many_index)) != ok { os.exit(43i32) }
+        if write_file_of(a, str.done(&many_builder), 101u8) != ok { os.exit(43i32) }
+        many_index += 1usize
+    }
+    let (many_watch, many_error) = os.watch_open(a, "np-watch", true)
+    if many_error == ok {
+        if write_file_of(a, "np-watch/many/f299", 102u8) != ok { os.exit(44i32) }
+        var saw_many = false
+        var saw_overflow = false
+        var many_tries = 0usize
+        while !saw_many && !saw_overflow && many_tries < 4usize {
+            var many_events: [16]os.WatchEvent = zero
+            let (many_count, many_read_error) = os.watch_read(a, many_watch, many_events[..])
+            if many_read_error != ok { os.exit(44i32) }
+            var many_at = 0usize
+            while many_at < many_count {
+                if many_events[many_at].action == .Overflow { saw_overflow = true }
+                if ends_with(many_events[many_at].path, "f299") { saw_many = true }
+                many_at += 1usize
+            }
+            many_tries += 1usize
+        }
+        if !saw_many && !saw_overflow { os.exit(45i32) }
+        if os.watch_close(many_watch) != ok { os.exit(46i32) }
+    } else {
+        if many_error != os.Unsupported { os.exit(44i32) }
+    }
+    many_index = 0usize
+    while many_index < 300usize {
+        let (many_name, many_name_error) = str.builder(a, 64usize)
+        if many_name_error != ok { os.exit(43i32) }
+        var many_builder = many_name
+        if str.push(&many_builder, "np-watch/many/f") != ok || str.push_u64(&many_builder, u64(many_index)) != ok { os.exit(43i32) }
+        if os.remove_file(a, str.done(&many_builder)) != ok { os.exit(43i32) }
+        many_index += 1usize
+    }
+    if os.remove_dir(a, "np-watch/many") != ok { os.exit(43i32) }
     if os.remove_dir(a, "np-watch") != ok { os.exit(41i32) }
     ret ok
 }
