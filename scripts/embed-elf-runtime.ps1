@@ -110,6 +110,16 @@ foreach ($line in $symbols) {
         $table += [pscustomobject]@{ Name = $matches[2]; Offset = [Convert]::ToUInt64($matches[1], 16) }
     }
 }
+# Every function is patched with an aarch64 B/BL, whose offset must be a multiple of
+# 4: a data literal left in .text before a routine would silently misalign it, so this
+# is checked when the blob is generated rather than when a link fails (#1637).
+if ($arm) {
+    $misaligned = $table | Where-Object { $_.Offset % 4 -ne 0 }
+    if ($misaligned) {
+        $names = ($misaligned | ForEach-Object { "$($_.Name)@$($_.Offset)" }) -join ', '
+        throw "runtime symbols are not 4-aligned: $names (add .balign 4 before the label)"
+    }
+}
 [void]$builder.AppendLine('fn symbol_offset(name: str) -> (usize, bool) {')
 foreach ($entry in $table) {
     [void]$builder.AppendLine(('    if check.same(name, "{0}") {{ ret ({1}usize, true) }}' -f $entry.Name, $entry.Offset))
