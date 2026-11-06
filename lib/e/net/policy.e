@@ -930,7 +930,9 @@ fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules {
                     typed[ntp] = host
                     typeopts[ntp] = options
                     ntp += 1usize
-                    add_unique(domains, &nd, host)
+                    // The public domain set holds plain `||host^` rules only: Vaper keeps
+                    // a path-limited rule (`||host/path^`) out of it (it is a URL filter).
+                    if path_prefix.len == 0usize { add_unique(domains, &nd, host) }
                 }
             }
             continue
@@ -1784,69 +1786,12 @@ fn split_set_cookie(a: *mem.Arena, raw: str) -> []const str {
 
 fn same_site_allowed(ss: u8, is_top_level: bool, is_same_site: bool) -> bool {
     if ss == 2u8 { ret true }
-    if ss == 0u8 { ret is_same_site }
+    // Vaper allows Lax and Strict alike when the request is a top-level navigation
+    // (its jar cannot see the initiator) and suppresses them otherwise.
     ret is_top_level
 }
 
-fn default_cookie_path(request: str) -> str {
-    if request.len == 0usize || request[0usize] != 47u8 { ret "/" }
-    var slash = 0usize
-    var i = 1usize
-    while i < request.len {
-        if request[i] == 47u8 { slash = i }
-        i += 1usize
-    }
-    if slash == 0usize { ret "/" }
-    ret request[0usize..slash]
-}
 
-// Processes one `Set-Cookie` header received for `url`; `partition_key` is the top-frame site when known.
-// Whether `d` is a public suffix a Domain cookie must not scope to. This is an explicit
-// policy boundary, not the full PSL: single-label names and the common multi-label
-// country suffixes are rejected; an unknown suffix still falls back to the two-label
-// registrable-domain rule (#905).
-fn public_suffix(d: str) -> bool {
-    if d.len == 0usize { ret true }
-    var dots = 0usize
-    var i = 0usize
-    while i < d.len {
-        if d[i] == 46u8 { dots += 1usize }
-        i += 1usize
-    }
-    if dots == 0usize { ret true }
-    if str.eq(d, "co.uk") { ret true }
-    if str.eq(d, "org.uk") { ret true }
-    if str.eq(d, "ac.uk") { ret true }
-    if str.eq(d, "gov.uk") { ret true }
-    if str.eq(d, "com.au") { ret true }
-    if str.eq(d, "net.au") { ret true }
-    if str.eq(d, "org.au") { ret true }
-    if str.eq(d, "co.jp") { ret true }
-    if str.eq(d, "ne.jp") { ret true }
-    if str.eq(d, "or.jp") { ret true }
-    if str.eq(d, "com.br") { ret true }
-    if str.eq(d, "com.cn") { ret true }
-    if str.eq(d, "com.hk") { ret true }
-    if str.eq(d, "com.tw") { ret true }
-    if str.eq(d, "com.sg") { ret true }
-    if str.eq(d, "co.nz") { ret true }
-    if str.eq(d, "co.za") { ret true }
-    if str.eq(d, "co.in") { ret true }
-    if str.eq(d, "co.kr") { ret true }
-    if str.eq(d, "co.il") { ret true }
-    if str.eq(d, "com.mx") { ret true }
-    if str.eq(d, "com.ar") { ret true }
-    if str.eq(d, "com.co") { ret true }
-    if str.eq(d, "com.pe") { ret true }
-    if str.eq(d, "com.ua") { ret true }
-    if str.eq(d, "com.tr") { ret true }
-    if str.eq(d, "co.id") { ret true }
-    if str.eq(d, "com.my") { ret true }
-    if str.eq(d, "com.ph") { ret true }
-    if str.eq(d, "com.vn") { ret true }
-    if str.eq(d, "co.th") { ret true }
-    ret false
-}
 
 fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, partition_key: str, has_partition_key: bool, now_ms: i64) {
     let parts_end = index_of(header, 59u8)
@@ -1861,7 +1806,9 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
     if name.len + value.len > 4096usize { ret }
     var domain = request.host
     var host_only = true
-    var path = default_cookie_path(request.path)
+    // Vaper starts a cookie's path at "/" and changes it only when a Path attribute
+    // names another valid path; it does not use RFC 6265's directory default.
+    var path = "/"
     var secure = false
     var http_only = false
     var partitioned = false
@@ -1898,7 +1845,10 @@ fn jar_process_one(a: *mem.Arena, j: *CookieJar, request: Url, header: str, part
                 has_domain_attr = true
                 var d = lower(a, trim(attr[7usize..]))
                 if str.starts_with(d, ".") { d = d[1usize..] }
-                if domain_matches(a, request.host, d) && !public_suffix(d) {
+                // Vaper has no public-suffix list here: a Domain the request host
+                // matches becomes the cookie's domain, and a bare label (no dot) is
+                // rejected with the whole cookie below, as Vaper does.
+                if domain_matches(a, request.host, d) {
                     domain = d
                     host_only = false
                 }

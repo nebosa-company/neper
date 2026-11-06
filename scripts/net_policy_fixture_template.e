@@ -365,8 +365,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     policy.jar_process_response(a, &default_jar, "https://example.com/account/login", "sid=default", "", false, 1800000000000i64)
     let default_child = policy.jar_cookie_header(a, &default_jar, "https://example.com/account/profile", true, "", false, 1800000000000i64)
     if !default_child.present || !str.eq(default_child.value, "sid=default") { os.exit(83i32) }
+    // Vaper starts a cookie's path at "/" unless a Path attribute names another, so
+    // a sibling path still sees it (it does not use RFC 6265's directory default).
     let default_sibling = policy.jar_cookie_header(a, &default_jar, "https://example.com/admin", true, "", false, 1800000000000i64)
-    if default_sibling.present { os.exit(84i32) }
+    if !default_sibling.present || !str.eq(default_sibling.value, "sid=default") { os.exit(84i32) }
     // A cookie with no Domain attribute is host-only, whereas an explicit Domain
     // attribute also covers matching subdomains.
     var scope_jar = policy.new_cookie_jar(a, false)
@@ -396,18 +398,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let rfc850_later = policy.utc_ms(2050i64, 1i64, 1i64, 0i64, 0i64, 0i64)
     let (rfc850_94_later, ok_94_later) = policy.parse_http_date("Sunday, 06-Nov-94 08:49:37 GMT", rfc850_later)
     if !ok_94_later || rfc850_94_later != policy.utc_ms(2094i64, 11i64, 6i64, 8i64, 49i64, 37i64) { os.exit(107i32) }
-    // SameSite=Strict needs a same-site context; Lax keeps its top-level rule.
+    // Vaper sends SameSite=Lax and Strict alike on a top-level navigation and
+    // suppresses both otherwise (its jar cannot see the initiator).
     var strict_jar = policy.new_cookie_jar(a, false)
     policy.jar_process_response(a, &strict_jar, "https://example.com/", "strict=1; SameSite=Strict; Path=/", "", false, 1800000000000i64)
     policy.jar_process_response(a, &strict_jar, "https://example.com/", "lax=2; SameSite=Lax; Path=/", "", false, 1800000000000i64)
     let strict_cross = policy.jar_cookie_header(a, &strict_jar, "https://example.com/", true, "https://other.org", true, 1800000000000i64)
-    if !strict_cross.present || !str.eq(strict_cross.value, "lax=2") { os.exit(108i32) }
+    if !strict_cross.present || !str.eq(strict_cross.value, "strict=1; lax=2") { os.exit(108i32) }
     let strict_same = policy.jar_cookie_header(a, &strict_jar, "https://example.com/", true, "https://example.com", true, 1800000000000i64)
     if !strict_same.present || !str.eq(strict_same.value, "strict=1; lax=2") { os.exit(109i32) }
     let strict_unknown = policy.jar_cookie_header(a, &strict_jar, "https://example.com/", true, "", false, 1800000000000i64)
-    if !strict_unknown.present || !str.eq(strict_unknown.value, "lax=2") { os.exit(110i32) }
+    if !strict_unknown.present || !str.eq(strict_unknown.value, "strict=1; lax=2") { os.exit(110i32) }
     let strict_subresource = policy.jar_cookie_header(a, &strict_jar, "https://example.com/", false, "https://example.com", true, 1800000000000i64)
-    if !strict_subresource.present || !str.eq(strict_subresource.value, "strict=1") { os.exit(111i32) }
+    if strict_subresource.present { os.exit(111i32) }
     //__VECTOR_CALLS__
     try io.print("net policy ok")
     ret ok
