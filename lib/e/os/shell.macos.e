@@ -1051,6 +1051,20 @@ fn clipboard_write(a: *mem.Arena, items: []const Content) -> err {
     while at < items.len {
         if items[at].kind == .Bytes && items[at].mime.len == 0usize { ret Invalid }
         if items[at].kind == .Promise { ret Unsupported }
+        // Files are joined with LF in the pasteboard's private format; a path containing
+        // LF cannot round trip, so refuse it before the pasteboard is cleared (#629).
+        if items[at].kind == .Files {
+            var f = 0usize
+            while f < items[at].paths.len {
+                let path_text = items[at].paths[f]
+                var b = 0usize
+                while b < path_text.len {
+                    if path_text[b] == 10u8 { ret Invalid }
+                    b += 1usize
+                }
+                f += 1usize
+            }
+        }
         at += 1usize
     }
     let started = os.cocoa_start()
