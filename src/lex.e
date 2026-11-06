@@ -652,10 +652,6 @@ fn has(s: *Scanner, a: u8, b: u8) -> bool {
     ret s.off + 1usize < s.source.len && s.source[s.off] == a && s.source[s.off + 1usize] == b
 }
 
-fn has3(s: *Scanner, a: u8, b: u8, c: u8) -> bool {
-    ret s.off + 2usize < s.source.len && s.source[s.off] == a && s.source[s.off + 1usize] == b && s.source[s.off + 2usize] == c
-}
-
 // The runs `next` skips (D930), over the source as a local slice: the loop's own test
 // of the length is what proves each index, where `s.source[s.off]` through the scanner
 // was checked at every byte.
@@ -697,10 +693,6 @@ fn take_invalid_utf8(s: *Scanner) {
 
 // The trivia before `owner`, from the previous token's end (D315): its position is
 // where that token ended, and the file's first line and column when there is none.
-fn trivia_of(source: str, lines: []const usize, tokens: []const Token, at: usize) -> TriviaScanner {
-    ret trivia_init(source, lines, leading_start(tokens, at), tokens[at])
-}
-
 // The trivia before a token for a reader of kinds and bytes alone: no positions, so
 // no line lookup per token, which the formatter's passes over every newline need.
 fn trivia_kinds_of(source: str, tokens: []const Token, at: usize) -> TriviaScanner {
@@ -1013,6 +1005,12 @@ fn next(s: *Scanner) -> Token {
                 take(s, 1usize)
                 if s.off == s.source.len { ret token(s, .Invalid, start) }
                 let escaped = s.source[s.off]
+                // A backslash before a line break is invalid and must not consume it,
+                // or the token runs on and swallows the next line.
+                if escaped == 10u8 || escaped == 13u8 {
+                    valid = false
+                    break
+                }
                 if escaped != 110u8 && escaped != 116u8 && escaped != 114u8 && escaped != 92u8 && escaped != 34u8 && escaped != 39u8 && escaped != 48u8 && escaped != 120u8 {
                     valid = false
                 }
