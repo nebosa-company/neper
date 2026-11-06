@@ -12773,10 +12773,13 @@ fn crew_bodies(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, 
         worker_at += 1usize
     }
     if crew.count != 0usize { body_worker_run(&crew.workers[0usize], &crew.workers[0usize].arena, checker, 0usize) }
+    // Every started worker is joined before returning; the first error is returned after.
+    var join_error = ok
     worker_at = 1usize
     while worker_at < crew.count {
         if started[worker_at] {
-            try os.thread_join(threads[worker_at])
+            let joined = os.thread_join(threads[worker_at])
+            if joined != ok && join_error == ok { join_error = joined }
         } else {
             starts[worker_at].worker = &crew.workers[worker_at]
             starts[worker_at].program = checker
@@ -12785,6 +12788,7 @@ fn crew_bodies(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, 
         }
         worker_at += 1usize
     }
+    if join_error != ok { ret join_error }
     worker_at = 0usize
     while worker_at < crew.count {
         if ran_dry(&crew.workers[worker_at]) { try crew_replace(a, crew, worker_at, true, loaded, checker, resolver, report, abi, hot, held, bindings, program, body_skip) }
@@ -12912,15 +12916,18 @@ fn crew_second_oracle(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.
         worker_at += 1usize
     }
     if crew.count != 0usize && !crew.workers[0usize].replaced { second_worker_run(&crew.workers[0usize], 0usize) }
+    var join_error = ok
     worker_at = 1usize
     while worker_at < crew.count {
         if started[worker_at] {
-            try os.thread_join(threads[worker_at])
+            let joined = os.thread_join(threads[worker_at])
+            if joined != ok && join_error == ok { join_error = joined }
         } else {
             if !crew.workers[worker_at].replaced { second_worker_run(&crew.workers[worker_at], 0usize) }
         }
         worker_at += 1usize
     }
+    if join_error != ok { ret join_error }
     // The generous worker's turn: the modules it took over in the sweep, whose first
     // entries are its own, in the order it made them; and those of any worker that
     // ran dry just now, whose bodies it checks over first and whose own first entries,
@@ -13005,15 +13012,18 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         worker_at += 1usize
     }
     if crew.count != 0usize && !crew.workers[0usize].replaced { lower_worker_run(&crew.workers[0usize], &crew.workers[0usize].arena, checker, 0usize) }
+    var join_error = ok
     worker_at = 1usize
     while worker_at < crew.count {
         if started[worker_at] {
-            try os.thread_join(threads[worker_at])
+            let joined = os.thread_join(threads[worker_at])
+            if joined != ok && join_error == ok { join_error = joined }
         } else {
             if !crew.workers[worker_at].replaced { lower_worker_run(&crew.workers[worker_at], &crew.workers[worker_at].arena, checker, 0usize) }
         }
         worker_at += 1usize
     }
+    if join_error != ok { ret join_error }
     let (failed_worker, failed) = crew_lowest_failure(crew, loaded)
     if failed { ret crew_failure(report, loaded, &crew.workers[failed_worker]) }
     // (D1667) The lowering's threads have joined: what runs from here runs alone.
@@ -14105,7 +14115,34 @@ fn json_failure(report: *Sink, code: str, message: str, status: i32) -> err {
     ret write_all(report, ",\"data\":{\"diagnostics\":1}}\n")
 }
 
+// A numeric flag is validated before dispatch: a value that is not a decimal or that
+// overflows usize is a usage error naming the flag, not the generic usage line.
+fn numeric_flag_usage(args: []str) -> err {
+    var at = 2usize
+    while at < args.len {
+        if same(args[at], "--") { ret ok }
+        let flag = args[at]
+        let numeric = same(flag, "--deadline") || same(flag, "--capture") || same(flag, "--fault-select-inlined") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--instances") || same(flag, "--fault-write")
+        if numeric {
+            var bad = true
+            if at + 1usize < args.len { if decimal_ok(args[at + 1usize]) { bad = false } }
+            if bad {
+                let shown: err = stderr_text("error[E-CLI-9999]: usage: ")
+                let shown_flag: err = stderr_text(flag)
+                let shown_mid: err = stderr_text(" needs a decimal number")
+                let shown_end: err = stderr_text("\n")
+                os.exit(2i32)
+            }
+            at += 1usize
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn dispatch(a: *mem.Arena, args: []str) -> err {
+    let numeric_error = numeric_flag_usage(args)
+    if numeric_error != ok { ret numeric_error }
     var report = stderr_sink()
     if args.len == 2usize && same(args[1usize], "self-test") {
         try self_test()
