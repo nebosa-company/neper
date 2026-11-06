@@ -72,7 +72,7 @@ type Floats = struct { data: []f32, len: usize }
 // The state a Save pushes: the transform, the scissor, the mask in use and whether
 // this entry opened an opacity layer.
 type DrawState = struct { transform: geometry.Transform, scissor: geometry.Rect, mask: usize, has_mask: bool, layer: usize, opens_layer: bool, opacity: f32, layer_x0: usize, layer_y0: usize, layer_x1: usize, layer_y1: usize }
-type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [32]*tthint.Hinter, hint_tried: [32]bool, hint_ok: [32]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [32]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, acc_x1: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool, changed_x0: usize, changed_y0: usize, changed_x1: usize, changed_y1: usize, raster: Rasteriser, has_raster: bool, raster_frames: u64, raster_fallbacks: u64, cover: usize, vid: []u32, vid_ok: bool, vid_x0: usize, vid_y0: usize, vid_x1: usize, vid_y1: usize, vid_dirty_ok: bool, vid_dirty: geometry.Rect }
+type RendererState = struct { cff_engine: *cffhint.Engine, cff_out: *cffhint.Outline, hinters: [32]*tthint.Hinter, hint_tried: [32]bool, hint_ok: [32]bool, lcd: *cleartype.Scratch, lcd_tried: bool, mat_buf: []u8, mat_tried: bool, arena: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, scenes: []Scene, textures: []Texture, fonts: [32]FontEntry, font_count: usize, edges: []Edge, edge_count: usize, canvases: [4]Floats, masks: [8]Floats, acc: []f32, coverage: []f32, pixels: []u32, axis_rows: []f32, width: usize, height: usize, scale: f32, box_x0: usize, box_y0: usize, box_x1: usize, box_y1: usize, acc_x0: usize, acc_x1: usize, last_scene: usize, has_last: bool, retiring: bool, last_width: usize, last_height: usize, last_scale: f32, dx0: usize, dy0: usize, dx1: usize, dy1: usize, wrote_y0: usize, wrote_y1: usize, skip: []bool, shift_x0: usize, shift_y0: usize, shift_x1: usize, shift_y1: usize, shift_dx: i64, shift_dy: i64, has_shift: bool, boxes: [2]geometry.Rect, box_count: usize, full_frame: bool, closed: bool, changed_x0: usize, changed_y0: usize, changed_x1: usize, changed_y1: usize, raster: Rasteriser, has_raster: bool, raster_frames: u64, raster_fallbacks: u64, cover: usize, vid: []u32, vid_ok: bool, vid_x0: usize, vid_y0: usize, vid_x1: usize, vid_y1: usize, vid_dirty_ok: bool, vid_dirty: geometry.Rect }
 type TargetState = struct { target: *gpu.Target }
 
 // A rasteriser that draws a frame instead of the CPU loop (D5929): `e.gfx.gpuraster` installs one on a Vulkan device. `render` is
@@ -2624,8 +2624,6 @@ fn draw_image(s: *RendererState, state: DrawState, draw: DrawImage) -> err {
 // `draw_image` for a transform without rotation or skew: the columns' source texels and weights are found once, the texel rows are
 // blended across (and kept for the rows that share them), and each pixel takes its two rows; the arithmetic is that of the general
 // loop and `sample_texture`, so the pixels are the same.
-var axis_rows: []f32 = zero
-
 fn axis_fill(rows: []f32, slot: usize, pix: []const f32, row: usize, tw: usize, n: usize, col0: []const u32, col1: []const u32, colu: []const f32, colv: []const bool) {
     let base = row * tw * 4usize
     let out = slot * 8192usize
@@ -2649,12 +2647,12 @@ fn axis_fill(rows: []f32, slot: usize, pix: []const f32, row: usize, tw: usize, 
 }
 
 fn draw_image_axis(s: *RendererState, state: DrawState, draw: DrawImage, t: *const Texture, inverse: geometry.Transform, x0: usize, y0: usize, x1: usize, y1: usize) {
-    if axis_rows.len < 16384usize {
+    if s.axis_rows.len < 16384usize {
         let (made, made_error) = mem.alloc[f32](s.arena, 16384usize)
         if made_error != ok { ret }
-        axis_rows = made
+        s.axis_rows = made
     }
-    let rows = axis_rows
+    let rows = s.axis_rows
     let n = x1 - x0
     var col0: [2048]u32 = zero
     var col1: [2048]u32 = zero
