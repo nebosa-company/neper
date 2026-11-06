@@ -127,6 +127,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         left_num += 1u64
     }
 
+    // 60.23: zero is the free state, never a token or holder.
+    let (zero_ok, zero_validity) = lock.redlock_acquire(insts[..], 0u64, 0u64, 20u64, 1u64)
+    if zero_ok || zero_validity != 0u64 { os.exit(5i32) }
+    var zero_lease = lock.lease()
+    if lock.lease_acquire(&zero_lease, 0u64, 0u64, 10u64) { os.exit(5i32) }
+
     try io.print("dist lock ok\n")
     ret ok
 }

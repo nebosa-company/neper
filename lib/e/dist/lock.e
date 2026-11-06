@@ -46,6 +46,8 @@ fn instance_free(inst: *const Instance, now: u64) -> bool { ret inst.holder == 0
 
 // Answers (held, validity); `token` must be non-zero.
 fn redlock_acquire(instances: []Instance, token: u64, now: u64, ttl: u64, drift: u64) -> (bool, u64) {
+    // Token zero means "free": a caller may not take a lock nobody can hold.
+    if token == 0u64 { ret (false, 0u64) }
     var granted = 0usize
     var elapsed = 0u64
     var i = 0usize
@@ -120,6 +122,8 @@ fn lease_expired(l: *const Lease, now: u64) -> bool { ret l.holder == 0u64 || l.
 
 // Take the lease when free or expired; answers whether it was granted.
 fn lease_acquire(l: *Lease, holder: u64, now: u64, ttl: u64) -> bool {
+    // Holder zero is the free state, never a holder.
+    if holder == 0u64 { ret false }
     if !lease_expired(l, now) && l.holder != holder { ret false }
     let (expires, expires_fits) = time_add(now, ttl)
     if !expires_fits { ret false }
@@ -182,3 +186,4 @@ fn redlock(instances: []Instance, token: u64, now: u64, ttl: u64, drift: u64) ->
     let (held, validity) = redlock_acquire(instances, token, now, ttl, drift)
     ret (held, validity)
 }
+

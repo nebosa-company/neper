@@ -52,6 +52,11 @@ fn ra_request(r: *Ra, i: usize, s: *Sent) {
     r.nodes[i].stamp = r.nodes[i].clock
     r.nodes[i].requesting = true
     r.nodes[i].replies = 0usize
+    // A single-node ring needs no replies: it enters as soon as it asks.
+    if r.nodes.len == 1usize {
+        r.nodes[i].in_cs = true
+        ret
+    }
     var j = 0usize
     while j < r.nodes.len {
         if j != i { push(s, .Request, i, j, r.nodes[i].stamp) }
@@ -282,3 +287,4 @@ fn raymond_tree(nodes: []RayNode, queue: []u32, parent: []const u32, root: usize
     let e = ray_deliver(&t, s, &head, order, &entered)
     ret (entered, e)
 }
+

@@ -155,6 +155,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let bad = [7]u32 { 0u32, 0u32, 9u32, 1u32, 1u32, 2u32, 2u32 }
     let (_, e5) = mutex.raymond(ray_nodes[..], queue[..], bad[..], 0usize)
     if e5 != mutex.Invalid { os.exit(3i32) }
+    // 60.21: a one-node ring enters on request with no replies to wait for.
+    var single_nodes: [1]mutex.RaNode = zero
+    let (single, single_error) = mutex.ra(single_nodes[..], deferred[..1usize])
+    if single_error != ok { os.exit(4i32) }
+    var single_ra = single
+    mutex.ra_request(&single_ra, 0usize, &s)
+    if mutex.ra_in_cs(&single_ra) != 1usize { os.exit(4i32) }
 
     try io.print("dist mutex ok\n")
     ret ok
