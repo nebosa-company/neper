@@ -1338,7 +1338,17 @@ fn stream_read(ctx: *void, dst: []u8) -> (usize, err) {
             ret (0usize, read_error)
         }
         if content_type == 21u8 {
-            if length != 2usize || state.read_buffer[1] != 0u8 {
+            if length != 2usize {
+                state.failed = true
+                ret (0usize, Protocol)
+            }
+            // TLS 1.3 only allows a warning-level close_notify to end the stream cleanly;
+            // a fatal alert (or any other description) is an error, not io.End.
+            if state.read_buffer[0] != 1u8 {
+                state.failed = true
+                ret (0usize, Protocol)
+            }
+            if state.read_buffer[1] != 0u8 {
                 state.failed = true
                 ret (0usize, Protocol)
             }
