@@ -124,6 +124,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !near(x[0usize], 60.0f64, 1.0f64) || !near(x[1usize], 2.0f64, 0.2f64) { os.exit(3i32) }
     if filter.ukf_step[Model](&model, move, range, x[..], p[..], q[..], rn[..], z[..], 2usize, 1usize, scratch[..10usize]) != filter.TooSmall { os.exit(3i32) }
+    // #130: short x/p/q/z arrays are TooSmall too, not an out-of-bounds read.
+    if filter.ekf_predict[Model](&model, move, move_jacobian, x[..1usize], p[..], q[..], 2usize, scratch[..]) != filter.TooSmall { os.exit(20i32) }
+    if filter.ekf_update[Model](&model, range, range_jacobian, x[..], p[..1usize], rn[..], z[..], 2usize, 1usize, scratch[..]) != filter.TooSmall { os.exit(21i32) }
+    if filter.ukf_step[Model](&model, move, range, x[..], p[..], q[..3usize], rn[..], z[..], 2usize, 1usize, scratch[..]) != filter.TooSmall { os.exit(22i32) }
 
     // 4: the particle filter follows the line and resamples.
     var particles: [400]f64 = zero

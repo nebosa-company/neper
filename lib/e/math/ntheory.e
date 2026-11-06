@@ -335,7 +335,9 @@ fn factor_trial(n: u64, factors: []u64, exponents: []u32) -> (usize, err) {
     var count = 0usize
     var rest = n
     var p = 2u64
-    while p * p <= rest {
+    // `p * p` overflows u64 once p passes 2^32, which a prime near u64::MAX reaches;
+    // the division form is exact over the whole range (#130).
+    while p <= rest / p {
         if rest % p == 0u64 {
             if count >= factors.len || count >= exponents.len { ret (0usize, TooSmall) }
             factors[count] = p
@@ -488,7 +490,8 @@ fn totient(n: u64) -> u64 {
     var result = n
     var rest = n
     var p = 2u64
-    while p * p <= rest {
+    // Same overflow-free bound as factor_trial (#130).
+    while p <= rest / p {
         if rest % p == 0u64 {
             while rest % p == 0u64 { rest = rest / p }
             result -= result / p
@@ -535,11 +538,17 @@ fn discrete_log_bsgs(base: u64, wanted: u64, m: u64, bound: u64, scratch: []u64)
     // Giant steps: wanted * base^(-steps * i).
     let (inverse_base, invertible) = inverse_mod(base % m, m)
     if !invertible {
-        // A non-invertible base: fall back to the baby steps alone.
-        j = 0u64
-        while j < steps {
-            if scratch[2usize * usize(j)] == t { ret (scratch[2usize * usize(j) + 1usize], true) }
-            j += 1u64
+        // A non-invertible base has no giant-step inverse: scan every exponent below the
+        // bound in order, so the least x is found (the old baby-only scan stopped at
+        // `steps` and could return an unordered duplicate) (#130).
+        // ponytail: O(bound) modular multiplications; a caller passing a huge bound
+        // pays for it, but correctness there beats a silent miss.
+        var x = 0u64
+        var current = 1u64 % m
+        while x < bound {
+            if current == t { ret (x, true) }
+            current = mul_mod(current, base % m, m)
+            x += 1u64
         }
         ret (0u64, false)
     }
@@ -732,6 +741,8 @@ fn sqrt_mod(n: u64, p: u64) -> (u64, bool) {
 // The fraction with the smallest denominator not above `max_den` that lies within
 // `tolerance` of `x`, found by walking the Stern-Brocot tree; `x >= 0`.
 fn stern_brocot_search(x: f64, tolerance: f64, max_den: u64) -> (u64, u64) {
+    // +-inf and NaN have no fraction to converge on and the walk would never stop.
+    if x != x || x - x != 0.0f64 { ret (0u64, 0u64) }
     var left_n = 0u64
     var left_d = 1u64
     var right_n = 1u64

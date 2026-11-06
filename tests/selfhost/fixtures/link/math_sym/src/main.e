@@ -334,6 +334,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (deg_expr, deg_ok) = sym.parse(&p2, "x^19")
     let (_, deg_good) = sym.integrate(&p2, deg_expr, x_symbol)
     if deg_ok != ok || deg_good { os.exit(97i32) }
+    // #130: a run of unary signs hits the nesting guard instead of the native stack.
+    // The pool is large enough to hold every negation, so only the guard stands between
+    // the parser and a stack overflow.
+    let (dash_pool0, dash_pool_error) = sym.pool(a, 300000usize)
+    if dash_pool_error != ok { os.exit(98i32) }
+    var dash_pool = dash_pool0
+    let (dash_builder, dash_error) = str.builder(a, 200002usize)
+    if dash_error != ok { os.exit(98i32) }
+    var dashes = dash_builder
+    var dash_at = 0usize
+    while dash_at < 200000usize {
+        try str.push_byte(&dashes, 45u8)
+        dash_at += 1usize
+    }
+    try str.push_byte(&dashes, 49u8)
+    let (_, deep_unary) = sym.parse(&dash_pool, str.done(&dashes))
+    if deep_unary != sym.Syntax && deep_unary != sym.TooLarge { os.exit(98i32) }
+    // #130: a pool that overflowed while building also reports TooLarge from the printer.
+    let (tiny_pool0, tiny_error) = sym.pool(a, 1usize)
+    if tiny_error != ok { os.exit(99i32) }
+    var tiny_pool = tiny_pool0
+    let (_, tiny_parse) = sym.parse(&tiny_pool, "x + y + z")
+    if tiny_parse != sym.TooLarge { os.exit(99i32) }
+    let (_, tiny_text) = sym.to_string(a, &tiny_pool, 0u32)
+    if tiny_text != sym.TooLarge { os.exit(100i32) }
     try io.print("math sym ok")
     ret ok
 }

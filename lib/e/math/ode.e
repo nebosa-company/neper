@@ -9,6 +9,8 @@
 // stepper works in place on caller storage and takes its scratch from the
 // caller too, sized as each declaration says.
 
+use e.math
+
 error TooSmall
 error Invalid
 
@@ -143,22 +145,10 @@ fn rkf45[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: 
     ret (0.0f64, h * factor, ok)
 }
 
-// The fourth root by two square roots of Newton's iteration.
-fn root4(x: f64) -> f64 { ret sqrt_f64(sqrt_f64(x)) }
-
-fn sqrt_f64(x: f64) -> f64 {
-    if x <= 0.0f64 { ret 0.0f64 }
-    var r = x
-    if r > 1.0f64 { r = x / 2.0f64 }
-    var i = 0usize
-    while i < 80usize {
-        let next = (r + x / r) / 2.0f64
-        if next == r { break }
-        r = next
-        i += 1usize
-    }
-    ret r
-}
+// The fourth root as two square roots. `math.sqrt` is correctly rounded at every
+// magnitude; the hand-rolled Newton loop here was not (1e-100 came back ~4e-25), so
+// a tiny step scaled the Euler-Maruyama noise wrongly (#130).
+fn root4(x: f64) -> f64 { ret math.sqrt[f64](math.sqrt[f64](x)) }
 
 // One velocity Verlet step for `x'' = acceleration(x)`: positions `x` and
 // velocities `v` of equal length; `scratch.len >= 2 * x.len` holds the
@@ -229,7 +219,7 @@ fn euler_maruyama[Ctx: type](ctx: *Ctx, drift: fn(*Ctx, f64, []const f64, []f64)
     var b = scratch[n..2usize * n]
     drift(ctx, t, y, a)
     diffusion(ctx, t, y, b)
-    let root_h = sqrt_f64(h)
+    let root_h = math.sqrt[f64](h)
     var i = 0usize
     while i < n {
         y[i] += h * a[i] + b[i] * root_h * noise[i]

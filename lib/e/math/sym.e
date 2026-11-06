@@ -102,14 +102,6 @@ fn q(n: i64, d: i64) -> Q {
     ret Q{ n: nn, d: dd }
 }
 
-fn big(p: *Pool, v: i64) -> bool {
-    if abs64(v) >= LIMIT * LIMIT / 2i64 {
-        p.failed = true
-        ret true
-    }
-    ret false
-}
-
 fn q_add(p: *Pool, x: Q, y: Q) -> Q {
     if abs64(x.n) >= LIMIT || abs64(y.n) >= LIMIT || x.d >= LIMIT || y.d >= LIMIT {
         p.failed = true
@@ -412,6 +404,12 @@ fn parse_atom(s: *Parser, depth: u32) -> u32 {
 
 // Unary minus binds looser than `^` (-x^2 is -(x^2)) and tighter than `*`.
 fn parse_unary(s: *Parser, depth: u32) -> u32 {
+    // Unary signs recurse before any atom is reached, so the nesting guard must be
+    // here too; parse_atom alone let a run of '-' overflow the native stack (#130).
+    if depth > 200u32 {
+        s.bad = true
+        ret 0u32
+    }
     let c = peek(s)
     if c == 45u8 {
         s.at += 1usize
@@ -576,6 +574,9 @@ fn to_string(a: *mem.Arena, p: *Pool, e: u32) -> (str, err) {
     if be != ok { ret ("", be) }
     var b = b0
     try push_expr(&b, p, e, 0u8)
+    // Printing can build nodes (a negation, parentheses) and a pool that overflowed must
+    // not hand back a string that silently names node 0 (#130).
+    if p.failed { ret ("", TooLarge) }
     ret (str.done(&b), ok)
 }
 

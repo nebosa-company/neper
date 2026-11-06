@@ -215,6 +215,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !wide_log_found || wide_log != 18446744073709551615u64 { os.exit(12i32) }
     // 13: a segment ending at u64::MAX reports TooSmall, never a wrap or trap.
     if ntheory.sieve_segmented(18446744073709551515u64, 18446744073709551615u64, window[..], scratch[..]) != ntheory.TooSmall { os.exit(13i32) }
+    // 14: a non-invertible base (2 shares a factor with 2038) finds the least exponent
+    // even when it lies past the baby-step span (#130).
+    let dark = ntheory.pow_mod(2u64, 600u64, 2038u64)
+    let (dark_log, dark_found) = ntheory.discrete_log_bsgs(2u64, dark, 2038u64, 2038u64, pairs[..])
+    if !dark_found || dark_log != 600u64 { os.exit(14i32) }
+    // 15: a non-finite Stern-Brocot target is refused instead of walking forever (#130).
+    let (inf_n, inf_d) = ntheory.stern_brocot_search(mem.bitcast[f64](9218868437227405312u64), 0.0001f64, 100u64)
+    if inf_n != 0u64 || inf_d != 0u64 { os.exit(15i32) }
 
     try io.print("math ntheory ok\n")
     ret ok

@@ -181,6 +181,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 16 steps of 1/16: Brownian motion at t = 1 has variance 1.
     if !near(sum2 / 4000.0f64, 1.0f64, 0.08f64) { os.exit(6i32) }
     if ode.euler_maruyama[Nothing](&nothing, zero_drift, unit_diffusion, 0.0f64, w[..], 0.1f64, noise[..], scratch[..1usize]) != ode.TooSmall { os.exit(6i32) }
+    // #130: root4 is exact at tiny magnitudes; the hand-rolled Newton loop answered
+    // ~1e-25 where the true fourth root of 1e-200 is 1e-50.
+    if !near(ode.root4(1.0e-200f64), 1.0e-50f64, 1.0e-60f64) { os.exit(7i32) }
 
     try io.print("math ode ok\n")
     ret ok

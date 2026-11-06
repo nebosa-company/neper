@@ -218,7 +218,8 @@ fn kalman_update(x: []f64, p: []f64, h: []const f64, r: []const f64, z: []const 
 // `jacobian(ctx, x, F)` fills the `n x n` linearisation at the old state;
 // `scratch.len >= 3 * n * n + n`.
 fn ekf_predict[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), jacobian: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, n: usize, scratch: []f64) -> err {
-    if scratch.len < 3usize * n * n + n { ret TooSmall }
+    // Every array the body indexes is checked, not just the scratch (#130).
+    if x.len < n || p.len < n * n || q.len < n * n || scratch.len < 3usize * n * n + n { ret TooSmall }
     var f = scratch[..n * n]
     jacobian(ctx, x, f)
     var next = scratch[n * n..n * n + n]
@@ -248,7 +249,10 @@ fn ekf_predict[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), j
 // `kalman_update` plus `m * n + m`.
 fn ekf_update[Ctx: type](ctx: *Ctx, observe: fn(*Ctx, []const f64, []f64), jacobian: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, r: []const f64, z: []const f64, n: usize, m: usize, scratch: []f64) -> err {
     let extra = m * n + m
-    if scratch.len < extra { ret TooSmall }
+    // The linear update's own requirement is added to the room taken before it, and
+    // its x/p/r/z reads are checked here rather than after the callbacks ran (#130).
+    let linear_need = 3usize * n * n + 4usize * m * m + 3usize * n * m + m
+    if x.len < n || p.len < n * n || r.len < m * m || z.len < m || scratch.len < extra + linear_need { ret TooSmall }
     var h = scratch[..m * n]
     var predicted = scratch[m * n..m * n + m]
     jacobian(ctx, x, h)
@@ -297,7 +301,7 @@ fn ukf_step[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), obse
 fn ukf[Ctx: type](ctx: *Ctx, transition: fn(*Ctx, []const f64, []f64), observe: fn(*Ctx, []const f64, []f64), x: []f64, p: []f64, q: []const f64, r: []const f64, z: []const f64, n: usize, m: usize, alpha: f64, beta: f64, kappa: f64, scratch: []f64) -> err {
     let points = 2usize * n + 1usize
     let need = points * (n + m) + 4usize * n * n + 3usize * m * m + 2usize * n * m + 2usize * n + 2usize * m
-    if scratch.len < need { ret TooSmall }
+    if x.len < n || p.len < n * n || q.len < n * n || r.len < m * m || z.len < m || scratch.len < need { ret TooSmall }
     var at = 0usize
     var sigma = scratch[at..at + points * n]
     at += points * n
