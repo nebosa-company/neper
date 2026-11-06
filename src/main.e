@@ -1031,11 +1031,21 @@ fn identifier_ok(spelling: str) -> bool {
     ret true
 }
 
+// A numeric flag value: up to 19 digits and no usize overflow, so a budget above
+// seven digits is not silently ignored. (A bad value still falls through as absent;
+// the usage diagnostic for it is not wired yet.)
 fn decimal_ok(spelling: str) -> bool {
-    if spelling.len == 0usize || spelling.len > 6usize { ret false }
+    if spelling.len == 0usize || spelling.len > 19usize { ret false }
+    var value = 0usize
     var at = 0usize
     while at < spelling.len {
-        if spelling[at] < 48u8 || spelling[at] > 57u8 { ret false }
+        let digit = spelling[at]
+        if digit < 48u8 || digit > 57u8 { ret false }
+        let d = usize(digit - 48u8)
+        if value > 18446744073709551615usize / 10usize { ret false }
+        value = value * 10usize
+        if value > 18446744073709551615usize - d { ret false }
+        value = value + d
         at += 1usize
     }
     ret true
