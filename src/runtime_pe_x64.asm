@@ -322,7 +322,7 @@ np_utf16_to_utf8 PROC
     test r14, r14
     jz utf16_empty
     mov rcx, 65001
-    mov edx, 80h
+    mov edx, 0
     mov r8, r13
     mov r9, r14
     mov qword ptr [rsp+32], 0
@@ -341,7 +341,7 @@ np_utf16_to_utf8 PROC
     jz utf16_fail
     mov r12, rax
     mov rcx, 65001
-    mov edx, 80h
+    mov edx, 0
     mov r8, r13
     mov r9, r14
     mov [rsp+32], r12
