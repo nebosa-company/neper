@@ -37,6 +37,8 @@ const CAP_DEVICE: u8 = 5u8
 // kernel reserves the object pools at boot and allocates no memory afterward; retype assigns
 // a pre-reserved slot and caps it, and an exhausted untyped refuses (D2128).
 const CAP_UNTYPED: u8 = 6u8
+// The launcher right: held by the init/shell thread, required by the launch syscall.
+const CAP_LAUNCH: u8 = 7u8
 const RIGHT_SEND: u8 = 1u8
 const RIGHT_RECV: u8 = 2u8
 const RIGHT_WRITE: u8 = 4u8

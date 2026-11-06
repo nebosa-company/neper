@@ -742,6 +742,12 @@ fn start_process(image_addr: usize, image_len: usize, name: str) -> (usize, err)
 // `reap` collects it. An index past the archive, or a space or table that will not take it, gives
 // the all-ones sentinel.
 fn launch(frame: *a64.Frame) {
+    // A launcher capability is required: any other thread is refused before its words
+    // are read (the caller-declared capability escape needs a launcher first).
+    if !thread.current_holds(thread.CAP_LAUNCH, thread.RIGHT_WRITE) {
+        frame.x[0usize] = 18446744073709551615u64
+        ret
+    }
     // (C126) The program index in the low byte and the system theme word above it.
     var index = usize(frame.x[0usize]) & 255usize
     let theme_word = (usize(frame.x[0usize]) >> 8usize) & 16383usize
@@ -1037,6 +1043,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !parse_archive(image_addr) { ret BadArchive }
         let (shell_init, shell_init_error) = start_process(archive_base + archive_offset[0usize], archive_length[0usize], "init")
         if shell_init_error != ok { ret shell_init_error }
+        // Only this thread may call the launch syscall; apps do not hold CAP_LAUNCH.
+        thread.grant(shell_init, 6usize, thread.CAP_LAUNCH, thread.RIGHT_WRITE, 0usize)
     }
     // (D2153, C106) The filesystem-server boot (`-append fsserver fswrite` / `fsserver fsread`):
     // the initrd is an archive of three programs. Program 0 is the filesystem server, started with
