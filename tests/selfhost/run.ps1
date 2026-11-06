@@ -1370,6 +1370,12 @@ $fmtXlsxBookWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $fmtXlsxBookWritten -ne 'executable written') { throw 'fmt_xlsx_book emission failed' }
 & $fmtXlsxBookPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_xlsx_book check failed: exit $LASTEXITCODE" }
+# A package whose workbook and worksheets live in a foreign namespace must not decode.
+$fmtXlsxForeignPath = Join-Path $testBuild 'fmt-xlsx-foreign-selfhost.exe'
+$fmtXlsxForeignWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\xlsx_foreign_package\src\main.e') $repo 'x64' 'windows' $fmtXlsxForeignPath
+if ($LASTEXITCODE -ne 0 -or $fmtXlsxForeignWritten -ne 'executable written') { throw 'xlsx_foreign_package emission failed' }
+& $fmtXlsxForeignPath
+if ($LASTEXITCODE -ne 0) { throw "a xlsx_foreign_package check failed: exit $LASTEXITCODE" }
 # `e.fmt.xlsx.book`: malformed text and sheet names are refused before they reach XML.
 $fmtXlsxBookUtf8Path = Join-Path $testBuild 'fmt-xlsx-book-utf8-selfhost.exe'
 $fmtXlsxBookUtf8Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_xlsx_book_utf8\src\main.e') $repo 'x64' 'windows' $fmtXlsxBookUtf8Path

@@ -1296,6 +1296,11 @@ fmt_xlsx_book_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$fmt_xlsx_book_written" = 'executable written' ]
 chmod +x "$test_build/fmt-xlsx-book-selfhost"
 "$test_build/fmt-xlsx-book-selfhost"
+# A package whose workbook and worksheets live in a foreign namespace must not decode.
+xlsx_foreign_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/xlsx_foreign_package/src/main.e" "$repo" x64 linux "$test_build/fmt-xlsx-foreign-selfhost")
+[ "$xlsx_foreign_written" = 'executable written' ]
+chmod +x "$test_build/fmt-xlsx-foreign-selfhost"
+"$test_build/fmt-xlsx-foreign-selfhost"
 # `e.fmt.xlsx.book`: malformed text and sheet names are refused before they reach XML.
 fmt_xlsx_book_utf8_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xlsx_book_utf8/src/main.e" "$repo" x64 linux "$test_build/fmt-xlsx-book-utf8-selfhost")
 [ "$fmt_xlsx_book_utf8_written" = 'executable written' ]
