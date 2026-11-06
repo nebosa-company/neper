@@ -1491,6 +1491,19 @@ fn global_of(a: *mem.Arena, item: Content) -> (usize, err) {
 
 // A representation read out of a global block into the arena, or `Unsupported`
 // for a DIB this does not decode (only 24- and 32-bit uncompressed ones are).
+// Checked usize arithmetic for untrusted dimensions: a product past usize is refused
+// before it can size an allocation or index the clipboard block.
+fn mul_ok(a: usize, b: usize) -> (usize, bool) {
+    if a == 0usize || b == 0usize { ret (0usize, true) }
+    if a > 18446744073709551615usize / b { ret (0usize, false) }
+    ret (a * b, true)
+}
+
+fn add_ok(a: usize, b: usize) -> (usize, bool) {
+    if a > 18446744073709551615usize - b { ret (0usize, false) }
+    ret (a + b, true)
+}
+
 fn content_of(a: *mem.Arena, kind: ContentKind, mime: str, handle: usize) -> (Content, err) {
     var item: Content = zero
     item.kind = kind
@@ -1581,22 +1594,42 @@ fn content_of(a: *mem.Arena, kind: ContentKind, mime: str, handle: usize) -> (Co
     let compression = get_u32(block, 16usize)
     let colours_used = get_u32(block, 32usize)
     var bottom_up = true
+    // Negating i32::MIN overflows; a height of exactly that is malformed, not absolute.
+    if height == -2147483647i32 - 1i32 {
+        let unlocked = raw_global_unlock(handle)
+        ret (item, Unsupported)
+    }
     if height < 0i32 {
         height = 0i32 - height
         bottom_up = false
     }
-    if dib_width <= 0i32 || height <= 0i32 || (bits != 32usize && bits != 24usize) || (compression != 0u32 && compression != 3u32) {
+    if header_size < 40u32 || usize(header_size) > block.len || dib_width <= 0i32 || height <= 0i32 || (bits != 32usize && bits != 24usize) || (compression != 0u32 && compression != 3u32) {
         let unlocked = raw_global_unlock(handle)
         ret (item, Unsupported)
     }
     let width = usize(dib_width)
     let rows = usize(height)
-    let stride = ((width * bits + 31usize) / 32usize) * 4usize
+    // Untrusted dimensions: every product/add below is checked before it is used to
+    // size the allocation or to index the block.
+    let (wbits, ok_wbits) = mul_ok(width, bits)
+    let (wbits31, ok_wbits31) = add_ok(wbits, 31usize)
+    let (stride, ok_stride) = mul_ok(wbits31 / 32usize, 4usize)
     var pixel_start = usize(header_size)
     // BITMAPINFOHEADER keeps the bit masks after the header; a V4/V5 header has them inside.
-    if compression == 3u32 && header_size < 108u32 { pixel_start += 12usize }
-    if bits <= 8usize { pixel_start += usize(colours_used) * 4usize }
-    if block.len < pixel_start + stride * rows {
+    if compression == 3u32 && header_size < 108u32 {
+        let (next, ok_next) = add_ok(pixel_start, 12usize)
+        pixel_start = next
+        if !ok_next { ret (item, Unsupported) }
+    }
+    if bits <= 8usize {
+        let (masks, ok_masks) = mul_ok(usize(colours_used), 4usize)
+        let (next, ok_next) = add_ok(pixel_start, masks)
+        pixel_start = next
+        if !ok_masks || !ok_next { ret (item, Unsupported) }
+    }
+    let (row_bytes, ok_rows) = mul_ok(stride, rows)
+    let (needed, ok_needed) = add_ok(pixel_start, row_bytes)
+    if !ok_wbits || !ok_wbits31 || !ok_stride || !ok_rows || !ok_needed || block.len < needed {
         let unlocked = raw_global_unlock(handle)
         ret (item, Unsupported)
     }
@@ -1617,7 +1650,9 @@ fn content_of(a: *mem.Arena, kind: ContentKind, mime: str, handle: usize) -> (Co
         mask_b = get_u32(block, 48usize)
         if header_size >= 56u32 && block.len >= 56usize { mask_a = get_u32(block, 52usize) }
     }
-    let (pixels, allocation_error) = mem.alloc[u32](a, width * rows)
+    let (pixel_count, ok_count) = mul_ok(width, rows)
+    if !ok_count { ret (item, Unsupported) }
+    let (pixels, allocation_error) = mem.alloc[u32](a, pixel_count)
     if allocation_error != ok {
         let unlocked = raw_global_unlock(handle)
         ret (item, allocation_error)
@@ -2923,26 +2958,24 @@ fn receive_activation(lparam: isize) -> isize {
     let (copy, allocation_error) = mem.alloc[u8](instance_storage, length)
     if allocation_error != ok { ret 0isize }
     mem.copy[u8](copy, incoming)
-    // The arguments back out of the newline-separated text.
-    var count = 1usize
-    var at = 0usize
-    while at < length {
-        if copy[at] == 10u8 { count += 1usize }
-        at += 1usize
-    }
+    // Length-prefixed arguments: u32 count, then for each a u32 byte length and its bytes.
+    if length < 4usize { ret 0isize }
+    let count = usize(copy[0usize]) | (usize(copy[1usize]) << 8usize) | (usize(copy[2usize]) << 16usize) | (usize(copy[3usize]) << 24usize)
+    if count == 0usize || count > (length - 4usize) / 4usize { ret 0isize }
     let (args, args_error) = mem.alloc[str](instance_storage, count)
     if args_error != ok { ret 0isize }
-    var start = 0usize
+    var at = 4usize
     var index = 0usize
-    at = 0usize
-    while at <= length {
-        if at == length || copy[at] == 10u8 {
-            args[index] = copy[start..at]
-            index += 1usize
-            start = at + 1usize
-        }
-        at += 1usize
+    while index < count {
+        if at + 4usize > length { ret 0isize }
+        let size = usize(copy[at]) | (usize(copy[at + 1usize]) << 8usize) | (usize(copy[at + 2usize]) << 16usize) | (usize(copy[at + 3usize]) << 24usize)
+        at += 4usize
+        if size > length - at { ret 0isize }
+        args[index] = copy[at..at + size]
+        at += size
+        index += 1usize
     }
+    if at != length { ret 0isize }
     activations[(activation_head + activation_count) % ACTIVATION_RING] = activation_of(instance_storage, args[0usize..count])
     activation_count += 1usize
     ret 1isize
@@ -2976,30 +3009,35 @@ fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Aren
         instance_storage = storage
         ret (true, ok)
     }
-    // Not the first: the arguments to the first, newline-separated.
+    // Not the first: the arguments to the first, length-prefixed.
     let primary = raw_find_window(&shell_class_name[0usize], &title[0usize])
     if primary == 0usize { ret (false, NotFound) }
-    var total = 0usize
+    var total = 4usize
     var at = 0usize
     while at < args.len {
-        total += args[at].len + 1usize
+        total += 4usize + args[at].len
         at += 1usize
     }
-    if total == 0usize { total = 1usize }
     let (payload, allocation_error) = mem.alloc[u8](a, total)
     if allocation_error != ok { ret (false, allocation_error) }
-    var written = 0usize
+    payload[0usize] = u8(args.len & 255usize)
+    payload[1usize] = u8((args.len >> 8usize) & 255usize)
+    payload[2usize] = u8((args.len >> 16usize) & 255usize)
+    payload[3usize] = u8((args.len >> 24usize) & 255usize)
+    var written = 4usize
     at = 0usize
     while at < args.len {
+        let size = args[at].len
+        payload[written] = u8(size & 255usize)
+        payload[written + 1usize] = u8((size >> 8usize) & 255usize)
+        payload[written + 2usize] = u8((size >> 16usize) & 255usize)
+        payload[written + 3usize] = u8((size >> 24usize) & 255usize)
+        written += 4usize
         var i = 0usize
-        while i < args[at].len {
+        while i < size {
             payload[written] = args[at][i]
             written += 1usize
             i += 1usize
-        }
-        if at + 1usize < args.len {
-            payload[written] = 10u8
-            written += 1usize
         }
         at += 1usize
     }
