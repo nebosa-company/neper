@@ -4576,6 +4576,12 @@ fn argument_can_change(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
             let pointed = c.tokens[at + 1usize]
             if check.same(lex.token_text(g.modules[module_index].text, pointed), name) { ret true }
         }
+        // `name[...]` may be a slice over the local's storage, which is an implicit
+        // address even without an `&`: a slice handed to the callee can write it.
+        if c.tokens[at].kind == .Identifier && c.tokens[at + 1usize].kind == .PunctLBracket {
+            let indexed = c.tokens[at]
+            if check.same(lex.token_text(g.modules[module_index].text, indexed), name) { ret true }
+        }
         at += 1usize
     }
     ret false
@@ -11155,3 +11161,4 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     ret ok
 }
+
