@@ -6782,9 +6782,14 @@ fn proof_bound(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
             is_constant = left_is_constant
         }
         if !is_constant { ret (0usize, false) }
-        if operator == .PunctAmp { ret (constant + 1usize, true) }
+        let proof_max = 18446744073709551615usize
+        if operator == .PunctAmp {
+            // An overflowed bound is not a bound: answer "unbounded", never wrap.
+            if constant == proof_max { ret (0usize, false) }
+            ret (constant + 1usize, true)
+        }
         let (other_bound, other_bounded) = proof_bound(c, g, tree, module_index, other_index)
-        if !other_bounded { ret (0usize, false) }
+        if !other_bounded || other_bound > proof_max - constant { ret (0usize, false) }
         ret (constant + other_bound, true)
     }
     ret (0usize, false)
@@ -8618,6 +8623,12 @@ fn emit_deferred_from(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
             let local_checkpoint = c.local_count
             var current_binding_count = binding_count
             var no_loop: LoopControl = zero
+            // A deferred body runs at block exit, after the proof that guarded its text;
+            // it must not inherit a proof that no longer holds there.
+            let saved_proofs = builder.proof_count
+            let saved_equalities = builder.proof_equal_count
+            builder.proof_count = 0usize
+            builder.proof_equal_count = 0usize
             if entry.kind == .Block {
                 try lower_block(c, g, tree, module_index, function, tree.nodes[entry.node_index], builder, bindings, &current_binding_count, &no_loop, defers)
             } else {
@@ -8625,6 +8636,8 @@ fn emit_deferred_from(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
                 try lower_statement(c, g, tree, module_index, function, tree.nodes[entry.node_index], builder, bindings, &current_binding_count, &no_loop, defers)
             }
             c.local_count = local_checkpoint
+            builder.proof_count = saved_proofs
+            builder.proof_equal_count = saved_equalities
         }
     }
     ret ok
