@@ -30,7 +30,9 @@ const BROADCAST: u64 = 281474976710655u64
 // emulated time, and every exchange retries a few waits.
 const POLLS: usize = 4000000usize
 
-type Stack = struct { net: virtio.Net, mac: u64, ip: u32, mask: u32, gw: u32, dns: u32, dns_port: u16, gw_mac: u64, ident: u16 }
+// `arp_waiting` gates learning the gateway's MAC: a reply is trusted only while a
+// resolution we started is outstanding, so a late or forged reply cannot re-point it.
+type Stack = struct { net: virtio.Net, mac: u64, ip: u32, mask: u32, gw: u32, dns: u32, dns_port: u16, gw_mac: u64, ident: u16, arp_waiting: bool }
 
 fn put16(at: usize, value: u16) {
     os.store8(at, u8(value >> 8u16))
@@ -123,7 +125,7 @@ fn say_ip(ip: u32) {
 fn attach(device: virtio.Device) -> (Stack, err) {
     let (net, net_error) = virtio.net_open(device)
     if net_error != ok { ret (zero, net_error) }
-    ret (Stack { net: net, mac: net.mac, ip: 0u32, mask: 0u32, gw: 0u32, dns: 0u32, dns_port: 53u16, gw_mac: BROADCAST, ident: 1u16 }, ok)
+    ret (Stack { net: net, mac: net.mac, ip: 0u32, mask: 0u32, gw: 0u32, dns: 0u32, dns_port: 53u16, gw_mac: BROADCAST, ident: 1u16, arp_waiting: false }, ok)
 }
 
 // ---- Ethernet and ARP ----
@@ -178,7 +180,11 @@ fn poll(st: *Stack) -> (u8, u32, usize, usize) {
         let sender_mac = get_mac(at + 8usize)
         let sender_ip = get32(at + 14usize)
         let target_ip = get32(at + 24usize)
-        if op == 2u16 && sender_ip == st.gw { st.gw_mac = sender_mac }
+        // Only a reply to our own outstanding request is trusted, and only one.
+        if op == 2u16 && sender_ip == st.gw && st.arp_waiting {
+            st.gw_mac = sender_mac
+            st.arp_waiting = false
+        }
         if op == 1u16 && target_ip == st.ip && st.ip != 0u32 {
             let reply_error = arp_send(st, 2u16, sender_mac, sender_ip)
         }
@@ -197,7 +203,9 @@ fn poll(st: *Stack) -> (u8, u32, usize, usize) {
     let src = get32(ip + 12usize)
     let payload = ip + header_len
     let payload_len = total - header_len
-    if proto == PROTO_ICMP && payload_len >= 8usize && os.load8(payload) == 8u8 {
+    // An echo is answered only when it is addressed to our leased address, never for a
+    // broadcast or a packet seen before the lease.
+    if proto == PROTO_ICMP && st.ip != 0u32 && dst == st.ip && payload_len >= 8usize && os.load8(payload) == 8u8 {
         let reply = eth_payload(st) + IP_HDR
         copy(reply, payload, payload_len)
         os.store8(reply, 0u8)
@@ -211,6 +219,7 @@ fn poll(st: *Stack) -> (u8, u32, usize, usize) {
 
 // Resolve the gateway's MAC with an ARP request, retrying a few times.
 fn arp_gateway(st: *Stack) -> err {
+    st.arp_waiting = true
     var attempt = 0usize
     while attempt < 5usize {
         let send_error = arp_send(st, 1u16, 0u64, st.gw)
@@ -218,11 +227,13 @@ fn arp_gateway(st: *Stack) -> err {
         var spins = 0usize
         while spins < POLLS {
             let (proto, src, payload, len) = poll(st)
-            if st.gw_mac != BROADCAST { ret ok }
+            if st.gw_mac != BROADCAST { st.arp_waiting = false
+                ret ok }
             spins += 1usize
         }
         attempt += 1usize
     }
+    st.arp_waiting = false
     ret NoReply
 }
 
