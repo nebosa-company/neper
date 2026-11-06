@@ -52,7 +52,10 @@ if ($useWsl) {
     $objcopy = Join-Path $llvm 'llvm-objcopy.exe'
     $nm = Join-Path $llvm 'llvm-nm.exe'
     $objdump = Join-Path $llvm 'llvm-objdump.exe'
-    $target = if ($Arch -eq 'macosx64') { 'x86_64-macos' } elseif ($Arch -eq 'macos') { 'aarch64-macos' } elseif ($arm) { 'aarch64-linux-gnu' } else { 'x86_64-linux-gnu' }
+    # macOS runtimes are raw position-independent code (svc/x86-64 syscall stubs), so
+    # they assemble as ELF objects: the Mach-O target puts code in __text, which the
+    # .text extraction below would not find (the blob came out truncated, #1638).
+    $target = if ($arm) { 'aarch64-linux-gnu' } else { 'x86_64-linux-gnu' }
     $input = $source
     if ($arm) {
         # The CRC instructions need an explicit architecture for the integrated assembler.
@@ -138,3 +141,4 @@ for ($index = 0; $index -lt $table.Count; $index++) {
 
 [IO.File]::WriteAllText($output, $builder.ToString().Replace("`r`n", "`n"), [Text.UTF8Encoding]::new($false))
 Write-Output $output
+
