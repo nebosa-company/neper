@@ -66,7 +66,7 @@ fn tile_name(a: *mem.Arena, s: *State, who: usize) -> str {
 
 // Open the signalling connection for the meeting called `title` and join it; false when there is no server.
 fn live_open(s: *State) -> bool {
-    if netclient.connect("neper.test", 8090u16, false) != netproto.R_OK { ret false }
+    if netclient.connect("neper.test", 443u16, true) != netproto.R_OK { ret false }
     s.nb.pos = 0usize
     s.nb.len = 0usize
     s.nb.closed = false

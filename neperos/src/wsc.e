@@ -18,13 +18,16 @@ fn byte(b: *netio.NetBuf) -> (u8, bool) {
 // The Sec-WebSocket-Key is not verified against the accept value: the exchange is over TLS or loopback here and the
 // server's 101 answer is what is checked.
 fn upgrade(b: *netio.NetBuf, host: str, path: str) -> bool {
-    var request: [320]u8 = zero
+    // Room for the longest host/path the app may pass; over that, fail rather than
+    // silently cutting the handshake short.
+    var request: [512]u8 = zero
     var n = 0usize
     let parts: [7]str = [7]str{ "GET ", path, " HTTP/1.1\r\nHost: ", host, "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: AQIDBAUGBwgJCgsMDQ4PEA==\r\nSec-WebSocket-Version: 13\r\n\r\n", "", "" }
     var p = 0usize
     while p < 5usize {
         var i = 0usize
-        while i < parts[p].len && n < 320usize {
+        while i < parts[p].len {
+            if n >= 512usize { ret false }
             request[n] = parts[p][i]
             n += 1usize
             i += 1usize
@@ -86,8 +89,17 @@ fn receive(b: *netio.NetBuf, out: []u8) -> (u8, usize, bool) {
         if !okh || !okl { ret (0u8, 0usize, false) }
         length = usize(hi) * 256usize + usize(lo)
     } else if length == 127usize {
-        // A frame this large is not for a chat.
-        ret (0u8, 0usize, false)
+        // A 64-bit length: consume it and the payload so the stream stays framed; keep
+        // only what fits in `out` (a chat frame this large is dropped, not desynced).
+        length = 0usize
+        var lb = 0usize
+        while lb < 8usize {
+            let (size_byte, size_ok) = byte(b)
+            if !size_ok { ret (0u8, 0usize, false) }
+            length = length * 256usize + usize(size_byte)
+            lb += 1usize
+        }
+        if length > 33554432usize { ret (0u8, 0usize, false) }
     }
     var mask: [4]u8 = zero
     let masked = (h1 & 128u8) != 0u8
