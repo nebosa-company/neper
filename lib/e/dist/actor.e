@@ -18,7 +18,10 @@
 // timer next falls at its due time plus the smallest multiple of its period that is after `now`:
 // a long gap is one firing, not a burst. A firing that cannot be delivered (busy grain, failed
 // handler) stays due for a later tick; a one-shot timer is consumed only after delivery succeeds.
-// `tick(now)` is the clock: the caller (a scheduler loop, `e.task.jobs`) drives it.
+// `tick(now)` is the clock: the caller (a scheduler loop, `e.task.jobs`) drives it. In this
+// module `now`, timer `due`/`period`, reminder `due`/`period` and collect's `idle_ms` are all
+// milliseconds: one unit, compared as given, so a 500 ms timer fires after 500 ms and a 950 ms
+// idle threshold collects after 950 ms. A caller with a nanosecond clock converts at the boundary.
 //
 // A silo failure (`fail_silo`) drops its activations without running `deactivate` and without
 // writing state: what a grain had committed in a turn is in the store, and its next call
@@ -287,7 +290,7 @@ fn deactivate(sys: *System, grain: str, now: i64) -> err {
     ret deactivate_at(sys, at, now)
 }
 
-// Deactivates every grain idle for at least `idle_ms`; how many.
+// Deactivates every grain idle for at least `idle_ms` milliseconds; how many. `now` is in ms.
 fn collect(sys: *System, now: i64, idle_ms: i64) -> (usize, err) {
     var n = 0usize
     var i = 0usize
@@ -322,7 +325,8 @@ fn fail_silo(sys: *System, silo: usize) -> usize {
 
 // ---- timers (in memory) -------------------------------------------------------------------
 
-// Starts (or restarts) a timer of this grain: first firing at `due`, then every `period` ms (0
+// Starts (or restarts) a timer of this grain: first firing at `due` (a millisecond timestamp),
+// then every `period` milliseconds (0
 // for once). Delivered as kind `timer:<name>` by `tick` while the grain stays active.
 fn timer_start(t: *Turn, name: str, due: i64, period: i64) -> err {
     if name.len == 0usize || period < 0i64 { ret Invalid }
