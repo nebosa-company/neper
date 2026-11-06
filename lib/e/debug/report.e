@@ -50,7 +50,7 @@ type Limit = struct { category: str, until: i64 }
 type Transport = struct { ctx: *void, send: fn(*void, *mem.Arena, *const http.Request) -> (http.Response, err) }
 type NetTransport = struct { endpoint: net.Endpoint, limits: http.Limits }
 type TlsTransport = struct { endpoint: net.Endpoint, config: tls.ClientConfig, limits: http.Limits }
-type Client = struct { dsn: Dsn, a: *mem.Arena, transport: Transport, name: str, queue: []str, count: usize, bytes: usize, max_items: usize, max_bytes: usize, dropped: usize, rejected: usize, sent: usize, failures: u32, retry_at: i64, limited_until: i64 }
+type Client = struct { dsn: Dsn, a: *mem.Arena, transport: Transport, name: str, storage: []u8, q_off: []usize, q_len: []usize, count: usize, bytes: usize, max_items: usize, max_bytes: usize, dropped: usize, rejected: usize, sent: usize, failures: u32, retry_at: i64, limited_until: i64, scratch_mark: usize, has_scratch: bool }
 
 error Invalid
 error TooLarge
@@ -484,13 +484,19 @@ fn client(a: *mem.Arena, dsn_text: str, transport: Transport, sdk_name: str, max
     let (dsn, dsn_error) = parse_dsn(dsn_text)
     if dsn_error != ok { ret (c, dsn_error) }
     if max_items == 0usize || max_bytes == 0usize { ret (c, Invalid) }
-    let (queue, queue_error) = mem.alloc[str](a, max_items)
-    if queue_error != ok { ret (c, queue_error) }
+    let (storage, storage_error) = mem.alloc[u8](a, max_bytes)
+    if storage_error != ok { ret (c, storage_error) }
+    let (q_off, off_error) = mem.alloc[usize](a, max_items)
+    if off_error != ok { ret (c, off_error) }
+    let (q_len, len_error) = mem.alloc[usize](a, max_items)
+    if len_error != ok { ret (c, len_error) }
     c.dsn = dsn
     c.a = a
     c.transport = transport
     c.name = sdk_name
-    c.queue = queue
+    c.storage = storage
+    c.q_off = q_off
+    c.q_len = q_len
     c.max_items = max_items
     c.max_bytes = max_bytes
     ret (c, ok)
@@ -507,35 +513,58 @@ fn keep(a: *mem.Arena, s: str) -> (str, err) {
     ret (buf[0..s.len], ok)
 }
 
+// The queued envelope `i`, a slice of the client's bounded storage.
+fn queued(c: *const Client, i: usize) -> str { ret queue_at(c, i) }
+fn queue_at(c: *const Client, i: usize) -> str {
+    ret c.storage[c.q_off[i]..c.q_off[i] + c.q_len[i]]
+}
+
+// Drops the oldest envelope and shifts the kept bytes down, so the storage never grows past
+// the queue budget (#530).
 fn pop_front(c: *Client) {
     if c.count == 0usize { ret }
-    c.bytes -= c.queue[0].len
+    let first = c.q_len[0usize]
     var i = 1usize
     while i < c.count {
-        c.queue[i - 1usize] = c.queue[i]
+        c.q_off[i - 1usize] = c.q_off[i] - first
+        c.q_len[i - 1usize] = c.q_len[i]
         i += 1usize
     }
+    var b = first
+    while b < c.bytes {
+        c.storage[b - first] = c.storage[b]
+        b += 1usize
+    }
+    c.bytes -= first
     c.count -= 1usize
 }
 
 // Queues one serialized envelope, dropping the oldest to fit. `TooLarge` when it alone exceeds
-// the byte budget.
+// the byte budget. The bytes live in the client's bounded storage, not in the caller's arena.
 fn enqueue(c: *Client, bytes_in: str) -> err {
     if bytes_in.len > c.max_bytes { ret TooLarge }
-    let (copy, keep_error) = keep(c.a, bytes_in)
-    if keep_error != ok { ret keep_error }
-    while c.count >= c.max_items || c.bytes + copy.len > c.max_bytes {
+    while c.count >= c.max_items || c.bytes + bytes_in.len > c.max_bytes {
         pop_front(c)
         c.dropped += 1usize
     }
-    c.queue[c.count] = copy
+    let at = c.bytes
+    var i = 0usize
+    while i < bytes_in.len {
+        c.storage[at + i] = bytes_in[i]
+        i += 1usize
+    }
+    c.q_off[c.count] = at
+    c.q_len[c.count] = bytes_in.len
     c.count += 1usize
-    c.bytes += copy.len
+    c.bytes += bytes_in.len
     ret ok
 }
 
 // Serializes an event (plus attachments) into an envelope stamped `now` and queues it.
 fn capture(c: *Client, ev: *const Event, attachments: []const Item, now: i64) -> err {
+    // Serialization scratch is temporary: the envelope is copied into the queue storage below.
+    let entry = mem.mark(c.a)
+    defer mem.reset(c.a, entry)
     var items: [4]Item = zero
     if attachments.len + 1usize > 4usize { ret Invalid }
     let (first, item_error) = event_item(c.a, ev)
@@ -594,6 +623,11 @@ fn host_header(a: *mem.Arena, dsn: *const Dsn) -> str {
 // Sends queued envelopes oldest first, at most `max_send`; how many were delivered. Stops early
 // at a rate limit or a failure (the envelope stays queued).
 fn flush(c: *Client, now: i64, max_send: usize) -> (usize, err) {
+    // Request headers, target and auth strings are per-send scratch (#530); the previous
+    // attempt's scratch is reclaimed here, before new strings are built.
+    if c.has_scratch { mem.reset(c.a, c.scratch_mark) }
+    c.scratch_mark = mem.mark(c.a)
+    c.has_scratch = true
     var delivered = 0usize
     if now < c.retry_at || now < c.limited_until { ret (0usize, ok) }
     let (path_text, target_error) = envelope_target(c.a, &c.dsn)
@@ -612,7 +646,9 @@ fn flush(c: *Client, now: i64, max_send: usize) -> (usize, err) {
         req.target = path_text
         req.version = .Http11
         req.headers = headers[0..3]
-        req.body = c.queue[0]
+        let (body, body_error) = keep(c.a, queue_at(c, 0usize))
+        if body_error != ok { ret (delivered, body_error) }
+        req.body = body
         let (resp, send_error) = c.transport.send(c.transport.ctx, c.a, &req)
         if send_error != ok {
             c.failures += 1u32
@@ -703,8 +739,9 @@ fn save_queue(c: *Client, s: *store.Store, key: str) -> err {
     try put_u32(&b, u32(c.count))
     var i = 0usize
     while i < c.count {
-        try put_u32(&b, u32(c.queue[i].len))
-        try str.push(&b, c.queue[i])
+        let item = queue_at(c, i)
+        try put_u32(&b, u32(item.len))
+        try str.push(&b, item)
         i += 1usize
     }
     ret store.put(s, c.a, key, str.done(&b))

@@ -331,7 +331,7 @@ fn queue(a: *mem.Arena) -> i32 {
     if report.capture(&c, &ev0, zero, 1i64) != ok || report.capture(&c, &ev1, zero, 2i64) != ok || report.capture(&c, &ev2, zero, 3i64) != ok { ret 2302i32 }
     if report.pending(&c) != 2usize || c.dropped != 1usize { ret 2303i32 }
     // the oldest was dropped: what is left starts with event 1
-    if !str.eq(c.queue[0][2..10], "event_id") { ret 2304i32 }
+    if !str.eq(report.queued(&c, 0usize)[2..10], "event_id") { ret 2304i32 }
     // persisted and restored into a fresh client
     let (m0, mem_error) = store.memory(a, 4usize)
     if mem_error != ok { ret 2305i32 }
@@ -343,7 +343,7 @@ fn queue(a: *mem.Arena) -> i32 {
     if client_error2 != ok { ret 2307i32 }
     var d = d0
     if report.load_queue(&d, &s, "reports/queue") != ok || report.pending(&d) != 2usize { ret 2308i32 }
-    if !str.eq(d.queue[0], c.queue[0]) || !str.eq(d.queue[1], c.queue[1]) { ret 2309i32 }
+    if !str.eq(report.queued(&d, 0usize), report.queued(&c, 0usize)) || !str.eq(report.queued(&d, 1usize), report.queued(&c, 1usize)) { ret 2309i32 }
     let (n1, e1) = report.flush(&d, 9i64, 5usize)
     if e1 != ok || n1 != 2usize { ret 2310i32 }
     // damage is refused
@@ -382,6 +382,20 @@ fn queue(a: *mem.Arena) -> i32 {
     if report.pending(&c) != 2usize { ret 2316i32 }
     let (bad_client, bad_error) = report.client(a, "nonsense", transport(&f), "x", 1usize, 1usize)
     if bad_error != report.Invalid { ret 2317i32 }
+    // #530: a long capture run does not grow the arena; queue storage is bounded at creation.
+    var gf = new_fake(200u16)
+    let (g0, growth_client_error) = make_client(a, &gf, 2usize, 65536usize)
+    if growth_client_error != ok { ret 2323i32 }
+    var g = g0
+    let growth_before = mem.mark(a)
+    var gi = 0usize
+    while gi < 500usize {
+        let gev = test_event(id_n(gi), 1i64)
+        if report.capture(&g, &gev, zero, 1i64) != ok { ret 2324i32 }
+        gi += 1usize
+    }
+    let growth_after = mem.mark(a)
+    if growth_after > growth_before && growth_after - growth_before > 64usize { ret 2325i32 }
     ret 0i32
 }
 
