@@ -3431,7 +3431,17 @@ var window_handles: [16]usize = zero
 var window_cursors: [16]CursorShape = zero
 var window_class_atom: u16 = 0u16
 var window_class_name: [16]u16 = zero
-var window_pending_surrogate: u32 = 0u32
+// One pending high surrogate per window: a WM_CHAR pair must compose in the window
+// that received its first half, not with whatever window typed last.
+const SURROGATE_SLOTS: usize = 8usize
+var window_surrogate_windows: [8]usize = zero
+var window_surrogate_values: [8]u32 = zero
+
+// ponytail: fixed 8 slots indexed by window handle; a collision costs one dropped
+// half-pair in an extreme multi-window case.
+fn surrogate_slot(handle: usize) -> usize {
+    ret (handle / 16usize) % SURROGATE_SLOTS
+}
 
 @import("user32.dll", "RegisterClassExW")
 extern fn raw_register_class(class: *const WindowClass) -> u16
@@ -3717,16 +3727,19 @@ fn window_procedure(handle: usize, message: u32, wparam: usize, lparam: isize) -
     }
     if message == 258u32 {
         let unit = u32(wparam & 65535usize)
+        let slot = surrogate_slot(handle)
         if unit >= 55296u32 && unit < 56320u32 {
-            window_pending_surrogate = unit
+            window_surrogate_windows[slot] = handle
+            window_surrogate_values[slot] = unit
             ret 0isize
         }
         event.kind = .Text
         event.codepoint = unit
-        if unit >= 56320u32 && unit < 57344u32 && window_pending_surrogate != 0u32 {
-            event.codepoint = 65536u32 + ((window_pending_surrogate - 55296u32) << 10u32) + (unit - 56320u32)
+        if unit >= 56320u32 && unit < 57344u32 && window_surrogate_windows[slot] == handle && window_surrogate_values[slot] != 0u32 {
+            event.codepoint = 65536u32 + ((window_surrogate_values[slot] - 55296u32) << 10u32) + (unit - 56320u32)
         }
-        window_pending_surrogate = 0u32
+        window_surrogate_windows[slot] = 0usize
+        window_surrogate_values[slot] = 0u32
         window_push(event)
         ret 0isize
     }
