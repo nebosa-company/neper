@@ -404,7 +404,7 @@ fn function_name(f: u8) -> str
 fn push_expr(b: *str.Builder, p: *Pool, e: u32, parent: u8) -> err
 fn to_string(a: *mem.Arena, p: *Pool, e: u32) -> (str, err)
 fn eval(p: *Pool, e: u32, names: []const str, values: []const f64) -> f64
-fn diff(p: *Pool, e: u32, s: u32) -> u32
+fn diff(p: *Pool, e: u32, s: u32) -> (u32, err)
 fn poly_zero() -> Poly
 fn poly_const(v: Q) -> Poly
 fn poly_trim(r: *Poly)
@@ -413,7 +413,7 @@ fn poly_mul(p: *Pool, x: Poly, y: Poly) -> (Poly, bool)
 fn poly_of(p: *Pool, e: u32, s: u32) -> (Poly, bool)
 fn poly_expr(p: *Pool, f: Poly, x: u32) -> u32
 fn poly_derivative(p: *Pool, f: Poly) -> Poly
-fn integrate(p: *Pool, e: u32, s: u32) -> (u32, bool)
+fn integrate(p: *Pool, e: u32, s: u32) -> (u32, bool, err)
 fn by_parts(p: *Pool, poly: Poly, f: u8, u: u32, slope: Q, x: u32) -> (u32, bool)
 fn divides(d: i64, v: i64) -> bool
 fn horner(p: *Pool, f: Poly, r: Q) -> Q
@@ -32292,6 +32292,7 @@ const QUARTER: Fx
 const EIGHTH: Fx
 
 fn from_int(n: i32) -> Fx
+fn saturate(v: i64) -> i32
 fn to_int(x: Fx) -> i32
 fn from_ratio(num: i32, den: i32) -> (Fx, err)
 fn mul(a: Fx, b: Fx) -> Fx
