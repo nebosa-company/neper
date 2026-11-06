@@ -187,6 +187,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     if !oversized_framed_untouched() { os.exit(13i32) }
 
+    // 595: empty input still writes the stream identifier (ten bytes, no data chunk),
+    // and the decoder turns it back into zero bytes.
+    var empty_stream: [16]u8 = zero
+    let (empty_n, empty_e) = snappy.encode_framed(text[0usize..0usize], empty_stream[..], table[..])
+    if empty_e != ok || empty_n != 10usize || empty_stream[0] != 255u8 || empty_stream[4] != 115u8 { os.exit(14i32) }
+    let (empty_out, empty_d) = snappy.decode_framed(empty_stream[0usize..empty_n], out[..])
+    if empty_d != ok || empty_out != 0usize { os.exit(14i32) }
+
     try io.print("fmt snappy ok\n")
     ret ok
 }

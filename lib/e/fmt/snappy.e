@@ -351,9 +351,9 @@ fn put_chunk_head(dst: []u8, at: usize, kind: u8, size: usize, crc: u32) {
 }
 
 // Writes `src` as a framed stream into `dst` (`bound_framed(src.len)` bytes
-// to be safe); answers the bytes written. An empty input is an empty stream.
+// to be safe); answers the bytes written. The stream identifier is written even for
+// empty input: a zero-byte stream is not a valid framed stream.
 fn encode_framed(src: []const u8, dst: []u8, table: []u16) -> (usize, err) {
-    if src.len == 0usize { ret (0usize, ok) }
     if dst.len < 10usize { ret (0usize, TooSmall) }
     let ident: [10]u8 = [10]u8{ 255, 6, 0, 0, 115, 78, 97, 80, 112, 89 }
     var i = 0usize
@@ -443,3 +443,4 @@ fn decode_framed(src: []const u8, dst: []u8) -> (usize, err) {
     }
     ret (d, ok)
 }
+
