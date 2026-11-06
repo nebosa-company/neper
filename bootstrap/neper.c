@@ -2944,6 +2944,40 @@ static int case_constant_value(Expr *e, int64_t *value) {
     return 0;
 }
 
+static int untyped_integer_value(Expr *e, int64_t *value) {
+    if (e->kind == EX_INTEGER) { *value = e->as.integer; return 1; }
+    if (e->kind == EX_ENUM_MEMBER) { *value = e->constant_value; return 1; }
+    if (e->kind == EX_UNARY && (e->as.unary.op == TK_MINUS || e->as.unary.op == TK_PLUS)) {
+        int64_t inner;
+        if (untyped_integer_value(e->as.unary.value, &inner)) {
+            *value = e->as.unary.op == TK_MINUS ? -inner : inner;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* An untyped integer coerced into a narrow type must fit it: `let x: u8 = 300`
+   is E-TYPE-0004 rather than a silent wrap. 64-bit targets keep the u64 range the
+   literal parser already enforced. */
+static void check_untyped_range(Compiler *c, Expr *value, Type target) {
+    int bits, is_signed;
+    int64_t v;
+    if (!value || value->type.kind != TY_UNTYPED_INT || target.kind != TY_INT) return;
+    if (!untyped_integer_value(value, &v)) return;
+    if (strcmp(target.name, "usize") == 0 || strcmp(target.name, "isize") == 0 || !target.name[0]) return;
+    bits = atoi(target.name + 1);
+    is_signed = target.name[0] == 'i';
+    if (bits <= 0 || bits >= 64) return;
+    if (is_signed) {
+        int64_t limit = INT64_C(1) << (bits - 1);
+        if (v < -limit || v > limit - 1)
+            diagnostic_at(c, &value->token, "E-TYPE-0004", "integer literal is not representable");
+    } else if (v < 0 || (uint64_t)v > ((UINT64_C(1) << bits) - 1)) {
+        diagnostic_at(c, &value->token, "E-TYPE-0004", "integer literal is not representable");
+    }
+}
+
 static int type_has_zero_at(Compiler *c, Type type, int depth, char *offending, size_t capacity) {
     StructDecl *decl;
     int i;
@@ -4105,6 +4139,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     }
                 }
                 if (actual.kind == TY_UNTYPED_INT && chosen.kind == TY_INT) {
+                    check_untyped_range(c, s->as.bind.value, chosen);
                     coerce_untyped_integer(s->as.bind.value, chosen); actual = chosen;
                 }
                 if (s->as.bind.declared_type.kind == TY_INVALID && actual.kind == TY_UNTYPED_INT)
