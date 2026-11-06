@@ -149,6 +149,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     // 13: hybrid A* on map 0: the path length is a whole number of arcs.
     let grid = plan.Grid { cell: 0.5f64, w: 20usize, h: 20usize, headings: 16usize, arc: 0.6f64, radius: 1.5f64, substeps: 3usize }
+    // #129: the heading bin of `f64(bin) * turn` is recovered exactly, not as bin-1.
+    let bin_turn = 6.283185307179586f64 / 16.0f64
+    let (bin_cell, bin_inside) = plan.cell_of(&cfg0, &grid, 3.0f64, 3.0f64, 11.0f64 * bin_turn)
+    if !bin_inside || bin_cell % 16usize != 11usize { os.exit(18i32) }
     let (hybrid_node, hybrid_error) = plan.hybrid_astar(&cfg0, &grid, obs0[..], &p, closed[..], cell_node[..], heap_key[..], heap_node[..], 1.0f64, 1.0f64, 0.0f64, 9.0f64, 9.0f64)
     if hybrid_error != ok || hybrid_node == plan.NONE { os.exit(13i32) }
     if p.cost[usize(hybrid_node)] != 11.999999999999996f64 { os.exit(13i32) }

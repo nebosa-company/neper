@@ -324,13 +324,24 @@ fn dynamic_window(s: DwaState, goal_x: f64, goal_y: f64, obstacles: []const f64,
             var clearance = params.clearance_cap
             var step = 0usize
             while step < steps {
+                let px = x
+                let py = y
                 theta += w * params.dt
                 x += v * math.cos[f64](theta) * params.dt
                 y += v * math.sin[f64](theta) * params.dt
                 var o = 0usize
                 while 2usize * o + 1usize < obstacles.len {
-                    let dx = obstacles[2usize * o] - x
-                    let dy = obstacles[2usize * o + 1usize] - y
+                    // The pose moved along a segment; an endpoint-only check lets a fast
+                    // step tunnel through an obstacle whose centre the chord passes (#396).
+                    let ex = x - px
+                    let ey = y - py
+                    let span = ex * ex + ey * ey
+                    var t = 0.0f64
+                    if span > 0.0f64 { t = ((obstacles[2usize * o] - px) * ex + (obstacles[2usize * o + 1usize] - py) * ey) / span }
+                    if t < 0.0f64 { t = 0.0f64 }
+                    if t > 1.0f64 { t = 1.0f64 }
+                    let dx = obstacles[2usize * o] - (px + t * ex)
+                    let dy = obstacles[2usize * o + 1usize] - (py + t * ey)
                     let gap = math.sqrt[f64](dx * dx + dy * dy) - params.radius
                     if gap < clearance { clearance = gap }
                     o += 1usize

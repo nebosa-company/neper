@@ -156,6 +156,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let dwa_state = motion.DwaState { x: 0.0f64, y: 0.0f64, theta: 0.0f64, v: 0.5f64, omega: 0.0f64 }
     let (dwa_v, dwa_w) = motion.dynamic_window(dwa_state, 3.0f64, 0.5f64, obstacles[..], params)
     if !near(dwa_v, 0.45f64, 1.0e-12f64) || !near(dwa_w, 0.0f64 - 0.12f64, 1.0e-12f64) { os.exit(6i32) }
+    // #396: a step whose chord crosses an obstacle is rejected even when both of its
+    // endpoints are clear; the only candidate tunnels, so nothing is chosen.
+    let tunnel_obstacles: [2]f64 = [2]f64{ 0.5f64, 0.0f64 }
+    let tunnel_params = motion.DwaParams { v_min: 10.0f64, v_max: 10.0f64, omega_max: 0.0f64, a_max: 1000.0f64, alpha_max: 1000.0f64, dt: 0.1f64, horizon: 0.1f64, v_samples: 1usize, omega_samples: 1usize, heading_weight: 1.0f64, clearance_weight: 0.8f64, velocity_weight: 0.5f64, radius: 0.2f64, clearance_cap: 1.0f64 }
+    let tunnel_state = motion.DwaState { x: 0.0f64, y: 0.0f64, theta: 0.0f64, v: 10.0f64, omega: 0.0f64 }
+    let (tunnel_v, tunnel_w) = motion.dynamic_window(tunnel_state, 5.0f64, 0.0f64, tunnel_obstacles[..], tunnel_params)
+    if tunnel_v != 0.0f64 || tunnel_w != 0.0f64 { os.exit(60i32) }
 
     // 7: velocity obstacles.
     let me = motion.agent(0.0f64, 0.0f64, 1.0f64, 0.0f64, 0.5f64, 1.0f64, 0.0f64, 1.5f64)

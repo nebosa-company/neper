@@ -33,9 +33,12 @@ fn two_pi() -> f64 { ret 6.283185307179586f64 }
 fn finite(v: f64) -> bool { ret v - v == 0.0f64 }
 
 fn wrap_angle(th: f64) -> f64 {
-    var t = th
-    while t > 3.141592653589793f64 { t -= two_pi() }
-    while t <= 0.0f64 - 3.141592653589793f64 { t += two_pi() }
+    // Non-finite and huge angles pass through the reduction; the old `while` loop
+    // never terminated for them (#129).
+    if !(th - th == 0.0f64) { ret th }
+    var t = th - two_pi() * math.floor[f64](th / two_pi())
+    if t > 3.141592653589793f64 { t -= two_pi() }
+    if t <= 0.0f64 - 3.141592653589793f64 { t += two_pi() }
     ret t
 }
 

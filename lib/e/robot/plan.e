@@ -603,9 +603,11 @@ fn trace(grid: *const Grid, obstacles: []const Circle, x0: f64, y0: f64, th0: f6
 }
 
 fn wrap_heading(th: f64) -> f64 {
-    var t = th
-    while t < 0.0f64 { t += two_pi() }
-    while t >= two_pi() { t -= two_pi() }
+    // Arithmetic reduction: a `while` loop never terminates for +-inf or huge angles
+    // where two_pi is lost in the subtraction (#129).
+    if !(th - th == 0.0f64) { ret th }
+    var t = th - two_pi() * math.floor[f64](th / two_pi())
+    if t < 0.0f64 { t += two_pi() }
     ret t
 }
 
@@ -614,7 +616,9 @@ fn cell_of(cfg: *const Config, grid: *const Grid, x: f64, y: f64, th: f64) -> (u
     let ix = i64(math.floor[f64]((x - cfg.min_x) / grid.cell))
     let iy = i64(math.floor[f64]((y - cfg.min_y) / grid.cell))
     if ix < 0i64 || iy < 0i64 || ix >= i64(grid.w) || iy >= i64(grid.h) { ret (0usize, false) }
-    var ih = usize(i64(math.floor[f64](wrap_heading(th) / (two_pi() / f64(grid.headings)))))
+    // The angle came from `f64(bin) * turn`, so round the quotient rather than flooring
+    // it: floor re-derives bin-1 for many exact bins, turning the wrong way (#129).
+    var ih = usize(i64(math.floor[f64](wrap_heading(th) / (two_pi() / f64(grid.headings)) + 0.5f64)))
     if ih >= grid.headings { ih = grid.headings - 1usize }
     ret ((usize(iy) * grid.w + usize(ix)) * grid.headings + ih, true)
 }

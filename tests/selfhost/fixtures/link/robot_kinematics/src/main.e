@@ -114,6 +114,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if dls_status != ok || dls_error > 1.0e-4f64 { os.exit(7i32) }
     if !near(joints6[0usize], 0.3f64, 1.0e-6f64) || !near(joints6[1usize], 0.0f64 - 0.4f64, 1.0e-6f64) || !near(joints6[2usize], 0.5f64, 1.0e-6f64) { os.exit(7i32) }
     if !near(joints6[3usize], 0.2f64, 1.0e-6f64) || !near(joints6[4usize], 0.1f64, 1.0e-6f64) || !near(joints6[5usize], 0.0f64, 1.0e-6f64) { os.exit(7i32) }
+    // #129: wrapping is arithmetic, so a huge angle terminates and an infinite one is
+    // passed through instead of spinning the old `while` loop forever.
+    let wrapped_huge = kin.wrap_angle(1.0e17f64)
+    if wrapped_huge - wrapped_huge != 0.0f64 { os.exit(20i32) }
+    let wrapped_inf = kin.wrap_angle(1.0e308f64 * 1.0e10f64)
+    if wrapped_inf - wrapped_inf == 0.0f64 { os.exit(21i32) }
 
     try io.print("robot kinematics ok\n")
     ret ok

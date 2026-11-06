@@ -26,9 +26,12 @@ fn dh(theta: f64, d: f64, a: f64, alpha: f64) -> Dh { ret Dh { theta: theta, d: 
 // Wrap an angle into (-pi, pi].
 fn wrap_angle(angle: f64) -> f64 {
     let two_pi = 6.283185307179586f64
-    var a = angle
-    while a > 3.141592653589793f64 { a -= two_pi }
-    while a <= 0.0f64 - 3.141592653589793f64 { a += two_pi }
+    // Reduce arithmetically: a `while` loop never terminates for +-inf or for values
+    // where a - two_pi rounds back to a, so a NaN/inf heading hangs callers (#129).
+    if !(angle - angle == 0.0f64) { ret angle }
+    var a = angle - two_pi * math.floor[f64](angle / two_pi)
+    if a > 3.141592653589793f64 { a -= two_pi }
+    if a <= 0.0f64 - 3.141592653589793f64 { a += two_pi }
     ret a
 }
 
