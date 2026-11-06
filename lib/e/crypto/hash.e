@@ -1263,3 +1263,96 @@ fn shake256(data: []const u8, out: []u8) {
     shake_absorb(&s, data)
     shake_squeeze(&s, out)
 }
+
+// SHA-1 (FIPS 180-4): the WebSocket handshake needs it; newer code should prefer SHA-256.
+fn sha1_rol(value: u32, bits: u32) -> u32 {
+    ret (value << bits) | (value >> (32u32 - bits))
+}
+
+fn sha1_compress(h: []u32, block: []const u8) {
+    var w: [80]u32 = zero
+    var i = 0usize
+    while i < 16usize {
+        w[i] = (u32(block[i * 4usize]) << 24u32) | (u32(block[i * 4usize + 1usize]) << 16u32) | (u32(block[i * 4usize + 2usize]) << 8u32) | u32(block[i * 4usize + 3usize])
+        i += 1usize
+    }
+    while i < 80usize {
+        w[i] = sha1_rol(w[i - 3usize] ^ w[i - 8usize] ^ w[i - 14usize] ^ w[i - 16usize], 1u32)
+        i += 1usize
+    }
+    var a = h[0usize]
+    var b = h[1usize]
+    var c = h[2usize]
+    var d = h[3usize]
+    var e = h[4usize]
+    i = 0usize
+    while i < 80usize {
+        var f = 0u32
+        var k = 0u32
+        if i < 20usize {
+            f = (b & c) | ((~b) & d)
+            k = 1518500249u32
+        } else if i < 40usize {
+            f = b ^ c ^ d
+            k = 1859775393u32
+        } else if i < 60usize {
+            f = (b & c) | (b & d) | (c & d)
+            k = 2400959708u32
+        } else {
+            f = b ^ c ^ d
+            k = 3395469782u32
+        }
+        let temp = sha1_rol(a, 5u32) +% f +% e +% k +% w[i]
+        e = d
+        d = c
+        c = sha1_rol(b, 30u32)
+        b = a
+        a = temp
+        i += 1usize
+    }
+    h[0usize] = h[0usize] +% a
+    h[1usize] = h[1usize] +% b
+    h[2usize] = h[2usize] +% c
+    h[3usize] = h[3usize] +% d
+    h[4usize] = h[4usize] +% e
+}
+
+fn sha1(data: []const u8) -> [20]u8 {
+    var h: [5]u32 = [5]u32{ 1732584193u32, 4023233417u32, 2562383102u32, 271733878u32, 3285377520u32 }
+    var at = 0usize
+    while at + 64usize <= data.len {
+        sha1_compress(h[..], data[at..at + 64usize])
+        at += 64usize
+    }
+    var tail: [128]u8 = zero
+    var rem = data.len - at
+    var i = 0usize
+    while i < rem {
+        tail[i] = data[at + i]
+        i += 1usize
+    }
+    tail[rem] = 128u8
+    var blocks = 1usize
+    if rem + 9usize > 64usize { blocks = 2usize }
+    let size_at = blocks * 64usize - 8usize
+    let bits = u64(data.len) * 8u64
+    var k = 0usize
+    while k < 8usize {
+        tail[size_at + k] = u8((bits >> u64((7usize - k) * 8usize)) & 255u64)
+        k += 1usize
+    }
+    sha1_compress(h[..], tail[0usize..64usize])
+    if blocks == 2usize { sha1_compress(h[..], tail[64usize..128usize]) }
+    var out: [20]u8 = zero
+    i = 0usize
+    while i < 5usize {
+        out[i * 4usize] = u8((h[i] >> 24u32) & 255u32)
+        out[i * 4usize + 1usize] = u8((h[i] >> 16u32) & 255u32)
+        out[i * 4usize + 2usize] = u8((h[i] >> 8u32) & 255u32)
+        out[i * 4usize + 3usize] = u8(h[i] & 255u32)
+        i += 1usize
+    }
+    ret out
+}
+
+

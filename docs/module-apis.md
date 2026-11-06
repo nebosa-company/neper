@@ -11519,6 +11519,7 @@ fn sha512(data: []const u8) -> [64]u8
 fn sha384_init() -> Sha512
 fn sha384_update(h: *Sha512, data: []const u8)
 fn sha384_done(h: *Sha512) -> [48]u8
+fn sha1(data: []const u8) -> [20]u8
 fn sha384(data: []const u8) -> [48]u8
 fn keccak_round_constant(round: usize) -> u64
 fn keccak_rho(index: usize) -> u32
