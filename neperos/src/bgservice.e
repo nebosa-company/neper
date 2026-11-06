@@ -333,7 +333,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 }
                 let sent = os.send(REP, 1usize, NO_SLOT)
             } else if op == bgclient.OP_FOREGROUND {
-                foreground = payload != 0usize
+                // Foreground drives whether alarms ring now: the interface and the Clock only.
+                if app == 0usize || app == 14usize { foreground = payload != 0usize }
             } else if op == bgclient.OP_SCHEDULE {
                 // Six bytes of the Clock's state; only the settings server (stamp 0) and the Clock (entry 14) may send it.
                 if (app == 0usize || app == 14usize) && kind < 11usize {
@@ -388,7 +389,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 }
             } else if op == bgclient.OP_REC_START {
                 var started = bgclient.REC_OK
-                if !mic_allowed {
+                if app != 34usize {
+                    started = bgclient.REC_DENIED
+                    say("services recording refused app ")
+                    say_num(app)
+                    say("\n")
+                } else if !mic_allowed {
                     started = bgclient.REC_DENIED
                     say("services recording denied app ")
                     say_num(app)
