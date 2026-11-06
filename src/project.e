@@ -4,6 +4,7 @@ use e.mem
 use e.os
 
 error InvalidPath
+error TooSmall
 error InvalidTarget
 error ModuleNotFound
 error AmbiguousVariant
@@ -110,8 +111,13 @@ fn relative_under(path: str, root: str, source_root: str) -> (str, bool) {
             i += 1usize
         }
         offset = root.len
-        if !is_separator(path[offset]) { ret ("", false) }
-        offset += 1usize
+        // A root may already end in a separator ("/", "C:\", "proj/"): then the next
+        // byte is already the first name, and no separator is owed.
+        let root_ends_separator = is_separator(root[root.len - 1usize])
+        if !root_ends_separator {
+            if offset >= path.len || !is_separator(path[offset]) { ret ("", false) }
+            offset += 1usize
+        }
     }
     if path.len <= offset + source_root.len { ret ("", false) }
     var segment = 0usize
@@ -179,8 +185,17 @@ fn module_name(a: *mem.Arena, project: Project, named_file: str) -> (str, err) {
     if !under_source_root { ret (stem, ok) }
     let (name, allocation_error) = mem.alloc[u8](a, stem.len)
     if allocation_error != ok { ret ("", allocation_error) }
+    // Only the file stem may contain a dot: a dot inside a directory segment would make
+    // the module name resolve to a different directory (a.b.c -> lib/a/b/c.e).
+    var last_separator = 0usize
     var i = 0usize
     while i < stem.len {
+        if is_separator(stem[i]) { last_separator = i + 1usize }
+        i += 1usize
+    }
+    i = 0usize
+    while i < stem.len {
+        if i < last_separator && stem[i] == 46u8 { ret ("", InvalidPath) }
         if is_separator(stem[i]) {
             name[i] = 46u8
         } else {
@@ -343,9 +358,9 @@ fn source_path(a: *mem.Arena, directory: str, stem: str, suffix: str) -> (str, e
 // two thousand times -- over a second before a module was parsed. A directory that is
 // not there is remembered as such.
 type Listings = struct {
-    directories: [64]str,
-    entries: [64][]os.DirEntry,
-    missing: [64]bool,
+    directories: [256]str,
+    entries: [256][]os.DirEntry,
+    missing: [256]bool,
     count: usize,
 }
 
@@ -365,12 +380,13 @@ fn list_directory(a: *mem.Arena, listings: *Listings, directory: str) -> ([]os.D
     } else {
         listed = entries
     }
-    if listings.count < listings.directories.len {
-        listings.directories[listings.count] = directory
-        listings.entries[listings.count] = listed
-        listings.missing[listings.count] = missing
-        listings.count += 1usize
-    }
+    // Past the table a listing is not cached; that is a capacity error, not silent
+    // degradation of every later import in that directory.
+    if listings.count >= listings.directories.len { ret (listed, missing, TooSmall) }
+    listings.directories[listings.count] = directory
+    listings.entries[listings.count] = listed
+    listings.missing[listings.count] = missing
+    listings.count += 1usize
     ret (listed, missing, ok)
 }
 
