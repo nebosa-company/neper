@@ -757,7 +757,9 @@ type Builder = struct {
     // Whether `used_list` holds every used reference of `used_marks_module`, sorted (D930).
     used_complete: bool,
     // The imports in name order (D319), built when the linker first asks.
-    import_order: [1024]usize,
+    // Sized well past lib/e alone (438 imports); program imports are bounded by the
+    // reference table, so this is a generous fixed ceiling rather than a protocol limit.
+    import_order: [8192]usize,
     import_order_count: usize,
     imports_ordered: bool,
     // Every reference's target set by whoever made the references (D460): the
@@ -1339,17 +1341,26 @@ fn import_symbol_name(builder: *Builder, library: usize, entry: usize) -> str {
 // Which library and which of its symbols a reference names.
 fn import_slot_of(builder: *Builder, index: usize) -> (usize, usize, bool) {
     if !imported_reference(builder, index) { ret (0usize, 0usize, false) }
+    ensure_import_order(builder)
     let reference = builder.function_refs[index]
+    // One sorted walk: library changes are the distinct-library boundaries and entries
+    // count symbols within the current library, so this is O(imports), not cubic.
     var library = 0usize
-    while library < import_library_count(builder) {
-        if check.same(import_library_name(builder, library), reference.library) {
-            var entry = 0usize
-            while entry < import_symbol_count(builder, library) {
-                if check.same(import_symbol_name(builder, library, entry), reference.symbol) { ret (library, entry, true) }
-                entry += 1usize
-            }
+    var entry = 0usize
+    var previous_library = ""
+    var at = 0usize
+    while at < builder.import_order_count {
+        let current = builder.function_refs[builder.import_order[at]]
+        if at == 0usize || !check.same(previous_library, current.library) {
+            if at != 0usize { library += 1usize }
+            entry = 0usize
+            previous_library = current.library
         }
-        library += 1usize
+        if check.same(current.library, reference.library) && check.same(current.symbol, reference.symbol) {
+            ret (library, entry, true)
+        }
+        entry += 1usize
+        at += 1usize
     }
     ret (0usize, 0usize, false)
 }
@@ -2297,3 +2308,5 @@ fn discard_module_self_test() -> err {
     if s_again_error != ok || s_again != s + 1usize { ret InvalidValue }
     ret ok
 }
+
+
