@@ -525,7 +525,8 @@ fn eval(a: *mem.Arena, nodes: []const Node, at: usize, resource: json.Value) -> 
 
 // A parsed filter against one resource.
 fn evaluate(a: *mem.Arena, filter: Filter, resource: json.Value) -> bool {
-    if !filter.valid { ret true }
+    // An invalid filter must match nothing: fail closed, never the whole collection.
+    if !filter.valid { ret false }
     ret eval(a, filter.nodes, filter.root, resource)
 }
 

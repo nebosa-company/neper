@@ -519,14 +519,18 @@ fn lower_ascii(a: *mem.Arena, s: str) -> str {
 // Whether an assertion may be linked to, or provisioned as, a local account.
 fn link_policy(a: *mem.Arena, p: Profile, verified_domains: []const str, existing_account: bool, allow_unverified_email_link: bool) -> Link {
     if !p.has_email { ret Link { action: "deny", reason: "no-email-in-assertion" } }
-    // The text after the first `@` and before the next, or empty.
+    // The text after the last `@`; more than one `@` is not a usable address.
     var domain = ""
     var at = 0usize
-    while at < p.email.len && p.email[at] != 64u8 { at += 1usize }
-    if at < p.email.len {
-        var end = at + 1usize
-        while end < p.email.len && p.email[end] != 64u8 { end += 1usize }
-        domain = p.email[at + 1usize..end]
+    var at_count = 0usize
+    while at < p.email.len {
+        if p.email[at] == 64u8 { at_count += 1usize }
+        at += 1usize
+    }
+    if at_count == 1usize {
+        var cut = 0usize
+        while cut < p.email.len && p.email[cut] != 64u8 { cut += 1usize }
+        domain = p.email[cut + 1usize..p.email.len]
     }
     let want = lower_ascii(a, domain)
     var verified = false
@@ -557,3 +561,5 @@ fn build_logout_url(a: *mem.Arena, config: Config, id_token_hint: str, post_logo
     if query.len == 0usize { ret Url { valid: true, missing: zero, url: config.end_session_endpoint } }
     ret Url { valid: true, missing: zero, url: join(a, join(a, config.end_session_endpoint, "?"), query) }
 }
+
+

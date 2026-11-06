@@ -179,9 +179,9 @@ fn build_authn_request(a: *mem.Arena, id: str, issue_instant: str, destination: 
     let missing = missing_names(a, names[0usize..5usize], present[0usize..5usize])
     if missing.len > 0usize { ret Request { valid: false, missing: missing, binding: "", xml: "", form_action: "", saml_request: "", relay_state: "", url: "" } }
     var attrs = "xmlns:samlp=\"urn:oasis:names:tc:SAML:2.0:protocol\" xmlns:saml=\"urn:oasis:names:tc:SAML:2.0:assertion\""
-    attrs = join(a, attrs, join(a, " ID=\"", join(a, id, "\"")))
+    attrs = join(a, attrs, join(a, " ID=\"", join(a, xml_escape(a, id), "\"")))
     attrs = join(a, attrs, " Version=\"2.0\"")
-    attrs = join(a, attrs, join(a, " IssueInstant=\"", join(a, issue_instant, "\"")))
+    attrs = join(a, attrs, join(a, " IssueInstant=\"", join(a, xml_escape(a, issue_instant), "\"")))
     attrs = join(a, attrs, join(a, " Destination=\"", join(a, xml_escape(a, destination), "\"")))
     attrs = join(a, attrs, join(a, " AssertionConsumerServiceURL=\"", join(a, xml_escape(a, acs_url), "\"")))
     attrs = join(a, attrs, join(a, " ProtocolBinding=\"", join(a, binding_post(), "\"")))
@@ -627,6 +627,9 @@ fn validate_saml_response(a: *mem.Arena, parsed: Response, c: Config) -> Validat
     }
     let (not_before, has_nb) = parse_instant(asn.not_before)
     let (not_on_or_after, has_na) = parse_instant(asn.not_on_or_after)
+    // Present but unparseable is a rejection, not an absent bound.
+    if asn.not_before.len > 0usize && !has_nb { ret none_validation("assertion-bad-not-before") }
+    if asn.not_on_or_after.len > 0usize && !has_na { ret none_validation("assertion-bad-not-on-or-after") }
     if has_nb && now + skew < not_before { ret none_validation("assertion-not-yet-valid") }
     if has_na && now - skew >= not_on_or_after { ret none_validation("assertion-expired") }
     if asn.audiences.len > 0usize && c.audience.len > 0usize && !contains_text(asn.audiences, c.audience) {
@@ -635,6 +638,8 @@ fn validate_saml_response(a: *mem.Arena, parsed: Response, c: Config) -> Validat
     if asn.audiences.len == 0usize { ret none_validation("no-AudienceRestriction") }
     let (conf_expiry, has_conf) = parse_instant(asn.confirmation_not_on_or_after)
     if has_conf && now - skew >= conf_expiry { ret none_validation("subject-confirmation-expired") }
+    // At least one expiry must exist, or the assertion outlives the replay window forever.
+    if !has_na && !has_conf { ret none_validation("no-expiry") }
     if asn.recipient.len > 0usize && c.acs_url.len > 0usize && !str.eq(asn.recipient, c.acs_url) {
         ret none_validation(join(a, "recipient-mismatch: ", asn.recipient))
     }
