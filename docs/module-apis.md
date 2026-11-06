@@ -360,7 +360,6 @@ fn mk(p: *Pool, kind: u8, f: u8, a: u32, b: u32, n: i64, d: i64) -> u32
 fn abs64(v: i64) -> i64
 fn gcd64(x: i64, y: i64) -> i64
 fn q(n: i64, d: i64) -> Q
-fn big(p: *Pool, v: i64) -> bool
 fn q_add(p: *Pool, x: Q, y: Q) -> Q
 fn q_mul(p: *Pool, x: Q, y: Q) -> Q
 fn q_neg(x: Q) -> Q
@@ -31361,7 +31360,6 @@ fn euler[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: 
 fn rk4[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, scratch: []f64) -> err
 fn rkf45[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64, []const f64, []f64), t: f64, y: []f64, h: f64, tolerance: f64, scratch: []f64) -> (f64, f64, err)
 fn root4(x: f64) -> f64
-fn sqrt_f64(x: f64) -> f64
 fn verlet[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: []f64, v: []f64, h: f64, scratch: []f64) -> err
 fn leapfrog[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: []f64, v: []f64, h: f64, scratch: []f64) -> err
 fn yoshida[Ctx: type](ctx: *Ctx, acceleration: fn(*Ctx, []const f64, []f64), x: []f64, v: []f64, h: f64, scratch: []f64) -> err
