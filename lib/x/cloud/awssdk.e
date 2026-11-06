@@ -589,6 +589,12 @@ fn ls_list(a: *mem.Arena, kind: str, src: *const LsSource) -> (json.Value, bool,
     var token = ""
     var has_token = false
     var more = true
+    // Page tokens are opaque: a source that repeats one (or hands back an empty
+    // one) would otherwise loop forever and grow the arena.
+    let (seen_initial, seen_error) = mem.alloc[str](a, 8usize)
+    var seen = seen_initial
+    var seen_count = 0usize
+    var seen_cap = 8usize
     while more {
         let page = src.page(src.ctx, token, has_token)
         if !page.good {
@@ -599,7 +605,7 @@ fn ls_list(a: *mem.Arena, kind: str, src: *const LsSource) -> (json.Value, bool,
         }
         var at = 0usize
         while at < page.items.len {
-            let (seen, has) = ls_one(a, kind, page.items[at])
+            let (seen_item, has) = ls_one(a, kind, page.items[at])
             if has {
                 if n == cap {
                     let (bigger, ge) = mem.alloc[json.Value](a, cap * 2usize)
@@ -611,16 +617,36 @@ fn ls_list(a: *mem.Arena, kind: str, src: *const LsSource) -> (json.Value, bool,
                     out = bigger
                     cap = cap * 2usize
                 }
-                out[n] = seen
+                out[n] = seen_item
                 n += 1usize
             }
             at += 1usize
         }
         more = false
-        if !str.eq(kind, "domain") && page.has_next {
-            token = page.next
-            has_token = true
-            more = true
+        if page.has_next && page.next.len != 0usize {
+            var repeated = false
+            var visited = 0usize
+            while visited < seen_count {
+                if str.eq(seen[visited], page.next) { repeated = true }
+                visited += 1usize
+            }
+            if !repeated {
+                if seen_count == seen_cap {
+                    let (bigger_seen, gs) = mem.alloc[str](a, seen_cap * 2usize)
+                    var s = 0usize
+                    while s < seen_count {
+                        bigger_seen[s] = seen[s]
+                        s += 1usize
+                    }
+                    seen = bigger_seen
+                    seen_cap = seen_cap * 2usize
+                }
+                seen[seen_count] = page.next
+                seen_count += 1usize
+                token = page.next
+                has_token = true
+                more = true
+            }
         }
     }
     ret (json.Value{ Array: out[0usize..n] }, true, "")

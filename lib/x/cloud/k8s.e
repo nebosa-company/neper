@@ -246,10 +246,12 @@ fn lower_ascii(a: *mem.Arena, s: str) -> str {
     ret out[0usize..s.len]
 }
 
-// Whether a kubectl error means the resource does not exist.
+// Whether a kubectl error means the resource does not exist. Only the API's
+// `(NotFound)` verdict counts: a connection or config failure can also say
+// "not found" (an unknown context or kubeconfig) and must not drop state.
 fn is_not_found(a: *mem.Arena, stderr: str) -> bool {
     let low = lower_ascii(a, stderr)
-    ret str.contains(low, "notfound") || str.contains(low, "not found")
+    ret str.contains(low, "(notfound)")
 }
 
 fn text(s: str) -> json.Value { ret json.Value{ String: s } }

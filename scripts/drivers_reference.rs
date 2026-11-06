@@ -300,8 +300,11 @@ fn is_managed_item(item: &Json) -> bool {
 }
 
 fn is_not_found(stderr: &str) -> bool {
+    // Only the API's `(NotFound)` verdict counts: a connection or config failure
+    // can also say "not found" (an unknown context or kubeconfig) and must not
+    // drop state.
     let s = stderr.to_ascii_lowercase();
-    s.contains("notfound") || s.contains("not found")
+    s.contains("(notfound)")
 }
 
 fn apply_manifest(
@@ -1098,6 +1101,7 @@ fn ls_list_all(kind: &str, pages: &[Json], tokens: &mut Vec<Json>) -> Result<Vec
     };
     let mut out = Vec::new();
     let mut token: Option<String> = None;
+    let mut seen: Vec<String> = Vec::new();
     let mut n = 0;
     loop {
         tokens.push(token.clone().map(Json::from).unwrap_or(Json::Null));
@@ -1117,12 +1121,22 @@ fn ls_list_all(kind: &str, pages: &[Json], tokens: &mut Vec<Json>) -> Result<Vec
                 out.push(o);
             }
         }
-        if kind == "domain" {
-            break;
-        }
-        token = page.get("nextPageToken").and_then(|t| t.as_str()).map(str::to_string);
-        if token.is_none() {
-            break;
+        // Page tokens are opaque: an empty one ends the walk, and a repeated one
+        // means the source is looping, so stop rather than grow the output.
+        let next = page
+            .get("nextPageToken")
+            .and_then(|t| t.as_str())
+            .filter(|t| !t.is_empty())
+            .map(str::to_string);
+        match next {
+            Some(t) => {
+                if seen.contains(&t) {
+                    break;
+                }
+                seen.push(t.clone());
+                token = Some(t);
+            }
+            None => break,
         }
     }
     Ok(out)
