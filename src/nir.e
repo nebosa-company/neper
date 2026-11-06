@@ -762,6 +762,9 @@ type Builder = struct {
     import_order: [8192]usize,
     import_order_count: usize,
     imports_ordered: bool,
+    // Set when the import order could not be built (the table is full): the linker must
+    // refuse the image instead of working from a truncated order.
+    import_order_failed: bool,
     // Every reference's target set by whoever made the references (D460): the
     // artifact link, which knows each callee's function from its reach walk, so
     // `resolve_reference_targets` has nothing to search for.
@@ -1264,7 +1267,10 @@ fn order_imports(builder: *Builder) -> err {
     var at = 0usize
     while at < builder.function_ref_count {
         if first_reference_for_symbol(builder, at) {
-            if count == builder.import_order.len { ret Capacity }
+            if count == builder.import_order.len {
+                builder.import_order_failed = true
+                ret Capacity
+            }
             var slot = count
             while slot > 0usize && import_before(builder, at, builder.import_order[slot - 1usize]) {
                 builder.import_order[slot] = builder.import_order[slot - 1usize]
@@ -1280,9 +1286,20 @@ fn order_imports(builder: *Builder) -> err {
     ret ok
 }
 
-// The ordered list is built the first time it is asked for.
+// The ordered list is built the first time it is asked for; a failure is remembered so
+// the linker can refuse the image rather than use a truncated order.
 fn ensure_import_order(builder: *Builder) {
-    if !builder.imports_ordered { let ignored = order_imports(builder) }
+    if !builder.imports_ordered {
+        let order_error = order_imports(builder)
+        if order_error != ok { builder.import_order_failed = true }
+    }
+}
+
+// Whether the import order is complete: the linker calls this before writing an image so
+// a full table answers an error instead of silently dropping imports.
+fn import_order_ok(builder: *Builder) -> bool {
+    ensure_import_order(builder)
+    ret !builder.import_order_failed
 }
 
 fn import_library_count(builder: *Builder) -> usize {

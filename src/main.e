@@ -7727,6 +7727,8 @@ fn link_artifact_image(a: *mem.Arena, program: *em_link.Program, is_windows: boo
     var executable: emit_x64.Buffer = zero
     let init_error = emit_x64.init(&executable, storage)
     if init_error != ok { ret (empty, init_error) }
+    // A truncated import order must fail the link rather than drop imports silently.
+    if !nir.import_order_ok(&program.builder) { ret (empty, io.TooSmall) }
     var write_error: err = ok
     if is_windows {
         write_error = link_pe.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines[..program.line_count], table_at, &executable)
@@ -15137,6 +15139,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 report.build.pools[stats.POOL_IMAGE] = executable_storage.len
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
+                // A truncated import order must fail the link rather than drop imports silently.
+                if !nir.import_order_ok(&builder) { ret io.TooSmall }
                 if has_flag(args, "--shared-library") { try collect_exports(&loaded, &checker, &builder, args) }
                 if machine_abi_of(args) == .Windows {
                     try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)
