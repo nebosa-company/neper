@@ -345,6 +345,8 @@ fn remez_value(x: f64, xs: []const f64, ys: []const f64, ad: []const f64) -> f64
 // `desired` and `weights` one value per band; `out.len >= taps`,
 // `scratch.len >= 48 * taps + 12 * bands.len + 64`.
 fn design_parks_mcclellan(taps: usize, bands: []const f64, desired: []const f64, weights: []const f64, out: []f64, scratch: []f64) -> err {
+    // Bands are edge pairs: an odd count has an unpaired edge that must not be dropped.
+    if bands.len % 2usize != 0usize { ret Invalid }
     let nbands = bands.len / 2usize
     if taps < 3usize || taps % 2usize == 0usize || nbands == 0usize || desired.len < nbands || weights.len < nbands { ret Invalid }
     let r = taps / 2usize + 1usize
