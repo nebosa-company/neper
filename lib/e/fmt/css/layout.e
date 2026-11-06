@@ -2504,6 +2504,9 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
                 }
             }
         }
+        if pos + needed > lim_eff + 0.01f64 && p.kind == .Text && pws.letter_spacing != 0.0f64 && pos + needed - pws.letter_spacing <= lim_eff + 0.01f64 {
+            needed -= pws.letter_spacing
+        }
         if pos + needed > lim_eff + 0.01f64 && has_content {
             if last_soft != NONE {
                 out.end = usize(last_soft) + 1usize

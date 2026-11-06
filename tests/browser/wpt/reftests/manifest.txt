@@ -209,3 +209,4 @@ block-ellipsis-pre-breakall-008.html | block-ellipsis-pre-breakall-008-ref.html 
 multicol-span-single-line-009.html | multicol-span-single-line-009-ref.html | match
 q-element-quotes-012.html | q-element-quotes-012-ref.html | match
 first-line-color-014.html | first-line-color-014-ref.html | match
+ls-mini.html | ls-mini-ref.html | match
