@@ -64,6 +64,8 @@ fn slot_of(p: Predictor, tick: u64) -> usize {
 
 fn record(p: *Predictor, sample: Input) -> err {
     let slot = slot_of(*p, sample.tick)
+    // A reordered older sample must not evict the newer tick that already owns the slot.
+    if p.inputs[slot].tick != NO_TICK && sample.tick < p.inputs[slot].tick { ret Late }
     p.inputs[slot] = sample
     if sample.tick > p.predicted { p.predicted = sample.tick }
     ret ok

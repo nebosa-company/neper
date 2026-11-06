@@ -194,5 +194,14 @@ fn main() -> i64 {
     if snapshot.load(received[..], 8usize) != -37i32 { ret 65i64 }
     if receiver.acked != 1u64 { ret 66i64 }
 
+    // #507: a late, reordered older sample is refused and cannot evict a newer tick.
+    var late_history: [4]netsync.Input = zero
+    var late_predictor: netsync.Predictor = zero
+    if netsync.init(&late_predictor, late_history[..]) != ok { ret 70i64 }
+    if netsync.record(&late_predictor, netsync.Input { tick: 8u64, bits: 17u32 }) != ok { ret 71i64 }
+    if netsync.record(&late_predictor, netsync.Input { tick: 4u64, bits: 3u32 }) != netsync.Late { ret 72i64 }
+    let (late_known, late_known_error) = netsync.predict(late_predictor, 8u64)
+    if late_known_error != ok || late_known.bits != 17u32 { ret 73i64 }
+
     ret 0i64
 }
