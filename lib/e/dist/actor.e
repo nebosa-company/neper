@@ -512,6 +512,7 @@ fn tick(sys: *System, now: i64) -> (usize, err) {
         pend[j] = item
         a1 += 1usize
     }
+    var stuck: err = ok
     var k = 0usize
     while k < np {
         let p = pend[k]
@@ -521,10 +522,19 @@ fn tick(sys: *System, now: i64) -> (usize, err) {
         var name = ""
         if sep < p.key.len { name = p.key[sep + 1usize..p.key.len] }
         let (at, activate_error) = activate(sys, grain, now)
-        if activate_error != ok { ret (fired, activate_error) }
+        if activate_error != ok {
+            // A reminder that keeps failing must not block every later reminder.
+            if stuck == ok { stuck = activate_error }
+            k += 1usize
+            continue
+        }
         let kind = timer_kind(sys.a, "reminder:", name)
         let (reply, deliver_error) = deliver(sys, at, kind, "", now)
-        if deliver_error != ok { ret (fired, deliver_error) }
+        if deliver_error != ok {
+            if stuck == ok { stuck = deliver_error }
+            k += 1usize
+            continue
+        }
         fired += 1usize
         if p.period > 0i64 {
             let (value, value_error) = reminder_value(sys.a, next_due(p.due, p.period, now), p.period)
@@ -537,6 +547,7 @@ fn tick(sys: *System, now: i64) -> (usize, err) {
         }
         k += 1usize
     }
+    if stuck != ok { ret (fired, stuck) }
     ret (fired, ok)
 }
 

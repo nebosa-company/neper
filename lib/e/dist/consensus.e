@@ -361,19 +361,25 @@ fn raft_replicate_step(c: *Cluster, node: usize, now: u64, msg: *const Message, 
         }
         if term_at(n, msg.index) != msg.term2 {
             n.log_len = usize(msg.index - n.snap_index - 1u64)
+            // A truncated configuration entry must not keep describing the quorum.
+            restore_configuration(n)
             r.index = msg.index - 1u64
             ret pool_push(out, r)
         }
         var matched = msg.index
         if msg.flag {
             let at_index = msg.index + 1u64
-            if at_index <= last_index(n) && term_at(n, at_index) != msg.entry.term { n.log_len = usize(at_index - n.snap_index - 1u64) }
+            if at_index <= last_index(n) && term_at(n, at_index) != msg.entry.term {
+                n.log_len = usize(at_index - n.snap_index - 1u64)
+                restore_configuration(n)
+            }
             if at_index > last_index(n) { try append_entry(n, msg.entry) }
             matched = at_index
         }
         if msg.commit > n.commit {
-            n.commit = msg.commit
-            if matched < n.commit { n.commit = matched }
+            var new_commit = matched
+            if msg.commit < matched { new_commit = msg.commit }
+            if new_commit > n.commit { n.commit = new_commit }
         }
         try apply(n)
         r.flag = true

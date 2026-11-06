@@ -18,6 +18,7 @@ type Kind = enum u8 { GCounter, PnCounter, Lww, OrSet }
 type Crdt = struct { kind: Kind, gcounter: GCounter, pncounter: PnCounter, lww: Lww, orset: OrSet }
 error TooSmall
 error Exhausted
+error Invalid
 
 fn fill(xs: []u64) {
     var i = 0usize
@@ -154,9 +155,20 @@ fn orset_merge(dst: *OrSet, src: *const OrSet) -> err {
 }
 
 fn merge(a: *Crdt, b: *const Crdt) -> err {
-    if a.kind == .GCounter { gcounter_merge(&a.gcounter, &b.gcounter) }
-    if a.kind == .PnCounter { pncounter_merge(&a.pncounter, &b.pncounter) }
-    if a.kind == .Lww { let _ = lww_merge(&a.lww, &b.lww) }
-    if a.kind == .OrSet { ret orset_merge(&a.orset, &b.orset) }
-    ret ok
+    // Different kinds share no state: merging them would read an unrelated field and lose
+    // updates, so refuse before touching the destination.
+    if a.kind != b.kind { ret Invalid }
+    if a.kind == .GCounter {
+        gcounter_merge(&a.gcounter, &b.gcounter)
+        ret ok
+    }
+    if a.kind == .PnCounter {
+        pncounter_merge(&a.pncounter, &b.pncounter)
+        ret ok
+    }
+    if a.kind == .Lww {
+        let _ = lww_merge(&a.lww, &b.lww)
+        ret ok
+    }
+    ret orset_merge(&a.orset, &b.orset)
 }

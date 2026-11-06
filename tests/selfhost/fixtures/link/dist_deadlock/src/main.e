@@ -35,7 +35,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     let s1 = [6]u32 { 0u32, 0u32, 1u32, 1u32, 2u32, 2u32 }
-    if !check(g1[..], s1[..], true, 6usize, true, 3usize, false, 4usize) { os.exit(1i32) }
+    if !check(g1[..], s1[..], true, 6usize, true, 3usize, true, 4usize) { os.exit(1i32) }
     if !check(g1[..5usize], s1[..], false, 0usize, false, 2usize, false, 2usize) { os.exit(1i32) }
 
     // 2: the initiator waits on a cycle it is not part of: the graph has a

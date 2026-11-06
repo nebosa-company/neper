@@ -62,7 +62,7 @@ fn wait_for_graph_cycle(edges: []const Edge, n: usize, scratch: []usize) -> (boo
     ret (false, 0usize, ok)
 }
 
-type Chase = struct { edges: []const Edge, site: []const u32, initiator: u32, probes: []Probe, sent: usize, seen: []bool }
+type Chase = struct { edges: []const Edge, site: []const u32, initiator: u32, probes: []Probe, sent: usize, seen: []bool, deadlocked: bool }
 
 // Send a probe along every edge leaving `u`'s site that is reachable from
 // `u` through same-site edges.
@@ -73,6 +73,9 @@ fn spread(c: *Chase, u: usize) {
         if usize(c.edges[e].from) == u {
             let v = usize(c.edges[e].to)
             if c.site[v] == c.site[u] {
+                // A same-site edge back to the initiator closes the wait-for cycle even
+                // though no probe crosses a site boundary.
+                if v == usize(c.initiator) { c.deadlocked = true }
                 if !c.seen[v] { spread(c, v) }
             } else {
                 if c.sent < c.probes.len { c.probes[c.sent] = Probe { initiator: c.initiator, from: u32(u), to: u32(v) } }
@@ -95,7 +98,7 @@ fn chandy_misra_haas(edges: []const Edge, site: []const u32, initiator: usize, p
         i += 1usize
     }
     let dependent = scratch[..n]
-    var c = Chase { edges: edges, site: site, initiator: u32(initiator), probes: probes, sent: 0usize, seen: scratch[n..2usize * n] }
+    var c = Chase { edges: edges, site: site, initiator: u32(initiator), probes: probes, sent: 0usize, seen: scratch[n..2usize * n], deadlocked: false }
     i = 0usize
     while i < n {
         dependent[i] = false
@@ -103,7 +106,7 @@ fn chandy_misra_haas(edges: []const Edge, site: []const u32, initiator: usize, p
         i += 1usize
     }
     spread(&c, initiator)
-    var deadlocked = false
+    var deadlocked = c.deadlocked
     var head = 0usize
     while head < c.sent {
         if head >= probes.len { ret (deadlocked, c.sent, TooSmall) }
@@ -121,6 +124,7 @@ fn chandy_misra_haas(edges: []const Edge, site: []const u32, initiator: usize, p
             spread(&c, k)
         }
     }
+    if c.deadlocked { deadlocked = true }
     ret (deadlocked, c.sent, ok)
 }
 
