@@ -100,7 +100,7 @@ neper_start:
     xor ebp, ebp
 .global neper_start_main
 neper_start_main:
-    call .
+    .byte 0xE8, 0, 0, 0, 0
     test eax, eax
     setne dil
     movzx edi, dil
@@ -387,13 +387,10 @@ neper_os_copy_bytes:
 neper_os_sha256_blocks:
     push rbx
     sub rsp, 40
-    mov r10, rdi
-    mov r11, rsi
-    mov eax, 7
-    xor ecx, ecx
-    cpuid
+    mov r10, rsi
+    mov r11, rdx
     xor eax, eax
-    bt ebx, 29
+    bt rdi, 61
     jnc .Lsha_done
     mov r8, qword ptr [r11+8]
     shr r8, 6
@@ -644,12 +641,10 @@ neper_os_sha256_blocks:
 .global neper_os_crc32c_bytes
 neper_os_crc32c_bytes:
     push rbx
-    mov r10, rdi
-    mov r11, rsi
-    mov eax, 1
-    cpuid
+    mov r10, rsi
+    mov r11, rdx
     xor eax, eax
-    bt ecx, 20
+    bt rdi, 20
     jnc .Lcrc_done
     mov r8, qword ptr [r11+8]
     mov rax, r8

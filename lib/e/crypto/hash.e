@@ -175,7 +175,7 @@ fn sha256_update(h: *Sha256, data: []const u8) {
     }
     let whole = ((data.len - at) / 64usize) * 64usize
     if whole > 0usize {
-        var done = os.sha256_blocks(slots[0..], data[at..at + whole]) * 64usize
+        var done = os.sha256_blocks(os.cpu_features(), slots[0..], data[at..at + whole]) * 64usize
         while done < whole {
             sha256_rounds(slots[0..], data, at + done, k[0..])
             done += 64usize

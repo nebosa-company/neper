@@ -4835,12 +4835,14 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     if usizes_error != ok { ret usizes_error }
     let (sha_index, sha_error) = add_seeded_function(c, os_module, "sha256_blocks", usize_type, false)
     if sha_error != ok { ret sha_error }
+    try add_seeded_parameter(c, sha_index, "features", usize_type)
     try add_seeded_parameter(c, sha_index, "state", usizes)
     try add_seeded_parameter(c, sha_index, "bytes", const_bytes)
     // `os.crc32c_bytes(crc: []usize, bytes: []const u8) -> usize` (D332): the bytes
     // folded with the CRC32 instruction, or none when the CPU has none.
     let (crc_index, crc_error) = add_seeded_function(c, os_module, "crc32c_bytes", usize_type, false)
     if crc_error != ok { ret crc_error }
+    try add_seeded_parameter(c, crc_index, "features", usize_type)
     try add_seeded_parameter(c, crc_index, "crc", usizes)
     try add_seeded_parameter(c, crc_index, "bytes", const_bytes)
     // C098: AES-GCM in hardware. `os.cpu_features() -> usize` asks CPUID once (leaf 1 ECX in the

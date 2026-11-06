@@ -59,7 +59,7 @@ fn crc32c(bytes: []const u8, zero_at: usize, zero_count: usize) -> (usize, err) 
     }
     var crc_slot: [1]usize = zero
     crc_slot[0usize] = usize(state.value)
-    at += os.crc32c_bytes(crc_slot[..], bytes[at..bytes.len])
+    at += os.crc32c_bytes(os.cpu_features(), crc_slot[..], bytes[at..bytes.len])
     state.value = u32(crc_slot[0usize])
     algo_hash.crc32c_update(&state, bytes[at..bytes.len])
     ret (usize(algo_hash.crc32c_done(&state)), ok)

@@ -968,9 +968,9 @@ fn neper_os_touch(p: *u8, n: usize) {}
 
 fn neper_os_cpu_features() -> usize { ret 0usize }
 
-fn neper_os_sha256_blocks(state: *[]usize, bytes: *[]const u8) -> usize { ret 0usize }
+fn neper_os_sha256_blocks(features: usize, state: *[]usize, bytes: *[]const u8) -> usize { ret 0usize }
 
-fn neper_os_crc32c_bytes(crc: *[]usize, bytes: *[]const u8) -> usize { ret 0usize }
+fn neper_os_crc32c_bytes(features: usize, crc: *[]usize, bytes: *[]const u8) -> usize { ret 0usize }
 
 fn neper_os_aes_expand_key(features: usize, key: *[]const u8, out: *[]u8) -> usize { ret 0usize }
 

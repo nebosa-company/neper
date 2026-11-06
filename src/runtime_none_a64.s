@@ -519,33 +519,33 @@ neper_os_sha256_blocks:
 
 .global neper_os_crc32c_bytes
 neper_os_crc32c_bytes:
-    ldr x2, [x1, #8]
-    ldr x3, [x1]
-    ldr x4, [x0]
-    ldr w5, [x4]
-    mov x0, x2
-    lsr x6, x2, #3
-    tst x3, #7
+    ldr x3, [x2, #8]
+    ldr x4, [x2]
+    ldr x5, [x1]
+    ldr w6, [x5]
+    mov x0, x3
+    lsr x7, x3, #3
+    tst x4, #7
     b.ne .Lcrc_unaligned
 .Lcrc_words:
-    cbz x6, .Lcrc_tail
-    ldr x7, [x3], #8
-    crc32cx w5, w5, x7
-    sub x6, x6, #1
+    cbz x7, .Lcrc_tail
+    ldr x8, [x4], #8
+    crc32cx w6, w6, x8
+    sub x7, x7, #1
     b .Lcrc_words
 .Lcrc_tail:
-    and x6, x2, #7
+    and x7, x3, #7
 .Lcrc_bytes:
-    cbz x6, .Lcrc_store
-    ldrb w7, [x3], #1
-    crc32cb w5, w5, w7
-    sub x6, x6, #1
+    cbz x7, .Lcrc_store
+    ldrb w8, [x4], #1
+    crc32cb w6, w6, w8
+    sub x7, x7, #1
     b .Lcrc_bytes
 .Lcrc_store:
-    str x5, [x4]
+    str w6, [x5]
     ret
 .Lcrc_unaligned:
-    mov x6, x2
+    mov x7, x3
     b .Lcrc_bytes
 
 // Spec section 9 rule 4: the supplied `hash` is xxHash64 with seed 0 over a value's

@@ -822,17 +822,10 @@ neper_os_copy_bytes ENDP
 neper_os_sha256_blocks PROC
     push rbx
     sub rsp, 128
-    mov r10, rcx
-    mov r11, rdx
+    mov r10, rdx
+    mov r11, r8
     xor eax, eax
-    cpuid
-    cmp eax, 7
-    jb np_sha_done
-    mov eax, 7
-    xor ecx, ecx
-    cpuid
-    xor eax, eax
-    bt ebx, 29
+    bt rcx, 61
     jnc np_sha_done
     mov r8, qword ptr [r11+8]
     shr r8, 6
@@ -1092,16 +1085,10 @@ neper_os_sha256_blocks ENDP
 ; own tables. rcx = &crc, rdx = &bytes.
 neper_os_crc32c_bytes PROC
     push rbx
-    mov r10, rcx
-    mov r11, rdx
+    mov r10, rdx
+    mov r11, r8
     xor eax, eax
-    cpuid
-    cmp eax, 1
-    jb np_crc_done
-    mov eax, 1
-    cpuid
-    xor eax, eax
-    bt ecx, 20
+    bt rcx, 20
     jnc np_crc_done
     mov r8, qword ptr [r11+8]
     mov rax, r8

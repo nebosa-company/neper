@@ -276,17 +276,10 @@ neper_os_copy_bytes:
 neper_os_sha256_blocks:
     push rbx
     sub rsp, 40
-    mov r10, rdi
-    mov r11, rsi
+    mov r10, rsi
+    mov r11, rdx
     xor eax, eax
-    cpuid
-    cmp eax, 7
-    jb .Lsha_done
-    mov eax, 7
-    xor ecx, ecx
-    cpuid
-    xor eax, eax
-    bt ebx, 29
+    bt rdi, 61
     jnc .Lsha_done
     mov r8, qword ptr [r11+8]
     shr r8, 6
@@ -537,16 +530,10 @@ neper_os_sha256_blocks:
 .global neper_os_crc32c_bytes
 neper_os_crc32c_bytes:
     push rbx
-    mov r10, rdi
-    mov r11, rsi
+    mov r10, rsi
+    mov r11, rdx
     xor eax, eax
-    cpuid
-    cmp eax, 1
-    jb .Lcrc_done
-    mov eax, 1
-    cpuid
-    xor eax, eax
-    bt ecx, 20
+    bt rdi, 20
     jnc .Lcrc_done
     mov r8, qword ptr [r11+8]
     mov rax, r8
@@ -1987,6 +1974,83 @@ neper_os_spawn:
 .Lspawn_exec:
     mov rsi, qword ptr [rsp + 8]
     mov rdi, qword ptr [rsi]
+    xor ecx, ecx
+.Lspawn_name_scan:
+    mov al, byte ptr [rdi + rcx]
+    test al, al
+    jz .Lspawn_name_bare
+    cmp al, 47
+    je .Lspawn_try_exec
+    inc rcx
+    jmp .Lspawn_name_scan
+.Lspawn_name_bare:
+    test r14, r14
+    jz .Lspawn_try_exec
+    xor ecx, ecx
+.Lspawn_pathenv_scan:
+    mov rax, qword ptr [r14 + rcx * 8]
+    test rax, rax
+    jz .Lspawn_try_exec
+    cmp dword ptr [rax], 0x48544150
+    jne .Lspawn_pathenv_next
+    cmp byte ptr [rax + 4], 61
+    je .Lspawn_path_found
+.Lspawn_pathenv_next:
+    inc rcx
+    jmp .Lspawn_pathenv_scan
+.Lspawn_path_found:
+    lea r15, [rax + 5]
+    mov rdi, r13
+    mov esi, 4096
+    mov edx, 8
+    call np_alloc
+    test rax, rax
+    jz .Lspawn_try_exec
+    mov rbx, rax
+.Lspawn_path_entry:
+    mov rcx, rbx
+.Lspawn_copy_entry:
+    mov al, byte ptr [r15]
+    test al, al
+    jz .Lspawn_entry_build
+    cmp al, 58
+    je .Lspawn_entry_skip
+    mov byte ptr [rcx], al
+    inc rcx
+    inc r15
+    jmp .Lspawn_copy_entry
+.Lspawn_entry_skip:
+    inc r15
+.Lspawn_entry_build:
+    cmp rcx, rbx
+    je .Lspawn_entry_advance
+    mov byte ptr [rcx], 47
+    inc rcx
+    mov rsi, qword ptr [rsp + 8]
+    mov rdi, qword ptr [rsi]
+.Lspawn_copy_name:
+    mov al, byte ptr [rdi]
+    test al, al
+    jz .Lspawn_name_done
+    mov byte ptr [rcx], al
+    inc rcx
+    inc rdi
+    jmp .Lspawn_copy_name
+.Lspawn_name_done:
+    mov byte ptr [rcx], 0
+    mov rdi, rbx
+    mov rsi, qword ptr [rsp + 8]
+    mov rdx, r14
+    mov eax, 59
+    syscall
+.Lspawn_entry_advance:
+    cmp byte ptr [r15], 0
+    je .Lspawn_try_exec
+    inc r15
+    jmp .Lspawn_path_entry
+.Lspawn_try_exec:
+    mov rsi, qword ptr [rsp + 8]
+    mov rdi, qword ptr [rsi]
     mov rdx, r14
     mov eax, 59
     syscall
@@ -2487,5 +2551,7 @@ neper_os_ghash_blocks:
     movdqa xmm0, xmm6
     ret
 .Lghash_flip: .byte 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+
+
 
 
