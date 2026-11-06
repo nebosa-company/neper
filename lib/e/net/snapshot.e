@@ -110,7 +110,11 @@ fn quantize(value: i32, f: Field) -> u32 {
     if held < i64(f.lo) { held = i64(f.lo) }
     if held > i64(f.hi) { held = i64(f.hi) }
     let scale = steps(f)
-    ret u32(((held - i64(f.lo)) * scale + range / 2i64) / range)
+    // Unsigned 64-bit intermediates: for a full 32-bit range (2^32-1)^2 fits u64 but not i64.
+    let above = u64(held - i64(f.lo))
+    let codes = u64(scale)
+    let reach = u64(range)
+    ret u32((above * codes + reach / 2u64) / reach)
 }
 
 fn dequantize(code: u32, f: Field) -> i32 {
@@ -118,7 +122,10 @@ fn dequantize(code: u32, f: Field) -> i32 {
     if range <= 0i64 { ret f.lo }
     let scale = steps(f)
     if scale == 0i64 { ret f.lo }
-    ret i32(i64(f.lo) + (i64(code) * range + scale / 2i64) / scale)
+    let codes = u64(scale)
+    let reach = u64(range)
+    let scaled = (u64(code) * reach + codes / 2u64) / codes
+    ret i32(i64(f.lo) + i64(scaled))
 }
 
 // An i32 read from the state array, low byte first. A conversion in this language is
