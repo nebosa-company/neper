@@ -32,7 +32,7 @@ const POLLS: usize = 4000000usize
 
 // `arp_waiting` gates learning the gateway's MAC: a reply is trusted only while a
 // resolution we started is outstanding, so a late or forged reply cannot re-point it.
-type Stack = struct { net: virtio.Net, mac: u64, ip: u32, mask: u32, gw: u32, dns: u32, dns_port: u16, gw_mac: u64, ident: u16, arp_waiting: bool, seed: u64 }
+type Stack = struct { net: virtio.Net, mac: u64, ip: u32, mask: u32, gw: u32, dns: u32, dns_port: u16, gw_mac: u64, ident: u16, arp_waiting: bool, seed: u64, xid: u32 }
 
 // A 64-bit seed from eight bytes of the net server's entropy device; a zero seed would
 // make the LCG degenerate, so fall back to the golden ratio constant.
@@ -160,7 +160,7 @@ fn say_ip(ip: u32) {
 fn attach(device: virtio.Device, seed: u64) -> (Stack, err) {
     let (net, net_error) = virtio.net_open(device)
     if net_error != ok { ret (zero, net_error) }
-    ret (Stack { net: net, mac: net.mac, ip: 0u32, mask: 0u32, gw: 0u32, dns: 0u32, dns_port: 53u16, gw_mac: BROADCAST, ident: 1u16, arp_waiting: false, seed: seed }, ok)
+    ret (Stack { net: net, mac: net.mac, ip: 0u32, mask: 0u32, gw: 0u32, dns: 0u32, dns_port: 53u16, gw_mac: BROADCAST, ident: 1u16, arp_waiting: false, seed: seed, xid: 0u32 }, ok)
 }
 
 // ---- Ethernet and ARP ----
@@ -251,6 +251,11 @@ fn poll(st: *Stack) -> (u8, u32, usize, usize) {
         put16(reply + 2usize, 0u16)
         put16(reply + 2usize, checksum(reply, payload_len, 0u32))
         let reply_error = ip_finish(st, PROTO_ICMP, src, st.gw_mac, payload_len)
+        ret (0u8, 0u32, 0usize, 0usize)
+    }
+    // A UDP datagram whose checksum does not verify is dropped, not delivered (0 means
+    // "no checksum", which this stack never sends).
+    if proto == PROTO_UDP && payload_len >= UDP_HDR && checksum(payload, payload_len, pseudo(src, dst, PROTO_UDP, payload_len)) != 0u16 {
         ret (0u8, 0u32, 0usize, 0usize)
     }
     ret (proto, src, payload, payload_len)
@@ -384,7 +389,8 @@ fn dhcp_send(st: *Stack, kind: u8, want: u32, server: u32) -> err {
     os.store8(at, 1u8)
     os.store8(at + 1usize, 1u8)
     os.store8(at + 2usize, 6u8)
-    put32(at + 4usize, next_random(st))
+    st.xid = next_random(st)
+    put32(at + 4usize, st.xid)
     put16(at + 10usize, 32768u16)
     put_mac(at + 28usize, st.mac)
     put32(at + 236usize, 1669485411u32)
@@ -424,12 +430,32 @@ fn dhcp_wait(st: *Stack, kind: u8) -> (u32, u32, err) {
             let msg = payload + UDP_HDR
             // The reply must carry our transaction id and our client hardware address;
             // another device on the segment uses a different chaddr.
-            if os.load8(msg) == 2u8 && get32(msg + 4usize) == 1397965394u32 && get32(msg + 236usize) == 1669485411u32 && mac_at(msg + 28usize) == st.mac {
+            if os.load8(msg) == 2u8 && get32(msg + 4usize) == st.xid && get32(msg + 236usize) == 1669485411u32 && mac_at(msg + 28usize) == st.mac {
                 let yiaddr = get32(msg + 16usize)
+                let limit = payload + len
+                // First pass: only the message type, so options are applied only when this
+                // reply is the one being waited for.
                 var found = 0u8
+                var probe = msg + 240usize
+                while probe + 2usize <= limit && os.load8(probe) != 255u8 {
+                    let code = os.load8(probe)
+                    if code == 0u8 {
+                        probe += 1usize
+                    } else {
+                        let size = usize(os.load8(probe + 1usize))
+                        if probe + 2usize + size > limit { ret (0u32, 0u32, NoReply) }
+                        if code == 53u8 && size >= 1usize { found = os.load8(probe + 2usize) }
+                        probe += 2usize + size
+                    }
+                }
+                if found != kind { 
+                    spins += 1usize
+                    continue
+                }
+                // Second pass: only now do the options of this kind reach the stack, each
+                // bounded by the reply's end.
                 var server = src
                 var o = msg + 240usize
-                let limit = payload + len
                 while o + 2usize <= limit && os.load8(o) != 255u8 {
                     let code = os.load8(o)
                     if code == 0u8 {
@@ -437,15 +463,14 @@ fn dhcp_wait(st: *Stack, kind: u8) -> (u32, u32, err) {
                     } else {
                         let size = usize(os.load8(o + 1usize))
                         let value = o + 2usize
-                        if code == 53u8 { found = os.load8(value) }
-                        if code == 1u8 && size >= 4usize { st.mask = get32(value) }
-                        if code == 3u8 && size >= 4usize { st.gw = get32(value) }
-                        if code == 6u8 && size >= 4usize { st.dns = get32(value) }
-                        if code == 54u8 && size >= 4usize { server = get32(value) }
+                        if code == 1u8 && size >= 4usize && value + size <= limit { st.mask = get32(value) }
+                        if code == 3u8 && size >= 4usize && value + size <= limit { st.gw = get32(value) }
+                        if code == 6u8 && size >= 4usize && value + size <= limit { st.dns = get32(value) }
+                        if code == 54u8 && size >= 4usize && value + size <= limit { server = get32(value) }
                         o += 2usize + size
                     }
                 }
-                if found == kind { ret (yiaddr, server, ok) }
+                ret (yiaddr, server, ok)
             }
         }
         spins += 1usize
@@ -511,7 +536,8 @@ fn resolve(st: *Stack, name: str) -> (u32, err) {
         put16(o + 1usize, 1u16)
         put16(o + 3usize, 1u16)
         o += 5usize
-        let send_error = udp_send(st, query_port, st.dns, st.dns_port, o - at)
+        let qlen = o - at
+        let send_error = udp_send(st, query_port, st.dns, st.dns_port, qlen)
         if send_error != ok { ret (0u32, send_error) }
         var spins = 0usize
         while spins < POLLS {
@@ -521,7 +547,14 @@ fn resolve(st: *Stack, name: str) -> (u32, err) {
             if proto == PROTO_UDP && src == st.dns && len >= UDP_HDR + 12usize && get16(payload) == st.dns_port && get16(payload + 2usize) == query_port {
                 let msg = payload + UDP_HDR
                 let msg_len = len - UDP_HDR
-                if get16(msg) == id {
+                if get16(msg) == id && msg_len >= qlen {
+                    // The question is echoed: its bytes must match the ones sent, or a
+                    // resolver could answer a different name with this transaction id.
+                    var qm = 12usize
+                    while qm < qlen {
+                        if os.load8(msg + qm) != os.load8(at + qm) { ret (0u32, NoReply) }
+                        qm += 1usize
+                    }
                     let answers = usize(get16(msg + 6usize))
                     if (get16(msg + 2usize) & 15u16) != 0u16 || answers == 0usize { ret (0u32, NoName) }
                     // Skip the echoed question, then walk the answers for the first A record.
