@@ -227,17 +227,19 @@ fn new_year(year: i32) -> (i64, err) {
     ret (days, e)
 }
 
-// The number of the leap month of a Chinese year, 0 when it has none.
-fn leap_month(year: i32) -> u8 {
+// The number of the leap month of a Chinese year, 0 when it has none. `OutOfRange`
+// outside 1900..2100, as the module header promises (#92).
+fn leap_month(year: i32) -> (u8, err) {
+    if !in_range(i64(year)) { ret (0u8, OutOfRange) }
     var y = i64(year) - 1i64
     while y <= i64(year) {
         let k0 = solstice_lunation(y)
         let k1 = solstice_lunation(y + 1i64)
         let leap_i = leap_index(k0, k1 - k0)
-        if leap_i != 0i64 && year_at(y, leap_i, leap_i) == i64(year) { ret u8(number_at(leap_i, leap_i)) }
+        if leap_i != 0i64 && year_at(y, leap_i, leap_i) == i64(year) { ret (u8(number_at(leap_i, leap_i)), ok) }
         y += 1i64
     }
-    ret 0u8
+    ret (0u8, ok)
 }
 
 // The length of a month, 29 or 30.

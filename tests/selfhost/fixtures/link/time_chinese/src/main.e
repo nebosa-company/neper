@@ -60,7 +60,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !known(year) {
             let (ny, ny_e) = chinese.new_year(year)
             if ny_e != ok || ny != new_year_days { os.exit(11) }
-            if i64(chinese.leap_month(year)) != leap_number { os.exit(12) }
+            let (leap_value, leap_error) = chinese.leap_month(year)
+            if leap_error != ok || i64(leap_value) != leap_number { os.exit(12) }
+            let (out_of_range_leap, out_of_range_error) = chinese.leap_month(1800)
+            if out_of_range_error != chinese.OutOfRange || out_of_range_leap != 0u8 { os.exit(12) }
             var start = new_year_days
             var j = 0i64
             while j < months {

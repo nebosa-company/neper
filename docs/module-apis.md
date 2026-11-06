@@ -13250,6 +13250,7 @@ fn host_write(ctx: *void, a: *mem.Arena, path: str, data: []const u8) -> err
 fn host_make_dir(ctx: *void, a: *mem.Arena, path: str) -> err
 fn host_remove(ctx: *void, a: *mem.Arena, path: str) -> err
 fn host_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err)
+fn precheck_limits(a: *mem.Arena, v: *Vfs, path: str, limit: usize) -> err
 fn host_vfs(h: *Host) -> Vfs
 fn host_drive_root(root: str, n: usize) -> bool
 fn mark_prepare(o: *Overlay, path: str) -> ([]Mark, str, err)
@@ -23061,6 +23062,7 @@ fn set_path(a: *mem.Arena, base: json.Value, parts: []const str, at: usize, valu
 fn split_dots(a: *mem.Arena, attribute: str, sub: str, has_sub: bool) -> []const str
 fn patch_failed(msg: str) -> Patched
 fn apply_patch_op(a: *mem.Arena, resource: json.Value, operation: json.Value) -> Patched
+fn patch_read_only(a: *mem.Arena, attr: str) -> bool
 fn apply_patch(a: *mem.Arena, resource: json.Value, body: json.Value) -> Patched
 fn escape_into(a: *mem.Arena, s: str) -> str
 fn s_of(c: u8) -> str
@@ -28853,7 +28855,7 @@ fn in_range(year: i64) -> bool
 fn from_days(count: i64) -> (Date, err)
 fn to_days(date: Date) -> (i64, err)
 fn new_year(year: i32) -> (i64, err)
-fn leap_month(year: i32) -> u8
+fn leap_month(year: i32) -> (u8, err)
 fn month_length(year: i32, month: u8, leap: bool) -> (u8, err)
 fn stem_branch(year: i32) -> (u8, u8)
 ```
