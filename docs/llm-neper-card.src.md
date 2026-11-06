@@ -9,8 +9,10 @@ not the render of its grammar revision is stale.
 
 ## Keywords
 
-Every alphabetic terminal of the grammar: {{keywords}}. None may name a value, type,
+Every alphabetic terminal of the grammar's KEYWORD production: {{keywords}}. None may name a value, type,
 field or module.
+
+Contextual words (ordinary identifiers that particular productions spell, not keywords): {{contextual}}. `usize` and `isize` are reserved type names, not keywords.
 
 ## Grammar rule standing
 

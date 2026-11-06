@@ -61,10 +61,25 @@ for name in DECLARATIONS + TYPES + STATEMENTS + EXPRESSIONS:
     rule_rows.append('| `%s` | present |' % name)
 rules = '\n'.join(rule_rows)
 
-# Keywords: the alphabetic terminals of the productions, not of the notation comments,
-# and not `_`, which is a binding, nor lexer fragments of a number.
-production_text = '\n'.join(line for line in grammar.splitlines() if not line.startswith('#'))
-keywords = sorted(k for k in set(re.findall(r'`([a-z][a-z_]+)`', production_text)) if len(k) > 1)
+# Keywords: the lexer's KEYWORD production alone. `own`, `resource` and `nocheck` are
+# contextual identifiers that particular productions spell, and `usize`/`isize` are
+# reserved type names (resolve.reserved), so none belongs in the keyword set.
+keyword_lines = []
+in_keyword = False
+for line in grammar.splitlines():
+    if re.match(r'^KEYWORD\s*=', line):
+        in_keyword = True
+        keyword_lines.append(line)
+        continue
+    if in_keyword:
+        if line.startswith(' '):
+            keyword_lines.append(line)
+            continue
+        break
+if not keyword_lines:
+    sys.exit('render_card: grammar.ebnf has no KEYWORD production')
+keywords = sorted(set(re.findall(r'`([a-z][a-z_]+)`', '\n'.join(keyword_lines))))
+CONTEXTUAL = ['nocheck', 'own', 'resource']
 
 codes = re.findall(r'^\| `(E-([A-Z]+)-(\d{4}))` \| ([^|]+) \|', read('docs', 'diagnostics.md'), re.M)
 # Each code's standing (D440, H11/H28): `verified` when a conformance golden or a
@@ -139,6 +154,7 @@ body = template
 for key, value in [
     ('{{revision}}', revision), ('{{language_version}}', language_version), ('{{tool_version}}', tool_version),
     ('{{keywords}}', ' '.join('`%s`' % k for k in keywords)),
+    ('{{contextual}}', ' '.join('`%s`' % k for k in CONTEXTUAL)),
     ('{{rules}}', rules),
     ('{{declarations}}', block(DECLARATIONS)), ('{{types}}', block(TYPES)),
     ('{{statements}}', block(STATEMENTS)), ('{{expressions}}', block(EXPRESSIONS)),
