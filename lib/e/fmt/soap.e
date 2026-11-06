@@ -32,6 +32,30 @@ fn namespace(v: Version) -> str {
 fn content_type(a: *mem.Arena, v: Version, action: str) -> (str, err) {
     if v == .Soap11 { ret ("text/xml; charset=utf-8", ok) }
     if action.len == 0usize { ret ("application/soap+xml; charset=utf-8", ok) }
+    // RFC 3902: the action parameter value must be an absolute URI-reference. Require a
+    // scheme before the first colon (ALPHA *( ALPHA / DIGIT / "+" / "-" / "." )).
+    var colon = action.len
+    var ci = 0usize
+    while ci < action.len {
+        if action[ci] == 58u8 {
+            colon = ci
+            break
+        }
+        ci += 1usize
+    }
+    if colon == 0usize || colon >= action.len { ret ("", Invalid) }
+    ci = 0usize
+    while ci < colon {
+        let c = action[ci]
+        let alpha = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8)
+        let digit = c >= 48u8 && c <= 57u8
+        if ci == 0usize {
+            if !alpha { ret ("", Invalid) }
+        } else if !alpha && !digit && c != 43u8 && c != 45u8 && c != 46u8 {
+            ret ("", Invalid)
+        }
+        ci += 1usize
+    }
     let (made, made_error) = str.builder(a, action.len * 2usize + 64usize)
     if made_error != ok { ret ("", made_error) }
     var out = made

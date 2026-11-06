@@ -763,6 +763,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if (xb_error_9 == ok) != false || (xb_error_9 == ok && xb_9 != false) { try report("xsd-boolean", 9usize) }
     let (xb_10, xb_error_10) = soap.parse_xsd_boolean("tru")
     if (xb_error_10 == ok) != false || (xb_error_10 == ok && xb_10 != false) { try report("xsd-boolean", 10usize) }
+    // #597: the SOAP 1.2 action parameter is an absolute URI-reference and is escaped.
+    let (ct_default, ct_e0) = soap.content_type(a, .Soap12, "")
+    if ct_e0 != ok || !same(ct_default, "application/soap+xml; charset=utf-8") { try report("content-type-default", 30usize) }
+    let (ct_urn, ct_e1) = soap.content_type(a, .Soap12, "urn:example:op")
+    if ct_e1 != ok || ct_urn.len < "action=\"urn:example:op\"".len { try report("content-type-urn", 31usize) }
+    let (_, ct_e2) = soap.content_type(a, .Soap12, "not a uri")
+    if ct_e2 != soap.Invalid { try report("content-type-invalid-uri", 32usize) }
+    let (_, ct_e3) = soap.content_type(a, .Soap12, "urn:a\"b")
+    if ct_e3 != ok { try report("content-type-escape", 33usize) }
     try io.print("fmt soap ok\n")
     ret ok
 }
