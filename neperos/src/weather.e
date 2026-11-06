@@ -189,6 +189,9 @@ fn digits_at(text_value: str, at: usize, n: usize) -> usize {
 
 // The weekday (0 = Monday) of a calendar date.
 fn weekday_of(year: usize, month: usize, day: usize) -> usize {
+    // Remote date text: the civil-days subtraction underflows before 1970 and `year - 1` traps at
+    // 0, so out-of-range dates answer 0 instead (#257 item 16).
+    if year < 1970usize || year > 9999usize || month < 1usize || month > 12usize || day < 1usize || day > 31usize { ret 0usize }
     var shifted = year
     if month <= 2usize { shifted = year - 1usize }
     let era = shifted / 400usize
@@ -597,7 +600,9 @@ fn fetch_alert(a: *mem.Arena, s: *State, p: usize) -> bool {
                             if has_uri && uri_is_text && uri.len > 8usize && ui.same(uri[0usize..8usize], "https://") {
                                 var slash = 8usize
                                 while slash < uri.len && uri[slash] != 47u8 { slash += 1usize }
-                                if slash < uri.len {
+                                if slash < uri.len && ui.same(uri[8usize..slash], "api.met.no") {
+                                    // The CAP URI is server-supplied: only the alerts API host is
+                                    // fetched, never an arbitrary host/path (#257 item 17).
                                     cap_host = uri[8usize..slash]
                                     cap_path = uri[slash..uri.len]
                                     has_cap = true

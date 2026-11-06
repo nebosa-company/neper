@@ -669,7 +669,16 @@ fn find_symbols(a: *mem.Arena, s: *State) -> bool {
                                         if ui.same(s.found_symbol[f * SYMBOL_BYTES..f * SYMBOL_BYTES + s.found_symbol_len[f]], symbol_text) { seen = true }
                                         f += 1usize
                                     }
-                                    if !seen && symbol_text.len <= SYMBOL_BYTES && symbol_text.len > 0usize {
+                                    // A symbol is spliced into URLs carrying apiKey=, so only
+                                    // [A-Za-z0-9.-] may be stored (#257 item 18).
+                                    var symbol_ok = symbol_text.len > 0usize
+                                    var sc = 0usize
+                                    while sc < symbol_text.len && symbol_ok {
+                                        let c = symbol_text[sc]
+                                        if !((c >= 48u8 && c <= 57u8) || (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 46u8 || c == 45u8) { symbol_ok = false }
+                                        sc += 1usize
+                                    }
+                                    if !seen && symbol_ok && symbol_text.len <= SYMBOL_BYTES && symbol_text.len > 0usize {
                                         s.found_symbol_len[s.found] = set_text(s.found_symbol[0usize..], s.found * SYMBOL_BYTES, SYMBOL_BYTES, symbol_text)
                                         s.found_name_len[s.found] = set_text(s.found_name[0usize..], s.found * NAME_BYTES, NAME_BYTES, name_text)
                                         s.found += 1usize
