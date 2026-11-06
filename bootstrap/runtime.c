@@ -882,13 +882,15 @@ void neper_os_open(void *result, NpArena *arena, const unsigned char *path, size
 }
 
 void neper_os_read(void *result, uintptr_t raw, unsigned char *buffer, size_t length) {
-    unsigned char *out = (unsigned char *)result; ssize_t got = read((int)raw, buffer, length);
+    unsigned char *out = (unsigned char *)result; ssize_t got;
+    do { got = read((int)raw, buffer, length); } while (got < 0 && errno == EINTR);
     *(size_t *)out = 0; *(uint32_t *)(out + 8) = got < 0 ? np_error(errno) : NP_OK;
     if (got >= 0) *(size_t *)out = (size_t)got;
 }
 
 void neper_os_write(void *result, uintptr_t raw, const unsigned char *buffer, size_t length) {
-    unsigned char *out = (unsigned char *)result; ssize_t put = write((int)raw, buffer, length);
+    unsigned char *out = (unsigned char *)result; ssize_t put;
+    do { put = write((int)raw, buffer, length); } while (put < 0 && errno == EINTR);
     *(size_t *)out = 0; *(uint32_t *)(out + 8) = put < 0 ? np_error(errno) : NP_OK;
     if (put >= 0) *(size_t *)out = (size_t)put;
 }
@@ -901,6 +903,26 @@ uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_l
     if (!name) return NP_OUT_OF_MEMORY;
     made = mkdir(name, 0777); arena->off = saved;
     return made == 0 ? NP_OK : np_error(errno);
+}
+
+/* Sync the directory holding `path`, so a rename/link/unlink from `neper_os_replace` is
+   durable. A path with no separator or a root entry ("/file") resolves correctly: the
+   former syncs ".", the latter syncs "/". */
+static void np_sync_parent(const char *path) {
+    char dir[1024];
+    size_t n = strlen(path);
+    const char *open_at = ".";
+    if (n > 0 && n < sizeof dir) {
+        char *slash;
+        memcpy(dir, path, n + 1);
+        slash = strrchr(dir, '/');
+        if (slash) {
+            if (slash == dir) slash[1] = 0; else *slash = 0;
+            open_at = dir;
+        }
+    }
+    int fd = open(open_at, O_RDONLY);
+    if (fd >= 0) { fsync(fd); close(fd); }
 }
 
 /* `os.replace` (D343): rename(2), which replaces; without `overwrite` a link-then-unlink
@@ -918,10 +940,21 @@ uint32_t neper_os_replace(NpArena *arena, const unsigned char *src, size_t src_l
         if (result == 0) result = unlink(from);
     }
     if (result == 0 && durable) {
-        char *slash = strrchr(to, '/');
-        int dir;
-        if (slash) { *slash = 0; dir = open(to, O_RDONLY); } else { dir = open(".", O_RDONLY); }
-        if (dir >= 0) { fsync(dir); close(dir); }
+        np_sync_parent(to);
+        /* A cross-directory move changes both names, so both directories need the sync. */
+        if (strcmp(from, to) != 0) {
+            char from_parent[1024], to_parent[1024];
+            size_t fn = strlen(from), tn = strlen(to);
+            int same_parent = 0;
+            if (fn < sizeof from_parent && tn < sizeof to_parent) {
+                char *fs, *ts;
+                memcpy(from_parent, from, fn + 1); memcpy(to_parent, to, tn + 1);
+                fs = strrchr(from_parent, '/'); ts = strrchr(to_parent, '/');
+                if (fs && ts) same_parent = (size_t)(fs - from_parent) == (size_t)(ts - to_parent) &&
+                    memcmp(from_parent, to_parent, (size_t)(fs - from_parent)) == 0;
+            }
+            if (!same_parent) np_sync_parent(from);
+        }
     }
     arena->off = saved;
     return result == 0 ? NP_OK : np_error(errno);
@@ -1117,16 +1150,18 @@ oom_spawn_options:
 }
 
 void neper_os_wait(void *result, uintptr_t raw) {
-    unsigned char *out = (unsigned char *)result; int status;
+    unsigned char *out = (unsigned char *)result; int status, waited;
     *(int32_t *)out = -1; *(uint32_t *)(out + 4) = NP_OK;
-    if (waitpid((pid_t)raw, &status, 0) < 0) { *(uint32_t *)(out + 4) = np_error(errno); return; }
+    do { waited = waitpid((pid_t)raw, &status, 0); } while (waited < 0 && errno == EINTR);
+    if (waited < 0) { *(uint32_t *)(out + 4) = np_error(errno); return; }
     *(int32_t *)out = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }
 
 void neper_os_wait_usage(void *result, uintptr_t raw) {
-    unsigned char *out = (unsigned char *)result; int status; struct rusage usage;
+    unsigned char *out = (unsigned char *)result; int status, waited; struct rusage usage;
     *(int32_t *)out = -1; *(size_t *)(out + 8) = 0; *(uint32_t *)(out + 16) = NP_OK;
-    if (wait4((pid_t)raw, &status, 0, &usage) < 0) { *(uint32_t *)(out + 16) = np_error(errno); return; }
+    do { waited = wait4((pid_t)raw, &status, 0, &usage); } while (waited < 0 && errno == EINTR);
+    if (waited < 0) { *(uint32_t *)(out + 16) = np_error(errno); return; }
     *(int32_t *)out = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
     *(size_t *)(out + 8) = (size_t)usage.ru_maxrss * 1024;
 }
