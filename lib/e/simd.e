@@ -235,7 +235,8 @@ fn mask[V: type](packed: u64) -> Mask[meta.element_type[V](), meta.array_len[V](
 
 // Section 4: a fixed pairwise tree in lane order -- `(0+1)+(2+3)` and so on -- so a
 // float sum is the same bits on every target. Each level folds lane `2i` and `2i+1`
-// into lane `i`, which is why it can be done in place: `2i >= i`.
+// into lane `i`, and an odd trailing lane is carried forward to `width / 2`, so every
+// width works, not only powers of two (#470).
 fn reduce_add[V: type](v: V) -> meta.element_type[V]() {
     var acc = v
     var width = meta.array_len[V]()
@@ -245,7 +246,8 @@ fn reduce_add[V: type](v: V) -> meta.element_type[V]() {
             acc.lanes[i] = lane_add[meta.element_type[V]()](acc.lanes[2usize * i], acc.lanes[2usize * i + 1usize])
             i += 1usize
         }
-        width = width / 2usize
+        if width % 2usize == 1usize { acc.lanes[width / 2usize] = acc.lanes[width - 1usize] }
+        width = (width + 1usize) / 2usize
     }
     ret acc.lanes[0]
 }
@@ -283,7 +285,8 @@ fn reduce_min[V: type](v: V) -> meta.element_type[V]() {
             acc.lanes[i] = lane_min[meta.element_type[V]()](acc.lanes[2usize * i], acc.lanes[2usize * i + 1usize])
             i += 1usize
         }
-        width = width / 2usize
+        if width % 2usize == 1usize { acc.lanes[width / 2usize] = acc.lanes[width - 1usize] }
+        width = (width + 1usize) / 2usize
     }
     ret acc.lanes[0]
 }
@@ -297,7 +300,8 @@ fn reduce_max[V: type](v: V) -> meta.element_type[V]() {
             acc.lanes[i] = lane_max[meta.element_type[V]()](acc.lanes[2usize * i], acc.lanes[2usize * i + 1usize])
             i += 1usize
         }
-        width = width / 2usize
+        if width % 2usize == 1usize { acc.lanes[width / 2usize] = acc.lanes[width - 1usize] }
+        width = (width + 1usize) / 2usize
     }
     ret acc.lanes[0]
 }
