@@ -22,7 +22,11 @@ fn load(a: *mem.Arena, path: str) -> (str, err) {
     let (size, size_error) = os.seek(file, 0i64, .End)
     if size_error == ok {
         let (start, start_error) = os.seek(file, 0i64, .Start)
-        if start_error == ok {
+        if start_error != ok {
+            // A failed rewind leaves the file at its end; reading from there would hand
+            // back an empty source with no error, so the failure is reported.
+            read_error = start_error
+        } else {
             let (sized_text, sized_error) = read_sized(a, file, usize(size))
             text = sized_text
             read_error = sized_error
@@ -96,12 +100,17 @@ fn read_sized(a: *mem.Arena, file: os.File, size: usize) -> (str, err) {
 
 // The whole of standard input, for a `-` operand (D289). The handle is not closed.
 fn load_stdin(a: *mem.Arena) -> (str, err) {
+    let (text, read_error) = read_growing(a, os.stdin())
+    ret (text, read_error)
+}
+
+// Every byte of an open file read the growing way, shared by a pipe and by read_all.
+fn read_growing(a: *mem.Arena, file: os.File) -> (str, err) {
     var capacity = 4096usize
     let (initial, allocation_error) = mem.alloc[u8](a, capacity)
     if allocation_error != ok { ret ("", allocation_error) }
     var buffer = initial
     var used = 0usize
-    let file = os.stdin()
     while true {
         if used == capacity {
             capacity = capacity + capacity
@@ -124,35 +133,8 @@ fn load_stdin(a: *mem.Arena) -> (str, err) {
 
 // Every byte of an open file, which is closed after.
 fn read_all(a: *mem.Arena, file: os.File) -> (str, err) {
-    var capacity = 4096usize
-    let (initial, allocation_error) = mem.alloc[u8](a, capacity)
-    if allocation_error != ok {
-        ret ("", allocation_error)
-    }
-    var buffer = initial
-    var used = 0usize
-    while true {
-        if used == capacity {
-            capacity = capacity + capacity
-            let (grown, grow_error) = mem.alloc[u8](a, capacity)
-            if grow_error != ok {
-                ret ("", grow_error)
-            }
-            var i = 0usize
-            while i < used {
-                grown[i] = buffer[i]
-                i += 1usize
-            }
-            buffer = grown
-        }
-        let (count, read_error) = os.read(file, buffer[used..])
-        if read_error != ok {
-            ret ("", read_error)
-        }
-        if count == 0usize { break }
-        used += count
-    }
-    ret (buffer[..used], ok)
+    let (text, read_error) = read_growing(a, file)
+    ret (text, read_error)
 }
 
 // Whether the file at `path` is exactly `bytes` (D332): the size from a seek to its
