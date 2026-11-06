@@ -1387,7 +1387,12 @@ fn load_state(s: *State) -> bool {
         s.timer_done = (flags & 4usize) != 0usize
     }
     if buf[46usize] != 0u8 {
-        let started = i64(get_word(buf[0usize..64usize], 47usize)) * 4294967296i64 + i64(get_word(buf[0usize..64usize], 51usize))
+        let started_high = get_word(buf[0usize..64usize], 47usize)
+        let started_low = get_word(buf[0usize..64usize], 51usize)
+        // A corrupt /clock can carry a high word at or above 2^31; saturate instead of
+        // overflowing the i64 multiply (#257 item 23).
+        var started = 9223372036854775807i64
+        if started_high < 2147483648usize { started = i64(started_high) * 4294967296i64 + i64(started_low) }
         var elapsed = wall_ms - started
         if elapsed < 0i64 { elapsed = 0i64 }
         s.sw_running = true

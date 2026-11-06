@@ -1220,7 +1220,12 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             let name = text_of(a, s.ext_names[k * 24usize..], s.ext_len[k])
             s.ext_note = 2usize
             var size = s.ext_size[k]
-            if size > 65536usize { size = 65536usize }
+            if size > 65536usize {
+                // Do not call a prefix of the file "copied" (#257 item 20).
+                s.ext_note = 2usize
+                say("files external copy too large\n")
+                ret true
+            }
             let (buffer, buffer_error) = mem.alloc[u8](a, size + 1usize)
             if buffer_error == ok && size > 0usize && name_free(s, name, NONE) {
                 let (got, read_ok) = external_read(join(a, "/", name, ""), mem.address_of(&buffer[0usize]), size)

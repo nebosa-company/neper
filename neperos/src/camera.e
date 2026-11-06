@@ -635,13 +635,8 @@ fn save_scan(a: *mem.Arena, code_found: *bool) -> bool {
             code_bytes[c] = code[c]
             c += 1usize
         }
-        say("camera scan qr ")
-        say(code_bytes[0usize..code.len])
-        say("\n")
-        if vaultfs.write("/scancode", mem.address_of(&code_bytes[0usize]), code.len) {
-            *code_found = true
-            say("camera saved /scancode\n")
-        }
+        // Scanned text is not written to /scancode or the serial console (#257 item 22).
+        *code_found = true
     }
     let out_w = 186usize
     let out_h = 300usize
@@ -667,12 +662,17 @@ fn save_scan(a: *mem.Arena, code_found: *bool) -> bool {
         var ox = 0usize
         while ox < out_w {
             let at = vision.apply_homography(h[0usize..9usize], vision.Point { x: f64(ox) + 0.5f64, y: f64(oy) + 0.5f64 })
-            var sx = i64(at.x)
-            var sy = i64(at.y)
-            if sx < 0i64 { sx = 0i64 }
-            if sy < 0i64 { sy = 0i64 }
-            if sx >= i64(width) { sx = i64(width) - 1i64 }
-            if sy >= i64(height) { sy = i64(height) - 1i64 }
+            // A degenerate quad can make the projection NaN or infinite: clamp in float
+            // space before the integer cast, which would trap (#257 item 21).
+            if at.x != at.x || at.y != at.y { ret false }
+            var fx = at.x
+            var fy = at.y
+            if fx < 0.0f64 { fx = 0.0f64 }
+            if fy < 0.0f64 { fy = 0.0f64 }
+            if fx > f64(width - 1usize) { fx = f64(width - 1usize) }
+            if fy > f64(height - 1usize) { fy = f64(height - 1usize) }
+            var sx = i64(fx)
+            var sy = i64(fy)
             let px = usize(os.load32(os.SHARED_FRAME_VA + ((top + usize(sy) * step) * os.SURFACE_W + usize(sx) * step) * 4usize))
             let to = (oy * out_w + ox) * 4usize
             sheet[to] = u8((px >> 16usize) & 255usize)

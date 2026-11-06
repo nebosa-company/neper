@@ -213,7 +213,10 @@ fn save_from_server(a: *mem.Arena, s: *State, frames: usize) -> usize {
     if pcm_error != ok { ret 0usize }
     var at = 0usize
     while at < frames {
-        let got = bgclient.rec_read(at, 256usize, mem.address_of(&pcm[at * 2usize]))
+        // Ask only for the frames left: a fixed 256 overreads the last block.
+        var want = 256usize
+        if frames - at < want { want = frames - at }
+        let got = bgclient.rec_read(at, want, mem.address_of(&pcm[at * 2usize]))
         if got == 0usize { ret 0usize }
         at += got
     }
@@ -256,7 +259,7 @@ fn load_recordings(a: *mem.Arena, s: *State) -> usize {
         if names[at] == 10u8 {
             let name = names[start..at]
             // REC_nnnn.wav
-            if name.len == 12usize && name[0usize] == 82u8 && name[1usize] == 69u8 && name[2usize] == 67u8 {
+            if name.len == 12usize && name[0usize] == 82u8 && name[1usize] == 69u8 && name[2usize] == 67u8 && name[4usize] >= 48u8 && name[4usize] <= 57u8 && name[5usize] >= 48u8 && name[5usize] <= 57u8 && name[6usize] >= 48u8 && name[6usize] <= 57u8 && name[7usize] >= 48u8 && name[7usize] <= 57u8 {
                 let number = usize(name[4usize] - 48u8) * 1000usize + usize(name[5usize] - 48u8) * 100usize + usize(name[6usize] - 48u8) * 10usize + usize(name[7usize] - 48u8)
                 let path = file_path(a, number)
                 let (size, kind, day, found) = vaultfs.stat(path)
