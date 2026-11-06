@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Reference for grid-baseline-orthogonal</title>
+<style>
+  body { margin: 0; }
+  /* The same 80x90 row: two 40px columns, a 2px border and a 2px margin on each item. The vertical item lines up on
+     its bottom margin edge and the horizontal item's first baseline sits on that line, so the horizontal item is
+     placed where that puts it. Text is not painted in either page. */
+  .row { position: relative; width: 80px; height: 90px; border: 1px solid #000; }
+  .row > div { position: absolute; border: 2px solid #000; box-sizing: border-box; }
+  .horizontal { left: 2px; top: 28px; width: 36px; height: 24px; }
+  .vertical { left: 42px; top: 2px; width: 42px; height: 44px; }
+</style>
+</head>
+<body>
+<div class="row">
+  <div class="horizontal"></div>
+  <div class="vertical"></div>
+</div>
+</body>
+</html>

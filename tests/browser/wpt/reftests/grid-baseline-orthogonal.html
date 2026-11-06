@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<title>Grid row baseline with an orthogonal item</title>
+<meta charset="utf-8">
+<link rel="match" href="grid-baseline-orthogonal-ref.html">
+<meta name="assert" content="In a row aligned on the first baseline, an item whose writing mode is orthogonal to the
+grid container does not contribute its own frame's baseline: it falls back to its bottom margin edge, so it must not
+lift the parallel items of the row.">
+<link rel="stylesheet" href="/fonts/ahem.css">
+<style>
+  body { margin: 0; font: 20px/1 Ahem; }
+  .grid {
+    display: grid;
+    grid-template-rows: 90px;
+    grid-auto-flow: column;
+    grid-auto-columns: 40px;
+    width: 80px;
+    align-items: baseline;
+    border: 1px solid #000;
+  }
+  /* Explicit border-box sizes so both pages place the same rectangles; the text only fills them. */
+  .grid > div { border: 2px solid #000; margin: 2px; box-sizing: border-box; color: transparent; }
+  .short { width: 36px; height: 24px; }
+  .vertical { writing-mode: vertical-lr; width: 42px; height: 44px; }
+</style>
+<div class="grid">
+  <div class="short">X</div>
+  <div class="vertical">X</div>
+</div>

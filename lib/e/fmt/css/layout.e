@@ -8586,8 +8586,14 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         if al0 == .Auto { al0 = cs.align_items }
         if al0 == .Baseline || al0 == .FirstBaseline {
             let (bfound, bby) = first_baseline(l, id)
+            // An orthogonal item has no baseline in this axis: `first_baseline` measured it in the item's own frame, so
+            // the value is not a distance down this box. Such an item lines up on its bottom margin edge instead
+            // (CSS-align-3's baseline fallback), which is what `ib.h` plus the bottom margin is. The comparison is against
+            // the grid container's own mode: `is_orthogonal` reads `l.vmode`, which is not the container's frame here.
+            var orth_items = false
+            if mode_code(is0) != mode_code(cs) { orth_items = true }
             var bup = ib.h
-            if bfound { bup = bby }
+            if bfound && !orth_items { bup = bby }
             bl_up[i] = ib.margin[0usize] + bup
             bl_on[i] = true
             let brow = usize(g.items[i].rs)
