@@ -3058,6 +3058,14 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     oracle.limit_base = oracle.instruction_count
                     oracle.instruction_limit = inline_cap(oracle) + 1usize
                     if barrier_helper || oracle.barrier_oracle { oracle.instruction_limit = 0usize }
+                    // The oracle lowers a candidate body whole, `defer`s included, so its
+                    // table has to be sized like the real lowering's: a zero-length one made
+                    // every candidate with a `defer` answer Capacity (#gpu_barrier_chain).
+                    let oracle_defer_cap = usize(function.source_end) - usize(function.source_start) + 8usize
+                    let (oracle_defer_entries, oracle_defer_error) = mem.alloc[Deferred](c.arena, oracle_defer_cap)
+                    if oracle_defer_error != ok { ret oracle_defer_error }
+                    oracle_defers.entries = oracle_defer_entries
+                    oracle_defers.count = 0usize
                     let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, oracle_defers)
                     oracle.instruction_limit = 0usize
                     // The lowering arms the checker's failure position at every statement it
