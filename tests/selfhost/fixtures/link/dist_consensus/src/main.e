@@ -7,6 +7,7 @@
 // replica repeats; the fixture also asserts no two leaders in one term and
 // that committed entries never change. Each check exits with its own code.
 
+use e.dist.commit as cmt
 use e.dist.consensus
 use e.io
 use e.mem
@@ -348,6 +349,56 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, _, oversized_error) = consensus.raft_election(&oversized, 0usize, 0u64, 0u64, &net)
     if oversized_error != consensus.TooSmall { os.exit(8i32) }
 
+    // 9: a delayed AppendEntries with an older commit must not lower a follower's
+    // commit index (max semantics).
+    let lag_target = 1usize
+    let lag_before = c.nodes[lag_target].commit
+    let lag_last = c.nodes[lag_target].snap_index + u64(c.nodes[lag_target].log_len)
+    var lag_msg: consensus.Message = zero
+    lag_msg.from = u32(leader)
+    lag_msg.to = u32(lag_target)
+    lag_msg.kind = .AppendEntries
+    lag_msg.term = c.nodes[leader].term
+    lag_msg.index = lag_last
+    lag_msg.term2 = c.nodes[lag_target].log[c.nodes[lag_target].log_len - 1usize].term
+    lag_msg.commit = 0u64
+    var lag_items: [8]consensus.Message = zero
+    var lag_pool = consensus.Pool { items: lag_items[0..], len: 0usize }
+    if consensus.raft_step(&c, lag_target, s.now, &lag_msg, &lag_pool) != ok { os.exit(9i32) }
+    if c.nodes[lag_target].commit != lag_before { os.exit(9i32) }
+
+    // 10: commit masks cover all 64 bits, >64 participants are refused, and a vote
+    // from outside `parts` is Invalid rather than a stuck bit.
+    var wide_parts: [64]cmt.Participant = zero
+    var wide = cmt.two_phase(wide_parts[0..], 10u64)
+    var commit_pool_items: [128]cmt.Message = zero
+    var commit_pool = cmt.Pool { items: commit_pool_items[0..], len: 0usize }
+    if cmt.commit_begin(&wide, 0u64, &commit_pool) != ok { os.exit(11i32) }
+    var voter = 0usize
+    while voter < 64usize {
+        var yes: cmt.Message = zero
+        yes.to = 64u32
+        yes.from = u32(voter)
+        yes.kind = .VoteYes
+        if cmt.commit_step(&wide, 64usize, 0u64, &yes, &commit_pool) != ok { os.exit(12i32) }
+        voter += 1usize
+    }
+    if wide.state != .Committed { os.exit(13i32) }
+    var over_parts: [65]cmt.Participant = zero
+    var over = cmt.two_phase(over_parts[0..], 10u64)
+    if cmt.commit_begin(&over, 0u64, &commit_pool) != cmt.TooSmall { os.exit(14i32) }
+    var pair_parts: [2]cmt.Participant = zero
+    var pair = cmt.two_phase(pair_parts[0..], 10u64)
+    var pair_pool_items: [8]cmt.Message = zero
+    var pair_pool = cmt.Pool { items: pair_pool_items[0..], len: 0usize }
+    if cmt.commit_begin(&pair, 0u64, &pair_pool) != ok { os.exit(15i32) }
+    var stray: cmt.Message = zero
+    stray.to = 2u32
+    stray.from = 5u32
+    stray.kind = .VoteYes
+    if cmt.commit_step(&pair, 2usize, 0u64, &stray, &pair_pool) != cmt.Invalid { os.exit(16i32) }
+
     try io.print("dist consensus ok\n")
     ret ok
 }
+
