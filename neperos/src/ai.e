@@ -690,6 +690,13 @@ fn endpoint_secure(s: *State) -> bool {
     ret endpoint_port(s) == 443u16
 }
 
+// #257 item 25: a key over plain HTTP is sent to anyone on the path; refuse it up front.
+fn refuses_keyed_plain_http(s: *State, key: str) -> bool {
+    if key.len == 0usize || endpoint_secure(s) { ret false }
+    set_reply(s, "This endpoint is not TLS; refusing to send the API key over plain HTTP.")
+    ret true
+}
+
 fn chat_path(a: *mem.Arena, s: *State, key: str) -> str {
     if s.provider == 0usize { ret "/v1/messages" }
     if s.provider == 2usize { ret ui.join(a, ui.join(a, "/v1beta/models/", model_id(s.provider, s.model), ":streamGenerateContent?alt=sse&key="), key, "") }
@@ -716,6 +723,7 @@ fn start_request(a: *mem.Arena, s: *State) -> bool {
     if s.vault_state == VAULT_OPEN { let have = load_key(a, s) }
     let body_len = build_body(a, s, buf)
     let key = ui.field_text(a, &s.key)
+    if refuses_keyed_plain_http(s, key) { ret false }
     httpstream.begin(&s.net, mem.address_of(&s.body[0usize]), s.body.len)
     let result = httpstream.start(a, &s.net, "POST", endpoint_host(a, s), chat_path(a, s, key), key_headers(a, s, key), buf[0usize..body_len], endpoint_port(s), endpoint_secure(s))
     if s.vault_state == VAULT_OPEN { wipe_key(s) }
@@ -736,6 +744,7 @@ fn start_request(a: *mem.Arena, s: *State) -> bool {
 // A cheap check of a key: the provider's model list. 0 accepted, 1 refused, 2 could not reach it.
 fn check_key(a: *mem.Arena, s: *State) -> usize {
     let key = ui.field_text(a, &s.key)
+    if refuses_keyed_plain_http(s, key) { ret 1usize }
     var path = "/v1/models"
     if s.provider == 2usize { path = ui.join(a, "/v1beta/models?key=", key, "") }
     httpstream.begin(&s.net, mem.address_of(&s.body[0usize]), s.body.len)
@@ -2023,3 +2032,4 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     ret ok
 }
+

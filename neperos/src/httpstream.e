@@ -32,6 +32,7 @@ type Stream = struct {
     status: usize,
     chunked: bool,
     ck: usize,
+    ck_saw_digit: bool,
     left: usize,
     size: usize,
     ended: bool,
@@ -127,12 +128,19 @@ fn body_byte(st: *Stream, b: u8) {
     if st.ck == CK_SIZE {
         let v = hex_value(b)
         if v != 99usize {
+            st.ck_saw_digit = true
             st.size = st.size * 16usize + v
             if st.size > 16777216usize {
                 st.failed = true
                 st.phase = PH_DONE
             }
         } else if b == 59u8 || b == 13u8 || b == 10u8 || b == 32u8 {
+            // An empty size line is malformed, not a zero-length final chunk (#257 item 26).
+            if !st.ck_saw_digit {
+                st.failed = true
+                st.phase = PH_DONE
+                ret
+            }
             st.ck = CK_EXT
             if b == 10u8 { chunk_header_done(st) }
         } else {
@@ -149,9 +157,11 @@ fn body_byte(st: *Stream, b: u8) {
         // The CR after a chunk's data (a bare LF is tolerated).
         if b == 10u8 { st.ck = CK_SIZE } else { st.ck = CK_LF }
         st.size = 0usize
+        st.ck_saw_digit = false
     } else if st.ck == CK_LF {
         st.ck = CK_SIZE
         st.size = 0usize
+        st.ck_saw_digit = false
     } else {
         // After the last chunk the trailer is read to the end of the stream and ignored.
     }
@@ -272,3 +282,4 @@ fn abort(st: *Stream) {
     st.ended = true
     st.phase = PH_DONE
 }
+
