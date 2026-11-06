@@ -103,7 +103,9 @@ fn same_text(a: []const u8, b: str) -> bool {
 // True when the picture changed.
 fn live_poll(a: *mem.Arena, s: *State) -> bool {
     if !s.live { ret false }
-    if netio.poll(&s.nb) == 0usize {
+    let (have, poll_error) = netio.poll(&s.nb)
+    if poll_error != ok { s.live = false }
+    if have == 0usize {
         if s.nb.closed { s.live = false }
         ret false
     }

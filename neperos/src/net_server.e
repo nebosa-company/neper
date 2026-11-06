@@ -365,7 +365,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if op == netproto.OP_JOIN {
             let (name_len, name_ok) = netproto.recv_bytes(REQ, host_addr, 255usize)
             let (password_len, password_ok) = netproto.recv_bytes(REQ, chunk_addr, 64usize)
-            if !controls { reply(netproto.R_BAD) } else if !name_ok || !password_ok {
+            if !controls { reply(netproto.R_BAD) } else if !s.test { reply(netproto.R_NO_NETWORK) } else if !name_ok || !password_ok {
                 reply(netproto.R_BAD)
                 continue
             }

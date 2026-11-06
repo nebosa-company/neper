@@ -10,16 +10,19 @@ use netproto
 type NetBuf = struct { data: [4096]u8, len: usize, pos: usize, closed: bool }
 
 // Take what the server has for us (a short wait): the number of bytes now buffered. The peer's close sets `closed`.
-fn poll(b: *NetBuf) -> usize {
-    if b.pos < b.len { ret b.len - b.pos }
+fn poll(b: *NetBuf) -> (usize, err) {
+    if b.pos < b.len { ret (b.len - b.pos, ok) }
     b.pos = 0usize
     b.len = 0usize
     let (n, r) = netclient.poll(mem.address_of(&b.data[0usize]), 4096usize)
-    if r == netproto.R_OK {
-        if n == 0usize { b.closed = true }
-        b.len = n
+    if r != netproto.R_OK {
+        // A reset, auth failure or malformed request is not "no data": surface it.
+        if r == netproto.R_BAD || r == netproto.R_AUTH { b.closed = true }
+        ret (0usize, io.NoProgress)
     }
-    ret b.len
+    if n == 0usize { b.closed = true }
+    b.len = n
+    ret (b.len, ok)
 }
 
 fn net_read(ctx: *void, dst: []u8) -> (usize, err) {

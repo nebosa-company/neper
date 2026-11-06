@@ -710,7 +710,8 @@ fn live_message(a: *mem.Arena, s: *State, payload: []const u8) -> bool {
 fn live_poll(a: *mem.Arena, s: *State) -> bool {
     if !s.live { ret false }
     var changed = false
-    let have = netio.poll(&s.nb)
+    let (have, poll_error) = netio.poll(&s.nb)
+    if poll_error != ok { s.live = false }
     if have == 0usize {
         if s.nb.closed {
             s.live = false
@@ -762,6 +763,17 @@ fn load_account(s: *State) -> bool {
 }
 
 fn save_account(a: *mem.Arena, s: *State) -> bool {
+    // The stored "name:secret" is the JOIN source: refuse values the protocol cannot carry.
+    var check = 0usize
+    while check < s.user.len {
+        if s.user.bytes[check] == 124u8 || s.user.bytes[check] == 10u8 || s.user.bytes[check] == 13u8 { ret false }
+        check += 1usize
+    }
+    check = 0usize
+    while check < s.secret.len {
+        if s.secret.bytes[check] == 124u8 || s.secret.bytes[check] == 10u8 || s.secret.bytes[check] == 13u8 { ret false }
+        check += 1usize
+    }
     var raw: [64]u8 = zero
     var n = 0usize
     var i = 0usize
@@ -828,12 +840,16 @@ fn send(a: *mem.Arena, s: *State) {
     add_post(s, s.open, 0usize, body, s.now_minute, 0usize)
     s.rooms[s.open].posts[s.rooms[s.open].post_total - 1usize].reply = reply
     save_room(a, s, s.open)
-    // A room the server knows (not a direct message) is said there too.
+    // A room the server knows (not a direct message) is said there too, but only when the room
+    // and body carry no field separator or control byte (#180 item 2).
     if s.live && !s.rooms[s.open].direct {
-        if reply != 0usize {
-            live_say(s, ui.join(a, ui.join(a, ui.join(a, "SAYTO|", room_name(a, s, s.open), "|"), ui.number(a, reply), "|"), body, ""))
+        let room = room_name(a, s, s.open)
+        if !field_ok(room) || !field_ok(body) {
+            ui.say("chat message not sent: | or control byte\n")
+        } else if reply != 0usize {
+            live_say(s, ui.join(a, ui.join(a, ui.join(a, "SAYTO|", room, "|"), ui.number(a, reply), "|"), body, ""))
         } else {
-            live_say(s, ui.join(a, ui.join(a, "SAY|", room_name(a, s, s.open), ""), "|", body))
+            live_say(s, ui.join(a, ui.join(a, "SAY|", room, ""), "|", body))
         }
     }
     s.reply_to = NONE

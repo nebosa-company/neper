@@ -183,6 +183,9 @@ type Hit = struct { id: usize, x: f32, y: f32, w: f32, h: f32 }
 
 type State = struct {
     cards: [16]Card,
+    // A slot whose sealed record exists but did not open (transient read, seal or
+    // IPC error): save_all must not delete it as an unused card.
+    failed: [16]bool,
     screen: usize,
     filter: usize,
     open: usize,
@@ -393,7 +396,7 @@ fn save_all(a: *mem.Arena, s: *State) -> usize {
                 let (length, seal_error) = vault.seal(s.key, nonce[0usize..], record_name, plain[0usize..n], record[0usize..])
                 if seal_error == ok && vaultfs.write(path, mem.address_of(&record[0usize]), length) { written += 1usize }
             }
-        } else {
+        } else if !s.failed[i] {
             let dropped = vaultfs.remove(path)
         }
         i += 1usize
@@ -407,6 +410,7 @@ fn save_all(a: *mem.Arena, s: *State) -> usize {
 // Open the sealed records into the card slots; how many came back. The cards in the slots now are replaced only when
 // at least one record opened.
 fn load_all(a: *mem.Arena, s: *State) -> usize {
+    var failed_now: [16]bool = zero
     var found: [16]Card = zero
     var loaded = 0usize
     var i = 0usize
@@ -423,7 +427,11 @@ fn load_all(a: *mem.Arena, s: *State) -> usize {
                 if good {
                     found[i] = opened
                     loaded += 1usize
+                } else {
+                    failed_now[i] = true
                 }
+            } else {
+                failed_now[i] = true
             }
         }
         i += 1usize
@@ -434,6 +442,13 @@ fn load_all(a: *mem.Arena, s: *State) -> usize {
             s.cards[i] = found[i]
             i += 1usize
         }
+    }
+    // Keep the failure map even when nothing loaded: those records exist and must
+    // survive the next save.
+    i = 0usize
+    while i < MAX_CARDS {
+        s.failed[i] = failed_now[i]
+        i += 1usize
     }
     ret loaded
 }
