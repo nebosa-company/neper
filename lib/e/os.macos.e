@@ -2911,7 +2911,12 @@ fn cocoa_start() -> err {
 }
 
 fn cocoa_push(event: WindowEvent) {
-    if cocoa_count >= COCOA_RING { ret }
+    // A full ring must not silently starve the newest state: drop the OLDEST queued event
+    // so a close/resize/focus behind a pointer-move burst still arrives.
+    if cocoa_count >= COCOA_RING {
+        cocoa_head = (cocoa_head + 1usize) % COCOA_RING
+        cocoa_count = cocoa_count - 1usize
+    }
     cocoa_events[(cocoa_head + cocoa_count) % COCOA_RING] = event
     cocoa_count += 1usize
 }

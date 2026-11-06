@@ -37,6 +37,17 @@ fn last_problem(out: []u8) -> usize {
 @import("/System/Library/Frameworks/Metal.framework/Metal", "MTLCreateSystemDefaultDevice")
 extern fn default_device() -> usize
 
+var cached_device: usize = 0usize
+
+// The process-wide default device, created once: MTLCreateSystemDefaultDevice returns a new object
+// each call, so caching stops repeated `open` from leaking devices and lets every Context share it
+// (the OS reclaims it at exit) (#390).
+fn device_handle() -> usize {
+    if cached_device != 0usize { ret cached_device }
+    cached_device = default_device()
+    ret cached_device
+}
+
 @import("/usr/lib/libobjc.A.dylib", "objc_msgSend")
 extern fn msg_buffer(receiver: usize, selector: usize, a: usize, b: usize, c: usize) -> usize
 
@@ -50,10 +61,7 @@ fn available() -> bool {
         let metal = "/System/Library/Frameworks/Metal.framework/Metal\x00"
         let handle = os.raw_dlopen(mem.address_of(&metal[0usize]), 2i32)
         if handle == 0usize { ret false }
-        let device = default_device()
-        if device != 0usize {
-            let dropped = os.msg0(device, os.cocoa_sel("release\x00"))
-        }
+        let device = device_handle()
         let closed = os.raw_dlclose(handle)
         ret device != 0usize
     }
@@ -69,21 +77,18 @@ fn open(a: *mem.Arena) -> (Context, err) {
     var none: Context = zero
     when target.os == .Macos {
         if !available() { ret (none, NoDevice) }
-        let device = default_device()
+        let device = device_handle()
         if device == 0usize { ret (none, NoDevice) }
         let queue = os.msg0(device, os.cocoa_sel("newCommandQueue\x00"))
-        if queue == 0usize {
-            let dropped = os.msg0(device, os.cocoa_sel("release\x00"))
-            ret (none, Failed)
-        }
+        if queue == 0usize { ret (none, Failed) }
         ret (Context { device: device, queue: queue }, ok)
     }
     ret (none, Unsupported)
 }
 
 fn close(context: Context) {
+    // The device is the cached process-wide one; only the queue is this Context's to release (#390).
     let dropped = os.msg0(context.queue, os.cocoa_sel("release\x00"))
-    let released = os.msg0(context.device, os.cocoa_sel("release\x00"))
 }
 
 // `bytes` of storage the CPU and the device share, zero filled by the system.
@@ -115,6 +120,8 @@ fn free(buffer_value: Buffer) {
 // A kernel function `entry` of the MSL `source`, compiled for this device.
 fn compile(context: Context, source: str, entry: str) -> (Pipeline, err) {
     var none: Pipeline = zero
+    // A previous failure's text must not be reported for this compile (#388).
+    problem_length = 0usize
     let pool = os.objc_pool_push()
     let text = os.cocoa_text(source)
     var problem = 0usize
@@ -135,6 +142,13 @@ fn compile(context: Context, source: str, entry: str) -> (Pipeline, err) {
     let function = os.msg1(library, os.cocoa_sel("newFunctionWithName:\x00"), function_name)
     os.cf_release(function_name)
     if function == 0usize {
+        let missing = "entry function not found"
+        var m = 0usize
+        while m < missing.len && m < 512usize {
+            problem_text[m] = missing[m]
+            m += 1usize
+        }
+        problem_length = m
         let released = os.msg0(library, os.cocoa_sel("release\x00"))
         os.objc_pool_pop(pool)
         ret (none, CompileFailed)
@@ -143,6 +157,12 @@ fn compile(context: Context, source: str, entry: str) -> (Pipeline, err) {
     let state = os.msg2(context.device, os.cocoa_sel("newComputePipelineStateWithFunction:error:\x00"), function, mem.address_of(&pipeline_problem))
     let released_function = os.msg0(function, os.cocoa_sel("release\x00"))
     let released_library = os.msg0(library, os.cocoa_sel("release\x00"))
+    // Read the pipeline error before the pool dies: it is autoreleased (#388).
+    if state == 0usize && pipeline_problem != 0usize {
+        var reported = os.cocoa_read_text(os.msg0(pipeline_problem, os.cocoa_sel("localizedDescription\x00")), problem_text[0usize..512usize])
+        if reported > 512usize { reported = 512usize }
+        problem_length = reported
+    }
     os.objc_pool_pop(pool)
     if state == 0usize { ret (none, CompileFailed) }
     ret (Pipeline { state: state, max_threads: os.msg0(state, os.cocoa_sel("maxTotalThreadsPerThreadgroup\x00")) }, ok)
@@ -164,10 +184,21 @@ fn dispatch(context: Context, pipeline: Pipeline, buffers: []const Buffer, group
 // must stay as they are until then.
 fn dispatch_begin(context: Context, pipeline: Pipeline, buffers: []const Buffer, groups: Size, per_group: Size, shared_bytes: usize) -> (usize, err) {
     if buffers.len > 31usize || groups.width == 0usize || groups.height == 0usize || groups.depth == 0usize { ret (0usize, Failed) }
+    if pipeline.state == 0usize { ret (0usize, Failed) }
     let pool = os.objc_pool_push()
     let command = os.msg0(context.queue, os.cocoa_sel("commandBuffer\x00"))
+    // No encoder means nothing can be encoded, so do not report a successful commit (#389).
+    if command == 0usize {
+        os.objc_pool_pop(pool)
+        ret (0usize, Failed)
+    }
     let kept = os.msg0(command, os.cocoa_sel("retain\x00"))
     let encoder = os.msg0(command, os.cocoa_sel("computeCommandEncoder\x00"))
+    if encoder == 0usize {
+        let dropped = os.msg0(command, os.cocoa_sel("release\x00"))
+        os.objc_pool_pop(pool)
+        ret (0usize, Failed)
+    }
     let pipelined = os.msg1(encoder, os.cocoa_sel("setComputePipelineState:\x00"), pipeline.state)
     var at = 0usize
     while at < buffers.len {

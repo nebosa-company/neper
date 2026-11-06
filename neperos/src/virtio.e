@@ -91,7 +91,7 @@ fn pool_set(base: usize, size: usize) {
 // bump suffices; the pool refuses rather than overrun.
 fn dma_region(bytes: usize) -> (usize, err) {
     let at = (pool_next + PAGE - 1usize) & ~(PAGE - 1usize)
-    if at + bytes > pool_end { ret (0usize, PoolExhausted) }
+    if at > pool_end || bytes > pool_end - at { ret (0usize, PoolExhausted) }
     pool_next = at + bytes
     var i = 0usize
     while i < bytes {
@@ -178,7 +178,8 @@ fn negotiate(device: Device) -> err {
 fn setup_queue(device: Device, selector: u16) -> (Ring, err) {
     os.store16(device.common + QUEUE_SELECT, selector)
     let size = usize(os.load16(device.common + QUEUE_SIZE))
-    if size == 0usize { ret (zero, NoQueue) }
+    // The driver posts up to 64 descriptors: a smaller device queue would be overrun (#208).
+    if size < 64usize { ret (zero, NoQueue) }
     let (desc, desc_error) = dma_region(16usize * size)
     if desc_error != ok { ret (zero, desc_error) }
     let (avail, avail_error) = dma_region(6usize + 2usize * size)
@@ -199,7 +200,7 @@ fn setup_queue(device: Device, selector: u16) -> (Ring, err) {
 fn ring_submit(ring: Ring, nth: u16) {
     os.store16(ring.avail + 4usize + 2usize * usize(nth), 0u16)
     os.barrier()
-    os.store16(ring.avail + 2usize, nth + 1u16)
+    os.store16(ring.avail + 2usize, nth +% 1u16)
     os.barrier()
     os.store16(ring.notify, ring.index)
 }
@@ -209,8 +210,8 @@ fn ring_submit(ring: Ring, nth: u16) {
 // still completes here -- so a missing or mis-routed interrupt degrades to polling, never a hang.
 fn ring_poll(ring: Ring, nth: u16) -> err {
     var spins = 0usize
-    while os.load16(ring.used + 2usize) != nth + 1u16 && spins < 200000000usize { spins += 1usize }
-    if os.load16(ring.used + 2usize) != nth + 1u16 { ret NoData }
+    while os.load16(ring.used + 2usize) != nth +% 1u16 && spins < 200000000usize { spins += 1usize }
+    if os.load16(ring.used + 2usize) != nth +% 1u16 { ret NoData }
     ret ok
 }
 
@@ -366,7 +367,7 @@ fn block_open(device: Device) -> (Block, err) {
     let (status, status_error) = dma_region(1usize)
     if status_error != ok { ret (zero, status_error) }
     // The device's capacity in 512-byte sectors is the first word of its configuration space.
-    ret (Block { ring: ring, header: header, data: data, status: status, sectors: u64(os.load32(device.config)) }, ok)
+    ret (Block { ring: ring, header: header, data: data, status: status, sectors: os.load64(device.config) }, ok)
 }
 
 // One block request: the three-descriptor chain (header the device reads, the sector, the status
@@ -374,6 +375,7 @@ fn block_open(device: Device) -> (Block, err) {
 // notified, and a bounded spin until the used index reaches it. `write` sends `blk.data` to the
 // sector; a read fills `blk.data` from it. The descriptors are reused each call.
 fn block_io(blk: Block, sector: u64, write: bool) -> err {
+    if sector >= blk.sectors { ret BlockStatus }
     if write { os.store32(blk.header, VIRTIO_BLK_T_OUT) } else { os.store32(blk.header, VIRTIO_BLK_T_IN) }
     os.store32(blk.header + 4usize, 0u32)
     os.store64(blk.header + 8usize, sector)
@@ -393,7 +395,7 @@ fn block_io(blk: Block, sector: u64, write: bool) -> err {
     let slot = block_seq % u16(blk.ring.size)
     os.store16(blk.ring.avail + 4usize + 2usize * usize(slot), 0u16)
     os.barrier()
-    block_seq += 1u16
+    block_seq +%= 1u16
     os.store16(blk.ring.avail + 2usize, block_seq)
     os.barrier()
     os.store16(blk.ring.notify, blk.ring.index)
@@ -579,7 +581,7 @@ fn gpu_cmd(ring: Ring, cmd: usize, resp: usize, cmd_len: usize, resp_len: usize)
     let slot = gpu_seq % u16(ring.size)
     os.store16(ring.avail + 4usize + 2usize * usize(slot), 0u16)
     os.barrier()
-    gpu_seq += 1u16
+    gpu_seq +%= 1u16
     os.store16(ring.avail + 2usize, gpu_seq)
     os.barrier()
     os.store16(ring.notify, ring.index)
@@ -767,16 +769,17 @@ fn input_next(input: *Input) -> (u16, u16, u32, bool) {
     if os.load16(input.ring.used + 2usize) == input.seen { ret (0u16, 0u16, 0u32, false) }
     let j = usize(input.seen) % input.ring.size
     let id = usize(os.load32(input.ring.used + 4usize + j * 8usize))
+    if id >= input.count { ret (0u16, 0u16, 0u32, false) }
     let event = input.buffers + id * 8usize
     let etype = os.load16(event)
     let ecode = os.load16(event + 2usize)
     let evalue = os.load32(event + 4usize)
-    input.seen += 1u16
+    input.seen +%= 1u16
     // Give the buffer back to the device (D2206): without it the device ran out after `count` events
     // and dropped the rest, which a long session of taps reached.
     let slot = usize(input.posted) % input.ring.size
     os.store16(input.ring.avail + 4usize + 2usize * slot, u16(id))
-    input.posted += 1u16
+    input.posted +%= 1u16
     os.barrier()
     os.store16(input.ring.avail + 2usize, input.posted)
     os.barrier()
@@ -850,7 +853,7 @@ fn net_send(net: *Net, len: usize) -> err {
     let slot = usize(net.sent) % net.tx.size
     os.store16(net.tx.avail + 4usize + 2usize * slot, 0u16)
     os.barrier()
-    net.sent += 1u16
+    net.sent +%= 1u16
     os.store16(net.tx.avail + 2usize, net.sent)
     os.barrier()
     os.store16(net.tx.notify, net.tx.index)
@@ -866,7 +869,7 @@ fn net_recv(net: *Net) -> (usize, usize, bool) {
     if net.held != NET_RX_BUFFERS {
         let slot = usize(net.posted) % net.rx.size
         os.store16(net.rx.avail + 4usize + 2usize * slot, u16(net.held))
-        net.posted += 1u16
+        net.posted +%= 1u16
         os.barrier()
         os.store16(net.rx.avail + 2usize, net.posted)
         os.barrier()
@@ -877,9 +880,9 @@ fn net_recv(net: *Net) -> (usize, usize, bool) {
     let j = usize(net.seen) % net.rx.size
     let id = usize(os.load32(net.rx.used + 4usize + j * 8usize))
     let total = usize(os.load32(net.rx.used + 8usize + j * 8usize))
-    net.seen += 1u16
+    net.seen +%= 1u16
+    if id >= NET_RX_BUFFERS || total > NET_BUF || total <= NET_HDR { ret (0usize, 0usize, false) }
     net.held = id
-    if total <= NET_HDR { ret (0usize, 0usize, false) }
     ret (net.rx_buf + id * NET_BUF + NET_HDR, total - NET_HDR, true)
 }
 
@@ -910,12 +913,16 @@ fn entropy_fill(e: *Entropy) -> (usize, err) {
     let slot = usize(e.seq) % e.ring.size
     os.store16(e.ring.avail + 4usize + 2usize * slot, 0u16)
     os.barrier()
-    e.seq += 1u16
+    e.seq +%= 1u16
     os.store16(e.ring.avail + 2usize, e.seq)
     os.barrier()
     os.store16(e.ring.notify, e.ring.index)
     var spins = 0usize
     while os.load16(e.ring.used + 2usize) != e.seq && spins < 200000000usize { spins += 1usize }
     if os.load16(e.ring.used + 2usize) != e.seq { ret (0usize, NoData) }
-    ret (usize(os.load32(e.ring.used + 8usize + slot * 8usize)), ok)
+    var got = usize(os.load32(e.ring.used + 8usize + slot * 8usize))
+    if got > e.size { got = e.size }
+    ret (got, ok)
 }
+
+
