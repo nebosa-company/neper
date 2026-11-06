@@ -323,7 +323,8 @@ const SHARED_FRAME_VA: usize = USER_BASE + SHARED_FRAME_OFFSET
 fn map_shared(a: *mem.Arena, ttbr: usize, phys: usize, pages: usize) -> err {
     let l1 = ttbr & TABLE_MASK
     let l2 = usize(os.load64(l1 + L1_USER_INDEX * 8usize)) & TABLE_MASK
-    let bits = user_page_bits()
+    // A surface is data: never executable at EL0 (UXN).
+    let bits = user_page_bits() | USER_EXECUTE_NEVER
     let first_slot = SHARED_FRAME_OFFSET >> 21usize
     var page = 0usize
     while page < pages {
@@ -370,7 +371,8 @@ fn map_stack(a: *mem.Arena, ttbr: usize, pages: usize) -> (usize, usize, err) {
     let (bytes, bytes_error) = mem.alloc[u8](a, pages * PAGE + PAGE)
     if bytes_error != ok { ret (0usize, 0usize, bytes_error) }
     let base = (mem.address_of(&bytes[0usize]) + PAGE - 1usize) & ~(PAGE - 1usize)
-    let bits = user_page_bits()
+    // A thread stack is data: never executable at EL0 (UXN).
+    let bits = user_page_bits() | USER_EXECUTE_NEVER
     var i = 0usize
     while i < pages {
         os.store64(l3 + (found + i) * 8usize, u64((base + i * PAGE) | bits))

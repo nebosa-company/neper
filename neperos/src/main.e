@@ -406,17 +406,19 @@ fn exception(raw: *void) {
             syscall(frame)
             ret
         }
-        if ec == a64.EC_DATA_ABORT_LOWER {
-            // An EL0 thread reached memory it has no right to. The page tables turned the
-            // access into this fault; the kernel ends the thread and the rest run on.
-            console_write("neperos: thread ")
-            console_write(thread.current_name())
-            console_write(" killed, el0 fault at ")
-            hex(frame.far)
-            console_write("\n")
-            let more = thread.finish_current(frame, thread.FAULT_CODE)
-            ret
-        }
+        // Any other synchronous EL0 exception — data or instruction abort, an
+        // undefined instruction, an alignment fault, BRK, an FP trap — ends the
+        // faulting thread, like a data abort: one bad app must not power the
+        // machine off (power_off stays for EL1 faults below).
+        console_write("neperos: thread ")
+        console_write(thread.current_name())
+        console_write(" killed, el0 fault ec ")
+        hex(ec)
+        console_write(" at ")
+        hex(frame.far)
+        console_write("\n")
+        let more = thread.finish_current(frame, thread.FAULT_CODE)
+        ret
     }
     if probe != 0usize && frame.far == u64(probe) && ec == a64.EC_DATA_ABORT_SAME {
         probe_taken = true
@@ -1300,6 +1302,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         thread.grant(last_server_index, 4usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 10usize)
                         thread.grant(last_server_index, 5usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 11usize)
                     }
+                    thread.stamp_endpoint(8usize)
                     net_present = true
                 }
                 last_server_index = thread.MAX_THREADS
@@ -1341,6 +1344,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 next_asid = 10usize
                 let (settings_server, settings_server_error) = start_process(archive_base + archive_offset[6usize], archive_length[6usize], "settings")
                 if settings_server_error != ok { ret settings_server_error }
+                // The settings server is the app number net_server trusts for control operations.
+                thread.set_app(settings_server, 24usize)
                 thread.grant(settings_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 12usize)
                 thread.grant(settings_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 13usize)
                 // The status service's two endpoints (3 requests, 4 replies), shared with the shell.
