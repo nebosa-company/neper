@@ -227,6 +227,51 @@ fn main(a: *mem.Arena) -> err {
         if long_after - long_before < 20000000i64 { os.exit(76i32) }
     }
 
+    // #1569: two distinct descriptors may reuse one token; both readiness events must survive.
+    let (twin_poller, twin_error) = os.poller_open(a)
+    if twin_error != ok { os.exit(80i32) }
+    let (twin_a, twin_a_error) = os.socket_open(.Ip4, .Datagram)
+    if twin_a_error != ok { os.exit(80i32) }
+    let (twin_a_port, twin_a_bind_error) = bind_ephemeral(twin_a)
+    if twin_a_bind_error != ok { os.exit(80i32) }
+    let (twin_b, twin_b_error) = os.socket_open(.Ip4, .Datagram)
+    if twin_b_error != ok { os.exit(80i32) }
+    let (twin_b_port, twin_b_bind_error) = bind_ephemeral(twin_b)
+    if twin_b_bind_error != ok { os.exit(80i32) }
+    if os.poller_register(twin_poller, os.socket_handle(twin_a), READ_TOKEN, readable) != ok { os.exit(81i32) }
+    if os.poller_register(twin_poller, os.socket_handle(twin_b), READ_TOKEN, readable) != ok { os.exit(81i32) }
+    var to_twin_a = loopback()
+    to_twin_a.port = twin_a_port
+    var to_twin_b = loopback()
+    to_twin_b.port = twin_b_port
+    let (twin_sent_a, twin_sent_a_error) = os.socket_send_to(sender, to_twin_a, payload[..])
+    if twin_sent_a_error != ok { os.exit(82i32) }
+    let (twin_sent_b, twin_sent_b_error) = os.socket_send_to(sender, to_twin_b, payload[..])
+    if twin_sent_b_error != ok { os.exit(82i32) }
+    var twin_events: [8]os.PollEvent = zero
+    var twin_ready = 0usize
+    let (twin_began, twin_began_error) = os.clock(.Monotonic)
+    if twin_began_error != ok { os.exit(83i32) }
+    var twin_waiting = true
+    while twin_ready != 2usize && twin_waiting {
+        let (twin_got, twin_got_error) = os.poller_wait(twin_poller, twin_events[..], 2000000000i64)
+        if twin_got_error != ok { os.exit(83i32) }
+        twin_ready = twin_got
+        let (twin_now, twin_now_error) = os.clock(.Monotonic)
+        if twin_now_error != ok || twin_now - twin_began > 1000000000i64 { twin_waiting = false }
+    }
+    if twin_ready != 2usize { os.exit(84i32) }
+    if twin_events[0usize].token != READ_TOKEN || twin_events[1usize].token != READ_TOKEN { os.exit(85i32) }
+    if !twin_events[0usize].readable || !twin_events[1usize].readable { os.exit(86i32) }
+    var twin_sink: [8]u8 = zero
+    let (twin_drained_a, twin_a_source, twin_drained_a_error) = os.socket_receive_from(twin_a, twin_sink[..])
+    if twin_drained_a_error != ok { os.exit(87i32) }
+    let (twin_drained_b, twin_b_source, twin_drained_b_error) = os.socket_receive_from(twin_b, twin_sink[..])
+    if twin_drained_b_error != ok { os.exit(87i32) }
+    if os.poller_unregister(twin_poller, os.socket_handle(twin_a)) != ok { os.exit(88i32) }
+    if os.poller_unregister(twin_poller, os.socket_handle(twin_b)) != ok { os.exit(88i32) }
+    if os.poller_close(twin_poller) != ok { os.exit(89i32) }
+    if os.socket_close(twin_a) != ok || os.socket_close(twin_b) != ok { os.exit(89i32) }
     if os.poller_unregister(poller, os.socket_handle(second)) != ok { os.exit(60i32) }
     if os.poller_close(poller) != ok { os.exit(61i32) }
     if os.socket_close(sender) != ok { os.exit(62i32) }

@@ -2465,6 +2465,7 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
         ret (0usize, from_errno(ready))
     }
     var produced = 0usize
+    var idents: [64]u64 = zero
     var at = 0usize
     while at < usize(ready) {
         if raw[at].filter == EVFILT_USER {
@@ -2472,13 +2473,26 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
             continue
         }
         let token = usize(raw[at].udata)
+        // Coalesce the read and write filters of one descriptor, not equal tokens of
+        // different descriptors (#1569).
         var slot = produced
-        if produced != 0usize && events[produced - 1usize].token == token { slot = produced - 1usize } else {
+        var found = false
+        var k = 0usize
+        while k < produced {
+            if idents[k] == raw[at].ident {
+                slot = k
+                found = true
+                break
+            }
+            k += 1usize
+        }
+        if !found {
             events[slot].token = token
             events[slot].readable = false
             events[slot].writable = false
             events[slot].closed = false
             events[slot].failed = false
+            idents[slot] = raw[at].ident
             produced += 1usize
         }
         if raw[at].filter == EVFILT_READ { events[slot].readable = true }
