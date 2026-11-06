@@ -54,10 +54,11 @@ fn banned(index: usize) -> str {
     if index == 14usize { ret "os.set_console" }
     if index == 15usize { ret "os.launch" }
     if index == 16usize { ret "os.reap" }
+    if index == 17usize { ret "os.send" }
     ret ""
 }
 
-const BANNED_COUNT: usize = 17usize
+const BANNED_COUNT: usize = 18usize
 
 fn needs_network(index: usize) -> str {
     if index == 0usize { ret "netclient" }
@@ -92,26 +93,69 @@ fn scan(source: str, declared: usize) -> (usize, usize, str) {
     var count = 0usize
     var first_line = 0usize
     var first_message = ""
+    var aliases: [16]str = zero
+    var alias_imports: [16]str = zero
+    var alias_count = 0usize
+    var in_string = false
     var at = 0usize
     while at < source.len {
-        // A comment to the end of the line is not code.
-        if starts_at(source, at, "//") {
+        let b = source[at]
+        if in_string {
+            if b == 92u8 { at += 2usize } else {
+                if b == 34u8 { in_string = false }
+                at += 1usize
+            }
+        } else if b == 34u8 {
+            in_string = true
+            at += 1usize
+        } else if starts_at(source, at, "//") {
             while at < source.len && source[at] != 10u8 { at += 1usize }
         } else {
-            var b = 0usize
-            while b < BANNED_COUNT {
-                if name_at(source, at, banned(b)) {
+            var bi = 0usize
+            while bi < BANNED_COUNT {
+                let word = banned(bi)
+                var hit = name_at(source, at, word)
+                if !hit {
+                    // `use e.os as k` then `k.store64(..)` is the same raw access (#257).
+                    var ai = 0usize
+                    while !hit && ai < alias_count {
+                        let module = alias_imports[ai]
+                        let alias = aliases[ai]
+                        if word.len > module.len && starts_at(word, 0usize, module) && word[module.len] == 46u8 {
+                            let rest = word[module.len + 1usize..word.len]
+                            if alias.len + 1usize + rest.len <= 64usize {
+                                var rebuilt: [64]u8 = zero
+                                var ri = 0usize
+                                while ri < alias.len {
+                                    rebuilt[ri] = alias[ri]
+                                    ri += 1usize
+                                }
+                                rebuilt[ri] = 46u8
+                                ri += 1usize
+                                var rj = 0usize
+                                while rj < rest.len {
+                                    rebuilt[ri + rj] = rest[rj]
+                                    rj += 1usize
+                                }
+                                hit = name_at(source, at, rebuilt[0usize..ri + rj])
+                            }
+                        }
+                        ai += 1usize
+                    }
+                }
+                if hit {
                     count += 1usize
                     if first_line == 0usize {
                         first_line = line_of(source, at)
                         first_message = "raw machine access is not allowed"
                     }
                 }
-                b += 1usize
+                bi += 1usize
             }
-            // `use <module>` lines name the modules the app imports.
-            if name_at(source, at, "use") && at + 4usize < source.len && source[at + 3usize] == 32u8 {
-                let start = at + 4usize
+            // `use <module>` lines name the modules the app imports; any whitespace separates.
+            if name_at(source, at, "use") && at + 4usize < source.len && (source[at + 3usize] == 32u8 || source[at + 3usize] == 9u8) {
+                var start = at + 3usize
+                while start < source.len && (source[start] == 32u8 || source[start] == 9u8) { start += 1usize }
                 var k = 0usize
                 while k < 4usize {
                     let net = needs_network(k)
@@ -132,13 +176,36 @@ fn scan(source: str, declared: usize) -> (usize, usize, str) {
                     }
                     k += 1usize
                 }
+                // `use <module> as <alias>`: keep the binding for the raw-access check.
+                var alias_at = start
+                while alias_at < source.len && source[alias_at] != 10u8 { alias_at += 1usize }
+                var as_at = start
+                var found_as = false
+                while as_at + 3usize < alias_at {
+                    if source[as_at] == 32u8 && name_at(source, as_at + 1usize, "as") && as_at + 4usize < alias_at {
+                        found_as = true
+                        as_at += 4usize
+                        break
+                    }
+                    as_at += 1usize
+                }
+                if found_as && alias_count < aliases.len {
+                    var module_end = start
+                    while module_end < source.len && !(source[module_end] == 32u8 || source[module_end] == 9u8 || source[module_end] == 10u8) { module_end += 1usize }
+                    var alias_end = as_at
+                    while alias_end < source.len && !(source[alias_end] == 32u8 || source[alias_end] == 9u8 || source[alias_end] == 10u8) { alias_end += 1usize }
+                    if module_end > start && alias_end > as_at {
+                        aliases[alias_count] = source[as_at..alias_end]
+                        alias_imports[alias_count] = source[start..module_end]
+                        alias_count += 1usize
+                    }
+                }
             }
             at += 1usize
         }
     }
     ret (count, first_line, first_message)
 }
-
 // ----------------------------------------------------------------------------------------------
 // (C173) The strict scan, for an app a server built from a prompt: the three rules above, plus
 //   4. no loop that never ends -- `while true { ... }` whose body holds no `break` and no `ret`, which would
@@ -362,3 +429,5 @@ fn report(findings: []Finding, count: usize, out: []u8) -> usize {
     }
     ret n
 }
+
+
