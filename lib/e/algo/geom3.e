@@ -539,7 +539,9 @@ fn complete_tetrahedron(a: []const Vec3, b: []const Vec3, vertices: []Vec3, coun
 // than `tolerance` or after `max_iterations`.
 fn epa(a: []const Vec3, b: []const Vec3, simplex: []const Vec3, count: usize, vertices: []Vec3, faces: []u32, edges: []u32, tolerance: f64, max_iterations: usize) -> (Vec3, f64, err) {
     if a.len == 0usize || b.len == 0usize || count == 0usize || count > simplex.len { ret (zero, 0.0f64, Invalid) }
-    if vertices.len < 5usize || faces.len < 12usize { ret (zero, 0.0f64, TooSmall) }
+    // `count` points are copied into `vertices` before the tetrahedron check, so the
+    // caller's buffer must hold all of them as well as the five a tetrahedron needs.
+    if vertices.len < 5usize || faces.len < 12usize || count > vertices.len { ret (zero, 0.0f64, TooSmall) }
     var k = 0usize
     while k < count {
         vertices[k] = simplex[k]
@@ -768,6 +770,53 @@ fn mean_point(points: []const Vec3) -> Vec3 {
     ret scale(sum, 1.0f64 / f64(points.len))
 }
 
+// The dominant eigenvector of a symmetric 4x4 quaternion matrix by power iteration,
+// answering it with its Rayleigh quotient. One start can be orthogonal to the optimal
+// quaternion, so the caller runs two and keeps the larger quotient.
+fn power_quaternion(m: []const f64, seed: [4]f64) -> ([4]f64, f64) {
+    var v: [4]f64 = seed
+    var iteration = 0usize
+    while iteration < 2000usize {
+        var w: [4]f64 = zero
+        var norm = 0.0f64
+        var r = 0usize
+        while r < 4usize {
+            var c = 0usize
+            while c < 4usize {
+                w[r] += m[r * 4usize + c] * v[c]
+                c += 1usize
+            }
+            norm += w[r] * w[r]
+            r += 1usize
+        }
+        norm = math.sqrt[f64](norm)
+        if norm == 0.0f64 { break }
+        var change = 0.0f64
+        r = 0usize
+        while r < 4usize {
+            w[r] = w[r] / norm
+            change += math.abs[f64](w[r] - v[r])
+            v[r] = w[r]
+            r += 1usize
+        }
+        if change < 1.0e-15f64 { break }
+        iteration += 1usize
+    }
+    var quotient = 0.0f64
+    var r = 0usize
+    while r < 4usize {
+        var row = 0.0f64
+        var c = 0usize
+        while c < 4usize {
+            row += m[r * 4usize + c] * v[c]
+            c += 1usize
+        }
+        quotient += v[r] * row
+        r += 1usize
+    }
+    ret (v, quotient)
+}
+
 // The rigid motion `q ~ rotation * p + translation` of least squared error by
 // Horn's quaternion: the largest eigenvector of the 4x4 profile matrix by
 // shifted power iteration. `rotation` receives nine row-major entries.
@@ -831,38 +880,23 @@ fn kabsch(p: []const Vec3, q: []const Vec3, rotation: []f64) -> (Vec3, err) {
         m[i * 5usize] += shift
         i += 1usize
     }
-    var v: [4]f64 = zero
-    v[0usize] = 0.5f64
-    v[1usize] = 0.5f64
-    v[2usize] = 0.5f64
-    v[3usize] = 0.5f64
-    var iteration = 0usize
-    while iteration < 2000usize {
-        var w: [4]f64 = zero
-        var norm = 0.0f64
-        var r = 0usize
-        while r < 4usize {
-            var c = 0usize
-            while c < 4usize {
-                w[r] += m[r * 4usize + c] * v[c]
-                c += 1usize
-            }
-            norm += w[r] * w[r]
-            r += 1usize
-        }
-        norm = math.sqrt[f64](norm)
-        if norm == 0.0f64 { break }
-        var change = 0.0f64
-        r = 0usize
-        while r < 4usize {
-            w[r] = w[r] / norm
-            change += math.abs[f64](w[r] - v[r])
-            v[r] = w[r]
-            r += 1usize
-        }
-        if change < 1.0e-15f64 { break }
-        iteration += 1usize
-    }
+    // The all-positive start is orthogonal to the optimal quaternion for rotations such
+    // as -90 degrees about x (qw+qx+qy+qz == 0), so a second, independent start is run
+    // and the larger Rayleigh quotient wins.
+    var seed_a: [4]f64 = zero
+    seed_a[0usize] = 0.5f64
+    seed_a[1usize] = 0.5f64
+    seed_a[2usize] = 0.5f64
+    seed_a[3usize] = 0.5f64
+    var seed_b: [4]f64 = zero
+    seed_b[0usize] = 0.5f64
+    seed_b[1usize] = 0.5f64
+    seed_b[2usize] = 0.0f64 - 0.5f64
+    seed_b[3usize] = 0.0f64 - 0.5f64
+    let (first, first_quotient) = power_quaternion(m[0usize..], seed_a)
+    let (second, second_quotient) = power_quaternion(m[0usize..], seed_b)
+    var v: [4]f64 = first
+    if second_quotient > first_quotient { v = second }
     let qw = v[0usize]
     let qx = v[1usize]
     let qy = v[2usize]
