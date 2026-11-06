@@ -1021,8 +1021,19 @@ fn text_bytes(code: []const usize, from: usize, to: usize) -> bool {
     ret true
 }
 
+// An instruction offset: at least four hex digits, widened so a function past
+// 0xFFFF does not wrap its label column.
+fn put_offset(c: *Cursor, value: usize) -> err {
+    var digits = 4usize
+    var high = value >> 16usize
+    while high != 0usize {
+        digits += 1usize
+        high = high >> 4usize
+    }
+    ret put_hex(c, value, digits)
+}
 fn text_line(c: *Cursor, from: usize, to: usize) -> err {
-    try put_hex(c, from, 4usize)
+    try put_offset(c, from)
     try puts(c, "  text \"")
     var at = from
     while at < to {
@@ -1126,7 +1137,7 @@ fn data_lines(c: *Cursor, from: usize, to: usize) -> err {
     while at < to {
         var end = at + 16usize
         if end > to { end = to }
-        try put_hex(c, at, 4usize)
+        try put_offset(c, at)
         try puts(c, "  db ")
         var b = at
         while b < end {
@@ -1166,7 +1177,7 @@ fn disassemble(code: []usize, out: []u8) -> (usize, err) {
             continue
         }
         let line_start = c.written
-        let offset_error = put_hex(&c, start, 4usize)
+        let offset_error = put_offset(&c, start)
         if offset_error != ok { ret (0usize, offset_error) }
         let gap_error = puts(&c, "  ")
         if gap_error != ok { ret (0usize, gap_error) }
@@ -1203,7 +1214,7 @@ fn disassemble(code: []usize, out: []u8) -> (usize, err) {
         if !instruction(&c, start) {
             c.written = line_start
             c.at = start
-            let redo_error = put_hex(&c, start, 4usize)
+            let redo_error = put_offset(&c, start)
             if redo_error != ok { ret (0usize, redo_error) }
             let db_error = puts(&c, "  db 0x")
             if db_error != ok { ret (0usize, db_error) }
@@ -1482,3 +1493,4 @@ fn att_memory(c: *Cursor, expression: str) -> err {
     }
     ret put(c, 41u8)
 }
+
