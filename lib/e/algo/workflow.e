@@ -223,6 +223,10 @@ fn parse_duration(v: json.Value) -> (f64, bool) {
     default:
         good = false
     }
+    // A duration beyond ~31,700 years is meaningless and would overflow the i64 millisecond
+    // conversions and `now + delta`: clamp it here, once (#205 item 9).
+    if good && out > 1000000000000000.0f64 { out = 1000000000000000.0f64 }
+    if good && out < 0.0f64 { good = false }
     ret (out, good)
 }
 
@@ -250,9 +254,10 @@ fn truthy(v: json.Value) -> bool {
 
 // --- executor -------------------------------------------------------------------------------------------------------
 
-fn begin(ex: *Executor) {
+fn begin(ex: *Executor) -> err {
     let (c, e) = journal.begin_commit(ex.a, ex.run)
     if e == ok { ex.commit = c }
+    ret e
 }
 
 fn record(ex: *Executor, kind: str, fields: json.Value) -> usize {
@@ -270,7 +275,9 @@ fn flush(ex: *Executor) -> Flow {
     if journal.is_empty(&ex.commit) { ret nothing() }
     let (built, built_error) = journal.build(ex.a, &ex.commit)
     if built_error != ok { ret signal(FATAL, "build-failed") }
-    begin(ex)
+    // A commit that cannot even be begun must stop the run, not carry stale entries forward (#205 item 10).
+    let begin_error = begin(ex)
+    if begin_error != ok { ret signal(FATAL, "build-failed") }
     let (landed, store_error) = journal.store_commit(ex.store, member_text(ex.run, "runId"), built)
     if store_error != ok { ret signal(FATAL, "store-failed") }
     let (ok_value, have_ok) = get(landed, "ok")
@@ -283,6 +290,8 @@ fn flush(ex: *Executor) -> Flow {
     }
     if !good { ret signal(STALE, member_text(landed, "reason")) }
     let (run_value, have_run) = get(landed, "run")
+    // The landed record must carry the run it committed; without it there is nothing to continue from.
+    if !have_run { ret signal(FATAL, "store-failed") }
     ex.run = run_value
     let rebased = journal.rebase(ex.a, &ex.commit, run_seq(run_value))
     ret nothing()
@@ -612,16 +621,10 @@ fn check_approval_evidence(ex: *Executor, step: json.Value, key: str, result: js
 fn resolve_items(ex: *Executor, step: json.Value, scope: json.Value) -> []const json.Value {
     let config = ir.or_falsy(step, "config", json.Value{ Object: zero })
     let (items_value, have_items) = present(config, "items")
-    var source = ""
-    if have_items {
-        let (s, is_text) = ir.string_of(items_value)
-        if is_text {
-            source = s
-        } else {
-            source = scalar_text(items_value)
-        }
-    }
-    let (raw, defined) = ex.hooks.render_value(ex.hooks.ctx, source, context(ex, scope))
+    if !have_items { ret zero }
+    // A literal array or object is iterated element by element; a string is rendered as the
+    // expression it is (#205 item 6). render_deep does both, and never forges a "" list.
+    let (raw, defined) = render_deep(ex, items_value, context(ex, scope))
     if !defined { ret zero }
     let (xs, is_array) = ir.items_of(raw)
     if is_array { ret xs }
@@ -1148,41 +1151,79 @@ fn dispatch_delay(ex: *Executor, step: json.Value, key: str, config: json.Value)
     ret suspend(ir.obj_value(&wait))
 }
 
-// An ISO-8601 instant `YYYY-MM-DDTHH:MM[:SS[.mmm]]Z` (or a date alone) as epoch milliseconds, UTC.
+// Days in `month` of `year` (proleptic Gregorian, leap years included).
+fn days_in_month(year: i64, month: i64) -> i64 {
+    if month == 2i64 {
+        if year % 4i64 == 0i64 && (year % 100i64 != 0i64 || year % 400i64 == 0i64) { ret 29i64 }
+        ret 28i64
+    }
+    if month == 4i64 || month == 6i64 || month == 9i64 || month == 11i64 { ret 30i64 }
+    ret 31i64
+}
+
+// An ISO-8601 instant `YYYY-MM-DD[(T)HH:MM[:SS[.f{1,9}]]][Z|[+-]HH:MM]` (or a date alone) as epoch
+// milliseconds, UTC: every field range is checked (days per month and leap years too), so a malformed
+// time or zone is rejected rather than rolled into the next field (#205 item 8).
 fn parse_instant(s: str) -> (i64, bool) {
     if s.len < 10usize { ret (0i64, false) }
     let (year, ok_year) = digits(s, 0usize, 4usize)
     let (month, ok_month) = digits(s, 5usize, 2usize)
     let (day, ok_day) = digits(s, 8usize, 2usize)
     if !ok_year || !ok_month || !ok_day || s[4] != 45u8 || s[7] != 45u8 { ret (0i64, false) }
-    if month < 1i64 || month > 12i64 || day < 1i64 || day > 31i64 { ret (0i64, false) }
+    if month < 1i64 || month > 12i64 { ret (0i64, false) }
+    if day < 1i64 || day > days_in_month(year, month) { ret (0i64, false) }
     var hour = 0i64
     var minute = 0i64
     var second = 0i64
     var milli = 0i64
+    var offset_minutes = 0i64
     var at = 10usize
-    if s.len > 10usize {
-        if s[10] != 84u8 || s.len < 16usize { ret (0i64, false) }
+    if at < s.len {
+        if s[at] != 84u8 || s.len < 16usize { ret (0i64, false) }
         let (h, ok_h) = digits(s, 11usize, 2usize)
         let (mi, ok_mi) = digits(s, 14usize, 2usize)
         if !ok_h || !ok_mi || s[13] != 58u8 { ret (0i64, false) }
         hour = h
         minute = mi
+        if hour > 23i64 || minute > 59i64 { ret (0i64, false) }
         at = 16usize
         if at < s.len && s[at] == 58u8 {
             let (sec, ok_sec) = digits(s, at + 1usize, 2usize)
-            if !ok_sec { ret (0i64, false) }
+            if !ok_sec || sec > 59i64 { ret (0i64, false) }
             second = sec
             at += 3usize
             if at < s.len && s[at] == 46u8 {
-                let (frac, ok_frac) = digits(s, at + 1usize, 3usize)
-                if !ok_frac { ret (0i64, false) }
-                milli = frac
-                at += 4usize
+                at += 1usize
+                var value = 0i64
+                var count = 0usize
+                while at < s.len && s[at] >= 48u8 && s[at] <= 57u8 {
+                    if count < 3usize { value = value * 10i64 + i64(s[at] - 48u8) }
+                    count += 1usize
+                    at += 1usize
+                }
+                if count == 0usize || count > 9usize { ret (0i64, false) }
+                while count < 3usize {
+                    value = value * 10i64
+                    count += 1usize
+                }
+                milli = value
             }
         }
-        if at < s.len {
-            if !(s[at] == 90u8 && at + 1usize == s.len) { ret (0i64, false) }
+    }
+    // A zone: Z, or a signed HH:MM offset whose local time is `offset` ahead of UTC.
+    if at < s.len {
+        if s[at] == 90u8 {
+            if at + 1usize != s.len { ret (0i64, false) }
+            at = s.len
+        } else {
+            if s[at] != 43u8 && s[at] != 45u8 { ret (0i64, false) }
+            if at + 6usize != s.len || s[at + 3usize] != 58u8 { ret (0i64, false) }
+            let (oh, ok_oh) = digits(s, at + 1usize, 2usize)
+            let (om, ok_om) = digits(s, at + 4usize, 2usize)
+            if !ok_oh || !ok_om || oh > 23i64 || om > 59i64 { ret (0i64, false) }
+            offset_minutes = oh * 60i64 + om
+            if s[at] == 45u8 { offset_minutes = 0i64 - offset_minutes }
+            at = s.len
         }
     }
     // Days from civil (Howard Hinnant's algorithm), proleptic Gregorian.
@@ -1196,7 +1237,8 @@ fn parse_instant(s: str) -> (i64, bool) {
     let doy = (153i64 * mp + 2i64) / 5i64 + day - 1i64
     let doe = yoe * 365i64 + yoe / 4i64 - yoe / 100i64 + doy
     let days = era * 146097i64 + doe - 719468i64
-    ret (((days * 24i64 + hour) * 60i64 + minute) * 60000i64 + second * 1000i64 + milli, true)
+    let local_minutes = (days * 24i64 + hour) * 60i64 + minute - offset_minutes
+    ret (local_minutes * 60000i64 + second * 1000i64 + milli, true)
 }
 
 fn digits(s: str, from: usize, count: usize) -> (i64, bool) {
@@ -1740,6 +1782,8 @@ fn call_handler(ex: *Executor, step: json.Value, key: str, config: json.Value, s
         let (n, bad) = ir_number(retries)
         if !bad { max_attempts = n }
     }
+    // The handler always runs once: `retries: 0` (or a policy of 0) means one attempt, not zero (#205 item 7).
+    if max_attempts < 1i64 { max_attempts = 1i64 }
     let already = i64(journal.failure_count(ex.run, key))
     var last_error = ""
     var have_error = false
@@ -1848,6 +1892,12 @@ fn execute_run(a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, defini
         vars: obj(a), outputs: obj(a), changes: changes, unchecked: unchecked, step_budget: budget, steps_run: 0usize,
     }
     let status = member_text(run, "status")
+    // A run already in a terminal state is finished: answer its stored result instead of running
+    // the definition again and appending a second terminal record (#205 item 11).
+    if str.eq(status, "succeeded") || str.eq(status, "failed") || str.eq(status, "cancelled") {
+        var stored = result_object(&ex, status)
+        ret (ir.obj_value(&stored), ok)
+    }
     var started = true
     // The prologue is inside the same unwinding as the steps: its flush is where a second owner is discovered.
     var prologue = nothing()
