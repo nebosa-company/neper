@@ -28,6 +28,7 @@ use e.gfx.image
 use e.str
 use e.bytes as bytes
 use vaultfs
+use vault
 use e.net.imap as imap
 use e.net.smtp as smtp
 use appkit
@@ -151,6 +152,11 @@ type State = struct {
     // (C158) The program a file was handed over to (Document is 40): the app leaves and exits with 20000 + it, and the
     // shell starts that program; the file's path is in /handover.
     handover: usize,
+    // (C158) The sealed account store: the vault key from the master password (valid only while
+    // `keyed`), and the master-password prompt field (#257 item 10).
+    vault_key: [32]u8,
+    keyed: bool,
+    master: ui.Field,
 }
 
 fn add_mail(s: *State, from: str, subject: str, body: str, folder: usize, unread: bool, ago: usize) -> usize {
@@ -1649,6 +1655,61 @@ fn try_login(a: *mem.Arena, user: str, word: str) -> bool {
     }
     let closed = netclient.close()
     ret accepted
+}
+
+// The sealed account records: name "m<slot>" under /v, one per stored account (#257 item 10).
+fn account_record(a: *mem.Arena, slot: usize) -> str {
+    ret ui.join(a, "m", ui.number(a, slot), "")
+}
+
+// Unlock the vault with the master password: 0 unlocked, 1 wrong password, 2 no vault/other.
+fn unlock_mail_vault(a: *mem.Arena, s: *State) -> usize {
+    var meta: [80]u8 = zero
+    let (count, found) = vaultfs.read("/vmeta", mem.address_of(&meta[0usize]), 80usize)
+    if !found { ret 2usize }
+    let (key, unlock_error) = vault.meta_unlock(meta[0usize..count], ui.field_text(a, &s.master))
+    if unlock_error == vault.WrongPassword { ret 1usize }
+    if unlock_error != ok { ret 2usize }
+    s.vault_key = key
+    s.keyed = true
+    ret 0usize
+}
+
+// The sealed bytes of account `slot` into [addr, addr + cap); count and whether one was there.
+fn load_sealed_account(a: *mem.Arena, s: *State, slot: usize, addr: usize, cap: usize) -> (usize, bool) {
+    if !s.keyed { ret (0usize, false) }
+    var record: [288]u8 = zero
+    let name = account_record(a, slot)
+    let (count, found) = vaultfs.read(ui.join(a, "/v/", name, ""), mem.address_of(&record[0usize]), 288usize)
+    if !found { ret (0usize, false) }
+    var plain: [256]u8 = zero
+    let (n, open_error) = vault.open(s.vault_key, name, record[0usize..count], plain[0usize..])
+    if open_error != ok || n > cap { ret (0usize, false) }
+    var i = 0usize
+    while i < n {
+        os.store8(addr + i, plain[i])
+        i += 1usize
+    }
+    ret (n, true)
+}
+
+// Seal `len` bytes at `addr` as account `slot`; whether the disk took it.
+fn store_sealed_account(a: *mem.Arena, s: *State, slot: usize, addr: usize, len: usize) -> bool {
+    if !s.keyed || len == 0usize || len > 256usize { ret false }
+    var nonce: [16]u8 = zero
+    if !vaultfs.random(mem.address_of(&nonce[0usize]), 2usize) { ret false }
+    var plain: [256]u8 = zero
+    var i = 0usize
+    while i < len {
+        plain[i] = os.load8(addr + i)
+        i += 1usize
+    }
+    var record: [288]u8 = zero
+    let name = account_record(a, slot)
+    let (length, seal_error) = vault.seal(s.vault_key, nonce[0usize..], name, plain[0usize..len], record[0usize..])
+    if seal_error != ok { ret false }
+    let made = vaultfs.mkdir("/v")
+    ret vaultfs.write(ui.join(a, "/v/", name, ""), mem.address_of(&record[0usize]), length)
 }
 
 // (C158) The accounts after the built-in one are kept in /mail_accounts as `user<TAB>password<LF>` lines.
