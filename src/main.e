@@ -2844,6 +2844,12 @@ fn test_project_command(a: *mem.Arena, args: []str, compact: bool, retries: usiz
     var exit_code = 0usize
     if passed != total { exit_code = 1usize }
     if refused { exit_code = 2usize }
+    // A project walk that found no @test function at all is not a green run: say so on
+    // stderr, where it cannot disturb the record stream, so a bare `test` cannot pass as
+    // a suite merely because every module was empty.
+    if total == 0usize && count != 0usize {
+        let (written_warning, warning_error) = os.write(os.stderr(), "warning: no @test functions were found in this project\n")
+    }
     if exit_code == 0usize {
         try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"tests\":")
     } else {
