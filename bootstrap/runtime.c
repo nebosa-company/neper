@@ -565,8 +565,10 @@ void neper_os_readdir(void *result, NpArena *arena, const unsigned char *path, s
         name = np_utf8_arena(arena, item.cFileName, &len);
         if (!name && item.cFileName[0]) continue;   /* not valid UTF-16: skip the entry */
         entries[count].name = (NpStr){name, len};
-        entries[count].kind = (item.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 1 :
-                              (item.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) ? 2 : 0;
+        /* A junction/symlink is a link even though NTFS also sets DIRECTORY on it: test the
+           reparse bit first, matching the POSIX half. */
+        entries[count].kind = (item.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) ? 2 :
+                              (item.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
         ++count;
     } while (FindNextFileW(find, &item));
     if (GetLastError() != ERROR_NO_MORE_FILES) { uint32_t error = np_error(GetLastError()); FindClose(find); arena->off = saved; *(uint32_t *)(out + 16) = error; return; }
@@ -598,6 +600,18 @@ static unsigned char *np_quote(unsigned char *out, NpStr arg) {
     *out++ = '"'; return out;
 }
 
+/* Case-insensitive ASCII suffix test, for the batch-runner extension check. */
+static int np_ends_with_ci(NpStr text, const char *suffix) {
+    size_t n = 0, i;
+    while (suffix[n]) ++n;
+    if (text.len < n) return 0;
+    for (i = 0; i < n; ++i) {
+        int a = text.ptr[text.len - n + i], b = (unsigned char)suffix[i];
+        if (a >= 'A' && a <= 'Z') a += 'a' - 'A';
+        if (a != b) return 0;
+    }
+    return 1;
+}
 void neper_os_spawn(void *result, NpArena *arena, const NpStr *argv, size_t argc, const NpStdio *stdio) {
     unsigned char *out = (unsigned char *)result, *command, *at;
     size_t i, bytes = 1;
@@ -608,7 +622,17 @@ void neper_os_spawn(void *result, NpArena *arena, const NpStr *argv, size_t argc
     (void)arena;
     *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
     if (!argc) { *(uint32_t *)(out + 8) = NP_NOT_FOUND; return; }
-    for (i = 0; i < argc; ++i) bytes += np_quoted_size(argv[i]) + (i != 0);
+    /* cmd.exe re-parses a batch target's arguments and our CreateProcess quoting does
+       not survive that, so a .bat/.cmd target is refused; an embedded NUL is refused
+       because the command line would end there and silently drop the rest. */
+    if (np_ends_with_ci(argv[0], ".bat") || np_ends_with_ci(argv[0], ".cmd")) {
+        *(uint32_t *)(out + 8) = NP_UNSUPPORTED; return;
+    }
+    for (i = 0; i < argc; ++i) {
+        size_t k;
+        for (k = 0; k < argv[i].len; ++k)
+            if (argv[i].ptr[k] == 0) { *(uint32_t *)(out + 8) = NP_INVALID; return; }
+    }    for (i = 0; i < argc; ++i) bytes += np_quoted_size(argv[i]) + (i != 0);
     command = (unsigned char *)HeapAlloc(GetProcessHeap(), 0, bytes);
     if (!command) { *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
     at = command;
@@ -793,13 +817,24 @@ static int np_reserved_grow(NpArena *a, size_t need) {
 
 /* A thread, run inline (D321): the bootstrap compiler need not be fast, only right, and
    its parallel front end is written so that the workers share nothing they write. */
+/* The inline thread has one owner: a second create before the first join, or a join of
+   a handle that is not open, is refused rather than silently aliasing the same body. */
+static int np_thread_open = 0;
+
 void neper_os_thread_create(void *result, void *entry, void *ctx, size_t stack) {
     unsigned char *out = (unsigned char *)result;
     (void)stack;
+    *(uintptr_t *)out = 0;
+    if (np_thread_open) { *(uint32_t *)(out + 8) = NP_UNSUPPORTED; return; }
+    np_thread_open = 1;
     ((void (*)(void *))entry)(ctx);
     *(uintptr_t *)out = 1; *(uint32_t *)(out + 8) = NP_OK;
 }
-uint32_t neper_os_thread_join(uintptr_t raw) { (void)raw; return NP_OK; }
+uint32_t neper_os_thread_join(uintptr_t raw) {
+    if (raw != 1 || !np_thread_open) return NP_UNSUPPORTED;
+    np_thread_open = 0;
+    return NP_OK;
+}
 /* `os.seek` (D324): the new position, or the error. */
 void neper_os_seek(void *result, uintptr_t raw, int64_t off, unsigned char whence) {
     unsigned char *out = (unsigned char *)result; LARGE_INTEGER move, position;
@@ -1188,13 +1223,24 @@ uint32_t neper_os_release(unsigned char *p, size_t n) { return munmap(p, n) == 0
 
 /* A thread, run inline (D321): the bootstrap compiler need not be fast, only right, and
    its parallel front end is written so that the workers share nothing they write. */
+/* The inline thread has one owner: a second create before the first join, or a join of
+   a handle that is not open, is refused rather than silently aliasing the same body. */
+static int np_thread_open = 0;
+
 void neper_os_thread_create(void *result, void *entry, void *ctx, size_t stack) {
     unsigned char *out = (unsigned char *)result;
     (void)stack;
+    *(uintptr_t *)out = 0;
+    if (np_thread_open) { *(uint32_t *)(out + 8) = NP_UNSUPPORTED; return; }
+    np_thread_open = 1;
     ((void (*)(void *))entry)(ctx);
     *(uintptr_t *)out = 1; *(uint32_t *)(out + 8) = NP_OK;
 }
-uint32_t neper_os_thread_join(uintptr_t raw) { (void)raw; return NP_OK; }
+uint32_t neper_os_thread_join(uintptr_t raw) {
+    if (raw != 1 || !np_thread_open) return NP_UNSUPPORTED;
+    np_thread_open = 0;
+    return NP_OK;
+}
 /* `os.seek` (D324): the new position, or the error. */
 void neper_os_seek(void *result, uintptr_t raw, int64_t off, unsigned char whence) {
     unsigned char *out = (unsigned char *)result; off_t position;
@@ -1214,5 +1260,9 @@ void neper_os_clock(void *result, unsigned char clock_kind) {
     *(int64_t *)out = (int64_t)value.tv_sec * INT64_C(1000000000) + value.tv_nsec;
 }
 #endif
+
+
+
+
 
 
