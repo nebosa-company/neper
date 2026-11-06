@@ -2,6 +2,8 @@
 
 use e.mem
 
+error Invalid
+
 type List[T: type] = struct { items: []T, len: usize, arena: *mem.Arena }
 type Iter[T: type] = struct { items: []const T, index: usize }
 
@@ -62,11 +64,10 @@ fn pop[T: type](l: *List[T]) -> (T, bool) {
     ret (l.items[l.len], true)
 }
 
+// An index equal to `len` appends; any index above `len` is `Invalid` (the old code
+// wrote one past the slice).
 fn insert[T: type](l: *List[T], index: usize, v: own T) -> err {
-    if index > l.len {
-        l.items[l.items.len] = v
-        ret ok
-    }
+    if index > l.len { ret Invalid }
     if l.len == l.items.len {
         var next_capacity = 1usize
         if l.items.len != 0usize { next_capacity = l.items.len * 2usize }
@@ -82,8 +83,10 @@ fn insert[T: type](l: *List[T], index: usize, v: own T) -> err {
     ret ok
 }
 
+// An index at or above `len` answers the zero value and changes nothing: a defined
+// result instead of the old one-past-the-slice read.
 fn remove[T: type](l: *List[T], index: usize) -> T {
-    if index >= l.len { ret l.items[l.items.len] }
+    if index >= l.len { ret zero }
     let value = l.items[index]
     var at = index
     while at + 1usize < l.len {

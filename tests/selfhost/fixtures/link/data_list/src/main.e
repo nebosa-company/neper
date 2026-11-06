@@ -41,6 +41,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, empty_pop) = list.pop[i64](&values)
     if values.len != 0usize || empty_pop { ret Failed }
 
+    // #367 boundaries: append at len, reject above len, out-of-range remove is zero.
+    var edge: list.List[i64] = zero
+    let (edge0, edge_error) = list.init[i64](a, 2usize)
+    if edge_error != ok { ret Failed }
+    edge = edge0
+    if list.insert[i64](&edge, 0usize, 7i64) != ok { ret Failed }
+    if list.insert[i64](&edge, 1usize, 8i64) != ok || edge.len != 2usize { ret Failed }
+    if list.insert[i64](&edge, 3usize, 9i64) != list.Invalid || edge.len != 2usize { ret Failed }
+    let out_of_range = list.remove[i64](&edge, 5usize)
+    if out_of_range != 0i64 || edge.len != 2usize { ret Failed }
     try io.print("data list ok\n")
     ret ok
 }
