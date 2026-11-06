@@ -340,6 +340,32 @@ fn floor_f64(x: f64) -> f64 {
     ret t
 }
 
+// The claims Core requires an ID token to carry: a non-empty `sub` and an `iat`.
+// Answers "" when they are present, else the rejection message.
+fn required_claims(claims: json.Value) -> str {
+    let (sub, has_sub) = text_of(claims, "sub")
+    if !has_sub || sub.len == 0usize { ret "missing sub" }
+    let (iat, has_iat) = number_claim(claims, "iat")
+    if !has_iat { ret "missing iat" }
+    ret ""
+}
+
+// The discovery document checked against the issuer the client configured; a document
+// whose issuer differs is invalid with "issuer" missing, so a discovery redirect cannot
+// silently point the client at another provider.
+fn parse_discovery_expected(a: *mem.Arena, document: json.Value, expected_issuer: str) -> Discovery {
+    let d = parse_discovery(a, document)
+    if !d.valid { ret d }
+    if !str.eq(d.config.issuer, expected_issuer) {
+        let (missing, e) = mem.alloc[str](a, 1usize)
+        var none: []const str = zero
+        if e != ok { ret Discovery { valid: false, missing: none, config: zero } }
+        missing[0usize] = "issuer"
+        ret Discovery { valid: false, missing: missing[0..1usize], config: zero }
+    }
+    ret d
+}
+
 // An ID token against what the request expected, in the order of Core 3.1.3.7.
 fn validate_id_token(a: *mem.Arena, id_token: str, ex: Expectations) -> Validation {
     let d = jose.decode_jwt(a, id_token)
@@ -397,10 +423,12 @@ fn validate_id_token(a: *mem.Arena, id_token: str, ex: Expectations) -> Validati
     let (exp, has_exp) = number_claim(claims, "exp")
     if !has_exp { ret rejected("missing exp") }
     if now > exp + skew { ret rejected("token expired") }
+    let required = required_claims(claims)
+    if required.len > 0usize { ret rejected(required) }
     let (nbf, has_nbf) = number_claim(claims, "nbf")
     if has_nbf && now + skew < nbf { ret rejected("token not yet valid") }
     let (iat, has_iat) = number_claim(claims, "iat")
-    if has_iat && iat - skew > now { ret rejected("issued in the future") }
+    if iat - skew > now { ret rejected("issued in the future") }
     // Required: a caller that lost its nonce must not silently lose replay protection.
     if ex.nonce.len == 0usize { ret rejected("nonce-not-configured") }
     if true {

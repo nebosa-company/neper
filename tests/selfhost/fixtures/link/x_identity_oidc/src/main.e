@@ -651,6 +651,21 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // #52.9 direct checks; the Appdor reference does not cover these yet.
+    let (no_sub, ns_error) = json.parse(a, "{\"iat\":1700000000}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if ns_error != ok || !str.eq(oidc.required_claims(no_sub), "missing sub") { os.exit(120i32) }
+    let (empty_sub, es_error) = json.parse(a, "{\"sub\":\"\",\"iat\":1700000000}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if es_error != ok || !str.eq(oidc.required_claims(empty_sub), "missing sub") { os.exit(121i32) }
+    let (no_iat, ni_error) = json.parse(a, "{\"sub\":\"u1\"}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if ni_error != ok || !str.eq(oidc.required_claims(no_iat), "missing iat") { os.exit(122i32) }
+    let (both, both_error) = json.parse(a, "{\"sub\":\"u1\",\"iat\":1700000000}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if both_error != ok || oidc.required_claims(both).len != 0usize { os.exit(123i32) }
+    let (doc, doc_error) = json.parse(a, "{\"issuer\":\"https://evil\",\"authorization_endpoint\":\"https://idp/auth\",\"token_endpoint\":\"https://idp/token\",\"jwks_uri\":\"https://idp/jwks\"}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if doc_error != ok { os.exit(124i32) }
+    let wrong = oidc.parse_discovery_expected(a, doc, "https://idp")
+    if wrong.valid || wrong.missing.len != 1usize || !str.eq(wrong.missing[0usize], "issuer") { os.exit(124i32) }
+    let (same_doc, same_error) = json.parse(a, "{\"issuer\":\"https://idp\",\"authorization_endpoint\":\"https://idp/auth\",\"token_endpoint\":\"https://idp/token\",\"jwks_uri\":\"https://idp/jwks\"}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if same_error != ok || !oidc.parse_discovery_expected(a, same_doc, "https://idp").valid { os.exit(125i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }
