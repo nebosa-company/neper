@@ -308,12 +308,23 @@ fn shortest_lengths(g: Grammar, min_len: []usize) -> err {
 fn shortest_alternative(g: Grammar, rule: usize, min_len: []const usize) -> usize {
     var best = 0usize
     var best_len = UNREACHABLE
+    var best_nt = 0usize
     var k = 0usize
     while k < g.rules[rule].alternatives.len {
-        let n = alternative_len(g, g.rules[rule].alternatives[k], min_len)
-        if n < best_len {
+        let alt = g.rules[rule].alternatives[k]
+        let n = alternative_len(g, alt, min_len)
+        // On a tie prefer the alternative with fewer nonterminals: `A -> A | "x"`
+        // must choose "x" or the expansion re-enters A forever.
+        var nt = 0usize
+        var si = 0usize
+        while si < alt.symbols.len {
+            if !alt.symbols[si].terminal { nt += 1usize }
+            si += 1usize
+        }
+        if n < best_len || (n == best_len && nt < best_nt) {
             best_len = n
             best = k
+            best_nt = nt
         }
         k += 1usize
     }

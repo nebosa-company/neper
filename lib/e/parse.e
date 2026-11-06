@@ -340,7 +340,9 @@ fn pratt_expr(p: *Parser, t: *Ast, min_bp: u8) -> (u32, err) {
         let lbp = 2u8 * p.ops[k].prec
         if lbp < min_bp { break }
         var rbp = lbp + 1u8
-        if p.ops[k].right { rbp = lbp - 1u8 }
+        // A right-associative operator binds its own precedence: subtracting one
+        // underflows at prec 0.
+        if p.ops[k].right { rbp = lbp }
         let op_at = u32(p.pos)
         p.pos += 1usize
         let (rhs, e) = pratt_expr(p, t, rbp)
@@ -368,11 +370,6 @@ fn recursive_descent(tokens: []const Token, text: str, t: *Ast) -> (u32, err) {
 
 fn peek_char(p: *const Parser, c: u8) -> bool {
     ret p.pos < p.tokens.len && is_char(p.text, p.tokens[p.pos], c)
-}
-
-fn rd_binary(p: *Parser, t: *Ast, lhs: u32, rhs: u32) -> (u32, err) {
-    let (node, e) = ast_node(t, NODE_INFIX, lhs, rhs, u32(p.pos - 1usize))
-    ret (node, e)
 }
 
 fn rd_expr(p: *Parser, t: *Ast) -> (u32, err) {

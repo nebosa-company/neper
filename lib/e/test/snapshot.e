@@ -81,8 +81,10 @@ fn normalized(a: *mem.Arena, s: str) -> (str, err) {
 fn body_of(stored: str) -> str {
     if !str.starts_with(stored, "---\n") { ret stored }
     let (at_close, found) = str.find_from(stored, "\n---\n", 3usize)
-    if !found { ret stored }
-    ret stored[at_close + 5usize..]
+    if found { ret stored[at_close + 5usize..] }
+    // An empty body file ends at the closing marker with the newline trimmed away.
+    if str.ends_with(stored, "\n---") { ret "" }
+    ret stored
 }
 
 fn same_text(a: *mem.Arena, x: str, y: str) -> (bool, err) {
@@ -90,7 +92,9 @@ fn same_text(a: *mem.Arena, x: str, y: str) -> (bool, err) {
     if ex != ok { ret (false, ex) }
     let (ny, ey) = normalized(a, y)
     if ey != ok { ret (false, ey) }
-    ret (str.eq(str.trim_end(body_of(nx)), str.trim_end(body_of(ny))), ok)
+    // Only the stored file has a snapshot header: stripping the actual side would eat
+    // real content that starts with "---".
+    ret (str.eq(str.trim_end(body_of(nx)), str.trim_end(ny)), ok)
 }
 
 // The candidate's file text: header, then the body with exactly one trailing newline.

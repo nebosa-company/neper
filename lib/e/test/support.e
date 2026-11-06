@@ -255,7 +255,10 @@ fn mask(src: []const u8, volatile: []const str, out: []u8) -> (usize, err) {
             if starts_with(src[i..end], volatile[v]) && volatile[v].len < keep { keep = volatile[v].len }
             v += 1usize
         }
-        if n + keep + 1usize > out.len { ret (n, io.TooSmall) }
+        // Reserve a newline only when this line has one; a last line without it fits exactly.
+        var reserve = 0usize
+        if end < src.len { reserve = 1usize }
+        if n + keep + reserve > out.len { ret (n, io.TooSmall) }
         mem.copy[u8](out[n..n + keep], src[i..i + keep])
         n += keep
         if end < src.len {
