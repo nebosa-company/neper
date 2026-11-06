@@ -3697,21 +3697,21 @@ fn element_end(text: str, end: usize, name: str, self_closing: bool) -> usize {
     ret text.len
 }
 
-fn sib_push(list: []str, n: *usize, tag: str) {
-    if *n >= list.len {
-        var k = 1usize
-        while k < list.len {
-            list[k - 1usize] = list[k]
-            k += 1usize
-        }
-        *n = list.len - 1usize
+fn sib_push(a: *mem.Arena, list: *[]str, n: *usize, tag: str) -> err {
+    if (*n) >= (*list).len {
+        // `~` may look at any preceding sibling, so the per-depth list grows in the
+        // arena instead of keeping a fixed window.
+        var capacity = (*list).len * 2usize
+        if (*list).len == 0usize { capacity = 8usize }
+        let (bigger, e) = mem.alloc[str](a, capacity)
+        if e != ok { ret e }
+        mem.copy[str](bigger, *list)
+        *list = bigger
     }
-    list[*n] = tag
+    (*list)[*n] = tag
     *n += 1usize
+    ret ok
 }
-
-// One pass over the elements of `text` (the document, or the part a `use` names) from
-// `first`. `root` is the document pass, which opens at `<svg>` and fits it to `dest`.
 fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, root: bool, dest: geometry.Rect, level: usize) -> err {
     var frames: [16]Frame = zero
     frames[0usize] = first
@@ -3723,7 +3723,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
         anc[anc_n] = doc.base_anc[anc_n]
         anc_n += 1usize
     }
-    var sib: [16][256]str = zero
+    var sib: [16][]str = zero
     var sib_n: [16]usize = zero
     var depth = 0usize
     var opened = !root
@@ -3765,7 +3765,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             if body_end > end + 1usize { body_end -= 1usize }
             let (tag, tag_error) = styled(a, doc, raw, anc[0usize..anc_n], sib[depth][0usize..sib_n[depth]])
             if tag_error != ok { ret tag_error }
-            sib_push(sib[depth][0usize..256usize], &sib_n[depth], raw)
+            try sib_push(a, &sib[depth], &sib_n[depth], raw)
             if !doc.has_job {
                 let frame = child_of(tag, frames[depth])
                 try draw_text(a, b, doc, frame, tag, text[end + 1usize..body_end])
@@ -3774,7 +3774,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             continue
         }
         if skipped(name) {
-            sib_push(sib[depth][0usize..256usize], &sib_n[depth], raw)
+            try sib_push(a, &sib[depth], &sib_n[depth], raw)
             if !self_closing {
                 var j = i
                 var found = false
@@ -3843,7 +3843,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
                 try scene.push(b, scene.Command { Transform: fit })
             } else {
                 if depth + 1usize >= MAX_DEPTH { ret TooComplex }
-                sib_push(sib[depth][0usize..256usize], &sib_n[depth], raw)
+                try sib_push(a, &sib[depth], &sib_n[depth], raw)
                 if !self_closing {
                     frames[depth + 1usize] = child_of(tag, frames[depth])
                     depth += 1usize
@@ -3855,7 +3855,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             continue
         }
         if !opened { continue }
-        sib_push(sib[depth][0usize..256usize], &sib_n[depth], raw)
+        try sib_push(a, &sib[depth], &sib_n[depth], raw)
         var frame = child_of(tag, frames[depth])
         // A filter draws the element's whole source through its primitives, before clip, mask and opacity.
         let (filter_text, has_filter) = prop(tag, "filter")
