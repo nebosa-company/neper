@@ -155,6 +155,7 @@ fn declaration_aggregate_kind() -> usize { ret 2usize }
 fn declaration_alias_kind() -> usize { ret 3usize }
 fn declaration_constant_kind() -> usize { ret 4usize }
 fn declaration_error_kind() -> usize { ret 5usize }
+fn declaration_globals_kind() -> usize { ret 6usize }
 // The checksum the header carries (D473): CRC-32C over the file with the field
 // zeroed, as `check_layout` verified it; read raw, for a manifest to record.
 fn artifact_checksum(bytes: []const u8) -> (usize, err) {
@@ -1670,8 +1671,19 @@ fn module_error_count(c: *check.Checker, module_index: usize) -> usize {
     ret count
 }
 
+fn module_global_count(c: *check.Checker, module_index: usize) -> usize {
+    let (first, end) = span_of(c, span_globals(), module_index)
+    var count = 0usize
+    var at = first
+    while at < end {
+        if c.globals[at].module_index == module_index { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
 fn interface_declaration_count(c: *check.Checker, module_index: usize) -> usize {
-    ret source_function_count(c, module_index) + module_aggregate_count(c, module_index) + module_alias_count(c, module_index) + module_constant_count(c, module_index) + module_error_count(c, module_index)
+    ret source_function_count(c, module_index) + module_aggregate_count(c, module_index) + module_alias_count(c, module_index) + module_constant_count(c, module_index) + module_error_count(c, module_index) + module_global_count(c, module_index)
 }
 
 fn module_nir_function_count(builder: *nir.Builder, c: *check.Checker, module_index: usize) -> usize {
@@ -1856,6 +1868,35 @@ fn write_aggregate_interface(c: *check.Checker, g: *graph.Graph, table: *StringT
     ret binary.patch_little_u32(output, length_offset, output.count - payload_start)
 }
 
+fn global_type_hash(c: *check.Checker, g: *graph.Graph, global_index: usize, scratch: *binary.Buffer) -> (usize, err) {
+    if global_index >= c.global_count { ret (0usize, InvalidArtifact) }
+    scratch.count = 0usize
+    let write_error = write_type_canonical(c, g, c.globals[global_index].ty, scratch)
+    if write_error != ok { ret (0usize, write_error) }
+    let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    ret (hash, hash_error)
+}
+
+fn write_global_interface(c: *check.Checker, g: *graph.Graph, table: *StringTable, global_index: usize, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+    let global = c.globals[global_index]
+    let (name_index, name_error) = string_index(table, global.name)
+    if name_error != ok { ret name_error }
+    let (signature, signature_error) = global_type_hash(c, g, global_index, scratch)
+    if signature_error != ok { ret signature_error }
+    let (body, body_error) = signature_only_body_hash(signature, scratch)
+    if body_error != ok { ret body_error }
+    try binary.byte(output, declaration_globals_kind())
+    try binary.zeroes(output, 3usize)
+    let length_offset = output.count
+    try binary.little_u32(output, 0usize)
+    let payload_start = output.count
+    try binary.little_u32(output, name_index)
+    try binary.little_u64(output, signature)
+    try binary.little_u64(output, body)
+    try write_type_indexed(c, g, table, global.ty, output)
+    ret binary.patch_little_u32(output, length_offset, output.count - payload_start)
+}
+
 fn write_alias_interface(c: *check.Checker, g: *graph.Graph, table: *StringTable, alias_index: usize, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     let alias = c.aliases[alias_index]
     let (name_index, name_error) = string_index(table, alias.name)
@@ -1952,6 +1993,12 @@ fn write_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, mo
     at = constant_first
     while at < constant_end {
         if c.constants[at].module_index == module_index { try write_constant_interface(c, g, table, at, scratch, output) }
+        at += 1usize
+    }
+    let (global_first, global_end) = span_of(c, span_globals(), module_index)
+    at = global_first
+    while at < global_end {
+        if c.globals[at].module_index == module_index { try write_global_interface(c, g, table, at, scratch, output) }
         at += 1usize
     }
     let (symbol_first, symbol_end) = span_of(c, span_symbols(), module_index)
@@ -2411,7 +2458,7 @@ fn global_dependency_count(c: *check.Checker, g: *graph.Graph, module_index: usi
     }
     ret count
 }
-fn write_global_dependencies(c: *check.Checker, g: *graph.Graph, table: *StringTable, output: *binary.Buffer, module_index: usize) -> err {
+fn write_global_dependencies(c: *check.Checker, g: *graph.Graph, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer, module_index: usize) -> err {
     var at = 0usize
     while at < c.global_count {
         if foreign_global_referenced(c, g, module_index, at) {
@@ -2729,7 +2776,7 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     }
     try write_aggregate_dependencies(c, g, table, scratch, output, aggregate_marks)
     try write_alias_dependencies(c, g, table, scratch, output, alias_marks)
-    try write_global_dependencies(c, g, table, output, module_index)
+    try write_global_dependencies(c, g, table, scratch, output, module_index)
     at = 0usize
     while at < c.constant_count {
         let (used_by_constant, used_error) = foreign_constant_used_by_module(c, module_index, at)
@@ -4307,7 +4354,7 @@ fn interface_errors_unchecked(bytes: []const u8) -> (InterfaceErrors, err) {
     while declaration_at < declaration_count {
         if cursor > end || 8usize > end - cursor { ret (empty, InvalidArtifact) }
         let kind = usize(bytes[cursor])
-        if kind < declaration_function_kind() || kind > declaration_error_kind() || usize(bytes[cursor + 1usize]) > 255usize || usize(bytes[cursor + 2usize]) != 0usize || usize(bytes[cursor + 3usize]) != 0usize { ret (empty, InvalidArtifact) }
+        if kind < declaration_function_kind() || kind > declaration_globals_kind() || usize(bytes[cursor + 1usize]) > 255usize || usize(bytes[cursor + 2usize]) != 0usize || usize(bytes[cursor + 3usize]) != 0usize { ret (empty, InvalidArtifact) }
         let (length, length_error) = binary.read_u32(bytes, cursor + 4usize)
         if length_error != ok || length < 20usize { ret (empty, InvalidArtifact) }
         let payload = cursor + 8usize
@@ -5037,6 +5084,10 @@ fn interface_payload_end(bytes: []const u8, kind: usize, payload: usize, end: us
         let (after, after_error) = interface_skip(next, end, 4usize)
         ret (after, after_error)
     }
+    if kind == declaration_globals_kind() {
+        let (typed_end, typed_error) = interface_type_end(bytes, next, end, 0usize)
+        ret (typed_end, typed_error)
+    }
     ret (0usize, InvalidArtifact)
 }
 
@@ -5092,7 +5143,9 @@ fn dependency_holds(dependency: Dependency, declaration: Declaration, found_decl
     }
     // A foreign global has no interface declaration yet: conservative for now, the
     // dependent is rebuilt on every warm build rather than wrongly kept.
-    if dependency.kind == dependency_globals_kind() { ret (false, ok) }
+    if dependency.kind == dependency_globals_kind() {
+        ret (declaration.kind == declaration_globals_kind() && declaration.signature_hash == dependency.hash, ok)
+    }
     ret (false, InvalidArtifact)
 }
 
@@ -5477,9 +5530,15 @@ fn declare_interface_symbols(r: *resolve.Resolver, g: *graph.Graph, module_index
         if read_error != ok { ret read_error }
         let (name, name_error) = artifact_string(bytes, declaration.name_index)
         if name_error != ok { ret name_error }
+        if declaration.kind == declaration_globals_kind() {
+            // Added below from the Globals section, which carries the name and record.
+            cursor = next
+            at += 1usize
+            continue
+        }
         var kind: resolve.Kind = .Function
         var space: resolve.Namespace = .Value
-        if declaration.kind < declaration_function_kind() || declaration.kind > declaration_error_kind() { ret InvalidArtifact }
+        if declaration.kind < declaration_function_kind() || declaration.kind > declaration_globals_kind() { ret InvalidArtifact }
         if declaration.kind == declaration_function_kind() && (declaration.flags & 2usize) != 0usize { kind = .Extern }
         if declaration.kind == declaration_aggregate_kind() || declaration.kind == declaration_alias_kind() {
             kind = .Type
