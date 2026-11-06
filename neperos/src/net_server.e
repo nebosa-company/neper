@@ -17,6 +17,11 @@ use netproto
 
 const AUX: usize = 548684165120usize
 const REQ: usize = 2usize
+const APP_SERVICES: usize = 2usize
+const APP_SETTINGS: usize = 24usize
+
+// A stamped request word: the kernel puts the sender app number in the top byte.
+fn recv_arg() -> usize { ret os.recv(REQ, netproto.NO_SLOT) & 72057594037927935usize }
 const REP: usize = 3usize
 const RNG_REQ: usize = 4usize
 const RNG_REP: usize = 5usize
@@ -285,24 +290,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     say("net server up\n")
     var running = true
     while running {
-        let op = os.recv(REQ, netproto.NO_SLOT)
+        let raw_op = os.recv(REQ, netproto.NO_SLOT)
+        let app = raw_op >> 56usize
+        let op = raw_op & 255usize
+        let controls = app == APP_SETTINGS || app == APP_SERVICES
         if op == netproto.OP_QUIT {
-            running = false
+            if controls { running = false }
         } else if op == netproto.OP_RADIO {
-            let flag = os.recv(REQ, netproto.NO_SLOT)
+            let flag = recv_arg()
+            if !controls { reply(netproto.R_BAD) } else {
             let was_hotspot_state = hotspot_state()
             radio_on = flag != 0usize
             if radio_on { say("net server radio on\n") } else { say("net server radio off\n") }
             link_report(bt_up(), was_hotspot_state)
             reply(netproto.R_OK)
+            }
         } else if op == netproto.OP_LINKS {
-            let mask = os.recv(REQ, netproto.NO_SLOT)
+            let mask = recv_arg()
+            if !controls { reply(netproto.R_BAD) } else {
             let was_bt = bt_up()
             let was_state = hotspot_state()
             bt_wanted = (mask & 1usize) != 0usize
             hotspot_wanted = (mask & 2usize) != 0usize
             link_report(was_bt, was_state)
             reply(netproto.R_OK)
+            }
         } else if op == netproto.OP_LINK_STATE {
             reply(netproto.R_OK)
             var state = 0usize
@@ -353,7 +365,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if op == netproto.OP_JOIN {
             let (name_len, name_ok) = netproto.recv_bytes(REQ, host_addr, 255usize)
             let (password_len, password_ok) = netproto.recv_bytes(REQ, chunk_addr, 64usize)
-            if !name_ok || !password_ok {
+            if !controls { reply(netproto.R_BAD) } else if !name_ok || !password_ok {
                 reply(netproto.R_BAD)
                 continue
             }
@@ -381,20 +393,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         } else {
             if op == netproto.OP_SET_DNS {
-                let ip_word = os.recv(REQ, netproto.NO_SLOT)
-                let port_word = os.recv(REQ, netproto.NO_SLOT)
-                s.dns_ip = u32(ip_word)
-                s.dns_port = u16(port_word)
-                if s.leased {
-                    s.st.dns = s.dns_ip
-                    s.st.dns_port = s.dns_port
+                let ip_word = recv_arg()
+                let port_word = recv_arg()
+                if controls {
+                    s.dns_ip = u32(ip_word)
+                    s.dns_port = u16(port_word)
+                    if s.leased {
+                        s.st.dns = s.dns_ip
+                        s.st.dns_port = s.dns_port
+                    }
+                    reply(netproto.R_OK)
+                } else {
+                    reply(netproto.R_BAD)
                 }
-                reply(netproto.R_OK)
             } else {
                 if op == netproto.OP_CONNECT {
                     let (host_len, host_ok) = netproto.recv_bytes(REQ, host_addr, 255usize)
-                    let port_word = os.recv(REQ, netproto.NO_SLOT)
-                    let secure_word = os.recv(REQ, netproto.NO_SLOT)
+                    let port_word = recv_arg()
+                    let secure_word = recv_arg()
                     if !host_ok {
                         reply(netproto.R_BAD)
                     } else {
@@ -418,7 +434,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             if failed { reply(netproto.R_IO) } else { reply(netproto.R_OK) }
                         }
                     } else if op == netproto.OP_POLL {
-                        var want = os.recv(REQ, netproto.NO_SLOT)
+                        var want = recv_arg()
                         if want > 2048usize { want = 2048usize }
                         if !s.connected {
                             reply(netproto.R_NOT_CONNECTED)
@@ -475,7 +491,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         }
                     } else {
                         if op == netproto.OP_RECV {
-                            var want = os.recv(REQ, netproto.NO_SLOT)
+                            var want = recv_arg()
                             if want > 2048usize { want = 2048usize }
                             if !s.connected {
                                 reply(netproto.R_NOT_CONNECTED)

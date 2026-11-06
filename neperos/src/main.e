@@ -1346,6 +1346,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if settings_server_error != ok { ret settings_server_error }
                 // The settings server is the app number net_server trusts for control operations.
                 thread.set_app(settings_server, 24usize)
+                // The network request endpoint is stamped so net_server can see the sender
+                // (#213): without this every request would arrive with app 0.
+                thread.stamp_endpoint(8usize)
                 thread.grant(settings_server, 2usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 12usize)
                 thread.grant(settings_server, 3usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 13usize)
                 // The status service's two endpoints (3 requests, 4 replies), shared with the shell.

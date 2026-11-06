@@ -68,12 +68,12 @@ fn send_bytes(slot: usize, addr: usize, len: usize) {
     while at < len {
         var word = 0usize
         var j = 0usize
-        while j < 8usize && at + j < len {
+        while j < 7usize && at + j < len {
             word = word | (usize(os.load8(addr + at + j)) << usize(8usize * j))
             j += 1usize
         }
         let sent = os.send(slot, word, NO_SLOT)
-        at += 8usize
+        at += 7usize
     }
 }
 
@@ -84,12 +84,12 @@ fn send_text(slot: usize, text: str) {
     while at < text.len {
         var word = 0usize
         var j = 0usize
-        while j < 8usize && at + j < text.len {
+        while j < 7usize && at + j < text.len {
             word = word | (usize(text[at + j]) << usize(8usize * j))
             j += 1usize
         }
         let sent = os.send(slot, word, NO_SLOT)
-        at += 8usize
+        at += 7usize
     }
 }
 
@@ -98,21 +98,21 @@ fn send_text(slot: usize, text: str) {
 // length is above `max`: a server must answer R_BAD rather than block on words a client may
 // never send (the length word is the client's alone to choose).
 fn recv_bytes(slot: usize, dst: usize, max: usize) -> (usize, bool) {
-    let len = os.recv(slot, NO_SLOT)
+    let len = os.recv(slot, NO_SLOT) & 72057594037927935usize
     if len > max { ret (0usize, false) }
     var kept = 0usize
     var at = 0usize
     while at < len {
-        let word = os.recv(slot, NO_SLOT)
+        let word = os.recv(slot, NO_SLOT) & 72057594037927935usize
         var j = 0usize
-        while j < 8usize && at + j < len {
+        while j < 7usize && at + j < len {
             if kept < max {
                 os.store8(dst + kept, u8((word >> usize(8usize * j)) & 255usize))
                 kept += 1usize
             }
             j += 1usize
         }
-        at += 8usize
+        at += 7usize
     }
     ret (kept, true)
 }
