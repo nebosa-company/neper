@@ -3,10 +3,17 @@
 # differing pixel, the row and column ink histograms, and the rows whose ink differs.
 #
 #   scripts/png-diff.ps1 -A tmp/wpt/out/test.png -B tmp/wpt/out/ref.png
+#
+# `-WindowX/-WindowY/-WindowW/-WindowH` restrict the comparison to a window, which is how a single box of a multi-box test
+# (`letter-spacing-200` has four floats) is looked at on its own.
 param(
     [Parameter(Mandatory = $true)][string]$A,
     [Parameter(Mandatory = $true)][string]$B,
-    [int]$MaxRows = 40
+    [int]$MaxRows = 40,
+    [int]$WindowX = 0,
+    [int]$WindowY = 0,
+    [int]$WindowW = 0,
+    [int]$WindowH = 0
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,13 +26,15 @@ if ($ia.Width -ne $ib.Width -or $ia.Height -ne $ib.Height) {
 }
 $w = $ia.Width
 $h = $ia.Height
+if ($WindowW -gt 0) { if ($WindowX + $WindowW -lt $w) { $w = $WindowX + $WindowW } }
+if ($WindowH -gt 0) { if ($WindowY + $WindowH -lt $h) { $h = $WindowY + $WindowH } }
 $first = $null
 $rows = @()
-for ($y = 0; $y -lt $h; $y++) {
+for ($y = $WindowY; $y -lt $h; $y++) {
     $na = 0
     $nb = 0
     $diff = 0
-    for ($x = 0; $x -lt $w; $x++) {
+    for ($x = $WindowX; $x -lt $w; $x++) {
         $pa = $ia.GetPixel($x, $y)
         $pb = $ib.GetPixel($x, $y)
         $wa = ($pa.R -lt 250) -or ($pa.G -lt 250) -or ($pa.B -lt 250)
