@@ -127,7 +127,17 @@ fn ssh_args(a: *mem.Arena, address: str, vars: json.Value, command: str, powersh
         out[n + 1usize] = port
         n += 2usize
     }
+    // `--` ends the options when the destination would otherwise start one: a leading '-'
+    // in the address or user becomes a hostname (which fails to resolve) instead of an ssh
+    // option such as -oProxyCommand. Benign hosts keep their argument list unchanged.
     let user_keys = [3]str{ "ssh_user", "ansible_user", "user" }
+    let (early_user, early_has_user) = host_str(vars, user_keys[0usize..3usize])
+    var needs_dash = address.len > 0usize && address[0usize] == 45u8
+    if early_has_user && early_user.len > 0usize && early_user[0usize] == 45u8 { needs_dash = true }
+    if needs_dash {
+        out[n] = "--"
+        n += 1usize
+    }
     let (user, has_user) = host_str(vars, user_keys[0usize..3usize])
     if has_user {
         out[n] = join(a, join(a, user, "@"), address)

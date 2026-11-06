@@ -748,7 +748,8 @@ fn driver_script(host: &ResolvedHost, command: &str, shell: Shell) -> String {
 if (-not $pw) {{ throw \"{WINRM_PASSWORD_ENV} is not set, but host var 'winrm_user' names a user to \
 authenticate as — set the variable, or remove the user to use the caller's own identity\" }}\n\
 $cred = New-Object System.Management.Automation.PSCredential(\
-'{user}', (ConvertTo-SecureString $pw -AsPlainText -Force))\n"
+'{}', (ConvertTo-SecureString $pw -AsPlainText -Force))\n",
+            ps_quote(&user)
         ));
         opts.push_str(" -Credential $cred");
     }
@@ -769,11 +770,17 @@ $cred = New-Object System.Management.Automation.PSCredential(\
 Invoke-Command -ComputerName '{}' -Port {}{} -ScriptBlock {{\n  \
 powershell -NoProfile -NonInteractive -EncodedCommand $using:enc\n}}\n",
         encode_command(&payload),
-        host.address,
+        ps_quote(&host.address),
         port,
         opts
     ));
     s
+}
+
+// PowerShell single-quoted literals escape a quote by doubling it; the same
+// rule the Neper implementation applies before interpolating a host value.
+fn ps_quote(s: &str) -> String {
+    s.replace('\'', "''")
 }
 
 pub fn encode_command(script: &str) -> String {

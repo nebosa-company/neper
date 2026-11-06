@@ -28,6 +28,47 @@ fn http_port() -> str { ret "5985" }
 
 fn password_env() -> str { ret "PETCOW_WINRM_PASSWORD" }
 
+// A single-quoted PowerShell literal: every internal `'` is doubled.
+fn ps_quote(a: *mem.Arena, s: str) -> str {
+    var out = ""
+    var i = 0usize
+    while i < s.len {
+        if s[i] == 39u8 { out = join(a, out, "''") } else { out = join(a, out, s[i..i + 1usize]) }
+        i += 1usize
+    }
+    ret out
+}
+
+// ASCII case-insensitive equality, for PowerShell's case-insensitive -Authentication names.
+fn eq_ci(x: str, y: str) -> bool {
+    if x.len != y.len { ret false }
+    var i = 0usize
+    while i < x.len {
+        var a = x[i]
+        var b = y[i]
+        if a >= 65u8 && a <= 90u8 { a += 32u8 }
+        if b >= 65u8 && b <= 90u8 { b += 32u8 }
+        if a != b { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Only the authentication kinds `Invoke-Command -Authentication` accepts.
+fn auth_ok(s: str) -> bool {
+    ret eq_ci(s, "Default") || eq_ci(s, "Basic") || eq_ci(s, "Negotiate") || eq_ci(s, "Kerberos") || eq_ci(s, "Credssp") || eq_ci(s, "Certificate") || eq_ci(s, "Digest")
+}
+
+fn digits_only(s: str) -> bool {
+    if s.len == 0usize { ret false }
+    var i = 0usize
+    while i < s.len {
+        if s[i] < 48u8 || s[i] > 57u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
 // `-EncodedCommand`'s encoding: the script as UTF-16LE, then standard padded base64.
 fn encode_command(a: *mem.Arena, script: str) -> str {
     let (units, e) = mem.alloc[u8](a, script.len * 2usize + 4usize)
@@ -50,7 +91,7 @@ fn driver_script(a: *mem.Arena, address: str, vars: json.Value, command: str) ->
     if allow_http { port = http_port() }
     let port_keys = [3]str{ "winrm_port", "ansible_port", "port" }
     let (named_port, has_port) = sargs.host_str(vars, port_keys[0usize..3usize])
-    if has_port { port = named_port }
+    if has_port && digits_only(named_port) { port = named_port }
 
     var script = "$ErrorActionPreference = 'Stop'\n"
     var opts = ""
@@ -77,17 +118,26 @@ fn driver_script(a: *mem.Arena, address: str, vars: json.Value, command: str) ->
         let env = password_env()
         script = join(a, script, join(a, join(a, "$pw = $env:", env), "\n"))
         script = join(a, script, join(a, join(a, "if (-not $pw) { throw \"", env), " is not set, but host var 'winrm_user' names a user to authenticate as — set the variable, or remove the user to use the caller's own identity\" }\n"))
-        script = join(a, script, join(a, join(a, "$cred = New-Object System.Management.Automation.PSCredential('", user), "', (ConvertTo-SecureString $pw -AsPlainText -Force))\n"))
+        script = join(a, script, join(a, join(a, "$cred = New-Object System.Management.Automation.PSCredential('", ps_quote(a, user)), "', (ConvertTo-SecureString $pw -AsPlainText -Force))\n"))
         opts = join(a, opts, " -Credential $cred")
     }
 
     let auth_keys = [2]str{ "winrm_auth", "winrm_authentication" }
     let (auth, has_auth) = sargs.host_str(vars, auth_keys[0usize..2usize])
-    if has_auth { opts = join(a, join(a, opts, " -Authentication "), auth) }
+    if has_auth && auth_ok(auth) { opts = join(a, join(a, opts, " -Authentication "), auth) }
     if !allow_http { opts = join(a, opts, " -UseSSL") }
 
-    script = join(a, script, join(a, join(a, "$enc = '", encode_command(a, command)), "'\n"))
-    script = join(a, script, join(a, "Invoke-Command -ComputerName '", address))
+    let encoded = encode_command(a, command)
+    // An empty command legitimately encodes to no bytes (the reference emits
+    // `$enc = ''` for it); only a failed encode of a real command must fail the
+    // run instead of silently succeeding with an empty script.
+    if encoded.len == 0usize && command.len != 0usize {
+        script = join(a, script, "throw 'command encoding failed'\n")
+        script = join(a, script, "$enc = ''\n")
+    } else {
+        script = join(a, script, join(a, join(a, "$enc = '", encoded), "'\n"))
+    }
+    script = join(a, script, join(a, "Invoke-Command -ComputerName '", ps_quote(a, address)))
     script = join(a, script, join(a, "' -Port ", port))
     script = join(a, script, opts)
     script = join(a, script, " -ScriptBlock {\n  powershell -NoProfile -NonInteractive -EncodedCommand $using:enc\n}\n")

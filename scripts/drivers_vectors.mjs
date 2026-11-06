@@ -3,9 +3,10 @@
 // behind thin shims for the SDK builders, see the Rust source beside this script's fixture notes in D2922) over random
 // inputs, written as the link fixture tests/selfhost/fixtures/link/x_cloud_drivers.
 // Usage: node scripts/drivers_vectors.mjs REFERENCE_EXE   (default D:/temp/l048ref/target/debug/l048ref.exe)
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, openSync, closeSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -238,7 +239,23 @@ add({ op: 'lsList', kind: 'instance', pages: [{ instances: [{ name: 'petcow-a', 
 add({ op: 'lsList', kind: 'domain', pages: [{ domains: [{ name: 'example.com', domainEntries: [] }], nextPageToken: 'ignored' }], mode: 'all' });
 
 const exe = process.argv[2] || 'D:/temp/l048ref/target/debug/l048ref.exe';
-const answers = JSON.parse(execFileSync(exe, [], { input: JSON.stringify(cases), maxBuffer: 1 << 28 }).toString());
+// The reference reads its cases on stdin and answers on stdout. Route both
+// through temp files rather than pipes: confined harnesses refuse to open named
+// pipes for child stdio, and the answers are the only thing read back.
+const answersDir = mkdtempSync(join(os.tmpdir(), 'l048ref-'));
+const casesPath = join(answersDir, 'cases.json');
+const answersPath = join(answersDir, 'answers.json');
+writeFileSync(casesPath, JSON.stringify(cases));
+const casesFd = openSync(casesPath, 'r');
+const answersFd = openSync(answersPath, 'w');
+const run = spawnSync(exe, [], { stdio: [casesFd, answersFd, 'ignore'] });
+closeSync(casesFd);
+closeSync(answersFd);
+if (run.error || run.status !== 0) {
+  throw new Error(`reference failed: ${run.error || 'exit ' + run.status}`);
+}
+const answers = JSON.parse(readFileSync(answersPath, 'utf8'));
+rmSync(answersDir, { recursive: true, force: true });
 const bs = String.fromCharCode(92);
 const lines = cases.map((c, i) => JSON.stringify({ ...c, e: answers[i] }));
 const chunks = [];
