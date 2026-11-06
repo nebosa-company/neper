@@ -8,6 +8,10 @@ use nir
 error Capacity
 error InvalidObject
 
+// The self-test's relocation overflow case (#23): 65,536 unresolved calls, one past
+// the 16-bit `NumberOfRelocations` field. Module scope so the self-test's stack stays small.
+var big_relocations: [65536]codegen_x64.Relocation = zero
+
 type Symbol = struct {
     name: str,
     module: str,
@@ -247,5 +251,15 @@ fn self_test() -> err {
     try write(&builder, &machine, offsets[..], relocations[..], 1usize, symbols[..], &object)
     if object.count != 129usize || object.bytes[8usize] != 75u8 || object.bytes[12usize] != 2u8 || object.bytes[36usize] != 5u8 || object.bytes[44usize] != 65u8 || object.bytes[52usize] != 1u8 { ret InvalidObject }
     if object.bytes[65usize] != 1u8 || object.bytes[69usize] != 1u8 || object.bytes[73usize] != 4u8 || object.bytes[97usize] != 4u8 || object.bytes[111usize] != 18u8 || object.bytes[115usize] != 101u8 { ret InvalidObject }
+    // #23: a relocation run past 65535 must be refused by the writer, not truncated to
+    // 16 bits (`unresolved_count > 65535` -> Capacity).
+    var many_at = 0usize
+    while many_at < big_relocations.len {
+        big_relocations[many_at] = external_relocation
+        many_at += 1usize
+    }
+    try emit_x64.init(&object, object_storage[..])
+    let overflow = write(&builder, &machine, offsets[..], big_relocations[..], big_relocations.len, symbols[..], &object)
+    if overflow != Capacity { ret InvalidObject }
     ret ok
 }
