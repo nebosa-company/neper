@@ -410,8 +410,9 @@ fn send_packet(s: *Session, payload: []const u8) {
     }
     i = 0usize
     while i < pad {
-        // The padding is random bytes; the spare entropy is plenty and cheap.
-        s.outbuf[at + 5usize + payload.len + i] = s.rng[(i + usize(s.seq_out)) % 64usize] ^ u8((i * 37usize) % 256usize)
+        // Padding has its own stream, never the first 32 bytes: those are the X25519 secret and
+        // this padding goes out in clear before encryption starts.
+        s.outbuf[at + 5usize + payload.len + i] = s.rng[32usize + ((i * 7usize + usize(s.seq_out)) % 32usize)] ^ u8((i * 37usize) % 256usize)
         i += 1usize
     }
     if s.encrypted_out && s.cipher_out != CIPHER_CHACHA {
@@ -505,7 +506,7 @@ fn send_kexinit(s: *Session) {
         w_byte(&w, s.rng[32usize + i])
         i += 1usize
     }
-    name_list(&w, "curve25519-sha256,curve25519-sha256@libssh.org")
+    name_list(&w, "curve25519-sha256,curve25519-sha256@libssh.org,ext-info-c,kex-strict-c-v00@openssh.com")
     name_list(&w, "ssh-ed25519")
     name_list(&w, "chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com")
     name_list(&w, "chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com")
@@ -891,6 +892,10 @@ fn start_auth(s: *Session) {
 }
 
 fn send_userauth(s: *Session) {
+    if !s.encrypted_out {
+        fail(s, FAIL_PROTOCOL)
+        ret
+    }
     defer {
         var password_at = 0usize
         while password_at < s.password.len {
@@ -1128,10 +1133,22 @@ fn dispatch(s: *Session, payload: []const u8) {
         ret
     }
     if kind == 31u8 {
+        // The reply is expected only while the exchange is open; a plaintext KEX_REPLY
+        // later in the session is a protocol error.
+        if s.encrypted_out && !s.rekeying {
+            fail(s, FAIL_PROTOCOL)
+            ret
+        }
         handle_kex_reply(s, payload)
         ret
     }
     if kind == 21u8 {
+        // NEWKEYS is valid only after our own NEWKEYS was sent and the keys installed;
+        // otherwise a plaintext injection would switch the receiver to zero keys.
+        if !s.encrypted_out {
+            fail(s, FAIL_PROTOCOL)
+            ret
+        }
         apply_in_keys(s)
         if s.rekeying {
             // The exchange is done: what was held goes out.
@@ -1153,7 +1170,12 @@ fn dispatch(s: *Session, payload: []const u8) {
         ret
     }
     if kind == 6u8 {
-        // Service accepted: authenticate.
+        // Service accepted: authenticate, but only once the transport is encrypted and a
+        // host key was accepted. A plaintext forged SERVICE_ACCEPT must not yield the password.
+        if s.status != AUTH || !s.encrypted_out {
+            fail(s, FAIL_PROTOCOL)
+            ret
+        }
         send_userauth(s)
         ret
     }
@@ -1175,6 +1197,11 @@ fn dispatch(s: *Session, payload: []const u8) {
         ret
     }
     if kind == 52u8 {
+        // Authentication success only makes sense while authenticating, over the encrypted transport.
+        if s.status != AUTH || !s.encrypted_out {
+            fail(s, FAIL_PROTOCOL)
+            ret
+        }
         open_channel(s)
         ret
     }
@@ -1186,6 +1213,10 @@ fn dispatch(s: *Session, payload: []const u8) {
         ret
     }
     if kind == 91u8 {
+        if s.status != CHANNEL {
+            fail(s, FAIL_PROTOCOL)
+            ret
+        }
         var r = Reader { buf: payload, pos: 1usize, bad: false }
         let local = r_u32(&r)
         let remote = r_u32(&r)
@@ -1229,11 +1260,20 @@ fn dispatch(s: *Session, payload: []const u8) {
         ret
     }
     if kind == 93u8 {
+        if s.status != CHANNEL && s.status != READY {
+            fail(s, FAIL_PROTOCOL)
+            ret
+        }
         var r = Reader { buf: payload, pos: 1usize, bad: false }
         let local = r_u32(&r)
         let add = r_u32(&r)
         if r.bad {
             fail(s, FAIL_PROTOCOL)
+            ret
+        }
+        // RFC 4254 5.2: the window is u32 and must not wrap.
+        if add > 4294967295u32 - s.window_out {
+            fail(s, FAIL_CHANNEL)
             ret
         }
         s.window_out += add
