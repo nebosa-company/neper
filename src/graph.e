@@ -1100,15 +1100,21 @@ fn front_modules(a: *mem.Arena, g: *Graph, modules: []const usize) -> err {
         worker_at += 1usize
     }
     worker_entry(&workers[0usize])
+    // Join every started worker and run the unstarted fallbacks before returning: a
+    // first join error must not abandon the rest of the wave into arenas the caller
+    // is about to reuse. The first error is returned after the loop.
+    var join_error = ok
     worker_at = 1usize
     while worker_at < worker_count {
         if started[worker_at] {
-            try os.thread_join(threads[worker_at])
+            let joined = os.thread_join(threads[worker_at])
+            if joined != ok && join_error == ok { join_error = joined }
         } else {
             worker_entry(&workers[worker_at])
         }
         worker_at += 1usize
     }
+    if join_error != ok { ret join_error }
     // (D1666) The module reservations count as the workers' memory (D339), exactly.
     worker_at = 0usize
     while worker_at < worker_count {
