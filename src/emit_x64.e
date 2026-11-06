@@ -148,8 +148,11 @@ fn relative_address(buffer: *Buffer, destination: usize) -> (usize, err) {
 }
 
 fn add_immediate(buffer: *Buffer, destination: usize, value: usize) -> err {
-    // The imm32 of `add` is sign-extended to 64 bits: only 2^31-1 and below are safe.
-    if value > 2147483647usize { ret InvalidByte }
+    // The imm32 is sign-extended to 64 bits, and the callers pass the 32-bit pattern
+    // they mean (4294967265 is -31): a 64-bit constant reaches the buffer through
+    // mov_immediate instead, so refusing above 2^31 broke the float-conversion
+    // patterns that legitimately use the high half.
+    if value > 4294967295usize { ret InvalidByte }
     try rex(buffer, 0usize, destination)
     try byte(buffer, 129usize)
     try modrm(buffer, 0usize, destination)
@@ -295,8 +298,8 @@ fn multiply_register(buffer: *Buffer, destination: usize, source: usize) -> err 
 }
 
 fn multiply_immediate(buffer: *Buffer, destination: usize, source: usize, value: usize) -> err {
-    // `imul r64, r/m64, imm32` also sign-extends its immediate.
-    if value > 2147483647usize { ret InvalidByte }
+    // Sign-extended imm32, like add_immediate: callers pass the 32-bit pattern.
+    if value > 4294967295usize { ret InvalidByte }
     try rex(buffer, destination, source)
     try byte(buffer, 105usize)
     try modrm(buffer, destination, source)
@@ -652,9 +655,12 @@ fn function_prologue(buffer: *Buffer, stack_slots: usize) -> err {
     try byte(buffer, 85usize)
     try mov_register(buffer, 5usize, 4usize)
     let bytes = frame_size(stack_slots)
-    // The per-page probe is unrolled, three bytes per 1 KiB of frame: a frame past
-    // 1 MiB would spend the whole code buffer on probes, so it is refused here.
-    if bytes > 1048576usize { ret InvalidByte }
+    // The per-page probe is unrolled, three bytes per 1 KiB of frame. The cap keeps a
+    // runaway frame from spending the whole code buffer on probes; 16 MiB covers the
+    // largest stack frames the language produces (TLS servers hold their buffers in
+    // one), and a counted-loop probe would lift it (ponytail: unrolled, loop if larger
+    // frames ever matter).
+    if bytes > 16777216usize { ret InvalidByte }
     var remaining = bytes
     while remaining > 4096usize {
         try byte(buffer, 72usize)
