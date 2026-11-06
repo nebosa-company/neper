@@ -239,6 +239,9 @@ fn cast(f: *Field, m: tilemap.Map, x: i32, y: i32, radius: u32) -> err {
 // Whether one cell can see another, by the same rule the fog uses: a sightline is blocked
 // by an opaque cell between the two, and neither endpoint blocks itself.
 fn line_of_sight(m: tilemap.Map, x0: i32, y0: i32, x1: i32, y1: i32) -> bool {
+    // Visibility is symmetric: walk the pair in one canonical order so the Bresenham
+    // tie-break chooses the same crossed cells whichever endpoint asks.
+    if x0 > x1 || (x0 == x1 && y0 > y1) { ret line_of_sight(m, x1, y1, x0, y0) }
     var dx = x1 - x0
     var dy = y1 - y0
     var step_x = 1i32
@@ -306,3 +309,4 @@ fn visible_count(f: Field) -> usize {
     }
     ret total
 }
+

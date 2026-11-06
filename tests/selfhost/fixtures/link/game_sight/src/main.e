@@ -175,6 +175,10 @@ fn main() -> i64 {
     if !vision.line_of_sight(map, 3i32, 3i32, 1i32, 3i32) { ret 62i64 }
     if !vision.line_of_sight(map, 3i32, 3i32, 3i32, 2i32) { ret 63i64 }
     if !vision.line_of_sight(map, 3i32, 3i32, 3i32, 3i32) { ret 64i64 }
+    // 793: the same endpoint pair must answer the same both ways, including the
+    // half-step tie where (1,0) is the equally-close cell.
+    if tilemap.set_opaque(&map, 1i32, 0i32, true) != ok { ret 65i64 }
+    if vision.line_of_sight(map, 0i32, 0i32, 2i32, 1i32) != vision.line_of_sight(map, 2i32, 1i32, 0i32, 0i32) { ret 65i64 }
 
     // #395: a ray is not a miss just because it crosses a lot of open cells. A 5000-cell
     // strip, tiles of one unit, with a wall at 4500: the ray passes 4500 open cells before
