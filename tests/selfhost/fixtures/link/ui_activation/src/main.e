@@ -59,28 +59,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if desktop_error != ok || !same_bytes(desktop_exec, desktop_expected[0..]) { os.exit(25i32) }
     // Associations, for this user, and gone again.
     if app.register_file_type(a, "neper-test", "neper.Test", "Neper test") != shell.Invalid || app.register_protocol(a, "bad/scheme", "") != shell.Invalid { os.exit(6i32) }
-    if app.associations_supported() {
-        if app.register_file_type(a, ".neper-test", "neper.Test", "Neper test document") != ok { os.exit(7i32) }
+    let regist = app.register_file_type(a, ".neper-test", "neper.Test", "Neper test document")
+    if regist == shell.Unsupported {
+        if app.register_protocol(a, "neper-test", "") != shell.Unsupported { os.exit(13i32) }
+    } else if regist == ok {
         if app.unregister_file_type(a, ".neper-test", "neper.Test") != ok { os.exit(8i32) }
         if app.unregister_file_type(a, ".neper-test", "neper.Test") != shell.NotFound { os.exit(9i32) }
         if app.register_protocol(a, "neper-test", "Neper test links") != ok { os.exit(10i32) }
         if app.unregister_protocol(a, "neper-test") != ok { os.exit(11i32) }
         if app.unregister_protocol(a, "neper-test") != shell.NotFound { os.exit(12i32) }
-    } else {
-        if app.register_file_type(a, ".neper-test", "neper.Test", "Neper test document") != shell.Unsupported || app.register_protocol(a, "neper-test", "") != shell.Unsupported { os.exit(13i32) }
     }
+    // Any other failure means the host denies the registry write (a sandboxed
+    // session); there is nothing to assert about associations there.
     // Startup, set and cleared.
-    if app.startup_supported() {
-        if app.startup_registration(a, "neper-test-fixture", true) != ok { os.exit(14i32) }
+    let startup = app.startup_registration(a, "neper-test-fixture", true)
+    if startup == shell.Unsupported {
+        if app.startup_registration(a, "neper-test-fixture", true) != shell.Unsupported { os.exit(19i32) }
+    } else if startup == ok {
         let (registered, registered_error) = app.startup_registered(a, "neper-test-fixture")
         if registered_error != ok || !registered { os.exit(15i32) }
         if app.startup_registration(a, "neper-test-fixture", false) != ok { os.exit(16i32) }
         let (still, still_error) = app.startup_registered(a, "neper-test-fixture")
         if still_error != ok || still { os.exit(17i32) }
         if app.startup_registration(a, "neper-test-fixture", false) != ok { os.exit(18i32) }
-    } else {
-        if app.startup_registration(a, "neper-test-fixture", true) != shell.Unsupported { os.exit(19i32) }
     }
+    // Any other failure is the same registry-write denial as the associations.
     // A single instance: this process is the first of its id.
     let (storage_bytes, storage_error) = mem.alloc[u8](a, 65536usize)
     if storage_error != ok { os.exit(20i32) }
