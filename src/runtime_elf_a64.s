@@ -1975,6 +1975,89 @@ neper_os_spawn:
     mov x8, #24
     svc #0
 .Lspawn_exec:
+    // A bare argv[0] is looked up through the child's PATH, entry by entry, then
+    // execve'd; a name with '/' and a missing PATH fall back to the bare name (#30).
+    ldr x0, [x25]
+    mov x9, #0
+.Lspawn_name_scan:
+    ldrb w10, [x0, x9]
+    cbz w10, .Lspawn_name_bare
+    cmp w10, #47
+    b.eq .Lspawn_try_exec
+    add x9, x9, #1
+    b .Lspawn_name_scan
+.Lspawn_name_bare:
+    cbz x22, .Lspawn_try_exec
+    mov x26, #0
+.Lspawn_pathenv_scan:
+    ldr x27, [x22, x26, lsl #3]
+    cbz x27, .Lspawn_try_exec
+    ldrb w10, [x27]
+    cmp w10, #80
+    b.ne .Lspawn_pathenv_next
+    ldrb w10, [x27, #1]
+    cmp w10, #65
+    b.ne .Lspawn_pathenv_next
+    ldrb w10, [x27, #2]
+    cmp w10, #84
+    b.ne .Lspawn_pathenv_next
+    ldrb w10, [x27, #3]
+    cmp w10, #72
+    b.ne .Lspawn_pathenv_next
+    ldrb w10, [x27, #4]
+    cmp w10, #61
+    b.eq .Lspawn_path_found
+.Lspawn_pathenv_next:
+    add x26, x26, #1
+    b .Lspawn_pathenv_scan
+.Lspawn_path_found:
+    add x27, x27, #5
+    mov x0, x20
+    mov x1, #4096
+    mov x2, #8
+    bl np_alloc
+    cbz x0, .Lspawn_try_exec
+    mov x21, x0
+.Lspawn_path_entry:
+    mov x28, x21
+.Lspawn_copy_entry:
+    ldrb w10, [x27]
+    cbz w10, .Lspawn_entry_build
+    cmp w10, #58
+    b.eq .Lspawn_entry_skip
+    strb w10, [x28]
+    add x28, x28, #1
+    add x27, x27, #1
+    b .Lspawn_copy_entry
+.Lspawn_entry_skip:
+    add x27, x27, #1
+.Lspawn_entry_build:
+    cmp x28, x21
+    b.eq .Lspawn_entry_advance
+    mov w10, #47
+    strb w10, [x28]
+    add x28, x28, #1
+    ldr x9, [x25]
+.Lspawn_copy_name:
+    ldrb w10, [x9]
+    cbz w10, .Lspawn_name_done
+    strb w10, [x28]
+    add x28, x28, #1
+    add x9, x9, #1
+    b .Lspawn_copy_name
+.Lspawn_name_done:
+    strb wzr, [x28]
+    mov x0, x21
+    mov x1, x25
+    mov x2, x22
+    mov x8, #221
+    svc #0
+.Lspawn_entry_advance:
+    ldrb w10, [x27]
+    cbz w10, .Lspawn_try_exec
+    add x27, x27, #1
+    b .Lspawn_path_entry
+.Lspawn_try_exec:
     ldr x0, [x25]
     mov x1, x25
     mov x2, x22
@@ -2060,3 +2143,7 @@ neper_os_cpu_features:
 neper_os_aes_expand_key:
     mov x0, #0
     ret
+
+// The blob is appended before code by the linker: keep its length a multiple of 4
+// so user instructions stay 4-aligned (the envp/PATH strings live in .text too).
+.balign 4
