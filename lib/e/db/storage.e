@@ -1130,6 +1130,9 @@ fn mvcc_read(m: *const Mvcc, snapshot_ts: u64, key: u64) -> (i64, bool) {
 // Commit `txn` at `commit_ts`: its pending versions begin there and the
 // versions they supersede end there. Answers how many versions committed.
 fn mvcc_commit(m: *Mvcc, txn: u32, commit_ts: u64) -> usize {
+    // 0 is the pending-version sentinel: committing at it would report success for a
+    // version mvcc_read never sees, so nothing is committed (#480).
+    if commit_ts == 0u64 { ret 0usize }
     var committed = 0usize
     var i = 0usize
     while i < m.n {
