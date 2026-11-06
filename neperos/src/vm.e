@@ -93,6 +93,22 @@ fn page_of(a: *mem.Arena) -> (usize, err) {
     ret (at, ok)
 }
 
+// (#202 item 6) Windows and page tables of reaped processes, kept for the next launch: the
+// kernel arena is a bump allocator, so reusing a spare avoids allocating the window (up to
+// 4 MB) and its tables again. A released entry is rebuilt by create() before use.
+const SPACE_SLOTS: usize = 32usize
+type Spare = struct { used: bool, ttbr: usize, region_phys: usize, window: usize, big: bool, l1: usize, l2: usize, l3: usize, l3b: usize, aux: usize }
+
+var spares: [32]Spare = zero
+
+// Mark the space whose TTBR0 is `ttbr` as free for the next create() (#202 item 6).
+fn release(ttbr: usize) {
+    var at = 0usize
+    while at < SPACE_SLOTS {
+        if spares[at].used && spares[at].ttbr == ttbr { spares[at].used = false }
+        at += 1usize
+    }
+}
 // A fresh address space over a copy of the kernel's first-level table, the user gigabyte
 // mapped to its own pages, and the program image at [image_addr, image_addr+image_len)
 // copied into them by address. `asid` tags its TLB entries so no flush is needed when the
@@ -123,20 +139,60 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
     }
     let window = arg_off + ARG_SIZE + stack_bytes
     let pages = window / PAGE
-    let (region, region_error) = mem.alloc[u8](a, window + PAGE)
-    if region_error != ok { ret (zero, region_error) }
-    let region_phys = (mem.address_of(&region[0usize]) + PAGE - 1usize) & ~(PAGE - 1usize)
-    let (l1, l1_error) = page_of(a)
-    if l1_error != ok { ret (zero, l1_error) }
-    let (l2, l2_error) = page_of(a)
-    if l2_error != ok { ret (zero, l2_error) }
-    let (l3, l3_error) = page_of(a)
-    if l3_error != ok { ret (zero, l3_error) }
+    var region_phys = 0usize
+    var l1 = 0usize
+    var l2 = 0usize
+    var l3 = 0usize
     var l3b = 0usize
-    if big {
+    var aux = 0usize
+    var reusing = 0usize
+    var scan = 0usize
+    while scan < SPACE_SLOTS {
+        if !spares[scan].used && spares[scan].region_phys != 0usize && spares[scan].window >= window && spares[scan].big == big {
+            reusing = scan + 1usize
+            break
+        }
+        scan += 1usize
+    }
+    if reusing != 0usize {
+        let spare = spares[reusing - 1usize]
+        region_phys = spare.region_phys
+        l1 = spare.l1
+        l2 = spare.l2
+        l3 = spare.l3
+        l3b = spare.l3b
+        aux = spare.aux
+        // Nothing of the old process survives: zero the window and the tables, then rebuild.
+        var zero_at = 0usize
+        while zero_at < window {
+            os.store64(region_phys + zero_at, 0u64)
+            zero_at += 8usize
+        }
+        zero_at = 0usize
+        while zero_at < PAGE {
+            os.store64(l2 + zero_at, 0u64)
+            os.store64(l3 + zero_at, 0u64)
+            if big { os.store64(l3b + zero_at, 0u64) }
+            zero_at += 8usize
+        }
+    } else {
+        let (region, region_error) = mem.alloc[u8](a, window + PAGE)
+        if region_error != ok { ret (zero, region_error) }
+        region_phys = (mem.address_of(&region[0usize]) + PAGE - 1usize) & ~(PAGE - 1usize)
+        let (first, first_error) = page_of(a)
+        if first_error != ok { ret (zero, first_error) }
+        l1 = first
         let (second, second_error) = page_of(a)
         if second_error != ok { ret (zero, second_error) }
-        l3b = second
+        l2 = second
+        let (third, third_error) = page_of(a)
+        if third_error != ok { ret (zero, third_error) }
+        l3 = third
+        if big {
+            let (fourth, fourth_error) = page_of(a)
+            if fourth_error != ok { ret (zero, fourth_error) }
+            l3b = fourth
+        }
     }
     let kernel_l1 = os.mrs(a64.TTBR0_EL1) & TABLE_MASK
     var entry_at = 0usize
@@ -164,17 +220,31 @@ fn create(a: *mem.Arena, image_addr: usize, image_len: usize, asid: usize) -> (S
     }
     // The aux page, mapped last in the first table so no one-table window can reach it (the checks above keep one
     // entry free). A two-table window covers that address and has none.
-    var aux = 0usize
     if !big {
-        let (aux_page, aux_error) = page_of(a)
-        if aux_error != ok { ret (zero, aux_error) }
-        aux = aux_page
+        if aux == 0usize {
+            let (aux_page, aux_error) = page_of(a)
+            if aux_error != ok { ret (zero, aux_error) }
+            aux = aux_page
+        }
         os.store64(l3 + (L3_PAGES - 1usize) * 8usize, u64(aux | data_bits))
     }
     var copied = 0usize
     while copied < image_len {
         os.store8(region_phys + copied, os.load8(image_addr + copied))
         copied += 1usize
+    }
+    // Record what a later release() can hand to the next create().
+    var slot = 0usize
+    var probe = 0usize
+    while probe < SPACE_SLOTS {
+        if !spares[probe].used {
+            slot = probe
+            break
+        }
+        probe += 1usize
+    }
+    if slot < SPACE_SLOTS {
+        spares[slot] = Spare { used: true, ttbr: l1 | (asid << 48usize), region_phys: region_phys, window: window, big: big, l1: l1, l2: l2, l3: l3, l3b: l3b, aux: aux }
     }
     ret (Space {
         ttbr: l1 | (asid << 48usize),

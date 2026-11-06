@@ -296,6 +296,7 @@ fn finish_current(frame: *a64.Frame, code: usize) -> bool {
     // code and wake a parent blocked joining it.
     if threads[gone].detached != 0usize {
         threads[gone].state = FREE
+        vm.release(threads[gone].ttbr)
     } else {
         wake_reaper(gone)
     }
@@ -316,6 +317,7 @@ fn wake_reaper(child: usize) {
         threads[parent].waiting_child = NONE
         threads[parent].state = READY
         threads[child].state = FREE
+        vm.release(threads[child].ttbr)
     }
 }
 
