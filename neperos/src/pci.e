@@ -108,10 +108,15 @@ fn bar_base(host: Host, slot: usize, bar: usize) -> usize {
 // holds that device's registers and nothing of a neighbour's (D2146). The low 32 bits suffice for
 // the small BARs virtio uses.
 fn bar_size(host: Host, slot: usize, bar: usize) -> usize {
+    // Size the BAR with memory decoding off (#208 item 5): the all-ones probe must not map
+    // the device at 0xFFFFFFF0 while its memory is enabled.
+    let command = config_read16(host, 0usize, slot, 0usize, 4usize)
+    if (command & 2u16) != 0u16 { config_write16(host, slot, 4usize, command & ~2u16) }
     let original = config_read32(host, 0usize, slot, 0usize, 16usize + bar * 4usize)
     config_write32(host, slot, 16usize + bar * 4usize, 4294967295u32)
     let probe = config_read32(host, 0usize, slot, 0usize, 16usize + bar * 4usize)
     config_write32(host, slot, 16usize + bar * 4usize, original)
+    if (command & 2u16) != 0u16 { config_write16(host, slot, 4usize, command) }
     if (probe & 4294967280u32) == 0u32 { ret 0usize }
     ret usize((~(probe & 4294967280u32)) + 1u32)
 }
@@ -127,15 +132,33 @@ fn enable_device(host: Host, slot: usize) {
 // and return where the next BAR may go. A 64-bit BAR takes the following word too; its high
 // word is zero since the window is below 4 GB. An unimplemented BAR is left alone.
 fn assign_bar(host: Host, slot: usize, bar: usize, next: usize) -> usize {
+    // Size before assigning, and with memory decoding off, so the probe never maps the
+    // device at the top of the address space (#208 item 5).
+    let command = config_read16(host, 0usize, slot, 0usize, 4usize)
+    if (command & 2u16) != 0u16 { config_write16(host, slot, 4usize, command & ~2u16) }
+    let original = config_read32(host, 0usize, slot, 0usize, 16usize + bar * 4usize)
     config_write32(host, slot, 16usize + bar * 4usize, 4294967295u32)
     let probe = config_read32(host, 0usize, slot, 0usize, 16usize + bar * 4usize)
-    if probe == 0u32 { ret next }
+    if probe == 0u32 {
+        config_write32(host, slot, 16usize + bar * 4usize, original)
+        if (command & 2u16) != 0u16 { config_write16(host, slot, 4usize, command) }
+        ret next
+    }
     let wide = (probe & 6u32) == 4u32
     if wide { config_write32(host, slot, 16usize + (bar + 1usize) * 4usize, 4294967295u32) }
     let size = usize((~(probe & 4294967280u32)) + 1u32)
     let base = (next + size - 1usize) & ~(size - 1usize)
+    // The BAR has to fit the host's MMIO window; one that does not is left unassigned and
+    // the device's setup then fails at the mapping instead of touching memory outside it.
+    if base < host.mmio || base >= host.mmio + host.mmio_size || size > host.mmio + host.mmio_size - base {
+        config_write32(host, slot, 16usize + bar * 4usize, original)
+        if wide { config_write32(host, slot, 16usize + (bar + 1usize) * 4usize, 0u32) }
+        if (command & 2u16) != 0u16 { config_write16(host, slot, 4usize, command) }
+        ret next
+    }
     config_write32(host, slot, 16usize + bar * 4usize, u32(base))
     if wide { config_write32(host, slot, 16usize + (bar + 1usize) * 4usize, 0u32) }
+    if (command & 2u16) != 0u16 { config_write16(host, slot, 4usize, command) }
     ret base + size
 }
 
@@ -155,3 +178,5 @@ fn virtio_type(host: Host, bus: usize, slot: usize, function: usize) -> (usize, 
     if device < VIRTIO_BASE_ID || device >= VIRTIO_BASE_ID + 64u32 { ret (0usize, false) }
     ret (usize(device - VIRTIO_BASE_ID), true)
 }
+
+

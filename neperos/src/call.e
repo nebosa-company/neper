@@ -97,7 +97,7 @@ fn contact_number(a: *mem.Arena, s: *State, index: usize) -> str {
 // The contact whose number is `digits`, or NONE.
 // (C127) The contacts are kept in /contacts.vcf as vCards (the format Messages, Mail and Wallet can share): the
 // display name and the number as a TEL.
-fn save_contacts(a: *mem.Arena, s: *State) {
+fn save_contacts(a: *mem.Arena, s: *State) -> bool {
     var cards: [10]vcard.Card = zero
     var i = 0usize
     while i < s.contact_total {
@@ -113,8 +113,9 @@ fn save_contacts(a: *mem.Arena, s: *State) {
     }
     var buf: [4096]u8 = zero
     let (len, write_error) = vcard.write(cards[0usize..s.contact_total], buf[0usize..4096usize])
-    if write_error != ok { ret }
-    let kept = vaultfs.write_big("/contacts.vcf", mem.address_of(&buf[0usize]), len)
+    if write_error != ok { ret false }
+    // A failed write must not be reported as saved: the contact is gone after a restart (#302).
+    ret vaultfs.write_big("/contacts.vcf", mem.address_of(&buf[0usize]), len)
 }
 
 // The contacts kept, if there are any (false leaves the list as it is).
@@ -536,11 +537,28 @@ fn save_form(a: *mem.Arena, s: *State) -> bool {
         }
         c.number_len = i
         s.contacts[s.form_edit] = c
+        // An edited number must follow into the recents of that contact (#302).
+        var r = 0usize
+        while r < MAX_RECENTS {
+            if s.recents[r].used && s.recents[r].contact == s.form_edit {
+                var q = 0usize
+                while q < number.len && q < 12usize {
+                    s.recents[r].number[q] = number[q]
+                    q += 1usize
+                }
+                s.recents[r].number_len = q
+            }
+            r += 1usize
+        }
+        save_recents(s)
     }
-    save_contacts(a, s)
-    ui.say("call contact saved ")
-    ui.say_text(name)
-    ui.say("\n")
+    if save_contacts(a, s) {
+        ui.say("call contact saved ")
+        ui.say_text(name)
+        ui.say("\n")
+    } else {
+        ui.say("call contact not saved: the store write failed\n")
+    }
     s.screen = MAIN_SCREEN
     s.tab = CONTACTS_TAB
     ret true
@@ -568,6 +586,25 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ret save_form(a, s)
         }
         if ui.is_key(id) {
+            // Paste appends up to 160 bytes at once: clip it to the field's limit here, as typing
+            // is clipped by the gate below, or save_form stored a truncated number (#302).
+            if id == 1206usize {
+                var changed = false
+                if s.form_focus == 0usize {
+                    changed = ui.field_key(&s.form_name, id, s.form_name.len == 0usize)
+                    if s.form_name.len > 20usize {
+                        s.form_name.len = 20usize
+                        ui.say("call name too long\n")
+                    }
+                } else {
+                    changed = ui.field_key(&s.form_number, id, false)
+                    if s.form_number.len > 12usize {
+                        s.form_number.len = 12usize
+                        ui.say("call number too long\n")
+                    }
+                }
+                ret changed
+            }
             if s.form_focus == 0usize {
                 if s.form_name.len < 20usize || id == 1201usize { ret ui.field_key(&s.form_name, id, s.form_name.len == 0usize) }
             } else if s.form_number.len < 12usize || id == 1201usize {
@@ -624,16 +661,35 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         }
         if id == 604usize {
             let name = contact_name(a, s, s.open)
+            let removed = s.open
+            // Recents index the contact array: keep every entry on the same person, clear the
+            // deleted one and shift the rest down with the array (#302).
+            var r = 0usize
+            while r < MAX_RECENTS {
+                if s.recents[r].used {
+                    if s.recents[r].contact == removed {
+                        s.recents[r].contact = NONE
+                    } else if s.recents[r].contact != NONE && s.recents[r].contact > removed {
+                        s.recents[r].contact -= 1usize
+                    }
+                }
+                r += 1usize
+            }
             var k = s.open
             while k + 1usize < s.contact_total {
                 s.contacts[k] = s.contacts[k + 1usize]
                 k += 1usize
             }
             s.contact_total -= 1usize
-            save_contacts(a, s)
-            ui.say("call contact deleted ")
-            ui.say_text(name)
-            ui.say("\n")
+            let saved_delete = save_contacts(a, s)
+            save_recents(s)
+            if saved_delete {
+                ui.say("call contact deleted ")
+                ui.say_text(name)
+                ui.say("\n")
+            } else {
+                ui.say("call contact delete not saved: the store write failed\n")
+            }
             s.screen = MAIN_SCREEN
             ret true
         }
@@ -710,22 +766,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var s: State = zero
     s.open = NONE
     s.callee = NONE
-    add_contact(&s, "Maya Chen", "5550101")
-    add_contact(&s, "Alex Rivera", "5550102")
-    add_contact(&s, "Dad", "5550103")
-    add_contact(&s, "Priya", "5550104")
-    add_contact(&s, "City Library", "5550105")
-    add_contact(&s, "Sam", "5550106")
-    add_contact(&s, "Dr. Okafor", "5550107")
-    // What was kept replaces the sample contacts; on a disk with none the samples are written.
-    if load_contacts(a, &s) {
+    // The sample contacts are a seed for a disk with no file, never a replacement for an empty one:
+    // deleting every contact used to bring the samples back on the next start (#302).
+    let (contacts_found, contacts_seen) = vaultfs.probe("/contacts.vcf")
+    if !contacts_found {
+        add_contact(&s, "Maya Chen", "5550101")
+        add_contact(&s, "Alex Rivera", "5550102")
+        add_contact(&s, "Dad", "5550103")
+        add_contact(&s, "Priya", "5550104")
+        add_contact(&s, "City Library", "5550105")
+        add_contact(&s, "Sam", "5550106")
+        add_contact(&s, "Dr. Okafor", "5550107")
+        let seeded = save_contacts(a, &s)
+    } else if load_contacts(a, &s) {
         ui.say("call contacts loaded ")
         ui.say_text(ui.number(a, s.contact_total))
         ui.say(" ")
         ui.say_text(contact_name(a, &s, 0usize))
         ui.say("\n")
     } else {
-        save_contacts(a, &s)
+        ui.say("call contacts unreadable\n")
     }
     let (wall, wall_error) = time.now()
     if wall_error == ok { s.now_min = usize(wall.nanos / 60000000000i64) }

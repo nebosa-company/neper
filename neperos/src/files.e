@@ -1176,34 +1176,55 @@ fn text_of_static(s: *State, index: usize) -> str {
     ret s.nodes[index].name[0usize..s.nodes[index].name_len]
 }
 
-// (C125) Delete item `index`: into /Trash, or for good when it is already there (or the Trash has its name).
+// Delete item `index`: into /Trash, or for good when it is already there. A move that fails
+// (a full Trash, a name taken) keeps the item and says so, rather than erasing it (#290).
 fn delete_item(a: *mem.Arena, s: *State, index: usize) {
     say("files deleted ")
     say_text(text_of_static(s, index))
     say("\n")
     var trashed = false
     if s.real {
-        // Delete moves an item into /Trash; an item already there, or one whose name the Trash has, is
-        // removed for good. (The Trash is not emptied by the clock yet: the filesystem keeps no times.)
         var trash = NONE
         var t = 0usize
         while t < MAX_NODES {
             if s.nodes[t].used && s.nodes[t].parent == 0usize && s.nodes[t].is_dir && same(text_of_static(s, t), "Trash") { trash = t }
             t += 1usize
         }
-        if s.nodes[index].parent != trash {
-            if trash == NONE && vaultfs.mkdir("/Trash") { trash = add_node(s, "Trash", 0usize, true, 0usize, 0usize) }
-            if trash != NONE && vaultfs.move(path_of(a, s, index), "/Trash") {
-                s.nodes[index].parent = trash
-                trashed = true
-                say("files trashed ")
-                say_text(text_of_static(s, index))
-                say("\n")
-            }
+        if trash != NONE && s.nodes[index].parent == trash {
+            // Already in the Trash: deleting there is the explicit permanent removal.
+            let removed = vaultfs.remove(path_of(a, s, index))
+            remove_node(s, index)
+            ret
         }
-        if !trashed { let removed = vaultfs.remove(path_of(a, s, index)) }
+        if trash == NONE && vaultfs.mkdir("/Trash") { trash = add_node(s, "Trash", 0usize, true, 0usize, 0usize) }
+        if trash != NONE && vaultfs.move(path_of(a, s, index), "/Trash") {
+            s.nodes[index].parent = trash
+            trashed = true
+            say("files trashed ")
+            say_text(text_of_static(s, index))
+            say("\n")
+        }
+        if !trashed {
+            say("files delete kept ")
+            say_text(text_of_static(s, index))
+            say("\n")
+            ret
+        }
     }
     if !trashed { remove_node(s, index) }
+}
+
+// True when `item` is `node` or one of its ancestors, so a folder move would create a cycle.
+fn is_ancestor(s: *State, item: usize, node: usize) -> bool {
+    var at = node
+    var guard = 0usize
+    while at != NONE && guard <= MAX_NODES {
+        if at == item { ret true }
+        if at == 0usize { ret false }
+        at = s.nodes[at].parent
+        guard += 1usize
+    }
+    ret guard > MAX_NODES
 }
 
 // What a tap on button `id` did: true when the screen changed.
@@ -1456,7 +1477,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             while i < MAX_NODES {
                 if s.checked[i] && s.nodes[i].used {
                     s.checked[i] = false
-                    if s.nodes[i].parent != s.cwd && i != s.cwd && vaultfs.move(path_of(a, s, i), path_of(a, s, s.cwd)) {
+                    if s.nodes[i].parent != s.cwd && i != s.cwd && !is_ancestor(s, i, s.cwd) && vaultfs.move(path_of(a, s, i), path_of(a, s, s.cwd)) {
                         s.nodes[i].parent = s.cwd
                         moved += 1usize
                     }
@@ -1481,7 +1502,7 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if id == 621usize {
             let item = s.moving
             s.moving = NONE
-            if s.nodes[item].parent == s.cwd || item == s.cwd {
+            if s.nodes[item].parent == s.cwd || item == s.cwd || is_ancestor(s, item, s.cwd) {
                 say("files move failed\n")
                 ret true
             }
@@ -1515,6 +1536,11 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                 // Hand the file over: its path in /handover, and the app for its type started by the shell
                 // when this one leaves (an image goes to Photos, anything else to Document).
                 let shared_path = path_of(a, s, s.selected)
+                if shared_path.len > 63usize {
+                    // /handover is 64 bytes: refuse rather than hand over a cut path (#290).
+                    say("files handover too long\n")
+                    ret true
+                }
                 var program = 40usize
                 if s.nodes[s.selected].kind == 6usize { program = 22usize }
                 var buffer: [64]u8 = zero
@@ -1552,11 +1578,24 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
             ret true
         }
         if id == 616usize && s.real && !s.nodes[s.selected].is_dir {
-            // Copy: read the file through the filesystem server and write it under "Copy of <name>" here.
-            var data: [4096]u8 = zero
-            let data_addr = mem.address_of(&data[0usize])
+            // Copy: read the whole file through the filesystem server and write it under
+            // "Copy of <name>" here; a short read or write reports failure (#290).
             let source_path = path_of(a, s, s.selected)
-            let (got, read_ok) = vaultfs.read(source_path, data_addr, 4096usize)
+            let (size, kind, day, found) = vaultfs.stat(source_path)
+            var copied = false
+            var got = 0usize
+            var data_addr = 0usize
+            var read_ok = false
+            if found && size < 18446744073709551615usize {
+                let (data, data_error) = mem.alloc[u8](a, size + 1usize)
+                if data_error == ok {
+                    data_addr = mem.address_of(&data[0usize])
+                    let (read_count, read_error) = vaultfs.read_big(source_path, data_addr, size)
+                    got = read_count
+                    read_ok = read_error
+                    if got != size { read_ok = false }
+                }
+            }
             var made_name: [24]u8 = zero
             let prefix = "Copy of "
             var n = 0usize
@@ -1571,9 +1610,8 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
                 k += 1usize
             }
             let new_name = made_name[0usize..n]
-            var copied = false
             if read_ok && name_free(s, new_name, NONE) {
-                if vaultfs.write(child_path(a, s, s.cwd, new_name), data_addr, got) {
+                if vaultfs.write_big(child_path(a, s, s.cwd, new_name), data_addr, got) {
                     let made = add_node(s, new_name, s.cwd, false, got, 0usize)
                     copied = made != NONE
                 }
@@ -1597,6 +1635,10 @@ fn act(a: *mem.Arena, s: *State, id: usize) -> bool {
         if (id == 619usize || id == 620usize) && s.share_open && s.real && !s.nodes[s.selected].is_dir {
             // (D4807) Hand the file over to the app chosen: its path in /handover, the shell starts the program.
             let shared_path = path_of(a, s, s.selected)
+            if shared_path.len > 63usize {
+                say("files handover too long\n")
+                ret true
+            }
             var buffer: [64]u8 = zero
             var n = 0usize
             while n < shared_path.len && n < 63usize {

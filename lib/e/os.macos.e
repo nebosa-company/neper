@@ -2842,18 +2842,20 @@ fn cocoa_text(text: str) -> usize {
     ret cf_string_create(0usize, &text[0usize], text.len, CF_UTF8, 0i32)
 }
 
-// The text of an NSString into `out`, as many bytes as fit; the length it had.
-fn cocoa_read_text(string: usize, out: []u8) -> usize {
-    if string == 0usize { ret 0usize }
+// Up to `out.len` bytes of an NSString's UTF-8 starting at byte `offset`, as (copied, total): a
+// caller decoding a longer string walks it a chunk at a time rather than truncating at a fixed cap (#516).
+fn cocoa_read_text(string: usize, offset: usize, out: []u8) -> (usize, usize) {
+    if string == 0usize { ret (0usize, 0usize) }
     let pointer = msg0(string, cocoa_sel("UTF8String\x00"))
-    if pointer == 0usize { ret 0usize }
+    if pointer == 0usize { ret (0usize, 0usize) }
     let length = raw_strlen(pointer)
-    var count = length
+    if offset >= length { ret (0usize, length) }
+    var count = length - offset
     if count > out.len { count = out.len }
     if count != 0usize {
-        let copied = raw_memcpy(mem.address_of(&out[0usize]), pointer, count)
+        let copied = raw_memcpy(mem.address_of(&out[0usize]), pointer + offset, count)
     }
-    ret length
+    ret (count, length)
 }
 
 // A rect an AppKit object answers for the selector `key` (`frame`, `bounds`, ...): called directly, it comes back in v0 to v3 on
@@ -3096,37 +3098,50 @@ fn cocoa_modifier_flag(code: u32) -> usize {
 fn cocoa_text_events(window: Window, modifiers: u8, string: usize) {
     if modifiers & 10u8 != 0u8 { ret }
     var bytes: [32]u8 = zero
-    let length = cocoa_read_text(string, bytes[0usize..31usize])
     var at = 0usize
-    var limit = length
-    if limit > 31usize { limit = 31usize }
-    while at < limit {
-        let lead = u32(bytes[at])
-        var point = lead
-        var width = 1usize
-        if lead >= 240u32 && at + 3usize < limit {
-            point = ((lead & 7u32) << 18u32) | ((u32(bytes[at + 1usize]) & 63u32) << 12u32) | ((u32(bytes[at + 2usize]) & 63u32) << 6u32) | (u32(bytes[at + 3usize]) & 63u32)
-            width = 4usize
-        } else {
-            if lead >= 224u32 && at + 2usize < limit {
-                point = ((lead & 15u32) << 12u32) | ((u32(bytes[at + 1usize]) & 63u32) << 6u32) | (u32(bytes[at + 2usize]) & 63u32)
-                width = 3usize
-            } else {
-                if lead >= 192u32 && at + 1usize < limit {
-                    point = ((lead & 31u32) << 6u32) | (u32(bytes[at + 1usize]) & 63u32)
-                    width = 2usize
+    var total = raw_strlen(msg0(string, cocoa_sel("UTF8String\x00")))
+    // Decode the whole string a chunk at a time; a scalar straddling the chunk boundary is left
+    // for the next chunk, so its bytes are read again rather than cut in half (#516).
+    while at < total {
+        let (got, ignored_total) = cocoa_read_text(string, at, bytes[0usize..32usize])
+        if got == 0usize { ret }
+        var pos = 0usize
+        var consumed = 0usize
+        while pos < got {
+            let lead = u32(bytes[pos])
+            var width = 1usize
+            if lead >= 240u32 { width = 4usize } else {
+                if lead >= 224u32 { width = 3usize } else {
+                    if lead >= 192u32 { width = 2usize }
                 }
             }
+            // An incomplete trailing scalar: stop this chunk, resume at its first byte.
+            if pos + width > got { break }
+            var point = u32(bytes[pos])
+            if width == 4usize {
+                point = ((lead & 7u32) << 18u32) | ((u32(bytes[pos + 1usize]) & 63u32) << 12u32) | ((u32(bytes[pos + 2usize]) & 63u32) << 6u32) | (u32(bytes[pos + 3usize]) & 63u32)
+            } else {
+                if width == 3usize {
+                    point = ((lead & 15u32) << 12u32) | ((u32(bytes[pos + 1usize]) & 63u32) << 6u32) | (u32(bytes[pos + 2usize]) & 63u32)
+                } else {
+                    if width == 2usize {
+                        point = ((lead & 31u32) << 6u32) | (u32(bytes[pos + 1usize]) & 63u32)
+                    }
+                }
+            }
+            if point >= 32u32 && point != 127u32 && (point < 63232u32 || point > 63743u32) {
+                var event: WindowEvent = zero
+                event.kind = .Text
+                event.window = window
+                event.modifiers = modifiers
+                event.codepoint = point
+                cocoa_push(event)
+            }
+            pos += width
+            consumed = pos
         }
-        if point >= 32u32 && point != 127u32 && (point < 63232u32 || point > 63743u32) {
-            var event: WindowEvent = zero
-            event.kind = .Text
-            event.window = window
-            event.modifiers = modifiers
-            event.codepoint = point
-            cocoa_push(event)
-        }
-        at += width
+        if consumed == 0usize { ret }
+        at = at + consumed
     }
 }
 
@@ -3457,7 +3472,7 @@ fn cocoa_interpret(window: Window, modifiers: u8, event: usize) {
         let source = msg0(context, cocoa_sel("selectedKeyboardInputSource\x00"))
         if source != 0usize {
             var name: [96]u8 = zero
-            let length = cocoa_read_text(source, name[0usize..95usize])
+            let (length, ignored_total) = cocoa_read_text(source, 0usize, name[0usize..95usize])
             var at = 0usize
             while at + 11usize < length && at < 85usize {
                 if name[at] == 105u8 && name[at + 1usize] == 110u8 && name[at + 2usize] == 112u8 && name[at + 3usize] == 117u8 && name[at + 4usize] == 116u8 && name[at + 5usize] == 109u8 && name[at + 6usize] == 101u8 && name[at + 7usize] == 116u8 && name[at + 8usize] == 104u8 && name[at + 9usize] == 111u8 && name[at + 10usize] == 100u8 { use_input_method = true }
@@ -3922,7 +3937,9 @@ fn ax_forget(slot: usize) {
     store.tail = 0usize
 }
 
-fn ax_push(element: usize, action: u8) {
+// Answers false when the request could not be queued (ring full or the element no
+// longer published): AppKit then sees the action fail instead of a silent success.
+fn ax_push(element: usize, action: u8) -> bool {
     var slot = 0usize
     while slot < COCOA_TABLE {
         let store = &ax_stores[slot]
@@ -3930,31 +3947,32 @@ fn ax_push(element: usize, action: u8) {
         while at < store.count && store.elements[at] != element { at += 1usize }
         if at < store.count {
             let next = (store.tail + 1usize) % AX_QUEUE
-            if next == store.head { ret }
+            if next == store.head { ret false }
             store.requests[store.tail] = AccessibleRequest { id: store.ids[at], generation: store.generations[at], action: action, value: "" }
             store.tail = next
-            ret
+            ret true
         }
         slot += 1usize
     }
+    ret false
 }
 
 @cc(c)
 fn ax_press(this: usize, command: usize) -> usize {
-    ax_push(this, 1u8)
-    ret 1usize
+    if ax_push(this, 1u8) { ret 1usize }
+    ret 0usize
 }
 
 @cc(c)
 fn ax_increment(this: usize, command: usize) -> usize {
-    ax_push(this, 2u8)
-    ret 1usize
+    if ax_push(this, 2u8) { ret 1usize }
+    ret 0usize
 }
 
 @cc(c)
 fn ax_decrement(this: usize, command: usize) -> usize {
-    ax_push(this, 3u8)
-    ret 1usize
+    if ax_push(this, 3u8) { ret 1usize }
+    ret 0usize
 }
 
 fn ax_make_class() -> usize {
@@ -4028,6 +4046,9 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
     let pool = objc_pool_push()
     let window = cocoa_windows[slot]
     let view = msg0(window, cocoa_sel("contentView\x00"))
+    // A tree larger than the store is refused: silently dropping tail nodes loses them
+    // from VoiceOver while publish still says ok.
+    if nodes.len > AX_NODES { ret TooLarge }
     // The last tree is let go of; the new one is built whole.
     ax_release(slot)
     let store = &ax_stores[slot]
