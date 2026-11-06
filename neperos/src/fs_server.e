@@ -137,6 +137,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let total_sent = os.send(REP, usize(blk.sectors), fsproto.NO_SLOT)
         } else {
             let plen = fsproto.recv_bytes(REQ, path_addr, 64usize)
+            // recv_bytes reports an oversized length word as cap + 1 (#177).
+            if plen > 64usize {
+                reply(fs.NotFound)
+                continue
+            }
             var path = pathbuf[0usize..plen]
             if confined {
                 let scoped_len = scoped_path(app, path, scope[0usize..80usize])

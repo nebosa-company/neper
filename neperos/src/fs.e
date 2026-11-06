@@ -17,6 +17,8 @@ error NotFound
 error NotDirectory
 error NameTooLong
 error NameTaken
+// The device has no free block for a reservation (#177).
+error NoSpace
 
 const SUPER_MAGIC: u32 = 0x4653454Eu32
 const ROOT_DIR: u64 = 1u64
@@ -83,6 +85,9 @@ fn alloc_block(blk: virtio.Block) -> (u64, err) {
     let read_error = virtio.block_read(blk, 0u64)
     if read_error != ok { ret (0u64, read_error) }
     let next = usize(os.load32(blk.data + 4usize))
+    // The bump counter must stop at the device: a client-chosen reservation used to walk it
+    // past the end (and wrap the u32), breaking every later allocation (#177).
+    if next + 1usize >= usize(blk.sectors) { ret (0u64, NoSpace) }
     os.store32(blk.data + 4usize, u32(next + 1usize))
     let write_error = virtio.block_write(blk, 0u64)
     if write_error != ok { ret (0u64, write_error) }
@@ -211,6 +216,10 @@ fn mkdir(blk: virtio.Block, path: str) -> err {
     let (parent, leaf) = parent_leaf(path)
     let (dir_block, resolve_error) = resolve_dir(blk, parent)
     if resolve_error != ok { ret resolve_error }
+    // `mkdir` is called on every save; without the lookup the root filled with duplicates of
+    // the same directory name until it was full (#177).
+    let (_, _, _, _, exists) = dir_lookup(blk, dir_block, leaf)
+    if exists { ret ok }
     let (new_block, add_error) = add_entry(blk, dir_block, leaf, KIND_DIR)
     ret add_error
 }
@@ -307,6 +316,9 @@ fn reserve(blk: virtio.Block, path: str, size: usize) -> err {
     let (off, found_block, old_size, kind, found) = dir_lookup(blk, dir_block, leaf)
     var needed = (size + BLOCK_SIZE - 1usize) / BLOCK_SIZE
     if needed == 0usize { needed = 1usize }
+    // A request cannot reserve more blocks than the device has; this rejects a huge size
+    // before the one-block-at-a-time loop starts (#177).
+    if needed > usize(blk.sectors) { ret NoSpace }
     if !found {
         let (new_block, add_error) = add_entry(blk, dir_block, leaf, KIND_FILE)
         if add_error != ok { ret add_error }

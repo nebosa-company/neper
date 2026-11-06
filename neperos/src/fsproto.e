@@ -223,6 +223,10 @@ fn send_str(ep_slot: usize, text: str) {
 // step even when the buffer is smaller; the stored count (min of length and cap) comes back.
 fn recv_bytes(ep_slot: usize, addr: usize, cap: usize) -> usize {
     let len = os.recv(ep_slot, NO_SLOT) & STAMP_MASK
+    // A length word above the caller's maximum is a protocol error: draining it would let a
+    // client that stops mid-request wedge the single-threaded server (#177). `cap + 1` marks
+    // it for the caller, and the oversized payload is left unread.
+    if len > cap { ret cap + 1usize }
     var i = 0usize
     while i < len {
         let byte = os.recv(ep_slot, NO_SLOT) & 255usize
