@@ -9,10 +9,15 @@ use e.gfx.geometry
 use e.gfx.paint
 use e.gfx.scene
 use e.gfx.svg
+use e.str
 use icons
 
 const WIDTH: usize = 848usize
-const HEIGHT: usize = 1150usize
+// The grid is four columns; the sheet must be tall enough for every icon row plus the
+// bar strip, or the newest icons are drawn off-canvas or under it.
+const ROWS: usize = (icons.APP_COUNT + 3usize) / 4usize
+const BAR_HEIGHT: usize = 86usize
+const HEIGHT: usize = 16usize + ROWS * 208usize + BAR_HEIGHT
 
 fn color(r: usize, g: usize, b: usize) -> paint.Color {
     ret paint.Color { red: f32(r) / 255.0, green: f32(g) / 255.0, blue: f32(b) / 255.0, alpha: 1.0 }
@@ -49,10 +54,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try svg.draw(a, &builder, icons.app(i), geometry.rect(x, y, 192.0, 192.0), ink)
         i += 1usize
     }
-    try block(&builder, 0.0, 1064.0, f32(WIDTH), 86.0, color(20usize, 23usize, 28usize))
+    try block(&builder, 0.0, f32(HEIGHT - BAR_HEIGHT), f32(WIDTH), f32(BAR_HEIGHT), color(20usize, 23usize, 28usize))
     var j = 0usize
     while j < icons.BAR_COUNT {
-        try svg.draw(a, &builder, icons.bar(j), geometry.rect(32.0 + f32(j) * 72.0, 1078.0, 56.0, 56.0), ink)
+        try svg.draw(a, &builder, icons.bar(j), geometry.rect(32.0 + f32(j) * 72.0, f32(HEIGHT - BAR_HEIGHT + 14usize), 56.0, 56.0), ink)
         j += 1usize
     }
     let list = scene.finish(&builder)
@@ -64,7 +69,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (pixels, pixels_error) = mem.alloc[u32](a, WIDTH * HEIGHT)
     if pixels_error != ok { ret pixels_error }
     if gpu.read_image(q, image, pixels) != ok { ret gpu.OutOfMemory }
-    let header = "P6\n848 1150\n255\n"
+    // The PPM header from the same WIDTH/HEIGHT the canvas uses, never a stale literal.
+    let (h0, header_error) = str.builder(a, 32usize)
+    if header_error != ok { ret header_error }
+    var hb = h0
+    try str.push(&hb, "P6\n")
+    try str.push_usize(&hb, WIDTH)
+    try str.push(&hb, " ")
+    try str.push_usize(&hb, HEIGHT)
+    try str.push(&hb, "\n255\n")
+    let header = str.done(&hb)
     let (bytes, bytes_error) = mem.alloc[u8](a, header.len + WIDTH * HEIGHT * 3usize)
     if bytes_error != ok { ret bytes_error }
     var at = 0usize
