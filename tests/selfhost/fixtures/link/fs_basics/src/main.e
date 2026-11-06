@@ -466,6 +466,20 @@ fn main(a: *mem.Arena) -> err {
     let (no_temp, no_handle, no_temp_error) = fs.temp_file(a, "np-fs/no-such-dir", "probe-")
     if no_temp_error != fs.NotFound { os.exit(213i32) }
 
+    // #461: the prefix is one filename component; a separator of either host style or an
+    // embedded NUL must be refused before any file is created.
+    let (slash_escape, slash_handle, slash_error) = fs.temp_file(a, "np-fs", "../outside-")
+    if slash_error == ok {
+        let ignored = os.close(slash_handle)
+        let ignored_remove = fs.remove_file(a, slash_escape)
+        os.exit(400i32)
+    }
+    if slash_error != fs.Invalid { os.exit(401i32) }
+    let (_, _, backslash_error) = fs.temp_file(a, "np-fs", "..\\outside-")
+    if backslash_error != fs.Invalid { os.exit(402i32) }
+    let (_, _, nul_error) = fs.temp_file(a, "np-fs", "a\0b")
+    if nul_error != fs.Invalid { os.exit(403i32) }
+
     if fs.remove_file(a, first_temp) != ok { os.exit(214i32) }
     if fs.remove_file(a, second_temp) != ok { os.exit(215i32) }
 

@@ -273,6 +273,13 @@ fn hex_digit(value: u8) -> u8 {
 // loop reads as a collision. An empty `dir` means the host's temporary directory.
 fn temp_file(a: *mem.Arena, dir: str, prefix: str) -> (str, os.File, err) {
     var nothing: os.File = zero
+    // The prefix becomes one filename component: either separator style or a NUL in it
+    // would let the generated name escape `dir` (#461).
+    var prefix_at = 0usize
+    while prefix_at < prefix.len {
+        if prefix[prefix_at] == 47u8 || prefix[prefix_at] == 92u8 || prefix[prefix_at] == 0u8 { ret ("", nothing, Invalid) }
+        prefix_at += 1usize
+    }
     var directory = dir
     if directory.len == 0usize {
         let (fallback, fallback_error) = temp_dir(a)
@@ -683,9 +690,11 @@ fn write_file(a: *mem.Arena, path_text: str, data: []const u8) -> err {
 // looping.
 fn copy_file(a: *mem.Arena, src: str, dst: str, scratch: []u8) -> err {
     if scratch.len == 0usize { ret Invalid }
-    // `truncate` applies to the file its path resolves to. Check both parts of the
-    // host identity first so an alias (including a hard link) cannot truncate the
-    // source before its reads. A host with no identity leaves `file_id` zero.
+    // The source is opened first, and the bytes go into a fresh sibling file that is
+    // then atomically renamed over `dst`. Nothing opens `dst` for truncation, so
+    // swapping `dst` for an alias of `src` after these checks cannot truncate the
+    // source (#1505). The identity check stays as the cheap, deterministic answer for
+    // an alias that was already there. A host with no identity leaves `file_id` zero.
     let (source_info, source_info_error) = os.stat(a, src)
     if source_info_error != ok { ret from_os(source_info_error) }
     if source_info.kind != .File { ret Invalid }
@@ -696,43 +705,58 @@ fn copy_file(a: *mem.Arena, src: str, dst: str, scratch: []u8) -> err {
     read_flags.read = true
     let (source, source_error) = os.open(a, src, read_flags)
     if source_error != ok { ret from_os(source_error) }
-    var write_flags: os.OpenFlags = zero
-    write_flags.write = true
-    write_flags.create = true
-    write_flags.truncate = true
-    let (destination, destination_error) = os.open(a, dst, write_flags)
-    if destination_error != ok {
+    let style = host_style()
+    var directory = path.dirname(dst, style)
+    if directory.len == 0usize { directory = "." }
+    let (temp_path, temp_handle, temp_error) = temp_file(a, directory, ".copy-")
+    if temp_error != ok {
         let ignored = os.close(source)
-        ret from_os(destination_error)
+        ret temp_error
     }
     while true {
         let (read_count, read_error) = os.read(source, scratch)
         if read_error != ok {
             let ignored_source = os.close(source)
-            let ignored_destination = os.close(destination)
+            let ignored_temp = os.close(temp_handle)
+            let ignored_remove = os.remove_file(a, temp_path)
             ret from_os(read_error)
         }
         if read_count == 0usize { break }
         var sent = 0usize
         while sent < read_count {
-            let (written, write_error) = os.write(destination, scratch[sent..read_count])
+            let (written, write_error) = os.write(temp_handle, scratch[sent..read_count])
             if write_error != ok {
                 let ignored_source = os.close(source)
-                let ignored_destination = os.close(destination)
+                let ignored_temp = os.close(temp_handle)
+                let ignored_remove = os.remove_file(a, temp_path)
                 ret from_os(write_error)
             }
             if written == 0usize {
                 let ignored_source = os.close(source)
-                let ignored_destination = os.close(destination)
+                let ignored_temp = os.close(temp_handle)
+                let ignored_remove = os.remove_file(a, temp_path)
                 ret Io
             }
             sent += written
         }
     }
     let source_close = os.close(source)
-    let destination_close = os.close(destination)
-    if source_close != ok { ret from_os(source_close) }
-    ret from_os(destination_close)
+    if source_close != ok {
+        let ignored_temp = os.close(temp_handle)
+        let ignored_remove = os.remove_file(a, temp_path)
+        ret from_os(source_close)
+    }
+    let temp_close = os.close(temp_handle)
+    if temp_close != ok {
+        let ignored_remove = os.remove_file(a, temp_path)
+        ret from_os(temp_close)
+    }
+    let replaced = os.replace(a, temp_path, dst, true, false)
+    if replaced != ok {
+        let ignored_remove = os.remove_file(a, temp_path)
+        ret from_os(replaced)
+    }
+    ret ok
 }
 
 fn push_level(state: *WalkState, directory: str) -> err {
