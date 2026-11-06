@@ -4555,6 +4555,22 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
 // anyone's; a local's own storage is writable only through a pointer to it, so a
 // function that never takes `&x` passes `x` by address and copies nothing. A
 // value that is no place -- a call's result, a literal -- is fresh already.
+// Whether the `[` at token `open_at` opens a slice (a `..` before its `]`).
+fn bracket_has_range(c: *check.Checker, g: *graph.Graph, module_index: usize, open_at: usize) -> bool {
+    var at = open_at + 1usize
+    var depth = 0usize
+    while at < c.token_count && at < open_at + 64usize {
+        let kind = c.tokens[at].kind
+        if kind == .PunctLBracket { depth += 1usize }
+        if kind == .PunctRBracket {
+            if depth == 0usize { ret false }
+            depth -= 1usize
+        }
+        if depth == 0usize && kind == .PunctRange { ret true }
+        at += 1usize
+    }
+    ret false
+}
 fn argument_can_change(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, argument_index: usize, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> bool {
     var base_index = argument_index
     var base = tree.nodes[base_index]
@@ -4572,16 +4588,17 @@ fn argument_can_change(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     if !bound { ret true }
     if binding.ty.kind == .Pointer || binding.ty.kind == .Slice || binding.ty.kind == .String { ret true }
     var at = builder.proof_function_start
-    while at + 1usize < builder.proof_function_end && at + 1usize < c.token_count {
+    while at + 1usize < builder.proof_function_end && at + 4usize < c.token_count {
         if c.tokens[at].kind == .PunctAmp && c.tokens[at + 1usize].kind == .Identifier {
             let pointed = c.tokens[at + 1usize]
             if check.same(lex.token_text(g.modules[module_index].text, pointed), name) { ret true }
         }
-        // `name[...]` may be a slice over the local's storage, which is an implicit
-        // address even without an `&`: a slice handed to the callee can write it.
-        if c.tokens[at].kind == .Identifier && c.tokens[at + 1usize].kind == .PunctLBracket {
-            let indexed = c.tokens[at]
-            if check.same(lex.token_text(g.modules[module_index].text, indexed), name) { ret true }
+        // A slice over the local's storage is an implicit address even without an `&`:
+        // `name[a..b]`, and `name.field[a..b]`, which the call argument may name as
+        // `p.field`. Plain indexing is not address-taking and is left alone.
+        if c.tokens[at].kind == .Identifier && check.same(lex.token_text(g.modules[module_index].text, c.tokens[at]), name) {
+            if c.tokens[at + 1usize].kind == .PunctLBracket && bracket_has_range(c, g, module_index, at + 1usize) { ret true }
+            if at + 3usize < c.token_count && c.tokens[at + 1usize].kind == .PunctDot && c.tokens[at + 2usize].kind == .Identifier && c.tokens[at + 3usize].kind == .PunctLBracket && bracket_has_range(c, g, module_index, at + 3usize) { ret true }
         }
         at += 1usize
     }
@@ -11194,6 +11211,8 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     ret ok
 }
+
+
 
 
 
