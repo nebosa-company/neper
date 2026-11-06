@@ -691,6 +691,8 @@ void neper_os_wait(void *result, uintptr_t raw) {
     *(int32_t *)out = -1; *(uint32_t *)(out + 4) = NP_OK;
     status = WaitForSingleObject((HANDLE)raw, INFINITE);
     if (status != WAIT_OBJECT_0 || !GetExitCodeProcess((HANDLE)raw, &code)) {
+        /* The handle is this call's to give back on every path, not only success. */
+        CloseHandle((HANDLE)raw);
         *(uint32_t *)(out + 4) = status == WAIT_TIMEOUT ? NP_TIMEOUT : np_error(GetLastError()); return;
     }
     CloseHandle((HANDLE)raw); *(int32_t *)out = (int32_t)code;
@@ -703,6 +705,7 @@ void neper_os_wait_usage(void *result, uintptr_t raw) {
     *(int32_t *)out = -1; *(size_t *)(out + 8) = 0; *(uint32_t *)(out + 16) = NP_OK;
     status = WaitForSingleObject((HANDLE)raw, INFINITE);
     if (status != WAIT_OBJECT_0 || !GetExitCodeProcess((HANDLE)raw, &code)) {
+        CloseHandle((HANDLE)raw);
         *(uint32_t *)(out + 16) = status == WAIT_TIMEOUT ? NP_TIMEOUT : np_error(GetLastError()); return;
     }
     if (GetProcessMemoryInfo((HANDLE)raw, &counters, sizeof counters)) *(size_t *)(out + 8) = counters.PeakWorkingSetSize;
@@ -1037,7 +1040,13 @@ void neper_os_readdir(void *result, NpArena *arena, const unsigned char *path, s
         }
         bytes = (unsigned char *)np_arena_alloc(arena, len, 1); if (!bytes && len) goto oom;
         np_copy(bytes, item->d_name, len); entries[count].name = (NpStr){bytes, len};
-        entries[count].kind = item->d_type == DT_REG ? 0 : item->d_type == DT_DIR ? 1 : item->d_type == DT_LNK ? 2 : 3;
+        if (item->d_type == DT_UNKNOWN) {
+            /* Filesystems that do not fill d_type: ask lstat instead of calling it "other". */
+            struct stat st;
+            if (fstatat(dirfd(dir), item->d_name, &st, AT_SYMLINK_NOFOLLOW) == 0) {
+                entries[count].kind = S_ISREG(st.st_mode) ? 0 : S_ISDIR(st.st_mode) ? 1 : S_ISLNK(st.st_mode) ? 2 : 3;
+            } else entries[count].kind = 3;
+        } else entries[count].kind = item->d_type == DT_REG ? 0 : item->d_type == DT_DIR ? 1 : item->d_type == DT_LNK ? 2 : 3;
         ++count;
     }
     if (errno) { uint32_t error = np_error(errno); closedir(dir); arena->off = saved; *(uint32_t *)(out + 16) = error; return; }
@@ -1057,9 +1066,15 @@ void neper_os_spawn(void *result, NpArena *arena, const NpStr *argv, size_t argc
     for (i = 0; i < argc; ++i) if (!(native[i] = np_c_string_arena(arena, argv[i]))) { arena->off = saved; *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
     native[argc] = 0; pid = fork();
     if (pid == 0) {
-        if ((int)stdio->in.raw != 0) dup2((int)stdio->in.raw, 0);
-        if ((int)stdio->out.raw != 1) dup2((int)stdio->out.raw, 1);
-        if ((int)stdio->err.raw != 2) dup2((int)stdio->err.raw, 2);
+        int in = (int)stdio->in.raw, out_fd = (int)stdio->out.raw, err_fd = (int)stdio->err.raw, moved;
+        /* Every source that is itself a standard fd is moved above them first, or a
+           dup2 onto 0/1/2 could clobber a source that had not been applied yet. */
+        if (in >= 0 && in <= 2) { moved = fcntl(in, F_DUPFD, 3); if (moved >= 0) in = moved; }
+        if (out_fd >= 0 && out_fd <= 2) { moved = fcntl(out_fd, F_DUPFD, 3); if (moved >= 0) out_fd = moved; }
+        if (err_fd >= 0 && err_fd <= 2) { moved = fcntl(err_fd, F_DUPFD, 3); if (moved >= 0) err_fd = moved; }
+        if (in != 0 && in >= 0) dup2(in, 0);
+        if (out_fd != 1 && out_fd >= 0) dup2(out_fd, 1);
+        if (err_fd != 2 && err_fd >= 0) dup2(err_fd, 2);
         execvp(native[0], native); _exit(127);
     }
     arena->off = saved;

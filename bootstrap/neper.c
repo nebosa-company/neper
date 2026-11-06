@@ -1040,7 +1040,7 @@ static void intrinsic_returns(Function *fn, int count, Type first, Type second) 
 static void install_os_intrinsics(Compiler *c) {
     static const char *error_names[] = {
         "NotFound", "Denied", "Exists", "Interrupted", "OutOfMemory",
-        "Failed", "Timeout", "WouldBlock", "Unsupported"
+        "Failed", "Timeout", "WouldBlock", "Unsupported", "Exhausted", "Invalid"
     };
     Token token = c->tokens[0];
     Type u8 = type_make(TY_INT, "u8"), i32 = type_make(TY_INT, "i32");
@@ -1382,6 +1382,12 @@ static void parse_integer_value(Compiler *c, Token *token, Expr *expr) {
     static const char *suffixes[] = {"usize", "isize", "u64", "u32", "u16", "u8", "i64", "i32", "i16", "i8"};
     char text[128], digits[128];
     size_t length = (size_t)token->length, suffix_length = 0, i, n = 0;
+    // A literal longer than the buffer is never representable: refuse it before the
+    // truncated text is read with the untruncated length.
+    if (length >= sizeof(text)) {
+        diagnostic_at(c, token, "E-TYPE-0004", "integer literal is not representable");
+        length = sizeof(text) - 1;
+    }
     const char *suffix = 0;
     int base = 10;
     uint64_t value = 0;
