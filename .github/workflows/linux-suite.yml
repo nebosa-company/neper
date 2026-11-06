@@ -1,15 +1,17 @@
 name: linux-suite
 # The Linux side of the suites, which do not finish on a developer's Windows machine (run.ps1 trips on PowerShell's
-# stderr handling; the Linux build exhausts WSL's memory). Two jobs, both manual:
+# stderr handling; the Linux build exhausts WSL's memory). All jobs are manual:
 #   wasm   the wasm32-wasi checks on their own: the compiler built as neper.wasm against the native one, the
 #          curated fixtures plain and with --threads (D5651).
 #   suite  tests/selfhost/run.sh whole, which includes the whole wasm32-wasi block.
-# `only` picks one job; empty runs both.
+#   software-gl  the GPU fixtures twice: device-less (each must report 77/SKIP) and under Mesa
+#          llvmpipe/xvfb; a manual lane for the #1566 skip path.
+# `only` picks one job; empty runs wasm and suite.
 on:
   workflow_dispatch:
     inputs:
       only:
-        description: "wasm, suite, or empty for both"
+        description: "wasm, suite, software-gl, or empty for the first two"
         required: false
         default: ""
       names:
@@ -156,3 +158,83 @@ jobs:
         with:
           name: refreshed-goldens
           path: /tmp/refreshed-goldens.patch
+  software-gl:
+    # #1632: exercise the exit-77 skip path on a host with no GL device, then run the same
+    # fixtures under Mesa llvmpipe with a virtual display. Selected with `only: software-gl`.
+    if: ${{ inputs.only == 'software-gl' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Bootstrap compiler
+        run: sh scripts/build-bootstrap.sh
+      - name: Self-hosted compiler
+        run: build/linux/neper build src/main.e --arena 1g --output build/linux/neper-self
+      - name: Build the GPU fixtures
+        run: |
+          set -eu
+          b=build/linux/tests/selfhost
+          mkdir -p "$b"
+          c=build/linux/neper-self
+          for f in gpu_gl gpu_gl_cache gpu_gl_exact gpu_gl_f64 gpu_gl_limits gpu_gl_narrow gpu_gl_subgroup gpu_gl_threads; do
+            "$c" emit-executable "tests/selfhost/fixtures/link/$f/src/main.e" . x64 linux "$b/$f" --gpu glsl
+            chmod +x "$b/$f"
+          done
+          "$c" emit-executable tests/selfhost/fixtures/link/x_khronos_gl_window/src/main.e . x64 linux "$b/x-khronos-gl-window"
+          "$c" emit-executable tests/selfhost/fixtures/link/gpu_devices/src/main.e . x64 linux "$b/gpu-devices"
+          chmod +x "$b/x-khronos-gl-window" "$b/gpu-devices"
+      - name: Device-less host: every capability fixture must report 77 on its own
+        run: |
+          set -eu
+          b=build/linux/tests/selfhost
+          export DISPLAY=
+          export LIBGL_DRIVERS_PATH=/nonexistent
+          export MESA_LOADER_DRIVER_OVERRIDE=does-not-exist
+          run_skip() {
+            name=$1; shift
+            status=0
+            "$@" >/dev/null 2>&1 || status=$?
+            if [ "$status" -ne 77 ]; then echo "$name: expected 77 (SKIP), got $status"; exit 1; fi
+            echo "SKIP $name"
+          }
+          for f in gpu_gl gpu_gl_cache gpu_gl_exact gpu_gl_f64 gpu_gl_limits gpu_gl_narrow gpu_gl_subgroup gpu_gl_threads; do
+            run_skip "$f" "$b/$f"
+          done
+          run_skip x_khronos_gl_window "$b/x-khronos-gl-window"
+          devices=$("$b/gpu-devices" 2>&1) || { echo "gpu_devices failed without a device: $devices"; exit 1; }
+          if [ "$devices" != "gpu devices ok" ]; then echo "gpu_devices: $devices"; exit 1; fi
+          echo "SKIP gpu_devices keeps NoDevice/Unsupported"
+      - name: Software GL (llvmpipe): no fixture may fail, and a missing capability is SKIP
+        run: |
+          set -eu
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgl1-mesa-dri libegl-mesa0 libegl1 libgl1 libglx-mesa0 xvfb
+          b=build/linux/tests/selfhost
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export GALLIUM_DRIVER=llvmpipe
+          export MESA_LOADER_DRIVER_OVERRIDE=llvmpipe
+          Xvfb :99 -screen 0 1280x1024x24 -ac > /tmp/xvfb-software-gl.log 2>&1 &
+          export DISPLAY=:99
+          sleep 3
+          failed=0
+          passed=0
+          skipped=0
+          run() {
+            name=$1; shift
+            status=0
+            "$@" || status=$?
+            if [ "$status" -eq 0 ]; then echo "PASS $name"; passed=$((passed + 1))
+            elif [ "$status" -eq 77 ]; then echo "SKIP $name"; skipped=$((skipped + 1))
+            else echo "$name failed: exit $status"; failed=1; fi
+          }
+          for f in gpu_gl gpu_gl_cache gpu_gl_exact gpu_gl_f64 gpu_gl_limits gpu_gl_narrow gpu_gl_subgroup gpu_gl_threads; do
+            run "$f" "$b/$f"
+          done
+          run x_khronos_gl_window "$b/x-khronos-gl-window"
+          devices=$("$b/gpu-devices" 2>&1) || { echo "gpu_devices: $devices"; exit 1; }
+          if [ "$devices" != "gpu devices ok" ]; then echo "gpu_devices: $devices"; exit 1; fi
+          echo "software GL: $passed passed, $skipped skipped"
+          exit $failed
