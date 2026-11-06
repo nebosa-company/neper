@@ -5995,6 +5995,13 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     if saved_error != ok { ret saved_error }
     let (saved_before, saved_before_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
     if saved_before_error != ok { ret saved_before_error }
+    // Arena memory is not zeroed and `saved[previous] != 0` is the "was spilled" test.
+    var clear_at = 0usize
+    while clear_at < saved.len {
+        saved[clear_at] = 0usize
+        saved_before[clear_at] = 0usize
+        clear_at += 1usize
+    }
     var count = 0usize
     var literal_ok = false
     let end = usize(node.first_child) + usize(node.child_count)
