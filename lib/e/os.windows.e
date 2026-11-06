@@ -2311,6 +2311,16 @@ fn start_process(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (StartR
             ret (result, assign_error)
         }
         let resumed = raw_resume_thread(information.thread)
+        if resumed == 4294967295u32 {
+            // A child that cannot be resumed would stay suspended forever: end it, close
+            // everything, and report the resume failure as the spawn's answer (#613).
+            let resume_error = from_last_error()
+            let unused_kill = raw_terminate_process(information.process, KILL_EXIT_CODE)
+            let unused_thread = raw_close_handle(information.thread)
+            let unused_process = raw_close_handle(information.process)
+            let unused_job = raw_close_handle(job)
+            ret (result, resume_error)
+        }
     }
     let closed_thread = raw_close_handle(information.thread)
     result.group.raw = job
@@ -2497,7 +2507,13 @@ fn wait_usage(p: own Proc) -> (ProcUsage, err) {
     usage.exit_code = -1i32
     if raw_wait_for_single_object(p.raw, WAIT_INFINITE) != WAIT_OBJECT_0 { ret (usage, from_last_error_cleanup()) }
     var code = 0u32
-    if raw_exit_code_process(p.raw, &code) == 0i32 { ret (usage, from_last_error_cleanup()) }
+    if raw_exit_code_process(p.raw, &code) == 0i32 {
+        // `p` was consumed by this call, so the handle must close even when the query
+        // fails, or every such failure leaks it (#612).
+        let query_error = from_last_error()
+        let unused_close = raw_close_handle(p.raw)
+        ret (usage, query_error)
+    }
     let (peak, peak_error) = peak_of(p.raw)
     let unused_close = raw_close_handle(p.raw)
     if peak_error != ok { ret (usage, peak_error) }
