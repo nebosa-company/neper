@@ -474,10 +474,14 @@ fn link_run(a: *mem.Arena, workers: []LinkWorker, worker_count: usize, weights: 
         worker_at += 1usize
     }
     link_worker_entry(&workers[0usize])
+    // Join every started worker even when an earlier join fails, so no thread keeps
+    // running over tables the caller is about to release (#20).
+    var first_join_error = ok
     worker_at = 1usize
     while worker_at < worker_count {
         if started[worker_at] {
-            try os.thread_join(threads[worker_at])
+            let join_error = os.thread_join(threads[worker_at])
+            if join_error != ok && first_join_error == ok { first_join_error = join_error }
         } else {
             link_worker_entry(&workers[worker_at])
         }
@@ -493,7 +497,8 @@ fn link_run(a: *mem.Arena, workers: []LinkWorker, worker_count: usize, weights: 
         }
         worker_at += 1usize
     }
-    ret failure
+    if failure != ok { ret failure }
+    ret first_join_error
 }
 
 // The table, read on the workers (D333): the counts first, sequentially, so every
