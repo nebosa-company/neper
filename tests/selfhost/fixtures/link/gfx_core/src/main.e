@@ -149,6 +149,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if canvas.pixels[2usize * 16usize + 3usize * 4usize] != 1u8 || canvas.pixels[2usize * 16usize + 3usize * 4usize + 3usize] != 4u8 || canvas.pixels[2usize * 16usize + 2usize * 4usize] != 0u8 { os.exit(35i32) }
     if image.copy(canvas, source, pt(-1.0, -1.0)) != ok || canvas.pixels[0] != 1u8 || canvas.pixels[4] != 0u8 || canvas.pixels[16] != 0u8 { os.exit(36i32) }
     if image.copy(strip, source, pt(0.0, 0.0)) != image.Invalid { os.exit(37i32) }
+    // #708: an extreme (off-canvas) destination origin clips to nothing, never traps.
+    if image.copy(canvas, source, pt(1.0e30, 1.0e30)) != ok { os.exit(38i32) }
+    if image.copy(canvas, source, pt(1.0e30, 2.0)) != ok { os.exit(39i32) }
 
     try io.print("gfx core ok\n")
     ret ok

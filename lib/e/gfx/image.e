@@ -185,6 +185,11 @@ fn clear(image: Image, color: paint.Color) {
 // Blits `src` at `dst_origin` (whole pixels: the origin is truncated), clipped to `dst`.
 fn copy(dst: Image, src: ConstImage, dst_origin: geometry.Point) -> err {
     if dst.format != src.format { ret Invalid }
+    // An origin no canvas can hold is off-canvas, not a conversion trap: NaN is bad input,
+    // any finite value beyond 2^40 is fully outside the destination (#708).
+    if !(dst_origin.x == dst_origin.x) || !(dst_origin.y == dst_origin.y) { ret Invalid }
+    let span = 1099511627776.0f32
+    if dst_origin.x <= 0.0f32 - span || dst_origin.x >= span || dst_origin.y <= 0.0f32 - span || dst_origin.y >= span { ret ok }
     let width = bytes_per_pixel(dst.format)
     let ox = i64(dst_origin.x)
     let oy = i64(dst_origin.y)
