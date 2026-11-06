@@ -10,6 +10,8 @@ error InvalidObject
 
 type Symbol = struct {
     name: str,
+    module: str,
+    imported: bool,
     value: usize,
     section: usize,
     string_offset: usize,
@@ -52,10 +54,10 @@ fn append_short_name(output: *emit_x64.Buffer, name: str) -> err {
     ret ok
 }
 
-fn find_symbol(symbols: []Symbol, count: usize, name: str) -> (usize, bool) {
+fn find_symbol(symbols: []Symbol, count: usize, module: str, name: str, imported: bool) -> (usize, bool) {
     var at = 0usize
     while at < count {
-        if check.same(symbols[at].name, name) { ret (at, true) }
+        if symbols[at].imported == imported && check.same(symbols[at].module, module) && check.same(symbols[at].name, name) { ret (at, true) }
         at += 1usize
     }
     ret (0usize, false)
@@ -66,7 +68,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     var symbol_count = 0usize
     var function_at = 0usize
     while function_at < builder.function_count {
-        symbols[symbol_count] = Symbol { name: builder.functions[function_at].name, value: function_offsets[function_at], section: 1usize, string_offset: 0usize }
+        symbols[symbol_count] = Symbol { name: builder.functions[function_at].name, module: builder.functions[function_at].module_name, imported: false, value: function_offsets[function_at], section: 1usize, string_offset: 0usize }
         symbol_count += 1usize
         function_at += 1usize
     }
@@ -74,25 +76,37 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         let relocation = relocations[relocation_at]
+        // A module-scope var needs a data section this writer does not have (#23).
+        if relocation.global { ret InvalidObject }
         if !relocation.resolved {
             if relocation.function_ref >= builder.function_ref_count { ret InvalidObject }
             unresolved_count += 1usize
-            let name = builder.function_refs[relocation.function_ref].name
-            let (existing, found) = find_symbol(symbols, symbol_count, name)
+            let reference = builder.function_refs[relocation.function_ref]
+            var name = reference.name
+            var imported = false
+            if reference.library.len != 0usize {
+                name = reference.symbol
+                imported = true
+            }
+            let (existing, found) = find_symbol(symbols, symbol_count, "", name, imported)
             if !found {
                 if symbol_count == symbols.len { ret Capacity }
-                symbols[symbol_count] = Symbol { name: name, value: 0usize, section: 0usize, string_offset: 0usize }
+                symbols[symbol_count] = Symbol { name: name, module: "", imported: imported, value: 0usize, section: 0usize, string_offset: 0usize }
                 symbol_count += 1usize
             }
         }
         relocation_at += 1usize
     }
+    if unresolved_count > 65535usize { ret Capacity }
     var string_size = 4usize
     var symbol_at = 0usize
     while symbol_at < symbol_count {
-        if symbols[symbol_at].name.len > 8usize {
+        var length = symbols[symbol_at].name.len
+        if symbols[symbol_at].module.len != 0usize { length += symbols[symbol_at].module.len + 1usize }
+        if symbols[symbol_at].imported { length += 6usize }
+        if length > 8usize {
             symbols[symbol_at].string_offset = string_size
-            string_size += symbols[symbol_at].name.len + 1usize
+            string_size += length + 1usize
         }
         symbol_at += 1usize
     }
@@ -125,8 +139,14 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     while relocation_at < relocation_count {
         let relocation = relocations[relocation_at]
         if !relocation.resolved {
-            let name = builder.function_refs[relocation.function_ref].name
-            let (index, found) = find_symbol(symbols, symbol_count, name)
+            let reference = builder.function_refs[relocation.function_ref]
+            var name = reference.name
+            var imported = false
+            if reference.library.len != 0usize {
+                name = reference.symbol
+                imported = true
+            }
+            let (index, found) = find_symbol(symbols, symbol_count, "", name, imported)
             if !found { ret InvalidObject }
             try emit_x64.little_u32(output, relocation.displacement_at)
             try emit_x64.little_u32(output, index)
@@ -155,6 +175,21 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     while symbol_at < symbol_count {
         let symbol = symbols[symbol_at]
         if symbol.string_offset != 0usize {
+            byte_at = 0usize
+            if symbol.imported {
+                try emit_x64.byte(output, 95usize)
+                try emit_x64.byte(output, 95usize)
+                try emit_x64.byte(output, 105usize)
+                try emit_x64.byte(output, 109usize)
+                try emit_x64.byte(output, 112usize)
+                try emit_x64.byte(output, 95usize)
+            } else if symbol.module.len != 0usize {
+                while byte_at < symbol.module.len {
+                    try emit_x64.byte(output, widen_byte(symbol.module[byte_at]))
+                    byte_at += 1usize
+                }
+                try emit_x64.byte(output, 46usize)
+            }
             byte_at = 0usize
             while byte_at < symbol.name.len {
                 try emit_x64.byte(output, widen_byte(symbol.name[byte_at]))
