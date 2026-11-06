@@ -10,6 +10,7 @@
 use e.algo.rand
 use e.algo.rand.dist
 use e.io
+use e.math
 use e.mem
 use e.os
 
@@ -306,6 +307,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
         dist.weighted_reservoir_offer(&s, &r, 9u64, 9.0f64)
         dist.weighted_reservoir_offer(&s, &r, 0u64, 0.0f64)
         if s.count != 1usize { os.exit(4i32) }
+        // 457: a NaN key must not become the heap root and lock out heavier items.
+        var nan_items: [2]u64 = zero
+        var nan_keys: [2]f64 = zero
+        let (nan_res, nan_error) = dist.weighted_reservoir(nan_items[..], nan_keys[..])
+        if nan_error != ok { os.exit(4i32) }
+        var nan_s = nan_res
+        dist.weighted_reservoir_offer(&nan_s, &r, 1u64, math.nan64())
+        dist.weighted_reservoir_offer(&nan_s, &r, 2u64, 1.0f64)
+        dist.weighted_reservoir_offer(&nan_s, &r, 3u64, 100.0f64)
+        var nan_has_heavy = false
+        var nan_q = 0usize
+        while nan_q < nan_s.count {
+            if nan_s.items[nan_q] == 3u64 { nan_has_heavy = true }
+            nan_q += 1usize
+        }
+        if nan_s.count != 2usize || !nan_has_heavy { os.exit(4i32) }
+        // And an infinite key (u^0 == 1) never enters either.
+        var inf_items: [2]u64 = zero
+        var inf_keys: [2]f64 = zero
+        let (inf_res, inf_error) = dist.weighted_reservoir(inf_items[..], inf_keys[..])
+        if inf_error != ok { os.exit(4i32) }
+        var inf_s = inf_res
+        dist.weighted_reservoir_offer(&inf_s, &r, 4u64, math.inf64())
+        dist.weighted_reservoir_offer(&inf_s, &r, 5u64, 1.0f64)
+        if inf_s.count != 1usize { os.exit(4i32) }
         if picks[0usize] == 9u64 { heavy_wins += 1usize }
         round += 1usize
     }
@@ -424,3 +450,4 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try io.print("algo rand dist ok\n")
     ret ok
 }
+

@@ -309,7 +309,8 @@ fn weighted_reservoir(items: []u64, keys: []f64) -> (WeightedReservoir, err) {
 }
 
 fn weighted_reservoir_offer(s: *WeightedReservoir, r: *rand.Pcg64, item: u64, weight: f64) {
-    if weight <= 0.0f64 { ret }
+    // NaN and infinite weights poison the key ordering; they are never taken.
+    if !(weight == weight) || weight - weight != 0.0f64 || weight <= 0.0f64 { ret }
     let key = math.pow[f64](uniform_open(r), 1.0f64 / weight)
     if s.count < s.items.len {
         s.items[s.count] = item
@@ -532,3 +533,5 @@ fn copula_gaussian(r: *rand.Pcg64, factor: []const f64, n: usize, out: []f64, sc
     }
     ret ok
 }
+
+

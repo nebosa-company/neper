@@ -366,7 +366,8 @@ fn reservoir_weighted[T: type](items: []T, keys: []f64) -> WeightedReservoir[T] 
 fn reservoir_weighted_offer[T: type](s: *WeightedReservoir[T], r: *Pcg64, item: T, weight: f64) {
     // An empty caller-provided reservoir has no heap root to compare against.
     if s.keys.len == 0usize { ret }
-    if weight <= 0.0f64 { ret }
+    // NaN and infinite weights poison the key ordering; they are never taken.
+    if !(weight == weight) || weight - weight != 0.0f64 || weight <= 0.0f64 { ret }
     let key = math.pow[f64](pcg64_f64(r), 1.0f64 / weight)
     if s.count < s.keys.len {
         var node = s.count
@@ -560,3 +561,4 @@ fn varopt_sample(r: *Pcg64, weights: []const f64, k: usize, chosen: []usize, adj
 fn reservoir_decayed[T: type](items: []T, keys: []f64) -> WeightedReservoir[T] {
     ret reservoir_weighted[T](items, keys)
 }
+
