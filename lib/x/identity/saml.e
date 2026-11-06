@@ -22,7 +22,7 @@ use x.identity.xml as xml
 
 type Key = struct { has: bool, n: str, e: str }
 
-type Signed = struct { valid: bool, message: str, id: str, assertion: usize, signed_element: str }
+type Signed = struct { valid: bool, message: str, id: str, assertion: usize, signed_element: str, doc: xml.Doc }
 
 type Assertion = struct { present: bool, id: str, issuer: str, has_name_id: bool, name_id: str, name_id_format: str, session_index: str, authn_instant: str, not_before: str, not_on_or_after: str, audiences: []const str, recipient: str, confirmation_not_on_or_after: str, confirmation_in_response_to: str, attr_names: []const str, attr_values: []const []const str }
 
@@ -259,7 +259,7 @@ fn prefixes_of(a: *mem.Arena, d: xml.Doc, at: usize) -> []const str {
     ret split_words(a, list)
 }
 
-fn failed(msg: str) -> Signed { ret Signed { valid: false, message: msg, id: "", assertion: 0usize, signed_element: "" } }
+fn failed(msg: str) -> Signed { ret Signed { valid: false, message: msg, id: "", assertion: 0usize, signed_element: "", doc: zero } }
 
 // An enveloped XML signature over the document, against an RSA key; `id` is the Reference's target.
 fn verify_xml_signature(a: *mem.Arena, d: xml.Doc, signature: usize, has_signature: bool, key: Key) -> Signed {
@@ -321,7 +321,7 @@ fn verify_xml_signature(a: *mem.Arena, d: xml.Doc, signature: usize, has_signatu
         good = jose.verify_rs256(a, canonical_info, sig_bytes, key.n, key.e)
     }
     if !good { ret failed("SignatureValue-mismatch") }
-    ret Signed { valid: true, message: "", id: target_uri[1usize..], assertion: 0usize, signed_element: "" }
+    ret Signed { valid: true, message: "", id: target_uri[1usize..], assertion: 0usize, signed_element: "", doc: stripped }
 }
 
 // The one Assertion the response's signature covers.
@@ -344,7 +344,7 @@ fn extract_signed_assertion(a: *mem.Arena, d: xml.Doc, key: Key) -> Signed {
         var cur = i64(assertions[0])
         while cur >= 0i64 {
             if has_cov && usize(cur) == covered {
-                ret Signed { valid: true, message: "", id: "", assertion: assertions[0], signed_element: d.nodes[covered].local }
+                ret Signed { valid: true, message: "", id: "", assertion: assertions[0], signed_element: d.nodes[covered].local, doc: r.doc }
             }
             cur = d.nodes[usize(cur)].parent
         }
@@ -383,28 +383,10 @@ fn starts_with_markup(s: str) -> bool {
 }
 
 // A response message (the XML itself or its base64) read into fields, with no validation.
-fn parse_saml_response(a: *mem.Arena, encoded: str) -> Response {
-    var source = encoded
-    if !starts_with_markup(encoded) { source = from_base64(a, encoded) }
-    // A DTD is never needed for SAML and enables entity tricks; refuse it up front.
-    if str.contains(source, "<!DOCTYPE") { ret bad_response(a, "DOCTYPE-not-allowed") }
-    if source.len > 4194304usize { ret bad_response(a, "response-too-large") }
-    let d = xml.parse_xml(a, source)
-    if !d.valid { ret bad_response(a, d.message) }
-    let root = d.root
-    if !str.eq(d.nodes[root].local, "Response") { ret bad_response(a, join(a, "not-a-Response: ", d.nodes[root].local)) }
-    let (status, has_status) = xml.find_element(a, d, root, ns_protocol(), "StatusCode")
-    var status_value = ""
-    var status_has_value = false
-    if has_status {
-        let (v, found) = xml.attribute_of(d.nodes[status], "Value")
-        status_value = v
-        status_has_value = found
-    }
-    let (assertion, has_assertion) = xml.find_element(a, d, root, ns_assertion(), "Assertion")
+// The assertion fields every validation check reads, from the document the signature covers.
+fn parse_assertion(a: *mem.Arena, d: xml.Doc, assertion: usize) -> Assertion {
     var asn = empty_assertion()
-    if has_assertion {
-        asn.present = true
+    asn.present = true
         asn.id = attr_text(d, assertion, "ID")
         let (issuer, has_issuer) = xml.find_element(a, d, assertion, ns_assertion(), "Issuer")
         if has_issuer { asn.issuer = trimmed(d.nodes[issuer].text) }
@@ -470,7 +452,30 @@ fn parse_saml_response(a: *mem.Arena, encoded: str) -> Response {
         }
         asn.attr_names = names[0usize..count]
         asn.attr_values = values[0usize..count]
+    ret asn
+}
+
+fn parse_saml_response(a: *mem.Arena, encoded: str) -> Response {
+    var source = encoded
+    if !starts_with_markup(encoded) { source = from_base64(a, encoded) }
+    // A DTD is never needed for SAML and enables entity tricks; refuse it up front.
+    if str.contains(source, "<!DOCTYPE") { ret bad_response(a, "DOCTYPE-not-allowed") }
+    if source.len > 4194304usize { ret bad_response(a, "response-too-large") }
+    let d = xml.parse_xml(a, source)
+    if !d.valid { ret bad_response(a, d.message) }
+    let root = d.root
+    if !str.eq(d.nodes[root].local, "Response") { ret bad_response(a, join(a, "not-a-Response: ", d.nodes[root].local)) }
+    let (status, has_status) = xml.find_element(a, d, root, ns_protocol(), "StatusCode")
+    var status_value = ""
+    var status_has_value = false
+    if has_status {
+        let (v, found) = xml.attribute_of(d.nodes[status], "Value")
+        status_value = v
+        status_has_value = found
     }
+    let (assertion, has_assertion) = xml.find_element(a, d, root, ns_assertion(), "Assertion")
+    var asn = empty_assertion()
+    if has_assertion { asn = parse_assertion(a, d, assertion) }
     var issuer = ""
     let (top_issuer, has_top_issuer) = xml.find_element(a, d, root, ns_assertion(), "Issuer")
     if has_top_issuer { issuer = trimmed(d.nodes[top_issuer].text) }
@@ -619,7 +624,9 @@ fn validate_saml_response(a: *mem.Arena, parsed: Response, c: Config) -> Validat
         v.has_detail = parsed.status_message.len > 0usize
         ret v
     }
-    let asn = parsed.assertion
+    // Read every checked field from the digested infoset, not the original tree.
+    var asn = parsed.assertion
+    if signed.doc.valid && signed.assertion > 0usize { asn = parse_assertion(a, signed.doc, signed.assertion) }
     if !asn.present { ret none_validation("assertion-missing") }
     var issuer = asn.issuer
     if issuer.len == 0usize { issuer = parsed.issuer }
@@ -891,4 +898,6 @@ fn parse_idp_metadata(a: *mem.Arena, source: str) -> IdpMetadata {
     }
     ret IdpMetadata { valid: true, message: "", entity_id: attr_text(d, d.root, "entityID"), sso_url: sso, post_url: post, certificates: out[0usize..certs.len] }
 }
+
+
 
