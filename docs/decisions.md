@@ -43873,3 +43873,36 @@ in the section and never required.
 **Done when.** `LICENSE` carries the section (done 2026-11-06) and the text above
 matches it. No checker reads the file, so nothing else changes: the queue is untouched
 and C104 remains the first item.
+
+## D5964 — Oracle sources are pinned in-repo so fixture regeneration is self-contained
+
+Three generated fixtures compare an `e.*` port against the sibling project it came
+from: `net_policy` against Vaper's net Dart (`scripts/policy_reference.dart`),
+`algo_workflow` against Appdor's durable interpreter (`scripts/workflow_reference.mjs`)
+and `x_migrate` against Petcow's importers (`scripts/migrate_reference.py`). The
+generators used to reach those projects through absolute paths (`D:/repos/vaper` via
+`file:///` imports, `APPDOR_DIR` defaulting to `D:/repos/appdor`, an externally built
+migrate binary). A checkout was therefore a hidden test dependency: regeneration failed
+on any other machine, and a `file:///D:/...` import is not a reproducible reference.
+
+The sources are now copied under `tests/oracles/` (Vaper's six net files, Appdor's 63-file
+workflow closure) and the Petcow migrate shim lives in `tools/migrate_reference/`, each
+with a `PINNED.md` naming the upstream commit (`e874cad5076`, `b8320cace27`,
+`228a5284e59`) and a README stating the regeneration commands. The generators read the
+copies; environment overrides remain (`APPDOR_DIR`), but nothing depends on them.
+Fidelity was checked by regenerating with the copies and comparing to the
+real-repository output: `net_policy` and `algo_workflow` came out with the same SHA-256,
+and `x_migrate` is deterministic and identical to the committed fixture.
+
+Consequences. Updating a pin is an explicit act: copy the upstream files, run the
+generator, and review the fixture diff as a semantic change to the port. Generated
+vectors stay never-hand-edited; the hand-written assertions live in the templates
+(`scripts/*_fixture_template.e`, `scripts/net_policy_fixture_template.e`) and must be
+aligned with the pinned oracle when its semantics move. `net_policy` needed exactly such
+a migration (`#900`): Vaper's default cookie path, Domain handling, SameSite rule, CHIPS
+visibility and path-limited filter domains were ported, the template assertions were
+aligned and the vectors regenerated. The Vaper copy carries no upstream licence text;
+the README records that these copies are internal until that is settled. Appdor's
+journal shape and budget accounting (`#205`) and Petcow's Puppet skip-one behaviour
+(`#55`) remain upstream changes: editing a pinned copy would make the fixture disagree
+with the real project, so they stay open until those repositories change.
