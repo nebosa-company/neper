@@ -304,6 +304,48 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !malformed_peg_rejected(&direct_left, memo[..]) { os.exit(11i32) }
     if !malformed_peg_rejected(&indirect_left, memo[..]) { os.exit(11i32) }
 
+    // 12: a long left-associative chain folds iteratively (no native-stack overflow);
+    // past parse.MAX_EVAL_DEPTH frames evaluation reports Invalid instead of recursing.
+    var deep_terms: [2]usize = zero
+    deep_terms[0usize] = 6000usize
+    deep_terms[1usize] = 200000usize
+    var dt = 0usize
+    while dt < 2usize {
+        let terms = deep_terms[dt]
+        let chars = 2usize * terms - 1usize
+        let (deep_text, text_error) = mem.alloc[u8](a, chars)
+        if text_error != ok { os.exit(12i32) }
+        var c = 0usize
+        while c < chars {
+            deep_text[c] = 43u8
+            if c % 2usize == 0usize { deep_text[c] = 49u8 }
+            c += 1usize
+        }
+        let (deep_tokens, tokens_error) = mem.alloc[parse.Token](a, chars)
+        if tokens_error != ok { os.exit(12i32) }
+        let (deep_n, deep_lex) = parse.lex(deep_text[..chars], operators[..0usize], deep_tokens)
+        if deep_lex != ok { os.exit(12i32) }
+        let nodes = 2usize * terms
+        let (deep_kind, kind_error) = mem.alloc[u8](a, nodes)
+        if kind_error != ok { os.exit(12i32) }
+        let (deep_a, a_error) = mem.alloc[u32](a, nodes)
+        if a_error != ok { os.exit(12i32) }
+        let (deep_b, b_error) = mem.alloc[u32](a, nodes)
+        if b_error != ok { os.exit(12i32) }
+        let (deep_tok, tok_error) = mem.alloc[u32](a, nodes)
+        if tok_error != ok { os.exit(12i32) }
+        var deep_ast = parse.ast(deep_kind, deep_a, deep_b, deep_tok)
+        let (deep_root, deep_parse) = parse.pratt(deep_tokens[..deep_n], deep_text[..chars], ops[..], &deep_ast)
+        if deep_parse != ok { os.exit(12i32) }
+        let (deep_value, deep_eval) = parse.evaluate(&deep_ast, deep_root, deep_tokens[..deep_n], deep_text[..chars])
+        if dt == 0usize {
+            if deep_eval != ok || !close(deep_value, 6000.0f64) { os.exit(12i32) }
+        } else {
+            if deep_eval != parse.Invalid { os.exit(12i32) }
+        }
+        dt += 1usize
+    }
+
     try io.print("parse ok\n")
     ret ok
 }

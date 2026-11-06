@@ -251,6 +251,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if oversized != 0usize || oversized_error != dsp.TooSmall { os.exit(12i32) }
     if dsp.resample_sinc(x[..], 1.5f64, 4usize, out[..96usize]) != ok || !near(digest(out[..96usize]), 1.417640258162624f64, 1.0e-9f64) { os.exit(12i32) }
     if dsp.resample_sinc(x[..1usize], 1.0f64, maximum, out[..1usize]) != dsp.Invalid { os.exit(12i32) }
+    // #442: a non-finite ratio is Invalid, not a zero-sample "ok" (NaN) or a repeated
+    // first sample (positive infinity).
+    let inf = mem.bitcast[f64](9218868437227405312u64)
+    if dsp.resample_sinc(x[..], nan, 4usize, out[..96usize]) != dsp.Invalid { os.exit(12i32) }
+    if dsp.resample_sinc(x[..], inf, 4usize, out[..96usize]) != dsp.Invalid { os.exit(12i32) }
 
     try io.print("dsp ok\n")
     ret ok

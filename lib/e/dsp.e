@@ -1426,7 +1426,7 @@ fn resample_polyphase(x: []const f64, up: usize, down: usize, taps: []const f64,
 // Band-limited resampling by a Hann-windowed sinc of `half_width` input
 // samples each side: `out[i]` is the signal at input time `i / ratio`.
 fn resample_sinc(x: []const f64, ratio: f64, half_width: usize, out: []f64) -> err {
-    if ratio <= 0.0f64 || half_width == 0usize || half_width > (0usize -% 1usize) / 2usize { ret Invalid }
+    if !finite_f64(ratio) || ratio <= 0.0f64 || half_width == 0usize || half_width > (0usize -% 1usize) / 2usize { ret Invalid }
     var i = 0usize
     while i < out.len {
         let t = f64(i) / ratio

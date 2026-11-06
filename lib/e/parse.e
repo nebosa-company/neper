@@ -22,6 +22,10 @@ use e.math
 type Token = struct { kind: u8, start: usize, len: usize }
 type Op = struct { text: str, kind: u8, prec: u8, right: bool }
 type Ast = struct { kind: []u8, a: []u32, b: []u32, tok: []u32, used: usize }
+// `evaluate`'s explicit postorder stack: one frame per nesting level, so the cap
+// is also the deepest expression it can fold (8192).
+const MAX_EVAL_DEPTH: usize = 8192usize
+type EvalFrame = struct { node: u32, phase: u8, left: f64, right: f64 }
 type Grammar = struct { lhs: []const u32, rhs: []const u32, rule_start: []const usize, terminals: u32 }
 type Item = struct { rule: u32, dot: u32, origin: u32 }
 type Peg = struct { op: []const u8, a: []const u32, b: []const u32, rules: []const u32 }
@@ -444,37 +448,77 @@ fn rd_atom(p: *Parser, t: *Ast) -> (u32, err) {
 }
 
 // Fold an arithmetic AST: INT leaves, prefix `-`, infix `+ - * / ^`;
-// anything else (an identifier, a postfix) is `Invalid`.
+// anything else (an identifier, a postfix) is `Invalid`. The walk is iterative
+// (explicit postorder stack), so a long left-associative chain cannot overflow
+// the native stack; a tree deeper than `MAX_EVAL_DEPTH` frames is `Invalid`.
 fn evaluate(t: *const Ast, node: u32, tokens: []const Token, text: str) -> (f64, err) {
     if node == 0u32 { ret (0.0f64, Invalid) }
-    let n = usize(node)
-    let tok = tokens[usize(t.tok[n])]
-    let kind = t.kind[n]
-    if kind == LEAF {
-        if tok.kind != INT { ret (0.0f64, Invalid) }
-        var value = 0.0f64
-        var i = 0usize
-        while i < tok.len {
-            value = value * 10.0f64 + f64(text[tok.start + i] - 48u8)
-            i += 1usize
+    var stack: [MAX_EVAL_DEPTH]EvalFrame = zero
+    stack[0usize] = EvalFrame { node: node, phase: 0u8, left: 0.0f64, right: 0.0f64 }
+    var depth = 1usize
+    while depth > 0usize {
+        let at = depth - 1usize
+        let n = usize(stack[at].node)
+        let kind = t.kind[n]
+        if kind == LEAF {
+            let tok = tokens[usize(t.tok[n])]
+            if tok.kind != INT { ret (0.0f64, Invalid) }
+            var value = 0.0f64
+            var i = 0usize
+            while i < tok.len {
+                value = value * 10.0f64 + f64(text[tok.start + i] - 48u8)
+                i += 1usize
+            }
+            depth = at
+            if depth == 0usize { ret (value, ok) }
+            let p = depth - 1usize
+            if stack[p].phase == 0u8 { stack[p].left = value } else { stack[p].right = value }
+            stack[p].phase += 1u8
+            continue
         }
-        ret (value, ok)
+        if kind != NODE_PREFIX && kind != NODE_INFIX { ret (0.0f64, Invalid) }
+        var expected: u8 = 2u8
+        if kind == NODE_PREFIX { expected = 1u8 }
+        if stack[at].phase < expected {
+            var child = t.b[n]
+            if stack[at].phase == 0u8 { child = t.a[n] }
+            if child == 0u32 { ret (0.0f64, Invalid) }
+            if depth >= MAX_EVAL_DEPTH { ret (0.0f64, Invalid) }
+            stack[depth] = EvalFrame { node: child, phase: 0u8, left: 0.0f64, right: 0.0f64 }
+            depth += 1usize
+            continue
+        }
+        let tok = tokens[usize(t.tok[n])]
+        var value = 0.0f64
+        if kind == NODE_PREFIX {
+            let c = text[tok.start]
+            if tok.len != 1usize || c != 45u8 { ret (0.0f64, Invalid) }
+            value = 0.0f64 - stack[at].left
+        } else {
+            if tok.len != 1usize { ret (0.0f64, Invalid) }
+            let c = text[tok.start]
+            let x = stack[at].left
+            let y = stack[at].right
+            if c == 43u8 {
+                value = x + y
+            } else if c == 45u8 {
+                value = x - y
+            } else if c == 42u8 {
+                value = x * y
+            } else if c == 47u8 {
+                value = x / y
+            } else if c == 94u8 {
+                value = math.pow[f64](x, y)
+            } else {
+                ret (0.0f64, Invalid)
+            }
+        }
+        depth = at
+        if depth == 0usize { ret (value, ok) }
+        let p = depth - 1usize
+        if stack[p].phase == 0u8 { stack[p].left = value } else { stack[p].right = value }
+        stack[p].phase += 1u8
     }
-    let (x, x_error) = evaluate(t, t.a[n], tokens, text)
-    if x_error != ok { ret (0.0f64, x_error) }
-    let c = text[tok.start]
-    if kind == NODE_PREFIX {
-        if tok.len != 1usize || c != 45u8 { ret (0.0f64, Invalid) }
-        ret (0.0f64 - x, ok)
-    }
-    if kind != NODE_INFIX || tok.len != 1usize { ret (0.0f64, Invalid) }
-    let (y, y_error) = evaluate(t, t.b[n], tokens, text)
-    if y_error != ok { ret (0.0f64, y_error) }
-    if c == 43u8 { ret (x + y, ok) }
-    if c == 45u8 { ret (x - y, ok) }
-    if c == 42u8 { ret (x * y, ok) }
-    if c == 47u8 { ret (x / y, ok) }
-    if c == 94u8 { ret (math.pow[f64](x, y), ok) }
     ret (0.0f64, Invalid)
 }
 

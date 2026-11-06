@@ -412,6 +412,16 @@ fn kalman_step(k: *Kalman, measured: f64, rate: f64, dt: f64) -> f64 {
     k.p10 = k.p10 - dt * k.p11
     k.p11 = k.p11 + k.q_bias * dt
     let s = k.p00 + k.r_measure
+    if !(s > 0.0f64) {
+        // A noiseless measurement (or a caller-zeroed noise) leaves no innovation
+        // variance: take the measurement whole rather than dividing 0 by 0 into NaN.
+        k.angle = measured
+        k.p00 = 0.0f64
+        k.p01 = 0.0f64
+        k.p10 = 0.0f64
+        k.p11 = 0.0f64
+        ret k.angle
+    }
     let gain0 = k.p00 / s
     let gain1 = k.p10 / s
     let innovation = measured - k.angle

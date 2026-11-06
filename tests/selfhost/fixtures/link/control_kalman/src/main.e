@@ -40,5 +40,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if m0 != 0.0f64 || s0 != 0.0f64 { os.exit(5) }
     let (_, invalid_noise) = control.kalman_new(0.001f64, 0.003f64, 0.0f64)
     if invalid_noise != control.Invalid { os.exit(6i32) }
+    // #409: even a caller-zeroed measurement variance must not divide 0/0; a noiseless
+    // correction takes the measurement and the state stays finite.
+    let (zero_value, zero_error) = control.kalman_new(0.0f64, 0.0f64, 0.03f64)
+    if zero_error != ok { os.exit(6i32) }
+    var zero_filter = zero_value
+    zero_filter.r_measure = 0.0f64
+    control.kalman_start(&zero_filter, 0.0f64)
+    let zero_angle = control.kalman_step(&zero_filter, 12.5f64, 0.0f64, 0.01f64)
+    if !(zero_angle == 12.5f64) || zero_angle - zero_angle != 0.0f64 { os.exit(7i32) }
+    if zero_filter.p00 - zero_filter.p00 != 0.0f64 || zero_filter.p11 - zero_filter.p11 != 0.0f64 { os.exit(7i32) }
     ret ok
 }
