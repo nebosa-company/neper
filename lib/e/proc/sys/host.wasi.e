@@ -60,14 +60,12 @@ fn memory(a: *mem.Arena) -> (format.MemoryInfo, err) {
 }
 
 fn uptime_ms(a: *mem.Arena) -> (u64, err) {
+    // WASI's monotonic clock may start at module instantiation, so it is not host
+    // uptime: only the runner's uptime text can claim that.
     let (src, e) = text(a, TEXT_UPTIME, 256usize)
-    if e == ok {
-        let (ms, pe) = format.parse_uptime_ms(src)
-        ret (ms, pe)
-    }
-    let (nanoseconds, clock_error) = os.clock(.Monotonic)
-    if clock_error != ok { ret (0u64, clock_error) }
-    ret (u64(nanoseconds) / 1000000u64, ok)
+    if e != ok { ret (0u64, os.Unsupported) }
+    let (ms, pe) = format.parse_uptime_ms(src)
+    ret (ms, pe)
 }
 
 fn disk_usage(a: *mem.Arena, path: str) -> (u64, u64, u64, err) {
@@ -75,10 +73,11 @@ fn disk_usage(a: *mem.Arena, path: str) -> (u64, u64, u64, err) {
     if stat_error != ok { ret (0u64, 0u64, 0u64, stat_error) }
     let (buf, alloc_error) = mem.alloc[u8](a, 96usize)
     if alloc_error != ok { ret (0u64, 0u64, 0u64, alloc_error) }
-    var relative = "."
-    if path.len > 0usize && path[0usize] != 47u8 { relative = path }
+    // Ask the preopen the path actually resolves to, not the first one.
+    let (dirfd, relative, resolve_error) = os.resolve(path)
+    if resolve_error != ok { ret (0u64, 0u64, 0u64, resolve_error) }
     var count: [1]u32 = zero
-    let status = host_sys_disk(3u32, address_of_str(relative), u32(relative.len), u32(mem.address_of(&buf[0usize])), 96u32, u32(mem.address_of(&count[0usize])))
+    let status = host_sys_disk(dirfd, address_of_str(relative), u32(relative.len), u32(mem.address_of(&buf[0usize])), 96u32, u32(mem.address_of(&count[0usize])))
     if status != 0u32 { ret (0u64, 0u64, 0u64, os.Unsupported) }
     // "total free used", decimal
     let reply = buf[0usize..usize(count[0usize])]
@@ -125,3 +124,4 @@ fn address_of_str(value: str) -> u32 {
     let bytes: []const u8 = value
     ret u32(mem.address_of(&bytes[0usize]))
 }
+
