@@ -31,6 +31,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // No locales still means the default locale's grouping.
     let (_, e8) = realm.run(it, "if ((1234.5).toLocaleString() !== '1,234.5') throw new Error('localeDefault')")
     if e8 != ok { os.exit(8i32) }
+    // #832: currency code spacing is U+00A0, not the literal text 00a0.
+    let (_, e9) = realm.run(it, "var s = new Intl.NumberFormat('en-US', {style: 'currency', currency: 'USD', currencyDisplay: 'code'}).format(1); if (s.charCodeAt(3) !== 0xa0) throw new Error('00a0 literal' + s)")
+    if e9 != ok { os.exit(9i32) }
     try io.print("audit js number ok")
     ret ok
 }
