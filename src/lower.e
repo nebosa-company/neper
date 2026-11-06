@@ -5965,7 +5965,8 @@ fn lower_try_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
     try nir.add_operand(builder, branch_instruction, failed)
     let (error_block_index, error_block_error) = nir.begin_block(builder)
     if error_block_error != ok || error_block_index != error_block { ret nir.InvalidControlFlow }
-    var values: [16]usize = zero
+    let (values, values_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
+    if values_error != ok { ret values_error }
     var slot = 0usize
     while slot + 1usize < function.return_count {
         let (slot_type, slot_type_error) = check.function_return(c, function, slot)
@@ -5988,9 +5989,12 @@ fn lower_try_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
 }
 
 fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
-    var values: [16]usize = zero
-    var saved: [16]usize = zero
-    var saved_before: [16]usize = zero
+    let (values, values_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
+    if values_error != ok { ret values_error }
+    let (saved, saved_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
+    if saved_error != ok { ret saved_error }
+    let (saved_before, saved_before_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
+    if saved_before_error != ok { ret saved_before_error }
     var count = 0usize
     var literal_ok = false
     let end = usize(node.first_child) + usize(node.child_count)
@@ -11240,6 +11244,7 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     ret ok
 }
+
 
 
 
