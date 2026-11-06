@@ -18175,9 +18175,9 @@ fn enqueue(q: *Queue, name: str, payload: str, now: i64, delay_ms: i64, max_atte
 fn fail_at(q: *Queue, at: usize, now: i64, message: str) -> (u8, err)
 fn better(x: Job, y: Job) -> bool
 fn fetch(q: *Queue, now: i64, lease_ms: i64) -> (Job, bool, err)
-fn complete(q: *Queue, id: u64) -> err
-fn fail(q: *Queue, id: u64, now: i64, message: str) -> (u8, err)
-fn heartbeat(q: *Queue, id: u64, now: i64, lease_ms: i64) -> err
+fn complete(q: *Queue, id: u64, token: u32) -> err
+fn fail(q: *Queue, id: u64, now: i64, message: str, token: u32) -> (u8, err)
+fn heartbeat(q: *Queue, id: u64, now: i64, lease_ms: i64, token: u32) -> err
 fn requeue(q: *Queue, id: u64, now: i64) -> err
 fn get(q: *Queue, id: u64) -> (Job, bool)
 fn count(q: *Queue, state: u8) -> usize
@@ -18346,6 +18346,8 @@ error Invalid
 error TooLarge
 error Corrupt
 fn find_byte(s: str, from: usize, c: u8) -> usize
+fn scheme_default_port(scheme: str) -> u16
+fn host_header(a: *mem.Arena, dsn: *const Dsn) -> str
 fn parse_port(s: str) -> (u16, bool)
 fn parse_dsn(text: str) -> (Dsn, err)
 fn envelope_target(a: *mem.Arena, d: *const Dsn) -> (str, err)
