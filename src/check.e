@@ -104,6 +104,9 @@ type DiagnosticKind = enum u8 {
     ArrayLengthType,
     ConstantDependencyCycle,
     EnumValueRange,
+    // An integer literal whose value does not fit the type its context gives it
+    // (let x: u8 = 300, c += 300, f(256)), reported as E-TYPE-0004.
+    IntegerLiteralRange,
     DuplicateEnumValue,
     MissingZeroValue,
     MissingUndefValue,
@@ -13643,6 +13646,19 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             ret (invalid_type(), MissingContext)
         }
         let (literal, context_error) = apply_context(c, literal_type(c, text, node), expected)
+        // A literal applied to an integer context must fit that type: `let x: u8 = 300`
+        // is E-TYPE-0004 instead of a silent wrap at lowering. The parsed type is
+        // untyped for an unsuffixed literal, so only the value is checked.
+        if context_error == ok && token.kind == .Integer && literal.kind == .Integer {
+            let (magnitude, parsed_type, value_error) = integer_literal_value(c, text, node)
+            if value_error == ok {
+                let value = normalized_integer(magnitude, false)
+                if !integer_representable(value, literal) {
+                    record_failure(c, module_index, node, .IntegerLiteralRange, literal.name, literal.name)
+                    ret (invalid_type(), InvalidType)
+                }
+            }
+        }
         ret (literal, context_error)
     }
     if node.kind == .NameExpr {
@@ -13923,6 +13939,9 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         }
         let (value_type, value_error) = check_expr(c, g, tree, module_index, child_index, expected)
         if value_error != ok { ret (invalid_type(), value_error) }
+        // `-` of an unsigned value is not a negation the type can hold (the interpreter
+        // path rejects it the same way); it is InvalidOperator rather than a wrap.
+        if op == .PunctMinus && is_integer(value_type) && unsigned_integer_type(value_type) { ret (invalid_type(), InvalidOperator) }
         if op == .PunctMinus && !is_numeric(value_type) {
             if !c.generic_declaration || !type_shape_unknown(value_type) { ret (invalid_type(), InvalidOperator) }
         }
@@ -17027,7 +17046,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ReturnType { ret "E-TYPE-0002" }
     if kind == .ArrayLengthType || kind == .InitializerType { ret "E-TYPE-0002" }
     if kind == .GenericTypeArity || kind == .IteratorSignature || kind == .ProtocolSignature { ret "E-TYPE-0003" }
-    if kind == .EnumValueRange { ret "E-TYPE-0004" }
+    if kind == .EnumValueRange || kind == .IntegerLiteralRange { ret "E-TYPE-0004" }
     if kind == .CallUnknown { ret "E-NAME-0004" }
     if kind == .CallArity { ret "E-TYPE-0005" }
     if kind == .OperatorOperands { ret "E-TYPE-0006" }
@@ -17103,6 +17122,7 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .ArrayLengthType { ret "array length must have type usize" }
     if kind == .ConstantDependencyCycle { ret "constant dependency cycle" }
     if kind == .EnumValueRange { ret "enum member value is outside its backing type" }
+    if kind == .IntegerLiteralRange { ret "integer literal is outside its expected type" }
     if kind == .DuplicateEnumValue { ret "duplicate enum backing value" }
     if kind == .IteratorImmutable { ret "iterator subject must be a mutable variable or a mutable pointer" }
     if kind == .IteratorSignature { ret "iterator next function must have signature `fn <type>_next(it: *I) -> (T, bool)`" }
