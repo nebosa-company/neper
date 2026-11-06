@@ -87,6 +87,10 @@ fn flatten(a: *mem.Arena, root: *const cli.Command) -> ([]Node, err) {
         var j = 0usize
         while j < c.options.len {
             if !valid_name(c.options[j].long) { ret (zero, Invalid) }
+            // Every generated script writes `short` raw into a quoted pattern or flag;
+            // allow only a letter or digit.
+            let short = c.options[j].short
+            if short != 0u8 && !((short >= 48u8 && short <= 57u8) || (short >= 65u8 && short <= 90u8) || (short >= 97u8 && short <= 122u8)) { ret (zero, Invalid) }
             j += 1usize
         }
         i += 1usize
@@ -521,7 +525,8 @@ fn push_upper(b: *str.Builder, s: str) -> err {
 }
 
 // The page for `command`, titled `title` (the root's name, or `tool sub` for a subcommand);
-// `section` is the manual section (1), `date` and `version` go in the header and footer.
+// `section` is the manual section as an ASCII digit (`49` is section 1), and `date` and
+// `version` go in the header and footer.
 fn man_page(a: *mem.Arena, command: *const cli.Command, title: str, section: u8, date: str, version: str) -> (str, err) {
     if !valid_name(command.name) || title.len == 0usize { ret ("", Invalid) }
     var cap = 2048usize + title.len * 8usize + command.help.len * 3usize + date.len + version.len

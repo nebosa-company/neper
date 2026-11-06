@@ -59,6 +59,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var bad_o: [1]cli.Option = zero
     bad_o[0] = opt("bad name", 0u8, .Bool, false, false, "", "")
     let bad = cli.Command{ name: "bad", help: "", options: bad_o[0usize..1usize], subcommands: none_c[0usize..0usize] }
+    // invalid: a short option that would break every generated script's quoting
+    var bad_short_o: [1]cli.Option = zero
+    bad_short_o[0] = opt("quote", 34u8, .Bool, false, false, "", "")
+    let bad_short = cli.Command{ name: "badshort", help: "", options: bad_short_o[0usize..1usize], subcommands: none_c[0usize..0usize] }
     // A seventeen-word path and another branch sharing its retained suffix
     // must be rejected rather than producing an ambiguous fish condition.
     var deep: [16]cli.Command = zero
@@ -125,6 +129,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ie != complete.Invalid { os.exit(11i32) }
     let (_, ie2) = complete.fish(a, &bad)
     if ie2 != complete.Invalid { os.exit(12i32) }
+    // #95: a short option that is not a letter or digit is refused by every generator.
+    let (_, short_bash) = complete.bash(a, &bad_short)
+    if short_bash != complete.Invalid { os.exit(20i32) }
+    let (_, short_fish) = complete.fish(a, &bad_short)
+    if short_fish != complete.Invalid { os.exit(21i32) }
+    let (_, short_zsh) = complete.zsh(a, &bad_short)
+    if short_zsh != complete.Invalid { os.exit(22i32) }
     let (_, ie3) = complete.fish(a, &deep_root)
     if ie3 != complete.Invalid { os.exit(13i32) }
     let (_, ie_limit) = complete.fish(a, &deep_limit_root)

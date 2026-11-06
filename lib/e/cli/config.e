@@ -81,6 +81,38 @@ fn clear_layer(c: *Config, layer: Layer) {
     c.count = out
 }
 
+// The current entries of `layer`, so a failed replacement can put them back.
+fn save_layer(a: *mem.Arena, c: *const Config, layer: Layer) -> ([]Entry, err) {
+    var count = 0usize
+    var i = 0usize
+    while i < c.count {
+        if c.entries[i].layer == layer { count += 1usize }
+        i += 1usize
+    }
+    let (saved, se) = mem.alloc[Entry](a, count)
+    if se != ok { ret (zero, se) }
+    var out = 0usize
+    i = 0usize
+    while i < c.count {
+        if c.entries[i].layer == layer {
+            saved[out] = c.entries[i]
+            out += 1usize
+        }
+        i += 1usize
+    }
+    ret (saved, ok)
+}
+
+// Undo a failed layer replacement: drop whatever was written, then restore `saved`.
+fn restore_layer(c: *Config, layer: Layer, saved: []const Entry) {
+    clear_layer(c, layer)
+    var i = 0usize
+    while i < saved.len {
+        let ignored = set(c, layer, saved[i].key, saved[i].value)
+        i += 1usize
+    }
+}
+
 // The winning entry for `key`: highest layer; `false` when no layer sets it.
 fn lookup(c: *const Config, key: str) -> (Entry, bool) {
     var best: Entry = zero
@@ -198,25 +230,39 @@ fn flatten_json(a: *mem.Arena, c: *Config, prefix: str, v: json.Value) -> err {
     ret ok
 }
 
-// Replace the file layer with the flattened keys of a JSON document.
+// Replace the file layer with the flattened keys of a JSON document. The old layer is
+// restored when the document does not fit, so a failed reload never wipes file values.
 fn layer_json(a: *mem.Arena, c: *Config, source: str) -> err {
     let (v, pe) = json.parse(a, source, json.Options { allow_duplicate_keys: false, max_depth: 32u16 })
     if pe != ok { ret Invalid }
+    let (saved, se) = save_layer(a, c, .File)
+    if se != ok { ret se }
     clear_layer(c, .File)
-    ret flatten_json(a, c, "", v)
+    let built = flatten_json(a, c, "", v)
+    if built != ok { restore_layer(c, .File, saved) }
+    ret built
 }
 
 // Replace the file layer with an INI document's `section.key` entries (`key` outside a section).
 fn layer_ini(a: *mem.Arena, c: *Config, source: str) -> err {
     let (doc, pe) = ini.parse(a, source, ini.Options { case_sensitive: true, allow_duplicate_keys: true })
     if pe != ok { ret Invalid }
+    let (saved, se) = save_layer(a, c, .File)
+    if se != ok { ret se }
     clear_layer(c, .File)
     var i = 0usize
     while i < doc.entries.len {
         let entry = doc.entries[i]
         let (key, ke) = join_key(a, entry.section, entry.key)
-        if ke != ok { ret ke }
-        try set(c, .File, key, entry.value)
+        if ke != ok {
+            restore_layer(c, .File, saved)
+            ret ke
+        }
+        let set_error = set(c, .File, key, entry.value)
+        if set_error != ok {
+            restore_layer(c, .File, saved)
+            ret set_error
+        }
         i += 1usize
     }
     ret ok

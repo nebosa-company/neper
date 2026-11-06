@@ -5,13 +5,15 @@
 // buffer the editor uses; nothing here allocates.
 //
 // Bindings (emacs): Left/Right/Ctrl-B/Ctrl-F, Home/Ctrl-A, End/Ctrl-E, Alt-B/Alt-F and
-// Ctrl-Left/Ctrl-Right by word (alphanumeric runs), Backspace/Ctrl-H, Delete/Ctrl-D (Eof
-// on an empty line), Ctrl-K kill to end, Ctrl-U kill to start, Ctrl-W kill the
-// whitespace-delimited word before the cursor, Alt-D kill the word after, Alt-Backspace
-// kill the word before, Ctrl-Y yank, Ctrl-T transpose, Up/Ctrl-P and Down/Ctrl-N through
-// history (the line being edited is kept as a draft), Tab completion through a caller
-// callback with cycling on repeated Tab, Enter accepts, Ctrl-C interrupts, Ctrl-L asks
-// for a screen clear. Consecutive kills accumulate in the kill buffer, as in readline.
+// Ctrl-Left/Ctrl-Right by word (a word byte is a letter, a digit, `_`, or any byte >= 128:
+// so `snake_case` is one word and non-ASCII bytes are word bytes), Backspace/Ctrl-H,
+// Delete/Ctrl-D (Eof on an empty line), Ctrl-K kill to end, Ctrl-U kill to start, Ctrl-W
+// kill the whitespace-delimited word before the cursor, Alt-D kill the word after,
+// Alt-Backspace kill the word before, Ctrl-Y yank, Ctrl-T transpose, Up/Ctrl-P and
+// Down/Ctrl-N through history (the line being edited is kept as a draft), Tab completion
+// through a caller callback with cycling on repeated Tab, Enter accepts, Ctrl-C
+// interrupts, Ctrl-L asks for a screen clear. Consecutive kills accumulate in the kill
+// buffer, as in readline.
 // The cursor moves by UTF-8 code point; a code point is one terminal column (wide and
 // combining characters are not measured).
 //
@@ -27,10 +29,11 @@ type Action = enum u8 { None, Changed, Accept, Interrupt, Eof, Tab, ClearScreen 
 type Editor = struct { buf: []u8, len: usize, cursor: usize, draft: []u8, draft_len: usize, kill: []u8, kill_len: usize, last_was_kill: bool, hist_data: []u8, hist_used: usize, hist_starts: []usize, hist_lens: []usize, hist_count: usize, hist_pos: usize, cands: []str, cand_n: usize, cand_i: usize, cand_start: usize, cand_len: usize, cycling: bool }
 error TooSmall
 
-// An editor over caller storage: `buf`, `draft` and `kill` hold a line each (the draft and
-// kill buffers should be as long as `buf`), `hist_data` the history's bytes with
-// `hist_starts`/`hist_lens` its entries, `cands` the completion candidates.
-fn editor(buf: []u8, draft: []u8, kill: []u8, hist_data: []u8, hist_starts: []usize, hist_lens: []usize, cands: []str) -> Editor {
+// An editor over caller storage: `buf`, `draft` and `kill` hold a line each (`draft` and
+// `kill` must be at least as long as `buf`, or `TooSmall`), `hist_data` the history's bytes
+// with `hist_starts`/`hist_lens` its entries, `cands` the completion candidates.
+fn editor(buf: []u8, draft: []u8, kill: []u8, hist_data: []u8, hist_starts: []usize, hist_lens: []usize, cands: []str) -> (Editor, err) {
+    if draft.len < buf.len || kill.len < buf.len || hist_starts.len != hist_lens.len { ret (zero, TooSmall) }
     var e: Editor = zero
     e.buf = buf
     e.draft = draft
@@ -39,7 +42,7 @@ fn editor(buf: []u8, draft: []u8, kill: []u8, hist_data: []u8, hist_starts: []us
     e.hist_starts = hist_starts
     e.hist_lens = hist_lens
     e.cands = cands
-    ret e
+    ret (e, ok)
 }
 
 fn text(e: *const Editor) -> str {
@@ -177,7 +180,8 @@ fn kill_range(e: *Editor, start: usize, end: usize, forward: bool) {
 }
 
 fn history_add(e: *Editor, line: str) {
-    if line.len == 0usize || line.len > e.hist_data.len || e.hist_starts.len == 0usize { ret }
+    // A history entry must also fit the line buffer, or `history_prev` cannot show it.
+    if line.len == 0usize || line.len > e.hist_data.len || line.len > e.buf.len || e.hist_starts.len == 0usize { ret }
     if e.hist_count > 0usize {
         let last = e.hist_count - 1usize
         let prev = e.hist_data[e.hist_starts[last]..e.hist_starts[last] + e.hist_lens[last]]
@@ -245,6 +249,7 @@ fn insert_newline(e: *Editor) -> bool {
 fn history_prev(e: *Editor) -> bool {
     if e.hist_count == 0usize || e.hist_pos == 0usize { ret false }
     if e.hist_pos == e.hist_count {
+        if e.len > e.draft.len { ret false }
         var i = 0usize
         while i < e.len {
             e.draft[i] = e.buf[i]
@@ -574,9 +579,9 @@ fn decode(bytes: []const u8, at: usize) -> (Key, usize) {
                 if bytes[i] == 59u8 {
                     field += 1usize
                 } else if field == 0usize {
-                    p0 = p0 * 10u32 + u32(bytes[i] - 48u8)
+                    if p0 < 100000u32 { p0 = p0 * 10u32 + u32(bytes[i] - 48u8) }
                 } else {
-                    p1 = p1 * 10u32 + u32(bytes[i] - 48u8)
+                    if p1 < 100000u32 { p1 = p1 * 10u32 + u32(bytes[i] - 48u8) }
                 }
                 i += 1usize
             }
@@ -625,6 +630,9 @@ fn decode(bytes: []const u8, at: usize) -> (Key, usize) {
         k.ctrl = true
         ret (k, 1usize)
     }
+    // NUL and the remaining C0 controls (28..31) are not text; drop them instead of
+    // inserting raw control bytes into the buffer.
+    if b < 32u8 { ret (plain(.Unknown), 1usize) }
     var k = plain(.Char)
     if b < 128u8 {
         k.ch = u32(b)
@@ -632,24 +640,32 @@ fn decode(bytes: []const u8, at: usize) -> (Key, usize) {
     }
     var need = 0usize
     var cp = 0u32
-    if b >= 240u8 {
+    if b >= 240u8 && b <= 244u8 {
         need = 3usize
         cp = u32(b & 7u8)
-    } else if b >= 224u8 {
+    } else if b >= 224u8 && b <= 239u8 {
         need = 2usize
         cp = u32(b & 15u8)
-    } else if b >= 192u8 {
+    } else if b >= 194u8 && b <= 223u8 {
         need = 1usize
         cp = u32(b & 31u8)
     } else {
+        // 0x80..0xC1 are continuation/overlong leads, 0xF5..0xFF are past U+10FFFF.
         ret (plain(.Unknown), 1usize)
     }
     if at + need >= bytes.len { ret (plain(.Unknown), 0usize) }
     var i = 1usize
     while i <= need {
-        cp = (cp << 6u32) | u32(bytes[at + i] & 63u8)
+        let continuation = bytes[at + i]
+        if !is_continuation(continuation) { ret (plain(.Unknown), 1usize) }
+        cp = (cp << 6u32) | u32(continuation & 63u8)
         i += 1usize
     }
+    // Reject overlong forms, surrogates and code points past U+10FFFF.
+    if need == 1usize && cp < 128u32 { ret (plain(.Unknown), 1usize) }
+    if need == 2usize && cp < 2048u32 { ret (plain(.Unknown), 1usize) }
+    if cp >= 55296u32 && cp <= 57343u32 { ret (plain(.Unknown), 1usize) }
+    if cp > 1114111u32 { ret (plain(.Unknown), 1usize) }
     k.ch = cp
     ret (k, need + 1usize)
 }
@@ -694,13 +710,34 @@ fn render(b: *str.Builder, e: *const Editor, prompt: str, prompt_cols: usize, hi
         try str.push(b, "\x1b[0m")
     }
     try str.push(b, "\x1b[K")
-    var cols = prompt_cols
+    // Multi-line entries: the cursor may be on an earlier line and at a column that
+    // excludes the prompt and every earlier line.
+    var total_newlines = 0usize
+    var cursor_line = 0usize
+    var cursor_col = 0usize
     var i = 0usize
-    while i < e.cursor {
-        if !is_continuation(e.buf[i]) { cols += 1usize }
+    while i < e.len {
+        let c = e.buf[i]
+        if c == 10u8 {
+            total_newlines += 1usize
+            if i < e.cursor {
+                cursor_line += 1usize
+                cursor_col = 0usize
+            }
+        } else if !is_continuation(c) && i < e.cursor {
+            cursor_col += 1usize
+        }
         i += 1usize
     }
     try str.push(b, "\r")
+    let up = total_newlines - cursor_line
+    if up > 0usize {
+        try str.push(b, "\x1b[")
+        try str.push_usize(b, up)
+        try str.push(b, "A")
+    }
+    var cols = cursor_col
+    if cursor_line == 0usize { cols += prompt_cols }
     if cols > 0usize { try push_cols(b, cols) }
     ret ok
 }

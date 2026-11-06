@@ -242,6 +242,14 @@ fn check_reload(a: *mem.Arena) -> i32 {
     when target.os != .Windows {
         if config.names_file("LIVE.JSON", "live.json") { ret 52i32 }
     }
+    // #95: a file layer that does not fit is a failed reload, not a wiped layer: the
+    // previous keys must still answer after the error.
+    let (small0, small_error) = config.config(a, 3usize)
+    if small_error != ok { ret 54i32 }
+    var small = small0
+    if config.layer_json(a, &small, "{\"a\": 1, \"b\": 2}") != ok { ret 54i32 }
+    if config.layer_json(a, &small, "{\"a\": 3, \"b\": 4, \"c\": 5, \"d\": 6}") != config.Full { ret 55i32 }
+    if !value_is(&small, "a", "1") || !value_is(&small, "b", "2") { ret 56i32 }
     ret 0i32
 }
 
@@ -303,7 +311,9 @@ fn check_process_env_error() -> i32 {
     var refresh_backing: [64]u8 = zero
     var refresh = mem.arena_from(refresh_backing[..])
     let refresh_error = config.layer_process_env(&refresh, &cfg, "")
-    if refresh_error != os.OutOfMemory { ret 84i32 }
+    // The refresh arena is deliberately too small for this host's environment material-
+    // ization; either allocation-failure token is acceptable across hosts.
+    if refresh_error != os.OutOfMemory && refresh_error != mem.Exhausted { ret 84i32 }
     let (after, after_found) = config.layer_of(&cfg, "path")
     if !after_found || after != config.Layer.Env || !value_is(&cfg, "path", "old") { ret 85i32 }
     ret 0i32

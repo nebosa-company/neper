@@ -104,7 +104,9 @@ fn check_vectors(a: *mem.Arena) -> i32 {
         let (cursor_text, r5, g5) = str.split_once(r4, "~")
         let (kill_hex, render_hex, g6) = str.split_once(r5, "~")
         if !g1 || !g2 || !g3 || !g4 || !g5 || !g6 { ret 10i32 }
-        var e = line.editor(store.buf[0..], store.draft[0..], store.kill[0..], store.hist[0..], store.starts[0..], store.lens[0..], store.cands[0..])
+        let (editor_value, editor_error) = line.editor(store.buf[0..], store.draft[0..], store.kill[0..], store.hist[0..], store.starts[0..], store.lens[0..], store.cands[0..])
+        if editor_error != ok { ret 10i32 }
+        var e = editor_value
         // History seed: comma separated hex lines.
         if history_hex.len > 0usize {
             var rest = history_hex
@@ -190,9 +192,11 @@ fn press(e: *line.Editor, keys: str) {
     let action = act(e, keys)
 }
 
-fn check_hand() -> i32 {
+fn check_hand(a: *mem.Arena) -> i32 {
     var store: Store = zero
-    var e = line.editor(store.buf[0..], store.draft[0..], store.kill[0..], store.hist[0..], store.starts[0..], store.lens[0..], store.cands[0..])
+    let (editor_value, editor_error) = line.editor(store.buf[0..], store.draft[0..], store.kill[0..], store.hist[0..], store.starts[0..], store.lens[0..], store.cands[0..])
+    if editor_error != ok { ret 10i32 }
+    var e = editor_value
     // Typing, moving, deleting by code point.
     press(&e, "caf\xC3\xA9")
     if !str.eq(line.text(&e), "caf\xC3\xA9") || e.cursor != 5usize { ret 40i32 }
@@ -260,12 +264,52 @@ fn check_hand() -> i32 {
     }
     press(&e, long[0..])
     if e.len != 96usize { ret 62i32 }
+    // #95: draft/kill buffers shorter than buf are TooSmall, and a history entry that
+    // cannot fit the line buffer is not recorded (Up would silently skip it).
+    var short_draft: [8]u8 = zero
+    let (_, tight_editor) = line.editor(store.buf[0..], short_draft[..], store.kill[0..], store.hist[0..], store.starts[0..], store.lens[0..], store.cands[0..])
+    if tight_editor != line.TooSmall { ret 63i32 }
+    let before_history = e.hist_count
+    let before_used = e.hist_used
+    line.history_add(&e, long[0..])
+    if e.hist_count != before_history || e.hist_used != before_used { ret 64i32 }
+    // #95: invalid UTF-8, NUL and the remaining C0 controls are dropped, and a stray ASCII
+    // byte after a lead byte is not eaten as data.
+    line.clear(&e)
+    press(&e, "\xF8\x00\x1C")
+    if e.len != 0usize { ret 65i32 }
+    press(&e, "a\xC3b")
+    if !str.eq(line.text(&e), "ab") { ret 66i32 }
+    // #95: a very long CSI parameter run is capped rather than overflowing.
+    line.clear(&e)
+    press(&e, "abc")
+    press(&e, "\x01")
+    press(&e, "\x1B[123456789012345678901234567890C")
+    if e.cursor != 1usize { ret 67i32 }
+    // #95: render places the cursor on the last line it was on (one up, columns past the
+    // prompt), instead of counting bytes across the newline.
+    line.clear(&e)
+    press(&e, "ab")
+    if !line.insert_newline(&e) { ret 68i32 }
+    press(&e, "cd")
+    let (render_builder, render_error) = str.builder(a, 64usize)
+    if render_error != ok { ret 69i32 }
+    var render = render_builder
+    if line.render(&render, &e, "> ", 2usize, "") != ok { ret 69i32 }
+    if !str.eq(str.done(&render), "\r> ab\ncd\x1b[K\r\x1b[2C") { ret 70i32 }
+    // With the cursor before the newline the redraw moves one line up and past the prompt.
+    press(&e, "\x1B[D\x1B[D\x1B[D")
+    let (render2_builder, render2_error) = str.builder(a, 64usize)
+    if render2_error != ok { ret 71i32 }
+    var render2 = render2_builder
+    if line.render(&render2, &e, "> ", 2usize, "") != ok { ret 71i32 }
+    if !str.eq(str.done(&render2), "\r> ab\ncd\x1b[K\r\x1b[1A\x1b[4C") { ret 72i32 }
     ret 0i32
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
     var code = check_vectors(a)
-    if code == 0i32 { code = check_hand() }
+    if code == 0i32 { code = check_hand(a) }
     if code != 0i32 { os.exit(code) }
     let e = io.print("cli line ok")
     ret ok
