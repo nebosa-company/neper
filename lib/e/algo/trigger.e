@@ -393,10 +393,21 @@ fn day_matches(c: Cron, dom: i64, dow: i64) -> bool {
 fn next_cron_fire(c: *const Clock, cron: Cron, from_ms: f64, name: str) -> (f64, bool) {
     if !is_finite(from_ms) || !is_known_timezone(c, name) { ret (0.0f64, false) }
     let start = wall_clock(c, from_ms, name)
+    // The largest UTC offset around `from_ms`: a wall time never maps to an instant
+    // earlier than `wall - max_offset`, so a found best can stop the scan once that
+    // bound passes it.
+    var max_offset = zone_offset_ms(c, from_ms - 86400000.0f64, name)
+    let here_offset = zone_offset_ms(c, from_ms, name)
+    let after_offset = zone_offset_ms(c, from_ms + 86400000.0f64, name)
+    if here_offset > max_offset { max_offset = here_offset }
+    if after_offset > max_offset { max_offset = after_offset }
+    var best = 0.0f64
+    var best_found = false
+    var done = false
     var y = start.year
-    while y <= start.year + 400i64 {
+    while y <= start.year + 400i64 && !done {
         var mo = 1i64
-        while mo <= 12i64 {
+        while mo <= 12i64 && !done {
             if (cron.month >> u32(mo)) & 1u32 == 0u32 || (y == start.year && mo < start.month) {
                 mo += 1i64
                 continue
@@ -405,17 +416,26 @@ fn next_cron_fire(c: *const Clock, cron: Cron, from_ms: f64, name: str) -> (f64,
             var first_day = 1i64
             if y == start.year && mo == start.month { first_day = start.day }
             var d = first_day
-            while d <= last_day {
+            while d <= last_day && !done {
                 if day_matches(cron, d, weekday_of(civil_days(y, mo, d))) {
-                    let same_day = y == start.year && mo == start.month && d == start.day
                     var h = 0i64
-                    while h < 24i64 {
-                        if (cron.hour >> u32(h)) & 1u32 == 1u32 && !(same_day && h < start.hour) {
+                    while h < 24i64 && !done {
+                        if (cron.hour >> u32(h)) & 1u32 == 1u32 {
                             var mi = 0i64
-                            while mi < 60i64 {
-                                if (cron.minute >> u64(mi)) & 1u64 == 1u64 && !(same_day && h == start.hour && mi < start.minute) {
+                            while mi < 60i64 && !done {
+                                if (cron.minute >> u64(mi)) & 1u64 == 1u64 {
                                     let inst = wall_to_instants(c, y, mo, d, h, mi, name)
-                                    if inst.count > 0usize && f64(inst.at[0usize]) > from_ms { ret (f64(inst.at[0usize]), true) }
+                                    var inst_at = 0usize
+                                    while inst_at < inst.count {
+                                        let candidate = f64(inst.at[inst_at])
+                                        if candidate > from_ms && (!best_found || candidate < best) {
+                                            best = candidate
+                                            best_found = true
+                                        }
+                                        inst_at += 1usize
+                                    }
+                                    let wall_ms = f64(civil_days(y, mo, d) * DAY_MS + (h * 60i64 + mi) * 60000i64)
+                                    if best_found && wall_ms - f64(max_offset) > best { done = true }
                                 }
                                 mi += 1i64
                             }
@@ -429,20 +449,13 @@ fn next_cron_fire(c: *const Clock, cron: Cron, from_ms: f64, name: str) -> (f64,
         }
         y += 1i64
     }
-    ret (0.0f64, false)
+    ret (best, best_found)
 }
 
 // The latest occurrence at or before `now_ms`, with the same zone policy.
 fn previous_cron_fire(c: *const Clock, cron: Cron, now_ms: f64, name: str) -> (f64, bool) {
     if !is_finite(now_ms) || !is_known_timezone(c, name) { ret (0.0f64, false) }
     let start = wall_clock(c, now_ms, name)
-    let base = ms_int(now_ms)
-    var upper_offset = zone_offset_ms(c, now_ms - 86400000.0f64, name)
-    let here = zone_offset_ms(c, now_ms, name)
-    let after = zone_offset_ms(c, now_ms + 86400000.0f64, name)
-    if here > upper_offset { upper_offset = here }
-    if after > upper_offset { upper_offset = after }
-    let upper_wall = base + upper_offset
     var y = start.year
     while y >= start.year - 400i64 {
         var mo = 12i64
@@ -462,10 +475,11 @@ fn previous_cron_fire(c: *const Clock, cron: Cron, now_ms: f64, name: str) -> (f
                             var mi = 59i64
                             while mi >= 0i64 {
                                 if (cron.minute >> u64(mi)) & 1u64 == 1u64 {
-                                    let wall = civil_days(y, mo, d) * DAY_MS + (h * 60i64 + mi) * 60000i64
-                                    if wall <= upper_wall {
-                                        let inst = wall_to_instants(c, y, mo, d, h, mi, name)
-                                        if inst.count > 0usize && f64(inst.at[0usize]) <= now_ms { ret (f64(inst.at[0usize]), true) }
+                                    let inst = wall_to_instants(c, y, mo, d, h, mi, name)
+                                    var inst_at = inst.count
+                                    while inst_at > 0usize {
+                                        inst_at -= 1usize
+                                        if f64(inst.at[inst_at]) <= now_ms { ret (f64(inst.at[inst_at]), true) }
                                     }
                                 }
                                 mi -= 1i64

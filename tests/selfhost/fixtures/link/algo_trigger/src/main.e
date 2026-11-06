@@ -1265,6 +1265,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var registry = built
     let (clock, clock_error) = t.new_clock(a)
     if clock_error != ok { os.exit(91i32) }
+    // #702: America/New_York 2024-11-03 has two 01:30s (EDT 05:30Z, EST 06:30Z).
+    let (cron_130, cron_130_ok) = t.parse_cron("30 1 * * *")
+    if !cron_130_ok { os.exit(92i32) }
+    let (fb_next, fb_next_ok) = t.next_cron_fire(&clock, cron_130, 1730612700000.0f64, "America/New_York")
+    if !fb_next_ok || fb_next != 1730615400000.0f64 { os.exit(92i32) }
+    let (fb_first, fb_first_ok) = t.next_cron_fire(&clock, cron_130, 1730610000000.0f64, "America/New_York")
+    if !fb_first_ok || fb_first != 1730611800000.0f64 { os.exit(93i32) }
+    let (fb_prev, fb_prev_ok) = t.previous_cron_fire(&clock, cron_130, 1730617200000.0f64, "America/New_York")
+    if !fb_prev_ok || fb_prev != 1730615400000.0f64 { os.exit(94i32) }
+    let (fb_prev1, fb_prev1_ok) = t.previous_cron_fire(&clock, cron_130, 1730613600000.0f64, "America/New_York")
+    if !fb_prev1_ok || fb_prev1 != 1730611800000.0f64 { os.exit(95i32) }
     let (numeric_step, numeric_step_ok) = t.parse_cron("5/10 * * * *")
     if !numeric_step_ok { os.exit(116i32) }
     var minute = 5usize
