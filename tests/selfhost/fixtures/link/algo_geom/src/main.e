@@ -227,6 +227,55 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if kept_count != 3usize { os.exit(8i32) }
 
+    // #221: a pentagram ordering has consistent turns but self-intersects.
+    var pentagram: [5]geom.Point = zero
+    pentagram[0usize] = geom.point(0.0f64, 1.0f64)
+    pentagram[1usize] = geom.point(-0.951f64, 0.309f64)
+    pentagram[2usize] = geom.point(-0.588f64, -0.809f64)
+    pentagram[3usize] = geom.point(0.588f64, -0.809f64)
+    pentagram[4usize] = geom.point(0.951f64, 0.309f64)
+    var star_order: [5]geom.Point = zero
+    star_order[0usize] = pentagram[0usize]
+    star_order[1usize] = pentagram[2usize]
+    star_order[2usize] = pentagram[4usize]
+    star_order[3usize] = pentagram[1usize]
+    star_order[4usize] = pentagram[3usize]
+    if geom.is_convex(star_order[..]) { os.exit(90i32) }
+    // #221: a duplicate of the start coordinate is not repeated in the Jarvis hull.
+    var dup_points: [4]geom.Point = zero
+    dup_points[0usize] = geom.point(0.0f64, 0.0f64)
+    dup_points[1usize] = geom.point(1.0f64, 0.0f64)
+    dup_points[2usize] = geom.point(0.0f64, 1.0f64)
+    dup_points[3usize] = geom.point(0.0f64, 0.0f64)
+    var dup_out: [4]geom.Point = zero
+    let (dup_count, dup_error) = geom.hull_jarvis(dup_points[..], dup_out[..])
+    if dup_error != ok || dup_count != 3usize { os.exit(91i32) }
+    if dup_out[0usize].x == dup_out[dup_count - 1usize].x && dup_out[0usize].y == dup_out[dup_count - 1usize].y { os.exit(91i32) }
+    // #221: a constraint running through a vertex is Invalid, and a clean one is kept.
+    var cpoints: [5]geom.Point = zero
+    cpoints[0usize] = geom.point(0.0f64, 0.0f64)
+    cpoints[1usize] = geom.point(2.0f64, 0.0f64)
+    cpoints[2usize] = geom.point(2.0f64, 2.0f64)
+    cpoints[3usize] = geom.point(0.0f64, 2.0f64)
+    cpoints[4usize] = geom.point(1.0f64, 1.0f64)
+    var ctris: [64]usize = zero
+    var cscratch: [64]usize = zero
+    let (cwritten, cerror) = geom.delaunay(cpoints[..], ctris[..], cscratch[..])
+    if cerror != ok { os.exit(92i32) }
+    var through: [2]usize = zero
+    through[0usize] = 0usize
+    through[1usize] = 2usize
+    if geom.delaunay_constrained(cpoints[..], ctris[..], cwritten, through[..]) != geom.Invalid { os.exit(92i32) }
+    var square: [4]geom.Point = zero
+    square[0usize] = geom.point(0.0f64, 0.0f64)
+    square[1usize] = geom.point(2.0f64, 0.0f64)
+    square[2usize] = geom.point(2.0f64, 2.0f64)
+    square[3usize] = geom.point(0.0f64, 2.0f64)
+    var stris: [64]usize = zero
+    var sscratch: [64]usize = zero
+    let (swritten, serror) = geom.delaunay(square[..], stris[..], sscratch[..])
+    if serror != ok { os.exit(93i32) }
+    if geom.delaunay_constrained(square[..], stris[..], swritten, through[..]) != ok { os.exit(93i32) }
     try io.print("algo geom ok\n")
     ret ok
 }

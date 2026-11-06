@@ -93,9 +93,29 @@ fn polygon_area(polygon: []const Point) -> f64 {
     ret sum / 2.0f64
 }
 
-// Whether every turn has the same sign (collinear runs allowed).
+// Whether the polygon is simple: non-adjacent edges do not meet.
+fn polygon_simple(polygon: []const Point) -> bool {
+    let n = polygon.len
+    var i = 0usize
+    while i < n {
+        let a = polygon[i]
+        let b = polygon[(i + 1usize) % n]
+        var j = i + 2usize
+        while j < n {
+            let adjacent = j == i + 1usize || (i == 0usize && j == n - 1usize)
+            if !adjacent && segments_intersect(a, b, polygon[j], polygon[(j + 1usize) % n]) { ret false }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}
+
+// Whether every turn has the same sign (collinear runs allowed) and the polygon is
+// simple, so a star ordering with consistent turns is not convex (#221).
 fn is_convex(polygon: []const Point) -> bool {
     if polygon.len < 3usize { ret false }
+    if !polygon_simple(polygon) { ret false }
     var sign = 0i32
     var i = 0usize
     while i < polygon.len {
@@ -231,6 +251,8 @@ fn hull_jarvis(points: []const Point, out: []Point) -> (usize, err) {
         current = candidate
         if current == start || m >= n { break }
     }
+    // A duplicate of the start coordinate must not appear twice in the hull (#221).
+    if m > 1usize && out[m - 1usize].x == out[0usize].x && out[m - 1usize].y == out[0usize].y { m -= 1usize }
     ret (m, ok)
 }
 
@@ -933,6 +955,32 @@ fn crosses(a: Point, b: Point, c: Point, d: Point) -> bool {
 // triangulation of `points` by flipping the edges it crosses, then restores the
 // Delaunay property everywhere else. `Invalid` when a constraint runs through
 // a vertex or crosses another constraint.
+fn is_constraint_edge(edges: []const usize, u: usize, v: usize) -> bool {
+    var e = 0usize
+    while 2usize * e + 1usize < edges.len {
+        let a = edges[2usize * e]
+        let b = edges[2usize * e + 1usize]
+        if (a == u && b == v) || (a == v && b == u) { ret true }
+        e += 1usize
+    }
+    ret false
+}
+
+fn tri_has_edge(triangles: []const usize, count: usize, u: usize, v: usize) -> bool {
+    var t = 0usize
+    while t < count {
+        var i = 0usize
+        while i < 3usize {
+            let a = triangles[t * 3usize + i]
+            let b = triangles[t * 3usize + (i + 1usize) % 3usize]
+            if (a == u && b == v) || (a == v && b == u) { ret true }
+            i += 1usize
+        }
+        t += 1usize
+    }
+    ret false
+}
+
 fn delaunay_constrained(points: []const Point, triangles: []usize, written: usize, edges: []const usize) -> err {
     let count = written / 3usize
     var t = 0usize
@@ -954,7 +1002,7 @@ fn delaunay_constrained(points: []const Point, triangles: []usize, written: usiz
                 var j = i + 1usize
                 while j < count {
                     let (u, v, p, q, adjacent) = shared_edge(triangles, i, j)
-                    if adjacent && u != a && u != b && v != a && v != b && crosses(points[u], points[v], points[a], points[b]) {
+                    if adjacent && u != a && u != b && v != a && v != b && !is_constraint_edge(edges, u, v) && crosses(points[u], points[v], points[a], points[b]) {
                         crossing = true
                         let _ = flip(points, triangles, i, j, u, v, p, q)
                     }
@@ -964,6 +1012,7 @@ fn delaunay_constrained(points: []const Point, triangles: []usize, written: usiz
             }
         }
         if crossing { ret Invalid }
+        if !tri_has_edge(triangles, count, a, b) { ret Invalid }
         e += 1usize
     }
     let _ = lawson(points, triangles, written, edges)
