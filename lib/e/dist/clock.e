@@ -16,17 +16,17 @@ fn lamport() -> Lamport { ret Lamport { time: 0u64 } }
 
 // A local event; answers the new time.
 fn lamport_tick(c: *Lamport) -> u64 {
-    c.time += 1u64
+    if c.time < 18446744073709551615u64 { c.time += 1u64 }
     ret c.time
 }
 
 // The stamp to carry on an outgoing message.
 fn lamport_send(c: *Lamport) -> u64 { ret lamport_tick(c) }
 
-// Fold a received `stamp` in: max of both, then one tick.
+// Fold a received `stamp` in: max of both, then one tick (saturating).
 fn lamport_receive(c: *Lamport, stamp: u64) -> u64 {
     if stamp > c.time { c.time = stamp }
-    c.time += 1u64
+    if c.time < 18446744073709551615u64 { c.time += 1u64 }
     ret c.time
 }
 
@@ -95,18 +95,26 @@ fn hlc_now(c: *Hlc, physical: u64) -> Hlc {
 
 // A message stamped `remote` arrives at wall time `physical`; answers the stamp.
 fn hlc_receive(c: *Hlc, physical: u64, remote: Hlc) -> Hlc {
+    // A remote physical implausibly far ahead of the local wall clock is rejected: use
+    // the local time instead, with a fresh logical counter (HLC drift bound).
+    var remote_physical = remote.physical
+    var remote_logical = remote.logical
+    if remote_physical > physical && remote_physical - physical > 60000u64 {
+        remote_physical = physical
+        remote_logical = 0u64
+    }
     let old = c.physical
     var top = old
-    if remote.physical > top { top = remote.physical }
+    if remote_physical > top { top = remote_physical }
     if physical > top { top = physical }
-    if top == old && top == remote.physical {
+    if top == old && top == remote_physical {
         var l = c.logical
-        if remote.logical > l { l = remote.logical }
-        c.logical = l + 1u64
+        if remote_logical > l { l = remote_logical }
+        if l < 18446744073709551615u64 { c.logical = l + 1u64 } else { c.logical = l }
     } else if top == old {
-        c.logical += 1u64
-    } else if top == remote.physical {
-        c.logical = remote.logical + 1u64
+        if c.logical < 18446744073709551615u64 { c.logical += 1u64 }
+    } else if top == remote_physical {
+        if remote_logical < 18446744073709551615u64 { c.logical = remote_logical + 1u64 } else { c.logical = remote_logical }
     } else {
         c.logical = 0u64
     }

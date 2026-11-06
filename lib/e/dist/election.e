@@ -67,6 +67,18 @@ fn bully(alive: []const bool, initiator: usize, out: []Message) -> (usize, usize
 // or `ring_order` is not one entry per node, TooSmall when `out` overflowed.
 fn ring(alive: []const bool, ring_order: []const usize, initiator: usize, out: []Message) -> (usize, usize, err) {
     if ring_order.len != alive.len || initiator >= alive.len || !alive[initiator] { ret (0usize, 0usize, Invalid) }
+    // ring_order must be a permutation: every entry in range and no repeats, or the
+    // "two messages per alive node" claim and the alive[to] index are broken.
+    var vi = 0usize
+    while vi < ring_order.len {
+        if ring_order[vi] >= alive.len { ret (0usize, 0usize, Invalid) }
+        var vj = 0usize
+        while vj < vi {
+            if ring_order[vj] == ring_order[vi] { ret (0usize, 0usize, Invalid) }
+            vj += 1usize
+        }
+        vi += 1usize
+    }
     var start = 0usize
     while start < ring_order.len && ring_order[start] != initiator { start += 1usize }
     if start == ring_order.len { ret (0usize, 0usize, Invalid) }
