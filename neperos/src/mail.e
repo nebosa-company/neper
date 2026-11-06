@@ -2120,20 +2120,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var s: State = zero
     s.open = NONE
     // (C158) The built-in test account and its INBOX; the accounts added in the app come back from /mail_accounts.
+    // The built-in account has no password of its own: the hardcoded one let anyone log in, and the
+    // sample INBOX stays because it is added below (#257 item 10).
     let built_user = "neper"
-    let built_pass = "secret"
     var b = 0usize
     while b < built_user.len {
         s.accounts[0usize].user[b] = built_user[b]
         b += 1usize
     }
     s.accounts[0usize].user_len = built_user.len
-    b = 0usize
-    while b < built_pass.len {
-        s.accounts[0usize].pass[b] = built_pass[b]
-        b += 1usize
-    }
-    s.accounts[0usize].pass_len = built_pass.len
     s.account_total = 1usize
     let inbox_name = "INBOX"
     b = 0usize
