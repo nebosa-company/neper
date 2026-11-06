@@ -4,6 +4,9 @@ The one browser handover. For another session or account continuing the work. Go
 
 Sections 0-8 cover the CSS conformance stream, the app and its targets; section 9 covers the script-side WPT stream (DOM and web APIs, the JavaScript prelude in `lib/e/web/dom_js.e`).
 
+
+**Session close (2026-11-05, 256 rounds).** All gates re-verified on the committed tree at `3249e328b`: vendored corpus **189 of 211**, `css/css-grid/alignment` **94 of 151**, `css/css-content` **6 of 14**, and `tests/selfhost/fixtures/link/gpu_present` **green** (`gpu present ok`, exit 0). The browser app is verified on **Windows** (live window) and **wasm32-wasi** (exit 0); the Linux binary emits at 22 MB and still needs a host with WSL to run. The two landings of the closing stretch are the app itself - a worktree bisect to `74991611f` and the shared-queue fix `44dc9f93b`, which also turned `gpu_present` from exit 76 to green - and the grid-baseline answer: the row-baseline pass exists only in `layout_lanes_rows`, so normal grid placement has none, which is the 47-file block's root cause and its one-step fix. **The single next action is to add that per-row pass to `layout_grid_inner`** and compare against the reference's 16/20/24 px.
+
 ## Where the objective stands (2026-11-06, end of a long session)
 
 Measured, on the committed tree, with the numbers repeated where they matter:
