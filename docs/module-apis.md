@@ -23591,6 +23591,10 @@ The OpenSSH command line a host's variables describe (L048), after Petcow's `tra
 fn join(a: *mem.Arena, x: str, y: str) -> str
 fn https_port() -> str
 fn http_port() -> str
+fn ps_quote(a: *mem.Arena, s: str) -> str
+fn eq_ci(x: str, y: str) -> bool
+fn auth_ok(s: str) -> bool
+fn digits_only(s: str) -> bool
 fn password_env() -> str
 fn encode_command(a: *mem.Arena, script: str) -> str
 fn driver_script(a: *mem.Arena, address: str, vars: json.Value, command: str) -> str
@@ -23783,10 +23787,13 @@ OpenAPI 3.0.3 document builder (L049), after Appdor's `src/api/openapi-builder.j
 ### `x.ops.inventory`
 
 ```neper
-type Doc = struct { valid: bool, message: str, names: []const str, addresses: []const str, host_groups: []const []const str, host_vars: []const json.Value, group_names: []const str, group_vars: []const json.Value }
+type Doc = struct { valid: bool, message: str, names: []const str, addresses: []const str, host_groups: []const []const str, host_vars: []const json.Value, group_names: []const str, group_vars: []const json.Value, sources: []const DynamicSource }
+type DynamicSource = struct { cloud: str, type_name: str, address_from: str, has_group: bool, group: str, has_group_from_tag: bool, group_from_tag: str, include_unmanaged: bool }
 type Host = struct { name: str, address: str, groups: []const str, vars: json.Value }
 
 fn join(a: *mem.Arena, x: str, y: str) -> str
+fn canonical_integer(s: str) -> bool
+fn i64_text(a: *mem.Arena, n: i64) -> str
 fn sv(s: str) -> json.Value
 fn put(o: *ir.Obj, key: str, v: json.Value)
 fn new_obj(a: *mem.Arena) -> ir.Obj
