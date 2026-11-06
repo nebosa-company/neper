@@ -698,6 +698,8 @@ fn multi_paxos_step(m: *MultiPaxos, node: usize, msg: *const Message, out: *Pool
     if msg.kind == .Prepare {
         if msg.term <= n.promised { ret ok }
         n.promised = msg.term
+        // A higher ballot means another proposer has taken over: stop leading.
+        n.leading = false
         // ponytail: the promise carries only the first free slot, not the
         // accepted values; a new leader must start past every accepted slot
         var free = 0u64
@@ -722,7 +724,9 @@ fn multi_paxos_step(m: *MultiPaxos, node: usize, msg: *const Message, out: *Pool
         ret ok
     }
     if msg.kind == .Accept {
-        if msg.term < n.promised || usize(msg.index) >= n.slot_n.len { ret ok }
+        if msg.term < n.promised { ret ok }
+        // A slot the acceptor does not have must fail the step, not vanish silently.
+        if usize(msg.index) >= n.slot_n.len || usize(msg.index) >= n.slot_value.len { ret TooSmall }
         n.promised = msg.term
         n.slot_n[usize(msg.index)] = msg.term
         n.slot_value[usize(msg.index)] = msg.value
@@ -895,6 +899,17 @@ fn vr_step(v: *Vr, node: usize, msg: *const Message, out: *Pool) -> err {
         ret pool_push(out, d)
     }
     if msg.kind == .DoViewChange {
+        // DoViewChange may overtake StartViewChange at the new primary: enter the view it
+        // names before judging the message, so a reordered DVC is not dropped.
+        if msg.term > n.view {
+            if n.status == .Normal { n.last_normal = n.view }
+            n.view = msg.term
+            n.status = .ViewChange
+            n.svc_mask = mask_bit(n.id)
+            n.dvc_sent = false
+            n.dvc_mask = 0u64
+            n.best_from = NONE
+        }
         if msg.term != n.view || n.status != .ViewChange || vr_primary(v, n.view) != n.id { ret ok }
         n.dvc_mask |= mask_bit(msg.from)
         if n.best_from == NONE || msg.term2 > n.best_view || (msg.term2 == n.best_view && msg.index > n.best_op) {
