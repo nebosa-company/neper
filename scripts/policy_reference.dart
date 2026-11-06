@@ -9,12 +9,15 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'file:///D:/repos/vaper/packages/vaper_engine_core/lib/src/net/cookie_jar.dart';
-import 'file:///D:/repos/vaper/packages/vaper_engine_core/lib/src/net/cors.dart';
-import 'file:///D:/repos/vaper/packages/vaper_engine_core/lib/src/net/csp_policy.dart';
-import 'file:///D:/repos/vaper/packages/vaper_engine_core/lib/src/net/filter_list_parser.dart';
-import 'file:///D:/repos/vaper/packages/vaper_engine_core/lib/src/net/http_cache.dart';
-import 'file:///D:/repos/vaper/packages/vaper_engine_core/lib/src/net/private_network.dart';
+// The Vaper sources are pinned in this repository (tests/oracles/vaper, see its
+// PINNED.md): regeneration is self-contained and does not depend on a checkout
+// of the sibling project.
+import '../tests/oracles/vaper/net/cookie_jar.dart';
+import '../tests/oracles/vaper/net/cors.dart';
+import '../tests/oracles/vaper/net/csp_policy.dart';
+import '../tests/oracles/vaper/net/filter_list_parser.dart';
+import '../tests/oracles/vaper/net/http_cache.dart';
+import '../tests/oracles/vaper/net/private_network.dart';
 
 Map<String, String> hdrs(dynamic m) => {for (final e in (m as Map<String, dynamic>).entries) e.key: e.value as String};
 DateTime ms(dynamic v) => DateTime.fromMillisecondsSinceEpoch((v as num).toInt(), isUtc: true);

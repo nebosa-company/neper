@@ -9,7 +9,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const appdor = process.env.APPDOR_DIR || 'D:/repos/appdor';
+// Appdor's workflow runtime is pinned in this repository (tests/oracles/appdor, see
+// its PINNED.md): regeneration is self-contained. APPDOR_DIR still overrides it.
+const appdor = process.env.APPDOR_DIR || resolve(here, '..', 'tests', 'oracles', 'appdor');
 const load = (p) => import(pathToFileURL(resolve(appdor, p)).href);
 const rt = await load('src/workflow/runtime.js');
 const j = await load('src/workflow/journal.js');
