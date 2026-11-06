@@ -391,6 +391,22 @@ fn map_stack(a: *mem.Arena, ttbr: usize, pages: usize) -> (usize, usize, err) {
     ret (stack_va, stack_va + pages * PAGE, ok)
 }
 
+// Give a thread stack back: clear its level-3 entries so a later os.thread_create can reuse
+// the window (the physical pages remain in the kernel arena) (#202 item 6).
+fn unmap_stack(ttbr: usize, stack_va: usize, pages: usize) {
+    let l1 = ttbr & TABLE_MASK
+    let l2 = usize(os.load64(l1 + L1_USER_INDEX * 8usize)) & TABLE_MASK
+    let l3 = usize(os.load64(l2)) & TABLE_MASK
+    var i = 0usize
+    while i < pages {
+        let index = (stack_va - USER_BASE) / PAGE + i
+        if index < 512usize { os.store64(l3 + index * 8usize, 0u64) }
+        i += 1usize
+    }
+    os.barrier()
+    os.tlb_flush()
+}
+
 // The physical address behind user VA `va` in the address space rooted at `ttbr`, or 0 when the page is not
 // mapped (the same three-level walk as `protect`).
 fn translate(ttbr: usize, va: usize) -> usize {

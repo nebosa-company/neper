@@ -330,6 +330,7 @@ fn thread_spawn(frame: *a64.Frame) {
         frame.x[0usize] = 18446744073709551615u64
         ret
     }
+    thread.set_stack(index, stack_va, pages)
     frame.x[0usize] = u64(index)
 }
 
