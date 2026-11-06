@@ -136,6 +136,125 @@ fn serve_https(job: *HttpServerJob) {
     if http.write_response(&encoder, &response) != ok || tls.close(&secure) != ok { job.failed = true }
 }
 
+// #176: a mainstream ClientHello: TLS 1.3 first but TLS 1.2 also offered, two supported
+// groups, and two key shares (the second entry, x25519, is the usable one).
+fn tolerant_hello(out: []u8) -> usize {
+    var at = 0usize
+    out[at] = 1u8
+    at += 1usize
+    out[at] = 0u8
+    out[at + 1usize] = 0u8
+    out[at + 2usize] = 0u8
+    at += 3usize
+    out[at] = 3u8
+    out[at + 1usize] = 3u8
+    at += 2usize
+    var z = 0usize
+    while z < 32usize {
+        out[at] = 0u8
+        at += 1usize
+        z += 1usize
+    }
+    out[at] = 0u8
+    at += 1usize
+    out[at] = 0u8
+    out[at + 1usize] = 2u8
+    at += 2usize
+    out[at] = 19u8
+    out[at + 1usize] = 1u8
+    at += 2usize
+    out[at] = 1u8
+    out[at + 1usize] = 0u8
+    at += 2usize
+    let ext_len_at = at
+    at += 2usize
+    let ext_start = at
+    // signature_algorithms
+    out[at] = 0u8
+    out[at + 1usize] = 13u8
+    at += 2usize
+    out[at] = 0u8
+    out[at + 1usize] = 4u8
+    at += 2usize
+    out[at] = 0u8
+    out[at + 1usize] = 2u8
+    at += 2usize
+    out[at] = 8u8
+    out[at + 1usize] = 7u8
+    at += 2usize
+    // supported_versions: TLS 1.3 then TLS 1.2
+    out[at] = 0u8
+    out[at + 1usize] = 43u8
+    at += 2usize
+    out[at] = 0u8
+    out[at + 1usize] = 5u8
+    at += 2usize
+    out[at] = 4u8
+    out[at + 1usize] = 3u8
+    out[at + 2usize] = 4u8
+    out[at + 3usize] = 3u8
+    out[at + 4usize] = 3u8
+    at += 5usize
+    // supported_groups: p256 then x25519
+    out[at] = 0u8
+    out[at + 1usize] = 10u8
+    at += 2usize
+    out[at] = 0u8
+    out[at + 1usize] = 6u8
+    at += 2usize
+    out[at] = 0u8
+    out[at + 1usize] = 4u8
+    at += 2usize
+    out[at] = 0u8
+    out[at + 1usize] = 23u8
+    at += 2usize
+    out[at] = 0u8
+    out[at + 1usize] = 29u8
+    at += 2usize
+    // key_share: a p256 share first, then the x25519 one
+    out[at] = 0u8
+    out[at + 1usize] = 51u8
+    at += 2usize
+    let key_share_ext_len_at = at
+    at += 2usize
+    let list_len_at = at
+    at += 2usize
+    out[at] = 0u8
+    out[at + 1usize] = 23u8
+    at += 2usize
+    out[at] = 0u8
+    out[at + 1usize] = 1u8
+    at += 2usize
+    out[at] = 9u8
+    at += 1usize
+    out[at] = 0u8
+    out[at + 1usize] = 29u8
+    at += 2usize
+    out[at] = 0u8
+    out[at + 1usize] = 32u8
+    at += 2usize
+    var k = 0usize
+    while k < 32usize {
+        out[at] = u8(k + 1usize)
+        at += 1usize
+        k += 1usize
+    }
+    let list_len = at - (list_len_at + 2usize)
+    out[list_len_at] = u8(list_len >> 8usize)
+    out[list_len_at + 1usize] = u8(list_len)
+    let key_share_value_len = at - (key_share_ext_len_at + 2usize)
+    out[key_share_ext_len_at] = u8(key_share_value_len >> 8usize)
+    out[key_share_ext_len_at + 1usize] = u8(key_share_value_len)
+    let ext_len = at - ext_start
+    out[ext_len_at] = u8(ext_len >> 8usize)
+    out[ext_len_at + 1usize] = u8(ext_len)
+    let body_len = at - 4usize
+    out[1usize] = u8(body_len >> 16usize)
+    out[2usize] = u8(body_len >> 8usize)
+    out[3usize] = u8(body_len)
+    ret at
+}
+
 fn main(a: *mem.Arena) -> err {
     let none: [0]u8 = zero
     var source_state = io.SliceReader { data: none[0..], off: 0usize }
@@ -241,6 +360,15 @@ fn main(a: *mem.Arena) -> err {
     if client_hello_error != ok { os.exit(9i32) }
     let (hello_info, parse_client_error) = tls.parse_client_hello(client_hello[..client_hello_len], server_protocols[0..])
     if parse_client_error != ok || !same_bytes(hello_info.selected_alpn, "h2") { os.exit(10i32) }
+    // #176: the server searches supported_versions, supported_groups and key_share instead of
+    // requiring this module's own single-entry shapes.
+    var tolerant: [256]u8 = zero
+    let tolerant_len = tolerant_hello(tolerant[..])
+    let no_alpn: [1]str = zero
+    let (tolerant_info, tolerant_error) = tls.parse_client_hello(tolerant[..tolerant_len], no_alpn[0usize..0usize])
+    if tolerant_error == tls.Protocol { os.exit(15i32) }
+    if tolerant_error != ok { os.exit(17i32) }
+    if tolerant_info.peer_key.bytes[0usize] != 1u8 { os.exit(16i32) }
     // ed25519, ecdsa_secp256r1_sha256, ecdsa_secp384r1_sha384, rsa_pss_rsae_sha256/384/512 and
     // rsa_pkcs1_sha256/384/512 (D1644, D2249).
     let p256_offer = "\x00\x0d\x00\x14\x00\x12\x08\x07\x04\x03\x05\x03\x08\x04\x08\x05\x08\x06\x04\x01\x05\x01\x06\x01"
@@ -252,8 +380,19 @@ fn main(a: *mem.Arena) -> err {
     }
     if !has_p256_offer { os.exit(45i32) }
     var server_hello: [128]u8 = zero
-    let (server_hello_len, server_secret, server_hello_error) = tls.build_server_hello(hello_server_config, server_hello[0..])
+    let (server_hello_len, server_secret, server_hello_error) = tls.build_server_hello(hello_server_config, "", server_hello[0..])
     if server_hello_error != ok || server_hello_len != 90usize { os.exit(11i32) }
+    // #176: a ClientHello session id is echoed in ServerHello, and the body grows with it.
+    var session_id: [32]u8 = zero
+    var session_at = 0usize
+    while session_at < 32usize {
+        session_id[session_at] = u8(session_at + 1usize)
+        session_at += 1usize
+    }
+    var echoed_hello: [160]u8 = zero
+    let (echoed_len, echoed_secret, echoed_error) = tls.build_server_hello(hello_server_config, session_id[..], echoed_hello[0..])
+    if echoed_error != ok || echoed_len != 122usize { os.exit(13i32) }
+    if echoed_hello[38usize] != 32u8 || echoed_hello[39usize] != 1u8 || echoed_hello[70usize] != 32u8 { os.exit(13i32) }
     let (server_key, parse_server_error) = tls.parse_server_hello(server_hello[..server_hello_len])
     if parse_server_error != ok { os.exit(12i32) }
     server_hello[45] = 43u8

@@ -21,7 +21,7 @@ type ServerConfig = struct { certificate_chain: []const u8, private_key: []const
 type Stream = struct { state: *void }
 type TrafficKeys = struct { key: [16]u8, iv: [12]u8, sequence: u64 }
 type Cursor = struct { data: []const u8, off: usize }
-type ClientHelloInfo = struct { peer_key: kx.X25519PublicKey, selected_alpn: str }
+type ClientHelloInfo = struct { peer_key: kx.X25519PublicKey, selected_alpn: str, session_id: [32]u8, session_len: u8 }
 type CertificateSet = struct { leaf: x509.Certificate, intermediates: []const x509.Certificate }
 type HandshakeSecrets = struct { client: [32]u8, server: [32]u8, master: [32]u8 }
 // A record cipher a caller brings in place of `e.crypto.aead`'s AES-128-GCM, such as
@@ -422,7 +422,9 @@ fn parse_client_hello(message: []const u8, supported_alpn: []const str) -> (Clie
     let (_, random_error) = take_bytes(&c, 32usize)
     let (session_len, session_error) = take_u8(&c)
     if random_error != ok || session_error != ok || session_len > 32u8 { ret (out, Protocol) }
-    let (_, session_bytes_error) = take_bytes(&c, usize(session_len))
+    let (session, session_bytes_error) = take_bytes(&c, usize(session_len))
+    out.session_len = session_len
+    if session_bytes_error == ok { mem.copy[u8](out.session_id[0..], session) }
     let (cipher_len, cipher_error) = take_u16(&c)
     if session_bytes_error != ok || cipher_error != ok || cipher_len == 0usize || cipher_len % 2usize != 0usize { ret (out, Protocol) }
     let (ciphers, ciphers_error) = take_bytes(&c, cipher_len)
@@ -454,13 +456,48 @@ fn parse_client_hello(message: []const u8, supported_alpn: []const str) -> (Clie
         let (value, value_error) = take_bytes(&e, extension_len)
         if extension_kind_error != ok || extension_len_error != ok || value_error != ok { ret (out, Protocol) }
         if has_extension(extensions[..extension_at], extension_kind) { ret (out, Protocol) }
-        if extension_kind == 43usize { has_version = value.len == 3usize && value[0] == 2u8 && value[1] == 3u8 && value[2] == 4u8 }
-        if extension_kind == 10usize { has_group = value.len == 4usize && value[0] == 0u8 && value[1] == 2u8 && value[2] == 0u8 && value[3] == 29u8 }
+        if extension_kind == 43usize {
+            // `supported_versions`: a length byte and a list of 2-byte versions; TLS 1.3
+            // must be offered, alongside any others the client also supports.
+            if value.len >= 1usize && usize(value[0]) == value.len - 1usize && (value.len - 1usize) % 2usize == 0usize {
+                var version_at = 1usize
+                while version_at + 2usize <= value.len {
+                    if value[version_at] == 3u8 && value[version_at + 1usize] == 4u8 { has_version = true }
+                    version_at += 2usize
+                }
+            }
+        }
+        if extension_kind == 10usize {
+            // `supported_groups`: x25519 may sit anywhere in the list.
+            if value.len >= 2usize {
+                let listed = (usize(value[0]) << 8usize) | usize(value[1])
+                if listed == value.len - 2usize && listed % 2usize == 0usize {
+                    var group_at = 2usize
+                    while group_at + 2usize <= value.len {
+                        if value[group_at] == 0u8 && value[group_at + 1usize] == 29u8 { has_group = true }
+                        group_at += 2usize
+                    }
+                }
+            }
+        }
         if extension_kind == 13usize { has_signature = signature_offered(value, 8u8, 7u8) }
         if extension_kind == 51usize {
-            if value.len == 38usize && value[0] == 0u8 && value[1] == 36u8 && value[2] == 0u8 && value[3] == 29u8 && value[4] == 0u8 && value[5] == 32u8 {
-                mem.copy[u8](out.peer_key.bytes[0..], value[6..])
-                has_share = true
+            // `key_share`: a list of (group, key length, key) entries; take the x25519 one.
+            if value.len >= 2usize {
+                let listed = (usize(value[0]) << 8usize) | usize(value[1])
+                if listed == value.len - 2usize {
+                    var share_at = 2usize
+                    while share_at + 4usize <= value.len {
+                        let group = (usize(value[share_at]) << 8usize) | usize(value[share_at + 1usize])
+                        let key_len = (usize(value[share_at + 2usize]) << 8usize) | usize(value[share_at + 3usize])
+                        if share_at + 4usize + key_len > value.len { break }
+                        if group == 29usize && key_len == 32usize {
+                            mem.copy[u8](out.peer_key.bytes[0..], value[share_at + 4usize..share_at + 4usize + key_len])
+                            has_share = true
+                        }
+                        share_at += 4usize + key_len
+                    }
+                }
             }
         }
         if extension_kind == 16usize {
@@ -480,16 +517,18 @@ fn parse_client_hello(message: []const u8, supported_alpn: []const str) -> (Clie
     ret (out, ok)
 }
 
-fn fill_server_hello(config: ServerConfig, out: []u8, secret: *kx.X25519SecretKey, written: *usize) -> err {
-    if config.entropy.len < 64usize { ret Unsupported }
+fn fill_server_hello(config: ServerConfig, session: []const u8, out: []u8, secret: *kx.X25519SecretKey, written: *usize) -> err {
+    if config.entropy.len < 64usize || session.len > 32usize { ret Unsupported }
     mem.copy[u8](secret.bytes[0..], config.entropy[32usize..64usize])
     let public = kx.x25519_public_from_secret(*secret)
     var at = 0usize
     try put_u8(out, &at, 2u8)
-    try put_u24(out, &at, 86usize)
+    // The ClientHello's session id is echoed (RFC 8446 4.1.3); the body grows with it.
+    try put_u24(out, &at, 86usize + session.len)
     try put_u16(out, &at, 771usize)
     try put_bytes(out, &at, config.entropy[..32usize])
-    try put_u8(out, &at, 0u8)
+    try put_u8(out, &at, u8(session.len))
+    try put_bytes(out, &at, session)
     try put_u16(out, &at, 4865usize)
     try put_u8(out, &at, 0u8)
     try put_u16(out, &at, 46usize)
@@ -504,10 +543,10 @@ fn fill_server_hello(config: ServerConfig, out: []u8, secret: *kx.X25519SecretKe
     ret ok
 }
 
-fn build_server_hello(config: ServerConfig, out: []u8) -> (usize, kx.X25519SecretKey, err) {
+fn build_server_hello(config: ServerConfig, session: []const u8, out: []u8) -> (usize, kx.X25519SecretKey, err) {
     var secret: kx.X25519SecretKey = zero
     var written = 0usize
-    let build_error = fill_server_hello(config, out, &secret, &written)
+    let build_error = fill_server_hello(config, session, out, &secret, &written)
     ret (written, secret, build_error)
 }
 
@@ -956,7 +995,8 @@ fn read_plain(state: *State, expected_type: u8, out: []u8) -> (usize, err) {
     let header_error = io.read_exact(&state.source, header[0..])
     if header_error != ok { ret (0usize, Handshake) }
     let length = (usize(header[3]) << 8usize) | usize(header[4])
-    if header[0] != expected_type || header[1] != 3u8 || header[2] != 3u8 || length > 16384usize || length > out.len { ret (0usize, Protocol) }
+    // RFC 8446 5.1: the first ClientHello may carry legacy record version 0x0301.
+    if header[0] != expected_type || header[1] != 3u8 || header[2] < 1u8 || header[2] > 3u8 || length > 16384usize || length > out.len { ret (0usize, Protocol) }
     let content_check_error = check_control(state)
     if content_check_error != ok { ret (0usize, content_check_error) }
     let content_error = io.read_exact(&state.source, out[..length])
@@ -1121,7 +1161,7 @@ fn server_handshake(state: *State) -> err {
     hash.sha256_update(&transcript, hello[..client_hello_len])
     let (signing_key, credential_error) = validate_server_credentials(state.arena, state.server_config)
     if credential_error != ok { ret credential_error }
-    let (server_hello_len, server_secret, server_hello_error) = build_server_hello(state.server_config, hello[0..])
+    let (server_hello_len, server_secret, server_hello_error) = build_server_hello(state.server_config, client_info.session_id[0usize..usize(client_info.session_len)], hello[0..])
     if server_hello_error != ok { ret server_hello_error }
     let send_server_error = send_plain(state, 22u8, hello[..server_hello_len])
     if send_server_error != ok { ret send_server_error }
