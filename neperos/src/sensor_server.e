@@ -29,13 +29,13 @@ const REFUSED: usize = 18446744073709551615usize
 const LOCATION_SETTING: usize = 15usize
 
 const STREAMS: usize = 16usize
-const APPS: usize = 64usize
+const APPS: usize = 200usize
 // The permission mask bits: one per kind, and the fine (satellite) location.
 const BIT_FINE: usize = 32usize
 const OVERRIDE: u8 = 128u8
 
 // The overrides: two bytes an app, the mask's low byte then OVERRIDE | its high bits (a mask of 15 bits).
-type Permits = struct { b: [128]u8 }
+type Permits = struct { b: [400]u8 }
 
 type Streams = struct {
     app: [16]usize,
@@ -94,11 +94,11 @@ fn load_overrides(over: *Permits) {
     if sent == REFUSED { ret }
     fsproto.send_str(FS_REQ, "/permits")
     let result = os.recv(FS_REP, fsproto.NO_SLOT)
-    var raw: [128]u8 = zero
-    let count = fsproto.recv_bytes(FS_REP, mem.address_of(&raw[0usize]), 128usize)
-    if result != fsproto.RESULT_OK || count != 128usize { ret }
+    var raw: [400]u8 = zero
+    let count = fsproto.recv_bytes(FS_REP, mem.address_of(&raw[0usize]), 400usize)
+    if result != fsproto.RESULT_OK || count != 400usize { ret }
     var i = 0usize
-    while i < 128usize {
+    while i < 400usize {
         over.b[i] = raw[i]
         i += 1usize
     }
@@ -109,7 +109,7 @@ fn save_overrides(over: *Permits) {
     let sent = os.send(FS_REQ, fsproto.OP_WRITE, fsproto.NO_SLOT)
     if sent == REFUSED { ret }
     fsproto.send_str(FS_REQ, "/permits")
-    fsproto.send_bytes(FS_REQ, mem.address_of(&over.b[0usize]), 128usize)
+    fsproto.send_bytes(FS_REQ, mem.address_of(&over.b[0usize]), 400usize)
     let result = os.recv(FS_REP, fsproto.NO_SLOT)
 }
 
@@ -349,18 +349,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let sent_cadence = os.send(REP, cadence, NO_SLOT)
                 let sent_status = os.send(REP, status, NO_SLOT)
             } else if op == sensorclient.OP_BIOMETRIC {
-                // The recorded fingerprint sensor: the enrolled finger lies on the reader unless it is every fourth try.
+                // The recorded reader is test-only and is not wired here: outside a test boot
+                // the biometric answer is denied, never a scripted match (#215).
                 var answer = sensorclient.BIOMETRIC_DENIED
                 if app == sensorclient.APP_SHELL {
                     let (switch_value, switch_served) = sysettings.get(18usize)
-                    if switch_served && switch_value == 0usize {
-                        answer = sensorclient.BIOMETRIC_OFF
-                    } else if touches % 4usize == 3usize {
-                        answer = sensorclient.BIOMETRIC_NO
-                    } else {
-                        answer = sensorclient.BIOMETRIC_MATCH
-                    }
-                    touches += 1usize
+                    if switch_served && switch_value == 0usize { answer = sensorclient.BIOMETRIC_OFF }
                     say("sensor biometric ")
                     say_num(answer)
                     say("\n")
@@ -368,7 +362,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let sent = os.send(REP, answer, NO_SLOT)
             } else if op == sensorclient.OP_PERMIT_GET {
                 var value = 0usize
-                if (mask_of(&over, arg1) & kind_bit(kind)) != 0usize { value = 1usize }
+                if (app == sensorclient.APP_SETTINGS || arg1 == app) && (mask_of(&over, arg1) & kind_bit(kind)) != 0usize { value = 1usize }
                 let sent = os.send(REP, value, NO_SLOT)
             } else if op == sensorclient.OP_PERMIT_SET {
                 var taken = 0usize

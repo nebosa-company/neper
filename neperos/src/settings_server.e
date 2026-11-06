@@ -14,6 +14,11 @@ use theme
 use sensor_sim
 
 const REQ: usize = 2usize
+const APP_SHELL: usize = 1usize
+const APP_SETTINGS: usize = 24usize
+
+// A request word carries the kernel stamp in its top byte; the protocol value is the rest.
+fn recv_value() -> usize { ret os.recv(REQ, sysettings.NO_SLOT) & 72057594037927935usize }
 const REP: usize = 3usize
 const FS_REQ: usize = 4usize
 const FS_REP: usize = 5usize
@@ -264,7 +269,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var torch_last = 5usize
     var torch_until = 0usize
     // (C148) The clipboard: the text as four words, its length, owner and the second it was put.
-    var clip: [16]usize = zero
+    var clip: [19]usize = zero
     var clip_len = 0usize
     var clip_owner = 0usize
     var clip_stamp = 0usize
@@ -281,7 +286,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // (C163) While the torch is on under a limit the server wakes every half second to see whether it has passed.
         var wait_slot = sysettings.NO_SLOT
         if torch_until != 0usize { wait_slot = 1500usize }
-        let op = os.recv(REQ, wait_slot)
+        let raw_op = os.recv(REQ, wait_slot)
+        let app = raw_op >> 56usize
+        let op = raw_op & 255usize
         // The limit is checked at every request too, not only when the wait ran out: an app that polls the torch
         // would otherwise keep the server from ever timing out.
         if torch_until != 0usize && now_ms() >= torch_until {
@@ -292,18 +299,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if op == TIMED_OUT {
             running = true
         } else if op == sysettings.OP_QUIT {
-            running = false
+            if app == APP_SETTINGS { running = false }
         } else if op == sysettings.OP_GET_WORD {
             let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
         } else if op == sysettings.OP_GET {
-            let index = os.recv(REQ, sysettings.NO_SLOT)
+            let index = recv_value()
             var value = 0usize
             if index < COUNT { value = usize(store.v[index]) }
             let sent = os.send(REP, value, sysettings.NO_SLOT)
         } else if op == sysettings.OP_SET {
-            let index = os.recv(REQ, sysettings.NO_SLOT)
-            let value = os.recv(REQ, sysettings.NO_SLOT)
-            if index < COUNT && value <= 10usize {
+            let index = recv_value()
+            let value = recv_value()
+            if (app == APP_SETTINGS || app == APP_SHELL) && index < COUNT && value <= 10usize {
                 store.v[index] = u8(value)
                 save(&store)
                 if index < 3usize && radios_allowed(&store) != radios {
@@ -332,7 +339,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             let sent = os.send(REP, battery, sysettings.NO_SLOT)
         } else if op == sysettings.OP_DYN_GET {
-            let index = os.recv(REQ, sysettings.NO_SLOT)
+            let index = recv_value()
             var k = 0usize
             while k < 4usize {
                 var word = 0usize
@@ -341,18 +348,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 k += 1usize
             }
         } else if op == sysettings.OP_DYN_SET {
-            let index = os.recv(REQ, sysettings.NO_SLOT)
+            let index = recv_value()
             var k = 0usize
             while k < 4usize {
-                let word = os.recv(REQ, sysettings.NO_SLOT)
-                if index < 6usize { registry.w[index * 4usize + k] = word }
+                let word = recv_value()
+                if app == APP_SETTINGS && index < 6usize { registry.w[index * 4usize + k] = word }
                 k += 1usize
             }
-            if index < 6usize { save_registry(&registry) }
+            if app == APP_SETTINGS && index < 6usize { save_registry(&registry) }
             let sent = os.send(REP, 0usize, sysettings.NO_SLOT)
         } else if op == sysettings.OP_SENSOR {
-            let kind = os.recv(REQ, sysettings.NO_SLOT)
-            let tick = os.recv(REQ, sysettings.NO_SLOT)
+            let kind = recv_value()
+            let tick = recv_value()
             let (mx, my, mz, ax, ay, az) = sensor_sim.sensors(tick)
             var x = mx
             var y = my
@@ -381,7 +388,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let sent_y = os.send(REP, usize(by), sysettings.NO_SLOT)
             let sent_z = os.send(REP, usize(bz), sysettings.NO_SLOT)
         } else if op == sysettings.OP_TORCH {
-            let level = os.recv(REQ, sysettings.NO_SLOT)
+            let level = recv_value()
             if level <= 5usize && level != torch_level {
                 torch_level = level
                 if level != 0usize {
@@ -396,8 +403,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             let sent = os.send(REP, torch_level, sysettings.NO_SLOT)
         } else if op == sysettings.OP_TORCH_FOR {
-            let level = os.recv(REQ, sysettings.NO_SLOT)
-            var seconds = os.recv(REQ, sysettings.NO_SLOT)
+            let level = recv_value()
+            var seconds = recv_value()
             if seconds == 0usize || seconds > sysettings.TORCH_MAX_SECONDS { seconds = sysettings.TORCH_MAX_SECONDS }
             if level <= 5usize {
                 if level != 0usize {
@@ -428,13 +435,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
             say(" toggle\n")
             let sent = os.send(REP, torch_level, sysettings.NO_SLOT)
         } else if op == sysettings.OP_CLIP_SET {
-            clip_owner = os.recv(REQ, sysettings.NO_SLOT)
-            clip_stamp = os.recv(REQ, sysettings.NO_SLOT)
-            clip_len = os.recv(REQ, sysettings.NO_SLOT)
+            let offered_owner = recv_value()
+            let offered_stamp = recv_value()
+            clip_len = recv_value()
             if clip_len > sysettings.CLIP_BYTES { clip_len = sysettings.CLIP_BYTES }
+            // The kernel stamp is the owner; the server clock is the age (#215).
+            clip_owner = app
+            clip_stamp = now_ms()
             var cw = 0usize
-            while cw < 16usize {
-                clip[cw] = os.recv(REQ, sysettings.NO_SLOT)
+            while cw < 19usize {
+                clip[cw] = recv_value()
                 cw += 1usize
             }
             // Only the length and owner are said, never the text.
@@ -445,8 +455,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             say("\n")
             let sent = os.send(REP, 1usize, sysettings.NO_SLOT)
         } else if op == sysettings.OP_CLIP_GET {
-            let asked_at = os.recv(REQ, sysettings.NO_SLOT)
-            if clip_len > 0usize && asked_at >= clip_stamp && asked_at - clip_stamp > clip_lifetime(usize(store.v[sysettings.CLIP_LIFETIME_SETTING])) {
+            let asked_at = recv_value()
+            if clip_len > 0usize && now_ms() > clip_stamp && now_ms() - clip_stamp > clip_lifetime(usize(store.v[sysettings.CLIP_LIFETIME_SETTING])) {
                 clip_len = 0usize
                 var zeroed = 0usize
                 while zeroed < 16usize {
@@ -458,14 +468,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let sent_length = os.send(REP, clip_len, sysettings.NO_SLOT)
             let sent_owner = os.send(REP, clip_owner, sysettings.NO_SLOT)
             var gw = 0usize
-            while gw < 16usize {
+            while gw < 19usize {
                 let sent_word = os.send(REP, clip[gw], sysettings.NO_SLOT)
                 gw += 1usize
             }
         } else if op == sysettings.OP_CLIP_CLEAR {
-            let owner = os.recv(REQ, sysettings.NO_SLOT)
+            let owner = recv_value()
             var cleared = 0usize
-            if clip_len > 0usize && clip_owner == owner {
+            if clip_len > 0usize && clip_owner == app {
                 clip_len = 0usize
                 var zeroed = 0usize
                 while zeroed < 16usize {
@@ -481,27 +491,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else if op == sysettings.OP_GET_HIDDEN {
             let sent = os.send(REP, hidden, sysettings.NO_SLOT)
         } else if op == sysettings.OP_SET_HIDDEN {
-            let index = os.recv(REQ, sysettings.NO_SLOT)
-            let flag = os.recv(REQ, sysettings.NO_SLOT)
-            if index < 29usize {
+            let index = recv_value()
+            let flag = recv_value()
+            if app == APP_SETTINGS && index < 29usize {
                 if flag != 0usize { hidden = hidden | (1usize << index) } else { hidden = hidden & ~(1usize << index) }
                 save_hidden(hidden)
             }
             let sent = os.send(REP, hidden, sysettings.NO_SLOT)
         } else if op == sysettings.OP_RESET {
-            defaults(&store)
-            save(&store)
-            if radios_allowed(&store) != radios {
-                radios = radios_allowed(&store)
-                push_radio(radios)
+            if app != APP_SETTINGS {
+                let denied = os.send(REP, system_word(&store), sysettings.NO_SLOT)
+            } else {
+                defaults(&store)
+                save(&store)
+                if radios_allowed(&store) != radios {
+                    radios = radios_allowed(&store)
+                    push_radio(radios)
+                }
+                if links_mask(&store) != links {
+                    links = links_mask(&store)
+                    push_links(links)
+                }
+                push_notify_mask(&store)
+                push_volumes(&store)
+                let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
             }
-            if links_mask(&store) != links {
-                links = links_mask(&store)
-                push_links(links)
-            }
-            push_notify_mask(&store)
-            push_volumes(&store)
-            let sent = os.send(REP, system_word(&store), sysettings.NO_SLOT)
         }
     }
     say("settings server done\n")

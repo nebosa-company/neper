@@ -116,12 +116,13 @@ fn clip_set(owner: usize, now: usize, value: str) -> bool {
     let s0 = os.send(REQ, owner, NO_SLOT)
     let s1 = os.send(REQ, now, NO_SLOT)
     let s2 = os.send(REQ, length, NO_SLOT)
+    // Seven bytes a word: the top byte is the kernel stamp on the request endpoint.
     var w = 0usize
-    while w < 16usize {
+    while w < 19usize {
         var word_value = 0usize
         var b = 0usize
-        while b < 8usize {
-            let at = w * 8usize + b
+        while b < 7usize {
+            let at = w * 7usize + b
             if at < length { word_value = word_value | (usize(value[at]) << (8usize * b)) }
             b += 1usize
         }
@@ -141,11 +142,11 @@ fn clip_get(now: usize, out: []u8) -> (usize, usize) {
     let length = os.recv(REP, NO_SLOT)
     let owner = os.recv(REP, NO_SLOT)
     var w = 0usize
-    while w < 16usize {
+    while w < 19usize {
         let word_value = os.recv(REP, NO_SLOT)
         var b = 0usize
-        while b < 8usize {
-            let at = w * 8usize + b
+        while b < 7usize {
+            let at = w * 7usize + b
             if at < out.len { out[at] = u8((word_value >> (8usize * b)) & 255usize) }
             b += 1usize
         }

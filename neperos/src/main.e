@@ -1355,6 +1355,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 }
                 thread.grant(comp_app, 9usize, thread.CAP_ENDPOINT, thread.RIGHT_SEND, 12usize)
                 thread.grant(comp_app, 10usize, thread.CAP_ENDPOINT, thread.RIGHT_RECV, 13usize)
+                // Requests carry the sender app number in the top byte; Settings is the only mutator.
+                thread.stamp_endpoint(12usize)
                 settings_present = true
                 // (D4003) The sensor server: archive entry 44, serving endpoints 14 (requests, stamped with the sender's
                 // app number by the kernel) and 15 (replies). It holds the filesystem's ends (slots 4, 5: its permission
