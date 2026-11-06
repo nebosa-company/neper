@@ -69,18 +69,26 @@ def parse_receipt(text):
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest(), doc["contract"], seen
 
 
-def verify(contract_text, receipt_text, env_level, required, audit):
+def verify(contract_text, receipt_text, env_level, required, audit, expected_environment=None, expected_policy=None, expected_bundle=None, expected_snapshot=None):
     ref = cr.reference(contract_text)
     rec = parse_receipt(receipt_text)
     if ref is None or rec is None:
         return "error"
     chash, verdict, _required_count, _canonical, _pred = ref
     _rhash, receipt_contract, results = rec
+    receipt_doc = json.loads(receipt_text)
+    if expected_environment is None: expected_environment = receipt_doc["environment"]
+    if expected_policy is None: expected_policy = receipt_doc["policy"]
+    if expected_bundle is None: expected_bundle = receipt_doc["bundle"]
+    if expected_snapshot is None: expected_snapshot = receipt_doc["snapshot"]
     cdoc = json.loads(contract_text)
     obligations = cdoc["obligations"]
     fresh = sum(1 for o in obligations if o["disposition"] == "required"
                 and o["id"] in results and results[o["id"]]["evidence"] == "executed")
     if chash != receipt_contract:
+        return "unbound %d" % fresh
+    if (receipt_doc["environment"] != expected_environment or receipt_doc["policy"] != expected_policy
+            or receipt_doc["bundle"] != expected_bundle or receipt_doc["snapshot"] != expected_snapshot):
         return "unbound %d" % fresh
     if audit != "verified":
         return "unsafe %d" % fresh

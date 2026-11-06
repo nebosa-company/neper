@@ -176,8 +176,11 @@ fn result_for(r: *const Receipt, id: str) -> (Result, bool) {
 }
 
 // The verdict on a receipt, in the module header's precedence.
-fn verify(c: *const contract.Contract, r: *const Receipt, env_level: str, required_level: str, audit_verdict: str) -> str {
+fn verify(c: *const contract.Contract, r: *const Receipt, expected_environment: str, expected_policy: str, expected_bundle: str, expected_snapshot: str, env_level: str, required_level: str, audit_verdict: str) -> str {
     if !str.eq(c.hash, r.contract_hash) { ret "unbound" }
+    // A receipt is verified only under the environment, policy, bundle and snapshot the caller
+    // names; a receipt from another run is not verified (#53).
+    if !str.eq(r.environment, expected_environment) || !str.eq(r.policy, expected_policy) || !str.eq(r.bundle, expected_bundle) || !str.eq(r.snapshot, expected_snapshot) { ret "unbound" }
     if !str.eq(audit_verdict, "verified") { ret "unsafe" }
     if !environment.permits(env_level, required_level) { ret "unhermetic" }
     var incomplete = str.eq(contract.verdict(c), "incomplete")

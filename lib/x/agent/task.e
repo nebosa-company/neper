@@ -82,6 +82,8 @@ fn allowed(from: str, to: str) -> bool {
 // A status change by the executor: "ok", "terminal" (the task is finished and stays so) or "illegal".
 fn advance(t: *Task, to: str) -> str {
     if is_terminal(t.status) { ret "terminal" }
+    // A terminal status is entered only through `complete`, so the result cannot be left empty (#53).
+    if is_terminal(to) { ret "illegal" }
     if !allowed(t.status, to) { ret "illegal" }
     t.status = to
     t.version += 1usize
@@ -242,7 +244,7 @@ fn supply_input(a: *mem.Arena, key: str, t: *Task, token: str, now: usize) -> (s
 
 // The state as canonical text and its hash: what a store keeps and a restart restores.
 fn snapshot(a: *mem.Arena, t: *const Task) -> (str, err) {
-    let (members, members_error) = mem.alloc[json.Member](a, 13usize)
+    let (members, members_error) = mem.alloc[json.Member](a, 14usize)
     if members_error != ok { ret ("", members_error) }
     let (seen_values, seen_error) = mem.alloc[json.Value](a, t.seen.len + 1usize)
     if seen_error != ok { ret ("", seen_error) }
@@ -269,7 +271,8 @@ fn snapshot(a: *mem.Arena, t: *const Task) -> (str, err) {
     members[9] = json.Member { key: "result", value: json.Value{ String: t.result_hash } }
     members[10] = json.Member { key: "seen", value: json.Value{ Array: seen_values[0usize..t.seen.len] } }
     members[11] = json.Member { key: "version", value: json.Value{ Number: json.Number { lexeme: version } } }
-    let (canonical, canonical_error) = contract.canonical_json(a, json.Value{ Object: members[0usize..12usize] })
+    members[12] = json.Member { key: "nonce", value: json.Value{ String: t.nonce } }
+    let (canonical, canonical_error) = contract.canonical_json(a, json.Value{ Object: members[0usize..13usize] })
     ret (canonical, canonical_error)
 }
 

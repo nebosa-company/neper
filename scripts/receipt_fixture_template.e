@@ -75,7 +75,7 @@ fn evaluate(a: *mem.Arena, kind: str, x: str, y: str, level: str, extra: str) ->
     if re != ok { ret "error" }
     let (required, audit, found) = str.split_once(extra, "\n")
     if !found { ret "error" }
-    let verdict = receipt.verify(&c, &r, level, required, audit)
+    let verdict = receipt.verify(&c, &r, r.environment, r.policy, r.bundle, r.snapshot, level, required, audit)
     ret join(a, join(a, verdict, " "), digit(a, receipt.fresh(&c, &r)))
 }
 

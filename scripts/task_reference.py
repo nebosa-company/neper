@@ -65,6 +65,8 @@ class Task:
     def advance(self, to):
         if self.status in TERMINAL:
             return "terminal"
+        if to in TERMINAL:
+            return "illegal"
         if to not in ALLOWED[self.status]:
             return "illegal"
         self.status = to
@@ -133,7 +135,8 @@ class Task:
     def snapshot(self):
         return canonical({"id": self.id, "operation": self.operation, "policy": self.policy, "scope": self.scope,
                           "owner": self.owner, "status": self.status, "created": self.created, "expires": self.expires,
-                          "outcome": self.outcome, "result": self.result_hash, "seen": self.seen, "version": self.version})
+                          "outcome": self.outcome, "result": self.result_hash, "seen": self.seen, "version": self.version,
+                          "nonce": self.nonce})
 
 
 def token(key, subject, now_hint=0, **over):

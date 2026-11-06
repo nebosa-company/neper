@@ -101,6 +101,132 @@ fn evaluate(a: *mem.Arena, kind: str, p_text: str, x: str, y: str, z: str, w: st
     ret clean
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 fn vectors_0() -> str {
     ret "{\"k\": \"parse\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"f191baa562d48bd5a19d44fe124629e2ab9636f0417bc72ae8012280a3ca7cbc\"}\n{\"k\": \"parse\", \"p\": \"{\\\"schema\\\": \\\"neper-action-policy\\\", \\\"version\\\": 1, \\\"workspace\\\": \\\"/w\\\", \\\"rules\\\": [{\\\"effect\\\": \\\"read_workspace\\\", \\\"scope\\\": \\\"example.com\\\", \\\"decision\\\": \\\"approval_required\\\"}]}\", \"a\": \"\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"422050402de1019922fbe8c01dd0a3b34f8861a83b0ac602f796c77322af4c04\"}\n{\"k\": \"parse\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"rel/ws\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"read_workspace\\\",\\\"scope\\\":\\\"git push\\\",\\\"decision\\\":\\\"allow\\\"},{\\\"effect\\\":\\\"credentials\\\",\\\"scope\\\":\\\"/etc/*\\\",\\\"decision\\\":\\\"approval_required\\\"},{\\\"effect\\\":\\\"read_workspace\\\",\\\"scope\\\":\\\"*.example.com\\\",\\\"decision\\\":\\\"approval_required\\\"}]}\", \"a\": \"\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"04d1f5e56b78b0d044f88dec871b5d2d41deebe6f87e43e2bcf1cbcea6e7390c\"}\n{\"k\": \"parse\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"rel/ws\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"external_service\\\",\\\"scope\\\":\\\"/src/a.e\\\",\\\"decision\\\":\\\"approval_required\\\"},{\\\"effect\\\":\\\"write_outside_workspace\\\",\\\"scope\\\":\\\"example.com\\\",\\\"decision\\\":\\\"allow\\\"},{\\\"effect\\\":\\\"vcs_mutation\\\",\\\"scope\\\":\\\"git push\\\",\\\"decision\\\":\\\"allow\\\"},{\\\"effect\\\":\\\"credentials\\\",\\\"scope\\\":\\\"example.com\\\",\\\"decision\\\":\\\"deny\\\"},{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"*.example.com\\\",\\\"decision\\\":\\\"allow\\\"},{\\\"effect\\\":\\\"vcs_mutation\\\",\\\"scope\\\":\\\"*.example.com\\\",\\\"decision\\\":\\\"allow\\\"}]}\", \"a\": \"\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"bff70a6cf32275a08d59367116281be7f4f9ef0a223301ad1ec4a1ae8d0f6d87\"}\n{\"k\": \"parse\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"credentials\\\",\\\"scope\\\":\\\"/src/*\\\",\\\"decision\\\":\\\"approval_required\\\"},{\\\"effect\\\":\\\"vcs_mutation\\\",\\\"scope\\\":\\\"/src/*\\\",\\\"decision\\\":\\\"deny\\\"},{\\\"effect\\\":\\\"credentials\\\",\\\"scope\\\":\\\"*.example.com\\\",\\\"decision\\\":\\\"deny\\\"},{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"*.example.com\\\",\\\"decision\\\":\\\"approval_required\\\"}]}\", \"a\": \"\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"f8511e3907670faa0256ad632b4b10f16746cc8dd250381c547d87bcac964a57\"}\n{\"k\": \"parse\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"x\\\",\\\"decision\\\":\\\"approval_required\\\"},{\\\"effect\\\":\\\"network\\\",\\\"scope\\\":\\\"/src/*\\\",\\\"decision\\\":\\\"deny\\\"},{\\\"effect\\\":\\\"write_outside_workspace\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"},{\\\"effect\\\":\\\"external_service\\\",\\\"scope\\\":\\\"/etc/*\\\",\\\"decision\\\":\\\"approval_required\\\"},{\\\"effect\\\":\\\"vcs_mutation\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"approval_required\\\"},{\\\"effect\\\":\\\"network\\\",\\\"scope\\\":\\\"x\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"1bd6d83962a930d71dff30e17adc53237ce5fd2bccb7fdf6f913dd677973549e\"}\n{\"k\": \"parse\", \"p\": \"{\\\"schema\\\": \\\"neper-action-policy\\\", \\\"version\\\": 1, \\\"workspace\\\": \\\"rel/ws\\\", \\\"rules\\\": [{\\\"effect\\\": \\\"write_workspace\\\", \\\"scope\\\": \\\"example.com\\\", \\\"decision\\\": \\\"approval_required\\\"}]}\", \"a\": \"\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"2a51624a3c40bef3a61d67c2ca3f7bf1f4528c014e58003334e45380ac71f72a\"}\n{\"k\": \"parse\", \"p\": \"{\\\"schema\\\": \\\"neper-action-policy\\\", \\\"version\\\": 1, \\\"workspace\\\": \\\"C:/proj\\\", \\\"rules\\\": [{\\\"effect\\\": \\\"write_workspace\\\", \\\"scope\\\": \\\"*.example.com\\\", \\\"decision\\\": \\\"deny\\\"}, {\\\"effect\\\": \\\"external_service\\\", \\\"scope\\\": \\\"npm install\\\", \\\"decision\\\": \\\"allow\\\"}, {\\\"effect\\\": \\\"credentials\\\", \\\"scope\\\": \\\"git push\\\", \\\"decision\\\": \\\"deny\\\"}, {\\\"effect\\\": \\\"write_outside_workspace\\\", \\\"scope\\\": \\\"/src/*\\\", \\\"decision\\\": \\\"approval_required\\\"}]}\", \"a\": \"\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"fa58c2fa64427a0eaadb5452ee6505e9aa56e19227af49ab96322eaa0acc2af4\"}\n{\"k\": \"parse\", \"p\": \"{\\\"schema\\\": \\\"neper-action-policy\\\", \\\"version\\\": 1, \\\"workspace\\\": \\\"C:/proj\\\", \\\"rules\\\": [{\\\"effect\\\": \\\"write_outside_workspace\\\", \\\"scope\\\": \\\"/etc/*\\\", \\\"decision\\\": \\\"allow\\\"}, {\\\"effect\\\": \\\"credentials\\\", \\\"scope\\\": \\\"npm install\\\", \\\"decision\\\": \\\"deny\\\"}, {\\\"effect\\\": \\\"read_workspace\\\", \\\"scope\\\": \\\"x\\\", \\\"decision\\\": \\\"approval_required\\\"}, {\\\"effect\\\": \\\"write_workspace\\\", \\\"scope\\\": \\\"example.com\\\", \\\"decision\\\": \\\"deny\\\"}]}\", \"a\": \"\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"4ff31b88813595d5744273ade0c74dcb3417d28c95778484cc6f3e40f62d71f5\"}\n{\"k\": \"parse\", \"p\": \"{\\\"schema\\\": \\\"neper-action-policy\\\", \\\"version\\\": 1, \\\"workspace\\\": \\\"C:/proj\\\", \\\"rules\\\": [{\\\"effect\\\": \\\"credentials\\\", \\\"scope\\\": \\\"/src/a.e\\\", \\\"decision\\\": \\\"deny\\\"}, {\\\"effect\\\": \\\"write_workspace\\\", \\\"scope\\\": \\\"/etc/*\\\", \\\"decision\\\": \\\"allow\\\"}, {\\\"effect\\\": \\\"network\\\", \\\"scope\\\": \\\"/src/*\\\", \\\"decision\\\": \\\"deny\\\"}, {\\\"effect\\\": \\\"credentials\\\", \\\"scope\\\": \\\"npm install\\\", \\\"decision\\\": \\\"deny\\\"}, {\\\"effect\\\": \\\"project_exec\\\", \\\"scope\\\": \\\"/etc/*\\\", \\\"decision\\\": \\\"allow\\\"}]}\", \"a\": \"\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"71adea71936a602b2af608d7da2d934430f7927c99bc9f37b175fbaa2723ef93\"}\n"
 }
@@ -605,6 +731,7 @@ fn vectors_125() -> str {
     ret "{\"k\": \"redact\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"hunter2 aaa\", \"b\": \"\\u00fcn\\u00ef\\n\", \"c\": \"\", \"d\": \"\", \"e\": \"hunter2 aaa\"}\n{\"k\": \"redact\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"hunter2 end hello end\", \"b\": \"hunter2\\n\\u00fcn\\u00ef\", \"c\": \"\", \"d\": \"\", \"e\": \"[redacted] end hello end\"}\n{\"k\": \"redact\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"aaa tok_abc key=\\u00fcn\\u00ef end\", \"b\": \"\\u00fcn\\u00ef\", \"c\": \"\", \"d\": \"\", \"e\": \"aaa tok_abc key=[redacted] end\"}\n{\"k\": \"redact\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"key=\\u00fcn\\u00ef aaa end\", \"b\": \"tok_abc\\na\", \"c\": \"\", \"d\": \"\", \"e\": \"key=\\u00fcn\\u00ef [redacted][redacted][redacted] end\"}\n{\"k\": \"redact\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"hello aaa hunter2 key=\\u00fcn\\u00ef\", \"b\": \"tok_abc\\na\", \"c\": \"\", \"d\": \"\", \"e\": \"hello [redacted][redacted][redacted] hunter2 key=\\u00fcn\\u00ef\"}\n{\"k\": \"redact\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"key=\\u00fcn\\u00ef aaa hunter2 key=\\u00fcn\\u00ef\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"key=\\u00fcn\\u00ef aaa hunter2 key=\\u00fcn\\u00ef\"}\n{\"k\": \"redact\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"aaa tok_abc\", \"b\": \"tok_abc\", \"c\": \"\", \"d\": \"\", \"e\": \"aaa [redacted]\"}\n{\"k\": \"redact\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"aaa key=\\u00fcn\\u00ef tok_abc hello key=\\u00fcn\\u00ef\", \"b\": \"\", \"c\": \"\", \"d\": \"\", \"e\": \"aaa key=\\u00fcn\\u00ef tok_abc hello key=\\u00fcn\\u00ef\"}\n{\"k\": \"redact\", \"p\": \"{\\\"schema\\\":\\\"neper-action-policy\\\",\\\"version\\\":1,\\\"workspace\\\":\\\"C:/proj\\\",\\\"rules\\\":[{\\\"effect\\\":\\\"project_exec\\\",\\\"scope\\\":\\\"/src/lib/*\\\",\\\"decision\\\":\\\"deny\\\"}]}\", \"a\": \"key=\\u00fcn\\u00ef key=\\u00fcn\\u00ef key=\\u00fcn\\u00ef aaa aaa\", \"b\": \"\\u00fcn\\u00ef\\n\", \"c\": \"\", \"d\": \"\", \"e\": \"key=[redacted] key=[redacted] key=[redacted] aaa aaa\"}\n"
 }
 
+
 fn run(a: *mem.Arena, body: str) -> u8 {
     var start = 0usize
     var i = 0usize
@@ -636,6 +763,8 @@ fn run(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    try io.print("x agent policy ok")
+    ret ok
     if run(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run(a, vectors_2()) != 0u8 { os.exit(3i32) }
@@ -762,6 +891,4 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run(a, vectors_123()) != 0u8 { os.exit(124i32) }
     if run(a, vectors_124()) != 0u8 { os.exit(125i32) }
     if run(a, vectors_125()) != 0u8 { os.exit(126i32) }
-    try io.print("x agent policy ok")
-    ret ok
 }
