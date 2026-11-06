@@ -3890,7 +3890,7 @@ const ATSPI_NODES: usize = 8192usize
 const ATSPI_SLOTS: usize = 16384usize
 const ATSPI_TEXT: usize = 1048576usize
 const ATSPI_STORE_BYTES: usize = 4194304usize
-const ATSPI_BUFFER: usize = 262144usize
+const ATSPI_BUFFER: usize = 2097152usize
 const ATSPI_REQUESTS: usize = 8usize
 const SYS_GETUID: usize = 102usize
 const ATSPI_UNTRIED: u8 = 0u8
@@ -3924,6 +3924,7 @@ var atspi_out: []u8 = zero
 var atspi_out_len: usize = 0usize
 var atspi_body: usize = 0usize
 var atspi_overflow: bool = zero
+var atspi_reply_serial: u32 = 0u32
 var atspi_in: []u8 = zero
 var atspi_in_len: usize = 0usize
 var atspi_name: [64]u8 = zero
@@ -4084,6 +4085,7 @@ fn d_call(destination: str, object: str, called: str, member: str, signature: st
 }
 
 fn d_reply(m: *const DMessage, signature: str) {
+    atspi_reply_serial = m.serial
     let fields = d_begin(2u8)
     d_field_u32(5u8, m.serial)
     if m.sender.len != 0usize { d_field_text(6u8, "s", m.sender) }
@@ -4118,9 +4120,19 @@ fn d_send(fd: usize) -> err {
 }
 
 // A reply, error or signal to the bus; without a bus it stays in the buffer.
+// A reply too large for the buffer becomes an explicit LimitsExceeded error instead
+// of being dropped, so the client is not left waiting (#520).
 fn d_answer() {
     d_finish()
-    if atspi_state != ATSPI_CONNECTED || atspi_overflow { ret }
+    if atspi_state != ATSPI_CONNECTED { ret }
+    if atspi_overflow {
+        let serial = atspi_reply_serial
+        let fields = d_begin(3u8)
+        d_field_text(4u8, "s", "org.freedesktop.DBus.Error.LimitsExceeded")
+        d_field_u32(5u8, serial)
+        d_body(fields)
+        d_finish()
+    }
     if d_write(atspi_socket, atspi_out[0usize..atspi_out_len]) != ok { atspi_drop() }
 }
 
@@ -5966,3 +5978,4 @@ fn sandbox(policy: *const SandboxPolicy) -> err {
 // A rectangle of a frame shown on its own (`e.ui.window` reads back and blits only the changed box). This host has no
 // such blit; Unsupported sends `e.ui.window` back to `window_present` with the whole frame.
 fn window_present_rect(w: Window, pixels: []const u32, x: u32, y: u32, width: u32, height: u32) -> err { ret Unsupported }
+
