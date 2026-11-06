@@ -2258,9 +2258,9 @@ const POLL_BATCH: usize = 64usize
 const POLL_TRACKED: usize = 32usize
 
 // What this poller registered, so a second registration of a handle answers Exists as epoll does
-// (EV_ADD silently replaces). flags: 1 read, 2 write, 0 a free slot. Handles past the 32nd go
-// untracked and keep kqueue's replace-on-register.
-type PollerState = struct { queue: usize, fds: [32]u64, tokens: [32]usize, flags: [32]u8 }
+// (EV_ADD silently replaces). flags: 1 read, 2 write, 0 a free slot. The table grows by doubling
+// in the poller's arena, so duplicate detection is not limited to the initial 32 handles (#359).
+type PollerState = struct { queue: usize, a: *mem.Arena, fds: []u64, tokens: []usize, flags: []u8 }
 
 // One change to the queue; an error from a delete (the filter was never added) is the caller's
 // to ignore, so the result is returned as it came.
@@ -2284,8 +2284,27 @@ fn poller_open(a: *mem.Arena) -> (Poller, err) {
         ret (poller, OutOfMemory)
     }
     holder[0usize].queue = usize(queue)
+    let (fds, fds_error) = mem.alloc[u64](a, POLL_TRACKED)
+    if fds_error != ok {
+        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, OutOfMemory)
+    }
+    let (tokens, tokens_error) = mem.alloc[usize](a, POLL_TRACKED)
+    if tokens_error != ok {
+        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, OutOfMemory)
+    }
+    let (flags, flags_error) = mem.alloc[u8](a, POLL_TRACKED)
+    if flags_error != ok {
+        let closed = syscall(SYS_CLOSE, usize(queue), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, OutOfMemory)
+    }
+    holder[0usize].a = a
+    holder[0usize].fds = fds
+    holder[0usize].tokens = tokens
+    holder[0usize].flags = flags
     var clear = 0usize
-    while clear < POLL_TRACKED {
+    while clear < flags.len {
         holder[0usize].flags[clear] = 0u8
         clear += 1usize
     }
@@ -2301,18 +2320,18 @@ fn poller_open(a: *mem.Arena) -> (Poller, err) {
 
 fn poller_slot(state: *PollerState, fd: u64) -> usize {
     var at = 0usize
-    while at < POLL_TRACKED {
+    while at < state.flags.len {
         if state.flags[at] != 0u8 && state.fds[at] == fd { ret at }
         at += 1usize
     }
-    ret POLL_TRACKED
+    ret state.flags.len
 }
 
 fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
     let state = mem.cast[*PollerState](p.state)
     let fd = u64(handle.raw)
     let known = poller_slot(state, fd)
-    if known < POLL_TRACKED {
+    if known < state.flags.len {
         // A closed descriptor leaves the kernel's table without telling this one, so the entry is
         // only believed if the kernel still has the filter: deleting it proves that, and it goes
         // straight back as it was.
@@ -2346,8 +2365,17 @@ fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollIntere
         }
         mark = mark | 2u8
     }
-    let free = poller_slot_free(state)
-    if free < POLL_TRACKED && mark != 0u8 {
+    if mark != 0u8 {
+        var free = poller_slot_free(state)
+        if free == state.flags.len {
+            let grown = poller_grow(state)
+            if grown != ok {
+                if mark & 1u8 != 0u8 { let removed = poller_change(state.queue, fd, EVFILT_READ, EV_DELETE, 0u32, 0usize) }
+                if mark & 2u8 != 0u8 { let removed = poller_change(state.queue, fd, EVFILT_WRITE, EV_DELETE, 0u32, 0usize) }
+                ret grown
+            }
+            free = poller_slot_free(state)
+        }
         state.fds[free] = fd
         state.tokens[free] = token
         state.flags[free] = mark
@@ -2355,19 +2383,45 @@ fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollIntere
     ret ok
 }
 
+// Doubles the tracked table, copying the live entries; the poller's arena owns it (#359).
+fn poller_grow(state: *PollerState) -> err {
+    let capacity = state.flags.len * 2usize
+    let (fds, fds_error) = mem.alloc[u64](state.a, capacity)
+    if fds_error != ok { ret OutOfMemory }
+    let (tokens, tokens_error) = mem.alloc[usize](state.a, capacity)
+    if tokens_error != ok { ret OutOfMemory }
+    let (flags, flags_error) = mem.alloc[u8](state.a, capacity)
+    if flags_error != ok { ret OutOfMemory }
+    var at = 0usize
+    while at < state.flags.len {
+        fds[at] = state.fds[at]
+        tokens[at] = state.tokens[at]
+        flags[at] = state.flags[at]
+        at += 1usize
+    }
+    while at < capacity {
+        flags[at] = 0u8
+        at += 1usize
+    }
+    state.fds = fds
+    state.tokens = tokens
+    state.flags = flags
+    ret ok
+}
+
 fn poller_slot_free(state: *PollerState) -> usize {
     var at = 0usize
-    while at < POLL_TRACKED {
+    while at < state.flags.len {
         if state.flags[at] == 0u8 { ret at }
         at += 1usize
     }
-    ret POLL_TRACKED
+    ret state.flags.len
 }
 
 fn poller_unregister(p: Poller, handle: Handle) -> err {
     let state = mem.cast[*PollerState](p.state)
     let known = poller_slot(state, u64(handle.raw))
-    if known < POLL_TRACKED { state.flags[known] = 0u8 }
+    if known < state.flags.len { state.flags[known] = 0u8 }
     // Either filter may never have been added, so ENOENT from one is not a failure; both gone
     // is what the caller asked for.
     let read_removed = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_DELETE, 0u32, 0usize)
@@ -4046,3 +4100,4 @@ fn accessibility_take(w: Window) -> (AccessibleRequest, bool) {
 // A rectangle of a frame shown on its own (`e.ui.window` reads back and blits only the changed box). This host has no
 // such blit; Unsupported sends `e.ui.window` back to `window_present` with the whole frame.
 fn window_present_rect(w: Window, pixels: []const u32, x: u32, y: u32, width: u32, height: u32) -> err { ret Unsupported }
+
