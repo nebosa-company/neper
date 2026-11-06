@@ -49,8 +49,7 @@ fn notify_index(app: usize) -> usize {
 // A notification as the app that owns slot `index` of the list: the status service counts it when the user has that
 // app's switch on.
 fn post_as(index: usize) {
-    let sent = os.send(STATUS_REQ, OP_POST_APP_QUIET, NO_SLOT)
-    let sent_index = os.send(STATUS_REQ, index, NO_SLOT)
+    let sent = os.send(STATUS_REQ, OP_POST_APP_QUIET | (index << 32usize), NO_SLOT)
 }
 
 const RATE: u32 = 8000u32
@@ -211,6 +210,7 @@ var capture: [160000]u8 = zero
 var rec_running: bool = false
 var rec_start_ms: usize = 0usize
 var rec_frames: usize = 0usize
+var rec_read_frames: usize = 0usize
 var rec_seed: usize = 0usize
 var rec_watched_ms: usize = 0usize
 var rec_unwatched: bool = false
@@ -410,6 +410,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     rec_running = true
                     rec_start_ms = now
                     rec_frames = 0usize
+                    rec_read_frames = 0usize
                     rec_seed = kind
                     rec_watched_ms = now
                     rec_unwatched = false
@@ -419,6 +420,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 }
                 let sent_started = os.send(REP, started, NO_SLOT)
             } else if op == bgclient.OP_REC_STATE {
+                if app != 34usize {
+                    let denied_state = os.send(REP, 0usize, NO_SLOT)
+                } else {
                 capture_fill(now)
                 rec_watched_ms = now
                 if kind == 1usize && rec_running && !rec_unwatched {
@@ -433,7 +437,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 state = state | (rec_frames << 8usize) | (capture_level() << 40usize)
                 if rec_unwatched { state = state | (1usize << 48usize) }
                 let sent_state = os.send(REP, state, NO_SLOT)
+                }
             } else if op == bgclient.OP_REC_STOP {
+                if app != 34usize {
+                    let denied_stop = os.send(REP, 0usize, NO_SLOT)
+                } else {
                 capture_fill(now)
                 // The app that watches has it: a recording it stops is no longer an unwatched one.
                 rec_unwatched = false
@@ -443,14 +451,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     say_num(rec_frames)
                     say("\n")
                 }
+                rec_read_frames = rec_frames
                 let sent_frames = os.send(REP, rec_frames, NO_SLOT)
+                }
             } else if op == bgclient.OP_REC_READ {
+                if app != 34usize { let denied_read = os.send(REP, 0usize, NO_SLOT) } else {
                 let offset = payload & 4294967295usize
                 var want = (payload >> 32usize) & 65535usize
                 var from = offset
-                if from > rec_frames { from = rec_frames }
+                if from > rec_read_frames { from = rec_read_frames }
                 if want > 256usize { want = 256usize }
-                var count = rec_frames - from
+                var count = rec_read_frames - from
                 if count > want { count = want }
                 let sent_count = os.send(REP, count, NO_SLOT)
                 var w = 0usize
@@ -466,6 +477,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     let sent_word = os.send(REP, out_word, NO_SLOT)
                     w += 1usize
                 }
+                }
             } else if op == bgclient.OP_SPK_WRITE {
                 // The words follow at once, three 16-bit frames each; the first block of a stream resets the counts.
                 var words = payload & 65535usize
@@ -480,7 +492,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let gain = gain_of(volumes[0usize])
                 var w = 0usize
                 while w < words {
-                    let packed = os.recv(REQ, NO_SLOT)
+                    // A stalled sender must not freeze the services process: each word waits 100 ms
+                    // (TIMEOUT_BASE 1000 + 100), then the block is cut short (#257 item 4).
+                    let packed = os.recv(REQ, 1100usize)
+                    if packed == TIMED_OUT || packed == 18446744073709551615usize { break }
                     var j = 0usize
                     while j < 3usize {
                         if counted < block_frames {
@@ -538,8 +553,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let battery_word = BATTERY_PRESENT | charging_bit | level
                 if battery_word != last_battery {
                     last_battery = battery_word
-                    let set_sent = os.send(STATUS_REQ, OP_SET_BATTERY, NO_SLOT)
-                    let word_sent = os.send(STATUS_REQ, battery_word, NO_SLOT)
+                    let set_sent = os.send(STATUS_REQ, OP_SET_BATTERY | (battery_word << 32usize), NO_SLOT)
                     say("services battery ")
                     say_num(level)
                     if charging { say(" charging\n") } else { say(" discharging\n") }

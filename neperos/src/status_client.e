@@ -84,10 +84,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     report(battery2, wifi2, cellular2, clock2, notes2)
     // (C149) Per-app notification permission is enforced where notifications are posted: with app 2's switch off in
     // the mask, a post from app 2 is blocked and a post from app 3 is counted.
-    let mask = os.send(REQ, OP_SET_ALLOWED, NO_SLOT)
-    let mask_value = os.send(REQ, 251usize, NO_SLOT)
-    let blocked_post = os.send(REQ, OP_POST_APP, NO_SLOT)
-    let blocked_app = os.send(REQ, 2usize, NO_SLOT)
+    let mask = os.send(REQ, OP_SET_ALLOWED | (251usize << 32usize), NO_SLOT)
+    let blocked_post = os.send(REQ, OP_POST_APP | (2usize << 32usize), NO_SLOT)
     let b1 = os.recv(REPLY, NO_SLOT)
     let w1 = os.recv(REPLY, NO_SLOT)
     let c1 = os.recv(REPLY, NO_SLOT)
@@ -96,8 +94,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     say("status app 2 count ")
     say_num(n1)
     say("\n")
-    let allowed_post = os.send(REQ, OP_POST_APP, NO_SLOT)
-    let allowed_app = os.send(REQ, 3usize, NO_SLOT)
+    let allowed_post = os.send(REQ, OP_POST_APP | (3usize << 32usize), NO_SLOT)
     let b2 = os.recv(REPLY, NO_SLOT)
     let w2 = os.recv(REPLY, NO_SLOT)
     let c2 = os.recv(REPLY, NO_SLOT)

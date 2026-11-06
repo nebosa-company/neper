@@ -81,11 +81,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var allowed = 255usize
     var running = true
     while running {
-        let op = os.recv(REQ, NO_SLOT)
+        let request = os.recv(REQ, NO_SLOT)
+        let op = request & 4294967295usize
+        let argument = request >> 32usize
         if op == OP_QUIT { running = false }
-        if op == OP_SET_ALLOWED { allowed = os.recv(REQ, NO_SLOT) & 255usize }
+        if op == OP_SET_ALLOWED { allowed = argument & 255usize }
         if op == OP_POST_APP {
-            let app = os.recv(REQ, NO_SLOT)
+            let app = argument
             if app < 8usize && ((allowed >> app) & 1usize) == 0usize {
                 say("status notification blocked ")
                 say(digit_text(app))
@@ -96,12 +98,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             push_snapshot(notes, battery)
         }
         if op == OP_SET_BATTERY {
-            let reading = os.recv(REQ, NO_SLOT)
+            let reading = argument
             if !recorded { battery = reading }
         }
         if op == OP_POST_QUIET { notes += 1usize }
         if op == OP_POST_APP_QUIET {
-            let quiet_app = os.recv(REQ, NO_SLOT)
+            let quiet_app = argument
             if quiet_app < 8usize && ((allowed >> quiet_app) & 1usize) == 0usize {
                 say("status notification blocked ")
                 say(digit_text(quiet_app))

@@ -191,9 +191,7 @@ fn push_notify_mask(store: *Store) {
         if store.v[26usize + n] != 0u8 { mask = mask | (1usize << n) }
         n += 1usize
     }
-    let sent = os.send(STATUS_REQ, 5usize, sysettings.NO_SLOT)
-    if sent == REFUSED { ret }
-    let mask_sent = os.send(STATUS_REQ, mask, sysettings.NO_SLOT)
+    let sent = os.send(STATUS_REQ, 5usize | (mask << 32usize), sysettings.NO_SLOT)
 }
 
 // (D4007) The background services process's request end (slot 11): the volumes and Vibrate as one word, whenever one
