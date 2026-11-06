@@ -2723,6 +2723,11 @@ fmt_snappy_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$fmt_snappy_written" = 'executable written' ]
 chmod +x "$test_build/fmt-snappy-selfhost"
 "$test_build/fmt-snappy-selfhost"
+# multi-result returns (#191 item 6): 2, 5, 16 and 20 results hand back exact sums.
+multi_results_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/multi_results/src/main.e" "$repo" x64 linux "$test_build/multi-results-selfhost")
+[ "$multi_results_written" = 'executable written' ]
+chmod +x "$test_build/multi-results-selfhost"
+"$test_build/multi-results-selfhost"
 # `e.algo.egraph`: the egg README example saturating `(a*2)/2` to `a` in the replica's four iterations with its node and class counts, upward congruence after a merge, a capped associativity run still joining the two parenthesisations (D874).
 algo_egraph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_egraph/src/main.e" "$repo" x64 linux "$test_build/algo-egraph-selfhost")
 [ "$algo_egraph_written" = 'executable written' ]

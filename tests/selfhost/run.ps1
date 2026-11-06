@@ -3056,6 +3056,12 @@ $fmtSnappyWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $fmtSnappyWritten -ne 'executable written') { throw 'fmt_snappy emission failed' }
 & $fmtSnappyPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_snappy check failed: exit $LASTEXITCODE" }
+# multi-result returns (#191 item 6): 2, 5, 16 and 20 results hand back exact sums.
+$multiResultsPath = Join-Path $testBuild 'multi-results-selfhost.exe'
+$multiResultsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\multi_results\src\main.e') $repo 'x64' 'windows' $multiResultsPath
+if ($LASTEXITCODE -ne 0 -or $multiResultsWritten -ne 'executable written') { throw 'multi_results emission failed' }
+& $multiResultsPath
+if ($LASTEXITCODE -ne 0) { throw "a multi_results check failed: exit $LASTEXITCODE" }
 # `e.algo.egraph`: the egg README example saturating `(a*2)/2` to `a` in the replica's four iterations with its node and class counts, upward congruence after a merge, a capped associativity run still joining the two parenthesisations (D874).
 $algoEgraphPath = Join-Path $testBuild 'algo-egraph-selfhost.exe'
 $algoEgraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_egraph\src\main.e') $repo 'x64' 'windows' $algoEgraphPath
