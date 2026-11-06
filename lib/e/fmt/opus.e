@@ -2423,7 +2423,10 @@ fn decode_lp(d: *Decoder, frames: []Frame, count: usize, toc: u8, rate: u32, out
         var f = 0usize
         while f < nsilk {
             var ch = 0usize
-            while ch < nch && ch < cc {
+            // A stereo packet through a mono decoder still runs both channels; their
+            // samples are averaged (the format's stereo-to-mono downmix), not truncated.
+            let stereo_to_mono = nch == 2usize && cc == 1usize
+            while ch < nch {
                 var j = 0usize
                 while j < sflen {
                     d.ch16[j] = d.pcm16[(f * sflen + j) * nch + ch]
@@ -2433,7 +2436,8 @@ fn decode_lp(d: *Decoder, frames: []Frame, count: usize, toc: u8, rate: u32, out
                 if pe != ok { ret (base, pe) }
                 j = 0usize
                 while j < no {
-                    let v = f32(d.rs16[j]) * 0.000030517578125f32
+                    var v = f32(d.rs16[j]) * 0.000030517578125f32
+                    if stereo_to_mono { v = v * 0.5f32 }
                     let k = (base + f * sfout + j) * cc + ch
                     out[k] = out[k] + v
                     if nch == 1usize && cc == 2usize { out[k + 1usize] = out[k + 1usize] + v }
