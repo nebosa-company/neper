@@ -170,10 +170,12 @@ fn nearest_on(s: Segment, x: f64, y: f64) -> (f64, f64) {
     ret (s.x0 + t * dx, s.y0 + t * dy)
 }
 
-// #1845 Point-to-line ICP: each iteration projects every scan point (robot frame) through
-// the pose, pairs it with the nearest point on the nearest segment, and re-solves the rigid
-// transform in closed form (theta from atan2 of the cross and dot sums about the centroids,
-// then the translation). Answers (x, y, theta, mean squared residual).
+// #1845 Point-to-point ICP over the segments: each iteration projects every scan point
+// (robot frame) through the pose, pairs it with the nearest point on the nearest segment,
+// and re-solves the rigid transform in closed form (theta from atan2 of the cross and dot
+// sums about the centroids, then the translation). When every point coincides both sums are
+// exactly zero, where atan2(0, 0) is a convention, not an angle: the current heading is kept.
+// Answers (x, y, theta, mean squared residual).
 fn scan_match(px: []const f64, py: []const f64, lines: []const Segment, x: f64, y: f64, th: f64, iterations: usize) -> (f64, f64, f64, f64) {
     var tx = x
     var ty = y
@@ -219,7 +221,8 @@ fn scan_match(px: []const f64, py: []const f64, lines: []const Segment, x: f64, 
             cross += ax * by - ay * bx
             i += 1usize
         }
-        tth = math.atan2[f64](cross, dot)
+        // Coincident scans (#129): keep the heading rather than reset it to 0.
+        if !(cross == 0.0f64 && dot == 0.0f64) { tth = math.atan2[f64](cross, dot) }
         let c2 = math.cos[f64](tth)
         let s2 = math.sin[f64](tth)
         tx = cqx - (c2 * cpx - s2 * cpy)
@@ -599,3 +602,4 @@ fn pose_graph_optimize(xs: []f64, ys: []f64, ths: []f64, edges: []const Edge, it
     }
     ret (residual(xs, ys, ths, edges), ok)
 }
+
