@@ -14,6 +14,13 @@
 type Pixel = struct { x: i32, y: i32 }
 type Coverage = struct { x: i32, y: i32, coverage: f64 }
 error TooSmall
+error Invalid
+
+// A coordinate the integer pixel cast can represent, with room for the end-point pair.
+fn coord_ok(v: f64) -> bool {
+    if v != v { ret false }
+    ret v <= 2147480000.0f64 && v >= -2147480000.0f64
+}
 
 fn push(out: []Pixel, n: *usize, x: i32, y: i32) -> err {
     if *n >= out.len { ret TooSmall }
@@ -92,6 +99,9 @@ fn pair(out: []Coverage, n: *usize, steep: bool, major: f64, minor: f64, gap: f6
 }
 
 fn line_aa(x0: f64, y0: f64, x1: f64, y1: f64, out: []Coverage) -> (usize, err) {
+    // Reject before any f64-to-integer cast: NaN/infinity and coordinates outside the
+    // i32 pixel range would otherwise trap or wrap to an unrelated pixel.
+    if !coord_ok(x0) || !coord_ok(y0) || !coord_ok(x1) || !coord_ok(y1) { ret (0usize, Invalid) }
     var n = 0usize
     var ax = x0
     var ay = y0
@@ -308,3 +318,4 @@ fn fill_triangle(x0: f64, y0: f64, x1: f64, y1: f64, x2: f64, y2: f64, out: []Pi
     }
     ret (n, ok)
 }
+

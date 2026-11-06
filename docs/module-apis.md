@@ -18720,8 +18720,10 @@ collapse), `marching_squares`, `marching_cubes` (a generated 256-case table),
 type Pixel = struct { x: i32, y: i32 }
 type Coverage = struct { x: i32, y: i32, coverage: f64 }
 error TooSmall
+error Invalid
 
 fn push(out: []Pixel, n: *usize, x: i32, y: i32) -> err
+fn coord_ok(v: f64) -> bool
 fn abs32(v: i32) -> i32
 fn line(x0: i32, y0: i32, x1: i32, y1: i32, out: []Pixel) -> (usize, err)
 fn push_aa(out: []Coverage, n: *usize, x: i32, y: i32, c: f64) -> err

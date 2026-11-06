@@ -156,6 +156,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if nc != 134usize || nd != 106usize || overlap(out[..nc], other[..nd]) { os.exit(6i32) }
     let (degenerate, _) = raster.fill_triangle(0.0f64, 0.0f64, 5.0f64, 5.0f64, 10.0f64, 10.0f64, out[..])
     if degenerate != 0usize { os.exit(6i32) }
+    // 704: non-finite or out-of-range endpoints are Invalid, never a trap/wrap.
+    var probe_aa: [16]raster.Coverage = zero
+    let (_, inf_error) = raster.line_aa(0.0f64, 0.0f64, 1.0f64 / 0.0f64, 2.0f64, probe_aa[..])
+    if inf_error != raster.Invalid { os.exit(7i32) }
+    let (_, big_error) = raster.line_aa(0.0f64, 0.0f64, 1.0e30f64, 2.0f64, probe_aa[..])
+    if big_error != raster.Invalid { os.exit(7i32) }
+    let (_, nan_error) = raster.line_aa(0.0f64, 0.0f64 / 0.0f64, 2.0f64, 2.0f64, probe_aa[..])
+    if nan_error != raster.Invalid { os.exit(7i32) }
 
     try io.print("gfx raster ok\n")
     ret ok
