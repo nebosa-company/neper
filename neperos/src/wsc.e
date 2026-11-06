@@ -3,6 +3,8 @@
 // platform yet; this is the part an app needs.) Client frames are masked with a fixed mask: the standard asks for a
 // random one so a proxy cannot be fooled, and there is no proxy between the app and its server here.
 use e.mem
+use e.bytes
+use e.crypto.hash
 use netclient
 use netproto
 use netio
@@ -15,16 +17,74 @@ fn byte(b: *netio.NetBuf) -> (u8, bool) {
     ret (one[0usize], true)
 }
 
-// The Sec-WebSocket-Key is not verified against the accept value: the exchange is over TLS or loopback here and the
-// server's 101 answer is what is checked.
-fn upgrade(b: *netio.NetBuf, host: str, path: str) -> bool {
-    // Room for the longest host/path the app may pass; over that, fail rather than
-    // silently cutting the handshake short.
+fn client_key() -> str { ret "dGhlIHNhbXBsZSBub25jZQ==" }
+fn accept_guid() -> str { ret "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" }
+
+fn same(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// base64(sha1(key ++ GUID)), the accept value RFC 6455 requires.
+fn expected_accept(a: *mem.Arena, key: str) -> (str, bool) {
+    let (joined, joined_error) = mem.alloc[u8](a, key.len + accept_guid().len)
+    if joined_error != ok { ret ("", false) }
+    var i = 0usize
+    while i < key.len {
+        joined[i] = key[i]
+        i += 1usize
+    }
+    var j = 0usize
+    while j < accept_guid().len {
+        joined[key.len + j] = accept_guid()[j]
+        j += 1usize
+    }
+    let digest = hash.sha1(joined)
+    let (encoded, encoded_error) = mem.alloc[u8](a, 32usize)
+    if encoded_error != ok { ret ("", false) }
+    let (text, encode_error) = bytes.base64_encode(encoded, digest[0usize..20usize], .Standard, true)
+    if encode_error != ok { ret ("", false) }
+    ret (text, true)
+}
+
+// The 101 response must carry Sec-WebSocket-Accept for the key this client sent.
+fn accept_ok(a: *mem.Arena, header: str, key: str) -> bool {
+    let marker = "sec-websocket-accept:"
+    let (want, has_want) = expected_accept(a, key)
+    if !has_want { ret false }
+    var at = 0usize
+    while at + marker.len < header.len {
+        var hit = true
+        var k = 0usize
+        while k < marker.len {
+            var c = header[at + k]
+            if c >= 65u8 && c <= 90u8 { c += 32u8 }
+            if c != marker[k] { hit = false }
+            k += 1usize
+        }
+        if hit {
+            var start = at + marker.len
+            while start < header.len && (header[start] == 32u8 || header[start] == 9u8) { start += 1usize }
+            var stop = start
+            while stop < header.len && header[stop] != 13u8 && header[stop] != 10u8 && header[stop] != 32u8 { stop += 1usize }
+            ret same(header[start..stop], want)
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+fn upgrade(a: *mem.Arena, b: *netio.NetBuf, host: str, path: str) -> bool {
     var request: [512]u8 = zero
     var n = 0usize
-    let parts: [7]str = [7]str{ "GET ", path, " HTTP/1.1\r\nHost: ", host, "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: AQIDBAUGBwgJCgsMDQ4PEA==\r\nSec-WebSocket-Version: 13\r\n\r\n", "", "" }
+    let parts: [7]str = [7]str{ "GET ", path, " HTTP/1.1\r\nHost: ", host, "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ", client_key(), "\r\nSec-WebSocket-Version: 13\r\n\r\n" }
     var p = 0usize
-    while p < 5usize {
+    while p < 7usize {
         var i = 0usize
         while i < parts[p].len {
             if n >= 512usize { ret false }
@@ -35,28 +95,27 @@ fn upgrade(b: *netio.NetBuf, host: str, path: str) -> bool {
         p += 1usize
     }
     if netclient.send(mem.address_of(&request[0usize]), n) != netproto.R_OK { ret false }
-    // The response header ends at a blank line; it has to start "HTTP/1.1 101".
+    var header: [1024]u8 = zero
     var seen = 0usize
-    var first: [12]u8 = zero
     var last4: [4]u8 = zero
     var guard = 0usize
-    while guard < 1024usize {
+    var done = false
+    while guard < 1024usize && !done {
         let (c, got) = byte(b)
         if !got { ret false }
-        if seen < 12usize { first[seen] = c }
+        if seen < 1024usize { header[seen] = c }
         seen += 1usize
         last4[0usize] = last4[1usize]
         last4[1usize] = last4[2usize]
         last4[2usize] = last4[3usize]
         last4[3usize] = c
-        if seen >= 4usize && last4[0usize] == 13u8 && last4[1usize] == 10u8 && last4[2usize] == 13u8 && last4[3usize] == 10u8 {
-            ret seen >= 12usize && first[9usize] == 49u8 && first[10usize] == 48u8 && first[11usize] == 49u8
-        }
+        if seen >= 4usize && last4[0usize] == 13u8 && last4[1usize] == 10u8 && last4[2usize] == 13u8 && last4[3usize] == 10u8 { done = true }
         guard += 1usize
     }
-    ret false
+    if !done || seen < 12usize { ret false }
+    if header[9usize] != 49u8 || header[10usize] != 48u8 || header[11usize] != 49u8 { ret false }
+    ret accept_ok(a, header[0usize..seen], client_key())
 }
-
 // Send `payload` (at most 125 bytes... or 65535) as one masked text frame.
 fn send_text(payload: []const u8) -> bool {
     var frame: [140]u8 = zero
@@ -127,3 +186,8 @@ fn receive(b: *netio.NetBuf, out: []u8) -> (u8, usize, bool) {
     }
     ret (h0 & 15u8, kept, true)
 }
+
+
+
+
+
