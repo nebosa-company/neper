@@ -21,6 +21,7 @@
 // as written: the empty registry.
 
 use e.mem
+use e.os
 use artifact_hash
 use source
 
@@ -179,6 +180,11 @@ fn asset_split(line: str) -> (str, str, bool) {
     var quoted = false
     while i < line.len {
         let b = line[i]
+        // A backslash inside a quoted run escapes the next byte, so it must not toggle quotes.
+        if b == 92u8 && quoted {
+            i += 2usize
+            continue
+        }
         if b == 34u8 { quoted = !quoted }
         if b == 58u8 && !quoted && (i + 1usize == line.len || line[i + 1usize] == 32u8) {
             ret (line[..i], line[i + 1usize..], true)
@@ -222,6 +228,10 @@ fn flow_attributes(a: *mem.Arena, e: *Entry, raw: str) -> err {
             var colon = 0usize
             var in_quote = false
             while colon < pair.len {
+                if pair[colon] == 92u8 && in_quote {
+                    colon += 2usize
+                    continue
+                }
                 if pair[colon] == 34u8 { in_quote = !in_quote }
                 if pair[colon] == 58u8 && !in_quote { break }
                 colon += 1usize
@@ -230,6 +240,10 @@ fn flow_attributes(a: *mem.Arena, e: *Entry, raw: str) -> err {
             try add_attribute(a, e, pair[..colon], pair[colon + 1usize..])
             start = i + 1usize
         } else {
+            if inner[i] == 92u8 && quoted {
+                i += 2usize
+                continue
+            }
             if inner[i] == 34u8 { quoted = !quoted }
         }
         i += 1usize
@@ -478,7 +492,11 @@ fn asset_collect(a: *mem.Arena, root: str, entries: []Entry, manifest_len: *usiz
     let (manifest_path, manifest_path_error) = asset_join(a, root, "project.yaml")
     if manifest_path_error != ok { ret (0usize, manifest_path_error) }
     let (manifest, manifest_error) = source.load(a, manifest_path)
-    if manifest_error != ok { ret (0usize, ok) }
+    // Only a missing manifest means no assets; any other read failure belongs to the build.
+    if manifest_error != ok {
+        if manifest_error == os.NotFound { ret (0usize, ok) }
+        ret (0usize, manifest_error)
+    }
     *manifest_len = manifest.len
     let (count, parse_error) = parse_manifest(a, manifest, entries)
     if parse_error != ok { ret (0usize, parse_error) }
