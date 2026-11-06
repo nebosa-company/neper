@@ -117,6 +117,10 @@ def model(cfg):
             return
         if timed_out:
             marked.append(a['k'])
+        # gRFC A6: a trailers-only response still counts as headers arrived, so the attempt
+        # is committed and its retryable status is final (a reset/timeout attempt is not).
+        if not timed_out and not a['b'].get('kind') and not a['b']['headers']:
+            a['committed'] = True
         n = len(attempts) - tr[0]
         if mode == 'retry':
             if code == 0:
