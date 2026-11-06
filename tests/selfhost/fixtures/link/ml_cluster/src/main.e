@@ -210,6 +210,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, nj_invalid) = cluster.neighbor_joining(matrix[..], 1usize, rows[..], joins[..], lengths[..], ids[..])
     if nj_invalid != cluster.Invalid { os.exit(6i32) }
 
+    // #850: the fixed per-cluster scratch caps silhouette k at 64; a larger k is
+    // Invalid (and documented), not an unexplained TooSmall.
+    var sil_scores: [24]f64 = zero
+    let (_, sil_cap) = cluster.silhouette_samples(x[..], 24usize, 2usize, labels[..], 65usize, sil_scores[..])
+    if sil_cap != cluster.Invalid { os.exit(7i32) }
+
     try io.print("ml cluster ok\n")
     ret ok
 }

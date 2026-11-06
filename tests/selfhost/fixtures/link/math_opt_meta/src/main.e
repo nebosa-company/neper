@@ -188,6 +188,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ac_invalid != meta.Invalid { os.exit(5i32) }
     let (_, ac_room) = meta.ant_colony(&r, distance[..], 8usize, 10usize, 1.0f64, 3.0f64, 0.3f64, 5u32, tour[..], scratch[..], marks[..8usize])
     if ac_room != meta.TooSmall { os.exit(5i32) }
+    // #846: zero iterations walks no tour, so it must not answer "ok" with `tour` untouched.
+    let (_, ac_zero) = meta.ant_colony(&r, distance[..], 8usize, 10usize, 1.0f64, 3.0f64, 0.3f64, 0u32, tour[..], scratch[..], marks[..])
+    if ac_zero != meta.Invalid { os.exit(5i32) }
 
     try io.print("math opt meta ok\n")
     ret ok

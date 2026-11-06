@@ -852,12 +852,12 @@ fn birch_insert(t: *Birch, point: []const f64, path: []usize) -> err {
             descending = false
         }
     }
-    // `node` is the leaf: absorb into a subcluster or open one. Reserve the whole
-    // possible split chain (one fresh node per level plus a new root) before mutating.
-    if t.nodes + depth + 2usize > t.room { ret Invalid }
+    // `node` is the leaf: absorb into a subcluster or open one. Decide that before
+    // reserving nodes: a fresh subcluster costs one node on top of the split chain.
     let stride = t.branching + 1usize
     var home = t.room
-    if t.child_count[node] > 0u32 {
+    var opens = t.child_count[node] == 0u32
+    if !opens {
         let candidate = birch_nearest_child(t, node, point)
         let n = t.cf_n[candidate] + 1.0f64
         var ss = t.cf_ss[candidate]
@@ -869,9 +869,31 @@ fn birch_insert(t: *Birch, point: []const f64, path: []usize) -> err {
             norm += (ls / n) * (ls / n)
             j += 1usize
         }
-        if ss / n - norm <= t.threshold * t.threshold { home = candidate }
+        if ss / n - norm <= t.threshold * t.threshold { home = candidate } else { opens = true }
     }
-    if home == t.room {
+    // Count exactly what the insert will allocate: one node if a subcluster opens, one
+    // per node that splits, and one more for a new root when the root itself splits.
+    var needed = 0usize
+    var carrying = 0usize
+    if opens {
+        needed = 1usize
+        carrying = 1usize
+    }
+    var walk_level = depth
+    var root_split = false
+    while walk_level > 0usize {
+        walk_level -= 1usize
+        if usize(t.child_count[path[walk_level]]) + carrying > t.branching {
+            needed += 1usize
+            carrying = 1usize
+            if walk_level == 0usize { root_split = true }
+        } else {
+            carrying = 0usize
+        }
+    }
+    if root_split { needed += 1usize }
+    if t.nodes + needed > t.room { ret Invalid }
+    if opens {
         if t.nodes >= t.room { ret Invalid }
         home = t.nodes
         t.nodes += 1usize
@@ -892,7 +914,9 @@ fn birch_insert(t: *Birch, point: []const f64, path: []usize) -> err {
         level -= 1usize
         let full = path[level]
         if usize(t.child_count[full]) > t.branching {
-            if t.nodes + 2usize > t.room { ret Invalid }
+            var split_nodes = 1usize
+            if level == 0usize { split_nodes = 2usize }
+            if t.nodes + split_nodes > t.room { ret Invalid }
             let fresh = birch_split(t, full)
             if level == 0usize {
                 let top = t.nodes
@@ -956,14 +980,15 @@ fn birch_fit(a: *mem.Arena, x: []const f64, n: usize, d: usize, branching: usize
 // Per-sample silhouette s = (b - a) / max(a, b) under Euclidean distance, where
 // a is the mean distance to the sample's own cluster and b the least mean
 // distance to another; a singleton scores 0. `labels` are indices below `k`
-// (k >= 2) and every cluster must have a member, so an empty cluster is refused
-// rather than silently skipped. `scores.len >= n`. Answers the mean silhouette.
+// (2 <= k <= 64; the per-cluster scratch is fixed, so a larger k is Invalid)
+// and every cluster must have a member, so an empty cluster is refused rather
+// than silently skipped. `scores.len >= n`. Answers the mean silhouette.
 // ponytail: O(n^2 d) pairwise passes; fine for diagnostic plots, sample first for large n.
 fn silhouette_samples(x: []const f64, n: usize, d: usize, labels: []const usize, k: usize, scores: []f64) -> (f64, err) {
     if n < 2usize || d == 0usize || k < 2usize || x.len != n * d || labels.len != n { ret (0.0f64, Invalid) }
     if scores.len < n { ret (0.0f64, TooSmall) }
     var sizes: [64]usize = zero
-    if k > 64usize { ret (0.0f64, TooSmall) }
+    if k > 64usize { ret (0.0f64, Invalid) }
     var i = 0usize
     while i < n {
         if labels[i] >= k { ret (0.0f64, Invalid) }

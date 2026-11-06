@@ -345,6 +345,8 @@ fn differential_evolution[Ctx: type](ctx: *Ctx, f: fn(*Ctx, []const f64) -> f64,
 fn ant_colony(r: *rand.Pcg64, distance: []const f64, n: usize, ants: usize, alpha: f64, beta: f64, evaporation: f64, iterations: u32, tour: []usize, scratch: []f64, marks: []usize) -> (f64, err) {
     if distance.len < n * n || tour.len < n || scratch.len < n * n + n || marks.len < 2usize * n { ret (0.0f64, TooSmall) }
     if n < 2usize || ants == 0usize || evaporation < 0.0f64 || evaporation > 1.0f64 { ret (0.0f64, Invalid) }
+    // No iteration means no tour was ever walked, so the answer cannot be "ok".
+    if iterations == 0u32 { ret (0.0f64, Invalid) }
     var pheromone = scratch[..n * n]
     var weights = scratch[n * n..n * n + n]
     var walk = marks[..n]

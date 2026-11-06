@@ -87,6 +87,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if search_room != ann.TooSmall { os.exit(2i32) }
     let (_, build_invalid) = ann.graph_build(a, cloud[..], 40usize, 2usize, 0usize, 12usize, scratch[..], visited[..])
     if build_invalid != ann.Invalid { os.exit(2i32) }
+    // #847: a dataset or query slice shorter than its declared rows is TooSmall, not a
+    // trap inside distance_squared.
+    let (_, short_data) = ann.graph_search(&g, cloud[..76usize], 2usize, query[..], 3usize, 12usize, ids[..], dists[..], scratch[..], visited[..])
+    if short_data != ann.TooSmall { os.exit(5i32) }
+    let (_, short_query) = ann.graph_search(&g, cloud[..], 2usize, query[..1usize], 3usize, 12usize, ids[..], dists[..], scratch[..], visited[..])
+    if short_query != ann.TooSmall { os.exit(5i32) }
+    var hx: [4]f64 = zero
+    hx[0usize] = 0.0f64
+    hx[1usize] = 0.0f64
+    hx[2usize] = 1.0f64
+    hx[3usize] = 1.0f64
+    let (hgraph0, hgraph_error) = ann.hnsw(a, 4usize, 2usize, 2usize, 0usize)
+    if hgraph_error != ok { os.exit(5i32) }
+    var hgraph = hgraph0
+    var hscratch: [16]f64 = zero
+    var hvisited: [4]u32 = zero
+    if ann.hnsw_insert(&hgraph, hx[..], &r, 2usize, hscratch[..], hvisited[..]) != ok { os.exit(5i32) }
+    if ann.hnsw_insert(&hgraph, hx[..], &r, 2usize, hscratch[..], hvisited[..]) != ok { os.exit(5i32) }
+    var hids: [2]u32 = zero
+    var hdists: [2]f64 = zero
+    let (_, hnsw_short) = ann.hnsw_search(&hgraph, hx[..2usize], hx[..], 1usize, 2usize, hids[..], hdists[..], hscratch[..], hvisited[..])
+    if hnsw_short != ann.TooSmall { os.exit(5i32) }
+    let (hnsw_found, hnsw_error) = ann.hnsw_search(&hgraph, hx[..], hx[..], 1usize, 2usize, hids[..], hdists[..], hscratch[..], hvisited[..])
+    if hnsw_error != ok || hnsw_found != 1usize { os.exit(5i32) }
 
     // 3: IVF-PQ over three clusters of sixteen points in four dimensions.
     var points: [192]f64 = zero

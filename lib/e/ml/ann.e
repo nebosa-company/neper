@@ -161,6 +161,9 @@ fn graph_build(a: *mem.Arena, x: []const f64, n: usize, d: usize, m: usize, ef: 
 // nearest first. `scratch.len >= 2 ef + n`, `visited.len >= n`.
 fn graph_search(g: *const Graph, x: []const f64, d: usize, query: []const f64, k: usize, ef: usize, ids: []f64, dists: []f64, scratch: []f64, visited: []u32) -> (usize, err) {
     if ids.len < ef || dists.len < ef || scratch.len < 2usize * ef || visited.len < g.n || k > ef { ret (0usize, TooSmall) }
+    // The dataset is `g.n` rows of `d` coordinates and the query one row; a short
+    // slice must be TooSmall, not an out-of-bounds trap inside distance_squared.
+    if query.len < d || (d != 0usize && g.n > x.len / d) { ret (0usize, TooSmall) }
     if g.n == 0usize { ret (0usize, ok) }
     var beam_ids = scratch[..ef]
     var beam_dists = scratch[ef..2usize * ef]
@@ -566,6 +569,8 @@ fn hnsw_insert(g: *Hnsw, x: []const f64, r: *rand.Pcg64, ef: usize, scratch: []f
 // nearest first. `scratch.len >= 2 ef`, `visited.len >= room`.
 fn hnsw_search(g: *const Hnsw, x: []const f64, query: []const f64, k: usize, ef: usize, ids: []u32, dists: []f64, scratch: []f64, visited: []u32) -> (usize, err) {
     if scratch.len < 2usize * ef || visited.len < g.room || ids.len < k || dists.len < k || query.len < g.d { ret (0usize, TooSmall) }
+    // The stored vectors are `g.n` rows of `g.d` coordinates.
+    if g.d != 0usize && g.n > x.len / g.d { ret (0usize, TooSmall) }
     if k == 0usize || k > ef { ret (0usize, Invalid) }
     if g.n == 0usize { ret (0usize, ok) }
     var beam_ids = scratch[..ef]

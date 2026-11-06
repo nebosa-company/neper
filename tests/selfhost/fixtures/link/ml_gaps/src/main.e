@@ -312,6 +312,21 @@ fn check_birch(a: *mem.Arena) {
     if room_error != cluster.TooSmall { os.exit(7i32) }
     let (_, tiny_error) = cluster.birch_fit(a, x[..], 45usize, 2usize, 3usize, 1.0f64, 4usize, path[..])
     if tiny_error != cluster.Invalid { os.exit(7i32) }
+    // #849: a non-root split allocates one node, not two. This 12-point tree fits in
+    // exactly 25 nodes at branching 2 and threshold 0, where reserving a spare node at
+    // every non-root split rejected it below 30.
+    var bx: [24]f64 = zero
+    i = 0usize
+    while i < 12usize {
+        bx[i * 2usize] = f64(i)
+        bx[i * 2usize + 1usize] = f64(i * i)
+        i += 1usize
+    }
+    var bpath: [64]usize = zero
+    let (_, split_error) = cluster.birch_fit(a, bx[..], 12usize, 2usize, 2usize, 0.0f64, 25usize, bpath[..])
+    if split_error != ok { os.exit(7i32) }
+    let (_, full_error) = cluster.birch_fit(a, bx[..], 12usize, 2usize, 2usize, 0.0f64, 24usize, bpath[..])
+    if full_error != cluster.Invalid { os.exit(7i32) }
 }
 
 // 8: streaming k-means from the first three samples.
