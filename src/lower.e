@@ -61,7 +61,7 @@ type DeferState = struct {
 }
 
 type ReturnLayout = struct {
-    offsets: [16]usize,
+    offsets: []usize,
     size: usize,
     alignment: usize,
     via_slot: bool,
@@ -1249,6 +1249,9 @@ fn register_return_type(c: *check.Checker, ty: check.Type) -> bool {
 
 fn call_return_layout(c: *check.Checker, call: check.CallInfo, result: *ReturnLayout) -> err {
     result.alignment = 1usize
+    let (offsets, offsets_error) = mem.alloc[usize](c.arena, call.function.return_count + 1usize)
+    if offsets_error != ok { ret offsets_error }
+    result.offsets = offsets
     if call.function.return_count > result.offsets.len { ret check.Capacity }
     var integer_count = 0usize
     var at = 0usize
@@ -11237,6 +11240,7 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     ret ok
 }
+
 
 
 
