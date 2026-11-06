@@ -542,19 +542,22 @@ fn asset_load(a: *mem.Arena, root: str, entries: []Entry, count: usize, missing:
         i += 1usize
     }
     var total = 0usize
+    // Bound to a local: the bootstrap reads `> MAX_TOTAL {` as an aggregate literal.
+    let limit = MAX_TOTAL
     i = 0usize
     while i < count {
         let (path, path_error) = asset_join(a, root, entries[i].path)
         if path_error != ok { ret path_error }
-        let (bytes, load_error) = source.load(a, path)
+        // Read at most the room left before the limit: a huge declared file must not be
+        // loaded whole only to be refused afterwards.
+        let remaining = limit - total
+        let (bytes, whole_size, load_error) = source.load_prefix(a, path, remaining)
         if load_error != ok {
             *missing = entries[i].path
             ret AssetMissing
         }
-        total += bytes.len
-        // Bound to a local: the bootstrap reads `> MAX_TOTAL {` as an aggregate literal.
-        let limit = MAX_TOTAL
-        if total > limit { ret AssetTooLarge }
+        if whole_size > remaining { ret AssetTooLarge }
+        total += whole_size
         entries[i].bytes = bytes
         var hex: [64]u8 = zero
         artifact_hash.sha256_hex_into(bytes, hex[0usize..64usize])
