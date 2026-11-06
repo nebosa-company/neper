@@ -10,6 +10,7 @@ error InvalidObject
 
 type Symbol = struct {
     name: str,
+    module: str,
     value: usize,
     size: usize,
     section: usize,
@@ -63,10 +64,10 @@ fn append_text(output: *emit_x64.Buffer, text: str) -> err {
     ret ok
 }
 
-fn find_symbol(symbols: []Symbol, count: usize, name: str) -> (usize, bool) {
+fn find_symbol(symbols: []Symbol, count: usize, module: str, name: str) -> (usize, bool) {
     var at = 1usize
     while at < count {
-        if check.same(symbols[at].name, name) { ret (at, true) }
+        if check.same(symbols[at].module, module) && check.same(symbols[at].name, name) { ret (at, true) }
         at += 1usize
     }
     ret (0usize, false)
@@ -103,7 +104,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
             size = end - start
             placed_max = start
         }
-        symbols[symbol_count] = Symbol { name: builder.functions[function_at].name, value: start, size: size, section: 1usize, string_offset: 0usize }
+        symbols[symbol_count] = Symbol { name: builder.functions[function_at].name, module: builder.functions[function_at].module_name, value: start, size: size, section: 1usize, string_offset: 0usize }
         symbol_count += 1usize
         function_at += 1usize
     }
@@ -117,11 +118,16 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
             unresolved_count += 1usize
             let reference = builder.function_refs[relocation.function_ref]
             var name = reference.name
-            if reference.library.len != 0usize { name = reference.symbol }
-            let (existing, found) = find_symbol(symbols, symbol_count, name)
+            var reference_module = ""
+            if reference.has_target { reference_module = builder.functions[reference.target].module_name }
+            if reference.library.len != 0usize {
+                name = reference.symbol
+                reference_module = ""
+            }
+            let (existing, found) = find_symbol(symbols, symbol_count, reference_module, name)
             if !found {
                 if symbol_count == symbols.len { ret Capacity }
-                symbols[symbol_count] = Symbol { name: name, value: 0usize, size: 0usize, section: 0usize, string_offset: 0usize }
+                symbols[symbol_count] = Symbol { name: name, module: reference_module, value: 0usize, size: 0usize, section: 0usize, string_offset: 0usize }
                 symbol_count += 1usize
             }
         }
@@ -132,6 +138,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     while symbol_at < symbol_count {
         symbols[symbol_at].string_offset = string_size
         string_size += symbols[symbol_at].name.len + 1usize
+        if symbols[symbol_at].module.len != 0usize { string_size += symbols[symbol_at].module.len + 1usize }
         symbol_at += 1usize
     }
     let text_offset = 64usize
@@ -178,12 +185,15 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         if !relocation.resolved {
             let reference = builder.function_refs[relocation.function_ref]
             var name = reference.name
+            var reference_module = ""
+            if reference.has_target { reference_module = builder.functions[reference.target].module_name }
             var kind = 2usize
             if reference.library.len != 0usize {
                 name = reference.symbol
+                reference_module = ""
                 kind = 9usize
             }
-            let (index, found) = find_symbol(symbols, symbol_count, name)
+            let (index, found) = find_symbol(symbols, symbol_count, reference_module, name)
             if !found { ret InvalidObject }
             try emit_x64.little_u64(output, relocation.displacement_at)
             try emit_x64.little_u64(output, index * 4294967296usize + kind)
@@ -213,6 +223,10 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.byte(output, 0usize)
     symbol_at = 1usize
     while symbol_at < symbol_count {
+        if symbols[symbol_at].module.len != 0usize {
+            try append_text(output, symbols[symbol_at].module)
+            try emit_x64.byte(output, 46usize)
+        }
         try append_text(output, symbols[symbol_at].name)
         try emit_x64.byte(output, 0usize)
         symbol_at += 1usize
