@@ -222,43 +222,90 @@ fn cache_auth_key(a: *mem.Arena) -> ([]const u8, err) {
     var empty: []const u8 = zero
     let (path, path_error) = cache_key_path(a)
     if path_error != ok { ret (empty, path_error) }
-    let (existing, existing_error) = source.load(a, path)
-    if existing_error == ok {
-        if existing.len != 32usize { ret (empty, InvalidByte) }
-        ret (existing, ok)
+    // Publish through a uniquely created sibling so a concurrent build or an
+    // interrupted writer sees either no key or one whole 32-byte key (#19).
+    var attempt = 0usize
+    while attempt < 8usize {
+        let (existing, existing_error) = source.load(a, path)
+        if existing_error == ok {
+            if existing.len == 32usize { ret (existing, ok) }
+            // A short or torn file is replaced after a bounded retry rather than
+            // failing every later build forever.
+            let removed = os.remove_file(a, path)
+            attempt += 1usize
+            continue
+        }
+        if existing_error != os.NotFound { ret (empty, existing_error) }
+        var generated: [32]u8 = zero
+        let random_error = os.random(generated[..])
+        if random_error != ok { ret (empty, random_error) }
+        var suffix: [8]u8 = zero
+        suffix[0usize] = 46u8
+        suffix[1usize] = 115u8
+        suffix[2usize] = 116u8
+        suffix[3usize] = 97u8
+        suffix[4usize] = 103u8
+        suffix[5usize] = 101u8
+        suffix[6usize] = 45u8
+        let (staged, staged_error) = mem.alloc[u8](a, path.len + 23usize)
+        if staged_error != ok { ret (empty, staged_error) }
+        var at = 0usize
+        while at < path.len {
+            staged[at] = path[at]
+            at += 1usize
+        }
+        at = 0usize
+        while at < 7usize {
+            staged[path.len + at] = suffix[at]
+            at += 1usize
+        }
+        var nonce: [8]u8 = zero
+        let nonce_error = os.random(nonce[0usize..])
+        if nonce_error != ok { ret (empty, nonce_error) }
+        at = 0usize
+        while at < 8usize {
+            staged[path.len + 7usize + at * 2usize] = sha_hex_digit(usize(nonce[at] >> 4u8))
+            staged[path.len + 7usize + at * 2usize + 1usize] = sha_hex_digit(usize(nonce[at] & 15u8))
+            at += 1usize
+        }
+        let staged_path = staged[0usize..path.len + 23usize]
+        let (file, create_error) = os.create_new_with_mode(a, staged_path, 384u32)
+        if create_error == os.Exists {
+            attempt += 1usize
+            continue
+        }
+        if create_error != ok { ret (empty, create_error) }
+        var written = 0usize
+        var write_error = ok
+        while written < 32usize && write_error == ok {
+            let (count, one_error) = os.write(file, generated[written..])
+            write_error = one_error
+            if count == 0usize && one_error == ok { write_error = Capacity }
+            written += count
+        }
+        let close_error = os.close(file)
+        if write_error != ok || close_error != ok {
+            let cleanup_error = os.remove_file(a, staged_path)
+            if write_error != ok { ret (empty, write_error) }
+            ret (empty, close_error)
+        }
+        let publish_error = os.replace(a, staged_path, path, false, false)
+        if publish_error == ok {
+            let (held, held_error) = mem.alloc[u8](a, 32usize)
+            if held_error != ok { ret (empty, held_error) }
+            var held_at = 0usize
+            while held_at < 32usize {
+                held[held_at] = generated[held_at]
+                held_at += 1usize
+            }
+            ret (held, ok)
+        }
+        let cleanup_error = os.remove_file(a, staged_path)
+        if publish_error != os.Exists { ret (empty, publish_error) }
+        attempt += 1usize
     }
-    if existing_error != os.NotFound { ret (empty, existing_error) }
-    var generated: [32]u8 = zero
-    let random_error = os.random(generated[..])
-    if random_error != ok { ret (empty, random_error) }
-    let (file, create_error) = os.create_new(a, path)
-    if create_error == os.Exists {
-        let (raced, raced_error) = source.load(a, path)
-        if raced_error != ok || raced.len != 32usize { ret (empty, InvalidByte) }
-        ret (raced, ok)
-    }
-    if create_error != ok { ret (empty, create_error) }
-    var written = 0usize
-    var write_error = ok
-    while written < 32usize && write_error == ok {
-        let (count, one_error) = os.write(file, generated[written..])
-        write_error = one_error
-        if count == 0usize && one_error == ok { write_error = Capacity }
-        written += count
-    }
-    let close_error = os.close(file)
-    if write_error != ok { ret (empty, write_error) }
-    if close_error != ok { ret (empty, close_error) }
-    let (held, held_error) = mem.alloc[u8](a, 32usize)
-    if held_error != ok { ret (empty, held_error) }
-    var held_at = 0usize
-    while held_at < 32usize {
-        held[held_at] = generated[held_at]
-        held_at += 1usize
-    }
-    ret (held, ok)
+    ret (empty, InvalidByte)
 }
-
 fn cache_auth_tag(a: *mem.Arena, message: []const u8) -> (str, err) {
     let (key, key_error) = cache_auth_key(a)
     if key_error != ok { ret ("", key_error) }
