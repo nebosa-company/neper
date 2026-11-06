@@ -385,12 +385,16 @@ fn map_stack(a: *mem.Arena, ttbr: usize, pages: usize) -> (usize, usize, err) {
 // The physical address behind user VA `va` in the address space rooted at `ttbr`, or 0 when the page is not
 // mapped (the same three-level walk as `protect`).
 fn translate(ttbr: usize, va: usize) -> usize {
+    // Only the user window may be walked: a VA elsewhere turns a block descriptor
+    // into a table address or reads device registers as PTEs.
+    // The EL0 window is at most one level-3 table (2 MB): anything else is kernel or device.
+    if va < USER_BASE || va - USER_BASE >= L3_PAGES * PAGE { ret 0usize }
     let l1 = ttbr & TABLE_MASK
     let l1_entry = usize(os.load64(l1 + ((va >> 30usize) & 511usize) * 8usize))
-    if (l1_entry & 1usize) == 0usize { ret 0usize }
+    if (l1_entry & 3usize) != 3usize { ret 0usize }
     let l2 = l1_entry & TABLE_MASK
     let l2_entry = usize(os.load64(l2 + ((va >> 21usize) & 511usize) * 8usize))
-    if (l2_entry & 1usize) == 0usize { ret 0usize }
+    if (l2_entry & 3usize) != 3usize { ret 0usize }
     let l3 = l2_entry & TABLE_MASK
     let entry = usize(os.load64(l3 + ((va >> 12usize) & 511usize) * 8usize))
     if (entry & 1usize) == 0usize { ret 0usize }
