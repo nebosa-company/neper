@@ -1301,12 +1301,17 @@ fn dist2(p: Finder, q: Finder) -> f64 {
 // by `qr_decode`. `NotFound` when there is no symbol or it cannot be read.
 fn qr_scan(a: *mem.Arena, luma: []const u8, width: usize, height: usize) -> ([]u8, err) {
     var none: []u8 = zero
-    if width < 21usize || height < 21usize || luma.len < width * height { ret (none, NotFound) }
-    let (bin, bin_error) = mem.alloc[u8](a, width * height)
+    if width < 21usize || height < 21usize { ret (none, NotFound) }
+    // The pixel count is computed once, after an overflow check, and every later index
+    // uses it: width * height must not wrap past a short luma slice.
+    if width > 18446744073709551615usize / height { ret (none, NotFound) }
+    let pixels = width * height
+    if luma.len < pixels { ret (none, NotFound) }
+    let (bin, bin_error) = mem.alloc[u8](a, pixels)
     if bin_error != ok { ret (none, bin_error) }
-    let threshold = otsu(luma, width * height)
+    let threshold = otsu(luma, pixels)
     var k = 0usize
-    while k < width * height {
+    while k < pixels {
         if usize(luma[k]) < threshold { bin[k] = 1u8 } else { bin[k] = 0u8 }
         k += 1usize
     }
@@ -1464,3 +1469,6 @@ fn qr_scan(a: *mem.Arena, luma: []const u8, width: usize, height: usize) -> ([]u
     }
     ret (none, NotFound)
 }
+
+
+

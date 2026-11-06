@@ -16,6 +16,7 @@ use e.sync
 type Channel[T: type] = struct { state: *void }
 
 error Closed
+error Invalid
 
 type ChannelState[T: type] = struct {
     lock: sync.Mutex,
@@ -28,13 +29,11 @@ type ChannelState[T: type] = struct {
 }
 
 // A capacity of zero is invalid: there would be nowhere to put a value and no
-// rendezvous in this surface to hand it over directly. The refusal is `sync.Invalid`
-// because this module's fence declares one error and it is `Closed`, which this is
-// not; `e.concurrent.queue` declares an `Invalid` of its own for the same case, and
-// e.channel would want one too if its surface were being written today.
+// rendezvous in this surface to hand it over directly. The refusal is this module's
+// own `Invalid`, so callers do not need `e.sync` just to classify a bad capacity.
 fn init[T: type](a: *mem.Arena, cap: usize) -> (Channel[T], err) {
     var empty: Channel[T] = zero
-    if cap == 0usize { ret (empty, sync.Invalid) }
+    if cap == 0usize { ret (empty, Invalid) }
     let start = mem.mark(a)
     let (storage, storage_error) = mem.alloc[ChannelState[T]](a, 1usize)
     if storage_error != ok {
@@ -168,5 +167,6 @@ fn wrap_of[T: type](s: *ChannelState[T], at: usize) -> usize {
 fn slot_of[T: type](s: *ChannelState[T], offset: usize) -> usize {
     ret wrap_of[T](s, s.head + offset)
 }
+
 
 

@@ -4,14 +4,13 @@
 // second channel with its own state and element type.
 use e.mem
 use e.channel
-use e.sync
 
 error Failed
 
 fn main(a: *mem.Arena) -> err {
-    // A capacity of zero is invalid.
+    // A capacity of zero is invalid, and the channel names its own error.
     let (bad, bad_error) = channel.init[i64](a, 0usize)
-    if bad_error != sync.Invalid { ret Failed }
+    if bad_error != channel.Invalid { ret Failed }
 
     // A failed allocation after the channel state is reserved leaves this caller
     // arena unchanged, so it can still be used for a smaller channel.
