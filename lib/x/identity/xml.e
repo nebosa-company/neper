@@ -262,6 +262,8 @@ fn bare(message: str) -> Doc {
 
 // Parses a document; `valid` false carries the reference's message.
 fn parse_xml(a: *mem.Arena, source: str) -> Doc {
+    // A hard input cap keeps the allocation below bounded for untrusted POSTs.
+    if source.len > 4194304usize { ret bare("document too large") }
     var lt = 1usize
     var q = 0usize
     while q < source.len {
@@ -495,38 +497,67 @@ fn parse_xml(a: *mem.Arena, source: str) -> Doc {
         ret bare(join(a, join(a, "unclosed element <", nodes[stack[depth - 1usize]].name), ">"))
     }
     if !have_root { ret bare("no root element") }
-    // Attach the text and the children and entries lists, in document order.
+    // Attach text and the child/entry lists with one pass per parent index: count per
+    // parent, allocate each list once, then fill, instead of scanning every entry per node.
+    let (ce_count, ce_alloc) = mem.alloc[usize](a, count + 1usize)
+    let (ee_count, ee_alloc) = mem.alloc[usize](a, count + 1usize)
+    let (ce_at, ce_pos) = mem.alloc[usize](a, count + 1usize)
+    let (ee_at, ee_pos) = mem.alloc[usize](a, count + 1usize)
+    if ce_alloc != ok || ee_alloc != ok || ce_pos != ok || ee_pos != ok { ret bare("out of memory") }
+    var z = 0usize
+    while z < count {
+        ce_count[z] = 0usize
+        ee_count[z] = 0usize
+        z += 1usize
+    }
+    z = 0usize
+    while z < ents {
+        let parent = ent_parent[z]
+        ee_count[parent] += 1usize
+        if !ent_is_text[z] { ce_count[parent] += 1usize }
+        z += 1usize
+    }
+    var total_ce = 0usize
+    var total_ee = 0usize
     var n = 0usize
     while n < count {
+        total_ce += ce_count[n]
+        total_ee += ee_count[n]
+        n += 1usize
+    }
+    let (flat_ch, fa) = mem.alloc[usize](a, total_ce + 1usize)
+    let (flat_en, fb) = mem.alloc[Entry](a, total_ee + 1usize)
+    if fa != ok || fb != ok { ret bare("out of memory") }
+    n = 0usize
+    var c_run = 0usize
+    var e_run = 0usize
+    while n < count {
         nodes[n].text = texts[n]
-        var ce = 0usize
-        var ee = 0usize
-        var z = 0usize
-        while z < ents {
-            if ent_parent[z] == n {
-                ee += 1usize
-                if !ent_is_text[z] { ce += 1usize }
-            }
-            z += 1usize
+        ce_at[n] = c_run
+        ee_at[n] = e_run
+        c_run += ce_count[n]
+        e_run += ee_count[n]
+        n += 1usize
+    }
+    z = 0usize
+    while z < ents {
+        let parent = ent_parent[z]
+        flat_en[ee_at[parent]] = Entry { is_text: ent_is_text[z], text: ent_text[z], node: ent_node[z] }
+        ee_at[parent] += 1usize
+        if !ent_is_text[z] {
+            flat_ch[ce_at[parent]] = ent_node[z]
+            ce_at[parent] += 1usize
         }
-        let (ch, ca) = mem.alloc[usize](a, ce + 1usize)
-        let (en, cb) = mem.alloc[Entry](a, ee + 1usize)
-        var ci = 0usize
-        var ei = 0usize
-        z = 0usize
-        while z < ents {
-            if ent_parent[z] == n {
-                en[ei] = Entry { is_text: ent_is_text[z], text: ent_text[z], node: ent_node[z] }
-                ei += 1usize
-                if !ent_is_text[z] {
-                    ch[ci] = ent_node[z]
-                    ci += 1usize
-                }
-            }
-            z += 1usize
-        }
-        nodes[n].children = ch[0usize..ce]
-        nodes[n].entries = en[0usize..ee]
+        z += 1usize
+    }
+    n = 0usize
+    c_run = 0usize
+    e_run = 0usize
+    while n < count {
+        nodes[n].children = flat_ch[c_run..c_run + ce_count[n]]
+        nodes[n].entries = flat_en[e_run..e_run + ee_count[n]]
+        c_run += ce_count[n]
+        e_run += ee_count[n]
         n += 1usize
     }
     ret Doc { valid: true, message: "", nodes: nodes[0usize..count], root: root }
@@ -871,4 +902,10 @@ fn without_signature(a: *mem.Arena, d: Doc, at: usize, signature: usize) -> (Doc
     }
     ret (Doc { valid: true, message: "", nodes: nodes[0usize..d.nodes.len], root: d.root }, at)
 }
+
+
+
+
+
+
 
