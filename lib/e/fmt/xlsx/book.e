@@ -660,6 +660,57 @@ fn attr(node: *const xml.Node, name: str) -> (str, bool) {
     ret ("", false)
 }
 
+// The prefix of a qualified name, or "" for an unqualified one.
+fn name_prefix(name: str) -> str {
+    var i = 0usize
+    while i < name.len {
+        if name[i] == 58u8 { ret name[0usize..i] }
+        i += 1usize
+    }
+    ret ""
+}
+
+// The namespace URI bound to `prefix` at element `n`, walking its ancestors.
+fn prefix_uri(nodes: []const xml.Node, n: usize, prefix: str) -> (str, bool) {
+    var cur = n
+    var depth = 0usize
+    while cur < nodes.len && depth < 64usize {
+        var a = 0usize
+        while a < nodes[cur].attributes.len {
+            let aname = nodes[cur].attributes[a].name
+            if prefix.len == 0usize {
+                if str.eq(aname, "xmlns") { ret (nodes[cur].attributes[a].value, true) }
+            } else if aname.len == 6usize + prefix.len && str.eq(aname[0usize..6usize], "xmlns:") && str.eq(aname[6usize..], prefix) {
+                ret (nodes[cur].attributes[a].value, true)
+            }
+            a += 1usize
+        }
+        let parent = usize(nodes[cur].parent)
+        if parent == cur || parent >= nodes.len { break }
+        cur = parent
+        depth += 1usize
+    }
+    ret ("", false)
+}
+
+// The attribute whose local name is `name` and whose prefix resolves to `uri`; a
+// foreign x:id does not answer the officeDocument r:id lookup.
+fn attr_ns(nodes: []const xml.Node, n: usize, name: str, uri: str) -> (str, bool) {
+    var i = 0usize
+    while i < nodes[n].attributes.len {
+        let aname = nodes[n].attributes[i].name
+        if str.eq(local(aname), name) {
+            let qprefix = name_prefix(aname)
+            // An unqualified legacy attribute has no prefix to check.
+            if qprefix.len == 0usize { ret (nodes[n].attributes[i].value, true) }
+            let (bound, has) = prefix_uri(nodes, n, qprefix)
+            if has && str.eq(bound, uri) { ret (nodes[n].attributes[i].value, true) }
+        }
+        i += 1usize
+    }
+    ret ("", false)
+}
+
 fn parent_index(nodes: []const xml.Node, n: usize) -> usize {
     ret usize(nodes[n].parent)
 }
@@ -1107,7 +1158,7 @@ fn decode(a: *mem.Arena, data: []const u8) -> ([]xlsx.Sheet, err) {
     while i < book_nodes.len {
         if is_element(book_nodes, i, "sheet") {
             let (name, has_name) = attr(&book_nodes[i], "name")
-            let (rid, has_rid) = attr(&book_nodes[i], "id")
+            let (rid, has_rid) = attr_ns(book_nodes, i, "id", "http://schemas.openxmlformats.org/officeDocument/2006/relationships")
             if !has_name || !has_rid { ret (zero, BadWorkbook) }
             // The target of relationship `rid`, relative to xl/.
             var target_path = ""
@@ -1135,4 +1186,3 @@ fn decode(a: *mem.Arena, data: []const u8) -> ([]xlsx.Sheet, err) {
     }
     ret (out, ok)
 }
-
