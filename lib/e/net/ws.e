@@ -25,6 +25,10 @@ type ConnectionState = struct {
     sink: io.Writer,
     client: bool,
     closed: bool,
+    // Peer already sent Close and we have not answered yet: one Close response is
+    // still allowed, any other send is not.
+    peer_closed: bool,
+    close_sent: bool,
     fragmented: bool,
     receiving_fragmented: bool,
 }
@@ -113,6 +117,8 @@ fn client_upgrade(a: *mem.Arena, stream: io.Reader, sink: io.Writer, host: str, 
     state.sink = sink
     state.client = true
     state.closed = false
+    state.peer_closed = false
+    state.close_sent = false
     state.fragmented = false
     state.receiving_fragmented = false
 
@@ -187,6 +193,8 @@ fn server_upgrade(a: *mem.Arena, stream: io.Reader, sink: io.Writer, request: *c
     state.sink = sink
     state.client = false
     state.closed = false
+    state.peer_closed = false
+    state.close_sent = false
     state.fragmented = false
     state.receiving_fragmented = false
     var headers: [3]http.Header = zero
@@ -223,7 +231,7 @@ fn decode_opcode(value: u8) -> (Opcode, err) {
 fn receive(a: *mem.Arena, connection: *Connection, limit: usize) -> (Frame, err) {
     var out: Frame = zero
     let state = mem.cast[*ConnectionState](connection.state)
-    if state.closed { ret (out, Closed) }
+    if state.closed || state.peer_closed { ret (out, Closed) }
     var prefix: [2]u8 = zero
     let prefix_error = read_exact(state, prefix[0..])
     if prefix_error != ok { ret (out, prefix_error) }
@@ -294,7 +302,11 @@ fn receive(a: *mem.Arena, connection: *Connection, limit: usize) -> (Frame, err)
         ret (out, InvalidFrame)
     }
     state.receiving_fragmented = next_fragmented
-    if opcode == .Close { state.closed = true }
+    if opcode == .Close {
+        // A peer Close still needs our reply: only mark the peer side.
+        state.peer_closed = true
+        if state.close_sent { state.closed = true }
+    }
     out = Frame { final: final, opcode: opcode, payload: payload }
     ret (out, ok)
 }
@@ -315,6 +327,9 @@ fn control_opcode(opcode: Opcode) -> bool {
 fn send(connection: *Connection, frame: Frame, mask: [4]u8) -> err {
     let state = mem.cast[*ConnectionState](connection.state)
     if state.closed { ret Closed }
+    if state.close_sent { ret Closed }
+    // After the peer's Close only the closing handshake response may be sent.
+    if state.peer_closed && frame.opcode != .Close { ret Closed }
     let control = control_opcode(frame.opcode)
     if control && (!frame.final || frame.payload.len > 125usize) { ret InvalidFrame }
     var next_fragmented = state.fragmented
@@ -375,7 +390,10 @@ fn send(connection: *Connection, frame: Frame, mask: [4]u8) -> err {
         try io.write_all(&state.sink, frame.payload)
     }
     state.fragmented = next_fragmented
-    if frame.opcode == .Close { state.closed = true }
+    if frame.opcode == .Close {
+        state.close_sent = true
+        if state.peer_closed { state.closed = true }
+    }
     ret ok
 }
 
@@ -413,3 +431,5 @@ fn close(connection: *Connection, code: u16, reason: str, mask: [4]u8) -> err {
     let frame = Frame { final: true, opcode: .Close, payload: payload[0usize..reason.len + 2usize] }
     ret send(connection, frame, mask)
 }
+
+

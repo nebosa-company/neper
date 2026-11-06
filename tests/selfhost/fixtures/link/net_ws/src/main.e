@@ -156,7 +156,7 @@ fn main(a: *mem.Arena) -> err {
     // rejected frame the next valid text frame remains readable. Test all three
     // Close-specific wire rules: a one-byte payload, a reserved status code, and
     // a non-UTF-8 reason after an otherwise valid code.
-    var malformed: [45]u8 = zero
+    var malformed: [64]u8 = zero
     var malformed_at = 0usize
     var one_byte_close: [1]u8 = zero
     one_byte_close[0usize] = 0u8
@@ -173,6 +173,10 @@ fn main(a: *mem.Arena) -> err {
     invalid_reason[2usize] = 128u8
     malformed_at = append_masked_frame(malformed[0..], malformed_at, 8u8, invalid_reason[0..])
     malformed_at = append_masked_frame(malformed[0..], malformed_at, 1u8, "c")
+    var peer_close_payload: [2]u8 = zero
+    peer_close_payload[0usize] = 3u8
+    peer_close_payload[1usize] = 232u8
+    malformed_at = append_masked_frame(malformed[0..], malformed_at, 8u8, peer_close_payload[0..])
     var close_source = io.SliceReader { data: malformed[0usize..malformed_at], off: 0usize }
     let close_reader = io.slice_reader(&close_source)
     var close_bytes: [512]u8 = zero
@@ -193,5 +197,15 @@ fn main(a: *mem.Arena) -> err {
     if reason_error != ws.InvalidFrame { os.exit(37i32) }
     let (after_reason, after_reason_error) = ws.receive(a, &close_checked, 16usize)
     if after_reason_error != ok || after_reason.opcode != .Text || !str.eq(after_reason.payload, "c") { os.exit(38i32) }
+    // #634: after the peer Close exactly one Close response may still be sent.
+    let (peer_close, peer_close_error) = ws.receive(a, &close_checked, 16usize)
+    if peer_close_error != ok || peer_close.opcode != .Close { os.exit(39i32) }
+    close_capture.off = 0usize
+    if ws.close(&close_checked, 1000u16, "", mask) != ok { os.exit(40i32) }
+    if close_capture.off == 0usize { os.exit(41i32) }
+    if ws.send(&close_checked, ws.Frame { final: true, opcode: .Text, payload: "x" }, mask) != ws.Closed { os.exit(42i32) }
+    let (_, after_close_error) = ws.receive(a, &close_checked, 16usize)
+    if after_close_error != ws.Closed { os.exit(43i32) }
     ret ok
 }
+
