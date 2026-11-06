@@ -4410,7 +4410,12 @@ fn declaration_gpu(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                                 is_literal = false
                                 break
                             }
-                            if value > 429496729usize { valid = false }
+                            // Stop before the multiply: a long user literal must not
+                            // overflow usize, and no size above 1024 is legal anyway.
+                            if value > 1024usize {
+                                valid = false
+                                break
+                            }
                             value = value * 10usize + usize(digit - 48u8)
                             digit_at += 1usize
                         }
@@ -4423,7 +4428,11 @@ fn declaration_gpu(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
             child_at += 1usize
         }
         if count == 0usize { valid = false }
-        if valid && dims[0usize] * dims[1usize] * dims[2usize] > 1024usize { valid = false }
+        if valid && (dims[0usize] > 1024usize || dims[1usize] > 1024usize || dims[2usize] > 1024usize) { valid = false }
+        // Check the product without multiplying three unbounded values: dims[0]*dims[1]
+        // is at most 1024*1024 after the guard above.
+        if valid && dims[0usize] * dims[1usize] > 1024usize { valid = false }
+        if valid && dims[2usize] != 0usize && dims[0usize] * dims[1usize] > 1024usize / dims[2usize] { valid = false }
         ret (dims[0usize], dims[1usize], dims[2usize], true, valid)
     }
     ret (0usize, 0usize, 0usize, false, false)
