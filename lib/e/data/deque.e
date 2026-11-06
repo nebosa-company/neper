@@ -75,7 +75,9 @@ fn pop_back[T: type](d: *Deque[T]) -> (T, bool) {
 }
 
 fn get[T: type](d: *const Deque[T], index: usize) -> T {
-    if index >= d.len { ret d.items[d.items.len] }
+    // An out-of-range index (including an empty deque) answers the zero value; the
+    // alternative was indexing one past the slice and trapping.
+    if index >= d.len || d.items.len == 0usize { ret zero }
     ret d.items[(d.head + index) % d.items.len]
 }
 
