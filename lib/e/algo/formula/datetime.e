@@ -144,12 +144,12 @@ fn weekday_name(index: i64) -> str {
 
 fn iso_week_number(ms: f64) -> f64 {
     let p = parts_of(ms)
-    let date = date_utc(p.year, p.month, p.day, 0.0f64, 0.0f64, 0.0f64, 0.0f64)
+    let date = date_utc_raw(p.year, p.month, p.day)
     let day_num = f.fmod(parts_of(date).weekday + 6.0f64, 7.0f64)
     // Thursday of this week
     let thursday = date - day_num * day_ms() + 3.0f64 * day_ms()
     let tp = parts_of(thursday)
-    let first = date_utc(tp.year, 0.0f64, 4.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64)
+    let first = date_utc_raw(tp.year, 0.0f64, 4.0f64)
     let first_num = f.fmod(parts_of(first).weekday + 6.0f64, 7.0f64)
     let first_thursday = first - first_num * day_ms() + 3.0f64 * day_ms()
     ret 1.0f64 + js_round((thursday - first_thursday) / (7.0f64 * day_ms()))
@@ -727,7 +727,7 @@ fn h_weeknum(c: *f.Call) -> f.Value {
     if f.is_error(early) { ret early }
     if !valid { ret f.blank() }
     let p = parts_of(ms)
-    let start = date_utc(p.year, 0.0f64, 1.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64)
+    let start = date_utc_raw(p.year, 0.0f64, 1.0f64)
     let days = math.floor[f64]((ms - start) / day_ms())
     ret f.number(math.floor[f64]((days + parts_of(start).weekday) / 7.0f64) + 1.0f64)
 }
@@ -796,9 +796,9 @@ fn h_datedif(c: *f.Call) -> f.Value {
     if str.eq(unit, "YD") {
         let pa = parts_of(a_ms)
         let pb = parts_of(b_ms)
-        let anchor = date_utc(pb.year, pa.month, pa.day, 0.0f64, 0.0f64, 0.0f64, 0.0f64)
+        let anchor = date_utc_raw(pb.year, pa.month, pa.day)
         var base = anchor
-        if anchor > b_ms { base = date_utc(pb.year - 1.0f64, pa.month, pa.day, 0.0f64, 0.0f64, 0.0f64, 0.0f64) }
+        if anchor > b_ms { base = date_utc_raw(pb.year - 1.0f64, pa.month, pa.day) }
         ret f.number(math.floor[f64]((b_ms - base) / day_ms()))
     }
     ret f.value_error(f.join3(c.a, "Unknown DATEDIF unit \"", unit, "\""))
@@ -1093,7 +1093,7 @@ fn h_dayofyear(c: *f.Call) -> f.Value {
     if f.is_error(early) { ret early }
     if !valid { ret f.blank() }
     let p = parts_of(ms)
-    let start = date_utc(p.year, 0.0f64, 1.0f64, 0.0f64, 0.0f64, 0.0f64, 0.0f64)
+    let start = date_utc_raw(p.year, 0.0f64, 1.0f64)
     ret f.number(math.floor[f64]((utc_midnight(ms) - start) / day_ms()) + 1.0f64)
 }
 
