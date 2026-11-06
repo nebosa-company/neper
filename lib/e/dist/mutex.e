@@ -47,7 +47,11 @@ fn ra(nodes: []RaNode, deferred: []bool) -> (Ra, err) {
 }
 
 // Node `i` asks for the critical section: a stamped Request to every other node.
+// A node already asking (or inside the section) is not queued again: without this,
+// a duplicate request would leave a stale entry that re-enters on release.
 fn ra_request(r: *Ra, i: usize, s: *Sent) {
+    if i >= r.nodes.len { ret }
+    if r.nodes[i].requesting || r.nodes[i].in_cs { ret }
     r.nodes[i].clock += 1u64
     r.nodes[i].stamp = r.nodes[i].clock
     r.nodes[i].requesting = true
