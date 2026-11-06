@@ -495,6 +495,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let l6 = str.push_byte(&l, 93u8)
     let (lav, lae) = json.parse(a, str.done(&l), json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
     if lae != ok || scim.split_list(a, lav).len != 70usize { os.exit(132i32) }
+    // #52.12: a long left-deep `and` chain is bounded by the evaluator, not the stack.
+    let (ab, abe) = str.builder(a, 1024usize)
+    if abe != ok { os.exit(133i32) }
+    var abld = ab
+    var ai = 0usize
+    while ai < 200000usize {
+        let ap = str.push(&abld, "x eq 1 and ")
+        if ap != ok { os.exit(133i32) }
+        ai += 1usize
+    }
+    let atail = str.push(&abld, "x eq 1")
+    if atail != ok { os.exit(133i32) }
+    let long_filter = scim.parse_filter(a, str.done(&abld))
+    if !long_filter.valid { os.exit(134i32) }
+    let (chain_resource, cre) = json.parse(a, "{\"x\":1}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if cre != ok || scim.evaluate(a, long_filter, chain_resource) { os.exit(135i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }
@@ -558,3 +574,5 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try io.print("x identity scim ok")
     ret ok
 }
+
+

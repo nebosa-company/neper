@@ -27,6 +27,11 @@ type Node = struct { kind: u8, op: u8, attribute: str, path: str, left: usize, r
 
 type Parser = struct { tokens: []const Token, pos: usize, nodes: []Node, count: usize, failed: bool, message: str, depth: usize }
 
+// The evaluator walks the parsed tree recursively; a left-deep `and`/`or` chain is as
+// deep as its length, so reflection past this bound answers false (fail closed) rather
+// than overflowing the stack.
+const MAX_EVAL_DEPTH: usize = 128usize
+
 type Filter = struct { valid: bool, message: str, nodes: []const Node, root: usize }
 
 type PatchPath = struct { attribute: str, has_filter: bool, filter: Filter, has_sub: bool, sub: str, has_error: bool, message: str }
@@ -491,11 +496,12 @@ fn compare_values(a: *mem.Arena, actual: json.Value, found: bool, op: u8, expect
     ret to_number(x) <= to_number(y)
 }
 
-fn eval(a: *mem.Arena, nodes: []const Node, at: usize, resource: json.Value) -> bool {
+fn eval(a: *mem.Arena, nodes: []const Node, at: usize, resource: json.Value, depth: usize) -> bool {
+    if depth > MAX_EVAL_DEPTH { ret false }
     let n = nodes[at]
-    if n.kind == 0u8 { ret eval(a, nodes, n.left, resource) && eval(a, nodes, n.right, resource) }
-    if n.kind == 1u8 { ret eval(a, nodes, n.left, resource) || eval(a, nodes, n.right, resource) }
-    if n.kind == 2u8 { ret !eval(a, nodes, n.left, resource) }
+    if n.kind == 0u8 { ret eval(a, nodes, n.left, resource, depth + 1usize) && eval(a, nodes, n.right, resource, depth + 1usize) }
+    if n.kind == 1u8 { ret eval(a, nodes, n.left, resource, depth + 1usize) || eval(a, nodes, n.right, resource, depth + 1usize) }
+    if n.kind == 2u8 { ret !eval(a, nodes, n.left, resource, depth + 1usize) }
     let (value, found) = get_attribute(a, resource, n.attribute)
     if n.kind == 3u8 {
         let (items, is_array) = ir.items_of(value)
@@ -513,7 +519,7 @@ fn eval(a: *mem.Arena, nodes: []const Node, at: usize, resource: json.Value) -> 
         if !found || !is_array { ret false }
         var i = 0usize
         while i < items.len {
-            if eval(a, nodes, n.left, items[i]) { ret true }
+            if eval(a, nodes, n.left, items[i], depth + 1usize) { ret true }
             i += 1usize
         }
         ret false
@@ -534,7 +540,7 @@ fn eval(a: *mem.Arena, nodes: []const Node, at: usize, resource: json.Value) -> 
 fn evaluate(a: *mem.Arena, filter: Filter, resource: json.Value) -> bool {
     // An invalid filter must match nothing: fail closed, never the whole collection.
     if !filter.valid { ret false }
-    ret eval(a, filter.nodes, filter.root, resource)
+    ret eval(a, filter.nodes, filter.root, resource, 0usize)
 }
 
 // --- PATCH ---------------------------------------------------------------------------------------------------
