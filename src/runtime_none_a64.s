@@ -176,14 +176,14 @@ np_number:
 // with SP_ELx, a lower EL in AArch64 and one in AArch32, each synchronous, IRQ, FIQ and
 // SError. Every entry makes the frame, keeps x0 and x1 in it, and passes its number.
 //
-// The frame, 304 bytes on the EL1 stack: x0-x30 at 0, SP_EL0 at 248, ELR_EL1 at 256,
+// The frame, 832 bytes on the EL1 stack (FP/SIMD included since #262): x0-x30 at 0, SP_EL0 at 248, ELR_EL1 at 256,
 // SPSR_EL1 at 264, ESR_EL1 at 272, FAR_EL1 at 280, the entry's number at 288. The hook
 // may rewrite any of it; ELR, SPSR, SP_EL0 and the registers are restored from it.
     .balign 2048
 np_vectors:
     .irp kind, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
     .balign 128
-    sub sp, sp, #304
+    sub sp, sp, #832
     stp x0, x1, [sp]
     mov x0, #\kind
     b np_vector
@@ -213,6 +213,29 @@ np_vector:
     mrs x10, far_el1
     stp x9, x10, [sp, #272]
     str x0, [sp, #288]
+    // The entry enables FP/SIMD, so q0-q31 (and FPCR/FPSR) may be live: save them in the
+    // frame the hook may rewrite, and restore them on the way out.
+    add x11, sp, #304
+    stp q0, q1, [x11]
+    stp q2, q3, [x11, #32]
+    stp q4, q5, [x11, #64]
+    stp q6, q7, [x11, #96]
+    stp q8, q9, [x11, #128]
+    stp q10, q11, [x11, #160]
+    stp q12, q13, [x11, #192]
+    stp q14, q15, [x11, #224]
+    stp q16, q17, [x11, #256]
+    stp q18, q19, [x11, #288]
+    stp q20, q21, [x11, #320]
+    stp q22, q23, [x11, #352]
+    stp q24, q25, [x11, #384]
+    stp q26, q27, [x11, #416]
+    stp q28, q29, [x11, #448]
+    stp q30, q31, [x11, #480]
+    mrs x9, fpcr
+    mrs x10, fpsr
+    str x9, [x11, #512]
+    str x10, [x11, #520]
     bl np_bss
     ldr x9, [x9, #16]
     cbz x9, np_unhandled
@@ -238,8 +261,29 @@ np_vector:
     ldp x24, x25, [sp, #192]
     ldp x26, x27, [sp, #208]
     ldp x28, x29, [sp, #224]
+    add x11, sp, #304
+    ldp q0, q1, [x11]
+    ldp q2, q3, [x11, #32]
+    ldp q4, q5, [x11, #64]
+    ldp q6, q7, [x11, #96]
+    ldp q8, q9, [x11, #128]
+    ldp q10, q11, [x11, #160]
+    ldp q12, q13, [x11, #192]
+    ldp q14, q15, [x11, #224]
+    ldp q16, q17, [x11, #256]
+    ldp q18, q19, [x11, #288]
+    ldp q20, q21, [x11, #320]
+    ldp q22, q23, [x11, #352]
+    ldp q24, q25, [x11, #384]
+    ldp q26, q27, [x11, #416]
+    ldp q28, q29, [x11, #448]
+    ldp q30, q31, [x11, #480]
+    ldr x9, [x11, #512]
+    ldr x10, [x11, #520]
+    msr fpcr, x9
+    msr fpsr, x10
     ldp x0, x1, [sp]
-    add sp, sp, #304
+    add sp, sp, #832
     eret
 
 // No exception hook: the entry, ESR, FAR and ELR on the console, and exit 135.
@@ -447,6 +491,11 @@ neper_os_copy_bytes:
     csel x2, x3, x2, lo
     ldr x0, [x0]
     ldr x1, [x1]
+    // With the MMU off every access is Device memory: an unaligned word faults, so
+    // only an aligned pair uses the word loop.
+    orr x4, x0, x1
+    tst x4, #7
+    b.ne .Lcopy_bytes_byte
 .Lcopy_bytes_word:
     cmp x2, #8
     b.lo .Lcopy_bytes_byte
@@ -476,6 +525,8 @@ neper_os_crc32c_bytes:
     ldr w5, [x4]
     mov x0, x2
     lsr x6, x2, #3
+    tst x3, #7
+    b.ne .Lcrc_unaligned
 .Lcrc_words:
     cbz x6, .Lcrc_tail
     ldr x7, [x3], #8
@@ -493,6 +544,140 @@ neper_os_crc32c_bytes:
 .Lcrc_store:
     str x5, [x4]
     ret
+.Lcrc_unaligned:
+    mov x6, x2
+    b .Lcrc_bytes
+
+// Spec section 9 rule 4: the supplied `hash` is xxHash64 with seed 0 over a value's
+// canonical little-endian bytes; this agrees bit for bit with algo.hash.xxhash64, with
+// the x86-64 runtime and with bootstrap/runtime.c. x0 = the bytes, x1 = their length.
+.global neper_hash_bytes
+neper_hash_bytes:
+    ldr x11, .Lhash_p1
+    ldr x12, .Lhash_p2
+    ldr x13, .Lhash_p3
+    ldr x14, .Lhash_p4
+    ldr x15, .Lhash_p5
+    mov x9, x0
+    mov x10, x1
+    mov x3, #0
+    cmp x10, #32
+    b.lo .Lhash_small
+    add x5, x11, x12
+    mov x6, x12
+    mov x7, #0
+    neg x8, x11
+    sub x2, x10, #32
+.Lhash_block:
+    ldr x4, [x9, x3]
+    mul x4, x4, x12
+    add x5, x5, x4
+    ror x5, x5, #33
+    mul x5, x5, x11
+    add x3, x3, #8
+    ldr x4, [x9, x3]
+    mul x4, x4, x12
+    add x6, x6, x4
+    ror x6, x6, #33
+    mul x6, x6, x11
+    add x3, x3, #8
+    ldr x4, [x9, x3]
+    mul x4, x4, x12
+    add x7, x7, x4
+    ror x7, x7, #33
+    mul x7, x7, x11
+    add x3, x3, #8
+    ldr x4, [x9, x3]
+    mul x4, x4, x12
+    add x8, x8, x4
+    ror x8, x8, #33
+    mul x8, x8, x11
+    add x3, x3, #8
+    cmp x3, x2
+    b.ls .Lhash_block
+    ror x16, x5, #63
+    ror x4, x6, #57
+    add x16, x16, x4
+    ror x4, x7, #52
+    add x16, x16, x4
+    ror x4, x8, #46
+    add x16, x16, x4
+    mul x4, x5, x12
+    ror x4, x4, #33
+    mul x4, x4, x11
+    eor x16, x16, x4
+    madd x16, x16, x11, x14
+    mul x4, x6, x12
+    ror x4, x4, #33
+    mul x4, x4, x11
+    eor x16, x16, x4
+    madd x16, x16, x11, x14
+    mul x4, x7, x12
+    ror x4, x4, #33
+    mul x4, x4, x11
+    eor x16, x16, x4
+    madd x16, x16, x11, x14
+    mul x4, x8, x12
+    ror x4, x4, #33
+    mul x4, x4, x11
+    eor x16, x16, x4
+    madd x16, x16, x11, x14
+    b .Lhash_sized
+.Lhash_small:
+    mov x16, x15
+.Lhash_sized:
+    add x16, x16, x10
+.Lhash_tail8:
+    add x4, x3, #8
+    cmp x4, x10
+    b.hi .Lhash_tail4
+    ldr x4, [x9, x3]
+    mul x4, x4, x12
+    ror x4, x4, #33
+    mul x4, x4, x11
+    eor x16, x16, x4
+    ror x16, x16, #37
+    madd x16, x16, x11, x14
+    add x3, x3, #8
+    b .Lhash_tail8
+.Lhash_tail4:
+    add x4, x3, #4
+    cmp x4, x10
+    b.hi .Lhash_tail1
+    ldr w4, [x9, x3]
+    mul x4, x4, x11
+    eor x16, x16, x4
+    ror x16, x16, #41
+    madd x16, x16, x12, x13
+    add x3, x3, #4
+.Lhash_tail1:
+    cmp x3, x10
+    b.hs .Lhash_final
+    ldrb w4, [x9, x3]
+    mul x4, x4, x15
+    eor x16, x16, x4
+    ror x16, x16, #53
+    mul x16, x16, x11
+    add x3, x3, #1
+    b .Lhash_tail1
+.Lhash_final:
+    eor x16, x16, x16, lsr #33
+    mul x16, x16, x12
+    eor x16, x16, x16, lsr #29
+    mul x16, x16, x13
+    eor x0, x16, x16, lsr #32
+    ret
+    .p2align 3
+.Lhash_p1:
+    .quad 11400714785074694791
+.Lhash_p2:
+    .quad 14029467366897019727
+.Lhash_p3:
+    .quad 1609587929392839161
+.Lhash_p4:
+    .quad 9650029242287828579
+.Lhash_p5:
+    .quad 2870177450012600261
 
 // The hooks: each stores the function's address in its slot.
 .global neper_os_set_console

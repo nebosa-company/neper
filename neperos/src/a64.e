@@ -41,7 +41,7 @@ const ICC_EOIR1_EL1: usize = (3usize << 14usize) | (12usize << 7usize) | (12usiz
 // What the runtime's vectors save, in its order: x0-x30, SP_EL0, ELR_EL1, SPSR_EL1,
 // ESR_EL1, FAR_EL1, the vector's number (0-15) and a word that keeps the frame 16-byte
 // aligned. A handler may change any of it; the return restores it.
-type Frame = struct { x: [31]u64, sp_el0: u64, elr: u64, spsr: u64, esr: u64, far: u64, kind: u64, pad: u64 }
+type Frame = struct { x: [31]u64, sp_el0: u64, elr: u64, spsr: u64, esr: u64, far: u64, kind: u64, pad: u64, q: [64]u64, fpcr: u64, fpsr: u64 }
 
 // ESR_EL1's exception class: a data abort from a lower EL (an EL0 thread), one taken
 // without a change of level (the kernel itself), and an SVC from AArch64.
