@@ -67,6 +67,8 @@ fn gossip_round(g: *Gossip, r: *rand.Pcg64) -> usize {
 // Rounds until every node knows, at most `limit` (0 is no limit).
 fn gossip_rounds_until_all(g: *Gossip, r: *rand.Pcg64, limit: usize) -> usize {
     var rounds = 0usize
+    // fanout 0 informs nobody: stop instead of spinning forever.
+    if g.fanout == 0usize { ret 0usize }
     while g.informed < g.state.len && (limit == 0usize || rounds < limit) {
         let _ = gossip_round(g, r)
         rounds += 1usize
