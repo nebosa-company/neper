@@ -1064,7 +1064,10 @@ fn prefill_body_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
 fn declaration_constants(c: *check.Checker, g: *graph.Graph, function: check.Function, slots: []usize, scratch: *binary.Buffer) -> (usize, err) {
     let module = g.modules[function.module_index]
     let tokens = module.tokens
-    var seen: [32]usize = zero
+    // The de-duplication set is not a 32-entry prefix any more: a declaration that reads
+    // more constants used to fold the 33rd and later twice, cancelling their hash.
+    // ponytail: still a fixed ceiling; a per-function bitset over constant_count is the upgrade.
+    var seen: [512]usize = zero
     var used = 0usize
     var low = 0usize
     var high = tokens.len
@@ -5626,3 +5629,5 @@ fn decode_constant(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payloa
     c.constant_count += 1usize
     ret ok
 }
+
+
