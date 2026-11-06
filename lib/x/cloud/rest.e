@@ -736,6 +736,8 @@ fn lro_max_polls(minutes: u32, has_minutes: bool) -> u32 {
     var m = 30u32
     if has_minutes { m = minutes }
     if m < 1u32 { m = 1u32 }
+    // A manifest-supplied u32 minute count overflows twelve a minute; saturate.
+    if m > 4294967295u32 / 12u32 { ret 4294967295u32 }
     ret m * 12u32
 }
 
