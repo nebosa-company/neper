@@ -27,6 +27,9 @@ extern fn raw_open_process(access: u32, inherit: i32, pid: u32) -> usize
 @import("kernel32.dll", "CloseHandle")
 extern fn raw_close_handle(handle: usize) -> i32
 
+@import("kernel32.dll", "GetLastError")
+extern fn raw_last_error() -> u32
+
 // A null name asks for the running image.
 @import("kernel32.dll", "GetModuleHandleW")
 extern fn raw_module_handle(name: usize) -> usize
@@ -48,7 +51,13 @@ fn write_minidump(a: *mem.Arena, pid: u32, path: str, flags: u32) -> err {
     var opened = false
     if pid != 0u32 && pid != id {
         process = raw_open_process(DUMP_ACCESS, 0i32, pid)
-        if process == 0usize { ret NotFound }
+        if process == 0usize {
+            // ERROR_INVALID_PARAMETER means no such pid; access denied (protected or
+            // otherwise restricted process) is a distinct failure the caller can retry
+            // or report, not "not found".
+            if raw_last_error() == 87u32 { ret NotFound }
+            ret Failed
+        }
         id = pid
         opened = true
     }

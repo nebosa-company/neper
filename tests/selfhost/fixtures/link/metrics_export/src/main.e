@@ -2154,6 +2154,11 @@ fn case_74(a: *mem.Arena) -> bool {
         show(got, "{\"resourceMetrics\":[{\"resource\":{\"attributes\":[{\"key\":\"service.name\",\"value\":{\"stringValue\":\"checkout\"}}]},\"scopeMetrics\":[{\"scope\":{\"name\":\"my.lib\"},\"metrics\":[{\"name\":\"queue_depth\",\"description\":\"tab\\there\",\"sum\":{\"dataPoints\":[{\"startTimeUnixNano\":\"1700000000000000000\",\"timeUnixNano\":\"1700000060123456789\",\"asDouble\":95394.0}],\"aggregationTemporality\":2,\"isMonotonic\":true}}]}]}]}")
         ret false
     }
+    // #62: a zero start or time is refused, not written as "0" into the exposition.
+    let (_, zero_start) = x.render_otlp_metrics(a, res[0usize..1usize], "my.lib", samples[0usize..1usize], 0u64, 1700000060123456789u64)
+    if zero_start != x.Invalid { ret false }
+    let (_, zero_time) = x.render_otlp_metrics(a, res[0usize..1usize], "my.lib", samples[0usize..1usize], 1700000000000000000u64, 0u64)
+    if zero_time != x.Invalid { ret false }
     ret true
 }
 

@@ -578,6 +578,8 @@ fn payload_capacity(samples: []const Sample, extra: usize) -> usize {
 // nanoseconds, and both stay nonzero.
 fn render_otlp_metrics(a: *mem.Arena, resource: []const Label, scope: str, samples: []const Sample, start_ns: u64, time_ns: u64) -> (str, err) {
     if !attributes_valid(resource) { ret ("", Invalid) }
+    // Collectors reject a zero timestamp, so the documented invariant is enforced here.
+    if start_ns == 0u64 || time_ns == 0u64 { ret ("", Invalid) }
     var vi = 0usize
     while vi < samples.len {
         if !name_valid(samples[vi].name, true) { ret ("", Invalid) }

@@ -284,12 +284,23 @@ fn check_real_bytes(a: *mem.Arena, bytes: []const u8, pid: u32, marker_at: u64) 
     ret 0i32
 }
 
+// #61: OpenProcess on a protected process is Failed (access denied), while a pid that
+// does not exist is NotFound. Windows only; both calls would be Unsupported elsewhere.
+fn check_windows_open(a: *mem.Arena) -> i32 {
+    when target.os == .Windows {
+        if dump.write_minidump(a, 4u32, "np-debug-denied.dmp", dump.DATA_SEGMENTS) != host.Failed { ret 60i32 }
+        if dump.write_minidump(a, 4294967295u32, "np-debug-denied.dmp", dump.DATA_SEGMENTS) != host.NotFound { ret 61i32 }
+    }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var code = check_core(a)
     if code == 0i32 { code = check_core_refusals(a) }
     if code == 0i32 { code = check_minidump(a) }
     if code == 0i32 { code = check_minidump_refusals(a) }
     if code == 0i32 { code = check_real(a) }
+    if code == 0i32 { code = check_windows_open(a) }
     if code != 0i32 { os.exit(code) }
     try io.print("debug dump ok\n")
     ret ok

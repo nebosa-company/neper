@@ -553,6 +553,21 @@ fn lower_eq(x: str, y: str) -> bool {
     ret true
 }
 
+// The `Host` header: the DSN host alone for its scheme's default port, else `host:port`.
+fn scheme_default_port(scheme: str) -> u16 {
+    if str.eq(scheme, "https") { ret 443u16 }
+    ret 80u16
+}
+
+fn host_header(a: *mem.Arena, dsn: *const Dsn) -> str {
+    if dsn.port == scheme_default_port(dsn.scheme) { ret dsn.host }
+    let (b0, be) = str.builder(a, dsn.host.len + 8usize)
+    if be != ok { ret dsn.host }
+    var b = b0
+    if str.push(&b, dsn.host) != ok || str.push(&b, ":") != ok || str.push_usize(&b, usize(dsn.port)) != ok { ret dsn.host }
+    ret str.done(&b)
+}
+
 // Sends queued envelopes oldest first, at most `max_send`; how many were delivered. Stops early
 // at a rate limit or a failure (the envelope stays queued).
 fn flush(c: *Client, now: i64, max_send: usize) -> (usize, err) {
@@ -562,10 +577,11 @@ fn flush(c: *Client, now: i64, max_send: usize) -> (usize, err) {
     if target_error != ok { ret (0usize, target_error) }
     let (auth, auth_error) = auth_header(c.a, &c.dsn, c.name)
     if auth_error != ok { ret (0usize, auth_error) }
+    let host = host_header(c.a, &c.dsn)
     while c.count > 0usize && delivered < max_send {
         let (headers, header_error) = mem.alloc[http.Header](c.a, MAX_HEADERS)
         if header_error != ok { ret (delivered, header_error) }
-        headers[0] = http.Header { name: "Host", value: c.dsn.host }
+        headers[0] = http.Header { name: "Host", value: host }
         headers[1] = http.Header { name: "Content-Type", value: "application/x-sentry-envelope" }
         headers[2] = http.Header { name: "X-Sentry-Auth", value: auth }
         var req: http.Request = zero

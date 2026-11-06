@@ -218,6 +218,15 @@ fn delivery(a: *mem.Arena) -> i32 {
     if e2 != ok || n2 != 1usize || report.pending(&c) != 0usize || c.sent != 3usize { ret 2009i32 }
     let (n3, e3) = report.flush(&c, t0, 10usize)
     if e3 != ok || n3 != 0usize || f.calls != 3u32 { ret 2010i32 }
+    // #61: a non-default DSN port belongs in the Host header.
+    var f2 = new_fake(200u16)
+    let (c2_0, c2_error) = report.client(a, "http://pubkey@localhost:9000/42", transport(&f2), "neper.report/0.1", 8usize, 65536usize)
+    if c2_error != ok { ret 2011i32 }
+    var c2 = c2_0
+    let ev2 = test_event(id_n(9usize), t0)
+    if report.capture(&c2, &ev2, zero, t0) != ok { ret 2011i32 }
+    let (n4, e4) = report.flush(&c2, t0, 1usize)
+    if e4 != ok || n4 != 1usize || !str.eq(f2.last_host, "localhost:9000") { ret 2012i32 }
     ret 0i32
 }
 
