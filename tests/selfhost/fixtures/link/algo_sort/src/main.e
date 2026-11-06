@@ -170,6 +170,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let after = mem.stats(a)
     if after.used != before.used { ret Failed }
 
+    // #371: external_merge requires bounds to span the whole runs slice.
+    var er_runs: [2]i32 = zero
+    er_runs[0usize] = 1i32
+    er_runs[1usize] = 2i32
+    var er_cursor: [1]usize = zero
+    var er_heap: [1]usize = zero
+    var er_out: [2]i32 = zero
+    var er_short: [2]usize = zero
+    er_short[0usize] = 0usize
+    er_short[1usize] = 1usize
+    if sort.external_merge[i32](er_runs[..], er_short[..], er_cursor[..], er_heap[..], er_out[..]) != sort.Invalid { ret Failed }
+    var er_prefix: [2]usize = zero
+    er_prefix[0usize] = 1usize
+    er_prefix[1usize] = 2usize
+    if sort.external_merge[i32](er_runs[..], er_prefix[..], er_cursor[..], er_heap[..], er_out[..]) != sort.Invalid { ret Failed }
+    var er_ok_bounds: [2]usize = zero
+    er_ok_bounds[0usize] = 0usize
+    er_ok_bounds[1usize] = 2usize
+    if sort.external_merge[i32](er_runs[..], er_ok_bounds[..], er_cursor[..], er_heap[..], er_out[..]) != ok { ret Failed }
+    if er_out[0usize] != 1i32 || er_out[1usize] != 2i32 { ret Failed }
     try io.print("algo sort ok\n")
     ret ok
 }
