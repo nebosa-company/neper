@@ -755,12 +755,50 @@ fn stern_brocot_search(x: f64, tolerance: f64, max_den: u64) -> (u64, u64) {
         var gap = value - x
         if gap < 0.0f64 { gap = 0.0f64 - gap }
         if gap <= tolerance { ret (n, d) }
+        // Batch the run: from L < x < R, `j` mediants toward the far side stay on this
+        // side of x, so continued-fraction jumps replace O(x) single steps.
+        var jump = 1u64
         if value < x {
-            left_n = n
-            left_d = d
+            let toward = x * f64(left_d) - f64(left_n)
+            let other = f64(right_n) - x * f64(right_d)
+            if other > 0.0f64 && toward > 0.0f64 {
+                let estimate = toward / other
+                // A very large ratio means "many steps"; cap it at the denominator budget
+                // before narrowing (and never narrow an infinity).
+                if estimate >= 1.0f64 {
+                    if estimate >= f64(max_den) { jump = max_den } else { jump = u64(estimate) }
+                }
+            }
+            // right_d is 0 only on the first step, when no denominator budget binds.
+            var limit = max_den
+            if right_d != 0u64 { limit = (max_den - left_d) / right_d }
+            if jump > limit { jump = limit }
+            if jump == 0u64 {
+                left_n = n
+                left_d = d
+            } else {
+                left_n = left_n + jump * right_n
+                left_d = left_d + jump * right_d
+            }
         } else {
-            right_n = n
-            right_d = d
+            let toward = f64(right_n) - x * f64(right_d)
+            let other = x * f64(left_d) - f64(left_n)
+            if other > 0.0f64 && toward > 0.0f64 {
+                let estimate = toward / other
+                if estimate >= 1.0f64 {
+                    if estimate >= f64(max_den) { jump = max_den } else { jump = u64(estimate) }
+                }
+            }
+            var limit = max_den
+            if left_d != 0u64 { limit = (max_den - right_d) / left_d }
+            if jump > limit { jump = limit }
+            if jump == 0u64 {
+                right_n = n
+                right_d = d
+            } else {
+                right_n = right_n + jump * left_n
+                right_d = right_d + jump * left_d
+            }
         }
     }
     // Nothing within tolerance: the closer of the two bounds.

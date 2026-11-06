@@ -61,12 +61,20 @@ fn floor(x: Fx) -> i32 {
     ret x >> SHIFT
 }
 
+// Narrow an intermediate i64 to i32 with saturation: an Fx near the edges must not
+// trap, and the library is documented as total and deterministic.
+fn saturate(v: i64) -> i32 {
+    if v > 2147483647i64 { ret 2147483647i32 }
+    if v < -2147483647i64 - 1i64 { ret -2147483647i32 - 1i32 }
+    ret i32(v)
+}
+
 fn ceil(x: Fx) -> i32 {
-    ret i32((i64(x) + i64(ONE) - 1i64) >> SHIFT)
+    ret saturate((i64(x) + i64(ONE) - 1i64) >> SHIFT)
 }
 
 fn round(x: Fx) -> i32 {
-    ret i32((i64(x) + i64(HALF)) >> SHIFT)
+    ret saturate((i64(x) + i64(HALF)) >> SHIFT)
 }
 
 // The positive magnitude of i32.MIN cannot be represented as an Fx, so this

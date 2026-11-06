@@ -143,7 +143,11 @@ fn run_chunk(a: *mem.Arena, v: str) -> u32 {
             }
         }
         if kind == 68u8 {
-            let d = sym.diff(&p, expr, xs)
+            let (d, de) = sym.diff(&p, expr, xs)
+            if de != ok {
+                show("diff too large", src)
+                ret seen + 1u32
+            }
             var k = 0usize
             while k < n1 {
                 values[0] = f64_at(v, g1 + k * 17usize)
@@ -157,7 +161,11 @@ fn run_chunk(a: *mem.Arena, v: str) -> u32 {
             }
         }
         if kind == 73u8 {
-            let (anti, good) = sym.integrate(&p, expr, xs)
+            let (anti, good, ie) = sym.integrate(&p, expr, xs)
+            if ie != ok {
+                show("integrate too large", src)
+                ret seen + 1u32
+            }
             if !good {
                 show("integrate refused", src)
                 ret seen + 1u32
@@ -172,7 +180,11 @@ fn run_chunk(a: *mem.Arena, v: str) -> u32 {
                 ret seen + 1u32
             }
             // and the derivative of the antiderivative is the integrand
-            let back = sym.diff(&p, anti, xs)
+            let (back, be) = sym.diff(&p, anti, xs)
+            if be != ok {
+                show("diff too large", src)
+                ret seen + 1u32
+            }
             values[0] = 0.8f64
             let want = sym.eval(&p, expr, names[0usize..2usize], values[0usize..2usize])
             let got = sym.eval(&p, back, names[0usize..2usize], values[0usize..2usize])
@@ -182,7 +194,11 @@ fn run_chunk(a: *mem.Arena, v: str) -> u32 {
             }
         }
         if kind == 78u8 {
-            let (_, good) = sym.integrate(&p, expr, xs)
+            let (_, good, ie2) = sym.integrate(&p, expr, xs)
+            if ie2 != ok {
+                show("integrate too large", src)
+                ret seen + 1u32
+            }
             if good {
                 show("integrate should refuse", src)
                 ret seen + 1u32
@@ -317,10 +333,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var p2 = pl2
     let (x_symbol, x_ok) = sym.parse(&p2, "x")
     let (tan_expr, tan_ok) = sym.parse(&p2, "x*tan(x)")
-    let (tan_anti, tan_good) = sym.integrate(&p2, tan_expr, x_symbol)
+    let (tan_anti, tan_good, tan_err) = sym.integrate(&p2, tan_expr, x_symbol)
+    if tan_err != ok { os.exit(13i32) }
     if x_ok != ok || tan_ok != ok { os.exit(96i32) }
     if tan_good {
-        let tan_derived = sym.diff(&p2, tan_anti, x_symbol)
+        let (tan_derived, tan_de) = sym.diff(&p2, tan_anti, x_symbol)
+    if tan_de != ok { os.exit(13i32) }
         var tan_names: [1]str = zero
         tan_names[0usize] = "x"
         var tan_values: [1]f64 = zero
@@ -332,7 +350,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if d > 0.000001f64 { os.exit(96i32) }
     }
     let (deg_expr, deg_ok) = sym.parse(&p2, "x^19")
-    let (_, deg_good) = sym.integrate(&p2, deg_expr, x_symbol)
+    let (_, deg_good, deg_err) = sym.integrate(&p2, deg_expr, x_symbol)
+    if deg_err != ok { os.exit(13i32) }
     if deg_ok != ok || deg_good { os.exit(97i32) }
     // #130: a run of unary signs hits the nesting guard instead of the native stack.
     // The pool is large enough to hold every negation, so only the guard stands between

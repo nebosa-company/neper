@@ -624,33 +624,47 @@ fn eval(p: *Pool, e: u32, names: []const str, values: []const f64) -> f64 {
     ret math.pow64(l, r)
 }
 
+// The derivative of `e` in `s`; a full pool or an overflowed rational reports TooLarge
+// rather than silently yielding an expression that refers to node 0.
+fn diff(p: *Pool, e: u32, s: u32) -> (u32, err) {
+    let r = diff_raw(p, e, s)
+    if p.failed { ret (0u32, TooLarge) }
+    ret (r, ok)
+}
+// The antiderivative of `e` in `s`, with the same TooLarge channel as `diff`.
+fn integrate(p: *Pool, e: u32, s: u32) -> (u32, bool, err) {
+    let (r, good) = integrate_raw(p, e, s)
+    if p.failed { ret (0u32, false, TooLarge) }
+    ret (r, good, ok)
+}
+
 // ---- differentiation ---------------------------------------------------------------------
 
-fn diff(p: *Pool, e: u32, s: u32) -> u32 {
+fn diff_raw(p: *Pool, e: u32, s: u32) -> u32 {
     let n = p.nodes[usize(e)]
     if n.kind == K_NUM { ret int(p, 0i64) }
     if n.kind == K_SYM {
         if n.a == s { ret int(p, 1i64) }
         ret int(p, 0i64)
     }
-    if n.kind == K_ADD { ret add(p, diff(p, n.a, s), diff(p, n.b, s)) }
+    if n.kind == K_ADD { ret add(p, diff_raw(p, n.a, s), diff_raw(p, n.b, s)) }
     if n.kind == K_MUL {
-        let da = diff(p, n.a, s)
-        let db = diff(p, n.b, s)
+        let da = diff_raw(p, n.a, s)
+        let db = diff_raw(p, n.b, s)
         ret add(p, mul(p, da, n.b), mul(p, n.a, db))
     }
     if n.kind == K_POW {
-        let da = diff(p, n.a, s)
+        let da = diff_raw(p, n.a, s)
         if !has(p, n.b, s) {
             // d(u^c) = c u^(c-1) u'
             ret mul(p, mul(p, n.b, pow(p, n.a, sub(p, n.b, int(p, 1i64)))), da)
         }
-        let db = diff(p, n.b, s)
+        let db = diff_raw(p, n.b, s)
         // d(u^v) = u^v (v' ln u + v u' / u)
         let inner = add(p, mul(p, db, func(p, F_LN, n.a)), div(p, mul(p, n.b, da), n.a))
         ret mul(p, e, inner)
     }
-    let inner = diff(p, n.a, s)
+    let inner = diff_raw(p, n.a, s)
     if n.f == F_SIN { ret mul(p, func(p, F_COS, n.a), inner) }
     if n.f == F_COS { ret mul(p, neg(p, func(p, F_SIN, n.a)), inner) }
     if n.f == F_TAN { ret mul(p, add(p, int(p, 1i64), pow(p, func(p, F_TAN, n.a), int(p, 2i64))), inner) }
@@ -785,7 +799,7 @@ fn poly_derivative(p: *Pool, f: Poly) -> Poly {
 // ---- integration ----------------------------------------------------------------------------
 
 // The antiderivative of `e` in the symbol `s`, with no constant; false when out of reach.
-fn integrate(p: *Pool, e: u32, s: u32) -> (u32, bool) {
+fn integrate_raw(p: *Pool, e: u32, s: u32) -> (u32, bool) {
     let x = mk(p, K_SYM, 0u8, s, 0u32, 0i64, 1i64)
     if !has(p, e, s) { ret (mul(p, e, x), true) }
     let (poly, is_poly) = poly_of(p, e, s)
@@ -805,20 +819,20 @@ fn integrate(p: *Pool, e: u32, s: u32) -> (u32, bool) {
     }
     let n = p.nodes[usize(e)]
     if n.kind == K_ADD {
-        let (l, lg) = integrate(p, n.a, s)
-        let (r, rg) = integrate(p, n.b, s)
+        let (l, lg) = integrate_raw(p, n.a, s)
+        let (r, rg) = integrate_raw(p, n.b, s)
         if !lg || !rg { ret (0u32, false) }
         ret (add(p, l, r), true)
     }
     if n.kind == K_MUL {
         // a factor free of the symbol comes out
         if !has(p, n.a, s) {
-            let (r, g) = integrate(p, n.b, s)
+            let (r, g) = integrate_raw(p, n.b, s)
             if !g { ret (0u32, false) }
             ret (mul(p, n.a, r), true)
         }
         if !has(p, n.b, s) {
-            let (l, g) = integrate(p, n.a, s)
+            let (l, g) = integrate_raw(p, n.a, s)
             if !g { ret (0u32, false) }
             ret (mul(p, n.b, l), true)
         }
