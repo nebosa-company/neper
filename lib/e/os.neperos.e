@@ -461,6 +461,15 @@ fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) { ret (0usize, Uns
 // a kernel query, for when a program's own threads each take the lock.)
 fn current_thread_id() -> usize { ret 1usize }
 fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err) { ret (File { raw: 0usize }, Unsupported) }
+
+// Rooted metadata is not served yet, but the surface exists so target-generic callers compile
+// (lib/e/fs.e) and report Unsupported rather than a missing-member diagnostic.
+fn stat_at(a: *mem.Arena, dir: Dir, relative_path: str) -> (FileInfo, err) {
+    var info: FileInfo = zero
+    ret (info, Unsupported)
+}
+fn mkdir_at(a: *mem.Arena, dir: Dir, relative_path: str) -> err { ret Unsupported }
+
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err { ret Unsupported }
 fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err { ret Unsupported }
 

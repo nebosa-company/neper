@@ -45,13 +45,13 @@ fn open(a: *mem.Arena, args: []str, first_font: usize, title: str) -> (Kit, err)
     var kit: Kit = zero
     let (device, open_error) = gpu.open(a, gpu.Backend.Cpu, 0u32)
     if open_error != ok { ret (kit, open_error) }
-    let (win, win_error) = window.open(a, device, window.Options { title: title, width: u32(os.SURFACE_W), height: u32(os.SURFACE_H), min_width: 0u32, min_height: 0u32, resizable: false, transparent: false, mode: window.Mode.Windowed })
+    let (q, q_error) = gpu.queue(device)
+    if q_error != ok { ret (kit, q_error) }
+    let (win, win_error) = window.open(a, device, q, window.Options { title: title, width: u32(os.SURFACE_W), height: u32(os.SURFACE_H), min_width: 0u32, min_height: 0u32, resizable: false, transparent: false, mode: window.Mode.Windowed })
     if win_error != ok { ret (kit, gpu.Unsupported) }
     var w = win
     let (drawable, drawable_error) = window.draw_target(&w)
     if drawable_error != ok { ret (kit, gpu.Unsupported) }
-    let (q, q_error) = gpu.queue(device)
-    if q_error != ok { ret (kit, q_error) }
     // (D2242) The renderer keeps its own arena for what it allocates and holds on to (its scenes, its glyph
     // cache), apart from the program arena, so that arena can be given back at the start of every frame.
     let (render_store, render_store_error) = mem.alloc[u8](a, 134217728usize)

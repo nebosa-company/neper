@@ -791,8 +791,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let t4 = add_task(&s, make_task("Calibrate communications array", 0usize, false, 2usize))
     // The two past-due samples need a clock at least two days in; with no wall clock
     // (s.today == 0) the subtraction would underflow at startup.
-    var t5 = 0usize
-    var t6 = 0usize
+    var t5 = false
+    var t6 = false
     if s.today >= 2usize {
         t5 = add_task(&s, make_task("Review last week's survey", s.today - 2usize, false, 2usize))
         var done_task = make_task("Charge the batteries", s.today - 1usize, false, 0usize)

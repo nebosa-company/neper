@@ -241,7 +241,8 @@ fn ip_finish(st: *Stack, proto: u8, dst: u32, dst_mac: u64, len: usize) -> err {
     os.store8(ip + 1usize, 0u8)
     put16(ip + 2usize, u16(IP_HDR + len))
     put16(ip + 4usize, st.ident)
-    st.ident += 1u16
+    // The IP id field wraps rather than trapping after 65535 packets.
+    st.ident = st.ident +% 1u16
     put16(ip + 6usize, 16384u16)
     os.store8(ip + 8usize, 64u8)
     os.store8(ip + 9usize, proto)

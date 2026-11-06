@@ -128,7 +128,9 @@ fn pump(c: *Conn) {
 // Open a connection to `rip`:`rport`, with `ring` the address of a RING-byte buffer for incoming data.
 fn connect(st: *inet.Stack, rip: u32, rport: u16, ring: usize) -> (Conn, err) {
     var c = Conn { st: st, lport: next_port, rip: rip, rport: rport, snd_nxt: next_iss, snd_una: next_iss, rcv_nxt: 0u32, ring: ring, head: 0usize, count: 0usize, state: SYN_SENT, peer_fin: false, reset: false, peer_window: 0usize }
-    next_port += 1u16
+    // Wrap inside the ephemeral range instead of trapping at 65535.
+    next_port = next_port +% 1u16
+    if next_port < 49152u16 { next_port = 49152u16 }
     next_iss = next_iss +% 64000u32
     var attempt = 0usize
     while attempt < 4usize {

@@ -321,7 +321,9 @@ fn setting_matches(q: *ui.Field, setting: usize) -> bool {
 fn find_settings(s: *State) {
     s.found_total = 0usize
     var setting = 0usize
-    while setting < NOTIFY + 9usize && s.found_total < FOUND_MAX {
+    // Every setting has search words and a page, including Clipboard, Height and Weight
+    // added after the original 0..34 block; search must reach SETTINGS, not NOTIFY+9.
+    while setting < SETTINGS && s.found_total < FOUND_MAX {
         if setting_matches(&s.search, setting) {
             s.found[s.found_total] = setting
             s.found_total += 1usize
@@ -1167,8 +1169,9 @@ fn draw_detail(a: *mem.Arena, builder: *scene.Builder, s: *State, faces: text.Fa
     y += 54.0
     try perm_row(a, builder, s, faces, "Location", "Needs Location in Security & privacy", sensorclient.KIND_LOCATION, program, y)
     y += 68.0
-    try perm_row(a, builder, s, faces, "Storage", "Files this app may keep", sensorclient.KIND_STORAGE, program, y)
-    y += 74.0
+    // No Storage row: file access is the kernel's endpoint grant at launch, and nothing
+    // reads the sensor server's storage bit, so a switch here would promise an effect it
+    // does not have (C126 server-side enforcement is tracked separately).
     if pos == SETTINGS_ICON {
         try put(a, builder, faces.grotesk, 14.0, "A system app: it cannot be uninstalled.", 20.0, y + 14.0, fg_dim())
     } else {
