@@ -246,6 +246,11 @@ fn call_event(c: *Call, ev: *const grpc.Event, now_ns: u64, jitter: f64) {
         call_headers(c, ev.stream)
     } else if ev.kind == grpc.EVENT_TRAILERS {
         let (pushback, has_pushback) = grpc.find_header(ev.headers, "grpc-retry-pushback-ms")
+        // gRFC A6: a trailers-only response is one whose headers already arrived (initial
+        // HEADERS with END_STREAM), so the attempt is committed before its status applies
+        // and a retryable code from it is final, not a retry.
+        let trailers_slot = slot_of_stream(c, ev.stream)
+        if trailers_slot < 5usize && c.slots[trailers_slot].state == SLOT_LIVE { c.slots[trailers_slot].committed = true }
         call_status(c, ev.stream, ev.code, pushback, has_pushback, now_ns, jitter)
     } else if ev.kind == grpc.EVENT_RESET {
         let s = slot_of_stream(c, ev.stream)

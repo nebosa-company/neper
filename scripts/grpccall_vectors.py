@@ -21,7 +21,15 @@ import threading
 import time
 from concurrent import futures
 
-import grpc
+# grpcio is the live oracle for the untimed scenarios. It is optional so the vectors
+# can be regenerated from the in-tree model on a machine without it (`--offline`); the
+# model is the reference (#869), the live comparison is its cross-check.
+try:
+    import grpc
+    HAVE_GRPC = True
+except ImportError:
+    grpc = None
+    HAVE_GRPC = False
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TEMPLATE = os.path.join(ROOT, 'scripts', 'grpccall_fixture_template.e')
@@ -313,10 +321,13 @@ for i in range(60):
     cfg = base_cfg('retry')
     cfg['policy'] = policy()
     cfg['server'] = [b_untimed() for _ in range(rng.randint(1, 6))]
-    want = live(cfg)
-    got = model(cfg)
-    assert (got['attempts'], got['code']) == want, (cfg, got, want)
-    live_checked += 1
+    if HAVE_GRPC:
+        want = live(cfg)
+        got = model(cfg)
+        assert (got['attempts'], got['code']) == want, (cfg, got, want)
+        live_checked += 1
+    else:
+        got = model(cfg)
     cfg['e'] = got
     cases.append(cfg)
 
@@ -373,10 +384,16 @@ cases.append(cfg)
 # half) and its transparent expectation comes from the model, written from the gRFC's text (REFUSED_STREAM is transparent).
 import socket
 
-import h2.config
-import h2.connection
-import h2.errors
-import h2.events
+try:
+    import h2.config
+    import h2.connection
+    import h2.errors
+    import h2.events
+    HAVE_H2 = True
+except ImportError:
+    HAVE_H2 = False
+if not HAVE_H2:
+    HAVE_GRPC = False
 
 
 def raw_server(script, seen):
@@ -466,18 +483,20 @@ for i in range(70):
     plain_cfg = dict(cfg, server=[beh(x, plain=has_refuse) for x in script])
     # grpcio sees a REFUSED_STREAM reset as a plain UNAVAILABLE and 'goaway' as itself.
     if not has_refuse:
-        want = live_raw(script, None if cfg['policy']['retryableStatusCodes'] == ['DATA_LOSS'] else cfg['policy'])
         got = model(cfg)
-        assert (got['attempts'], got['code']) == want, ('transparent', script, cfg['policy'], got, want)
-        transparent_live += 1
+        if HAVE_GRPC:
+            want = live_raw(script, None if cfg['policy']['retryableStatusCodes'] == ['DATA_LOSS'] else cfg['policy'])
+            assert (got['attempts'], got['code']) == want, ('transparent', script, cfg['policy'], got, want)
+            transparent_live += 1
     else:
         # the model's non-transparent half against grpcio: the reset (and any goaway) read as plain 14 would not be a
         # goaway anymore, so compare with the goaways kept and the refusals turned into a plain status
         mixed = [x if x != 'refuse' else 14 for x in script]
         mcfg = dict(cfg, server=[beh(x) for x in mixed])
-        want = live_raw(script, None if cfg['policy']['retryableStatusCodes'] == ['DATA_LOSS'] else cfg['policy'])
-        # grpcio: refusal == plain UNAVAILABLE, goaway transparent once
-        assert (model(mcfg)['attempts'], model(mcfg)['code']) == want, ('refuse-as-plain', script, cfg['policy'], model(mcfg), want)
+        if HAVE_GRPC:
+            want = live_raw(script, None if cfg['policy']['retryableStatusCodes'] == ['DATA_LOSS'] else cfg['policy'])
+            # grpcio: refusal == plain UNAVAILABLE, goaway transparent once
+            assert (model(mcfg)['attempts'], model(mcfg)['code']) == want, ('refuse-as-plain', script, cfg['policy'], model(mcfg), want)
         transparent_model += 1
     cfg['e'] = model(cfg)
     assert cfg['e']['code'] >= 0, cfg
