@@ -750,12 +750,28 @@ fn manifest_version(pkg: package.Package) -> usize {
 // lower one (the roll back). There is room for MAX_INSTALLED apps.
 fn adopt(a: *mem.Arena, data: str, persist: bool, downgrade: bool) -> bool {
     // (C143) The revocation list on the disk, if there is one: an app on it is refused whatever its signature.
-    var revocations: [1024]u8 = zero
+    // The list is loaded into a buffer sized from the file; a list that exists but cannot be read (or is
+    // too large to load) fails CLOSED -- the package is refused rather than treated as unrevoked.
+    var revocations: []u8 = zero
     var revocation_len = 0usize
     let (rev_size, rev_kind, rev_day, rev_found) = fsproto.stat(FS_REQ, FS_REP, "/revoked")
-    if rev_found && rev_size > 0usize && rev_size <= 1024usize {
-        let (rev_got, rev_ok) = fsproto.read_big(FS_REQ, FS_REP, "/revoked", mem.address_of(&revocations[0usize]), rev_size)
-        if rev_ok { revocation_len = rev_got }
+    if rev_found && rev_size > 0usize {
+        if rev_size > 65536usize {
+            say("shell package refused: revocation list too large\n")
+            ret false
+        }
+        let (rev_buffer, rev_buffer_error) = mem.alloc[u8](a, rev_size)
+        if rev_buffer_error != ok {
+            say("shell package refused: no room for the revocation list\n")
+            ret false
+        }
+        let (rev_got, rev_ok) = fsproto.read_big(FS_REQ, FS_REP, "/revoked", mem.address_of(&rev_buffer[0usize]), rev_size)
+        if !rev_ok || rev_got != rev_size {
+            say("shell package refused: revocation list unreadable\n")
+            ret false
+        }
+        revocations = rev_buffer
+        revocation_len = rev_got
     }
     let (pkg, pkg_error) = package.check_revocable(data, server_key.public(), revocations[0usize..revocation_len])
     if pkg_error == package.Revoked {
@@ -773,6 +789,17 @@ fn adopt(a: *mem.Arena, data: str, persist: bool, downgrade: bool) -> bool {
         ret false
     }
     let (pkg_name, has_pkg_name) = package.value(pkg, "name")
+    // A nameless or over-long name cannot be installed: an empty one would live at /apps/.npkg,
+    // and one over the 24-byte slot would be stored truncated but compared in full, never
+    // matching its own slot.
+    if !has_pkg_name || pkg_name.len == 0usize {
+        say("shell package refused: no name\n")
+        ret false
+    }
+    if pkg_name.len > 24usize {
+        say("shell package refused: name too long\n")
+        ret false
+    }
     let version = manifest_version(pkg)
     // The slot of the same name, if there is one.
     var slot = 99usize
@@ -839,9 +866,13 @@ fn adopt(a: *mem.Arena, data: str, persist: bool, downgrade: bool) -> bool {
     installed_len[slot] = n
     installed_va[slot] = base
     installed_pages[slot] = pages
-    installed_caps[slot] = 0usize
-    if package.declares(pkg, "network") { installed_caps[slot] = installed_caps[slot] | 1usize }
-    if package.declares(pkg, "storage") { installed_caps[slot] = installed_caps[slot] | 2usize }
+    var new_caps = 0usize
+    if package.declares(pkg, "network") { new_caps = new_caps | 1usize }
+    if package.declares(pkg, "storage") { new_caps = new_caps | 2usize }
+    // Consent is per capability set: an update that changes what the app may reach must ask
+    // again, or an old "Allow" would carry over to new permissions.
+    if updating && installed_caps[slot] != new_caps { installed_allowed[slot] = 0usize }
+    installed_caps[slot] = new_caps
     installed_version[slot] = version
     if !updating {
         installed_allowed[slot] = 0usize
