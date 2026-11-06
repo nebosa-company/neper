@@ -719,7 +719,10 @@ fn replay_control(ex: *Executor, step: json.Value, frames: []const str, result: 
         while c < cases.len && !found {
             let (name, have_name) = get(cases[c], "name")
             let (wanted, have_wanted) = get(result, "branch")
-            if has_result && have_name && have_wanted && ir.same_scalar(name, wanted) {
+            if has_result && have_wanted && ir.same_scalar(wanted, text("case")) && !have_name {
+                chosen_steps = ir.value_of(cases[c], "steps")
+                found = true
+            } else if has_result && have_name && have_wanted && ir.same_scalar(name, wanted) {
                 chosen_steps = ir.value_of(cases[c], "steps")
                 found = true
             }
@@ -867,7 +870,11 @@ fn dispatch(ex: *Executor, step: json.Value, frames: []const str, key: str, scop
             if have_recorded {
                 let (name, have_name) = get(cases[c], "name")
                 let (wanted, have_wanted) = get(recorded, "branch")
-                if have_name && have_wanted && ir.same_scalar(name, wanted) {
+                if have_wanted && ir.same_scalar(wanted, text("case")) && !have_name {
+                    // An unnamed case is recorded as "case"; the first such case is its branch.
+                    matched = true
+                    matched_index = c
+                } else if have_name && have_wanted && ir.same_scalar(name, wanted) {
                     matched = true
                     matched_index = c
                 }
