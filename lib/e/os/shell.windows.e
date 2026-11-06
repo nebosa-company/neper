@@ -2377,6 +2377,11 @@ fn file_dialog(a: *mem.Arena, w: os.Window, dialog: FileDialog) -> ([]const str,
     var get_options: GetOptionsPun = zero
     get_options.bits = object.vtable.slots[DIALOG_GET_OPTIONS]
     let read_options = get_options.function(mem.address_of(object), &options)
+    if read_options < 0i32 {
+        // Flags must come from a real options value, not from a zeroed result.
+        com_release(object)
+        ret (nothing, Failed)
+    }
     var flags = options.value | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST
     if dialog.kind == .Open { flags = flags | FOS_FILEMUSTEXIST }
     if dialog.kind == .Save { flags = flags | FOS_OVERWRITEPROMPT }
@@ -2395,6 +2400,10 @@ fn file_dialog(a: *mem.Arena, w: os.Window, dialog: FileDialog) -> ([]const str,
             ret (nothing, title_error)
         }
         let titled = call_wide(object, DIALOG_SET_TITLE, &title[0usize])
+        if titled < 0i32 {
+            com_release(object)
+            ret (nothing, Failed)
+        }
     }
     if dialog.initial.len != 0usize {
         let (initial, initial_error) = widen(a, dialog.initial)
@@ -2403,6 +2412,10 @@ fn file_dialog(a: *mem.Arena, w: os.Window, dialog: FileDialog) -> ([]const str,
             ret (nothing, initial_error)
         }
         let named = call_wide(object, DIALOG_SET_FILE_NAME, &initial[0usize])
+        if named < 0i32 {
+            com_release(object)
+            ret (nothing, Failed)
+        }
     }
     if dialog.folder.len != 0usize {
         // The folder as a shell item, set as the one the dialog opens on.
@@ -2414,11 +2427,20 @@ fn file_dialog(a: *mem.Arena, w: os.Window, dialog: FileDialog) -> ([]const str,
         var item_iid: [16]u8 = zero
         guid(item_iid[..], 1132621086u32, 59160u16, 17134u16, 3159728610u32, 1640201214u32)
         var item: *ComObject = zero
-        if raw_item_from_name(&folder_wide[0usize], 0usize, &item_iid[0usize], &item) >= 0i32 && mem.address_of(item) != 0usize {
-            var set_folder: SetFolderPun = zero
-            set_folder.bits = object.vtable.slots[DIALOG_SET_FOLDER]
-            let placed = set_folder.function(mem.address_of(object), item)
-            com_release(item)
+        let made_item = raw_item_from_name(&folder_wide[0usize], 0usize, &item_iid[0usize], &item)
+        if made_item < 0i32 || mem.address_of(item) == 0usize {
+            // A requested initial folder that cannot be resolved is a failure, not a
+            // dialog silently opening somewhere else.
+            com_release(object)
+            ret (nothing, Failed)
+        }
+        var set_folder: SetFolderPun = zero
+        set_folder.bits = object.vtable.slots[DIALOG_SET_FOLDER]
+        let placed = set_folder.function(mem.address_of(object), item)
+        com_release(item)
+        if placed < 0i32 {
+            com_release(object)
+            ret (nothing, Failed)
         }
     }
     if dialog.default_extension.len != 0usize {
@@ -2428,6 +2450,10 @@ fn file_dialog(a: *mem.Arena, w: os.Window, dialog: FileDialog) -> ([]const str,
             ret (nothing, extension_error)
         }
         let defaulted = call_wide(object, DIALOG_SET_DEFAULT_EXTENSION, &extension[0usize])
+        if defaulted < 0i32 {
+            com_release(object)
+            ret (nothing, Failed)
+        }
     }
     if dialog.filters.len != 0usize && dialog.kind != .Folder {
         var specs: [16]FilterSpec = zero
