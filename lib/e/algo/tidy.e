@@ -414,10 +414,12 @@ fn mutate[Ctx: type](a: *mem.Arena, rows: []const view.Row, name: str, ctx: *Ctx
 fn value_key(a: *mem.Arena, v: f.Value) -> str {
     if v.kind == .Blank { ret "b" }
     if v.kind == .Number { ret f.join(a, "n", f.number_text(a, v.n)) }
-    if v.kind == .Text { ret f.join(a, "t", v.s) }
+    // Text is length-prefixed: row keys are joined with a raw U+001F, so copying text
+    // verbatim let a value containing that byte forge a different tuple (#706).
+    if v.kind == .Text { ret f.join(a, f.join3(a, "t", f.number_text(a, f64(v.s.len)), ":"), v.s) }
     if v.kind == .Bool { ret f.join(a, "o", f.number_text(a, v.n)) }
     if v.kind == .Date { ret f.join(a, "d", f.number_text(a, v.n)) }
-    ret f.join(a, "x", v.s)
+    ret f.join(a, f.join3(a, "x", f.number_text(a, f64(v.s.len)), ":"), v.s)
 }
 
 // The text of a value as a column name or label.
