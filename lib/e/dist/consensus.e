@@ -179,6 +179,11 @@ fn apply(n: *Node) -> err {
         } else if e.cfg_old != e.cfg_new && n.role == .Leader && n.cfg_old != n.cfg_new {
             try append_entry(n, Entry { term: n.term, value: 0i64, cfg_old: e.cfg_new, cfg_new: e.cfg_new })
             n.match_index[usize(n.id)] = last_index(n)
+        } else if e.cfg_old == e.cfg_new && n.role == .Leader && !has_bit(e.cfg_new, n.id) {
+            // The final configuration no longer lists this node: a removed leader
+            // steps down instead of accepting proposals forever.
+            n.role = .Follower
+            n.leader = NONE
         }
     }
     ret ok
@@ -203,6 +208,11 @@ fn become_leader(c: *Cluster, n: *Node, now: u64, out: *Pool) -> err {
     n.leader = n.id
     // The no-op of the new term lets earlier terms' entries commit by count.
     try append_entry(n, Entry { term: n.term, value: 0i64, cfg_old: 0u64, cfg_new: 0u64 })
+    // A follower that applied the joint configuration and then won must finish it, or
+    // the cluster stays in the joint configuration requiring both majorities forever.
+    if n.cfg_old != n.cfg_new {
+        try append_entry(n, Entry { term: n.term, value: 0i64, cfg_old: n.cfg_new, cfg_new: n.cfg_new })
+    }
     let last = last_index(n)
     var p = 0usize
     while p < c.nodes.len {
