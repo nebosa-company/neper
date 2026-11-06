@@ -449,7 +449,16 @@ fn copy_file(a: *mem.Arena, from: *Vfs, src: str, to: *Vfs, dst: str, limit: usi
 }
 
 // Moves a file or a whole directory within one Vfs: the destination must not exist and
-// must not lie inside the source. A directory is copied entry by entry and then removed.
+// must not lie inside the source. A directory is copied entry by entry and then removed;
+// the subtree is pre-scanned against `limit` before anything is touched, so an over-limit
+// file aborts with both trees unchanged.
+//
+// Error contract for a directory move: a failure after the pre-scan (a write error, a
+// child that cannot be removed, a concurrent change) is PARTIAL. Entries already moved
+// are at `dst`, the remaining entries are still at `src`, and the `dst` directory stays
+// in place; the returned error names the failed entry's operation. A caller that needs
+// all-or-nothing must move a single file, or inspect both trees and retry the unfinished
+// children. There is no automatic rollback.
 fn move(a: *mem.Arena, v: *Vfs, src: str, dst: str, limit: usize) -> err {
     let (from, from_error) = clean(a, src)
     if from_error != ok { ret from_error }

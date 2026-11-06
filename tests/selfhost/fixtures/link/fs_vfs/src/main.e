@@ -2649,6 +2649,25 @@ fn host_scenarios(a: *mem.Arena) -> i32 {
     if code == 0i32 && vfs.remove(a, &hv, "/d/f.txt") != ok { code = 27i32 }
     if code == 0i32 && vfs.remove(a, &hv, "/d") != ok { code = 28i32 }
     if code == 0i32 && !fails(a, &hv, "/d", fs.NotFound) { code = 29i32 }
+    // #93: a Host over a real directory with more than 256 entries lists them all.
+    if code == 0i32 {
+        if !dir(a, &hv, "/many") { code = 90i32 }
+        var file_at = 0usize
+        while code == 0i32 && file_at < 300usize {
+            let (name_builder, name_error) = str.builder(a, 32usize)
+            if name_error != ok { code = 90i32 } else {
+                var nb = name_builder
+                if str.push(&nb, "/many/f") != ok || str.push_usize(&nb, file_at) != ok { code = 90i32 } else {
+                    if vfs.write_file(a, &hv, str.done(&nb), "x") != ok { code = 91i32 }
+                }
+            }
+            file_at += 1usize
+        }
+        if code == 0i32 {
+            let (many, many_error) = vfs.list(a, &hv, "/many")
+            if many_error != ok || many.len != 300usize { code = 92i32 }
+        }
+    }
     // an overlay can sit on the real directory as its lower layer and keep it unchanged
     if code == 0i32 {
         if !dir(a, &hv, "/base") || !put(a, &hv, "/base/keep.txt", "keep") { code = 30i32 }
