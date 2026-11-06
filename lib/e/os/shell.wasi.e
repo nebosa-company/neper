@@ -43,14 +43,32 @@ fn capabilities() -> Capabilities {
     var none: Capabilities = zero
     ret none
 }
-fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err { ret Unsupported }
-fn tray_update(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err { ret Unsupported }
+// The same icon rule the host backends apply: a nonzero size with enough pixels.
+fn valid_icon(icon: Icon) -> bool {
+    ret icon.width != 0u32 && icon.height != 0u32 && icon.pixels.len >= usize(icon.width) * usize(icon.height)
+}
+
+fn tray_add(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
+    if !valid_icon(icon) { ret Invalid }
+    ret Unsupported
+}
+fn tray_update(a: *mem.Arena, id: u32, icon: Icon, tooltip: str) -> err {
+    if !valid_icon(icon) { ret Invalid }
+    ret Unsupported
+}
 fn tray_remove(a: *mem.Arena, id: u32) -> err { ret Unsupported }
 fn tray_poll() -> (TrayEvent, bool) {
     var none: TrayEvent = zero
     ret (none, false)
 }
-fn popup_menu(a: *mem.Arena, items: []const MenuItem, x: i32, y: i32) -> (u32, bool, err) { ret (0u32, false, Unsupported) }
+fn popup_menu(a: *mem.Arena, items: []const MenuItem, x: i32, y: i32) -> (u32, bool, err) {
+    var at = 0usize
+    while at < items.len {
+        if !items[at].separator && items[at].id == 0u32 { ret (0u32, false, Invalid) }
+        at += 1usize
+    }
+    ret (0u32, false, Unsupported)
+}
 fn open_uri(a: *mem.Arena, uri: str) -> err {
     if uri.len == 0usize { ret Invalid }
     ret Unsupported
@@ -63,9 +81,23 @@ fn trash(a: *mem.Arena, path: str) -> err {
     if path.len == 0usize { ret Invalid }
     ret Unsupported
 }
-fn taskbar_progress(a: *mem.Arena, w: os.Window, state: ProgressState, completed: u64, total: u64) -> err { ret Unsupported }
-fn taskbar_overlay(a: *mem.Arena, w: os.Window, icon: Icon, description: str) -> err { ret Unsupported }
-fn jump_list(a: *mem.Arena, tasks: []const JumpTask) -> err { ret Unsupported }
+fn taskbar_progress(a: *mem.Arena, w: os.Window, state: ProgressState, completed: u64, total: u64) -> err {
+    let determinate = state == .Normal || state == .Paused || state == .Error
+    if determinate && (total == 0u64 || completed > total) { ret Invalid }
+    ret Unsupported
+}
+fn taskbar_overlay(a: *mem.Arena, w: os.Window, icon: Icon, description: str) -> err {
+    if !valid_icon(icon) { ret Invalid }
+    ret Unsupported
+}
+fn jump_list(a: *mem.Arena, tasks: []const JumpTask) -> err {
+    var at = 0usize
+    while at < tasks.len {
+        if tasks[at].title.len == 0usize || tasks[at].program.len == 0usize { ret Invalid }
+        at += 1usize
+    }
+    ret Unsupported
+}
 fn jump_list_clear(a: *mem.Arena) -> err { ret Unsupported }
 fn notice_permission(a: *mem.Arena) -> NoticePermission { ret NoticePermission.Unavailable }
 fn notice_publish(a: *mem.Arena, tray_id: u32, title: str, body: str, silent: bool) -> (u32, err) {
@@ -76,7 +108,10 @@ fn notice_update(a: *mem.Arena, tray_id: u32, notice_id: u32, title: str, body: 
     if body.len == 0usize || notice_id == 0u32 { ret Invalid }
     ret Unsupported
 }
-fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err { ret Unsupported }
+fn notice_remove(a: *mem.Arena, tray_id: u32, notice_id: u32) -> err {
+    if tray_id == 0u32 || notice_id == 0u32 { ret Invalid }
+    ret Unsupported
+}
 fn clipboard_write(a: *mem.Arena, items: []const Content) -> err {
     if items.len == 0usize { ret Invalid }
     ret Unsupported
