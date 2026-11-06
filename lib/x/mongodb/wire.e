@@ -256,6 +256,61 @@ fn status(a: *mem.Arena, body: []const u8) -> (Status, err) {
                 s.message = ""
             }
         }
+        // A write reply is `ok:1` with the failure in `writeErrors` (or
+        // `writeConcernError`); reporting it as good hides a failed insert (#48).
+        let (write_value, has_write) = bson.element_of(elements, "writeErrors")
+        if has_write {
+            switch write_value {
+            case .Array as errors:
+                if errors.len > 0usize {
+                    s.good = false
+                    switch errors[0usize] {
+                    case .Document as fields:
+                        let (write_code, has_write_code) = bson.element_of(fields, "code")
+                        if has_write_code {
+                            let (code, code_ok) = bson.integer_of(write_code)
+                            if code_ok { s.code = code }
+                        }
+                        let (write_message, has_write_message) = bson.element_of(fields, "errmsg")
+                        if has_write_message {
+                            switch write_message {
+                            case .String as text:
+                                s.message = text
+                            default:
+                                s.message = ""
+                            }
+                        }
+                    default:
+                        s.code = s.code
+                    }
+                }
+            default:
+                s.good = s.good
+            }
+        }
+        let (concern_value, has_concern) = bson.element_of(elements, "writeConcernError")
+        if has_concern {
+            switch concern_value {
+            case .Document as fields:
+                s.good = false
+                let (concern_code, has_concern_code) = bson.element_of(fields, "code")
+                if has_concern_code {
+                    let (code, code_ok) = bson.integer_of(concern_code)
+                    if code_ok { s.code = code }
+                }
+                let (concern_message, has_concern_message) = bson.element_of(fields, "errmsg")
+                if has_concern_message {
+                    switch concern_message {
+                    case .String as text:
+                        s.message = text
+                    default:
+                        s.message = ""
+                    }
+                }
+            default:
+                s.good = s.good
+            }
+        }
         ret (s, ok)
     default:
         ret (s, Invalid)
@@ -345,7 +400,11 @@ fn scram_final(dst: []u8, first_bare: str, server_first: str, password: str, non
     if !has_r || !has_s || !has_i { ret (0usize, 0usize, AuthFailed) }
     if rnonce.len <= nonce.len || !str.eq(rnonce[0usize..nonce.len], nonce) { ret (0usize, 0usize, AuthFailed) }
     let (iterations, iterations_ok) = parse_u32(count_text)
-    if !iterations_ok || iterations < 4096u32 { ret (0usize, 0usize, AuthFailed) }
+    // The count comes from the server; an unbounded one turns a bad peer into minutes of
+    // PBKDF2 work before the client can reject it (#48).
+    // The count comes from the server; an unbounded one turns a bad peer into minutes of
+    // PBKDF2 work before the client can reject it (#48).
+    if !iterations_ok || iterations < 4096u32 || iterations > 200000u32 { ret (0usize, 0usize, AuthFailed) }
     var salt: [64]u8 = zero
     let (salt_bytes, salt_error) = bytes.base64_decode(salt[0usize..], salt_text, .Standard)
     if salt_error != ok { ret (0usize, 0usize, AuthFailed) }

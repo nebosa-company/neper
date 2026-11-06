@@ -342,6 +342,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run_chunk(a, vectors_5()) != 0u8 { os.exit(105i32) }
     if run_chunk(a, vectors_6()) != 0u8 { os.exit(106i32) }
     if run_chunk(a, vectors_7()) != 0u8 { os.exit(107i32) }
+    // #48 (2): a write reply with writeErrors is a failure, not `good`.
+    let duplicate_body = unhex(a, "50000000016f6b00000000000000f03f0477726974654572726f727300320000000330002a00000010696e646578000000000010636f646500f82a0000026572726d7367000400000064757000000000")
+    let (duplicate_status, duplicate_error) = wire.status(a, duplicate_body)
+    if duplicate_error != ok || duplicate_status.good || duplicate_status.code != 11000i64 || !str.eq(duplicate_status.message, "dup") { os.exit(200i32) }
+    // #48 (1): a server-chosen iteration count above the ceiling is refused before PBKDF2.
+    var cap_out: [512]u8 = zero
+    var cap_expected: [64]u8 = zero
+    let (_, _, cap_error) = wire.scram_final(cap_out[0usize..], "n=user,r=abcdef", "r=abcdefXYZ,s=c2FsdA==,i=300000", "pw", "abcdef", cap_expected[0usize..])
+    if cap_error != wire.AuthFailed { os.exit(201i32) }
     try io.print("x mongodb wire ok")
     ret ok
 }

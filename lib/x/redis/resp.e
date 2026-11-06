@@ -101,10 +101,14 @@ fn encode_hello(dst: []u8, version: u8, user: str, password: str) -> (usize, err
         ret (n, e)
     }
     var args3: [5][]const u8 = zero
+    // A password-only (requirepass) server authenticates the implicit `default` user;
+    // sending an empty user makes Redis answer WRONGPASS (#47).
+    var user_text = user
+    if user_text.len == 0usize { user_text = "default" }
     args3[0usize] = "HELLO"
     args3[1usize] = number[0usize..1usize]
     args3[2usize] = "AUTH"
-    args3[3usize] = user
+    args3[3usize] = user_text
     args3[4usize] = password
     let (m, e2) = encode_command(dst, args3[0usize..])
     ret (m, e2)
@@ -282,7 +286,9 @@ fn read_value(a: *mem.Arena, buf: []const u8, at: *usize, lim: *const Limits, de
         }
         *at = pos
         if tag == 37u8 { ret (Value { Map: pairs }, ok) }
-        let (next, next_error) = read_value(a, buf, at, lim, depth)
+        // An attribute frame is a level of nesting: without the increment a stream of
+        // `|0` frames bypasses max_depth and overflows the stack (#47).
+        let (next, next_error) = read_value(a, buf, at, lim, depth + 1u16)
         if next_error != ok { ret (none, next_error) }
         ret (next, ok)
     }
@@ -365,7 +371,9 @@ fn error_kind(text: str) -> ErrorKind {
     if starts(text, "CLUSTERDOWN") { ret .ClusterDown }
     if starts(text, "MASTERDOWN") { ret .MasterDown }
     if starts(text, "NOSCRIPT") { ret .NoScript }
-    if starts(text, "BUSY") { ret .Busy }
+    // BUSYKEY/BUSYGROUP are permanent errors, not "a script is running": only BUSY
+    // followed by a space (or alone) means retry later (#47).
+    if str.eq(text, "BUSY") || starts(text, "BUSY ") { ret .Busy }
     ret .Generic
 }
 
@@ -498,6 +506,10 @@ fn session(protocol: u8) -> Session {
 fn is_reply(s: *const Session, v: Value) -> bool {
     switch v {
     case .Push as items:
+        // In RESP3 the subscribe/unsubscribe confirmations arrive as pushes; they still
+        // answer a sent command, so they consume a pending slot (#47).
+        let (event, found) = pubsub_event(items)
+        if found && (event.kind == .Subscribe || event.kind == .PSubscribe || event.kind == .Unsubscribe || event.kind == .PUnsubscribe) { ret true }
         ret false
     case .Array as items:
         if s.protocol == 2u8 && s.subscriptions > 0usize {

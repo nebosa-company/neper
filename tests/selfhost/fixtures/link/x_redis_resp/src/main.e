@@ -437,6 +437,36 @@ fn session(a: *mem.Arena) -> bool {
     if he != ok || !str.eq(out[0usize..hn], "*2\r\n$5\r\nHELLO\r\n$1\r\n3\r\n") { ret false }
     let (an, ae) = resp.encode_hello(out[0usize..], 3u8, "default", "pw")
     if ae != ok || !str.eq(out[0usize..an], "*5\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$4\r\nAUTH\r\n$7\r\ndefault\r\n$2\r\npw\r\n") { ret false }
+    // #47 (2): a password-only HELLO authenticates the implicit `default` user.
+    let (dn, de) = resp.encode_hello(out[0usize..], 3u8, "", "pw")
+    if de != ok || !str.eq(out[0usize..dn], "*5\r\n$5\r\nHELLO\r\n$1\r\n3\r\n$4\r\nAUTH\r\n$7\r\ndefault\r\n$2\r\npw\r\n") { ret false }
+    // #47 (3): BUSYGROUP/BUSYKEY are not the retryable BUSY.
+    if resp.error_kind("BUSYGROUP Consumer Group name already exists") == .Busy { ret false }
+    if resp.error_kind("BUSYKEY Target key name already exists.") == .Busy { ret false }
+    if resp.error_kind("BUSY Redis is busy running a script.") != .Busy { ret false }
+    // #47 (4): a RESP3 subscribe confirmation is a push but still consumes a pending slot.
+    let sub_push = ">3\r\n$9\r\nsubscribe\r\n$4\r\nnews\r\n:1\r\n"
+    s3.pending = 1usize
+    let (spv, spused, spe) = resp.parse(a, sub_push, &lim)
+    if spe != ok || spused != sub_push.len || !resp.is_reply(&s3, spv) { ret false }
+    resp.note(&s3, spv)
+    if s3.pending != 0usize { ret false }
+    // #47 (1): attribute frames count as nesting, so a run of them hits max_depth.
+    let (attrb, attre) = str.builder(a, 64usize)
+    if attre != ok { ret false }
+    var ab = attrb
+    var ai = 0usize
+    while ai < 40usize {
+        let pushed = str.push(&ab, "|0\r\n")
+        if pushed != ok { ret false }
+        ai += 1usize
+    }
+    let tail = str.push(&ab, "*1\r\n$1\r\nx\r\n")
+    if tail != ok { ret false }
+    var deep_lim = resp.limits()
+    deep_lim.max_depth = 8u16
+    let (_, _, attr_error) = resp.parse(a, str.done(&ab), &deep_lim)
+    if attr_error == ok { ret false }
     ret true
 }
 
