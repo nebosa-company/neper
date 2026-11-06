@@ -459,6 +459,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, found_8) = xsd.type_named("integers")
     if found_8 { try report("type-named-unknown", 8usize) }
     if xsd.whitespace(.String) != xsd.Whitespace.Preserve || xsd.whitespace(.NormalizedString) != xsd.Whitespace.Replace || xsd.whitespace(.Token) != xsd.Whitespace.Collapse || xsd.whitespace(.Int) != xsd.Whitespace.Collapse || xsd.whitespace(.Base64Binary) != xsd.Whitespace.Collapse { try report("whitespace", 0usize) }
+    // 606: leap day decided from the full year digit string, not a truncated prefix.
+    if !xsd.valid(.Date, "123456789012345678000-02-29") { try report("long-year-leap-valid", 0usize) }
+    if xsd.valid(.Date, "100000000000000000002-02-29") { try report("long-year-leap-invalid", 0usize) }
     try io.print("fmt xsd types ok\n")
     ret ok
 }
+

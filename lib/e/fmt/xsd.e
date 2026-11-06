@@ -300,6 +300,31 @@ fn two(s: str, at: usize) -> (u32, bool) {
     ret (u32(s[at] - 48u8) * 10u32 + u32(s[at + 1usize] - 48u8), true)
 }
 
+// Leap-year test from the complete year digit string, so a year longer than the
+// accumulator in scan_year (18 digits) still gets the astronomical rule.
+fn leap_digits(s: str, start: usize, end: usize, negative: bool) -> bool {
+    var r4 = 0u64
+    var r100 = 0u64
+    var r400 = 0u64
+    var i = start
+    while i < end {
+        let d = u64(s[i] - 48u8)
+        r4 = (r4 * 10u64 + d) % 4u64
+        r100 = (r100 * 10u64 + d) % 100u64
+        r400 = (r400 * 10u64 + d) % 400u64
+        i += 1usize
+    }
+    // `-YYYY` is astronomical year -(YYYY-1); subtract one modulo each divisor.
+    if negative {
+        r4 = (r4 + 4u64 - 1u64) % 4u64
+        r100 = (r100 + 100u64 - 1u64) % 100u64
+        r400 = (r400 + 400u64 - 1u64) % 400u64
+    }
+    if r4 != 0u64 { ret false }
+    if r100 != 0u64 { ret true }
+    ret r400 == 0u64
+}
+
 fn leap_year(y: u64, negative: bool) -> bool {
     var year = y
     if negative && year > 0u64 { year = year - 1u64 }
@@ -393,7 +418,18 @@ fn is_date_then(s: str, at: usize, want_time: bool, want_day: bool) -> bool {
     if !want_day { ret is_zone(s, i) }
     if i >= s.len || s[i] != 45u8 { ret false }
     let (day, day_ok) = two(s, i + 1usize)
-    if !day_ok || day < 1u32 || day > days_in(month, year, negative) { ret false }
+    var day_limit = days_in(month, year, negative)
+    if month == 2u32 {
+        let start = at + 1usize
+        if negative {
+            if leap_digits(s, start, year_end, true) { day_limit = 29u32 } else { day_limit = 28u32 }
+        } else if leap_digits(s, start, year_end, false) {
+            day_limit = 29u32
+        } else {
+            day_limit = 28u32
+        }
+    }
+    if !day_ok || day < 1u32 || day > day_limit { ret false }
     i += 3usize
     if want_time {
         if i >= s.len || s[i] != 84u8 { ret false }
@@ -578,3 +614,4 @@ fn valid(t: Type, text: str) -> bool {
     if t == .HexBinary { ret is_hex_binary(s) }
     ret is_base64(s)
 }
+
