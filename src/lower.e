@@ -30,8 +30,10 @@ type Binding = struct {
 
 type CallResults = struct {
     call: check.CallInfo,
-    values: [16]usize,
-    addresses: [16]bool,
+    // ponytail: 64 result slots; a caller-sized pair of slices is the upgrade if a
+    // function ever returns more (the fixed cap used to be 16).
+    values: [64]usize,
+    addresses: [64]bool,
     count: usize,
 }
 
@@ -353,8 +355,10 @@ fn emit_enum_check(c: *check.Checker, converted: usize, source: usize, ty: check
     if !found { ret check.InvalidType }
     let aggregate = c.aggregates[aggregate_index]
     let boolean = check.make_type(.Bool, "bool", ty.module_index)
-    var decisions: [512]usize = zero
-    var falses: [512]usize = zero
+    let (decisions, decisions_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if decisions_error != ok { ret decisions_error }
+    let (falses, falses_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if falses_error != ok { ret falses_error }
     var count = 0usize
     var at = 0usize
     while at < aggregate.field_count {
@@ -1786,10 +1790,14 @@ fn emit_tagged_union_cmp(c: *check.Checker, ty: check.Type, slot: usize, result_
     if tag_decision_error != ok { ret tag_decision_error }
     try nir.add_operand(builder, tag_decision, tags_differ)
 
-    var tests: [32]usize = zero
-    var decisions: [32]usize = zero
-    var bodies: [32]usize = zero
-    var exits: [32]usize = zero
+    let (tests, tests_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if tests_error != ok { ret tests_error }
+    let (decisions, decisions_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if decisions_error != ok { ret decisions_error }
+    let (bodies, bodies_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if bodies_error != ok { ret bodies_error }
+    let (exits, exits_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if exits_error != ok { ret exits_error }
     var arm_count = 0usize
     var at = 0usize
     while at < aggregate.field_count {
@@ -2108,10 +2116,14 @@ fn emit_tagged_union_hash(c: *check.Checker, ty: check.Type, slot: usize, value:
     let tag_mix_error = emit_hash_mix(c, module_index, slot, tag_hash, builder, token)
     if tag_mix_error != ok { ret tag_mix_error }
 
-    var tests: [32]usize = zero
-    var decisions: [32]usize = zero
-    var bodies: [32]usize = zero
-    var exits: [32]usize = zero
+    let (tests, tests_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if tests_error != ok { ret tests_error }
+    let (decisions, decisions_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if decisions_error != ok { ret decisions_error }
+    let (bodies, bodies_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if bodies_error != ok { ret bodies_error }
+    let (exits, exits_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if exits_error != ok { ret exits_error }
     var arm_count = 0usize
     var at = 0usize
     let (entry_branch, entry_branch_error) = emit_branch(builder, token)
@@ -2408,10 +2420,14 @@ fn emit_tagged_union_eq(c: *check.Checker, ty: check.Type, slot: usize, boolean:
     if tag_decision_error != ok { ret tag_decision_error }
     try nir.add_operand(builder, tag_decision, tags_equal)
 
-    var tests: [32]usize = zero
-    var decisions: [32]usize = zero
-    var bodies: [32]usize = zero
-    var exits: [32]usize = zero
+    let (tests, tests_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if tests_error != ok { ret tests_error }
+    let (decisions, decisions_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if decisions_error != ok { ret decisions_error }
+    let (bodies, bodies_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if bodies_error != ok { ret bodies_error }
+    let (exits, exits_error) = mem.alloc[usize](c.arena, aggregate.field_count + 1usize)
+    if exits_error != ok { ret exits_error }
     var arm_count = 0usize
     var at = 0usize
     while at < aggregate.field_count {
@@ -11221,6 +11237,7 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     ret ok
 }
+
 
 
 
