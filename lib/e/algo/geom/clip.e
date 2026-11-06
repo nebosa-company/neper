@@ -49,9 +49,12 @@ fn clip_convex(subject: []const geom.Point, window: []const geom.Point, out: []g
                 out[count] = current
                 count += 1usize
             } else if previous_inside {
-                let (crossing, _) = line_intersection(previous, current, a, b)
-                out[count] = crossing
-                count += 1usize
+                let (crossing, hit) = line_intersection(previous, current, a, b)
+                // A parallel edge has no crossing point: inserting one would add a fake vertex.
+                if hit {
+                    out[count] = crossing
+                    count += 1usize
+                }
             }
             i += 1usize
         }
