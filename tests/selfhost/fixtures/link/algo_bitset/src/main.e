@@ -113,6 +113,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, empty_found) = bitset.first_set(&empty_set)
     if empty_found || bitset.count(&empty_set) != 0usize { ret Failed }
 
+    // #362: padding bits set through the caller-owned words are not logical members.
+    var pad_storage: [1]u64 = zero
+    let (pad_set, pad_error) = bitset.init(pad_storage[..], 1usize)
+    if pad_error != ok { ret Failed }
+    var padded = pad_set
+    bitset.set(&padded, 0usize)
+    padded.words[0usize] = 3u64
+    if bitset.get(&padded, 1usize) || bitset.count(&padded) != 1usize { ret Failed }
+    var clean_storage: [1]u64 = zero
+    let (clean_set, clean_error) = bitset.init(clean_storage[..], 1usize)
+    if clean_error != ok { ret Failed }
+    var clean = clean_set
+    bitset.set(&clean, 0usize)
+    if !bitset.eq(&padded, &clean) || !bitset.is_subset(&padded, &clean) || !bitset.is_subset(&clean, &padded) { ret Failed }
+    var pad_out_storage: [1]u64 = zero
+    let (pad_out_set, pad_out_error) = bitset.init(pad_out_storage[..], 1usize)
+    if pad_out_error != ok { ret Failed }
+    var pad_out = pad_out_set
+    bitset.union_into(&padded, &clean, &pad_out)
+    if bitset.count(&pad_out) != 1usize || !bitset.eq(&pad_out, &clean) || pad_out.words[0usize] & 2u64 != 0u64 { ret Failed }
     try io.print("algo bitset ok\n")
     ret ok
 }

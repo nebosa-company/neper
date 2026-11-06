@@ -21,6 +21,18 @@ fn init(storage: []u64, bit_count: usize) -> (BitSet, err) {
 
 fn len(s: *const BitSet) -> usize { ret s.len }
 
+// Bits past `len` are padding: logical queries ignore them because the backing words
+// are caller-owned and a caller may set them (#362).
+fn padding_mask(s: *const BitSet) -> u64 {
+    let tail = s.len % 64usize
+    if tail == 0usize { ret 18446744073709551615u64 }
+    ret (1u64 << u64(tail)) - 1u64
+}
+
+fn normalize(s: *BitSet) {
+    if s.words.len > 0usize { s.words[s.words.len - 1usize] = s.words[s.words.len - 1usize] & padding_mask(s) }
+}
+
 fn clear_all(s: *BitSet) {
     var at = 0usize
     while at < s.words.len {
@@ -72,8 +84,10 @@ fn toggle(s: *BitSet, index: usize) {
 fn count(s: *const BitSet) -> usize {
     var total = 0usize
     var at = 0usize
+    let mask = padding_mask(s)
     while at < s.words.len {
         var word = s.words[at]
+        if at + 1usize == s.words.len { word = word & mask }
         while word != 0u64 {
             word = word & (word - 1u64)
             total += 1usize
@@ -109,6 +123,7 @@ fn union_in_place(dst: *BitSet, src: *const BitSet) {
         dst.words[at] = dst.words[at] | src.words[at]
         at += 1usize
     }
+    normalize(dst)
 }
 
 fn intersect_in_place(dst: *BitSet, src: *const BitSet) {
@@ -118,6 +133,7 @@ fn intersect_in_place(dst: *BitSet, src: *const BitSet) {
         dst.words[at] = dst.words[at] & src.words[at]
         at += 1usize
     }
+    normalize(dst)
 }
 
 fn difference_in_place(dst: *BitSet, src: *const BitSet) {
@@ -127,6 +143,7 @@ fn difference_in_place(dst: *BitSet, src: *const BitSet) {
         dst.words[at] = dst.words[at] & ~src.words[at]
         at += 1usize
     }
+    normalize(dst)
 }
 
 fn complement_in_place(s: *BitSet) {
@@ -143,9 +160,12 @@ fn complement_in_place(s: *BitSet) {
 
 fn is_subset(a: *const BitSet, b: *const BitSet) -> bool {
     if a.len != b.len { ret false }
+    let mask = padding_mask(a)
     var at = 0usize
     while at < a.words.len {
-        if (a.words[at] & ~b.words[at]) != 0u64 { ret false }
+        var extra = a.words[at] & ~b.words[at]
+        if at + 1usize == a.words.len { extra = extra & mask }
+        if extra != 0u64 { ret false }
         at += 1usize
     }
     ret true
@@ -153,9 +173,16 @@ fn is_subset(a: *const BitSet, b: *const BitSet) -> bool {
 
 fn eq(a: *const BitSet, b: *const BitSet) -> bool {
     if a.len != b.len { ret false }
+    let mask = padding_mask(a)
     var at = 0usize
     while at < a.words.len {
-        if a.words[at] != b.words[at] { ret false }
+        var left = a.words[at]
+        var right = b.words[at]
+        if at + 1usize == a.words.len {
+            left = left & mask
+            right = right & mask
+        }
+        if left != right { ret false }
         at += 1usize
     }
     ret true
@@ -169,6 +196,7 @@ fn intersect(a: *const BitSet, b: *const BitSet, out: *BitSet) {
         out.words[at] = a.words[at] & b.words[at]
         at += 1usize
     }
+    normalize(out)
 }
 
 // `out = a | b`.
@@ -179,6 +207,7 @@ fn union_into(a: *const BitSet, b: *const BitSet, out: *BitSet) {
         out.words[at] = a.words[at] | b.words[at]
         at += 1usize
     }
+    normalize(out)
 }
 
 // `out = a & ~b`.
@@ -189,4 +218,5 @@ fn difference(a: *const BitSet, b: *const BitSet, out: *BitSet) {
         out.words[at] = a.words[at] & ~b.words[at]
         at += 1usize
     }
+    normalize(out)
 }
