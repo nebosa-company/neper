@@ -465,6 +465,36 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // #52.12: a deeply nested filter is refused instead of overflowing the stack.
+    let (db, dbe) = str.builder(a, 512usize)
+    if dbe != ok { os.exit(130i32) }
+    var d = db
+    var di = 0usize
+    while di < 200usize {
+        let pushed_d = str.push_byte(&d, 40u8)
+        di += 1usize
+    }
+    if scim.parse_filter(a, str.done(&d)).valid { os.exit(130i32) }
+    // #52.14: id/meta/schemas are readOnly patch targets.
+    let (resj, rje) = json.parse(a, "{\"id\":\"1\",\"userName\":\"a\"}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    let (opj, oje) = json.parse(a, "{\"op\":\"replace\",\"path\":\"id\",\"value\":\"2\"}", json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if rje != ok || oje != ok || scim.apply_patch_op(a, resj, opj).valid { os.exit(131i32) }
+    // #52.13: a 70-entry attributes list is not truncated.
+    let (lb, lbe) = str.builder(a, 1024usize)
+    if lbe != ok { os.exit(132i32) }
+    var l = lb
+    let l1 = str.push_byte(&l, 91u8)
+    var li = 0usize
+    while li < 70usize {
+        if li > 0usize { let l2 = str.push_byte(&l, 44u8) }
+        let l3 = str.push_byte(&l, 34u8)
+        let l4 = str.push_byte(&l, 97u8)
+        let l5 = str.push_byte(&l, 34u8)
+        li += 1usize
+    }
+    let l6 = str.push_byte(&l, 93u8)
+    let (lav, lae) = json.parse(a, str.done(&l), json.Options { allow_duplicate_keys: false, max_depth: 16u16 })
+    if lae != ok || scim.split_list(a, lav).len != 70usize { os.exit(132i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }

@@ -25,7 +25,7 @@ type Token = struct { kind: u8, value: str }
 // kind: 0 and, 1 or, 2 not, 3 present, 4 value path, 5 compare. op: 0 eq .. 8 le.
 type Node = struct { kind: u8, op: u8, attribute: str, path: str, left: usize, right: usize, value: json.Value }
 
-type Parser = struct { tokens: []const Token, pos: usize, nodes: []Node, count: usize, failed: bool, message: str }
+type Parser = struct { tokens: []const Token, pos: usize, nodes: []Node, count: usize, failed: bool, message: str, depth: usize }
 
 type Filter = struct { valid: bool, message: str, nodes: []const Node, root: usize }
 
@@ -249,6 +249,13 @@ fn parse_and(a: *mem.Arena, p: *Parser) -> usize {
 }
 
 fn parse_or(a: *mem.Arena, p: *Parser) -> usize {
+    // Nesting is attacker-controlled input: bound the descent before recursing.
+    p.depth += 1usize
+    if p.depth > 128usize {
+        p.depth -= 1usize
+        ret fail(p, "filter nested too deep")
+    }
+    defer p.depth -= 1usize
     var left = parse_and(a, p)
     if p.failed { ret 0usize }
     while peek_word_is(a, p, "or") {
@@ -270,7 +277,7 @@ fn parse_filter(a: *mem.Arena, input: str) -> Filter {
     if tokens.len == 0usize { ret Filter { valid: false, message: "empty filter", nodes: none, root: 0usize } }
     let (nodes, e) = mem.alloc[Node](a, tokens.len * 2usize + 4usize)
     if e != ok { ret Filter { valid: false, message: "invalid filter", nodes: none, root: 0usize } }
-    var p = Parser { tokens: tokens, pos: 0usize, nodes: nodes, count: 0usize, failed: false, message: "" }
+    var p = Parser { tokens: tokens, pos: 0usize, nodes: nodes, count: 0usize, failed: false, message: "", depth: 0usize }
     let root = parse_or(a, &p)
     if p.failed { ret Filter { valid: false, message: p.message, nodes: none, root: 0usize } }
     if p.pos != tokens.len { ret Filter { valid: false, message: join(a, "unexpected token: ", tokens[p.pos].value), nodes: none, root: 0usize } }
@@ -645,6 +652,12 @@ fn split_dots(a: *mem.Arena, attribute: str, sub: str, has_sub: bool) -> []const
 
 fn patch_failed(msg: str) -> Patched { ret Patched { valid: false, message: msg, resource: .Null } }
 
+// RFC 7644 3.5.2: readOnly attributes (`id`, `meta`, `schemas`) cannot be patched.
+fn patch_read_only(a: *mem.Arena, attr: str) -> bool {
+    let l = lower(a, attr)
+    ret str.eq(l, "id") || str.eq(l, "meta") || str.eq(l, "schemas")
+}
+
 // One PATCH operation (`{op, path?, value?}`) applied to a resource, immutably.
 fn apply_patch_op(a: *mem.Arena, resource: json.Value, operation: json.Value) -> Patched {
     let op_value = ir.value_of(operation, "op")
@@ -671,12 +684,19 @@ fn apply_patch_op(a: *mem.Arena, resource: json.Value, operation: json.Value) ->
         if !has_value || ir.is_null(value) || !is_object {
             ret patch_failed(join(a, join(a, op, " without a path needs an object value"), ""))
         }
+        var vi = 0usize
+        while vi < members.len {
+            if patch_read_only(a, members[vi].key) { ret patch_failed(join(a, "read-only attribute: ", members[vi].key)) }
+            vi += 1usize
+        }
         var obj = object_of(a, resource)
         let ae = ir.assign(&obj, value)
         ret Patched { valid: true, message: "", resource: ir.obj_value(&obj) }
     }
     let parsed = parse_patch_path(a, path)
     if parsed.has_error { ret patch_failed(parsed.message) }
+
+    if patch_read_only(a, parsed.attribute) { ret patch_failed(join(a, "read-only attribute: ", parsed.attribute)) }
     let (current, has_current) = find_key(a, resource, parsed.attribute)
     if parsed.has_filter {
         let (items, is_array) = ir.items_of(current)
@@ -1088,11 +1108,16 @@ fn to_scim_group(a: *mem.Arena, group: json.Value, base_url: str) -> json.Value 
 
 fn split_list(a: *mem.Arena, v: json.Value) -> []const str {
     let (items, is_array) = ir.items_of(v)
-    let (out, e) = mem.alloc[str](a, 64usize)
+    // Sized from the input: a long attributes/excludedAttributes list must not be
+    // silently truncated (the old 63-entry cap returned excluded attributes).
+    var capacity = items.len + text_value(a, v).len + 2usize
+    let (out, e) = mem.alloc[str](a, capacity)
+    if e != ok { var none: []const str = zero
+        ret none }
     var n = 0usize
     if is_array {
         var i = 0usize
-        while i < items.len && n < 63usize {
+        while i < items.len {
             let t = js_trim(text_value(a, items[i]))
             if t.len > 0usize {
                 out[n] = t
@@ -1109,7 +1134,7 @@ fn split_list(a: *mem.Arena, v: json.Value) -> []const str {
     while i <= text.len {
         if i == text.len || text[i] == 44u8 {
             let t = js_trim(text[start..i])
-            if t.len > 0usize && n < 63usize {
+            if t.len > 0usize {
                 out[n] = t
                 n += 1usize
             }
@@ -1202,6 +1227,8 @@ fn list_response(a: *mem.Arena, resources: []const json.Value, start_index: json
         size = to_number(count)
         if size < 0.0f64 { size = 0.0f64 }
     }
+    // The advertised filter.maxResults (200) is also the page cap.
+    if size > 200.0f64 { size = 200.0f64 }
     var page = resources
     if !(has_total && !ir.is_null(total_results)) {
         var from = trunc_f64(start - 1.0f64)
