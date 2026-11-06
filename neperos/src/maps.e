@@ -748,6 +748,11 @@ fn decimal(text_in: str) -> (f64, bool) {
 // A coordinate as text with five decimals ("-122.33210").
 fn degrees_text(a: *mem.Arena, v: f64) -> str {
     var value = v
+    // Remote coordinates: NaN/inf and absurd magnitudes are clamped so the checked cast cannot
+    // trap (#257 item 15).
+    if !(value == value) { value = 0.0f64 }
+    if value > 1000000.0f64 { value = 1000000.0f64 }
+    if value < 0.0f64 - 1000000.0f64 { value = 0.0f64 - 1000000.0f64 }
     var sign = ""
     if value < 0.0f64 {
         sign = "-"
@@ -940,8 +945,15 @@ fn route_map(a: *mem.Arena, s: *State) -> bool {
                         let (metres, metres_ok) = number_value(distance_value)
                         let (seconds, seconds_ok) = number_value(duration_value)
                         if has_distance && has_duration && metres_ok && seconds_ok {
-                            s.net_metres = usize(metres + 0.5f64)
-                            s.net_seconds = usize(seconds + 0.5f64)
+                            // OSRM values are remote: clamp before the checked casts (#257 item 15).
+                            var route_metres = metres
+                            if !(route_metres == route_metres) || route_metres < 0.0f64 { route_metres = 0.0f64 }
+                            if route_metres > 100000000.0f64 { route_metres = 100000000.0f64 }
+                            var route_seconds = seconds
+                            if !(route_seconds == route_seconds) || route_seconds < 0.0f64 { route_seconds = 0.0f64 }
+                            if route_seconds > 100000000.0f64 { route_seconds = 100000000.0f64 }
+                            s.net_metres = usize(route_metres + 0.5f64)
+                            s.net_seconds = usize(route_seconds + 0.5f64)
                             let (geometry_value, has_geometry) = member_of(route, "geometry")
                             if has_geometry {
                                 switch geometry_value {

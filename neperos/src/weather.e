@@ -187,6 +187,15 @@ fn digits_at(text_value: str, at: usize, n: usize) -> usize {
     ret v
 }
 
+// A remote number as an integer: NaN, infinity and out-of-range values answer 0 instead of
+// trapping the checked f64->usize conversion (#257 item 15).
+fn remote_usize(v: f32) -> usize {
+    if !(v == v) { ret 0usize }
+    if v <= 0.0f32 { ret 0usize }
+    if v >= 1000000.0f32 { ret 1000000usize }
+    ret usize(v)
+}
+
 // The weekday (0 = Monday) of a calendar date.
 fn weekday_of(year: usize, month: usize, day: usize) -> usize {
     // Remote date text: the civil-days subtraction underflows before 1970 and `year - 1` traps at
@@ -481,10 +490,10 @@ fn read_forecast(fields: []const json.Member, f: *Forecast) -> bool {
     if !has_temperature || !has_feels || !has_humid || !has_code || !has_blow || !has_index || !has_day { ret false }
     f.now_temp = number_or_zero(temperature)
     f.feels = number_or_zero(feels)
-    f.humidity = usize(number_or_zero(humid) + 0.5)
-    f.code = wmo_cond(usize(number_or_zero(code)))
+    f.humidity = remote_usize(number_or_zero(humid) + 0.5)
+    f.code = wmo_cond(remote_usize(number_or_zero(code)))
     f.wind = number_or_zero(blow)
-    f.uv = usize(number_or_zero(index) + 0.5)
+    f.uv = remote_usize(number_or_zero(index) + 0.5)
     f.night = number_or_zero(day_flag) < 0.5
     let (h_time, has_h_time) = array_of(hourly, "time")
     let (h_temp, has_h_temp) = array_of(hourly, "temperature_2m")
@@ -498,8 +507,8 @@ fn read_forecast(fields: []const json.Member, f: *Forecast) -> bool {
     var h = 0usize
     while h < HOURS {
         f.htemp[h] = number_or_zero(h_temp[h])
-        f.hcode[h] = wmo_cond(usize(number_or_zero(h_code[h])))
-        f.hpop[h] = usize(number_or_zero(h_pop[h]) + 0.5)
+        f.hcode[h] = wmo_cond(remote_usize(number_or_zero(h_code[h])))
+        f.hpop[h] = remote_usize(number_or_zero(h_pop[h]) + 0.5)
         h += 1usize
     }
     let (d_time, has_d_time) = array_of(daily, "time")
@@ -518,8 +527,8 @@ fn read_forecast(fields: []const json.Member, f: *Forecast) -> bool {
     while d < DAYS {
         f.dhigh[d] = number_or_zero(d_high[d])
         f.dlow[d] = number_or_zero(d_low[d])
-        f.dcode[d] = wmo_cond(usize(number_or_zero(d_code[d])))
-        f.dpop[d] = usize(number_or_zero(d_pop[d]) + 0.5)
+        f.dcode[d] = wmo_cond(remote_usize(number_or_zero(d_code[d])))
+        f.dpop[d] = remote_usize(number_or_zero(d_pop[d]) + 0.5)
         let (rise, rise_ok) = string_of(d_rise[d])
         let (set, set_ok) = string_of(d_set[d])
         if !rise_ok || !set_ok || rise.len < 16usize || set.len < 16usize { ret false }
