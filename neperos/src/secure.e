@@ -733,16 +733,116 @@ fn create_vault(a: *mem.Arena, s: *State) -> bool {
     ret true
 }
 
+// (C116) A vault made with an older ITERATIONS is upgraded here: every record under /v is re-sealed
+// under a key derived at the current count, the new meta file is staged, and only then are the files
+// switched (records first, meta last). A failure during staging leaves the old count usable and is
+// reported to the caller; the key returned is the new one on success, the old one otherwise.
+// ponytail: a crash between the record renames and the meta rename leaves a mixed vault; a journal
+// file is the upgrade when that window matters.
+fn migrate_vault(a: *mem.Arena, s: *State, meta: []const u8, old_key: [32]u8, password: str) -> ([32]u8, usize) {
+    let current = vault.meta_iterations(meta)
+    if current == 0u32 || current >= ITERATIONS { ret (old_key, 0usize) }
+    let (new_key, derive_error) = vault.derive(password, meta[5usize..21usize], ITERATIONS)
+    if derive_error != ok { ret (old_key, 0usize) }
+    var names: [512]u8 = zero
+    let (name_bytes, listed) = vaultfs.list("/v", mem.address_of(&names[0usize]), 512usize)
+    if !listed { ret (old_key, 0usize) }
+    // Pass one: stage every record as "<name>.mig" under the new key without touching the originals.
+    var staged: [16][16]u8 = zero
+    var staged_lens: [16]usize = zero
+    var staged_total = 0usize
+    var start = 0usize
+    var stage_failed = false
+    while start < name_bytes && !stage_failed {
+        var end = start
+        while end < name_bytes && names[end] != 10u8 { end += 1usize }
+        let width = end - start
+        if width > 0usize && width <= 15usize && staged_total < 16usize {
+            let name = ui.text_of(a, names[start..], width)
+            var record: [288]u8 = zero
+            let (count, found) = vaultfs.read(ui.join(a, "/v/", name, ""), mem.address_of(&record[0usize]), 288usize)
+            var good = false
+            if found {
+                var plain: [256]u8 = zero
+                let (n, open_error) = vault.open(old_key, name, record[0usize..count], plain[0usize..])
+                if open_error == ok {
+                    var nonce: [16]u8 = zero
+                    if vaultfs.random(mem.address_of(&nonce[0usize]), 2usize) {
+                        var sealed: [288]u8 = zero
+                        let (length, seal_error) = vault.seal(new_key, nonce[0usize..], name, plain[0usize..n], sealed[0usize..])
+                        if seal_error == ok && vaultfs.write(ui.join(a, "/v/", name, ".mig"), mem.address_of(&sealed[0usize]), length) {
+                            var w = 0usize
+                            while w < width {
+                                staged[staged_total][w] = names[start + w]
+                                w += 1usize
+                            }
+                            staged_lens[staged_total] = width
+                            staged_total += 1usize
+                            good = true
+                        }
+                    }
+                }
+            }
+            if !good { stage_failed = true }
+        }
+        start = end + 1usize
+    }
+    if stage_failed {
+        var c = 0usize
+        while c < staged_total {
+            let cname = ui.text_of(a, staged[c][0usize..], staged_lens[c])
+            let dropped = vaultfs.remove(ui.join(a, ui.join(a, "/v/", cname, ""), ".mig", ""))
+            c += 1usize
+        }
+        ret (old_key, 0usize)
+    }
+    // The new meta file is staged too, so a random or write failure still leaves the old vault whole.
+    var nonce: [16]u8 = zero
+    var staged_meta = false
+    if vaultfs.random(mem.address_of(&nonce[0usize]), 2usize) {
+        var new_meta: [80]u8 = zero
+        let (meta_length, meta_error) = vault.meta_make(new_key, meta[5usize..21usize], ITERATIONS, nonce[0usize..], new_meta[0usize..])
+        if meta_error == ok {
+            staged_meta = vaultfs.write("/vmeta.mig", mem.address_of(&new_meta[0usize]), meta_length)
+        }
+    }
+    if !staged_meta {
+        var c = 0usize
+        while c < staged_total {
+            let cname = ui.text_of(a, staged[c][0usize..], staged_lens[c])
+            let dropped = vaultfs.remove(ui.join(a, ui.join(a, "/v/", cname, ""), ".mig", ""))
+            c += 1usize
+        }
+        ret (old_key, 0usize)
+    }
+    // Commit: each record then the meta file; the old count stays readable until the last rename.
+    var moved = 0usize
+    var c = 0usize
+    while c < staged_total {
+        let cname = ui.text_of(a, staged[c][0usize..], staged_lens[c])
+        if vaultfs.rename(ui.join(a, "/v/", cname, ".mig"), cname) { moved += 1usize }
+        c += 1usize
+    }
+    let switched = vaultfs.rename("/vmeta.mig", "vmeta")
+    if switched { ret (new_key, moved) }
+    ret (old_key, 0usize)
+}
+
 // Open the vault with the typed password: 0 opened, 1 wrong password, 2 unreadable.
 fn unlock_vault(a: *mem.Arena, s: *State) -> usize {
     var meta: [80]u8 = zero
     let (count, found) = vaultfs.read("/vmeta", mem.address_of(&meta[0usize]), 80usize)
     if !found { ret 2usize }
-    let (key, unlock_error) = vault.meta_unlock(meta[0usize..count], ui.field_text(a, &s.master))
+    let password = ui.field_text(a, &s.master)
+    let (key, unlock_error) = vault.meta_unlock(meta[0usize..count], password)
     if unlock_error == vault.WrongPassword { ret 1usize }
     if unlock_error != ok { ret 2usize }
-    s.key = key
+    let (upgraded_key, upgraded) = migrate_vault(a, s, meta[0usize..count], key, password)
+    s.key = upgraded_key
     s.keyed = true
+    if upgraded > 0usize {
+        say_message(s, "The vault's key was upgraded")
+    }
     ret 0usize
 }
 
