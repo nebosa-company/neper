@@ -182,6 +182,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, e28) = count_events(a, "<\xc0\x80/>", 8u16)
     if e28 != xml.Invalid { os.exit(70) }
     var name_buffer: [64]u8 = zero
+    // #604: the writer refuses invalid names and a mismatched end tag without emitting.
+    var guard_buffer: [64]u8 = zero
+    var guard_state = io.SliceWriter { data: guard_buffer[..], off: 0usize }
+    var guard = xml.writer(io.slice_writer(&guard_state))
+    if xml.start(&guard, "bad name", zero) != xml.Invalid { os.exit(40) }
+    if xml.start(&guard, "good", zero) != ok { os.exit(41) }
+    if xml.end(&guard, "other") != xml.Invalid { os.exit(42) }
+    if xml.end(&guard, "good") != ok || guard_state.off != 13usize { os.exit(43) }
     var name_state = io.SliceWriter { data: name_buffer[..], off: 0usize }
     var name_writer = xml.writer(io.slice_writer(&name_state))
     if xml.start(&name_writer, "1bad", zero) != xml.Invalid || name_state.off != 0usize { os.exit(65) }
