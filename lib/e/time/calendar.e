@@ -217,6 +217,9 @@ fn format[PATTERN: str](value: DateTime, dst: []u8) -> (str, err) {
             if c == 121u8 {
                 field = i64(value.date.year)
                 if width != 4usize { ret ("", Invalid) }
+                // write_field keeps only the width's low digits, so a year outside
+                // four digits would format as a different date.
+                if value.date.year < 0 || value.date.year > 9999 { ret ("", Invalid) }
             }
             if c == 77u8 {
                 field = i64(value.date.month)

@@ -159,6 +159,11 @@ fn push_num(b: *Buf, value: i64, width: usize) {
     var digits: [20]u8 = zero
     var count = 0usize
     var v = value
+    // A negative year prints its sign: padding alone would render -5 as 0000.
+    if v < 0i64 {
+        push(b, 45u8)
+        v = -v
+    }
     if v == 0i64 {
         digits[0usize] = 48u8
         count = 1usize

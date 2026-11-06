@@ -462,6 +462,9 @@ fn convert(from: Calendar, to: Calendar, date: time.Date) -> (time.Date, err) {
 
 fn from_iso(cal: Calendar, date: time.Date) -> (time.Date, err) {
     let count = time.days_from_civil(i64(date.year), i64(date.month), i64(date.day))
+    // An impossible Gregorian date would otherwise convert from a different day.
+    let (y, m, d) = time.civil_from_days(count)
+    if y != i64(date.year) || m != i64(date.month) || d != i64(date.day) { ret (zero, Invalid) }
     let (out, out_error) = from_days(cal, count)
     ret (out, out_error)
 }

@@ -229,6 +229,13 @@ fn alias(t: str) -> (usize, bool) {
     if str.eq(t, "pt-tl") { ret (41usize, true) }
     if str.eq(t, "ro-md") { ret (42usize, true) }
     if str.eq(t, "zh-hant") { ret (44usize, true) }
+    // Traditional Chinese regions resolve to the zh-Hant row, not the Simplified one.
+    if str.eq(t, "zh-tw") { ret (44usize, true) }
+    if str.eq(t, "zh-hk") { ret (44usize, true) }
+    if str.eq(t, "zh-mo") { ret (44usize, true) }
+    // `no` has no row of its own; Norwegian Bokmal (nb) is its written form.
+    if str.eq(t, "no") { ret (9usize, true) }
+    if str.eq(t, "no-no") { ret (9usize, true) }
     if str.eq(t, "zh-hant-hk") { ret (44usize, true) }
     if str.eq(t, "zh-hant-mo") { ret (44usize, true) }
     if str.eq(t, "zh-hant-my") { ret (44usize, true) }
@@ -292,6 +299,9 @@ fn locale_index(tag: str) -> (usize, bool) {
         n += 1usize
     }
     let whole: str = buf[0usize..n]
+    // Whole-tag aliases also cover languages with no row of their own (`no`).
+    let (whole_hit, whole_found) = alias(whole)
+    if whole_found { ret (whole_hit, true) }
     var cut = 0usize
     while cut < n && buf[cut] != 45u8 { cut += 1usize }
     let language: str = buf[0usize..cut]
