@@ -46,7 +46,7 @@ type Deferred = struct {
     kind: DeferredKind,
     call: check.CallInfo,
     callee: usize,
-    arguments: [16]usize,
+    arguments: []usize,
     argument_count: usize,
     token: lex.Token,
     node_index: usize,
@@ -4688,7 +4688,8 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             if child_position > 0usize {
                 if *argument_count == arguments.len { ret check.ArgumentCount }
                 let child_index = parse.child_index_at(tree, at)
-                var saved: [96]usize = zero
+                let (saved, saved_alloc_error) = mem.alloc[usize](c.arena, *argument_count + 1usize)
+                if saved_alloc_error != ok { ret saved_alloc_error }
                 var saved_callee = 0usize
                 var pending = false
                 if !into_c && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, child_index, builder) {
@@ -4789,10 +4790,11 @@ fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     var call: check.CallInfo = zero
     // A format string may carry 32 verbs, so a call may carry 32 arguments plus the
     // arena: the checker already allows it and this is what lowering has to match.
-    var arguments: [96]usize = zero
+    let (results_arguments, results_arguments_error) = mem.alloc[usize](c.arena, usize(node.child_count) + 8usize)
+    if results_arguments_error != ok { ret results_arguments_error }
     var argument_count = 0usize
     var callee = 0usize
-    let arguments_error = lower_call_arguments(c, g, tree, module_index, node, builder, bindings, binding_count, false, &call, &callee, arguments[..], &argument_count)
+    let arguments_error = lower_call_arguments(c, g, tree, module_index, node, builder, bindings, binding_count, false, &call, &callee, results_arguments, &argument_count)
     if arguments_error != ok { ret arguments_error }
     if call.is_unreachable {
         // A `.Trap` whose immediate is the message's string constant plus one, or zero
@@ -4820,12 +4822,12 @@ fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         results.count = 0usize
         ret ok
     }
-    let align_error = emit_align_check(c, g, call, arguments[..], argument_count, builder, c.tokens[usize(node.token_start)])
+    let align_error = emit_align_check(c, g, call, results_arguments, argument_count, builder, c.tokens[usize(node.token_start)])
     if align_error != ok { ret align_error }
     var simd_packed = false
-    try lower_simd_call(c, g, call, arguments[..], argument_count, builder, c.tokens[usize(node.token_start)], results, &simd_packed)
+    try lower_simd_call(c, g, call, results_arguments, argument_count, builder, c.tokens[usize(node.token_start)], results, &simd_packed)
     if simd_packed { ret ok }
-    ret emit_call_results(c, g, call, callee, arguments[..], argument_count, builder, c.tokens[usize(node.token_start)], results)
+    ret emit_call_results(c, g, call, callee, results_arguments, argument_count, builder, c.tokens[usize(node.token_start)], results)
 }
 
 fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (check.CallInfo, usize, err) {
@@ -8626,7 +8628,10 @@ fn lower_defer(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let (call_index, has_call) = deferred_call_node(tree, child)
     if has_call {
         entry.kind = .Call
-        let arguments_error = lower_call_arguments(c, g, tree, module_index, tree.nodes[call_index], builder, bindings, binding_count, true, &entry.call, &entry.callee, entry.arguments[..], &entry.argument_count)
+        let (defer_arguments, defer_arguments_error) = mem.alloc[usize](c.arena, usize(tree.nodes[call_index].child_count) + 8usize)
+        if defer_arguments_error != ok { ret defer_arguments_error }
+        entry.arguments = defer_arguments
+        let arguments_error = lower_call_arguments(c, g, tree, module_index, tree.nodes[call_index], builder, bindings, binding_count, true, &entry.call, &entry.callee, entry.arguments, &entry.argument_count)
         if arguments_error != ok { ret arguments_error }
         if (builder.frame_mode || builder.frame_locals) && !builder.spirv {
             var argument_at = 0usize
@@ -11216,6 +11221,8 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     ret ok
 }
+
+
 
 
 
