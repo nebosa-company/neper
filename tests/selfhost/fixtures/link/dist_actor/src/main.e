@@ -220,6 +220,129 @@ fn behavior(c: *Counters) -> actor.Behavior {
     ret actor.Behavior { ctx: mem.cast[*void](c), activate: on_activate, handle: on_handle, deactivate: on_deactivate }
 }
 
+fn hook_set_state(ctx: *void, t: *actor.Turn) -> err {
+    actor.set_state(t, "hooked")
+    ret ok
+}
+
+fn hook_fail_with_timer(ctx: *void, t: *actor.Turn) -> err {
+    let _ = actor.timer_start(t, "ft", t.now + 10i64, 0i64)
+    ret actor.Invalid
+}
+
+fn handle_bad_timer(ctx: *void, t: *actor.Turn) -> err {
+    if str.eq(t.kind, "startbad") {
+        let _ = actor.timer_start(t, "bad", t.now + 10i64, 0i64)
+        ret ok
+    }
+    if str.eq(t.kind, "timer:bad") { ret actor.Invalid }
+    if str.eq(t.kind, "get") {
+        actor.set_reply(t, t.state)
+        ret ok
+    }
+    ret actor.Invalid
+}
+
+fn noop_activate(ctx: *void, t: *actor.Turn) -> err { ret ok }
+
+fn handle_mixed_reminders(ctx: *void, t: *actor.Turn) -> err {
+    if str.eq(t.kind, "reminder:bad") { ret actor.Invalid }
+    if str.eq(t.kind, "reminder:good") {
+        actor.set_state(t, "good")
+        ret ok
+    }
+    ret actor.Invalid
+}
+
+// 7xx: #60 items 14-18 (reminder continuation, timer consumption, activate hook, parse_pair,
+// MAX_FIRE order).
+fn edges(a: *mem.Arena) -> i32 {
+    // 17: an overflowing pair is malformed, not a trap or a wrapped due time.
+    let (ov_due, ov_period, ov_ok) = actor.parse_pair("99999999999999999999,0")
+    if ov_ok { ret 700i32 }
+    let (ok_due, ok_period, ok_parse) = actor.parse_pair("1000,50")
+    if !ok_parse || ok_due != 1000i64 || ok_period != 50i64 { ret 701i32 }
+    // 16a: the activate hook's set_state is committed.
+    var c1 = Counters { activations: 0u32, deactivations: 0u32 }
+    let (db1, dbe1) = new_db(a)
+    if dbe1 != ok { ret 702i32 }
+    var db1v = db1
+    let (sys1_value, se1) = actor.create(a, &db1v, actor.Behavior { ctx: mem.cast[*void](&c1), activate: hook_set_state, handle: on_handle, deactivate: on_deactivate }, 1usize, 8usize, 4usize)
+    var sys1 = sys1_value
+    let (_, silo_err1) = actor.add_silo(&sys1, "s")
+    if se1 != ok || silo_err1 != ok { ret 703i32 }
+    let (hr, he) = actor.call(&sys1, "hooked-grain", "get", "", 1000i64)
+    if he != ok || !str.eq(hr, "hooked") { ret 704i32 }
+    let (stored_hook, has_hook) = actor.stored_state(&sys1, "hooked-grain")
+    if !has_hook || !str.eq(stored_hook, "hooked") { ret 705i32 }
+    // 16b: a failing activate hook drops the timers it created.
+    var c2 = Counters { activations: 0u32, deactivations: 0u32 }
+    let (db2, dbe2) = new_db(a)
+    if dbe2 != ok { ret 706i32 }
+    var db2v = db2
+    let (sys2_value, se2) = actor.create(a, &db2v, actor.Behavior { ctx: mem.cast[*void](&c2), activate: hook_fail_with_timer, handle: on_handle, deactivate: on_deactivate }, 1usize, 8usize, 4usize)
+    var sys2 = sys2_value
+    let (_, silo_err2) = actor.add_silo(&sys2, "s")
+    if se2 != ok || silo_err2 != ok { ret 707i32 }
+    let (_, hook_error) = actor.call(&sys2, "fail-grain", "get", "", 1000i64)
+    if hook_error != actor.Invalid || actor.timer_count(&sys2) != 0usize { ret 708i32 }
+    // 15: a failed timer delivery leaves the timer due for the next tick instead of
+    // consuming the one-shot.
+    var c3 = Counters { activations: 0u32, deactivations: 0u32 }
+    let (db3, dbe3) = new_db(a)
+    if dbe3 != ok { ret 709i32 }
+    var db3v = db3
+    let (sys3_value, se3) = actor.create(a, &db3v, actor.Behavior { ctx: mem.cast[*void](&c3), activate: noop_activate, handle: handle_bad_timer, deactivate: on_deactivate }, 1usize, 8usize, 4usize)
+    var sys3 = sys3_value
+    let (_, silo_err3) = actor.add_silo(&sys3, "s")
+    if se3 != ok || silo_err3 != ok { ret 710i32 }
+    let (_, start_error) = actor.call(&sys3, "timer-grain", "startbad", "", 1000i64)
+    if start_error != ok || actor.timer_count(&sys3) != 1usize { ret 711i32 }
+    let (_, fire_error) = actor.tick(&sys3, 1100i64)
+    if fire_error != actor.Invalid { ret 712i32 }
+    if actor.timer_count(&sys3) != 1usize { ret 713i32 }
+    let (_, fire_error2) = actor.tick(&sys3, 1200i64)
+    if fire_error2 != actor.Invalid || actor.timer_count(&sys3) != 1usize { ret 714i32 }
+    // 18: with 70 due reminders, the 64 oldest fire (not the first 64 in storage order);
+    // the store order here is newest-due first.
+    var c4 = Counters { activations: 0u32, deactivations: 0u32 }
+    let (db4, dbe4) = ds.create(a, ds.Limits { log: 65536usize, docs: 256usize, events: 4usize, marks: 2usize, streams: 2usize })
+    if dbe4 != ok { ret 715i32 }
+    var db4v = db4
+    let (sys4_value, se4) = actor.create(a, &db4v, behavior(&c4), 8usize, 64usize, 16usize)
+    var sys4 = sys4_value
+    let (_, silo_err4) = actor.add_silo(&sys4, "s")
+    if se4 != ok || silo_err4 != ok { ret 716i32 }
+    var ri = 0usize
+    while ri < 70usize {
+        let ri_grain = grain_name(a, ri)
+        if actor.reminder_set(&sys4, ri_grain, "r", 1000i64 - i64(ri), 0i64) != ok { ret 717i32 }
+        ri += 1usize
+    }
+    let (rn, re) = actor.tick(&sys4, 1000i64)
+    if re != ok || rn != 64usize { ret 718i32 }
+    let newest_grain = grain_name(a, 0usize)
+    let oldest_grain = grain_name(a, 69usize)
+    if actor.is_active(&sys4, newest_grain) { ret 719i32 }
+    if !actor.is_active(&sys4, oldest_grain) { ret 720i32 }
+    // 14: a failing reminder does not block the later one on the same tick.
+    var c5 = Counters { activations: 0u32, deactivations: 0u32 }
+    let (db5, dbe5) = new_db(a)
+    if dbe5 != ok { ret 721i32 }
+    var db5v = db5
+    let (sys5_value, se5) = actor.create(a, &db5v, actor.Behavior { ctx: mem.cast[*void](&c5), activate: noop_activate, handle: handle_mixed_reminders, deactivate: on_deactivate }, 1usize, 8usize, 4usize)
+    var sys5 = sys5_value
+    let (_, silo_err5) = actor.add_silo(&sys5, "s")
+    if se5 != ok || silo_err5 != ok { ret 722i32 }
+    if actor.reminder_set(&sys5, "bad-grain", "bad", 500i64, 0i64) != ok { ret 723i32 }
+    if actor.reminder_set(&sys5, "good-grain", "good", 500i64, 0i64) != ok { ret 724i32 }
+    let (mixed_n, mixed_error) = actor.tick(&sys5, 600i64)
+    if mixed_error != actor.Invalid || mixed_n != 1usize { ret 725i32 }
+    let (good_state, good_found) = actor.stored_state(&sys5, "good-grain")
+    if !good_found || !str.eq(good_state, "good") { ret 726i32 }
+    ret 0i32
+}
+
 fn grain_name(a: *mem.Arena, k: usize) -> str {
     let digits = dec_text(a, i64(k))
     let (buf, alloc_error) = mem.alloc[u8](a, 6usize + digits.len)
@@ -490,6 +613,7 @@ fn main(a: *mem.Arena) -> err {
     if code == 0i32 { code = reentrancy(a) }
     if code == 0i32 { code = timers(a) }
     if code == 0i32 { code = reminders(a) }
+    if code == 0i32 { code = edges(a) }
     if code == 0i32 { code = refusals(a) }
     if code != 0i32 {
         // a status of 256, 512, ... would read as success on Linux, where it is taken mod 256
@@ -499,3 +623,5 @@ fn main(a: *mem.Arena) -> err {
     }
     ret ok
 }
+
+

@@ -16,8 +16,9 @@
 // durable documents in the store: they fire whether or not the grain is active, activating it,
 // and survive a restart because they are read back from the same file. A periodic reminder or
 // timer next falls at its due time plus the smallest multiple of its period that is after `now`:
-// a long gap is one firing, not a burst. `tick(now)` is the clock: the caller (a scheduler loop,
-// `e.task.jobs`) drives it.
+// a long gap is one firing, not a burst. A firing that cannot be delivered (busy grain, failed
+// handler) stays due for a later tick; a one-shot timer is consumed only after delivery succeeds.
+// `tick(now)` is the clock: the caller (a scheduler loop, `e.task.jobs`) drives it.
 //
 // A silo failure (`fail_silo`) drops its activations without running `deactivate` and without
 // writing state: what a grain had committed in a turn is in the store, and its next call
@@ -191,8 +192,17 @@ fn activate(sys: *System, grain: str, now: i64) -> (usize, err) {
     let hook_error = sys.behavior.activate(sys.behavior.ctx, &turn)
     sys.acts[at].busy = false
     if hook_error != ok {
+        // Timers the failed hook created must not fire into the next activation.
+        drop_timers(sys, sys.acts[at].grain)
         sys.acts[at].live = false
         ret (0usize, hook_error)
+    }
+    // The hook's set_state is part of activation, like deactivate's.
+    let commit_error = commit(sys, at, &turn)
+    if commit_error != ok {
+        drop_timers(sys, sys.acts[at].grain)
+        sys.acts[at].live = false
+        ret (0usize, commit_error)
     }
     ret (at, ok)
 }
@@ -413,7 +423,9 @@ fn parse_pair(s: str) -> (i64, i64, bool) {
                 neg = true
             } else {
                 if c < 48u8 || c > 57u8 { ret (0i64, 0i64, false) }
-                vals[which] = vals[which] * 10i64 + i64(c - 48u8)
+                let digit = i64(c - 48u8)
+                if vals[which] > (9223372036854775807i64 - digit) / 10i64 { ret (0i64, 0i64, false) }
+                vals[which] = vals[which] * 10i64 + digit
                 seen = true
             }
         }
@@ -456,8 +468,9 @@ fn next_due(due: i64, period: i64, now: i64) -> i64 {
 
 type Pending = struct { key: str, due: i64, period: i64 }
 
-// Fires every timer and reminder due at `now`, oldest first; how many fired. A reminder whose
-// handler fails stays due and is retried by the next tick.
+// Fires every timer and reminder due at `now`, oldest first; how many fired. A timer or
+// reminder that cannot be delivered (busy grain, failed handler) stays due and is retried
+// by the next tick; a one-shot timer is consumed only after a successful delivery.
 fn tick(sys: *System, now: i64) -> (usize, err) {
     var fired = 0usize
     // timers: those of live activations
@@ -470,21 +483,23 @@ fn tick(sys: *System, now: i64) -> (usize, err) {
                 sys.timers[i].live = false
             } else {
                 let kind = timer_kind(sys.a, "timer:", tm.name)
-                if tm.period > 0i64 {
-                    sys.timers[i].due = next_due(tm.due, tm.period, now)
-                } else {
-                    sys.timers[i].live = false
-                }
+                // Consume the firing only after a successful delivery: a busy grain or a
+                // failed handler leaves the timer due for the next tick.
                 if !sys.acts[at].busy {
                     let (reply, deliver_error) = deliver(sys, at, kind, "", now)
                     if deliver_error != ok { ret (fired, deliver_error) }
                     fired += 1usize
+                    if tm.period > 0i64 {
+                        sys.timers[i].due = next_due(tm.due, tm.period, now)
+                    } else {
+                        sys.timers[i].live = false
+                    }
                 }
             }
         }
         i += 1usize
     }
-    // reminders: collect the due ones first, then fire (firing writes to the same collection)
+    // reminders: keep the MAX_FIRE oldest due ones (sorted), independent of storage order.
     var pend: [64]Pending = zero
     var np = 0usize
     var n = 0usize
@@ -493,24 +508,20 @@ fn tick(sys: *System, now: i64) -> (usize, err) {
         if !found { break }
         n += 1usize
         let (due, period, parsed) = parse_pair(value)
-        if parsed && due <= now && np < MAX_FIRE {
+        if parsed && due <= now {
+            if np == MAX_FIRE && !(due < pend[MAX_FIRE - 1usize].due) { continue }
             let (key_copy, keep_error) = keep(sys.a, key)
             if keep_error != ok { ret (fired, keep_error) }
-            pend[np] = Pending { key: key_copy, due: due, period: period }
-            np += 1usize
+            let item = Pending { key: key_copy, due: due, period: period }
+            var j = np
+            if j == MAX_FIRE { j -= 1usize }
+            while j > 0usize && pend[j - 1usize].due > due {
+                pend[j] = pend[j - 1usize]
+                j -= 1usize
+            }
+            pend[j] = item
+            if np < MAX_FIRE { np += 1usize }
         }
-    }
-    // oldest first (insertion sort; the table is small)
-    var a1 = 1usize
-    while a1 < np {
-        let item = pend[a1]
-        var j = a1
-        while j > 0usize && pend[j - 1usize].due > item.due {
-            pend[j] = pend[j - 1usize]
-            j -= 1usize
-        }
-        pend[j] = item
-        a1 += 1usize
     }
     var stuck: err = ok
     var k = 0usize
