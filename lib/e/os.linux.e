@@ -973,7 +973,7 @@ type InotifyHeader = struct { descriptor: i32, mask: u32, cookie: u32, name_leng
 
 // What a watch remembers: the descriptor to read from, and the directory it is watching --
 // because the kernel reports a name relative to that and `WatchEvent` wants a path.
-type WatchState = struct { descriptor: usize, base: str }
+type WatchState = struct { descriptor: usize, base: str, pending: []u8, pending_len: usize, pending_at: usize }
 
 fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
     var watch: Watch = zero
@@ -1046,35 +1046,46 @@ fn watch_path(a: *mem.Arena, base: str, name: str) -> (str, err) {
 fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
     let state = mem.cast[*WatchState](w.state)
     if events.len == 0usize { ret (0usize, ok) }
-    let (buffer, allocation_error) = mem.alloc[u8](a, WATCH_BUFFER)
-    if allocation_error != ok { ret (0usize, OutOfMemory) }
-    let taken = syscall(SYS_READ, state.descriptor, mem.address_of(&buffer[0usize]), WATCH_BUFFER, 0usize, 0usize, 0usize)
-    if taken < 0isize { ret (0usize, from_errno(taken)) }
+    if state.pending_at >= state.pending_len {
+        let (buffer, allocation_error) = mem.alloc[u8](a, WATCH_BUFFER)
+        if allocation_error != ok { ret (0usize, OutOfMemory) }
+        let taken = syscall(SYS_READ, state.descriptor, mem.address_of(&buffer[0usize]), WATCH_BUFFER, 0usize, 0usize, 0usize)
+        if taken < 0isize { ret (0usize, from_errno(taken)) }
+        state.pending = buffer
+        state.pending_len = usize(taken)
+        state.pending_at = 0usize
+    }
     var produced = 0usize
-    var at = 0usize
-    while at + 16usize <= usize(taken) {
-        let header = mem.cast[*InotifyHeader](&buffer[at])
+    var at = state.pending_at
+    // Records the output slice cannot hold stay pending for the next call, so a burst of
+    // changes is not lost when the caller's buffer is small.
+    while at + 16usize <= state.pending_len {
+        if produced == events.len { break }
+        let header = mem.cast[*InotifyHeader](&state.pending[at])
         let name_length = usize(header.name_length)
         let mask = header.mask
         at += 16usize
         // The name is NUL-padded inside the length the header gave, so its own end is the
         // first NUL rather than that length.
         var name_end = 0usize
-        while name_end < name_length && buffer[at + name_end] != 0u8 { name_end += 1usize }
-        if produced < events.len {
-            var entry: WatchEvent = zero
-            entry.action = action_from_mask(mask)
-            if name_end != 0usize {
-                let (joined, join_error) = watch_path(a, state.base, buffer[at..at + name_end])
-                if join_error != ok { ret (produced, join_error) }
-                entry.path = joined
-            } else {
-                entry.path = state.base
-            }
-            events[produced] = entry
-            produced += 1usize
+        while name_end < name_length && state.pending[at + name_end] != 0u8 { name_end += 1usize }
+        var entry: WatchEvent = zero
+        entry.action = action_from_mask(mask)
+        if name_end != 0usize {
+            let (joined, join_error) = watch_path(a, state.base, state.pending[at..at + name_end])
+            if join_error != ok { ret (produced, join_error) }
+            entry.path = joined
+        } else {
+            entry.path = state.base
         }
+        events[produced] = entry
+        produced += 1usize
         at += name_length
+    }
+    state.pending_at = at
+    if state.pending_at >= state.pending_len {
+        state.pending_at = 0usize
+        state.pending_len = 0usize
     }
     ret (produced, ok)
 }
@@ -3692,8 +3703,10 @@ fn window_metrics(w: Window) -> (WindowMetrics, err) {
     var metrics: WindowMetrics = zero
     let slot = window_slot(u32(w.raw))
     if w.raw == 0usize || slot >= WINDOW_TABLE { ret (metrics, NotFound) }
-    // Whatever the server has said since: a resize or a focus change lands first.
+    // Whatever the server has said since: a resize or a focus change lands first. A failed
+    // poll is reported, not hidden behind the cached metrics.
     let drained = x_drain(0u32)
+    if drained != ok { ret (metrics, drained) }
     metrics.width = window_widths[slot]
     metrics.height = window_heights[slot]
     metrics.scale_percent = 100u32
@@ -5899,10 +5912,13 @@ fn sandbox_child_call(index: usize) -> u32 {
 // a second kind of filter; until it is written the policy is applied as far as it goes and
 // the answer says the rest was not. The upgrade path is argument filtering on `PROT_EXEC`.
 fn sandbox(policy: *const SandboxPolicy) -> err {
-    let privileged = syscall(SYS_PRCTL, PR_SET_NO_NEW_PRIVS, 1usize, 0usize, 0usize, 0usize, 0usize)
-    if privileged < 0isize { ret from_errno(privileged) }
+    // Reject what this backend cannot implement before any prctl: NO_NEW_PRIVS is
+    // irreversible, so an unsupported field must not leave the process half-changed.
     let allowed = policy.allow_syscalls
     if allowed.len > SANDBOX_ALLOW_MAX { ret Unsupported }
+    if policy.deny_dynamic_code { ret Unsupported }
+    let privileged = syscall(SYS_PRCTL, PR_SET_NO_NEW_PRIVS, 1usize, 0usize, 0usize, 0usize, 0usize)
+    if privileged < 0isize { ret from_errno(privileged) }
     var children = 0usize
     if policy.deny_child_processes { children = SANDBOX_CHILD_CALLS }
     if children != 0usize || allowed.len != 0usize {
