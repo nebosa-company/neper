@@ -3047,6 +3047,31 @@ fn f64_to_narrow(m: *Module, kind: u8, value: usize) -> usize {
     ret convert(m, OP_U_CONVERT, m.t_u16, select_u32(m, is_nan, constant(m, m.t_u32, nan), special))
 }
 
+// A float-to-integer conversion with the release result section 11 defines: NaN to 0,
+// out-of-range values saturate, as the x64 back end does (D4203, #192).
+fn clamp_float_to_int(m: *Module, source: usize, to_ty: usize, signed: bool, value: usize) -> usize {
+    let width = type_bytes(m, to_ty) * 8usize
+    var max_bits = 0usize -% 1usize
+    if width < 64usize { max_bits = max_bits >> (64usize - width) }
+    if signed { max_bits = max_bits >> 1usize }
+    let max_float = convert(m, OP_CONVERT_U_TO_F, source, constant(m, to_ty, max_bits))
+    let zero_float = constant(m, source, 0usize)
+    let nan = binary(m, OP_F_UNORD_NOT_EQUAL, m.t_bool, value, value)
+    var safe = select_typed(m, source, nan, zero_float, value)
+    let over = binary(m, OP_F_ORD_GREATER_THAN_EQUAL, m.t_bool, safe, max_float)
+    safe = select_typed(m, source, over, max_float, safe)
+    if signed {
+        let min_bits = 1usize << (width - 1usize)
+        let min_float = convert(m, OP_CONVERT_S_TO_F, source, constant(m, to_ty, min_bits))
+        let under = binary(m, OP_F_ORD_LESS_THAN, m.t_bool, safe, min_float)
+        safe = select_typed(m, source, under, min_float, safe)
+    } else {
+        let under = binary(m, OP_F_ORD_LESS_THAN, m.t_bool, safe, zero_float)
+        safe = select_typed(m, source, under, zero_float, safe)
+    }
+    ret safe
+}
+
 fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, values: *Values) -> err {
     let source = operand(builder, instruction, 0usize)
     let (ty, signed) = value_type(m, instruction.ty)
@@ -3100,7 +3125,7 @@ fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
         if integer_to {
             var opcode = OP_CONVERT_F_TO_U
             if signed { opcode = OP_CONVERT_F_TO_S }
-            scalar(values, instruction.result, convert(m, opcode, ty, widened), ty, signed)
+            scalar(values, instruction.result, convert(m, opcode, ty, clamp_float_to_int(m, m.t_f32, ty, signed, widened)), ty, signed)
             ret ok
         }
         ret fail(m, "a narrow float conversion is not yet written as SPIR-V")
@@ -3111,7 +3136,7 @@ fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
     if from != ty {
         if integer_from && integer_to {
             var opcode = OP_U_CONVERT
-            if values.signed[source] && ty == u64_type(m) { opcode = OP_S_CONVERT }
+            if values.signed[source] && type_bytes(m, ty) > type_bytes(m, from) { opcode = OP_S_CONVERT }
             id = convert(m, opcode, ty, values.id[source])
         } else {
             let float_from = from == m.t_f32 || (from != 0usize && from == m.t_f64)
@@ -3127,7 +3152,7 @@ fn emit_cast(m: *Module, builder: *nir.Builder, instruction: nir.Instruction, va
                     if float_from && integer_to {
                         var opcode = OP_CONVERT_F_TO_U
                         if signed { opcode = OP_CONVERT_F_TO_S }
-                        id = convert(m, opcode, ty, values.id[source])
+                        id = convert(m, opcode, ty, clamp_float_to_int(m, from, ty, signed, values.id[source]))
                     } else {
                         ret fail(m, "a conversion of this type is not yet written as SPIR-V")
                     }
@@ -3192,6 +3217,17 @@ fn float_sqrt_seed(m: *Module, value: usize) -> usize {
     put(&m.code, glsl_import(m))
     put(&m.code, 31usize)
     put(&m.code, value)
+    ret id
+}
+
+fn select_typed(m: *Module, ty: usize, condition: usize, yes: usize, no: usize) -> usize {
+    let id = fresh(m)
+    head(&m.code, OP_SELECT, 6usize)
+    put(&m.code, ty)
+    put(&m.code, id)
+    put(&m.code, condition)
+    put(&m.code, yes)
+    put(&m.code, no)
     ret id
 }
 
