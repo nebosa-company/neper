@@ -754,7 +754,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             var drew = false
             if s.held_id != NONE {
                 ui.say("blocks released px ")
-                ui.say_num(usize(s.px))
+                // The box's left edge is legitimately negative for a vertical piece whose
+                // filled cells are not in column 0; print it sign-first rather than trapping.
+                if s.px < 0i32 { ui.say("-") }
+                var released_px = s.px
+                if released_px < 0i32 { released_px = 0i32 - released_px }
+                ui.say_num(usize(released_px))
                 ui.say("\n")
                 s.held_id = NONE
             }
@@ -766,7 +771,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if adx < 0.0 { adx = 0.0 - adx }
                 if s.drag_moved {
                     ui.say("blocks drag px ")
-                    ui.say_num(usize(s.px))
+                    if s.px < 0i32 { ui.say("-") }
+                    var dragged_px = s.px
+                    if dragged_px < 0i32 { dragged_px = 0i32 - dragged_px }
+                    ui.say_num(usize(dragged_px))
                     ui.say("\n")
                     s.dirty = true
                 } else if dy > 60.0 && dy > 2.0 * adx {
