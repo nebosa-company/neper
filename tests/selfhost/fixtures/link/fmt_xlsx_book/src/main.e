@@ -248,5 +248,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if nb_error != book.NoWorkbook { os.exit(78) }
     let (nj, nj_error) = book.decode(a, "\x01\x02\x03\x04\x05\x06\x07\x08")
     if nj_error != ooxml.NotAPackage { os.exit(79) }
+    // #581: the worksheet part comes from the workbook relationship Target, not the sheet ordinal,
+    // and a package-relative target with ".." is normalised before the archive lookup.
+    let rel_workbook = "<?xml version=\"1.0\"?><workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><sheets><sheet name=\"First\" sheetId=\"1\" r:id=\"rId1\"/><sheet name=\"Second\" sheetId=\"2\" r:id=\"rId2\"/></sheets></workbook>"
+    let rel_rels = "<?xml version=\"1.0\"?><Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"../xl/worksheets/custom.xml\"/><Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/></Relationships>"
+    let rel_custom = "<?xml version=\"1.0\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>Custom</t></is></c></row></sheetData></worksheet>"
+    let rel_one = "<?xml version=\"1.0\"?><worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>Other</t></is></c></row></sheetData></worksheet>"
+    let rel_types = "<?xml version=\"1.0\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/></Types>"
+    let rel_parts: [5]zipw.Part = [5]zipw.Part{
+        zipw.Part { name: "[Content_Types].xml", data: rel_types },
+        zipw.Part { name: "xl/workbook.xml", data: rel_workbook },
+        zipw.Part { name: "xl/_rels/workbook.xml.rels", data: rel_rels },
+        zipw.Part { name: "xl/worksheets/custom.xml", data: rel_custom },
+        zipw.Part { name: "xl/worksheets/sheet1.xml", data: rel_one },
+    }
+    let (rel_bytes, rel_zip_error) = zipw.store(a, rel_parts[0..])
+    if rel_zip_error != ok { os.exit(197) }
+    let (rel_back, rel_decode_error) = book.decode(a, rel_bytes)
+    if rel_decode_error != ok || rel_back.len != 2usize { os.exit(198) }
+    if !str.eq(rel_back[0usize].name, "First") || rel_back[0usize].grid.len != 1usize || rel_back[0usize].grid[0usize].len != 1usize || !str.eq(rel_back[0usize].grid[0usize][0usize].text, "Custom") { os.exit(199) }
+    if !str.eq(rel_back[1usize].name, "Second") || rel_back[1usize].grid.len != 1usize || rel_back[1usize].grid[0usize].len != 1usize || !str.eq(rel_back[1usize].grid[0usize][0usize].text, "Other") { os.exit(200) }
     ret ok
 }

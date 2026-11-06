@@ -961,6 +961,56 @@ fn read_sheet(a: *mem.Arena, part: []const u8, sst_table: []const str, dates: []
     ret (grid[0usize..max_row], ok)
 }
 
+// Resolve a relationship Target against xl/ (the workbook part's directory), normalising
+// "." and ".." segments so the archive lookup uses the package-relative part name.
+fn resolve_part(a: *mem.Arena, tgt: str) -> (str, err) {
+    var raw = tgt
+    var absolute = false
+    if tgt.len > 0usize && tgt[0usize] == 47u8 {
+        raw = tgt[1usize..tgt.len]
+        absolute = true
+    }
+    var joined = raw
+    if !absolute {
+        let (prefixed, prefix_error) = str.concat(a, "xl/", raw)
+        if prefix_error != ok { ret ("", prefix_error) }
+        joined = prefixed
+    }
+    let (builder, builder_error) = str.builder(a, joined.len + 8usize)
+    if builder_error != ok { ret ("", builder_error) }
+    var b = builder
+    var parts: [64]str = zero
+    var count = 0usize
+    var start = 0usize
+    var i = 0usize
+    while i <= joined.len {
+        if i == joined.len || joined[i] == 47u8 || joined[i] == 92u8 {
+            let seg = joined[start..i]
+            if seg.len == 0usize || (seg.len == 1usize && seg[0usize] == 46u8) {
+                // skip empty and "."
+            } else if seg.len == 2usize && seg[0usize] == 46u8 && seg[1usize] == 46u8 {
+                if count == 0usize { ret ("", BadWorkbook) }
+                count -= 1usize
+            } else {
+                if count >= 64usize { ret ("", BadWorkbook) }
+                parts[count] = seg
+                count += 1usize
+            }
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    var k = 0usize
+    while k < count {
+        if k > 0usize {
+            if str.push_byte(&b, 47u8) != ok { ret ("", BadWorkbook) }
+        }
+        if str.push(&b, parts[k]) != ok { ret ("", BadWorkbook) }
+        k += 1usize
+    }
+    ret (str.done(&b), ok)
+}
+
 // The sheets of a package, in workbook order.
 fn decode(a: *mem.Arena, data: []const u8) -> ([]xlsx.Sheet, err) {
     let (archive, open_error) = ooxml.open_package(a, data)
@@ -1025,14 +1075,8 @@ fn decode(a: *mem.Arena, data: []const u8) -> ([]xlsx.Sheet, err) {
                 j += 1usize
             }
             if target_path.len == 0usize { ret (zero, BadWorkbook) }
-            var full = target_path
-            if target_path[0usize] == 47u8 {
-                full = target_path[1usize..target_path.len]
-            } else {
-                let (joined, join_error) = str.concat(a, "xl/", target_path)
-                if join_error != ok { ret (zero, join_error) }
-                full = joined
-            }
+            let (full, resolve_error) = resolve_part(a, target_path)
+            if resolve_error != ok { ret (zero, BadWorkbook) }
             let (part, has_part, part_error) = part_of(a, &ar, full)
             if part_error != ok { ret (zero, part_error) }
             if !has_part { ret (zero, BadWorkbook) }
@@ -1045,3 +1089,4 @@ fn decode(a: *mem.Arena, data: []const u8) -> ([]xlsx.Sheet, err) {
     }
     ret (out, ok)
 }
+
