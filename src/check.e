@@ -4052,9 +4052,44 @@ fn comptime_array_item(spelling: str, at: *usize) -> (usize, bool) {
         index += 1usize
     }
     if index >= spelling.len { ret (0usize, false) }
+    // The literal forms: the same prefixes and underscores the integer scanner accepts.
+    var base = 10usize
+    if index + 1usize < spelling.len && spelling[index] == 48u8 {
+        let prefix = spelling[index + 1usize]
+        if prefix == 120u8 || prefix == 88u8 {
+            base = 16usize
+            index += 2usize
+        } else {
+            if prefix == 111u8 || prefix == 79u8 {
+                base = 8usize
+                index += 2usize
+            } else {
+                if prefix == 98u8 || prefix == 66u8 {
+                    base = 2usize
+                    index += 2usize
+                }
+            }
+        }
+    }
     var value = 0usize
-    while index < spelling.len && spelling[index] >= 48u8 && spelling[index] <= 57u8 {
-        value = value * 10usize + usize(spelling[index] - 48u8)
+    while index < spelling.len {
+        let byte = spelling[index]
+        if byte == 95u8 {
+            index += 1usize
+            continue
+        }
+        var digit = 99usize
+        if byte >= 48u8 && byte <= 57u8 {
+            digit = usize(byte - 48u8)
+        } else {
+            if byte >= 97u8 && byte <= 102u8 {
+                digit = usize(byte - 97u8) + 10usize
+            } else {
+                if byte >= 65u8 && byte <= 70u8 { digit = usize(byte - 65u8) + 10usize }
+            }
+        }
+        if digit >= base { break }
+        value = value * base + digit
         index += 1usize
     }
     // A width suffix (`3u8`) is letters and digits; step past it.
@@ -10082,9 +10117,6 @@ fn format_self_test() -> err {
 
 // A format string carries at most this many verbs. It is a limit on one literal, not
 // on a program, and reaching it is `Capacity` rather than a wrong expansion.
-fn format_verb_limit() -> usize {
-    ret 32usize
-}
 
 fn format_verb_count(spelling: str) -> (usize, err) {
     var kinds: [32]FormatVerb = zero
@@ -17296,10 +17328,6 @@ fn function_noescape_at(c: *Checker, function: Function, position: usize) -> boo
 // The first one-based parameter promised not to outlive an `@noescape` call. The
 // complete quoted name list uses the second import string slot, otherwise empty on
 // every non-extern function.
-fn function_noescape_from(c: *Checker, function: Function) -> usize {
-    ret function_noescape_position_at(c, function, 0usize)
-}
-
 fn function_noescape_count(c: *Checker, function: Function) -> usize {
     var count = 0usize
     var at = 0usize
@@ -21952,3 +21980,4 @@ fn resource_cleanup_of(c: *Checker, ty: Type, function: Function) -> bool {
     let aggregate = c.aggregates[aggregate_index]
     ret aggregate.resource && aggregate.module_index == function.module_index && same(aggregate.cleanup, function.name)
 }
+
