@@ -20143,6 +20143,7 @@ fn unregister_protocol(a: *mem.Arena, scheme: str) -> err
 fn startup_registration(a: *mem.Arena, id: str, enabled: bool) -> err
 fn startup_registered(a: *mem.Arena, id: str) -> (bool, err)
 fn single_instance(a: *mem.Arena, id: str, args: []const str, storage: *mem.Arena) -> (bool, err)
+fn desktop_exec(a: *mem.Arena, exe: str) -> (str, err)
 fn activation_poll() -> (shell.Activation, bool)
 type GlobalShortcutSession = struct { registered: u32 }
 type PowerInhibitor = struct { held: bool }
