@@ -24,6 +24,7 @@ use e.algo.journal as journal
 use e.data.list as list
 use e.fmt.json as json
 use e.mem
+use e.str as strbuf
 use e.str
 
 error Exhausted
@@ -97,6 +98,20 @@ fn cat(a: *mem.Arena, x: str, y: str) -> str {
 }
 
 fn cat3(a: *mem.Arena, x: str, y: str, z: str) -> str { ret cat(a, cat(a, x, y), z) }
+
+// The durable branch name of `cases[index]`: its own `name` when it has one, else its
+// index as `case:<n>`, so two unnamed cases resume into the case they took instead of
+// the first unnamed one (appdor's runtime records the same form).
+fn case_branch_name(a: *mem.Arena, cases: []const json.Value, index: usize) -> str {
+    let name = member_text(cases[index], "name")
+    if name.len > 0usize { ret name }
+    let (builder, builder_error) = strbuf.builder(a, 24usize)
+    if builder_error != ok { ret "case" }
+    var b = builder
+    let prefix_error = strbuf.push(&b, "case:")
+    let index_error = strbuf.push_usize(&b, index)
+    ret strbuf.done(&b)
+}
 
 fn get(v: json.Value, key: str) -> (json.Value, bool) {
     let (x, found) = ir.get(v, key)
@@ -488,7 +503,8 @@ fn exec_step(ex: *Executor, step: json.Value, frames: []const str, scope: json.V
     let control = assert_control(ex)
     if control.kind != OK { ret control }
     ex.steps_run += 1usize
-    if ex.steps_run - 1usize > ex.step_budget {
+    // A budget of N runs at most N steps: budget 0 runs none, budget 1 runs exactly one.
+    if ex.steps_run > ex.step_budget {
         var f = fail_run("Step budget", id)
         f.reason = "budget_exceeded"
         f.budget = ex.step_budget
@@ -719,15 +735,17 @@ fn replay_control(ex: *Executor, step: json.Value, frames: []const str, result: 
         var chosen_steps: json.Value = .Null
         var found = false
         var c = 0usize
+        let (wanted, have_wanted) = get(result, "branch")
         while c < cases.len && !found {
-            let (name, have_name) = get(cases[c], "name")
-            let (wanted, have_wanted) = get(result, "branch")
-            if has_result && have_wanted && ir.same_scalar(wanted, text("case")) && !have_name {
-                chosen_steps = ir.value_of(cases[c], "steps")
-                found = true
-            } else if has_result && have_name && have_wanted && ir.same_scalar(name, wanted) {
-                chosen_steps = ir.value_of(cases[c], "steps")
-                found = true
+            if has_result && have_wanted {
+                let candidate = case_branch_name(ex.a, cases, c)
+                // Old journals name an unnamed case just "case": the first unnamed
+                // case is the only reading those entries allow.
+                let legacy = ir.same_scalar(wanted, text("case")) && member_text(cases[c], "name").len == 0usize
+                if ir.same_scalar(text(candidate), wanted) || legacy {
+                    chosen_steps = ir.value_of(cases[c], "steps")
+                    found = true
+                }
             }
             c += 1usize
         }
@@ -871,13 +889,10 @@ fn dispatch(ex: *Executor, step: json.Value, frames: []const str, key: str, scop
         var c = 0usize
         while c < cases.len && !matched {
             if have_recorded {
-                let (name, have_name) = get(cases[c], "name")
                 let (wanted, have_wanted) = get(recorded, "branch")
-                if have_wanted && ir.same_scalar(wanted, text("case")) && !have_name {
-                    // An unnamed case is recorded as "case"; the first such case is its branch.
-                    matched = true
-                    matched_index = c
-                } else if have_name && have_wanted && ir.same_scalar(name, wanted) {
+                let candidate = case_branch_name(ex.a, cases, c)
+                let legacy = have_wanted && ir.same_scalar(wanted, text("case")) && member_text(cases[c], "name").len == 0usize
+                if have_wanted && (ir.same_scalar(text(candidate), wanted) || legacy) {
                     matched = true
                     matched_index = c
                 }
@@ -894,9 +909,7 @@ fn dispatch(ex: *Executor, step: json.Value, frames: []const str, key: str, scop
         if have_recorded && member_text(recorded, "branch").len > 0usize {
             branch = member_text(recorded, "branch")
         } else if matched {
-            let name = member_text(cases[matched_index], "name")
-            branch = "case"
-            if name.len > 0usize { branch = name }
+            branch = case_branch_name(ex.a, cases, matched_index)
         }
         if !have_recorded {
             var f = obj(ex.a)

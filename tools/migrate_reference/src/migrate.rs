@@ -1829,11 +1829,13 @@ pub fn migrate_puppet(src: &str, project: &str) -> Result<Migration> {
         };
         let type_ = type_.clone();
         if toks.get(i + 1) != Some(&PTok::Open) {
-            // Not a resource decl (could be a class/define/var) — skip to next '{' group.
+            // Not a resource decl (a class/define/var, or a statement such as
+            // `include apache`): skip only this token. Skipping to the next `}` group
+            // swallowed the following resource declaration with it (#55).
             warnings.push(format!(
                 "'{type_}' is not a simple resource declaration, skipped"
             ));
-            i = skip_to_close(&toks, i);
+            i += 1;
             continue;
         }
         let title = match toks.get(i + 2) {

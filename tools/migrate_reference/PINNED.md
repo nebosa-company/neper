@@ -1,6 +1,6 @@
 # Petcow migrate pin
 
-- Upstream: D:/repos/petcow, commit 228a5284e59341f7a6345512da85a0252845ab75
+- Upstream: D:/repos/petcow, commit d26e2034
 - Source: src/migrate.rs (lines 1..2570, before `#[cfg(test)]`), plus error.rs,
   naming.rs and a minimal ModuleSource (parse / looks_like_git / split_subdir).
 - Build (offline; the cached registry is enough):

@@ -3036,4 +3036,4 @@ D5960	5003	Real SIMD on x64: `e.simd` calls lower to packed instructions, SSE2 b
 D5961	2874	The 2026-11-04 language design review is queued as C258-C264, and the token cost is the gate on each
 D5962	2128	GitHub Pages caching: HTML keeps max-age=600, long-lived assets are fingerprinted, a fronting CDN is optional
 D5963	2832	MIT is the licence, and a machine-learning section says training is permitted rather than implied
-D5964	2437	Oracle sources are pinned in-repo so fixture regeneration is self-contained
+D5964	3148	Oracle sources are pinned in-repo so fixture regeneration is self-contained

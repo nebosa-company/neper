@@ -1,4 +1,4 @@
-﻿/**
+/**
  * The durable workflow interpreter.
  *
  * Executes a normalized definition against a run journal. Every step consults
@@ -375,7 +375,9 @@ async function execStep(step, ex, frames, scope = {}) {
 
   ex.assertControl();
 
-  if (ex.stepsRun++ > ex.stepBudget) {
+  // A budget of N runs at most N steps: the comparison is against the pre-increment
+  // count, so budget 0 runs none and budget 1 runs exactly one before failing.
+  if (ex.stepsRun++ >= ex.stepBudget) {
     // `reason` is the machine-readable half. The budget-exhaustion metric is
     // consumed by an operator plane that must not have to regex an error
     // message to find out why a run stopped — a contract nobody can match
@@ -434,14 +436,36 @@ async function execStep(step, ex, frames, scope = {}) {
  * unfinished half of a branch that had already chosen — the single most likely
  * way to get a resumed run to quietly do nothing.
  */
+/**
+ * The durable name of a `case` branch: the case's own `name` when it has one, else its
+ * index in `"case:<n>"` form, so two unnamed cases can be told apart on resume (a plain
+ * `"case"` was ambiguous and resumed into the first unnamed case, or into `default`).
+ */
+function caseBranchName(c, index) {
+  return c && c.name ? c.name : `case:${index}`;
+}
+
+function findCase(cases, branch) {
+  const list = cases || [];
+  for (let i = 0; i < list.length; i++) {
+    if (caseBranchName(list[i], i) === branch) return i;
+  }
+  // Journals from before the index was recorded say just "case": the first unnamed
+  // case is the only reading available.
+  if (branch === 'case') {
+    for (let i = 0; i < list.length; i++) if (!list[i].name) return i;
+  }
+  return -1;
+}
+
 async function replayControl(step, ex, frames, result, scope) {
   switch (step.type) {
     case 'if':
       await execSteps(result && result.branch === 'then' ? step.then : step.else, ex, [...frames, step.id], scope);
       return result;
     case 'case': {
-      const chosen = (step.cases || []).find((c) => c.name === (result && result.branch));
-      await execSteps(chosen ? chosen.steps : step.default, ex, [...frames, step.id], scope);
+      const chosen = findCase(step.cases, result && result.branch);
+      await execSteps(chosen >= 0 ? step.cases[chosen].steps : step.default, ex, [...frames, step.id], scope);
       return result;
     }
     case 'foreach': {
@@ -509,10 +533,12 @@ async function dispatch(step, ex, frames, key, scope = {}, config = ex.renderCon
     case 'case': {
       const recorded = ex.index.branch(key);
       const context = ex.context(scope);
-      const match = (step.cases || []).find((c) => recorded ? c.name === recorded.branch : evaluateCondition(c.when, context));
-      const branch = recorded?.branch ?? (match ? (match.name || 'case') : 'default');
+      const cases = step.cases || [];
+      let matchIndex = recorded ? findCase(cases, recorded.branch) : -1;
+      if (!recorded) matchIndex = cases.findIndex((c) => evaluateCondition(c.when, context));
+      const branch = recorded?.branch ?? (matchIndex >= 0 ? caseBranchName(cases[matchIndex], matchIndex) : 'default');
       if (!recorded) { ex.record('branch-taken', { key, stepId: step.id, branch }); await ex.flush(); }
-      await execSteps(match ? match.steps : step.default, ex, [...frames, step.id], scope);
+      await execSteps(matchIndex >= 0 ? cases[matchIndex].steps : step.default, ex, [...frames, step.id], scope);
       return { branch };
     }
 

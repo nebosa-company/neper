@@ -7,10 +7,10 @@ no `file:///D:/...` paths, no network.
 | directory | upstream | pinned commit | used by |
 |---|---|---|---|
 | `vaper/` | D:/repos/vaper (`packages/vaper_engine_core/lib/src/net/`) | `e874cad5076131095204cb84294be26cc7e7a0d3` | `scripts/policy_vectors.mjs`, `scripts/policy_reference.dart` → `net_policy` |
-| `appdor/` | D:/repos/appdor (`src/`, the workflow runtime's import closure) | `b8320cace27cd2fc19f97c64a29becc599229` | `scripts/workflow_reference.mjs` → `algo_workflow` |
+| `appdor/` | D:/repos/appdor (`src/`, the workflow runtime's import closure) | `417009d97` | `scripts/workflow_reference.mjs` → `algo_workflow` |
 
 `tools/migrate_reference/` is the petcow oracle: a small standalone crate built from
-petcow's `src/migrate.rs` (commit `228a5284e59341f7a6345512da85a0252845ab75`) with its
+petcow's `src/migrate.rs` (commit `d26e2034`) with its
 `error.rs`, `naming.rs` and a minimal module source. It is built with
 `cargo build --release --offline` and consumed by `scripts/migrate_reference.py`.
 

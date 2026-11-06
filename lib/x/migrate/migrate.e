@@ -1417,8 +1417,10 @@ fn puppet(a: *mem.Arena, source: str, project: str) -> (Migration, err) {
         }
         let type_name = toks[i].text
         if !(i + 1usize < toks.len && toks[i + 1usize].kind == T_OPEN) {
+            // A class/define/var or a statement such as `include apache`: skip only this
+            // token, so the resource declaration after it is still translated (#55).
             warn(&run, cat3(&run, "'", type_name, "' is not a simple resource declaration, skipped"))
-            i = skip_to_close(toks, i)
+            i += 1usize
             continue
         }
         var title = ""
