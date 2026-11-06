@@ -474,6 +474,8 @@ fn move(a: *mem.Arena, v: *Vfs, src: str, dst: str, limit: usize) -> err {
         if wrote != ok { ret wrote }
         ret remove(a, v, from)
     }
+    let prechecked = precheck_limits(a, v, from, limit)
+    if prechecked != ok { ret prechecked }
     let made = make_dir(a, v, to)
     if made != ok { ret made }
     let (children, list_error) = list(a, v, from)
@@ -488,6 +490,25 @@ fn move(a: *mem.Arena, v: *Vfs, src: str, dst: str, limit: usize) -> err {
         i += 1usize
     }
     ret remove(a, v, from)
+}
+
+// Every file below path reads within limit: checked before a directory move touches the tree.
+fn precheck_limits(a: *mem.Arena, v: *Vfs, path: str, limit: usize) -> err {
+    let (children, list_error) = list(a, v, path)
+    if list_error != ok { ret list_error }
+    var i = 0usize
+    while i < children.len {
+        let child = children[i].path
+        if children[i].kind == .Directory {
+            let deep = precheck_limits(a, v, child, limit)
+            if deep != ok { ret deep }
+        } else {
+            let (bytes, read_error) = read_file(a, v, child, limit)
+            if read_error != ok { ret read_error }
+        }
+        i += 1usize
+    }
+    ret ok
 }
 
 // ---- Overlay ---------------------------------------------------------------------------
@@ -1127,12 +1148,25 @@ fn host_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err) {
     if walk_error != ok { ret (nothing, walk_error) }
     var it = it0
     var n = 0usize
-    var staging: [256]fs.Entry = zero
+    var cap = 64usize
+    let (first, first_error) = mem.alloc[fs.Entry](a, cap)
+    if first_error != ok { ret (nothing, first_error) }
+    var staging = first
     while true {
         let (e, more, next_error) = fs.walk_next_err(&it)
         if next_error != ok { ret (nothing, next_error) }
         if !more { break }
-        if n == staging.len { ret (nothing, TooLarge) }
+        if n == staging.len {
+            let (grown, grown_error) = mem.alloc[fs.Entry](a, cap * 2usize)
+            if grown_error != ok { ret (nothing, grown_error) }
+            var g = 0usize
+            while g < n {
+                grown[g] = staging[g]
+                g += 1usize
+            }
+            staging = grown
+            cap = cap * 2usize
+        }
         staging[n] = e
         n += 1usize
     }
