@@ -59,7 +59,14 @@ fn open_current(r: *Rotator, truncate: bool) -> err {
     r.size = 0u64
     if !truncate {
         let (info, stat_error) = os.stat(r.arena, r.path)
-        if stat_error == ok { r.size = info.size }
+        if stat_error != ok {
+            // An unknown starting size would delay the first rotation by the whole
+            // existing file; refuse instead of pretending it is empty.
+            let closed = os.close(r.file)
+            r.is_open = false
+            ret stat_error
+        }
+        r.size = info.size
     }
     ret ok
 }
@@ -88,6 +95,13 @@ fn remove_if_present(a: *mem.Arena, name: str) -> err {
     ret os.remove_file(a, name)
 }
 
+// A rotation that fails after closing must not disable the sink: reopen the current
+// file in append mode and answer the original failure.
+fn reopen_after_failure(r: *Rotator, failure: err) -> err {
+    let reopened = open_current(r, false)
+    ret failure
+}
+
 fn rotate(r: *Rotator) -> err {
     if r.is_open {
         let closed = os.close(r.file)
@@ -95,7 +109,9 @@ fn rotate(r: *Rotator) -> err {
         if closed != ok { ret closed }
     }
     if r.keep == 0u32 {
-        ret open_current(r, true)
+        let truncated = open_current(r, true)
+        if truncated != ok { ret reopen_after_failure(r, truncated) }
+        ret ok
     }
     let mark = mem.mark(r.arena)
     var i = r.keep
@@ -103,14 +119,14 @@ fn rotate(r: *Rotator) -> err {
         let (dst, dst_error) = backup_name(r.arena, r.path, i)
         if dst_error != ok {
             mem.reset(r.arena, mark)
-            ret dst_error
+            ret reopen_after_failure(r, dst_error)
         }
         var src = r.path
         if i > 1u32 {
             let (older, older_error) = backup_name(r.arena, r.path, i - 1u32)
             if older_error != ok {
                 mem.reset(r.arena, mark)
-                ret older_error
+                ret reopen_after_failure(r, older_error)
             }
             src = older
         }
@@ -119,18 +135,20 @@ fn rotate(r: *Rotator) -> err {
             let removed = remove_if_present(r.arena, dst)
             if removed != ok {
                 mem.reset(r.arena, mark)
-                ret removed
+                ret reopen_after_failure(r, removed)
             }
             let moved = os.rename(r.arena, src, dst)
             if moved != ok {
                 mem.reset(r.arena, mark)
-                ret moved
+                ret reopen_after_failure(r, moved)
             }
         }
         i -= 1u32
     }
     mem.reset(r.arena, mark)
-    ret open_current(r, true)
+    let fresh = open_current(r, true)
+    if fresh != ok { ret reopen_after_failure(r, fresh) }
+    ret ok
 }
 
 // One record. Rotates first when `size + len >= max_bytes` (and there is something to rotate).
@@ -145,8 +163,10 @@ fn write(r: *Rotator, record: []const u8) -> err {
         if write_error != ok { ret write_error }
         if count == 0usize { ret io.NoProgress }
         sent += count
+        // Count what actually reached the file, so a partial/failed write cannot leave
+        // `size` behind the bytes already appended.
+        r.size += u64(count)
     }
-    r.size += u64(record.len)
     ret ok
 }
 

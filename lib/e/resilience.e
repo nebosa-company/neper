@@ -63,6 +63,8 @@ fn breaker_success(b: *Breaker) {
 }
 
 fn breaker_failure(b: *Breaker, now: u64) {
+    // A straggler admitted before the trip must not extend the open interval.
+    if b.state == .Open { ret }
     if b.state == .HalfOpen {
         b.state = .Open
         b.opened_at = now
@@ -104,6 +106,8 @@ fn backoff_decorrelated(previous: u64, base: u64, cap: u64, rng: *rand.Pcg64) ->
     // `[0, u64::MAX]` has 2^64 members, which cannot be represented as the
     // bounded generator's upper argument. A raw draw is exactly that range.
     if base == 0u64 && high == 18446744073709551615u64 { ret rand.pcg64_next(rng) }
+    // A saturated ceiling is the cap: growing further cannot exceed it.
+    if high >= cap { ret cap }
     ret base + rand.pcg64_bounded(rng, high - base + 1u64)
 }
 
@@ -247,3 +251,4 @@ fn rollout_bucket(user_id: str, salt: str) -> u32 {
 fn rollout_enabled(user_id: str, salt: str, basis_points: u32) -> bool {
     ret rollout_bucket(user_id, salt) < basis_points
 }
+

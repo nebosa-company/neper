@@ -14921,6 +14921,9 @@ type Label = struct { name: str, value: str }
 type Sample = struct { name: str, help: str, kind: Kind, labels: []const Label, value: f64, bounds: []const f64, buckets: []const u64, sum: f64 }
 type Span = struct { trace_id: [16]u8, span_id: [8]u8, parent_span_id: [8]u8, name: str, kind: u8, start_ns: u64, end_ns: u64, attributes: []const Label, status_code: u8, status_message: str }
 type Scrape = struct { content_type: str, body: str }
+fn name_valid(s: str, metric: bool) -> bool
+fn attributes_valid(labels: []const Label) -> bool
+fn accept_quality(accept: str, wanted_type: str) -> f64
 type Digits = struct { text: [24]u8, count: usize, exponent: i32, negative: bool }
 
 fn counter_sample(name: str, help: str, labels: []const Label, c: *metrics.Counter) -> Sample
@@ -29201,6 +29204,7 @@ Call de-duplication in the manner of Go's `singleflight`: concurrent `do` calls 
 type Rotator = struct { arena: *mem.Arena, path: str, max_bytes: u64, keep: u32, file: os.File, size: u64, is_open: bool }
 error Closed
 fn backup_name(a: *mem.Arena, path: str, index: u32) -> (str, err)
+fn reopen_after_failure(r: *Rotator, failure: err) -> err
 fn open_current(r: *Rotator, truncate: bool) -> err
 fn open(a: *mem.Arena, path: str, max_bytes: u64, keep: u32) -> (Rotator, err)
 fn close(r: *Rotator) -> err
