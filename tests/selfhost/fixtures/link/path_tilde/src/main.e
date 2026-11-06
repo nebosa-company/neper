@@ -151,6 +151,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var none: [0]tilde.UserHome = zero
     let (_, small) = tilde.expand("~/abc", "/home", none[0usize..0usize], tiny[0usize..3usize])
     if small != tilde.TooSmall { os.exit(101i32) }
+    // #307: a Windows home with a trailing backslash is trimmed by `expand` and
+    // still collapses, because `\` is a separator for this module.
+    var win_out: [128]u8 = zero
+    var no_users: [0]tilde.UserHome = zero
+    let (win_expand, win_expand_error) = tilde.expand("~/x", "C:\\Users\\ann\\", no_users[0usize..0usize], win_out[0..])
+    if win_expand_error != ok || !text_is(win_expand, "C:\\Users\\ann/x") { os.exit(102i32) }
+    let (drive_expand, drive_error) = tilde.expand("~/x", "C:\\", no_users[0usize..0usize], win_out[0..])
+    if drive_error != ok || !text_is(drive_expand, "C:/x") { os.exit(103i32) }
+    let (win_collapse, win_collapse_error) = tilde.collapse("C:\\Users\\ann\\x", "C:\\Users\\ann\\", win_out[0..])
+    if win_collapse_error != ok || !text_is(win_collapse, "~\\x") { os.exit(104i32) }
     let r = run_vectors()
     if r != 0u8 { os.exit(i32(r)) }
     try io.print("path tilde ok")

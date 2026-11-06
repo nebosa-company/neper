@@ -265,6 +265,14 @@ fn parse[PATTERN: str](source: str) -> (DateTime, err) {
         let c = pattern[at]
         if is_verb(c) {
             let width = run_length(pattern, at)
+            // The same width table `format` enforces: an unchecked run would narrow on the cast.
+            if c == 121u8 {
+                if width != 4usize { ret (zero, Invalid) }
+            } else if c == 83u8 {
+                if width != 9usize { ret (zero, Invalid) }
+            } else if width != 2usize {
+                ret (zero, Invalid)
+            }
             var negative = false
             if c == 121u8 && read < source.len && source[read] == 45u8 {
                 negative = true

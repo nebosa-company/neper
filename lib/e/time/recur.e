@@ -493,7 +493,8 @@ fn expand_from(rule: Rule, start: calendar.DateTime, from: calendar.DateTime, ou
             var unit = 3600i64
             if r.freq == MINUTELY { unit = 60i64 }
             if r.freq == SECONDLY { unit = 1i64 }
-            let moment = (start_seconds + k * r.interval * unit) / unit * unit
+            // floor, not truncation: a start before 1970 must round down, not toward zero.
+            let moment = time.floor_div(start_seconds + k * r.interval * unit, unit) * unit
             let day = time.floor_div(moment, 86400i64)
             if day > 2932896i64 { break }
             let within = moment - day * 86400i64

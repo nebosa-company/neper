@@ -31,5 +31,10 @@ fn main(a: *mem.Arena) -> err {
     let minimum = time.Timestamp { nanos: -9223372036854775807i64 - 1i64 }
     let (after_minimum, after_minimum_error) = cron.next(every, minimum)
     if every_error != ok || !cron.matches(every, minimum) || after_minimum_error != ok || after_minimum.nanos != -9223372036000000000i64 { os.exit(6i32) }
+    // #92.1: `*/2` starts with `*`, so Vixie treats it as a star field: the day
+    // fields are not both restricted and the weekday alone decides.
+    let (star_step, star_step_error) = cron.parse(a, "0 0 0 */2 * 1", 0i32)
+    if star_step_error != ok || star_step.dom_restricted || !star_step.dow_restricted { os.exit(7i32) }
+    if !cron.matches(star_step, stamp(2024i32, 1u8, 8u8, 0u8, 0u8, 0u8)) || cron.matches(star_step, stamp(2024i32, 1u8, 9u8, 0u8, 0u8, 0u8)) { os.exit(7i32) }
     ret ok
 }

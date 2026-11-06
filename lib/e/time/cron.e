@@ -70,7 +70,8 @@ fn field(text: str, minimum: u32, maximum: u32, sunday: bool) -> (u64, bool, err
         at += 1usize
         if at == text.len { ret (0u64, false, Invalid) }
     }
-    ret (bits, !(text.len == 1usize && text[0usize] == 42u8), ok)
+    // Vixie sets DOM_STAR/DOW_STAR when the field starts with "*": `*/2` is not restricted.
+    ret (bits, text.len == 0usize || text[0usize] != 42u8, ok)
 }
 
 fn parse(a: *mem.Arena, expr: str, offset_minutes: i32) -> (Schedule, err) {

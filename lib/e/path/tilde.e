@@ -65,7 +65,7 @@ fn expand(path: str, home: str, users: []const UserHome, dst: []u8) -> (str, err
         ret (dst[..n], ok)
     }
     var trimmed = base.len
-    while trimmed > 0usize && base[trimmed - 1usize] == 47u8 { trimmed -= 1usize }
+    while trimmed > 0usize && is_sep(base[trimmed - 1usize]) { trimmed -= 1usize }
     let (n, fits) = put(dst, 0usize, base[0usize..trimmed])
     if !fits { ret ("", TooSmall) }
     let (n2, fits2) = put(dst, n, path[end..path.len])
@@ -81,7 +81,7 @@ fn expand(path: str, home: str, users: []const UserHome, dst: []u8) -> (str, err
 // `/home/ann/src` -> `~/src`, `/home/ann` -> `~`; anything not under `home` is unchanged.
 fn collapse(path: str, home: str, dst: []u8) -> (str, err) {
     var trimmed = home.len
-    while trimmed > 0usize && home[trimmed - 1usize] == 47u8 { trimmed -= 1usize }
+    while trimmed > 0usize && is_sep(home[trimmed - 1usize]) { trimmed -= 1usize }
     let base = home[0usize..trimmed]
     if trimmed > 0usize && path.len >= trimmed && same(path[0usize..trimmed], base) && (path.len == trimmed || is_sep(path[trimmed])) {
         let (n, fits) = put(dst, 0usize, "~")
