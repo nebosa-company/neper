@@ -381,6 +381,7 @@ fn save_all(a: *mem.Arena, s: *State) -> usize {
     if !s.keyed { ret 0usize }
     let made = vaultfs.mkdir("/w")
     var written = 0usize
+    var failed = 0usize
     var i = 0usize
     while i < MAX_CARDS {
         let name = join(a, "c", number_label(i % 10usize), "")
@@ -391,19 +392,31 @@ fn save_all(a: *mem.Arena, s: *State) -> usize {
             var plain: [256]u8 = zero
             let n = pack_card(s.cards[i], plain[0usize..])
             var nonce: [16]u8 = zero
+            var saved = false
             if vaultfs.random(mem.address_of(&nonce[0usize]), 2usize) {
                 var record: [288]u8 = zero
                 let (length, seal_error) = vault.seal(s.key, nonce[0usize..], record_name, plain[0usize..n], record[0usize..])
-                if seal_error == ok && vaultfs.write(path, mem.address_of(&record[0usize]), length) { written += 1usize }
+                if seal_error == ok && vaultfs.write(path, mem.address_of(&record[0usize]), length) {
+                    saved = true
+                    written += 1usize
+                }
             }
+            // A card that did not get its record is reported, not counted as saved (#180 item 6).
+            if !saved { failed += 1usize }
         } else if !s.failed[i] {
             let dropped = vaultfs.remove(path)
         }
         i += 1usize
     }
-    say("wallet vault saved ")
-    say_num(written)
-    say("\n")
+    if failed > 0usize {
+        say("wallet vault save failed ")
+        say_num(failed)
+        say("\n")
+    } else {
+        say("wallet vault saved ")
+        say_num(written)
+        say("\n")
+    }
     ret written
 }
 

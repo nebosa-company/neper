@@ -21,6 +21,9 @@ const SENTINEL: usize = 65535usize
 // The app surface's position on the display, where it is composited and damage-flushed.
 const SURFACE_X: usize = 0usize
 const SURFACE_Y: usize = 0usize
+// The shell-owned top bar: an app frame may not paint over it, so the compositor saves and
+// restores it around a non-shell surface (#215).
+const STATUS_ROWS: usize = 64usize
 
 fn say(text: str) {
     let (written, write_error) = os.write(os.stdout(), text)
@@ -77,6 +80,30 @@ fn composite(fb: usize, stride: usize, height: usize, ox: usize, oy: usize) {
     }
 }
 
+fn save_region(fb: usize, stride: usize, buf: usize, width: usize, rows: usize) {
+    var y = 0usize
+    while y < rows {
+        var x = 0usize
+        while x + 1usize < width {
+            os.store64(buf + (y * width + x) * 4usize, os.load64(fb + (y * stride + x) * 4usize))
+            x += 2usize
+        }
+        y += 1usize
+    }
+}
+
+fn restore_region(fb: usize, stride: usize, buf: usize, width: usize, rows: usize) {
+    var y = 0usize
+    while y < rows {
+        var x = 0usize
+        while x + 1usize < width {
+            os.store64(fb + (y * stride + x) * 4usize, os.load64(buf + (y * width + x) * 4usize))
+            x += 2usize
+        }
+        y += 1usize
+    }
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let device = read_device()
     let (gpu, begin_error) = virtio.gpu_begin(device)
@@ -101,7 +128,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         lockstep = true
         frame = os.recv(APP, NO_SLOT)
     }
+    let (protect, protect_error) = mem.alloc[u8](a, gpu.width * STATUS_ROWS * 4usize)
+    if protect_error != ok { ret protect_error }
+    if !lockstep { save_region(gpu.fb, gpu.width, mem.address_of(&protect[0usize]), gpu.width, STATUS_ROWS) }
     composite(gpu.fb, gpu.width, gpu.height, SURFACE_X, SURFACE_Y)
+    if !lockstep { restore_region(gpu.fb, gpu.width, mem.address_of(&protect[0usize]), gpu.width, STATUS_ROWS) }
     // Flush only the app's surface rectangle -- the damage -- not the whole display, and
     // clamped to the scanout: a display smaller than the surface must not ask the device
     // for pixels outside its resource.

@@ -89,6 +89,13 @@ fn running() -> usize {
     ret live
 }
 
+// The parent slot of the current thread, or NONE: the launcher check uses it to tell
+// the boot shell (no parent) from apps that may only launch without new capabilities.
+fn current_parent() -> usize {
+    if current == NONE { ret NONE }
+    ret threads[current].parent
+}
+
 fn current_name() -> str {
     if current == NONE { ret "" }
     ret threads[current].name
@@ -265,6 +272,13 @@ fn finish_current(frame: *a64.Frame, code: usize) -> bool {
     let gone = current
     threads[gone].exit_code = code
     threads[gone].state = EXITED
+    // A gone thread's children are adopted by the kernel: its slot is reused, and the new
+    // occupant must not pass reap/detach's parent test for the old children (#202 item 8).
+    var orphan = 0usize
+    while orphan < MAX_THREADS {
+        if threads[orphan].parent == gone { threads[orphan].parent = NONE }
+        orphan += 1usize
+    }
     if live != 0usize { live -= 1usize }
     // (D2157) A detached thread is reaped by no one, so free its slot at once; otherwise record the
     // code and wake a parent blocked joining it.

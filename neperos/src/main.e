@@ -756,7 +756,10 @@ fn launch(frame: *a64.Frame) {
     let installed = (usize(frame.x[0usize]) >> 63usize) != 0usize
     // The capabilities an installed app's manifest declared, as bits 56 (network) and 57 (storage); an archive
     // app has what its entry always had.
-    let declared = (usize(frame.x[0usize]) >> 56usize) & 3usize
+    var declared = (usize(frame.x[0usize]) >> 56usize) & 3usize
+    // Only the shell boot thread (no parent) may speak for an installed app manifest:
+    // any other caller declaring network/storage gets neither capability.
+    if installed && thread.current_parent() != thread.NONE { declared = 0usize }
     if installed {
         let pages = (usize(frame.x[0usize]) >> 40usize) & 65535usize
         let first_va = ((usize(frame.x[0usize]) >> 8usize) & 134217727usize) << 12usize
@@ -764,12 +767,18 @@ fn launch(frame: *a64.Frame) {
             frame.x[0usize] = 18446744073709551615u64
             ret
         }
-        let (staging, staging_error) = mem.alloc[u8](kernel_arena, pages * 4096usize + 4096usize)
-        if staging_error != ok {
-            frame.x[0usize] = 18446744073709551615u64
-            ret
+        // One staging buffer for every installed launch (the kernel arena has no free): the
+        // maximum 1024 pages plus alignment is allocated once and reused, so repeated
+        // launches do not leak 4 MB each (#202 item 6, staging half).
+        if launch_staging == 0usize {
+            let (staging_storage, staging_error) = mem.alloc[u8](kernel_arena, 1024usize * 4096usize + 4096usize)
+            if staging_error != ok {
+                frame.x[0usize] = 18446744073709551615u64
+                ret
+            }
+            launch_staging = mem.address_of(&staging_storage[0usize])
         }
-        let base = (mem.address_of(&staging[0usize]) + 4095usize) & ~4095usize
+        let base = (launch_staging + 4095usize) & ~4095usize
         let caller_ttbr = thread.ttbr_of(thread.current)
         var page = 0usize
         while page < pages {
