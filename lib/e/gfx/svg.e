@@ -1561,8 +1561,8 @@ fn collect_hits(text: str, sc: Scope, hits: []Hit) -> usize {
                     if rank > best { best = rank }
                     s = e + 1usize
                 }
-                if best > 0usize && n < hits.len {
-                    hits[n] = Hit { level: best, from: base + j + 1usize, to: base + k }
+                if best > 0usize {
+                    if hits.len > 0usize && n < hits.len { hits[n] = Hit { level: best, from: base + j + 1usize, to: base + k } }
                     n += 1usize
                 }
             }
@@ -1580,9 +1580,15 @@ fn collect_hits(text: str, sc: Scope, hits: []Hit) -> usize {
 fn styled(a: *mem.Arena, doc: Doc, tag: str, anc: []const str, sibs: []const str) -> (str, err) {
     if find(doc.text, 0usize, "<style") >= doc.text.len { ret (tag, ok) }
     let element = name_of(tag)
-    var hits: [32]Hit = zero
-    let n = collect_hits(doc.text, Scope { subject: tag, anc: anc, sibs: sibs }, hits[0usize..32usize])
+    let scope = Scope { subject: tag, anc: anc, sibs: sibs }
+    let n = collect_hits(doc.text, scope, zero)
     if n == 0usize { ret (tag, ok) }
+    let (hits, hits_error) = mem.alloc[Hit](a, n)
+    if hits_error != ok { ret (tag, hits_error) }
+    let got = collect_hits(doc.text, scope, hits)
+    if got != n { ret (tag, hits_error) }
+    let (used, used_error) = mem.alloc[bool](a, n)
+    if used_error != ok { ret (tag, used_error) }
     let (inline, has_inline) = attr(tag, "style")
     let (made, builder_error) = str.builder(a, 0usize)
     if builder_error != ok { ret (tag, builder_error) }
@@ -1595,13 +1601,17 @@ fn styled(a: *mem.Arena, doc: Doc, tag: str, anc: []const str, sibs: []const str
     }
     // Highest specificity first, later rules first among equals (the first declaration of a
     // property wins in `prop`).
-    var used: [32]bool = zero
+    var ui = 0usize
+    while ui < n {
+        used[ui] = false
+        ui += 1usize
+    }
     var done = 0usize
     while done < n {
-        var best = 32usize
+        var best = n
         var h = 0usize
         while h < n {
-            if !used[h] && (best == 32usize || hits[h].level >= hits[best].level) { best = h }
+            if !used[h] && (best == n || hits[h].level >= hits[best].level) { best = h }
             h += 1usize
         }
         used[best] = true
@@ -3713,7 +3723,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
         anc[anc_n] = doc.base_anc[anc_n]
         anc_n += 1usize
     }
-    var sib: [16][8]str = zero
+    var sib: [16][256]str = zero
     var sib_n: [16]usize = zero
     var depth = 0usize
     var opened = !root
@@ -3755,7 +3765,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             if body_end > end + 1usize { body_end -= 1usize }
             let (tag, tag_error) = styled(a, doc, raw, anc[0usize..anc_n], sib[depth][0usize..sib_n[depth]])
             if tag_error != ok { ret tag_error }
-            sib_push(sib[depth][0usize..8usize], &sib_n[depth], raw)
+            sib_push(sib[depth][0usize..256usize], &sib_n[depth], raw)
             if !doc.has_job {
                 let frame = child_of(tag, frames[depth])
                 try draw_text(a, b, doc, frame, tag, text[end + 1usize..body_end])
@@ -3764,7 +3774,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             continue
         }
         if skipped(name) {
-            sib_push(sib[depth][0usize..8usize], &sib_n[depth], raw)
+            sib_push(sib[depth][0usize..256usize], &sib_n[depth], raw)
             if !self_closing {
                 var j = i
                 var found = false
@@ -3833,7 +3843,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
                 try scene.push(b, scene.Command { Transform: fit })
             } else {
                 if depth + 1usize >= MAX_DEPTH { ret TooComplex }
-                sib_push(sib[depth][0usize..8usize], &sib_n[depth], raw)
+                sib_push(sib[depth][0usize..256usize], &sib_n[depth], raw)
                 if !self_closing {
                     frames[depth + 1usize] = child_of(tag, frames[depth])
                     depth += 1usize
@@ -3845,7 +3855,7 @@ fn walk(a: *mem.Arena, b: *scene.Builder, doc: Doc, text: str, first: Frame, roo
             continue
         }
         if !opened { continue }
-        sib_push(sib[depth][0usize..8usize], &sib_n[depth], raw)
+        sib_push(sib[depth][0usize..256usize], &sib_n[depth], raw)
         var frame = child_of(tag, frames[depth])
         // A filter draws the element's whole source through its primitives, before clip, mask and opacity.
         let (filter_text, has_filter) = prop(tag, "filter")
