@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<meta charset=utf-8>
+<title>A submit or reset event does not escape its form into an enclosing one</title>
+<script src="/resources/testharness.js"></script>
+<script src="/resources/testharnessreport.js"></script>
+<div id=log></div>
+<script>
+// Regression for whatwg/dom#756: nested forms can be constructed from script, and no browser lets the inner form's
+// submit or reset event reach an enclosing form. The engine used to bubble it, which activated both forms.
+
+function nested(target, parent) {
+    let outer = document.createElement('form');
+    document.body.appendChild(outer);
+    let holder = document.createElement(parent.tagName.toLowerCase());
+    outer.appendChild(holder);
+    let inner = document.createElement('form');
+    holder.appendChild(inner);
+    let btn = document.createElement(target.tagName.toLowerCase());
+    btn.type = target.type;
+    inner.appendChild(btn);
+    return { outer: outer, inner: inner, btn: btn };
+}
+
+test(function () {
+    let seen = [];
+    let f = nested({ tagName: 'INPUT', type: 'submit' }, { tagName: 'DIV' });
+    f.inner.addEventListener('submit', function () { seen.push('inner'); });
+    f.outer.addEventListener('submit', function () { seen.push('outer'); });
+    f.btn.click();
+    assert_array_equals(seen, ['inner'], 'submit stops at the form it was dispatched on');
+}, 'a nested form submit does not reach the outer form');
+
+test(function () {
+    let seen = [];
+    let f = nested({ tagName: 'INPUT', type: 'reset' }, { tagName: 'DIV' });
+    f.inner.addEventListener('reset', function () { seen.push('inner'); });
+    f.outer.addEventListener('reset', function () { seen.push('outer'); });
+    f.btn.click();
+    assert_array_equals(seen, ['inner'], 'reset stops at the form it was dispatched on');
+}, 'a nested form reset does not reach the outer form');
+
+test(function () {
+    let seen = [];
+    let f = nested({ tagName: 'INPUT', type: 'submit' }, { tagName: 'DIV' });
+    // Other events still bubble out of a form: only submit and reset stop there.
+    f.inner.addEventListener('click', function () { seen.push('inner'); });
+    f.outer.addEventListener('click', function () { seen.push('outer'); });
+    f.btn.click();
+    assert_array_equals(seen, ['inner', 'outer'], 'click still bubbles through the form');
+}, 'click still crosses a nested form boundary');
+</script>

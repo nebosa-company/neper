@@ -835,7 +835,9 @@ fn part3(b: *str.Builder) -> err {
     try str.push(b, "function nodeGetTheParent(event) {\n")
     try str.push(b, "  if (isSlotable(this)) { const sl = assignedSlotOf(this); if (sl) return sl; }\n")
     try str.push(b, "  const p = parentNode(this);\n")
-    try str.push(b, "  if (p !== null) return p;\n")
+    // A submit or reset event does not cross out of one form into an enclosing one: nested forms are constructible from
+    // script, and no browser lets the inner form's submit reach the outer form (whatwg/dom#756, unspecified but universal).
+    try str.push(b, "  if (p !== null) { if ((slotOf(event).type === 'submit' || slotOf(event).type === 'reset') && isFormElement(this)) return null; return p; }\n")
     try str.push(b, "  if (isShadowRoot(this)) {\n")
     try str.push(b, "    const path = slotOf(event).path;\n")
     try str.push(b, "    if (slotOf(event).composed || (path.length && rootNode(path[0].invocationTarget) !== this)) return shadowHost(this);\n")
