@@ -12,6 +12,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (it, realm_error) = realm.new_realm(a)
     if realm_error != ok { os.exit(1i32) }
     it.quiet = true
+    // #833: selectRange applies the range rule, not the end value's category alone.
+    let (range, range_error) = realm.run(it, "new Intl.PluralRules('en', { type: 'ordinal' }).selectRange(1, 2)")
+    if range_error != ok { os.exit(13i32) }
+    let (range_text, range_text_error) = js.to_string(it, range)
+    if range_text_error != ok || !str.eq(range_text, "other") { os.exit(14i32) }
+    let (same, same_error) = realm.run(it, "new Intl.PluralRules('en', { type: 'ordinal' }).selectRange(2, 2)")
+    if same_error != ok { os.exit(15i32) }
+    let (same_text, same_text_error) = js.to_string(it, same)
+    if same_text_error != ok || !str.eq(same_text, "two") { os.exit(15i32) }
+    // #834: an iterable's iterator method is fetched and called exactly once.
+    let (once, once_error) = realm.run(it, "var calls = 0; var iterable = {}; iterable[Symbol.iterator] = function () { calls++; var n = 0; return { next: function () { n++; return n <= 2 ? { value: 'a' + n, done: false } : { value: undefined, done: true }; } }; }; new Intl.ListFormat('en').format(iterable) + '|' + calls")
+    if once_error != ok { os.exit(16i32) }
+    let (once_text, once_text_error) = js.to_string(it, once)
+    if once_text_error != ok || !str.eq(once_text, "a1 and a2|1") { os.exit(17i32) }
     // #829: RFC 5646 allows a 4-letter primary language subtag.
     let (four, four_error) = realm.run(it, "Intl.getCanonicalLocales('Gbcd')[0]")
     if four_error != ok { os.exit(2i32) }
