@@ -21,6 +21,7 @@ use e.algo.sat as sat
 error TooSmall
 error Invalid
 error Full
+error TooLarge
 
 // Safe: every reachable state (within the bound) satisfies the invariant;
 // for `prove` the property is proven. Violated: a bad state is reachable.
@@ -218,9 +219,19 @@ fn fresh_frame(f: *sat.Cnf, frame: []i32) {
 // `Violated` and the least step j with a bad state reachable -- `values`
 // (`(k + 1) * n`, one 0/1 per variable per frame) then holds the trace for
 // frames 0..j -- or `Bounded` and `k` when none is reachable within k steps.
+// (k + extra) * n, checked: a large bound must answer TooLarge, not wrap the slot count.
+fn frames_needed(k: usize, extra: usize, n: usize) -> (usize, bool) {
+    if k > 18446744073709551615usize - extra { ret (0usize, false) }
+    let count = k + extra
+    if n != 0usize && count > 18446744073709551615usize / n { ret (0usize, false) }
+    ret (count * n, true)
+}
+
 fn bmc[Ctx: type](ctx: *Ctx, n: usize, init: fn(*Ctx, *sat.Cnf, []const i32) -> err, trans: fn(*Ctx, *sat.Cnf, []const i32, []i32) -> err, bad: fn(*Ctx, *sat.Cnf, []const i32) -> (i32, err), k: usize, f: *sat.Cnf, frames: []i32, s: *Solver, values: []u8) -> (Verdict, usize, err) {
     if n == 0usize { ret (.Bounded, 0usize, Invalid) }
-    if frames.len < (k + 1usize) * n || values.len < (k + 1usize) * n { ret (.Bounded, 0usize, TooSmall) }
+    let (need, representable) = frames_needed(k, 1usize, n)
+    if !representable { ret (.Bounded, 0usize, TooLarge) }
+    if frames.len < need || values.len < need { ret (.Bounded, 0usize, TooSmall) }
     fresh_frame(f, frames[..n])
     let init_error = init(ctx, f, frames[..n])
     if init_error != ok { ret (.Bounded, 0usize, init_error) }
@@ -260,7 +271,9 @@ fn bmc[Ctx: type](ctx: *Ctx, n: usize, init: fn(*Ctx, *sat.Cnf, []const i32) -> 
 // clauses when one is needed.
 fn prove[Ctx: type](ctx: *Ctx, n: usize, init: fn(*Ctx, *sat.Cnf, []const i32) -> err, trans: fn(*Ctx, *sat.Cnf, []const i32, []i32) -> err, bad: fn(*Ctx, *sat.Cnf, []const i32) -> (i32, err), k: usize, base: *sat.Cnf, frames: []i32, step: *sat.Cnf, step_frames: []i32, s: *Solver, values: []u8) -> (Verdict, usize, err) {
     if n == 0usize { ret (.Bounded, 0usize, Invalid) }
-    if step_frames.len < (k + 2usize) * n { ret (.Bounded, 0usize, TooSmall) }
+    let (step_need, step_representable) = frames_needed(k, 2usize, n)
+    if !step_representable { ret (.Bounded, 0usize, TooLarge) }
+    if step_frames.len < step_need { ret (.Bounded, 0usize, TooSmall) }
     fresh_frame(step, step_frames[..n])
     let (first_bad, first_error) = bad(ctx, step, step_frames[..n])
     if first_error != ok { ret (.Bounded, 0usize, first_error) }

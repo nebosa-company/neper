@@ -5002,9 +5002,11 @@ type Solver = struct { assignment: []i8, trail: []u32, level: []u32, flipped: []
 error TooSmall
 error Invalid
 error Full
+error TooLarge
 const ROOT: u32 = 4294967295u32
 
 fn hash_state(s: []const u64) -> u64
+fn frames_needed(k: usize, extra: usize, n: usize) -> (usize, bool)
 fn same_state(a: []const u64, b: []const u64) -> bool
 fn visit(s: []const u64, width: usize, store: []u64, table: []u32, count: usize, capacity: usize) -> (usize, bool, err)
 fn explore[Ctx: type](ctx: *Ctx, width: usize, initial: []const u64, successors: fn(*Ctx, []const u64, []u64) -> usize, invariant: fn(*Ctx, []const u64) -> bool, deadlock: bool, max_depth: usize, store: []u64, parent: []u32, table: []u32, scratch: []u64) -> (Result, err)
