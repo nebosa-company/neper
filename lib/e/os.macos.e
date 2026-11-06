@@ -1116,7 +1116,11 @@ fn watch_collect(a: *mem.Arena, base: str, recursive: bool) -> ([]DirEntry, err)
         let (listing, listing_error) = readdir(a, directory)
         if listing_error != ok {
             if head == 1usize { ret (none, listing_error) }
-            continue
+            // A nested directory that vanished (ENOENT) is skipped, as the rescan drops
+            // it; any other failure (permission, I/O) is reported so the incomplete
+            // listing is not diffed into false Removed events for live descendants.
+            if listing_error == NotFound { continue }
+            ret (none, listing_error)
         }
         var at = 0usize
         while at < listing.len && count < WATCH_ENTRIES {
