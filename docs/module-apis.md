@@ -18376,6 +18376,8 @@ fn tls_transport(t: *TlsTransport) -> Transport
 fn client(a: *mem.Arena, dsn_text: str, transport: Transport, sdk_name: str, max_items: usize, max_bytes: usize) -> (Client, err)
 fn keep(a: *mem.Arena, s: str) -> (str, err)
 fn pop_front(c: *Client)
+fn queued(c: *const Client, i: usize) -> str
+fn queue_at(c: *const Client, i: usize) -> str
 fn enqueue(c: *Client, bytes_in: str) -> err
 fn capture(c: *Client, ev: *const Event, attachments: []const Item, now: i64) -> err
 fn is_error_category(l: Limit) -> bool
