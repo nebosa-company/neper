@@ -5290,6 +5290,20 @@ fn lower_unary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
     if result_type_error != ok { ret (0usize, result_type, result_type_error) }
     let operator = c.tokens[usize(node.token_start)].kind
+    // A negated integer literal is folded here: lowering the magnitude alone would
+    // re-check it against the signed type and reject `-9223372036854775808i64`, whose
+    // magnitude is one past the positive maximum but whose negation is the minimum.
+    if operator == .PunctMinus && result_type.kind == .Integer {
+        let literal_node = tree.nodes[child_index]
+        if literal_node.kind == .LiteralExpr && c.tokens[usize(literal_node.token_start)].kind == .Integer {
+            let (literal_magnitude, literal_value_type, literal_error) = check.integer_literal_value(c, g.modules[module_index].text, literal_node)
+            if literal_error == ok {
+                let negated_value = 0usize -% literal_magnitude
+                let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, result_type, true, negated_value, c.tokens[usize(node.token_start)])
+                ret (result, result_type, emit_error)
+            }
+        }
+    }
     if operator == .PunctAmp {
         let (address, place_type, place_error) = lower_place(c, g, tree, module_index, child_index, builder, bindings, binding_count)
         if place_error != ok { ret (0usize, result_type, place_error) }

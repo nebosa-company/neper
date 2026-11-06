@@ -13978,7 +13978,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         // is a valid i32 even though its magnitude alone is not, while `-300` in a u8 is
         // not. The literal's own positive-magnitude check is skipped while it is checked.
         var negated_literal = false
-        if op == .PunctMinus && expected.kind == .Integer {
+        if op == .PunctMinus {
             let minus_child = tree.nodes[child_index]
             if minus_child.kind == .LiteralExpr && c.tokens[usize(minus_child.token_start)].kind == .Integer {
                 c.skip_literal_range = true
@@ -13989,13 +13989,19 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if negated_literal { c.skip_literal_range = false }
         if value_error != ok { ret (invalid_type(), value_error) }
         if negated_literal {
-            let minus_child = tree.nodes[child_index]
-            let (negated_magnitude, negated_type, negated_error) = integer_literal_value(c, text, minus_child)
-            if negated_error == ok {
-                let negated_value = normalized_integer(negated_magnitude, true)
-                if !integer_representable(negated_value, expected) {
-                    record_failure(c, module_index, node, .IntegerLiteralRange, expected.name, expected.name)
-                    ret (invalid_type(), InvalidType)
+            // The value is the negation: check it against the context type, or against
+            // the literal's own suffixed type when there is no context (`-9223372036854775808i64`).
+            var negated_target = expected
+            if negated_target.kind != .Integer { negated_target = value_type }
+            if negated_target.kind == .Integer {
+                let minus_child = tree.nodes[child_index]
+                let (negated_magnitude, negated_type, negated_error) = integer_literal_value(c, text, minus_child)
+                if negated_error == ok {
+                    let negated_value = normalized_integer(negated_magnitude, true)
+                    if !integer_representable(negated_value, negated_target) {
+                        record_failure(c, module_index, node, .IntegerLiteralRange, negated_target.name, negated_target.name)
+                        ret (invalid_type(), InvalidType)
+                    }
                 }
             }
         }
