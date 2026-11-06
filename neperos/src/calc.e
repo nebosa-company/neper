@@ -47,6 +47,27 @@ fn say_text(value: str) {
 // `value` as text into `out`: up to eight decimals with trailing zeros trimmed, or scientific
 // (1.5e-7) when it is very large or very small. Returns the length.
 fn format_value(value: f64, out: []u8) -> usize {
+    // NaN and the infinities have no fixed or scientific decimal form; the log10 and
+    // i64 conversions below would trap on them.
+    if value != value {
+        out[0usize] = 78u8
+        out[1usize] = 97u8
+        out[2usize] = 78u8
+        ret 3usize
+    }
+    if value > 1.0e308f64 {
+        out[0usize] = 105u8
+        out[1usize] = 110u8
+        out[2usize] = 102u8
+        ret 3usize
+    }
+    if value < -1.0e308f64 {
+        out[0usize] = 45u8
+        out[1usize] = 105u8
+        out[2usize] = 110u8
+        out[3usize] = 102u8
+        ret 4usize
+    }
     var n = 0usize
     var v = value
     if v < 0.0f64 {
@@ -61,7 +82,12 @@ fn format_value(value: f64, out: []u8) -> usize {
     if v >= 1000000000000.0f64 || v < 0.000001f64 {
         var exponent = i64(math.log10[f64](v))
         if math.log10[f64](v) < 0.0f64 && f64(exponent) != math.log10[f64](v) { exponent = exponent - 1i64 }
+        // Denormals underflow pow(10, exponent) to 0, making the mantissa inf; clamp so the
+        // exponent digits and the division stay in range.
+        if exponent < -323i64 { exponent = -323i64 }
+        if exponent > 308i64 { exponent = 308i64 }
         var mantissa = v / math.pow[f64](10.0f64, f64(exponent))
+        if !(mantissa < 1.7e308f64) || !(mantissa > 0.0f64) { mantissa = 1.0f64 }
         if mantissa >= 10.0f64 {
             mantissa = mantissa / 10.0f64
             exponent = exponent + 1i64
@@ -102,6 +128,12 @@ fn format_value(value: f64, out: []u8) -> usize {
 // A non-negative value in fixed notation into `out` at `at`: the whole part, then up to `decimals`
 // decimals with trailing zeros trimmed. Returns how many bytes it wrote.
 fn format_fixed(value: f64, decimals: usize, out: []u8, at: usize) -> usize {
+    // Only finite non-negative values reach here from format_value; a caller that breaks
+    // that prints a zero instead of trapping in the i64 cast.
+    if value != value || value < 0.0f64 || value > 1.7e308f64 {
+        out[at] = 48u8
+        ret at + 1usize
+    }
     var n = at
     let whole = i64(value)
     var digits: [20]u8 = zero
@@ -413,6 +445,13 @@ fn press(c: *Calc, key: u8) {
             let typed = shown_value(c)
             if c.pending {
                 c.acc = apply(c, c.acc, c.op, typed)
+                // A chained result is range-checked like a final one: inf/NaN from
+                // `9 x^y 99999999` must not reach format_value.
+                if c.acc != c.acc || c.acc > 1.0e300f64 || c.acc < -1.0e300f64 {
+                    c.failed = true
+                    c.entry_len = 0usize
+                    ret
+                }
             } else {
                 c.acc = typed
             }
