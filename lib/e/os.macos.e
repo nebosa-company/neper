@@ -4048,7 +4048,7 @@ fn accessibility_publish(w: Window, nodes: []const AccessibleNode) -> err {
     let view = msg0(window, cocoa_sel("contentView\x00"))
     // A tree larger than the store is refused: silently dropping tail nodes loses them
     // from VoiceOver while publish still says ok.
-    if nodes.len > AX_NODES { ret TooLarge }
+    if nodes.len > AX_NODES { ret OutOfMemory }
     // The last tree is let go of; the new one is built whole.
     ax_release(slot)
     let store = &ax_stores[slot]
