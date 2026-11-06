@@ -1885,6 +1885,75 @@ neper_os_spawn:
 .Lspawn_copied:
     mov r8, qword ptr [rsp + 8]
     mov qword ptr [r8 + r15 * 8], 0
+    # The environment comes from /proc/self/environ: this runtime has no saved startup
+    # envp, and a child must inherit the parent's variables (#28).
+    mov rdi, r13
+    mov esi, 65536
+    mov edx, 8
+    call np_alloc
+    test rax, rax
+    jz .Lspawn_noenv
+    mov r15, rax
+    lea rdi, [rip + .Lspawn_environ_path]
+    xor esi, esi
+    xor edx, edx
+    mov eax, 2
+    syscall
+    test rax, rax
+    js .Lspawn_noenv
+    mov r14, rax
+    xor r8d, r8d
+.Lspawn_env_read:
+    mov rdi, r14
+    lea rsi, [r15 + r8]
+    mov edx, 65536
+    sub rdx, r8
+    jz .Lspawn_env_closed
+    xor eax, eax
+    syscall
+    test rax, rax
+    jle .Lspawn_env_closed
+    add r8, rax
+    jmp .Lspawn_env_read
+.Lspawn_env_closed:
+    mov rdi, r14
+    mov eax, 3
+    syscall
+    test r8, r8
+    jz .Lspawn_noenv
+    mov rdi, r13
+    mov esi, 32768
+    mov edx, 8
+    call np_alloc
+    test rax, rax
+    jz .Lspawn_noenv
+    mov r14, rax
+    lea r9, [r15 + r8]
+    mov r10, r15
+    xor r11d, r11d
+.Lspawn_env_parse:
+    cmp r10, r9
+    jae .Lspawn_env_parsed
+    cmp byte ptr [r10], 0
+    je .Lspawn_env_next
+    mov qword ptr [r14 + r11 * 8], r10
+    inc r11
+    cmp r11, 4095
+    jae .Lspawn_env_parsed
+.Lspawn_env_seek:
+    cmp byte ptr [r10], 0
+    je .Lspawn_env_next
+    inc r10
+    jmp .Lspawn_env_seek
+.Lspawn_env_next:
+    inc r10
+    jmp .Lspawn_env_parse
+.Lspawn_env_parsed:
+    mov qword ptr [r14 + r11 * 8], 0
+    jmp .Lspawn_env_built
+.Lspawn_noenv:
+    xor r14d, r14d
+.Lspawn_env_built:
     mov eax, 57
     syscall
     test rax, rax
@@ -1918,7 +1987,7 @@ neper_os_spawn:
 .Lspawn_exec:
     mov rsi, qword ptr [rsp + 8]
     mov rdi, qword ptr [rsi]
-    xor edx, edx
+    mov rdx, r14
     mov eax, 59
     syscall
     mov edi, 127
@@ -1929,6 +1998,8 @@ neper_os_spawn:
     mov qword ptr [r13 + 16], rcx
     mov dword ptr [r12 + 8], 0x6f777ebf
     jmp .Lspawn_done
+.Lspawn_environ_path:
+    .asciz "/proc/self/environ"
 .Lspawn_not_found:
     mov dword ptr [r12 + 8], 0x7683e2cd
     jmp .Lspawn_done
@@ -2416,4 +2487,5 @@ neper_os_ghash_blocks:
     movdqa xmm0, xmm6
     ret
 .Lghash_flip: .byte 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+
 
