@@ -84,14 +84,19 @@ fn init[Ctx: type](a: *mem.Arena, options: Options, builder: Builder[Ctx]) -> (A
     if options.frame_arena_bytes < 65536usize || options.event_capacity == 0usize { ret (zero, Failed) }
     let (device, open_error) = gpu.open_preferred(a, options.backend)
     if open_error != ok { ret (zero, Failed) }
-    let (win, window_error) = window.open(a, device, options.window)
+    let (queue, queue_error) = gpu.queue(device)
+    if queue_error != ok {
+        let abandoned = gpu.close(device)
+        ret (zero, Failed)
+    }
+    // The window opens its target on the renderer's queue: a frame can only be presented through the queue
+    // it was acquired from, and a second queue on the same device made the app fail at startup.
+    let (win, window_error) = window.open(a, device, queue, options.window)
     if window_error != ok {
         let abandoned = gpu.close(device)
         ret (zero, Failed)
     }
     var opened = win
-    let (queue, queue_error) = gpu.queue(device)
-    if queue_error != ok { ret (zero, Failed) }
     let (renderer, renderer_error) = scene.renderer(a, device, queue, 4u32, 256u32)
     if renderer_error != ok { ret (zero, Failed) }
     // NEPER_RASTER=gpu or check (D5929): the tile rasteriser draws the frames on a Vulkan device; a device whose self-test fails, or

@@ -123,7 +123,10 @@ fn swapchain_wanted(a: *mem.Arena) -> bool {
     ret wanted
 }
 
-fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
+// The queue is the caller's, not one created here: a frame acquired from a target opened on one queue
+// can only be presented through that same queue (see `gpu.present`), so the window and the renderer
+// must share one - two queues on one device made every present fail with `WrongDevice`.
+fn open(a: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, options: Options) -> (Window, err) {
     var none: Window = zero
     if options.width == 0u32 || options.height == 0u32 { ret (none, Invalid) }
     if options.min_width > options.width || options.min_height > options.height { ret (none, Invalid) }
@@ -136,11 +139,7 @@ fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err) {
     let (handle, open_error) = os.window_open(a, os.WindowOptions { title: options.title, width: options.width, height: options.height, resizable: options.resizable, visible: true, mode: mode })
     if open_error == os.Unsupported { ret (none, Unsupported) }
     if open_error != ok { ret (none, Invalid) }
-    let (queue, queue_error) = gpu.queue(device)
-    if queue_error != ok {
-        let abandoned = os.window_close(handle)
-        ret (none, Invalid)
-    }
+
     // A swapchain target when the device can present to the window and NEPER_PRESENT / the default asks for it (D5928), else
     // the offscreen pair shown by `os.window_present`. The swapchain target keeps the same frame images, so everything above
     // this module renders as before.

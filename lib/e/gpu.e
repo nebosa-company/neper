@@ -2268,7 +2268,7 @@ fn present(q: *Queue, t: *Target, frame: Frame) -> (Token, err) {
     // The queue is named by its device and index, not by the address of the `QueueState`:
     // a caller may hold its own `Queue` for the same queue, and comparing addresses
     // refused every present from one (which stopped the browser app at startup).
-    if presenter.device != state.queue.device {
+    if presenter.device != state.queue.device || presenter.index != state.queue.index {
         state.acquired = false
         ret (zero, WrongDevice)
     }
