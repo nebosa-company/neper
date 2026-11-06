@@ -539,6 +539,10 @@ neper_os_crc32c_bytes:
     push rbx
     mov r10, rdi
     mov r11, rsi
+    xor eax, eax
+    cpuid
+    cmp eax, 1
+    jb .Lcrc_done
     mov eax, 1
     cpuid
     xor eax, eax
@@ -2412,3 +2416,4 @@ neper_os_ghash_blocks:
     movdqa xmm0, xmm6
     ret
 .Lghash_flip: .byte 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
+
