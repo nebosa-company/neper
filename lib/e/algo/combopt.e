@@ -588,11 +588,11 @@ fn large_neighborhood_search[Ctx: type](ctx: *Ctx, r: *rand.Pcg64, iterations: u
 
 // Christofides on a symmetric matrix: a minimum spanning tree (Prim), a perfect matching of its
 // odd-degree vertices, an Euler tour of the union and the tour that skips
-// repeats. `scratch.len >= 10 * n + 4`, `flags.len >= 3 * n`. Answers the length.
+// repeats. `scratch.len >= 11 * n + 4`, `flags.len >= 3 * n`. Answers the length.
 // ponytail: the matching is greedy nearest-unmatched, not minimum weight, so
 // the 3/2 bound is not guaranteed; a weighted blossom matching is the upgrade.
 fn tsp_christofides(d: []const f64, n: usize, tour: []usize, scratch: []usize, flags: []u8) -> (f64, err) {
-    if !has_product(d.len, n, n) || tour.len < n || !has_scaled(scratch.len, n, 10usize, 4usize) || !has_product(flags.len, n, 3usize) { ret (0.0f64, TooSmall) }
+    if !has_product(d.len, n, n) || tour.len < n || !has_scaled(scratch.len, n, 11usize, 4usize) || !has_product(flags.len, n, 3usize) { ret (0.0f64, TooSmall) }
     if !matrix_symmetric(d, n) { ret (0.0f64, Invalid) }
     if n < 3usize { ret (0.0f64, Invalid) }
     let parent = scratch[..n]
@@ -601,7 +601,9 @@ fn tsp_christofides(d: []const f64, n: usize, tour: []usize, scratch: []usize, f
     let eu = scratch[3usize * n..5usize * n]
     let ev = scratch[5usize * n..7usize * n]
     let stack = scratch[7usize * n..9usize * n + 2usize]
-    let circuit = scratch[9usize * n + 2usize..10usize * n + 4usize]
+    // The Euler circuit of the MST + matching multigraph has edges + 1 entries, and
+    // edges <= (n - 1) + n/2, so 2n + 2 slots are always enough.
+    let circuit = scratch[9usize * n + 2usize..11usize * n + 4usize]
     let in_tree = flags[..n]
     let used = flags[n..3usize * n]
     var i = 0usize
@@ -686,6 +688,7 @@ fn tsp_christofides(d: []const f64, n: usize, tour: []usize, scratch: []usize, f
             i += 1usize
         }
         if e == edges {
+            if circuit_len >= circuit.len { ret (0.0f64, TooSmall) }
             circuit[circuit_len] = v
             circuit_len += 1usize
             top -= 1usize
@@ -925,3 +928,6 @@ fn tsp_lin_kernighan(d: []const f64, n: usize, tour: []usize, scratch: []usize, 
     }
     ret (tour_length(d, n, tour), improvements, ok)
 }
+
+
+

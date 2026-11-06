@@ -172,7 +172,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var directed: [25]f64 = zero
     directed[1usize] = 1.0f64
     var directed_tour: [5]usize = [5]usize{ 0usize, 1usize, 2usize, 3usize, 4usize }
-    var directed_scratch: [54]usize = zero
+    var directed_scratch: [64]usize = zero
     var directed_flags: [15]u8 = zero
     let (_, _, directed_two) = combopt.tsp_two_opt(directed[..], 5usize, directed_tour[..])
     let (_, _, directed_or) = combopt.tsp_or_opt(directed[..], 5usize, directed_tour[..], directed_scratch[..5usize])
@@ -313,6 +313,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if !near(check, final_cost, 0.000001f64) { os.exit(4i32) }
 
-    try io.print("algo combopt ok\n")
+    // 447: a star multigraph on six cities has 9 edges, so the circuit needs 10 entries.\n    var star_d: [36]f64 = zero\n    var si = 0usize\n    while si < 6usize {\n        var sj = 0usize\n        while sj < 6usize {\n            if si != sj {\n                if si == 0usize || sj == 0usize { star_d[si * 6usize + sj] = 1.0f64 } else { star_d[si * 6usize + sj] = 2.0f64 }\n            }\n            sj += 1usize\n        }\n        si += 1usize\n    }\n    var star_tour: [6]usize = zero\n    var star_scratch: [70]usize = zero\n    var star_flags: [18]u8 = zero\n    let (_, star_error) = combopt.tsp_christofides(star_d[..], 6usize, star_tour[..], star_scratch[..], star_flags[..])\n    if star_error != ok { os.exit(60i32) }\n    try io.print("algo combopt ok\n")
     ret ok
 }
+

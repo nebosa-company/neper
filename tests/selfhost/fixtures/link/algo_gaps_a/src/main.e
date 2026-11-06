@@ -174,7 +174,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let optimum = 2331.4856815807743f64
     var tour: [10]usize = zero
-    var scratch: [104]usize = zero
+    var scratch: [114]usize = zero
     var flags: [30]u8 = zero
     let (christofides_len, christofides_error) = combopt.tsp_christofides(d[..], 10usize, tour[..], scratch[..], flags[..])
     if christofides_error != ok || !is_permutation(tour[..], 10usize, flags[..]) { os.exit(7i32) }
@@ -335,3 +335,4 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try io.print("algo gaps a ok\n")
     ret ok
 }
+
