@@ -547,11 +547,11 @@ fn reminders(a: *mem.Arena) -> i32 {
     let (s1, f1) = actor.stored_state(&sys, "pager")
     if !f1 || !str.eq(s1, "10") { ret 506i32 }
     // next due: 1500 + 1000 = 2500; a late tick at 5000 is one firing and moves to 5500
-    let (v1, g1) = ds.get(&db, "reminders", "pager\x1Fr")
+    let (v1, g1) = ds.get(&db, "reminders", "5:pagerr")
     if !g1 || !str.eq(v1, "2500,1000") { ret 507i32 }
     let (n2, t2) = actor.tick(&sys, 5000i64)
     if t2 != ok || n2 != 1usize { ret 508i32 }
-    let (v2, g2) = ds.get(&db, "reminders", "pager\x1Fr")
+    let (v2, g2) = ds.get(&db, "reminders", "5:pagerr")
     if !g2 || !str.eq(v2, "5500,1000") { ret 509i32 }
     // restart: the same file, a new process image; the reminder and the state are both there
     let (db2a, dropped, restore_error) = ds.restore(a, ds.bytes(&db), ds.Limits { log: 65536usize, docs: 64usize, events: 4usize, marks: 2usize, streams: 2usize })
@@ -643,7 +643,18 @@ fn main(a: *mem.Arena) -> err {
     }
     let (late_silo, late_placed) = actor.place(&late, "late-grain")
     if !late_placed || late_silo < 32usize || late_silo >= 40usize { os.exit(719i32) }
+    // 532: a separator byte inside grain or name must not collide with another reminder.
+    var sep_ctx = Counters { activations: 0u32, deactivations: 0u32 }
+    let (sep_db, sep_db_error) = ds.create(a, ds.Limits { log: 65536usize, docs: 256usize, events: 4usize, marks: 2usize, streams: 2usize })
+    if sep_db_error != ok { os.exit(720i32) }
+    var sep_db_value = sep_db
+    let (sep_system, sep_system_error) = actor.create(a, &sep_db_value, behavior(&sep_ctx), 2usize, 8usize, 4usize)
+    if sep_system_error != ok { os.exit(721i32) }
+    var sep = sep_system
+    let (_, sep_silo_error) = actor.add_silo(&sep, "s")
+    if sep_silo_error != ok { os.exit(722i32) }
+    if actor.reminder_set(&sep, "a\x1fb", "c", 0i64, 0i64) != ok { os.exit(723i32) }
+    if actor.reminder_set(&sep, "a", "b\x1fc", 0i64, 0i64) != ok { os.exit(724i32) }
+    if actor.reminder_count(&sep) != 2usize { os.exit(725i32) }
     ret ok
 }
-
-

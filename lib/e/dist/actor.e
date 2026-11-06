@@ -388,14 +388,31 @@ fn timer_count(sys: *System) -> usize {
 // ---- reminders (durable) ------------------------------------------------------------------
 
 fn reminder_key(a: *mem.Arena, grain: str, name: str) -> (str, err) {
-    let (b0, builder_error) = str.builder(a, 64usize)
+    let (b0, builder_error) = str.builder(a, grain.len + name.len + 16usize)
     if builder_error != ok { ret ("", builder_error) }
     var b = b0
-    var failure = str.push(&b, grain)
-    if failure == ok { failure = str.push_byte(&b, KEY_SEP) }
+    // Length-prefixed: `<grain.len>:<grain><name>`, so a separator byte inside either
+    // component cannot make two pairs share one durable key.
+    var failure = str.push_i64(&b, i64(grain.len))
+    if failure == ok { failure = str.push_byte(&b, 58u8) }
+    if failure == ok { failure = str.push(&b, grain) }
     if failure == ok { failure = str.push(&b, name) }
     if failure != ok { ret ("", failure) }
     ret (str.done(&b), ok)
+}
+
+// The grain/name of a key written by reminder_key; false when malformed.
+fn parse_reminder_key(key: str) -> (str, str, bool) {
+    var i = 0usize
+    var length = 0usize
+    while i < key.len && key[i] >= 48u8 && key[i] <= 57u8 {
+        length = length * 10usize + usize(key[i] - 48u8)
+        i += 1usize
+    }
+    if i == 0usize || i >= key.len || key[i] != 58u8 { ret ("", "", false) }
+    i += 1usize
+    if i + length > key.len { ret ("", "", false) }
+    ret (key[i..i + length], key[i + length..key.len], true)
 }
 
 fn reminder_value(a: *mem.Arena, due: i64, period: i64) -> (str, err) {
@@ -533,11 +550,11 @@ fn tick(sys: *System, now: i64) -> (usize, err) {
     var k = 0usize
     while k < np {
         let p = pend[k]
-        var sep = 0usize
-        while sep < p.key.len && p.key[sep] != KEY_SEP { sep += 1usize }
-        let grain = p.key[0..sep]
-        var name = ""
-        if sep < p.key.len { name = p.key[sep + 1usize..p.key.len] }
+        let (grain, name, key_ok) = parse_reminder_key(p.key)
+        if !key_ok {
+            k += 1usize
+            continue
+        }
         let (at, activate_error) = activate(sys, grain, now)
         if activate_error != ok {
             // A reminder that keeps failing must not block every later reminder.
@@ -577,5 +594,6 @@ fn timer_kind(a: *mem.Arena, prefix: str, name: str) -> str {
     if first != ok || second != ok { ret "" }
     ret str.done(&b)
 }
+
 
 
