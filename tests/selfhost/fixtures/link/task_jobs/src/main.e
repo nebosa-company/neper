@@ -271,7 +271,7 @@ fn lifecycle(a: *mem.Arena) -> i32 {
     let (none, found_none, none_error) = jobs.fetch(&q, t0, 30000i64)
     if none_error != ok || found_none { ret 204i32 }
     // fail once: Retry, due 1000 ms later
-    let (s1, fail_error1) = jobs.fail(&q, 1u64, t0, "boom 1")
+    let (s1, fail_error1) = jobs.fail(&q, 1u64, t0, "boom 1", j1.attempts)
     if fail_error1 != ok || s1 != jobs.STATE_RETRY { ret 205i32 }
     let (early, found_early, early_error) = jobs.fetch(&q, t0 + 999000000i64, 30000i64)
     if early_error != ok || found_early { ret 206i32 }
@@ -279,13 +279,13 @@ fn lifecycle(a: *mem.Arena) -> i32 {
     if fetch_error2 != ok || !found2 || j2.attempts != 2u32 || !str.eq(j2.last_error, "boom 1") { ret 207i32 }
     // second failure: due 2000 ms later
     let t2 = t0 + 1000000000i64
-    let (s2, fail_error2) = jobs.fail(&q, 1u64, t2, "boom 2")
+    let (s2, fail_error2) = jobs.fail(&q, 1u64, t2, "boom 2", j2.attempts)
     if fail_error2 != ok || s2 != jobs.STATE_RETRY { ret 208i32 }
     let (j3, found3, fetch_error3) = jobs.fetch(&q, t2 + 2000000000i64, 30000i64)
     if fetch_error3 != ok || !found3 || j3.attempts != 3u32 { ret 209i32 }
     // third failure reaches max_attempts: quarantined, no more deliveries
     let t3 = t2 + 2000000000i64
-    let (s3, fail_error3) = jobs.fail(&q, 1u64, t3, "boom 3")
+    let (s3, fail_error3) = jobs.fail(&q, 1u64, t3, "boom 3", j3.attempts)
     if fail_error3 != ok || s3 != jobs.STATE_DEAD { ret 210i32 }
     let (dead_job, dead_found) = jobs.get(&q, 1u64)
     if !dead_found || !str.eq(dead_job.last_error, "boom 3") || jobs.count(&q, jobs.STATE_DEAD) != 1usize { ret 211i32 }
@@ -295,10 +295,10 @@ fn lifecycle(a: *mem.Arena) -> i32 {
     if jobs.requeue(&q, 1u64, t3) != ok { ret 213i32 }
     let (j4, found4, fetch_error4) = jobs.fetch(&q, t3, 30000i64)
     if fetch_error4 != ok || !found4 || j4.attempts != 1u32 { ret 214i32 }
-    if jobs.complete(&q, 1u64) != ok { ret 215i32 }
+    if jobs.complete(&q, 1u64, j4.attempts) != ok { ret 215i32 }
     if jobs.count(&q, jobs.STATE_SUCCEEDED) != 1usize { ret 216i32 }
-    if jobs.complete(&q, 1u64) != jobs.NotProcessing { ret 217i32 }
-    if jobs.complete(&q, 99u64) != jobs.NotFound { ret 218i32 }
+    if jobs.complete(&q, 1u64, j4.attempts) != jobs.NotProcessing { ret 217i32 }
+    if jobs.complete(&q, 99u64, 1u32) != jobs.NotFound { ret 218i32 }
     if jobs.requeue(&q, 1u64, t3) != jobs.Invalid { ret 219i32 }
     ret 0i32
 }
@@ -316,7 +316,7 @@ fn leases(a: *mem.Arena) -> i32 {
     let (n1, found_n1, en1) = jobs.fetch(&q, t0 + 9999000000i64, 10000i64)
     if en1 != ok || found_n1 { ret 223i32 }
     // a heartbeat extends it
-    if jobs.heartbeat(&q, id, t0 + 9000000000i64, 10000i64) != ok { ret 224i32 }
+    if jobs.heartbeat(&q, id, t0 + 9000000000i64, 10000i64, j1.attempts) != ok { ret 224i32 }
     let (n2, found_n2, en2) = jobs.fetch(&q, t0 + 18999000000i64, 10000i64)
     if en2 != ok || found_n2 { ret 225i32 }
     // the lease runs out: a failed attempt, retried 1000 ms later and delivered again
@@ -327,6 +327,9 @@ fn leases(a: *mem.Arena) -> i32 {
     if !found_back || back.state != jobs.STATE_RETRY || !str.eq(back.last_error, "lease expired") { ret 227i32 }
     let (j2, found2, e2) = jobs.fetch(&q, t_expire + 1000000000i64, 10000i64)
     if e2 != ok || !found2 || j2.attempts != 2u32 { ret 228i32 }
+    // #4.6: the expired worker A (token 1) cannot complete B's delivery (token 2).
+    if jobs.complete(&q, id, j1.attempts) != jobs.NotProcessing { ret 231i32 }
+    if jobs.heartbeat(&q, id, t_expire + 1500000000i64, 10000i64, j1.attempts) != jobs.NotProcessing { ret 231i32 }
     // a second lost lease reaches max_attempts: poison
     let (n4, found_n4, en4) = jobs.fetch(&q, t_expire + 1000000000i64 + 10000000000i64, 10000i64)
     if en4 != ok || found_n4 { ret 229i32 }
@@ -361,7 +364,7 @@ fn ordering(a: *mem.Arena) -> i32 {
     if ke1 != ok || ke2 != ok || k1 != k2 { ret 248i32 }
     let (f6, ok6, ef6) = jobs.fetch(&q, t0, 1000i64)
     if ef6 != ok || !ok6 || f6.id != k1 { ret 249i32 }
-    let (st, fe) = jobs.fail(&q, k1, t0, "x")
+    let (st, fe) = jobs.fail(&q, k1, t0, "x", f6.attempts)
     if fe != ok || st != jobs.STATE_DEAD { ret 250i32 }
     let (k3, ke3) = jobs.enqueue(&q, "uniq", "", t0, 0i64, 1u32, 0i32, "once")
     if ke3 != ok || k3 == k1 { ret 251i32 }
@@ -452,7 +455,7 @@ fn replay(a: *mem.Arena) -> i32 {
     while i < 3usize {
         let (job, found, fetch_error) = jobs.fetch(&r, now, 1000i64)
         if fetch_error != ok || !found { ret 408i32 }
-        if jobs.complete(&r, job.id) != ok { ret 409i32 }
+        if jobs.complete(&r, job.id, job.attempts) != ok { ret 409i32 }
         i += 1usize
     }
     if jobs.purge(&r) != 3usize || r.n != 0usize { ret 410i32 }

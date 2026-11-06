@@ -220,29 +220,35 @@ fn fetch(q: *Queue, now: i64, lease_ms: i64) -> (Job, bool, err) {
     ret (q.jobs[best], true, ok)
 }
 
-fn complete(q: *Queue, id: u64) -> err {
+fn complete(q: *Queue, id: u64, token: u32) -> err {
     let (at, found) = find(q, id)
     if !found { ret NotFound }
     if q.jobs[at].state != STATE_PROCESSING { ret NotProcessing }
+    // The delivery is the lease token (attempt count): a stale worker must not settle
+    // the delivery now leased to another.
+    if q.jobs[at].attempts != token { ret NotProcessing }
+
     q.jobs[at].state = STATE_SUCCEEDED
     q.jobs[at].locked_until = 0i64
     ret ok
 }
 
 // Reports a failed delivery; the job's new state.
-fn fail(q: *Queue, id: u64, now: i64, message: str) -> (u8, err) {
+fn fail(q: *Queue, id: u64, now: i64, message: str, token: u32) -> (u8, err) {
     let (at, found) = find(q, id)
     if !found { ret (STATE_DEAD, NotFound) }
     if q.jobs[at].state != STATE_PROCESSING { ret (q.jobs[at].state, NotProcessing) }
+    if q.jobs[at].attempts != token { ret (q.jobs[at].state, NotProcessing) }
     let (state, fail_error) = fail_at(q, at, now, message)
     ret (state, fail_error)
 }
 
 // Extends a running job's lease from `now`.
-fn heartbeat(q: *Queue, id: u64, now: i64, lease_ms: i64) -> err {
+fn heartbeat(q: *Queue, id: u64, now: i64, lease_ms: i64, token: u32) -> err {
     let (at, found) = find(q, id)
     if !found { ret NotFound }
     if q.jobs[at].state != STATE_PROCESSING { ret NotProcessing }
+    if q.jobs[at].attempts != token { ret NotProcessing }
     q.jobs[at].locked_until = now + lease_ms * MS
     ret ok
 }
