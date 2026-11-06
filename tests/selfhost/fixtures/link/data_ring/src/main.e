@@ -9,14 +9,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var values = ring.init[i64](storage[..])
     if ring.len[i64](&values) != 0usize || ring.capacity[i64](&values) != 3usize { ret Failed }
 
-    if !ring.push[i64](&values, 10i64) || !ring.push[i64](&values, 20i64) || !ring.push[i64](&values, 30i64) { ret Failed }
-    if ring.push[i64](&values, 40i64) { ret Failed }
+    let (_, pushed_a) = ring.push[i64](&values, 10i64)
+    let (_, pushed_b) = ring.push[i64](&values, 20i64)
+    let (_, pushed_c) = ring.push[i64](&values, 30i64)
+    if !pushed_a || !pushed_b || !pushed_c { ret Failed }
+    let (full_rejected, full_push) = ring.push[i64](&values, 40i64)
+    if full_push || full_rejected != 40i64 { ret Failed }
     let (front, has_front) = ring.peek[i64](&values)
     if !has_front || front != 10i64 { ret Failed }
 
     let (first, has_first) = ring.pop[i64](&values)
     if !has_first || first != 10i64 { ret Failed }
-    if !ring.push[i64](&values, 40i64) { ret Failed }
+    let (_, pushed_d) = ring.push[i64](&values, 40i64)
+    if !pushed_d { ret Failed }
 
     var it = ring.iter[i64](&values)
     let (iter_first, iter_has_first) = ring.iter_next[i64](&it)
@@ -38,10 +43,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     var empty_storage: [0]i64 = zero
     var empty = ring.init[i64](empty_storage[..])
-    if ring.capacity[i64](&empty) != 0usize || ring.push[i64](&empty, 1i64) { ret Failed }
-    let (_, empty_replaced) = ring.push_overwrite[i64](&empty, 1i64)
-    if empty_replaced { ret Failed }
+    if ring.capacity[i64](&empty) != 0usize { ret Failed }
+    let (empty_rejected, empty_push) = ring.push[i64](&empty, 1i64)
+    if empty_push || empty_rejected != 1i64 { ret Failed }
+    let (empty_replaced, did_empty_replace) = ring.push_overwrite[i64](&empty, 1i64)
+    if did_empty_replace || empty_replaced != 1i64 { ret Failed }
 
     try io.print("data ring ok\n")
     ret ok
 }
+

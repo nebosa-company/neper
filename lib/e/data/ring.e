@@ -1,4 +1,7 @@
-// Fixed-capacity FIFO rings over caller-owned storage.
+// Fixed-capacity FIFO rings over caller-owned storage. A push takes ownership only when
+// it reports success: `push` answers (unaccepted value, false) when the ring is full, so
+// the caller can release or retry it; `push_overwrite` answers the input value on a
+// zero-capacity ring, and the replaced value on a successful overwrite.
 
 type Ring[T: type] = struct { items: []T, head: usize, len: usize }
 type Iter[T: type] = struct { ring: *const Ring[T], index: usize }
@@ -11,16 +14,16 @@ fn len[T: type](r: *const Ring[T]) -> usize { ret r.len }
 
 fn capacity[T: type](r: *const Ring[T]) -> usize { ret r.items.len }
 
-fn push[T: type](r: *Ring[T], v: own T) -> bool {
-    if r.len == r.items.len { ret false }
+fn push[T: type](r: *Ring[T], v: own T) -> (T, bool) {
+    if r.len == r.items.len { ret (v, false) }
     let at = (r.head + r.len) % r.items.len
     r.items[at] = v
     r.len += 1usize
-    ret true
+    ret (zero, true)
 }
 
 fn push_overwrite[T: type](r: *Ring[T], v: own T) -> (T, bool) {
-    if r.items.len == 0usize { ret (zero, false) }
+    if r.items.len == 0usize { ret (v, false) }
     if r.len < r.items.len {
         let at = (r.head + r.len) % r.items.len
         r.items[at] = v
@@ -63,3 +66,5 @@ fn iter_next[T: type](it: *Iter[T]) -> (T, bool) {
     it.index += 1usize
     ret (value, true)
 }
+
+

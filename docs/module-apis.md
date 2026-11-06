@@ -737,6 +737,7 @@ redirect are not read. `env_from_process` fills an `Env` from the process enviro
 
 ```neper
 type List[T: type] = struct { items: []T, len: usize, arena: *mem.Arena }
+error Invalid
 type Iter[T: type] = struct { items: []const T, index: usize }
 type Builder[T: type] = resource(builder_drop) struct { list: List[T] }
 type Owning[T: type] = resource(owning_finish) struct { list: List[T] }
@@ -873,7 +874,7 @@ type Iter[T: type] = struct { ring: *const Ring[T], index: usize }
 fn init[T: type](storage: []T) -> Ring[T]
 fn len[T: type](r: *const Ring[T]) -> usize
 fn capacity[T: type](r: *const Ring[T]) -> usize
-fn push[T: type](r: *Ring[T], v: own T) -> bool
+fn push[T: type](r: *Ring[T], v: own T) -> (T, bool)
 fn push_overwrite[T: type](r: *Ring[T], v: own T) -> (T, bool)
 fn pop[T: type](r: *Ring[T]) -> (T, bool)
 fn peek[T: type](r: *const Ring[T]) -> (T, bool)
@@ -6001,6 +6002,8 @@ type BitSet = struct { words: []u64, len: usize }
 error TooSmall
 
 fn init(storage: []u64, bit_count: usize) -> (BitSet, err)
+fn padding_mask(s: *const BitSet) -> u64
+fn normalize(s: *BitSet)
 fn len(s: *const BitSet) -> usize
 fn clear_all(s: *BitSet)
 fn fill_all(s: *BitSet)
