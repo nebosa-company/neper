@@ -4,6 +4,7 @@
 // random one so a proxy cannot be fooled, and there is no proxy between the app and its server here.
 use e.mem
 use e.bytes
+use vaultfs
 use e.crypto.hash
 use netclient
 use netproto
@@ -17,7 +18,28 @@ fn byte(b: *netio.NetBuf) -> (u8, bool) {
     ret (one[0usize], true)
 }
 
+// The upgrade key is 16 random bytes base64-encoded; the fixed RFC key remains the
+// fallback when the app has no rng capability (vaultfs.random answers false).
 fn client_key() -> str { ret "dGhlIHNhbXBsZSBub25jZQ==" }
+
+fn random_key(a: *mem.Arena) -> str {
+    var raw: [2]u64 = zero
+    if !vaultfs.random(mem.address_of(&raw[0usize]), 2usize) { ret client_key() }
+    var bytes16: [16]u8 = zero
+    var i = 0usize
+    while i < 2usize {
+        var k = 0usize
+        while k < 8usize {
+            bytes16[i * 8usize + k] = u8((raw[i] >> u64(k * 8usize)) & 255u64)
+            k += 1usize
+        }
+        i += 1usize
+    }
+    var encoded: [24]u8 = zero
+    let (text, text_error) = bytes.base64_encode(encoded[..], bytes16[0usize..16usize], .Standard, true)
+    if text_error != ok { ret client_key() }
+    ret text
+}
 fn accept_guid() -> str { ret "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" }
 
 fn same(a: str, b: str) -> bool {
@@ -82,7 +104,8 @@ fn accept_ok(a: *mem.Arena, header: str, key: str) -> bool {
 fn upgrade(a: *mem.Arena, b: *netio.NetBuf, host: str, path: str) -> bool {
     var request: [512]u8 = zero
     var n = 0usize
-    let parts: [7]str = [7]str{ "GET ", path, " HTTP/1.1\r\nHost: ", host, "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ", client_key(), "\r\nSec-WebSocket-Version: 13\r\n\r\n" }
+    let key = random_key(a)
+    let parts: [7]str = [7]str{ "GET ", path, " HTTP/1.1\r\nHost: ", host, "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ", key, "\r\nSec-WebSocket-Version: 13\r\n\r\n" }
     var p = 0usize
     while p < 7usize {
         var i = 0usize
@@ -114,7 +137,7 @@ fn upgrade(a: *mem.Arena, b: *netio.NetBuf, host: str, path: str) -> bool {
     }
     if !done || seen < 12usize { ret false }
     if header[9usize] != 49u8 || header[10usize] != 48u8 || header[11usize] != 49u8 { ret false }
-    ret accept_ok(a, header[0usize..seen], client_key())
+    ret accept_ok(a, header[0usize..seen], key)
 }
 // Send `payload` (at most 125 bytes... or 65535) as one masked text frame.
 fn send_text(payload: []const u8) -> bool {
@@ -122,7 +145,16 @@ fn send_text(payload: []const u8) -> bool {
     if payload.len > 125usize { ret false }
     frame[0usize] = 129u8
     frame[1usize] = u8(128usize + payload.len)
-    let mask: [4]u8 = [4]u8{ 55u8, 250u8, 33u8, 61u8 }
+    var mask: [4]u8 = [4]u8{ 55u8, 250u8, 33u8, 61u8 }
+    // A fresh mask per frame from the rng capability; the fixed one is the fallback
+    // when the app has no rng endpoint.
+    var seed: [1]u64 = zero
+    if vaultfs.random(mem.address_of(&seed[0usize]), 1usize) {
+        mask[0usize] = u8(seed[0usize] & 255u64)
+        mask[1usize] = u8((seed[0usize] >> 8u64) & 255u64)
+        mask[2usize] = u8((seed[0usize] >> 16u64) & 255u64)
+        mask[3usize] = u8((seed[0usize] >> 24u64) & 255u64)
+    }
     frame[2usize] = mask[0usize]
     frame[3usize] = mask[1usize]
     frame[4usize] = mask[2usize]
@@ -186,6 +218,9 @@ fn receive(b: *netio.NetBuf, out: []u8) -> (u8, usize, bool) {
     }
     ret (h0 & 15u8, kept, true)
 }
+
+
+
 
 
 
