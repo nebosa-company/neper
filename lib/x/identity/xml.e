@@ -370,6 +370,23 @@ fn parse_xml(a: *mem.Arena, source: str) -> Doc {
             while i < source.len && is_name_char(source[i]) { i += 1usize }
             let attr_name = source[attr_start..i]
             if attr_name.len == 0usize { ret bad(a, source, i, "expected attribute name") }
+            // XML forbids a repeated attribute name on one element. Appdor's xml.js is
+            // last-wins, so this is a deliberate, documented divergence: a duplicate
+            // ID/Algorithm attribute must never be resolved by position.
+            var dup = false
+            var dp = 0usize
+            while dp < attrs {
+                if str.eq(an_s[dp], attr_name) { dup = true }
+                dp += 1usize
+            }
+            var dn = 0usize
+            while dn < nss {
+                let decl = join(a, "xmlns:", np_s[dn])
+                if str.eq(np_s[dn], "") { if str.eq(attr_name, "xmlns") { dup = true } }
+                if str.eq(attr_name, decl) { dup = true }
+                dn += 1usize
+            }
+            if dup { ret bad(a, source, i, join(a, join(a, "duplicate attribute ", attr_name), "")) }
             while i < source.len && is_space(source[i]) { i += 1usize }
             if i >= source.len || source[i] != 61u8 { ret bad(a, source, i, join(a, join(a, "attribute ", attr_name), " has no value")) }
             i += 1usize

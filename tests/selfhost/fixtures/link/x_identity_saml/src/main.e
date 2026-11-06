@@ -465,6 +465,10 @@ fn run_one(a: *mem.Arena, c: json.Value) -> bool {
     let (want, we) = chain.canonical_json(a, ir.value_of(c, "e"))
     if ge != ok || we != ok { ret false }
     if !str.eq(got, want) {
+        // #52.5 deliberate divergence: Appdor's xml.js is last-wins for a repeated
+        // attribute; this reader refuses it. A generated ok vector whose source repeats
+        // one is accepted as an error here until the Appdor reference catches up.
+        if str.starts_with(got, "{\"error\":\"duplicate attribute") && str.starts_with(want, "{\"ok\":true") { ret true }
         let shown = io.print(f.join(a, f.join(a, "\nGOT  ", got), f.join(a, "\nWANT ", want)))
         ret false
     }
@@ -908,6 +912,13 @@ fn run_chunk(a: *mem.Arena, body: str) -> u8 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // #52.5: duplicate attributes are refused (the vectors above stay Appdor-shaped).
+    let dup = xml.parse_xml(a, "<a ID=\"1\" ID=\"2\"/>")
+    if dup.valid || !str.contains(dup.message, "duplicate attribute") { os.exit(95i32) }
+    let dup_ns = xml.parse_xml(a, "<a xmlns:p=\"u\" xmlns:p=\"v\"/>")
+    if dup_ns.valid { os.exit(96i32) }
+    let unique = xml.parse_xml(a, "<a ID=\"1\" id=\"2\"/>")
+    if !unique.valid { os.exit(97i32) }
     if run_chunk(a, vectors_0()) != 0u8 { os.exit(1i32) }
     if run_chunk(a, vectors_1()) != 0u8 { os.exit(2i32) }
     if run_chunk(a, vectors_2()) != 0u8 { os.exit(3i32) }
