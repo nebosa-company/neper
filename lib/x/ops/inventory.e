@@ -17,7 +17,10 @@ use e.fmt.yaml as yaml
 use e.mem
 use e.str
 
-type Doc = struct { valid: bool, message: str, names: []const str, addresses: []const str, host_groups: []const []const str, host_vars: []const json.Value, group_names: []const str, group_vars: []const json.Value }
+// A `dynamic` entry as the document declared it, for a caller to build a `Source`.
+type DynamicSource = struct { cloud: str, type_name: str, address_from: str, has_group: bool, group: str, has_group_from_tag: bool, group_from_tag: str, include_unmanaged: bool }
+
+type Doc = struct { valid: bool, message: str, names: []const str, addresses: []const str, host_groups: []const []const str, host_vars: []const json.Value, group_names: []const str, group_vars: []const json.Value, sources: []const DynamicSource }
 
 type Host = struct { name: str, address: str, groups: []const str, vars: json.Value }
 
@@ -73,6 +76,31 @@ fn parse_i64(s: str) -> (i64, bool) {
     ret (value, true)
 }
 
+// A canonical integer spelling: `0` or `-` followed by a nonzero digit and digits.
+fn canonical_integer(s: str) -> bool {
+    if s.len == 0usize { ret false }
+    var i = 0usize
+    if s[0usize] == 45u8 { i = 1usize }
+    if i >= s.len { ret false }
+    if s[i] == 48u8 { ret i == 0usize && s.len == 1usize }
+    if s[i] < 49u8 || s[i] > 57u8 { ret false }
+    i += 1usize
+    while i < s.len {
+        if s[i] < 48u8 || s[i] > 57u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// An i64 exactly as decimal text (no f64 rounding).
+fn i64_text(a: *mem.Arena, n: i64) -> str {
+    let (b0, be) = str.builder(a, 24usize)
+    if be != ok { ret "" }
+    var b = b0
+    if str.push_i64(&b, n) != ok { ret "" }
+    ret str.done(&b)
+}
+
 // The facts in a script's output, as an object (a later duplicate key wins).
 fn parse_facts(a: *mem.Arena, stdout: str) -> json.Value {
     var out = new_obj(a)
@@ -97,9 +125,12 @@ fn parse_facts(a: *mem.Arena, stdout: str) -> json.Value {
                     let key = trim(line[0usize..usize(eq)])
                     let value = trim(line[usize(eq) + 1usize..])
                     if key.len > 0usize {
-                        let (n, is_int) = parse_i64(value)
-                        if is_int {
-                            put(&out, key, json.Value{ Number: json.Number{ lexeme: f.number_text(a, f64(n)) } })
+                        let (_, is_int) = parse_i64(value)
+                        // Keep the exact lexeme for a canonical integer; a padded or
+                        // signed spelling (`007`, `+7`, `-0`) stays text, as does an
+                        // integer beyond i64.
+                        if is_int && canonical_integer(value) {
+                            put(&out, key, json.Value{ Number: json.Number{ lexeme: value } })
                         } else {
                             put(&out, key, sv(value))
                         }
@@ -195,7 +226,8 @@ fn bad(a: *mem.Arena, what: str) -> Doc {
     let none_texts: []const str = zero
     let none_lists: []const []const str = zero
     let none_vars: []const json.Value = zero
-    ret Doc { valid: false, message: join(a, "invalid inventory: ", what), names: none_texts, addresses: none_texts, host_groups: none_lists, host_vars: none_vars, group_names: none_texts, group_vars: none_vars }
+    let none_sources: []const DynamicSource = zero
+    ret Doc { valid: false, message: join(a, "invalid inventory: ", what), names: none_texts, addresses: none_texts, host_groups: none_lists, host_vars: none_vars, group_names: none_texts, group_vars: none_vars, sources: none_sources }
 }
 
 fn key_text(v: yaml.Value) -> (str, bool) {
@@ -215,7 +247,7 @@ fn to_json(a: *mem.Arena, v: yaml.Value) -> json.Value {
     case .Bool as b:
         ret json.Value{ Bool: b }
     case .Integer as n:
-        ret json.Value{ Number: json.Number{ lexeme: f.number_text(a, f64(n)) } }
+        ret json.Value{ Number: json.Number{ lexeme: i64_text(a, n) } }
     case .Float as x:
         ret json.Value{ Number: json.Number{ lexeme: f.number_text(a, x) } }
     case .String as s:
@@ -303,9 +335,12 @@ fn parse_inventory(a: *mem.Arena, source: str) -> Doc {
     let (groups, groups_ok) = mapping_of(groups_v)
     if !groups_ok { ret bad(a, "groups: expected a map") }
     let (dyn_v, has_dyn) = find(top, "dynamic")
+    var sources: []const DynamicSource = zero
     if has_dyn {
         switch dyn_v {
         case .Sequence as ds:
+            let (source_buf, source_error) = mem.alloc[DynamicSource](a, ds.len + 1usize)
+            if source_error != ok { ret bad(a, "out of memory") }
             var q = 0usize
             while q < ds.len {
                 let (dm, dm_ok) = mapping_of(ds[q])
@@ -321,8 +356,49 @@ fn parse_inventory(a: *mem.Arena, source: str) -> Doc {
                     }
                     p += 1usize
                 }
+                let (cloud, cloud_ok) = key_text(cv)
+                let (type_text, type_ok) = key_text(tv)
+                if !cloud_ok { ret bad(a, "dynamic.cloud: expected a string") }
+                if !type_ok { ret bad(a, "dynamic.type: expected a string") }
+                var address_from = ""
+                let (afv, has_af) = find(dm, "address_from")
+                if has_af {
+                    let (af, af_ok) = key_text(afv)
+                    if !af_ok { ret bad(a, "dynamic.address_from: expected a string") }
+                    address_from = af
+                }
+                var group = ""
+                var has_group = false
+                let (gv, has_g) = find(dm, "group")
+                if has_g {
+                    let (g, g_ok) = key_text(gv)
+                    if !g_ok { ret bad(a, "dynamic.group: expected a string") }
+                    group = g
+                    has_group = true
+                }
+                var group_from_tag = ""
+                var has_group_from_tag = false
+                let (gfv, has_gf) = find(dm, "group_from_tag")
+                if has_gf {
+                    let (gf, gf_ok) = key_text(gfv)
+                    if !gf_ok { ret bad(a, "dynamic.group_from_tag: expected a string") }
+                    group_from_tag = gf
+                    has_group_from_tag = true
+                }
+                var include_unmanaged = false
+                let (uv, has_u) = find(dm, "include_unmanaged")
+                if has_u {
+                    switch uv {
+                    case .Bool as flag:
+                        include_unmanaged = flag
+                    default:
+                        ret bad(a, "dynamic.include_unmanaged: expected a boolean")
+                    }
+                }
+                source_buf[q] = DynamicSource { cloud: cloud, type_name: type_text, address_from: address_from, has_group: has_group, group: group, has_group_from_tag: has_group_from_tag, group_from_tag: group_from_tag, include_unmanaged: include_unmanaged }
                 q += 1usize
             }
+            sources = source_buf[0usize..ds.len]
         case .Null:
             q_noop()
         default:
@@ -422,7 +498,7 @@ fn parse_inventory(a: *mem.Arena, source: str) -> Doc {
         }
         i += 1usize
     }
-    ret Doc { valid: true, message: "", names: names[0usize..hosts.len], addresses: addresses[0usize..hosts.len], host_groups: host_groups[0usize..hosts.len], host_vars: host_vars[0usize..hosts.len], group_names: gnames[0usize..groups.len], group_vars: gvars[0usize..groups.len] }
+    ret Doc { valid: true, message: "", names: names[0usize..hosts.len], addresses: addresses[0usize..hosts.len], host_groups: host_groups[0usize..hosts.len], host_vars: host_vars[0usize..hosts.len], group_names: gnames[0usize..groups.len], group_vars: gvars[0usize..groups.len], sources: sources }
 }
 
 fn q_noop() {
