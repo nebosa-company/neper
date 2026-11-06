@@ -13,6 +13,9 @@ use e.ui.layout as ui_layout
 use e.ui.style
 use e.ui.widget
 
+// A pixel list or a dither parity that breaks the widget's contract (#779).
+error Invalid
+
 fn edge(v: f32, scale: f32) -> f32 {
     ret math.floor[f32](v * scale + 0.5) / scale
 }
@@ -87,12 +90,20 @@ fn dots_node(a: *mem.Arena, d: Dots, w: f32, h: f32) -> (widget.Node, err) {
 
 // A bitmap of single pixels: pixel i at (codes[i] / 16, codes[i] % 16) in colors[i], painted in order.
 fn sprite(a: *mem.Arena, codes: []const u8, colors: []const paint.Color, w: f32, h: f32) -> (widget.Node, err) {
+    var none: widget.Node = zero
+    // The slice contract is checked before the node exists: an empty or short colour list
+    // would be indexed by every code during painting (#779).
+    if codes.len == 0usize || colors.len != codes.len { ret (none, Invalid) }
+    if !(w == w) || !(h == h) || w < 0.0f32 || h < 0.0f32 { ret (none, Invalid) }
     let (node, node_error) = dots_node(a, Dots { count: codes.len, codes: codes, colors: colors, parity: 0u32, color: colors[0usize], across: 0u32, down: 0u32, dither: false }, w, h)
     ret (node, node_error)
 }
 
 // Every other pixel of a `w` x `h` box, those where x + y has `parity` (0 or 1), in `color`.
 fn dither(a: *mem.Arena, w: u32, h: u32, parity: u32, color: paint.Color) -> (widget.Node, err) {
+    var none_node: widget.Node = zero
+    // Parity is 0 or 1 by contract; anything else names no pixel set (#779).
+    if parity > 1u32 { ret (none_node, Invalid) }
     var none: []const u8 = zero
     var none_colors: []const paint.Color = zero
     let (node, node_error) = dots_node(a, Dots { count: 0usize, codes: none, colors: none_colors, parity: parity, color: color, across: w, down: h, dither: true }, f32(w), f32(h))
