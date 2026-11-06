@@ -29181,7 +29181,7 @@ JSON5 over `e.fmt.json`: `parse` transcodes JSON5 to strict JSON text in the are
 ### `e.sync.flight`
 
 ```neper
-type Call = struct { key: str, used: bool, done: bool, forgotten: bool, waiters: u32, value: str, failure: err }
+type Call = struct { key: str, used: bool, done: bool, forgotten: bool, waiters: u32, value: str, failure: err, generation: u64 }
 type Group = struct { lock: sync.Mutex, finished: sync.Condition, calls: []Call }
 error Full
 fn group(calls: []Call) -> Group
@@ -30789,6 +30789,7 @@ type OrSet = struct { elems: []OrElem, count: usize, site: u32, counter: u32 }
 type Kind = enum u8 { GCounter, PnCounter, Lww, OrSet }
 type Crdt = struct { kind: Kind, gcounter: GCounter, pncounter: PnCounter, lww: Lww, orset: OrSet }
 error TooSmall
+error Invalid
 
 fn fill(xs: []u64)
 fn max_into(dst: []u64, src: []const u64)
