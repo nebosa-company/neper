@@ -1738,6 +1738,7 @@ fn push_bin_u64(b: *Builder, v: u64) -> err {
 }
 
 fn concat(a: *mem.Arena, x: str, y: str) -> (str, err) {
+    if y.len > 18446744073709551615usize - x.len { ret ("", mem.Exhausted) }
     var (b, builder_error) = builder(a, x.len + y.len)
     if builder_error != ok { ret ("", builder_error) }
     let x_error = push(&b, x)
@@ -1754,10 +1755,17 @@ fn join(a: *mem.Arena, parts: []const str, sep: str) -> (str, err) {
     var total = 0usize
     var at = 0usize
     while at < parts.len {
+        if parts[at].len > 18446744073709551615usize - total { ret ("", mem.Exhausted) }
         total += parts[at].len
         at += 1usize
     }
-    if parts.len > 1usize { total += sep.len * (parts.len - 1usize) }
+    if parts.len > 1usize {
+        let gaps = parts.len - 1usize
+        if sep.len != 0usize && gaps > 18446744073709551615usize / sep.len { ret ("", mem.Exhausted) }
+        let padding = sep.len * gaps
+        if padding > 18446744073709551615usize - total { ret ("", mem.Exhausted) }
+        total += padding
+    }
     var (b, builder_error) = builder(a, total)
     if builder_error != ok { ret ("", builder_error) }
     at = 0usize
@@ -2816,6 +2824,7 @@ fn replace(a: *mem.Arena, s: str, needle: str, replacement: str) -> (str, err) {
 }
 
 fn repeat(a: *mem.Arena, s: str, repeat_count: usize) -> (str, err) {
+    if repeat_count != 0usize && s.len > 18446744073709551615usize / repeat_count { ret ("", mem.Exhausted) }
     var (b, builder_error) = builder(a, s.len * repeat_count)
     if builder_error != ok { ret ("", builder_error) }
     var at = 0usize
@@ -2901,7 +2910,10 @@ fn pad(a: *mem.Arena, s: str, width: usize, side: Side, fill: str) -> (str, err)
     if side == .Left { before = extra }
     if side == .Center { before = extra / 2usize }
     let after = extra - before
-    var (b, builder_error) = builder(a, s.len + extra * fill.len)
+    if fill.len != 0usize && extra > 18446744073709551615usize / fill.len { ret ("", mem.Exhausted) }
+    let fill_bytes = extra * fill.len
+    if s.len > 18446744073709551615usize - fill_bytes { ret ("", mem.Exhausted) }
+    var (b, builder_error) = builder(a, s.len + fill_bytes)
     if builder_error != ok { ret ("", builder_error) }
     let before_error = push_repeated(&b, fill, before)
     if before_error != ok { ret ("", before_error) }
