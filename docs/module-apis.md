@@ -5153,6 +5153,7 @@ type Vec3 = struct { x: f64, y: f64, z: f64 }
 type BarnesHut = struct { xs: []const f64, ys: []const f64, zs: []const f64, masses: []const f64, x0: f64, y0: f64, z0: f64, size: f64, child: []u32, body: []u32, mass: []f64, cx: []f64, cy: []f64, cz: []f64, used: usize }
 error TooSmall
 error Invalid
+error Iterations
 const NONE: u32 = 4294967295u32
 
 fn vec3(x: f64, y: f64, z: f64) -> Vec3
