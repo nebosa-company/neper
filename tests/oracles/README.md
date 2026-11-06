@@ -10,7 +10,7 @@ no `file:///D:/...` paths, no network.
 | `appdor/` | D:/repos/appdor (`src/`, the workflow runtime's import closure) | `f24389d8f` | `scripts/workflow_reference.mjs` → `algo_workflow` |
 
 `tools/migrate_reference/` is the petcow oracle: a small standalone crate built from
-petcow's `src/migrate.rs` (commit `d26e2034` in the local checkout; the oboobortot/petcow remote is not reachable with this account) with its
+petcow's `src/migrate.rs` (commit `e6811e19` in the local checkout; the oboobortot/petcow remote is not reachable with this account) with its
 `error.rs`, `naming.rs` and a minimal module source. It is built with
 `cargo build --release --offline` and consumed by `scripts/migrate_reference.py`.
 
@@ -40,4 +40,5 @@ Copy the upstream files again, run the generator, and review the fixture diff as
 semantic change to the port — never hand-edit the generated vectors. Licence status:
 `vaper` carries no explicit licence file upstream; `appdor`/`petcow` are company
 projects. Do not publish these copies outside the repository until that is settled.
+
 

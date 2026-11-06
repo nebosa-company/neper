@@ -43888,7 +43888,7 @@ on any other machine, and a `file:///D:/...` import is not a reproducible refere
 The sources are now copied under `tests/oracles/` (Vaper's six net files, Appdor's 63-file
 workflow closure) and the Petcow migrate shim lives in `tools/migrate_reference/`, each
 with a `PINNED.md` naming the upstream commit (`e874cad5076`, `f24389d8f`,
-`d26e2034`) and a README stating the regeneration commands. The generators read the
+`e6811e19`) and a README stating the regeneration commands. The generators read the
 copies; environment overrides remain (`APPDOR_DIR`), but nothing depends on them.
 Fidelity was checked by regenerating with the copies and comparing to the
 real-repository output: `net_policy` and `algo_workflow` came out with the same SHA-256,
@@ -43898,12 +43898,12 @@ The first two reference-only fixes were then made upstream and re-pinned, becaus
 fixture generated from a pinned copy must agree with the project it claims to mirror:
 Appdor commit `f24389d8f` (rebased onto upstream main and pushed) runs at most N steps for a budget of N (the off-by-one that
 made `maxSteps=0` run one step) and journals an unnamed `case` branch as `case:<n>` so
-a resume cannot confuse two unnamed cases; Petcow commit `d26e2034` skips only the
+a resume cannot confuse two unnamed cases; Petcow commit `e6811e19` skips only the
 offending token after a non-resource statement, so `include apache` no longer swallows
 the resource declaration after it. Both fixtures were regenerated and the neper side
 (`lib/e/algo/workflow.e`, `lib/x/migrate/migrate.e`) changed with them, so the fixtures
 stay green (`#205`, `#55`). The Appdor commit was rebased onto upstream `main` and pushed
-as `f24389d8f`; the Petcow commit `d26e2034` is local only, because the configured
+as `f24389d8f`; the Petcow commit `e6811e19` is local only, because the configured
 `oboobortot/petcow` remote answers 404 to the available account (no SSH key is present
 either), so the owner has to push it or grant access.
 
@@ -43919,6 +43919,7 @@ the README records that these copies are internal until that is settled. Appdor'
 journal shape and budget accounting (`#205`) and Petcow's Puppet skip-one behaviour
 (`#55`) remain upstream changes: editing a pinned copy would make the fixture disagree
 with the real project, so they stay open until those repositories change.
+
 
 
 
