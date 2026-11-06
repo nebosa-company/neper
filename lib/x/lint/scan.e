@@ -344,20 +344,45 @@ fn in_ids(ids: []const str, id: str) -> bool {
     ret false
 }
 
-// Merge reported findings for one resource into its recorded ones. An existing finding matched by id keeps its state,
-// justification, expiry and detection time and takes the new description and severity (`last_update` moves only on a
-// change); a reported finding not seen before is opened; an open finding of `owner_tool` no longer reported is fixed;
-// everything else is kept as is. The result is ordered by tool, rule and description.
+// Merge reported findings for one resource into its recorded ones. Duplicate reports of one
+// id (a scanner reports one rule per offending location) are collapsed to the highest severity.
+// An existing finding matched by id keeps its state, justification, expiry and detection time
+// and takes the new description and severity (`last_update` moves only on a change), except a
+// `Fixed` one, which has reappeared and is reopened; a reported finding not seen before is
+// opened; an open finding of `owner_tool` no longer reported is fixed; everything else is kept
+// as is. The result is ordered by tool, rule and description.
 fn merge(a: *mem.Arena, base: str, existing: []const Finding, reported: []const Reported, now: str, owner_tool: str) -> []const Finding {
     let (made, e) = list.init[Finding](a, 8usize)
     if e != ok { ret zero }
     var out = made
+    let (unique_made, ue) = list.init[Reported](a, reported.len)
+    if ue != ok { ret zero }
+    var unique = unique_made
+    var u = 0usize
+    while u < reported.len {
+        let rep = reported[u]
+        let id = finding_id(a, base, rep.tool, rep.rule)
+        var found_at = unique.len
+        var q = 0usize
+        while q < unique.len {
+            let other = finding_id(a, base, unique.items[q].tool, unique.items[q].rule)
+            if str.eq(other, id) { found_at = q }
+            q += 1usize
+        }
+        if found_at == unique.len {
+            let pushed = list.push[Reported](&unique, rep)
+        } else if rank(rep.severity) > rank(unique.items[found_at].severity) {
+            unique.items[found_at] = rep
+        }
+        u += 1usize
+    }
+    let reported_unique = list.slice_const[Reported](&unique)
     let (seen_made, se) = list.init[str](a, 8usize)
     if se != ok { ret zero }
     var seen = seen_made
     var r = 0usize
-    while r < reported.len {
-        let id = finding_id(a, base, reported[r].tool, reported[r].rule)
+    while r < reported_unique.len {
+        let id = finding_id(a, base, reported_unique[r].tool, reported_unique[r].rule)
         let pushed_id = list.push[str](&seen, id)
         var prev_index = existing.len
         var k = 0usize
@@ -365,11 +390,18 @@ fn merge(a: *mem.Arena, base: str, existing: []const Finding, reported: []const 
             if existing[k].has_id && str.eq(existing[k].id, id) && prev_index == existing.len { prev_index = k }
             k += 1usize
         }
-        let rep = reported[r]
+        let rep = reported_unique[r]
         if prev_index < existing.len {
             let prev = existing[prev_index]
             let changed = !str.eq(prev.description, rep.description) || prev.severity != rep.severity
             var f = Finding { has_id: true, id: id, tool: rep.tool, state: prev.state, severity: rep.severity, has_rule: true, rule: rep.rule, description: rep.description, has_solution: prev.has_solution, solution: prev.solution, has_justification: prev.has_justification, justification: prev.justification, has_expires: prev.has_expires, expires: prev.expires, detection_time: prev.detection_time, last_update: prev.last_update }
+            // A `Fixed` finding the scanner reports again has regressed: reopen it so it
+            // blocks `apply` again. A human `Accepted`/`FalsePositive` still survives.
+            if f.state == .Fixed {
+                f.state = .Open
+                f.detection_time = now
+                f.last_update = now
+            }
             if !prev.has_solution && rep.has_solution {
                 f.has_solution = true
                 f.solution = rep.solution

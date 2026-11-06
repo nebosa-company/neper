@@ -2,7 +2,8 @@
 // classification (request, notification, or the reference's refusal tokens), the three supported protocol versions and
 // their negotiation, the server capabilities, result and error envelopes, the three built-in prompts and their rendering,
 // the `appdor://table/<id>/schema|records` resource URIs, newline-delimited stdio framing (encode, and decode with the
-// unterminated remainder), batch handling, and the protocol-level half of the server state machine
+// unterminated remainder; a JSON-RPC batch array is not implemented, so it is answered as `message-not-an-object`), and
+// the protocol-level half of the server state machine
 // (`initialize`, `ping`, notifications, `prompts/list`, `prompts/get`, unknown methods, the initialize-first guard and
 // the argument checks). Tool, resource and curated dispatch go to the caller's accessor, so those methods answer
 // `delegate`.
@@ -262,8 +263,17 @@ fn encode_stdio_message(a: *mem.Arena, message: json.Value) -> str {
 
 // The messages in a buffer of newline-delimited JSON, the lines that were not JSON, and the unterminated tail.
 fn decode_stdio_chunk(a: *mem.Arena, buffer: str) -> Chunk {
-    let (messages, e1) = mem.alloc[json.Value](a, buffer.len + 1usize)
-    let (errors, e2) = mem.alloc[str](a, buffer.len + 1usize)
+    // Size the message and error arrays to the actual line count, not the byte count:
+    // a 64 MB buffer must not reserve gigabytes of json.Values up front.
+    var lines = 0usize
+    var scan = 0usize
+    while scan < buffer.len {
+        if buffer[scan] == 10u8 { lines += 1usize }
+        scan += 1usize
+    }
+    let capacity = lines + 1usize
+    let (messages, e1) = mem.alloc[json.Value](a, capacity)
+    let (errors, e2) = mem.alloc[str](a, capacity)
     var nm = 0usize
     var ne = 0usize
     var start = 0usize
@@ -304,11 +314,18 @@ fn pending(a: *mem.Arena, id: json.Value) -> json.Value { ret rpc_error(a, id, i
 // The protocol-level handling of one message; the accessor-backed methods are delegated.
 fn handle(a: *mem.Arena, s: *Server, message: json.Value, instructions: str) -> Handled {
     let c = classify_message(message)
-    var id = ir.value_of(message, "id")
-    if !c.valid { ret Handled { kind: 0u8, response: rpc_error(a, id, c.code, c.reason) } }
-    id = c.id
+    if !c.valid {
+        // JSON-RPC answers an unreadable request with a null id; a readable request with a
+        // bad method/version still gets its own id echoed.
+        var id: json.Value = zero
+        if !str.eq(c.reason, "message-not-an-object") && !str.eq(c.reason, "id-not-string-or-number") { id = ir.value_of(message, "id") }
+        ret Handled { kind: 0u8, response: rpc_error(a, id, c.code, c.reason) }
+    }
+    let id = c.id
     if c.notification {
-        if str.eq(c.method, "notifications/initialized") { s.initialized = true }
+        // A notification may only count after an initialize set a version; otherwise the
+        // guard below would serve tools/call and friends with no handshake.
+        if str.eq(c.method, "notifications/initialized") && s.version.len > 0usize { s.initialized = true }
         ret Handled { kind: 1u8, response: .Null }
     }
     var params = ir.value_of(message, "params")
