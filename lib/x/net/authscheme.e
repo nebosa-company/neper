@@ -493,6 +493,15 @@ fn apply_auth(a: *mem.Arena, connection: json.Value, request: json.Value, now_ms
             put(&headers, "Cookie", connection_value(connection, "cookie"))
         }
     }
+    // Every produced header goes through the same check, not only apiKey/custom: a token
+    // endpoint can inject CR/LF through accessToken/tokenType, cookie, or prefix.
+    let (produced, produced_is_object) = ir.members_of(ir.obj_value(&headers))
+    var hcheck = 0usize
+    while hcheck < produced.len && failed.len == 0usize {
+        let problem = header_problem(a, produced[hcheck].key, js_string(a, produced[hcheck].value), t)
+        if problem.len > 0usize { failed = problem }
+        hcheck += 1usize
+    }
     put(&out, "headers", ir.obj_value(&headers))
     put(&out, "query", ir.obj_value(&query))
     if failed.len > 0usize { put(&out, "error", sv(failed)) }
@@ -638,7 +647,7 @@ fn build_refresh(a: *mem.Arena, connection: json.Value) -> Refresh {
         put(&headers, "Content-Type", sv("application/x-www-form-urlencoded"))
         put(&headers, "Accept", sv("application/json"))
         if ir.truthy(ir.value_of(connection, "clientId")) && ir.truthy(ir.value_of(connection, "clientSecret")) && !in_body {
-            put(&headers, "Authorization", sv(join(a, "Basic ", base64(a, join(a, join(a, text_member(a, connection, "clientId"), ":"), text_member(a, connection, "clientSecret"))))))
+            put(&headers, "Authorization", sv(join(a, "Basic ", base64(a, join(a, join(a, form_component(a, text_member(a, connection, "clientId")), ":"), form_component(a, text_member(a, connection, "clientSecret")))))))
         }
         if !present(connection, "tokenUrl") { ret refresh_failed(missing(a, "oauth2", "tokenUrl")) }
         let body = encode_form(a, keys[0usize..n], values[0usize..n], n)
@@ -767,7 +776,10 @@ fn verify_inbound(a: *mem.Arena, connection: json.Value, headers: json.Value, bo
     }
     if presented.len == 0usize { ret Inbound { valid: false, reason: "missing-signature" } }
     let tol = ir.value_of(connection, "toleranceSec")
-    if ir.truthy(tol) && timestamp.len > 0usize {
+    if ir.truthy(tol) {
+        // With a tolerance configured the timestamp is mandatory, even when the canonical
+        // string does not include it: otherwise a captured request replays by dropping it.
+        if timestamp.len == 0usize { ret Inbound { valid: false, reason: "missing-timestamp" } }
         let (stamp, good) = webhook.js_number(timestamp)
         var tolerance = 0.0f64
         switch tol {

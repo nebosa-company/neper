@@ -246,9 +246,12 @@ fn render_number(a: *mem.Arena, lexeme: str) -> str {
 fn quote_pcl(a: *mem.Arena, s: str) -> str {
     if !str.contains(s, "\"") { ret cat3(a, "\"", s, "\"") }
     if !str.contains(s, "'") { ret cat3(a, "'", s, "'") }
-    let (stripped, e) = str.replace(a, s, "\"", "")
-    if e != ok { ret "" }
-    ret cat3(a, "\"", stripped, "\"")
+    // Both quote kinds: escape backslashes and double quotes instead of deleting them.
+    let (slashed, e1) = str.replace(a, s, "\\", "\\\\")
+    if e1 != ok { ret "" }
+    let (escaped, e2) = str.replace(a, slashed, "\"", "\\\"")
+    if e2 != ok { ret "" }
+    ret cat3(a, "\"", escaped, "\"")
 }
 
 type Rendered = struct { good: bool, s: str }
