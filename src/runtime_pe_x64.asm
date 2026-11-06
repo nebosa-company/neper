@@ -6,6 +6,8 @@ EXTERN __imp_CloseHandle:QWORD
 EXTERN __imp_CreateFileW:QWORD
 EXTERN __imp_CreateThread:QWORD
 EXTERN __imp_CreateProcessW:QWORD
+EXTERN __imp_CreateMutexW:QWORD
+EXTERN __imp_ReleaseMutex:QWORD
 EXTERN __imp_ExitProcess:QWORD
 EXTERN __imp_FindClose:QWORD
 EXTERN __imp_FindFirstFileW:QWORD
@@ -114,10 +116,24 @@ entry_main_call:
     call qword ptr [__imp_ExitProcess]
 
 entry_fail:
+    ; A command line that could not be parsed must say so, not exit 111 silently (#32).
+    mov ecx, -12
+    call qword ptr [__imp_GetStdHandle]
+    mov rcx, rax
+    lea rdx, entry_fail_text
+    mov r8d, ENTRY_FAIL_LEN
+    sub rsp, 64
+    lea r9, [rsp+48]
+    mov qword ptr [rsp+32], 0
+    call qword ptr [__imp_WriteFile]
+    add rsp, 64
     mov ecx, 111
     call qword ptr [__imp_ExitProcess]
     int 3
 neper_entry ENDP
+
+entry_fail_text db "neper: command line could not be parsed", 13, 10
+ENTRY_FAIL_LEN EQU $ - entry_fail_text
 
 ; The root arena's size (D225): the default, which `emit-executable --arena` patches in
 ; the image. A word in the code, so the linker finds it by symbol like a procedure.
@@ -808,6 +824,10 @@ neper_os_sha256_blocks PROC
     sub rsp, 128
     mov r10, rcx
     mov r11, rdx
+    xor eax, eax
+    cpuid
+    cmp eax, 7
+    jb np_sha_done
     mov eax, 7
     xor ecx, ecx
     cpuid
@@ -1074,6 +1094,10 @@ neper_os_crc32c_bytes PROC
     push rbx
     mov r10, rcx
     mov r11, rdx
+    xor eax, eax
+    cpuid
+    cmp eax, 1
+    jb np_crc_done
     mov eax, 1
     cpuid
     xor eax, eax
@@ -2357,6 +2381,19 @@ spawn_command_done:
     mov rax, [rbx+16]
     mov [rsp+176], rax
 
+    ; Serialise the inherit-flag window: a second spawn must not leave its handles
+    ; inheritable while this CreateProcessW runs (#32).
+    xor ecx, ecx
+    xor edx, edx
+    lea r8, spawn_lock_name
+    call qword ptr [__imp_CreateMutexW]
+    mov [rsp+248], rax
+    test rax, rax
+    jz spawn_lock_ready
+    mov rcx, rax
+    mov edx, 0FFFFFFFFh
+    call qword ptr [__imp_WaitForSingleObject]
+spawn_lock_ready:
     mov rcx, [rbx]
     test rcx, rcx
     jz spawn_set_stdout
@@ -2487,6 +2524,13 @@ spawn_not_found:
 spawn_oom:
     mov dword ptr [r12+8], 06979AADCh
 spawn_restore:
+    mov rcx, [rsp+248]
+    test rcx, rcx
+    jz spawn_unlocked
+    call qword ptr [__imp_ReleaseMutex]
+    mov rcx, [rsp+248]
+    call qword ptr [__imp_CloseHandle]
+spawn_unlocked:
     mov rcx, [rsp+208]
     mov rax, [rsp+216]
     mov [rcx+16], rax
@@ -3108,5 +3152,7 @@ np_ghash_reduce:
     ret
 np_ghash_flip db 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0
 neper_os_ghash_blocks ENDP
+
+spawn_lock_name DW 06Eh,065h,070h,065h,072h,05Fh,073h,070h,061h,077h,06Eh,05Fh,06Ch,06Fh,063h,06Bh,0000h
 
 END
