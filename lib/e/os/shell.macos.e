@@ -2804,7 +2804,9 @@ fn permission_location_enabled() -> bool {
 
 fn permission_of(code: usize, authorized_from: usize) -> Permission {
     if code >= authorized_from && code <= 4usize { ret .Granted }
-    if code == 2usize || code == 1usize { ret .Denied }
+    // AVFoundation 1 (Restricted) is not a refusal the user can reverse: Unavailable.
+    if code == 1usize { ret .Unavailable }
+    if code == 2usize { ret .Denied }
     if code == 0usize { ret .NotDetermined }
     ret .Unavailable
 }
