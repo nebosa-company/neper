@@ -218,7 +218,12 @@ fn rrt_star_run(cfg: *const Config, obstacles: []const Circle, rng: *rand.Pcg64,
         var qx = 0.0f64
         var qy = 0.0f64
         if informed && best != NONE {
-            let (ex, ey) = sample_ellipse(cfg, rng, sx, sy, gx, gy, c_min, p.cost[usize(best)])
+            // The bound is the cost of a path that reaches the goal: the node's own cost
+            // plus its remaining distance. Using the node cost alone let the ellipse be
+            // shorter than the start-goal chord and never cover the goal (#129).
+            var bound = p.cost[usize(best)] + distance(p.xs[usize(best)], p.ys[usize(best)], gx, gy)
+            if bound < c_min { bound = c_min }
+            let (ex, ey) = sample_ellipse(cfg, rng, sx, sy, gx, gy, c_min, bound)
             qx = ex
             qy = ey
         } else {
@@ -380,7 +385,10 @@ fn rrt_kinodynamic(cfg: *const Config, kino: *const Kino, obstacles: []const Cir
             let v = kino.v_min + rand.pcg64_f64(rng) * (kino.v_max - kino.v_min)
             let omega = (2.0f64 * rand.pcg64_f64(rng) - 1.0f64) * kino.omega_max
             let (free, x, y, th) = roll_out(kino, obstacles, p.xs[near], p.ys[near], p.th[near], v, omega)
-            if free {
+            // A free roll-out can still leave the declared workspace: a sampled control
+            // is unconstrained, so the end point is checked against the box (#129).
+            let inside = x >= cfg.min_x && x <= cfg.max_x && y >= cfg.min_y && y <= cfg.max_y
+            if free && inside {
                 let d = distance(x, y, qx, qy)
                 if !found || d < bd {
                     found = true
@@ -559,6 +567,23 @@ fn prm_query(obstacles: []const Circle, p: *Pool, n: usize, k: usize, adj: []u32
                 if relax_error != ok { ret (NONE, relax_error) }
             }
             e += 1usize
+        }
+        // A PRM roadmap is undirected, while the k-nearest adjacency it is built from is
+        // not: an edge v -> u that is only in v's list must still be usable from u (#129).
+        // O(n*k) per pop; n is the sample count, and this keeps the builder unchanged.
+        var r = 0usize
+        while r < n {
+            if closed[r] == 0u8 && r != u {
+                var re = 0usize
+                while re < k {
+                    if adj[r * k + re] == popped {
+                        let reverse_error = relax(p, &h, u, r)
+                        if reverse_error != ok { ret (NONE, reverse_error) }
+                    }
+                    re += 1usize
+                }
+            }
+            r += 1usize
         }
         var into_goal = u == usize(start) && direct
         e = 0usize
