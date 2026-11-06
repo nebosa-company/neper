@@ -262,7 +262,11 @@ fn chi_squared_cdf(x: f64, df: f64) -> f64 {
 fn f_cdf(x: f64, d1: f64, d2: f64) -> f64 {
     if d1 <= 0.0f64 || d2 <= 0.0f64 || x < 0.0f64 { ret nan() }
     if x == infinity() { ret 1.0f64 }
-    ret beta_i(d1 / 2.0f64, d2 / 2.0f64, d1 * x / (d1 * x + d2))
+    // d1*x/(d1*x+d2) written as 1/(1+d2/(d1*x)) so a huge finite x does not overflow both
+    // the numerator and the denominator into infinity/infinity (NaN).
+    var ratio = 0.0f64
+    if x > 0.0f64 { ratio = 1.0f64 / (1.0f64 + d2 / (d1 * x)) }
+    ret beta_i(d1 / 2.0f64, d2 / 2.0f64, ratio)
 }
 
 // The binomial coefficient as a real number, through the log-gamma.
