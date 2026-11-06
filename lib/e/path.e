@@ -39,6 +39,19 @@ fn root_length(path: str, style: Style) -> usize {
     if path.len == 0usize { ret 0usize }
     if style == .Windows {
         if path.len >= 2usize && is_separator(path[0usize], style) && is_separator(path[1usize], style) {
+            // UNC: the root runs through the server and the share, so `..` cannot walk
+            // above the share and two shares are different roots. A dot component means
+            // the spelling is not a share (fall back to the bare pair).
+            var scan = 2usize
+            while scan < path.len && !is_separator(path[scan], style) { scan += 1usize }
+            let server = path[2usize..scan]
+            if scan > 2usize && scan < path.len && !same_text(server, ".") && !same_text(server, "..") {
+                scan += 1usize
+                let share_start = scan
+                while scan < path.len && !is_separator(path[scan], style) { scan += 1usize }
+                let share = path[share_start..scan]
+                if scan > share_start && !same_text(share, ".") && !same_text(share, "..") { ret scan }
+            }
             ret 2usize
         }
         if path.len >= 2usize && is_drive_letter(path[0usize]) && path[1usize] == 58u8 {
@@ -55,6 +68,8 @@ fn root_length(path: str, style: Style) -> usize {
 fn is_absolute(path: str, style: Style) -> bool {
     let root = root_length(path, style)
     if root == 0usize { ret false }
+    // A UNC root ends with the share name, not a separator, but it is absolute.
+    if style == .Windows && root > 2usize && path.len >= 2usize && is_separator(path[0usize], style) && is_separator(path[1usize], style) { ret true }
     ret is_separator(path[root - 1usize], style)
 }
 
@@ -225,7 +240,7 @@ fn normalize(a: *mem.Arena, path: str, style: Style) -> (str, err) {
                     continue
                 }
             }
-            if written > body_start || unc_share {
+            if written > 0usize && !is_separator(buffer[written - 1usize], style) {
                 buffer[written] = separator(style)
                 written += 1usize
             }
@@ -662,3 +677,4 @@ fn glob_match(pattern: *const Glob, path: str) -> (bool, err) {
     }
     ret (true, ok)
 }
+

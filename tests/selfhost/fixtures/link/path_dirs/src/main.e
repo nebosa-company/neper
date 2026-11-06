@@ -190,6 +190,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // A shareless spelling is an edge, not a share: its current answer stands.
     let (unc_server, unc_server_error) = path.normalize(a, "\\\\server\\..\\share", .Windows)
     if unc_server_error != ok || !str.eq(unc_server, "\\\\share") { os.exit(99i32) }
+    // #404: different servers/shares are different roots, so relative() refuses them.
+    let (cross_share, cross_share_error) = path.relative(a, "\\\\server\\share\\a", "\\\\server\\other\\b", .Windows)
+    if cross_share_error != path.Invalid { os.exit(100i32) }
+    let (cross_server, cross_server_error) = path.relative(a, "\\\\one\\share\\a", "\\\\two\\share\\b", .Windows)
+    if cross_server_error != path.Invalid { os.exit(101i32) }
+    let (same_share, same_share_error) = path.relative(a, "\\\\server\\share\\a", "\\\\server\\share\\b", .Windows)
+    if same_share_error != ok || !str.eq(same_share, "..\\b") { os.exit(102i32) }
     try io.print("path dirs ok")
     ret ok
 }

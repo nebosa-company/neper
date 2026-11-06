@@ -2087,6 +2087,12 @@ fn denying_list(context: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err) {
     ret (entries, list_error)
 }
 
+// A branch whose listing always fails with a real error (not NotFound/NotDirectory).
+fn denied_list(context: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err) {
+    var none: []fs.Entry = zero
+    ret (none, fs.Denied)
+}
+
 fn overlay_scenarios(a: *mem.Arena) -> i32 {
     let (lower, lower_error) = vfs.mem_new(a, 4usize)
     if lower_error != ok { ret 1i32 }
@@ -2165,6 +2171,8 @@ fn overlay_scenarios(a: *mem.Arena) -> i32 {
     if !fails(a, &ov, "/etc", fs.NotFound) { ret 96i32 }
     if vfs.move(a, &ov, "/var", "/var/inner", 4096usize) != fs.Invalid { ret 97i32 }
     if vfs.move(a, &ov, "/bin", "/etc2", 4096usize) != fs.Exists { ret 98i32 }
+    // #638: a self-move of a missing path is NotFound, not success.
+    if vfs.move(a, &ov, "/nope", "/nope", 4096usize) != fs.NotFound { ret 120i32 }
     // the lower is exactly what it was
     if !names(a, &lv, "/", "bin/ etc/ var/") { ret 100i32 }
     if !names(a, &lv, "/etc", "conf.d/ hosts") { ret 101i32 }
@@ -2318,6 +2326,16 @@ fn union_scenarios(a: *mem.Arena) -> i32 {
     if vfs.write_file(a, &uv, "/d/new", "x") != fs.Denied { ret 20i32 }
     if vfs.make_dir(a, &uv, "/z") != fs.Denied { ret 21i32 }
     if vfs.remove(a, &uv, "/only0") != fs.Denied { ret 22i32 }
+    // #639: a branch listing failure that is not NotFound/NotDirectory propagates.
+    var failing_branch = v0
+    failing_branch.list_fn = denied_list
+    var error_branches = [2]vfs.Vfs{ v0, failing_branch }
+    let (error_union, error_union_error) = vfs.union_new(a, error_branches[0..])
+    if error_union_error != ok { ret 24i32 }
+    var eu = error_union
+    var euv = vfs.union_vfs(&eu)
+    let (_, branch_error) = vfs.list(a, &euv, "/")
+    if branch_error != fs.Denied { ret 25i32 }
     let (_, file_list) = vfs.list(a, &uv, "/only0")
     if file_list != vfs.NotDirectory { ret 23i32 }
     // the union lists as the same tree a plain Mem holds after the branches are copied in

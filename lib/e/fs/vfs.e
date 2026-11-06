@@ -456,7 +456,11 @@ fn move(a: *mem.Arena, v: *Vfs, src: str, dst: str, limit: usize) -> err {
     let (to, to_error) = clean(a, dst)
     if to_error != ok { ret to_error }
     if is_root(from) || is_root(to) { ret fs.Invalid }
-    if same_text(from, to) { ret ok }
+    if same_text(from, to) {
+        // A move to itself is a no-op only when the source exists.
+        let (_, same_error) = stat(a, v, from)
+        ret same_error
+    }
     if strictly_below(to, from) { ret fs.Invalid }
     let (e, stat_error) = stat(a, v, from)
     if stat_error != ok { ret stat_error }
@@ -879,7 +883,13 @@ fn union_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err) {
     var i = 0usize
     while i < u.branches.len {
         let (entries, failure) = list(a, &u.branches[i], path)
-        if failure == ok { total += entries.len }
+        // A branch without this directory is shadowed/absent; any other failure is real
+        // and must not turn into a silently partial listing.
+        if failure == ok {
+            total += entries.len
+        } else if failure != fs.NotFound && failure != NotDirectory {
+            ret (nothing, failure)
+        }
         i += 1usize
     }
     if total == 0usize { ret (nothing, ok) }
@@ -904,6 +914,8 @@ fn union_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err) {
                 }
                 k += 1usize
             }
+        } else if failure != fs.NotFound && failure != NotDirectory {
+            ret (nothing, failure)
         }
         i += 1usize
     }
@@ -1144,3 +1156,5 @@ fn host_list(ctx: *void, a: *mem.Arena, path: str) -> ([]fs.Entry, err) {
 fn host_vfs(h: *Host) -> Vfs {
     ret Vfs { ctx: mem.cast[*void](h), stat_fn: host_stat, read_fn: host_read, write_fn: host_write, make_dir_fn: host_make_dir, remove_fn: host_remove, list_fn: host_list }
 }
+
+
