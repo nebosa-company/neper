@@ -167,6 +167,7 @@ fn dependency_signature_kind() -> usize { ret 1usize }
 fn dependency_value_kind() -> usize { ret 2usize }
 fn dependency_body_kind() -> usize { ret 3usize }
 fn dependency_lookup_kind() -> usize { ret 4usize }
+fn dependency_alias_kind() -> usize { ret 5usize }
 
 fn mode_id(mode: BuildMode) -> usize {
     if mode == .Release { ret 1usize }
@@ -2346,6 +2347,65 @@ fn lookup_dependency_count(c: *check.Checker, marks: []u8) -> usize {
     ret count
 }
 
+// Aliases a module names as `q.Name` in another module. Without these edges a warm
+// build keeps a dependent artifact after `type Word = u32` becomes `u64`.
+fn mark_alias_uses(c: *check.Checker, g: *graph.Graph, module_index: usize, marks: []u8) {
+    if module_index >= g.count { ret }
+    let module = g.modules[module_index]
+    let tokens = module.tokens
+    var token_at = 0usize
+    while token_at + 2usize < tokens.len {
+        if tokens[token_at].kind == .Identifier && tokens[token_at + 1usize].kind == .PunctDot && tokens[token_at + 2usize].kind == .Identifier {
+            let qualifier = lex.token_text(module.text, tokens[token_at])
+            let name = lex.token_text(module.text, tokens[token_at + 2usize])
+            var import_at = module.first_import
+            let import_end = module.first_import + module.import_count
+            while import_at < import_end {
+                if same(g.imports[import_at].qualifier, qualifier) {
+                    let (alias_at, declared) = check.find_alias(c, g.imports[import_at].target, name)
+                    if declared && alias_at < c.alias_count && alias_at < marks.len {
+                        if c.aliases[alias_at].module_index != module_index { marks[alias_at] = 1u8 }
+                    }
+                }
+                import_at += 1usize
+            }
+        }
+        token_at += 1usize
+    }
+}
+
+fn alias_dependency_count(c: *check.Checker, marks: []u8) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < c.alias_count && at < marks.len {
+        if marks[at] != 0u8 { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn write_alias_dependencies(c: *check.Checker, g: *graph.Graph, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer, marks: []u8) -> err {
+    var at = 0usize
+    while at < c.alias_count && at < marks.len {
+        if marks[at] != 0u8 {
+            let alias = c.aliases[at]
+            if alias.module_index >= g.count { ret InvalidArtifact }
+            let (hash, hash_error) = alias_signature_hash(c, g, at, scratch)
+            if hash_error != ok { ret hash_error }
+            let (target_module, target_module_error) = string_index(table, g.modules[alias.module_index].name)
+            if target_module_error != ok { ret target_module_error }
+            let (target_name, target_name_error) = string_index(table, alias.name)
+            if target_name_error != ok { ret target_name_error }
+            try binary.byte(output, dependency_alias_kind())
+            try binary.zeroes(output, 3usize)
+            try binary.little_u32(output, target_module)
+            try binary.little_u32(output, target_name)
+            try binary.little_u64(output, hash)
+        }
+        at += 1usize
+    }
+    ret ok
+}
 fn aggregate_dependency_count(c: *check.Checker, marks: []u8) -> usize {
     var count = 0usize
     var at = 0usize
@@ -2529,11 +2589,12 @@ fn write_aggregate_dependencies(c: *check.Checker, g: *graph.Graph, table: *Stri
     ret ok
 }
 
-fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer, aggregate_marks: []u8, body_marks: []u8) -> err {
+fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer, aggregate_marks: []u8, alias_marks: []u8, body_marks: []u8) -> err {
     try mark_module_references(builder, c, module_index)
+    mark_alias_uses(c, g, module_index, alias_marks)
     let (value_count, value_count_error) = value_dependency_count(c, module_index, body_marks)
     if value_count_error != ok { ret value_count_error }
-    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks) + lookup_dependency_count(c, aggregate_marks))
+    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks) + alias_dependency_count(c, alias_marks) + lookup_dependency_count(c, aggregate_marks))
     var walk = 0usize
     while walk < reference_walk_count(builder) {
         let at = reference_walk_at(builder, walk)
@@ -2610,6 +2671,7 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
         at += 1usize
     }
     try write_aggregate_dependencies(c, g, table, scratch, output, aggregate_marks)
+    try write_alias_dependencies(c, g, table, scratch, output, alias_marks)
     at = 0usize
     while at < c.constant_count {
         let (used_by_constant, used_error) = foreign_constant_used_by_module(c, module_index, at)
@@ -3210,7 +3272,9 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     let (target_index, target_error) = intern(strings, target_triple)
     if target_error != ok { ret target_error }
     var aggregate_marks: [8192]u8 = zero
+    var alias_marks: [8192]u8 = zero
     var constant_marks: [8192]u8 = zero
+    mark_alias_uses(c, g, module_index, alias_marks[..])
     try collect_module_strings(c, g, builder, module_index, strings, aggregate_marks[..], constant_marks[..])
     try collect_line_paths(builder, c, module_index, machine, function_offsets, lines, line_count, strings)
     try collect_vars(builder, c, g, module_index, machine, function_offsets, strings)
@@ -3224,7 +3288,7 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     if interface_error != ok { ret interface_error }
     try end_section(&writer)
     try begin_section(&writer, deps_kind(), required_flag())
-    try write_dependencies(c, g, builder, module_index, strings, scratch, output, aggregate_marks[..], constant_marks[..])
+    try write_dependencies(c, g, builder, module_index, strings, scratch, output, aggregate_marks[..], alias_marks[..], constant_marks[..])
     try end_section(&writer)
     try begin_section(&writer, code_kind(), required_flag())
     let code_error = write_code(c, g, builder, module_index, strings, machine, function_offsets, relocations, relocation_count, scratch, output)
@@ -4963,6 +5027,11 @@ fn dependency_holds(dependency: Dependency, declaration: Declaration, found_decl
     if dependency.kind == dependency_signature_kind() { ret (declaration.signature_hash == dependency.hash, ok) }
     if dependency.kind == dependency_value_kind() || dependency.kind == dependency_body_kind() { ret (declaration.body_hash == dependency.hash, ok) }
     if dependency.kind == dependency_lookup_kind() { ret (declaration.signature_hash == dependency.hash, ok) }
+    // An alias edge names the alias declaration itself: same name and same canonical
+    // resolved-type signature, so changing `type Word = u32` to u64 invalidates users.
+    if dependency.kind == dependency_alias_kind() {
+        ret (declaration.kind == declaration_alias_kind() && declaration.signature_hash == dependency.hash, ok)
+    }
     ret (false, InvalidArtifact)
 }
 
@@ -5629,5 +5698,8 @@ fn decode_constant(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payloa
     c.constant_count += 1usize
     ret ok
 }
+
+
+
 
 
