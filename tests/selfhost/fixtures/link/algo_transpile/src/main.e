@@ -337,6 +337,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if run(a, vectors_32(), &registry) != 0u8 { os.exit(33i32) }
     if run(a, vectors_33(), &registry) != 0u8 { os.exit(34i32) }
     if run(a, vectors_34(), &registry) != 0u8 { os.exit(35i32) }
+    // #703: quoted literals are data; their text must not score any dialect.
+    let quoted = t.detect(a, "\"WORKDAYS(x, y)\"")
+    var qi = 0usize
+    while qi < quoted.len {
+        if quoted[qi].score != 0i64 { os.exit(44i32) }
+        qi += 1usize
+    }
+    let quoted_sums = t.detect(a, "\"SUMIFS(a, b, c)\"")
+    qi = 0usize
+    while qi < quoted_sums.len {
+        if quoted_sums[qi].score != 0i64 { os.exit(45i32) }
+        qi += 1usize
+    }
     // #206: `//` and `;` inside strings are literal; reorder keeps unlisted args.
     let url = t.translate(a, &registry, "Concat(\"https://example.com/\", [Id])", "quickbase", zero)
     if !str.contains(url.canonical, "https://example.com/") { os.exit(41i32) }

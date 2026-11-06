@@ -1117,6 +1117,9 @@ fn number_or_nan(v: f.Value) -> f64 {
 // blank until `size` non-missing values are in the window (pandas'
 // `min_periods = window`).
 fn window(a: *mem.Arena, rows: []const view.Row, spec: Window) -> ([]view.Row, err) {
+    // Reject unknown operation codes before any allocation, so a typo cannot quietly
+    // produce a column of blank cells.
+    if spec.function > WINDOW_DIFF { ret (zero, Invalid) }
     let (names, ne) = column_names(a, rows)
     if ne != ok { ret (zero, ne) }
     if !has_column(names, spec.input) && spec.function != WINDOW_ROW_NUMBER { ret (zero, Missing) }
@@ -1321,6 +1324,9 @@ fn replace_na(a: *mem.Arena, rows: []const view.Row, column: str, value: f.Value
 // or next (`FILL_UP`) non-missing value of the same column within its
 // `partition`, in row order.
 fn fill(a: *mem.Arena, rows: []const view.Row, columns: []const str, partition: []const str, direction: u8) -> ([]view.Row, err) {
+    // Only the two documented directions are meaningful; anything else used to behave
+    // as FILL_DOWN.
+    if direction != FILL_DOWN && direction != FILL_UP { ret (zero, Invalid) }
     let (names, ne) = column_names(a, rows)
     if ne != ok { ret (zero, ne) }
     let n = rows.len

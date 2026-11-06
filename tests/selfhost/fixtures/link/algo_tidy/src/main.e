@@ -456,6 +456,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     failed += run_chunk(a, vectors_13())
     failed += run_chunk(a, vectors_14())
     if failed != 0u32 { os.exit(1i32) }
+    // #707: unknown window and fill operation codes are Invalid, before any work.
+    var empty_rows: [0]view.Row = zero
+    var no_parts: [0]str = zero
+    var no_columns: [0]str = zero
+    let (_, bad_window_error) = tidy.window(a, empty_rows[0..], tidy.Window { function: 200u8, input: "x", output: "y", partition: no_parts[0..], order_by: "", descending: false, size: 0usize })
+    if bad_window_error != tidy.Invalid { os.exit(60i32) }
+    let (_, bad_fill_error) = tidy.fill(a, empty_rows[0..], no_columns[0..], no_parts[0..], 7u8)
+    if bad_fill_error != tidy.Invalid { os.exit(61i32) }
     try io.print("algo tidy ok")
     ret ok
 }

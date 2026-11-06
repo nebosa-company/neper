@@ -965,6 +965,41 @@ fn detect(a: *mem.Arena, source: str) -> []Ranked {
     var none: []Ranked = zero
     let (out, e) = mem.alloc[Ranked](a, known.len)
     if e != ok { ret none }
+    // Only syntax is evidence: blank quoted literals (honouring backslash escapes) and
+    // `//` comments before looking for reference shapes or mapped function names.
+    let (masked_buf, masked_error) = mem.alloc[u8](a, source.len)
+    if masked_error != ok { ret none }
+    mem.copy[u8](masked_buf, source)
+    var q = 0usize
+    var quote = 0u8
+    while q < masked_buf.len {
+        let ch = masked_buf[q]
+        if quote == 0u8 {
+            if ch == 34u8 || ch == 39u8 {
+                // Keep the delimiters: `field("A")` is real reference syntax; blank only
+                // the literal's content.
+                quote = ch
+            } else if ch == 47u8 && q + 1usize < masked_buf.len && masked_buf[q + 1usize] == 47u8 {
+                while q < masked_buf.len && masked_buf[q] != 10u8 {
+                    masked_buf[q] = 32u8
+                    q += 1usize
+                }
+                continue
+            }
+        } else {
+            if ch == 92u8 && q + 1usize < masked_buf.len {
+                masked_buf[q] = 32u8
+                q += 1usize
+                masked_buf[q] = 32u8
+            } else if ch == quote {
+                quote = 0u8
+            } else {
+                masked_buf[q] = 32u8
+            }
+        }
+        q += 1usize
+    }
+    let scanned = masked_buf
     // which reference styles the text shows
     var has_field = false
     var has_prop = false
@@ -973,54 +1008,54 @@ fn detect(a: *mem.Arena, source: str) -> []Ranked {
     var has_var = false
     var notion_hint = false
     var i = 0usize
-    while i < source.len {
-        if (i == 0usize || !is_word(source[i - 1usize])) && starts_fold(source, i, "field") {
+    while i < scanned.len {
+        if (i == 0usize || !is_word(scanned[i - 1usize])) && starts_fold(scanned, i, "field") {
             var p = i + 5usize
-            if p < source.len && source[p] == 40u8 {
+            if p < scanned.len && scanned[p] == 40u8 {
                 p += 1usize
-                while p < source.len && is_space(source[p]) { p += 1usize }
-                if p < source.len && (source[p] == 34u8 || source[p] == 39u8) { has_field = true }
+                while p < scanned.len && is_space(scanned[p]) { p += 1usize }
+                if p < scanned.len && (scanned[p] == 34u8 || scanned[p] == 39u8) { has_field = true }
             }
         }
-        if (i == 0usize || !is_word(source[i - 1usize])) && starts_fold(source, i, "prop") {
+        if (i == 0usize || !is_word(scanned[i - 1usize])) && starts_fold(scanned, i, "prop") {
             var p = i + 4usize
-            if p < source.len && source[p] == 40u8 {
+            if p < scanned.len && scanned[p] == 40u8 {
                 p += 1usize
-                while p < source.len && is_space(source[p]) { p += 1usize }
-                if p < source.len && (source[p] == 34u8 || source[p] == 39u8) { has_prop = true }
+                while p < scanned.len && is_space(scanned[p]) { p += 1usize }
+                if p < scanned.len && (scanned[p] == 34u8 || scanned[p] == 39u8) { has_prop = true }
             }
         }
-        if source[i] == 91u8 && i + 1usize < source.len && is_letter(source[i + 1usize]) {
+        if scanned[i] == 91u8 && i + 1usize < scanned.len && is_letter(scanned[i + 1usize]) {
             var p = i + 2usize
-            while p < source.len && source[p] != 93u8 { p += 1usize }
-            if p < source.len { has_bracket = true }
+            while p < scanned.len && scanned[p] != 93u8 { p += 1usize }
+            if p < scanned.len { has_bracket = true }
         }
-        if source[i] == 123u8 {
+        if scanned[i] == 123u8 {
             var p = i + 1usize
-            while p < source.len && source[p] != 125u8 { p += 1usize }
-            if p < source.len && p > i + 1usize { has_brace = true }
+            while p < scanned.len && scanned[p] != 125u8 { p += 1usize }
+            if p < scanned.len && p > i + 1usize { has_brace = true }
         }
-        if (i == 0usize || !is_word(source[i - 1usize])) && starts_fold(source, i, "var") && i + 3usize < source.len && is_space(source[i + 3usize]) {
+        if (i == 0usize || !is_word(scanned[i - 1usize])) && starts_fold(scanned, i, "var") && i + 3usize < scanned.len && is_space(scanned[i + 3usize]) {
             var p = i + 3usize
-            while p < source.len && is_space(source[p]) { p += 1usize }
-            if p < source.len && is_letter(source[p]) { has_var = true }
+            while p < scanned.len && is_space(scanned[p]) { p += 1usize }
+            if p < scanned.len && is_letter(scanned[p]) { has_var = true }
         }
         i += 1usize
     }
     // `(prop|lets?|formatDate|dateBetween)\s*\(` as written
     i = 0usize
-    while i < source.len {
-        if i == 0usize || !is_word(source[i - 1usize]) {
+    while i < scanned.len {
+        if i == 0usize || !is_word(scanned[i - 1usize]) {
             var word = 0usize
-            if i + 4usize <= source.len && str.eq(source[i..i + 4usize], "prop") { word = 4usize }
-            if i + 3usize <= source.len && str.eq(source[i..i + 3usize], "let") { word = 3usize }
-            if i + 4usize <= source.len && str.eq(source[i..i + 4usize], "lets") { word = 4usize }
-            if i + 10usize <= source.len && str.eq(source[i..i + 10usize], "formatDate") { word = 10usize }
-            if i + 11usize <= source.len && str.eq(source[i..i + 11usize], "dateBetween") { word = 11usize }
+            if i + 4usize <= scanned.len && str.eq(scanned[i..i + 4usize], "prop") { word = 4usize }
+            if i + 3usize <= scanned.len && str.eq(scanned[i..i + 3usize], "let") { word = 3usize }
+            if i + 4usize <= scanned.len && str.eq(scanned[i..i + 4usize], "lets") { word = 4usize }
+            if i + 10usize <= scanned.len && str.eq(scanned[i..i + 10usize], "formatDate") { word = 10usize }
+            if i + 11usize <= scanned.len && str.eq(scanned[i..i + 11usize], "dateBetween") { word = 11usize }
             if word > 0usize {
                 var p = i + word
-                while p < source.len && is_space(source[p]) { p += 1usize }
-                if p < source.len && source[p] == 40u8 { notion_hint = true }
+                while p < scanned.len && is_space(scanned[p]) { p += 1usize }
+                if p < scanned.len && scanned[p] == 40u8 { notion_hint = true }
             }
         }
         i += 1usize
@@ -1036,14 +1071,14 @@ fn detect(a: *mem.Arena, source: str) -> []Ranked {
         let entries = mappings(a, known[d].id)
         // every `identifier(` in the text that the dialect maps
         var p = 0usize
-        while p < source.len {
-            if is_letter(source[p]) || source[p] == 95u8 {
-                var q = p
-                while q < source.len && is_word(source[q]) { q += 1usize }
-                var r = q
-                while r < source.len && is_space(source[r]) { r += 1usize }
-                if r < source.len && source[r] == 40u8 {
-                    let (at, hit) = find_mapping(entries, f.normalize_name(a, source[p..q]))
+        while p < scanned.len {
+            if is_letter(scanned[p]) || scanned[p] == 95u8 {
+                var q2 = p
+                while q2 < scanned.len && is_word(scanned[q2]) { q2 += 1usize }
+                var r = q2
+                while r < scanned.len && is_space(scanned[r]) { r += 1usize }
+                if r < scanned.len && scanned[r] == 40u8 {
+                    let (at, hit) = find_mapping(entries, f.normalize_name(a, scanned[p..q2]))
                     if hit { score += 1i64 }
                     p = r + 1usize
                 } else {
