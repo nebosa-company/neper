@@ -311,8 +311,10 @@ fn parse_lenient(text: str, day_first: bool) -> (Parsed, err) {
             i += 1usize
             continue
         }
-        // Punctuation: a sign after a time is a zone offset, anything else separates.
-        if (t.value == 43i64 || t.value == 45i64) && p.has_time && !p.has_offset && i + 1usize < n && toks[i + 1usize].kind == NUM {
+        // Punctuation: a sign after a time is a zone offset, anything else separates. A
+        // `-NN-YYYY` tail is a dash-separated date, not an offset (#92 item 7).
+        let date_tail = t.value == 45i64 && i + 3usize < n && toks[i + 2usize].kind == PUNCT && toks[i + 2usize].value == 45i64 && toks[i + 3usize].kind == NUM && toks[i + 3usize].len == 4usize
+        if (t.value == 43i64 || t.value == 45i64) && !date_tail && p.has_time && !p.has_offset && i + 1usize < n && toks[i + 1usize].kind == NUM {
             let digits = toks[i + 1usize].len
             var hh = 0i64
             var mm = 0i64

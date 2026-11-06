@@ -10,13 +10,14 @@
 // 30-99 as 1930-1999); `MMMM` `MMM` month name, `MM` `M` month number; `dddd` `ddd`
 // weekday name, `dd` `d` day; `HH` `H` 24-hour, `hh` `h` 12-hour; `mm` `m` minute; `ss`
 // `s` second; `f`..`fffffffff` a fixed fraction of that many digits, `F`..`FFFFFFFFF` the
-// same with trailing zeros (and a bare separator) dropped; `tt` `t` AM/PM or A/P. A
+// same with trailing zeros dropped (the preceding separator stays); `tt` `t` AM/PM or A/P. A
 // quoted run `'...'` or `"..."` is literal, `\x` is literal x, `%x` makes a single
 // letter a specifier; every other byte is literal. A doubled letter run longer than the
 // forms above is `Invalid`.
 //
 // Parsing: a padded form (`dd`) reads exactly its digits, an unpadded one (`d`) one or
-// two; names match case-insensitively; each field may appear once; `h` needs `tt`/`t`
+// two; names match case-insensitively for ASCII letters (non-ASCII must match exactly);
+// each field may appear once; `h` needs `tt`/`t`
 // and `tt`/`t` needs `h`; a weekday name that disagrees with the date is refused. A
 // field the pattern lacks takes the template's value (2000-01-01T00:00:00 for `parse`).
 
