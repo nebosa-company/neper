@@ -2613,8 +2613,10 @@ fn xmss_leaf(sk_seed: []const u8, seed: []const u8, index: u32) -> [32]u8 {
     ret xmss_ltree(elements[0..], seed, adrs[0..])
 }
 
-// Byte offset of node j at level t in the level-by-level layout (level 0 = leaves).
+// Byte offset of node j at level t in the level-by-level layout (level 0 = leaves). Both the shift
+// and the subtraction need a supported height and level: an unsupported one answers 0 (#529).
 fn xmss_node_at(height: usize, level: usize, j: usize) -> usize {
+    if !xmss_height_valid(height) || level > height { ret 0usize }
     ret ((2usize << u32(height)) - (2usize << u32(height - level)) + j) * 32usize
 }
 

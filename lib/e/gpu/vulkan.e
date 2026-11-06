@@ -525,7 +525,8 @@ fn open(a: *mem.Arena, physical: Physical) -> (Context, err) {
     if cached != 32usize { context.host_type = u32(cached) }
     let submission_error = make_submission(a, &context)
     if submission_error != ok {
-        close(context)
+        // The caller closes the context it is handed, so every partial device is released
+        // exactly once (#34).
         ret (context, submission_error)
     }
     ret (context, ok)

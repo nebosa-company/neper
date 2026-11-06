@@ -1141,18 +1141,24 @@ fn open_preferred(a: *mem.Arena, backend: Backend) -> (*Device, err) {
 fn open_physical(a: *mem.Arena, physical: vulkan.Physical, index: u32) -> (*Device, err) {
     if !physical.floor { ret (zero, Unsupported) }
     let (context, context_error) = vulkan.open(a, physical)
-    if context_error == vulkan.Unsupported {
+    if context_error != ok {
+        // open may already have created the VkDevice before a later allocation or the
+        // memory-type probe fails; release it on every error path (#34).
         vulkan.close(context)
-        ret (zero, Unsupported)
+        if context_error == vulkan.Unsupported { ret (zero, Unsupported) }
+        ret (zero, Lost)
     }
-    if context_error != ok { ret (zero, Lost) }
     let (device, device_error) = open_state(a, .Vulkan)
     if device_error != ok {
         vulkan.close(context)
         ret (zero, device_error)
     }
     let (state, state_error) = state_of(device)
-    if state_error != ok { ret (zero, state_error) }
+    if state_error != ok {
+        vulkan.close(context)
+        let closed = close(device)
+        ret (zero, state_error)
+    }
     defer unlock_state(state)
     state.context = context
     state.physical = physical
