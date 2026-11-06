@@ -595,7 +595,8 @@ fn validate_named_type(r: *Resolver, g: *graph.Graph, module_index: usize, node:
     let first = r.tokens[usize(node.token_start)]
     if first.kind != .Identifier { ret parse.InvalidSyntax }
     let base = lex.token_text(g.modules[module_index].text, first)
-    if same(base, "mem") {
+    let (mem_module, mem_qualified) = qualifier(r, module_index, "mem")
+    if same(base, "mem") && !mem_qualified {
         var entry_at = usize(node.token_start) + 1usize
         var entry_state = 0usize
         var valid_entry = true
