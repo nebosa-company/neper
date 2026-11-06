@@ -5293,6 +5293,13 @@ fn lower_unary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if emit_error != ok { ret (0usize, result_type, emit_error) }
     let add_error = nir.add_operand(builder, instruction, operand)
     if add_error != ok { ret (0usize, result_type, add_error) }
+    // SPIR-V has no Negate fault of its own: 0 - MIN overflows, so reuse the subtract guard.
+    if builder.spirv && operator == .PunctMinus && !builder.nocheck && !builder.release && result_type.kind == .Integer {
+        let (zero_value, zero_error) = emit_device_constant(builder, result_type, 0usize, c.tokens[usize(node.token_start)])
+        if zero_error != ok { ret (0usize, result_type, zero_error) }
+        let negate_guard_error = emit_device_overflow_guard(builder, .Subtract, result_type, zero_value, operand, result, c.tokens[usize(node.token_start)])
+        if negate_guard_error != ok { ret (0usize, result_type, negate_guard_error) }
+    }
     ret (result, result_type, ok)
 }
 
@@ -6505,6 +6512,14 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if binary_error != ok { ret binary_error }
         try nir.add_operand(builder, binary_instruction, resumed_current)
         try nir.add_operand(builder, binary_instruction, right)
+        if builder.spirv && place_type.kind == .Integer && (opcode == .Divide || opcode == .Remainder) {
+            let division_error = emit_device_divide_guards(builder, place_type, resumed_current, right, token)
+            if division_error != ok { ret division_error }
+        }
+        if builder.spirv && !builder.nocheck && !builder.release && place_type.kind == .Integer && (opcode == .Add || opcode == .Subtract || opcode == .Multiply) {
+            let overflow_error = emit_device_overflow_guard(builder, opcode, place_type, resumed_current, right, value, token)
+            if overflow_error != ok { ret overflow_error }
+        }
         ret store_assignment_value(c, place_type, resumed_address, value, token, builder)
     }
     let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, children[1usize], place_type, builder, bindings, binding_count)
@@ -7827,6 +7842,16 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
         if right_coerce_error != ok { ret (0usize, result_type, right_coerce_error) }
         left_ordered = left_operand
         right_ordered = right_operand
+    }
+    // SPIR-V leaves a shift count at or past the width undefined; mask it the way the
+    // spec section 11 defines the release result on every target.
+    if builder.spirv && result_type.kind == .Integer && (opcode == .ShiftLeft || opcode == .ShiftRight) {
+        let width = check.integer_width(result_type)
+        let (mask, mask_error) = emit_device_constant(builder, lowered_right_type, width - 1usize, c.tokens[usize(node.token_start)])
+        if mask_error != ok { ret (0usize, result_type, mask_error) }
+        let (masked, masked_error) = emit_device_binary(builder, .BitAnd, lowered_right_type, right_ordered, mask, c.tokens[usize(node.token_start)])
+        if masked_error != ok { ret (0usize, result_type, masked_error) }
+        right_ordered = masked
     }
     let operation_token = c.tokens[usize(node.token_start)]
     if builder.spirv && result_type.kind == .Integer && (opcode == .Divide || opcode == .Remainder) {
@@ -11161,4 +11186,5 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     ret ok
 }
+
 
