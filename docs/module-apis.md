@@ -23233,6 +23233,7 @@ fn split_dots(a: *mem.Arena, path: str) -> []const str
 fn set_by_path(a: *mem.Arena, obj: json.Value, path: str, value: json.Value) -> Built
 fn scalar_text(a: *mem.Arena, v: json.Value) -> (str, bool)
 fn var_lookup(vars: []const Pair, key: str) -> (str, bool)
+fn url_segment(a: *mem.Arena, s: str) -> str
 fn render_with(a: *mem.Arena, template: str, name: str, attrs: json.Value, vars: []const Pair) -> Rendered
 fn address(a: *mem.Arena, def: Def, name: str) -> str
 fn body_name_value(a: *mem.Arena, def: Def, name: str, vars: []const Pair) -> Rendered
@@ -23397,7 +23398,7 @@ fn is_not_found(a: *mem.Arena, stderr: str) -> bool
 fn text(s: str) -> json.Value
 fn obj(a: *mem.Arena) -> ir.Obj
 fn is_managed_item(item: json.Value) -> bool
-fn apply_manifest(a: *mem.Arena, d: Def, name: str, attrs: json.Value) -> str
+fn apply_manifest(a: *mem.Arena, d: Def, name: str, attrs: json.Value) -> (str, err)
 fn observed(a: *mem.Arena, type_: str, live: json.Value) -> json.Value
 ```
 
