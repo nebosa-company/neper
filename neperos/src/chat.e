@@ -783,11 +783,10 @@ fn save_account(a: *mem.Arena, s: *State) -> bool {
 }
 
 // Connect to the chat server and join: as the account in the Account fields when there is one (JOIN|name|secret, which
-// the server checks), else as the guest `neper`. wss first, the plain port when the secure link cannot be made.
+// the server checks), else as the guest `neper`. TLS only: a failed secure link is reported, never downgraded (#180).
 fn live_open(a: *mem.Arena, s: *State) -> bool {
-    var link = netclient.connect("neper.test", 8453u16, true)
+    let link = netclient.connect("neper.test", 8453u16, true)
     s.tls = link == netproto.R_OK
-    if link != netproto.R_OK { link = netclient.connect("neper.test", 8090u16, false) }
     if link != netproto.R_OK { ret false }
     s.nb.pos = 0usize
     s.nb.len = 0usize
