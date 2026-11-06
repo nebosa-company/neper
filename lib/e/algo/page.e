@@ -404,21 +404,9 @@ fn decode_cursor(a: *mem.Arena, cursor: str) -> ([]const f.Field, bool) {
     let (root, e) = json.parse(a, text, json.Options { allow_duplicate_keys: true, max_depth: 64u16 })
     if e != ok { ret (none, false) }
     switch root {
-    case .Null:
-        ret (none, false)
-    case .Bool as b:
-        if !b { ret (none, false) }
-        ret (none, true)
-    case .Number as n:
-        let (value, ne) = json.number_f64(n)
-        if value == 0.0f64 || value != value { ret (none, false) }
-        ret (none, true)
-    case .String as s:
-        if s.len == 0usize { ret (none, false) }
-        ret (none, true)
-    case .Array as items:
-        ret (none, true)
     case .Object as members:
+        // A cursor is an object of sort fields; any other JSON token names no position.
+        if members.len == 0usize { ret (none, false) }
         let (out, oe) = mem.alloc[f.Field](a, members.len + 1usize)
         if oe != ok { ret (none, false) }
         var n = 0usize

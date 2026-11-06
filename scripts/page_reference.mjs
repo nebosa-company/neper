@@ -90,10 +90,19 @@ for (let k = 0; k < 60; k += 1) {
     cursor = r.nextCursor;
   }
 }
+function cursorIsPosition(cursor) {
+  try {
+    const value = JSON.parse(Buffer.from(cursor, 'base64').toString('utf8'));
+    return value !== null && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length > 0;
+  } catch {
+    return false;
+  }
+}
 for (const cursor of ['zzzz', 'bnVsbA==', 'MA==', 'W10=', 'InMi', 'eyJhIjoxfQ==', 'NQ==', 'eyJhIjoxfQ', '!!!', 'e30=', 'eyJpZCI6InIwMDEifQ==']) {
   const rows = makeRows(6);
   const r = engine.paginate(rows.slice(), { sort: [{ field: 'a' }], limit: 2, cursor });
-  add({ op: 'page', rows, sort: [{ field: 'a' }], limit: 2, cursor, e: !r.ok ? `no:${r.error}` : `${r.records.map((x) => `${String(x['~idx']).slice(1)},`).join('')}|${r.nextCursor === null ? '-' : r.nextCursor}|${flag(r.hasMore)}` });
+  const answer = !r.ok ? `no:${r.error}` : `${r.records.map((x) => `${String(x['~idx']).slice(1)},`).join('')}|${r.nextCursor === null ? '-' : r.nextCursor}|${flag(r.hasMore)}`;
+  add({ op: 'page', rows, sort: [{ field: 'a' }], limit: 2, cursor, e: cursorIsPosition(cursor) ? answer : 'no:invalid-cursor' });
 }
 // duplication
 for (let k = 0; k < 24; k += 1) {
