@@ -99,10 +99,23 @@ fn soft_shape(arena: *mem.Arena, b: *scene.Builder, cx0: f32, cy0: f32, radius: 
     let shift = math.max[f32](math.abs[f32](mx), math.abs[f32](my))
     let margin = reach + i32(shift * scale + grow * scale + 2.0)
     let span = (radius + 1.0 + grow) * 2.0 * scale
-    let gx0 = i32(math.floor[f32](cx0 * scale - span * 0.5)) - margin
-    let gy0 = i32(math.floor[f32](cy0 * scale - span * 0.5)) - margin
-    var n = usize(span + 1.0) + usize(2 * margin) + 1usize
-    if n > 120usize { n = 120usize }
+    var gx0 = i32(math.floor[f32](cx0 * scale - span * 0.5)) - margin
+    var gy0 = i32(math.floor[f32](cy0 * scale - span * 0.5)) - margin
+    let full = usize(span + 1.0) + usize(2 * margin) + 1usize
+    // The grid is a scratch cost, not a rendering clamp: scale 4 needs about 150. The
+    // 512 limit is a memory guard (two n*n f32 buffers, 2 MB); above it the shape is
+    // clipped symmetrically around its centre instead of dropping the right/bottom.
+    var n = full
+    if n > 512usize { n = 512usize }
+
+    if n < full {
+        // Saturate the half-shift so a huge span cannot trap the i32 conversion.
+        var half = (full - n) / 2usize
+        if half > 2147483647usize { half = 2147483647usize }
+        gx0 += i32(half)
+        gy0 += i32(half)
+    }
+
     let (grid, grid_error) = mem.alloc[f32](arena, n * n)
     if grid_error != ok { ret grid_error }
     let (tmp, tmp_error) = mem.alloc[f32](arena, n * n)
