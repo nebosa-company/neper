@@ -14,6 +14,9 @@ type Vec3 = struct { x: f64, y: f64, z: f64 }
 type BarnesHut = struct { xs: []const f64, ys: []const f64, zs: []const f64, masses: []const f64, x0: f64, y0: f64, z0: f64, size: f64, child: []u32, body: []u32, mass: []f64, cx: []f64, cy: []f64, cz: []f64, used: usize }
 error TooSmall
 error Invalid
+// A shape pair that did not decide within the iteration cap; callers must not read the
+// zero distance as a separation answer (#220).
+error Iterations
 
 const NONE: u32 = 4294967295u32
 
@@ -408,8 +411,9 @@ fn gjk(a: []const Vec3, b: []const Vec3, simplex: []Vec3) -> (bool, f64, usize, 
         n += 1usize
         iteration += 1usize
     }
-    let (v_last, m_last) = closest_on_simplex(simplex, n)
-    ret (false, length(v_last), m_last, ok)
+    // The loop exhausted its iterations without deciding; a zero/partial distance is not
+    // a separation answer, so report the limit instead (#220).
+    ret (false, 0.0f64, 0usize, Iterations)
 }
 
 fn face_normal(vertices: []const Vec3, faces: []const u32, f: usize) -> Vec3 {
