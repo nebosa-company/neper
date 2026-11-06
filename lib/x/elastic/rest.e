@@ -86,6 +86,9 @@ fn path(dst: []u8, segments: []const str) -> (usize, err) {
     var i = 0usize
     while i < segments.len {
         if segments[i].len > 0usize {
+            // `.`/`..` would let a proxy normalise the path to a different endpoint (#267).
+            if segments[i].len == 1usize && segments[i][0usize] == 46u8 { ret (0usize, Invalid) }
+            if segments[i].len == 2usize && segments[i][0usize] == 46u8 && segments[i][1usize] == 46u8 { ret (0usize, Invalid) }
             var e = put_byte(dst, &at, 47u8)
             if e != ok { ret (0usize, e) }
             e = quote(dst, &at, segments[i], ",*")
@@ -110,7 +113,8 @@ fn query(dst: []u8, params: []const Param) -> (usize, err) {
             e = put_byte(dst, &at, 38u8)
             if e != ok { ret (0usize, e) }
         }
-        e = put_text(dst, &at, params[i].name)
+        // The name is caller text too: `&`, `=` or `#` in it would add or truncate params (#267).
+        e = quote(dst, &at, params[i].name, ",*")
         if e != ok { ret (0usize, e) }
         e = put_byte(dst, &at, 61u8)
         if e != ok { ret (0usize, e) }

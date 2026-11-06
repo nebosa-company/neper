@@ -98,6 +98,8 @@ fn encode_write_single(dst: []u8, function: u8, address: u16, value: u16) -> (us
 
 // Write multiple coils: `packed` holds the bits, least significant bit of the first byte first.
 fn encode_write_coils(dst: []u8, address: u16, count: u16, packed: []const u8) -> (usize, err) {
+    // The protocol limit is 1968 coils; more would trap in the u8 byte-count cast (#266).
+    if count < 1u16 || count > 1968u16 { ret (0usize, Invalid) }
     let bytes = (usize(count) + 7usize) / 8usize
     if packed.len != bytes { ret (0usize, Invalid) }
     if dst.len < 6usize + bytes { ret (0usize, TooSmall) }
@@ -110,6 +112,8 @@ fn encode_write_coils(dst: []u8, address: u16, count: u16, packed: []const u8) -
 }
 
 fn encode_write_registers(dst: []u8, address: u16, values: []const u16) -> (usize, err) {
+    // At most 123 registers per FC16; more overflows `u8(values.len * 2)` (#266).
+    if values.len < 1usize || values.len > 123usize { ret (0usize, Invalid) }
     if dst.len < 6usize + values.len * 2usize { ret (0usize, TooSmall) }
     dst[0usize] = WRITE_MULTIPLE_REGISTERS
     put16(dst, 1usize, address)
@@ -133,6 +137,8 @@ fn encode_mask_write(dst: []u8, address: u16, and_mask: u16, or_mask: u16) -> (u
 }
 
 fn encode_read_write(dst: []u8, read_address: u16, read_count: u16, write_address: u16, values: []const u16) -> (usize, err) {
+    // FC23 allows 125 reads and 121 writes; the byte-count casts would trap otherwise (#266).
+    if read_count < 1u16 || read_count > 125u16 || values.len < 1usize || values.len > 121usize { ret (0usize, Invalid) }
     if dst.len < 10usize + values.len * 2usize { ret (0usize, TooSmall) }
     dst[0usize] = READ_WRITE_REGISTERS
     put16(dst, 1usize, read_address)
@@ -481,6 +487,7 @@ fn slave_handle(s: *Slave, pdu: []const u8, dst: []u8) -> (usize, err) {
     if f == WRITE_SINGLE_COIL {
         if r.value != 0u16 && r.value != 65280u16 { ret (fail_pdu(dst, f, ILLEGAL_VALUE), ok) }
         if usize(r.address) >= s.coils.len { ret (fail_pdu(dst, f, ILLEGAL_ADDRESS), ok) }
+        if dst.len < 5usize { ret (0usize, TooSmall) }
         if r.value == 65280u16 {
             s.coils[usize(r.address)] = 1u8
         } else {
@@ -492,8 +499,8 @@ fn slave_handle(s: *Slave, pdu: []const u8, dst: []u8) -> (usize, err) {
     }
     if f == WRITE_SINGLE_REGISTER {
         if usize(r.address) >= s.holding.len { ret (fail_pdu(dst, f, ILLEGAL_ADDRESS), ok) }
-        s.holding[usize(r.address)] = r.value
         if dst.len < 5usize { ret (0usize, TooSmall) }
+        s.holding[usize(r.address)] = r.value
         mem.copy[u8](dst[0usize..5usize], pdu)
         ret (5usize, ok)
     }
@@ -501,6 +508,7 @@ fn slave_handle(s: *Slave, pdu: []const u8, dst: []u8) -> (usize, err) {
         let bytes = (usize(r.count) + 7usize) / 8usize
         if r.count < 1u16 || r.count > 1968u16 || usize(r.value) != bytes || r.data.len != bytes { ret (fail_pdu(dst, f, ILLEGAL_VALUE), ok) }
         if usize(r.address) + usize(r.count) > s.coils.len { ret (fail_pdu(dst, f, ILLEGAL_ADDRESS), ok) }
+        if dst.len < 5usize { ret (0usize, TooSmall) }
         var i = 0usize
         while i < usize(r.count) {
             if ((r.data[i / 8usize] >> u8(i % 8usize)) & 1u8) != 0u8 {
@@ -519,6 +527,7 @@ fn slave_handle(s: *Slave, pdu: []const u8, dst: []u8) -> (usize, err) {
     if f == WRITE_MULTIPLE_REGISTERS {
         if r.count < 1u16 || r.count > 123u16 || usize(r.value) != usize(r.count) * 2usize || r.data.len != usize(r.count) * 2usize { ret (fail_pdu(dst, f, ILLEGAL_VALUE), ok) }
         if usize(r.address) + usize(r.count) > s.holding.len { ret (fail_pdu(dst, f, ILLEGAL_ADDRESS), ok) }
+        if dst.len < 5usize { ret (0usize, TooSmall) }
         var i = 0usize
         while i < usize(r.count) {
             s.holding[usize(r.address) + i] = be16(r.data, i * 2usize)
@@ -532,22 +541,22 @@ fn slave_handle(s: *Slave, pdu: []const u8, dst: []u8) -> (usize, err) {
     }
     if f == MASK_WRITE_REGISTER {
         if usize(r.address) >= s.holding.len { ret (fail_pdu(dst, f, ILLEGAL_ADDRESS), ok) }
+        if dst.len < 7usize { ret (0usize, TooSmall) }
         let current = s.holding[usize(r.address)]
         s.holding[usize(r.address)] = (current & r.and_mask) | (r.or_mask & ~r.and_mask)
-        if dst.len < 7usize { ret (0usize, TooSmall) }
         mem.copy[u8](dst[0usize..7usize], pdu)
         ret (7usize, ok)
     }
     // READ_WRITE_REGISTERS
     if r.read_count < 1u16 || r.read_count > 125u16 || r.count < 1u16 || r.count > 121u16 || usize(r.value) != usize(r.count) * 2usize || r.data.len != usize(r.count) * 2usize { ret (fail_pdu(dst, f, ILLEGAL_VALUE), ok) }
     if usize(r.read_address) + usize(r.read_count) > s.holding.len || usize(r.address) + usize(r.count) > s.holding.len { ret (fail_pdu(dst, f, ILLEGAL_ADDRESS), ok) }
+    let bytes = usize(r.read_count) * 2usize
+    if dst.len < 2usize + bytes { ret (0usize, TooSmall) }
     var w = 0usize
     while w < usize(r.count) {
         s.holding[usize(r.address) + w] = be16(r.data, w * 2usize)
         w += 1usize
     }
-    let bytes = usize(r.read_count) * 2usize
-    if dst.len < 2usize + bytes { ret (0usize, TooSmall) }
     dst[0usize] = f
     dst[1usize] = u8(bytes)
     var i = 0usize
