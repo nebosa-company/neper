@@ -2,11 +2,12 @@
 // 512-byte blocks: block 0 the superblock (a magic word, then the next free block as a bump
 // allocator), block 1 the root directory, blocks 2+ handed out for file data and subdirectories.
 // A directory is one block of sixteen 32-byte entries -- a 20-byte NUL-padded name, a kind byte
-// (empty, file, dir), the data block, and the size in bytes. Files are a single block (<= 512
-// bytes); a directory holds up to sixteen entries. Paths are resolved from the root, so mkdir,
-// write and the rest take `/dir/name`. Removed blocks are not reclaimed.
-// ponytail: single-block files, sixteen-entry one-block directories, bump allocation with no free
-// list -- an inode with block pointers and a free bitmap are the upgrade when a file or directory
+// (empty, file, dir), the data block, and the size in bytes. A file is a run of blocks up to
+// MAX_FILE (4096) bytes and `reserve` may claim any size the device holds; a directory holds up
+// to sixteen entries. Paths are resolved from the root, so mkdir, write and the rest take
+// `/dir/name`. Removed blocks are not reclaimed.
+// ponytail: sixteen-entry one-block directories, bump allocation with no free list, no parent
+// pointers -- an inode with block pointers and a free bitmap are the upgrade when a directory
 // outgrows a block.
 use e.os
 use virtio
@@ -19,6 +20,9 @@ error NameTooLong
 error NameTaken
 // The device has no free block for a reservation (#177).
 error NoSpace
+// A write larger than MAX_FILE, or a leaf name that is empty, `.`/`..` or too long (#177).
+error FileTooLarge
+error BadName
 
 const SUPER_MAGIC: u32 = 0x4653454Eu32
 const ROOT_DIR: u64 = 1u64
@@ -164,6 +168,10 @@ fn parent_leaf(path: str) -> (str, str) {
 // Add an entry `name` of `kind` to `dir_block`, allocating its data (or directory) block. A new
 // directory block is zeroed. Returns the allocated block.
 fn add_entry(blk: virtio.Block, dir_block: u64, name: str, kind: u8) -> (u64, err) {
+    // An empty leaf (a trailing slash) or `.`/`..` would create an entry no path can name (#177).
+    if name.len == 0usize { ret (0u64, BadName) }
+    if name.len == 1usize && name[0usize] == 46u8 { ret (0u64, BadName) }
+    if name.len == 2usize && name[0usize] == 46u8 && name[1usize] == 46u8 { ret (0u64, BadName) }
     if name.len > NAME_MAX { ret (0u64, NameTooLong) }
     let (data_block, alloc_error) = alloc_block(blk)
     if alloc_error != ok { ret (0u64, alloc_error) }
@@ -265,8 +273,9 @@ fn write(blk: virtio.Block, path: str, src: usize, len: usize) -> err {
         if add_error != ok { ret add_error }
         data_block = new_block
     }
-    var count = len
-    if count > MAX_FILE { count = MAX_FILE }
+    // Truncating here reported success while losing data (#177).
+    if len > MAX_FILE { ret FileTooLarge }
+    let count = len
     var needed = (count + BLOCK_SIZE - 1usize) / BLOCK_SIZE
     if needed == 0usize { needed = 1usize }
     let have = (size + BLOCK_SIZE - 1usize) / BLOCK_SIZE
@@ -488,6 +497,17 @@ fn move(blk: virtio.Block, path: str, dest: str) -> err {
     let (src_off, data_block, size, kind, found) = dir_lookup(blk, src_dir, leaf)
     if !found { ret NotFound }
     if kind == KIND_DIR && dst_dir == data_block { ret NotDirectory }
+    // Moving a directory into one of its own descendants would orphan the subtree: reject any
+    // destination under the source path (#177).
+    if kind == KIND_DIR && dest.len > path.len && dest[path.len] == SLASH {
+        var under = true
+        var k = 0usize
+        while k < path.len && under {
+            if dest[k] != path[k] { under = false }
+            k += 1usize
+        }
+        if under { ret NotDirectory }
+    }
     if virtio.block_read(blk, dst_dir) != ok { ret NotFormatted }
     var slot = ENTRIES
     var i = 0usize
@@ -515,6 +535,14 @@ fn move(blk: virtio.Block, path: str, dest: str) -> err {
 // Give the file or directory `path` a new leaf name in the same directory; NameTaken when that name exists.
 fn rename(blk: virtio.Block, path: str, new_name: str) -> err {
     if new_name.len == 0usize || new_name.len > NAME_MAX { ret NameTooLong }
+    // A slash or NUL in the new name would produce an entry no path can reach (#177).
+    if new_name.len == 1usize && new_name[0usize] == 46u8 { ret BadName }
+    if new_name.len == 2usize && new_name[0usize] == 46u8 && new_name[1usize] == 46u8 { ret BadName }
+    var name_at = 0usize
+    while name_at < new_name.len {
+        if new_name[name_at] == SLASH || new_name[name_at] == 0u8 { ret BadName }
+        name_at += 1usize
+    }
     let (parent, leaf) = parent_leaf(path)
     let (dir_block, resolve_error) = resolve_dir(blk, parent)
     if resolve_error != ok { ret resolve_error }

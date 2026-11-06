@@ -58,6 +58,9 @@ type State = struct {
     pedometer: ped.Pedometer,
     sample: usize,
     base: usize,
+    // The simulated detector count already folded into `today`; only the delta is added,
+    // so hub steps read during a Walk are not overwritten by the assignment.
+    sim_count: usize,
     // (C168) The hub's counter: its value at the last save or read, what the app has read of it (and whether it is
     // served), the cadence now in hundredths of a step a second, and the best streak.
     hub_base: usize,
@@ -500,6 +503,7 @@ fn act(s: *State, id: usize) -> bool {
         s.walking = !s.walking
         if s.walking {
             s.pedometer = ped.new(25usize)
+            s.sim_count = 0usize
             s.base = s.today
             ui.say("steps walking on\n")
         } else {
@@ -609,7 +613,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     s.sample += 1usize
                     k += 1usize
                 }
-                s.today = s.base + ped.steps(&s.pedometer)
+                let simulated = ped.steps(&s.pedometer)
+                if simulated > s.sim_count {
+                    s.today += simulated - s.sim_count
+                    s.sim_count = simulated
+                }
                 moved = true
             }
             let before = s.today

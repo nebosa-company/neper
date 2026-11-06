@@ -160,9 +160,29 @@ fn revoked(p: Package, list: []const u8) -> bool {
         while end < list.len && list[end] != 10u8 { end += 1usize }
         var line_end = end
         if line_end > at && list[line_end - 1usize] == 13u8 { line_end -= 1usize }
-        var eq = at
-        while eq < line_end && list[eq] != 61u8 { eq += 1usize }
-        if eq - at == name.len && eq > at {
+        // A line is `Name` (every version) or `Name=N` (versions up to and including N).
+        // The separator is the last '=' whose suffix is all digits, so a package name may
+        // itself contain '=' and still be revocable.
+        var sep = line_end
+        var has_limit = false
+        var scan = line_end
+        while scan > at {
+            scan -= 1usize
+            if list[scan] == 61u8 {
+                var digits = scan + 1usize < line_end
+                var d = scan + 1usize
+                while d < line_end {
+                    if list[d] < 48u8 || list[d] > 57u8 { digits = false }
+                    d += 1usize
+                }
+                if digits {
+                    sep = scan
+                    has_limit = true
+                }
+                break
+            }
+        }
+        if sep - at == name.len && sep > at {
             var same = true
             var k = 0usize
             while k < name.len {
@@ -170,9 +190,9 @@ fn revoked(p: Package, list: []const u8) -> bool {
                 k += 1usize
             }
             if same {
-                if eq == line_end { ret true }
+                if !has_limit { ret true }
                 var limit = 0usize
-                var d = eq + 1usize
+                var d = sep + 1usize
                 while d < line_end && list[d] >= 48u8 && list[d] <= 57u8 && limit < 100000000usize {
                     limit = limit * 10usize + usize(list[d] - 48u8)
                     d += 1usize
