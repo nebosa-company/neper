@@ -2,17 +2,17 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://neper.dev/</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-07</lastmod>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://neper.dev/get-started.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://neper.dev/play.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.9</priority>
   </url>
   <url>
@@ -22,12 +22,12 @@
   </url>
   <url>
     <loc>https://neper.dev/charts.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://neper.dev/ux/showcase.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.6</priority>
   </url>
   <url>
@@ -37,32 +37,32 @@
   </url>
   <url>
     <loc>https://neper.dev/reference/modules.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://neper.dev/reference/algorithms.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://neper.dev/about.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://neper.dev/contact.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://neper.dev/install.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.5</priority>
   </url>
   <url>
     <loc>https://neper.dev/language.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.5</priority>
   </url>
   <url>
@@ -82,12 +82,12 @@
   </url>
   <url>
     <loc>https://neper.dev/blog/compiler-memory.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://neper.dev/blog/desktop-toolchains.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.7</priority>
   </url>
   <url>
@@ -102,7 +102,7 @@
   </url>
   <url>
     <loc>https://neper.dev/blog/neper-webassembly.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.7</priority>
   </url>
   <url>
@@ -122,7 +122,7 @@
   </url>
   <url>
     <loc>https://neper.dev/blog/why-neper-is-optimized-for-llms.html</loc>
-    <lastmod>2026-11-05</lastmod>
+    <lastmod>2026-11-06</lastmod>
     <priority>0.7</priority>
   </url>
 </urlset>
