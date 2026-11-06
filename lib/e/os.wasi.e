@@ -452,23 +452,51 @@ fn neper_trap(record_path: *str, site: usize, first: usize, second: usize, recor
 
 // The arguments as the slice of strings `main` takes, copied into `arena`. `_start` calls this
 // first, with the root arena, whose end is where reservations begin (D5640).
+var rt_args_failed: bool = false
+var rt_args_out_of_memory: bool = false
+
 fn neper_start_args(out: *[]str, arena: *mem.Arena) {
-    if rt_reserve_top == 0usize { rt_reserve_top = (mem.address_of(arena.base) + arena.cap + 65535usize) / 65536usize * 65536usize }
+    rt_args_failed = false
+    rt_args_out_of_memory = false
+    if rt_reserve_top == 0usize {
+        rt_reserve_top = (mem.address_of(arena.base) + arena.cap + 65535usize) / 65536usize * 65536usize
+        rt_reserve_start = rt_reserve_top
+    }
     if wasm_threads() == 1u32 { load_mounts() }
     var none: []str = zero
     *out = none
     var sizes: [2]u32 = zero
-    if wasi_args_sizes_get(u32(mem.address_of(&sizes[0usize])), u32(mem.address_of(&sizes[1usize]))) != 0u32 { ret }
+    let sizes_error = wasi_args_sizes_get(u32(mem.address_of(&sizes[0usize])), u32(mem.address_of(&sizes[1usize])))
+    if sizes_error != 0u32 {
+        rt_args_failed = true
+        ret
+    }
     let count = usize(sizes[0usize])
     let buffer_size = usize(sizes[1usize])
     let (pointers, pointers_error) = mem.alloc[u32](arena, count + 1usize)
-    if pointers_error != ok { ret }
+    if pointers_error != ok {
+        rt_args_failed = true
+        rt_args_out_of_memory = true
+        ret
+    }
     let (storage, storage_error) = mem.alloc[u8](arena, buffer_size + 1usize)
-    if storage_error != ok { ret }
+    if storage_error != ok {
+        rt_args_failed = true
+        rt_args_out_of_memory = true
+        ret
+    }
     let (items, items_error) = mem.alloc[str](arena, count + 1usize)
-    if items_error != ok { ret }
+    if items_error != ok {
+        rt_args_failed = true
+        rt_args_out_of_memory = true
+        ret
+    }
     let base = u32(mem.address_of(&storage[0usize]))
-    if wasi_args_get(u32(mem.address_of(&pointers[0usize])), base) != 0u32 { ret }
+    let get_error = wasi_args_get(u32(mem.address_of(&pointers[0usize])), base)
+    if get_error != 0u32 {
+        rt_args_failed = true
+        ret
+    }
     var at = 0usize
     while at < count {
         let start = usize(pointers[at] - base)
@@ -482,7 +510,11 @@ fn neper_start_args(out: *[]str, arena: *mem.Arena) {
 
 fn neper_os_args(result: *ArgsResult, arena: *mem.Arena) {
     neper_start_args(&result.items, arena)
-    result.failure = ok
+    if rt_args_failed {
+        if rt_args_out_of_memory { result.failure = OutOfMemory } else { result.failure = Failed }
+    } else {
+        result.failure = ok
+    }
 }
 
 // exit_group's counterpart: the status is the low byte.
@@ -835,6 +867,7 @@ fn neper_os_thread_detach(t: *Thread) -> err {
 // latest reservation. The ceiling: 4 GiB of address for the root and every reservation together.
 const MEMORY_END: usize = 4294901760usize
 var rt_reserve_top: usize = 0usize
+var rt_reserve_start: usize = 0usize
 var rt_anchor: [1]u8 = zero
 
 // The byte at `address` as a pointer: a window from a byte of this module's data, which lies below
@@ -880,7 +913,9 @@ fn rt_thread_reserve(n: usize) -> usize {
 
 fn neper_os_commit(p: *u8, n: usize) -> err {
     let start = mem.address_of(p)
-    if start > rt_reserve_top || n > rt_reserve_top - start { ret Failed }
+    // Only the reserved region is committable: [rt_reserve_start, rt_reserve_top).
+    if start < rt_reserve_start || start > rt_reserve_top { ret Failed }
+    if n > rt_reserve_top - start { ret Failed }
     ret ok
 }
 
@@ -1903,6 +1938,10 @@ fn env(a: *mem.Arena, name: str) -> (str, err) {
 fn executable_path(a: *mem.Arena) -> (str, err) {
     var items: []str = zero
     neper_start_args(&items, a)
+    if rt_args_failed {
+        if rt_args_out_of_memory { ret ("", OutOfMemory) }
+        ret ("", Failed)
+    }
     if items.len == 0usize {
         record_error_detail(44i32)
         ret ("", NotFound)
@@ -2868,3 +2907,7 @@ fn fd_of(raw: usize) -> u32 {
 // A rectangle of a frame shown on its own (`e.ui.window` reads back and blits only the changed box). This host has no
 // such blit; Unsupported sends `e.ui.window` back to `window_present` with the whole frame.
 fn window_present_rect(w: Window, pixels: []const u32, x: u32, y: u32, width: u32, height: u32) -> err { ret Unsupported }
+
+
+
+
