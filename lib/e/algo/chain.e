@@ -317,7 +317,10 @@ fn diff_records(a: *mem.Arena, before: json.Value, after: json.Value, ignore: []
     var changes = found
     let (bm, b_is_object) = ir.members_of(before)
     let (am, a_is_object) = ir.members_of(after)
-    var seen_list: [64]str = zero
+    // One slot per key of either record: a fixed 64-slot list made every key past the
+    // 64th look unseen, duplicating its change on the second pass (#450).
+    let (seen_list, seen_error) = mem.alloc[str](a, bm.len + am.len + 1usize)
+    if seen_error != ok { ret (zero, seen_error) }
     var seen = 0usize
     var pass = 0usize
     while pass < 2usize {
@@ -328,7 +331,7 @@ fn diff_records(a: *mem.Arena, before: json.Value, after: json.Value, ignore: []
             let key = members[at].key
             var done = in_list(seen_list[0usize..seen], key) || in_list(ignore, key)
             if !done {
-                if seen < 64usize {
+                if seen < bm.len + am.len {
                     seen_list[seen] = key
                     seen += 1usize
                 }
