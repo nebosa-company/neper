@@ -347,8 +347,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 i += 1usize
             }
         } else if op == netproto.OP_JOIN {
-            let name_len = netproto.recv_bytes(REQ, host_addr, 255usize)
-            let password_len = netproto.recv_bytes(REQ, chunk_addr, 64usize)
+            let (name_len, name_ok) = netproto.recv_bytes(REQ, host_addr, 255usize)
+            let (password_len, password_ok) = netproto.recv_bytes(REQ, chunk_addr, 64usize)
+            if !name_ok || !password_ok {
+                reply(netproto.R_BAD)
+                continue
+            }
             var found = 99usize
             var i = 0usize
             while i < air_count(&s) {
@@ -384,14 +388,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 reply(netproto.R_OK)
             } else {
                 if op == netproto.OP_CONNECT {
-                    let host_len = netproto.recv_bytes(REQ, host_addr, 255usize)
+                    let (host_len, host_ok) = netproto.recv_bytes(REQ, host_addr, 255usize)
                     let port_word = os.recv(REQ, netproto.NO_SLOT)
                     let secure_word = os.recv(REQ, netproto.NO_SLOT)
-                    reply(connect(&s, a, hostbuf[0usize..host_len], u16(port_word), secure_word != 0usize))
+                    if !host_ok {
+                        reply(netproto.R_BAD)
+                    } else {
+                        reply(connect(&s, a, hostbuf[0usize..host_len], u16(port_word), secure_word != 0usize))
+                    }
                 } else {
                     if op == netproto.OP_SEND {
-                        let got = netproto.recv_bytes(REQ, chunk_addr, 2048usize)
-                        if !s.connected {
+                        let (got, got_ok) = netproto.recv_bytes(REQ, chunk_addr, 2048usize)
+                        if !got_ok {
+                            reply(netproto.R_BAD)
+                        } else if !s.connected {
                             reply(netproto.R_NOT_CONNECTED)
                         } else {
                             var failed = false

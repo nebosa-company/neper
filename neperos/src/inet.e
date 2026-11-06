@@ -52,6 +52,16 @@ fn get32(at: usize) -> u32 {
     ret (u32(get16(at)) << 16u32) | u32(get16(at + 2usize))
 }
 
+fn mac_at(at: usize) -> u64 {
+    var m = 0u64
+    var i = 0usize
+    while i < 6usize {
+        m = (m << 8u64) | u64(os.load8(at + i))
+        i += 1usize
+    }
+    ret m
+}
+
 fn put_mac(at: usize, mac: u64) {
     var i = 0usize
     while i < 6usize {
@@ -196,6 +206,10 @@ fn poll(st: *Stack) -> (u8, u32, usize, usize) {
     let header_len = usize(os.load8(ip) & 15u8) * 4usize
     let total = usize(get16(ip + 2usize))
     if header_len < IP_HDR || total < header_len || ETH_HDR + total > len { ret (0u8, 0u32, 0usize, 0usize) }
+    // Fragments are not reassembled: a non-first fragment has no transport header and
+    // must not be parsed as a whole datagram.
+    let fragment = get16(ip + 6usize)
+    if (fragment & 8192u16) != 0u16 || (fragment & 8191u16) != 0u16 { ret (0u8, 0u32, 0usize, 0usize) }
     let dst = get32(ip + 16usize)
     // Before a lease the only packet that matters is the DHCP reply, addressed to our MAC.
     if st.ip != 0u32 && dst != st.ip && dst != 4294967295u32 { ret (0u8, 0u32, 0usize, 0usize) }
@@ -383,7 +397,9 @@ fn dhcp_wait(st: *Stack, kind: u8) -> (u32, u32, err) {
         let (proto, src, payload, len) = poll(st)
         if proto == PROTO_UDP && len >= UDP_HDR + 240usize && get16(payload) == 67u16 && get16(payload + 2usize) == 68u16 {
             let msg = payload + UDP_HDR
-            if os.load8(msg) == 2u8 && get32(msg + 4usize) == 1397965394u32 && get32(msg + 236usize) == 1669485411u32 {
+            // The reply must carry our transaction id and our client hardware address;
+            // another device on the segment uses a different chaddr.
+            if os.load8(msg) == 2u8 && get32(msg + 4usize) == 1397965394u32 && get32(msg + 236usize) == 1669485411u32 && mac_at(msg + 28usize) == st.mac {
                 let yiaddr = get32(msg + 16usize)
                 var found = 0u8
                 var server = src
@@ -474,15 +490,24 @@ fn resolve(st: *Stack, name: str) -> (u32, err) {
         var spins = 0usize
         while spins < POLLS {
             let (proto, src, payload, len) = poll(st)
-            if proto == PROTO_UDP && len >= UDP_HDR + 12usize && get16(payload) == st.dns_port && get16(payload + 2usize) == 53000u16 {
+            // Only the configured resolver may answer: a forged reply from another host
+            // is ignored even if it guesses the port and id.
+            if proto == PROTO_UDP && src == st.dns && len >= UDP_HDR + 12usize && get16(payload) == st.dns_port && get16(payload + 2usize) == 53000u16 {
                 let msg = payload + UDP_HDR
                 let msg_len = len - UDP_HDR
                 if get16(msg) == id {
                     let answers = usize(get16(msg + 6usize))
                     if (get16(msg + 2usize) & 15u16) != 0u16 || answers == 0usize { ret (0u32, NoName) }
                     // Skip the echoed question, then walk the answers for the first A record.
+                    // Every label length is attacker-supplied: each skip is checked against
+                    // msg_len before the fixed fields are read.
                     var p = 12usize
-                    while p < msg_len && os.load8(msg + p) != 0u8 { p += usize(os.load8(msg + p)) + 1usize }
+                    while p < msg_len && os.load8(msg + p) != 0u8 {
+                        let label = usize(os.load8(msg + p))
+                        if p + label + 1usize > msg_len { ret (0u32, NoName) }
+                        p += label + 1usize
+                    }
+                    if p + 5usize > msg_len { ret (0u32, NoName) }
                     p += 5usize
                     var n = 0usize
                     while n < answers && p + 12usize <= msg_len {
@@ -490,9 +515,14 @@ fn resolve(st: *Stack, name: str) -> (u32, err) {
                         if (os.load8(msg + p) & 192u8) == 192u8 {
                             p += 2usize
                         } else {
-                            while p < msg_len && os.load8(msg + p) != 0u8 { p += usize(os.load8(msg + p)) + 1usize }
+                            while p < msg_len && os.load8(msg + p) != 0u8 {
+                                let label = usize(os.load8(msg + p))
+                                if p + label + 1usize > msg_len { ret (0u32, NoName) }
+                                p += label + 1usize
+                            }
                             p += 1usize
                         }
+                        if p + 12usize > msg_len { ret (0u32, NoName) }
                         let rtype = get16(msg + p)
                         let rdlen = usize(get16(msg + p + 8usize))
                         if rtype == 1u16 && rdlen == 4usize && p + 14usize <= msg_len { ret (get32(msg + p + 10usize), ok) }

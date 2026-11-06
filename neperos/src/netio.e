@@ -30,7 +30,15 @@ fn net_read(ctx: *void, dst: []u8) -> (usize, err) {
         b.pos = 0usize
         b.len = 0usize
         let (n, r) = netclient.recv(mem.address_of(&b.data[0usize]), 4096usize)
-        if r != netproto.R_OK { ret (0usize, io.NoProgress) }
+        if r != netproto.R_OK {
+            // A malformed request or an auth refusal is terminal for this connection: a
+            // caller that retried it would spin forever. Everything else is progress.
+            if r == netproto.R_BAD || r == netproto.R_AUTH {
+                b.closed = true
+                ret (0usize, io.Invalid)
+            }
+            ret (0usize, io.NoProgress)
+        }
         if n == 0usize {
             b.closed = true
             ret (0usize, io.End)

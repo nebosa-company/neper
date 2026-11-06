@@ -79,8 +79,17 @@ fn handle(c: *Conn, seg: usize, seg_len: usize) {
     if header < TCP_HDR || header > seg_len { ret }
     var data_len = seg_len - header
     if (flags & RST) != 0u8 {
-        c.reset = true
-        c.state = CLOSED
+        // A blind reset is refused: the RST must answer our SYN (SYN_SENT) or carry the
+        // sequence number we expect next, not just the right 4-tuple.
+        if c.state == SYN_SENT {
+            if (flags & ACK) != 0u8 && ack_number == c.snd_nxt {
+                c.reset = true
+                c.state = CLOSED
+            }
+        } else if seq == c.rcv_nxt {
+            c.reset = true
+            c.state = CLOSED
+        }
         ret
     }
     if c.state == SYN_SENT {
@@ -122,7 +131,11 @@ fn handle(c: *Conn, seg: usize, seg_len: usize) {
 // Receive one frame and, if it is a TCP segment from the peer, handle it.
 fn pump(c: *Conn) {
     let (proto, src, payload, len) = inet.poll(c.st)
-    if proto == inet.PROTO_TCP && src == c.rip { handle(c, payload, len) }
+    // A segment whose checksum does not verify is dropped, not delivered to the ring.
+    if proto == inet.PROTO_TCP && src == c.rip && len >= TCP_HDR {
+        let seed = inet.pseudo(src, c.st.ip, inet.PROTO_TCP, len)
+        if inet.checksum(payload, len, seed) == 0u16 { handle(c, payload, len) }
+    }
 }
 
 // Open a connection to `rip`:`rport`, with `ring` the address of a RING-byte buffer for incoming data.
@@ -154,8 +167,18 @@ fn write(c: *Conn, data: usize, len: usize) -> err {
     var sent = 0usize
     while sent < len {
         if c.state != ESTABLISHED { ret Reset }
+        // Respect the peer's advertised window: wait for an update when it is zero instead of
+        // sending into it and burning the retries (#207 item 7).
+        var window_spins = 0usize
+        while c.peer_window == 0usize && c.state == ESTABLISHED && !c.reset && window_spins < inet.POLLS {
+            pump(c)
+            window_spins += 1usize
+        }
+        if c.state != ESTABLISHED { ret Reset }
+        if c.peer_window == 0usize { ret Timeout }
         var chunk = len - sent
         if chunk > MSS { chunk = MSS }
+        if chunk > c.peer_window { chunk = c.peer_window }
         let seq = c.snd_nxt
         let done = seq +% u32(chunk)
         var attempt = 0usize
@@ -173,6 +196,8 @@ fn write(c: *Conn, data: usize, len: usize) -> err {
             attempt += 1usize
         }
         if !acked { ret Timeout }
+        // The bytes just sent consume the advertised window until the peer's ACK refreshes it.
+        if c.peer_window >= chunk { c.peer_window -= chunk } else { c.peer_window = 0usize }
         sent += chunk
     }
     ret ok

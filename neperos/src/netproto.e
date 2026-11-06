@@ -94,9 +94,12 @@ fn send_text(slot: usize, text: str) {
 }
 
 // Receive a byte string into `dst`, at most `max` bytes of it kept; the rest of the words are
-// drained so the two sides stay in step. Returns the count kept.
-fn recv_bytes(slot: usize, dst: usize, max: usize) -> usize {
+// drained so the two sides stay in step. Returns the count kept, and false when the announced
+// length is above `max`: a server must answer R_BAD rather than block on words a client may
+// never send (the length word is the client's alone to choose).
+fn recv_bytes(slot: usize, dst: usize, max: usize) -> (usize, bool) {
     let len = os.recv(slot, NO_SLOT)
+    if len > max { ret (0usize, false) }
     var kept = 0usize
     var at = 0usize
     while at < len {
@@ -111,5 +114,5 @@ fn recv_bytes(slot: usize, dst: usize, max: usize) -> usize {
         }
         at += 8usize
     }
-    ret kept
+    ret (kept, true)
 }

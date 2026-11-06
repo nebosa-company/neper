@@ -47,7 +47,9 @@ fn recv(dst: usize, max: usize) -> (usize, usize) {
     let want = os.send(REQ, max, netproto.NO_SLOT)
     let r = result()
     if r != netproto.R_OK { ret (0usize, r) }
-    ret (netproto.recv_bytes(REP, dst, max), netproto.R_OK)
+    let (n, bytes_ok) = netproto.recv_bytes(REP, dst, max)
+    if !bytes_ok { ret (0usize, netproto.R_BAD) }
+    ret (n, netproto.R_OK)
 }
 
 // Like `recv`, but waits only a moment: R_EMPTY when nothing has arrived (plain TCP only).
@@ -56,7 +58,9 @@ fn poll(dst: usize, max: usize) -> (usize, usize) {
     let want = os.send(REQ, max, netproto.NO_SLOT)
     let r = result()
     if r != netproto.R_OK { ret (0usize, r) }
-    ret (netproto.recv_bytes(REP, dst, max), netproto.R_OK)
+    let (n, bytes_ok) = netproto.recv_bytes(REP, dst, max)
+    if !bytes_ok { ret (0usize, netproto.R_BAD) }
+    ret (n, netproto.R_OK)
 }
 
 fn close() -> usize {
@@ -99,7 +103,8 @@ fn bluetooth_devices(dst: usize, cap: usize) -> (usize, usize) {
     var name: [32]u8 = zero
     var i = 0usize
     while i < count {
-        let length = netproto.recv_bytes(REP, mem.address_of(&name[0usize]), 24usize)
+        let (length, length_ok) = netproto.recv_bytes(REP, mem.address_of(&name[0usize]), 24usize)
+        if !length_ok { break }
         let strength = os.recv(REP, netproto.NO_SLOT)
         if written + length + 2usize <= cap {
             if i > 0usize {
