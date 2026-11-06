@@ -168,6 +168,7 @@ fn dependency_value_kind() -> usize { ret 2usize }
 fn dependency_body_kind() -> usize { ret 3usize }
 fn dependency_lookup_kind() -> usize { ret 4usize }
 fn dependency_alias_kind() -> usize { ret 5usize }
+fn dependency_globals_kind() -> usize { ret 6usize }
 
 fn mode_id(mode: BuildMode) -> usize {
     if mode == .Release { ret 1usize }
@@ -2374,6 +2375,62 @@ fn mark_alias_uses(c: *check.Checker, g: *graph.Graph, module_index: usize, mark
     }
 }
 
+// Whether this module names a foreign module-scope var as `q.Name` (or through a name
+// that lowers to one): changing its type changes what the module computes (a `u32` to
+// `u64` width change), so the dependent must not be kept.
+fn foreign_global_referenced(c: *check.Checker, g: *graph.Graph, module_index: usize, global_index: usize) -> bool {
+    if global_index >= c.global_count || module_index >= g.count { ret false }
+    let global = c.globals[global_index]
+    if global.module_index == module_index || global.module_index >= g.count { ret false }
+    let module = g.modules[module_index]
+    let tokens = module.tokens
+    var token_at = 0usize
+    while token_at + 2usize < tokens.len {
+        if tokens[token_at].kind == .Identifier && tokens[token_at + 1usize].kind == .PunctDot && tokens[token_at + 2usize].kind == .Identifier {
+            let name = lex.token_text(module.text, tokens[token_at + 2usize])
+            if same(name, global.name) {
+                let qualifier = lex.token_text(module.text, tokens[token_at])
+                var import_at = module.first_import
+                let import_end = module.first_import + module.import_count
+                while import_at < import_end {
+                    if same(g.imports[import_at].qualifier, qualifier) && g.imports[import_at].target == global.module_index { ret true }
+                    import_at += 1usize
+                }
+            }
+        }
+        token_at += 1usize
+    }
+    ret false
+}
+fn global_dependency_count(c: *check.Checker, g: *graph.Graph, module_index: usize) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < c.global_count {
+        if foreign_global_referenced(c, g, module_index, at) { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+fn write_global_dependencies(c: *check.Checker, g: *graph.Graph, table: *StringTable, output: *binary.Buffer, module_index: usize) -> err {
+    var at = 0usize
+    while at < c.global_count {
+        if foreign_global_referenced(c, g, module_index, at) {
+            let global = c.globals[at]
+            let (target_module, target_module_error) = string_index(table, g.modules[global.module_index].name)
+            if target_module_error != ok { ret target_module_error }
+            let (target_name, target_name_error) = string_index(table, global.name)
+            if target_name_error != ok { ret target_name_error }
+            try binary.byte(output, dependency_globals_kind())
+            try binary.zeroes(output, 3usize)
+            try binary.little_u32(output, target_module)
+            try binary.little_u32(output, target_name)
+            try binary.little_u64(output, 0usize)
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn alias_dependency_count(c: *check.Checker, marks: []u8) -> usize {
     var count = 0usize
     var at = 0usize
@@ -2594,7 +2651,7 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     mark_alias_uses(c, g, module_index, alias_marks)
     let (value_count, value_count_error) = value_dependency_count(c, module_index, body_marks)
     if value_count_error != ok { ret value_count_error }
-    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks) + alias_dependency_count(c, alias_marks) + lookup_dependency_count(c, aggregate_marks))
+    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks) + alias_dependency_count(c, alias_marks) + lookup_dependency_count(c, aggregate_marks) + global_dependency_count(c, g, module_index))
     var walk = 0usize
     while walk < reference_walk_count(builder) {
         let at = reference_walk_at(builder, walk)
@@ -2672,6 +2729,7 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     }
     try write_aggregate_dependencies(c, g, table, scratch, output, aggregate_marks)
     try write_alias_dependencies(c, g, table, scratch, output, alias_marks)
+    try write_global_dependencies(c, g, table, output, module_index)
     at = 0usize
     while at < c.constant_count {
         let (used_by_constant, used_error) = foreign_constant_used_by_module(c, module_index, at)
@@ -5032,6 +5090,9 @@ fn dependency_holds(dependency: Dependency, declaration: Declaration, found_decl
     if dependency.kind == dependency_alias_kind() {
         ret (declaration.kind == declaration_alias_kind() && declaration.signature_hash == dependency.hash, ok)
     }
+    // A foreign global has no interface declaration yet: conservative for now, the
+    // dependent is rebuilt on every warm build rather than wrongly kept.
+    if dependency.kind == dependency_globals_kind() { ret (false, ok) }
     ret (false, InvalidArtifact)
 }
 
