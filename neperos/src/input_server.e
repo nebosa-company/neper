@@ -50,17 +50,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // With ticks the server runs from the start; without, it sleeps until the first input.
     if !ticks { let bits = os.notify_wait(NOTIFY) }
     var next_tick = 0i64
-    var iterations = 0usize
     var forwarded = 0usize
-    while iterations < 40000000000usize && forwarded < 600usize {
+    // No poll-count bound: after a burst the server blocks on the notification, and the tick
+    // is driven from the monotonic clock when it wakes, so it neither dies after a fixed
+    // number of polls nor spins a core between events (#289). The 600-event bound is the
+    // harness's; see the sentinel at the end.
+    while forwarded < 600usize {
         let (etype, ecode, evalue, present) = virtio.input_next(&input)
         if present {
             let word = (usize(etype) << 48usize) | (usize(ecode) << 32usize) | usize(evalue)
             let sent = os.send(CLIENT, word, NO_SLOT)
             forwarded += 1usize
+            continue
         }
-        // The clock is a system call, so it is read every few thousand polls.
-        if ticks && iterations % 4000usize == 0usize {
+        if ticks {
             let (now, now_error) = time.monotonic()
             if now_error == ok {
                 let ms = now.nanos / 1000000i64
@@ -70,7 +73,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 }
             }
         }
-        iterations += 1usize
+        // Sleep until the device reports the next event.
+        let bits = os.notify_wait(NOTIFY)
     }
     let done = os.send(CLIENT, SENTINEL << 48usize, NO_SLOT)
     ret ok

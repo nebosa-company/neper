@@ -729,10 +729,23 @@ fn fetch_revocations(a: *mem.Arena, s: *State) {
         ui.say("dynamic revocations unreachable\n")
         ret
     }
-    let (list, list_error) = package.check_list(reply.body, server_key.public())
+    let (list, serial, list_error) = package.check_list_serial(reply.body, server_key.public())
     if list_error != ok {
         s.revoked_state = 3usize
         ui.say("dynamic revocations refused\n")
+        ret
+    }
+    // (C173) The signed serial is a high-water mark: a replayed older list (a stale cache,
+    // proxy or captured response) verifies but must not replace a newer one.
+    var high_storage: [4]u8 = zero
+    var high = 0usize
+    let (high_read, high_ok) = vaultfs.read("/revoked.serial", mem.address_of(&high_storage[0usize]), 4usize)
+    if high_ok && high_read == 4usize {
+        high = usize(high_storage[0usize]) | (usize(high_storage[1usize]) << 8usize) | (usize(high_storage[2usize]) << 16usize) | (usize(high_storage[3usize]) << 24usize)
+    }
+    if !package.revocation_is_fresh(serial, high) {
+        s.revoked_state = 3usize
+        ui.say("dynamic revocations refused: stale list\n")
         ret
     }
     var entries = 0usize
@@ -745,6 +758,14 @@ fn fetch_revocations(a: *mem.Arena, s: *State) {
         if vaultfs.write("/revoked", mem.address_of(&list[0usize]), list.len) {
             ui.say("dynamic revocations kept\n")
         }
+    }
+    if serial > high {
+        var serial_storage: [4]u8 = zero
+        serial_storage[0usize] = u8(serial & 255usize)
+        serial_storage[1usize] = u8((serial >> 8usize) & 255usize)
+        serial_storage[2usize] = u8((serial >> 16usize) & 255usize)
+        serial_storage[3usize] = u8((serial >> 24usize) & 255usize)
+        let written = vaultfs.write("/revoked.serial", mem.address_of(&serial_storage[0usize]), 4usize)
     }
     s.revoked_count = entries
     s.revoked_state = 1usize

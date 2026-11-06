@@ -789,10 +789,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let t2 = add_task(&s, make_task("Install seismometer unit 4", s.today + 1usize, false, 0usize))
     let t3 = add_task(&s, make_task("Maintain the rover", s.today + 3usize, false, 0usize))
     let t4 = add_task(&s, make_task("Calibrate communications array", 0usize, false, 2usize))
-    let t5 = add_task(&s, make_task("Review last week's survey", s.today - 2usize, false, 2usize))
-    var done_task = make_task("Charge the batteries", s.today - 1usize, false, 0usize)
-    done_task.done = true
-    let t6 = add_task(&s, done_task)
+    // The two past-due samples need a clock at least two days in; with no wall clock
+    // (s.today == 0) the subtraction would underflow at startup.
+    var t5 = 0usize
+    var t6 = 0usize
+    if s.today >= 2usize {
+        t5 = add_task(&s, make_task("Review last week's survey", s.today - 2usize, false, 2usize))
+        var done_task = make_task("Charge the batteries", s.today - 1usize, false, 0usize)
+        done_task.done = true
+        t6 = add_task(&s, done_task)
+    }
     if load_tasks(&s) {
         say("tasks loaded ")
         say_num(count_tasks(&s))

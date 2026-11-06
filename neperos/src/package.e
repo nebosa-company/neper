@@ -214,22 +214,43 @@ fn check_revocable(data: []const u8, public: sign.Ed25519PublicKey, list: []cons
 }
 
 // A revocation list as the server sends it (C173), so the device can fetch it instead of only reading one from its
-// disk: "NREV" | version (1) | text length (2, little end) | the list's text (the lines above) | signature (64), the
-// signature being Ed25519 over everything before it. The text, when the signature is the server's; BadPackage when
-// the bytes are not a list or the signature is not the server's.
-fn check_list(data: []const u8, public: sign.Ed25519PublicKey) -> ([]const u8, err) {
+// disk. Format 2 carries a signed monotonically increasing serial the device keeps as a high-water mark, so a
+// replayed older list is refused: "NREV" | 2 | serial (4, little end) | text length (2, little end) | text | signature (64).
+// A format-1 list (the original "NREV" | 1 | text length (2) | text | signature) still verifies with serial 0, so
+// lists cached before the serial existed keep working; a stale one is refused once a serialled list has been seen.
+const LIST_FORMAT: u8 = 2u8
+
+fn check_list_serial(data: []const u8, public: sign.Ed25519PublicKey) -> ([]const u8, usize, err) {
     var none: []const u8 = data[0usize..0usize]
-    if data.len < 7usize + SIGNATURE_BYTES { ret (none, BadPackage) }
-    if data[0usize] != 78u8 || data[1usize] != 82u8 || data[2usize] != 69u8 || data[3usize] != 86u8 { ret (none, BadPackage) }
-    if data[4usize] != FORMAT { ret (none, BadPackage) }
-    let text_len = le16(data, 5usize)
-    if 7usize + text_len + SIGNATURE_BYTES != data.len { ret (none, BadPackage) }
+    if data.len < 7usize + SIGNATURE_BYTES { ret (none, 0usize, BadPackage) }
+    if data[0usize] != 78u8 || data[1usize] != 82u8 || data[2usize] != 69u8 || data[3usize] != 86u8 { ret (none, 0usize, BadPackage) }
+    let format = data[4usize]
+    if format != FORMAT && format != LIST_FORMAT { ret (none, 0usize, BadPackage) }
+    var serial = 0usize
+    var header = 7usize
+    var text_len = le16(data, 5usize)
+    if format == LIST_FORMAT {
+        if data.len < 11usize + SIGNATURE_BYTES { ret (none, 0usize, BadPackage) }
+        serial = le32(data, 7usize)
+        header = 11usize
+        text_len = le16(data, 9usize)
+    }
+    if header + text_len + SIGNATURE_BYTES != data.len { ret (none, 0usize, BadPackage) }
     var signature: sign.Ed25519Signature = zero
     var i = 0usize
     while i < SIGNATURE_BYTES {
-        signature.bytes[i] = data[7usize + text_len + i]
+        signature.bytes[i] = data[header + text_len + i]
         i += 1usize
     }
-    if !sign.ed25519_verify(public, data[0usize..7usize + text_len], signature) { ret (none, BadPackage) }
-    ret (data[7usize..7usize + text_len], ok)
+    if !sign.ed25519_verify(public, data[0usize..header + text_len], signature) { ret (none, 0usize, BadPackage) }
+    ret (data[header..header + text_len], serial, ok)
+}
+
+// Whether a list serial may replace the stored high-water mark: equal is the same list
+// re-fetched, lower is an older (replayed) one.
+fn revocation_is_fresh(serial: usize, high: usize) -> bool { ret serial >= high }
+
+fn check_list(data: []const u8, public: sign.Ed25519PublicKey) -> ([]const u8, err) {
+    let (text, serial, list_error) = check_list_serial(data, public)
+    ret (text, list_error)
 }
