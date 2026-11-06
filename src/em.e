@@ -2695,10 +2695,9 @@ fn write_aggregate_dependencies(c: *check.Checker, g: *graph.Graph, table: *Stri
 
 fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer, aggregate_marks: []u8, alias_marks: []u8, body_marks: []u8) -> err {
     try mark_module_references(builder, c, module_index)
-    mark_alias_uses(c, g, module_index, alias_marks)
     let (value_count, value_count_error) = value_dependency_count(c, module_index, body_marks)
     if value_count_error != ok { ret value_count_error }
-    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks) + alias_dependency_count(c, alias_marks) + lookup_dependency_count(c, aggregate_marks) + global_dependency_count(c, g, module_index))
+    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks) + lookup_dependency_count(c, aggregate_marks) + global_dependency_count(c, g, module_index))
     var walk = 0usize
     while walk < reference_walk_count(builder) {
         let at = reference_walk_at(builder, walk)
@@ -2775,7 +2774,6 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
         at += 1usize
     }
     try write_aggregate_dependencies(c, g, table, scratch, output, aggregate_marks)
-    try write_alias_dependencies(c, g, table, scratch, output, alias_marks)
     try write_global_dependencies(c, g, table, scratch, output, module_index)
     at = 0usize
     while at < c.constant_count {
@@ -3379,7 +3377,6 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     var aggregate_marks: [8192]u8 = zero
     var alias_marks: [8192]u8 = zero
     var constant_marks: [8192]u8 = zero
-    mark_alias_uses(c, g, module_index, alias_marks[..])
     try collect_module_strings(c, g, builder, module_index, strings, aggregate_marks[..], constant_marks[..])
     try collect_line_paths(builder, c, module_index, machine, function_offsets, lines, line_count, strings)
     try collect_vars(builder, c, g, module_index, machine, function_offsets, strings)
@@ -5818,6 +5815,7 @@ fn decode_constant(c: *check.Checker, g: *graph.Graph, bytes: []const u8, payloa
     c.constant_count += 1usize
     ret ok
 }
+
 
 
 
