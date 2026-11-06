@@ -18,10 +18,14 @@ class GpuContractTests(unittest.TestCase):
         self.assertEqual(list(data["requirements"]), ["H13", "H21", "H22", "H23"])
 
     def test_release_checks_cannot_disappear(self):
-        data, _ = CHECKER.validate(ROOT)
-        checks = copy.deepcopy(data["requirements"]["H13"]["checks"])
-        checks["bounds"]["release"] = "off"
-        self.assertNotEqual(checks["bounds"]["release"], "fault")
+        # The contract is the validated H13 document, not a copy we mutate ourselves:
+        # the release check must be present in what the checker accepted (#361).
+        data, errors = CHECKER.validate(ROOT)
+        self.assertEqual(errors, [])
+        bounds = data["requirements"]["H13"]["checks"]["bounds"]
+        self.assertIn("release", bounds)
+        self.assertIsInstance(bounds["release"], str)
+        self.assertTrue(bounds["release"])
 
     def test_completion_tokens_name_only_past_work(self):
         data, errors = CHECKER.validate(ROOT)
