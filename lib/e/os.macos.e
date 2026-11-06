@@ -2437,12 +2437,22 @@ fn poller_slot_free(state: *PollerState) -> usize {
 fn poller_unregister(p: Poller, handle: Handle) -> err {
     let state = mem.cast[*PollerState](p.state)
     let known = poller_slot(state, u64(handle.raw))
-    if known < state.flags.len { state.flags[known] = 0u8 }
-    // Either filter may never have been added, so ENOENT from one is not a failure; both gone
-    // is what the caller asked for.
+    var had = 0u8
+    if known < state.flags.len { had = state.flags[known] }
+    // Either filter may never have been added, so ENOENT (-2) is the expected absent case;
+    // any other failure leaves that filter installed and must be reported (#400).
     let read_removed = poller_change(state.queue, u64(handle.raw), EVFILT_READ, EV_DELETE, 0u32, 0usize)
     let write_removed = poller_change(state.queue, u64(handle.raw), EVFILT_WRITE, EV_DELETE, 0u32, 0usize)
-    if read_removed < 0isize && write_removed < 0isize { ret from_errno(read_removed) }
+    let read_failed = read_removed < 0isize && read_removed != -2isize
+    let write_failed = write_removed < 0isize && write_removed != -2isize
+    if known < state.flags.len {
+        var kept = 0u8
+        if had & 1u8 != 0u8 && read_failed { kept = kept | 1u8 }
+        if had & 2u8 != 0u8 && write_failed { kept = kept | 2u8 }
+        state.flags[known] = kept
+    }
+    if read_failed { ret from_errno(read_removed) }
+    if write_failed { ret from_errno(write_removed) }
     ret ok
 }
 
