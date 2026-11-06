@@ -3067,19 +3067,13 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     oracle_defers.entries = oracle_defer_entries
                     oracle_defers.count = 0usize
                     let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, oracle_defers)
-                    // A candidate body is lowered with the cap armed, and `nir.emit` is only one of the builder calls
-                    // that can fail: `begin_block`, `set_terminator` and the operand rows refuse control flow of their
-                    // own accord. Once the body has already passed the cap, any such refusal means "this candidate is too
-                    // long", not "the compiler is broken" - it used to surface as a hard `cannot lower` error naming
-                    // whichever function happened to be over the line (gpu.e's subgroup_* at --inline-cap 8/16/32).
-                    let past_cap = oracle.instruction_limit != 0usize && oracle.instruction_count - oracle.limit_base >= oracle.instruction_limit
                     oracle.instruction_limit = 0usize
                     // The lowering arms the checker's failure position at every statement it
                     // takes (D345); a body lowered or discarded leaves it disarmed, or a
                     // later module's check failure would be reported at this body's last
                     // statement, as every release-build check error after an oracle was.
-                    if lower_error == ok || lower_error == nir.TooLong || past_cap { c.failure_has_token = false }
-                    if lower_error == nir.TooLong || (past_cap && lower_error != ok) {
+                    if lower_error == ok || lower_error == nir.TooLong { c.failure_has_token = false }
+                    if lower_error == nir.TooLong {
                         // Past the cap: what was lowered so far goes, and so does the function.
                         if oracle.explain { explain_inline(oracle, g, module_index, name, "rejected: its body is over the cap") }
                         nir.reset(oracle, checkpoint)
