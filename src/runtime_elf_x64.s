@@ -278,6 +278,10 @@ neper_os_sha256_blocks:
     sub rsp, 40
     mov r10, rdi
     mov r11, rsi
+    xor eax, eax
+    cpuid
+    cmp eax, 7
+    jb .Lsha_done
     mov eax, 7
     xor ecx, ecx
     cpuid
@@ -1701,7 +1705,9 @@ neper_os_thread_create:
     jae .Lthread_size_ok
     mov rbx, 65536
 .Lthread_size_ok:
-    mov rsi, rbx
+    // One guard page below the header: a stack overflow faults there instead of
+    // running into the mapping below (or trusting a corrupt join size).
+    lea rsi, [rbx + 4096]
     xor edi, edi
     mov edx, 3
     mov r10d, 0x22
@@ -1712,7 +1718,16 @@ neper_os_thread_create:
     test rax, rax
     js .Lthread_create_failed
     mov r9, rax
-    mov qword ptr [r9 + 8], rbx
+    add r9, 4096
+    lea rcx, [rbx + 4096]
+    mov qword ptr [r9 + 8], rcx
+    mov rdi, rax
+    mov esi, 4096
+    xor edx, edx
+    mov eax, 10
+    syscall
+    test rax, rax
+    js .Lthread_create_unmap
     // The child finds its entry point and context on the stack it starts on.
     lea r11, [r9 + rbx]
     and r11, -16
@@ -1749,8 +1764,8 @@ neper_os_thread_create:
     mov eax, 60
     syscall
 .Lthread_create_unmap:
-    mov rdi, r9
-    mov rsi, rbx
+    lea rdi, [r9 - 4096]
+    lea rsi, [rbx + 4096]
     mov eax, 11
     syscall
 .Lthread_create_failed:
@@ -1784,7 +1799,7 @@ neper_os_thread_join:
     syscall
     jmp .Lthread_join_wait
 .Lthread_join_done:
-    mov rdi, r12
+    lea rdi, [r12 - 4096]
     mov rsi, rbx
     mov eax, 11
     syscall

@@ -23,19 +23,53 @@ function Convert-ToWslPath([string]$Path) {
 
 $object = Join-Path $build "$stem.o"
 $binary = Join-Path $build "$stem.bin"
-$sourceWsl = Convert-ToWslPath $source
-$objectWsl = Convert-ToWslPath $object
-$binaryWsl = Convert-ToWslPath $binary
-& wsl -d Ubuntu-24.04 -- $assemble $sourceWsl -o $objectWsl
-if ($LASTEXITCODE -ne 0) { throw 'assembling the ELF runtime failed' }
-# The blob is copied as it is, so a relocation -- a reference to a global symbol -- would
-# be left unapplied, its instruction pointing at itself (D2126).
-$relocations = & wsl -d Ubuntu-24.04 -- "${tools}objdump" -r $objectWsl
-if ($relocations -match 'R_(AARCH64|X86_64)_') { throw "the runtime has relocations; reference a local label instead:`n$($relocations -join "`n")" }
-& wsl -d Ubuntu-24.04 -- "${tools}objcopy" -O binary --only-section=.text $objectWsl $binaryWsl
-if ($LASTEXITCODE -ne 0) { throw 'extracting the ELF runtime failed' }
-$symbols = & wsl -d Ubuntu-24.04 -- "${tools}nm" -n --defined-only $objectWsl
-if ($LASTEXITCODE -ne 0) { throw 'reading ELF runtime symbols failed' }
+
+# Prefer the WSL cross binutils; fall back to the host's Zig assembler and LLVM
+# binutils (from the Rust sysroot) when WSL cannot run (D2126).
+$useWsl = $true
+try {
+    & wsl -d Ubuntu-24.04 -- true 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0) { $useWsl = $false }
+} catch { $useWsl = $false }
+
+if ($useWsl) {
+    $sourceWsl = Convert-ToWslPath $source
+    $objectWsl = Convert-ToWslPath $object
+    $binaryWsl = Convert-ToWslPath $binary
+    & wsl -d Ubuntu-24.04 -- $assemble $sourceWsl -o $objectWsl
+    if ($LASTEXITCODE -ne 0) { throw 'assembling the ELF runtime failed' }
+    $relocations = & wsl -d Ubuntu-24.04 -- "${tools}objdump" -r $objectWsl
+    if ($relocations -match 'R_(AARCH64|X86_64)_') { throw "the runtime has relocations; reference a local label instead:`n$($relocations -join "`n")" }
+    & wsl -d Ubuntu-24.04 -- "${tools}objcopy" -O binary --only-section=.text $objectWsl $binaryWsl
+    if ($LASTEXITCODE -ne 0) { throw 'extracting the ELF runtime failed' }
+    $symbols = & wsl -d Ubuntu-24.04 -- "${tools}nm" -n --defined-only $objectWsl
+    if ($LASTEXITCODE -ne 0) { throw 'reading ELF runtime symbols failed' }
+} else {
+    $zig = 'D:\tools\zig\zig.exe'
+    if (-not (Test-Path -LiteralPath $zig)) { throw 'no WSL and no Zig assembler; install zig or set up WSL' }
+    $env:ZIG_GLOBAL_CACHE_DIR = Join-Path $build 'zig-cache'
+    $llvm = Join-Path (& rustc --print sysroot) 'lib\rustlib\x86_64-pc-windows-gnu\bin'
+    $objcopy = Join-Path $llvm 'llvm-objcopy.exe'
+    $nm = Join-Path $llvm 'llvm-nm.exe'
+    $objdump = Join-Path $llvm 'llvm-objdump.exe'
+    $target = if ($Arch -eq 'macosx64') { 'x86_64-macos' } elseif ($Arch -eq 'macos') { 'aarch64-macos' } elseif ($arm) { 'aarch64-linux-gnu' } else { 'x86_64-linux-gnu' }
+    $input = $source
+    if ($arm) {
+        # The CRC instructions need an explicit architecture for the integrated assembler.
+        $input = Join-Path $build "$stem.arch.s"
+        [IO.File]::WriteAllText($input, ".arch armv8.2-a+crc`n" + [IO.File]::ReadAllText($source))
+    }
+    $zigArgs = @('cc', '-target', $target, '-g0', '-c', $input, '-o', $object)
+    if ($arm) { $zigArgs = @('cc', '-target', $target, '-mcpu=a64fx', '-g0', '-c', $input, '-o', $object) }
+    & $zig @zigArgs
+    if ($LASTEXITCODE -ne 0) { throw 'assembling the ELF runtime with Zig failed' }
+    $relocations = & $objdump -r $object
+    if ($relocations -match 'R_(AARCH64|X86_64)_') { throw "the runtime has relocations; reference a local label instead:`n$($relocations -join "`n")" }
+    & $objcopy -O binary --only-section=.text $object $binary
+    if ($LASTEXITCODE -ne 0) { throw 'extracting the ELF runtime failed' }
+    $symbols = & $nm -n --defined-only $object
+    if ($LASTEXITCODE -ne 0) { throw 'reading ELF runtime symbols failed' }
+}
 
 $bytes = [IO.File]::ReadAllBytes($binary)
 $builder = [Text.StringBuilder]::new()
@@ -92,5 +126,5 @@ for ($index = 0; $index -lt $table.Count; $index++) {
 [void]$builder.AppendLine('    ret (0usize, false)')
 [void]$builder.AppendLine('}')
 
-[IO.File]::WriteAllText($output, $builder.ToString(), [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText($output, $builder.ToString().Replace("`r`n", "`n"), [Text.UTF8Encoding]::new($false))
 Write-Output $output
