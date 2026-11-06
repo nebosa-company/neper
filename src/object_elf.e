@@ -141,7 +141,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let symbol_size = symbol_count * 24usize
     let string_offset = symbol_offset + symbol_size
     let section_names_offset = string_offset + string_size
-    let section_names_size = 44usize
+    let section_names_size = 60usize
     let section_header_offset = align(section_names_offset + section_names_size, 8usize)
     try emit_x64.byte(output, 127usize)
     try append_text(output, "ELF")
@@ -162,7 +162,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try little_u16(output, 0usize)
     try little_u16(output, 0usize)
     try little_u16(output, 64usize)
-    try little_u16(output, 6usize)
+    try little_u16(output, 7usize)
     try little_u16(output, 5usize)
     try pad_to(output, text_offset)
     var byte_at = 0usize
@@ -228,6 +228,8 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try append_text(output, ".strtab")
     try emit_x64.byte(output, 0usize)
     try append_text(output, ".shstrtab")
+    try emit_x64.byte(output, 0usize)
+    try append_text(output, ".note.GNU-stack")
     try emit_x64.byte(output, 0usize)
     try pad_to(output, section_header_offset)
     var null_section: Section = zero
