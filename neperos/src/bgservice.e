@@ -324,12 +324,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if ringing != bgclient.RING_NONE { answer = (ring_index + 1usize) | (ringing << 8usize) | (ring_minute << 16usize) }
                 let sent = os.send(REP, answer, NO_SLOT)
             } else if op == bgclient.OP_RING_STOP {
-                // Whatever rang, this minute's alarm is answered: it does not ring again in the same minute.
-                fired_stamp = wall_seconds() / 60usize
-                if ringing != bgclient.RING_NONE {
-                    say("services ring stopped\n")
-                    ringing = bgclient.RING_NONE
-                    ring_index = 99usize
+                // Only the Clock (14) and the settings server (0) may stop a ring.
+                if app == 0usize || app == 14usize {
+                    // Whatever rang, this minute's alarm is answered: it does not ring again in the same minute.
+                    fired_stamp = wall_seconds() / 60usize
+                    if ringing != bgclient.RING_NONE {
+                        say("services ring stopped\n")
+                        ringing = bgclient.RING_NONE
+                        ring_index = 99usize
+                    }
+                } else {
+                    say("services ring stop refused from app ")
+                    say_num(app)
+                    say("\n")
                 }
                 let sent = os.send(REP, 1usize, NO_SLOT)
             } else if op == bgclient.OP_FOREGROUND {

@@ -173,7 +173,9 @@ fn rec_read(offset: usize, max: usize, dst: usize) -> usize {
     if want > 256usize { want = 256usize }
     let sent = os.send(REQ, request(OP_REC_READ, 0usize, offset | (want << 32usize)), NO_SLOT)
     if sent == REFUSED { ret 0usize }
-    let count = os.recv(REP, NO_SLOT)
+    var count = os.recv(REP, NO_SLOT)
+    // The destination holds `want` frames: a larger count from the service must not overrun it.
+    if count > want { count = want }
     var i = 0usize
     while i * 4usize < count {
         let word = os.recv(REP, NO_SLOT)
