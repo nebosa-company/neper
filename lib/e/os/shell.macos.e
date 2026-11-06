@@ -540,9 +540,8 @@ fn target_dock_menu(this: usize, command: usize, sender: usize) -> usize {
     ret dock_menu
 }
 
-// A Dock menu item: its program and arguments run in the background. The shell only
-// receives a fixed script; the program and parsed words are positional parameters, so
-// task text cannot become shell syntax.
+// A Dock menu item: its program and arguments run in the background, directly from
+// argv. No shell is involved, so task text cannot become shell syntax.
 @cc(c)
 fn target_dock_task(this: usize, command: usize, sender: usize) {
     let held = os.msg0(sender, os.cocoa_sel("representedObject\x00"))
@@ -556,29 +555,28 @@ fn target_dock_task(this: usize, command: usize, sender: usize) {
     var arguments: [512]str = zero
     let (argument_count, split_error) = shlex.split(text[program_end + 1usize..length], argument_bytes[..], arguments[..])
     if split_error != ok { ret }
-    // `sh` starts its fixed positional-parameter command in the background and ends,
-    // so no child is left to wait for. "$@" begins at $1: the sentinel below is $0.
+    // argv[0] is the program; the parsed words are its arguments. The program name is
+    // resolved as given (no PATH search), exactly as the former exec "$@" did.
     var storage: [16384]u8 = zero
     var scratch = mem.arena_from(storage[..])
     var argv: [512]str = zero
-    argv[0usize] = "/bin/sh"
-    argv[1usize] = "-c"
-    argv[2usize] = "exec \"$@\" >/dev/null 2>&1 &"
-    argv[3usize] = "neper-dock-task"
-    argv[4usize] = text[0usize..program_end]
+    argv[0usize] = text[0usize..program_end]
     var at = 0usize
     while at < argument_count {
-        argv[5usize + at] = arguments[at]
+        argv[1usize + at] = arguments[at]
         at += 1usize
     }
     var options: os.SpawnOptions = zero
-    options.argv = argv[0usize..5usize + argument_count]
+    options.argv = argv[0usize..1usize + argument_count]
     options.inherit_env = true
     options.stdio.stdout = os.File { raw: 1usize }
     options.stdio.stderr = os.File { raw: 2usize }
     let (child, spawn_error) = os.spawn_with_options(&scratch, options)
     if spawn_error != ok { ret }
-    let (usage, wait_error) = os.wait_usage(child)
+    // ponytail: the child is deliberately left unreaped; a Dock task outlives the
+    // click. The former shell script detached it and sent output to /dev/null;
+    // without a shell the child inherits the Dock's fds.
+    dock_child = child
 }
 
 fn jump_list(a: *mem.Arena, tasks: []const JumpTask) -> err {
@@ -1852,6 +1850,9 @@ extern fn ls_default_for_type(content_type: usize, roles: u32, handler: usize) -
 extern fn ls_default_for_scheme(scheme: usize, handler: usize) -> i32
 
 const ACTIVATIONS: usize = 8usize
+// The last Dock-launched child. Holding the handle here keeps it alive without
+// waiting; the menu callback must not block on the task it started.
+var dock_child: os.Proc = zero
 var act_text: [16384]u8 = zero
 var act_used: usize = zero
 var act_lengths: [8]usize = zero
