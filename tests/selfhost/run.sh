@@ -11717,7 +11717,7 @@ greeting"
         [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/$net_prog.e" "$repo" aarch64 neperos "$test_build/$net_prog.img")" = 'executable written' ]
     done
     net_archive="$test_build/net-archive.img"
-    python3 "$repo/scripts/build-shell-archive.py" "$net_archive" "$test_build/rng_server.img" "$test_build/net_server.img" "$test_build/net_check.img" "$repo/neperos/assets/roots/mozilla.der" "$repo/tests/selfhost/fixtures/neperos/net/ca.der"
+    python3 "$repo/scripts/build-shell-archive.py" "$net_archive" "$test_build/rng_server.img" "$test_build/net_server.img" "$test_build/net_check.img" "$repo/neperos/assets/roots/mozilla.der" "$repo/tests/selfhost/fixtures/neperos/net/ca.der" "$repo/tests/selfhost/fixtures/neperos/net/air.txt"
     net_ready="$test_build/net-hosts.ready"
     rm -f "$net_ready"
     python3 "$repo/tests/selfhost/fixtures/neperos/net/host_services.py" "$net_ready" > /dev/null 2>&1 &

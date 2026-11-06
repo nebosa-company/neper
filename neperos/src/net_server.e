@@ -173,28 +173,73 @@ fn connect(s: *Session, a: *mem.Arena, host: str, port: u16, secure: bool) -> us
 // is listed as "Ethernet" and is always the connection to fall back on. The test boots add a recorded air, the way
 // they record DNS and the API hosts, so the Settings app's scan, password sheet and join can be exercised: three
 // networks, two of them secured. A real radio driver would put its scan results in this list.
+// The recorded air arrives as the third mapped archive entry (args[3]) only in the test
+// boot: lines "name<TAB>secured<TAB>signal<TAB>password". The production image holds no
+// names or passwords; without the entry air_count is 0.
+var air_buf: [1024]u8 = zero
+var air_len: usize = 0usize
+var air_loaded: bool = false
+
+fn air_field(line: str, want: usize) -> str {
+    var start = 0usize
+    var field = 0usize
+    var i = 0usize
+    while i <= line.len {
+        if i == line.len || line[i] == 9u8 {
+            if field == want { ret line[start..i] }
+            field += 1usize
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    ret ""
+}
+
+fn air_line(index: usize) -> str {
+    if !air_loaded || index == 0usize { ret "" }
+    var want = index - 1usize
+    var line = 0usize
+    var at = 0usize
+    let text = air_buf[0usize..air_len]
+    while at <= text.len {
+        var end = at
+        while end < text.len && text[end] != 10u8 && text[end] != 13u8 { end += 1usize }
+        if line == want { ret text[at..end] }
+        line += 1usize
+        at = end + 1usize
+        if at > text.len { break }
+    }
+    ret ""
+}
+
+fn air_decimal(text: str) -> usize {
+    var v = 0usize
+    var i = 0usize
+    while i < text.len {
+        if text[i] < 48u8 || text[i] > 57u8 { ret 0usize }
+        v = v * 10usize + usize(text[i] - 48u8)
+        i += 1usize
+    }
+    ret v
+}
+
 fn air_name(index: usize) -> str {
-    if index == 1usize { ret "Neper-Lab" }
-    if index == 2usize { ret "Cafe-Free" }
-    if index == 3usize { ret "Neighbour-5G" }
-    ret "Ethernet"
+    if index == 0usize { ret "Ethernet" }
+    ret air_field(air_line(index), 0usize)
 }
 
 fn air_secured(index: usize) -> usize {
-    if index == 1usize || index == 3usize { ret 1usize }
+    if air_field(air_line(index), 1usize).len != 0usize { ret 1usize }
     ret 0usize
 }
 
 fn air_signal(index: usize) -> usize {
-    if index == 1usize { ret 82usize }
-    if index == 2usize { ret 61usize }
-    if index == 3usize { ret 34usize }
-    ret 100usize
+    if index == 0usize { ret 100usize }
+    ret air_decimal(air_field(air_line(index), 2usize))
 }
 
 fn air_password(index: usize) -> str {
-    if index == 1usize { ret "neperlab1" }
-    ret "wallhugger"
+    ret air_field(air_line(index), 3usize)
 }
 
 // Whether the radios may carry traffic (the settings server's word: Airplane mode and the Wi-Fi and Mobile switches).
@@ -233,7 +278,7 @@ fn link_report(was_bt: bool, was_hotspot: usize) {
 
 fn air_count(s: *Session) -> usize {
     if !radio_on { ret 0usize }
-    if s.test { ret 4usize }
+    if s.test && air_loaded { ret 4usize }
     if s.present { ret 1usize }
     ret 0usize
 }
@@ -280,6 +325,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         s.dns_ip = 167772674u32
         s.dns_port = 5300u16
         if args.len > 2usize { s.trust = args[2usize] }
+    // Test boots only: the recorded air fixture, as the third mapped entry.
+    if args.len > 3usize {
+        var copy = 0usize
+        while copy < args[3usize].len && copy < air_buf.len {
+            air_buf[copy] = args[3usize][copy]
+            copy += 1usize
+        }
+        air_len = copy
+        air_loaded = true
+    }
     }
     var ring_storage: [65536]u8 = zero
     s.ring = mem.address_of(&ring_storage[0usize])

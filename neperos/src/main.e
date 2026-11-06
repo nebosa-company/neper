@@ -1121,7 +1121,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // The trust store (program 3, the Mozilla roots) and the fixture's root (program 4) are mapped
         // into the server as its arguments 1 and 2.
         extra_first = 3usize
-        extra_count = 2usize
+        extra_count = 3usize
         last_server_index = thread.MAX_THREADS
         let (net_bar, net_error) = start_driver_server(a, archive_base + archive_offset[1usize], archive_length[1usize], 2usize, pci_host, rng_bar, pci.VIRTIO_NET, "net")
         extra_count = 0usize

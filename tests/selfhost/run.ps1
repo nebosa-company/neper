@@ -12021,7 +12021,7 @@ if ($neperosQemu) {
         if ($LASTEXITCODE -ne 0) { throw "the NeperOS network program $netProgram did not build" }
     }
     $netArchive = Join-Path $testBuild 'net-archive.img'
-    & python (Join-Path $repo 'scripts\build-shell-archive.py') $netArchive (Join-Path $testBuild 'rng_server.img') (Join-Path $testBuild 'net_server.img') (Join-Path $testBuild 'net_check.img') (Join-Path $repo 'neperos\assets\roots\mozilla.der') (Join-Path $repo 'tests\selfhost\fixtures\neperos\net\ca.der')
+    & python (Join-Path $repo 'scripts\build-shell-archive.py') $netArchive (Join-Path $testBuild 'rng_server.img') (Join-Path $testBuild 'net_server.img') (Join-Path $testBuild 'net_check.img') (Join-Path $repo 'neperos\assets\roots\mozilla.der') (Join-Path $repo 'tests\selfhost\fixtures\neperos\net\ca.der') (Join-Path $repo 'tests\selfhost\fixtures\neperos\net\air.txt')
     if ($LASTEXITCODE -ne 0) { throw 'the NeperOS network archive did not assemble' }
     $netReady = Join-Path $testBuild 'net-hosts.ready'
     if (Test-Path $netReady) { Remove-Item $netReady }
