@@ -404,8 +404,15 @@ fn dijkstra[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: 
         at += 1usize
     }
     distance[usize(start)] = 0.0
+    // Each node is settled once and each outgoing edge is relaxed at most once, so the
+    // queue must hold the seed plus one entry per edge; sizing by node count alone drops
+    // a relaxation on dense graphs (the stale-entry overflow).
+    var capacity = graph.edge_count[E](g)
+    if capacity > 18446744073709551615usize - 1usize { ret (zero, graph.TooLarge) }
+    capacity += 1usize
+    if capacity < count { capacity = count }
     var tie = 0u8
-    let (initial_queue, queue_error) = heap.init_by[Entry, u8](a, count, &tie, entry_cmp)
+    let (initial_queue, queue_error) = heap.init_by[Entry, u8](a, capacity, &tie, entry_cmp)
     if queue_error != ok { ret (zero, queue_error) }
     var queue = initial_queue
     let seed_error = heap.push_by[Entry, u8](&queue, Entry { distance: 0.0, node: start })
