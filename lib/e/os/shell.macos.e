@@ -3225,3 +3225,50 @@ fn photo_picker(a: *mem.Arena, w: os.Window, multiple: bool) -> ([]const str, er
     let (picked, picked_error) = file_dialog(a, w, dialog)
     ret (picked, picked_error)
 }
+// Quote one executable path for a Desktop Entry Exec string: escaping happens before
+// Exec parsing, so a backslash is doubled twice and `%` becomes `%%`.
+fn desktop_exec(a: *mem.Arena, exe: str) -> (str, err) {
+    let (out, allocation_error) = mem.alloc[u8](a, exe.len * 4usize + 2usize)
+    if allocation_error != ok { ret ("", allocation_error) }
+    var at = 0usize
+    out[at] = 34u8
+    at += 1usize
+    var i = 0usize
+    while i < exe.len {
+        let c = exe[i]
+        if c == 92u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 92u8
+            out[at + 2usize] = 92u8
+            out[at + 3usize] = 92u8
+            at += 4usize
+        } else if c == 34u8 || c == 36u8 || c == 96u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 92u8
+            out[at + 2usize] = c
+            at += 3usize
+        } else if c == 37u8 {
+            out[at] = 37u8
+            out[at + 1usize] = 37u8
+            at += 2usize
+        } else if c == 10u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 110u8
+            at += 2usize
+        } else if c == 9u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 116u8
+            at += 2usize
+        } else if c == 13u8 {
+            out[at] = 92u8
+            out[at + 1usize] = 114u8
+            at += 2usize
+        } else {
+            out[at] = c
+            at += 1usize
+        }
+        i += 1usize
+    }
+    out[at] = 34u8
+    ret (out[0usize..at + 1usize], ok)
+}
