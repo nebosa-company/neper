@@ -614,11 +614,26 @@ fn digits_of(a: *mem.Arena, n: usize) -> str {
 // ---------------------------------------------------------------------------
 // Built-in predicates.
 
+// A CIDR naming every source address, IPv4 or IPv6, in its canonical spellings.
+fn any_source(text: str) -> bool {
+    if same(text, "0.0.0.0/0") { ret true }
+    if same(text, "::/0") || same(text, "::0/0") { ret true }
+    if same(text, "0:0:0:0:0:0:0:0/0") || same(text, "0000:0000:0000:0000:0000:0000:0000:0000/0") { ret true }
+    ret false
+}
+
 fn world_open(rule: []const json.Member) -> bool {
     let (cidr, has_cidr) = member(rule, "cidr")
-    if !has_cidr { ret false }
-    let (text, text_ok) = string_of(cidr)
-    ret text_ok && same(text, "0.0.0.0/0")
+    if has_cidr {
+        let (text, text_ok) = string_of(cidr)
+        if text_ok && any_source(text) { ret true }
+    }
+    let (cidr6, has_cidr6) = member(rule, "cidr_ipv6")
+    if has_cidr6 {
+        let (text6, text6_ok) = string_of(cidr6)
+        if text6_ok && any_source(text6) { ret true }
+    }
+    ret false
 }
 
 fn rule_port(rule: []const json.Member, key: str) -> (i64, bool) {
