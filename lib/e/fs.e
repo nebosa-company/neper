@@ -32,7 +32,7 @@ error Io
 // walk opens; a growing stack is what to write if a real tree ever exceeds it.
 const WALK_DEPTH: usize = 64usize
 
-type WalkLevel = struct { path: str, entries: []os.DirEntry, at: usize }
+type WalkLevel = struct { path: str, resolved: str, entries: []os.DirEntry, at: usize }
 
 type WalkState = struct {
     arena: *mem.Arena,
@@ -790,9 +790,19 @@ fn copy_file(a: *mem.Arena, src: str, dst: str, scratch: []u8) -> err {
 
 fn push_level(state: *WalkState, directory: str) -> err {
     if state.depth == state.levels.len { ret Invalid }
+    // A directory already on the active path is a symlink cycle, not a second copy of
+    // the tree: answer Invalid instead of descending until the fixed depth.
+    let (resolved, resolved_error) = canonical(state.arena, directory)
+    if resolved_error != ok { ret resolved_error }
+    var seen = 0usize
+    while seen < state.depth {
+        if same_path(state.levels[seen].resolved, resolved) { ret Invalid }
+        seen += 1usize
+    }
     let (entries, read_error) = os.readdir(state.arena, directory)
     if read_error != ok { ret from_os(read_error) }
     state.levels[state.depth].path = directory
+    state.levels[state.depth].resolved = resolved
     state.levels[state.depth].entries = entries
     state.levels[state.depth].at = 0usize
     state.depth += 1usize
