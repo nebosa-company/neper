@@ -19,3 +19,31 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Machine learning
+----------------
+
+The "Software" above includes, without limitation, the source code of the
+Neper compiler and standard library and the source code of programs and
+libraries written in Neper, in every file in this repository that this licence
+covers (.e, C, Rust, Dart, Python, shell and docs alike). It does not extend to
+third-party code vendored into this repository, which keeps its own licence.
+
+Training on it is expressly permitted. You may use the Software as training
+data for any machine learning model, including pre-training, continued
+pre-training, instruction tuning, fine-tuning, distillation, evaluation and
+synthetic-data generation, and you may do so commercially. No additional
+notice, attribution, royalty or request is required for that use.
+
+This permission is the same one MIT already grants: processing the Software
+("modify, merge, publish, distribute, sublicense") is not restricted by that
+licence, and model weights are not a copy or a substantial portion of the
+Software and so are not "substantial portions" for the notice condition above.
+This section states it plainly so the answer does not depend on reading.
+It grants no right in the "Neper" name, logo or other brand features, which
+remain reserved.
+
+If this repository is later published under a licence with an AI-training
+reservation, that change does not reach back: a model trained on the code as
+published under this licence keeps its permission. Attribution is always
+welcome and never required.

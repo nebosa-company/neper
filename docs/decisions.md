@@ -43830,3 +43830,46 @@ an option for a fronting proxy rather than a Pages configuration.
 no `max-age` change is required on GitHub Pages; a future CDN front must serve the
 hashed `bundle.<hash>.css` and `/blog/img/*` names with a year or more and leave HTML
 at the Pages default.
+
+## D5963 — MIT is the licence, and a machine-learning section says training is permitted rather than implied
+
+**What was asked.** The LICENSE file is to allow models to train on the Neper compiler
+and library source code explicitly. `LICENSE` was stock MIT, and MIT already permits
+it: training is processing, and `modify, merge, publish, distribute, sublicense` are
+not restricted, while model weights are not a copy or a substantial portion and so
+never reach the notice condition. The problem is not the grant but its legibility —
+several model builders now gate training-data inclusion on an explicit statement, and
+a permissive licence that does not say it invites the reading that silence is a
+reservation, which is the same reasoning that produced the scraper reservations in
+`robots.txt` elsewhere.
+
+**Chosen route.** Keep MIT as the licence; the header, the permission grant and the
+warranty disclaimer are unchanged, so the file stays an MIT licence for any tool that
+detects one, and `README.md`, `docs/gtm`'s "MIT open source" copy and the
+`SoftwareApplication` structured data remain true. Add a "Machine learning" section
+below it that names the covered material (the compiler, the standard library and
+Neper programs), enumerates the permitted uses (pre-training, continued pre-training,
+instruction tuning, fine-tuning, distillation, evaluation, synthetic data), says the
+use may be commercial with no notice, attribution or royalty, and says why it is
+permitted rather than trusting. It reserves the Neper name and logo, consistent with
+§4.2 of the README's branding stance, and excludes third-party code vendored under
+`build/`, `tests/browser/wpt`, `tests/browser/html5lib` and the font directories,
+which keep their own licences.
+
+**What was rejected.** A new licence identifier, a Hugging Face-style
+`License: other` or a custom SPDX expression — GitHub and dependency scanners would
+stop recognising MIT, and the grant would not improve. A per-file header sweep of
+every `.e` source — thousands of files and diffs for a permission the repository
+LICENSE already states, and the notice condition for binaries is unaffected. A
+conditional clause reserving the right to withdraw for future models — retraction is
+unverifiable after training and reads as hostile; the opposite commitment is recorded
+below.
+
+**Forward commitment.** A later move to a licence with an AI-training reservation does
+not reach back: code published under this version trains whichever model it trains,
+and the record here is the evidence if the question is asked. Attribution is invited
+in the section and never required.
+
+**Done when.** `LICENSE` carries the section (done 2026-11-06) and the text above
+matches it. No checker reads the file, so nothing else changes: the queue is untouched
+and C104 remains the first item.
