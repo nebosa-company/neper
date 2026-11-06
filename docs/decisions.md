@@ -43902,10 +43902,8 @@ a resume cannot confuse two unnamed cases; Petcow commit `e6811e19` skips only t
 offending token after a non-resource statement, so `include apache` no longer swallows
 the resource declaration after it. Both fixtures were regenerated and the neper side
 (`lib/e/algo/workflow.e`, `lib/x/migrate/migrate.e`) changed with them, so the fixtures
-stay green (`#205`, `#55`). The Appdor commit was rebased onto upstream `main` and pushed
-as `f24389d8f`; the Petcow commit `e6811e19` is local only, because the configured
-`oboobortot/petcow` remote answers 404 to the available account (no SSH key is present
-either), so the owner has to push it or grant access.
+stay green (`#205`, `#55`). Both upstream fixes were pushed: Appdor `f24389d8f` (rebased
+onto upstream `main`) and Petcow `e6811e19` to `oboobortot/petcow` `main`.
 
 Consequences. Updating a pin is an explicit act: copy the upstream files, run the
 generator, and review the fixture diff as a semantic change to the port. Generated
@@ -43919,6 +43917,7 @@ the README records that these copies are internal until that is settled. Appdor'
 journal shape and budget accounting (`#205`) and Petcow's Puppet skip-one behaviour
 (`#55`) remain upstream changes: editing a pinned copy would make the fixture disagree
 with the real project, so they stay open until those repositories change.
+
 
 
 
