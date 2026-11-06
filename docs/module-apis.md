@@ -22917,6 +22917,8 @@ fn shared_strings_xml(a: *mem.Arena, sst_table: *const Shared) -> (str, err)
 fn encode(a: *mem.Arena, sheets: []const xlsx.Sheet, layouts: []const Layout) -> ([]u8, err)
 fn sheet_part_name(a: *mem.Arena, index: usize) -> (str, err)
 fn local(name: str) -> str
+fn qualified_attribute(element: *const xml.Node, name: str) -> (str, bool)
+fn part_name(a: *mem.Arena, path: str) -> (str, err)
 fn is_element(nodes: []const xml.Node, n: usize, name: str) -> bool
 fn attr(node: *const xml.Node, name: str) -> (str, bool)
 fn parent_index(nodes: []const xml.Node, n: usize) -> usize
