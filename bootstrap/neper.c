@@ -6709,6 +6709,12 @@ static int debug_visible_local(Local *local) {
 }
 
 static int debug_string(DebugContext *debug, const char *text) {
+    /* A truncated entry would make the lookup by full path fail silently: reject it. */
+    if (strlen(text) >= sizeof(debug->strings[0].text)) {
+        fprintf(stderr, "neper: debug string too long (max %u bytes): %s\n",
+                (unsigned)(sizeof(debug->strings[0].text) - 1), text);
+        exit(2);
+    }
     int i;
     for (i = 0; i < debug->string_count; ++i)
         if (strcmp(debug->strings[i].text, text) == 0) return i;
@@ -7628,13 +7634,19 @@ static void emit_linux_runtime(Compiler *c, FILE *out) {
         "    mov edx, 3\n"
         "    mov r10d, 34\n    mov r8, -1\n    xor r9d, r9d\n    mov eax, 9\n    syscall\n"
         "    test rax, rax\n    js np_start_fail\n"
-        "    mov r13, rax\n    mov r14, QWORD PTR [r12]\n    mov rbx, r14\n    shl rbx, 4\n    xor r15d, r15d\n"
+        "    mov r13, rax\n    mov r14, QWORD PTR [r12]\n    mov rbx, r14\n    shl rbx, 4\n", out);
+    fprintf(out, "    mov r11, %llu\n    cmp rbx, r11\n    ja np_start_fail\n", (unsigned long long)c->root_arena_size);
+    fputs(
+        "    xor r15d, r15d\n"
         "np_arg_loop:\n    cmp r15, r14\n    jae np_args_done\n"
         "    mov r8, QWORD PTR [r12+r15*8+8]\n    xor ecx, ecx\n"
         "np_arg_len:\n    cmp BYTE PTR [r8+rcx], 0\n    je np_arg_len_done\n    inc rcx\n    jmp np_arg_len\n"
         "np_arg_len_done:\n    lea r9, [r13+rbx]\n    mov r10, r15\n    shl r10, 4\n"
         "    mov QWORD PTR [r13+r10], r9\n    mov QWORD PTR [r13+r10+8], rcx\n"
-        "    mov rdx, rcx\n    mov rsi, r8\n    mov rdi, r9\n    rep movsb\n    add rbx, rdx\n    inc r15\n    jmp np_arg_loop\n"
+        "    mov rdx, rcx\n", out);
+    fprintf(out, "    lea r10, [rbx+rdx]\n    mov r11, %llu\n    cmp r10, r11\n    ja np_start_fail\n", (unsigned long long)c->root_arena_size);
+    fputs(
+        "    mov rsi, r8\n    mov rdi, r9\n    rep movsb\n    add rbx, rdx\n    inc r15\n    jmp np_arg_loop\n"
         "np_args_done:\n    mov rdi, r13\n    mov rsi, r14\n    call neper_os_set_args\n    sub rsp, 32\n"
         "    mov QWORD PTR [rsp], r13\n", out);
     fprintf(out, "    mov rax, %llu\n    mov QWORD PTR [rsp+8], rax\n", (unsigned long long)c->root_arena_size);
