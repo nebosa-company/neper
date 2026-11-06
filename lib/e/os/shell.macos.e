@@ -1854,6 +1854,7 @@ extern fn ls_default_for_scheme(scheme: usize, handler: usize) -> i32
 const ACTIVATIONS: usize = 8usize
 var act_text: [16384]u8 = zero
 var act_used: usize = zero
+var act_lengths: [8]usize = zero
 var act_strs: [16]str = zero
 var act_kinds: [8]ActivationKind = zero
 var act_payloads: [8]str = zero
@@ -1865,10 +1866,34 @@ fn act_push(kind: ActivationKind, string: usize) {
     if next == act_head || string == 0usize { ret }
     var none: [1]u8 = zero
     let length = os.cocoa_read_text(string, none[0usize..0usize])
-    if length == 0usize || act_used + length > 16384usize { ret }
+    if length == 0usize { ret }
+    // The buffer fills from `act_used` without wrapping, so entries already delivered
+    // leave dead prefix space. Compact the live ring before dropping the event (#630).
+    if act_used + length > 16384usize {
+        var live = 0usize
+        var s = act_head
+        while s != act_tail {
+            live += act_lengths[s]
+            s = (s + 1usize) % ACTIVATIONS
+        }
+        let dead = act_used - live
+        if dead > 0usize {
+            mem.copy[u8](act_text[0usize..live], act_text[dead..act_used])
+            var moved = 0usize
+            s = act_head
+            while s != act_tail {
+                act_payloads[s] = act_text[moved..moved + act_lengths[s]]
+                moved += act_lengths[s]
+                s = (s + 1usize) % ACTIVATIONS
+            }
+            act_used = live
+        }
+        if act_used + length > 16384usize { ret }
+    }
     let copied = os.cocoa_read_text(string, act_text[act_used..act_used + length])
     act_payloads[act_tail] = act_text[act_used..act_used + length]
     act_kinds[act_tail] = kind
+    act_lengths[act_tail] = length
     act_used += length
     act_tail = next
 }
