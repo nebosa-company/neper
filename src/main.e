@@ -869,7 +869,15 @@ fn decimal_flag(args: []str, name: str) -> (usize, bool) {
     var at = 7usize
     while at + 1usize < args.len {
         if same(args[at], "--") { ret (0usize, false) }
-        if same(args[at], name) && decimal_ok(args[at + 1usize]) { ret (decimal_value(args[at + 1usize]), true) }
+        if same(args[at], name) {
+            if decimal_ok(args[at + 1usize]) { ret (decimal_value(args[at + 1usize]), true) }
+            let shown: err = stderr_text("error[E-CLI-9999]: usage: ")
+            let shown_flag: err = stderr_text(name)
+            let shown_mid: err = stderr_text(" needs a decimal number, got `")
+            let shown_value: err = stderr_text(args[at + 1usize])
+            let shown_end: err = stderr_text("`\n")
+            os.exit(2i32)
+        }
         if takes_value(args[at]) { at += 1usize }
         at += 1usize
     }
@@ -6602,11 +6610,12 @@ fn apply_transaction(a: *mem.Arena, sink: *Sink, dot_dir: str, paths: []str, nam
     if locked == os.Exists { ret apply_plan_refused(sink, "E-TOOL-0003", "`.neper/transaction.lock` is held: another apply is writing these sources, or one was interrupted and `apply-plan --recover` restores its files; nothing applied") }
     if locked != ok { ret locked }
     try os.close(lock_file)
+    // Every exit from here on gives the lock back; the defer is the only release.
+    defer { release_transaction(a, dot_dir) }
     // Every precondition again, under the lock.
     var at = 0usize
     while at < paths.len {
         if !file_holds(a, paths[at], digests[at]) {
-            release_transaction(a, dot_dir)
             ret apply_plan_refused_file(sink, "E-TOOL-0003", names[at], " changed since the plan was made; nothing applied")
         }
         at += 1usize
@@ -6661,7 +6670,6 @@ fn apply_transaction(a: *mem.Arena, sink: *Sink, dot_dir: str, paths: []str, nam
                 // An edit made since the lock was taken, by a writer that does not take
                 // it: the files replaced so far go back, and nothing is applied.
                 roll_back(a, dot_dir, paths[0usize..at], digests, new_digests, edits)
-                release_transaction(a, dot_dir)
                 ret apply_plan_refused_file(sink, "E-TOOL-0003", names[at], " changed during the apply; the files already written were restored; nothing applied")
             }
             try save_bytes(a, paths[at], results[at])
@@ -8988,15 +8996,19 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
         worker_at += 1usize
     }
     artifact_worker_entry(&workers[0usize])
+    // Every started worker is joined before returning; the first error is returned after.
+    var join_error = ok
     worker_at = 1usize
     while worker_at < worker_count {
         if started[worker_at] {
-            try os.thread_join(threads[worker_at])
+            let joined = os.thread_join(threads[worker_at])
+            if joined != ok && join_error == ok { join_error = joined }
         } else {
             artifact_worker_entry(&workers[worker_at])
         }
         worker_at += 1usize
     }
+    if join_error != ok { ret join_error }
     // What a worker left, out of the program's arena.
     worker_at = 0usize
     while worker_at < worker_count {
@@ -10557,15 +10569,19 @@ fn resolve_per_module(a: *mem.Arena, resolver: *resolve.Resolver, loaded: *graph
         worker_at += 1usize
     }
     if worker_count != 0usize { resolve_worker_entry(&workers[0usize]) }
+    // Every started worker is joined before returning; the first error is returned after.
+    var join_error = ok
     worker_at = 1usize
     while worker_at < worker_count {
         if started[worker_at] {
-            try os.thread_join(threads[worker_at])
+            let joined = os.thread_join(threads[worker_at])
+            if joined != ok && join_error == ok { join_error = joined }
         } else {
             resolve_worker_entry(&workers[worker_at])
         }
         worker_at += 1usize
     }
+    if join_error != ok { ret join_error }
     // The failure at the module earliest in dependency order is the build's.
     var lowest_order = loaded.order_count
     var lowest_worker = 0usize
