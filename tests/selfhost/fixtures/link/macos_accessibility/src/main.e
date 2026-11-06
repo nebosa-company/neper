@@ -14,7 +14,7 @@ fn text_of(object: usize, key: str) -> usize {
 fn equals(object: usize, expected: str) -> bool {
     if object == 0usize { ret false }
     var buffer: [64]u8 = zero
-    let length = os.cocoa_read_text(object, buffer[..])
+    let (length, ignored_total) = os.cocoa_read_text(object, 0usize, buffer[..])
     if length != expected.len { ret false }
     var at = 0usize
     while at < length {

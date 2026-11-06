@@ -70,7 +70,8 @@ fn available() -> bool {
 
 // The default device's name, copied into `out`; the length it had.
 fn name(context: Context, out: []u8) -> usize {
-    ret os.cocoa_read_text(os.msg0(context.device, os.cocoa_sel("name\x00")), out)
+    let (copied, ignored_total) = os.cocoa_read_text(os.msg0(context.device, os.cocoa_sel("name\x00")), 0usize, out)
+    ret copied
 }
 
 fn open(a: *mem.Arena) -> (Context, err) {
@@ -132,7 +133,8 @@ fn compile(context: Context, source: str, entry: str) -> (Pipeline, err) {
     let released_options = os.msg0(options, os.cocoa_sel("release\x00"))
     os.cf_release(text)
     if library == 0usize {
-        var reported = os.cocoa_read_text(os.msg0(problem, os.cocoa_sel("localizedDescription\x00")), problem_text[0usize..512usize])
+        let (read_problem, ignored_problem_total) = os.cocoa_read_text(os.msg0(problem, os.cocoa_sel("localizedDescription\x00")), 0usize, problem_text[0usize..512usize])
+        var reported = read_problem
         if reported > 512usize { reported = 512usize }
         problem_length = reported
         os.objc_pool_pop(pool)
@@ -159,7 +161,8 @@ fn compile(context: Context, source: str, entry: str) -> (Pipeline, err) {
     let released_library = os.msg0(library, os.cocoa_sel("release\x00"))
     // Read the pipeline error before the pool dies: it is autoreleased (#388).
     if state == 0usize && pipeline_problem != 0usize {
-        var reported = os.cocoa_read_text(os.msg0(pipeline_problem, os.cocoa_sel("localizedDescription\x00")), problem_text[0usize..512usize])
+        let (read_pipeline, ignored_pipeline_total) = os.cocoa_read_text(os.msg0(pipeline_problem, os.cocoa_sel("localizedDescription\x00")), 0usize, problem_text[0usize..512usize])
+        var reported = read_pipeline
         if reported > 512usize { reported = 512usize }
         problem_length = reported
     }

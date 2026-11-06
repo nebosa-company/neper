@@ -546,7 +546,7 @@ fn target_dock_menu(this: usize, command: usize, sender: usize) -> usize {
 fn target_dock_task(this: usize, command: usize, sender: usize) {
     let held = os.msg0(sender, os.cocoa_sel("representedObject\x00"))
     var text: [1024]u8 = zero
-    let length = os.cocoa_read_text(held, text[..])
+    let (length, ignored_held_total) = os.cocoa_read_text(held, 0usize, text[..])
     if length == 0usize || length > 1000usize { ret }
     var program_end = 0usize
     while program_end < length && text[program_end] != 10u8 { program_end += 1usize }
@@ -1277,11 +1277,11 @@ fn pasteboard_string(a: *mem.Arena, drag_board: usize, kind: str) -> (str, bool)
     os.cf_release(name)
     if string == 0usize { ret ("", false) }
     var none: [1]u8 = zero
-    let length = os.cocoa_read_text(string, none[0usize..0usize])
+    let (length, ignored_length_total) = os.cocoa_read_text(string, 0usize, none[0usize..0usize])
     if length == 0usize { ret ("", false) }
     let (text, allocation_error) = mem.alloc[u8](a, length)
     if allocation_error != ok { ret ("", false) }
-    let copied = os.cocoa_read_text(string, text[0usize..length])
+    let (copied, ignored_copy_total) = os.cocoa_read_text(string, 0usize, text[0usize..length])
     ret (text[0usize..length], true)
 }
 
@@ -1317,11 +1317,11 @@ fn view_drag_perform(this: usize, command: usize, sender: usize) -> usize {
                 while index < total {
                     let entry = os.msg1(files, os.cocoa_sel("objectAtIndex:\x00"), index)
                     var none: [1]u8 = zero
-                    let length = os.cocoa_read_text(entry, none[0usize..0usize])
+                    let (length, ignored_entry_total) = os.cocoa_read_text(entry, 0usize, none[0usize..0usize])
                     if length != 0usize {
                         let (text, text_error) = mem.alloc[u8](drop_arena, length)
                         if text_error == ok {
-                            let copied = os.cocoa_read_text(entry, text[0usize..length])
+                            let (copied, ignored_entry_copy_total) = os.cocoa_read_text(entry, 0usize, text[0usize..length])
                             paths[kept] = text[0usize..length]
                             kept += 1usize
                         }
@@ -1571,11 +1571,11 @@ fn drag_start(a: *mem.Arena, items: []const Content, allow_move: bool) -> (DragR
 fn url_path(a: *mem.Arena, url: usize) -> (str, err) {
     let string = os.msg0(url, os.cocoa_sel("path\x00"))
     var none: [1]u8 = zero
-    let length = os.cocoa_read_text(string, none[0usize..0usize])
+    let (length, ignored_path_total) = os.cocoa_read_text(string, 0usize, none[0usize..0usize])
     if length == 0usize { ret ("", Failed) }
     let (text, text_error) = mem.alloc[u8](a, length)
     if text_error != ok { ret ("", text_error) }
-    let copied = os.cocoa_read_text(string, text[0usize..length])
+    let (copied, ignored_path_copy_total) = os.cocoa_read_text(string, 0usize, text[0usize..length])
     ret (text[0usize..length], ok)
 }
 
@@ -1866,7 +1866,7 @@ fn act_push(kind: ActivationKind, string: usize) {
     let next = (act_tail + 1usize) % ACTIVATIONS
     if next == act_head || string == 0usize { ret }
     var none: [1]u8 = zero
-    let length = os.cocoa_read_text(string, none[0usize..0usize])
+    let (length, ignored_action_total) = os.cocoa_read_text(string, 0usize, none[0usize..0usize])
     if length == 0usize { ret }
     // The buffer fills from `act_used` without wrapping, so entries already delivered
     // leave dead prefix space. Compact the live ring before dropping the event (#630).
@@ -1891,7 +1891,7 @@ fn act_push(kind: ActivationKind, string: usize) {
         }
         if act_used + length > 16384usize { ret }
     }
-    let copied = os.cocoa_read_text(string, act_text[act_used..act_used + length])
+    let (copied, ignored_action_copy_total) = os.cocoa_read_text(string, 0usize, act_text[act_used..act_used + length])
     act_payloads[act_tail] = act_text[act_used..act_used + length]
     act_kinds[act_tail] = kind
     act_lengths[act_tail] = length
