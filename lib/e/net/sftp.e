@@ -432,7 +432,14 @@ fn decode(input: []const u8, names: []Name) -> (usize, Response, err) {
         if at + 4usize > p.len { ret (0usize, r, Invalid) }
         let count = usize(get32(p, at))
         at += 4usize
-        if count > names.len { ret (0usize, r, TooSmall) }
+        // A READDIR reply may hold any number of names, and the declared packet length
+        // is known: when `names` cannot hold them, report the total and answer TooSmall
+        // with the whole packet consumed, so the caller can drop it instead of wedging
+        // on the same reply.
+        if count > names.len {
+            r.count = count
+            ret (4usize + length, r, TooSmall)
+        }
         var i = 0usize
         while i < count {
             let (f, fe) = take_bytes(p, &at)

@@ -263,7 +263,9 @@ fn run_case(a: *mem.Arena, line: str, c: json.Value) -> bool {
         } else if de == sftp.TooLarge {
             got = error_json(a, "toolarge")
         } else if de == sftp.TooSmall {
-            got = error_json(a, "toosmall")
+            // #291: truncation is explicit and the whole packet was consumed, so a
+            // caller can drop it instead of wedge on the same reply.
+            if used != bytes.len { got = error_json(a, "wedged") } else { got = error_json(a, "toosmall") }
         } else if de != ok {
             got = error_json(a, "other")
         } else {
