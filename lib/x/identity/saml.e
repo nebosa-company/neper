@@ -386,6 +386,9 @@ fn starts_with_markup(s: str) -> bool {
 fn parse_saml_response(a: *mem.Arena, encoded: str) -> Response {
     var source = encoded
     if !starts_with_markup(encoded) { source = from_base64(a, encoded) }
+    // A DTD is never needed for SAML and enables entity tricks; refuse it up front.
+    if str.contains(source, "<!DOCTYPE") { ret bad_response(a, "DOCTYPE-not-allowed") }
+    if source.len > 4194304usize { ret bad_response(a, "response-too-large") }
     let d = xml.parse_xml(a, source)
     if !d.valid { ret bad_response(a, d.message) }
     let root = d.root
@@ -632,20 +635,23 @@ fn validate_saml_response(a: *mem.Arena, parsed: Response, c: Config) -> Validat
     if asn.not_on_or_after.len > 0usize && !has_na { ret none_validation("assertion-bad-not-on-or-after") }
     if has_nb && now + skew < not_before { ret none_validation("assertion-not-yet-valid") }
     if has_na && now - skew >= not_on_or_after { ret none_validation("assertion-expired") }
-    if asn.audiences.len > 0usize && c.audience.len > 0usize && !contains_text(asn.audiences, c.audience) {
+    // Every check below is mandatory: a missing setting or element is a rejection.
+    if c.audience.len == 0usize { ret none_validation("no-audience-configured") }
+    if c.acs_url.len == 0usize { ret none_validation("no-acsUrl-configured") }
+    if asn.audiences.len == 0usize { ret none_validation("no-AudienceRestriction") }
+    if !contains_text(asn.audiences, c.audience) {
         ret none_validation(join(a, "audience-mismatch: ", join_list(a, asn.audiences)))
     }
-    if asn.audiences.len == 0usize { ret none_validation("no-AudienceRestriction") }
     let (conf_expiry, has_conf) = parse_instant(asn.confirmation_not_on_or_after)
+    if !has_na && !has_conf { ret none_validation("assertion-has-no-expiry") }
     if has_conf && now - skew >= conf_expiry { ret none_validation("subject-confirmation-expired") }
-    // At least one expiry must exist, or the assertion outlives the replay window forever.
-    if !has_na && !has_conf { ret none_validation("no-expiry") }
-    if asn.recipient.len > 0usize && c.acs_url.len > 0usize && !str.eq(asn.recipient, c.acs_url) {
+    if asn.recipient.len == 0usize { ret none_validation("no-Recipient") }
+    if !str.eq(asn.recipient, c.acs_url) {
         ret none_validation(join(a, "recipient-mismatch: ", asn.recipient))
     }
     if c.expected_in_response_to.len > 0usize {
-        var echoed = asn.confirmation_in_response_to
-        if echoed.len == 0usize { echoed = parsed.in_response_to }
+        // Only the signed assertion's SubjectConfirmation is trusted here.
+        let echoed = asn.confirmation_in_response_to
         if !str.eq(echoed, c.expected_in_response_to) {
             var shown = echoed
             if shown.len == 0usize { shown = "null" }
@@ -705,6 +711,17 @@ fn replay_remember(c: *ReplayCache, id: str, expires_at: f64, has_expiry: bool, 
         c.ids[c.count] = id
         c.expiries[c.count] = expiry
         c.count += 1usize
+    } else if c.ids.len > 0usize {
+        // The cache is full: evict the earliest-expiring entry so the newest login is
+        // still remembered instead of silently not being recorded.
+        var earliest = 0usize
+        var k = 1usize
+        while k < c.count {
+            if c.expiries[k] < c.expiries[earliest] { earliest = k }
+            k += 1usize
+        }
+        c.ids[earliest] = id
+        c.expiries[earliest] = expiry
     }
 }
 
@@ -874,3 +891,4 @@ fn parse_idp_metadata(a: *mem.Arena, source: str) -> IdpMetadata {
     }
     ret IdpMetadata { valid: true, message: "", entity_id: attr_text(d, d.root, "entityID"), sso_url: sso, post_url: post, certificates: out[0usize..certs.len] }
 }
+
