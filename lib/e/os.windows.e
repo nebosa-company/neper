@@ -221,7 +221,9 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
         let next = usize(header.next)
         let action = header.action
         let units = usize(header.name_length) / 2usize
-        if produced < events.len {
+        // The last slot is kept for the overflow marker, so a full caller slice
+        // still tells the loop that records were dropped instead of truncating silently.
+        if produced + 1usize < events.len {
             var entry: WatchEvent = zero
             entry.action = action_from_code(action)
             let names = mem.cast[*const u16](&buffer[at + 12usize])
@@ -236,13 +238,12 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
             entry.path = joined
             events[produced] = entry
             produced += 1usize
-        } else {
-            skipped = true
+            if next == 0usize { break }
+            at += next
+            continue
         }
-        // A zero `next` is the last entry, and following it is what keeps the walk on the
-        // entries the call actually wrote rather than on a stride they do not have.
-        if next == 0usize { break }
-        at += next
+        skipped = true
+        break
     }
     if (overflow || skipped) && produced < events.len {
         events[produced] = WatchEvent { action: .Overflow, path: "", old_path: "" }
@@ -3427,6 +3428,7 @@ var window_resize_handlers: [16]usize = zero
 var window_events: [256]WindowEvent = zero
 var window_event_head: usize = 0usize
 var window_event_count: usize = 0usize
+var window_event_dropped: usize = 0usize
 var window_handles: [16]usize = zero
 var window_cursors: [16]CursorShape = zero
 var window_class_atom: u16 = 0u16
@@ -3588,9 +3590,20 @@ fn window_slot(handle: usize) -> usize {
 }
 
 fn window_push(event: WindowEvent) {
-    if window_event_count >= WINDOW_RING { ret }
+    // A full ring drops the event rather than growing, but the drop is counted so a
+    // poll loop can see that it lost input instead of silently missing a keystroke.
+    if window_event_count >= WINDOW_RING {
+        window_event_dropped += 1usize
+        ret
+    }
     window_events[(window_event_head + window_event_count) % WINDOW_RING] = event
     window_event_count += 1usize
+}
+
+// How many window events have been dropped because the ring was full. Cumulative
+// for the process, so a caller compares it against its own last reading.
+fn window_events_dropped() -> usize {
+    ret window_event_dropped
 }
 
 fn window_modifiers() -> u8 {

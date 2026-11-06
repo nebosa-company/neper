@@ -12461,6 +12461,7 @@ fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err)
 fn window_open(a: *mem.Arena, options: WindowOptions) -> (Window, err)
 fn window_close(w: Window) -> err
 fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err)
+fn window_events_dropped() -> usize
 fn window_metrics(w: Window) -> (WindowMetrics, err)
 fn window_title(w: Window, value: str) -> err
 fn window_visible(w: Window, value: bool) -> err
