@@ -2308,19 +2308,43 @@ fn step_inner(m: *M, id: u32, pos: i64, k: *Cont, back: bool) -> bool {
         let len = e - s
         if back {
             if pos - len < 0i64 { ret false }
-            var i2 = 0i64
-            while i2 < len {
-                if canon(m, u32(m.input[usize(s + i2)]), eff_i(m, &n)) != canon(m, u32(m.input[usize(pos - len + i2)]), eff_i(m, &n)) { ret false }
-                i2 += 1i64
+            if m.re.unicode {
+                // Unicode mode compares code points, so a supplementary input character is
+                // canonicalised whole rather than as two surrogate halves.
+                var i2 = len
+                while i2 > 0i64 {
+                    let (cs, ws) = char_before(m, s + i2)
+                    let (ci, wi) = char_before(m, pos - len + i2)
+                    if ws == 0i64 || wi == 0i64 || ws != wi { ret false }
+                    if canon(m, cs, eff_i(m, &n)) != canon(m, ci, eff_i(m, &n)) { ret false }
+                    i2 -= ws
+                }
+            } else {
+                var i2 = 0i64
+                while i2 < len {
+                    if canon(m, u32(m.input[usize(s + i2)]), eff_i(m, &n)) != canon(m, u32(m.input[usize(pos - len + i2)]), eff_i(m, &n)) { ret false }
+                    i2 += 1i64
+                }
             }
             if m.re.unicode && len > 0i64 && splits_pair(m, pos - len, pos) { ret false }
             ret call_cont(m, k, pos - len)
         }
         if pos + len > i64(m.input.len) { ret false }
-        var i3 = 0i64
-        while i3 < len {
-            if canon(m, u32(m.input[usize(s + i3)]), eff_i(m, &n)) != canon(m, u32(m.input[usize(pos + i3)]), eff_i(m, &n)) { ret false }
-            i3 += 1i64
+        if m.re.unicode {
+            var i3 = 0i64
+            while i3 < len {
+                let (cs, ws) = char_at(m, s + i3)
+                let (ci, wi) = char_at(m, pos + i3)
+                if ws == 0i64 || wi == 0i64 || ws != wi { ret false }
+                if canon(m, cs, eff_i(m, &n)) != canon(m, ci, eff_i(m, &n)) { ret false }
+                i3 += ws
+            }
+        } else {
+            var i3 = 0i64
+            while i3 < len {
+                if canon(m, u32(m.input[usize(s + i3)]), eff_i(m, &n)) != canon(m, u32(m.input[usize(pos + i3)]), eff_i(m, &n)) { ret false }
+                i3 += 1i64
+            }
         }
         if m.re.unicode && len > 0i64 && splits_pair(m, pos, pos + len) { ret false }
         ret call_cont(m, k, pos + len)

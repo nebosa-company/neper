@@ -1238,17 +1238,17 @@ fn wrap_function(home: *js.Interp, from: *js.Interp, target_fn: *js.Obj) -> (js.
             }
         }
     }
+    // CopyNameAndLength reads `name` with ordinary Get: an inherited name counts, and only
+    // an abrupt completion or a non-string value changes the answer.
     var name = ""
-    let (np, nfound) = js.get_own(from, target_fn, js.key_of("name"))
+    from.px_err = ok
+    let (nv, ne) = js.get_prop(from, target_fn, js.key_of("name"), js.obj_value(target_fn))
     if from.px_err != ok {
         from.px_err = ok
         ret (js.undefv(), js.throw_type(home, "cannot read the name of the wrapped function"))
     }
-    if nfound {
-        let (nv, ne) = js.get_prop(from, target_fn, js.key_of("name"), js.obj_value(target_fn))
-        if ne != ok { ret (js.undefv(), js.throw_type(home, "cannot read the name of the wrapped function")) }
-        if js.is_string(nv) { name = js.value_str(nv) }
-    }
+    if ne != ok { ret (js.undefv(), js.throw_type(home, "cannot read the name of the wrapped function")) }
+    if js.is_string(nv) { name = js.value_str(nv) }
     let e1 = js.define_data(home, wf, js.key_of("length"), js.num_value(len), js.P_CONFIGURABLE)
     let e2 = js.define_data(home, wf, js.key_of("name"), js.str_value(name), js.P_CONFIGURABLE)
     ret (js.obj_value(wf), ok)
@@ -1680,7 +1680,13 @@ fn tz_offset_native(it: *js.Interp, this_val: js.Value, args: []const js.Value) 
     if !ok_db { ret (js.num_value(js.nan()), ok) }
     let (z, ze) = tz.zone(&db, name)
     if ze != ok { ret (js.num_value(js.nan()), ok) }
-    let off = tz.offset_at(z, time.Timestamp { nanos: i64(ms) * 1000000i64 })
+    // The Date range (±8.64e15 ms) exceeds the i64 nanosecond span; clamp to the
+    // representable window so the multiply cannot overflow.
+    var clamped = ms
+    if clamped != clamped { clamped = 0.0f64 }
+    if clamped > 9223372036854.0f64 { clamped = 9223372036854.0f64 }
+    if clamped < -9223372036854.0f64 { clamped = -9223372036854.0f64 }
+    let off = tz.offset_at(z, time.Timestamp { nanos: i64(clamped) * 1000000i64 })
     ret (js.num_value(f64(off.seconds)), ok)
 }
 

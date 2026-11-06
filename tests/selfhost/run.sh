@@ -4908,6 +4908,11 @@ audit_js_array_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$audit_js_array_written" = 'executable written' ]
 chmod +x "$test_build/audit-js-array-selfhost"
 "$test_build/audit-js-array-selfhost"
+# e.js Temporal/DateTime (L168): named-zone offsets and the i64 nanosecond window clamp.
+audit_js_time_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_js_time/src/main.e" "$repo" x64 linux "$test_build/audit-js-time-selfhost")
+[ "$audit_js_time_written" = 'executable written' ]
+chmod +x "$test_build/audit-js-time-selfhost"
+"$test_build/audit-js-time-selfhost"
 # e.fmt.pdf (L168): indirect /Length streams, object-like bytes inside payloads, page-tree inheritance.
 audit_pdf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/audit_pdf/src/main.e" "$repo" x64 linux "$test_build/audit-pdf-selfhost")
 [ "$audit_pdf_written" = 'executable written' ]

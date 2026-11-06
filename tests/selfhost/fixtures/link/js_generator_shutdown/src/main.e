@@ -63,6 +63,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // 826: one strings array per tagged-template call site and realm.
     let (cache_value, cache_error) = run_fresh(a, "var seen = null; var same = true; function tag(s) { if (seen === null) { seen = s } else { same = same && (s === seen) } return s } function f() { return tag`a` } f(); f(); same")
     if cache_error != ok || !js.to_boolean(cache_value) { os.exit(14i32) }
+    // 841: a ShadowRealm wrapper copies a name inherited from the wrapped function's prototype.
+    let (shadow_name, shadow_error) = run_fresh(a, "var r = new ShadowRealm(); var w = r.evaluate(\"(function () { var f = function () {}; Object.defineProperty(f, 'name', { configurable: true }); delete f.name; Object.setPrototypeOf(f, { name: 'inherited' }); return f })()\"); w.name === 'inherited'")
+    if shadow_error != ok || !js.to_boolean(shadow_name) { os.exit(15i32) }
+    // 842: with u+i a backreference canonicalises a supplementary character whole.
+    let (astral_ref, astral_error) = run_fresh(a, "var r = /(\\u{10400})\\1/iu; r.test(\"\\u{10400}\\u{10428}\") && !r.test(\"\\u{10400}\\u{10401}\")")
+    if astral_error != ok || !js.to_boolean(astral_ref) { os.exit(16i32) }
     // 836: CRLF inside a block comment is one line terminator; the token after it is line 3.
     let crlf_comment = "/* a\r\nb */\nzzz"
     if token_line(a, crlf_comment, "zzz") != 3u32 { os.exit(8i32) }

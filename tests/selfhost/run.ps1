@@ -5408,6 +5408,12 @@ $auditJsArrayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $auditJsArrayWritten -ne 'executable written') { throw 'audit_js_array emission failed' }
 & $auditJsArrayPath
 if ($LASTEXITCODE -ne 0) { throw "audit_js_array answered wrongly: exit $LASTEXITCODE" }
+# e.js Temporal/DateTime (L168): named-zone offsets and the i64 nanosecond window clamp.
+$auditJsTimePath = Join-Path $testBuild 'audit-js-time-selfhost.exe'
+$auditJsTimeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_js_time\src\main.e') $repo 'x64' 'windows' $auditJsTimePath
+if ($LASTEXITCODE -ne 0 -or $auditJsTimeWritten -ne 'executable written') { throw 'audit_js_time emission failed' }
+& $auditJsTimePath
+if ($LASTEXITCODE -ne 0) { throw "audit_js_time answered wrongly: exit $LASTEXITCODE" }
 # e.fmt.pdf (L168): indirect /Length streams, object-like bytes inside payloads, page-tree inheritance.
 $auditPdfPath = Join-Path $testBuild 'audit-pdf-selfhost.exe'
 $auditPdfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\audit_pdf\src\main.e') $repo 'x64' 'windows' $auditPdfPath
