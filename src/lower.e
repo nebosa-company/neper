@@ -30,10 +30,9 @@ type Binding = struct {
 
 type CallResults = struct {
     call: check.CallInfo,
-    // ponytail: 64 result slots; a caller-sized pair of slices is the upgrade if a
-    // function ever returns more (the fixed cap used to be 16).
-    values: [64]usize,
-    addresses: [64]bool,
+    // Sized by the caller from the callee'+"'"+'s return count and zeroed (issue #191 item 6).
+    values: []usize,
+    addresses: []bool,
     count: usize,
 }
 
@@ -4221,6 +4220,8 @@ fn store_c_result(returned_type: check.Type, crossing: Crossing, call_result: us
 }
 
 fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    let results_size_error = size_call_results(c, results, call.function.return_count + 1usize)
+    if results_size_error != ok { ret results_size_error }
     if call.subgroup_op != .None {
         results.call = call
         results.count = 1usize
@@ -4805,8 +4806,27 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     ret ok
 }
 
+fn size_call_results(c: *check.Checker, results: *CallResults, capacity: usize) -> err {
+    if results.values.len >= capacity && results.addresses.len >= capacity { ret ok }
+    let (values, values_error) = mem.alloc[usize](c.arena, capacity + 1usize)
+    if values_error != ok { ret values_error }
+    let (addresses, addresses_error) = mem.alloc[bool](c.arena, capacity + 1usize)
+    if addresses_error != ok { ret addresses_error }
+    // Arena memory is not zeroed: a garbage `true` in addresses used to make a
+    // returned value be treated as a pointer (access violation at 0x1).
+    var slot = 0usize
+    while slot < capacity + 1usize {
+        values[slot] = 0usize
+        addresses[slot] = false
+        slot += 1usize
+    }
+    results.values = values
+    results.addresses = addresses
+    ret ok
+}
 fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, results: *CallResults) -> err {
     var call: check.CallInfo = zero
+    try size_call_results(c, results, usize(node.child_count) + 8usize)
     // A format string may carry 32 verbs, so a call may carry 32 arguments plus the
     // arena: the checker already allows it and this is what lowering has to match.
     let (results_arguments, results_arguments_error) = mem.alloc[usize](c.arena, usize(node.child_count) + 8usize)
@@ -11251,6 +11271,8 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     ret ok
 }
+
+
 
 
 
