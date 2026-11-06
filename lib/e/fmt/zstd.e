@@ -1098,11 +1098,13 @@ fn flush_block(s: *WriterState, last: bool) -> err {
     let header_error = io.write_all(&s.sink, header[0..])
     if header_error != ok {
         s.failed = true
+        s.buffered = 0usize
         ret header_error
     }
     let data_error = io.write_all(&s.sink, s.buffer[..s.buffered])
     if data_error != ok {
         s.failed = true
+        s.buffered = 0usize
         ret data_error
     }
     xxh64_update(&s.hash, s.buffer[..s.buffered])
@@ -1117,6 +1119,9 @@ fn write(w: *Writer, src: []const u8) -> (usize, err) {
     while at < src.len {
         var take_count = BLOCK_MAX - s.buffered
         if take_count > src.len - at { take_count = src.len - at }
+        // A poisoned writer leaves a full buffer behind; without this guard the loop
+        // would copy nothing and spin forever after a failed block flush.
+        if take_count == 0usize { ret (at, Invalid) }
         mem.copy[u8](s.buffer[s.buffered..s.buffered + take_count], src[at..at + take_count])
         s.buffered += take_count
         at += take_count
