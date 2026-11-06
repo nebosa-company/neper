@@ -44,5 +44,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // is pinned by inspection.
     if !check(it, "(function() { var b = new SharedArrayBuffer(16); var a = new Int32Array(b); Atomics.store(a, 0, 41); Atomics.add(a, 0, 1); return String(Atomics.load(a, 0)); })()", "42") { os.exit(3i32) }
     if !check(it, "(function() { var b = new SharedArrayBuffer(8); var a = new BigInt64Array(b); Atomics.store(a, 0, 7n); return String(Atomics.load(a, 0)); })()", "7") { os.exit(3i32) }
+    // 838: a non-callable mapper is a TypeError before the source is read or closed.
+    if !check(it, "(function() { var closed = false; var src = { next: function() { return { value: undefined, done: true }; }, return: function() { closed = true; return {}; } }; try { Iterator.prototype.map.call(src, null); } catch (e) {} return String(closed); })()", "false") { os.exit(20i32) }
     ret ok
 }

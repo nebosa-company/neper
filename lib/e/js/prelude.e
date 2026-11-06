@@ -4,7 +4,7 @@ use e.mem
 use e.str
 
 fn source(a: *mem.Arena) -> (str, err) {
-    var b = try str.builder(a, 69152)
+    var b = try str.builder(a, 69212)
     try str.push(&b, "// Built-ins written in JavaScript, evaluated into every new realm (generated into prelude.e by scripts/gen_js_prelude.py).\n")
     try str.push(&b, "// They only use intrinsics captured up front, so page scripts cannot change how they behave.\n")
     try str.push(&b, "(function (global) {\n")
@@ -50,7 +50,7 @@ fn source(a: *mem.Arena) -> (str, err) {
     try str.push(&b, "  function needObject(o) { if (!isObject(o)) throw new TypeErr('Iterator method called on a non-object'); }\n")
     try str.push(&b, "  function needCallable(o, fn) {\n")
     try str.push(&b, "    if (typeof fn !== 'function') {\n")
-    try str.push(&b, "      closeQuietly(o);\n")
+    try str.push(&b, "      // Argument validation must not touch the source iterator: no return() here.\n")
     try str.push(&b, "      throw new TypeErr('argument is not a function');\n")
     try str.push(&b, "    }\n")
     try str.push(&b, "  }\n")

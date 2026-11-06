@@ -36,5 +36,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !check(it, "var q = []; for (var j = 0; j < 2000; j++) { q.push(j) } var t = 0; q.forEach(function(v) { t += v }); t", "1999000") { os.exit(8i32) }
     let spent = it.a.off - before
     if spent > 350000usize { os.exit(10i32) }
+    // 839: toLocaleString applies ToLength once, so length.valueOf runs once.
+    if !check(it, "var n = 0; var o = { length: { valueOf: function() { n += 1; return 2; } }, 0: 'a', 1: 'b' }; String(Array.prototype.toLocaleString.call(o)) + '|' + String(n)", "a,b|1") { os.exit(30i32) }
     ret ok
 }
