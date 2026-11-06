@@ -785,7 +785,9 @@ fn to_sfnt(a: *mem.Arena, bytes: []const u8) -> ([]u8, err) {
     if de != ok { ret (zero, de) }
     let (got, be) = brotli.decode(packed, transformed_buf, scratch)
     if be != ok { ret (zero, Invalid) }
-    if src_offset > got { ret (zero, Invalid) }
+    // WOFF2 5: the decompressed block is exactly the table directory's sum; trailing or
+    // missing bytes mean the file must not be loaded.
+    if src_offset != got { ret (zero, Invalid) }
     i = 0usize
     while i < count {
         if tables[i].src_off > got || tables[i].xform_len > got - tables[i].src_off { ret (zero, Invalid) }
