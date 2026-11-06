@@ -621,6 +621,28 @@ fn main(a: *mem.Arena) -> err {
         if shown % 256i32 == 0i32 { shown += 1i32 }
         os.exit(shown)
     }
+    // 60.13: a silo past the first 32 is placed on, and dead first 32 fall through.
+    var late_ctx = Counters { activations: 0u32, deactivations: 0u32 }
+    let (late_db, late_db_error) = ds.create(a, ds.Limits { log: 65536usize, docs: 256usize, events: 4usize, marks: 2usize, streams: 2usize })
+    if late_db_error != ok { os.exit(716i32) }
+    var late_db_value = late_db
+    let (late_system, late_system_error) = actor.create(a, &late_db_value, behavior(&late_ctx), 40usize, 64usize, 16usize)
+    if late_system_error != ok { os.exit(717i32) }
+    var late = late_system
+    var s = 0usize
+    while s < 40usize {
+        let silo_name = grain_name(a, s)
+        let (_, silo_error) = actor.add_silo(&late, silo_name)
+        if silo_error != ok { os.exit(718i32) }
+        s += 1usize
+    }
+    s = 0usize
+    while s < 32usize {
+        let _ = actor.fail_silo(&late, s)
+        s += 1usize
+    }
+    let (late_silo, late_placed) = actor.place(&late, "late-grain")
+    if !late_placed || late_silo < 32usize || late_silo >= 40usize { os.exit(719i32) }
     ret ok
 }
 

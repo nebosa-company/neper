@@ -105,22 +105,24 @@ fn live_silos(sys: *System) -> usize {
 
 // The silo a grain id is placed on among the live ones (rendezvous hashing).
 fn place(sys: *System, grain: str) -> (usize, bool) {
-    var ids: [32]u64 = zero
-    var map: [32]usize = zero
-    var n = 0usize
+    // Score every live silo directly: no 32-entry staging buffer, so silo 33+ can be
+    // chosen and a dead first 32 falls through to a later live one.
+    let key = hash.xxhash64(grain, 0u64)
+    var best = sys.nsilos
+    var best_weight = 0u64
     var i = 0usize
-    while i < sys.nsilos && n < 32usize {
+    while i < sys.nsilos {
         if sys.silos[i].alive {
-            ids[n] = sys.silos[i].id
-            map[n] = i
-            n += 1usize
+            let weight = ch.mix(sys.silos[i].id ^ ch.mix(key))
+            if best == sys.nsilos || weight > best_weight || (weight == best_weight && sys.silos[i].id < sys.silos[best].id) {
+                best = i
+                best_weight = weight
+            }
         }
         i += 1usize
     }
-    if n == 0usize { ret (0usize, false) }
-    let (best, found) = ch.rendezvous(ids[0..n], hash.xxhash64(grain, 0u64))
-    if !found { ret (0usize, false) }
-    ret (map[best], true)
+    if best == sys.nsilos { ret (0usize, false) }
+    ret (best, true)
 }
 
 fn find_activation(sys: *System, grain: str) -> (usize, bool) {
@@ -571,3 +573,5 @@ fn timer_kind(a: *mem.Arena, prefix: str, name: str) -> str {
     if first != ok || second != ok { ret "" }
     ret str.done(&b)
 }
+
+
