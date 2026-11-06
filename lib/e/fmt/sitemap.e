@@ -4,7 +4,7 @@
 // Reading. Element names are matched by local name and the namespace resolved through their
 // in-scope `xmlns` declarations. A prefixed or default core namespace is fine; elements of
 // extension namespaces (image, video, news, xhtml) and unknown children are skipped. Per
-// entry: `loc` is required, non-empty and at most 2048 bytes;
+// entry: `loc` is required, an absolute http(s) URL shorter than 2048 bytes;
 // `lastmod`, `changefreq` and `priority` are kept as the text written, with `changefreq`
 // one of always hourly daily weekly monthly yearly never and `priority` a decimal in
 // 0.0..1.0 (anything else is `Invalid`). At most 50000 entries (`TooMany`). Entity
@@ -129,8 +129,14 @@ fn valid_priority(s: str) -> bool {
     ret true
 }
 
+fn absolute_loc(s: str) -> bool {
+    if s.len > 8usize && s[0usize] == 104u8 && s[1usize] == 116u8 && s[2usize] == 116u8 && s[3usize] == 112u8 && s[4usize] == 115u8 && s[5usize] == 58u8 && s[6usize] == 47u8 && s[7usize] == 47u8 { ret true }
+    if s.len > 7usize && s[0usize] == 104u8 && s[1usize] == 116u8 && s[2usize] == 116u8 && s[3usize] == 112u8 && s[4usize] == 58u8 && s[5usize] == 47u8 && s[6usize] == 47u8 { ret true }
+    ret false
+}
+
 fn check_entry(e: Entry) -> err {
-    if e.loc.len == 0usize || e.loc.len > MAX_LOC { ret Invalid }
+    if e.loc.len == 0usize || e.loc.len >= MAX_LOC || !absolute_loc(e.loc) { ret Invalid }
     if e.changefreq.len > 0usize && !valid_changefreq(e.changefreq) { ret Invalid }
     if e.priority.len > 0usize && !valid_priority(e.priority) { ret Invalid }
     ret ok
@@ -246,7 +252,7 @@ fn parse_text(a: *mem.Arena, source: []const u8) -> (Sitemap, err) {
             let line = trim(source[start..i])
             if line.len > 0usize {
                 if n >= MAX_ENTRIES { ret (out, TooMany) }
-                if line.len > MAX_LOC { ret (out, Invalid) }
+                if line.len >= MAX_LOC || !absolute_loc(line) { ret (out, Invalid) }
                 var e: Entry = zero
                 e.loc = line
                 entries[n] = e

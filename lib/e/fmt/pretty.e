@@ -73,7 +73,12 @@ fn group(p: *Pool, child: u32) -> (u32, err) {
 // Does the flat frame at `stack[base]` (the scratch is `[base, top)`), followed by the rest
 // of the line, fit in `remaining` columns? The rest is read downward from `base`; the
 // `depth` skips at the top end of `stack` jump over frames a parent measure consumed.
+// Re-entering for a nested broken group is bounded: past `MAX_LOOKAHEAD_DEPTH` the measure
+// answers TooSmall instead of recursing on the native stack without limit.
+const MAX_LOOKAHEAD_DEPTH: usize = 64usize
+
 fn fits(p: *const Pool, stack: []Frame, base: usize, top: usize, depth: usize, remaining: i64) -> (bool, err) {
+    if depth >= MAX_LOOKAHEAD_DEPTH { ret (false, TooSmall) }
     var s_top = top
     var z = base
     var rem = remaining

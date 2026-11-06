@@ -68,7 +68,9 @@ def expected(text):
                 continue
             if n in e:
                 e[n] = (f.text or '').strip()
-        if not e['loc'] or len(e['loc'].encode()) > 2048:
+        if not e['loc'] or len(e['loc'].encode()) >= 2048:
+            return None
+        if not (e['loc'].startswith('http://') or e['loc'].startswith('https://')):
             return None
         if e['changefreq'] and e['changefreq'] not in FREQS:
             return None
@@ -161,7 +163,7 @@ bad = [
 for t in bad:
     assert expected(t) is None or t.startswith('<urlset xmlns') and False
     lines.append('P %s => E' % hx(t))
-for text in ('https://a.example/1\nhttps://a.example/2\n\n  https://a.example/3  \r\n', '', '\n\n', 'only'):
+for text in ('https://a.example/1\nhttps://a.example/2\n\n  https://a.example/3  \r\n', '', '\n\n', 'https://a.example/only'):
     urls = [l.strip() for l in text.split('\n') if l.strip()]
     lines.append('T %s => %d %s' % (hx(text), len(urls), ' '.join(hx(u) for u in urls)))
 # writer round trips
