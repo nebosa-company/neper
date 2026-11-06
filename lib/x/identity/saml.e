@@ -306,7 +306,7 @@ fn verify_xml_signature(a: *mem.Arena, d: xml.Doc, signature: usize, has_signatu
     }
     let (digest_value, has_dv) = xml.find_element(a, d, reference, ns_signature(), "DigestValue")
     if !has_dv { ret failed("no-DigestValue") }
-    let (stripped, apex) = xml.without_signature(a, d, referenced)
+    let (stripped, apex) = xml.without_signature(a, d, referenced, signature)
     let canonical = xml.canonicalize(a, stripped, apex, prefixes_of(a, d, reference))
     let canonical_digest = hash.sha256(canonical)
     let actual = to_base64(a, canonical_digest[0usize..32usize])

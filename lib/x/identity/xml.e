@@ -468,6 +468,8 @@ fn parse_xml(a: *mem.Arena, source: str) -> Doc {
             have_root = true
         }
         if !self_closing {
+            // Cap nesting so the recursive passes over the tree cannot overflow the stack.
+            if depth >= 512usize { ret bad(a, source, i, "element nesting too deep") }
             stack[depth] = index
             depth += 1usize
         }
@@ -549,7 +551,21 @@ fn collect(d: Doc, at: usize, ns: str, local: str, out: []usize, n: *usize) {
     }
     var i = 0usize
     while i < node.children.len {
-        collect(d, node.children[i], ns, local, out, n)
+        let child = node.children[i]
+        // Elements named Signature are reported when asked for, but never descended into:
+        // field lookups must not read content inside a signature wrapper.
+        if str.eq(d.nodes[child].local, "Signature") {
+            let cn = d.nodes[child]
+            let (curi, cfound) = resolve_namespace(d, child, cn.prefix)
+            var cok = ns.len == 0usize
+            if !cok && cfound && str.eq(curi, ns) { cok = true }
+            if cok && str.eq(cn.local, local) {
+                out[*n] = child
+                *n += 1usize
+            }
+        } else {
+            collect(d, child, ns, local, out, n)
+        }
         i += 1usize
     }
 }
@@ -791,9 +807,10 @@ fn canonicalize(a: *mem.Arena, d: Doc, at: usize, inclusive: []const str) -> str
     ret render(a, d, at, Rendered { prefixes: p, uris: u, count: 0usize }, inclusive)
 }
 
-// The tree as `canonicalize` sees it with every `Signature` element removed from the subtree at `at`
-// (the enveloped-signature transform): returns a new document whose subtree root keeps the original parent chain.
-fn without_signature(a: *mem.Arena, d: Doc, at: usize) -> (Doc, usize) {
+// The tree as `canonicalize` sees it with the one `Signature` element being verified removed
+// from the subtree at `at` (the enveloped-signature transform). Any other `Signature`-named
+// element stays in the digest, so wrapping content cannot hide from it.
+fn without_signature(a: *mem.Arena, d: Doc, at: usize, signature: usize) -> (Doc, usize) {
     let (nodes, e) = mem.alloc[Node](a, d.nodes.len + 1usize)
     var i = 0usize
     while i < d.nodes.len {
@@ -821,7 +838,7 @@ fn without_signature(a: *mem.Arena, d: Doc, at: usize) -> (Doc, usize) {
             if entry.is_text {
                 en[ec] = entry
                 ec += 1usize
-            } else if !str.eq(nodes[entry.node].local, "Signature") {
+            } else if entry.node != signature {
                 en[ec] = entry
                 ec += 1usize
                 ch[cn] = entry.node
@@ -837,3 +854,4 @@ fn without_signature(a: *mem.Arena, d: Doc, at: usize) -> (Doc, usize) {
     }
     ret (Doc { valid: true, message: "", nodes: nodes[0usize..d.nodes.len], root: d.root }, at)
 }
+
