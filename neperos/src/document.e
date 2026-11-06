@@ -1874,13 +1874,20 @@ fn extract_zip(a: *mem.Arena, s: *State, only: usize) -> usize {
     }
     var stem = path[leaf..path.len]
     if ends_with(stem, ".zip") { stem = stem[0usize..stem.len - 4usize] }
-    let base = ui.join(a, "/", stem, "")
+    // A file named just ".zip" has no stem; with it the base was "/" and entries overwrote root
+    // files such as /revoked (#257 item 13).
+    if stem.len == 0usize { ret 0usize }
+    let made_root = vaultfs.mkdir("/Extracted")
+    let base = ui.join(a, "/Extracted/", stem, "")
     let made_base = vaultfs.mkdir(base)
     let listed = zip.entries(&ar)
     var files = 0usize
     var bytes = 0usize
     var k = 0usize
     while k < listed.len {
+        // A zip with thousands of entries would fill the arena and the disk; the budgets stop it
+        // (#257 item 14).
+        if files >= 256usize || bytes > 262144usize { break }
         let name = listed[k].name
         // (D4807) One chosen entry (an index into the archive) or all of them (NONE).
         if (only == NONE || only == k) && !unsafe_entry(name) && listed[k].size <= 204800u64 {
