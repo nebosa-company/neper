@@ -159,7 +159,17 @@ fn connect(st: *inet.Stack, rip: u32, rport: u16, ring: usize) -> (Conn, err) {
         if c.reset { ret (c, Reset) }
         attempt += 1usize
     }
+    // The peer may have answered our SYN and be waiting for an ACK: a RST ends that
+    // half-open state instead of leaving it for its backlog to time out (C134).
+    let ignored = abort(&c)
     ret (c, Timeout)
+}
+
+// End a connection with RST|ACK at the current sequence, for a dial that never
+// established or a close whose FIN was never acknowledged.
+fn abort(c: *Conn) -> err {
+    c.state = CLOSED
+    ret emit(c, RST | ACK, c.snd_nxt, 0usize, 0usize)
 }
 
 // Send `len` bytes from `data`: one segment at a time, each retransmitted until acknowledged.
@@ -253,6 +263,8 @@ fn close(c: *Conn) -> err {
         }
         attempt += 1usize
     }
+    // A FIN the peer never acknowledged leaves it half-closed: a RST ends it.
+    if !at_or_after(c.snd_una, fin_end) { ret abort(c) }
     c.state = CLOSED
     ret ok
 }
