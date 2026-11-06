@@ -84,6 +84,9 @@ fn mru_free(p: *const Pool) -> u32 {
 // is full, and again while `w` stays queued; `Timeout` once `w` has waited
 // `connection_timeout` (it is dequeued). `Full` when the waiter ring is full.
 fn acquire(p: *Pool, w: u32, now: u64) -> (u32, Outcome, err) {
+    // NONE is the no-waiter/no-slot sentinel: a queued waiter of that id would be
+    // indistinguishable from "none assigned" in release.
+    if w == NONE { ret (NONE, .Queued, Invalid) }
     let idle = mru_free(p)
     if idle != NONE {
         unqueue(p, w)

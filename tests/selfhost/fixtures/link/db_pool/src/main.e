@@ -267,6 +267,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (served, release_error) = pool.release(&pz, 0u32, 100001u64, false)
     if release_error != ok || served != 2u32 { os.exit(9i32) }
 
+    // #482: NONE is the no-waiter sentinel and cannot be a waiter identity.
+    let (_, _, none_waiter_error) = pool.acquire(&p, 4294967295u32, 0u64)
+    if none_waiter_error != pool.Invalid { os.exit(99i32) }
     try io.print("db pool ok\n")
     ret ok
 }
