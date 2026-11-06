@@ -235,6 +235,10 @@ fn oracle_mysql(a: *mem.Arena) -> i32 {
     if mysql.mapped(1062u32, "23000") != db.Constraint || mysql.mapped(3819u32, "HY000") != db.Constraint { ret 76i32 }
     if mysql.mapped(1213u32, "40001") != db.Busy || mysql.mapped(3572u32, "HY000") != db.Busy || mysql.mapped(1205u32, "HY000") != db.Busy { ret 77i32 }
     if mysql.mapped(1064u32, "42000") != db.InvalidQuery || mysql.mapped(2013u32, "HY000") != mysql.Failed { ret 78i32 }
+    // #56 TLS: the mysql_options numbers and the mysql.h SSL_MODE_* packing.
+    if mysql.MYSQL_OPT_SSL_MODE != 43i32 || mysql.MYSQL_OPT_SSL_CA != 14i32 { ret 79i32 }
+    if mysql.ssl_mode_code(.Default) != 0u32 || mysql.ssl_mode_code(.Disabled) != 1u32 || mysql.ssl_mode_code(.Required) != 3u32 { ret 80i32 }
+    if mysql.ssl_mode_code(.Preferred) != 2u32 || mysql.ssl_mode_code(.VerifyCa) != 4u32 || mysql.ssl_mode_code(.VerifyIdentity) != 5u32 { ret 81i32 }
     ret 0i32
 }
 
