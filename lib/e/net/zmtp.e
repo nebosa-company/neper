@@ -276,6 +276,9 @@ fn decode_ready(body: []const u8) -> (Ready, err) {
             r.socket_type = t
             have_type = true
         } else if same(name, "Identity") {
+            // The encoder caps identities at 255; a longer peer guess must not be kept,
+            // or router_prefix would slice past remote_id.
+            if value_len > 255usize { ret (r, TooLarge) }
             r.identity = value
             r.has_identity = true
         }
@@ -466,7 +469,8 @@ fn handshake(c: *Conn, as_server: bool) -> err {
             c.remote_id[k] = r.identity[k]
             k += 1usize
         }
-        c.remote_id_len = r.identity.len
+        // Keep the stored length consistent with what was copied.
+        c.remote_id_len = k
         c.consumed += used
         c.ready = true
         break
@@ -594,6 +598,7 @@ fn compact_if_possible(c: *Conn) -> (bool, err) {
 
 // REQ: the message with the empty delimiter frame in front, into `out`; returns the part count.
 fn req_envelope(parts: []const []const u8, out: [][]const u8) -> (usize, err) {
+    if parts.len == 0usize { ret (0usize, Malformed) }
     if parts.len + 1usize > out.len { ret (0usize, TooLarge) }
     out[0usize] = parts[0usize][0usize..0usize]
     var i = 0usize

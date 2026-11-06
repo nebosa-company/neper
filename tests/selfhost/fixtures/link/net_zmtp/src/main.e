@@ -680,6 +680,56 @@ fn patterns(a: *mem.Arena) -> u32 {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    // #635: a READY whose Identity is over the encoder's 255-byte cap is refused.
+    var ready_body: [320]u8 = zero
+    ready_body[0usize] = 5u8
+    ready_body[1usize] = 82u8
+    ready_body[2usize] = 69u8
+    ready_body[3usize] = 65u8
+    ready_body[4usize] = 68u8
+    ready_body[5usize] = 89u8
+    ready_body[6usize] = 11u8
+    let type_name = "Socket-Type"
+    var ti = 0usize
+    while ti < type_name.len {
+        ready_body[7usize + ti] = type_name[ti]
+        ti += 1usize
+    }
+    ready_body[18usize] = 0u8
+    ready_body[19usize] = 0u8
+    ready_body[20usize] = 0u8
+    ready_body[21usize] = 3u8
+    ready_body[22usize] = 82u8
+    ready_body[23usize] = 69u8
+    ready_body[24usize] = 81u8
+    var at = 25usize
+    ready_body[at] = 8u8
+    at += 1usize
+    let identity_name = "Identity"
+    var ii = 0usize
+    while ii < identity_name.len {
+        ready_body[at + ii] = identity_name[ii]
+        ii += 1usize
+    }
+    at += 8usize
+    ready_body[at] = 0u8
+    ready_body[at + 1usize] = 0u8
+    ready_body[at + 2usize] = 1u8
+    ready_body[at + 3usize] = 0u8
+    at += 4usize
+    var bi = 0usize
+    while bi < 256usize {
+        ready_body[at + bi] = 120u8
+        bi += 1usize
+    }
+    at += 256usize
+    let (_, ready_error) = zmtp.decode_ready(ready_body[0usize..at])
+    if ready_error != zmtp.TooLarge { os.exit(90i32) }
+    // #636: an empty parts slice is a malformed request, not an index past the input.
+    var wire: [2][]const u8 = zero
+    var no_parts: [0][]const u8 = zero
+    let (_, req_error) = zmtp.req_envelope(no_parts[0usize..0usize], wire[0usize..2usize])
+    if req_error != zmtp.Malformed { os.exit(91i32) }
     let rd_v_0 = run_decode_chunk(v_0())
     if rd_v_0 != 0u8 { os.exit(i32(rd_v_0)) }
     let rd_v_1 = run_decode_chunk(v_1())
