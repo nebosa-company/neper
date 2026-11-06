@@ -11813,7 +11813,7 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/input_server.e" "$repo" aarch64 neperos "$route_input_server")" = 'executable written' ]
     route_archive="$test_build/route-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$route_archive" "$comp_img" "$comp_app_img" "$route_input_server"
-    route=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$route_archive" keyboard "$test_build/route.serial" 55129 compositor 'app input ev 1 30 0' 2>&1)
+    route=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$route_archive" keyboard "$test_build/route.serial" 55129 'compositor --test-input-cap' 'app input ev 1 30 0' 2>&1)
     case "$route" in
         *'comp composited flushed'*'app input ev 1 30 1'*'app input ev 1 30 0'*) ;;
         *) printf '%s\n' "NeperOS compositor did not route input to the focused surface: $route" >&2; exit 1 ;;
@@ -11854,12 +11854,12 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/input_client.e" "$repo" aarch64 neperos "$input_client_img")" = 'executable written' ]
     input_archive="$test_build/input-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$input_archive" "$input_server_img" "$input_client_img"
-    input_kbd=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$input_archive" keyboard "$test_build/input-kbd.serial" 55125 input 'input ev 1 30 0' 2>&1)
+    input_kbd=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$input_archive" keyboard "$test_build/input-kbd.serial" 55125 'input --test-input-cap' 'input ev 1 30 0' 2>&1)
     case "$input_kbd" in
         *'input ev 1 30 1'*'input ev 1 30 0'*) ;;
         *) printf '%s\n' "NeperOS input did not deliver the key over IPC: $input_kbd" >&2; exit 1 ;;
     esac
-    input_tab=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$input_archive" tablet "$test_build/input-tab.serial" 55126 input 'input ev 1 272 1' 2>&1)
+    input_tab=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$input_archive" tablet "$test_build/input-tab.serial" 55126 'input --test-input-cap' 'input ev 1 272 1' 2>&1)
     case "$input_tab" in
         *'input ev 3 0 16384'*'input ev 3 1 16384'*'input ev 1 272 1'*) ;;
         *) printf '%s\n' "NeperOS input did not deliver the tap over IPC: $input_tab" >&2; exit 1 ;;
@@ -11873,7 +11873,7 @@ greeting"
     [ "$("$test_build/neper-self" emit-executable "$repo/neperos/src/tap_app.e" "$repo" aarch64 neperos "$tap_app_img")" = 'executable written' ]
     tap_archive="$test_build/tap-archive.img"
     python3 "$repo/scripts/build-shell-archive.py" "$tap_archive" "$input_server_img" "$tap_launcher_img" "$tap_app_img"
-    tap_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$tap_archive" keyboard "$test_build/tap.serial" 55134 input 'launcher home' 2>&1)
+    tap_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_image" "$tap_archive" keyboard "$test_build/tap.serial" 55134 'input --test-input-cap' 'launcher home' 2>&1)
     case "$tap_boot" in
         *'launcher tap'*'launcher launched app'*'launcher app code 5'*'launcher home'*) ;;
         *) printf '%s\n' "NeperOS launcher did not launch an app and return Home on a tap: $tap_boot" >&2; exit 1 ;;
@@ -11898,7 +11898,7 @@ greeting"
     # disk, program 6 the loader that writes and reads /wall.png and sends it to the shell.
     shell_disk="$test_build/shell-disk.img"
     truncate -s 1M "$shell_disk"
-    shell_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$shell_archive" keyboard "$test_build/shell.serial" 55135 "compositor bigarena unified" 'shell home' "$shell_disk" 2>&1)
+    shell_boot=$(python3 "$repo/scripts/neperos-input.py" qemu-system-aarch64 "$neperos_display_image" "$shell_archive" keyboard "$test_build/shell.serial" 55135 "compositor bigarena unified --test-input-cap" 'shell home' "$shell_disk" 2>&1)
     case "$shell_boot" in
         *'shell wallpaper from fs'*'shell status service notes 1'*'comp composited flushed'*'shell tap'*'shell launched app'*'shell app code 5'*'shell home'*)
             case "$shell_boot" in

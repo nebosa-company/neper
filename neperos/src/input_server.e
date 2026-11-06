@@ -35,6 +35,13 @@ fn read_device() -> virtio.Device {
     ret device
 }
 
+// (#289) The 600-event bound is the test harness's, not the phone's: aux slot 7 is the kernel's
+// test-boot discriminator (`-append ... --test-input-cap`), and only then does the server stop
+// after 600 forwarded events. A production boot forwards until the device stops reporting.
+fn test_cap() -> bool {
+    ret os.load64(AUX + 56usize) != 0u64
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let device = read_device()
     let (opened, open_error) = virtio.input_open(device, virtio.INPUT_EVENTS)
@@ -53,9 +60,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var forwarded = 0usize
     // No poll-count bound: after a burst the server blocks on the notification, and the tick
     // is driven from the monotonic clock when it wakes, so it neither dies after a fixed
-    // number of polls nor spins a core between events (#289). The 600-event bound is the
-    // harness's; see the sentinel at the end.
-    while forwarded < 600usize {
+    // number of polls nor spins a core between events (#289). Only a test boot (aux slot 7)
+    // stops after 600 forwarded events; production forwards until the sentinel is asked for.
+    while !test_cap() || forwarded < 600usize {
         let (etype, ecode, evalue, present) = virtio.input_next(&input)
         if present {
             let word = (usize(etype) << 48usize) | (usize(ecode) << 32usize) | usize(evalue)
