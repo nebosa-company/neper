@@ -33438,6 +33438,7 @@ fn finish(doc: *Document, w: *io.Writer) -> err
 ```neper
 error NotAPackage
 error NoMainPart
+error Invalid
 type Source = struct { data: []const u8, off: usize }
 type Paragraph = struct { text: str, style: str, list: bool }
 type Slide = struct { paragraphs: []const str }

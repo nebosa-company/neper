@@ -15,6 +15,7 @@ use e.fmt.xml as xml
 
 error NotAPackage
 error NoMainPart
+error Invalid
 
 type Source = struct { data: []const u8, off: usize }
 
@@ -236,7 +237,35 @@ fn slide_number(name: str) -> usize {
     ret n
 }
 
-// The slides of a `.pptx` held in `data`, in slide-number order; each slide's text paragraphs.
+// The value of a qualified attribute whose local name is `name` (`r:id` matches `id`,
+// a bare `id` does not). Used where an element carries both.
+fn qualified_attribute(element: *const xml.Node, name: str) -> (str, bool) {
+    var i = 0usize
+    while i < element.attributes.len {
+        let attribute = element.attributes[i]
+        if str.eq(local(attribute.name), name) && attribute.name.len > name.len { ret (attribute.value, true) }
+        i += 1usize
+    }
+    ret ("", false)
+}
+
+// The package part a presentation relationship reference names: absolute references keep
+// their path, relative ones are resolved against `ppt/`.
+fn part_name(a: *mem.Arena, path: str) -> (str, err) {
+    if path.len == 0usize { ret ("", Invalid) }
+    if path[0usize] == 47u8 { ret (path[1usize..], ok) }
+    if path.len >= 4usize && path[0usize] == 112u8 && path[1usize] == 112u8 && path[2usize] == 116u8 && path[3usize] == 47u8 { ret (path, ok) }
+    let (joined, joined_error) = mem.alloc[u8](a, 4usize + path.len)
+    if joined_error != ok { ret ("", joined_error) }
+    joined[0usize] = 112u8
+    joined[1usize] = 112u8
+    joined[2usize] = 116u8
+    joined[3usize] = 47u8
+    mem.copy[u8](joined[4usize..], path)
+    ret (joined, ok)
+}
+
+// The slides of a `.pptx` held in `data`, in presentation order; each slide's text paragraphs.
 fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err) {
     let (archive, open_error) = open_package(a, data)
     if open_error != ok { ret (zero, open_error) }
@@ -251,13 +280,95 @@ fn slides(a: *mem.Arena, data: []const u8) -> ([]Slide, err) {
     if total == 0usize { ret (zero, NoMainPart) }
     let (out, out_error) = mem.alloc[Slide](a, total)
     if out_error != ok { ret (zero, out_error) }
-    // Slide k, for k = 1 upward, is the part whose number is k; a missing number is skipped.
+    // Presentation order: `ppt/presentation.xml` lists the slides as `sldId` elements whose
+    // `r:id` values name relationship targets. Part numbers carry no order.
+    var order_count = 0usize
+    var order: []str = zero
+    let (pres_index, has_pres) = find(&ar, "ppt/presentation.xml")
+    if has_pres {
+        let (pres, pres_error) = zip.extract(a, &ar, pres_index)
+        if pres_error != ok { ret (zero, pres_error) }
+        let (pres_doc, pres_parse) = xml.parse(a, pres)
+        if pres_parse != ok { ret (zero, pres_parse) }
+        var ids = 0usize
+        i = 0usize
+        while i < pres_doc.nodes.len {
+            if pres_doc.nodes[i].kind == .Element && str.eq(local(pres_doc.nodes[i].name), "sldId") { ids += 1usize }
+            i += 1usize
+        }
+        let (rids, rids_error) = mem.alloc[str](a, ids)
+        if rids_error != ok { ret (zero, rids_error) }
+        var k = 0usize
+        i = 0usize
+        while i < pres_doc.nodes.len {
+            if pres_doc.nodes[i].kind == .Element && str.eq(local(pres_doc.nodes[i].name), "sldId") {
+                let (rid, has_rid) = qualified_attribute(&pres_doc.nodes[i], "id")
+                if !has_rid { ret (zero, Invalid) }
+                rids[k] = rid
+                k += 1usize
+            }
+            i += 1usize
+        }
+        if ids > 0usize {
+            let (rels_index, has_rels) = find(&ar, "ppt/_rels/presentation.xml.rels")
+            if !has_rels { ret (zero, Invalid) }
+            let (rels, rels_error) = zip.extract(a, &ar, rels_index)
+            if rels_error != ok { ret (zero, rels_error) }
+            let (rels_doc, rels_parse) = xml.parse(a, rels)
+            if rels_parse != ok { ret (zero, rels_parse) }
+            let (names, names_error) = mem.alloc[str](a, ids)
+            if names_error != ok { ret (zero, names_error) }
+            var n = 0usize
+            while n < ids {
+                var dest = ""
+                var found_target = false
+                var r = 0usize
+                while r < rels_doc.nodes.len && !found_target {
+                    let node = rels_doc.nodes[r]
+                    if node.kind == .Element && str.eq(local(node.name), "Relationship") {
+                        let (id, has_id) = local_attribute(&node, "Id")
+                        let (to, has_to) = local_attribute(&node, "Target")
+                        if has_id && has_to && str.eq(id, rids[n]) {
+                            dest = to
+                            found_target = true
+                        }
+                    }
+                    r += 1usize
+                }
+                if !found_target { ret (zero, Invalid) }
+                let (name, name_error) = part_name(a, dest)
+                if name_error != ok { ret (zero, name_error) }
+                names[n] = name
+                n += 1usize
+            }
+            order = names
+            order_count = ids
+        }
+    }
+    if order_count > 0usize {
+        var w = 0usize
+        while w < order_count {
+            let (j, has_part) = find(&ar, order[w])
+            if !has_part { ret (zero, Invalid) }
+            let (part, extract_error) = zip.extract(a, &ar, j)
+            if extract_error != ok { ret (zero, extract_error) }
+            let (c, collect_error) = collect(a, part)
+            if collect_error != ok { ret (zero, collect_error) }
+            out[w] = Slide { paragraphs: c.texts }
+            w += 1usize
+        }
+        ret (out[0usize..order_count], ok)
+    }
+    // Fallback: no presentation part. Slide k, for k = 1 upward, is the part whose number
+    // is k; a missing number is skipped. The entries view is retaken: extraction above
+    // invalidates an earlier one.
+    let entries = zip.entries(&ar)
     var written = 0usize
     var want = 1usize
     while written < total && want < 10000usize {
         var j = 0usize
-        while j < listed.len {
-            if slide_number(listed[j].name) == want {
+        while j < entries.len {
+            if slide_number(entries[j].name) == want {
                 let (part, extract_error) = zip.extract(a, &ar, j)
                 if extract_error != ok { ret (zero, extract_error) }
                 let (c, collect_error) = collect(a, part)
