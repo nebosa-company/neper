@@ -12897,6 +12897,7 @@ type DetailBufferState = struct { source: DetailReader, sink: DetailWriter, buff
 error End
 error TooSmall
 error NoProgress
+error Invalid
 
 fn reader(ctx: *void, read_fn: fn(*void, []u8) -> (usize, err)) -> Reader
 fn detail_reader(ctx: *void, read_fn: fn(*void, []u8, *os.ErrorDetail) -> (usize, err)) -> DetailReader

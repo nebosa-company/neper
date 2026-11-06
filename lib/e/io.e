@@ -12,6 +12,7 @@ use e.str
 error End
 error TooSmall
 error NoProgress
+error Invalid
 
 type Reader = struct {
     ctx: *void,
@@ -79,6 +80,10 @@ type CountingWriter = struct {
 type TeeWriter = struct {
     left: Writer,
     right: Writer,
+    // Set when one sink accepted bytes the other did not: the streams no longer agree,
+    // so the tee refuses further writes instead of reporting a resumable count that
+    // would duplicate bytes into the sink that already took them.
+    failed: bool,
 }
 
 type MemoryWriter = struct {
@@ -298,14 +303,26 @@ fn counting_writer(state: *CountingWriter, sink: Writer) -> Writer {
 }
 
 // Left before right, stopping on the first error: what reaches the right sink is
-// whatever the left one accepted, so this is duplication and not a transaction.
+// whatever the left one accepted, so this is duplication and not a transaction. A right
+// short write leaves the sinks out of step, so the tee answers Invalid on every later
+// call instead of reporting a count the caller would replay into the left sink twice.
 fn tee_write(ctx: *void, src: []const u8) -> (usize, err) {
     var state = mem.cast[*TeeWriter](ctx)
+    if state.failed { ret (0usize, Invalid) }
     let (count, left_error) = write(&state.left, src)
-    if left_error != ok { ret (count, left_error) }
+    if left_error != ok {
+        state.failed = true
+        ret (0usize, left_error)
+    }
     let (right_count, right_error) = write(&state.right, src[0usize..count])
-    if right_error != ok { ret (right_count, right_error) }
-    if right_count != count { ret (right_count, NoProgress) }
+    if right_error != ok {
+        state.failed = true
+        ret (0usize, right_error)
+    }
+    if right_count != count {
+        state.failed = true
+        ret (0usize, NoProgress)
+    }
     ret (count, ok)
 }
 
@@ -319,6 +336,7 @@ fn tee_flush(ctx: *void) -> err {
 fn tee_writer(state: *TeeWriter, left: Writer, right: Writer) -> Writer {
     state.left = left
     state.right = right
+    state.failed = false
     ret Writer { ctx: mem.cast[*void](state), write: tee_write, flush: tee_flush }
 }
 
