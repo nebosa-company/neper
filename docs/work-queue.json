@@ -2411,6 +2411,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Opened from the 2026-11-04 language design review; this is the one addition the review recommends. Problem: v1 has no labels, so a generated loop that must leave two levels writes a flag local, an `if` guard at every level and a check after the inner loop. That is three lines and a mutable binding per nesting level, all of which a reviewer follows to see where control goes. Proposal: an optional label on `for` and `while` with `break outer` and `continue outer` resolved at parse time, no dynamic behaviour, no new keyword. Token and cost: measured rather than assumed. Add the shapes to benchmarks/tokens/profile.py and to the card's token table before the grammar revision; the labelled form must be no worse than the flag form per nesting level, which it should beat by roughly ten tokens at depth two, and the tokens and parse streams gain a label field. Guard: `break` and `continue` without a label mean what they mean today, and a label that names no enclosing loop is a compile error. Not done: the grammar revision, the parser, the checker, the formatter and the card re-render; two fixture programs at depth two and three, checked against the flag spelling; the token profile updated."
+    },
+    {
+      "id": "C265",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 401,
+      "title": "a syntax error exits with its diagnostic: the error path must not consume the machine",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Found while porting x.duckdb.duckdb to DuckDB v2 and trying to build the Linux self-hosted compiler: a parse failure in lib/e/str.e (mem.bitcast[f32], syntax the September bootstrap does not know) did not report and exit. Measured in a freshly restarted 5GB WSL instance with nothing else running, RSS went 3148 kB at t=3s to 4352956 kB at t=6s, then 4550256 kB at t=9s, with MemAvailable down to 15MB, the process in D state, and exit code 1 only after the allocator had exhausted the VM. The diagnostic printed correctly (E-SYNTAX-9999 at four sites); the defect is that emitting it retained 4.5GB and stalled on swap for minutes instead of returning. Acceptance: a program with a syntax error reports every diagnostic it currently reports and exits 1 with peak RSS within a small fixed multiple of the source size (measured, and stated in the fixture); the same failure on Windows and Linux; a fixture that parses a file with many errors and asserts the exit code and a bounded peak; and no error path allocates per-diagnostic state that is never released."
     }
   ]
 }
