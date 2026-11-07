@@ -52,7 +52,12 @@ if [ -n "${NEPER_SEED:-}" ]; then
         echo "NEPER_SEED names no executable: $NEPER_SEED" >&2
         exit 1
     fi
-    "$NEPER_SEED" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-self" -j 1
+    # `--release`: a debug-built compiler fills every allocation with 0xCD (D306, section 11)
+    # and an arena pool charges what it touches, so every pool the loader sizes from the
+    # program is committed. On this tree that is 6.6-8.9 GB against 365 MB, for the same
+    # emitted code. The bootstrap path below cannot ask for it: the C bootstrap has no such
+    # option.
+    "$NEPER_SEED" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-self" -j 1 --release
 else
     $neper build "$repo/src/main.e" --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
 fi

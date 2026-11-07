@@ -20,21 +20,28 @@ New-Item -ItemType Directory -Force -Path $testBuild | Out-Null
 $compiler = Join-Path $testBuild 'neper-self.exe'
 $compilerAsm = Join-Path $testBuild 'neper-self.asm'
 # The arena is reserved and committed as it is used (D133), so its size is a ceiling rather
-# than a cost -- what a run charges is what it allocates. So this build sets no `--arena`:
-# the ceiling is then the default gigabyte-scale one that the startup halves if the host
-# refuses the reservation, and the compiler grows into whatever it actually needs. A fixed
+# than a cost. So this build sets no `--arena`: the ceiling is then the default the startup
+# halves if the host refuses it, and the compiler grows into what it needs. A fixed
 # `--arena 1g` here was a cap on this compiler, not a saving, and it began failing real
 # fixtures (str_float_vectors, algo_conflictview) as the tree grew. The cap itself is
 # still exercised, deliberately and explicitly, by the 96 MB compiler below.
+# `--release` is not about speed. A debug-built compiler fills every allocation with 0xCD
+# (D306, section 11), and an arena pool charges what it touches -- so the pools the loader
+# sizes from the program are all committed, whether they hold anything or not. Measured on
+# this tree, compiling src/main.e: a debug-built compiler peaks at 6.6-8.9 GB, a release-built
+# one at 365 MB, and both emit byte-identical code for the fixtures they were compared on.
+# The suite spends hours in that compiler, so the debug build is what exhausts a machine
+# shared with anything else.
 # A seed (C147): a previously built self-hosted compiler, named by NEPER_SEED, builds this
 # stage in place of the C bootstrap, which on a host short of commit charge cannot hold the
 # compiler's source. The seed is only the first stage: the fixed point the suite checks below
 # is unchanged, and the bootstrap's own frame check is skipped because the seed has no
-# bootstrap asm to read. Without NEPER_SEED the bootstrap builds it, as before.
+# bootstrap asm to read. Without NEPER_SEED the bootstrap builds it, as before -- and that
+# path cannot ask for `--release`, because the C bootstrap has no such option.
 $seed = $env:NEPER_SEED
 if ($seed) {
     if (-not (Test-Path -LiteralPath $seed)) { throw "NEPER_SEED names no file: $seed" }
-    & $seed emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $compiler -j 1 | Out-Null
+    & $seed emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $compiler -j 1 --release | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'the seed did not build the self-hosted compiler slice' }
 } else {
     & $neper build (Join-Path $repo 'src\main.e') --output $compiler --emit-asm $compilerAsm
