@@ -7941,18 +7941,25 @@ static int assemble_and_link(Compiler *c, const char *asm_path, const char *obj_
     if (windows) {
         const char *devcmd = getenv("NEPER_VSDEVCMD");
         char qd[MAX_PATH_LEN * 2], batch[MAX_PATH_LEN], qb[MAX_PATH_LEN * 2];
+        char log[MAX_PATH_LEN], ql[MAX_PATH_LEN * 2];
         FILE *f;
         if (!devcmd) devcmd = "D:\\VS\\Community\\Common7\\Tools\\VsDevCmd.bat";
         if (!path_exists(devcmd)) {
             fputs("neper: error[E-LINK-9999]: set NEPER_VSDEVCMD to Visual Studio's VsDevCmd.bat\n", stderr);
             return 0;
         }
+        /* ml64 and link write their diagnostics to stdout and the old `>nul` swallowed
+           them, so a failure surfaced only as "assembler or system linker failed". Their
+           output goes to a log beside the batch instead, and is replayed on failure. */
+        replace_extension(log, sizeof(log), asm_path, ".link.log");
+        quote_arg(ql, sizeof(ql), log);
         replace_extension(batch, sizeof(batch), asm_path, ".link.bat");
         f = fopen(batch, "wb");
         if (!f) return 0;
         quote_arg(qd, sizeof(qd), devcmd);
         fprintf(f, "@echo off\r\ncall %s -arch=x64 -host_arch=x64 >nul\r\n", qd);
-        fprintf(f, "ml64 /nologo /c /Fo%s %s >nul || exit /b 1\r\n", qo, qa);
+        fprintf(f, "ml64 /nologo /c /Fo%s %s >%s 2>&1\r\n", qo, qa, ql);
+        fprintf(f, "if errorlevel 1 ( type %s 1>&2 & exit /b 1 )\r\n", ql);
         fclose(f);
         quote_arg(qb, sizeof(qb), batch);
         snprintf(command, sizeof(command), "cmd.exe /d /c %s", qb);
@@ -7964,10 +7971,12 @@ static int assemble_and_link(Compiler *c, const char *asm_path, const char *obj_
         f = fopen(batch, "wb");
         if (!f) return 0;
         fprintf(f, "@echo off\r\ncall %s -arch=x64 -host_arch=x64 >nul\r\n", qd);
-        fprintf(f, "link /nologo /debug:full /include:np_nepersym /subsystem:console /entry:mainCRTStartup /out:%s %s %s kernel32.lib shell32.lib advapi32.lib >nul || exit /b 1\r\n", qe, qo, qr);
+        fprintf(f, "link /nologo /debug:full /include:np_nepersym /subsystem:console /entry:mainCRTStartup /out:%s %s %s kernel32.lib shell32.lib advapi32.lib >%s 2>&1\r\n", qe, qo, qr, ql);
+        fprintf(f, "if errorlevel 1 ( type %s 1>&2 & exit /b 1 )\r\n", ql);
         fclose(f);
         if (command_status(command) != 0) return 0;
         remove(batch);
+        remove(log);
     } else {
         char *as_args[] = {"as", "--64", "-o", (char *)obj_path, (char *)asm_path, 0};
         char *link_args[] = {"cc", "-nostartfiles", "-no-pie", "-o", (char *)exe_path,
