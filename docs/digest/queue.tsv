@@ -222,4 +222,3 @@ C265	compiler	0	1059	a syntax error exits with its diagnostic: the error path mu
 C266	compiler	0	1110	the bootstrap builds the tree again: refresh it, or make the seed path the contract	Found while getting tests/selfhost to reach its DuckDB fixture.
 C267	compiler	0	1450	emitted binaries are reproducible: no field may depend on which compiler binary ran	Found while verifying 18 bootstrap-lint fixes by differential build.
 C269	compiler	0	2537	the artifact path emits the same debug info as the whole-program path	Found once crew_windows could finally be reached: 'crew_windows at -j 1 is not the image linked from its artifacts (--time)'.
-C272	library	0	1883	chacha20-poly1305 sessions reach an encrypted packet and cannot open it	net_ssh fails on every chacha20-poly1305 case (password, early, key, badpass, sftp, forward, forward_refused) while gcm256, gcm128, rekey, badhost and unit all pass.
