@@ -18,7 +18,13 @@ targets, ownership and licensing boundary. Decision D1571's sibling for SQLite.
 | Target | Library | Present because |
 |---|---|---|
 | x64 Windows | `duckdb.dll` | the published `duckdb-shared-libs-windows-amd64` archive, unpacked under `D:\tools\duckdb` and put on PATH |
-| x64 Linux | `libduckdb.so` | the `duckdb` package, or the same archive's linux build on `LD_LIBRARY_PATH` |
+| x64 Linux | `duckdb` | the `duckdb-shared-libs-linux-amd64` archive from the v2.0.0 release, on `LD_LIBRARY_PATH` |
+
+The Linux name is the one the linker asks for: `@import("duckdb", ...)` emits `DT_NEEDED
+[duckdb]`, so the loader looks for a file named `duckdb`, not `libduckdb.so`. The upstream
+archive ships `libduckdb.so`; copy it to `duckdb` (or symlink it) and the loader finds it.
+The `duckdb` Python wheel is *not* usable here — its `_duckdb.abi3.so` is a CPython
+extension with 200 undefined `Py*` symbols, so it links and then fails at load.
 
 Measured when the package was delivered: v2.0.0 on Windows 11.
 

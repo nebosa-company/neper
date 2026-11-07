@@ -41,7 +41,21 @@ mkdir -p "$test_build"
 # workload there is, the compiler compiling itself: 384m exhausts, 400m succeeds, and the
 # peak is 388m. A gigabyte is the largest program worth compiling, not the largest the
 # commit limit will bear.
-$neper build "$repo/src/main.e" --arena 1g --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
+# A seed (C147), as run.ps1 has: a previously built self-hosted compiler, named by
+# NEPER_SEED, builds this stage in place of the C bootstrap. The bootstrap is a fixed
+# point -- it must parse the tree it builds -- so once the language gains syntax it can
+# no longer build the current source, and a seed is the way back. A compiler
+# cross-emitted from the Windows self-host works:
+#   build/windows/neper-self.exe emit-executable src/main.e . x64 linux neper-self-linux
+if [ -n "${NEPER_SEED:-}" ]; then
+    if [ ! -x "$NEPER_SEED" ]; then
+        echo "NEPER_SEED names no executable: $NEPER_SEED" >&2
+        exit 1
+    fi
+    "$NEPER_SEED" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-self" -j 1 --arena 1g
+else
+    $neper build "$repo/src/main.e" --arena 1g --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
+fi
 python3 "$repo/scripts/check_module_surfaces.py" --compiler "$test_build/neper-self" --arch x64 --os linux
 # The deferred-library fixture manifest (D1529): current, and every delivered API
 # with an executable fixture.
@@ -3362,10 +3376,11 @@ sqlite_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$sqlite_written" = 'executable written' ]
 chmod +x "$test_build/x-sqlite-selfhost"
 TMPDIR=/tmp "$test_build/x-sqlite-selfhost"
-# `x.duckdb.duckdb`: the `e.db` driver over the DuckDB C API v2 (`libduckdb.so`, from the `duckdb`
-# package or the published shared-libs archive on LD_LIBRARY_PATH), every value kind round-tripped,
-# DuckDB's errors mapped, statements, transactions, and a database file reopened in /tmp. The
-# fixture checks the library version itself and answers 1 when it is older than 2.0.
+# `x.duckdb.duckdb`: the `e.db` driver over the DuckDB C API v2 (`duckdb`, the name the
+# linker asks for, from the v2.0.0 shared-libs archive on LD_LIBRARY_PATH), every value
+# kind round-tripped, DuckDB's errors mapped, statements, transactions, and a database
+# file reopened in /tmp. The fixture checks the library version itself and answers 1 when
+# it is older than 2.0.
 duckdb_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_duckdb/src/main.e" "$repo" x64 linux "$test_build/x-duckdb-selfhost")
 [ "$duckdb_written" = 'executable written' ]
 chmod +x "$test_build/x-duckdb-selfhost"
