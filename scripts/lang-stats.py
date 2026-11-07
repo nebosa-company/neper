@@ -43,6 +43,12 @@ ap.add_argument('-d', '--days', type=float, help='only data from the last DAYS d
 ap.add_argument('-a', '--harness', nargs='?', const='split', choices=['claude', 'codex', 'dsh', 'opencode', 'split'], metavar='AGENT',
                 help='alone: split every row by agent (claude, codex, deepseek) and score each harness apart; '
                      'with claude, codex or dsh (DeepSeek): read that agent only')
+ap.add_argument('-p', '--path', metavar='PREFIX',
+                help="only count code landed under this path prefix (e.g. tests, lib/e, src), so two harnesses "
+                     "can be compared on the same kind of work instead of on whatever each happened to land. "
+                     "Read direct $/KB there: helper cost cannot be sliced by path")
+ap.add_argument('-s', '--since', metavar='DATE', help='only replies at or after DATE (YYYY-MM-DD or YYYY-MM-DDTHH:MM), so a date split is two runs')
+ap.add_argument('-u', '--until', metavar='DATE', help='only replies before DATE: with --since it bounds a window, with -d it cuts the recent one short')
 ARGS = ap.parse_args()
 ONLY = {'claude': 'claude', 'codex': 'codex', 'dsh': 'deepseek', 'opencode': 'opencode'}.get(ARGS.harness)  # the one agent read, or None for all
 ARGS.harness = ARGS.harness == 'split'  # every later test of it asks whether rows are split by agent
@@ -54,6 +60,24 @@ def explain(text):
     if ARGS.help: print(text)
 NOW = time.time()
 CUTOFF = NOW - ARGS.days * 86400 if ARGS.days else 0  # a reply older than this is left out
+
+
+def stamp(s):
+    """A --since/--until argument: YYYY-MM-DD or YYYY-MM-DDTHH:MM, local time."""
+    for f in ('%Y-%m-%dT%H:%M', '%Y-%m-%d'):
+        try: return datetime.strptime(s, f).timestamp()
+        except ValueError: pass
+    raise SystemExit('not a date (YYYY-MM-DD or YYYY-MM-DDTHH:MM): %s' % s)
+CUTOFF = max(CUTOFF, stamp(ARGS.since)) if ARGS.since else CUTOFF  # both ends can be set: a date split
+UNTIL = stamp(ARGS.until) if ARGS.until else 0
+PATH = (ARGS.path or '').replace('\\', '/').strip('/')  # '' counts everything; else one kind of work
+
+
+def under(p):
+    """Whether a landed file is under PATH: paths arrive both absolute (D:/repos/neper/...) and relative."""
+    p = str(p).replace('\\', '/')
+    if '/neper/' in p: p = p.split('/neper/', 1)[1]
+    return not PATH or p.startswith(PATH)
 
 COLOR = sys.stdout.isatty() or ARGS.color
 if COLOR and os.name == 'nt': os.system('')  # switches the console to honour ANSI escapes
@@ -67,6 +91,7 @@ CODE = {'e': 'Neper', 'dart': 'Dart', 'rs': 'Rust', 'js': 'JS', 'ts': 'TS'}  # w
 ROWS = ['Neper', 'Dart', 'Rust', 'JS', 'TS', 'Python']
 # neper is the binary (neper-self, neper-try.exe), never the repo path: repos/neper, D--repos-neper, src/neper.e
 BUILD = re.compile(r'\b(cargo|flutter|dart|(?<!-)(?<!repos[\\/])neper(?:-\w+)*(?:\.exe)?(?![\w\\/.-])|tsc|npm|pnpm|node|vitest|jest|pytest|run\.sh|suite|make|gcc|clang|bootstrap|go (build|test)|dotnet)\b')
+GH = re.compile(r'\bgh\s+(?:issue|pr)\b', re.I)  # GitHub bookkeeping, not a build however its body reads
 COMPILE = {'Neper': re.compile(r'\bE-[A-Z]+-\d{4}\b'), 'Rust': re.compile(r'error(\[E\d{4}\]|: )'), 'Dart': re.compile(r'\bError: |\berror •'),
            'JS': re.compile(r'\b(SyntaxError|TypeError|ReferenceError)\b'), 'TS': re.compile(r'\berror TS\d{4}\b'), 'Python': re.compile(r'Traceback|SyntaxError')}
 # A failure that is the program's rather than the shell's (T030): an assertion, a panic, a trap, a
@@ -166,7 +191,7 @@ def landed(t, full):
                 if L == 'Python': python(tgt.group(1), body)
                 elif L and SCRATCH.search(tgt.group(1)): out.append((None, 'helper', 0, set()))
                 elif L: out.append((L, 'direct', len(body.encode()), {tgt.group(1)}))
-    return out
+    return [e for e in out if any(under(f) for f in e[3])] if PATH else out  # --path: one kind of work
 
 
 def runs(cmd):
@@ -318,8 +343,87 @@ def opencode_steps(agent, wanted):
         yield agent, msgs, order, results
 
 
+DSH = os.path.expanduser('~/.dsh/sessions')  # DeepSeek Harness: one .jsonl.zstd per session, concatenated zstd frames
+NOTE = []  # what could not be read, printed above the tables
+# Windows Python ships no libzstd; Node 24 does, so it decodes the frames when zlib cannot.
+ZSTD_JS = ('const z=require("zlib"),fs=require("fs"),b=fs.readFileSync(process.argv[1]),s=[],o=[];'
+           'for(let i=0;i+4<=b.length;i++)if(b.compare(Buffer.from([0x28,0xb5,0x2f,0xfd]),0,4,i,i+4)===0)s.push(i);'
+           'for(let k=0;k<s.length;k++)try{o.push(z.zstdDecompressSync(b.subarray(s[k],s[k+1]??b.length)))}catch{}'
+           'process.stdout.write(Buffer.concat(o))')
+
+
+def frames_text(files):
+    """The plain text of every zstd frame in the given concatenated session logs, via Node when this
+    Python has no zlib.zstd. Each append is its own frame, so one decompress of the whole file would
+    stop at the header. A torn final frame contributes only its complete decoded lines."""
+    import subprocess, zlib
+    if hasattr(zlib, 'zstdDecompressSync'):
+        out = []
+        for f in files:
+            buf, i = open(f, 'rb').read(), 0
+            while (i := buf.find(b'\x28\xb5\x2f\xfd', i)) >= 0:
+                end = buf.find(b'\x28\xb5\x2f\xfd', i + 4)
+                try: out.append(zlib.zstdDecompressSync(buf[i:end if end >= 0 else len(buf)]))
+                except Exception: pass
+                i = end if end >= 0 else len(buf)
+        yield b''.join(out).decode('utf8', 'replace'); return
+    node = __import__('shutil').which('node')
+    if node is None:
+        NOTE.append('deepseek: no zlib.zstdDecompressSync (Python 3.14+ built with libzstd) and no node on PATH, so %s was not read' % DSH)
+        return
+    for f in files:
+        try: yield subprocess.run([node, '-e', ZSTD_JS, f], capture_output=True, timeout=1800).stdout.decode('utf8', 'replace')
+        except Exception as e: NOTE.append('deepseek: %s could not be decoded (%s)' % (f, e))
+
+
+DSH_TOOL = {'read': 'Read', 'grep': 'Grep', 'glob': 'Glob', 'pwsh': 'Bash', 'write': 'Write', 'edit': 'Edit'}
+DSH_ARGS = {'file_path': 'file_path', 'content': 'content', 'old_string': 'old_string', 'new_string': 'new_string', 'command': 'command'}
+
+
+def dsh():
+    """DeepSeek Harness sessions. A reply is an assistant/message with its usage; its tool calls are
+    those of the same turn and step (DeepSeek may emit several per reply), matched to tool/result by
+    callId. The logs are zstd; frames_text decodes them."""
+    def think(stream):  # reasoning arrives as streamed text; ~4 chars a token
+        return sum(len((s.get('chunk') or {}).get('text') or '') for s in stream or []
+                   if (s.get('chunk') or {}).get('type') == 'reasoning-delta') // 4
+    files = [f for f in glob.glob(DSH + '/**/*.zstd', recursive=True) if os.path.getmtime(f) >= CUTOFF]
+    for text in frames_text(files) if files else ():
+        msgs, order, results, last_user, step = {}, [], {}, None, None
+        for line in text.splitlines():
+            try: o = json.loads(line)
+            except ValueError: continue
+            k, d, ts = o.get('type'), o.get('data') or {}, (o.get('time') or 0) / 1000
+            if k == 'user/message': last_user = ts or last_user
+            elif k == 'step/start': step = (d.get('turn'), d.get('step'))
+            elif k == 'assistant/message':
+                m = d.get('message') or {}
+                if step is None or step not in msgs:
+                    msgs[step] = {'content': [], 'usage': {}, 'after': last_user, 'ts': ts}; order.append(step)
+                u = d.get('usage') or {}
+                msgs[step]['content'] += [{'type': 'tool_use', 'id': c.get('id'), 'name': DSH_TOOL.get(c.get('name'), c.get('name')),
+                                           'input': {DSH_ARGS.get(x, x): v for x, v in json.loads(c.get('arguments') or '{}').items()}
+                                                    if str(c.get('arguments') or '').strip().startswith('{') else {}}
+                                          for c in m.get('content') or [] if c.get('type') == 'tool-call']
+                msgs[step]['content'] += [{'type': 'text', 'text': c.get('text', '')} for c in m.get('content') or [] if c.get('type') == 'text']
+                msgs[step]['usage'] = {'input_tokens': u.get('inputTokens', 0), 'cache_read_input_tokens': u.get('cacheReadTokens', 0),
+                                       'cache_creation_input_tokens': u.get('cacheWriteTokens', 0), 'output_tokens': u.get('outputTokens', 0),
+                                       'output_tokens_details': {'thinking_tokens': u.get('reasoningTokens', 0) or think(d.get('stream'))}}
+                msgs[step]['ts'] = ts or msgs[step]['ts']
+            elif k == 'tool/result':
+                m = d.get('message') or {}
+                cid = d.get('callId') or m.get('toolCallId')
+                text = ''.join(c.get('text', '') for c in m.get('content') or [] if isinstance(c, dict))
+                head = text[:300].lower()
+                results[cid] = {'text': text, 'ts': ts, 'failed': bool(m.get('isError')) or ('exit code' in head and 'exit code 0' not in head)}
+                last_user = ts or last_user
+        yield 'deepseek', msgs, order, results
+
+
 def deepseek():
-    return opencode_steps('deepseek', lambda model: 'deepseek' in model)
+    """The DSH logs, then any opencode steps the DSH logs do not already carry."""
+    yield from dsh()
+    for s in opencode_steps('deepseek', lambda model: 'deepseek' in model): yield s
 
 
 def opencode():
@@ -340,7 +444,7 @@ AGENTS = ['claude', 'codex', 'deepseek', 'opencode']
 span = []  # times of every reply counted, for the period line
 for agent, msgs, order, results in itertools.chain(*(read() for name, read in zip(AGENTS, (claude, codex, deepseek, opencode)) if ONLY in (None, name))):
     tag = lambda L: '%s %s' % (L, agent) if ARGS.harness else L  # with --harness a row is a language as one agent wrote it
-    order = [mid for mid in order if (msgs[mid]['ts'] or 0) >= CUTOFF]
+    order = [mid for mid in order if (msgs[mid]['ts'] or 0) >= CUTOFF and not (UNTIL and (msgs[mid]['ts'] or 0) >= UNTIL)]
     span += [msgs[mid]['ts'] for mid in order if msgs[mid]['ts']]
     # first pass: what each turn lands, and the session's host language (most new code)
     full, turn, host_bytes = {}, {}, C.Counter()
@@ -412,15 +516,19 @@ for agent, msgs, order, results in itertools.chain(*(read() for name, read in zi
                     S[(hk, 'direct')]['apply_err'] += failed
                     if not BUILD.search(cmd): continue
                 plumbing = failed and not program_failed
-                building = (not ks or chained) and (BUILD.search(cmd) or PYRUN.search(cmd))
+                # gh issue bookkeeping is not a build: its body text often carries build-shaped words
+                # ponytail: any command mentioning `gh issue`/`gh pr` is skipped whole, so a rare
+                # `neper build && gh issue comment` chained call is not counted either.
+                building = (not ks or chained) and (BUILD.search(cmd) or PYRUN.search(cmd)) and not GH.search(cmd)
                 if chained and plumbing:
                     pass  # the patch failed, counted above: no build ran
                 elif building and plumbing:
                     H['plumbing'] += 1  # the shell failed, not the language: no build, and the edits wait for one
                 elif building:  # a build or test run, or a script written outside these transcripts
                     kinds.add('build')
-                    H['builds'] += 1; H['build_fail'] += failed; build_s[hk].append(dur)
-                    if ONLY_COMPILE.match(cmd): compile_s[hk].append(dur)
+                    H['builds'] += 1; H['build_fail'] += failed
+                    if dur: build_s[hk].append(dur)  # a 0 s command has no timestamp to measure (T031)
+                    if dur and ONLY_COMPILE.match(cmd): compile_s[hk].append(dur)
                     H['fb_n'] += since_build; H['fb_ok'] += since_build * (not failed); since_build = 0
                     if failed:
                         diag_b[hk].append(len(text))
@@ -456,12 +564,13 @@ def merged(L):
     return d, s, h, t, d['bytes'] + s['bytes']
 
 
-first, last = (CUTOFF, NOW) if ARGS.days else (min(span, default=NOW), max(span, default=NOW))
-print('period: %s -> %s (%s days)%s\n' % (datetime.fromtimestamp(first).strftime('%Y-%m-%d %H:%M'), datetime.fromtimestamp(last).strftime('%Y-%m-%d %H:%M'),
-                                          '%g' % ARGS.days if ARGS.days else '%.0f' % ((last - first) / 86400),
-                                          ('' if ARGS.days else ', all data') + (', %s only' % ONLY if ONLY else '')))
+first, last = (CUTOFF, UNTIL or NOW) if (ARGS.days or ARGS.since or ARGS.until) else (min(span, default=NOW), max(span, default=NOW))
+print('period: %s -> %s (%.1f days)%s\n' % (datetime.fromtimestamp(first).strftime('%Y-%m-%d %H:%M'), datetime.fromtimestamp(last).strftime('%Y-%m-%d %H:%M'),
+                                            (last - first) / 86400,
+                                            ('' if (ARGS.days or ARGS.since or ARGS.until) else ', all data') + (', %s only' % ONLY if ONLY else '')))
 if FREE_TURNS:
     print('free tier: %s step(s) priced at $0 (effort counted, dollars not): %s\n' % (sum(FREE_TURNS.values()), ', '.join('%s %d' % kv for kv in sorted(FREE_TURNS.items()))))
+for n in NOTE: print(n + '\n')
 
 FLOOR = 100 * KB  # a language with less landed source than this is too thin to compare
 if ARGS.harness: ROWS = ['%s %s' % (L, a) for L in ROWS for a in AGENTS]
@@ -533,13 +642,13 @@ $/KB     cost/B priced at $5 per million input-token equivalents (Opus 5 list), 
 rows = []
 for L in ROWS:
     d, s, h, t, kb = merged(L)
-    bs = sorted(build_s[L]) or [0]
+    bs = sorted(build_s[L])
     applied = max(d['applied'] + s['applied'], 1)
     rows.append((L, (t['out'] / kb, statistics.median(ctx_tok[L]) / 1000 if ctx_tok[L] else 0, t['read_b'] / kb,
                      t['turns'] / applied, t['turns_read'] / applied, t['turns_build'] / applied, t['turns_other'] / applied,
                      kb / applied, t['turns'] / kb * KB, 100 * h['fb_ok'] / max(h['fb_n'], 1),
-                     statistics.median(bs) * 1000, statistics.median(compile_s[L]) * 1000 if compile_s[L] else None,
-                     (bs[int(len(bs) * 0.9)] if len(bs) > 1 else bs[0]) * 1000, 100 * h['compile_err'] / max(h['build_fail'], 1),
+                     statistics.median(bs) * 1000 if bs else None, statistics.median(compile_s[L]) * 1000 if compile_s[L] else None,
+                     (bs[int(len(bs) * 0.9)] if len(bs) > 1 else bs[0]) * 1000 if bs else None, 100 * h['compile_err'] / max(h['build_fail'], 1),
                      t['model_s'] / kb * KB, t['tool_s'] / kb * KB)))
 table('\nPROCESS  (how the code got written)',
       [('outK/KB', 8, '%.1f', 'low'), ('ctx Ktk', 8, '%.0f', 'low'), ('read/KB', 8, '%.1f', 'low'), ('turns/ed', 8, '%.1f', None),
@@ -662,4 +771,31 @@ claude..  the same mean within one harness, where each agent's languages only me
           rival. Read overall with contests beside it.''' if SPLIT else '''
 Without --harness every agent's work in a language is pooled into one row; run with -a to
 split it by agent, or with --harness claude (codex, dsh) to read one agent only.'''))
+
+if ARGS.harness:  # the mirror image: each language's judged columns are what the harnesses meet in
+    hp, hm = C.defaultdict(list), C.defaultdict(C.Counter)
+    for col, better, vals in CONTESTS:
+        by = C.defaultdict(dict)
+        for L, v in vals.items():
+            if v is not None: by[L.split()[0]][L.split()[1]] = v
+        for lang, field in by.items():
+            ranked = sorted(set(field.values()), reverse=better == 'high')
+            if len(ranked) < 2: continue  # one harness alone in it is no contest
+            for a, v in field.items():
+                pos = ranked.index(v)
+                hp[a].append(1 - pos / (len(ranked) - 1))
+                if pos < 3: hm[a][pos] += 1
+    print('\nHARNESS SCORECARD  (each language\'s judged columns, ranked between the harnesses that landed it)')
+    print('place %-9s %7s %8s %5s %5s %5s' % ('agent', 'overall', 'contests', '1st', '2nd', '3rd'))
+    for i, a in enumerate(sorted(hp, key=lambda a: -statistics.mean(hp[a]))):
+        print('%s   %-9s %7.0f %8d %5d %5d %5d' % (PLACE.get(i, '%dth' % (i + 1)), a, 100 * statistics.mean(hp[a]),
+                                                   len(hp[a]), hm[a][0], hm[a][1], hm[a][2]))
+    explain('''
+place     order by overall score
+overall   mean score, 0-100, over every (language, judged column) contest this harness entered:
+          100 means best in all, 0 worst; a language is only a contest where two harnesses landed
+          more than 100 KB of it, so the harnesses meet on unequal ground and contests is their
+          common denominator
+contests  (language, column) contests entered: the harnesses did not all land every language
+1st..3rd  times the harness ranked first, second or third in one of them''')
 print('\n' + TABLES, end='')
