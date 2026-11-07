@@ -221,7 +221,10 @@ transitive_graph=$($test_build/neper-self graph-file "$graph_root/transitive/src
 [ "$transitive_graph" = 'module graph ok' ]
 reused_graph=$($test_build/neper-self graph-file "$graph_root/reuse/src/main.e" "$repo" x64 linux main common)
 [ "$reused_graph" = 'module graph ok' ]
-toolchain_graph=$($test_build/neper-self graph-file "$nested_root/src/main.e" "$repo" x64 linux main e.io e.mem e.os e.str util.math)
+# The loader counts the whole closure, including what the target's variants pull in: e.str
+# imports e.text.utf8. Linux has no extra module here, where the Windows variant adds
+# e.proc.sys.win_heap, so the two lists differ by exactly that one.
+toolchain_graph=$($test_build/neper-self graph-file "$nested_root/src/main.e" "$repo" x64 linux main e.io e.mem e.os e.str e.text.utf8 util.math)
 [ "$toolchain_graph" = 'module graph ok' ]
 variant_graph=$($test_build/neper-self graph-file "$variant_root/src/root.e" "$repo" x64 linux root system)
 [ "$variant_graph" = 'module graph ok' ]
