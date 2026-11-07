@@ -2173,7 +2173,15 @@ fn tm_in_head(p: *Ps, tk: *Tok) -> (bool, err) {
             ret (false, ok)
         }
         if nm_in(",noframes,style,", name) {
-            try tb_text_element(p, tk, TS_RAWTEXT)
+            // In XML syntax (`application/xhtml+xml`) a `<style>` body is ordinary character data: references in it are
+            // decoded, so `div#test &gt; span` reaches the CSS parser with a real child combinator. RCDATA is exactly that
+            // - it decodes references and still stops at `</style>`, so the body is not parsed as markup. RAWTEXT is the
+            // HTML rule and is what would leave the entity literal. WPT CSS2 ships .xht files that depend on this.
+            if xml_syntax && str.eq(name, "style") {
+                try tb_text_element(p, tk, TS_RCDATA)
+            } else {
+                try tb_text_element(p, tk, TS_RAWTEXT)
+            }
             ret (false, ok)
         }
         if str.eq(name, "noscript") {

@@ -226,6 +226,8 @@ fn append(out: []u8, at: usize, text: str) -> usize {
 // The types a toolchain serves, by extension without its dot, case-folded.
 fn extension_type(extension: str) -> (str, bool) {
     if same_folded(extension, "html") || same_folded(extension, "htm") { ret ("text/html", true) }
+    // XHTML is XML syntax: `<style>` holds character data there, so `&gt;` in a stylesheet is a child combinator.
+    if same_folded(extension, "xhtml") || same_folded(extension, "xht") { ret ("application/xhtml+xml", true) }
     if same_folded(extension, "css") { ret ("text/css", true) }
     if same_folded(extension, "js") || same_folded(extension, "mjs") { ret ("text/javascript", true) }
     if same_folded(extension, "json") { ret ("application/json", true) }
