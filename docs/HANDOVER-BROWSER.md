@@ -213,10 +213,18 @@ Written 2026-11-03 by the script-side WPT session. The numbers live in `docs/bro
 
 `lib/e/ui/browser.e` is one browsing context as a control: `attach`, `navigate`, `back`, `forward`, `reload`, `state`, `pump`, `timer_due`, `canvas`, `region`, `keys`, `a11y_tree`, `semantics`, `set_preferences`, `ensure_renderer`. Chrome (tabs, omnibox, bookmarks, downloads) is deliberately not there.
 
-**Driving the page (2026-11-07):** `scriptable(b)` answers whether there is a realm, `eval_js(b, source)` runs a script in the page's own realm and returns false if it threw, and `eval_error(b)` names the exception. These wrap `page.eval_js` / `page.eval_error`, which take the same path as the page's own `<script>` elements, so **CSP `script-src` applies exactly as it does to the page**. Fixture: `tests/selfhost/fixtures/link/browser_eval` (realm reused across calls, DOM write visible afterwards, a throw reported rather than swallowed).
+**Driving the page (2026-11-07):** the control has a full automation surface now, all of it wrapping `page`:
+- `scriptable(b)` - is there a realm to drive.
+- `eval_js(b, source)` - run a script in the page's own realm and run the jobs it queued; false when it threw. Takes the same path as the page's own `<script>` elements, so **CSP `script-src` applies exactly as it does to the page**.
+- `eval_value(b, source)` - run an *expression* and answer `String(result)`, plus whether it succeeded. This is the read half: `(title, usable) = eval_value(b, "document.title")`.
+- `eval_error(b)` - the exception the last eval threw.
+- `eval_truthy(b, source)` - poll an expression.
+- `wait_for(b, source, start_ms, timeout_ms)` - drive the page's event loop until the condition holds. Steps to `page.next_wakeup` rather than a fixed tick, so a page waiting on `setTimeout` or a promise chain is driven rather than starved, and it stops early when nothing is scheduled and nothing changed.
 
-- **Trap:** that fixture builds the realm with `script.new_context` on a real `Dom` (the `web_shell` pattern), **not** with `page.load`. `page.load` on a `data:` URL returns `LoadFailed` in a headless fixture - it needs the fetch/view stack the reftest runner sets up - so a fixture for `page.eval_js` end-to-end still needs a page whose load path works headless. The eval behaviour itself is covered.
-- **Still missing for a first-class control:** reading a value back out of `eval_js` (it answers only whether the script threw - use a script that writes to `window` and a follow-up that throws on a mismatch), a selector-based query helper, and waiting-for-condition. `page.click` exists for real pointer input.
+Fixture: `tests/selfhost/fixtures/link/browser_eval` loads a real page with `page.load` and drives it through the same `page.eval_js` / `page.eval_value` entries: realm reuse across calls, a DOM write read back, `textContent` and `1 + 41` returned as strings, a throw reported with its message, and a `setTimeout` driven to completion. **It is a verified test** - stubbing `page.tick` makes it fail with `WaitFailed`.
+
+- **Trap (resolved, 2026-11-07):** `page.load` on a `data:` URL *does* work headless, but only once a face is registered **and the generics are set** (`fontset.add` then `fontset.set_generic` for `sans-serif`/`serif`). An empty `Set` has no fallback family and the load answers `LoadFailed`, which reads like a fetch or URL failure and is neither. Copy the four lines from the fixture.
+- **Still missing for a first-class control:** a selector-based query helper (`query(b, css)` answering the first match's text/attribute - today it is `eval_value(b, "document.querySelector(...)?.textContent")`), a typed `eval_number`, and a wait that also drives *network* work rather than only timers and jobs.
 
 
 ### Where the code is
