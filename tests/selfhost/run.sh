@@ -1,8 +1,12 @@
 #!/usr/bin/env sh
 set -eu
 # Run it as `bash scripts/run-linux-suite.sh`, from a copy on WSL's own disk (inotify delivers nothing on /mnt/d).
-# Memory: the compiler building itself peaks at 388 MB and the VM at about 2.2 GB, but the VM is dropped when the
-# host's free commit gets short: it went down twice at 3.2 GB free and a run finished at 6.9 GB. Keep 5 GB free.
+# Memory: with a release-built compiler -- which is what this script builds, see the seed
+# below -- the compiler building itself peaks at 388 MB. A debug-built one peaks at
+# 6.6-8.9 GB for the same work (D306: it fills every allocation with 0xCD, and an arena
+# charges what it touches), so those two figures are different builds, not a contradiction.
+# The VM itself takes about 2.2 GB, and is dropped when the host's free commit gets short:
+# it went down twice at 3.2 GB free and a run finished at 6.9 GB. Keep 5 GB free.
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 neper="$repo/build/linux/neper"
@@ -37,10 +41,11 @@ require_fixture() {
 mkdir -p "$test_build"
 
 # The arena is reserved and committed as it is used (D133), so its size is a ceiling rather
-# than a cost -- what a run charges is what it allocates. Measured against the heaviest
-# workload there is, the compiler compiling itself: 384m exhausts, 400m succeeds, and the
-# peak is 388m. A gigabyte is the largest program worth compiling, not the largest the
-# commit limit will bear.
+# than a cost. So this build sets no `--arena`: the ceiling is then the default the startup
+# halves if the host refuses it, and the compiler grows into what it needs. A fixed
+# `--arena 1g` here was a cap on this compiler, not a saving, and it began failing real
+# fixtures as the tree grew. The cap is still exercised, deliberately, by the 96 MB compiler
+# further down.
 # A seed (C147), as run.ps1 has: a previously built self-hosted compiler, named by
 # NEPER_SEED, builds this stage in place of the C bootstrap. The bootstrap is a fixed
 # point -- it must parse the tree it builds -- so once the language gains syntax it can
