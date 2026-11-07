@@ -98,7 +98,34 @@ fn eval_value(b: *Browser, source: str) -> (str, bool) {
 fn eval_truthy(b: *Browser, source: str) -> bool {
     let (text, usable) = eval_value(b, source)
     if !usable { ret false }
-    ret !str.eq(text, "false") && !str.eq(text, "") && !str.eq(text, "0") && !str.eq(text, "null") && !str.eq(text, "undefined")
+    if str.eq(text, "true") { ret true }
+    if str.eq(text, "false") || str.eq(text, "") || str.eq(text, "0") || str.eq(text, "null") || str.eq(text, "undefined") { ret false }
+    // Anything else that is not the empty string is truthy in JavaScript.
+    ret true
+}
+
+// Answers the number an expression evaluates to, plus whether it was a number. A `NaN` answer is a number, so a caller
+// that needs a finite value checks it; `usable` is false when there is no realm or the script threw.
+fn eval_number(b: *Browser, source: str) -> (f64, bool) {
+    if !scriptable(b) { ret (0.0f64, false) }
+    let (value, usable) = page.eval_number(b.tab.pg, source)
+    ret (value, usable)
+}
+
+// The text of the first element matching a CSS selector, or "" when nothing matches. `usable` is false when the page
+// has no realm, the selector is invalid, or the script threw. This is the shape most automation wants.
+fn query(b: *Browser, selector: str) -> (str, bool) {
+    if !scriptable(b) { ret ("", false) }
+    let (text, found) = page.query_text(b.tab.pg, selector)
+    ret (text, found)
+}
+
+// The value of an attribute on the first element matching a CSS selector; `usable` is false when nothing matches or the
+// element has no such attribute.
+fn query_attr(b: *Browser, selector: str, name: str) -> (str, bool) {
+    if !scriptable(b) { ret ("", false) }
+    let (value, found) = page.query_attr(b.tab.pg, selector, name)
+    ret (value, found)
 }
 
 // Runs the page's event loop until `source` is truthy or `timeout_ms` have passed, answering whether the condition

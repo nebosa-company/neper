@@ -28,6 +28,10 @@ error ValueWrong
 error ValueThrew
 error WaitFailed
 error WaitFoundNothing
+error QueryWrong
+error QueryMissed
+error AttrWrong
+error NumberWrong
 
 // The page has no external references; a font still has to be registered or layout has no generic family to fall back to.
 fn load_page(a: *mem.Arena) -> (*page.Page, err) {
@@ -40,7 +44,7 @@ fn load_page(a: *mem.Arena) -> (*page.Page, err) {
     if fontset.add(&fonts, "Ahem", 400u32, false, bytes, 0u32) != ok { ret (zero, FontAddFailed) }
     fontset.set_generic(&fonts, "sans-serif", "Ahem")
     fontset.set_generic(&fonts, "serif", "Ahem")
-    let html = "data:text/html,<title>t</title><div id=box>0</div>"
+    let html = "data:text/html,<title>t</title><div id=box>0</div><button class='primary' data-note=\"it's here\">Go</button>"
     let (p, pe) = page.load(a, &client, &fonts, html, 800.0, 600.0, 134217728usize)
     ret (p, pe)
 }
@@ -87,6 +91,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         steps += 1usize
     }
     if !held { ret WaitFailed }
+    // 6. Selector queries: the first match's text, an attribute, and a miss reported as a miss.
+    let (label, found) = page.query_text(p, "button.primary")
+    if !found { ret QueryMissed }
+    if !str.eq(label, "Go") { ret QueryWrong }
+    let (note, note_found) = page.query_attr(p, "button.primary", "data-note")
+    if !note_found { ret QueryMissed }
+    if !str.eq(note, "it's here") { ret AttrWrong }
+    // A quote in the selector must not break out of the injected literal: this is a valid selector that matches nothing.
+    let (missing, missing_found) = page.query_text(p, "[data-none='x']")
+    if missing_found { ret QueryWrong }
+    if !str.eq(missing, "") { ret QueryWrong }
+    // 7. A number comes back as a number.
+    let (count, count_ok) = page.eval_number(p, "document.querySelectorAll('button').length")
+    if !count_ok { ret NumberWrong }
+    if count != 1.0f64 { ret NumberWrong }
     page.close(p)
     ret ok
 }

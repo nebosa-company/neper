@@ -1139,6 +1139,78 @@ fn eval_value(p: *Page, source: str) -> (str, bool) {
     ret (text, true)
 }
 
+// The number an expression evaluates to, plus whether it was a number at all. `NaN` parses as a number here, so a caller
+// that needs a finite value checks it.
+fn eval_number(p: *Page, source: str) -> (f64, bool) {
+    let (text, usable) = eval_value(p, source)
+    if !usable { ret (0.0f64, false) }
+    let (value, parsed) = str.parse_f64(text)
+    if parsed != ok { ret (0.0f64, false) }
+    ret (value, true)
+}
+
+// Escapes `text` for use inside a single-quoted JavaScript string literal: backslash, the quote itself, and the two line
+// terminators that end a literal. A selector or attribute name therefore cannot break out of the expression.
+fn js_quote(p: *Page, text: str) -> str {
+    let (b0, be) = str.builder(p.pa, text.len + 8usize)
+    if be != ok { ret "" }
+    var b = b0
+    let q1 = str.push(&b, "'")
+    var at = 0usize
+    while at < text.len {
+        let ch = text[at]
+        if ch == 92u8 || ch == 39u8 {
+            let s1 = str.push(&b, "\\")
+            let s2 = str.push_byte(&b, ch)
+        } else if ch == 10u8 || ch == 13u8 {
+            let s3 = str.push(&b, " ")
+        } else {
+            let s4 = str.push_byte(&b, ch)
+        }
+        at += 1usize
+    }
+    let q2 = str.push(&b, "'")
+    ret str.done(&b)
+}
+
+// The text of the first element matching `selector`, or "" plus false when nothing matches or the selector is invalid.
+fn query_text(p: *Page, selector: str) -> (str, bool) {
+    if !p.scripted { ret ("", false) }
+    let quoted = js_quote(p, selector)
+    let (s1, e1) = str.concat(p.pa, "(() => { const e = document.querySelector(", quoted)
+    let (s2, e2) = str.concat(p.pa, s1, "); return e === null ? null : e.textContent; })()")
+    if e1 != ok || e2 != ok { ret ("", false) }
+    let (value, ve) = js.eval_source(p.ctx, s2)
+    let waited = script.pump_self(p.ctx)
+    if p.view.tree.version != p.seen_version { refresh(p) }
+    if ve != ok { ret ("", false) }
+    let (text, te) = js.to_string(p.ctx, value)
+    if te != ok { ret ("", false) }
+    // A missing element answers "null" through String(); report that as no match.
+    if str.eq(text, "null") { ret ("", false) }
+    ret (text, true)
+}
+
+// The value of attribute `name` on the first element matching `selector`.
+fn query_attr(p: *Page, selector: str, name: str) -> (str, bool) {
+    if !p.scripted { ret ("", false) }
+    let sel = js_quote(p, selector)
+    let attr = js_quote(p, name)
+    let (s1, e1) = str.concat(p.pa, "(() => { const e = document.querySelector(", sel)
+    let (s2, e2) = str.concat(p.pa, s1, "); return e === null ? null : e.getAttribute(")
+    let (s3, e3) = str.concat(p.pa, s2, attr)
+    let (s4, e4) = str.concat(p.pa, s3, "); })()")
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret ("", false) }
+    let (value, ve) = js.eval_source(p.ctx, s4)
+    let waited = script.pump_self(p.ctx)
+    if p.view.tree.version != p.seen_version { refresh(p) }
+    if ve != ok { ret ("", false) }
+    let (text, te) = js.to_string(p.ctx, value)
+    if te != ok { ret ("", false) }
+    if str.eq(text, "null") { ret ("", false) }
+    ret (text, true)
+}
+
 // The page's event loop: runs promise jobs and the timers that are due at `now_ms` (milliseconds on the host clock, any
 // origin as long as it only grows). Answers true when the page changed and was laid out again.
 fn tick(p: *Page, now_ms: f64) -> bool {
