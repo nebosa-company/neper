@@ -85,6 +85,44 @@ fn eval_error(b: *const Browser) -> str {
     ret page.eval_error(b.tab.pg)
 }
 
+// Evaluates `source` as an expression in the page's realm and answers its result as a string (`String(result)`), plus
+// whether it succeeded. This is the read half of driving a page: `eval_js` answers whether a script ran, this answers
+// what it produced, so a host can do `(text, ok) = eval_value(b, "document.title")`.
+fn eval_value(b: *Browser, source: str) -> (str, bool) {
+    if !scriptable(b) { ret ("", false) }
+    let (text, usable) = page.eval_value(b.tab.pg, source)
+    ret (text, usable)
+}
+
+// Answers whether an expression in the page's realm is truthy, for polling a condition.
+fn eval_truthy(b: *Browser, source: str) -> bool {
+    let (text, usable) = eval_value(b, source)
+    if !usable { ret false }
+    ret !str.eq(text, "false") && !str.eq(text, "") && !str.eq(text, "0") && !str.eq(text, "null") && !str.eq(text, "undefined")
+}
+
+// Runs the page's event loop until `source` is truthy or `timeout_ms` have passed, answering whether the condition
+// held. This is what an automating host needs after any action: after `eval_js` that starts a timer, after a click, or
+// after a navigation. The clock starts at `start_ms` - the same monotonic millisecond clock `pump` takes - and each step
+// jumps to the next due timer, so a page waiting on `setTimeout` or a promise chain is driven rather than starved.
+fn wait_for(b: *Browser, source: str, start_ms: f64, timeout_ms: f64) -> bool {
+    if eval_truthy(b, source) { ret true }
+    var now = start_ms
+    let deadline = start_ms + timeout_ms
+    while now < deadline {
+        let due = page.next_wakeup(b.tab.pg)
+        var step = 1.0f64
+        if due > now { step = due - now }
+        if due < 0.0f64 { step = 1.0f64 }
+        now = now + step
+        let changed = pump(b, now)
+        if eval_truthy(b, source) { ret true }
+        // Nothing scheduled and no state change: no further pump can make the condition true.
+        if due < 0.0f64 && !changed { break }
+    }
+    ret eval_truthy(b, source)
+}
+
 // The host's media preferences for every page of this browser: `dark` answers `prefers-color-scheme` (and
 // `light-dark()`), `reduced_motion` answers `prefers-reduced-motion`. A page whose answer changes is laid out again,
 // so the next frame paints it; a page loaded later is laid out with them from the start.

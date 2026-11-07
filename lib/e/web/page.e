@@ -1123,6 +1123,22 @@ fn eval_error(p: *Page) -> str {
     ret script.describe_thrown(p.ctx)
 }
 
+// Evaluates `source` as an expression in the page's realm and answers its result as a string, the way a template
+// literal would spell it (`String(result)`), plus whether it succeeded. Queued jobs run before the answer is taken, and
+// the page is laid out again when the script changed the DOM. `ok` is false when there is no realm or the script threw;
+// `eval_error` then names the exception. This is the read half of driving a page: `eval_js` answers whether a script
+// ran, this answers what it produced.
+fn eval_value(p: *Page, source: str) -> (str, bool) {
+    if !p.scripted { ret ("", false) }
+    let (value, ve) = js.eval_source(p.ctx, source)
+    let waited = script.pump_self(p.ctx)
+    if p.view.tree.version != p.seen_version { refresh(p) }
+    if ve != ok { ret ("", false) }
+    let (text, te) = js.to_string(p.ctx, value)
+    if te != ok { ret ("", false) }
+    ret (text, true)
+}
+
 // The page's event loop: runs promise jobs and the timers that are due at `now_ms` (milliseconds on the host clock, any
 // origin as long as it only grows). Answers true when the page changed and was laid out again.
 fn tick(p: *Page, now_ms: f64) -> bool {

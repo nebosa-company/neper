@@ -8,6 +8,7 @@
 // Each failure returns a distinct error so the exit status names the step.
 use e.fmt.dom as dom
 use e.fmt.html as html
+use e.js.interp as js
 use e.mem
 use e.str
 use e.web.script as script
@@ -20,6 +21,8 @@ error Eval3
 error Eval4
 error ThrowReportedAsSuccess
 error ThrowNotDescribed
+error ValueFailed
+error ValueWrong
 
 fn options() -> html.Options {
     ret html.Options { max_bytes: 1048576usize, max_nodes: 4096usize, max_attributes: 64usize, max_depth: 64u16, preserve_comments: false }
@@ -42,6 +45,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if script.run_script(it, "throw new Error('deliberate')", "five.js") { ret ThrowReportedAsSuccess }
     let why = script.describe_thrown(it)
     if !str.contains(why, "deliberate") { ret ThrowNotDescribed }
+    // 4. The read half: an expression's value comes back, which is what `page.eval_value` does with these two calls.
+    let (value, ve) = js.eval_source(it, "document.getElementById('box').textContent")
+    if ve != ok { ret ValueFailed }
+    let (text, te) = js.to_string(it, value)
+    if te != ok { ret ValueFailed }
+    if !str.eq(text, "driven") { ret ValueWrong }
+    let (num, ne) = js.eval_source(it, "1 + 41")
+    if ne != ok { ret ValueFailed }
+    let (num_text, nte) = js.to_string(it, num)
+    if nte != ok { ret ValueFailed }
+    if !str.eq(num_text, "42") { ret ValueWrong }
     script.close(it)
     ret ok
 }
