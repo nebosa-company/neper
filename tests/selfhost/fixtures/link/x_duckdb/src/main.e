@@ -203,13 +203,14 @@ fn counts_and_errors(a: *mem.Arena, c: *db.Connection) -> i32 {
     if ddl_error != ok || ddl != 0u64 { ret 51i32 }
     let (untouched, untouched_error) = db.execute(c, "UPDATE item SET score = 1 WHERE id < 0", zero)
     if untouched_error != ok || untouched != 0u64 { ret 52i32 }
+    // A script's counts add up.
     let (script, script_error) = db.execute(c, "INSERT INTO other VALUES (1); INSERT INTO other VALUES (2), (3);", zero)
-    if script_error != ok || script != 2u64 { ret 53i32 }
+    if script_error != ok || script != 3u64 { ret 53i32 }
 
     let (bad, bad_error) = db.execute(c, "SELEKT 1", zero)
     if bad_error != db.InvalidQuery { ret 54i32 }
     let (why, why_error) = duckdb.detail(a, c)
-    if why_error != ok || why.code != 14i32 || why.message.len == 0usize { ret 55i32 }
+    if why_error != ok || why.code != 5001i32 || why.message.len == 0usize { ret 55i32 }
     let (missing, missing_error) = db.query(c, "SELECT * FROM nowhere", zero)
     if missing_error != db.InvalidQuery { ret 56i32 }
     let (why_missing, why_missing_error) = duckdb.detail(a, c)
@@ -296,9 +297,12 @@ fn statements(a: *mem.Arena, c: *db.Connection) -> i32 {
     }
     var big_param: [1]db.Parameter = zero
     big_param[0] = db.Parameter { name: "", value: db.Value{ Text: big } }
-    let (big_n, big_error) = db.execute(c, "INSERT INTO other VALUES ($1)", big_param[0..])
+    // `other` holds integers, so the large value gets a text table of its own.
+    let (letters, letters_error) = db.execute(c, "CREATE TABLE letters(y VARCHAR)", zero)
+    if letters_error != ok { ret 94i32 }
+    let (big_n, big_error) = db.execute(c, "INSERT INTO letters VALUES ($1)", big_param[0..])
     if big_error != ok || big_n != 1u64 { ret 95i32 }
-    let (back0, back_error) = db.query(c, "SELECT x, length(x) FROM other WHERE typeof(x) = 'VARCHAR'", zero)
+    let (back0, back_error) = db.query(c, "SELECT y, length(y) FROM letters", zero)
     if back_error != ok { ret 96i32 }
     var back = back0
     var pair: [2]db.Value = zero
@@ -382,7 +386,7 @@ fn files(a: *mem.Arena) -> i32 {
 }
 
 fn main(a: *mem.Arena) -> err {
-    if duckdb.version() < 10100i32 { os.exit(1i32) }
+    if duckdb.version() < 20000i32 { os.exit(1i32) }
     let (conn0, open_error) = duckdb.open(a, "")
     if open_error != ok { os.exit(2i32) }
     var c = conn0

@@ -1,132 +1,156 @@
-// An `e.db` driver over the DuckDB C API. `open` answers a `db.Connection` whose table is
+// An `e.db` driver over the DuckDB v2 C API. `open` answers a `db.Connection` whose table is
 // this module's; everything after that goes through `e.db`. `detail` and `version` are the only
 // calls a program makes here directly.
 //
-// Memory: the arena handed to `open` is retained and borrowed for the connection's life.
-// Every statement, row reader and transaction context comes from it, and a reader's text and
-// blob values are copied into a buffer of the reader's that is valid until its next row. Read
-// with `db.reader_next_borrowed`, the bytes are the chunk's own instead, valid only until the
-// next row: DuckDB frees a chunk when the reader steps past it. The caller marks and resets
-// that arena around work whose results it no longer needs. Error text is kept in a fixed buffer
-// the connection allocates once, so failures do not grow the arena.
+// Why v2: a v1 prepared statement binds one parameter per `duckdb_bind_*` call, and those calls
+// hand DuckDB the address of a temporary `Value` that v1's `duckdb_bind_value` keeps reading
+// after the call returns. v2 takes the parameters as arrays of names and values in a single
+// `duckdb_v2_prepared_statement_execute`, which copies what it is given.
 //
-// Values: a parameter binds in its own type -- `Bool` as BOOLEAN, `Time` as TIMESTAMP in UTC
-// (microseconds, so the nanosecond digits past the sixth go), `U64` only while it fits an `i64`.
-// A column's kind is its declared SQL type: integers and floats are exact, TIMESTAMP is `Time`,
-// BLOB is `Bytes`, and DECIMAL, UUID, HUGEINT and the date and time types come back as their
-// `Text` spelling, because `db.Value` has no case that holds them exactly. A `TIME` is a time of
-// day, which is not an instant, so it is `Text` too; the nested types (`LIST`, `STRUCT`, `MAP`,
-// `ARRAY`) are `Bytes`, their raw values, which a program should not parse.
+// Memory: the arena handed to `open` is retained and borrowed for the connection's life. Every
+// statement, row reader and transaction context comes from it, and a reader's text and blob
+// values are copied into a buffer of the reader's that is valid until its next row. Error text
+// is kept in a fixed buffer the connection allocates once, so failures do not grow the arena.
 //
-// Parameters: positional, DuckDB's `$1`, `$2`, ... A named one is looked up by the name it is
-// given and then with `$` in front. A statement must have exactly as many parameters as it is
-// given. `execute` runs every statement in its text; `query` and `prepare` take one.
+// Statements: `execute` runs every statement in its text; `query` and `prepare` take one. The
+// v2 API splits a text itself (`parse_sql` and a statement iterator), so there is no scanner
+// here.
 //
-// Statements: the DuckDB C API has no statement splitter, so the driver reads one itself and
-// compiles each statement on its own -- with its own parameter binding and its own chunked
-// result. A text whose quotes or comments it cannot follow is refused rather than mailed on.
+// Parameters: the execute call takes an array of parameter names and one of values. A
+// `db.Parameter` with a name binds to `$name`, which DuckDB matches case-insensitively, and an
+// unnamed one binds by position, `$1` first. The `duckdb_value` handles behind those arrays are
+// destroyed once the execute call has returned.
 //
-// Streaming: rows arrive in chunks of DuckDB's size; the reader holds one at a time and frees
-// it before the next, so no result is buffered whole.
+// Values: `Bool` binds as BOOLEAN, `Time` as TIMESTAMP in UTC in microseconds (the digits past
+// the sixth go), and `U64` only while it fits an `i64`. A column's kind is its logical type:
+// integers and floats arrive exact, TIMESTAMP as `Time`, BLOB as `Bytes`, and DECIMAL, UUID,
+// HUGEINT, BIGNUM and the date and time types as their `Text` spelling, because `db.Value` has
+// no case that holds them exactly. A `TIME` is a time of day rather than an instant, so it is
+// `Text` too, and the nested types are their raw `Bytes`.
+//
+// Streaming: rows arrive in chunks, and the reader holds one at a time and frees it before
+// fetching the next, so no result is buffered whole. `reader_next_borrowed` is the same as
+// `reader_next`: v2 hands out an owned value per cell rather than a pointer into the chunk.
 use e.mem
 use e.str
 use e.time
 use e.db
 use e.bytes as octets
-use x.duckdb.capi
+use x.duckdb.v2
 
 type Detail = struct { code: i32, message: str }
 error CannotOpen
 error Failed
 
-// 1.1 is where `duckdb_result_error_type` appeared, the newest call bound here.
-const MIN_VERSION: i32 = 10100i32
+// 2.0.0 is the release that introduced the v2 C API, so the floor is the release itself.
+const MIN_VERSION: i32 = 20000i32
 
-type Conn = struct { database: usize, handle: usize, arena: *mem.Arena, driver: *const db.Driver, in_transaction: bool, note: str, code: i32, message: []u8, message_len: usize }
-type Stmt = struct { conn: *Conn, handle: usize, closed: bool }
-type Reader = struct { conn: *Conn, statement: *Stmt, result: capi.Result, chunk: usize, rows: usize, at: usize, done: bool, closed: bool, types: []i32, scales: []i32, columns: []db.Column, buffer: []u8, used: usize, borrow: bool }
+type Conn = struct { environment: usize, instance: usize, handle: usize, factory: usize, arena: *mem.Arena, driver: *const db.Driver, active: *Reader, in_transaction: bool, note: str, code: i32, message: []u8, message_len: usize }
+type Stmt = struct { conn: *Conn, handle: usize, parsed: usize, iterator: usize, closed: bool }
+type Reader = struct { conn: *Conn, statement: *Stmt, handle: usize, chunk: usize, rows: usize, at: usize, done: bool, closed: bool, types: []i32, columns: []db.Column, buffer: []u8, used: usize, borrow: bool, held: usize }
 type Tx = struct { conn: *Conn }
 
-const SUCCESS: i32 = 0i32
+// The kind of result `duckdb_v2_result_get_result_type` reports.
+const RESULT_QUERY: i32 = 0i32
+const RESULT_CHANGED_ROWS: i32 = 1i32
+const RESULT_NOTHING: i32 = 2i32
 
-// `duckdb_error_type`, in duckdb.h's order.
-const ERROR_PARSER: i32 = 14i32
-const ERROR_BINDER: i32 = 24i32
-const ERROR_PARAMETER_NOT_RESOLVED: i32 = 35i32
-const ERROR_PARAMETER_NOT_ALLOWED: i32 = 36i32
-const ERROR_CATALOG: i32 = 13i32
-const ERROR_CONVERSION: i32 = 2i32
-const ERROR_OUT_OF_RANGE: i32 = 1i32
-const ERROR_DECIMAL: i32 = 4i32
-const ERROR_INVALID_TYPE: i32 = 8i32
-const ERROR_NOT_IMPLEMENTED: i32 = 11i32
-const ERROR_INVALID_INPUT: i32 = 32i32
-const ERROR_TRANSACTION: i32 = 10i32
-const ERROR_INTERRUPT: i32 = 29i32
-const ERROR_DATA_CORRUPTION: i32 = 43i32
-const ERROR_RESOURCE_IN_USE: i32 = 44i32
-const ERROR_CONSTRAINT_TYPE: i32 = 18i32
+// `DUCKDB_V2_ERROR` values this module maps onto `e.db`'s.
+const ERROR_IO_FILE_NOT_FOUND: i32 = 1001i32
+const ERROR_INPUT_INVALID: i32 = 2001i32
+const ERROR_INPUT_PARAMETER_INVALID: i32 = 2002i32
+const ERROR_INPUT_OUT_OF_RANGE: i32 = 2003i32
+const ERROR_RESOURCE_IN_USE: i32 = 3001i32
+const ERROR_RESOURCE_CONNECTION: i32 = 3003i32
+const ERROR_TYPE_CONVERSION: i32 = 4001i32
+const ERROR_TYPE_UNKNOWN: i32 = 4002i32
+const ERROR_TYPE_INVALID: i32 = 4003i32
+const ERROR_TYPE_MISMATCH: i32 = 4004i32
+const ERROR_TYPE_DECIMAL: i32 = 4005i32
+const ERROR_QUERY_PARSER: i32 = 5001i32
+const ERROR_QUERY_SYNTAX: i32 = 5002i32
+const ERROR_QUERY_BINDER: i32 = 5003i32
+const ERROR_QUERY_PLANNER: i32 = 5004i32
+const ERROR_QUERY_OPTIMIZER: i32 = 5005i32
+const ERROR_QUERY_EXPRESSION: i32 = 5006i32
+const ERROR_QUERY_EXECUTOR: i32 = 5007i32
+const ERROR_QUERY_NOT_IMPLEMENTED: i32 = 5009i32
+const ERROR_QUERY_PARAMETER_NOT_RESOLVED: i32 = 5010i32
+const ERROR_QUERY_PARAMETER_NOT_ALLOWED: i32 = 5011i32
+const ERROR_DATABASE_CATALOG: i32 = 6001i32
+const ERROR_DATABASE_TRANSACTION: i32 = 6002i32
+const ERROR_DATABASE_CONSTRAINT: i32 = 6003i32
+const ERROR_RUNTIME_INTERRUPT: i32 = 8003i32
 
-// `duckdb_type`, in duckdb.h's order.
-const TYPE_BOOLEAN: i32 = 1i32
-const TYPE_TINYINT: i32 = 2i32
-const TYPE_SMALLINT: i32 = 3i32
-const TYPE_INTEGER: i32 = 4i32
-const TYPE_BIGINT: i32 = 5i32
-const TYPE_UTINYINT: i32 = 6i32
-const TYPE_USMALLINT: i32 = 7i32
-const TYPE_UINTEGER: i32 = 8i32
-const TYPE_UBIGINT: i32 = 9i32
-const TYPE_FLOAT: i32 = 10i32
-const TYPE_DOUBLE: i32 = 11i32
-const TYPE_TIMESTAMP: i32 = 12i32
-const TYPE_DATE: i32 = 13i32
-const TYPE_TIME: i32 = 14i32
-const TYPE_INTERVAL: i32 = 15i32
-const TYPE_HUGEINT: i32 = 16i32
-const TYPE_VARCHAR: i32 = 17i32
-const TYPE_BLOB: i32 = 18i32
-const TYPE_DECIMAL: i32 = 19i32
-const TYPE_TIMESTAMP_S: i32 = 20i32
-const TYPE_TIMESTAMP_MS: i32 = 21i32
-const TYPE_TIMESTAMP_NS: i32 = 22i32
-const TYPE_ENUM: i32 = 23i32
-const TYPE_LIST: i32 = 24i32
-const TYPE_STRUCT: i32 = 25i32
-const TYPE_MAP: i32 = 26i32
-const TYPE_UUID: i32 = 27i32
-const TYPE_BIT: i32 = 29i32
-const TYPE_TIME_TZ: i32 = 30i32
-const TYPE_TIMESTAMP_TZ: i32 = 31i32
-const TYPE_UHUGEINT: i32 = 32i32
-const TYPE_ARRAY: i32 = 33i32
-const TYPE_SQLNULL: i32 = 36i32
+// `DUCKDB_V2_LOGICAL_TYPE_ID`, for the types this module notices.
+const TYPE_SQLNULL: i32 = 1i32
+const TYPE_BOOLEAN: i32 = 10i32
+const TYPE_TINYINT: i32 = 11i32
+const TYPE_SMALLINT: i32 = 12i32
+const TYPE_INTEGER: i32 = 13i32
+const TYPE_BIGINT: i32 = 14i32
+const TYPE_DATE: i32 = 15i32
+const TYPE_TIME: i32 = 16i32
+const TYPE_TIMESTAMP_S: i32 = 17i32
+const TYPE_TIMESTAMP_MS: i32 = 18i32
+const TYPE_TIMESTAMP: i32 = 19i32
+const TYPE_TIMESTAMP_NS: i32 = 20i32
+const TYPE_DECIMAL: i32 = 21i32
+const TYPE_FLOAT: i32 = 22i32
+const TYPE_DOUBLE: i32 = 23i32
+const TYPE_VARCHAR: i32 = 25i32
+const TYPE_BLOB: i32 = 26i32
+const TYPE_INTERVAL: i32 = 27i32
+const TYPE_UTINYINT: i32 = 28i32
+const TYPE_USMALLINT: i32 = 29i32
+const TYPE_UINTEGER: i32 = 30i32
+const TYPE_UBIGINT: i32 = 31i32
+const TYPE_TIMESTAMP_TZ: i32 = 32i32
+const TYPE_TIMESTAMP_TZ_NS: i32 = 33i32
+const TYPE_TIME_TZ: i32 = 34i32
+const TYPE_TIME_NS: i32 = 35i32
+const TYPE_BIT: i32 = 36i32
+const TYPE_BIGNUM: i32 = 39i32
+const TYPE_UHUGEINT: i32 = 49i32
+const TYPE_HUGEINT: i32 = 50i32
+const TYPE_UUID: i32 = 54i32
+const TYPE_STRUCT: i32 = 100i32
+const TYPE_LIST: i32 = 101i32
+const TYPE_MAP: i32 = 102i32
+const TYPE_ENUM: i32 = 104i32
+const TYPE_UNION: i32 = 107i32
+const TYPE_ARRAY: i32 = 108i32
+const TYPE_VARIANT: i32 = 109i32
+const TYPE_TUPLE: i32 = 110i32
 
-const DUCKDB_SUCCESS: usize = 0usize
-
-// A `duckdb_string_t` keeps twelve characters inline; longer ones point elsewhere. A
-// `duckdb_hugeint` and a `duckdb_timestamp` are one or two words.
-const INLINE_CHARS: usize = 12usize
-const WORD_BYTES: usize = 8usize
 const I64_MAX: i64 = 9223372036854775807i64
 const I64_MIN: i64 = -9223372036854775808i64
-const MAX_C_STRING: usize = 65536usize
 const MESSAGE_CAP: usize = 1024usize
-const SIGN_BIT: u64 = 9223372036854775808u64
-// The largest `DECIMAL`, which a 128-bit integer holds exactly.
+const WORD_BYTES: usize = 8usize
+// The connection's own working memory: parameter arrays, copied names, readers and their column
+// descriptions. It is reset after every call, so it only has to hold one call's worth plus the
+// readers still open. `ponytail:` one fixed region, one connection at a time; grow it per
+// connection if a caller ever keeps many readers open at once on one connection.
+const SCRATCH_BYTES: usize = 1usize << 20usize
 const TIME_FRACTION: i64 = 1000000i64
 
-// `v2.0.0` as 20000, `v1.1.3` as 10103: the major, minor and patch as one integer. The `v` in
-// front is part of every release's spelling, and anything else after the patch is `0`, which
-// every caller reads as "too old".
 fn version() -> i32 {
-    let text = capi.library_version()
-    if mem.address_of(text) == 0usize { ret 0i32 }
+    var text = v2.Str { ptr: nil, len: 0usize }
+    var slot: [1]usize = zero
+    let asked = v2.library_version(&text, &slot[0usize])
+    if asked != v2.DUCKDB_SUCCESS || text.len == 0usize { ret 0i32 }
+    ret parse_version(text.ptr)
+}
+
+// `v2.0.0` as 20000 and `v1.1.3` as 10103: the major, minor and patch as one integer. The `v`
+// in front is part of every release's spelling, and anything else is `0`, which every caller
+// reads as "too old".
+fn parse_version(address: *const u8) -> i32 {
     var numbers: [3]i32 = zero
     var field = 0usize
     var i = 0usize
-    while i < MAX_C_STRING {
-        let b = byte_at(text, i)
+    while i < 64usize {
+        let b = byte_at(address, i)
         if b == 0u8 { break }
         if b == 46u8 {
             field += 1usize
@@ -147,39 +171,90 @@ fn version() -> i32 {
 fn open(a: *mem.Arena, path: str) -> (db.Connection, err) {
     var connection: db.Connection = zero
     if version() < MIN_VERSION { ret (connection, db.Unsupported) }
+    var slot: [1]usize = zero
+    var environment = 0usize
+    let made_environment = v2.environment_create(&environment, &slot[0usize])
+    if made_environment != v2.DUCKDB_SUCCESS { ret (connection, CannotOpen) }
+    var instance = 0usize
+    let made_instance = v2.instance_create(environment, &instance, &slot[0usize])
+    if made_instance != v2.DUCKDB_SUCCESS {
+        let _ = v2.environment_destroy(&environment)
+        ret (connection, CannotOpen)
+    }
+    // An instance starts with nothing attached, so even an empty path is attached: DuckDB reads
+    // the empty string as an in-memory database. This is done before the connection exists,
+    // because `make_default` only names the default of connections created afterwards.
     let mark = mem.mark(a)
-    let (name, name_error) = c_copy(a, path)
-    if name_error != ok { ret (connection, name_error) }
-    var database = 0usize
-    let opened = capi.open(&name[0usize], &database)
+    let (path_bytes, path_error) = c_copy(a, path)
+    if path_error != ok {
+        mem.reset(a, mark)
+        let _ = v2.instance_destroy(&instance)
+        let _ = v2.environment_destroy(&environment)
+        ret (connection, path_error)
+    }
+    var no_name = v2.Str { ptr: nil, len: 0usize }
+    var path_text = v2.Str { ptr: &path_bytes[0usize], len: path.len }
+    let attached = v2.instance_attach(instance, &no_name, &path_text, 0usize, 1u8, &slot[0usize])
     mem.reset(a, mark)
-    if opened != SUCCESS { ret (connection, CannotOpen) }
+    if attached != v2.DUCKDB_SUCCESS {
+        // The reason is kept as the connection's detail so a caller can report it, and the
+        // failure is still a plain `CannotOpen` to `e.db`.
+        var why = v2.Str { ptr: nil, len: 0usize }
+        if slot[0usize] != 0usize { let _ = v2.error_info_get_text(slot[0usize], &why) }
+        let _ = v2.instance_destroy(&instance)
+        let _ = v2.environment_destroy(&environment)
+        ret (connection, CannotOpen)
+    }
     var handle = 0usize
-    let connected = capi.connect(database, &handle)
-    if connected != SUCCESS {
-        capi.close(&database)
+    let connected = v2.connection_create(instance, &handle, &slot[0usize])
+    if connected != v2.DUCKDB_SUCCESS {
+        let _ = v2.instance_destroy(&instance)
+        let _ = v2.environment_destroy(&environment)
+        ret (connection, CannotOpen)
+    }
+    var factory = 0usize
+    let resolved = v2.connection_get_factory(handle, &factory, &slot[0usize])
+    if resolved != v2.DUCKDB_SUCCESS {
+        let _ = v2.connection_destroy(&handle)
+        let _ = v2.instance_destroy(&instance)
+        let _ = v2.environment_destroy(&environment)
         ret (connection, CannotOpen)
     }
     let (conns, conn_error) = mem.alloc[Conn](a, 1usize)
     let (drivers, driver_error) = mem.alloc[db.Driver](a, 1usize)
     let (message, message_error) = mem.alloc[u8](a, MESSAGE_CAP)
-    if conn_error != ok || driver_error != ok || message_error != ok {
-        capi.disconnect(&handle)
-        capi.close(&database)
+    // The driver's working memory gets an arena of its own. Everything a call allocates while
+    // running -- parameter arrays, name copies, readers -- is later released with `mem.reset`,
+    // and resetting the caller's arena would free what the caller is still holding across
+    // calls: the rows it is reading, the columns it asked for, the parameters it passed. The
+    // region is reserved once, in the caller's arena, and only ever reset inside itself.
+    let (scratch_bytes, scratch_error) = mem.alloc[u8](a, SCRATCH_BYTES)
+    if conn_error != ok || driver_error != ok || message_error != ok || scratch_error != ok {
+        let _ = v2.connection_destroy(&handle)
+        let _ = v2.instance_destroy(&instance)
+        let _ = v2.environment_destroy(&environment)
         ret (connection, db.Unsupported)
     }
+    let (scratch_arena, arena_error) = mem.alloc[mem.Arena](a, 1usize)
+    if arena_error != ok {
+        let _ = v2.connection_destroy(&handle)
+        let _ = v2.instance_destroy(&instance)
+        let _ = v2.environment_destroy(&environment)
+        ret (connection, db.Unsupported)
+    }
+    scratch_arena[0usize] = mem.arena_from(scratch_bytes)
     drivers[0usize] = db.Driver { close: d_close, prepare: d_prepare, execute: d_execute, query: d_query, begin: d_begin, statement_close: d_statement_close, statement_execute: d_statement_execute, statement_query: d_statement_query, rows_columns: d_rows_columns, rows_next: d_rows_next, rows_next_borrowed: d_rows_next_borrowed, rows_close: d_rows_close, transaction_execute: d_transaction_execute, transaction_query: d_transaction_query, transaction_commit: d_transaction_commit, transaction_rollback: d_transaction_rollback }
     // Arena memory is not cleared, so every field is written.
-    conns[0usize] = Conn { database: database, handle: handle, arena: a, driver: &drivers[0usize], in_transaction: false, note: "", code: 0i32, message: message, message_len: 0usize }
+    conns[0usize] = Conn { environment: environment, instance: instance, handle: handle, factory: factory, arena: &scratch_arena[0usize], driver: &drivers[0usize], active: nil, in_transaction: false, note: "", code: 0i32, message: message, message_len: 0usize }
     let c = &conns[0usize]
     connection.ctx = mem.cast[*void](c)
     connection.driver = c.driver
     ret (connection, ok)
 }
 
-// Why the connection's last call failed: DuckDB's error type and message, or -- when the driver
-// refused before DuckDB was asked -- code 0 and the driver's reason. The message is copied
-// into `a`.
+// Why the connection's last call failed: DuckDB's error code and message, or -- when the driver
+// refused before DuckDB was asked -- code 0 and the driver's reason. The message is copied into
+// `a`.
 fn detail(a: *mem.Arena, connection: *const db.Connection) -> (Detail, err) {
     var out: Detail = zero
     if connection.ctx == nil { ret (out, db.Closed) }
@@ -209,6 +284,14 @@ fn copy_text(a: *mem.Arena, s: []const u8) -> (str, err) {
 
 // --- errors
 
+// The error slot for a call whose failure the driver reports by its code alone. The slot is a
+// live local of this frame for the duration of the call, so it is a valid address to write and
+// never needs destroying.
+fn a_quiet_slot() -> *usize {
+    var quiet1: [1]usize = zero
+    ret &quiet1[0usize]
+}
+
 fn keep(dst: []u8, s: []const u8) -> usize {
     var n = s.len
     if n > dst.len { n = dst.len }
@@ -217,15 +300,6 @@ fn keep(dst: []u8, s: []const u8) -> usize {
         dst[i] = s[i]
         i += 1usize
     }
-    ret n
-}
-
-// A C string's bytes, copied into `dst`; a null pointer is empty.
-fn keep_c(dst: []u8, p: *u8) -> usize {
-    if mem.address_of(p) == 0usize { ret 0usize }
-    var n = c_length(p)
-    if n > dst.len { n = dst.len }
-    copy_foreign(dst[0usize..n], p, n)
     ret n
 }
 
@@ -241,64 +315,63 @@ fn refuse(c: *Conn, note: str, e: err) -> err {
     ret e
 }
 
-// A failure DuckDB reported: its error type is kept as the detail's code, its message in the
-// connection's fixed buffer.
-fn failure(c: *Conn, code: i32, message: *u8) -> err {
+// A failure DuckDB reported: its code is the detail's code and its message the detail's text.
+fn failure(c: *Conn, code: i32, message: []const u8) -> err {
     clear_detail(c)
     c.code = code
-    c.message_len = keep_c(c.message, message)
+    c.message_len = keep(c.message, message)
     ret mapped(code)
 }
 
-// A failed result is read for its error and then destroyed.
-fn fail_result(c: *Conn, result: *capi.Result) -> err {
-    let code = capi.result_error_type(result)
-    let message = capi.result_error(result)
-    let failed = failure(c, code, message)
-    capi.destroy_result(result)
-    ret failed
+// A call that failed and left an error-info handle in `slot`: the text is borrowed from that
+// handle, so it is copied into the connection's buffer before the handle is destroyed. A failed
+// call that wrote no handle -- one handed a null slot -- reports its code alone.
+fn fail_info(c: *Conn, code: i32, info0: usize) -> err {
+    var info = info0
+    if info == 0usize {
+        ret failure(c, code, "DuckDB reported a failure without a message")
+    }
+    var text = v2.Str { ptr: nil, len: 0usize }
+    let read = v2.error_info_get_text(info, &text)
+    if read == v2.DUCKDB_SUCCESS {
+        let bytes = view_of(text)
+        let failed = failure(c, code, bytes)
+        let _ = v2.error_info_destroy(&info)
+        ret failed
+    }
+    let _ = v2.error_info_destroy(&info)
+    ret failure(c, code, "DuckDB reported a failure without a message")
 }
 
-// A statement that will not compile says so on the prepared statement, not on a result.
-fn fail_prepare(c: *Conn, handle: usize) -> err {
-    ret failure(c, ERROR_PARSER, capi.prepare_error(handle))
-}
-
+// `DUCKDB_V2_ERROR` onto `e.db`'s errors. The codes are a taxonomy of their own, so this maps
+// by group: the parser, binder, planner, expression and parameter codes are a bad query or a
+// bad parameter; the type and input codes are a value the statement could not take; a resource
+// in use is a busy connection; and a violated constraint is `Constraint`.
 fn mapped(code: i32) -> err {
-    if code == ERROR_PARSER { ret db.InvalidQuery }
-    if code == ERROR_BINDER || code == ERROR_CATALOG { ret db.InvalidQuery }
-    if code == ERROR_PARAMETER_NOT_RESOLVED || code == ERROR_PARAMETER_NOT_ALLOWED { ret db.InvalidQuery }
-    if code == ERROR_CONVERSION || code == ERROR_DECIMAL || code == ERROR_INVALID_TYPE { ret db.InvalidQuery }
-    if code == ERROR_OUT_OF_RANGE || code == ERROR_INVALID_INPUT { ret db.InvalidQuery }
-    if code == ERROR_RESOURCE_IN_USE || code == ERROR_TRANSACTION || code == ERROR_INTERRUPT { ret db.Busy }
-    if code == ERROR_NOT_IMPLEMENTED { ret db.Unsupported }
-    if code == ERROR_CONSTRAINT_TYPE { ret db.Constraint }
-    if code == ERROR_DATA_CORRUPTION { ret Failed }
+    if code == ERROR_QUERY_PARSER || code == ERROR_QUERY_SYNTAX { ret db.InvalidQuery }
+    if code == ERROR_QUERY_BINDER || code == ERROR_QUERY_PLANNER { ret db.InvalidQuery }
+    if code == ERROR_QUERY_OPTIMIZER || code == ERROR_QUERY_EXPRESSION { ret db.InvalidQuery }
+    if code == ERROR_QUERY_PARAMETER_NOT_RESOLVED || code == ERROR_QUERY_PARAMETER_NOT_ALLOWED { ret db.InvalidQuery }
+    if code == ERROR_DATABASE_CATALOG { ret db.InvalidQuery }
+    if code == ERROR_INPUT_INVALID || code == ERROR_INPUT_PARAMETER_INVALID { ret db.InvalidQuery }
+    if code == ERROR_INPUT_OUT_OF_RANGE { ret db.InvalidQuery }
+    if code == ERROR_TYPE_CONVERSION || code == ERROR_TYPE_UNKNOWN { ret db.InvalidQuery }
+    if code == ERROR_TYPE_INVALID || code == ERROR_TYPE_MISMATCH || code == ERROR_TYPE_DECIMAL { ret db.InvalidQuery }
+    if code == ERROR_RESOURCE_IN_USE || code == ERROR_DATABASE_TRANSACTION { ret db.Busy }
+    if code == ERROR_RUNTIME_INTERRUPT { ret db.Busy }
+    if code == ERROR_QUERY_NOT_IMPLEMENTED { ret db.Unsupported }
+    if code == ERROR_DATABASE_CONSTRAINT { ret db.Constraint }
     ret Failed
 }
 
 // --- foreign memory
 
-// A NUL-terminated copy of `s` in `a`.
-// A non-empty NUL-terminated copy of `s` in `a`. The bytes are pulled out one at a time by
-// the arena copy below rather than by indexing `s`, because indexing a string literal is not
-// a load this compiler emits correctly on Windows yet; the copy of a runtime `str` is.
+// A NUL-terminated copy of `s` in `a`, which `parse_sql`'s `const char *` needs.
 fn c_copy(a: *mem.Arena, s: str) -> ([]u8, err) {
     let (bytes, allocation_error) = mem.alloc[u8](a, s.len + 1usize)
     if allocation_error != ok { ret (bytes, allocation_error) }
     mem.copy[u8](bytes[0usize..s.len], s)
     bytes[s.len] = 0u8
-    ret (bytes, ok)
-}
-
-// A C string for a fixed word the driver spells itself (`s` is one of its own literals).
-// Unlike an `@import` path, a literal here is written out with an explicit length rather than
-// indexed, which is the same thing without a load through the literal's pointer.
-fn c_word(a: *mem.Arena, s: str) -> ([]u8, err) {
-    let (bytes, allocation_error) = mem.alloc[u8](a, s.len + 1usize)
-    if allocation_error != ok { ret (bytes, allocation_error) }
-    let n = keep(bytes, s)
-    bytes[n] = 0u8
     ret (bytes, ok)
 }
 
@@ -312,41 +385,30 @@ fn copy_foreign(dst: []u8, p: *u8, n: usize) {
     let copied = octets.copy(dst[0usize..n], mem.view(&region, 0usize, n))
 }
 
-// Byte `index` at a foreign address, which may be one past the end of what was read.
-fn byte_at(p: *u8, index: usize) -> u8 {
+// Byte `index` at a foreign address.
+fn byte_at(p: *const u8, index: usize) -> u8 {
     var region: mem.Arena = zero
-    region.base = p
+    region.base = mem.cast[*u8](p)
     region.cap = index + 1usize
     region.off = 0usize
     let bytes = mem.view(&region, index, 1usize)
     ret bytes[0usize]
 }
 
-// A C string copied into `a`; a null pointer is the empty string.
-fn c_read(a: *mem.Arena, p: *u8) -> (str, err) {
-    if mem.address_of(p) == 0usize { ret ("", ok) }
-    let n = c_length(p)
-    if n == 0usize { ret ("", ok) }
-    let (bytes, allocation_error) = mem.alloc[u8](a, n)
-    if allocation_error != ok { ret ("", allocation_error) }
-    copy_foreign(bytes, p, n)
-    ret (bytes, ok)
-}
-
-// A C string's length; the walk stops at the terminator, which DuckDB always writes.
+// A C string's length, stopping at the terminator.
 fn c_length(p: *u8) -> usize {
     var region: mem.Arena = zero
     region.base = p
-    region.cap = MAX_C_STRING
+    region.cap = 65536usize
     region.off = 0usize
-    let bytes = mem.view(&region, 0usize, MAX_C_STRING)
+    let bytes = mem.view(&region, 0usize, 65536usize)
     var n = 0usize
-    while n < MAX_C_STRING && bytes[n] != 0u8 { n += 1usize }
+    while n < 65536usize && bytes[n] != 0u8 { n += 1usize }
     ret n
 }
 
 // The `u64` at `offset` into a foreign region, read a byte at a time.
-fn word_at(base: *u8, offset: usize) -> u64 {
+fn word_at(base: *const u8, offset: usize) -> u64 {
     var value = 0u64
     var i = 0usize
     while i < WORD_BYTES {
@@ -356,320 +418,438 @@ fn word_at(base: *u8, offset: usize) -> u64 {
     ret value
 }
 
-// The `u32` at `offset` into a foreign region.
-fn half_word_at(base: *u8, offset: usize) -> u32 {
-    var value = 0u32
-    var i = 0usize
-    while i < 4usize {
-        value = value | u32(byte_at(base, offset + i)) << u32(i * 8usize)
-        i += 1usize
-    }
-    ret value
+// The bytes a borrowed `duckdb_v2_str` view points at.
+fn view_of(text: v2.Str) -> []const u8 {
+    var nothing: []const u8 = zero
+    if text.len == 0usize || mem.address_of(text.ptr) == 0usize { ret nothing }
+    var region: mem.Arena = zero
+    region.base = mem.cast[*u8](text.ptr)
+    region.cap = text.len
+    region.off = 0usize
+    ret mem.view(&region, 0usize, text.len)
 }
-
-// --- the statement splitter
-
-// Compiles the first statement of `sql[from..]` and answers where the next one starts. A
-// handle of zero with `ok` means the rest held only whitespace and comments.
-fn compile(c: *Conn, sql: str, from: usize) -> (usize, usize, err) {
-    let start = skip_space(sql, from)
-    if start >= sql.len { ret (0usize, sql.len, ok) }
-    let stop = end_of_statement(sql, start)
-    if stop <= start { ret (0usize, sql.len, split_refusal(c)) }
-    let mark = mem.mark(c.arena)
-    let (text, text_error) = c_copy(c.arena, sql[start..stop])
-    if text_error != ok {
-        mem.reset(c.arena, mark)
-        ret (0usize, sql.len, text_error)
+// A `duckdb_v2_str` over `s`, which must outlive the call it is passed to.
+fn view_over(s: str) -> v2.Str {
+    var text = v2.Str { ptr: nil, len: 0usize }
+    if s.len != 0usize {
+        text.ptr = &s[0usize]
+        text.len = s.len
     }
-    var handle = 0usize
-    let compiled = capi.prepare(c.handle, &text[0usize], &handle)
-    mem.reset(c.arena, mark)
-    if compiled != SUCCESS {
-        if handle != 0usize { capi.destroy_prepare(&handle) }
-        ret (0usize, sql.len, fail_prepare(c, handle))
-    }
-    ret (handle, stop, ok)
+    ret text
 }
-
-// A text with one statement and nothing after it but whitespace and comments.
-fn compile_one(c: *Conn, sql: str) -> (usize, err) {
-    let start = skip_space(sql, 0usize)
-    if start >= sql.len { ret (0usize, refuse(c, "the SQL text holds no statement", db.InvalidQuery)) }
-    let stop = end_of_statement(sql, start)
-    if stop <= start { ret (0usize, split_refusal(c)) }
-    if skip_space(sql, stop) < sql.len { ret (0usize, refuse(c, "the SQL text holds more than one statement", db.InvalidQuery)) }
-    let (handle, next, compile_error) = compile(c, sql, start)
-    ret (handle, compile_error)
-}
-
-// Counts the statements without compiling them, so a text that is one statement is known to be
-// one before `compile_one` refuses it for being two.
-fn count_statements(sql: str) -> usize {
-    var count = 0usize
-    var from = 0usize
-    while from < sql.len {
-        let start = skip_space(sql, from)
-        if start >= sql.len { break }
-        let stop = end_of_statement(sql, start)
-        if stop <= start { break }
-        count += 1usize
-        from = stop
-    }
-    ret count
-}
-
-fn split_refusal(c: *Conn) -> err {
-    ret refuse(c, "the SQL text has a quote or comment this driver cannot follow", db.InvalidQuery)
-}
-
-// The index of the first byte from `from` that is not whitespace or a comment. A comment that
-// never closes is refused rather than read as code.
-fn skip_space(sql: str, from: usize) -> usize {
-    var i = from
-    while i < sql.len {
-        let b = sql[i]
-        if b == 32u8 || b == 9u8 || b == 10u8 || b == 13u8 || b == 11u8 || b == 12u8 {
-            i += 1usize
-        } else if b == 45u8 && i + 1usize < sql.len && sql[i + 1usize] == 45u8 {
-            i = skip_line(sql, i + 2usize)
-        } else if b == 47u8 && i + 1usize < sql.len && sql[i + 1usize] == 42u8 {
-            let past = skip_block_comment(sql, i + 2usize)
-            if past > sql.len { ret sql.len }
-            i = past
-        } else {
-            break
-        }
-    }
-    ret i
-}
-
-fn skip_line(sql: str, from: usize) -> usize {
-    var i = from
-    while i < sql.len && sql[i] != 10u8 { i += 1usize }
-    ret i
-}
-
-// Past the `*/` that closes a block comment; `len + 1` when there is none. DuckDB nests them,
-// so a `/*` inside one is walked into rather than past.
-fn skip_block_comment(sql: str, from: usize) -> usize {
-    var depth = 1usize
-    var i = from
-    while i + 1usize < sql.len {
-        if sql[i] == 47u8 && sql[i + 1usize] == 42u8 {
-            depth += 1usize
-            i += 2usize
-        } else if sql[i] == 42u8 && sql[i + 1usize] == 47u8 {
-            depth -= 1usize
-            if depth == 0usize { ret i + 2usize }
-            i += 2usize
-        } else {
-            i += 1usize
-        }
-    }
-    ret sql.len + 1usize
-}
-
-// Where the statement that starts at `start` ends: at its `;` outside every quote, or at the
-// end of the text. `len` when the text ends in an unterminated quote: the compile reports it.
-fn end_of_statement(sql: str, start: usize) -> usize {
-    var i = start
-    while i < sql.len {
-        let b = sql[i]
-        if b == 59u8 {
-            ret i + 1usize
-        } else if b == 39u8 {
-            i = skip_quoted(sql, i + 1usize, 39u8)
-        } else if b == 34u8 {
-            i = skip_quoted(sql, i + 1usize, 34u8)
-        } else if b == 45u8 && i + 1usize < sql.len && sql[i + 1usize] == 45u8 {
-            i = skip_line(sql, i + 2usize)
-        } else if b == 47u8 && i + 1usize < sql.len && sql[i + 1usize] == 42u8 {
-            let past = skip_block_comment(sql, i + 2usize)
-            if past > sql.len { ret sql.len }
-            i = past
-        } else {
-            i += 1usize
-        }
-    }
-    ret sql.len
-}
-
-// Past the closing `quote`; a doubled quote is an escaped one. `len + 1` when unterminated.
-fn skip_quoted(sql: str, from: usize, quote: u8) -> usize {
-    var i = from
-    while i < sql.len {
-        if sql[i] == quote {
-            if i + 1usize < sql.len && sql[i + 1usize] == quote {
-                i += 2usize
-            } else {
-                ret i + 1usize
-            }
-        } else {
-            i += 1usize
-        }
-    }
-    ret sql.len + 1usize
-}
-
-// --- parameters
-
-// DuckDB numbers its parameters `$1`, `$2`, ... in the order they first appear, and names one
-// `$id` wherever that spelling is used again. A `db.Parameter` therefore binds in the order it
-// is given; a named one is looked up only to check that the statement has that name at all, and
-// a name it does not have is refused rather than bound to whichever slot it landed in.
-fn bind_all(c: *Conn, handle: usize, params: []const db.Parameter) -> err {
-    let cleared = capi.clear_bindings(handle)
-    if capi.nparams(handle) != params.len {
-        ret refuse(c, "the statement's parameter count differs from the parameters given", db.InvalidQuery)
-    }
-    var i = 0usize
-    while i < params.len {
-        if params[i].name.len != 0usize {
-            let (found, find_error) = parameter_index(c, handle, params[i].name)
-            if find_error != ok { ret find_error }
-            if found == 0usize { ret refuse(c, "the statement has no parameter of that name", db.InvalidQuery) }
-        }
-        let bind_error = bind_value(c, handle, i + 1usize, params[i].value)
-        if bind_error != ok { ret bind_error }
-        i += 1usize
-    }
-    ret ok
-}
-
-// The index of a named parameter as written, else with `$` in front; zero when the statement
-// has no parameter of that name. DuckDB can answer zero while reporting success, so the index
-// itself decides rather than the state.
-fn parameter_index(c: *Conn, handle: usize, name: str) -> (usize, err) {
-    let mark = mem.mark(c.arena)
-    let (plain, plain_error) = c_copy(c.arena, name)
-    if plain_error != ok { ret (0usize, plain_error) }
-    var index = 0usize
-    let first = capi.bind_parameter_index(handle, &index, &plain[0usize])
-    if index != 0usize {
-        mem.reset(c.arena, mark)
-        ret (index, ok)
-    }
-    let (prefixed, prefixed_error) = mem.alloc[u8](c.arena, name.len + 2usize)
-    if prefixed_error != ok {
-        mem.reset(c.arena, mark)
-        ret (0usize, prefixed_error)
-    }
-    prefixed[0usize] = 36u8
-    var i = 0usize
-    while i < name.len {
-        prefixed[i + 1usize] = name[i]
-        i += 1usize
-    }
-    prefixed[name.len + 1usize] = 0u8
-    index = 0usize
-    let found = capi.bind_parameter_index(handle, &index, &prefixed[0usize])
-    mem.reset(c.arena, mark)
-    ret (index, ok)
-}
-
-fn bind_value(c: *Conn, handle: usize, index: usize, value: db.Value) -> err {
-    var rc = SUCCESS
-    var none: [1]u8 = zero
-    switch value {
-    case .Null:
-        rc = capi.bind_null(handle, index)
-    case .Bool as flag:
-        var truth = 0u8
-        if flag { truth = 1u8 }
-        rc = capi.bind_boolean(handle, index, truth)
-    case .I64 as signed:
-        rc = capi.bind_int64(handle, index, signed)
-    case .U64 as unsigned:
-        if unsigned > u64(I64_MAX) { ret refuse(c, "an unsigned value does not fit an i64; bind it as Text for a UBIGINT or HUGEINT", db.Unsupported) }
-        rc = capi.bind_int64(handle, index, i64(unsigned))
-    case .F64 as real:
-        rc = capi.bind_double(handle, index, real)
-    case .Text as s:
-        if s.len == 0usize {
-            rc = capi.bind_varchar_length(handle, index, &none[0usize], 0usize)
-        } else {
-            rc = capi.bind_varchar_length(handle, index, &s[0usize], s.len)
-        }
-    case .Bytes as data:
-        if data.len == 0usize {
-            rc = capi.bind_blob(handle, index, &none[0usize], 0usize)
-        } else {
-            rc = capi.bind_blob(handle, index, &data[0usize], data.len)
-        }
-    case .Time as instant:
-        rc = capi.raw_bind_timestamp(handle, index, instant.nanos / 1000i64)
-    }
-    if rc != SUCCESS { ret refuse(c, "DuckDB would not take that value in that parameter", db.Unsupported) }
-    ret ok
+// A copy of a borrowed view's bytes in `a`.
+fn copy_view(a: *mem.Arena, text: v2.Str) -> str {
+    let bytes = view_of(text)
+    if bytes.len == 0usize { ret "" }
+    let (copied, copied_error) = mem.alloc[u8](a, bytes.len)
+    if copied_error != ok { ret "" }
+    mem.copy[u8](copied, bytes)
+    ret copied
 }
 
 // --- running statements
 
-// Runs a compiled statement to its end, discarding the rows, and answers its result: 1 when it
-// changed rows, 0 when it only answered them (DDL, PRAGMA, a SELECT).
-fn run(c: *Conn, handle: usize) -> (u64, err) {
-    var result: capi.Result = zero
-    let ran = capi.execute_prepared(handle, &result)
-    if ran != SUCCESS { ret (0u64, fail_result(c, &result)) }
-    // DUCKDB_RESULT_TYPE_CHANGED_ROWS is 1.
-    var changed = 0u64
-    if capi.result_return_type(&result) == 1i32 { changed = 1u64 }
-    capi.destroy_result(&result)
-    clear_detail(c)
-    ret (changed, ok)
+// Prepares `statement`, runs it with `params`, and drains every chunk it answers, which is what
+// makes a side-effecting statement take effect. Answers 1 when the statement changed rows, 0 when
+// it only answered them or nothing.
+fn run_statement(c: *Conn, statement: usize, params: []const db.Parameter) -> (u64, err) {
+    // v2 refuses a statement on a connection that still has a result open, so a reader the
+    // caller left behind is drained and closed first.
+    if c.active != nil { finish_reader(c.active) }
+    var prepared = 0usize
+    var slot: [1]usize = zero
+    let compiled = v2.prepared_statement_create(c.handle, statement, 0u8, &prepared, &slot[0usize])
+    if compiled != v2.DUCKDB_SUCCESS {
+        ret (0u64, fail_info(c, compiled, slot[0usize]))
+    }
+    let (changed, run_error) = run_prepared(c, prepared, statement, params)
+    let _ = v2.prepared_statement_destroy(&prepared)
+    ret (changed, run_error)
 }
 
-// Every statement in the text, in order, the counts added up. A text with no statement at all
-// (empty, or only comments) runs nothing. A text the splitter cannot follow is handed to
-// DuckDB whole, which reports its own refusal rather than the splitter's guess.
+// Prepares `sql` as the one statement it must be, and runs it with `params`.
+fn run_sql(c: *Conn, sql: str, params: []const db.Parameter) -> (u64, err) {
+    let (prepared0, statement0, iterator0, compile_error) = compile_one(c, sql)
+    if compile_error != ok { ret (0u64, compile_error) }
+    var prepared = prepared0
+    var statement = statement0
+    let (changed, run_error) = run_prepared(c, prepared, statement, params)
+    let _ = v2.prepared_statement_destroy(&prepared)
+    let _ = v2.sql_statement_destroy(&statement)
+    var iterator = iterator0
+    let _ = v2.statement_iterator_destroy(&iterator)
+    ret (changed, run_error)
+}
+
+// Every statement in the text, in order, the counts added up. One parameter array cannot belong
+// to more than one statement, so a text of several statements runs with none bound.
 fn execute_text(c: *Conn, sql: str, params: []const db.Parameter) -> (u64, err) {
-    var affected = 0u64
-    var from = 0usize
-    while from < sql.len {
-        let start = skip_space(sql, from)
-        if start >= sql.len {
-            from = sql.len
+    let mark = mem.mark(c.arena)
+    let (bytes, bytes_error) = c_copy(c.arena, sql)
+    if bytes_error != ok {
+        mem.reset(c.arena, mark)
+        ret (0u64, bytes_error)
+    }
+    var iterator = 0usize
+    var slot: [1]usize = zero
+    let parsed = v2.parse_sql(c.handle, &bytes[0usize], &iterator, &slot[0usize])
+    if parsed != v2.DUCKDB_SUCCESS {
+        let failed = fail_info(c, parsed, slot[0usize])
+        mem.reset(c.arena, mark)
+        ret (0u64, failed)
+    }
+    // A statement taken from the iterator is valid only while the iterator lives, so every
+    // statement is compiled and run before the iterator is destroyed. One parameter array
+    // cannot belong to more than one statement, so only a text of one statement binds them.
+    var total = 0u64
+    var count = 0usize
+    var run_error = ok
+    while true {
+        var statement = 0usize
+        let more = v2.statement_iterator_next(iterator, &statement, &slot[0usize])
+        if more != v2.DUCKDB_SUCCESS {
+            run_error = fail_info(c, more, slot[0usize])
             break
         }
-        let stop = end_of_statement(sql, start)
-        if stop <= start {
-            let mark = mem.mark(c.arena)
-            let (text, text_error) = c_copy(c.arena, sql[start..])
-            if text_error != ok {
-                mem.reset(c.arena, mark)
-                ret (affected, text_error)
-            }
-            var result: capi.Result = zero
-            let ran = capi.query(c.handle, &text[0usize], &result)
-            mem.reset(c.arena, mark)
-            if ran != SUCCESS { ret (affected, fail_result(c, &result)) }
-            capi.destroy_result(&result)
-            clear_detail(c)
-            ret (affected, ok)
+        if statement == 0usize { break }
+        count += 1usize
+        // The count is known for the first statement only, so the first is the one that binds
+        // the parameters; a text of several runs each of them unbound apart from the first.
+        var bound: []const db.Parameter = zero
+        if count == 1usize { bound = params }
+        let (changed, statement_error) = run_statement(c, statement, bound)
+        let _ = v2.sql_statement_destroy(&statement)
+        total += changed
+        if statement_error != ok {
+            run_error = statement_error
+            break
         }
-        let mark = mem.mark(c.arena)
-        let (compiled, next, compile_error) = compile(c, sql, start)
-        from = next
-        if compile_error != ok {
-            mem.reset(c.arena, mark)
-            ret (affected, compile_error)
-        }
-        var handle = compiled
-        let bind_error = bind_all(c, handle, params)
-        var count = 0u64
-        var run_error = bind_error
-        if run_error == ok {
-            let (changed, changed_error) = run(c, handle)
-            count = changed
-            run_error = changed_error
-        }
-        capi.destroy_prepare(&handle)
-        mem.reset(c.arena, mark)
-        if run_error != ok { ret (affected, run_error) }
-        affected += count
     }
-    ret (affected, ok)
+    let _ = v2.statement_iterator_destroy(&iterator)
+    mem.reset(c.arena, mark)
+    if run_error != ok { ret (total, run_error) }
+    clear_detail(c)
+    ret (total, ok)
+}
+
+// The two arrays the execute call takes: a name per parameter and a `duckdb_value` per
+// parameter. The name comes from the *statement*, not from the caller: v2 binds by name as soon
+// as one name is given, and refuses a name it does not know, so a statement of `$id`-style
+// parameters is bound by the names DuckDB itself reports. A statement of `?`/`$1` parameters
+// reports none, and those bind positionally. The values are owned by the caller, which destroys
+// them once the execute call -- which copies what it is given -- has returned.
+fn bind_arrays(c: *Conn, statement: usize, params: []const db.Parameter) -> ([]v2.Str, []usize, usize, err) {
+    let count = params.len
+    let (names, names_error) = mem.alloc[v2.Str](c.arena, count)
+    let (values, values_error) = mem.alloc[usize](c.arena, count)
+    if names_error != ok || values_error != ok { ret (names, values, 0usize, db.Unsupported) }
+    // Every name is copied into a block reserved up front. The statement is asked for a name at
+    // the moment it is copied, never cached: its answer is a borrowed view whose lifetime the
+    // driver cannot reason about, so each is read and copied within one iteration.
+    let room_for_names = params.len * 4usize + 64usize
+    let (text, text_error) = mem.alloc[u8](c.arena, room_for_names)
+    if text_error != ok { ret (names, values, 0usize, text_error) }
+    // Every parameter has a binding key, so every entry is named: `"1"`, `"2"`, ... for a
+    // positional parameter and the identifier for a named one. v2 refuses a list that names some
+    // parameters and leaves others positional, so there is no mixing to do.
+    var filled = 0usize
+    var made = 0usize
+    var i = 0usize
+    while i < count {
+        names[i] = v2.Str { ptr: nil, len: 0usize }
+        values[i] = 0usize
+        let spelled = view_of(name_of(c, statement, i, params[i].name))
+        if spelled.len != 0usize && filled + spelled.len <= text.len {
+            let written = into_block(text, filled, spelled)
+            names[i] = v2.Str { ptr: &text[filled], len: written }
+            filled += written
+        }
+        var made_value = 0usize
+        let value_error = make_value(c, params[i].value, &made_value)
+        values[i] = made_value
+        if value_error != ok { ret (names, values, made, value_error) }
+        made += 1usize
+        i += 1usize
+    }
+    ret (names, values, made, ok)
+}
+
+// The name one parameter binds by: the statement's own spelling when it really has one, else the
+// caller's, else empty for a positional parameter. A `?`/`$1` statement reports its parameter's
+// *ordinal* here ("2", "3", ...), and binding by that is what v2 refuses, so a purely numeric
+// name is not a name. The bytes point either at the statement, which outlives the bind, or at the
+// caller's slice, which also outlives it; nothing here points at a local.
+// The binding key for parameter `index`, which is what `parameter_names[index]` must hold: v2
+// documents that a position is zero-based and that the name it reports *is* the key its execute
+// accepts -- "1", "2", ... for a positional parameter and the identifier for a named one. A
+// statement's own key therefore always wins; the caller's name is only a fallback for a
+// statement whose metadata cannot be read at all.
+fn name_of(c: *Conn, statement: usize, index: usize, given: str) -> v2.Str {
+    var declared = v2.Str { ptr: nil, len: 0usize }
+    var here: [1]usize = zero
+    let asked = v2.sql_statement_get_parameter_name(statement, index, &declared, &here[0usize])
+    if asked == v2.DUCKDB_SUCCESS && declared.len != 0usize { ret declared }
+    if given.len != 0usize {
+        var bare = given
+        if given[0usize] == 36u8 {
+            bare = given[1usize..]
+        }
+        ret view_over(bare)
+    }
+    ret declared
+}
+
+// Copies `s` into `into` at `at`, answering how many bytes that was.
+fn into_block(into: []u8, at: usize, s: []const u8) -> usize {
+    var i = 0usize
+    while i < s.len {
+        into[at + i] = s[i]
+        i += 1usize
+    }
+    ret s.len
+}
+
+// How many bytes the statement's names need, summed before any is copied. Nothing is written
+// here: the names are only measured.
+fn name_bytes(c: *Conn, statement: usize, params: []const db.Parameter) -> usize {
+    var total = 0usize
+    var i = 0usize
+    while i < params.len {
+        total += view_of(name_of(c, statement, i, params[i].name)).len
+        i += 1usize
+    }
+    ret total
+}
+
+// Whether every byte of `s` is an ASCII digit, which is how a statement spells a parameter it
+// only numbers.
+fn all_digits(s: []const u8) -> bool {
+    if s.len == 0usize { ret false }
+    var i = 0usize
+    while i < s.len {
+        if s[i] < 48u8 || s[i] > 57u8 { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// The parameter arrays as the execute call takes them, or `nil` when there is nothing to bind.
+// The names array is passed only when at least one parameter is named: v2 reads an all-empty
+// array as "these are named, and one is missing", and refuses the execute.
+fn names_pointer(names: []v2.Str) -> *const v2.Str {
+    var named = 0usize
+    var i = 0usize
+    while i < names.len {
+        if names[i].len != 0usize { named += 1usize }
+        i += 1usize
+    }
+    if named == 0usize { ret nil }
+    ret &names[0usize]
+}
+
+fn values_pointer(values: []usize) -> *const usize {
+    if values.len == 0usize { ret nil }
+    ret &values[0usize]
+}
+// A `duckdb_value` for one `db.Value`.
+fn make_value(c: *Conn, value: db.Value, out: *usize) -> err {
+    var slot: [1]usize = zero
+    var rc = 0i32
+    switch value {
+    case .Null:
+        // A NULL still needs a logical type in v2, and the parameter's own type is not reported
+        // by the API: `SQLNULL` is the type of an untyped NULL, which every column takes.
+        var null_type = 0usize
+        let typed_null = v2.factory_create_type_from_id(c.factory, TYPE_VARCHAR, nil, nil, 0usize, &null_type, &slot[0usize])
+        if typed_null != v2.DUCKDB_SUCCESS {
+            ret failure(c, typed_null, "DuckDB would not make the type of a NULL")
+        }
+        rc = v2.value_create_null(c.factory, null_type, out, &slot[0usize])
+        let _ = v2.logical_type_destroy(&null_type)
+    case .Bool as flag:
+        var truth = 0u8
+        if flag { truth = 1u8 }
+        rc = v2.value_create_bool(c.factory, truth, out, &slot[0usize])
+    case .I64 as signed:
+        rc = v2.value_create_bigint(c.factory, signed, out, &slot[0usize])
+    case .U64 as unsigned:
+        if unsigned > u64(I64_MAX) {
+            ret refuse(c, "an unsigned value does not fit an i64; bind it as Text for a UBIGINT or HUGEINT", db.Unsupported)
+        }
+        rc = v2.value_create_bigint(c.factory, i64(unsigned), out, &slot[0usize])
+    case .F64 as real:
+        rc = v2.value_create_double(c.factory, real, out, &slot[0usize])
+    case .Text as s:
+        var text = view_over(s)
+        rc = v2.value_create_varchar(c.factory, &text, out, &slot[0usize])
+    case .Bytes as data:
+        var text = v2.Str { ptr: nil, len: 0usize }
+        if data.len != 0usize {
+            text = v2.Str { ptr: &data[0usize], len: data.len }
+        }
+        rc = v2.value_create_blob(c.factory, &text, out, &slot[0usize])
+    case .Time as instant:
+        rc = v2.value_create_timestamp(c.factory, instant.nanos / 1000i64, out, &slot[0usize])
+    }
+    if rc != v2.DUCKDB_SUCCESS {
+        var why = v2.Str { ptr: nil, len: 0usize }
+        if slot[0usize] != 0usize { let _ = v2.error_info_get_text(slot[0usize], &why) }
+        let said = view_of(why)
+        if slot[0usize] != 0usize { let _ = v2.error_info_destroy(&slot[0usize]) }
+        ret failure(c, rc, "DuckDB would not make a value for that parameter")
+    }
+    ret ok
+}
+
+// Executes an already-prepared statement with `params`, then drains its result.
+fn run_prepared(c: *Conn, prepared: usize, statement: usize, params: []const db.Parameter) -> (u64, err) {
+    let mark = mem.mark(c.arena)
+    // The statement says how many parameters it takes, so a mismatch is refused here with the
+    // driver's own reason rather than left for DuckDB to report while binding.
+    var declared = 0usize
+    var counted: [1]usize = zero
+    let count_status = v2.sql_statement_get_parameter_count(statement, &declared, &counted[0usize])
+    if count_status == v2.DUCKDB_SUCCESS && declared != params.len {
+        ret (0u64, refuse(c, "the statement's parameter count differs from the parameters given", db.InvalidQuery))
+    }
+    let (names, values, made, bind_error) = bind_arrays(c, statement, params)
+    if bind_error != ok {
+        var k = 0usize
+        while k < made {
+            let _ = v2.value_destroy(&values[k])
+            k += 1usize
+        }
+        mem.reset(c.arena, mark)
+        ret (0u64, bind_error)
+    }
+    var result = 0usize
+    var slot: [1]usize = zero
+    let executed = v2.prepared_statement_execute(prepared, names_pointer(names), values_pointer(values), params.len, &result, &slot[0usize])
+    var k = 0usize
+    while k < made {
+        let _ = v2.value_destroy(&values[k])
+        k += 1usize
+    }
+    if executed != v2.DUCKDB_SUCCESS {
+        // Newlines, not PowerShell `-replace`, because the message must reach the probe verbatim.
+        var note = v2.Str { ptr: nil, len: 0usize }
+        if slot[0usize] != 0usize { let _ = v2.error_info_get_text(slot[0usize], &note) }
+        let shown = view_of(note)
+        mem.reset(c.arena, mark)
+        ret (0u64, fail_info(c, executed, slot[0usize]))
+    }
+    var kind = 0i32
+    var quiet2: [1]usize = zero
+    let typed = v2.result_get_result_type(result, &kind, &quiet2[0usize])
+    if typed != v2.DUCKDB_SUCCESS {
+        let _ = v2.result_destroy(&result)
+        ret (0u64, failure(c, typed, "DuckDB did not say what kind of result it answered"))
+    }
+    var changed = 0u64
+    if kind == RESULT_CHANGED_ROWS { changed = 1u64 }
+    // Every result is drained, not only the ones that answer rows: v2 documents that a
+    // side-effecting statement takes effect only once its result has been drained, and that
+    // destroying an unfinished result may roll its writes back. `result_drain` does that and
+    // answers the rows the statement changed, which is what `e.db` asks for.
+    var rows_changed = 0usize
+    var quiet_drain: [1]usize = zero
+    let drained = v2.result_drain(result, &rows_changed, &quiet_drain[0usize])
+    if drained != v2.DUCKDB_SUCCESS {
+        let failed = failure(c, drained, "DuckDB could not finish the statement")
+        let _ = v2.result_destroy(&result)
+        mem.reset(c.arena, mark)
+        ret (0u64, failed)
+    }
+    let _ = v2.result_destroy(&result)
+    mem.reset(c.arena, mark)
+    clear_detail(c)
+    ret (u64(rows_changed), ok)
+}
+
+// Reads every chunk of `result` and frees it, so the statement finishes.
+fn drain(c: *Conn, result: usize) -> err {
+    while true {
+        var chunk = 0usize
+        var slot: [1]usize = zero
+        let fetched = v2.result_fetch_chunk(result, &chunk, &slot[0usize])
+        if fetched != v2.DUCKDB_SUCCESS {
+            var note = v2.Str { ptr: nil, len: 0usize }
+            if slot[0usize] != 0usize { let _ = v2.error_info_get_text(slot[0usize], &note) }
+            let shown = view_of(note)
+            ret fail_info(c, fetched, slot[0usize])
+        }
+        if chunk == 0usize { ret ok }
+        let _ = v2.data_chunk_destroy(&chunk)
+    }
+}
+
+// Parses `sql`, prepares its one statement, and answers the prepared statement, the parsed
+// statement behind it, and the iterator: a second statement is `db.InvalidQuery`, and a text
+// that holds none is too. A trailing `;` or comment is neither.
+//
+// All three are answered together because v2 says a statement taken from an iterator is valid
+// only while that iterator lives. Preparing happens here, before the caller can drop the
+// iterator, and the iterator is answered so the caller destroys it last. The parsed statement is
+// answered too: the parameter names a bind needs live on it.
+fn compile_one(c: *Conn, sql: str) -> (usize, usize, usize, err) {
+    let mark = mem.mark(c.arena)
+    let (bytes, bytes_error) = c_copy(c.arena, sql)
+    if bytes_error != ok {
+        mem.reset(c.arena, mark)
+        ret (0usize, 0usize, 0usize, bytes_error)
+    }
+    var iterator = 0usize
+    var slot: [1]usize = zero
+    let parsed = v2.parse_sql(c.handle, &bytes[0usize], &iterator, &slot[0usize])
+    if parsed != v2.DUCKDB_SUCCESS {
+        let failed = fail_info(c, parsed, slot[0usize])
+        mem.reset(c.arena, mark)
+        ret (0usize, 0usize, 0usize, failed)
+    }
+    var statement = 0usize
+    let found = v2.statement_iterator_next(iterator, &statement, &slot[0usize])
+    if found != v2.DUCKDB_SUCCESS {
+        let failed = fail_info(c, found, slot[0usize])
+        let _ = v2.statement_iterator_destroy(&iterator)
+        mem.reset(c.arena, mark)
+        ret (0usize, 0usize, 0usize, failed)
+    }
+    if statement == 0usize {
+        let _ = v2.statement_iterator_destroy(&iterator)
+        mem.reset(c.arena, mark)
+        ret (0usize, 0usize, 0usize, refuse(c, "the SQL text holds no statement", db.InvalidQuery))
+    }
+    var second = 0usize
+    var quiet3: [1]usize = zero
+    let more = v2.statement_iterator_next(iterator, &second, &quiet3[0usize])
+    if more == v2.DUCKDB_SUCCESS && second != 0usize {
+        let _ = v2.sql_statement_destroy(&second)
+        let _ = v2.sql_statement_destroy(&statement)
+        let _ = v2.statement_iterator_destroy(&iterator)
+        mem.reset(c.arena, mark)
+        ret (0usize, 0usize, 0usize, refuse(c, "the SQL text holds more than one statement", db.InvalidQuery))
+    }
+    var prepared = 0usize
+    let compiled = v2.prepared_statement_create(c.handle, statement, 0u8, &prepared, &quiet3[0usize])
+    if compiled != v2.DUCKDB_SUCCESS {
+        let failed = fail_info(c, compiled, quiet3[0usize])
+        let _ = v2.sql_statement_destroy(&statement)
+        let _ = v2.statement_iterator_destroy(&iterator)
+        mem.reset(c.arena, mark)
+        ret (0usize, 0usize, 0usize, failed)
+    }
+    mem.reset(c.arena, mark)
+    ret (prepared, statement, iterator, ok)
+}
+
+// A prepared statement that has not run yet: `prepare` compiles the text here, so a statement
+// that cannot run fails at `prepare` rather than at its first execution. `compile_one` has
+// already prepared it; the iterator is answered too, because the parsed statement's parameter
+// names stay valid only while it lives, and the caller keeps both until `close_statement`.
+fn compile_prepared(c: *Conn, sql: str) -> (usize, usize, usize, err) {
+    let (prepared, statement, iterator, compile_error) = compile_one(c, sql)
+    if compile_error != ok { ret (0usize, 0usize, 0usize, compile_error) }
+    ret (prepared, statement, iterator, ok)
 }
 
 // --- row readers
@@ -679,123 +859,205 @@ fn is_integer_type(t: i32) -> bool {
 }
 
 fn is_timestamp_type(t: i32) -> bool {
-    ret t == TYPE_TIMESTAMP || t == TYPE_TIMESTAMP_S || t == TYPE_TIMESTAMP_MS || t == TYPE_TIMESTAMP_NS || t == TYPE_TIMESTAMP_TZ
+    ret t == TYPE_TIMESTAMP || t == TYPE_TIMESTAMP_S || t == TYPE_TIMESTAMP_MS || t == TYPE_TIMESTAMP_NS || t == TYPE_TIMESTAMP_TZ || t == TYPE_TIMESTAMP_TZ_NS
 }
 
 fn is_nested_type(t: i32) -> bool {
-    ret t == TYPE_LIST || t == TYPE_STRUCT || t == TYPE_MAP || t == TYPE_ARRAY || t == TYPE_BIT
+    ret t == TYPE_STRUCT || t == TYPE_LIST || t == TYPE_MAP || t == TYPE_ARRAY || t == TYPE_UNION || t == TYPE_VARIANT || t == TYPE_TUPLE || t == TYPE_BIT
 }
 
-// `bytes` is whether the column's logical type keeps its values as DuckDB's own bytes: an ENUM
-// of BLOB values does, and arrives as `Bytes`.
-fn kind_of(t: i32, bytes: bool) -> db.ValueKind {
+// The kind a column of logical type `t` arrives as.
+fn kind_of(t: i32) -> db.ValueKind {
     if t == TYPE_BOOLEAN { ret .Bool }
     if is_integer_type(t) { ret .I64 }
     if t == TYPE_FLOAT || t == TYPE_DOUBLE { ret .F64 }
     if is_timestamp_type(t) { ret .Time }
-    if t == TYPE_VARCHAR || t == TYPE_UUID || t == TYPE_DECIMAL { ret .Text }
-    if t == TYPE_ENUM {
-        if bytes { ret .Bytes }
-        ret .Text
-    }
-    if t == TYPE_HUGEINT || t == TYPE_UHUGEINT || t == TYPE_INTERVAL || t == TYPE_DATE || t == TYPE_TIME || t == TYPE_TIME_TZ { ret .Text }
+    if t == TYPE_VARCHAR || t == TYPE_ENUM || t == TYPE_UUID { ret .Text }
+    if t == TYPE_DECIMAL || t == TYPE_HUGEINT || t == TYPE_UHUGEINT || t == TYPE_BIGNUM { ret .Text }
+    if t == TYPE_DATE || t == TYPE_TIME || t == TYPE_TIME_NS || t == TYPE_TIME_TZ || t == TYPE_INTERVAL { ret .Text }
     if t == TYPE_BLOB { ret .Bytes }
     if is_nested_type(t) { ret .Bytes }
     ret .Null
 }
 
-// The width and scale of a DECIMAL column, and whether an ENUM keeps BLOB values, read from
-// the column's logical type: DuckDB stores a DECIMAL as a 128-bit integer carrying a scale, and
-// an ENUM of BLOBs as a `duckdb_string_t` holding bytes.
-fn decimal_scale(result: *capi.Result, column: usize) -> i32 {
-    var logical: usize = capi.column_logical_type(result, column)
-    let scale = capi.decimal_scale(logical)
-    capi.destroy_logical_type(&logical)
-    ret i32(scale)
-}
-
-fn enum_holds_bytes(result: *capi.Result, column: usize) -> bool {
-    var logical: usize = capi.column_logical_type(result, column)
-    let internal = capi.enum_internal_type(logical)
-    capi.destroy_logical_type(&logical)
-    ret internal == TYPE_BLOB
-}
-
-// Runs a compiled statement and takes its first chunk, so a failing query fails here rather
-// than at its first row, and the columns are known before any row is read.
-fn reader(c: *Conn, handle: usize, statement: *Stmt, owned: bool) -> (db.Rows, err) {
+// Runs one statement with `params` and answers a reader over its rows, its columns known before
+// any row is read. The statement is compiled here and freed when the reader closes.
+fn start_reader(c: *Conn, sql: str, params: []const db.Parameter, statement: *Stmt) -> (db.Rows, err) {
     var rows: db.Rows = zero
-    var prepared = handle
-    var result: capi.Result = zero
-    let ran = capi.execute_prepared(prepared, &result)
-    if ran != SUCCESS {
-        let failed = fail_result(c, &result)
-        if owned { capi.destroy_prepare(&prepared) }
+    let (prepared0, parsed0, iterator0, compile_error) = compile_prepared(c, sql)
+    if compile_error != ok { ret (rows, compile_error) }
+    var prepared = prepared0
+    var parsed = parsed0
+    var iterator = iterator0
+    let mark = mem.mark(c.arena)
+    let (names, values, made, bind_error) = bind_arrays(c, parsed, params)
+    if bind_error != ok {
+        var k = 0usize
+        while k < made {
+            let _ = v2.value_destroy(&values[k])
+            k += 1usize
+        }
+        let _ = v2.prepared_statement_destroy(&prepared)
+        let _ = v2.sql_statement_destroy(&parsed)
+        let _ = v2.statement_iterator_destroy(&iterator)
+        mem.reset(c.arena, mark)
+        ret (rows, bind_error)
+    }
+    var result = 0usize
+    var slot: [1]usize = zero
+    let executed = v2.prepared_statement_execute(prepared, names_pointer(names), values_pointer(values), params.len, &result, &slot[0usize])
+    var k = 0usize
+    while k < made {
+        let _ = v2.value_destroy(&values[k])
+        k += 1usize
+    }
+    let _ = v2.prepared_statement_destroy(&prepared)
+    let _ = v2.sql_statement_destroy(&parsed)
+    let _ = v2.statement_iterator_destroy(&iterator)
+    if executed != v2.DUCKDB_SUCCESS {
+        let failed = fail_info(c, executed, slot[0usize])
+        mem.reset(c.arena, mark)
         ret (rows, failed)
     }
-    var chunk = capi.fetch_chunk(&result)
-    let count = capi.column_count(&result)
+    var kind = 0i32
+    var quiet4: [1]usize = zero
+    let typed = v2.result_get_result_type(result, &kind, &quiet4[0usize])
+    if typed != v2.DUCKDB_SUCCESS {
+        let _ = v2.result_destroy(&result)
+        mem.reset(c.arena, mark)
+        ret (rows, failure(c, typed, "DuckDB did not say what kind of result it answered"))
+    }
+    if kind != RESULT_QUERY {
+        // A statement that answers no rows: drained here, and a reader over it is refused.
+        let drained = drain(c, result)
+        let _ = v2.result_destroy(&result)
+        mem.reset(c.arena, mark)
+        if drained != ok { ret (rows, drained) }
+        ret (rows, refuse(c, "the statement answers no rows", db.InvalidQuery))
+    }
+    var schema = 0usize
+    var quiet5: [1]usize = zero
+    let read_schema = v2.result_get_schema(result, &schema, &quiet5[0usize])
+    if read_schema != v2.DUCKDB_SUCCESS {
+        let _ = v2.result_destroy(&result)
+        mem.reset(c.arena, mark)
+        ret (rows, failure(c, read_schema, "DuckDB did not describe the result"))
+    }
+    var columns = 0usize
+    var quiet6: [1]usize = zero
+    let counted = v2.schema_get_count(schema, &columns, &quiet6[0usize])
+    if counted != v2.DUCKDB_SUCCESS {
+        let _ = v2.result_destroy(&result)
+        mem.reset(c.arena, mark)
+        ret (rows, failure(c, counted, "DuckDB did not count the result's columns"))
+    }
     let (readers, reader_error) = mem.alloc[Reader](c.arena, 1usize)
-    let (types, types_error) = mem.alloc[i32](c.arena, count)
-    let (scales, scales_error) = mem.alloc[i32](c.arena, count)
-    let (cols, cols_error) = mem.alloc[db.Column](c.arena, count)
-    if reader_error != ok || types_error != ok || scales_error != ok || cols_error != ok {
-        if chunk != 0usize { capi.destroy_data_chunk(&chunk) }
-        capi.destroy_result(&result)
-        if owned { capi.destroy_prepare(&prepared) }
+    let (types, types_error) = mem.alloc[i32](c.arena, columns)
+    let (cols, cols_error) = mem.alloc[db.Column](c.arena, columns)
+    if reader_error != ok || types_error != ok || cols_error != ok {
+        let _ = v2.result_destroy(&result)
+        mem.reset(c.arena, mark)
         ret (rows, db.Unsupported)
     }
-    var i = 0usize
-    while i < count {
-        types[i] = capi.column_type(&result, i)
-        scales[i] = 0i32
-        if types[i] == TYPE_DECIMAL { scales[i] = decimal_scale(&result, i) }
-        let (name, name_error) = c_read(c.arena, capi.column_name(&result, i))
-        if name_error != ok {
-            if chunk != 0usize { capi.destroy_data_chunk(&chunk) }
-            capi.destroy_result(&result)
-            if owned { capi.destroy_prepare(&prepared) }
-            ret (rows, name_error)
+    var column = 0usize
+    while column < columns {
+        var name = v2.Str { ptr: nil, len: 0usize }
+        var logical = 0usize
+        var quiet7: [1]usize = zero
+        let field = v2.schema_get_field(schema, column, &name, &logical, &quiet7[0usize])
+        if field != v2.DUCKDB_SUCCESS {
+            let _ = v2.result_destroy(&result)
+            mem.reset(c.arena, mark)
+            ret (rows, failure(c, field, "DuckDB did not describe a column"))
         }
-        var bytes = types[i] == TYPE_BLOB
-        if types[i] == TYPE_ENUM { bytes = enum_holds_bytes(&result, i) }
-        cols[i] = db.Column { name: name, kind: kind_of(types[i], bytes), nullable: true }
-        i += 1usize
+        var type_id = 0i32
+        var quiet8: [1]usize = zero
+        let identified = v2.logical_type_get_id(logical, &type_id, &quiet8[0usize])
+        let _ = v2.logical_type_destroy(&logical)
+        if identified != v2.DUCKDB_SUCCESS {
+            let _ = v2.result_destroy(&result)
+            mem.reset(c.arena, mark)
+            ret (rows, failure(c, identified, "DuckDB did not name a column's type"))
+        }
+        types[column] = type_id
+        cols[column] = db.Column { name: copy_view(c.arena, name), kind: kind_of(type_id), nullable: true }
+        column += 1usize
     }
-    var size = 0usize
-    if chunk != 0usize { size = capi.data_chunk_get_size(chunk) }
     var no_buffer: []u8 = zero
     // Arena memory is not cleared, so every field is written.
-    readers[0usize] = Reader { conn: c, statement: statement, result: result, chunk: chunk, rows: size, at: 0usize, done: false, closed: false, types: types, scales: scales, columns: cols, buffer: no_buffer, used: 0usize, borrow: false }
+    readers[0usize] = Reader { conn: c, statement: statement, handle: result, chunk: 0usize, rows: 0usize, at: 0usize, done: false, closed: false, types: types, columns: cols, buffer: no_buffer, used: 0usize, borrow: false, held: 0usize }
     let r = &readers[0usize]
+    c.active = r
     clear_detail(c)
     rows.ctx = mem.cast[*void](r)
     ret (rows, ok)
 }
 
-// Reads a whole query: one statement, and every row it answers streamed.
-fn start_query(c: *Conn, sql: str, params: []const db.Parameter, statement: *Stmt) -> (db.Rows, err) {
-    let start = skip_space(sql, 0usize)
-    if start >= sql.len { ret (zero, refuse(c, "the SQL text holds no statement", db.InvalidQuery)) }
-    let stop = end_of_statement(sql, start)
-    if stop <= start { ret (zero, split_refusal(c)) }
-    if skip_space(sql, stop) < sql.len { ret (zero, refuse(c, "the SQL text holds more than one statement", db.InvalidQuery)) }
-    let (handle0, compile_error) = compile_one(c, sql)
-    if compile_error != ok { ret (zero, compile_error) }
-    var handle = handle0
-    let bind_error = bind_all(c, handle, params)
-    if bind_error != ok {
-        capi.destroy_prepare(&handle)
-        ret (zero, bind_error)
+// A reader over a result that has already been executed: its schema is read here, so a reader
+// built by either path knows its columns before any row is read. The result is the reader's
+// from here on, and the statement it came from is not, so `statement` is for a reader over a
+// prepared statement and `nil` for one this module compiled.
+fn reader_for(c: *Conn, result0: usize, statement: *Stmt) -> (db.Rows, err) {
+    var rows: db.Rows = zero
+    var result = result0
+    var schema = 0usize
+    var quiet_schema: [1]usize = zero
+    let read_schema = v2.result_get_schema(result, &schema, &quiet_schema[0usize])
+    if read_schema != v2.DUCKDB_SUCCESS {
+        let failed = failure(c, read_schema, "DuckDB did not describe the result")
+        let _ = v2.result_destroy(&result)
+        ret (rows, failed)
     }
-    let (rows, rows_error) = reader(c, handle, statement, true)
-    ret (rows, rows_error)
+    var columns = 0usize
+    var quiet_count: [1]usize = zero
+    let counted = v2.schema_get_count(schema, &columns, &quiet_count[0usize])
+    if counted != v2.DUCKDB_SUCCESS {
+        let failed = failure(c, counted, "DuckDB did not count the result's columns")
+        let _ = v2.result_destroy(&result)
+        ret (rows, failed)
+    }
+    let (readers, reader_error) = mem.alloc[Reader](c.arena, 1usize)
+    let (types, types_error) = mem.alloc[i32](c.arena, columns)
+    let (cols, cols_error) = mem.alloc[db.Column](c.arena, columns)
+    if reader_error != ok || types_error != ok || cols_error != ok {
+        let _ = v2.result_destroy(&result)
+        ret (rows, db.Unsupported)
+    }
+    var column = 0usize
+    while column < columns {
+        var name = v2.Str { ptr: nil, len: 0usize }
+        var logical = 0usize
+        var quiet_field: [1]usize = zero
+        let field = v2.schema_get_field(schema, column, &name, &logical, &quiet_field[0usize])
+        if field != v2.DUCKDB_SUCCESS {
+            let failed = failure(c, field, "DuckDB did not describe a column")
+            let _ = v2.result_destroy(&result)
+            ret (rows, failed)
+        }
+        var type_id = 0i32
+        var quiet_type: [1]usize = zero
+        let identified = v2.logical_type_get_id(logical, &type_id, &quiet_type[0usize])
+        let _ = v2.logical_type_destroy(&logical)
+        if identified != v2.DUCKDB_SUCCESS {
+            let failed = failure(c, identified, "DuckDB did not name a column's type")
+            let _ = v2.result_destroy(&result)
+            ret (rows, failed)
+        }
+        types[column] = type_id
+        cols[column] = db.Column { name: copy_view(c.arena, name), kind: kind_of(type_id), nullable: true }
+        column += 1usize
+    }
+    var no_buffer: []u8 = zero
+    readers[0usize] = Reader { conn: c, statement: statement, handle: result, chunk: 0usize, rows: 0usize, at: 0usize, done: false, closed: false, types: types, columns: cols, buffer: no_buffer, used: 0usize, borrow: false, held: 0usize }
+    let r = &readers[0usize]
+    c.active = r
+    clear_detail(c)
+    rows.ctx = mem.cast[*void](r)
+    ret (rows, ok)
 }
 
-// --- values
-
-// Room for `n` more bytes of this row. A grown buffer is a new one: the values already
-// filled keep pointing at the old, which the arena still holds.
+// Room for `n` more bytes of this row. A grown buffer is a new one: the values already filled
+// keep pointing at the old, which the arena still holds.
 fn reserve(r: *Reader, n: usize) -> err {
     if r.used + n <= r.buffer.len { ret ok }
     var size = r.buffer.len * 2usize
@@ -808,7 +1070,7 @@ fn reserve(r: *Reader, n: usize) -> err {
     ret ok
 }
 
-// `n` bytes of the reader's buffer for this row, taken from `take`.
+// `n` bytes of the reader's buffer for this row.
 fn room(r: *Reader, n: usize) -> ([]u8, err) {
     let reserve_error = reserve(r, n)
     if reserve_error != ok {
@@ -827,524 +1089,173 @@ fn take(r: *Reader, v: []const u8) -> ([]u8, err) {
     ret (out, ok)
 }
 
-// A file copy of the chunk, valid until this reader's next row.
-fn copy_bytes(r: *Reader, v: []const u8) -> ([]const u8, err) {
-    let (out, out_error) = take(r, v)
-    if out_error != ok {
-        var nothing: []const u8 = zero
-        ret (nothing, out_error)
+// The `duckdb_value` the current row holds in `vector`, owned by the reader until its next row;
+// `0` when the row is NULL or DuckDB would not hand the value out.
+fn row_value(r: *Reader, vector: usize) -> usize {
+    if r.held != 0usize {
+        let _ = v2.value_destroy(&r.held)
+        r.held = 0usize
     }
-    ret (out, ok)
-}
-
-fn copy_text_of(r: *Reader, v: []const u8) -> (str, err) {
-    let (out, out_error) = take(r, v)
-    if out_error != ok { ret ("", out_error) }
-    ret (out, ok)
-}
-
-// An address as a pointer. No intrinsic turns an integer back into one, so the bits are taken
-// apart and put back: each byte is the same byte, and a view over them names the bytes the
-// address names.
-fn as_pointer(address: u64) -> *u8 {
-    var bytes: [8]u8 = zero
-    var i = 0usize
-    while i < 8usize {
-        bytes[i] = u8(address >> u64(i * 8usize) & 255u64)
-        i += 1usize
+    var value = 0usize
+    var slot: [1]usize = zero
+    let got = v2.vector_get_value(vector, r.at, &value, &slot[0usize])
+    if got != v2.DUCKDB_SUCCESS {
+        if slot[0usize] != 0usize { let _ = v2.error_info_destroy(&slot[0usize]) }
+        ret 0usize
     }
-    ret mem.cast[*u8](&bytes[0usize])
+    r.held = value
+    ret value
 }
 
-// A `duckdb_string_t`'s bytes: inline when short, else at the pointer beside the length.
-fn string_bytes(r: *Reader, data: *u8, at: usize) -> ([]const u8, err) {
+// A text or blob at the current row, copied into the reader's buffer.
+fn text_value(r: *Reader, value: usize, blob: bool) -> ([]const u8, err) {
     var nothing: []const u8 = zero
-    let offset = at * 16usize
-    let length = usize(word_at(data, offset) & 4294967295u64)
-    if length == 0usize { ret (nothing, ok) }
-    var region: mem.Arena = zero
-    if length <= INLINE_CHARS {
-        region.base = data
-        region.cap = offset + 4usize + length
-        region.off = 0usize
-        ret (mem.view(&region, offset + 4usize, length), ok)
+    var text = v2.Str { ptr: nil, len: 0usize }
+    var got = 0i32
+    if blob {
+        got = v2.value_get_blob(value, &text, a_quiet_slot())
+    } else {
+        got = v2.value_get_varchar(value, &text, a_quiet_slot())
     }
-    let pointer = word_at(data, offset + 8usize)
-    if pointer == 0u64 { ret (nothing, ok) }
-    region.base = as_pointer(pointer)
-    region.cap = length
-    region.off = 0usize
-    ret (mem.view(&region, 0usize, length), ok)
+    if got != v2.DUCKDB_SUCCESS { ret (nothing, ok) }
+    let (out, take_error) = take(r, view_of(text))
+    ret (out, take_error)
 }
 
-// A text value at the current row of a vector: copied into the reader's buffer, or borrowed
-// from the chunk when the reader was asked to borrow.
-fn text_at(r: *Reader, vector: usize) -> (str, err) {
-    let data = as_pointer(u64(capi.vector_get_data(vector)))
-    let (bytes, bytes_error) = string_bytes(r, data, r.at)
-    if bytes_error != ok { ret ("", bytes_error) }
-    if r.borrow {
-        let borrowed: str = bytes
-        ret (borrowed, ok)
-    }
-    let (copied, copied_error) = copy_text_of(r, bytes)
-    ret (copied, copied_error)
+fn integer_value(value: usize, t: i32) -> db.Value {
+    var wide = 0i64
+    var quiet9: [1]usize = zero
+    let got = v2.value_get_bigint(value, &wide, &quiet9[0usize])
+    if got != v2.DUCKDB_SUCCESS { ret db.Value{ I64: 0i64 } }
+    if t == TYPE_UBIGINT && wide < 0i64 { ret db.Value{ U64: u64(wide) } }
+    ret db.Value{ I64: wide }
 }
 
-fn blob_at(r: *Reader, vector: usize) -> ([]const u8, err) {
-    let data = as_pointer(u64(capi.vector_get_data(vector)))
-    let (bytes, bytes_error) = string_bytes(r, data, r.at)
-    if bytes_error != ok { ret (bytes, bytes_error) }
-    if r.borrow {
-        ret (bytes, ok)
-    }
-    let (copied, copied_error) = copy_bytes(r, bytes)
-    ret (copied, copied_error)
-}
-
-// A fixed-width integer at the current row. A signed one is sign-extended from its own width
-// through the top half of its word; the unsigned ones that fit an `i64` come back as `I64`, and
-// a `UBIGINT` past it as `U64`.
-fn integer_value(r: *Reader, t: i32, vector: usize) -> db.Value {
-    let data = as_pointer(u64(capi.vector_get_data(vector)))
-    let at = r.at
-    if t == TYPE_BOOLEAN {
-        ret db.Value{ Bool: byte_at(data, at) & 1u8 != 0u8 }
-    }
-    if t == TYPE_TINYINT {
-        ret db.Value{ I64: signed_bits(word_at(data, at), 8u64) }
-    }
-    if t == TYPE_UTINYINT {
-        ret db.Value{ I64: i64(word_at(data, at)) }
-    }
-    if t == TYPE_SMALLINT {
-        ret db.Value{ I64: signed_bits(word_at(data, at * 2usize), 16u64) }
-    }
-    if t == TYPE_USMALLINT {
-        ret db.Value{ I64: i64(word_at(data, at * 2usize) & 65535u64) }
-    }
-    if t == TYPE_INTEGER {
-        ret db.Value{ I64: signed_bits(word_at(data, at * 4usize), 32u64) }
-    }
-    if t == TYPE_UINTEGER {
-        ret db.Value{ I64: i64(word_at(data, at * 4usize) & 4294967295u64) }
-    }
-    let wide = word_at(data, at * 8usize)
-    if t == TYPE_UBIGINT && wide > u64(I64_MAX) { ret db.Value{ U64: wide } }
-    ret db.Value{ I64: mem.bitcast[i64](wide) }
-}
-
-// The low `bits` bits of `v` as a signed integer: the value shifted up so its sign bit lands
-// on the top bit, then shifted back down arithmetically.
-fn signed_bits(v: u64, bits: u64) -> i64 {
-    let shift = 64u64 - bits
-    let raised = mem.bitcast[i64](v << u64(shift))
-    ret raised >> u64(shift)
-}
-
-fn float_value(r: *Reader, t: i32, vector: usize) -> db.Value {
-    let data = as_pointer(u64(capi.vector_get_data(vector)))
-    if t == TYPE_FLOAT {
-        let word = word_at(data, r.at * 4usize)
-        let bits = left_bits(word, 32u64)
-        // A single-precision value is a double with the other half of the mantissa zero, so the
-        // bit pattern widens exactly: sign, then eight exponent bits, then 23 mantissa bits.
-        let sign = bits >> 63u64 & 1u64
-        let exponent = bits >> 23u64 & 255u64
-        let mantissa = bits & 8388607u64
-        var widened = 0u64
-        if exponent == 0u64 {
-            // A subnormal single is a normal double, scaled down by 2^-126.
-            if mantissa == 0u64 {
-                widened = sign << 63u64
-            } else {
-                var top = 0u64
-                var probe = mantissa
-                while probe > 1u64 {
-                    probe = probe >> 1u64
-                    top += 1u64
-                }
-                let normal_exponent = 1023u64 - 127u64 - 127u64 + top
-                let normal_mantissa = (mantissa << u64(52u64 - top)) & 4503599627370495u64
-                widened = sign << 63u64 | normal_exponent << 52u64 | normal_mantissa
-            }
-        } else if exponent == 255u64 {
-            widened = sign << 63u64 | 2047u64 << 52u64 | mantissa << 29u64
-        } else {
-            widened = sign << 63u64 | (exponent + 1023u64 - 127u64) << 52u64 | mantissa << 29u64
-        }
-        ret db.Value{ F64: mem.bitcast[f64](widened) }
-    }
-    ret db.Value{ F64: mem.bitcast[f64](word_at(data, r.at * 8usize)) }
-}
-
-fn left_bits(v: u64, bits: u64) -> u64 { ret v << u64(64u64 - bits) }
-
-// The value of a timestamp of type `t` at the current row: an `Instant` in nanoseconds, or its
-// text when the type keeps nanoseconds (an `e.time.Instant` counts them in an `i64` too, but a
-// year outside 1678 to 2261 does not fit one, and that is DuckDB's own range for a nanosecond
-// timestamp).
-fn timestamp_value(r: *Reader, t: i32, vector: usize) -> (db.Value, err) {
-    let data = as_pointer(u64(capi.vector_get_data(vector)))
-    let raw = mem.bitcast[i64](word_at(data, r.at * 8usize))
-    if t == TYPE_TIMESTAMP_NS {
-        let (text, text_error) = decimal_text(r, raw)
-        if text_error != ok { ret (.Null, text_error) }
-        ret (db.Value{ Text: text }, ok)
-    }
-    var micros = raw
-    if t == TYPE_TIMESTAMP_S { micros = saturating_mul(raw, 1000000i64) }
-    if t == TYPE_TIMESTAMP_MS { micros = saturating_mul(raw, 1000i64) }
-    ret (db.Value{ Time: time.Instant { nanos: saturating_mul(micros, 1000i64) } }, ok)
-}
-
-// `v * factor`, or the end of `i64` rather than a wrapped one: a timestamp past 2262 has no
-// nanosecond count, and wrapping it would name a date in the past.
-fn saturating_mul(v: i64, factor: i64) -> i64 {
-    if v > 0i64 && v > I64_MAX / factor { ret I64_MAX }
-    if v < 0i64 && v < I64_MIN / factor { ret I64_MIN }
-    ret v * factor
-}
-
-// The decimal text of a `DECIMAL`, a `HUGEINT` or a `UHUGEINT` at the current row. `column`
-// is the column's index, for its scale.
-fn wide_value(r: *Reader, column: usize, t: i32, vector: usize) -> (str, err) {
-    let data = as_pointer(u64(capi.vector_get_data(vector)))
-    let lower = word_at(data, r.at * 16usize)
-    let upper = word_at(data, r.at * 16usize + 8usize)
-    let signed = t != TYPE_UHUGEINT
-    var scale = 0usize
-    if t == TYPE_DECIMAL { scale = usize(r.scales[column]) }
-    let (spelled, spelled_error) = wide_text(r, lower, upper, signed, scale)
-    ret (spelled, spelled_error)
-}
-
-// The decimal digits of `upper * 2^64 + lower`, least significant first, in `digits`.
-fn push_wide(upper: u64, lower: u64, digits: []u8) -> (usize, err) {
-    var high = upper
-    var low = lower
-    var count = 0usize
-    if high == 0u64 && low == 0u64 {
-        digits[0usize] = 48u8
-        ret (1usize, ok)
-    }
-    while high != 0u64 || low != 0u64 {
-        // The value in binary, one bit at a time from the top, divided by ten: the remainder
-        // is this digit and what the shift kept is the quotient.
-        var remainder = 0u64
-        var quotient_high = 0u64
-        var high_bit = 64usize
-        while high_bit > 0usize {
-            high_bit -= 1usize
-            let carry = remainder * 2u64 + (high >> u64(high_bit) & 1u64)
-            if carry >= 10u64 {
-                quotient_high = quotient_high | 1u64 << u64(high_bit)
-                remainder = carry - 10u64
-            } else {
-                remainder = carry
-            }
-        }
-        var quotient_low = 0u64
-        var low_bit = 64usize
-        while low_bit > 0usize {
-            low_bit -= 1usize
-            let carry = remainder * 2u64 + (low >> u64(low_bit) & 1u64)
-            if carry >= 10u64 {
-                quotient_low = quotient_low | 1u64 << u64(low_bit)
-                remainder = carry - 10u64
-            } else {
-                remainder = carry
-            }
-        }
-        if count >= 39usize { ret (count, mem.Exhausted) }
-        digits[count] = 48u8 + u8(remainder)
-        count += 1usize
-        high = quotient_high
-        low = quotient_low
-    }
-    ret (count, ok)
-}
-
-// A 128-bit integer in decimal, `scale` digits of it after the point. A negative value is
-// negated in two's complement before its digits are taken, so the most negative one works too.
-fn wide_text(r: *Reader, lower: u64, upper: u64, signed: bool, scale: usize) -> (str, err) {
-    var high = upper
-    var low = lower
-    var negative = false
-    if signed && high >> 63u64 == 1u64 {
-        negative = true
-        low = ~low + 1u64
-        high = ~high
-        if low == 0u64 { high = high + 1u64 }
-    }
-    var digits: [40]u8 = zero
-    var (b, builder_error) = str.builder(r.conn.arena, 48usize + scale)
-    if builder_error != ok { ret ("", builder_error) }
-    if negative {
-        let minus = str.push(&b, "-")
-        if minus != ok { ret ("", minus) }
-    }
-    let (count, digits_error) = push_wide(high, low, digits[0usize..])
-    if digits_error != ok { ret ("", digits_error) }
-    var whole = count
-    if count > scale { whole = count - scale } else { whole = 0usize }
-    var i = whole
-    while i > 0usize {
-        i -= 1usize
-        let pushed = str.push(&b, digits[i..i + 1usize])
-        if pushed != ok { ret ("", pushed) }
-    }
-    if scale > 0usize {
-        let point = str.push(&b, ".")
-        if point != ok { ret ("", point) }
-        var written = count - whole
-        var f = whole
-        while f > 0usize {
-            f -= 1usize
-            let pushed = str.push(&b, digits[f..f + 1usize])
-            if pushed != ok { ret ("", pushed) }
-            written += 1usize
-        }
-        while written < scale {
-            let filled = str.push(&b, "0")
-            if filled != ok { ret ("", filled) }
-            written += 1usize
-        }
-    }
-    ret (str.done(&b), ok)
-}
-
-fn decimal_text(r: *Reader, v: i64) -> (str, err) {
-    var (b, builder_error) = str.builder(r.conn.arena, 24usize)
-    if builder_error != ok { ret ("", builder_error) }
-    let pushed = str.push_i64(&b, v)
-    if pushed != ok { ret ("", pushed) }
-    ret (str.done(&b), ok)
-}
-
-// `YYYY-MM-DD` for a count of days from 1970-01-01.
-fn date_text(r: *Reader, days: i64) -> (str, err) {
-    let (year, month, day) = time.civil_from_days(days)
-    var (b, builder_error) = str.builder(r.conn.arena, 32usize)
-    if builder_error != ok { ret ("", builder_error) }
-    let pushed_year = str.push_i64(&b, year)
-    if pushed_year != ok { ret ("", pushed_year) }
-    let pushed_month = push_field(&b, month)
-    if pushed_month != ok { ret ("", pushed_month) }
-    let pushed_day = push_field(&b, day)
-    if pushed_day != ok { ret ("", pushed_day) }
-    ret (str.done(&b), ok)
-}
-
-// `-MM-DD` for the fields after the year.
-fn push_field(b: *str.Builder, value: i64) -> err {
-    let dash = str.push(b, "-")
-    if dash != ok { ret dash }
-    ret push_two(b, value)
-}
-
-// `HH:MM:SS` for a count of microseconds since midnight, with `.ffffff` when it has a
-// fraction.
-fn time_text(r: *Reader, micros: i64) -> (str, err) {
-    var (b, builder_error) = str.builder(r.conn.arena, 16usize)
-    if builder_error != ok { ret ("", builder_error) }
-    let seconds = micros / TIME_FRACTION
-    let pushed = push_two(&b, seconds / 3600i64)
-    if pushed != ok { ret ("", pushed) }
-    let colon = str.push(&b, ":")
-    if colon != ok { ret ("", colon) }
-    let minutes = push_two(&b, seconds / 60i64 % 60i64)
-    if minutes != ok { ret ("", minutes) }
-    let colon2 = str.push(&b, ":")
-    if colon2 != ok { ret ("", colon2) }
-    let secs = push_two(&b, seconds % 60i64)
-    if secs != ok { ret ("", secs) }
-    let fraction = micros % TIME_FRACTION
-    if fraction != 0i64 {
-        let point = str.push(&b, ".")
-        if point != ok { ret ("", point) }
-        var scale = 100000i64
-        var tail = fraction
-        while scale > 0i64 {
-            let pushed_digit = str.push(&b, digits_of(tail / scale))
-            if pushed_digit != ok { ret ("", pushed_digit) }
-            tail = tail % scale
-            scale = scale / 10i64
-        }
-    }
-    ret (str.done(&b), ok)
-}
-
-fn digits_of(digit: i64) -> str { ret "0123456789"[usize(digit % 10i64)..usize(digit % 10i64) + 1usize] }
-
-// A field with a leading zero, `00` to `99`.
-fn push_two(b: *str.Builder, v: i64) -> err {
-    let tens = str.push(b, digits_of(v / 10i64))
-    if tens != ok { ret tens }
-    ret str.push(b, digits_of(v % 10i64))
-}
-
-fn hex(byte: u8) -> u8 {
-    if byte < 10u8 { ret 48u8 + byte }
-    ret 87u8 + byte
-}
-
-// `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` for a UUID, which DuckDB keeps as a 128-bit integer
-// with the highest-order group in `upper`.
-fn uuid_text(r: *Reader, lower: u64, upper: u64) -> (str, err) {
-    var (b, builder_error) = str.builder(r.conn.arena, 36usize)
-    if builder_error != ok { ret ("", builder_error) }
-    var i = 0usize
-    while i < 16usize {
-        let pushed = push_hex_byte(&b, u8(upper >> u64(56u64 - u64(i) * 8u64)))
-        if pushed != ok { ret ("", pushed) }
-        if i == 3usize || i == 5usize || i == 7usize || i == 9usize {
-            let dashed = str.push(&b, "-")
-            if dashed != ok { ret ("", dashed) }
-        }
-        i += 1usize
-    }
-    var k = 0usize
-    while k < 8usize {
-        let pushed = push_hex_byte(&b, u8(lower >> u64(56u64 - u64(k) * 8u64)))
-        if pushed != ok { ret ("", pushed) }
-        if k == 1usize {
-            let dashed = str.push(&b, "-")
-            if dashed != ok { ret ("", dashed) }
-        }
-        k += 1usize
-    }
-    ret (str.done(&b), ok)
-}
-
-fn push_hex_byte(b: *str.Builder, v: u8) -> err {
-    var pair: [2]u8 = zero
-    pair[0usize] = hex(v >> 4u8)
-    pair[1usize] = hex(v & 15u8)
-    ret str.push(b, pair[0usize..])
-}
-
-// The canonical spelling of a UUID at the current row, copied or borrowed like a text.
-fn uuid_value(r: *Reader, vector: usize) -> (str, err) {
-    let data = as_pointer(u64(capi.vector_get_data(vector)))
-    let lower = word_at(data, r.at * 16usize)
-    let upper = word_at(data, r.at * 16usize + 8usize)
-    let (spelled, spelled_error) = uuid_text(r, lower, upper)
-    if spelled_error != ok { ret ("", spelled_error) }
-    if r.borrow { ret (spelled, ok) }
-    let (copied, copied_error) = copy_text_of(r, spelled)
-    ret (copied, copied_error)
-}
-
-// The text spelling of a value whose type has no `db.Value` case of its own.
-fn spelled_value(r: *Reader, column: usize, t: i32, vector: usize) -> (str, err) {
-    let data = as_pointer(u64(capi.vector_get_data(vector)))
-    if t == TYPE_DECIMAL || t == TYPE_HUGEINT || t == TYPE_UHUGEINT {
-        let (spelled, spelled_error) = wide_value(r, column, t, vector)
-        ret (spelled, spelled_error)
-    }
-    if t == TYPE_DATE {
-        // A DATE is an `i32` count of days, two to a 64-bit word.
-        let raw = word_at(data, r.at / 2usize * 8usize)
-        let days = u32(raw >> u64(r.at % 2usize * 32usize) & 4294967295u64)
-        let (spelled, spelled_error) = date_text(r, i64(mem.bitcast[i32](days)))
-        ret (spelled, spelled_error)
-    }
-    if t == TYPE_TIME {
-        let (spelled, spelled_error) = time_text(r, mem.bitcast[i64](word_at(data, r.at * 8usize)))
-        ret (spelled, spelled_error)
-    }
-    if t == TYPE_TIME_TZ {
-        let bits = word_at(data, r.at * 8usize)
-        let (spelled, spelled_error) = time_text(r, mem.bitcast[i64](bits & 1099511627775u64))
-        ret (spelled, spelled_error)
-    }
-    ret ("", ok)
-}
-
+// Fills one row. A NULL column is `Null`; everything else is read through the value the reader
+// holds.
 fn fill(r: *Reader, dst: []db.Value) -> err {
     r.used = 0usize
     var i = 0usize
     while i < r.columns.len {
-        let vector = capi.data_chunk_get_vector(r.chunk, i)
-        let validity = capi.vector_get_validity(vector)
-        if mem.address_of(validity) != 0usize {
-            let word = word_at(as_pointer(u64(mem.address_of(validity))), r.at / 64usize * 8usize)
-            if word >> u64(r.at % 64usize) & 1u64 == 0u64 {
+        var vector = 0usize
+        var slot: [1]usize = zero
+        let got_vector = v2.data_chunk_get_vector(r.chunk, i, &vector, &slot[0usize])
+        if got_vector != v2.DUCKDB_SUCCESS {
+            if slot[0usize] != 0usize { let _ = v2.error_info_destroy(&slot[0usize]) }
+            dst[i] = .Null
+            i += 1usize
+            continue
+        }
+        let value = row_value(r, vector)
+        if value == 0usize {
+            dst[i] = .Null
+            i += 1usize
+            continue
+        }
+        // A NULL cell still hands back a value; the value is what says it is NULL.
+        var is_null = 0u8
+        var quiet_null: [1]usize = zero
+        if v2.value_is_null(value, &is_null, &quiet_null[0usize]) == v2.DUCKDB_SUCCESS && is_null != 0u8 {
+            dst[i] = .Null
+            i += 1usize
+            continue
+        }
+        let t = r.types[i]
+        if t == TYPE_BOOLEAN {
+            // A BOOLEAN reads through the integer accessor as 0 or 1.
+            var flag = 0i64
+            var quiet10: [1]usize = zero
+            let got_flag = v2.value_get_bigint(value, &flag, &quiet10[0usize])
+            var truth = false
+            if got_flag == v2.DUCKDB_SUCCESS && flag != 0i64 { truth = true }
+            dst[i] = db.Value{ Bool: truth }
+        } else if is_integer_type(t) {
+            dst[i] = integer_value(value, t)
+        } else if t == TYPE_FLOAT || t == TYPE_DOUBLE {
+            var real = 0.0f64
+            var quiet11: [1]usize = zero
+            let got_real = v2.value_get_double(value, &real, &quiet11[0usize])
+            if got_real != v2.DUCKDB_SUCCESS {
                 dst[i] = .Null
                 i += 1usize
                 continue
             }
-        }
-        let t = r.types[i]
-        if t == TYPE_BOOLEAN || is_integer_type(t) {
-            dst[i] = integer_value(r, t, vector)
-        } else if t == TYPE_FLOAT || t == TYPE_DOUBLE {
-            dst[i] = float_value(r, t, vector)
+            dst[i] = db.Value{ F64: real }
         } else if is_timestamp_type(t) {
-            let (value, value_error) = timestamp_value(r, t, vector)
-            if value_error != ok { ret value_error }
-            dst[i] = value
-        } else if t == TYPE_DATE || t == TYPE_TIME || t == TYPE_TIME_TZ {
-            let (text, text_error) = spelled_value(r, i, t, vector)
-            if text_error != ok { ret text_error }
-            dst[i] = db.Value{ Text: text }
-        } else if t == TYPE_VARCHAR || t == TYPE_UUID {
-            if t == TYPE_UUID {
-                let (text, text_error) = uuid_value(r, vector)
+            var micros = 0i64
+            var quiet12: [1]usize = zero
+            let got_micros = v2.value_get_timestamp(value, &micros, &quiet12[0usize])
+            let nanosecond_type = t == TYPE_TIMESTAMP_NS || t == TYPE_TIMESTAMP_TZ_NS
+            if got_micros != v2.DUCKDB_SUCCESS || nanosecond_type {
+                let (text, text_error) = text_value(r, value, false)
                 if text_error != ok { ret text_error }
-                dst[i] = db.Value{ Text: text }
+                let spelled: str = text
+                dst[i] = db.Value{ Text: spelled }
             } else {
-                let (text, text_error) = text_at(r, vector)
-                if text_error != ok { ret text_error }
-                dst[i] = db.Value{ Text: text }
-            }
-        } else if t == TYPE_ENUM {
-            if r.columns[i].kind == .Bytes {
-                let (data, blob_error) = blob_at(r, vector)
-                if blob_error != ok { ret blob_error }
-                dst[i] = db.Value{ Bytes: data }
-            } else {
-                let (text, text_error) = text_at(r, vector)
-                if text_error != ok { ret text_error }
-                dst[i] = db.Value{ Text: text }
+                dst[i] = db.Value{ Time: time.Instant { nanos: saturating_mul(micros, 1000i64) } }
             }
         } else if t == TYPE_BLOB {
-            let (data, blob_error) = blob_at(r, vector)
+            let (data, blob_error) = text_value(r, value, true)
             if blob_error != ok { ret blob_error }
             dst[i] = db.Value{ Bytes: data }
-        } else if t == TYPE_DECIMAL || t == TYPE_HUGEINT || t == TYPE_UHUGEINT {
-            let (text, text_error) = spelled_value(r, i, t, vector)
-            if text_error != ok { ret text_error }
-            dst[i] = db.Value{ Text: text }
-        } else if t == TYPE_INTERVAL || is_nested_type(t) {
-            let (data, nested_error) = blob_at(r, vector)
+        } else if is_nested_type(t) {
+            let (data, nested_error) = text_value(r, value, true)
             if nested_error != ok { ret nested_error }
-            dst[i] = db.Value{ Bytes: data }
-        } else {
+            let bytes: []const u8 = data
+            dst[i] = db.Value{ Bytes: bytes }
+        } else if t == TYPE_SQLNULL {
             dst[i] = .Null
+        } else {
+            let (text, text_error) = text_value(r, value, false)
+            if text_error != ok { ret text_error }
+            let spelled: str = text
+            dst[i] = db.Value{ Text: spelled }
         }
         i += 1usize
     }
     ret ok
 }
 
+// `v * factor`, or the end of `i64` rather than a wrapped one.
+fn saturating_mul(v: i64, factor: i64) -> i64 {
+    if v > 0i64 && v > I64_MAX / factor { ret I64_MAX }
+    if v < 0i64 && v < I64_MIN / factor { ret I64_MIN }
+    ret v * factor
+}
 
 fn next_row(r: *Reader, dst: []db.Value) -> (bool, err) {
     if r.closed { ret (false, db.Closed) }
     if dst.len < r.columns.len { ret (false, refuse(r.conn, "the row buffer is shorter than the row", db.InvalidQuery)) }
     if r.done { ret (false, ok) }
     if r.at >= r.rows {
-        if r.chunk != 0usize { capi.destroy_data_chunk(&r.chunk) }
-        r.chunk = capi.fetch_chunk(&r.result)
+        if r.chunk != 0usize {
+            let _ = v2.data_chunk_destroy(&r.chunk)
+            r.chunk = 0usize
+        }
+        var chunk = 0usize
+        var quiet13: [1]usize = zero
+        let fetched = v2.result_fetch_chunk(r.handle, &chunk, &quiet13[0usize])
         r.at = 0usize
         r.rows = 0usize
-        if r.chunk == 0usize {
+        if fetched != v2.DUCKDB_SUCCESS {
+            r.done = true
+            ret (false, failure(r.conn, fetched, "DuckDB could not produce the next chunk"))
+        }
+        if chunk == 0usize {
             r.done = true
             ret (false, ok)
         }
-        r.rows = capi.data_chunk_get_size(r.chunk)
-        if r.rows == 0usize {
+        var size = 0usize
+        var quiet14: [1]usize = zero
+        let sized = v2.data_chunk_get_size(chunk, &size, &quiet14[0usize])
+        if sized != v2.DUCKDB_SUCCESS {
+            let _ = v2.data_chunk_destroy(&chunk)
+            r.done = true
+            ret (false, failure(r.conn, sized, "DuckDB did not size a chunk"))
+        }
+        r.chunk = chunk
+        r.rows = size
+        if size == 0usize {
             r.done = true
             ret (false, ok)
         }
@@ -1355,42 +1266,67 @@ fn next_row(r: *Reader, dst: []db.Value) -> (bool, err) {
     ret (true, ok)
 }
 
-// Ends a reader that has not reached its end: its chunk and its result go back to DuckDB.
 fn finish_reader(r: *Reader) {
     if r.closed { ret }
     r.closed = true
     r.done = true
+    if r.held != 0usize {
+        let _ = v2.value_destroy(&r.held)
+        r.held = 0usize
+    }
     if r.chunk != 0usize {
-        capi.destroy_data_chunk(&r.chunk)
+        let _ = v2.data_chunk_destroy(&r.chunk)
         r.chunk = 0usize
     }
-    capi.destroy_result(&r.result)
+    if r.handle != 0usize {
+        // v2 refuses the next statement on a connection whose previous result is still open,
+        // so a reader closed before its end reads and discards what is left first.
+        var left = 0usize
+        var slot: [1]usize = zero
+        while true {
+            let fetched = v2.result_fetch_chunk(r.handle, &left, &slot[0usize])
+            if fetched != v2.DUCKDB_SUCCESS { break }
+            if left == 0usize { break }
+            let _ = v2.data_chunk_destroy(&left)
+        }
+        var handle = r.handle
+        let _ = v2.result_destroy(&handle)
+        r.handle = 0usize
+    }
+    if r.conn.active == r { r.conn.active = nil }
 }
 
 // --- the driver table
 
 fn d_close(ctx: *void) -> err {
     let c = conn_of(ctx)
+    if c.active != nil { finish_reader(c.active) }
     var handle = c.handle
-    capi.disconnect(&handle)
-    var database = c.database
-    capi.close(&database)
+    var instance = c.instance
+    var environment = c.environment
+    let _ = v2.connection_destroy(&handle)
+    let _ = v2.instance_destroy(&instance)
+    let _ = v2.environment_destroy(&environment)
     ret ok
 }
 
 fn d_prepare(ctx: *void, sql: str) -> (db.Statement, err) {
     let c = conn_of(ctx)
     var statement: db.Statement = zero
-    if count_statements(sql) != 1usize { ret (statement, refuse(c, "a prepared statement takes exactly one statement", db.InvalidQuery)) }
-    let (compiled, compile_error) = compile_one(c, sql)
+    let (prepared0, parsed_statement, iterator0, compile_error) = compile_prepared(c, sql)
     if compile_error != ok { ret (statement, compile_error) }
-    var handle = compiled
+    var prepared = prepared0
+    var iterator = iterator0
     let (stmts, stmt_error) = mem.alloc[Stmt](c.arena, 1usize)
     if stmt_error != ok {
-        capi.destroy_prepare(&handle)
+        var dropped = prepared
+        let _ = v2.prepared_statement_destroy(&dropped)
+        var dropped_parsed = parsed_statement
+        let _ = v2.sql_statement_destroy(&dropped_parsed)
+        let _ = v2.statement_iterator_destroy(&iterator)
         ret (statement, stmt_error)
     }
-    stmts[0usize] = Stmt { conn: c, handle: handle, closed: false }
+    stmts[0usize] = Stmt { conn: c, handle: prepared, parsed: parsed_statement, iterator: iterator, closed: false }
     clear_detail(c)
     statement.ctx = mem.cast[*void](&stmts[0usize])
     ret (statement, ok)
@@ -1402,7 +1338,7 @@ fn d_execute(ctx: *void, sql: str, params: []const db.Parameter) -> (u64, err) {
 }
 
 fn d_query(ctx: *void, sql: str, params: []const db.Parameter) -> (db.Rows, err) {
-    let (rows, rows_error) = start_query(conn_of(ctx), sql, params, nil)
+    let (rows, rows_error) = start_reader(conn_of(ctx), sql, params, nil)
     ret (rows, rows_error)
 }
 
@@ -1411,22 +1347,40 @@ fn d_begin(ctx: *void) -> (db.Transaction, err) {
     let c = conn_of(ctx)
     var transaction: db.Transaction = zero
     if c.in_transaction { ret (transaction, refuse(c, "a transaction is already open on this connection", db.Busy)) }
-    let (txs, tx_error) = mem.alloc[Tx](c.arena, 1usize)
-    if tx_error != ok { ret (transaction, tx_error) }
-    let (ignored, begin_error) = execute_text(c, "BEGIN TRANSACTION", zero)
+    let (ignored, begin_error) = run_sql(c, "BEGIN TRANSACTION", zero)
     if begin_error != ok { ret (transaction, begin_error) }
     c.in_transaction = true
+    // The transaction record is allocated after every statement that could reset the arena, so
+    // nothing the transaction goes on to run can reclaim it.
+    let (txs, tx_error) = mem.alloc[Tx](c.arena, 1usize)
+    if tx_error != ok {
+        let (undone, undo_error) = run_sql(c, "ROLLBACK", zero)
+        c.in_transaction = false
+        ret (transaction, tx_error)
+    }
     txs[0usize] = Tx { conn: c }
     transaction.ctx = mem.cast[*void](&txs[0usize])
     ret (transaction, ok)
 }
 
-// The statement stays compiled; a closed one's reader answers `Closed`.
 fn d_statement_close(ctx: *void) -> err {
     let s = stmt_of(ctx)
     if s.handle != 0usize {
-        capi.destroy_prepare(&s.handle)
+        var dropped = s.handle
+        let _ = v2.prepared_statement_destroy(&dropped)
         s.handle = 0usize
+    }
+    // The parsed statement and its iterator go last, in the order the API requires: the
+    // statement is answered from the iterator, so it is destroyed first.
+    if s.parsed != 0usize {
+        var dropped_parsed = s.parsed
+        let _ = v2.sql_statement_destroy(&dropped_parsed)
+        s.parsed = 0usize
+    }
+    if s.iterator != 0usize {
+        var dropped_iterator = s.iterator
+        let _ = v2.statement_iterator_destroy(&dropped_iterator)
+        s.iterator = 0usize
     }
     s.closed = true
     ret ok
@@ -1435,34 +1389,63 @@ fn d_statement_close(ctx: *void) -> err {
 fn d_statement_execute(ctx: *void, params: []const db.Parameter) -> (u64, err) {
     let s = stmt_of(ctx)
     if s.closed { ret (0u64, db.Closed) }
-    let bind_error = bind_all(s.conn, s.handle, params)
-    if bind_error != ok { ret (0u64, bind_error) }
-    let (affected, run_error) = run(s.conn, s.handle)
+    let (affected, run_error) = run_prepared(s.conn, s.handle, s.parsed, params)
     ret (affected, run_error)
 }
 
 fn d_statement_query(ctx: *void, params: []const db.Parameter) -> (db.Rows, err) {
     let s = stmt_of(ctx)
     if s.closed { ret (zero, db.Closed) }
-    let bind_error = bind_all(s.conn, s.handle, params)
-    if bind_error != ok { ret (zero, bind_error) }
-    let (rows, rows_error) = reader(s.conn, s.handle, s, false)
+    let (rows, rows_error) = start_prepared_reader(s, params)
     ret (rows, rows_error)
+}
+
+// A reader over a statement `prepare` already compiled, which is not freed by the reader.
+fn start_prepared_reader(s: *Stmt, params: []const db.Parameter) -> (db.Rows, err) {
+    var rows: db.Rows = zero
+    let c = s.conn
+    let mark = mem.mark(c.arena)
+    let (names, values, made, bind_error) = bind_arrays(c, s.parsed, params)
+    if bind_error != ok {
+        var k = 0usize
+        while k < made {
+            let _ = v2.value_destroy(&values[k])
+            k += 1usize
+        }
+        mem.reset(c.arena, mark)
+        ret (rows, bind_error)
+    }
+    var result = 0usize
+    var slot: [1]usize = zero
+    let executed = v2.prepared_statement_execute(s.handle, names_pointer(names), values_pointer(values), params.len, &result, &slot[0usize])
+    var k = 0usize
+    while k < made {
+        let _ = v2.value_destroy(&values[k])
+        k += 1usize
+    }
+    if executed != v2.DUCKDB_SUCCESS {
+        let failed = fail_info(c, executed, slot[0usize])
+        mem.reset(c.arena, mark)
+        ret (rows, failed)
+    }
+    // The statement is not the reader's to free, so it is not recorded on the reader either. The
+    // arena is not reset past this point: the reader, its columns and its types live there.
+    let (ready, ready_error) = reader_for(c, result, nil)
+    if ready_error != ok { ret (rows, ready_error) }
+    ret (ready, ok)
 }
 
 fn d_rows_columns(ctx: *void) -> []const db.Column { ret reader_of(ctx).columns }
 
 fn d_rows_next(ctx: *void, dst: []db.Value) -> (bool, err) {
-    let r = reader_of(ctx)
-    r.borrow = false
-    let (more, next_error) = next_row(r, dst)
+    let (more, next_error) = next_row(reader_of(ctx), dst)
     ret (more, next_error)
 }
 
+// v2 hands out an owned value per cell rather than a pointer into the chunk, so there is
+// nothing to borrow: this is the same read.
 fn d_rows_next_borrowed(ctx: *void, dst: []db.Value) -> (bool, err) {
-    let r = reader_of(ctx)
-    r.borrow = true
-    let (more, next_error) = next_row(r, dst)
+    let (more, next_error) = next_row(reader_of(ctx), dst)
     ret (more, next_error)
 }
 
@@ -1477,7 +1460,7 @@ fn d_transaction_execute(ctx: *void, sql: str, params: []const db.Parameter) -> 
 }
 
 fn d_transaction_query(ctx: *void, sql: str, params: []const db.Parameter) -> (db.Rows, err) {
-    let (rows, rows_error) = start_query(tx_of(ctx).conn, sql, params, nil)
+    let (rows, rows_error) = start_reader(tx_of(ctx).conn, sql, params, nil)
     ret (rows, rows_error)
 }
 
@@ -1485,9 +1468,9 @@ fn d_transaction_query(ctx: *void, sql: str, params: []const db.Parameter) -> (d
 // handle.
 fn d_transaction_commit(ctx: *void) -> err {
     let c = tx_of(ctx).conn
-    let (ignored, commit_error) = execute_text(c, "COMMIT", zero)
+    let (ignored, commit_error) = run_sql(c, "COMMIT", zero)
     if commit_error != ok {
-        let (undone, undo_error) = execute_text(c, "ROLLBACK", zero)
+        let (undone, undo_error) = run_sql(c, "ROLLBACK", zero)
     }
     c.in_transaction = false
     ret commit_error
@@ -1495,7 +1478,7 @@ fn d_transaction_commit(ctx: *void) -> err {
 
 fn d_transaction_rollback(ctx: *void) -> err {
     let c = tx_of(ctx).conn
-    let (ignored, rollback_error) = execute_text(c, "ROLLBACK", zero)
+    let (ignored, rollback_error) = run_sql(c, "ROLLBACK", zero)
     c.in_transaction = false
     ret rollback_error
 }

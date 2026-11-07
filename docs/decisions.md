@@ -43918,43 +43918,56 @@ journal shape and budget accounting (`#205`) and Petcow's Puppet skip-one behavi
 (`#55`) remain upstream changes: editing a pinned copy would make the fixture disagree
 with the real project, so they stay open until those repositories change.
 
-## D5965 — `x.duckdb.duckdb`: an `e.db` driver over DuckDB's C API, on v1 names and a 48-byte result
+## D5965 — `x.duckdb.duckdb`: an `e.db` driver over DuckDB's v2 C API
 
 **Problem.** `e.db` has drivers for SQLite, PostgreSQL, MySQL, ODBC and TDS, and none for
 DuckDB, the embedded analytical store most of the new database work lands in. The obvious
 starting point is the same shape as `x.sqlite.sqlite`: declare the C API with `@import`, run
 the statements through it, and let the arena own everything.
 
-**Decision.** `x.duckdb.duckdb` binds the DuckDB **C API v1** — the `duckdb.h` surface —
-through `x.duckdb.capi`, one variant per OS, and is the only file with `@import`. DuckDB 2.0
-exports V1 and V2 side by side and the V2 surface is still moving, so V1 is what a driver can
-sit on today; the package specification records the move to `duckdb_v2_*` as the next step
-rather than a rename of today's calls. The floor is 1.1.0, the release that added
-`duckdb_result_error_type`, and the newest call bound. `open` takes a path (empty for an
+**Decision.** `x.duckdb.duckdb` binds the DuckDB **C API v2** — the `duckdb_v2_*` surface —
+through `x.duckdb.v2`, one variant per OS, and is the only file with `@import`. The floor is
+2.0.0, the first release that declares this surface. `open` takes a path (empty for an
 in-memory database) and answers a `db.Connection` whose table is the package's.
 
-Three shapes are fixed by the library rather than chosen here. `duckdb_result` is a 48-byte
-C struct whose last field is the address of the result's state; it crosses as a pointer, and
-the three deprecated counters ahead of that field are written zero and read never. DuckDB v2
-does not put a pointer-sized field where v1's own layout put the column array, so reading a
-result through a locally invented 192-byte block gets success and then empty columns — which
-is what the first draft of this driver did. `duckdb_string_t` is 16 bytes, a length and then
-either twelve inline characters or a prefix and a pointer. The chunks a reader consumes are
-DuckDB's own, so a reader holds one at a time and frees it before fetching the next, and a
-borrowed row is valid only until the reader steps.
+This started on the v1 names, because DuckDB 2.0 exported v1 and v2 side by side. It moved to
+v2 because v1 had a defect this driver could not work around: `duckdb_bind_int64` passes
+`duckdb_bind_value` the address of a local `Value` that the library keeps reading, so a bound
+integer read back as garbage. v2 has no such call — an execute takes a whole array of values,
+which is why that class of bug is gone rather than fixed. The three decisions the move forced:
 
-The DuckDB C API has no statement splitter, so the driver reads one: `;` outside quotes and
-comments ends a statement, and a text it cannot follow is handed to DuckDB whole rather than
-refused by a guess. `execute` therefore answers the number of statements that changed rows,
-not the number of rows, because the API reports "changed rows" per result rather than a count.
-Parameters are DuckDB's `$1`, `$2`, ... in first-appearance order; a `db.Parameter` binds
-positionally, and a named one is checked against the statement so a name it does not have is
-refused instead of silently binding elsewhere. `DATE`, `TIME`, `DECIMAL`, `HUGEINT`,
-`UHUGEINT`, `UUID`, `INTERVAL` and `TIMESTAMP_NS` have no `db.Value` case that holds them
-exactly and arrive as their `Text` spelling; the nested types arrive as their raw `Bytes`.
+- **Parameters are named by the statement, not the caller.** `prepared_statement_execute` takes
+  a name per parameter beside a value per parameter, and v2 binds by name as soon as any name
+  is given. `sql_statement_get_parameter_name` reports, per zero-based position, *the binding
+  key v2 accepts*: `"1"`, `"2"`, ... for a positional parameter and the bare identifier for a
+  named one. The driver therefore asks the statement for each key and copies it, and a
+  `db.Parameter`'s own name is a fallback only. Supplying a spelling v2 does not expect is
+  refused as `excess parameters` or `values were not provided`, which is how the first draft of
+  the port bound a `$1` statement with names `"2".."6"`.
+- **A statement lives as long as its iterator.** A `sql_statement` taken from a
+  `statement_iterator` is valid only while that iterator lives. The driver therefore parses,
+  prepares, and only then destroys the iterator, and a prepared statement keeps its iterator
+  open until `close_statement`. Doing this in one place and not the others cost real time: the
+  same rule was honoured in `execute_text` and missed in `compile_one`, so every transaction
+  call ran a dangling statement.
+- **The connection owns its own arena.** The driver allocates per call — parameter arrays,
+  copied names, readers, column descriptions — and releases them with `mem.reset`. When the
+  connection borrowed the caller's arena, that reset freed memory the caller was still holding
+  across calls. A connection now reserves a region once and resets only inside it.
 
-**Not done.** `duckdb_execute_prepared` answers success and leaves an empty result against the
-2.0 library this was measured on, while `duckdb_query` works, so the `db.prepare` path is not
-usable yet and the fixture does not exercise it; `db.execute`/`db.query` split the text and run
-each statement on its own, and that is the path that works. Nothing was run on Linux: the
-fixture is wired into both suites, but only the Windows host had DuckDB's library.
+Also fixed by the move: every result is drained (`result_drain`, which is also where the
+affected-row count comes from) because v2 applies a side effect only once its result is
+consumed; a NULL read back is `value_is_null` rather than a zero handle; a `TIMESTAMP` is
+`value_get_timestamp` rather than a bigint read; and `make_default` is passed to
+`instance_attach`, which must happen **before** `connection_create` because it names the default
+of connections created afterwards.
+
+**Measured.** v2.0.0 on Windows 11. `tests/selfhost/fixtures/link/x_duckdb` passes on the
+Windows host. One environment note for whoever runs it next: the fixture's `files` section
+opens a database under the system temp directory, and a process whose file access is confined
+to a workspace cannot write there — `instance_attach` reports `IO Error: Access is denied` and
+the fixture exits 134, which is its own code for "`open` on a file path failed", not a crash.
+
+**Not done.** Nothing was run on Linux: the fixture is wired into both suites, but only the
+Windows host had DuckDB's library. The v1 declarations (`capi.windows.e`, `capi.linux.e`) are
+left in place and now unreferenced.

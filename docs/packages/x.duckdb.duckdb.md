@@ -6,11 +6,11 @@ targets, ownership and licensing boundary. Decision D1571's sibling for SQLite.
 
 ## Upstream
 
-- **API:** the DuckDB **C API v1** — the surface `duckdb.h` declares, not the `duckdb_v2_*`
-  redesign. A DuckDB 2.0 library exports both; this package binds the v1 names, so it runs on
-  1.1 and later. The newest call bound is `duckdb_result_error_type`, which arrived in
-  **1.1.0**, so the floor is version `1.1.0` and anything older fails `open` with
-  `db.Unsupported`.
+- **API:** the DuckDB **C API v2** — the `duckdb_v2_*` surface `duckdb_v2.h` declares. Every
+  call answers a `DUCKDB_V2_ERROR` (`0` is success) and hands back its products through
+  out-parameters, with errors carried in an opaque info handle the caller destroys. The floor is
+  version **2.0.0** (`MIN_VERSION = 20000`), the first release that declares this surface, and
+  anything older fails `open` with `db.Unsupported`.
 - **Library, not source:** the package binds a shared library. No DuckDB source is vendored or
   compiled. DuckDB is MIT licensed, and linking it dynamically keeps that licence's notice
   requirement with the distributor, as libpq and libmysql do for their drivers.
@@ -24,23 +24,25 @@ Measured when the package was delivered: v2.0.0 on Windows 11.
 
 ## Modules
 
-- `x.duckdb.capi` holds the raw `@import` declarations, one variant per OS
-  (`capi.windows.e`, `capi.linux.e`). The two files differ only in the library name and the
+- `x.duckdb.v2` holds the raw `@import` declarations, one variant per OS
+  (`v2.windows.e`, `v2.linux.e`). The two files differ only in the library name and the
   header comment. It is the package's only foreign boundary.
-- `x.duckdb.duckdb` is the driver. It is portable source over `capi`.
+- `x.duckdb.duckdb` is the driver. It is portable source over `v2`.
 
 Binding is by `@import`, so the loader resolves every symbol eagerly at start-up. A program
 that calls nothing in the package does not depend on the library (D128). A program that does
 call it will not start on a host that lacks the library.
 
 The library is C++ inside, but its C API is `extern "C"` and exported unmangled: every symbol
-`capi` names is the plain `duckdb_*` spelling. Two C shapes matter:
+`v2` names is the plain `duckdb_v2_*` spelling. Three v2 shapes matter:
 
-- `duckdb_result` is a 48-byte struct whose last field is the address of the result's real
-  state. It crosses as a pointer; the three deprecated counters ahead of that field are written
-  zero and never read.
-- `duckdb_string_t` is 16 bytes: a length and then either twelve inline characters or a prefix
-  and a pointer to the rest.
+- `duckdb_v2_str` is `{ const char *ptr; idx_t len; }` — 16 bytes, and **not** NUL-terminated.
+  `duckdb_v2_identifier_t` has the same layout, and is what a parameter name is passed as.
+- `duckdb_v2_value_handle` is an owned value, not a pointer into a chunk: every cell read is
+  destroyed by the reader, and so is every value handed to an execute call once it returns.
+- A statement taken from a statement iterator is valid **only while that iterator lives**. The
+  driver therefore prepares a statement before it destroys the iterator, and keeps the iterator
+  alive for as long as a prepared statement is open.
 
 ## Surface
 
@@ -48,7 +50,7 @@ The library is C++ inside, but its C API is `extern "C"` and exported unmangled:
 type Detail = struct { code: i32, message: str }
 error CannotOpen
 error Failed
-const MIN_VERSION: i32 = 10100i32
+const MIN_VERSION: i32 = 20000i32
 
 fn version() -> i32
 fn open(a: *mem.Arena, path: str) -> (db.Connection, err)
@@ -87,10 +89,12 @@ visibility (spec section 12), so they are reachable, but they are not the surfac
 - `query` and `prepare` accept one statement. A second statement is `db.InvalidQuery`; a
   trailing `;` or comment is not.
 - Parameters are DuckDB's `$1`, `$2`, ... in the order they first appear. A `db.Parameter`
-  binds in the order it is given. A named one is looked up by the name it is given and then
-  with `$` in front, and a name the statement does not have is `db.InvalidQuery`; DuckDB
-  itself numbers mixed named and positional parameters in first-appearance order.
-- Each statement must take exactly as many parameters as it is given.
+  binds in the order it is given. A statement's parameters are bound by the key DuckDB reports
+  for each position — `"1"`, `"2"`, ... for a positional parameter and the bare identifier for
+  a named one, without a leading `$` — so `$name`, `$1` and a mix of the two all bind, and a
+  parameter name the caller supplies is used only when the statement reports none.
+- Each statement must take exactly as many parameters as it is given: the driver asks the
+  statement how many it takes and refuses a mismatch as `db.InvalidQuery` itself.
 - A query takes its first chunk before it returns, so a failing query fails at `query` rather
   than at its first row.
 
@@ -154,6 +158,7 @@ host. Every check has its own exit code.
 
 ## Not in this package
 
-- The `duckdb_v2_*` surface, which the package would move to when a release drops the v1 names.
+- The v1 `duckdb_*` surface. DuckDB 2.0 still exports it, but this package binds only the v2
+  names, so the v1 declarations (`capi.windows.e`, `capi.linux.e`) are now unreferenced.
 - User-defined SQL functions and appenders, which need foreign callbacks.
 - Column metadata beyond the declared type, which the C API does not report per column.
