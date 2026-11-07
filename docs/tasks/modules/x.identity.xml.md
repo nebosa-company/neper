@@ -63,7 +63,7 @@ type Rendered = struct { prefixes: []str, uris: []str, count: usize }
 fn rendered_get(r: Rendered, prefix: str) -> (str, bool)
 fn render(a: *mem.Arena, d: Doc, at: usize, inherited: Rendered, inclusive: []const str) -> str
 fn canonicalize(a: *mem.Arena, d: Doc, at: usize, inclusive: []const str) -> str
-fn without_signature(a: *mem.Arena, d: Doc, at: usize) -> (Doc, usize)
+fn without_signature(a: *mem.Arena, d: Doc, at: usize, signature: usize) -> (Doc, usize)
 ```
 
 A small XML reader and Exclusive XML Canonicalization 1.0 for SAML (L045), after Appdor's `src/identity/xml.js`: `parse_xml` (elements, attributes, namespaces, text, CDATA, comments and the declaration; no DTD, so no entity expansion; the reference's own error messages and UTF-16 offsets), `decode_entities`, `resolve_namespace`, `find_elements`/`find_element`/`find_by_id`, `canonicalize` (visibly-utilised namespace declarations, attributes sorted by namespace then local name, text kept with its whitespace, the C14N escapes, `InclusiveNamespaces` prefixes) and `without_signature` (the enveloped-signature transform). Checked against Appdor's own functions over 416 cases with `x.identity.saml` on both hosts (D2350).

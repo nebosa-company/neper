@@ -1,4 +1,4 @@
-# x.identity.scim — 77 of 77 declarations missing
+# x.identity.scim — 79 of 79 declarations missing
 
 | field | value |
 |---|---|
@@ -28,9 +28,10 @@ The module may `use` only these (`scripts/check_module_plan.py` enforces it). La
 ## Public API fence (verbatim from `docs/module-apis.md`)
 
 ```neper
+const MAX_EVAL_DEPTH: usize = 128usize
 type Token = struct { kind: u8, value: str }
 type Node = struct { kind: u8, op: u8, attribute: str, path: str, left: usize, right: usize, value: json.Value }
-type Parser = struct { tokens: []const Token, pos: usize, nodes: []Node, count: usize, failed: bool, message: str }
+type Parser = struct { tokens: []const Token, pos: usize, nodes: []Node, count: usize, failed: bool, message: str, depth: usize }
 type Filter = struct { valid: bool, message: str, nodes: []const Node, root: usize }
 type PatchPath = struct { attribute: str, has_filter: bool, filter: Filter, has_sub: bool, sub: str, has_error: bool, message: str }
 type Patched = struct { valid: bool, message: str, resource: json.Value }
@@ -65,7 +66,7 @@ fn strict_equal(x: json.Value, y: json.Value) -> bool
 fn lowered_value(a: *mem.Arena, v: json.Value) -> json.Value
 fn less(x: json.Value, y: json.Value) -> bool
 fn compare_values(a: *mem.Arena, actual: json.Value, found: bool, op: u8, expected: json.Value) -> bool
-fn eval(a: *mem.Arena, nodes: []const Node, at: usize, resource: json.Value) -> bool
+fn eval(a: *mem.Arena, nodes: []const Node, at: usize, resource: json.Value, depth: usize) -> bool
 fn evaluate(a: *mem.Arena, filter: Filter, resource: json.Value) -> bool
 fn index_of(s: str, c: u8) -> i64
 fn last_index_of(s: str, c: u8) -> i64
@@ -76,11 +77,12 @@ fn object_of(a: *mem.Arena, v: json.Value) -> ir.Obj
 fn without(a: *mem.Arena, v: json.Value, key: str) -> json.Value
 fn set_path(a: *mem.Arena, base: json.Value, parts: []const str, at: usize, value: json.Value, has_value: bool) -> json.Value
 fn split_dots(a: *mem.Arena, attribute: str, sub: str, has_sub: bool) -> []const str
+fn compare_sorted(a: *mem.Arena, before: json.Value, cur: json.Value, sort_by: str, direction: i32) -> i32
 fn patch_failed(msg: str) -> Patched
 fn apply_patch_op(a: *mem.Arena, resource: json.Value, operation: json.Value) -> Patched
+fn patch_read_only(a: *mem.Arena, attr: str) -> bool
 fn apply_patch(a: *mem.Arena, resource: json.Value, body: json.Value) -> Patched
 fn escape_into(a: *mem.Arena, s: str) -> str
-fn s_of(c: u8) -> str
 fn stringify(a: *mem.Arena, v: json.Value, keys: []const str) -> str
 fn hex_text(a: *mem.Arena, x: u32) -> str
 fn resource_version(a: *mem.Arena, resource: json.Value) -> str
@@ -112,6 +114,7 @@ SCIM 2.0 protocol core, RFC 7643 and RFC 7644 (L045), after Appdor's `src/identi
 
 ## Missing declarations
 
+- [ ] `MAX_EVAL_DEPTH`
 - [ ] `Token`
 - [ ] `Node`
 - [ ] `Parser`
@@ -159,11 +162,12 @@ SCIM 2.0 protocol core, RFC 7643 and RFC 7644 (L045), after Appdor's `src/identi
 - [ ] `without`
 - [ ] `set_path`
 - [ ] `split_dots`
+- [ ] `compare_sorted`
 - [ ] `patch_failed`
 - [ ] `apply_patch_op`
+- [ ] `patch_read_only`
 - [ ] `apply_patch`
 - [ ] `escape_into`
-- [ ] `s_of`
 - [ ] `stringify`
 - [ ] `hex_text`
 - [ ] `resource_version`
@@ -195,7 +199,7 @@ SCIM 2.0 protocol core, RFC 7643 and RFC 7644 (L045), after Appdor's `src/identi
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/identity/scim.e` prints `parse file ok`.
 - A fixture `tests/selfhost/fixtures/link/identity_scim/src/main.e` that prints one fixed line on success, registered in both runners.
 - `python scripts/check_module_surfaces.py --compiler <neper-self> --arch x64 --os <host>` and `python tests/test_module_plan.py` pass.
-- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 77.
+- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 79.
 
 ## Session procedure
 

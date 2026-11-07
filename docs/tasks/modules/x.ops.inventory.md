@@ -1,4 +1,4 @@
-# x.ops.inventory — 26 of 26 declarations missing
+# x.ops.inventory — 30 of 30 declarations missing
 
 | field | value |
 |---|---|
@@ -27,10 +27,13 @@ The module may `use` only these (`scripts/check_module_plan.py` enforces it). La
 ## Public API fence (verbatim from `docs/module-apis.md`)
 
 ```neper
-type Doc = struct { valid: bool, message: str, names: []const str, addresses: []const str, host_groups: []const []const str, host_vars: []const json.Value, group_names: []const str, group_vars: []const json.Value }
+type Doc = struct { valid: bool, message: str, names: []const str, addresses: []const str, host_groups: []const []const str, host_vars: []const json.Value, group_names: []const str, group_vars: []const json.Value, sources: []const DynamicSource }
+type DynamicSource = struct { cloud: str, type_name: str, address_from: str, has_group: bool, group: str, has_group_from_tag: bool, group_from_tag: str, include_unmanaged: bool }
 type Host = struct { name: str, address: str, groups: []const str, vars: json.Value }
 
 fn join(a: *mem.Arena, x: str, y: str) -> str
+fn canonical_integer(s: str) -> bool
+fn i64_text(a: *mem.Arena, n: i64) -> str
 fn sv(s: str) -> json.Value
 fn put(o: *ir.Obj, key: str, v: json.Value)
 fn new_obj(a: *mem.Arena) -> ir.Obj
@@ -38,6 +41,7 @@ fn is_ws(c: u8) -> bool
 fn trim(s: str) -> str
 fn parse_i64(s: str) -> (i64, bool)
 fn parse_facts(a: *mem.Arena, stdout: str) -> json.Value
+fn fact_name_ok(s: str) -> bool
 fn custom_fact_script(a: *mem.Arena, names: []const str, commands: []const str) -> str
 fn sanitize(a: *mem.Arena, token: str) -> str
 fn bad(a: *mem.Arena, what: str) -> Doc
@@ -63,8 +67,11 @@ Host facts and inventory helpers (L050), after Petcow's `facts.rs`, `inventory.r
 ## Missing declarations
 
 - [ ] `Doc`
+- [ ] `DynamicSource`
 - [ ] `Host`
 - [ ] `join`
+- [ ] `canonical_integer`
+- [ ] `i64_text`
 - [ ] `sv`
 - [ ] `put`
 - [ ] `new_obj`
@@ -72,6 +79,7 @@ Host facts and inventory helpers (L050), after Petcow's `facts.rs`, `inventory.r
 - [ ] `trim`
 - [ ] `parse_i64`
 - [ ] `parse_facts`
+- [ ] `fact_name_ok`
 - [ ] `custom_fact_script`
 - [ ] `sanitize`
 - [ ] `bad`
@@ -94,7 +102,7 @@ Host facts and inventory helpers (L050), after Petcow's `facts.rs`, `inventory.r
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/ops/inventory.e` prints `parse file ok`.
 - A fixture `tests/selfhost/fixtures/link/ops_inventory/src/main.e` that prints one fixed line on success, registered in both runners.
 - `python scripts/check_module_surfaces.py --compiler <neper-self> --arch x64 --os <host>` and `python tests/test_module_plan.py` pass.
-- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 26.
+- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 30.
 
 ## Session procedure
 

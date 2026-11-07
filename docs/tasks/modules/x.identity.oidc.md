@@ -1,4 +1,4 @@
-# x.identity.oidc — 43 of 43 declarations missing
+# x.identity.oidc — 45 of 45 declarations missing
 
 | field | value |
 |---|---|
@@ -49,6 +49,7 @@ fn text_of(v: json.Value, key: str) -> (str, bool)
 fn strings_or(a: *mem.Arena, v: json.Value, key: str, fallback: []const str) -> []const str
 fn list_of(a: *mem.Arena, xs: []const str) -> []const str
 fn parse_discovery(a: *mem.Arena, document: json.Value) -> Discovery
+fn parse_discovery_expected(a: *mem.Arena, document: json.Value, expected_issuer: str) -> Discovery
 fn discovery_url(a: *mem.Arena, issuer: str) -> str
 fn pkce_challenge(a: *mem.Arena, verifier: str) -> str
 fn same_text(x: str, y: str) -> bool
@@ -71,6 +72,7 @@ fn rejected(msg: str) -> Validation
 fn number_claim(v: json.Value, key: str) -> (f64, bool)
 fn floor_f64(x: f64) -> f64
 fn validate_id_token(a: *mem.Arena, id_token: str, ex: Expectations) -> Validation
+fn required_claims(claims: json.Value) -> str
 fn mapped(claims: json.Value, mapping: []const Pair, key: str, fallback: str) -> (str, bool)
 fn truthy_text(claims: json.Value, name: str) -> (str, bool)
 fn profile_from_claims(a: *mem.Arena, claims: json.Value, mapping: []const Pair) -> Profile
@@ -100,6 +102,7 @@ OpenID Connect relying party with PKCE (L045), after Appdor's `src/identity/oidc
 - [ ] `strings_or`
 - [ ] `list_of`
 - [ ] `parse_discovery`
+- [ ] `parse_discovery_expected`
 - [ ] `discovery_url`
 - [ ] `pkce_challenge`
 - [ ] `same_text`
@@ -120,6 +123,7 @@ OpenID Connect relying party with PKCE (L045), after Appdor's `src/identity/oidc
 - [ ] `number_claim`
 - [ ] `floor_f64`
 - [ ] `validate_id_token`
+- [ ] `required_claims`
 - [ ] `mapped`
 - [ ] `truthy_text`
 - [ ] `profile_from_claims`
@@ -132,7 +136,7 @@ OpenID Connect relying party with PKCE (L045), after Appdor's `src/identity/oidc
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/identity/oidc.e` prints `parse file ok`.
 - A fixture `tests/selfhost/fixtures/link/identity_oidc/src/main.e` that prints one fixed line on success, registered in both runners.
 - `python scripts/check_module_surfaces.py --compiler <neper-self> --arch x64 --os <host>` and `python tests/test_module_plan.py` pass.
-- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 43.
+- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 45.
 
 ## Session procedure
 

@@ -754,9 +754,9 @@ Recorded from earlier sessions; each one cost hours. Check them before blaming t
 
 - **Two compilers, two truths.** `build/windows/neper.exe` (or `build/linux/neper`) is the C bootstrap: more permissive than the language. `neper-self` is the self-hosted compiler and the only one whose verdict counts. A clean bootstrap build proves nothing. `MAX_LOCALS 256` and `MAX_DECLS` in `bootstrap/neper.c` are program-wide and near full: a new compiler file can silently truncate or refuse. Keep new compiler code small; do not raise the limits without measuring memory.
 - **Reserved local names.** `target`, `shared` and a local shadowing a module-scope `fn` pass the bootstrap and kill `neper-self` (`ModuleShadow`). Do not name locals after modules, module-scope functions or keywords.
-- **Capacities sit at their limit.** The arena (`--arena 1g` for the compiler), bootstrap tokens and resolver tokens have each been full before; a diagnostic blaming your change may be a full table. `MAX_TRAP_SITES` full surfaced as a bare `E-LINK-9999`.
+- **Capacities sit at their limit.** The arena, bootstrap tokens and resolver tokens have each been full before; a diagnostic blaming your change may be a full table. `MAX_TRAP_SITES` full surfaced as a bare `E-LINK-9999`. The compiler is built with no `--arena`, so its ceiling is the lazily-committed default; a cap exists only where a test asks for one (`--arena 96m`).
 - **Never edit `src/` while a suite runs.** Stage 2 fails silently. Never run both suites at once.
-- **Byte-equality needs the same cwd and operand.** `--arena` is baked at emit time; stage 2 must equal stage 3 byte for byte, so an added global or a changed `--arena` breaks the fixed point.
+- **Byte-equality needs the same cwd and operand.** `--arena` is baked at emit time; stage 2 must equal stage 3 byte for byte, so an added global or a changed `--arena` breaks the fixed point. That is why no stage sets the flag.
 - **A debug edit that fails to compile leaves the OLD binary answering.** Check `$LASTEXITCODE` / `$?` of the build before trusting a run.
 - **Fixtures cap at about 450 statements** per function under the bootstrap frame sizing; split large fixtures.
 - **Launch WSL from PowerShell**, never from Git Bash (it rewrites `/mnt/d/...`). `run.sh` fails silently on some errors; run `bash -x` when a step's output is missing.
@@ -876,7 +876,7 @@ wsl -d Ubuntu-24.04 -- bash /mnt/d/repos/neper/tests/selfhost/run.sh
 ```powershell
 # Fast inner loop: build stage 1 only (the C bootstrap), then the self-hosted compiler
 & scripts/build-bootstrap.ps1
-& build/windows/neper.exe build src/main.e --arena 1g --output build/windows/tests/selfhost/neper-self.exe
+& build/windows/neper.exe build src/main.e --output build/windows/tests/selfhost/neper-self.exe
 ```
 
 ```powershell

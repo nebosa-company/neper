@@ -4,7 +4,7 @@
 |---|---|
 | category | compiler / Language design |
 | score | 0.00 of 1 |
-| queue position | 217 of 219 (only position 1 is eligible for the next session; see README) |
+| queue position | 217 of 222 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -25,7 +25,7 @@ Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.m
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `Arena`: `lib/e/ui/control.e`×460‡, `lib/e/ui/datagrid.e`×197‡, `src/main.e`×184‡, `lib/e/ui/overlay.e`×168‡, `lib/e/ui/navigation.e`×158‡, `lib/e/ui/collection.e`×113‡, `lib/e/os/shell.windows.e`×83‡, `lib/e/os/shell.macos.e`×76‡
+- `Arena`: `lib/e/ui/control.e`×460‡, `lib/e/ui/datagrid.e`×197‡, `src/main.e`×184‡, `lib/e/ui/overlay.e`×168‡, `lib/e/ui/navigation.e`×158‡, `lib/e/ui/collection.e`×113‡, `lib/e/os/shell.windows.e`×88‡, `lib/e/os/shell.macos.e`×77‡
 
 ## Verification
 

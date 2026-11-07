@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.95 of 1 |
-| queue position | 25 of 219 (only position 1 is eligible for the next session; see README) |
+| queue position | 25 of 222 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -49,8 +49,8 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 - `program_snapshot`: `src/tool.e`×10‡
 - `fnv1a32_step`: `src/artifact_hash.e`×4, `src/em.e`×3‡
 - `rotate_left`: `lib/e/data/tree.e`×3, `src/artifact_hash.e`×2, `lib/e/bytes.e`×1
-- `read_u32`: `src/em.e`×134‡, `lib/e/text/unicode.e`×6‡, `src/binary.e`×4, `lib/e/audio.e`×3, `lib/e/text/bidi.e`×3†, `lib/e/time/sync.e`×3, `src/main.e`×3‡, `src/em_link.e`×1†
-- `read_u64`: `src/em.e`×17‡, `lib/e/fmt/mvt.e`×8, `lib/e/fmt/protobuf.e`×8, `lib/e/net/grpcstub.e`×6, `src/binary.e`×3, `lib/e/time/sync.e`×2, `lib/e/fmt/protodesc.e`×1
+- `read_u32`: `src/em.e`×134‡, `lib/e/proc/sys/host.macos.e`×11, `lib/e/text/unicode.e`×6‡, `src/binary.e`×4, `lib/e/audio.e`×3, `lib/e/text/bidi.e`×3†, `lib/e/time/sync.e`×3, `src/main.e`×3‡
+- `read_u64`: `src/em.e`×17‡, `lib/e/fmt/mvt.e`×8, `lib/e/fmt/protobuf.e`×8, `lib/e/net/grpcstub.e`×6, `lib/e/proc/sys/host.macos.e`×6, `src/binary.e`×3, `lib/e/time/sync.e`×2, `lib/e/fmt/protodesc.e`×1
 - `artifact_hash.self_test`: `src/main.e`×1‡
 - `os.sha256_blocks`: `lib/e/crypto/hash.e`×2†, `src/check.e`×1‡, `src/runtime_elf_a64.s`×1†, `src/runtime_elf_x64.s`×1†, `src/runtime_macos_a64.s`×1, `src/runtime_macos_x64.s`×1†, `src/runtime_pe_x64.asm`×1†
 

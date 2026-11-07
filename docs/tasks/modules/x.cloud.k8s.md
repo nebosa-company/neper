@@ -49,7 +49,7 @@ fn is_not_found(a: *mem.Arena, stderr: str) -> bool
 fn text(s: str) -> json.Value
 fn obj(a: *mem.Arena) -> ir.Obj
 fn is_managed_item(item: json.Value) -> bool
-fn apply_manifest(a: *mem.Arena, d: Def, name: str, attrs: json.Value) -> str
+fn apply_manifest(a: *mem.Arena, d: Def, name: str, attrs: json.Value) -> (str, err)
 fn observed(a: *mem.Arena, type_: str, live: json.Value) -> json.Value
 ```
 

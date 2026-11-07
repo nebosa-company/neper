@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.00 of 1 |
-| queue position | 119 of 219 (only position 1 is eligible for the next session; see README) |
+| queue position | 119 of 222 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -25,7 +25,7 @@ Verbatim from `docs/work-queue.json`; every `D<n>` is a row in `docs/decisions.m
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `e.lib`: `src/wasm.e`×6, `src/nir.e`×5†, `scripts/render_progress.py`×3, `src/em.e`×3‡, `src/lower.e`×2‡, `src/em_link.e`×1†, `src/wasm_code.e`×1†
+- `e.lib`: `src/wasm.e`×6, `src/nir.e`×5†, `scripts/render_progress.py`×3, `src/em.e`×3‡, `src/object_elf.e`×3, `src/lower.e`×2‡, `src/object_coff.e`×2, `src/em_link.e`×1†
 
 ## Verification
 

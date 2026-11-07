@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.85 of 1 |
-| queue position | 29 of 219 (only position 1 is eligible for the next session; see README) |
+| queue position | 29 of 222 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
@@ -27,10 +27,10 @@ The queue's own gap clause, split into checklist lines. Each line is one session
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `.ArgumentCount`: `src/lower.e`×57‡, `src/check.e`×1‡
+- `.ArgumentCount`: `src/lower.e`×57‡, `src/main.e`×2‡, `src/check.e`×1‡
 - `.InvalidOperator`: `src/lower.e`×2‡, `src/check.e`×1‡
-- `.Unsupported`: `src/codegen_a64.e`×85‡, `src/lower.e`×56‡, `lib/e/crypto/x509.e`×18†, `lib/x/postgresql/libpq.e`×12†, `lib/e/ui/app.e`×10†, `scripts/xsd_schema_reference.py`×10, `lib/e/gpu/tensor.e`×9, `lib/x/oracle/mysql.e`×8
-- `.InvalidType`: `src/lower.e`×54‡, `src/tool.e`×2‡, `src/check.e`×1‡, `src/layout.e`×1, `src/main.e`×1‡
+- `.Unsupported`: `src/codegen_a64.e`×85‡, `src/lower.e`×55‡, `lib/e/crypto/x509.e`×18†, `lib/x/postgresql/libpq.e`×13†, `lib/x/oracle/mysql.e`×12†, `lib/e/ui/app.e`×10†, `scripts/xsd_schema_reference.py`×10, `lib/e/gpu/tensor.e`×9
+- `.InvalidType`: `src/lower.e`×53‡, `src/tool.e`×2‡, `src/check.e`×1‡, `src/layout.e`×1, `src/main.e`×1‡
 - `.MissingContext`: `src/lower.e`×2‡, `src/check.e`×1‡
 
 ## Verification

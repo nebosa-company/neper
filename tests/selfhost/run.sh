@@ -52,9 +52,9 @@ if [ -n "${NEPER_SEED:-}" ]; then
         echo "NEPER_SEED names no executable: $NEPER_SEED" >&2
         exit 1
     fi
-    "$NEPER_SEED" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-self" -j 1 --arena 1g
+    "$NEPER_SEED" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-self" -j 1
 else
-    $neper build "$repo/src/main.e" --arena 1g --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
+    $neper build "$repo/src/main.e" --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
 fi
 python3 "$repo/scripts/check_module_surfaces.py" --compiler "$test_build/neper-self" --arch x64 --os linux
 # The deferred-library fixture manifest (D1529): current, and every delivered API

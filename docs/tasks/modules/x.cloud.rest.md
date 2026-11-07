@@ -1,4 +1,4 @@
-# x.cloud.rest — 69 of 69 declarations missing
+# x.cloud.rest — 70 of 70 declarations missing
 
 | field | value |
 |---|---|
@@ -49,6 +49,7 @@ fn split_dots(a: *mem.Arena, path: str) -> []const str
 fn set_by_path(a: *mem.Arena, obj: json.Value, path: str, value: json.Value) -> Built
 fn scalar_text(a: *mem.Arena, v: json.Value) -> (str, bool)
 fn var_lookup(vars: []const Pair, key: str) -> (str, bool)
+fn url_segment(a: *mem.Arena, s: str) -> str
 fn render_with(a: *mem.Arena, template: str, name: str, attrs: json.Value, vars: []const Pair) -> Rendered
 fn address(a: *mem.Arena, def: Def, name: str) -> str
 fn body_name_value(a: *mem.Arena, def: Def, name: str, vars: []const Pair) -> Rendered
@@ -126,6 +127,7 @@ Declarative REST resources and the provider registry (L047), after Petcow's `pro
 - [ ] `set_by_path`
 - [ ] `scalar_text`
 - [ ] `var_lookup`
+- [ ] `url_segment`
 - [ ] `render_with`
 - [ ] `address`
 - [ ] `body_name_value`
@@ -180,7 +182,7 @@ Declarative REST resources and the provider registry (L047), after Petcow's `pro
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/cloud/rest.e` prints `parse file ok`.
 - A fixture `tests/selfhost/fixtures/link/cloud_rest/src/main.e` that prints one fixed line on success, registered in both runners.
 - `python scripts/check_module_surfaces.py --compiler <neper-self> --arch x64 --os <host>` and `python tests/test_module_plan.py` pass.
-- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 69.
+- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 70.
 
 ## Session procedure
 

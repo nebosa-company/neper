@@ -1,4 +1,4 @@
-# x.identity.saml — 58 of 58 declarations missing
+# x.identity.saml — 59 of 59 declarations missing
 
 | field | value |
 |---|---|
@@ -31,7 +31,7 @@ The module may `use` only these (`scripts/check_module_plan.py` enforces it). La
 
 ```neper
 type Key = struct { has: bool, n: str, e: str }
-type Signed = struct { valid: bool, message: str, id: str, assertion: usize, signed_element: str }
+type Signed = struct { valid: bool, message: str, id: str, assertion: usize, signed_element: str, doc: xml.Doc }
 type Assertion = struct { present: bool, id: str, issuer: str, has_name_id: bool, name_id: str, name_id_format: str, session_index: str, authn_instant: str, not_before: str, not_on_or_after: str, audiences: []const str, recipient: str, confirmation_not_on_or_after: str, confirmation_in_response_to: str, attr_names: []const str, attr_values: []const []const str }
 type Response = struct { valid: bool, message: str, doc: xml.Doc, id: str, in_response_to: str, destination: str, issue_instant: str, issuer: str, status_present: bool, status_has_value: bool, status_code: str, status_message: str, assertion: Assertion }
 type Config = struct { issuer: str, audience: str, acs_url: str, key: Key, expected_in_response_to: str, now: f64, has_skew: bool, skew_ms: f64, seen: []const str }
@@ -74,6 +74,7 @@ fn parse_instant(s: str) -> (f64, bool)
 fn none_validation(msg: str) -> Validation
 fn contains_text(xs: []const str, v: str) -> bool
 fn join_list(a: *mem.Arena, xs: []const str) -> str
+fn parse_assertion(a: *mem.Arena, d: xml.Doc, assertion: usize) -> Assertion
 fn validate_saml_response(a: *mem.Arena, parsed: Response, c: Config) -> Validation
 fn new_replay_cache(a: *mem.Arena, capacity: usize) -> ReplayCache
 fn replay_prune(c: *ReplayCache, now: f64)
@@ -144,6 +145,7 @@ SAML 2.0 service provider, Web Browser SSO (L045), after Appdor's `src/identity/
 - [ ] `none_validation`
 - [ ] `contains_text`
 - [ ] `join_list`
+- [ ] `parse_assertion`
 - [ ] `validate_saml_response`
 - [ ] `new_replay_cache`
 - [ ] `replay_prune`
@@ -165,7 +167,7 @@ SAML 2.0 service provider, Web Browser SSO (L045), after Appdor's `src/identity/
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/identity/saml.e` prints `parse file ok`.
 - A fixture `tests/selfhost/fixtures/link/identity_saml/src/main.e` that prints one fixed line on success, registered in both runners.
 - `python scripts/check_module_surfaces.py --compiler <neper-self> --arch x64 --os <host>` and `python tests/test_module_plan.py` pass.
-- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 58.
+- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 59.
 
 ## Session procedure
 

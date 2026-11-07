@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.95 of 1 |
-| queue position | 24 of 219 (only position 1 is eligible for the next session; see README) |
+| queue position | 24 of 222 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -51,7 +51,7 @@ Read each row in full (`sed -n 'START,+60p' docs/decisions.md`). They record why
 
 Files that mention each identifier from the evidence, with hit counts (`git grep -n -F IDENT FILE` to jump). † = over 40 KB, read by region; ‡ = over 120 KB, never read whole.
 
-- `.jsonl`: `scripts/render_progress.py`×3, `scripts/validate_stream.py`×3, `scripts/freeze_llm_protocol.py`×2, `scripts/lang-stats.py`×2†, `benchmarks/baseline/rename.py`×1, `benchmarks/metamorphic/reorder_parameters.py`×1, `lib/e/log/rotate.e`×1, `scripts/check_stats_record.py`×1
+- `.jsonl`: `scripts/lang-stats.py`×3†, `scripts/render_progress.py`×3, `scripts/validate_stream.py`×3, `scripts/freeze_llm_protocol.py`×2, `benchmarks/baseline/rename.py`×1, `benchmarks/metamorphic/reorder_parameters.py`×1, `lib/e/log/rotate.e`×1, `scripts/check_stats_record.py`×1
 
 ## Verification
 

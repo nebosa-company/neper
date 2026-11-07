@@ -20,10 +20,12 @@ New-Item -ItemType Directory -Force -Path $testBuild | Out-Null
 $compiler = Join-Path $testBuild 'neper-self.exe'
 $compilerAsm = Join-Path $testBuild 'neper-self.asm'
 # The arena is reserved and committed as it is used (D133), so its size is a ceiling rather
-# than a cost -- what a run charges is what it allocates. Measured against the heaviest
-# workload there is, the compiler compiling itself: 384m exhausts, 400m succeeds, and the
-# peak is 388m. A gigabyte is the largest program worth compiling, not the largest the
-# commit limit will bear.
+# than a cost -- what a run charges is what it allocates. So this build sets no `--arena`:
+# the ceiling is then the default gigabyte-scale one that the startup halves if the host
+# refuses the reservation, and the compiler grows into whatever it actually needs. A fixed
+# `--arena 1g` here was a cap on this compiler, not a saving, and it began failing real
+# fixtures (str_float_vectors, algo_conflictview) as the tree grew. The cap itself is
+# still exercised, deliberately and explicitly, by the 96 MB compiler below.
 # A seed (C147): a previously built self-hosted compiler, named by NEPER_SEED, builds this
 # stage in place of the C bootstrap, which on a host short of commit charge cannot hold the
 # compiler's source. The seed is only the first stage: the fixed point the suite checks below
@@ -32,10 +34,10 @@ $compilerAsm = Join-Path $testBuild 'neper-self.asm'
 $seed = $env:NEPER_SEED
 if ($seed) {
     if (-not (Test-Path -LiteralPath $seed)) { throw "NEPER_SEED names no file: $seed" }
-    & $seed emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $compiler -j 1 --arena 1g | Out-Null
+    & $seed emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $compiler -j 1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'the seed did not build the self-hosted compiler slice' }
 } else {
-    & $neper build (Join-Path $repo 'src\main.e') --arena 1g --output $compiler --emit-asm $compilerAsm
+    & $neper build (Join-Path $repo 'src\main.e') --output $compiler --emit-asm $compilerAsm
     if ($LASTEXITCODE -ne 0) { throw 'self-hosted compiler slice did not build' }
 }
 & python (Join-Path $repo 'scripts\check_module_surfaces.py') --compiler $compiler --arch x64 --os windows

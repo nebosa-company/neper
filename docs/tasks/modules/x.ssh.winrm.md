@@ -1,4 +1,4 @@
-# x.ssh.winrm — 7 of 7 declarations missing
+# x.ssh.winrm — 11 of 11 declarations missing
 
 | field | value |
 |---|---|
@@ -31,6 +31,10 @@ The module may `use` only these (`scripts/check_module_plan.py` enforces it). La
 fn join(a: *mem.Arena, x: str, y: str) -> str
 fn https_port() -> str
 fn http_port() -> str
+fn ps_quote(a: *mem.Arena, s: str) -> str
+fn eq_ci(x: str, y: str) -> bool
+fn auth_ok(s: str) -> bool
+fn digits_only(s: str) -> bool
 fn password_env() -> str
 fn encode_command(a: *mem.Arena, script: str) -> str
 fn driver_script(a: *mem.Arena, address: str, vars: json.Value, command: str) -> str
@@ -44,6 +48,10 @@ The PowerShell command line a Windows host's variables describe (L048), after Pe
 - [ ] `join`
 - [ ] `https_port`
 - [ ] `http_port`
+- [ ] `ps_quote`
+- [ ] `eq_ci`
+- [ ] `auth_ok`
+- [ ] `digits_only`
 - [ ] `password_env`
 - [ ] `encode_command`
 - [ ] `driver_script`
@@ -54,7 +62,7 @@ The PowerShell command line a Windows host's variables describe (L048), after Pe
 - `build/windows/tests/selfhost/neper-self.exe parse-file lib/e/ssh/winrm.e` prints `parse file ok`.
 - A fixture `tests/selfhost/fixtures/link/ssh_winrm/src/main.e` that prints one fixed line on success, registered in both runners.
 - `python scripts/check_module_surfaces.py --compiler <neper-self> --arch x64 --os <host>` and `python tests/test_module_plan.py` pass.
-- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 7.
+- Both suites green; `python scripts/render_progress.py` shows the module declaration count rising by 11.
 
 ## Session procedure
 
