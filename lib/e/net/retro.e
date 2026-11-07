@@ -163,7 +163,10 @@ fn gopher_item(line: str) -> (GopherItem, err) {
         port = port * 10usize + digit
         p += 1usize
     }
-    if port == 0usize { ret (item, BadItem) }
+    // An info item has no host to connect to, and `i<text>\t\t\t0` is how a menu spells one,
+    // so port 0 is legal exactly when there is no host. A menu item that does name a host
+    // still has to name a port: rejecting 0 outright made every info item BadItem.
+    if port == 0usize && item.host.len != 0usize { ret (item, BadItem) }
     item.port = port
     ret (item, ok)
 }
