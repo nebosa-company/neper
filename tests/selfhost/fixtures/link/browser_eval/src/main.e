@@ -32,6 +32,11 @@ error QueryWrong
 error QueryMissed
 error AttrWrong
 error NumberWrong
+error AllWrong
+error AllMissed
+error SetFailed
+error SetNotSeen
+error SetNoEvents
 
 // The page has no external references; a font still has to be registered or layout has no generic family to fall back to.
 fn load_page(a: *mem.Arena) -> (*page.Page, err) {
@@ -44,7 +49,7 @@ fn load_page(a: *mem.Arena) -> (*page.Page, err) {
     if fontset.add(&fonts, "Ahem", 400u32, false, bytes, 0u32) != ok { ret (zero, FontAddFailed) }
     fontset.set_generic(&fonts, "sans-serif", "Ahem")
     fontset.set_generic(&fonts, "serif", "Ahem")
-    let html = "data:text/html,<title>t</title><div id=box>0</div><button class='primary' data-note=\"it's here\">Go</button>"
+    let html = "data:text/html,<title>t</title><div id=box>0</div><button class='primary' data-note=\"it's here\">Go</button><ul><li>a</li><li>b</li></ul><input id=q>"
     let (p, pe) = page.load(a, &client, &fonts, html, 800.0, 600.0, 134217728usize)
     ret (p, pe)
 }
@@ -106,6 +111,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (count, count_ok) = page.eval_number(p, "document.querySelectorAll('button').length")
     if !count_ok { ret NumberWrong }
     if count != 1.0f64 { ret NumberWrong }
+    // 8. Every match, joined: two list items come back separated by the separator.
+    let (items, items_found) = page.query_all_text(p, "li", "|")
+    if !items_found { ret AllMissed }
+    if !str.eq(items, "a|b") { ret AllWrong }
+    let (none, none_found) = page.query_all_text(p, "li.missing", "|")
+    if none_found { ret AllWrong }
+    if !str.eq(none, "") { ret AllWrong }
+    // 9. Writing a value dispatches input and change, which the page's own listeners must observe.
+    if !page.eval_js(p, "window.__seen = []; const q = document.getElementById('q'); q.addEventListener('input', function () { window.__seen.push('input:' + q.value); }); q.addEventListener('change', function () { window.__seen.push('change:' + q.value); });") { ret SetFailed }
+    if !page.set_value(p, "#q", "hello") { ret SetFailed }
+    let (seen, seen_ok) = page.eval_value(p, "window.__seen.join(',')")
+    if !seen_ok { ret SetNotSeen }
+    if !str.eq(seen, "input:hello,change:hello") { ret SetNoEvents }
+    let (qval, qval_ok) = page.eval_value(p, "document.getElementById('q').value")
+    if !qval_ok { ret SetNotSeen }
+    if !str.eq(qval, "hello") { ret SetNotSeen }
     page.close(p)
     ret ok
 }

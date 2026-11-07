@@ -1211,6 +1211,43 @@ fn query_attr(p: *Page, selector: str, name: str) -> (str, bool) {
     ret (text, true)
 }
 
+// The text of every element matching `selector`, joined by `separator`. Answers "" plus false when nothing matches.
+fn query_all_text(p: *Page, selector: str, separator: str) -> (str, bool) {
+    if !p.scripted { ret ("", false) }
+    let sel = js_quote(p, selector)
+    let sep = js_quote(p, separator)
+    let (s1, e1) = str.concat(p.pa, "(() => { const a = Array.prototype.map.call(document.querySelectorAll(", sel)
+    let (s2, e2) = str.concat(p.pa, s1, "), function (e) { return e.textContent; }); return a.length === 0 ? null : a.join(")
+    let (s3, e3) = str.concat(p.pa, s2, sep)
+    let (s4, e4) = str.concat(p.pa, s3, "); })()")
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret ("", false) }
+    let (value, ve) = js.eval_source(p.ctx, s4)
+    let waited = script.pump_self(p.ctx)
+    if p.view.tree.version != p.seen_version { refresh(p) }
+    if ve != ok { ret ("", false) }
+    let (text, te) = js.to_string(p.ctx, value)
+    if te != ok { ret ("", false) }
+    if str.eq(text, "null") { ret ("", false) }
+    ret (text, true)
+}
+
+// Sets the value of the input, textarea or select matching `selector` and dispatches `input` then `change`, so the page's
+// own listeners run the way they would after a real edit. Answers false when nothing matches or the assignment threw.
+fn set_value(p: *Page, selector: str, value: str) -> bool {
+    if !p.scripted { ret false }
+    let sel = js_quote(p, selector)
+    let val = js_quote(p, value)
+    let (s1, e1) = str.concat(p.pa, "(() => { const e = document.querySelector(", sel)
+    let (s2, e2) = str.concat(p.pa, s1, "); if (e === null) return false; e.value = ")
+    let (s3, e3) = str.concat(p.pa, s2, val)
+    let (s4, e4) = str.concat(p.pa, s3, "; e.dispatchEvent(new Event('input', { bubbles: true })); e.dispatchEvent(new Event('change', { bubbles: true })); return true; })()")
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret false }
+    let ran = script.run_script(p.ctx, s4, "<set_value>")
+    let waited = script.pump_self(p.ctx)
+    if p.view.tree.version != p.seen_version { refresh(p) }
+    ret ran
+}
+
 // The page's event loop: runs promise jobs and the timers that are due at `now_ms` (milliseconds on the host clock, any
 // origin as long as it only grows). Answers true when the page changed and was laid out again.
 fn tick(p: *Page, now_ms: f64) -> bool {

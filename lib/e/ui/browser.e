@@ -128,6 +128,22 @@ fn query_attr(b: *Browser, selector: str, name: str) -> (str, bool) {
     ret (value, found)
 }
 
+// The text of every element matching a selector, separated by `separator` (use "\n" for one per line). Answers "" plus
+// false when nothing matches. For a host that reads a list of rows or items in one call.
+fn query_all(b: *Browser, selector: str, separator: str) -> (str, bool) {
+    if !scriptable(b) { ret ("", false) }
+    let (text, found) = page.query_all_text(b.tab.pg, selector, separator)
+    ret (text, found)
+}
+
+// Puts `value` into the input, textarea or select matching `selector`, the way a user typing into it would: the element's
+// `value` is set and `input` and `change` events are dispatched, so the page's own handlers run as they would for real
+// input. Answers false when nothing matches or the page has no realm.
+fn set_value(b: *Browser, selector: str, value: str) -> bool {
+    if !scriptable(b) { ret false }
+    ret page.set_value(b.tab.pg, selector, value)
+}
+
 // Runs the page's event loop until `source` is truthy or `timeout_ms` have passed, answering whether the condition
 // held. This is what an automating host needs after any action: after `eval_js` that starts a timer, after a click, or
 // after a navigation. The clock starts at `start_ms` - the same monotonic millisecond clock `pump` takes - and each step
