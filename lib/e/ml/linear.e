@@ -345,8 +345,11 @@ fn pls_solve(matrix: []f64, rhs: []f64, c: usize) -> err {
 // near-zero slopes with the mean as intercept (no error).
 fn pls(x: []const f64, y: []const f64, n: usize, d: usize, components: usize, coefficients: []f64, scratch: []f64) -> err {
     let c = components
-    if x.len < n * d || y.len < n || coefficients.len < d + 1usize || scratch.len < n * d + 2usize * n + 2usize * d + 2usize * d * c + c * c + c { ret TooSmall }
+    // The request is validated before the storage for it is sized. Sizing first made the answer
+    // depend on the caller's buffer: four components of a three-column matrix is Invalid, but with
+    // a scratch too small for four it came back TooSmall, so the same bad request had two answers.
     if n == 0usize || d == 0usize || c == 0usize || c > d { ret Invalid }
+    if x.len < n * d || y.len < n || coefficients.len < d + 1usize || scratch.len < n * d + 2usize * n + 2usize * d + 2usize * d * c + c * c + c { ret TooSmall }
     var xw = scratch[..n * d]
     var off = n * d
     var yw = scratch[off..off + n]
