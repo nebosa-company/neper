@@ -114,6 +114,8 @@ fn lookup_entity(text: str, at: usize, in_attribute: bool) -> ([]const u8, usize
     // Every entity name starts with an ASCII letter, and the records are sorted by
     // name, so a text that cannot start a name stops before the scan and a record
     // sorting after the text ends it.
+    // A reference at the very end of the input (a bare `&`) has no name to look at.
+    if at >= text.len { ret (zero, 0usize, false) }
     let first = text[at]
     if !((first >= 65u8 && first <= 90u8) || (first >= 97u8 && first <= 122u8)) { ret (zero, 0usize, false) }
     let table = entity_table()
