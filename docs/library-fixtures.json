@@ -58,10 +58,14 @@
    "milestone": null,
    "schedule": "later",
    "catalogue": 59,
-   "delivered": 59,
-   "pending": [],
+   "delivered": 58,
+   "pending": [
+    "low_visit"
+   ],
    "fixtures": [
     "algo_graph",
+    "algo_graph_color",
+    "algo_graph_cut",
     "algo_graph_path",
     "algo_graph_plan"
    ]
@@ -227,8 +231,8 @@
    "module": "e.crypto.aead",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 52,
-   "delivered": 52,
+   "catalogue": 53,
+   "delivered": 53,
    "pending": [],
    "fixtures": [
     "crypto_aead",
@@ -243,8 +247,8 @@
    "module": "e.crypto.hash",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 92,
-   "delivered": 90,
+   "catalogue": 93,
+   "delivered": 91,
    "pending": [
     "sha256_compress",
     "sha256_k"
@@ -301,6 +305,7 @@
     "crypto_sign_wide",
     "fmt_jwt",
     "misc_gaps",
+    "net_dns",
     "net_tls"
    ]
   },
@@ -444,6 +449,7 @@
     "fmt_dom",
     "fmt_gaps_a",
     "fmt_html",
+    "fmt_html_template",
     "html_accessible",
     "text_css_cascade",
     "text_css_match",
@@ -869,6 +875,7 @@
    "delivered": 56,
    "pending": [],
    "fixtures": [
+    "browser_eval",
     "cli_config",
     "debug_dump",
     "differential",
@@ -907,6 +914,7 @@
     "ui_taskbar",
     "web_page_csp",
     "web_shell",
+    "x_duckdb",
     "x_sqlite",
     "x_tds",
     "x_tds_integrated"
@@ -2184,7 +2192,8 @@
     "ui_title_bar",
     "ui_widget",
     "ui_window",
-    "ui_windows_looks"
+    "ui_windows_looks",
+    "ui_winpx"
    ]
   },
   {
@@ -2478,6 +2487,7 @@
    "delivered": 10,
    "pending": [],
    "fixtures": [
+    "gfx_svg",
     "gfx_svg_filter"
    ]
   },
@@ -2536,6 +2546,7 @@
     "gpu_inventory",
     "gpu_launch_facts",
     "gpu_present",
+    "gpu_release",
     "gpu_reshape",
     "gpu_shared",
     "gpu_spaces",
@@ -2664,11 +2675,12 @@
    "module": "e.gpu.vulkan",
    "milestone": "M3",
    "schedule": "scheduled",
-   "catalogue": 19,
-   "delivered": 19,
+   "catalogue": 20,
+   "delivered": 20,
    "pending": [],
    "fixtures": [
     "gpu_inventory",
+    "gpu_vulkan_loop",
     "gpu_vulkan_raw"
    ]
   },
@@ -2744,6 +2756,7 @@
     "algo_gaps_a",
     "algo_gaps_b",
     "algo_geo",
+    "algo_rand_dist",
     "algo_stat_mixed",
     "algo_stat_regression",
     "algo_survival_trial",
@@ -2790,14 +2803,17 @@
     "math_root",
     "math_trig",
     "misc_gaps",
+    "ml_gaps",
     "ml_loss",
     "ml_mixed",
     "ml_reduce",
     "ml_sample",
+    "ml_tree",
     "narrow_float",
     "robot_map",
     "robot_motion",
     "robot_plan",
+    "text_dwmask",
     "text_tokenize",
     "ui_inputs3_v2",
     "ui_theme",
@@ -2808,8 +2824,8 @@
    "module": "e.math.fixed",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 29,
-   "delivered": 29,
+   "catalogue": 30,
+   "delivered": 30,
    "pending": [],
    "fixtures": [
     "audio_spatial",
@@ -2839,8 +2855,8 @@
    "module": "e.net",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 61,
-   "delivered": 61,
+   "catalogue": 62,
+   "delivered": 62,
    "pending": [],
    "fixtures": [
     "misc_gaps",
@@ -2994,7 +3010,6 @@
    "delivered": 79,
    "pending": [],
    "fixtures": [
-    "channel_semantics",
     "channel_threads",
     "concurrent_queue_map",
     "gpu_cuda",
@@ -3187,6 +3202,7 @@
     "gfx_chart_shared_guides",
     "gfx_chart_word_cloud",
     "gfx_scene",
+    "gfx_svg",
     "gfx_svg_filter",
     "gfx_svg_text",
     "gfx_svg_text_faces",
@@ -3465,6 +3481,7 @@
     "ui_window",
     "ui_workspace",
     "x_db_units",
+    "x_duckdb",
     "x_mysql",
     "x_odbc",
     "x_openssl",
@@ -4021,6 +4038,7 @@
    "fixtures": [
     "os_exchange",
     "os_shell",
+    "os_shell_wasi",
     "ui_activation",
     "ui_clipboard",
     "ui_drag_drop",
@@ -4039,9 +4057,11 @@
    "module": "e.ui.app",
    "milestone": null,
    "schedule": "later",
-   "catalogue": 139,
+   "catalogue": 140,
    "delivered": 139,
-   "pending": [],
+   "pending": [
+    "desktop_exec"
+   ],
    "fixtures": [
     "ui_activation",
     "ui_algorithms",
