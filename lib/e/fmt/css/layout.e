@@ -10124,12 +10124,39 @@ fn layout_abs(l: *Layout, b: u32) {
     if has_l && has_r && !w_auto {
         let rest = cb_w - lv - rv - cw - extras_h - ml - mr
         if aml && amr {
-            ml = maxf(0.0f64, rest / 2.0f64)
-            mr = maxf(0.0f64, rest / 2.0f64)
+            // CSS 2.1 10.3.7: two auto margins share the slack. When that split would be negative the margins are made
+            // equal but the START one takes the whole (negative) rest and the end one stays zero - in a right-to-left box
+            // the start margin is `margin-right`. WPT absolute-non-replaced-width-005.
+            let half = rest / 2.0f64
+            if half >= 0.0f64 {
+                ml = half
+                mr = half
+            } else if bstyle(l, b).direction == .Rtl {
+                mr = 0.0f64
+                ml = rest
+            } else {
+                ml = 0.0f64
+                mr = rest
+            }
         } else if aml {
-            ml = maxf(0.0f64, rest)
+            // One auto margin takes the whole rest, which may be NEGATIVE: an absolutely positioned box solves the
+            // equation `left + margin-left + width + margin-right + right = containing block width` exactly, and a
+            // negative auto margin is legal (WPT absolute-non-replaced-width-008 solves it to -100px).
+            ml = rest
         } else if amr {
-            mr = maxf(0.0f64, rest)
+            mr = rest
+        } else if bstyle(l, b).direction == .Rtl {
+            // CSS 2.1 10.3.7: with `left`, `width` and `right` all set and neither margin auto, the two margins share the
+            // slack equally in a right-to-left box; when that makes them negative, `margin-right` is set to zero and
+            // `margin-left` takes the whole (possibly negative) rest. WPT absolute-non-replaced-width-005.
+            let half = rest / 2.0f64
+            if half < 0.0f64 {
+                mr = 0.0f64
+                ml = rest
+            } else {
+                ml = half
+                mr = half
+            }
         }
     }
     bb.margin[3usize] = ml
