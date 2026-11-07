@@ -381,7 +381,14 @@ fn matches_part(m: *const Matcher, part: selector.Simple, el: html.NodeId) -> bo
     case .Empty:
         ret is_empty(m, el)
     case .Root:
-        ret parent_element(m, el) == html.NONE
+        // `:root` is the document's root element: its parent is the document node itself. Testing only
+        // "has no parent element" also matched the top-level children of a DocumentFragment, where nothing is the root
+        // element at all (WPT ParentNode-querySelector-All queries `:root` against a fragment and expects no match), so
+        // the query's own scope has to be the document as well - a scoped query counts only the scope's subtree.
+        let parent = m.doc.nodes[usize(el)].parent
+        if parent == html.NONE || m.doc.nodes[usize(parent)].kind != .Document { ret false }
+        if m.state.has_scope && m.state.scope != m.doc.root { ret false }
+        ret true
     case .Scope:
         ret false
     case .Not:
