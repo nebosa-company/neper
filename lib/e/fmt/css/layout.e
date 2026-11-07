@@ -427,6 +427,16 @@ fn apply_counter_props(l: *Layout, s: *const style.Style, node: u32) {
 }
 
 // `name [integer]` pairs; op 0 reset, 1 increment, 2 set.
+// An `<integer>` in a counter property, which CSS Syntax allows an explicit `+` sign on: `counter-reset: ident +10`.
+// `str.parse_i64` accepts only `-`, so `+10` used to fail and the counter fell back to its default value
+// (WPT css/CSS2/lists/counter-reset-009/-022/-035/-046/-048 and the counter-increment mirrors of the same numbers).
+fn counter_integer(text: str) -> (i64, err) {
+    var digits = text
+    if text.len > 1usize && text[0usize] == 43u8 { digits = text[1usize..] }
+    let (value, e) = str.parse_i64(digits)
+    ret (value, e)
+}
+
 fn counter_pairs(l: *Layout, text: str, op: u8, default_value: i64, node: u32) {
     let toks = cv.split_top_level_spaces(l.a, text)
     var i = 0usize
@@ -441,7 +451,7 @@ fn counter_pairs(l: *Layout, text: str, op: u8, default_value: i64, node: u32) {
         var v = default_value
         var explicit = false
         if i < toks.len {
-            let (n, good) = str.parse_i64(toks[i])
+            let (n, good) = counter_integer(toks[i])
             if good == ok {
                 v = n
                 explicit = true
