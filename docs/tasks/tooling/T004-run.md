@@ -4,7 +4,7 @@
 |---|---|
 | category | tooling / Tooling |
 | score | 0.93 of 1 |
-| queue position | 21 of 223 (only position 1 is eligible for the next session; see README) |
+| queue position | 21 of 222 (only position 1 is eligible for the next session; see README) |
 | difficulty | medium — rated for a mid-size model; one or two checklist lines per session |
 
 ## Definition of done
@@ -39,7 +39,7 @@ Files that mention each identifier from the evidence, with hit counts (`git grep
 
 - `os.set_mode`: `src/main.e`×2‡, `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×2, `lib/e/fs.e`×1†, `lib/e/os/shell.macos.e`×1‡
 - `e.os`: `tests/conformance/tools/explain_inline.x64-linux.expected.jsonl`×268, `tests/conformance/tools/explain_inline.x64-windows.expected.jsonl`×215, `src/resolve.e`×85†, `src/check.e`×13‡, `lib/e/ui/app.e`×12†, `lib/e/os.linux.e`×9‡, `lib/e/fs.e`×8†, `lib/e/os.windows.e`×7‡
-- `src/main.e`: `benchmarks/baseline/results/baseline-linux.json`×8, `benchmarks/baseline/results/h25-linux-d936.json`×8, `scripts/wasm-compiler.sh`×6, `benchmarks/scale/profile.sh`×5, `benchmarks/baseline/rename.py`×4, `benchmarks/baseline/context.py`×3, `benchmarks/baseline/session.py`×3, `benchmarks/scale/profile_edit.sh`×3
+- `src/main.e`: `benchmarks/baseline/results/baseline-linux.json`×8, `benchmarks/baseline/results/h25-linux-d936.json`×8, `scripts/wasm-compiler.sh`×6, `benchmarks/scale/profile.sh`×5, `benchmarks/baseline/rename.py`×4, `scripts/check_suite_parity.py`×4, `benchmarks/baseline/context.py`×3, `benchmarks/baseline/session.py`×3
 
 ## Existing fixtures
 

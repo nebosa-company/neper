@@ -99,7 +99,31 @@ for name in sorted(extra):
     if name in in_sh or name in in_ps:
         failures.append(f"extra-fixtures.txt names {name}, which a suite script already runs")
 
+# The compiler the suite runs must be a release build. A debug build fills every allocation
+# with 0xCD (D306, section 11), and an arena pool charges what it touches, so every pool the
+# loader sizes from the program is committed whether it holds anything or not: 6.6-8.9 GB
+# against 365 MB on Windows and 371 MB on Linux, for byte-identical output. The suite spends
+# hours in that compiler, so losing the flag is not a slowdown, it is what makes the suite
+# exhaust a machine shared with anything else. Checked here because both runners build that
+# stage and nothing else would notice a runner that stopped asking for it.
+COMPILER_BUILD = re.compile(r"emit-executable[^\n]*src[\\/]main\.e")
+for label, text, target in (("run.sh", sh_text, '"$test_build/neper-self"'), ("run.ps1", ps_text, "$compiler")):
+    number, line = None, None
+    for at, candidate in enumerate(text.split("\n"), 1):
+        # The first emit-executable of src/main.e is the stage this suite runs everything
+        # with; later ones build comparison compilers, which are their own business.
+        if COMPILER_BUILD.search(candidate) and target in candidate:
+            number, line = at, candidate
+            break
+    if number is None:
+        failures.append(f"{label} does not build the self-hosted compiler from src/main.e")
+    elif "--release" not in line:
+        failures.append(
+            f"{label} line {number} builds the self-hosted compiler without --release: a debug "
+            "build commits every pool it sizes (D306), 6.6-8.9 GB against 365 MB"
+        )
+
 if failures:
     print("\n".join(failures), file=sys.stderr)
     sys.exit(1)
-print(f"suite parity ok: run.sh names {len(in_sh | extra)} fixtures, run.ps1 names {len(in_ps | extra)}")
+print(f"suite parity ok: run.sh names {len(in_sh | extra)} fixtures, run.ps1 names {len(in_ps | extra)}, both build the compiler with --release")
