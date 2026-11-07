@@ -14146,6 +14146,17 @@ fn numeric_flag_usage(args: []str) -> err {
     ret ok
 }
 
+// Whether the module names a `graph-file` command line carries -- everything after the
+// six leading arguments -- include `name`.
+fn names_module(args: []str, name: str) -> bool {
+    var at = 6usize
+    while at < args.len {
+        if same(args[at], name) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 fn dispatch(a: *mem.Arena, args: []str) -> err {
     let numeric_error = numeric_flag_usage(args)
     if numeric_error != ok { ret numeric_error }
@@ -14349,7 +14360,23 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
         try load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
-        if loaded.count != args.len - 6usize { ret graph.Capacity }
+        // The names given must be exactly what loaded, not a sample of it: that is what the
+        // command asserts. It is not a full table, though, and returning Capacity here
+        // reported a module list that had gone stale as the compiler running out of room.
+        // Name the module that surprised us instead, since that is the whole diagnosis.
+        if loaded.count != args.len - 6usize {
+            var unnamed = 0usize
+            while unnamed < loaded.count {
+                let loaded_name = loaded.modules[unnamed].name
+                if !names_module(args, loaded_name) {
+                    try io.print("graph-file: loaded `")
+                    try io.print(loaded_name)
+                    try io.print("`, which the command line did not name\n")
+                }
+                unnamed += 1usize
+            }
+            ret project.InvalidPath
+        }
         var expected = 6usize
         while expected < args.len {
             if !graph.has_module(&loaded, args[expected]) { ret project.ModuleNotFound }
