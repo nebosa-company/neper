@@ -43962,12 +43962,28 @@ consumed; a NULL read back is `value_is_null` rather than a zero handle; a `TIME
 `instance_attach`, which must happen **before** `connection_create` because it names the default
 of connections created afterwards.
 
-**Measured.** v2.0.0 on Windows 11. `tests/selfhost/fixtures/link/x_duckdb` passes on the
-Windows host. One environment note for whoever runs it next: the fixture's `files` section
-opens a database under the system temp directory, and a process whose file access is confined
-to a workspace cannot write there — `instance_attach` reports `IO Error: Access is denied` and
-the fixture exits 134, which is its own code for "`open` on a file path failed", not a crash.
+**Measured.** v2.0.0 on Windows 11 and on x86-64 Ubuntu-24.04 (WSL).
+`tests/selfhost/fixtures/link/x_duckdb` passes on both hosts: exit 0. On Linux the library is
+the `duckdb-shared-libs-linux-amd64` v2.0.0 archive, and it must be reachable as a file named
+`duckdb` — `@import("duckdb", ...)` emits `DT_NEEDED [duckdb]`, so the loader looks for that
+name, not `libduckdb.so`. The `duckdb` Python wheel is not a substitute: its `_duckdb.abi3.so`
+is a CPython extension with 200 undefined `Py*` symbols and fails at load.
 
-**Not done.** Nothing was run on Linux: the fixture is wired into both suites, but only the
-Windows host had DuckDB's library. The v1 declarations (`capi.windows.e`, `capi.linux.e`) are
-left in place and now unreferenced.
+One environment note for whoever runs it next: the fixture's `files` section opens a database
+under the system temp directory, and a process whose file access is confined to a workspace
+cannot write there — `instance_attach` reports `IO Error: Access is denied` and the fixture
+exits 134, which is its own code for "`open` on a file path failed", not a crash.
+
+**Getting a compiler that can build this.** The C bootstrap is a fixed point: it must parse the
+tree it builds, and it currently parses neither host's tree — `lib/e/str.e:13` (a function type
+as a struct member) and `src/check.e:924` stop it on Windows and Linux alike. Windows continues
+to work because a self-hosted compiler already sits in `build/`; Linux had no equivalent until
+`run.sh` gained the `NEPER_SEED` path that `run.ps1` already had. A compiler cross-emitted from
+the Windows self-host serves as that seed:
+
+```
+build/windows/neper-self.exe emit-executable src/main.e . x64 linux neper-self-linux
+```
+
+**Not done.** The v1 declarations (`capi.windows.e`, `capi.linux.e`) are left in place and now
+unreferenced.
