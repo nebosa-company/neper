@@ -221,4 +221,4 @@ C264	compiler	0	1198	language: labelled break and continue	the grammar revision,
 C265	compiler	0	1059	a syntax error exits with its diagnostic: the error path must not consume the machine	Found while porting x.duckdb.duckdb to DuckDB v2 and trying to build the Linux self-hosted compiler: a parse failure in lib/e/str.e (mem.bitcast[f32], syntax the September bootstrap does not know) did
 C266	compiler	0	1110	the bootstrap builds the tree again: refresh it, or make the seed path the contract	Found while getting tests/selfhost to reach its DuckDB fixture.
 C267	compiler	0	1450	emitted binaries are reproducible: no field may depend on which compiler binary ran	Found while verifying 18 bootstrap-lint fixes by differential build.
-C269	compiler	0	1703	the artifact path emits the same debug info as the whole-program path	Found once crew_windows could finally be reached: 'crew_windows at -j 1 is not the image linked from its artifacts (--time)'.
+C269	compiler	0	2537	the artifact path emits the same debug info as the whole-program path	Found once crew_windows could finally be reached: 'crew_windows at -j 1 is not the image linked from its artifacts (--time)'.
