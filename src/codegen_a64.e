@@ -1098,7 +1098,7 @@ fn narrow_mask(output: *emit_x64.Buffer, size: usize) -> err {
     var step = size
     while step > 0usize {
         try neon2(output, 0x0E212800usize, step - 1usize, 16usize, 16usize)
-        step -= 1usize
+        step = step - 1usize
     }
     ret emit_a64.vector_shift_immediate(output, 1usize, 0usize, 16usize, 16usize, 7usize)
 }
@@ -1995,10 +1995,12 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 if instruction.immediate != 16usize { ret codegen_x64.Unsupported }
                 if copy_to_held && copy_from_held {
                     try vector_move(output, copy_to, copy_from)
-                } else if copy_to_held {
-                    try ext_in(allocations, builder.operands[instruction.first_operand + 1usize], copy_to, output)
                 } else {
-                    try ext_out(allocations, builder.operands[instruction.first_operand], copy_from, 16usize, output)
+                    if copy_to_held {
+                        try ext_in(allocations, builder.operands[instruction.first_operand + 1usize], copy_to, output)
+                    } else {
+                        try ext_out(allocations, builder.operands[instruction.first_operand], copy_from, 16usize, output)
+                    }
                 }
             } else {
             try read_into(allocations, builder.operands[instruction.first_operand], 0usize, output)

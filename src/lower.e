@@ -4592,7 +4592,7 @@ fn bracket_has_range(c: *check.Checker, g: *graph.Graph, module_index: usize, op
         if kind == .PunctLBracket { depth += 1usize }
         if kind == .PunctRBracket {
             if depth == 0usize { ret false }
-            depth -= 1usize
+            depth = depth - 1usize
         }
         if depth == 0usize && kind == .PunctRange { ret true }
         at += 1usize

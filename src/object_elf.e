@@ -123,10 +123,12 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
             if reference.library.len != 0usize {
                 name = reference.symbol
                 reference_module = ""
-            } else if !reference.has_target {
-                // A non-library reference with no target has no module to qualify with;
-                // silently matching the empty module could bind the wrong symbol.
-                ret InvalidObject
+            } else {
+                if !reference.has_target {
+                    // A non-library reference with no target has no module to qualify with;
+                    // silently matching the empty module could bind the wrong symbol.
+                    ret InvalidObject
+                }
             }
             let (existing, found) = find_symbol(symbols, symbol_count, reference_module, name)
             if !found {

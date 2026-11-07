@@ -187,12 +187,14 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
                 try emit_x64.byte(output, 109usize)
                 try emit_x64.byte(output, 112usize)
                 try emit_x64.byte(output, 95usize)
-            } else if symbol.module.len != 0usize {
-                while byte_at < symbol.module.len {
-                    try emit_x64.byte(output, widen_byte(symbol.module[byte_at]))
-                    byte_at += 1usize
+            } else {
+                if symbol.module.len != 0usize {
+                    while byte_at < symbol.module.len {
+                        try emit_x64.byte(output, widen_byte(symbol.module[byte_at]))
+                        byte_at += 1usize
+                    }
+                    try emit_x64.byte(output, 46usize)
                 }
-                try emit_x64.byte(output, 46usize)
             }
             byte_at = 0usize
             while byte_at < symbol.name.len {
