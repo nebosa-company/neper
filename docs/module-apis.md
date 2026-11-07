@@ -2700,7 +2700,7 @@ type Node = struct { kind: NodeKind, n: f64, s: str, b: bool, op: str, kids: []c
 fn leaf(kind: NodeKind) -> Node
 fn zero_nodes() -> []const Node
 
-type Parser = struct { a: *mem.Arena, src: str, tokens: []const Token, at: usize, failed: bool, message: str, pos: usize }
+type Parser = struct { a: *mem.Arena, src: str, tokens: []const Token, at: usize, failed: bool, message: str, pos: usize, depth: usize, too_deep: bool }
 
 fn fail(p: *Parser, message: str, pos: usize)
 fn describe(p: *Parser, t: Token) -> str
@@ -6705,7 +6705,7 @@ fn decimal_value(s: str) -> f64
 fn parse_duration(v: json.Value) -> (f64, bool)
 fn approval_signal(a: *mem.Arena, key: str) -> str
 fn truthy(v: json.Value) -> bool
-fn begin(ex: *Executor)
+fn begin(ex: *Executor) -> err
 fn record(ex: *Executor, kind: str, fields: json.Value) -> usize
 fn record_obj(ex: *Executor, kind: str, fields: ir.Obj) -> usize
 fn flush(ex: *Executor) -> Flow
@@ -7578,7 +7578,7 @@ fn snake(g: *Gen, s: str) -> str
 fn type_ident(g: *Gen, full: str) -> str
 fn is_keyword(s: str) -> bool
 fn field_ident(g: *Gen, name: str) -> str
-type Info = struct { name: str, number: u32, kind: str, repeated: bool, explicit: bool, packed: bool, element: str, supported: bool }
+type Info = struct { name: str, number: u32, kind: str, repeated: bool, explicit: bool, packed: bool, element: str, supported: bool, has_oneof: bool, oneof: u32 }
 fn kind_of(type_text: str) -> str
 fn neper_scalar(kind: str) -> str
 fn zero_literal(element: str) -> str
@@ -7589,10 +7589,10 @@ fn put_statement(g: *Gen, info: Info, x: str) -> str
 fn raw_statement(g: *Gen, info: Info, x: str) -> str
 fn nonzero_condition(g: *Gen, info: Info, x: str) -> str
 fn fill(g: *Gen, t: str, info: Info, number: str) -> str
-fn write_field(g: *Gen, info: Info, always: bool) -> str
+fn write_field(g: *Gen, info: Info, always: bool, suppress: str) -> str
 fn read_call(g: *Gen, kind: str, reader: str) -> str
 fn convert(kind: str) -> str
-fn read_field(g: *Gen, info: Info) -> str
+fn read_field(g: *Gen, info: Info, clears: str) -> str
 fn struct_field(g: *Gen, info: Info) -> str
 fn emit_enum(g: *Gen, full: str, e: json.Value)
 fn emit_message(g: *Gen, full: str, message: json.Value, proto3: bool)
@@ -7955,7 +7955,7 @@ fn new_consumer(a: *mem.Arena, dead_capacity: usize) -> Consumer
 type Drained = struct { processed: usize, upserts: usize, removals: usize, errors: usize, cursor: f64, dead_letters: []const DeadLetter }
 
 fn is_removal(t: str) -> bool
-fn apply_event(c: *Consumer, ix: *SearchIndex, e: Event, to_document: ToDocument, state: *void, now_iso: str, upserts: *Counter)
+fn apply_event(c: *Consumer, ix: *SearchIndex, e: Event, to_document: ToDocument, state: *void, now_iso: str, upserts: *Counter) -> bool
 
 type Counter = struct { upserts: usize, removals: usize, errors: usize }
 
@@ -11109,7 +11109,7 @@ The model and engine layer of the native code editor (L065, D3201); the widget, 
 ```neper
 type Cell = struct { ch: u32, fg: u32, bg: u32, attr: u32 }
 type Selection = struct { mode: u32, a_line: usize, a_col: usize, h_line: usize, h_col: usize }
-type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32, app_keypad: bool, mouse_utf8: bool, mouse_urxvt: bool, modify_other: u32, kitty: [32]u32, kitty_n: [2]usize, sb_dropped: usize }
+type Term = struct { cols: usize, rows: usize, max_cols: usize, max_rows: usize, sb_cap: usize, sb_head: usize, sb_len: usize, cells: []Cell, flags: []u32, tabs: []bool, alt: bool, cx: usize, cy: usize, wrap_pending: bool, top: usize, bottom: usize, pen_fg: u32, pen_bg: u32, pen_attr: u32, graphics: bool, saved_x: usize, saved_y: usize, saved_fg: u32, saved_bg: u32, saved_attr: u32, saved_pending: bool, saved_origin: bool, saved_graphics: bool, autowrap: bool, origin: bool, insert: bool, newline_mode: bool, cursor_visible: bool, app_cursor: bool, bracketed_paste: bool, mouse_mode: u32, mouse_sgr: bool, focus_events: bool, state: u32, params: [16]u32, np: usize, pseen: bool, private: u32, inter: u32, sep: [16]u8, utf_cp: u32, utf_need: u32, last_ch: u32, osc: [256]u8, osc_len: usize, title: [128]u8, title_len: usize, out: [256]u8, out_len: usize, bells: u32, app_keypad: bool, mouse_utf8: bool, mouse_urxvt: bool, modify_other: u32, kitty: [32]u32, kitty_n: [2]usize, sb_dropped: usize }
 error Invalid
 const BOLD: u32 = 1u32
 const DIM: u32 = 2u32
@@ -12898,7 +12898,7 @@ type DetailBufferedWriter = struct { state: *void }
 type Seeker = struct { ctx: *void, seek: fn(*void, i64, os.SeekWhence) -> (u64, err) }
 type LimitedReader = struct { source: Reader, remaining: u64 }
 type CountingWriter = struct { sink: Writer, count: u64 }
-type TeeWriter = struct { left: Writer, right: Writer }
+type TeeWriter = struct { left: Writer, right: Writer, // Set when one sink accepted bytes the other did not: the streams no longer agree, // so the tee refuses further writes instead of reporting a resumable count that // would duplicate bytes into the sink that already took them. failed: bool }
 type MemoryWriter = struct { arena: *mem.Arena, start: usize, len: usize, backing: *MemoryWriter }
 type BufferState = struct { source: Reader, sink: Writer, buffer: []u8, off: usize, len: usize, pending_error: err }
 type DetailBufferState = struct { source: DetailReader, sink: DetailWriter, buffer: []u8, off: usize, len: usize, pending_error: err, pending_detail: os.ErrorDetail }
@@ -15164,7 +15164,7 @@ type Action = enum u8 { None, Changed, Accept, Interrupt, Eof, Tab, ClearScreen 
 type Editor = struct { buf: []u8, len: usize, cursor: usize, draft: []u8, draft_len: usize, kill: []u8, kill_len: usize, last_was_kill: bool, hist_data: []u8, hist_used: usize, hist_starts: []usize, hist_lens: []usize, hist_count: usize, hist_pos: usize, cands: []str, cand_n: usize, cand_i: usize, cand_start: usize, cand_len: usize, cycling: bool }
 error TooSmall
 
-fn editor(buf: []u8, draft: []u8, kill: []u8, hist_data: []u8, hist_starts: []usize, hist_lens: []usize, cands: []str) -> Editor
+fn editor(buf: []u8, draft: []u8, kill: []u8, hist_data: []u8, hist_starts: []usize, hist_lens: []usize, cands: []str) -> (Editor, err)
 fn text(e: *const Editor) -> str
 fn is_continuation(b: u8) -> bool
 fn is_word_byte(b: u8) -> bool
@@ -16235,7 +16235,7 @@ fn conditional_headers(h: Headers) -> Conditional
 fn parse_ipv4(s: str) -> (i64, i64, bool)
 fn is_private_network_host(a: *mem.Arena, host: str) -> bool
 
-type FilterRules = struct { domains: []const str, selectors: []const str }
+type FilterRules = struct { domains: []const str, selectors: []const str, allow: []const str, third: []const str, typed: []const str, types: []const str }
 
 fn add_unique(out: []str, n: *usize, v: str)
 fn parse_filter_list(a: *mem.Arena, text: str) -> FilterRules
@@ -18355,7 +18355,7 @@ type Limit = struct { category: str, until: i64 }
 type Transport = struct { ctx: *void, send: fn(*void, *mem.Arena, *const http.Request) -> (http.Response, err) }
 type NetTransport = struct { endpoint: net.Endpoint, limits: http.Limits }
 type TlsTransport = struct { endpoint: net.Endpoint, config: tls.ClientConfig, limits: http.Limits }
-type Client = struct { dsn: Dsn, a: *mem.Arena, transport: Transport, name: str, queue: []str, count: usize, bytes: usize, max_items: usize, max_bytes: usize, dropped: usize, rejected: usize, sent: usize, failures: u32, retry_at: i64, limited_until: i64 }
+type Client = struct { dsn: Dsn, a: *mem.Arena, transport: Transport, name: str, storage: []u8, q_off: []usize, q_len: []usize, count: usize, bytes: usize, max_items: usize, max_bytes: usize, dropped: usize, rejected: usize, sent: usize, failures: u32, retry_at: i64, limited_until: i64, scratch_mark: usize, has_scratch: bool }
 error Invalid
 error TooLarge
 error Corrupt
@@ -20553,10 +20553,10 @@ Animation interpolation kernels (L039), after Vaper's `vaper_css_values/lib/src/
 ### `e.gfx.cssvalue`
 
 ```neper
-type LengthUnit = enum u8 { Px, Pt, Em, Rem, Ex, Percent, Vw, Vh, Vmin, Vmax, Ch }
+type LengthUnit = enum u8 { Px, Pt, Em, Rem, Ex, Percent, Vw, Vh, Vmin, Vmax, Ch, Lh }
 type LengthOp = enum u8 { None, Min, Max, Clamp, Abs, Hypot, Mod, Rem, RoundNearest, RoundUp, RoundDown, RoundToZero }
 type CssLength = struct { value: f64, unit: LengthUnit, px_offset: f64, op: LengthOp, terms: []const CssLength }
-type Bases = struct { has_em: bool, em: f64, has_rem: bool, rem: f64, has_percent: bool, percent: f64, has_viewport_width: bool, viewport_width: f64, has_viewport_height: bool, viewport_height: f64, ch: f64, ex: f64 }
+type Bases = struct { has_em: bool, em: f64, has_rem: bool, rem: f64, has_percent: bool, percent: f64, has_viewport_width: bool, viewport_width: f64, has_viewport_height: bool, viewport_height: f64, ch: f64, ex: f64, lh: f64 }
 
 fn no_bases() -> Bases
 fn pi() -> f64
@@ -20625,7 +20625,7 @@ type Product = struct { coeff: f64, has_length: bool, length: CssLength }
 
 fn parse_calc_product(a: *mem.Arena, token: str) -> (Product, bool)
 fn scalar_or_eval(a: *mem.Arena, s: str) -> (f64, bool)
-fn parse_calc(a: *mem.Arena, expr: str, b: Bases) -> (CssLength, bool)
+fn parse_calc(a: *mem.Arena, expr_in: str, b: Bases) -> (CssLength, bool)
 fn parse_length(a: *mem.Arena, raw: str, bases: Bases) -> (CssLength, bool)
 fn argb(a: i64, r: i64, g: i64, b: i64) -> u32
 fn euclid_mod(x: f64, m: f64) -> f64
@@ -20997,7 +20997,7 @@ type Key = struct { identifier: bool, name: str, expr: []const Expr }
 type Part = struct { kind: PartKind, text: str, expr: []const Expr }
 type Expr = struct { kind: Kind, text: str, flag: bool, items: []const Expr, keys: []const Key, ops: []const Operator, parts: []const Part, names: []const str }
 type Item = struct { is_block: bool, name: str, labels: []const str, value: []const Expr, body: []const Item }
-type Parser = struct { a: *mem.Arena, src: str, at: usize, depth: usize, nest: usize, invalid: bool }
+type Parser = struct { a: *mem.Arena, src: str, at: usize, depth: usize, nest: usize, invalid: bool, too_deep: bool }
 
 fn blank(kind: Kind) -> Expr
 fn peek(p: *const Parser) -> u8
@@ -22549,9 +22549,9 @@ ZIP writing (L100): `store` lays named parts out as stored (method 0) entries, l
 type Limits = struct { entries: usize, name_bytes: usize, header_bytes: usize, folder_bytes: usize }
 type Entry = struct { name: str, size: u64, crc32: u32, has_crc: bool, directory: bool, has_stream: bool, folder: usize, offset: u64 }
 type Coder = struct { id: u64, props: [8]u8, props_len: usize }
-type Folder = struct { coders: [4]Coder, ncoders: usize, bind_in: [3]usize, bind_out: [3]usize, nbind: usize, main_out: usize, sizes: [4]u64, crc: u32, has_crc: bool, nsub: usize, first_sub: usize }
+type Folder = struct { coders: [4]Coder, ncoders: usize, bind_in: [3]usize, bind_out: [3]usize, nbind: usize, main_out: usize, sizes: [4]u64, crc: u32, has_crc: bool, nsub: usize, first_sub: usize, pack_coder: usize }
 type Cur = struct { data: []const u8, at: usize, bad: bool }
-type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, folders: []Folder, pack_pos: []u64, pack_size: []u64, sub_size: []u64, sub_crc: []u32, sub_has: []bool, entries: []Entry, cache_folder: usize, cache: []u8, cached: bool }
+type State = struct { a: *mem.Arena, data: []const u8, limits: Limits, folders: []Folder, pack_pos: []u64, pack_size: []u64, pack_has: []bool, pack_crc: []u32, sub_size: []u64, sub_crc: []u32, sub_has: []bool, entries: []Entry, cache_folder: usize, cache: []u8, cached: bool }
 type Archive = struct { state: *void }
 error Invalid
 error Unsupported
@@ -22929,7 +22929,7 @@ OpenID Connect relying party with PKCE (L045), after Appdor's `src/identity/oidc
 ```neper
 type Token = struct { kind: u8, value: str }
 type Node = struct { kind: u8, op: u8, attribute: str, path: str, left: usize, right: usize, value: json.Value }
-type Parser = struct { tokens: []const Token, pos: usize, nodes: []Node, count: usize, failed: bool, message: str }
+type Parser = struct { tokens: []const Token, pos: usize, nodes: []Node, count: usize, failed: bool, message: str, depth: usize }
 type Filter = struct { valid: bool, message: str, nodes: []const Node, root: usize }
 type PatchPath = struct { attribute: str, has_filter: bool, filter: Filter, has_sub: bool, sub: str, has_error: bool, message: str }
 type Patched = struct { valid: bool, message: str, resource: json.Value }
@@ -22964,7 +22964,7 @@ fn strict_equal(x: json.Value, y: json.Value) -> bool
 fn lowered_value(a: *mem.Arena, v: json.Value) -> json.Value
 fn less(x: json.Value, y: json.Value) -> bool
 fn compare_values(a: *mem.Arena, actual: json.Value, found: bool, op: u8, expected: json.Value) -> bool
-fn eval(a: *mem.Arena, nodes: []const Node, at: usize, resource: json.Value) -> bool
+fn eval(a: *mem.Arena, nodes: []const Node, at: usize, resource: json.Value, depth: usize) -> bool
 fn evaluate(a: *mem.Arena, filter: Filter, resource: json.Value) -> bool
 fn index_of(s: str, c: u8) -> i64
 fn last_index_of(s: str, c: u8) -> i64
@@ -23059,7 +23059,7 @@ A small XML reader and Exclusive XML Canonicalization 1.0 for SAML (L045), after
 
 ```neper
 type Key = struct { has: bool, n: str, e: str }
-type Signed = struct { valid: bool, message: str, id: str, assertion: usize, signed_element: str }
+type Signed = struct { valid: bool, message: str, id: str, assertion: usize, signed_element: str, doc: xml.Doc }
 type Assertion = struct { present: bool, id: str, issuer: str, has_name_id: bool, name_id: str, name_id_format: str, session_index: str, authn_instant: str, not_before: str, not_on_or_after: str, audiences: []const str, recipient: str, confirmation_not_on_or_after: str, confirmation_in_response_to: str, attr_names: []const str, attr_values: []const []const str }
 type Response = struct { valid: bool, message: str, doc: xml.Doc, id: str, in_response_to: str, destination: str, issue_instant: str, issuer: str, status_present: bool, status_has_value: bool, status_code: str, status_message: str, assertion: Assertion }
 type Config = struct { issuer: str, audience: str, acs_url: str, key: Key, expected_in_response_to: str, now: f64, has_skew: bool, skew_ms: f64, seen: []const str }
@@ -24857,7 +24857,7 @@ const TOP: usize = 0usize
 const RIGHT: usize = 1usize
 const BOTTOM: usize = 2usize
 const LEFT: usize = 3usize
-type LenKind = enum u8 { Auto, Px, None, MinContent, MaxContent, FitContent, Number, Normal }
+type LenKind = enum u8 { Auto, Px, None, MinContent, MaxContent, FitContent, Number, Normal, FitLimit }
 type Len = struct { kind: LenKind, px: f64, pct: f64 }
 type Display = enum u8 { Inline, Block, None, Contents, InlineBlock, Flex, InlineFlex, Grid, InlineGrid, Table, InlineTable, TableRow, TableCell, TableRowGroup, TableHeaderGroup, TableFooterGroup, TableColumn, TableColumnGroup, TableCaption, ListItem, FlowRoot, Ruby, RubyText, RubyBase, RubyTextContainer, RubyBaseContainer, RunIn }
 type Position = enum u8 { Static, Relative, Absolute, Fixed, Sticky }
@@ -24868,7 +24868,7 @@ type Overflow = enum u8 { Visible, Hidden, Scroll, Auto, Clip }
 type Visibility = enum u8 { Visible, Hidden, Collapse }
 type BorderStyle = enum u8 { None, Hidden, Dotted, Dashed, Solid, Double, Groove, Ridge, Inset, Outset }
 type FontStyle = enum u8 { Normal, Italic, Oblique }
-type TextAlign = enum u8 { Start, End, Left, Right, Center, Justify, MatchParent }
+type TextAlign = enum u8 { Start, End, Left, Right, Center, Justify, JustifyAll, MatchParent }
 type TextTransform = enum u8 { None, Capitalize, Uppercase, Lowercase, FullWidth }
 type WhiteSpace = enum u8 { Normal, Pre, Nowrap, PreWrap, PreLine, BreakSpaces }
 type WordBreak = enum u8 { Normal, BreakAll, KeepAll, BreakWord }
@@ -24882,7 +24882,7 @@ type TableLayout = enum u8 { Auto, Fixed }
 type CaptionSide = enum u8 { Top, Bottom }
 type EmptyCells = enum u8 { Show, Hide }
 type FlexDirection = enum u8 { Row, RowReverse, Column, ColumnReverse }
-type FlexWrap = enum u8 { Nowrap, Wrap, WrapReverse }
+type FlexWrap = enum u8 { Nowrap, Wrap, WrapReverse, Balance }
 type Align = enum u8 { Normal, Start, End, FlexStart, FlexEnd, Center, Stretch, SpaceBetween, SpaceAround, SpaceEvenly, Baseline, FirstBaseline, LastBaseline, SelfStart, SelfEnd, Left, Right, Safe, Unsafe, Auto }
 type DecorationStyle = enum u8 { Solid, Double, Dotted, Dashed, Wavy }
 type VAlign = enum u8 { Baseline, Sub, Super, Top, TextTop, Middle, Bottom, TextBottom, Length }
@@ -24891,7 +24891,7 @@ const DECORATION_OVERLINE: u8 = 2u8
 const DECORATION_LINE_THROUGH: u8 = 4u8
 type Custom = struct { name: str, value: str }
 type Extra = struct { name: str, value: str }
-type Style = struct { display: Display, was_inline: bool, lanes: bool, position: Position, floating: Float, clear: Clear, box_sizing: BoxSizing, overflow_x: Overflow, overflow_y: Overflow, visibility: Visibility, width: Len, height: Len, min_width: Len, min_height: Len, max_width: Len, max_height: Len, inset: [4]Len, margin: [4]Len, padding: [4]Len, border_width: [4]f64, border_style: [4]BorderStyle, border_color: [4]u32, border_current: [4]bool, radius_h: [4]Len, radius_v: [4]Len, z_index_auto: bool, z_index: i64, opacity: f64, flex_direction: FlexDirection, flex_wrap: FlexWrap, flex_grow: f64, flex_shrink: f64, flex_basis: Len, order: i64, justify_content: Align, justify_items: Align, justify_self: Align, align_items: Align, align_self: Align, align_content: Align, row_gap: Len, column_gap: Len, color: u32, font_size: f64, font_weight: f64, font_style: FontStyle, font_family: str, line_height: Len, letter_spacing: f64, word_spacing: f64, text_indent: Len, text_align: TextAlign, text_transform: TextTransform, white_space: WhiteSpace, word_break: WordBreak, overflow_wrap: OverflowWrap, text_overflow: TextOverflow, direction: Direction, writing_mode: WritingMode, vertical_align: VAlign, vertical_align_length: Len, decoration_line: u8, decoration_color: u32, decoration_current: bool, decoration_style: DecorationStyle, cursor: str, tab_size: f64, list_style_type: str, list_style_position: ListPosition, list_style_image: str, background_color: u32, outline_width: f64, outline_style: BorderStyle, outline_color: u32, outline_current: bool, outline_offset: f64, border_collapse: BorderCollapse, border_spacing_h: f64, border_spacing_v: f64, table_layout: TableLayout, caption_side: CaptionSide, empty_cells: EmptyCells, custom: []const Custom, extras: []const Extra, // The styles of the element's pseudo-elements, by `selector.PseudoElement` (an address of 0: the element has none). pseudo: [8]*const Style }
+type Style = struct { display: Display, was_inline: bool, lanes: bool, position: Position, floating: Float, clear: Clear, box_sizing: BoxSizing, overflow_x: Overflow, overflow_y: Overflow, visibility: Visibility, width: Len, height: Len, min_width: Len, min_height: Len, max_width: Len, max_height: Len, inset: [4]Len, margin: [4]Len, padding: [4]Len, border_width: [4]f64, border_style: [4]BorderStyle, border_color: [4]u32, border_current: [4]bool, radius_h: [4]Len, radius_v: [4]Len, z_index_auto: bool, z_index: i64, opacity: f64, flex_direction: FlexDirection, flex_wrap: FlexWrap, flex_grow: f64, flex_shrink: f64, flex_basis: Len, order: i64, justify_content: Align, justify_items: Align, justify_self: Align, align_items: Align, align_self: Align, align_content: Align, row_gap: Len, column_gap: Len, color: u32, font_size: f64, font_weight: f64, font_style: FontStyle, font_family: str, line_height: Len, letter_spacing: f64, word_spacing: f64, text_indent: Len, text_align: TextAlign, text_transform: TextTransform, white_space: WhiteSpace, word_break: WordBreak, hanging_punctuation: u8, overflow_wrap: OverflowWrap, text_overflow: TextOverflow, direction: Direction, writing_mode: WritingMode, vertical_align: VAlign, vertical_align_length: Len, decoration_line: u8, decoration_color: u32, decoration_current: bool, decoration_style: DecorationStyle, cursor: str, tab_size: f64, list_style_type: str, list_style_position: ListPosition, list_style_image: str, background_color: u32, outline_width: f64, outline_style: BorderStyle, outline_color: u32, outline_current: bool, outline_offset: f64, border_collapse: BorderCollapse, border_spacing_h: f64, border_spacing_v: f64, table_layout: TableLayout, caption_side: CaptionSide, empty_cells: EmptyCells, custom: []const Custom, extras: []const Extra, // The styles of the element's pseudo-elements, by `selector.PseudoElement` (an address of 0: the element has none). pseudo: [8]*const Style }
 type Context = struct { a: *mem.Arena, viewport_width: f64, viewport_height: f64, root_font_size: f64, dark: bool, reduced_motion: bool, ch: f64, ex: f64, lh: f64 }
 fn new_context(a: *mem.Arena, viewport_width: f64, viewport_height: f64) -> Context
 fn len_auto() -> Len
@@ -25073,11 +25073,11 @@ type Intrinsic = struct { kind: u8, has_width: bool, width: f64, has_height: boo
 type Measure = struct { ctx: *void, width: fn(*void, *const style.Style, str) -> f64, metrics: fn(*void, *const style.Style) -> FontMetrics, intrinsic: fn(*void, html.NodeId, *const style.Style) -> Intrinsic }
 type Inner = enum u8 { Flow, FlowRoot, Flex, Grid, Table, Replaced, Text, Break, Marker, RowGroup, Row, Cell, Caption, ColumnGroup, Column }
 const NONE: u32 = 4294967295u32
-type Box = struct { inner: Inner, inline_level: bool, anonymous: bool, positioned_out: bool, node: u32, style: u32, parent: u32, first: u32, last: u32, prev: u32, next: u32, x: f64, y: f64, w: f64, h: f64, margin: [4]f64, border: [4]f64, padding: [4]f64, text: str, line_first: u32, line_count: u32, baseline: f64, has_baseline: bool, overflow_w: f64, overflow_h: f64, aux: u32, aux2: u32, min_c: f64, max_c: f64, has_c: bool, in_layout: bool, proc: str, coll: bool, cbd: [4]f64 }
+type Box = struct { inner: Inner, inline_level: bool, anonymous: bool, positioned_out: bool, node: u32, style: u32, parent: u32, first: u32, last: u32, prev: u32, next: u32, x: f64, y: f64, w: f64, h: f64, margin: [4]f64, border: [4]f64, padding: [4]f64, text: str, line_first: u32, line_count: u32, baseline: f64, has_baseline: bool, overflow_w: f64, overflow_h: f64, aux: u32, aux2: u32, min_c: f64, max_c: f64, has_c: bool, in_layout: bool, proc: str, coll: bool, cbd: [4]f64, cf_first: u32, cf_count: u32, clamped: bool }
 type FragKind = enum u8 { Text, Segment, Atomic, Marker }
 type Frag = struct { kind: FragKind, box: u32, x: f64, y: f64, w: f64, h: f64, text: str, first: bool, last: bool }
-type Line = struct { x: f64, y: f64, w: f64, h: f64, baseline: f64, frag_first: u32, frag_count: u32, overflow_ellipsis: bool }
-type Layout = struct { a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure, boxes: list.List[Box], lines: list.List[Line], frags: list.List[Frag], anon: list.List[style.Style], root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64, floats: list.List[FloatRec], tables: list.List[TableData], counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize, orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule] }
+type Line = struct { x: f64, y: f64, w: f64, h: f64, baseline: f64, frag_first: u32, frag_count: u32, overflow_ellipsis: bool, clamp: bool, ell_box: u32 }
+type Layout = struct { a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure, boxes: list.List[Box], lines: list.List[Line], frags: list.List[Frag], anon: list.List[style.Style], root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64, floats: list.List[FloatRec], tables: list.List[TableData], counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize, orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule], sub_c: []const f64, sub_r: []const f64, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool, mc_count: usize, mc_rgap: f64, cfrags: list.List[ColFrag], mc_br: []const f64, mc_use: bool }
 type FloatRec = struct { box: u32, x: f64, y: f64, w: f64, h: f64, left: bool, root: u32 }
 fn st(l: *const Layout, id: u32) -> *const style.Style
 fn bx(l: *Layout, id: u32) -> *Box
@@ -25090,11 +25090,11 @@ fn is_punct(c: u32) -> bool
 fn is_combining(c: u32) -> bool
 fn find_first_text(l: *Layout, b: u32) -> u32
 fn apply_first_letter(l: *Layout, b: u32, ps: *const style.Style)
-type CounterInst = struct { name: str, value: i64, depth: usize }
+type CounterInst = struct { name: str, value: i64, depth: usize, nested: bool, pend: i64, has_pend: bool }
 fn find_counter(l: *const Layout, name: str) -> i64
 fn counter_instantiate(l: *Layout, name: str, value: i64)
-fn apply_counter_props(l: *Layout, s: *const style.Style)
-fn counter_pairs(l: *Layout, text: str, op: u8, default_value: i64)
+fn apply_counter_props(l: *Layout, s: *const style.Style, node: u32)
+fn counter_pairs(l: *Layout, text: str, op: u8, default_value: i64, node: u32)
 fn format_counter(l: *Layout, value: i64, kind: str) -> str
 fn join_parts(a: *mem.Arena, parts: []const str) -> str
 fn quote_pair(l: *Layout, s: *const style.Style, depth: i64, close: bool) -> str
@@ -25137,7 +25137,7 @@ fn horizontal_extras(bb: *const Box) -> f64
 fn vertical_extras(bb: *const Box) -> f64
 fn to_content_w(l: *const Layout, b: u32, outer: f64) -> f64
 fn to_content_h(l: *const Layout, b: u32, outer: f64) -> f64
-fn clamp_width(l: *const Layout, b: u32, w: f64, cbw: f64) -> f64
+fn clamp_width(l: *Layout, b: u32, w: f64, cbw: f64) -> f64
 fn clamp_height(l: *const Layout, b: u32, h: f64, cbh: f64) -> f64
 fn float_edge_left(l: *const Layout, base: usize, y0: f64, y1: f64, floor_x: f64) -> f64
 fn float_edge_right(l: *const Layout, base: usize, y0: f64, y1: f64, ceil_x: f64) -> f64
@@ -25170,14 +25170,14 @@ type Open = struct { box: u32, shift: f64, start: f64 }
 fn valign_shift(l: *const Layout, s: *const style.Style, ps: *const style.Style, a: f64, d: f64, lh: f64) -> f64
 fn line_align_x(s: *const style.Style, base: style.TextAlign, last_line: bool, explicit_justify: bool, avail: f64, width: f64, left: f64) -> f64
 fn place_float(l: *Layout, fc: *Flow, f: u32, cbx: f64, cbw: f64, y_min: f64, parent: u32)
-type Ifc = struct { l: *Layout, bd: Builder, cont: u32, cs: *const style.Style, cbw: f64, fc: *Flow, y: f64, first_line: bool, open: [64]u32, open_count: usize, sa: f64, sd: f64, own: list.List[u32] }
+type Ifc = struct { l: *Layout, bd: Builder, cont: u32, cs: *const style.Style, cbw: f64, fc: *Flow, y: f64, first_line: bool, open: [64]u32, open_count: usize, sa: f64, sd: f64, own: list.List[u32], shift: i64, prev_strong: u8, shrink: f64 }
 type Scan = struct { restart: bool, end: usize, lead: usize, forced: bool, line_x: f64, avail: f64 }
 fn split_piece(x: *Ifc, j: usize, max_w: f64) -> bool
 fn scan_line(x: *Ifc, i: usize) -> Scan
 fn flush_text_frag(l: *Layout, bxid: u32, x: f64, text: str, w: f64, shift: f64, baseline: f64)
 fn emit_segment(l: *Layout, ob: u32, x0: f64, x1: f64, baseline: f64, shift: f64, first: bool, last: bool)
 fn layout_inline_content(l: *Layout, cont: u32, cbw: f64, cbh: f64, fc: *Flow) -> f64
-fn emit_line(x: *Ifc, scan: Scan, end: usize) -> f64
+fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64
 fn replaced_intrinsic(l: *Layout, b: u32) -> Intrinsic
 fn default_replaced(i: Intrinsic) -> (f64, f64)
 fn outer_content_widths(l: *Layout, c: u32) -> (f64, f64)
@@ -25250,7 +25250,7 @@ fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, e
 fn resolve_axis(names: *const list.List[GName], explicit: i32, s: LineSpec, e: LineSpec, a: *mem.Arena) -> (i32, i32)
 fn split_slash(text: str) -> (str, str, bool)
 fn item_axis_specs(a: *mem.Arena, s: *const style.Style, col: bool) -> (LineSpec, LineSpec)
-type Grid = struct { cols: []GTrack, rows: []GTrack, nc: usize, nr: usize, items: []GItem, n: usize, gap_c: f64, gap_r: f64, cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32 }
+type Grid = struct { cols: []GTrack, rows: []GTrack, nc: usize, nr: usize, items: []GItem, n: usize, gap_c: f64, gap_r: f64, cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32, c_dummy: bool, r_dummy: bool }
 fn occ_free(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize) -> bool
 fn occ_mark(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize)
 fn grid_autoplace(a: *mem.Arena, items: []GItem, n: usize, ec: i32, er: i32, dense: bool) -> bool
@@ -25271,7 +25271,7 @@ fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
 type Cols = struct { count: usize, width: f64, gap: f64 }
 fn has_columns(s: *const style.Style) -> bool
 fn columns_for(l: *Layout, s: *const style.Style, cw: f64) -> Cols
-fn column_of(y: f64, colh: f64) -> usize
+fn column_of(l: *const Layout, y: f64, colh: f64) -> usize
 fn unbreakable(l: *const Layout, b: u32) -> bool
 fn colify(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool) -> usize
 fn layout_multicol(l: *Layout, b: u32, cw: f64, ch: f64, cols: Cols, fc: *Flow) -> f64
@@ -25284,17 +25284,17 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
 error TooBig
 type ClampScan = struct { seen: usize, n: usize, tail: bool }
 type ColRule = struct { box: u32, x: f64, y: f64, w: f64, h: f64, color: u32 }
-type Counter = struct { n: usize }
+type Counter = struct { n: usize, mb: f64 }
 type Edge = struct { w: f64, bs: style.BorderStyle, color: u32, prio: u8, set: bool }
-type GridGeom = struct { box: u32, nc: usize, nr: usize, cpos: []f64, csz: []f64, rpos: []f64, rsz: []f64, cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32 }
-fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> bool
+type GridGeom = struct { box: u32, nc: usize, nr: usize, cpos: []f64, csz: []f64, rpos: []f64, rsz: []f64, cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32, w: f64, rtl: bool }
+fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> (bool, usize)
 fn box_ratio(l: *const Layout, b: u32) -> (f64, bool)
 fn build_transposed(l: *Layout)
-fn clamp_children(l: *Layout, b: u32, ctr: *Counter) -> f64
+fn clamp_children(l: *Layout, b: u32, container: u32, ctr: *Counter) -> f64
 fn clamp_height_auto(l: *const Layout, b: u32, h: f64, cbh: f64, auto_h: f64) -> f64
 fn clamp_hide(l: *Layout, b: u32)
 fn clamp_scan(l: *Layout, b: u32, sc: *ClampScan)
-fn clamp_walk(l: *Layout, b: u32, ctr: *Counter) -> f64
+fn clamp_walk(l: *Layout, b: u32, container: u32, ctr: *Counter) -> f64
 fn clear_widths(l: *Layout, b: u32)
 fn colify_run(l: *Layout, first: u32, stop: u32, origin: f64, base: f64, colh: f64, stride: f64, apply: bool, shift: f64) -> usize
 fn collapse_edges(l: *Layout, t: u32, cells: *const list.List[CellInfo], rows: []const u32, nrows: usize, ncols: usize) -> ([]Edge, []Edge)
@@ -25315,7 +25315,7 @@ fn is_scroll_container(s: *const style.Style) -> bool
 fn is_spanner(l: *const Layout, c: u32) -> bool
 fn is_table_part(inner: Inner) -> bool
 fn lanes_dense(cs: *const style.Style) -> bool
-fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -> f64
+fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64
 fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -> f64
 fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64
 fn layout_multicol_spans(l: *Layout, b: u32, cw: f64, cols: Cols, fc: *Flow) -> f64
@@ -25390,7 +25390,7 @@ fn hit_test(a: *mem.Arena, l: *const layout.Layout, b: u32, x: f64, y: f64) -> u
 ### `e.fmt.css.paint`
 
 ```neper
-type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, height: f32, svg: str }
+type ImageRef = struct { found: bool, texture: scene.TextureId, width: f32, height: f32, svg: str, has_w: bool, has_h: bool, ratio: f32 }
 type PaintEnv = struct { ctx: *void, text: fn(*void, *const style.Style, str) -> *const tl.Layout, image: fn(*void, html.NodeId) -> ImageRef, url_image: fn(*void, str) -> ImageRef }
 type Entry = struct { box: u32, z: i64, real: bool }
 type Painter = struct { l: *const layout.Layout, a: *mem.Arena, env: PaintEnv, b: *scene.Builder, vx: f64, vy: f64, vw: f64, vh: f64, scroll_x: f64, scroll_y: f64, ext: []f64, status: err, moved: usize }
@@ -25563,7 +25563,7 @@ const A11Y_SLOT_BASE: u32 = 2147483648u32
 fn a11y_role(r: accessible.Role) -> accessibility.Role
 fn a11y_count(n: *const accessible.Node) -> usize
 fn a11y_flags(n: *const accessible.Node) -> u32
-fn a11y_fill(n: *const accessible.Node, v: *View, boxes: []const u32, a: *mem.Arena, out: []widget.A11yNode, next: *usize) -> (u32, err)
+fn a11y_fill(n: *const accessible.Node, v: *const View, boxes: []const u32, a: *mem.Arena, out: []widget.A11yNode, next: *usize) -> (u32, err)
 fn a11y(v: *View, a: *mem.Arena) -> (widget.A11yTree, err)
 fn a11y_build(ctx: *void, a: *mem.Arena) -> (widget.A11yTree, err)
 fn semantics(v: *View) -> widget.Semantics
@@ -25834,10 +25834,10 @@ error BadEncoding
 error TooLarge
 type Credentials = enum u8 { Omit, SameOrigin, Include }
 type Redirect = enum u8 { Follow, Error, Manual }
-type Request = struct { url: str, method: http.Method, headers: []const http.Header, body: []const u8, redirect: Redirect, credentials: Credentials, referrer: str }
+type Request = struct { url: str, method: http.Method, headers: []const http.Header, body: []const u8, redirect: Redirect, credentials: Credentials, referrer: str, dest: str }
 type Response = struct { url: str, status: u16, status_text: str, headers: []const http.Header, body: []const u8, redirected: bool, redirects: usize }
-type Config = struct { roots: []const u8, user_agent: str, accept_language: str, body_limit: usize, max_redirects: usize, allow_file: bool }
-type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar, h1_hosts: [16]str, h1_count: usize }
+type Config = struct { roots: []const u8, user_agent: str, accept_language: str, body_limit: usize, max_redirects: usize, allow_file: bool, file_root: str, block_hosts: []const str, allow_hosts: []const str, third_hosts: []const str, typed_hosts: []const str, typed_types: []const str }
+type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar, h1_hosts: [16]str, h1_count: usize, blocked: usize, roots: []const u8, roots_read: bool }
 fn default_config(roots: []const u8) -> Config
 fn client(a: *mem.Arena, cfg: Config, max_cookies: usize) -> (Client, err)
 fn unix_seconds() -> i64
@@ -25879,8 +25879,8 @@ fn drop_redirect_header(name: str, cross_origin: bool) -> bool
 ```neper
 error NotRenderable
 error LoadFailed
-type ImageEntry = struct { url: str, state: u8, width: u32, height: u32, img: image.Image, svg: str, texture: scene.TextureId, uploaded: bool }
-type Page = struct { pa: *mem.Arena, va: mem.Arena, client: *fetch.Client, fonts: *fontset.Set, url: str, status: u16, charset: str, title: str, mime: str, base: url.Url, tree: dom.Dom, sheets: []const str, images: list.List[ImageEntry], renderer: *scene.Renderer, has_renderer: bool, font_base: usize, view: *view.View, ctx: *js.Interp, scripted: bool, seen_version: u64, view_width: f32, view_height: f32, csp: csp.PolicySet, box_map: []u32, box_rev: u64, has_box_map: bool }
+type ImageEntry = struct { url: str, state: u8, width: u32, height: u32, img: image.Image, svg: str, texture: scene.TextureId, uploaded: bool, has_w: bool, has_h: bool, ratio: f32 }
+type Page = struct { pa: *mem.Arena, va: mem.Arena, client: *fetch.Client, blocked0: usize, fonts: *fontset.Set, url: str, status: u16, charset: str, title: str, mime: str, base: url.Url, tree: dom.Dom, sheets: []const str, images: list.List[ImageEntry], renderer: *scene.Renderer, has_renderer: bool, font_base: usize, view: *view.View, ctx: *js.Interp, scripted: bool, seen_version: u64, view_width: f32, view_height: f32, csp: csp.PolicySet, box_map: []u32, box_rev: u64, has_box_map: bool }
 fn lower_byte(c: u8) -> u8
 fn eq_fold(x: str, y: str) -> bool
 fn starts_fold(s: str, prefix: str) -> bool
@@ -26261,7 +26261,7 @@ const K_NONE: u8 = 0u8
 const K_BASE: u8 = 1u8
 const K_DERIVED: u8 = 2u8
 type Protos = struct { object: *Obj, function: *Obj, array: *Obj, string: *Obj, number: *Obj, boolean: *Obj, symbol: *Obj, error_proto: *Obj, type_error: *Obj, range_error: *Obj, syntax_error: *Obj, reference_error: *Obj, eval_error: *Obj, uri_error: *Obj, iterator: *Obj, array_iterator: *Obj, generator: *Obj, promise: *Obj, regexp: *Obj, date: *Obj, map: *Obj, set: *Obj, bigint: *Obj, arguments: *Obj, gen_function: *Obj, async_function: *Obj, async_generator: *Obj, async_gen_function: *Obj, map_iterator: *Obj, set_iterator: *Obj, weakmap: *Obj, weakset: *Obj, regexp_string_iterator: *Obj, array_buffer: *Obj, typed_array: *Obj, data_view: *Obj, aggregate_error: *Obj }
-type Interp = struct { a: *mem.Arena, protos: Protos, global: *Obj, global_env: *Env, thrown: Value, depth: u32, max_depth: u32, next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64, sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym, sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym, sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16, modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str, pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32, loading_internal: bool, rx_quiet: bool, gens: list.List[*GenState], wasm: *void, no_eval: bool }
+type Interp = struct { a: *mem.Arena, protos: Protos, global: *Obj, global_env: *Env, thrown: Value, depth: u32, max_depth: u32, next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64, sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym, sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym, sym_search: *Sym, sym_split: *Sym, sym_match_all: *Sym, registry: list.List[*Sym], message: str, host: *void, hole: *Sym, eval_fn: *Obj, last: *Obj, rng_state: u64, next_object: u64, jobs: list.List[Job], promise_ctor: *Obj, regexp_ctor: *Obj, array_buffer_ctor: *Obj, last_abstract: *Obj, ta_ctors: [13]*Obj, ta_protos: [13]*Obj, last_print: str, quiet: bool, px_hook: ProxyHook, px_err: err, mem_limit: usize, array_values_fn: *Obj, array_next_fn: *Obj, obj_to_string_fn: *Obj, env_free: *Env, suppressed_ctor: *Obj, array_ctor: *Obj, function_ctor: *Obj, str_iter_proto: *Obj, thrower: *Obj, proto_indexed: bool, var_names: list.List[str], var_names_init: bool, tmpl_sites: list.List[TemplateSite], tmpl_init: bool, gprog: *ast.Program, rx_valid: bool, rx_input_ok: bool, rx_input: str, rx_units: []const u16, rx_caps: []const i64, ux_src: str, ux_units: []const u16, modules: list.List[*void], module_loader: ModuleLoader, module_hook: ModuleHook, has_modules: bool, script_url: str, pending_module_body: bool, caller: *Interp, has_caller: bool, donor: *Interp, hub: *AgentHub, has_hub: bool, tzdb: *void, has_tzdb: bool, shadow_proto: *Obj, eval_early: bool, eval_probe: bool, class_hint: str, tail_fn: Value, tail_this: Value, tail_args: []const Value, tail_set: bool, mod_order: u32, loading_internal: bool, rx_quiet: bool, gens: list.List[*GenState], wasm: *void, no_eval: bool }
 fn null_interp() -> *Interp
 fn undefv() -> Value
 fn null_value() -> Value
@@ -27278,7 +27278,7 @@ type Compiled = struct { re: rx.Regex, source: str, flags: str, legacy: bool, re
 fn compiled_of(o: *js.Obj) -> *Compiled
 fn is_regexp_obj(v: js.Value) -> bool
 fn zero_ptr() -> *void
-fn to_units(a: *mem.Arena, s: str) -> []const u16
+fn to_units(a: *mem.Arena, s: str) -> ([]const u16, err)
 fn from_units(it: *js.Interp, units: []const u16, from: usize, to: usize) -> str
 fn escape_source(it: *js.Interp, src: str) -> str
 fn regexp_create(it: *js.Interp, proto: *js.Obj, source: str, flags: str, legacy: bool) -> (js.Value, err)
@@ -27321,7 +27321,7 @@ fn legacy_get(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
 fn legacy_name(i: usize) -> str
 fn legacy_set_input(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn pick_named(names: []const str, k: usize, items: []js.Value, off: usize) -> js.Value
-fn subject_units(it: *js.Interp, s: str) -> []const u16
+fn subject_units(it: *js.Interp, s: str) -> ([]const u16, err)
 ```
 
 ### `e.js.b_collections`
@@ -29933,14 +29933,14 @@ fn ast(kind: []u8, a: []u32, b: []u32, tok: []u32) -> Ast
 fn ast_node(t: *Ast, kind: u8, a: u32, b: u32, tok: u32) -> (u32, err)
 fn ast_child(t: *const Ast, node: u32, which: usize) -> u32
 fn pratt(tokens: []const Token, text: str, ops: []const Op, t: *Ast) -> (u32, err)
-fn pratt_expr(p: *Parser, t: *Ast, min_bp: u8) -> (u32, err)
+fn pratt_expr(p: *Parser, t: *Ast, min_bp: u8, depth: usize) -> (u32, err)
 fn recursive_descent(tokens: []const Token, text: str, t: *Ast) -> (u32, err)
 fn peek_char(p: *const Parser, c: u8) -> bool
-fn rd_expr(p: *Parser, t: *Ast) -> (u32, err)
-fn rd_term(p: *Parser, t: *Ast) -> (u32, err)
-fn rd_unary(p: *Parser, t: *Ast) -> (u32, err)
-fn rd_power(p: *Parser, t: *Ast) -> (u32, err)
-fn rd_atom(p: *Parser, t: *Ast) -> (u32, err)
+fn rd_expr(p: *Parser, t: *Ast, depth: usize) -> (u32, err)
+fn rd_term(p: *Parser, t: *Ast, depth: usize) -> (u32, err)
+fn rd_unary(p: *Parser, t: *Ast, depth: usize) -> (u32, err)
+fn rd_power(p: *Parser, t: *Ast, depth: usize) -> (u32, err)
+fn rd_atom(p: *Parser, t: *Ast, depth: usize) -> (u32, err)
 fn evaluate(t: *const Ast, node: u32, tokens: []const Token, text: str) -> (f64, err)
 fn grammar(lhs: []const u32, rhs: []const u32, rule_start: []const usize, terminals: u32) -> Grammar
 fn rule_count(g: *const Grammar) -> usize
@@ -30761,7 +30761,7 @@ the kind.
 ```neper
 type Edge = struct { from: u32, to: u32 }
 type Probe = struct { initiator: u32, from: u32, to: u32 }
-type Chase = struct { edges: []const Edge, site: []const u32, initiator: u32, probes: []Probe, sent: usize, seen: []bool }
+type Chase = struct { edges: []const Edge, site: []const u32, initiator: u32, probes: []Probe, sent: usize, seen: []bool, deadlocked: bool }
 error TooSmall
 error Invalid
 const NONE: u32 = 4294967295u32
@@ -33957,7 +33957,7 @@ fn skip_comment(data: []const u8, at: usize, until: usize) -> usize
 fn skip_hex(data: []const u8, at: usize, until: usize) -> usize
 fn skip_literal(data: []const u8, at: usize, until: usize) -> usize
 fn stream_keyword(data: []const u8, from: usize, until: usize) -> usize
-fn stream_length(data: []const u8, from: usize, until: usize) -> (usize, bool)
+fn stream_length(data: []const u8, from: usize, until: usize) -> (usize, usize, bool, bool)
 fn stream_start(data: []const u8, at: usize, until: usize) -> usize
 ```
 
