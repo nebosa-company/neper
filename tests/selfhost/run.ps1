@@ -3780,10 +3780,10 @@ $sqliteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $sqliteWritten -ne 'executable written') { throw 'x.sqlite.sqlite emission failed' }
 & $sqlitePath
 if ($LASTEXITCODE -ne 0) { throw "the SQLite driver answered wrongly: exit $LASTEXITCODE" }
-# `x.duckdb.duckdb`: the `e.db` driver over the DuckDB C API (`duckdb.dll`, unpacked under
+# `x.duckdb.duckdb`: the `e.db` driver over the DuckDB C API v2 (`duckdb.dll`, unpacked under
 # D:\tools\duckdb and put on PATH by the caller), every value kind round-tripped, DuckDB's errors
 # mapped, statements, transactions, and a database file reopened in %TMP%. The fixture checks the
-# library's version itself and answers 1 when it is older than 1.1.
+# library's version itself and answers 1 when it is older than 2.0.
 $duckdbPath = Join-Path $testBuild 'x-duckdb-selfhost.exe'
 $duckdbWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_duckdb\src\main.e') $repo 'x64' 'windows' $duckdbPath
 if ($LASTEXITCODE -ne 0 -or $duckdbWritten -ne 'executable written') { throw 'x.duckdb.duckdb emission failed' }
