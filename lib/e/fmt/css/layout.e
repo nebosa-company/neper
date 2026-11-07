@@ -1670,6 +1670,19 @@ fn all_space_text(t: str) -> bool {
 }
 fn is_space_byte(c: u8) -> bool { ret c == 32u8 || c == 9u8 || c == 10u8 || c == 12u8 || c == 13u8 }
 
+// The non-ASCII spaces CSS Text 3 treats as collapsible ("document white space characters") that this pass rewrites to an
+// ASCII space: the Ogham space mark and the `U+2000`-`U+200A` quad family, plus narrow no-break and medium mathematical.
+//
+// `U+3000` (ideographic) is deliberately NOT here: it must HANG at the line end rather than vanish, and the later pass
+// already carries it as a piece with no content and its advance in `trail` (see `hanging_punct_w`). Collapsing it here
+// destroyed that and regressed trailing-ideographic-space-001/020/021/022.
+// `U+00A0` is absent too - a no-break space never collapses.
+fn is_collapsible_space_scalar(c: u32) -> bool {
+    if c == 0x1680u32 { ret true }
+    if c >= 0x2000u32 && c <= 0x200Au32 { ret true }
+    ret c == 0x202Fu32 || c == 0x205Fu32
+}
+
 fn spacing_extra(s: *const style.Style, text: str) -> f64 {
     if s.letter_spacing == 0.0f64 && s.word_spacing == 0.0f64 { ret 0.0f64 }
     var chars = 0usize
@@ -1781,6 +1794,21 @@ fn process_text(l: *const Layout, b: u32, ends_space: *Flag) -> str {
             }
             i += 1usize
             continue
+        }
+        // A non-ASCII collapsible space (Ogham, the quad family, ideographic) collapses to one ASCII space like any
+        // other, so it hangs at a line end and drops between words (WPT css-text/white-space/trailing-ogham-* and
+        // trailing-other-space-separators-*).
+        if c >= 128u8 {
+            let (d, de) = utf8.decode(raw, i)
+            if de == ok && is_collapsible_space_scalar(d.scalar) {
+                if !ends_space.v {
+                    out[n] = 32u8
+                    n += 1usize
+                    ends_space.v = true
+                }
+                i += usize(d.width)
+                continue
+            }
         }
         out[n] = c
         n += 1usize
