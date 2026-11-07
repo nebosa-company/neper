@@ -53,7 +53,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     // Signedness is a storage convention, so a pun between the two widths of one size
     // changes how the register holds the value without changing a bit of it.
-    if mem.bitcast[i32](2147483648u32) != 0i32 - 2147483648i32 { ret Failed }
+    // The magnitude of INT32_MIN does not fit i32, so the value is written as the negative
+    // literal rather than as `0i32 - 2147483648i32`, which no i32 can hold.
+    if mem.bitcast[i32](2147483648u32) != -2147483648i32 { ret Failed }
     if mem.bitcast[u32](0i32 - 1i32) != 4294967295u32 { ret Failed }
     if mem.bitcast[i64](18446744073709551615u64) != 0i64 - 1i64 { ret Failed }
     if mem.bitcast[u64](0i64 - 1i64) != 18446744073709551615u64 { ret Failed }
