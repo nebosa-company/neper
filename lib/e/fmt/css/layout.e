@@ -2431,6 +2431,11 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
             }
             if ab.inline_level || st(l, ab.style).was_inline {
                 ab.x = out.line_x + pos
+                // Only an INLINE-level absolutely positioned box keeps its static position on the line. Marking a
+                // block-level one `aux = 2` sent it down the inline branch of the static-position rules, where a
+                // right-to-left container placed it at `static_x - width` and it landed on the left edge
+                // (WPT css/CSS2/positioning/absolute-non-replaced-width-002).
+                ab.aux = 2u32
             } else {
                 ab.x = 0.0f64
             }
@@ -2439,7 +2444,6 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
                 ab.x += owner.border[3usize] + owner.padding[3usize]
                 ab.y += owner.border[0usize] + owner.padding[0usize]
             }
-            ab.aux = 2u32
             j += 1usize
             out.end = j
             continue
