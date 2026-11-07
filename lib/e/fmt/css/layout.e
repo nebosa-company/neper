@@ -10120,8 +10120,13 @@ fn layout_abs(l: *Layout, b: u32) {
             if has_rwm && rwm < cw { cw = rwm }
         }
     }
+    let cw_before_clamp = cw
     cw = maxf(0.0f64, clamp_width(l, b, cw, cb_w))
-    if has_l && has_r && !w_auto {
+    // `width: auto` with both offsets set makes the width definite, so the margins are solved from the equation - and
+    // when a `max-width`/`min-width` clamp changed the width, 10.3.7 says to apply the rules AGAIN with the clamped value,
+    // which is why a clamped `auto` width counts as definite here too. WPT absolute-non-replaced-width-025.
+    let width_definite = !w_auto || cw != cw_before_clamp
+    if has_l && has_r && width_definite {
         let rest = cb_w - lv - rv - cw - extras_h - ml - mr
         if aml && amr {
             // CSS 2.1 10.3.7: two auto margins share the slack. When that split would be negative the margins are made
