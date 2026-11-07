@@ -1,61 +1,92 @@
-// Driving a page's realm through the eval path the browser control uses (browser tracker 7.1).
+// Driving a loaded page through the browser control's eval surface (browser tracker 7.1).
 //
-// A host embedding the browser needs to run JavaScript in the page's own realm and see what it did - fill a field, click
-// a control, read back the result. `page.eval_js` is that entry, and `e.ui.browser`'s `eval_js` calls it. This fixture
-// builds the realm the way tests/selfhost/fixtures/link/web_shell does (a real Dom plus `script.new_context`), which is
-// the same context `page.start_scripts` creates, then drives it through `page.eval_js`'s two primitives.
+// A host embedding the browser needs to run JavaScript in the page's own realm and read what it produced - fill a field,
+// click a control, read back the result. `e.ui.browser` exposes that as `eval_js`, `eval_value`, `eval_truthy` and
+// `wait_for`, which sit on `page.eval_js` / `page.eval_value`. This fixture loads a real page with `page.load` and drives
+// it through the same `page` entry points the control uses, so it covers the path end to end without a window or a GPU.
 //
 // Each failure returns a distinct error so the exit status names the step.
-use e.fmt.dom as dom
-use e.fmt.html as html
-use e.js.interp as js
+use e.fs
 use e.mem
+use e.net.fetch as fetch
 use e.str
-use e.web.script as script
+use e.text.fontset as fontset
+use e.web.page as page
 
-error ParseFailed
-error ContextFailed
+error FontBytesFailed
+error ClientFailed
+error FontsFailed
+error FontAddFailed
+error LoadFailed
 error Eval1
 error Eval2
 error Eval3
 error Eval4
 error ThrowReportedAsSuccess
 error ThrowNotDescribed
-error ValueFailed
 error ValueWrong
+error ValueThrew
+error WaitFailed
+error WaitFoundNothing
 
-fn options() -> html.Options {
-    ret html.Options { max_bytes: 1048576usize, max_nodes: 4096usize, max_attributes: 64usize, max_depth: 64u16, preserve_comments: false }
+// The page has no external references; a font still has to be registered or layout has no generic family to fall back to.
+fn load_page(a: *mem.Arena) -> (*page.Page, err) {
+    let (bytes, be) = fs.read_file(a, "tests/browser/assets/ahem.ttf", 1048576usize)
+    if be != ok { ret (zero, FontBytesFailed) }
+    var (client, ce) = fetch.client(a, fetch.default_config(""), 16usize)
+    if ce != ok { ret (zero, ClientFailed) }
+    var (fonts, fe) = fontset.new(a)
+    if fe != ok { ret (zero, FontsFailed) }
+    if fontset.add(&fonts, "Ahem", 400u32, false, bytes, 0u32) != ok { ret (zero, FontAddFailed) }
+    fontset.set_generic(&fonts, "sans-serif", "Ahem")
+    fontset.set_generic(&fonts, "serif", "Ahem")
+    let html = "data:text/html,<title>t</title><div id=box>0</div>"
+    let (p, pe) = page.load(a, &client, &fonts, html, 800.0, 600.0, 134217728usize)
+    ret (p, pe)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    let (parsed, pe) = dom.parse(a, "<!doctype html><html><body><div id=box>0</div></body></html>", options(), 32usize)
-    if pe != ok { ret ParseFailed }
-    var tree = parsed
-    let (it, ie) = script.new_context(a, &tree, "https://eval.test/")
-    if ie != ok { ret ContextFailed }
+    page.set_scripts(true)
+    let (p, le) = load_page(a)
+    if le != ok { ret LoadFailed }
     // 1. A script runs and its effect survives into a later evaluation: one realm, reused.
-    if !script.run_script(it, "window.__counter = 1", "one.js") { ret Eval1 }
-    script.pump(it, 0.0f64)
-    if !script.run_script(it, "if (window.__counter !== 1) throw new Error('realm not reused')", "two.js") { ret Eval2 }
+    if !page.eval_js(p, "window.__counter = 1") { ret Eval1 }
+    if !page.eval_js(p, "if (window.__counter !== 1) throw new Error('realm not reused')") { ret Eval2 }
     // 2. The DOM can be written and read back.
-    if !script.run_script(it, "document.getElementById('box').textContent = 'driven'", "three.js") { ret Eval3 }
-    if !script.run_script(it, "if (document.getElementById('box').textContent !== 'driven') throw new Error('DOM write lost')", "four.js") { ret Eval4 }
-    // 3. A throw is reported rather than swallowed, and names the exception.
-    if script.run_script(it, "throw new Error('deliberate')", "five.js") { ret ThrowReportedAsSuccess }
-    let why = script.describe_thrown(it)
-    if !str.contains(why, "deliberate") { ret ThrowNotDescribed }
-    // 4. The read half: an expression's value comes back, which is what `page.eval_value` does with these two calls.
-    let (value, ve) = js.eval_source(it, "document.getElementById('box').textContent")
-    if ve != ok { ret ValueFailed }
-    let (text, te) = js.to_string(it, value)
-    if te != ok { ret ValueFailed }
+    if !page.eval_js(p, "document.getElementById('box').textContent = 'driven'") { ret Eval3 }
+    if !page.eval_js(p, "if (document.getElementById('box').textContent !== 'driven') throw new Error('DOM write lost')") { ret Eval4 }
+    // 3. An expression's value comes back as a string, which is the read half the control needs.
+    let (text, usable) = page.eval_value(p, "document.getElementById('box').textContent")
+    if !usable { ret ValueThrew }
     if !str.eq(text, "driven") { ret ValueWrong }
-    let (num, ne) = js.eval_source(it, "1 + 41")
-    if ne != ok { ret ValueFailed }
-    let (num_text, nte) = js.to_string(it, num)
-    if nte != ok { ret ValueFailed }
-    if !str.eq(num_text, "42") { ret ValueWrong }
-    script.close(it)
+    let (sum, sum_ok) = page.eval_value(p, "1 + 41")
+    if !sum_ok { ret ValueThrew }
+    if !str.eq(sum, "42") { ret ValueWrong }
+    // 4. A throw is reported rather than swallowed, and names the exception.
+    if page.eval_js(p, "throw new Error('deliberate')") { ret ThrowReportedAsSuccess }
+    let why = page.eval_error(p)
+    if !str.contains(why, "deliberate") { ret ThrowNotDescribed }
+    // 5. A timer the page scheduled is driven to completion by polling with the clock advanced, not starved.
+    if !page.eval_js(p, "window.__later = false; setTimeout(function () { window.__later = true; }, 50)") { ret WaitFailed }
+    let (before, before_ok) = page.eval_value(p, "window.__later === true")
+    if !before_ok { ret ValueThrew }
+    if str.eq(before, "true") { ret WaitFoundNothing }
+    var now = 0.0f64
+    var held = false
+    var steps = 0usize
+    while steps < 200usize && !held {
+        let due = page.next_wakeup(p)
+        if due > now {
+            now = due
+        }
+        now = now + 1.0f64
+        let changed = page.tick(p, now)
+        let (now_text, now_ok) = page.eval_value(p, "window.__later === true")
+        if now_ok && str.eq(now_text, "true") { held = true }
+        if due < 0.0f64 && !changed { break }
+        steps += 1usize
+    }
+    if !held { ret WaitFailed }
+    page.close(p)
     ret ok
 }
