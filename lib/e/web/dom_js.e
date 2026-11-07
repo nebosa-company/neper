@@ -3514,13 +3514,19 @@ fn part12(b: *str.Builder) -> err {
     try str.push(b, "  ['HTMLFormElement', ['form']], ['HTMLInputElement', ['input']], ['HTMLButtonElement', ['button']], ['HTMLSelectElement', ['select']],\n")
     try str.push(b, "  ['HTMLOptionElement', ['option']], ['HTMLTextAreaElement', ['textarea']], ['HTMLTableElement', ['table']], ['HTMLTableSectionElement', ['thead', 'tbody', 'tfoot']]\n")
     try str.push(b, "];\n")
+    // `summary` is an HTMLElement publicly, but it alone carries the activation behaviour that toggles the owning
+    // `details` (HTML's summary activation behaviour), which is what fires `toggle`.
+    try str.push(b, "simple.push(['HTMLSummaryElement', ['summary']]);\n")
     try str.push(b, "for (const [name, tags] of simple) if (!htmlInterfaces[name]) defineHTMLInterface(name, tags);\n")
     try str.push(b, "for (const t of ['thead', 'tbody', 'tfoot']) htmlTagInterface[t] = 'HTMLTableSectionElement';\n")
     try str.push(b, "setPrototypeOf(htmlInterfaces.HTMLAudioElement, htmlInterfaces.HTMLMediaElement);\n")
     try str.push(b, "setPrototypeOf(htmlInterfaces.HTMLAudioElement.prototype, htmlInterfaces.HTMLMediaElement.prototype);\n")
     try str.push(b, "setPrototypeOf(htmlInterfaces.HTMLVideoElement, htmlInterfaces.HTMLMediaElement);\n")
     try str.push(b, "setPrototypeOf(htmlInterfaces.HTMLVideoElement.prototype, htmlInterfaces.HTMLMediaElement.prototype);\n")
-    try str.push(b, "for (const t of ['article', 'section', 'nav', 'aside', 'header', 'footer', 'main', 'address', 'figure', 'figcaption', 'hgroup', 'abbr', 'b', 'bdi', 'bdo', 'cite', 'code', 'dd', 'dfn', 'dt', 'em', 'i', 'kbd', 'mark', 'noscript', 'rp', 'rt', 'ruby', 's', 'samp', 'small', 'strong', 'sub', 'summary', 'sup', 'u', 'var', 'wbr', 'acronym', 'big', 'center', 'nobr', 'strike', 'tt', 'noembed', 'noframes', 'rb', 'rtc', 'search']) htmlTagInterface[t] = 'HTMLElement';\n")
+    try str.push(b, "for (const t of ['article', 'section', 'nav', 'aside', 'header', 'footer', 'main', 'address', 'figure', 'figcaption', 'hgroup', 'abbr', 'b', 'bdi', 'bdo', 'cite', 'code', 'dd', 'dfn', 'dt', 'em', 'i', 'kbd', 'mark', 'noscript', 'rp', 'rt', 'ruby', 's', 'samp', 'small', 'strong', 'sub', 'sup', 'u', 'var', 'wbr', 'acronym', 'big', 'center', 'nobr', 'strike', 'tt', 'noembed', 'noframes', 'rb', 'rtc', 'search']) htmlTagInterface[t] = 'HTMLElement';\n")
+    // `summary` gets its own class: it is an HTMLElement publicly, but it alone carries the activation behaviour that
+    // toggles the owning `details` (HTML's summary activation behaviour), which is what fires `toggle`.
+    try str.push(b, "htmlTagInterface['summary'] = 'HTMLSummaryElement';\n")
     try str.push(b, "const HTMLHtmlElement = htmlInterfaces.HTMLHtmlElement, HTMLHeadElement = htmlInterfaces.HTMLHeadElement,\n")
     try str.push(b, "  HTMLBodyElement = htmlInterfaces.HTMLBodyElement, HTMLTitleElement = htmlInterfaces.HTMLTitleElement,\n")
     try str.push(b, "  HTMLAnchorElement = htmlInterfaces.HTMLAnchorElement, HTMLImageElement = htmlInterfaces.HTMLImageElement,\n")
@@ -4186,6 +4192,18 @@ fn part14(b: *str.Builder) -> err {
     try str.push(b, "installHyperlinkUtils(htmlInterfaces.HTMLAreaElement.prototype);\n")
     try str.push(b, "operations(HTMLAnchorElement.prototype, { toString() { elSlot(this); const c = hyperlinkURL(this); const v = getAttributeValue(this, 'href'); return c === null ? (v === null ? '' : v) : c[0]; } });\n")
     try str.push(b, "operations(htmlInterfaces.HTMLAreaElement.prototype, { toString() { elSlot(this); const c = hyperlinkURL(this); const v = getAttributeValue(this, 'href'); return c === null ? (v === null ? '' : v) : c[0]; } });\n")
+    // Clicking a hyperlink follows it (HTML's "following hyperlinks"): the activation behavior of `a` and `area`,
+    // which neither element had, so a click on them did nothing and the window never saw a `hashchange`.
+    try str.push(b, "function hyperlinkActivation(event) {\n")
+    try str.push(b, "  const href = getAttributeValue(this, 'href');\n")
+    try str.push(b, "  if (href === null || href === '') return;\n")
+    try str.push(b, "  if (htmlLocal(this) === 'area' && getAttributeValue(this, 'nohref') !== null) return;\n")
+    try str.push(b, "  const c = hyperlinkURL(this);\n")
+    try str.push(b, "  if (c === null) return;\n")
+    try str.push(b, "  navigateTo(c[0]);\n")
+    try str.push(b, "}\n")
+    try str.push(b, "defineProperty(HTMLAnchorElement.prototype, 'activationBehavior', { value: hyperlinkActivation, writable: true, enumerable: false, configurable: true });\n")
+    try str.push(b, "defineProperty(htmlInterfaces.HTMLAreaElement.prototype, 'activationBehavior', { value: hyperlinkActivation, writable: true, enumerable: false, configurable: true });\n")
     try str.push(b, "function ShadowRoot() { throw new TypeError('Illegal constructor'); }\n")
     try str.push(b, "iface('ShadowRoot', ShadowRoot, DocumentFragment);\n")
     try str.push(b, "defineHandlerAttrs(ShadowRoot.prototype, ['slotchange']);\n")
@@ -10015,6 +10033,14 @@ fn part34(b: *str.Builder) -> err {
     try str.push(b, "  for (const c of childrenOf(p)) if (htmlLocal(c) === 'summary') return c === el;\n")
     try str.push(b, "  return false;\n")
     try str.push(b, "}\n")
+    // Clicking the first `summary` of a `details` toggles its `open`, and `detailsToggled` fires `toggle` from that.
+    try str.push(b, "function summaryActivation(event) {\n")
+    try str.push(b, "  if (!isSummaryOfDetails(this)) return;\n")
+    try str.push(b, "  const d = parentNode(this);\n")
+    try str.push(b, "  if (getAttributeValue(d, 'open') === null) setAttributeValue(d, 'open', '');\n")
+    try str.push(b, "  else removeAttributeByName(d, 'open');\n")
+    try str.push(b, "}\n")
+    try str.push(b, "defineProperty(htmlInterfaces.HTMLSummaryElement.prototype, 'activationBehavior', { value: summaryActivation, writable: true, enumerable: false, configurable: true });\n")
     try str.push(b, "defaultTabIndex = el => (focusableByDefault(el) ? 0 : -1);\n")
     ret ok
 }
