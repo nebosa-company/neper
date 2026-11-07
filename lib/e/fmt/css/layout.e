@@ -4624,6 +4624,17 @@ fn set_baseline(l: *Layout, b: u32) {
         bb.has_baseline = ff
         ret
     }
+    // The baseline of an inline-table is the baseline of its FIRST row, not of the last line (CSS 2.1 10.8.1), which
+    // is what `last_baseline` gives. Takes css/CSS2/normal-flow/inline-table-valign-001; inline-table-002a/002b still
+    // fail because their table has no row boxes at all (a bare `display: inline-table` holding a block child).
+    if bb.inner == .Table {
+        let (tf, ty) = first_baseline(l, b)
+        if tf {
+            bb.baseline = ty
+            bb.has_baseline = true
+        }
+        ret
+    }
     let (found, y) = last_baseline(l, b)
     if found {
         bb.baseline = y
