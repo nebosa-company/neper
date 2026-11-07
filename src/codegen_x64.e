@@ -2044,13 +2044,17 @@ fn prologue_conflict(builder: *nir.Builder, current: nir.Function, abi: Abi, par
         if in_register && width == 0usize && !stacked {
             if !context.ranges[value].used {
                 direct = true
-            } else if allocations[value].kind == .Register {
-                let (hardware, hardware_error) = hardware_register(allocations[value].index)
-                if hardware_error != ok { ret true }
-                direct_registers = direct_registers | (1usize << hardware)
-                direct = true
-            } else if allocations[value].kind == .Stack {
-                direct = true
+            } else {
+                if allocations[value].kind == .Register {
+                    let (hardware, hardware_error) = hardware_register(allocations[value].index)
+                    if hardware_error != ok { ret true }
+                    direct_registers = direct_registers | (1usize << hardware)
+                    direct = true
+                } else {
+                    if allocations[value].kind == .Stack {
+                        direct = true
+                    }
+                }
             }
         }
         if !direct && allocations[value].kind == .Register {
@@ -2060,7 +2064,8 @@ fn prologue_conflict(builder: *nir.Builder, current: nir.Function, abi: Abi, par
         }
         at += 1usize
     }
-    ret (direct_registers & other_registers) != 0usize
+    let common = direct_registers & other_registers
+    ret common != 0usize
 }
 
 fn prologue_parameters(builder: *nir.Builder, current: nir.Function, abi: Abi, stack_slots: usize, parameters: usize, context: *FunctionContext) -> err {
@@ -2109,35 +2114,41 @@ fn prologue_parameters(builder: *nir.Builder, current: nir.Function, abi: Abi, s
             if value < allocations.len && value < context.ranges.len {
                 if !context.ranges[value].used {
                     direct = true
-                } else if allocations[value].kind == .Register {
-                    let (hardware, hardware_error) = hardware_register(allocations[value].index)
-                    if hardware_error != ok { ret hardware_error }
-                    move_src[moves] = register
-                    move_dst[moves] = hardware
-                    moves += 1usize
-                    direct = true
-                } else if allocations[value].kind == .Stack {
-                    try emit_x64.store_stack(output, allocations[value].index, register)
-                    direct = true
+                } else {
+                    if allocations[value].kind == .Register {
+                        let (hardware, hardware_error) = hardware_register(allocations[value].index)
+                        if hardware_error != ok { ret hardware_error }
+                        move_src[moves] = register
+                        move_dst[moves] = hardware
+                        moves += 1usize
+                        direct = true
+                    } else {
+                        if allocations[value].kind == .Stack {
+                            try emit_x64.store_stack(output, allocations[value].index, register)
+                            direct = true
+                        }
+                    }
                 }
             }
         }
         if direct {
             context.param_direct[at] = true
-        } else if in_register {
-            if width == 0usize {
-                try emit_x64.store_stack(output, stack_slots + at, register)
+        } else {
+            if in_register {
+                if width == 0usize {
+                    try emit_x64.store_stack(output, stack_slots + at, register)
+                } else {
+                    try emit_x64.move_from_float(output, 10usize, register, width == 64usize)
+                    try emit_x64.store_stack(output, stack_slots + at, 10usize)
+                }
             } else {
-                try emit_x64.move_from_float(output, 10usize, register, width == 64usize)
+                try emit_x64.load_frame_argument(output, 10usize, incoming_stack_displacement(abi, stack_index))
+                if width == 0usize {
+                    let int_width = integer_width(incoming)
+                    if int_width != 0usize && int_width < 64usize { try emit_x64.normalize_integer(output, 10usize, 10usize, int_width, signed_integer(incoming)) }
+                }
                 try emit_x64.store_stack(output, stack_slots + at, 10usize)
             }
-        } else {
-            try emit_x64.load_frame_argument(output, 10usize, incoming_stack_displacement(abi, stack_index))
-            if width == 0usize {
-                let int_width = integer_width(incoming)
-                if int_width != 0usize && int_width < 64usize { try emit_x64.normalize_integer(output, 10usize, 10usize, int_width, signed_integer(incoming)) }
-            }
-            try emit_x64.store_stack(output, stack_slots + at, 10usize)
         }
         at += 1usize
     }
@@ -2147,7 +2158,7 @@ fn prologue_parameters(builder: *nir.Builder, current: nir.Function, abi: Abi, s
     while at < moves {
         if move_src[at] == move_dst[at] {
             done[at] = true
-            remaining -= 1usize
+            remaining = remaining - 1usize
         }
         at += 1usize
     }
@@ -2165,7 +2176,7 @@ fn prologue_parameters(builder: *nir.Builder, current: nir.Function, abi: Abi, s
                 if !blocked {
                     try emit_x64.mov_register(output, move_dst[at], move_src[at])
                     done[at] = true
-                    remaining -= 1usize
+                    remaining = remaining - 1usize
                     progressed = true
                 }
             }
@@ -4220,10 +4231,12 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     if instruction.immediate != 16usize { ret Unsupported }
                     if destination_is_held && source_is_held {
                         if destination_held != source_held { try emit_x64.vector_op(output, 0usize, destination_held, source_held, 40usize) }
-                    } else if destination_is_held {
-                        try vec_in(allocations, source_value, destination_held, 16usize, output)
                     } else {
-                        try vec_out(allocations, destination_value, source_held, 16usize, output)
+                        if destination_is_held {
+                            try vec_in(allocations, source_value, destination_held, 16usize, output)
+                        } else {
+                            try vec_out(allocations, destination_value, source_held, 16usize, output)
+                        }
                     }
                 } else {
                 let copy_mask = preserve_mask(builder, current, instruction, 17usize, false, context)
@@ -4374,7 +4387,8 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
             } else {
         if instruction.opcode == .ConstInteger && instruction.has_result && instruction.result < context.dead_consts.len && context.dead_consts[instruction.result] {
             // every use of it is an immediate: nothing to make
-        } else if instruction.opcode == .ConstInteger || instruction.opcode == .ConstBool || instruction.opcode == .ConstError || instruction.opcode == .ConstFloat {
+        } else {
+        if instruction.opcode == .ConstInteger || instruction.opcode == .ConstBool || instruction.opcode == .ConstError || instruction.opcode == .ConstFloat {
             let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
             if destination_error != ok { ret destination_error }
             try emit_x64.mov_immediate(output, destination, instruction.immediate)
@@ -4651,17 +4665,19 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                                 if zero_error != ok { ret zero_error }
                                 try add_fixup(fixups, &fixup_count, zero_displacement, instruction.target2 - current.first_block)
                                 inverted = true
-                            } else if short && !context.has_short {
-                                try emit_x64.test_register(output, condition)
-                                let (short_at, short_jump_error) = emit_x64.jump_condition_short(output, 5usize)
-                                if short_jump_error != ok { ret short_jump_error }
-                                context.short_pending = short_at
-                                context.short_block = instruction.target - current.first_block
-                                context.has_short = true
                             } else {
-                                let (true_displacement, true_error) = emit_x64.jump_nonzero(output, condition)
-                                if true_error != ok { ret true_error }
-                                try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
+                                if short && !context.has_short {
+                                    try emit_x64.test_register(output, condition)
+                                    let (short_at, short_jump_error) = emit_x64.jump_condition_short(output, 5usize)
+                                    if short_jump_error != ok { ret short_jump_error }
+                                    context.short_pending = short_at
+                                    context.short_block = instruction.target - current.first_block
+                                    context.has_short = true
+                                } else {
+                                    let (true_displacement, true_error) = emit_x64.jump_nonzero(output, condition)
+                                    if true_error != ok { ret true_error }
+                                    try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
+                                }
                             }
                         }
                         if !inverted && builder.blocks[instruction.target2].first_instruction != at + 1usize {
@@ -4744,6 +4760,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
             }
             }
             }
+        }
             }
             }
             }

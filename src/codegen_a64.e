@@ -55,9 +55,13 @@ fn slot_store(output: *emit_x64.Buffer, rt: usize, slot: usize) -> err {
     if offset <= 256usize { ret emit_a64.store_below(output, rt, A64_FP, offset, 8usize) }
     // x8 carries a C callback result address, so the address scratch is one of the
     // non-argument scratch registers and never `rt` itself (#260).
-    var address = A64_S2
-    if rt == A64_S2 { address = A64_S1 }
-    if rt == A64_S1 { address = A64_S0 }
+    // The registers are bound to locals because the bootstrap reads `== A64_S2 {` as an
+    // aggregate literal, so it cannot parse the comparison with a brace after the constant.
+    let scratch_s2 = A64_S2
+    let scratch_s1 = A64_S1
+    var address = scratch_s2
+    if rt == scratch_s2 { address = scratch_s1 }
+    if rt == scratch_s1 { address = A64_S0 }
     try emit_a64.sub_immediate(output, address, A64_FP, offset)
     ret emit_a64.store_offset(output, rt, address, 0usize, 8usize)
 }
