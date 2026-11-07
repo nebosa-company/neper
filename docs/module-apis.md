@@ -2792,6 +2792,10 @@ fn random(ev: *Evaluator) -> f64
 fn weekday_name(index: i64) -> str
 fn month_name(month: i64) -> str
 fn date_js_string(a: *mem.Arena, ms: f64) -> str
+const MAX_PARSE_DEPTH: usize = 256usize
+fn enter_parse(p: *Parser) -> bool
+fn leave_parse(p: *Parser)
+fn max_nodes_or_default(max_nodes: usize) -> usize
 ```
 
 A formula engine, the core of the formula library: a tokenizer and parser for the Airtable/Notion-style language (field references in braces, operators, ternary, array literals, LET/LETS), an evaluator with a step and node budget, a function registry with names, aliases, arity and lazy/volatile/generate-once flags, dependency collection, cycle detection and evaluation order over formula fields, and the JavaScript-compatible value rules (number text, text/number/date conversion, loose equality, ordering) every function builds on. The functions themselves are the `e.algo.formula.*` modules; `e.algo.formula.library` registers them all.
@@ -4180,6 +4184,9 @@ fn above(p: Point, q: Point) -> bool
 fn is_monotone(polygon: []const Point) -> bool
 fn emit_triangle(points: []const Point, triangles: []usize, written: usize, a: usize, b: usize, c: usize) -> usize
 fn triangulate_monotone(polygon: []const Point, triangles: []usize, scratch: []usize) -> (usize, err)
+fn is_constraint_edge(edges: []const usize, u: usize, v: usize) -> bool
+fn polygon_simple(polygon: []const Point) -> bool
+fn tri_has_edge(triangles: []const usize, count: usize, u: usize, v: usize) -> bool
 ```
 
 Points are `f64` pairs; polygons are point slices in either winding and
@@ -4262,6 +4269,7 @@ fn statement_allows_wildcard(statement: []const json.Member) -> bool
 fn iam_wildcard_principal(attrs: []const json.Member) -> bool
 fn eval_builtin(a: *mem.Arena, f: *const Filter, attrs: []const json.Member) -> bool
 fn eval(a: *mem.Arena, f: *const Filter, attrs: []const json.Member) -> bool
+fn any_source(text: str) -> bool
 ```
 
 Declarative predicates over a resource's attributes (L025), the value-rule subset of petcow's Spartan filter engine: a filter is `and`/`or`/`not` over leaves that read a dotted `key` from an attribute object and apply an `op` to a `value` (`eq`, `ne`, `gt`, `lt`, `ge`, `le`, `in`, `not_in`, `contains`, `regex` through `e.text.regex`, `glob`, `present`, `absent`, `any`, `all` over an `element` sub-filter, `count` with `count_op`), or a built-in (`sg_world_open_ports`, `sg_world_open_all_protocols`, `iam_wildcard_principal`). `parse` validates a filter once with named refusals; `eval` is then pure. Policy sets, GSL, waivers and reports of the full engine are not here. The fixture `algo_predicate` checks 952 cases against a transcription of the Rust.
@@ -6749,6 +6757,8 @@ fn result_object(ex: *Executor, status: str) -> ir.Obj
 fn finish(ex: *Executor, kind: str, fields: ir.Obj, patch: ir.Obj)
 fn execute_run(a: *mem.Arena, hooks: *const Hooks, store: *journal.Store, definition: json.Value, run: json.Value) -> (json.Value, err)
 fn choose(c: bool, yes: str, no: str) -> str
+fn case_branch_name(a: *mem.Arena, cases: []const json.Value, index: usize) -> str
+fn days_in_month(year: i64, month: i64) -> i64
 ```
 
 The durable workflow interpreter of L036's runtime half, checked against appdor's `src/workflow/runtime.js` with its real Jinja engine and trace redaction: a normalized definition executed against a run journal, every step consulting the journal first so that calling `execute_run` again on a suspended run is the whole of resuming it. `if`, `case`, `foreach`, `fork` and `try`, `stop` and `fail`; `delay`, `wait-signal` and `approval` (parked on a signal derived from the execution key); `set` and `log`; every other type an effect handed to an injected handler with an idempotency key stable across replays, retried with backoff and withheld in a dry run when its type mutates. `Hooks` carries what is injected: the clock and sleep, the template renderer, the redacting trace, the outbound URL check, the effect handlers and the environment. A fork's branches run in declaration order where appdor's run concurrently, so its journal entries are not interleaved as the concurrent ones are.
@@ -16302,7 +16312,6 @@ fn new_cookie_jar(a: *mem.Arena, block_third_party: bool) -> CookieJar
 fn jar_remove_at(j: *CookieJar, at: usize)
 fn jar_find(j: *CookieJar, c: Cookie) -> i64
 fn domain_matches(a: *mem.Arena, host: str, domain: str) -> bool
-fn public_suffix(d: str) -> bool
 fn registrable_domain_jar(a: *mem.Arena, host: str) -> str
 fn partition_key_for(a: *mem.Arena, u: Url) -> (str, bool)
 fn is_third_party(a: *mem.Arena, u: Url, partition_key: str, has_partition: bool) -> bool
@@ -16325,7 +16334,6 @@ fn jar_clear_origin(a: *mem.Arena, j: *CookieJar, origin_host: str)
 fn cookie_domain_matches(a: *mem.Arena, host: str, c: Cookie) -> bool
 fn cookie_path_matches(request: str, cookie: str) -> bool
 fn cors_safelisted_value(value: str) -> bool
-fn default_cookie_path(request: str) -> str
 fn is_cors_unsafe_request_header_byte(c: u8) -> bool
 ```
 
@@ -18337,6 +18345,7 @@ fn next_due(due: i64, period: i64, now: i64) -> i64
 type Pending = struct { key: str, due: i64, period: i64 }
 fn tick(sys: *System, now: i64) -> (usize, err)
 fn timer_kind(a: *mem.Arena, prefix: str, name: str) -> str
+fn parse_reminder_key(key: str) -> (str, str, bool)
 ```
 
 A virtual-actor framework (L141) in the shape of Orleans grains, over `e.algo.consistent_hash` placement and `e.db.docstore` storage. A grain is an id that always exists: the first `call` places it on a live silo by rendezvous hashing of its id, loads its persisted state, runs `activate` and delivers messages one turn at a time through the behavior's `handle`; `collect` deactivates idle grains and the next call activates them again. A turn's state change and reply take effect only when the handler returns `ok`, and the state is written through to the store first. A turn is not reentrant: a call to a grain that is in a turn (its own, or a cycle) is `Reentrancy`, refused rather than deadlocked. Timers are in memory and die with the activation; reminders are durable documents that fire whether or not the grain is active and survive a restart of the same file; a periodic schedule's next firing is its due time plus the smallest period multiple after `now`, so a gap is one firing. `fail_silo` drops a silo's activations with no hook and no write; the next call re-places and reloads. There is no transport: a silo is a placement target and failure domain in one process.
@@ -20845,6 +20854,9 @@ const F_POPOVER_OPEN: u32 = 8u32
 fn looks_custom(name: str) -> bool
 fn matches_lang(m: *const Matcher, el: html.NodeId, argument: str) -> bool
 fn is_empty(m: *const Matcher, el: html.NodeId) -> bool
+fn ascii_ci_eq(a: str, b: str) -> bool
+fn in_disabled_fieldset(m: *const Matcher, el: html.NodeId) -> bool
+fn in_first_legend(m: *const Matcher, el: html.NodeId, fieldset: html.NodeId) -> bool
 ```
 
 Selector matching over an HTML document (L040), after Vaper's `css/selector_matcher.dart`: a parsed selector from `e.fmt.css.selector` tested against an element of an `e.fmt.html` document by walking its combinators right to left from the key compound, with the simple selectors, the structural pseudo-classes, `:not()`, `:is()`, `:where()`, `:has()` and its relative lookahead, `:nth-*()` with An+B and `of S`, the attribute operators with the `i` flag, and the state and form pseudo-classes (`:hover`, `:focus`, `:checked`, `:disabled`, `:required`, `:in-range`, `:valid`, `:invalid`, ...) over a `State` the host installs. Checked against Vaper's own matcher over 560 random documents and selector lists on both hosts (D2343).
@@ -20897,6 +20909,7 @@ fn resolve(m: *const match.Matcher, ua: *const Index, author: *const Index, el: 
 const END: usize = 18446744073709551615usize
 fn chain_add(m: *map.Map[str, usize], idx: *Index, key: str, at: usize) -> err
 fn push_chain(out: *list.List[usize], idx: *const Index, m: *const map.Map[str, usize], key: str) -> err
+fn auto_direction(m: *const match.Matcher, el: html.NodeId) -> (str, bool)
 ```
 
 ### `e.fmt.html.accessible`
@@ -21574,6 +21587,7 @@ fn group(p: *Pool, child: u32) -> (u32, err)
 fn fits(p: *const Pool, stack: []Frame, base: usize, top: usize, depth: usize, remaining: i64) -> (bool, err)
 fn emit(out: []u8, n: usize, byte: u8) -> (usize, err)
 fn layout(p: *const Pool, root: u32, width: usize, out: []u8, stack: []Frame) -> (usize, err)
+const MAX_LOOKAHEAD_DEPTH: usize = 64usize
 ```
 
 Wadler-style layout over a caller document pool (`text`, `line`, `soft_line`, `nest`,
@@ -22588,6 +22602,7 @@ fn le64_at(data: []const u8, at: usize) -> u64
 fn open(a: *mem.Arena, data: []const u8, limits: Limits) -> (Archive, err)
 fn entries(archive: *const Archive) -> []const Entry
 fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err)
+fn verify_pack_crc(st: *State, index: usize) -> err
 ```
 
 7z archive reader (L120), decode only, over an archive held in memory. `open` verifies the signature header's
@@ -23981,6 +23996,7 @@ fn base64_value(c: u8) -> i32
 fn is_base64(s: str) -> bool
 fn valid(t: Type, text: str) -> bool
 fn int_unbounded(s: str, negative_ok: bool, positive_ok: bool, zero_ok: bool) -> bool
+fn leap_digits(s: str, start: usize, end: usize, negative: bool) -> bool
 ```
 
 XML Schema 1.0 built-in datatypes: `valid(type, text)` answers whether `text` is a legal lexical form of
@@ -24899,6 +24915,8 @@ fn check_insert_excluding(d: *const Dom, parent: NodeId, child: NodeId, before: 
 fn document_add(d: *const Dom, state: *DocumentSequence, child: NodeId) -> bool
 fn document_add_node(d: *const Dom, state: *DocumentSequence, id: NodeId) -> bool
 fn document_insert_ok(d: *const Dom, parent: NodeId, child: NodeId, before: NodeId, removed: NodeId) -> bool
+fn is_pipe(t: syntax.Token) -> bool
+fn set_inner_html_with(d: *Dom, id: NodeId, markup: str, options: html.Options, scripting: bool) -> err
 ```
 
 ### `e.fmt.css.expand`
@@ -25091,6 +25109,10 @@ fn compute_document_with(c: *Context, d: *const dom.Dom, sheets: []const str, st
 fn declared_writing_mode(a: *mem.Arena, declared: []const cascade.Declared, parent: *const Style, customs: []const Custom) -> u8
 fn invalid_length_value(prop: str, v: str) -> bool
 fn resolved_customs(a: *mem.Arena, declared: []const cascade.Declared, inherited: []const Custom) -> ([]const Custom, err)
+fn hex_digit_value(c: u8) -> i32
+fn unescape_numeric(a: *mem.Arena, v: str) -> str
+fn unescape_string(a: *mem.Arena, v: str) -> str
+fn unparsable_value(a: *mem.Arena, prop: str, v: str) -> bool
 ```
 
 ### `e.fmt.css.sheet`
@@ -25477,6 +25499,81 @@ fn tab_advance(l: *const Layout, s: *const style.Style, x: f64) -> f64
 fn table_column_index(ncols: usize, logical: usize, rtl: bool) -> usize
 fn table_left_line(ncols: usize, start: usize, end: usize, rtl: bool) -> usize
 fn table_right_line(ncols: usize, start: usize, end: usize, rtl: bool) -> usize
+type BidiItem = struct { piece: usize, a: usize, b: usize, level: u8, trail: bool }
+type BidiOut = struct { out: list.List[Piece], stk: [64]u32, ns: usize, inset: [64]u32, nset: usize, has_open: [64]bool, has_close: [64]bool, open_w: [64]f64, close_w: [64]f64 }
+type ColFrag = struct { dx: f64, dy: f64, h: f64 }
+type RevAcc = struct { sum: i64, last: i64, has_set: bool, set_val: i64, set_sum: i64 }
+fn all_space_text(t: str) -> bool
+fn auto_fit_lines(l: *Layout, b: u32, oy: f64, room: f64, tail: f64, mb: f64, done: *bool) -> usize
+fn balance_reset(x: *Ifc, lines0: usize, frags0: usize)
+fn balance_safe(x: *Ifc) -> bool
+fn bidi_chain(l: *const Layout, cont: u32, b: u32, o: *const BidiOut, out: []u32) -> usize
+fn bidi_close_box(o: *BidiOut)
+fn bidi_emit_item(x: *Ifc, o: *BidiOut, lead: usize, it: BidiItem)
+fn bidi_enter(o: *BidiOut, chain: []const u32, m: usize)
+fn bidi_flags(l: *const Layout, s: *const style.Style) -> u8
+fn bidi_index_of(items: []const u32, n: usize, b: u32) -> usize
+fn bidi_is_rtl_mark(cp: u32) -> bool
+fn bidi_marks(flags: u8, rtl: bool, closing: bool, out: []u32) -> usize
+fn bidi_mirror(l: *Layout, b: u32, from: usize, to: usize)
+fn bidi_open_box(o: *BidiOut, b: u32)
+fn clamp_ellipsis_kind(s: *const style.Style) -> u8
+fn clamp_ellipsis_tail(v: str) -> (str, bool)
+fn clamp_ellipsis_text(s: *const style.Style) -> str
+fn clamp_ellipsis_word(v: str, kind0: u8) -> u8
+fn col_dx(l: *const Layout, k: usize, stride: f64) -> f64
+fn col_dy(l: *const Layout, k: usize, colh: f64) -> f64
+fn col_end(l: *const Layout, k: usize, colh: f64) -> f64
+fn col_start(l: *const Layout, k: usize, colh: f64) -> f64
+fn colify_t(l: *Layout, b: u32, abs_y: f64, colh: f64, stride: f64, apply: bool, table: bool) -> usize
+fn collect_atoms(l: *Layout, b: u32, abs_y: f64, out: *list.List[f64])
+fn cross_offset(is: *const style.Style, cs: *const style.Style, free: f64) -> f64
+fn cross_stretches(is: *const style.Style, cs: *const style.Style) -> bool
+fn css_resets_list_item(l: *Layout, node: u32) -> bool
+fn flex_breaks(items: []const FlexItem, n: usize, gap_main: f64, limit: f64, wrap: bool, line_start: []usize) -> usize
+fn flex_static_align(a: style.Align) -> style.Align
+fn forward_list_start(l: *Layout, node: u32) -> i64
+fn georgian_text(l: *const Layout, n: i64) -> str
+fn hang_tail_len(s: str, end: usize) -> usize
+fn hanging_close_w(l: *Layout, p: Piece) -> (f64, usize)
+fn hanging_period_w(l: *Layout, p: Piece) -> (f64, usize)
+fn hanging_punct_w(l: *Layout, p: Piece) -> (f64, usize)
+fn has_painted_hang(s: str) -> bool
+fn ifc_run(x: *Ifc)
+fn implicit_list_reset(l: *Layout, e: u32) -> bool
+fn incr_of(l: *Layout, text: str, name: str) -> (i64, bool)
+fn inline_depth(l: *const Layout, cont: u32, b: u32) -> usize
+fn is_collapsible_space_scalar(c: u32) -> bool
+fn is_reversed_ol(l: *Layout, node: u32) -> bool
+fn lane_area(tr: []GTrack, n: usize, gap: f64, at: f64, span: usize) -> (f64, f64)
+fn lanes_mirror(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, columns: bool, lane_extent: f64, stack_extent: f64)
+fn lanes_reversal(cs: *const style.Style) -> (bool, bool)
+fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64
+fn li_default_step(l: *Layout, item: u32) -> i64
+fn line_clamp_is_auto(s: *const style.Style) -> bool
+fn line_clamp_room(l: *Layout, b: u32, cbh: f64) -> (f64, bool)
+fn list_step(l: *Layout, kid: u32, reversed: bool) -> i64
+fn mc_prepare(l: *Layout, b: u32, origin: f64, colh: f64)
+fn ratio_has_auto(l: *const Layout, b: u32) -> bool
+fn record_col_frags(l: *Layout, kid: u32, ky: f64, k0: usize, k1: usize, colh: f64, stride: f64)
+fn resets_name(l: *Layout, text: str, name: str) -> bool
+fn rev_initial(l: *Layout, node: u32, name: str) -> i64
+fn rev_style(l: *Layout, s: *const style.Style, name: str, acc: *RevAcc)
+fn rev_walk(l: *Layout, e: u32, name: str, acc: *RevAcc, origin: bool)
+fn row_height_specified(l: *Layout, td: TableData, r: usize) -> bool
+fn size_contained(l: *const Layout, b: u32) -> (bool, f64, f64)
+fn strip_auto_kw(t: str) -> str
+fn subgrid_axes_match(l: *Layout, id: u32) -> bool
+fn subgrid_axis(text: str) -> bool
+fn subgrid_contributions(l: *Layout, g: *Grid) -> ([]GItem, usize)
+fn subgrid_prepare(l: *Layout, g: *Grid, i: usize, cols: bool, rows: bool)
+fn subgrid_prepare_lane(l: *Layout, g: *Grid, id: u32, start: usize, span: usize)
+fn subgrid_prepare_lane_rows(l: *Layout, g: *Grid, id: u32, start: usize, span: usize)
+fn subgrid_tracks(a: *mem.Arena, sizes: []const f64, parent_gap: f64, own_gap: f64, edge_start: f64, edge_end: f64, out: *list.List[GTrack])
+fn text_wrap_balance(cs: *const style.Style) -> bool
+fn transform_cb(l: *const Layout, b: u32) -> bool
+fn unquote_ellipsis(v: str) -> str
+fn width_limit(l: *Layout, b: u32, len: style.Len, cbw: f64) -> (f64, bool)
 ```
 
 ### `e.fmt.css.geom`
@@ -25604,6 +25701,9 @@ fn paint_row_background(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f
 fn paint_spaced(p: *Painter, ts: *const style.Style, text: str, x: f64, y: f64)
 fn snap(v: f64) -> f64
 fn paint_atomic_ellipsis(p: *Painter, owner: u32, bb: *const layout.Box, ln: layout.Line, fr: layout.Frag, cx: f64, cy: f64)
+fn clamp_break_mode(s: *const style.Style) -> u8
+fn paint_text_run_color(p: *Painter, text_box: u32, sty: *const style.Style, text: str, x: f64, y: f64, w: f64)
+fn svg_tile_size(img: ImageRef, mode: u8, spec_w: f64, spec_h: f64, aw: f64, ah: f64) -> (f64, f64)
 ```
 
 ### `e.text.fontset`
@@ -25685,6 +25785,8 @@ fn a11y_fill(n: *const accessible.Node, v: *const View, boxes: []const u32, a: *
 fn a11y(v: *View, a: *mem.Arena) -> (widget.A11yTree, err)
 fn a11y_build(ctx: *void, a: *mem.Arena) -> (widget.A11yTree, err)
 fn semantics(v: *View) -> widget.Semantics
+fn fragment_text(v: *View) -> str
+fn take_tap(v: *View) -> (f32, f32, bool)
 ```
 
 ### `e.ui.browser`
@@ -25708,6 +25810,17 @@ fn region(b: *Browser) -> widget.Region
 fn keys(b: *Browser) -> widget.Change[input.KeyEvent]
 fn a11y_tree(b: *Browser, a: *mem.Arena) -> (accessibility.Tree, err)
 fn semantics(b: *Browser) -> widget.Semantics
+fn eval_error(b: *const Browser) -> str
+fn eval_js(b: *Browser, source: str) -> bool
+fn eval_number(b: *Browser, source: str) -> (f64, bool)
+fn eval_truthy(b: *Browser, source: str) -> bool
+fn eval_value(b: *Browser, source: str) -> (str, bool)
+fn query(b: *Browser, selector: str) -> (str, bool)
+fn query_all(b: *Browser, selector: str, separator: str) -> (str, bool)
+fn query_attr(b: *Browser, selector: str, name: str) -> (str, bool)
+fn scriptable(b: *const Browser) -> bool
+fn set_value(b: *Browser, selector: str, value: str) -> bool
+fn wait_for(b: *Browser, source: str, start_ms: f64, timeout_ms: f64) -> bool
 ```
 
 ### `e.fmt.url`
@@ -25990,6 +26103,13 @@ fn known_h1(c: *Client, host: str) -> bool
 fn mime_of_extension(path: str) -> str
 fn remember_h1(c: *Client, host: str)
 fn drop_redirect_header(name: str, cross_origin: bool) -> bool
+error BlockedByFilter
+error CertificateError
+error CertificateExpired
+error CertificateName
+error CertificateSelfSigned
+error CertificateUntrusted
+fn drop_body_header(name: str) -> bool
 ```
 
 ### `e.web.page`
@@ -26056,6 +26176,18 @@ fn style_hook(ctx: *void, node: u32, prop: str) -> (str, bool)
 fn svg_entry(p: *Page, node: html.NodeId) -> *ImageEntry
 fn take_navigation(p: *Page) -> (str, bool)
 fn tick(p: *Page, now_ms: f64) -> bool
+fn blocked_count(p: *const Page) -> usize
+fn eval_error(p: *Page) -> str
+fn eval_js(p: *Page, source: str) -> bool
+fn eval_number(p: *Page, source: str) -> (f64, bool)
+fn eval_value(p: *Page, source: str) -> (str, bool)
+fn get_request_as(u: str, referrer: str, creds: fetch.Credentials, dest: str) -> fetch.Request
+fn js_quote(p: *Page, text: str) -> str
+fn query_all_text(p: *Page, selector: str, separator: str) -> (str, bool)
+fn query_attr(p: *Page, selector: str, name: str) -> (str, bool)
+fn query_text(p: *Page, selector: str) -> (str, bool)
+fn set_value(p: *Page, selector: str, value: str) -> bool
+fn svg_view_box(p: *Page, node: html.NodeId) -> (str, bool)
 ```
 
 ### `e.js.lex`
@@ -26844,6 +26976,16 @@ fn value_to_raw(kind: u8, n: f64) -> u64
 fn with_has(it: *Interp, e: *Env, name: str) -> (bool, err)
 fn zero_entries() -> []const NsEntry
 fn zero_prog() -> *ast.Program
+const B_DELETABLE: u8 = 32u8
+type TemplateSite = struct { prog: *const ast.Program, node: u32, obj: *Obj }
+fn afs_fulfilled(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn afs_rejected(it: *Interp, this_val: Value, args: []const Value) -> (Value, err)
+fn declare_var_deletable(it: *Interp, e: *Env, name: str) -> err
+fn pbn_is_ident(f: *Frame, id: u32) -> bool
+fn realm_chain_revoked(f: *Obj) -> bool
+fn sync_iter_close_quiet(it: *Interp, iter: Iter)
+fn ta_copy_raw(it: *Interp, dst: *Obj, di: usize, src: *Obj, si: usize)
+fn throw_in_caller(it: *Interp, type_error: bool, message: str) -> err
 ```
 
 ### `e.js.b_array`
@@ -27386,6 +27528,7 @@ fn v_operand(p: *Parse) -> (CSet, bool, u32, err)
 fn v_property(p: *Parse, negated: bool) -> (CSet, err)
 fn v_set_node(p: *Parse, set: *const CSet) -> (u32, err)
 fn v_string_disjunction(p: *Parse) -> (CSet, err)
+fn splits_pair(m: *const M, a: i64, b: i64) -> bool
 ```
 
 ### `e.js.b_regexp`
@@ -28027,6 +28170,8 @@ fn load_module(it: *js.Interp, referrer: str, spec_in: str, include_credentials:
 fn n_decode_text(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 fn remember_credentials(h: *Host, u: str, include_credentials: bool) -> err
 fn remembered_credentials(h: *Host, u: str) -> bool
+fn n_encoding_name(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
+fn n_to_ascii_domain(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js.Value, err)
 ```
 
 ### `e.fmt.html.template`
@@ -29430,6 +29575,7 @@ fn declares_namespace(name: str, wanted: str) -> bool
 fn has_sitemap_name(doc: *const xml.Document, id: u32, namespace: str, name: str) -> bool
 fn prefix(name: str) -> str
 fn resolved_namespace(doc: *const xml.Document, id: u32) -> (str, bool)
+fn absolute_loc(s: str) -> bool
 ```
 
 Sitemaps (sitemaps.org 0.9): `parse` reads a `urlset` or `sitemapindex` XML document (matching by local name, so any namespace prefix works; extension elements and unknown children are skipped; CDATA and entities decoded) into `Entry` values (`loc`, `lastmod`, `changefreq`, `priority` as written), refusing a missing or oversized `loc`, an unknown `changefreq` or a `priority` outside 0.0..1.0 as `Invalid` and more than 50000 entries as `TooMany`; `parse_text` reads the one-URL-per-line form; `write_urlset`/`write_index` emit the XML declaration and namespace with the same checks. Not here: gzip handling, the 50 MB size limit, or interpreting the image/video/news extensions.
@@ -30065,7 +30211,6 @@ fn rule_count(g: *const Grammar) -> usize
 fn rule_len(g: *const Grammar, rule: usize) -> usize
 fn rule_symbol(g: *const Grammar, rule: usize, at_pos: usize) -> u32
 fn cyk(g: *const Grammar, start: u32, sentence: []const u32, chart: []u64) -> (bool, err)
-fn nullable_set(g: *const Grammar) -> u64
 fn earley_add(items: []Item, from: usize, used: usize, it: Item) -> (usize, err)
 fn earley_run(g: *const Grammar, start: u32, sentence: []const u32, items: []Item, sets: []usize) -> (usize, err)
 fn earley(g: *const Grammar, start: u32, sentence: []const u32, items: []Item, sets: []usize) -> (bool, usize, err)
@@ -30081,6 +30226,11 @@ fn peg_node_left_info(p: *const Peg, node: usize, states: []i64) -> (bool, bool)
 fn peg_node_refs_valid(p: *const Peg, node: usize, depth: usize) -> bool
 fn peg_rule_left_info(p: *const Peg, rule: usize, states: []i64) -> (bool, bool)
 fn peg_table_valid(p: *const Peg) -> bool
+type EvalFrame = struct { node: u32, phase: u8, left: f64, right: f64 }
+const MAX_EVAL_DEPTH: usize = 8192usize
+const MAX_PARSE_DEPTH: usize = 1024usize
+const MAX_SYMBOLS: usize = 4096usize
+fn nullable_fill(g: *const Grammar, out: []bool) -> err
 ```
 
 `lex` (table scanner with a caller operator list), `lex_indent` (off-side rule),
@@ -34077,6 +34227,8 @@ fn skip_literal(data: []const u8, at: usize, until: usize) -> usize
 fn stream_keyword(data: []const u8, from: usize, until: usize) -> usize
 fn stream_length(data: []const u8, from: usize, until: usize) -> (usize, usize, bool, bool)
 fn stream_start(data: []const u8, at: usize, until: usize) -> usize
+fn indirect_length(data: []const u8, number: usize) -> (usize, bool)
+fn length_value(data: []const u8, from: usize, until: usize) -> (usize, bool)
 ```
 
 A page painted (C152, C172, D3801): `page_painting` runs page N's content streams and gives the page's size (its MediaBox, or the first MediaBox of any page tree node, else 612 by 792) and the shapes in paint order: `SHAPE_FILL` (a rectangle filled by `re` then `f`, `F`, `f*`, `B`), `SHAPE_LINE` (a segment of `m`/`l`/`h`/`re` stroked by `S`, `s`, `B`, with the line width and the stroke colour) and `SHAPE_TEXT` (a `Tj`/`TJ`/`'`/`"` string at the text position, with the font size scaled by `Tm`), in user space (origin bottom left) after the `cm` scale and offset; colours from `g`, `rg`, `k` and their stroke forms, `q`/`Q` nest eight deep. Not a renderer: a `cm` rotation or shear is not followed, a curve is its chord, a filled path that is not a rectangle is not filled, clipping and images (`Do`) are ignored, and text is placed with no glyph metrics (half its size a character). Checked on a hand-written page with a red fill, a blue 3-unit line, text after `Td`, a `cm` scale and offset undone by `Q`, and a CMYK black kerned `TJ` (`reference_paint.py`).
