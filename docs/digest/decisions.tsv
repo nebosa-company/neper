@@ -3037,4 +3037,4 @@ D5961	2874	The 2026-11-04 language design review is queued as C258-C264, and the
 D5962	2128	GitHub Pages caching: HTML keeps max-age=600, long-lived assets are fingerprinted, a fronting CDN is optional
 D5963	2832	MIT is the licence, and a machine-learning section says training is permitted rather than implied
 D5964	3324	Oracle sources are pinned in-repo so fixture regeneration is self-contained
-D5965	3135	`x.duckdb.duckdb`: an `e.db` driver over DuckDB's C API, on v1 names and a 48-byte result
+D5965	3966	`x.duckdb.duckdb`: an `e.db` driver over DuckDB's v2 C API
