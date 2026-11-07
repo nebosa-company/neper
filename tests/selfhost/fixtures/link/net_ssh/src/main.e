@@ -369,7 +369,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if ssh.set_forward(&s, too_long, 65535u32) != ssh.TooLong || !command_is_zero(&s) || s.channel_kind != 0u32 || s.fwd_port != 0u32 { os.exit(99i32) }
     if str.eq(mode, "unit") {
         ssh.send_userauth(&s)
-        if !password_is_zero(&s) || !contains(s.outbuf[0usize..s.out_len], "secret") { os.exit(104i32) }
+        // Only the clearing is assertable here. Since 8d0bc690a `send_userauth` refuses a session
+        // that has not reached encrypted NEWKEYS, so a bare session builds no packet and `outbuf`
+        // can never carry the password; that it reaches the wire is what the `password`, `key` and
+        // `badpass` modes prove against a real server. The clearing must still hold on this path,
+        // which is exactly the one the guard takes.
+        if !password_is_zero(&s) { os.exit(104i32) }
         let (key_value, key_error) = ssh.open(a, random[0usize..64usize], "neper", password, 80u32, 24u32)
         if key_error != ok { os.exit(105i32) }
         var key_s = key_value

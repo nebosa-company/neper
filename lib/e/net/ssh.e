@@ -892,10 +892,9 @@ fn start_auth(s: *Session) {
 }
 
 fn send_userauth(s: *Session) {
-    if !s.encrypted_out {
-        fail(s, FAIL_PROTOCOL)
-        ret
-    }
+    // Registered before the guard below, because that guard returns: with the defer after it, a
+    // session that never encrypted left the plaintext password in `s.password`. Every path out
+    // of here clears it, whether or not the packet was ever sent.
     defer {
         var password_at = 0usize
         while password_at < s.password.len {
@@ -903,6 +902,10 @@ fn send_userauth(s: *Session) {
             password_at += 1usize
         }
         s.password_len = 0usize
+    }
+    if !s.encrypted_out {
+        fail(s, FAIL_PROTOCOL)
+        ret
     }
     var msg: [512]u8 = zero
     var w = Writer { buf: msg[0usize..512usize], len: 0usize, over: false }
