@@ -319,6 +319,21 @@ fn part1(b: *str.Builder) -> err {
     try str.push(b, "  ['key', '', asString], ['code', '', asString], ['location', 0, asUL], ['ctrlKey', false, asBool], ['shiftKey', false, asBool],\n")
     try str.push(b, "  ['altKey', false, asBool], ['metaKey', false, asBool], ['repeat', false, asBool], ['isComposing', false, asBool], ['charCode', 0, asUL], ['keyCode', 0, asUL]\n")
     try str.push(b, "]);\n")
+    // The legacy initializers (DOM §2.6 "Legacy extensions to the Event interface"): each re-initialises an event through
+    // `initEvent` - which is a no-op while the event is being dispatched, the property these tests exercise - and then
+    // records the interface-specific fields. They answered "is not a function" before this existed.
+    try str.push(b, "function legacyInit(ev, kind, type, bubbles, cancelable) {\n")
+    try str.push(b, "  const s = evSlot(ev);\n")
+    // `initEvent` below replaces the whole slot, so the "being dispatched" flag has to be read *first*: after the call
+    // the new slot says false no matter what was happening. While dispatching, the legacy initializers are no-ops and the
+    // constructor's values survive (WPT Event-init-while-dispatching).
+    try str.push(b, "  if (s.dispatch) return null;\n")
+    try str.push(b, "  initEvent(ev, type, { bubbles: bubbles, cancelable: cancelable });\n")
+    try str.push(b, "  return slotOf(ev);\n")
+    try str.push(b, "}\n")
+    try str.push(b, "defineProperty(UIEvent.prototype, 'initUIEvent', { value: function (type, bubbles, cancelable, view, detail) { required(arguments, 1, 'initUIEvent'); const s = legacyInit(this, 'UIEvent', toDOMString(type), bubbles, cancelable); if (s === null) return; s.detail = detail === undefined ? 0 : toLong(detail); }, writable: true, enumerable: true, configurable: true });\n")
+    try str.push(b, "defineProperty(MouseEvent.prototype, 'initMouseEvent', { value: function (type, bubbles, cancelable, view, detail, screenX, screenY, clientX, clientY, ctrlKey, altKey, shiftKey, metaKey, button, relatedTarget) { required(arguments, 1, 'initMouseEvent'); const s = legacyInit(this, 'MouseEvent', toDOMString(type), bubbles, cancelable); if (s === null) return; s.clientX = clientX === undefined ? 0 : toLong(clientX); s.clientY = clientY === undefined ? 0 : toLong(clientY); s.ctrlKey = !!ctrlKey; s.altKey = !!altKey; s.shiftKey = !!shiftKey; s.metaKey = !!metaKey; s.button = button === undefined ? 0 : toLong(button); s.relatedTarget = relatedTarget === undefined ? null : relatedTarget; }, writable: true, enumerable: true, configurable: true });\n")
+    try str.push(b, "defineProperty(KeyboardEvent.prototype, 'initKeyboardEvent', { value: function (type, bubbles, cancelable, view, key, location, modifiers, repeat) { required(arguments, 1, 'initKeyboardEvent'); const s = legacyInit(this, 'KeyboardEvent', toDOMString(type), bubbles, cancelable); if (s === null) return; s.key = key === undefined ? '' : toDOMString(key); s.location = location === undefined ? 0 : asUL(location); s.repeat = !!repeat; }, writable: true, enumerable: true, configurable: true });\n")
     try str.push(b, "const PointerEvent = defineEventClass('PointerEvent', MouseEvent, [['pointerId', 0, toLong], ['width', 1, asDouble], ['height', 1, asDouble], ['pressure', 0, asDouble], ['pointerType', '', asString], ['isPrimary', false, asBool]]);\n")
     try str.push(b, "const TransitionEvent = defineEventClass('TransitionEvent', Event, [['propertyName', '', asString], ['elapsedTime', 0, asDouble], ['pseudoElement', '', asString]]);\n")
     try str.push(b, "const AnimationEvent = defineEventClass('AnimationEvent', Event, [['animationName', '', asString], ['elapsedTime', 0, asDouble], ['pseudoElement', '', asString]]);\n")
