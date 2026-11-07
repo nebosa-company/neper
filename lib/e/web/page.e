@@ -1105,6 +1105,24 @@ fn start_scripts(p: *Page) {
     if v.tree.version != p.seen_version { refresh(p) }
 }
 
+// Evaluates `source` as a script in the page's realm, then runs the jobs it queued. Answers false when the page has no
+// scripting context or the script threw (`script.describe_thrown` on `p.ctx` then names the exception). This is what a
+// host embedding the browser uses to drive the page (the control's `eval_js`), and it takes the same path the page's own
+// `<script>` elements do, so CSP's `script-src` still decides whether it runs.
+fn eval_js(p: *Page, source: str) -> bool {
+    if !p.scripted { ret false }
+    let ran = script.run_script(p.ctx, source, "<eval>")
+    let waited = script.pump_self(p.ctx)
+    if p.view.tree.version != p.seen_version { refresh(p) }
+    ret ran
+}
+
+// The exception the last `eval_js` threw, or the empty string.
+fn eval_error(p: *Page) -> str {
+    if !p.scripted { ret "" }
+    ret script.describe_thrown(p.ctx)
+}
+
 // The page's event loop: runs promise jobs and the timers that are due at `now_ms` (milliseconds on the host clock, any
 // origin as long as it only grows). Answers true when the page changed and was laid out again.
 fn tick(p: *Page, now_ms: f64) -> bool {

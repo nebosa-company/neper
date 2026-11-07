@@ -62,6 +62,29 @@ fn reload(b: *Browser) {
     shell.reload(b.sh, b.tab)
 }
 
+// --- Driving the page. The control's scriptable surface: run JavaScript in the page's own realm, and read back what it
+// did. A host that embeds the browser uses these to automate a page (fill a field, click a control, wait for a node), to
+// which `pump` then delivers the resulting microtasks and timers.
+
+// Whether a page is loaded and has a scripting context to drive.
+fn scriptable(b: *const Browser) -> bool {
+    ret b.tab.loaded && b.tab.pg.scripted
+}
+
+// Evaluates `source` in the page's realm and runs the jobs it queued, then lays the page out again if the DOM changed.
+// Answers false when there is nothing to evaluate in, or the script threw; `eval_error` then names the exception.
+// CSP's `script-src` applies exactly as it does to the page's own scripts.
+fn eval_js(b: *Browser, source: str) -> bool {
+    if !scriptable(b) { ret false }
+    ret page.eval_js(b.tab.pg, source)
+}
+
+// The exception the last `eval_js` threw, or the empty string.
+fn eval_error(b: *const Browser) -> str {
+    if !b.tab.loaded { ret "" }
+    ret page.eval_error(b.tab.pg)
+}
+
 // The host's media preferences for every page of this browser: `dark` answers `prefers-color-scheme` (and
 // `light-dark()`), `reduced_motion` answers `prefers-reduced-motion`. A page whose answer changes is laid out again,
 // so the next frame paints it; a page loaded later is laid out with them from the start.
