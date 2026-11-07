@@ -25251,6 +25251,7 @@ fn is_out_of_flow(s: *const style.Style) -> bool
 fn gen_children(l: *Layout, node: u32, parent_box: u32)
 fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32)
 fn list_ordinal(l: *Layout, node: u32) -> i64
+fn counter_integer(text: str) -> (i64, err)
 fn is_ws_only(s: str) -> bool
 fn is_block_container(l: *const Layout, b: u32) -> bool
 fn fix_anonymous(l: *Layout, b: u32)
