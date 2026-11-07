@@ -10,7 +10,10 @@ completed ledger; module and UI/host scores come from their inventories.
 import json, re, subprocess, datetime, html, sys
 from pathlib import Path
 
-from check_widget_plan import validate as validate_widget_plan
+# `check_widget_plan` is a sibling, and this directory is not on sys.path when the
+# script is run by path (`python scripts/render_progress.py`), so it is added here.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from check_widget_plan import validate as validate_widget_plan  # noqa: E402
 CHARTS_ONLY = __name__ == '__main__' and sys.argv[1:] == ['--charts-only']
 if __name__ == '__main__' and sys.argv[1:] and not CHARTS_ONLY:
     raise SystemExit('usage: python scripts/render_progress.py [--charts-only]')
