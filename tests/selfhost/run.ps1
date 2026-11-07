@@ -1065,13 +1065,24 @@ foreach ($crewWindowsMode in @('--release', '--time')) {
     $crewWindowsLinkWritten = & $compiler link-em $crewWindowsLinked @crewWindowsList
     if ($LASTEXITCODE -ne 0 -or $crewWindowsLinkWritten -ne 'artifact executable written') { throw "crew_windows compiled modules did not link ($crewWindowsMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $crewWindowsLinked).Hash -ne $crewWindowsHash) { throw "crew_windows at -j 1 is not the image linked from its artifacts ($crewWindowsMode)" }
-    # Without `--time`, whose rows would join the stream.
+    # Without `--time`, whose rows would join the stream. `--instances 0` refuses the build and
+    # reports how many generic functions the program monomorphizes, so this pinned stream is a
+    # cheap deterministic count of every instance the program needs. It moved 49 -> 50 when
+    # `e.io` gained a `mem.copy[u8]` (0cbf4d9a4), which is a legitimate new instance; any other
+    # change is a duplicate instance or one for code nothing reaches, which is why it is pinned.
     $crewWindowsExpected = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $PSScriptRoot 'fixtures\link\crew_windows\instances.expected.jsonl')).Hash
+    $crewWindowsPinned = ((Get-Content -LiteralPath (Join-Path $PSScriptRoot 'fixtures\link\crew_windows\instances.expected.jsonl') | Select-String -Pattern 'makes (\d+) instances' | Select-Object -First 1).Line -replace '.*makes (\d+) instances.*', '$1')
     foreach ($crewWindowsJobs in @(@('-j', '1'), @('-j', '3', '--perturb'), @('-j', '8'))) {
         $crewWindowsInstances = Join-Path $testBuild ("crew-windows-instances" + ($crewWindowsJobs -join '') + "$crewWindowsMode.jsonl")
         cmd /c "`"$compiler`" emit-executable `"$crewWindows`" `"$repo`" x64 windows `"$(Join-Path $testBuild 'crew-windows-refused.exe')`" $($crewWindowsFlags -join ' ') $($crewWindowsJobs -join ' ') --json --instances 0 > `"$crewWindowsInstances`""
         if ($LASTEXITCODE -ne 1) { throw "crew_windows under '$crewWindowsJobs' --instances 0 exited $LASTEXITCODE, not 1 ($crewWindowsMode)" }
-        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $crewWindowsInstances).Hash -ne $crewWindowsExpected) { throw "crew_windows under '$crewWindowsJobs' counts its instances otherwise ($crewWindowsMode)" }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $crewWindowsInstances).Hash -ne $crewWindowsExpected) {
+            # Name the number, not just the mismatch. Reading it out of the stream is the whole
+            # point of the --instances 0 build, and a bare hash mismatch once cost a bisect to
+            # explain when the answer was a single integer.
+            $crewWindowsSaid = ((Get-Content -LiteralPath $crewWindowsInstances | Select-String -Pattern 'makes (\d+) instances' | Select-Object -First 1).Line -replace '.*makes (\d+) instances.*', '$1')
+            throw "crew_windows under '$crewWindowsJobs' makes $crewWindowsSaid generic instances, not $crewWindowsPinned ($crewWindowsMode)"
+        }
     }
 }
 # An `@import` extern reached from a sequence's or tagged union's supplied `cmp` and

@@ -1063,7 +1063,15 @@ for crew_windows_mode in --release --time; do
         crew_windows_status=0
         "$test_build/neper-self" emit-executable "$crew_windows" "$repo" x64 linux "$test_build/crew-windows-refused" $crew_windows_flag $crew_windows_jobs --json --instances 0 > "$crew_windows_instances" || crew_windows_status=$?
         [ "$crew_windows_status" = 1 ]
-        cmp "$crew_windows_instances" "$repo/tests/selfhost/fixtures/link/crew_windows/instances.expected.jsonl"
+        # The pin is the count `--instances 0` refuses with. Name the number, not just the
+        # mismatch: reading it out of the stream is the point, and a bare diff once cost a
+        # bisect to explain when the answer was a single integer.
+        if ! cmp -s "$crew_windows_instances" "$repo/tests/selfhost/fixtures/link/crew_windows/instances.expected.jsonl"; then
+            said=$(sed -n 's/.*makes \([0-9]*\) instances.*/\1/p' "$crew_windows_instances" | head -1)
+            pinned=$(sed -n 's/.*makes \([0-9]*\) instances.*/\1/p' "$repo/tests/selfhost/fixtures/link/crew_windows/instances.expected.jsonl" | head -1)
+            echo "crew_windows under '$crew_windows_jobs' makes ${said:-?} generic instances, not ${pinned:-?} ($crew_windows_mode)" >&2
+            exit 1
+        fi
     done
 done
 # An `@import` extern reached from a sequence's or tagged union's supplied `cmp` and
