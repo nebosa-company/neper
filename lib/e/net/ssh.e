@@ -807,6 +807,7 @@ fn handle_kex_reply(s: *Session, payload: []const u8) {
         var nk: [1]u8 = zero
         nk[0usize] = 21u8
         send_packet(s, nk[0usize..1usize])
+        s.seq_out = 0u32
         install_keys(s)
         ret
     }
@@ -820,6 +821,7 @@ fn trust(s: *Session) {
     var nk: [1]u8 = zero
     nk[0usize] = 21u8
     send_packet(s, nk[0usize..1usize])
+    s.seq_out = 0u32
     install_keys(s)
     s.encrypted_out = true
     s.sent_newkeys = true
@@ -1512,8 +1514,14 @@ fn take_packet(s: *Session) -> bool {
         m += 1usize
     }
     s.in_len = rest
+    // Strict KEX (kex-strict-c-v00@openssh.com, which this client offers): a NEWKEYS starts the
+    // sequence numbers again at zero. The peer does the same, and a shared secret is not the only
+    // thing the numbers feed -- chacha20-poly1305 uses them as the packet nonce, while AES-GCM
+    // carries its own counter, which is why only chacha noticed.
+    let strict_reset = payload_len != 0usize && payload_copy[0usize] == 21u8
     dispatch(s, payload_copy[0usize..payload_len])
     s.seq_in += 1u32
+    if strict_reset { s.seq_in = 0u32 }
     ret true
 }
 
