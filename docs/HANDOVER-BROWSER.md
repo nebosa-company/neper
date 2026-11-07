@@ -209,6 +209,16 @@ The shared tree was landed since the 2026-10-30 check: **local `master` is now 0
 
 Written 2026-11-03 by the script-side WPT session. The numbers live in `docs/browser-progress.html`, row 9.3 (script-side WPT) and row 9.2 (CSS reftests); this section holds what the numbers do not say: how the runs work, the traps, and what is left.
 
+### The control surface (`e.ui.browser`, tracker 7.1/7.2)
+
+`lib/e/ui/browser.e` is one browsing context as a control: `attach`, `navigate`, `back`, `forward`, `reload`, `state`, `pump`, `timer_due`, `canvas`, `region`, `keys`, `a11y_tree`, `semantics`, `set_preferences`, `ensure_renderer`. Chrome (tabs, omnibox, bookmarks, downloads) is deliberately not there.
+
+**Driving the page (2026-11-07):** `scriptable(b)` answers whether there is a realm, `eval_js(b, source)` runs a script in the page's own realm and returns false if it threw, and `eval_error(b)` names the exception. These wrap `page.eval_js` / `page.eval_error`, which take the same path as the page's own `<script>` elements, so **CSP `script-src` applies exactly as it does to the page**. Fixture: `tests/selfhost/fixtures/link/browser_eval` (realm reused across calls, DOM write visible afterwards, a throw reported rather than swallowed).
+
+- **Trap:** that fixture builds the realm with `script.new_context` on a real `Dom` (the `web_shell` pattern), **not** with `page.load`. `page.load` on a `data:` URL returns `LoadFailed` in a headless fixture - it needs the fetch/view stack the reftest runner sets up - so a fixture for `page.eval_js` end-to-end still needs a page whose load path works headless. The eval behaviour itself is covered.
+- **Still missing for a first-class control:** reading a value back out of `eval_js` (it answers only whether the script threw - use a script that writes to `window` and a follow-up that throws on a mismatch), a selector-based query helper, and waiting-for-condition. `page.click` exists for real pointer input.
+
+
 ### Where the code is
 
 | Area | File |
