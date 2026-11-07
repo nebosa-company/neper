@@ -247,7 +247,14 @@ fn characteristic(re: []const f64, im: []const f64, out: []f64, scratch: []f64) 
 fn pole_placement(a: []const f64, b: []const f64, n: usize, poles_re: []const f64, poles_im: []const f64, k: []f64, scratch: []f64) -> err {
     let nn = n * n
     if a.len < nn || b.len < n || poles_re.len < n || poles_im.len < n || k.len < n { ret TooSmall }
-    if scratch.len < 5usize * nn + 5usize * n + 2usize { ret TooSmall }
+    // The polynomial needs 2 * (n + 1) entries, which is more than the n * n + n the tail of the
+    // old `5 * nn + 5 * n + 2` allowed for a one-state plant: characteristic() answered TooSmall
+    // and pole placement refused a 1x1 system it can solve. The same sum also covers what the
+    // ring of matrices above reaches for every n, which `5 * nn + 5 * n + 2` did not for n >= 3.
+    let poly_base = 5usize * nn + 3usize * n
+    var poly_needed = nn + n
+    if poly_needed < 2usize * (n + 1usize) { poly_needed = 2usize * (n + 1usize) }
+    if scratch.len < poly_base + poly_needed { ret TooSmall }
     var ctrl = scratch[..nn]
     var ctrl_inverse = scratch[nn..2usize * nn]
     var phi = scratch[2usize * nn..3usize * nn]
@@ -256,7 +263,7 @@ fn pole_placement(a: []const f64, b: []const f64, n: usize, poles_re: []const f6
     var column = scratch[5usize * nn..5usize * nn + n]
     var next_column = scratch[5usize * nn + n..5usize * nn + 2usize * n]
     var alpha = scratch[5usize * nn + 2usize * n..5usize * nn + 3usize * n]
-    var poly_scratch = scratch[5usize * nn + 3usize * n..6usize * nn + 4usize * n]
+    var poly_scratch = scratch[poly_base..poly_base + poly_needed]
     // Controllability matrix [B, AB, A^2 B, ...] by columns.
     var i = 0usize
     while i < n {
