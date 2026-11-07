@@ -132,20 +132,31 @@ fn query_attr(b: *Browser, selector: str, name: str) -> (str, bool) {
 // held. This is what an automating host needs after any action: after `eval_js` that starts a timer, after a click, or
 // after a navigation. The clock starts at `start_ms` - the same monotonic millisecond clock `pump` takes - and each step
 // jumps to the next due timer, so a page waiting on `setTimeout` or a promise chain is driven rather than starved.
+//
+// A navigation the page asked for is a load in progress, not an idle page: `pump` follows it and the tab comes back with
+// a new page whose realm and condition names differ, so `eval_truthy` answers false until the reload has settled. The
+// loop therefore keeps going while the address changes, and only gives up when nothing is scheduled, nothing changed,
+// and no load is pending.
 fn wait_for(b: *Browser, source: str, start_ms: f64, timeout_ms: f64) -> bool {
     if eval_truthy(b, source) { ret true }
     var now = start_ms
     let deadline = start_ms + timeout_ms
+    var address = b.tab.pg.url
     while now < deadline {
         let due = page.next_wakeup(b.tab.pg)
         var step = 1.0f64
         if due > now { step = due - now }
         if due < 0.0f64 { step = 1.0f64 }
         now = now + step
+        let next_address = b.tab.pg.url
         let changed = pump(b, now)
+        // A navigation replaced the document: the condition must be re-evaluated in the new realm, and the deadline keeps
+        // running so a redirect loop cannot spin forever.
+        let navigated = !str.eq(address, next_address) || !str.eq(address, b.tab.pg.url)
+        address = b.tab.pg.url
         if eval_truthy(b, source) { ret true }
-        // Nothing scheduled and no state change: no further pump can make the condition true.
-        if due < 0.0f64 && !changed { break }
+        // Nothing scheduled, nothing changed and no load in flight: no further pump can make the condition true.
+        if due < 0.0f64 && !changed && !navigated { break }
     }
     ret eval_truthy(b, source)
 }
