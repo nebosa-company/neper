@@ -43918,7 +43918,43 @@ journal shape and budget accounting (`#205`) and Petcow's Puppet skip-one behavi
 (`#55`) remain upstream changes: editing a pinned copy would make the fixture disagree
 with the real project, so they stay open until those repositories change.
 
+## D5965 — `x.duckdb.duckdb`: an `e.db` driver over DuckDB's C API, on v1 names and a 48-byte result
 
+**Problem.** `e.db` has drivers for SQLite, PostgreSQL, MySQL, ODBC and TDS, and none for
+DuckDB, the embedded analytical store most of the new database work lands in. The obvious
+starting point is the same shape as `x.sqlite.sqlite`: declare the C API with `@import`, run
+the statements through it, and let the arena own everything.
 
+**Decision.** `x.duckdb.duckdb` binds the DuckDB **C API v1** — the `duckdb.h` surface —
+through `x.duckdb.capi`, one variant per OS, and is the only file with `@import`. DuckDB 2.0
+exports V1 and V2 side by side and the V2 surface is still moving, so V1 is what a driver can
+sit on today; the package specification records the move to `duckdb_v2_*` as the next step
+rather than a rename of today's calls. The floor is 1.1.0, the release that added
+`duckdb_result_error_type`, and the newest call bound. `open` takes a path (empty for an
+in-memory database) and answers a `db.Connection` whose table is the package's.
 
+Three shapes are fixed by the library rather than chosen here. `duckdb_result` is a 48-byte
+C struct whose last field is the address of the result's state; it crosses as a pointer, and
+the three deprecated counters ahead of that field are written zero and read never. DuckDB v2
+does not put a pointer-sized field where v1's own layout put the column array, so reading a
+result through a locally invented 192-byte block gets success and then empty columns — which
+is what the first draft of this driver did. `duckdb_string_t` is 16 bytes, a length and then
+either twelve inline characters or a prefix and a pointer. The chunks a reader consumes are
+DuckDB's own, so a reader holds one at a time and frees it before fetching the next, and a
+borrowed row is valid only until the reader steps.
 
+The DuckDB C API has no statement splitter, so the driver reads one: `;` outside quotes and
+comments ends a statement, and a text it cannot follow is handed to DuckDB whole rather than
+refused by a guess. `execute` therefore answers the number of statements that changed rows,
+not the number of rows, because the API reports "changed rows" per result rather than a count.
+Parameters are DuckDB's `$1`, `$2`, ... in first-appearance order; a `db.Parameter` binds
+positionally, and a named one is checked against the statement so a name it does not have is
+refused instead of silently binding elsewhere. `DATE`, `TIME`, `DECIMAL`, `HUGEINT`,
+`UHUGEINT`, `UUID`, `INTERVAL` and `TIMESTAMP_NS` have no `db.Value` case that holds them
+exactly and arrive as their `Text` spelling; the nested types arrive as their raw `Bytes`.
+
+**Not done.** `duckdb_execute_prepared` answers success and leaves an empty result against the
+2.0 library this was measured on, while `duckdb_query` works, so the `db.prepare` path is not
+usable yet and the fixture does not exercise it; `db.execute`/`db.query` split the text and run
+each statement on its own, and that is the path that works. Nothing was run on Linux: the
+fixture is wired into both suites, but only the Windows host had DuckDB's library.

@@ -3362,6 +3362,14 @@ sqlite_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$sqlite_written" = 'executable written' ]
 chmod +x "$test_build/x-sqlite-selfhost"
 TMPDIR=/tmp "$test_build/x-sqlite-selfhost"
+# `x.duckdb.duckdb`: the `e.db` driver over the DuckDB C API (`libduckdb.so`, from the `duckdb`
+# package or the published shared-libs archive on LD_LIBRARY_PATH), every value kind round-tripped,
+# DuckDB's errors mapped, statements, transactions, and a database file reopened in /tmp. The
+# fixture checks the library version itself and answers 1 when it is older than 1.1.
+duckdb_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_duckdb/src/main.e" "$repo" x64 linux "$test_build/x-duckdb-selfhost")
+[ "$duckdb_written" = 'executable written' ]
+chmod +x "$test_build/x-duckdb-selfhost"
+TMPDIR=/tmp "$test_build/x-duckdb-selfhost"
 # `x.khronos.gl` and `x.khronos.egl` (D5883, D5885): generated from scripts/khronos, the profile
 # table checked with fake resolvers and no driver, and EGL refused as NoLoader from a missing library.
 python3 "$repo/scripts/gen_khronos_gl.py" --check

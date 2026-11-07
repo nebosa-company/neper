@@ -344,6 +344,9 @@ because toolchain-owned facilities use the domain namespaces above:
   host's driver manager (`odbc32.dll`, unixODBC). It is named for the owner of the API it
   programs against, as `x.khronos.*` is, not for either host's library (D1650). Delivered:
   [`x.microsoft.odbc`](packages/x.microsoft.odbc.md) under `lib/x/microsoft/`.
+- `x.duckdb.duckdb`: the `e.db` driver over DuckDB's C API (`duckdb.dll`, `libduckdb.so`),
+  named for the project as `x.sqlite.sqlite` is. Delivered:
+  [`x.duckdb.duckdb`](packages/x.duckdb.duckdb.md) under `lib/x/duckdb/`.
 - `x.microsoft.tds`: the `e.db` driver for SQL Server, speaking Microsoft's Tabular Data
   Stream itself inside TLS 1.3 (TDS 8.0 strict), with no client library. It is portable
   source over `e.net` and `e.net.tls` (D1643). Delivered:

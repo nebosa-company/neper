@@ -3780,6 +3780,15 @@ $sqliteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $sqliteWritten -ne 'executable written') { throw 'x.sqlite.sqlite emission failed' }
 & $sqlitePath
 if ($LASTEXITCODE -ne 0) { throw "the SQLite driver answered wrongly: exit $LASTEXITCODE" }
+# `x.duckdb.duckdb`: the `e.db` driver over the DuckDB C API (`duckdb.dll`, unpacked under
+# D:\tools\duckdb and put on PATH by the caller), every value kind round-tripped, DuckDB's errors
+# mapped, statements, transactions, and a database file reopened in %TMP%. The fixture checks the
+# library's version itself and answers 1 when it is older than 1.1.
+$duckdbPath = Join-Path $testBuild 'x-duckdb-selfhost.exe'
+$duckdbWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\x_duckdb\src\main.e') $repo 'x64' 'windows' $duckdbPath
+if ($LASTEXITCODE -ne 0 -or $duckdbWritten -ne 'executable written') { throw 'x.duckdb.duckdb emission failed' }
+& $duckdbPath
+if ($LASTEXITCODE -ne 0) { throw "the DuckDB driver answered wrongly: exit $LASTEXITCODE" }
 # `x.khronos.gl` and `x.khronos.egl` (D5883, D5885): generated from scripts/khronos, the profile
 # table checked with fake resolvers and no driver, and EGL refused as NoLoader from a missing library.
 & python (Join-Path $repo 'scripts\gen_khronos_gl.py') --check

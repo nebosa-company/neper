@@ -9366,6 +9366,13 @@
    ]
   },
   {
+   "name": "x.duckdb.duckdb",
+   "schedule": "later",
+   "blocked_by": [
+    "e.db"
+   ]
+  },
+  {
    "name": "x.oracle.mysql",
    "schedule": "later",
    "blocked_by": [
