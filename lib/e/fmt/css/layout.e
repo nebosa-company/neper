@@ -4426,8 +4426,11 @@ fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool {
     while kid != NONE {
         let kb = &l.boxes.items[usize(kid)]
         if kb.inner == .Marker {
-            kid = kb.next
-            continue
+            // A list item's marker is not a flow child, but it still occupies a line: the box is NOT self-collapsing.
+            // Skipping the marker alone made an EMPTY `display: list-item` look empty, so its whole subtree was skipped
+            // and the marker was never positioned (WPT css/CSS2/lists/list-style*-applies-to-008/009/012/014/017, which
+            // all put an empty list item inside a styled parent).
+            ret false
         }
         // An absolutely positioned child is laid out by the positioned pass and takes no part in the flow.
         let kps = st(l, kb.style).position
