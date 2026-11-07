@@ -294,7 +294,11 @@ fn forward_session(sock: net.Socket, s: *ssh.Session) -> i32 {
 
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len < 4usize { os.exit(90i32) }
-    // RFC 7748's Alice/Bob vector checks the raw little-endian primitive and SSH's mpint conversion.
+    // RFC 7748's Alice/Bob vector checks the raw little-endian primitive. RFC 8731 section 3 makes
+    // K the integer those bytes encode read big-endian, so the mpint below carries them in order:
+    // a host reads the secret as int.from_bytes(secret, 'big'), and the reversed form is a
+    // different integer no peer agrees with.
+    //
     let alice = parse_hex_32("77076d0a7318a57d3c16c17251b26645df4c2f87ebc0992ab177fba51db92c2a")
     let bob = parse_hex_32("de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f")
     let raw_expected = parse_hex_32("4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742")
@@ -312,7 +316,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var big: [32]u8 = zero
     i = 0usize
     while i < 32usize {
-        big[i] = raw_expected[31usize - i]
+        big[i] = raw_expected[i]
         i += 1usize
     }
     var encoded: [40]u8 = zero
@@ -321,7 +325,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if writer.over || writer.len != 36usize || encoded[0usize] != 0u8 || encoded[1usize] != 0u8 || encoded[2usize] != 0u8 || encoded[3usize] != 32u8 { os.exit(94i32) }
     i = 0usize
     while i < 32usize {
-        if encoded[4usize + i] != raw_expected[31usize - i] { os.exit(95i32) }
+        if encoded[4usize + i] != raw_expected[i] { os.exit(95i32) }
         i += 1usize
     }
     var letter: [1]u8 = zero

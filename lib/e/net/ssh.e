@@ -554,13 +554,7 @@ fn compute_exchange_hash(s: *Session) {
     hash.sha256_update(&h, s.server_public[0usize..32usize])
     var mp: [40]u8 = zero
     var w = Writer { buf: mp[0usize..40usize], len: 0usize, over: false }
-    var big: [32]u8 = zero
-    var big_at = 0usize
-    while big_at < 32usize {
-        big[big_at] = s.kex_k[31usize - big_at]
-        big_at += 1usize
-    }
-    w_mpint(&w, big[0usize..32usize])
+    w_mpint(&w, s.kex_k[0usize..32usize])
     hash.sha256_update(&h, mp[0usize..w.len])
     s.exchange_hash = hash.sha256_done(&h)
 }
@@ -569,13 +563,7 @@ fn compute_exchange_hash(s: *Session) {
 fn derive_key(s: *Session, letter: u8, out: []u8) {
     var mp: [40]u8 = zero
     var w = Writer { buf: mp[0usize..40usize], len: 0usize, over: false }
-    var big: [32]u8 = zero
-    var big_at = 0usize
-    while big_at < 32usize {
-        big[big_at] = s.kex_k[31usize - big_at]
-        big_at += 1usize
-    }
-    w_mpint(&w, big[0usize..32usize])
+    w_mpint(&w, s.kex_k[0usize..32usize])
     var h1 = hash.sha256_init()
     hash.sha256_update(&h1, mp[0usize..w.len])
     hash.sha256_update(&h1, s.exchange_hash[0usize..32usize])
