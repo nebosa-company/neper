@@ -217,7 +217,10 @@ fn tally(it: *js.Interp, show: bool, test_path: str) -> Counts {
             c.done = true
             c.harness_ok = str.starts_with(rest[5usize..], "0")
             if show && !c.harness_ok {
-                let p2 = io.printf["  HARNESS {}: {}\n"](test_path, rest[5usize..])
+                // The reporter writes `<status>\t<message>`; print both rather than the raw slice, whose bytes were what
+                // "HARNESS ... [50, 9]" used to show - a status and a tab, not a diagnosable message.
+                let detail: str = rest[5usize..]
+                let p2 = io.printf["  HARNESS {}: {}\n"](test_path, detail)
             }
         } else if show {
             let p3 = io.printf["  LOG {}\n"](rest)
