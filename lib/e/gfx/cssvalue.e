@@ -1943,11 +1943,11 @@ fn interp_hue(h1: f64, h2: f64, w1: f64, w2: f64, method: str) -> f64 {
     ret x * w1 + y * w2
 }
 
-// `out` becomes the mix of `c1` and `c2` in `space`. The channels are mixed straight, not
-// premultiplied by alpha: that is what the reference does (`out[i] = a[i] * w1 + b[i] * w2` in
-// vaper_css_values' _mixInSpace) and these colours are pinned against it, so the two engines agree
-// on what a translucent mix looks like. The alpha itself mixes the same way, and a hue method is
-// not consulted -- the reference always takes the shorter arc.
+// `out` becomes the mix of `c1` and `c2` in `space`; the channels are premultiplied by their alpha,
+// as the CSS interpolation rule says and as css_style pins (`in srgb, transparent 50%, red 50%` is
+// half-opaque red, not half-dark red). The hue follows `method` in a polar space. The Vaper
+// reference this module is otherwise pinned against mixes the channels straight, which shows only
+// when an operand is translucent; gfx_cssvalue records that as a known difference.
 fn mix_in_space(c1: u32, c2: u32, w1: f64, w2: f64, space: str, method: str) -> (u32, bool) {
     let (ca, a_ok) = to_space_coords(c1, space)
     let (cb, b_ok) = to_space_coords(c2, space)
@@ -1955,11 +1955,11 @@ fn mix_in_space(c1: u32, c2: u32, w1: f64, w2: f64, space: str, method: str) -> 
     let hue_idx = hue_index(space)
     let alpha = ca.alpha * w1 + cb.alpha * w2
     var out = Vec3 { x: 0.0f64, y: 0.0f64, z: 0.0f64 }
-    let shortest = "shorter"
-    let _ = method
-    if hue_idx == 0i64 { out.x = interp_hue(ca.v.x, cb.v.x, w1, w2, shortest) } else { out.x = ca.v.x * w1 + cb.v.x * w2 }
-    if hue_idx == 1i64 { out.y = interp_hue(ca.v.y, cb.v.y, w1, w2, shortest) } else { out.y = ca.v.y * w1 + cb.v.y * w2 }
-    if hue_idx == 2i64 { out.z = interp_hue(ca.v.z, cb.v.z, w1, w2, shortest) } else { out.z = ca.v.z * w1 + cb.v.z * w2 }
+    if alpha > 0.0f64 {
+        if hue_idx == 0i64 { out.x = interp_hue(ca.v.x, cb.v.x, w1, w2, method) } else { out.x = (ca.v.x * ca.alpha * w1 + cb.v.x * cb.alpha * w2) / alpha }
+        if hue_idx == 1i64 { out.y = interp_hue(ca.v.y, cb.v.y, w1, w2, method) } else { out.y = (ca.v.y * ca.alpha * w1 + cb.v.y * cb.alpha * w2) / alpha }
+        if hue_idx == 2i64 { out.z = interp_hue(ca.v.z, cb.v.z, w1, w2, method) } else { out.z = (ca.v.z * ca.alpha * w1 + cb.v.z * cb.alpha * w2) / alpha }
+    }
     ret (from_space_coords(Coords { v: out, alpha: alpha }, space), true)
 }
 

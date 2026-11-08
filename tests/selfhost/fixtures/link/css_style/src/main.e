@@ -206,6 +206,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let c77 = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c77"))]
     if !near(c77.margin[3usize].px, 1.0f64) { os.exit(55) }
     let c78 = fixes_table[usize(dom.get_element_by_id(&fixes_tree, fixes_tree.root, "c78"))]
-    if !near(c78.margin[3usize].px, 0.0f64) { os.exit(56) }
+    // `100svw` is a viewport unit, and the small-viewport family folds onto vw as the reference
+    // folds it, so it resolves against the style context's 800-pixel viewport. It used to be an
+    // unknown unit -- which is what #718 was about -- so it was refused and left the margin at 0.
+    if !near(c78.margin[3usize].px, 800.0f64) { os.exit(56) }
     ret ok
 }
