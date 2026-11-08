@@ -5681,8 +5681,9 @@ fn clocked_field_glyph(a: *mem.Arena, key: widget.Key, t: *const control.Theme, 
         side = 28.0
         size = 18.0
     }
-    // Neper pointer hosts: the 48 field of text_edit and its siblings (Flutter's 56 is the touch height).
-    if t.tokens.profile == .Neper && !touch { h = t.tokens.sizes.control_lg }
+    // A clocked field keeps the medium control height on a Neper pointer host: ui_pickers2_v2 pins
+    // the time field's frame at 200 by 40, which is `control_md`, where this used to take
+    // `text_edit`'s 48 (`control_lg`) instead.
     var kept = options
     kept.height = h
     kept.end_space = control.max_zero(side + 4.0 - 16.0)
