@@ -34,8 +34,12 @@ fn near(a: f32, b: f32) -> bool {
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
+    // The window opens its target on the caller's queue, and a frame can only be presented through
+    // the queue it came from, so the renderer below shares this one.
+    let (queue, queue_error) = gpu.queue(device)
+    if queue_error != ok { os.exit(16i32) }
     let options = window.Options { title: "neper ui_host", width: 320u32, height: 200u32, min_width: 0u32, min_height: 0u32, resizable: false, transparent: false, mode: .Windowed }
-    let (w, window_error) = window.open(a, device, options)
+    let (w, window_error) = window.open(a, device, queue, options)
     if window_error == window.Unsupported {
         try io.print("ui host unsupported\n")
         ret ok
@@ -80,9 +84,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(adapted.metrics.hit_target, light.metrics.hit_target) || !near(adapted.spacing.md, light.spacing.md) { os.exit(15i32) }
     // The events reach the widgets: lifecycle and insets are taken quietly, back
     // fires the scope's cancel action.
-    let (q, queue_error) = gpu.queue(device)
-    if queue_error != ok { os.exit(16i32) }
-    let (r, renderer_error) = scene.renderer(a, device, q, 2u32, 2u32)
+    let (r, renderer_error) = scene.renderer(a, device, queue, 2u32, 2u32)
     if renderer_error != ok { os.exit(17i32) }
     var renderer = r
     let (rt, runtime_error) = widget.runtime(a, &renderer, widget.Limits { max_elements: 8usize, max_states: 4usize, state_bytes: 64usize, state_classes: 1u16, max_depth: 4u16, max_commands: 16usize })

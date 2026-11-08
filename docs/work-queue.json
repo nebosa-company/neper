@@ -4,6 +4,17 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
+      "id": "C280",
+      "category": "library",
+      "group": "Library",
+      "order": 415,
+      "title": "a window whose present fails still reports itself presenting",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. ui_window reaches its failing-presenter section and exits 34. Splitting that assertion shows the failing part is window.presenting: after the presenter under test refuses a frame, the window still answers that it is presenting (exit 341), so the release and the cleared slot the fixture then checks were never reached. The path to look at is request_frame in lib/e/ui/window.e: it returns early when gpu.native(s.frames) holds and again when gpu.presented(s.frames) errors, and in both of those it sets frame_requested without touching has_presenter; present_whole does clear has_presenter and release the presenter, but only if it gets that far, and it returns before the presenter is called when gpu.read_image fails. Whether the cpu target used here takes the native early return is the first thing to establish. Reached only now: this fixture could not compile before the queue migration below, so no run had exercised it since window.open grew its queue parameter. Acceptance: after a failed present the window answers that it is not presenting, the presenter has been released exactly once, and its slot is clear; ui_window exits 0."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",

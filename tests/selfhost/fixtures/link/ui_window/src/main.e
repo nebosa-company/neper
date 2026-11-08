@@ -70,8 +70,12 @@ fn fake_attach_and_fail(a: *mem.Arena, w: *window.Window) -> err {
 fn main(a: *mem.Arena, args: []str) -> err {
     let (device, open_error) = gpu.open(a, .Cpu, 0u32)
     if open_error != ok { os.exit(1i32) }
+    // Every window opens its target on the caller's queue, and a frame can only be presented
+    // through the queue it came from, so the renderer below shares this one.
+    let (q, queue_error) = gpu.queue(device)
+    if queue_error != ok { os.exit(6i32) }
     let options = window.Options { title: "neper ui_window", width: 320u32, height: 200u32, min_width: 0u32, min_height: 0u32, resizable: true, transparent: false, mode: .Windowed }
-    let (w, window_error) = window.open(a, device, options)
+    let (w, window_error) = window.open(a, device, q, options)
     if window_error == window.Unsupported {
         try io.print("ui window unsupported\n")
         ret ok
@@ -84,8 +88,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (canvas, target_error) = window.draw_target(&win)
     if target_error != ok { os.exit(5i32) }
     // A frame: a red fill, rendered into the window's target and shown.
-    let (q, queue_error) = gpu.queue(device)
-    if queue_error != ok { os.exit(6i32) }
     let (r, renderer_error) = scene.renderer(a, device, q, 2u32, 2u32)
     if renderer_error != ok { os.exit(7i32) }
     var renderer = r
@@ -124,7 +126,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if input.composition_rect(&events, win.id, geometry.rect(0.0, 0.0, 1.0, 1.0)) != input.TooLarge { os.exit(23i32) }
     // Pointer buttons belong to their window's input queue. A held button in the
     // second window must not become a held button on a move in the first (#1216).
-    let (other_opened, other_open_error) = window.open(a, device, options)
+    let (other_opened, other_open_error) = window.open(a, device, q, options)
     if other_open_error != ok { os.exit(61i32) }
     var other = other_opened
     let (first_queue, first_queue_error) = input.queue_for(a, win.id, 8usize)
@@ -188,7 +190,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if input.capture(&events, win.id, 0u32) != input.Closed { os.exit(28i32) }
     if input.close(&events) != ok || input.close(&events) != input.Closed { os.exit(29i32) }
     window.set_default_presenter(window.PresenterFactory { attach: fake_attach })
-    let (failure_opened, failure_open_error) = window.open(a, device, options)
+    let (failure_opened, failure_open_error) = window.open(a, device, q, options)
     if failure_open_error != ok { os.exit(31i32) }
     var failure = failure_opened
     let (failure_canvas, failure_canvas_error) = window.draw_target(&failure)
@@ -200,7 +202,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if window.close(&failure) != ok || fake_releases != 1usize { os.exit(35i32) }
     var cycle = 0usize
     while cycle < PRESENTER_CYCLES {
-        let (opened, opened_error) = window.open(a, device, options)
+        let (opened, opened_error) = window.open(a, device, q, options)
         if opened_error != ok { os.exit(36i32) }
         var attached = opened
         if !window.presenting(&attached) { os.exit(37i32) }
@@ -209,7 +211,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         cycle += 1usize
     }
     window.set_default_presenter(window.PresenterFactory { attach: fake_attach_and_fail })
-    let (partially_attached, partial_error) = window.open(a, device, options)
+    let (partially_attached, partial_error) = window.open(a, device, q, options)
     if partial_error != ok { os.exit(40i32) }
     var fallback = partially_attached
     if window.presenting(&fallback) { os.exit(41i32) }

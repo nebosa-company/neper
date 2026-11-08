@@ -121,12 +121,16 @@ fn run(a: *mem.Arena, host: os.Window, options: context.Options, base: i32) -> e
 fn cycle_presenters(a: *mem.Arena) -> err {
     let (device, device_error) = gpu.open(a, .Cpu, 0u32)
     if device_error != ok { ret present.Failed }
+    // The window opens its target on the caller's queue and a frame is presented through the same
+    // one, so every window in the cycle shares it.
+    let (queue, queue_error) = gpu.queue(device)
+    if queue_error != ok { ret present.Failed }
     present.install()
     let options = window.Options { title: "neper x_khronos_gl_present lifecycle", width: WINDOW_W, height: WINDOW_H, min_width: 0u32, min_height: 0u32, resizable: false, transparent: false, mode: .Windowed }
     var cycle = 0usize
     var attached_once = false
     while cycle < PRESENTER_CYCLES {
-        let (opened, opened_error) = window.open(a, device, options)
+        let (opened, opened_error) = window.open(a, device, queue, options)
         if opened_error != ok {
             let released = gpu.close(device)
             if !attached_once && opened_error == window.Unsupported { ret present.Unsupported }
