@@ -1662,11 +1662,14 @@ fn token_queue(token_value: Token) -> (*QueueState, err) {
         ret (zero, InvalidHandle)
     }
     let state = found.queue_states[usize(token_value.queue)]
-    // A token names the queue's state at some point, and serial 0 is the point before the first
-    // submission: `token()` on a queue that has not launched anything answers exactly that, so it
-    // is a dependency on nothing, which every wait finds already satisfied. Anything past the
-    // queue's latest serial still names work that has not happened and is refused.
-    if mem.address_of(state) == 0usize || token_value.serial > state.serial {
+    // Serial 0 is the point before a queue's first submission. It names something only while the
+    // queue is still there: `token()` on a queue that has launched nothing answers exactly that,
+    // and gpu_cpu pins that its waits then find the dependency already satisfied. Once the queue
+    // has advanced, a serial-0 token is stale work that never existed, which gpu_present pins as
+    // InvalidHandle (#642). Anything past the queue's latest serial is refused either way, since
+    // it would name work that has not happened yet.
+    let stale_zero = token_value.serial == 0u64 && state.serial != 0u64
+    if mem.address_of(state) == 0usize || stale_zero || token_value.serial > state.serial {
         unlock_state(found)
         ret (zero, InvalidHandle)
     }
