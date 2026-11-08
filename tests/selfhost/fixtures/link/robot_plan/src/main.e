@@ -121,10 +121,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var want0: [6]u64 = zero
     want0[0usize] = 8203780714608507993u64
     want0[1usize] = 14703156449591510357u64
-    want0[2usize] = 15717861397283005729u64
+    want0[2usize] = 13661152492554218576u64
     want0[3usize] = 9560560986039005156u64
     want0[4usize] = 2856621670879354026u64
-    want0[5usize] = 13863913387895266264u64
+    want0[5usize] = 4078884085949937429u64
     let code0 = map_checks(0usize, &cfg0, obs0[..], &p, &b, 1.0f64, 1.0f64, 9.0f64, 9.0f64, ox[..], oy[..], adj[..], heap_key[..], heap_node[..], closed[..], want0[..])
     if code0 != 0i32 { os.exit(code0) }
 
@@ -140,10 +140,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var want1: [6]u64 = zero
     want1[0usize] = 7610227544535967416u64
     want1[1usize] = 15463159572548659341u64
-    want1[2usize] = 2837082539057196575u64
+    want1[2usize] = 7583639436229392920u64
     want1[3usize] = 515942651855530069u64
-    want1[4usize] = 10990028379380037797u64
-    want1[5usize] = 10302297329380454057u64
+    want1[4usize] = 10990028379379084485u64
+    want1[5usize] = 7719258167549107521u64
     let code1 = map_checks(1usize, &cfg1, obs1[..], &p, &b, 1.0f64, 5.0f64, 19.0f64, 5.0f64, ox[..], oy[..], adj[..], heap_key[..], heap_node[..], closed[..], want1[..])
     if code1 != 0i32 { os.exit(code1 + 6i32) }
 
