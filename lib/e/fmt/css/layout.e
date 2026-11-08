@@ -7284,6 +7284,7 @@ fn gp_list(gp: *GridParse, text: str, out: *list.List[GTrack], names: *list.List
                 if per == 0.0f64 && gp.item_min > 0.0f64 {
                     per = gp.item_min
                     if tl.len > 0usize && tl.items[0usize].max.kind == 5u8 && gp.item_max > 0.0f64 { per = gp.item_max }
+                    if tl.len > 0usize && tl.items[0usize].max.kind == 6u8 && gp.item_max > 0.0f64 { per = minf(gp.item_max, tl.items[0usize].max.v) }
                 }
                 n = 1i64
                 if gp.avail >= 0.0f64 && tl.len > 0usize && per > 0.0f64 {
@@ -8648,7 +8649,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             var ic = 0usize
             while ic < g.nc {
                 let ck1 = g.cols[ic].max.kind
-                if ck1 == 4u8 || ck1 == 5u8 { intrinsic_cols = true }
+                if ck1 == 4u8 || ck1 == 5u8 || ck1 == 6u8 { intrinsic_cols = true }
                 ic += 1usize
             }
             if (cs.width.kind == .Px || cs.display == .Grid) && !intrinsic_cols { exn = 0usize }
