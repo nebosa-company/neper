@@ -10486,7 +10486,7 @@ $listSurface = Get-Content (Join-Path $repo 'lib\e\data\list.e') |
         if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.data.list contains an unreadable public declaration' }
         $Matches[1]
     }
-$expectedListSurface = @('List', 'Iter', 'init', 'from_slice', 'slice', 'slice_const', 'reserve', 'push', 'pop', 'insert', 'remove', 'clear', 'iter', 'iter_next', 'Builder', 'builder', 'build_push', 'built', 'freeze', 'builder_drop', 'Owning', 'owning', 'own_put', 'own_take', 'owned_count', 'owning_finish')
+$expectedListSurface = @('Invalid', 'List', 'Iter', 'init', 'from_slice', 'slice', 'slice_const', 'reserve', 'push', 'pop', 'insert', 'remove', 'clear', 'iter', 'iter_next', 'Builder', 'builder', 'build_push', 'built', 'freeze', 'builder_drop', 'Owning', 'owning', 'own_put', 'own_take', 'owned_count', 'owning_finish')
 if (($listSurface -join "`n") -ne ($expectedListSurface -join "`n")) { throw 'e.data.list public declarations differ from module-apis.md' }
 $listParsed = & $compiler parse-file (Join-Path $repo 'lib\e\data\list.e')
 if ($LASTEXITCODE -ne 0 -or $listParsed -ne 'parse file ok') { throw 'e.data.list failed CLI parsing' }

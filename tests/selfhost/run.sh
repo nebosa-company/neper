@@ -10165,7 +10165,8 @@ chmod +x "$deque_executable_path"
 deque_output=$("$deque_executable_path")
 [ "$deque_output" = 'data deque ok' ]
 list_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/e/data/list.e")
-expected_list_surface='List
+expected_list_surface='Invalid
+List
 Iter
 init
 from_slice
