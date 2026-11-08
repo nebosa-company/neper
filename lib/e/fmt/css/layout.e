@@ -8638,8 +8638,15 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
                 xi += 1usize
             }
             // (items only size lanes when the container's width is not definite; here `auto` lanes share it equally)
-            if cs.width.kind == .Px || cs.display == .Grid { exn = 0usize }
-            size_tracks(g.cols, g.nc, g.gap_c, cw, ex, exn, true, false, stretch_cols)
+            var intrinsic_cols = false
+            var ic = 0usize
+            while ic < g.nc {
+                let ck1 = g.cols[ic].max.kind
+                if ck1 == 4u8 || ck1 == 5u8 { intrinsic_cols = true }
+                ic += 1usize
+            }
+            if (cs.width.kind == .Px || cs.display == .Grid) && !intrinsic_cols { exn = 0usize }
+            size_tracks(g.cols, g.nc, g.gap_c, cw, ex, exn, true, false, stretch_cols && !intrinsic_cols)
         } else {
             size_tracks(g.cols, g.nc, g.gap_c, cw, g.items, g.n, true, false, stretch_cols)
         }
