@@ -65,7 +65,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret context_error
     }
     var live = c
-    if context.load(a, options) != ok {
+    if context.load(a, &live, options) != ok {
         let printed = io.print(gl.missing())
         ret gl.Unsupported
     }
