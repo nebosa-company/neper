@@ -288,9 +288,14 @@ def constants_extracted(main, tokens_json_lines):
     line_kinds = {}
     for r in records:
         line_kinds.setdefault(r['span']['line'], []).append(r['kind'])
+    previous = None
     for r in records:
         kind = r['kind']
-        if kind == 'INTEGER':
+        # A literal right after a minus stays: lowering folds a negated literal as one
+        # constant, which `-K` (a named constant under a runtime negate) is not.
+        negated = previous == 'PUNCT_MINUS'
+        previous = kind
+        if kind == 'INTEGER' and not negated:
             lexeme = text[r['span']['byte_start']:r['span']['byte_end']]
             first = line_kinds[r['span']['line']][0]
             if LITERAL.match(lexeme) and len(lexeme) >= 3 and first not in ('KW_CONST', 'KW_CASE'):
