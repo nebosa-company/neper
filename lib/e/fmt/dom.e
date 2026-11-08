@@ -837,6 +837,9 @@ fn compile_selectors(a: *mem.Arena, text: str) -> ([]const selector.RuleSelector
     if segments.len != chosen.len { ret (zero, SyntaxError) }
     var i = 0usize
     while i < chosen.len {
+        // A pseudo-element names a thing that is not an element of the tree, so the selector APIs
+        // reject it (what the DOM specification calls a syntax error), though a style rule keeps it.
+        if chosen[i].has_pseudo { ret (zero, SyntaxError) }
         if !selector_known(chosen[i].selector) { ret (zero, SyntaxError) }
         i += 1usize
     }
