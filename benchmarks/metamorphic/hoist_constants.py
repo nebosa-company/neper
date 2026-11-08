@@ -42,8 +42,13 @@ def hoisted(path):
         line_kinds.setdefault(r['span']['line'], []).append(r['kind'])
     names = {}
     edits = []
+    previous = None
     for r in records:
-        if r['kind'] != 'INTEGER':
+        # A literal right after a minus stays: lowering folds a negated literal as one
+        # constant, which `-K` (a named constant under a runtime negate) is not.
+        negated = previous == 'PUNCT_MINUS'
+        previous = r['kind']
+        if r['kind'] != 'INTEGER' or negated:
             continue
         lexeme = text[r['span']['byte_start']:r['span']['byte_end']]
         first = line_kinds[r['span']['line']][0]
