@@ -8949,7 +8949,7 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
     while ir < g.nr {
         let rk0 = g.rows[ir].min.kind
         let rk1 = g.rows[ir].max.kind
-        if rk0 == 4u8 || rk0 == 5u8 || rk1 == 4u8 || rk1 == 5u8 { intrinsic_rows = true }
+        if rk0 == 4u8 || rk0 == 5u8 || rk1 == 4u8 || rk1 == 5u8 || rk1 == 6u8 { intrinsic_rows = true }
         ir += 1usize
     }
     if ch < 0.0f64 || intrinsic_rows {
