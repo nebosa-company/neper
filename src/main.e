@@ -6623,7 +6623,7 @@ fn apply_transaction(a: *mem.Arena, sink: *Sink, dot_dir: str, paths: []str, nam
     if locked == os.Exists { ret apply_plan_refused(sink, "E-TOOL-0003", "`.neper/transaction.lock` is held: another apply is writing these sources, or one was interrupted and `apply-plan --recover` restores its files; nothing applied") }
     if locked != ok { ret locked }
     try os.close(lock_file)
-    // Every exit from here on gives the lock back; the defer is the only release.
+    // Every return from here on gives the lock back; a refusal exits the process, which runs no defer, so it releases first.
     defer { release_transaction(a, dot_dir) }
     // Every precondition again, under the lock.
     var at = 0usize
@@ -6683,6 +6683,7 @@ fn apply_transaction(a: *mem.Arena, sink: *Sink, dot_dir: str, paths: []str, nam
                 // An edit made since the lock was taken, by a writer that does not take
                 // it: the files replaced so far go back, and nothing is applied.
                 roll_back(a, dot_dir, paths[0usize..at], digests, new_digests, edits)
+                release_transaction(a, dot_dir)
                 ret apply_plan_refused_file(sink, "E-TOOL-0003", names[at], " changed during the apply; the files already written were restored; nothing applied")
             }
             try save_bytes(a, paths[at], results[at])
