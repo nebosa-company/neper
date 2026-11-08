@@ -36,7 +36,7 @@ fn painted(a: *mem.Arena, n: widget.Node, w: f32, h: f32) -> (usize, err) {
 }
 
 fn painted_scaled(a: *mem.Arena, n: widget.Node, w: f32, h: f32, scale: f32) -> (usize, f32, err) {
-    let (b, be) = scene.builder(a, 4096usize)
+    let (b, be) = scene.builder(a, 65536usize)
     if be != ok { ret (0usize, 0.0, be) }
     var builder = b
     scene.set_builder_scale(&builder, scale)
@@ -77,23 +77,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if e3 != ok || n3 == 0usize { os.exit(4) }
 
     // winbutton: a ring and a focus rectangle, light and dark
-    let (r, re) = winbutton.ring_node(a, 0u32, 0xFFFDFDFDu32, 75.0, 23.0, 0.0, 0.0, 0.0, 0.0, 0u32, false)
+    let (r, re) = winbutton.ring_node(a, 0u32, 0xFFFDFDFDu32, 75.0, 23.0, 0.0, 0.0, 0.0, 0.0, 0u32, false, false)
     if re != ok { os.exit(5) }
     let (n4, e4) = painted(a, r, 75.0, 23.0)
     if e4 != ok || n4 == 0usize { os.exit(6) }
     // A phase at the far edge is still a shifted ring: it must not fall back to
     // the crisp painter merely because the near-edge phase is zero.
-    let (r_endpoint, endpoint_error) = winbutton.ring_node(a, 0u32, 0xFFFDFDFDu32, 75.0, 23.0, 0.0, 0.0, 0.5, 0.0, 0u32, false)
+    let (r_endpoint, endpoint_error) = winbutton.ring_node(a, 0u32, 0xFFFDFDFDu32, 75.0, 23.0, 0.0, 0.0, 0.5, 0.0, 0u32, false, false)
     if endpoint_error != ok { os.exit(47) }
     let (endpoint_count, endpoint_paint_error) = painted(a, r_endpoint, 75.0, 23.0)
     if endpoint_paint_error != ok || endpoint_count == 0usize || endpoint_count == n4 { os.exit(48) }
-    let (f, fe) = winbutton.focus_node(a, false, 75.0, 23.0, true)
+    let (f, fe) = winbutton.focus_node(a, false, 75.0, 23.0, true, false, 0xFFFDFDFDu32)
     if fe != ok { os.exit(7) }
     let (n5, e5) = painted(a, f, 75.0, 23.0)
     if e5 != ok || n5 == 0usize { os.exit(8) }
 
     // winedit: the edit chrome at rest, a token chrome and the native combo
-    let (c, ce) = winedit.chrome(a, 0u32, 0u32, 121.0, 21.0, 100.0, 0u32, false)
+    let (c, ce) = winedit.light_chrome(a, 0u32, 0u32, 0u32, 121.0, 21.0, 0u32)
     if ce != ok { os.exit(9) }
     let (n6, e6) = painted(a, c, 121.0, 21.0)
     if e6 != ok || n6 == 0usize { os.exit(10) }
