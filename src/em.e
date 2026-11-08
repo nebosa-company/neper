@@ -1601,6 +1601,15 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
         }
         global_at += 1usize
     }
+    // The Interface carries the checker's globals, which an early build has before it lowers any.
+    var checked_global_at = 0usize
+    while checked_global_at < c.global_count {
+        if c.globals[checked_global_at].module_index == module_index {
+            let (checked_name, checked_name_error) = intern(table, c.globals[checked_global_at].name)
+            if checked_name_error != ok { ret checked_name_error }
+        }
+        checked_global_at += 1usize
+    }
     // (D1514) The strings of the globals' types.
     global_at = 0usize
     while global_at < c.global_count {
@@ -1671,11 +1680,13 @@ fn module_error_count(c: *check.Checker, module_index: usize) -> usize {
     ret count
 }
 
+// Counted over `c.globals`, which the Interface writer reads: the span is the NIR
+// builder's, and a hot build that lowered nothing has none for a module whose globals its
+// Interface must still carry.
 fn module_global_count(c: *check.Checker, module_index: usize) -> usize {
-    let (first, end) = span_of(c, span_globals(), module_index)
     var count = 0usize
-    var at = first
-    while at < end {
+    var at = 0usize
+    while at < c.global_count {
         if c.globals[at].module_index == module_index { count += 1usize }
         at += 1usize
     }
@@ -1995,9 +2006,8 @@ fn write_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, mo
         if c.constants[at].module_index == module_index { try write_constant_interface(c, g, table, at, scratch, output) }
         at += 1usize
     }
-    let (global_first, global_end) = span_of(c, span_globals(), module_index)
-    at = global_first
-    while at < global_end {
+    at = 0usize
+    while at < c.global_count {
         if c.globals[at].module_index == module_index { try write_global_interface(c, g, table, at, scratch, output) }
         at += 1usize
     }
@@ -2467,11 +2477,13 @@ fn write_global_dependencies(c: *check.Checker, g: *graph.Graph, table: *StringT
             if target_module_error != ok { ret target_module_error }
             let (target_name, target_name_error) = string_index(table, global.name)
             if target_name_error != ok { ret target_name_error }
+            let (type_hash, type_hash_error) = global_type_hash(c, g, at, scratch)
+            if type_hash_error != ok { ret type_hash_error }
             try binary.byte(output, dependency_globals_kind())
             try binary.zeroes(output, 3usize)
             try binary.little_u32(output, target_module)
             try binary.little_u32(output, target_name)
-            try binary.little_u64(output, 0usize)
+            try binary.little_u64(output, type_hash)
         }
         at += 1usize
     }
