@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C295",
-      "category": "library",
-      "group": "Library",
-      "order": 430,
-      "title": "x_cloud_rest reports an observed azure vnet as unmanaged where the expectation says managed",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open, and pre-existing: it is the fixture after text_css_cascade in the suite, so no run had reached it. x_cloud_rest answers exit 17 from its seventeenth vector chunk, on an `observed` call whose def is an azure.vnet. The comparison that fails is the resource record: the library answers `{\"attributes\":{},\"managed\":false,\"name\":\"petcow-x\",\"realId\":null,\"type\":\"azure.vnet\"}` where the expectation has `\"managed\":true`, everything else agreeing -- name, type, empty attributes and a null realId. So the observation path's `managed` decision is the whole difference: rest.observed sets `ob.managed` from the resource's markers, and for this input it concludes the resource is not managed. Nothing in the selector, cssvalue, cascade, window or ssh work touches x.oracle.cloud, so this is not a regression from them. Acceptance: x_cloud_rest exits 0, and an observed azure.vnet whose expectation is managed reports managed."
-    },
-    {
       "id": "C287",
       "category": "library",
       "group": "Library",

@@ -542,15 +542,13 @@ fn status(kind: u8, message: str) -> Status { ret Status { kind: kind, message: 
 
 // 0 done, 1 failed, 2 pending. `error` wins over `done`.
 fn operation_status(a: *mem.Arena, op: json.Value) -> Status {
+    // An `error` key is a failure however it is filled in, null included: Petcow's
+    // `operation_status` is `if let Some(e) = op.get("error") { return Failed(e.to_string()) }`,
+    // so `{"done": true, "error": null}` is a failure whose message is the text `null`. It is the
+    // Compute dialect that exempts a present-but-empty error, and that is `compute_operation_status`
+    // below, which keeps its own check.
     let (e, has_error) = ir.get(op, "error")
-    var failed = has_error
-    switch e {
-    case .Null:
-        failed = false
-    default:
-        failed = has_error
-    }
-    if failed {
+    if has_error {
         let (text, ce) = chain.canonical_json(a, e)
         ret status(1u8, text)
     }
@@ -758,7 +756,13 @@ fn to_observed(a: *mem.Arena, def: Def, body: json.Value) -> (Observed, bool) {
             has_real_id = true
         }
     }
-    ret (Observed { name: name, type_name: def.type_name, attributes: parse_attrs(a, def, body), has_real_id: has_real_id, real_id: real_id, managed: is_managed(a, def, body) }, true)
+    ret (Observed { name: name, type_name: def.type_name, attributes: parse_attrs(a, def, body), has_real_id: has_real_id, real_id: real_id,
+        // The recorded resource asks whether the name is ours, not whether the marker says so:
+        // `ObservedResource::is_managed` is `self.name.starts_with("petcow-")` in Petcow's
+        // provider/mod.rs, and a resource whose `petcow_managed` tag reads false -- mid-delete,
+        // say -- is still one this tool created. `is_managed` above answers the different question
+        // of whether the marker claims it, and is what the `isManaged` operation compares.
+        managed: str.starts_with(name, "petcow-") }, true)
 }
 
 // --- polling budgets -------------------------------------------------------------------------------------------
