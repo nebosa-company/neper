@@ -39,9 +39,53 @@ fn base64_encode(a: *mem.Arena, s: str) -> (str, err) {
 
 // The decoded bytes of `s`, which must be valid UTF-8.
 fn base64_decode(a: *mem.Arena, s: str) -> (str, err) {
-    let (out, out_error) = mem.alloc[u8](a, s.len / 4usize * 3usize + 3usize)
+    // The contract this is pinned to (scripts/encode_reference.py) strips whatever `=` padding is
+    // there and pads again to a whole group of four, refusing only a character outside the
+    // alphabet or a remainder of one past a multiple of four. So `Zg=` decodes to `f` as `Zg==`
+    // does, which is not what a decoder demanding exact padding answers.
+    var end = s.len
+    while end > 0usize && s[end - 1usize] == 61u8 { end -= 1usize }
+    let body = s[0usize..end]
+    var i = 0usize
+    while i < body.len {
+        let c = body[i]
+        let alphabet = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || (c >= 48u8 && c <= 57u8) || c == 43u8 || c == 47u8
+        if !alphabet { ret ("", BadBase64) }
+        i += 1usize
+    }
+    if body.len % 4usize == 1usize { ret ("", BadBase64) }
+    var padded = body
+    if body.len % 4usize != 0usize {
+        let (pad, pad_error) = mem.alloc[u8](a, body.len + 3usize)
+        if pad_error != ok { ret ("", pad_error) }
+        i = 0usize
+        while i < body.len {
+            pad[i] = body[i]
+            i += 1usize
+        }
+        while i % 4usize != 0usize {
+            pad[i] = 61u8
+            i += 1usize
+        }
+        // The last data symbol carries unused low bits -- four of them when two symbols make the
+        // group, two when three do. `base64.b64decode`, the contract here, ignores them;
+        // `e.bytes.base64_decode` insists they are zero, so they are cleared rather than the value
+        // refused. `Zm9` is `fo` with its low two bits set, and Python answers `fo`.
+        let table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+        let last = body[body.len - 1usize]
+        var value = 0usize
+        var t = 0usize
+        while t < 64usize {
+            if table[t] == last { value = t }
+            t += 1usize
+        }
+        if body.len % 4usize == 2usize { value = value & 48usize } else { value = value & 60usize }
+        pad[body.len - 1usize] = table[value]
+        padded = pad[0usize..i]
+    }
+    let (out, out_error) = mem.alloc[u8](a, body.len / 4usize * 3usize + 3usize)
     if out_error != ok { ret ("", out_error) }
-    let (decoded, decode_error) = bytes.base64_decode(out, s, .Standard)
+    let (decoded, decode_error) = bytes.base64_decode(out, padded, .Standard)
     if decode_error != ok { ret ("", BadBase64) }
     if !utf8.validate(decoded) { ret ("", NotUtf8) }
     ret (decoded, ok)
