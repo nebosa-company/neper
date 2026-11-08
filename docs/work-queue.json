@@ -4,6 +4,17 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
+      "id": "C287",
+      "category": "library",
+      "group": "Library",
+      "order": 422,
+      "title": "e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. With C286 landed gfx_cssvalue emits and runs, and stops on `min(abs(360in), min(16pt, 100dvh))`. Its reference answer is {v:0, u:\"px\", o:0, p:null} -- a plain zero length whose to_px resolution is null -- while the fixture's check fails, and the likeliest reason is that css.parse_length answers not-good because LengthUnit is {Px, Pt, Em, Rem, Ex, Percent, Vw, Vh, Vmin, Vmax, Ch, Lh} with no viewport-dynamic unit, so `100dvh` is not a length at all. Whether the reference reaches 0 by treating an unknown basis as zero (so min(16pt, 0) is 0 and min(abs(360in), 0) is 0) or by clamping is the thing to establish from Vaper's Dart parser before choosing between adding the dvh family to the enum and matching the zero-basis reading. Everything after this case is unmeasured, since the fixture stops at the first mismatch. Acceptance: gfx_cssvalue runs to completion, and the fixture's remaining cases agree with the reference."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",

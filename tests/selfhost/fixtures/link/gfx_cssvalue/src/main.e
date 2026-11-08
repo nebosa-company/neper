@@ -99,6 +99,8 @@ fn unit_name(u: css.LengthUnit) -> str {
         ret "vmax"
     case .Ch:
         ret "ch"
+    case .Lh:
+        ret "lh"
     }
 }
 
