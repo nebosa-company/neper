@@ -4262,13 +4262,26 @@ fn used_replaced_size(l: *Layout, b: u32, cbw: f64, cbh: f64) -> (f64, f64) {
         }
         ret (rw, rh)
     }
-    // min and max constraints, keeping the ratio when only one axis is constrained.
+    // min and max constraints, keeping the ratio when only one axis is constrained. The clamps are applied FIRST and the
+    // ratio correction after them: a trailing `w = wc` would otherwise undo the correction with a `wc` measured before
+    // it, which is how a 200x100 image with `max-height` stayed 200 wide instead of following its clamped height through
+    // a 1:1 ratio (WPT css/CSS2/normal-flow/inline-replaced-width-016: the red swatch must end up 100x100 for the green
+    // box to cover it).
     let wc = clamp_width(l, b, w, cbw)
     let hc = clamp_height(l, b, h, cbh)
-    if wc != w && hc == h && ratio > 0.0f64 && !known_h { h = clamp_height(l, b, wc / ratio, cbh) }
-    if hc != h && wc == w && ratio > 0.0f64 && !known_w { w = clamp_width(l, b, hc * ratio, cbw) }
-    if wc != w { w = wc }
-    if hc != h { h = hc }
+    let w_clamped = wc != w
+    let h_clamped = hc != h
+    if w_clamped { w = wc }
+    if h_clamped { h = hc }
+    // Re-derive the unconstrained axis from the ratio, so a `max-height` also narrows the image (and a `max-width`
+    // shortens it). Only when exactly one axis was constrained - if both were, the author's sizes win.
+    if ratio > 0.0f64 {
+        if h_clamped && !w_clamped && !known_w {
+            w = clamp_width(l, b, h * ratio, cbw)
+        } else if w_clamped && !h_clamped && !known_h {
+            h = clamp_height(l, b, w / ratio, cbh)
+        }
+    }
     ret (w, h)
 }
 
@@ -10724,3 +10737,5 @@ fn flex_static_align(a: style.Align) -> style.Align {
     if a == .End || a == .FlexEnd { ret .End }
     ret .Start
 }
+
+
