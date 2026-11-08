@@ -7964,18 +7964,24 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
         var rk = l.boxes.items[usize(b)].first
         while rk != NONE {
             let (rsc, rec) = item_axis_specs(l.a, bstyle(l, rk), false)
-            if flex_in(l, rk) && rsc.kind == 0u8 && rec.kind == 0u8 {
+            if flex_in(l, rk) && (rsc.kind == 0u8 || rsc.kind == 2u8) && rec.kind == 0u8 {
                 let rks = bstyle(l, rk)
                 resolve_edges(l, rk, maxf(avail_w, 0.0f64))
                 resolve_margins_fixed(l, rk, maxf(avail_w, 0.0f64))
-                let rw = grid_item_width(l, rk, cs, maxf(avail_w, 0.0f64))
+                var rw = grid_item_width(l, rk, cs, maxf(avail_w, 0.0f64))
+                if rks.width.kind == .MinContent || rks.width.kind == .MaxContent {
+                    let (rmn, rmx) = content_widths(l, rk)
+                    if rks.width.kind == .MinContent { rw = rmn } else { rw = rmx }
+                }
                 var rhs = -1.0f64
                 let (rhv, rhas) = resolve_len(rks.height, -1.0f64)
                 if rks.height.kind == .Px && rhas { rhs = to_content_h(l, rk, rhv) }
                 flex_place_item(l, rk, rw, rhs)
                 let rbx = bx(l, rk)
                 let rh = rbx.h + rbx.margin[0usize] + rbx.margin[2usize]
-                if rh > gp.item_min { gp.item_min = rh }
+                var rspan = 1.0f64
+                if rsc.kind == 2u8 && rsc.n > 1i32 { rspan = f64(rsc.n) }
+                if rh / rspan > gp.item_min { gp.item_min = rh / rspan }
             }
             rk = l.boxes.items[usize(rk)].next
         }
@@ -9004,6 +9010,7 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         var w = maxf(mn, minf(mx, cw - ib.margin[3usize] - ib.margin[1usize] - horizontal_extras(ib)))
         let (wv, has_w) = resolve_len(is.width, cw)
         if is.width.kind == .Px && has_w { w = to_content_w(l, id, wv) }
+        if is.width.kind == .MinContent { w = mn } else if is.width.kind == .MaxContent { w = mx }
         var hs = -1.0f64
         let (hv, has_h) = resolve_len(is.height, area_h)
         if is.height.kind == .Px && has_h {
