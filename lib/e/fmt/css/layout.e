@@ -7966,14 +7966,16 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
             let (rsc, rec) = item_axis_specs(l.a, bstyle(l, rk), false)
             if flex_in(l, rk) && rsc.kind == 0u8 && rec.kind == 0u8 {
                 let rks = bstyle(l, rk)
-                let (rhv, rhas) = resolve_len(rks.height, avail_h)
-                if rks.height.kind == .Px && rhas {
-                    resolve_edges(l, rk, maxf(avail_w, 0.0f64))
-                    resolve_margins_fixed(l, rk, maxf(avail_w, 0.0f64))
-                    let rbx = bx(l, rk)
-                    let rh = to_content_h(l, rk, rhv) + vertical_extras(rbx) + rbx.margin[0usize] + rbx.margin[2usize]
-                    if rh > gp.item_min { gp.item_min = rh }
-                }
+                resolve_edges(l, rk, maxf(avail_w, 0.0f64))
+                resolve_margins_fixed(l, rk, maxf(avail_w, 0.0f64))
+                let rw = grid_item_width(l, rk, cs, maxf(avail_w, 0.0f64))
+                var rhs = -1.0f64
+                let (rhv, rhas) = resolve_len(rks.height, -1.0f64)
+                if rks.height.kind == .Px && rhas { rhs = to_content_h(l, rk, rhv) }
+                flex_place_item(l, rk, rw, rhs)
+                let rbx = bx(l, rk)
+                let rh = rbx.h + rbx.margin[0usize] + rbx.margin[2usize]
+                if rh > gp.item_min { gp.item_min = rh }
             }
             rk = l.boxes.items[usize(rk)].next
         }
