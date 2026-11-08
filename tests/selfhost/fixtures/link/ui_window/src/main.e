@@ -194,7 +194,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if failure_open_error != ok { os.exit(31i32) }
     var failure = failure_opened
     let (failure_canvas, failure_canvas_error) = window.draw_target(&failure)
-    if failure_canvas_error != ok || scene.render(&renderer, compiled, failure_canvas, geometry.Size { width: 320.0, height: 200.0 }) != ok { os.exit(32i32) }
+    // A scene of its own, drawn into this window's target: the renderer skips a scene it has
+    // already drawn, and a frame that was never drawn leaves the target empty, so `request_frame`
+    // has nothing to offer the presenter and rightly does nothing -- which is not the failure this
+    // section is about.
+    let (failure_builder, failure_builder_error) = scene.builder(a, 4usize)
+    if failure_builder_error != ok { os.exit(32i32) }
+    var failure_scene = failure_builder
+    if scene.push(&failure_scene, scene.Command { FillRect: scene.FillRect { rect: geometry.rect(0.0, 0.0, 320.0, 200.0), brush: paint.Brush { Solid: paint.rgba(0.1, 0.8, 0.1, 1.0) } } }) != ok { os.exit(32i32) }
+    let (failure_compiled, failure_compile_error) = scene.compile(&renderer, scene.finish(&failure_scene))
+    if failure_compile_error != ok { os.exit(32i32) }
+    if failure_canvas_error != ok || scene.render(&renderer, failure_compiled, failure_canvas, geometry.Size { width: 320.0, height: 200.0 }) != ok { os.exit(32i32) }
     fake_present_fails = true
     if window.request_frame(&failure) != ok { os.exit(33i32) }
     fake_present_fails = false
