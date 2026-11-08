@@ -4,6 +4,17 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
+      "id": "C301",
+      "category": "library",
+      "group": "Library",
+      "order": 436,
+      "title": "ui_inputs_v2 draws a disabled field brighter than the 4% overlay it pins",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open, and pre-existing: ui_inputs_v2 is the fixture after gpu_present in the suite, so no run had reached it. It exits 16 at its fourth field, the disabled one, which pins the pixel at the box's left inset to `over(page, style.color(&tokens, .OnSurface), 0.04)` -- page plus four percent of the on-surface ink, where `over` is a plain linear blend and `close_to` allows three of 255. Read out of a temporary probe at that pixel the frame is 248, 249, 255 where the expectation's red is 239, so the drawn tint is brighter and bluer than the four percent overlay by about nine of 255 on red, well outside the tolerance; the neighbouring fields pass, so it is the disabled state specifically. Not from this session's work: rebuilding the fixture against lib/e/gfx/cssvalue.e from before the viewport-unit, transform and colour changes answers exit 16 the same way. Where to look is the disabled tint the widget style lays over the field -- whether it composites `on-surface` at four percent, at the wrong alpha, or under the field's own background rather than over it -- and the blue channel reaching 255 suggests the field's background is not what the fixture assumes. Acceptance: ui_inputs_v2 exits 0."
+    },
+    {
       "id": "C287",
       "category": "library",
       "group": "Library",
