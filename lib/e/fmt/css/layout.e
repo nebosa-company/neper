@@ -8919,7 +8919,10 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         let is = bstyle(l, id)
         let ib = bx(l, id)
         let (mn, mx) = content_widths(l, id)
-        let w = maxf(mn, minf(mx, cw - ib.margin[3usize] - ib.margin[1usize] - horizontal_extras(ib)))
+        var w = maxf(mn, minf(mx, cw - ib.margin[3usize] - ib.margin[1usize] - horizontal_extras(ib)))
+        let (nwv, nhas) = resolve_len(is.width, cw)
+        if is.width.kind == .Px && nhas { w = to_content_w(l, id, nwv) }
+        if is.width.kind == .MinContent { w = mn } else if is.width.kind == .MaxContent { w = mx }
         flex_place_item(l, id, w, -1.0f64)
         let outer = bx(l, id).h + ib.margin[0usize] + ib.margin[2usize]
         g.items[i].rmin = outer
@@ -8927,7 +8930,15 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         i += 1usize
     }
     let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch
-    if ch < 0.0f64 {
+    var intrinsic_rows = false
+    var ir = 0usize
+    while ir < g.nr {
+        let rk0 = g.rows[ir].min.kind
+        let rk1 = g.rows[ir].max.kind
+        if rk0 == 4u8 || rk0 == 5u8 || rk1 == 4u8 || rk1 == 5u8 { intrinsic_rows = true }
+        ir += 1usize
+    }
+    if ch < 0.0f64 || intrinsic_rows {
         let (ex, exe) = mem.alloc[GItem](l.a, g.n * (g.nr + 1usize) + 1usize)
         var exn = 0usize
         if exe == ok {
@@ -8945,7 +8956,7 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
                 xi += 1usize
             }
         }
-        size_tracks(g.rows, g.nr, g.gap_r, ch, ex, exn, false, false, false)
+        size_tracks(g.rows, g.nr, g.gap_r, ch, ex, exn, false, false, ch >= 0.0f64 && stretch_rows)
     } else {
         size_tracks(g.rows, g.nr, g.gap_r, ch, g.items, 0usize, false, false, stretch_rows)
     }
