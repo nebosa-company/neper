@@ -7731,10 +7731,14 @@ fn subgrid_axis(text: str) -> bool {
 }
 
 // A subgrid in an orthogonal writing mode does not share the parent's axes: it is an independent grid.
+// A `grid-lanes` PARENT is not a reason to stop sharing: CSS Grid 3 allows a subgrid inside a lanes container and it
+// still takes its tracks from the lines it spans. Requiring `!lanes` on the parent left those subgrids as independent
+// grids, so their own `width` decided their box and half the parent's track showed through
+// (WPT css/css-grid/grid-lanes/subgrid/grid-subgridded-to-grid-lanes/*, the largest cluster at 134 tests).
 fn subgrid_axes_match(l: *Layout, id: u32) -> bool {
     let p = l.boxes.items[usize(id)].parent
     if p == NONE { ret false }
-    ret bstyle(l, id).writing_mode == bstyle(l, p).writing_mode && !bstyle(l, id).lanes && !bstyle(l, p).lanes
+    ret bstyle(l, id).writing_mode == bstyle(l, p).writing_mode && !bstyle(l, id).lanes
 }
 
 // A grid item that is itself a grid with `subgrid` in an axis takes its tracks from the lines it spans: the parent leaves their
@@ -8459,6 +8463,15 @@ fn grid_item_width(l: *Layout, id: u32, cs: *const style.Style, area_w: f64) -> 
     let extras = horizontal_extras(ib)
     let avail = area_w - ib.margin[3usize] - ib.margin[1usize] - extras
     let (wv, has_w) = resolve_len(is.width, area_w)
+    // A subgrid in the column axis has no width of its own to give: its tracks are the parent's, so a `width` on it is
+    // ignored and the box takes the full area it spans. Without this the subgrid's own width won and the parent's
+    // background showed through the rest of the track (WPT grid-lanes/subgrid/.../column-subgrid-ignores-width-001).
+    if ib.inner == .Grid && subgrid_axes_match(l, id) {
+        let (sct, has_sct) = extra_text(is, "grid-template-columns")
+        if has_sct && subgrid_axis(sct) && just != .Left && just != .Right && just != .Center && just != .Start && just != .End {
+            ret maxf(0.0f64, avail)
+        }
+    }
     if is.width.kind == .Px && has_w { ret maxf(0.0f64, clamp_width(l, id, to_content_w(l, id, wv), area_w)) }
     // An item with a preferred ratio and a definite height takes its width from the ratio rather than stretching.
     if just == .Normal && is.height.kind == .Px && ib.inner != .Replaced && has_box_ratio(l, id) {
