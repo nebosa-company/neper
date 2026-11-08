@@ -7239,8 +7239,36 @@ fn gp_track(gp: *GridParse, tok: str, out: *list.List[GTrack]) -> bool {
 }
 
 // The tokens of a track list; `[name]` groups and `repeat()` are expanded.
+// An `auto-fill`/`auto-fit` repeat is only valid when every other track in the list has a fixed size; otherwise the
+// whole list is invalid and the property computes to `none`.
+fn auto_repeat_list_invalid(gp: *GridParse, toks: []const str) -> bool {
+    var has_auto = false
+    var k = 0usize
+    while k < toks.len {
+        let lt = cv.lower(gp.c.a, cv.trim_ws(toks[k]))
+        if str.starts_with(lt, "repeat(auto-fill") || str.starts_with(lt, "repeat(auto-fit") { has_auto = true }
+        k += 1usize
+    }
+    if !has_auto { ret false }
+    k = 0usize
+    while k < toks.len {
+        let lt = cv.lower(gp.c.a, cv.trim_ws(toks[k]))
+        k += 1usize
+        if lt.len == 0usize || lt[0usize] == 91u8 || str.starts_with(lt, "repeat(") { continue }
+        let (probe, pe) = list.init[GTrack](gp.c.a, 1usize)
+        if pe != ok { continue }
+        var pl = probe
+        if !gp_track(gp, lt, &pl) || pl.len == 0usize { continue }
+        let pk0 = pl.items[0usize].min.kind
+        let pk1 = pl.items[0usize].max.kind
+        if pk0 > 1u8 || pk1 > 1u8 { ret true }
+    }
+    ret false
+}
+
 fn gp_list(gp: *GridParse, text: str, out: *list.List[GTrack], names: *list.List[GName]) {
     let toks = grid_split(gp.c.a, text)
+    if auto_repeat_list_invalid(gp, toks) { ret }
     var i = 0usize
     while i < toks.len {
         let tok = toks[i]
