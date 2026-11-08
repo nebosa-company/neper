@@ -9923,7 +9923,7 @@ $vulkanBufferTest = & $compiler test-file (Join-Path $repo 'lib\e\gpu\vulkan.e')
 if ($LASTEXITCODE -ne 0 -or ($vulkanBufferTest -join "`n") -notmatch '"passed":4,"failed":0') { throw 'Vulkan buffer rollback regression test failed' }
 # The workgroup-size guard is pure arithmetic, so it runs without a GPU loader.
 $gpuWorkgroupTest = & $compiler test-file (Join-Path $repo 'lib\e\gpu.e') $repo 'x64' 'windows' $testBuild --json
-if ($LASTEXITCODE -ne 0 -or ($gpuWorkgroupTest -join "`n") -notmatch '"passed":1,"failed":0') { throw 'GPU workgroup-size overflow regression test failed' }
+if ($LASTEXITCODE -ne 0 -or ($gpuWorkgroupTest -join "`n") -notmatch '"name":"workgroup_dimensions_do_not_wrap"[^\n]*"outcome":"passed"' -or ($gpuWorkgroupTest -join "`n") -notmatch '"failed":0,') { throw 'GPU workgroup-size overflow regression test failed' }
 $testActual = Join-Path $testBuild 'conformance-tools-test.jsonl'
 cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test.e')`" `"$repo`" x64 windows `"$($testBuild.Replace('\', '/'))`" --json > `"$testActual`""
 if ($LASTEXITCODE -ne 1) { throw "test --json exited $LASTEXITCODE, expected 1" }
