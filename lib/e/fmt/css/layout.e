@@ -7960,6 +7960,24 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
         gp_list(&gp, ctext, &ctr, &cnames)
     }
     gp.item_min = 0.0f64
+    if cs.lanes {
+        var rk = l.boxes.items[usize(b)].first
+        while rk != NONE {
+            let (rsc, rec) = item_axis_specs(l.a, bstyle(l, rk), false)
+            if flex_in(l, rk) && rsc.kind == 0u8 && rec.kind == 0u8 {
+                let rks = bstyle(l, rk)
+                let (rhv, rhas) = resolve_len(rks.height, avail_h)
+                if rks.height.kind == .Px && rhas {
+                    resolve_edges(l, rk, maxf(avail_w, 0.0f64))
+                    resolve_margins_fixed(l, rk, maxf(avail_w, 0.0f64))
+                    let rbx = bx(l, rk)
+                    let rh = to_content_h(l, rk, rhv) + vertical_extras(rbx) + rbx.margin[0usize] + rbx.margin[2usize]
+                    if rh > gp.item_min { gp.item_min = rh }
+                }
+            }
+            rk = l.boxes.items[usize(rk)].next
+        }
+    }
     gp.gap = g.gap_r
     gp.avail = avail_h
     let (rtext, has_rt) = extra_text(cs, "grid-template-rows")
