@@ -2561,8 +2561,8 @@ fn activation_of(a: *mem.Arena, args: []const str) -> Activation {
     if first.len == 0usize { ret activation }
     let first_letter = (first[0usize] >= 97u8 && first[0usize] <= 122u8) || (first[0usize] >= 65u8 && first[0usize] <= 90u8)
     if !first_letter { ret activation }
-    // `C:\dir\app.exe` is a drive path, not a URL scheme.
-    if first.len >= 2usize && first[1usize] == 58u8 {
+    // `C:\dir\app.exe` and `C:/dir` are drive paths, not URL schemes; `x:open` is a one-letter scheme.
+    if first.len >= 2usize && first[1usize] == 58u8 && (first.len == 2usize || first[2usize] == 92u8 || first[2usize] == 47u8) {
         let (info, stat_error) = os.stat(a, first)
         if stat_error == ok {
             activation.kind = .File
