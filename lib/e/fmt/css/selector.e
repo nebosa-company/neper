@@ -462,7 +462,10 @@ fn attribute_from_inner(p: *const Parser, inner: []const syntax.Token) -> (Simpl
         idx += 2usize
     }
     if idx >= inner.len || inner[idx].kind != .Ident { ret (none, false) }
-    let name = inner[idx].value
+    // An attribute name is a name, so it is lowercased like a type, a pseudo-class or a
+    // pseudo-element; only attribute values and class names keep their case. `[HREF]` and
+    // `[href]` name the same HTML attribute, and the reference implementations say so.
+    let name = lower(p, inner[idx].value)
     idx += 1usize
     idx = skip_ws(inner, idx)
     if idx >= inner.len { ret (new_simple(.AttrPresent, name), true) }

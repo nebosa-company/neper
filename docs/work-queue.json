@@ -4,6 +4,17 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
+      "id": "C285",
+      "category": "library",
+      "group": "Library",
+      "order": 420,
+      "title": "text_css_selector: a segment opening with a combinator is dropped by both parsers",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. With C284 landed, text_css_selector passes its first vector chunk and stops at the third, exit 3. The case is src `:has(> img)[a*=b] + :placeholder:first-letter::after aSpan::,  + [a=\"b\"i]` whose reference answer keeps one selector, an attrEquals on `a` with the `i` flag; the library answers an empty list, so both comma-separated segments were dropped rather than only the first. The first segment is invalid for several reasons and is meant to go; the second begins with a leading combinator `+` after the comma, which the reference apparently still accepts as its subject `[a=\"b\"i]`. So the question is whether a segment that starts with a combinator is dropped (the parser's current reading, and what lib/e/fmt/css/selector.e's header describes -- a selector it cannot represent is dropped rather than failing the list) or has the combinator ignored. Everything after this case is unmeasured, since the fixture stops at the first mismatch. Acceptance: the fixture's vector chunks through vectors_2 agree with the reference, and the rest of the matrix runs to completion."
+    },
+    {
       "id": "C104",
       "category": "compiler",
       "group": "NeperOS",
