@@ -240,7 +240,11 @@ fn normalize(a: *mem.Arena, path: str, style: Style) -> (str, err) {
                     continue
                 }
             }
-            if written > 0usize && !is_separator(buffer[written - 1usize], style) {
+            // A separator goes between components, and after a UNC share root (`\\srv\share`),
+            // which does not end in one; never after a drive-relative root, whose `C:foo` is
+            // not `C:\foo`.
+            let after_unc_root = written == body_start && root > 2usize && style == .Windows && is_separator(path[0usize], style) && is_separator(path[1usize], style)
+            if (written > body_start || after_unc_root) && written > 0usize && !is_separator(buffer[written - 1usize], style) {
                 buffer[written] = separator(style)
                 written += 1usize
             }
