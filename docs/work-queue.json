@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C297",
-      "category": "library",
-      "group": "Library",
-      "order": 432,
-      "title": "net_ftp: the explicit-TLS session fails its AUTH TLS handshake",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open, and pre-existing: it is the fixture after fmt_encode in the suite, so no run had reached it. net_ftp exits 44 and prints nothing. That code is not the fixture's own -- it reports a spawned server's exit through `if job.failure != 0i32 { os.exit(job.failure) }` -- and the server side returns 44 at `if ftp.auth_tls(&c, config) != ok || !c.secured || !c.protected || c.broken { ret 44i32 }`, so the explicit-TLS session is the one failing: either the AUTH TLS handshake itself errors, or the connection afterwards does not report itself secured and protected as the fixture expects. The plain, PASV-fallback and parser halves of the fixture are not implicated, since it reaches this one. The next step is to know which of those four conditions holds, by reporting them separately. Acceptance: net_ftp exits 0 and prints net ftp ok, with the FTPS session secured and protected."
-    },
-    {
       "id": "C287",
       "category": "library",
       "group": "Library",

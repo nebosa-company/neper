@@ -288,12 +288,15 @@ fn auth_tls(s: *Session, config: tls.ClientConfig) -> err {
     s.config = config
     s.at = 0usize
     s.len = 0usize
+    // The writers are the TLS ones now, so the plaintext-only guard has done its work: leaving it
+    // set made `exchange` answer `Closed` to every command from here on, which is PBSZ and PROT --
+    // the handshake would succeed and the session would then always fail.
+    s.broken = false
     let (_, pbsz_error) = simple(s, "PBSZ", "0", 2u16)
     if pbsz_error != ok { ret pbsz_error }
     let (_, prot_error) = simple(s, "PROT", "P", 2u16)
     if prot_error != ok { ret prot_error }
     s.protected = true
-    s.broken = false
     ret ok
 }
 
