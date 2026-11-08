@@ -10072,6 +10072,8 @@ expected_bitset_surface='BitSet
 TooSmall
 init
 len
+padding_mask
+normalize
 clear_all
 fill_all
 get

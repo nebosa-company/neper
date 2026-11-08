@@ -10425,7 +10425,7 @@ $bitsetSurface = Get-Content (Join-Path $repo 'lib\e\algo\bitset.e') |
         if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.algo.bitset contains an unreadable public declaration' }
         $Matches[1]
     }
-$expectedBitsetSurface = @('BitSet', 'TooSmall', 'init', 'len', 'clear_all', 'fill_all', 'get', 'set', 'unset', 'toggle', 'count', 'first_set', 'next_set', 'union_in_place', 'intersect_in_place', 'difference_in_place', 'complement_in_place', 'is_subset', 'eq', 'intersect', 'union_into', 'difference')
+$expectedBitsetSurface = @('BitSet', 'TooSmall', 'init', 'len', 'padding_mask', 'normalize', 'clear_all', 'fill_all', 'get', 'set', 'unset', 'toggle', 'count', 'first_set', 'next_set', 'union_in_place', 'intersect_in_place', 'difference_in_place', 'complement_in_place', 'is_subset', 'eq', 'intersect', 'union_into', 'difference')
 if (($bitsetSurface -join "`n") -ne ($expectedBitsetSurface -join "`n")) { throw 'e.algo.bitset public declarations differ from module-apis.md' }
 $bitsetParsed = & $compiler parse-file (Join-Path $repo 'lib\e\algo\bitset.e')
 if ($LASTEXITCODE -ne 0 -or $bitsetParsed -ne 'parse file ok') { throw 'e.algo.bitset failed CLI parsing' }
