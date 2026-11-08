@@ -1662,9 +1662,11 @@ fn token_queue(token_value: Token) -> (*QueueState, err) {
         ret (zero, InvalidHandle)
     }
     let state = found.queue_states[usize(token_value.queue)]
-    // A token must name a submission that happened: serials start at 1, so 0 or
-    // anything past the queue's latest serial names no work.
-    if mem.address_of(state) == 0usize || token_value.serial == 0u64 || token_value.serial > state.serial {
+    // A token names the queue's state at some point, and serial 0 is the point before the first
+    // submission: `token()` on a queue that has not launched anything answers exactly that, so it
+    // is a dependency on nothing, which every wait finds already satisfied. Anything past the
+    // queue's latest serial still names work that has not happened and is refused.
+    if mem.address_of(state) == 0usize || token_value.serial > state.serial {
         unlock_state(found)
         ret (zero, InvalidHandle)
     }

@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C298",
-      "category": "library",
-      "group": "Library",
-      "order": 433,
-      "title": "a token from a fresh queue is refused where the fixture expects it to name nothing done",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open, and pre-existing: gpu_cpu is the fixture after net_ftp in the suite. It exits 90 at its first token check; splitting the four conditions shows done() itself answering an error. gpu.done goes through token_queue, which refuses `token_value.serial == 0u64` outright -- its comment says 'serials start at 1, so 0 or anything past the queue's latest serial names no work' -- while gpu.token on a queue that has not submitted anything returns exactly serial 0, which the fixture asserts (`before.serial != 0` is its own earlier failure at exit 13) before asking that done, wait and wait_for all answer cleanly. So the two disagree about whether the token a fresh queue hands out names anything, and neither the fixture nor the module has changed: the module's rule and its own token() are what conflict. The choice is whether token_queue accepts serial 0 when the queue's own serial is 0 (a dependency on nothing, which every wait should find already satisfied), or whether token() should hand out a serial that names the next submission, in which case the fixture's expectation needs rewriting. Acceptance: gpu_cpu exits 0 and prints gpu cpu ok."
-    },
-    {
       "id": "C287",
       "category": "library",
       "group": "Library",
