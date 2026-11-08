@@ -35,7 +35,10 @@ enum {
     NP_OK = 0, NP_NOT_FOUND = 2, NP_DENIED = 3, NP_EXISTS = 4,
     NP_INTERRUPTED = 5, NP_OUT_OF_MEMORY = 6, NP_FAILED = 7,
     NP_TIMEOUT = 8, NP_WOULD_BLOCK = 9, NP_UNSUPPORTED = 10,
-    NP_EXHAUSTED = 11, NP_INVALID = 12
+    NP_EXHAUSTED = 11, NP_INVALID = 12,
+    /* mem.Exhausted: the compiler declares it right after the eleven os errors (codes 2 to 12),
+       so its code is 13; install_mem_intrinsics in neper.c takes the next free code. */
+    NP_MEM_EXHAUSTED = 13
 };
 
 /* `os.copy_bytes` (D329): as many bytes as the shorter slice holds, forwards. */
@@ -211,7 +214,7 @@ void neper_mem_alloc(void *result, NpArena *arena, size_t count,
     *(uint32_t *)(out + 16) = NP_OK;
     if (!arena || arena->off > arena->cap || (!arena->base && arena->cap) ||
         !alignment || (alignment & (alignment - 1))) {
-        *(uint32_t *)(out + 16) = NP_EXHAUSTED;
+        *(uint32_t *)(out + 16) = NP_MEM_EXHAUSTED;
         return;
     }
     if (count == 0) {
@@ -219,13 +222,13 @@ void neper_mem_alloc(void *result, NpArena *arena, size_t count,
         return;
     }
     if (element_size && count > SIZE_MAX / element_size) {
-        *(uint32_t *)(out + 16) = NP_EXHAUSTED;
+        *(uint32_t *)(out + 16) = NP_MEM_EXHAUSTED;
         return;
     }
     bytes = count * element_size;
     allocation = np_arena_alloc(arena, bytes, alignment);
     if (!allocation && bytes) {
-        *(uint32_t *)(out + 16) = NP_EXHAUSTED;
+        *(uint32_t *)(out + 16) = NP_MEM_EXHAUSTED;
         return;
     }
     *(void **)out = allocation;
