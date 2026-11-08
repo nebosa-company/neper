@@ -3533,6 +3533,13 @@ fn index_project_command(a: *mem.Arena, args: []str) -> err {
     ret ok
 }
 
+// `x/android/` holds modules for an Android app, which is a Linux target whose `os` carries
+// the window host they install: on another OS they name what `os` lacks, so they are not
+// in that program.
+fn android_only_elsewhere(rel: str, target_os: str) -> bool {
+    ret rel.len > 10usize && same(rel[0usize..10usize], "x/android/") && !same(target_os, "linux")
+}
+
 // The toolchain's `lib` for `index --all` (T009), appended after the project's modules:
 // its paths relative to that `lib`, as `toolchain-lib` spells them, without the other
 // target's variants and without a module the project's own `lib` defines.
@@ -3546,7 +3553,7 @@ fn walk_toolchain(a: *mem.Arena, args: []str, paths: []str, rels: []str, count: 
     var kept = start
     var at = start
     while at < *count {
-        var shadowed = variant_of_other_target(rels[at], args[4usize], args[5usize])
+        var shadowed = variant_of_other_target(rels[at], args[4usize], args[5usize]) || android_only_elsewhere(rels[at], args[5usize])
         var project_at = 0usize
         while !shadowed && project_at < project_count {
             let own = rels[project_at]
@@ -7068,8 +7075,18 @@ fn ends_with_text(text: str, suffix: str) -> bool {
     ret same(text[text.len - suffix.len..text.len], suffix)
 }
 
+// A helper module only one host's variant imports, named for that host (`win_heap.e`, which
+// `os.windows.e` imports): the host's own, as its variant is.
+// ponytail: a name prefix, not the import graph; a host-only helper must be named `win_`.
+fn host_private_path(path: str) -> bool {
+    var base = path.len
+    while base > 0usize && path[base - 1usize] != 47u8 { base = base - 1usize }
+    ret path.len >= base + 4usize && path[base] == 119u8 && path[base + 1usize] == 105u8 && path[base + 2usize] == 110u8 && path[base + 3usize] == 95u8
+}
+
 // A per-target variant of a module's file, `os.windows.e` beside `os.linux.e`.
 fn host_variant_path(path: str) -> bool {
+    if host_private_path(path) { ret true }
     if ends_with_text(path, ".windows.e") { ret true }
     if ends_with_text(path, ".linux.e") { ret true }
     if ends_with_text(path, ".macos.e") { ret true }
@@ -7096,8 +7113,10 @@ fn host_variant_modules(a: *mem.Arena, left: str, right: str) -> (str, err) {
             if host_variant_path(path) {
                 // Without the `.e`, then without the `.<os>` before it.
                 var stop = path.len - 2usize
-                while stop > 0usize && path[stop - 1usize] != 46u8 { stop = stop - 1usize }
-                if stop > 0usize { stop = stop - 1usize }
+                if !host_private_path(path) {
+                    while stop > 0usize && path[stop - 1usize] != 46u8 { stop = stop - 1usize }
+                    if stop > 0usize { stop = stop - 1usize }
+                }
                 var i = 0usize
                 while i < stop {
                     var byte = path[i]
