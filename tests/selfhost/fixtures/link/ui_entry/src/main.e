@@ -290,8 +290,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let fruit_field = testing.by_key(&harness, 10u64)
     let fruit_popup = testing.by_key(&harness, 11u64)
     let (fruit_field_bounds, has_fruit_field) = widget.bounds_of(&runtime, fruit_field.element)
+    // The anchor is the editor, 16 in from the field: the list spans the whole field, 16 out each side. The combo's editor stops short of its chevron, so only its popup is compared (same field, same list).
     let (fruit_popup_bounds, has_fruit_popup) = widget.bounds_of(&runtime, fruit_popup.element)
-    if fruit_field.count != 1usize || fruit_popup.count != 1usize || !has_fruit_field || !has_fruit_popup || !near(fruit_field_bounds.width, fruit_popup_bounds.width) { os.exit(53i32) }
+    if fruit_field.count != 1usize || fruit_popup.count != 1usize || !has_fruit_field || !has_fruit_popup || !near(fruit_field_bounds.width + 32.0, fruit_popup_bounds.width) || !near(fruit_field_bounds.x - 16.0, fruit_popup_bounds.x) { os.exit(53i32) }
     let (fruit_at, has_fruit_at) = centre_of(&harness, &runtime, 10u64)
     if !has_fruit_at || testing.tap(&harness, fruit_at.x, fruit_at.y) != ok { os.exit(25i32) }
     if testing.press_key(&harness, 40u32, zero) != ok || logs[0usize].activations != 1usize || logs[0usize].active != 1usize { os.exit(26i32) }
@@ -315,7 +316,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let combo_popup = testing.by_key(&harness, 22u64)
     let (combo_field_bounds, has_combo_field) = widget.bounds_of(&runtime, combo_field.element)
     let (combo_popup_bounds, has_combo_popup) = widget.bounds_of(&runtime, combo_popup.element)
-    if !has_combo_field || !has_combo_popup || !near(combo_field_bounds.width, combo_popup_bounds.width) { os.exit(54i32) }
+    if !has_combo_field || !has_combo_popup || !near(fruit_popup_bounds.width, combo_popup_bounds.width) || !near(combo_field_bounds.x - 16.0, combo_popup_bounds.x) { os.exit(54i32) }
     let (colour_at, has_colour) = centre_of(&harness, &runtime, 20u64)
     if !has_colour || testing.tap(&harness, colour_at.x, colour_at.y) != ok || testing.press_key(&harness, 13u32, zero) != ok || logs[0usize].picks != 3usize || logs[0usize].last_pick != 1usize { os.exit(35i32) }
     // The token field (the combo's list closed again): two chips; the second's
