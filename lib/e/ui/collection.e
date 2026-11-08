@@ -4803,7 +4803,7 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         layer_count += 1usize
     }
     if state.editing && !state.disabled {
-        let (fires, fires_error) = mem.alloc[GridFire](a, 2usize)
+        let (fires, fires_error) = mem.alloc[GridFire](a, 6usize)
         if fires_error != ok { ret (zero, TooLarge) }
         var committed = state
         committed.editing = false
@@ -4813,6 +4813,44 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         let no_focus = control.FocusTo { runtime: t.runtime, key: 0u64 }
         fires[0usize] = GridFire { event: GridEvent { kind: .Commit, row: state.row, column: state.column, next: committed, text: "" }, change: change, to: no_focus }
         fires[1usize] = GridFire { event: GridEvent { kind: .Type, row: state.row, column: state.column, next: state, text: "" }, change: change, to: no_focus }
+        // The modal overlay's own Escape is its dismiss, a commit; the editor's scope takes Enter and Escape first (commit, cancel).
+        var cancelled = state
+        cancelled.editing = false
+        cancelled.anchor_row = state.row
+        cancelled.anchor_column = state.column
+        fires[2usize] = GridFire { event: GridEvent { kind: .Cancel, row: state.row, column: state.column, next: cancelled, text: "" }, change: change, to: no_focus }
+        // Tab and Shift+Tab commit and walk the cells in reading order, wrapping; Shift+Enter commits and goes up a row.
+        var forward = committed
+        var backward = committed
+        var upward = committed
+        if columns.len > 0usize && total > 0usize {
+            let flat = state.row * columns.len + state.column
+            let count = total * columns.len
+            let after = (flat + 1usize) % count
+            let before = (flat + count - 1usize) % count
+            forward.row = after / columns.len
+            forward.column = after % columns.len
+            backward.row = before / columns.len
+            backward.column = before % columns.len
+        }
+        upward.row = state.row
+        if state.row > 0usize { upward.row = state.row - 1usize }
+        forward.anchor_row = forward.row
+        forward.anchor_column = forward.column
+        backward.anchor_row = backward.row
+        backward.anchor_column = backward.column
+        upward.anchor_row = upward.row
+        upward.anchor_column = upward.column
+        fires[3usize] = GridFire { event: GridEvent { kind: .Commit, row: state.row, column: state.column, next: forward, text: "" }, change: change, to: no_focus }
+        fires[4usize] = GridFire { event: GridEvent { kind: .Commit, row: state.row, column: state.column, next: backward, text: "" }, change: change, to: no_focus }
+        fires[5usize] = GridFire { event: GridEvent { kind: .Commit, row: state.row, column: state.column, next: upward, text: "" }, change: change, to: no_focus }
+        let (editor_keys, editor_keys_error) = mem.alloc[widget.Shortcut](a, 3usize)
+        if editor_keys_error != ok { ret (zero, TooLarge) }
+        var shifted: input.Modifiers = zero
+        shifted.shift = true
+        editor_keys[0usize] = widget.Shortcut { key: 9u32, modifiers: zero, action: widget.Submit { ctx: ctx_of(&fires[3usize]), invoke: grid_fire } }
+        editor_keys[1usize] = widget.Shortcut { key: 9u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&fires[4usize]), invoke: grid_fire } }
+        editor_keys[2usize] = widget.Shortcut { key: 13u32, modifiers: shifted, action: widget.Submit { ctx: ctx_of(&fires[5usize]), invoke: grid_fire } }
         let (look, look_error) = control.text_style(a, t, .BodyMedium)
         if look_error != ok { ret (zero, look_error) }
         let line = style.text_style(t.tokens, .BodyMedium).line_height
@@ -4827,7 +4865,10 @@ fn data_grid_of(a: *mem.Arena, key: widget.Key, t: *const control.Theme, label: 
         edits[0usize] = widget.edit(key + 2u64, widget.Edit { buffer: draft, len: state.len, style: look, color: style.color(t.tokens, .OnSurface), selection: style.color(t.tokens, .TextSelection), change: widget.Change[str] { ctx: ctx_of(&fires[1usize]), invoke: grid_typed }, submit: zero, enabled: true, read_only: false, multiline: false, secret: false, marked: zero, caret: style.color(t.tokens, .Primary), untabbed: false, ringed: false }, editor_style)
         let (named_cell, named_cell_error) = control.named_editor(a, key + 2u64, label, "", false, editor_style, edits[0usize])
         if named_cell_error != ok { ret (zero, named_cell_error) }
-        edits[0usize] = named_cell
+        let (named, named_error) = mem.alloc[widget.Node](a, 1usize)
+        if named_error != ok { ret (zero, TooLarge) }
+        named[0usize] = named_cell
+        edits[0usize] = widget.scope(0u64, widget.Scope { traps_focus: false, shortcuts: editor_keys[0usize..3usize], default_action: widget.Submit { ctx: ctx_of(&fires[0usize]), invoke: grid_fire }, cancel_action: widget.Submit { ctx: ctx_of(&fires[2usize]), invoke: grid_fire }, keys: zero }, style.defaults(), named[0usize..1usize])
         layers[layer_count] = widget.overlay(0u64, widget.Overlay { anchor: key + 1u64, placement: .TopCenter, offset: zero, modal: true, dismiss: widget.Submit { ctx: ctx_of(&fires[0usize]), invoke: grid_fire } }, style.defaults(), edits[0usize..1usize])
         layer_count += 1usize
     }
