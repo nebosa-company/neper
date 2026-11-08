@@ -556,7 +556,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if mysql.version() < 50700usize { os.exit(2i32) }
     let (port, port_error) = str.parse_u64(args[1])
     if port_error != ok || port > 65535u64 { os.exit(3i32) }
-    let options = mysql.Options { host: "127.0.0.1", port: u16(port), user: "root", password: "", database: "neper" }
+    let options = mysql.Options { host: "127.0.0.1", port: u16(port), user: "root", password: "", database: "neper", ssl_mode: .Default, ssl_ca: "" }
     let (conn0, open_error) = mysql.open(a, options)
     if open_error != ok { os.exit(4i32) }
     var c = conn0
