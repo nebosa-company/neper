@@ -4,7 +4,7 @@
 |---|---|
 | category | library / macOS |
 | score | 0.20 of 1 |
-| queue position | 11 of 225 (only position 1 is eligible for the next session; see README) |
+| queue position | 10 of 224 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
