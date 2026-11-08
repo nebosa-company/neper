@@ -130,7 +130,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let left = [8]u32{ 0u32, 1u32, 0u32, 2u32, 3u32, 2u32, 3u32, 5u32 }
     let right = [8]u32{ 0u32, 0u32, 1u32, 0u32, 0u32, 4u32, 0u32, 6u32 }
     let (f, build_error) = bdd.build(&b, kind[..], left[..], right[..], 7u32, keys[..], values[..])
-    if build_error != ok || bdd.count(&b, f) != 8u64 { os.exit(5i32) }
+    var bdd_counts: [2048]u64 = zero
+    let (models, count_error) = bdd.count(&b, f, bdd_counts[..])
+    if build_error != ok || count_error != ok || models != 8u64 { os.exit(5i32) }
     let truth = [16]u8{ 1u8, 0u8, 0u8, 1u8, 1u8, 0u8, 0u8, 1u8, 1u8, 0u8, 0u8, 1u8, 1u8, 0u8, 1u8, 0u8 }
     var assignment: [4]bool = zero
     var mask = 0usize
