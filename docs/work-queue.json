@@ -4,6 +4,17 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
+      "id": "C291",
+      "category": "library",
+      "group": "Library",
+      "order": 426,
+      "title": "color-mix in xyz-d50 with a translucent operand differs from the reference",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. With C288-C290 landed gfx_cssvalue runs to its twenty-fifth vector chunk and stops on `color-mix(in xyz-d50, #80808080 100%, black 30%)`, whose reference answer is 2641457521 -- ARGB 9D 71 71 71, a neutral grey. The alpha agrees with what the shared formula gives: 0.502*0.769 + 1*0.231 = 0.617, which is 0x9D, and the weights are the percentages normalised over their 130 total. So the difference is in the colour channels, and the places to look are to_space_coords/from_space_coords for xyz-d50 (whether the conversion and its white point match the reference's) and the premultiplied blend in mix_in_space, which divides by the summed alpha and is otherwise the textbook formula. Everything after this chunk is unmeasured, since the fixture stops at the first mismatch. Acceptance: gfx_cssvalue runs to completion and its remaining cases agree with the reference."
+    },
+    {
       "id": "C287",
       "category": "library",
       "group": "Library",

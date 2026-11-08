@@ -955,7 +955,10 @@ fn match_length(s: str) -> (str, str, bool) {
 }
 
 fn length_unit_known(u: str) -> bool {
-    ret str.eq(u, "px") || str.eq(u, "pt") || str.eq(u, "pc") || str.eq(u, "em") || str.eq(u, "rem") || str.eq(u, "ex") || str.eq(u, "ch") || str.eq(u, "ic") || str.eq(u, "cap") || str.eq(u, "lh") || str.eq(u, "rlh") || str.eq(u, "vw") || str.eq(u, "vh") || str.eq(u, "vmin") || str.eq(u, "vmax") || str.eq(u, "cm") || str.eq(u, "mm") || str.eq(u, "in") || str.eq(u, "q") || str.eq(u, "%")
+    // The dynamic, small and large viewport units and the inline/block ones fold onto the viewport
+    // axis they measure, which is what the reference does: dvw/svw/lvw/vi are vw, dvh/svh/lvh/vb
+    // are vh.
+    ret str.eq(u, "px") || str.eq(u, "pt") || str.eq(u, "pc") || str.eq(u, "em") || str.eq(u, "rem") || str.eq(u, "ex") || str.eq(u, "ch") || str.eq(u, "ic") || str.eq(u, "cap") || str.eq(u, "lh") || str.eq(u, "rlh") || str.eq(u, "vw") || str.eq(u, "vh") || str.eq(u, "vmin") || str.eq(u, "vmax") || str.eq(u, "cm") || str.eq(u, "mm") || str.eq(u, "in") || str.eq(u, "q") || str.eq(u, "%") || str.eq(u, "dvw") || str.eq(u, "svw") || str.eq(u, "lvw") || str.eq(u, "vi") || str.eq(u, "dvh") || str.eq(u, "svh") || str.eq(u, "lvh") || str.eq(u, "vb")
 }
 
 fn unit_length(value: f64, unit: str) -> (CssLength, bool) {
@@ -979,7 +982,15 @@ fn unit_length(value: f64, unit: str) -> (CssLength, bool) {
     if str.eq(unit, "pc") { ret (plain_length(value * 16.0f64, .Px), true) }
     if str.eq(unit, "%") { ret (plain_length(value, .Percent), true) }
     if str.eq(unit, "vw") { ret (plain_length(value, .Vw), true) }
+    if str.eq(unit, "dvw") { ret (plain_length(value, .Vw), true) }
+    if str.eq(unit, "svw") { ret (plain_length(value, .Vw), true) }
+    if str.eq(unit, "lvw") { ret (plain_length(value, .Vw), true) }
+    if str.eq(unit, "vi") { ret (plain_length(value, .Vw), true) }
     if str.eq(unit, "vh") { ret (plain_length(value, .Vh), true) }
+    if str.eq(unit, "dvh") { ret (plain_length(value, .Vh), true) }
+    if str.eq(unit, "svh") { ret (plain_length(value, .Vh), true) }
+    if str.eq(unit, "lvh") { ret (plain_length(value, .Vh), true) }
+    if str.eq(unit, "vb") { ret (plain_length(value, .Vh), true) }
     if str.eq(unit, "vmin") { ret (plain_length(value, .Vmin), true) }
     if str.eq(unit, "vmax") { ret (plain_length(value, .Vmax), true) }
     if str.eq(unit, "lh") { ret (plain_length(value, .Lh), true) }
@@ -2433,7 +2444,10 @@ fn parse_color_mix(a: *mem.Arena, raw: str, has_current: bool, current: u32) -> 
     if !mix_space_known(space) { ret (0u32, false) }
     var method = "shorter"
     if head.len == 4usize {
-        if !str.eq(head.items[3], "hue") || hue_index(space) < 0i64 { ret (0u32, false) }
+        // `in <space> <method> hue` names a hue method. It only means anything for a polar space:
+        // in a rectangular one the channels mix linearly and the method is ignored, so naming one
+        // is not an error -- `color-mix(in srgb longer hue, ...)` is the plain sRGB mix.
+        if !str.eq(head.items[3], "hue") { ret (0u32, false) }
         let named = head.items[2]
         if !(str.eq(named, "shorter") || str.eq(named, "longer") || str.eq(named, "increasing") || str.eq(named, "decreasing")) { ret (0u32, false) }
         method = named
@@ -2740,13 +2754,19 @@ fn parse_transform(a: *mem.Arena, raw: str) -> ([6]f64, bool) {
     var m = identity()
     let funcs = transform_functions(a, s)
     if funcs.len == 0usize { ret (identity(), false) }
+    // A function the parser does not know is passed over, and the transform holds if any other
+    // function applied -- the reference's `if (f == null) continue; m = mul(...); any = true`.
+    var any = false
     var i = 0usize
     while i < funcs.len {
         let (f, good) = transform_func(a, funcs[i].name, funcs[i].args)
-        if !good { ret (identity(), false) }
-        m = affine_mul(m, f)
+        if good {
+            m = affine_mul(m, f)
+            any = true
+        }
         i += 1usize
     }
+    if !any { ret (identity(), false) }
     ret (m, true)
 }
 
