@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-C301	library	0	1200	ui_inputs_v2 draws a disabled field brighter than the 4% overlay it pins	Open, and pre-existing: ui_inputs_v2 is the fixture after gpu_present in the suite, so no run had reached it.
+C301	library	0	2363	ui_inputs_v2 draws a disabled field brighter than the 4% overlay it pins	Open, and pre-existing: ui_inputs_v2 is the fixture after gpu_present in the suite, so no run had reached it.
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU
