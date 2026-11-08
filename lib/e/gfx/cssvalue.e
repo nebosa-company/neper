@@ -2757,19 +2757,17 @@ fn parse_transform(a: *mem.Arena, raw: str) -> ([6]f64, bool) {
     var m = identity()
     let funcs = transform_functions(a, s)
     if funcs.len == 0usize { ret (identity(), false) }
-    // A function the parser does not know is passed over, and the transform holds if any other
-    // function applied -- the reference's `if (f == null) continue; m = mul(...); any = true`.
-    var any = false
+    // One function the parser cannot represent makes the whole list invalid, as the CSS grammar
+    // says and as css_paint pins (`translate(10px,20px) bogus(1)` gives no transform at all). The
+    // Vaper reference skips an unknown function and keeps the rest; gfx_cssvalue records that as a
+    // known difference.
     var i = 0usize
     while i < funcs.len {
         let (f, good) = transform_func(a, funcs[i].name, funcs[i].args)
-        if good {
-            m = affine_mul(m, f)
-            any = true
-        }
+        if !good { ret (identity(), false) }
+        m = affine_mul(m, f)
         i += 1usize
     }
-    if !any { ret (identity(), false) }
     ret (m, true)
 }
 
