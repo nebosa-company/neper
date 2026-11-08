@@ -547,11 +547,13 @@ fn presentational_hints(m: *const match.Matcher, el: html.NodeId) -> ([]const De
     let (dir_raw, have_dir) = trimmed_attr(m, el, "dir")
     if have_dir {
         let dir = match.lower(a, dir_raw)
+        // `dir` maps to `direction` only when it names one: the reference this module is pinned
+        // against (`style_resolver.dart`: `if (dir == 'rtl' || dir == 'ltr')`) does not implement
+        // `dir=auto`, so neither does this -- a table with `dir="auto"` gets the same winning set
+        // from both engines. `auto_direction` below is what it would take; wire it in when the
+        // reference gains it.
         if str.eq(dir, "rtl") || str.eq(dir, "ltr") {
             try push_hint(&out, "direction", dir)
-        } else if str.eq(dir, "auto") {
-            let (auto_dir, has_auto) = auto_direction(m, el)
-            if has_auto { try push_hint(&out, "direction", auto_dir) }
         }
     }
     if one_of(tag, "body", "table", "tr", "td", "th", "thead", "tbody", "tfoot") {

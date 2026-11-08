@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "C294",
-      "category": "library",
-      "group": "Library",
-      "order": 429,
-      "title": "text_css_cascade disagrees with its expectation at the fourth element of a table case",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open, and pre-existing: it is the fixture after gfx_cssvalue in the suite, so no run had reached it before. It answers exit 1 with 'FAIL element index 4 tag table' followed by 'FAIL case' -- the computed cascade for the fifth element of some vector (a table) does not match the case's expectation. Not caused by the selector or cssvalue work: rebuilding it against lib/e/fmt/css/selector.e from before the attribute-lowercase and leading-combinator changes, and against lib/e/gfx/cssvalue.e from before the viewport-unit, transform and colour changes, both still answer exit 1 with the same message, and reversing those changes one at a time on top of HEAD changes nothing. The fixture prints one 'rule <matched> <condition-text>' line per rule it walked, and the run reaches 'rule scoped-no cont-yes' before failing, so the case in question is among the early vectors -- vectors_0 has a body with bgcolor and color attributes and a table beneath it, which is the shape the message describes. Acceptance: text_css_cascade exits 0, and the cascade of the table case agrees with the expectation."
-    },
-    {
       "id": "C287",
       "category": "library",
       "group": "Library",

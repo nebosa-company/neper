@@ -4,7 +4,7 @@
 |---|---|
 | category | library / Algorithms |
 | score | 0.00 of 1 |
-| queue position | 179 of 225 (only position 1 is eligible for the next session; see README) |
+| queue position | 178 of 224 (only position 1 is eligible for the next session; see README) |
 | difficulty | high — rated for a frontier model; one checklist line per session, thinking budget unlimited |
 
 ## Definition of done
