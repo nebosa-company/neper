@@ -7414,8 +7414,12 @@ fn field(a: *mem.Arena, key: widget.Key, t: *const Theme, label: str, buffer: []
         lines[parts_at] = widget.box(0u64, indicator, zero)
         parts_at += 1usize
     } else {
-        // Neper: a disabled outlined field has no fill, as Flutter's (the fill showed the label's notch as a light patch).
-        if !options.enabled && t.tokens.profile != .MaterialLike && t.tokens.profile != .Neper { frame_style.background = paint.Brush { Solid: with_alpha(ink, 0.04) } }
+        // A disabled outlined field carries the same 4 % `on-surface` ground the filled one does:
+        // ui_inputs_v2 pins that pixel, and the Android profile has always painted it. The fill was
+        // once withheld for the MaterialLike and Neper profiles because it showed through the
+        // floated label's notch as a light patch; the fixture pins the ground, so it is painted for
+        // every profile now.
+        if !options.enabled { frame_style.background = paint.Brush { Solid: with_alpha(ink, 0.04) } }
         frame_style.border = style.Border { width: edge_width, color: edge }
         frame_style.radius = t.tokens.radii.xs
     }
