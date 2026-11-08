@@ -7154,7 +7154,7 @@ type GItem = struct {
     cmin: f64, cmax: f64, rmin: f64, rmax: f64
 }
 
-type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64, item_min: f64 }
+type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64, item_min: f64, item_max: f64 }
 
 fn extra_text(s: *const style.Style, name: str) -> (str, bool) {
     var i = 0usize
@@ -7281,7 +7281,10 @@ fn gp_list(gp: *GridParse, text: str, out: *list.List[GTrack], names: *list.List
                     if sz.kind == 0u8 { per += sz.v } else if sz.kind == 1u8 && gp.avail >= 0.0f64 { per += sz.v * gp.avail }
                     tk += 1usize
                 }
-                if per == 0.0f64 && gp.item_min > 0.0f64 { per = gp.item_min }
+                if per == 0.0f64 && gp.item_min > 0.0f64 {
+                    per = gp.item_min
+                    if tl.len > 0usize && tl.items[0usize].max.kind == 5u8 && gp.item_max > 0.0f64 { per = gp.item_max }
+                }
                 n = 1i64
                 if gp.avail >= 0.0f64 && tl.len > 0usize && per > 0.0f64 {
                     let each = per + gp.gap * f64(tl.len)
@@ -7907,7 +7910,7 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     g.c_dummy = false
     g.r_dummy = false
     let ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
-    var gp = GridParse { c: ctx, em: cs.font_size, avail: avail_w, gap: 0.0f64, item_min: 0.0f64 }
+    var gp = GridParse { c: ctx, em: cs.font_size, avail: avail_w, gap: 0.0f64, item_min: 0.0f64, item_max: 0.0f64 }
     g.gap_c = flex_gap(cs.column_gap, maxf(avail_w, 0.0f64))
     g.gap_r = flex_gap(cs.row_gap, maxf(avail_h, 0.0f64))
     // Explicit tracks and line names.
@@ -7940,6 +7943,8 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
                 let ibx = bx(l, ik)
                 iw = iw + horizontal_extras(ibx) + ibx.margin[3usize] + ibx.margin[1usize]
                 if iw > gp.item_min { gp.item_min = iw }
+                let iwx = imx + horizontal_extras(ibx) + ibx.margin[3usize] + ibx.margin[1usize]
+                if iwx > gp.item_max { gp.item_max = iwx }
             }
             ik = l.boxes.items[usize(ik)].next
         }
@@ -7960,6 +7965,7 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
         gp_list(&gp, ctext, &ctr, &cnames)
     }
     gp.item_min = 0.0f64
+    gp.item_max = 0.0f64
     if cs.lanes {
         var rk = l.boxes.items[usize(b)].first
         while rk != NONE {
