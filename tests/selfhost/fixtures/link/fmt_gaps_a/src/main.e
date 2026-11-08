@@ -425,9 +425,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var qp_total = 0usize
     while true {
         let (count, read_error) = qp.read(&qp_reader, qp_decoded[qp_total..])
+        // The last chunk arrives with `io.End`, as `fmt_gzip`'s drain reads it: take the bytes
+        // first, then look at what the read said.
+        qp_total += count
         if read_error == io.End { break }
         if read_error != ok { os.exit(27) }
-        qp_total += count
     }
     if !same(qp_decoded[..qp_total], qp_source[0..]) { os.exit(27) }
 
