@@ -113,7 +113,7 @@ fn relative_under(path: str, root: str, source_root: str) -> (str, bool) {
         offset = root.len
         // A root may already end in a separator ("/", "C:\", "proj/"): then the next
         // byte is already the first name, and no separator is owed.
-        let root_ends_separator = is_separator(root[root.len - 1usize])
+        let root_ends_separator = root.len > 0usize && is_separator(root[root.len - 1usize])
         if !root_ends_separator {
             if offset >= path.len || !is_separator(path[offset]) { ret ("", false) }
             offset += 1usize
