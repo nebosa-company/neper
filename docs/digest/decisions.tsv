@@ -3040,4 +3040,5 @@ D5964	3324	Oracle sources are pinned in-repo so fixture regeneration is self-con
 D5965	4892	`x.duckdb.duckdb`: an `e.db` driver over DuckDB's v2 C API
 D5966	2119	A defer table holds the span's `defer`s, not one entry per source byte
 D5967	2102	Per-call tables live in the frame; re-parsed trees and test discovery are kept at their size
-D5968	2022	A module's global dependencies are marked in one walk of its tokens
+D5968	2023	A module's global dependencies are marked in one walk of its tokens
+D5969	1832	The artifact writer's constant and aggregate edges stop walking the whole program

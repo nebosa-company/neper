@@ -1490,14 +1490,14 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
     unmark_seeded_aggregates(c, g, aggregate_marks)
     try intern_aggregate_strings(c, g, table, aggregate_marks)
     mark_body_constant_uses(c, g, module_index, string_marks)
+    mark_constant_constant_uses(c, module_index, string_marks)
     constant_at = 0usize
     while constant_at < c.constant_count {
-        let constant = c.constants[constant_at]
-        if constant.module_index != module_index {
-            let (used_by_constant, used_error) = foreign_constant_used_by_module(c, module_index, constant_at)
-            if used_error != ok { ret used_error }
-            let used = used_by_constant || (constant_at < string_marks.len && string_marks[constant_at] != 0u8)
-            if used {
+        let (used, used_error) = constant_marked(c, module_index, string_marks, constant_at)
+        if used_error != ok { ret used_error }
+        if used {
+            let constant = c.constants[constant_at]
+            if constant.module_index != module_index {
                 if constant.module_index >= g.count { ret InvalidArtifact }
                 let (target_module_name, target_module_name_error) = intern(table, g.modules[constant.module_index].name)
                 if target_module_name_error != ok { ret target_module_name_error }
@@ -2282,11 +2282,18 @@ fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
                 // The index says whether the module declares an aggregate of the name at
                 // all (D930): most `q.x` are calls and fields, and the walk of every
                 // aggregate below was a sixth of the artifact writer's time.
-                let (declared_at, declared) = check.find_aggregate(c, g.imports[import_at].target, name)
-                if declared && same(g.imports[import_at].qualifier, qualifier) {
+                var declared = false
+                if same(g.imports[import_at].qualifier, qualifier) {
+                    let (declared_at, is_declared) = check.find_aggregate(c, g.imports[import_at].target, name)
+                    declared = is_declared
+                }
+                if declared {
                     let imported = g.imports[import_at].target
-                    var aggregate_at = 0usize
-                    while aggregate_at < c.aggregate_count && aggregate_at < marks.len {
+                    // The imported module's own rows hold every aggregate of the name: a walk
+                    // of the whole program's, once per mention, was the writer's hottest loop.
+                    let (aggregate_first, aggregate_end) = span_of(c, span_aggregates(), imported)
+                    var aggregate_at = aggregate_first
+                    while aggregate_at < aggregate_end && aggregate_at < marks.len {
                         if c.aggregates[aggregate_at].module_index == imported && same(c.aggregates[aggregate_at].name, name) {
                             if marks[aggregate_at] == 0u8 { changed = true }
                             marks[aggregate_at] = 1u8
@@ -2600,6 +2607,40 @@ fn foreign_constant_used_by_module(c: *check.Checker, module_index: usize, targe
     ret (false, ok)
 }
 
+// The same answer for every constant in one walk of the module's constant expressions:
+// asking per constant walked them once for each constant of the program, three times over.
+fn mark_expression_constant_uses(c: *check.Checker, module_index: usize, expression_index: usize, marks: []u8) {
+    if expression_index >= c.constant_expr_count { ret }
+    let expression = c.constant_exprs[expression_index]
+    if expression.kind == .Name {
+        if expression.module_index == module_index { ret }
+        let (constant_at, declared) = check.find_constant(c, expression.module_index, expression.name)
+        if declared && constant_at < marks.len { marks[constant_at] = 1u8 }
+        ret
+    }
+    if expression.kind == .Unary { mark_expression_constant_uses(c, module_index, expression.left, marks) }
+    if expression.kind == .Binary {
+        mark_expression_constant_uses(c, module_index, expression.left, marks)
+        if expression.has_right { mark_expression_constant_uses(c, module_index, expression.right, marks) }
+    }
+}
+
+fn mark_constant_constant_uses(c: *check.Checker, module_index: usize, marks: []u8) {
+    let (first, end) = span_of(c, span_constants(), module_index)
+    var at = first
+    while at < end {
+        if c.constants[at].module_index == module_index { mark_expression_constant_uses(c, module_index, c.constants[at].expression, marks) }
+        at += 1usize
+    }
+}
+
+// Past the marks' length the per-constant walk still answers, so no count bounds the table.
+fn constant_marked(c: *check.Checker, module_index: usize, marks: []u8, constant_index: usize) -> (bool, err) {
+    if constant_index < marks.len { ret (marks[constant_index] != 0u8, ok) }
+    let (used, used_error) = foreign_constant_used_by_module(c, module_index, constant_index)
+    ret (used, used_error)
+}
+
 // The references a module's walks visit (D930): its used ones in index order when the
 // list of them was whole, else every reference the builder holds.
 fn reference_walk_count(builder: *nir.Builder) -> usize {
@@ -2706,9 +2747,9 @@ fn value_dependency_count(c: *check.Checker, module_index: usize, marks: []u8) -
     var count = 0usize
     var at = 0usize
     while at < c.constant_count {
-        let (used_by_constant, used_error) = foreign_constant_used_by_module(c, module_index, at)
+        let (used, used_error) = constant_marked(c, module_index, marks, at)
         if used_error != ok { ret (0usize, used_error) }
-        if used_by_constant || (at < marks.len && marks[at] != 0u8) { count += 1usize }
+        if used { count += 1usize }
         at += 1usize
     }
     ret (count, ok)
@@ -2844,9 +2885,9 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     try write_global_dependencies(c, g, table, scratch, output, module_index, global_marks[..])
     at = 0usize
     while at < c.constant_count {
-        let (used_by_constant, used_error) = foreign_constant_used_by_module(c, module_index, at)
+        let (used, used_error) = constant_marked(c, module_index, body_marks, at)
         if used_error != ok { ret used_error }
-        if used_by_constant || (at < body_marks.len && body_marks[at] != 0u8) {
+        if used {
             let constant = c.constants[at]
             if constant.module_index >= g.count { ret InvalidArtifact }
             let (hash, hash_error) = constant_body_hash(c, g, at, scratch)
