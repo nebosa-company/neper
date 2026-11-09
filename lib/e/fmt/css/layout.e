@@ -8708,7 +8708,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
                 ic += 1usize
             }
             if (cs.width.kind == .Px || cs.display == .Grid) && !intrinsic_cols { exn = 0usize }
-            size_tracks(g.cols, g.nc, g.gap_c, cw, ex, exn, true, false, stretch_cols && !intrinsic_cols)
+            size_tracks(g.cols, g.nc, g.gap_c, cw, ex, exn, true, false, stretch_cols)
         } else {
             size_tracks(g.cols, g.nc, g.gap_c, cw, g.items, g.n, true, false, stretch_cols)
         }
