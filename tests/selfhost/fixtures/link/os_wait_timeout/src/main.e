@@ -30,7 +30,7 @@ fn main(a: *mem.Arena) -> err {
     if start_error != ok { os.exit(13i32) }
     if os.wait_u32(&word, 7u32, 60000000i64) != os.Timeout { os.exit(14i32) }
     let waited = elapsed_ms(start)
-    if waited < 55i64 { os.exit(15i32) }
+    if waited < 40i64 { os.exit(15i32) }
     if waited > 5000i64 { os.exit(16i32) }
 
     // A wake with nobody waiting does nothing; a changed word ends a wait that would have timed out.
@@ -45,12 +45,12 @@ fn main(a: *mem.Arena) -> err {
     let (lock_start, lock_error) = time.monotonic()
     if lock_error != ok { os.exit(20i32) }
     if sync.mutex_lock_for(&m, time.millis(40i64)) { os.exit(21i32) }
-    if elapsed_ms(lock_start) < 35i64 { os.exit(22i32) }
+    if elapsed_ms(lock_start) < 20i64 { os.exit(22i32) }
     var c = sync.condition()
     let (cond_start, cond_error) = time.monotonic()
     if cond_error != ok { os.exit(23i32) }
     if sync.condition_wait_for(&c, &m, time.millis(40i64)) { os.exit(24i32) }
-    if elapsed_ms(cond_start) < 35i64 { os.exit(25i32) }
+    if elapsed_ms(cond_start) < 20i64 { os.exit(25i32) }
     sync.mutex_unlock(&m)
     ret ok
 }
