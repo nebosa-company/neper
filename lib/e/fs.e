@@ -423,7 +423,11 @@ fn make_dirs_at(a: *mem.Arena, r: *const Root, relative_path: str) -> err {
 // procfs-like files and stale for a growing one, so `read_stream` reads to End
 // and enforces `limit` on the bytes actually seen.
 fn size_for_read(size: u64, limit: usize) -> (usize, err) {
-    if mem.size_of[usize]() == 4usize && size > 4294967295u64 { ret (0usize, Invalid) }
+    // `usize` is eight bytes on every target (D5622), so the wasm32 address space, not the
+    // width of `usize`, is what a count must fit.
+    when target.arch == .Wasm32 {
+        if size > 4294967295u64 { ret (0usize, Invalid) }
+    }
     let usable = usize(size)
     if limit != 0usize && usable > limit { ret (0usize, Invalid) }
     ret (usable, ok)
