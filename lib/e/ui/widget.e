@@ -5755,7 +5755,14 @@ fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err {
     case .KeyUp as k:
         let code = key_code(k.key.physical)
         hold_modifier(s, code, false)
-        if modal_blocks_focus(s) { ret ok }
+        if modal_blocks_focus(s) {
+            // Releasing Alt under a modal still ends the Alt press, or the next plain letter would be taken as an accelerator.
+            if menu_alt_key(code) {
+                s.menu_alt_down = false
+                s.menu_alt_used = false
+            }
+            ret ok
+        }
         if menu_alt_key(code) {
             let enter = s.menu_alt_down && !s.menu_alt_used
             s.menu_alt_down = false
