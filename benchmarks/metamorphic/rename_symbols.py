@@ -83,6 +83,10 @@ for input_root, output_root in trees:
             target_path = os.path.join(target_dir, name)
             parts = name.split('.')
             other_target = len(parts) == 3 and parts[1] not in (host_os, 'x64')
+            # x/android is for an Android app, a Linux target whose `os` has the window host
+            # it installs; on another OS it names what `os` lacks, so it is not in the program.
+            if host_os != 'linux' and rel_dir.replace(os.sep, '/').startswith('x/android'):
+                other_target = True
             if not name.endswith('.e') or other_target:
                 shutil.copy(path, target_path)
                 continue
