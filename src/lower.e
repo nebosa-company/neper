@@ -4743,8 +4743,14 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             if child_position > 0usize {
                 if *argument_count == arguments.len { ret check.ArgumentCount }
                 let child_index = parse.child_index_at(tree, at)
-                let (saved, saved_alloc_error) = mem.alloc[usize](c.arena, *argument_count + 1usize)
-                if saved_alloc_error != ok { ret saved_alloc_error }
+                // One per argument lowered, so in the frame unless the call is unusually wide.
+                var saved_storage: [48]usize = zero
+                var saved = saved_storage[0usize..48usize]
+                if *argument_count + 1usize > 48usize {
+                    let (wide_saved, saved_alloc_error) = mem.alloc[usize](c.arena, *argument_count + 1usize)
+                    if saved_alloc_error != ok { ret saved_alloc_error }
+                    saved = wide_saved
+                }
                 var saved_callee = 0usize
                 var pending = false
                 if !into_c && (builder.frame_mode || builder.frame_locals) && !builder.spirv && expression_may_cut(c, g, tree, module_index, child_index, builder) {
@@ -6043,8 +6049,13 @@ fn lower_try_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
     try nir.add_operand(builder, branch_instruction, failed)
     let (error_block_index, error_block_error) = nir.begin_block(builder)
     if error_block_error != ok || error_block_index != error_block { ret nir.InvalidControlFlow }
-    let (values, values_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
-    if values_error != ok { ret values_error }
+    var values_storage: [16]usize = zero
+    var values = values_storage[0usize..16usize]
+    if function.return_count + 1usize > 16usize {
+        let (wide_values, values_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
+        if values_error != ok { ret values_error }
+        values = wide_values
+    }
     var slot = 0usize
     while slot + 1usize < function.return_count {
         let (slot_type, slot_type_error) = check.function_return(c, function, slot)
@@ -6067,12 +6078,24 @@ fn lower_try_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
 }
 
 fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
-    let (values, values_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
-    if values_error != ok { ret values_error }
-    let (saved, saved_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
-    if saved_error != ok { ret saved_error }
-    let (saved_before, saved_before_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
-    if saved_before_error != ok { ret saved_before_error }
+    // Three tables per `ret` lowered: in the frame unless the function returns more than fifteen values.
+    var values_storage: [16]usize = zero
+    var saved_storage: [16]usize = zero
+    var saved_before_storage: [16]usize = zero
+    var values = values_storage[0usize..16usize]
+    var saved = saved_storage[0usize..16usize]
+    var saved_before = saved_before_storage[0usize..16usize]
+    if function.return_count + 1usize > 16usize {
+        let (wide_values, values_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
+        if values_error != ok { ret values_error }
+        let (wide_saved, saved_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
+        if saved_error != ok { ret saved_error }
+        let (wide_saved_before, saved_before_error) = mem.alloc[usize](c.arena, function.return_count + 1usize)
+        if saved_before_error != ok { ret saved_before_error }
+        values = wide_values
+        saved = wide_saved
+        saved_before = wide_saved_before
+    }
     // Arena memory is not zeroed and `saved[previous] != 0` is the "was spilled" test.
     var clear_at = 0usize
     while clear_at < saved.len {

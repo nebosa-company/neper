@@ -126,12 +126,11 @@ scan_file=$($test_build/neper-self scan-file "$repo/src/main.e")
 [ "$scan_file" = 'scan file ok' ]
 parse_file=$($test_build/neper-self parse-file "$repo/tests/selfhost/fixtures/source-load.e")
 [ "$parse_file" = 'parse file ok' ]
-if missing_file=$($test_build/neper-self scan-file "$test_build/missing-source.e" 2>&1); then
-    printf '%s\n' 'missing source unexpectedly loaded' >&2
-    exit 1
-fi
+missing_file_status=0
+missing_file=$($test_build/neper-self scan-file "$test_build/missing-source.e" 2>&1) || missing_file_status=$?
+[ "$missing_file_status" = 2 ] || { printf '%s\n' "missing source exited $missing_file_status" >&2; exit 1; }
 case "$missing_file" in
-    *'error: os.NotFound'*|*'error: e.os.NotFound'*) ;;
+    *'error[E-CLI-9999]: the operand `'*'missing-source.e` does not exist'*) ;;
     *) printf '%s\n' 'source loader returned the wrong missing-file error' >&2; exit 1 ;;
 esac
 project_root=$($test_build/neper-self project-file "$repo/src/main.e" "$repo" main)
@@ -7746,6 +7745,12 @@ for summary_case in cold warm; do
         printf '%s\n' "$summary_text" | grep -q "$summary_line" || { printf '%s\n' "--summary ($summary_case) lacks $summary_line: $summary_text" >&2; exit 1; }
     done
 done
+# A missing operand is the input's failure: one named line and exit 2, not an internal failure.
+missing_status=0
+missing_text=$($test_build/neper-self emit-executable "$test_build/no-such-dir/src/main.e" "$repo" x64 linux "$test_build/no-such" 2>&1) || missing_status=$?
+[ "$missing_status" = 2 ] || { printf '%s\n' "a missing operand exited $missing_status: $missing_text" >&2; exit 1; }
+printf '%s\n' "$missing_text" | grep -q 'E-CLI-9999\]: the operand `.*no-such-dir.*` does not exist' || { printf '%s\n' "a missing operand was not named: $missing_text" >&2; exit 1; }
+if printf '%s\n' "$missing_text" | grep -q 'internal compiler failure\|e\.os\.NotFound'; then printf '%s\n' "a missing operand read as an internal failure: $missing_text" >&2; exit 1; fi
 # A hot build (D319): `emit-executable --incremental` settles the keep set, writes each
 # fresh module's artifact under `.neper/<mode>/em/` and links the image from every
 # artifact; a warm one and one after a body edit are each the clean build's image.

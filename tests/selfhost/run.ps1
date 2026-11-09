@@ -125,7 +125,7 @@ if ($LASTEXITCODE -ne 0 -or $scanFile -ne 'scan file ok') { throw 'arena-backed 
 $parseFile = & $compiler parse-file (Join-Path $PSScriptRoot 'fixtures\source-load.e')
 if ($LASTEXITCODE -ne 0 -or $parseFile -ne 'parse file ok') { throw 'arena-backed source parse failed' }
 $missingFile = & $compiler scan-file (Join-Path $testBuild 'missing-source.e') 2>&1
-if ($LASTEXITCODE -ne 1 -or ($missingFile -join "`n") -notmatch 'error: (e\.)?os\.NotFound') {
+if ($LASTEXITCODE -ne 2 -or ($missingFile -join "`n") -notmatch 'error\[E-CLI-9999\]: the operand `.*missing-source\.e` does not exist') {
     throw 'source loader missing-file propagation failed'
 }
 $projectRoot = & $compiler project-file (Join-Path $repo 'src\main.e') $repo 'main'
@@ -7870,6 +7870,10 @@ foreach ($summaryCase in @(@('cold', $frontCold), @('warm', $null))) {
         if ($summaryText -notmatch $summaryLine) { throw "--summary ($($summaryCase[0])) lacks '$summaryLine': $summaryText" }
     }
 }
+# A missing operand is the input's failure: one named line and exit 2, not an internal failure.
+$missingOperand = Join-Path $testBuild 'no-such-dir\src\main.e'
+$missingText = (& $compiler emit-executable $missingOperand $repo 'x64' 'windows' (Join-Path $testBuild 'no-such.exe') 2>&1 | ForEach-Object { "$_" }) -join "`n"
+if ($LASTEXITCODE -ne 2 -or $missingText -notmatch 'E-CLI-9999\]: the operand `.*no-such-dir.*` does not exist' -or $missingText -match 'internal compiler failure|e\.os\.NotFound') { throw "a missing operand was not reported as one: exit $LASTEXITCODE $missingText" }
 # A hot build (D319): `emit-executable --incremental` settles the keep set, writes each
 # fresh module's artifact under `.neper/<mode>/em/` and links the image from every
 # artifact; a warm one with nothing changed and one after a body edit are each the clean

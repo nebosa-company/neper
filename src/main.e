@@ -14074,6 +14074,13 @@ fn capacity_name(result: err) -> str {
     ret ""
 }
 
+// Whether the command's operand names something that is there; a flag or nothing at all counts as there.
+fn operand_present(a: *mem.Arena, operand: str) -> bool {
+    if operand.len == 0usize || operand[0usize] == 45u8 { ret true }
+    let (_, stat_error) = os.stat(a, operand)
+    ret stat_error == ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let result = run_arguments(a, args)
     if result == ok { ret ok }
@@ -14095,6 +14102,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         at = tool.nptest_copy(detail_storage[..], at, " is full; the program is larger than this compiler was built to hold")
         message = detail_storage[0usize..at]
         status = 1i32
+    }
+    // A file the command reads that is not there or not readable is the input's failure, not
+    // the compiler's: the operand by name when it is the one missing.
+    if result == os.NotFound || result == os.Denied {
+        code = "E-CLI-9999"
+        var at = 0usize
+        if args.len > 2usize && !operand_present(a, args[2usize]) {
+            at = tool.nptest_copy(detail_storage[..], at, "the operand `")
+            at = tool.nptest_copy(detail_storage[..], at, args[2usize])
+            if result == os.Denied { at = tool.nptest_copy(detail_storage[..], at, "` cannot be read: access denied") } else { at = tool.nptest_copy(detail_storage[..], at, "` does not exist") }
+        } else {
+            if result == os.Denied { at = tool.nptest_copy(detail_storage[..], at, "a file the command reads cannot be read: access denied") } else { at = tool.nptest_copy(detail_storage[..], at, "a file the command reads does not exist") }
+        }
+        message = detail_storage[0usize..at]
+        status = 2i32
     }
     // A form the checker has no rule for, reaching here without a site of its own.
     if result == check.Unsupported {
@@ -14130,9 +14152,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !json {
         var human = stderr_sink()
         try emit_command_diagnostic(&human, code, message)
-        // A named limit is reported once (D546); an internal failure keeps the
-        // runtime's line with the error's name, for whoever debugs the compiler.
-        if status == 1i32 { os.exit(1i32) }
+        // A named limit or input failure is reported once (D546), under its own status; an
+        // internal failure keeps the runtime's line with the error's name, for whoever
+        // debugs the compiler.
+        if !same(code, "E-TOOL-9999") { os.exit(status) }
         ret result
     }
     var report = json_sink()
