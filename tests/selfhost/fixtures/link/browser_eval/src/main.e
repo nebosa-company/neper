@@ -42,15 +42,22 @@ error SetNoEvents
 fn load_page(a: *mem.Arena) -> (*page.Page, err) {
     let (bytes, be) = fs.read_file(a, "tests/browser/assets/ahem.ttf", 1048576usize)
     if be != ok { ret (zero, FontBytesFailed) }
-    var (client, ce) = fetch.client(a, fetch.default_config(""), 16usize)
+    // The page keeps pointers to the client and the fonts, so they live in the arena, not in this frame.
+    let (clients, clients_error) = mem.alloc[fetch.Client](a, 1usize)
+    if clients_error != ok { ret (zero, ClientFailed) }
+    let (client, ce) = fetch.client(a, fetch.default_config(""), 16usize)
     if ce != ok { ret (zero, ClientFailed) }
-    var (fonts, fe) = fontset.new(a)
+    clients[0usize] = client
+    let (font_sets, font_sets_error) = mem.alloc[fontset.Set](a, 1usize)
+    if font_sets_error != ok { ret (zero, FontsFailed) }
+    let (fonts, fe) = fontset.new(a)
     if fe != ok { ret (zero, FontsFailed) }
-    if fontset.add(&fonts, "Ahem", 400u32, false, bytes, 0u32) != ok { ret (zero, FontAddFailed) }
-    fontset.set_generic(&fonts, "sans-serif", "Ahem")
-    fontset.set_generic(&fonts, "serif", "Ahem")
+    font_sets[0usize] = fonts
+    if fontset.add(&font_sets[0usize], "Ahem", 400u32, false, bytes, 0u32) != ok { ret (zero, FontAddFailed) }
+    fontset.set_generic(&font_sets[0usize], "sans-serif", "Ahem")
+    fontset.set_generic(&font_sets[0usize], "serif", "Ahem")
     let html = "data:text/html,<title>t</title><div id=box>0</div><button class='primary' data-note=\"it's here\">Go</button><ul><li>a</li><li>b</li></ul><input id=q>"
-    let (p, pe) = page.load(a, &client, &fonts, html, 800.0, 600.0, 134217728usize)
+    let (p, pe) = page.load(a, &clients[0usize], &font_sets[0usize], html, 800.0, 600.0, 134217728usize)
     ret (p, pe)
 }
 
