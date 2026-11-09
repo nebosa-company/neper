@@ -11,7 +11,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var tree = parsed
     let (context, context_error) = script.new_context(a, &tree, "https://static-range.test/")
     if context_error != ok { os.exit(2i32) }
-    let check = "const text = document.createTextNode('ok'); let startRejected = false; try { new StaticRange({ startContainer: text, startOffset: 3, endContainer: text, endOffset: 2 }); } catch (error) { startRejected = error.name === 'IndexSizeError'; } let endRejected = false; try { new StaticRange({ startContainer: text, startOffset: 0, endContainer: text, endOffset: 3 }); } catch (error) { endRejected = error.name === 'IndexSizeError'; } const valid = new StaticRange({ startContainer: text, startOffset: 2, endContainer: text, endOffset: 2 }); if (!startRejected || !endRejected || valid.startOffset !== 2 || valid.endOffset !== 2) throw new Error('StaticRange bounds validation failed');"
+    let check = "const text = document.createTextNode('ok'); const past = new StaticRange({ startContainer: text, startOffset: 3, endContainer: text, endOffset: 2 }); if (past.startOffset !== 3 || past.endOffset !== 2 || past.collapsed) throw new Error('StaticRange rejected or changed offsets past the node length');"
     if !script.run_script(context, check, "static-range-bounds.js") { os.exit(3i32) }
     ret ok
 }

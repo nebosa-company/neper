@@ -11,7 +11,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var tree = parsed
     let (context, context_error) = script.new_context(a, &tree, "https://unsigned-long.test/")
     if context_error != ok { os.exit(2i32) }
-    let test = "const value = 3000000000; const image = document.createElement('img'); image.width = value; if (image.getAttribute('width') !== '3000000000' || image.width !== value) throw new Error('image width rejected a valid unsigned long'); image.setAttribute('height', '3000000000'); if (image.height !== value) throw new Error('image height getter rejected a valid unsigned long'); const canvas = document.createElement('canvas'); canvas.width = value; if (canvas.getAttribute('width') !== '3000000000' || canvas.width !== value) throw new Error('canvas width rejected a valid unsigned long');"
+    let test = "const value = 3000000000; const image = document.createElement('img'); image.width = value; if (image.getAttribute('width') !== '0' || image.width !== 0) throw new Error('image width kept a value past 2147483647'); image.setAttribute('height', '3000000000'); if (image.height !== 0) throw new Error('image height getter returned a value past 2147483647'); image.width = 2147483647; if (image.getAttribute('width') !== '2147483647' || image.width !== 2147483647) throw new Error('image width rejected the largest valid value'); const canvas = document.createElement('canvas'); canvas.width = value; if (canvas.getAttribute('width') !== '300' || canvas.width !== 300) throw new Error('canvas width kept a value past 2147483647');"
     if !script.run_script(context, test, "unsigned-long-reflection.js") { os.exit(3i32) }
     ret ok
 }
