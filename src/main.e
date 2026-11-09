@@ -945,7 +945,7 @@ fn flags_known(args: []str) -> bool {
                     if !same(args[at], "-j") && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
-                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") && !same(args[at], "--att") && !same(args[at], "--shared-library") { ret false }
+                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--summary") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") && !same(args[at], "--att") && !same(args[at], "--shared-library") { ret false }
                 }
             }
         }
@@ -8739,6 +8739,17 @@ fn load_graph(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, roo
 // module is kept as it stands. Everything else, and everything it imports, is parsed,
 // resolved and declared as before, and the edge rule decides the unchanged among them
 // against the interfaces of their targets, fresh or held.
+// Whether an incremental build kept any module from its artifact: reason 3 (stable) or 4
+// (unchanged, every edge holding). That is `--summary`'s warm build.
+fn kept_any(reason: []u8, count: usize) -> bool {
+    var at = 0usize
+    while at < count && at < reason.len {
+        if reason[at] == 3u8 || reason[at] == 4u8 { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 type HotLoad = struct {
     on: bool,
     release: bool,
@@ -14661,7 +14672,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         report.timing = trailing_flags && has_flag(args, "--time")
         report.build.full = trailing_flags && has_flag(args, "--stats-full")
-        report.build.on = report.build.full || (trailing_flags && has_flag(args, "--stats"))
+        report.build.table = report.build.full || (trailing_flags && has_flag(args, "--stats"))
+        report.build.summary = trailing_flags && has_flag(args, "--summary")
+        report.build.on = report.build.table || report.build.summary
         // (D1667) `--stats` counts a released module's tree as its block goes back.
         loaded.counts_wanted = report.build.on
         // With `--json` the table is a `stats` record of the stream (D476).
@@ -14685,6 +14698,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if held_all_error != ok { ret held_all_error }
         clear_held(held_all)
         let load_error = load_graph_in(a, &report, &loaded, &hot_load, held_all, args[2usize], args[3usize], args[4usize], args[5usize], project_flag(args))
+        report.build.warm = hot_load.on && kept_any(hot_load.reason, loaded.count)
         report.arena_used = mem.stats(a).used
         try report_phase(&report, "load and parse")
         if load_error == ok && loaded.count != 0usize { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }

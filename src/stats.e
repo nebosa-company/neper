@@ -61,6 +61,10 @@ const POOL_COUNT: usize = 34usize
 // as its suffix; the row helpers below read `Build.json`.
 type Build = struct {
     on: bool,
+    // `--stats` / `--stats-full` print the table; `--summary` the five figures of a build.
+    table: bool,
+    summary: bool,
+    warm: bool,
     full: bool,
     json: bool,
     release: bool,
@@ -378,7 +382,68 @@ fn host_name(a: *mem.Arena, host: str) -> str {
     ret "Windows x64"
 }
 
+// The worker arenas' high-water marks summed (D339): every phase's workers, what each
+// allocated, rounded to the runtime's chunk -- what the pools were sized to, not what was
+// committed, which is the pages touched and the peak working set; the front end's workers
+// are still held by the graph.
+fn worker_arena_bytes(g: *graph.Graph) -> usize {
+    var worker_bytes = g.worker_bytes
+    var worker_at = 0usize
+    while worker_at < g.workers.len {
+        worker_bytes += graph.arena_touched(&g.workers[worker_at].arena)
+        worker_at += 1usize
+    }
+    ret worker_bytes
+}
+
+// A build is warm when `--incremental` kept a module from its artifact (main.kept_any).
+fn warm_build(b: *const Build) -> bool { ret b.warm }
+
+// `--summary`: the image's size, the compiler's peak working set and arena high-water, whether
+// the cache was used, and the compile time -- as five lines, or one `summary` record under `--json`.
+fn print_summary(b: *Build, g: *graph.Graph) -> err {
+    let (peak, peak_error) = os.peak_memory()
+    if peak_error != ok { ret peak_error }
+    let peak_mb = (peak + 1048575usize) / 1048576usize
+    let arena_mb = (worker_arena_bytes(g) + 1048575usize) / 1048576usize
+    var cache = "cold"
+    if warm_build(b) { cache = "warm" }
+    let centiseconds = (b.wall_ms + 5usize) / 10usize
+    var fraction = "."
+    if centiseconds % 100usize < 10usize { fraction = ".0" }
+    if b.json {
+        try out(b, "{\"record\":\"summary\",\"executable_size_bytes\":")
+        try number(b, b.image_bytes)
+        try out(b, ",\"peak_working_set_mb\":")
+        try number(b, peak_mb)
+        try out(b, ",\"arena_high_water_mb\":")
+        try number(b, arena_mb)
+        try out(b, ",\"build\":\"")
+        try out(b, cache)
+        try out(b, "\",\"compile_time_s\":")
+        try number(b, centiseconds / 100usize)
+        try out(b, fraction)
+        try number(b, centiseconds % 100usize)
+        ret out(b, "}\n")
+    }
+    try out(b, "executable size: ")
+    try number(b, b.image_bytes)
+    try out(b, " bytes\npeak working set: ")
+    try number(b, peak_mb)
+    try out(b, " MB\narena high-water: ")
+    try number(b, arena_mb)
+    try out(b, " MB\nbuild: ")
+    try out(b, cache)
+    try out(b, "\ncompile time: ")
+    try number(b, centiseconds / 100usize)
+    try out(b, fraction)
+    try number(b, centiseconds % 100usize)
+    ret out(b, " s\n")
+}
+
 fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *check.Checker, builder: *nir.Builder, host: str) -> err {
+    if b.summary { try print_summary(b, g) }
+    if !b.table { ret ok }
     // Lines, per module and in all.
     var all: Lines = zero
     let (sizes, sizes_error) = mem.alloc[usize](a, g.count + 1usize)
@@ -499,17 +564,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try row_number(b, "values allocated", b.values_allocated)
     try row_number(b, "values spilled", b.values_spilled)
     try row_number(b, "functions spilling", b.functions_spilling)
-    // The worker arenas' high-water marks summed (D339): every phase's workers, what
-    // each allocated, rounded to the runtime's chunk -- what the pools were sized to,
-    // not what was committed, which is the pages touched and the peak below; the
-    // front end's workers are still held by the graph.
-    var worker_bytes = g.worker_bytes
-    var worker_at = 0usize
-    while worker_at < g.workers.len {
-        worker_bytes += graph.arena_touched(&g.workers[worker_at].arena)
-        worker_at += 1usize
-    }
-    try row_bytes(b, "worker arenas reached", worker_bytes)
+    try row_bytes(b, "worker arenas reached", worker_arena_bytes(g))
     // (D1667) The modules' token and tree blocks given back after the lowering.
     try row_bytes(b, "module fronts released", counts.released)
     // (D1527) The lowering workers admitted, and the budget they were admitted under.

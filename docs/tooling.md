@@ -909,6 +909,19 @@ where the table leaves the column blank). Values are scalars under the rule
 `result.data` has, numbers bare; without `--json` the table on stderr is
 unchanged, and the two are one row list rendered twice.
 
+`--summary` on a build prints five lines on stderr instead of the table: the
+executable size in bytes, the compiler's peak working set in MB, the worker
+arenas' high-water in MB (address reserved, not memory used), `build: cold` or
+`build: warm`, and the compile time in seconds. A build is warm when
+`--incremental` kept at least one module from its artifact. With `--json` the
+five are one `summary` record (`executable_size_bytes`, `peak_working_set_mb`,
+`arena_high_water_mb`, `build`, `compile_time_s`); with `--stats` too, both
+are printed.
+
+```
+neper-self emit-executable src/main.e . x64 windows app.exe -j 8 --incremental --summary
+```
+
 `--overlay PATH=FILE` (D502, H15) on a build command, any number of times, reads
 the module at PATH -- spelled as the loader spells it, or a suffix of that on a
 separator, `dep.e` or `src/dep.e` -- from FILE instead of its own file: an

@@ -7738,6 +7738,14 @@ for count_row in nodes externs @tests @gpus @imports @nochecks; do
     [ "$cold_row" = "$(printf '%s\n' "$front_warm" | grep "^$count_row | ")" ]
 done
 [ "$("$test_build/front-counts-built")" = 'front counts ok' ]
+# `--summary`: five lines, cold on an empty cache and warm when --incremental kept a module.
+rm -rf "$front_scratch/.neper"
+for summary_case in cold warm; do
+    summary_text=$($test_build/neper-self emit-executable "$front_scratch/src/main.e" "$repo" x64 linux "$test_build/front-counts-built" --incremental --summary 2>&1)
+    for summary_line in "executable size: [0-9']* bytes" 'peak working set: [0-9]* MB' 'arena high-water: [0-9]* MB' "build: $summary_case" 'compile time: [0-9]*\.[0-9][0-9] s'; do
+        printf '%s\n' "$summary_text" | grep -q "$summary_line" || { printf '%s\n' "--summary ($summary_case) lacks $summary_line: $summary_text" >&2; exit 1; }
+    done
+done
 # A hot build (D319): `emit-executable --incremental` settles the keep set, writes each
 # fresh module's artifact under `.neper/<mode>/em/` and links the image from every
 # artifact; a warm one and one after a body edit are each the clean build's image.

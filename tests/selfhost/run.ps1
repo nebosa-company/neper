@@ -7860,6 +7860,16 @@ foreach ($countRow in @('nodes', 'externs', '@tests', '@gpus', '@imports', '@noc
 }
 $frontOutput = & $frontExe
 if ($LASTEXITCODE -ne 0 -or $frontOutput -ne 'front counts ok') { throw "the front_counts fixture failed: $frontOutput" }
+# `--summary`: five lines, cold on an empty cache and warm when --incremental kept a module.
+$summaryNeper = Join-Path $frontScratch '.neper'
+if (Test-Path -LiteralPath $summaryNeper) { Remove-Item -LiteralPath $summaryNeper -Recurse -Force }
+foreach ($summaryCase in @(@('cold', $frontCold), @('warm', $null))) {
+    $summaryText = (& $compiler emit-executable $frontMain $repo 'x64' 'windows' $frontExe --incremental --summary 2>&1) -join "`n"
+    if ($LASTEXITCODE -ne 0) { throw "--summary build failed" }
+    foreach ($summaryLine in @('executable size: [0-9'']+ bytes', 'peak working set: [0-9]+ MB', 'arena high-water: [0-9]+ MB', "build: $($summaryCase[0])", 'compile time: [0-9]+\.[0-9][0-9] s')) {
+        if ($summaryText -notmatch $summaryLine) { throw "--summary ($($summaryCase[0])) lacks '$summaryLine': $summaryText" }
+    }
+}
 # A hot build (D319): `emit-executable --incremental` settles the keep set, writes each
 # fresh module's artifact under `.neper/<mode>/em/` and links the image from every
 # artifact; a warm one with nothing changed and one after a body edit are each the clean
