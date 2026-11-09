@@ -25218,7 +25218,7 @@ type Box = struct { inner: Inner, inline_level: bool, anonymous: bool, positione
 type FragKind = enum u8 { Text, Segment, Atomic, Marker }
 type Frag = struct { kind: FragKind, box: u32, x: f64, y: f64, w: f64, h: f64, text: str, first: bool, last: bool }
 type Line = struct { x: f64, y: f64, w: f64, h: f64, baseline: f64, frag_first: u32, frag_count: u32, overflow_ellipsis: bool, clamp: bool, ell_box: u32 }
-type Layout = struct { a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure, boxes: list.List[Box], lines: list.List[Line], frags: list.List[Frag], anon: list.List[style.Style], root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64, floats: list.List[FloatRec], tables: list.List[TableData], counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize, orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule], sub_c: []const f64, sub_r: []const f64, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool, mc_count: usize, mc_rgap: f64, cfrags: list.List[ColFrag], mc_br: []const f64, mc_use: bool }
+type Layout = struct { a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style, measure: Measure, boxes: list.List[Box], lines: list.List[Line], frags: list.List[Frag], anon: list.List[style.Style], root: u32, viewport_width: f64, viewport_height: f64, doc_width: f64, doc_height: f64, floats: list.List[FloatRec], tables: list.List[TableData], counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize, orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule], sub_c: []const f64, sub_r: []const f64, sub_cn: []const GName, sub_rn: []const GName, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool, mc_count: usize, mc_rgap: f64, cfrags: list.List[ColFrag], mc_br: []const f64, mc_use: bool }
 type FloatRec = struct { box: u32, x: f64, y: f64, w: f64, h: f64, left: bool, root: u32 }
 fn st(l: *const Layout, id: u32) -> *const style.Style
 fn bx(l: *Layout, id: u32) -> *Box
@@ -25572,6 +25572,8 @@ fn subgrid_prepare(l: *Layout, g: *Grid, i: usize, cols: bool, rows: bool)
 fn subgrid_prepare_lane(l: *Layout, g: *Grid, id: u32, start: usize, span: usize)
 fn subgrid_prepare_lane_rows(l: *Layout, g: *Grid, id: u32, start: usize, span: usize)
 fn subgrid_tracks(a: *mem.Arena, sizes: []const f64, parent_gap: f64, own_gap: f64, edge_start: f64, edge_end: f64, out: *list.List[GTrack])
+fn subgrid_own_names(a: *mem.Arena, text: str, names: *list.List[GName])
+fn subgrid_names(l: *Layout, src: *const list.List[GName], start: i32, count: i32) -> []const GName
 fn text_wrap_balance(cs: *const style.Style) -> bool
 fn transform_cb(l: *const Layout, b: u32) -> bool
 fn unquote_ellipsis(v: str) -> str
