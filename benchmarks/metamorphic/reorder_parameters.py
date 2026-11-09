@@ -22,6 +22,9 @@ for dirpath, dirs, files in os.walk(out_dir):
         parts = name.split('.')
         if not name.endswith('.e') or (len(parts) == 3 and parts[1] not in (host_os, 'x64')):
             continue
+        # x/android names the window host only the Linux `os` carries (see rename_locals.py).
+        if host_os != 'linux' and os.path.relpath(dirpath, out_dir).replace(os.sep, '/').startswith('x/android'):
+            continue
         path = os.path.join(dirpath, name)
         indexed = subprocess.run(
             [compiler, 'index-file', path, root, 'x64', host_os, '--json'],

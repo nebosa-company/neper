@@ -65,6 +65,10 @@ for dirpath, dirs, files in os.walk(src_dir):
         # program's module: it cannot be indexed here and goes over as it is.
         parts = name.split('.')
         other_target = len(parts) == 3 and parts[1] not in (host_os, 'x64')
+        # x/android names the window host only the Linux `os` carries, so off Linux it is not
+        # in the program either.
+        if host_os != 'linux' and rel.replace(os.sep, '/').startswith('x/android'):
+            other_target = True
         if name.endswith('.e') and not other_target:
             b, n = renamed(source); open(os.path.join(target_dir, name), 'wb').write(b); total += n
         else: shutil.copy(source, os.path.join(target_dir, name))
