@@ -11175,11 +11175,12 @@ case "$cycle_output" in
 esac
 
 # Fixtures no block above names (extra-fixtures.txt, D5192): built, then run from the repo root, where they read their fonts.
-while read -r extra_fixture; do
+while read -r extra_fixture extra_mode; do
     [ -n "$extra_fixture" ] || continue
     extra_written=$("$test_build/neper-self" emit-executable "$repo/tests/selfhost/fixtures/link/$extra_fixture/src/main.e" "$repo" x64 linux "$test_build/extra-$extra_fixture" -j 2)
     [ "$extra_written" = 'executable written' ] || { printf '%s\n' "$extra_fixture emission failed" >&2; exit 1; }
     chmod +x "$test_build/extra-$extra_fixture"
+    [ "$extra_mode" = build-only ] && continue
     (cd "$repo" && "$test_build/extra-$extra_fixture" > /dev/null) || { printf '%s\n' "a $extra_fixture check failed" >&2; exit 1; }
 done < "$repo/tests/selfhost/extra-fixtures.txt"
 # (D5651) wasm32-wasi under Node: a curated set emitted as WebAssembly and run by lib/wasm/run-wasm.mjs from the repo

@@ -84,7 +84,7 @@ for name in ONE_HOST:
 
 # A fixture directory no suite runs is a test that has stopped testing. extra-fixtures.txt holds the ones neither
 # script names; `differential` belongs to scripts/a64-differential.
-extra = {line.strip() for line in (selfhost / "extra-fixtures.txt").read_text(encoding="utf-8").split("\n") if line.strip()}
+extra = {line.split()[0] for line in (selfhost / "extra-fixtures.txt").read_text(encoding="utf-8").split("\n") if line.strip()}
 NOT_SUITE = {"differential"}
 named = in_sh | in_ps | extra | NOT_SUITE
 for main in sorted((selfhost / "fixtures" / "link").glob("*/src/main.e")):

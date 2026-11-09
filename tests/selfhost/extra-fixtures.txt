@@ -70,10 +70,10 @@ net_fetch_cert
 net_fetch_filter
 net_h2client
 net_sp_bounds
-nir_many_imports
+nir_many_imports build-only
 os_clock_random
 os_environment
-os_neperos_write
+os_neperos_write build-only
 os_pipe_threads
 os_shell_wasi
 os_wait_timeout

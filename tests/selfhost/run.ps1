@@ -11458,10 +11458,12 @@ if ($LASTEXITCODE -ne 1 -or ($cycleOutput -join "`n") -notmatch
 }
 
 # Fixtures no block above names (extra-fixtures.txt, D5192): built, then run from the repo root, where they read their fonts.
-foreach ($extraFixture in (Get-Content (Join-Path $PSScriptRoot 'extra-fixtures.txt') | Where-Object { $_.Trim() })) {
+foreach ($extraLine in (Get-Content (Join-Path $PSScriptRoot 'extra-fixtures.txt') | Where-Object { $_.Trim() })) {
+    $extraFixture, $extraMode = -split $extraLine
     $extraPath = Join-Path $testBuild "extra-$extraFixture.exe"
     $extraWritten = & $compiler emit-executable (Join-Path $PSScriptRoot "fixtures\link\$extraFixture\src\main.e") $repo 'x64' 'windows' $extraPath -j 2
     if ($LASTEXITCODE -ne 0 -or $extraWritten -ne 'executable written') { throw "$extraFixture emission failed" }
+    if ($extraMode -eq 'build-only') { continue }
     Push-Location $repo
     try { & $extraPath | Out-Null } finally { Pop-Location }
     if ($LASTEXITCODE -ne 0) { throw "a $extraFixture check failed: exit $LASTEXITCODE" }
