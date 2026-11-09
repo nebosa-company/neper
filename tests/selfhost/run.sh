@@ -11194,7 +11194,7 @@ if command -v node >/dev/null 2>&1; then
         (cd "$repo" && node --no-warnings lib/wasm/run-wasm.mjs "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi" >&2; exit 1; }
         # neper-host.js is the browser host: no sockets (every neper_host socket call answers ENOSYS), so the network rows stay on run-wasm.mjs.
         case "$wasm_fixture" in
-            os_socket|os_resolve|macos_poller_loss|net|wasm_net) continue ;;
+            os_socket|os_resolve|macos_poller_loss|net|wasm_net|proc_sys_wasm) continue ;;
         esac
         (cd "$repo" && node --no-warnings lib/wasm/neper-host.js "$wasm_build/$wasm_fixture.wasm" > /dev/null) || { printf '%s\n' "a $wasm_fixture check failed on wasm32-wasi through lib/wasm/neper-host.js" >&2; exit 1; }
     done
