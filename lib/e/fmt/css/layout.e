@@ -7961,7 +7961,7 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
         var ik = l.boxes.items[usize(b)].first
         while ik != NONE {
             let (isc, iec) = item_axis_specs(l.a, bstyle(l, ik), true)
-            if flex_in(l, ik) && isc.kind == 0u8 && iec.kind == 0u8 {
+            if flex_in(l, ik) && (isc.kind == 0u8 || isc.kind == 2u8) && iec.kind == 0u8 {
                 let iks = bstyle(l, ik)
                 resolve_edges(l, ik, maxf(avail_w, 0.0f64))
                 resolve_margins_fixed(l, ik, maxf(avail_w, 0.0f64))
@@ -7974,9 +7974,11 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
                 }
                 let ibx = bx(l, ik)
                 iw = iw + horizontal_extras(ibx) + ibx.margin[3usize] + ibx.margin[1usize]
-                if iw > gp.item_min { gp.item_min = iw }
+                var cspan = 1.0f64
+                if isc.kind == 2u8 && isc.n > 1i32 { cspan = f64(isc.n) }
+                if iw / cspan > gp.item_min { gp.item_min = iw / cspan }
                 let iwx = imx + horizontal_extras(ibx) + ibx.margin[3usize] + ibx.margin[1usize]
-                if iwx > gp.item_max { gp.item_max = iwx }
+                if iwx / cspan > gp.item_max { gp.item_max = iwx / cspan }
             }
             ik = l.boxes.items[usize(ik)].next
         }
