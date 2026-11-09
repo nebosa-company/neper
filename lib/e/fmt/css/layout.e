@@ -9058,7 +9058,7 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         let (sr, ers) = item_axis_specs(l.a, is, false)
         let span = usize(maxf(1.0f64, f64(g.items[i].rn)))
         var start = usize(g.items[i].rs)
-        if sr.kind == 0u8 {
+        if (sr.kind == 0u8 || (sr.kind == 2u8 && ers.kind == 0u8)) && g.nr >= span {
             var best = 0usize
             var best_end = 1000000000.0f64
             var s0 = 0usize
