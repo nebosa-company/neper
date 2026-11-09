@@ -7968,7 +7968,10 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
                 let (imn, imx) = content_widths(l, ik)
                 var iw = imn
                 let (iwv, ihas) = resolve_len(iks.width, avail_w)
-                if iks.width.kind == .Px && ihas { iw = to_content_w(l, ik, iwv) }
+                if iks.width.kind == .Px && ihas {
+                    iw = to_content_w(l, ik, iwv)
+                    if iks.width.pct != 0.0f64 { iw = imx }
+                }
                 let ibx = bx(l, ik)
                 iw = iw + horizontal_extras(ibx) + ibx.margin[3usize] + ibx.margin[1usize]
                 if iw > gp.item_min { gp.item_min = iw }
