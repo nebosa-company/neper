@@ -25377,7 +25377,7 @@ type GName = struct { name: str, line: i32 }
 type GArea = struct { name: str, r0: i32, r1: i32, c0: i32, c1: i32 }
 type LineSpec = struct { kind: u8, n: i32, name: str, span_name: bool }
 type GItem = struct { box: u32, order: i64, rs: i32, rn: i32, cs: i32, cn: i32, cmin: f64, cmax: f64, rmin: f64, rmax: f64 }
-type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64, item_min: f64 }
+type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64, item_min: f64, item_max: f64 }
 fn extra_text(s: *const style.Style, name: str) -> (str, bool)
 fn push_name(names: *list.List[GName], name: str, line: i32)
 fn grid_split(a: *mem.Arena, s: str) -> []const str
@@ -25397,6 +25397,7 @@ fn occ_mark(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: 
 fn grid_autoplace(a: *mem.Arena, items: []GItem, n: usize, ec: i32, er: i32, dense: bool) -> bool
 fn swap_axes(items: []GItem, n: usize)
 fn auto_track_list(gp: *GridParse, s: *const style.Style, prop: str) -> list.List[GTrack]
+fn auto_repeat_list_invalid(gp: *GridParse, toks: []const str) -> bool
 fn grid_make_track(auto_list: *const list.List[GTrack], index: usize) -> GTrack
 fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool)
 fn is_intrinsic_min(k: u8) -> bool
