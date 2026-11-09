@@ -77,7 +77,7 @@ os_neperos_write build-only
 os_pipe_threads
 os_shell_wasi
 os_wait_timeout
-proc_sys_wasm
+proc_sys_wasm build-only
 text_cffhint_bounds
 text_dwmask
 text_ttglyph_bounds
