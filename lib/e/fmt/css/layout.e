@@ -9368,7 +9368,7 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, c
         let span = usize(maxf(1.0f64, f64(g.items[i].cn)))
         var start = usize(g.items[i].cs)
         if sc.kind == 0u8 && ecs.kind != 0u8 && g.nc >= span { start = 0usize }
-        if sc.kind == 0u8 {
+        if (sc.kind == 0u8 || (sc.kind == 2u8 && ecs.kind == 0u8)) && g.nc >= span {
             // Auto placement: the lane whose spanned run ends highest.
             var best = 0usize
             var best_end = 1000000000.0f64
