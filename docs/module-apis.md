@@ -26072,7 +26072,7 @@ type Redirect = enum u8 { Follow, Error, Manual }
 type Request = struct { url: str, method: http.Method, headers: []const http.Header, body: []const u8, redirect: Redirect, credentials: Credentials, referrer: str, dest: str }
 type Response = struct { url: str, status: u16, status_text: str, headers: []const http.Header, body: []const u8, redirected: bool, redirects: usize }
 type Config = struct { roots: []const u8, user_agent: str, accept_language: str, body_limit: usize, max_redirects: usize, allow_file: bool, file_root: str, block_hosts: []const str, allow_hosts: []const str, third_hosts: []const str, typed_hosts: []const str, typed_types: []const str }
-type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar, h1_hosts: [16]str, h1_count: usize, blocked: usize, roots: []const u8, roots_read: bool }
+type Client = struct { a: *mem.Arena, cfg: Config, jar: cookie.Jar, h1_hosts: [16]str, h1_count: usize, blocked: usize }
 fn default_config(roots: []const u8) -> Config
 fn client(a: *mem.Arena, cfg: Config, max_cookies: usize) -> (Client, err)
 fn unix_seconds() -> i64
@@ -26113,7 +26113,6 @@ error CertificateExpired
 error CertificateName
 error CertificateSelfSigned
 error CertificateUntrusted
-fn drop_body_header(name: str) -> bool
 ```
 
 ### `e.web.page`
