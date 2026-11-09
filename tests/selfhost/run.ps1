@@ -7059,21 +7059,30 @@ if ($LASTEXITCODE -ne 0 -or $uiDesktopOutput -ne 'ui desktop ok') { throw "the d
 $osShellPath = Join-Path $testBuild 'os-shell-selfhost.exe'
 $osShellWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_shell\src\main.e') $repo 'x64' 'windows' $osShellPath
 if ($LASTEXITCODE -ne 0 -or $osShellWritten -ne 'executable written') { throw 'os_shell emission failed' }
-$osShellOutput = & $osShellPath
+# The shell registers a tray item by reading the caller's executable, and refuses one that sits in a directory carrying a
+# sandbox's mandatory-label ACLs (a checkout can): the tray fixtures run from a copy in the user's profile instead.
+function Invoke-ShellFixture([string]$path) {
+    $shellDir = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'AppData\Local\Temp\neper-shell-fixtures'
+    New-Item -ItemType Directory -Force -Path $shellDir | Out-Null
+    $shellCopy = Join-Path $shellDir (Split-Path -Leaf $path)
+    Copy-Item -LiteralPath $path -Destination $shellCopy -Force
+    & $shellCopy
+}
+$osShellOutput = Invoke-ShellFixture $osShellPath
 if ($LASTEXITCODE -ne 0 -or $osShellOutput -ne 'os shell ok') { throw "the shell services answered wrongly: exit $LASTEXITCODE" }
 # The tray controller (D886, widget plan P4-01): a real tray item with its badge composed
 # and its menu attached, opened and closed once.
 $uiTrayPath = Join-Path $testBuild 'ui-tray-selfhost.exe'
 $uiTrayWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_tray\src\main.e') $repo 'x64' 'windows' $uiTrayPath
 if ($LASTEXITCODE -ne 0 -or $uiTrayWritten -ne 'executable written') { throw 'ui_tray emission failed' }
-$uiTrayOutput = & $uiTrayPath
+$uiTrayOutput = Invoke-ShellFixture $uiTrayPath
 if ($LASTEXITCODE -ne 0 -or $uiTrayOutput -ne 'ui tray ok') { throw "the tray controller answered wrongly: exit $LASTEXITCODE" }
 # The taskbar and jump list controllers (D887, widget plan P4-02): the app's window shows
 # progress and an overlay on its real taskbar button, and a jump list is published then removed.
 $uiTaskbarPath = Join-Path $testBuild 'ui-taskbar-selfhost.exe'
 $uiTaskbarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_taskbar\src\main.e') $repo 'x64' 'windows' $uiTaskbarPath
 if ($LASTEXITCODE -ne 0 -or $uiTaskbarWritten -ne 'executable written') { throw 'ui_taskbar emission failed' }
-$uiTaskbarOutput = & $uiTaskbarPath
+$uiTaskbarOutput = Invoke-ShellFixture $uiTaskbarPath
 if ($LASTEXITCODE -ne 0 -or $uiTaskbarOutput -ne 'ui taskbar ok') { throw "the taskbar controllers answered wrongly: exit $LASTEXITCODE" }
 # The shell file operations (D888, widget plan P4-09): the app's verbs are the shell's answers.
 $uiShellOpsPath = Join-Path $testBuild 'ui-shell-ops-selfhost.exe'
@@ -7086,7 +7095,7 @@ if ($LASTEXITCODE -ne 0 -or $uiShellOpsOutput -ne 'ui shell ops ok') { throw "th
 $uiNotificationPath = Join-Path $testBuild 'ui-notification-selfhost.exe'
 $uiNotificationWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\ui_notification\src\main.e') $repo 'x64' 'windows' $uiNotificationPath
 if ($LASTEXITCODE -ne 0 -or $uiNotificationWritten -ne 'executable written') { throw 'ui_notification emission failed' }
-$uiNotificationOutput = & $uiNotificationPath
+$uiNotificationOutput = Invoke-ShellFixture $uiNotificationPath
 if ($LASTEXITCODE -ne 0 -or $uiNotificationOutput -ne 'ui notification ok') { throw "the notifications answered wrongly: exit $LASTEXITCODE" }
 # Data exchange (D890, native-data-exchange-api): text, paths, an image and named bytes through
 # the real clipboard and back, the sequence moving, and the refusals.
