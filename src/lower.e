@@ -54,9 +54,26 @@ type Deferred = struct {
 }
 
 type DeferState = struct {
-    // Allocated per lowering from the function's token span (issue #191 item 6).
+    // One entry per `defer` in scope, so a table holds at most the span's `defer`s (defer_cap).
     entries: []Deferred,
     count: usize,
+}
+
+// How many `defer`s a span of source can have in scope at once: the occurrences of the
+// word, which also counts comments, strings and longer names, so it is never too small.
+// A Deferred is hundreds of bytes; sizing by the span's bytes cost gigabytes on sc500k.
+fn defer_cap(text: str) -> usize {
+    var count = 8usize
+    var at = 0usize
+    while at + 5usize <= text.len {
+        if text[at] == 100u8 && text[at + 1usize] == 101u8 && text[at + 2usize] == 102u8 && text[at + 3usize] == 101u8 && text[at + 4usize] == 114u8 {
+            count += 1usize
+            at += 5usize
+        } else {
+            at += 1usize
+        }
+    }
+    ret count
 }
 
 type ReturnLayout = struct {
@@ -3061,10 +3078,13 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     // The oracle lowers a candidate body whole, `defer`s included, so its
                     // table has to be sized like the real lowering's: a zero-length one made
                     // every candidate with a `defer` answer Capacity (#gpu_barrier_chain).
-                    let oracle_defer_cap = usize(function.source_end) - usize(function.source_start) + 8usize
-                    let (oracle_defer_entries, oracle_defer_error) = mem.alloc[Deferred](c.arena, oracle_defer_cap)
-                    if oracle_defer_error != ok { ret oracle_defer_error }
-                    oracle_defers.entries = oracle_defer_entries
+                    // One table serves every candidate; it grows only when a body needs more.
+                    let oracle_defer_cap = defer_cap(g.modules[module_index].text[usize(function.source_start)..usize(function.source_end)])
+                    if oracle_defers.entries.len < oracle_defer_cap {
+                        let (oracle_defer_entries, oracle_defer_error) = mem.alloc[Deferred](c.arena, oracle_defer_cap)
+                        if oracle_defer_error != ok { ret oracle_defer_error }
+                        oracle_defers.entries = oracle_defer_entries
+                    }
                     oracle_defers.count = 0usize
                     let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, oracle_defers)
                     oracle.instruction_limit = 0usize
@@ -9359,8 +9379,8 @@ fn emit_kernel_spirv(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
         generic_at = check.function_row(c, generic_at + 1usize)
     }
     builder.spirv = true
-    let defer_cap = usize(function.source_end) - usize(function.source_start) + 8usize
-    let (defer_entries, defer_alloc_error) = mem.alloc[Deferred](c.arena, defer_cap)
+    let kernel_defer_cap = defer_cap(g.modules[module_index].text[usize(function.source_start)..usize(function.source_end)])
+    let (defer_entries, defer_alloc_error) = mem.alloc[Deferred](c.arena, kernel_defer_cap)
     if defer_alloc_error != ok { ret defer_alloc_error }
     var defers = DeferState { entries: defer_entries, count: 0usize }
     var lowered = lower_function_index(c, g, tree, module_index, node, function_index, builder, signatures, bindings, &defers)
@@ -11084,7 +11104,7 @@ fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize
 
 fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     if module_index >= g.count { ret FunctionNotFound }
-    let (defer_entries, defer_alloc_error) = mem.alloc[Deferred](c.arena, g.modules[module_index].text.len + 8usize)
+    let (defer_entries, defer_alloc_error) = mem.alloc[Deferred](c.arena, defer_cap(g.modules[module_index].text))
     if defer_alloc_error != ok { ret defer_alloc_error }
     var defers = DeferState { entries: defer_entries, count: 0usize }
     var tree: parse.Tree = zero

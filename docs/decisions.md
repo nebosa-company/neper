@@ -43987,3 +43987,13 @@ build/windows/neper-self.exe emit-executable src/main.e . x64 linux neper-self-l
 
 **Not done.** The v1 declarations (`capi.windows.e`, `capi.linux.e`) are left in place and now
 unreferenced.
+
+## D5966 — A defer table holds the span's `defer`s, not one entry per source byte
+
+**Problem.** The static gate's `sc500k` arena high-water went from 2,129 / 2,833 MB (debug / release) to 15,355 / 29,020 MB, and the Windows suite's static measurement failed outright: the release build asked for more commit than the machine had. Two commits of 2026-11-06 did it. "Size the defer table from the function" (52d360bd3) replaced the fixed `[2048]Deferred` with tables of `text.len + 8` entries, one per byte of the module (or function) being lowered, from the checker's arena. A `Deferred` carries a whole `check.CallInfo`, hundreds of bytes, so each module's table was hundreds of times its source. "Size the inline oracle's defer table from the candidate's span" (8bc553cd7) then allocated another byte-sized table for every inline candidate, never released, which doubled the release figure.
+
+**Decision.** A table is sized by `defer_cap(text)`: eight plus the occurrences of the word `defer` in the span. Entries are pushed once per `defer` statement in scope and popped at block exit, so the live count never exceeds the span's `defer` statements, and counting the bare word (comments, strings and longer names included) only ever over-counts. The inline oracle keeps one table for every candidate and grows it only when a body needs more.
+
+**Evidence.** `sc500k`, 8 workers: debug 15,355 → 2,153 MB, release 29,020 → 2,858 MB; the compiler's peak working set in release is 536 MB for 12.4 MB of source. Stage 2 equals stage 3. Twenty-five `defer` fixtures exit as before in both modes, `gpu_barrier_chain` builds and runs, and `defer_many` (300 `defer`s in one function, the case the fixed table refused) runs in both modes.
+
+**Re-pin.** `benchmarks/baseline/results/static-windows.json` moves to 2,153 / 2,858 MB and images of 1,870,231 / 1,365,849 B. The arena figures are +24 / +25 MB (+1.1% / +0.9%) over the old pin, growth across five weeks of commits that no build of the seed can bisect past 2026-11-06; the images are smaller. `static-linux.json` is not re-pinned: the Linux figure was not measured.

@@ -5,21 +5,21 @@
  "host": "windows",
  "jobs": 8,
  "compiler": "D:\\repos\\neper\\build\\windows\\tests\\selfhost\\neper-own.exe",
- "revision": "dcbf79723a5148c46471ed26ed89b3195dab8609",
+ "revision": "d82faa73e5a3ab3dbb765f1714a224fbb565c469",
  "cells": [
   {
    "workload": "sc500k",
    "mode": "debug",
    "command": "D:\\repos\\neper\\build\\windows\\tests\\selfhost\\neper-own.exe emit-executable D:\\repos\\neper\\build\\windows\\tests\\selfhost\\baseline-fixtures\\sc500k\\src\\main.e D:\\repos\\neper x64 windows D:\\repos\\neper\\build\\windows\\tests\\selfhost\\baseline-fixtures\\sc500k\\static-debug.exe -j 8 --stats --json",
-   "arena_mb": 2129,
-   "image_bytes": 1936791
+   "arena_mb": 2153,
+   "image_bytes": 1870231
   },
   {
    "workload": "sc500k",
    "mode": "release",
    "command": "D:\\repos\\neper\\build\\windows\\tests\\selfhost\\neper-own.exe emit-executable D:\\repos\\neper\\build\\windows\\tests\\selfhost\\baseline-fixtures\\sc500k\\src\\main.e D:\\repos\\neper x64 windows D:\\repos\\neper\\build\\windows\\tests\\selfhost\\baseline-fixtures\\sc500k\\static-release.exe --release -j 8 --stats --json",
-   "arena_mb": 2833,
-   "image_bytes": 1458009
+   "arena_mb": 2858,
+   "image_bytes": 1365849
   }
  ]
 }

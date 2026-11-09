@@ -13,6 +13,7 @@ audit_algo_search_range
 audit_bytes_unaligned
 audit_replica_quorum_overflow
 browser_eval
+defer_many
 dist_snapshot_config
 gfx_chart_agreement_forest
 gfx_chart_alluvial
