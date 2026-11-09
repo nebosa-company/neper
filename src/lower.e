@@ -63,7 +63,7 @@ type DeferState = struct {
 // word, which also counts comments, strings and longer names, so it is never too small.
 // A Deferred is hundreds of bytes; sizing by the span's bytes cost gigabytes on sc500k.
 fn defer_cap(text: str) -> usize {
-    var count = 8usize
+    var count = 1usize
     var at = 0usize
     while at + 5usize <= text.len {
         if text[at] == 100u8 && text[at + 1usize] == 101u8 && text[at + 2usize] == 102u8 && text[at + 3usize] == 101u8 && text[at + 4usize] == 114u8 {
@@ -76,8 +76,11 @@ fn defer_cap(text: str) -> usize {
     ret count
 }
 
+// Always a caller's local, passed by pointer and never copied, so `offsets` may point
+// into `inline_offsets`: the common call's layout takes no arena memory.
 type ReturnLayout = struct {
     offsets: []usize,
+    inline_offsets: [8]usize,
     size: usize,
     alignment: usize,
     via_slot: bool,
@@ -1265,9 +1268,13 @@ fn register_return_type(c: *check.Checker, ty: check.Type) -> bool {
 
 fn call_return_layout(c: *check.Checker, call: check.CallInfo, result: *ReturnLayout) -> err {
     result.alignment = 1usize
-    let (offsets, offsets_error) = mem.alloc[usize](c.arena, call.function.return_count + 1usize)
-    if offsets_error != ok { ret offsets_error }
-    result.offsets = offsets
+    if call.function.return_count + 1usize <= 8usize {
+        result.offsets = result.inline_offsets[0usize..8usize]
+    } else {
+        let (offsets, offsets_error) = mem.alloc[usize](c.arena, call.function.return_count + 1usize)
+        if offsets_error != ok { ret offsets_error }
+        result.offsets = offsets
+    }
     if call.function.return_count > result.offsets.len { ret check.Capacity }
     var integer_count = 0usize
     var at = 0usize
@@ -4854,11 +4861,20 @@ fn size_call_results(c: *check.Checker, results: *CallResults, capacity: usize) 
 }
 fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, results: *CallResults) -> err {
     var call: check.CallInfo = zero
-    try size_call_results(c, results, usize(node.child_count) + 8usize)
+    // Room for a builtin's one or two results; a call's own results resize to the callee's
+    // return count in emit_call_results. Sized by the arguments, every call cost a table.
+    try size_call_results(c, results, 4usize)
     // A format string may carry 32 verbs, so a call may carry 32 arguments plus the
-    // arena: the checker already allows it and this is what lowering has to match.
-    let (results_arguments, results_arguments_error) = mem.alloc[usize](c.arena, usize(node.child_count) + 8usize)
-    if results_arguments_error != ok { ret results_arguments_error }
+    // arena: the checker already allows it and this is what lowering has to match. The
+    // common call fits this frame's buffer; only a wider one takes arena memory, which
+    // nothing gives back, once per call lowered.
+    var results_storage: [48]usize = zero
+    var results_arguments = results_storage[0usize..48usize]
+    if usize(node.child_count) + 8usize > 48usize {
+        let (wide_arguments, wide_arguments_error) = mem.alloc[usize](c.arena, usize(node.child_count) + 8usize)
+        if wide_arguments_error != ok { ret wide_arguments_error }
+        results_arguments = wide_arguments
+    }
     var argument_count = 0usize
     var callee = 0usize
     let arguments_error = lower_call_arguments(c, g, tree, module_index, node, builder, bindings, binding_count, false, &call, &callee, results_arguments, &argument_count)

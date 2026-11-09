@@ -3038,4 +3038,5 @@ D5962	2128	GitHub Pages caching: HTML keeps max-age=600, long-lived assets are f
 D5963	2832	MIT is the licence, and a machine-learning section says training is permitted rather than implied
 D5964	3324	Oracle sources are pinned in-repo so fixture regeneration is self-contained
 D5965	4892	`x.duckdb.duckdb`: an `e.db` driver over DuckDB's v2 C API
-D5966	2118	A defer table holds the span's `defer`s, not one entry per source byte
+D5966	2119	A defer table holds the span's `defer`s, not one entry per source byte
+D5967	2101	Per-call tables live in the frame; re-parsed trees and test discovery are kept at their size

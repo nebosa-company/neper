@@ -2288,9 +2288,11 @@ fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize, bad: *
     var no_lines: [1]usize = zero
     let (tokens, token_count, invalid, scan_error) = tool.scan_all(a, text)
     if scan_error != ok { ret (0usize, scan_error) }
-    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, text.len + 1024usize)
+    // The graph's tree-pool bounds (graph.ensure_tree_pool): a node per four bytes and a child
+    // per two, measured, doubled. A node per byte was twenty bytes of tree per source byte.
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, text.len / 2usize + 4096usize)
     if nodes_error != ok { ret (0usize, nodes_error) }
-    let (children, children_error) = mem.alloc[u32](a, text.len + 1024usize)
+    let (children, children_error) = mem.alloc[u32](a, text.len + 8192usize)
     if children_error != ok { ret (0usize, children_error) }
     var tree: parse.Tree = zero
     let init_error = parse.init_tree(&tree, nodes, children)

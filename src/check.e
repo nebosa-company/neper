@@ -790,6 +790,9 @@ type Checker = struct {
     interp_parsed: []bool,
     interp_tokens: [][]lex.Token,
     interp_token_counts: []usize,
+    // The re-parse scratch, grown to the largest module re-parsed; each tree is copied out of it at its size.
+    interp_scratch_nodes: []syntax.Node,
+    interp_scratch_children: []u32,
     interp_constant: str,
     interp_steps: usize,
     // A call's answer, kept for the function being checked or lowered (D318): lowering
@@ -6537,6 +6540,10 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
         c.interp_parsed = parsed
         c.interp_tokens = token_tables
         c.interp_token_counts = token_counts
+        var no_nodes: []syntax.Node = zero
+        var no_children: []u32 = zero
+        c.interp_scratch_nodes = no_nodes
+        c.interp_scratch_children = no_children
         c.interp_ready = true
     }
     if c.interp_parsed[module_index] { ret (module_index, ok) }
@@ -6549,8 +6556,6 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
     // and the same full tree, so the same answers. So is one with no tree kept (D1511's
     // module declared from its Interface, never lexed): the graph's token scratch and
     // parse pool are shared by every worker's checker, and so are its token slots.
-    // ponytail: the copy takes the header path's text-sized pools; copy it out at its
-    // own size if comptime-heavy lowerings make the pools felt.
     let privately = !g.modules[module_index].has_tree || !graph.front_readable(g, module_index, c.fork.id)
     var tokens: []lex.Token = zero
     if privately {
@@ -6561,15 +6566,43 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
         tokens = g.modules[module_index].tokens
     }
     if privately || g.modules[module_index].headers_only {
+        // Parsed into a scratch the size the graph's pool takes for the text, then kept at the
+        // tree's own size: a re-parsed module costs its tree, not fourteen bytes per source byte.
         let text_length = g.modules[module_index].text.len
-        let (nodes, nodes_error) = mem.alloc[syntax.Node](c.arena, text_length / 2usize + 4096usize)
-        if nodes_error != ok { ret (0usize, nodes_error) }
-        let (children, children_error) = mem.alloc[u32](c.arena, text_length + 4096usize)
-        if children_error != ok { ret (0usize, children_error) }
-        let init_error = parse.init_tree(&kept, nodes, children)
+        let nodes_needed = text_length / 2usize + 4096usize
+        let children_needed = text_length + 4096usize
+        if c.interp_scratch_nodes.len < nodes_needed {
+            let (scratch_nodes, scratch_nodes_error) = mem.alloc[syntax.Node](c.arena, nodes_needed)
+            if scratch_nodes_error != ok { ret (0usize, scratch_nodes_error) }
+            c.interp_scratch_nodes = scratch_nodes
+        }
+        if c.interp_scratch_children.len < children_needed {
+            let (scratch_children, scratch_children_error) = mem.alloc[u32](c.arena, children_needed)
+            if scratch_children_error != ok { ret (0usize, scratch_children_error) }
+            c.interp_scratch_children = scratch_children
+        }
+        var scratch_tree: parse.Tree = zero
+        let init_error = parse.init_tree(&scratch_tree, c.interp_scratch_nodes, c.interp_scratch_children)
         if init_error != ok { ret (0usize, init_error) }
-        let full_error = parse.parse_tokens(&kept, g.modules[module_index].text, tokens)
+        let full_error = parse.parse_tokens(&scratch_tree, g.modules[module_index].text, tokens)
         if full_error != ok { ret (0usize, full_error) }
+        let (nodes, nodes_error) = mem.alloc[syntax.Node](c.arena, scratch_tree.count + 1usize)
+        if nodes_error != ok { ret (0usize, nodes_error) }
+        let (children, children_error) = mem.alloc[u32](c.arena, usize(scratch_tree.child_count) + 1usize)
+        if children_error != ok { ret (0usize, children_error) }
+        var node_at = 0usize
+        while node_at < scratch_tree.count {
+            nodes[node_at] = scratch_tree.nodes[node_at]
+            node_at += 1usize
+        }
+        var child_at = 0usize
+        while child_at < usize(scratch_tree.child_count) {
+            children[child_at] = scratch_tree.children[child_at]
+            child_at += 1usize
+        }
+        kept = scratch_tree
+        kept.nodes = nodes[0usize..scratch_tree.count]
+        kept.children = children[0usize..scratch_tree.child_count]
     } else {
         let kept_error = graph.parse_module(g, module_index, &kept)
         if kept_error != ok { ret (0usize, kept_error) }

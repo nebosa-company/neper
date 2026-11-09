@@ -43997,3 +43997,15 @@ unreferenced.
 **Evidence.** `sc500k`, 8 workers: debug 15,355 → 2,153 MB, release 29,020 → 2,858 MB; the compiler's peak working set in release is 536 MB for 12.4 MB of source. Stage 2 equals stage 3. Twenty-five `defer` fixtures exit as before in both modes, `gpu_barrier_chain` builds and runs, and `defer_many` (300 `defer`s in one function, the case the fixed table refused) runs in both modes.
 
 **Re-pin.** `benchmarks/baseline/results/static-windows.json` moves to 2,153 / 2,858 MB and images of 1,870,231 / 1,365,849 B. The arena figures are +24 / +25 MB (+1.1% / +0.9%) over the old pin, growth across five weeks of commits that no build of the seed can bisect past 2026-11-06; the images are smaller. `static-linux.json` is not re-pinned: the Linux figure was not measured.
+
+## D5967 — Per-call tables live in the frame; re-parsed trees and test discovery are kept at their size
+
+**Problem.** D5966 left `sc500k` 24 / 25 MB (debug / release) over the October pin. Compiling `sc500k` with today's compiler against dcbf7972's library splits it: about 7 MB is the larger library, and 16 MB is the compiler. A compiler binary of 2026-11-06 09:06 measures 2,130 / 2,834 MB, the October figures, so the 16 MB arrived after it: the "#191" commits of that day replaced fixed buffers with an arena allocation per call, per return and per call's results, which nothing gives back.
+
+**Decision.** A call's argument table is a 48-entry frame buffer, from the arena only past that. A call's results table starts at four entries, and `emit_call_results` grows it to the callee's return count. `ReturnLayout` (always a caller's local, never copied) holds up to eight offsets inline. `defer_cap`'s floor is one entry, not eight, since only a `defer` statement pushes one. Two text-sized parses are bounded as the graph's pool is: the interpreter's re-parse of a module goes through a per-checker scratch and is kept at the tree's own size, and `test` discovery takes a node per two bytes instead of one.
+
+**Evidence.** `sc500k` at 8 workers, today's library: arena high-water 2,153 / 2,858 → 2,139 / 2,843 MB, peak working set 398 / 373 → 387 / 364 MB; against dcbf7972's library 2,146 / 2,850 → 2,136 / 2,840 MB, so 10 of the 16 MB. The two parse bounds do not move `sc500k`, which never re-parses a module or runs `test`. Stage 2 equals stage 3, and `-j 3 --perturb` gives the same image. The full Windows suite passes on a clean checkout with these sources.
+
+**Not done.** Growing the index capture of `plan-rename` on demand raised its peak working set from 291 to 318 MB, because the fixed 40-bytes-per-source-byte buffer is reserved but mostly never touched; it stays fixed. The remaining 6 MB is per-call return-value and saved-argument tables under 1 MB each, and the arena total's per-worker chunk rounding.
+
+**Re-pin.** `static-windows.json` moves down to 2,139 / 2,843 MB.
