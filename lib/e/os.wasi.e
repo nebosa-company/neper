@@ -1550,14 +1550,26 @@ fn set_current_dir(a: *mem.Arena, path: str) -> err {
         mem.reset(a, checkpoint)
         ret Failed
     }
-    let (fd, open_error) = open_directory(resolved)
-    if open_error != ok {
-        mem.reset(a, checkpoint)
-        ret open_error
+    // A mount's own root is its preopen. A second descriptor onto it is not one, and a host
+    // (Node's uvwasi on Windows) follows a relative symlink through such a descriptor wrongly.
+    var mount_fd = NO_FD
+    var mount_at = 0usize
+    while mount_at < mount_count {
+        if mount_lens[mount_at] == resolved.len && mount_matches(resolved, mount_at) { mount_fd = mount_fds[mount_at] }
+        mount_at += 1usize
+    }
+    var fd = mount_fd
+    if mount_fd == NO_FD {
+        let (opened, open_error) = open_directory(resolved)
+        if open_error != ok {
+            mem.reset(a, checkpoint)
+            ret open_error
+        }
+        fd = opened
     }
     if cwd_owned { let closed = wasi_fd_close(cwd_fd) }
     cwd_fd = fd
-    cwd_owned = true
+    cwd_owned = mount_fd == NO_FD
     var at = 0usize
     while at < resolved.len {
         cwd_text[at] = resolved[at]
@@ -2449,6 +2461,8 @@ fn net_error(status: u32) -> err {
     if status == 0u32 { ret ok }
     record_error_detail(i32(status))
     if status == 26u32 || status == 7u32 { ret WouldBlock }
+    // ADDRINUSE: a held address normalises to Exists, as on the native hosts.
+    if status == 3u32 { ret Exists }
     ret error_of_status(status)
 }
 
