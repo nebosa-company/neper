@@ -7462,6 +7462,8 @@ fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, e
     }
     if spec.kind != 3u8 { ret 0i32 }
     var pass = 0usize
+    var count0 = 0i64
+    var last0 = 0i32
     while pass < 2usize {
         var want = spec.name
         if pass == 1usize {
@@ -7476,11 +7478,14 @@ fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, e
                 if str.eq(names.items[k].name, want) {
                     count += 1i64
                     if count == i64(spec.n) { found = names.items[k].line }
-                    if count <= i64(spec.n) && found == 0i32 { last_found = names.items[k].line }
+                    last_found = names.items[k].line
                 }
                 k += 1usize
             }
-            if found == 0i32 && last_found > 0i32 { found = last_found }
+            if pass == 0usize {
+                count0 = count
+                last0 = last_found
+            }
         } else {
             k = names.len
             while k > 0usize {
@@ -7494,6 +7499,9 @@ fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, e
         if found > 0i32 { ret found }
         pass += 1usize
     }
+    // Too few lines of that name: the implicit lines after the explicit grid are taken to carry it.
+    if spec.n > 0i32 && count0 > 0i64 { ret last0 }
+    if spec.n > 0i32 { ret explicit + 1i32 + i32(i64(spec.n) - count0) }
     ret 0i32
 }
 
@@ -7858,6 +7866,28 @@ fn subgrid_prepare(l: *Layout, g: *Grid, i: usize, cols: bool, rows: bool) {
     }
 }
 
+// The `[names]` a subgrid writes after the `subgrid` keyword: the k-th group names the subgrid's line k+1.
+fn subgrid_own_names(a: *mem.Arena, text: str, names: *list.List[GName]) {
+    let toks = grid_split(a, text)
+    var line = 1i32
+    var i = 1usize
+    while i < toks.len {
+        let tk = toks[i]
+        i += 1usize
+        if tk.len >= 2usize && tk[0usize] == 91u8 {
+            let words = cv.split_top_level_spaces(a, tk[1usize..tk.len - 1usize])
+            var w = 0usize
+            while w < words.len {
+                push_name(names, words[w], line)
+                w += 1usize
+            }
+            line += 1i32
+        } else {
+            line += 1i32
+        }
+    }
+}
+
 // The line names of the parent lines a subgrid spans (`start` is the 0-based first track, `count` the tracks), renumbered
 // from the subgrid's own first line.
 fn subgrid_names(l: *Layout, src: *const list.List[GName], start: i32, count: i32) -> []const GName {
@@ -8057,6 +8087,7 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
                 push_name(&cnames, l.sub_cn[sn].name, l.sub_cn[sn].line)
                 sn += 1usize
             }
+            subgrid_own_names(l.a, ctext, &cnames)
         }
         l.sub_has_c = false
     } else if has_ct {
@@ -8106,6 +8137,7 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
                 push_name(&rnames, l.sub_rn[sm].name, l.sub_rn[sm].line)
                 sm += 1usize
             }
+            subgrid_own_names(l.a, rtext, &rnames)
         }
         l.sub_has_r = false
     } else if has_rt {
