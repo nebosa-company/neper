@@ -44009,3 +44009,13 @@ unreferenced.
 **Not done.** Growing the index capture of `plan-rename` on demand raised its peak working set from 291 to 318 MB, because the fixed 40-bytes-per-source-byte buffer is reserved but mostly never touched; it stays fixed. The remaining 6 MB is per-call return-value and saved-argument tables under 1 MB each, and the arena total's per-worker chunk rounding.
 
 **Re-pin.** `static-windows.json` moves down to 2,139 / 2,843 MB.
+
+## D5968 — A module's global dependencies are marked in one walk of its tokens
+
+**Measured on the compiler's own source, not `sc500k`.** A release-built compiler building `src/main.e` (59 modules, 6 MB) spent 18.5% of its samples in `em.foreign_global_referenced`: `global_dependency_count` and `write_global_dependencies` each asked it once per global, and each call rescanned every token of the module. That is tokens × globals, twice per module.
+
+**Decision.** `em.mark_global_uses` walks the module's tokens once and marks every foreign global a `qualifier.name` pair resolves to, through `check.find_global`, the way `mark_alias_uses` already does for aliases. The marks are an 8,192-byte frame table; a global index past it is answered by the old per-global scan, so no count bounds the table.
+
+**Result.** Same source, old and new compiler alternated: one worker, lower and codegen 1,666 → 1,485 ms and artifact writing 538 → 337 ms; eight workers, 529 → 471 ms. A root that imports all 745 `e.*` modules under `emit-em-all`, which prunes nothing, goes from 41.5 s to 23–24.5 s on Windows. Images are byte-identical, stage 2 equals stage 3, and the 747 artifacts are identical apart from the compiler's identity and the hashes derived from it in the two modules that embed GPU kernels; a compiler that differs only in a message string moves the same bytes.
+
+**Not done.** The eight-worker profile is now flat: `main.same` 5.1%, `lower.find_inline_entry` 4.5% (a linear scan), `lower.argument_can_change` 3.4%; worker 0, which holds the largest module, bounds the phase at ~650 ms against ~440 for the others. On the all-library root `em.write_module` is still 27% of the build, led by `em.collect_module_strings` (11.5%), `em.mark_aggregate_uses` and `em.foreign_constant_used_by_module`, and `emit-em-all` lowers on one thread with 5–8 s reported as "codegen setup". `build-selfhost.ps1` still leaves a debug-built compiler, which is 4.5 times slower than a release one. The full suites were not run.
