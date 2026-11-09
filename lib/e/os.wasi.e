@@ -1238,6 +1238,16 @@ fn resolve(path: str) -> (u32, str, err) {
         record_error_detail(44i32)
         ret (NO_FD, "", NotFound)
     }
+    // A NUL would make the host see a shorter path than the caller wrote; no such file can
+    // exist, which is what the other hosts answer.
+    var nul_at = 0usize
+    while nul_at < path.len {
+        if path[nul_at] == 0u8 {
+            record_error_detail(44i32)
+            ret (NO_FD, "", NotFound)
+        }
+        nul_at += 1usize
+    }
     if path[0usize] != 47u8 {
         if cwd_fd == NO_FD {
             record_error_detail(44i32)
