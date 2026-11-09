@@ -78,7 +78,7 @@ type Layout = struct {
     floats: list.List[FloatRec], tables: list.List[TableData],
     counters: list.List[CounterInst], quote_depth: i64, gen_depth: usize,
     orth_fb: f64, vmode: u8, tr1: []style.Style, tr2: []style.Style, grids: list.List[GridGeom], rules: list.List[ColRule],
-    sub_c: []const f64, sub_r: []const f64, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool, mc_count: usize, mc_rgap: f64, cfrags: list.List[ColFrag],
+    sub_c: []const f64, sub_r: []const f64, sub_cn: []const GName, sub_rn: []const GName, sub_gc: f64, sub_gr: f64, sub_has_c: bool, sub_has_r: bool, mc_count: usize, mc_rgap: f64, cfrags: list.List[ColFrag],
     mc_br: []const f64, mc_use: bool
 }
 
@@ -7469,15 +7469,18 @@ fn resolve_line(names: *const list.List[GName], explicit: i32, spec: LineSpec, e
         }
         var count = 0i64
         var found = 0i32
+        var last_found = 0i32
         var k = 0usize
         if spec.n > 0i32 {
             while k < names.len {
                 if str.eq(names.items[k].name, want) {
                     count += 1i64
                     if count == i64(spec.n) { found = names.items[k].line }
+                    if count <= i64(spec.n) && found == 0i32 { last_found = names.items[k].line }
                 }
                 k += 1usize
             }
+            if found == 0i32 && last_found > 0i32 { found = last_found }
         } else {
             k = names.len
             while k > 0usize {
@@ -7517,6 +7520,23 @@ fn resolve_axis(names: *const list.List[GName], explicit: i32, s: LineSpec, e: L
         ret (sl - 1i32, 1i32)
     }
     if e_line {
+        if s.kind == 2u8 && s.name.len > 0usize {
+            var seen = 0i32
+            var st1 = el - 1i32
+            var kk = names.len
+            var best = 0i32
+            while kk > 0usize {
+                kk -= 1usize
+                if str.eq(names.items[kk].name, s.name) && names.items[kk].line < el {
+                    seen += 1i32
+                    best = names.items[kk].line
+                    if seen == s.n { break }
+                }
+            }
+            if best > 0i32 { st1 = best }
+            if st1 < 1i32 { st1 = 1i32 }
+            ret (st1 - 1i32, el - st1)
+        }
         if s.kind == 2u8 {
             var st0 = el - s.n
             if st0 < 1i32 { st0 = 1i32 }
@@ -7813,6 +7833,7 @@ fn subgrid_prepare(l: *Layout, g: *Grid, i: usize, cols: bool, rows: bool) {
                     k += 1usize
                 }
                 l.sub_c = sz
+                l.sub_cn = subgrid_names(l, &g.cnames, g.items[i].cs, g.items[i].cn)
                 l.sub_gc = g.gap_c
                 l.sub_has_c = true
             }
@@ -7829,11 +7850,30 @@ fn subgrid_prepare(l: *Layout, g: *Grid, i: usize, cols: bool, rows: bool) {
                     k += 1usize
                 }
                 l.sub_r = sz
+                l.sub_rn = subgrid_names(l, &g.rnames, g.items[i].rs, g.items[i].rn)
                 l.sub_gr = g.gap_r
                 l.sub_has_r = true
             }
         }
     }
+}
+
+// The line names of the parent lines a subgrid spans (`start` is the 0-based first track, `count` the tracks), renumbered
+// from the subgrid's own first line.
+fn subgrid_names(l: *Layout, src: *const list.List[GName], start: i32, count: i32) -> []const GName {
+    let (out, e) = mem.alloc[GName](l.a, src.len + 1usize)
+    if e != ok { ret zero }
+    var n = 0usize
+    var k = 0usize
+    while k < src.len {
+        let ln = src.items[k].line
+        if ln >= start + 1i32 && ln <= start + 1i32 + count {
+            out[n] = GName { name: src.items[k].name, line: ln - start }
+            n += 1usize
+        }
+        k += 1usize
+    }
+    ret out[..n]
 }
 
 // The tracks of a subgrid: the parent's tracks it spans, moved by the difference of the two gaps and by its own edges.
@@ -8012,6 +8052,11 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
             if cs.column_gap.kind == .Normal { g.gap_c = l.sub_gc }
             gp.gap = g.gap_c
             subgrid_tracks(l.a, l.sub_c, l.sub_gc, g.gap_c, sbb.margin[3usize] + sbb.border[3usize] + sbb.padding[3usize], sbb.margin[1usize] + sbb.border[1usize] + sbb.padding[1usize], &ctr)
+            var sn = 0usize
+            while sn < l.sub_cn.len {
+                push_name(&cnames, l.sub_cn[sn].name, l.sub_cn[sn].line)
+                sn += 1usize
+            }
         }
         l.sub_has_c = false
     } else if has_ct {
@@ -8056,6 +8101,11 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
             if cs.row_gap.kind == .Normal { g.gap_r = l.sub_gr }
             gp.gap = g.gap_r
             subgrid_tracks(l.a, l.sub_r, l.sub_gr, g.gap_r, sbb.margin[0usize] + sbb.border[0usize] + sbb.padding[0usize], sbb.margin[2usize] + sbb.border[2usize] + sbb.padding[2usize], &rtr)
+            var sm = 0usize
+            while sm < l.sub_rn.len {
+                push_name(&rnames, l.sub_rn[sm].name, l.sub_rn[sm].line)
+                sm += 1usize
+            }
         }
         l.sub_has_r = false
     } else if has_rt {
@@ -8971,6 +9021,7 @@ fn subgrid_prepare_lane_rows(l: *Layout, g: *Grid, id: u32, start: usize, span: 
         k += 1usize
     }
     l.sub_r = sz
+    l.sub_rn = subgrid_names(l, &g.rnames, i32(start), i32(span))
     l.sub_gr = g.gap_r
     l.sub_has_r = true
 }
@@ -9326,6 +9377,7 @@ fn subgrid_prepare_lane(l: *Layout, g: *Grid, id: u32, start: usize, span: usize
         k += 1usize
     }
     l.sub_c = sz
+    l.sub_cn = subgrid_names(l, &g.cnames, i32(start), i32(span))
     l.sub_gc = g.gap_c
     l.sub_has_c = true
 }
@@ -10817,7 +10869,7 @@ fn layout_document(a: *mem.Arena, d: *const dom.Dom, styles: []const style.Style
     let (rules_made, e9r) = list.init[ColRule](a, 8usize)
     let (cfrags_made, e9c) = list.init[ColFrag](a, 8usize)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9r != ok { ret (zero, TooBig) }
-    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made, sub_c: zero, sub_r: zero, sub_gc: 0.0f64, sub_gr: 0.0f64, sub_has_c: false, sub_has_r: false, mc_count: 0usize, mc_rgap: 0.0f64, cfrags: cfrags_made, mc_br: zero, mc_use: false }
+    var l = Layout { a: a, d: d, styles: styles, measure: measure, boxes: boxes, lines: lines, frags: frags, anon: anon, root: NONE, viewport_width: viewport_width, viewport_height: viewport_height, doc_width: 0.0f64, doc_height: 0.0f64, floats: floats, tables: tables, counters: counters, quote_depth: 0i64, gen_depth: 0usize, orth_fb: -1.0f64, vmode: 0u8, tr1: zero, tr2: zero, grids: grids, rules: rules_made, sub_c: zero, sub_r: zero, sub_cn: zero, sub_rn: zero, sub_gc: 0.0f64, sub_gr: 0.0f64, sub_has_c: false, sub_has_r: false, mc_count: 0usize, mc_rgap: 0.0f64, cfrags: cfrags_made, mc_br: zero, mc_use: false }
     let root_el = dom.first_element_child(d, d.root)
     if root_el == html.NONE { ret (l, ok) }
     let vp = new_box(&l, .Flow, false, true, NONE, anon_style(&l, root_el, .Block))
