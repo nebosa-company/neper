@@ -7309,6 +7309,27 @@ fn gp_list(gp: *GridParse, text: str, out: *list.List[GTrack], names: *list.List
                     if sz.kind == 0u8 { per += sz.v } else if sz.kind == 1u8 && gp.avail >= 0.0f64 { per += sz.v * gp.avail }
                     tk += 1usize
                 }
+                if tl.len > 1usize && gp.item_min > 0.0f64 {
+                    // Lanes: a repeat of several tracks, some intrinsic, is as wide as each track's own size added up.
+                    var any_intrinsic = false
+                    var mixed = 0.0f64
+                    var mt = 0usize
+                    while mt < tl.len {
+                        let mk = tl.items[mt].max
+                        if mk.kind == 0u8 { mixed += mk.v } else if mk.kind == 1u8 && gp.avail >= 0.0f64 { mixed += mk.v * gp.avail } else if mk.kind == 4u8 {
+                            any_intrinsic = true
+                            mixed += gp.item_min
+                        } else if mk.kind == 6u8 {
+                            any_intrinsic = true
+                            mixed += minf(gp.item_max, mk.v)
+                        } else if mk.kind == 3u8 || mk.kind == 5u8 {
+                            any_intrinsic = true
+                            mixed += gp.item_max
+                        }
+                        mt += 1usize
+                    }
+                    if any_intrinsic { per = mixed }
+                }
                 if per == 0.0f64 && gp.item_min > 0.0f64 {
                     per = gp.item_min
                     if tl.len > 0usize && tl.items[0usize].max.kind == 5u8 && gp.item_max > 0.0f64 { per = gp.item_max }
@@ -8022,6 +8043,7 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
                 var rspan = 1.0f64
                 if rsc.kind == 2u8 && rsc.n > 1i32 { rspan = f64(rsc.n) }
                 if rh / rspan > gp.item_min { gp.item_min = rh / rspan }
+                if rh / rspan > gp.item_max { gp.item_max = rh / rspan }
             }
             rk = l.boxes.items[usize(rk)].next
         }
