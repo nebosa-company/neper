@@ -8448,6 +8448,25 @@ fn collect_global_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
     ret ok
 }
 
+// Module-scope `var`s, once the aggregates are registered: a global's type may be the
+// builtin `Atomic[T]`, which collect_aggregates seeds, as the per-module path already has.
+fn collect_globals(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+    var module_index = 0usize
+    while module_index < g.count {
+        var tree: parse.Tree = zero
+        try graph.parse_module(g, module_index, &tree)
+        try tokenize_module(c, g, module_index)
+        var node_index = 1usize
+        while node_index < tree.count {
+            let node = tree.nodes[node_index]
+            if node.top_level && node.kind == .VarDecl && !skip_declaration(c, g, module_index, node) { try collect_global_declaration(c, r, g, &tree, module_index, node) }
+            node_index += 1usize
+        }
+        module_index += 1usize
+    }
+    ret ok
+}
+
 fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     c.constant_count = 0usize
     c.constant_expr_count = 0usize
@@ -8461,7 +8480,6 @@ fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err 
         while node_index < tree.count {
             let node = tree.nodes[node_index]
             if node.top_level && node.kind == .ConstDecl && !skip_declaration(c, g, module_index, node) { try collect_constant_declaration(c, r, g, &tree, module_index, node) }
-            if node.top_level && node.kind == .VarDecl && !skip_declaration(c, g, module_index, node) { try collect_global_declaration(c, r, g, &tree, module_index, node) }
             node_index += 1usize
         }
         module_index += 1usize
@@ -17058,6 +17076,7 @@ fn run_declarations(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     try collect_aliases(c, r, g, false)
     try expand_aggregate_field_types(c)
     try validate_aggregate_value_cycles(c)
+    try collect_globals(c, r, g)
     try collect_signatures(c, r, g)
     c.signatures_ready = true
     c.has_declaration = false

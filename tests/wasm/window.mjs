@@ -9,6 +9,8 @@ import { readFile } from 'node:fs/promises'
 import { run } from '../../lib/wasm/neper-host.js'
 
 const [counterPath, threadsPath, galleryPath] = process.argv.slice(2)
+// A Worker that never answers would hold the suite for hours: the whole check gets three minutes.
+setTimeout(() => { process.stderr.write('window.mjs: no result after 180 s\n'); process.exit(124) }, 180000).unref()
 const font = new Uint8Array(await readFile(new URL('../../neperos/assets/fonts/jost-regular.ttf', import.meta.url)))
 const written = []
 Object.defineProperty(globalThis, 'navigator', { value: { clipboard: { writeText: async (text) => written.push(text) } }, configurable: true })
