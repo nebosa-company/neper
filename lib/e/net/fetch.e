@@ -540,7 +540,7 @@ fn fetch(c: *Client, req: Request) -> (Response, err) {
         // A subresource (it has a referrer or a destination) whose host a filter list names is never requested; the document itself
         // is not filtered.
         if (req.referrer.len > 0usize || req.dest.len > 0usize) && !policy.host_blocked(c.cfg.allow_hosts, cur.host) {
-            var hit = policy.host_blocked(c.cfg.block_hosts, cur.host)
+            var hit = policy.host_blocked(c.cfg.block_hosts, cur.host) || policy.host_blocked(c.cfg.typed_hosts, cur.host)
             if hit && c.cfg.third_hosts.len > 0usize && policy.host_blocked(c.cfg.third_hosts, cur.host) {
                 let (rurl, re) = url.parse(c.a, req.referrer, zero, false)
                 hit = re != ok || !policy.same_party(rurl.host, cur.host)

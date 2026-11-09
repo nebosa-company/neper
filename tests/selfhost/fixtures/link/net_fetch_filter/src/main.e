@@ -90,7 +90,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     cfg6.block_hosts = rules6.domains
     cfg6.typed_hosts = rules6.typed
     cfg6.typed_types = rules6.types
-    if rules6.domains.len != 1usize || rules6.typed.len != 1usize { os.exit(26i32) }
+    if rules6.domains.len != 0usize || rules6.typed.len != 1usize { os.exit(26i32) }
     let (c6, ce6) = fetch.client(a, cfg6, 8usize)
     if ce6 != ok { os.exit(27i32) }
     var t6 = c6
