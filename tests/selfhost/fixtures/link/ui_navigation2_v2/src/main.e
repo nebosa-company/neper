@@ -358,14 +358,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (edit_node, has_edit_node) = find(tree_3, .Button, "Edit")
     if !has_file_node || !file_node.state.expanded || !has_edit_node || edit_node.state.expanded { os.exit(27i32) }
     s.counters[9usize].count = 0usize
-    if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || s.counters[9usize].count != 1usize || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(54i32) }
+    // The app rebuilds after every menu toggle: an open menu is modal, so F10 and Down go to the closed bar, and the open tree follows.
+    let (root_closed, closed_error) = build(&f, &theme, s, false, 9usize)
+    if closed_error != ok || testing.pump(&harness, root_closed, time.Instant { nanos: 1060000000i64 }) != ok { os.exit(54i32) }
+    if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || s.counters[9usize].count != 1usize { os.exit(54i32) }
+    if testing.pump(&harness, root_3, time.Instant { nanos: 1070000000i64 }) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(54i32) }
     s.counters[9usize].count = 0usize
     if testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyDown: input.KeyEvent { window: zero, key: input.Key { physical: 78u32, logical: 78u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 78u32, logical: 78u32 }, modifiers: alt, repeat: false } }) != ok || testing.send(&harness, input.Event { KeyUp: input.KeyEvent { window: zero, key: input.Key { physical: 18u32, logical: 18u32 }, modifiers: zero, repeat: false } }) != ok { os.exit(59i32) }
+    if testing.pump(&harness, root_closed, time.Instant { nanos: 1080000000i64 }) != ok { os.exit(60i32) }
     let (item_returned, has_item_returned) = testing.focused(&harness)
     if !has_item_returned || !same_element(item_returned, original) || s.counters[10usize].count != 1usize || s.counters[9usize].count != 1usize { os.exit(60i32) }
     s.counters[9usize].count = 0usize
     s.counters[10usize].count = 0usize
-    if testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(61i32) }
+    if testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || testing.pump(&harness, root_3, time.Instant { nanos: 1090000000i64 }) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(61i32) }
     s.counters[9usize].count = 0usize
     // Prefix typeahead expires after 500 ms: delayed T does not extend O, while
     // immediate O,T selects Other.
@@ -393,25 +398,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let radio_count = testing.by_role(&harness, .MenuItemRadio).count
     let (other_node, has_other_node) = find(tree_sub, .MenuItem, "Other")
     let (recent_node, has_recent_node) = find(tree_sub, .MenuItemRadio, "Recent")
-    if !has_other_node || !other_node.state.expanded || !has_action(other_node, .ShowMenu) || !same_element(other_node.relations.controls, testing.by_key(&harness, 2449u64).element) { os.exit(73i32) }
+    if !has_other_node || !other_node.state.expanded || !has_action(other_node, .ShowMenu) || !same_element(other_node.relations.controls, testing.by_key(&harness, 76882u64).element) { os.exit(73i32) }
     if !has_recent_node || !recent_node.state.checked { os.exit(74i32) }
     if radio_count != 2usize { os.exit(75i32) }
-    let (submenu_bounds, has_submenu_bounds) = testing.overlay_of(&harness, testing.by_key(&harness, 2449u64).element)
+    let (submenu_bounds, has_submenu_bounds) = testing.overlay_of(&harness, testing.by_key(&harness, 76882u64).element)
     let (auto_safe, has_auto_safe) = bounds(&harness, &runtime, 2406u64)
     if !has_submenu_bounds || !has_auto_safe || testing.hover(&harness, other_row.x + other_row.width * 0.5, other_row.y + other_row.height * 0.5) != ok || testing.hover(&harness, submenu_bounds.x - 1.0, auto_safe.y + auto_safe.height * 0.5) != ok || !widget.interaction(&runtime, 2406u64).hovered { os.exit(70i32) }
     if testing.pump(&harness, root_sub, time.Instant { nanos: 2410000000i64 }) != ok || s.counters[11usize].count != 1usize { os.exit(71i32) }
     if testing.hover(&harness, auto_safe.x + 8.0, auto_safe.y + auto_safe.height * 0.5) != ok || testing.pump(&harness, root_sub, time.Instant { nanos: 2610000000i64 }) != ok || s.counters[11usize].count != 2usize { os.exit(72i32) }
     s.counters[11usize].count = 1usize
     let (on_recent, has_on_recent) = testing.focused(&harness)
-    if !has_on_recent || !same_element(on_recent, testing.by_key(&harness, 2450u64).element) { os.exit(67i32) }
+    if !has_on_recent || !same_element(on_recent, testing.by_key(&harness, 76883u64).element) { os.exit(67i32) }
     if testing.press_key(&harness, 13u32, zero) != ok { os.exit(67i32) }
     if s.counters[10usize].count != 1usize || s.counters[11usize].count != 2usize || s.counters[9usize].count != 1usize { os.exit(67i32) }
     let (sub_returned, has_sub_returned) = testing.focused(&harness)
     if !has_sub_returned || !same_element(sub_returned, original) { os.exit(67i32) }
-    if widget.focus(&runtime, testing.by_key(&harness, 2450u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || s.counters[11usize].count != 3usize { os.exit(67i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 76883u64).element) != ok || testing.press_key(&harness, 37u32, zero) != ok || s.counters[11usize].count != 3usize { os.exit(67i32) }
     // A second cascade level reuses the same menu behavior and closes the full
     // chain after its leaf runs.
-    if widget.focus(&runtime, testing.by_key(&harness, 2451u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok || s.counters[12usize].count != 1usize { os.exit(76i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 76884u64).element) != ok || testing.press_key(&harness, 39u32, zero) != ok || s.counters[12usize].count != 1usize { os.exit(76i32) }
     s.submenu[1usize].submenu_open = true
     let (root_deep, root_deep_error) = build(&f, &theme, s, false, 0usize)
     if root_deep_error != ok || testing.pump(&harness, root_deep, time.Instant { nanos: 2215000000i64 }) != ok { os.exit(77i32) }
@@ -421,9 +426,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !has_workspace_node { os.exit(80i32) }
     if !workspace_node.state.expanded { os.exit(81i32) }
     if !has_action(workspace_node, .ShowMenu) { os.exit(82i32) }
-    if !same_element(workspace_node.relations.controls, testing.by_key(&harness, 78385u64).element) { os.exit(83i32) }
-    if testing.by_key(&harness, 78386u64).count != 1usize { os.exit(84i32) }
-    if widget.focus(&runtime, testing.by_key(&harness, 78386u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.counters[13usize].count != 1usize || s.counters[12usize].count != 2usize || s.counters[11usize].count != 4usize || s.counters[9usize].count != 2usize { os.exit(79i32) }
+    if !same_element(workspace_node.relations.controls, testing.by_key(&harness, 2460241u64).element) { os.exit(83i32) }
+    if testing.by_key(&harness, 2460242u64).count != 1usize { os.exit(84i32) }
+    if widget.focus(&runtime, testing.by_key(&harness, 2460242u64).element) != ok || testing.press_key(&harness, 13u32, zero) != ok || s.counters[13usize].count != 1usize || s.counters[12usize].count != 2usize || s.counters[11usize].count != 4usize || s.counters[9usize].count != 2usize { os.exit(79i32) }
     s.submenu[1usize].submenu_open = false
     s.counters[9usize].count = 0usize
     s.counters[10usize].count = 0usize
@@ -465,9 +470,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (delete_node, has_delete_node) = find(tree_menu, .MenuItem, "Delete")
     let (auto_check, has_auto_check) = find(tree_menu, .MenuItemCheckbox, "Autosave")
     if testing.by_role(&harness, .MenuItem).count != 4usize || !has_auto_check || !auto_check.state.checked || has_auto_node || !has_delete_node || !delete_node.state.disabled { os.exit(30i32) }
-    if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(69i32) }
+    if testing.pump(&harness, root_closed, time.Instant { nanos: 3600000000i64 }) != ok { os.exit(69i32) }
+    if widget.focus(&runtime, original) != ok || testing.press_key(&harness, 65479u32, zero) != ok || testing.press_key(&harness, 40u32, zero) != ok { os.exit(69i32) }
+    let (root_reopened, reopened_error) = build(&f, &theme, s, false, 0usize)
+    if reopened_error != ok || testing.pump(&harness, root_reopened, time.Instant { nanos: 3610000000i64 }) != ok || widget.focus(&runtime, testing.by_key(&harness, 2403u64).element) != ok { os.exit(69i32) }
     s.counters[9usize].count = 0usize
     if !tap_key(&harness, &runtime, 2403u64) || s.counters[10usize].count != 1usize || s.counters[9usize].count != 1usize { os.exit(31i32) }
+    if testing.pump(&harness, root_closed, time.Instant { nanos: 3620000000i64 }) != ok { os.exit(55i32) }
     let (returned, has_returned) = testing.focused(&harness)
     if !has_returned || !same_element(returned, original) { os.exit(55i32) }
     // The overflow crumb open: Expanded, its menu holding lib and e in order.
