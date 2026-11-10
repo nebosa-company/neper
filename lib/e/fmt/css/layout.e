@@ -721,6 +721,12 @@ fn gen_pseudo(l: *Layout, node: u32, parent_box: u32, kind: usize) {
     }
     let b = new_box(l, inner_for_display(pd), is_inline_level_display(pd), true, node, id)
     append(l, parent_box, b)
+    // A generated box that is a list item gets its marker like any other.
+    if pd == .ListItem {
+        let pm = new_box(l, .Marker, ps.list_style_position == .Inside, true, node, id)
+        bx(l, pm).aux = 1u32
+        append(l, b, pm)
+    }
     // Counters of the pseudo-element itself apply inside it.
     if text.len > 0usize {
         let t = new_box(l, .Text, true, false, node, id)
