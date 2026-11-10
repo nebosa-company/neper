@@ -7719,6 +7719,16 @@ Copy-Item (Join-Path $incrementalFixture 'edits\dep_signature.e') (Join-Path $in
 Copy-Item (Join-Path $incrementalFixture 'edits\main_signature.e') $incrementalMain
 $incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalSignature -notmatch 'rebuilt main' -or $incrementalSignature -notmatch 'rebuilt dep' -or $incrementalSignature -notmatch 'kept e.os') { throw "a signature edit did not rebuild the dependent: $incrementalSignature" }
+# A generic type used across modules leaves no stale edge: an unchanged warm build keeps
+# the importer (its alias and instance edges once never held, so it was rebuilt every time).
+$genericFixture = Join-Path $PSScriptRoot 'fixtures\link\incremental_generic'
+$genericArtifacts = Join-Path $testBuild 'incremental-generic-artifacts'
+if (Test-Path -LiteralPath $genericArtifacts) { Remove-Item -LiteralPath $genericArtifacts -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $genericArtifacts | Out-Null
+$genericFirst = & $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts
+if ($LASTEXITCODE -ne 0 -or $genericFirst -ne 'compiled modules written') { throw 'the generic importer fixture did not compile to artifacts' }
+$genericSame = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $genericSame -notmatch 'kept main' -or $genericSame -match 'rebuilt') { throw "an unchanged generic importer was rebuilt: $genericSame" }
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing

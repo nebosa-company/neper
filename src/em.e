@@ -2219,8 +2219,13 @@ fn mark_type_aggregates(c: *check.Checker, ty: check.Type, module_index: usize, 
     if canonical_error != ok { ret }
     let (aggregate_index, found) = check.aggregate_for_type(c, canonical)
     if !found || aggregate_index >= marks.len { ret }
-    if c.aggregates[aggregate_index].module_index == module_index || marks[aggregate_index] != 0u8 { ret }
-    marks[aggregate_index] = 1u8
+    // An instance is declared by no interface; its edge is the generic's (a `List[T]`
+    // use was stale on every build, so its importer was rebuilt each time).
+    var marked = aggregate_index
+    if c.aggregates[marked].instance { marked = c.aggregates[marked].template_index }
+    if marked >= marks.len { ret }
+    if c.aggregates[marked].module_index == module_index || marks[marked] != 0u8 { ret }
+    marks[marked] = 1u8
     *changed = true
 }
 
@@ -2294,7 +2299,7 @@ fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
                     let (aggregate_first, aggregate_end) = span_of(c, span_aggregates(), imported)
                     var aggregate_at = aggregate_first
                     while aggregate_at < aggregate_end && aggregate_at < marks.len {
-                        if c.aggregates[aggregate_at].module_index == imported && same(c.aggregates[aggregate_at].name, name) {
+                        if c.aggregates[aggregate_at].module_index == imported && !c.aggregates[aggregate_at].instance && same(c.aggregates[aggregate_at].name, name) {
                             if marks[aggregate_at] == 0u8 { changed = true }
                             marks[aggregate_at] = 1u8
                         }
@@ -2429,7 +2434,11 @@ fn mark_alias_uses(c: *check.Checker, g: *graph.Graph, module_index: usize, mark
                 if same(g.imports[import_at].qualifier, qualifier) {
                     let (alias_at, declared) = check.find_alias(c, g.imports[import_at].target, name)
                     if declared && alias_at < c.alias_count && alias_at < marks.len {
-                        if c.aliases[alias_at].module_index != module_index { marks[alias_at] = 1u8 }
+                        // A generic aggregate also leaves an alias row; its interface entry is
+                        // the aggregate's, so the alias edge could never hold (every warm build
+                        // rebuilt the importer) and the aggregate edge already covers it.
+                        let (shadow, shadowed) = check.find_aggregate(c, g.imports[import_at].target, name)
+                        if c.aliases[alias_at].module_index != module_index && !(c.aliases[alias_at].generic && shadowed) { marks[alias_at] = 1u8 }
                     }
                 }
                 import_at += 1usize

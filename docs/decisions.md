@@ -44078,3 +44078,13 @@ unreferenced.
 **Removed: `proc_sys_x86_linux`.** It guarded the i386 syscall numbers and `struct statfs` layout of `e.proc.sys`, but the compiler has no 32-bit Linux back end: `x86 linux` emits an x86-64 image whose code takes the i386 branches, so `getpid` (20) ran as x86-64's `writev` and the fixture answered `Failed` on every host and on every compiler built since it was added. The fixture, its run line and its `ONE_HOST` entry are gone. The `target.arch == .X86` branches in `e.proc.sys.host.linux` remain, untested, for the day there is a back end; a guard for them belongs with that back end.
 
 **Not done.** `ui_activation` fails on Windows at exit 8 (the registry cleanup), also before this change, and was passed over locally in the Windows run; it leaves two keys, `HKCU\Software\Classes\.neper-test` and `neper.Test`. The full Linux suite passed on GitHub without the collect mode (79 minutes) and the Windows suite passed with a seed compiler (33 minutes), both before the fixture was removed; the removal was checked by the suite-parity script and by parsing `run.sh`, not by another run.
+
+## D5972 — An importer of a generic type is kept by an unchanged warm build
+
+**Problem.** `emit-em-all --incremental` over the unchanged `e.*` library rebuilt 126 of 748 modules every run, and took longer (5.5 s) than the cold build (3.6 s). Every importer of a generic type from another module (`e.data.list`'s `List`, `Graph`, `Deque`, `Tensor`, `Buf`) carried an edge that could not hold, so it and everything importing it was rebuilt.
+
+**Decision.** The edge writer marks three things for a `q.Name` mention or a signature type; two were wrong for a generic. A type argument is an instance, which no interface declares, so `mark_type_aggregates` marks the instance's generic (`template_index`) instead, and the `q.Name` walk skips instances. A generic aggregate also leaves a generic alias row of the same name; the interface lookup finds the aggregate first, so the alias edge (kind 5) failed its kind check on every build. `mark_alias_uses` skips a generic alias whose module also declares an aggregate of the name; the aggregate edge covers it.
+
+**Result.** All-library root, x64-linux, `-j 8`: warm rebuilt modules 126 → 0 and warm 5.5 s → 2.2 s against a cold 3.6 to 4.4 s. Of the 2.2 s, `settle` (reading and checking 748 artifacts) is 1.25 s, load and parse 0.38 s, resolve 0.33 s, declarations 0.18 s. `incremental_generic` fails on the previous compiler (`rebuilt main`) and passes now.
+
+**Not done.** Warm is still not orders of magnitude faster: it parses and resolves every source and reads every artifact before deciding. `--incremental` still takes the serial path and does not use the crew. The full suites were not run.

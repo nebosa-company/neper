@@ -7635,6 +7635,17 @@ incremental_signature=$($test_build/neper-self emit-em-all "$incremental_main" "
 case "$incremental_signature" in *'rebuilt main'*) ;; *) printf %s "a signature edit did not rebuild the dependent: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'rebuilt dep'*) ;; *) printf %s "a signature edit did not rebuild its module: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'kept e.os'*) ;; *) printf %s "an untouched module was rebuilt: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
+# A generic type used across modules leaves no stale edge: an unchanged warm build keeps
+# the importer (its alias and instance edges once never held, so it was rebuilt every time).
+generic_fixture="$repo/tests/selfhost/fixtures/link/incremental_generic"
+generic_artifacts="$test_build/incremental-generic-artifacts"
+rm -rf "$generic_artifacts"
+mkdir -p "$generic_artifacts"
+generic_first=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e" "$repo" x64 linux "$generic_artifacts")
+[ "$generic_first" = 'compiled modules written' ]
+generic_same=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e" "$repo" x64 linux "$generic_artifacts" --incremental)
+case "$generic_same" in *'kept main'*) ;; *) printf %s "an unchanged generic importer was not kept: $generic_same" >&2; echo >&2; exit 1 ;; esac
+case "$generic_same" in *rebuilt*) printf %s "an unchanged generic importer rebuilt a module: $generic_same" >&2; echo >&2; exit 1 ;; esac
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing
