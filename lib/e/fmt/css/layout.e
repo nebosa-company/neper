@@ -5598,6 +5598,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
             var q = 0usize
             while q < span && cursor + q < ncols {
                 if ws.width.kind == .Px && has_w { cspec[cursor + q] = clamp_width(l, kid, wv, -1.0f64) }
+                if is_pct_width(ws.width) { cpct[cursor + q] = maxf(cpct[cursor + q], ws.width.pct) }
                 q += 1usize
             }
             cursor += span
@@ -5615,6 +5616,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
                     var gq = 0usize
                     while gq < gspan && cursor + gq < ncols {
                         if gws.width.kind == .Px && ghas { cspec[cursor + gq] = clamp_width(l, gkid, gwv, -1.0f64) }
+                        if is_pct_width(gws.width) { cpct[cursor + gq] = maxf(cpct[cursor + gq], gws.width.pct) }
                         gq += 1usize
                     }
                     cursor += gspan
@@ -5628,6 +5630,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
                 var gq2 = 0usize
                 while gq2 < gspan2 && cursor + gq2 < ncols {
                     if gws2.width.kind == .Px && ghas2 { cspec[cursor + gq2] = clamp_width(l, kid, gwv2, -1.0f64) }
+                    if is_pct_width(gws2.width) { cpct[cursor + gq2] = maxf(cpct[cursor + gq2], gws2.width.pct) }
                     gq2 += 1usize
                 }
                 cursor += gspan2
