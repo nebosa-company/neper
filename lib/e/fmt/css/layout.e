@@ -8795,7 +8795,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             size_tracks(g.cols, g.nc, g.gap_c, cw, g.items, g.n, true, false, stretch_cols)
         }
         if lanes_dense(cs) {
-            let dense_h = layout_lanes_dense(l, b, g, cs, cw)
+            let dense_h = layout_lanes_dense(l, b, g, cs, cw, ch)
             var dense_stack = ch
             if dense_stack < 0.0f64 { dense_stack = dense_h }
             lanes_mirror(l, b, g, cs, true, cw, dense_stack)
@@ -9375,15 +9375,16 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         let is = bstyle(l, id)
         let pb = bx(l, id)
         var limit = cw
+        let right = (pb.x - ox0) + pb.w + pb.margin[1usize]
         var j = i + 1usize
+        if dense { j = 0usize }
         while j < g.n {
-            if rstart[j] < rstart[i] + rspan[i] && rstart[i] < rstart[j] + rspan[j] {
+            if j != i && rstart[j] < rstart[i] + rspan[i] && rstart[i] < rstart[j] + rspan[j] && (!dense || lefts[j] >= right - 0.01f64) {
                 let cand = lefts[j] - g.gap_c
                 if cand < limit { limit = cand }
             }
             j += 1usize
         }
-        let right = (pb.x - ox0) + pb.w + pb.margin[1usize]
         let free = limit - right
         if free > 0.0f64 {
             var just = is.justify_self
@@ -9417,7 +9418,7 @@ fn lanes_dense(cs: *const style.Style) -> bool {
 }
 
 // Dense packing: each item goes to the earliest free spot, holes beside spanning items included.
-fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -> f64 {
+fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64 {
     position_tracks(g.cols, g.nc, g.gap_c, cw, cs.justify_content)
     let bb0 = bx(l, b)
     let ox0 = bb0.border[3usize] + bb0.padding[3usize]
@@ -9427,7 +9428,10 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
     let (oe, e2) = mem.alloc[f64](l.a, (g.nc + 1usize) * cap)
     let (on, e3) = mem.alloc[usize](l.a, g.nc + 1usize)
     let (cys, e4) = mem.alloc[f64](l.a, g.nc + 1usize)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 }
+    let (dtops, e5) = mem.alloc[f64](l.a, g.n + 1usize)
+    let (dss, e6) = mem.alloc[usize](l.a, g.n + 1usize)
+    let (dsp, e7) = mem.alloc[usize](l.a, g.n + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret 0.0f64 }
     var q = 0usize
     while q < g.nc {
         on[q] = 0usize
@@ -9531,6 +9535,9 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
         pb.x = ox0 + g.cols[best_s].pos + pb.margin[3usize]
         pb.y = oy0 + best_y + pb.margin[0usize]
         let bottom = best_y + pb.margin[0usize] + pb.h + pb.margin[2usize]
+        dtops[i] = best_y
+        dss[i] = best_s
+        dsp[i] = span
         var t3 = best_s
         while t3 < best_s + span && t3 < g.nc {
             os[t3 * cap + on[t3]] = best_y
@@ -9539,6 +9546,40 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
             t3 += 1usize
         }
         if bottom > total { total = bottom }
+        i += 1usize
+    }
+    // An item is aligned within its hole: from its own end to just before the next item below it in any of its lanes (in
+    // any placement order), or to the end of the container.
+    var container_end = total
+    if ch >= 0.0f64 { container_end = ch }
+    i = 0usize
+    while i < g.n {
+        let id = g.items[i].box
+        let is = bstyle(l, id)
+        let pb = bx(l, id)
+        let bottom = (pb.y - oy0) + pb.h + pb.margin[2usize]
+        var limit = container_end
+        var j = 0usize
+        while j < g.n {
+            if j != i && dss[j] < dss[i] + dsp[i] && dss[i] < dss[j] + dsp[j] && dtops[j] >= bottom - 0.01f64 {
+                let cand = dtops[j] - g.gap_r
+                if cand < limit { limit = cand }
+            }
+            j += 1usize
+        }
+        let free = limit - bottom
+        if free > 0.0f64 {
+            var al = is.align_self
+            if al == .Auto { al = cs.align_items }
+            if al == .Center {
+                pb.y += free / 2.0f64
+            } else if al == .End || al == .FlexEnd || al == .SelfEnd {
+                pb.y += free
+            } else if al == .Stretch && is.height.kind == .Auto {
+                let wcontent = pb.w - horizontal_extras(pb)
+                flex_place_item(l, id, wcontent, pb.h - vertical_extras(pb) + free)
+            }
+        }
         i += 1usize
     }
     ret total
