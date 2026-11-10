@@ -1606,9 +1606,13 @@ fn push_entry_clips(p: *Painter, e: u32, root: u32, rx: f64, ry: f64) -> usize {
     var n = 0usize
     var cur = p.l.boxes.items[usize(e)].parent
     var fixed = layout.st(p.l, p.l.boxes.items[usize(e)].style).position == .Fixed
+    let e_is_relative = layout.st(p.l, p.l.boxes.items[usize(e)].style).position == .Relative || layout.st(p.l, p.l.boxes.items[usize(e)].style).position == .Sticky
     while cur != layout.NONE && cur != root && n < 32usize && !fixed {
         let cs = layout.st(p.l, p.l.boxes.items[usize(cur)].style)
-        if clips_overflow(cs) {
+        // An absolutely positioned element is only clipped by its containing block (and what lies above it): a static box between
+        // them is not in its chain of containing blocks. A relatively positioned one stays in its parent's flow, so every ancestor
+        // that clips applies.
+        if clips_overflow(cs) && (cs.position != .Static || e_is_relative) {
             chain[n] = cur
             n += 1usize
         }
