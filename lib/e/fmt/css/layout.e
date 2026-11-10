@@ -6227,10 +6227,15 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch_spec: f64) -> f64 {
             resolve_margins_fixed(l, kid, cw)
             let cap = bx(l, kid)
             cap.w = maxf(0.0f64, cw + horizontal_extras(bx(l, t)) - cap.margin[1usize] - cap.margin[3usize])
-            let content_w = maxf(0.0f64, cap.w - horizontal_extras(cap))
+            var content_w = maxf(0.0f64, cap.w - horizontal_extras(cap))
+            // A caption's own `width`, `min-width` and `max-width` apply to it.
+            let (cap_wv, cap_has_w) = resolve_len(cs.width, cw)
+            if cs.width.kind == .Px && cap_has_w { content_w = to_content_w(l, kid, cap_wv) }
+            content_w = maxf(0.0f64, clamp_width(l, kid, content_w, cw))
+            cap.w = content_w + horizontal_extras(cap)
             var cap_spec_h = -1.0f64
             let (cap_hv, cap_has_h) = resolve_len(cs.height, -1.0f64)
-            if cs.height.kind == .Px && cap_has_h { cap_spec_h = to_content_h(l, kid, cap_hv) }
+            if cs.height.kind == .Px && cap_has_h { cap_spec_h = clamp_height(l, kid, to_content_h(l, kid, cap_hv), -1.0f64) }
             let h = layout_in_new_bfc(l, kid, content_w, cap_spec_h)
             let cap2 = bx(l, kid)
             var cap_content_h = h
