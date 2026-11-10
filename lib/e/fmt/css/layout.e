@@ -9426,6 +9426,16 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
             }
         }
         size_tracks(g.rows, g.nr, g.gap_r, ch, ex, exn, false, false, ch >= 0.0f64 && stretch_rows)
+        // An indefinite height with flexible rows needs a second pass: the `fr` are found again against the height the first gave.
+        if ch < 0.0f64 {
+            var any_fr = false
+            var fi = 0usize
+            while fi < g.nr {
+                if g.rows[fi].max.kind == 2u8 { any_fr = true }
+                fi += 1usize
+            }
+            if any_fr { size_tracks(g.rows, g.nr, g.gap_r, tracks_total(g.rows, g.nr, g.gap_r), ex, exn, false, false, false) }
+        }
     } else {
         size_tracks(g.rows, g.nr, g.gap_r, ch, g.items, 0usize, false, false, stretch_rows)
     }
@@ -9567,6 +9577,9 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         let x0 = left + g.gap_c
         pb.x = ox0 + x0 + pb.margin[3usize]
         pb.y = oy0 + g.rows[start].pos + pb.margin[0usize] + cross_offset(is, cs, area_h - pb.h - pb.margin[0usize] - pb.margin[2usize])
+        let (rrx, rry) = relative_offset(is, cw, -1.0f64)
+        pb.x += rrx
+        pb.y += rry
         let right = x0 + pb.margin[3usize] + pb.w + pb.margin[1usize]
         lefts[i] = x0
         rstart[i] = start
@@ -9779,6 +9792,9 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
         let pb = bx(l, id)
         pb.x = ox0 + g.cols[best_s].pos + pb.margin[3usize]
         pb.y = oy0 + best_y + pb.margin[0usize]
+        let (drx, dry) = relative_offset(is, cw, -1.0f64)
+        pb.x += drx
+        pb.y += dry
         let bottom = best_y + pb.margin[0usize] + pb.h + pb.margin[2usize]
         dtops[i] = best_y
         dss[i] = best_s
@@ -9905,6 +9921,9 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, c
         let y0 = top + g.gap_r
         pb.x = ox0 + g.cols[start].pos + pb.margin[3usize]
         pb.y = oy0 + y0 + pb.margin[0usize]
+        let (lrx, lry) = relative_offset(is, cw, -1.0f64)
+        pb.x += lrx
+        pb.y += lry
         let bottom = y0 + pb.margin[0usize] + pb.h + pb.margin[2usize]
         tops[i] = y0
         sstart[i] = start
