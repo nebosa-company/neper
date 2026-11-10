@@ -8755,6 +8755,50 @@ fn lane_area(tr: []GTrack, n: usize, gap: f64, at: f64, span: usize) -> (f64, f6
     ret (tr[k].pos, grid_area_size(tr, i32(k), i32(sp), gap))
 }
 
+// `fill-reverse` flows the items from the far end, so the whole stack is placed by `align-content` (`justify-content` for lanes
+// along the rows) once it is mirrored: start, center or end of the container, when its size along the stack is definite.
+fn lanes_stack_align(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, columns: bool, extent: f64) {
+    let (fill_rev, track_rev) = lanes_reversal(cs)
+    if !fill_rev || extent < 0.0f64 || g.n == 0usize { ret }
+    var mode = cs.justify_content
+    if columns { mode = cs.align_content }
+    var how = 0u8
+    if mode == .Start || mode == .FlexStart { how = 1u8 } else if mode == .Center { how = 2u8 } else if mode == .End || mode == .FlexEnd { how = 3u8 } else if mode == .FlowEnd { how = 1u8 }
+    if how == 0u8 { ret }
+    let bb = bx(l, b)
+    let ox0 = bb.border[3usize] + bb.padding[3usize]
+    let oy0 = bb.border[0usize] + bb.padding[0usize]
+    var lo = 1000000000.0f64
+    var hi = -1000000000.0f64
+    var i = 0usize
+    while i < g.n {
+        let pb = bx(l, g.items[i].box)
+        var a0 = 0.0f64
+        var a1 = 0.0f64
+        if columns {
+            a0 = pb.y - oy0 - pb.margin[0usize]
+            a1 = pb.y - oy0 + pb.h + pb.margin[2usize]
+        } else {
+            a0 = pb.x - ox0 - pb.margin[3usize]
+            a1 = pb.x - ox0 + pb.w + pb.margin[1usize]
+        }
+        if a0 < lo { lo = a0 }
+        if a1 > hi { hi = a1 }
+        i += 1usize
+    }
+    let free = extent - (hi - lo)
+    // (`safe` alignment: a stack that overflows stays where the flow put it)
+    if free < 0.0f64 { ret }
+    var shift = 0.0f64 - lo
+    if how == 2u8 { shift = free / 2.0f64 - lo } else if how == 3u8 { shift = free - lo }
+    i = 0usize
+    while i < g.n {
+        let pb = bx(l, g.items[i].box)
+        if columns { pb.y += shift } else { pb.x += shift }
+        i += 1usize
+    }
+}
+
 // The far edge of the lanes (the span `track-reverse` reflects across): where they end, which is the container's size only
 // when they fill it.
 fn lanes_span(tr: []GTrack, n: usize, gap: f64, fallback: f64) -> f64 {
@@ -8813,6 +8857,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         var rows_lane = ch
         if rows_lane < 0.0f64 { rows_lane = rows_h }
         lanes_mirror(l, b, g, cs, false, lanes_span(g.rows, g.nr, g.gap_r, rows_lane), cw)
+        lanes_stack_align(l, b, g, cs, false, cw)
         ret rows_h
     }
     if cs.lanes {
@@ -8860,12 +8905,14 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             var dense_stack = ch
             if dense_stack < 0.0f64 { dense_stack = dense_h }
             lanes_mirror(l, b, g, cs, true, lanes_span(g.cols, g.nc, g.gap_c, cw), dense_stack)
+            lanes_stack_align(l, b, g, cs, true, ch)
             ret dense_h
         }
         let lanes_h = layout_lanes(l, b, g, cs, cw, ch)
         var lane_h = ch
         if lane_h < 0.0f64 { lane_h = lanes_h }
         lanes_mirror(l, b, g, cs, true, lanes_span(g.cols, g.nc, g.gap_c, cw), lane_h)
+        lanes_stack_align(l, b, g, cs, true, ch)
         ret lanes_h
     }
     let (sized_items, sized_n) = subgrid_contributions(l, g)

@@ -72,7 +72,7 @@ type CaptionSide = enum u8 { Top, Bottom }
 type EmptyCells = enum u8 { Show, Hide }
 type FlexDirection = enum u8 { Row, RowReverse, Column, ColumnReverse }
 type FlexWrap = enum u8 { Nowrap, Wrap, WrapReverse, Balance }
-type Align = enum u8 { Normal, Start, End, FlexStart, FlexEnd, Center, Stretch, SpaceBetween, SpaceAround, SpaceEvenly, Baseline, FirstBaseline, LastBaseline, SelfStart, SelfEnd, Left, Right, Safe, Unsafe, Auto }
+type Align = enum u8 { Normal, Start, End, FlexStart, FlexEnd, Center, Stretch, SpaceBetween, SpaceAround, SpaceEvenly, Baseline, FirstBaseline, LastBaseline, SelfStart, SelfEnd, Left, Right, Safe, Unsafe, Auto, FlowStart, FlowEnd }
 type DecorationStyle = enum u8 { Solid, Double, Dotted, Dashed, Wavy }
 type VAlign = enum u8 { Baseline, Sub, Super, Top, TextTop, Middle, Bottom, TextBottom, Length }
 
@@ -482,7 +482,7 @@ fn parse_align(ap: *const Ap, v: str, fallback: Align) -> Align {
         if parts.len == 2usize && str.eq(parts[0usize], "last") { ret .LastBaseline }
         if parts.len == 2usize && str.eq(parts[0usize], "first") { ret .FirstBaseline }
     }
-    let set = ",normal,start,end,flex-start,flex-end,center,stretch,space-between,space-around,space-evenly,baseline,first-baseline,last-baseline,self-start,self-end,left,right,safe,unsafe,auto,"
+    let set = ",normal,start,end,flex-start,flex-end,center,stretch,space-between,space-around,space-evenly,baseline,first-baseline,last-baseline,self-start,self-end,left,right,safe,unsafe,auto,flow-start,flow-end,"
     ret kw[Align](t, set, fallback)
 }
 
