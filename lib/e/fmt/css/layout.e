@@ -8648,6 +8648,12 @@ fn grid_area_size(tr: []GTrack, start: i32, span: i32, gap: f64) -> f64 {
 
 // The content width item `id` takes in an area `area_w` wide (the margins are in the box already).
 fn grid_item_width(l: *Layout, id: u32, cs: *const style.Style, area_w: f64) -> f64 {
+    ret grid_item_width_h(l, id, cs, area_w, -1.0f64)
+}
+
+// `area_h` is the height of the grid area (negative: not known), the basis of a percentage `height` that turns into a width by
+// the item's aspect ratio.
+fn grid_item_width_h(l: *Layout, id: u32, cs: *const style.Style, area_w: f64, area_h: f64) -> f64 {
     let is = bstyle(l, id)
     let ib = bx(l, id)
     var just = is.justify_self
@@ -8667,7 +8673,7 @@ fn grid_item_width(l: *Layout, id: u32, cs: *const style.Style, area_w: f64) -> 
     if is.width.kind == .Px && has_w { ret maxf(0.0f64, clamp_width(l, id, to_content_w(l, id, wv), area_w)) }
     // An item with a preferred ratio and a definite height takes its width from the ratio rather than stretching.
     if just == .Normal && is.height.kind == .Px && ib.inner != .Replaced && has_box_ratio(l, id) {
-        let (hv2, has_h2) = resolve_len(is.height, area_w)
+        let (hv2, has_h2) = resolve_len(is.height, area_h)
         if has_h2 {
             let (rw2, has_rw2) = ratio_width(l, id, to_content_h(l, id, hv2))
             if has_rw2 { ret maxf(0.0f64, clamp_width(l, id, rw2, area_w)) }
@@ -9084,7 +9090,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         let area_h = grid_area_size(g.rows, g.items[i].rs, g.items[i].rn, g.gap_r)
         let ax = g.cols[usize(g.items[i].cs)].pos
         let ay = g.rows[usize(g.items[i].rs)].pos
-        let w = grid_item_width(l, id, cs, area_w)
+        let w = grid_item_width_h(l, id, cs, area_w, area_h)
         // Height: specified, stretched to the area, or from the content.
         var align = is.align_self
         if align == .Auto { align = cs.align_items }
