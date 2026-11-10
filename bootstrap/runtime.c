@@ -48,13 +48,13 @@ void neper_os_copy_bytes(unsigned char *dst, size_t dst_len, const unsigned char
 }
 /* `os.sha256_blocks` (D332): the C runtime has no SHA extensions, so none are done and
    the caller runs its own rounds. */
-size_t neper_os_sha256_blocks(size_t *state, size_t state_len, const unsigned char *bytes, size_t len) {
-    (void)state; (void)state_len; (void)bytes; (void)len;
+size_t neper_os_sha256_blocks(size_t features, size_t *state, size_t state_len, const unsigned char *bytes, size_t len) {
+    (void)features; (void)state; (void)state_len; (void)bytes; (void)len;
     return 0;
 }
 /* `os.crc32c_bytes` (D332): likewise none; the caller keeps its tables. */
-size_t neper_os_crc32c_bytes(size_t *crc, size_t crc_len, const unsigned char *bytes, size_t len) {
-    (void)crc; (void)crc_len; (void)bytes; (void)len;
+size_t neper_os_crc32c_bytes(size_t features, size_t *crc, size_t crc_len, const unsigned char *bytes, size_t len) {
+    (void)features; (void)crc; (void)crc_len; (void)bytes; (void)len;
     return 0;
 }
 /* C098: no CPU features, so the AES-NI and PCLMULQDQ entry points answer none and the caller keeps its portable path. */

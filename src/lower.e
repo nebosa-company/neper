@@ -1268,9 +1268,9 @@ fn register_return_type(c: *check.Checker, ty: check.Type) -> bool {
 
 fn call_return_layout(c: *check.Checker, call: check.CallInfo, result: *ReturnLayout) -> err {
     result.alignment = 1usize
-    if call.function.return_count + 1usize <= 8usize {
-        result.offsets = result.inline_offsets[0usize..8usize]
-    } else {
+    // The caller points `offsets` at its own `inline_offsets`: the bootstrap cannot slice
+    // an array field through a pointer, only one of a local.
+    if 8usize < call.function.return_count + 1usize {
         let (offsets, offsets_error) = mem.alloc[usize](c.arena, call.function.return_count + 1usize)
         if offsets_error != ok { ret offsets_error }
         result.offsets = offsets
@@ -3068,6 +3068,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         var function_call: check.CallInfo = zero
                         function_call.function = function
                         var return_layout: ReturnLayout = zero
+                        return_layout.offsets = return_layout.inline_offsets[0usize..8usize]
                         try call_return_layout(c, function_call, &return_layout)
                         hidden = return_layout.via_slot
                     }
@@ -3336,6 +3337,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
     let foreign = entry.checker.fork.id != c.fork.id
     let callee = oracle.functions[entry.function_index]
     var return_layout: ReturnLayout = zero
+    return_layout.offsets = return_layout.inline_offsets[0usize..8usize]
     try call_return_layout(c, call, &return_layout)
     let hidden_return = return_layout.via_slot && results.count != 0usize
     // ponytail: multi-result copies use one slot even for a single return;
@@ -4418,6 +4420,7 @@ fn emit_call_results(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, c
     results.call = call
     results.count = call.function.return_count
     var return_layout: ReturnLayout = zero
+    return_layout.offsets = return_layout.inline_offsets[0usize..8usize]
     let return_layout_error = call_return_layout(c, call, &return_layout)
     if return_layout_error != ok { ret return_layout_error }
     // A helper another module declares, reached from a kernel's device build (D24,
@@ -6166,6 +6169,7 @@ fn emit_return_values(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         var call: check.CallInfo = zero
         call.function = function
         var return_layout: ReturnLayout = zero
+        return_layout.offsets = return_layout.inline_offsets[0usize..8usize]
         let layout_error = call_return_layout(c, call, &return_layout)
         if layout_error != ok || !return_layout.via_slot { ret check.InvalidReturn }
         var result_at = 0usize
@@ -9250,6 +9254,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     var function_call: check.CallInfo = zero
     function_call.function = function
     var return_layout: ReturnLayout = zero
+    return_layout.offsets = return_layout.inline_offsets[0usize..8usize]
     let return_layout_error = call_return_layout(c, function_call, &return_layout)
     if return_layout_error != ok { ret return_layout_error }
     // A `@cc` function takes its parameters as C passes them (D1676), and a struct or union
@@ -10034,6 +10039,7 @@ fn emit_formatter_return(c: *check.Checker, module_index: usize, instance: check
     var call: check.CallInfo = zero
     call.function = instance
     var return_layout: ReturnLayout = zero
+    return_layout.offsets = return_layout.inline_offsets[0usize..8usize]
     let layout_error = call_return_layout(c, call, &return_layout)
     if layout_error != ok || !return_layout.via_slot { ret check.InvalidReturn }
     var values: [2]usize = zero
@@ -10656,6 +10662,7 @@ fn lower_formatter_instance(c: *check.Checker, g: *graph.Graph, module_index: us
     var call: check.CallInfo = zero
     call.function = instance
     var return_layout: ReturnLayout = zero
+    return_layout.offsets = return_layout.inline_offsets[0usize..8usize]
     let return_layout_error = call_return_layout(c, call, &return_layout)
     if return_layout_error != ok { ret return_layout_error }
     var hidden = 0usize

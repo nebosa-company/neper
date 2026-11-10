@@ -59,7 +59,7 @@
 #define MAX_LOOP_DEPTH 64
 #define MAX_NESTING 1024
 #define MAX_ARRAY_ELEMENTS 4096
-#define MAX_FIELDS 161
+#define MAX_FIELDS 192
 #define MAX_FIELD_PATH 32
 #define MAX_SOURCES 128
 
@@ -1146,10 +1146,10 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.clock", "neper_os_clock"); intrinsic_param(fn, token, "c", clock); intrinsic_returns(fn, 2, i64, error);
     /* `os.copy_bytes(dst, src)` (D329): the shorter length's worth of bytes, one `rep movsb`. */
     OS_FN("os.copy_bytes", "neper_os_copy_bytes"); intrinsic_param(fn, token, "dst", bytes); intrinsic_param(fn, token, "src", const_bytes); intrinsic_returns(fn, 0, error, error);
-    /* `os.sha256_blocks(state, bytes)` (D332): the whole blocks compressed with the SHA extensions, or none. */
-    OS_FN("os.sha256_blocks", "neper_os_sha256_blocks"); intrinsic_param(fn, token, "state", intrinsic_slice(usize, 0)); intrinsic_param(fn, token, "bytes", const_bytes); intrinsic_returns(fn, 1, usize, error);
-    /* `os.crc32c_bytes(crc, bytes)` (D332): the bytes folded with the CRC32 instruction, or none. */
-    OS_FN("os.crc32c_bytes", "neper_os_crc32c_bytes"); intrinsic_param(fn, token, "crc", intrinsic_slice(usize, 0)); intrinsic_param(fn, token, "bytes", const_bytes); intrinsic_returns(fn, 1, usize, error);
+    /* `os.sha256_blocks(features, state, bytes)` (D332): the whole blocks compressed with the SHA extensions, or none. */
+    OS_FN("os.sha256_blocks", "neper_os_sha256_blocks"); intrinsic_param(fn, token, "features", usize); intrinsic_param(fn, token, "state", intrinsic_slice(usize, 0)); intrinsic_param(fn, token, "bytes", const_bytes); intrinsic_returns(fn, 1, usize, error);
+    /* `os.crc32c_bytes(features, crc, bytes)` (D332): the bytes folded with the CRC32 instruction, or none. */
+    OS_FN("os.crc32c_bytes", "neper_os_crc32c_bytes"); intrinsic_param(fn, token, "features", usize); intrinsic_param(fn, token, "crc", intrinsic_slice(usize, 0)); intrinsic_param(fn, token, "bytes", const_bytes); intrinsic_returns(fn, 1, usize, error);
     /* C098: `os.cpu_features()`, `os.aes_expand_key(features, key, out)`, `os.aes_ctr(features, keys, counter, data)` and `os.ghash_blocks(features, state, h, data)`: AES-NI and PCLMULQDQ, or none. */
     OS_FN("os.cpu_features", "neper_os_cpu_features"); intrinsic_returns(fn, 1, usize, error);
     OS_FN("os.aes_expand_key", "neper_os_aes_expand_key"); intrinsic_param(fn, token, "features", usize); intrinsic_param(fn, token, "key", const_bytes); intrinsic_param(fn, token, "out", bytes); intrinsic_returns(fn, 1, usize, error);

@@ -2194,6 +2194,11 @@ fn window_event_kind(code: u32) -> WindowEventKind {
     if code == 11u32 { ret WindowEventKind.Paint }
     ret WindowEventKind.Close
 }
+// The page keeps the ring, so nothing is dropped on this side.
+fn window_events_dropped() -> usize {
+    ret 0usize
+}
+
 // A page's window gives one record of eight u32s (the ring of lib/wasm/window.js): kind | button << 8 |
 // modifiers << 16 | repeat << 24, x, y, width, height, key, delta, codepoint.
 fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {

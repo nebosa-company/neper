@@ -60,7 +60,7 @@ fn validate_test_parse(text: str) -> err {
     ret parse.parse(&tree, text)
 }
 
-fn self_test() -> err {
+fn self_test(a: *mem.Arena) -> err {
     var basic = lex.init("use e.io\r\nfn main() -> err { // note\n    ret ok\n}\n")
     let basic_use = lex.next(&basic)
     if basic_use.kind != .KwUse || usize(basic_use.start) != 0usize || usize(basic_use.end) != 3usize { ret lex.InvalidSource }
@@ -774,7 +774,7 @@ fn self_test() -> err {
     try emit_x64.self_test()
     try emit_a64.self_test()
     try codegen_x64.self_test()
-    try object_coff.self_test()
+    try object_coff.self_test(a)
     try object_elf.self_test()
     try link_elf.self_test()
     try link_pe.self_test()
@@ -7774,7 +7774,7 @@ fn link_artifact_image(a: *mem.Arena, program: *em_link.Program, is_windows: boo
     let init_error = emit_x64.init(&executable, storage)
     if init_error != ok { ret (empty, init_error) }
     // A truncated import order must fail the link rather than drop imports silently.
-    if !nir.import_order_ok(&program.builder) { ret (empty, io.TooSmall) }
+    if !nir.import_order_ok(&program.builder) { ret (empty, nir.Capacity) }
     var write_error: err = ok
     if is_windows {
         write_error = link_pe.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines[..program.line_count], table_at, &executable)
@@ -14083,8 +14083,15 @@ fn capacity_name(result: err) -> str {
 // Whether the command's operand names something that is there; a flag or nothing at all counts as there.
 fn operand_present(a: *mem.Arena, operand: str) -> bool {
     if operand.len == 0usize || operand[0usize] == 45u8 { ret true }
-    let (_, stat_error) = os.stat(a, operand)
-    ret stat_error == ok
+    // An open, not `os.stat`, which the bootstrap does not seed: only an absent name is
+    // missing, so a directory, which Windows refuses to open, is still present.
+    let flags = os.OpenFlags { read: true, write: false, create: false, truncate: false, append: false }
+    let (file, open_error) = os.open(a, operand, flags)
+    if open_error == ok {
+        let close_error = os.close(file)
+        ret true
+    }
+    ret open_error != os.NotFound
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -14224,7 +14231,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if numeric_error != ok { ret numeric_error }
     var report = stderr_sink()
     if args.len == 2usize && same(args[1usize], "self-test") {
-        try self_test()
+        try self_test(a)
         try io.print("selfhost lexer ok\n")
         ret ok
     }
@@ -15325,7 +15332,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
                 // A truncated import order must fail the link rather than drop imports silently.
-                if !nir.import_order_ok(&builder) { ret io.TooSmall }
+                if !nir.import_order_ok(&builder) { ret nir.Capacity }
                 if has_flag(args, "--shared-library") { try collect_exports(&loaded, &checker, &builder, args) }
                 if machine_abi_of(args) == .Windows {
                     try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)

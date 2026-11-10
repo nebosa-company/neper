@@ -44,7 +44,10 @@ if ($seed) {
     & $seed emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $compiler -j 1 --release | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'the seed did not build the self-hosted compiler slice' }
 } else {
-    & $neper build (Join-Path $repo 'src\main.e') --output $compiler --emit-asm $compilerAsm
+    # The bootstrap's default arena is 64 MB, not a ceiling that grows: with no `--arena`
+    # the compiler it builds is out of room on its first module. This one is reserved,
+    # and committed as it is used.
+    & $neper build (Join-Path $repo 'src\main.e') --arena 12g --output $compiler --emit-asm $compilerAsm
     if ($LASTEXITCODE -ne 0) { throw 'self-hosted compiler slice did not build' }
 }
 & python (Join-Path $repo 'scripts\check_module_surfaces.py') --compiler $compiler --arch x64 --os windows

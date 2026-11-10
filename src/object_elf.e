@@ -8,6 +8,18 @@ use nir
 error Capacity
 error InvalidObject
 
+// What `em_link.host_runtime_symbol` answers: the reserved prefix of the host runtime.
+fn host_runtime_symbol(name: str) -> bool {
+    let prefix = "neper_"
+    if name.len < prefix.len { ret false }
+    var at = 0usize
+    while at < prefix.len {
+        if name[at] != prefix[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 type Symbol = struct {
     name: str,
     module: str,
@@ -124,9 +136,10 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
                 name = reference.symbol
                 reference_module = ""
             } else {
-                if !reference.has_target {
+                if !reference.has_target && !host_runtime_symbol(name) {
                     // A non-library reference with no target has no module to qualify with;
-                    // silently matching the empty module could bind the wrong symbol.
+                    // silently matching the empty module could bind the wrong symbol. The
+                    // host runtime's own symbols are in no module and stay unqualified.
                     ret InvalidObject
                 }
             }

@@ -8,7 +8,6 @@
 use e.io
 use e.mem
 use e.os
-use e.str
 use check
 use graph
 use nir
@@ -371,12 +370,12 @@ fn count_nodes(a: *mem.Arena, g: *graph.Graph) -> (graph.FrontCounts, err) {
 // The host the driver resolved, not a cwd-shape guess.
 fn host_name(a: *mem.Arena, host: str) -> str {
     if platform.triple().len != 0usize { ret "WASI wasm32" }
-    if str.eq(host, "x64-linux") { ret "Linux x64" }
-    if str.eq(host, "aarch64-linux") { ret "Linux aarch64" }
-    if str.eq(host, "x64-macos") { ret "macOS x64" }
-    if str.eq(host, "aarch64-macos") { ret "macOS aarch64" }
-    if str.eq(host, "x64-windows") { ret "Windows x64" }
-    if str.eq(host, "aarch64-windows") { ret "Windows aarch64" }
+    if graph.same(host,"x64-linux") { ret "Linux x64" }
+    if graph.same(host,"aarch64-linux") { ret "Linux aarch64" }
+    if graph.same(host,"x64-macos") { ret "macOS x64" }
+    if graph.same(host,"aarch64-macos") { ret "macOS aarch64" }
+    if graph.same(host,"x64-windows") { ret "Windows x64" }
+    if graph.same(host,"aarch64-windows") { ret "Windows aarch64" }
     let (cwd, cwd_error) = os.current_dir(a)
     if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 { ret "Linux x64" }
     ret "Windows x64"

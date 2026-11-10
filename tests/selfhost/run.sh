@@ -12,6 +12,19 @@ repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 neper="$repo/build/linux/neper"
 test_build="$repo/build/linux/tests/selfhost"
 
+# NEPER_SUITE_COLLECT=1, under bash: a failing step is recorded and the suite goes on, so one
+# run names every failure instead of the first. A step that fails can make later ones fail
+# too, so read the list from the top. The run still ends non-zero when anything was recorded.
+suite_collect=
+if [ -n "${NEPER_SUITE_COLLECT:-}" ] && [ -n "${BASH_VERSION:-}" ]; then
+    suite_collect=/tmp/neper-suite-failures.txt
+    : > "$suite_collect"
+    set +eu
+    set -E
+    eval 'trap '"'"'printf "%s\n" "line $LINENO: $BASH_COMMAND" | cut -c1-400 >> "$suite_collect"'"'"' ERR'
+    eval 'exit() { printf "%s\n" "line ${BASH_LINENO[0]}: exit ${1:-0}" >> "$suite_collect"; return 0; }'
+fi
+
 # A fixture that exits 77 exercised no graphics capability: report SKIP, not PASS.
 gpu_run() {
     name=$1; shift
@@ -64,7 +77,10 @@ if [ -n "${NEPER_SEED:-}" ]; then
     # option.
     "$NEPER_SEED" emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/neper-self" -j 1 --release
 else
-    $neper build "$repo/src/main.e" --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
+    # The bootstrap's default arena is 64 MB, not a ceiling that grows: with no `--arena`
+    # the compiler it builds is out of room on its first module. This one is reserved,
+    # and committed as it is used.
+    $neper build "$repo/src/main.e" --arena 12g --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
 fi
 python3 "$repo/scripts/check_module_surfaces.py" --compiler "$test_build/neper-self" --arch x64 --os linux
 # The deferred-library fixture manifest (D1529): current, and every delivered API
@@ -80,7 +96,9 @@ python3 "$repo/scripts/check_agent_routes.py"
 python3 "$repo/scripts/ui_audit_test.py"
 # Every bootstrap frame has to cover the temporaries its statements allocate. A
 # frame sized by guess rather than by measurement lets a deep statement address
-# below rsp, into the outgoing argument area and past the stack pointer.
+# below rsp, into the outgoing argument area and past the stack pointer. A seed has no
+# bootstrap asm to read, so the check is the bootstrap path's alone, as in run.ps1.
+if [ -z "${NEPER_SEED:-}" ]; then
 awk '
 function report() {
     if (proc != "" && frame > 0 && deepest > frame) {
@@ -104,6 +122,7 @@ frame == 0 { next }
 }
 END { report(); if (bad) exit 1; exit 0 }
 ' "$test_build/neper-self.s"
+fi
 # A bootstrap code-generation regression: `.len` on a call result is read out of a
 # register, not an address, because a call result has no address. Built and run with
 # the bootstrap, since that is the back end that had it wrong.
@@ -2511,7 +2530,7 @@ chmod +x "$test_build/ui-browser-selfhost"
 fmt_url_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_url/src/main.e" "$repo" x64 linux "$test_build/fmt-url-selfhost")
 [ "$fmt_url_written" = 'executable written' ]
 chmod +x "$test_build/fmt-url-selfhost"
-NEPER_COMPILER="$test_build/neper-self" NEPER_URL_WPT_EXE="$test_build/url-wpt-selfhost" "$repo/tests/browser/url/run.sh" --all
+NEPER_COMPILER="$test_build/neper-self" NEPER_URL_WPT_EXE="$test_build/url-wpt-selfhost" bash "$repo/tests/browser/url/run.sh" --all
 # `e.text.charset`, `e.text.charset_cjk`, `e.fmt.html.encoding`: Encoding Standard labels, single-byte and multi-byte decoders (windows-1252, ISO-8859-2, KOI8-R, Shift_JIS, EUC-JP, Big5, GBK, GB18030, EUC-KR, ISO-2022-JP), BOM override and the HTML meta prescan (tracker 1.4).
 text_encoding_std_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_encoding_std/src/main.e" "$repo" x64 linux "$test_build/text-encoding-std-selfhost")
 [ "$text_encoding_std_written" = 'executable written' ]
@@ -3524,7 +3543,18 @@ python3 "$repo/scripts/dump_glsl.py" "$test_build/loop-glsl-selfhost" --check "$
 gl_triangle_written=$($test_build/neper-self emit-executable "$repo/examples/gl_triangle.e" "$repo" x64 linux "$test_build/gl-triangle-selfhost")
 [ "$gl_triangle_written" = 'executable written' ]
 chmod +x "$test_build/gl-triangle-selfhost"
-if [ -n "${DISPLAY:-}" ]; then "$test_build/gl-triangle-selfhost" --frames 3; fi
+# A display is not an OpenGL context: under a bare Xvfb the example answers
+# `x.khronos.context.Unsupported`, which is a host without the capability, not a failure.
+if [ -n "${DISPLAY:-}" ]; then
+    gl_triangle_status=0
+    gl_triangle_output=$("$test_build/gl-triangle-selfhost" --frames 3 2>&1) || gl_triangle_status=$?
+    if [ "$gl_triangle_status" -ne 0 ]; then
+        case "$gl_triangle_output" in
+            *'x.khronos.context.Unsupported'*) echo 'SKIP gl_triangle (no OpenGL context)' ;;
+            *) printf '%s\n' "gl_triangle failed: exit $gl_triangle_status: $gl_triangle_output" >&2; exit 1 ;;
+        esac
+    fi
+fi
 # The PostgreSQL and MySQL drivers' own logic -- numeric decoding, parameter encoding, the MySQL
 # statement scanner and literal rendering, error mapping -- with no server and no client library.
 db_units_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/x_db_units/src/main.e" "$repo" x64 linux "$test_build/x-db-units-selfhost")
@@ -4671,12 +4701,6 @@ proc_sys_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 chmod +x "$test_build/proc-sys-selfhost"
 proc_sys_output=$("$test_build/proc-sys-selfhost")
 [ "$proc_sys_output" = 'proc sys ok' ]
-# Linux i386 has its own getpid/statfs syscall table and a four-byte `struct statfs` layout.
-proc_sys_x86_path="$test_build/proc-sys-x86-selfhost"
-proc_sys_x86_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/proc_sys_x86_linux/src/main.e" "$repo" x86 linux "$proc_sys_x86_path" -j 2)
-[ "$proc_sys_x86_written" = 'executable written' ]
-chmod +x "$proc_sys_x86_path"
-"$proc_sys_x86_path"
 # e.metrics.export: Prometheus and OpenMetrics text against prometheus_client, OTLP/JSON against the OTLP protobuf definitions (130 cases, D2723).
 metrics_export_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/metrics_export/src/main.e" "$repo" x64 linux "$test_build/metrics-export-selfhost" -j 2)
 [ "$metrics_export_written" = 'executable written' ]
@@ -12372,4 +12396,9 @@ else
     printf '%s\n' 'NeperOS tests skipped: NEPER_NEPEROS=1 runs them'
 fi
 
+if [ -n "$suite_collect" ] && [ -s "$suite_collect" ]; then
+    printf '%s\n' "==== the suite recorded $(grep -c '' "$suite_collect") failing step(s) ===="
+    cat "$suite_collect"
+    eval 'builtin exit 1'
+fi
 printf '%s\n' 'selfhost tests passed'

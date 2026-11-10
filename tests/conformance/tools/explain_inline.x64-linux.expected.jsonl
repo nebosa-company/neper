@@ -97,6 +97,8 @@
 {"record":"inline","symbol":"e.os.dir_close","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.release_parent","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.parent_of","decision":"not-a-candidate","reason":"its result comes back through a slot","pass":1}
+{"record":"inline","symbol":"e.os.set_window_host","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_hosted","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.x_put16","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.x_put32","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.x_get16","decision":"inlinable","reason":"at or under the cap","pass":1}
@@ -105,6 +107,7 @@
 {"record":"inline","symbol":"e.os.x_send","decision":"rejected","reason":"its body is over the cap","pass":1}
 {"record":"inline","symbol":"e.os.window_slot","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.window_push","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_events_dropped","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.x_keysym","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.x_await_reply","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.x_resource","decision":"inlinable","reason":"at or under the cap","pass":1}
@@ -134,11 +137,11 @@
 {"record":"inline","symbol":"e.os.d_body","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.d_finish","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.d_call","decision":"inlinable","reason":"at or under the cap","pass":1}
-{"record":"inline","symbol":"e.os.d_reply","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.d_reply","decision":"rejected","reason":"its body is over the cap","pass":1}
 {"record":"inline","symbol":"e.os.d_signal","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.d_write","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.d_send","decision":"inlinable","reason":"at or under the cap","pass":1}
-{"record":"inline","symbol":"e.os.d_answer","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.d_answer","decision":"rejected","reason":"its body is over the cap","pass":1}
 {"record":"inline","symbol":"e.os.d_error","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.r_u32_at","decision":"rejected","reason":"its body is over the cap","pass":1}
 {"record":"inline","symbol":"e.os.r_pad","decision":"inlinable","reason":"at or under the cap","pass":1}
@@ -184,6 +187,7 @@
 {"record":"inline","symbol":"e.os.signal_default","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.signal_raise","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.sandbox_child_call","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.window_present_rect","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"contract.bump","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"contract.first","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"contract.total","decision":"inlinable","reason":"at or under the cap","pass":2}
@@ -237,6 +241,8 @@
 {"record":"inline","symbol":"e.os.socket_shutdown","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.dir_close","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.release_parent","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.set_window_host","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.window_hosted","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.x_put16","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.x_put32","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.x_get16","decision":"inlinable","reason":"at or under the cap","pass":2}
@@ -244,6 +250,7 @@
 {"record":"inline","symbol":"e.os.x_pad4","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.window_slot","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.window_push","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.window_events_dropped","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.x_await_reply","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.x_resource","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.x_simple","decision":"rejected","reason":"its body is over the cap","pass":2}
@@ -267,7 +274,6 @@
 {"record":"inline","symbol":"e.os.d_body","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.d_finish","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.d_call","decision":"rejected","reason":"its body is over the cap","pass":2}
-{"record":"inline","symbol":"e.os.d_reply","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.d_signal","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.d_write","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.d_send","decision":"rejected","reason":"its body is over the cap","pass":2}
@@ -299,5 +305,6 @@
 {"record":"inline","symbol":"e.os.signal_default","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.signal_raise","decision":"rejected","reason":"its body is over the cap","pass":2}
 {"record":"inline","symbol":"e.os.sandbox_child_call","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.window_present_rect","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"transformation","name":"vectorize","decision":"unavailable","reason":"no vectorizer: automatic vectorisation is not scheduled, and Vec and Mask lower lane by lane"}
 {"record":"result","ok":true,"exit_code":0,"data":{"executable":"conformance-tools-explain-inline.out","diagnostics":0}}

@@ -109,7 +109,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     compute.install()
     if !check_context_state() || check_worker_slots() != ok { os.exit(1i32) }
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
-    if found_error == gpu.Unsupported {
+    if found_error == gpu.Unsupported || found_error == gpu.NoDevice {
         let printed = io.print("no OpenGL compute device; nothing checked\n")
         os.exit(77i32)
     }

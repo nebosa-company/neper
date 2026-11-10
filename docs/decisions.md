@@ -44041,3 +44041,40 @@ unreferenced.
 **Result.** The all-library root of D5968: 11.6 → 3.2 s on Windows and 12.3 → 3.3 s on Linux; the compiler's own 59 modules 2.0 → 0.7 s. `crew_windows` gains a check in both suites: its artifacts written on the crew with `-j 3 --perturb` link to the `-j 1` image, in release. The nine sections of `run.ps1` that call `emit-em-all`, replayed against the new compiler, pass: the link fixtures, the incremental sequences (cold on the crew, then `--incremental`), the device-edit cases, the artifact-format and edge checks. Stage 2 equals stage 3.
 
 **Not done.** The new check passes on a compiler that lowers whole too, since those artifacts link to the same image; it guards the crew's artifacts, not that the crew is used. The C bootstrap could not compile the tree to confirm `main.e` stays inside its subset: it stops in `lib/e/str.e`, which this change does not touch. The full suites were not run, and of `run.sh` only the `crew_windows` check was replayed.
+
+## D5971 — The bootstrap builds the tree again, and the Linux suite's first steps pass
+
+**The Linux suite had not run since 6 November.** `linux-suite.yml` was not valid YAML (two step names held an unquoted colon, e20ac434d), so GitHub refused every dispatch and nothing showed what else had drifted. Six things stood between `run.sh` and its first fixture.
+
+**The C bootstrap could not build `src/main.e`.** It compiles only the modules a program reaches, and what it reached had left its subset:
+- `src/stats.e` called `e.str.eq` (84831dde6), which pulled in `lib/e/str.e` and its float literals, which the bootstrap does not lex. It now calls `graph.same`.
+- `check.Checker` has 163 members and `MAX_FIELDS` was 161. It is 192.
+- `src/object_coff.e` held a module-scope `var` for its 65,536-relocation self-test (1bd8709b4); the bootstrap has none. The array comes from the arena, which `self_test` now takes.
+- `io.TooSmall` and `os.stat` are not seeded in the bootstrap. The two link refusals return `nir.Capacity`; `operand_present` opens the operand and treats only `NotFound` as absent, so a directory Windows refuses to open is still present.
+- `os.sha256_blocks` and `os.crc32c_bytes` took a features word in source (76dcba220) and not in the bootstrap's seeds or its C runtime. Both take it.
+- `call_return_layout` sliced an array field through a pointer (D5967), which the bootstrap types as a mismatch; a local's field it accepts. Each of the seven callers points `offsets` at its own `inline_offsets`, and the callee only allocates past eight.
+
+**`object-file` failed on Linux for every module.** ca688ff37 refused any non-library reference with no target, which is every host-runtime symbol. `object_elf` lets the reserved `neper_` prefix through unqualified, as `em_link` does.
+
+**`e.os.window_events_dropped` existed only on Windows** (1c28bc9e0) while the catalogue delivers it for `e.os`. Linux counts its ring's drops the same way, macOS counts the oldest event it evicts, and WASI and NeperOS, which queue nothing, answer 0.
+
+**`run.sh` under `NEPER_SEED` read the bootstrap's assembly unconditionally;** it is guarded as in `run.ps1`.
+
+**The bootstrap-built compiler had a 64 MB arena.** 351040a44 took `--arena 1g` off every compiler build line so the self-hosted compiler grows into what it needs; for the C bootstrap no `--arena` is its 64 MB default, and the compiler it built was exhausted on its first module (`index-file lib/e/mem.e`, 3.7 MB peak). The bootstrap line in both suite scripts asks for `--arena 12g`, which is reserved and committed as used: the same command then peaks at 17 MB and the module-surface gate passes with that compiler.
+
+**Fixtures and the workflow that had only ever run on Windows.** Each stopped a GitHub run of the Linux suite, in this order:
+- `tests/browser/url/run.sh` had no executable bit and the workflow chmods only `scripts/` and `tests/selfhost/`; `run.sh` runs it through `bash`.
+- `os_group` demanded `NotFound` for a NUL in a path, Windows' answer; Linux and macOS answer `Unsupported`, which `fs_basics` depends on. It now demands a refusal.
+- The workflow had no DuckDB library for `x_duckdb`; it downloads the 2.0.0 shared-libs archive and puts it on `LD_LIBRARY_PATH`.
+- Seven `gpu_gl_*` fixtures skipped on `Unsupported` only; a runner with no device answers `NoDevice`, as `gpu_gl` already handled. `gl_triangle` under a bare Xvfb answers `x.khronos.context.Unsupported` and now skips.
+- Linux `processes()` failed the whole listing for one name past 16 bytes; it cuts it. The cause on the runner was inferred and the run after confirmed `proc_sys` passes.
+- `e.os.shell.valid_name` refused `*` on Windows only; every host does. `activation_of` returned Launch for every path not opening with a letter (388ccedd6), which is every absolute POSIX path; the scheme scan alone is skipped now.
+- `os_resolve` as WebAssembly: the wasm host answered `dns.lookup`'s list as it came, and a runner's `localhost` repeats an address. It answers each address once, as the native resolvers do (#190 item 8). Not reproduced here, where `localhost` resolves once.
+
+**Goldens and the gate.** The suite's collect mode (`NEPER_SUITE_COLLECT=1`, the workflow's `collect` input) records each failing step and goes on, so one 96-minute run named the last two failures where thirteen runs had named one each. The refresh run rewrote 34 Linux goldens: 23 differ in hashes only. The other 11 (disassembly, instance costs, `indirect_calls`, the `explain_inline` list) were last refreshed on 27 October and are not this change: a compiler built before these repairs and the one built after give identical output for those commands, and the Windows goldens already carry the same values. The Linux static baseline, pinned on 5 October, is re-pinned to what the suite measured (arena 2137 and 2842 MB, images 1874888 and 1373944 B), as D5967 did for Windows; the arena moved +0.3% against a +0% budget, and the edits here do not allocate in that path, which is reasoning and not a measurement.
+
+**Checked.** In WSL the bootstrap builds the compiler in 68 s; with a release compiler from this tree `self-test`, `object-file`, `emit-object` and the module-surface gate pass on Linux, a missing operand is still refused by name, and stage 2 equals stage 3 on Windows.
+
+**Removed: `proc_sys_x86_linux`.** It guarded the i386 syscall numbers and `struct statfs` layout of `e.proc.sys`, but the compiler has no 32-bit Linux back end: `x86 linux` emits an x86-64 image whose code takes the i386 branches, so `getpid` (20) ran as x86-64's `writev` and the fixture answered `Failed` on every host and on every compiler built since it was added. The fixture, its run line and its `ONE_HOST` entry are gone. The `target.arch == .X86` branches in `e.proc.sys.host.linux` remain, untested, for the day there is a back end; a guard for them belongs with that back end.
+
+**Not done.** `ui_activation` fails on Windows at exit 8 (the registry cleanup), also before this change, and was passed over locally in the Windows run; it leaves two keys, `HKCU\Software\Classes\.neper-test` and `neper.Test`. The full Linux suite passed on GitHub without the collect mode (79 minutes) and the Windows suite passed with a seed compiler (33 minutes), both before the fixture was removed; the removal was checked by the suite-parity script and by parsing `run.sh`, not by another run.

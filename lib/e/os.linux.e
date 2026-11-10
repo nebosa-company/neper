@@ -3003,10 +3003,22 @@ fn window_slot(id: u32) -> usize {
     ret WINDOW_TABLE
 }
 
+var window_event_dropped: usize = 0usize
+
 fn window_push(event: WindowEvent) {
-    if window_event_count >= WINDOW_RING { ret }
+    // A full ring drops the event rather than growing, and the drop is counted, as on Windows.
+    if window_event_count >= WINDOW_RING {
+        window_event_dropped += 1usize
+        ret
+    }
     window_events[(window_event_head + window_event_count) % WINDOW_RING] = event
     window_event_count += 1usize
+}
+
+// How many window events have been dropped because the ring was full. Cumulative
+// for the process, so a caller compares it against its own last reading.
+fn window_events_dropped() -> usize {
+    ret window_event_dropped
 }
 
 fn x_modifiers(state: u32) -> u8 {
