@@ -8935,9 +8935,16 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             var xi = 0usize
             while xi < g.n {
                 let item = g.items[xi]
+                // An item placed on a definite column sizes that lane alone; the others might land in any lane.
+                let (xsc, xec) = item_axis_specs(l.a, bstyle(l, item.box), true)
                 var s0 = 0usize
+                var s_end = g.nc
+                if (xsc.kind == 1u8 || xsc.kind == 3u8) && item.cs >= 0i32 && usize(item.cs) < g.nc {
+                    s0 = usize(item.cs)
+                    s_end = s0 + 1usize
+                }
                 // (an item spanning several lanes does not size any of them)
-                while s0 + usize(maxf(1.0f64, f64(item.cn))) <= g.nc && item.cn <= 1i32 {
+                while s0 < s_end && s0 + usize(maxf(1.0f64, f64(item.cn))) <= g.nc && item.cn <= 1i32 {
                     var copy = item
                     copy.cs = i32(s0)
                     ex[exn] = copy
@@ -9349,8 +9356,15 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
             var xi = 0usize
             while xi < g.n {
                 let item = g.items[xi]
+                // An item placed on a definite row sizes that row alone; the others might land in any lane.
+                let (xsr, xer) = item_axis_specs(l.a, bstyle(l, item.box), false)
                 var s0 = 0usize
-                while s0 < g.nr && item.rn <= 1i32 {
+                var s_end = g.nr
+                if (xsr.kind == 1u8 || xsr.kind == 3u8) && item.rs >= 0i32 && usize(item.rs) < g.nr {
+                    s0 = usize(item.rs)
+                    s_end = s0 + 1usize
+                }
+                while s0 < s_end && item.rn <= 1i32 {
                     var copy = item
                     copy.rs = i32(s0)
                     ex[exn] = copy
