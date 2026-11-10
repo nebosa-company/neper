@@ -229,12 +229,12 @@ fn processes(a: *mem.Arena, limit: usize) -> ([]format.ProcessInfo, err) {
             mem.reset(a, entry_mark)
             continue
         }
-        if p.name.len > 16usize {
-            mem.reset(a, start)
-            ret (zero, os.Failed)
-        }
+        // A kernel worker's name in `stat` is not bound by TASK_COMM_LEN
+        // (`kworker/u8:3-events_unbound`); it is cut to the row's 16 bytes, where one
+        // such thread used to fail the whole listing.
         let name_start = n * 16usize
-        let name_len = p.name.len
+        var name_len = p.name.len
+        if name_len > 16usize { name_len = 16usize }
         var name_index = 0usize
         while name_index < name_len {
             names[name_start + name_index] = p.name[name_index]

@@ -1721,10 +1721,10 @@ fn activation_of(a: *mem.Arena, args: []const str) -> Activation {
     let first = args[1usize]
     if first.len == 0usize { ret activation }
     let first_letter = (first[0usize] >= 97u8 && first[0usize] <= 122u8) || (first[0usize] >= 65u8 && first[0usize] <= 90u8)
-    if !first_letter { ret activation }
+    // A path opens with `/` or `.`, never a scheme: it skips the scan and is still looked up.
     var at = 0usize
     var scheme = false
-    while at < first.len {
+    while first_letter && at < first.len {
         let c = first[at]
         if c == 58u8 {
             scheme = at > 0usize && at + 1usize < first.len
@@ -1761,7 +1761,7 @@ fn valid_name(text: str) -> bool {
     var at = 0usize
     while at < text.len {
         let c = text[at]
-        if c == 92u8 || c == 47u8 || c == 34u8 || c < 32u8 { ret false }
+        if c == 92u8 || c == 47u8 || c == 34u8 || c == 42u8 || c < 32u8 { ret false }
         at += 1usize
     }
     ret true

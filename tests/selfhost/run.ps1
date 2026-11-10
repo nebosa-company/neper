@@ -44,7 +44,10 @@ if ($seed) {
     & $seed emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $compiler -j 1 --release | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'the seed did not build the self-hosted compiler slice' }
 } else {
-    & $neper build (Join-Path $repo 'src\main.e') --output $compiler --emit-asm $compilerAsm
+    # The bootstrap's default arena is 64 MB, not a ceiling that grows: with no `--arena`
+    # the compiler it builds is out of room on its first module. This one is reserved,
+    # and committed as it is used.
+    & $neper build (Join-Path $repo 'src\main.e') --arena 12g --output $compiler --emit-asm $compilerAsm
     if ($LASTEXITCODE -ne 0) { throw 'self-hosted compiler slice did not build' }
 }
 & python (Join-Path $repo 'scripts\check_module_surfaces.py') --compiler $compiler --arch x64 --os windows
@@ -1021,7 +1024,7 @@ foreach ($lowerResetMode in @('--release', '--time')) {
     New-Item -ItemType Directory -Force -Path $lowerResetArtifacts | Out-Null
     $lowerResetFlags = @()
     if ($lowerResetMode -eq '--release') { $lowerResetFlags = @('--release') }
-    $lowerResetArtifactsWritten = & $compiler emit-em-all $lowerReset $repo 'x64' 'windows' $lowerResetArtifacts @lowerResetFlags
+    $lowerResetArtifactsWritten = & $compiler emit-em-all $lowerReset $repo 'x64' 'windows' $lowerResetArtifacts @lowerResetFlags --whole
     if ($LASTEXITCODE -ne 0 -or $lowerResetArtifactsWritten -ne 'compiled modules written') { throw "lower_reset artifact emission failed ($lowerResetMode)" }
     $lowerResetLinked = Join-Path $testBuild "lower-reset-from-artifacts$lowerResetMode.exe"
     $lowerResetLinkWritten = & $compiler link-em $lowerResetLinked (Join-Path $lowerResetArtifacts 'main.x64-windows.em') (Join-Path $lowerResetArtifacts 'm1.x64-windows.em') (Join-Path $lowerResetArtifacts 'm2.x64-windows.em') (Join-Path $lowerResetArtifacts 'm3.x64-windows.em')
@@ -1058,7 +1061,7 @@ foreach ($crewWindowsMode in @('--release', '--time')) {
     New-Item -ItemType Directory -Force -Path $crewWindowsArtifacts | Out-Null
     $crewWindowsFlags = @()
     if ($crewWindowsMode -eq '--release') { $crewWindowsFlags = @('--release') }
-    $crewWindowsArtifactsWritten = & $compiler emit-em-all $crewWindows $repo 'x64' 'windows' $crewWindowsArtifacts @crewWindowsFlags
+    $crewWindowsArtifactsWritten = & $compiler emit-em-all $crewWindows $repo 'x64' 'windows' $crewWindowsArtifacts @crewWindowsFlags --whole
     if ($LASTEXITCODE -ne 0 -or $crewWindowsArtifactsWritten -ne 'compiled modules written') { throw "crew_windows artifact emission failed ($crewWindowsMode)" }
     $crewWindowsList = @('main', 'e.io', 'e.mem', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'e.os', 'e.str', 'tmpl') | ForEach-Object { Join-Path $crewWindowsArtifacts "$_.x64-windows.em" }
     $crewWindowsLinked = Join-Path $testBuild "crew-windows-from-artifacts$crewWindowsMode.exe"
@@ -1070,6 +1073,17 @@ foreach ($crewWindowsMode in @('--release', '--time')) {
     # still covered by this image running above and by the instance count below.
     if ($crewWindowsMode -eq '--release') {
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $crewWindowsLinked).Hash -ne $crewWindowsHash) { throw "crew_windows at -j 1 is not the image linked from its artifacts ($crewWindowsMode)" }
+        # Without `--whole`, `emit-em-all` writes its artifacts on the crew, and they link to the same image.
+        $crewWindowsCrew = Join-Path $testBuild 'crew-windows-artifacts-crew'
+        if (Test-Path -LiteralPath $crewWindowsCrew) { Remove-Item -LiteralPath $crewWindowsCrew -Recurse -Force }
+        New-Item -ItemType Directory -Force -Path $crewWindowsCrew | Out-Null
+        $crewWindowsCrewWritten = & $compiler emit-em-all $crewWindows $repo 'x64' 'windows' $crewWindowsCrew --release -j 3 --perturb
+        if ($LASTEXITCODE -ne 0 -or $crewWindowsCrewWritten -ne 'compiled modules written') { throw 'crew_windows artifact emission on the crew failed' }
+        $crewWindowsCrewList = @('main', 'e.io', 'e.mem', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'e.os', 'e.str', 'tmpl') | ForEach-Object { Join-Path $crewWindowsCrew "$_.x64-windows.em" }
+        $crewWindowsCrewLinked = Join-Path $testBuild 'crew-windows-from-crew-artifacts.exe'
+        $crewWindowsCrewLinkWritten = & $compiler link-em $crewWindowsCrewLinked @crewWindowsCrewList
+        if ($LASTEXITCODE -ne 0 -or $crewWindowsCrewLinkWritten -ne 'artifact executable written') { throw 'crew_windows crew-written compiled modules did not link' }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $crewWindowsCrewLinked).Hash -ne $crewWindowsHash) { throw 'crew_windows at -j 1 is not the image linked from crew-written artifacts' }
     }
     # Without `--time`, whose rows would join the stream. `--instances 0` refuses the build and
     # reports how many generic functions the program monomorphizes, so this pinned stream is a
@@ -7705,6 +7719,16 @@ Copy-Item (Join-Path $incrementalFixture 'edits\dep_signature.e') (Join-Path $in
 Copy-Item (Join-Path $incrementalFixture 'edits\main_signature.e') $incrementalMain
 $incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalSignature -notmatch 'rebuilt main' -or $incrementalSignature -notmatch 'rebuilt dep' -or $incrementalSignature -notmatch 'kept e.os') { throw "a signature edit did not rebuild the dependent: $incrementalSignature" }
+# A generic type used across modules leaves no stale edge: an unchanged warm build keeps
+# the importer (its alias and instance edges once never held, so it was rebuilt every time).
+$genericFixture = Join-Path $PSScriptRoot 'fixtures\link\incremental_generic'
+$genericArtifacts = Join-Path $testBuild 'incremental-generic-artifacts'
+if (Test-Path -LiteralPath $genericArtifacts) { Remove-Item -LiteralPath $genericArtifacts -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $genericArtifacts | Out-Null
+$genericFirst = & $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts
+if ($LASTEXITCODE -ne 0 -or $genericFirst -ne 'compiled modules written') { throw 'the generic importer fixture did not compile to artifacts' }
+$genericSame = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $genericSame -notmatch 'kept main' -or $genericSame -match 'rebuilt') { throw "an unchanged generic importer was rebuilt: $genericSame" }
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing

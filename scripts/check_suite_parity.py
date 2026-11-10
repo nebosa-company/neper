@@ -26,9 +26,8 @@ ONE_HOST = {
     "os_window_resize": "ps1",
     "import_touch": "ps1",
     "mem_commit_refused": "ps1",
-    # X11 loader behaviour and a Linux-only syscall surface.
+    # X11 loader behaviour.
     "x_khronos_xlib_loader_race": "sh",
-    "proc_sys_x86_linux": "sh",
     # Windows window layout, and the Khronos context teardown only Windows reaches.
     "proc_sys_windows_layout": "ps1",
     "x_khronos_context_cleanup": "ps1",

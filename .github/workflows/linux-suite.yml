@@ -22,6 +22,10 @@ on:
         description: "yes: refresh the x64-linux tool goldens that differ only in their snapshot hash; all: refresh whatever differs; the changes are saved as an artifact"
         required: false
         default: ""
+      collect:
+        description: "yes: the suite job records each failing step and goes on, then lists them all at the end"
+        required: false
+        default: ""
 jobs:
   wasm:
     if: ${{ inputs.only == '' || inputs.only == 'wasm' }}
@@ -137,9 +141,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends postgresql mysql-server unixodbc odbc-postgresql libpq5 libmysqlclient21 xvfb xauth mesa-vulkan-drivers libvulkan1 vulkan-tools valgrind
           ls -d /usr/lib/postgresql/*/bin /usr/sbin/mysqld /usr/lib/x86_64-linux-gnu/odbc/psqlodbcw.so
+      - name: DuckDB 2.0.0 shared library (x.duckdb.duckdb imports it by the bare name `duckdb`)
+        run: |
+          mkdir -p "$HOME/duckdb"
+          curl -sSL -o /tmp/duckdb-libs.tar.gz https://github.com/duckdb/duckdb/releases/download/v2.0.0/duckdb-shared-libs-linux-amd64.tar.gz
+          tar -xzf /tmp/duckdb-libs.tar.gz -C "$HOME/duckdb"
+          found=$(find "$HOME/duckdb" -name 'libduckdb.so*' -type f | head -n 1)
+          ls -l "$HOME/duckdb"
+          [ -n "$found" ]
+          [ -e "$(dirname "$found")/duckdb" ] || ln -s "$found" "$(dirname "$found")/duckdb"
+          echo "LD_LIBRARY_PATH=$(dirname "$found")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
       - name: Whole suite (traced, and the last commands it ran are printed when it stops)
         env:
           NEPER_REFRESH_GOLDENS: ${{ inputs.refresh == 'yes' && '1' || (inputs.refresh == 'all' && 'all' || '') }}
+          NEPER_SUITE_COLLECT: ${{ inputs.collect == 'yes' && '1' || '' }}
         run: |
           status=0
           Xvfb :99 -screen 0 1280x1024x24 -ac > /tmp/xvfb.log 2>&1 &
@@ -186,7 +201,7 @@ jobs:
           "$c" emit-executable tests/selfhost/fixtures/link/x_khronos_gl_window/src/main.e . x64 linux "$b/x-khronos-gl-window"
           "$c" emit-executable tests/selfhost/fixtures/link/gpu_devices/src/main.e . x64 linux "$b/gpu-devices"
           chmod +x "$b/x-khronos-gl-window" "$b/gpu-devices"
-      - name: Device-less host: every capability fixture must report 77 on its own
+      - name: "Device-less host: every capability fixture must report 77 on its own"
         run: |
           set -eu
           b=build/linux/tests/selfhost
@@ -207,7 +222,7 @@ jobs:
           devices=$("$b/gpu-devices" 2>&1) || { echo "gpu_devices failed without a device: $devices"; exit 1; }
           if [ "$devices" != "gpu devices ok" ]; then echo "gpu_devices: $devices"; exit 1; fi
           echo "SKIP gpu_devices keeps NoDevice/Unsupported"
-      - name: Software GL (llvmpipe): no fixture may fail, and a missing capability is SKIP
+      - name: "Software GL (llvmpipe): no fixture may fail, and a missing capability is SKIP"
         run: |
           set -eu
           sudo apt-get update

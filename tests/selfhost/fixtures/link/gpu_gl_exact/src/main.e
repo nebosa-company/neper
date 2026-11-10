@@ -97,7 +97,7 @@ fn run(a: *mem.Arena, backend: gpu.Backend, flushing: bool, xs: []const f32, ys:
 fn main(a: *mem.Arena, args: []str) -> err {
     compute.install()
     let (found, found_error) = gpu.devices(a, .Gl, 4usize)
-    if found_error == gpu.Unsupported {
+    if found_error == gpu.Unsupported || found_error == gpu.NoDevice {
         let printed = io.print("no OpenGL compute device; nothing checked\n")
         os.exit(77i32)
     }

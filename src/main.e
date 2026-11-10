@@ -60,7 +60,7 @@ fn validate_test_parse(text: str) -> err {
     ret parse.parse(&tree, text)
 }
 
-fn self_test() -> err {
+fn self_test(a: *mem.Arena) -> err {
     var basic = lex.init("use e.io\r\nfn main() -> err { // note\n    ret ok\n}\n")
     let basic_use = lex.next(&basic)
     if basic_use.kind != .KwUse || usize(basic_use.start) != 0usize || usize(basic_use.end) != 3usize { ret lex.InvalidSource }
@@ -774,7 +774,7 @@ fn self_test() -> err {
     try emit_x64.self_test()
     try emit_a64.self_test()
     try codegen_x64.self_test()
-    try object_coff.self_test()
+    try object_coff.self_test(a)
     try object_elf.self_test()
     try link_elf.self_test()
     try link_pe.self_test()
@@ -945,7 +945,7 @@ fn flags_known(args: []str) -> bool {
                     if !same(args[at], "-j") && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
-                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--summary") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") && !same(args[at], "--att") && !same(args[at], "--shared-library") { ret false }
+                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--summary") && !same(args[at], "--perturb") && !same(args[at], "--explain") && !same(args[at], "--fault-collision") && !same(args[at], "--chunked") && !same(args[at], "--att") && !same(args[at], "--shared-library") && !same(args[at], "--whole") { ret false }
                 }
             }
         }
@@ -7774,7 +7774,7 @@ fn link_artifact_image(a: *mem.Arena, program: *em_link.Program, is_windows: boo
     let init_error = emit_x64.init(&executable, storage)
     if init_error != ok { ret (empty, init_error) }
     // A truncated import order must fail the link rather than drop imports silently.
-    if !nir.import_order_ok(&program.builder) { ret (empty, io.TooSmall) }
+    if !nir.import_order_ok(&program.builder) { ret (empty, nir.Capacity) }
     var write_error: err = ok
     if is_windows {
         write_error = link_pe.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines[..program.line_count], table_at, &executable)
@@ -11226,6 +11226,9 @@ type HotBuild = struct {
     // so a suite can read what the next build finds; `fault_on` false for none.
     fault_on: bool,
     fault_module: usize,
+    // `emit-em-all` on the crew: each artifact is saved to `directory` as it is written,
+    // with nothing of a hot build's reuse recorded in it.
+    saves: bool,
     directory: str,
     triple: str,
     release: bool,
@@ -11531,7 +11534,7 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     loaded.modules[module_index].artifact_sha256 = written_sha
     loaded.modules[module_index].artifact_sha256_known = true
     // A cold build holds its artifacts for the link alone (D325); a hot one keeps them.
-    if !hot.on { ret ok }
+    if !hot.on && !hot.saves { ret ok }
     let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
     if artifact_path_error != ok { ret artifact_path_error }
     if hot.fault_on && hot.fault_module == module_index {
@@ -13179,6 +13182,9 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
             try report_count("workers replaced by the generous one", replaced)
         }
     }
+    // `emit-em-all` ends with the artifacts on disk: a program whose error tables collide,
+    // or that has no `main`, still compiles to them, and only a link refuses it.
+    if hot.saves { ret ok }
     if crew.drops { try release_fronts(loaded, lowered, crew, checker, resolver) }
     try link_hot_artifacts(a, report, loaded, builder, hot, held, code)
     report.arena_used = mem.stats(a).used
@@ -14077,8 +14083,15 @@ fn capacity_name(result: err) -> str {
 // Whether the command's operand names something that is there; a flag or nothing at all counts as there.
 fn operand_present(a: *mem.Arena, operand: str) -> bool {
     if operand.len == 0usize || operand[0usize] == 45u8 { ret true }
-    let (_, stat_error) = os.stat(a, operand)
-    ret stat_error == ok
+    // An open, not `os.stat`, which the bootstrap does not seed: only an absent name is
+    // missing, so a directory, which Windows refuses to open, is still present.
+    let flags = os.OpenFlags { read: true, write: false, create: false, truncate: false, append: false }
+    let (file, open_error) = os.open(a, operand, flags)
+    if open_error == ok {
+        let close_error = os.close(file)
+        ret true
+    }
+    ret open_error != os.NotFound
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -14218,7 +14231,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if numeric_error != ok { ret numeric_error }
     var report = stderr_sink()
     if args.len == 2usize && same(args[1usize], "self-test") {
-        try self_test()
+        try self_test(a)
         try io.print("selfhost lexer ok\n")
         ret ok
     }
@@ -14654,6 +14667,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // artifacts already in the directory are kept and which are replaced (D205).
     let incremental_build = trailing_flags && same(args[1usize], "emit-em-all") && has_flag(args, "--incremental")
     let writes_all_em = (args.len == 7usize || trailing_flags) && same(args[1usize], "emit-em-all")
+    // `emit-em-all` takes the executable path's crew: one thread lowered, selected and
+    // wrote 745 modules while seven cores sat idle. `--whole` keeps the program lowered
+    // whole on one thread, the path no crew makes, which the crew's image is held against.
+    let crew_em = writes_all_em && !incremental_build && !(trailing_flags && has_flag(args, "--whole"))
+    let crew_build = writes_executable || crew_em
     // `dis-file PATH ROOT ARCH OS --json` (D233): the codegen pipeline, then per-function bytes.
     // `dis-file ... --json --release` (D542): the release image, its inlined ranges named.
     let disassemble = (args.len == 7usize || trailing_flags) && same(args[1usize], "dis-file") && same(args[6usize], "--json")
@@ -14683,7 +14701,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try load_overlays(a, args, &loaded)
         // (D1666) A build that writes an executable keeps each module's front in a
         // reservation of its own.
-        loaded.module_blocks = writes_executable
+        loaded.module_blocks = crew_build
         // Every artifact writer and executable embedding device code knows which
         // compiler it is (D398, D1734).
         if writes_executable || writes_em || writes_all_em { learn_compiler_identity(a, &loaded, args[0usize], args) }
@@ -14883,8 +14901,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             early_builder.explain = has_flag(args, "--explain")
             early_builder.explain_json = report.json
         }
-        if writes_executable {
+        if crew_build {
             hot.on = hot_build
+            hot.saves = crew_em
             hot.keep = keep
             hot.directory = artifact_dir
             hot.release = release_build
@@ -14898,7 +14917,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             if hot_triple_error != ok { ret hot_triple_error }
             hot.triple = hot_triple
         }
-        let with_crew = fused && writes_executable
+        let with_crew = fused && crew_build
         if with_crew {
             crew.drops = true
             try crew_begin(a, &crew, &report, &loaded, &checker, &resolver, &early_builder, bindings, machine_abi_of(args), &hot, held, release_build, body_skip)
@@ -14970,8 +14989,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // One more parameter type than the declarations need: `neper_report_failure`,
         // which lowering synthesizes for `main`'s failure line (D199), has no declaration.
         var builder_scale = 1usize
-        if writes_executable { builder_scale = 64usize }
-        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report, body_bytes_of(&loaded, writes_executable), builder_scale, !release_build)
+        let per_module = writes_executable || (crew_em && with_crew)
+        if per_module { builder_scale = 64usize }
+        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report, body_bytes_of(&loaded, per_module), builder_scale, !release_build)
         builder.apple_variadic = same(args[4usize], "aarch64") && same(args[5usize], "macos")
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, loaded.count + 1usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
@@ -15148,7 +15168,6 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if unchecked_build && !release_build { artifact_mode = .DebugUnchecked }
         // The executable path lowers and selects a module at a time (D314); the rest
         // lower the program whole, since an artifact or an object keeps every function.
-        let per_module = writes_executable
         var lower_error = ok
         if !per_module {
             if writes_all_em {
@@ -15198,6 +15217,10 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                     mode_at += 1usize
                 }
                 try crew_emit(a, &crew, &report, &loaded, &checker, &resolver, &builder, bindings, lowered_modules, machine_abi_of(args), &hot, held, &code, body_skip)
+                if crew_em {
+                    try io.print("compiled modules written\n")
+                    ret ok
+                }
             } else {
                 try emit_per_module(a, &report, &loaded, &checker, &resolver, &builder, bindings, lowered_modules, machine_abi_of(args), &hot, held, &code)
             }
@@ -15309,7 +15332,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
                 // A truncated import order must fail the link rather than drop imports silently.
-                if !nir.import_order_ok(&builder) { ret io.TooSmall }
+                if !nir.import_order_ok(&builder) { ret nir.Capacity }
                 if has_flag(args, "--shared-library") { try collect_exports(&loaded, &checker, &builder, args) }
                 if machine_abi_of(args) == .Windows {
                     try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines[..code.line_count], table_at, &executable)

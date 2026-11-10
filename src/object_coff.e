@@ -1,5 +1,6 @@
 // Deterministic AMD64 COFF object serialization.
 
+use e.mem
 use check
 use codegen_x64
 use emit_x64
@@ -7,10 +8,6 @@ use nir
 
 error Capacity
 error InvalidObject
-
-// The self-test's relocation overflow case (#23): 65,536 unresolved calls, one past
-// the 16-bit `NumberOfRelocations` field. Module scope so the self-test's stack stays small.
-var big_relocations: [65536]codegen_x64.Relocation = zero
 
 type Symbol = struct {
     name: str,
@@ -208,7 +205,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     ret ok
 }
 
-fn self_test() -> err {
+fn self_test(a: *mem.Arena) -> err {
     var functions: [1]nir.Function = zero
     var blocks: [1]nir.Block = zero
     var instructions: [1]nir.Instruction = zero
@@ -255,13 +252,16 @@ fn self_test() -> err {
     if object.bytes[65usize] != 1u8 || object.bytes[69usize] != 1u8 || object.bytes[73usize] != 4u8 || object.bytes[97usize] != 4u8 || object.bytes[111usize] != 18u8 || object.bytes[115usize] != 101u8 { ret InvalidObject }
     // #23: a relocation run past 65535 must be refused by the writer, not truncated to
     // 16 bits (`unresolved_count > 65535` -> Capacity).
+    // From the arena: the stack stays small, and the bootstrap has no module-scope `var`.
+    let (big_relocations, big_error) = mem.alloc[codegen_x64.Relocation](a, 65536usize)
+    if big_error != ok { ret big_error }
     var many_at = 0usize
     while many_at < big_relocations.len {
         big_relocations[many_at] = external_relocation
         many_at += 1usize
     }
     try emit_x64.init(&object, object_storage[..])
-    let overflow = write(&builder, &machine, offsets[..], big_relocations[..], big_relocations.len, symbols[..], &object)
+    let overflow = write(&builder, &machine, offsets[..], big_relocations, big_relocations.len, symbols[..], &object)
     if overflow != Capacity { ret InvalidObject }
     ret ok
 }

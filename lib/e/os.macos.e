@@ -2918,9 +2918,18 @@ fn cocoa_push(event: WindowEvent) {
     if cocoa_count >= COCOA_RING {
         cocoa_head = (cocoa_head + 1usize) % COCOA_RING
         cocoa_count = cocoa_count - 1usize
+        cocoa_dropped += 1usize
     }
     cocoa_events[(cocoa_head + cocoa_count) % COCOA_RING] = event
     cocoa_count += 1usize
+}
+
+var cocoa_dropped: usize = 0usize
+
+// How many window events have been dropped because the ring was full. Cumulative
+// for the process, so a caller compares it against its own last reading.
+fn window_events_dropped() -> usize {
+    ret cocoa_dropped
 }
 
 // A window's handle is its NSWindow, as an HWND is a Windows program's, so `window_native` can answer the handle the

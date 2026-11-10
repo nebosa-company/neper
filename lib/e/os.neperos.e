@@ -534,6 +534,8 @@ fn window_poll(timeout_ns: i64) -> (WindowEvent, bool, err) {
     var event: WindowEvent = zero
     ret (event, false, ok)
 }
+// No window events are queued here, so none are dropped.
+fn window_events_dropped() -> usize { ret 0usize }
 fn window_capture(w: Window, on: bool) -> err { ret Unsupported }
 // The accessibility-bridge surface e.ui.accessibility compiles against -- no window, no AT client.
 type AccessibleRequest = struct { id: u32, generation: u32, action: u8, value: str }
