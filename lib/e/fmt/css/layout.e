@@ -6018,6 +6018,18 @@ fn distribute_columns(l: *Layout, ti: u32, tw: f64, fixed_layout: bool) {
             if td.col_spec[k] >= 0.0f64 {
                 td.col_w[k] = td.col_spec[k]
                 used += td.col_spec[k]
+            } else if td.col_pct[k] >= 0.0f64 {
+                // A percentage column: its share of the table's width, plus the horizontal padding and border of its cells.
+                var cell_extras = 0.0f64
+                var cq = 0usize
+                while cq < td.cells.len {
+                    if td.cells.items[cq].col == k && td.cells.items[cq].cs == 1usize && td.cells.items[cq].pct >= 0.0f64 {
+                        cell_extras = maxf(cell_extras, horizontal_extras(&l.boxes.items[usize(td.cells.items[cq].box)]))
+                    }
+                    cq += 1usize
+                }
+                td.col_w[k] = td.col_pct[k] * avail + cell_extras
+                used += td.col_w[k]
             } else {
                 td.col_w[k] = -1.0f64
                 autos += 1usize
