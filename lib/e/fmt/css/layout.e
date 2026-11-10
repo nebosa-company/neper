@@ -8201,7 +8201,10 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
             var (mn, mx) = outer_content_widths(l, kid)
             // An item with an aspect ratio and a percentage height gets its width from that height resolved against its
             // rows when they are all fixed lengths.
-            if ks.width.kind == .Auto && ks.height.kind == .Px && ks.height.pct != 0.0f64 && has_box_ratio(l, kid) && bx(l, kid).inner != .Replaced {
+            let ratio_pct = ks.height.kind == .Px && ks.height.pct != 0.0f64 && bx(l, kid).inner != .Replaced
+            // (a replaced item stretched to the row takes the row's height, and its width follows by the ratio)
+            let ratio_stretch = ks.height.kind == .Auto && ks.align_self == .Stretch && bx(l, kid).inner == .Replaced
+            if ks.width.kind == .Auto && (ratio_pct || ratio_stretch) && (ratio_stretch || has_box_ratio(l, kid)) {
                 var rsum = 0.0f64
                 var rfixed = true
                 // (an item not yet placed is taken to sit on the first row)
@@ -8213,7 +8216,27 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
                     rr += 1usize
                 }
                 if rfixed && rsum > 0.0f64 {
-                    let (rw, has_rw) = ratio_width(l, kid, to_content_h(l, kid, ks.height.px + ks.height.pct * rsum))
+                    var area_content_h = ks.height.px + ks.height.pct * rsum
+                    if ratio_stretch {
+                        let kbb = bx(l, kid)
+                        area_content_h = rsum - kbb.margin[0usize] - kbb.margin[2usize] - vertical_extras(kbb)
+                    }
+                    var rw = 0.0f64
+                    var has_rw = false
+                    if ratio_stretch {
+                        let rintr = replaced_intrinsic(l, kid)
+                        let (riw, rih) = default_replaced(rintr)
+                        var rratio = rintr.ratio
+                        if rratio <= 0.0f64 && riw > 0.0f64 && rih > 0.0f64 { rratio = riw / rih }
+                        if rratio > 0.0f64 {
+                            rw = to_content_h(l, kid, area_content_h) * rratio
+                            has_rw = true
+                        }
+                    } else {
+                        let (pw, has_pw) = ratio_width(l, kid, to_content_h(l, kid, area_content_h))
+                        rw = pw
+                        has_rw = has_pw
+                    }
                     if has_rw {
                         let rbb = bx(l, kid)
                         mn = rw + horizontal_extras(rbb) + rbb.margin[1usize] + rbb.margin[3usize]
