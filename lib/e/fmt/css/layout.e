@@ -8764,7 +8764,8 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     }
     if cs.lanes {
         // A masonry item may land in any lane, so each one counts towards the size of every lane it could occupy.
-        let (ex, exe) = mem.alloc[GItem](l.a, g.n * (g.nc + 1usize) + 1usize)
+        let (sub_items, sub_n) = subgrid_contributions(l, g)
+        let (ex, exe) = mem.alloc[GItem](l.a, g.n * (g.nc + 1usize) + sub_n + 1usize)
         if exe == ok {
             var exn = 0usize
             var xi = 0usize
@@ -8780,6 +8781,13 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
                     s0 += 1usize
                 }
                 xi += 1usize
+            }
+            // The items of a subgrid sit on the lanes it spans, with its gap difference and edges already counted.
+            var si = g.n
+            while si < sub_n {
+                ex[exn] = sub_items[si]
+                exn += 1usize
+                si += 1usize
             }
             // (items only size lanes when the container's width is not definite; here `auto` lanes share it equally)
             var intrinsic_cols = false
