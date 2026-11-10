@@ -9334,7 +9334,10 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         let (nwv, nhas) = resolve_len(is.width, cw)
         if is.width.kind == .Px && nhas { w = to_content_w(l, id, nwv) }
         if is.width.kind == .MinContent { w = mn } else if is.width.kind == .MaxContent { w = mx }
-        flex_place_item(l, id, w, -1.0f64)
+        var nhs = -1.0f64
+        let (nhv, nhh) = resolve_len(is.height, -1.0f64)
+        if is.height.kind == .Px && nhh { nhs = to_content_h(l, id, nhv) }
+        flex_place_item(l, id, w, nhs)
         let outer = bx(l, id).h + ib.margin[0usize] + ib.margin[2usize]
         g.items[i].rmin = outer
         g.items[i].rmax = outer
