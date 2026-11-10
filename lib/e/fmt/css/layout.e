@@ -10518,8 +10518,16 @@ fn layout_abs(l: *Layout, b: u32) {
         cb_h = l.viewport_height
     }
     var grid_cb = false
-    // A child of a grid container is placed against the grid area its `grid-row`/`grid-column` name.
-    if cbid != l.root && l.boxes.items[usize(cbid)].inner == .Grid && l.boxes.items[usize(b)].parent == cbid {
+    // An element whose containing block is a grid container (a child or a deeper descendant) is placed against the grid area
+    // its `grid-row`/`grid-column` name.
+    var names_area = true
+    if l.boxes.items[usize(b)].parent != cbid {
+        // A deeper descendant only takes the area when it names a line on both axes: otherwise it keeps its static position.
+        let (dsc, dec) = item_axis_specs(l.a, bstyle(l, b), true)
+        let (dsr, der) = item_axis_specs(l.a, bstyle(l, b), false)
+        names_area = (dsc.kind != 0u8 || dec.kind != 0u8) && (dsr.kind != 0u8 || der.kind != 0u8)
+    }
+    if cbid != l.root && l.boxes.items[usize(cbid)].inner == .Grid && names_area {
         let gpad = &l.boxes.items[usize(cbid)]
         let (gfound, gx0, gx1, gy0, gy1) = grid_abs_area(l, cbid, b, cb_w, cb_h, gpad.padding[3usize], gpad.padding[0usize])
         if gfound {
