@@ -44029,3 +44029,15 @@ unreferenced.
 **Result.** All-library root, old and new compiler alternated: 12.4 → 11.45 s on Windows, `em.write_module` 27.5% → under 22.7% of samples. Self-build at one worker, lower and codegen 1,470 → 1,391 ms; at eight workers the difference is inside the noise. The 747 artifacts are identical apart from the identity-derived bytes D5968 describes, the self-built images are identical, and stage 2 equals stage 3.
 
 **Not done.** What is left in the writer is spread thin: the interface and body hashes (about 3% and 2.5%), the four separate token walks that each compare every import's qualifier, and the fixed point over the marks. `emit-em-all` still lowers on one thread. The full suites were not run.
+
+## D5970 — `emit-em-all` writes its artifacts on the executable path's crew; `--whole` keeps the serial path
+
+**`emit-em-all` lowered the program whole on one thread, selected it, and wrote each artifact in turn.** The executable path's workers already lower, select and write a whole module's artifact each (D314, D326); a cold build only held the bytes for the link instead of saving them.
+
+**Decision.** Without `--incremental`, `emit-em-all` runs the executable path through the crew's lowering and stops before the link: `HotBuild.saves` has `write_hot_artifact` save each artifact to the output directory, and nothing of a hot build's reuse (`note_emission`) is recorded. It does not link, so a program whose error tables collide, or one with no `main`, still compiles to artifacts as before. `--whole` lowers the program whole on one thread, the old path. The suite holds the crew's image against the one linked from `emit-em-all`'s artifacts as the path "no crew makes", so those two calls (`lower_reset`, `crew_windows`) now pass `--whole`; left on the default they would compare the crew with itself. `--incremental` keeps the serial path, which settles the edge rule before lowering.
+
+**The artifacts are not the serial ones byte for byte.** A worker's builder interns a module's references in its own order, so the dependency records come in another order, the same set at the same size; this is the order a hot build's artifacts already have. They link to the same image.
+
+**Result.** The all-library root of D5968: 11.6 → 3.2 s on Windows and 12.3 → 3.3 s on Linux; the compiler's own 59 modules 2.0 → 0.7 s. `crew_windows` gains a check in both suites: its artifacts written on the crew with `-j 3 --perturb` link to the `-j 1` image, in release. The nine sections of `run.ps1` that call `emit-em-all`, replayed against the new compiler, pass: the link fixtures, the incremental sequences (cold on the crew, then `--incremental`), the device-edit cases, the artifact-format and edge checks. Stage 2 equals stage 3.
+
+**Not done.** The new check passes on a compiler that lowers whole too, since those artifacts link to the same image; it guards the crew's artifacts, not that the crew is used. The C bootstrap could not compile the tree to confirm `main.e` stays inside its subset: it stops in `lib/e/str.e`, which this change does not touch. The full suites were not run, and of `run.sh` only the `crew_windows` check was replayed.

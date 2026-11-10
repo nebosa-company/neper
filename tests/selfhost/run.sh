@@ -1023,7 +1023,7 @@ for lower_reset_mode in --release --time; do
     mkdir -p "$lower_reset_artifacts"
     lower_reset_flag=
     [ "$lower_reset_mode" = --release ] && lower_reset_flag=--release
-    [ "$($test_build/neper-self emit-em-all "$lower_reset" "$repo" x64 linux "$lower_reset_artifacts" $lower_reset_flag)" = 'compiled modules written' ]
+    [ "$($test_build/neper-self emit-em-all "$lower_reset" "$repo" x64 linux "$lower_reset_artifacts" $lower_reset_flag --whole)" = 'compiled modules written' ]
     [ "$($test_build/neper-self link-em "$test_build/lower-reset-from-artifacts$lower_reset_mode" "$lower_reset_artifacts/main.x64-linux.em" "$lower_reset_artifacts/m1.x64-linux.em" "$lower_reset_artifacts/m2.x64-linux.em" "$lower_reset_artifacts/m3.x64-linux.em")" = 'artifact executable written' ]
     cmp "$test_build/lower-reset-j1$lower_reset_mode" "$test_build/lower-reset-from-artifacts$lower_reset_mode"
 done
@@ -1051,7 +1051,7 @@ for crew_windows_mode in --release --time; do
     mkdir -p "$crew_windows_artifacts"
     crew_windows_flag=
     [ "$crew_windows_mode" = --release ] && crew_windows_flag=--release
-    [ "$($test_build/neper-self emit-em-all "$crew_windows" "$repo" x64 linux "$crew_windows_artifacts" $crew_windows_flag)" = 'compiled modules written' ]
+    [ "$($test_build/neper-self emit-em-all "$crew_windows" "$repo" x64 linux "$crew_windows_artifacts" $crew_windows_flag --whole)" = 'compiled modules written' ]
     crew_windows_list=
     for crew_windows_module in main e.io e.mem m1 m2 m3 m4 m5 m6 e.os e.str tmpl; do crew_windows_list="$crew_windows_list $crew_windows_artifacts/$crew_windows_module.x64-linux.em"; done
     [ "$($test_build/neper-self link-em "$test_build/crew-windows-from-artifacts$crew_windows_mode" $crew_windows_list)" = 'artifact executable written' ]
@@ -1061,6 +1061,15 @@ for crew_windows_mode in --release --time; do
 # still covered by this image running and by the instance count below.
 if [ "$crew_windows_mode" = --release ]; then
     cmp "$crew_windows_one" "$test_build/crew-windows-from-artifacts$crew_windows_mode"
+    # Without `--whole`, `emit-em-all` writes its artifacts on the crew, and they link to the same image.
+    crew_windows_crew="$test_build/crew-windows-artifacts-crew"
+    rm -rf "$crew_windows_crew"
+    mkdir -p "$crew_windows_crew"
+    [ "$($test_build/neper-self emit-em-all "$crew_windows" "$repo" x64 linux "$crew_windows_crew" --release -j 3 --perturb)" = 'compiled modules written' ]
+    crew_windows_crew_list=
+    for crew_windows_module in main e.io e.mem m1 m2 m3 m4 m5 m6 e.os e.str tmpl; do crew_windows_crew_list="$crew_windows_crew_list $crew_windows_crew/$crew_windows_module.x64-linux.em"; done
+    [ "$($test_build/neper-self link-em "$test_build/crew-windows-from-crew-artifacts" $crew_windows_crew_list)" = 'artifact executable written' ]
+    cmp "$crew_windows_one" "$test_build/crew-windows-from-crew-artifacts"
 fi
     # Without `--time`, whose rows would join the stream.
     for crew_windows_jobs in '-j 1' '-j 3 --perturb' '-j 8'; do
