@@ -9058,6 +9058,78 @@ fn subgrid_prepare_lane_rows(l: *Layout, g: *Grid, id: u32, start: usize, span: 
     l.sub_has_r = true
 }
 
+// Auto placement in a masonry axis: among the runs of `span` lanes whose ends are within `tol` of the lowest, the first one
+// after the lane the previous item took (with no tolerance: the first of the lowest).
+fn pick_run(ends: []f64, nl: usize, span: usize, tol: f64, prev: usize) -> usize {
+    if nl < span { ret 0usize }
+    let count = nl - span + 1usize
+    var lo = 1000000000.0f64
+    var s0 = 0usize
+    while s0 < count {
+        var e = -1000000000.0f64
+        var t = s0
+        while t < s0 + span {
+            if ends[t] > e { e = ends[t] }
+            t += 1usize
+        }
+        if e < lo { lo = e }
+        s0 += 1usize
+    }
+    var step = 1usize
+    if tol <= 0.0f64 { step = count }
+    var first = 0usize
+    if tol > 0.0f64 && prev < count { first = prev + 1usize } else if tol > 0.0f64 { first = 0usize }
+    var tried = 0usize
+    var cur = first
+    if tol <= 0.0f64 { cur = 0usize }
+    while tried < count {
+        if cur >= count { cur = 0usize }
+        var e2 = -1000000000.0f64
+        var t2 = cur
+        while t2 < cur + span {
+            if ends[t2] > e2 { e2 = ends[t2] }
+            t2 += 1usize
+        }
+        if e2 <= lo + tol { ret cur }
+        cur += 1usize
+        tried += 1usize
+    }
+    ret 0usize
+}
+
+// `flow-tolerance`: `normal` (the initial value) is 1em, `infinite` never lets a lane look shorter, a percentage is of the
+// size of the grid axis (the tracks and their gaps).
+fn axis_total(tr: []GTrack, n: usize, gap: f64) -> f64 {
+    var t = gaps_of(tr, n, gap)
+    var k = 0usize
+    while k < n {
+        t += tr[k].base
+        k += 1usize
+    }
+    ret t
+}
+
+fn lanes_tolerance(l: *Layout, cs: *const style.Style, total: f64) -> f64 {
+    let (tv, has_tv) = extra_text(cs, "flow-tolerance")
+    if !has_tv { ret 0.0f64 }
+    let tl = cv.lower(l.a, cv.trim_ws(tv))
+    if str.eq(tl, "normal") || str.eq(tl, "initial") || tl.len == 0usize { ret cs.font_size }
+    if str.eq(tl, "infinite") { ret 1000000000.0f64 }
+    if str.ends_with(tl, "px") {
+        let (v, e) = str.parse_f64(tl[..tl.len - 2usize])
+        if e == ok { ret v }
+    }
+    if str.ends_with(tl, "em") && !str.ends_with(tl, "rem") {
+        let (v, e) = str.parse_f64(tl[..tl.len - 2usize])
+        if e == ok { ret v * cs.font_size }
+    }
+    if str.ends_with(tl, "%") {
+        let (v, e) = str.parse_f64(tl[..tl.len - 1usize])
+        if e == ok { ret v / 100.0f64 * total }
+    }
+    ret 0.0f64
+}
+
 // `display: grid-lanes` with the lanes along the rows: items flow sideways, each into the lane (or run of lanes) whose
 // content ends furthest left, and take their width from their content.
 fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64 {
@@ -9124,16 +9196,8 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         ends[q] = 0.0f64 - g.gap_c
         q += 1usize
     }
-    var tol = 0.0f64
-    let (tv, has_tv) = extra_text(cs, "flow-tolerance")
-    if has_tv {
-        let tl = cv.lower(l.a, cv.trim_ws(tv))
-        tol = 0.0f64
-        if str.ends_with(tl, "px") {
-            let (nv, ne) = str.parse_i64(tl[..tl.len - 2usize])
-            if ne == ok { tol = f64(nv) }
-        }
-    }
+    let tol = lanes_tolerance(l, cs, axis_total(g.rows, g.nr, g.gap_r))
+    var prev_lane = 1000000usize
     i = 0usize
     while i < g.n {
         let id = g.items[i].box
@@ -9142,25 +9206,10 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         let span = usize(maxf(1.0f64, f64(g.items[i].rn)))
         var start = usize(g.items[i].rs)
         if (sr.kind == 0u8 || (sr.kind == 2u8 && ers.kind == 0u8)) && g.nr >= span {
-            var best = 0usize
-            var best_end = 1000000000.0f64
-            var s0 = 0usize
-            while s0 + span <= g.nr {
-                var e = -1000000000.0f64
-                var t = s0
-                while t < s0 + span {
-                    if ends[t] > e { e = ends[t] }
-                    t += 1usize
-                }
-                if e < best_end - tol {
-                    best_end = e
-                    best = s0
-                }
-                s0 += 1usize
-            }
-            start = best
+            start = pick_run(ends, g.nr, span, tol, prev_lane)
         }
         if start + span > g.nr { start = 0usize }
+        prev_lane = start
         var left = -1000000000.0f64
         var t2 = start
         while t2 < start + span && t2 < g.nr {
@@ -9296,15 +9345,7 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
         on[q] = 0usize
         q += 1usize
     }
-    var tol = 0.0f64
-    let (tv, has_tv) = extra_text(cs, "flow-tolerance")
-    if has_tv {
-        let tl = cv.lower(l.a, cv.trim_ws(tv))
-        if str.ends_with(tl, "px") {
-            let (nv, ne) = str.parse_i64(tl[..tl.len - 2usize])
-            if ne == ok { tol = f64(nv) }
-        }
-    }
+    let tol = lanes_tolerance(l, cs, axis_total(g.cols, g.nc, g.gap_c))
     var total = 0.0f64
     var i = 0usize
     while i < g.n {
@@ -9433,16 +9474,8 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, c
         lastin[q] = 1000000usize
         q += 1usize
     }
-    var tol = 0.0f64
-    let (tv, has_tv) = extra_text(cs, "flow-tolerance")
-    if has_tv {
-        let tl = cv.lower(l.a, cv.trim_ws(tv))
-        tol = 0.0f64
-        if str.ends_with(tl, "px") {
-            let (nv, ne) = str.parse_i64(tl[..tl.len - 2usize])
-            if ne == ok { tol = f64(nv) }
-        }
-    }
+    let tol = lanes_tolerance(l, cs, axis_total(g.cols, g.nc, g.gap_c))
+    var prev_lane = 1000000usize
     var total = 0.0f64
     var i = 0usize
     while i < g.n {
@@ -9454,25 +9487,10 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, c
         if sc.kind == 0u8 && ecs.kind != 0u8 && g.nc >= span { start = 0usize }
         if (sc.kind == 0u8 || (sc.kind == 2u8 && ecs.kind == 0u8)) && g.nc >= span {
             // Auto placement: the lane whose spanned run ends highest.
-            var best = 0usize
-            var best_end = 1000000000.0f64
-            var s0 = 0usize
-            while s0 + span <= g.nc {
-                var e = -1000000000.0f64
-                var t = s0
-                while t < s0 + span {
-                    if ends[t] > e { e = ends[t] }
-                    t += 1usize
-                }
-                if e < best_end - tol {
-                    best_end = e
-                    best = s0
-                }
-                s0 += 1usize
-            }
-            start = best
+            start = pick_run(ends, g.nc, span, tol, prev_lane)
         }
         if start + span > g.nc { start = 0usize }
+        prev_lane = start
         var top = -1000000000.0f64
         var t2 = start
         while t2 < start + span && t2 < g.nc {
