@@ -5576,7 +5576,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
         var max_w = mx + extras
         let (wv, has_w) = resolve_len(cs.width, -1.0f64)
         if cs.width.kind == .Px && has_w {
-            let spec = to_content_w(l, c, wv) + extras
+            let spec = clamp_width(l, c, to_content_w(l, c, wv), -1.0f64) + extras
             cells.items[ci].spec = spec
             max_w = maxf(min_w, spec)
         } else if is_pct_width(cs.width) {
@@ -5597,7 +5597,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
             let (wv, has_w) = resolve_len(ws.width, -1.0f64)
             var q = 0usize
             while q < span && cursor + q < ncols {
-                if ws.width.kind == .Px && has_w { cspec[cursor + q] = wv }
+                if ws.width.kind == .Px && has_w { cspec[cursor + q] = clamp_width(l, kid, wv, -1.0f64) }
                 q += 1usize
             }
             cursor += span
@@ -5614,7 +5614,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
                     let (gwv, ghas) = resolve_len(gws.width, -1.0f64)
                     var gq = 0usize
                     while gq < gspan && cursor + gq < ncols {
-                        if gws.width.kind == .Px && ghas { cspec[cursor + gq] = gwv }
+                        if gws.width.kind == .Px && ghas { cspec[cursor + gq] = clamp_width(l, gkid, gwv, -1.0f64) }
                         gq += 1usize
                     }
                     cursor += gspan
@@ -5627,7 +5627,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
                 let (gwv2, ghas2) = resolve_len(gws2.width, -1.0f64)
                 var gq2 = 0usize
                 while gq2 < gspan2 && cursor + gq2 < ncols {
-                    if gws2.width.kind == .Px && ghas2 { cspec[cursor + gq2] = gwv2 }
+                    if gws2.width.kind == .Px && ghas2 { cspec[cursor + gq2] = clamp_width(l, kid, gwv2, -1.0f64) }
                     gq2 += 1usize
                 }
                 cursor += gspan2
@@ -6097,9 +6097,12 @@ fn is_baseline_valign(v: style.VAlign) -> bool {
 
 // Lays out table box `t` with content width `cw` (`ch`: the specified content height or negative); returns the content
 // height: top captions, the row grid, bottom captions.
-fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64 {
+fn layout_table(l: *Layout, t: u32, cw: f64, ch_spec: f64) -> f64 {
     let ti = build_table(l, t)
     let ts = bstyle(l, t)
+    // `min-height` / `max-height` apply to a table's specified height.
+    var ch = ch_spec
+    if ch >= 0.0f64 { ch = clamp_height(l, t, ch, -1.0f64) }
     distribute_columns(l, ti, cw, ts.table_layout == .Fixed && ts.width.kind == .Px)
     let td = l.tables.items[usize(ti)]
     let sh = td.sh
