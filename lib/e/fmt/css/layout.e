@@ -8761,7 +8761,7 @@ fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
         let gcs = bstyle(l, b)
         if gcs.lanes {
             lanes_cap(l, g, gcs)
-            if g.er > 0i32 && g.ec == 0i32 {
+            if lanes_along_rows(gcs, g) {
                 // Lanes along the rows: the width is how far the items run along their lanes.
                 var probe = 1000000.0f64
                 if pass == 0usize { probe = 0.0f64 }
@@ -8788,6 +8788,14 @@ fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
         pass += 1usize
     }
     ret (mn, mx)
+}
+
+// Lanes run along the rows when only rows are templated, or when the direction says `row` and no column is.
+fn lanes_along_rows(cs: *const style.Style, g: *Grid) -> bool {
+    if g.ec != 0i32 { ret false }
+    if g.er > 0i32 { ret true }
+    let (dv, has_dv) = extra_text(cs, "grid-lanes-direction")
+    ret has_dv && str.contains(dv, "row")
 }
 
 // `grid-lanes-direction: ... fill-reverse track-reverse`: the lanes are laid out in their normal order and flow, then the
@@ -8910,7 +8918,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     let stretch_cols = cs.justify_content == .Normal || cs.justify_content == .Stretch
     let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch
     lanes_cap(l, g, cs)
-    if cs.lanes && g.er > 0i32 && g.ec == 0i32 {
+    if cs.lanes && lanes_along_rows(cs, g) {
         let rows_h = layout_lanes_rows(l, b, g, cs, cw, ch)
         var rows_lane = ch
         if rows_lane < 0.0f64 { rows_lane = rows_h }
@@ -9331,7 +9339,7 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
     while ir < g.nr {
         let rk0 = g.rows[ir].min.kind
         let rk1 = g.rows[ir].max.kind
-        if rk0 == 4u8 || rk0 == 5u8 || rk1 == 4u8 || rk1 == 5u8 || rk1 == 6u8 { intrinsic_rows = true }
+        if rk0 == 4u8 || rk0 == 5u8 || rk1 == 3u8 || rk1 == 4u8 || rk1 == 5u8 || rk1 == 6u8 { intrinsic_rows = true }
         ir += 1usize
     }
     if ch < 0.0f64 || intrinsic_rows {
