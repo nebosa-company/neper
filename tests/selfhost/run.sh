@@ -7646,6 +7646,15 @@ generic_first=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e"
 generic_same=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e" "$repo" x64 linux "$generic_artifacts" --incremental)
 case "$generic_same" in *'kept main'*) ;; *) printf %s "an unchanged generic importer was not kept: $generic_same" >&2; echo >&2; exit 1 ;; esac
 case "$generic_same" in *rebuilt*) printf %s "an unchanged generic importer rebuilt a module: $generic_same" >&2; echo >&2; exit 1 ;; esac
+# An artifact is kept only under the directory's signed manifest: without it every
+# module is rebuilt, and that build signs the directory again.
+[ -f "$generic_artifacts/build-manifest.json" ]
+rm "$generic_artifacts/build-manifest.json"
+generic_unsigned=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e" "$repo" x64 linux "$generic_artifacts" --incremental)
+case "$generic_unsigned" in *'rebuilt main'*) ;; *) printf %s "an unsigned artifact directory was trusted: $generic_unsigned" >&2; echo >&2; exit 1 ;; esac
+case "$generic_unsigned" in *kept*) printf %s "an unsigned artifact was kept: $generic_unsigned" >&2; echo >&2; exit 1 ;; esac
+generic_signed=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e" "$repo" x64 linux "$generic_artifacts" --incremental)
+case "$generic_signed" in *rebuilt*) printf %s "a rebuilt directory was not signed again: $generic_signed" >&2; echo >&2; exit 1 ;; esac
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing

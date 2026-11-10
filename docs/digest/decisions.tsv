@@ -3044,4 +3044,5 @@ D5968	2023	A module's global dependencies are marked in one walk of its tokens
 D5969	1833	The artifact writer's constant and aggregate edges stop walking the whole program
 D5970	2456	`emit-em-all` writes its artifacts on the executable path's crew; `--whole` keeps the serial path
 D5971	6410	The bootstrap builds the tree again, and the Linux suite's first steps pass
-D5972	1646	An importer of a generic type is kept by an unchanged warm build
+D5972	1647	An importer of a generic type is kept by an unchanged warm build
+D5973	2320	`emit-em-all --incremental` takes the hot loader

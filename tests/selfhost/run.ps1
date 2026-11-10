@@ -7729,6 +7729,15 @@ $genericFirst = & $compiler emit-em-all (Join-Path $genericFixture 'src\main.e')
 if ($LASTEXITCODE -ne 0 -or $genericFirst -ne 'compiled modules written') { throw 'the generic importer fixture did not compile to artifacts' }
 $genericSame = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $genericSame -notmatch 'kept main' -or $genericSame -match 'rebuilt') { throw "an unchanged generic importer was rebuilt: $genericSame" }
+# An artifact is kept only under the directory's signed manifest: without it every
+# module is rebuilt, and that build signs the directory again.
+$genericManifest = Join-Path $genericArtifacts 'build-manifest.json'
+if (-not (Test-Path -LiteralPath $genericManifest)) { throw 'emit-em-all wrote no signed manifest' }
+Remove-Item -LiteralPath $genericManifest
+$genericUnsigned = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $genericUnsigned -notmatch 'rebuilt main' -or $genericUnsigned -match 'kept') { throw "an unsigned artifact directory was trusted: $genericUnsigned" }
+$genericSigned = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $genericSigned -match 'rebuilt') { throw "a rebuilt directory was not signed again: $genericSigned" }
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing

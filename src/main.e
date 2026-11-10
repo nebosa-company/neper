@@ -8758,6 +8758,9 @@ type HotLoad = struct {
     unchecked: bool,
     triple: str,
     directory: str,
+    // `emit-em-all --incremental`: the directory the command names, which holds the
+    // artifacts and their signed manifest; empty for an executable's `.neper` tree.
+    em_directory: str,
     scratch: *binary.Buffer,
     // Per module, sized to the graph's capacity: whether the source is unchanged
     // since its artifact, and whether the module is stable. The artifacts themselves
@@ -9084,8 +9087,12 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
 
 fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]const u8, path: str, root: str, arch: str, target_os: str, project_root: str) -> err {
     try graph.begin(a, loaded, path, root, arch, target_os, project_root)
-    let (directory, directory_error) = artifact_directory(a, loaded, hot.release)
-    if directory_error != ok { ret directory_error }
+    var directory = hot.em_directory
+    if directory.len == 0usize {
+        let (made, made_error) = artifact_directory(a, loaded, hot.release)
+        if made_error != ok { ret made_error }
+        directory = made
+    }
     hot.directory = directory
     var mode_id = 0usize
     if hot.release { mode_id = 1usize }
@@ -9097,7 +9104,8 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
     // before any module record can authorize cache reuse, then index it once.
     if !hot.manifest_read {
         hot.manifest_read = true
-        let (manifest_path, manifest_path_error) = with_suffix(a, dirname(directory[0usize..directory.len - 1usize]), "build-manifest.json")
+        var (manifest_path, manifest_path_error) = with_suffix(a, dirname(directory[0usize..directory.len - 1usize]), "build-manifest.json")
+        if hot.em_directory.len != 0usize { (manifest_path, manifest_path_error) = tool.manifest_join(a, directory, "build-manifest.json") }
         if manifest_path_error != ok { ret manifest_path_error }
         let (manifest_text, manifest_error) = source.load(a, manifest_path)
         if manifest_error == ok && artifact_hash.cache_auth_verify(a, manifest_text) { try index_manifest_hashes(a, hot, manifest_text, loaded.modules.len) }
@@ -9295,6 +9303,7 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     hot.unchecked = unchecked
     hot.scratch = scratch
     if !on { ret ok }
+    if same(args[1usize], "emit-em-all") { hot.em_directory = args[6usize] }
     // A release build's header trees keep the oracle's candidates (D421): the
     // declarations of at most the tokens `lower.oracle_module` looks at.
     loaded.header_body_cap = 0usize
@@ -11249,12 +11258,7 @@ type HotBuild = struct {
 // dependency's unchanged since its artifact, which is what makes it kept -- so neither
 // the checker nor the link runs.
 fn image_current(a: *mem.Arena, hot: *HotLoad, loaded: *graph.Graph, held: [][]const u8, args: []str) -> bool {
-    if !hot.on || hot.stable.len < loaded.count || held.len < loaded.count { ret false }
-    var module_at = 0usize
-    while module_at < loaded.count {
-        if !hot.stable[module_at] || held[module_at].len == 0usize || (module_at < hot.distrust.len && hot.distrust[module_at]) { ret false }
-        module_at += 1usize
-    }
+    if !all_stable(hot, loaded, held) { ret false }
     let (key, stamp) = image_key(a, hot.directory, hot.triple, loaded, held, args)
     if key.len == 0usize { ret false }
     // The stamp: the key, a space, the image's SHA-256, a newline, then the libraries.
@@ -11266,6 +11270,30 @@ fn image_current(a: *mem.Arena, hot: *HotLoad, loaded: *graph.Graph, held: [][]c
     artifact_hash.sha256_hex_into(image, digest[..])
     if !same(recorded[65usize..129usize], digest[..]) { ret false }
     ret stamped_libraries(a, loaded, recorded, args) == ok
+}
+
+// Every module stable since its artifact, and the artifact held.
+fn all_stable(hot: *HotLoad, loaded: *graph.Graph, held: [][]const u8) -> bool {
+    if !hot.on || hot.stable.len < loaded.count || held.len < loaded.count { ret false }
+    var module_at = 0usize
+    while module_at < loaded.count {
+        if !hot.stable[module_at] || held[module_at].len == 0usize || (module_at < hot.distrust.len && hot.distrust[module_at]) { ret false }
+        module_at += 1usize
+    }
+    ret true
+}
+
+// What `emit-em-all --incremental` did with each module, in load order; `keep` empty
+// when nothing was rebuilt.
+fn print_em_outcome(loaded: *graph.Graph, keep: []bool) -> err {
+    var module_at = 0usize
+    while module_at < loaded.count {
+        if module_at >= keep.len || keep[module_at] { try io.print("kept ") } else { try io.print("rebuilt ") }
+        try io.print(loaded.modules[module_at].name)
+        try io.print("\n")
+        module_at += 1usize
+    }
+    ret io.print("compiled modules written\n")
 }
 
 // The key of the image the command line links from the artifacts in the directory, and
@@ -12430,7 +12458,8 @@ fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> e
     // build of a module rebuilt with a previous artifact (a source change; D1516: an
     // edge that did not hold, and a release build), that artifact's emission.
     var reuse: Reuse = zero
-    if w.hot.on {
+    // A directory of artifacts records none: a rebuilt artifact is the cold build's.
+    if w.hot.on && !w.hot.saves {
         try note_emission(w, a, first)
         if !w.builder.explain && module_index < w.loaded.previous.len && w.loaded.previous[module_index].len != 0usize { try reuse_open(a, w.loaded.previous[module_index], module_index, &reuse) }
     }
@@ -14670,7 +14699,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `emit-em-all` takes the executable path's crew: one thread lowered, selected and
     // wrote 745 modules while seven cores sat idle. `--whole` keeps the program lowered
     // whole on one thread, the path no crew makes, which the crew's image is held against.
-    let crew_em = writes_all_em && !incremental_build && !(trailing_flags && has_flag(args, "--whole"))
+    // An incremental one takes the hot loader with it; under `--whole` the edge rule
+    // still runs over every module parsed.
+    let crew_em = writes_all_em && !(trailing_flags && has_flag(args, "--whole"))
     let crew_build = writes_executable || crew_em
     // `dis-file PATH ROOT ARCH OS --json` (D233): the codegen pipeline, then per-function bytes.
     // `dis-file ... --json --release` (D542): the release image, its inlined ranges named.
@@ -14736,7 +14767,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // helper: `main` is at the bootstrap's cap of locals.
         var hot_load: HotLoad = zero
         var hot_scratch: binary.Buffer = zero
-        try init_hot_load(a, &hot_load, &hot_scratch, &loaded, args, hot_build, release_build, unchecked_build)
+        try init_hot_load(a, &hot_load, &hot_scratch, &loaded, args, hot_build || (incremental_build && crew_em), release_build, unchecked_build)
         let (held_all, held_all_error) = mem.alloc[[]const u8](a, loaded.modules.len)
         if held_all_error != ok { ret held_all_error }
         clear_held(held_all)
@@ -14753,6 +14784,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             try io.print("executable written\n")
             ret ok
         }
+        // The same for a directory of artifacts: every module stable, nothing to write.
+        if incremental_build && load_error == ok && report.count == 0usize && !report.json && !report.build.on && all_stable(&hot_load, &loaded, held_all) { ret print_em_outcome(&loaded, hot_load.stable[0usize..0usize]) }
         if load_error != ok {
             if disassemble {
                 report.pending_header = ""
@@ -14772,7 +14805,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // once per sweep; the incremental artifact build keeps the whole-program passes,
         // whose `keep` mask it decides between declarations and bodies.
         var resolve_error = ok
-        if !(writes_all_em && incremental_build) && loaded.order_count == loaded.count {
+        if (crew_em || !incremental_build) && loaded.order_count == loaded.count {
             resolve_error = resolve_per_module(a, &resolver, &loaded)
         } else {
             resolve_error = resolve.collect(&resolver, &loaded)
@@ -14810,7 +14843,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             keep_at += 1usize
         }
         var check_error = ok
-        if !(writes_all_em && incremental_build) && loaded.order_count == loaded.count {
+        if (crew_em || !incremental_build) && loaded.order_count == loaded.count {
             check_error = declarations_per_module(&checker, &resolver, &loaded)
         } else {
             check_error = check.run_declarations(&checker, &resolver, &loaded)
@@ -14880,7 +14913,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if bindings_error != ok { ret bindings_error }
         report.build.pools[stats.POOL_BINDINGS] = bindings.len
         checker.arena = a
-        let fused = check_error == ok && !(writes_all_em && incremental_build) && loaded.order_count == loaded.count
+        let fused = check_error == ok && (crew_em || !incremental_build) && loaded.order_count == loaded.count
         // A release build checks every body, kept or not: the oracle inlines from
         // all of them, and a hot release image is then the cold one's (D319).
         var body_skip = keep
@@ -14902,7 +14935,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             early_builder.explain_json = report.json
         }
         if crew_build {
-            hot.on = hot_build
+            hot.on = hot_build || incremental_build
             hot.saves = crew_em
             hot.keep = keep
             hot.directory = artifact_dir
@@ -15218,6 +15251,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 }
                 try crew_emit(a, &crew, &report, &loaded, &checker, &resolver, &builder, bindings, lowered_modules, machine_abi_of(args), &hot, held, &code, body_skip)
                 if crew_em {
+                    try tool.em_manifest_file(a, &loaded, args[6usize])
+                    if incremental_build { ret print_em_outcome(&loaded, keep) }
                     try io.print("compiled modules written\n")
                     ret ok
                 }

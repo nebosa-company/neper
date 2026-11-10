@@ -44088,3 +44088,15 @@ unreferenced.
 **Result.** All-library root, x64-linux, `-j 8`: warm rebuilt modules 126 → 0 and warm 5.5 s → 2.2 s against a cold 3.6 to 4.4 s. Of the 2.2 s, `settle` (reading and checking 748 artifacts) is 1.25 s, load and parse 0.38 s, resolve 0.33 s, declarations 0.18 s. `incremental_generic` fails on the previous compiler (`rebuilt main`) and passes now.
 
 **Not done.** Warm is still not orders of magnitude faster: it parses and resolves every source and reads every artifact before deciding. `--incremental` still takes the serial path and does not use the crew. The full suites were not run.
+
+## D5973 — `emit-em-all --incremental` takes the hot loader
+
+**Problem.** After D5972 an unchanged warm `emit-em-all --incremental` of the all-library root still took 2.0 s against a cold 3.8 s, and so did a one-module edit. The same root through `emit-executable --incremental` was a 0.23 s no-op. The executable's hot loader (D322, D324) reads each artifact before parsing anything and parses only what changed; `emit-em-all --incremental` (D205) parsed, resolved and declared every source, serialized a fresh Interface for every module, then read the artifacts on one thread. The `.em` files already carried everything the faster path needs.
+
+**Decision.** `emit-em-all --incremental` runs the hot loader, `settle_hot` and the crew, over the directory the command names instead of `.neper/<mode>/em/`. When every module is stable it prints the `kept` lines and writes nothing. `--incremental --whole` keeps the old whole-program path. The hot loader keeps an artifact only when an authenticated manifest recorded its checksum and SHA-256 (D473); so every crew `emit-em-all`, cold or incremental, writes `build-manifest.json` into the output directory, signed with the user's cache key. A directory without it, or with an artifact the manifest does not record, is rebuilt. A rebuilt artifact carries no emission reuse records (D1515), so it is the cold build's artifact byte for byte when its source is.
+
+**Result.** All-library root, 748 modules, x64-windows, `-j 8`, release compiler: unchanged warm 2.0 s → 0.18 s; one module edited 2.0 s → 0.22 s; a `List` field reorder rebuilding 64 modules 3.5 s → 1.07 s; cold 3.8 s unchanged. The directory after a one-module edit equals a cold build of the edited tree, manifest included. Stage 3 equals stage 4.
+
+**Changed behaviour.** An artifact another compiler build wrote is rebuilt (the hot loader compares the compiler identity; the old path compared source and mode only). The output directory holds one more file.
+
+**Not done.** `--incremental --whole` writes no manifest, so a crew build after it rebuilds everything once. Three modules that use `e.data.list` only through generic calls, never naming `List`, are kept when `List`'s fields are reordered; the compiler before D5972 kept them too, so the gap is in the edge writer's signature walk, not here.

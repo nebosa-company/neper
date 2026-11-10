@@ -7397,6 +7397,52 @@ fn manifest_publish(a: *mem.Arena, directory: str, manifest_path: str, bytes: []
     ret os.Exists
 }
 
+// The signed record of an `emit-em-all` directory: each artifact's checksum and SHA-256
+// under the user's cache key, which the next `--incremental` build asks for before it
+// keeps an artifact (D473's rule, for a directory outside `.neper`).
+fn em_manifest_file(a: *mem.Arena, g: *graph.Graph, directory: str) -> err {
+    let (manifest_path, path_error) = manifest_join(a, directory, "build-manifest.json")
+    if path_error != ok { ret path_error }
+    var capacity = 256usize
+    var module_at = 0usize
+    while module_at < g.count {
+        capacity += g.modules[module_at].name.len * 2usize + 160usize
+        module_at += 1usize
+    }
+    let (storage, storage_error) = mem.alloc[u8](a, capacity)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try text(&out, "{\"schema\":\"neper-em-manifest\",\"version\":1,\"incremental\":[")
+    var written = 0usize
+    module_at = 0usize
+    while module_at < g.count {
+        if g.modules[module_at].artifact_hash_known && g.modules[module_at].artifact_sha256_known {
+            if written != 0usize { try byte(&out, 44u8) }
+            try text(&out, "{\"module\":")
+            try quoted(&out, g.modules[module_at].name)
+            try text(&out, ",\"artifact_crc32c\":\"")
+            try hex32(&out, g.modules[module_at].artifact_hash)
+            try text(&out, "\",\"artifact_sha256\":")
+            try quoted(&out, g.modules[module_at].artifact_sha256)
+            try byte(&out, 125u8)
+            written += 1usize
+        }
+        module_at += 1usize
+    }
+    try byte(&out, 93u8)
+    let (cache_tag, cache_tag_error) = artifact_hash.cache_auth_tag(a, out.bytes[..out.count])
+    if cache_tag_error == ok {
+        try text(&out, ",\"cache_hmac_sha256\":\"")
+        try text(&out, cache_tag)
+        try text(&out, "\"}\n")
+    } else {
+        // Without the key the directory is unsigned, and the next build rebuilds it.
+        try text(&out, "}\n")
+    }
+    ret manifest_publish(a, directory, manifest_path, out.bytes[0usize..out.count])
+}
+
 fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, release_mode: bool, unchecked: bool, artifact_path: str, packed: []const u8, reasons: []u8, image_unchanged: bool) -> err {
     var mode = "debug"
     if release_mode { mode = "release" }
