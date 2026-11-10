@@ -991,9 +991,24 @@ fn paint_text_run_color(p: *Painter, text_box: u32, sty: *const style.Style, tex
 fn paint_marker(p: *Painter, mb: u32, text: str, x: f64, y: f64, w: f64) {
     let ms = layout.st(p.l, p.l.boxes.items[usize(mb)].style)
     if ms.visibility != .Visible { ret }
+    let fm = font_metrics_of(p, ms)
+    // `list-style-image` replaces the marker's glyph (and wins over `list-style-type: none`) when the image loads.
+    let img_low = cv.lower(p.a, cv.trim_ws(ms.list_style_image))
+    if img_low.len > 0usize && !str.eq(img_low, "none") {
+        let layer = parse_layer_image(p, ms.list_style_image)
+        if layer.kind == 4u8 {
+            let env = p.env
+            let tex = env.url_image(env.ctx, layer.body)
+            if tex.found && tex.width > 0.0f32 && tex.height > 0.0f32 {
+                let iw = f64(tex.width)
+                let ih = f64(tex.height)
+                emit(p, scene.Command { Image: scene.DrawImage { texture: tex.texture, source: geo.rect(0.0f32, 0.0f32, tex.width, tex.height), destination: grect(x + w - iw, y + fm.ascent - ih, iw, ih), opacity: 1.0f32 } })
+                ret
+            }
+        }
+    }
     let kind = cv.lower(p.a, ms.list_style_type)
     if str.eq(kind, "none") { ret }
-    let fm = font_metrics_of(p, ms)
     if str.eq(kind, "disc") || str.eq(kind, "circle") || str.eq(kind, "square") {
         let size = maxf(3.0f64, ms.font_size * 0.35f64)
         let mx = x + (w - size) / 2.0f64 - ms.font_size * 0.1f64
