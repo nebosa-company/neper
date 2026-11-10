@@ -8198,7 +8198,29 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
             it.cn = cn
             it.rs = r0
             it.rn = rn
-            let (mn, mx) = outer_content_widths(l, kid)
+            var (mn, mx) = outer_content_widths(l, kid)
+            // An item with an aspect ratio and a percentage height gets its width from that height resolved against its
+            // rows when they are all fixed lengths.
+            if ks.width.kind == .Auto && ks.height.kind == .Px && ks.height.pct != 0.0f64 && has_box_ratio(l, kid) && bx(l, kid).inner != .Replaced {
+                var rsum = 0.0f64
+                var rfixed = true
+                // (an item not yet placed is taken to sit on the first row)
+                var rr = 0usize
+                if r0 >= 0i32 { rr = usize(r0) }
+                let rend = rr + usize(rn)
+                while rr < rend {
+                    if rr < rtr.len && rtr.items[rr].min.kind == 0u8 && rtr.items[rr].max.kind == 0u8 { rsum += rtr.items[rr].max.v } else { rfixed = false }
+                    rr += 1usize
+                }
+                if rfixed && rsum > 0.0f64 {
+                    let (rw, has_rw) = ratio_width(l, kid, to_content_h(l, kid, ks.height.px + ks.height.pct * rsum))
+                    if has_rw {
+                        let rbb = bx(l, kid)
+                        mn = rw + horizontal_extras(rbb) + rbb.margin[1usize] + rbb.margin[3usize]
+                        mx = mn
+                    }
+                }
+            }
             it.cmin = mn
             it.cmax = mx
             var at = count
