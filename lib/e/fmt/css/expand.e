@@ -549,16 +549,23 @@ fn expand_list_style(a: *mem.Arena, value: str, out: *list.List[Pair]) {
         let t = lc(a, toks[i])
         i += 1usize
         if str.eq(t, "inside") || str.eq(t, "outside") {
+            if position.len > 0usize { ret }
             position = t
         } else if str.eq(t, "none") {
             nones += 1usize
         } else if str.starts_with(t, "url(") || str.starts_with(t, "linear-gradient(") || str.starts_with(t, "radial-gradient(") {
+            if image.len > 0usize { ret }
             image = toks[i - 1usize]
         } else {
+            if kind.len > 0usize { ret }
             kind = toks[i - 1usize]
         }
     }
-    if nones > 2usize { ret }
+    // Each `none` fills a slot (type or image) the other components left free; more of them than slots is invalid.
+    var free_slots = 0usize
+    if kind.len == 0usize { free_slots += 1usize }
+    if image.len == 0usize { free_slots += 1usize }
+    if nones > free_slots { ret }
     if nones >= 1usize && kind.len == 0usize { kind = "none" }
     if nones == 2usize && image.len == 0usize { image = "none" }
     if kind.len == 0usize { kind = "disc" }
