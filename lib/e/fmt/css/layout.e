@@ -9339,13 +9339,15 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
     let (os, e1) = mem.alloc[f64](l.a, (g.nc + 1usize) * cap)
     let (oe, e2) = mem.alloc[f64](l.a, (g.nc + 1usize) * cap)
     let (on, e3) = mem.alloc[usize](l.a, g.nc + 1usize)
-    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 }
+    let (cys, e4) = mem.alloc[f64](l.a, g.nc + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 }
     var q = 0usize
     while q < g.nc {
         on[q] = 0usize
         q += 1usize
     }
     let tol = lanes_tolerance(l, cs, axis_total(g.cols, g.nc, g.gap_c))
+    var prev_lane = 1000000usize
     var total = 0.0f64
     var i = 0usize
     while i < g.n {
@@ -9356,7 +9358,7 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
         var s_lo = 0usize
         var s_hi = 0usize
         if g.nc >= span { s_hi = g.nc - span }
-        if sc.kind != 0u8 {
+        if sc.kind != 0u8 && !(sc.kind == 2u8 && ecs.kind == 0u8) {
             s_lo = usize(g.items[i].cs)
             s_hi = s_lo
         }
@@ -9403,12 +9405,32 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
                 }
                 ci += 1i64
             }
-            if cand_best < best_y - tol {
-                best_y = cand_best
-                best_s = s0
-            }
+            cys[s0] = cand_best
+            if cand_best < best_y { best_y = cand_best }
             s0 += 1usize
         }
+        // The first lane whose top is within the tolerance of the lowest one.
+        var cnt = s_hi - s_lo + 1usize
+        if s_hi + span > g.nc { cnt = 0usize }
+        var pick = 0usize
+        var found_pick = false
+        var from = s_lo
+        var tried = 0usize
+        var cur = from
+        while tried < cnt && !found_pick {
+            if cur > s_hi { cur = s_lo }
+            if cys[cur] <= best_y + tol {
+                pick = cur
+                found_pick = true
+            }
+            cur += 1usize
+            tried += 1usize
+        }
+        if found_pick {
+            best_s = pick
+            best_y = cys[pick]
+        }
+        prev_lane = best_s
         let area_w = grid_area_size(g.cols, i32(best_s), i32(span), g.gap_c)
         let w = grid_item_width(l, id, cs, area_w)
         var hs2 = -1.0f64
