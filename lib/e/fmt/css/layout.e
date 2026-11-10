@@ -8753,8 +8753,27 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     let stretch_cols = cs.justify_content == .Normal || cs.justify_content == .Stretch
     let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch
     // Lanes are the explicit tracks: the implicit ones auto-placement made up are not lanes.
-    if cs.lanes && g.ec > 0i32 && usize(g.ec) < g.nc { g.nc = usize(g.ec) }
-    if cs.lanes && g.er > 0i32 && g.ec == 0i32 && usize(g.er) < g.nr { g.nr = usize(g.er) }
+    // An item placed on a definite line past them still makes the lane it names.
+    if cs.lanes && g.ec > 0i32 && usize(g.ec) < g.nc {
+        var need = usize(g.ec)
+        var ni = 0usize
+        while ni < g.n {
+            let (nsc, nec) = item_axis_specs(l.a, bstyle(l, g.items[ni].box), true)
+            if (nsc.kind == 1u8 || nsc.kind == 3u8) && usize(g.items[ni].cs + g.items[ni].cn) > need && usize(g.items[ni].cs + g.items[ni].cn) <= g.nc { need = usize(g.items[ni].cs + g.items[ni].cn) }
+            ni += 1usize
+        }
+        g.nc = need
+    }
+    if cs.lanes && g.er > 0i32 && g.ec == 0i32 && usize(g.er) < g.nr {
+        var rneed = usize(g.er)
+        var rni = 0usize
+        while rni < g.n {
+            let (rsc2, rec2) = item_axis_specs(l.a, bstyle(l, g.items[rni].box), false)
+            if (rsc2.kind == 1u8 || rsc2.kind == 3u8) && usize(g.items[rni].rs + g.items[rni].rn) > rneed && usize(g.items[rni].rs + g.items[rni].rn) <= g.nr { rneed = usize(g.items[rni].rs + g.items[rni].rn) }
+            rni += 1usize
+        }
+        g.nr = rneed
+    }
     if cs.lanes && g.er > 0i32 && g.ec == 0i32 {
         let rows_h = layout_lanes_rows(l, b, g, cs, cw, ch)
         var rows_lane = ch
