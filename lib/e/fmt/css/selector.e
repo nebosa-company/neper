@@ -423,7 +423,8 @@ fn parse_simple(p: *const Parser, toks: []const syntax.Token, start: usize) -> S
         ret rejected()
     }
     if t.kind == .Ident { ret found_simple(new_simple(.Type, lower(p, t.value)), i + 1usize) }
-    if t.kind == .Hash { ret found_simple(new_simple(.Id, t.value), i + 1usize) }
+    // `#1digit` is a hash token but not an identifier: it is no selector.
+    if t.kind == .Hash && t.hash_id { ret found_simple(new_simple(.Id, t.value), i + 1usize) }
     if t.kind == .LeftSquare { ret parse_attribute(p, toks, i) }
     if t.kind == .Colon { ret parse_pseudo(p, toks, i) }
     ret rejected()
@@ -714,6 +715,8 @@ fn functional_pseudo(p: *const Parser, name: str, arg: []const syntax.Token) -> 
     if str.eq(name, "is") || str.eq(name, "matches") { ret (Simple { kind: .Is, name: "is", argument: raw, subs: plain_list(p, arg), attr_ci: false }, true) }
     if str.eq(name, "where") { ret (Simple { kind: .Where, name: name, argument: raw, subs: plain_list(p, arg), attr_ci: false }, true) }
     if str.eq(name, "has") { ret (Simple { kind: .Has, name: name, argument: raw, subs: relative_list(p, arg), attr_ci: false }, true) }
+    // `:lang()` needs a language range.
+    if str.eq(name, "lang") && str.trim(syntax.decoded_text(p.a, p.src, arg)).len == 0usize { ret (new_simple(.PseudoClass, name), false) }
     if str.eq(name, "lang") { ret (Simple { kind: .PseudoClass, name: "lang", argument: syntax.decoded_text(p.a, p.src, arg), subs: zero, attr_ci: false }, true) }
     if str.eq(name, "nth-child") { ret (parse_nth(p, .NthChild, arg), true) }
     if str.eq(name, "nth-last-child") { ret (parse_nth(p, .NthLastChild, arg), true) }
