@@ -8763,7 +8763,8 @@ fn lanes_stack_align(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, colum
     var mode = cs.justify_content
     if columns { mode = cs.align_content }
     var how = 0u8
-    if mode == .Start || mode == .FlexStart { how = 1u8 } else if mode == .Center { how = 2u8 } else if mode == .End || mode == .FlexEnd { how = 3u8 } else if mode == .FlowEnd { how = 1u8 }
+    // (`flex-start` / `flex-end` follow the flow like `flow-start` / `flow-end`: with `fill-reverse` the flow starts at the far end)
+    if mode == .Start { how = 1u8 } else if mode == .Center { how = 2u8 } else if mode == .End { how = 3u8 } else if mode == .FlowEnd || mode == .FlexEnd { how = 1u8 }
     if how == 0u8 { ret }
     let bb = bx(l, b)
     let ox0 = bb.border[3usize] + bb.padding[3usize]
