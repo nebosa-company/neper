@@ -2533,13 +2533,22 @@ fn paint_layers(p: *Painter, b: u32, s: *const style.Style, x: f64, y: f64, w: f
         if space_x { sx = ox }
         if space_y { sy = oy }
         // The painting area, clipped (rounded with the border radius).
-        let cx = x + in_l
-        let cy = y + in_t
-        let cw = w - in_l - in_r
-        let ch = h - in_t - in_b
+        var cx = x + in_l
+        var cy = y + in_t
+        var cw = w - in_l - in_r
+        var ch = h - in_t - in_b
+        // The root element's background belongs to the canvas: its image is positioned by the root box but covers the whole view.
+        var on_canvas = false
+        if bb.parent == p.l.root && p.moved == 0usize {
+            on_canvas = true
+            cx = p.vx
+            cy = p.vy
+            cw = p.vw
+            ch = p.vh
+        }
         if cw <= 0.0f64 || ch <= 0.0f64 { continue }
         save(p)
-        if has_radius(s) {
+        if has_radius(s) && !on_canvas {
             emit(p, scene.Command { Clip: scene.Clip { Rounded: region_rrect(s, x, y, w, h, in_t, in_r, in_b, in_l) } })
         } else {
             emit(p, scene.Command { Clip: scene.Clip { Rect: grect(cx, cy, cw, ch) } })
