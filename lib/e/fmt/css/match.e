@@ -429,12 +429,28 @@ fn includes_word(a: str, b: str) -> bool {
     ret false
 }
 
+// The HTML attributes whose values selectors compare ASCII case-insensitively (HTML §4.16.1 "case-insensitive" list).
+fn html_ci_attr(name: str) -> bool {
+    let set = ",accept,accept-charset,align,alink,axis,bgcolor,charset,checked,clear,codetype,color,compact,declare,defer,dir,direction,disabled,enctype,face,frame,hreflang,http-equiv,lang,language,link,media,method,multiple,nohref,noresize,noshade,nowrap,readonly,rel,rev,rules,scope,scrolling,selected,shape,target,text,type,valign,valuetype,vlink,"
+    var i = 1usize
+    while i < set.len {
+        var j = i
+        while j < set.len && set[j] != 44u8 { j += 1usize }
+        if j - i == name.len && str.eq(set[i..j], name) { ret true }
+        i = j + 1usize
+    }
+    ret false
+}
+
 fn attr_compare(m: *const Matcher, el: html.NodeId, part: selector.Simple, op: u8) -> bool {
     let (raw, found) = attr(m, el, part.name)
     if !found { ret false }
     var actual = raw
     var expected = part.argument
-    if part.attr_ci {
+    // HTML names a set of attributes whose values are ASCII case-insensitive for selectors (`lang`, `type`, `dir`, `rel`, ...).
+    var ci = part.attr_ci
+    if !ci && m.doc.nodes[usize(el)].namespace == .Html && html_ci_attr(lower(m.a, part.name)) { ci = true }
+    if ci {
         actual = lower(m.a, actual)
         expected = lower(m.a, expected)
     }
