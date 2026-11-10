@@ -4065,6 +4065,12 @@ fn content_widths(l: *Layout, b: u32) -> (f64, f64) {
         let (imn, imx) = inline_widths(l, b)
         mn = imn
         mx = imx
+        // The first line's indent is part of its intrinsic width.
+        let (tiv, tih) = resolve_len(st(l, l.boxes.items[usize(b)].style).text_indent, -1.0f64)
+        if tih && tiv > 0.0f64 {
+            mn += tiv
+            mx += tiv
+        }
     } else {
         var kid = bb.first
         while kid != NONE {
