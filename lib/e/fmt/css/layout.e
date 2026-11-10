@@ -8876,9 +8876,15 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
                     g.items[i].rmin = 0.0f64
                     g.items[i].rmax = 0.0f64
                     let sb2 = bx(l, id)
+                    // The subgrid's own row gap against the parent's: half the difference sits on each side facing a gap.
+                    var own_rgap = g.gap_r
+                    if is0.row_gap.kind != .Normal { own_rgap = flex_gap(is0.row_gap, maxf(ch, 0.0f64)) }
+                    let rgap_half = (own_rgap - g.gap_r) / 2.0f64
                     var rk = 0usize
                     while rk < geom.nr && rk < usize(g.items[i].rn) {
                         var rv = geom.rsz[rk]
+                        if rk > 0usize { rv += rgap_half }
+                        if rk + 1usize < geom.nr && rk + 1usize < usize(g.items[i].rn) { rv += rgap_half }
                         if rk == 0usize { rv += sb2.margin[0usize] + sb2.border[0usize] + sb2.padding[0usize] }
                         if rk + 1usize == geom.nr || rk + 1usize == usize(g.items[i].rn) { rv += sb2.margin[2usize] + sb2.border[2usize] + sb2.padding[2usize] }
                         var rit: GItem = zero
