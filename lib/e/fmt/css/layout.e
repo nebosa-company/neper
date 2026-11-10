@@ -9196,7 +9196,7 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         ir += 1usize
     }
     if ch < 0.0f64 || intrinsic_rows {
-        let (ex, exe) = mem.alloc[GItem](l.a, g.n * (g.nr + 1usize) + 1usize)
+        let (ex, exe) = mem.alloc[GItem](l.a, g.n * (g.nr + 1usize) + g.n * 64usize + 1usize)
         var exn = 0usize
         if exe == ok {
             var xi = 0usize
@@ -9211,6 +9211,54 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
                     s0 += 1usize
                 }
                 xi += 1usize
+            }
+            // A subgrid has no height of its own to give its lanes: its own rows (sized by its content) stand in for it, with
+            // the difference between its row gap and the lanes' counted on each side that faces a gap.
+            var si = 0usize
+            while si < g.n {
+                let sid = g.items[si].box
+                let sst = bstyle(l, sid)
+                if bx(l, sid).inner == .Grid && g.items[si].rn > 0i32 && subgrid_axes_match(l, sid) && !sst.lanes {
+                    let (srt, hsrt) = extra_text(sst, "grid-template-rows")
+                    if hsrt && subgrid_axis(srt) {
+                        var gi = l.grids.len
+                        var gfound = false
+                        var geom: GridGeom = zero
+                        while gi > 0usize && !gfound {
+                            gi -= 1usize
+                            if l.grids.items[gi].box == sid {
+                                geom = l.grids.items[gi]
+                                gfound = true
+                            }
+                        }
+                        if gfound && geom.nr > 0usize {
+                            let sb2 = bx(l, sid)
+                            var own_gap = g.gap_r
+                            if sst.row_gap.kind != .Normal { own_gap = flex_gap(sst.row_gap, maxf(ch, 0.0f64)) }
+                            let half = (own_gap - g.gap_r) / 2.0f64
+                            var rk = 0usize
+                            while rk < geom.nr && rk < usize(g.items[si].rn) && exn < g.n * (g.nr + 1usize) + g.n * 64usize {
+                                var rv = geom.rsz[rk]
+                                if rk == 0usize { rv += sb2.margin[0usize] + sb2.border[0usize] + sb2.padding[0usize] }
+                                if rk + 1usize == geom.nr || rk + 1usize == usize(g.items[si].rn) { rv += sb2.margin[2usize] + sb2.border[2usize] + sb2.padding[2usize] }
+                                if rk > 0usize { rv += half }
+                                if rk + 1usize < geom.nr && rk + 1usize < usize(g.items[si].rn) { rv += half }
+                                var rit: GItem = zero
+                                rit.box = sid
+                                rit.cs = 0i32
+                                rit.cn = 1i32
+                                rit.rs = g.items[si].rs + i32(rk)
+                                rit.rn = 1i32
+                                rit.rmin = rv
+                                rit.rmax = rv
+                                ex[exn] = rit
+                                exn += 1usize
+                                rk += 1usize
+                            }
+                        }
+                    }
+                }
+                si += 1usize
             }
         }
         size_tracks(g.rows, g.nr, g.gap_r, ch, ex, exn, false, false, ch >= 0.0f64 && stretch_rows)
