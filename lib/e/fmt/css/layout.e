@@ -9198,6 +9198,19 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
     }
     let tol = lanes_tolerance(l, cs, axis_total(g.rows, g.nr, g.gap_r))
     var prev_lane = 1000000usize
+    // Dense packing: every lane keeps the intervals its items take along it, so a later item can fill a hole.
+    let dense = lanes_dense(cs)
+    let dcap = g.n + 1usize
+    let (dos, de1) = mem.alloc[f64](l.a, (g.nr + 1usize) * dcap)
+    let (doe, de2) = mem.alloc[f64](l.a, (g.nr + 1usize) * dcap)
+    let (don, de3) = mem.alloc[usize](l.a, g.nr + 1usize)
+    let (dxs, de4) = mem.alloc[f64](l.a, g.nr + 1usize)
+    if de1 != ok || de2 != ok || de3 != ok || de4 != ok { ret 0.0f64 }
+    var dq = 0usize
+    while dq < g.nr {
+        don[dq] = 0usize
+        dq += 1usize
+    }
     i = 0usize
     while i < g.n {
         let id = g.items[i].box
@@ -9205,7 +9218,77 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         let (sr, ers) = item_axis_specs(l.a, is, false)
         let span = usize(maxf(1.0f64, f64(g.items[i].rn)))
         var start = usize(g.items[i].rs)
-        if (sr.kind == 0u8 || (sr.kind == 2u8 && ers.kind == 0u8)) && g.nr >= span {
+        var dense_x = 0.0f64
+        if dense && g.nr >= span {
+            var s_lo = 0usize
+            var s_hi = g.nr - span
+            if sr.kind != 0u8 && !(sr.kind == 2u8 && ers.kind == 0u8) && start + span <= g.nr {
+                s_lo = start
+                s_hi = start
+            }
+            var best_x = 1000000000.0f64
+            var s0 = s_lo
+            while s0 <= s_hi {
+                let dh = grid_area_size(g.rows, i32(s0), i32(span), g.gap_r)
+                let dib = bx(l, id)
+                let (dmn, dmx) = content_widths(l, id)
+                var dw = maxf(dmn, minf(dmx, cw - dib.margin[3usize] - dib.margin[1usize] - horizontal_extras(dib)))
+                let (dwv, dhw) = resolve_len(is.width, cw)
+                if is.width.kind == .Px && dhw { dw = to_content_w(l, id, dwv) }
+                if is.width.kind == .MinContent { dw = dmn } else if is.width.kind == .MaxContent { dw = dmx }
+                var dhs = -1.0f64
+                let (dhv, dhh) = resolve_len(is.height, dh)
+                if is.height.kind == .Px && dhh { dhs = to_content_h(l, id, dhv) }
+                subgrid_prepare_lane_rows(l, g, id, s0, span)
+                flex_place_item(l, id, dw, dhs)
+                l.sub_has_c = false
+                l.sub_has_r = false
+                let dpb = bx(l, id)
+                let outer = dpb.margin[3usize] + dpb.w + dpb.margin[1usize]
+                var cand_best = 1000000000.0f64
+                var ci = -1i64
+                while ci < i64(g.nr * dcap) {
+                    var x = 0.0f64
+                    var valid = true
+                    if ci >= 0i64 {
+                        let lane = usize(ci) / dcap
+                        let k = usize(ci) % dcap
+                        if lane < s0 || lane >= s0 + span || k >= don[lane] { valid = false } else { x = doe[lane * dcap + k] + g.gap_c }
+                    }
+                    if valid && x < cand_best {
+                        var free = true
+                        var t = s0
+                        while t < s0 + span && free {
+                            var k2 = 0usize
+                            while k2 < don[t] {
+                                let a0 = dos[t * dcap + k2]
+                                let b0 = doe[t * dcap + k2]
+                                if x < b0 + g.gap_c && x + outer + g.gap_c > a0 { free = false }
+                                k2 += 1usize
+                            }
+                            t += 1usize
+                        }
+                        if free { cand_best = x }
+                    }
+                    ci += 1i64
+                }
+                dxs[s0] = cand_best
+                if cand_best < best_x { best_x = cand_best }
+                s0 += 1usize
+            }
+            var pick = s_lo
+            var cur = s_lo
+            var found_pick = false
+            while cur <= s_hi && !found_pick {
+                if dxs[cur] <= best_x + tol {
+                    pick = cur
+                    found_pick = true
+                }
+                cur += 1usize
+            }
+            start = pick
+            dense_x = dxs[pick]
+        } else if (sr.kind == 0u8 || (sr.kind == 2u8 && ers.kind == 0u8)) && g.nr >= span {
             start = pick_run(ends, g.nr, span, tol, prev_lane)
         }
         if start + span > g.nr { start = 0usize }
@@ -9216,6 +9299,7 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
             if ends[t2] > left { left = ends[t2] }
             t2 += 1usize
         }
+        if dense { left = dense_x - g.gap_c }
         let area_h = grid_area_size(g.rows, i32(start), i32(span), g.gap_r)
         let ib = bx(l, id)
         let (mn, mx) = content_widths(l, id)
@@ -9245,6 +9329,9 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         var t3 = start
         while t3 < start + span && t3 < g.nr {
             ends[t3] = maxf(right, left)
+            dos[t3 * dcap + don[t3]] = x0
+            doe[t3 * dcap + don[t3]] = right
+            don[t3] += 1usize
             t3 += 1usize
         }
         i += 1usize
