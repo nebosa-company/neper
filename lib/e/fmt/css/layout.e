@@ -8755,6 +8755,13 @@ fn lane_area(tr: []GTrack, n: usize, gap: f64, at: f64, span: usize) -> (f64, f6
     ret (tr[k].pos, grid_area_size(tr, i32(k), i32(sp), gap))
 }
 
+// The far edge of the lanes (the span `track-reverse` reflects across): where they end, which is the container's size only
+// when they fill it.
+fn lanes_span(tr: []GTrack, n: usize, gap: f64, fallback: f64) -> f64 {
+    if n == 0usize { ret fallback }
+    ret tr[0usize].pos + axis_total(tr, n, gap)
+}
+
 fn lanes_mirror(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, columns: bool, lane_extent: f64, stack_extent: f64) {
     let (fill_rev, track_rev) = lanes_reversal(cs)
     if !fill_rev && !track_rev { ret }
@@ -8805,7 +8812,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         let rows_h = layout_lanes_rows(l, b, g, cs, cw, ch)
         var rows_lane = ch
         if rows_lane < 0.0f64 { rows_lane = rows_h }
-        lanes_mirror(l, b, g, cs, false, rows_lane, cw)
+        lanes_mirror(l, b, g, cs, false, lanes_span(g.rows, g.nr, g.gap_r, rows_lane), cw)
         ret rows_h
     }
     if cs.lanes {
@@ -8852,13 +8859,13 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             let dense_h = layout_lanes_dense(l, b, g, cs, cw, ch)
             var dense_stack = ch
             if dense_stack < 0.0f64 { dense_stack = dense_h }
-            lanes_mirror(l, b, g, cs, true, cw, dense_stack)
+            lanes_mirror(l, b, g, cs, true, lanes_span(g.cols, g.nc, g.gap_c, cw), dense_stack)
             ret dense_h
         }
         let lanes_h = layout_lanes(l, b, g, cs, cw, ch)
         var lane_h = ch
         if lane_h < 0.0f64 { lane_h = lanes_h }
-        lanes_mirror(l, b, g, cs, true, cw, lane_h)
+        lanes_mirror(l, b, g, cs, true, lanes_span(g.cols, g.nc, g.gap_c, cw), lane_h)
         ret lanes_h
     }
     let (sized_items, sized_n) = subgrid_contributions(l, g)
