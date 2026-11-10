@@ -8669,6 +8669,31 @@ fn grid_axis_offset(mode: style.Align, free: f64) -> f64 {
     ret 0.0f64
 }
 
+fn lanes_cap(l: *Layout, g: *Grid, cs: *const style.Style) {
+    // Lanes are the explicit tracks: the implicit ones auto-placement made up are not lanes.
+    // An item placed on a definite line past them still makes the lane it names.
+    if cs.lanes && g.ec > 0i32 && usize(g.ec) < g.nc {
+        var need = usize(g.ec)
+        var ni = 0usize
+        while ni < g.n {
+            let (nsc, nec) = item_axis_specs(l.a, bstyle(l, g.items[ni].box), true)
+            if (nsc.kind == 1u8 || nsc.kind == 3u8) && usize(g.items[ni].cs + g.items[ni].cn) > need && usize(g.items[ni].cs + g.items[ni].cn) <= g.nc { need = usize(g.items[ni].cs + g.items[ni].cn) }
+            ni += 1usize
+        }
+        g.nc = need
+    }
+    if cs.lanes && g.er > 0i32 && g.ec == 0i32 && usize(g.er) < g.nr {
+        var rneed = usize(g.er)
+        var rni = 0usize
+        while rni < g.n {
+            let (rsc2, rec2) = item_axis_specs(l.a, bstyle(l, g.items[rni].box), false)
+            if (rsc2.kind == 1u8 || rsc2.kind == 3u8) && usize(g.items[rni].rs + g.items[rni].rn) > rneed && usize(g.items[rni].rs + g.items[rni].rn) <= g.nr { rneed = usize(g.items[rni].rs + g.items[rni].rn) }
+            rni += 1usize
+        }
+        g.nr = rneed
+    }
+}
+
 fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
     var mn = 0.0f64
     var mx = 0.0f64
@@ -8676,6 +8701,29 @@ fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
     while pass < 2usize {
         let (g, built) = grid_build(l, b, -1.0f64, -1.0f64)
         if !built { ret (0.0f64, 0.0f64) }
+        let gcs = bstyle(l, b)
+        if gcs.lanes {
+            lanes_cap(l, g, gcs)
+            if g.er > 0i32 && g.ec == 0i32 {
+                // Lanes along the rows: the width is how far the items run along their lanes.
+                var probe = 1000000.0f64
+                if pass == 0usize { probe = 0.0f64 }
+                let rows_h = layout_lanes_rows(l, b, g, gcs, probe, -1.0f64)
+                let gbb = bx(l, b)
+                let gox = gbb.border[3usize] + gbb.padding[3usize]
+                var run = 0.0f64
+                var ri = 0usize
+                while ri < g.n {
+                    let rpb = bx(l, g.items[ri].box)
+                    let edge = (rpb.x - gox) + rpb.w + rpb.margin[1usize]
+                    if edge > run { run = edge }
+                    ri += 1usize
+                }
+                if pass == 0usize { mn = run } else { mx = run }
+                pass += 1usize
+                continue
+            }
+        }
         let (wide_items, wide_n) = subgrid_contributions(l, g)
         size_tracks(g.cols, g.nc, g.gap_c, -1.0f64, wide_items, wide_n, true, pass == 0usize, false)
         let total = tracks_total(g.cols, g.nc, g.gap_c)
@@ -8752,28 +8800,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     if !built { ret 0.0f64 }
     let stretch_cols = cs.justify_content == .Normal || cs.justify_content == .Stretch
     let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch
-    // Lanes are the explicit tracks: the implicit ones auto-placement made up are not lanes.
-    // An item placed on a definite line past them still makes the lane it names.
-    if cs.lanes && g.ec > 0i32 && usize(g.ec) < g.nc {
-        var need = usize(g.ec)
-        var ni = 0usize
-        while ni < g.n {
-            let (nsc, nec) = item_axis_specs(l.a, bstyle(l, g.items[ni].box), true)
-            if (nsc.kind == 1u8 || nsc.kind == 3u8) && usize(g.items[ni].cs + g.items[ni].cn) > need && usize(g.items[ni].cs + g.items[ni].cn) <= g.nc { need = usize(g.items[ni].cs + g.items[ni].cn) }
-            ni += 1usize
-        }
-        g.nc = need
-    }
-    if cs.lanes && g.er > 0i32 && g.ec == 0i32 && usize(g.er) < g.nr {
-        var rneed = usize(g.er)
-        var rni = 0usize
-        while rni < g.n {
-            let (rsc2, rec2) = item_axis_specs(l.a, bstyle(l, g.items[rni].box), false)
-            if (rsc2.kind == 1u8 || rsc2.kind == 3u8) && usize(g.items[rni].rs + g.items[rni].rn) > rneed && usize(g.items[rni].rs + g.items[rni].rn) <= g.nr { rneed = usize(g.items[rni].rs + g.items[rni].rn) }
-            rni += 1usize
-        }
-        g.nr = rneed
-    }
+    lanes_cap(l, g, cs)
     if cs.lanes && g.er > 0i32 && g.ec == 0i32 {
         let rows_h = layout_lanes_rows(l, b, g, cs, cw, ch)
         var rows_lane = ch
