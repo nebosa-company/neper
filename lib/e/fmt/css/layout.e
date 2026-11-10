@@ -8694,6 +8694,12 @@ fn grid_item_width_h(l: *Layout, id: u32, cs: *const style.Style, area_w: f64, a
         }
     }
     if is.width.kind == .Px && has_w { ret maxf(0.0f64, clamp_width(l, id, to_content_w(l, id, wv), area_w)) }
+    if !cs.lanes && ib.inner != .Replaced && (is.width.kind == .MinContent || is.width.kind == .MaxContent || is.width.kind == .FitContent) {
+        let (cmn, cmx) = content_widths(l, id)
+        var cw = minf(maxf(cmn, avail), cmx)
+        if is.width.kind == .MinContent { cw = cmn } else if is.width.kind == .MaxContent { cw = cmx }
+        ret maxf(0.0f64, clamp_width(l, id, cw, area_w))
+    }
     // An item with a preferred ratio and a definite height takes its width from the ratio rather than stretching.
     if just == .Normal && is.height.kind == .Px && ib.inner != .Replaced && has_box_ratio(l, id) {
         let (hv2, has_h2) = resolve_len(is.height, area_h)
