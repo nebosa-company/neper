@@ -8109,7 +8109,8 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     let g = &gcell[0usize]
     g.c_dummy = false
     g.r_dummy = false
-    let ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
+    var ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
+    ctx.ch = 1.0f64
     var gp = GridParse { c: ctx, em: cs.font_size, avail: avail_w, gap: 0.0f64, item_min: 0.0f64, item_max: 0.0f64, min_avail: 0.0f64 }
     g.gap_c = flex_gap(cs.column_gap, maxf(avail_w, 0.0f64))
     g.gap_r = flex_gap(cs.row_gap, maxf(avail_h, 0.0f64))
