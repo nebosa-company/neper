@@ -735,6 +735,8 @@ fn paint_decor(p: *Painter, b: u32, x: f64, y: f64) {
     if bb.inner == .Text || bb.inner == .Marker { ret }
     let s = layout.st(p.l, bb.style)
     if s.visibility != .Visible { ret }
+    // An inline split around a block child paints only in its empty fragments, which have no extent here.
+    if s.display == .Inline && !bb.inline_level && !bb.anonymous && bb.inner == .Flow { ret }
     if bb.inner == .Column || bb.inner == .ColumnGroup {
         paint_column_background(p, b, s, x, y)
         ret

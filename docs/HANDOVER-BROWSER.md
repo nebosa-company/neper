@@ -712,3 +712,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 320 (2026-11-11): zeroing border/padding of a promoted inline is inert; reverted.**
   - `block-in-inline-empty-001` expects the empty fragments of the split inline to paint nothing; zeroing the promoted span's edges left normal-flow at 639. A real fix needs fragment boxes before and after the block (true §9.2.1.1 split), not an edge tweak.
+
+- **Round 321 (2026-11-11): an inline split around a block child draws no decoration and has no edges.**
+  - Round 320's edge zeroing alone was inert because paint read the style; `paint_decor` now skips a non-anonymous, non-inline-level `display: inline` flow box, and `resolve_edges` zeroes its border/padding. normal-flow 639 -> 644 (the `block-in-inline-empty-*` and `whitespace-*` family); positioning 453, tables 222, generated-content 176 unchanged.
+  - Ceiling: a split inline with text before or after the block should still paint its fragments; this treats every promoted inline as fragmentless.
