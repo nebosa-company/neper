@@ -5121,7 +5121,9 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
         auto_h = layout_in_new_bfc(l, c, content_w, spec_h)
     } else {
         var sub = Flow { base: fc.base, ox: content_ox, oy: content_oy }
-        let (h2, m2) = layout_children(l, c, content_w, spec_h, &sub, through_top)
+        var kid_h = spec_h
+        if spec_h < 0.0f64 && s.display == .Inline { kid_h = ch }
+        let (h2, m2) = layout_children(l, c, content_w, kid_h, &sub, through_top)
         auto_h = h2
         out_margin = m2
     }

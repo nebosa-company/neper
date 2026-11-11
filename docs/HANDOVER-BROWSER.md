@@ -706,3 +706,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 318 (2026-11-11): remaining `block-in-inline-*` failures are placeholder-glyph tests; nothing built.**
   - `nested-001` renders text as black blocks in both test and ref, so the comparison depends on glyph widths and line wrapping the harness font cannot reproduce; same class as the Ahem-dependent families.
+
+- **Round 319 (2026-11-11): an auto-height inline promoted to a block passes its parent's definite height to its children.**
+  - `block-in-inline-percents-001` expects `height: 50%` on a block inside a span to resolve against the body's 200px; the promoted span now forwards `ch`. normal-flow 638 -> 639; positioning 453, tables 222, corpus 191 unchanged.
