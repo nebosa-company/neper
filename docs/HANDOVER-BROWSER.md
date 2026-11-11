@@ -795,3 +795,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
   - In the post-`emit_line` loop of the inline line placement, an `Abs` piece that follows a `Text`/`Atomic` piece and is block-level (not inline-level, not `was_inline`, not `aux == 2`) gets `y += lh`. `abspos-negative-margin-001` passes.
   - positioning 453 -> 454; normal-flow 659, tables 222, generated-content 176, corpus 191, css-grid 971 (identical failure set) unchanged.
   - Still failing: `abspos-007` (glyph wrap), `-012`, `-022`, `-024`-`-026`, `-block-level-001`, `-float-with-inline-container`, `-inline-007/008`, `-overflow-011/012`.
+
+- **Round 343 (2026-11-11): `abspos-012`, `-024`, `-overflow-011` read; all glyph-bound, nothing changed.**
+  - `abspos-012` lays out `monospace` text by glyph widths (flag `may`); `abspos-024` compares rtl text against a reference text line plus a PNG image; `abspos-overflow-011` has a 20em box whose 26-character text wraps in the 1-em placeholder font but not in the reference.
