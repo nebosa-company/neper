@@ -4465,8 +4465,14 @@ fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool {
     if contained && ch0 > 0.0f64 { ret false }
     if s.height.kind == .Px {
         let (hv, good) = resolve_len(s.height, -1.0f64)
-        // A percentage height may resolve to a real height against a definite container.
-        if s.height.pct != 0.0f64 { ret false }
+        // A percentage height may resolve to a real height against a definite container; against an auto-height one it is `auto`.
+        if s.height.pct != 0.0f64 {
+            if cb.parent == NONE || bstyle(l, cb.parent).height.kind != .Auto { ret false }
+            // A grid or flex item may be stretched to a definite height.
+            let pp = l.boxes.items[usize(cb.parent)].parent
+            if pp != NONE && (l.boxes.items[usize(pp)].inner == .Grid || l.boxes.items[usize(pp)].inner == .Flex) { ret false }
+            if hv != 0.0f64 { ret false }
+        }
         if !good || hv != 0.0f64 { if s.height.pct == 0.0f64 { ret false } }
         if s.height.pct == 0.0f64 && hv != 0.0f64 { ret false }
     }
