@@ -736,3 +736,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 327 (2026-11-11): `subgrid/line-names-006` is not an areas-widening problem; nothing changed.**
   - Row 1 of the test expects `grid-template-areas: '. a a a a'` on a two-track subgrid to leave the box at its two tracks and the item `a-end -1` overflowing past it. Stopping `grid-template-areas` from raising the column count for a subgrid axis left the subgrid directory at 44 of 88; reverted. Rows 7 and 11 of the same file are separate name-resolution cases (`[a] [a]` with `span 3`, and an area name on a subgrid).
+
+- **Round 328 (2026-11-11): `grid-lanes/intrinsic-sizing/*-001-auto` — measured, not fixed.**
+  - Printing the lane inputs for `cols-001-auto`: an auto item has `cmin = cmax = 15` (the placeholder glyph advance at 15px) but the item with `width: 2ch` has 30, so `ch` resolves as 1.0 em there; every lane then sizes to 30 and the container comes out 81 wide against the reference's ~66. The reference writes the same `2ch` as `repeat(4, 2ch)` tracks and renders ~15px per track, i.e. 0.5 em. Where the two diverge (item `width` vs track list) is not found; `style.e` line ~1768 sets `ch = 1.0` only for an Ahem family, which this test does not use.
+  - Next probe: print `ch` at the point `width: 2ch` resolves for the item, and for the track list.
