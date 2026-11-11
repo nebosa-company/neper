@@ -1409,6 +1409,14 @@ fn is_bfc_root(l: *const Layout, b: u32) -> bool {
 fn border_px(s: *const style.Style, side: usize) -> f64 { ret s.border_width[side] }
 
 // Sets the used border and padding of `b` (padding percentages are of the containing block's width).
+// A `display: inline` box that holds a block child and sits in a block container: the inline is split around the block.
+fn is_split_inline(l: *const Layout, b: u32) -> bool {
+    let bb = &l.boxes.items[usize(b)]
+    if st(l, bb.style).display != .Inline || bb.inline_level || bb.anonymous || bb.inner != .Flow || bb.parent == NONE { ret false }
+    let pi = l.boxes.items[usize(bb.parent)].inner
+    ret pi == .Flow || pi == .FlowRoot
+}
+
 fn resolve_edges(l: *Layout, b: u32, cbw: f64) {
     let s = bstyle(l, b)
     let bb = bx(l, b)
@@ -1421,7 +1429,7 @@ fn resolve_edges(l: *Layout, b: u32, cbw: f64) {
         i += 1usize
     }
     // An inline split around a block child is not a box of its own: its edges belong to the empty fragments.
-    if s.display == .Inline && !bb.inline_level && !bb.anonymous && bb.inner == .Flow {
+    if is_split_inline(l, b) {
         bb.border = [4]f64{0.0f64, 0.0f64, 0.0f64, 0.0f64}
         bb.padding = [4]f64{0.0f64, 0.0f64, 0.0f64, 0.0f64}
     }
@@ -5324,7 +5332,7 @@ fn apply_relative(l: *Layout, c: u32, cbw: f64, cbh: f64) {
     cb.x += dx
     cb.y += dy
     // An inline split around a block child offsets its in-flow content, not the floats it contains.
-    if s.display == .Inline && !cb.inline_level && !cb.anonymous {
+    if is_split_inline(l, c) {
         var kid = cb.first
         while kid != NONE {
             let kb = &l.boxes.items[usize(kid)]
