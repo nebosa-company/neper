@@ -4330,7 +4330,9 @@ fn used_width_block(l: *Layout, c: u32, cbw: f64, avail: f64) {
     if (tf_h & 8u8) != 0u8 { mr = 0.0f64 }
     // Which margin absorbs the slack follows the direction of the containing block, not of the box itself.
     var cb_rtl = s.direction == .Rtl
-    if cb.parent != NONE { cb_rtl = st(l, l.boxes.items[usize(cb.parent)].style).direction == .Rtl }
+    var dp = cb.parent
+    while dp != NONE && st(l, l.boxes.items[usize(dp)].style).display == .Inline && l.boxes.items[usize(dp)].parent != NONE { dp = l.boxes.items[usize(dp)].parent }
+    if dp != NONE { cb_rtl = st(l, l.boxes.items[usize(dp)].style).direction == .Rtl }
     var cw = 0.0f64
     var w_auto = s.width.kind != .Px
     if s.width.kind == .FitLimit {
