@@ -758,3 +758,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 333 (2026-11-11): an all-`auto` lanes container's intrinsic width counts each auto-placed item on every lane, spanning items included.**
   - `grid_widths` now builds the same every-lane list layout uses (`lanes_all_lane_items`) when every column is plain `auto`; spanning items contribute only on this width path (`spans` flag). Round 332's two losses came from letting spanning items into the layout path as well. css-grid 969 -> 971: `grid-lanes-gap-002`, `column-auto-repeat-auto-006`; none regress.
   - `cols-001-auto` still fails on a few pixels where spanning items sit (4ch over lanes 2-3, span 3).
+
+- **Round 334 (2026-11-11): treating `span N / line` as a definite lane placement in the every-lane list is inert; reverted.**
+  - css-grid 971 with an identical failure set. The remaining pixel difference in `cols-001-auto` (spanning-item grids 1-8px wide) is not the lane-start count.
