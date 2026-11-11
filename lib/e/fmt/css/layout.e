@@ -9150,6 +9150,41 @@ fn lanes_all_lane_items(l: *Layout, g: *Grid, sub_items: []GItem, sub_n: usize, 
     ret exn
 }
 
+// Keeps the lane geometry for absolutely positioned children; the stacking axis has no tracks, so it is one empty track.
+fn lanes_register_geom(l: *Layout, b: u32, g: *Grid, cw: f64, columns: bool) {
+    var nc = 1usize
+    if columns { nc = g.nc }
+    var nr = g.nr
+    if columns { nr = 1usize }
+    let (cpos, cpe) = mem.alloc[f64](l.a, nc + 1usize)
+    let (csz, cse) = mem.alloc[f64](l.a, nc + 1usize)
+    let (rpos, rpe) = mem.alloc[f64](l.a, nr + 1usize)
+    let (rsz, rse) = mem.alloc[f64](l.a, nr + 1usize)
+    if cpe != ok || cse != ok || rpe != ok || rse != ok { ret }
+    var q = 0usize
+    while q < nc {
+        cpos[q] = 0.0f64
+        csz[q] = 0.0f64
+        if columns {
+            cpos[q] = g.cols[q].pos
+            csz[q] = g.cols[q].base
+        }
+        q += 1usize
+    }
+    q = 0usize
+    while q < nr {
+        rpos[q] = 0.0f64
+        rsz[q] = 0.0f64
+        if !columns {
+            rpos[q] = g.rows[q].pos
+            rsz[q] = g.rows[q].base
+        }
+        q += 1usize
+    }
+    let gg = GridGeom { box: b, nc: nc, nr: nr, cpos: cpos, csz: csz, rpos: rpos, rsz: rsz, cnames: g.cnames, rnames: g.rnames, ec: i32(nc), er: i32(nr), w: cw, rtl: columns && bstyle(l, b).direction == .Rtl }
+    let gp = list.push[GridGeom](&l.grids, gg)
+}
+
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     let cs = bstyle(l, b)
     if ch < 0.0f64 && cs.row_gap.kind == .Px && cs.row_gap.pct != 0.0f64 {
@@ -9173,6 +9208,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         if rows_lane < 0.0f64 { rows_lane = rows_h }
         lanes_mirror(l, b, g, cs, false, lanes_span(g.rows, g.nr, g.gap_r, rows_lane), cw)
         lanes_stack_align(l, b, g, cs, false, cw)
+        lanes_register_geom(l, b, g, cw, false)
         ret rows_h
     }
     if cs.lanes {
@@ -9200,6 +9236,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             if dense_stack < 0.0f64 { dense_stack = dense_h }
             lanes_mirror(l, b, g, cs, true, lanes_span(g.cols, g.nc, g.gap_c, cw), dense_stack)
             lanes_stack_align(l, b, g, cs, true, ch)
+            lanes_register_geom(l, b, g, cw, true)
             ret dense_h
         }
         let lanes_h = layout_lanes(l, b, g, cs, cw, ch)
@@ -9207,6 +9244,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         if lane_h < 0.0f64 { lane_h = lanes_h }
         lanes_mirror(l, b, g, cs, true, lanes_span(g.cols, g.nc, g.gap_c, cw), lane_h)
         lanes_stack_align(l, b, g, cs, true, ch)
+        lanes_register_geom(l, b, g, cw, true)
         ret lanes_h
     }
     let (sized_items, sized_n) = subgrid_contributions(l, g)
