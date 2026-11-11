@@ -812,3 +812,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 347 (2026-11-11): `abspos-block-level-001` read; the first block matches, the right-to-left blocks do not.**
   - The two left-to-right rows pass the compare (after Round 342). In the right-to-left rows the reference draws a lime shrink-to-fit abspos box at the right edge covering the red inline text, and ours sits left with the red text visible; 40-character lines wrap at the placeholder font's 1-em advance, so it was not narrowed to a rule. `abspos-float-with-inline-container` still waits on the abspos containing block of a split inline being its fragment box.
+
+- **Round 348 (2026-11-12): grid-lanes containers keep their track geometry for abspos children.**
+  - `layout_grid_inner` returned from its three lanes branches (rows, dense columns, columns) without pushing a `GridGeom`, so `grid_abs_area` found none and an abspos child kept its static position whatever `grid-column`/`grid-row` said. `lanes_register_geom` now pushes the lane tracks plus one empty track for the stacking axis (an auto line there is the padding edge, as in a grid); a right-to-left column-lanes container sets `rtl` so the lines mirror.
+  - css-grid 971 -> 983 (12 fewer failures, none new: the eight `*-lanes-alignment-positioned-items-*` plus `abspos/{column,row}-grid-lanes-alignment` and `-out-of-flow-001`); positioning 457, normal-flow 659, tables 222, generated-content 176, corpus 191 unchanged.
