@@ -4,6 +4,17 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
+      "id": "C288",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 423,
+      "title": "compiler line coverage is measured by one repeatable report, so 100% is a number",
+      "score": 0.7,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Built 2026-11-11 (D5977): scripts/coverage-run.sh BUILDER OUTDIR [STRIDE] builds HEAD's release Linux compiler and runs every STRIDE-th fixture under callgrind across x64 linux/windows/macos, aarch64 linux/macos, wasm32, --release, emit-em, --gpu and fmt/tokens/parse/nir/codegen/object/resolve; scripts/coverage_report.py merges the runs against the DWARF line table by file:line, applies docs/coverage-exempt.tsv, prints per-file gaps (--uncovered FILE lists a file's missing ranges) and fails under --floor; tests/test_coverage_report.py pins the file/function id spaces, call-cost lines, exemptions and the floor. End to end at STRIDE 200 (58 runs) reads 46.2%; the earlier 512-run sample reads 57.3% of 74,391 lines. Left: run it at STRIDE 1 over all ~1,600 fixtures for the real baseline and set the floor from it; wire the floor into run.sh and run.ps1 (C290). If callgrind cannot cover the full set in reasonable time, finish D776's compiler half (coverage.hit from lowering). The denominator holds only code dead-function elimination kept, so @test-only functions are missing."
+    },
+    {
       "id": "C287",
       "category": "library",
       "group": "Library",
@@ -2466,17 +2477,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Found once crew_windows could finally be reached: 'crew_windows at -j 1 is not the image linked from its artifacts (--time)'. Repro: emit-em-all over crew_windows then link-em the twelve artifacts, and separately emit-executable the same fixture at -j 1, both in the default (debug) mode. Sizes 75560 linked against 76072 direct. A PE section compare (dumpbin /headers) shows every section identical except .debug_info: 3FFA virtual / 4000 raw linked, against 4068 / 4200 direct -- the whole 512-byte file difference is that section's rounding. The code is byte-identical: 0 differing bytes across 0x400..0xB000, which is the headers' payload, .text (A8F5/AA00) and .idata (1B0/200). Inside .debug_info the first four bytes are the unit length, 0x3FF6 linked against 0x4064 direct, and the streams diverge at +0x10A6: the linked copy lists `e.os.PollRegistration`, the direct one `e.text.utf8.Iterator`, so the subprogram DIEs are in a different order and 110 bytes differ in total. In --release the two paths are byte-identical (E5321649... both), which is why this has never been seen: release emits no debug info to disagree about. Pre-existing and not this session's: the untouched Nov 6 self-hosted compiler produces the same two hashes (C1E733B0... linked, FE538AEC... direct). Acceptance: the artifact path and the whole-program path emit the same .debug_info for the same program in the default mode, so the two images are byte-identical there as they already are in --release; crew_windows' artifact comparison then covers both modes again; and a check pins the two images byte for byte in a debug build, which is what would have caught this before a suite run had to reach line 1067 to notice. Where the order comes from, located for the fix: the PE path assembles the debug rows in `assemble_vars` (src/em_link.e:558, D1582: 'The named locals of every copied function, placed where its code landed, in code order: what the image's DWARF describes'), reached from `link_artifact_image` (src/main.e:7744). Code order is already the stated intent, so the artifact path is ordering its subprogram DIEs by the function table it builds from artifacts rather than by where the code landed, while the whole-program path emits them in source order. So the fix is to sort both by code offset, not to reorder the CU. Deferred rather than attempted here: it is an emitter change on a path that only a debug build exercises, the code itself is already byte-identical, and crew_windows now asserts byte-identity in --release where it holds."
-    },
-    {
-      "id": "C288",
-      "category": "compiler",
-      "group": "Hardening",
-      "order": 423,
-      "title": "compiler line coverage is measured by one repeatable report, so 100% is a number",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open. A 2026-11-11 spike merged 512 callgrind runs of a release Linux compiler (228 x64-linux link/check fixtures, 283 across x64 windows/macos, aarch64 linux/macos, wasm32, --release, emit-em, --gpu and fmt/tokens/parse/nir/codegen/object/resolve) against its DWARF line table: 43,818 of 75,995 src lines, 57.7%. Nothing is in the repo yet: the scripts live untracked in build/cov. Needs a scripts/ report that builds the compiler, runs the suite fixtures under callgrind, merges by file:line, and prints per-file gaps; a decision row fixing the metric (src/*.e minus bootstrap and runtime_*, lines first then branches); and docs/coverage-exempt.tsv as the only home for a justified gap. The denominator holds only code dead-function elimination kept, so @test-only functions are missing. If callgrind is too slow for the full 1,600 fixtures, finish D776's compiler half (coverage.hit calls from lowering). Never run against the shared tree's stage 2 == stage 3 build."
     },
     {
       "id": "C289",

@@ -44128,3 +44128,13 @@ unreferenced.
 **Given up.** Someone who can write the directory can forge an artifact with a matching CRC-32C and it is kept. An accidental source change that keeps both length and CRC-32C (one in four billion per same-length edit) keeps a stale artifact.
 
 **Result.** All-library root, 748 modules, x64-linux, unchanged warm build, median of seven alternating runs: `-j 1` 0.21 s → 0.13 s, `-j 8` 0.09 s → 0.07 s. Stage 3 equals stage 4.
+
+## D5977 — Compiler coverage is src line coverage read from callgrind and the DWARF line table
+
+**Problem.** Nothing measured how much of the compiler the suite exercises, so "100% coverage" had no number (C288). D776's `coverage.hit` is the library half only; no pass in lowering emits it.
+
+**Decision.** The metric is line coverage of `src/*.e` excluding `runtime_*.e` and `bootstrap/`; branch coverage follows once lines are at 100%. A line is covered when the release Linux compiler's `.debug_line` has it and a callgrind run of that compiler executed it, merged by file and line across runs. `scripts/coverage-run.sh` builds HEAD's compiler and makes the runs; `scripts/coverage_report.py` merges them and fails under `--floor`. The only place a gap may live is `docs/coverage-exempt.tsv` (file, line or lo-hi, reason).
+
+**Given up.** The denominator holds only code the linker kept, so functions reachable only from `@test` are not counted, and a line the debug table omits cannot be reported. Instrumenting lowering (D776's compiler half) would count them and is kept as the fallback if callgrind cannot cover the full fixture set.
+
+**Result.** A 2026-11-11 sample of 512 runs reads 57.3% of 74,391 lines (57.7% with `runtime_*` included).
