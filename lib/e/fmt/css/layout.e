@@ -2764,6 +2764,21 @@ fn ifc_run(x: *Ifc) {
         let lh = emit_line(x, scan, end)
         end = usize(i64(end) + x.shift)
         // Floats that waited for this line are placed below it.
+        // A block-level absolutely positioned box that follows content on this line sits below the line (its static position
+        // is where a block would start after it).
+        if lh >= 0.0f64 {
+            var seen = false
+            var ai = scan.lead
+            while ai < end {
+                let pa = x.bd.pieces.items[ai]
+                if pa.kind == .Text || pa.kind == .Atomic { seen = true }
+                if pa.kind == .Abs && seen {
+                    let ab2 = &l.boxes.items[usize(pa.box)]
+                    if !ab2.inline_level && !st(l, ab2.style).was_inline && ab2.aux != 2u32 { ab2.y += lh }
+                }
+                ai += 1usize
+            }
+        }
         var df = scan.lead
         while df < end {
             let p2 = x.bd.pieces.items[df]

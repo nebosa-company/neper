@@ -790,3 +790,8 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 341 (2026-11-11): remaining `normal-flow` and `positioning` failures sorted; no cheap rule left in them.**
   - normal-flow (16 left of 675): 5 `*-replaced-*` use `svg:svg`; `block-in-inline-first-line-002`/`nested-001`/`nested-002`, `inlines-013`/`-020`, `inline-table-width-001a`, `block-formatting-contexts-011` depend on wrapped or nbsp glyph widths of the placeholder font; the rest not examined (`float-percentage-resolution-quirks-mode`, `margin-collapsing-in-table-caption-*` already pass).
   - positioning (45 of 498): `absolute-replaced-width` (14) and `-height` (5) use `svg:svg`; `position-relative-027/030/031/035` count "Filler Text" glyphs against 5in; `abspos-float-with-inline-container` needs the abspos containing block of a split inline to be its fragment box. Not examined: `abspos-007/012/022/024-026`, `abspos-inline-007/008`, `abspos-overflow-011/012`, `absolute-non-replaced-*` (9).
+
+- **Round 342 (2026-11-11): a block-level abspos after content on its line sits below that line.**
+  - In the post-`emit_line` loop of the inline line placement, an `Abs` piece that follows a `Text`/`Atomic` piece and is block-level (not inline-level, not `was_inline`, not `aux == 2`) gets `y += lh`. `abspos-negative-margin-001` passes.
+  - positioning 453 -> 454; normal-flow 659, tables 222, generated-content 176, corpus 191, css-grid 971 (identical failure set) unchanged.
+  - Still failing: `abspos-007` (glyph wrap), `-012`, `-022`, `-024`-`-026`, `-block-level-001`, `-float-with-inline-container`, `-inline-007/008`, `-overflow-011/012`.
