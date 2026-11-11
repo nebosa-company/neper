@@ -5638,6 +5638,15 @@ fn build_table(l: *Layout, t: u32) -> u32 {
         } else if is_pct_width(cs.width) {
             cells.items[ci].pct = cs.width.pct
         }
+        // An unset `width` still has the cell at least its `min-width` wide.
+        if !(cs.width.kind == .Px && has_w) {
+            let cell_min = clamp_width(l, c, 0.0f64, -1.0f64)
+            if cell_min > 0.0f64 {
+                min_w = maxf(min_w, cell_min + extras)
+                max_w = maxf(max_w, min_w)
+                if cells.items[ci].pct < 0.0f64 { cells.items[ci].spec = cell_min + extras }
+            }
+        }
         cells.items[ci].min = min_w
         cells.items[ci].max = max_w
         ci += 1usize
@@ -5653,7 +5662,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
             let (wv, has_w) = resolve_len(ws.width, -1.0f64)
             var q = 0usize
             while q < span && cursor + q < ncols {
-                if ws.width.kind == .Px && has_w { cspec[cursor + q] = clamp_width(l, kid, wv, -1.0f64) }
+                if ws.width.kind == .Px && has_w { cspec[cursor + q] = clamp_width(l, kid, wv, -1.0f64) } else if clamp_width(l, kid, 0.0f64, -1.0f64) > 0.0f64 { cspec[cursor + q] = clamp_width(l, kid, 0.0f64, -1.0f64) }
                 if is_pct_width(ws.width) { cpct[cursor + q] = maxf(cpct[cursor + q], ws.width.pct) }
                 q += 1usize
             }
@@ -5671,7 +5680,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
                     let (gwv, ghas) = resolve_len(gws.width, -1.0f64)
                     var gq = 0usize
                     while gq < gspan && cursor + gq < ncols {
-                        if gws.width.kind == .Px && ghas { cspec[cursor + gq] = clamp_width(l, gkid, gwv, -1.0f64) }
+                        if gws.width.kind == .Px && ghas { cspec[cursor + gq] = clamp_width(l, gkid, gwv, -1.0f64) } else if clamp_width(l, gkid, 0.0f64, -1.0f64) > 0.0f64 { cspec[cursor + gq] = clamp_width(l, gkid, 0.0f64, -1.0f64) }
                         if is_pct_width(gws.width) { cpct[cursor + gq] = maxf(cpct[cursor + gq], gws.width.pct) }
                         gq += 1usize
                     }
@@ -5685,7 +5694,7 @@ fn build_table(l: *Layout, t: u32) -> u32 {
                 let (gwv2, ghas2) = resolve_len(gws2.width, -1.0f64)
                 var gq2 = 0usize
                 while gq2 < gspan2 && cursor + gq2 < ncols {
-                    if gws2.width.kind == .Px && ghas2 { cspec[cursor + gq2] = clamp_width(l, kid, gwv2, -1.0f64) }
+                    if gws2.width.kind == .Px && ghas2 { cspec[cursor + gq2] = clamp_width(l, kid, gwv2, -1.0f64) } else if clamp_width(l, kid, 0.0f64, -1.0f64) > 0.0f64 { cspec[cursor + gq2] = clamp_width(l, kid, 0.0f64, -1.0f64) }
                     if is_pct_width(gws2.width) { cpct[cursor + gq2] = maxf(cpct[cursor + gq2], gws2.width.pct) }
                     gq2 += 1usize
                 }
@@ -6174,6 +6183,11 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch_spec: f64) -> f64 {
     // `min-height` / `max-height` apply to a table's specified height.
     var ch = ch_spec
     if ch >= 0.0f64 { ch = clamp_height(l, t, ch, -1.0f64) }
+    // An auto-height table is at least its `min-height` tall: the rows share the extra.
+    if ch < 0.0f64 {
+        let min_h = clamp_height(l, t, 0.0f64, -1.0f64)
+        if min_h > 0.0f64 { ch = min_h }
+    }
     distribute_columns(l, ti, cw, ts.table_layout == .Fixed && ts.width.kind == .Px)
     let td = l.tables.items[usize(ti)]
     let sh = td.sh
@@ -6311,6 +6325,8 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch_spec: f64) -> f64 {
             let cap2 = bx(l, kid)
             var cap_content_h = h
             if cap_spec_h >= 0.0f64 { cap_content_h = cap_spec_h }
+            // An auto-height caption is at least its `min-height` tall.
+            if cap_spec_h < 0.0f64 { cap_content_h = maxf(cap_content_h, clamp_height(l, kid, 0.0f64, -1.0f64)) }
             cap2.h = cap_content_h + vertical_extras(cap2)
             let outer = cap2.h + cap2.margin[0usize] + cap2.margin[2usize]
             if cs.caption_side == .Bottom { cap_bottom += outer } else { cap_top += outer }
