@@ -806,3 +806,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 345 (2026-11-11): an inline containing block takes its rectangle from its line fragments, and a relative inline carries its abspos static position.**
   - An absolutely positioned box whose containing block is a plain inline (no blocks inside) measured against a 0x0 box at the container origin; `layout_abs` now uses the union of the inline's `Segment` fragments (padding box, plus the `relative_chain` offset). A `position: relative` inline also moves the static position of the abspos boxes in it (`abspos-inline-007`, `-008`).
   - positioning 455 -> 457; normal-flow 659, tables 222, generated-content 176, corpus 191, css-grid 971 (identical failure set) unchanged.
+
+- **Round 346 (2026-11-11): `abspos-025`/`-026` read; font-bound, nothing changed.**
+  - Both compare an abspos image at `4em`/`4em` of the initial containing block with a reference that places an in-flow image after a wrapped paragraph (`top: 12px` after two serif lines of 1.25 line-height): the reference's position depends on the real font's line wrapping and metrics, which the placeholder font does not reproduce. Remaining unexamined in `abspos*`: `-block-level-001`, `-float-with-inline-container`.
