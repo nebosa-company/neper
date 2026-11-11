@@ -747,3 +747,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 330 (2026-11-11): lanes intrinsic width through the every-lane item list is net negative; reverted.**
   - `grid_widths` sizes a lanes container's columns from the placed items only, while layout repeats each auto-placed item on every lane; the mismatch is why `cols-001-auto` is 81 wide against 130. Feeding `grid_widths` the same expanded list gave intrinsic-sizing 25 -> 23 (`cols-001-fr` and `cols-007` regress, nothing gains), so the width path needs the fr / minmax cases handled separately before it can share the list.
+
+- **Round 331 (2026-11-11): the every-lane list in `grid_widths`, limited to all-`auto` lanes, is inert; reverted.**
+  - With fr/minmax lanes kept on the placed-item path, intrinsic-sizing stayed 25 of 64 and `cols-001-auto` still fails (81 wide against ~130), so `grid_widths` is not where that container's width comes from. The lanes width path (`content_widths`, `lanes_cap`) has not been traced.
