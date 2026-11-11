@@ -44110,3 +44110,11 @@ unreferenced.
 **Result.** `incremental_generic_layout` fails on the previous compiler (`kept main`) and passes now. On the all-library root the reorder rebuilds 67 modules instead of 64 and no kept artifact differs from a cold build; an unchanged warm build still keeps all 748.
 
 **Not done.** Only signature types are marked: a foreign generic type that an instance's body uses without taking or returning it is not. A rebuilt artifact can still differ from the cold one in its dependency table (not in code); that predates this.
+
+## D5975 — Two scans in lowering answered from what is already held
+
+**Problem.** A one-thread release self-build (2.3 s) spent 3.5% in `lower.find_inline_entry` and 3.5% in `lower.argument_can_change`. The first copied a whole `InlineEntry` per step of its scan over some 1,700 entries, once per call lowered. The second walked every token of the enclosing function once per by-value aggregate argument, asking whether the argument's base name is addressed or sliced in place.
+
+**Decision.** `find_inline_entry` compares the entry's fields in place. The walk `lower_function_index` already makes when a function opens (D383) also collects the identifiers sliced in place (`name[a..b]`, `name.field[a..b]`) into `proof_sliced`; `argument_can_change` asks that list and `proof_addressed`, and keeps the token walk only for a function that overflowed either list. `main.same`, 5% in the same profile, is every module's `same` folded into one symbol; its largest caller is 0.6%, so there is nothing to take there.
+
+**Result.** The compiler built by the changed compiler is byte for byte the one the previous compiler builds from the same source. Release self-build on x64-linux, median of five alternating runs: `-j 1` 2.27 s → 2.12 s, `-j 8` 0.86 s → 0.78 s.
