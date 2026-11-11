@@ -761,3 +761,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 334 (2026-11-11): treating `span N / line` as a definite lane placement in the every-lane list is inert; reverted.**
   - css-grid 971 with an identical failure set. The remaining pixel difference in `cols-001-auto` (spanning-item grids 1-8px wide) is not the lane-start count.
+
+- **Round 335 (2026-11-11): `cols-001-auto` measured to the pixel; only lane widths inside two grids differ.**
+  - With round 334's tweak (`span N / line` counts as one definite lane) every grid in the test has the reference's outer width (border columns identical on both rows), so that tweak is right even though it flips no test. The remaining 2400 differing pixels are inside the grids holding a span-3 item (`width: 5ch; grid-column: span 3/4`) with another item over lanes 2-3: reference lanes are 19 / 26 / 26 / 15 px (the 75 px item over lanes 1-3), ours come out near 24 / 25 / 24 / 21, so lane 4 also grows in ours.
+  - Open: the reference does not split the span-3 item's extra space equally over lanes 1-3, and nothing in ours should reach lane 4. Look at the order and the limit-capped distribution in `size_tracks` (items sorted by span, growth limits, then base sizes).
