@@ -4083,6 +4083,15 @@ fn content_widths(l: *Layout, b: u32) -> (f64, f64) {
             kid = l.boxes.items[usize(kid)].next
         }
     }
+    // A `min-height` carries through an `aspect-ratio` into the box's width.
+    let cs_r = st(l, l.boxes.items[usize(b)].style)
+    if cs_r.min_height.kind == .Px && cs_r.min_height.pct == 0.0f64 && cs_r.min_height.px > 0.0f64 && cs_r.width.kind == .Auto && l.boxes.items[usize(b)].inner != .Replaced && has_box_ratio(l, b) {
+        let (rwm, has_rwm) = ratio_width(l, b, to_content_h(l, b, cs_r.min_height.px))
+        if has_rwm {
+            mn = maxf(mn, rwm)
+            mx = maxf(mx, rwm)
+        }
+    }
     let bb2 = bx(l, b)
     bb2.min_c = mn
     bb2.max_c = mx
@@ -7189,7 +7198,7 @@ type GItem = struct {
     cmin: f64, cmax: f64, rmin: f64, rmax: f64
 }
 
-type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64, item_min: f64, item_max: f64 }
+type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64, item_min: f64, item_max: f64, min_avail: f64 }
 
 fn extra_text(s: *const style.Style, name: str) -> (str, bool) {
     var i = 0usize
@@ -7376,6 +7385,13 @@ fn gp_list(gp: *GridParse, text: str, out: *list.List[GTrack], names: *list.List
                     let fit = (gp.avail + gp.gap) / each
                     n = i64(fit)
                     if n < 1i64 { n = 1i64 }
+                } else if gp.avail < 0.0f64 && gp.min_avail > 0.0f64 && tl.len > 0usize && per > 0.0f64 {
+                    // No definite size: the fewest repetitions that reach the minimum size (a `min-width`, or the width a
+                    // `min-height` carries through the aspect ratio).
+                    let each2 = per + gp.gap * f64(tl.len)
+                    var m = i64((gp.min_avail + gp.gap) / each2)
+                    if f64(m) * each2 < gp.min_avail + gp.gap { m += 1i64 }
+                    if m > n { n = m }
                 }
             } else {
                 let (cnt, good) = str.parse_i64(count_text)
@@ -8065,7 +8081,7 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     g.c_dummy = false
     g.r_dummy = false
     let ctx = style.new_context(l.a, l.viewport_width, l.viewport_height)
-    var gp = GridParse { c: ctx, em: cs.font_size, avail: avail_w, gap: 0.0f64, item_min: 0.0f64, item_max: 0.0f64 }
+    var gp = GridParse { c: ctx, em: cs.font_size, avail: avail_w, gap: 0.0f64, item_min: 0.0f64, item_max: 0.0f64, min_avail: 0.0f64 }
     g.gap_c = flex_gap(cs.column_gap, maxf(avail_w, 0.0f64))
     g.gap_r = flex_gap(cs.row_gap, maxf(avail_h, 0.0f64))
     // Explicit tracks and line names.
@@ -8082,6 +8098,14 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     var areas = al
     gp.gap = g.gap_c
     gp.avail = avail_w
+    // The smallest width the container may have (for an `auto-fill` that has no definite size to fill).
+    if avail_w < 0.0f64 {
+        if cs.min_width.kind == .Px && cs.min_width.pct == 0.0f64 { gp.min_avail = cs.min_width.px }
+        if cs.min_height.kind == .Px && cs.min_height.pct == 0.0f64 && cs.min_height.px > 0.0f64 && cs.width.kind == .Auto && has_box_ratio(l, b) {
+            let (mrw, has_mrw) = ratio_width(l, b, to_content_h(l, b, cs.min_height.px))
+            if has_mrw && mrw > gp.min_avail { gp.min_avail = mrw }
+        }
+    }
     // Masonry: an `auto-fill` of intrinsic tracks is as many as the widest minimum item allows.
     if cs.lanes {
         var ik = l.boxes.items[usize(b)].first
