@@ -716,3 +716,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 321 (2026-11-11): an inline split around a block child draws no decoration and has no edges.**
   - Round 320's edge zeroing alone was inert because paint read the style; `paint_decor` now skips a non-anonymous, non-inline-level `display: inline` flow box, and `resolve_edges` zeroes its border/padding. normal-flow 639 -> 644 (the `block-in-inline-empty-*` and `whitespace-*` family); positioning 453, tables 222, generated-content 176 unchanged.
   - Ceiling: a split inline with text before or after the block should still paint its fragments; this treats every promoted inline as fragmentless.
+
+- **Round 322 (2026-11-11): a relatively positioned split inline does not offset the floats inside it.**
+  - `block-in-inline-float-between-001`: the reference keeps the float at its unshifted place while the in-flow blocks move; `apply_relative` now takes the offset back off direct float children of a promoted inline. normal-flow 644 -> 645; positioning 453 unchanged (corpus not rerun, change is limited to promoted inlines).
