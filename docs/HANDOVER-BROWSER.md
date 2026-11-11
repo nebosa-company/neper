@@ -744,3 +744,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 329 (2026-11-11): grid track lists resolve `ch` like the cascade does (1 em in this harness).**
   - Probes in `tmp/ch`: `1ch` equals `1em` (15px at a 15px font) for monospace and serif alike, so every `width: Nch` is N em; `grid_build` built its track-list context with `ch = 0.5`, so `repeat(4, 2ch)` was half the size of the same `2ch` on an item. `ctx.ch = 1.0` there. css-grid 966 -> 969: `grid-lanes-align-content-004`, `intrinsic-sizing-rows-005`, `-007`; none regress.
   - Not found: why the cascade uses 1.0 while `new_context` says 0.5 (the other `new_context` callers still carry 0.5), and `ex` is neither 7.5 nor 15 at 15px.
+
+- **Round 330 (2026-11-11): lanes intrinsic width through the every-lane item list is net negative; reverted.**
+  - `grid_widths` sizes a lanes container's columns from the placed items only, while layout repeats each auto-placed item on every lane; the mismatch is why `cols-001-auto` is 81 wide against 130. Feeding `grid_widths` the same expanded list gave intrinsic-sizing 25 -> 23 (`cols-001-fr` and `cols-007` regress, nothing gains), so the width path needs the fr / minmax cases handled separately before it can share the list.
