@@ -781,3 +781,8 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 339 (2026-11-11): an empty block with a percentage height in an auto-height parent is self-collapsing.**
   - `self_collapsing` returned false for any percentage height. Against an auto-height parent the percentage behaves as `auto`, so the box is empty and its margins collapse through (`margin-collapse-through-percentage-height-block` and `-inside-table-cell`; the two `margin-collapsing-in-table-caption-*` tests passed in the same run). A grid or flex item may be stretched to a definite height, so a parent directly inside a grid or flex container keeps the old rule: the first version regressed `css-grid/grid-items/percentage-size-subitems-002` (971 -> 970) until that case was excluded.
   - normal-flow 656 -> 658; tables 222, positioning 453, generated-content 176, corpus 191, css-grid 971 (identical failure set) unchanged.
+
+- **Round 340 (2026-11-11): a table cell with no line of text does not share its row's baseline.**
+  - `layout_table` gave a cell without a first baseline `up = border + padding top`, so an empty cell sat in the baseline group with a text cell: row = text baseline above (13) + empty cell below (48) = 61 instead of 48 (`width-applies-to-006`). Such a cell is now treated like a top-aligned one and only sets the row's minimum height. A bare copy of the test with empty cells passed before, one with text did not: `tmp/ch/t1`/`t2` probes.
+  - normal-flow 658 -> 659; tables 222, positioning 453, generated-content 176, corpus 191, css-grid 971 (identical failure set) unchanged.
+  - Read, not fixed: `inlines-013`/`-020` compare rendered words in the placeholder font; `inline-table-width-001a` and `block-formatting-contexts-011` not examined.

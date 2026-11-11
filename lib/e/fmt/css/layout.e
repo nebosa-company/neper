@@ -6248,8 +6248,17 @@ fn layout_table(l: *Layout, t: u32, cw: f64, ch_spec: f64) -> f64 {
         let cb2 = bx(l, c)
         cell_h[ci] = content_h + vertical_extras(cb2)
         cell_up[ci] = -1.0f64
+        var cell_found = false
+        var cell_by = 0.0f64
         if is_baseline_valign(cs.vertical_align) {
-            let (found, by) = first_baseline(l, c)
+            let (fnd, byy) = first_baseline(l, c)
+            cell_found = fnd
+            cell_by = byy
+        }
+        // A cell with no line of text has no baseline to share: it sits at the top of its row.
+        if is_baseline_valign(cs.vertical_align) && cell_found {
+            let found = cell_found
+            let by = cell_by
             var up = cb2.border[0usize] + cb2.padding[0usize]
             if found { up = by }
             cell_up[ci] = up
