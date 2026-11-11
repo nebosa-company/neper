@@ -3,7 +3,10 @@
 # Builds HEAD's compiler as a release Linux binary (BUILDER is any Linux neper compiler),
 # runs every STRIDE-th fixture under callgrind across targets and commands, and writes
 # OUTDIR/runs/*.out and OUTDIR/lines.txt for scripts/coverage_report.py. Run from WSL's own
-# disk or /mnt; a rerun skips runs already present, so delete OUTDIR/runs to start over.
+# disk or /mnt; JOBS=N runs N at once (about 100-300 MB each); MSTRIDE=M runs the cross-target matrix on
+# every M-th fixture while x64 linux covers all STRIDE-th ones; UI_STRIDE=U thins the ui_*
+# fixtures, which need ~400 MB and minutes each under valgrind. A rerun skips finished runs,
+# so delete OUTDIR/runs to start over.
 set -u
 BUILDER=$(realpath "$1"); OUT=$(realpath -m "$2"); STRIDE=${3:-32}
 REPO=$(cd "$(dirname "$0")/.." && pwd)
@@ -18,18 +21,21 @@ if [ ! -x "$C" ]; then
   objdump --dwarf=decodedline "$C" > "$OUT/lines.txt"
 fi
 
-n=0
+JOBS=${JOBS:-1}; MSTRIDE=${MSTRIDE:-1}; UI_STRIDE=${UI_STRIDE:-1}; k=0; u=0
 run() {
   local name=$1; shift
   [ -s "$R/$name.out" ] && return
-  timeout 300 valgrind --tool=callgrind --dump-line=yes --callgrind-out-file="$R/$name.out" "$C" "$@" >/dev/null 2>&1
-  n=$((n+1)); echo "$name $n"
+  while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n; done
+  { timeout 1200 valgrind --tool=callgrind --dump-line=yes --callgrind-out-file="$R/$name.out.part" "$C" "$@" >/dev/null 2>&1
+    mv "$R/$name.out.part" "$R/$name.out" && echo "$name"; } &
 }
 pick() { ls "$FIX/$1" | sort | grep -Ev "$2" | awk -v s="$3" -v o="$4" 'NR % s == o'; }
 
 for d in $(pick link '^gfx_chart' "$STRIDE" 0); do
   s=$FIX/link/$d/src/main.e; [ -f "$s" ] || continue; b=$B/$d
+  case $d in ui_*) u=$((u+1)); [ $((u % UI_STRIDE)) -eq 0 ] || continue;; esac
   run "link_$d" emit-executable "$s" "$T" x64 linux "$b"
+  k=$((k+1)); [ $((k % MSTRIDE)) -eq 0 ] || continue
   run "x64win_$d" emit-executable "$s" "$T" x64 windows "$b.exe"
   run "x64mac_$d" emit-executable "$s" "$T" x64 macos "$b.mx"
   run "a64lin_$d" emit-executable "$s" "$T" aarch64 linux "$b.al"
@@ -59,4 +65,5 @@ for d in advanced aggregate; do
   run "obj_$d" object-file "$s" "$T" x64 windows
   run "exp_$d" emit-executable "$s" "$T" x64 linux "$B/exp_$d" --explain --json --stats-full --time
 done
-echo "done new=$n runs=$(ls "$R" | wc -l)"
+wait
+echo "done runs=$(ls "$R"/*.out | wc -l)"

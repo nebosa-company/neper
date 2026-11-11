@@ -44131,10 +44131,10 @@ unreferenced.
 
 ## D5977 — Compiler coverage is src line coverage read from callgrind and the DWARF line table
 
-**Problem.** Nothing measured how much of the compiler the suite exercises, so "100% coverage" had no number (C288). D776's `coverage.hit` is the library half only; no pass in lowering emits it.
+**Problem.** Nothing measured how much of the compiler the suite exercises, so "100% coverage" had no number (C303). D776's `coverage.hit` is the library half only; no pass in lowering emits it.
 
 **Decision.** The metric is line coverage of `src/*.e` excluding `runtime_*.e` and `bootstrap/`; branch coverage follows once lines are at 100%. A line is covered when the release Linux compiler's `.debug_line` has it and a callgrind run of that compiler executed it, merged by file and line across runs. `scripts/coverage-run.sh` builds HEAD's compiler and makes the runs; `scripts/coverage_report.py` merges them and fails under `--floor`. The only place a gap may live is `docs/coverage-exempt.tsv` (file, line or lo-hi, reason).
 
 **Given up.** The denominator holds only code the linker kept, so functions reachable only from `@test` are not counted, and a line the debug table omits cannot be reported. Instrumenting lowering (D776's compiler half) would count them and is kept as the fallback if callgrind cannot cover the full fixture set.
 
-**Result.** A 2026-11-11 sample of 512 runs reads 57.3% of 74,391 lines (57.7% with `runtime_*` included).
+**Result.** The 2026-11-11 baseline, 3,702 runs (every non-chart link and check fixture on x64 linux, the other targets on every 4th link fixture, `ui_*` on every 10th), reads 48,753 of 74,391 lines, 65.5%; `docs/coverage-floor.txt` holds 65.0.
