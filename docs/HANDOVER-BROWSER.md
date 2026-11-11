@@ -730,3 +730,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 325 (2026-11-11): an `auto` track minimum is limited by a fixed maximum (css-grid 11.5.1).**
   - `size_tracks` clamped item min-contribution to the fixed max for span-1 tracks. css-grid 958 -> 962, exactly four tests flip and none regress: `subgrid/standalone-axis-size-004` and `-009`, `grid-item-minmax-img-001`, `grid-minimum-size-grid-items-017`. normal-flow 645 and tables 222 unchanged.
+
+- **Round 326 (2026-11-11): a subgrid with no parent tracks takes as many tracks as it spans.**
+  - `grid_build` set `er`/`ec` from the dummy axis' own `grid-row`/`grid-column` span; before, `grid-auto-flow: column` with `grid-template-rows: subgrid` placed every item in one row when the parent was sizing it. css-grid 962 -> 966, four flips and none regress: `subgrid/standalone-axis-size-007`, `subgrid/grid-gap-003`, `grid-lanes/.../row-subgrid-grid-gap-014`, `row-subgrid-extra-margin-003`. normal-flow unchanged.

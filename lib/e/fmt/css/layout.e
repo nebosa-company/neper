@@ -8247,6 +8247,19 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     var er = i32(rtr.len)
     if dims.cols > ec { ec = dims.cols }
     if dims.rows > er { er = dims.rows }
+    // A subgrid with no parent tracks to take (sized on its own) still has as many tracks as it spans.
+    if g.r_dummy || g.c_dummy {
+        let (sp_r, ep_r) = item_axis_specs(l.a, cs, false)
+        let (sp_c, ep_c) = item_axis_specs(l.a, cs, true)
+        if g.r_dummy {
+            if sp_r.kind == 2u8 && sp_r.n > er { er = sp_r.n }
+            if ep_r.kind == 2u8 && ep_r.n > er { er = ep_r.n }
+        }
+        if g.c_dummy {
+            if sp_c.kind == 2u8 && sp_c.n > ec { ec = sp_c.n }
+            if ep_c.kind == 2u8 && ep_c.n > ec { ec = ep_c.n }
+        }
+    }
     gp.avail = avail_w
     gp.gap = g.gap_c
     var auto_cols = auto_track_list(&gp, cs, "grid-auto-columns")
