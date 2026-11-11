@@ -9181,7 +9181,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         } else if align == .Normal && is.height.kind == .Auto && ib.inner != .Replaced && has_box_ratio(l, id) {
             let (rh2, has_rh2) = ratio_height(l, id, w)
             if has_rh2 { hspec = rh2 }
-        } else if (align == .Normal || align == .Stretch) && is.height.kind == .Auto && is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced {
+        } else if (align == .Normal || align == .Stretch) && is.height.kind == .Auto && is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && (ib.inner != .Replaced || align == .Stretch) {
             hspec = maxf(0.0f64, area_h - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib))
         }
         var just0 = is.justify_self
