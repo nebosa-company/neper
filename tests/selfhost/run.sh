@@ -7668,6 +7668,16 @@ layout_first=$($test_build/neper-self emit-em-all "$layout_scratch/src/main.e" "
 cp "$layout_fixture/edits/box_layout.e" "$layout_scratch/src/box.e"
 layout_edited=$($test_build/neper-self emit-em-all "$layout_scratch/src/main.e" "$repo" x64 linux "$layout_artifacts" --incremental)
 case "$layout_edited" in *'rebuilt main'*) ;; *) printf %s "a generic type's reordered fields kept a module whose instances read them: $layout_edited" >&2; echo >&2; exit 1 ;; esac
+# A race between the crew's workers shows as an image that differs from run to run: the
+# compiler's own source, over three worker schedules twice, is the `-j 1` image.
+stress_first="$test_build/crew-stress-first"
+[ "$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$stress_first" --release -j 1 2>/dev/null)" = 'executable written' ]
+for stress_round in 1 2; do
+    for stress_jobs in '-j 3 --perturb' '-j 8' '-j 8 --perturb'; do
+        [ "$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/crew-stress-next" --release $stress_jobs 2>/dev/null)" = 'executable written' ]
+        cmp "$stress_first" "$test_build/crew-stress-next"
+    done
+done
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing

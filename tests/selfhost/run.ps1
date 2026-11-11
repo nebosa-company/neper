@@ -7751,6 +7751,19 @@ if ($LASTEXITCODE -ne 0 -or $layoutFirst -ne 'compiled modules written') { throw
 Copy-Item -LiteralPath (Join-Path $layoutFixture 'edits\box_layout.e') -Destination (Join-Path $layoutScratch 'src\box.e') -Force
 $layoutEdited = (& $compiler emit-em-all (Join-Path $layoutScratch 'src\main.e') $repo 'x64' 'windows' $layoutArtifacts --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $layoutEdited -notmatch 'rebuilt main') { throw "a generic type's reordered fields kept a module whose instances read them: $layoutEdited" }
+# A race between the crew's workers shows as an image that differs from run to run: the
+# compiler's own source, over three worker schedules twice, is the `-j 1` image.
+$stressFirst = Join-Path $testBuild 'crew-stress-first.exe'
+$stressNext = Join-Path $testBuild 'crew-stress-next.exe'
+$stressWritten = & $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $stressFirst --release -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $stressWritten -ne 'executable written') { throw 'the stress build at -j 1 failed' }
+foreach ($stressRound in 1, 2) {
+    foreach ($stressJobs in @('-j', '3', '--perturb'), @('-j', '8'), @('-j', '8', '--perturb')) {
+        $stressWritten = & $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $stressNext --release @stressJobs 2>$null
+        if ($LASTEXITCODE -ne 0 -or $stressWritten -ne 'executable written') { throw "the stress build at $stressJobs failed" }
+        if ((Get-FileHash -LiteralPath $stressFirst).Hash -ne (Get-FileHash -LiteralPath $stressNext).Hash) { throw "the compiler's image at $stressJobs is not the -j 1 image (round $stressRound)" }
+    }
+}
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing
