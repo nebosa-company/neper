@@ -8897,6 +8897,23 @@ fn grid_widths(l: *Layout, b: u32) -> (f64, f64) {
             }
         }
         let (wide_items, wide_n) = subgrid_contributions(l, g)
+        var all_auto = gcs.lanes && g.nc > 0usize
+        var ak = 0usize
+        while ak < g.nc {
+            if g.cols[ak].min.kind != 3u8 || g.cols[ak].max.kind != 3u8 { all_auto = false }
+            ak += 1usize
+        }
+        if all_auto {
+            let (lx, lxe) = mem.alloc[GItem](l.a, g.n * (g.nc + 1usize) + wide_n + 1usize)
+            if lxe == ok {
+                let lxn = lanes_all_lane_items(l, g, wide_items, wide_n, lx, true)
+                size_tracks(g.cols, g.nc, g.gap_c, -1.0f64, lx, lxn, true, pass == 0usize, false)
+                let ltotal = tracks_total(g.cols, g.nc, g.gap_c)
+                if pass == 0usize { mn = ltotal } else { mx = ltotal }
+                pass += 1usize
+                continue
+            }
+        }
         size_tracks(g.cols, g.nc, g.gap_c, -1.0f64, wide_items, wide_n, true, pass == 0usize, false)
         let total = tracks_total(g.cols, g.nc, g.gap_c)
         if pass == 0usize { mn = total } else { mx = total }
@@ -9016,6 +9033,40 @@ fn lanes_mirror(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, columns: b
 
 // A percentage row gap under an indefinite height counts as zero while the rows are sized; it then resolves against the height
 // they gave, which stays the container's height.
+// A masonry item may land in any lane, so it is repeated on every lane it could occupy (a definite column keeps its own).
+fn lanes_all_lane_items(l: *Layout, g: *Grid, sub_items: []GItem, sub_n: usize, ex: []GItem, spans: bool) -> usize {
+    var exn = 0usize
+    var xi = 0usize
+    while xi < g.n {
+        let item = g.items[xi]
+        // An item placed on a definite column sizes that lane alone; the others might land in any lane.
+        let (xsc, xec) = item_axis_specs(l.a, bstyle(l, item.box), true)
+        var s0 = 0usize
+        var s_end = g.nc
+        if (xsc.kind == 1u8 || xsc.kind == 3u8) && item.cs >= 0i32 && usize(item.cs) < g.nc {
+            s0 = usize(item.cs)
+            s_end = s0 + 1usize
+        }
+        // (an item spanning several lanes does not size any of them)
+        while s0 < s_end && s0 + usize(maxf(1.0f64, f64(item.cn))) <= g.nc && (spans || item.cn <= 1i32) {
+            var copy = item
+            copy.cs = i32(s0)
+            ex[exn] = copy
+            exn += 1usize
+            s0 += 1usize
+        }
+        xi += 1usize
+    }
+    // The items of a subgrid sit on the lanes it spans, with its gap difference and edges already counted.
+    var si = g.n
+    while si < sub_n {
+        ex[exn] = sub_items[si]
+        exn += 1usize
+        si += 1usize
+    }
+    ret exn
+}
+
 fn layout_grid(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     let cs = bstyle(l, b)
     if ch < 0.0f64 && cs.row_gap.kind == .Px && cs.row_gap.pct != 0.0f64 {
@@ -9046,35 +9097,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         let (sub_items, sub_n) = subgrid_contributions(l, g)
         let (ex, exe) = mem.alloc[GItem](l.a, g.n * (g.nc + 1usize) + sub_n + 1usize)
         if exe == ok {
-            var exn = 0usize
-            var xi = 0usize
-            while xi < g.n {
-                let item = g.items[xi]
-                // An item placed on a definite column sizes that lane alone; the others might land in any lane.
-                let (xsc, xec) = item_axis_specs(l.a, bstyle(l, item.box), true)
-                var s0 = 0usize
-                var s_end = g.nc
-                if (xsc.kind == 1u8 || xsc.kind == 3u8) && item.cs >= 0i32 && usize(item.cs) < g.nc {
-                    s0 = usize(item.cs)
-                    s_end = s0 + 1usize
-                }
-                // (an item spanning several lanes does not size any of them)
-                while s0 < s_end && s0 + usize(maxf(1.0f64, f64(item.cn))) <= g.nc && item.cn <= 1i32 {
-                    var copy = item
-                    copy.cs = i32(s0)
-                    ex[exn] = copy
-                    exn += 1usize
-                    s0 += 1usize
-                }
-                xi += 1usize
-            }
-            // The items of a subgrid sit on the lanes it spans, with its gap difference and edges already counted.
-            var si = g.n
-            while si < sub_n {
-                ex[exn] = sub_items[si]
-                exn += 1usize
-                si += 1usize
-            }
+            var exn = lanes_all_lane_items(l, g, sub_items, sub_n, ex, false)
             // (items only size lanes when the container's width is not definite; here `auto` lanes share it equally)
             var intrinsic_cols = false
             var ic = 0usize
