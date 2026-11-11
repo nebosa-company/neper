@@ -798,3 +798,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 343 (2026-11-11): `abspos-012`, `-024`, `-overflow-011` read; all glyph-bound, nothing changed.**
   - `abspos-012` lays out `monospace` text by glyph widths (flag `may`); `abspos-024` compares rtl text against a reference text line plus a PNG image; `abspos-overflow-011` has a 20em box whose 26-character text wraps in the 1-em placeholder font but not in the reference.
+
+- **Round 344 (2026-11-11): an empty block's margins were counted twice under a parent that had already collapsed them through.**
+  - `peek_top` already folds every self-collapsing first child's top and bottom margin into the parent's shift; `layout_block_child` then added the child's bottom margin again while `consumed.v` was set (`<div style="margin:3px 0"></div>` first in a body gave 6px, not 3px). That branch now adds nothing while `consumed.v`, and `inner_collapsed` brings the margins of empty blocks nested in an empty block into both paths. `abspos-022` passes (probe: `tmp/ch/m`).
+  - positioning 454 -> 455; normal-flow 659, tables 222, generated-content 176, corpus 191, css-grid 971 (identical failure set) unchanged.

@@ -4527,6 +4527,23 @@ fn self_collapsing(l: *Layout, c: u32, cbw: f64) -> bool {
     ret true
 }
 
+// The margins of the self-collapsing blocks inside the self-collapsing block `c`: they all adjoin its own.
+fn inner_collapsed(l: *Layout, c: u32, cbw: f64) -> Margin {
+    var m = no_margin()
+    var kid = l.boxes.items[usize(c)].first
+    while kid != NONE {
+        let kb = &l.boxes.items[usize(kid)]
+        if kb.inner != .Text && !kb.inline_level && !is_out_of_flow(st(l, kb.style)) && kb.inner != .Marker {
+            used_margins_vertical(l, kid, cbw)
+            let k2 = &l.boxes.items[usize(kid)]
+            m = collapse(m, collapse(margin_of(k2.margin[0usize]), margin_of(k2.margin[2usize])))
+            m = collapse(m, inner_collapsed(l, kid, cbw))
+        }
+        kid = l.boxes.items[usize(kid)].next
+    }
+    ret m
+}
+
 // The collapsed top margin of `c` and of the chain of first children it adjoins.
 fn peek_top(l: *Layout, c: u32, cbw: f64, floats: bool) -> Margin {
     used_margins_vertical(l, c, cbw)
@@ -4559,6 +4576,7 @@ fn peek_top(l: *Layout, c: u32, cbw: f64, floats: bool) -> Margin {
         if self_collapsing(l, kid, cbw) {
             m = collapse(m, margin_of(l.boxes.items[usize(kid)].margin[0usize]))
             m = collapse(m, margin_of(l.boxes.items[usize(kid)].margin[2usize]))
+            m = collapse(m, inner_collapsed(l, kid, cbw))
             kid = kb.next
             continue
         }
@@ -5061,10 +5079,12 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
     consumed.cleared = false
     // Self-collapsing: it takes no height and its margins join the pending ones.
     if self_collapsing(l, c, cw) && s.clear == .None {
-        var m_in = m_top_own
-        if consumed.v { m_in = no_margin() }
-        acc.pos = maxf(acc.pos, maxf(m_in.pos, m_bottom_own.pos))
-        acc.neg = minf(acc.neg, minf(m_in.neg, m_bottom_own.neg))
+        // Under a parent whose top margin was already collapsed through (peek_top), these margins are in that shift.
+        if !consumed.v {
+            let m_in_kids = inner_collapsed(l, c, cw)
+            acc.pos = maxf(acc.pos, maxf(m_top_own.pos, maxf(m_bottom_own.pos, m_in_kids.pos)))
+            acc.neg = minf(acc.neg, minf(m_top_own.neg, minf(m_bottom_own.neg, m_in_kids.neg)))
+        }
         used_width_block(l, c, cw, cw)
         let cb2 = bx(l, c)
         cb2.x = ox0 + cb2.margin[3usize]
