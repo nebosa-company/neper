@@ -750,3 +750,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 331 (2026-11-11): the every-lane list in `grid_widths`, limited to all-`auto` lanes, is inert; reverted.**
   - With fr/minmax lanes kept on the placed-item path, intrinsic-sizing stayed 25 of 64 and `cols-001-auto` still fails (81 wide against ~130), so `grid_widths` is not where that container's width comes from. The lanes width path (`content_widths`, `lanes_cap`) has not been traced.
+
+- **Round 332 (2026-11-11): all-`auto` lanes width through the every-lane list, with spanning items, is a wash; reverted.**
+  - Correction to round 331: the path is live (`grid_widths` gave 126 for the first `cols-001-auto` grid, matching the reference, up from 81) but the pass count did not move. Full css-grid 969 -> 969: gains `grid-lanes-gap-002`, `column-auto-repeat-auto-006`; losses `column-subgrid-grid-gap-002`, `column-auto-repeat-minmax-004`. `cols-001-auto` still fails on a few pixels in the grids with spanning items (a 4ch item over lanes 2-3 and a span-3 item).
+  - Retry only with the two losses understood first.
