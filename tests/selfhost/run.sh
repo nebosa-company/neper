@@ -7649,6 +7649,9 @@ case "$generic_same" in *rebuilt*) printf %s "an unchanged generic importer rebu
 # An artifact is kept only under the directory's signed manifest: without it every
 # module is rebuilt, and that build signs the directory again.
 [ -f "$generic_artifacts/build-manifest.json" ]
+# The directory is checked for change by CRC-32C; it records and computes no SHA-256.
+grep -q '"source_crc32c":"' "$generic_artifacts/build-manifest.json"
+! grep -q 'artifact_sha256' "$generic_artifacts/build-manifest.json"
 rm "$generic_artifacts/build-manifest.json"
 generic_unsigned=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e" "$repo" x64 linux "$generic_artifacts" --incremental)
 case "$generic_unsigned" in *'rebuilt main'*) ;; *) printf %s "an unsigned artifact directory was trusted: $generic_unsigned" >&2; echo >&2; exit 1 ;; esac

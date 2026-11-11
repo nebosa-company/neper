@@ -44118,3 +44118,13 @@ unreferenced.
 **Decision.** `find_inline_entry` compares the entry's fields in place. The walk `lower_function_index` already makes when a function opens (D383) also collects the identifiers sliced in place (`name[a..b]`, `name.field[a..b]`) into `proof_sliced`; `argument_can_change` asks that list and `proof_addressed`, and keeps the token walk only for a function that overflowed either list. `main.same`, 5% in the same profile, is every module's `same` folded into one symbol; its largest caller is 0.6%, so there is nothing to take there.
 
 **Result.** The compiler built by the changed compiler is byte for byte the one the previous compiler builds from the same source. Release self-build on x64-linux, median of five alternating runs: `-j 1` 2.27 s → 2.12 s, `-j 8` 0.86 s → 0.78 s.
+
+## D5976 — An `emit-em-all` directory is checked by CRC-32C, not SHA-256
+
+**Problem.** In an unchanged warm `emit-em-all --incremental` (D5973), 53% of the CPU was SHA-256 with the hardware instructions: every source hashed to prove its artifact's key hit (D507) and every artifact hashed against the manifest (D473). CRC-32C, which every artifact load already verifies, was 8%.
+
+**Decision.** The user's call: this directory is checked for change, not for tampering. Its manifest records, per module, the artifact's CRC-32C and the source's length and CRC-32C (`source_crc32c`, sixteen digits), and no SHA-256. The hot load takes a source whose length and CRC-32C are the recorded ones as the bytes the artifact was built from, and an artifact whose checksum is the recorded one as the recorded artifact. A source that differs is hashed as before, so a comment-only edit and a real one are told apart the way they were. The manifest keeps its HMAC, which now proves only that this user's compiler wrote the record. `emit-executable --incremental` under `.neper` is unchanged: SHA-256 for both.
+
+**Given up.** Someone who can write the directory can forge an artifact with a matching CRC-32C and it is kept. An accidental source change that keeps both length and CRC-32C (one in four billion per same-length edit) keeps a stale artifact.
+
+**Result.** All-library root, 748 modules, x64-linux, unchanged warm build, median of seven alternating runs: `-j 1` 0.21 s → 0.13 s, `-j 8` 0.09 s → 0.07 s. Stage 3 equals stage 4.

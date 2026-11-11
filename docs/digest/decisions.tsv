@@ -3047,4 +3047,5 @@ D5971	6410	The bootstrap builds the tree again, and the Linux suite's first step
 D5972	1647	An importer of a generic type is kept by an unchanged warm build
 D5973	2321	`emit-em-all --incremental` takes the hot loader
 D5974	1590	A module whose instances read a generic type's layout depends on that type
-D5975	1263	Two scans in lowering answered from what is already held
+D5975	1264	Two scans in lowering answered from what is already held
+D5976	1527	An `emit-em-all` directory is checked by CRC-32C, not SHA-256

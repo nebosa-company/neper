@@ -7733,6 +7733,9 @@ if ($LASTEXITCODE -ne 0 -or $genericSame -notmatch 'kept main' -or $genericSame 
 # module is rebuilt, and that build signs the directory again.
 $genericManifest = Join-Path $genericArtifacts 'build-manifest.json'
 if (-not (Test-Path -LiteralPath $genericManifest)) { throw 'emit-em-all wrote no signed manifest' }
+# The directory is checked for change by CRC-32C; it records and computes no SHA-256.
+$genericManifestText = Get-Content -LiteralPath $genericManifest -Raw
+if ($genericManifestText -notmatch '"source_crc32c":"' -or $genericManifestText -match 'artifact_sha256') { throw 'the emit-em-all manifest does not record sources by CRC-32C alone' }
 Remove-Item -LiteralPath $genericManifest
 $genericUnsigned = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $genericUnsigned -notmatch 'rebuilt main' -or $genericUnsigned -match 'kept') { throw "an unsigned artifact directory was trusted: $genericUnsigned" }

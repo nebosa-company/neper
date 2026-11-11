@@ -7397,8 +7397,8 @@ fn manifest_publish(a: *mem.Arena, directory: str, manifest_path: str, bytes: []
     ret os.Exists
 }
 
-// The signed record of an `emit-em-all` directory: each artifact's checksum and SHA-256
-// under the user's cache key, which the next `--incremental` build asks for before it
+// The signed record of an `emit-em-all` directory: each artifact's checksum and its
+// source's under the user's cache key, which the next `--incremental` build asks for before it
 // keeps an artifact (D473's rule, for a directory outside `.neper`).
 fn em_manifest_file(a: *mem.Arena, g: *graph.Graph, directory: str) -> err {
     let (manifest_path, path_error) = manifest_join(a, directory, "build-manifest.json")
@@ -7417,14 +7417,21 @@ fn em_manifest_file(a: *mem.Arena, g: *graph.Graph, directory: str) -> err {
     var written = 0usize
     module_at = 0usize
     while module_at < g.count {
-        if g.modules[module_at].artifact_hash_known && g.modules[module_at].artifact_sha256_known {
+        if g.modules[module_at].artifact_hash_known {
+            // No SHA-256 here: the directory is checked for change, not for tampering,
+            // and hashing every source and artifact was half of an unchanged build.
+            // The source is its length and CRC-32C.
+            let (source_crc, source_crc_error) = artifact_hash.crc32c(g.modules[module_at].text, 0usize, 0usize)
+            if source_crc_error != ok { ret source_crc_error }
             if written != 0usize { try byte(&out, 44u8) }
             try text(&out, "{\"module\":")
             try quoted(&out, g.modules[module_at].name)
             try text(&out, ",\"artifact_crc32c\":\"")
             try hex32(&out, g.modules[module_at].artifact_hash)
-            try text(&out, "\",\"artifact_sha256\":")
-            try quoted(&out, g.modules[module_at].artifact_sha256)
+            try text(&out, "\",\"source_crc32c\":\"")
+            try hex32(&out, g.modules[module_at].text.len)
+            try hex32(&out, source_crc)
+            try byte(&out, 34u8)
             try byte(&out, 125u8)
             written += 1usize
         }

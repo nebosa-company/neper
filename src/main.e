@@ -5579,8 +5579,11 @@ fn index_manifest_hashes(a: *mem.Arena, hot: *HotLoad, manifest: str, capacity: 
             var entry_end = name_end
             while entry_end < manifest.len && manifest[entry_end] != 125u8 { entry_end += 1usize }
             let digits = json_str_after(manifest[name_end..entry_end], "\"artifact_crc32c\":\"")
-            let sha = json_str_after(manifest[name_end..entry_end], "\"artifact_sha256\":\"")
-            if digits.len == 8usize && sha.len == 64usize && hex_string(digits) && hex_string(sha) {
+            var sha = json_str_after(manifest[name_end..entry_end], "\"artifact_sha256\":\"")
+            // An `emit-em-all` directory records the source's length and CRC-32C in its
+            // place: sixteen digits, which is how the readers below tell the two apart.
+            if sha.len == 0usize { sha = json_str_after(manifest[name_end..entry_end], "\"source_crc32c\":\"") }
+            if digits.len == 8usize && (sha.len == 64usize || sha.len == 16usize) && hex_string(digits) && hex_string(sha) {
                 var value = 0usize
                 var digit_at = 0usize
                 while digit_at < 8usize {
@@ -8830,7 +8833,7 @@ fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     let module_index = w.modules[at]
     let (old, old_error) = load_artifact(&w.arena, w.paths[at])
     if old_error == mem.Exhausted { ret old_error }
-    let (sha, sha_error) = artifact_hash.sha256_hex(&w.arena, w.texts[at])
+    let (sha, sha_error) = source_sha_now(&w.arena, old, old_error, w.texts[at], w.recorded_artifact_sha[module_index])
     if sha_error != ok { ret sha_error }
     w.sha_now[module_index] = sha
     var (reason, unchanged) = artifact_identity(&w.arena, old, old_error, w.texts[at], sha, w.mode_id, w.compiler_identity, w.fault_collision)
@@ -8853,6 +8856,30 @@ fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     ret ok
 }
 
+// The SHA-256 of a module's bytes as the hot load compares it. Where the manifest
+// recorded the source's length and CRC-32C instead (an `emit-em-all` directory) and
+// the text still has both, the bytes are the ones the artifact was built from and the
+// digest is the artifact's own; anything else is hashed.
+fn source_sha_now(a: *mem.Arena, old: []const u8, old_error: err, text: str, recorded: str) -> (str, err) {
+    if old_error == ok && recorded.len == 16usize {
+        let (crc, crc_error) = artifact_hash.crc32c(text, 0usize, 0usize)
+        var key = 0usize
+        var at = 0usize
+        while at < 16usize {
+            var nibble = usize(recorded[at]) - 48usize
+            if recorded[at] >= 97u8 { nibble = usize(recorded[at]) - 87usize }
+            key = (key << 4usize) | nibble
+            at += 1usize
+        }
+        if crc_error == ok && key == ((text.len << 32usize) | crc) {
+            let (written_sha, written_interface, written_error) = em.artifact_manifest_digests(old)
+            if written_error == ok && written_sha.len == 64usize { ret (written_sha, ok) }
+        }
+    }
+    let (sha, sha_error) = artifact_hash.sha256_hex(a, text)
+    ret (sha, sha_error)
+}
+
 fn previous_trusted(a: *mem.Arena, old: []const u8, compiler_identity: usize, recorded: usize, recorded_sha: str, recorded_known: bool) -> bool {
     let (old_compiler, old_compiler_error) = em.artifact_compiler_hash(old)
     if old_compiler_error != ok || compiler_identity == 0usize || old_compiler != compiler_identity { ret false }
@@ -8869,9 +8896,15 @@ fn previous_trusted(a: *mem.Arena, old: []const u8, compiler_identity: usize, re
 fn artifact_content_verified(a: *mem.Arena, old: []const u8, recorded: usize, recorded_sha: str, recorded_known: bool) -> (usize, str, bool) {
     let (checksum, checksum_error) = em.artifact_checksum(old)
     if checksum_error != ok { ret (0usize, "", false) }
-    let (sha, sha_error) = artifact_hash.sha256_hex(a, old)
-    if sha_error != ok { ret (checksum, "", false) }
-    if !recorded_known || checksum != recorded || !same(sha, recorded_sha) { ret (checksum, sha, false) }
+    // An `emit-em-all` directory records no SHA-256 (sixteen digits of source record in
+    // its place): the artifact is the recorded one by its checksum alone.
+    var sha = ""
+    if recorded_sha.len != 16usize {
+        let (hashed, sha_error) = artifact_hash.sha256_hex(a, old)
+        if sha_error != ok { ret (checksum, "", false) }
+        sha = hashed
+    }
+    if !recorded_known || checksum != recorded || (recorded_sha.len != 16usize && !same(sha, recorded_sha)) { ret (checksum, sha, false) }
     // (D1325) A kept artifact's Interface must read back whole, declarations and
     // types, so the declarations can come from it rather than a lexed tree.
     if em.interface_payloads_read(old) != ok { ret (checksum, sha, false) }
@@ -9061,7 +9094,7 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
                 let module_index = workers[worker_at].modules[remaining]
                 let (old, old_error) = load_artifact(a, workers[worker_at].paths[remaining])
                 if old_error == mem.Exhausted { ret old_error }
-                let (sha, sha_error) = artifact_hash.sha256_hex(a, loaded.modules[module_index].text)
+                let (sha, sha_error) = source_sha_now(a, old, old_error, loaded.modules[module_index].text, hot.recorded_artifact_sha[module_index])
                 if sha_error != ok { ret sha_error }
                 hot.sha_now[module_index] = sha
                 var (reason, unchanged) = artifact_identity(a, old, old_error, loaded.modules[module_index].text, sha, mode_id, loaded.compiler_identity, hot.fault_collision)
@@ -11557,10 +11590,13 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     if written_hash_error != ok { ret written_hash_error }
     loaded.modules[module_index].artifact_hash = written_hash
     loaded.modules[module_index].artifact_hash_known = true
-    let (written_sha, written_sha_error) = artifact_hash.sha256_hex(a, held)
-    if written_sha_error != ok { ret written_sha_error }
-    loaded.modules[module_index].artifact_sha256 = written_sha
-    loaded.modules[module_index].artifact_sha256_known = true
+    // An `emit-em-all` directory's manifest records no SHA-256.
+    if !hot.saves {
+        let (written_sha, written_sha_error) = artifact_hash.sha256_hex(a, held)
+        if written_sha_error != ok { ret written_sha_error }
+        loaded.modules[module_index].artifact_sha256 = written_sha
+        loaded.modules[module_index].artifact_sha256_known = true
+    }
     // A cold build holds its artifacts for the link alone (D325); a hot one keeps them.
     if !hot.on && !hot.saves { ret ok }
     let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
