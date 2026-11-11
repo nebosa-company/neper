@@ -733,3 +733,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 326 (2026-11-11): a subgrid with no parent tracks takes as many tracks as it spans.**
   - `grid_build` set `er`/`ec` from the dummy axis' own `grid-row`/`grid-column` span; before, `grid-auto-flow: column` with `grid-template-rows: subgrid` placed every item in one row when the parent was sizing it. css-grid 962 -> 966, four flips and none regress: `subgrid/standalone-axis-size-007`, `subgrid/grid-gap-003`, `grid-lanes/.../row-subgrid-grid-gap-014`, `row-subgrid-extra-margin-003`. normal-flow unchanged.
+
+- **Round 327 (2026-11-11): `subgrid/line-names-006` is not an areas-widening problem; nothing changed.**
+  - Row 1 of the test expects `grid-template-areas: '. a a a a'` on a two-track subgrid to leave the box at its two tracks and the item `a-end -1` overflowing past it. Stopping `grid-template-areas` from raising the column count for a subgrid axis left the subgrid directory at 44 of 88; reverted. Rows 7 and 11 of the same file are separate name-resolution cases (`[a] [a]` with `span 3`, and an area name on a subgrid).
