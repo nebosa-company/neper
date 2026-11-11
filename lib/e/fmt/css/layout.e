@@ -5024,6 +5024,12 @@ fn position_markers(l: *Layout, b: u32) {
 
 // One in-flow block-level child: its position (margin collapsing, clearance, floats), size and contents. Returns the
 // new content-relative y of the parent's flow.
+// A non-zero `min-height` or any `max-height` that changes the content height keeps the last child's bottom margin from collapsing through.
+fn height_limited(s: *const style.Style) -> bool {
+    if s.max_height.kind == .Px { ret true }
+    ret s.min_height.kind == .Px && (s.min_height.px > 0.0f64 || s.min_height.pct != 0.0f64)
+}
+
 fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y_in: f64, acc: *Margin, consumed: *Flag, ox0: f64, oy0: f64) -> f64 {
     let s = bstyle(l, c)
     let cb = bx(l, c)
@@ -5166,7 +5172,7 @@ fn layout_block_child(l: *Layout, p: u32, c: u32, cw: f64, ch: f64, fc: *Flow, y
     apply_relative(l, c, cw, ch)
     // The margin below: its own, joined with the last child's when that collapsed through.
     var below = m_bottom_own
-    if !bfc && cb5.border[2usize] == 0.0f64 && cb5.padding[2usize] == 0.0f64 && s.height.kind != .Px { below = collapse(m_bottom_own, out_margin) }
+    if !bfc && cb5.border[2usize] == 0.0f64 && cb5.padding[2usize] == 0.0f64 && s.height.kind != .Px && !(height_limited(s) && (ch_used - auto_h > 0.001f64 || auto_h - ch_used > 0.001f64)) { below = collapse(m_bottom_own, out_margin) }
     consumed.v = false
     acc.pos = below.pos
     acc.neg = below.neg
