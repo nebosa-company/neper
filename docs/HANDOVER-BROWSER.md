@@ -709,3 +709,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 319 (2026-11-11): an auto-height inline promoted to a block passes its parent's definite height to its children.**
   - `block-in-inline-percents-001` expects `height: 50%` on a block inside a span to resolve against the body's 200px; the promoted span now forwards `ch`. normal-flow 638 -> 639; positioning 453, tables 222, corpus 191 unchanged.
+
+- **Round 320 (2026-11-11): zeroing border/padding of a promoted inline is inert; reverted.**
+  - `block-in-inline-empty-001` expects the empty fragments of the split inline to paint nothing; zeroing the promoted span's edges left normal-flow at 639. A real fix needs fragment boxes before and after the block (true §9.2.1.1 split), not an edge tweak.
