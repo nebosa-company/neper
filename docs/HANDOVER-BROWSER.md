@@ -719,3 +719,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 322 (2026-11-11): a relatively positioned split inline does not offset the floats inside it.**
   - `block-in-inline-float-between-001`: the reference keeps the float at its unshifted place while the in-flow blocks move; `apply_relative` now takes the offset back off direct float children of a promoted inline. normal-flow 644 -> 645; positioning 453 unchanged (corpus not rerun, change is limited to promoted inlines).
+
+- **Round 323 (2026-11-11): `block-in-inline-*` is 21/24; the three left are text-wrapping bound.**
+  - `empty-001` to `-004` and `whitespace-001a` pass since round 321. `first-line-002` (`10ch` width, `text-indent: 5ch`, wrapped digits) and `nested-001`/`002` (wrapped words) compare wrapped placeholder glyphs; they need real font metrics, not a layout rule.
