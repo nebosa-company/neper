@@ -2466,6 +2466,39 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Found once crew_windows could finally be reached: 'crew_windows at -j 1 is not the image linked from its artifacts (--time)'. Repro: emit-em-all over crew_windows then link-em the twelve artifacts, and separately emit-executable the same fixture at -j 1, both in the default (debug) mode. Sizes 75560 linked against 76072 direct. A PE section compare (dumpbin /headers) shows every section identical except .debug_info: 3FFA virtual / 4000 raw linked, against 4068 / 4200 direct -- the whole 512-byte file difference is that section's rounding. The code is byte-identical: 0 differing bytes across 0x400..0xB000, which is the headers' payload, .text (A8F5/AA00) and .idata (1B0/200). Inside .debug_info the first four bytes are the unit length, 0x3FF6 linked against 0x4064 direct, and the streams diverge at +0x10A6: the linked copy lists `e.os.PollRegistration`, the direct one `e.text.utf8.Iterator`, so the subprogram DIEs are in a different order and 110 bytes differ in total. In --release the two paths are byte-identical (E5321649... both), which is why this has never been seen: release emits no debug info to disagree about. Pre-existing and not this session's: the untouched Nov 6 self-hosted compiler produces the same two hashes (C1E733B0... linked, FE538AEC... direct). Acceptance: the artifact path and the whole-program path emit the same .debug_info for the same program in the default mode, so the two images are byte-identical there as they already are in --release; crew_windows' artifact comparison then covers both modes again; and a check pins the two images byte for byte in a debug build, which is what would have caught this before a suite run had to reach line 1067 to notice. Where the order comes from, located for the fix: the PE path assembles the debug rows in `assemble_vars` (src/em_link.e:558, D1582: 'The named locals of every copied function, placed where its code landed, in code order: what the image's DWARF describes'), reached from `link_artifact_image` (src/main.e:7744). Code order is already the stated intent, so the artifact path is ordering its subprogram DIEs by the function table it builds from artifacts rather than by where the code landed, while the whole-program path emits them in source order. So the fix is to sort both by code offset, not to reorder the CU. Deferred rather than attempted here: it is an emitter change on a path that only a debug build exercises, the code itself is already byte-identical, and crew_windows now asserts byte-identity in --release where it holds."
+    },
+    {
+      "id": "C288",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 423,
+      "title": "compiler line coverage is measured by one repeatable report, so 100% is a number",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. A 2026-11-11 spike merged 512 callgrind runs of a release Linux compiler (228 x64-linux link/check fixtures, 283 across x64 windows/macos, aarch64 linux/macos, wasm32, --release, emit-em, --gpu and fmt/tokens/parse/nir/codegen/object/resolve) against its DWARF line table: 43,818 of 75,995 src lines, 57.7%. Nothing is in the repo yet: the scripts live untracked in build/cov. Needs a scripts/ report that builds the compiler, runs the suite fixtures under callgrind, merges by file:line, and prints per-file gaps; a decision row fixing the metric (src/*.e minus bootstrap and runtime_*, lines first then branches); and docs/coverage-exempt.tsv as the only home for a justified gap. The denominator holds only code dead-function elimination kept, so @test-only functions are missing. If callgrind is too slow for the full 1,600 fixtures, finish D776's compiler half (coverage.hit calls from lowering). Never run against the shared tree's stage 2 == stage 3 build."
+    },
+    {
+      "id": "C289",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 424,
+      "title": "every src file with no or little coverage has a fixture that reaches it",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open, after C288. In the 2026-11-11 merged baseline glsl.e, msl.e, disasm_x64.e, object_elf.e, wasm_map.e, link_image_a64.e and the none/neperos a64 runtimes are 0%, wasm_threads.e 10%, tool.e 12.5%, emit_a64.e 25%, main.e 29%, spirv.e 43%. The --gpu glsl fixtures sampled never reached glsl.e, so find the entry point for each (a command, a flag, a target such as aarch64 none or neperos) and add a fixture or conformance case that fails if it breaks. Cover the neper test, run, eval, index and fmt commands and the CLI error paths in main.e and tool.e."
+    },
+    {
+      "id": "C290",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 425,
+      "title": "compiler coverage reaches 100% with a ratchet floor in the suite",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open, after C288 and C289. Baseline 2026-11-11: check.e 75.8% (11,524/15,197), lower.e 74.7%, em.e 66.8%, parse.e 73.8%, lex.e 65.5%, resolve.e 69.6%, nir.e 75%, graph.e 75%, codegen_x64.e 81.6%. Close gaps by phase (front end, check, lower/nir/graph/regalloc, em and codegen and linkers), one negative and one positive fixture per diagnostic code from the error table, golden-byte checks for emit_*.e encoders, @test unit tests where fixtures are awkward (first verify src modules are importable from a test). Then the suite fails when coverage drops below the committed floor, the floor rising per merged item until it is 100% with only docs/coverage-exempt.tsv entries uncovered. Keep run.sh and run.ps1 in parity."
     }
   ]
 }
