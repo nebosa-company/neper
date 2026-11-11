@@ -5323,6 +5323,18 @@ fn apply_relative(l: *Layout, c: u32, cbw: f64, cbh: f64) {
     }
     cb.x += dx
     cb.y += dy
+    // An inline split around a block child offsets its in-flow content, not the floats it contains.
+    if s.display == .Inline && !cb.inline_level && !cb.anonymous {
+        var kid = cb.first
+        while kid != NONE {
+            let kb = &l.boxes.items[usize(kid)]
+            if st(l, kb.style).floating != .None {
+                kb.x -= dx
+                kb.y -= dy
+            }
+            kid = kb.next
+        }
+    }
 }
 
 // --- Stand-ins until the table, flex and grid algorithms land: those boxes lay out as blocks.
