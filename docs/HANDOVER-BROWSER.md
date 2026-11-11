@@ -809,3 +809,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 346 (2026-11-11): `abspos-025`/`-026` read; font-bound, nothing changed.**
   - Both compare an abspos image at `4em`/`4em` of the initial containing block with a reference that places an in-flow image after a wrapped paragraph (`top: 12px` after two serif lines of 1.25 line-height): the reference's position depends on the real font's line wrapping and metrics, which the placeholder font does not reproduce. Remaining unexamined in `abspos*`: `-block-level-001`, `-float-with-inline-container`.
+
+- **Round 347 (2026-11-11): `abspos-block-level-001` read; the first block matches, the right-to-left blocks do not.**
+  - The two left-to-right rows pass the compare (after Round 342). In the right-to-left rows the reference draws a lime shrink-to-fit abspos box at the right edge covering the red inline text, and ours sits left with the red text visible; 40-character lines wrap at the placeholder font's 1-em advance, so it was not narrowed to a rule. `abspos-float-with-inline-container` still waits on the abspos containing block of a split inline being its fragment box.
