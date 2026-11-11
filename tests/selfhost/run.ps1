@@ -7738,6 +7738,19 @@ $genericUnsigned = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main
 if ($LASTEXITCODE -ne 0 -or $genericUnsigned -notmatch 'rebuilt main' -or $genericUnsigned -match 'kept') { throw "an unsigned artifact directory was trusted: $genericUnsigned" }
 $genericSigned = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $genericSigned -match 'rebuilt') { throw "a rebuilt directory was not signed again: $genericSigned" }
+# A module that reaches a generic type only through generic calls is rebuilt when the
+# type's fields are reordered: its instances read the layout.
+$layoutFixture = Join-Path $PSScriptRoot 'fixtures\link\incremental_generic_layout'
+$layoutScratch = Join-Path $testBuild 'incremental-layout-scratch'
+$layoutArtifacts = Join-Path $testBuild 'incremental-layout-artifacts'
+foreach ($layoutDir in @($layoutScratch, $layoutArtifacts)) { if (Test-Path -LiteralPath $layoutDir) { Remove-Item -LiteralPath $layoutDir -Recurse -Force } }
+New-Item -ItemType Directory -Force -Path (Join-Path $layoutScratch 'src'), $layoutArtifacts | Out-Null
+Copy-Item -Path (Join-Path $layoutFixture 'src\*.e') -Destination (Join-Path $layoutScratch 'src')
+$layoutFirst = & $compiler emit-em-all (Join-Path $layoutScratch 'src\main.e') $repo 'x64' 'windows' $layoutArtifacts
+if ($LASTEXITCODE -ne 0 -or $layoutFirst -ne 'compiled modules written') { throw 'the generic layout fixture did not compile to artifacts' }
+Copy-Item -LiteralPath (Join-Path $layoutFixture 'edits\box_layout.e') -Destination (Join-Path $layoutScratch 'src\box.e') -Force
+$layoutEdited = (& $compiler emit-em-all (Join-Path $layoutScratch 'src\main.e') $repo 'x64' 'windows' $layoutArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $layoutEdited -notmatch 'rebuilt main') { throw "a generic type's reordered fields kept a module whose instances read them: $layoutEdited" }
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing

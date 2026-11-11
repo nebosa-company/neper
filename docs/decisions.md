@@ -44100,3 +44100,13 @@ unreferenced.
 **Changed behaviour.** An artifact another compiler build wrote is rebuilt (the hot loader compares the compiler identity; the old path compared source and mode only). The output directory holds one more file.
 
 **Not done.** `--incremental --whole` writes no manifest, so a crew build after it rebuilds everything once. Three modules that use `e.data.list` only through generic calls, never naming `List`, are kept when `List`'s fields are reordered; the compiler before D5972 kept them too, so the gap is in the edge writer's signature walk, not here.
+
+## D5974 — A module whose instances read a generic type's layout depends on that type
+
+**Problem.** A module that reaches another module's generic type only through generic calls, never spelling its name (`let (xs, e) = list.init[usize](a, 8usize)`), was kept when the type's fields were reordered. Its instances of `init` and `push` are lowered in the module and read the layout, so a warm build linked old-layout code beside new. On the all-library root a `List` field reorder kept `e.net.uts46`, `e.js.lex` and `e.fmt.msgpack`; each differed from a cold build of the same tree. The signature walk (D493) looked up the generic function a reference names, whose `List[T]` is no aggregate, and the instance's own signature was never read.
+
+**Decision.** `mark_aggregate_uses` also walks the instances a module owns of another module's generic functions and marks the aggregates in each instance's parameters and returns; an instance of a generic type marks its generic (D5972). `owned_template_instance` is the test `owned_template_dependency` already made, split out.
+
+**Result.** `incremental_generic_layout` fails on the previous compiler (`kept main`) and passes now. On the all-library root the reorder rebuilds 67 modules instead of 64 and no kept artifact differs from a cold build; an unchanged warm build still keeps all 748.
+
+**Not done.** Only signature types are marked: a foreign generic type that an instance's body uses without taking or returning it is not. A rebuilt artifact can still differ from the cold one in its dependency table (not in code); that predates this.

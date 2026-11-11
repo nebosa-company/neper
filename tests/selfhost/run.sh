@@ -7655,6 +7655,19 @@ case "$generic_unsigned" in *'rebuilt main'*) ;; *) printf %s "an unsigned artif
 case "$generic_unsigned" in *kept*) printf %s "an unsigned artifact was kept: $generic_unsigned" >&2; echo >&2; exit 1 ;; esac
 generic_signed=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e" "$repo" x64 linux "$generic_artifacts" --incremental)
 case "$generic_signed" in *rebuilt*) printf %s "a rebuilt directory was not signed again: $generic_signed" >&2; echo >&2; exit 1 ;; esac
+# A module that reaches a generic type only through generic calls is rebuilt when the
+# type's fields are reordered: its instances read the layout.
+layout_fixture="$repo/tests/selfhost/fixtures/link/incremental_generic_layout"
+layout_scratch="$test_build/incremental-layout-scratch"
+layout_artifacts="$test_build/incremental-layout-artifacts"
+rm -rf "$layout_scratch" "$layout_artifacts"
+mkdir -p "$layout_scratch/src" "$layout_artifacts"
+cp "$layout_fixture"/src/*.e "$layout_scratch/src/"
+layout_first=$($test_build/neper-self emit-em-all "$layout_scratch/src/main.e" "$repo" x64 linux "$layout_artifacts")
+[ "$layout_first" = 'compiled modules written' ]
+cp "$layout_fixture/edits/box_layout.e" "$layout_scratch/src/box.e"
+layout_edited=$($test_build/neper-self emit-em-all "$layout_scratch/src/main.e" "$repo" x64 linux "$layout_artifacts" --incremental)
+case "$layout_edited" in *'rebuilt main'*) ;; *) printf %s "a generic type's reordered fields kept a module whose instances read them: $layout_edited" >&2; echo >&2; exit 1 ;; esac
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing
