@@ -8747,6 +8747,16 @@ fn grid_item_width_h(l: *Layout, id: u32, cs: *const style.Style, area_w: f64, a
     if ib.inner == .Replaced {
         let (rw, _rh) = used_replaced_size(l, id, area_w, -1.0f64)
         if just == .Stretch && stretch { ret maxf(0.0f64, avail) }
+        // Stretched to the area's height with a free width: the width follows by the ratio.
+        var ralign = is.align_self
+        if ralign == .Auto { ralign = cs.align_items }
+        if ralign == .Stretch && area_h >= 0.0f64 && is.height.kind == .Auto && is.width.kind == .Auto && is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto {
+            let rintr = replaced_intrinsic(l, id)
+            let (riw, rih) = default_replaced(rintr)
+            var rratio = rintr.ratio
+            if rratio <= 0.0f64 && riw > 0.0f64 && rih > 0.0f64 { rratio = riw / rih }
+            if rratio > 0.0f64 { ret maxf(0.0f64, (area_h - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib)) * rratio) }
+        }
         ret rw
     }
     if stretch { ret maxf(0.0f64, clamp_width(l, id, avail, area_w)) }
