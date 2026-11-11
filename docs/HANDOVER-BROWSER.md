@@ -722,3 +722,8 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 323 (2026-11-11): `block-in-inline-*` is 21/24; the three left are text-wrapping bound.**
   - `empty-001` to `-004` and `whitespace-001a` pass since round 321. `first-line-002` (`10ch` width, `text-indent: 5ch`, wrapped digits) and `nested-001`/`002` (wrapped words) compare wrapped placeholder glyphs; they need real font metrics, not a layout rule.
+
+- **Round 324 (2026-11-11): the split-inline rule of round 321 broke grid-lanes items; restricted to block-container parents.**
+  - Custom-element grid items (`<item>`) keep `display: inline`, so round 321's zeroing of edges and decoration stripped them: css-grid fell 958 -> 951 (flow-tolerance, justify-content). `is_split_inline` now also requires the parent to be a Flow/FlowRoot box; css-grid back to 958 with an identical failure set, normal-flow 645.
+  - Lesson: a CSS2 box-tree change needs a css-grid sweep too; the earlier round-321 checks never ran it.
+  - Negative: capping an `auto` track minimum by a fixed maximum (for `subgrid/standalone-axis-size-004/009`) is untested in isolation; re-measure alone before keeping.
