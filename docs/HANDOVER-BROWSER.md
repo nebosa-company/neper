@@ -727,3 +727,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
   - Custom-element grid items (`<item>`) keep `display: inline`, so round 321's zeroing of edges and decoration stripped them: css-grid fell 958 -> 951 (flow-tolerance, justify-content). `is_split_inline` now also requires the parent to be a Flow/FlowRoot box; css-grid back to 958 with an identical failure set, normal-flow 645.
   - Lesson: a CSS2 box-tree change needs a css-grid sweep too; the earlier round-321 checks never ran it.
   - Negative: capping an `auto` track minimum by a fixed maximum (for `subgrid/standalone-axis-size-004/009`) is untested in isolation; re-measure alone before keeping.
+
+- **Round 325 (2026-11-11): an `auto` track minimum is limited by a fixed maximum (css-grid 11.5.1).**
+  - `size_tracks` clamped item min-contribution to the fixed max for span-1 tracks. css-grid 958 -> 962, exactly four tests flip and none regress: `subgrid/standalone-axis-size-004` and `-009`, `grid-item-minmax-img-001`, `grid-minimum-size-grid-items-017`. normal-flow 645 and tables 222 unchanged.

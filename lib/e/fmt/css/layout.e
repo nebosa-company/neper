@@ -8483,7 +8483,10 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
         if span == 1i32 && usize(start) < n {
             let c = usize(start)
             let sk = tr[c].min.kind
-            if sk == 3u8 || sk == 4u8 { tr[c].base = maxf(tr[c].base, mn) } else if sk == 5u8 { tr[c].base = maxf(tr[c].base, mx) }
+            // An `auto` minimum is limited by a fixed maximum (css-grid 11.5.1).
+            var mn_used = mn
+            if sk == 3u8 && (tr[c].max.kind == 0u8 || (tr[c].max.kind == 1u8 && avail >= 0.0f64)) { mn_used = minf(mn, tr[c].limit) }
+            if sk == 3u8 || sk == 4u8 { tr[c].base = maxf(tr[c].base, mn_used) } else if sk == 5u8 { tr[c].base = maxf(tr[c].base, mx) }
             let mk = tr[c].max.kind
             if is_intrinsic_max(mk) {
                 var contribution = mx
