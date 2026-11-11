@@ -2448,8 +2448,12 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
                 out.end = j
                 continue
             }
+            var rel_dy = 0.0f64
             if ab.inline_level || st(l, ab.style).was_inline {
                 ab.x = out.line_x + pos
+                let (rix, riy) = relative_chain(l, ab.parent, x.cont, 0.0f64)
+                ab.x += rix
+                rel_dy = riy
                 // Only an INLINE-level absolutely positioned box keeps its static position on the line. Marking a
                 // block-level one `aux = 2` sent it down the inline branch of the static-position rules, where a
                 // right-to-left container placed it at `static_x - width` and it landed on the left edge
@@ -2457,8 +2461,11 @@ fn scan_line(x: *Ifc, i: usize) -> Scan {
                 ab.aux = 2u32
             } else {
                 ab.x = 0.0f64
+                let (rbx, rby) = relative_chain(l, ab.parent, x.cont, 0.0f64)
+                ab.x += rbx
+                rel_dy = rby
             }
-            ab.y = x.y
+            ab.y = x.y + rel_dy
             if owner.inner == .Flow || owner.inner == .FlowRoot {
                 ab.x += owner.border[3usize] + owner.padding[3usize]
                 ab.y += owner.border[0usize] + owner.padding[0usize]
@@ -3722,6 +3729,10 @@ fn emit_line(x: *Ifc, scan: Scan, end0: usize) -> f64 {
                 if cs.direction == .Rtl && !tail_keep { nx = ax + used_w - abs_off }
                 if owner.inner == .Flow || owner.inner == .FlowRoot { nx += owner.border[3usize] + owner.padding[3usize] }
                 ab.x = nx
+                // The static position moves with a relatively positioned inline it sits in.
+                let (rax, _ray) = relative_chain(l, ab.parent, x.cont, scan.avail)
+                ab.x += rax
+
             }
         } else if k < trim_end {
             if ap.kind == .Tab {
@@ -10809,6 +10820,37 @@ fn layout_abs(l: *Layout, b: u32) {
     var pad_y = cby + cbb.border[0usize]
     var cb_w = cbb.w - cbb.border[1usize] - cbb.border[3usize]
     var cb_h = cbb.h - cbb.border[0usize] - cbb.border[2usize]
+    // An inline box without a rectangle of its own (no blocks inside) is the union of its line fragments.
+    if !fixed && cbid != l.root && cbb.inner == .Flow && bstyle(l, cbid).display == .Inline && cbb.w == 0.0f64 && cbb.h == 0.0f64 {
+        var fx0 = 1000000000.0f64
+        var fy0 = 1000000000.0f64
+        var fx1 = -1000000000.0f64
+        var fy1 = -1000000000.0f64
+        var fi = 0usize
+        while fi < l.frags.len {
+            let fr = l.frags.items[fi]
+            if fr.kind == .Segment && fr.box == cbid {
+                fx0 = minf(fx0, fr.x)
+                fy0 = minf(fy0, fr.y)
+                fx1 = maxf(fx1, fr.x + fr.w)
+                fy1 = maxf(fy1, fr.y + fr.h)
+            }
+            fi += 1usize
+        }
+        var cont = cbb.parent
+        while cont != NONE && (bstyle(l, cont).display == .Inline || l.boxes.items[usize(cont)].inline_level) { cont = l.boxes.items[usize(cont)].parent }
+        if fx1 > fx0 && cont != NONE {
+            let (ox, oy) = abs_origin(l, cont)
+            let ob = &l.boxes.items[usize(cont)]
+            pad_x = ox + ob.border[3usize] + ob.padding[3usize] + fx0 + cbb.border[3usize]
+            pad_y = oy + ob.border[0usize] + ob.padding[0usize] + fy0 + cbb.border[0usize]
+            cb_w = fx1 - fx0 - cbb.border[3usize] - cbb.border[1usize]
+            cb_h = fy1 - fy0 - cbb.border[0usize] - cbb.border[2usize]
+            let (rcx, rcy) = relative_chain(l, cbid, cont, ob.w)
+            pad_x += rcx
+            pad_y += rcy
+        }
+    }
     // An inline containing block that holds blocks starts at the line its first fragment sits on: the line of the inline content just before it.
     if !fixed && cbid != l.root && (bstyle(l, cbid).was_inline || bstyle(l, cbid).display == .Inline) && !cbb.inline_level && cbb.prev != NONE {
         let pvb = &l.boxes.items[usize(cbb.prev)]
