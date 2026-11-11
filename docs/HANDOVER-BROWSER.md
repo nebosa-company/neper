@@ -703,3 +703,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 317 of the conformance goal (2026-11-11): a block inside an inline resolves its over-constrained margin by the direction of the nearest non-inline ancestor.**
   - `used_width_block` took the direction of the promoted inline span; the spec's containing block is the anonymous block, which inherits from the span's block parent. `block-in-inline-margins-001b`/`002b` pass.
   - normal-flow 636 -> 638; positioning 453, vendored corpus 191 unchanged.
+
+- **Round 318 (2026-11-11): remaining `block-in-inline-*` failures are placeholder-glyph tests; nothing built.**
+  - `nested-001` renders text as black blocks in both test and ref, so the comparison depends on glyph widths and line wrapping the harness font cannot reproduce; same class as the Ahem-dependent families.
