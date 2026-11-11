@@ -7646,6 +7646,41 @@ generic_first=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e"
 generic_same=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e" "$repo" x64 linux "$generic_artifacts" --incremental)
 case "$generic_same" in *'kept main'*) ;; *) printf %s "an unchanged generic importer was not kept: $generic_same" >&2; echo >&2; exit 1 ;; esac
 case "$generic_same" in *rebuilt*) printf %s "an unchanged generic importer rebuilt a module: $generic_same" >&2; echo >&2; exit 1 ;; esac
+# An artifact is kept only under the directory's signed manifest: without it every
+# module is rebuilt, and that build signs the directory again.
+[ -f "$generic_artifacts/build-manifest.json" ]
+# The directory is checked for change by CRC-32C; it records and computes no SHA-256.
+grep -q '"source_crc32c":"' "$generic_artifacts/build-manifest.json"
+! grep -q 'artifact_sha256' "$generic_artifacts/build-manifest.json"
+rm "$generic_artifacts/build-manifest.json"
+generic_unsigned=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e" "$repo" x64 linux "$generic_artifacts" --incremental)
+case "$generic_unsigned" in *'rebuilt main'*) ;; *) printf %s "an unsigned artifact directory was trusted: $generic_unsigned" >&2; echo >&2; exit 1 ;; esac
+case "$generic_unsigned" in *kept*) printf %s "an unsigned artifact was kept: $generic_unsigned" >&2; echo >&2; exit 1 ;; esac
+generic_signed=$($test_build/neper-self emit-em-all "$generic_fixture/src/main.e" "$repo" x64 linux "$generic_artifacts" --incremental)
+case "$generic_signed" in *rebuilt*) printf %s "a rebuilt directory was not signed again: $generic_signed" >&2; echo >&2; exit 1 ;; esac
+# A module that reaches a generic type only through generic calls is rebuilt when the
+# type's fields are reordered: its instances read the layout.
+layout_fixture="$repo/tests/selfhost/fixtures/link/incremental_generic_layout"
+layout_scratch="$test_build/incremental-layout-scratch"
+layout_artifacts="$test_build/incremental-layout-artifacts"
+rm -rf "$layout_scratch" "$layout_artifacts"
+mkdir -p "$layout_scratch/src" "$layout_artifacts"
+cp "$layout_fixture"/src/*.e "$layout_scratch/src/"
+layout_first=$($test_build/neper-self emit-em-all "$layout_scratch/src/main.e" "$repo" x64 linux "$layout_artifacts")
+[ "$layout_first" = 'compiled modules written' ]
+cp "$layout_fixture/edits/box_layout.e" "$layout_scratch/src/box.e"
+layout_edited=$($test_build/neper-self emit-em-all "$layout_scratch/src/main.e" "$repo" x64 linux "$layout_artifacts" --incremental)
+case "$layout_edited" in *'rebuilt main'*) ;; *) printf %s "a generic type's reordered fields kept a module whose instances read them: $layout_edited" >&2; echo >&2; exit 1 ;; esac
+# A race between the crew's workers shows as an image that differs from run to run: the
+# compiler's own source, over three worker schedules twice, is the `-j 1` image.
+stress_first="$test_build/crew-stress-first"
+[ "$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$stress_first" --release -j 1 2>/dev/null)" = 'executable written' ]
+for stress_round in 1 2; do
+    for stress_jobs in '-j 3 --perturb' '-j 8' '-j 8 --perturb'; do
+        [ "$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$test_build/crew-stress-next" --release $stress_jobs 2>/dev/null)" = 'executable written' ]
+        cmp "$stress_first" "$test_build/crew-stress-next"
+    done
+done
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing

@@ -608,6 +608,11 @@ type Builder = struct {
     proof_addressed: [256]usize,
     proof_addressed_count: usize,
     proof_addressed_overflow: bool,
+    // The identifiers the function slices in place (`name[a..b]`, `name.field[a..b]`),
+    // collected in the same walk: an implicit address a by-value argument asks about.
+    proof_sliced: [256]usize,
+    proof_sliced_count: usize,
+    proof_sliced_overflow: bool,
     // The lengths held in a local (D452, H03): every `let n = x.len` of the function,
     // as the token indices of `n` and `x`, collected when the function is opened, so
     // `while i < n` reads as `while i < x.len` when `x` is never written.

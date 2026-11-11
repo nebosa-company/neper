@@ -5579,8 +5579,11 @@ fn index_manifest_hashes(a: *mem.Arena, hot: *HotLoad, manifest: str, capacity: 
             var entry_end = name_end
             while entry_end < manifest.len && manifest[entry_end] != 125u8 { entry_end += 1usize }
             let digits = json_str_after(manifest[name_end..entry_end], "\"artifact_crc32c\":\"")
-            let sha = json_str_after(manifest[name_end..entry_end], "\"artifact_sha256\":\"")
-            if digits.len == 8usize && sha.len == 64usize && hex_string(digits) && hex_string(sha) {
+            var sha = json_str_after(manifest[name_end..entry_end], "\"artifact_sha256\":\"")
+            // An `emit-em-all` directory records the source's length and CRC-32C in its
+            // place: sixteen digits, which is how the readers below tell the two apart.
+            if sha.len == 0usize { sha = json_str_after(manifest[name_end..entry_end], "\"source_crc32c\":\"") }
+            if digits.len == 8usize && (sha.len == 64usize || sha.len == 16usize) && hex_string(digits) && hex_string(sha) {
                 var value = 0usize
                 var digit_at = 0usize
                 while digit_at < 8usize {
@@ -8758,6 +8761,9 @@ type HotLoad = struct {
     unchecked: bool,
     triple: str,
     directory: str,
+    // `emit-em-all --incremental`: the directory the command names, which holds the
+    // artifacts and their signed manifest; empty for an executable's `.neper` tree.
+    em_directory: str,
     scratch: *binary.Buffer,
     // Per module, sized to the graph's capacity: whether the source is unchanged
     // since its artifact, and whether the module is stable. The artifacts themselves
@@ -8827,7 +8833,7 @@ fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     let module_index = w.modules[at]
     let (old, old_error) = load_artifact(&w.arena, w.paths[at])
     if old_error == mem.Exhausted { ret old_error }
-    let (sha, sha_error) = artifact_hash.sha256_hex(&w.arena, w.texts[at])
+    let (sha, sha_error) = source_sha_now(&w.arena, old, old_error, w.texts[at], w.recorded_artifact_sha[module_index])
     if sha_error != ok { ret sha_error }
     w.sha_now[module_index] = sha
     var (reason, unchanged) = artifact_identity(&w.arena, old, old_error, w.texts[at], sha, w.mode_id, w.compiler_identity, w.fault_collision)
@@ -8850,6 +8856,30 @@ fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     ret ok
 }
 
+// The SHA-256 of a module's bytes as the hot load compares it. Where the manifest
+// recorded the source's length and CRC-32C instead (an `emit-em-all` directory) and
+// the text still has both, the bytes are the ones the artifact was built from and the
+// digest is the artifact's own; anything else is hashed.
+fn source_sha_now(a: *mem.Arena, old: []const u8, old_error: err, text: str, recorded: str) -> (str, err) {
+    if old_error == ok && recorded.len == 16usize {
+        let (crc, crc_error) = artifact_hash.crc32c(text, 0usize, 0usize)
+        var key = 0usize
+        var at = 0usize
+        while at < 16usize {
+            var nibble = usize(recorded[at]) - 48usize
+            if recorded[at] >= 97u8 { nibble = usize(recorded[at]) - 87usize }
+            key = (key << 4usize) | nibble
+            at += 1usize
+        }
+        if crc_error == ok && key == ((text.len << 32usize) | crc) {
+            let (written_sha, written_interface, written_error) = em.artifact_manifest_digests(old)
+            if written_error == ok && written_sha.len == 64usize { ret (written_sha, ok) }
+        }
+    }
+    let (sha, sha_error) = artifact_hash.sha256_hex(a, text)
+    ret (sha, sha_error)
+}
+
 fn previous_trusted(a: *mem.Arena, old: []const u8, compiler_identity: usize, recorded: usize, recorded_sha: str, recorded_known: bool) -> bool {
     let (old_compiler, old_compiler_error) = em.artifact_compiler_hash(old)
     if old_compiler_error != ok || compiler_identity == 0usize || old_compiler != compiler_identity { ret false }
@@ -8866,9 +8896,15 @@ fn previous_trusted(a: *mem.Arena, old: []const u8, compiler_identity: usize, re
 fn artifact_content_verified(a: *mem.Arena, old: []const u8, recorded: usize, recorded_sha: str, recorded_known: bool) -> (usize, str, bool) {
     let (checksum, checksum_error) = em.artifact_checksum(old)
     if checksum_error != ok { ret (0usize, "", false) }
-    let (sha, sha_error) = artifact_hash.sha256_hex(a, old)
-    if sha_error != ok { ret (checksum, "", false) }
-    if !recorded_known || checksum != recorded || !same(sha, recorded_sha) { ret (checksum, sha, false) }
+    // An `emit-em-all` directory records no SHA-256 (sixteen digits of source record in
+    // its place): the artifact is the recorded one by its checksum alone.
+    var sha = ""
+    if recorded_sha.len != 16usize {
+        let (hashed, sha_error) = artifact_hash.sha256_hex(a, old)
+        if sha_error != ok { ret (checksum, "", false) }
+        sha = hashed
+    }
+    if !recorded_known || checksum != recorded || (recorded_sha.len != 16usize && !same(sha, recorded_sha)) { ret (checksum, sha, false) }
     // (D1325) A kept artifact's Interface must read back whole, declarations and
     // types, so the declarations can come from it rather than a lexed tree.
     if em.interface_payloads_read(old) != ok { ret (checksum, sha, false) }
@@ -9058,7 +9094,7 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
                 let module_index = workers[worker_at].modules[remaining]
                 let (old, old_error) = load_artifact(a, workers[worker_at].paths[remaining])
                 if old_error == mem.Exhausted { ret old_error }
-                let (sha, sha_error) = artifact_hash.sha256_hex(a, loaded.modules[module_index].text)
+                let (sha, sha_error) = source_sha_now(a, old, old_error, loaded.modules[module_index].text, hot.recorded_artifact_sha[module_index])
                 if sha_error != ok { ret sha_error }
                 hot.sha_now[module_index] = sha
                 var (reason, unchanged) = artifact_identity(a, old, old_error, loaded.modules[module_index].text, sha, mode_id, loaded.compiler_identity, hot.fault_collision)
@@ -9084,8 +9120,12 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
 
 fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]const u8, path: str, root: str, arch: str, target_os: str, project_root: str) -> err {
     try graph.begin(a, loaded, path, root, arch, target_os, project_root)
-    let (directory, directory_error) = artifact_directory(a, loaded, hot.release)
-    if directory_error != ok { ret directory_error }
+    var directory = hot.em_directory
+    if directory.len == 0usize {
+        let (made, made_error) = artifact_directory(a, loaded, hot.release)
+        if made_error != ok { ret made_error }
+        directory = made
+    }
     hot.directory = directory
     var mode_id = 0usize
     if hot.release { mode_id = 1usize }
@@ -9097,7 +9137,8 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
     // before any module record can authorize cache reuse, then index it once.
     if !hot.manifest_read {
         hot.manifest_read = true
-        let (manifest_path, manifest_path_error) = with_suffix(a, dirname(directory[0usize..directory.len - 1usize]), "build-manifest.json")
+        var (manifest_path, manifest_path_error) = with_suffix(a, dirname(directory[0usize..directory.len - 1usize]), "build-manifest.json")
+        if hot.em_directory.len != 0usize { (manifest_path, manifest_path_error) = tool.manifest_join(a, directory, "build-manifest.json") }
         if manifest_path_error != ok { ret manifest_path_error }
         let (manifest_text, manifest_error) = source.load(a, manifest_path)
         if manifest_error == ok && artifact_hash.cache_auth_verify(a, manifest_text) { try index_manifest_hashes(a, hot, manifest_text, loaded.modules.len) }
@@ -9295,6 +9336,7 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     hot.unchecked = unchecked
     hot.scratch = scratch
     if !on { ret ok }
+    if same(args[1usize], "emit-em-all") { hot.em_directory = args[6usize] }
     // A release build's header trees keep the oracle's candidates (D421): the
     // declarations of at most the tokens `lower.oracle_module` looks at.
     loaded.header_body_cap = 0usize
@@ -11249,12 +11291,7 @@ type HotBuild = struct {
 // dependency's unchanged since its artifact, which is what makes it kept -- so neither
 // the checker nor the link runs.
 fn image_current(a: *mem.Arena, hot: *HotLoad, loaded: *graph.Graph, held: [][]const u8, args: []str) -> bool {
-    if !hot.on || hot.stable.len < loaded.count || held.len < loaded.count { ret false }
-    var module_at = 0usize
-    while module_at < loaded.count {
-        if !hot.stable[module_at] || held[module_at].len == 0usize || (module_at < hot.distrust.len && hot.distrust[module_at]) { ret false }
-        module_at += 1usize
-    }
+    if !all_stable(hot, loaded, held) { ret false }
     let (key, stamp) = image_key(a, hot.directory, hot.triple, loaded, held, args)
     if key.len == 0usize { ret false }
     // The stamp: the key, a space, the image's SHA-256, a newline, then the libraries.
@@ -11266,6 +11303,30 @@ fn image_current(a: *mem.Arena, hot: *HotLoad, loaded: *graph.Graph, held: [][]c
     artifact_hash.sha256_hex_into(image, digest[..])
     if !same(recorded[65usize..129usize], digest[..]) { ret false }
     ret stamped_libraries(a, loaded, recorded, args) == ok
+}
+
+// Every module stable since its artifact, and the artifact held.
+fn all_stable(hot: *HotLoad, loaded: *graph.Graph, held: [][]const u8) -> bool {
+    if !hot.on || hot.stable.len < loaded.count || held.len < loaded.count { ret false }
+    var module_at = 0usize
+    while module_at < loaded.count {
+        if !hot.stable[module_at] || held[module_at].len == 0usize || (module_at < hot.distrust.len && hot.distrust[module_at]) { ret false }
+        module_at += 1usize
+    }
+    ret true
+}
+
+// What `emit-em-all --incremental` did with each module, in load order; `keep` empty
+// when nothing was rebuilt.
+fn print_em_outcome(loaded: *graph.Graph, keep: []bool) -> err {
+    var module_at = 0usize
+    while module_at < loaded.count {
+        if module_at >= keep.len || keep[module_at] { try io.print("kept ") } else { try io.print("rebuilt ") }
+        try io.print(loaded.modules[module_at].name)
+        try io.print("\n")
+        module_at += 1usize
+    }
+    ret io.print("compiled modules written\n")
 }
 
 // The key of the image the command line links from the artifacts in the directory, and
@@ -11529,10 +11590,13 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     if written_hash_error != ok { ret written_hash_error }
     loaded.modules[module_index].artifact_hash = written_hash
     loaded.modules[module_index].artifact_hash_known = true
-    let (written_sha, written_sha_error) = artifact_hash.sha256_hex(a, held)
-    if written_sha_error != ok { ret written_sha_error }
-    loaded.modules[module_index].artifact_sha256 = written_sha
-    loaded.modules[module_index].artifact_sha256_known = true
+    // An `emit-em-all` directory's manifest records no SHA-256.
+    if !hot.saves {
+        let (written_sha, written_sha_error) = artifact_hash.sha256_hex(a, held)
+        if written_sha_error != ok { ret written_sha_error }
+        loaded.modules[module_index].artifact_sha256 = written_sha
+        loaded.modules[module_index].artifact_sha256_known = true
+    }
     // A cold build holds its artifacts for the link alone (D325); a hot one keeps them.
     if !hot.on && !hot.saves { ret ok }
     let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
@@ -12430,7 +12494,8 @@ fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> e
     // build of a module rebuilt with a previous artifact (a source change; D1516: an
     // edge that did not hold, and a release build), that artifact's emission.
     var reuse: Reuse = zero
-    if w.hot.on {
+    // A directory of artifacts records none: a rebuilt artifact is the cold build's.
+    if w.hot.on && !w.hot.saves {
         try note_emission(w, a, first)
         if !w.builder.explain && module_index < w.loaded.previous.len && w.loaded.previous[module_index].len != 0usize { try reuse_open(a, w.loaded.previous[module_index], module_index, &reuse) }
     }
@@ -14670,7 +14735,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `emit-em-all` takes the executable path's crew: one thread lowered, selected and
     // wrote 745 modules while seven cores sat idle. `--whole` keeps the program lowered
     // whole on one thread, the path no crew makes, which the crew's image is held against.
-    let crew_em = writes_all_em && !incremental_build && !(trailing_flags && has_flag(args, "--whole"))
+    // An incremental one takes the hot loader with it; under `--whole` the edge rule
+    // still runs over every module parsed.
+    let crew_em = writes_all_em && !(trailing_flags && has_flag(args, "--whole"))
     let crew_build = writes_executable || crew_em
     // `dis-file PATH ROOT ARCH OS --json` (D233): the codegen pipeline, then per-function bytes.
     // `dis-file ... --json --release` (D542): the release image, its inlined ranges named.
@@ -14736,7 +14803,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // helper: `main` is at the bootstrap's cap of locals.
         var hot_load: HotLoad = zero
         var hot_scratch: binary.Buffer = zero
-        try init_hot_load(a, &hot_load, &hot_scratch, &loaded, args, hot_build, release_build, unchecked_build)
+        try init_hot_load(a, &hot_load, &hot_scratch, &loaded, args, hot_build || (incremental_build && crew_em), release_build, unchecked_build)
         let (held_all, held_all_error) = mem.alloc[[]const u8](a, loaded.modules.len)
         if held_all_error != ok { ret held_all_error }
         clear_held(held_all)
@@ -14753,6 +14820,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             try io.print("executable written\n")
             ret ok
         }
+        // The same for a directory of artifacts: every module stable, nothing to write.
+        if incremental_build && load_error == ok && report.count == 0usize && !report.json && !report.build.on && all_stable(&hot_load, &loaded, held_all) { ret print_em_outcome(&loaded, hot_load.stable[0usize..0usize]) }
         if load_error != ok {
             if disassemble {
                 report.pending_header = ""
@@ -14772,7 +14841,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // once per sweep; the incremental artifact build keeps the whole-program passes,
         // whose `keep` mask it decides between declarations and bodies.
         var resolve_error = ok
-        if !(writes_all_em && incremental_build) && loaded.order_count == loaded.count {
+        if (crew_em || !incremental_build) && loaded.order_count == loaded.count {
             resolve_error = resolve_per_module(a, &resolver, &loaded)
         } else {
             resolve_error = resolve.collect(&resolver, &loaded)
@@ -14810,7 +14879,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             keep_at += 1usize
         }
         var check_error = ok
-        if !(writes_all_em && incremental_build) && loaded.order_count == loaded.count {
+        if (crew_em || !incremental_build) && loaded.order_count == loaded.count {
             check_error = declarations_per_module(&checker, &resolver, &loaded)
         } else {
             check_error = check.run_declarations(&checker, &resolver, &loaded)
@@ -14880,7 +14949,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if bindings_error != ok { ret bindings_error }
         report.build.pools[stats.POOL_BINDINGS] = bindings.len
         checker.arena = a
-        let fused = check_error == ok && !(writes_all_em && incremental_build) && loaded.order_count == loaded.count
+        let fused = check_error == ok && (crew_em || !incremental_build) && loaded.order_count == loaded.count
         // A release build checks every body, kept or not: the oracle inlines from
         // all of them, and a hot release image is then the cold one's (D319).
         var body_skip = keep
@@ -14902,7 +14971,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             early_builder.explain_json = report.json
         }
         if crew_build {
-            hot.on = hot_build
+            hot.on = hot_build || incremental_build
             hot.saves = crew_em
             hot.keep = keep
             hot.directory = artifact_dir
@@ -15218,6 +15287,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 }
                 try crew_emit(a, &crew, &report, &loaded, &checker, &resolver, &builder, bindings, lowered_modules, machine_abi_of(args), &hot, held, &code, body_skip)
                 if crew_em {
+                    try tool.em_manifest_file(a, &loaded, args[6usize])
+                    if incremental_build { ret print_em_outcome(&loaded, keep) }
                     try io.print("compiled modules written\n")
                     ret ok
                 }

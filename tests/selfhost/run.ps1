@@ -7729,6 +7729,44 @@ $genericFirst = & $compiler emit-em-all (Join-Path $genericFixture 'src\main.e')
 if ($LASTEXITCODE -ne 0 -or $genericFirst -ne 'compiled modules written') { throw 'the generic importer fixture did not compile to artifacts' }
 $genericSame = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $genericSame -notmatch 'kept main' -or $genericSame -match 'rebuilt') { throw "an unchanged generic importer was rebuilt: $genericSame" }
+# An artifact is kept only under the directory's signed manifest: without it every
+# module is rebuilt, and that build signs the directory again.
+$genericManifest = Join-Path $genericArtifacts 'build-manifest.json'
+if (-not (Test-Path -LiteralPath $genericManifest)) { throw 'emit-em-all wrote no signed manifest' }
+# The directory is checked for change by CRC-32C; it records and computes no SHA-256.
+$genericManifestText = Get-Content -LiteralPath $genericManifest -Raw
+if ($genericManifestText -notmatch '"source_crc32c":"' -or $genericManifestText -match 'artifact_sha256') { throw 'the emit-em-all manifest does not record sources by CRC-32C alone' }
+Remove-Item -LiteralPath $genericManifest
+$genericUnsigned = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $genericUnsigned -notmatch 'rebuilt main' -or $genericUnsigned -match 'kept') { throw "an unsigned artifact directory was trusted: $genericUnsigned" }
+$genericSigned = (& $compiler emit-em-all (Join-Path $genericFixture 'src\main.e') $repo 'x64' 'windows' $genericArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $genericSigned -match 'rebuilt') { throw "a rebuilt directory was not signed again: $genericSigned" }
+# A module that reaches a generic type only through generic calls is rebuilt when the
+# type's fields are reordered: its instances read the layout.
+$layoutFixture = Join-Path $PSScriptRoot 'fixtures\link\incremental_generic_layout'
+$layoutScratch = Join-Path $testBuild 'incremental-layout-scratch'
+$layoutArtifacts = Join-Path $testBuild 'incremental-layout-artifacts'
+foreach ($layoutDir in @($layoutScratch, $layoutArtifacts)) { if (Test-Path -LiteralPath $layoutDir) { Remove-Item -LiteralPath $layoutDir -Recurse -Force } }
+New-Item -ItemType Directory -Force -Path (Join-Path $layoutScratch 'src'), $layoutArtifacts | Out-Null
+Copy-Item -Path (Join-Path $layoutFixture 'src\*.e') -Destination (Join-Path $layoutScratch 'src')
+$layoutFirst = & $compiler emit-em-all (Join-Path $layoutScratch 'src\main.e') $repo 'x64' 'windows' $layoutArtifacts
+if ($LASTEXITCODE -ne 0 -or $layoutFirst -ne 'compiled modules written') { throw 'the generic layout fixture did not compile to artifacts' }
+Copy-Item -LiteralPath (Join-Path $layoutFixture 'edits\box_layout.e') -Destination (Join-Path $layoutScratch 'src\box.e') -Force
+$layoutEdited = (& $compiler emit-em-all (Join-Path $layoutScratch 'src\main.e') $repo 'x64' 'windows' $layoutArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $layoutEdited -notmatch 'rebuilt main') { throw "a generic type's reordered fields kept a module whose instances read them: $layoutEdited" }
+# A race between the crew's workers shows as an image that differs from run to run: the
+# compiler's own source, over three worker schedules twice, is the `-j 1` image.
+$stressFirst = Join-Path $testBuild 'crew-stress-first.exe'
+$stressNext = Join-Path $testBuild 'crew-stress-next.exe'
+$stressWritten = & $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $stressFirst --release -j 1 2>$null
+if ($LASTEXITCODE -ne 0 -or $stressWritten -ne 'executable written') { throw 'the stress build at -j 1 failed' }
+foreach ($stressRound in 1, 2) {
+    foreach ($stressJobs in @('-j', '3', '--perturb'), @('-j', '8'), @('-j', '8', '--perturb')) {
+        $stressWritten = & $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $stressNext --release @stressJobs 2>$null
+        if ($LASTEXITCODE -ne 0 -or $stressWritten -ne 'executable written') { throw "the stress build at $stressJobs failed" }
+        if ((Get-FileHash -LiteralPath $stressFirst).Hash -ne (Get-FileHash -LiteralPath $stressNext).Hash) { throw "the compiler's image at $stressJobs is not the -j 1 image (round $stressRound)" }
+    }
+}
 # The device-reached edit case (C096, D4202; spec section 12, D24 and D36): a kernel's
 # helper chain lives in two other modules and its device copy in the kernel module's
 # `K$spirv`, so a body edit two modules away rebuilds the kernel's module and nothing

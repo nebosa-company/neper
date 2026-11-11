@@ -2247,6 +2247,20 @@ fn unmark_seeded_aggregates(c: *check.Checker, g: *graph.Graph, marks: []u8) {
     }
 }
 
+fn mark_signature_aggregates(c: *check.Checker, function_index: usize, module_index: usize, marks: []u8, changed: *bool) {
+    let function = c.functions[function_index]
+    var parameter_at = 0usize
+    while parameter_at < function.parameter_count {
+        if function.first_parameter + parameter_at < c.parameter_count { mark_type_aggregates(c, c.parameters[function.first_parameter + parameter_at].ty, module_index, marks, changed) }
+        parameter_at += 1usize
+    }
+    var return_at = 0usize
+    while return_at < function.return_count {
+        if function.first_return + return_at < c.return_type_count { mark_type_aggregates(c, c.return_types[function.first_return + return_at], module_index, marks, changed) }
+        return_at += 1usize
+    }
+}
+
 fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, marks: []u8) {
     if module_index >= g.count { ret }
     var changed = false
@@ -2257,21 +2271,22 @@ fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
         let (dependency_name, records_dependency) = module_dependency_reference(builder, module_index, at)
         if records_dependency && builder.function_refs[at].module_index < g.count {
             let (checked_function, found_function) = find_checked_function(c, builder.function_refs[at].module_index, dependency_name)
-            if found_function {
-                let function = c.functions[checked_function]
-                var parameter_at = 0usize
-                while parameter_at < function.parameter_count {
-                    if function.first_parameter + parameter_at < c.parameter_count { mark_type_aggregates(c, c.parameters[function.first_parameter + parameter_at].ty, module_index, marks, &changed) }
-                    parameter_at += 1usize
-                }
-                var return_at = 0usize
-                while return_at < function.return_count {
-                    if function.first_return + return_at < c.return_type_count { mark_type_aggregates(c, c.return_types[function.first_return + return_at], module_index, marks, &changed) }
-                    return_at += 1usize
-                }
-            }
+            if found_function { mark_signature_aggregates(c, checked_function, module_index, marks, &changed) }
         }
         walk += 1usize
+    }
+    // The instances the module makes of another module's generic functions: an
+    // instance's signature names the instance of a generic type the module may never
+    // spell (`list.init[usize]` returns a `List[usize]`), and its body, lowered here,
+    // reads that layout.
+    // ponytail: signature types only; a foreign generic type an instance's body uses
+    // without taking or returning it is not marked. Walk the instance's locals if one appears.
+    let (instance_first, instance_end) = span_of(c, span_instances(), module_index)
+    var instance_at = instance_first
+    while instance_at < instance_end {
+        let (template_index, foreign_template) = owned_template_instance(c, module_index, instance_at)
+        if foreign_template { mark_signature_aggregates(c, instance_at, module_index, marks, &changed) }
+        instance_at += 1usize
     }
     // The aggregates the module spells as `q.Name`.
     let module = g.modules[module_index]
@@ -2688,7 +2703,9 @@ fn module_dependency_reference(builder: *nir.Builder, module_index: usize, at: u
     ret (dependency_name, records_dependency)
 }
 
-fn owned_template_dependency(c: *check.Checker, module_index: usize, at: usize) -> (usize, bool) {
+// An instance the module owns of a generic function another module declares, and that
+// template.
+fn owned_template_instance(c: *check.Checker, module_index: usize, at: usize) -> (usize, bool) {
     if at >= c.function_count { ret (0usize, false) }
     let generic = c.function_generics[at]
     if !generic.instance || c.functions[at].generic { ret (0usize, false) }
@@ -2698,6 +2715,13 @@ fn owned_template_dependency(c: *check.Checker, module_index: usize, at: usize) 
     if generic.formatter || generic.launcher { ret (0usize, false) }
     let template_index = generic.template_index
     if template_index >= c.function_count || c.functions[template_index].module_index == module_index { ret (0usize, false) }
+    ret (template_index, true)
+}
+
+// The first of them per template: one dependency edge each.
+fn owned_template_dependency(c: *check.Checker, module_index: usize, at: usize) -> (usize, bool) {
+    let (template_index, owned) = owned_template_instance(c, module_index, at)
+    if !owned { ret (0usize, false) }
     let (first, end) = span_of(c, span_instances(), module_index)
     var prior = first
     if prior < check.own_rows(c) { prior = check.own_rows(c) }

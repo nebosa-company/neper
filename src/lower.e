@@ -2785,8 +2785,8 @@ fn explain_append(oracle: *nir.Builder, piece: str) {
 fn find_inline_entry(builder: *nir.Builder, module_index: usize, name: str, instance: usize) -> (usize, bool) {
     var at = 0usize
     while at < builder.inline_entry_count {
-        let entry = builder.inline_entries[at]
-        if entry.module_index == module_index && entry.instance == instance && check.same(entry.name, name) { ret (at, true) }
+        // Read in place: copying the whole entry per step was the cost of the scan.
+        if builder.inline_entries[at].module_index == module_index && builder.inline_entries[at].instance == instance && check.same(builder.inline_entries[at].name, name) { ret (at, true) }
         at += 1usize
     }
     ret (0usize, false)
@@ -4645,6 +4645,22 @@ fn argument_can_change(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     let (binding, bound) = find_binding(bindings, binding_count, name)
     if !bound { ret true }
     if binding.ty.kind == .Pointer || binding.ty.kind == .Slice || binding.ty.kind == .String { ret true }
+    // The lists collected when the function was opened answer it; the walk of the
+    // function's tokens per argument below is only for a function that overflowed them.
+    if !builder.proof_addressed_overflow && !builder.proof_sliced_overflow {
+        let text = g.modules[module_index].text
+        var listed = 0usize
+        while listed < builder.proof_addressed_count {
+            if check.same(lex.token_text(text, c.tokens[builder.proof_addressed[listed]]), name) { ret true }
+            listed += 1usize
+        }
+        listed = 0usize
+        while listed < builder.proof_sliced_count {
+            if check.same(lex.token_text(text, c.tokens[builder.proof_sliced[listed]]), name) { ret true }
+            listed += 1usize
+        }
+        ret false
+    }
     var at = builder.proof_function_start
     while at + 1usize < builder.proof_function_end && at + 4usize < c.token_count {
         if c.tokens[at].kind == .PunctAmp && c.tokens[at + 1usize].kind == .Identifier {
@@ -9166,6 +9182,8 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     builder.proof_count = 0usize
     builder.proof_addressed_count = 0usize
     builder.proof_addressed_overflow = false
+    builder.proof_sliced_count = 0usize
+    builder.proof_sliced_overflow = false
     // The addressed locals, and the lengths held in a local (D452): `let n = x.len`
     // anywhere in the function; one walk of its tokens over a local view (D931).
     builder.proof_alias_count = 0usize
@@ -9179,6 +9197,18 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
                 builder.proof_addressed_count += 1usize
             } else {
                 builder.proof_addressed_overflow = true
+            }
+        }
+        if kind == .Identifier && scan + 4usize < tokens.len {
+            var ranged = tokens[scan + 1usize].kind == .PunctLBracket && bracket_has_range(c, g, module_index, scan + 1usize)
+            if !ranged && tokens[scan + 1usize].kind == .PunctDot && tokens[scan + 2usize].kind == .Identifier && tokens[scan + 3usize].kind == .PunctLBracket { ranged = bracket_has_range(c, g, module_index, scan + 3usize) }
+            if ranged {
+                if builder.proof_sliced_count < builder.proof_sliced.len {
+                    builder.proof_sliced[builder.proof_sliced_count] = scan
+                    builder.proof_sliced_count += 1usize
+                } else {
+                    builder.proof_sliced_overflow = true
+                }
             }
         }
         if kind == .KwLet && scan + 5usize < builder.proof_function_end && scan + 5usize < tokens.len && tokens[scan + 1usize].kind == .Identifier && tokens[scan + 2usize].kind == .PunctAssign && tokens[scan + 3usize].kind == .Identifier && tokens[scan + 4usize].kind == .PunctDot && tokens[scan + 5usize].kind == .Identifier {
