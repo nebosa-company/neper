@@ -740,3 +740,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 328 (2026-11-11): `grid-lanes/intrinsic-sizing/*-001-auto` — measured, not fixed.**
   - Printing the lane inputs for `cols-001-auto`: an auto item has `cmin = cmax = 15` (the placeholder glyph advance at 15px) but the item with `width: 2ch` has 30, so `ch` resolves as 1.0 em there; every lane then sizes to 30 and the container comes out 81 wide against the reference's ~66. The reference writes the same `2ch` as `repeat(4, 2ch)` tracks and renders ~15px per track, i.e. 0.5 em. Where the two diverge (item `width` vs track list) is not found; `style.e` line ~1768 sets `ch = 1.0` only for an Ahem family, which this test does not use.
   - Next probe: print `ch` at the point `width: 2ch` resolves for the item, and for the track list.
+
+- **Round 329 (2026-11-11): grid track lists resolve `ch` like the cascade does (1 em in this harness).**
+  - Probes in `tmp/ch`: `1ch` equals `1em` (15px at a 15px font) for monospace and serif alike, so every `width: Nch` is N em; `grid_build` built its track-list context with `ch = 0.5`, so `repeat(4, 2ch)` was half the size of the same `2ch` on an item. `ctx.ch = 1.0` there. css-grid 966 -> 969: `grid-lanes-align-content-004`, `intrinsic-sizing-rows-005`, `-007`; none regress.
+  - Not found: why the cascade uses 1.0 while `new_context` says 0.5 (the other `new_context` callers still carry 0.5), and `ex` is neither 7.5 nor 15 at 15px.
