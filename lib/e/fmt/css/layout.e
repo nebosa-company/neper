@@ -1420,6 +1420,11 @@ fn resolve_edges(l: *Layout, b: u32, cbw: f64) {
         bb.padding[i] = maxf(0.0f64, resolve_or(s.padding[i], base, 0.0f64))
         i += 1usize
     }
+    // An inline split around a block child is not a box of its own: its edges belong to the empty fragments.
+    if s.display == .Inline && !bb.inline_level && !bb.anonymous && bb.inner == .Flow {
+        bb.border = [4]f64{0.0f64, 0.0f64, 0.0f64, 0.0f64}
+        bb.padding = [4]f64{0.0f64, 0.0f64, 0.0f64, 0.0f64}
+    }
     // A table, row, cell... of a collapsed-border table takes the half of each collapsed edge that falls inside it.
     if bb.coll { bb.border = bb.cbd }
     if bb.inner == .Table && s.border_collapse == .Collapse && !bb.coll {
