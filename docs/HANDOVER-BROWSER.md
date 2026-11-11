@@ -802,3 +802,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 344 (2026-11-11): an empty block's margins were counted twice under a parent that had already collapsed them through.**
   - `peek_top` already folds every self-collapsing first child's top and bottom margin into the parent's shift; `layout_block_child` then added the child's bottom margin again while `consumed.v` was set (`<div style="margin:3px 0"></div>` first in a body gave 6px, not 3px). That branch now adds nothing while `consumed.v`, and `inner_collapsed` brings the margins of empty blocks nested in an empty block into both paths. `abspos-022` passes (probe: `tmp/ch/m`).
   - positioning 454 -> 455; normal-flow 659, tables 222, generated-content 176, corpus 191, css-grid 971 (identical failure set) unchanged.
+
+- **Round 345 (2026-11-11): an inline containing block takes its rectangle from its line fragments, and a relative inline carries its abspos static position.**
+  - An absolutely positioned box whose containing block is a plain inline (no blocks inside) measured against a 0x0 box at the container origin; `layout_abs` now uses the union of the inline's `Segment` fragments (padding box, plus the `relative_chain` offset). A `position: relative` inline also moves the static position of the abspos boxes in it (`abspos-inline-007`, `-008`).
+  - positioning 455 -> 457; normal-flow 659, tables 222, generated-content 176, corpus 191, css-grid 971 (identical failure set) unchanged.
