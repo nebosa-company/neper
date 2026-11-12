@@ -942,3 +942,7 @@ The intrinsic-rows path dropped every item with `rn > 1`. A non-subgrid item on 
 ## Round 380 — negative: baseline shim for auto-placed items when there is one row
 
 Letting `layout_lanes_rows` apply the Round 378 baseline shim to auto-placed items when `g.nr == 1` left css-grid at 1031 with an identical FAIL list, so `grid-lanes-baseline-alignment-affects-intrinsic-size-002` is not blocked by explicit placement alone (it also uses `align-self: last baseline` and `minmax(0, min-content/max-content)` rows). Reverted.
+
+## Round 381 — triage of the 487 remaining css-grid failures (r201, 1031 of 1545)
+
+By directory: grid-lanes/subgrid 116 (grid-subgridded-to-grid-lanes: track-sizing 40, gap 17, line-names 12, baseline 5, row 3; grid-lanes-subgridded-to-grid-lanes: row 6, column 5; grid-lanes-subgridded-to-grid: 9), grid-lanes/track-sizing 51, alignment 50, abspos 42, grid-lanes/intrinsic-sizing 33, grid-lanes/alignment 30, grid-lanes/item-placement 28, grid-lanes/tentative 27, grid-lanes/baseline 23, grid-items 22. `column-line-names-006` renders mostly right: the differences are in a few of its twelve cases (the rtl `.hr` ones and the `[a] [a]` spans), so a per-case probe of the subgrid name resolution in `subgrid_prepare_lane` is the next step; `subgrid_prepare_lane` renumbers parent names but a subgrid's own `[names]` after `subgrid` and a `grid-column-end: span N` item are not obviously merged for lanes.
