@@ -918,3 +918,7 @@ css-grid 1015 -> 1020 of 1545. Fixed 11: `grid-size-with-orthogonal-child-002`, 
 ## Round 374 — negative: Round 373 growth only for rows
 
 Restricting the indefinite-space growth to `!is_col` gave css-grid 1013: the 11 gains are column-side (grid-inline-first-*, `row-*-max-content`, margins/baseline-grid) and are lost, while `grid-size-with-orthogonal-child-001`, `grid-lanes-intrinsic-sizing-rows-005`, `grid-lanes-subgrid-005a` and `standalone-axis-size-005` come back. So four of the six Round 373 regressions (and the earlier rows-005) come from the column side; `baseline-alignment-affects-intrinsic-size-002/004/008` stay failing in both. Reverted to Round 373 (1020). Next: find what distinguishes the column cases that regress (percentage block-size on a shrink-to-fit grid, subgrid, orthogonal) from those that gain.
+
+## Round 375 — orthogonal grid item column contribution measured at fixed row height
+
+When an orthogonal item spans only fixed-size rows, its column contribution is its laid-out width at that block size (`flex_place_item` with the row sum), not its content-width estimate. css-grid 1020 -> 1022: fixed `grid-size-with-orthogonal-child-001`, `column-subgrid-with-row-standalone-axis-size-001/-002`; broken `grid-template-rows-fit-content-001`. A `mx = mn` fallback for non-fixed rows also fixed `grid-lanes-intrinsic-sizing-rows-005` (1023) but broke the same test, so it was dropped. css-sizing unchanged (335); css-position 60/129 as before.
