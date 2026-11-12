@@ -8838,6 +8838,13 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
             }
             round += 1usize
         }
+    } else if !min_mode {
+        // Indefinite free space: every track grows to its growth limit (the container is sized to its max-content).
+        t = 0usize
+        while t < n {
+            if tr[t].max.kind != 2u8 && tr[t].limit < 1000000.0f64 { tr[t].base = maxf(tr[t].base, tr[t].limit) }
+            t += 1usize
+        }
     }
     // Flexible tracks.
     var sum_fr = 0.0f64
