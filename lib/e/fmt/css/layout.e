@@ -8433,6 +8433,27 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
                     }
                 }
             }
+            // An orthogonal item's column extent is its block size: it has no min/max-content spread (its inline-level
+            // content stacks along the other axis, where `content_widths` sums it as a line).
+            if is_orthogonal(l, kid) {
+                // With fixed rows its inline size is known, so its block size is what the content lays out to at that size.
+                var osum = 0.0f64
+                var ofixed = true
+                var orr = 0usize
+                if r0 >= 0i32 { orr = usize(r0) }
+                let oend = orr + usize(rn)
+                while orr < oend {
+                    if orr < rtr.len && rtr.items[orr].min.kind == 0u8 && rtr.items[orr].max.kind == 0u8 { osum += rtr.items[orr].max.v } else { ofixed = false }
+                    orr += 1usize
+                }
+                if ofixed && osum > 0.0f64 {
+                    let obb = bx(l, kid)
+                    flex_place_item(l, kid, 100000.0f64, to_content_h(l, kid, osum - obb.margin[0usize] - obb.margin[2usize]))
+                    let obb2 = bx(l, kid)
+                    mn = obb2.w + obb2.margin[1usize] + obb2.margin[3usize]
+                    mx = mn
+                }
+            }
             it.cmin = mn
             it.cmax = mx
             var at = count
