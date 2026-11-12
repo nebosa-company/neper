@@ -20857,6 +20857,7 @@ fn is_empty(m: *const Matcher, el: html.NodeId) -> bool
 fn ascii_ci_eq(a: str, b: str) -> bool
 fn in_disabled_fieldset(m: *const Matcher, el: html.NodeId) -> bool
 fn in_first_legend(m: *const Matcher, el: html.NodeId, fieldset: html.NodeId) -> bool
+fn html_ci_attr(name: str) -> bool
 ```
 
 Selector matching over an HTML document (L040), after Vaper's `css/selector_matcher.dart`: a parsed selector from `e.fmt.css.selector` tested against an element of an `e.fmt.html` document by walking its combinators right to left from the key compound, with the simple selectors, the structural pseudo-classes, `:not()`, `:is()`, `:where()`, `:has()` and its relative lookahead, `:nth-*()` with An+B and `of S`, the attribute operators with the `i` flag, and the state and form pseudo-classes (`:hover`, `:focus`, `:checked`, `:disabled`, `:required`, `:in-range`, `:valid`, `:invalid`, ...) over a `State` the host installs. Checked against Vaper's own matcher over 560 random documents and selector lists on both hosts (D2343).
@@ -25020,7 +25021,7 @@ type CaptionSide = enum u8 { Top, Bottom }
 type EmptyCells = enum u8 { Show, Hide }
 type FlexDirection = enum u8 { Row, RowReverse, Column, ColumnReverse }
 type FlexWrap = enum u8 { Nowrap, Wrap, WrapReverse, Balance }
-type Align = enum u8 { Normal, Start, End, FlexStart, FlexEnd, Center, Stretch, SpaceBetween, SpaceAround, SpaceEvenly, Baseline, FirstBaseline, LastBaseline, SelfStart, SelfEnd, Left, Right, Safe, Unsafe, Auto }
+type Align = enum u8 { Normal, Start, End, FlexStart, FlexEnd, Center, Stretch, SpaceBetween, SpaceAround, SpaceEvenly, Baseline, FirstBaseline, LastBaseline, SelfStart, SelfEnd, Left, Right, Safe, Unsafe, Auto, FlowStart, FlowEnd }
 type DecorationStyle = enum u8 { Solid, Double, Dotted, Dashed, Wavy }
 type VAlign = enum u8 { Baseline, Sub, Super, Top, TextTop, Middle, Bottom, TextBottom, Length }
 const DECORATION_UNDERLINE: u8 = 1u8
@@ -25359,7 +25360,7 @@ fn table_widths(l: *Layout, t: u32) -> (f64, f64)
 fn table_min_width(l: *Layout, t: u32) -> f64
 fn distribute_columns(l: *Layout, ti: u32, tw: f64, fixed_layout: bool)
 fn is_baseline_valign(v: style.VAlign) -> bool
-fn layout_table(l: *Layout, t: u32, cw: f64, ch: f64) -> f64
+fn layout_table(l: *Layout, t: u32, cw: f64, ch_spec: f64) -> f64
 type FlexItem = struct { box: u32, order: i64, grow: f64, shrink: f64, basis: f64, hyp: f64, target: f64, min_main: f64, max_main: f64, frozen: bool, ms: f64, me: f64, cs: f64, ce: f64, ams: bool, ame: bool, acs: bool, ace: bool, main_ex: f64, cross_ex: f64, cross: f64, up: f64, align: style.Align, pos_main: f64, pos_cross: f64 }
 fn flex_is_row(s: *const style.Style) -> bool
 fn flex_gap(len: style.Len, basis: f64) -> f64
@@ -25377,7 +25378,7 @@ type GName = struct { name: str, line: i32 }
 type GArea = struct { name: str, r0: i32, r1: i32, c0: i32, c1: i32 }
 type LineSpec = struct { kind: u8, n: i32, name: str, span_name: bool }
 type GItem = struct { box: u32, order: i64, rs: i32, rn: i32, cs: i32, cn: i32, cmin: f64, cmax: f64, rmin: f64, rmax: f64 }
-type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64, item_min: f64, item_max: f64 }
+type GridParse = struct { c: style.Context, em: f64, avail: f64, gap: f64, item_min: f64, item_max: f64, min_avail: f64 }
 fn extra_text(s: *const style.Style, name: str) -> (str, bool)
 fn push_name(names: *list.List[GName], name: str, line: i32)
 fn grid_split(a: *mem.Arena, s: str) -> []const str
@@ -25428,7 +25429,7 @@ type ClampScan = struct { seen: usize, n: usize, tail: bool }
 type ColRule = struct { box: u32, x: f64, y: f64, w: f64, h: f64, color: u32 }
 type Counter = struct { n: usize, mb: f64 }
 type Edge = struct { w: f64, bs: style.BorderStyle, color: u32, prio: u8, set: bool }
-type GridGeom = struct { box: u32, nc: usize, nr: usize, cpos: []f64, csz: []f64, rpos: []f64, rsz: []f64, cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32, w: f64, rtl: bool }
+type GridGeom = struct { box: u32, nc: usize, nr: usize, cpos: []f64, csz: []f64, rpos: []f64, rsz: []f64, cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32, w: f64, rtl: bool, stack: u8, ext: f64 }
 fn bidi_order_pieces(x: *Ifc, lead: usize, tail: usize) -> (bool, usize)
 fn box_ratio(l: *const Layout, b: u32) -> (f64, bool)
 fn build_transposed(l: *Layout)
@@ -25458,7 +25459,7 @@ fn is_spanner(l: *const Layout, c: u32) -> bool
 fn is_table_part(inner: Inner) -> bool
 fn lanes_dense(cs: *const style.Style) -> bool
 fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64
-fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64) -> f64
+fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64
 fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, ch: f64) -> f64
 fn layout_multicol_spans(l: *Layout, b: u32, cw: f64, cols: Cols, fc: *Flow) -> f64
 fn layout_orthogonal(l: *Layout, c: u32, pbase: f64, pch: f64, fi: f64, fb: f64)
@@ -25578,6 +25579,20 @@ fn text_wrap_balance(cs: *const style.Style) -> bool
 fn transform_cb(l: *const Layout, b: u32) -> bool
 fn unquote_ellipsis(v: str) -> str
 fn width_limit(l: *Layout, b: u32, len: style.Len, cbw: f64) -> (f64, bool)
+fn axis_total(tr: []GTrack, n: usize, gap: f64) -> f64
+fn grid_item_width_h(l: *Layout, id: u32, cs: *const style.Style, area_w: f64, area_h: f64) -> f64
+fn height_limited(s: *const style.Style) -> bool
+fn inner_collapsed(l: *Layout, c: u32, cbw: f64) -> Margin
+fn is_split_inline(l: *const Layout, b: u32) -> bool
+fn lane_tier_ok(tier: u8, k: u8) -> bool
+fn lanes_all_lane_items(l: *Layout, g: *Grid, sub_items: []GItem, sub_n: usize, ex: []GItem, spans: bool) -> usize
+fn lanes_along_rows(cs: *const style.Style, g: *Grid) -> bool
+fn lanes_cap(l: *Layout, g: *Grid, cs: *const style.Style)
+fn lanes_register_geom(l: *Layout, b: u32, g: *Grid, cw: f64, columns: bool, ext: f64)
+fn lanes_span(tr: []GTrack, n: usize, gap: f64, fallback: f64) -> f64
+fn lanes_stack_align(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, columns: bool, extent: f64)
+fn lanes_tolerance(l: *Layout, cs: *const style.Style, total: f64) -> f64
+fn pick_run(ends: []f64, nl: usize, span: usize, tol: f64, prev: usize) -> usize
 ```
 
 ### `e.fmt.css.geom`
