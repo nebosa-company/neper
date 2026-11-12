@@ -9446,6 +9446,18 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         let outer = ib.h + ib.margin[0usize] + ib.margin[2usize]
         g.items[i].rmin = outer
         g.items[i].rmax = outer
+        if is_orthogonal(l, id) && l.vmode == 0u8 {
+            // The row axis is the item's inline axis: its min-content and max-content sizes are its contributions.
+            let old_vm = l.vmode
+            l.vmode = mode_code(is0)
+            clear_widths(l, id)
+            let (omn, omx) = content_widths(l, id)
+            l.vmode = old_vm
+            clear_widths(l, id)
+            let oex = ib.margin[0usize] + ib.margin[2usize] + ib.border[0usize] + ib.border[2usize] + ib.padding[0usize] + ib.padding[2usize]
+            g.items[i].rmin = omn + oex
+            g.items[i].rmax = omx + oex
+        }
         bl_on[i] = false
         var al0 = is0.align_self
         if al0 == .Auto { al0 = cs.align_items }
