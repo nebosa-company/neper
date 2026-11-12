@@ -904,3 +904,7 @@ Applying the Round 368 override to the lanes rows measurement fixed `row-explici
 ## Round 371 — negative: spanning items size lanes columns (`lanes_all_lane_items(..., true)`)
 
 Letting multi-lane items contribute to grid-lanes column sizing fixed `items/column-intrinsic-maximums` but broke `column-subgrid-grid-gap-002` and `column-auto-repeat-minmax-004`, and did not fix `column-track-sizing-002` (lanes renders column 2 at 0 against the reference 30/45/25; the copies placed at every start lane distribute the span's extra space wrongly). A correct fix needs the span item counted once at its real placement, which lanes only knows after laying out. Reverted.
+
+## Round 372 — diagnosis only: `grid-lanes-intrinsic-sizing-rows-005` fails in its reference
+
+The lanes side renders plausibly; the plain-grid reference (grids 2-4: `repeat(4,auto)` rows, `vertical-lr` items, `visibility:hidden` "0 0" items at `grid-column:3; grid-row:2..4`) renders every row 15px where 3ch (45px) is expected, and a blue bar paints past the grid's right edge in row 1. Isolated probe `tmp/ch/h/t.html` reproduces it with r189 (Round 368 build) and r190 (height-auto guard), so the hidden items' orthogonal max-content contribution is coming back as one character wide, not the "0 0" line, and something paints at the grid edge. Next: print `content_widths` for a `vertical-lr` "0 0" item inside a grid cell (placement past the implicit column may be the trigger), before touching sizing again.
