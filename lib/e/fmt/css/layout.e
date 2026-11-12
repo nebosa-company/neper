@@ -9493,7 +9493,10 @@ fn cross_offset(is: *const style.Style, cs: *const style.Style, free: f64) -> f6
     var al = is.align_self
     if al == .Auto { al = cs.align_items }
     if al == .Center { ret free / 2.0f64 }
-    if al == .End || al == .FlexEnd || al == .SelfEnd { ret free }
+    // `flow-start` / `flow-end` follow the lanes' flow: `track-reverse` swaps them with the physical edges.
+    let (_fr, track_rev) = lanes_reversal(cs)
+    if track_rev && al == .FlowStart { ret free }
+    if al == .End || al == .FlexEnd || al == .SelfEnd || (!track_rev && al == .FlowEnd) { ret free }
     ret 0.0f64
 }
 
