@@ -66,5 +66,27 @@ for d in advanced aggregate; do
   run "dis_$d" dis-file "$s" "$T" x64 linux --json
   run "exp_$d" emit-executable "$s" "$T" x64 linux "$B/exp_$d" --explain --json --stats-full --time
 done
+# The tooling surface (tool.e, the project and query commands of main.e) and the encoder self tests.
+CT=$REPO/tests/conformance/tools
+run self_test self-test
+run tool_tokens tokens --json --path every_kind.e "$REPO/tests/conformance/tokens/every_kind.e"
+run tool_parse parse --json --path recovery.e "$REPO/tests/conformance/parse/recovery.e"
+run tool_fmt fmt-file "$CT/fmt.e" --json
+run tool_fmtreject fmt-file "$CT/fmt_reject.e" --json
+run tool_index index-file "$CT/index.e" "$T" x64 linux --json
+run tool_explain explain-file "$CT/explain.e" "$T" x64 linux --json
+run tool_explainarm explain-file "$CT/explain_arm.e" "$T" x64 linux --json
+run tool_context context-file "$CT/explain.e" "$T" x64 linux --json --symbol explain.main --budget 8
+run tool_uses uses-file "$CT/explain.e" "$T" x64 linux --json --symbol explain.same
+run tool_rename plan-rename-file "$CT/explain.e" "$T" x64 linux --json --symbol explain.same --to alike
+run tool_manifest build-manifest-file "$CT/manifest.e" "$T" x64 linux --json
+run tool_batch query-batch "$CT/contract.e" "$T" x64 linux --json --batch "$CT/batch.txt"
+run tool_dis dis-file "$CT/dis.e" "$T" x64 linux --json
+run tool_eval eval '1usize << 40' "$T" x64 linux
+run tool_run run "$CT/run_trap_module/src/main.e" "$T" x64 linux "$B/trap.out" --json
+run tool_testfile test-file "$CT/test.e" "$T" x64 linux "$B" --json
+run tool_testproj test-project "$CT/test_project" "$T" x64 linux "$B" --json
+run tool_checkproj check-project "$CT/check_project" "$T" x64 linux "$B" --json
+run tool_indexproj index-project "$CT/index_project" "$T" x64 linux "$B" --json
 wait
 echo "done runs=$(ls "$R"/*.out | wc -l)"

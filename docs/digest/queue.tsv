@@ -223,5 +223,5 @@ C265	compiler	0	1059	a syntax error exits with its diagnostic: the error path mu
 C266	compiler	0	1110	the bootstrap builds the tree again: refresh it, or make the seed path the contract	Found while getting tests/selfhost to reach its DuckDB fixture.
 C267	compiler	0	1450	emitted binaries are reproducible: no field may depend on which compiler binary ran	Found while verifying 18 bootstrap-lint fixes by differential build.
 C269	compiler	0	2537	the artifact path emits the same debug info as the whole-program path	Found once crew_windows could finally be reached: 'crew_windows at -j 1 is not the image linked from its artifacts (--time)'.
-C304	compiler	0.2	1084	every src file with no or little coverage has a fixture that reaches it	Partial.
+C304	compiler	0.5	1574	every src file with no or little coverage has a fixture that reaches it	Partial.
 C305	compiler	0	749	compiler coverage reaches 100% with a ratchet floor in the suite	Open, after C304.
