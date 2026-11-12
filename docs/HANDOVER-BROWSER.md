@@ -896,3 +896,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 ## Round 369 — negative: skipping the orthogonal row contribution when `height` is definite
 
 Guarding the Round 368 override with `height: auto` lost the three lanes intrinsic-sizing gains (css-grid 1013) and did not fix `row-explicit-placement-006` or `grid-lanes-intrinsic-sizing-rows-005` (only `column-grid-lanes-item-baseline-004a` recovered). Reverted; the Round 368 behavior (1015) stays. The two remaining regressions are not an explicit-`height` problem.
+
+## Round 370 — negative: orthogonal contributions in `layout_lanes_rows` too
+
+Applying the Round 368 override to the lanes rows measurement fixed `row-explicit-placement-006` and `grid-lanes-intrinsic-sizing-rows-001-fr` but broke `-001-mix1`, `-002-fr` and `-002-mix1` (net -1 within grid-lanes); `rows-005` fails either way. Reverted. The lanes path's own contribution model (natural height at a fit-content width) is what those mix/fr tests agree with, so the grid-vs-lanes mismatch is in the reference rendering, not a missing override.
