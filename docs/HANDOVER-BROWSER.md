@@ -844,3 +844,6 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 355 (2026-11-12): `flow-start`/`flow-end` follow `track-reverse` in lane alignment.**
   - `cross_offset` (the alignment along the lane axis in row lanes) ignored `flow-start` and `flow-end`, so both acted as `start`. In a `track-reverse` container `flow-start` is the physical end and `flow-end` the physical start; without it `flow-end` is the end. `row-track-reverse-align-items-001` passes.
   - css-grid 1010 -> 1011; other suites unchanged.
+
+- **Round 356 (2026-11-12): `row-fill-reverse-align-items-002` read; not changed.**
+  - A `last baseline` row-lanes container narrower than its min-content items (`width: 180px`, six `min-content` items): the reference is a column of two `flex-direction: row` lines with `align-items: last baseline` and overflows to the right, ours reflects the overflowing stack and spills left of the container (x < 0). The test needs both the last-baseline alignment in lanes and the overflow direction of a `fill-reverse` stack that does not fit; neither is derivable from this one pair, so nothing was changed. Related open: `-003`, `row-fill-reverse-align-items-indefinite-size-002`, `row-justify-items-016`.
