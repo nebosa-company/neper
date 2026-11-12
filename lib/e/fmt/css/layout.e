@@ -8574,6 +8574,8 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
         tr[t].pos = 0.0f64
         t += 1usize
     }
+    // Tracks whose growth limit a single-span item set.
+    var fixed_lim: [64]bool = zero
     // Items covering one track.
     var i = 0usize
     while i < nitems {
@@ -8600,6 +8602,7 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
                 var contribution = mx
                 if mk == 4u8 { contribution = mn }
                 if tr[c].limit >= inf() { tr[c].limit = contribution } else { tr[c].limit = maxf(tr[c].limit, contribution) }
+                if c < 64usize { fixed_lim[c] = true }
             }
         }
         i += 1usize
@@ -8611,7 +8614,92 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
         if tr[t].limit < tr[t].base { tr[t].limit = tr[t].base }
         t += 1usize
     }
-    // Items covering several tracks (those touching flexible tracks size those tracks later).
+    // Items covering several tracks, first the base sizes (all items' min-content contributions, then the max-content ones
+    // for tracks whose minimum is `max-content`), then the growth limits (those touching flexible tracks size those later).
+    i = 0usize
+    while i < nitems {
+        var sa = items[i].rs
+        var na = items[i].rn
+        var mna = items[i].rmin
+        if is_col {
+            sa = items[i].cs
+            na = items[i].cn
+            mna = items[i].cmin
+        }
+        if na > 1i32 && usize(sa + na) <= n {
+            var flex_a = false
+            var cover_a = gap * f64(na - 1i32)
+            var intr_a = 0usize
+            var qa = usize(sa)
+            while qa < usize(sa + na) {
+                if tr[qa].max.kind == 2u8 { flex_a = true }
+                cover_a += tr[qa].base
+                if is_intrinsic_min(tr[qa].min.kind) { intr_a += 1usize }
+                qa += 1usize
+            }
+            if !flex_a && mna > cover_a && intr_a > 0usize {
+                var need_a = mna - cover_a
+                var rounds_a = 0usize
+                while need_a > 0.0001f64 && rounds_a < 8usize {
+                    var takers_a = 0usize
+                    qa = usize(sa)
+                    while qa < usize(sa + na) {
+                        if is_intrinsic_min(tr[qa].min.kind) && (qa >= 64usize || !fixed_lim[qa] || tr[qa].max.kind != 6u8 || tr[qa].limit - tr[qa].base > 0.0001f64) { takers_a += 1usize }
+                        qa += 1usize
+                    }
+                    if takers_a == 0usize { break }
+                    let share_a = need_a / f64(takers_a)
+                    need_a = 0.0f64
+                    qa = usize(sa)
+                    while qa < usize(sa + na) {
+                        if is_intrinsic_min(tr[qa].min.kind) && (qa >= 64usize || !fixed_lim[qa] || tr[qa].max.kind != 6u8 || tr[qa].limit - tr[qa].base > 0.0001f64) {
+                            var take_a = share_a
+                            if qa < 64usize && fixed_lim[qa] && tr[qa].max.kind == 6u8 { take_a = minf(share_a, tr[qa].limit - tr[qa].base) }
+                            tr[qa].base += take_a
+                            need_a += share_a - take_a
+                        }
+                        qa += 1usize
+                    }
+                    rounds_a += 1usize
+                }
+            }
+        }
+        i += 1usize
+    }
+    // `max-content` minimums: the items' max-content contributions raise the bases of those tracks.
+    i = 0usize
+    while i < nitems {
+        var sm = items[i].rs
+        var nm = items[i].rn
+        var mxm = items[i].rmax
+        if is_col {
+            sm = items[i].cs
+            nm = items[i].cn
+            mxm = items[i].cmax
+        }
+        if min_mode { mxm = 0.0f64 }
+        if nm > 1i32 && usize(sm + nm) <= n {
+            var flex_m = false
+            var cover_m = gap * f64(nm - 1i32)
+            var maxmin = 0usize
+            var qm = usize(sm)
+            while qm < usize(sm + nm) {
+                if tr[qm].max.kind == 2u8 { flex_m = true }
+                cover_m += tr[qm].base
+                if tr[qm].min.kind == 5u8 { maxmin += 1usize }
+                qm += 1usize
+            }
+            if !flex_m && maxmin > 0usize && mxm > cover_m {
+                let share_m = (mxm - cover_m) / f64(maxmin)
+                qm = usize(sm)
+                while qm < usize(sm + nm) {
+                    if tr[qm].min.kind == 5u8 { tr[qm].base += share_m }
+                    qm += 1usize
+                }
+            }
+        }
+        i += 1usize
+    }
     i = 0usize
     while i < nitems {
         var start2 = items[i].rs
@@ -8640,11 +8728,30 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
             }
             if !has_flex {
                 if mn2 > cover && intrinsic > 0usize {
-                    let share = (mn2 - cover) / f64(intrinsic)
-                    q = usize(start2)
-                    while q < usize(start2 + span2) {
-                        if is_intrinsic_min(tr[q].min.kind) { tr[q].base += share }
-                        q += 1usize
+                    // Equal shares, but a track a single item already sized takes no more than its limit; the rest goes on.
+                    var need = mn2 - cover
+                    var rounds = 0usize
+                    while need > 0.0001f64 && rounds < 8usize {
+                        var takers = 0usize
+                        q = usize(start2)
+                        while q < usize(start2 + span2) {
+                            if is_intrinsic_min(tr[q].min.kind) && (q >= 64usize || !fixed_lim[q] || tr[q].limit - tr[q].base > 0.0001f64) { takers += 1usize }
+                            q += 1usize
+                        }
+                        if takers == 0usize { break }
+                        let share = need / f64(takers)
+                        need = 0.0f64
+                        q = usize(start2)
+                        while q < usize(start2 + span2) {
+                            if is_intrinsic_min(tr[q].min.kind) && (q >= 64usize || !fixed_lim[q] || tr[q].limit - tr[q].base > 0.0001f64) {
+                                var take = share
+                                if q < 64usize && fixed_lim[q] { take = minf(share, tr[q].limit - tr[q].base) }
+                                tr[q].base += take
+                                need += share - take
+                            }
+                            q += 1usize
+                        }
+                        rounds += 1usize
                     }
                 }
                 var growable = 0usize
@@ -8663,13 +8770,22 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
                         if tr[q].max.kind == 5u8 { tier = 1u8 } else if (tr[q].max.kind == 3u8 || tr[q].max.kind == 6u8) && tier != 1u8 { tier = 2u8 }
                         q += 1usize
                     }
+                    // Among the `auto` and `fit-content()` tracks, those a single item already sized do not take more while another can.
+                    var skip_owned = false
+                    if tier == 2u8 {
+                        q = usize(start2)
+                        while q < usize(start2 + span2) {
+                            if (tr[q].max.kind == 3u8 || tr[q].max.kind == 6u8) && (q >= 64usize || !fixed_lim[q]) { skip_owned = true }
+                            q += 1usize
+                        }
+                    }
                     while extra > 0.0001f64 && pass < 8usize {
                         var open = 0usize
                         q = usize(start2)
                         while q < usize(start2 + span2) {
                             var room = inf()
                             if tr[q].max.kind == 6u8 { room = maxf(tr[q].max.v, tr[q].base) - tr[q].limit }
-                            if is_intrinsic_max(tr[q].max.kind) && room > 0.0001f64 && lane_tier_ok(tier, tr[q].max.kind) { open += 1usize }
+                            if is_intrinsic_max(tr[q].max.kind) && room > 0.0001f64 && lane_tier_ok(tier, tr[q].max.kind) && !(skip_owned && q < 64usize && fixed_lim[q]) { open += 1usize }
                             q += 1usize
                         }
                         if open == 0usize { break }
@@ -8679,7 +8795,7 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
                         while q < usize(start2 + span2) {
                             var room2 = inf()
                             if tr[q].max.kind == 6u8 { room2 = maxf(tr[q].max.v, tr[q].base) - tr[q].limit }
-                            if is_intrinsic_max(tr[q].max.kind) && room2 > 0.0001f64 && lane_tier_ok(tier, tr[q].max.kind) {
+                            if is_intrinsic_max(tr[q].max.kind) && room2 > 0.0001f64 && lane_tier_ok(tier, tr[q].max.kind) && !(skip_owned && q < 64usize && fixed_lim[q]) {
                                 let take = minf(share2, room2)
                                 tr[q].limit += take
                                 extra += share2 - take
