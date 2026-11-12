@@ -6890,7 +6890,11 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             } else {
                 let (mn, mx) = content_widths(l, id)
                 content_min = mn
-                if basis < 0.0f64 { basis = mx }
+                if basis < 0.0f64 {
+                    basis = mx
+                    // `width: min-content` sizes the item to its longest unbreakable run, not its whole line.
+                    if main_len.kind == .MinContent { basis = mn }
+                }
             }
         } else {
             // A column item's content height depends on its width.
