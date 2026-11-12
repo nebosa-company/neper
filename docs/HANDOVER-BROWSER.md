@@ -926,3 +926,7 @@ When an orthogonal item spans only fixed-size rows, its column contribution is i
 ## Round 376 — orthogonal contribution in `layout_lanes_rows`, explicit rows only
 
 Round 370 applied the orthogonal row contribution to every lanes item and lost the mix/fr tests. Restricted to items with a definite row (`item_axis_specs` kind 1 or 3) it has no regression: css-grid 1022 -> 1026, fixing `row-explicit-placement-006`, `grid-lanes-intrinsic-sizing-rows-001-auto`, `-001-mix2` and `-002-auto`.
+
+## Round 377 — diagnosis: `grid-lanes-baseline-alignment-affects-intrinsic-size-002/004/008`
+
+`-004` renders the lanes container too short: items are baseline-shifted but the container (and rows) are sized from plain item heights, so the shifted items overflow it (reference containers are 110/42/90/90 px high; ours 60/50/50/50). `layout_grid_inner` adds the baseline shim to row contributions (`bl_on`, ~line 9489); `layout_lanes_rows` (rmin/rmax = outer height) has no equivalent. Fix direction: compute per-item baseline offsets within a row's baseline-sharing group in `layout_lanes_rows` and add the shim to rmin/rmax before `size_tracks`. Not implemented.
