@@ -938,3 +938,7 @@ Items on an explicit row that align to a baseline now contribute height plus the
 ## Round 379 — items on a definite row that span rows size them in `layout_lanes_rows`
 
 The intrinsic-rows path dropped every item with `rn > 1`. A non-subgrid item on a definite row that spans rows now enters `size_tracks` once with its span. css-grid 1027 -> 1031, no regressions: fixes `row-flex-spanning-items`, `row-track-sizing-002`, `grid-lanes-baseline-alignment-affects-intrinsic-size-004` and `-008`. Without the `inner != .Grid` guard the same change fixed four but broke `row-subgrid-grid-gap-{larger,normal,smaller}-001` (subgrid items already add per-row contributions through the `row_extra` path), net +1.
+
+## Round 380 — negative: baseline shim for auto-placed items when there is one row
+
+Letting `layout_lanes_rows` apply the Round 378 baseline shim to auto-placed items when `g.nr == 1` left css-grid at 1031 with an identical FAIL list, so `grid-lanes-baseline-alignment-affects-intrinsic-size-002` is not blocked by explicit placement alone (it also uses `align-self: last baseline` and `minmax(0, min-content/max-content)` rows). Reverted.
