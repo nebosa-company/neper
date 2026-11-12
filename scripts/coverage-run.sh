@@ -188,5 +188,47 @@ run e_arena emit-executable "$FIX/link/advanced/src/main.e" "$T" x64 linux "$B/e
 run e_gpu emit-executable "$FIX/link/advanced/src/main.e" "$T" x64 linux "$B/e.out" --gpu bogus
 run e_contextbad context-file "$CT/explain.e" "$T" x64 linux --json --symbol nothing.here
 run e_syntax check-file "$REPO/tests/conformance/reject/$(ls "$REPO/tests/conformance/reject" | grep '\.e$' | head -1)" "$T" x64 linux --json
+# Diagnostics as records: every check fixture again under --json (emit_diagnostic and the printers).
+for d in $(ls "$FIX/check" | sort); do
+  s=$FIX/check/$d/src/main.e; [ -f "$s" ] || continue
+  run "checkjson_$d" check-file "$s" "$T" x64 linux --json
+done
+# Incremental rebuilds (section 12): a cold build, a warm one, then each edit the fixture ships.
+wait
+for d in incremental incremental_generic incremental_layout incremental_generic_layout incremental_value incremental_deleted incremental_fallback incremental_reset; do
+  S=$P/inc_$d; rm -rf "$S"; mkdir -p "$S/src" "$S/art"; cp "$FIX/link/$d/src/"*.e "$S/src/"
+  "$C" emit-em-all "$S/src/main.e" "$T" x64 linux "$S/art" --release >/dev/null 2>&1
+  run "inc_${d}_same" emit-em-all "$S/src/main.e" "$T" x64 linux "$S/art" --release --incremental; wait
+  for e in $(ls "$FIX/link/$d/edits" 2>/dev/null | sort); do
+    b=${e%.e}; b=${b%%_*}; cp "$FIX/link/$d/edits/$e" "$S/src/$b.e"
+    run "inc_${d}_${e%.e}" emit-em-all "$S/src/main.e" "$T" x64 linux "$S/art" --release --incremental; wait
+  done
+done
+# The apply-plan transaction (D1519): held lock, a death after one file, recovery, a writer that
+# skips the lock, a plan over two programs, a stale file in the second, a foreign root.
+A=$CT/uses_alias; AP=$P/alias.jsonl
+(cd "$A" && "$C" plan-rename-file src/main.e "$T" x64 linux --json --symbol deep.pick --to choose > "$AP")
+fresh() { rm -rf "$P/$1"; cp -r "$A" "$P/$1"; }
+fresh txn_held; mkdir -p "$P/txn_held/src/.neper"; : > "$P/txn_held/src/.neper/transaction.lock"
+run x_held apply-plan "$AP" --root "$P/txn_held/src"
+fresh txn_die
+run x_die apply-plan "$AP" --root "$P/txn_die/src" --fault-apply 1; wait
+run x_dieagain apply-plan "$AP" --root "$P/txn_die/src"; wait
+run x_recover apply-plan --recover --root "$P/txn_die/src"; wait
+run x_reapply apply-plan "$AP" --root "$P/txn_die/src"; wait
+fresh txn_edit
+run x_edit apply-plan "$AP" --root "$P/txn_edit/src" --fault-edit 1
+fresh txn_stale
+run x_first apply-plan "$AP" --root "$P/txn_stale/src"; wait
+run x_stale apply-plan "$AP" --root "$P/txn_stale/src" --json; wait
+run x_foreign apply-plan "$CT/plan_foreign_root.jsonl" --root "$P/txn_stale/src" --json
+for side in one two three four five; do fresh multi_$side; done
+echo '// changed' >> "$P/multi_five/src/deep.e"
+run x_multi apply-plan "$AP" --root "$P/multi_one/src" --also "$AP" --root "$P/multi_two/src" --json
+run x_multisame apply-plan "$AP" --root "$P/multi_three/src" --also "$AP" --root "$P/multi_three/src"
+run x_multistale apply-plan "$AP" --root "$P/multi_four/src" --also "$AP" --root "$P/multi_five/src"
+run x_noroot apply-plan "$AP"
+run x_badplan apply-plan "$REPO/README.md" --root "$P/multi_one/src"
+wait
 wait
 echo "done runs=$(ls "$R"/*.out | wc -l)"
