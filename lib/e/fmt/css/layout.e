@@ -10104,9 +10104,13 @@ fn layout_lanes_dense(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: 
         if free > 0.0f64 {
             var al = is.align_self
             if al == .Auto { al = cs.align_items }
+            // With `fill-reverse` the stack is reflected after this, so the alignment edges swap.
+            let (rev_fill, _rev_track) = lanes_reversal(cs)
             if al == .Center {
                 pb.y += free / 2.0f64
-            } else if al == .End || al == .FlexEnd || al == .SelfEnd {
+            } else if rev_fill && (al == .Start || al == .FlexStart || al == .SelfStart) {
+                pb.y += free
+            } else if !rev_fill && (al == .End || al == .FlexEnd || al == .SelfEnd) {
                 pb.y += free
             } else if al == .Stretch && is.height.kind == .Auto {
                 let wcontent = pb.w - horizontal_extras(pb)
@@ -10232,9 +10236,13 @@ fn layout_lanes(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f64, c
         if free > 0.0f64 {
             var al = is.align_self
             if al == .Auto { al = cs.align_items }
+            // With `fill-reverse` the stack is reflected after this, so the alignment edges swap.
+            let (rev_fill, _rev_track) = lanes_reversal(cs)
             if al == .Center {
                 pb.y += free / 2.0f64
-            } else if al == .End || al == .FlexEnd || al == .SelfEnd {
+            } else if rev_fill && (al == .Start || al == .FlexStart || al == .SelfStart) {
+                pb.y += free
+            } else if !rev_fill && (al == .End || al == .FlexEnd || al == .SelfEnd) {
                 pb.y += free
             } else if al == .Stretch && is.height.kind == .Auto {
                 let wcontent = pb.w - horizontal_extras(pb)
