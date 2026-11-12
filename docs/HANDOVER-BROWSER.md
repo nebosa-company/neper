@@ -860,3 +860,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 360 (2026-11-12): per-axis grid area for abspos descendants; negative, reverted.**
   - `grid/abspos/descendant-static-position-001/002` name only `grid-column` on a descendant (not a child) of the grid; `layout_abs` gives a deeper descendant the grid area only when it names a line on both axes. Switching that to "either axis" fixed neither test and regressed `descendant-static-position-003` and `-004` (css-grid abspos 97 -> 95 of 141). The reference puts the descendant's row at its static position inside the grid item (`margin-top: 2px`) and its width at the column area, which needs the static position taken inside the intermediate block rather than at the grid's padding edge; not tried.
+
+- **Round 361 (2026-11-12): `::first-letter` does not apply to a grid or flex container.**
+  - `gen_box` called `apply_first_letter` for any non-inline-level box; a grid or flex container is not a block container, so its `::first-letter` has nothing to style (its items' own are another matter). The call now skips `Grid` and `Flex` inner types: `grid-model/grid-container-ignores-first-letter-002` and `grid-first-letter-001`.
+  - css-grid 1011 -> 1013; css-flexbox 636 (identical failure set), positioning 458, normal-flow 659, tables 222, generated-content 176, corpus 191 unchanged. Read, not fixed: `grid-first-line-003` and the `grid-inline-first-*` tests wrap their long text at the placeholder font's width (second line stays red where the reference is all green).

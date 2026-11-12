@@ -994,7 +994,7 @@ fn gen_node(l: *Layout, node: u32, parent_box: u32, parent_node: u32) {
     gen_children(l, node, b)
     gen_pseudo(l, node, b, 1usize)
     let fl = s.pseudo[3usize]
-    if mem.address_of(fl) != 0usize && !inline_level { apply_first_letter(l, b, fl) }
+    if mem.address_of(fl) != 0usize && !inline_level && l.boxes.items[usize(b)].inner != .Grid && l.boxes.items[usize(b)].inner != .Flex { apply_first_letter(l, b, fl) }
     fix_anonymous(l, b)
 }
 
