@@ -820,3 +820,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 349 (2026-11-12): grid-lanes `align-content`/`justify-content` move the stack in normal flow too.**
   - `lanes_stack_align` returned at once unless the container was `fill-reverse`, so `align-content: end|center` (column lanes) and `justify-content` (row lanes) never moved the in-flow stack of an ordinary lanes container. `center` now centres it and `end`/`flow-end`/`flex-end` push it to the far end; the `fill-reverse` mapping is unchanged. (`grid-lanes/abspos/*oof-align-content-*`, `*oof-justify-content-*`.)
   - css-grid 983 -> 988 (5 fewer failures, none new); positioning 457, normal-flow 659, tables 222, generated-content 176, corpus 191 unchanged. The six `*oof-fill-reverse-*` abspos tests still fail.
+
+- **Round 350 (2026-11-12): a `fill-reverse` lanes container reverses the static position of its abspos children.**
+  - The in-flow stack of a `fill-reverse` lanes container is reflected across the stack extent, but an abspos child without insets on that axis kept its near-edge static position. `GridGeom` now carries `stack` (0 none, 1 the y axis, 2 the x axis) and `ext` (the stack extent: container size when definite, else the content size) for lanes containers, and `layout_abs` reflects the static top/left: `ext - static - size`. (`grid-lanes/abspos/*oof-fill-reverse-*`; all 24 `grid-lanes/abspos` now pass.)
+  - css-grid 988 -> 994 (6 fewer failures, none new); positioning 457, normal-flow 659, tables 222, generated-content 176, corpus 191 unchanged.

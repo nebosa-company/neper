@@ -7803,7 +7803,7 @@ type Grid = struct {
 // A laid-out grid's track geometry, kept so absolutely positioned children can use their grid area as containing block.
 type GridGeom = struct {
     box: u32, nc: usize, nr: usize, cpos: []f64, csz: []f64, rpos: []f64, rsz: []f64,
-    cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32, w: f64, rtl: bool
+    cnames: list.List[GName], rnames: list.List[GName], ec: i32, er: i32, w: f64, rtl: bool, stack: u8, ext: f64
 }
 
 fn occ_free(occ: []bool, ncols: usize, rows_cap: usize, r: usize, c: usize, rn: usize, cn: usize) -> bool {
@@ -9156,11 +9156,15 @@ fn lanes_all_lane_items(l: *Layout, g: *Grid, sub_items: []GItem, sub_n: usize, 
 }
 
 // Keeps the lane geometry for absolutely positioned children; the stacking axis has no tracks, so it is one empty track.
-fn lanes_register_geom(l: *Layout, b: u32, g: *Grid, cw: f64, columns: bool) {
+fn lanes_register_geom(l: *Layout, b: u32, g: *Grid, cw: f64, columns: bool, ext: f64) {
     var nc = 1usize
     if columns { nc = g.nc }
     var nr = g.nr
     if columns { nr = 1usize }
+    var stack_axis = 2u8
+    if columns { stack_axis = 1u8 }
+    let (frv, _trv) = lanes_reversal(bstyle(l, b))
+    if !frv { stack_axis = 0u8 }
     let (cpos, cpe) = mem.alloc[f64](l.a, nc + 1usize)
     let (csz, cse) = mem.alloc[f64](l.a, nc + 1usize)
     let (rpos, rpe) = mem.alloc[f64](l.a, nr + 1usize)
@@ -9186,7 +9190,7 @@ fn lanes_register_geom(l: *Layout, b: u32, g: *Grid, cw: f64, columns: bool) {
         }
         q += 1usize
     }
-    let gg = GridGeom { box: b, nc: nc, nr: nr, cpos: cpos, csz: csz, rpos: rpos, rsz: rsz, cnames: g.cnames, rnames: g.rnames, ec: i32(nc), er: i32(nr), w: cw, rtl: columns && bstyle(l, b).direction == .Rtl }
+    let gg = GridGeom { box: b, nc: nc, nr: nr, cpos: cpos, csz: csz, rpos: rpos, rsz: rsz, cnames: g.cnames, rnames: g.rnames, ec: i32(nc), er: i32(nr), w: cw, rtl: columns && bstyle(l, b).direction == .Rtl, stack: stack_axis, ext: ext }
     let gp = list.push[GridGeom](&l.grids, gg)
 }
 
@@ -9213,7 +9217,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         if rows_lane < 0.0f64 { rows_lane = rows_h }
         lanes_mirror(l, b, g, cs, false, lanes_span(g.rows, g.nr, g.gap_r, rows_lane), cw)
         lanes_stack_align(l, b, g, cs, false, cw)
-        lanes_register_geom(l, b, g, cw, false)
+        lanes_register_geom(l, b, g, cw, false, cw)
         ret rows_h
     }
     if cs.lanes {
@@ -9241,7 +9245,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             if dense_stack < 0.0f64 { dense_stack = dense_h }
             lanes_mirror(l, b, g, cs, true, lanes_span(g.cols, g.nc, g.gap_c, cw), dense_stack)
             lanes_stack_align(l, b, g, cs, true, ch)
-            lanes_register_geom(l, b, g, cw, true)
+            lanes_register_geom(l, b, g, cw, true, dense_stack)
             ret dense_h
         }
         let lanes_h = layout_lanes(l, b, g, cs, cw, ch)
@@ -9249,7 +9253,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         if lane_h < 0.0f64 { lane_h = lanes_h }
         lanes_mirror(l, b, g, cs, true, lanes_span(g.cols, g.nc, g.gap_c, cw), lane_h)
         lanes_stack_align(l, b, g, cs, true, ch)
-        lanes_register_geom(l, b, g, cw, true)
+        lanes_register_geom(l, b, g, cw, true, lane_h)
         ret lanes_h
     }
     let (sized_items, sized_n) = subgrid_contributions(l, g)
@@ -9466,7 +9470,7 @@ fn layout_grid_inner(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
             rsz[q] = g.rows[q].base
             q += 1usize
         }
-        let gg = GridGeom { box: b, nc: g.nc, nr: g.nr, cpos: cpos, csz: csz, rpos: rpos, rsz: rsz, cnames: g.cnames, rnames: g.rnames, ec: g.ec, er: g.er, w: cw, rtl: rtl }
+        let gg = GridGeom { box: b, nc: g.nc, nr: g.nr, cpos: cpos, csz: csz, rpos: rpos, rsz: rsz, cnames: g.cnames, rnames: g.rnames, ec: g.ec, er: g.er, w: cw, rtl: rtl, stack: 0u8, ext: 0.0f64 }
         let gp2 = list.push[GridGeom](&l.grids, gg)
     }
     ret total
@@ -11201,6 +11205,18 @@ fn layout_abs(l: *Layout, b: u32) {
         if !has_l && !has_r && rect_w < 0.0f64 { left = fx }
     }
     var top = static_y
+    var lanes_stack = 0u8
+    var lanes_ext = 0.0f64
+    if bb.aux == 0u32 && swap_code == 0u8 {
+        var gi2 = l.grids.len
+        while gi2 > 0usize && lanes_stack == 0u8 {
+            gi2 -= 1usize
+            if l.grids.items[gi2].box == bb.parent {
+                lanes_stack = l.grids.items[gi2].stack
+                lanes_ext = l.grids.items[gi2].ext
+            }
+        }
+    }
     if has_t {
         top = tv
     } else if has_b {
@@ -11210,6 +11226,14 @@ fn layout_abs(l: *Layout, b: u32) {
         if flex_rect { aa = flex_aa }
         if aa == .Auto && !flex_rect { aa = bstyle(l, bbh.parent).align_items }
         top += static_align_offset(aa, rect_h - bbh.h - mt - mb, false)
+    }
+    // In a `fill-reverse` lanes container the static position is reversed across the stack like the content.
+    if lanes_stack == 1u8 && !has_t && !has_b {
+        let oy = pb.border[0usize] + pb.padding[0usize]
+        top = lanes_ext - (static_y - oy) - bbh.h - mt - mb + oy
+    } else if lanes_stack == 2u8 && !has_l && !has_r {
+        let ox = pb.border[3usize] + pb.padding[3usize]
+        left = lanes_ext - (static_x - ox) - bbh.w - ml - mr + ox
     }
     // To the parent's border box.
     var rx = left + ml
