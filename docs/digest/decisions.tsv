@@ -3049,4 +3049,5 @@ D5973	2321	`emit-em-all --incremental` takes the hot loader
 D5974	1590	A module whose instances read a generic type's layout depends on that type
 D5975	1264	Two scans in lowering answered from what is already held
 D5976	1528	An `emit-em-all` directory is checked by CRC-32C, not SHA-256
-D5977	1883	Compiler coverage is src line coverage read from callgrind and the DWARF line table
+D5977	1993	Compiler coverage is src line coverage read from callgrind and the DWARF line table
+D5978	1222	`check --unused-imports` reports a `use` nothing names, as a compiler flag

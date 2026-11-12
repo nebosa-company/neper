@@ -88,6 +88,46 @@ run tool_testfile test-file "$CT/test.e" "$T" x64 linux "$B" --json
 run tool_testproj test-project "$CT/test_project" "$T" x64 linux "$B" --json
 run tool_checkproj check-project "$CT/check_project" "$T" x64 linux "$B" --json
 run tool_indexproj index-project "$CT/index_project" "$T" x64 linux "$B" --json
+# More of tool.e: contexts, impact, renames of types and fields, manifests, formatting (the suite's own invocations).
+for s in context_moves.open_and_close context_moves.width context_moves.views context_moves.ends; do
+  RD=$CT run "t_ctx_$s" context-file context_moves.e "$T" x64 linux --json --symbol $s --budget 16
+done
+for s in subjects.LIMIT subjects.counter; do RD=$CT run "t_ctx_$s" context-file subjects.e "$T" x64 linux --json --symbol $s --budget 8; done
+for s in contract.main contract.bump contract.first contract.total; do RD=$CT run "t_ctx_$s" context-file contract.e "$T" x64 linux --json --symbol $s --budget 16; done
+RD=$CT run t_ctx_module context-file contract.e "$T" x64 linux --json --module contract --budget 64 --bytes 3000
+RD=$CT run t_ctx_modgpu context-file contract.e "$T" x64 linux --json --module e.gpu --budget 64
+RD=$CT run t_ctx_modunchecked context-file contract.e "$T" x64 linux --json --module contract --unchecked --budget 64
+RD=$CT run t_ctx_unchecked context-file contract.e "$T" x64 linux --json --symbol contract.main --unchecked --budget 64
+RD=$CT run t_ctx_project context-file test_project/src/nested/deep.e "$T" x64 linux --json --module helper --budget 64
+RD=$CT run t_ctx_partial context-file query_partial.e "$T" x64 linux --json --symbol query_partial.later
+RD=$CT run t_ctx_tiny context-file explain.e "$T" x64 linux --json --symbol explain.main --budget 1
+RD=$CT run t_impact_why test-impact-file test_project/src/nested/deep.e "$T" x64 linux --json --changed helper --why
+RD=$CT run t_impact_deep test-impact-file test_project/src/nested/deep.e "$T" x64 linux --json --changed deep
+for c in plan_rename_type:deep.pick:choose plan_rename_type:main.twice:double plan_rename_type:deep.Rec:Pair plan_rename_type:deep.rec_cmp:compare errors_project:faults.Stalled:Blocked; do
+  d=${c%%:*}; r=${c#*:}; RD=$CT/$d run "t_ren_${d}_${r%%:*}" plan-rename-file src/main.e "$T" x64 linux --json --symbol ${r%%:*} --to ${r#*:}
+  RD=$CT/$d run "t_use_${d}_${r%%:*}" uses-file src/main.e "$T" x64 linux --json --symbol ${r%%:*}
+done
+RD=$CT run t_ren_field plan-rename-file contract.e "$T" x64 linux --json --symbol contract.Counter.hits --to count
+RD=$CT run t_use_field uses-file contract.e "$T" x64 linux --json --symbol contract.Counter.hits
+RD=$CT run t_sig_remove plan-change-signature-file signature_remove.e "$T" x64 linux --json --symbol signature_remove.adjust --order 0,1
+RD=$CT run t_sig_remove2 plan-change-signature-file signature_remove.e "$T" x64 linux --json --symbol signature_remove.adjust --order 0,2
+RD=$CT run t_sig_dup plan-change-signature-file signature.e "$T" x64 linux --json --symbol signature.adjust --order 0,0
+RD=$CT run t_param_bump plan-add-parameter-file contract.e "$T" x64 linux --json --symbol contract.bump --parameter 'by: i64' --argument 1i64
+for f in fold_const explain_fold explain_when; do RD=$CT run "t_explain_$f" explain-file $f.e "$T" x64 linux --json; done
+RD=$CT run t_manifest_gen build-manifest-file generated_map.e "$T" x64 linux --json
+RD=$CT run t_manifest_proj build-manifest-file manifest_project/src/main.e "$T" x64 linux --json
+RD=$CT run t_manifest_unsafe build-manifest-file manifest_unsafe/src/main.e "$T" x64 linux --json
+RD=$CT run t_batch_broken query-batch query_broken.e "$T" x64 linux --json --batch batch_broken.txt
+RD=$CT run t_batch_mem query-batch contract.e "$T" x64 linux --json --batch batch_memory.txt
+RD=$CT run t_batch_unchecked query-batch contract.e "$T" x64 linux --json --batch batch_unchecked.txt --unchecked
+RD=$CT run t_fmt_check fmt-file fmt_check.e --check
+RD=$CT run t_fmt_stmts fmt-file fmt_statements.e --json
+RD=$CT run t_fmt_plain fmt-file fmt.e
+RD=$CT run t_fmt_miss fmt-file no-such-operand.e --check
+for c in $(ls "$REPO/tests/conformance/format" | grep -v expected | sed 's/\.e$//'); do
+  run "t_format_$c" fmt-file "$REPO/tests/conformance/format/$c.e"
+  run "t_formatchk_$c" fmt-file "$REPO/tests/conformance/format/$c.e" --check --json
+done
 # VEX and the wider moves are reached only above the x64-v1 baseline (D765).
 for d in simd_codec simd_convert_lanes simd_lanes simd_masked_bounds simd_ops_reference gp09_simd_hex fmt_sse advanced aggregate; do
   s=$FIX/link/$d/src/main.e; [ -f "$s" ] || continue

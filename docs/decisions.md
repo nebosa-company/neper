@@ -44137,4 +44137,14 @@ unreferenced.
 
 **Given up.** The denominator holds only code the linker kept, so functions reachable only from `@test` are not counted, and a line the debug table omits cannot be reported. Instrumenting lowering (D776's compiler half) would count them and is kept as the fallback if callgrind cannot cover the full fixture set.
 
-**Result.** The 2026-11-11 baseline, 3,702 runs (every non-chart link and check fixture on x64 linux, the other targets on every 4th link fixture, `ui_*` on every 10th), reads 48,753 of 74,391 lines, 65.5%. After C304 added object, image, wasm-threads, source-map and disassembly runs it is 3,714 runs, 50,022 lines, 67.2%. Replaying the tooling corpus (self-test, the --json tools, test/run/eval and the project commands) makes it 3,734 runs, 56,772 lines, 76.3%. The remaining main.e commands, short forms, CLI error paths and `--cpu` levels, with line-table rows past the end of their file dropped (inlined callee lines are filed under the caller), make it 3,804 runs, 58,720 of 73,636 lines, 79.7%; `docs/coverage-floor.txt` holds 79.5.
+**Result.** The 2026-11-11 baseline, 3,702 runs (every non-chart link and check fixture on x64 linux, the other targets on every 4th link fixture, `ui_*` on every 10th), reads 48,753 of 74,391 lines, 65.5%. After C304 added object, image, wasm-threads, source-map and disassembly runs it is 3,714 runs, 50,022 lines, 67.2%. Replaying the tooling corpus (self-test, the --json tools, test/run/eval and the project commands) makes it 3,734 runs, 56,772 lines, 76.3%. The remaining main.e commands, short forms, CLI error paths and `--cpu` levels, with line-table rows past the end of their file dropped (inlined callee lines are filed under the caller), make it 3,804 runs, 58,720 of 73,636 lines, 79.7%; With the context, impact, rename, manifest, batch and format variants it is 3,863 runs, 59,900 lines, 81.3%; `docs/coverage-floor.txt` holds 81.0.
+
+## D5978 — `check --unused-imports` reports a `use` nothing names, as a compiler flag
+
+**Problem.** Nothing found a dependency a module no longer needs, and a script outside the compiler would not travel with the executable.
+
+**Decision.** `check-file ... --unused-imports` (short form `check FILE --unused-imports`) scans each loaded module's tokens (`src/unused_use.e`): a `use`'s qualifier is its `as` alias or last segment, and it is named when an identifier spelling it stands first in a `q.name` outside every `use` line. Each unnamed `use` is E-MODULE-0003 at the `use`, run after a clean check, exit 1. Without the flag nothing changes.
+
+**Given up.** It is textual: a qualifier spelled in a `q.name` that is itself never reached counts as named, and the project form `check` does not take the flag yet. Library modules are scanned too, so a program importing a library with an unused `use` fails the flag until that library is fixed.
+
+**Result.** Fixture `check/unused_import` passes under the new compiler and the previous one refuses the flag. The first run over the compiler found five unused imports (`lookup` in codegen_x64.e, `io` and `syntax` in stats.e, `check` in link_elf_a64.e, `str` in lib/e/io.e).
