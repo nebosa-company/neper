@@ -10915,6 +10915,9 @@ fn layout_abs(l: *Layout, b: u32) {
             let (rcx, rcy) = relative_chain(l, cbid, cont, ob.w)
             pad_x += rcx
             pad_y += rcy
+        } else if cb_w <= 0.0f64 && cbb.padding[3usize] + cbb.padding[1usize] > 0.0f64 {
+            // An inline split around blocks that has no line of its own: its padding is all its fragments hold.
+            cb_w = cbb.padding[3usize] + cbb.padding[1usize]
         }
     }
     // An inline containing block that holds blocks starts at the line its first fragment sits on: the line of the inline content just before it.
