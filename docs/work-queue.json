@@ -2473,10 +2473,10 @@
       "group": "Hardening",
       "order": 424,
       "title": "every src file with no or little coverage has a fixture that reaches it",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open. In the C303 baseline (2026-11-11, 3,702 runs, 65.5%) glsl.e, disasm_x64.e, object_elf.e, wasm_map.e and link_image_a64.e are 0%, wasm_threads.e 10%, tool.e 12.9%, emit_a64.e 25%, main.e 32%, platform.e 33%, binary.e 48%, msl.e 54%, emit_x64.e 56%. The --gpu glsl fixtures sampled never reached glsl.e, so find the entry point for each (a command, a flag, a target such as aarch64 none or neperos) and add a fixture or conformance case that fails if it breaks. Cover the neper test, run, eval, index and fmt commands and the CLI error paths in main.e and tool.e."
+      "evidence": "Partial. Entry points found and added to scripts/coverage-run.sh on a 5-run sample: emit-object x64/aarch64 linux (object_elf 79%), aarch64 none/neperos (link_image_a64 78%), wasm32 --threads --source-map (wasm_threads 100%, wasm_map 97%), dis-file --json (disasm_x64 45%). glsl.e stays 0%: every gpu_* fixture aborts valgrind with an aspacem out_of_memory on all targets, so it needs the D776 instrumented route. Still open: tool.e, emit_a64, main.e, platform, binary, msl, emit_x64 and the test/run/eval/index/fmt commands. Original baseline (2026-11-11, 3,702 runs, 65.5%) glsl.e, disasm_x64.e, object_elf.e, wasm_map.e and link_image_a64.e are 0%, wasm_threads.e 10%, tool.e 12.9%, emit_a64.e 25%, main.e 32%, platform.e 33%, binary.e 48%, msl.e 54%, emit_x64.e 56%. The --gpu glsl fixtures sampled never reached glsl.e, so find the entry point for each (a command, a flag, a target such as aarch64 none or neperos) and add a fixture or conformance case that fails if it breaks. Cover the neper test, run, eval, index and fmt commands and the CLI error paths in main.e and tool.e."
     },
     {
       "id": "C305",

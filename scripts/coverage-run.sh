@@ -48,12 +48,7 @@ for d in $(pick check '^$' $((STRIDE / 2 + 1)) 0); do
   s=$FIX/check/$d/src/main.e; [ -f "$s" ] || continue
   run "check_$d" check-file "$s" "$T" x64 linux
 done
-for d in $(pick link '^$' $((STRIDE * 8 / 3 + 1)) 0 | grep -E '^(gpu|kernel|tensor)'); do
-  s=$FIX/link/$d/src/main.e; [ -f "$s" ] || continue; b=$B/$d
-  run "gpu_$d" emit-executable "$s" "$T" x64 linux "$b.gpu" --gpu spv,ptx,glsl
-  run "gpuwin_$d" emit-executable "$s" "$T" x64 windows "$b.gpuw" --gpu spv,glsl
-  run "gpumac_$d" emit-executable "$s" "$T" aarch64 macos "$b.gpum" --gpu spv,glsl
-done
+# gpu_* fixtures (glsl.e, most of spirv.e) abort valgrind with an aspacem out_of_memory, so they are not run here.
 for d in advanced aggregate; do
   s=$FIX/link/$d/src/main.e; [ -f "$s" ] || continue
   run "fmt_$d" fmt-file "$s" --check
@@ -63,6 +58,12 @@ for d in advanced aggregate; do
   run "nir_$d" nir-file "$s" "$T" x64 linux
   run "codegen_$d" codegen-file "$s" "$T" x64 linux
   run "obj_$d" object-file "$s" "$T" x64 windows
+  run "objlin_$d" emit-object "$s" "$T" x64 linux "$B/$d.o"
+  run "obja64_$d" emit-object "$s" "$T" aarch64 linux "$B/$d.a64.o"
+  run "imgnone_$d" emit-executable "$s" "$T" aarch64 none "$B/$d.img"
+  run "imgneperos_$d" emit-executable "$s" "$T" aarch64 neperos "$B/$d.nos"
+  run "wthreads_$d" emit-executable "$s" "$T" wasm32 wasi "$B/$d.wt.wasm" --threads --source-map
+  run "dis_$d" dis-file "$s" "$T" x64 linux --json
   run "exp_$d" emit-executable "$s" "$T" x64 linux "$B/exp_$d" --explain --json --stats-full --time
 done
 wait
