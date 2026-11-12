@@ -10311,6 +10311,15 @@ foreach ($case in $codeDiagnostics) {
         throw "diagnostic code for $($case[0]) is wrong: $($codeOutput -join "`n")"
     }
 }
+Require-Fixture 'check/unused_import'
+$unusedFixture = Join-Path $repo 'tests\selfhost\fixtures\check\unused_import\src\main.e'
+& $compiler check-file $unusedFixture $repo 'x64' 'windows' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'an unused import failed a check that did not ask for --unused-imports' }
+$unusedOutput = & $compiler check-file $unusedFixture $repo 'x64' 'windows' --unused-imports 2>&1
+$unusedText = $unusedOutput -join "`n"
+if ($LASTEXITCODE -ne 1 -or $unusedText -notmatch 'main\.e:1:1: error\[E-MODULE-0003\]' -or $unusedText -notmatch 'main\.e:3:1: error\[E-MODULE-0003\]' -or $unusedText -match 'main\.e:2:1: error') {
+    throw "--unused-imports did not report exactly the unnamed imports: $unusedText"
+}
 $cliOutput = & $compiler 2>&1
 if ($LASTEXITCODE -ne 1 -or ($cliOutput -join "`n") -notmatch 'error\[E-CLI-9999\]: usage: ') { throw "an empty command line was not refused under E-CLI-9999: $($cliOutput -join "`n")" }
 foreach ($case in $atomicDiagnostics) {

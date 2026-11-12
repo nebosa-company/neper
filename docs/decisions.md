@@ -44128,3 +44128,13 @@ unreferenced.
 **Given up.** Someone who can write the directory can forge an artifact with a matching CRC-32C and it is kept. An accidental source change that keeps both length and CRC-32C (one in four billion per same-length edit) keeps a stale artifact.
 
 **Result.** All-library root, 748 modules, x64-linux, unchanged warm build, median of seven alternating runs: `-j 1` 0.21 s → 0.13 s, `-j 8` 0.09 s → 0.07 s. Stage 3 equals stage 4.
+
+## D5978 — `check --unused-imports` reports a `use` nothing names, as a compiler flag
+
+**Problem.** Nothing found a dependency a module no longer needs, and a script outside the compiler would not travel with the executable.
+
+**Decision.** `check-file ... --unused-imports` (short form `check FILE --unused-imports`) scans each loaded module's tokens (`src/unused_use.e`): a `use`'s qualifier is its `as` alias or last segment, and it is named when an identifier spelling it stands first in a `q.name` outside every `use` line. Each unnamed `use` is E-MODULE-0003 at the `use`, run after a clean check, exit 1. Without the flag nothing changes.
+
+**Given up.** It is textual: a qualifier spelled in a `q.name` that is itself never reached counts as named, and the project form `check` does not take the flag yet. Library modules are scanned too, so a program importing a library with an unused `use` fails the flag until that library is fixed.
+
+**Result.** Fixture `check/unused_import` passes under the new compiler and the previous one refuses the flag. The first run over the compiler found five unused imports (`lookup` in codegen_x64.e, `io` and `syntax` in stats.e, `check` in link_elf_a64.e, `str` in lib/e/io.e).
