@@ -8551,6 +8551,13 @@ fn is_intrinsic_min(k: u8) -> bool { ret k == 3u8 || k == 4u8 || k == 5u8 }
 
 fn is_intrinsic_max(k: u8) -> bool { ret k == 3u8 || k == 4u8 || k == 5u8 || k == 6u8 }
 
+// Whether a track with max function `k` takes a spanning item's extra growth-limit space at preference `tier`: tracks sized to max-content first, then `auto` and `fit-content()`, last the `min-content` ones.
+fn lane_tier_ok(tier: u8, k: u8) -> bool {
+    if tier == 1u8 { ret k == 5u8 }
+    if tier == 2u8 { ret k == 3u8 || k == 6u8 }
+    ret k == 4u8
+}
+
 fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nitems: usize, is_col: bool, min_mode: bool, stretch: bool) {
     if n == 0usize { ret }
     var t = 0usize
@@ -8650,13 +8657,19 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
                     // Share the extra equally; what a `fit-content()` track cannot take (it stops at its argument) goes to the others.
                     var extra = mx2 - cover_limit
                     var pass = 0usize
+                    var tier = 3u8
+                    q = usize(start2)
+                    while q < usize(start2 + span2) {
+                        if tr[q].max.kind == 5u8 { tier = 1u8 } else if (tr[q].max.kind == 3u8 || tr[q].max.kind == 6u8) && tier != 1u8 { tier = 2u8 }
+                        q += 1usize
+                    }
                     while extra > 0.0001f64 && pass < 8usize {
                         var open = 0usize
                         q = usize(start2)
                         while q < usize(start2 + span2) {
                             var room = inf()
                             if tr[q].max.kind == 6u8 { room = maxf(tr[q].max.v, tr[q].base) - tr[q].limit }
-                            if is_intrinsic_max(tr[q].max.kind) && room > 0.0001f64 { open += 1usize }
+                            if is_intrinsic_max(tr[q].max.kind) && room > 0.0001f64 && lane_tier_ok(tier, tr[q].max.kind) { open += 1usize }
                             q += 1usize
                         }
                         if open == 0usize { break }
@@ -8666,7 +8679,7 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
                         while q < usize(start2 + span2) {
                             var room2 = inf()
                             if tr[q].max.kind == 6u8 { room2 = maxf(tr[q].max.v, tr[q].base) - tr[q].limit }
-                            if is_intrinsic_max(tr[q].max.kind) && room2 > 0.0001f64 {
+                            if is_intrinsic_max(tr[q].max.kind) && room2 > 0.0001f64 && lane_tier_ok(tier, tr[q].max.kind) {
                                 let take = minf(share2, room2)
                                 tr[q].limit += take
                                 extra += share2 - take
