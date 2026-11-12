@@ -892,3 +892,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 ## Round 368 — orthogonal grid items contribute real min/max-content to row sizing
 
 `layout_grid_inner` row measurement gave an orthogonal item (`vertical-*` inside a horizontal grid) one fixed row size, so min and max contributions were equal and `fit-content()` rows could not clamp it. Now an orthogonal item measures `content_widths` in its own writing mode for `rmin`/`rmax`. css-grid 1014 -> 1015 of 1545: fixed `grid-template-rows-fit-content-001`, `grid-lanes-intrinsic-sizing-rows-001-mix1`, `-002-fr`, `-002-mix1`; regressed `column-grid-lanes-item-baseline-004a`, `row-explicit-placement-006`, `grid-lanes-intrinsic-sizing-rows-005` (all lanes with vertical-* items; open, not yet diagnosed). Every other suite (positioning 458, normal-flow 659, tables 222, generated-content 176, corpus 191, css-sizing 335, css-flexbox 636, css-writing-modes 638) unchanged.
+
+## Round 369 — negative: skipping the orthogonal row contribution when `height` is definite
+
+Guarding the Round 368 override with `height: auto` lost the three lanes intrinsic-sizing gains (css-grid 1013) and did not fix `row-explicit-placement-006` or `grid-lanes-intrinsic-sizing-rows-005` (only `column-grid-lanes-item-baseline-004a` recovered). Reverted; the Round 368 behavior (1015) stays. The two remaining regressions are not an explicit-`height` problem.
