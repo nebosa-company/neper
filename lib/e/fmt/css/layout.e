@@ -9838,7 +9838,7 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         let (hv, has_h) = resolve_len(is.height, area_h)
         if is.height.kind == .Px && has_h {
             hs = to_content_h(l, id, hv)
-        } else if is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced && cross_stretches(is, cs) {
+        } else if is.height.kind == .Auto && is.margin[0usize].kind != .Auto && is.margin[2usize].kind != .Auto && ib.inner != .Replaced && cross_stretches(is, cs) {
             hs = maxf(0.0f64, area_h - ib.margin[0usize] - ib.margin[2usize] - vertical_extras(ib))
         }
         subgrid_prepare_lane_rows(l, g, id, start, span)
