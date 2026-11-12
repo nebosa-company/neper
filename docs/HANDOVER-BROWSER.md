@@ -934,3 +934,7 @@ Round 370 applied the orthogonal row contribution to every lanes item and lost t
 ## Round 378 — baseline shim for explicit-row items in `layout_lanes_rows`
 
 Items on an explicit row that align to a baseline now contribute height plus the shift to the group's baseline (as `layout_grid_inner` does). css-grid 1026 -> 1027, no regressions: fixes `grid-lanes-baseline-alignment-affects-intrinsic-size-001`. `-002`, `-004`, `-008` still fail: they span rows and use `last baseline`, which this does not model (a spanning item's shim belongs to its first row's group only when it starts there, and baseline groups also set the track's alignment offset at placement, not just its size).
+
+## Round 379 — items on a definite row that span rows size them in `layout_lanes_rows`
+
+The intrinsic-rows path dropped every item with `rn > 1`. A non-subgrid item on a definite row that spans rows now enters `size_tracks` once with its span. css-grid 1027 -> 1031, no regressions: fixes `row-flex-spanning-items`, `row-track-sizing-002`, `grid-lanes-baseline-alignment-affects-intrinsic-size-004` and `-008`. Without the `inner != .Grid` guard the same change fixed four but broke `row-subgrid-grid-gap-{larger,normal,smaller}-001` (subgrid items already add per-row contributions through the `row_extra` path), net +1.

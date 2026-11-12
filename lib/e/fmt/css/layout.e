@@ -9889,6 +9889,11 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
                     s0 = usize(item.rs)
                     s_end = s0 + 1usize
                 }
+                if s_end == s0 + 1usize && item.rn > 1i32 && usize(item.rs) + usize(item.rn) <= g.nr && bx(l, item.box).inner != .Grid {
+                    // An item on a definite row that spans several rows sizes them together.
+                    ex[exn] = item
+                    exn += 1usize
+                }
                 while s0 < s_end && item.rn <= 1i32 {
                     var copy = item
                     copy.rs = i32(s0)
