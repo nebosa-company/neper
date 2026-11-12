@@ -9919,9 +9919,13 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         if free > 0.0f64 {
             var just = is.justify_self
             if just == .Auto { just = cs.justify_items }
+            // With `fill-reverse` the stack is reflected after this, so the alignment edges swap.
+            let (rev_fill, _rev_track) = lanes_reversal(cs)
             if just == .Center {
                 pb.x += free / 2.0f64
-            } else if just == .End || just == .FlexEnd || just == .SelfEnd {
+            } else if rev_fill && (just == .Start || just == .FlexStart || just == .SelfStart) {
+                pb.x += free
+            } else if !rev_fill && (just == .End || just == .FlexEnd || just == .SelfEnd) {
                 pb.x += free
             } else if just == .Stretch && is.width.kind == .Auto {
                 let hcontent = pb.h - vertical_extras(pb)
