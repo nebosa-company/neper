@@ -9824,6 +9824,47 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         }
         i += 1usize
     }
+    // Items on an explicit row that align to a baseline share it: each contributes its height plus the shift down to the group's baseline.
+    let (blu, ble1) = mem.alloc[f64](l.a, g.n + 1usize)
+    let (blg, ble2) = mem.alloc[f64](l.a, g.nr + 1usize)
+    let (blo, ble3) = mem.alloc[bool](l.a, g.n + 1usize)
+    if ble1 == ok && ble2 == ok && ble3 == ok {
+        var bz = 0usize
+        while bz < g.nr {
+            blg[bz] = 0.0f64
+            bz += 1usize
+        }
+        i = 0usize
+        while i < g.n {
+            blo[i] = false
+            let id = g.items[i].box
+            let is = bstyle(l, id)
+            let (bsr, ber) = item_axis_specs(l.a, is, false)
+            var bal = is.align_self
+            if bal == .Auto { bal = cs.align_items }
+            if (bal == .Baseline || bal == .FirstBaseline) && (bsr.kind == 1u8 || bsr.kind == 3u8) && g.items[i].rs >= 0i32 && usize(g.items[i].rs) < g.nr && !is_orthogonal(l, id) {
+                let (bfound, bby) = first_baseline(l, id)
+                let ib = bx(l, id)
+                var bup = ib.h
+                if bfound { bup = bby }
+                blu[i] = ib.margin[0usize] + bup
+                blo[i] = true
+                let brow = usize(g.items[i].rs)
+                if blu[i] > blg[brow] { blg[brow] = blu[i] }
+            }
+            i += 1usize
+        }
+        i = 0usize
+        while i < g.n {
+            if blo[i] {
+                let ib = bx(l, g.items[i].box)
+                let bouter = ib.h + ib.margin[0usize] + ib.margin[2usize] + (blg[usize(g.items[i].rs)] - blu[i])
+                g.items[i].rmin = bouter
+                g.items[i].rmax = bouter
+            }
+            i += 1usize
+        }
+    }
     let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch
     var intrinsic_rows = false
     var ir = 0usize
