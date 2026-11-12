@@ -9912,6 +9912,20 @@ check_protocol_diagnostic module_cycle 'b.e:1:1: error[E-MODULE-0002]: `use main
 check_protocol_diagnostic lex_literal 'main.e:3:13: error[E-LEX-0003]: string literal is not closed before the end of the line'
 check_protocol_diagnostic lex_tab 'main.e:3:1: error[E-LEX-0002]: a tab; indent and separate with spaces'
 check_protocol_diagnostic lex_utf8 'main.e:2:21: error[E-LEX-0001]: a byte that is not valid UTF-8'
+require_fixture check/unused_import
+unused_fixture="$repo/tests/selfhost/fixtures/check/unused_import/src/main.e"
+$test_build/neper-self check-file "$unused_fixture" "$repo" x64 linux >/dev/null || { printf '%s\n' "an unused import failed a check that did not ask for --unused-imports" >&2; exit 1; }
+if unused_output=$($test_build/neper-self check-file "$unused_fixture" "$repo" x64 linux --unused-imports 2>&1); then
+    printf '%s\n' "--unused-imports accepted unnamed imports" >&2
+    exit 1
+fi
+case "$unused_output" in
+    *'main.e:1:1: error[E-MODULE-0003]'*'main.e:3:1: error[E-MODULE-0003]'*) ;;
+    *) printf '%s\n' "--unused-imports did not report the unnamed imports: $unused_output" >&2; exit 1 ;;
+esac
+case "$unused_output" in
+    *'main.e:2:1: error'*) printf '%s\n' "--unused-imports reported a named import: $unused_output" >&2; exit 1 ;;
+esac
 cli_status=0
 cli_output=$($test_build/neper-self 2>&1) || cli_status=$?
 [ "$cli_status" -eq 1 ]

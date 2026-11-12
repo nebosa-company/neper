@@ -17,6 +17,7 @@ use emit_a64
 use graph
 use lookup
 use stats
+use unused_use
 use lex
 use link_elf
 use link_elf_a64
@@ -886,6 +887,16 @@ fn decimal_flag(args: []str, name: str) -> (usize, bool) {
 
 // The flags after an emit command's five positional arguments; `--arena` takes the
 // size after it (D225).
+// A `check-file` flag: its flags begin at index 6, where `has_flag` begins at 7.
+fn check_wants(args: []str, name: str) -> bool {
+    var at = 6usize
+    while at < args.len {
+        if same(args[at], name) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 fn has_flag(args: []str, name: str) -> bool {
     var at = 7usize
     while at < args.len {
@@ -1268,6 +1279,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     var virtual_path = ""
     var jobs = ""
     var perturb = false
+    var unused_imports = false
     var program_args_at = args.len
     var at = 3usize
     if project_form || (project_program && no_operand) { at = 2usize }
@@ -1304,6 +1316,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
                             if same(args[at], "--json") { json = true }
                             if same(args[at], "--check") { check_only = true }
                             if same(args[at], "--perturb") { perturb = true }
+                            if same(args[at], "--unused-imports") { unused_imports = true }
                         }
                     }
                 }
@@ -1496,6 +1509,10 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         long_form[count] = "--path"
         long_form[count + 1usize] = virtual_path
         count += 2usize
+    }
+    if is_check && unused_imports {
+        long_form[count] = "--unused-imports"
+        count += 1usize
     }
     ret (long_form[0usize..count], true, ok)
 }
@@ -3986,9 +4003,11 @@ fn check_flags(a: *mem.Arena, report: *Sink, args: []str) -> bool {
                     // Loaded by the command (D524): the flag is only allowed here.
                     at += 1usize
                 } else {
-                    if !same(args[at], "--absolute-paths") { ret false }
-                    report.operand_source = args[2usize]
-                    report.absolute_path = absolute_operand(a, args[2usize])
+                    if !same(args[at], "--absolute-paths") && !same(args[at], "--unused-imports") { ret false }
+                    if same(args[at], "--absolute-paths") {
+                        report.operand_source = args[2usize]
+                        report.absolute_path = absolute_operand(a, args[2usize])
+                    }
                 }
                 }
             }
@@ -14640,7 +14659,30 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             os.exit(1i32)
             ret ok
         }
+        // `--unused-imports`: each `use` no module names, in the loaded graph.
+        var unused_total = 0usize
+        if check_wants(args, "--unused-imports") {
+            let (unused_slots, unused_slots_error) = mem.alloc[usize](a, 256usize)
+            if unused_slots_error != ok { ret unused_slots_error }
+            var unused_module = 0usize
+            while unused_module < loaded.count {
+                let unused_found = unused_use.find(loaded.modules[unused_module].text, loaded.modules[unused_module].tokens, unused_slots)
+                var unused_at = 0usize
+                while unused_at < unused_found {
+                    let unused_module_ref = loaded.modules[unused_module]
+                    try emit_diagnostic(&report, unused_module_ref.path, unused_module_ref.text, unused_module_ref.lines, unused_module_ref.tokens[unused_slots[unused_at]], true, "E-MODULE-0003", "this `use` is never named by a `qualifier.name` in its module")
+                    unused_total += 1usize
+                    unused_at += 1usize
+                }
+                unused_module += 1usize
+            }
+        }
         if report.json { try finish_report(&report) }
+        if unused_total != 0usize {
+            if !report.json { try finish_report(&report) }
+            os.exit(1i32)
+            ret ok
+        }
         // A stale map failed the command however clean the module was (D300).
         if report.map_stale { os.exit(1i32) }
         if !report.json { try io.print("module check ok\n") }
