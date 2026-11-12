@@ -9809,6 +9809,19 @@ fn layout_lanes_rows(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, cw: f
         let outer = bx(l, id).h + ib.margin[0usize] + ib.margin[2usize]
         g.items[i].rmin = outer
         g.items[i].rmax = outer
+        let (osr, oer) = item_axis_specs(l.a, is, false)
+        if is_orthogonal(l, id) && l.vmode == 0u8 && (osr.kind == 1u8 || osr.kind == 3u8) {
+            // On an explicit row its inline axis is the row axis: its min-content and max-content sizes are its contributions.
+            let old_vm = l.vmode
+            l.vmode = mode_code(cs)
+            clear_widths(l, id)
+            let (omn, omx) = content_widths(l, id)
+            l.vmode = old_vm
+            clear_widths(l, id)
+            let oex = ib.margin[0usize] + ib.margin[2usize] + ib.border[0usize] + ib.border[2usize] + ib.padding[0usize] + ib.padding[2usize]
+            g.items[i].rmin = omn + oex
+            g.items[i].rmax = omx + oex
+        }
         i += 1usize
     }
     let stretch_rows = cs.align_content == .Normal || cs.align_content == .Stretch

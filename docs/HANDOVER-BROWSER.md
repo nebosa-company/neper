@@ -922,3 +922,7 @@ Restricting the indefinite-space growth to `!is_col` gave css-grid 1013: the 11 
 ## Round 375 — orthogonal grid item column contribution measured at fixed row height
 
 When an orthogonal item spans only fixed-size rows, its column contribution is its laid-out width at that block size (`flex_place_item` with the row sum), not its content-width estimate. css-grid 1020 -> 1022: fixed `grid-size-with-orthogonal-child-001`, `column-subgrid-with-row-standalone-axis-size-001/-002`; broken `grid-template-rows-fit-content-001`. A `mx = mn` fallback for non-fixed rows also fixed `grid-lanes-intrinsic-sizing-rows-005` (1023) but broke the same test, so it was dropped. css-sizing unchanged (335); css-position 60/129 as before.
+
+## Round 376 — orthogonal contribution in `layout_lanes_rows`, explicit rows only
+
+Round 370 applied the orthogonal row contribution to every lanes item and lost the mix/fr tests. Restricted to items with a definite row (`item_axis_specs` kind 1 or 3) it has no regression: css-grid 1022 -> 1026, fixing `row-explicit-placement-006`, `grid-lanes-intrinsic-sizing-rows-001-auto`, `-001-mix2` and `-002-auto`.
