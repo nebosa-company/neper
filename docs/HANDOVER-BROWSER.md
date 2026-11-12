@@ -850,3 +850,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 
 - **Round 357 (2026-11-12): lanes `track-sizing` triaged; no cheap rule.**
   - Of 63 `grid-lanes/track-sizing` failures, about 50 are subgrid (`*-subgrid-*`, `*-inherited-tracks-*`, `*-extra-margin-*`, `*-standalone-axis-size-*`). `column-track-sizing-002` (`minmax(15px, min-content) max-content auto`, items spanning lanes 1-2): the reference sizes the tracks 30/45/25, ours leaves the `max-content` lane at 0 and the `auto` lane at 70, i.e. the spanning item's contribution is not distributed to the `max-content` track the way the intrinsic-size algorithm (with the `minmax` minimum counted first) does. `grid-lanes-percentage-rows-indefinite-height-003/004` need `repeat(auto-fill, ...)` rows with a percentage track in an indefinite height. Next candidate: spanning-item distribution in `size_tracks` for lanes.
+
+- **Round 358 (2026-11-12): an inline split around blocks with no line of its own is as wide as its padding for abspos.**
+  - `abspos-float-with-inline-container`: the span (`position: relative; padding-left: 100px`) holds only a block, so it has no `Segment` fragment and a 0 x 0 box; its abspos descendant (`left: 0; right: 0`) came out 0 wide. The containing block of such an inline is its padding (what its first and last fragments hold), now `padding-left + padding-right` in `layout_abs`.
+  - positioning 457 -> 458; css-grid 1011 (identical failure set), normal-flow 659, tables 222, generated-content 176, corpus 191 unchanged.
