@@ -26,7 +26,7 @@ run() {
   local name=$1; shift
   [ -s "$R/$name.out" ] && return
   while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n; done
-  { timeout 1200 valgrind --tool=callgrind --dump-line=yes --callgrind-out-file="$R/$name.out.part" "$C" "$@" >/dev/null 2>&1
+  { cd "${RD:-.}" && timeout 1200 valgrind --tool=callgrind --dump-line=yes --callgrind-out-file="$R/$name.out.part" "$C" "$@" >/dev/null 2>&1
     mv "$R/$name.out.part" "$R/$name.out" && echo "$name"; } &
 }
 pick() { ls "$FIX/$1" | sort | grep -Ev "$2" | awk -v s="$3" -v o="$4" 'NR % s == o'; }
@@ -88,5 +88,65 @@ run tool_testfile test-file "$CT/test.e" "$T" x64 linux "$B" --json
 run tool_testproj test-project "$CT/test_project" "$T" x64 linux "$B" --json
 run tool_checkproj check-project "$CT/check_project" "$T" x64 linux "$B" --json
 run tool_indexproj index-project "$CT/index_project" "$T" x64 linux "$B" --json
+# VEX and the wider moves are reached only above the x64-v1 baseline (D765).
+for d in simd_codec simd_convert_lanes simd_lanes simd_masked_bounds simd_ops_reference gp09_simd_hex fmt_sse advanced aggregate; do
+  s=$FIX/link/$d/src/main.e; [ -f "$s" ] || continue
+  run "cpuv2_$d" emit-executable "$s" "$T" x64 linux "$B/$d.v2" --cpu x64-v2
+  run "cpuv3_$d" emit-executable "$s" "$T" x64 linux "$B/$d.v3" --cpu x64-v3
+  run "cpuv3rel_$d" emit-executable "$s" "$T" x64 windows "$B/$d.v3.exe" --cpu x64-v3 --release
+done
+# Remaining commands of main.e. Plans and artifacts are made once with the unprofiled compiler.
+P=$OUT/prep; rm -rf "$P"; mkdir -p "$P/scratch/src" "$P/em" "$P/em2"
+(cd "$CT" && "$C" plan-rename-file explain.e "$T" x64 linux --json --symbol explain.same --to alike > "$P/plan.jsonl")
+cp "$CT/explain.e" "$P/scratch/src/"
+"$C" emit-em-all "$FIX/link/function_values/src/main.e" "$T" x64 linux "$P/em" >/dev/null 2>&1
+"$C" emit-executable "$FIX/link/function_values/src/main.e" "$T" x64 linux "$P/fv" >/dev/null 2>&1
+"$C" emit-em-all "$FIX/link/element_cmp/src/main.e" "$T" x64 linux "$P/em2" >/dev/null 2>&1
+RD=$CT run m_apply apply-plan "$P/plan.jsonl" --root "$P/scratch/src"
+wait
+RD=$CT run m_applyjson apply-plan "$P/plan.jsonl" --root "$P/scratch/src" --json
+RD=$CT run m_applymiss apply-plan "$P/nothing.jsonl" --root "$P/scratch/src" --json
+run m_cmpmiss compare-manifests "$P/a.json" "$P/b.json"
+run m_info info --json
+run m_infocap info --json --capabilities
+run m_scan scan-file "$REPO/src/lex.e"
+run m_scanmiss scan-file "$P/missing.e"
+run m_parsefile parse-file "$FIX/source-load.e"
+run m_sharedlib emit-shared-library "$FIX/link/shared_library/src/main.e" "$T" x64 linux "$B/lib.so"
+RD=$CT run m_impact test-impact-file test_project/src/nested/deep.e "$T" x64 linux --json --changed nowhere
+RD=$CT run m_addparam plan-add-parameter-file contract.e "$T" x64 linux --json --symbol contract.total --parameter 'scale: i64' --argument 1i64
+RD=$CT run m_addparams plan-add-parameter-file contract.e "$T" x64 linux --json --symbol contract.total --parameter 'scale: i64' --arguments parameter_sites.txt
+RD=$CT run m_signature plan-change-signature-file signature.e "$T" x64 linux --json --symbol signature.adjust --order 2,0,1
+RD=$CT run m_signested plan-change-signature-file signature_nested.e "$T" x64 linux --json --symbol signature_nested.pair --order 1,0
+RD=$CT run m_replace plan-replace-expression-file contract.e "$T" x64 linux --json --span 693:703 --with 131072usize
+RD=$CT run m_replacebad plan-replace-expression-file contract.e "$T" x64 linux --json --span 693:700 --with 1usize
+run m_linkem link-em "$B/fv.linked" "$P/em/main.x64-linux.em" "$P/em/ops.x64-linux.em"
+run m_validate validate-em "$P/em/main.x64-linux.em"
+run m_edge check-em-edge "$P/em2/main.x64-linux.em" "$P/em2/shapes.x64-linux.em"
+run m_emerr check-em-errors "$P/em2/main.x64-linux.em" "$P/em2/shapes.x64-linux.em"
+run m_manifestem manifest-em "$P/em/main.x64-linux.em"
+# Short forms run in a project directory (D283).
+RD=$CT/test_project run s_test test --json
+RD=$CT/check_project run s_check check --json
+RD=$CT/index_project run s_index index --json
+RD=$CT/manifest_project run s_manifest build-manifest --json
+RD=$CT/index_project run s_fmt fmt --check --json
+RD=$CT/index_project run s_dis dis --json
+RD=$CT/check_project run s_build build
+RD=$CT/test_project run s_run run
+# CLI error paths.
+run e_none
+run e_unknown frobnicate
+run e_unknown_json frobnicate --json
+run e_badtarget check-file "$FIX/link/advanced/src/main.e" "$T" x99 linux
+run e_bados check-file "$FIX/link/advanced/src/main.e" "$T" x64 plan9
+run e_nofile check-file "$P/missing.e" "$T" x64 linux
+run e_langver check-file "$FIX/link/advanced/src/main.e" "$T" x64 linux --language-version 9.9
+run e_langver_json check-file "$FIX/link/advanced/src/main.e" "$T" x64 linux --json --language-version 9.9
+run e_shortbad check --bogus
+run e_arena emit-executable "$FIX/link/advanced/src/main.e" "$T" x64 linux "$B/e.out" --arena nonsense
+run e_gpu emit-executable "$FIX/link/advanced/src/main.e" "$T" x64 linux "$B/e.out" --gpu bogus
+run e_contextbad context-file "$CT/explain.e" "$T" x64 linux --json --symbol nothing.here
+run e_syntax check-file "$REPO/tests/conformance/reject/$(ls "$REPO/tests/conformance/reject" | grep '\.e$' | head -1)" "$T" x64 linux --json
 wait
 echo "done runs=$(ls "$R"/*.out | wc -l)"

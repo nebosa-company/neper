@@ -105,6 +105,13 @@ def main():
 
     valid = {f: ls for f, ls in parse_line_table(a.lines).items()
              if f.startswith('src/') and (a.include_runtime or not f.startswith('src/runtime_'))}
+    # The line table puts inlined callee lines under the caller's file name (binary.e at line
+    # 7512), so a line past the end of its file is not that file's.
+    for f in valid:
+        if os.path.exists(f):
+            with open(f, 'rb') as src:
+                n = src.read().count(b'\n') + 1
+            valid[f] = {l for l in valid[f] if l <= n}
     exempt = parse_exempt(a.exempt)
     runs = sorted(glob.glob(os.path.join(a.runs, '*.out')))
     if not runs:
