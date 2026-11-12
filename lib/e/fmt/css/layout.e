@@ -9039,12 +9039,17 @@ fn lane_area(tr: []GTrack, n: usize, gap: f64, at: f64, span: usize) -> (f64, f6
 // along the rows) once it is mirrored: start, center or end of the container, when its size along the stack is definite.
 fn lanes_stack_align(l: *Layout, b: u32, g: *Grid, cs: *const style.Style, columns: bool, extent: f64) {
     let (fill_rev, track_rev) = lanes_reversal(cs)
-    if !fill_rev || extent < 0.0f64 || g.n == 0usize { ret }
+    if extent < 0.0f64 || g.n == 0usize { ret }
     var mode = cs.justify_content
     if columns { mode = cs.align_content }
     var how = 0u8
+    if !fill_rev {
+        // The flow starts at the near end: `end` moves the stack to the far one.
+        if mode == .Center { how = 2u8 } else if mode == .End || mode == .FlowEnd || mode == .FlexEnd { how = 3u8 }
+    } else {
     // (`flex-start` / `flex-end` follow the flow like `flow-start` / `flow-end`: with `fill-reverse` the flow starts at the far end)
     if mode == .Start { how = 1u8 } else if mode == .Center { how = 2u8 } else if mode == .End { how = 3u8 } else if mode == .FlowEnd || mode == .FlexEnd { how = 1u8 }
+    }
     if how == 0u8 { ret }
     let bb = bx(l, b)
     let ox0 = bb.border[3usize] + bb.padding[3usize]
