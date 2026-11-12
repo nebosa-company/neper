@@ -840,3 +840,7 @@ Implemented this stretch: Sanitizer API and the `setHTML` family, streaming HTML
 - **Round 354 (2026-11-12): the same `start`/`end` swap for row lanes with `fill-reverse` (`justify-items`).**
   - `layout_lanes_rows` aligns an item along the stack (x) inside the room from its own end to the next item in its lanes; with `fill-reverse` the reflection follows, so `justify-items: start` moves the item to the flow end and `end` leaves it (as Round 353 did for `align-items` in column lanes).
   - css-grid 1005 -> 1010 (`row-justify-items-007/009/011/013`, `row-fill-reverse-dense-packing-justify-items-multi-span-001`); other suites unchanged.
+
+- **Round 355 (2026-11-12): `flow-start`/`flow-end` follow `track-reverse` in lane alignment.**
+  - `cross_offset` (the alignment along the lane axis in row lanes) ignored `flow-start` and `flow-end`, so both acted as `start`. In a `track-reverse` container `flow-start` is the physical end and `flow-end` the physical start; without it `flow-end` is the end. `row-track-reverse-align-items-001` passes.
+  - css-grid 1010 -> 1011; other suites unchanged.
