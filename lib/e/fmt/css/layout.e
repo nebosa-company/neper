@@ -8647,11 +8647,33 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
                     q += 1usize
                 }
                 if mx2 > cover_limit && growable > 0usize {
-                    let share2 = (mx2 - cover_limit) / f64(growable)
-                    q = usize(start2)
-                    while q < usize(start2 + span2) {
-                        if is_intrinsic_max(tr[q].max.kind) { tr[q].limit += share2 }
-                        q += 1usize
+                    // Share the extra equally; what a `fit-content()` track cannot take (it stops at its argument) goes to the others.
+                    var extra = mx2 - cover_limit
+                    var pass = 0usize
+                    while extra > 0.0001f64 && pass < 8usize {
+                        var open = 0usize
+                        q = usize(start2)
+                        while q < usize(start2 + span2) {
+                            var room = inf()
+                            if tr[q].max.kind == 6u8 { room = maxf(tr[q].max.v, tr[q].base) - tr[q].limit }
+                            if is_intrinsic_max(tr[q].max.kind) && room > 0.0001f64 { open += 1usize }
+                            q += 1usize
+                        }
+                        if open == 0usize { break }
+                        let share2 = extra / f64(open)
+                        extra = 0.0f64
+                        q = usize(start2)
+                        while q < usize(start2 + span2) {
+                            var room2 = inf()
+                            if tr[q].max.kind == 6u8 { room2 = maxf(tr[q].max.v, tr[q].base) - tr[q].limit }
+                            if is_intrinsic_max(tr[q].max.kind) && room2 > 0.0001f64 {
+                                let take = minf(share2, room2)
+                                tr[q].limit += take
+                                extra += share2 - take
+                            }
+                            q += 1usize
+                        }
+                        pass += 1usize
                     }
                 }
                 q = usize(start2)
