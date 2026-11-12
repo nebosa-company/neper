@@ -900,3 +900,7 @@ Guarding the Round 368 override with `height: auto` lost the three lanes intrins
 ## Round 370 — negative: orthogonal contributions in `layout_lanes_rows` too
 
 Applying the Round 368 override to the lanes rows measurement fixed `row-explicit-placement-006` and `grid-lanes-intrinsic-sizing-rows-001-fr` but broke `-001-mix1`, `-002-fr` and `-002-mix1` (net -1 within grid-lanes); `rows-005` fails either way. Reverted. The lanes path's own contribution model (natural height at a fit-content width) is what those mix/fr tests agree with, so the grid-vs-lanes mismatch is in the reference rendering, not a missing override.
+
+## Round 371 — negative: spanning items size lanes columns (`lanes_all_lane_items(..., true)`)
+
+Letting multi-lane items contribute to grid-lanes column sizing fixed `items/column-intrinsic-maximums` but broke `column-subgrid-grid-gap-002` and `column-auto-repeat-minmax-004`, and did not fix `column-track-sizing-002` (lanes renders column 2 at 0 against the reference 30/45/25; the copies placed at every start lane distribute the span's extra space wrongly). A correct fix needs the span item counted once at its real placement, which lanes only knows after laying out. Reverted.
