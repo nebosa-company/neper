@@ -10320,6 +10320,17 @@ $unusedText = $unusedOutput -join "`n"
 if ($LASTEXITCODE -ne 1 -or $unusedText -notmatch 'main\.e:1:1: error\[E-MODULE-0003\]' -or $unusedText -notmatch 'main\.e:3:1: error\[E-MODULE-0003\]' -or $unusedText -match 'main\.e:2:1: error') {
     throw "--unused-imports did not report exactly the unnamed imports: $unusedText"
 }
+Require-Fixture 'check/unused_code'
+$deadFixture = Join-Path $repo 'tests\selfhost\fixtures\check\unused_code\src\main.e'
+& $compiler check-file $deadFixture $repo 'x64' 'windows' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'an unused declaration failed a check that did not ask for --unused-code' }
+$deadOutput = & $compiler check-file $deadFixture $repo 'x64' 'windows' --unused-code 2>&1
+$deadText = $deadOutput -join "`n"
+$deadWant = @('4:1: error\[E-MODULE-0004\]: constant `IDLE`', '5:1: error\[E-MODULE-0004\]: error `Gone`', '6:1: error\[E-MODULE-0004\]: type `Point`', '7:1: error\[E-MODULE-0004\]: type `Spare`', '10:1: error\[E-MODULE-0004\]: function `dead`')
+$deadMiss = @($deadWant | Where-Object { $deadText -notmatch $_ })
+if ($LASTEXITCODE -ne 1 -or $deadMiss.Count -ne 0 -or $deadText -match 'E-MODULE-0004\]: [a-z]+ `(USED|helper|point_cmp|main)`') {
+    throw "--unused-code did not nominate exactly the unnamed declarations: $deadText"
+}
 $cliOutput = & $compiler 2>&1
 if ($LASTEXITCODE -ne 1 -or ($cliOutput -join "`n") -notmatch 'error\[E-CLI-9999\]: usage: ') { throw "an empty command line was not refused under E-CLI-9999: $($cliOutput -join "`n")" }
 foreach ($case in $atomicDiagnostics) {

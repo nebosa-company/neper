@@ -18,6 +18,7 @@ use graph
 use lookup
 use stats
 use unused_use
+use unused_decl
 use lex
 use link_elf
 use link_elf_a64
@@ -1280,6 +1281,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     var jobs = ""
     var perturb = false
     var unused_imports = false
+    var unused_code = false
     var program_args_at = args.len
     var at = 3usize
     if project_form || (project_program && no_operand) { at = 2usize }
@@ -1317,6 +1319,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
                             if same(args[at], "--check") { check_only = true }
                             if same(args[at], "--perturb") { perturb = true }
                             if same(args[at], "--unused-imports") { unused_imports = true }
+                            if same(args[at], "--unused-code") { unused_code = true }
                         }
                     }
                 }
@@ -1512,6 +1515,10 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     }
     if is_check && unused_imports {
         long_form[count] = "--unused-imports"
+        count += 1usize
+    }
+    if is_check && unused_code {
+        long_form[count] = "--unused-code"
         count += 1usize
     }
     ret (long_form[0usize..count], true, ok)
@@ -4003,7 +4010,7 @@ fn check_flags(a: *mem.Arena, report: *Sink, args: []str) -> bool {
                     // Loaded by the command (D524): the flag is only allowed here.
                     at += 1usize
                 } else {
-                    if !same(args[at], "--absolute-paths") && !same(args[at], "--unused-imports") { ret false }
+                    if !same(args[at], "--absolute-paths") && !same(args[at], "--unused-imports") && !same(args[at], "--unused-code") { ret false }
                     if same(args[at], "--absolute-paths") {
                         report.operand_source = args[2usize]
                         report.absolute_path = absolute_operand(a, args[2usize])
@@ -14675,6 +14682,31 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                     unused_at += 1usize
                 }
                 unused_module += 1usize
+            }
+        }
+        // `--unused-code`: each declaration no identifier in the graph names.
+        if check_wants(args, "--unused-code") {
+            let (unused_decls, unused_decls_error) = mem.alloc[unused_decl.Found](a, 4096usize)
+            if unused_decls_error != ok { ret unused_decls_error }
+            let (decl_count, decl_error) = unused_decl.find(a, &loaded, unused_decls)
+            if decl_error != ok { ret decl_error }
+            var decl_at = 0usize
+            while decl_at < decl_count {
+                let decl = unused_decls[decl_at]
+                let decl_module = loaded.modules[decl.module]
+                let decl_name = lex.token_text(decl_module.text, decl_module.tokens[decl.token + 1usize])
+                var decl_storage: [256]u8 = zero
+                var decl_len = 0usize
+                if decl.kind == 1u8 { decl_len = tool.nptest_copy(decl_storage[..], decl_len, "function `") }
+                if decl.kind == 2u8 { decl_len = tool.nptest_copy(decl_storage[..], decl_len, "constant `") }
+                if decl.kind == 3u8 { decl_len = tool.nptest_copy(decl_storage[..], decl_len, "type `") }
+                if decl.kind == 4u8 { decl_len = tool.nptest_copy(decl_storage[..], decl_len, "error `") }
+                if decl.kind == 5u8 { decl_len = tool.nptest_copy(decl_storage[..], decl_len, "variable `") }
+                decl_len = tool.nptest_copy(decl_storage[..], decl_len, decl_name)
+                decl_len = tool.nptest_copy(decl_storage[..], decl_len, "` is never named in the loaded modules")
+                try emit_diagnostic(&report, decl_module.path, decl_module.text, decl_module.lines, decl_module.tokens[decl.token], true, "E-MODULE-0004", decl_storage[0usize..decl_len])
+                unused_total += 1usize
+                decl_at += 1usize
             }
         }
         if report.json { try finish_report(&report) }
