@@ -9926,6 +9926,22 @@ esac
 case "$unused_output" in
     *'main.e:2:1: error'*) printf '%s\n' "--unused-imports reported a named import: $unused_output" >&2; exit 1 ;;
 esac
+require_fixture check/unused_code
+dead_fixture="$repo/tests/selfhost/fixtures/check/unused_code/src/main.e"
+$test_build/neper-self check-file "$dead_fixture" "$repo" x64 linux >/dev/null || { printf '%s\n' "an unused declaration failed a check that did not ask for --unused-code" >&2; exit 1; }
+if dead_output=$($test_build/neper-self check-file "$dead_fixture" "$repo" x64 linux --unused-code 2>&1); then
+    printf '%s\n' "--unused-code accepted unnamed declarations" >&2
+    exit 1
+fi
+for dead_want in '4:1: error[E-MODULE-0004]: constant `IDLE`' '5:1: error[E-MODULE-0004]: error `Gone`' '6:1: error[E-MODULE-0004]: type `Point`' '7:1: error[E-MODULE-0004]: type `Spare`' '10:1: error[E-MODULE-0004]: function `dead`'; do
+    case "$dead_output" in
+        *"$dead_want"*) ;;
+        *) printf '%s\n' "--unused-code did not nominate $dead_want: $dead_output" >&2; exit 1 ;;
+    esac
+done
+case "$dead_output" in
+    *'function `helper`'*|*'constant `USED`'*|*'function `point_cmp`'*) printf '%s\n' "--unused-code nominated a named declaration: $dead_output" >&2; exit 1 ;;
+esac
 cli_status=0
 cli_output=$($test_build/neper-self 2>&1) || cli_status=$?
 [ "$cli_status" -eq 1 ]

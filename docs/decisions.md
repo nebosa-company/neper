@@ -44138,3 +44138,13 @@ unreferenced.
 **Given up.** It is textual: a qualifier spelled in a `q.name` that is itself never reached counts as named, and the project form `check` does not take the flag yet. Library modules are scanned too, so a program importing a library with an unused `use` fails the flag until that library is fixed.
 
 **Result.** Fixture `check/unused_import` passes under the new compiler and the previous one refuses the flag. The first run over the compiler found five unused imports (`lookup` in codegen_x64.e, `io` and `syntax` in stats.e, `check` in link_elf_a64.e, `str` in lib/e/io.e).
+
+## D5979 — `check --unused-code` nominates declarations no identifier names
+
+**Problem.** Dead functions, constants, types and errors stayed until someone happened to notice; the compiler already held every token of the graph.
+
+**Decision.** `check-file ... --unused-code` (short form `check FILE --unused-code`) counts, over every loaded module, each identifier spelling in a hash table, and counts the module-scope `fn`, `const`, `type`, `error` and `var` declarations that open their line at brace depth 0 (`src/unused_decl.e`). A declaration whose spelling has no mention beyond the declarations themselves is E-MODULE-0004, exit 1, after a clean check. Modules under the toolchain's `lib/` are counted but not reported, since a library's surface is its API. `main`, `extern`, anything an attribute line precedes, and a function spelled `<type>_<word>` (a protocol is found by name) are never reported.
+
+**Given up.** Textual and one-sided: a local, field or other module's declaration of the same name, or a hash collision, counts as naming it, so some dead code is missed and none is invented; a declaration named only by other dead code is reported one level at a time. Enum members, struct fields and locals are not nominated.
+
+**Result.** Fixture `check/unused_code` in both suites. Over `src/main.e` it names 17 declarations, each with one mention in `src` and `lib`.

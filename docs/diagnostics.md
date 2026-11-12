@@ -72,6 +72,7 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-MODULE-0001` | module is missing or defined by multiple roots | spec §2 |
 | `E-MODULE-0002` | import graph contains a cycle | spec §2 |
 | `E-MODULE-0003` | a `use` no `qualifier.name` in its module names; reported only under `check --unused-imports` (D5978) | spec §2 |
+| `E-MODULE-0004` | a module-scope `fn`, `const`, `type`, `error` or `var` no identifier in the loaded modules names; reported only under `check --unused-code` (D5979) | spec §2 |
 | `E-MODULE-9999` | other module/source-root violation | spec §§2, 12 |
 | `E-LINK-0001` | a compiled module named as an input is malformed or fails its checksum | spec §12 |
 | `E-LINK-0002` | `e.mem.Arena` is not laid out as the embedded runtime reads it: `base` at 0, `cap` at 8, `off` at 16, twenty-four bytes (D552) | spec §8 |
