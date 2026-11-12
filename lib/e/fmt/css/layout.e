@@ -8252,7 +8252,10 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     }
     let (ctext, has_ct) = extra_text(cs, "grid-template-columns")
     let sbb = bx(l, b)
+    var csub = false
+    var rsub = false
     if has_ct && subgrid_axis(ctext) && l.sub_has_c {
+        csub = true
         // A subgrid's tracks are the ones of the parent grid it spans.
         if l.sub_has_c {
             if cs.column_gap.kind == .Normal { g.gap_c = l.sub_gc }
@@ -8304,6 +8307,7 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     gp.avail = avail_h
     let (rtext, has_rt) = extra_text(cs, "grid-template-rows")
     if has_rt && subgrid_axis(rtext) && l.sub_has_r {
+        rsub = true
         if l.sub_has_r {
             if cs.row_gap.kind == .Normal { g.gap_r = l.sub_gr }
             gp.gap = g.gap_r
@@ -8324,17 +8328,32 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
     let (atext, has_at) = extra_text(cs, "grid-template-areas")
     if has_at { parse_areas(l.a, atext, &areas, &dims) }
     var k = 0usize
+    // A subgrid has no implicit tracks: an area reaching past its spanned tracks is cut at its last line.
+    let cmax = i32(ctr.len) + 1i32
+    let rmax = i32(rtr.len) + 1i32
     while k < areas.len {
-        push_name(&rnames, cv.cat(l.a, areas.items[k].name, "-start"), areas.items[k].r0)
-        push_name(&rnames, cv.cat(l.a, areas.items[k].name, "-end"), areas.items[k].r1)
-        push_name(&cnames, cv.cat(l.a, areas.items[k].name, "-start"), areas.items[k].c0)
-        push_name(&cnames, cv.cat(l.a, areas.items[k].name, "-end"), areas.items[k].c1)
+        var ar0 = areas.items[k].r0
+        var ar1 = areas.items[k].r1
+        var ac0 = areas.items[k].c0
+        var ac1 = areas.items[k].c1
+        if rsub {
+            if ar0 > rmax { ar0 = rmax }
+            if ar1 > rmax { ar1 = rmax }
+        }
+        if csub {
+            if ac0 > cmax { ac0 = cmax }
+            if ac1 > cmax { ac1 = cmax }
+        }
+        push_name(&rnames, cv.cat(l.a, areas.items[k].name, "-start"), ar0)
+        push_name(&rnames, cv.cat(l.a, areas.items[k].name, "-end"), ar1)
+        push_name(&cnames, cv.cat(l.a, areas.items[k].name, "-start"), ac0)
+        push_name(&cnames, cv.cat(l.a, areas.items[k].name, "-end"), ac1)
         k += 1usize
     }
     var ec = i32(ctr.len)
     var er = i32(rtr.len)
-    if dims.cols > ec { ec = dims.cols }
-    if dims.rows > er { er = dims.rows }
+    if dims.cols > ec && !csub { ec = dims.cols }
+    if dims.rows > er && !rsub { er = dims.rows }
     // A subgrid with no parent tracks to take (sized on its own) still has as many tracks as it spans.
     if g.r_dummy || g.c_dummy {
         let (sp_r, ep_r) = item_axis_specs(l.a, cs, false)
@@ -8378,8 +8397,17 @@ fn grid_build(l: *Layout, b: u32, avail_w: f64, avail_h: f64) -> (*Grid, bool) {
             resolve_margins_fixed(l, kid, maxf(avail_w, 0.0f64))
             let (sc, ecs) = item_axis_specs(l.a, ks, true)
             let (sr, ers) = item_axis_specs(l.a, ks, false)
-            let (c0, cn) = resolve_axis(&cnames, ec, sc, ecs, l.a)
-            let (r0, rn) = resolve_axis(&rnames, er, sr, ers, l.a)
+            var (c0, cn) = resolve_axis(&cnames, ec, sc, ecs, l.a)
+            var (r0, rn) = resolve_axis(&rnames, er, sr, ers, l.a)
+            // No implicit tracks in a subgridded axis: a placement outside it is moved back inside.
+            if csub && ec > 0i32 && c0 >= 0i32 {
+                if cn > ec { cn = ec }
+                if c0 + cn > ec { c0 = ec - cn }
+            }
+            if rsub && er > 0i32 && r0 >= 0i32 {
+                if rn > er { rn = er }
+                if r0 + rn > er { r0 = er - rn }
+            }
             var it: GItem = zero
             it.box = kid
             it.order = ks.order
