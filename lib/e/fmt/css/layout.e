@@ -8656,6 +8656,8 @@ fn size_tracks(tr: []GTrack, n: usize, gap: f64, avail: f64, items: []GItem, nit
                 }
                 q = usize(start2)
                 while q < usize(start2 + span2) {
+                    // A `fit-content()` track never grows past its argument, whatever a spanning item asks of it.
+                    if tr[q].max.kind == 6u8 { tr[q].limit = minf(tr[q].limit, maxf(tr[q].max.v, tr[q].base)) }
                     if tr[q].limit < tr[q].base { tr[q].limit = tr[q].base }
                     q += 1usize
                 }
