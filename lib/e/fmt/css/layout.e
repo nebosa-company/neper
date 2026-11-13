@@ -6724,7 +6724,8 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
     var rev = cs.flex_direction == .RowReverse || cs.flex_direction == .ColumnReverse
     if row && cs.direction == .Rtl { rev = !rev }
     let wrap = cs.flex_wrap != .Nowrap
-    let wrap_rev = cs.flex_wrap == .WrapReverse
+    var wrap_rev = cs.flex_wrap == .WrapReverse
+    if !row && cs.direction == .Rtl && cs.writing_mode == .HorizontalTb { wrap_rev = !wrap_rev }
     var main_def = ch
     var cross_def = cw
     if row {
