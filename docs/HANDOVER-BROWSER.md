@@ -962,3 +962,7 @@ Two parsing fixes found by splitting `subgrid/line-names-008` and `-012` into ca
 ## Round 385 — negative: a synthetic subgrid-edge item in `subgrid_contributions`
 
 A subgrid's own margin, border and padding at its start and end belong to the parent's first and last spanned tracks. Adding one synthetic single-track item per untouched edge made `column-subgrid-extra-margin-001` include the 80px border (visible in the PNG diff), but css-grid stayed at 1035 of 1545 with no test changing. The test still fails because item 4's `width: 100%` contributes about 17px (the placeholder glyph width), which equalizes the lanes; that is font-dependent, and the lanes equalization itself (`grid_widths`, all-auto branch) is spec-correct per css-grid-3. Reverted as inert. Still open: `t012` rtl/ltr subgrid name ordering (15 cases), abspos in subgrids, baseline `-002`/`-008`.
+
+## Round 386 — name groups glued to sizes, and a subgrid's own names in line order
+
+`repeat(5,[a]30px)` collapsed the grid: `grid_split` only split `[a][b]`, so `[a]30px` and `30px[a]` stayed one token. It now splits any name group from an adjacent token. Separately, `subgrid_own_names` appended after the parent's names, so `a -1` took the subgrid's own line 1 instead of the last `a`; `push_name_by_line` inserts in line order and drops a repeat on the same line. Probes of `line-names-008/012` 9 -> 12 of 31; css-grid 1035 -> 1037 (`column/row-line-names-017`), no regressions. The rest of `line-names-008/010/011/012` and `t012` (rtl ordering) still differ.

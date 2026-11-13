@@ -7329,6 +7329,23 @@ fn push_name(names: *list.List[GName], name: str, line: i32) {
     let pushed = list.push[GName](names, GName { name: name, line: line })
 }
 
+// Adds a name in line order and not twice on one line, so `a -1` and `a 2` count lines the way the grid reads them.
+fn push_name_by_line(names: *list.List[GName], name: str, line: i32) {
+    var k = 0usize
+    while k < names.len {
+        if names.items[k].line == line && str.eq(names.items[k].name, name) { ret }
+        k += 1usize
+    }
+    push_name(names, name, line)
+    var j = names.len - 1usize
+    while j > 0usize && names.items[j - 1usize].line > line {
+        let t = names.items[j - 1usize]
+        names.items[j - 1usize] = names.items[j]
+        names.items[j] = t
+        j -= 1usize
+    }
+}
+
 // Splits on spaces outside parentheses, keeping a [bracketed group] as one token.
 fn grid_split(a: *mem.Arena, s: str) -> []const str {
     var out = cv.strings_list(a)
@@ -7338,11 +7355,16 @@ fn grid_split(a: *mem.Arena, s: str) -> []const str {
     while i < s.len {
         let c = s[i]
         if c == 40u8 || c == 91u8 {
+            // A name group straight after a size (`30px[a]`) starts a new token.
+            if depth == 0i64 && c == 91u8 && i > start {
+                cv.push_str(&out, s[start..i])
+                start = i
+            }
             depth += 1i64
         } else if c == 41u8 || c == 93u8 {
             if depth > 0i64 { depth -= 1i64 }
-            // Adjacent name groups (`[a][b]`) are separate tokens.
-            if depth == 0i64 && c == 93u8 && i + 1usize < s.len && s[i + 1usize] == 91u8 {
+            // Name groups adjacent to another token (`[a][b]`, `[a]30px`) are separate tokens.
+            if depth == 0i64 && c == 93u8 && i + 1usize < s.len && s[i + 1usize] != 32u8 && s[i + 1usize] != 9u8 && s[i + 1usize] != 10u8 && s[i + 1usize] != 13u8 {
                 cv.push_str(&out, s[start..i + 1usize])
                 start = i + 1usize
             }
@@ -8058,7 +8080,7 @@ fn subgrid_own_names(a: *mem.Arena, text: str, names: *list.List[GName]) {
             let words = cv.split_top_level_spaces(a, tk[1usize..tk.len - 1usize])
             var w = 0usize
             while w < words.len {
-                push_name(names, words[w], line)
+                push_name_by_line(names, words[w], line)
                 w += 1usize
             }
             line += 1i32
