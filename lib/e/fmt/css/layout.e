@@ -7223,7 +7223,15 @@ fn layout_flex(l: *Layout, b: u32, cw: f64, ch: f64) -> f64 {
         } else {
             let jc = cs.justify_content
             let cnt = to3 - from3
-            if jc == .FlexEnd || jc == .End || (jc == .Right && row) {
+            // `start`/`end` follow the writing mode and `left`/`right` the page, not the flex direction.
+            var start_is_flex_start = !rev
+            if row { start_is_flex_start = rev == (cs.direction == .Rtl) }
+            var to_end = jc == .FlexEnd
+            if jc == .Start { to_end = !start_is_flex_start }
+            if jc == .End { to_end = start_is_flex_start }
+            if row && jc == .Right { to_end = !rev }
+            if row && jc == .Left { to_end = rev }
+            if to_end {
                 start_off = free2
             } else if jc == .Center {
                 start_off = free2 / 2.0f64
