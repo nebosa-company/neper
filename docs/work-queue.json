@@ -232,7 +232,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "bootstrap/neper.c still builds stage 0. Follow-on (D1898): deletion is also the biggest LLMx lever â€” until it lands, agents write M1 per the docs and compile neper-0 plus quirks, and failures like T021's look like agent error."
+      "evidence": "bootstrap/neper.c still builds stage 0. Follow-on (D1898): deletion is also the biggest LLMx lever â€” until it lands, agents write M1 per the docs and compile neper-0 plus quirks, and failures like T021's look like agent error. The 2026-11-12 compiler review adds to the acceptance: a clean clone on each host builds the compiler with no C compiler present. Notes: docs/compiler-hardening-plan.md."
     },
     {
       "id": "T004",
@@ -1299,7 +1299,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit; not previously a queue row. Acceptance: `neper --help`, `-h` and `help` print the same text the two E-CLI-9999 sites use, naming all dispatched commands, and `info.commands` matches. A conformance check fails if the three disagree with the dispatcher. Size S. Checked open: grep '\"--help\"' in src/main.e: none; src/main.e:1115 usage names only tokens|parse|fmt-file|info; no work-done record."
+      "evidence": "Opened 2026-11-03 from docs/roadmap.md:435 by the single-list audit; not previously a queue row. Acceptance: `neper --help`, `-h` and `help` print the same text the two E-CLI-9999 sites use, naming all dispatched commands, and `info.commands` matches. A conformance check fails if the three disagree with the dispatcher. Size S. Checked open: grep '\"--help\"' in src/main.e: none; src/main.e:1115 usage names only tokens|parse|fmt-file|info; no work-done record. The 2026-11-12 compiler review adds to the acceptance: `scripts/check_agent_routes.py` gains a check that every dispatched command is in `info`; a tools golden pins the capabilities stream. Notes: docs/compiler-hardening-plan.md."
     },
     {
       "id": "T055",
@@ -1640,7 +1640,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "high",
-      "evidence": "Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit; not previously a queue row. Acceptance: A Neper binary speaks MCP JSON-RPC over stdio (reusing lib/x/mcp/protocol.e framing) and serves get_symbol_definition, get_build_diagnostics, get_symbol_references and get_ast_subtree from the existing index/check/parse JSONL, with a per-request arena that stays flat across 1000 calls. A conformance test drives it from a scripted client and compares payloads to the CLI output. Size M. Checked open: lib/x/mcp/protocol.e exists but is Appdor table-oriented; no compiler-query MCP binary under tools/ or src/; T032 is the Appdor services/mcp-server only; grep work-done mcp: only L049 builders."
+      "evidence": "Opened 2026-11-03 from docs/llm-mcp-server.md:57 by the single-list audit; not previously a queue row. Acceptance: A Neper binary speaks MCP JSON-RPC over stdio (reusing lib/x/mcp/protocol.e framing) and serves get_symbol_definition, get_build_diagnostics, get_symbol_references and get_ast_subtree from the existing index/check/parse JSONL, with a per-request arena that stays flat across 1000 calls. A conformance test drives it from a scripted client and compares payloads to the CLI output. Size M. Checked open: lib/x/mcp/protocol.e exists but is Appdor table-oriented; no compiler-query MCP binary under tools/ or src/; T032 is the Appdor services/mcp-server only; grep work-done mcp: only L049 builders. The 2026-11-12 compiler review adds to the acceptance: a second query in one session answers in under 50 ms on `src/main.e`. Notes: docs/compiler-hardening-plan.md."
     },
     {
       "id": "T063",
@@ -2256,7 +2256,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Opened from docs/compiler-optimizations.md: CI has macos-14 for native macOS a64 but no Linux a64 job, so a64 codegen changes (C242, C243, C249) are checked only in WSL. scripts/a64-differential.sh runs prebuilt x64/aarch64 pairs named in build/a64/out/names.txt, which scripts/a64-differential.ps1 builds on Windows, so the job needs a Linux step that builds the pairs itself. Acceptance: a workflow runs the differential on ubuntu-24.04-arm (native) or ubuntu-latest with qemu-user, libc6:arm64 and aarch64-linux-gnu-gcc, builds both architectures of every fixture in the list, and fails when any pair differs outside the five expected ones (when_target, os_fs, fs_basics, os_gaps, debug_dump); a deliberately broken a64 select_binary makes the job fail; the job is triggered by workflow_dispatch and by pushes touching src/codegen_a64.e, src/regalloc.e or src/nir.e."
+      "evidence": "Opened from docs/compiler-optimizations.md: CI has macos-14 for native macOS a64 but no Linux a64 job, so a64 codegen changes (C242, C243, C249) are checked only in WSL. scripts/a64-differential.sh runs prebuilt x64/aarch64 pairs named in build/a64/out/names.txt, which scripts/a64-differential.ps1 builds on Windows, so the job needs a Linux step that builds the pairs itself. Acceptance: a workflow runs the differential on ubuntu-24.04-arm (native) or ubuntu-latest with qemu-user, libc6:arm64 and aarch64-linux-gnu-gcc, builds both architectures of every fixture in the list, and fails when any pair differs outside the five expected ones (when_target, os_fs, fs_basics, os_gaps, debug_dump); a deliberately broken a64 select_binary makes the job fail; the job is triggered by workflow_dispatch and by pushes touching src/codegen_a64.e, src/regalloc.e or src/nir.e. The 2026-11-12 compiler review adds to the acceptance: a deliberately broken a64 encoding on a branch turns the push red. Notes: docs/compiler-hardening-plan.md."
     },
     {
       "id": "C254",
@@ -2267,7 +2267,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Opened from the weakness review: arena, bootstrap tokens and resolver tokens each filled up and the diagnostic blamed the change, and MAX_LOCALS 256 truncated silently. Acceptance: an inventory of every fixed capacity in src/ and the C bootstrap (constant, file, what fills it); each exhaustion raises one code E-CAP-nnnn naming the limit, its value and the current use; no capacity truncates silently; one generated fixture per capacity that fills it exactly and one past it, the first compiles, the second reports its code; the inventory is the fixture list, not a second document."
+      "evidence": "Opened from the weakness review: arena, bootstrap tokens and resolver tokens each filled up and the diagnostic blamed the change, and MAX_LOCALS 256 truncated silently. Acceptance: an inventory of every fixed capacity in src/ and the C bootstrap (constant, file, what fills it); each exhaustion raises one code E-CAP-nnnn naming the limit, its value and the current use; no capacity truncates silently; one generated fixture per capacity that fills it exactly and one past it, the first compiles, the second reports its code; the inventory is the fixture list, not a second document. The 2026-11-12 compiler review adds to the acceptance: the 12,000-const file checks clean; a fixture per remaining fixed limit asserts the pool's name in the message. `resolve.e:230` and `fill_indexes` (`check.e:5344`) stop falling back to linear scans silently: they report. Notes: docs/compiler-hardening-plan.md."
     },
     {
       "id": "C255",
@@ -2278,7 +2278,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Opened from the weakness review: three generic-deferral bugs in a row (data.map, e.bytes, e.data.iter) and the D163 instance-over-instance case, each found by a module hitting it. Acceptance: a generated fixture set crosses {return, assign, let, call argument, field, index, annotation, comptime branch} with {T, Inner[T], Outer[Inner[X], Y], Vec[T]} and checks the value at run time on both hosts; every combination passes or is a named refusal with a code; the checker has no site that reads a still-generic type as concrete."
+      "evidence": "Opened from the weakness review: three generic-deferral bugs in a row (data.map, e.bytes, e.data.iter) and the D163 instance-over-instance case, each found by a module hitting it. Acceptance: a generated fixture set crosses {return, assign, let, call argument, field, index, annotation, comptime branch} with {T, Inner[T], Outer[Inner[X], Y], Vec[T]} and checks the value at run time on both hosts; every combination passes or is a named refusal with a code; the checker has no site that reads a still-generic type as concrete. The 2026-11-12 compiler review adds to the acceptance: the C255 matrix (instance over instance at ret / assign / let / argument / field / array length) passes; byte gate. Notes: docs/compiler-hardening-plan.md."
     },
     {
       "id": "C256",
@@ -2333,7 +2333,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Opened from the weakness review: Windows suites hit the stderr trip and WSL crashes, WSL is short of RAM, and the Linux suite needs GitHub (linux-suite.yml). Acceptance: the runner picks -j from free commit before starting and lowers it on pressure; a fixture past its timeout is killed and reported, not left hanging; an interrupted run resumes from the last finished fixture; stderr output never fails a fixture whose exit code and stdout match; a deliberately hanging fixture and a deliberately stderr-writing fixture are the tests; scripts/check_suite_parity.py keeps both hosts' fixture lists equal."
+      "evidence": "Opened from the weakness review: Windows suites hit the stderr trip and WSL crashes, WSL is short of RAM, and the Linux suite needs GitHub (linux-suite.yml). Acceptance: the runner picks -j from free commit before starting and lowers it on pressure; a fixture past its timeout is killed and reported, not left hanging; an interrupted run resumes from the last finished fixture; stderr output never fails a fixture whose exit code and stdout match; a deliberately hanging fixture and a deliberately stderr-writing fixture are the tests; scripts/check_suite_parity.py keeps both hosts' fixture lists equal. The 2026-11-12 compiler review adds to the acceptance: the migrated slice's pass/fail set equals the scripts' on both hosts; T076's acceptance (finishes, resumable, stderr tolerant) holds for migrated steps. Notes: docs/compiler-hardening-plan.md."
     },
     {
       "id": "T077",
@@ -2488,6 +2488,985 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Open, after C304. Baseline 2026-11-11 (C303, docs/coverage-floor.txt = 65.0): check.e 87.2% (13,248/15,197), lower.e 91.5%, codegen_x64.e 91.1%, em.e 67.2%, parse.e 75%, lex.e 69.6%, resolve.e 71.3%, nir.e 75.8%, graph.e 82.7%. Close gaps by phase (front end, check, lower/nir/graph/regalloc, em and codegen and linkers), one negative and one positive fixture per diagnostic code from the error table, golden-byte checks for emit_*.e encoders, @test unit tests where fixtures are awkward (first verify src modules are importable from a test). Then the suite fails when coverage drops below the committed floor, the floor rising per merged item until it is 100% with only docs/coverage-exempt.tsv entries uncovered. Keep run.sh and run.ps1 in parity."
+    },
+    {
+      "id": "C308",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 426,
+      "title": "Resource containment is truncated at depth 6 and the wrong answer is cached",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: nine nested structs, innermost holding `os.File`, close forgotten: E-SAFETY-0002 in both declaration orders and at `-j 1` and `-j 8`. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C309",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 427,
+      "title": "x64 does not widen narrow integer parameters arriving in registers",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a C shim calls a Neper callback with i8/i16/i32 min and -1 and u8/u16/u32 max, in register and stack positions; both back ends agree; `< 0` holds. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C310",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 428,
+      "title": "Negative tags of a narrow signed enum never compare equal",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `enum i8/i16/i32 { A = -1, B = -128 }` and a `union enum i32` through literal, struct field, switch, generated `eq` and formatter, both back ends. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C311",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 429,
+      "title": "Register eviction assumes value numbers ascend with position",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a `regalloc.self_test` case with an out-of-order value under pressure asserting no two overlapping ranges share a register; a kernel fixture with more than 12 hot locals in a loop equal to the serial result. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C312",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 430,
+      "title": "Parser nesting bound has two holes: stack overflow, no diagnostic",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: both shapes reject with the \"nesting deeper than 128\" diagnostic. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C313",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 431,
+      "title": "Valid large literals are rejected as syntax errors",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: link fixture with a generated 20,000-element table builds and sums right. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C315",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 432,
+      "title": "Type memo key ignores `in_shared` and `foreign`",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: one expression checked under both expectations in one function yields both types (C255-style probe). Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C316",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 433,
+      "title": "Identical-function folding trusts a 64-bit hash",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a self-test forcing two different bodies to one hash keeps both; `--time` `fold_ns` on the all-library root drops; byte gate. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C322",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 434,
+      "title": "Module path segments are case-checked",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: reject fixture on Windows with the registered module code and the correctly-cased name as the fix. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T078",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 435,
+      "title": "Query commands take flags by name and have short forms",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a tools conformance case runs `context-file` with `--symbol` before and after `--json` and gets identical streams; an unknown flag exits 2 with E-CLI naming it; `neper context --symbol m.f` equals the long form. Card re-rendered, with `docs/llm-neper-card.src.md:189` (\"past 256 locals silently\") corrected to the bootstrap's reported 400. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T079",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 436,
+      "title": "Short forms forward every flag",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `build F --time` prints phases; `check F --nope` exits 2; `test F --only a` runs one test; a build with five `--overlay` pairs is accepted. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T085",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 437,
+      "title": "Every checker diagnostic kind has a registered code",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: one reject fixture per new code; the script passes; the card's per-family counts re-render. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T088",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 438,
+      "title": "Float literals are range-checked by the checker",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: reject fixture, E-TYPE-0004 at the literal, under `check-file` alone. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T091",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 439,
+      "title": "Module errors have a span and a suggestion",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: reject fixture asserts line 2 and a `fixes` entry `e.str`. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T093",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 440,
+      "title": "Probing never writes into the project",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a tools test snapshots a project tree, runs bare `fmt`, `check`, `index`, and finds the tree byte-identical. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T094",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 441,
+      "title": "Internal failures say where",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a self-test hook that forces an internal error in lowering prints the phase and module. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T095",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 442,
+      "title": "`uses-file` answers for constants and globals",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `uses --symbol m.CONST` equals a grep count on a fixture. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T100",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 443,
+      "title": "`check-fixture.sh` shows the error",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a failing fixture build prints its first diagnostic lines on the terminal; two sessions running check-fixture.sh at once do not share an output file; with NEPER_SEED set the C bootstrap is not run. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C324",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 444,
+      "title": "aarch64 ELF segment alignment is 4 KiB",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte check `p_align >= 16384` and `p_vaddr % p_align == p_offset % p_align`; a fixture runs under `qemu-aarch64 -p 65536`. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C325",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 445,
+      "title": "Host detection and positional arch",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: under qemu-aarch64, `neper build hello.e` writes an aarch64 ELF. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C331",
+      "category": "compiler",
+      "group": "Optimization",
+      "order": 446,
+      "title": "A baseline that is one command",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: two consecutive runs differ by under 3% on (a). Every CS and XS package quotes its row before and after. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C339",
+      "category": "compiler",
+      "group": "Optimization",
+      "order": 447,
+      "title": "Roadmap corrections",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: docs/compiler-optimizations.md rows for C249, compare-branch fusion and jump-to-next elision match the source; C249's title no longer lists loop-depth spill weights. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "L230",
+      "category": "library",
+      "group": "Library",
+      "order": 448,
+      "title": "A library line-coverage number",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: two runs agree; a module with no fixture reports 0%; the number is in `docs/progress.html` through `render_progress.py`. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L231",
+      "category": "library",
+      "group": "Library",
+      "order": 449,
+      "title": "The unreached-function list as a gate",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: the script fails when the count rises. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L237",
+      "category": "library",
+      "group": "Library",
+      "order": 450,
+      "title": "Page scripts have no step limit",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a page with `while(true){}` returns a script error within the budget. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L238",
+      "category": "library",
+      "group": "Library",
+      "order": 451,
+      "title": "Predictable passwords and UUIDs in the formula engine",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: two evaluators with the same seed give different passwords. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L239",
+      "category": "library",
+      "group": "Library",
+      "order": 452,
+      "title": "WAL replay swallows a failed delete",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a replay whose delete fails returns the error and the applied count excludes it. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L240",
+      "category": "library",
+      "group": "Library",
+      "order": 453,
+      "title": "TIFF inflate skips zlib validation",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a strip with a corrupt checksum is `Invalid`. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L241",
+      "category": "library",
+      "group": "Library",
+      "order": 454,
+      "title": "Recursion without a depth guard",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a 100,000-deep input to each returns an error, not a stack overflow. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L242",
+      "category": "library",
+      "group": "Library",
+      "order": 455,
+      "title": "`@import` fan-out",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a sheet importing itself fetches once; a total cap is reported, not silent. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L247",
+      "category": "library",
+      "group": "Library",
+      "order": 456,
+      "title": "`partial` means partial",
+      "score": 0,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: `docs/progress.html` shows 8 partial library modules, not 155. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L248",
+      "category": "library",
+      "group": "Library",
+      "order": 457,
+      "title": "Every source module is in the plan",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: check_module_plan.py fails on a lib/e source file with no docs/modules.json entry; each of today's 111 is listed or marked internal. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L249",
+      "category": "library",
+      "group": "Library",
+      "order": 458,
+      "title": "`docs/algos.md` says what was delivered",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a script checks that every name docs/algos.md maps to resolves in lib/e, and passes; the seven rows name the algorithm that was delivered. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L250",
+      "category": "library",
+      "group": "Library",
+      "order": 459,
+      "title": "Numeric defects",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: one fixture per item that fails before the fix. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L260",
+      "category": "library",
+      "group": "Library",
+      "order": 460,
+      "title": "Comments carry no history",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: the count is 0 and the suite's goldens are unchanged. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L261",
+      "category": "library",
+      "group": "Library",
+      "order": 461,
+      "title": "Stale comments found",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: each listed comment is corrected or deleted; goldens unchanged. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "T080",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 462,
+      "title": "Bounded, compact answers by default",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: default `uses main.same` is under 8 KB and resumable by cursor; context on `main.dispatch` shows at least 55 body facts; subject `end_line > line`; `--compact` output for `main.same` is under 20 KB for all 503 uses. Schema version bumped and `scripts/validate_stream.py` goldens refreshed. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T081",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 463,
+      "title": "`check --digest`: keep-going text diagnostics with fixes",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the three-error fixture gives three lines under 500 bytes total; output is sorted by path, line, column and stable across `-j 1` and `-j 8`. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T082",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 464,
+      "title": "`neper fix`: apply a diagnostic's own fixes",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the card's E-NAME-0003 and E-TYPE-0002 reject fences become clean after `fix`; a stale file hash aborts with nothing written. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T083",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 465,
+      "title": "`neper explain CODE`",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: every code the card lists as verified has an explanation; an unknown code exits 2. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T084",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 466,
+      "title": "`neper verify`: the whole repair loop in one call",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: on a one-function edit of a fixture project, output is at most 30 lines and names the tests it ran and the ones it skipped as unreached. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T086",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 467,
+      "title": "Syntax errors say what was wrong",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: one reject fixture per row pinning code and fix; the card's \"Traps\" section gains nothing (the diagnostics now carry it). Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T087",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 468,
+      "title": "Declaration errors always have a location and a kind",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `const PI: f32 = 3.14` and `const S = \"x\"` in a context that fails report at the declaration with a registered code; a bad format verb names the verb and its column. A script counts bare `ret <Error>` lines without a preceding record in `check.e` and ratchets the number down. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T090",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 469,
+      "title": "A failed block header does not cascade; all failures print",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: that fixture reports one diagnostic; a file with 100 bad statements reports 64 and the count of the rest. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T092",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 470,
+      "title": "Duplicate and shadow errors name the first site",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: reject fixtures assert `related[0]` line. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C314",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 471,
+      "title": "Safety facts are dropped silently at fixed limits",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a 17-pointer statement followed by a move reports E-SAFETY-0004 or the named limit, never silence; 65 nested loops with `break` reject by name. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C317",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 472,
+      "title": "NIR type verifier and allocation verifier",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `nir.verify_self_test` gains one rejected function per invariant; reverting C310's fix locally fails with `Unverified` (state it in the D-row, do not commit the revert). Count gate: verifier cost under 2% of self-build in release. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C318",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 473,
+      "title": "a64 frames are not stack-probed",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a thread with a 1 MB local array written from the far end exits 0, and unbounded recursion traps cleanly, under qemu-aarch64 and on the macOS runner. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C319",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 474,
+      "title": "Project `check` trusts children it never reads",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: two concurrent project checks both answer correctly; a fixture whose child is killed reports `ok:false`; project check time on `lib/e` at most 1.2x one whole-program check. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C320",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 475,
+      "title": "Emitted images get the platform's standard mitigations",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte checks in `link_elf.self_test` and `link_pe.self_test`; `readelf -lW` shows `GNU_STACK RW`; the trap fixture still names its frames under ASLR; DWARF line fixture still resolves under gdb. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C321",
+      "category": "compiler",
+      "group": "Hardening",
+      "order": 476,
+      "title": "Generic-argument rows leak; parallel arrays unchecked",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a fixture with 50,000 calls of one generic instance builds at the default arena; self-test for the length check. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C326",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 477,
+      "title": "Runtime blobs: one assembler, a drift check, shared routines",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: changing one byte of a `.s` without re-embedding fails the check; blobs byte-identical after the split. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C327",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 478,
+      "title": "Variant surface parity for every OS",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the script fails today, listing the gaps; each gap is then either implemented or given an `os.Unsupported` body. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C332",
+      "category": "compiler",
+      "group": "Optimization",
+      "order": 479,
+      "title": "Warm builds do no SHA-256 and `--json` takes the no-op path",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: an unchanged `run --json` reports `load and parse` only; SHA-256 call count on a warm build is 0 (counter in `--stats`); C331 row (c) improves. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C333",
+      "category": "compiler",
+      "group": "Optimization",
+      "order": 480,
+      "title": "Generic instances: hashed lookup, shared across modules",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: an instance-heavy fixture (e.data.map over 200 key types); count gate. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C334",
+      "category": "compiler",
+      "group": "Optimization",
+      "order": 481,
+      "title": "Back-end constant factors",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate; count gate on the self-build. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C335",
+      "category": "compiler",
+      "group": "Optimization",
+      "order": 482,
+      "title": "Front-end constant factors",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate; the count gate on the self-build is stated for each item; the dead resolver token pool is gone. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C336",
+      "category": "compiler",
+      "group": "Optimization",
+      "order": 483,
+      "title": "x64 array indexing uses scaled addressing",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: emit sweep covers the new encodings against `disasm_x64`; count gate on the self-build and `benchmarks/gp`; both back ends agree on the index fixtures. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C337",
+      "category": "compiler",
+      "group": "Optimization",
+      "order": 484,
+      "title": "Spill slots are reused; short displacements",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `--stats` frame bytes and `.text` size on the self-build both drop; count gate; C317's allocation verifier extended to \"no two live values share a slot\". Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "L232",
+      "category": "library",
+      "group": "Library",
+      "order": 485,
+      "title": "AV1 and mp4: test or leave the library",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: the fixture fails on the unfixed `mp4.e` (give it a time bound). Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L233",
+      "category": "library",
+      "group": "Library",
+      "order": 486,
+      "title": "Fuzz the parsers",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: each fixture runs a fixed iteration count under a fixed seed in under 10 s. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L234",
+      "category": "library",
+      "group": "Library",
+      "order": 487,
+      "title": "Conformance corpora",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a deliberately broken parser turns its corpus step red. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L235",
+      "category": "library",
+      "group": "Library",
+      "order": 488,
+      "title": "Thin modules get a second fixture",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: each module listed has a second fixture (or a first) that asserts results and one refusal; each function named as untested is called by a fixture. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L236",
+      "category": "library",
+      "group": "Library",
+      "order": 489,
+      "title": "Fixture hygiene",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: no fixture cites a path outside the repository; path_pure and every touched fixture exit with a per-case code; a suite step renders a looks subset with a font loaded and compares frame hashes. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L243",
+      "category": "library",
+      "group": "Library",
+      "order": 490,
+      "title": "Stub resolver",
+      "score": 0,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: fixtures against a local UDP responder for a wrong-id datagram followed by the right one, and for a TC answer. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L244",
+      "category": "library",
+      "group": "Library",
+      "order": 491,
+      "title": "Secrets are never wiped; crypto gaps",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a fixture reads a key buffer after TLS close and after KDF exit and finds zeros; a cross-signed chain validates; a root with an unhandled critical extension is refused; the privacy samplers' outputs lie on the snapped grid. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L245",
+      "category": "library",
+      "group": "Library",
+      "order": 492,
+      "title": "Silent truncation at fixed limits",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: one fixture per site: the case that was silently cut now returns a named error or sets a flag the caller reads. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L246",
+      "category": "library",
+      "group": "Library",
+      "order": 493,
+      "title": "Copy replaces without a sync",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a fixture observes the sync before the replace through a recording backend; the copy cost before and after is stated in the D-row. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L251",
+      "category": "library",
+      "group": "Library",
+      "order": 494,
+      "title": "Platform parity is declared, not discovered",
+      "score": 0,
+      "model": "opus",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: EINVAL maps to Invalid on every host, with a fixture per host; sandbox follows one contract on all three hosts, asserted by a fixture; the per-host capability matrix is generated into docs/progress.html. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L252",
+      "category": "library",
+      "group": "Library",
+      "order": 495,
+      "title": "Disabled crypto: dead ML-DSA signer, DNSSEC RSASHA256 refused",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: ml_dsa_sign's dead body is gone; a DNSSEC fixture validates an RSASHA256-signed RRset from a recorded answer. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L253",
+      "category": "library",
+      "group": "Library",
+      "order": 496,
+      "title": "Declared ceilings become metadata",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a generated table in docs/progress.html lists every ceiling declared by a source marker; AV1 pool exhaustion returns TooLarge, with a fixture. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L254",
+      "category": "library",
+      "group": "Library",
+      "order": 497,
+      "title": "Options that do nothing",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: each option either changes the Windows-look frame hash in a fixture or is removed from the public struct; the unused parameter is gone. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L255",
+      "category": "library",
+      "group": "Library",
+      "order": 498,
+      "title": "One helper, not thirty",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a script lists functions with identical normalised bodies across modules and its count only falls. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L256",
+      "category": "library",
+      "group": "Library",
+      "order": 499,
+      "title": "Generated blobs are assets",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: the generated files are no longer source text under lib/e; their content loads through e.asset; the fixtures that use them pass unchanged. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L262",
+      "category": "library",
+      "group": "Library",
+      "order": 500,
+      "title": "Design-spec prose lives in one place",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: ui/control.e has under 1,000 comment lines, each stating a constraint docs/ux does not; goldens unchanged. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "T096",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 501,
+      "title": "A generated compiler map",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "low",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the map regenerates deterministically; `AGENTS.md` routing names it. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T097",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 502,
+      "title": "`plan-move-file`: move a function between modules",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: move a function between two fixture modules and back; tree byte-identical after the round trip. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T098",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 503,
+      "title": "Split `main.e` (15.5k) and `tool.e` (8.1k)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate after every step; no `src` file over 4k lines at the end; the bootstrap (until C088) still builds it. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "T099",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 504,
+      "title": "Split `check.e` (22k)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate after every step. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C323",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 505,
+      "title": "One target record",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: `scripts/check_target_literals.py` fails on any target literal in `src/*.e` outside `target.e`; byte gate; adding a dummy row for a new OS on an existing arch needs edits in `target.e`, a runtime, and `lib/e/os.<os>.e` only (write that checklist into the file header). Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C328",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 506,
+      "title": "A shared instruction selector",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate on x64; a64 output changes only by the gained fusions, checked by the a64 differential; `codegen_a64.e` no longer imports `codegen_x64`. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C329",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 507,
+      "title": "riscv64-linux as the proof of C323 and C328",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: the link-fixture slice that aarch64-linux runs passes on riscv64; the diff touches no file outside `target.e`, the new emitter, runtime and `os` variant. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C338",
+      "category": "compiler",
+      "group": "Optimization",
+      "order": 508,
+      "title": "Promotion to values happens in NIR, before the optimisations",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: byte gate is not expected to hold; instead the emit sweep, both suites and the count gate (no regression) on both back ends. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "L257",
+      "category": "library",
+      "group": "Library",
+      "order": 509,
+      "title": "Sheet support code leaves the library",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: no lib/e module is imported only by examples/; no looks_* file is named by round or lane; no module-level drawing switch remains; ui fixtures pass unchanged. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L258",
+      "category": "library",
+      "group": "Library",
+      "order": 510,
+      "title": "Split `ui/control.e` by platform look",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: byte gate; ui/control.e holds no function prefixed win, linux, cup or mat; one dots painter; frame hashes of the looks subset are unchanged. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L259",
+      "category": "library",
+      "group": "Library",
+      "order": 511,
+      "title": "Split the other large UI files",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: byte gate after every move; no file under lib/e/ui is over 6,000 lines. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "L263",
+      "category": "library",
+      "group": "Library",
+      "order": 512,
+      "title": "The catalogue is generated, not synced",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: adding a helper to a source module needs no docs edit; the pending fences total the 102 declarations `library-fixtures.json` lists. Notes: docs/library-hardening-plan.md."
+    },
+    {
+      "id": "T089",
+      "category": "tooling",
+      "group": "Tooling",
+      "order": 513,
+      "title": "Many errors per function, no cascades",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: three independent errors in one function give three records; one undefined local used five times gives one; both suites' reject goldens reviewed for count changes. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "C330",
+      "category": "compiler",
+      "group": "OS targets",
+      "order": 514,
+      "title": "Width axis for 32-bit targets",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a decision row in docs/decisions.md with the width-axis design and a cost estimate; L228's score and text re-checked against lib/e/os.wasi.e. No code. Notes: docs/compiler-hardening-plan.md."
     }
   ]
 }
