@@ -966,3 +966,7 @@ A subgrid's own margin, border and padding at its start and end belong to the pa
 ## Round 386 — name groups glued to sizes, and a subgrid's own names in line order
 
 `repeat(5,[a]30px)` collapsed the grid: `grid_split` only split `[a][b]`, so `[a]30px` and `30px[a]` stayed one token. It now splits any name group from an adjacent token. Separately, `subgrid_own_names` appended after the parent's names, so `a -1` took the subgrid's own line 1 instead of the last `a`; `push_name_by_line` inserts in line order and drops a repeat on the same line. Probes of `line-names-008/012` 9 -> 12 of 31; css-grid 1035 -> 1037 (`column/row-line-names-017`), no regressions. The rest of `line-names-008/010/011/012` and `t012` (rtl ordering) still differ.
+
+## Round 387 — `span <name>`, abspos spans, and names of an opposed-direction subgrid
+
+`resolve_axis` ignored a named span after a start line (`a / span a`): it now ends at the n-th line of that name past the start. `grid_abs_area` resolved only single lines, so an absolutely positioned child with a span edge got an auto edge; it now takes the span from `resolve_axis`. A subgrid whose `direction` opposes its parent's numbers the parent's line names from the far end (`subgrid_names` flip, columns only). Reversing the track sizes too was tried and broke `writing-directions-002` (the subgrid edge padding is not mirrored), so only the names flip. css-grid 1037 -> 1038: `subgrid/line-names-008` passes (probes 12 -> 16 of 31), no regressions. `t012` (15 cases) is still open.

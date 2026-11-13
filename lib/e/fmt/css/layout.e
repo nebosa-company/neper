@@ -7718,7 +7718,26 @@ fn resolve_axis(names: *const list.List[GName], explicit: i32, s: LineSpec, e: L
         ret (lo - 1i32, hi - lo)
     }
     if s_line {
-        if e.kind == 2u8 { ret (sl - 1i32, e.n) }
+        if e.kind == 2u8 {
+            // `span <name>`: up to the n-th line of that name after the start line.
+            if e.name.len > 0usize {
+                var far = sl
+                var step = 0i32
+                while step < e.n && far > 0i32 {
+                    var nxt = 0i32
+                    var kk = 0usize
+                    while kk < names.len {
+                        let ln = names.items[kk].line
+                        if str.eq(names.items[kk].name, e.name) && ln > far && (nxt == 0i32 || ln < nxt) { nxt = ln }
+                        kk += 1usize
+                    }
+                    far = nxt
+                    step += 1i32
+                }
+                if far > sl { ret (sl - 1i32, far - sl) }
+            }
+            ret (sl - 1i32, e.n)
+        }
         ret (sl - 1i32, 1i32)
     }
     if e_line {
@@ -8043,7 +8062,8 @@ fn subgrid_prepare(l: *Layout, g: *Grid, i: usize, cols: bool, rows: bool) {
                     k += 1usize
                 }
                 l.sub_c = sz
-                l.sub_cn = subgrid_names(l, &g.cnames, g.items[i].cs, g.items[i].cn)
+                // A subgrid whose direction opposes its parent's numbers the parent's lines from the other end.
+                l.sub_cn = subgrid_names(l, &g.cnames, g.items[i].cs, g.items[i].cn, bstyle(l, id).direction != bstyle(l, l.boxes.items[usize(id)].parent).direction)
                 l.sub_gc = g.gap_c
                 l.sub_has_c = true
             }
@@ -8060,7 +8080,7 @@ fn subgrid_prepare(l: *Layout, g: *Grid, i: usize, cols: bool, rows: bool) {
                     k += 1usize
                 }
                 l.sub_r = sz
-                l.sub_rn = subgrid_names(l, &g.rnames, g.items[i].rs, g.items[i].rn)
+                l.sub_rn = subgrid_names(l, &g.rnames, g.items[i].rs, g.items[i].rn, false)
                 l.sub_gr = g.gap_r
                 l.sub_has_r = true
             }
@@ -8092,7 +8112,7 @@ fn subgrid_own_names(a: *mem.Arena, text: str, names: *list.List[GName]) {
 
 // The line names of the parent lines a subgrid spans (`start` is the 0-based first track, `count` the tracks), renumbered
 // from the subgrid's own first line.
-fn subgrid_names(l: *Layout, src: *const list.List[GName], start: i32, count: i32) -> []const GName {
+fn subgrid_names(l: *Layout, src: *const list.List[GName], start: i32, count: i32, flip: bool) -> []const GName {
     let (out, e) = mem.alloc[GName](l.a, src.len + 1usize)
     if e != ok { ret zero }
     var n = 0usize
@@ -8100,10 +8120,23 @@ fn subgrid_names(l: *Layout, src: *const list.List[GName], start: i32, count: i3
     while k < src.len {
         let ln = src.items[k].line
         if ln >= start + 1i32 && ln <= start + 1i32 + count {
-            out[n] = GName { name: src.items[k].name, line: ln - start }
+            var at = ln - start
+            if flip { at = count + 2i32 - at }
+            out[n] = GName { name: src.items[k].name, line: at }
             n += 1usize
         }
         k += 1usize
+    }
+    // Opposed directions renumber from the far end; keep the list in line order.
+    if flip {
+        var lo = 0usize
+        while lo + 1usize < n - lo {
+            let hi = n - 1usize - lo
+            let t = out[lo]
+            out[lo] = out[hi]
+            out[hi] = t
+            lo += 1usize
+        }
     }
     ret out[..n]
 }
@@ -9771,7 +9804,7 @@ fn subgrid_prepare_lane_rows(l: *Layout, g: *Grid, id: u32, start: usize, span: 
         k += 1usize
     }
     l.sub_r = sz
-    l.sub_rn = subgrid_names(l, &g.rnames, i32(start), i32(span))
+    l.sub_rn = subgrid_names(l, &g.rnames, i32(start), i32(span), false)
     l.sub_gr = g.gap_r
     l.sub_has_r = true
 }
@@ -10459,7 +10492,7 @@ fn subgrid_prepare_lane(l: *Layout, g: *Grid, id: u32, start: usize, span: usize
         k += 1usize
     }
     l.sub_c = sz
-    l.sub_cn = subgrid_names(l, &g.cnames, i32(start), i32(span))
+    l.sub_cn = subgrid_names(l, &g.cnames, i32(start), i32(span), false)
     l.sub_gc = g.gap_c
     l.sub_has_c = true
 }
@@ -10599,10 +10632,25 @@ fn grid_abs_area(l: *Layout, gb: u32, child: u32, pw: f64, ph: f64, ox: f64, oy:
     var y1 = ph - oy
     var cnl = geom.cnames
     var rnl = geom.rnames
-    let c0 = resolve_line(&cnl, geom.ec, sc, false, l.a)
-    let c1 = resolve_line(&cnl, geom.ec, ecs, true, l.a)
-    let r0 = resolve_line(&rnl, geom.er, sr, false, l.a)
-    let r1 = resolve_line(&rnl, geom.er, ers, true, l.a)
+    var c0 = resolve_line(&cnl, geom.ec, sc, false, l.a)
+    var c1 = resolve_line(&cnl, geom.ec, ecs, true, l.a)
+    var r0 = resolve_line(&rnl, geom.er, sr, false, l.a)
+    var r1 = resolve_line(&rnl, geom.er, ers, true, l.a)
+    // A `span` edge counts from the line on the other side.
+    if ecs.kind == 2u8 && c0 >= 1i32 {
+        let (cst, cn) = resolve_axis(&cnl, geom.ec, sc, ecs, l.a)
+        c1 = cst + 1i32 + cn
+    } else if sc.kind == 2u8 && c1 >= 1i32 {
+        let (cst, cn) = resolve_axis(&cnl, geom.ec, sc, ecs, l.a)
+        c0 = cst + 1i32
+    }
+    if ers.kind == 2u8 && r0 >= 1i32 {
+        let (rst, rn) = resolve_axis(&rnl, geom.er, sr, ers, l.a)
+        r1 = rst + 1i32 + rn
+    } else if sr.kind == 2u8 && r1 >= 1i32 {
+        let (rst, rn) = resolve_axis(&rnl, geom.er, sr, ers, l.a)
+        r0 = rst + 1i32
+    }
     if c0 >= 1i32 && usize(c0) <= geom.nc + 1usize {
         let i0 = usize(c0 - 1i32)
         if i0 < geom.nc { x0 = geom.cpos[i0] } else { x0 = geom.cpos[geom.nc - 1usize] + geom.csz[geom.nc - 1usize] }
