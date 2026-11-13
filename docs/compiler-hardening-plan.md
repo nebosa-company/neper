@@ -71,6 +71,9 @@ Model guide: **S** packages and anything tagged *mechanical* suit Sonnet. **Opus
 packages tagged *soundness*, *refactor L*, or touching `regalloc.e`, generic deferral
 or checker recovery.
 
+Each heading ends with the proposed thinking effort. Raise one step if the first
+attempt fails its acceptance; do not start higher.
+
 ## 1. Order of work
 
 Wave 1 (independent, start now, all S or M):
@@ -97,7 +100,7 @@ The edit loop an agent runs is: locate -> context -> edit -> check -> repair -> 
 Today it loses turns to positional flags, single bare diagnostics, catch-all codes and
 unbounded answers. These packages fix each of those at its source.
 
-### LF-01 Query commands take flags by name and have short forms - M, Sonnet
+### LF-01 Query commands take flags by name and have short forms - M, Sonnet, medium
 - Evidence (verified): `main.e:14537` requires `args[6]=="--json" && args[7]=="--symbol"`.
   The card's own spelling `context-file --symbol m.f` fails with a 942-byte usage line
   and exit 1. `test-file --only` must be the last two arguments (`:14697`).
@@ -115,7 +118,7 @@ unbounded answers. These packages fix each of those at its source.
   bootstrap's reported 400.
 - Files: `src/main.e` (1132-1604, 14500-14720), `docs/llm-neper-card.src.md`.
 
-### LF-02 Short forms forward every flag - S, Sonnet
+### LF-02 Short forms forward every flag - S, Sonnet, low
 - Evidence (verified): `check bad.e --bogus-flag --deadline 5` behaves as plain `check`.
   The loop at `main.e:1262-1297` knows 12 flags and skips the rest; `test` never
   forwards `--only` (`:1470-1482`); `check FILE` drops `--project`/`--overlay`
@@ -127,7 +130,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: `build F --time` prints phases; `check F --nope` exits 2; `test F --only a`
   runs one test; a build with five `--overlay` pairs is accepted.
 
-### LF-03 Bounded, compact answers by default - M, Sonnet (after LF-01)
+### LF-03 Bounded, compact answers by default - M, Sonnet, medium (after LF-01)
 - Evidence (measured on `src/main.e`): `uses-file --symbol main.same` 142 KB, 503
   records of ~280 B, every span zero-width; `uses_json` has no page (`tool.e:4640`).
   `index-file` 12.7 MB, 32,835 records, no filter (`main.e:14650`).
@@ -146,7 +149,7 @@ unbounded answers. These packages fix each of those at its source.
 - Files: `src/tool.e` (3200-3400, 4600-4760), `src/main.e` (13425-14102),
   `docs/schemas/`, `docs/tooling.md`.
 
-### LF-04 `check --digest`: keep-going text diagnostics with fixes - M, Sonnet
+### LF-04 `check --digest`: keep-going text diagnostics with fixes - M, Sonnet, medium
 - Evidence (verified): text mode prints 1 of 3 errors as `path:l:c: error[CODE]: msg`
   with no fix (`emit_diagnostic`, `main.e:5144-5158`; first-error stop noted at
   `:10432`). JSON mode gave all 3 in 2.3 KB. Per-function continuation runs only under
@@ -158,7 +161,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: the three-error fixture gives three lines under 500 bytes total; output is
   sorted by path, line, column and stable across `-j 1` and `-j 8`.
 
-### LF-05 `neper fix`: apply a diagnostic's own fixes - M, Sonnet (after LF-04)
+### LF-05 `neper fix`: apply a diagnostic's own fixes - M, Sonnet, medium (after LF-04)
 - Evidence (source): five fix kinds exist, all `maybe` (`main.e:5311-5322`);
   `plan_collect` (`main.e:6240`) reads only `precondition`/`edit` records, so nothing
   applies a diagnostic's fix.
@@ -170,7 +173,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: the card's E-NAME-0003 and E-TYPE-0002 reject fences become clean after
   `fix`; a stale file hash aborts with nothing written.
 
-### LF-06 `neper explain CODE` - S, Sonnet
+### LF-06 `neper explain CODE` - S, Sonnet, low
 - Evidence: `--explain` today is the inliner's (`main.e:14970`); `docs/diagnostics.md`
   has one line per code.
 - Do: `neper explain E-XXXX-nnnn` prints the registry line, a minimal rejected example
@@ -180,7 +183,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: every code the card lists as verified has an explanation; an unknown code
   exits 2.
 
-### LF-07 `neper verify`: the whole repair loop in one call - M, Sonnet (after LF-04)
+### LF-07 `neper verify`: the whole repair loop in one call - M, Sonnet, medium (after LF-04)
 - Do: `neper verify [--changed m1,m2]` runs check + `fmt --check` + test-impact +
   `test --only` in one process, one digest, at most 30 lines; exit 0 only if all pass.
   With no `--changed`, it derives the changed modules from source hashes against the
@@ -188,7 +191,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: on a one-function edit of a fixture project, output is at most 30 lines and
   names the tests it ran and the ones it skipped as unreached.
 
-### LF-08 Every checker diagnostic kind has a registered code - M, Sonnet, mechanical
+### LF-08 Every checker diagnostic kind has a registered code - M, Sonnet, mechanical, low
 - Evidence (source): `diagnostic_code` (`check.e:17131-17182`) names 60 of 92 kinds;
   30 fall to `ret "E-TYPE-9999"` (`:17181`), including `FieldMissing` (which already
   carries a rename fix, `:2518`), `NonExhaustive`, `AssignmentImmutable`, `NotAType`,
@@ -209,7 +212,7 @@ unbounded answers. These packages fix each of those at its source.
   precedes an unknown-name error (`main.e:9726-9728`, `resolve.e:1009-1012`; verified
   with `let count: usize = cuont`).
 
-### LF-09 Syntax errors say what was wrong - M, Sonnet (extends T028)
+### LF-09 Syntax errors say what was wrong - M, Sonnet, medium (extends T028)
 - Evidence (verified): one emit site (`main.e:8640`) for 89 bare `ret InvalidSyntax`
   in `parse.e`. Shapes an LLM writes from habit, and today's answer:
 
@@ -234,7 +237,7 @@ unbounded answers. These packages fix each of those at its source.
   gains nothing (the diagnostics now carry it).
 - Files: `src/parse.e`, `src/lex.e:1186`, `src/main.e` (8600-8700).
 
-### LF-10 Declaration errors always have a location and a kind - M, Sonnet
+### LF-10 Declaration errors always have a location and a kind - M, Sonnet, medium
 - Evidence (source): bare error returns with no `record_failure`: InvalidType 252,
   TypeMismatch 71, Unsupported 63, ArgumentCount 49, InvalidConstant 49,
   InvalidOperator 38, InvalidFormat 37. Bodies have a statement-level fallback for
@@ -252,7 +255,7 @@ unbounded answers. These packages fix each of those at its source.
   column. A script counts bare `ret <Error>` lines without a preceding record in
   `check.e` and ratchets the number down.
 
-### LF-11 Float literals are range-checked by the checker - S, Sonnet
+### LF-11 Float literals are range-checked by the checker - S, Sonnet, low
 - Evidence (source): `decimal.literal_bits` has one caller, `lower.e:295`; `check.e`
   has no `use decimal`. `let x: f32 = 1e39` passes `check-file` and fails in lowering
   as `cannot lower f: lowering failed`, E-TYPE-9999.
@@ -260,7 +263,7 @@ unbounded answers. These packages fix each of those at its source.
   record a float-range kind mapped to E-TYPE-0004 (as integers are).
 - Accept: reject fixture, E-TYPE-0004 at the literal, under `check-file` alone.
 
-### LF-12 Many errors per function, no cascades - L, Opus (wave 4)
+### LF-12 Many errors per function, no cascades - L, Opus, xhigh (wave 4)
 - Evidence (source): `record_failure` returns if `c.failure_has_token`
   (`check.e:980`) and every statement is a `try`, so one diagnostic per function.
   No poisoned type exists (`Kind.Invalid` means unknown, not reported); each failing
@@ -275,7 +278,7 @@ unbounded answers. These packages fix each of those at its source.
   local used five times gives one; both suites' reject goldens reviewed for count
   changes.
 
-### LF-13 A failed block header does not cascade; all failures print - S/M, Sonnet
+### LF-13 A failed block header does not cascade; all failures print - S/M, Sonnet, medium
 - Evidence (verified): `if x = 2usize {` yields 5 `unexpected` notes for the rest of
   the function; `recover_statement` (`parse.e:1616-1623`) stops at the newline so the
   body's `}` closes the enclosing block. Plain mode prints only `failure_token`
@@ -287,21 +290,21 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: that fixture reports one diagnostic; a file with 100 bad statements reports
   64 and the count of the rest.
 
-### LF-14 Module errors have a span and a suggestion - S, Sonnet
+### LF-14 Module errors have a span and a suggestion - S, Sonnet, low
 - Evidence (verified): `use e.strng` on line 2 reports `1:1`; `main.e:9539-9540`
   passes `no_token`; `graph.e:1316-1319` keeps only the name.
 - Do: keep the `UseDecl` token in `graph.Import` (`collect_imports`); suggest the
   nearest directory-listing entry with `resolve.edit_distance`, as a fix.
 - Accept: reject fixture asserts line 2 and a `fixes` entry `e.str`.
 
-### LF-15 Duplicate and shadow errors name the first site - S, Sonnet
+### LF-15 Duplicate and shadow errors name the first site - S, Sonnet, low
 - Evidence (verified): E-NAME-0003 and E-NAME-0001 show only the second site;
   `resolve.Local` has no token (`resolve.e:47-50`, `:296-301`, `:895-905`).
 - Do: store the token in `Local`; put the prior site in `related`. For E-NAME-0003
   against a module-scope function or qualifier, `related` is that declaration or `use`.
 - Accept: reject fixtures assert `related[0]` line.
 
-### LF-16 One command table drives dispatch, usage, `info` and exit codes - M, Sonnet (T054, T011)
+### LF-16 One command table drives dispatch, usage, `info` and exit codes - M, Sonnet, medium (T054, T011)
 - Evidence (source): `info --json` lists 10 commands and
   `build_targets:["x64-linux","x64-windows"]` (`tool.e:237`) while eleven targets are
   dispatched; `capabilities_json` (`tool.e:262-263`) is a hand-kept string missing
@@ -315,7 +318,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: `scripts/check_agent_routes.py` gains a check that every dispatched command
   is in `info`; a tools golden pins the capabilities stream.
 
-### LF-17 Probing never writes into the project - S, Sonnet
+### LF-17 Probing never writes into the project - S, Sonnet, low
 - Evidence (source): `fmt` with no operand becomes `fmt-project --write`
   (`main.e:1408`); `check`/`index` with no operand create `.neper/debug/<leaf>`
   (`:1420`).
@@ -324,7 +327,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: a tools test snapshots a project tree, runs bare `fmt`, `check`, `index`,
   and finds the tree byte-identical.
 
-### LF-18 Internal failures say where - S, Sonnet
+### LF-18 Internal failures say where - S, Sonnet, low
 - Evidence: `main` returns the raw error (`main.e:14237`); the user sees
   `E-TOOL-9999: internal compiler failure` and a bare error name.
 - Do: keep the current phase and module in `Sink`; on an internal error print them
@@ -332,11 +335,11 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: a self-test hook that forces an internal error in lowering prints the phase
   and module.
 
-### LF-19 `uses-file` answers for constants and globals - S, Sonnet (next to T075)
+### LF-19 `uses-file` answers for constants and globals - S, Sonnet, low (next to T075)
 - Evidence: `tool.e:4658` "names no function, type, field or error".
 - Accept: `uses --symbol m.CONST` equals a grep count on a fixture.
 
-### LF-20 A generated compiler map - S, Sonnet (wave 3 entry)
+### LF-20 A generated compiler map - S, Sonnet, low (wave 3 entry)
 - Evidence: no architecture map exists; `main.e` has no header line; headers of
   `check.e` ("foundation") and `parse.e` ("revision-1") are stale.
 - Do: fix the headers (one line of responsibility each). `scripts/render_digest.py`
@@ -345,7 +348,7 @@ unbounded answers. These packages fix each of those at its source.
   read it instead of the file.
 - Accept: the map regenerates deterministically; `AGENTS.md` routing names it.
 
-### LF-21 `plan-move-file`: move a function between modules - M, Opus
+### LF-21 `plan-move-file`: move a function between modules - M, Opus, high
 - Why: the splits below are thousands of mechanical requalifications; a plan command
   does them with hash preconditions, and agents get a general refactoring.
 - Do: `plan-move-file --symbol m.f --to module2` emits edits that move the declaration
@@ -354,7 +357,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: move a function between two fixture modules and back; tree byte-identical
   after the round trip.
 
-### LF-22 Split `main.e` (15.5k) and `tool.e` (8.1k) - L, Opus, refactor (byte gate)
+### LF-22 Split `main.e` (15.5k) and `tool.e` (8.1k) - L, Opus, high, refactor (byte gate)
 - Constraint: imports are acyclic, so `Sink` and the report helpers move first.
   `dispatch` is at the bootstrap's local cap (`main.e:14803`); split it into
   per-family functions as part of this.
@@ -369,7 +372,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: byte gate after every step; no `src` file over 4k lines at the end; the
   bootstrap (until PL-09) still builds it.
 
-### LF-23 Split `check.e` (22k) - L, Opus, refactor (byte gate)
+### LF-23 Split `check.e` (22k) - L, Opus, xhigh, refactor (byte gate)
 - Leaf clusters with no back-edges, move first: constant integer arithmetic
   5753-6001; format verbs 9967-10195; atomic tables 11124-11242; diagnostic tables
   17131-17267; intrinsic seeds 4729-5245; layout 6184-6470; region and keeps walks
@@ -379,7 +382,7 @@ unbounded answers. These packages fix each of those at its source.
   6473-8399; resources 18927-22069; device 18187-18926.
 - Accept: byte gate after every step.
 
-### LF-24 Streaming `query-batch` as the server transport - S then M (T062)
+### LF-24 Streaming `query-batch` as the server transport - S then M, Sonnet, medium (T062)
 - Evidence: `source.load_stdin` at `main.e:13646` reads all of stdin first; a cold
   query costs 0.8-1.7 s on the compiler itself.
 - Do: read stdin line by line, flush per answer; `BatchSession` already holds the
@@ -387,7 +390,7 @@ unbounded answers. These packages fix each of those at its source.
   call skips load, parse and check.
 - Accept: a second query in one session answers in under 50 ms on `src/main.e`.
 
-### LF-25 One suite, one fixture table - L, Opus
+### LF-25 One suite, one fixture table - L, Opus, xhigh
 - Evidence: `tests/selfhost/run.ps1` (12,615 lines, 1.3 MB) and `run.sh` (12,450
   lines, 1.0 MB) are the same suite written twice by hand; every fixture is a stanza
   in each. A worker adding a fixture edits both and cannot read either.
@@ -402,7 +405,7 @@ unbounded answers. These packages fix each of those at its source.
   acceptance (finishes, resumable, stderr tolerant) holds for migrated steps.
 - Queue: T076 (widened).
 
-### LF-26 `check-fixture.sh` shows the error - S, Sonnet
+### LF-26 `check-fixture.sh` shows the error - S, Sonnet, low
 - Evidence: the build log goes to `build/check-fixture-build.log` with only "see log"
   printed (`scripts/check-fixture.sh:56-57`); the output `neper-try.exe` is shared by
   every session; it always rebuilds through the C bootstrap.
@@ -413,7 +416,7 @@ unbounded answers. These packages fix each of those at its source.
 
 ## 3. Hardening (HD)
 
-### HD-01 Resource containment is truncated at depth 6 and the wrong answer is cached - S, Opus, soundness
+### HD-01 Resource containment is truncated at depth 6 and the wrong answer is cached - S, Opus, high, soundness
 - Evidence (source): `check.e:19096` `if depth > 6usize { ret 0u8 }` (0 = plain);
   `:19135` memoizes `affine_memo` whatever depth computed it. A `File` eight structs
   deep is untracked, and the answer depends on query order and so on worker schedule.
@@ -424,7 +427,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: nine nested structs, innermost holding `os.File`, close forgotten:
   E-SAFETY-0002 in both declaration orders and at `-j 1` and `-j 8`.
 
-### HD-02 x64 does not widen narrow integer parameters arriving in registers - S, Opus (C256)
+### HD-02 x64 does not widen narrow integer parameters arriving in registers - S, Opus, high (C256)
 - Evidence (source): `codegen_x64.e:2137-2139` in `prologue_parameters` stores the
   register as-is; the direct-move path `:2118-2124` also skips it; only stack-passed
   arguments are normalised (`:2148`). `store_incoming_parameters` (`:2197`) is dead
@@ -435,7 +438,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: a C shim calls a Neper callback with i8/i16/i32 min and -1 and u8/u16/u32
   max, in register and stack positions; both back ends agree; `< 0` holds.
 
-### HD-03 Negative tags of a narrow signed enum never compare equal - S, Opus (C256)
+### HD-03 Negative tags of a narrow signed enum never compare equal - S, Opus, high (C256)
 - Evidence (source): `enum_member_bits` (`check.e:2570-2579`) returns the
   width-truncated pattern; `lower.e:1840` emits it as `ConstInteger` of `tag_type`
   and `:1844` compares with a sign-extended load (`codegen_x64.e:4289`,
@@ -446,7 +449,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: `enum i8/i16/i32 { A = -1, B = -128 }` and a `union enum i32` through
   literal, struct field, switch, generated `eq` and formatter, both back ends.
 
-### HD-04 Register eviction assumes value numbers ascend with position - S, Opus
+### HD-04 Register eviction assumes value numbers ascend with position - S, Opus, high
 - Evidence (source): `regalloc.e:930` walks values by number; eviction `:987-993`
   pops only the top holder. `nir.e:1612-1663` (`hoist_frame_addresses`) moves
   late-numbered values into the entry block, giving them an early `first`, so other
@@ -457,7 +460,7 @@ unbounded answers. These packages fix each of those at its source.
   asserting no two overlapping ranges share a register; a kernel fixture with more
   than 12 hot locals in a loop equal to the serial result.
 
-### HD-05 Parser nesting bound has two holes: stack overflow, no diagnostic - S, Sonnet
+### HD-05 Parser nesting bound has two holes: stack overflow, no diagnostic - S, Sonnet, low
 - Evidence (verified): a 2,000-link `p.b.b...` chain and 20,000 nested `switch` exit
   `0xC00000FD` with empty output. `parse.e:766-789` (postfix loop) and `:1550-1568`
   (`parse_switch_statement`) never call `enter`; `resolve.e:973-983` recurses over it.
@@ -465,7 +468,7 @@ unbounded answers. These packages fix each of those at its source.
   `parse_switch_statement`.
 - Accept: both shapes reject with the "nesting deeper than 128" diagnostic.
 
-### HD-06 Valid large literals are rejected as syntax errors - S/M, Sonnet (C254-adjacent)
+### HD-06 Valid large literals are rejected as syntax errors - S/M, Sonnet, medium (C254-adjacent)
 - Evidence (verified): a 71 KB file with a 20,000-element `[_]u8{...}` gives
   `E-SYNTAX-9999 unexpected ','` at 1248:16. The tree pool is a guess
   (`graph.e:443-444`: `bytes / 2 + 4096` nodes, `bytes + 8192` children; again at
@@ -474,7 +477,7 @@ unbounded answers. These packages fix each of those at its source.
   and `worker_module` double the pool and reparse.
 - Accept: link fixture with a generated 20,000-element table builds and sums right.
 
-### HD-07 Every capacity names itself (C254, concrete list) - M, Sonnet
+### HD-07 Every capacity names itself (C254, concrete list) - M, Sonnet, medium
 - Evidence: symbols sized `sized(4096, total, 64)` (`main.e:4525`); 12,000
   `const` lines give `1:1 E-NAME-9999 name resolution failed` because
   `main.e:9824-9826` prints before `capacity_name` (`:14136`); 6,000 give `1:1
@@ -494,7 +497,7 @@ unbounded answers. These packages fix each of those at its source.
   asserts the pool's name in the message. `resolve.e:230` and `fill_indexes`
   (`check.e:5344`) stop falling back to linear scans silently: they report.
 
-### HD-08 Safety facts are dropped silently at fixed limits - S, Opus, soundness
+### HD-08 Safety facts are dropped silently at fixed limits - S, Opus, high, soundness
 - Evidence (source): `resource_pin` (`check.e:18981`) returns silently at 16 pins, so
   the 17th `&x` in one statement is unpinned and E-SAFETY-0004 unenforced.
   `set_kernel_fact` (`:16510-16512`) past 64 kernels records "none", and which ones
@@ -504,7 +507,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: a 17-pointer statement followed by a move reports E-SAFETY-0004 or the
   named limit, never silence; 65 nested loops with `break` reject by name.
 
-### HD-09 Type memo key ignores `in_shared` and `foreign` - S, Opus
+### HD-09 Type memo key ignores `in_shared` and `foreign` - S, Opus, high
 - Evidence (source): `same_expectation` (`check.e:13706-13710`) omits both;
   `type_equal` honours them (`:1345,1373`). `memo_intern` (`:13581`) and the
   expression cache (`:13657`) key on it and lowering reads the memo. Inferred
@@ -513,7 +516,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: one expression checked under both expectations in one function yields both
   types (C255-style probe).
 
-### HD-10 Identical-function folding trusts a 64-bit hash - S, Sonnet
+### HD-10 Identical-function folding trusts a 64-bit hash - S, Sonnet, medium
 - Evidence (source): `fold_function` (`main.e:10845-10848`) folds on a hash match
   with no byte comparison, and scans every earlier hash linearly.
 - Do: an open-addressing table keyed by hash, and a byte compare of the hash input
@@ -521,7 +524,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: a self-test forcing two different bodies to one hash keeps both; `--time`
   `fold_ns` on the all-library root drops; byte gate.
 
-### HD-11 NIR type verifier and allocation verifier - M, Opus (feeds C256)
+### HD-11 NIR type verifier and allocation verifier - M, Opus, high (feeds C256)
 - Evidence (source): `nir.e:1727-1936` checks structure only and runs in
   `end_function` (`:2153`), before `promote_locals` (`regalloc.e:278`) rewrites the
   function. Unchecked assumptions of both back ends: binary operand types agree;
@@ -534,14 +537,14 @@ unbounded answers. These packages fix each of those at its source.
   HD-03's fix locally fails with `Unverified` (state it in the D-row, do not commit
   the revert). Count gate: verifier cost under 2% of self-build in release.
 
-### HD-12 a64 frames are not stack-probed - S, Sonnet
+### HD-12 a64 frames are not stack-probed - S, Sonnet, medium
 - Evidence (source): `codegen_a64.e:107-112` is a bare `sub_immediate`; x64 probes
   every 4096 bytes (`emit_x64.e:664-687`, confirmed).
 - Do: probe loop in `frame_prologue` above one page (16 KiB step on macOS).
 - Accept: a thread with a 1 MB local array written from the far end exits 0, and
   unbounded recursion traps cleanly, under qemu-aarch64 and on the macOS runner.
 
-### HD-13 Project `check` trusts children it never reads - M, Sonnet
+### HD-13 Project `check` trusts children it never reads - M, Sonnet, medium
 - Evidence (source): `check_project_command` (`main.e:3722-3739`) spawns
   `check-file` per source, never reads `status`; all children share the output base
   `npcheck-child` (`:3709`), so two sessions clobber each other. Cost is every file's
@@ -553,7 +556,7 @@ unbounded answers. These packages fix each of those at its source.
   is killed reports `ok:false`; project check time on `lib/e` at most 1.2x one
   whole-program check.
 
-### HD-14 Emitted images get the platform's standard mitigations - M, Sonnet
+### HD-14 Emitted images get the platform's standard mitigations - M, Sonnet, high
 - Evidence (source): PE DllCharacteristics 256 (NX only), fixed base, no `.reloc`
   (`link_pe.e:346,359`). ELF x64 is ET_EXEC at a fixed base unless android or shared
   (`link_elf.e:138-141`); no PT_GNU_STACK or RELRO in any ELF writer (inferred: the
@@ -566,7 +569,7 @@ unbounded answers. These packages fix each of those at its source.
   shows `GNU_STACK RW`; the trap fixture still names its frames under ASLR; DWARF
   line fixture still resolves under gdb.
 
-### HD-15 Generic-argument rows leak; parallel arrays unchecked - S, Sonnet (C254)
+### HD-15 Generic-argument rows leak; parallel arrays unchecked - S, Sonnet, medium (C254)
 - Evidence (source): `specialize_call` (`check.e:9240-9246`) and `specialize_value`
   (`:13411-13417`) claim `generic_arguments` rows per call site and never return them
   on a cache hit; only `atomic_wrapper_type` rolls back (`:11269,11274`).
@@ -576,7 +579,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: a fixture with 50,000 calls of one generic instance builds at the default
   arena; self-test for the length check.
 
-### HD-16 One "still generic" predicate, one substitution (C255) - S/M, Opus
+### HD-16 One "still generic" predicate, one substitution (C255) - S/M, Opus, xhigh
 - Evidence (source): `type_shape_unknown` (`check.e:1403`),
   `type_depends_on_comptime` (`:1393`) and `type_still_generic` (`:3675`) disagree;
   the last ignores `Array && !has_length`, so `Box[[N]T]` reads as concrete
@@ -587,7 +590,7 @@ unbounded answers. These packages fix each of those at its source.
 - Accept: the C255 matrix (instance over instance at ret / assign / let / argument /
   field / array length) passes; byte gate.
 
-### HD-17 Module path segments are case-checked - S, Sonnet (near C235)
+### HD-17 Module path segments are case-checked - S, Sonnet, low (near C235)
 - Evidence (verified): `use E.mem` is accepted on Windows; `project.e:294-302`
   matches the file stem exactly but `source_directory` (`:250`) trusts the OS for
   directories. Inferred: the same source fails on Linux.
@@ -612,7 +615,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
 | wasm32-wasi | `wasm*.e` | none (`os.wasi.e`) | Node in both suites; CI manual |
 | x86-* | accepted by `valid_arch`, no emitter | - | never |
 
-### PL-01 One target record - L, Opus, refactor (byte gate). Prerequisite of C225, C238, C237
+### PL-01 One target record - L, Opus, high, refactor (byte gate). Prerequisite of C225, C238, C237
 - Evidence (source): about 90 target string compares in 12 files (`main.e` 38,
   `project.e` 19, `stats.e` 6, `resolve.e` 6, `lower.e` 6, `em_link.e` 5, `tool.e` 3,
   `check.e` 3, `graph.e` 2, one each in `wasm.e`, `em.e`, `platform.wasi.e`) and six
@@ -634,7 +637,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
   needs edits in `target.e`, a runtime, and `lib/e/os.<os>.e` only (write that
   checklist into the file header).
 
-### PL-02 aarch64 ELF segment alignment is 4 KiB - S, Sonnet (C236)
+### PL-02 aarch64 ELF segment alignment is 4 KiB - S, Sonnet, low (C236)
 - Evidence (source): `link_elf_a64.e:21` `A64_IMAGE_PAGE = 4096`, used at `:309`.
   Inferred: on 16K/64K-page kernels (Android 15+ devices, Asahi, RHEL aarch64) RX and
   RW share a page and the image fails to load.
@@ -643,7 +646,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
 - Accept: byte check `p_align >= 16384` and `p_vaddr % p_align == p_offset %
   p_align`; a fixture runs under `qemu-aarch64 -p 65536`.
 
-### PL-03 Host detection and positional arch - S, Sonnet
+### PL-03 Host detection and positional arch - S, Sonnet, low
 - Evidence (source): `main.e:1962` answers `x64-linux` for any non-mac POSIX host;
   `main.e:1232` recognises only `x64` and `wasm32` as a positional arch, so
   `run F R aarch64 macos OUT` is read as the short form. `graph.e:342-346,384-388`
@@ -652,7 +655,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
   Mach-O); use `project.valid_arch` at `:1232`; move the cwd test into `platform`.
 - Accept: under qemu-aarch64, `neper build hello.e` writes an aarch64 ELF.
 
-### PL-04 Runtime blobs: one assembler, a drift check, shared routines - M, Sonnet
+### PL-04 Runtime blobs: one assembler, a drift check, shared routines - M, Sonnet, medium
 - Evidence (source): the seven `runtime_*.e` are embedded bytes generated by
   `scripts/embed-elf-runtime.ps1` (WSL GNU `as`, or `zig cc` with a different
   `-mcpu`) and `embed-pe-runtime.ps1` (`ml64`), Windows only. No suite or workflow
@@ -666,7 +669,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
 - Accept: changing one byte of a `.s` without re-embedding fails the check; blobs
   byte-identical after the split.
 
-### PL-05 Variant surface parity for every OS - S, Sonnet
+### PL-05 Variant surface parity for every OS - S, Sonnet, medium
 - Evidence (source): `scripts/check_module_surfaces.py:203` accepts only `windows`
   and `linux`. `e.os` function counts: linux 298, windows 244, wasi 218, macos 214,
   neperos 131; 117 names common to all. 18 lib modules have variants; `net/auth`,
@@ -680,7 +683,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
 - Accept: the script fails today, listing the gaps; each gap is then either
   implemented or given an `os.Unsupported` body.
 
-### PL-06 CI runs current source on every target, on push - M, Sonnet (C253 widened)
+### PL-06 CI runs current source on every target, on push - M, Sonnet, medium (C253 widened)
 - Evidence (source): every workflow but `macos-a64.yml` is `workflow_dispatch` only;
   there is no Windows runner; `macos-a64.yml` copies committed binaries
   (`tests/macos/hello`, last committed 2026-10-22); `freebsd-suite.yml:30` emits a
@@ -692,7 +695,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
   `target.e` (PL-01) so a new row gets a job.
 - Accept: a deliberately broken a64 encoding on a branch turns the push red.
 
-### PL-07 A shared instruction selector - L, Opus, refactor (byte gate). Before C242/C243
+### PL-07 A shared instruction selector - L, Opus, xhigh, refactor (byte gate). Before C242/C243
 - Evidence (source): duplicated between `codegen_x64.e` and `codegen_a64.e`: the
   opcode ladder (x64 4158-4779, a64 1927-2200), the line-table block (4142-4157,
   1909-1924), the pre-pass in `function()`, Cast/narrow/overflow rules (4346-4377,
@@ -711,7 +714,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
 - Accept: byte gate on x64; a64 output changes only by the gained fusions, checked by
   the a64 differential; `codegen_a64.e` no longer imports `codegen_x64`.
 
-### PL-08 riscv64-linux as the proof of PL-01 and PL-07 - L, Opus (new; optional)
+### PL-08 riscv64-linux as the proof of PL-01 and PL-07 - L, Opus, xhigh (new; optional)
 - Why: the cheapest honest test that a target is now a table row plus an emitter. The
   a64 path is the template (`emit_a64` 1460 lines, `link_elf_a64` 324). Needs an
   emitter, the per-target emit set, a runtime `.s`, `e_machine` and relocation numbers
@@ -721,7 +724,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
 - Decide before starting; C238 FreeBSD is the alternative proof for the OS axis and is
   cheap after PL-01 (OSABI byte, interpreter path, `os.freebsd.e`, a runtime).
 
-### PL-09 Retire the C bootstrap through committed seeds - M, Opus (C088, C266, C263)
+### PL-09 Retire the C bootstrap through committed seeds - M, Opus, high (C088, C266, C263)
 - Evidence (source): the bootstrap is still the default path in
   `scripts/build-bootstrap.sh`, `build-selfhost.{ps1,sh}`, `check-fixture.sh`,
   `run.ps1`/`run.sh` and seven workflows; `run.sh:78` already builds from
@@ -735,7 +738,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
   card's "Bootstrap-only rules" paragraph, and the constraints in section 0 item 4.
 - Accept: a clean clone on each host builds the compiler with no C compiler present.
 
-### PL-10 Width axis for 32-bit targets - design only, Opus (blocks C224, C239)
+### PL-10 Width axis for 32-bit targets - design only, Opus, xhigh (blocks C224, C239)
 - Evidence (source): values are 64-bit throughout; even wasm32 keeps "every NIR
   value is an `i64`" (`wasm_code.e:6`). x86-32 and Thumb-2 need a pointer-width axis
   in layout, NIR and regalloc; z/OS (C241) needs a big-endian emit path, since every
@@ -749,7 +752,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
 
 ## 5. Compile speed (CS)
 
-### CS-00 A baseline that is one command - S, Sonnet (first)
+### CS-00 A baseline that is one command - S, Sonnet, low (first)
 - Do: `scripts/bench-compile.sh`: build a release compiler from the seed into a
   scratch directory outside the repo (the sandbox ACL note in memory applies), then
   report `--time` phases for (a) the self-build at `-j1` and `-j8`, (b) the
@@ -759,7 +762,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
 - Accept: two consecutive runs differ by under 3% on (a). Every CS and XS package
   quotes its row before and after.
 
-### CS-01 Warm builds do no SHA-256 and `--json` takes the no-op path - M, Sonnet
+### CS-01 Warm builds do no SHA-256 and `--json` takes the no-op path - M, Sonnet, medium
 - Evidence (source): the no-op shortcut requires `!report.json && !report.build.on`
   (`main.e:14821`) and short `run` always adds `--json` (`:1367`), so an agent's
   build never takes it. `source_sha_now` (`:8863`) hashes every source with SHA-256
@@ -771,7 +774,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
 - Accept: an unchanged `run --json` reports `load and parse` only; SHA-256 call count
   on a warm build is 0 (counter in `--stats`); CS-00 row (c) improves.
 
-### CS-02 Generic instances: hashed lookup, shared across modules - M, Opus
+### CS-02 Generic instances: hashed lookup, shared across modules - M, Opus, high
 - Evidence (source): `find_function_instance` (`check.e:9019`) scans every instance
   per generic call; `owner_instance_count` (`:9003`) scans again per new instance;
   instances are keyed by owner module (`:9023`) so a template body is re-checked per
@@ -786,7 +789,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
   (it changes artifact identity; needs its own decision row).
 - Accept: an instance-heavy fixture (e.data.map over 200 key types); count gate.
 
-### CS-03 Back-end constant factors - S each, Sonnet
+### CS-03 Back-end constant factors - S each, Sonnet, low
 - `lower.e:7543, 7685, 8727, 8966`: `var break_storage: [2048]usize = zero` clears
   16 KB per loop lowered; use `undef` or a shared stack.
 - `lower.e:1223-1241`: `declare_globals` is modules x globals.
@@ -794,7 +797,7 @@ Target matrix today (all targets are produced from any host; writers are byte-wi
   function; one event sweep.
 - Accept: byte gate; count gate on the self-build.
 
-### CS-04 Front-end constant factors - S each, Sonnet
+### CS-04 Front-end constant factors - S each, Sonnet, low (type-name interning: medium)
 - `error_table.e:63-88`: `validate_link` is errors x symbols, rehashing names per
   pair; `build` already sorts, so compare adjacent entries.
 - `resolve.e:598`: a `"mem"` qualifier lookup runs for every named type before the
@@ -821,7 +824,7 @@ The optimisation roadmap (`docs/compiler-optimizations.md`, C242-C252) stands. T
 review found one missing prerequisite, two cheap wins the roadmap does not list, and
 stale rows.
 
-### XS-01 x64 array indexing uses scaled addressing - M, Opus
+### XS-01 x64 array indexing uses scaled addressing - M, Opus, high
 - Evidence (source): `codegen_x64.e:3782-3799` emits 8-10 instructions per index:
   copies base to r10, index to r11, length to rax (saving live rax), a
   `multiply_immediate` even for 2/4/8, `add`, restore, then a separate Load.
@@ -834,7 +837,7 @@ stale rows.
 - Accept: emit sweep covers the new encodings against `disasm_x64`; count gate on the
   self-build and `benchmarks/gp`; both back ends agree on the index fixtures.
 
-### XS-02 Spill slots are reused; short displacements - S, Sonnet
+### XS-02 Spill slots are reused; short displacements - S, Sonnet, high
 - Evidence (source): `regalloc.e:989-990,995-996` take a new slot per spilled value;
   `emit_x64.e:1026-1039` always emits disp32 (7 bytes, against 4); a64 slots past 256
   bytes cost two instructions (`codegen_a64.e:44-51`).
@@ -843,7 +846,7 @@ stale rows.
 - Accept: `--stats` frame bytes and `.text` size on the self-build both drop; count
   gate; HD-11's allocation verifier extended to "no two live values share a slot".
 
-### XS-03 Promotion to values happens in NIR, before the optimisations - L, Opus
+### XS-03 Promotion to values happens in NIR, before the optimisations - L, Opus, xhigh
 - Evidence (source): no Phi is ever emitted (`wasm_code.e:1920`; no codegen arm).
   Mutable locals stay Load/Store until `promote_locals` inside regalloc
   (`regalloc.e:278`), so value numbering (C245), LICM (C246) and bounds-check
@@ -854,7 +857,7 @@ stale rows.
 - Accept: byte gate is not expected to hold; instead the emit sweep, both suites and
   the count gate (no regression) on both back ends.
 
-### XS-04 Roadmap corrections - S, Sonnet (docs only)
+### XS-04 Roadmap corrections - S, Sonnet, low (docs only)
 - C249's loop-depth spill weights already exist (`regalloc.e:721-773`); narrow C249
   to splitting, coalescing and rematerialisation.
 - Compare-branch fusion and jump-to-next elision are done on both targets; the
