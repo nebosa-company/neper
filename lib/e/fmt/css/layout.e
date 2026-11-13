@@ -7341,6 +7341,11 @@ fn grid_split(a: *mem.Arena, s: str) -> []const str {
             depth += 1i64
         } else if c == 41u8 || c == 93u8 {
             if depth > 0i64 { depth -= 1i64 }
+            // Adjacent name groups (`[a][b]`) are separate tokens.
+            if depth == 0i64 && c == 93u8 && i + 1usize < s.len && s[i + 1usize] == 91u8 {
+                cv.push_str(&out, s[start..i + 1usize])
+                start = i + 1usize
+            }
         } else if depth == 0i64 && (c == 32u8 || c == 9u8 || c == 10u8 || c == 13u8) {
             if i > start { cv.push_str(&out, s[start..i]) }
             start = i + 1usize
@@ -7786,7 +7791,15 @@ fn item_axis_specs(a: *mem.Arena, s: *const style.Style, col: bool) -> (LineSpec
         sp = parse_line_spec(a, h1)
         if hs { ep = parse_line_spec(a, h2) } else {
             ep = parse_line_spec(a, "")
-            if sp.kind == 3u8 { ep = sp }
+            // Only a bare identifier repeats as the end; `a -1` (an index too) leaves it auto.
+            var bare = sp.kind == 3u8
+            let h1t = cv.trim_ws(h1)
+            var hi = 0usize
+            while hi < h1t.len {
+                if h1t[hi] == 32u8 { bare = false }
+                hi += 1usize
+            }
+            if bare { ep = sp }
         }
     }
     let (st_text, has_st) = extra_text(s, start_name)
