@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L279",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 523,
-      "title": "Row and column statistic kernels (matrixStats)",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open. Needs L264. Acceptance: rowSums2, rowMeans2, rowVars, rowSds, rowMads, rowMedians, rowQuantiles, rowRanks (ties.method), rowCumsums, rowDiffs, rowOrderStats, weightedMedian, weightedMean, binCounts, colRanges and the col* twins, with rows and cols subsets and na.rm, equal to matrixStats on seeded matrices with NA, Inf, ties and zero-width cases."
-    },
-    {
       "id": "L280",
       "category": "library",
       "group": "CRAN parity",

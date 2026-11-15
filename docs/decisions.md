@@ -44238,3 +44238,11 @@ unreferenced.
 **Decision.** `e.gfx.colorspace.convert` is `from_rgb(to, to_rgb(from, cap(from, v), white_from), white_to)` then `cap(to, ..)`, as farver's driver does; `to_rgb` and `from_rgb` are its converters formula for formula (0.008856 and 7.787 for Lab, the 0.001 floors in Luv and HSV, cbrt through one Newton step on `pow`). `compare` reads both colours in one space, the first under `white_from` and the second under `white_to`, and takes the distance under `white_to`, which is farver's order. `min_of` and `max_of` are `std::min` and `std::max`, which return the first argument when a NaN is involved: that is why a NaN sRGB converts to 0 channels in HSL, CMYK and XYZ and to NaN in others, as farver's does. The one case left out of the golden is the yxy colour with y2 = 0, where farver reads an uninitialised hue.
 
 **Result.** Fixture `oracle_colour`: 14298 cases equal farver 2.1.2 at 1e-9 on both hosts.
+
+## D5990 — matrixStats kernels are one set over two margins, with R's tie and bin rules
+
+**Context.** L279. matrixStats has a C kernel per function and margin; the contract is the shapes, the NA rules and a handful of conventions that only the C shows.
+
+**Decision.** `e.algo.stat.matrix` has one kernel per statistic and a `by_row` flag that picks the margin, over a column-major `Mat`; `rows` and `cols` subsets are `submatrix` first. Long-double sums are Neumaier double-double (`Sum`), the means follow the C (sum, divide, optional refinement pass), the variance is the C's double pass. The conventions read from the C and from the oracle: `rowRanks` and `colRanks` both answer the n-by-length matrix (the column version is transposed, not x's shape), "last" ranks the first of a tie highest, ranges of an all-NA unit with na.rm are (Inf, -Inf), a bin is half-open throughout (`[lo, hi)` or `(lo, hi]`, with no closed last bin), and `weightedMedian` is the interpolating or weighted-ties algorithm of `weightedMedian_lowlevel_template.h`. `quantiles` is type 7 only.
+
+**Result.** Fixture `oracle_matrixstats`: 11518 cases equal matrixStats 1.5.0 at 1e-12 on both hosts.

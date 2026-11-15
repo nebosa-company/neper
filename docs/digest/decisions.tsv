@@ -3061,4 +3061,5 @@ D5985	1474	prettyunits and abind reproduce R's text and array rules, not their i
 D5986	1350	cli's ANSI operations carry cli's own Unicode tables
 D5987	1364	scales' labels are number() plus R's format(), not a printf
 D5988	1243	axis breaks are ported with R's own sequence rules
-D5989	1198	colour conversion goes through sRGB under two white points, with C++ min and max
+D5989	1199	colour conversion goes through sRGB under two white points, with C++ min and max
+D5990	1176	matrixStats kernels are one set over two margins, with R's tie and bin rules

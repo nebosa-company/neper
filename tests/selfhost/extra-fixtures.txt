@@ -140,3 +140,4 @@ oracle_ansi
 oracle_labels
 oracle_scale
 oracle_colour
+oracle_matrixstats
