@@ -1,6 +1,6 @@
 id	category	score	evidence_bytes	title	status
 L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
-L298	library	0	338	xts: period handling and time-indexed series	Open (CRAN rank 165).
+L298	library	0.7	635	xts: period handling and time-indexed series	Partial (D6022).
 L296	library	0	398	proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener	Open (CRAN ranks 147, 152).
 L297	library	0	356	colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation	Open (CRAN rank 110).
 L295	library	0.9	324	classInt: classification intervals	Partial (D6020, D6021).
@@ -128,6 +128,30 @@ L415	library	0	366	marginaleffects: predictions, slopes and comparisons	Open (CR
 L416	library	0	231	polspline: polynomial spline models	Open (CRAN rank 597).
 L417	library	0	429	gsl: special functions of the GNU Scientific Library	Open (CRAN rank 594).
 L418	library	0	333	Rmpfr: arbitrary-precision floating point	Open (CRAN rank 567).
+L419	library	0	240	cmprsk: competing risks	Open (CRAN rank 602).
+L420	library	0	198	minpack.lm: Levenberg-Marquardt least squares	Open (CRAN rank 620).
+L421	library	0	215	fdrtool: false discovery rate estimation	Open (CRAN rank 677).
+L422	library	0	342	extraDistr: extra probability distributions	Open (CRAN rank 678).
+L423	library	0	215	biglm: bounded-memory linear and generalized linear models	Open (CRAN rank 672).
+L424	library	0	214	logistf: Firth penalized logistic regression	Open (CRAN rank 689).
+L425	library	0	222	ismev: extreme-value model fits	Open (CRAN rank 647).
+L426	library	0	295	DiceDesign: space-filling designs	Open (CRAN rank 604).
+L427	library	0	320	afex: repeated-measures and mixed ANOVA	Open (CRAN rank 607).
+L428	library	0	224	MuMIn: model selection and averaging	Open (CRAN rank 667).
+L429	library	0	316	imputeTS: time-series imputation	Open (CRAN rank 658).
+L430	library	0	287	geepack: generalized estimating equations	Open (CRAN rank 644).
+L431	library	0	261	TSP: travelling-salesperson tools	Open (CRAN rank 631).
+L432	library	0	223	seriation: ordering of objects	Open (CRAN rank 609).
+L433	library	0	320	vars: vector autoregression	Open (CRAN rank 606).
+L434	library	0	258	qgraph: network estimation	Open (CRAN rank 690).
+L435	library	0	312	sna: social network analysis	Open (CRAN rank 629).
+L436	library	0	298	MatchIt: matching for causal inference	Open (CRAN rank 656).
+L437	library	0	315	gstat: geostatistics	Open (CRAN rank 699).
+L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
+L439	library	0	309	MCMCpack: Bayesian MCMC for common models	Open (CRAN rank 636).
+L440	library	0	347	flexsurv and rstpm2: flexible parametric survival models	Open (CRAN ranks 697, 694).
+L441	library	0	300	msm and mstate: multi-state models	Open (CRAN ranks 642, 679).
+L442	library	0	264	phangorn: phylogenetic inference	Open (CRAN rank 666).
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU

@@ -633,3 +633,103 @@ polspline	597	polynomial splines: polymars, logspline, hare, heft, lspec, oldlog
 statnet.common	598	utilities	-	out-of-scope	-		
 pingr	599	ping helper	-	out-of-scope	-		
 formula.tools	600	formula helpers	-	out-of-scope	-		
+tmap	601	thematic maps	-	out-of-scope	-		
+cmprsk	602	competing risks: cumulative incidence (cuminc), Gray test, Fine-Gray regression (crr)	cuminc, crr, timepoints	partial	e.algo.stat.survival has cumulative_incidence	~4k	L419
+Rcmdr	603	R Commander GUI	-	out-of-scope	-		
+DiceDesign	604	space-filling designs: maximin and optimized Latin hypercubes, WSP, discrepancy and distance criteria, low-discrepancy	lhsDesign, maximinSA_LHS, discrepancyCriteria, wspDesign	gap	e.algo.rand.quasi has sequences	~6k	L426
+qgam	605	quantile GAMs on mgcv, see L353	-	covered-by-other-item	-		
+vars	606	vector autoregression: VAR selection and estimation, SVAR, SVEC, VECM with Johansen, impulse responses, FEVD, Granger and stability tests	VAR, SVAR, irf, fevd, causality, vec2var	partial	e.algo.timeseries has var_fit and var_forecast	~10k	needs L303 for the cointegration part; L433
+afex	607	repeated-measures and mixed ANOVA with Type III sums of squares, Greenhouse-Geisser and Huynh-Feldt corrections	aov_car, aov_ez, mixed	gap	-	~15k	the mixed part waits for L274; L427
+tune	608	tuning wrapper	-	out-of-scope	-		
+seriation	609	ordering of objects and matrices: TSP, GW, OLO, spectral, bond energy, MDS, hclust leaf orders and quality criteria	seriate, criterion, permute	gap	-	~15k	needs L431; L432
+correlation	610	correlation types, see L312	-	covered-by-other-item	-		
+wordcloud	611	word cloud layout	-	out-of-scope	-		
+msigdbr	612	gene set data	-	out-of-scope	-		
+collections	613	data structures, e.data.deque and e.data.map	-	covered	e.data.deque and e.data.map		
+shinycssloaders	614	shiny	-	out-of-scope	-		
+sjlabelled	615	labelled data, see L304	-	covered-by-other-item	-		
+xlsx	616	Excel files over Java, e.fmt.xlsx	-	covered	e.fmt.xlsx		
+git2r	617	git client	-	out-of-scope	-		
+maptiles	618	map tile download	-	out-of-scope	-		
+rjags	619	JAGS interface	-	out-of-scope	-		
+minpack.lm	620	Levenberg-Marquardt nonlinear least squares: nls.lm and nlsLM	nls.lm, nlsLM	gap	-	~3k	L420
+UpSetR	621	plot	-	out-of-scope	-		
+see	622	plot helpers	-	out-of-scope	-		
+magic	623	magic squares and arrays	-	out-of-scope	-		
+webshot2	624	web screenshots	-	out-of-scope	-		
+countrycode	625	country code tables	-	out-of-scope	-		
+nanoarrow	626	Arrow, e.fmt.arrow	-	covered	e.fmt.arrow		
+spatstat	627	point patterns, see L384	-	covered-by-other-item	-		
+fastGHQuad	628	Gauss-Hermite quadrature, see L327	-	covered-by-other-item	-		
+sna	629	social network analysis: centralities, QAP tests, blockmodels, structural equivalence, triad census, network regression	degree, betweenness, qaptest, equiv.clust, blockmodel	partial	e.algo.graph.centrality	~20k	overlaps igraph (L316); L435
+semTools	630	lavaan helpers, see L354	-	covered-by-other-item	-		
+TSP	631	travelling salesperson heuristics and exact solvers: nearest and insertion, 2-opt, LKH, concorde, tour length	solve_TSP, TSP, tour_length	partial	e.algo.combopt	~4k	verify against e.algo.combopt first; L431
+data.tree	632	hierarchical data structure	-	out-of-scope	-		
+RMySQL	633	MySQL driver, x.oracle.mysql	-	covered	x.oracle.mysql		
+gss	634	smoothing spline ANOVA: ssanova, gssanova, density estimation by penalized likelihood	ssanova, gssanova, ssden, sshzd	gap	-	~15k	L438
+proto	635	prototype objects	-	out-of-scope	-		
+MCMCpack	636	Bayesian MCMC for regression, IRT, factor, change-point and ecological models, with Wishart and Dirichlet samplers	MCMCregress, MCMClogit, MCMCirt1d, rwish, MCMCmetrop1R	gap	e.math.mcmc has generic samplers	~25k	needs the R RNG streams; L439
+AzureRMR	637	Azure client	-	out-of-scope	-		
+modelbased	638	model-based predictions, see L415	-	covered-by-other-item	-		
+fastICA	639	FastICA, see L402	-	covered-by-other-item	-		
+ggcorrplot	640	chart engine	-	out-of-scope	-		
+mapview	641	interactive maps	-	out-of-scope	-		
+msm	642	continuous-time multi-state Markov and hidden Markov models by maximum likelihood	msm, pmatrix.msm, hmmMarkov	gap	-	~15k	with mstate (679); L441
+nanoparquet	643	Parquet, e.fmt.parquet	-	covered	e.fmt.parquet		
+geepack	644	generalized estimating equations: geeglm, ordgee, with Wald tests and robust errors	geeglm, ordgee, anova.geeglm	partial	e.algo.stat.mixed has gee	~8k	verify the working correlations first; L430
+lbfgs	645	L-BFGS and OWL-QN, see L309	-	covered-by-other-item	-		
+tigris	646	US Census shapefile download	-	out-of-scope	-		
+ismev	647	extreme-value fits: gev.fit, gpd.fit, pp.fit, rlarg.fit, return levels and profile likelihoods	gev.fit, gpd.fit, pp.fit, gev.prof	gap	-	~3k	with lmom (480); L425
+sjPlot	648	plot helpers for models	-	out-of-scope	-		
+webshot	649	web screenshots	-	out-of-scope	-		
+ggfortify	650	chart engine	-	out-of-scope	-		
+dichromat	651	colour-vision simulation, see L297	-	covered-by-other-item	-		
+coro	652	coroutines for R	-	out-of-scope	-		
+memuse	653	memory sizes	-	out-of-scope	-		
+hypergeo	654	hypergeometric function, see L417	-	covered-by-other-item	-		
+RcppRoll	655	rolling statistics, e.algo.stat.zoo	-	covered	e.algo.stat.zoo		
+MatchIt	656	matching for causal inference: nearest, optimal, full, exact, coarsened, genetic; balance diagnostics	matchit, match.data, summary	partial	e.algo.stat.causal has propensity_scores and iptw	~12k	L436
+RcmdrMisc	657	R Commander helpers	-	out-of-scope	-		
+imputeTS	658	time-series imputation: interpolation, Kalman, moving average, seasonal decomposition, locf	na_interpolation, na_kalman, na_ma, na_seadec	partial	e.algo.stat.zoo has locf, approx and spline	~6k	L429
+sjmisc	659	data helpers	-	out-of-scope	-		
+webutils	660	web helpers	-	out-of-scope	-		
+workflowsets	661	modelling plumbing	-	out-of-scope	-		
+yyjsonr	662	JSON, e.fmt.json	-	covered	e.fmt.json		
+hdf5r	663	HDF5 files, see L352	-	covered-by-other-item	-		
+egg	664	plot layout	-	out-of-scope	-		
+Metrics	665	evaluation metrics, see L405	-	covered-by-other-item	-		
+phangorn	666	phylogenetic inference: parsimony, maximum likelihood trees with substitution models, bootstrap, tree and network operations	pml, optim.pml, parsimony, bootstrap.pml	gap	-	~40k	needs L350; L442
+MuMIn	667	model selection and averaging: AICc, dredge, model.avg, Akaike weights, QIC	dredge, model.avg, AICc, Weights	gap	-	~15k	L428
+sparklyr	668	Spark client	-	out-of-scope	-		
+sfsmisc	669	numerical utilities, see L333	-	covered-by-other-item	-		
+muhaz	670	kernel hazard smoothing, see L311	-	covered-by-other-item	-		
+rrcov	671	robust multivariate estimators, see L338	-	covered-by-other-item	-		
+biglm	672	bounded-memory lm and glm fitted by chunked updating	biglm, bigglm, update	gap	e.ml.linear.ols is batch	~2k	L423
+WGCNA	673	gene co-expression networks	-	out-of-scope	-		
+TeachingDemos	674	teaching demos	-	out-of-scope	-		
+crul	675	HTTP client, e.net.http	-	covered	e.net.http		
+Rfast	676	fast statistics grab-bag, covered by the items it overlaps	-	out-of-scope	-		
+fdrtool	677	false discovery rate estimation: local fdr, Grenander and the censored-normal null	fdrtool, grenander, monospline	gap	-	~3k	L421
+extraDistr	678	about 60 extra distributions: beta-binomial, Dirichlet, Gumbel, Laplace, Lomax, Pareto, Rayleigh, triangular, truncated and more	dbbinom, ddirichlet, dgumbel, dlaplace, dpareto	gap	-	~15k	L422
+mstate	679	multi-state and competing-risks models: transition matrices, Cox models per transition, probabilities and prediction	msprep, msfit, probtrans	covered-by-other-item	-		L441
+dunn.test	680	Dunn test, e.algo.stat.rstatix	-	covered	e.algo.stat.rstatix		
+seqinr	681	biological sequence analysis	-	out-of-scope	-		
+SuperLearner	682	ensemble learning wrapper	-	out-of-scope	-		
+optparse	683	command line options, e.cli	-	covered	e.cli		
+cvAUC	684	cross-validated AUC, see L324	-	covered-by-other-item	-		
+arg	685	argument helper	-	out-of-scope	-		
+ggspatial	686	chart layers for maps	-	out-of-scope	-		
+gridBase	687	graphics helper	-	out-of-scope	-		
+clubSandwich	688	small-sample cluster-robust errors, see L300	-	covered-by-other-item	-		
+logistf	689	Firth penalized-likelihood logistic regression with profile intervals	logistf, logistpl, forward	gap	-	~3k	L424
+qgraph	690	network estimation: EBICglasso, partial correlation networks, centrality indices, FDR, graphical lasso	EBICglasso, qgraph, centrality, cor_auto	gap	-	~15k	L434
+pagedown	691	paged documents	-	out-of-scope	-		
+tmaptools	692	map helpers	-	out-of-scope	-		
+BSDA	693	basic tests, e.algo.stat.test	-	covered	e.algo.stat.test		
+rstpm2	694	flexible parametric survival models with penalized splines and link-based hazards	stpm2, pstpm2, predict	covered-by-other-item	-		L440
+ggmap	695	map tiles in plots	-	out-of-scope	-		
+jtools	696	model summary helpers	-	out-of-scope	-		
+flexsurv	697	flexible parametric survival: Royston-Parmar splines, generalized gamma, F and Gompertz families, multi-state	flexsurvreg, flexsurvspline, psurvspline	gap	-	~15k	with rstpm2 (694); needs L311; L440
+questionr	698	survey helpers	-	out-of-scope	-		
+gstat	699	geostatistics: sample and fitted variograms, ordinary, simple and universal kriging, simulation	variogram, fit.variogram, krige, gstat	gap	-	~25k	L437
+venn	700	Venn diagrams	-	out-of-scope	-		
