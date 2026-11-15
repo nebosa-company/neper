@@ -7,10 +7,12 @@ suppressMessages(library(cellranger))
 cases <- list()
 add <- function(fn, args, want, ...) cases[[length(cases) + 1]] <<- case(fn, args, want, ...)
 files <- c("clippy", "datasets", "deaths", "geometry", "type-me")
-for (fi in seq_along(files)) {
-  path <- file.path(root, "tests", "data", "xls", paste0(files[fi], ".xls"))
+# 5 biff5 and 6 biff5_mini are BIFF5 workbooks written by scripts/r_oracle/make_biff5.R
+cell_files <- c(files, "biff5", "biff5_mini")
+for (fi in seq_along(cell_files)) {
+  path <- file.path(root, "tests", "data", "xls", paste0(cell_files[fi], ".xls"))
   for (si in seq_along(excel_sheets(path))) {
-    x <- suppressMessages(read_excel(path, sheet = si, range = cell_limits(c(1, 1), c(NA, NA)), col_names = FALSE, col_types = "list", na = character()))
+    x <- suppressMessages(read_excel(path, sheet = si, range = cell_limits(c(1, 1), c(NA, NA)), col_names = FALSE, col_types = "list", na = character(), trim_ws = FALSE))
     add("xls_rows", c(fi - 1, si - 1), nrow(x), rel = 0, abs = 0)
     add("xls_cols", c(fi - 1, si - 1), ncol(x), rel = 0, abs = 0)
     for (r in seq_len(nrow(x))) for (c in seq_len(ncol(x))) {
@@ -55,5 +57,26 @@ for (fi in seq_along(files)) {
     add("xls_nmerged", c(fi - 1, si - 1), length(rects), rel = 0, abs = 0)
     for (i in seq_along(rects)) for (k in 1:4) add("xls_merged", c(fi - 1, si - 1, i - 1, k - 1), rects[[i]][k], rel = 0, abs = 0)
   }
+}
+# hidden sheets and encryption, on byte patches of datasets.xls that the fixture applies too. BOUNDSHEET state bytes at 0-based
+# offsets 11528, 11546 and 11566 (0 visible, 1 hidden, 2 very hidden); the first record after the globals BOF (INTERFACEHDR at 532)
+# turned into FILEPASS with its first data byte (536) 0 for XOR and 1 for RC4. readxl lists every sheet whatever its state and
+# refuses an encrypted workbook with "Unsupported encryption scheme".
+raw_ds <- readBin(file.path(root, "tests", "data", "xls", "datasets.xls"), "raw", file.size(file.path(root, "tests", "data", "xls", "datasets.xls")))
+vis <- c(0, 1, 2)
+x <- raw_ds
+for (k in 1:3) x[c(11529, 11547, 11567)[k]] <- as.raw(vis[k])
+hf <- tempfile(fileext = ".xls"); writeBin(x, hf)
+nm <- excel_sheets(hf)
+add("xls_hidden_n", c(0), length(nm), rel = 0, abs = 0)
+for (k in 1:3) {
+  add("xls_hidden_state", c(k - 1), vis[k], rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("xls_hidden_name", c(k - 1), nm[k])
+}
+for (t in c(0, 1)) {
+  x <- raw_ds; x[533] <- as.raw(0x2f); x[537] <- as.raw(t)
+  ef <- tempfile(fileext = ".xls"); writeBin(x, ef)
+  failed <- tryCatch({ excel_sheets(ef); 0 }, error = function(e) grepl("encryption", conditionMessage(e)))
+  add("xls_encrypted", c(t), as.numeric(failed), rel = 0, abs = 0)
 }
 emit("xls", "readxl", list(cases))

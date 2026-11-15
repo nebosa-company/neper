@@ -8,9 +8,12 @@
 // A cell is blank, text, number, boolean, date (the serial number, to be read with `date_serial`)
 // or error. Rows and columns are 0-based. Hidden sheets are listed with their state.
 //
-// Not here: BIFF5 and earlier (ANSI strings, a different BOUNDSHEET), encrypted workbooks, charts
-// and macro sheets, rich-text runs and phonetic text (skipped), array and shared formula text,
-// and the names of cell styles.
+// BIFF5 and 7 workbooks read through ANSI strings (Windows-1252 unless the CODEPAGE says
+// otherwise, in which case bytes pass as Latin-1); an encrypted workbook (FILEPASS) is refused
+// with Encrypted.
+//
+// Not here: BIFF4 and earlier, charts and macro sheets, rich-text runs and phonetic text
+// (skipped), array and shared formula text, and the names of cell styles.
 
 use e.mem
 use e.str
@@ -19,6 +22,7 @@ error NotACompoundFile
 error NoWorkbook
 error Corrupt
 error Unsupported
+error Encrypted
 
 const BLANK: u8 = 0u8
 const TEXT: u8 = 1u8
@@ -314,6 +318,54 @@ fn read_string(a: *mem.Arena, r: *Reader, cch: usize) -> (str, err) {
     ret (str.done(&b), ok)
 }
 
+// Windows-1252 code points 0x80 to 0x9F; the five bytes it leaves undefined stay as they are.
+fn cp1252(b: u8) -> u32 {
+    if b < 128u8 || b > 159u8 { ret u32(b) }
+    let hi = u32(b) - 128u32
+    if hi == 0u32 { ret 0x20ACu32 }
+    if hi == 2u32 { ret 0x201Au32 }
+    if hi == 3u32 { ret 0x0192u32 }
+    if hi == 4u32 { ret 0x201Eu32 }
+    if hi == 5u32 { ret 0x2026u32 }
+    if hi == 6u32 { ret 0x2020u32 }
+    if hi == 7u32 { ret 0x2021u32 }
+    if hi == 8u32 { ret 0x02C6u32 }
+    if hi == 9u32 { ret 0x2030u32 }
+    if hi == 10u32 { ret 0x0160u32 }
+    if hi == 11u32 { ret 0x2039u32 }
+    if hi == 12u32 { ret 0x0152u32 }
+    if hi == 14u32 { ret 0x017Du32 }
+    if hi == 17u32 { ret 0x2018u32 }
+    if hi == 18u32 { ret 0x2019u32 }
+    if hi == 19u32 { ret 0x201Cu32 }
+    if hi == 20u32 { ret 0x201Du32 }
+    if hi == 21u32 { ret 0x2022u32 }
+    if hi == 22u32 { ret 0x2013u32 }
+    if hi == 23u32 { ret 0x2014u32 }
+    if hi == 24u32 { ret 0x02DCu32 }
+    if hi == 25u32 { ret 0x2122u32 }
+    if hi == 26u32 { ret 0x0161u32 }
+    if hi == 27u32 { ret 0x203Au32 }
+    if hi == 28u32 { ret 0x0153u32 }
+    if hi == 30u32 { ret 0x017Eu32 }
+    if hi == 31u32 { ret 0x0178u32 }
+    ret u32(b)
+}
+
+// A BIFF5 string: `cch` bytes in the workbook's ANSI code page, from `pos`.
+fn ansi_string(a: *mem.Arena, d: []const u8, pos: usize, cch: usize, windows: bool) -> (str, err) {
+    if pos + cch > d.len { ret ("", Corrupt) }
+    let (initial, be) = str.builder(a, cch * 3usize + 8usize)
+    if be != ok { ret ("", be) }
+    var b = initial
+    var i = 0usize
+    while i < cch {
+        if windows { push_utf8(&b, cp1252(d[pos + i])) } else { push_utf8(&b, u32(d[pos + i])) }
+        i += 1usize
+    }
+    ret (str.done(&b), ok)
+}
+
 // --- Number formats that make a date
 
 fn builtin_date(id: u32) -> bool {
@@ -459,35 +511,53 @@ fn read(a: *mem.Arena, data: []const u8) -> (Workbook, err) {
     var i = 0usize
     var seen_bof = false
     var done = false
+    var biff5 = false
+    var windows = true
     while i < recs.n && !done {
         let id = recs.id[i]
         let d = wb[recs.start[i]..recs.start[i] + recs.len[i]]
         if id == 2057u32 {
-            if seen_bof { done = true }
+            if seen_bof { done = true } else { biff5 = u16_at(d, 0usize) < 0x600u32 }
             seen_bof = true
         } else if id == 10u32 {
             done = true
+        } else if id == 47u32 {
+            ret (empty, Encrypted)
+        } else if id == 66u32 {
+            windows = u16_at(d, 0usize) == 1252u32
         } else if id == 34u32 {
             date1904 = u16_at(d, 0usize) == 1u32
         } else if id == 133u32 {
             offsets[nsheets] = u32_at(d, 0usize)
             hidden[nsheets] = d[4usize] & 3u8
             let cch = usize(d[6usize])
-            var rd = Reader { d: d, pos: 7usize, bounds: no_bounds(), high: false }
-            let (s, se) = read_string(a, &rd, cch)
-            if se != ok { ret (empty, se) }
-            names[nsheets] = s
+            if biff5 {
+                let (s, se) = ansi_string(a, d, 7usize, cch, windows)
+                if se != ok { ret (empty, se) }
+                names[nsheets] = s
+            } else {
+                var rd = Reader { d: d, pos: 7usize, bounds: no_bounds(), high: false }
+                let (s, se) = read_string(a, &rd, cch)
+                if se != ok { ret (empty, se) }
+                names[nsheets] = s
+            }
             nsheets += 1usize
         } else if id == 224u32 {
             xfs[nxf] = u16_at(d, 2usize)
             nxf += 1usize
         } else if id == 1054u32 {
             fmt_id[nfmt] = u16_at(d, 0usize)
-            let cch = usize(u16_at(d, 2usize))
-            var rd = Reader { d: d, pos: 4usize, bounds: no_bounds(), high: false }
-            let (s, se) = read_string(a, &rd, cch)
-            if se != ok { ret (empty, se) }
-            fmt_text[nfmt] = s
+            if biff5 {
+                let (s, se) = ansi_string(a, d, 3usize, usize(d[2usize]), windows)
+                if se != ok { ret (empty, se) }
+                fmt_text[nfmt] = s
+            } else {
+                let cch = usize(u16_at(d, 2usize))
+                var rd = Reader { d: d, pos: 4usize, bounds: no_bounds(), high: false }
+                let (s, se) = read_string(a, &rd, cch)
+                if se != ok { ret (empty, se) }
+                fmt_text[nfmt] = s
+            }
             nfmt += 1usize
         } else if id == 252u32 {
             // SST with its CONTINUE records, boundaries kept
@@ -537,7 +607,9 @@ fn read(a: *mem.Arena, data: []const u8) -> (Workbook, err) {
     if shE != ok { ret (empty, shE) }
     var si = 0usize
     while si < nsheets {
-        let (sheet, sre) = read_sheet(a, wb, recs, usize(offsets[si]), names[si], hidden[si], xfs[0usize..nxf], fmt_id[0usize..nfmt], fmt_text[0usize..nfmt], sst[0usize..nsst])
+        var ansi = 0u8
+        if biff5 && windows { ansi = 2u8 } else if biff5 { ansi = 1u8 }
+        let (sheet, sre) = read_sheet(a, wb, recs, usize(offsets[si]), names[si], hidden[si], xfs[0usize..nxf], fmt_id[0usize..nfmt], fmt_text[0usize..nfmt], sst[0usize..nsst], ansi)
         if sre != ok { ret (empty, sre) }
         sheets[si] = sheet
         si += 1usize
@@ -555,7 +627,7 @@ fn find_record_at(recs: Recs, offset: usize) -> usize {
     ret recs.n
 }
 
-fn read_sheet(a: *mem.Arena, wb: []const u8, recs: Recs, offset: usize, name: str, hidden: u8, xfs: []const u32, fmt_id: []const u32, fmt_text: []const str, sst: []const str) -> (Sheet, err) {
+fn read_sheet(a: *mem.Arena, wb: []const u8, recs: Recs, offset: usize, name: str, hidden: u8, xfs: []const u32, fmt_id: []const u32, fmt_text: []const str, sst: []const str, ansi: u8) -> (Sheet, err) {
     var empty: Sheet = zero
     let first = find_record_at(recs, offset)
     if first >= recs.n { ret (empty, Corrupt) }
@@ -588,10 +660,16 @@ fn read_sheet(a: *mem.Arena, wb: []const u8, recs: Recs, offset: usize, name: st
             n += 1usize
         } else if id == 516u32 {
             let cch = usize(u16_at(d, 6usize))
-            var rd = Reader { d: d, pos: 8usize, bounds: no_bounds(), high: false }
-            let (s, se) = read_string(a, &rd, cch)
-            if se != ok { ret (empty, se) }
-            cells[n] = Cell { row: row, col: col, kind: TEXT, num: 0.0f64, text: s }
+            if ansi != 0u8 {
+                let (s, se) = ansi_string(a, d, 8usize, cch, ansi == 2u8)
+                if se != ok { ret (empty, se) }
+                cells[n] = Cell { row: row, col: col, kind: TEXT, num: 0.0f64, text: s }
+            } else {
+                var rd = Reader { d: d, pos: 8usize, bounds: no_bounds(), high: false }
+                let (s, se) = read_string(a, &rd, cch)
+                if se != ok { ret (empty, se) }
+                cells[n] = Cell { row: row, col: col, kind: TEXT, num: 0.0f64, text: s }
+            }
             n += 1usize
         } else if id == 515u32 || id == 638u32 {
             var v = 0.0f64
@@ -659,9 +737,17 @@ fn read_sheet(a: *mem.Arena, wb: []const u8, recs: Recs, offset: usize, name: st
         } else if id == 519u32 {
             if pending {
                 let cch = usize(u16_at(d, 0usize))
-                var rd = Reader { d: d, pos: 2usize, bounds: no_bounds(), high: false }
-                let (s, se) = read_string(a, &rd, cch)
-                if se != ok { ret (empty, se) }
+                var s = ""
+                if ansi != 0u8 {
+                    let (t, se) = ansi_string(a, d, 2usize, cch, ansi == 2u8)
+                    if se != ok { ret (empty, se) }
+                    s = t
+                } else {
+                    var rd = Reader { d: d, pos: 2usize, bounds: no_bounds(), high: false }
+                    let (t, se) = read_string(a, &rd, cch)
+                    if se != ok { ret (empty, se) }
+                    s = t
+                }
                 cells[n] = Cell { row: pending_row, col: pending_col, kind: TEXT, num: 0.0f64, text: s }
                 n += 1usize
                 pending = false

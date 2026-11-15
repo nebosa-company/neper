@@ -44420,3 +44420,11 @@ R's `walker_ProbSampleReplace` (used only when `replace` and more than 200 of `n
 **Decision.** `qnbinom_mu` is R's: size infinity answers `qpois`, mu or size zero answers 0, and otherwise the shared discrete search starts from the Cornish-Fisher estimate with Q = 1 + mu/size and P = mu/size, evaluating `pnbinom_mu` (search kind 2).
 
 **Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on 1600 more cases on both hosts.
+
+## D6013 — BIFF5 reads through ANSI strings, an encrypted workbook is refused by name
+
+**Context.** L292. `e.fmt.xls` read BIFF8 only. readxl's own example workbooks have no BIFF5 file, and libxls lists hidden sheets and refuses encrypted ones.
+
+**Decision.** The first BOF's version picks the string reader: below 0x0600 the BOUNDSHEET name, FORMAT string, LABEL and the STRING behind a formula are ANSI bytes, Windows-1252 unless a CODEPAGE record says another page (then Latin-1). A FILEPASS record in the globals returns `Encrypted` for XOR and RC4 alike. A hidden or very hidden sheet is listed with its state, as readxl lists it. The BIFF5 workbooks come from `scripts/r_oracle/make_biff5.R` (a compound-file writer, one in the mini stream and one in a regular chain; an empty LABEL is left out because libxls crashes on it), and the hidden and encrypted cases are byte patches of datasets.xls that the fixture applies as the generator does. readxl is read with `trim_ws = FALSE` so padded text is compared as stored.
+
+**Result.** Fixture `oracle_xls` equals readxl on 13260 cases on both hosts. Open in L292: a generated corpus that stresses the SST CONTINUE boundary and DIFAT chains, and rich-text and phonetic strings.

@@ -20,10 +20,10 @@
       "group": "CRAN parity",
       "order": 541,
       "title": "BIFF5 workbooks, hidden sheets and encrypted .xls in e.fmt.xls",
-      "score": 0,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open. e.fmt.xls reads BIFF8 and agrees with readxl on the five readxl example workbooks. Acceptance: BIFF5 (Excel 5 and 95) workbooks, whose strings are ANSI and whose BOUNDSHEET differs; hidden and very hidden sheets as readxl lists them; XOR and RC4 encrypted workbooks refused with a named error; rich-text and phonetic strings; a generated corpus of workbooks that stress the SST CONTINUE boundary, the mini stream cutoff and DIFAT chains, equal to readxl."
+      "evidence": "Partial (D6013). BIFF5 workbooks (ANSI strings, Windows-1252, the Book stream, in the mini stream and in a regular chain), hidden and very hidden sheets, and XOR and RC4 encrypted workbooks refused with Encrypted equal readxl. Open: a generated corpus of workbooks that stress the SST CONTINUE boundary and DIFAT chains, and rich-text and phonetic strings, equal to readxl."
     },
     {
       "id": "L275",
