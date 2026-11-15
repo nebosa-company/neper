@@ -11,6 +11,8 @@
 use e.math
 use e.mem
 use e.str
+use e.time
+use e.tz
 
 error Unsupported
 
@@ -718,6 +720,43 @@ fn parse_datetime_in(s: str, fmt: str, names: str) -> f64 {
     var t = f64(days_from_civil(p.year, p.mon, p.day)) * 86400.0f64 + f64(h) * 3600.0f64 + f64(p.min) * 60.0f64 + f64(p.sec) + p.psec
     t = t - f64(p.tzh) * 3600.0f64 - f64(p.tzm) * 60.0f64
     ret t
+}
+
+// parse_datetime(x, format, locale = locale(tz = zone)): a time with no offset of its own is local to the
+// zone, the earlier instant when the clock repeats, NaN when it was skipped; an offset or Z in the text wins.
+fn parse_datetime_zone(s: str, fmt: str, names: str, db: *const tz.Database, zone_name: str) -> f64 {
+    var p = new_parser(trim(s))
+    p.names = names
+    var good = false
+    if fmt.len == 0usize { good = parse_iso(&p) } else { good = parse_format(&p, fmt) }
+    if !good { ret nan() }
+    if !valid_date(&p) { ret nan() }
+    let h = hour_of(&p)
+    if h < 0i64 || h > 23i64 || p.min < 0i64 || p.min > 59i64 || p.sec < 0i64 || p.sec > 60i64 { ret nan() }
+    if p.utc { ret parse_datetime_in(s, fmt, names) }
+    let (z, ze) = tz.zone(db, zone_name)
+    if ze != ok { ret nan() }
+    var sec = p.sec
+    var extra = 0i64
+    if sec == 60i64 {
+        sec = 59i64
+        extra = 1i64
+    }
+    let wall = tz.Local { date: time.Date { year: i32(p.year), month: u8(p.mon), day: u8(p.day) }, time: time.Time { hour: u8(h), minute: u8(p.min), second: u8(sec), nanos: 0u32 } }
+    let (res, re) = tz.resolve(z, wall)
+    if re != ok { ret nan() }
+    var instant = 0i64
+    switch res {
+    case .Unique as only:
+        instant = only.nanos
+    case .Ambiguous as pair:
+        instant = pair[0].nanos
+    default:
+        ret nan()
+    }
+    var whole = instant / 1000000000i64
+    if instant % 1000000000i64 < 0i64 { whole -= 1i64 }
+    ret f64(whole + extra) + p.psec
 }
 
 // --- read_delim's field splitting.

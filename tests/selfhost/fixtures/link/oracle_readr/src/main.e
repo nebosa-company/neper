@@ -9,6 +9,7 @@ use e.io
 use e.mem
 use e.os
 use e.str
+use e.tz
 use e.test.oracle as oracle
 
 fn byte_of(x: f64) -> u8 { ret u8(x) }
@@ -70,9 +71,10 @@ fn vis(a: *mem.Arena, s: str) -> str {
     ret buf[0usize..s.len]
 }
 
-fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+fn answer(a: *mem.Arena, db: *const tz.Database, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "guess") { ret f64(readr.guess_parser(a, c.inputs, c.args[0usize] != 0.0f64)) }
     let s = c.inputs[0usize]
+    if str.eq(c.name, "datetime_tz") { ret readr.parse_datetime_zone(s, c.inputs[1usize], "", db, c.inputs[2usize]) }
     if str.eq(c.name, "date_loc") { ret readr.parse_date_in(s, c.inputs[1usize], c.inputs[2usize]) }
     if str.eq(c.name, "time_loc") { ret readr.parse_time_in(s, c.inputs[1usize], c.inputs[2usize]) }
     if str.eq(c.name, "datetime_loc") { ret readr.parse_datetime_in(s, c.inputs[1usize], c.inputs[2usize]) }
@@ -89,6 +91,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/readr.json")
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
+    let (db, dbe) = tz.builtin(a)
+    if dbe != ok { os.exit(4) }
     var failures = 0usize
     var at = 0usize
     while at < golden.cases.len {
@@ -98,7 +102,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if str.eq(c.name, "delim") {
             ok_case = oracle.agrees_text(delim_text(a, c), c)
         } else {
-            ok_case = oracle.agrees(answer(a, c), c)
+            ok_case = oracle.agrees(answer(a, &db, c), c)
         }
         if !ok_case {
             failures += 1usize
@@ -128,7 +132,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     }
                     let _ = io.print("\n")
                 } else {
-                    let _ = io.print(oracle.describe(a, c, answer(a, c)))
+                    let _ = io.print(oracle.describe(a, c, answer(a, &db, c)))
                     let _ = io.print("\n")
                 }
             }

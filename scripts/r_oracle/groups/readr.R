@@ -140,4 +140,24 @@ for (lang in c("en", "de", "fr", "es", "it", "nl", "pt", "ru", "sv", "pl")) {
     cases[[length(cases) + 1]] <- case("datetime_loc", 0, na0(as.numeric(r2)), input = c(str2, "%b %Y %I:%M %p", names_str))
   }
 }
+# time zones: a naive time is local to locale(tz); an offset in the text wins; a repeated hour is the earlier instant, a skipped one NA.
+# in [string, format, zone]; the zones are those of e.tz.builtin
+zones <- c("UTC", "America/New_York", "America/Los_Angeles", "America/Sao_Paulo", "Asia/Kathmandu", "Asia/Kolkata", "Asia/Tokyo",
+           "Australia/Lord_Howe", "Australia/Sydney", "Europe/Berlin", "Europe/London", "Europe/Sofia", "Pacific/Auckland")
+tzcase <- function(s, f, z) {
+  l <- locale(tz = z)
+  r <- quiet(if (nchar(f) == 0) parse_datetime(s, locale = l) else parse_datetime(s, f, locale = l))
+  cases[[length(cases) + 1]] <<- case("datetime_tz", 0, na0(as.numeric(r)), input = c(s, f, z))
+}
+fixed <- c("2024-06-15T12:00:00", "2024-06-15T12:00:00Z", "2024-06-15T12:00:00+0200", "2024-06-15 12:00:00-05:30", "1950-06-15T12:00:00",
+           "1900-01-01T00:00:00", "1999-12-31T23:59:59", "2000-02-29T12:00:00", "2100-07-01T00:00:00", "2100-01-01T00:00:00",
+           "2200-03-15T08:00:00", "2024-06-15T12:00:00.5", "2024-06-15T23:59:60", "2024-06-15T24:00:00", "2024-06-15", "2024-06-15T12", "x", "")
+for (z in zones) {
+  for (s in fixed) tzcase(s, "", z)
+  tzcase("2024-06-15 12:00:00", "%Y-%m-%d %H:%M:%S", z); tzcase("15/06/2024", "%d/%m/%Y", z); tzcase("2024-06-15 12:00:00 +0100", "%Y-%m-%d %H:%M:%S %z", z)
+  for (mo in c(3, 4, 9, 10, 11)) for (d in 1:31) for (hm in c("00:30", "01:30", "02:15", "03:30")) {
+    if (mo %in% c(4, 9, 10) && d > 30) next
+    tzcase(sprintf("2024-%02d-%02dT%s:00", mo, d, hm), "", z)
+  }
+}
 emit("readr", "readr", list(cases))

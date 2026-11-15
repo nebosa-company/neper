@@ -44436,3 +44436,11 @@ R's `walker_ProbSampleReplace` (used only when `replace` and more than 200 of `n
 **Decision.** `make_biff5.R` writes `biff8_sst_continue.xls`, 260 strings in 120-byte records: ASCII, Latin-1, CJK and a surrogate pair, rich-text runs and phonetic data, with records split inside characters. A CONTINUE boundary inside rich-text run data is not generated, because libxls then drops the string (readxl fails with "construction from null"); the run data of a string starts a new record when it does not fit. A DIFAT chain needs a FAT past 109 sectors, a stream over 7 MB, and stays untested.
 
 **Result.** Fixture `oracle_xls` equals readxl on 14302 cases on both hosts.
+
+## D6015 — a naive readr datetime is local to the locale's zone
+
+**Context.** L290. `parse_datetime` took every time as UTC unless the text carried an offset.
+
+**Decision.** `parse_datetime_zone` takes an `e.tz` database and a zone name. A time with an offset or Z keeps the old arithmetic; any other is resolved in the zone, the earlier instant when the clock repeats and NaN when it was skipped, which is what readr 2.2.0 answers on every transition of the twelve zones in `e.tz.builtin` (a leap second 60 adds a second to :59). The Timestamp range of `e.time` (1677 to 2262) bounds the dates, and `%Z` with a zone abbreviation is not read as a zone.
+
+**Result.** Fixture `oracle_readr` equals readr on 14433 cases, 8177 of them zoned, on both hosts.
