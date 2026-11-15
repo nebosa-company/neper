@@ -3088,4 +3088,5 @@ D6012	488	qnbinom with mu searches on pnbinom_mu
 D6013	1232	BIFF5 reads through ANSI strings, an encrypted workbook is refused by name
 D6014	806	the string-table corpus is written by R and kept out of rich-text run data
 D6015	756	a naive readr datetime is local to the locale's zone
-D6016	1073	the large-n random streams follow R's own routes
+D6016	1074	the large-n random streams follow R's own routes
+D6017	1057	rstatix is a numeric core over base R's tests, not a data-frame layer

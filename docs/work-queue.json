@@ -70,17 +70,6 @@
       "evidence": "Partial (D6000, D6009, D6010, D6015). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names and equal readr for ten languages; read_delim equals readr on rows shorter and longer than the header and under a one-column header; parse_datetime_zone equals readr for a naive time in any zone of e.tz.builtin, at every transition. Open: a quote that is not closed (readr 2.2.0 crashes on one with escapes off, so the reference answers need a guard), and %Z naming a zone."
     },
     {
-      "id": "L294",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 543,
-      "title": "rstatix: games_howell, dunn, pairwise tests, effect sizes, outliers",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 174). Small. Acceptance, each equal to rstatix: games_howell_test, dunn_test with p.adjust methods, pairwise_t_test and pairwise_wilcox_test, welch_anova_test, friedman_test, cochran_qtest, cohens_d (paired, Hedges), eta_squared, wilcox_effsize, kruskal_effsize, identify_outliers, mahalanobis_distance. tukey_hsd, cramers_v and levene exist in e.algo.stat.infer."
-    },
-    {
       "id": "L295",
       "category": "library",
       "group": "CRAN parity",
