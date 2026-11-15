@@ -108,6 +108,26 @@ L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463
 L396	library	0	308	agricolae: experimental designs and post-hoc tests	Open (CRAN rank 500).
 L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
 L398	library	0	447	rugarch: the GARCH family	Open (CRAN rank 497).
+L399	library	0	328	pwr: power analysis	Open (CRAN rank 558).
+L400	library	0	196	nnls: non-negative least squares	Open (CRAN rank 557).
+L401	library	0	310	geosphere: geodesic and spherical computations	Open (CRAN rank 582).
+L402	library	0	220	ica: independent component analysis	Open (CRAN rank 548).
+L403	library	0	245	rngtools and doRNG: parallel random streams	Open (CRAN ranks 538, 576).
+L404	library	0	238	mlbench: benchmark data generators	Open (CRAN rank 547).
+L405	library	0	339	yardstick and ModelMetrics: model performance metrics	Open (CRAN rank 553, 518).
+L406	library	0	263	DEoptimR: differential evolution	Open (CRAN rank 517).
+L407	library	0	289	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Open (CRAN ranks 592, 555;
+L408	library	0	315	PerformanceAnalytics: portfolio risk and return	Open (CRAN rank 590).
+L409	library	0	221	arm: applied regression helpers	Open (CRAN rank 570).
+L410	library	0	230	AlgDesign: optimal experimental designs	Open (CRAN rank 586).
+L411	library	0	303	DHARMa: simulated residual diagnostics	Open (CRAN rank 550).
+L412	library	0	212	pscl: zero-inflated and hurdle count models	Open (CRAN rank 584).
+L413	library	0	265	flexmix: finite mixture regression	Open (CRAN rank 568).
+L414	library	0	343	gbm: gradient boosting machines	Open (CRAN rank 561).
+L415	library	0	366	marginaleffects: predictions, slopes and comparisons	Open (CRAN ranks 541, 533, 577).
+L416	library	0	231	polspline: polynomial spline models	Open (CRAN rank 597).
+L417	library	0	429	gsl: special functions of the GNU Scientific Library	Open (CRAN rank 594).
+L418	library	0	333	Rmpfr: arbitrary-precision floating point	Open (CRAN rank 567).
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU

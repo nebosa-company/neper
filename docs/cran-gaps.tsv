@@ -533,3 +533,103 @@ rugarch	497	GARCH family: sGARCH, eGARCH, gjrGARCH, apARCH, fGARCH, IGARCH with 
 rsvd	498	randomized SVD and PCA, see L334	-	covered-by-other-item	-		
 multicool	499	multiset permutations, e.algo.combin	-	covered	e.algo.combin		
 agricolae	500	agricultural experiments: LSD, HSD, Duncan, SNK, Scheffe and Waller post-hoc tests, randomized designs (lattice, BIB, alpha, split plot), AMMI stability	LSD.test, HSD.test, duncan.test, design.rcbd, AMMI	partial	e.algo.stat.infer has tukey_hsd	~25k	L396
+textshaping	501	text shaping for R graphics, e.text.shape	-	covered	e.text.shape		
+timechange	502	time-zone-aware date rounding, see L314	-	covered-by-other-item	-		
+ggrastr	503	rasterized plot layers	-	out-of-scope	-		
+rematch	504	regex match helper	-	out-of-scope	-		
+QuickJSR	505	JS engine, e.js	-	covered	e.js		
+tensorA	506	tensor algebra, e.gpu.tensor	-	covered	e.gpu.tensor		
+selectr	507	CSS selectors, e.fmt.css.selector	-	covered	e.fmt.css.selector		
+carData	508	data sets	-	out-of-scope	-		
+ids	509	random identifiers, e.algo.uuid	-	covered	e.algo.uuid		
+pkgdown	510	R package sites	-	out-of-scope	-		
+threejs	511	htmlwidget	-	out-of-scope	-		
+RcppTOML	512	TOML, e.fmt.toml	-	covered	e.fmt.toml		
+credentials	513	credential helper	-	out-of-scope	-		
+sparsevctrs	514	sparse vector class	-	out-of-scope	-		
+downlit	515	code highlighting for R docs	-	out-of-scope	-		
+tidymodels	516	meta-package	-	out-of-scope	-		
+DEoptimR	517	differential evolution (JDE) for constrained global optimization	JDEoptim	partial	e.math.opt.meta	~1k	verify the metaheuristics already there; L406
+ModelMetrics	518	metrics, see L405	-	covered-by-other-item	-		
+dotCall64	519	foreign call helper	-	out-of-scope	-		
+aplot	520	plot composition	-	out-of-scope	-		
+jomo	521	multilevel multiple imputation, see L346	-	covered-by-other-item	-		
+spelling	522	spell checking over hunspell, see L397	-	covered-by-other-item	-		
+RcppHNSW	523	HNSW approximate nearest neighbours, see L395	-	covered-by-other-item	-		
+libcoin	524	engine of coin, see L371	-	covered-by-other-item	-		
+stringmagic	525	string helpers	-	out-of-scope	-		
+bigrquery	526	BigQuery client	-	out-of-scope	-		
+GlobalOptions	527	R options helper	-	out-of-scope	-		
+cardx	528	analysis result helpers	-	out-of-scope	-		
+pacman	529	package loader	-	out-of-scope	-		
+scattermore	530	fast scatter plots	-	out-of-scope	-		
+pixmap	531	PNM images, a few lines	-	out-of-scope	-		
+beeswarm	532	beeswarm layout in plots	-	out-of-scope	-		
+effects	533	effect displays for fitted models, see L415	-	covered-by-other-item	-		
+broom.mixed	534	tidy wrapper over mixed models	-	out-of-scope	-		
+geometries	535	geometry helpers for sf	-	out-of-scope	-		
+lobstr	536	R object sizes	-	out-of-scope	-		
+scatterpie	537	plot layer	-	out-of-scope	-		
+rngtools	538	RNG streams, see L403	-	covered-by-other-item	-		
+skimr	539	data summaries	-	out-of-scope	-		
+registry	540	R registry helper	-	out-of-scope	-		
+marginaleffects	541	predictions, slopes, comparisons and hypothesis tests by the delta method over fitted models	predictions, avg_slopes, comparisons, hypotheses	gap	-	~30k	with effects (533) and ggeffects (577); L415
+googleAuthR	542	Google API auth	-	out-of-scope	-		
+geojsonsf	543	GeoJSON and sf, see L320	-	covered-by-other-item	-		
+exactRankTests	544	exact rank tests, see L371	-	covered-by-other-item	-		
+miscTools	545	matrix helpers	-	out-of-scope	-		
+AzureAuth	546	Azure auth	-	out-of-scope	-		
+mlbench	547	benchmark data generators: Friedman 1-3, spirals, two norm, ringnorm, cassini, smiley, hypercube	mlbench.friedman1, mlbench.spirals, mlbench.2dnormals	gap	-	~2k	needs the R RNG streams; L404
+ica	548	independent component analysis: FastICA, JADE and Infomax	icafast, icajade, icaimax	gap	-	~2k	L402
+urltools	549	URL parsing, e.fmt.url	-	covered	e.fmt.url		
+DHARMa	550	simulation-based scaled residuals and diagnostics: uniformity, dispersion, outliers, zero inflation, temporal and spatial autocorrelation	simulateResiduals, testDispersion, testUniformity	gap	-	~8k	L411
+GetoptLong	551	command line options	-	out-of-scope	-		
+tokenizers	552	tokenizers, see L380	-	covered-by-other-item	-		
+yardstick	553	metrics, see L405	-	covered-by-other-item	-		
+jsonify	554	JSON, e.fmt.json	-	covered	e.fmt.json		
+GeneralizedHyperbolic	555	generalized hyperbolic, NIG and variance-gamma distributions: d, p, q, r and fitting	dghyp, pghyp, qghyp, rghyp, nigFit	gap	-	~10k	L407
+gap	556	genetic association analysis	-	out-of-scope	-		
+nnls	557	non-negative least squares by Lawson and Hanson	nnls	gap	-	~1k	L400
+pwr	558	power analysis: pwr.t.test, pwr.2p.test, pwr.anova.test, pwr.chisq.test, pwr.r.test, pwr.f2.test, effect sizes h, d, w, f	pwr.t.test, pwr.anova.test, pwr.r.test, ES.h	partial	e.algo.stat.infer has power_t and power_z	~2k	L399
+plumber	559	web API server, e.net.http	-	covered	e.net.http		
+ellmer	560	LLM client	-	out-of-scope	-		
+gbm	561	gradient boosting machines: Gaussian, Bernoulli, Poisson, Cox, AdaBoost, Laplace and quantile losses with bagging from the R RNG	gbm, predict.gbm, gbm.perf, relative.influence	partial	e.ml.tree has gradient boosting	~10k	verify against e.ml.tree; L414
+rstanarm	562	Stan front end, see L284	-	covered-by-other-item	-		
+anytime	563	flexible date parsing, see L314	-	covered-by-other-item	-		
+scam	564	shape-constrained additive models, see L353	-	covered-by-other-item	-		
+workflows	565	modelling plumbing	-	out-of-scope	-		
+admisc	566	utilities	-	out-of-scope	-		
+Rmpfr	567	arbitrary-precision floating point with correct rounding: arithmetic, elementary and special functions, constants	mpfr, Const, gamma, zeta, roundMpfr	gap	e.algo.bignum has integers	~8k	L418
+flexmix	568	finite mixture regression by EM: Gaussian, binomial, Poisson, Gamma and concomitant models, BIC selection	flexmix, stepFlexmix, FLXMRglm	gap	-	~12k	L413
+ggalluvial	569	chart engine	-	out-of-scope	-		
+arm	570	applied regression helpers: sim, bayesglm with Cauchy priors, se.coef, invlogit, binnedplot data, display	sim, bayesglm, se.coef, binned.resids	gap	-	~4k	L409
+lwgeom	571	geodesic geometry for sf, see L320	-	covered-by-other-item	-		
+timeSeries	572	financial time series objects, see L298	-	covered-by-other-item	-		
+network	573	network objects for statnet	-	out-of-scope	-		
+rsvg	574	SVG rendering, e.gfx.svg	-	covered	e.gfx.svg		
+leafem	575	htmlwidget	-	out-of-scope	-		
+doRNG	576	reproducible parallel RNG, see L403	-	covered-by-other-item	-		
+ggeffects	577	marginal predictions, see L415	-	covered-by-other-item	-		
+AzureGraph	578	Azure API client	-	out-of-scope	-		
+IRdisplay	579	notebook display	-	out-of-scope	-		
+qs2	580	R object serialization	-	out-of-scope	-		
+maxstat	581	maximally selected rank statistics, see L371	-	covered-by-other-item	-		
+geosphere	582	geodesic and spherical distances (Vincenty, Haversine, Meeus), bearings, destinations, midpoints, polygon areas on the ellipsoid	distGeo, distHaversine, bearing, destPoint, areaPolygon	partial	e.algo.geo has haversine and bearing	~4k	L401
+dials	583	tuning parameter objects	-	out-of-scope	-		
+pscl	584	zero-inflated and hurdle count models, Vuong test, ideal-point estimation, pR2	zeroinfl, hurdle, vuong, pR2	gap	-	~10k	L412
+tables	585	table construction for R output	-	out-of-scope	-		
+AlgDesign	586	optimal experimental designs: Federov exchange, D, A and I optimality, balanced incomplete blocks	optFederov, gen.factorial, optBlock	gap	-	~3k	L410
+rnaturalearth	587	map data	-	out-of-scope	-		
+gmodels	588	contrasts and estimable functions, see L313	-	covered-by-other-item	-		
+sodium	589	libsodium, e.crypto.secret and e.crypto.sign	-	covered	e.crypto.secret and e.crypto.sign		
+PerformanceAnalytics	590	finance risk and return measures: VaR (historical, Gaussian, Cornish-Fisher), ES, Sharpe, Sortino, drawdowns, CAPM, Omega, return calculations	VaR, ES, SharpeRatio, maxDrawdown, CAPM.beta	gap	-	~30k	L408
+RPostgreSQL	591	PostgreSQL driver, x.postgresql.libpq	-	covered	x.postgresql.libpq		
+stabledist	592	stable distributions: density, distribution, quantile and random numbers by Nolan and Chambers-Mallows-Stuck	dstable, pstable, qstable, rstable	gap	-	~2k	L407
+NLP	593	text objects for tm	-	out-of-scope	-		
+gsl	594	GNU Scientific Library special functions: Bessel, Airy, elliptic, hypergeometric, Legendre, zeta, Dawson, Fermi-Dirac, Coulomb	bessel_J0, airy_Ai, ellint_Kcomp, hyperg_2F1, legendre_P1, zeta	partial	e.math.special	~30k	verify which families e.math.special holds; L417
+fBasics	595	distribution families, see L407	-	covered-by-other-item	-		
+meta	596	meta-analysis, see L364	-	covered-by-other-item	-		
+polspline	597	polynomial splines: polymars, logspline, hare, heft, lspec, oldlogspline	polymars, logspline, hare, heft, lspec	gap	-	~15k	L416
+statnet.common	598	utilities	-	out-of-scope	-		
+pingr	599	ping helper	-	out-of-scope	-		
+formula.tools	600	formula helpers	-	out-of-scope	-		
