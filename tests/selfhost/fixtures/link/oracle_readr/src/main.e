@@ -71,6 +71,7 @@ fn vis(a: *mem.Arena, s: str) -> str {
 }
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "guess") { ret f64(readr.guess_parser(a, c.inputs, c.args[0usize] != 0.0f64)) }
     let s = c.inputs[0usize]
     if str.eq(c.name, "number") { ret readr.parse_number(s, byte_of(c.args[0usize]), byte_of(c.args[1usize])) }
     if str.eq(c.name, "double") { ret readr.parse_double(a, s, byte_of(c.args[0usize])) }

@@ -44318,3 +44318,11 @@ unreferenced.
 **Decision.** With 0.2, 0.3 and 0.5 the second quotient is 0.3 over the long double 1 - 0.2, which rounds to exactly 0.375, so n * p is 30 and rbinom takes the BTPE branch; dividing by the rounded double 0.8 gives 0.37499999999999994 and the inverse branch, and the draws diverge from the first uneven count. `rmultinom` therefore keeps the total as a (hi, lo) pair, subtracts with a two-sum, and divides with one correction step whose residual is exact (Dekker's two-product): the quotient is correctly rounded, which equals R's double rounding through 64 bits except when the 64-bit result lands on a tie. `sample_prob` sorts the probabilities descending with a stable insertion sort where R's `revsort` is a heap sort, so equal probabilities may come out in another order; the golden has none. rhyper reads its three parameters as ints as R does and refuses N past INT_MAX.
 
 **Result.** Fixture `oracle_rdist`: 7489 cases equal R 4.6.1 on both hosts.
+
+## D6000 — guess_parser looks at shapes, not at values, and number refuses a plus sign
+
+**Context.** L290. `guess_parser` is not `parse_*` over each type: the oracle showed three places where the shape decides.
+
+**Decision.** A column is the first of logical, integer (only with `guess_integer`), double, number, time, date, datetime that every non-NA value (empty or "NA") fits; a column of NA is logical, and character is the rest. A date is `dddd-dd-dd` or with slashes, whatever the digits say (2024-13-01 and 2024-02-30 are dates); a datetime is a date, or a date, `T` or a space, an hour of two digits, optional minutes, seconds and fraction, and optional Z or an offset (25:00:00 is a datetime), compact forms included; "10:00" is a time and alone it is not a datetime. A leading zero followed by a digit (007, 00.5) disqualifies integer, double and number. Number wants the first character to be a digit, a minus or a point, so "+7" is a double alone and breaks a column of numbers into character; "1e" is a number and so is "1,5"; the whole string must be consumed, which is why `$1`, `12%`, `(1)` and `1.2.3` are character. Leading blanks are skipped for integer and double and trailing ones are not. `scan_number` returns the position where readr's number reader stopped for that test.
+
+**Result.** Fixture `oracle_readr`: 4288 cases equal readr 2.2.0 on both hosts.

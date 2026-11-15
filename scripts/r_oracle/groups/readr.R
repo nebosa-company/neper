@@ -97,4 +97,24 @@ for (txt in delim_texts) for (dl in c(",", ";", "\t")) for (qt in c(q, "")) for 
   add("delim", c(utf8ToInt(dl), if (nchar(qt)) utf8ToInt(qt) else 0, if (nchar(cm)) utf8ToInt(cm) else 0, flags), t2, paste(rows, collapse = "\001"))
 }
 
+# guess_parser over a column: args (guess_integer), in the strings; the answer is the type code
+#   0 logical 1 integer 2 double 3 number 4 time 5 date 6 datetime 7 character
+codes <- c(logical = 0, integer = 1, double = 2, number = 3, time = 4, date = 5, datetime = 6, character = 7)
+gpool <- c("TRUE", "T", "true", "True", "t", "F", "FALSE", "false", "False", "f", "1", "0", "12", "-5", "+7", "007", "0012", "1.5", ".5", "5.", "1e5",
+           "1E-3", "Inf", "-Inf", "NaN", "NA", "", "1,234", "1,234.56", "$1,234", "$1", "12%", "1 000", "1.234,56", "2024-03-15", "2024/03/15",
+           "2024-3-5", "15/03/2024", "20240315", "2024-03-15 10:30:00", "2024-03-15T10:30:00", "2024-03-15T10:30:00Z", "2024-03-15 10:30", "10:30",
+           "10:30:15", "10:30:15.5", "1:05", "24:00:00", "abc", "12abc", "1.2.3", "--1", "1e", "0x10", "2147483647", "2147483648", "99999999999",
+           "-2147483647", "1d5", "12 ", " 12", "TRUE ", "(1)", "3.14", "1,5", "0", "-0", "0.5", "00.5", "1e+5", "1E5", "+.5", "-.5e3", "7:3", "23:59:59",
+           "2024-02-30", "2024-13-01", "T ", "yes", "2024-03-15 25:00:00", "1,234,567", "12,34", "1.5e3")
+gl <- function(x, gi) as.numeric(codes[[guess_parser(x, guess_integer = gi)]])
+for (gi in c(FALSE, TRUE)) {
+  for (v in gpool) add("guess", gi, v, gl(v, gi))
+  for (k in 1:700) {
+    n <- sample(2:5, 1)
+    x <- sample(gpool, n, replace = TRUE)
+    x <- x[nzchar(x) | runif(n) < 0.5]
+    if (length(x) == 0) next
+    add("guess", gi, x, gl(x, gi))
+  }
+}
 emit("readr", "readr", list(cases))

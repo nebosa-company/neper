@@ -3072,3 +3072,4 @@ D5996	1340	R's generators keep their statics out, and the stream stays the same
 D5997	1657	decompositions are compared by what they define, and qr keeps LINPACK's noise out of the golden
 D5998	1553	.xls is read from the Workbook stream by its records, and a date is a serial in either system
 D5999	1260	rmultinom divides by a double-double, because the algorithm branches on the quotient
+D6000	1380	guess_parser looks at shapes, not at values, and number refuses a plus sign

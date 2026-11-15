@@ -118,11 +118,11 @@
       "category": "library",
       "group": "CRAN parity",
       "order": 539,
-      "title": "readr guess_parser, locales and ragged read_delim rows",
-      "score": 0,
+      "title": "readr locales, time zones and ragged read_delim rows",
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open. e.fmt.readr has the parsers and the field splitter. Acceptance: guess_parser over seeded columns (logical, integer, double, number, date, time, datetime, character; guess_integer on and off) equal to readr; locale month and day names, a decimal mark other than . and a time zone offset in parse_datetime; read_delim rows shorter and longer than the header, a one-column header that leaves later rows unsplit, and a quote that is not closed, equal to readr."
+      "evidence": "Partial (D6000). guess_parser landed in e.fmt.readr and equals readr on 1,566 columns (every type, mixtures, guess_integer on and off). Open: locale month and day names (%b, %B, %a, %A in other languages), a decimal mark other than . in parse_datetime fractions, time zones other than UTC, read_delim rows shorter and longer than the header, a one-column header that leaves later rows unsplit, and a quote that is not closed (readr 2.2.0 crashes on one with escapes off, so the reference answers need a guard), equal to readr."
     },
     {
       "id": "C287",

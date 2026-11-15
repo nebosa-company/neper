@@ -30,14 +30,15 @@ fn trim(s: str) -> str {
 
 // --- parse_number
 
-fn parse_number(s: str, decimal: u8, grouping: u8) -> f64 {
+// The value of the number at the start of s and the position where reading stopped.
+fn scan_number(s: str, decimal: u8, grouping: u8) -> (f64, usize) {
     var cur = 0usize
     while cur < s.len {
         let c = s[cur]
         if c == 45u8 || c == decimal || is_digit(c) { break }
         cur += 1usize
     }
-    if cur == s.len { ret nan() }
+    if cur == s.len { ret (nan(), cur) }
     var sum = 0.0f64
     var denom = 1.0f64
     var exponent = 0.0f64
@@ -101,10 +102,15 @@ fn parse_number(s: str, decimal: u8, grouping: u8) -> f64 {
         if stop { break }
         cur += 1usize
     }
-    if !seen { ret nan() }
+    if !seen { ret (nan(), cur) }
     var res = sign * sum
     if exponent != 0.0f64 { res = res * math.pow[f64](10.0f64, exp_sign * exponent) }
-    ret res
+    ret (res, cur)
+}
+
+fn parse_number(s: str, decimal: u8, grouping: u8) -> f64 {
+    let (v, end) = scan_number(s, decimal, grouping)
+    ret v
 }
 
 // --- parse_double: digits, one decimal mark, an optional exponent (e E s S f F d D l L).
@@ -752,4 +758,169 @@ fn read_delim(a: *mem.Arena, text: str, delim: u8, quote: u8, comment: u8, escap
         }
     }
     ret (fields[0usize..nf], counts[0usize..nr], ok)
+}
+
+// --- guess_parser
+
+const G_LOGICAL: u8 = 0u8
+const G_INTEGER: u8 = 1u8
+const G_DOUBLE: u8 = 2u8
+const G_NUMBER: u8 = 3u8
+const G_TIME: u8 = 4u8
+const G_DATE: u8 = 5u8
+const G_DATETIME: u8 = 6u8
+const G_CHARACTER: u8 = 7u8
+
+fn is_na_text(v: str) -> bool { ret v.len == 0usize || str.eq(v, "NA") }
+
+fn leading_zero(v: str) -> bool {
+    var i = 0usize
+    if i < v.len && (v[i] == 45u8 || v[i] == 43u8) { i += 1usize }
+    ret i + 1usize < v.len && v[i] == 48u8 && is_digit(v[i + 1usize])
+}
+
+fn guess_logical(v: str) -> bool {
+    ret str.eq(v, "T") || str.eq(v, "F") || str.eq(v, "TRUE") || str.eq(v, "FALSE") || str.eq(v, "true") || str.eq(v, "false") || str.eq(v, "True") || str.eq(v, "False") || str.eq(v, "t") || str.eq(v, "f")
+}
+
+fn guess_integer(v0: str) -> bool {
+    var i = 0usize
+    while i < v0.len && (v0[i] == 32u8 || v0[i] == 9u8) { i += 1usize }
+    let v = v0[i..v0.len]
+    if leading_zero(v) { ret false }
+    var k = 0usize
+    if k < v.len && (v[k] == 45u8 || v[k] == 43u8) { k += 1usize }
+    if k >= v.len { ret false }
+    var total = 0i64
+    while k < v.len {
+        if !is_digit(v[k]) { ret false }
+        total = total * 10i64 + i64(v[k] - 48u8)
+        if total > 2147483647i64 { ret false }
+        k += 1usize
+    }
+    ret true
+}
+
+fn guess_double(a: *mem.Arena, v0: str) -> bool {
+    var i = 0usize
+    while i < v0.len && (v0[i] == 32u8 || v0[i] == 9u8) { i += 1usize }
+    let v = v0[i..v0.len]
+    if v.len == 0usize || leading_zero(v) { ret false }
+    if v[v.len - 1usize] == 32u8 || v[v.len - 1usize] == 9u8 { ret false }
+    let x = parse_double(a, v, 46u8)
+    ret x == x
+}
+
+fn guess_number(v: str) -> bool {
+    if v.len == 0usize || leading_zero(v) { ret false }
+    let c = v[0usize]
+    if !(is_digit(c) || c == 45u8 || c == 46u8) { ret false }
+    let (x, end) = scan_number(v, 46u8, 44u8)
+    ret x == x && end == v.len
+}
+
+fn digits_at(v: str, at: usize, n: usize) -> bool {
+    if at + n > v.len { ret false }
+    var i = 0usize
+    while i < n {
+        if !is_digit(v[at + i]) { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// The shape guess_parser looks for: 0 neither, 1 a date alone, 2 a date and a time; `dashed` says
+// the date had separators.
+fn iso_shape(v: str) -> (u8, bool) {
+    if !digits_at(v, 0usize, 4usize) { ret (0u8, false) }
+    var i = 4usize
+    var dashed = false
+    if i < v.len && (v[i] == 45u8 || v[i] == 47u8) {
+        dashed = true
+        i += 1usize
+        if !digits_at(v, i, 2usize) { ret (0u8, false) }
+        i += 2usize
+        if i >= v.len || (v[i] != 45u8 && v[i] != 47u8) { ret (0u8, false) }
+        i += 1usize
+        if !digits_at(v, i, 2usize) { ret (0u8, false) }
+        i += 2usize
+    } else {
+        if !digits_at(v, i, 4usize) { ret (0u8, false) }
+        i += 4usize
+    }
+    if i == v.len { ret (1u8, dashed) }
+    if v[i] != 84u8 && v[i] != 32u8 { ret (0u8, false) }
+    i += 1usize
+    if !digits_at(v, i, 2usize) { ret (0u8, false) }
+    i += 2usize
+    if i < v.len && v[i] == 58u8 {
+        i += 1usize
+        if !digits_at(v, i, 2usize) { ret (0u8, false) }
+        i += 2usize
+        if i < v.len && v[i] == 58u8 {
+            i += 1usize
+            if !digits_at(v, i, 2usize) { ret (0u8, false) }
+            i += 2usize
+            if i < v.len && v[i] == 46u8 {
+                i += 1usize
+                if i >= v.len || !is_digit(v[i]) { ret (0u8, false) }
+                while i < v.len && is_digit(v[i]) { i += 1usize }
+            }
+        }
+    } else if digits_at(v, i, 2usize) {
+        i += 2usize
+        if digits_at(v, i, 2usize) { i += 2usize }
+    }
+    if i == v.len { ret (2u8, dashed) }
+    if v[i] == 90u8 && i + 1usize == v.len { ret (2u8, dashed) }
+    if v[i] == 43u8 || v[i] == 45u8 {
+        i += 1usize
+        if !digits_at(v, i, 2usize) { ret (0u8, false) }
+        i += 2usize
+        if i < v.len && v[i] == 58u8 { i += 1usize }
+        if i < v.len {
+            if !digits_at(v, i, 2usize) { ret (0u8, false) }
+            i += 2usize
+        }
+        if i == v.len { ret (2u8, dashed) }
+    }
+    ret (0u8, false)
+}
+
+// guess_parser over a column of strings (NA is "" or "NA"): the type code, G_LOGICAL to G_CHARACTER.
+fn guess_parser(a: *mem.Arena, values: []const str, integer: bool) -> u8 {
+    var t = 0u8
+    while t < 7u8 {
+        var all = true
+        var i = 0usize
+        while i < values.len && all {
+            let v = values[i]
+            if !is_na_text(v) {
+                var good = false
+                if t == G_LOGICAL { good = guess_logical(v) }
+                if t == G_INTEGER { good = integer && guess_integer(v) }
+                if t == G_DOUBLE { good = guess_double(a, v) }
+                if t == G_NUMBER { good = guess_number(v) }
+                if t == G_TIME {
+                    let x = parse_time(v, "%AT")
+                    good = x == x
+                }
+                if t == G_DATE {
+                    let (shape, dashed) = iso_shape(v)
+                    good = shape == 1u8 && dashed
+                }
+                if t == G_DATETIME {
+                    let (shape, dashed) = iso_shape(v)
+                    good = shape != 0u8
+                }
+                if !good { all = false }
+            }
+            i += 1usize
+        }
+        if all {
+            if t != G_INTEGER || integer { ret t }
+        }
+        t += 1u8
+    }
+    ret G_CHARACTER
 }
