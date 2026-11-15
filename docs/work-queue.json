@@ -15,17 +15,6 @@
       "evidence": "Open. e.algo.rand.r and e.algo.rand.rdist cover runif, rnorm, rexp, sample, rgamma, rchisq, rt, rbeta, rbinom, rpois, rnbinom, rgeom, rweibull, rlnorm, rlogis, rcauchy. Acceptance, each equal to R value for value after set.seed: rhyper (HIN and H2PE, 414 lines of C), rnchisq, rmultinom, rsignrank, rwilcox, sample with prob (with and without replacement, Walker's alias for n >= 200), sample for n >= 2^32 and the hash path past 1e7, rbinom for n >= 2^31 through qbinom, rbinom where k * k overflows a C int, qnorm for p below 2.5e-317."
     },
     {
-      "id": "L273",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 531,
-      "title": "Dense and sparse linear algebra completions (RcppEigen, base R)",
-      "score": 0,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Open. Needs L264. e.algo.linalg.matrix has cholesky, qr and Jacobi eigen; SVD lives only in e.ml.multivariate; no sparse type. Acceptance: SVD, general (non-symmetric) eigen with complex output, LDLT, column-pivoted QR, determinant, solve and least squares match base R svd, eigen, qr, chol and lm.fit up to sign and ordering conventions; a CSC sparse matrix with sparse Cholesky and multiply matches the Matrix package on seeded systems."
-    },
-    {
       "id": "L282",
       "category": "library",
       "group": "CRAN parity",

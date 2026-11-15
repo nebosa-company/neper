@@ -3068,4 +3068,5 @@ D5992	1422	readr's parsers keep their quirks, and the splitter is checked on rec
 D5993	1429	strwrap is ported line for line, and ansi_strwrap keeps its maps over characters
 D5994	1356	zoo's maxgap and spline evaluation keep R's cursor, and yearmon converts its right operand
 D5995	1391	isoband's 81 band cases are data, and the comparison normalises what its hash map leaves open
-D5996	1339	R's generators keep their statics out, and the stream stays the same
+D5996	1340	R's generators keep their statics out, and the stream stays the same
+D5997	1656	decompositions are compared by what they define, and qr keeps LINPACK's noise out of the golden

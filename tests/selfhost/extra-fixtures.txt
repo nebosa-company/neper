@@ -147,3 +147,5 @@ oracle_ansiwrap
 oracle_zoo
 oracle_isoband
 oracle_rdist
+oracle_decomp
+oracle_sparse
