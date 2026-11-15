@@ -150,3 +150,4 @@ oracle_rdist
 oracle_decomp
 oracle_sparse
 oracle_xls
+oracle_dist

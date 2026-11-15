@@ -44326,3 +44326,11 @@ unreferenced.
 **Decision.** A column is the first of logical, integer (only with `guess_integer`), double, number, time, date, datetime that every non-NA value (empty or "NA") fits; a column of NA is logical, and character is the rest. A date is `dddd-dd-dd` or with slashes, whatever the digits say (2024-13-01 and 2024-02-30 are dates); a datetime is a date, or a date, `T` or a space, an hour of two digits, optional minutes, seconds and fraction, and optional Z or an offset (25:00:00 is a datetime), compact forms included; "10:00" is a time and alone it is not a datetime. A leading zero followed by a digit (007, 00.5) disqualifies integer, double and number. Number wants the first character to be a digit, a minus or a point, so "+7" is a double alone and breaks a column of numbers into character; "1e" is a number and so is "1,5"; the whole string must be consumed, which is why `$1`, `12%`, `(1)` and `1.2.3` are character. Leading blanks are skipped for integer and double and trailing ones are not. `scan_number` returns the position where readr's number reader stopped for that test.
 
 **Result.** Fixture `oracle_readr`: 4288 cases equal readr 2.2.0 on both hosts.
+
+## D6001 — the d, p and q functions are ported with R's dpq macros, one family at a time
+
+**Context.** L288. The whole of nmath is some ten thousand lines; the simple families need only exp, log, expm1 and log1p.
+
+**Decision.** `e.math.dist` carries the dpq.h macros as small functions (`dt0`, `dt1`, `dval`, `dclog`, `dlexp`, `dt_qiv`, `dt_clog`, `log1_exp`, `log1pexp`) so each family reads like its C and every lower.tail and log.p combination goes through the same code. norm takes pnorm_both (Cody) with the tail asymptote and the denormal-aware bounds of R 4.4, dnorm4 with its split exponent, and qnorm in full (Wichura's three rational approximations and the five-step asymptotic series down to the smallest log probability); the other six are short. The gamma, beta and incomplete-function families stay in L288 and wait on pgamma and toms708. Powers of two stand in for ldexp.
+
+**Result.** Fixture `oracle_dist`: every family, kind, tail and log setting over a grid of arguments from -Inf to Inf and probabilities from 1e-300 to 1, equal to R 4.6.1 at 1e-13 relative on both hosts.

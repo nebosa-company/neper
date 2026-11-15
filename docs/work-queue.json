@@ -42,10 +42,10 @@
       "group": "CRAN parity",
       "order": 534,
       "title": "d/p/q for the distribution families (nmath), lower.tail and log.p",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open; split from L265 as large. Needs L264. e.math.special has the normal, t, chi-squared and F cdfs, incomplete gamma and beta. Acceptance: d, p and q for norm (log.p, lower.tail), t, chisq, F, gamma, beta, binom, pois, nbinom, geom, hyper, weibull, lnorm, logis, cauchy, unif, exp, signrank, wilcox and tukey match R within 1e-13 relative, in the tails and for non-integer parameters, ported from R's src/nmath (toms708 for pbeta, pgamma, qgamma, bd0, stirlerr, dpois_raw)."
+      "evidence": "Partial (D6001). e.math.dist ports nmath d, p and q with lower.tail and log.p for norm (Cody pnorm, qnorm with Wichura tails to the log-scale asymptotics), unif, exp, weibull, logis, cauchy and lnorm; oracle_dist equals R on 5796 cases at 1e-13 relative. Open, ported from R src/nmath (toms708 for pbeta, pgamma, qgamma, bd0, stirlerr, dpois_raw): t, chisq, F, gamma, beta, binom, pois, nbinom, geom, hyper, signrank, wilcox and tukey, in the tails and for non-integer parameters, within 1e-13 relative."
     },
     {
       "id": "L274",
