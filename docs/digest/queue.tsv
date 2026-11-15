@@ -1,35 +1,35 @@
 id	category	score	evidence_bytes	title	status
+L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
+L295	library	0	248	classInt: classification intervals	Open (CRAN rank 193).
+L298	library	0	338	xts: period handling and time-indexed series	Open (CRAN rank 165).
+L296	library	0	398	proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener	Open (CRAN ranks 147, 152).
+L297	library	0	356	colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation	Open (CRAN rank 110).
+L301	library	0	368	mvtnorm: multivariate normal and t probabilities and quantiles	Open (CRAN rank 130).
+L302	library	0	410	GPArotation: gradient projection rotations	Open (CRAN rank 196).
+L303	library	0	321	urca: unit-root and cointegration tests	Open (CRAN rank 136).
+L299	library	0	547	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Open (CRAN ranks 115, 116, 167, plus the interval summaries of ggdist 175).
+L300	library	0	503	car, lmtest and sandwich: linear-model tests and robust covariance	Open (CRAN ranks 111, 114, 155).
+L305	library	0	392	Hmisc: numerically defined core	Open (CRAN rank 184).
+L306	library	0	455	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Open (CRAN rank 173).
+L307	library	0	329	quantreg: quantile regression inference and algorithms	Open (CRAN rank 131).
+L309	library	0	371	nloptr: gradient-based and constrained optimizers	Open (CRAN rank 120).
+L314	library	0	682	lubridate and timeDate: date-time parsing, periods, business calendars	Open (CRAN ranks 102, 134).
+L317	library	0	407	igraph: random graph generators and layouts	Open (CRAN rank 109).
+L310	library	0	484	glmnet: elastic-net path and families	Open (CRAN rank 182).
+L308	library	0	451	minqa and nloptr: derivative-free optimizers	Open (CRAN ranks 120, 122).
+L304	library	0	469	haven: SAS, SPSS and Stata file formats	Open (CRAN rank 123).
+L315	library	0	448	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Open (CRAN ranks 163, 144).
+L316	library	0	542	igraph: deterministic structure and community detection	Open (CRAN rank 109).
+L311	library	0	605	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	Open (CRAN rank 200).
+L312	library	0	392	psych: reliability, factor analysis and correlation tools	Open (CRAN rank 168).
+L313	library	0	425	emmeans: estimated marginal means and contrasts	Open (CRAN rank 192).
+L318	library	0	473	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Open (CRAN rank 128).
+L319	library	0	471	nlme: gls, correlation structures and variance functions	Open (CRAN rank 195).
+L320	library	0	602	sf: simple-features geometry, predicates and spherical geometry	Open (CRAN rank 159;
 L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
 L274	library	0	381	General linear mixed models (lme4)	Open.
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
-L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
-L295	library	0	248	classInt: classification intervals	Open (CRAN rank 193).
-L296	library	0	398	proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener	Open (CRAN ranks 147, 152).
-L297	library	0	356	colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation	Open (CRAN rank 110).
-L298	library	0	338	xts: period handling and time-indexed series	Open (CRAN rank 165).
-L299	library	0	547	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Open (CRAN ranks 115, 116, 167, plus the interval summaries of ggdist 175).
-L300	library	0	503	car, lmtest and sandwich: linear-model tests and robust covariance	Open (CRAN ranks 111, 114, 155).
-L301	library	0	368	mvtnorm: multivariate normal and t probabilities and quantiles	Open (CRAN rank 130).
-L302	library	0	410	GPArotation: gradient projection rotations	Open (CRAN rank 196).
-L303	library	0	321	urca: unit-root and cointegration tests	Open (CRAN rank 136).
-L304	library	0	469	haven: SAS, SPSS and Stata file formats	Open (CRAN rank 123).
-L305	library	0	392	Hmisc: numerically defined core	Open (CRAN rank 184).
-L306	library	0	455	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Open (CRAN rank 173).
-L307	library	0	329	quantreg: quantile regression inference and algorithms	Open (CRAN rank 131).
-L308	library	0	451	minqa and nloptr: derivative-free optimizers	Open (CRAN ranks 120, 122).
-L309	library	0	371	nloptr: gradient-based and constrained optimizers	Open (CRAN rank 120).
-L310	library	0	484	glmnet: elastic-net path and families	Open (CRAN rank 182).
-L311	library	0	605	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	Open (CRAN rank 200).
-L312	library	0	392	psych: reliability, factor analysis and correlation tools	Open (CRAN rank 168).
-L313	library	0	425	emmeans: estimated marginal means and contrasts	Open (CRAN rank 192).
-L314	library	0	682	lubridate and timeDate: date-time parsing, periods, business calendars	Open (CRAN ranks 102, 134).
-L315	library	0	448	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Open (CRAN ranks 163, 144).
-L316	library	0	542	igraph: deterministic structure and community detection	Open (CRAN rank 109).
-L317	library	0	407	igraph: random graph generators and layouts	Open (CRAN rank 109).
-L318	library	0	473	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Open (CRAN rank 128).
-L319	library	0	471	nlme: gls, correlation structures and variance functions	Open (CRAN rank 195).
-L320	library	0	602	sf: simple-features geometry, predicates and spherical geometry	Open (CRAN rank 159;
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU
