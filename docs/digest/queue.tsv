@@ -2,14 +2,10 @@ id	category	score	evidence_bytes	title	status
 L293	library	0	471	R random streams, the corners: Walker alias, ties in sample prob, n past 2^32, large-n rbinom and rhyper	Open.
 L292	library	0	460	BIFF5 workbooks, hidden sheets and encrypted .xls in e.fmt.xls	Open.
 L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
-L288	library	0.97	381	d/p/q for the distribution families (nmath), lower.tail and log.p	Partial (D6001 to D6007).
 L274	library	0	381	General linear mixed models (lme4)	Open.
-L287	library	0	402	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)	Open.
-L283	library	0	427	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	Open;
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
-L276	library	0	307	Sass/SCSS compiler (sass, libsass)	Open;
-L290	library	0.4	526	readr locales, time zones and ragged read_delim rows	Partial (D6000).
+L290	library	0.4	530	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6008).
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU
@@ -325,3 +321,6 @@ L259	library	0	165	Split the other large UI files	Opened from the 2026-11-13 lib
 L263	library	0	225	The catalogue is generated, not synced	Opened from the 2026-11-13 library review.
 T089	tooling	0	259	Many errors per function, no cascades	Opened from the 2026-11-12 compiler review.
 C330	compiler	0	246	Width axis for 32-bit targets	Opened from the 2026-11-12 compiler review.
+L287	library	0	513	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
+L283	library	0	538	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.
+L276	library	0	418	Sass/SCSS compiler (sass, libsass)	DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it.

@@ -44382,3 +44382,19 @@ unreferenced.
 **Decision.** `signrank_table` and `wilcox_table` build the table for the (n) or (m, n) of the call in the caller's arena: the signed-rank counts by the subset-sum recurrence up to n (n + 1) / 4, the rank-sum counts by R 4.6's divisor-sum recursion w[k] = (sum of w[i] sigma(k - i)) / k with sigma from the divisors of k up to m and from n + 1 up to m + n. The quantile loops, the 10 epsilon fuzz and the shorter-tail summation are R's.
 
 **Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on both hosts.
+
+## D6008 — the studentized range is compared where R is accurate
+
+**Context.** L288. `ptukey` sums its Gauss-Legendre pieces in long double and returns a probability near 1 for the lower tail, so an upper tail of 1e-13 carries an absolute error of about 1e-13 in R itself.
+
+**Decision.** `ptukey`, `wprob` and `qtukey` are R's, with double sums; the golden compares them at 1e-9 relative and 1e-12 absolute and leaves out upper tails below 1e-9. L287, L283 and L276 were moved to the back of the backlog at the user's request, each marked to ask the user whether it is still relevant.
+
+**Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on both hosts; L288 is closed.
+
+## D6008 — a locale is one names string, and readr has no full weekday name
+
+**Context.** L290. readr's `locale(date_names = lang)` supplies month, weekday and am/pm names to the date parsers.
+
+**Decision.** `parse_date_in`, `parse_time_in` and `parse_datetime_in` take the names as one string, `months;abbreviated months;days;abbreviated days;am|pm`, items separated by `|` and groups by `;`, which the fixture builds from `date_names_lang`; the empty string is English, so the old three functions are the same calls. `%B` and `%b` read the locale's months, `%a` the abbreviated weekday (consumed, not used) and `%p` its am and pm. `%A` is not a weekday in readr: R refuses it unless a D or T follows ("Invalid %A auto parser"), so it stays the auto parser only.
+
+**Result.** Fixture `oracle_readr` equals readr 2.2.0 on 6208 cases on both hosts, ten languages included.

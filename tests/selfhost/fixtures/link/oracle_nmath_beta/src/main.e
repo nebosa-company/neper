@@ -15,6 +15,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let lower = x[5usize] != 0.0f64
     let lg = x[6usize] != 0.0f64
     if fam == 2u8 { ret nb.lbeta(x[3usize], x[4usize]) }
+    if fam == 15u8 {
+        if kind == 1u8 { ret nb.ptukey(x[2usize], x[3usize], x[7usize], x[4usize], lower, lg) }
+        ret nb.qtukey(x[2usize], x[3usize], x[7usize], x[4usize], lower, lg)
+    }
     if fam == 13u8 {
         if kind == 0u8 { ret nb.dsignrank(a, x[2usize], x[3usize], lg) }
         if kind == 1u8 { ret nb.psignrank(a, x[2usize], x[3usize], lower, lg) }

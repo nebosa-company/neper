@@ -1035,6 +1035,215 @@ fn qwilcox(a: *mem.Arena, x0: f64, m0: f64, n0: f64, lower: bool, lg: bool) -> f
     ret f64(q)
 }
 
+// --- studentized range
+
+fn wprob(w: f64, rr: f64, cc: f64) -> f64 {
+    let c1 = -30.0f64
+    let c2 = -50.0f64
+    let c3 = 60.0f64
+    let bb = 8.0f64
+    let wlar = 3.0f64
+    var xleg: [6]f64 = zero
+    xleg[0usize] = 0.981560634246719250690549090149f64
+    xleg[1usize] = 0.904117256370474856678465866119f64
+    xleg[2usize] = 0.769902674194304687036893833213f64
+    xleg[3usize] = 0.587317954286617447296702418941f64
+    xleg[4usize] = 0.367831498998180193752691536644f64
+    xleg[5usize] = 0.125233408511468915472441369464f64
+    var aleg: [6]f64 = zero
+    aleg[0usize] = 0.047175336386511827194615961485f64
+    aleg[1usize] = 0.106939325995318430960254718194f64
+    aleg[2usize] = 0.160078328543346226334652529543f64
+    aleg[3usize] = 0.203167426723065921749064455810f64
+    aleg[4usize] = 0.233492536538354808760849898925f64
+    aleg[5usize] = 0.249147045813402785000562436043f64
+    let qsqz = w * 0.5f64
+    if qsqz >= bb { ret 1.0f64 }
+    var pr_w = 2.0f64 * dist.pnorm(qsqz, 0.0f64, 1.0f64, true, false) - 1.0f64
+    if pr_w >= math.exp[f64](c2 / cc) { pr_w = math.pow[f64](pr_w, cc) } else { pr_w = 0.0f64 }
+    var wincr = 3.0f64
+    if w > wlar { wincr = 2.0f64 }
+    var blb = qsqz
+    let binc = (bb - qsqz) / wincr
+    var bub = blb + binc
+    var einsum = 0.0f64
+    let cc1 = cc - 1.0f64
+    var wi = 1.0f64
+    while wi <= wincr {
+        var elsum = 0.0f64
+        let a = 0.5f64 * (bub + blb)
+        let b = 0.5f64 * (bub - blb)
+        var jj = 1i64
+        var stop = false
+        while jj <= 12i64 && !stop {
+            var j = 0usize
+            var xx = 0.0f64
+            if 6i64 < jj {
+                j = usize(12i64 - jj)
+                xx = xleg[j]
+            } else {
+                j = usize(jj - 1i64)
+                xx = 0.0f64 - xleg[j]
+            }
+            let c = b * xx
+            let ac = a + c
+            let qexpo = ac * ac
+            if qexpo > c3 {
+                stop = true
+            } else {
+                let pplus = 2.0f64 * dist.pnorm(ac, 0.0f64, 1.0f64, true, false)
+                let pminus = 2.0f64 * dist.pnorm(ac, w, 1.0f64, true, false)
+                var rinsum = pplus * 0.5f64 - pminus * 0.5f64
+                if rinsum >= math.exp[f64](c1 / cc1) {
+                    rinsum = (aleg[j] * math.exp[f64](0.0f64 - 0.5f64 * qexpo)) * math.pow[f64](rinsum, cc1)
+                    elsum += rinsum
+                }
+            }
+            jj += 1i64
+        }
+        elsum = elsum * (((2.0f64 * b) * cc) * 0.398942280401432677939946059934f64)
+        einsum += elsum
+        blb = bub
+        bub += binc
+        wi += 1.0f64
+    }
+    pr_w += einsum
+    if pr_w <= math.exp[f64](c1 / rr) { ret 0.0f64 }
+    pr_w = math.pow[f64](pr_w, rr)
+    if pr_w >= 1.0f64 { ret 1.0f64 }
+    ret pr_w
+}
+
+fn ptukey(q: f64, rr: f64, cc: f64, dof: f64, lower: bool, lg: bool) -> f64 {
+    let eps1 = -30.0f64
+    let eps2 = 1.0e-14f64
+    var xlegq: [8]f64 = zero
+    xlegq[0usize] = 0.989400934991649932596154173450f64
+    xlegq[1usize] = 0.944575023073232576077988415535f64
+    xlegq[2usize] = 0.865631202387831743880467897712f64
+    xlegq[3usize] = 0.755404408355003033895101194847f64
+    xlegq[4usize] = 0.617876244402643748446671764049f64
+    xlegq[5usize] = 0.458016777657227386342419442984f64
+    xlegq[6usize] = 0.281603550779258913230460501460f64
+    xlegq[7usize] = 0.0950125098376374401853193354250f64
+    var alegq: [8]f64 = zero
+    alegq[0usize] = 0.0271524594117540948517805724560f64
+    alegq[1usize] = 0.0622535239386478928628438369944f64
+    alegq[2usize] = 0.0951585116824927848099251076022f64
+    alegq[3usize] = 0.124628971255533872052476282192f64
+    alegq[4usize] = 0.149595988816576732081501730547f64
+    alegq[5usize] = 0.169156519395002538189312079030f64
+    alegq[6usize] = 0.182603415044923588866763667969f64
+    alegq[7usize] = 0.189450610455068496285396723208f64
+    if q != q || rr != rr || cc != cc || dof != dof { ret nan() }
+    if q <= 0.0f64 { ret dist.dt0(lower, lg) }
+    if dof < 2.0f64 || rr < 1.0f64 || cc < 2.0f64 { ret nan() }
+    if !finite(q) { ret dist.dt1(lower, lg) }
+    if dof > 25000.0f64 { ret dt_val(wprob(q, rr, cc), lower, lg) }
+    let f2 = dof * 0.5f64
+    var f2lf = ((f2 * math.log[f64](dof)) - (dof * 0.693147180559945309417232121458f64)) - nm.lgammafn(f2)
+    let f21 = f2 - 1.0f64
+    let ff4 = dof * 0.25f64
+    var ulen = 0.125f64
+    if dof <= 100.0f64 { ulen = 1.0f64 } else if dof <= 800.0f64 { ulen = 0.5f64 } else if dof <= 5000.0f64 { ulen = 0.25f64 }
+    f2lf += math.log[f64](ulen)
+    var ans = 0.0f64
+    var otsum = 0.0f64
+    var i = 1i64
+    var done = false
+    while i <= 50i64 && !done {
+        otsum = 0.0f64
+        let twa1 = f64(2i64 * i - 1i64) * ulen
+        var jj = 1i64
+        while jj <= 16i64 {
+            var j = 0usize
+            var t1 = 0.0f64
+            if 8i64 < jj {
+                j = usize(jj - 9i64)
+                t1 = (f2lf + (f21 * math.log[f64](twa1 + (xlegq[j] * ulen)))) - (((xlegq[j] * ulen) + twa1) * ff4)
+            } else {
+                j = usize(jj - 1i64)
+                t1 = (f2lf + (f21 * math.log[f64](twa1 - (xlegq[j] * ulen)))) + (((xlegq[j] * ulen) - twa1) * ff4)
+            }
+            if t1 >= eps1 {
+                var qsqz = 0.0f64
+                if 8i64 < jj {
+                    qsqz = q * math.sqrt[f64](((xlegq[j] * ulen) + twa1) * 0.5f64)
+                } else {
+                    qsqz = q * math.sqrt[f64](((0.0f64 - (xlegq[j] * ulen)) + twa1) * 0.5f64)
+                }
+                let wprb = wprob(qsqz, rr, cc)
+                otsum += (wprb * alegq[j]) * math.exp[f64](t1)
+            }
+            jj += 1i64
+        }
+        if f64(i) * ulen >= 1.0f64 && otsum <= eps2 {
+            done = true
+        } else {
+            ans += otsum
+            i += 1i64
+        }
+    }
+    if ans > 1.0f64 { ans = 1.0f64 }
+    ret dt_val(ans, lower, lg)
+}
+
+fn qinv(p: f64, c: f64, v: f64) -> f64 {
+    let p0 = 0.322232421088f64
+    let q0 = 0.993484626060e-01f64
+    let p1 = -1.0f64
+    let q1 = 0.588581570495f64
+    let p2 = -0.342242088547f64
+    let q2 = 0.531103462366f64
+    let p3 = -0.204231210125f64
+    let q3 = 0.103537752850f64
+    let p4 = -0.453642210148e-04f64
+    let q4 = 0.38560700634e-02f64
+    let c1 = 0.8832f64
+    let c2 = 0.2368f64
+    let c3 = 1.214f64
+    let c4 = 1.208f64
+    let c5 = 1.4142f64
+    let ps = 0.5f64 - 0.5f64 * p
+    let yi = math.sqrt[f64](math.log[f64](1.0f64 / (ps * ps)))
+    var t = yi + ((((yi * p4 + p3) * yi + p2) * yi + p1) * yi + p0) / ((((yi * q4 + q3) * yi + q2) * yi + q1) * yi + q0)
+    if v < 120.0f64 { t += (t * t * t + t) / v / 4.0f64 }
+    var q = c1 - c2 * t
+    if v < 120.0f64 { q += 0.0f64 - c3 / v + c4 * t / v }
+    ret t * (q * math.log[f64](c - 1.0f64) + c5)
+}
+
+fn qtukey(p0: f64, rr: f64, cc: f64, dof: f64, lower: bool, lg: bool) -> f64 {
+    let eps = 0.0001f64
+    if p0 != p0 || rr != rr || cc != cc || dof != dof { ret p0 + rr + cc + dof }
+    if dof < 2.0f64 || rr < 1.0f64 || cc < 2.0f64 { ret nan() }
+    if dist.bad_p(p0, lg) { ret nan() }
+    if p0 == dist.dt0(lower, lg) { ret 0.0f64 }
+    if p0 == dist.dt1(lower, lg) { ret inf() }
+    let p = dist.dt_qiv(p0, lower, lg)
+    var x0 = qinv(p, cc, dof)
+    var valx0 = ptukey(x0, rr, cc, dof, true, false) - p
+    var x1 = 0.0f64
+    if valx0 > 0.0f64 { x1 = nm.max2(0.0f64, x0 - 1.0f64) } else { x1 = x0 + 1.0f64 }
+    var valx1 = ptukey(x1, rr, cc, dof, true, false) - p
+    var ans = 0.0f64
+    var iter = 1i64
+    while iter < 50i64 {
+        ans = x1 - ((valx1 * (x1 - x0)) / (valx1 - valx0))
+        valx0 = valx1
+        x0 = x1
+        if ans < 0.0f64 {
+            ans = 0.0f64
+            valx1 = 0.0f64 - p
+        }
+        valx1 = ptukey(ans, rr, cc, dof, true, false) - p
+        x1 = ans
+        if nm.abs_of(x1 - x0) < eps { ret ans }
+        iter += 1i64
+    }
+    ret ans
+}
+
 // --- qbeta (AS 109 start, Newton steps on x or on log x, tail swaps)
 
 fn dt_civ(alpha: f64, lower: bool, lg: bool) -> f64 {

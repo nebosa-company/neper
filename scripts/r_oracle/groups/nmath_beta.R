@@ -86,4 +86,13 @@ for (m in c(1, 3, 8, 15)) for (n in c(1, 4, 9, 20)) {
   }
   for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) for (p in qkind(lt, lg)) add(c(14, 2, p, m, n, lt, lg), suppressWarnings(qwilcox(p, m, n, lower.tail = lt, log.p = lg)))
 }
+# studentized range (15): args (15, kind, x, nranges, df, lower, log, nmeans)
+# ptukey sums in long double and returns 1 - small: an upper tail below 1e-9 is noise (about 1e-13 absolute), so it is left out
+addt <- function(args, want) { tiny <- args[2] == 1 && !args[6] && (if (args[7]) exp(want) else want) < 1e-9
+  if (!tiny) cases[[length(cases) + 1]] <<- case("nmath_beta", args, want, rel = 1e-9, abs = 1e-12) }
+for (nm in c(2, 3, 5, 10, 20)) for (rr in c(1, 2)) for (df in c(2, 5, 10, 30, 120, 1000, 6000, 30000)) {
+  for (x in c(0, 0.5, 1.5, 3, 4.5, 8, 15, 40)) for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE))
+    addt(c(15, 1, x, rr, df, lt, lg, nm), suppressWarnings(ptukey(x, nm, df, nranges = rr, lower.tail = lt, log.p = lg)))
+  for (p in c(0.01, 0.1, 0.5, 0.9, 0.95, 0.99)) for (lt in c(TRUE, FALSE)) addt(c(15, 2, p, rr, df, lt, FALSE, nm), suppressWarnings(qtukey(p, nm, df, nranges = rr, lower.tail = lt)))
+}
 emit("nmath_beta", character(), list(cases))

@@ -3079,4 +3079,6 @@ D6003	1031	qgamma and qpois follow R's iterations step for step
 D6004	1068	toms708 is a line-for-line port with its labels turned into a state variable
 D6005	1140	the t, F, geometric and negative binomial functions sit on pbeta, and the discrete quantiles share one search
 D6006	1195	qbeta is a state machine over R's gotos, and its golden is held to 1e-9
-D6007	661	signrank and wilcox build their count table per call
+D6007	662	signrank and wilcox build their count table per call
+D6008	675	the studentized range is compared where R is accurate
+D6008	874	a locale is one names string, and readr has no full weekday name

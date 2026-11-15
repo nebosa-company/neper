@@ -37,17 +37,6 @@
       "evidence": "Open. Needs L264. e.text.collate has codepoint, byte and natural compare only. Acceptance: stri_sort, stri_order, stri_compare with UCA and locale tailoring (en, de, sv, tr), stri_trans_general for Latin-ASCII, Any-Lower, Any-Hex and Any-NFD, stri_enc_detect and stri_encode over the shared charsets, sentence and grapheme splitting, all equal to stringi on a seeded multilingual corpus."
     },
     {
-      "id": "L288",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 534,
-      "title": "d/p/q for the distribution families (nmath), lower.tail and log.p",
-      "score": 0.97,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Partial (D6001 to D6007). Equal to R with lower.tail and log.p: e.math.dist (norm, unif, exp, weibull, logis, cauchy, lnorm), e.math.nmath (gamma, lgamma, gamma, chisq, pois), e.math.toms708 and e.math.nmath_beta (beta, binom, nbinom, geom, hyper, t, F, signrank, wilcox; oracle_nmath_beta 41183 cases). Open: ptukey and qtukey (R src/nmath ptukey.c, qtukey.c) and qnbinom with mu."
-    },
-    {
       "id": "L274",
       "category": "library",
       "group": "CRAN parity",
@@ -57,28 +46,6 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open. Needs L264, L273. e.algo.stat.mixed has random intercept and slope fits and PQL only. Acceptance: lmer with crossed and nested random effects by REML and ML, glmer with Laplace and adaptive Gauss-Hermite for binomial and poisson, bobyqa and Nelder_Mead optimisers; fixef, ranef, VarCorr, logLik, predict and simulate match lme4 on sleepstudy, Penicillin and cbpp within 1e-6."
-    },
-    {
-      "id": "L287",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 527,
-      "title": "YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open. Needs L264. Verifies the partial rows for yaml and xml2 in docs/cran-gaps.tsv. Acceptance: yaml.load and as.yaml equal yaml for 1.1 scalars (yes/no booleans, octal, sexagesimal, merge keys, anchors, tags) on a seeded corpus; read_xml and read_html with recover, XPath 1.0 results, namespace handling and xml_validate against XSD equal xml2 on the same corpus; each failing case becomes a fixture."
-    },
-    {
-      "id": "L283",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 526,
-      "title": "CommonMark and GFM conformance with xml, latex and man renderers (commonmark)",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Needs L264. Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match."
     },
     {
       "id": "L284",
@@ -103,17 +70,6 @@
       "evidence": "Open; large (terra is about 74k lines of C++ over GDAL, GEOS and PROJ). Needs L264. Acceptance: raster cell algebra, focal (window, function, edge), aggregate, resample (near, bilinear, cubic), crop, mask, zonal and extract over GeoTIFF inputs equal terra values; reprojection among EPSG 4326, 3857, UTM zones and a set of national grids matches PROJ to 1e-6 m; vector buffer, intersect and union on seeded polygons match GEOS after canonical ring ordering."
     },
     {
-      "id": "L276",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 538,
-      "title": "Sass/SCSS compiler (sass, libsass)",
-      "score": 0,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Open; largest gap (about 42k lines upstream). Needs L264. Acceptance: variables, nesting, mixins, functions, extend, maps, control directives, imports and the built-in function library compile to the same CSS as sass::sass for the libsass spec suite subset, in nested, expanded and compressed output styles."
-    },
-    {
       "id": "L290",
       "category": "library",
       "group": "CRAN parity",
@@ -122,7 +78,7 @@
       "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6000). guess_parser landed in e.fmt.readr and equals readr on 1,566 columns (every type, mixtures, guess_integer on and off). Open: locale month and day names (%b, %B, %a, %A in other languages), a decimal mark other than . in parse_datetime fractions, time zones other than UTC, read_delim rows shorter and longer than the header, a one-column header that leaves later rows unsplit, and a quote that is not closed (readr 2.2.0 crashes on one with escapes off, so the reference answers need a guard), equal to readr."
+      "evidence": "Partial (D6000, D6008). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names (months, abbreviated months, abbreviated weekdays, am and pm) and equal readr for ten languages on 1920 cases. Open: a time zone other than UTC in parse_datetime, read_delim rows shorter and longer than the header, a one-column header that leaves later rows unsplit, and a quote that is not closed (readr 2.2.0 crashes on one with escapes off, so the reference answers need a guard), equal to readr."
     },
     {
       "id": "C287",
@@ -3588,6 +3544,39 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a decision row in docs/decisions.md with the width-axis design and a cost estimate; L228's score and text re-checked against lib/e/os.wasi.e. No code. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "L287",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 527,
+      "title": "YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open. Needs L264. Verifies the partial rows for yaml and xml2 in docs/cran-gaps.tsv. Acceptance: yaml.load and as.yaml equal yaml for 1.1 scalars (yes/no booleans, octal, sexagesimal, merge keys, anchors, tags) on a seeded corpus; read_xml and read_html with recover, XPath 1.0 results, namespace handling and xml_validate against XSD equal xml2 on the same corpus; each failing case becomes a fixture."
+    },
+    {
+      "id": "L283",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 526,
+      "title": "CommonMark and GFM conformance with xml, latex and man renderers (commonmark)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Needs L264. Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match."
+    },
+    {
+      "id": "L276",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 538,
+      "title": "Sass/SCSS compiler (sass, libsass)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; largest gap (about 42k lines upstream). Needs L264. Acceptance: variables, nesting, mixins, functions, extend, maps, control directives, imports and the built-in function library compile to the same CSS as sass::sass for the libsass spec suite subset, in nested, expanded and compressed output styles."
     }
   ]
 }
