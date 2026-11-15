@@ -44476,3 +44476,9 @@ The reader already followed the DIFAT sectors; what was missing was a file that 
 `e.algo.stat.classint` holds the rules that need no random numbers: equal, pretty, sd, quantile types 1 to 9, jenks, fisher, headtails, maximum and box, and `find_cols`. Two details decide agreement with R. The quantile probabilities are `i * (1 / n)`, as `seq(0, 1, 1 / n)` makes them, not `i / n`, so 3 / 5 and 3 * 0.2 differ and the type 1 and 2 steps fall on different sides of an integer. R 4.6 floors `n * p` as `floor(np * (1 + fuzz))` with `fuzz = 4 * eps` for every type but 7, which is multiplicative, where older R added the fuzz. Fisher's classes are the least-squares partition by dynamic programming, which is the optimum Fortran `fish` returns.
 
 **Result.** `oracle_classint` equals classInt 0.4.11 on 6725 cases on Windows. Linux was not run (the machine had no memory for WSL). Open under L295: kmeans, hclust, bclust and dpih.
+
+## D6021 — classInt kmeans, hclust and dpih are ported, bclust waits
+
+`kmeans` is Hartigan and Wong's AS 136 as `kmns.f` has it (optimal transfer, quick transfer, the `50 * m` step cap), started the way R's `kmeans()` starts it: `sample.int(m, k)` over the rows, then over `unique(x)` when two centres coincide. Without that port a least-squares partition is no stand-in: for the same data R's kmeans ends in a worse local optimum in 142 of 265 seeded runs, so the breaks differ. `hclust` is complete linkage with R's tie order (first smallest pair scanning rows), `dpih` is KernSmooth's level-2 direct plug-in with the binned functional summed directly where R uses an FFT, and the breaks of all three are classInt's `.rbrks` over the classes ordered by centre. A case where R's kmeans fails and classInt jitters is not probed.
+
+**Result.** `oracle_classint` equals classInt 0.4.11 on both hosts. Open under L295: bclust (e1071's bagged clustering: resampled kmeans with 20 centres, `knn1`, average-linkage `hclust`).

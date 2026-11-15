@@ -1,7 +1,7 @@
 # classInt::classIntervals break rules that need no random numbers. A vector answer is one case per
 # element (fn "v:<style>") plus a length case ("len:<style>"); the last argument of an element case is its position.
 #   args: (style, n, extra, len, x..., [pos])   style 0 equal 1 pretty 2 sd 3 quantile (extra = type) 4 jenks 5 fisher
-#   6 headtails (n unused, extra = thr) 7 maximum 8 box (extra = iqr_mult, n = quantile type, legacy in n >= 100) 
+#   6 headtails (n unused, extra = thr) 7 maximum 9 dpih, 10 hclust, 11 kmeans (extra = the seed), 8 box (extra = iqr_mult, n = quantile type, legacy in n >= 100) 
 #   "cols": (left, x, nb, brks...) -> the 0-based class of x from findCols, -1 outside
 suppressMessages(library(classInt))
 set.seed(20261115)
@@ -21,7 +21,7 @@ for (x in xs) {
   for (n in c(2, 3, 4, 5, 6, 8)) {
     if (n >= nobs) next
     len <- length(x)
-    for (st in list(list(0, "equal"), list(1, "pretty"), list(2, "sd"), list(4, "jenks"), list(5, "fisher"), list(7, "maximum"))) {
+    for (st in list(list(0, "equal"), list(1, "pretty"), list(2, "sd"), list(4, "jenks"), list(5, "fisher"), list(7, "maximum"), list(10, "hclust"))) {
       b <- cls(x, n, st[[2]])
       if (!is.null(b)) vec(st[[2]], c(st[[1]], n, 0, len, x), b)
     }
@@ -30,6 +30,14 @@ for (x in xs) {
       if (!is.null(b)) vec("quantile", c(3, n, ty, len, x), b)
     }
   }
+  for (sd in 1:3) for (n in c(2, 3, 4, 5, 6)) {
+    if (n >= nobs) next
+    jit <- FALSE
+    b <- withCallingHandlers(quiet2 <- tryCatch({ set.seed(sd); classIntervals(x, n, "kmeans", warnSmallN = FALSE)$brks }, error = function(e) NULL),
+                             warning = function(w) { if (grepl("jitter", conditionMessage(w))) jit <<- TRUE; invokeRestart("muffleWarning") })
+    if (!is.null(b) && !jit) vec("kmeans", c(11, n, sd, length(x), x), b)
+  }
+  b <- cls(x, 4, "dpih"); if (!is.null(b)) vec("dpih", c(9, 0, 0, length(x), x), b)
   for (thr in c(0.4, 0.25, 0.6)) { b <- cls(x, 4, "headtails", thr = thr); if (!is.null(b)) vec("headtails", c(6, 0, thr, length(x), x), b) }
   for (ty in c(7, 6, 2)) for (mult in c(1.5, 3)) for (lg in c(FALSE, TRUE)) {
     b <- cls(x, 4, "box", iqr_mult = mult, type = ty, legacy = lg)

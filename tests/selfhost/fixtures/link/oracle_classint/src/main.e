@@ -3,6 +3,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R classint`; the layouts are at the top of
 // scripts/r_oracle/groups/classint.R. A vector answer is one case per element plus a "len:" case.
 
+use e.algo.rand.r as rr
 use e.algo.stat.classint as ci
 use e.io
 use e.mem
@@ -66,6 +67,23 @@ fn breaks(a: *mem.Arena, x: []const f64) -> []f64 {
             legacy = true
         }
         let (r, re) = ci.box(a, data, extra, u8(t), legacy)
+        out = r
+        e = re
+    }
+    if style == 9u8 {
+        let (r, re) = ci.dpih_breaks(a, data)
+        out = r
+        e = re
+    }
+    if style == 10u8 {
+        let (r, re) = ci.hclust_breaks(a, data, n)
+        out = r
+        e = re
+    }
+    if style == 11u8 {
+        var g: rr.Rng = zero
+        rr.seed(&g, i64(extra))
+        let (r, re) = ci.kmeans_breaks(a, &g, data, n)
         out = r
         e = re
     }
