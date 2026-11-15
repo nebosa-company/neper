@@ -1,0 +1,78 @@
+pkg	rank	unit	r_exports	status	e_home	upstream_loc	note
+stringi	42	unicode normalization NFC/NFD/NFKC/NFKD	stri_trans_nfc etc	covered	e.text.normalize
+stringi	42	word and line break iteration	stri_split_boundaries, stri_count_boundaries	covered	e.text.segment
+stringi	42	sentence and grapheme break iteration	stri_split_boundaries type=sentence/character	partial	e.text.uprops, e.js.intl		verify UAX29 conformance vectors
+stringi	42	locale collation (UCA + tailoring), sort, order, compare, equals	stri_sort, stri_order, stri_compare, stri_cmp_*	partial	e.text.collate		only codepoint/byte/natural compare; no UCA tables or locale tailoring
+stringi	42	case mapping with locale, case folding	stri_trans_toupper/tolower/totitle/casefold	partial	e.text.casing		locale-specific (tr, lt) unverified
+stringi	42	transliteration (ICU transforms: Latin-ASCII, Any-Hex)	stri_trans_general, stri_trans_list	gap	-	~100k	needs a rule-based transform engine plus data
+stringi	42	charset conversion and detection	stri_encode, stri_enc_detect, stri_enc_list, stri_enc_isutf8	partial	e.text.charset, charset_cjk, encoding		stri_enc_detect is a gap; converter list is shorter than ICU
+stringi	42	ICU regex (Unicode props, lookaround, boundaries)	stri_detect_regex family, stri_replace_all_regex	partial	e.text.regex		check \p{..} coverage and lookbehind
+stringi	42	fixed, coll and charclass search	stri_*_fixed, stri_*_coll, stri_*_charclass	partial	e.text.search, e.text.collate		coll variants need UCA search
+stringi	42	locale-aware number and date formatting	stri_datetime_*, stri_format, stri_sprintf	partial	e.js.intl, e.time		CLDR data subset
+stringi	42	string utilities (pad, wrap, dup, reverse, trim, stats, width)	stri_pad, stri_wrap, stri_width	partial	e.text.wrap, e.text.segment
+stringr	34	wrappers over stringi	str_*	covered-by-stringi	-
+jsonlite	16	parse, serialize, prettify, minify, stream NDJSON, validate	fromJSON, toJSON, prettify, stream_in	covered	e.fmt.json
+jsonlite	16	data-frame and matrix simplification, rbind_pages, flatten	simplify*, flatten	skip	-		R data model only
+digest	38	md5 sha1 sha256 sha512 sha3 crc32 crc32c blake3 murmur32 xxhash64	digest(algo=)	covered	e.crypto.hash, e.algo.hash
+digest	38	xxhash32, xxh3_64, xxh3_128	digest(algo=xxhash32/xxh3_*)	gap	-	~1.5k	small, exact vectors
+digest	38	spookyhash	digest(algo=spookyhash)	gap	-	~0.5k
+digest	38	jenkins one-at-a-time digest2int	digest2int	gap	-	<50
+digest	38	hmac, AES block modes	hmac, AES	covered	e.crypto.mac, e.crypto.cipher
+scales	17	extended, pretty, log and date breaks	extended_breaks, breaks_pretty, breaks_log, breaks_width	partial	e.gfx.chart		nice-number ticks exist; Talbot extended and log breaks to add (see labeling)
+scales	17	transformations (log, sqrt, reciprocal, boxcox, yj, probit, logit, asn, exp, pseudo_log, date, time)	transform_*	partial	e.gfx.chart		confirm which transforms exist
+scales	17	rescale, squish, censor, oob, expand_range	rescale, oob_*	gap	-	~0.5k	trivial
+scales	17	label formatters (comma, percent, dollar, scientific, bytes, ordinal, SI, date)	label_*	gap	-	~2k	needs locale grouping and rounding rules
+scales	17	colour palettes and gradients (hue, brewer, viridis, grey, Lab gradient)	pal_*, gradient_n_pal	gap	-		see farver, viridisLite, RColorBrewer
+farver	30	colour space conversion (rgb hsl hsv xyz lab luv hcl cmyk oklab oklch hunterlab yxy cmy)	convert_colour	partial	e.gfx.cssvalue		rgb/hsl/oklab only; lab luv hcl xyz hsv cmyk yxy missing
+farver	30	delta-E (cie76 cie94 cie2000 cmc)	compare_colour	gap	-	~0.5k
+farver	30	encode and decode colour strings, named colours	encode_colour, decode_colour	partial	e.gfx.cssvalue
+viridisLite	29	viridis palettes (magma inferno plasma cividis mako rocket turbo)	viridis, magma	gap	-	~0.3k	256-entry tables generated from the R package
+RColorBrewer	32	ColorBrewer palette tables	brewer.pal	gap	-	~0.1k	data
+labeling	35	Heckbert, Wilkinson, Nelder, extended, rpretty axis labelling	extended, heckbert, wilkinson	gap	-	~0.9k
+isoband	26	isolines and isobands (marching squares + polygon assembly)	isolines, isobands	gap	-	~3.4k	e.gfx.mesh has no iso code
+lme4	39	lmer/glmer (REML, Laplace, AGQ, crossed random effects, sparse Cholesky)	lmer, glmer, nlmer, ranef, fixef, predict, simulate, profile	partial	e.algo.stat.mixed		random intercept/slope and PQL only; no general formula, crossed effects, Laplace or AGQ
+lme4	39	derivative-free optimisers	Nelder_Mead, bobyqa	partial	e.math.opt		bobyqa not present
+lme4	39	formula and model matrices with random-effect terms	lFormula, findbars	partial	e.algo.formula
+RcppEigen	15	dense decompositions (LLT, LDLT, QR, SVD, eigen)	fastLm, fastLmPure	partial	e.algo.linalg.matrix		cholesky, qr, jacobi eigen present; SVD only in e.ml.multivariate; non-symmetric eigen missing
+RcppEigen	15	sparse matrices and solvers	-	gap	-	~5k	no CSC/CSR type
+utf8	23	validate, normalize, width, graphemes, format	utf8_valid, utf8_normalize, utf8_width, utf8_graphemes	partial	e.text.utf8, normalize, segment		width tables exist in text.segment and termkit
+cli	3	ANSI-aware strip, nchar, substr, align, wrap, html	ansi_strip, ansi_nchar, ansi_substr, ansi_align, ansi_strwrap	gap	-	~2k	no ANSI-aware string ops found
+cli	3	spark bars, boxx, trees, pluralize, format_bytes, format_time, hash_animal	spark_bar, boxx, tree, pluralize, format_bytes	partial	e.text.termkit, e.gfx.chart
+glue	9	string interpolation	glue	covered	e.text.template, e.interpolate
+mime	49	extension to mime type	guess_type	covered	e.fmt.mime
+sass	28	Sass/SCSS compiler (libsass)	sass, sass_compile	gap	-	~42k	large; e.fmt.css parses CSS only
+StanHeaders	48	Stan math reverse-mode autodiff	-	gap	-	~160k	scope decision needed
+StanHeaders	48	about 600 probability distributions (lpdf, cdf, rng)	-	gap	-		overlaps base R d/p/q/r; e.math.special has normal/t/chisq/F cdf and gamma/beta incomplete only
+StanHeaders	48	matrix functions, ODE and algebraic solvers	-	partial	e.algo.linalg, e.math.ode
+RcppParallel	37	parallel_for and parallel_reduce	parallelFor, parallelReduce	covered	e.thread, e.task
+httr	50	HTTP client	GET, POST	covered	e.net.fetch
+curl	25	HTTP/FTP/SMTP client, multi interface	curl_fetch_memory	partial	e.net.fetch, e.net.smtp
+xfun	31	misc utilities (base64, md5, file ext, numeric_version)	base64_encode	covered	e.bytes, e.crypto.hash
+fs	11	filesystem	path_*, dir_*, file_*	covered	e.fs, e.path
+processx	43	process management	process	covered	e.proc
+callr	45	R subprocess	r	skip	-		R-specific
+ps	47	process inspection	ps_*	partial	e.os, e.proc
+otel	36	OpenTelemetry API	-	covered	e.trace, e.metrics
+dplyr	8	data-frame verbs	filter, mutate, group_by, join	out-of-scope	e.data.table		per scope answer
+tidyr	41	reshape	pivot_longer	out-of-scope	e.algo.pivot
+tibble	13	data frames	tibble	out-of-scope	-
+purrr	33	functional iteration	map	out-of-scope	-
+tidyselect	44	column selection	-	out-of-scope	-
+pillar	18	table formatting	-	out-of-scope	-
+generics	27	S3 generics	-	skip	-		R language
+rlang	1	R language runtime	-	skip	-		R language
+vctrs	4	R vector types	-	skip	-		R language
+lifecycle	5	deprecation helpers	-	skip	-		R language
+Rcpp	6	R/C++ bridge	-	skip	-		R language
+cpp11	14	R/C++ bridge	-	skip	-		R language
+R6	7	OO classes	-	skip	-		R language
+S7	21	OO classes	-	skip	-		R language
+magrittr	12	pipes	-	skip	-		R language
+withr	10	scoped state	-	skip	-		R language
+pkgconfig	24	package config	-	skip	-		R language
+ggplot2	2	grammar of graphics	-	out-of-scope	e.gfx.chart		graphics
+gtable	22	layout tables	-	out-of-scope	-		graphics
+bslib	19	Bootstrap theming	-	out-of-scope	-		web
+htmltools	46	HTML builders	-	out-of-scope	e.fmt.html
+rmarkdown	20	document rendering	-	out-of-scope	e.fmt.markdown
+knitr	40	literate programming	-	out-of-scope	-

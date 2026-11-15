@@ -3467,6 +3467,149 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a decision row in docs/decisions.md with the width-axis design and a cost estimate; L228's score and text re-checked against lib/e/os.wasi.e. No code. Notes: docs/compiler-hardening-plan.md."
+    },
+    {
+      "id": "L264",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 515,
+      "title": "R oracle harness: golden generator, tolerance policy, fixture reader",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open; foundation for L265-L276 (gaps in docs/cran-gaps.tsv, source: top-50 CRAN packages by last-month downloads, 2026-11-14). R 4.6.2 is installed at D:\\tools\\R. Acceptance: scripts/r_oracle/ holds one R script per function group that writes seeded cases plus edge cases (NA, ties, empty, extreme values) to JSON goldens carrying R and package versions; a Neper helper reads a golden and compares with a per-function tolerance (about 1e-12 relative closed form, looser iterative, exact for integer/string/date); one example fixture passes on both hosts and fails when a golden value is perturbed; goldens are committed so the suites never need R; regeneration is a single command."
+    },
+    {
+      "id": "L265",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 516,
+      "title": "R-compatible random streams and d/p/q/r distributions",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Open. Needs L264. e.math.special has only normal_cdf, t_cdf, chi_squared_cdf, f_cdf and incomplete gamma/beta; no density, quantile or random generator matches R. Acceptance: Mersenne-Twister with R set.seed scrambling, sample() (rejection sampling), runif, rnorm (inversion), rexp, rgamma, rbeta, rbinom, rpois, rt, rchisq reproduce R streams value for value; d/p/q for norm, t, chisq, F, gamma, beta, binom, pois, nbinom, geom, hyper, weibull, lnorm, logis, cauchy, unif, exp (lower.tail and log.p) match R within 1e-13 relative; goldens from R."
+    },
+    {
+      "id": "L266",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 517,
+      "title": "e.algo.hash: xxhash32, xxh3_64/128, spookyhash, jenkins one-at-a-time",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Open. Needs L264. Gap from digest. Acceptance: digest(x, algo=xxhash32|xxh3_64|xxh3_128|spookyhash, serialize=FALSE) and digest2int match on seeded byte inputs of lengths 0..4096 including every block-boundary length, with streaming update equal to one-shot."
+    },
+    {
+      "id": "L267",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 518,
+      "title": "Palette tables: viridisLite and RColorBrewer",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Open. Needs L264. Acceptance: viridis, magma, inferno, plasma, cividis, mako, rocket, turbo for n=1..256 with alpha, begin, end, direction; every RColorBrewer palette at every n; tables generated from the R packages, not typed; strings equal R output exactly."
+    },
+    {
+      "id": "L268",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 519,
+      "title": "Colour spaces and delta-E (farver)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. e.gfx.cssvalue has rgb, hsl and oklab only. Acceptance: convert_colour among rgb, hsl, hsv, cmy, cmyk, xyz, yxy, lab, hunterlab, luv, lch, hcl, oklab, oklch with white points and gamut handling matches farver within 1e-9; compare_colour cie76, cie94, cie2000, cmc match; encode_colour and decode_colour round-trip named and hex colours equal to R."
+    },
+    {
+      "id": "L269",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 520,
+      "title": "Axis breaks, transforms and rescaling (labeling, scales)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. e.gfx.chart has nice ticks only. Acceptance: labeling extended, heckbert, wilkinson, nelder and rpretty; scales breaks_extended, breaks_pretty, breaks_log, breaks_width; transform_log, sqrt, reciprocal, boxcox, yj, probit, logit, asn, pseudo_log with inverse; rescale, squish, censor, oob_* and expand_range, all matching R on seeded ranges including degenerate, negative and non-finite input."
+    },
+    {
+      "id": "L270",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 521,
+      "title": "Label formatters (scales)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. Acceptance: label_comma, percent, dollar, scientific, bytes, ordinal, number with SI scaling, label_date and label_time produce strings equal to R across accuracy, big.mark, decimal.mark, prefix, suffix and rounding edge cases."
+    },
+    {
+      "id": "L271",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 522,
+      "title": "Isolines and isobands (isoband)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. No iso code exists in e.gfx. Acceptance: isolines and isobands on seeded grids, saddles, ties at the level and NA cells return polylines and polygons equal to isoband's point sets after canonical ring ordering and start-point normalisation."
+    },
+    {
+      "id": "L272",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 523,
+      "title": "ANSI-aware string operations (cli)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Open. Needs L264. Acceptance: ansi_strip, ansi_nchar (chars, bytes, width, graphemes), ansi_substr, ansi_align, ansi_strwrap, ansi_trimws, ansi_toupper and ansi_html equal cli output on strings with SGR, OSC-8 links, wide characters and combining marks."
+    },
+    {
+      "id": "L273",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 524,
+      "title": "Dense and sparse linear algebra completions (RcppEigen, base R)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Open. Needs L264. e.algo.linalg.matrix has cholesky, qr and Jacobi eigen; SVD lives only in e.ml.multivariate; no sparse type. Acceptance: SVD, general (non-symmetric) eigen with complex output, LDLT, column-pivoted QR, determinant, solve and least squares match base R svd, eigen, qr, chol and lm.fit up to sign and ordering conventions; a CSC sparse matrix with sparse Cholesky and multiply matches the Matrix package on seeded systems."
+    },
+    {
+      "id": "L274",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 525,
+      "title": "General linear mixed models (lme4)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Open. Needs L264, L273. e.algo.stat.mixed has random intercept and slope fits and PQL only. Acceptance: lmer with crossed and nested random effects by REML and ML, glmer with Laplace and adaptive Gauss-Hermite for binomial and poisson, bobyqa and Nelder_Mead optimisers; fixef, ranef, VarCorr, logLik, predict and simulate match lme4 on sleepstudy, Penicillin and cbpp within 1e-6."
+    },
+    {
+      "id": "L275",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 526,
+      "title": "Unicode collation, transliteration and encoding detection (stringi)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Open. Needs L264. e.text.collate has codepoint, byte and natural compare only. Acceptance: stri_sort, stri_order, stri_compare with UCA and locale tailoring (en, de, sv, tr), stri_trans_general for Latin-ASCII, Any-Lower, Any-Hex and Any-NFD, stri_enc_detect and stri_encode over the shared charsets, sentence and grapheme splitting, all equal to stringi on a seeded multilingual corpus."
+    },
+    {
+      "id": "L276",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 527,
+      "title": "Sass/SCSS compiler (sass, libsass)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Open; largest gap (about 42k lines upstream). Needs L264. Acceptance: variables, nesting, mixins, functions, extend, maps, control directives, imports and the built-in function library compile to the same CSS as sass::sass for the libsass spec suite subset, in nested, expanded and compressed output styles."
     }
   ]
 }
