@@ -143,3 +143,4 @@ oracle_colour
 oracle_matrixstats
 oracle_datatable
 oracle_readr
+oracle_ansiwrap

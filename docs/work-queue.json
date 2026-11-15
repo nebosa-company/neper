@@ -4,39 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L283",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 526,
-      "title": "CommonMark and GFM conformance with xml, latex and man renderers (commonmark)",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open. Needs L264. e.fmt.markdown exists; conformance unmeasured. Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match."
-    },
-    {
-      "id": "L287",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 527,
-      "title": "YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open. Needs L264. Verifies the partial rows for yaml and xml2 in docs/cran-gaps.tsv. Acceptance: yaml.load and as.yaml equal yaml for 1.1 scalars (yes/no booleans, octal, sexagesimal, merge keys, anchors, tags) on a seeded corpus; read_xml and read_html with recover, XPath 1.0 results, namespace handling and xml_validate against XSD equal xml2 on the same corpus; each failing case becomes a fixture."
-    },
-    {
-      "id": "L289",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 529,
-      "title": "ANSI-aware wrap, split and trim (cli), on R's strwrap",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open; split from L272. Needs L264 and e.text.ansi. cli's ansi_strwrap runs base::strwrap on the stripped text and maps the line breaks back onto the styled string; ansi_strsplit and ansi_strtrim sit on regular expressions and ansi_nchar. Acceptance: R's strwrap (paragraphs, sentence-end double spaces, width - 1, indent and exdent, form feeds) as a function over plain text; ansi_strwrap with simplify and without, ansi_strsplit with fixed and perl splits, ansi_strtrim with ellipsis, equal to cli on styled, linked, wide and emoji strings."
-    },
-    {
       "id": "L278",
       "category": "library",
       "group": "CRAN parity",
@@ -123,6 +90,28 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open. Needs L264, L273. e.algo.stat.mixed has random intercept and slope fits and PQL only. Acceptance: lmer with crossed and nested random effects by REML and ML, glmer with Laplace and adaptive Gauss-Hermite for binomial and poisson, bobyqa and Nelder_Mead optimisers; fixef, ranef, VarCorr, logLik, predict and simulate match lme4 on sleepstudy, Penicillin and cbpp within 1e-6."
+    },
+    {
+      "id": "L287",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 527,
+      "title": "YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. Verifies the partial rows for yaml and xml2 in docs/cran-gaps.tsv. Acceptance: yaml.load and as.yaml equal yaml for 1.1 scalars (yes/no booleans, octal, sexagesimal, merge keys, anchors, tags) on a seeded corpus; read_xml and read_html with recover, XPath 1.0 results, namespace handling and xml_validate against XSD equal xml2 on the same corpus; each failing case becomes a fixture."
+    },
+    {
+      "id": "L283",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 526,
+      "title": "CommonMark and GFM conformance with xml, latex and man renderers (commonmark)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open; large (cmark is about 15k lines; e.fmt.markdown leaves reference links, entities and raw HTML as text). Needs L264. Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match."
     },
     {
       "id": "L284",
