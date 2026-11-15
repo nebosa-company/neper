@@ -30,6 +30,40 @@ L275	library	0	387	Unicode collation, transliteration and encoding detection (st
 L274	library	0	381	General linear mixed models (lme4)	Open.
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
+L321	library	0	236	boot: bootstrap and permutation confidence intervals	Open (CRAN rank 296).
+L322	library	0	267	class and FNN: knn variants, SOM, LVQ, entropy estimators	Open (CRAN ranks 276, 246).
+L323	library	0	221	permute: restricted permutation designs	Open (CRAN rank 281).
+L324	library	0	285	pROC and ROCR: ROC curves and threshold performance	Open (CRAN ranks 217, 294).
+L325	library	0	250	KernSmooth and tseries remainder	Open (CRAN ranks 273, 241).
+L326	library	0	205	quantmod and TTR: technical indicators	Open (CRAN rank 215).
+L327	library	0	252	statmod: Tweedie and inverse Gaussian, Gauss quadrature	Open (CRAN rank 218).
+L328	library	0	400	caret evaluation and resampling	Open (CRAN rank 235).
+L329	library	0	184	ggsci and ggthemes palettes	Open (CRAN ranks 220, 226).
+L330	library	0	200	leaps: best-subset regression	Open (CRAN rank 268).
+L331	library	0	327	dendextend and hclust operations	Open (CRAN rank 297).
+L332	library	0	222	foreign: dBase, ARFF, Octave, Minitab and Systat	Open (CRAN rank 249).
+L333	library	0	561	pracma and polynom: numerical analysis toolbox	Open (CRAN rank 203, 225, 231).
+L334	library	0	304	RSpectra and irlba: partial eigen and singular value decompositions	Open (CRAN ranks 207, 289).
+L335	library	0	310	cluster: pam, clara, fanny, agnes, diana, mona, daisy	Open (CRAN rank 229).
+L336	library	0	247	nnet: single-hidden-layer networks and multinom	Open (CRAN rank 258).
+L337	library	0	288	rpart: CART trees	Open (CRAN rank 270).
+L338	library	0	241	robustbase: robust regression and scale	Open (CRAN rank 285).
+L339	library	0	435	bayestestR, performance and parameters: model summary indices	Open (CRAN ranks 254, 251, 272).
+L340	library	0	269	signal: filter design and spectral tools	Open (CRAN rank 253).
+L341	library	0	313	multcomp: general linear hypotheses	Open (CRAN rank 224;
+L342	library	0	202	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Open (CRAN rank 262).
+L343	library	0	330	deSolve: solver parity	Open (CRAN rank 216).
+L344	library	0	359	randomForest: Breiman forests equal to R	Open (CRAN rank 255;
+L345	library	0	324	FactoMineR and factoextra: multivariate exploration	Open (CRAN ranks 232, 277).
+L346	library	0	284	mice: imputation parity	Open (CRAN rank 293).
+L347	library	0	276	locfit: local regression and likelihood	Open (CRAN rank 259).
+L348	library	0	308	mclust: Gaussian mixture model selection	Open (CRAN rank 280).
+L349	library	0	268	vegan: community ecology	Open (CRAN rank 247).
+L350	library	0	308	ape: phylogenetic trees	Open (CRAN rank 238).
+L351	library	0	262	survey: design-based inference	Open (CRAN rank 267).
+L352	library	0	306	ncdf4: NetCDF and HDF5 files	Open (CRAN rank 237).
+L353	library	0	285	mgcv: generalized additive models	Open (CRAN rank 239).
+L354	library	0	286	lavaan: structural equation models	Open (CRAN rank 275).
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU

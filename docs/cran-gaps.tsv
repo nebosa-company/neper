@@ -233,3 +233,103 @@ insight	197	model accessor wrapper	-	out-of-scope	-
 here	198	path helper	-	out-of-scope	-		
 gh	199	GitHub API client	-	out-of-scope	-		
 survival	200	coxph (Breslow, Efron, exact; strata, offset, time-varying, robust), survfit, survreg (AFT families), survdiff, cox.zph, concordance, survSplit, tmerge, pyears, cluster	coxph, survfit, survreg, survdiff, cox.zph, concordance	partial	e.algo.stat.survival, survival_trial	~40k	L311, read survival_trial first
+wk	201	WKT and WKB parsing, see L320 (sf)	-	covered-by-other-item	-		
+arrow	202	Arrow and Parquet, e.fmt.arrow and e.fmt.parquet	-	covered	e.fmt.arrow and e.fmt.parquet		
+pracma	203	numerical grab-bag: findpeaks, polyfit and polyroot, adaptive quadrature (quadgk, romberg), cumtrapz, fzero, interp1 and pchip, orthogonal polynomials, primes and factors, savgol; plus polynom arithmetic	findpeaks, polyfit, roots, quadgk, fzero, interp1, cumtrapz, legendre	partial	e.math.root, e.math.special	~25k	verify each function against e.math first; polynom (225) and caTools folded in; L333
+gert	204	git client	-	out-of-scope	-		
+RSQLite	205	SQLite driver, x.sqlite.sqlite	-	covered	e.sqlite		
+R.methodsS3	206	R object system glue	-	out-of-scope	-		
+irlba	207	truncated SVD by implicitly restarted Lanczos bidiagonalization	irlba, svdr	gap	e.algo.linalg.decomp has dense jacobi_svd	~3k	with RSpectra eigs and svds; L334
+assertthat	208	R assertion helpers	-	out-of-scope	-		
+viridis	209	viridisLite palettes already ported	-	covered	-		
+R.utils	210	R utilities	-	out-of-scope	-		
+reticulate	211	Python bridge	-	out-of-scope	-		
+mnormt	212	multivariate normal and t, see L301	-	covered-by-other-item	-		
+svglite	213	SVG device, e.gfx.svg	-	covered	e.gfx.svg		
+jpeg	214	e.fmt.jpeg	-	covered	e.fmt.jpeg		
+quantmod	215	technical indicators (SMA, EMA, WMA, RSI, MACD, Bollinger bands, ATR, ADX, stochastic, SAR) and period returns	SMA, EMA, RSI, MACD, BBands, periodReturn, Delt	gap	-	~6k	getSymbols and charting excluded; L326
+deSolve	216	ODE, DAE and DDE solvers: lsoda, lsode, vode, radau, daspk, rk4, rkf45, ode23, ode45, euler, with events and root finding	ode, lsoda, radau, daspk, dede, rk	partial	e.math.ode	~40k	verify the method list and the event handling first; L343
+pROC	217	ROC curves, AUC and partial AUC, DeLong and bootstrap confidence intervals, roc.test, coords, smoothing, multiclass AUC	roc, auc, ci.auc, roc.test, coords	partial	e.algo.stat.diagnostic metrics	~8k	with ROCR performance measures; L324
+statmod	218	Tweedie and inverse Gaussian distributions and GLM families, gauss.quad, glmnb.fit, qresiduals, power.fisher.test, growth-curve tests	dtweedie, ptweedie, qtweedie, rtweedie, dinvgauss, gauss.quad, qresiduals	gap	-	~8k	L327
+lattice	219	graphics system	-	out-of-scope	-		
+ggsci	220	scientific-journal colour palettes (NPG, AAAS, Lancet, JCO, NEJM, UChicago and more)	pal_npg, pal_aaas, pal_lancet	gap	e.gfx.palette_data	~1k	data only; with ggthemes palettes (226); L329
+pbapply	221	progress bars	-	out-of-scope	-		
+doParallel	222	parallel backend, e.thread.pool	-	covered	e.thread.pool		
+whisker	223	mustache templates, e.text.template	-	covered	e.text.template		
+multcomp	224	general linear hypotheses with single-step, Shaffer and free multiplicity adjustments from the multivariate t	glht, summary.glht, confint, cld	gap	-	~10k	needs L301 and L313; L341
+polynom	225	polynomial arithmetic, folded into the pracma item	-	covered-by-other-item	-		L333
+ggthemes	226	theme palettes (Tableau, Excel, Stata, Economist, Solarized, Wall Street Journal)	tableau_color_pal, economist_pal	covered-by-other-item	-		L329
+snakecase	227	case conversion helpers	-	out-of-scope	-		
+RCurl	228	HTTP client, e.net.http	-	covered	e.net.http		
+cluster	229	pam, clara, fanny, agnes, diana, mona, daisy (Gower dissimilarity), silhouette, clusGap, bannerplot data	pam, clara, fanny, agnes, diana, daisy, silhouette, clusGap	partial	e.ml.cluster has kmedoids, agglomerative and silhouette_samples	~15k	L335
+leaflet	230	htmlwidget	-	out-of-scope	-		
+caTools	231	runmean, trapz, colAUC, base64, GIF; folded into L333 and L324	-	covered-by-other-item	-		
+FactoMineR	232	PCA with supplementary elements, CA, MCA, MFA, FAMD and HCPC; factoextra reads these	PCA, CA, MCA, MFA, FAMD, HCPC, dimdesc	partial	e.ml.reduce has PCA	~30k	factoextra (277) is its wrapper; L345
+recipes	233	preprocessing pipeline over e.ml.* steps	-	covered	e.ml.* steps		
+gt	234	table rendering	-	out-of-scope	-		
+caret	235	resampling splits (createDataPartition, createFolds, createResample, createTimeSlices), confusionMatrix statistics, varImp, preProcess	createFolds, confusionMatrix, preProcess, varImp	partial	e.ml.select, e.algo.stat.diagnostic	~15k	train() is a wrapper; L328
+hardhat	236	modelling plumbing	-	out-of-scope	-		
+ncdf4	237	NetCDF classic and NetCDF-4 (HDF5) variables, dimensions and attributes	nc_open, ncvar_get, ncatt_get	gap	-	~25k	large: HDF5 object headers, chunked and compressed datasets; L352
+ape	238	phylogenetics: Newick and Nexus IO, nj, bionj, fastme, DNA distances, tree distances, cophenetic, ace, rtree	read.tree, nj, dist.dna, cophenetic, rtree, ace	partial	e.ml.cluster has neighbor_joining	~60k	L350
+mgcv	239	generalized additive models: tp, cr, ps, te and ti smooths, REML, GCV and ML smoothing selection, predict and summary tests, gamm	gam, s, te, predict.gam, summary.gam, gam.check	gap	-	~90k	very large; ask the user before starting; L353
+multcompView	240	compact letter display, see L341	-	covered-by-other-item	-		
+tseries	241	jarque.bera.test, bds.test, runs.test, white.test, terasvirta.test, tsbootstrap, portfolio.optim, garch, adf.test, kpss.test, pp.test	jarque.bera.test, bds.test, tsbootstrap, portfolio.optim, garch	partial	e.algo.timeseries has garch	~6k	adf, kpss and pp come with L303; L325
+snow	242	parallel backend	-	out-of-scope	-		
+prodlim	243	Kaplan-Meier and competing risks, see L311	-	covered-by-other-item	-		
+formatR	244	source reformatting	-	out-of-scope	-		
+deldir	245	Delaunay triangulation and Dirichlet (Voronoi) tessellation with areas and neighbours	deldir, tile.list	partial	e.algo.geom	~3k	verify against e.algo.geom; shares st_voronoi with L320
+FNN	246	k-nearest neighbours by kd-tree and cover tree, kNN regression, KL entropy and mutual-information estimators	get.knn, knn.reg, entropy, mutinfo, KL.divergence	partial	e.ml.knn	~4k	search exists; the estimators do not; L322
+vegan	247	community ecology: vegdist (20 dissimilarities), diversity and rarefaction, cca, rda, metaMDS, decorana, adonis2, anosim, mantel, envfit, estimateR, specaccum	vegdist, diversity, rda, cca, metaMDS, adonis2, mantel	gap	-	~100k	large; L349
+clock	248	date-time arithmetic, see L314	-	covered-by-other-item	-		
+foreign	249	read.dbf, read.arff, read.octave, read.mtp, read.systat; read.spss, read.dta and read.xport are haven territory	read.dbf, read.arff, read.octave, read.systat	partial	-	~6k	SPSS, Stata and SAS are in L304; L332
+duckdb	250	x.duckdb.duckdb	-	out-of-scope	-		
+performance	251	model quality indices: R2 variants (Nakagawa, Tjur), icc, check_collinearity, check_heteroscedasticity, check_normality, check_outliers (zscore, cook, mahalanobis, mcd, ics, optics), model_performance	r2, icc, check_collinearity, check_outliers, model_performance	gap	-	~25k	with parameters (272) and insight; L339
+officer	252	office documents, e.fmt.docx	-	covered	e.fmt.docx		
+signal	253	filter design (butter, cheby1, cheby2, ellip, bessel, fir1, fir2, remez), filter and filtfilt, freqz, sgolayfilt, resample, decimate, specgram	butter, cheby1, ellip, fir1, filtfilt, sgolayfilt, freqz, resample	partial	e.dsp, e.math.filter	~15k	verify what e.dsp already designs; L340
+bayestestR	254	posterior indices: hdi, eti, map_estimate, p_direction, rope, equivalence_test, bayesfactor_savagedickey, si, point_estimate	hdi, eti, p_direction, rope, bayesfactor_parameters	gap	-	~12k	L339
+randomForest	255	Breiman random forests: classification and regression, OOB error, importance, proximity, partial dependence, bit-equal under set.seed through R RNG	randomForest, importance, predict, MDSplot data	partial	e.ml.tree has forests	~12k	bit equality needs the R RNG streams and the C sampling order; L344
+gplots	256	plot helpers, chart engine	-	out-of-scope	-		
+tensorflow	257	Python bridge	-	out-of-scope	-		
+nnet	258	single-hidden-layer networks fitted by BFGS from R RNG weights, multinom softmax regression, class.ind	nnet, multinom, class.ind	partial	e.ml.nn	~2k	L336
+locfit	259	local regression and likelihood with adaptive bandwidth, kernel and degree choices, cross-validation and confidence bands	locfit, lp, predict.locfit, gcv	gap	e.algo.timeseries.loess only	~25k	L347
+showtext	260	font rendering	-	out-of-scope	-		
+flextable	261	table rendering	-	out-of-scope	-		
+lmerTest	262	Satterthwaite and Kenward-Roger degrees of freedom and p-values for lmer fits, step, difflsmeans	lmer, anova, summary, ranova	gap	-	~8k	needs L274; L342
+sysfonts	263	font lookup	-	out-of-scope	-		
+rjson	264	e.fmt.json	-	covered	e.fmt.json		
+reactable	265	htmlwidget	-	out-of-scope	-		
+furrr	266	parallel frameworks	-	out-of-scope	-		
+survey	267	design-based inference: svydesign, svymean, svytotal, svyglm, svyquantile, replicate weights (jackknife, BRR, bootstrap), calibrate, postStratify, rake	svydesign, svymean, svyglm, svyquantile, calibrate	gap	-	~40k	large; L351
+leaps	268	best-subset regression by branch and bound (regsubsets), forward, backward and exhaustive search	regsubsets, leaps	gap	-	~3k	L330
+scatterplot3d	269	graphics	-	out-of-scope	-		
+rpart	270	CART with rpart splitting (anova, class, poisson, exp), surrogate splits, complexity-parameter pruning and cross-validation table	rpart, prune, printcp, predict	partial	e.ml.tree	~12k	L337
+filelock	271	file locking, e.fs	-	covered	e.fs		
+parameters	272	model parameter tables with confidence intervals, standardization and p-value methods (Wald, profile, boot), dof_kenward	model_parameters, standardize_parameters, ci	covered-by-other-item	-		L339
+KernSmooth	273	kernel density and regression: bkde, bkde2D, locpoly, bandwidths dpik, dpih, dpill	bkde, locpoly, dpik, dpill, bkde2D	gap	-	~3k	L325 companion; L325
+ggforce	274	chart engine	-	out-of-scope	-		
+lavaan	275	structural equation models: CFA, path analysis, growth curves, ML, GLS, ULS and DWLS estimation, fit indices, modification indices	cfa, sem, growth, fitMeasures, modindices	gap	-	~120k	very large; ask the user before starting; L354
+class	276	knn, knn1, knn.cv, SOM and batchSOM, LVQ1-3 and olvq1 with lvqinit	knn, knn.cv, SOM, lvq1, olvq1	partial	e.ml.knn	~1k	L322
+factoextra	277	accessors and summaries over PCA, CA, MCA and clustering results	get_pca_var, fviz_nbclust, hcut	covered-by-other-item	-		L345
+kableExtra	278	table rendering	-	out-of-scope	-		
+raster	279	superseded by terra, see L285	-	covered-by-other-item	-		
+mclust	280	Gaussian mixture models with 14 covariance structures, EM with hierarchical initialization, BIC model choice, MclustDA, density estimation	Mclust, mclustBIC, predict, densityMclust, MclustDA	partial	e.ml.cluster has gmm_em	~25k	L348
+permute	281	permutation designs: free, series, grid and block restrictions, how(), shuffle, allPerms	how, shuffle, allPerms, shuffleSet	gap	-	~3k	needs the R RNG streams; L323
+expm	282	matrix exponential, see L315	-	covered-by-other-item	-		
+spam	283	sparse matrices, see L315	-	covered-by-other-item	-		
+magick	284	ImageMagick binding	-	out-of-scope	-		
+robustbase	285	lmrob (MM), covMcd (FastMCD), ltsReg, glmrob, nlrob, huberM, medcouple, adjbox, scale estimators Qn, Sn and scaleTau2	lmrob, covMcd, ltsReg, huberM, mc, Qn	gap	e.ml.linear.huber only	~40k	L338, with MASS robust fits in L306
+RcppProgress	286	progress bars	-	out-of-scope	-		
+ggtext	287	chart engine	-	out-of-scope	-		
+plotrix	288	plot helpers	-	out-of-scope	-		
+RSpectra	289	largest and smallest eigenpairs of symmetric and general matrices, shift-invert, truncated SVD	eigs, eigs_sym, svds	gap	-	~5k	L334
+pheatmap	290	heatmap graphics	-	out-of-scope	-		
+ellipse	291	confidence ellipse points, a few lines of e.math	-	covered	e.math		
+ggplotify	292	chart engine	-	out-of-scope	-		
+mice	293	multiple imputation by chained equations (pmm, norm, logreg, polyreg, cart), passive imputation and Rubin pooling	mice, complete, pool	partial	e.algo.stat.causal has mice and mice_pool	~15k	verify equality to R under set.seed first; L346
+ROCR	294	prediction and performance measures over thresholds (tpr, fpr, prec, rec, lift, auc, cost)	prediction, performance	partial	e.algo.stat.diagnostic	~2k	L324
+spatstat.utils	295	utilities	-	out-of-scope	-		
+boot	296	bootstrap and permutation: boot, boot.ci (norm, basic, stud, perc, bca), tsboot, censboot, jack.after.boot, empinf, abc.ci	boot, boot.ci, tsboot, censboot, abc.ci	partial	e.algo.stat resamples	~8k	L321
+dendextend	297	dendrogram operations: cutree, ladderize, cophenetic, Baker gamma, Fowlkes-Mallows, entanglement, tanglegram ordering	cutree, cor_bakers_gamma, entanglement, untangle	partial	e.ml.cluster.agglomerative	~10k	L331
+jose	298	JOSE and JWT, e.fmt.jwt and x.identity.jose	-	covered	e.fmt.jwt and x.identity.jose		
+ranger	299	fast random forests with its own C++ RNG and survival, quantile and probability forests	ranger, predict	skip	-	~15k	seeded with std::mt19937_64 and library-defined distributions; bit equality is not portable, statistical equivalence is covered by L344
+yulab.utils	300	utilities	-	out-of-scope	-		
