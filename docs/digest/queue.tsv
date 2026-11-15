@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-L286	library	0	287	Pretty units and n-d array bind (prettyunits, abind)	Open.
 L272	library	0	253	ANSI-aware string operations (cli)	Open.
 L270	library	0	245	Label formatters (scales)	Open.
 L269	library	0	411	Axis breaks, transforms and rescaling (labeling, scales)	Open.
