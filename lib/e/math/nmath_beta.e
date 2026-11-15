@@ -4,6 +4,8 @@
 
 use e.math
 use e.math.dist as dist
+use e.math.special as special
+use e.mem
 use e.math.nmath as nm
 use e.math.toms708 as tm
 
@@ -731,6 +733,306 @@ fn qhyper(p0: f64, nr0: f64, nb0: f64, n0: f64, lower: bool, lg: bool) -> f64 {
         nr -= 1.0f64
     }
     ret xr
+}
+
+// --- Wilcoxon signed rank and rank sum
+
+// The counts w[0..c] of the signed-rank statistic for n (csignrank's table), c = n (n + 1) / 4 floored.
+fn signrank_table(a: *mem.Arena, n: i64) -> ([]f64, err) {
+    let u = n * (n + 1i64) / 2i64
+    let c = u / 2i64
+    let (w, e) = mem.alloc[f64](a, usize(c) + 2usize)
+    if e != ok { ret (w, e) }
+    var i = 0usize
+    while i <= usize(c) {
+        w[i] = 0.0f64
+        i += 1usize
+    }
+    w[0usize] = 1.0f64
+    if c >= 1i64 { w[1usize] = 1.0f64 }
+    var j = 2i64
+    while j < n + 1i64 {
+        var end = j * (j + 1i64) / 2i64
+        if c < end { end = c }
+        var k = end
+        while k >= j {
+            w[usize(k)] = w[usize(k)] + w[usize(k - j)]
+            k -= 1i64
+        }
+        j += 1i64
+    }
+    ret (w, ok)
+}
+
+fn csignrank(w: []const f64, k0: i64, n: i64) -> f64 {
+    let u = n * (n + 1i64) / 2i64
+    let c = u / 2i64
+    var k = k0
+    if k < 0i64 || k > u { ret 0.0f64 }
+    if k > c { k = u - k }
+    if n == 1i64 { ret 1.0f64 }
+    ret w[usize(k)]
+}
+
+fn dt_val(p: f64, lower: bool, lg: bool) -> f64 {
+    if lower { ret dist.dval(p, lg) }
+    ret dist.dclog(p, lg)
+}
+
+fn dsignrank(a: *mem.Arena, x0: f64, n0: f64, lg: bool) -> f64 {
+    if x0 != x0 || n0 != n0 { ret x0 + n0 }
+    let n = math.round[f64](n0)
+    if n <= 0.0f64 { ret nan() }
+    if nonint(x0) { ret dist.d0(lg) }
+    let x = math.round[f64](x0)
+    if x < 0.0f64 || x > n * (n + 1.0f64) / 2.0f64 { ret dist.d0(lg) }
+    let nn = i64(n)
+    let (w, e) = signrank_table(a, nn)
+    if e != ok { ret nan() }
+    let v = math.log[f64](csignrank(w, i64(x), nn)) - n * 0.693147180559945309417232121458f64
+    if lg { ret v }
+    ret math.exp[f64](v)
+}
+
+fn psignrank(a: *mem.Arena, x0: f64, n0: f64, lower0: bool, lg: bool) -> f64 {
+    var lower = lower0
+    if x0 != x0 || n0 != n0 { ret x0 + n0 }
+    if !finite(n0) { ret nan() }
+    let n = math.round[f64](n0)
+    if n <= 0.0f64 { ret nan() }
+    var x = math.floor[f64](x0 + 1e-7f64)
+    if x < 0.0f64 { ret dist.dt0(lower, lg) }
+    if x >= n * (n + 1.0f64) / 2.0f64 { ret dist.dt1(lower, lg) }
+    let nn = i64(n)
+    let (w, e) = signrank_table(a, nn)
+    if e != ok { ret nan() }
+    let f = math.exp[f64](0.0f64 - n * 0.693147180559945309417232121458f64)
+    var p = 0.0f64
+    if x <= n * (n + 1.0f64) / 4.0f64 {
+        var i = 0i64
+        while f64(i) <= x {
+            p += csignrank(w, i, nn) * f
+            i += 1i64
+        }
+    } else {
+        x = n * (n + 1.0f64) / 2.0f64 - x
+        var i = 0i64
+        while f64(i) < x {
+            p += csignrank(w, i, nn) * f
+            i += 1i64
+        }
+        lower = !lower
+    }
+    ret dt_val(p, lower, lg)
+}
+
+fn qsignrank(a: *mem.Arena, x0: f64, n0: f64, lower: bool, lg: bool) -> f64 {
+    var x = x0
+    if x != x || n0 != n0 { ret x + n0 }
+    if !finite(x) || !finite(n0) { ret nan() }
+    if dist.bad_p(x, lg) { ret nan() }
+    let n = math.round[f64](n0)
+    if n <= 0.0f64 { ret nan() }
+    if x == dist.dt0(lower, lg) { ret 0.0f64 }
+    if x == dist.dt1(lower, lg) { ret n * (n + 1.0f64) / 2.0f64 }
+    if lg || !lower { x = dist.dt_qiv(x, lower, lg) }
+    let nn = i64(n)
+    let (w, e) = signrank_table(a, nn)
+    if e != ok { ret nan() }
+    let f = math.exp[f64](0.0f64 - n * 0.693147180559945309417232121458f64)
+    var p = 0.0f64
+    var q = 0i64
+    if x <= 0.5f64 {
+        x = x - 10.0f64 * 2.220446049250313e-16f64
+        var go = true
+        while go {
+            p += csignrank(w, q, nn) * f
+            if p >= x { go = false } else { q += 1i64 }
+        }
+    } else {
+        x = 1.0f64 - x + 10.0f64 * 2.220446049250313e-16f64
+        var go = true
+        while go {
+            p += csignrank(w, q, nn) * f
+            if p > x {
+                q = i64(n * (n + 1.0f64) / 2.0f64) - q
+                go = false
+            } else {
+                q += 1i64
+            }
+        }
+    }
+    ret f64(q)
+}
+
+// cwilcox's table for (m, n) with m <= n: w[0..k] by the divisor-sum recursion.
+fn wilcox_table(a: *mem.Arena, m: i64, n: i64, kmax: i64) -> ([]f64, err) {
+    let (w, e) = mem.alloc[f64](a, usize(kmax) + 2usize)
+    let (sg, se) = mem.alloc[i64](a, usize(kmax) + 2usize)
+    if e != ok { ret (w, e) }
+    if se != ok { ret (w, se) }
+    var k = 0i64
+    while k <= kmax {
+        if k == 0i64 {
+            w[0usize] = 1.0f64
+        } else {
+            var s = 0i64
+            var iter1 = m
+            if k < m { iter1 = k }
+            var iter2 = m + n
+            if k < m + n { iter2 = k }
+            var d = 1i64
+            while d <= iter1 {
+                if k % d == 0i64 { s += d }
+                d += 1i64
+            }
+            d = n + 1i64
+            while d <= iter2 {
+                if k % d == 0i64 { s -= d }
+                d += 1i64
+            }
+            sg[usize(k)] = s
+            var acc = 0.0f64
+            var i = 0i64
+            while i < k {
+                acc += w[usize(i)] * f64(sg[usize(k - i)])
+                i += 1i64
+            }
+            w[usize(k)] = acc / f64(k)
+        }
+        k += 1i64
+    }
+    ret (w, ok)
+}
+
+fn cwilcox(w: []const f64, k0: i64, m: i64, n: i64) -> f64 {
+    let u = m * n
+    var k = k0
+    if k < 0i64 || k > u { ret 0.0f64 }
+    let c = u / 2i64
+    if k > c { k = u - k }
+    if m == 0i64 || n == 0i64 || k == 0i64 {
+        if k == 0i64 { ret 1.0f64 }
+        ret 0.0f64
+    }
+    ret w[usize(k)]
+}
+
+fn dwilcox(a: *mem.Arena, x0: f64, m0: f64, n0: f64, lg: bool) -> f64 {
+    if x0 != x0 || m0 != m0 || n0 != n0 { ret x0 + m0 + n0 }
+    let m = math.round[f64](m0)
+    let n = math.round[f64](n0)
+    if m <= 0.0f64 || n <= 0.0f64 { ret nan() }
+    if nonint(x0) { ret dist.d0(lg) }
+    let x = math.round[f64](x0)
+    if x < 0.0f64 || x > m * n { ret dist.d0(lg) }
+    var mi = i64(m)
+    var ni = i64(n)
+    if mi > ni {
+        let t = mi
+        mi = ni
+        ni = t
+    }
+    let (w, e) = wilcox_table(a, mi, ni, mi * ni / 2i64)
+    if e != ok { ret nan() }
+    let cw = cwilcox(w, i64(x), mi, ni)
+    if lg { ret math.log[f64](cw) - lchoose_int(m + n, n) }
+    ret cw / special.choose(m + n, n)
+}
+
+fn lchoose_int(n: f64, k: f64) -> f64 {
+    if k < 2.0f64 {
+        if k < 0.0f64 { ret 0.0f64 - inf() }
+        if k == 0.0f64 { ret 0.0f64 }
+        ret math.log[f64](nm.abs_of(n))
+    }
+    if n - k < 2.0f64 { ret lchoose_int(n, n - k) }
+    ret lfastchoose(n, k)
+}
+
+fn pwilcox(a: *mem.Arena, q0: f64, m0: f64, n0: f64, lower0: bool, lg: bool) -> f64 {
+    var lower = lower0
+    if q0 != q0 || m0 != m0 || n0 != n0 { ret q0 + m0 + n0 }
+    if !finite(m0) || !finite(n0) { ret nan() }
+    let m = math.round[f64](m0)
+    let n = math.round[f64](n0)
+    if m <= 0.0f64 || n <= 0.0f64 { ret nan() }
+    var q = math.floor[f64](q0 + 1e-7f64)
+    if q < 0.0f64 { ret dist.dt0(lower, lg) }
+    if q >= m * n { ret dist.dt1(lower, lg) }
+    var mi = i64(m)
+    var ni = i64(n)
+    if mi > ni {
+        let t = mi
+        mi = ni
+        ni = t
+    }
+    let (w, e) = wilcox_table(a, mi, ni, mi * ni / 2i64)
+    if e != ok { ret nan() }
+    let c = special.choose(m + n, n)
+    var p = 0.0f64
+    if q <= m * n / 2.0f64 {
+        var i = 0i64
+        while f64(i) <= q {
+            p += cwilcox(w, i, mi, ni) / c
+            i += 1i64
+        }
+    } else {
+        q = m * n - q
+        var i = 0i64
+        while f64(i) < q {
+            p += cwilcox(w, i, mi, ni) / c
+            i += 1i64
+        }
+        lower = !lower
+    }
+    ret dt_val(p, lower, lg)
+}
+
+fn qwilcox(a: *mem.Arena, x0: f64, m0: f64, n0: f64, lower: bool, lg: bool) -> f64 {
+    var x = x0
+    if x != x || m0 != m0 || n0 != n0 { ret x + m0 + n0 }
+    if !finite(x) || !finite(m0) || !finite(n0) { ret nan() }
+    if dist.bad_p(x, lg) { ret nan() }
+    let m = math.round[f64](m0)
+    let n = math.round[f64](n0)
+    if m <= 0.0f64 || n <= 0.0f64 { ret nan() }
+    if x == dist.dt0(lower, lg) { ret 0.0f64 }
+    if x == dist.dt1(lower, lg) { ret m * n }
+    if lg || !lower { x = dist.dt_qiv(x, lower, lg) }
+    var mi = i64(m)
+    var ni = i64(n)
+    if mi > ni {
+        let t = mi
+        mi = ni
+        ni = t
+    }
+    let (w, e) = wilcox_table(a, mi, ni, mi * ni / 2i64)
+    if e != ok { ret nan() }
+    let c = special.choose(m + n, n)
+    var p = 0.0f64
+    var q = 0i64
+    if x <= 0.5f64 {
+        x = x - 10.0f64 * 2.220446049250313e-16f64
+        var go = true
+        while go {
+            p += cwilcox(w, q, mi, ni) / c
+            if p >= x { go = false } else { q += 1i64 }
+        }
+    } else {
+        x = 1.0f64 - x + 10.0f64 * 2.220446049250313e-16f64
+        var go = true
+        while go {
+            p += cwilcox(w, q, mi, ni) / c
+            if p > x {
+                q = i64(m * n) - q
+                go = false
+            } else {
+                q += 1i64
+            }
+        }
+    }
+    ret f64(q)
 }
 
 // --- qbeta (AS 109 start, Newton steps on x or on log x, tail swaps)

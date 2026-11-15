@@ -3078,4 +3078,5 @@ D6002	1071	nmath's gamma side is generated from the C tables and compared to R's
 D6003	1031	qgamma and qpois follow R's iterations step for step
 D6004	1068	toms708 is a line-for-line port with its labels turned into a state variable
 D6005	1140	the t, F, geometric and negative binomial functions sit on pbeta, and the discrete quantiles share one search
-D6006	1194	qbeta is a state machine over R's gotos, and its golden is held to 1e-9
+D6006	1195	qbeta is a state machine over R's gotos, and its golden is held to 1e-9
+D6007	661	signrank and wilcox build their count table per call

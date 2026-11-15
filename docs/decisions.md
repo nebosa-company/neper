@@ -44374,3 +44374,11 @@ unreferenced.
 **Decision.** `qbeta_raw` keeps R's tests in order and a `state` variable stands for the labels (0 start and swap, 1 Newton, 2 converged, 3 return); the log-scale and linear Newton loops are two loops with flags for converged, retry-after-swap and give-up. The `give_log_q` branches are dropped because `qbeta` passes the finite cutoff -5. `qf` is R's, with qchisq for the extreme df and qbeta otherwise. dhyper and phyper use dbinom_raw and pdhyper (the long-double sum is a double here); qhyper walks the cumulative sum as R does. The oracle shows qbeta and qf agreeing with R to about 1e-12 (the Newton loop stops at `acu`, 1e-13 or looser in the extreme tails, so a last-digit difference in pbeta moves the answer by that much), so those two families are compared at 1e-9 and everything else at 1e-13 or 1e-11.
 
 **Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on both hosts.
+
+## D6007 — signrank and wilcox build their count table per call
+
+**Context.** L288. nmath keeps the Wilcoxon count tables in statics grown on demand.
+
+**Decision.** `signrank_table` and `wilcox_table` build the table for the (n) or (m, n) of the call in the caller's arena: the signed-rank counts by the subset-sum recurrence up to n (n + 1) / 4, the rank-sum counts by R 4.6's divisor-sum recursion w[k] = (sum of w[i] sigma(k - i)) / k with sigma from the divisors of k up to m and from n + 1 up to m + n. The quantile loops, the 10 epsilon fuzz and the shorter-tail summation are R's.
+
+**Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on both hosts.

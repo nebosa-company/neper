@@ -71,4 +71,19 @@ for (a in c(1e-3, 0.05, 0.5, 0.9, 1, 1.5, 3, 10, 50, 300, 1e4)) for (b in c(1e-3
   add(c(11, 2, p, a, b, lt, lg), suppressWarnings(qbeta(p, a, b, lower.tail = lt, log.p = lg)))
 for (d1 in c(0.5, 1, 2, 5, 30, 400, 1e6, Inf)) for (d2 in c(0.5, 1, 3, 20, 90, 1e3, 1e6, Inf)) for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) for (p in qkind(lt, lg))
   add(c(12, 2, p, d1, d2, lt, lg), suppressWarnings(qf(p, d1, d2, lower.tail = lt, log.p = lg)))
+# signed rank (13): args (13, kind, x, n, 0, lower, log); rank sum (14): args (14, kind, x, m, n, lower, log)
+for (n in c(1, 2, 5, 10, 20, 40)) {
+  for (x in c(-1, 0, 1, 3, floor(n * (n + 1) / 8), floor(n * (n + 1) / 4), floor(n * (n + 1) / 2), n * (n + 1) / 2 + 1)) for (lg in c(FALSE, TRUE)) {
+    add(c(13, 0, x, n, 0, 1, lg), suppressWarnings(dsignrank(x, n, log = lg)))
+    for (lt in c(TRUE, FALSE)) add(c(13, 1, x, n, 0, lt, lg), suppressWarnings(psignrank(x, n, lower.tail = lt, log.p = lg)))
+  }
+  for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) for (p in qkind(lt, lg)) add(c(13, 2, p, n, 0, lt, lg), suppressWarnings(qsignrank(p, n, lower.tail = lt, log.p = lg)))
+}
+for (m in c(1, 3, 8, 15)) for (n in c(1, 4, 9, 20)) {
+  for (x in unique(c(-1, 0, 1, 3, floor(m * n / 4), floor(m * n / 2), m * n - 1, m * n, m * n + 1))) for (lg in c(FALSE, TRUE)) {
+    add(c(14, 0, x, m, n, 1, lg), suppressWarnings(dwilcox(x, m, n, log = lg)))
+    for (lt in c(TRUE, FALSE)) add(c(14, 1, x, m, n, lt, lg), suppressWarnings(pwilcox(x, m, n, lower.tail = lt, log.p = lg)))
+  }
+  for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) for (p in qkind(lt, lg)) add(c(14, 2, p, m, n, lt, lg), suppressWarnings(qwilcox(p, m, n, lower.tail = lt, log.p = lg)))
+}
 emit("nmath_beta", character(), list(cases))
