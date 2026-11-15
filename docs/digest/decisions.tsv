@@ -3082,4 +3082,5 @@ D6006	1195	qbeta is a state machine over R's gotos, and its golden is held to 1e
 D6007	662	signrank and wilcox build their count table per call
 D6008	675	the studentized range is compared where R is accurate
 D6009	875	a locale is one names string, and readr has no full weekday name
-D6010	957	a readr row wider than the header folds into its last column
+D6010	958	a readr row wider than the header folds into its last column
+D6011	975	sample with prob and replacement: Walker's alias draws an unbiased index, then compares a second uniform

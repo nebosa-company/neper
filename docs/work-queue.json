@@ -9,10 +9,10 @@
       "group": "CRAN parity",
       "order": 542,
       "title": "R random streams, the corners: Walker alias, ties in sample prob, n past 2^32, large-n rbinom and rhyper",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open. e.algo.rand.rdist has every nmath generator except the large-n ones. Acceptance, each equal to R value for value after set.seed: sample with prob and replace for n >= 200 (Walker's alias method), sample with prob when probabilities tie (R's revsort order, not a stable sort), sample for n >= 2^32 and the hash path past 1e7, rbinom for n >= 2^31 and rhyper for N > INT_MAX through qbinom and qhyper, rbinom where k * k overflows a C int, qnorm for p below 2.5e-317."
+      "evidence": "Partial (D6011): sample with prob and replace past 200 entries (Walker) and prob ties (revsort) equal R. Open. e.algo.rand.rdist has every nmath generator except the large-n ones. Acceptance, each equal to R value for value after set.seed: sample for n >= 2^32 and the hash path past 1e7, rbinom for n >= 2^31 and rhyper for N > INT_MAX through qbinom and qhyper, rbinom where k * k overflows a C int, qnorm for p below 2.5e-317."
     },
     {
       "id": "L292",

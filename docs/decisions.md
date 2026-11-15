@@ -44406,3 +44406,9 @@ unreferenced.
 **Decision.** Once the first row has fixed the width, a row that still has a delimiter outside quotes when it reaches the last column keeps the rest of the row as that column: quotes removed and doubled quotes collapsed, backslash escapes applied, delimiters kept, a comment cutting the row. The text is trimmed at both ends, except that a cut by a comment leaves its trailing blanks, as readr does. A shorter row is padded with empty fields. A one-column header is the same rule at width 1, so every later row stays whole. A row with no extra delimiter takes the ordinary path, which keeps readr's literal-quote behaviour.
 
 **Result.** Fixture `oracle_readr` equals readr 2.2.0 on 6256 cases on both hosts.
+
+## D6011 — sample with prob and replacement: Walker's alias draws an unbiased index, then compares a second uniform
+
+R's `walker_ProbSampleReplace` (used only when `replace` and more than 200 of `n * p` exceed 0.1) builds the alias table from the normalised, unsorted `p` (small entries from the front of one array, large from the back), but draws `k = R_unif_index(n)` and then a second `unif_rand()` compared with `q[k]`; there is no `+ i` offset and no single-uniform split. A draw without replacement, or of size 1, takes the cumulative path even past 200 entries. Ties on the cumulative path follow R's `revsort` heap sort, now ported instead of an insertion sort, so the order of equal probabilities matches.
+
+**Result.** `oracle_rdist` equals R on both hosts with 260- and 250-entry probability vectors, tied weights and sizes 1, 2, 3, 10, 40. Still open under L293: `n` past 2^32 and the hash path past 1e7, large-n `rbinom` and `rhyper`, and the `k * k` overflow.

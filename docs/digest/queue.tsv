@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L293	library	0	471	R random streams, the corners: Walker alias, ties in sample prob, n past 2^32, large-n rbinom and rhyper	Open.
+L293	library	0.3	429	R random streams, the corners: Walker alias, ties in sample prob, n past 2^32, large-n rbinom and rhyper	Partial (D6011): sample with prob and replace past 200 entries (Walker) and prob ties (revsort) equal R.
 L292	library	0	460	BIFF5 workbooks, hidden sheets and encrypted .xls in e.fmt.xls	Open.
 L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
 L274	library	0	381	General linear mixed models (lme4)	Open.

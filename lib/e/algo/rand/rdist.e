@@ -817,12 +817,11 @@ fn rmultinom(a: *mem.Arena, r: *rng.Rng, n0: i64, prob: []const f64) -> ([]i64, 
     ret (out[0usize..kk], ok)
 }
 
-// sample.int(n, size, replace, prob) for distinct probabilities: 1-based. Not here: ties in prob
-// (R sorts them its own way) and Walker's alias method (replace with n >= 200).
+// sample.int(n, size, replace, prob): 1-based; revsort's heap sort for the order of ties and Walker's
+// alias method when more than 200 of the n * p are above 0.1, as R's do_sample does.
 fn sample_prob(a: *mem.Arena, r: *rng.Rng, n: usize, size: usize, replace: bool, prob: []const f64) -> ([]i64, err) {
     var none: []i64 = zero
     if prob.len != n { ret (none, TooBig) }
-    if replace && n >= 200usize { ret (none, TooBig) }
     if !replace && size > n { ret (none, TooBig) }
     let (p, pe) = mem.alloc[f64](a, n + 1usize)
     let (perm, ppe) = mem.alloc[i64](a, n + 1usize)
@@ -848,22 +847,102 @@ fn sample_prob(a: *mem.Arena, r: *rng.Rng, n: usize, size: usize, replace: bool,
         perm[i] = i64(i) + 1i64
         i += 1usize
     }
-    // revsort: p descending with perm along
-    i = 1usize
+    let draw_with_replacement = replace || size < 2usize
+    var nc = 0usize
+    i = 0usize
     while i < n {
-        let pv = p[i]
-        let qv = perm[i]
-        var j = i
-        while j > 0usize && p[j - 1usize] < pv {
-            p[j] = p[j - 1usize]
-            perm[j] = perm[j - 1usize]
-            j -= 1usize
-        }
-        p[j] = pv
-        perm[j] = qv
+        if f64(n) * p[i] > 0.1f64 { nc += 1usize }
         i += 1usize
     }
-    if replace {
+    if replace && nc > 200usize {
+        // Walker's alias method
+        let (q, qe) = mem.alloc[f64](a, n + 1usize)
+        let (hl, hle) = mem.alloc[i64](a, n + 1usize)
+        let (alias, ale) = mem.alloc[i64](a, n + 1usize)
+        if qe != ok { ret (none, qe) }
+        if hle != ok { ret (none, hle) }
+        if ale != ok { ret (none, ale) }
+        var h = -1i64
+        var l = i64(n)
+        i = 0usize
+        while i < n {
+            q[i] = p[i] * f64(n)
+            alias[i] = 0i64
+            if q[i] < 1.0f64 {
+                h += 1i64
+                hl[usize(h)] = i64(i)
+            } else {
+                l -= 1i64
+                hl[usize(l)] = i64(i)
+            }
+            i += 1usize
+        }
+        if h >= 0i64 && l < i64(n) {
+            var k = 0usize
+            var brk = false
+            while k + 1usize < n && !brk {
+                let ii = hl[k]
+                let jj = hl[usize(l)]
+                alias[usize(ii)] = jj
+                q[usize(jj)] = q[usize(jj)] + (q[usize(ii)] - 1.0f64)
+                if q[usize(jj)] < 1.0f64 { l += 1i64 }
+                if l >= i64(n) { brk = true }
+                k += 1usize
+            }
+        }
+        var s2 = 0usize
+        while s2 < size {
+            let kk = usize(i64(rng.unif_index(r, f64(n))))
+            let ru = rng.unif(r)
+            if ru < q[kk] { ans[s2] = i64(kk) + 1i64 } else { ans[s2] = alias[kk] + 1i64 }
+            s2 += 1usize
+        }
+        ret (ans[0usize..size], ok)
+    }
+    // revsort: p descending with perm along, R's heap sort (the order of ties is its own)
+    if n > 1usize {
+        var l2 = n / 2usize + 1usize
+        var ir = n
+        var go = true
+        while go {
+            var ra = 0.0f64
+            var ii = 0i64
+            if l2 > 1usize {
+                l2 -= 1usize
+                ra = p[l2 - 1usize]
+                ii = perm[l2 - 1usize]
+            } else {
+                ra = p[ir - 1usize]
+                ii = perm[ir - 1usize]
+                p[ir - 1usize] = p[0usize]
+                perm[ir - 1usize] = perm[0usize]
+                ir -= 1usize
+                if ir == 1usize {
+                    p[0usize] = ra
+                    perm[0usize] = ii
+                    go = false
+                }
+            }
+            if go {
+                var ci = l2
+                var cj = l2 * 2usize
+                while cj <= ir {
+                    if cj < ir && p[cj - 1usize] > p[cj] { cj += 1usize }
+                    if ra > p[cj - 1usize] {
+                        p[ci - 1usize] = p[cj - 1usize]
+                        perm[ci - 1usize] = perm[cj - 1usize]
+                        ci = cj
+                        cj += ci
+                    } else {
+                        cj = ir + 1usize
+                    }
+                }
+                p[ci - 1usize] = ra
+                perm[ci - 1usize] = ii
+            }
+        }
+    }
+    if draw_with_replacement {
         i = 1usize
         while i < n {
             p[i] = p[i] + p[i - 1usize]

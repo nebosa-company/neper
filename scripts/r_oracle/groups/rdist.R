@@ -54,8 +54,12 @@ for (pr in probs) for (size in c(0, 1, 10, 100, 1000)) for (seed in c(20261115, 
   v <- rmultinom(3, size, pr)
   for (i in seq_along(v)) add("rmultinom", c(seed, size, length(pr), pr, i - 1), v[i])
 }
-sprobs <- list(c(0.5, 0.3, 0.2), c(0.1, 0.2, 0.3, 0.4), c(0.15, 0.05, 0.5, 0.3), c(3, 1, 2, 7, 4, 9), c(0.4, 0.6))
-for (pr in sprobs) for (rep in c(TRUE, FALSE)) for (size in c(1, 2, 3, 10)) for (seed in c(20261115, 42)) {
+set.seed(99)
+big <- runif(260)
+sprobs <- list(c(0.5, 0.3, 0.2), c(0.1, 0.2, 0.3, 0.4), c(0.15, 0.05, 0.5, 0.3), c(3, 1, 2, 7, 4, 9), c(0.4, 0.6),
+               c(1, 1, 1, 1), c(1, 2, 2, 3, 3, 3), c(5, 1, 5, 1, 5, 1, 2), c(1, 1, 2, 2, 3, 3, 4, 4, 1, 2, 3, 4), c(2, 2), rep(1, 12),
+               big, rep(c(1, 2, 3, 4, 5), 52), c(rep(1, 100), rep(0.2, 150)))
+for (pr in sprobs) for (rep in c(TRUE, FALSE)) for (size in c(1, 2, 3, 10, 40)) for (seed in c(20261115, 42)) {
   n <- length(pr)
   if (!rep && size > n) next
   set.seed(seed)
