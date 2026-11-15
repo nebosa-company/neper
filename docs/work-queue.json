@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L266",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 515,
-      "title": "e.algo.hash: xxhash32, xxh3_64/128, spookyhash, jenkins one-at-a-time",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Open. Needs L264. Gap from digest. Acceptance: digest(x, algo=xxhash32|xxh3_64|xxh3_128|spookyhash, serialize=FALSE) and digest2int match on seeded byte inputs of lengths 0..4096 including every block-boundary length, with streaming update equal to one-shot."
-    },
-    {
       "id": "L267",
       "category": "library",
       "group": "CRAN parity",

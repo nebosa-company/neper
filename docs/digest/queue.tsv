@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-L266	library	0	258	e.algo.hash: xxhash32, xxh3_64/128, spookyhash, jenkins one-at-a-time	Open.
 L267	library	0	259	Palette tables: viridisLite and RColorBrewer	Open.
 L277	library	0	277	Numerical derivatives (numDeriv)	Open.
 L286	library	0	287	Pretty units and n-d array bind (prettyunits, abind)	Open.

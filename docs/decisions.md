@@ -44174,3 +44174,11 @@ unreferenced.
 **Decision.** `e.algo.rand.r` holds R's default generator only: Mersenne-Twister seeded by `set.seed` (fifty LCG scrambles, then 624 words), `unif_rand` with R's 0/1 fixup, `R_unif_index` by 16-bit-chunk rejection (R >= 3.6), `norm_rand` by inversion over two uniforms, `exp_rand`, `sample.int` with and without replacement. The state is a `[624]u64` of 32-bit words masked after each step, since the LCG and tempering need wrapping 32-bit arithmetic. `normal_quantile` is Wichura's AS 241 as in `qnorm.c`; `lgamma` and `gamma` answer R at zero, the negative integers and by reflection for negative non-integers; `choose` follows `choose.c` for k < 30 and for negative n. Ceilings are recorded in L265: n below 2^32, no `prob`, no hash path, no qnorm asymptotic tail.
 
 **Result.** Fixtures `oracle_rng` (4487 cases, exact for runif, rexp and sample, 1e-14 relative for rnorm) and `oracle_special` (608 cases) pass on both hosts.
+
+## D5982 — digest's hashes are one-shot modules; a golden may carry text
+
+**Context.** L266: xxhash32, xxh3 (64 and 128), spookyhash and digest2int from R's digest package, whose answers are 32- to 128-bit values that an `f64` cannot hold.
+
+**Decision.** A golden case may carry `"text"` in place of `"want"`; `e.test.oracle.agrees_text` compares strings exactly, and the hashes are written as digest prints them (xxh3_128 as high then low, spookyhash as h1 then h2 in little-endian bytes). The inputs are a function of (len, salt, seed) rebuilt on both sides, so a golden holds no byte arrays. `e.algo.hash.xxh` ports xxhash.h 0.8 from digest 0.6.39 (XXH32, XXH3 64 and 128 with the default secret and a seed that derives a custom one); `e.algo.hash.spooky` ports SpookyV2 as the one-shot 128-bit hash, which is what digest's streaming form is defined to equal. The streaming update states are not built, and `jenkins_one_at_a_time` adds bytes as signed chars, as digest's C does on x86. A module-scope `str` const gives a locationless E-TYPE-9999, so the secret is a function returning its hex.
+
+**Result.** Fixtures `oracle_hash` (2999 cases) and `oracle_spooky` (315 cases, short and long paths) pass on both hosts.

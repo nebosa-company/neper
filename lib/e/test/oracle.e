@@ -4,7 +4,7 @@
 //
 // A golden is {"group", "meta", "cases":[{"fn", "args":[..], "want", "rel", "abs"}]}. A number
 // is a JSON number; NA, NaN, Inf and -Inf are the strings of those names, because JSON has no
-// spelling for them. NA and NaN are one value here -- Neper has no NA, and a function that
+// spelling for them. A case may carry "text" in place of "want", for an answer that is a string. NA and NaN are one value here -- Neper has no NA, and a function that
 // answers NaN where R answers NA agrees. Dispatch on `Case.name` belongs to the fixture.
 
 use e.fmt.json as json
@@ -12,7 +12,7 @@ use e.fs
 use e.mem
 use e.str
 
-type Case = struct { name: str, args: []f64, want: f64, rel: f64, abs: f64 }
+type Case = struct { name: str, args: []f64, want: f64, rel: f64, abs: f64, text: str }
 
 type Golden = struct { group: str, r: str, cases: []Case }
 
@@ -76,6 +76,16 @@ fn load_case(a: *mem.Arena, v: json.Value) -> (Case, err) {
         if e != ok { ret (c, e) }
         args[at] = x
         at += 1usize
+    }
+    let (text_value, has_text) = json.member_of(members, "text")
+    if has_text {
+        let (text, text_is_string) = json.string_of(text_value)
+        if !text_is_string { ret (c, Malformed) }
+        c.name = name
+        c.args = args
+        c.want = nan()
+        c.text = text
+        ret (c, ok)
     }
     let (want, want_error) = member_scalar(members, "want")
     if want_error != ok { ret (c, want_error) }
@@ -148,6 +158,10 @@ fn agrees(got: f64, c: *const Case) -> bool {
     if other > scale { scale = other }
     ret distance <= c.rel * scale
 }
+
+// A text case, written {"fn", "args", "text"}: the answer is a string (a hash in hex, a formatted
+// number) and must be equal.
+fn agrees_text(got: str, c: *const Case) -> bool { ret str.eq(got, c.text) }
 
 // "name(args): got G, R says W", for the line a failing fixture prints.
 fn describe(a: *mem.Arena, c: *const Case, got: f64) -> str {

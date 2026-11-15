@@ -3,12 +3,16 @@
 #   Rscript scripts/r_oracle/generate.R            every group in scripts/r_oracle/groups
 #   Rscript scripts/r_oracle/generate.R special    only the named groups
 #
+# Packages a group needs are installed beforehand (install.packages(pkg, lib = dir)); point
+# R_ORACLE_LIB at dir when it is not a default library.
+#
 # A group file builds `cases` with `case()` or `sweep()` and calls `emit(name, packages)`.
 # Seeds are fixed inside each group, so two runs on the same R and package versions write
 # the same bytes. A number is written with 17 significant digits so it reads back to the
 # same double; NA, NaN, Inf and -Inf are strings because JSON has no spelling for them.
 
 root <- normalizePath(file.path(dirname(sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE)[1])), "..", ".."))
+if (nzchar(Sys.getenv("R_ORACLE_LIB"))) .libPaths(c(Sys.getenv("R_ORACLE_LIB"), .libPaths()))
 out_dir <- file.path(root, "tests", "oracle")
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -24,7 +28,7 @@ str <- function(s) paste0('"', gsub('"', '\\\\"', gsub("\\\\", "\\\\\\\\", s)), 
 # arguments, `want` is R's answer. `rel` and `abs` are the tolerance the comparison allows
 # (either one is enough); both zero means exact.
 case <- function(fn, args, want, rel = 1e-12, abs = 0) {
-  list(fn = fn, args = as.numeric(args), want = as.numeric(want), rel = rel, abs = abs)
+  list(fn = fn, args = as.numeric(args), want = if (is.character(want)) want else as.numeric(want), rel = rel, abs = abs)
 }
 
 # `f` over every row of a grid of arguments, one case per row.
@@ -43,6 +47,8 @@ emit <- function(name, packages = character(), cases) {
   meta <- paste0('{"r":', str(R.version.string),
                  ',"packages":{', if (length(pkgs)) paste(sprintf("%s:%s", str(names(pkgs)), str(pkgs)), collapse = ","), '}}')
   body <- vapply(cases, function(c) {
+    if (is.character(c$want))
+      return(sprintf('{"fn":%s,"args":[%s],"text":%s}', str(c$fn), paste(vapply(c$args, num, ""), collapse = ","), str(c$want)))
     sprintf('{"fn":%s,"args":[%s],"want":%s,"rel":%s,"abs":%s}', str(c$fn),
             paste(vapply(c$args, num, ""), collapse = ","), num(c$want), num(c$rel), num(c$abs))
   }, "")
