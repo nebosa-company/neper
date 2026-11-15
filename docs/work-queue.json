@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L267",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 516,
-      "title": "Palette tables: viridisLite and RColorBrewer",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Open. Needs L264. Acceptance: viridis, magma, inferno, plasma, cividis, mako, rocket, turbo for n=1..256 with alpha, begin, end, direction; every RColorBrewer palette at every n; tables generated from the R packages, not typed; strings equal R output exactly."
-    },
-    {
       "id": "L277",
       "category": "library",
       "group": "CRAN parity",

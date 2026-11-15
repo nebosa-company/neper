@@ -3054,4 +3054,5 @@ D5978	1223	`check --unused-imports` reports a `use` nothing names, as a compiler
 D5979	1381	`check --unused-code` nominates declarations no identifier names
 D5980	1557	R is the oracle through committed goldens, compared by `e.test.oracle`
 D5981	1192	`e.algo.rand.r` reproduces R's streams; `e.math.special` follows R at its edges
-D5982	1222	digest's hashes are one-shot modules; a golden may carry text
+D5982	1223	digest's hashes are one-shot modules; a golden may carry text
+D5983	1071	R's palettes are the ramp, not a table of every output
