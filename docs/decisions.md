@@ -44391,7 +44391,7 @@ unreferenced.
 
 **Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on both hosts; L288 is closed.
 
-## D6008 — a locale is one names string, and readr has no full weekday name
+## D6009 — a locale is one names string, and readr has no full weekday name
 
 **Context.** L290. readr's `locale(date_names = lang)` supplies month, weekday and am/pm names to the date parsers.
 
