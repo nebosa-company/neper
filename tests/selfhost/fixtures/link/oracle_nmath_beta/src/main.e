@@ -15,6 +15,13 @@ fn answer(c: *const oracle.Case) -> f64 {
     let lower = x[5usize] != 0.0f64
     let lg = x[6usize] != 0.0f64
     if fam == 2u8 { ret nb.lbeta(x[3usize], x[4usize]) }
+    if fam == 11u8 { ret nb.qbeta(x[2usize], x[3usize], x[4usize], lower, lg) }
+    if fam == 12u8 { ret nb.qf(x[2usize], x[3usize], x[4usize], lower, lg) }
+    if fam == 10u8 {
+        if kind == 0u8 { ret nb.dhyper(x[2usize], x[3usize], x[4usize], x[7usize], lg) }
+        if kind == 1u8 { ret nb.phyper(x[2usize], x[3usize], x[4usize], x[7usize], lower, lg) }
+        ret nb.qhyper(x[2usize], x[3usize], x[4usize], x[7usize], lower, lg)
+    }
     if fam == 5u8 {
         if kind == 0u8 { ret nb.dgeom(x[2usize], x[3usize], lg) }
         if kind == 1u8 { ret nb.pgeom(x[2usize], x[3usize], lower, lg) }

@@ -605,6 +605,527 @@ fn qgeom(p: f64, prob: f64, lower: bool, lg: bool) -> f64 {
     ret nm.max2(0.0f64, math.ceil[f64](dist.dt_clog(p, lower, lg) / dist.log1p(0.0f64 - prob) - 1.0f64 - 1e-12f64))
 }
 
+// --- hypergeometric
+
+fn dhyper(x0: f64, r0: f64, b0: f64, n0: f64, lg: bool) -> f64 {
+    if x0 != x0 || r0 != r0 || b0 != b0 || n0 != n0 { ret x0 + r0 + b0 + n0 }
+    if r0 < 0.0f64 || nonint(r0) || b0 < 0.0f64 || nonint(b0) || n0 < 0.0f64 || nonint(n0) || n0 > r0 + b0 { ret nan() }
+    if x0 < 0.0f64 { ret dist.d0(lg) }
+    if nonint(x0) { ret dist.d0(lg) }
+    let x = math.round[f64](x0)
+    let r = math.round[f64](r0)
+    let b = math.round[f64](b0)
+    let n = math.round[f64](n0)
+    if n < x || r < x || n - x > b { ret dist.d0(lg) }
+    if n == 0.0f64 {
+        if x == 0.0f64 { ret dist.d1(lg) }
+        ret dist.d0(lg)
+    }
+    let p = n / (r + b)
+    let q = (r + b - n) / (r + b)
+    let p1 = dbinom_raw(x, r, p, q, lg)
+    let p2 = dbinom_raw(n - x, b, p, q, lg)
+    let p3 = dbinom_raw(n, r + b, p, q, lg)
+    if lg { ret p1 + p2 - p3 }
+    ret p1 * p2 / p3
+}
+
+fn pdhyper(x0: f64, nr: f64, nb: f64, n: f64, lg: bool) -> f64 {
+    var x = x0
+    var sum = 0.0f64
+    var term = 1.0f64
+    while x > 0.0f64 && term >= 2.220446049250313e-16f64 * sum {
+        term = term * (x * (nb - n + x) / (n + 1.0f64 - x) / (nr + 1.0f64 - x))
+        sum = sum + term
+        x -= 1.0f64
+    }
+    if lg { ret dist.log1p(sum) }
+    ret 1.0f64 + sum
+}
+
+fn phyper(x0: f64, nr0: f64, nb0: f64, n0: f64, lower0: bool, lg: bool) -> f64 {
+    var lower = lower0
+    if x0 != x0 || nr0 != nr0 || nb0 != nb0 || n0 != n0 { ret x0 + nr0 + nb0 + n0 }
+    var x = math.floor[f64](x0 + 1e-7f64)
+    var nr = math.round[f64](nr0)
+    var nb = math.round[f64](nb0)
+    let n = math.round[f64](n0)
+    if nr < 0.0f64 || nb < 0.0f64 || !finite(nr + nb) || n < 0.0f64 || n > nr + nb { ret nan() }
+    if x * (nr + nb) > n * nr {
+        let old_nb = nb
+        nb = nr
+        nr = old_nb
+        x = n - x - 1.0f64
+        lower = !lower
+    }
+    if x < 0.0f64 || x < n - nb { ret dist.dt0(lower, lg) }
+    if x >= nr || x >= n { ret dist.dt1(lower, lg) }
+    let d = dhyper(x, nr, nb, n, lg)
+    if (!lg && d == 0.0f64) || (lg && d == 0.0f64 - inf()) { ret dist.dt0(lower, lg) }
+    let pd = pdhyper(x, nr, nb, n, lg)
+    if lg {
+        if lower { ret d + pd }
+        ret dist.log1_exp(d + pd)
+    }
+    if lower { ret d * pd }
+    ret 0.5f64 - d * pd + 0.5f64
+}
+
+fn lfastchoose(n: f64, k: f64) -> f64 { ret 0.0f64 - math.log[f64](n + 1.0f64) - lbeta(n - k + 1.0f64, k + 1.0f64) }
+
+fn qhyper(p0: f64, nr0: f64, nb0: f64, n0: f64, lower: bool, lg: bool) -> f64 {
+    var p = p0
+    if p != p || nr0 != nr0 || nb0 != nb0 || n0 != n0 { ret p + nr0 + nb0 + n0 }
+    if !finite(p) || !finite(nr0) || !finite(nb0) || !finite(n0) { ret nan() }
+    var nr = math.round[f64](nr0)
+    var nb = math.round[f64](nb0)
+    let nn = nr + nb
+    let n = math.round[f64](n0)
+    if nr < 0.0f64 || nb < 0.0f64 || n < 0.0f64 || n > nn { ret nan() }
+    var xstart = 0.0f64
+    if n - nb > 0.0f64 { xstart = n - nb }
+    var xend = n
+    if nr < n { xend = nr }
+    if lg {
+        if p > 0.0f64 { ret nan() }
+        if p == 0.0f64 {
+            if lower { ret xend }
+            ret xstart
+        }
+        if p == 0.0f64 - inf() {
+            if lower { ret xstart }
+            ret xend
+        }
+    } else {
+        if p < 0.0f64 || p > 1.0f64 { ret nan() }
+        if p == 0.0f64 {
+            if lower { ret xstart }
+            ret xend
+        }
+        if p == 1.0f64 {
+            if lower { ret xend }
+            ret xstart
+        }
+    }
+    var xr = xstart
+    var xb = n - xr
+    let small_n = nn < 1000.0f64
+    var term = lfastchoose(nr, xr) + lfastchoose(nb, xb) - lfastchoose(nn, n)
+    if small_n { term = math.exp[f64](term) }
+    nr -= xr
+    nb -= xb
+    if !lower || lg { p = dist.dt_qiv(p, lower, lg) }
+    p = p * (1.0f64 - 1000.0f64 * 2.220446049250313e-16f64)
+    var sum = 0.0f64
+    if small_n { sum = term } else { sum = math.exp[f64](term) }
+    while sum < p && xr < xend {
+        xr += 1.0f64
+        nb += 1.0f64
+        if small_n {
+            term = term * ((nr / xr) * (xb / nb))
+        } else {
+            term = term + math.log[f64]((nr / xr) * (xb / nb))
+        }
+        if small_n { sum += term } else { sum += math.exp[f64](term) }
+        xb -= 1.0f64
+        nr -= 1.0f64
+    }
+    ret xr
+}
+
+// --- qbeta (AS 109 start, Newton steps on x or on log x, tail swaps)
+
+fn dt_civ(alpha: f64, lower: bool, lg: bool) -> f64 {
+    if lg {
+        if lower { ret 0.0f64 - dist.expm1(alpha) }
+        ret math.exp[f64](alpha)
+    }
+    if lower { ret 0.5f64 - alpha + 0.5f64 }
+    ret alpha
+}
+
+fn qbeta_raw(alpha: f64, p: f64, q: f64, lower: bool, lg: bool, log_q_cut: f64, n_n: i64) -> (f64, f64) {
+    let dbl_very_min = 2.2250738585072014e-308f64 / 4.0f64
+    let dbl_log_v_min = 0.693147180559945309417232121458f64 * -1023.0f64
+    let dbl_1_eps = 0.99999999999999988898f64
+    let fpu = 3e-308f64
+    let acu_min = 1e-300f64
+    let p_lo = fpu
+    let p_hi = 1.0f64 - 2.22e-16f64
+    let const1 = 2.30753f64
+    let const2 = 0.27061f64
+    let const3 = 0.99229f64
+    let const4 = 0.04481f64
+    var use_log_x = false
+    var add_n_step = true
+    var warned = false
+    if alpha == dist.dt0(lower, lg) { ret (0.0f64, 1.0f64) }
+    if alpha == dist.dt1(lower, lg) { ret (1.0f64, 0.0f64) }
+    if (lg && alpha > 0.0f64) || (!lg && (alpha < 0.0f64 || alpha > 1.0f64)) { ret (nan(), nan()) }
+    if p == 0.0f64 || q == 0.0f64 || !finite(p) || !finite(q) {
+        var half = 0.5f64
+        if lg { half = -0.693147180559945309417232121458f64 }
+        if p == 0.0f64 && q == 0.0f64 {
+            if alpha < half { ret (0.0f64, 1.0f64) }
+            if alpha > half { ret (1.0f64, 0.0f64) }
+            ret (0.5f64, 0.5f64)
+        } else if p == 0.0f64 || p / q == 0.0f64 {
+            ret (0.0f64, 1.0f64)
+        } else if q == 0.0f64 || q / p == 0.0f64 {
+            ret (1.0f64, 0.0f64)
+        }
+        ret (0.5f64, 0.5f64)
+    }
+    let p_ = dist.dt_qiv(alpha, lower, lg)
+    let logbeta = lbeta(p, q)
+    var swap_tail = p_ > 0.5f64
+    var n_maybe_swaps = 0i64
+    var a = 0.0f64
+    var la = 0.0f64
+    var pp = 0.0f64
+    var qq = 0.0f64
+    var acu = 0.0f64
+    var u0 = 0.0f64
+    var rp = 0.0f64
+    var u = 0.0f64
+    var xinbta = 0.0f64
+    var tx = 0.0f64
+    var u_n = 1.0f64
+    var y = -1.0f64
+    var w = 0.0f64
+    var r = 0.0f64
+    var t = 0.0f64
+    var s = 0.0f64
+    var h = 0.0f64
+    var g = 0.0f64
+    var state = 0i64
+    while true {
+        if state == 0i64 {
+            if swap_tail {
+                a = dt_civ(alpha, lower, lg)
+                la = dist.dt_clog(alpha, lower, lg)
+                pp = q
+                qq = p
+            } else {
+                a = p_
+                la = nm.dt_log(alpha, lower, lg)
+                pp = p
+                qq = q
+            }
+            n_maybe_swaps += 1i64
+            acu = nm.max2(acu_min, math.pow[f64](10.0f64, -13.0f64 - 2.5f64 / (pp * pp) - 0.5f64 / (a * a)))
+            u0 = (la + math.log[f64](pp) + logbeta) / pp
+            rp = pp * (1.0f64 - qq) / (pp + 1.0f64)
+            t = 0.2f64
+            let log_eps_c = 0.693147180559945309417232121458f64 * (1.0f64 - 53.0f64)
+            let u0_maybe = 0.693147180559945309417232121458f64 * -1021.0f64 < u0 && u0 < -0.01f64
+            u_n = 1.0f64
+            var to_newton = false
+            if u0_maybe && u0 < (t * log_eps_c - math.log[f64](nm.abs_of(pp * (1.0f64 - qq) * (2.0f64 - qq) / (2.0f64 * (pp + 2.0f64))))) / 2.0f64 {
+                rp = rp * math.exp[f64](u0)
+                if rp > -1.0f64 { u = u0 - dist.log1p(rp) / pp } else { u = u0 }
+                xinbta = math.exp[f64](u)
+                tx = xinbta
+                use_log_x = true
+                to_newton = true
+            }
+            var to_return = false
+            if !to_newton {
+                r = math.sqrt[f64](0.0f64 - 2.0f64 * la)
+                y = r - (const1 + const2 * r) / (1.0f64 + (const3 + const4 * r) * r)
+                if pp > 1.0f64 && qq > 1.0f64 {
+                    r = (y * y - 3.0f64) / 6.0f64
+                    s = 1.0f64 / (pp + pp - 1.0f64)
+                    t = 1.0f64 / (qq + qq - 1.0f64)
+                    h = 2.0f64 / (s + t)
+                    w = y * math.sqrt[f64](h + r) / h - (t - s) * (r + 5.0f64 / 6.0f64 - 2.0f64 / (3.0f64 * h))
+                    if w > 300.0f64 {
+                        t = w + w + math.log[f64](qq) - math.log[f64](pp)
+                        if t <= 18.0f64 { u = 0.0f64 - dist.log1p(math.exp[f64](t)) } else { u = 0.0f64 - t - math.exp[f64](0.0f64 - t) }
+                        xinbta = math.exp[f64](u)
+                    } else {
+                        xinbta = pp / (pp + qq * math.exp[f64](w + w))
+                        u = 0.0f64 - dist.log1p(qq / pp * math.exp[f64](w + w))
+                    }
+                } else {
+                    r = qq + qq
+                    t = 1.0f64 / (3.0f64 * math.sqrt[f64](qq))
+                    let cube = 1.0f64 + t * (0.0f64 - t + y)
+                    t = r * (cube * cube * cube)
+                    s = 4.0f64 * pp + r - 2.0f64
+                    if t == 0.0f64 || (t < 0.0f64 && s >= t) {
+                        var l1ma = nm.dt_log(alpha, lower, lg)
+                        if swap_tail { l1ma = nm.dt_log(alpha, lower, lg) } else { l1ma = dist.dt_clog(alpha, lower, lg) }
+                        let xx = (l1ma + math.log[f64](qq) + logbeta) / qq
+                        if xx <= 0.0f64 {
+                            xinbta = 0.0f64 - dist.expm1(xx)
+                            u = dist.log1_exp(xx)
+                        } else {
+                            let r_ = rp * math.exp[f64](u0)
+                            if r_ > -1.0f64 { u = u0 - dist.log1p(r_) / pp } else { u = u0 }
+                            xinbta = math.exp[f64](u)
+                        }
+                    } else {
+                        t = s / t
+                        if t <= 1.0f64 {
+                            u = u0
+                            xinbta = math.exp[f64](u)
+                        } else {
+                            xinbta = 1.0f64 - 2.0f64 / (t + 1.0f64)
+                            u = dist.log1p(0.0f64 - 2.0f64 / (t + 1.0f64))
+                        }
+                    }
+                }
+                if (swap_tail && u >= 0.0f64 - math.exp[f64](log_q_cut)) || (!swap_tail && u >= 0.0f64 - math.exp[f64](4.0f64 * log_q_cut) && pp / qq < 1000.0f64) {
+                    swap_tail = !swap_tail
+                    if swap_tail {
+                        a = dt_civ(alpha, lower, lg)
+                        la = dist.dt_clog(alpha, lower, lg)
+                        pp = q
+                        qq = p
+                    } else {
+                        a = p_
+                        la = nm.dt_log(alpha, lower, lg)
+                        pp = p
+                        qq = q
+                    }
+                    u = dist.log1_exp(u)
+                    xinbta = math.exp[f64](u)
+                }
+                if !use_log_x { use_log_x = u < log_q_cut }
+                let bad_u = !finite(u)
+                let bad_init = bad_u || xinbta > p_hi
+                tx = xinbta
+                if bad_u || u < log_q_cut {
+                    w = pbeta_raw(dbl_very_min, pp, qq, true, lg)
+                    var lim = a
+                    if lg { lim = la }
+                    if w > lim {
+                        if lg || nm.abs_of(w - a) < nm.abs_of(0.0f64 - a) {
+                            tx = dbl_very_min
+                            u_n = dbl_log_v_min
+                        } else {
+                            tx = 0.0f64
+                            u_n = 0.0f64 - inf()
+                        }
+                        use_log_x = lg
+                        add_n_step = false
+                        to_return = true
+                    } else if u < dbl_log_v_min {
+                        u = dbl_log_v_min
+                        xinbta = dbl_very_min
+                    }
+                }
+                if !to_return && bad_init && !(use_log_x && tx > 0.0f64) {
+                    if u == 0.0f64 - inf() {
+                        u = 0.693147180559945309417232121458f64 * -1021.0f64
+                        xinbta = 2.2250738585072014e-308f64
+                    } else {
+                        if xinbta > 1.1f64 {
+                            xinbta = 0.5f64
+                        } else if xinbta < p_lo {
+                            xinbta = math.exp[f64](u)
+                        } else {
+                            xinbta = p_hi
+                        }
+                        if bad_u { u = math.log[f64](xinbta) }
+                    }
+                }
+            }
+            if to_return { state = 3i64 } else { state = 1i64 }
+        }
+        if state == 1i64 {
+            r = 1.0f64 - pp
+            t = 1.0f64 - qq
+            var wprev = 0.0f64
+            var prev = 1.0f64
+            var adj = 1.0f64
+            var converged = false
+            var again = false
+            var give_up = false
+            var i_pb = 0i64
+            if use_log_x {
+                while i_pb < 1000i64 && !converged && !again && !give_up {
+                    y = pbeta_raw(xinbta, pp, qq, true, true)
+                    if y == 0.0f64 - inf() {
+                        w = 0.0f64
+                    } else {
+                        w = (y - la) * math.exp[f64](y - u + logbeta + r * u + t * dist.log1_exp(u))
+                    }
+                    if !finite(w) {
+                        if n_maybe_swaps <= 1i64 { again = true } else { give_up = true }
+                    } else {
+                        if i_pb >= n_n && w * wprev <= 0.0f64 { prev = nm.max2(nm.abs_of(adj), fpu) }
+                        g = 1.0f64
+                        var i_inn = 0i64
+                        var brk = false
+                        while i_inn < 1000i64 && !converged && !brk {
+                            adj = g * w
+                            if nm.abs_of(adj) < prev {
+                                u_n = u - adj
+                                if u_n <= 0.0f64 {
+                                    if prev <= acu || nm.abs_of(w) <= acu {
+                                        converged = true
+                                    } else {
+                                        brk = true
+                                    }
+                                }
+                            }
+                            if !converged && !brk { g = g / 3.0f64 }
+                            i_inn += 1i64
+                        }
+                        if !converged {
+                            var dd = nm.abs_of(adj)
+                            if nm.abs_of(u_n - u) < dd { dd = nm.abs_of(u_n - u) }
+                            if dd <= 4e-16f64 * nm.abs_of(u_n + u) {
+                                converged = true
+                            } else {
+                                u = u_n
+                                xinbta = math.exp[f64](u)
+                                wprev = w
+                            }
+                        }
+                    }
+                    i_pb += 1i64
+                }
+            } else {
+                var stop_zero = false
+                while i_pb < 1000i64 && !converged && !again && !give_up && !stop_zero {
+                    y = pbeta_raw(xinbta, pp, qq, true, lg)
+                    if lg {
+                        w = (y - la) * math.exp[f64](y + logbeta + r * math.log[f64](xinbta) + t * dist.log1p(0.0f64 - xinbta))
+                    } else {
+                        w = (y - a) * math.exp[f64](logbeta + r * math.log[f64](xinbta) + t * dist.log1p(0.0f64 - xinbta))
+                    }
+                    if !finite(w) {
+                        if n_maybe_swaps <= 2i64 {
+                            if !lg && n_maybe_swaps == 2i64 { use_log_x = true }
+                            if !lg || n_maybe_swaps <= 1i64 { again = true }
+                        }
+                        if !again { give_up = true }
+                    } else {
+                        if i_pb >= n_n && w * wprev <= 0.0f64 { prev = nm.max2(nm.abs_of(adj), fpu) }
+                        g = 1.0f64
+                        var i_inn = 0i64
+                        var brk = false
+                        while i_inn < 1000i64 && !converged && !brk {
+                            adj = g * w
+                            if i_pb < n_n || nm.abs_of(adj) < prev {
+                                tx = xinbta - adj
+                                if 0.0f64 <= tx && tx <= 1.0f64 {
+                                    if prev <= acu || nm.abs_of(w) <= acu {
+                                        converged = true
+                                    } else if tx != 0.0f64 && tx != 1.0f64 {
+                                        brk = true
+                                    }
+                                }
+                            }
+                            if !converged && !brk { g = g / 3.0f64 }
+                            i_inn += 1i64
+                        }
+                        if !converged {
+                            if nm.abs_of(tx - xinbta) <= 4e-16f64 * (tx + xinbta) {
+                                converged = true
+                            } else {
+                                xinbta = tx
+                                if tx == 0.0f64 {
+                                    stop_zero = true
+                                } else {
+                                    wprev = w
+                                }
+                            }
+                        }
+                    }
+                    i_pb += 1i64
+                }
+            }
+            if again {
+                state = 0i64
+            } else if give_up {
+                ret (nan(), nan())
+            } else {
+                if !converged { warned = true }
+                state = 2i64
+            }
+        }
+        if state == 2i64 {
+            let log_ = lg || use_log_x
+            if (log_ && y == 0.0f64 - inf()) || (!log_ && y == 0.0f64) {
+                w = pbeta_raw(dbl_very_min, pp, qq, true, log_)
+                if log_ || nm.abs_of(w - a) <= nm.abs_of(y - a) {
+                    tx = dbl_very_min
+                    u_n = dbl_log_v_min
+                }
+                add_n_step = false
+            }
+            state = 3i64
+        }
+        if state == 3i64 {
+            if use_log_x {
+                if add_n_step {
+                    if u_n != 1.0f64 { xinbta = math.exp[f64](u_n) }
+                    y = pbeta_raw(xinbta, pp, qq, true, lg)
+                    if lg {
+                        w = (y - la) * math.exp[f64](y + logbeta + r * math.log[f64](xinbta) + t * dist.log1p(0.0f64 - xinbta))
+                    } else {
+                        w = (y - a) * math.exp[f64](logbeta + r * math.log[f64](xinbta) + t * dist.log1p(0.0f64 - xinbta))
+                    }
+                    if finite(w) { tx = xinbta - w } else { tx = xinbta }
+                } else {
+                    if swap_tail { ret (0.0f64 - dist.expm1(u_n), math.exp[f64](u_n)) }
+                    ret (math.exp[f64](u_n), 0.0f64 - dist.expm1(u_n))
+                }
+            }
+            if swap_tail { ret (1.0f64 - tx, tx) }
+            ret (tx, 1.0f64 - tx)
+        }
+    }
+    ret (nan(), nan())
+}
+
+fn qbeta(alpha: f64, p: f64, q: f64, lower: bool, lg: bool) -> f64 {
+    if p != p || q != q || alpha != alpha { ret p + q + alpha }
+    if p < 0.0f64 || q < 0.0f64 { ret nan() }
+    let (q0, q1) = qbeta_raw(alpha, p, q, lower, lg, -5.0f64, 4i64)
+    ret q0
+}
+
+fn qf(p0: f64, df1: f64, df2: f64, lower: bool, lg: bool) -> f64 {
+    var p = p0
+    if p != p || df1 != df1 || df2 != df2 { ret p + df1 + df2 }
+    if df1 <= 0.0f64 || df2 <= 0.0f64 { ret nan() }
+    if lg {
+        if p > 0.0f64 { ret nan() }
+        if p == 0.0f64 {
+            if lower { ret inf() }
+            ret 0.0f64
+        }
+        if p == 0.0f64 - inf() {
+            if lower { ret 0.0f64 }
+            ret inf()
+        }
+    } else {
+        if p < 0.0f64 || p > 1.0f64 { ret nan() }
+        if p == 0.0f64 {
+            if lower { ret 0.0f64 }
+            ret inf()
+        }
+        if p == 1.0f64 {
+            if lower { ret inf() }
+            ret 0.0f64
+        }
+    }
+    if df1 <= df2 && df2 > 4e5f64 {
+        if !finite(df1) { ret 1.0f64 }
+        ret nm.qchisq(p, df1, lower, lg) / df1
+    } else if df1 > 4e5f64 {
+        ret df2 / nm.qchisq(p, df2, !lower, lg)
+    }
+    p = (1.0f64 / qbeta(p, df2 / 2.0f64, df1 / 2.0f64, !lower, lg) - 1.0f64) * (df2 / df1)
+    if p != p { ret nan() }
+    ret p
+}
+
 // --- qt
 
 fn tanpi(x0: f64) -> f64 {

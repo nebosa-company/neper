@@ -44366,3 +44366,11 @@ unreferenced.
 **Decision.** `e.math.nmath_beta` carries them: pt with its two-way split on n > x^2 and the large-nx asymptote, dt through bd0 and stirlerr, df through dbinom_raw, pf with the infinite-df limits, dnbinom and dnbinom_mu with the small-x series and the p-fraction, pnbinom through pbeta and pnbinom_mu through bratio directly, dgeom, pgeom and qgeom, and qt with Hill's start, the three df regimes and the two-term Taylor polish (df > 1e20 reads qnorm). `qbinom` and `qnbinom` use the same `q_discrete` and `do_search_disc` as nmath's qpois did, differing only in the binomial's upper bound of n that stops the right search. qbeta and qf wait on qbeta's 650 lines.
 
 **Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on both hosts (1e-13 for p and q, 1e-11 for d).
+
+## D6006 — qbeta is a state machine over R's gotos, and its golden is held to 1e-9
+
+**Context.** L288. `qbeta_raw` (AS 109 start, Newton on x or on log x, tail swaps through `maybe_swap`, `L_Newton`, `L_converged` and `L_return`) and the hypergeometric functions were the last of the beta-side quantiles.
+
+**Decision.** `qbeta_raw` keeps R's tests in order and a `state` variable stands for the labels (0 start and swap, 1 Newton, 2 converged, 3 return); the log-scale and linear Newton loops are two loops with flags for converged, retry-after-swap and give-up. The `give_log_q` branches are dropped because `qbeta` passes the finite cutoff -5. `qf` is R's, with qchisq for the extreme df and qbeta otherwise. dhyper and phyper use dbinom_raw and pdhyper (the long-double sum is a double here); qhyper walks the cumulative sum as R does. The oracle shows qbeta and qf agreeing with R to about 1e-12 (the Newton loop stops at `acu`, 1e-13 or looser in the extreme tails, so a last-digit difference in pbeta moves the answer by that much), so those two families are compared at 1e-9 and everything else at 1e-13 or 1e-11.
+
+**Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on both hosts.

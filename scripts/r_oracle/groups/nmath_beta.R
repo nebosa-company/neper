@@ -2,7 +2,8 @@
 #   family 0 beta(a, b), kind 0 d 1 p; 1 binom(n, p); 2 lbeta(p1, p2) (x ignored)
 cases <- list()
 # densities go through exp of a sum of large terms, so they agree to about 1e-11; a log value near 0 only to an absolute 1e-15
-add <- function(args, want) cases[[length(cases) + 1]] <<- case("nmath_beta", args, want, rel = if (args[2] == 0) 1e-11 else 1e-13, abs = if (args[7] == 1) 1e-15 else 1e-300)
+# qbeta and qf stop at Newton's own tolerance (acu about 1e-13 to 1e-9 in the extreme tails), so a last-digit difference in pbeta moves them by that much
+add <- function(args, want) cases[[length(cases) + 1]] <<- case("nmath_beta", args, want, rel = if (args[1] >= 11) 1e-9 else if (args[2] == 0) 1e-11 else 1e-13, abs = if (args[7] == 1) 1e-15 else 1e-300)
 shapes <- c(0.001, 0.05, 0.3, 0.9, 1, 1.5, 2, 3.7, 8, 15, 40, 100, 400, 1e4, 1e6)
 xs <- c(0, 1e-300, 1e-12, 1e-5, 0.01, 0.1, 0.29, 0.3, 0.5, 0.7, 0.9, 0.999, 1 - 1e-9, 1)
 for (a in shapes) for (b in c(0.01, 0.5, 1, 2.5, 9, 30, 120, 1e3, 1e5)) {
@@ -55,4 +56,19 @@ for (n in c(0, 1, 5, 30, 100, 1000, 1e5, 1e7)) for (pr in c(0, 0.001, 0.2, 0.5, 
   add(c(8, 2, p, n, pr, lt, lg), suppressWarnings(qbinom(p, n, pr, lower.tail = lt, log.p = lg)))
 for (df in c(0.05, 0.5, 0.99, 1, 1.0000000000001, 1.5, 2, 2.05, 3, 7.5, 30, 1000, 1e10, Inf)) for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) for (p in qkind(lt, lg))
   add(c(9, 2, p, df, 0, lt, lg), suppressWarnings(qt(p, df, lower.tail = lt, log.p = lg)))
+# hypergeometric (10): args (10, kind, x, m, n, lower, log, k) -- k is the 8th argument
+addh <- function(args, want) cases[[length(cases) + 1]] <<- case("nmath_beta", args, want, rel = if (args[2] == 0) 1e-11 else 1e-12, abs = if (args[7] == 1) 1e-15 else 1e-300)
+for (par in list(c(5, 5, 3), c(10, 7, 5), c(50, 60, 40), c(150, 150, 60), c(200, 300, 150), c(3, 1000, 50), c(20, 20, 20), c(0, 5, 2), c(30, 100, 60), c(1000, 1500, 800), c(7, 3, 10))) {
+  m <- par[1]; n <- par[2]; k <- par[3]
+  for (x in c(-1, 0, 1, 2, 3, 5, 10, 20, 40, 59, 60, 100, 700, 2.5)) for (lg in c(FALSE, TRUE)) {
+    addh(c(10, 0, x, m, n, 1, lg, k), suppressWarnings(dhyper(x, m, n, k, log = lg)))
+    for (lt in c(TRUE, FALSE)) addh(c(10, 1, x, m, n, lt, lg, k), suppressWarnings(phyper(x, m, n, k, lower.tail = lt, log.p = lg)))
+  }
+  for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) for (p in qkind(lt, lg)) addh(c(10, 2, p, m, n, lt, lg, k), suppressWarnings(qhyper(p, m, n, k, lower.tail = lt, log.p = lg)))
+}
+# qbeta (11) and qf (12)
+for (a in c(1e-3, 0.05, 0.5, 0.9, 1, 1.5, 3, 10, 50, 300, 1e4)) for (b in c(1e-3, 0.3, 1, 2.5, 8, 40, 200, 5e3)) for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) for (p in qkind(lt, lg))
+  add(c(11, 2, p, a, b, lt, lg), suppressWarnings(qbeta(p, a, b, lower.tail = lt, log.p = lg)))
+for (d1 in c(0.5, 1, 2, 5, 30, 400, 1e6, Inf)) for (d2 in c(0.5, 1, 3, 20, 90, 1e3, 1e6, Inf)) for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) for (p in qkind(lt, lg))
+  add(c(12, 2, p, d1, d2, lt, lg), suppressWarnings(qf(p, d1, d2, lower.tail = lt, log.p = lg)))
 emit("nmath_beta", character(), list(cases))
