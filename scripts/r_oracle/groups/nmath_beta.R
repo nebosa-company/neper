@@ -51,6 +51,7 @@ for (size in c(0, 0.01, 0.5, 1, 3.3, 20, 500, 1e6)) {
     add(c(7, 0, x, size, mu, 1, lg), suppressWarnings(dnbinom(x, size, mu = mu, log = lg)))
     for (lt in c(TRUE, FALSE)) add(c(7, 1, x, size, mu, lt, lg), suppressWarnings(pnbinom(x, size, mu = mu, lower.tail = lt, log.p = lg)))
   }
+  for (mu in c(0, 0.3, 4, 100, 1e4)) for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) for (p in qkind(lt, lg)) add(c(7, 2, p, size, mu, lt, lg), suppressWarnings(qnbinom(p, size, mu = mu, lower.tail = lt, log.p = lg)))
 }
 for (n in c(0, 1, 5, 30, 100, 1000, 1e5, 1e7)) for (pr in c(0, 0.001, 0.2, 0.5, 0.73, 1)) for (lt in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) for (p in qkind(lt, lg))
   add(c(8, 2, p, n, pr, lt, lg), suppressWarnings(qbinom(p, n, pr, lower.tail = lt, log.p = lg)))

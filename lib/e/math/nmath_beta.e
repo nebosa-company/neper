@@ -434,6 +434,7 @@ fn pnbinom_mu(x0: f64, size: f64, mu: f64, lower: bool, lg: bool) -> f64 {
 
 fn pdisc(d: u8, y: f64, a: f64, b: f64, lower: bool, lg: bool) -> f64 {
     if d == 0u8 { ret pbinom(y, a, b, lower, lg) }
+    if d == 2u8 { ret pnbinom_mu(y, a, b, lower, lg) }
     ret pnbinom(y, a, b, lower, lg)
 }
 
@@ -595,6 +596,39 @@ fn qnbinom(p: f64, size: f64, prob: f64, lower: bool, lg: bool) -> f64 {
     let sigma = math.sqrt[f64](size * pp * qq)
     let gam = (qq + pp) / sigma
     ret q_discrete(1u8, p, size, prob, mu, sigma, gam, lower, lg)
+}
+
+fn qnbinom_mu(p: f64, size: f64, mu: f64, lower: bool, lg: bool) -> f64 {
+    if p != p || size != size || mu != mu { ret p + size + mu }
+    if size == inf() { ret nm.qpois(p, mu, lower, lg) }
+    if mu == 0.0f64 || size == 0.0f64 { ret 0.0f64 }
+    if mu < 0.0f64 || size < 0.0f64 { ret nan() }
+    if lg {
+        if p > 0.0f64 { ret nan() }
+        if p == 0.0f64 {
+            if lower { ret inf() }
+            ret 0.0f64
+        }
+        if p == 0.0f64 - inf() {
+            if lower { ret 0.0f64 }
+            ret inf()
+        }
+    } else {
+        if p < 0.0f64 || p > 1.0f64 { ret nan() }
+        if p == 0.0f64 {
+            if lower { ret 0.0f64 }
+            ret inf()
+        }
+        if p == 1.0f64 {
+            if lower { ret inf() }
+            ret 0.0f64
+        }
+    }
+    let qq = 1.0f64 + mu / size
+    let pp = mu / size
+    let sigma = math.sqrt[f64](size * pp * qq)
+    let gam = (qq + pp) / sigma
+    ret q_discrete(2u8, p, size, mu, mu, sigma, gam, lower, lg)
 }
 
 fn qgeom(p: f64, prob: f64, lower: bool, lg: bool) -> f64 {

@@ -48,6 +48,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     if fam == 7u8 {
         if kind == 0u8 { ret nb.dnbinom_mu(x[2usize], x[3usize], x[4usize], lg) }
+        if kind == 2u8 { ret nb.qnbinom_mu(x[2usize], x[3usize], x[4usize], lower, lg) }
         ret nb.pnbinom_mu(x[2usize], x[3usize], x[4usize], lower, lg)
     }
     if fam == 8u8 { ret nb.qbinom(x[2usize], x[3usize], x[4usize], lower, lg) }

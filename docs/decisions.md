@@ -44412,3 +44412,11 @@ unreferenced.
 R's `walker_ProbSampleReplace` (used only when `replace` and more than 200 of `n * p` exceed 0.1) builds the alias table from the normalised, unsorted `p` (small entries from the front of one array, large from the back), but draws `k = R_unif_index(n)` and then a second `unif_rand()` compared with `q[k]`; there is no `+ i` offset and no single-uniform split. A draw without replacement, or of size 1, takes the cumulative path even past 200 entries. Ties on the cumulative path follow R's `revsort` heap sort, now ported instead of an insertion sort, so the order of equal probabilities matches.
 
 **Result.** `oracle_rdist` equals R on both hosts with 260- and 250-entry probability vectors, tied weights and sizes 1, 2, 3, 10, 40. Still open under L293: `n` past 2^32 and the hash path past 1e7, large-n `rbinom` and `rhyper`, and the `k * k` overflow.
+
+## D6011 — qnbinom with mu searches on pnbinom_mu
+
+**Context.** L288 closed with `qnbinom(p, size, mu = )` missing from `e.math.nmath_beta`.
+
+**Decision.** `qnbinom_mu` is R's: size infinity answers `qpois`, mu or size zero answers 0, and otherwise the shared discrete search starts from the Cornish-Fisher estimate with Q = 1 + mu/size and P = mu/size, evaluating `pnbinom_mu` (search kind 2).
+
+**Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on 1600 more cases on both hosts.
