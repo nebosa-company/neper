@@ -333,3 +333,103 @@ dendextend	297	dendrogram operations: cutree, ladderize, cophenetic, Baker gamma
 jose	298	JOSE and JWT, e.fmt.jwt and x.identity.jose	-	covered	e.fmt.jwt and x.identity.jose		
 ranger	299	fast random forests with its own C++ RNG and survival, quantile and probability forests	ranger, predict	skip	-	~15k	seeded with std::mt19937_64 and library-defined distributions; bit equality is not portable, statistical equivalence is covered by L344
 yulab.utils	300	utilities	-	out-of-scope	-		
+gmp	301	arbitrary-precision integers and rationals (bigz, bigq), modular arithmetic, primality and factorization	as.bigz, gcd, nextprime, factorize, isprime	partial	e.algo.bignum, e.math.ntheory	~8k	verify the bigq rational type and the factorization routines; L379
+lpSolve	302	linear, integer, transportation and assignment programs	lp, lp.assign, lp.transport	partial	e.math.opt, e.math.opt.milp, e.algo.graph.match	~3k	with lpSolveAPI (396); verify the solution values and sensitivity output; L367
+GGally	303	plot matrix helpers	-	out-of-scope	-		
+spatstat.geom	304	point patterns, windows and tessellations: ppp, owin, distances, nearest neighbours	ppp, owin, pairdist, nndist	gap	-	~100k	spatstat family: very large; ask the user before starting; L384
+nortest	305	normality tests: Lilliefors, Cramer-von Mises, Pearson chi-square, Shapiro-Francia, Anderson-Darling	lillie.test, cvm.test, pearson.test, sf.test, ad.test	partial	e.algo.stat.test has shapiro_wilk and anderson_darling	~1k	with moments (326); L355
+xgboost	306	gradient-boosted trees with exact and histogram split finding, objectives, regularization, early stopping and importance	xgb.train, predict, xgb.importance	partial	e.ml.tree has gradient boosting	~100k	deterministic fits (no subsampling) are comparable; L377
+RANN	307	nearest neighbours, e.ml.knn	-	covered	e.ml.knn		
+fastmatch	308	hash matching helper	-	out-of-scope	-		
+bookdown	309	document tooling	-	out-of-scope	-		
+ggiraph	310	htmlwidget	-	out-of-scope	-		
+uwot	311	UMAP with R seeding and supervised and transform modes	umap, umap_transform	partial	e.ml.reduce has umap	~10k	verify against R under set.seed; with Rtsne; L378
+kernlab	312	kernel methods: ksvm (C-svc, nu-svc, eps-svr, one-class, spoc, kbb), kernels, kpca, specc, gausspr, rvm, ipop	ksvm, kpca, specc, gausspr, rvm, ipop	partial	e.ml.svm has smo and kernels	~40k	L366
+Seurat	313	single-cell genomics suite	-	out-of-scope	-		
+spatstat.random	314	simulation of point processes: Poisson, Cox, cluster, Gibbs	rpoispp, rThomas, rMatClust, rmh	covered-by-other-item	-		L384
+Rtsne	315	Barnes-Hut t-SNE	Rtsne	partial	e.ml.reduce has t-SNE	~4k	verify against R under set.seed; L378
+spatstat.explore	316	summary functions K, L, G, F, J, pair correlation, envelopes, kernel intensity	Kest, Lest, Gest, envelope, density.ppp	covered-by-other-item	-		L384
+TMB	317	C++ automatic differentiation and Laplace, see L284	-	covered-by-other-item	-		
+rgl	318	3D graphics device	-	out-of-scope	-		
+pdftools	319	PDF text and rendering, e.fmt.pdf	-	covered	e.fmt.pdf		
+DescTools	320	descriptive and test grab-bag: Gini, many binomial and multinomial intervals, kappa and ICC variants, winsorize, Cochran-Armitage, Breslow-Day, effect sizes, MAD and robust location	Gini, BinomCI, CohenKappa, Winsorize, CochranArmitageTest, BreslowDayTest	partial	e.algo.stat.infer, e.algo.stat.meta	~60k	L363
+pbivnorm	321	bivariate normal distribution function	pbivnorm	covered-by-other-item	-		L356, and L301 mvtnorm covers the general case
+visNetwork	322	htmlwidget	-	out-of-scope	-		
+spatstat.univar	323	univariate kernel density and cumulative distribution helpers	CDF, bw.pcvd	covered-by-other-item	-		L384
+logger	324	logging, e.log	-	covered	e.log		
+labelled	325	labelled vectors, see L304	-	covered-by-other-item	-		
+moments	326	skewness, kurtosis, moment, Jarque-Bera, Anscombe-Glynn and Bonett-Seier tests, D'Agostino	skewness, kurtosis, jarque.test, anscombe.test, agostino.test	gap	-	~1k	L355
+rJava	327	JVM bridge	-	out-of-scope	-		
+fastDummies	328	dummy columns, a few lines	-	out-of-scope	-		
+clue	329	cluster ensembles: partition agreement, consensus, solve_LSAP, cl_dissimilarity	cl_agreement, cl_consensus, solve_LSAP	partial	e.algo.graph.match has the assignment solver	~8k	L367
+ggraph	330	graph plot layers, chart engine	-	out-of-scope	-		
+ks	331	multivariate kernel density with plug-in, cross-validation and smoothed bandwidth matrices, density regions, kernel tests	kde, Hpi, Hlscv, kde.test, ksupp	gap	-	~15k	L365
+slam	332	sparse triplets, see L315	-	covered-by-other-item	-		
+tidygraph	333	tidy wrapper over igraph, see L316	-	covered-by-other-item	-		
+fitdistrplus	334	fit distributions by MLE, MME, QME and MGE, goodness of fit, bootstrap, Cullen-Frey	fitdist, gofstat, bootdist, descdist, fitdistcens	gap	-	~10k	needs the families of L306 and e.math.dist; L362
+RcppThread	335	C++ threading	-	out-of-scope	-		
+spdep	336	spatial weights (poly2nb, knn2nb, dnearneigh), Moran I, Geary C, Getis-Ord, local Moran, join counts, spatial regression (lagsarlm, errorsarlm)	poly2nb, nb2listw, moran.test, localmoran, lagsarlm	gap	-	~30k	L372
+nleqslv	337	systems of nonlinear equations by Newton and Broyden with line search and trust region	nleqslv	gap	e.math.root solves scalar equations	~4k	with rootSolve, maxLik, Rsolnp and bbmle; L360
+segmented	338	piecewise linear regression with estimated breakpoints and Davies and score tests	segmented, davies.test, pscore.test	gap	-	~10k	L361
+quarto	339	document tooling	-	out-of-scope	-		
+stringdist	340	string distances, e.text.distance and e.text.phonetic	-	covered	e.text.distance and e.text.phonetic		
+codetools	341	R code analysis	-	out-of-scope	-		
+glmmTMB	342	generalized linear mixed models with many families, zero inflation and dispersion models by Laplace approximation	glmmTMB, ranef, fixef, predict	gap	-	~30k	very large; relates to L274 and L284; ask the user before starting; L383
+gtsummary	343	report tables	-	out-of-scope	-		
+strucchange	344	structural change: efp, Fstats, breakpoints (Bai-Perron), sctest, gefp, monitoring	efp, Fstats, breakpoints, sctest, mefp	gap	-	~8k	L361
+qpdf	345	PDF rewriting, e.fmt.pdf.write	-	covered	e.fmt.pdf.write		
+metafor	346	meta-analysis: rma with REML, DL, HE, SJ, PM, EB, ML estimators, rma.mv multilevel, escalc effect sizes, trim-and-fill, Egger and Begg tests, leave1out, influence	rma, rma.mv, escalc, trimfill, regtest, leave1out	partial	e.algo.stat.meta	~60k	fixed, DL, and meta-regression exist; L364
+mathjaxr	347	document tooling	-	out-of-scope	-		
+rootSolve	348	steady states, multiroot, uniroot.all, Jacobians and Hessians by finite differences	multiroot, uniroot.all, steady, jacobian.full	gap	e.math.numderiv has derivatives	~10k	L360
+fixest	349	fast fixed-effects estimation: feols, fepois, feglm with multiple high-dimensional fixed effects, IV, clustered and HAC errors, etable	feols, fepois, feglm, vcov, etable	gap	-	~50k	L368
+rpart.plot	350	tree plots	-	out-of-scope	-		
+interp	351	interpolation of irregular data on triangulations: linear, cubic, Akima, bilinear grids	interp, interpp, tri.mesh, voronoi.mosaic	gap	e.algo.geom has triangulation	~12k	L370
+ggnewscale	352	chart engine	-	out-of-scope	-		
+reshape	353	melt and cast, e.algo.pivot	-	covered	e.algo.pivot		
+AER	354	applied econometrics: ivreg, tobit, dispersiontest, coeftest wrappers, data sets	ivreg, tobit, dispersiontest	covered-by-other-item	-		L369
+bbmle	355	mle2 wrapper, profile likelihood intervals, AIC and AICc tables	mle2, profile, AICctab	gap	-	~5k	L360
+rsample	356	resampling splits, folded into L328	-	covered-by-other-item	-		
+Rsolnp	357	nonlinear programming by augmented Lagrangian and SQP (solnp)	solnp	covered-by-other-item	-		L309
+SnowballC	358	stemmers, e.text.stem	-	covered	e.text.stem		
+rlist	359	list helpers	-	out-of-scope	-		
+config	360	configuration files, e.cli.config	-	covered	e.cli.config		
+collapse	361	fast grouped statistics, e.data.table	-	covered	e.data.table		
+latticeExtra	362	graphics	-	out-of-scope	-		
+truncnorm	363	truncated normal density, distribution, quantile, random and moments	dtruncnorm, ptruncnorm, qtruncnorm, rtruncnorm, etruncnorm	gap	-	~1k	with CompQuadForm and pbivnorm; L356
+ade4	364	multivariate analysis of ecological and other data: dudi.pca, dudi.coa, dudi.mix, coinertia, procuste, RLQ, between and within analyses	dudi.pca, coinertia, procuste, rlq, bca	gap	-	~60k	overlaps FactoMineR (L345) and vegan (L349); ask the user before starting; L381
+circlize	365	circular plots	-	out-of-scope	-		
+pcaPP	366	robust PCA by projection pursuit (PCAproj, PCAgrid), fast Kendall tau and L1 median	PCAproj, PCAgrid, cor.fk, l1median	gap	-	~4k	L357
+fields	367	spatial statistics: thin-plate splines (Tps), kriging (Krig, spatialProcess), variograms, covariance functions	Tps, Krig, spatialProcess, vgram	gap	-	~25k	with interp (351); L370
+dbscan	368	DBSCAN, HDBSCAN, OPTICS, local outlier factor, shared nearest neighbours, kNN distance plots data	dbscan, hdbscan, optics, lof, sNN, kNNdist	partial	e.ml.cluster.density has dbscan and optics	~12k	L358
+chron	369	chronological dates, e.time	-	covered	e.time		
+pls	370	partial least squares and principal component regression: kernelpls, widekernelpls, simpls, oscorespls, cppls, cross-validation	plsr, pcr, cppls, crossval, MSEP	partial	e.ml.linear has pls	~6k	verify against pls; L359
+torch	371	deep learning framework, e.gpu.tensor and e.ml.nn	-	covered	e.gpu.tensor and e.ml.nn		
+coin	372	permutation and conditional inference tests: independence_test, exact and approximate wilcox_test with intervals, oneway_test, maxstat; the engine behind rstatix wilcox_effsize	independence_test, wilcox_test, oneway_test, symmetry_test, maxstat_test	gap	-	~25k	also closes the L294 leftovers wilcox_effsize and pairwise_wilcox_test; L371
+combinat	373	combinations and permutations, e.algo.combin	-	covered	e.algo.combin		
+brms	374	Stan front end, see L284	-	covered-by-other-item	-		
+corpcor	375	shrinkage covariance and correlation (Schafer-Strimmer), pseudoinverse, fast SVD, partial correlation	cov.shrink, cor.shrink, pseudoinverse, pcor.shrink	gap	-	~3k	with pcaPP; L357
+pander	376	report rendering	-	out-of-scope	-		
+DiagrammeR	377	diagram rendering, e.fmt.mermaid	-	covered	e.fmt.mermaid		
+shinyWidgets	378	shiny	-	out-of-scope	-		
+CompQuadForm	379	distribution of quadratic forms in normal variables: Davies, Imhof, Farebrother, Liu, Ruben	davies, imhof, farebrother, liu, ruben	gap	-	~3k	L356
+rio	380	file import wrapper over haven, foreign and readr	-	out-of-scope	-		
+survminer	381	plots over survival, see L311	-	covered-by-other-item	-		
+VGAM	382	vector generalized linear and additive models: multinomial, cumulative, zero-inflated, beta-binomial, Tobit and extreme-value families	vglm, vgam, multinomial, cumulative, zipoisson	gap	-	~150k	very large; ask the user before starting; L382
+tidytext	383	tidy tokenization, tf-idf, sentiment lexicons, topic-model tidiers	unnest_tokens, bind_tf_idf, get_sentiments	covered-by-other-item	-		L380
+shinydashboard	384	shiny	-	out-of-scope	-		
+gdata	385	data helpers	-	out-of-scope	-		
+partykit	386	conditional inference trees (ctree), model-based recursive partitioning (mob) and tree infrastructure	ctree, mob, lmtree, glmtree, cforest	gap	-	~50k	needs L371; L375
+mirai	387	async framework	-	out-of-scope	-		
+gam	388	Hastie and Tibshirani generalized additive models by backfitting with loess and smoothing splines	gam, s, lo, step.Gam	gap	-	~8k	mgcv is L353; L376
+stars	389	raster cubes, see L285	-	covered-by-other-item	-		
+RPostgres	390	x.postgresql.libpq	-	out-of-scope	-		
+sfheaders	391	geometry builders, see L320	-	covered-by-other-item	-		
+plm	392	panel data: within, between, random effects and first differences, Hausman and Breusch-Pagan tests, GMM (pgmm), cluster-robust errors	plm, phtest, pgmm, pFtest, vcovHC	gap	-	~40k	with AER (354); L369
+maxLik	393	maximum likelihood with Newton-Raphson, BHHH, BFGS and Nelder-Mead, numerical gradients and standard errors	maxLik, maxBHHH, maxNR	gap	e.math.opt	~6k	L360
+RhpcBLASctl	394	BLAS threading	-	out-of-scope	-		
+rms	395	regression modelling strategies: lrm, ols, cph, orm, validate, calibrate, nomogram, anova and contrast with splines	lrm, ols, cph, validate, calibrate, rcs	gap	-	~50k	needs L305 and L311; L374
+lpSolveAPI	396	incremental model building over lp_solve, sensitivity analysis	make.lp, set.constr.type, solve	covered-by-other-item	-		L367
+bnlearn	397	Bayesian networks: structure learning (hc, tabu, pc.stable, gs, iamb, mmhc), scores, parameter fitting, inference, arc strength	hc, pc.stable, bn.fit, cpquery, arc.strength, score	gap	-	~60k	L373
+adegenet	398	population genetics	-	out-of-scope	-		
+parsnip	399	modelling wrapper	-	out-of-scope	-		
+tm	400	text mining: corpora, term-document matrices, weighting (tf, tf-idf, bin), stopwords and stemming, readers	Corpus, DocumentTermMatrix, weightTfIdf, tm_map	partial	e.text.rank, e.text.index, e.text.stem	~12k	with tidytext (383); L380
