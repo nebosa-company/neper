@@ -131,3 +131,105 @@ shiny	65	web application framework	shinyApp	out-of-scope	-		web
 gridExtra	71	grid layout	grid.arrange	out-of-scope	-		graphics
 tidyverse	68	meta-package	-	skip	-		meta
 BH	81	Boost C++ headers	-	skip	-		reference for L265 (Boost.Math) and L271, not an API
+rprojroot	101	find project root	-	out-of-scope	-		
+lubridate	102	parse_date_time orders, guess_formats, period and duration arithmetic with month-end rules, floor/round/ceiling_date, intervals, with_tz/force_tz, epiweek	ymd_hms, parse_date_time, %m+%, floor_date, int_overlaps	partial	e.time, e.time.parse		L314
+clipr	103	system clipboard	-	out-of-scope	-		
+systemfonts	104	font lookup, covered by e.text.fontset and shape	-	covered	e.text.fontset and shape		
+broom	105	tidy wrapper over model objects	-	out-of-scope	-		
+xtable	106	LaTeX and HTML table export	-	out-of-scope	-		
+DBI	107	interface only, e.db covers	-	covered	e.db covers		
+reshape2	108	melt and dcast	melt, dcast	covered	e.algo.pivot		
+igraph	109	community: walktrap, fast_greedy, infomap, edge_betweenness merges, optimal modularity	cluster_walktrap, cluster_fast_greedy, cluster_infomap	gap	-		louvain, leiden, label propagation and Girvan-Newman exist; L316
+igraph	109	structure: assortativity, transitivity, coreness, dominator tree, motifs and triad census, similarity, eccentricity, bridges, Gomory-Hu	assortativity, transitivity, coreness, dominator_tree, motifs, similarity	partial	e.algo.graph.*		L316; articulation and flow exist
+igraph	109	generators: erdos_renyi, barabasi, watts_strogatz, sbm, configuration, regular; layouts: fr, kk, drl, mds, graphopt	sample_gnp, sample_pa, sample_smallworld, layout_with_kk	gap	-		needs R RNG streams for bit-equal output; L317
+colorspace	110	HCL palettes (sequential_hcl, diverging_hcl, qualitative_hcl, hcl_palettes), polarLUV, contrast ratio, CVD simulation	sequential_hcl, deutan, protan, tritan, contrast_ratio	gap	e.gfx.colorspace, e.gfx.palette		conversions exist; palette generators and CVD do not; L297
+car	111	Anova type II and III, vif, durbinWatsonTest, leveneTest, ncvTest, boxCox, powerTransform, hccm, linearHypothesis, influence measures	Anova, vif, linearHypothesis, boxCox, ncvTest	gap	e.algo.stat.infer has levene only		L300
+plyr	112	split-apply-combine, e.data.table	-	covered	e.data.table		
+distributional	113	distribution objects over e.math.dist	-	covered	e.math.dist		
+lmtest	114	bptest, dwtest, bgtest, resettest, coeftest, waldtest, lrtest, grangertest, jtest, gqtest, harvtest, raintest	bptest, dwtest, resettest, coeftest, grangertest	gap	-		L300
+loo	115	PSIS (generalized Pareto tail fit), loo, waic, loo_compare, stacking and pseudo-BMA weights, E_loo	psis, loo, waic, loo_compare	gap	-		L299
+posterior	116	rhat and rank-normalized split rhat, ess_bulk, ess_tail, mcse, summarise_draws, rank normalization	rhat, ess_bulk, ess_tail, mcse_mean, rank_normalize	gap	e.math.mcmc has samplers only		L299
+Rdpack	117	bibliography glue	-	out-of-scope	-		
+brio	118	file IO	-	out-of-scope	-		
+reformulas	119	formula plumbing for lme4, see L274	-	out-of-scope	-		
+nloptr	120	NLopt: COBYLA, SLSQP, MMA/CCSA, DIRECT, CRS2, ISRES, Subplex, augmented Lagrangian, L-BFGS, truncated Newton	nloptr, cobyla, slsqp, mma, direct, sbplx, auglag	gap	e.math.opt has bfgs, lbfgs, nelder_mead, simplex	~40k	L308 (derivative-free) and L309 (gradient and constrained)
+lazyeval	121	obsolete NSE	-	out-of-scope	-		
+minqa	122	Powell BOBYQA, NEWUOA, UOBYQA	bobyqa, newuoa, uobyqa	gap	-	~6k	lme4 default optimizer; L308
+haven	123	SAS7BDAT and XPORT readers, SPSS sav and zsav, Stata dta read and write, value labels, tagged NA	read_sas, read_xpt, read_sav, read_dta, write_dta, write_sav, write_xpt	gap	-	~25k	L304
+markdown	124	commonmark wrapper, see L283	-	out-of-scope	-		
+crosstalk	125	shiny widget glue	-	out-of-scope	-		
+Formula	126	formula plumbing	-	out-of-scope	-		
+forcats	127	factor helpers, e.data.table	-	covered	e.data.table		
+forecast	128	exact-likelihood ARIMA (Kalman), seasonal ARIMA, auto.arima, ets state space, tbats, BoxCox and Guerrero lambda, Croston, theta, ndiffs and nsdiffs, forecast intervals	Arima, auto.arima, ets, forecast, BoxCox, ndiffs	partial	e.algo.timeseries has holt_winters, stl, arma_css, ar_fit	~30k	L318
+openxlsx	129	xlsx writer, e.fmt.xlsx	-	covered	e.fmt.xlsx		
+mvtnorm	130	multivariate normal and t: pmvnorm and pmvt (Genz-Bretz QMC, Miwa), qmvnorm, qmvt, dmvt, rmvt, dmvnorm, rmvnorm	pmvnorm, qmvnorm, pmvt, dmvt, rmvnorm	gap	-	~5k	needed by L313 multiple-comparison adjustments; L301
+quantreg	131	rq via Barrodale-Roberts simplex, Frisch-Newton (fn, pfn), lasso rq, standard errors (rank, iid, nid, ker, boot), anova.rq, nlrq, rqss	rq, rq.fit.br, rq.fit.fnb, summary.rq, anova.rq	partial	e.ml.linear.quantile_regression	~15k	one pinball fit exists; no simplex, inference or non-crossing; L307
+ggrepel	132	label repulsion, chart engine	-	out-of-scope	-		
+cowplot	133	plot composition, chart engine	-	out-of-scope	-		
+timeDate	134	holiday calendars (NYSE, LONDON, TARGET, Zurich), Easter, business-day arithmetic, financial centers	holidayNYSE, holidayLONDON, isBizday, timeNthNdayInMonth	gap	-	~15k	L314
+quadprog	135	solve.QP, Goldfarb-Idanani dual active set	solve.QP	covered	e.math.opt.convex		
+urca	136	unit root and cointegration tests: ur.df, ur.kpss, ur.pp, ur.ers, ur.za, ur.sp, ca.jo, ca.po with critical-value tables	ur.df, ur.kpss, ur.pp, ca.jo	gap	-	~10k	L303
+dbplyr	137	SQL translation, e.algo.sqlsource	-	covered	e.algo.sqlsource		
+httr2	138	HTTP client, e.net.http and x.identity.oidc	-	covered	e.net.http and x.identity.oidc		
+miniUI	139	shiny	-	out-of-scope	-		
+rvest	140	HTML scraping, e.fmt.html with css and xpath	-	covered	e.fmt.html with css and xpath		
+uuid	141	e.algo.uuid	-	covered	e.algo.uuid		
+future	142	parallel frameworks, e.thread.pool	-	covered	e.thread.pool		
+zip	143	e.fmt.zip	-	covered	e.fmt.zip		
+SparseM	144	sparse CSR matrices, sparse Cholesky, slm	as.matrix.csr, chol, slm	partial	e.algo.linalg.sparse		folded into L315
+DT	145	datatables widget	-	out-of-scope	-		
+patchwork	146	plot composition, chart engine	-	out-of-scope	-		
+e1071	147	fuzzy c-means (cmeans, cshell), rwiener, bclust, lca, skewness and kurtosis types, countpattern, matchClasses, hamming and bootstrap helpers, tune	cmeans, cshell, rwiener, skewness, kurtosis, bclust	partial	e.ml.svm, e.ml.bayes		svm (libsvm) and naiveBayes exist; L296
+remotes	148	package installer	-	out-of-scope	-		
+renv	149	package installer	-	out-of-scope	-		
+png	150	e.fmt.png	-	covered	e.fmt.png		
+parallelly	151	parallel frameworks	-	out-of-scope	-		
+proxy	152	dist and simil with ~50 registered measures (Jaccard, Dice, Kulczynski, Gower, Canberra, Mahalanobis, cosine, Minkowski...)	dist, simil, pr_DB	gap	-	~3k	L296
+foreach	153	parallel frameworks	-	out-of-scope	-		
+Deriv	154	symbolic derivatives, gradient/hessian code generation, simplification	Deriv, Simplify	covered	e.math.sym		
+sandwich	155	HC0-HC5, HAC (Newey-West, Andrews, kernHAC), vcovCL, vcovPL, vcovPC, vcovBS, bread, meat, estfun	vcovHC, vcovHAC, NeweyWest, vcovCL	gap	e.ml.linear.ols		L300
+iterators	156	iteration helpers	-	out-of-scope	-		
+V8	157	JS engine, e.js	-	covered	e.js		
+ggridges	158	chart engine	-	out-of-scope	-		
+sf	159	geometry IO (WKT, WKB, GeoJSON), DE-9IM predicates, buffer, union, intersection, difference, make_valid, voronoi, delaunay, spherical area and distance, CRS transform	st_read, st_buffer, st_intersection, st_union, st_relate, st_transform	gap	e.algo.geom, geom.clip, e.algo.geo	~80k	only convex clip, ear clipping and simplification exist; CRS transform shares L285; L320
+BiocManager	160	package installer	-	out-of-scope	-		
+devtools	161	R dev tooling	-	out-of-scope	-		
+gtools	162	misc helpers, natural sort is e.text.collate	-	covered	e.text.collate		
+Matrix	163	expm, condest, rcond, sparse LU and QR, Cholesky with fill-reducing ordering, Schur, kronecker, band and symmetric classes, norm	expm, condest, lu, qr, Cholesky, Schur	partial	e.algo.linalg.sparse, decomp	~60k	from_triplets, multiply, cholesky, qr, svd, eigen exist; L315
+writexl	164	xlsx writer, e.fmt.xlsx	-	covered	e.fmt.xlsx		
+xts	165	to.period (OHLC), endpoints, period.apply, apply.daily/weekly/monthly, align.time, merge by index, first/last, lag/diff, periodicity	to.period, endpoints, period.apply, align.time	gap	e.algo.stat.zoo has zoo, yearmon, yearqtr	~12k	L298
+bitops	166	bit operations	-	out-of-scope	-		
+coda	167	gelman.diag, geweke.diag, heidel.diag, raftery.diag, autocorr, effectiveSize, HPDinterval, cramer	gelman.diag, geweke.diag, effectiveSize, HPDinterval	gap	-		L299
+psych	168	alpha, omega, fa (minres, ml, pa) with rotations, principal, KMO, Bartlett, polychoric and tetrachoric, ICC, cohen.kappa, fa.parallel, VSS, corr.test, mardia, describe	alpha, omega, fa, principal, KMO, polychoric, ICC, cohen.kappa	partial	e.ml.multivariate has factor_analysis and varimax	~60k	L312
+roxygen2	169	R dev tooling	-	out-of-scope	-		
+future.apply	170	parallel frameworks	-	out-of-scope	-		
+shinyjs	171	shiny	-	out-of-scope	-		
+plotly	172	htmlwidget	-	out-of-scope	-		
+MASS	173	rlm (M estimation), lqs, cov.rob (MCD, MVE), fitdistr, boxcox, kde2d with bw.SJ/ucv/bcv, isoMDS, sammon, mvrnorm, ginv, stepAIC, glm.nb, polr, lda and qda	rlm, lqs, cov.rob, fitdistr, boxcox, kde2d, isoMDS, sammon, stepAIC	partial	e.algo.stat.regression (negbin, ordinal_logistic), e.ml.multivariate (discriminant)	~25k	L306
+rstatix	174	games_howell, dunn_test, pairwise t/wilcox with adjustment, effect sizes (cohens_d, eta_squared, wilcox_effsize, kruskal_effsize), welch anova, friedman, cochran Q, identify_outliers, mahalanobis_distance	games_howell_test, dunn_test, cohens_d, eta_squared, identify_outliers	partial	e.algo.stat.test, infer, meta	~5k	tukey_hsd, cramers_v and cohen_d exist; L294
+ggdist	175	interval summaries are in L299, plots in the chart engine	-	out-of-scope	-		
+XML	176	e.fmt.xml	-	covered	e.fmt.xml		
+janitor	177	data cleaning helpers	-	out-of-scope	-		
+ggpubr	178	ggplot wrapper	-	out-of-scope	-		
+shape	179	plot shapes	-	out-of-scope	-		
+sp	180	superseded by sf, see L320	-	out-of-scope	-		
+rstantools	181	R dev tooling	-	out-of-scope	-		
+glmnet	182	elastic-net path by coordinate descent, cv.glmnet, families gaussian, binomial, poisson, multinomial, mgaussian, cox, relaxed fits, standardization and penalty factors	glmnet, cv.glmnet, coef, predict	partial	e.ml.linear lasso and elastic_net	~30k	single-lambda fits exist; no path, families or cv; L310
+corrplot	183	chart engine	-	out-of-scope	-		
+Hmisc	184	rcorr, rcorr.cens and somers2, binconf, hdquantile, wtd.mean/var/quantile/rank, cut2, rcspline.eval, approxExtrap, describe, varclus, redun, aregImpute	rcorr, rcorr.cens, somers2, binconf, hdquantile, rcspline.eval	partial	e.algo.stat.infer has weighted_quantile	~40k	L305
+usethis	185	R dev tooling	-	out-of-scope	-		
+colourpicker	186	shiny	-	out-of-scope	-		
+bayesplot	187	plots over L299 diagnostics	-	out-of-scope	-		
+units	188	unit parsing, e.math.units	-	covered	e.math.units		
+progressr	189	progress signalling	-	out-of-scope	-		
+dygraphs	190	htmlwidget	-	out-of-scope	-		
+shinythemes	191	shiny	-	out-of-scope	-		
+emmeans	192	ref_grid and estimated marginal means for lm and glm, pairwise and custom contrasts, Tukey, Dunnett and mvt adjustments, joint_tests, emtrends, eff_size	emmeans, pairs, contrast, joint_tests, emtrends	gap	-	~30k	needs L300 and L301; L313
+classInt	193	classIntervals styles: fixed, sd, equal, pretty, quantile, kmeans, hclust, bclust, fisher, jenks, dpih, headtails, maximum	classIntervals, findCols	gap	e.math.scale has pretty breaks only	~3k	L295
+maps	194	map outlines data	-	out-of-scope	-		
+nlme	195	gls with correlation structures (AR1, ARMA, CAR1, compound symmetry, Symm, Gaus, Exp, Spher) and variance functions (varPower, varExp, varIdent, varFixed), lme, nlme, nls self-start models, lmList	gls, lme, nlme, corAR1, varPower	partial	e.algo.stat.mixed	~50k	random-intercept and slope fits exist; L319
+GPArotation	196	gradient projection rotations: oblimin, quartimin, geomin, bentler, infomax, crawford-ferguson, simplimax, varimax, promax, target	GPForth, GPFoblq, oblimin, geominQ	partial	e.ml.multivariate.varimax	~3k	L302
+insight	197	model accessor wrapper	-	out-of-scope	-		
+here	198	path helper	-	out-of-scope	-		
+gh	199	GitHub API client	-	out-of-scope	-		
+survival	200	coxph (Breslow, Efron, exact; strata, offset, time-varying, robust), survfit, survreg (AFT families), survdiff, cox.zph, concordance, survSplit, tmerge, pyears, cluster	coxph, survfit, survreg, survdiff, cox.zph, concordance	partial	e.algo.stat.survival, survival_trial	~40k	L311, read survival_trial first
