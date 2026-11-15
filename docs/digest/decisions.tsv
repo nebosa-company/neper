@@ -3076,4 +3076,5 @@ D6000	1381	guess_parser looks at shapes, not at values, and number refuses a plu
 D6001	1095	the d, p and q functions are ported with R's dpq macros, one family at a time
 D6002	1071	nmath's gamma side is generated from the C tables and compared to R's own gamma
 D6003	1031	qgamma and qpois follow R's iterations step for step
-D6004	1067	toms708 is a line-for-line port with its labels turned into a state variable
+D6004	1068	toms708 is a line-for-line port with its labels turned into a state variable
+D6005	1139	the t, F, geometric and negative binomial functions sit on pbeta, and the discrete quantiles share one search

@@ -44358,3 +44358,11 @@ unreferenced.
 **Decision.** `e.math.toms708.bratio` keeps the C's order of tests and sets an integer `lab` where the C jumps; two straight-line blocks then run the label bodies and the three tail conversions. The subroutines are literal: fpser, apser, bpser, bup, bfrac, bgrat (with its 30-term c and d tables), grat_r, basym (the 20-term a0, b0, c, d tables), brcomp, brcmp1 and the gamma helpers. `bgrat` takes and returns `w` where the C passes a pointer. R's debug `#ifdef` blocks and warnings are left out. The beta and binomial densities in nmath_beta agree with R to about 1e-11 relative (they exponentiate a sum of terms of size up to 1e2, so a last-digit difference in libm's exp shows), so the golden holds them to that and the distribution functions to 1e-13.
 
 **Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on both hosts.
+
+## D6005 — the t, F, geometric and negative binomial functions sit on pbeta, and the discrete quantiles share one search
+
+**Context.** L288. pt, pf, pbinom, pnbinom and pgeom are one call to pbeta (or pgamma, for the infinite-df limits), so with bratio ported they are a few lines each; the quantiles of discrete laws are R's Cornish-Fisher start and a fuzzed search.
+
+**Decision.** `e.math.nmath_beta` carries them: pt with its two-way split on n > x^2 and the large-nx asymptote, dt through bd0 and stirlerr, df through dbinom_raw, pf with the infinite-df limits, dnbinom and dnbinom_mu with the small-x series and the p-fraction, pnbinom through pbeta and pnbinom_mu through bratio directly, dgeom, pgeom and qgeom, and qt with Hill's start, the three df regimes and the two-term Taylor polish (df > 1e20 reads qnorm). `qbinom` and `qnbinom` use the same `q_discrete` and `do_search_disc` as nmath's qpois did, differing only in the binomial's upper bound of n that stops the right search. qbeta and qf wait on qbeta's 650 lines.
+
+**Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on both hosts (1e-13 for p and q, 1e-11 for d).

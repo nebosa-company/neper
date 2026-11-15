@@ -15,6 +15,30 @@ fn answer(c: *const oracle.Case) -> f64 {
     let lower = x[5usize] != 0.0f64
     let lg = x[6usize] != 0.0f64
     if fam == 2u8 { ret nb.lbeta(x[3usize], x[4usize]) }
+    if fam == 5u8 {
+        if kind == 0u8 { ret nb.dgeom(x[2usize], x[3usize], lg) }
+        if kind == 1u8 { ret nb.pgeom(x[2usize], x[3usize], lower, lg) }
+        ret nb.qgeom(x[2usize], x[3usize], lower, lg)
+    }
+    if fam == 6u8 {
+        if kind == 0u8 { ret nb.dnbinom(x[2usize], x[3usize], x[4usize], lg) }
+        if kind == 1u8 { ret nb.pnbinom(x[2usize], x[3usize], x[4usize], lower, lg) }
+        ret nb.qnbinom(x[2usize], x[3usize], x[4usize], lower, lg)
+    }
+    if fam == 7u8 {
+        if kind == 0u8 { ret nb.dnbinom_mu(x[2usize], x[3usize], x[4usize], lg) }
+        ret nb.pnbinom_mu(x[2usize], x[3usize], x[4usize], lower, lg)
+    }
+    if fam == 8u8 { ret nb.qbinom(x[2usize], x[3usize], x[4usize], lower, lg) }
+    if fam == 9u8 { ret nb.qt(x[2usize], x[3usize], lower, lg) }
+    if fam == 3u8 {
+        if kind == 0u8 { ret nb.dt(x[2usize], x[3usize], lg) }
+        ret nb.pt(x[2usize], x[3usize], lower, lg)
+    }
+    if fam == 4u8 {
+        if kind == 0u8 { ret nb.df(x[2usize], x[3usize], x[4usize], lg) }
+        ret nb.pf(x[2usize], x[3usize], x[4usize], lower, lg)
+    }
     if fam == 0u8 {
         if kind == 0u8 { ret nb.dbeta(x[2usize], x[3usize], x[4usize], lg) }
         ret nb.pbeta(x[2usize], x[3usize], x[4usize], lower, lg)
