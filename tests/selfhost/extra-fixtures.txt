@@ -151,3 +151,4 @@ oracle_decomp
 oracle_sparse
 oracle_xls
 oracle_dist
+oracle_nmath
