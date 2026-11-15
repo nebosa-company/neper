@@ -44413,7 +44413,7 @@ R's `walker_ProbSampleReplace` (used only when `replace` and more than 200 of `n
 
 **Result.** `oracle_rdist` equals R on both hosts with 260- and 250-entry probability vectors, tied weights and sizes 1, 2, 3, 10, 40. Still open under L293: `n` past 2^32 and the hash path past 1e7, large-n `rbinom` and `rhyper`, and the `k * k` overflow.
 
-## D6011 — qnbinom with mu searches on pnbinom_mu
+## D6012 — qnbinom with mu searches on pnbinom_mu
 
 **Context.** L288 closed with `qnbinom(p, size, mu = )` missing from `e.math.nmath_beta`.
 
