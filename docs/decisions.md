@@ -44317,4 +44317,4 @@ unreferenced.
 
 **Decision.** With 0.2, 0.3 and 0.5 the second quotient is 0.3 over the long double 1 - 0.2, which rounds to exactly 0.375, so n * p is 30 and rbinom takes the BTPE branch; dividing by the rounded double 0.8 gives 0.37499999999999994 and the inverse branch, and the draws diverge from the first uneven count. `rmultinom` therefore keeps the total as a (hi, lo) pair, subtracts with a two-sum, and divides with one correction step whose residual is exact (Dekker's two-product): the quotient is correctly rounded, which equals R's double rounding through 64 bits except when the 64-bit result lands on a tie. `sample_prob` sorts the probabilities descending with a stable insertion sort where R's `revsort` is a heap sort, so equal probabilities may come out in another order; the golden has none. rhyper reads its three parameters as ints as R does and refuses N past INT_MAX.
 
-**Result.** Fixture `oracle_rdist`: 12056 cases equal R 4.6.1 on both hosts.
+**Result.** Fixture `oracle_rdist`: 7489 cases equal R 4.6.1 on both hosts.
