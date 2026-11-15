@@ -9370,6 +9370,7 @@ grep -q '"passed":4,"failed":0' "$test_build/vulkan-buffer-test.jsonl"
 gpu_workgroup_status=0
 $test_build/neper-self test-file "$repo/lib/e/gpu.e" "$repo" x64 linux "$test_build" --json > "$test_build/gpu-workgroup-test.jsonl" || gpu_workgroup_status=$?
 [ "$gpu_workgroup_status" -eq 0 ]
+tail -c 3000 "$test_build/gpu-workgroup-test.jsonl" >&2; ls -la "$test_build/gpu-workgroup-test.jsonl" >&2
 grep -q '"name":"workgroup_dimensions_do_not_wrap".*"outcome":"passed"' "$test_build/gpu-workgroup-test.jsonl"
 grep -q '"failed":0,' "$test_build/gpu-workgroup-test.jsonl"
 test_actual="$test_build/conformance-tools-test.jsonl"
