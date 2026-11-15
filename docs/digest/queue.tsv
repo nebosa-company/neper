@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-L269	library	0	411	Axis breaks, transforms and rescaling (labeling, scales)	Open.
 L268	library	0	365	Colour spaces and delta-E (farver)	Open.
 L279	library	0	353	Row and column statistic kernels (matrixStats)	Open.
 L280	library	0	314	data.table algorithms: rolling, overlap joins, run ids	Open.
