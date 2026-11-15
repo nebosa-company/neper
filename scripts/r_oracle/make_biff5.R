@@ -90,4 +90,53 @@ set.seed(1)
 big <- data.frame(t = rep(text, length.out = 150), n = round(rnorm(150), 6))
 writeBin(cfb(biff5(list(Sheet1 = mk(small), `Café data` = mk(small[1:3, ])))), file.path(out, "biff5_mini.xls"))
 writeBin(cfb(biff5(list(Numbers = mk(big), Second = mk(small)))), file.path(out, "biff5.xls"))
-cat("wrote", file.path(out, c("biff5_mini.xls", "biff5.xls")), "\n")
+# --- BIFF8 with a shared string table split across CONTINUE records at a small size, rich-text runs and phonetic text.
+# A string is list(t, runs, phon): its text, the number of rich-text runs and the bytes of phonetic data.
+sst_records <- function(strs, maxlen) {
+  recs <- list(); cur <- raw(0); first <- TRUE
+  flush <- function() { recs[[length(recs) + 1]] <<- list(id = if (first) 0xfc else 0x3c, d = cur); first <<- FALSE; cur <<- raw(0) }
+  room <- function(n) length(cur) + n <= maxlen
+  put <- function(b) cur <<- c(cur, b)
+  cur <- c(u32(length(strs)), u32(length(strs)))
+  for (s in strs) {
+    u <- utf8ToInt(s$t)
+    high <- any(u > 255)
+    units <- integer(0)
+    for (cp in u) units <- c(units, if (cp >= 65536) c(0xd800 + (cp - 65536) %/% 1024, 0xdc00 + (cp - 65536) %% 1024) else cp)
+    flags <- (if (high) 1 else 0) + (if (s$phon > 0) 4 else 0) + (if (s$runs > 0) 8 else 0)
+    hdr <- c(u16(length(units)), as.raw(flags), if (s$runs > 0) u16(s$runs), if (s$phon > 0) u32(s$phon))
+    if (!room(length(hdr) + 1 + (if (high) 1 else 0))) flush()
+    put(hdr)
+    w <- if (high) 2 else 1
+    for (k in seq_along(units)) {
+      if (!room(w)) { flush(); put(as.raw(if (high) 1 else 0)) }
+      put(if (high) u16(units[k]) else as.raw(units[k]))
+    }
+    if (s$runs > 0 && !room(s$runs * 4)) flush() # libxls drops a string whose run data is split across CONTINUE records
+    tl <- c(if (s$runs > 0) unlist(lapply(seq_len(s$runs), function(i) c(u16(i), u16(0)))), if (s$phon > 0) as.raw(seq_len(s$phon) %% 256))
+    for (b in tl) { if (!room(1)) flush(); put(b) }
+  }
+  flush()
+  unlist(lapply(recs, function(r) rec(r$id, r$d)))
+}
+biff8 <- function(strs, nrows, maxlen) {
+  sst <- sst_records(strs, maxlen)
+  cells <- raw(0)
+  for (r in seq_len(nrows)) cells <- c(cells, rec(0xfd, u16(r - 1), u16(0), u16(0), u32((r - 1) %% length(strs))), number(r - 1, 1, r))
+  sheet <- c(rec(0x809, u16(0x600), u16(0x10), u16(0x1234), u16(0x07cc), u32(0), u32(6)),
+             rec(0x200, u32(0), u32(nrows), u16(0), u16(2), u16(0)), cells, rec(0x0a))
+  xf <- rec(0xe0, u16(0), u16(0), u16(0xfff5), raw(14))
+  bs_len <- 4 + 4 + 2 + 1 + 1 + nchar("Strings")
+  head1 <- c(rec(0x809, u16(0x600), u16(0x05), u16(0x1234), u16(0x07cc), u32(0), u32(6)), rec(0x42, u16(1200)), rec(0x22, u16(0)), xf)
+  glen <- length(head1) + bs_len + length(sst) + 4
+  c(head1, rec(0x85, u32(glen), u16(0), as.raw(nchar("Strings")), as.raw(0), charToRaw("Strings")), sst, rec(0x0a), sheet)
+}
+set.seed(2)
+pick <- c("plain ascii", "café crème", "日本語のテキスト", "emoji \U0001F600 pair", "€ 1,5", "a", "mixed üñîçødé")
+strs <- lapply(1:260, function(i) {
+  t <- paste0(pick[(i %% length(pick)) + 1], " ", paste(rep(letters, length.out = sample(1:130, 1)), collapse = ""))
+  if (i %% 17 == 0) t <- strrep(t, 3)
+  list(t = t, runs = if (i %% 5 == 0) (i %% 4) + 1 else 0, phon = if (i %% 7 == 0) 8 + i %% 5 else 0)
+})
+writeBin(cfb(biff8(strs, 260, 120), "Workbook"), file.path(out, "biff8_sst_continue.xls"))
+cat("wrote", file.path(out, c("biff5_mini.xls", "biff5.xls", "biff8_sst_continue.xls")), "\n")

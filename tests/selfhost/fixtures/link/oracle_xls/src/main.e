@@ -77,10 +77,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/xls.json")
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
-    let (books, be) = mem.alloc[xls.Workbook](a, 7usize)
+    let (books, be) = mem.alloc[xls.Workbook](a, 8usize)
     if be != ok { os.exit(5) }
     var f = 0usize
-    while f < 7usize {
+    while f < 8usize {
         var name = "clippy"
         if f == 1usize { name = "datasets" }
         if f == 2usize { name = "deaths" }
@@ -88,6 +88,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if f == 4usize { name = "type-me" }
         if f == 5usize { name = "biff5" }
         if f == 6usize { name = "biff5_mini" }
+        if f == 7usize { name = "biff8_sst_continue" }
         let (path_b, pe) = str.builder(a, 64usize)
         if pe != ok { os.exit(5) }
         var pb = path_b

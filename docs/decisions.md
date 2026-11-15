@@ -44428,3 +44428,11 @@ R's `walker_ProbSampleReplace` (used only when `replace` and more than 200 of `n
 **Decision.** The first BOF's version picks the string reader: below 0x0600 the BOUNDSHEET name, FORMAT string, LABEL and the STRING behind a formula are ANSI bytes, Windows-1252 unless a CODEPAGE record says another page (then Latin-1). A FILEPASS record in the globals returns `Encrypted` for XOR and RC4 alike. A hidden or very hidden sheet is listed with its state, as readxl lists it. The BIFF5 workbooks come from `scripts/r_oracle/make_biff5.R` (a compound-file writer, one in the mini stream and one in a regular chain; an empty LABEL is left out because libxls crashes on it), and the hidden and encrypted cases are byte patches of datasets.xls that the fixture applies as the generator does. readxl is read with `trim_ws = FALSE` so padded text is compared as stored.
 
 **Result.** Fixture `oracle_xls` equals readxl on 13260 cases on both hosts. Open in L292: a generated corpus that stresses the SST CONTINUE boundary and DIFAT chains, and rich-text and phonetic strings.
+
+## D6014 — the string-table corpus is written by R and kept out of rich-text run data
+
+**Context.** L292. The SST reader joins the table's CONTINUE records and restates the width flag at a boundary inside characters.
+
+**Decision.** `make_biff5.R` writes `biff8_sst_continue.xls`, 260 strings in 120-byte records: ASCII, Latin-1, CJK and a surrogate pair, rich-text runs and phonetic data, with records split inside characters. A CONTINUE boundary inside rich-text run data is not generated, because libxls then drops the string (readxl fails with "construction from null"); the run data of a string starts a new record when it does not fit. A DIFAT chain needs a FAT past 109 sectors, a stream over 7 MB, and stays untested.
+
+**Result.** Fixture `oracle_xls` equals readxl on 14302 cases on both hosts.

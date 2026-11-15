@@ -3085,4 +3085,5 @@ D6009	875	a locale is one names string, and readr has no full weekday name
 D6010	958	a readr row wider than the header folds into its last column
 D6011	976	sample with prob and replacement: Walker's alias draws an unbiased index, then compares a second uniform
 D6012	488	qnbinom with mu searches on pnbinom_mu
-D6013	1231	BIFF5 reads through ANSI strings, an encrypted workbook is refused by name
+D6013	1232	BIFF5 reads through ANSI strings, an encrypted workbook is refused by name
+D6014	805	the string-table corpus is written by R and kept out of rich-text run data
