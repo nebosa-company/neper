@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L268",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 522,
-      "title": "Colour spaces and delta-E (farver)",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open. Needs L264. e.gfx.cssvalue has rgb, hsl and oklab only. Acceptance: convert_colour among rgb, hsl, hsv, cmy, cmyk, xyz, yxy, lab, hunterlab, luv, lch, hcl, oklab, oklch with white points and gamut handling matches farver within 1e-9; compare_colour cie76, cie94, cie2000, cmc match; encode_colour and decode_colour round-trip named and hex colours equal to R."
-    },
-    {
       "id": "L279",
       "category": "library",
       "group": "CRAN parity",

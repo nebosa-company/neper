@@ -44230,3 +44230,11 @@ unreferenced.
 **Decision.** `e.math.scale` carries `seq_by` (n = floor((to - from) / by + 1e-10) steps, clamped at `to`) and `seq_len_out` (`seq.int`: the end points exact, the rest from + i by) and every labeller ends in them. `extended` keeps labeling's loop shape (the `break` out of j, k and z by the best-score bound) and R's `%%`. `pretty` is `R_pretty` with `return_bounds`, then `seq.int` and the zap of values under 1e-14 of the step. `breaks_log` and `log_sub_breaks` port the relevant-break counting and the candidate search. Powers of ten are the correctly rounded decimal (`ten_to`), `log(x, base)` is `log10`, `log2` or a quotient as R picks it, and `e.math` has no `log1p`, `expm1`, `sinh`, `cosh`, `tanh`, `asinh` or `atanh`, so the module holds Kahan-form versions good to a few ulps. A function cannot return a pointer-indexed array element or share a local with a module function's name, so those are slices and `cover`.
 
 **Result.** Fixture `oracle_scale`: 10104 cases equal labeling 0.4.3 and scales 1.4.0 at 1e-12 on both hosts.
+
+## D5989 — colour conversion goes through sRGB under two white points, with C++ min and max
+
+**Context.** L268. farver's answers include its quirks: both ends are capped, the white point is a global set before each half, and the second colour of a comparison is read in the first's space.
+
+**Decision.** `e.gfx.colorspace.convert` is `from_rgb(to, to_rgb(from, cap(from, v), white_from), white_to)` then `cap(to, ..)`, as farver's driver does; `to_rgb` and `from_rgb` are its converters formula for formula (0.008856 and 7.787 for Lab, the 0.001 floors in Luv and HSV, cbrt through one Newton step on `pow`). `compare` reads both colours in one space, the first under `white_from` and the second under `white_to`, and takes the distance under `white_to`, which is farver's order. `min_of` and `max_of` are `std::min` and `std::max`, which return the first argument when a NaN is involved: that is why a NaN sRGB converts to 0 channels in HSL, CMYK and XYZ and to NaN in others, as farver's does. The one case left out of the golden is the yxy colour with y2 = 0, where farver reads an uninitialised hue.
+
+**Result.** Fixture `oracle_colour`: 14298 cases equal farver 2.1.2 at 1e-9 on both hosts.

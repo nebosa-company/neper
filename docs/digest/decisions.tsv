@@ -3060,4 +3060,5 @@ D5984	1320	numDeriv's derivatives take callbacks over borrowed context, and keep
 D5985	1474	prettyunits and abind reproduce R's text and array rules, not their intent
 D5986	1350	cli's ANSI operations carry cli's own Unicode tables
 D5987	1364	scales' labels are number() plus R's format(), not a printf
-D5988	1242	axis breaks are ported with R's own sequence rules
+D5988	1243	axis breaks are ported with R's own sequence rules
+D5989	1198	colour conversion goes through sRGB under two white points, with C++ min and max
