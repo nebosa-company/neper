@@ -22,13 +22,18 @@ num <- function(x) {
   if (is.infinite(x)) return(if (x > 0) '"Inf"' else '"-Inf"')
   sprintf("%.17g", x)
 }
-str <- function(s) paste0('"', gsub('"', '\\\\"', gsub("\\\\", "\\\\\\\\", s)), '"')
+str <- function(s) {
+  s <- gsub("\\\\", "\\\\\\\\", s)
+  s <- gsub('"', '\\\\"', s)
+  for (i in 1:31) s <- gsub(intToUtf8(i), sprintf("\\u%04x", i), s, fixed = TRUE)
+  paste0('"', s, '"')
+}
 
 # One check: `fn` names the Neper function the fixture dispatches on, `args` are its
 # arguments, `want` is R's answer. `rel` and `abs` are the tolerance the comparison allows
 # (either one is enough); both zero means exact.
-case <- function(fn, args, want, rel = 1e-12, abs = 0) {
-  list(fn = fn, args = as.numeric(args), want = if (is.character(want)) want else as.numeric(want), rel = rel, abs = abs)
+case <- function(fn, args, want, rel = 1e-12, abs = 0, input = NULL) {
+  list(fn = fn, args = as.numeric(args), want = if (is.character(want)) want else as.numeric(want), rel = rel, abs = abs, input = input)
 }
 
 # `f` over every row of a grid of arguments, one case per row.
@@ -48,7 +53,8 @@ emit <- function(name, packages = character(), cases) {
                  ',"packages":{', if (length(pkgs)) paste(sprintf("%s:%s", str(names(pkgs)), str(pkgs)), collapse = ","), '}}')
   body <- vapply(cases, function(c) {
     if (is.character(c$want))
-      return(sprintf('{"fn":%s,"args":[%s],"text":%s}', str(c$fn), paste(vapply(c$args, num, ""), collapse = ","), str(c$want)))
+      return(sprintf('{"fn":%s,"args":[%s]%s,"text":%s}', str(c$fn), paste(vapply(c$args, num, ""), collapse = ","),
+                     if (is.null(c$input)) "" else sprintf(',"in":[%s]', paste(vapply(c$input, str, ""), collapse = ",")), str(c$want)))
     sprintf('{"fn":%s,"args":[%s],"want":%s,"rel":%s,"abs":%s}', str(c$fn),
             paste(vapply(c$args, num, ""), collapse = ","), num(c$want), num(c$rel), num(c$abs))
   }, "")

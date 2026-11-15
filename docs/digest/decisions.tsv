@@ -3057,4 +3057,5 @@ D5981	1192	`e.algo.rand.r` reproduces R's streams; `e.math.special` follows R at
 D5982	1223	digest's hashes are one-shot modules; a golden may carry text
 D5983	1072	R's palettes are the ramp, not a table of every output
 D5984	1320	numDeriv's derivatives take callbacks over borrowed context, and keep its quirks
-D5985	1473	prettyunits and abind reproduce R's text and array rules, not their intent
+D5985	1474	prettyunits and abind reproduce R's text and array rules, not their intent
+D5986	1349	cli's ANSI operations carry cli's own Unicode tables

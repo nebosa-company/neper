@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-L272	library	0	253	ANSI-aware string operations (cli)	Open.
 L270	library	0	245	Label formatters (scales)	Open.
 L269	library	0	411	Axis breaks, transforms and rescaling (labeling, scales)	Open.
 L268	library	0	365	Colour spaces and delta-E (farver)	Open.
@@ -8,6 +7,7 @@ L280	library	0	314	data.table algorithms: rolling, overlap joins, run ids	Open.
 L281	library	0	402	Delimited parsing, type guessing and locale parsers (readr, vroom)	Open.
 L283	library	0	370	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	Open.
 L287	library	0	402	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)	Open.
+L289	library	0	541	ANSI-aware wrap, split and trim (cli), on R's strwrap	Open;
 L278	library	0	376	Irregular time series toolkit (zoo)	Open.
 L271	library	0	258	Isolines and isobands (isoband)	Open.
 L265	library	0.4	785	R-compatible random streams: runif, rnorm, rexp, sample landed; rgamma, rbeta, rbinom, rpois, rt, rchisq remain	Partial (D5981).

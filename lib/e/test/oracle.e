@@ -12,7 +12,7 @@ use e.fs
 use e.mem
 use e.str
 
-type Case = struct { name: str, args: []f64, want: f64, rel: f64, abs: f64, text: str }
+type Case = struct { name: str, args: []f64, want: f64, rel: f64, abs: f64, text: str, inputs: []str }
 
 type Golden = struct { group: str, r: str, cases: []Case }
 
@@ -76,6 +76,21 @@ fn load_case(a: *mem.Arena, v: json.Value) -> (Case, err) {
         if e != ok { ret (c, e) }
         args[at] = x
         at += 1usize
+    }
+    let (in_value, has_in) = json.member_of(members, "in")
+    if has_in {
+        let (strings, is_list) = json.array_of(in_value)
+        if !is_list { ret (c, Malformed) }
+        let (kept, kept_error) = mem.alloc[str](a, strings.len)
+        if kept_error != ok { ret (c, kept_error) }
+        var k = 0usize
+        while k < strings.len {
+            let (one, one_is_string) = json.string_of(strings[k])
+            if !one_is_string { ret (c, Malformed) }
+            kept[k] = one
+            k += 1usize
+        }
+        c.inputs = kept
     }
     let (text_value, has_text) = json.member_of(members, "text")
     if has_text {
