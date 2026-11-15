@@ -3469,17 +3469,6 @@
       "evidence": "Opened from the 2026-11-12 compiler review. Acceptance: a decision row in docs/decisions.md with the width-axis design and a cost estimate; L228's score and text re-checked against lib/e/os.wasi.e. No code. Notes: docs/compiler-hardening-plan.md."
     },
     {
-      "id": "L264",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 515,
-      "title": "R oracle harness: golden generator, tolerance policy, fixture reader",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open; foundation for L265-L276 (gaps in docs/cran-gaps.tsv, source: top-50 CRAN packages by last-month downloads, 2026-11-14). R 4.6.2 is installed at D:\\tools\\R. Acceptance: scripts/r_oracle/ holds one R script per function group that writes seeded cases plus edge cases (NA, ties, empty, extreme values) to JSON goldens carrying R and package versions; a Neper helper reads a golden and compares with a per-function tolerance (about 1e-12 relative closed form, looser iterative, exact for integer/string/date); one example fixture passes on both hosts and fails when a golden value is perturbed; goldens are committed so the suites never need R; regeneration is a single command."
-    },
-    {
       "id": "L265",
       "category": "library",
       "group": "CRAN parity",
@@ -3488,7 +3477,7 @@
       "score": 0,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open. Needs L264. e.math.special has only normal_cdf, t_cdf, chi_squared_cdf, f_cdf and incomplete gamma/beta; no density, quantile or random generator matches R. Acceptance: Mersenne-Twister with R set.seed scrambling, sample() (rejection sampling), runif, rnorm (inversion), rexp, rgamma, rbeta, rbinom, rpois, rt, rchisq reproduce R streams value for value; d/p/q for norm, t, chisq, F, gamma, beta, binom, pois, nbinom, geom, hyper, weibull, lnorm, logis, cauchy, unif, exp (lower.tail and log.p) match R within 1e-13 relative; goldens from R."
+      "evidence": "Open. L264 landed (D5980). e.math.special has only normal_cdf, t_cdf, chi_squared_cdf, f_cdf and incomplete gamma/beta; no density, quantile or random generator matches R. The oracle already found five disagreements, left out of tests/oracle/special.json until fixed: qnorm at 0 and 1 answers NaN (R: -Inf, Inf) and is 8e-11 off from 1 - 1e-8; lgamma and gamma answer NaN at 0 and at negative non-integers; choose answers 0 for negative or fractional n. Put those cases back into scripts/r_oracle/groups/special.R when fixing. Acceptance:Mersenne-Twister with R set.seed scrambling, sample() (rejection sampling), runif, rnorm (inversion), rexp, rgamma, rbeta, rbinom, rpois, rt, rchisq reproduce R streams value for value; d/p/q for norm, t, chisq, F, gamma, beta, binom, pois, nbinom, geom, hyper, weibull, lnorm, logis, cauchy, unif, exp (lower.tail and log.p) match R within 1e-13 relative; goldens from R."
     },
     {
       "id": "L266",

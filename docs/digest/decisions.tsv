@@ -3051,4 +3051,5 @@ D5975	1264	Two scans in lowering answered from what is already held
 D5976	1528	An `emit-em-all` directory is checked by CRC-32C, not SHA-256
 D5977	2159	Compiler coverage is src line coverage read from callgrind and the DWARF line table
 D5978	1223	`check --unused-imports` reports a `use` nothing names, as a compiler flag
-D5979	1380	`check --unused-code` nominates declarations no identifier names
+D5979	1381	`check --unused-code` nominates declarations no identifier names
+D5980	1556	R is the oracle through committed goldens, compared by `e.test.oracle`

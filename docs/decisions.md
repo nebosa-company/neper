@@ -44158,3 +44158,11 @@ unreferenced.
 **Given up.** Textual and one-sided: a local, field or other module's declaration of the same name, or a hash collision, counts as naming it, so some dead code is missed and none is invented; a declaration named only by other dead code is reported one level at a time. Enum members, struct fields and locals are not nominated.
 
 **Result.** Fixture `check/unused_code` in both suites. Over `src/main.e` it names 17 declarations, each with one mention in `src` and `lib`.
+
+## D5980 — R is the oracle through committed goldens, compared by `e.test.oracle`
+
+**Context.** The CRAN-parity items (L265-L287) are accepted by agreement with R. A suite that ran R would need R on every host and would break whenever R changed.
+
+**Decision.** `Rscript scripts/r_oracle/generate.R [group]` runs each `scripts/r_oracle/groups/<group>.R` over seeded inputs and writes `tests/oracle/<group>.json`: the R version, the package versions, and cases `{fn, args, want, rel, abs}`. Numbers carry 17 significant digits; NA, NaN, Inf and -Inf are strings, and NA and NaN are one value on the Neper side. A case agrees when the answer is within `abs` of R's or within `rel` of the larger magnitude, exact when both are zero; NaN agrees only with NaN and an infinity only with the same infinity. The goldens are committed, so no suite runs R; regenerating is one command. `e.test.oracle` (`load`, `agrees`, `describe`) reads and judges; the fixture owns the dispatch from `Case.name` to the Neper function and prints each disagreement. Cases a function is not yet meant to answer stay out of the golden and go in the queue item that will, so a fixture is green or it is wrong.
+
+**Result.** Fixture `oracle_special` (extra-fixtures.txt) checks `e.math.special` on 523 cases on both hosts, and fails when a golden value is perturbed. It found five gaps now carried by L265: `qnorm` at 0 and 1 answers NaN and is 8e-11 off from 1 - 1e-8; `lgamma` and `gamma` answer NaN at 0 and at negative non-integers; `choose` answers 0 for negative or fractional n.

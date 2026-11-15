@@ -314,3 +314,26 @@ L259	library	0	165	Split the other large UI files	Opened from the 2026-11-13 lib
 L263	library	0	225	The catalogue is generated, not synced	Opened from the 2026-11-13 library review.
 T089	tooling	0	259	Many errors per function, no cascades	Opened from the 2026-11-12 compiler review.
 C330	compiler	0	246	Width axis for 32-bit targets	Opened from the 2026-11-12 compiler review.
+L265	library	0	910	R-compatible random streams and d/p/q/r distributions	Open.
+L266	library	0	258	e.algo.hash: xxhash32, xxh3_64/128, spookyhash, jenkins one-at-a-time	Open.
+L267	library	0	259	Palette tables: viridisLite and RColorBrewer	Open.
+L268	library	0	365	Colour spaces and delta-E (farver)	Open.
+L269	library	0	411	Axis breaks, transforms and rescaling (labeling, scales)	Open.
+L270	library	0	245	Label formatters (scales)	Open.
+L271	library	0	258	Isolines and isobands (isoband)	Open.
+L272	library	0	253	ANSI-aware string operations (cli)	Open.
+L273	library	0	438	Dense and sparse linear algebra completions (RcppEigen, base R)	Open.
+L274	library	0	381	General linear mixed models (lme4)	Open.
+L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
+L276	library	0	307	Sass/SCSS compiler (sass, libsass)	Open;
+L277	library	0	277	Numerical derivatives (numDeriv)	Open.
+L278	library	0	376	Irregular time series toolkit (zoo)	Open.
+L279	library	0	353	Row and column statistic kernels (matrixStats)	Open.
+L280	library	0	314	data.table algorithms: rolling, overlap joins, run ids	Open.
+L281	library	0	402	Delimited parsing, type guessing and locale parsers (readr, vroom)	Open.
+L282	library	0	309	Legacy .xls (BIFF) reader (readxl)	Open.
+L283	library	0	370	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	Open.
+L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
+L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
+L286	library	0	287	Pretty units and n-d array bind (prettyunits, abind)	Open.
+L287	library	0	402	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)	Open.
