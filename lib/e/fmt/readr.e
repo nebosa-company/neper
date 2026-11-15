@@ -751,11 +751,64 @@ fn read_delim(a: *mem.Arena, text: str, delim: u8, quote: u8, comment: u8, escap
         var quoted = false
         var lit = false
         var end_of_row = false
+        var rest_mode = false
+        var rest_cut = false
         if !at_end {
             if trim_ws {
                 while i < text.len && (text[i] == 32u8 || text[i] == 9u8) && text[i] != delim { i += 1usize }
             }
-            if quote != 0u8 && i < text.len && text[i] == quote {
+            var extra = false
+            if nr > 0usize && row_fields + 1usize == counts[0usize] {
+                var j = i
+                var jq = false
+                while j < text.len {
+                    let c = text[j]
+                    if !jq && (c == 10u8 || c == 13u8) { break }
+                    if !jq && comment != 0u8 && c == comment { break }
+                    if escape_backslash && c == 92u8 {
+                        j += 2usize
+                    } else if quote != 0u8 && c == quote {
+                        jq = !jq
+                        j += 1usize
+                    } else if !jq && c == delim {
+                        extra = true
+                        break
+                    } else { j += 1usize }
+                }
+            }
+            if extra {
+                // readr's last column takes the rest of the row, unquoted, delimiters kept.
+                var in_quote = false
+                var cut = false
+                while i < text.len {
+                    let c = text[i]
+                    if !in_quote && (c == 10u8 || c == 13u8) { break }
+                    if !in_quote && comment != 0u8 && c == comment {
+                        cut = true
+                        while i < text.len && text[i] != 10u8 && text[i] != 13u8 { i += 1usize }
+                        break
+                    }
+                    if escape_backslash && c == 92u8 && i + 1usize < text.len {
+                        let _ = str.push_byte(&b, text[i + 1usize])
+                        i += 2usize
+                    } else if quote != 0u8 && c == quote {
+                        if escape_double && i + 1usize < text.len && text[i + 1usize] == quote {
+                            let _ = str.push_byte(&b, quote)
+                            i += 2usize
+                        } else {
+                            in_quote = !in_quote
+                            quoted = true
+                            i += 1usize
+                        }
+                    } else {
+                        let _ = str.push_byte(&b, c)
+                        i += 1usize
+                    }
+                }
+                rest_mode = true
+                rest_cut = cut
+            }
+            if !rest_mode && quote != 0u8 && i < text.len && text[i] == quote {
                 quoted = true
                 i += 1usize
                 while i < text.len {
@@ -782,7 +835,7 @@ fn read_delim(a: *mem.Arena, text: str, delim: u8, quote: u8, comment: u8, escap
                     }
                 }
             }
-            while i < text.len {
+            while !rest_mode && i < text.len {
                 let c = text[i]
                 if c == delim || c == 10u8 || c == 13u8 { break }
                 if comment != 0u8 && c == comment {
@@ -800,7 +853,13 @@ fn read_delim(a: *mem.Arena, text: str, delim: u8, quote: u8, comment: u8, escap
         }
         var field = str.done(&b)
         if lit && field.len > 0usize && field[field.len - 1usize] == quote { field = field[0usize..field.len - 1usize] }
-        if trim_ws { field = trim(field) }
+        if trim_ws && rest_cut {
+            var s0 = 0usize
+            while s0 < field.len && (field[s0] == 32u8 || field[s0] == 9u8) { s0 += 1usize }
+            field = field[s0..field.len]
+        } else if trim_ws {
+            field = trim(field)
+        }
         // what ended the field
         var ender = 0u8
         if i < text.len { ender = text[i] }

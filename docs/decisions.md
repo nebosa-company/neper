@@ -44398,3 +44398,11 @@ unreferenced.
 **Decision.** `parse_date_in`, `parse_time_in` and `parse_datetime_in` take the names as one string, `months;abbreviated months;days;abbreviated days;am|pm`, items separated by `|` and groups by `;`, which the fixture builds from `date_names_lang`; the empty string is English, so the old three functions are the same calls. `%B` and `%b` read the locale's months, `%a` the abbreviated weekday (consumed, not used) and `%p` its am and pm. `%A` is not a weekday in readr: R refuses it unless a D or T follows ("Invalid %A auto parser"), so it stays the auto parser only.
 
 **Result.** Fixture `oracle_readr` equals readr 2.2.0 on 6208 cases on both hosts, ten languages included.
+
+## D6010 — a readr row wider than the header folds into its last column
+
+**Context.** L290. `read_delim` answered every row at its own width, and the reference fixture skipped inputs where readr pads, folds or leaves a one-column header unsplit.
+
+**Decision.** Once the first row has fixed the width, a row that still has a delimiter outside quotes when it reaches the last column keeps the rest of the row as that column: quotes removed and doubled quotes collapsed, backslash escapes applied, delimiters kept, a comment cutting the row. The text is trimmed at both ends, except that a cut by a comment leaves its trailing blanks, as readr does. A shorter row is padded with empty fields. A one-column header is the same rule at width 1, so every later row stays whole. A row with no extra delimiter takes the ordinary path, which keeps readr's literal-quote behaviour.
+
+**Result.** Fixture `oracle_readr` equals readr 2.2.0 on 6256 cases on both hosts.

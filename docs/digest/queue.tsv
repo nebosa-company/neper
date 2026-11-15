@@ -5,7 +5,7 @@ L275	library	0	387	Unicode collation, transliteration and encoding detection (st
 L274	library	0	381	General linear mixed models (lme4)	Open.
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
-L290	library	0.4	530	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6008).
+L290	library	0.6	519	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010).
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU

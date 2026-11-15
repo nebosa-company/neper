@@ -75,10 +75,10 @@
       "group": "CRAN parity",
       "order": 539,
       "title": "readr locales, time zones and ragged read_delim rows",
-      "score": 0.4,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6000, D6008). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names (months, abbreviated months, abbreviated weekdays, am and pm) and equal readr for ten languages on 1920 cases. Open: a time zone other than UTC in parse_datetime, read_delim rows shorter and longer than the header, a one-column header that leaves later rows unsplit, and a quote that is not closed (readr 2.2.0 crashes on one with escapes off, so the reference answers need a guard), equal to readr."
+      "evidence": "Partial (D6000, D6009, D6010). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names and equal readr for ten languages; read_delim equals readr on rows shorter than the header (padded) and longer (the last column takes the rest of the row, unquoted), and under a one-column header. Open: a time zone other than UTC in parse_datetime, and a quote that is not closed (readr 2.2.0 crashes on one with escapes off, so the reference answers need a guard), equal to readr."
     },
     {
       "id": "C287",

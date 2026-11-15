@@ -75,7 +75,7 @@ for (f in dt_fmts) for (s in dt_pool) {
   add("datetime", 0, c(s, f), na0(as.numeric(r)))
 }
 
-# read_delim: rectangular inputs only (R pads ragged rows).
+# read_delim: a short row is padded with empty fields, a long row's last column takes the rest of the row.
 q <- "\""
 delim_texts <- list(
   "a,b,c\n1,2,3\n4,5,6\n", "a,b\n1,2\n", "a,b", "a,b\n\n1,2\n", "a,b\r\n1,2\r\n", "a,,c\n,,\n", "\"x,y\",b\n1,2\n",
@@ -92,7 +92,6 @@ for (txt in delim_texts) for (dl in c(",", ";", "\t")) for (qt in c(q, "")) for 
   if (is.null(r)) next
   m <- as.matrix(r)
   if (any(is.na(m))) next
-  if (ncol(r) == 1 && grepl(dl, t2, fixed = TRUE)) next # readr leaves later rows unsplit under a one-column header
   rows <- apply(m, 1, function(x) paste(x, collapse = "\002"))
   add("delim", c(utf8ToInt(dl), if (nchar(qt)) utf8ToInt(qt) else 0, if (nchar(cm)) utf8ToInt(cm) else 0, flags), t2, paste(rows, collapse = "\001"))
 }
