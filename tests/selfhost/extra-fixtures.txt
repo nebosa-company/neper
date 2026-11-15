@@ -152,3 +152,4 @@ oracle_sparse
 oracle_xls
 oracle_dist
 oracle_nmath
+oracle_nmath_beta

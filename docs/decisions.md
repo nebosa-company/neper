@@ -44350,3 +44350,11 @@ unreferenced.
 **Decision.** `qgamma` is AS 91's chi-squared start (`qchisq_appr`: small, Wilson-Hilferty, and the series for very small nu), up to 1000 corrections of the AS 91 type on the lower-tail probability, then Newton steps on the log scale with R's flip-flop test; `qchisq` is `qgamma(p, df / 2, 2)`. `qpois` starts from the Cornish-Fisher estimate, fuzzes p by 8 or 2 machine epsilons in the direction R does, and searches one step at a time below y = 4096 and with shrinking increments above. `nearbyint` is written as round-half-even. The generator `scripts/gen_nmath.py` appends the q part from `scripts/nmath_q_template.e.txt`.
 
 **Result.** Fixture `oracle_nmath`, now with the quantile cases in `tests/oracle/nmath_q.json`, equals R 4.6.1 at 1e-13 relative on both hosts.
+
+## D6004 — toms708 is a line-for-line port with its labels turned into a state variable
+
+**Context.** L288. pbeta, pbinom, pt and pf all go through `bratio`, whose C is a thicket of gotos (`L_w_bpser`, `L_end_from_w1`, `L131`, `L140`).
+
+**Decision.** `e.math.toms708.bratio` keeps the C's order of tests and sets an integer `lab` where the C jumps; two straight-line blocks then run the label bodies and the three tail conversions. The subroutines are literal: fpser, apser, bpser, bup, bfrac, bgrat (with its 30-term c and d tables), grat_r, basym (the 20-term a0, b0, c, d tables), brcomp, brcmp1 and the gamma helpers. `bgrat` takes and returns `w` where the C passes a pointer. R's debug `#ifdef` blocks and warnings are left out. The beta and binomial densities in nmath_beta agree with R to about 1e-11 relative (they exponentiate a sum of terms of size up to 1e2, so a last-digit difference in libm's exp shows), so the golden holds them to that and the distribution functions to 1e-13.
+
+**Result.** Fixture `oracle_nmath_beta` equals R 4.6.1 on both hosts.

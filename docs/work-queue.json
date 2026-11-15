@@ -42,10 +42,10 @@
       "group": "CRAN parity",
       "order": 534,
       "title": "d/p/q for the distribution families (nmath), lower.tail and log.p",
-      "score": 0.6,
+      "score": 0.75,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D6001, D6002, D6003). e.math.dist: norm, unif, exp, weibull, logis, cauchy, lnorm (d, p, q). e.math.nmath: gammafn, lgammafn, stirlerr, lgamma1p, bd0 and ebd0, dpois_raw, and d, p and q of gamma, chisq and pois (pgamma, qgamma with its Newton steps, the discrete search of qpois) with lower.tail and log.p, equal to R at 1e-13 (oracle_dist 5796, oracle_nmath 6326 plus 2496 quantile cases). Open, from R src/nmath: the beta side (toms708 bratio, pbeta, qbeta, dbeta, lbeta) and t, F, binom, nbinom, geom, hyper; signrank, wilcox and tukey."
+      "evidence": "Partial (D6001 to D6004). e.math.dist: norm, unif, exp, weibull, logis, cauchy, lnorm. e.math.nmath: gamma, lgamma and d, p, q of gamma, chisq, pois. e.math.toms708 and e.math.nmath_beta: TOMS 708 bratio with all its branches, pbeta, dbeta, lbeta, dbinom, pbinom (oracle_nmath_beta 15243 cases at 1e-13 for p, 1e-11 for d). All equal to R with lower.tail and log.p. Open, from R src/nmath: qbeta (650 lines), qbinom; t, F (pt, qt, dt, pf, qf, df through pbeta); nbinom, geom, hyper; signrank, wilcox and tukey."
     },
     {
       "id": "L274",
