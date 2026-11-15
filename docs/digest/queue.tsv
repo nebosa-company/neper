@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-L271	library	0	258	Isolines and isobands (isoband)	Open.
 L265	library	0.4	785	R-compatible random streams: runif, rnorm, rexp, sample landed; rgamma, rbeta, rbinom, rpois, rt, rchisq remain	Partial (D5981).
 L273	library	0	438	Dense and sparse linear algebra completions (RcppEigen, base R)	Open.
 L282	library	0	309	Legacy .xls (BIFF) reader (readxl)	Open.

@@ -3066,4 +3066,5 @@ D5990	1177	matrixStats kernels are one set over two margins, with R's tie and bi
 D5991	1154	data.table's algorithms keep its conventions, not the textbook ones
 D5992	1422	readr's parsers keep their quirks, and the splitter is checked on rectangular files
 D5993	1429	strwrap is ported line for line, and ansi_strwrap keeps its maps over characters
-D5994	1355	zoo's maxgap and spline evaluation keep R's cursor, and yearmon converts its right operand
+D5994	1356	zoo's maxgap and spline evaluation keep R's cursor, and yearmon converts its right operand
+D5995	1390	isoband's 81 band cases are data, and the comparison normalises what its hash map leaves open

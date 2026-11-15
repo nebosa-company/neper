@@ -145,3 +145,4 @@ oracle_datatable
 oracle_readr
 oracle_ansiwrap
 oracle_zoo
+oracle_isoband
