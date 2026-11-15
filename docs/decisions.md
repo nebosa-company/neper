@@ -44470,3 +44470,9 @@ The reader already followed the DIFAT sectors; what was missing was a file that 
 **Decision.** In the last column (the rest of a row) a leading quote makes it a quoted text: with `escape_double` every quote is syntax and doubled ones collapse; without it only the opening quote and one that ends the row are dropped, and any quote closes the quoted state. Without a leading quote the text is copied as it stands, and only a quote that follows a delimiter keeps a newline inside the column. The column is trimmed at both ends whenever `trim_ws` is on. A quote left open at the end of the text gives a field that ends in a newline, one added when the text had none. Not generated: a quote left open in the first field (readr 2.2.0 crashes) and `"x""` at the end of the text without `escape_double` (readr leaves it open in a way the other cases do not).
 
 **Result.** Fixture `oracle_readr` equals readr 2.2.0 on 15489 cases on both hosts.
+
+## D6020 — classInt breaks follow R's quantile fuzz and its seq probabilities
+
+`e.algo.stat.classint` holds the rules that need no random numbers: equal, pretty, sd, quantile types 1 to 9, jenks, fisher, headtails, maximum and box, and `find_cols`. Two details decide agreement with R. The quantile probabilities are `i * (1 / n)`, as `seq(0, 1, 1 / n)` makes them, not `i / n`, so 3 / 5 and 3 * 0.2 differ and the type 1 and 2 steps fall on different sides of an integer. R 4.6 floors `n * p` as `floor(np * (1 + fuzz))` with `fuzz = 4 * eps` for every type but 7, which is multiplicative, where older R added the fuzz. Fisher's classes are the least-squares partition by dynamic programming, which is the optimum Fortran `fish` returns.
+
+**Result.** `oracle_classint` equals classInt 0.4.11 on 6725 cases on Windows. Linux was not run (the machine had no memory for WSL). Open under L295: kmeans, hclust, bclust and dpih.

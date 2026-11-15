@@ -20,10 +20,10 @@
       "group": "CRAN parity",
       "order": 544,
       "title": "classInt: classification intervals",
-      "score": 0,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 193). Small. Acceptance: classIntervals breaks equal to classInt for fixed, sd, equal, pretty, quantile (types 1 to 9), kmeans, hclust, bclust, fisher, jenks, dpih, headtails and maximum, with findCols and the print-style intervals."
+      "evidence": "Partial (D6020). equal, pretty, sd, quantile 1-9, jenks, fisher, headtails, maximum, box and findCols equal classInt 0.4.11 on Windows (Linux run pending). Open (CRAN rank 193). Small. Acceptance remaining: kmeans, hclust, bclust and dpih breaks. Was: classIntervals breaks equal to classInt for fixed, sd, equal, pretty, quantile (types 1 to 9), kmeans, hclust, bclust, fisher, jenks, dpih, headtails and maximum, with findCols and the print-style intervals."
     },
     {
       "id": "L298",

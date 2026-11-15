@@ -1,6 +1,6 @@
 id	category	score	evidence_bytes	title	status
 L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
-L295	library	0	248	classInt: classification intervals	Open (CRAN rank 193).
+L295	library	0.6	459	classInt: classification intervals	Partial (D6020).
 L298	library	0	338	xts: period handling and time-indexed series	Open (CRAN rank 165).
 L296	library	0	398	proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener	Open (CRAN ranks 147, 152).
 L297	library	0	356	colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation	Open (CRAN rank 110).

@@ -3091,4 +3091,5 @@ D6015	756	a naive readr datetime is local to the locale's zone
 D6016	1074	the large-n random streams follow R's own routes
 D6017	1058	rstatix is a numeric core over base R's tests, not a data-frame layer
 D6018	728	a compound file past 109 FAT sectors reads through its DIFAT chain, and a split rich-text run is kept
-D6019	1188	the last column's quotes follow its first character; an open quote ends with a newline
+D6019	1189	the last column's quotes follow its first character; an open quote ends with a newline
+D6020	926	classInt breaks follow R's quantile fuzz and its seq probabilities
