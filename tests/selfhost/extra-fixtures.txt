@@ -133,3 +133,4 @@ oracle_rng
 oracle_hash
 oracle_spooky
 oracle_palette
+oracle_numderiv
