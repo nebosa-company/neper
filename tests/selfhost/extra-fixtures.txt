@@ -156,3 +156,4 @@ oracle_nmath
 oracle_nmath_beta
 oracle_rstatix
 oracle_classint
+oracle_xts

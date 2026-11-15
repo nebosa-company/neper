@@ -3093,4 +3093,5 @@ D6017	1058	rstatix is a numeric core over base R's tests, not a data-frame layer
 D6018	728	a compound file past 109 FAT sectors reads through its DIFAT chain, and a split rich-text run is kept
 D6019	1189	the last column's quotes follow its first character; an open quote ends with a newline
 D6020	927	classInt breaks follow R's quantile fuzz and its seq probabilities
-D6021	1021	classInt kmeans, hclust and dpih are ported, bclust waits
+D6021	1022	classInt kmeans, hclust and dpih are ported, bclust waits
+D6022	1171	xts periods are endpoints over UTC keys, and align.time always moves forward
