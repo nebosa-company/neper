@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L281",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 525,
-      "title": "Delimited parsing, type guessing and locale parsers (readr, vroom)",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open. Needs L264. e.fmt.csv and e.fmt.fixedwidth exist; no parse_number or type guessing. Acceptance: parse_number, parse_double and parse_integer with grouping and decimal marks, parse_date, parse_time and parse_datetime with formats and locales, guess_parser over seeded columns, and read_delim quote, escape, comment and trim rules, equal to readr on a corpus of malformed and locale-specific files."
-    },
-    {
       "id": "L283",
       "category": "library",
       "group": "CRAN parity",
@@ -167,6 +156,17 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open; largest gap (about 42k lines upstream). Needs L264. Acceptance: variables, nesting, mixins, functions, extend, maps, control directives, imports and the built-in function library compile to the same CSS as sass::sass for the libsass spec suite subset, in nested, expanded and compressed output styles."
+    },
+    {
+      "id": "L290",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 539,
+      "title": "readr guess_parser, locales and ragged read_delim rows",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. e.fmt.readr has the parsers and the field splitter. Acceptance: guess_parser over seeded columns (logical, integer, double, number, date, time, datetime, character; guess_integer on and off) equal to readr; locale month and day names, a decimal mark other than . and a time zone offset in parse_datetime; read_delim rows shorter and longer than the header, a one-column header that leaves later rows unsplit, and a quote that is not closed, equal to readr."
     },
     {
       "id": "C287",

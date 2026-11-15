@@ -55,8 +55,10 @@ emit <- function(name, packages = character(), cases) {
     if (is.character(c$want))
       return(sprintf('{"fn":%s,"args":[%s]%s,"text":%s}', str(c$fn), paste(vapply(c$args, num, ""), collapse = ","),
                      if (is.null(c$input)) "" else sprintf(',"in":[%s]', paste(vapply(c$input, str, ""), collapse = ",")), str(c$want)))
-    sprintf('{"fn":%s,"args":[%s],"want":%s,"rel":%s,"abs":%s}', str(c$fn),
-            paste(vapply(c$args, num, ""), collapse = ","), num(c$want), num(c$rel), num(c$abs))
+    sprintf('{"fn":%s,"args":[%s]%s,"want":%s,"rel":%s,"abs":%s}', str(c$fn),
+            paste(vapply(c$args, num, ""), collapse = ","),
+            if (is.null(c$input)) "" else sprintf(',"in":[%s]', paste(vapply(c$input, str, ""), collapse = ",")),
+            num(c$want), num(c$rel), num(c$abs))
   }, "")
   path <- file.path(out_dir, paste0(name, ".json"))
   writeLines(c(sprintf('{"group":%s,"meta":%s,"cases":[', str(name), meta),

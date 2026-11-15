@@ -3063,4 +3063,5 @@ D5987	1364	scales' labels are number() plus R's format(), not a printf
 D5988	1243	axis breaks are ported with R's own sequence rules
 D5989	1199	colour conversion goes through sRGB under two white points, with C++ min and max
 D5990	1177	matrixStats kernels are one set over two margins, with R's tie and bin rules
-D5991	1153	data.table's algorithms keep its conventions, not the textbook ones
+D5991	1154	data.table's algorithms keep its conventions, not the textbook ones
+D5992	1421	readr's parsers keep their quirks, and the splitter is checked on rectangular files

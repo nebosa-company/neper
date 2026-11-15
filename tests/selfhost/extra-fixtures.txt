@@ -142,3 +142,4 @@ oracle_scale
 oracle_colour
 oracle_matrixstats
 oracle_datatable
+oracle_readr

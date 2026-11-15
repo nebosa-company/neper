@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-L281	library	0	402	Delimited parsing, type guessing and locale parsers (readr, vroom)	Open.
 L283	library	0	370	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	Open.
 L287	library	0	402	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)	Open.
 L289	library	0	541	ANSI-aware wrap, split and trim (cli), on R's strwrap	Open;
@@ -14,6 +13,7 @@ L274	library	0	381	General linear mixed models (lme4)	Open.
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
 L276	library	0	307	Sass/SCSS compiler (sass, libsass)	Open;
+L290	library	0	462	readr guess_parser, locales and ragged read_delim rows	Open.
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU
