@@ -3074,4 +3074,5 @@ D5998	1553	.xls is read from the Workbook stream by its records, and a date is a
 D5999	1260	rmultinom divides by a double-double, because the algorithm branches on the quotient
 D6000	1381	guess_parser looks at shapes, not at values, and number refuses a plus sign
 D6001	1095	the d, p and q functions are ported with R's dpq macros, one family at a time
-D6002	1070	nmath's gamma side is generated from the C tables and compared to R's own gamma
+D6002	1071	nmath's gamma side is generated from the C tables and compared to R's own gamma
+D6003	1030	qgamma and qpois follow R's iterations step for step

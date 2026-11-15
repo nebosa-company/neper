@@ -2,7 +2,7 @@ id	category	score	evidence_bytes	title	status
 L293	library	0	471	R random streams, the corners: Walker alias, ties in sample prob, n past 2^32, large-n rbinom and rhyper	Open.
 L292	library	0	460	BIFF5 workbooks, hidden sheets and encrypted .xls in e.fmt.xls	Open.
 L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
-L288	library	0.5	490	d/p/q for the distribution families (nmath), lower.tail and log.p	Partial (D6001, D6002).
+L288	library	0.6	548	d/p/q for the distribution families (nmath), lower.tail and log.p	Partial (D6001, D6002, D6003).
 L274	library	0	381	General linear mixed models (lme4)	Open.
 L287	library	0	402	YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)	Open.
 L283	library	0	427	CommonMark and GFM conformance with xml, latex and man renderers (commonmark)	Open;

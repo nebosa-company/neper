@@ -831,3 +831,277 @@ fn ppois(x0: f64, lambda: f64, lower: bool, lg: bool) -> f64 {
     let x = math.floor[f64](x0 + 1e-7f64)
     ret pgamma(lambda, x + 1.0f64, 1.0f64, !lower, lg)
 }
+
+// --- q functions
+
+fn rint(x: f64) -> f64 {
+    let f = math.floor[f64](x)
+    let d = x - f
+    if d < 0.5f64 { ret f }
+    if d > 0.5f64 { ret f + 1.0f64 }
+    if (f - 2.0f64 * math.floor[f64](f / 2.0f64)) == 0.0f64 { ret f }
+    ret f + 1.0f64
+}
+
+fn dt_log(p: f64, lower: bool, lg: bool) -> f64 {
+    if lower { ret dist.dlog(p, lg) }
+    ret dist.dlexp(p, lg)
+}
+
+fn qchisq_appr(p: f64, nu: f64, g: f64, lower: bool, lg: bool, tol: f64) -> f64 {
+    let c7 = 4.67f64
+    let c8 = 6.66f64
+    let c9 = 6.73f64
+    let c10 = 13.32f64
+    if p != p || nu != nu { ret p + nu }
+    if dist.bad_p(p, lg) { ret nan() }
+    if nu <= 0.0f64 { ret nan() }
+    let alpha = 0.5f64 * nu
+    let c = alpha - 1.0f64
+    var ch = 0.0f64
+    var p1 = dt_log(p, lower, lg)
+    if nu < -1.24f64 * p1 {
+        var lgam1pa = math.log[f64](alpha) + g
+        if alpha < 0.5f64 { lgam1pa = lgamma1p(alpha) }
+        ch = math.exp[f64]((lgam1pa + p1) / alpha + 0.693147180559945309417232121458f64)
+    } else if nu > 0.32f64 {
+        let x = dist.qnorm(p, 0.0f64, 1.0f64, lower, lg)
+        p1 = 2.0f64 / (9.0f64 * nu)
+        let u = x * math.sqrt[f64](p1) + 1.0f64 - p1
+        ch = nu * u * u * u
+        if ch > 2.2f64 * nu + 6.0f64 {
+            ch = -2.0f64 * (dist.dt_clog(p, lower, lg) - c * math.log[f64](0.5f64 * ch) + g)
+        }
+    } else {
+        ch = 0.4f64
+        let a = dist.dt_clog(p, lower, lg) + g + c * 0.693147180559945309417232121458f64
+        var q = 0.0f64
+        var go = true
+        while go {
+            q = ch
+            let pp1 = 1.0f64 / (1.0f64 + ch * (c7 + ch))
+            let p2 = ch * (c9 + ch * (c8 + ch))
+            let t = -0.5f64 + (c7 + 2.0f64 * ch) * pp1 - (c9 + ch * (c10 + 3.0f64 * ch)) / p2
+            ch = ch - (1.0f64 - math.exp[f64](a + 0.5f64 * ch) * p2 * pp1) / t
+            go = abs_of(q - ch) > tol * abs_of(ch)
+        }
+    }
+    ret ch
+}
+
+fn qgamma(p0: f64, alpha: f64, scale: f64, lower: bool, lg0: bool) -> f64 {
+    let eps1 = 1e-2f64
+    let eps2 = 5e-7f64
+    let eps_n = 1e-15f64
+    let maxit = 1000i64
+    let pmin = 1e-100f64
+    let pmax = 1.0f64 - 1e-14f64
+    let i420 = 1.0f64 / 420.0f64
+    let i2520 = 1.0f64 / 2520.0f64
+    let i5040 = 1.0f64 / 5040.0f64
+    var p = p0
+    var lg = lg0
+    if p != p || alpha != alpha || scale != scale { ret p + alpha + scale }
+    if lg {
+        if p > 0.0f64 { ret nan() }
+        if p == 0.0f64 {
+            if lower { ret inf() }
+            ret 0.0f64
+        }
+        if p == 0.0f64 - inf() {
+            if lower { ret 0.0f64 }
+            ret inf()
+        }
+    } else {
+        if p < 0.0f64 || p > 1.0f64 { ret nan() }
+        if p == 0.0f64 {
+            if lower { ret 0.0f64 }
+            ret inf()
+        }
+        if p == 1.0f64 {
+            if lower { ret inf() }
+            ret 0.0f64
+        }
+    }
+    if alpha < 0.0f64 || scale <= 0.0f64 { ret nan() }
+    if alpha == 0.0f64 { ret 0.0f64 }
+    var max_it_newton = 1i64
+    if alpha < 1e-10f64 { max_it_newton = 7i64 }
+    var p_ = dist.dt_qiv(p, lower, lg)
+    var g = lgammafn(alpha)
+    var ch = qchisq_appr(p, 2.0f64 * alpha, g, lower, lg, eps1)
+    var skip = false
+    if !finite(ch) {
+        max_it_newton = 0i64
+        skip = true
+    } else if ch < eps2 {
+        max_it_newton = 20i64
+        skip = true
+    } else if p_ > pmax || p_ < pmin {
+        max_it_newton = 20i64
+        skip = true
+    }
+    if !skip {
+        let c = alpha - 1.0f64
+        let s6 = (120.0f64 + c * (346.0f64 + 127.0f64 * c)) * i5040
+        let ch0 = ch
+        var i = 1i64
+        var done = false
+        while i <= maxit && !done {
+            let q = ch
+            let p1 = 0.5f64 * ch
+            let p2 = p_ - pgamma_raw(p1, alpha, true, false)
+            if !finite(p2) || ch <= 0.0f64 {
+                ch = ch0
+                max_it_newton = 27i64
+                done = true
+            } else {
+                let t = p2 * math.exp[f64](alpha * 0.693147180559945309417232121458f64 + g + p1 - c * math.log[f64](ch))
+                let b = t / ch
+                let a = 0.5f64 * t - b * c
+                let s1 = (210.0f64 + a * (140.0f64 + a * (105.0f64 + a * (84.0f64 + a * (70.0f64 + 60.0f64 * a))))) * i420
+                let s2 = (420.0f64 + a * (735.0f64 + a * (966.0f64 + a * (1141.0f64 + 1278.0f64 * a)))) * i2520
+                let s3 = (210.0f64 + a * (462.0f64 + a * (707.0f64 + 932.0f64 * a))) * i2520
+                let s4 = (252.0f64 + a * (672.0f64 + 1182.0f64 * a) + c * (294.0f64 + a * (889.0f64 + 1740.0f64 * a))) * i5040
+                let s5 = (84.0f64 + 2264.0f64 * a + c * (1175.0f64 + 606.0f64 * a)) * i2520
+                ch = ch + t * (1.0f64 + 0.5f64 * t * s1 - b * c * (s1 - b * (s2 - b * (s3 - b * (s4 - b * (s5 - b * s6))))))
+                if abs_of(q - ch) < eps2 * ch {
+                    done = true
+                } else if abs_of(q - ch) > 0.1f64 * ch {
+                    if ch < q { ch = 0.9f64 * q } else { ch = 1.1f64 * q }
+                }
+            }
+            i += 1i64
+        }
+    }
+    var x = 0.5f64 * scale * ch
+    if max_it_newton > 0i64 {
+        if !lg {
+            p = math.log[f64](p)
+            lg = true
+        }
+        var stop = false
+        if x == 0.0f64 {
+            let one_p = 1.0f64 + 1e-7f64
+            let one_m = 1.0f64 - 1e-7f64
+            x = 2.2250738585072014e-308f64
+            p_ = pgamma(x, alpha, scale, lower, lg)
+            if (lower && p_ > p * one_p) || (!lower && p_ < p * one_m) { ret 0.0f64 }
+        } else {
+            p_ = pgamma(x, alpha, scale, lower, lg)
+        }
+        if p_ == 0.0f64 - inf() { ret 0.0f64 }
+        var i = 1i64
+        while i <= max_it_newton && !stop {
+            let p1 = p_ - p
+            if abs_of(p1) < abs_of(eps_n * p) {
+                stop = true
+            } else {
+                g = dgamma(x, alpha, scale, lg)
+                if g == dist.d0(lg) {
+                    stop = true
+                } else {
+                    var t = 0.0f64
+                    if lg { t = p1 * math.exp[f64](p_ - g) } else { t = p1 / g }
+                    if lower { t = x - t } else { t = x + t }
+                    p_ = pgamma(t, alpha, scale, lower, lg)
+                    if abs_of(p_ - p) > abs_of(p1) || (i > 1i64 && abs_of(p_ - p) == abs_of(p1)) {
+                        stop = true
+                    } else {
+                        x = t
+                    }
+                }
+            }
+            i += 1i64
+        }
+    }
+    ret x
+}
+
+fn qchisq(p: f64, df: f64, lower: bool, lg: bool) -> f64 { ret qgamma(p, 0.5f64 * df, 2.0f64, lower, lg) }
+
+fn do_search_pois(y0: f64, z: f64, p: f64, lambda: f64, incr: f64, lower: bool, lg: bool) -> (f64, f64) {
+    var y = y0
+    var zz = z
+    var left = zz < p
+    if lower { left = zz >= p }
+    if left {
+        var go = true
+        while go {
+            var newz = -1.0f64
+            if y > 0.0f64 {
+                newz = ppois(y - incr, lambda, lower, lg)
+            } else if y < 0.0f64 {
+                y = 0.0f64
+            }
+            var stop = y == 0.0f64 || newz != newz
+            if !stop {
+                if lower { stop = newz < p } else { stop = newz >= p }
+            }
+            if stop { ret (y, zz) }
+            y = max2(0.0f64, y - incr)
+            zz = newz
+        }
+    }
+    while true {
+        let prevy = y
+        y += incr
+        let newz = ppois(y, lambda, lower, lg)
+        var stop = newz != newz
+        if !stop {
+            if lower { stop = newz >= p } else { stop = newz < p }
+        }
+        if stop {
+            if incr <= 1.0f64 { ret (y, newz) }
+            ret (prevy, zz)
+        }
+        zz = newz
+    }
+    ret (y, zz)
+}
+
+fn qpois(p0: f64, lambda: f64, lower: bool, lg: bool) -> f64 {
+    var p = p0
+    if p != p || lambda != lambda { ret p + lambda }
+    if !finite(lambda) { ret nan() }
+    if lambda < 0.0f64 { ret nan() }
+    if dist.bad_p(p, lg) { ret nan() }
+    if lambda == 0.0f64 { ret 0.0f64 }
+    if p == dist.dt0(lower, lg) { ret 0.0f64 }
+    if p == dist.dt1(lower, lg) { ret inf() }
+    let mu = lambda
+    let sigma = math.sqrt[f64](lambda)
+    let gam = 1.0f64 / sigma
+    let zq = dist.qnorm(p, 0.0f64, 1.0f64, lower, lg)
+    var y = rint(mu + sigma * (zq + gam * (zq * zq - 1.0f64) / 6.0f64))
+    if y < 0.0f64 { y = 0.0f64 }
+    var z = ppois(y, lambda, lower, lg)
+    let eps = 2.220446049250313e-16f64
+    if lg {
+        let e = 2.0f64 * eps
+        if lower && p > -1.7976931348623157e308f64 { p = p * (1.0f64 + e) } else { p = p * (1.0f64 - e) }
+    } else {
+        let e = 8.0f64 * eps
+        if lower {
+            p = p * (1.0f64 - e)
+        } else if 1.0f64 - p > 4.0f64 * e {
+            p = p * (1.0f64 + e)
+        }
+    }
+    if y < 4096.0f64 {
+        let (yy, zz) = do_search_pois(y, z, p, lambda, 1.0f64, lower, lg)
+        ret yy
+    }
+    var incr = math.floor[f64](y * (1.0f64 / 64.0f64))
+    var oldincr = 0.0f64
+    var go = true
+    while go {
+        oldincr = incr
+        let (yy, zz) = do_search_pois(y, z, p, lambda, incr, lower, lg)
+        y = yy
+        z = zz
+        incr = max2(1.0f64, math.floor[f64](incr / 8.0f64))
+        go = oldincr > 1.0f64 && incr > y * 1e-15f64
+    }
+    ret y
+}

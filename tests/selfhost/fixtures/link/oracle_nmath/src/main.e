@@ -16,6 +16,11 @@ fn answer(c: *const oracle.Case) -> f64 {
     let lg = x[6usize] != 0.0f64
     if fam == 3u8 { ret nm.gammafn(x[2usize]) }
     if fam == 4u8 { ret nm.lgammafn(x[2usize]) }
+    if kind == 2u8 {
+        if fam == 0u8 { ret nm.qgamma(x[2usize], x[3usize], x[4usize], lower, lg) }
+        if fam == 1u8 { ret nm.qchisq(x[2usize], x[3usize], lower, lg) }
+        ret nm.qpois(x[2usize], x[3usize], lower, lg)
+    }
     if fam == 0u8 {
         if kind == 0u8 { ret nm.dgamma(x[2usize], x[3usize], x[4usize], lg) }
         ret nm.pgamma(x[2usize], x[3usize], x[4usize], lower, lg)
@@ -28,8 +33,8 @@ fn answer(c: *const oracle.Case) -> f64 {
     ret nm.ppois(x[2usize], x[3usize], lower, lg)
 }
 
-fn main(a: *mem.Arena, args: []str) -> err {
-    let (golden, load_error) = oracle.load(a, "tests/oracle/nmath.json")
+fn run(a: *mem.Arena, path: str) -> usize {
+    let (golden, load_error) = oracle.load(a, path)
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
@@ -48,6 +53,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         mem.reset(a, start)
         at += 1usize
     }
-    if failures > 0usize { os.exit(1) }
+    ret failures
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let f1 = run(a, "tests/oracle/nmath.json")
+    let f2 = run(a, "tests/oracle/nmath_q.json")
+    if f1 + f2 > 0usize { os.exit(1) }
     ret ok
 }
