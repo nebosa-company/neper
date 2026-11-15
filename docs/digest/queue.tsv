@@ -1,9 +1,9 @@
 id	category	score	evidence_bytes	title	status
 L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
-L295	library	0.6	459	classInt: classification intervals	Partial (D6020).
 L298	library	0	338	xts: period handling and time-indexed series	Open (CRAN rank 165).
 L296	library	0	398	proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener	Open (CRAN ranks 147, 152).
 L297	library	0	356	colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation	Open (CRAN rank 110).
+L295	library	0.9	324	classInt: classification intervals	Partial (D6020, D6021).
 L301	library	0	368	mvtnorm: multivariate normal and t probabilities and quantiles	Open (CRAN rank 130).
 L302	library	0	410	GPArotation: gradient projection rotations	Open (CRAN rank 196).
 L303	library	0	321	urca: unit-root and cointegration tests	Open (CRAN rank 136).
@@ -94,6 +94,20 @@ L381	library	0	298	ade4: multivariate analysis of ecological data	Open (CRAN ran
 L382	library	0	298	VGAM: vector generalized linear and additive models	Open (CRAN rank 382).
 L383	library	0	315	glmmTMB: generalized linear mixed models by Laplace approximation	Open (CRAN rank 342).
 L384	library	0	415	spatstat: point pattern analysis	Open (CRAN ranks 304, 314, 316, 323).
+L385	library	0	181	hexbin: hexagonal binning	Open (CRAN rank 434).
+L386	library	0	205	SQUAREM: accelerated fixed-point iteration	Open (CRAN rank 437).
+L387	library	0	269	lmom and gld: L-moments and the generalized lambda distribution	Open (CRAN ranks 480, 485).
+L388	library	0	204	fracdiff: fractional differencing and ARFIMA	Open (CRAN rank 411).
+L389	library	0	409	vcd and effectsize: categorical association and effect sizes	Open (CRAN ranks 473, 457).
+L390	library	0	273	R.matlab: MATLAB MAT files	Open (CRAN rank 444).
+L391	library	0	183	bridgesampling: marginal likelihoods	Open (CRAN rank 496).
+L392	library	0	259	dqrng: random number generators	Open (CRAN rank 461).
+L393	library	0	328	ordinal: cumulative link models	Open (CRAN rank 447).
+L394	library	0	193	ipred: bagging and error estimation	Open (CRAN rank 439).
+L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463).
+L396	library	0	308	agricolae: experimental designs and post-hoc tests	Open (CRAN rank 500).
+L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
+L398	library	0	447	rugarch: the GARCH family	Open (CRAN rank 497).
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU

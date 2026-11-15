@@ -433,3 +433,103 @@ bnlearn	397	Bayesian networks: structure learning (hc, tabu, pc.stable, gs, iamb
 adegenet	398	population genetics	-	out-of-scope	-		
 parsnip	399	modelling wrapper	-	out-of-scope	-		
 tm	400	text mining: corpora, term-document matrices, weighting (tf, tf-idf, bin), stopwords and stemming, readers	Corpus, DocumentTermMatrix, weightTfIdf, tm_map	partial	e.text.rank, e.text.index, e.text.stem	~12k	with tidytext (383); L380
+diffobj	401	R object diffs	-	out-of-scope	-		
+waldo	402	R object comparison	-	out-of-scope	-		
+cellranger	403	A1 cell ranges, e.fmt.xlsx	-	covered	e.fmt.xlsx		
+inline	404	C code inlining for R	-	out-of-scope	-		
+modelr	405	tidy modelling helpers	-	out-of-scope	-		
+gargle	406	Google API auth	-	out-of-scope	-		
+googledrive	407	Google Drive client	-	out-of-scope	-		
+googlesheets4	408	Google Sheets client	-	out-of-scope	-		
+blob	409	binary vector class	-	out-of-scope	-		
+MatrixModels	410	sparse model matrices, see L315	-	covered-by-other-item	-		
+fracdiff	411	fractional differencing and ARFIMA estimation by Haslett-Raftery	fracdiff, diffseries, fdGPH	gap	-	~2k	L388
+doBy	412	group summaries and linear estimates, see L313	-	covered-by-other-item	-		
+pbkrtest	413	Kenward-Roger and Satterthwaite tests for mixed models, see L342	-	covered-by-other-item	-		
+globals	414	R code analysis	-	out-of-scope	-		
+dtplyr	415	dplyr over data.table	-	out-of-scope	-		
+pak	416	package installer	-	out-of-scope	-		
+conflicted	417	R namespace conflicts	-	out-of-scope	-		
+listenv	418	R environments	-	out-of-scope	-		
+rematch2	419	regex match helpers	-	out-of-scope	-		
+s2	420	spherical geometry, see L320	-	covered-by-other-item	-		
+ellipsis	421	R argument checks	-	out-of-scope	-		
+rex	422	regex builder	-	out-of-scope	-		
+gdtools	423	font metrics for R graphics	-	out-of-scope	-		
+htmlTable	424	HTML tables for R output	-	out-of-scope	-		
+brew	425	templates, e.text.template	-	covered	e.text.template		
+sessioninfo	426	R session report	-	out-of-scope	-		
+R.oo	427	R object system	-	out-of-scope	-		
+covr	428	R code coverage	-	out-of-scope	-		
+datawizard	429	data wrangling and standardization helpers	-	out-of-scope	-		
+fansi	430	ANSI string handling, e.text.ansi and e.text.ansiwrap	-	covered	e.text.ansi and e.text.ansiwrap		
+lava	431	latent variable models, see L354	-	covered-by-other-item	-		
+rcmdcheck	432	R package checks	-	out-of-scope	-		
+ggsignif	433	plot annotations	-	out-of-scope	-		
+hexbin	434	hexagonal binning of two variables: hexbin counts, hcell2xy, hexcoords, hexTapply	hexbin, hcell2xy, hexcoords, erode	gap	-	~2k	L385
+gitcreds	435	git credential helper	-	out-of-scope	-		
+ini	436	INI files, e.fmt.ini	-	covered	e.fmt.ini		
+SQUAREM	437	accelerated fixed-point iteration (SQUAREM, cyclem, daarem-style) for EM and MM algorithms	squarem, fpiter, cyclem1	gap	-	~1k	L386
+palmerpenguins	438	a data set	-	out-of-scope	-		
+ipred	439	bagging, bootstrapped error estimators (.632+), cross-validation errorest, Brier score, indirect classification	bagging, errorest, sbrier, ipredknn	gap	-	~6k	needs L337; L394
+futile.logger	440	logging, e.log	-	covered	e.log		
+TTR	441	technical indicators, see L326	-	covered-by-other-item	-		
+polyclip	442	polygon clipping and offsetting, see L320	-	covered-by-other-item	-		
+diagram	443	flow chart drawing	-	out-of-scope	-		
+R.matlab	444	MATLAB MAT-file reader and writer for level 4 and level 5, compressed variables	readMat, writeMat	gap	-	~4k	v7.3 files are HDF5 and wait for L352; L390
+gower	445	Gower distance, see L335 and L296	-	covered-by-other-item	-		
+reactR	446	htmlwidget	-	out-of-scope	-		
+ordinal	447	cumulative link models and mixed models: clm, clmm with logit, probit, cloglog and flexible links, nominal and scale effects	clm, clmm, predict, anova	partial	e.algo.stat.regression has ordinal_logistic	~12k	L393
+mitools	448	Rubin pooling of imputations, see L346	-	covered-by-other-item	-		
+gridtext	449	text rendering in grid graphics	-	out-of-scope	-		
+ucminf	450	quasi-Newton minimizer, see L309	-	covered-by-other-item	-		
+xmlparsedata	451	R parse data as XML	-	out-of-scope	-		
+bdsmatrix	452	block-diagonal matrices for coxme	-	out-of-scope	-		
+modeltools	453	modelling plumbing	-	out-of-scope	-		
+ggfun	454	chart helpers	-	out-of-scope	-		
+tidytree	455	tree data containers for ape, see L350	-	covered-by-other-item	-		
+odbc	456	ODBC driver, x.microsoft.odbc	-	out-of-scope	-		
+effectsize	457	effect sizes with intervals: cohens_d, hedges_g, glass_delta, eta_squared, omega_squared, epsilon_squared, cramers_v, phi, rank-biserial, cliffs_delta, interpret	cohens_d, eta_squared, omega_squared, rank_biserial, cliffs_delta	partial	e.algo.stat.rstatix, e.algo.stat.meta	~20k	L389
+vdiffr	458	visual test snapshots	-	out-of-scope	-		
+graphlayouts	459	stress and SGD layouts, see L317	-	covered-by-other-item	-		
+R.cache	460	caching helper	-	out-of-scope	-		
+dqrng	461	fast random number generators xoshiro256++, xoroshiro128+, pcg64 and threefry with R-level seeding and distributions	dqrnorm, dqrunif, dqset.seed, dqsample	partial	e.algo.rand has generators	~3k	verify which generators exist first; L392
+lintr	462	R linter	-	out-of-scope	-		
+RcppAnnoy	463	approximate nearest neighbours by random-projection forests with Annoy index files	AnnoyEuclidean, getNNsByVector	gap	e.ml.knn is exact	~3k	L395
+hunspell	464	spell checking with Hunspell dictionaries and affix rules, stemming and suggestion	hunspell, hunspell_analyze, hunspell_suggest	gap	e.text.stem and e.text.distance help	~20k	affix rule engine and dictionary formats; L397
+spatstat.sparse	465	sparse arrays for spatstat, see L384	-	covered-by-other-item	-		
+sitmo	466	C++ RNG header	-	out-of-scope	-		
+rentrez	467	NCBI web API client	-	out-of-scope	-		
+tinytest	468	R test framework	-	out-of-scope	-		
+spatstat.data	469	data sets for spatstat, see L384	-	covered-by-other-item	-		
+slider	470	sliding windows, e.algo.stat.zoo and e.data.window	-	covered	e.algo.stat.zoo and e.data.window		
+gridGraphics	471	graphics conversion	-	out-of-scope	-		
+microbenchmark	472	timing helper, e.test.bench	-	covered	e.test.bench		
+vcd	473	categorical data: assocstats, goodfit, Kappa with weights, oddsratio, CMHtest, woolf_test, structable, mosaic data	assocstats, goodfit, Kappa, oddsratio, woolf_test	gap	e.algo.stat.infer has cramers_v and chi-squared	~12k	with effectsize (457); L389
+goftest	474	Cramer-von Mises and Anderson-Darling goodness of fit, see L355	-	covered-by-other-item	-		
+SeuratObject	475	single-cell data container	-	out-of-scope	-		
+websocket	476	WebSocket client, e.net.ws	-	covered	e.net.ws		
+servr	477	local web server	-	out-of-scope	-		
+repr	478	R object display	-	out-of-scope	-		
+chromote	479	headless browser control	-	out-of-scope	-		
+lmom	480	L-moments, sample L-moments and fits of GLO, GEV, GPD, Pearson III, Wakeby and kappa distributions	samlmu, pelgev, quagev, lmrgev, pelkap	gap	-	~4k	with gld (485); L387
+styler	481	R code formatter	-	out-of-scope	-		
+RTMB	482	automatic differentiation, see L284	-	covered-by-other-item	-		
+cards	483	analysis result data sets	-	out-of-scope	-		
+tensor	484	tensor products, e.gpu.tensor	-	covered	e.gpu.tensor		
+gld	485	generalized lambda distribution: d, p, q, r and several fitting methods	dgl, pgl, qgl, rgl, fit.fkml	gap	-	~3k	L387
+spData	486	data sets	-	out-of-scope	-		
+Cairo	487	graphics device	-	out-of-scope	-		
+ca	488	simple and multiple correspondence analysis, see L345	-	covered-by-other-item	-		
+nanonext	489	messaging library, e.net.zmtp and e.net.nats	-	covered	e.net.zmtp and e.net.nats		
+rapidjsonr	490	C++ JSON headers, e.fmt.json	-	covered	e.fmt.json		
+ggbeeswarm	491	beeswarm layout in plots	-	out-of-scope	-		
+mapproj	492	map projections, see L285	-	covered-by-other-item	-		
+stargazer	493	regression table rendering	-	out-of-scope	-		
+dreamerr	494	argument checking	-	out-of-scope	-		
+Brobdingnag	495	log-scale big floating numbers	-	out-of-scope	-		
+bridgesampling	496	marginal likelihoods and Bayes factors by bridge sampling	bridge_sampler, bf, post_prob	gap	-	~3k	L391
+rugarch	497	GARCH family: sGARCH, eGARCH, gjrGARCH, apARCH, fGARCH, IGARCH with ARFIMA means and norm, std, ged, sged, jsu innovations; fit, filter, forecast, simulation, tests	ugarchspec, ugarchfit, ugarchforecast, ugarchsim	partial	e.algo.timeseries has garch	~30k	L398
+rsvd	498	randomized SVD and PCA, see L334	-	covered-by-other-item	-		
+multicool	499	multiset permutations, e.algo.combin	-	covered	e.algo.combin		
+agricolae	500	agricultural experiments: LSD, HSD, Duncan, SNK, Scheffe and Waller post-hoc tests, randomized designs (lattice, BIB, alpha, split plot), AMMI stability	LSD.test, HSD.test, duncan.test, design.rcbd, AMMI	partial	e.algo.stat.infer has tukey_hsd	~25k	L396

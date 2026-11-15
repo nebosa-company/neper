@@ -15,17 +15,6 @@
       "evidence": "Partial (D6000, D6009, D6010, D6015, D6019). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names (ten languages) and a time zone (every transition of the zones in e.tz.builtin); read_delim equals readr on rows shorter and longer than the header, under a one-column header and with a quote left open, on 15489 cases. Open: %Z naming a zone, and two unterminated-quote shapes that crash or confuse readr 2.2.0 (listed in D6016)."
     },
     {
-      "id": "L295",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 544,
-      "title": "classInt: classification intervals",
-      "score": 0.6,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6020). equal, pretty, sd, quantile 1-9, jenks, fisher, headtails, maximum, box and findCols equal classInt 0.4.11 on Windows (Linux run pending). Open (CRAN rank 193). Small. Acceptance remaining: kmeans, hclust, bclust and dpih breaks. Was: classIntervals breaks equal to classInt for fixed, sd, equal, pretty, quantile (types 1 to 9), kmeans, hclust, bclust, fisher, jenks, dpih, headtails and maximum, with findCols and the print-style intervals."
-    },
-    {
       "id": "L298",
       "category": "library",
       "group": "CRAN parity",
@@ -57,6 +46,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Open (CRAN rank 110). Small to mid. e.gfx.colorspace converts; it generates no palettes. Acceptance, equal to colorspace: sequential_hcl, diverging_hcl, qualitative_hcl for every hcl_palettes() name and parameter set, polarLUV and polarLAB round trips, contrast_ratio, deutan, protan, tritan at severities 0 to 1, lighten and darken, rainbow_hcl, heat_hcl."
+    },
+    {
+      "id": "L295",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 544,
+      "title": "classInt: classification intervals",
+      "score": 0.9,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6020, D6021). Every classInt style but bclust equals classInt 0.4.11 on both hosts (kmeans by AS 136, hclust, dpih, fixed, sd, equal, pretty, quantile, fisher, jenks, headtails, maximum, box, findCols). Open: bclust (e1071 bagged clustering: resampled kmeans with 20 centres, knn1, average-linkage hclust, cutree)."
     },
     {
       "id": "L301",
@@ -1047,6 +1047,160 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN ranks 304, 314, 316, 323). Very large (about 100k lines upstream across four packages); ask the user whether it is still relevant before starting. Acceptance, equal to spatstat: ppp and owin objects, distances and tessellations, K, L, G, F, J and pair correlation estimates with edge corrections, envelopes under set.seed, simulation of Poisson, Cox, Thomas, Matern and Gibbs processes, kernel intensity."
+    },
+    {
+      "id": "L385",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 660,
+      "title": "hexbin: hexagonal binning",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN rank 434). Small. Acceptance, equal to hexbin: hexbin counts and cell ids for any xbins, shape and range, hcell2xy, hexcoords, erode, hexTapply and the smoothing helpers."
+    },
+    {
+      "id": "L386",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 661,
+      "title": "SQUAREM: accelerated fixed-point iteration",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN rank 437). Small. Acceptance, equal to SQUAREM: squarem with the three step-length schemes, cyclem1 and cyclem2, fpiter, with the same iterates, convergence flags and function-evaluation counts."
+    },
+    {
+      "id": "L387",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 662,
+      "title": "lmom and gld: L-moments and the generalized lambda distribution",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN ranks 480, 485). Small to mid. Acceptance, equal to R: lmom samlmu, lmr and quantile functions and parameter estimation for GLO, GEV, GPD, Pearson III, Wakeby, kappa and the rest; gld dgl, pgl, qgl, rgl under set.seed, and the FKML, moment and starship fits."
+    },
+    {
+      "id": "L388",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 663,
+      "title": "fracdiff: fractional differencing and ARFIMA",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN rank 411). Small. Acceptance, equal to fracdiff: fracdiff estimation of (p, d, q) by Haslett-Raftery approximate likelihood, diffseries, fdGPH, fdSperio and the simulated series under set.seed."
+    },
+    {
+      "id": "L389",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 664,
+      "title": "vcd and effectsize: categorical association and effect sizes",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN ranks 473, 457). Small to mid. Builds on the rstatix module. Acceptance, equal to R: vcd assocstats (phi, contingency, Cramer), goodfit, Kappa with weights and intervals, oddsratio, CMHtest, woolf_test, mantelhaen helpers; effectsize cohens_d, hedges_g, glass_delta, eta_squared, omega_squared, epsilon_squared, cramers_v, phi, rank_biserial, cliffs_delta, with their intervals and interpret rules."
+    },
+    {
+      "id": "L390",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 665,
+      "title": "R.matlab: MATLAB MAT files",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN rank 444). Small to mid. Acceptance, equal to R.matlab on real files: readMat for level 4 and level 5 files including compressed (v7) variables, structs, cells, sparse matrices, logical and char arrays; writeMat round trip. v7.3 files are HDF5 and wait for L352."
+    },
+    {
+      "id": "L391",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 666,
+      "title": "bridgesampling: marginal likelihoods",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN rank 496). Small. Acceptance, equal to bridgesampling under set.seed: bridge_sampler with the normal and warp3 methods, the iterative scheme, bf, post_prob, error_measures."
+    },
+    {
+      "id": "L392",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 667,
+      "title": "dqrng: random number generators",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN rank 461). Small. Verify which generators e.algo.rand already has. Acceptance, equal to dqrng value for value: xoshiro256++, xoroshiro128+, pcg64 and threefry streams, dqrunif, dqrnorm, dqrexp, dqsample, dqrng_get_state, seeds and stream selection."
+    },
+    {
+      "id": "L393",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 668,
+      "title": "ordinal: cumulative link models",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN rank 447). Mid. e.algo.stat.regression has ordinal_logistic. Acceptance, equal to ordinal: clm with logit, probit, cloglog, loglog, cauchit and the flexible links, nominal and scale effects, thresholds symmetric and equidistant; clmm with random intercepts by Laplace and adaptive quadrature; predict, anova, profile."
+    },
+    {
+      "id": "L394",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 669,
+      "title": "ipred: bagging and error estimation",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN rank 439). Small to mid. Needs L337. Acceptance, equal to ipred under set.seed: bagging, errorest with cv, boot and .632+, sbrier, ipredknn, inbagg, and their out-of-bag predictions."
+    },
+    {
+      "id": "L395",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 670,
+      "title": "RcppAnnoy: approximate nearest neighbours",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN rank 463). Mid. e.ml.knn is exact. Acceptance, equal to RcppAnnoy: index building with its seeded random-projection splits, Euclidean, angular, Manhattan and Hamming metrics, getNNsByVector and getNNsByItem with search_k, and the index file format."
+    },
+    {
+      "id": "L396",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 671,
+      "title": "agricolae: experimental designs and post-hoc tests",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open (CRAN rank 500). Mid. Acceptance, equal to agricolae: LSD.test, HSD.test, duncan.test, SNK.test, scheffe.test, waller.test, kruskal and friedman post-hoc with groups, design.crd, design.rcbd, design.lsd, design.bib, design.split, design.alpha and design.lattice under set.seed, AMMI, stability measures."
+    },
+    {
+      "id": "L397",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 672,
+      "title": "hunspell: spell checking",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Open (CRAN rank 464). Mid to large. Acceptance, equal to hunspell: .dic and .aff dictionary parsing (prefix and suffix rules, cross products, compounds, replacement and keyboard suggestion tables, ICONV and OCONV), hunspell_check, hunspell_find, hunspell_suggest, hunspell_analyze and hunspell_stem on the standard dictionaries."
+    },
+    {
+      "id": "L398",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 673,
+      "title": "rugarch: the GARCH family",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Open (CRAN rank 497). Large. e.algo.timeseries has a plain GARCH. Acceptance, equal to rugarch within the optimizer tolerance: ugarchspec for sGARCH, eGARCH, gjrGARCH, apARCH, fGARCH, IGARCH and csGARCH with ARFIMA means, external regressors and the norm, snorm, std, sstd, ged, sged, nig and jsu innovations; ugarchfit, ugarchfilter, ugarchforecast, ugarchsim and ugarchboot under set.seed, news-impact curves, information criteria and the tests."
     },
     {
       "id": "C287",
