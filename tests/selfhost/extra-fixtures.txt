@@ -141,3 +141,4 @@ oracle_labels
 oracle_scale
 oracle_colour
 oracle_matrixstats
+oracle_datatable

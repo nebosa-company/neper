@@ -44246,3 +44246,11 @@ unreferenced.
 **Decision.** `e.algo.stat.matrix` has one kernel per statistic and a `by_row` flag that picks the margin, over a column-major `Mat`; `rows` and `cols` subsets are `submatrix` first. Long-double sums are Neumaier double-double (`Sum`), the means follow the C (sum, divide, optional refinement pass), the variance is the C's double pass. The conventions read from the C and from the oracle: `rowRanks` and `colRanks` both answer the n-by-length matrix (the column version is transposed, not x's shape), "last" ranks the first of a tie highest, ranges of an all-NA unit with na.rm are (Inf, -Inf), a bin is half-open throughout (`[lo, hi)` or `(lo, hi]`, with no closed last bin), and `weightedMedian` is the interpolating or weighted-ties algorithm of `weightedMedian_lowlevel_template.h`. `quantiles` is type 7 only.
 
 **Result.** Fixture `oracle_matrixstats`: 11518 cases equal matrixStats 1.5.0 at 1e-12 on both hosts.
+
+## D5991 — data.table's algorithms keep its conventions, not the textbook ones
+
+**Context.** L280. The rolling and join functions have conventions that a definition does not give.
+
+**Decision.** `e.algo.stat.dt` follows what the oracle showed: a rolling window of size n ends at i for `right`, starts at i for `left`, and for `center` starts at i - (n - 1) / 2 (integer), so an even window leans left; a window that does not fit is `fill`; an adaptive window is the n[i] values ending at i. `rleid` compares by bits, so 0 and -0 are different runs and NA equals NA. `between` treats an NA bound as no bound (`NAbounds = TRUE`) and answers NA only for an NA x. `foverlaps` type "equal" matches a point interval (start = end) on its start alone, which is what data.table does; `mult` first and last keep the first or last match in y's key order, and an unmatched x row stays with NA. `forder` is a stable insertion sort with NA first or last. The golden leaves out a vector whose rolling mean drifts inside data.table's own long-double accumulation.
+
+**Result.** Fixture `oracle_datatable`: 19697 cases equal data.table 1.18.6.1 at 1e-12 on both hosts.
