@@ -44463,7 +44463,7 @@ The reader already followed the DIFAT sectors; what was missing was a file that 
 
 **Result.** `oracle_xls` equals readxl on the new workbook on both hosts.
 
-## D6016 — the last column's quotes follow its first character; an open quote ends with a newline
+## D6019 — the last column's quotes follow its first character; an open quote ends with a newline
 
 **Context.** L290. D6010 claimed the ragged-row cases were in the oracle; they were not (a replace in the R group had not applied), so the last-column rules were tested only by hand. This corrects D6010's rule and adds the cases.
 
