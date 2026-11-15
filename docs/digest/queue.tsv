@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L291	library	0	537	R random streams, the rest: rhyper, rnchisq, rmultinom, sample with prob, large n	Open.
+L293	library	0	471	R random streams, the corners: Walker alias, ties in sample prob, n past 2^32, large-n rbinom and rhyper	Open.
 L292	library	0	460	BIFF5 workbooks, hidden sheets and encrypted .xls in e.fmt.xls	Open.
 L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
 L288	library	0	475	d/p/q for the distribution families (nmath), lower.tail and log.p	Open;

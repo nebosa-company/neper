@@ -12,6 +12,8 @@ use e.math
 use e.math.special as special
 use e.mem
 
+error TooBig
+
 fn finite(x: f64) -> bool { ret x == x && x - x == 0.0f64 }
 
 fn sqrt_of(x: f64) -> f64 { ret math.sqrt[f64](x) }
@@ -514,4 +516,391 @@ fn rcauchy(r: *rng.Rng, location: f64, scale: f64) -> f64 {
     if location != location || !finite(scale) || scale < 0.0f64 { ret special.nan() }
     if scale == 0.0f64 || !finite(location) { ret location }
     ret location + scale * math.tan[f64](3.141592653589793238462643383280f64 * rng.unif(r))
+}
+
+// --- rhyper, rnchisq, rmultinom, rsignrank, rwilcox, sample with prob
+
+// ln(i!) as rhyper.c's afc: a table up to 7, Stirling's series after.
+fn afc(i: i64) -> f64 {
+    if i < 0i64 { ret -1.0f64 }
+    if i == 0i64 || i == 1i64 { ret 0.0f64 }
+    if i == 2i64 { ret 0.69314718055994530941723212145817f64 }
+    if i == 3i64 { ret 1.79175946922805500081247735838070f64 }
+    if i == 4i64 { ret 3.17805383034794561964694160129705f64 }
+    if i == 5i64 { ret 4.78749174278204599424770093452324f64 }
+    if i == 6i64 { ret 6.57925121201010099506017829290394f64 }
+    if i == 7i64 { ret 8.52516136106541430016553103634712f64 }
+    let di = f64(i)
+    let i2 = di * di
+    ret (di + 0.5f64) * math.log[f64](di) - di + 0.918938533204672741780329736406f64 + (0.0833333333333333f64 - 0.00277777777777778f64 / i2) / di
+}
+
+fn rhyper(r: *rng.Rng, nn1in0: f64, nn2in0: f64, kkin0: f64) -> f64 {
+    if !finite(nn1in0) || !finite(nn2in0) || !finite(kkin0) { ret special.nan() }
+    let nn1in = math.round[f64](nn1in0)
+    let nn2in = math.round[f64](nn2in0)
+    let kkin = math.round[f64](kkin0)
+    let nn = nn1in + nn2in
+    if nn1in < 0.0f64 || nn2in < 0.0f64 || kkin < 0.0f64 || kkin > nn1in + nn2in { ret special.nan() }
+    if nn > 2147483647.0f64 || kkin >= 2147483647.0f64 { ret special.nan() }
+    let nn1 = i64(nn1in)
+    let nn2 = i64(nn2in)
+    let kk = i64(kkin)
+    var n1 = nn1
+    var n2 = nn2
+    if nn1 > nn2 {
+        n1 = nn2
+        n2 = nn1
+    }
+    var k = kk
+    if f64(kk) + f64(kk) >= nn { k = i64(nn - f64(kk)) }
+    let m = i64((f64(k) + 1.0f64) * (f64(n1) + 1.0f64) / (nn + 2.0f64))
+    var minjx = 0i64
+    if k - n2 > 0i64 { minjx = k - n2 }
+    var maxjx = n1
+    if k < n1 { maxjx = k }
+    var ix = 0i64
+    if minjx == maxjx {
+        ix = maxjx
+    } else if m - minjx < 10i64 {
+        let scale = 1.0e25f64
+        let con = 57.5646273248511421f64
+        var lw = 0.0f64
+        if k < n2 {
+            lw = afc(n2) + afc(n1 + n2 - k) - afc(n2 - k) - afc(n1 + n2)
+        } else {
+            lw = afc(n1) + afc(k) - afc(k - n2) - afc(n1 + n2)
+        }
+        let w = math.exp[f64](lw + con)
+        if w <= 0.0f64 { ret special.nan() }
+        var go = true
+        while go {
+            var p = w
+            ix = minjx
+            var u = rng.unif(r) * scale
+            var restart = false
+            while u > p && !restart {
+                u = u - p
+                p = p * ((f64(n1) - f64(ix)) * f64(k - ix))
+                ix += 1i64
+                p = p / f64(ix) / f64(n2 - k + ix)
+                if ix > maxjx { restart = true }
+            }
+            if !restart { go = false }
+        }
+    } else {
+        let s = sqrt_of((nn - f64(k)) * f64(k) * f64(n1) * f64(n2) / (nn - 1.0f64) / nn / nn)
+        let d = f64(i64(1.5f64 * s)) + 0.5f64
+        let xl = f64(m) - d + 0.5f64
+        let xr = f64(m) + d + 0.5f64
+        let a = afc(m) + afc(n1 - m) + afc(k - m) + afc(n2 - k + m)
+        let kl = math.exp[f64](a - afc(i64(xl)) - afc(i64(f64(n1) - xl)) - afc(i64(f64(k) - xl)) - afc(i64(f64(n2 - k) + xl)))
+        let kr = math.exp[f64](a - afc(i64(xr - 1.0f64)) - afc(i64(f64(n1) - xr + 1.0f64)) - afc(i64(f64(k) - xr + 1.0f64)) - afc(i64(f64(n2 - k) + xr - 1.0f64)))
+        let lamdl = 0.0f64 - math.log[f64](xl * (f64(n2 - k) + xl) / (f64(n1) - xl + 1.0f64) / (f64(k) - xl + 1.0f64))
+        let lamdr = 0.0f64 - math.log[f64]((f64(n1) - xr + 1.0f64) * (f64(k) - xr + 1.0f64) / xr / (f64(n2 - k) + xr))
+        let p1 = d + d
+        let p2 = p1 + kl / lamdl
+        let p3 = p2 + kr / lamdr
+        var reject = true
+        var n_uv = 0i64
+        while reject {
+            let u = rng.unif(r) * p3
+            var v = rng.unif(r)
+            n_uv += 1i64
+            if n_uv >= 10000i64 { ret special.nan() }
+            var skip = false
+            if u < p1 {
+                ix = i64(xl + u)
+            } else if u <= p2 {
+                ix = i64(xl + math.log[f64](v) / lamdl)
+                if ix < minjx { skip = true } else { v = v * (u - p1) * lamdl }
+            } else {
+                ix = i64(xr - math.log[f64](v) / lamdr)
+                if ix > maxjx { skip = true } else { v = v * (u - p2) * lamdr }
+            }
+            if !skip {
+                if m < 100i64 || ix <= 50i64 {
+                    var f = 1.0f64
+                    if m < ix {
+                        var i = m + 1i64
+                        while i <= ix {
+                            f = f * f64(n1 - i + 1i64) * f64(k - i + 1i64) / f64(n2 - k + i) / f64(i)
+                            i += 1i64
+                        }
+                    } else if m > ix {
+                        var i = ix + 1i64
+                        while i <= m {
+                            f = f * f64(i) * f64(n2 - k + i) / f64(n1 - i + 1i64) / f64(k - i + 1i64)
+                            i += 1i64
+                        }
+                    }
+                    if v <= f { reject = false }
+                } else {
+                    let deltal = 0.0078f64
+                    let deltau = 0.0034f64
+                    let y = f64(ix)
+                    let y1 = y + 1.0f64
+                    let ym = y - f64(m)
+                    let yn = f64(n1) - y + 1.0f64
+                    let yk = f64(k) - y + 1.0f64
+                    let nk = f64(n2 - k) + y1
+                    let rr = (0.0f64 - ym) / y1
+                    let ss = ym / yn
+                    let tt = ym / yk
+                    let ee = (0.0f64 - ym) / nk
+                    let g = yn * yk / (y1 * nk) - 1.0f64
+                    var dg = 1.0f64
+                    if g < 0.0f64 { dg = 1.0f64 + g }
+                    let gu = g * (1.0f64 + g * (-0.5f64 + g / 3.0f64))
+                    let gl = gu - 0.25f64 * (g * g * g * g) / dg
+                    let xm = f64(m) + 0.5f64
+                    let xn = f64(n1 - m) + 0.5f64
+                    let xk = f64(k - m) + 0.5f64
+                    let nm = f64(n2 - k) + xm
+                    let ub = y * gu - f64(m) * gl + deltau + xm * rr * (1.0f64 + rr * (-0.5f64 + rr / 3.0f64)) + xn * ss * (1.0f64 + ss * (-0.5f64 + ss / 3.0f64)) + xk * tt * (1.0f64 + tt * (-0.5f64 + tt / 3.0f64)) + nm * ee * (1.0f64 + ee * (-0.5f64 + ee / 3.0f64))
+                    let alv = math.log[f64](v)
+                    if alv > ub {
+                        reject = true
+                    } else {
+                        var dr = xm * (rr * rr * rr * rr)
+                        if rr < 0.0f64 { dr = dr / (1.0f64 + rr) }
+                        var ds = xn * (ss * ss * ss * ss)
+                        if ss < 0.0f64 { ds = ds / (1.0f64 + ss) }
+                        var dt = xk * (tt * tt * tt * tt)
+                        if tt < 0.0f64 { dt = dt / (1.0f64 + tt) }
+                        var de = nm * (ee * ee * ee * ee)
+                        if ee < 0.0f64 { de = de / (1.0f64 + ee) }
+                        if alv < ub - 0.25f64 * (dr + ds + dt + de) + (y + f64(m)) * (gl - gu) - deltal {
+                            reject = false
+                        } else if alv <= a - afc(ix) - afc(n1 - ix) - afc(k - ix) - afc(n2 - k + ix) {
+                            reject = false
+                        } else {
+                            reject = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if f64(kk) + f64(kk) >= nn {
+        if nn1 > nn2 { ix = kk - nn2 + ix } else { ix = nn1 - ix }
+    } else if nn1 > nn2 {
+        ix = kk - ix
+    }
+    ret f64(ix)
+}
+
+fn rnchisq(r: *rng.Rng, df: f64, lambda: f64) -> f64 {
+    if df != df || !finite(lambda) || df < 0.0f64 || lambda < 0.0f64 { ret special.nan() }
+    if lambda == 0.0f64 {
+        if df == 0.0f64 { ret 0.0f64 }
+        ret rgamma(r, df / 2.0f64, 2.0f64)
+    }
+    var x = rpois(r, lambda / 2.0f64)
+    if x > 0.0f64 { x = rchisq(r, 2.0f64 * x) }
+    if df > 0.0f64 { x = x + rgamma(r, df / 2.0f64, 2.0f64) }
+    ret x
+}
+
+fn rsignrank(r: *rng.Rng, n0: f64) -> f64 {
+    if n0 != n0 { ret n0 }
+    let n = math.round[f64](n0)
+    if n < 0.0f64 { ret special.nan() }
+    if n == 0.0f64 { ret 0.0f64 }
+    var total = 0.0f64
+    let k = i64(n)
+    var i = 0i64
+    while i < k {
+        i += 1i64
+        total = total + f64(i) * math.floor[f64](rng.unif(r) + 0.5f64)
+    }
+    ret total
+}
+
+fn rwilcox(a: *mem.Arena, r: *rng.Rng, m0: f64, n0: f64) -> f64 {
+    if m0 != m0 || n0 != n0 { ret m0 + n0 }
+    let m = math.round[f64](m0)
+    let n = math.round[f64](n0)
+    if m < 0.0f64 || n < 0.0f64 { ret special.nan() }
+    if m == 0.0f64 || n == 0.0f64 { ret 0.0f64 }
+    if m + n > 2147483647.0f64 { ret special.nan() }
+    var k = i64(m + n)
+    let (x, e) = mem.alloc[i64](a, usize(k) + 1usize)
+    if e != ok { ret special.nan() }
+    var i = 0i64
+    while i < k {
+        x[usize(i)] = i
+        i += 1i64
+    }
+    var total = 0.0f64
+    i = 0i64
+    while f64(i) < n {
+        let j = i64(rng.unif_index(r, f64(k)))
+        total = total + f64(x[usize(j)])
+        k -= 1i64
+        x[usize(j)] = x[usize(k)]
+        i += 1i64
+    }
+    ret total - n * (n - 1.0f64) / 2.0f64
+}
+
+// a * b as the sum of two doubles, exactly (Dekker's split).
+fn two_prod(a: f64, b: f64) -> (f64, f64) {
+    let p = a * b
+    let ta = 134217729.0f64 * a
+    let ah = ta - (ta - a)
+    let al = a - ah
+    let tb = 134217729.0f64 * b
+    let bh = tb - (tb - b)
+    let bl = b - bh
+    let e = ((ah * bh - p) + ah * bl + al * bh) + al * bl
+    ret (p, e)
+}
+
+// rmultinom(1, n, prob): the counts of one draw (prob should sum to 1). The running total of the
+// remaining probability is a double-double, standing in for R's long double.
+fn rmultinom(a: *mem.Arena, r: *rng.Rng, n0: i64, prob: []const f64) -> ([]i64, err) {
+    var none: []i64 = zero
+    let kk = prob.len
+    let (out, e) = mem.alloc[i64](a, kk + 1usize)
+    if e != ok { ret (none, e) }
+    var k = 0usize
+    while k < kk {
+        out[k] = 0i64
+        k += 1usize
+    }
+    if kk < 1usize || n0 < 0i64 { ret (none, TooBig) }
+    var hi = 0.0f64
+    var lo = 0.0f64
+    k = 0usize
+    while k < kk {
+        let pp = prob[k]
+        if !finite(pp) || pp < 0.0f64 || pp > 1.0f64 { ret (none, TooBig) }
+        let t = hi + pp
+        let bb = t - hi
+        lo = lo + ((hi - (t - bb)) + (pp - bb))
+        hi = t
+        k += 1usize
+    }
+    let total0 = hi + lo
+    var diff = total0 - 1.0f64
+    if diff < 0.0f64 { diff = 0.0f64 - diff }
+    if diff > 0.0000001f64 { ret (none, TooBig) }
+    var n = n0
+    if n == 0i64 { ret (out[0usize..kk], ok) }
+    if kk == 1usize && total0 == 0.0f64 { ret (out[0usize..kk], ok) }
+    k = 0usize
+    while k + 1usize < kk {
+        if prob[k] != 0.0f64 {
+            // pp = prob[k] / p_tot with p_tot = hi + lo, one correction for the low word
+            let q1 = prob[k] / hi
+            let (ph, pe) = two_prod(q1, hi)
+            let resid = ((prob[k] - ph) - pe) - q1 * lo
+            let pp = q1 + resid / hi
+            if pp < 1.0f64 {
+                out[k] = i64(rbinom(r, f64(n), pp))
+            } else {
+                out[k] = n
+            }
+            n -= out[k]
+        } else {
+            out[k] = 0i64
+        }
+        if n <= 0i64 { ret (out[0usize..kk], ok) }
+        let t = hi - prob[k]
+        let bb = t - hi
+        lo = lo + ((hi - (t - bb)) + (0.0f64 - prob[k] - bb))
+        hi = t
+        k += 1usize
+    }
+    out[kk - 1usize] = n
+    ret (out[0usize..kk], ok)
+}
+
+// sample.int(n, size, replace, prob) for distinct probabilities: 1-based. Not here: ties in prob
+// (R sorts them its own way) and Walker's alias method (replace with n >= 200).
+fn sample_prob(a: *mem.Arena, r: *rng.Rng, n: usize, size: usize, replace: bool, prob: []const f64) -> ([]i64, err) {
+    var none: []i64 = zero
+    if prob.len != n { ret (none, TooBig) }
+    if replace && n >= 200usize { ret (none, TooBig) }
+    if !replace && size > n { ret (none, TooBig) }
+    let (p, pe) = mem.alloc[f64](a, n + 1usize)
+    let (perm, ppe) = mem.alloc[i64](a, n + 1usize)
+    let (ans, ae) = mem.alloc[i64](a, size + 1usize)
+    if pe != ok { ret (none, pe) }
+    if ppe != ok { ret (none, ppe) }
+    if ae != ok { ret (none, ae) }
+    var sum = 0.0f64
+    var npos = 0usize
+    var i = 0usize
+    while i < n {
+        if !finite(prob[i]) || prob[i] < 0.0f64 { ret (none, TooBig) }
+        if prob[i] > 0.0f64 {
+            npos += 1usize
+            sum = sum + prob[i]
+        }
+        i += 1usize
+    }
+    if npos == 0usize || (!replace && size > npos) { ret (none, TooBig) }
+    i = 0usize
+    while i < n {
+        p[i] = prob[i] / sum
+        perm[i] = i64(i) + 1i64
+        i += 1usize
+    }
+    // revsort: p descending with perm along
+    i = 1usize
+    while i < n {
+        let pv = p[i]
+        let qv = perm[i]
+        var j = i
+        while j > 0usize && p[j - 1usize] < pv {
+            p[j] = p[j - 1usize]
+            perm[j] = perm[j - 1usize]
+            j -= 1usize
+        }
+        p[j] = pv
+        perm[j] = qv
+        i += 1usize
+    }
+    if replace {
+        i = 1usize
+        while i < n {
+            p[i] = p[i] + p[i - 1usize]
+            i += 1usize
+        }
+        var s = 0usize
+        while s < size {
+            let ru = rng.unif(r)
+            var j = 0usize
+            while j + 1usize < n && ru > p[j] { j += 1usize }
+            ans[s] = perm[j]
+            s += 1usize
+        }
+        ret (ans[0usize..size], ok)
+    }
+    var totalmass = 1.0f64
+    var n1 = n - 1usize
+    var s = 0usize
+    while s < size {
+        let rtm = totalmass * rng.unif(r)
+        var mass = 0.0f64
+        var j = 0usize
+        while j < n1 {
+            mass = mass + p[j]
+            if rtm <= mass { break }
+            j += 1usize
+        }
+        ans[s] = perm[j]
+        totalmass = totalmass - p[j]
+        var q = j
+        while q < n1 {
+            p[q] = p[q + 1usize]
+            perm[q] = perm[q + 1usize]
+            q += 1usize
+        }
+        if n1 > 0usize { n1 -= 1usize }
+        s += 1usize
+    }
+    ret (ans[0usize..size], ok)
 }
