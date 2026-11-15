@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L265	library	0.4	785	R-compatible random streams: runif, rnorm, rexp, sample landed; rgamma, rbeta, rbinom, rpois, rt, rchisq remain	Partial (D5981).
+L291	library	0	537	R random streams, the rest: rhyper, rnchisq, rmultinom, sample with prob, large n	Open.
 L273	library	0	438	Dense and sparse linear algebra completions (RcppEigen, base R)	Open.
 L282	library	0	309	Legacy .xls (BIFF) reader (readxl)	Open.
 L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.

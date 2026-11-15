@@ -146,3 +146,4 @@ oracle_readr
 oracle_ansiwrap
 oracle_zoo
 oracle_isoband
+oracle_rdist

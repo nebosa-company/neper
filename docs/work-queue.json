@@ -4,15 +4,15 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L265",
+      "id": "L291",
       "category": "library",
       "group": "CRAN parity",
-      "order": 530,
-      "title": "R-compatible random streams: runif, rnorm, rexp, sample landed; rgamma, rbeta, rbinom, rpois, rt, rchisq remain",
-      "score": 0.4,
+      "order": 540,
+      "title": "R random streams, the rest: rhyper, rnchisq, rmultinom, sample with prob, large n",
+      "score": 0,
       "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Partial (D5981). Landed: e.algo.rand.r (set.seed scrambling, Mersenne-Twister, runif, rnorm by inversion, rexp, sample and sample.int by rejection, n below 2^32) equal to R value for value on 4487 cases in oracle_rng; e.math.special.normal_quantile is R's AS 241 (qnorm at 0, 1 and 1 - 1e-8 fixed), lgamma and gamma answer R at zero, negative integers and negative non-integers, choose follows R for negative and fractional n; all in oracle_special (608 cases). Remaining: rgamma, rbeta, rbinom, rpois, rt, rchisq, rnbinom, rgeom, rhyper, rweibull, rlnorm, rlogis, rcauchy streams equal to R; sample with prob, sample for n >= 2^32 and the hash path past 1e7; qnorm for p below 2.5e-317 (R's asymptotic series). The d/p/q families moved to L288. Both fixtures run on windows and linux."
+      "thinking": "high",
+      "evidence": "Open. e.algo.rand.r and e.algo.rand.rdist cover runif, rnorm, rexp, sample, rgamma, rchisq, rt, rbeta, rbinom, rpois, rnbinom, rgeom, rweibull, rlnorm, rlogis, rcauchy. Acceptance, each equal to R value for value after set.seed: rhyper (HIN and H2PE, 414 lines of C), rnchisq, rmultinom, rsignrank, rwilcox, sample with prob (with and without replacement, Walker's alias for n >= 200), sample for n >= 2^32 and the hash path past 1e7, rbinom for n >= 2^31 through qbinom, rbinom where k * k overflows a C int, qnorm for p below 2.5e-317."
     },
     {
       "id": "L273",
