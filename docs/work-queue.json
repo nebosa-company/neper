@@ -15,15 +15,15 @@
       "evidence": "Open. e.algo.rand.r and e.algo.rand.rdist cover runif, rnorm, rexp, sample, rgamma, rchisq, rt, rbeta, rbinom, rpois, rnbinom, rgeom, rweibull, rlnorm, rlogis, rcauchy. Acceptance, each equal to R value for value after set.seed: rhyper (HIN and H2PE, 414 lines of C), rnchisq, rmultinom, rsignrank, rwilcox, sample with prob (with and without replacement, Walker's alias for n >= 200), sample for n >= 2^32 and the hash path past 1e7, rbinom for n >= 2^31 through qbinom, rbinom where k * k overflows a C int, qnorm for p below 2.5e-317."
     },
     {
-      "id": "L282",
+      "id": "L292",
       "category": "library",
       "group": "CRAN parity",
-      "order": 532,
-      "title": "Legacy .xls (BIFF) reader (readxl)",
+      "order": 541,
+      "title": "BIFF5 workbooks, hidden sheets and encrypted .xls in e.fmt.xls",
       "score": 0,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open. Needs L264. e.fmt.xlsx reads xlsx only; about 13k lines in libxls. Acceptance: read_excel on BIFF5 and BIFF8 workbooks (compound file container, shared strings, dates, formulas results, merged cells, hidden sheets) returns cell values and types equal to readxl on a generated and a public sample corpus."
+      "evidence": "Open. e.fmt.xls reads BIFF8 and agrees with readxl on the five readxl example workbooks. Acceptance: BIFF5 (Excel 5 and 95) workbooks, whose strings are ANSI and whose BOUNDSHEET differs; hidden and very hidden sheets as readxl lists them; XOR and RC4 encrypted workbooks refused with a named error; rich-text and phonetic strings; a generated corpus of workbooks that stress the SST CONTINUE boundary, the mini stream cutoff and DIFAT chains, equal to readxl."
     },
     {
       "id": "L275",

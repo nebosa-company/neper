@@ -149,3 +149,4 @@ oracle_isoband
 oracle_rdist
 oracle_decomp
 oracle_sparse
+oracle_xls
