@@ -44444,3 +44444,9 @@ R's `walker_ProbSampleReplace` (used only when `replace` and more than 200 of `n
 **Decision.** `parse_datetime_zone` takes an `e.tz` database and a zone name. A time with an offset or Z keeps the old arithmetic; any other is resolved in the zone, the earlier instant when the clock repeats and NaN when it was skipped, which is what readr 2.2.0 answers on every transition of the twelve zones in `e.tz.builtin` (a leap second 60 adds a second to :59). The Timestamp range of `e.time` (1677 to 2262) bounds the dates, and `%Z` with a zone abbreviation is not read as a zone.
 
 **Result.** Fixture `oracle_readr` equals readr on 14433 cases, 8177 of them zoned, on both hosts.
+
+## D6016 — the large-n random streams follow R's own routes
+
+`sample.int` with `n` past 2^32 needs no table: `R_unif_index` reads 16 bits per uniform up to 64 bits, so the with-replacement draw is the same code at any `n`. Without replacement and with `n` above 1e7 and `size` at most `n / 2`, R's `sample2` rejects repeats (up to 100 tries) instead of shuffling, and that is what `sample_int` does now. `rbinom` for `n >= INT_MAX` is `qbinom(unif_rand(), n, p, upper)`; `rhyper` with any argument at `INT_MAX` or more is `rbinom(1, ...)` when `k == 1` and `qhyper(unif_rand(), ..., upper)` otherwise. R multiplies the C int `k` by itself in BTPEC's `ynorm`, so past `k = 46340` the product wraps at 32 bits; the port wraps it the same way. `qnorm` below 2.5e-317 and past `r = 6.4e8` was already in `e.math.dist` and is now probed.
+
+**Result.** `oracle_rdist` 9789, `oracle_rng` 4809 and `oracle_dist` 6132 cases equal R on both hosts. Not probed: `rhyper` past `INT_MAX` with a large `k`, because R's `qhyper` walks the support term by term and takes minutes per draw.

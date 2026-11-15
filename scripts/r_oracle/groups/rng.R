@@ -29,5 +29,9 @@ emit("rng", character(), list(
   sampled(7, 40, TRUE),
   sampled(1000000, 20, TRUE),
   sampled(2^20, 20, FALSE),
-  sampled(5, 1, FALSE)
+  sampled(5, 1, FALSE),
+  sampled(2^33, 10, TRUE),
+  sampled(2^40, 6, TRUE),
+  sampled(2e7, 20, FALSE),
+  sampled(2^34, 10, FALSE)
 ))

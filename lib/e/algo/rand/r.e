@@ -171,10 +171,34 @@ fn rexp(r: *Rng, scale: f64) -> f64 {
 // sample.int(n, size, replace): 1-based, as R answers.
 fn sample_int(a: *mem.Arena, r: *Rng, n: i64, size: i64, replace: bool) -> ([]i64, err) {
     var out: []i64 = zero
-    if n < 0i64 || size < 0i64 || n >= 4294967296i64 { ret (out, TooLarge) }
+    if n < 0i64 || size < 0i64 { ret (out, TooLarge) }
     if !replace && size > n { ret (out, TooLarge) }
     let (y, y_error) = mem.alloc[i64](a, usize(size))
     if y_error != ok { ret (out, y_error) }
+    // R's sample2: n past 1e7 without replacement, size at most n / 2, rejects repeats
+    if !replace && n > 10000000i64 && size <= n / 2i64 {
+        var i = 0i64
+        while i < size {
+            var tries = 0i64
+            var v = 0i64
+            while true {
+                v = i64(unif_index(r, f64(n))) + 1i64
+                var dup = false
+                var k = 0i64
+                while k < i {
+                    if y[usize(k)] == v { dup = true }
+                    k += 1i64
+                }
+                if !dup { break }
+                tries += 1i64
+                if tries >= 100i64 { ret (out, TooLarge) }
+            }
+            y[usize(i)] = v
+            i += 1i64
+        }
+        ret (y, ok)
+    }
+    if !replace && size >= 2i64 && n >= 4294967296i64 { ret (out, TooLarge) }
     if replace || size < 2i64 {
         var i = 0i64
         while i < size {

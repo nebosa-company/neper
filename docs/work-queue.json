@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L293",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 542,
-      "title": "R random streams, the corners: Walker alias, ties in sample prob, n past 2^32, large-n rbinom and rhyper",
-      "score": 0.3,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6011): sample with prob and replace past 200 entries (Walker) and prob ties (revsort) equal R. Open. e.algo.rand.rdist has every nmath generator except the large-n ones. Acceptance, each equal to R value for value after set.seed: sample for n >= 2^32 and the hash path past 1e7, rbinom for n >= 2^31 and rhyper for N > INT_MAX through qbinom and qhyper, rbinom where k * k overflows a C int, qnorm for p below 2.5e-317."
-    },
-    {
       "id": "L292",
       "category": "library",
       "group": "CRAN parity",

@@ -4,12 +4,13 @@
 // `rcauchy`, ported from R's nmath. The C code keeps the set-up of the last call in statics; the
 // numbers it draws do not depend on them, so each call here sets up again.
 //
-// Not here: `rhyper`, `rnchisq`, `rmultinom`, `rsignrank`, `rwilcox`, rbinom for n >= 2^31 (R
-// answers it through `qbinom`), and rbinom where `k * k` overflows a C int (n past about 4e5).
+// Also here: rhyper, rnchisq, rmultinom, rsignrank, rwilcox, sample with prob, rbinom and rhyper
+// past INT_MAX (through qbinom and qhyper), and BTPEC's int-wrapped `k * k`.
 
 use e.algo.rand.r as rng
 use e.math
 use e.math.special as special
+use e.math.nmath_beta as nb
 use e.mem
 
 error TooBig
@@ -259,7 +260,7 @@ fn rbinom(r: *rng.Rng, nin: f64, pp: f64) -> f64 {
     if !finite(pp) || rn < 0.0f64 || pp < 0.0f64 || pp > 1.0f64 { ret special.nan() }
     if rn == 0.0f64 || pp == 0.0f64 { ret 0.0f64 }
     if pp == 1.0f64 { ret rn }
-    if rn >= 2147483647.0f64 { ret special.nan() }
+    if rn >= 2147483647.0f64 { ret nb.qbinom(rng.unif(r), rn, pp, false, false) }
     let n = i64(rn)
     var p = pp
     if 1.0f64 - pp < p { p = 1.0f64 - pp }
@@ -348,7 +349,10 @@ fn rbinom(r: *rng.Rng, nin: f64, pp: f64) -> f64 {
                     if v <= f { accepted = true }
                 } else {
                     let amaxp = (kf / npq) * ((kf * (kf / 3.0f64 + 0.625f64) + 0.1666666666666f64) / npq + 0.5f64)
-                    let ynorm = (0.0f64 - kf * kf) / (2.0f64 * npq)
+                    let kk2 = (0i64 - (i64(kf) * i64(kf)) + 2147483648i64) % 4294967296i64
+                    var wrapped = kk2
+                    if wrapped < 0i64 { wrapped += 4294967296i64 }
+                    let ynorm = f64(wrapped - 2147483648i64) / (2.0f64 * npq)
                     let alv = math.log[f64](v)
                     if alv < ynorm - amaxp {
                         accepted = true
@@ -542,7 +546,10 @@ fn rhyper(r: *rng.Rng, nn1in0: f64, nn2in0: f64, kkin0: f64) -> f64 {
     let kkin = math.round[f64](kkin0)
     let nn = nn1in + nn2in
     if nn1in < 0.0f64 || nn2in < 0.0f64 || kkin < 0.0f64 || kkin > nn1in + nn2in { ret special.nan() }
-    if nn > 2147483647.0f64 || kkin >= 2147483647.0f64 { ret special.nan() }
+    if nn1in >= 2147483647.0f64 || nn2in >= 2147483647.0f64 || kkin >= 2147483647.0f64 {
+        if kkin == 1.0f64 { ret rbinom(r, kkin, nn1in / (nn1in + nn2in)) }
+        ret nb.qhyper(rng.unif(r), nn1in, nn2in, kkin, false, false)
+    }
     let nn1 = i64(nn1in)
     let nn2 = i64(nn2in)
     let kk = i64(kkin)
