@@ -30,7 +30,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !near(special.lgamma(0.5f64), 0.5723649429247f64, tight) || !near(special.lgamma(10.0f64), 12.801827480081469f64, tight) { os.exit(1i32) }
     if !near(special.lgamma(100.5f64), 361.43554046777757f64, tight) || !near(special.lgamma(0.1f64), 2.252712651734206f64, tight) { os.exit(1i32) }
     if !near(special.gamma(5.0f64), 24.0f64, loose) || !near(special.gamma(1.0f64), 1.0f64, loose) || !near(special.gamma(0.5f64), 1.7724538509055159f64, loose) { os.exit(1i32) }
-    if !is_nan(special.lgamma(0.0f64)) || !is_nan(special.gamma(0.0f64 - 1.0f64)) { os.exit(1i32) }
+    if special.lgamma(0.0f64) != infinity || !is_nan(special.gamma(0.0f64 - 1.0f64)) { os.exit(1i32) }
     if special.lgamma(infinity) != infinity || special.gamma(infinity) != infinity { os.exit(1i32) }
     if special.choose(10.0f64, 3.0f64) != 120.0f64 || special.choose(52.0f64, 5.0f64) != 2598960.0f64 || special.choose(3.0f64, 5.0f64) != 0.0f64 { os.exit(1i32) }
 
@@ -72,7 +72,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !near(special.normal_cdf(special.normal_quantile(p)), p, 0.00000001f64) { os.exit(5i32) }
         p += 0.0137f64
     }
-    if !is_nan(special.normal_quantile(0.0f64)) || !is_nan(special.normal_quantile(1.0f64)) { os.exit(5i32) }
+    if special.normal_quantile(0.0f64) != negative_infinity || special.normal_quantile(1.0f64) != infinity || !is_nan(special.normal_quantile(1.5f64)) { os.exit(5i32) }
 
     try io.print("math special ok\n")
     ret ok
