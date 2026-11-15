@@ -117,4 +117,28 @@ for (gi in c(FALSE, TRUE)) {
     add("guess", gi, x, gl(x, gi))
   }
 }
+# locale names: args (), in [string, format, names], names = "months;abbreviated months;days;abbreviated days;am|pm"
+for (lang in c("en", "de", "fr", "es", "it", "nl", "pt", "ru", "sv", "pl")) {
+  dn <- date_names_lang(lang)
+  names_str <- paste(c(paste(dn$mon, collapse = "|"), paste(dn$mon_ab, collapse = "|"), paste(dn$day, collapse = "|"), paste(dn$day_ab, collapse = "|"), paste(dn$am_pm, collapse = "|")), collapse = ";")
+  loc <- locale(date_names = lang)
+  for (m in c(1, 2, 5, 8, 12)) for (d in c(1, 15, 31)) for (wd in c(1, 4, 7)) {
+    cand <- list(
+      c(sprintf("%s %02d %d", dn$mon[m], d, 2024), "%B %d %Y"), c(sprintf("%02d %s %d", d, dn$mon_ab[m], 2023), "%d %b %Y"),
+      c(sprintf("%s, %02d %s %d", dn$day_ab[wd], d, dn$mon_ab[m], 2021), "%a, %d %b %Y"),
+      c(sprintf("%s %s", dn$mon[m], "x"), "%B %d"))
+    for (cc in cand) {
+      r <- quiet(parse_date(cc[1], cc[2], locale = loc))
+      cases[[length(cases) + 1]] <- case("date_loc", 0, na0(as.numeric(r)), input = c(cc, names_str))
+    }
+  }
+  for (h in c(1, 9, 12)) for (ap in 1:2) {
+    str <- sprintf("%02d:30 %s", h, dn$am_pm[ap])
+    r <- quiet(parse_time(str, "%I:%M %p", locale = loc))
+    cases[[length(cases) + 1]] <- case("time_loc", 0, na0(as.numeric(r)), input = c(str, "%I:%M %p", names_str))
+    str2 <- sprintf("%s 2024 %02d:15 %s", dn$mon_ab[3], h, dn$am_pm[ap])
+    r2 <- quiet(parse_datetime(str2, "%b %Y %I:%M %p", locale = loc))
+    cases[[length(cases) + 1]] <- case("datetime_loc", 0, na0(as.numeric(r2)), input = c(str2, "%b %Y %I:%M %p", names_str))
+  }
+}
 emit("readr", "readr", list(cases))

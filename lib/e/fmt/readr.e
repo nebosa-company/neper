@@ -211,10 +211,10 @@ fn parse_logical(s0: str) -> f64 {
 
 // --- Dates and times.
 
-type Parser = struct { s: str, at: usize, year: i64, mon: i64, day: i64, hour: i64, min: i64, sec: i64, psec: f64, ampm: i64, tzh: i64, tzm: i64, sign: i64, utc: bool, compact: bool }
+type Parser = struct { s: str, at: usize, year: i64, mon: i64, day: i64, hour: i64, min: i64, sec: i64, psec: f64, ampm: i64, tzh: i64, tzm: i64, sign: i64, utc: bool, compact: bool, names: str }
 
 fn new_parser(s: str) -> Parser {
-    ret Parser { s: s, at: 0usize, year: -1i64, mon: 1i64, day: 1i64, hour: 0i64, min: 0i64, sec: 0i64, psec: 0.0f64, ampm: -1i64, tzh: 0i64, tzm: 0i64, sign: 1i64, utc: false, compact: true }
+    ret Parser { s: s, at: 0usize, year: -1i64, mon: 1i64, day: 1i64, hour: 0i64, min: 0i64, sec: 0i64, psec: 0.0f64, ampm: -1i64, tzh: 0i64, tzm: 0i64, sign: 1i64, utc: false, compact: true, names: "" }
 }
 
 fn done(p: *Parser) -> bool { ret p.at >= p.s.len }
@@ -300,10 +300,68 @@ fn month_word(i: usize, full: bool) -> str {
     ret "Dec"
 }
 
+// Item idx of group g in a locale's names: "months;abbreviated months;days;abbreviated days;am|pm",
+// the items of a group separated by |.
+fn name_item(names: str, group: usize, idx: usize) -> str {
+    var g = 0usize
+    var k = 0usize
+    var start = 0usize
+    var i = 0usize
+    while i <= names.len {
+        let end_of_text = i == names.len
+        if end_of_text || names[i] == 59u8 || names[i] == 124u8 {
+            if g == group && k == idx { ret names[start..i] }
+            if !end_of_text && names[i] == 59u8 {
+                g += 1usize
+                k = 0usize
+            } else {
+                k += 1usize
+            }
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    ret ""
+}
+
+fn day_word(i: usize, full: bool) -> str {
+    if i == 0usize { if full { ret "Sunday" } else { ret "Sun" } }
+    if i == 1usize { if full { ret "Monday" } else { ret "Mon" } }
+    if i == 2usize { if full { ret "Tuesday" } else { ret "Tue" } }
+    if i == 3usize { if full { ret "Wednesday" } else { ret "Wed" } }
+    if i == 4usize { if full { ret "Thursday" } else { ret "Thu" } }
+    if i == 5usize { if full { ret "Friday" } else { ret "Fri" } }
+    if full { ret "Saturday" }
+    ret "Sat"
+}
+
+fn take_day(p: *Parser, full: bool) -> bool {
+    var i = 0usize
+    while i < 7usize {
+        var w = day_word(i, full)
+        if p.names.len > 0usize {
+            var g = 3usize
+            if full { g = 2usize }
+            w = name_item(p.names, g, i)
+        }
+        if w.len > 0usize && starts_with_ci(p.s, p.at, w) {
+            p.at += w.len
+            ret true
+        }
+        i += 1usize
+    }
+    ret false
+}
+
 fn take_month(p: *Parser, full: bool) -> bool {
     var i = 0usize
     while i < 12usize {
-        let w = month_word(i, full)
+        var w = month_word(i, full)
+        if p.names.len > 0usize {
+            var g = 1usize
+            if full { g = 0usize }
+            w = name_item(p.names, g, i)
+        }
         if starts_with_ci(p.s, p.at, w) {
             p.mon = i64(i + 1usize)
             p.at += w.len
@@ -315,14 +373,20 @@ fn take_month(p: *Parser, full: bool) -> bool {
 }
 
 fn take_ampm(p: *Parser) -> bool {
-    if starts_with_ci(p.s, p.at, "AM") {
+    var am = "AM"
+    var pm = "PM"
+    if p.names.len > 0usize {
+        am = name_item(p.names, 4usize, 0usize)
+        pm = name_item(p.names, 4usize, 1usize)
+    }
+    if am.len > 0usize && starts_with_ci(p.s, p.at, am) {
         p.ampm = 1i64
-        p.at += 2usize
+        p.at += am.len
         ret true
     }
-    if starts_with_ci(p.s, p.at, "PM") {
+    if pm.len > 0usize && starts_with_ci(p.s, p.at, pm) {
         p.ampm = 2i64
-        p.at += 2usize
+        p.at += pm.len
         ret true
     }
     ret false
@@ -532,17 +596,18 @@ fn parse_fmt(p: *Parser, fmt: str) -> bool {
                 while p.at < p.s.len && !is_digit(p.s[p.at]) { p.at += 1usize }
             } else if f == 42u8 {
                 while p.at < p.s.len && !is_digit(p.s[p.at]) { p.at += 1usize }
+            } else if f == 97u8 {
+                if !take_day(p, false) { ret false }
+            } else if f == 65u8 && !(i < fmt.len && (fmt[i] == 68u8 || fmt[i] == 84u8)) {
+                if !take_day(p, true) { ret false }
             } else if f == 65u8 {
-                if i >= fmt.len { ret false }
                 let g = fmt[i]
                 i += 1usize
                 if i != fmt.len { ret false }
                 if g == 68u8 {
                     if !parse_date_auto(p) { ret false }
-                } else if g == 84u8 {
-                    if !parse_time_auto(p) { ret false }
                 } else {
-                    ret false
+                    if !parse_time_auto(p) { ret false }
                 }
             } else if f == 68u8 {
                 if !parse_fmt(p, "%m/%d/%y") { ret false }
@@ -615,16 +680,25 @@ fn hour_of(p: *Parser) -> i64 {
 }
 
 // parse_date(x, format): days since the epoch, or NaN. The default format is "%AD".
-fn parse_date(s: str, fmt: str) -> f64 {
+fn parse_date(s: str, fmt: str) -> f64 { ret parse_date_in(s, fmt, "") }
+
+fn parse_time(s: str, fmt: str) -> f64 { ret parse_time_in(s, fmt, "") }
+
+fn parse_datetime(s: str, fmt: str) -> f64 { ret parse_datetime_in(s, fmt, "") }
+
+// The same with a locale's names (see name_item); "" is English.
+fn parse_date_in(s: str, fmt: str, names: str) -> f64 {
     var p = new_parser(trim(s))
+    p.names = names
     if !parse_format(&p, fmt) { ret nan() }
     if !valid_date(&p) { ret nan() }
     ret f64(days_from_civil(p.year, p.mon, p.day))
 }
 
 // parse_time(x, format): seconds since midnight (the default format is "%AT").
-fn parse_time(s: str, fmt: str) -> f64 {
+fn parse_time_in(s: str, fmt: str, names: str) -> f64 {
     var p = new_parser(trim(s))
+    p.names = names
     if !parse_format(&p, fmt) { ret nan() }
     if p.min < 0i64 || p.min > 59i64 || p.sec < 0i64 || p.sec > 59i64 { ret nan() }
     let sgn = f64(p.sign)
@@ -632,8 +706,9 @@ fn parse_time(s: str, fmt: str) -> f64 {
 }
 
 // parse_datetime(x, format): seconds since the epoch in UTC; an empty format is ISO 8601.
-fn parse_datetime(s: str, fmt: str) -> f64 {
+fn parse_datetime_in(s: str, fmt: str, names: str) -> f64 {
     var p = new_parser(trim(s))
+    p.names = names
     var good = false
     if fmt.len == 0usize { good = parse_iso(&p) } else { good = parse_format(&p, fmt) }
     if !good { ret nan() }
