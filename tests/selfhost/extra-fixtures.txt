@@ -144,3 +144,4 @@ oracle_matrixstats
 oracle_datatable
 oracle_readr
 oracle_ansiwrap
+oracle_zoo
