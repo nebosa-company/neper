@@ -7,8 +7,8 @@ suppressMessages(library(cellranger))
 cases <- list()
 add <- function(fn, args, want, ...) cases[[length(cases) + 1]] <<- case(fn, args, want, ...)
 files <- c("clippy", "datasets", "deaths", "geometry", "type-me")
-# 5 biff5 and 6 biff5_mini (BIFF5) and 7 biff8_sst_continue (a string table in 120-byte CONTINUE records, with rich-text runs and phonetic text) are written by scripts/r_oracle/make_biff5.R
-cell_files <- c(files, "biff5", "biff5_mini", "biff8_sst_continue")
+# 8 difat (a 7 MB compound file with a DIFAT sector, scripts/make_xls_difat.py). 5 biff5 and 6 biff5_mini (BIFF5) and 7 biff8_sst_continue (a string table in 120-byte CONTINUE records, with rich-text runs and phonetic text) are written by scripts/r_oracle/make_biff5.R
+cell_files <- c(files, "biff5", "biff5_mini", "biff8_sst_continue", "difat")
 for (fi in seq_along(cell_files)) {
   path <- file.path(root, "tests", "data", "xls", paste0(cell_files[fi], ".xls"))
   for (si in seq_along(excel_sheets(path))) {

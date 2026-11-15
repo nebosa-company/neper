@@ -44456,3 +44456,9 @@ R's `walker_ProbSampleReplace` (used only when `replace` and more than 200 of `n
 `e.algo.stat.rstatix` takes groups laid out consecutively with their sizes and answers per pair (first < second, estimate = second minus first, as rstatix prints group1 and group2). `p_adjust` is R's `p.adjust` including the stable-order tie behaviour of hochberg, BH and BY and hommel's loop. Games-Howell uses `ptukey` and `qtukey` from `e.math.nmath_beta` rather than the quadrature in `e.algo.stat.infer`, so its tails agree with R; Dunn, Welch ANOVA, Friedman and pairwise t use `pnorm`, `pf`, `pchisq` and `pt` from the nmath ports. Cochran's Q is Friedman on 0/1 data, as rstatix computes it. `mahalanobis` answers squared distances by Cholesky and the 0.999 chi-squared threshold.
 
 **Result.** Fixture `oracle_rstatix` equals R 4.6.1 with rstatix 1.1.0 on 10589 cases on Windows; Linux not run. Not here: `wilcox_effsize` and `pairwise_wilcox_test` (need `wilcox.test` exact p and intervals), Cohen's d confidence intervals, `ref.group` restriction, omega squared.
+
+## D6018 — a compound file past 109 FAT sectors reads through its DIFAT chain, and a split rich-text run is kept
+
+The reader already followed the DIFAT sectors; what was missing was a file that needs one. `scripts/make_xls_difat.py` pads datasets.xls's Workbook stream with zeros after its last EOF record to 7.3 MB, which takes 113 FAT sectors and one DIFAT sector, and readxl reads it as it reads datasets.xls. One difference from readxl stays: libxls drops a string whose rich-text run data is split by a CONTINUE record, and `e.fmt.xls` keeps the string, which is what Excel shows. The corpus avoids that string so the two agree everywhere else.
+
+**Result.** `oracle_xls` equals readxl on the new workbook on both hosts.
