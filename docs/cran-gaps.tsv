@@ -76,3 +76,58 @@ bslib	19	Bootstrap theming	-	out-of-scope	-		web
 htmltools	46	HTML builders	-	out-of-scope	e.fmt.html
 rmarkdown	20	document rendering	-	out-of-scope	e.fmt.markdown
 knitr	40	literate programming	-	out-of-scope	-
+RcppArmadillo	91	dense and sparse linear algebra, decompositions, stats helpers	-	partial	e.algo.linalg.matrix		same gaps as RcppEigen, queued under L273
+rstan	55	NUTS/HMC sampler with dual-averaging and mass-matrix adaptation	stan, sampling	partial	e.math.mcmc		sampler basics exist; adaptation and divergence diagnostics unverified
+rstan	55	ADVI variational inference and L-BFGS optimizing	vb, optimizing	partial	e.math.opt, e.math.mcmc		L-BFGS present; ADVI absent
+rstan	55	Stan language compiler, reverse-mode autodiff	stan_model	gap	-	~160k	autodiff queued, Stan language compiler out of scope
+numDeriv	69	numerical gradient, jacobian, hessian, Richardson genD	grad, jacobian, hessian, genD	gap	-	~0.4k	exact algorithm in R source, small
+zoo	77	rollapply family, rollmean, na.locf, na.approx, na.spline, yearmon, yearqtr, merge by index	rollapply, na.locf, na.approx, yearmon	gap	-	~4k	e.algo.timeseries has no rolling or gap-filling helpers
+matrixStats	98	row/column kernels, weighted median and quantile, row ranks, cumulative and binned stats	rowSums2, colMedians, rowRanks, weightedMedian	gap	-	~11k	exact NA handling and tie rules matter
+data.table	75	rolling functions, overlap joins, rleid, shift, between, inrange	frollapply, foverlaps, rleid, shift, between	gap	-	~5k	only the algorithms, not the verb surface
+data.table	75	radix ordering, fread/fwrite	forder, fread, fwrite	partial	e.algo.sort, e.fmt.csv		stable radix semantics and fread type guessing unverified
+data.table	75	grouping, keyed joins, dcast, melt	[.data.table, merge, dcast, melt	out-of-scope	e.data.table, e.algo.pivot		data-frame verbs
+readr	79	delimited parsing, type guessing, locale-aware number/date/time parsers	read_delim, parse_number, parse_date, guess_parser	partial	e.fmt.csv, e.fmt.fixedwidth		parse_number and locale parsers absent
+vroom	94	parallel indexed delimited reader	vroom	partial	e.fmt.csv
+readxl	61	xlsx and legacy xls (BIFF) reading	read_excel	partial	e.fmt.xlsx		xlsx present; BIFF .xls reader absent (about 13k lines libxls)
+commonmark	97	CommonMark and GFM parse and render (html, xml, latex, man)	markdown_html, markdown_xml, markdown_latex, markdown_man	partial	e.fmt.markdown		verify against the spec test suite; xml, latex, man renderers
+yaml	56	YAML 1.1 parse and emit	yaml.load, as.yaml	partial	e.fmt.yaml		R yaml resolves scalars by 1.1 rules (yes/no, octal, sexagesimal); verify
+xml2	72	XML/HTML parse, XPath 1.0, XSD validation, namespaces, modification	read_xml, xml_find_all, xml_validate	partial	e.fmt.xml, e.fmt.xpath, e.fmt.xsd, e.fmt.html		HTML error recovery and XSD coverage unverified
+openssl	67	hashes, AES, RSA, ECDSA, Ed25519, X25519, x509, PKCS12, PEM, bignum	sha256, aes_cbc_encrypt, rsa_sign, read_cert	covered	e.crypto.*, e.algo.bignum
+terra	93	raster algebra, focal, resample, zonal, aggregate	rast, focal, resample, zonal	gap	-	~74k	GDAL wrapper; e.fmt.tiff reads files only
+terra	93	CRS reprojection (PROJ), vector geometry ops (GEOS)	project, buffer, intersect	partial	e.algo.geom, e.algo.geo		projections limited; no EPSG database
+tzdb	100	IANA time zone database access	tz_names, tz_version	covered	e.tz
+hms	78	time-of-day type and formatting	as_hms	covered	e.time
+prettyunits	86	pretty bytes, durations, numbers, vague dates	pretty_bytes, pretty_dt, vague_dt, pretty_num	partial	e.text.bytesize		bytes only
+abind	76	bind arrays along any dimension	abind	gap	-	~0.2k	e.algo.linalg.tensor has no n-d bind
+base64enc	51	base64 encode and decode	base64encode, base64decode	covered	e.bytes
+checkmate	87	argument validators	check*, assert*	skip	-		R language
+httpuv	96	HTTP and WebSocket server	startServer	partial	e.net
+later	84	event loop and deferred execution	later	covered	e.async, e.task
+promises	92	futures and promises	promise	covered	e.async
+fastmap	52	hash map and stack	fastmap	covered	e.data.map
+cachem	54	LRU/memory cache	cache_mem	covered	e.data.cache
+memoise	66	function memoisation	memoise	covered	e.data.cache
+bit	95	bit vectors, ordering helpers	bit, ramsort	covered	e.algo.bitset
+bit64	85	64-bit integers with NA semantics	as.integer64	covered	i64		NA overflow rules are an R convention
+crayon	53	ANSI style API	red, bold	covered	e.text.termkit
+progress	90	progress bars	progress_bar	covered	e.text.termkit
+ragg	99	AGG-based text and graphics devices	agg_png	out-of-scope	e.gfx.raster
+testthat	83	test framework	test_that	covered	e.test
+rappdirs	57	user data directories	user_data_dir	skip	-
+askpass	88	password prompt	askpass	skip	-
+sys	89	process execution	exec_wait	covered	e.proc
+desc	73	DESCRIPTION file parsing	desc	skip	-		R packaging
+pkgbuild	70	package build tools	build	skip	-		R packaging
+pkgload	74	package loading	load_all	skip	-		R packaging
+tinytex	58	LaTeX installer	install_tinytex	skip	-		R packaging
+rstudioapi	80	RStudio IDE API	getActiveDocumentContext	skip	-		R language
+evaluate	64	R expression evaluation	evaluate	skip	-		R language
+highr	63	R syntax highlighting	hilight	skip	-		R language
+backports	60	R version shims	-	skip	-		R language
+jquerylib	62	jQuery assets	-	skip	-		web assets
+fontawesome	59	icon assets	fa	skip	-		web assets
+htmlwidgets	82	widget framework	createWidget	out-of-scope	-		web
+shiny	65	web application framework	shinyApp	out-of-scope	-		web
+gridExtra	71	grid layout	grid.arrange	out-of-scope	-		graphics
+tidyverse	68	meta-package	-	skip	-		meta
+BH	81	Boost C++ headers	-	skip	-		reference for L265 (Boost.Math) and L271, not an API

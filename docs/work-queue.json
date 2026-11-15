@@ -3610,6 +3610,127 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open; largest gap (about 42k lines upstream). Needs L264. Acceptance: variables, nesting, mixins, functions, extend, maps, control directives, imports and the built-in function library compile to the same CSS as sass::sass for the libsass spec suite subset, in nested, expanded and compressed output styles."
+    },
+    {
+      "id": "L277",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 528,
+      "title": "Numerical derivatives (numDeriv)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Open. Needs L264. Gap from numDeriv (rank 69). Acceptance: grad, jacobian, hessian and genD with the Richardson, simple and complex-step methods and their method.args (eps, d, zero.tol, r, v) equal numDeriv on seeded smooth functions to 1e-10, including the fallback near zero."
+    },
+    {
+      "id": "L278",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 529,
+      "title": "Irregular time series toolkit (zoo)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. e.algo.timeseries has no rolling or gap-filling helpers. Acceptance: rollapply (width, by, align, partial, fill), rollmean, rollmedian, rollmax, na.locf (fromLast, maxgap), na.approx, na.spline, na.fill, yearmon and yearqtr arithmetic and formatting, merge by index with all/fill, equal to zoo on seeded series with NA runs and unsorted or duplicate indexes."
+    },
+    {
+      "id": "L279",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 530,
+      "title": "Row and column statistic kernels (matrixStats)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. Acceptance: rowSums2, rowMeans2, rowVars, rowSds, rowMads, rowMedians, rowQuantiles, rowRanks (ties.method), rowCumsums, rowDiffs, rowOrderStats, weightedMedian, weightedMean, binCounts, colRanges and the col* twins, with rows and cols subsets and na.rm, equal to matrixStats on seeded matrices with NA, Inf, ties and zero-width cases."
+    },
+    {
+      "id": "L280",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 531,
+      "title": "data.table algorithms: rolling, overlap joins, run ids",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. Algorithms only, not the verb surface. Acceptance: frollmean, frollsum, frollmax, frollapply (align, fill, na.rm, adaptive), foverlaps (type any, within, start, end, equal), rleid, shift (lag, lead, cyclic), between, inrange, and forder stability and na.last on seeded inputs equal to data.table."
+    },
+    {
+      "id": "L281",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 532,
+      "title": "Delimited parsing, type guessing and locale parsers (readr, vroom)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. e.fmt.csv and e.fmt.fixedwidth exist; no parse_number or type guessing. Acceptance: parse_number, parse_double and parse_integer with grouping and decimal marks, parse_date, parse_time and parse_datetime with formats and locales, guess_parser over seeded columns, and read_delim quote, escape, comment and trim rules, equal to readr on a corpus of malformed and locale-specific files."
+    },
+    {
+      "id": "L282",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 533,
+      "title": "Legacy .xls (BIFF) reader (readxl)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. e.fmt.xlsx reads xlsx only; about 13k lines in libxls. Acceptance: read_excel on BIFF5 and BIFF8 workbooks (compound file container, shared strings, dates, formulas results, merged cells, hidden sheets) returns cell values and types equal to readxl on a generated and a public sample corpus."
+    },
+    {
+      "id": "L283",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 534,
+      "title": "CommonMark and GFM conformance with xml, latex and man renderers (commonmark)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. e.fmt.markdown exists; conformance unmeasured. Acceptance: all CommonMark spec examples and the GFM extension examples (tables, strikethrough, autolink, tasklist, tagfilter) render to the html that commonmark gives; markdown_xml, markdown_latex and markdown_man equal commonmark on the same corpus; source positions and smart punctuation options match."
+    },
+    {
+      "id": "L284",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 535,
+      "title": "Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Open. Needs L264 and L265. e.math.mcmc has sampler basics; no autodiff, no ADVI. Acceptance: reverse-mode gradients of a closed set of Stan math functions (distributions from L265, matrix ops, log-sum-exp) agree with R-computed numDeriv gradients to 1e-8; NUTS with dual-averaging step size and diagonal mass-matrix adaptation recovers posterior means and sds of a seeded hierarchical model within Monte Carlo error of rstan; ADVI meanfield and fullrank match rstan vb ELBO trajectory shape and final means within tolerance. Stan language compiler is out of scope."
+    },
+    {
+      "id": "L285",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 536,
+      "title": "Raster core and CRS reprojection (terra)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "xhigh",
+      "evidence": "Open; large (terra is about 74k lines of C++ over GDAL, GEOS and PROJ). Needs L264. Acceptance: raster cell algebra, focal (window, function, edge), aggregate, resample (near, bilinear, cubic), crop, mask, zonal and extract over GeoTIFF inputs equal terra values; reprojection among EPSG 4326, 3857, UTM zones and a set of national grids matches PROJ to 1e-6 m; vector buffer, intersect and union on seeded polygons match GEOS after canonical ring ordering."
+    },
+    {
+      "id": "L286",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 537,
+      "title": "Pretty units and n-d array bind (prettyunits, abind)",
+      "score": 0,
+      "model": "sonnet",
+      "thinking": "medium",
+      "evidence": "Open. Needs L264. Acceptance: pretty_bytes (binary, decimal, compact), pretty_dt, pretty_sec, vague_dt and pretty_num equal prettyunits across magnitudes and rounding edge cases; abind along any dimension with along, new.names and force.array equals abind on seeded arrays of mixed rank."
+    },
+    {
+      "id": "L287",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 538,
+      "title": "YAML 1.1 scalar rules and libxml2 recovery conformance (yaml, xml2)",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Needs L264. Verifies the partial rows for yaml and xml2 in docs/cran-gaps.tsv. Acceptance: yaml.load and as.yaml equal yaml for 1.1 scalars (yes/no booleans, octal, sexagesimal, merge keys, anchors, tags) on a seeded corpus; read_xml and read_html with recover, XPath 1.0 results, namespace handling and xml_validate against XSD equal xml2 on the same corpus; each failing case becomes a fixture."
     }
   ]
 }
