@@ -44462,3 +44462,11 @@ R's `walker_ProbSampleReplace` (used only when `replace` and more than 200 of `n
 The reader already followed the DIFAT sectors; what was missing was a file that needs one. `scripts/make_xls_difat.py` pads datasets.xls's Workbook stream with zeros after its last EOF record to 7.3 MB, which takes 113 FAT sectors and one DIFAT sector, and readxl reads it as it reads datasets.xls. One difference from readxl stays: libxls drops a string whose rich-text run data is split by a CONTINUE record, and `e.fmt.xls` keeps the string, which is what Excel shows. The corpus avoids that string so the two agree everywhere else.
 
 **Result.** `oracle_xls` equals readxl on the new workbook on both hosts.
+
+## D6016 — the last column's quotes follow its first character; an open quote ends with a newline
+
+**Context.** L290. D6010 claimed the ragged-row cases were in the oracle; they were not (a replace in the R group had not applied), so the last-column rules were tested only by hand. This corrects D6010's rule and adds the cases.
+
+**Decision.** In the last column (the rest of a row) a leading quote makes it a quoted text: with `escape_double` every quote is syntax and doubled ones collapse; without it only the opening quote and one that ends the row are dropped, and any quote closes the quoted state. Without a leading quote the text is copied as it stands, and only a quote that follows a delimiter keeps a newline inside the column. The column is trimmed at both ends whenever `trim_ws` is on. A quote left open at the end of the text gives a field that ends in a newline, one added when the text had none. Not generated: a quote left open in the first field (readr 2.2.0 crashes) and `"x""` at the end of the text without `escape_double` (readr leaves it open in a way the other cases do not).
+
+**Result.** Fixture `oracle_readr` equals readr 2.2.0 on 15489 cases on both hosts.

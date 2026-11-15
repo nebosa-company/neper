@@ -3,7 +3,7 @@ L275	library	0	387	Unicode collation, transliteration and encoding detection (st
 L274	library	0	381	General linear mixed models (lme4)	Open.
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
-L290	library	0.85	518	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015).
+L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6016).
 L295	library	0	248	classInt: classification intervals	Open (CRAN rank 193).
 L296	library	0	398	proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener	Open (CRAN ranks 147, 152).
 L297	library	0	356	colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation	Open (CRAN rank 110).

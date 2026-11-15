@@ -53,10 +53,10 @@
       "group": "CRAN parity",
       "order": 539,
       "title": "readr locales, time zones and ragged read_delim rows",
-      "score": 0.85,
+      "score": 0.95,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6000, D6009, D6010, D6015). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names and equal readr for ten languages; read_delim equals readr on rows shorter and longer than the header and under a one-column header; parse_datetime_zone equals readr for a naive time in any zone of e.tz.builtin, at every transition. Open: a quote that is not closed (readr 2.2.0 crashes on one with escapes off, so the reference answers need a guard), and %Z naming a zone."
+      "evidence": "Partial (D6000, D6009, D6010, D6015, D6016). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names (ten languages) and a time zone (every transition of the zones in e.tz.builtin); read_delim equals readr on rows shorter and longer than the header, under a one-column header and with a quote left open, on 15489 cases. Open: %Z naming a zone, and two unterminated-quote shapes that crash or confuse readr 2.2.0 (listed in D6016)."
     },
     {
       "id": "L295",

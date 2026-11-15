@@ -81,9 +81,13 @@ delim_texts <- list(
   "a,b,c\n1,2,3\n4,5,6\n", "a,b\n1,2\n", "a,b", "a,b\n\n1,2\n", "a,b\r\n1,2\r\n", "a,,c\n,,\n", "\"x,y\",b\n1,2\n",
   "\"he said \"\"hi\"\"\",b\n1,2\n", "\"a\nb\",c\n1,2\n", " a , b \n 1 , 2 \n", "\" a \",b\n1,2\n", "a,b\n1,2\n\n\n",
   "\"a\"\"\",\"b\"\n1,2\n", "x\\,y,b\n1,2\n", "a,b # c\n1,2\n", "# top\na,b\n1,2\n", "a,b\n1,2 # tail\n",
-  "a,b\n\"q\"x,2\n", "é,日本\n1,2\n", "a,b\n1,\n", "a,b\n,2\n", "\"\",b\n1,2\n", "a,b\n\"1\",\"2\"\n", "1\n2\n3\n")
+  "a,b\n\"q\"x,2\n", "é,日本\n1,2\n", "a,b\n1,\n", "a,b\n,2\n", "\"\",b\n1,2\n", "a,b\n\"1\",\"2\"\n", "1\n2\n3\n",
+  "a\n1,2\n3\n", "a,b\n1\n3,4,5\n6,7\n", "a,b\n1,2,3\n", "a\n\"x,y\",2\n", "a,b\n1,2,3,4\n", "a,b\n1,\"x,y\",3\n",
+  "a,b\n1,\"x\"\"y\",3\n", "a,b\n1, 2 , 3 \n", "a,b\n1,2,\n", "a,b\n1,2,,\n", "a,b\n1,2,3 # c\n", "a,b\n1,\"q\"x,3\n",
+  "a,b\n1,2\\,3,4\n", "a,b,c\n1\n", "a,b,c\n1,2\n", "a\n\"x\ny\",2\n3\n", "a,b\n\n1,2,3\n\n4,5\n",
+  "a,b\n\"1,2\n", "a,b\n1,\"2\n3,4\n", "a,b\n1,\"x", "a,b\n1,2,\"x,y\n", "a,b\n1,\"x\n")
 for (txt in delim_texts) for (dl in c(",", ";", "\t")) for (qt in c(q, "")) for (cm in c("", "#")) for (flags in list(c(0, 1, 1), c(1, 0, 0), c(0, 0, 0), c(0, 1, 0))) {
-  if (grepl("\\\"", txt, fixed = TRUE) && nchar(qt) && flags[1] == 0) next # readr crashes on an unterminated quote
+  if (grepl("\\\"", txt, fixed = TRUE) && nchar(qt) && flags[1] == 0) next # readr 2.2.0 crashes on a quote left open in the first field (not generated)
   t2 <- if (dl == ",") txt else gsub(",", dl, txt, fixed = TRUE)
   if (dl != ",") t2 <- gsub("\\;", ";", t2, fixed = TRUE)
   r <- tryCatch(quiet(read_delim(I(t2), delim = dl, quote = qt, comment = cm, col_names = FALSE, col_types = cols(.default = "c"),
