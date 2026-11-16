@@ -224,3 +224,139 @@ fn bern(k: usize) -> f64 {
     if k == 9usize { ret 43867.0f64 / 798.0f64 }
     ret 174611.0f64 / 330.0f64
 }
+
+// J_nu(x), x > 0, by the alternating power series (fine to x of about 15)
+fn bessel_jnu(nu: f64, x: f64) -> f64 {
+    let hx = x / 2.0f64
+    var t = math.exp[f64](nu * math.log[f64](hx) - sp.lgamma(nu + 1.0f64))
+    var s = t
+    var k = 0usize
+    while k < 200usize {
+        t = 0.0f64 - t * hx * hx / (f64(k + 1usize) * (f64(k + 1usize) + nu))
+        s += t
+        if math.abs[f64](t) < 1.0e-18f64 * math.abs[f64](s) { break }
+        k += 1usize
+    }
+    ret s
+}
+
+// the Airy functions: Ai through K_{1/3} and Bi through I_{+-1/3} for x > 0, and both through J_{+-1/3} for x < 0
+fn airy_ai(x: f64) -> f64 {
+    if x > 0.0f64 {
+        let z = 2.0f64 / 3.0f64 * math.pow[f64](x, 1.5f64)
+        ret math.sqrt[f64](x / 3.0f64) / pi() * bessel_knu(1.0f64 / 3.0f64, z)
+    }
+    let a = 0.0f64 - x
+    let z = 2.0f64 / 3.0f64 * math.pow[f64](a, 1.5f64)
+    ret math.sqrt[f64](a) / 3.0f64 * (bessel_jnu(1.0f64 / 3.0f64, z) + bessel_jnu(0.0f64 - 1.0f64 / 3.0f64, z))
+}
+
+fn airy_bi(x: f64) -> f64 {
+    if x > 0.0f64 {
+        let z = 2.0f64 / 3.0f64 * math.pow[f64](x, 1.5f64)
+        ret math.sqrt[f64](x / 3.0f64) * (bessel_inu(0.0f64 - 1.0f64 / 3.0f64, z) + bessel_inu(1.0f64 / 3.0f64, z))
+    }
+    let a = 0.0f64 - x
+    let z = 2.0f64 / 3.0f64 * math.pow[f64](a, 1.5f64)
+    ret math.sqrt[f64](a / 3.0f64) * (bessel_jnu(0.0f64 - 1.0f64 / 3.0f64, z) - bessel_jnu(1.0f64 / 3.0f64, z))
+}
+
+// Carlson's R_F(x, y, z) by duplication and the fifth-order series
+fn ellint_rf(x: f64, y: f64, z: f64) -> f64 {
+    var xt = x
+    var yt = y
+    var zt = z
+    var ave = 0.0f64
+    var dx = 0.0f64
+    var dy = 0.0f64
+    var dz = 0.0f64
+    var i = 0usize
+    while i < 200usize {
+        let sx = math.sqrt[f64](xt)
+        let sy = math.sqrt[f64](yt)
+        let sz = math.sqrt[f64](zt)
+        let al = sx * (sy + sz) + sy * sz
+        xt = 0.25f64 * (xt + al)
+        yt = 0.25f64 * (yt + al)
+        zt = 0.25f64 * (zt + al)
+        ave = (xt + yt + zt) / 3.0f64
+        dx = (ave - xt) / ave
+        dy = (ave - yt) / ave
+        dz = (ave - zt) / ave
+        var m = math.abs[f64](dx)
+        if math.abs[f64](dy) > m { m = math.abs[f64](dy) }
+        if math.abs[f64](dz) > m { m = math.abs[f64](dz) }
+        if m < 0.0025f64 { break }
+        i += 1usize
+    }
+    let e2 = dx * dy - dz * dz
+    let e3 = dx * dy * dz
+    ret (1.0f64 + (e2 / 24.0f64 - 0.1f64 - 3.0f64 * e3 / 44.0f64) * e2 + e3 / 14.0f64) / math.sqrt[f64](ave)
+}
+
+// Carlson's R_D(x, y, z)
+fn ellint_rd(x: f64, y: f64, z: f64) -> f64 {
+    var xt = x
+    var yt = y
+    var zt = z
+    var sum = 0.0f64
+    var fac = 1.0f64
+    var ave = 0.0f64
+    var dx = 0.0f64
+    var dy = 0.0f64
+    var dz = 0.0f64
+    var i = 0usize
+    while i < 200usize {
+        let sx = math.sqrt[f64](xt)
+        let sy = math.sqrt[f64](yt)
+        let sz = math.sqrt[f64](zt)
+        let al = sx * (sy + sz) + sy * sz
+        sum += fac / (sz * (zt + al))
+        fac = 0.25f64 * fac
+        xt = 0.25f64 * (xt + al)
+        yt = 0.25f64 * (yt + al)
+        zt = 0.25f64 * (zt + al)
+        ave = 0.2f64 * (xt + yt + 3.0f64 * zt)
+        dx = (ave - xt) / ave
+        dy = (ave - yt) / ave
+        dz = (ave - zt) / ave
+        var m = math.abs[f64](dx)
+        if math.abs[f64](dy) > m { m = math.abs[f64](dy) }
+        if math.abs[f64](dz) > m { m = math.abs[f64](dz) }
+        if m < 0.0015f64 { break }
+        i += 1usize
+    }
+    let c1 = 3.0f64 / 14.0f64
+    let c2 = 1.0f64 / 6.0f64
+    let c3 = 9.0f64 / 22.0f64
+    let c4 = 3.0f64 / 26.0f64
+    let c5 = 0.25f64 * c3
+    let c6 = 1.5f64 * c4
+    let ea = dx * dy
+    let eb = dz * dz
+    let ec = ea - eb
+    let ed = ea - 6.0f64 * eb
+    let ee = ed + ec + ec
+    ret 3.0f64 * sum + fac * (1.0f64 + ed * (0.0f64 - c1 + c5 * ed - c6 * dz * ee) + dz * (c2 * ee + dz * (0.0f64 - c3 * ec + dz * c4 * ea))) / (ave * math.sqrt[f64](ave))
+}
+
+// the Legendre forms with modulus k: F(phi, k), E(phi, k), and the complete K(k) and E(k)
+fn ellint_f(phi: f64, k: f64) -> f64 {
+    let s = math.sin[f64](phi)
+    let c = math.cos[f64](phi)
+    ret s * ellint_rf(c * c, 1.0f64 - k * k * s * s, 1.0f64)
+}
+
+fn ellint_e(phi: f64, k: f64) -> f64 {
+    let s = math.sin[f64](phi)
+    let c = math.cos[f64](phi)
+    let q = 1.0f64 - k * k * s * s
+    ret s * ellint_rf(c * c, q, 1.0f64) - k * k * s * s * s * ellint_rd(c * c, q, 1.0f64) / 3.0f64
+}
+
+fn ellint_kcomp(k: f64) -> f64 { ret ellint_rf(0.0f64, 1.0f64 - k * k, 1.0f64) }
+
+fn ellint_ecomp(k: f64) -> f64 {
+    let q = 1.0f64 - k * k
+    ret ellint_rf(0.0f64, q, 1.0f64) - k * k * ellint_rd(0.0f64, q, 1.0f64) / 3.0f64
+}

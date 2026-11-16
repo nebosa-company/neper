@@ -149,7 +149,7 @@ L368	library	0	273	fixest: high-dimensional fixed-effects estimation	Open (CRAN 
 L369	library	0	366	plm and AER: panel data and applied econometrics	Open (CRAN ranks 392, 354).
 L372	library	0	259	spdep: spatial autocorrelation and spatial regression	Open (CRAN rank 336).
 L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
-L417	library	0.15	647	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen equal gsl on Windows;
+L417	library	0.25	697	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD equal gsl on Windows;
 L418	library	0	333	Rmpfr: arbitrary-precision floating point	Open (CRAN rank 567).
 L435	library	0	312	sna: social network analysis	Open (CRAN rank 629).
 L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).

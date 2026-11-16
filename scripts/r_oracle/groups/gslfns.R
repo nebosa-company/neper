@@ -15,4 +15,9 @@ for (rep in 1:30) {
   x <- runif(1, 0.05, 30); add("e1", c(x, 0), expint_E1(x)); add("ei", c(x, 0), expint_Ei(x)); add("ei", c(-x, 0), expint_Ei(-x))
   d <- runif(1, -8, 8); add("dawson", c(d, 0), dawson(d)); cl <- runif(1, 0.05, 1.5); add("clausen", c(cl, 0), clausen(cl))
 }
+for (rep in 1:30) {
+  ax <- runif(1, 0.05, 5); sg <- sample(c(-1, 1), 1); a <- sg * ax; add("airy_ai", c(a, 0), airy_Ai(a)); add("airy_bi", c(a, 0), airy_Bi(a))
+  k <- runif(1, 0, 0.98); ph <- runif(1, 0.05, 1.5); add("kcomp", c(k, 0), ellint_Kcomp(k)); add("ecomp", c(k, 0), ellint_Ecomp(k)); add("ellf", c(ph, k), ellint_F(ph, k)); add("elle", c(ph, k), ellint_E(ph, k))
+  r <- runif(3, 0.05, 6); add("rf", r, ellint_RF(r[1], r[2], r[3])); add("rd", r, ellint_RD(r[1], r[2], r[3]))
+}
 emit("gslfns", "gsl", list(cases))

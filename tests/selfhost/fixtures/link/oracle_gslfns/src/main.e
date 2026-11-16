@@ -20,6 +20,14 @@ fn answer(c: *const oracle.Case) -> f64 {
     if str.eq(k, "ei") { ret gs.expint_ei(x[0usize]) }
     if str.eq(k, "dawson") { ret gs.dawson(x[0usize]) }
     if str.eq(k, "clausen") { ret gs.clausen(x[0usize]) }
+    if str.eq(k, "airy_ai") { ret gs.airy_ai(x[0usize]) }
+    if str.eq(k, "airy_bi") { ret gs.airy_bi(x[0usize]) }
+    if str.eq(k, "kcomp") { ret gs.ellint_kcomp(x[0usize]) }
+    if str.eq(k, "ecomp") { ret gs.ellint_ecomp(x[0usize]) }
+    if str.eq(k, "ellf") { ret gs.ellint_f(x[0usize], x[1usize]) }
+    if str.eq(k, "elle") { ret gs.ellint_e(x[0usize], x[1usize]) }
+    if str.eq(k, "rf") { ret gs.ellint_rf(x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "rd") { ret gs.ellint_rd(x[0usize], x[1usize], x[2usize]) }
     if str.eq(k, "hzeta") { ret gs.hzeta(x[0usize], x[1usize]) }
     ret gs.hzeta(x[0usize], 1.0f64)
 }

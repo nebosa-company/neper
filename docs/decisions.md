@@ -45928,3 +45928,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.gslfns` gains `expint_e1` (series to x = 1, Lentz continued fraction beyond), `expint_ei` (series, and minus E1 for negative x), `dawson` (Rybicki's sum over odd multiples of 0.2) and `clausen` (Bernoulli-number series for 0 < x <= 1.5).
 
 **Result.** `oracle_gslfns` equals gsl on 430 cases on Windows at rel 1e-9, 150 of them new, E1 and Ei over (0.05, 30), Dawson over (-8, 8) and Clausen over (0.05, 1.5); Linux pending. L417 stays partial.
+
+## D6460 — gsl: Airy, Carlson and Legendre elliptic integrals
+
+`e.algo.stat.gslfns` gains `airy_ai` and `airy_bi` (through K and I of order 1/3 for x > 0, through the alternating series for J of order +-1/3 for x < 0), `ellint_rf` and `ellint_rd` (Carlson duplication with the fifth-order series), and on them `ellint_f`, `ellint_e`, `ellint_kcomp` and `ellint_ecomp` with modulus k.
+
+**Result.** `oracle_gslfns` equals gsl on 670 cases on Windows at rel 1e-9, 240 of them new: Airy over |x| in (0.05, 5) on both sides, the Legendre forms at k up to 0.98, and RF and RD over (0.05, 6). Elliptic Pi, RC and RJ, the Jacobian functions, the scaled forms and the error estimates are open; Linux pending. L417 stays partial.
