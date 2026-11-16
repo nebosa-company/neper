@@ -306,10 +306,10 @@
       "group": "CRAN parity",
       "order": 601,
       "title": "foreign: dBase, ARFF, Octave, Minitab and Systat",
-      "score": 0.2,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6417). Dense read.arff (numeric and nominal, missing values) equals foreign on Windows (oracle_foreign; Linux pending). Open: sparse and relational ARFF, dates, read.dbf and write.dbf, read.octave, read.mtp, read.systat. Was: Open (CRAN rank 249). Small to mid. SAS, SPSS and Stata are L304. Acceptance, equal to foreign on real files: read.dbf with memo fields, read.arff (sparse, dates, relational), read.octave, read.mtp, read.systat; write.dbf."
+      "evidence": "Partial (D6417, D6418 read.dbf common field types). Dense read.arff (numeric and nominal, missing values) equals foreign on Windows (oracle_foreign; Linux pending). Open: sparse and relational ARFF, dates, read.dbf and write.dbf, read.octave, read.mtp, read.systat. Was: Open (CRAN rank 249). Small to mid. SAS, SPSS and Stata are L304. Acceptance, equal to foreign on real files: read.dbf with memo fields, read.arff (sparse, dates, relational), read.octave, read.mtp, read.systat; write.dbf."
     },
     {
       "id": "L358",
