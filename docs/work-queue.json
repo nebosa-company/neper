@@ -4019,17 +4019,6 @@
       "evidence": "Opened 2026-11-03 from docs/security-findings.md:407 by the single-list audit; not previously a queue row. Acceptance: A symlink in the source tree whose resolved target escapes the project root is rejected with a diagnostic, and the entry is re-checked at open time. A fixture with an escaping symlink and a swap-after-readdir case fails before the change. Size S. Checked open: src/project.e lines 411 and 463 still accept entry.kind == .Symlink as a source candidate with no realpath containment; security-findings 'Deferred' list names it; no queue row."
     },
     {
-      "id": "L221",
-      "category": "library",
-      "group": "Formats",
-      "order": 367,
-      "title": "e.fmt.macho: read-only Mach-O headers, load commands, segments and symbol tables",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "high",
-      "evidence": "Opened 2026-11-03 from docs/ethical-hacking.md:42 by the single-list audit; not previously a queue row. Acceptance: Parses thin and fat Mach-O files into headers, load commands, segments/sections, symbol tables and dyld info with hand-built fixtures cross-checked against otool/nm text goldens. Truncated and malformed inputs return errors, never panics. Size M. Checked open: ls lib/e/fmt shows elf.e and pe.e but no macho; ethical-hacking P9 says the Mach-O read-only slicing is 'an S2 follow-up, not queued'; absent from queue.tsv."
-    },
-    {
       "id": "L222",
       "category": "library",
       "group": "Formats",

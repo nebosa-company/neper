@@ -47048,3 +47048,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `beck_fiala` keeps a fractional colouring, collects the sets with more than t active elements (fewer than the active elements, since each element lies in at most t sets), finds a null vector of that constraint matrix by reduced row echelon form, and moves along it until an element reaches plus or minus one, until all are fixed; every set then has discrepancy below 2t. `balance` picks each sign so the inner product with the running sum is not positive; `max_cut` puts each vertex opposite the larger group of its decided neighbours, the method of conditional expectations.
 
 **Result.** `algo_discrepancy` passes on Windows against brute force on 50 seeded instances; Linux pending. L213 leaves the queue. Spencer's theorem itself (existential, by partial colouring) is not implemented and the item's own acceptance asks only for the Beck-Fiala bound and the half-cut.
+
+## D6654 — e.fmt.macho: read-only Mach-O
+
+**Decision.** `e.fmt.macho` mirrors `e.fmt.elf`: borrowed bytes, no allocation, `Truncated` for tables and strings outside the data and `Invalid` for a bad magic, a command size under 8 or not a multiple of 4, or an index out of range. It decodes the four thin magics (32- and 64-bit, both byte orders), the load-command walk bounded by `sizeofcmds`, segments and sections of both widths, `LC_SYMTAB` entries and names, `LC_DYLD_INFO(_ONLY)` offsets, `LC_UUID`, `LC_LOAD_DYLIB` install names, and fat headers (always big-endian, 20-byte entries, 32-byte for `FAT_MAGIC_64`). The command count and the fat architecture count are capped (4096 and 64) so a hostile header cannot make a walk long.
+
+**Result.** `fmt_macho` passes on Windows with hand-built images and the every-truncation sweep; Linux pending. L221 leaves the queue. The goldens are written by hand from the otool and nm output formats, since neither tool runs on this machine.

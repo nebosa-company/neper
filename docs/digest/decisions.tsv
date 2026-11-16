@@ -3513,4 +3513,5 @@ D6649	836	e.ml.mds: classical MDS and the Johnson-Lindenstrauss bound
 D6650	935	e.algo.approx: approximation algorithms with their ratios
 D6651	939	e.algo.online: online algorithms beside their offline optima
 D6652	890	e.algo.linalg.iterative: conjugate gradients and GMRES over an operator
-D6653	973	e.algo.discrepancy: Beck-Fiala, vector balancing and derandomised max-cut
+D6653	974	e.algo.discrepancy: Beck-Fiala, vector balancing and derandomised max-cut
+D6654	985	e.fmt.macho: read-only Mach-O
