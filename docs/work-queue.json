@@ -1472,10 +1472,10 @@
       "group": "CRAN parity",
       "order": 749,
       "title": "QCA: qualitative comparative analysis",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 956). Mid. Verify the Quine-McCluskey in e.algo.logic first. Acceptance, equal to QCA: truthTable with inclusion and PRI cut-offs, minimize with complex, parsimonious and intermediate solutions, superSubset, pof parameters of fit, necessity tests."
+      "evidence": "Partial (D6481 complex and parsimonious minimal models of minimize() on a crisp truth table, as prime-implicant counts, minimum size and model count, equal QCA on Windows; oracle_qcapkg; Linux pending). Open: intermediate solution, cut-offs, fit parameters, superSubset, necessity. Was: Open (CRAN rank 956). Mid. Verify the Quine-McCluskey in e.algo.logic first. Acceptance, equal to QCA: truthTable with inclusion and PRI cut-offs, minimize with complex, parsimonious and intermediate solutions, superSubset, pof parameters of fit, necessity tests."
     },
     {
       "id": "L512",

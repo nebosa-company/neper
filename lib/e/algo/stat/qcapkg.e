@@ -1,0 +1,74 @@
+// R QCA: the models of minimize(): every minimum-cardinality set of prime implicants that covers the outcome-1 configurations, with the unobserved configurations
+// either excluded (the complex solution) or taken as don't cares (the parsimonious solution, include = "?"), on the prime implicants of e.algo.logic.
+//
+// Not here: the intermediate solution and directional expectations, inclusion and PRI cut-offs, necessity and sufficiency parameters of fit, superSubset and the case labels.
+
+use e.algo.logic as lg
+use e.mem
+
+// the number of minimum-cardinality covers of the minterms by the primes (their size in `size`), by subset enumeration over at most 22 primes; the primes that cover no
+// minterm are ignored, as QCA's prime implicant chart has only the ones that do
+fn min_covers(a: *mem.Arena, minterms: []const u32, primes: []const lg.Implicant) -> (usize, usize, err) {
+    var np = 0usize
+    var i = 0usize
+    let (keep, e1) = mem.alloc[usize](a, primes.len)
+    if e1 != ok { ret (0usize, 0usize, e1) }
+    while i < primes.len {
+        var any = false
+        var m = 0usize
+        while m < minterms.len {
+            if lg.covers(primes[i], minterms[m]) { any = true }
+            m += 1usize
+        }
+        if any {
+            keep[np] = i
+            np += 1usize
+        }
+        i += 1usize
+    }
+    if np > 22usize { ret (0usize, 0usize, lg.TooSmall) }
+    // the bit mask of the minterms each kept prime covers (at most 64 minterms)
+    if minterms.len > 64usize { ret (0usize, 0usize, lg.TooSmall) }
+    let (cov, e2) = mem.alloc[u64](a, np)
+    if e2 != ok { ret (0usize, 0usize, e2) }
+    i = 0usize
+    while i < np {
+        var bits = 0u64
+        var m = 0usize
+        while m < minterms.len {
+            if lg.covers(primes[keep[i]], minterms[m]) { bits = bits | (1u64 << u64(m)) }
+            m += 1usize
+        }
+        cov[i] = bits
+        i += 1usize
+    }
+    var full = 0u64
+    var m = 0usize
+    while m < minterms.len {
+        full = full | (1u64 << u64(m))
+        m += 1usize
+    }
+    var best = np + 1usize
+    var count = 0usize
+    var mask = 1u64
+    let total = 1u64 << u64(np)
+    while mask < total {
+        var got = 0u64
+        var j = 0usize
+        while j < np {
+            if (mask >> u64(j)) & 1u64 == 1u64 { got = got | cov[j] }
+            j += 1usize
+        }
+        if got == full {
+            let s = lg.popcount(u32(mask))
+            if s < best {
+                best = s
+                count = 1usize
+            } else if s == best {
+                count += 1usize
+            }
+        }
+        mask += 1u64
+    }
+    ret (best, count, ok)
+}

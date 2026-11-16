@@ -46054,3 +46054,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.gmmpkg` gains `kernel_weight` (Bartlett, Parzen, Truncated, Tukey-Hanning and Quadratic Spectral, as functions of lag over bandwidth) and `moment_cov_mode`, which adds the kernel-weighted autocovariances of the centred moments to the MDS covariance; `gmm_linear` takes a mode and a bandwidth. A manual Bartlett check in R with weight max(0, 1 - j / bw) reproduced gmm to all printed digits before this was coded.
 
 **Result.** `oracle_gmmpkg` agrees with gmm on 980 cases on Windows at rel 1e-6, 700 of them new: seven weightings over 20 data sets, the HAC ones at fixed bandwidths 3 to 6 and prewhite = 0. The Andrews and Newey-West bandwidth selectors, prewhitening, the iterated and CUE estimators, nonlinear moments and the hypothesis tests are open; Linux pending. L510 stays partial.
+
+## D6481 — QCA: the minimal models of minimize()
+
+`e.algo.stat.qcapkg` is new: `min_covers` enumerates the subsets of prime implicants (from `e.algo.logic`) that cover the outcome-1 configurations and returns the minimum size and the number of subsets of that size. A brute-force check in R over 37 random truth tables first showed QCA's solution list is exactly the set of minimum-cardinality covers of its prime-implicant chart, which only holds primes that cover at least one outcome-1 configuration. Complete tables give the complex solution; tables with unobserved rows, taken as don't cares, give the parsimonious one (include = "?").
+
+**Result.** `oracle_qcapkg` agrees with QCA on 140 cases on Windows, exact integers: the prime-implicant count (complex only), the minimum model size and the number of models, over random 3 to 5 variable tables. The intermediate solution and directional expectations, inclusion and PRI cut-offs, the parameters of fit, superSubset and necessity tests are open; Linux pending. L511 is partial.
