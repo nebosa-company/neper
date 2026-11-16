@@ -45742,3 +45742,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.graph.match.hungarian` agrees with clue::solve_LSAP (the optimal assignment, and its cost) and with lpSolve::lp.assign (the optimal cost) on thirty random real-valued square cost matrices of order 2 to 9, where the optimum is unique. The oracle fixture is new; no library change was needed. Not here: rectangular and maximisation problems (solve_LSAP(maximum = TRUE), forbidden cells), lp.transport, the ties the packages break their own way, and the rest of clue (cluster ensembles, consensus partitions).
 
 **Result.** `oracle_assign` agrees with clue and lpSolve on 90 cases on Windows; Linux pending. L367 stays partial.
+
+## D6429 — DescTools: Skew, Kurt, Gini and the simple location and spread measures
+
+`e.algo.stat.desctools` gives Skew and Kurt (method 1 the moment g1 and g2, method 2 the sample-adjusted G1 and G2, method 3 the ratio of the central moment to the (n - 1) standard deviation's power, with no further finite-sample factor, minus 3 for the kurtosis: the first attempt applied the Minitab-style ((n - 1) / n) factor and every method 3 case missed), Gini (the sorted-rank form, times n / (n - 1) when unbiased, the default), MeanAD about the mean, Gmean, Hmean, Entropy (Shannon in bits of the values as frequencies) and CoefVar. All equal DescTools to 1e-9 on twenty positive skewed samples of 6 to 60 values. Not here: Winsorize, Mode, the association measures, the tests and the confidence intervals of the package.
+
+**Result.** `oracle_desctools` equals DescTools on 260 cases on Windows; Linux pending. L363 is partial.
