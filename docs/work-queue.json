@@ -273,10 +273,10 @@
       "group": "CRAN parity",
       "order": 603,
       "title": "pls: partial least squares regression",
-      "score": 0.75,
+      "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6136). plsr with kernelpls, widekernelpls, simpls and oscorespls, pcr, and cross-validation (PRESS, adjCV, MSEP, R2) over given segments equal pls on Windows (oracle_pls; Linux pending). Open: cppls and the jackknife. Was: Open (CRAN rank 370). Small to mid. Verify the pls already in e.ml.linear first. Acceptance, equal to pls: plsr and pcr with kernelpls, widekernelpls, simpls and oscorespls, cppls, scores, loadings, coefficients, validation by CV and LOO with MSEP, RMSEP and R2, jackknife."
+      "evidence": "Partial (D6136). plsr with kernelpls, widekernelpls, simpls and oscorespls, pcr, and cross-validation (PRESS, adjCV, MSEP, R2) over given segments equal pls on Windows (oracle_pls; Linux pending). D6576: cppls (default powers) coefficients and fitted values equal pls on 288 values. Open: cppls with lower or upper powers and Y.add, the jackknife. Was: Open (CRAN rank 370). Small to mid. Verify the pls already in e.ml.linear first. Acceptance, equal to pls: plsr and pcr with kernelpls, widekernelpls, simpls and oscorespls, cppls, scores, loadings, coefficients, validation by CV and LOO with MSEP, RMSEP and R2, jackknife."
     },
     {
       "id": "L379",

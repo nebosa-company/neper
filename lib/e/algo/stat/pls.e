@@ -8,6 +8,7 @@
 // jackknife.
 
 use e.algo.stat.ica as ic
+use e.algo.stat.psych as ps
 use e.math
 use e.mem
 
@@ -1120,8 +1121,12 @@ fn svdpc(a: *mem.Arena, x0: []const f64, y0: []const f64, n: usize, p: usize, q:
     ret (f, ok)
 }
 
-// the fit of `method` (0 kernelpls, 1 simpls, 2 oscorespls, 3 widekernelpls, 4 svdpc) with the package's default tolerances
+// the fit of `method` (0 kernelpls, 1 simpls, 2 oscorespls, 3 widekernelpls, 4 svdpc, 5 cppls) with the package's default tolerances
 fn fit_method(a: *mem.Arena, method: u8, x: []const f64, y: []const f64, n: usize, p: usize, q: usize, ncomp: usize, doc: bool) -> (Pls, err) {
+    if method == 5u8 {
+        let (fc, ec) = cppls(a, x, y, n, p, q, ncomp, doc)
+        ret (fc, ec)
+    }
     if method == 0u8 {
         let (f, e) = kernelpls(a, x, y, n, p, q, ncomp, doc)
         ret (f, e)
@@ -1278,4 +1283,258 @@ fn train_sse(f: Pls, y: []const f64, n: usize, q: usize, j: usize, ac: usize) ->
         i += 1usize
     }
     ret s
+}
+
+// cppls.fit(X, Y, ncomp, center) with the default powers (lower = upper = 0.5, no Y.add): canonical powered PLS, each weight vector the first canonical direction of X W0 (W0 = X'Y) against Y mapped back through W0, the first canonical vector found by power iteration on Szz^-1 Szy Syy^-1 Syz; the coefficients and fitted values follow the plain loops of cppls.fit (signs of weights, scores and loadings are free, the coefficients and fits are not)
+fn cppls(a: *mem.Arena, x0: []const f64, y0: []const f64, n: usize, p: usize, q: usize, ncomp: usize, doc: bool) -> (Pls, err) {
+    var none: Pls = zero
+    let (xo, xm, e1) = centre(a, x0, n, p, doc)
+    if e1 != ok { ret (none, e1) }
+    let (y, ym, e2) = centre(a, y0, n, q, doc)
+    if e2 != ok { ret (none, e2) }
+    let (f, fe) = alloc_fit(a, n, p, q, ncomp)
+    if fe != ok { ret (none, fe) }
+    let (x, e3) = mem.alloc[f64](a, n * p)
+    let (ww, e4) = mem.alloc[f64](a, p * ncomp)
+    let (pp, e5) = mem.alloc[f64](a, p * ncomp)
+    let (qq, e6) = mem.alloc[f64](a, q * ncomp)
+    let (tt, e7) = mem.alloc[f64](a, n * ncomp)
+    let (tsqs, e8) = mem.alloc[f64](a, ncomp)
+    let (pw, e9) = mem.alloc[f64](a, ncomp * ncomp)
+    let (ipw, e10) = mem.alloc[f64](a, ncomp * ncomp)
+    if e3 != ok { ret (none, e3) }
+    if e4 != ok { ret (none, e4) }
+    if e5 != ok { ret (none, e5) }
+    if e6 != ok { ret (none, e6) }
+    if e7 != ok { ret (none, e7) }
+    if e8 != ok { ret (none, e8) }
+    if e9 != ok { ret (none, e9) }
+    if e10 != ok { ret (none, e10) }
+    var i = 0usize
+    while i < n * p {
+        x[i] = xo[i]
+        i += 1usize
+    }
+    let (syy, e11) = tmm(a, y, y, n, q, q)
+    if e11 != ok { ret (none, e11) }
+    let (syyi, e12) = mem.alloc[f64](a, q * q)
+    if e12 != ok { ret (none, e12) }
+    if !ps.invert(a, syy, q, syyi) { ret (none, e12) }
+    let (v, e13) = mem.alloc[f64](a, q)
+    let (v2, e14) = mem.alloc[f64](a, q)
+    let (wa, e15) = mem.alloc[f64](a, p)
+    let (ta, e16) = mem.alloc[f64](a, n)
+    let (pa, e17) = mem.alloc[f64](a, p)
+    if e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok { ret (none, e13) }
+    var ac = 0usize
+    while ac < ncomp {
+        let (w0, e20) = tmm(a, x, y, n, p, q)
+        if e20 != ok { ret (none, e20) }
+        let (z, e21) = mm(a, x, w0, n, p, q)
+        if e21 != ok { ret (none, e21) }
+        let (szz, e22) = tmm(a, z, z, n, q, q)
+        let (szy, e23) = tmm(a, z, y, n, q, q)
+        if e22 != ok { ret (none, e22) }
+        if e23 != ok { ret (none, e23) }
+        let (szzi, e24) = mem.alloc[f64](a, q * q)
+        if e24 != ok { ret (none, e24) }
+        if !ps.invert(a, szz, q, szzi) { ret (none, e24) }
+        // M = Szz^-1 Szy Syy^-1 Szy'
+        let (m1, e25) = mm(a, szzi, szy, q, q, q)
+        if e25 != ok { ret (none, e25) }
+        let (m2, e26) = mm(a, m1, syyi, q, q, q)
+        if e26 != ok { ret (none, e26) }
+        let (mt, e27) = mem.alloc[f64](a, q * q)
+        if e27 != ok { ret (none, e27) }
+        var r = 0usize
+        while r < q {
+            var c = 0usize
+            while c < q {
+                mt[r * q + c] = szy[c * q + r]
+                c += 1usize
+            }
+            r += 1usize
+        }
+        let (mm3, e28) = mm(a, m2, mt, q, q, q)
+        if e28 != ok { ret (none, e28) }
+        r = 0usize
+        while r < q {
+            v[r] = 1.0f64 / math.sqrt[f64](f64(q))
+            r += 1usize
+        }
+        var it = 0usize
+        while it < 5000usize {
+            var nv = 0.0f64
+            r = 0usize
+            while r < q {
+                var s = 0.0f64
+                var c = 0usize
+                while c < q {
+                    s += mm3[r * q + c] * v[c]
+                    c += 1usize
+                }
+                v2[r] = s
+                nv += s * s
+                r += 1usize
+            }
+            nv = math.sqrt[f64](nv)
+            var diff = 0.0f64
+            r = 0usize
+            while r < q {
+                let nw = v2[r] / nv
+                diff += math.abs[f64](nw - v[r])
+                v[r] = nw
+                r += 1usize
+            }
+            if diff < 1.0e-15f64 { break }
+            it += 1usize
+        }
+        // a = Szz^-1 Szy Syy^-1 (Szy' ...) : the canonical vector of Z is Szz^-1 Szy u with u the Y-side eigenvector; v here is the Z-side eigenvector already
+        i = 0usize
+        while i < p {
+            var s = 0.0f64
+            var c = 0usize
+            while c < q {
+                s += w0[i * q + c] * v[c]
+                c += 1usize
+            }
+            wa[i] = s
+            i += 1usize
+        }
+        var nw = 0.0f64
+        i = 0usize
+        while i < p {
+            nw += wa[i] * wa[i]
+            i += 1usize
+        }
+        nw = math.sqrt[f64](nw)
+        i = 0usize
+        while i < p {
+            wa[i] = wa[i] / nw
+            i += 1usize
+        }
+        var tsq = 0.0f64
+        i = 0usize
+        while i < n {
+            var s = 0.0f64
+            var c = 0usize
+            while c < p {
+                s += x[i * p + c] * wa[c]
+                c += 1usize
+            }
+            ta[i] = s
+            tsq += s * s
+            i += 1usize
+        }
+        i = 0usize
+        while i < p {
+            var s = 0.0f64
+            var l = 0usize
+            while l < n {
+                s += x[l * p + i] * ta[l]
+                l += 1usize
+            }
+            pa[i] = s / tsq
+            i += 1usize
+        }
+        var j = 0usize
+        while j < q {
+            var s = 0.0f64
+            i = 0usize
+            while i < n {
+                s += y[i * q + j] * ta[i]
+                i += 1usize
+            }
+            qq[j * ncomp + ac] = s / tsq
+            j += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var c = 0usize
+            while c < p {
+                x[i * p + c] -= ta[i] * pa[c]
+                c += 1usize
+            }
+            tt[i * ncomp + ac] = ta[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < p {
+            ww[i * ncomp + ac] = wa[i]
+            pp[i * ncomp + ac] = pa[i]
+            f.loadings[i * ncomp + ac] = pa[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            f.scores[i * ncomp + ac] = ta[i]
+            i += 1usize
+        }
+        tsqs[ac] = tsq
+        // B_a = W[, 1:a] (P[, 1:a]' W[, 1:a])^-1 Q[, 1:a]'
+        let na = ac + 1usize
+        let (sub, e30) = mem.alloc[f64](a, na * na)
+        let (subi, e31) = mem.alloc[f64](a, na * na)
+        if e30 != ok { ret (none, e30) }
+        if e31 != ok { ret (none, e31) }
+        var l1 = 0usize
+        while l1 < na {
+            var l2 = 0usize
+            while l2 < na {
+                var s = 0.0f64
+                i = 0usize
+                while i < p {
+                    s += pp[i * ncomp + l1] * ww[i * ncomp + l2]
+                    i += 1usize
+                }
+                sub[l1 * na + l2] = s
+                l2 += 1usize
+            }
+            l1 += 1usize
+        }
+        if !ps.invert(a, sub, na, subi) { ret (none, e31) }
+        i = 0usize
+        while i < p {
+            j = 0usize
+            while j < q {
+                var s = 0.0f64
+                l1 = 0usize
+                while l1 < na {
+                    var l2 = 0usize
+                    while l2 < na {
+                        s += ww[i * ncomp + l1] * subi[l1 * na + l2] * qq[j * ncomp + l2]
+                        l2 += 1usize
+                    }
+                    l1 += 1usize
+                }
+                f.coef[ac * p * q + i * q + j] = s
+                j += 1usize
+            }
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            j = 0usize
+            while j < q {
+                var s = 0.0f64
+                var c = 0usize
+                while c < p {
+                    s += xo[i * p + c] * f.coef[ac * p * q + c * q + j]
+                    c += 1usize
+                }
+                f.fitted[ac * n * q + i * q + j] = s + ym[j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        var xv = 0.0f64
+        i = 0usize
+        while i < p {
+            xv += pa[i] * pa[i]
+            i += 1usize
+        }
+        f.xvar[ac] = xv * tsq
+        ac += 1usize
+    }
+    ret (f, ok)
 }

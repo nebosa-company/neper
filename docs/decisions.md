@@ -46624,3 +46624,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** L423 is delivered: bigglm with the families and links biglm can start from `eta = 0`, weights, offsets, sandwich errors and aliased columns equals biglm on Windows. The quasi families are not ported (they take a user-supplied variance function, outside the item's families), and the inverse-link families fail in biglm itself.
 
 **Result.** L423 leaves the queue; the Linux run of oracle_bigglm is batched with the others.
+
+## D6576 — pls: cppls
+
+**Decision.** `pls.cppls` is cppls.fit with the default powers: each weight vector is `W0 a`, W0 the cross-product of the current X with Y and `a` the first canonical vector of `X W0` against Y (power iteration on `Szz^-1 Szy Syy^-1 Syz`, which is what cancorr's pivoted QR and SVD return up to sign), then t, p, q and the deflation of X as in the other fits, and `B_a = W (P'W)^-1 Q'`. fit_method takes it as method 5, so the cross-validation and the other helpers apply.
+
+**Result.** `oracle_pls` agrees with pls on 288 new cppls values (coefficients and fitted values sums at every number of components, 1 to 3 responses, centred and not) on Windows (5040 cases in all); Linux pending. cppls with lower or upper powers, Y.add and the jackknife stay open; L359 at 0.85.
