@@ -47260,3 +47260,5 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6698 — SuppDists moments
 
 **Decision.** `moments_*` return the six numbers `makeStatList` is built from. The closed forms are the package's (inverse Gaussian from its R code, Johnson SN, SL and SU, Friedman, Spearman and Pearson); the rest use the package's own devices so that the same grid and the same Romberg iterates are formed: the density-weighted integrals over the 1% to 99% quantiles to a relative 1e-4, the mode as the best of 128 equally spaced densities, the Friedman median interpolated between exact support points. Kendall (its fourth moment needs the large-N approximation) and the generalised hypergeometric (its eleven varieties) are not covered. Linux pending.
+
+D6698 correction: the first commit of the moments compared nothing, because the oracle file had been generated before the moment cases existed (the R generation hung on `smaxFratio(5, 9)`, where the package itself loops). The oracle now holds 468 moment values and passes; the max F ratio rows are compared at the two digits `makeStatList` rounds them to, and its cases avoid df 5 with k 9.
