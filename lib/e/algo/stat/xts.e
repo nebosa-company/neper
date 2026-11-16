@@ -266,3 +266,81 @@ fn lag_diff(a: *mem.Arena, x: []const f64, kind: u8, k: usize) -> ([]f64, err) {
     }
     ret (out, ok)
 }
+
+// first(x, "k <unit>") and last(x, "k <unit>") on a daily or coarser series: the 1-based inclusive row range
+// (start, end) of the rows kept; unit 3 weeks .. 0 years use endpoints as xts does, unit 4 days is a plain row
+// count (the series units are days already); a negative k drops from the front (first) or back (last)
+fn first_last(a: *mem.Arena, idx: []const f64, on: u8, k: i64, is_last: bool) -> (usize, usize, err) {
+    let n = idx.len
+    if on == 4u8 {
+        var kk = k
+        if kk > i64(n) { kk = i64(n) }
+        if kk >= 0i64 {
+            if is_last { ret (n - usize(kk) + 1usize, n, ok) }
+            ret (1usize, usize(kk), ok)
+        }
+        let drop = usize(0i64 - kk)
+        if drop >= n { ret (1usize, 0usize, ok) }
+        if is_last { ret (1usize, n - drop, ok) }
+        ret (drop + 1usize, n, ok)
+    }
+    let (ep, e) = endpoints(a, idx, on, 1i64)
+    if e != ok { ret (0usize, 0usize, e) }
+    let np = ep.len - 1usize
+    var rpf = k
+    if rpf > i64(np) { rpf = i64(np) }
+    if rpf > 0i64 {
+        if is_last { ret (ep[ep.len - 1usize - usize(rpf)] + 1usize, n, ok) }
+        ret (1usize, ep[usize(rpf)], ok)
+    }
+    if rpf < 0i64 {
+        let m = usize(0i64 - rpf)
+        if is_last {
+            // x[1:0] is c(1, 0) in R: a zero endpoint keeps the first row
+            let stop = ep[ep.len - 1usize - m]
+            if stop == 0usize { ret (1usize, 1usize, ok) }
+            ret (1usize, stop, ok)
+        }
+        ret (ep[m] + 1usize, n, ok)
+    }
+    ret (1usize, 0usize, ok)
+}
+
+// merge(x, y, join): both indices ascending and unique; out receives the merged index, xo and yo the columns (NaN where
+// absent); join 0 outer, 1 inner, 2 left, 3 right; answers the number of rows
+fn merge2(idx_x: []const f64, x: []const f64, idx_y: []const f64, y: []const f64, join: u8, out: []f64, xo: []f64, yo: []f64) -> usize {
+    var i = 0usize
+    var j = 0usize
+    var r = 0usize
+    while i < idx_x.len || j < idx_y.len {
+        var take_x = false
+        var take_y = false
+        if i < idx_x.len && j < idx_y.len {
+            if idx_x[i] == idx_y[j] {
+                take_x = true
+                take_y = true
+            } else if idx_x[i] < idx_y[j] {
+                take_x = true
+            } else {
+                take_y = true
+            }
+        } else if i < idx_x.len {
+            take_x = true
+        } else {
+            take_y = true
+        }
+        var keep = true
+        if join == 1u8 { keep = take_x && take_y }
+        if join == 2u8 { keep = take_x }
+        if join == 3u8 { keep = take_y }
+        if keep {
+            if take_x { out[r] = idx_x[i] } else { out[r] = idx_y[j] }
+            if take_x { xo[r] = x[i] } else { xo[r] = nan() }
+            if take_y { yo[r] = y[j] } else { yo[r] = nan() }
+            r += 1usize
+        }
+        if take_x { i += 1usize }
+        if take_y { j += 1usize }
+    }
+    ret r
+}

@@ -31,10 +31,10 @@
       "group": "CRAN parity",
       "order": 547,
       "title": "xts: period handling and time-indexed series",
-      "score": 0.7,
+      "score": 0.9,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6022). endpoints (all units, k), OHLC and sum/mean/max/min over endpoints (so to.period, to.weekly and split by period), align.time, periodicity, lag and diff equal xts 0.14.3 on both hosts. Open: first and last with period strings, merge and join by index, to.period index labels. Was: Open (CRAN rank 165). Small. e.algo.stat.zoo holds zoo, yearmon, yearqtr. Acceptance, equal to xts: endpoints, to.period and to.daily/weekly/monthly/quarterly (OHLC with volume), period.apply, apply.daily to apply.yearly, align.time, merge and join by index, first and last with period strings, lag and diff, periodicity, split by period."
+      "evidence": "Partial (D6022, D6089): first and last with period strings and merge by index (four joins) equal xts on 3096 values on Windows (oracle_xts2). Earlier:  endpoints (all units, k), OHLC and sum/mean/max/min over endpoints (so to.period, to.weekly and split by period), align.time, periodicity, lag and diff equal xts 0.14.3 on both hosts. Open: to.period index labels. Was: Open (CRAN rank 165). Small. e.algo.stat.zoo holds zoo, yearmon, yearqtr. Acceptance, equal to xts: endpoints, to.period and to.daily/weekly/monthly/quarterly (OHLC with volume), period.apply, apply.daily to apply.yearly, align.time, merge and join by index, first and last with period strings, lag and diff, periodicity, split by period."
     },
     {
       "id": "L297",
