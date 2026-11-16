@@ -346,3 +346,34 @@ fn var_fit_det(a: *mem.Arena, y: []const f64, t0: usize, k: usize, p: usize, det
     }
     ret ok
 }
+
+// forecast error variance shares from the orthogonalised responses oo (h matrices Theta_0 .. Theta_{h-1}, k by k): out[(n - 1) k k + i k + j] is the share of series i's n-step error variance due to impulse j
+fn var_fevd(oo: []const f64, k: usize, h: usize, out: []f64) {
+    var n = 1usize
+    while n <= h {
+        var i = 0usize
+        while i < k {
+            var tot = 0.0f64
+            var j = 0usize
+            while j < k {
+                var s = 0.0f64
+                var t = 0usize
+                while t < n {
+                    let v = oo[t * k * k + i * k + j]
+                    s += v * v
+                    t += 1usize
+                }
+                out[(n - 1usize) * k * k + i * k + j] = s
+                tot += s
+                j += 1usize
+            }
+            j = 0usize
+            while j < k {
+                out[(n - 1usize) * k * k + i * k + j] /= tot
+                j += 1usize
+            }
+            i += 1usize
+        }
+        n += 1usize
+    }
+}

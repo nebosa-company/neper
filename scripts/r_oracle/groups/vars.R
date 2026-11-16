@@ -26,6 +26,8 @@ for (rep in 1:15) {
   io <- irf(v, n.ahead = h, ortho = TRUE, boot = FALSE)$irf
   tot <- 0; pos <- 0; for (imp in names(io)) for (i in 0:h) for (j in seq_len(K)) { pos <- pos + 1; tot <- tot + io[[imp]][i + 1, j] * pos }
   add("oirf", a, tot)
+  fe <- fevd(v, n.ahead = h); tot <- 0; pos <- 0; for (i in seq_len(K)) for (n in 1:h) for (j in seq_len(K)) { pos <- pos + 1; tot <- tot + fe[[i]][n, j] * pos }
+  add("fevd", a, tot)
 }
 for (rep in 1:16) {
   K <- sample(2:3, 1); T0 <- sample(50:100, 1); p <- sample(1:3, 1); dt <- (rep - 1) %% 4

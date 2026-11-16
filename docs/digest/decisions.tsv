@@ -3307,4 +3307,5 @@ D6435	1360	rpart: classification trees (gini) with cost-complexity pruning
 D6436	956	vars: VAR estimation and lag selection
 D6437	422	vars: forecasts and impulse responses
 D6438	300	vars: orthogonalised impulse responses
-D6439	362	vars: deterministic term types
+D6439	363	vars: deterministic term types
+D6440	313	vars: forecast error variance decomposition

@@ -45808,3 +45808,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.vars` gains `var_fit_det`: VAR with none, const, trend or both, the trend being the 1-based observation index (p + 1 .. T) as in vars, columns ordered lags, const, trend.
 
 **Result.** `oracle_vars` equals vars on 181 cases on Windows, 16 of them across the four types; Linux pending. L433 stays partial.
+
+## D6440 — vars: forecast error variance decomposition
+
+`e.algo.stat.vars` gains `var_fevd`: shares of each series' n-step error variance from the squared orthogonalised responses, normalised per row, as fevd().
+
+**Result.** `oracle_vars` equals vars on 196 cases on Windows; Linux pending. L433 stays partial.
