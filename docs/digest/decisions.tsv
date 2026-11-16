@@ -3525,4 +3525,5 @@ D6661	880	a ratchet on duplicated helpers
 D6663	980	docs/algos.md: names that resolve and rows that say what was delivered
 D6664	864	stale comments in lib/e corrected
 D6665	796	recursion depth guards: parser combinators and Avro
-D6666	908	recursion depth guards: the JavaScript engine
+D6666	909	recursion depth guards: the JavaScript engine
+D6667	945	quicksort recurses on the smaller part

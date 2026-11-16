@@ -5,6 +5,58 @@ use e.mem
 error Failed
 
 type Rec = struct { key: i64, seq: i64 }
+type Adversary = struct { val: []usize, nsolid: usize, candidate: usize, gas: usize }
+type Gas = struct { id: usize, adv: *Adversary }
+
+// McIlroy's adversary ("A Killer Adversary for Quicksort"): every element starts as an unset "gas" value larger than any fixed
+// one, and each comparison between two gas elements fixes one of them, the one that last stood as the pivot candidate, to
+// the next smallest value. Whatever the sorter does, the values end up in an order that makes it quadratic.
+fn gas_cmp(a: Gas, b: Gas) -> i32 {
+    let st = a.adv
+    if st.val[a.id] == st.gas && st.val[b.id] == st.gas {
+        if a.id == st.candidate {
+            st.val[a.id] = st.nsolid
+            st.nsolid += 1usize
+        } else {
+            st.val[b.id] = st.nsolid
+            st.nsolid += 1usize
+        }
+    }
+    if st.val[a.id] == st.gas {
+        st.candidate = a.id
+    } else if st.val[b.id] == st.gas {
+        st.candidate = b.id
+    }
+    if st.val[a.id] < st.val[b.id] { ret 0i32 - 1i32 }
+    if st.val[a.id] > st.val[b.id] { ret 1i32 }
+    ret 0i32
+}
+
+// An input that makes the median-of-three quicksort take quadratic time and, with recursion on both parts, a stack as deep as
+// the input: it must still sort, because the recursion is on the smaller part only. 80000 elements is where the old two-sided
+// recursion overflowed the stack (it passed at 70000); the run takes about 20 seconds because the work is quadratic.
+fn adversary_checks(a: *mem.Arena) -> err {
+    let n = 80000usize
+    let (values, ve) = mem.alloc[usize](a, n)
+    let (items, ie) = mem.alloc[Gas](a, n)
+    if ve != ok || ie != ok { ret Failed }
+    var adv = Adversary { val: values, nsolid: 0usize, candidate: 0usize, gas: n }
+    var i = 0usize
+    while i < n {
+        values[i] = n
+        items[i] = Gas { id: i, adv: &adv }
+        i += 1usize
+    }
+    sort.quick[Gas](items)
+    // every item is fixed or left as gas; the values by id are the killer input
+    i = 0usize
+    while i < n {
+        if i > 0usize && values[items[i - 1usize].id] > values[items[i].id] { ret Failed }
+        i += 1usize
+    }
+    ret ok
+}
+
 type Flip = struct { calls: i64 }
 
 // Orders on `key` alone, so records with equal keys are ties and a stable sort has
@@ -190,6 +242,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     er_ok_bounds[1usize] = 2usize
     if sort.external_merge[i32](er_runs[..], er_ok_bounds[..], er_cursor[..], er_heap[..], er_out[..]) != ok { ret Failed }
     if er_out[0usize] != 1i32 || er_out[1usize] != 2i32 { ret Failed }
+    let adversary = adversary_checks(a)
+    if adversary != ok { ret adversary }
     try io.print("algo sort ok\n")
     ret ok
 }

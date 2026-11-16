@@ -377,45 +377,54 @@ fn merge[T: type](items: []T, scratch: []T) -> err {
 }
 
 // Quicksort: median of three for the pivot, Hoare partition, insertion sort below
-// sixteen elements. Not stable.
+// sixteen elements. Not stable. The smaller part is sorted by recursion and the larger by
+// the loop, so the recursion is at most log2(n) deep whatever the input (an adversarial
+// input makes the work quadratic, not the stack deep).
 fn quick[T: type](items: []T) {
-    if items.len < 16usize {
-        insertion[T](items)
-        ret
+    var range = items
+    while range.len >= 16usize {
+        let n = range.len
+        let mid = n / 2usize
+        let last = n - 1usize
+        if T.cmp(range[mid], range[0usize]) < 0i32 {
+            let carried = range[mid]
+            range[mid] = range[0usize]
+            range[0usize] = carried
+        }
+        if T.cmp(range[last], range[0usize]) < 0i32 {
+            let carried = range[last]
+            range[last] = range[0usize]
+            range[0usize] = carried
+        }
+        if T.cmp(range[last], range[mid]) < 0i32 {
+            let carried = range[last]
+            range[last] = range[mid]
+            range[mid] = carried
+        }
+        let pivot = range[mid]
+        var i = 0usize
+        var j = n
+        while true {
+            while T.cmp(range[i], pivot) < 0i32 { i += 1usize }
+            j -= 1usize
+            while T.cmp(range[j], pivot) > 0i32 { j -= 1usize }
+            if i >= j { break }
+            let carried = range[i]
+            range[i] = range[j]
+            range[j] = carried
+            i += 1usize
+        }
+        let left = range[..j + 1usize]
+        let right = range[j + 1usize..n]
+        if left.len < right.len {
+            quick[T](left)
+            range = right
+        } else {
+            quick[T](right)
+            range = left
+        }
     }
-    let n = items.len
-    let mid = n / 2usize
-    let last = n - 1usize
-    if T.cmp(items[mid], items[0usize]) < 0i32 {
-        let carried = items[mid]
-        items[mid] = items[0usize]
-        items[0usize] = carried
-    }
-    if T.cmp(items[last], items[0usize]) < 0i32 {
-        let carried = items[last]
-        items[last] = items[0usize]
-        items[0usize] = carried
-    }
-    if T.cmp(items[last], items[mid]) < 0i32 {
-        let carried = items[last]
-        items[last] = items[mid]
-        items[mid] = carried
-    }
-    let pivot = items[mid]
-    var i = 0usize
-    var j = n
-    while true {
-        while T.cmp(items[i], pivot) < 0i32 { i += 1usize }
-        j -= 1usize
-        while T.cmp(items[j], pivot) > 0i32 { j -= 1usize }
-        if i >= j { break }
-        let carried = items[i]
-        items[i] = items[j]
-        items[j] = carried
-        i += 1usize
-    }
-    quick[T](items[..j + 1usize])
-    quick[T](items[j + 1usize..n])
+    insertion[T](range)
 }
 
 // Cycle sort: every element is written at most once, into its final slot; the

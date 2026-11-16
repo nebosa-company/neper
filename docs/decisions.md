@@ -47120,3 +47120,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** The parser counts expression nesting in `parse_primary` (1500) and refuses a run of more than 1500 chained binary operators, whose left-leaning tree is as deep as the chain; the evaluator counts nested `eval` calls in their own counter (1200, a RangeError), separate from the JS call depth of 160, because the native stack of the test executable gave out between 2000 and 2400 evaluations; `JSON.stringify` refuses past 2000 levels of its object stack, which also bounds the quadratic cycle check; `Array.prototype.flat` counts its recursion (2000). Each limit throws a catchable error or a syntax error.
 
 **Result.** `js_depth_guards` passes on Windows and crashes (exit 127) on the old code; 69 other js, web and dom fixtures still pass; Linux pending. L241 is at 0.85, with `sort.quick` and the other unguarded parser shapes open.
+
+## D6667 — quicksort recurses on the smaller part
+
+**Decision.** `sort.quick` recursed on both halves, so an input that makes every partition lopsided (a median-of-three killer) made the stack as deep as the input. It now recurses on the smaller part and loops on the larger, bounding the recursion at log2(n) frames; the quadratic time on such an input is unchanged, which is the nature of the algorithm, and `in_place` (heapsort) remains the bounded-time choice. The regression builds McIlroy's adversary through a comparison with shared state and sorts 80000 elements with it: the old code overflowed the stack at that size (and not at 70000), the new code does not.
+
+**Result.** `algo_sort` and `algo_search` pass on Windows; `algo_sort` now takes about 20 seconds; Linux pending. L241 leaves the queue; the JavaScript parser shapes the review did not list (prefix operator runs, nested conditionals, long member chains) remain unguarded.

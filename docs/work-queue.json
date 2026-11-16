@@ -4811,17 +4811,6 @@
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: a replay whose delete fails returns the error and the applied count excludes it. Notes: docs/library-hardening-plan.md. Checked 2026-11-16: table_delete answers only found or not, and the db_storage fixture (check 14) replays a log whose random deletes name keys the table never held, so making a missing key an error breaks its goldens (applied 20, sum 362); decide first whether redo of a delete is idempotent, then change the fixture log or the contract together."
     },
     {
-      "id": "L241",
-      "category": "library",
-      "group": "Library",
-      "order": 454,
-      "title": "Recursion without a depth guard",
-      "score": 0.85,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6665). Two of the sites now stop at a depth limit with a named result and a regression that fails before: e.parse.comb counts nesting in a call helper that every combinator runs its parsers through (MAX_DEPTH 2048; a hundred thousand open parentheses fail with cx.too_deep and cx.overflow set, 200 still parse; parse_comb) and e.fmt.avro skip and decode_resolved count depth in the decoder (MAX_DEPTH 512; a self-referencing list schema with 100000 levels answers TooDeep, a 50-level one skips; fmt_avro). D6666 added the four JavaScript sites, each answering an error where a hundred thousand levels used to overflow the stack (new fixture js_depth_guards, exit 127 on the old code, passes now; a sweep of 69 js, web and dom fixtures shows no regression): the parser counts expression nesting in parse_primary (1500) and refuses more than 1500 chained binary operators, the evaluator counts eval nesting (1200, a RangeError, since the native stack gave out between 2000 and 2400), JSON.stringify refuses past 2000 levels of the object stack, and Array flat counts its recursion (2000). Open: algo/sort.e quick still recurses on both halves; it should recurse on the smaller and loop on the larger, and a regression needs a median-of-three adversary. Other recursive parser shapes (prefix operator runs, nested conditionals, long member chains) are not guarded. Was: Opened from the 2026-11-13 library review. Acceptance: a 100,000-deep input to each returns an error, not a stack overflow. Notes: docs/library-hardening-plan.md."
-    },
-    {
       "id": "L247",
       "category": "library",
       "group": "Library",
