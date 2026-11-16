@@ -405,3 +405,74 @@ fn crps_gtc_unit(y0: f64, lower0: f64, upper0: f64, lmass0: f64, umass0: f64) ->
 fn crps_gtcnorm(y: f64, loc: f64, scale: f64, lower: f64, upper: f64, lmass: f64, umass: f64) -> f64 {
     ret scale * crps_gtc_unit((y - loc) / scale, (lower - loc) / scale, (upper - loc) / scale, lmass, umass)
 }
+
+fn plogis_std(x: f64) -> f64 { ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - x)) }
+
+// log(plogis(-x)) = -log(1 + exp(x)), stable for either sign
+fn log_plogis_neg(x: f64) -> f64 {
+    var m = x
+    if m < 0.0f64 { m = 0.0f64 }
+    ret 0.0f64 - (m + math.log[f64](1.0f64 + math.exp[f64](0.0f64 - math.abs[f64](x))))
+}
+
+// crps_gtclogis(y, location, scale, lower, upper, lmass, umass): the logistic analogue of crps_gtcnorm, with the package's small-p series for the end terms
+fn crps_gtcl_unit(y0: f64, lower0: f64, upper0: f64, lmass0: f64, umass0: f64) -> f64 {
+    var y = y0
+    var lower = lower0
+    var upper = upper0
+    var lmass = lmass0
+    var umass = umass0
+    if lower > 3.0f64 {
+        y = 0.0f64 - y
+        let nl = 0.0f64 - upper
+        let nu = 0.0f64 - lower
+        lower = nl
+        upper = nu
+        let tl = lmass
+        lmass = umass
+        umass = tl
+    }
+    let inf = 1.0f64 / 0.0f64
+    var out_l1 = 0.0f64
+    var out_l2 = 0.0f64
+    var out_l3 = 0.0f64
+    var out_u1 = 0.0f64
+    var out_u2 = 0.0f64
+    var out_u3 = 1.0f64
+    var p_l = 0.0f64
+    var p_u = 1.0f64
+    var z = y
+    if lower != 0.0f64 - inf || lmass != 0.0f64 {
+        p_l = plogis_std(lower)
+        if lower != 0.0f64 - inf {
+            let lp = log_plogis_neg(lower)
+            if lmass != 0.0f64 { out_l1 = lower * lmass * lmass }
+            out_l2 = 2.0f64 * (lower * p_l + lp) * lmass
+            var t = 0.0f64
+            if p_l > 1.0e-8f64 { t = p_l + lp } else { t = 0.0f64 - p_l * p_l / 2.0f64 - p_l * p_l * p_l / 3.0f64 }
+            out_l3 = t - p_l * (lower * p_l + 2.0f64 * lp)
+        }
+        if lower > z { z = lower }
+    }
+    if upper != inf || umass != 0.0f64 {
+        p_u = plogis_std(upper)
+        if upper != inf {
+            let lp = log_plogis_neg(upper)
+            if umass != 0.0f64 { out_u1 = upper * umass * umass }
+            out_u2 = 2.0f64 * (upper * p_u + lp) * umass
+            var t = 0.0f64
+            if p_u > 1.0e-8f64 { t = p_u + lp } else { t = 0.0f64 - p_u * p_u / 2.0f64 - p_u * p_u * p_u / 3.0f64 }
+            out_u3 = t - p_u * (upper * p_u + 2.0f64 * lp)
+        }
+        if upper < z { z = upper }
+    }
+    let a1 = p_u - p_l
+    let a2 = 1.0f64 - (umass + lmass)
+    let b = out_u3 - out_l3
+    let out = out_u1 - out_l1 - (z * ((1.0f64 - 2.0f64 * lmass) * p_u + (1.0f64 - 2.0f64 * umass) * p_l) + (2.0f64 * log_plogis_neg(z) - out_u2 - out_l2 + a2 * b / a1) * a2) / a1
+    ret out + math.abs[f64](y - z)
+}
+
+fn crps_gtclogis(y: f64, loc: f64, scale: f64, lower: f64, upper: f64, lmass: f64, umass: f64) -> f64 {
+    ret scale * crps_gtcl_unit((y - loc) / scale, (lower - loc) / scale, (upper - loc) / scale, lmass, umass)
+}

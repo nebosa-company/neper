@@ -46222,3 +46222,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.scoringrules` gains `crps_gtcnorm`, the generalized truncated and censored normal CRPS with point masses at the two ends, in the package's own arrangement: location and scale removed first, the unit core flipping sign and swapping the ends when lower > 3 for accuracy, the pieces of the formula (p_l, p_u, the two half-variance normal terms and the masses) switched on only for a finite end or a non-zero mass. crps_tnorm is the case of zero masses and crps_cnorm the case of masses equal to the tail probabilities.
 
 **Result.** `oracle_scoringrules` equals scoringRules on 721 cases on Windows, 120 of them new: 30 draws each of gtcnorm, tnorm, cnorm and tnorm with the lower end above 3 (the sign-flipped branch). The logistic, t and other truncated and censored families, the negative binomial, the kernel CRPS and the weights are open; Linux pending. L475 stays partial.
+
+## D6509 — scoringRules: truncated and censored logistic CRPS
+
+`e.algo.stat.scoringrules` gains `crps_gtclogis` (and through it tlogis and clogis): the logistic analogue of D6508, with log(plogis(-x)) computed stably for either sign and the package's small-probability series (-p^2/2 - p^3/3) for the end terms when p_l or p_u is below 1e-8.
+
+**Result.** `oracle_scoringrules` equals scoringRules on 841 cases on Windows, 120 of them new: 30 draws each of gtclogis, tlogis, clogis and tlogis with the lower end above 3. The truncated and censored t, the negative binomial, the kernel CRPS and the weights are open; Linux pending. L475 stays partial.
