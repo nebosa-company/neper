@@ -46736,3 +46736,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** No new arithmetic: the M-spline derivative is the B-spline derivative with the M-spline normalisation (`row` kind 1 with `deriv`), and the d-th derivative of an I-spline is the (d - 1)-th derivative of the M-spline of the same degree, knots and intercept.
 
 **Result.** `oracle_splines2` agrees with splines2 on 240 derivative summaries (degrees 2 to 4) on Windows (1160 cases in all); Linux pending. L445 stays partial: natural splines with fewer than two knots and periodic bases.
+
+## D6592 — coda: effectiveSize, ar and acf
+
+**Decision.** `e.algo.stat.codapkg` (new) has `acf` (biased autocovariances over the lag-0 value), `ar_yw` (the Yule-Walker fit of ar(aic = TRUE): Levinson-Durbin to `order.max = floor(10 log10 n)`, AIC `n log(var) + 2 k`, `var.pred = var_k n / (n - k - 1)`) and `effective_size` (`n var(x) / (var.pred / (1 - sum ar)^2)`, spectrum0.ar's estimate); a straight-line series is not special-cased.
+
+**Result.** `oracle_coda` agrees with coda on 120 values (ess, selected order, spectral estimate, acf sums; 30 AR(1) series, a third with a linear trend) on Windows; Linux pending. L299 starts at 0.1: geweke, gelman, heidel, raftery, HPDinterval, cramer.test, posterior and loo are open.

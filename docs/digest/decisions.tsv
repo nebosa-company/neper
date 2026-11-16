@@ -3461,4 +3461,5 @@ D6589	1078	splines2: naturalSpline
 D6590	665	splines2: cSpline
 D6590	731	splines2: cSpline
 D6591	598	splines2: derivatives of the M- and I-splines
-D6591	552	splines2: derivatives of M- and I-splines
+D6591	553	splines2: derivatives of M- and I-splines
+D6592	729	coda: effectiveSize, ar and acf
