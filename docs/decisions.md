@@ -46126,3 +46126,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.catoolspkg` is new: `window_stat` computes the mean, minimum, maximum, standard deviation or type-7 quantile of the window around a position, clipped to the data at both ends, which is what runmean, runmin, runmax, runsd and runquantile return under their default end rules (the window shrinks instead of being padded or dropped). The exact-window definition reproduces the package's C running sums at rel 1e-9.
 
 **Result.** `oracle_catoolspkg` agrees with caTools on 750 cases on Windows at rel 1e-9: five statistics at five positions of each of 30 series of 12 to 60 values, windows 3 to 9. Even windows, the other end rules and alignments, runmad, colAUC and the rest of caTools are open; Linux pending. L333 stays partial.
+
+## D6493 — polynom and caTools colAUC
+
+`e.algo.stat.polynompkg` is new: `predict` (Horner), `deriv`, `integral` (zero constant), `poly_calc` (the monic polynomial of given roots, ascending), `poly_orth` (the orthonormal polynomials under the unweighted discrete inner product, by the three-term recurrence with alpha = <x p, p> / <p, p> and beta = <p, p> / <prev, prev>, then normalised to a positive leading coefficient) and `col_auc` for two classes (ties half, taken as max(auc, 1 - auc) as colAUC reports).
+
+**Result.** `oracle_polynompkg` agrees with polynom and caTools on 830 cases on Windows at rel 1e-9, 30 random polynomials of 2 to 7 coefficients, orthogonal bases on 5 to 12 points to degree 4 and two-class AUCs over 10 to 40 observations. solve and the complex roots, the polynomial operators, more than two classes and the ROC plot are open; Linux pending. L333 stays partial.

@@ -3360,4 +3360,5 @@ D6488	923	stats::lowess
 D6489	712	stats::spline: fmm and natural
 D6490	761	pracma: kron and pinv for full-rank matrices
 D6491	674	pracma: singular values and cond
-D6492	789	caTools: running-window statistics
+D6492	790	caTools: running-window statistics
+D6493	894	polynom and caTools colAUC
