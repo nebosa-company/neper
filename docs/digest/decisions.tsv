@@ -3193,4 +3193,5 @@ D6117	1298	urca ur.sp, ca.po and ca.jo close L303
 D6118	1413	boot: tsboot, studentized intervals, abc.ci, antithetic resampling, censboot ordinary
 D6119	1100	class SOM and LVQ, FNN get.knn and knn.reg close L322
 D6120	1355	permute grid designs, shuffleSet, allPerms with plot restrictions and numPerms of grids close L323
-D6121	1340	KernSmooth dpill and bkde2D; rlbin keeps the right end point
+D6121	1341	KernSmooth dpill and bkde2D; rlbin keeps the right end point
+D6122	1121	tseries bds.test, tsbootstrap, terasvirta.test and white.test

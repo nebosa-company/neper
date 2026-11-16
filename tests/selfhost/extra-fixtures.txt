@@ -250,3 +250,4 @@ oracle_permgrid
 oracle_permset
 oracle_permall
 oracle_dpill
+oracle_tsutils
