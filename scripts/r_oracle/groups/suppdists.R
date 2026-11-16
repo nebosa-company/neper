@@ -22,4 +22,9 @@ for (rep in 1:20) {
 # ghyper: "gh_d" "gh_p" "gh_q" args (a, k, N, x)
 for (rep in 1:10) { N <- sample(10:40, 1); a <- sample(2:(N - 2), 1); k <- sample(2:(N - 2), 1); for (xx in seq(max(0, k + a - N), min(a, k))) { add("gh_d", c(a, k, N, xx), dghyper(xx, a, k, N)); add("gh_p", c(a, k, N, xx), pghyper(xx, a, k, N)) }
   for (pr in c(0.1, 0.5, 0.9)) add("gh_q", c(a, k, N, pr), qghyper(pr, a, k, N)) }
+# Pearson correlation: "pc_d" "pc_p" "pc_q": args (rho, N, x or p)
+for (rep in 1:40) {
+  N <- sample(5:60, 1); rho <- round(runif(1, -0.9, 0.9), 2); r <- round(runif(1, -0.95, 0.95), 3); pr <- round(runif(1, 0.05, 0.95), 3)
+  add("pc_d", c(rho, N, r), dPearson(r, N, rho)); add("pc_p", c(rho, N, r), pPearson(r, N, rho), 1e-7); add("pc_q", c(rho, N, pr), qPearson(pr, N, rho), 1e-6)
+}
 emit("suppdists", "SuppDists", list(cases))

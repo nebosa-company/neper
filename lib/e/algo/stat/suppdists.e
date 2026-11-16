@@ -3,7 +3,7 @@
 // support: the inversion count or squared-rank-difference sum is rounded to the nearest, a half going down), and Johnson's system (families SN,
 // SL, SB, SU: `d`, `p`, `q`).
 //
-// Not here: the Edgeworth approximations for large N, the Friedman, Kruskal-Wallis, normal-scores, maximum F-ratio,
+// And the Pearson correlation (SuppDists' own SQRT2 constant, 1.41413562..., is part of its answer). Not here: the Edgeworth approximations for large N, the Friedman, Kruskal-Wallis, normal-scores, maximum F-ratio,
 // Pearson and hypergeometric distributions, moments, the Johnson fit, random variates.
 
 use e.math
@@ -240,4 +240,148 @@ fn ghyper_q(p: f64, a: f64, k: f64, n: f64) -> f64 {
     var x = nb.qhyper(p, a, n - a, k, true, false)
     if nb.phyper(x, a, n - a, k, true, false) <= p * (1.0f64 + 1.0e-12f64) { x += 1.0f64 }
     ret x
+}
+
+// ---- the distribution of the Pearson correlation coefficient (dcorr, pcorr, qcorr) ----
+
+fn pik_loggamma(x0: f64) -> f64 {
+    var x = x0
+    if x == 1.0f64 || x == 2.0f64 { ret 0.0f64 }
+    var f = 0.0f64
+    if x < 7.0f64 {
+        f = 1.0f64
+        while x < 7.0f64 {
+            f = f * x
+            x = x + 1.0f64
+        }
+        f = 0.0f64 - math.log[f64](f)
+    }
+    let z = 1.0f64 / (x * x)
+    f = f + (x - 0.5f64) * math.log[f64](x) - x + 0.918938533204672741780329736406f64
+    let t = ((1.0f64 / 1188.0f64) * z - 1.0f64 / 1680.0f64) * z + 1.0f64 / 1260.0f64
+    f = f + ((t * z - 1.0f64 / 360.0f64) * z + 1.0f64 / 12.0f64) / x
+    ret f
+}
+
+// the density of r for the population correlation rho and sample size n (Johnson and Kotz 6.5, the series for F[1/2, 1/2; n - 1/2, (1 + rho r) / 2])
+fn fcorrelation(r: f64, rho: f64, nn: i64) -> f64 {
+    let n = f64(nn)
+    if nn < 3i64 || r < 0.0f64 - 1.0f64 || r > 1.0f64 || rho < 0.0f64 - 1.0f64 || rho > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    if math.abs[f64](r) >= 1.0f64 { ret 0.0f64 }
+    let scale = (n - 2.0f64) / (1.414135623730950488f64 * (n - 1.0f64))
+    var lf = 0.5f64 * (n - 1.0f64) * math.log[f64](1.0f64 - rho * rho) + 0.5f64 * (n - 4.0f64) * math.log[f64](1.0f64 - r * r)
+    lf = lf + (1.5f64 - n) * math.log[f64](1.0f64 - rho * r) + pik_loggamma(n) - pik_loggamma(n - 0.5f64) - 0.5723649429247001f64
+    let c = n - 0.5f64
+    let x = 0.5f64 * (1.0f64 + rho * r)
+    var sum = 0.0f64
+    var term = 1.0f64
+    var j = 1i64
+    var going = true
+    while going {
+        let dj = f64(j)
+        sum = sum + term
+        let value = f64(2i64 * j - 1i64)
+        term = term * ((0.25f64 * (value * value) / (c + dj - 1.0f64)) * (x / dj))
+        j += 1i64
+        if sum + term == sum || j > 100i64 { going = false }
+    }
+    ret scale * math.exp[f64](lf) * sum
+}
+
+type Corr = struct { rho: f64, n: i64, p: f64 }
+
+fn corr_density(c: *Corr, r: f64) -> f64 { ret fcorrelation(r, c.rho, c.n) }
+
+// SuppDists' Integral: Romberg iteration on halved steps, stopping when two diagonal values agree to tol (relative)
+fn romberg[C: type](ctx: *C, f: fn(*C, f64) -> f64, lo: f64, hi: f64, tol: f64) -> f64 {
+    let h = hi - lo
+    var a: [16][16]f64 = zero
+    var delta = h
+    var value = 0.0f64
+    a[0usize][0usize] = (h / 2.0f64) * (f(ctx, lo) + f(ctx, hi))
+    var two_power = 1.0f64
+    var k = 0usize
+    var n = 1usize
+    var going = true
+    while going {
+        k += 1usize
+        delta = delta * 0.5f64
+        if k > 1usize { n = n * 2usize }
+        two_power = two_power * 2.0f64
+        var sum = 0.0f64
+        var z = hi - delta
+        var m = n
+        while m > 0usize {
+            m -= 1usize
+            sum = sum + f(ctx, z)
+            z = z - 2.0f64 * delta
+        }
+        a[0usize][k] = a[0usize][k - 1usize] / 2.0f64 + h * sum / two_power
+        var four_power = 1.0f64
+        var i = 1usize
+        while i <= k {
+            four_power = four_power * 4.0f64
+            a[i][k - i] = (four_power * a[i - 1usize][k - i + 1usize] - a[i - 1usize][k - i]) / (four_power - 1.0f64)
+            i += 1usize
+        }
+        value = a[k][0usize]
+        if math.abs[f64]((value - a[k - 1usize][0usize]) / value) < tol { break }
+        if k >= 15usize { going = false }
+    }
+    ret value
+}
+
+fn pcorrelation(r: f64, rho: f64, nn: i64) -> f64 {
+    if nn < 3i64 || r < 0.0f64 - 1.0f64 || r > 1.0f64 || rho < 0.0f64 - 1.0f64 || rho > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    var c = Corr { rho: rho, n: nn, p: 0.0f64 }
+    var p = romberg[Corr](&c, corr_density, 0.0f64 - 1.0f64, r, 3.0e-8f64)
+    if p < 0.0f64 - 0.0001f64 || p > 1.0001f64 { ret 0.0f64 / 0.0f64 }
+    if p < 0.0f64 { p = 0.0f64 }
+    if p > 1.0f64 { p = 1.0f64 }
+    ret p
+}
+
+fn corr_dev(c: *Corr, r: f64) -> f64 { ret 0.0f64 - c.p + pcorrelation(r, c.rho, c.n) }
+
+// SuppDists' NewtonRoot (the step is (f / 2 f') damped by a scale that halves when the step grows)
+fn newton_root[C: type](ctx: *C, guess: f64, f: fn(*C, f64) -> f64, df: fn(*C, f64) -> f64, tol: f64) -> f64 {
+    var x = guess
+    var z = x
+    var ho = 1.7976931348623157e308f64
+    var scale = 1.0f64
+    var m = 0i64
+    var more = true
+    var going = true
+    while going {
+        var retry = false
+        let fcn = f(ctx, x)
+        let deriv = df(ctx, x)
+        let h = scale * 0.5f64 * fcn / (deriv + 2.220446049250313e-16f64 * math.abs[f64](fcn))
+        z = z - h
+        more = math.abs[f64](h / z) > tol
+        if ho <= math.abs[f64](h) {
+            scale = scale / 2.0f64
+            z = z + h
+            more = true
+            retry = true
+        }
+        if !retry {
+            if scale < 1.0f64 { scale = scale * 2.0f64 }
+            ho = math.abs[f64](h)
+            x = z
+        }
+        let cond = m > 100i64 || !more
+        m += 1i64
+        if cond { going = false }
+    }
+    ret x
+}
+
+fn qcorrelation(p: f64, rho: f64, nn: i64) -> f64 {
+    if nn < 3i64 || p < 0.0f64 || p > 1.0f64 || rho < 0.0f64 - 1.0f64 || rho > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    var c = Corr { rho: rho, n: nn, p: p }
+    var z = 0.5f64 * math.log[f64]((1.0f64 + rho) / (1.0f64 - rho)) + dist.qnorm(p, 0.0f64, 1.0f64, true, false) / math.sqrt[f64](f64(nn - 3i64))
+    z = math.exp[f64](2.0f64 * z)
+    let guess = (z - 1.0f64) / (z + 1.0f64)
+    ret newton_root[Corr](&c, guess, corr_dev, corr_density, 3.0e-8f64)
 }
