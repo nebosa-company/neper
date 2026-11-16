@@ -270,3 +270,50 @@ fn boot_ci(a: *mem.Arena, b: *const Boot, x: []const f64, kind: u8, qkind: u8, c
     if e2 != ok { ret (0.0f64, 0.0f64, e2) }
     ret (lo, hi, ok)
 }
+
+// boot(sim = "balanced"): every observation appears exactly R times overall; the index array is the permutation
+// sample(rep(1:n, R)) cut into R rows of n
+fn boot_balanced(a: *mem.Arena, g: *rng.Rng, x: []const f64, kind: u8, nrep: usize) -> (Boot, err) {
+    var none: Boot = zero
+    let n = x.len
+    let (perm, pe) = rng.sample_int(a, g, i64(n * nrep), i64(n * nrep), false)
+    if pe != ok { ret (none, pe) }
+    let (idx, ie) = mem.alloc[i64](a, n * nrep)
+    let (t, te) = mem.alloc[f64](a, nrep)
+    let (buf, be) = mem.alloc[f64](a, n)
+    if ie != ok || te != ok || be != ok { ret (none, ie) }
+    var r = 0usize
+    while r < nrep {
+        var j = 0usize
+        while j < n {
+            let k = (perm[r * n + j] - 1i64) % i64(n) + 1i64
+            idx[r * n + j] = k
+            buf[j] = x[usize(k) - 1usize]
+            j += 1usize
+        }
+        t[r] = stat_of(a, kind, buf)
+        r += 1usize
+    }
+    ret (Boot { t0: stat_of(a, kind, x), t: t, idx: idx, n: n, r: nrep }, ok)
+}
+
+// boot(sim = "parametric", ran.gen = function(d, p) rnorm(n, p[1], p[2]), mle = c(mu, sd)); there is no index array
+fn boot_parametric_norm(a: *mem.Arena, g: *rng.Rng, x: []const f64, kind: u8, nrep: usize, mu: f64, sd: f64) -> (Boot, err) {
+    var none: Boot = zero
+    let n = x.len
+    let (t, te) = mem.alloc[f64](a, nrep)
+    let (buf, be) = mem.alloc[f64](a, n)
+    let (ix, xe) = mem.alloc[i64](a, 1usize)
+    if te != ok || be != ok || xe != ok { ret (none, te) }
+    var r = 0usize
+    while r < nrep {
+        var j = 0usize
+        while j < n {
+            buf[j] = rng.rnorm(g, mu, sd)
+            j += 1usize
+        }
+        t[r] = stat_of(a, kind, buf)
+        r += 1usize
+    }
+    ret (Boot { t0: stat_of(a, kind, x), t: t, idx: ix[0usize..0usize], n: n, r: nrep }, ok)
+}
