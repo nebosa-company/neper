@@ -5,6 +5,7 @@ use e.algo.stat.metaforbias as mb
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -17,6 +18,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let x = c.args
+        if str.eq(c.name, "l1o") {
+            let lk = usize(x[3usize])
+            let g2 = mb.leave1out(a, x[4usize..4usize + lk], x[4usize + lk..4usize + 2usize * lk], usize(x[0usize]), usize(x[1usize]), usize(x[2usize]))
+            if !oracle.agrees(g2, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, g2))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         let k = usize(x[2usize])
         let y = x[3usize..3usize + k]
         let v = x[3usize + k..3usize + 2usize * k]

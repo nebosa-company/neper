@@ -46156,3 +46156,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.metaforbias` is new, on a fixed-effect model: `regtest` (Egger: weighted least squares of the effects on their standard errors with weights 1 / v and a known variance, so the slope's z test, and the intercept with 95 per cent limits), `ranktest` (Kendall's tau between (y - ybar) / sqrt(v - 1 / sum w) and v, with the exact two-sided p-value from the distribution of the number of inversions, folded as cor.test does) and `fsn_rosenthal` (the ceiling of (sum z / qnorm(0.95))^2 - k). With tied variances R switches to a tie-corrected normal approximation, which is not ported and is excluded from the cases.
 
 **Result.** `oracle_metaforbias` agrees with metafor on 261 cases on Windows at rel 1e-8: 29 data sets of 8 to 30 studies, regtest's six outputs, ranktest's tau and p and the fail-safe N. Random-effects regtest, the other models and predictors, the other fsn types, trimfill, influence, leave1out and permutest are open; Linux pending. L364 stays partial.
+
+## D6498 — metafor: leave1out
+
+`e.algo.stat.metaforbias` gains `leave1out`, which refits `rma` on the data without one study and returns the estimate, standard error, z, p-value, tau2 and Q (tau2 is zero for the fixed-effect model, where metafor reports NA).
+
+**Result.** `oracle_metaforbias` agrees with metafor on 621 cases on Windows at rel 1e-8, the 360 new ones over 20 data sets of 6 to 20 studies, three dropped studies each, FE and DL. One bug was in the oracle: the fixed-effect leave1out has no tau2 component, so building the reference vector with c() shifted Q one place; the reference now fills a zero there. trimfill, influence, permutest, the other estimators under leave1out and Knapp-Hartung are open; Linux pending. L364 stays partial.

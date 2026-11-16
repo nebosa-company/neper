@@ -4,7 +4,9 @@
 // Not here: random-effects models with moderators, the other predictors and models of regtest, the other fsn methods, trimfill and the funnel plots.
 
 use e.math
+use e.algo.stat.metaforpkg as mf
 use e.math.dist as dist
+use e.mem
 
 // regtest(rma(yi, vi, method = "FE")): what 0 the slope's z value, 1 its p-value, 2 the intercept estimate, 3 and 4 its 95 per cent limits, 5 the slope estimate
 fn regtest(y: []const f64, v: []const f64, what: usize) -> f64 {
@@ -126,4 +128,29 @@ fn fsn_rosenthal(y: []const f64, v: []const f64) -> f64 {
     let q = dist.qnorm(0.95f64, 0.0f64, 1.0f64, true, false)
     let n = (sz / q) * (sz / q) - f64(y.len)
     ret math.ceil[f64](n)
+}
+
+// leave1out(rma(yi, vi, method)): the estimate (what 0), its standard error (1), z (7 in rma's numbering, here 2), the p-value (3), tau2 (4) and Q (5) with study `drop` left out
+fn leave1out(a: *mem.Arena, y: []const f64, v: []const f64, method: usize, drop: usize, what: usize) -> f64 {
+    let k = y.len - 1usize
+    let (ys, e1) = mem.alloc[f64](a, k)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (vs, e2) = mem.alloc[f64](a, k)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var j = 0usize
+    var i = 0usize
+    while i < y.len {
+        if i != drop {
+            ys[j] = y[i]
+            vs[j] = v[i]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if what == 0usize { ret mf.rma(ys, vs, method, 0usize) }
+    if what == 1usize { ret mf.rma(ys, vs, method, 1usize) }
+    if what == 2usize { ret mf.rma(ys, vs, method, 7usize) }
+    if what == 3usize { ret mf.rma(ys, vs, method, 8usize) }
+    if what == 4usize { ret mf.rma(ys, vs, method, 2usize) }
+    ret mf.rma(ys, vs, method, 5usize)
 }
