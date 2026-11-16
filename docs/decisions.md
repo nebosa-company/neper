@@ -47096,3 +47096,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** The review found the same helper written dozens of times (hex digits, endian readers, byte equality, ASCII lower-casing). `scripts/check_duplicate_helpers.py` counts functions whose parameter list, return type and comment-free, whitespace-collapsed body are identical in at least two files, ignoring bodies under 60 characters, and records the group and copy counts in `docs/duplicate-helpers.json`. A rise fails `tests/test_duplicate_helpers.py`; a fall is recorded with `--update`, which never raises the record. Normalising names or types would find more near-duplicates but also false ones; the text-identical form has no false positives.
 
 **Result.** 367 groups and 557 redundant copies recorded, the test passes, and L255 leaves the queue as the measuring gate; removing the copies is the ongoing work it counts.
+
+## D6663 — docs/algos.md: names that resolve and rows that say what was delivered
+
+**Decision.** `scripts/check_algos_names.py` resolves each library name that `docs/algos.md` maps an algorithm to against `lib/e` (a declaration in the module file or its per-host variants); `tests/test_algos_names.py` keeps it passing. Compiler intrinsics are marked in the row with "(the intrinsic's spelling)" and skipped. Six rows whose mapped function is a simpler algorithm than the one named now say what is delivered (Timsort is a bottom-up merge sort, IntroSort heapsort, Karatsuba schoolbook multiplication, Bentley-Ottmann an O(n^2) pairwise test, the ziggurat Marsaglia's polar method, BTPE inversion with a rounded normal approximation); the duplicate row #2004 for Bentley-Ottmann follows #528. The six rows (#2262 to #2267) that named functions never written now name the ones that were.
+
+**Result.** All 1476 mapped names resolve and the five tests pass; L249 leaves the queue.

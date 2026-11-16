@@ -357,7 +357,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 8. **Radix Sort** – Digit-by-digit positional integer sorting. → `e.algo.sort.radix_u32_in_place`
 9. **Bucket Sort** – Distribution sort partitioning elements into buckets. → `e.algo.sort.bucket`
 10. **Shell Sort** – In-place gap-based generalization of insertion sort. → `e.algo.sort.shell`
-11. **Tim Sort** – Hybrid stable sort combining merge and insertion sort. → `e.algo.sort.stable_in_place`
+11. **Tim Sort** – Hybrid stable sort combining merge and insertion sort. → `e.algo.sort.stable_in_place` (delivered: a bottom-up merge sort, stable, with no run detection or galloping, so not Timsort)
 12. **Comb Sort** – Improvement on bubble sort using variable gap sizes. → skip: pedagogical only
 13. **Pigeonhole Sort** – Sorting where key count roughly equals element count. → see #7 (`e.algo.sort.counting`)
 14. **Cycle Sort** – In-place unstable sort minimizing memory writes. → `e.algo.sort.cycle`
@@ -380,7 +380,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 31. **Fractional Cascading** – Speeding up consecutive binary searches across structures. → skip: implementable, but too specialised for the standard library
 32. **Quickselect** – Selection algorithm to find k-th smallest element. → `e.algo.search.kth`
 33. **Median of Medians** – Deterministic linear-time selection algorithm. → `e.algo.search.kth_deterministic`
-34. **IntroSort** – Hybrid sort combining quicksort, heapsort, and insertion sort. → `e.algo.sort.in_place`
+34. **IntroSort** – Hybrid sort combining quicksort, heapsort, and insertion sort. → `e.algo.sort.in_place` (delivered: heapsort, with no quicksort phase or insertion-sort cutoff, so not IntroSort)
 35. **Block Sort** – In-place merge sort running in O(1) extra memory. → skip: implementable, but too specialised for the standard library
 36. **Library Sort** – Insertion sort with gaps to accelerate insertions. → skip: implementable, but too specialised for the standard library
 37. **Strand Sort** – Sorting by repeatedly extracting sorted sub-lists. → skip: implementable, but too specialised for the standard library
@@ -852,7 +852,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 488. **Shanks-Mestre Point Counting** – Counting points on elliptic curves over finite fields. → skip: implementable, but too specialised for the standard library
 489. **Fast Fourier Transform (FFT / Cooley-Tukey)** – O(N log N) transformation converting signals between time and frequency domains. → `e.math.fft.fft`
 490. **Number Theoretic Transform (NTT)** – FFT equivalent operating over finite fields using primitive roots. → `e.math.fft.ntt`
-491. **Karatsuba Multiplication** – Fast polynomial/integer multiplication running in O(N^log2(3)) ≈ O(N^1.58). → `e.algo.bignum.int_mul`
+491. **Karatsuba Multiplication** – Fast polynomial/integer multiplication running in O(N^log2(3)) ≈ O(N^1.58). → `e.algo.bignum.int_mul` (delivered: schoolbook multiplication on 32-bit limbs, O(N^2), so not Karatsuba)
 492. **Toom-Cook Multiplication** – Generalization of Karatsuba dividing numbers into k equal parts. → skip: an implementation detail of an existing module, not an API
 493. **Schönhage-Strassen Algorithm** – Fast multiplication for large integers using FFT over 2^(2^n) + 1. → skip: an implementation detail of an existing module, not an API
 494. **Harvey-Hoeven Multiplication** – O(N log N) ultra-large integer multiplication algorithm. → skip: research-grade, no settled practical implementation
@@ -892,7 +892,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 525. **Gilbert-Johnson-Keerthi (GJK)** – Collision detection and distance queries using Minkowski differences. → `e.algo.geom3.gjk`
 526. **Expanding Polytope Algorithm (EPA)** – Finding penetration depth and contact vectors following GJK collisions. → `e.algo.geom3.epa`
 527. **Bounding Volume Hierarchy (BVH)** – Tree structure organizing geometric primitives for spatial queries. → `e.data.spatial.bvh_build`
-528. **Sweep-Line Algorithm (Bentley-Ottmann)** – O((N + K)log N) algorithm discovering K segment intersections. → `e.algo.geom.segment_intersections`
+528. **Sweep-Line Algorithm (Bentley-Ottmann)** – O((N + K)log N) algorithm discovering K segment intersections. → `e.algo.geom.segment_intersections` (delivered: an O(n^2) test of every pair, not the Bentley-Ottmann sweep)
 529. **Fortune's Algorithm** – O(N log N) sweep-line algorithm generating Voronoi diagrams. → `e.algo.geom.voronoi`
 530. **Bowyer-Watson Algorithm** – Incremental generation of Delaunay triangulations in arbitrary dimensions. → `e.algo.geom.delaunay`
 531. **Flip Algorithm** – Converting arbitrary triangulations to Delaunay triangulations via edge flipping. → `e.algo.geom.delaunay_flip`
@@ -1053,7 +1053,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 680. **Slab Allocation** – Kernel object caching eliminating memory fragmentation for fixed-size structures. → `e.mem.slab`
 681. **Arena Allocator** – Region-based memory allocation releasing contiguous blocks all at once. → `e.mem.arena_from`
 682. **Pool Allocator** – Fast fixed-size block memory allocation managed via free lists. → `e.mem.pool`
-683. **Stack-Based Arena Allocator** – Sequential linear memory allocation supporting LIFO rewinds. → `e.mem.mark`
+683. **Stack-Based Arena Allocator** – Sequential linear memory allocation supporting LIFO rewinds. → `e.mem.mark` (the intrinsic's spelling)
 684. **First-Fit / Best-Fit Memory Search** – Free-list search strategies locating memory blocks for allocation requests. → skip: an implementation detail of an existing module, not an API
 685. **Mark-and-Sweep GC** – Two-phase garbage collection marking reachable roots and sweeping unreferenced memory. → skip: Neper has ownership, not a garbage collector
 686. **Cheney's Copying Collector** – Two-space GC copying reachable objects into a single contiguous destination space. → skip: Neper has ownership, not a garbage collector
@@ -2035,7 +2035,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 1605. **Virtual Memory Page Table Walks** – Translating virtual memory addresses to physical memory addresses using multi-level hardware page tables and Translation Lookaside Buffers (TLB). → skip: OS kernel internals
 1606. **Linux Copy-on-Write (CoW) Fork** – Deferring memory page duplication during fork() operations until child or parent processes write to pages. → skip: OS kernel internals
 1607. **Linux Page Cache Writeback Engine** – Managing dirty page flushing asynchronously from main RAM to block storage using system flusher threads. → skip: OS kernel internals
-1608. **Linux Futex (Fast Userspace Mutex)** – Fast synchronization primitive managing uncontested locks entirely in user space while delegating contested locks to kernel wait queues. → `e.os.wait_u32`
+1608. **Linux Futex (Fast Userspace Mutex)** – Fast synchronization primitive managing uncontested locks entirely in user space while delegating contested locks to kernel wait queues. → `e.os.wait_u32` (the intrinsic's spelling)
 1609. **Linux epoll Event Multiplexing** – High-performance I/O event notification mechanism returning ready file descriptors in O(1) time via shared memory ring buffers. → `e.async.poll`
 1610. **Linux SLUB Memory Allocator** – Unifying kernel memory allocation by managing object slabs without per-slab metadata overhead or fragmenting physical pages. → skip: OS kernel internals
 1611. **Linux Auto-NUMA Memory Balancing** – Migrating physical memory pages and tasks dynamically to place data on NUMA nodes local to processing threads. → skip: OS kernel internals
@@ -2076,7 +2076,7 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 1646. **Linux Pressure Stall Information (PSI)** – Real-time metrics monitoring hardware resource starvation across CPU, Memory, and I/O subsystems. → skip: OS kernel internals
 1647. **Linux zram Compressed Block Device** – Offloading memory pressures by creating compressed RAM block devices that act as fast swap spaces. → skip: OS kernel internals
 1648. **Rust Compile-Time Ownership & Borrow Checker** – Enforcing thread safety and memory safety statically without garbage collectors by enforcing strict reference ownership lifetimes. → skip: belongs in the Neper compiler, not the library
-1649. **C++11 Memory Model & Sequential Consistency** – Language-level primitives defining hardware atomic operation visibility and memory ordering constraints across threads. → see #1327 (`e.atomic.load`)
+1649. **C++11 Memory Model & Sequential Consistency** – Language-level primitives defining hardware atomic operation visibility and memory ordering constraints across threads. → see #1327 (`e.atomic.load` (the intrinsic's spelling))
 1650. **Hardware Transactional Memory (Intel TSX)** – Execution model speculatively executing memory operations in hardware, aborting and rolling back if data conflicts occur. → skip: hardware or circuit design
 
 ## 29. Database Engines, Storage Systems & Big Data Architecture (1651–1700)
@@ -2380,12 +2380,12 @@ Existing modules are named in `docs/modules.json`; new ones are proposals, liste
 1933. **Expectation-Maximization for Mixtures** – Alternating responsibility and parameter updates for a mixture model. → see #731 (`e.ml.cluster.gmm_em`)
 1934. **Box-Muller Transform** – Generating standard normals from two uniforms. → `e.algo.rand.dist.normal_box_muller`
 1935. **Marsaglia Polar Method** – Rejection-based normal generation without trigonometric functions. → `e.algo.rand.dist.normal_polar`
-1936. **Ziggurat Algorithm** – Fast normal or exponential sampling from stacked rectangular layers. → `e.algo.rand.dist.normal`
+1936. **Ziggurat Algorithm** – Fast normal or exponential sampling from stacked rectangular layers. → `e.algo.rand.dist.normal` (delivered: Marsaglia's polar method, not the ziggurat)
 1937. **Inverse Transform Sampling** – Mapping a uniform through the quantile function. → `e.algo.rand.dist.inverse_transform`
 1938. **Rejection Sampling** – Accepting proposals with probability proportional to the target-to-envelope ratio. → `e.algo.rand.dist.rejection`
 1939. **Importance Sampling** – Weighting samples from a proposal by target-to-proposal density ratio. → `e.algo.rand.dist.importance_weights`
 1940. **Poisson Sampling (Knuth)** – Multiplying uniforms until the product drops below e^(−λ). → `e.algo.rand.dist.poisson`
-1941. **Binomial Sampling (BTPE)** – Efficient generation for large n via a triangle-parallelogram-exponential envelope. → `e.algo.rand.dist.binomial`
+1941. **Binomial Sampling (BTPE)** – Efficient generation for large n via a triangle-parallelogram-exponential envelope. → `e.algo.rand.dist.binomial` (delivered: inversion for small means and a rounded normal approximation above, not BTPE)
 1942. **Gamma Sampling (Marsaglia-Tsang)** – Squeeze-based rejection for shape parameter ≥ 1. → `e.algo.rand.dist.gamma`
 1943. **Beta Sampling via Gammas** – Normalizing two gamma variates. → `e.algo.rand.dist.beta`
 1944. **Dirichlet Sampling** – Normalizing a vector of gamma variates by their sum. → `e.algo.rand.dist.dirichlet`
@@ -2770,9 +2770,9 @@ tools, DESeq2/DSSP/GSEA → skip: bio/system/product.
 2259. **Neural Layers for Molecules and Sequences** - Recurrent layers (LSTM/GRU) for SMILES and graph layers (GCN/GAT/MPNN, ChemProp-style message passing) for molecular property and drug-target prediction; trained weights excluded. → `e.ml.recurrent.lstm_step`, `e.ml.recurrent.lstm_forward`, `e.ml.recurrent.gru_step`, `e.ml.recurrent.gru_forward`, `e.ml.gnn.gcn_layer`, `e.ml.gnn.gat_layer`, `e.ml.gnn.mpnn_step`
 2260. **Chemical Similarity and Scaffold Core** - Bit fingerprints (ECFP/Morgan, MACCS), Tanimoto/Dice scoring, Butina clustering for library diversity, and maximum-common-substructure (FMCS) scaffold matching. → `e.ml.fingerprint.tanimoto`, `e.ml.fingerprint.butina`, `e.ml.fingerprint.fmcs`
 2261. **Chemometric Extensions** - Partial-least-squares regression for classical QSAR and PAT/NIR calibration, and UMAP for chemical and single-cell visualization. → `e.ml.linear.pls`, `e.ml.reduce.umap`
-2262. **Longitudinal and Mixed-Model Core** - Linear mixed models and MMRM for repeated-measures efficacy plus GEE for population-averaged effects. → `e.algo.stat.mixed.mmrm`, `e.algo.stat.mixed.gee`
-2263. **Time-to-Event Trial Extensions** - Kaplan-Meier estimator, log-rank test, Cox proportional-hazards fit, group-sequential alpha spending (O'Brien-Fleming/Pocock), Simon two-stage design, continual-reassessment dose escalation, and Farrington-Manning non-inferiority. → `e.algo.stat.survival_trial.kaplan_meier`, `e.algo.stat.survival_trial.log_rank`, `e.algo.stat.survival_trial.cox_ph`, `e.algo.stat.survival_trial.simon_two_stage`
-2264. **Causal and Missing-Data Core** - Propensity scores with IPTW, doubly-robust treatment-effect estimators, and multiple imputation by chained equations (MICE) for real-world evidence. → `e.algo.stat.causal.propensity`, `e.algo.stat.causal.mice`
+2262. **Longitudinal and Mixed-Model Core** - Linear mixed models and MMRM for repeated-measures efficacy plus GEE for population-averaged effects. → `e.algo.stat.mixed.mmrm_un`, `e.algo.stat.mixed.gee`
+2263. **Time-to-Event Trial Extensions** - Kaplan-Meier estimator, log-rank test, Cox proportional-hazards fit, group-sequential alpha spending (O'Brien-Fleming/Pocock), Simon two-stage design, continual-reassessment dose escalation, and Farrington-Manning non-inferiority. → `e.algo.stat.survival_trial.kaplan_meier`, `e.algo.stat.survival_trial.log_rank`, `e.algo.stat.survival_trial.cox_ph`, `e.algo.stat.survival_trial.simon_optimal`, `e.algo.stat.survival_trial.simon_minimax`
+2264. **Causal and Missing-Data Core** - Propensity scores with IPTW, doubly-robust treatment-effect estimators, and multiple imputation by chained equations (MICE) for real-world evidence. → `e.algo.stat.causal.propensity_scores`, `e.algo.stat.causal.iptw_ate`, `e.algo.stat.causal.doubly_robust`, `e.algo.stat.causal.mice`
 2265. **PK/PD Mathematics** - Non-compartmental analysis (trapezoidal AUC/Cmax), Emax/Hill dose-response fits, and Michaelis-Menten enzyme-kinetics fits over the existing optimizers. → `e.math.pkpd.nca`, `e.math.pkpd.emax_hill`, `e.math.pkpd.michaelis_menten`
-2266. **Safety-Signal Detection** - Disproportionality scores (ROR, PRR, BCPNN information component) and frequent-itemset rule mining (Apriori/FP-growth) for drug-drug interactions. → `e.algo.stat.safety.ror`, `e.algo.stat.safety.bcpnn`, `e.algo.stat.safety.apriori`
-2267. **Forecast and Inventory Extensions** - ARIMA for surveillance and demand series plus EOQ and newsvendor inventory policies for supply planning. → `e.algo.timeseries.arima`, `e.algo.combopt.inventory.eoq`
+2266. **Safety-Signal Detection** - Disproportionality scores (ROR, PRR, BCPNN information component) and frequent-itemset rule mining (Apriori/FP-growth) for drug-drug interactions. → `e.algo.stat.safety.ror`, `e.algo.stat.safety.ic`, `e.algo.stat.safety.apriori`
+2267. **Forecast and Inventory Extensions** - ARIMA for surveillance and demand series plus EOQ and newsvendor inventory policies for supply planning. → `e.algo.timeseries.arima_difference`, `e.algo.timeseries.arma_fit`, `e.algo.timeseries.eoq`

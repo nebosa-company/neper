@@ -4844,17 +4844,6 @@
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: check_module_plan.py fails on a lib/e source file with no docs/modules.json entry; each of today's 111 is listed or marked internal. Notes: docs/library-hardening-plan.md."
     },
     {
-      "id": "L249",
-      "category": "library",
-      "group": "Library",
-      "order": 458,
-      "title": "`docs/algos.md` says what was delivered",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "low",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a script checks that every name docs/algos.md maps to resolves in lib/e, and passes; the seven rows name the algorithm that was delivered. Notes: docs/library-hardening-plan.md."
-    },
-    {
       "id": "L260",
       "category": "library",
       "group": "Library",
