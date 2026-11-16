@@ -119,9 +119,19 @@ fn pool_slot(p: *Pool, offset: usize) -> []u8 {
     ret p.storage[offset..offset + p.size]
 }
 
-// `Invalid` for an offset that is not a slot of this pool; a double free is not caught.
+// `Invalid` for an offset that is not a slot of this pool, and for a slot that is already free when it is among the 256 most
+// recently freed (the free list is walked that far from its head) or when every slot is already free. A double free of a slot
+// freed longer ago is not caught: walking the whole list on every free would make a busy pool quadratic.
 fn pool_free(p: *Pool, offset: usize) -> err {
     if p.size == 0usize || offset > p.storage.len || p.size > p.storage.len - offset || offset % p.size != 0usize { ret Invalid }
+    if p.free_count >= p.storage.len / p.size { ret Invalid }
+    var at = p.head
+    var seen = 0usize
+    while at != NONE && seen < 256usize {
+        if at == offset { ret Invalid }
+        at = get_link(p.storage, at)
+        seen += 1usize
+    }
     put_link(p.storage, offset, p.head)
     p.head = offset
     p.free_count += 1usize

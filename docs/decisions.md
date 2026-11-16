@@ -47150,3 +47150,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** Sixteen functions of `e.gfx.filter` took `w * h` as the pixel count with a bare multiplication, which traps for a width and height whose product does not fit a `usize`, where `e.gfx.image` already answers `TooLarge`. Each now checks `h > max / w` first and returns `TooLarge` in the shape of its own result (the error alone, or a zero value with the error). `threshold_otsu`, which returns a bare byte, and the `src.len < w * h` comparisons are left.
 
 **Result.** `gfx_filter` passes on Windows with four oversized calls and exits 134 on the old code; Linux pending. L245 is at 0.55.
+
+## D6672 — mem.pool_free refuses a repeated free
+
+**Decision.** `pool_free` accepted any aligned offset, so freeing a slot twice linked it into the free list twice and handed one slot to two owners. It now answers `Invalid`, leaving the pool unchanged, when every slot is already free or when the offset is among the first 256 entries of the free list. The bound is deliberate: the repeat of a recent free is the common mistake, and walking the whole list on each free would make a busy pool quadratic.
+
+**Result.** `runtime_gaps` passes on Windows and fails (exit 11) on the old code; `mem_heap`, `mem_pages`, `data_objpool`, `db_pool` and `algo_sort` still pass; Linux pending. L245 is at 0.7: the Linux shell accumulator, `mem.copy`'s documented shorter-length contract, `threshold_otsu` and five size comparisons remain.

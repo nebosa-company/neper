@@ -80,6 +80,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if mem.pool_free(&p, 72usize) != ok || mem.pool_free(&p, 168usize) != ok { os.exit(5i32) }
     if mem.pool_free(&p, 70usize) != mem.Invalid { os.exit(5i32) }
     if mem.pool_free(&p, 18446744073709551608usize) != mem.Invalid { os.exit(5i32) }
+    // L245: freeing a slot that is already free is refused (the most recent free is the usual repeat), and the pool is not changed
+    if mem.pool_free(&p, 168usize) != mem.Invalid || mem.pool_free(&p, 72usize) != mem.Invalid { os.exit(11i32) }
+    if mem.pool_free_count(&p) != 2usize { os.exit(12i32) }
     let (first_reuse, _) = mem.pool_alloc(&p)
     let (second_reuse, _) = mem.pool_alloc(&p)
     let (_, third_reuse) = mem.pool_alloc(&p)

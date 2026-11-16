@@ -468,7 +468,7 @@ L235	library	0	240	Thin modules get a second fixture	Opened from the 2026-11-13 
 L236	library	0	286	Fixture hygiene	Opened from the 2026-11-13 library review.
 L243	library	0	204	Stub resolver	Opened from the 2026-11-13 library review.
 L244	library	0	317	Secrets are never wiped; crypto gaps	Opened from the 2026-11-13 library review.
-L245	library	0.55	1524	Silent truncation at fixed limits	Partial (D6670, D6671).
+L245	library	0.7	1956	Silent truncation at fixed limits	Partial (D6670, D6671, D6672).
 L246	library	0	224	Copy replaces without a sync	Opened from the 2026-11-13 library review.
 L251	library	0	297	Platform parity is declared, not discovered	Opened from the 2026-11-13 library review.
 L252	library	0	203	Disabled crypto: dead ML-DSA signer, DNSSEC RSASHA256 refused	Opened from the 2026-11-13 library review.
