@@ -45844,3 +45844,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.signalpkg` gains `decimate_iir` (filtfilt of the order-n Chebyshev type I low-pass at 0.05 dB and 0.8 / q, then every q-th sample) and `unwrap` (2 pi steps on jumps beyond pi).
 
 **Result.** `oracle_signalpkg` equals signal on 406 cases on Windows, 32 of them new; Linux pending. L340 stays partial.
+
+## D6446 — DescTools: BinomCI, eleven methods
+
+`e.algo.stat.desctools` gains `binom_ci`: the estimate and two-sided limits for wald, waldcc, wilson, wilsoncc, agresti-coull, jeffreys, modified wilson, modified jeffreys, clopper-pearson, arcsine and logit, on `qnorm`, `qbeta` and `qchisq` from e.math.
+
+**Result.** `oracle_desctools` equals DescTools on 1590 cases on Windows at rel 1e-9, 990 of them new, over 30 (x, n, level) draws including x = 1 and n - 1; Linux pending. Open on BinomCI: witting, pratt, midp, lik and blaker. L363 stays partial.

@@ -23,4 +23,9 @@ for (rep in 1:20) {
   add("tau_row", a, GoodmanKruskalTau(tab, direction = "row")); add("tau_col", a, GoodmanKruskalTau(tab, direction = "column"))
   t2 <- matrix(sample(1:30, 4, TRUE), 2); a2 <- c(2, 2, as.vector(t(t2))); add("or", a2, OddsRatio(t2)); add("yq", a2, YuleQ(t2))
 }
+ms <- c("wald", "waldcc", "wilson", "wilsoncc", "agresti-coull", "jeffreys", "modified wilson", "modified jeffreys", "clopper-pearson", "arcsine", "logit")
+for (rep in 1:30) {
+  n <- sample(c(8:30, 60, 120), 1); x <- sample(c(1:(n - 1), 1, n - 1), 1); cl <- sample(c(0.9, 0.95, 0.99), 1)
+  for (m in seq_along(ms)) { r <- BinomCI(x, n, conf.level = cl, method = ms[m]); add("binomci", c(m - 1, x, n, cl, 0), r[1, 1]); add("binomci", c(m - 1, x, n, cl, 1), r[1, 2]); add("binomci", c(m - 1, x, n, cl, 2), r[1, 3]) }
+}
 emit("desctools", "DescTools", list(cases))

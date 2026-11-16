@@ -96,7 +96,7 @@ L346	library	0	284	mice: imputation parity	Open (CRAN rank 293).
 L360	library	0	374	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Open (CRAN ranks 337, 348, 393, 355;
 L361	library	0	272	segmented and strucchange: breakpoints and structural change	Open (CRAN ranks 338, 344).
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
-L363	library	0.3	613	DescTools: descriptive statistics and tests	Partial (D6429, D6430 table association measures, D6431 kappa, lambda, tau, OR, Q).
+L363	library	0.3	632	DescTools: descriptive statistics and tests	Partial (D6429, D6430 table association measures, D6431 kappa, lambda, tau, OR, Q, D6446 BinomCI x11).
 L365	library	0	233	ks: multivariate kernel density estimation	Open (CRAN rank 331).
 L367	library	0.3	582	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
 L370	library	0	268	fields and interp: spatial smoothing and interpolation	Open (CRAN ranks 367, 351).

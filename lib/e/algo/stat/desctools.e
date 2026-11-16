@@ -4,6 +4,9 @@
 // Not here: the rest of the package (Winsorize, Mode, the association measures, tests and confidence intervals).
 
 use e.math
+use e.math.dist as dist
+use e.math.nmath as nm
+use e.math.nmath_beta as nb
 use e.mem
 
 fn mean_of(x: []const f64) -> f64 {
@@ -393,4 +396,85 @@ fn odds_ratio(t: []const f64) -> f64 { ret t[0usize] * t[3usize] / (t[1usize] * 
 fn yule_q(t: []const f64) -> f64 {
     let o = odds_ratio(t)
     ret (o - 1.0f64) / (o + 1.0f64)
+}
+
+fn min_f(a: f64, b: f64) -> f64 {
+    if a < b { ret a }
+    ret b
+}
+
+fn max_f(a: f64, b: f64) -> f64 {
+    if a > b { ret a }
+    ret b
+}
+
+// BinomCI(x, n, conf, method) two-sided: part 0 the estimate, 1 the lower limit, 2 the upper. method 0 wald, 1 waldcc, 2 wilson, 3 wilsoncc, 4 agresti-coull,
+// 5 jeffreys, 6 modified wilson, 7 modified jeffreys, 8 clopper-pearson, 9 arcsine, 10 logit
+fn binom_ci(x: f64, n: f64, conf: f64, method: usize, part: usize) -> f64 {
+    let alpha = 1.0f64 - conf
+    let kappa = dist.qnorm(1.0f64 - alpha / 2.0f64, 0.0f64, 1.0f64, true, false)
+    let ph = x / n
+    let qh = 1.0f64 - ph
+    var lo = 0.0f64
+    var hi = 1.0f64
+    var est = ph
+    if method == 0usize || method == 1usize {
+        var t = kappa * math.sqrt[f64](ph * qh) / math.sqrt[f64](n)
+        if method == 1usize { t += 1.0f64 / (2.0f64 * n) }
+        lo = max_f(0.0f64, ph - t)
+        hi = min_f(1.0f64, ph + t)
+    } else if method == 2usize || method == 6usize {
+        let t1 = (x + kappa * kappa / 2.0f64) / (n + kappa * kappa)
+        let t2 = kappa * math.sqrt[f64](n) / (n + kappa * kappa) * math.sqrt[f64](ph * qh + kappa * kappa / (4.0f64 * n))
+        lo = max_f(0.0f64, t1 - t2)
+        hi = min_f(1.0f64, t1 + t2)
+        if method == 6usize {
+            if (n <= 50.0f64 && (x == 1.0f64 || x == 2.0f64)) || (n >= 51.0f64 && (x == 1.0f64 || x == 2.0f64 || x == 3.0f64)) {
+                lo = 0.5f64 * nm.qchisq(alpha, 2.0f64 * x, true, false) / n
+            }
+            if (n <= 50.0f64 && (x == n - 1.0f64 || x == n - 2.0f64)) || (n >= 51.0f64 && (x == n - 1.0f64 || x == n - 2.0f64 || x == n - 3.0f64)) {
+                hi = 1.0f64 - 0.5f64 * nm.qchisq(alpha, 2.0f64 * (n - x), true, false) / n
+            }
+        }
+    } else if method == 3usize {
+        let k2 = kappa * kappa
+        var l = 0.0f64
+        var u = 1.0f64
+        if ph != 0.0f64 { l = (2.0f64 * x + k2 - 1.0f64 - kappa * math.sqrt[f64](k2 - 2.0f64 - 1.0f64 / n + 4.0f64 * ph * (n * qh + 1.0f64))) / (2.0f64 * (n + k2)) }
+        if ph != 1.0f64 { u = (2.0f64 * x + k2 + 1.0f64 + kappa * math.sqrt[f64](k2 + 2.0f64 - 1.0f64 / n + 4.0f64 * ph * (n * qh - 1.0f64))) / (2.0f64 * (n + k2)) }
+        lo = max_f(0.0f64, l)
+        hi = min_f(1.0f64, u)
+    } else if method == 4usize {
+        let xt = x + kappa * kappa / 2.0f64
+        let nt = n + kappa * kappa
+        let pt = xt / nt
+        let t = kappa * math.sqrt[f64](pt * (1.0f64 - pt)) / math.sqrt[f64](nt)
+        lo = max_f(0.0f64, pt - t)
+        hi = min_f(1.0f64, pt + t)
+    } else if method == 5usize {
+        if x != 0.0f64 { lo = nb.qbeta(alpha / 2.0f64, x + 0.5f64, n - x + 0.5f64, true, false) } else { lo = 0.0f64 }
+        if x != n { hi = nb.qbeta(1.0f64 - alpha / 2.0f64, x + 0.5f64, n - x + 0.5f64, true, false) } else { hi = 1.0f64 }
+    } else if method == 7usize {
+        if x == n { lo = math.pow[f64](alpha / 2.0f64, 1.0f64 / n) } else if x <= 1.0f64 { lo = 0.0f64 } else { lo = nb.qbeta(alpha / 2.0f64, x + 0.5f64, n - x + 0.5f64, true, false) }
+        if x == 0.0f64 { hi = 1.0f64 - math.pow[f64](alpha / 2.0f64, 1.0f64 / n) } else if x >= n - 1.0f64 { hi = 1.0f64 } else { hi = nb.qbeta(1.0f64 - alpha / 2.0f64, x + 0.5f64, n - x + 0.5f64, true, false) }
+    } else if method == 8usize {
+        lo = nb.qbeta(alpha / 2.0f64, x, n - x + 1.0f64, true, false)
+        hi = nb.qbeta(1.0f64 - alpha / 2.0f64, x + 1.0f64, n - x, true, false)
+    } else if method == 9usize {
+        let pt = (x + 0.375f64) / (n + 0.75f64)
+        let s1 = math.sin[f64](math.asin[f64](math.sqrt[f64](pt)) - 0.5f64 * kappa / math.sqrt[f64](n))
+        let s2 = math.sin[f64](math.asin[f64](math.sqrt[f64](pt)) + 0.5f64 * kappa / math.sqrt[f64](n))
+        lo = s1 * s1
+        hi = s2 * s2
+    } else {
+        let lh = math.log[f64](x / (n - x))
+        let v = n / (x * (n - x))
+        let l1 = lh - kappa * math.sqrt[f64](v)
+        let l2 = lh + kappa * math.sqrt[f64](v)
+        lo = math.exp[f64](l1) / (1.0f64 + math.exp[f64](l1))
+        hi = math.exp[f64](l2) / (1.0f64 + math.exp[f64](l2))
+    }
+    if part == 0usize { ret est }
+    if part == 1usize { ret lo }
+    ret hi
 }
