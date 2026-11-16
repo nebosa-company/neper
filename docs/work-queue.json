@@ -81,17 +81,6 @@
       "evidence": "Partly done (D6068): e.algo.stat.fdrtool.fdrtool_pvalue (fndr cutoff, eta0, Grenander density, local fdr and q values for p values) equals fdrtool on 210 values on Windows (oracle_fdrtool); Linux pending. Open: normal, correlation and t statistics (optimize), other cutoff methods, exported grenander and monoreg. Original: Open (CRAN rank 677). Small. Acceptance, equal to fdrtool: fdrtool for p-values, z-scores, correlations and t-statistics with the censored-normal null, local fdr, q-values, eta0, plus grenander and monotone helpers."
     },
     {
-      "id": "L423",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 580,
-      "title": "biglm: bounded-memory linear and generalized linear models",
-      "score": 0.9,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6100): e.algo.stat.bigglm (gaussian, binomial and Poisson IRLS with the package stopping rule, errors and deviance) equals biglm on 276 values on Windows (oracle_bigglm); Linux pending. D6570: offsets (offset() in the formula, 262 more values) equal biglm. D6571: the sandwich standard errors (sandwich = TRUE) equal biglm on 92 values. D6572: Gamma(log), gaussian(log), binomial(probit) and binomial(cloglog) equal biglm on 280 values (Gamma(inverse) cannot start from eta = 0, in biglm as here). D6573: singular designs (a column that is a combination of the earlier ones: NA coefficient and standard error, the others fitted) equal biglm on 63 values. D6574: inverse.gaussian(log) equals biglm on 44 values (the default 1/mu^2 link cannot start from eta = 0 in R either). Open: the quasi families, further links. Original: Open (CRAN rank 672). Small. Acceptance, equal to biglm: biglm and bigglm fitted by chunked QR updating, update with new chunks, coefficients, standard errors, deviance and the chunk-size independence of the result."
-    },
-    {
       "id": "L444",
       "category": "library",
       "group": "CRAN parity",

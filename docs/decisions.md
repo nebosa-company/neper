@@ -46618,3 +46618,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** Family id 8 is inverse.gaussian(log): variance `mu^3`, deviance residuals `w (y - mu)^2 / (y mu^2)`, the log link; the default `1/mu^2` link would start at `eta = 0` with an infinite mean, so biglm fails on it and it is not ported.
 
 **Result.** `oracle_bigglm` agrees with biglm on 44 new inverse.gaussian values on Windows (1017 cases in all); Linux pending. L423 stays at 0.9: the quasi families and further links.
+
+## D6575 — L423 closed
+
+**Decision.** L423 is delivered: bigglm with the families and links biglm can start from `eta = 0`, weights, offsets, sandwich errors and aliased columns equals biglm on Windows. The quasi families are not ported (they take a user-supplied variance function, outside the item's families), and the inverse-link families fail in biglm itself.
+
+**Result.** L423 leaves the queue; the Linux run of oracle_bigglm is batched with the others.
