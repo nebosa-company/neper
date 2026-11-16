@@ -46414,3 +46414,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `censboot_condcox` combines gety2 (failure times per case from the Cox baseline and linear predictors) with getc2 (each censoring time drawn beyond the case's own time), in R's draw order. `empinf_inf` is inf.jack for stype "w" (weight eps/n moved onto case i, eps = 0.001/n) and `empinf_jack` is usual.jack for stype "w" and "i" (`(n - 1)(tobs - stat without case i)`).
 
 **Result.** `oracle_boot3` agrees with boot on 240 cond-with-Cox values and 80 empinf values on Windows (1970 in all); Linux pending. empinf reg and pos, the coxph fit itself and jack.after.boot (plots only) stay open; L321 at 0.98.
+
+## D6541 — boot: empinf reg and pos
+
+**Decision.** `empinf_reg` is empinf.reg for one stratum: the least-squares slopes of the bootstrap statistics on the resampling frequencies divided by n (the first case dropped as the reference, intercept fitted), centred to mean zero; `empinf_pos` is positive.jack for stype "w" (case i weighted double, renormalised) and "i" (case i appended again), `(n + 1)(stat - tobs)`.
+
+**Result.** `oracle_boot3` agrees with boot on 100 new empinf values on Windows (2070 in all); Linux pending. What stays open on L321 is censboot with an object fitted by coxph (the oracle supplies the linear predictors and baseline survival) and jack.after.boot, which only plots.

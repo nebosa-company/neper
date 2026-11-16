@@ -103,4 +103,14 @@ for (x in xs) {
   }
   for (k in 0:3) { L <- empinf(data = x, statistic = ist[[k + 1]], stype = "i", type = "jack"); add("ei_ji_s", a(k), sum(L * seq_along(L))); add("ei_ji_1", a(k), L[1]) }
 }
+# empinf pos and reg: "ei_pw", "ei_pi" as above with type "pos"; "ei_reg" (kind, n, x..., seed, R) from boot(), _s weighted sum, _1 first
+for (x in xs) {
+  a <- function(k) c(k, length(x), x)
+  wst <- list(function(d, w) sum(d * w) / sum(w), function(d, w) { m <- sum(d * w) / sum(w); sum(w * (d - m)^2) / sum(w) })
+  ist <- list(function(d, i) mean(d[i]), function(d, i) median(d[i]), function(d, i) sd(d[i]), function(d, i) var(d[i]))
+  for (k in 0:1) { L <- empinf(data = x, statistic = wst[[k + 1]], stype = "w", type = "pos"); add("ei_pw_s", a(k), sum(L * seq_along(L))); add("ei_pw_1", a(k), L[1]) }
+  for (k in 0:3) { L <- empinf(data = x, statistic = ist[[k + 1]], stype = "i", type = "pos"); add("ei_pi_s", a(k), sum(L * seq_along(L))); add("ei_pi_1", a(k), L[1]) }
+  for (k in 0:3) { seed <- sample(1:1e6, 1); R <- 4 * length(x); set.seed(seed); b <- boot(x, ist[[k + 1]], R); L <- empinf(b, type = "reg")
+    add("ei_reg_s", c(a(k), seed, R), sum(L * seq_along(L))); add("ei_reg_1", c(a(k), seed, R), L[1]) }
+}
 emit("boot3", "boot", list(cases))

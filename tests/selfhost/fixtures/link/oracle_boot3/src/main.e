@@ -102,6 +102,30 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "ei_pw_s") || str.eq(c.name, "ei_pw_1") || str.eq(c.name, "ei_pi_s") || str.eq(c.name, "ei_pi_1") || str.eq(c.name, "ei_reg_s") || str.eq(c.name, "ei_reg_1") {
+        let kd = u8(z[0usize])
+        let n = usize(z[1usize])
+        let (lo, le) = mem.alloc[f64](a, n)
+        if le != ok { ret nan }
+        var ee = ok
+        if c.name[3usize] == 112u8 { ee = bt.empinf_pos(a, z[2usize..2usize + n], kd, c.name[4usize] == 119u8, lo) }
+        if c.name[3usize] == 114u8 {
+            var g: rng.Rng = zero
+            rng.seed(&g, i64(z[2usize + n]))
+            let (bo, be) = bt.boot(a, &g, z[2usize..2usize + n], kd, usize(z[3usize + n]))
+            if be != ok { ret nan }
+            ee = bt.empinf_reg(a, &bo, lo)
+        }
+        if ee != ok { ret nan }
+        if c.name[c.name.len - 1usize] == 49u8 { ret lo[0usize] }
+        var s = 0.0f64
+        var i = 0usize
+        while i < n {
+            s += lo[i] * f64(i + 1usize)
+            i += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "cond_t0") || str.eq(c.name, "cond_t") || str.eq(c.name, "cond_tsum") {
         let seed = i64(z[0usize])
         let st = u8(z[1usize])

@@ -1239,3 +1239,148 @@ fn empinf_jack(a: *mem.Arena, x: []const f64, kind: u8, wsel: bool, out: []f64) 
     }
     ret ok
 }
+
+// empinf(type = "reg") for one stratum: the least-squares slopes of the bootstrap statistics on the resampling frequencies divided by n (case 1 left out), centred to mean zero
+fn empinf_reg(a: *mem.Arena, b: *const Boot, out: []f64) -> err {
+    let n = b.n
+    let nr = b.r
+    let p = n
+    let (xm, e1) = mem.alloc[f64](a, nr * p)
+    let (ata, e2) = mem.alloc[f64](a, p * (p + 1usize))
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    var r = 0usize
+    while r < nr {
+        xm[r * p] = 1.0f64
+        var j = 1usize
+        while j < p {
+            xm[r * p + j] = 0.0f64
+            j += 1usize
+        }
+        j = 0usize
+        while j < n {
+            let c = usize(b.idx[r * n + j]) - 1usize
+            if c > 0usize { xm[r * p + c] += 1.0f64 / f64(n) }
+            j += 1usize
+        }
+        r += 1usize
+    }
+    let wd = p + 1usize
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            var s = 0.0f64
+            r = 0usize
+            while r < nr {
+                s += xm[r * p + i] * xm[r * p + j]
+                r += 1usize
+            }
+            ata[i * wd + j] = s
+            j += 1usize
+        }
+        var s2 = 0.0f64
+        r = 0usize
+        while r < nr {
+            s2 += xm[r * p + i] * b.t[r]
+            r += 1usize
+        }
+        ata[i * wd + p] = s2
+        i += 1usize
+    }
+    var col = 0usize
+    while col < p {
+        var piv = col
+        var rr = col + 1usize
+        while rr < p {
+            if math.abs[f64](ata[rr * wd + col]) > math.abs[f64](ata[piv * wd + col]) { piv = rr }
+            rr += 1usize
+        }
+        var cc = 0usize
+        while cc < wd {
+            let t = ata[col * wd + cc]
+            ata[col * wd + cc] = ata[piv * wd + cc]
+            ata[piv * wd + cc] = t
+            cc += 1usize
+        }
+        rr = 0usize
+        while rr < p {
+            if rr != col {
+                let fct = ata[rr * wd + col] / ata[col * wd + col]
+                cc = col
+                while cc < wd {
+                    ata[rr * wd + cc] -= fct * ata[col * wd + cc]
+                    cc += 1usize
+                }
+            }
+            rr += 1usize
+        }
+        col += 1usize
+    }
+    out[0usize] = 0.0f64
+    var m = 0.0f64
+    i = 1usize
+    while i < p {
+        out[i] = ata[i * wd + p] / ata[i * wd + i]
+        m += out[i]
+        i += 1usize
+    }
+    m = m / f64(n)
+    i = 0usize
+    while i < n {
+        out[i] = out[i] - m
+        i += 1usize
+    }
+    ret ok
+}
+
+// empinf(type = "pos") for one stratum: positive jackknife, case i given double weight (stype "w") or appended once more (stype "i"); out[i] = (n + 1) (stat - tobs)
+fn empinf_pos(a: *mem.Arena, x: []const f64, kind: u8, wsel: bool, out: []f64) -> err {
+    let n = x.len
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (buf, e2) = mem.alloc[f64](a, n + 1usize)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    var i = 0usize
+    var tobs = 0.0f64
+    if wsel {
+        while i < n {
+            w[i] = 1.0f64 / f64(n)
+            i += 1usize
+        }
+        tobs = wstat(a, kind, x, w)
+    } else {
+        tobs = stat_of(a, kind, x)
+    }
+    i = 0usize
+    while i < n {
+        var other = 0.0f64
+        if wsel {
+            var s = 0.0f64
+            var j = 0usize
+            while j < n {
+                w[j] = 1.0f64 / f64(n)
+                if j == i { w[j] = 2.0f64 * w[j] }
+                s += w[j]
+                j += 1usize
+            }
+            j = 0usize
+            while j < n {
+                w[j] = w[j] / s
+                j += 1usize
+            }
+            other = wstat(a, kind, x, w)
+        } else {
+            var j = 0usize
+            while j < n {
+                buf[j] = x[j]
+                j += 1usize
+            }
+            buf[n] = x[i]
+            other = stat_of(a, kind, buf[0usize..n + 1usize])
+        }
+        out[i] = f64(n + 1usize) * (other - tobs)
+        i += 1usize
+    }
+    ret ok
+}
