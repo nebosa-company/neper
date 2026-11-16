@@ -233,3 +233,66 @@ fn lof(x: []const f64, n: usize, d: usize, min_pts: usize, out: []f64, kd: []f64
         a += 1usize
     }
 }
+
+// the k nearest other rows of `row` by distance, ids and distances in ascending order (stable on equal distances)
+fn knn_list(x: []const f64, n: usize, d: usize, k: usize, row: usize, ids: []usize, dist: []f64) {
+    var m = 0usize
+    var j = 0usize
+    while j < n {
+        if j != row {
+            let v = distance(x, d, row, j)
+            var q = m
+            while q > 0usize && dist[q - 1usize] > v {
+                dist[q] = dist[q - 1usize]
+                ids[q] = ids[q - 1usize]
+                q -= 1usize
+            }
+            dist[q] = v
+            ids[q] = j
+            m += 1usize
+        }
+        j += 1usize
+    }
+}
+
+// sNN(x, k)$shared for the c-th nearest neighbour j of row i: the common members of the two k-neighbour lists, plus one when i is in j's list;
+// ids and dist are scratch of n, jids and jdist scratch of n
+fn snn_shared(x: []const f64, n: usize, d: usize, k: usize, i: usize, c: usize, ids: []usize, dist: []f64, jids: []usize, jdist: []f64) -> f64 {
+    knn_list(x, n, d, k, i, ids, dist)
+    let j = ids[c]
+    knn_list(x, n, d, k, j, jids, jdist)
+    var common = 0usize
+    var a = 0usize
+    while a < k {
+        var b = 0usize
+        while b < k {
+            if ids[a] == jids[b] { common += 1usize }
+            b += 1usize
+        }
+        a += 1usize
+    }
+    var b = 0usize
+    while b < k {
+        if jids[b] == i { common += 1usize }
+        b += 1usize
+    }
+    ret f64(common)
+}
+
+// frNN(x, eps): how many other rows lie within eps of `row`, and the sum of those distances through the second result
+fn frnn_count(x: []const f64, n: usize, d: usize, row: usize, eps: f64) -> (usize, f64) {
+    var cnt = 0usize
+    var s = 0.0f64
+    var j = 0usize
+    while j < n {
+        if j != row {
+            let v = distance(x, d, row, j)
+            if v <= eps {
+                cnt += 1usize
+                s += v
+            }
+        }
+        j += 1usize
+    }
+    ret (cnt, s)
+}

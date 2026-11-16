@@ -14,6 +14,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let d = usize(x[1usize])
     let p = usize(x[2usize])
     let row = usize(x[3usize])
+    if str.eq(c.name, "snn") || str.eq(c.name, "frcount") || str.eq(c.name, "frsum") {
+        let pts5 = x[5usize..5usize + n * d]
+        if str.eq(c.name, "snn") {
+            let (i1, g1) = mem.alloc[usize](a, n)
+            if g1 != ok { os.exit(9) }
+            let (d1, g2) = mem.alloc[f64](a, n)
+            if g2 != ok { os.exit(10) }
+            let (i2, g3) = mem.alloc[usize](a, n)
+            if g3 != ok { os.exit(11) }
+            let (d2, g4) = mem.alloc[f64](a, n)
+            if g4 != ok { os.exit(12) }
+            ret dn.snn_shared(pts5, n, d, p, row, usize(x[4usize]), i1, d1, i2, d2)
+        }
+        let (cnt, sm) = dn.frnn_count(pts5, n, d, row, x[2usize])
+        if str.eq(c.name, "frcount") { ret f64(cnt) }
+        ret sm
+    }
     let pts = x[4usize..4usize + n * d]
     let (o, e1) = mem.alloc[f64](a, n)
     if e1 != ok { os.exit(5) }

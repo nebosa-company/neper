@@ -45904,3 +45904,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.ml.cluster.density` gains `knn_distance` (the k-th other-row distance of every row) and `lof` (local outlier factor with the package's neighbourhood: every row within the (minPts - 1)-th neighbour distance, ties included; reachability as the larger of the neighbour's k-distance and the pair distance; NaN scores become 1).
 
 **Result.** `oracle_dbscanpkg` equals dbscan on 260 cases on Windows at rel 1e-9, 20 data sets of 20 to 70 rows in 2 to 4 dimensions with one planted outlier; ties are not exercised. hdbscan, sNN, sNNclust, kNN and frNN objects, extractXi, extractDBSCAN and jpclust are open; Linux pending. L358 is partial.
+
+## D6456 — dbscan: sNN shared counts and frNN neighbourhoods
+
+`e.ml.cluster.density` gains `knn_list`, `snn_shared` and `frnn_count`. sNN's shared count for a neighbour j of i is the common members of the two k-neighbour lists plus one when i is in j's list (checked against sNN on 4,560 pairs in R before porting); sNN sorts its own id columns by shared count, so the oracle queries by kNN position.
+
+**Result.** `oracle_dbscanpkg` equals dbscan on 485 cases on Windows, 225 of them new over sNN, frNN counts and frNN distance sums; Linux pending. L358 stays partial.
