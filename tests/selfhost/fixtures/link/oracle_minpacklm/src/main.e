@@ -91,6 +91,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         e = e2
     }
     if e != ok { ret 0.0f64 / 0.0f64 }
+    if str.eq(c.name, "lmhess") { ret fit.hess[q] }
     if q < np { ret x[q] }
     if q == np { ret fit.deviance }
     if q == np + 1usize { ret f64(fit.info) }

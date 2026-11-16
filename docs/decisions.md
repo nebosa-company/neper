@@ -46198,3 +46198,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `nls_lm_core` takes the initial step-bound factor and a user `diag`; an empty diag keeps lmdif's scaling mode 1 (diag set from the first Jacobian's column norms and raised as they grow), and a given one switches to mode 2 (the supplied scales are used as they are and never updated). `nls_lm_opts` exposes both.
 
 **Result.** `oracle_minpacklm` agrees with minpack.lm on 510 values on Windows, the 170 new ones from 30 fits with a factor of 1, 10, 100 or 1000 and a random diag: parameters, deviance, info code and iteration count at rel 1e-6. The hessian and the nlsLM model interface are open; Linux pending. L420 stays partial.
+
+## D6505 — minpack.lm: the hessian
+
+`Fit` now carries `hess`: the package's hessian is P R'R P' taken from the last QR factorisation of the Jacobian (R is the upper triangle of fjac, the columns pivoted by ipvt), which is the Jacobian at the last iterate before the final step, not at the returned parameters; a J'J at the final parameters differs from it by about 5e-5 relative, which is how this was found.
+
+**Result.** `oracle_minpacklm` agrees with minpack.lm on 730 values on Windows, the 220 new ones the hessian entries of 30 fits at rel 1e-5; `oracle_drc`, which also uses the module, still passes. Only the nlsLM model interface (formula, weights, summary standard errors) is open; Linux pending. L420 stays partial.

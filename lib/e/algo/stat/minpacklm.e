@@ -9,7 +9,7 @@
 use e.math
 use e.mem
 
-type Fit = struct { info: i64, nfev: i64, niter: i64, deviance: f64 }
+type Fit = struct { info: i64, nfev: i64, niter: i64, deviance: f64, hess: []f64 }
 
 fn rdwarf() -> f64 { ret 3.834e-20f64 }
 fn rgiant() -> f64 { ret 1.304e19f64 }
@@ -595,6 +595,28 @@ fn nls_lm_core[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C
     while i < m {
         dev += fvec[i] * fvec[i]
         i += 1usize
+    }
+    // the package's hessian: P R'R P' from the last QR factorisation (R in the upper triangle of fjac, columns pivoted by ipvt)
+    let (hs, eh) = mem.alloc[f64](a, n * n)
+    if eh == ok {
+        var ci = 0usize
+        while ci < n {
+            var cj = 0usize
+            while cj < n {
+                var s = 0.0f64
+                var kk = 0usize
+                var lim = ci
+                if cj < lim { lim = cj }
+                while kk <= lim {
+                    s += fjac[ci * m + kk] * fjac[cj * m + kk]
+                    kk += 1usize
+                }
+                hs[ipvt[ci] * n + ipvt[cj]] = s
+                cj += 1usize
+            }
+            ci += 1usize
+        }
+        fit.hess = hs
     }
     fit.deviance = dev
     ret (fit, ok)

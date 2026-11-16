@@ -3372,4 +3372,5 @@ D6500	936	PerformanceAnalytics: Return.calculate, and L408 lands
 D6501	915	DiceDesign: the two enhanced stochastic evolutionary searches
 D6502	1089	DiceDesign: faureprimeDesign and the L2star search, and L426 lands
 D6503	784	minpack.lm: lmder with an analytic Jacobian
-D6504	685	minpack.lm: the factor and diag controls
+D6504	686	minpack.lm: the factor and diag controls
+D6505	728	minpack.lm: the hessian
