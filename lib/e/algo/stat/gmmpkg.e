@@ -1,7 +1,7 @@
 // R gmm for the linear model y = X b with instruments Z (n by q, q >= p): the two-step estimator with an iid weighting (sigma^2 Z'Z / n, which is two-stage least squares)
-// or the heteroskedasticity-consistent centred moment covariance (vcov = "MDS"), its covariance matrix and the Hansen J statistic.
+// or the heteroskedasticity-consistent centred moment covariance (vcov = "MDS") with the five HAC kernels at a fixed bandwidth, its covariance matrix and the Hansen J statistic.
 //
-// Not here: the HAC kernels and bandwidths, the iterated and CUE estimators, nonlinear moment functions and the linear hypothesis tests.
+// Not here: the Andrews and Newey-West bandwidth selectors, prewhitening, the iterated and CUE estimators, nonlinear moment functions and the linear hypothesis tests.
 
 use e.algo.stat.carlmtest as ols
 use e.math
