@@ -192,3 +192,4 @@ oracle_dfree
 oracle_auglag
 oracle_glmnet
 oracle_coxph
+oracle_psych

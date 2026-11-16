@@ -192,7 +192,7 @@ L490	library	0	249	timereg: Aalen additive and Cox-Aalen hazard models	Open (CRA
 L491	library	0	208	riskRegression: risk prediction scoring	Open (CRAN rank 850).
 L492	library	0	236	coxme: mixed-effects Cox models	Open (CRAN rank 900).
 L440	library	0	347	flexsurv and rstpm2: flexible parametric survival models	Open (CRAN ranks 697, 694).
-L312	library	0	392	psych: reliability, factor analysis and correlation tools	Open (CRAN rank 168).
+L312	library	0.15	702	psych: reliability, factor analysis and correlation tools	Partly done (D6057): e.algo.stat.psych has alpha, KMO, cortest.bartlett, ICC, cohen.kappa and mardia, equal to psych on 220 cases on Windows (oracle_psych);
 L313	library	0	425	emmeans: estimated marginal means and contrasts	Open (CRAN rank 192).
 L341	library	0	313	multcomp: general linear hypotheses	Open (CRAN rank 224;
 L318	library	0	473	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Open (CRAN rank 128).
