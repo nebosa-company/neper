@@ -46096,3 +46096,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pracma` gains `savgol`: row dorder of the pseudo-inverse of the Vandermonde matrix (-fc .. fc)^(0 .. forder), found as (X'X)^-1 X' by Gauss-Jordan, convolved with the series and trimmed to its length with the data taken as zero outside, times (-1)^dorder, as the package does.
 
 **Result.** `oracle_pracma` equals pracma on 1086 cases on Windows at rel 1e-9, 150 of them new: five positions of each of 30 series of 20 to 60 values, window 5 to 11, polynomial order 2 to 4, derivative order 0 to 2, including the zero-padded ends. Linux pending. L333 stays partial.
+
+## D6488 — stats::lowess
+
+`e.algo.stat.lowesspkg` is new: `lowest` and `clowess` are R's C routine line for line, with its 1-based indexing kept: the window of ns = f n nearest points advanced while the right neighbour is closer, tricube weights with the 0.001 and 0.999 cut-offs, the local linear fit with the curvature correction applied only when the weighted spread exceeds 0.001 of the range, linear interpolation across points closer than delta, and the robustness weights from 6 times the median absolute residual (3 times the sum of the two middle values for even n) with the c1 and c9 cut-offs.
+
+**Result.** `oracle_lowesspkg` agrees with stats::lowess on 180 cases on Windows at rel 1e-9: 30 series of 15 to 80 points with outliers, spans 0.3 to 0.9, 0 to 4 robustness iterations, delta zero or 1 per cent of the range. The R wrapper's sorting and ties in x are not covered; Linux pending. L333 stays partial.

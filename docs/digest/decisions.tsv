@@ -3355,4 +3355,5 @@ D6483	1008	nleqslv and multiroot: roots of fixed systems
 D6484	881	rootSolve: gradient and hessian
 D6485	949	stats::uniroot and rootSolve::uniroot.all
 D6486	818	pracma: fminsearch (Nelder-Mead)
-D6487	606	pracma: savgol
+D6487	607	pracma: savgol
+D6488	922	stats::lowess
