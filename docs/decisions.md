@@ -46372,3 +46372,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `anova_term` gives, for one numeric column, the sequential F of anova(lm) (type I: the change in residual sum of squares when the column joins the earlier ones, over s^2) and the marginal F of Anova types II and III (the squared t statistic; for numeric main effects the three marginal types coincide). Factor terms, interactions and the type III intercept row are not here.
 
 **Result.** `oracle_carlmtest` agrees with car on 222 new values on Windows; Linux pending. L300 stays partial.
+
+## D6534 — car: boxCox profile log-likelihood
+
+**Decision.** `box_cox_ll` is the value boxCox plots: the Jacobian-adjusted power `(y^l - 1) / l / gm^(l - 1)` (`gm * log y` for |l| at most 1e-6, gm the geometric mean) regressed on X, log-likelihood `-n/2 log(RSS)`.
+
+**Result.** `oracle_carlmtest` agrees with car on 72 new values (six lambdas on positive responses) on Windows; Linux pending. The powerTransform maximiser stays open; L300 stays partial.

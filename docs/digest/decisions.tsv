@@ -3401,4 +3401,5 @@ D6529	609	lmtest: bgtest
 D6530	608	lmtest: raintest and harvtest
 D6531	464	car: ncvTest and leveneTest
 D6532	385	car: linearHypothesis
-D6533	545	car: Anova for numeric terms
+D6533	546	car: Anova for numeric terms
+D6534	456	car: boxCox profile log-likelihood

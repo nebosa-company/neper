@@ -866,3 +866,34 @@ fn anova_term(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize,
     let fs = t * t / (f0.xtx_inv[j * p + j] * s2)
     ret (fs, p_f(fs, 1.0f64, f64(n - p)))
 }
+
+// car::boxCox profile log-likelihood at lambda: -n/2 log(RSS) of the Jacobian-adjusted Box-Cox power of y (bcPower, j = TRUE) regressed on X; y must be positive
+fn box_cox_ll(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, lambda: f64) -> f64 {
+    let (z, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret 0.0f64 / 0.0f64 }
+    var lg = 0.0f64
+    var i = 0usize
+    while i < n {
+        lg += math.log[f64](y[i])
+        i += 1usize
+    }
+    let gm = math.exp[f64](lg / f64(n))
+    i = 0usize
+    while i < n {
+        if math.abs[f64](lambda) <= 1.0e-6f64 {
+            z[i] = gm * math.log[f64](y[i])
+        } else {
+            z[i] = (math.pow[f64](y[i], lambda) - 1.0f64) / lambda / math.pow[f64](gm, lambda - 1.0f64)
+        }
+        i += 1usize
+    }
+    let (f, e1) = ols(a, x, z, n, p)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var rss = 0.0f64
+    i = 0usize
+    while i < n {
+        rss += f.resid[i] * f.resid[i]
+        i += 1usize
+    }
+    ret 0.0f64 - f64(n) / 2.0f64 * math.log[f64](rss)
+}
