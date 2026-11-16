@@ -217,3 +217,33 @@ fn scale_tau2(a: *mem.Arena, x: []const f64, c1: f64, c2: f64) -> (f64, f64) {
     }
     ret (mu, sig0 * math.sqrt[f64](rs / nes2))
 }
+
+// mc: the medcouple, the median of ((x_j - med) - (med - x_i)) / (x_j - x_i) over x_i <= med <= x_j, for samples without ties at the median
+// (an observation exactly at the median pairs with itself and is skipped here); doReflect makes the package average the estimate with the reflected one,
+// which is the same number when there are no ties
+fn mc(a: *mem.Arena, x: []const f64) -> f64 {
+    let n = x.len
+    let (s, e) = sort_copy(a, x)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let med = median_sorted(s)
+    let (h, e2) = mem.alloc[f64](a, n * n)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var cnt = 0usize
+    var i = 0usize
+    while i < n {
+        if s[i] <= med {
+            var j = 0usize
+            while j < n {
+                if s[j] >= med && s[j] > s[i] {
+                    h[cnt] = ((s[j] - med) - (med - s[i])) / (s[j] - s[i])
+                    cnt += 1usize
+                }
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    let (hs, e3) = sort_copy(a, h[0usize..cnt])
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    ret median_sorted(hs)
+}

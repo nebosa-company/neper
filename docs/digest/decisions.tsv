@@ -3273,4 +3273,6 @@ D6192	915	PMCMRplus: the Kruskal-Wallis all-pairs post-hoc tests
 D6193	671	p.adjust: Holm, Hochberg, Hommel, Bonferroni, Benjamini-Hochberg and Benjamini-Yekutieli
 D6192	1103	robustbase: Qn, Sn and huberM
 D6194	1038	mixtools: normalmixEM
-D6193	773	robustbase: scaleTau2
+D6193	774	robustbase: scaleTau2
+D6195	720	klaR: Gaussian NaiveBayes
+D6194	763	robustbase: mc, the medcouple

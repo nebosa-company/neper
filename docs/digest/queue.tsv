@@ -60,7 +60,7 @@ L477	library	0.5	551	compositions: compositional data analysis	Partial (D6140).
 L478	library	0.4	519	dagitty: causal graph reasoning	Partial (D6159).
 L479	library	0	216	hdrcde: highest density regions	Open (CRAN rank 837).
 L480	library	0	199	aod: overdispersed binomial and count data	Open (CRAN rank 822).
-L481	library	0	202	klaR: classification helpers	Open (CRAN rank 846).
+L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
 L482	library	0.5	471	laeken: inequality and poverty indicators	Partial (D6139).
 L483	library	0.4	733	tsfeatures: time-series features	Partial (D6142).
 L484	library	0.25	506	LearnBayes: Bayesian computation helpers	Partial (D6156).
@@ -88,7 +88,7 @@ L335	library	0.45	729	cluster: pam, clara, fanny, agnes, diana, mona, daisy	Part
 L336	library	0	247	nnet: single-hidden-layer networks and multinom	Open (CRAN rank 258).
 L337	library	0	288	rpart: CART trees	Open (CRAN rank 270).
 L394	library	0	193	ipred: bagging and error estimation	Open (CRAN rank 439).
-L338	library	0.15	438	robustbase: robust regression and scale	Partial (D6192, D6193 scaleTau2).
+L338	library	0.2	461	robustbase: robust regression and scale	Partial (D6192, D6193 scaleTau2, D6194 mc without ties).
 L339	library	0	435	bayestestR, performance and parameters: model summary indices	Open (CRAN ranks 254, 251, 272).
 L340	library	0.55	664	signal: filter design and spectral tools	Partial (D6183, D6184 filtfilt and freqz, D6185 sgolay central row, D6186 cheby1, D6187 cheby2, D6188 grpdelay, D6189 band-pass butter).
 L343	library	0	330	deSolve: solver parity	Open (CRAN rank 216).

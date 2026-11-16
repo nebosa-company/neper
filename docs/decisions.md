@@ -45604,3 +45604,15 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.robustbase` gains scale_tau2, the Yohai-Zamar tau scale with the package's defaults (c1 = 4.5, c2 = 3, one iteration from mu0 = median and sigma0 = the raw median absolute deviation, with the asymptotic consistency factor n E rho(c2 qnorm(3/4))): the location is the biweight-weighted mean with weights (1 - (|x - mu0| / (c1 sigma0))^2)^2 truncated at 0, and the scale is sigma0 sqrt(sum min(((x - mu) / sigma0)^2, c2^2) / (n E)). Both the location and the scale equal robustbase's to 1e-9. Not here: the finite-sample consistency, further iterations and the rest of the package (mc, covMcd, lmrob, ltsReg).
 
 **Result.** `oracle_robustbase` agrees with robustbase on 210 cases on Windows; Linux pending. L338 stays partial.
+
+## D6195 — klaR: Gaussian NaiveBayes
+
+`e.algo.stat.klar` fits NaiveBayes with Gaussian class-conditional densities (class frequencies as priors, per-class means and (n - 1) standard deviations for each variable) and predicts as the package does: log prior plus the summed log densities, a density of exactly zero replaced by the threshold, the maximum for the class and the normalised exponential for the posterior. Equal to klaR on 14 random fits of 1 to 4 variables and 2 to 4 classes. Not here: kernel densities, factor and logical predictors, the Laplace smoothing fL, rda, woe, stepclass, greedy.wilks and the plots.
+
+**Result.** `oracle_klar` equals klaR on 70 cases on Windows; Linux pending. L481 is partial.
+
+## D6194 — robustbase: mc, the medcouple
+
+`e.algo.stat.robustbase` gains mc, the medcouple: the median over pairs x_i <= med <= x_j with x_i < x_j of ((x_j - med) - (med - x_i)) / (x_j - x_i), computed over all pairs. It equals mc() (doReflect on, so the package averages the estimate with the reflected one, the same number when there are no ties) on even-sized samples. Odd-sized samples put an observation exactly on the median, where the package's tie kernel applies, and are not covered; neither are other ties at the median. Not here: that kernel, doScale, scaleTau2's finite-sample consistency, covMcd, lmrob, ltsReg and adjOutlyingness.
+
+**Result.** `oracle_robustbase` agrees with robustbase on 226 cases on Windows; Linux pending. L338 stays partial.

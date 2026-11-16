@@ -8,6 +8,7 @@ for (rep in 1:30) {
   n <- sample(c(2:14, 15:60), 1); x <- round(rnorm(n) * 2 + (rep %% 3 == 0) * c(rep(0, n - 2), 15, -12)[seq_len(n)], 4)
   a <- c(n, x)
   add("qn", a, Qn(x), 1e-6); add("sn", a, Sn(x))
+  if (n >= 4 && n %% 2 == 0) add("mc", a, as.numeric(mc(x)))
   if (n >= 3) { t2 <- scaleTau2(x, mu.too = TRUE); add("tmu", a, t2[1]); add("tsd", a, t2[2]) }
   if (n >= 3) { h <- huberM(x); add("hmu", a, h$mu); add("hs", a, h$s); add("hit", a, h$it) }
 }

@@ -15,6 +15,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let k = c.name
     if str.eq(k, "qn") { ret rb.qn(a, v) }
     if str.eq(k, "sn") { ret rb.sn(a, v) }
+    if str.eq(k, "mc") { ret rb.mc(a, v) }
     if str.eq(k, "tmu") || str.eq(k, "tsd") {
         let (tm, ts) = rb.scale_tau2(a, v, 4.5f64, 3.0f64)
         if str.eq(k, "tmu") { ret tm }
