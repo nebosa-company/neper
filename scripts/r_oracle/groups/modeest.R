@@ -1,4 +1,5 @@
 # modeest: venter (types 1, 2, dalenius, shorth), hsm, grenander (p), meanshift, asselin.
+#   kinds 9 tsybakov (p = alpha, triangular, dmp) 10 tsybakov (gaussian, no dmp) 11 lientz (p = bw, the evaluation point after x)
 #   args: (kind, p, n, x[n])  kind 0 venter1 1 venter2 2 dalenius 3 shorth 4 hsm 5 grenander(p) 6 meanshift 7 asselin 8 meanshift iterations
 suppressMessages(library(modeest))
 cases <- list()
@@ -16,5 +17,11 @@ for (rep in 1:50) {
   ms <- tryCatch(meanshift(x), error = function(e) NULL)
   if (!is.null(ms)) { add(a(6, 0), as.numeric(ms)); add(a(8, 0), attr(ms, "iterations")) }
   as_ <- tryCatch(suppressWarnings(asselin(x)), error = function(e) NULL); if (!is.null(as_) && is.finite(as_)) add(a(7, 0), as_)
+}
+for (rep in 1:25) {
+  n <- sample(12:80, 1); x <- round(rnorm(n, 2, 1.4), 3); al <- runif(1, 0.6, 1)
+  add(c(9, al, n, x), tsybakov(x, alpha = al)); add(c(10, al, n, x), tsybakov(x, kernel = "gaussian", dmp = FALSE, alpha = al))
+  bwl <- runif(1, 0.1, 0.6); l <- lientz(x, bwl); zz <- runif(4, min(x) - 0.5, max(x) + 0.5)
+  for (z in zz) add(c(11, bwl, n, x, z), l(z))
 }
 emit("modeest", "modeest", list(cases))

@@ -292,6 +292,7 @@ oracle_ks
 oracle_aod
 oracle_drdid
 oracle_gstatpkg
+oracle_parzen
 oracle_fieldspkg
 oracle_gamlssdist
 oracle_bayestestr
@@ -348,6 +349,7 @@ oracle_ks
 oracle_aod
 oracle_drdid
 oracle_gstatpkg
+oracle_parzen
 oracle_fieldspkg
 oracle_gamlssdist
 oracle_bayestestr

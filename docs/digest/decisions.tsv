@@ -3383,4 +3383,5 @@ D6511	1060	scoringRules: weighted and kernel CRPS, and the negative binomial CRP
 D6512	1011	scoringRules: mixture, extreme-value, log-Laplace, log-logistic and two-piece CRPS
 D6513	992	scoringRules: crps_beta, crps_hyper and the log and Dawid-Sebastiani scores of the wider families
 D6514	1055	scoringRules: interval scores, ess_moments, gradient and Hessian CRPS, clogs and mmds
-D6515	1230	scoringRules: weighted scores, the last log scores, and L475 lands
+D6515	1231	scoringRules: weighted scores, the last log scores, and L475 lands
+D6516	1098	modeest: parzen, tsybakov and lientz

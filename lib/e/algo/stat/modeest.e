@@ -395,3 +395,92 @@ fn asselin(a: *mem.Arena, x: []const f64) -> (f64, err) {
     }
     ret (result, ok)
 }
+
+// tsybakov(x, kernel, dmp, alpha) with the default bandwidths (1 .. n)^(-1/7), the steps a_n = n^(-alpha) and the start shorth(x); kernel 0 triangular (derivative -sign(u) for |u| <= 1), 1 gaussian
+fn tsybakov(a: *mem.Arena, x: []const f64, kernel: usize, dmp: bool, alpha: f64) -> f64 {
+    let (par, e) = venter(a, x, 4u8, 0i64 - 1i64)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let n = x.len
+    var m = par
+    var mdmp = par
+    var cum = 0.0f64
+    var i = 1usize
+    while i <= n {
+        let bw = math.pow[f64](f64(i), 0.0f64 - 1.0f64 / 7.0f64)
+        let an = math.pow[f64](f64(i), 0.0f64 - alpha)
+        let bn = an / (bw * bw)
+        let pn = bw * bw * bw
+        cum += pn
+        let u = (m - x[i - 1usize]) / bw
+        var k = 0.0f64
+        if kernel == 0usize {
+            if math.abs[f64](u) <= 1.0f64 {
+                if u > 0.0f64 { k = 0.0f64 - 1.0f64 }
+                if u < 0.0f64 { k = 1.0f64 }
+            }
+        } else {
+            k = 0.0f64 - u * math.exp[f64](0.0f64 - u * u / 2.0f64) / math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64)
+        }
+        m = m + bn * k
+        mdmp = mdmp + (pn / cum) * (m - mdmp)
+        i += 1usize
+    }
+    if dmp { ret mdmp }
+    ret m
+}
+
+// lientz(x, bw) evaluated at z: the distance from z to the nearest half-sample mode candidate of the sorted sample (k = ceiling(bw n) - 1)
+fn lientz(a: *mem.Arena, x: []const f64, bw: f64, z: f64) -> f64 {
+    let (y, e) = sorted_copy(a, x)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let ny = y.len
+    let k = usize(math.ceil[f64](bw * f64(ny))) - 1usize
+    let inf = 1.0f64 / 0.0f64
+    if k == 0usize {
+        // yy_i = (y_i + y_{i+1}) / 2 with +Inf past the end; i = first index with z <= yy_i
+        var i = 0usize
+        while i < ny {
+            var nx = inf
+            if i + 1usize < ny { nx = y[i + 1usize] }
+            let yy = (y[i] + nx) / 2.0f64
+            if z <= yy { ret math.abs[f64](y[i] - z) }
+            i += 1usize
+        }
+        ret 0.0f64 / 0.0f64
+    }
+    // the sorted vector of (y_i + y_{i+k}) / 2 and (y_i + y_{i+k+1}) / 2, +Inf past the end
+    let (yy, e2) = mem.alloc[f64](a, 2usize * ny)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < ny {
+        var y1 = inf
+        if i + k < ny { y1 = y[i + k] }
+        var y2 = inf
+        if i + k + 1usize < ny { y2 = y[i + k + 1usize] }
+        yy[i] = (y[i] + y1) / 2.0f64
+        yy[ny + i] = (y[i] + y2) / 2.0f64
+        i += 1usize
+    }
+    i = 1usize
+    while i < 2usize * ny {
+        let t = yy[i]
+        var j = i
+        while j > 0usize && yy[j - 1usize] > t {
+            yy[j] = yy[j - 1usize]
+            j -= 1usize
+        }
+        yy[j] = t
+        i += 1usize
+    }
+    var idx = 0usize
+    while idx < 2usize * ny {
+        if z <= yy[idx] { break }
+        idx += 1usize
+    }
+    let one = idx + 1usize
+    let jj = one % 2usize
+    let pos = jj * k + (one + jj) / 2usize
+    let val = y[pos - 1usize]
+    if jj == 1usize { ret val - z }
+    ret z - val
+}

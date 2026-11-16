@@ -27,6 +27,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (r, re) = me.grenander(a, x, z[1usize])
         v = r
         e = re
+    } else if kind == 9usize || kind == 10usize {
+        v = me.tsybakov(a, x, kind - 9usize, kind == 9usize, z[1usize])
+    } else if kind == 11usize {
+        v = me.lientz(a, x, z[1usize], z[3usize + n])
     } else if kind == 6usize || kind == 8usize {
         let (r, it, re) = me.meanshift(a, x)
         v = r
