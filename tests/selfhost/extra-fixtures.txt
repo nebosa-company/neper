@@ -225,3 +225,4 @@ oracle_xts2
 oracle_promax
 oracle_cmeans
 oracle_proxy2
+oracle_pmvnorm

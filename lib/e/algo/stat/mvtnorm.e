@@ -8,6 +8,7 @@
 
 use e.algo.rand.r as rng
 use e.algo.rand.rdist as rd
+use e.algo.stat.pbivnorm as pb
 use e.math
 use e.math.dist as dist
 use e.math.special as special
@@ -371,4 +372,30 @@ fn rmvt(a: *mem.Arena, r: *rng.Rng, n: usize, sigma: []const f64, p: usize, df: 
         i += 1usize
     }
     ret (sims, ok)
+}
+
+fn phi1(z: f64) -> f64 { ret dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
+
+// P(X <= x, Y <= y) for a standard bivariate normal with correlation rho, infinite arguments allowed
+fn bvn_cdf(x: f64, y: f64, rho: f64) -> f64 {
+    if x == 0.0f64 - 1.0f64 / 0.0f64 || y == 0.0f64 - 1.0f64 / 0.0f64 { ret 0.0f64 }
+    let xinf = x == 1.0f64 / 0.0f64
+    let yinf = y == 1.0f64 / 0.0f64
+    if xinf && yinf { ret 1.0f64 }
+    if xinf { ret phi1(y) }
+    if yinf { ret phi1(x) }
+    ret pb.pbivnorm(x, y, rho)
+}
+
+// pmvnorm(lower, upper, mean, sigma, algorithm = TVPACK()) for two dimensions: the rectangle probability by
+// inclusion-exclusion over the bivariate normal distribution function (Genz's bivariate routine in pbivnorm)
+fn pmvnorm2(l0: f64, u0: f64, l1: f64, u1: f64, m0: f64, m1: f64, s00: f64, s01: f64, s11: f64) -> f64 {
+    let sd0 = math.sqrt[f64](s00)
+    let sd1 = math.sqrt[f64](s11)
+    let rho = s01 / (sd0 * sd1)
+    let a0 = (l0 - m0) / sd0
+    let b0 = (u0 - m0) / sd0
+    let a1 = (l1 - m1) / sd1
+    let b1 = (u1 - m1) / sd1
+    ret bvn_cdf(b0, b1, rho) - bvn_cdf(a0, b1, rho) - bvn_cdf(b0, a1, rho) + bvn_cdf(a0, a1, rho)
 }
