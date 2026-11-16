@@ -262,3 +262,4 @@ oracle_compositions
 oracle_rcompanion
 oracle_tsfeatures
 oracle_actuar
+oracle_extradistr

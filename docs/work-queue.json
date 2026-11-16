@@ -449,10 +449,10 @@
       "group": "CRAN parity",
       "order": 621,
       "title": "extraDistr: extra probability distributions",
-      "score": 0,
+      "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 678). Small to mid. Acceptance, equal to extraDistr under set.seed: d, p, q and r for the beta-binomial, beta-negative-binomial, Dirichlet and multinomial variants, Gumbel, Laplace, Lomax, Pareto, Rayleigh, Maxwell, triangular, truncated and half distributions, Kumaraswamy, Frechet, Skellam, Zipf and the rest of the package."
+      "evidence": "Partial (D6144). d, p and q of the Gumbel, Frechet, Kumaraswamy, Laplace, Lomax, Pareto, Rayleigh, triangular, Gompertz, power, inverse gamma, half-normal, half-Cauchy, Birnbaum-Saunders, Wald and beta-prime distributions equal extraDistr on Windows (oracle_extradistr; Linux pending). Open: the discrete, multivariate, truncated and remaining families and the generators under set.seed. Was: Open (CRAN rank 678). Small to mid. Acceptance, equal to extraDistr under set.seed: d, p, q and r for the beta-binomial, beta-negative-binomial, Dirichlet and multinomial variants, Gumbel, Laplace, Lomax, Pareto, Rayleigh, Maxwell, triangular, truncated and half distributions, Kumaraswamy, Frechet, Skellam, Zipf and the rest of the package."
     },
     {
       "id": "L424",

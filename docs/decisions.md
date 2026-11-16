@@ -45254,3 +45254,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.actuar` has the transformed beta family (d, p, q, raw moment, limited expected value) with Burr, inverse Burr, Pareto, inverse Pareto, loglogistic, paralogistic, inverse paralogistic and generalised Pareto as parameter maps, the transformed gamma and inverse transformed gamma families (with inverse gamma, inverse Weibull and inverse exponential), and the single-parameter Pareto. R's `levinvpareto` integrates numerically with QUADPACK at tolerance eps^0.25, so it differs from the closed form by up to 3e-8 relative; those cases are compared at 1e-5. aggregateDist, ruin, cm, the other distributions and the generators are not here.
 
 **Result.** `oracle_actuar` equals actuar on 3123 cases on Windows; Linux pending. L463 is partial.
+
+## D6144 — extraDistr, sixteen continuous families
+
+**Context.** L422 asked for the extraDistr distributions.
+
+**Decision.** `e.algo.stat.extradistr` ports d, p and q of the Gumbel, Frechet, Kumaraswamy, Laplace, Lomax, Pareto, Rayleigh, triangular, Gompertz, power, inverse gamma, half-normal, half-Cauchy, Birnbaum-Saunders, Wald (no q) and beta-prime distributions with the package's parameterisations (found by comparison: Gompertz takes the rate first and the shape second, power takes the upper bound first and the exponent second). The discrete and multivariate families, the truncated and half variants and the generators are not here.
+
+**Result.** `oracle_extradistr` equals extraDistr on 752 cases on Windows; Linux pending. L422 is partial.
