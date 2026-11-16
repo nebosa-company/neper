@@ -1538,3 +1538,72 @@ fn cppls(a: *mem.Arena, x0: []const f64, y0: []const f64, n: usize, p: usize, q:
     }
     ret (f, ok)
 }
+
+// jack.test(model, ncomp, use.mean = TRUE) of a fit with segment-wise jackknife coefficients: sd[i * q + j] = sqrt((nseg - 1) mean_s (B_s - mean B)^2) of the coefficient of predictor i for response j at ncomp components, and the full-data coefficients in coef; the t values are coef / sd on nseg - 1 degrees of freedom
+fn jack_test(a: *mem.Arena, method: u8, x: []const f64, y: []const f64, n: usize, p: usize, q: usize, ncomp: usize, doc: bool, seg: []const usize, nseg: usize, coef: []f64, sd: []f64) -> err {
+    let (full, fe) = fit_method(a, method, x, y, n, p, q, ncomp, doc)
+    if fe != ok { ret fe }
+    let (bs, e1) = mem.alloc[f64](a, nseg * p * q)
+    if e1 != ok { ret e1 }
+    var s = 0usize
+    while s < nseg {
+        let start = mem.mark(a)
+        var m = 0usize
+        var i = 0usize
+        while i < n {
+            if seg[i] != s { m += 1usize }
+            i += 1usize
+        }
+        let (xt, e2) = mem.alloc[f64](a, m * p)
+        let (yt, e3) = mem.alloc[f64](a, m * q)
+        if e2 != ok { ret e2 }
+        if e3 != ok { ret e3 }
+        var k = 0usize
+        i = 0usize
+        while i < n {
+            if seg[i] != s {
+                var c = 0usize
+                while c < p {
+                    xt[k * p + c] = x[i * p + c]
+                    c += 1usize
+                }
+                c = 0usize
+                while c < q {
+                    yt[k * q + c] = y[i * q + c]
+                    c += 1usize
+                }
+                k += 1usize
+            }
+            i += 1usize
+        }
+        let (ft, fe2) = fit_method(a, method, xt, yt, m, p, q, ncomp, doc)
+        if fe2 != ok { ret fe2 }
+        var c2 = 0usize
+        while c2 < p * q {
+            bs[s * p * q + c2] = ft.coef[(ncomp - 1usize) * p * q + c2]
+            c2 += 1usize
+        }
+        s += 1usize
+    }
+    var c = 0usize
+    while c < p * q {
+        coef[c] = full.coef[(ncomp - 1usize) * p * q + c]
+        var mean = 0.0f64
+        s = 0usize
+        while s < nseg {
+            mean += bs[s * p * q + c]
+            s += 1usize
+        }
+        mean = mean / f64(nseg)
+        var ss = 0.0f64
+        s = 0usize
+        while s < nseg {
+            let d = bs[s * p * q + c] - mean
+            ss += d * d
+            s += 1usize
+        }
+        sd[c] = math.sqrt[f64](f64(nseg - 1usize) * ss / f64(nseg))
+        c += 1usize
+    }
+    ret ok
+}

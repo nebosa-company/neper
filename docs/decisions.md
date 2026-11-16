@@ -46630,3 +46630,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `pls.cppls` is cppls.fit with the default powers: each weight vector is `W0 a`, W0 the cross-product of the current X with Y and `a` the first canonical vector of `X W0` against Y (power iteration on `Szz^-1 Szy Syy^-1 Syz`, which is what cancorr's pivoted QR and SVD return up to sign), then t, p, q and the deflation of X as in the other fits, and `B_a = W (P'W)^-1 Q'`. fit_method takes it as method 5, so the cross-validation and the other helpers apply.
 
 **Result.** `oracle_pls` agrees with pls on 288 new cppls values (coefficients and fitted values sums at every number of components, 1 to 3 responses, centred and not) on Windows (5040 cases in all); Linux pending. cppls with lower or upper powers, Y.add and the jackknife stay open; L359 at 0.85.
+
+## D6577 — pls: the jackknife
+
+**Decision.** `jack_test` refits the method on each leave-one-segment-out training set, takes the coefficients at `ncomp`, and reports `sd = sqrt((nseg - 1) mean_s (B_s - mean B)^2)` (var.jack with `use.mean = TRUE`, no covariance) beside the full-data coefficients; the t values are their ratio, tested on `nseg - 1` degrees of freedom.
+
+**Result.** `oracle_pls` agrees with pls on 384 new values (sd and t sums for kernelpls, simpls, oscorespls and pcr, two numbers of components) on Windows (5424 cases in all); Linux pending. L359 at 0.9: cppls with lower or upper powers and Y.add stay open.

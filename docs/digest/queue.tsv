@@ -23,7 +23,7 @@ L328	library	0.25	706	caret evaluation and resampling	Partly done (D6087): e.alg
 L331	library	0.55	577	dendextend and hclust operations	Partial (D6162, D6163 fowlkes_mallows and cor_cophenetic).
 L332	library	0.5	537	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418 read.dbf common field types, D6420 read.octave scalars matrices strings).
 L358	library	0.2	452	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;
-L359	library	0.85	626	pls: partial least squares regression	Partial (D6136).
+L359	library	0.9	741	pls: partial least squares regression	Partial (D6136).
 L379	library	0.5	536	gmp: arbitrary-precision numbers	Partial (D6161).
 L380	library	0	378	tm and tidytext: text mining	Open (CRAN ranks 400, 383).
 L387	library	0.3	565	lmom and gld: L-moments and the generalized lambda distribution	Partly done (D6098): e.algo.stat.lmom has samlmu, and lmr and qua for exp, gum, glo, gpa, nor, gev and pel for the five closed forms, equal to lmom on 651 values on Windows (oracle_lmom);

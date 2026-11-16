@@ -44,6 +44,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let ys = x[6usize + n * p..6usize + n * p + n * q]
     let tail = 6usize + n * p + n * q
     let nm0 = c.name
+    if str.eq(nm0, "jsd") || str.eq(nm0, "jt") {
+        let jn = usize(x[tail])
+        let jseg = a_seg(a, x[tail + 1usize..tail + 1usize + n])
+        let jk = usize(x[tail + 1usize + n])
+        let jw = usize(x[tail + 2usize + n])
+        let (cf, e1) = mem.alloc[f64](a, p * q)
+        let (sdv, e2) = mem.alloc[f64](a, p * q)
+        if e1 != ok || e2 != ok { os.exit(9) }
+        if pl.jack_test(a, m, xs, ys, n, p, q, jk, centre, jseg, jn, cf, sdv) != ok { os.exit(10) }
+        if str.eq(nm0, "jt") {
+            var ti = 0usize
+            while ti < p * q {
+                cf[ti] = cf[ti] / sdv[ti]
+                ti += 1usize
+            }
+            ret sums(cf, jw)
+        }
+        ret sums(sdv, jw)
+    }
     if str.eq(nm0, "press") || str.eq(nm0, "adj") || str.eq(nm0, "press0") || str.eq(nm0, "msep") || str.eq(nm0, "r2") {
         let nseg = usize(x[tail])
         let seg = a_seg(a, x[tail + 1usize..tail + 1usize + n])

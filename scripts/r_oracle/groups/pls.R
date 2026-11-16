@@ -61,6 +61,14 @@ for (rep in 1:8) {
   }
   segs <- cvsegments(n, 5, type = "random"); segid <- integer(n); for (s in seq_along(segs)) segid[segs[[s]]] <- s - 1
   for (m in c(0, 1, 2, 4)) {
+    fitj <- tryCatch(suppressWarnings(fitm(m, ncomp = ncomp, validation = "CV", segments = segs, jackknife = TRUE)), error = function(e) NULL)
+    if (is.null(fitj)) next
+    for (k in unique(c(2, ncomp))) {
+      jt <- jack.test(fitj, ncomp = k); a <- c(m, n, p, q, ncomp, 1, flat(X), flat(Y), length(segs), segid, k)
+      sums("jsd", a, flat(matrix(jt$sd, p, q))); sums("jt", a, flat(matrix(jt$tvalues, p, q)))
+    }
+  }
+  for (m in c(0, 1, 2, 4)) {
     fit <- tryCatch(suppressWarnings(fitm(m, ncomp = ncomp, validation = "CV", segments = segs)), error = function(e) NULL)
     if (is.null(fit)) next
     nc <- fit$validation$ncomp

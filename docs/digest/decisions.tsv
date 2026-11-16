@@ -3444,4 +3444,5 @@ D6572	756	biglm: more families and links
 D6573	807	biglm: singular designs
 D6574	486	biglm: inverse.gaussian with a log link
 D6575	463	L423 closed
-D6576	797	pls: cppls
+D6576	798	pls: cppls
+D6577	630	pls: the jackknife
