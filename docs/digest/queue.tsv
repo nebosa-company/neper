@@ -48,7 +48,7 @@ L358	library	0	270	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Open 
 L359	library	0	273	pls: partial least squares regression	Open (CRAN rank 370).
 L379	library	0	254	gmp: arbitrary-precision numbers	Open (CRAN rank 301).
 L380	library	0	378	tm and tidytext: text mining	Open (CRAN ranks 400, 383).
-L387	library	0	269	lmom and gld: L-moments and the generalized lambda distribution	Open (CRAN ranks 480, 485).
+L387	library	0.3	565	lmom and gld: L-moments and the generalized lambda distribution	Partly done (D6098): e.algo.stat.lmom has samlmu, and lmr and qua for exp, gum, glo, gpa, nor, gev and pel for the five closed forms, equal to lmom on 651 values on Windows (oracle_lmom);
 L389	library	0	409	vcd and effectsize: categorical association and effect sizes	Open (CRAN ranks 473, 457).
 L390	library	0	273	R.matlab: MATLAB MAT files	Open (CRAN rank 444).
 L401	library	0	310	geosphere: geodesic and spherical computations	Open (CRAN rank 582).

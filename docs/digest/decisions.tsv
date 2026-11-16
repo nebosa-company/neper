@@ -3169,4 +3169,5 @@ D6093	924	proxy Gower and Levenshtein
 D6094	1125	pmvnorm in two dimensions through the analytic bivariate routine
 D6095	1419	isotone gpava: contiguous blocks, three ties rules, and the long-double total
 D6096	953	ResourceSelection hoslem.test
-D6097	1329	Kendall: tau, MannKendall and SeasonalMannKendall; L498 closed
+D6097	1330	Kendall: tau, MannKendall and SeasonalMannKendall; L498 closed
+D6098	1371	lmom: sample L-moments and the closed-form distributions
