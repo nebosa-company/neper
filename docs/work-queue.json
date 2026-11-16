@@ -724,10 +724,10 @@
       "group": "CRAN parity",
       "order": 647,
       "title": "DRDID: difference-in-differences",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 893). Small to mid. Acceptance, equal to DRDID: drdid_panel, drdid_rc, ipwdid, ordid, reg_did_panel, std_ipw_did and the improved doubly robust estimators with their influence functions and standard errors."
+      "evidence": "Partial (D6464 reg_did_panel ATT and se equal DRDID on Windows; oracle_drdid; Linux pending). Open: ipw and doubly robust estimators, repeated cross-sections, bootstrap, improved estimators. Was: Open (CRAN rank 893). Small to mid. Acceptance, equal to DRDID: drdid_panel, drdid_rc, ipwdid, ordid, reg_did_panel, std_ipw_did and the improved doubly robust estimators with their influence functions and standard errors."
     },
     {
       "id": "L501",

@@ -45952,3 +45952,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.aod` is new: `varbin` (the binomial, ratio, arithmetic and jackknife estimates of a proportion over clusters, each with its variance and normal limits clipped to [0, 1]) and `iccbin_c` (the one-way ANOVA intra-cluster correlation of the split binary data, computed from cluster totals).
 
 **Result.** `oracle_aod` equals aod on 425 cases on Windows at rel 1e-9, 25 cluster data sets of 6 to 30 clusters. The bootstrap row, iccbin methods A and B (mixed models), betabin, negbin, quasibin, quasipois, wald.test, anova, donner, splitbin and drs are open; Linux pending. L480 is partial.
+
+## D6464 — DRDID: reg_did_panel
+
+`e.algo.stat.drdid` is new: `reg_did_panel` fits the control units' outcome change on the covariates by least squares, predicts it for every unit, takes the treated mean change minus the mean prediction over the treated as the ATT, and the standard error from the influence function including the regression-estimation term, sd(inf) sqrt(n - 1) / n.
+
+**Result.** `oracle_drdid` equals DRDID on 50 cases on Windows at rel 1e-8, 25 panels of 80 to 300 units with 1 to 3 covariate columns. The inverse-propensity and doubly robust estimators, repeated cross-sections, bootstrap inference and the improved estimators are open; Linux pending. L485 is partial.

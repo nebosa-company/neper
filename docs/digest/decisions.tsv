@@ -3331,4 +3331,5 @@ D6459	519	gsl: exponential integrals, Dawson and Clausen
 D6460	723	gsl: Airy, Carlson and Legendre elliptic integrals
 D6461	799	gsl: hypergeometric series, Legendre, Fermi-Dirac 0, dilogarithm and digamma
 D6462	671	ks: normal-scale bandwidths and kde at points
-D6463	643	aod: varbin and iccbin method C
+D6463	644	aod: varbin and iccbin method C
+D6464	690	DRDID: reg_did_panel
