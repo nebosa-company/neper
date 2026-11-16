@@ -45568,3 +45568,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.sampling` computes first-order inclusion probabilities (the capped-and-rescaled proportional rule of inclusionprobabilities), draws UPsystematic (one uniform, cumulative-sum differences modulo one), UPpoisson (one uniform per unit), srswor (sample.int), UPrandomsystematic (a random order, then systematic) and UPtille (the elimination procedure) from R's generator under the same seed so the selected units equal the package's, and gives the Horvitz-Thompson estimator. Not here: the other UP designs (Brewer, Midzuno, maxentropy, pivotal, cube), stratification and clustering, calibration, joint inclusion probabilities and the variance estimators.
 
 **Result.** `oracle_sampling` equals sampling on 191 cases on Windows; Linux pending. L508 is partial.
+
+## D6191 — TSA: McLeod.Li.test
+
+`e.algo.stat.tsa` gains mcleod_li, the p values of McLeod.Li.test(y = x, gof.lag) for lags 1 .. gof: the Ljung-Box statistic n (n + 2) sum_k r_k^2 / (n - k) of the squared series at lags 1 .. lag, referred to a chi-square with `lag` degrees of freedom. The package's own source reads the autocorrelations as `acf(...)$acf[1:lag]`, which looks like it includes lag 0; it does not, because TSA masks acf with a version that drops lag 0 by default, which the first attempt (including lag 0) missed. Not here: the object form (residuals of an arima fit, omit.initial) and the default gof.lag of 10 log10(n).
+
+**Result.** `oracle_tsa` equals TSA on 34 cases on Windows; Linux pending. L452 stays partial.

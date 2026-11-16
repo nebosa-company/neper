@@ -5,9 +5,27 @@ use e.algo.stat.tsa as ts
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
+fn mcl_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let gl = usize(x[1usize])
+    let (o, e) = mem.alloc[f64](a, gl)
+    if e != ok { os.exit(5) }
+    if ts.mcleod_li(a, x[2usize..2usize + n], gl, o) != ok { os.exit(6) }
+    var s = 0.0f64
+    var i = 0usize
+    while i < gl {
+        s += o[i] * f64(i + 1usize)
+        i += 1usize
+    }
+    ret s
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "mcl") { ret mcl_case(a, c) }
     let x = c.args
     let n = usize(x[0usize])
     let (o, e) = mem.alloc[f64](a, ts.nextn(n) / 2usize + 1usize)

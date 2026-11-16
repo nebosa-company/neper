@@ -9,4 +9,10 @@ for (rep in 1:20) {
   p <- periodogram(ts(y), plot = FALSE)
   add("pgram", c(n, y), sum(p$spec * seq_along(p$spec)))
 }
+for (rep in 1:14) {
+  n <- sample(30:120, 1); y <- round(rnorm(n) * (1 + 0.8 * (rep %% 2) * abs(sin(seq_len(n) / 5))), 4)
+  gl <- sample(4:15, 1)
+  ml <- McLeod.Li.test(y = y, gof.lag = gl, plot = FALSE)$p.values
+  add("mcl", c(n, gl, y), sum(ml * seq_along(ml)))
+}
 emit("tsa", "TSA", list(cases))

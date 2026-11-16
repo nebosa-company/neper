@@ -3267,4 +3267,5 @@ D6189	867	BayesFactor: the JZS Bayes factor of a t statistic
 D6189	662	signal: band-pass Butterworth
 D6190	767	gsDesign: the alpha spending functions
 D6190	859	TSA: periodogram
-D6191	843	sampling: inclusion probabilities and the UP and SRS designs
+D6191	844	sampling: inclusion probabilities and the UP and SRS designs
+D6191	734	TSA: McLeod.Li.test
