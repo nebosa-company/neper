@@ -301,6 +301,17 @@
       "evidence": "Partial (D6026). GPForth and GPFoblq (algorithm bb, Kaiser normalization) over oblimin, quartimin, quartimax, cf, bentler, infomax, geomin, entropy, oblimax, varimax, varimin, target, pst and tandem I and II equal GPArotation 2026.8.2 on both hosts (oblique entropy and oblimax, and paths past 150 iterations, not probed). Open: simplimax, cayley and legacy algorithms, Cureton-Mulaik normalization, bifactor, promax. Was: Open (CRAN rank 196). Mid. e.ml.multivariate has varimax. Acceptance, equal to GPArotation loadings, rotation matrix and criterion value: GPForth and GPFoblq driving oblimin, quartimin, geominT and geominQ, bentlerT and bentlerQ, infomaxT and infomaxQ, cfT and cfQ (Crawford-Ferguson), simplimax, tandemI and tandemII, entropy, varimin, targetT and targetQ, pstT and pstQ, plus promax and Kaiser normalization."
     },
     {
+      "id": "L303",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 664,
+      "title": "urca: unit-root and cointegration tests",
+      "score": 0.3,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6027). ur.df (none, drift, trend, fixed lags, AIC and BIC selection, tau and phi statistics, critical values) and ur.kpss equal urca 1.3.4 on both hosts. Open: ur.pp, ur.ers, ur.za, ur.sp, ca.jo, ca.po. Was: Open (CRAN rank 136). Mid. Acceptance, statistic and critical values equal to urca for ur.df (none, drift, trend, lag selection by AIC and BIC), ur.kpss, ur.pp, ur.ers (DF-GLS and P-test), ur.za, ur.sp, ca.jo (trace and eigen, with the constant, trend and seasonal specs and the Johansen critical-value tables) and ca.po."
+    },
+    {
       "id": "L406",
       "category": "library",
       "group": "CRAN parity",
@@ -1091,17 +1102,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Open (CRAN rank 964). Small to mid. Acceptance, equal to ggm: fitDag, fitCovGraph, fitConGraph, marg, pcor and pcor.test, parcor, dSep, fitAncestralGraph with its deviance and degrees of freedom."
-    },
-    {
-      "id": "L303",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 664,
-      "title": "urca: unit-root and cointegration tests",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 136). Mid. Acceptance, statistic and critical values equal to urca for ur.df (none, drift, trend, lag selection by AIC and BIC), ur.kpss, ur.pp, ur.ers (DF-GLS and P-test), ur.za, ur.sp, ca.jo (trace and eigen, with the constant, trend and seasonal specs and the Johansen critical-value tables) and ca.po."
     },
     {
       "id": "L299",

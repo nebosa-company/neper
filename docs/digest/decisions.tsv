@@ -3098,4 +3098,5 @@ D6022	1172	xts periods are endpoints over UTC keys, and align.time always moves 
 D6023	1125	proxy measures are the native value, with the later row first
 D6024	1343	HCL palettes follow colorspace's own LUV path, and an out-of-gamut colour is NA by its rounded byte
 D6025	1020	mvtnorm densities and draws: the Cholesky route, and a symmetric square root for eigen and svd
-D6026	1684	GPArotation is the bb step over a polar factor, and decomp's SVD is column-major
+D6026	1685	GPArotation is the bb step over a polar factor, and decomp's SVD is column-major
+D6027	1312	urca ADF reads its regressors from embed(diff(y)), and the reported lags are the input
