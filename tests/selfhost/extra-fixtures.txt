@@ -304,6 +304,7 @@ oracle_gmmpkg
 oracle_qcapkg
 oracle_nleqslvpkg
 oracle_rootfind
+oracle_fminsearchpkg
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -352,3 +353,4 @@ oracle_gmmpkg
 oracle_qcapkg
 oracle_nleqslvpkg
 oracle_rootfind
+oracle_fminsearchpkg

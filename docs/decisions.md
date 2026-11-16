@@ -46084,3 +46084,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.rootfind` is new: `zeroin2` is R's C routine R_zeroin2 line for line (Brent's method with R's tolerance rule 2 eps |b| + tol / 2 and its inverse-quadratic and secant choices), `uniroot` calls it with maxit 1000, and `uniroot_all` is the 101-point scan that refines each sign change at tol eps^0.2 and sorts. Grid points follow seq()'s from + i * by with the last set to the upper end. Because the arithmetic is R's, the root, the iteration count and the estimated precision agree, not just the root.
 
 **Result.** `oracle_rootfind` agrees with R on 204 cases on Windows: root at rel 1e-9, the iteration count exactly and estim.prec at 1e-6, over five functions, three tolerances and 50 intervals, plus the root count and every root of uniroot.all. User functions, extendInt, the other uniroot arguments and the other rootSolve solvers are open; Linux pending. L360 stays partial.
+
+## D6486 — pracma: fminsearch (Nelder-Mead)
+
+`e.algo.stat.fminsearchpkg` is new: `nelder_mead` is pracma's nelder_mead step by step (Algorithm AS 47 with the adaptive coefficients 1 + 2/n, 0.75 - 1/(2n) and 1 - 1/n, the convergence test on the variance of the simplex values every maxfeval / 100 steps, and the restart that perturbs each coordinate by 0.001 to confirm a local minimum), on five fixed test functions: Rosenbrock, a shifted sphere in three variables, Beale, Himmelblau and a quartic bowl.
+
+**Result.** `oracle_fminsearchpkg` agrees with pracma on 208 cases on Windows: the minimiser at rel 1e-6, the minimum, and the evaluation count and restart count exactly, over 40 random starts. User functions, the non-adaptive coefficients, Hooke-Jeeves and bounds are open; Linux pending. L333 stays partial.
