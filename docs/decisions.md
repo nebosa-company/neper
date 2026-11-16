@@ -45580,3 +45580,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pmcmr` ports the package's kwAllPairsDunnTest (z on rank-mean differences with the tie correction to the variance and a two-sided normal p), kwAllPairsConoverTest (t on the rank means with the tie-corrected rank variance and the Kruskal H adjustment, with the t p value or the single-step Tukey p value) and kwAllPairsNemenyiTest (sqrt(2) times the studentised rank difference, p from the studentised range with infinite degrees of freedom), plus the Holm adjustment of the pairwise p values, with and without ties. Not here: the other designs of the package (van der Waerden, Steel, Quade, Friedman, Skillings-Mack post-hoc tests, many-to-one comparisons), the other adjustment methods and the chi-square form of Nemenyi's test.
 
 **Result.** `oracle_pmcmr` equals PMCMRplus on 126 cases on Windows; Linux pending. L487 is partial.
+
+## D6193 — p.adjust: Holm, Hochberg, Hommel, Bonferroni, Benjamini-Hochberg and Benjamini-Yekutieli
+
+`e.algo.stat.pmcmr` gains p_adjust, a port of R's p.adjust for the six step-up and step-down methods (Hommel by the package's recursion over the number of true nulls), which the post-hoc tests and most multiple-comparison work need. It equals stats::p.adjust on random p-vector of 2 to 25 values, ties included. Not here: the unadjusted-p placeholder "none" (the identity), the NA handling, and the other post-hoc test families of PMCMRplus.
+
+**Result.** `oracle_pmcmr` equals PMCMRplus and stats::p.adjust on 306 cases on Windows; Linux pending. L487 stays partial.

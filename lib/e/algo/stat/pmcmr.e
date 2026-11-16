@@ -177,3 +177,154 @@ fn holm(a: *mem.Arena, p: []f64) -> err {
     }
     ret ok
 }
+
+// order of p (ascending, or descending), stable: the index of each rank
+fn order_idx(a: *mem.Arena, p: []const f64, desc: bool, idx: []usize) -> err {
+    let m = p.len
+    var i = 0usize
+    while i < m {
+        idx[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < m {
+        let t = idx[i]
+        var j = i
+        while j > 0usize {
+            var swap = p[idx[j - 1usize]] > p[t]
+            if desc { swap = p[idx[j - 1usize]] < p[t] }
+            if !swap { break }
+            idx[j] = idx[j - 1usize]
+            j -= 1usize
+        }
+        idx[j] = t
+        i += 1usize
+    }
+    ret ok
+}
+
+// p.adjust(p, method) in place: kind 0 holm, 1 hochberg, 2 hommel, 3 bonferroni, 4 BH, 5 BY
+fn p_adjust(a: *mem.Arena, p: []f64, kind: usize) -> err {
+    let n = p.len
+    let nf = f64(n)
+    let (o, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { ret e1 }
+    let (res, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret e2 }
+    if kind == 3usize {
+        var i = 0usize
+        while i < n {
+            var v = nf * p[i]
+            if v > 1.0f64 { v = 1.0f64 }
+            p[i] = v
+            i += 1usize
+        }
+        ret ok
+    }
+    if kind == 0usize {
+        let e = order_idx(a, p, false, o)
+        if e != ok { ret e }
+        var run = 0.0f64
+        var i = 0usize
+        while i < n {
+            var v = (nf - f64(i)) * p[o[i]]
+            if v > 1.0f64 { v = 1.0f64 }
+            if v > run { run = v }
+            res[o[i]] = run
+            i += 1usize
+        }
+    } else if kind == 1usize || kind == 4usize || kind == 5usize {
+        let e = order_idx(a, p, true, o)
+        if e != ok { ret e }
+        var q = 1.0f64
+        if kind == 5usize {
+            q = 0.0f64
+            var k = 1usize
+            while k <= n {
+                q += 1.0f64 / f64(k)
+                k += 1usize
+            }
+        }
+        var run = 1.0e300f64
+        var i = 0usize
+        while i < n {
+            // the i-th largest has index n - i in 1..n
+            let rank = f64(n - i)
+            var v = 0.0f64
+            if kind == 1usize { v = (nf + 1.0f64 - rank) * p[o[i]] } else { v = q * nf / rank * p[o[i]] }
+            if v < run { run = v }
+            var w = run
+            if w > 1.0f64 { w = 1.0f64 }
+            res[o[i]] = w
+            i += 1usize
+        }
+    } else {
+        let e = order_idx(a, p, false, o)
+        if e != ok { ret e }
+        let (ps, e3) = mem.alloc[f64](a, n)
+        if e3 != ok { ret e3 }
+        let (qv, e4) = mem.alloc[f64](a, n)
+        if e4 != ok { ret e4 }
+        let (pa, e5) = mem.alloc[f64](a, n)
+        if e5 != ok { ret e5 }
+        var i = 0usize
+        while i < n {
+            ps[i] = p[o[i]]
+            i += 1usize
+        }
+        var mn = 1.0e300f64
+        i = 0usize
+        while i < n {
+            let v = nf * ps[i] / f64(i + 1usize)
+            if v < mn { mn = v }
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            qv[i] = mn
+            pa[i] = mn
+            i += 1usize
+        }
+        var m = n - 1usize
+        while m >= 2usize {
+            let n1 = n - m + 1usize
+            var q1 = 1.0e300f64
+            var j = 0usize
+            while j < m - 1usize {
+                let v = f64(m) * ps[n - m + 1usize + j] / f64(j + 2usize)
+                if v < q1 { q1 = v }
+                j += 1usize
+            }
+            j = 0usize
+            while j < n1 {
+                let v = f64(m) * ps[j]
+                if v < q1 { qv[j] = v } else { qv[j] = q1 }
+                j += 1usize
+            }
+            j = n - m + 1usize
+            while j < n {
+                qv[j] = qv[n - m]
+                j += 1usize
+            }
+            j = 0usize
+            while j < n {
+                if qv[j] > pa[j] { pa[j] = qv[j] }
+                j += 1usize
+            }
+            m -= 1usize
+        }
+        i = 0usize
+        while i < n {
+            var v = pa[i]
+            if ps[i] > v { v = ps[i] }
+            res[o[i]] = v
+            i += 1usize
+        }
+    }
+    var i = 0usize
+    while i < n {
+        p[i] = res[i]
+        i += 1usize
+    }
+    ret ok
+}

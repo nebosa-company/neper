@@ -3269,4 +3269,5 @@ D6190	767	gsDesign: the alpha spending functions
 D6190	859	TSA: periodogram
 D6191	844	sampling: inclusion probabilities and the UP and SRS designs
 D6191	735	TSA: McLeod.Li.test
-D6192	914	PMCMRplus: the Kruskal-Wallis all-pairs post-hoc tests
+D6192	915	PMCMRplus: the Kruskal-Wallis all-pairs post-hoc tests
+D6193	670	p.adjust: Holm, Hochberg, Hommel, Bonferroni, Benjamini-Hochberg and Benjamini-Yekutieli

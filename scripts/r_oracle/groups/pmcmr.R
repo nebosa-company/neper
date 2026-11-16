@@ -18,4 +18,8 @@ for (rep in 1:14) {
   nm <- suppressWarnings(kwAllPairsNemenyiTest(x, g, dist = "Tukey"))
   add("nq", a, sw(nm$statistic)); add("np", a, sw(nm$p.value), abs = 1e-7)
 }
+for (rep in 1:30) {
+  m <- sample(2:25, 1); p <- round(runif(m)^2, 4) + 1e-4; p <- pmin(p, 1); meth <- c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY")
+  for (mi in 0:5) { adj <- p.adjust(p, meth[mi + 1]); add("padj", c(mi, m, 0, p), sum(adj * seq_along(adj))) }
+}
 emit("pmcmr", "PMCMRplus", list(cases))

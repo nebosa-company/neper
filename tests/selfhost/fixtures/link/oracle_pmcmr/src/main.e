@@ -8,7 +8,28 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
+fn padj_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let m = usize(x[1usize])
+    let (p, e) = mem.alloc[f64](a, m)
+    if e != ok { os.exit(5) }
+    var i = 0usize
+    while i < m {
+        p[i] = x[3usize + i]
+        i += 1usize
+    }
+    if pm.p_adjust(a, p, usize(x[0usize])) != ok { os.exit(6) }
+    var s = 0.0f64
+    i = 0usize
+    while i < m {
+        s += p[i] * f64(i + 1usize)
+        i += 1usize
+    }
+    ret s
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "padj") { ret padj_case(a, c) }
     let x = c.args
     let n = usize(x[0usize])
     let k = usize(x[1usize])
