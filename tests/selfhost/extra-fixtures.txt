@@ -222,3 +222,4 @@ oracle_rngseq
 oracle_gaussq
 oracle_carets
 oracle_xts2
+oracle_promax

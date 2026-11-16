@@ -3,7 +3,7 @@ L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Parti
 L296	library	0.6	813	proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener	Partial (D6023).
 L297	library	0.6	683	colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation	Partial (D6024).
 L301	library	0.3	551	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
-L302	library	0.7	833	GPArotation: gradient projection rotations	Partial (D6026).
+L302	library	0.8	910	GPArotation: gradient projection rotations	Partial (D6026).
 L303	library	0.3	539	urca: unit-root and cointegration tests	Partial (D6027).
 L321	library	0.65	572	boot: bootstrap and permutation confidence intervals	Partial (D6028, D6079): balanced and parametric (normal) simulation equal boot on 936 more values on Windows (oracle_boot2).
 L322	library	0.5	578	class and FNN: knn variants, SOM, LVQ, entropy estimators	Partial (D6029, D6080): FNN entropy, KL.divergence and mutinfo equal FNN on 338 values on Windows (oracle_fnn).

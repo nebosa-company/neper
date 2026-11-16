@@ -4,7 +4,7 @@
 // tandem I and tandem II, with Kaiser normalization. Matrices are row-major; NA in a target is NaN.
 //
 // Not here: the "legacy" and "cayley" algorithms, the Cureton-Mulaik normalization, simplimax,
-// bifactor, lp and McCammon rotations, and promax.
+// bifactor, lp and McCammon rotations. Also stats varimax and promax.
 
 use e.algo.linalg.decomp as decomp
 use e.math
@@ -1066,4 +1066,156 @@ fn safe_inverse(a: *mem.Arena, x: []const f64, k: usize) -> ([]f64, err) {
         i += 1usize
     }
     ret (out, ok)
+}
+
+// the polar factor U V' of a k x k row-major matrix (the orthogonal matrix closest to it), through decomp.svd
+fn polar(a: *mem.Arena, x: []const f64, k: usize) -> ([]f64, err) {
+    let (sv, e) = decomp.svd(a, x, k, k)
+    if e != ok {
+        var none: []f64 = zero
+        ret (none, e)
+    }
+    let (vt, vte) = transpose(a, sv.v, k, k)
+    if vte != ok {
+        var none: []f64 = zero
+        ret (none, vte)
+    }
+    let (pf, pfe) = matmul(a, vt, sv.u, k, k, k)
+    ret (pf, pfe)
+}
+
+// stats::varimax(x, normalize = TRUE, eps = 1e-5) of p x k row-major loadings: the rotated loadings and the rotation matrix
+fn varimax_stats(a: *mem.Arena, x0: []const f64, p: usize, k: usize, normalize: bool, tolv: f64) -> ([]f64, []f64, err) {
+    var none: []f64 = zero
+    let (x, e1) = mem.alloc[f64](a, p * k)
+    let (sc, e2) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok { ret (none, none, e1) }
+    var i = 0usize
+    while i < p {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            s += x0[i * k + j] * x0[i * k + j]
+            j += 1usize
+        }
+        sc[i] = math.sqrt[f64](s)
+        j = 0usize
+        while j < k {
+            if normalize { x[i * k + j] = x0[i * k + j] / sc[i] } else { x[i * k + j] = x0[i * k + j] }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var tt: []f64 = zero
+    let (t0, e3) = mem.alloc[f64](a, k * k)
+    if e3 != ok { ret (none, none, e3) }
+    i = 0usize
+    while i < k * k {
+        t0[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        t0[i * k + i] = 1.0f64
+        i += 1usize
+    }
+    tt = t0
+    var d = 0.0f64
+    var iter = 0usize
+    while iter < 1000usize {
+        let (z, ze) = matmul(a, x, tt, p, k, k)
+        if ze != ok { ret (none, none, ze) }
+        let (w, we) = mem.alloc[f64](a, p * k)
+        if we != ok { ret (none, none, we) }
+        var j = 0usize
+        while j < k {
+            var c = 0.0f64
+            i = 0usize
+            while i < p {
+                c += z[i * k + j] * z[i * k + j]
+                i += 1usize
+            }
+            i = 0usize
+            while i < p {
+                w[i * k + j] = z[i * k + j] * z[i * k + j] * z[i * k + j] - z[i * k + j] * c / f64(p)
+                i += 1usize
+            }
+            j += 1usize
+        }
+        let (xt, xe) = transpose(a, x, p, k)
+        if xe != ok { ret (none, none, xe) }
+        let (b, be) = matmul(a, xt, w, k, p, k)
+        if be != ok { ret (none, none, be) }
+        let (u, ue) = polar(a, b, k)
+        if ue != ok { ret (none, none, ue) }
+        tt = u
+        let dpast = d
+        d = 0.0f64
+        i = 0usize
+        while i < k * k {
+            d += u[i] * b[i]
+            i += 1usize
+        }
+        if d < dpast * (1.0f64 + tolv) { break }
+        iter += 1usize
+    }
+    let (z, ze) = matmul(a, x, tt, p, k, k)
+    if ze != ok { ret (none, none, ze) }
+    if normalize {
+        i = 0usize
+        while i < p {
+            var j = 0usize
+            while j < k {
+                z[i * k + j] = z[i * k + j] * sc[i]
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    ret (z, tt, ok)
+}
+
+// stats::promax(x, m): varimax, then the least-squares fit of the power target, columns rescaled to unit variance
+fn promax_stats(a: *mem.Arena, x0: []const f64, p: usize, k: usize, m: f64) -> ([]f64, []f64, err) {
+    var none: []f64 = zero
+    let (x, rot, ve) = varimax_stats(a, x0, p, k, true, 1.0e-5f64)
+    if ve != ok { ret (none, none, ve) }
+    let (q, qe) = mem.alloc[f64](a, p * k)
+    if qe != ok { ret (none, none, qe) }
+    var i = 0usize
+    while i < p * k {
+        q[i] = x[i] * math.pow[f64](math.abs[f64](x[i]), m - 1.0f64)
+        i += 1usize
+    }
+    let (xt, xte) = transpose(a, x, p, k)
+    if xte != ok { ret (none, none, xte) }
+    let (xtx, e1) = matmul(a, xt, x, k, p, k)
+    if e1 != ok { ret (none, none, e1) }
+    let (xtq, e2) = matmul(a, xt, q, k, p, k)
+    if e2 != ok { ret (none, none, e2) }
+    let (inv, e3) = invert(a, xtx, k)
+    if e3 != ok { ret (none, none, e3) }
+    let (u, e4) = matmul(a, inv, xtq, k, k, k)
+    if e4 != ok { ret (none, none, e4) }
+    let (ut, e5) = transpose(a, u, k, k)
+    if e5 != ok { ret (none, none, e5) }
+    let (utu, e6) = matmul(a, ut, u, k, k, k)
+    if e6 != ok { ret (none, none, e6) }
+    let (iu, e7) = invert(a, utu, k)
+    if e7 != ok { ret (none, none, e7) }
+    i = 0usize
+    while i < k {
+        let dd = math.sqrt[f64](iu[i * k + i])
+        var r = 0usize
+        while r < k {
+            u[r * k + i] = u[r * k + i] * dd
+            r += 1usize
+        }
+        i += 1usize
+    }
+    let (z, e8) = matmul(a, x, u, p, k, k)
+    if e8 != ok { ret (none, none, e8) }
+    let (um, e9) = matmul(a, rot, u, k, k, k)
+    if e9 != ok { ret (none, none, e9) }
+    ret (z, um, ok)
 }
