@@ -18,5 +18,8 @@ for (rep in 1:25) {
   y0 <- round(rnorm(n, X %*% rep(1, p)), 4); y1 <- round(y0 + 0.5 + 0.3 * X[, p] + 0.8 * D + rnorm(n, 0, 0.5), 4)
   r <- drdid_panel(y1, y0, D, X); dy <- y1 - y0
   add("dr", c(0, n, p, dy, D, as.vector(t(X))), r$ATT, 1e-6); add("dr", c(1, n, p, dy, D, as.vector(t(X))), r$se, 1e-6)
+  ri <- ipw_did_panel(y1, y0, D, X); rs <- std_ipw_did_panel(y1, y0, D, X)
+  add("ipw", c(0, n, p, dy, D, as.vector(t(X))), ri$ATT, 1e-6); add("ipw", c(1, n, p, dy, D, as.vector(t(X))), ri$se, 1e-6)
+  add("sipw", c(0, n, p, dy, D, as.vector(t(X))), rs$ATT, 1e-6); add("sipw", c(1, n, p, dy, D, as.vector(t(X))), rs$se, 1e-6)
 }
 emit("drdid", "DRDID", list(cases))

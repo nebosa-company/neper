@@ -45964,3 +45964,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.drdid` gains `logit_fit` (iteratively reweighted least squares to 1e-13) and `drdid_panel`, the locally efficient doubly robust DiD estimator: propensity capped at 1 - 1e-6, control units trimmed at 0.995, outcome regression on controls, ATT and the influence-function standard error with the propensity-score and regression terms.
 
 **Result.** `oracle_drdid` equals DRDID on 100 cases on Windows, the 50 new ones at rel 1e-6 because DRDID's propensity comes from glm and fastglm with their own stopping rule; 25 panels of 150 to 400 units. The inverse-propensity estimators, repeated cross-sections, bootstrap inference and the improved estimators are open; Linux pending. L485 stays partial.
+
+## D6466 — DRDID: ipw_did_panel and std_ipw_did_panel
+
+`e.algo.stat.drdid` gains `ipw_did_panel`, taking both inverse-propensity DiD estimators: Abadie's (treated and reweighted-control sums normalised by the treated share, influence function with the propensity-score term and the ATT correction) and the standardised Hajek form (each side normalised by its own mean weight).
+
+**Result.** `oracle_drdid` equals DRDID on 200 cases on Windows, the 100 new ones at rel 1e-6 for the same propensity-fit reason as D6465. Repeated cross-sections, bootstrap inference and the improved estimators are open; Linux pending. L485 stays partial.

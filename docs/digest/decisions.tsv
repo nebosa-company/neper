@@ -3333,4 +3333,5 @@ D6461	799	gsl: hypergeometric series, Legendre, Fermi-Dirac 0, dilogarithm and d
 D6462	671	ks: normal-scale bandwidths and kde at points
 D6463	644	aod: varbin and iccbin method C
 D6464	691	DRDID: reg_did_panel
-D6465	740	DRDID: drdid_panel
+D6465	741	DRDID: drdid_panel
+D6466	637	DRDID: ipw_did_panel and std_ipw_did_panel

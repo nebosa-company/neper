@@ -22,6 +22,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let p = usize(x[2usize])
         var got = dr.reg_did_panel(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[3usize + 2usize * n..3usize + 2usize * n + n * p], n, p, usize(x[0usize]))
         if str.eq(c.name, "dr") { got = dr.drdid_panel(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[3usize + 2usize * n..3usize + 2usize * n + n * p], n, p, usize(x[0usize])) }
+        if str.eq(c.name, "ipw") { got = dr.ipw_did_panel(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[3usize + 2usize * n..3usize + 2usize * n + n * p], n, p, false, usize(x[0usize])) }
+        if str.eq(c.name, "sipw") { got = dr.ipw_did_panel(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[3usize + 2usize * n..3usize + 2usize * n + n * p], n, p, true, usize(x[0usize])) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
