@@ -3145,4 +3145,5 @@ D6069	1266	splines2 bases by Cox-de Boor on the extended knots
 D6070	1094	partitions: integer partitions in R's orders, counts by the coin-change table
 D6071	1639	BiasedUrn: the mass function over the support, Wallenius by tanh-sinh, odds and mode in closed form
 D6072	1506	modeest: the shortest-half estimators, the grid rule of seq, the 1:0 quirk
-D6073	1424	pastecs: turnpoints on collapsed runs, stat.desc with the 1/n moments
+D6073	1425	pastecs: turnpoints on collapsed runs, stat.desc with the 1/n moments
+D6074	1453	norm: EM on standardised columns, loglik without the constant
