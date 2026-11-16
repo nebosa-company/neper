@@ -5,12 +5,41 @@
 use e.algo.rand.r as rr
 use e.algo.stat.algdesign as ad
 use e.algo.stat.algdesign_fed as fed
+use e.algo.stat.algdesign_mc as mc
 use e.io
 use e.math
 use e.mem
 use e.os
 use e.str
 use e.test.oracle as oracle
+
+fn mc_expand(id: *u8, v: []const f64, nrows: usize, nv: usize, out: []f64) -> usize {
+    var r = 0usize
+    while r < nrows {
+        let x1 = v[r * nv]
+        let x2 = v[r * nv + 1usize]
+        if *id == 0u8 {
+            out[r * 4usize] = 1.0f64
+            out[r * 4usize + 1usize] = x1
+            out[r * 4usize + 2usize] = x2
+            out[r * 4usize + 3usize] = x1 * x2
+        } else if *id == 1u8 {
+            out[r * 4usize] = 1.0f64
+            out[r * 4usize + 1usize] = x1
+            out[r * 4usize + 2usize] = x2
+            out[r * 4usize + 3usize] = v[r * nv + 2usize]
+        } else {
+            out[r * 4usize] = x1
+            out[r * 4usize + 1usize] = x2
+            out[r * 4usize + 2usize] = v[r * nv + 2usize]
+            out[r * 4usize + 3usize] = x1 * x2
+        }
+        r += 1usize
+    }
+    ret 4usize
+}
+
+fn mc_none(id: *u8, q: []const f64) -> bool { ret true }
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
@@ -36,6 +65,47 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             i += 1usize
         }
         ret s
+    }
+    if str.eq(c.name, "mc") {
+        var g: rr.Rng = zero
+        rr.seed(&g, i64(z[0usize]))
+        var id = u8(z[1usize])
+        let nv = usize(z[7usize])
+        var vars: mc.Vars = zero
+        let (lo, e1) = mem.alloc[f64](a, nv)
+        let (rg, e2) = mem.alloc[f64](a, nv)
+        let (ce, e3) = mem.alloc[f64](a, nv)
+        let (nl, e4) = mem.alloc[f64](a, nv)
+        let (dg, e5) = mem.alloc[usize](a, nv)
+        let (mx, e6) = mem.alloc[bool](a, nv)
+        if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret nan }
+        var i = 0usize
+        while i < nv {
+            lo[i] = z[9usize + 6usize * i]
+            rg[i] = z[10usize + 6usize * i] - z[9usize + 6usize * i]
+            ce[i] = z[11usize + 6usize * i]
+            nl[i] = z[12usize + 6usize * i]
+            dg[i] = usize(z[13usize + 6usize * i])
+            mx[i] = z[14usize + 6usize * i] != 0.0f64
+            i += 1usize
+        }
+        vars.nvar = nv
+        vars.lo = lo
+        vars.range = rg
+        vars.center = ce
+        vars.nlevels = nl
+        vars.digits = dg
+        vars.mixture = mx
+        let (res, me) = mc.opt_monte_carlo[u8](a, &g, &vars, &id, mc_expand, id != 2u8, mc_none, false, usize(z[4usize]), z[2usize] != 0.0f64, i64(z[3usize]), false, z[8usize], i64(z[5usize]), usize(z[6usize]), 1.0f64, 1.0f64)
+        if me != ok { ret nan }
+        if res.errcode != 0i64 { ret 0.0f64 - 1000.0f64 - f64(res.errcode) }
+        let what = usize(z[9usize + 6usize * nv])
+        if what == 0usize { ret res.dd }
+        if what == 1usize { ret res.aa }
+        if what == 2usize { ret res.ii }
+        if what == 3usize { ret math.floor[f64](res.gg * 1000.0f64 + 0.5f64) / 1000.0f64 }
+        if what == 4usize { ret f64(res.nrows) }
+        ret res.design[what - 5usize]
     }
     if str.eq(c.name, "fed") {
         var g: rr.Rng = zero
@@ -118,7 +188,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let got = answer(a, c)
         if !oracle.agrees(got, c) {
             failures += 1usize
-            if failures <= 12usize {
+            if failures <= 400usize {
                 let _ = io.print(oracle.describe(a, c, got))
                 let _ = io.print("\n")
             }

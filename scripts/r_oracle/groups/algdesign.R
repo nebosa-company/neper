@@ -52,4 +52,24 @@ for (rep in 1:48) {
   add("fed", c(a, 3), r$Ge, 7e-4)
   if (!appr) for (j in seq_along(r$rows)) add("fed", c(a, 3 + j), r$rows[j], 1e-9)
 }
+#   optMonteCarlo: fn "mc", args (seed, id, approx, crit, nTrials, nRepeats, nCand, nvar, mixsum, [lo, hi, center, nlevels, digits, mixflag] per variable, what)
+#   id 0 ~ x1 + x2 + x1:x2, id 1 ~ x1 + x2 + x3, id 2 mixture ~ m1 + m2 + m3 + m1:m2 (no intercept); what 0 D, 1 A, 2 I, 3 Ge, 4 the number of design rows, 5 + i the design values row-major
+mc_vars <- function(id) {
+  if (id == 0) data.frame(name = c("x1", "x2"), low = c(-1, 0), high = c(1, 10), center = c(0, 5), nLevels = c(5, 4), round = c(2, 1), isFactor = c(0, 0))
+  else if (id == 1) data.frame(name = c("x1", "x2", "x3"), low = c(-1, -2, 0), high = c(1, 2, 6), center = c(0, 0, 3), nLevels = c(3, 5, 4), round = c(2, 2, 1), isFactor = c(0, 0, 0))
+  else data.frame(name = c("m1", "m2", "m3"), low = c(0, 0, 0), high = c(1, 1, 1), center = c(0, 0, 0), nLevels = c(5, 5, 5), round = c(2, 2, 2), isFactor = c(0, 0, 0), mix = c(1, 1, 1))
+}
+mc_frml <- function(id) if (id == 0) ~ x1 + x2 + x1:x2 else if (id == 1) ~ x1 + x2 + x3 else ~ m1 + m2 + m3 + m1:m2
+for (rep in 1:36) {
+  id <- (rep - 1) %% 3; crit <- c("D", "A", "I")[((rep - 1) %/% 3) %% 3 + 1]; cc <- ((rep - 1) %/% 3) %% 3
+  appr <- rep > 27; nrep <- sample(2:4, 1); nt <- if (appr) 0 else sample(8:14, 1); nc <- sample(c(30, 50, 70), 1)
+  vd <- mc_vars(id); seed <- sample(1e6, 1); set.seed(seed)
+  r <- tryCatch(suppressWarnings(optMonteCarlo(mc_frml(id), vd, nTrials = if (appr) NULL else nt, approximate = appr, criterion = crit, nRepeats = nrep, nCand = nc)), error = function(e) NULL)
+  if (is.null(r)) next
+  nv <- nrow(vd); mixf <- if (ncol(vd) == 8) vd$mix else rep(0, nv)
+  a <- c(seed, id, as.numeric(appr), cc, nt, nrep, nc, nv, 1, as.vector(rbind(vd$low, vd$high, vd$center, vd$nLevels, vd$round, mixf)))
+  add("mc", c(a, 0), r$D, 1e-7); add("mc", c(a, 1), r$A, 1e-7); if (cc == 2) add("mc", c(a, 2), r$I, 1e-7)
+  add("mc", c(a, 3), r$Ge, 7e-4); add("mc", c(a, 4), nrow(r$design), 1e-9)
+  if (!appr) { dm <- as.matrix(r$design); for (j in seq_len(nrow(dm))) for (c2 in seq_len(nv)) add("mc", c(a, 4 + (j - 1) * nv + c2), dm[j, c2], 1e-9) }
+}
 emit("algdesign", "AlgDesign", list(cases))
