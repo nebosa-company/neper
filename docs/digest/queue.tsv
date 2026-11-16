@@ -165,7 +165,7 @@ L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
 L348	library	0	308	mclust: Gaussian mixture model selection	Open (CRAN rank 280).
 L349	library	0	268	vegan: community ecology	Open (CRAN rank 247).
 L350	library	0	308	ape: phylogenetic trees	Open (CRAN rank 238).
-L351	library	0	262	survey: design-based inference	Open (CRAN rank 267).
+L351	library	0.15	680	survey: design-based inference	Partial (D6626).
 L352	library	0	306	ncdf4: NetCDF and HDF5 files	Open (CRAN rank 237).
 L371	library	0.15	866	coin: conditional and permutation tests	Partial (D6625).
 L373	library	0	279	bnlearn: Bayesian network learning	Open (CRAN rank 397).

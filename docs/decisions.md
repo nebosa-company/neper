@@ -46880,3 +46880,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `coinpkg` standardises the sum of scores of the first group by its permutation mean `n1/N * sum(s)` and variance `n1 n2 / (N (N-1)) * (sum(s^2) - sum(s)^2 / N)`: average ranks for wilcox, `qnorm(rank / (N + 1))` for normal, an indicator of exceeding the median for median, and the raw values for oneway. Kruskal-Wallis is `(N-1) sum n_g (mean_g - mean)^2 / sum (s - mean)^2` on K-1 degrees of freedom; Spearman is `r sqrt(N-1)` with `r` the correlation of average ranks.
 
 **Result.** `oracle_coin` agrees with coin on statistics and two-sided or upper-tail p values on Windows (72 values over 12 to 60 observations); Linux pending. L371 stays partial: exact and Monte Carlo distributions, strata, maxT, scale tests, Savage scores.
+
+## D6626 — survey: linearised estimates of a stratified cluster sample
+
+**Decision.** `surveypkg.estimates` builds, for each estimate, the linearised score per observation (`w (y - mean) / sum w` for the mean, `w y` for the total, `w (y - r x) / sum(w x)` for the ratio), totals it by PSU, and sums over strata `f n_h/(n_h-1) sum (t_hj - mean_h)^2` with `f = 1 - n_h / N_h` when the stratum's PSU population `N_h` is given and 1 otherwise.
+
+**Result.** `oracle_survey` agrees with survey on estimates and standard errors on Windows (144 values, 2 to 5 strata, with and without fpc); Linux pending. L351 stays partial: multistage designs, replicate weights, calibration, svyglm, quantiles, domains.

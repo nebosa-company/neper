@@ -3485,4 +3485,5 @@ D6621	722	arules: apriori by exhaustive counting
 D6622	777	systemfit: SUR by feasible GLS
 D6623	852	fixest: feols with fixed effects
 D6624	737	spdep: Moran and Geary statistics
-D6625	799	coin: asymptotic linear-statistic tests
+D6625	800	coin: asymptotic linear-statistic tests
+D6626	700	survey: linearised estimates of a stratified cluster sample

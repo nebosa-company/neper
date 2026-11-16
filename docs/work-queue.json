@@ -1835,10 +1835,10 @@
       "group": "CRAN parity",
       "order": 797,
       "title": "survey: design-based inference",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 267). Large. Acceptance, equal to survey: svydesign (strata, clusters, weights, fpc), svymean, svytotal, svyratio, svyquantile, svyglm, svytable, replicate-weight designs (jackknife, BRR, bootstrap), calibrate, postStratify, rake, as.svrepdesign."
+      "evidence": "Partial (D6626). e.algo.stat.surveypkg (stratified cluster sample, one PSU level, with or without a finite-population correction) equals survey svymean, svytotal and svyratio with their Taylor-linearisation standard errors on Windows (oracle_survey, 144 values; Linux pending). Open: multistage ids, replicate weights, calibration and post-stratification, svyglm, svyquantile, domains, svyby, lonely PSU options. Was: Open (CRAN rank 267). Large. Acceptance, equal to survey: svydesign (strata, clusters, weights, fpc), svymean, svytotal, svyratio, svyquantile, svyglm, svytable, replicate-weight designs (jackknife, BRR, bootstrap), calibrate, postStratify, rake, as.svrepdesign."
     },
     {
       "id": "L352",
