@@ -1142,10 +1142,10 @@
       "group": "CRAN parity",
       "order": 723,
       "title": "qgraph: network estimation",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 690). Mid. Acceptance, equal to qgraph: EBICglasso (graphical lasso path with EBIC selection), the glasso algorithm, cor_auto, centrality and centralityTable, FDRnetwork, mat2vec and the weighted-graph layout coordinates of the spring layout."
+      "evidence": "Partial (D6646). e.algo.stat.qgraphpkg.centrality (weighted undirected connected graphs: betweenness as the fraction of shortest paths, closeness, strength and expected influence, edge length 1 over the absolute weight) equals qgraph centrality_auto on Windows (oracle_qgraph, 96 values; Linux pending). Open: directed graphs, clustering coefficients (WS, Zhang, Onnela, Barrat), EBICglasso and glasso, cor_auto, networks from data, disconnected graphs, layouts, bootnet. Was: Open (CRAN rank 690). Mid. Acceptance, equal to qgraph: EBICglasso (graphical lasso path with EBIC selection), the glasso algorithm, cor_auto, centrality and centralityTable, FDRnetwork, mat2vec and the weighted-graph layout coordinates of the spring layout."
     },
     {
       "id": "L436",

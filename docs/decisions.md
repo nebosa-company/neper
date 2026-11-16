@@ -47000,3 +47000,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `geometrypkg.hull2` is Andrew's monotone chain and reports the edge count, perimeter and area; `hull3` keeps every point triple whose plane has no point strictly on both sides, adding triangle area to the surface and the absolute tetrahedron volume against the centroid to the volume. R's `convhulln with the FA option` calls the perimeter `area` and the planar area `vol`; the oracle compares them under these roles. The triple test is cubic in the number of points and assumes general position, which random input satisfies.
 
 **Result.** `oracle_geometry` agrees with geometry on Windows (90 values, 6 to 40 points, 15 hulls in each dimension); Linux pending. L455 stays partial: higher dimensions, Delaunay and Voronoi, degenerate input.
+
+## D6646 — qgraph: centrality of a weighted network
+
+**Decision.** `qgraphpkg.centrality` turns each edge into a length `1 / |w|`, runs Floyd-Warshall with path counts (distances equal within 1e-9 relative count as ties), and reports betweenness as the sum over unordered pairs of the fraction of shortest paths through a node, closeness as `1 / (sum of distances to the others)`, strength as `sum |w|` and expected influence as `sum w`. `centrality_auto` halves the double-counted betweenness of `centrality()` for undirected graphs, which is the convention used.
+
+**Result.** `oracle_qgraph` agrees with qgraph on Windows (96 values over connected graphs of 4 to 12 nodes); Linux pending. L434 stays partial: directed graphs, clustering coefficients, glasso estimation, disconnected graphs.

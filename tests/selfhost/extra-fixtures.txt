@@ -380,3 +380,4 @@ oracle_riskregression
 oracle_osqp
 oracle_polca
 oracle_geometry
+oracle_qgraph
