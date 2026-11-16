@@ -1021,10 +1021,10 @@
       "group": "CRAN parity",
       "order": 692,
       "title": "deSolve: solver parity",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 216). Mid. Verify the method list of e.math.ode first. Acceptance, equal to deSolve within each method tolerance: ode with lsoda, lsode, lsodar, vode, radau, daspk, rk4, rkf45, ode23, ode45, euler, bdf and adams; events and root functions, dede for delay equations, DAE index 1 problems, output at requested times."
+      "evidence": "Partial (D6416). e.math.ode euler and rk4 equal deSolve ode(method euler and rk4) on Windows (oracle_desolve; Linux pending). Open: lsoda, lsode, vode, radau, daspk, ode23, ode45, bdf, adams, events, dede, DAE. Was: Open (CRAN rank 216). Mid. Verify the method list of e.math.ode first. Acceptance, equal to deSolve within each method tolerance: ode with lsoda, lsode, lsodar, vode, radau, daspk, rk4, rkf45, ode23, ode45, euler, bdf and adams; events and root functions, dede for delay equations, DAE index 1 problems, output at requested times."
     },
     {
       "id": "L346",

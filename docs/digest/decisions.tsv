@@ -3283,4 +3283,5 @@ D6412	816	Epi: twoby2
 D6412	690	pracma: newtonRaphson
 D6413	678	pracma: romberg
 D6414	929	MuMIn: AICc, Akaike weights and the full model average
-D6415	649	MuMIn: the conditional average and relative importance
+D6415	650	MuMIn: the conditional average and relative importance
+D6416	740	deSolve: the fixed-step methods against e.math.ode

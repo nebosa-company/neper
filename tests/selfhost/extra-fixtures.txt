@@ -299,3 +299,4 @@ oracle_klar
 oracle_drc
 oracle_osqp
 oracle_mumin
+oracle_desolve

@@ -45664,3 +45664,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.mumin` gains average_conditional: the average over only the models that contain a term with their weights renormalised, its Std. Error by the same formula, and the term's relative importance (the summed Akaike weight of the models that contain it). The conditional estimates and errors equal model.avg's coefmat.subset and the importances equal sw() on five linear models. Not here: the Adjusted SE column, QAIC and QIC, dredge, model.sel's tables and r.squaredGLMM.
 
 **Result.** `oracle_mumin` equals MuMIn on 84 cases on Windows; Linux pending. L428 stays partial.
+
+## D6416 — deSolve: the fixed-step methods against e.math.ode
+
+`e.math.ode.euler` and `rk4` agree with deSolve's ode(method = "euler") and ode(method = "rk4") on Lotka-Volterra, Lorenz, logistic and damped-oscillator systems with steps of 0.01 to 0.1 over 5 to 60 steps, to 1e-9 relative, so the module's fixed-step integrators are the same classical schemes. The oracle fixture is new; no library change was needed. Not here: lsoda, lsode, lsodar, vode, radau, daspk, the embedded Runge-Kutta methods ode23 and ode45, bdf and adams, events and root functions, dede and DAE problems; the adaptive methods agree only to their tolerances.
+
+**Result.** `oracle_desolve` equals deSolve on 48 cases on Windows; Linux pending. L343 is partial.
