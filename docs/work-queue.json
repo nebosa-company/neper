@@ -669,10 +669,10 @@
       "group": "CRAN parity",
       "order": 642,
       "title": "aod: overdispersed binomial and count data",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 822). Small to mid. Acceptance, equal to aod: betabin and negbin with their standard errors and covariance, quasibin and quasipois, wald.test and anova, iccbin, donner, splitbin, drs."
+      "evidence": "Partial (D6463 varbin non-bootstrap rows and iccbin method C equal aod on Windows; oracle_aod; Linux pending). Open: betabin, negbin, quasibin, quasipois, wald.test, anova, iccbin A and B, donner, splitbin, drs. Was: Open (CRAN rank 822). Small to mid. Acceptance, equal to aod: betabin and negbin with their standard errors and covariance, quasibin and quasipois, wald.test and anova, iccbin, donner, splitbin, drs."
     },
     {
       "id": "L481",

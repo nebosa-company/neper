@@ -45946,3 +45946,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.ks` is new: `hns` and `hns_matrix` (the normal-scale bandwidth (4 / (n (d + 2r + 2)))^(1 / (d + 2r + 4)) times the standard deviation, or its square times the covariance, for derivative order r) and `kde_at` (the mean of N(x_i, H) densities at a point, via the inverse and determinant of H), unbinned.
 
 **Result.** `oracle_ks` equals ks on 205 cases on Windows at rel 1e-9, 25 samples of 20 to 80 rows in 1 to 3 dimensions. The plug-in, smoothed cross-validation and least-squares selectors, binned estimation, density regions and the rest of the package are open; Linux pending. L365 is partial.
+
+## D6463 — aod: varbin and iccbin method C
+
+`e.algo.stat.aod` is new: `varbin` (the binomial, ratio, arithmetic and jackknife estimates of a proportion over clusters, each with its variance and normal limits clipped to [0, 1]) and `iccbin_c` (the one-way ANOVA intra-cluster correlation of the split binary data, computed from cluster totals).
+
+**Result.** `oracle_aod` equals aod on 425 cases on Windows at rel 1e-9, 25 cluster data sets of 6 to 30 clusters. The bootstrap row, iccbin methods A and B (mixed models), betabin, negbin, quasibin, quasipois, wald.test, anova, donner, splitbin and drs are open; Linux pending. L480 is partial.

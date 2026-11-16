@@ -59,7 +59,7 @@ L475	library	0.5	558	scoringRules: proper scoring rules	Partial (D6145).
 L477	library	0.5	551	compositions: compositional data analysis	Partial (D6140).
 L478	library	0.4	519	dagitty: causal graph reasoning	Partial (D6159).
 L479	library	0	216	hdrcde: highest density regions	Open (CRAN rank 837).
-L480	library	0	199	aod: overdispersed binomial and count data	Open (CRAN rank 822).
+L480	library	0.1	416	aod: overdispersed binomial and count data	Partial (D6463 varbin non-bootstrap rows and iccbin method C equal aod on Windows;
 L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
 L482	library	0.5	471	laeken: inequality and poverty indicators	Partial (D6139).
 L483	library	0.4	733	tsfeatures: time-series features	Partial (D6142).
