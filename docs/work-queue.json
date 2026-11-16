@@ -1142,10 +1142,10 @@
       "group": "CRAN parity",
       "order": 670,
       "title": "nloptr: gradient-based and constrained optimizers",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 120). Mid. Acceptance: SLSQP, MMA and CCSA, the augmented Lagrangian (with local and sub-solvers), L-BFGS, truncated Newton, variable-metric, with equality and inequality constraints and their Jacobians, reaching the nloptr optimum within the per-function tolerance and returning the same status codes on the nloptr test suite; check_derivatives equals R."
+      "evidence": "Partly done (D6054): e.algo.stat.dfree.auglag (augmented Lagrangian over the box minimiser, no gradients) equals nloptr on HS071 and two more constrained problems on Windows (oracle_auglag); Linux pending. Open: SLSQP, MMA, CCSA, L-BFGS, truncated Newton, variable-metric with Jacobians, status codes, check_derivatives. Original: Open (CRAN rank 120). Mid. Acceptance: SLSQP, MMA and CCSA, the augmented Lagrangian (with local and sub-solvers), L-BFGS, truncated Newton, variable-metric, with equality and inequality constraints and their Jacobians, reaching the nloptr optimum within the per-function tolerance and returning the same status codes on the nloptr test suite; check_derivatives equals R."
     },
     {
       "id": "L314",

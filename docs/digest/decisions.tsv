@@ -3125,4 +3125,5 @@ D6049	1454	the dta reader follows the section tags and map, and the missing code
 D6050	940	the Hmisc closed forms follow the package, including the exact-limit shortcuts
 D6051	1266	MASS closed-form part: huber returns the previous mu, fitdistr standard errors are the Fisher ones
 D6052	975	quantreg rq: dual interior point, then the exact vertex
-D6053	980	box-constrained derivative-free minimiser: same optimum, not the BOBYQA code
+D6053	981	box-constrained derivative-free minimiser: same optimum, not the BOBYQA code
+D6054	1041	augmented Lagrangian over the box minimiser; dfree is generic over the context

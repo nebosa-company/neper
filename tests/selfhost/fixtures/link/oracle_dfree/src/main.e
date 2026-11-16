@@ -47,7 +47,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         x0[i] = x[2usize + i]
         i += 1usize
     }
-    let (v, fe) = df.minimize_box(a, obj, &dummy, x0, x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n], 1.0e-14f64)
+    let (v, fe) = df.minimize_box[u8](a, obj, &dummy, x0, x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n], 1.0e-14f64)
     if fe != ok { ret 0.0f64 / 0.0f64 }
     if str.eq(c.name, "val") { ret v }
     ret x0[usize(x[2usize + 3usize * n])]

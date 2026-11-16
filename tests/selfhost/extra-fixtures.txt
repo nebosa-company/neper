@@ -189,3 +189,4 @@ oracle_hmisc
 oracle_mass
 oracle_quantreg
 oracle_dfree
+oracle_auglag
