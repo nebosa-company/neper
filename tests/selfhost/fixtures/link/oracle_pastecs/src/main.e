@@ -87,6 +87,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret v
     }
     if str.eq(nm, "pen") { ret pc.pennington(x, usize(z[3usize + n])) }
+    if str.eq(nm, "regsp") {
+        let b = 3usize + n
+        let no = usize(z[b + n + 1usize])
+        let (out, eo) = mem.alloc[f64](a, no)
+        if eo != ok { ret 0.0f64 / 0.0f64 }
+        let re = pc.regul_spline(a, x, z[b..b + n], z[b + n], no, z[b + n + 2usize], usize(z[b + n + 3usize]), out)
+        if re != ok { ret 0.0f64 / 0.0f64 }
+        ret out[usize(z[b + n + 4usize])]
+    }
     if str.eq(nm, "reg") {
         let b = 3usize + n
         let no = usize(z[b + n + 1usize])

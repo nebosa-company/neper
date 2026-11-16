@@ -6,6 +6,7 @@
 
 use e.algo.sort
 use e.algo.stat.ica as ica
+use e.algo.stat.splinepkg as sp
 use e.algo.stat.test as tst
 use e.math
 use e.math.dist as dist
@@ -1750,4 +1751,41 @@ fn deccensus(a: *mem.Arena, x: []const f64, period: usize) -> (Census, err) {
     res.trend = cc
     res.resid = rs
     ret (res, ok)
+}
+
+// pastecs::regul with methods = "spline" (fmm, not periodic): the cubic of Forsythe, Malcolm and Moler through the observations (sorted, distinct) evaluated at seq(xmin, xmax, length.out = n) with xmax = xmin + (n - 1) deltat, clamped to the range of y, NaN outside the observations for rule 1, and an observation where an abscissa equals one
+fn regul_spline(a: *mem.Arena, x: []const f64, y: []const f64, xmin: f64, n: usize, deltat: f64, rule: usize, out: []f64) -> err {
+    let nx = x.len
+    let (b, e1) = mem.alloc[f64](a, nx)
+    let (c, e2) = mem.alloc[f64](a, nx)
+    let (d, e3) = mem.alloc[f64](a, nx)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    sp.fmm_spline(nx, x, y, b, c, d)
+    var ymin = y[0usize]
+    var ymax = y[0usize]
+    var i = 1usize
+    while i < nx {
+        if y[i] < ymin { ymin = y[i] }
+        if y[i] > ymax { ymax = y[i] }
+        i += 1usize
+    }
+    let xmax = f64(n - 1usize) * deltat + xmin
+    let by = (xmax - xmin) / f64(n - 1usize)
+    i = 0usize
+    while i < n {
+        var u = xmin + f64(i) * by
+        if i + 1usize == n { u = xmax }
+        var v = sp.spline_eval(nx, x, y, b, c, d, u)
+        if v < ymin { v = ymin }
+        if v > ymax { v = ymax }
+        if rule == 1usize && (u < x[0usize] || u > x[nx - 1usize]) { v = 0.0f64 / 0.0f64 }
+        var k = 0usize
+        while k < nx {
+            if x[k] == u { v = y[k] }
+            k += 1usize
+        }
+        out[i] = v
+        i += 1usize
+    }
+    ret ok
 }

@@ -118,4 +118,11 @@ for (rep in 1:30) {
   out <- c(r1$test.seasons, r1$amplitude, r1$series[, 1], r1$series[, 2], r2$series[, 1], r2$series[, 3])
   for (k in seq_along(out)) if (is.finite(out[k])) cases[[length(cases) + 1]] <- case("cen", c(13, 0, n, x, per, k - 1), out[k], rel = 1e-9, abs = 1e-10)
 }
+# regul with the spline method (fn "regsp", args (14, 0, nx, x, y[nx], xmin, n, deltat, rule, idx))
+for (rep in 1:40) {
+  nx <- sample(8:30, 1); x <- sort(round(runif(nx, 0, 20), 2)); x <- unique(x); nx <- length(x); y <- round(rnorm(nx, 5, 2), 3)
+  xmin <- if (rep %% 3 == 0) round(min(x) - 1, 2) else min(x); no <- sample(6:40, 1); dt <- round((max(x) - min(x)) / (no - 1) * c(1, 0.8, 1.1)[rep %% 3 + 1], 4); ru <- sample(1:2, 1)
+  r <- suppressMessages(regul(x, y, xmin = xmin, n = no, deltat = dt, methods = "spline", rule = ru, tol = 0)); v <- r$y[[1]]
+  for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("regsp", c(14, 0, nx, x, y, xmin, no, dt, ru, i - 1), v[i], rel = 1e-9, abs = 1e-10)
+}
 emit("pastecs", "pastecs", list(cases))

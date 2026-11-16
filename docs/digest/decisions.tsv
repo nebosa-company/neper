@@ -3594,4 +3594,5 @@ D6731	597	pastecs: escouf and local.trend
 D6732	1113	pastecs: abund and turnogram
 D6733	1052	pastecs: deccensus
 D6734	1117	SuppDists: the generalised hypergeometric varieties
-D6735	1107	SuppDists: off-support Spearman and vector parameters of the r functions
+D6735	1108	SuppDists: off-support Spearman and vector parameters of the r functions
+D6736	745	pastecs: regul by spline
