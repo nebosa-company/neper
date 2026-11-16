@@ -190,3 +190,14 @@ fn bridge_normal[Ctx: type](a: *mem.Arena, g: *rng.Rng, ctx: *Ctx, logpost: fn(*
     let (fit, fe) = iterate(a, l1, l2, 0.5f64, 1.0e-10f64, maxiter)
     ret (fit, fe)
 }
+
+fn bf(logml1: f64, logml2: f64) -> f64 { ret math.exp[f64](logml1 - logml2) }
+
+// post_prob for two models: the softmax of logml + log(prior), subtracting the maximum
+fn post_prob2(logml1: f64, logml2: f64, prior1: f64, prior2: f64) -> f64 {
+    let a = logml1 + math.log[f64](prior1)
+    let b = logml2 + math.log[f64](prior2)
+    var m = a
+    if b > m { m = b }
+    ret math.exp[f64](a - m) / (math.exp[f64](a - m) + math.exp[f64](b - m))
+}

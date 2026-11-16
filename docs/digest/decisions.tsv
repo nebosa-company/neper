@@ -3216,4 +3216,6 @@ D6140	624	compositions: the Aitchison geometry
 D6141	601	rcompanion effect sizes
 D6142	767	tsfeatures, the closed-form features
 D6143	896	actuar loss distributions
-D6144	754	extraDistr, sixteen continuous families
+D6144	755	extraDistr, sixteen continuous families
+D6145	807	scoringRules: closed-form and sample-based proper scores
+D6146	506	bridgesampling: Bayes factor and posterior model probabilities

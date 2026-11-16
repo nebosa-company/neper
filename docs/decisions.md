@@ -45268,3 +45268,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.scoringrules` reports CRPS, log score and Dawid-Sebastiani score for the normal, logistic, Laplace, exponential, uniform (with point masses), log-normal and gamma forecasts, the binomial CRPS, the Poisson log and Dawid-Sebastiani scores, and the sample scores: empirical CRPS, Dawid-Sebastiani (population variance), the bw.nrd kernel log score, the energy score, the variogram score, the type-7 quantile score and the ranked probability score. Not here: the Poisson and negative binomial CRPS (they need exp-scaled Bessel I), the t, truncated and censored families, the kernel CRPS and the weighted variants.
 
 **Result.** `oracle_scoringrules` equals scoringRules on 526 cases on Windows; Linux pending. L475 is partial.
+
+## D6146 — bridgesampling: Bayes factor and posterior model probabilities
+
+`e.algo.stat.bridgesampling` gains `bf` (exp of the log marginal likelihood difference) and `post_prob2` (the two-model softmax of log marginal likelihood plus log prior, with the maximum subtracted). Not here: warp3, bounded and simplex transformations, repetitions and error_measures.
+
+**Result.** `oracle_bridgesampling` equals bridgesampling on the added bf and post_prob cases on Windows; Linux pending. L391 stays partial.

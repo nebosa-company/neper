@@ -5,7 +5,7 @@ L329	library	0.6	445	ggsci and ggthemes palettes	Partial (D6034).
 L357	library	0.8	584	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).
 L388	library	0.6	402	fracdiff: fractional differencing and ARFIMA	Partial (D6039).
 L392	library	0.3	497	dqrng: random number generators	Partial (D6041).
-L391	library	0.35	476	bridgesampling: marginal likelihoods	Partial (D6047).
+L391	library	0.45	500	bridgesampling: marginal likelihoods	Partial (D6047, D6146 bf and post_prob).
 L410	library	0.25	485	AlgDesign: optimal experimental designs	Partly done (D6077): e.algo.stat.algdesign has gen.factorial and the eval.design measures from a model matrix, equal to AlgDesign on 200 values on Windows (oracle_algdesign);
 L420	library	0.5	534	minpack.lm: Levenberg-Marquardt least squares	Partly done (D6078): e.algo.stat.minpacklm.nls_lm is lmdif ported line for line with the package wrapper (bounds, iteration count, info codes), equal to nls.lm on 170 values on Windows including info 
 L421	library	0.4	539	fdrtool: false discovery rate estimation	Partly done (D6068): e.algo.stat.fdrtool.fdrtool_pvalue (fndr cutoff, eta0, Grenander density, local fdr and q values for p values) equals fdrtool on 210 values on Windows (oracle_fdrtool);
@@ -55,7 +55,7 @@ L452	library	0	223	TSA: time-series analysis toolkit	Open (CRAN rank 735).
 L453	library	0	246	cubature: adaptive multidimensional integration	Open (CRAN rank 753).
 L454	library	0	188	VIM: missing-value imputation	Open (CRAN rank 765).
 L468	library	0	233	fpc: cluster validity and flexible clustering procedures	Open (CRAN rank 803).
-L475	library	0	247	scoringRules: proper scoring rules	Open (CRAN rank 870).
+L475	library	0.5	558	scoringRules: proper scoring rules	Partial (D6145).
 L477	library	0.5	551	compositions: compositional data analysis	Partial (D6140).
 L478	library	0	237	dagitty: causal graph reasoning	Open (CRAN rank 845).
 L479	library	0	216	hdrcde: highest density regions	Open (CRAN rank 837).

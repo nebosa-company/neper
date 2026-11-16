@@ -40,6 +40,8 @@ fn lp(id: *u8, th: []const f64) -> f64 {
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "bf") { ret bs.bf(x[0usize], x[1usize]) }
+    if str.eq(c.name, "post") { ret bs.post_prob2(x[0usize], x[1usize], x[2usize], x[3usize]) }
     var g: rr.Rng = zero
     rr.seed(&g, i64(x[0usize]))
     var id = u8(x[1usize])

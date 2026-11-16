@@ -3,7 +3,7 @@
 #   id 0: log posterior -0.5 sum((th - c(1, -2, 0.5, 3, -1)[1:p])^2 / c(1, 4, 0.25, 2, 1)[1:p])
 #   id 1: log posterior -0.5 (th1^2 / 4 + (th2 - 0.25 th1^2)^2)    (p = 2)
 suppressMessages(library(bridgesampling))
-cases <- list()
+cases <- list(); prev <- NULL
 add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-8, abs = 1e-8)
 mu <- c(1, -2, 0.5, 3, -1); s2 <- c(1, 4, 0.25, 2, 1)
 lp0 <- function(th, data) -0.5 * sum((th - mu[seq_along(th)])^2 / s2[seq_along(th)])
@@ -21,5 +21,7 @@ for (rep in 1:8) {
   if (is.null(b)) next
   a <- c(seed, id, n, p, as.vector(t(sm)))
   add("logml", a, b$logml); add("niter", a, b$niter)
+  if (!is.null(prev)) { add("bf", c(prev$logml, b$logml), bf(prev, b)$bf); add("post", c(prev$logml, b$logml, 0.3, 0.7), post_prob(prev, b, prior_prob = c(0.3, 0.7))[[1]]) }
+  prev <- b
 }
 emit("bridgesampling", "bridgesampling", list(cases))

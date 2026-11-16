@@ -75,10 +75,10 @@
       "group": "CRAN parity",
       "order": 558,
       "title": "bridgesampling: marginal likelihoods",
-      "score": 0.35,
+      "score": 0.45,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6047). bridge_sampler with the normal proposal (real parameters, use_neff = FALSE) equals bridgesampling 1.2-1 on Windows: log marginal likelihood and iteration count (Linux pending). Open: warp3, bounded and simplex transformations, repetitions, error_measures, bf, post_prob. Was: Open (CRAN rank 496). Small. Acceptance, equal to bridgesampling under set.seed: bridge_sampler with the normal and warp3 methods, the iterative scheme, bf, post_prob, error_measures."
+      "evidence": "Partial (D6047, D6146 bf and post_prob). bridge_sampler with the normal proposal (real parameters, use_neff = FALSE) equals bridgesampling 1.2-1 on Windows: log marginal likelihood and iteration count (Linux pending). Open: warp3, bounded and simplex transformations, repetitions, error_measures, bf, post_prob. Was: Open (CRAN rank 496). Small. Acceptance, equal to bridgesampling under set.seed: bridge_sampler with the normal and warp3 methods, the iterative scheme, bf, post_prob, error_measures."
     },
     {
       "id": "L410",
