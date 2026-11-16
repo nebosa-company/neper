@@ -1505,10 +1505,10 @@
       "group": "CRAN parity",
       "order": 762,
       "title": "fixest: high-dimensional fixed-effects estimation",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 349). Mid to large. Acceptance, equal to fixest: feols, fepois, feglm and femlm with multiple fixed effects (demeaning to convergence), IV, clustered, two-way, HAC and Driscoll-Kraay standard errors, etable data, predict, wald and the Sun-Abraham estimator."
+      "evidence": "Partial (D6623). e.algo.stat.fixestpkg.feols (one or two fixed effects by alternating projections; IID, HC1 and clustered-by-first-effect standard errors with fixest default small-sample corrections) equals fixest on Windows (oracle_fixest, 96 values; Linux pending). Open: other and multiway clusters, IV, fixed-effect estimates, GLM families (fepois, feglm), more than two fixed effects, varying slopes. Was: Open (CRAN rank 349). Mid to large. Acceptance, equal to fixest: feols, fepois, feglm and femlm with multiple fixed effects (demeaning to convergence), IV, clustered, two-way, HAC and Driscoll-Kraay standard errors, etable data, predict, wald and the Sun-Abraham estimator."
     },
     {
       "id": "L369",

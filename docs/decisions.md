@@ -46862,3 +46862,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `systemfitpkg.sur` runs OLS per equation, estimates the residual covariance (divisor `sqrt((n - k_i)(n - k_j))` for geomean, `n` for noDfCor), and repeats the generalized least squares pass on the stacked system the requested number of times, re-estimating the covariance from each pass's residuals; the reported covariance comes from the last pass. In R the divisor and the pass count are `systemfit.control` arguments: passed straight to `systemfit()` they are silently ignored, which first showed up as 4 of 24 cases disagreeing.
 
 **Result.** `oracle_systemfit` agrees with systemfit SUR on Windows (72 values); Linux pending. L461 stays partial: unequal observations, restrictions, 2SLS and 3SLS, other divisors.
+
+## D6623 — fixest: feols with fixed effects
+
+**Decision.** `fixestpkg.feols` demeans the response and regressors by alternating projections over one or two fixed effects (stopping at a change of 1e-14), then runs OLS on the demeaned data. IID standard errors divide by `n - k - (G1 + G2 - components)`, HC1 uses `n / (n - K)` with the same K, and the clustered errors (by the first effect) use `G/(G-1) * (n-1)/(n-K)` with `K = k + 1` for one effect and `k + G2` for two, which is fixest's "nonnested" fixed-effect count: the effect nested in the cluster counts once, not G1 times.
+
+**Result.** `oracle_fixest` agrees with fixest on coefficients and the three standard errors on Windows (96 values, R fitted with `fixef.tol` 3e-12, the smallest it allows); Linux pending. L368 stays partial: other clusters, IV, GLM families, more than two effects.

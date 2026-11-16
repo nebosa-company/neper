@@ -135,7 +135,7 @@ L345	library	0	324	FactoMineR and factoextra: multivariate exploration	Open (CRA
 L347	library	0	276	locfit: local regression and likelihood	Open (CRAN rank 259).
 L364	library	0.36	803	metafor: meta-analysis	Partial (D6499 Knapp-Hartung, D6498 leave1out, D6497 regtest, ranktest, fsn on a fixed-effect model, D6496 escalc MD, SMD, ROM, RR, OR, RD, COR, ZCOR, D6495 rma.uni intercept-only with FE, DL, HE, HS,
 L366	library	0	277	kernlab: kernel methods	Open (CRAN rank 312).
-L368	library	0	273	fixest: high-dimensional fixed-effects estimation	Open (CRAN rank 349).
+L368	library	0.2	684	fixest: high-dimensional fixed-effects estimation	Partial (D6623).
 L369	library	0.15	795	plm and AER: panel data and applied econometrics	Partial (D6620).
 L372	library	0	259	spdep: spatial autocorrelation and spatial regression	Open (CRAN rank 336).
 L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
