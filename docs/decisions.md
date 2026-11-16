@@ -46396,3 +46396,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `pracma.polyroots` repeats the package's Euclid-style gcd of p and p' (reversing p when |last/first| < 1, trimming at ztol 1e-8, stopping when the next remainder is below ntol 1e-4 of the last), divides out to a polynomial with simple roots, takes its roots with the Aberth iteration of `poly_roots`, and rounds `|v(z)/w(z)|` to the multiplicity; zero roots from trailing zeros come first. The oracle compares order-free summaries (count, total multiplicity, sum of mult times Re, sum of mult times Im squared) because the root order is the eigenvalue order of R's companion matrix. Test polynomials are built with exact integer `conv`: the FFT `convolve` leaves 1e-15 coefficients that make polyroots itself return nonsense.
 
 **Result.** `oracle_pracma` agrees with pracma on 100 polyroots summaries on Windows; Linux pending. L333 stays partial.
+
+## D6538 — DHARMa: spatial and temporal autocorrelation
+
+**Decision.** `moran_i` is ape::Moran.I on the scaled residuals with `1/distance` weights (zero diagonal), row-standardised, with the normal-theory sd and the two-sided p value; `dw_time` is the Durbin-Watson d of the centred residuals ordered by time (the statistic of the intercept-only dwtest that testTemporalAutocorrelation runs).
+
+**Result.** `oracle_dharma` agrees with DHARMa on 56 new values on Windows; Linux pending. The dwtest p value (pan or normal), traditional residuals and the bootstrap outlier test stay open; L411 stays partial.

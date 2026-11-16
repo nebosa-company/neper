@@ -15,6 +15,10 @@ for (rep in 1:14) {
   to <- suppressMessages(testOutliers(r, plot = FALSE))
   add("nout", a, as.numeric(to$statistic)); add("pout", a, to$p.value)
   add("ksp", a, suppressWarnings(ks.test(sr, "punif")$p.value))
+  xs <- round(runif(n, 0, 10), 4); ys <- round(runif(n, 0, 10), 4); tm <- sample(n); a2 <- c(a, xs, ys, tm)
+  mi <- testSpatialAutocorrelation(r, x = xs, y = ys, plot = FALSE)
+  add("mi_obs", a2, as.numeric(mi$statistic["observed"])); add("mi_sd", a2, as.numeric(mi$statistic["sd"])); add("mi_p", a2, mi$p.value)
+  add("dw_t", a2, as.numeric(suppressMessages(testTemporalAutocorrelation(r, time = tm, plot = FALSE))$statistic))
 }
 for (rep in 1:12) {
   n <- sample(30:90, 1); ns <- sample(c(50, 100, 200), 1); sd <- sample(1:10000, 1)

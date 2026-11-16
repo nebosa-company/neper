@@ -8,6 +8,7 @@
 use e.algo.rand.r as rr
 use e.math
 use e.math.nmath_beta as nb
+use e.math.dist as dist
 use e.mem
 
 // sims is n by nsim row-major; out receives the n scaled residuals
@@ -384,4 +385,117 @@ fn test_generic(a: *mem.Arena, sims: []const f64, obs: []const f64, fitted: []co
     }
     ms = ms / f64(nsim)
     ret (observed / ms, get_p(summ, observed, alt))
+}
+
+// testSpatialAutocorrelation: ape::Moran.I of the scaled residuals with inverse-distance weights (zero diagonal), row-standardised; returns the observed I, its standard deviation and the two-sided p value
+fn moran_i(a: *mem.Arena, r: []const f64, xs: []const f64, ys: []const f64) -> (f64, f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let n = r.len
+    let (w, e1) = mem.alloc[f64](a, n * n)
+    if e1 != ok { ret (nan, nan, nan) }
+    var i = 0usize
+    while i < n {
+        var rs = 0.0f64
+        var j = 0usize
+        while j < n {
+            var v = 0.0f64
+            if i != j { v = 1.0f64 / math.sqrt[f64]((xs[i] - xs[j]) * (xs[i] - xs[j]) + (ys[i] - ys[j]) * (ys[i] - ys[j])) }
+            w[i * n + j] = v
+            rs += v
+            j += 1usize
+        }
+        if rs == 0.0f64 { rs = 1.0f64 }
+        j = 0usize
+        while j < n {
+            w[i * n + j] = w[i * n + j] / rs
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var s = 0.0f64
+    var m = 0.0f64
+    i = 0usize
+    while i < n {
+        m += r[i]
+        i += 1usize
+    }
+    m = m / f64(n)
+    var cv = 0.0f64
+    var v2 = 0.0f64
+    var v4 = 0.0f64
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    i = 0usize
+    while i < n {
+        let yi = r[i] - m
+        v2 += yi * yi
+        v4 += yi * yi * yi * yi
+        var rsum = 0.0f64
+        var csum = 0.0f64
+        var j = 0usize
+        while j < n {
+            let yj = r[j] - m
+            s += w[i * n + j]
+            cv += w[i * n + j] * yi * yj
+            let sym = w[i * n + j] + w[j * n + i]
+            s1 += 0.5f64 * sym * sym
+            rsum += w[i * n + j]
+            csum += w[j * n + i]
+            j += 1usize
+        }
+        s2 += (rsum + csum) * (rsum + csum)
+        i += 1usize
+    }
+    let nf = f64(n)
+    let obs = (nf / s) * (cv / v2)
+    let ei = -1.0f64 / (nf - 1.0f64)
+    let ssq = s * s
+    let k = (v4 / nf) / ((v2 / nf) * (v2 / nf))
+    let sdi = math.sqrt[f64]((nf * ((nf * nf - 3.0f64 * nf + 3.0f64) * s1 - nf * s2 + 3.0f64 * ssq) - k * (nf * (nf - 1.0f64) * s1 - 2.0f64 * nf * s2 + 6.0f64 * ssq)) / ((nf - 1.0f64) * (nf - 2.0f64) * (nf - 3.0f64) * ssq) - 1.0f64 / ((nf - 1.0f64) * (nf - 1.0f64)))
+    var pv = dist.pnorm(obs, ei, sdi, true, false)
+    if obs <= ei { pv = 2.0f64 * pv } else { pv = 2.0f64 * (1.0f64 - pv) }
+    ret (obs, sdi, pv)
+}
+
+// testTemporalAutocorrelation's statistic: the Durbin-Watson d of the scaled residuals centred and ordered by the (unique) times
+fn dw_time(a: *mem.Arena, r: []const f64, time: []const f64) -> f64 {
+    let n = r.len
+    let (ord, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        ord[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let v = ord[i]
+        var j = i
+        while j > 0usize && time[ord[j - 1usize]] > time[v] {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = v
+        i += 1usize
+    }
+    var m = 0.0f64
+    i = 0usize
+    while i < n {
+        m += r[i]
+        i += 1usize
+    }
+    m = m / f64(n)
+    var num = 0.0f64
+    var den = 0.0f64
+    i = 0usize
+    while i < n {
+        let e = r[ord[i]] - m
+        den += e * e
+        if i > 0usize {
+            let d = e - (r[ord[i - 1usize]] - m)
+            num += d * d
+        }
+        i += 1usize
+    }
+    ret num / den
 }

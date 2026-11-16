@@ -25,6 +25,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "zi_ratio") || str.eq(k, "disp_ratio") { ret ratio }
         ret p
     }
+    if str.eq(k, "mi_obs") || str.eq(k, "mi_sd") || str.eq(k, "mi_p") || str.eq(k, "dw_t") {
+        let (rs, er) = mem.alloc[f64](a, n)
+        if er != ok { os.exit(5) }
+        if dh.pit(a, sims, obs, ns, seed, rs) != ok { os.exit(6) }
+        let base = 3usize + n + n * ns
+        if str.eq(k, "dw_t") { ret dh.dw_time(a, rs, x[base + 2usize * n..base + 3usize * n]) }
+        let (mo, ms, mp) = dh.moran_i(a, rs, x[base..base + n], x[base + n..base + 2usize * n])
+        if str.eq(k, "mi_obs") { ret mo }
+        if str.eq(k, "mi_sd") { ret ms }
+        ret mp
+    }
     let (r, e) = mem.alloc[f64](a, n)
     if e != ok { os.exit(5) }
     if dh.pit(a, sims, obs, ns, seed, r) != ok { os.exit(6) }
