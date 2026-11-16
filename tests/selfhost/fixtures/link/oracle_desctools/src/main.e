@@ -13,6 +13,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(x[0usize])
     let v = x[1usize..1usize + n]
     let k = c.name
+    if str.eq(k, "kappa") || str.eq(k, "lambda_symmetric") || str.eq(k, "lambda_row") || str.eq(k, "lambda_column") || str.eq(k, "tau_row") || str.eq(k, "tau_col") || str.eq(k, "or") || str.eq(k, "yq") {
+        let r = usize(x[0usize])
+        let cc = usize(x[1usize])
+        let tb = x[2usize..2usize + r * cc]
+        if str.eq(k, "kappa") { ret dt.cohen_kappa(tb, r) }
+        if str.eq(k, "lambda_symmetric") { ret dt.lambda_gk(tb, r, cc, 0usize) }
+        if str.eq(k, "lambda_row") { ret dt.lambda_gk(tb, r, cc, 1usize) }
+        if str.eq(k, "lambda_column") { ret dt.lambda_gk(tb, r, cc, 2usize) }
+        if str.eq(k, "tau_row") { ret dt.gk_tau(tb, r, cc, 1usize) }
+        if str.eq(k, "tau_col") { ret dt.gk_tau(tb, r, cc, 2usize) }
+        if str.eq(k, "or") { ret dt.odds_ratio(tb) }
+        ret dt.yule_q(tb)
+    }
     if str.eq(k, "cramer") || str.eq(k, "phi") || str.eq(k, "cont") || str.eq(k, "tschuprow") || str.eq(k, "gamma") || str.eq(k, "taub") || str.eq(k, "tauc") || str.eq(k, "somersr") || str.eq(k, "somersc") {
         let r = usize(x[0usize])
         let cc = usize(x[1usize])

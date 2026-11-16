@@ -277,3 +277,120 @@ fn ordinal_assoc(t: []const f64, r: usize, c: usize, kind: usize) -> f64 {
     if kind == 3usize { ret (cc - dd) / (n0 - n2) }
     ret (cc - dd) / (n0 - n1)
 }
+
+fn row_sum(t: []const f64, r: usize, c: usize, i: usize) -> f64 {
+    var s = 0.0f64
+    var j = 0usize
+    while j < c {
+        s += t[i * c + j]
+        j += 1usize
+    }
+    ret s
+}
+
+fn col_sum(t: []const f64, r: usize, c: usize, j: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < r {
+        s += t[i * c + j]
+        i += 1usize
+    }
+    ret s
+}
+
+// Cohen's kappa of a square table
+fn cohen_kappa(t: []const f64, r: usize) -> f64 {
+    let n = total_of(t)
+    var po = 0.0f64
+    var pe = 0.0f64
+    var i = 0usize
+    while i < r {
+        po += t[i * r + i]
+        pe += row_sum(t, r, r, i) * col_sum(t, r, r, i)
+        i += 1usize
+    }
+    po = po / n
+    pe = pe / (n * n)
+    ret (po - pe) / (1.0f64 - pe)
+}
+
+// Goodman-Kruskal lambda: dir 0 symmetric, 1 "row" (the sum of column maxima), 2 "column" (the sum of row maxima)
+fn lambda_gk(t: []const f64, r: usize, c: usize, dir: usize) -> f64 {
+    let n = total_of(t)
+    var maxr = 0.0f64
+    var sum_row_max = 0.0f64
+    var i = 0usize
+    while i < r {
+        var m = 0.0f64
+        var j = 0usize
+        while j < c {
+            if t[i * c + j] > m { m = t[i * c + j] }
+            j += 1usize
+        }
+        sum_row_max += m
+        let rs = row_sum(t, r, c, i)
+        if rs > maxr { maxr = rs }
+        i += 1usize
+    }
+    var maxc = 0.0f64
+    var sum_col_max = 0.0f64
+    var j = 0usize
+    while j < c {
+        var m = 0.0f64
+        i = 0usize
+        while i < r {
+            if t[i * c + j] > m { m = t[i * c + j] }
+            i += 1usize
+        }
+        sum_col_max += m
+        let cs = col_sum(t, r, c, j)
+        if cs > maxc { maxc = cs }
+        j += 1usize
+    }
+    if dir == 1usize { ret (sum_col_max - maxr) / (n - maxr) }
+    if dir == 2usize { ret (sum_row_max - maxc) / (n - maxc) }
+    ret (sum_col_max + sum_row_max - maxr - maxc) / (2.0f64 * n - maxr - maxc)
+}
+
+// Goodman-Kruskal tau as DescTools names the directions: 1 "row", 2 "column"
+fn gk_tau(t: []const f64, r: usize, c: usize, dir: usize) -> f64 {
+    let n = total_of(t)
+    var sa = 0.0f64
+    var sb = 0.0f64
+    var i = 0usize
+    while i < r {
+        let rs = row_sum(t, r, c, i)
+        sb += (rs / n) * (rs / n)
+        var j = 0usize
+        while j < c {
+            let p = t[i * c + j] / n
+            sa += p * p / (col_sum(t, r, c, j) / n)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // sa: sum p_ij^2 / p_.j ; sb: sum p_i.^2
+    var sc = 0.0f64
+    var sd = 0.0f64
+    var j = 0usize
+    while j < c {
+        let cs = col_sum(t, r, c, j)
+        sd += (cs / n) * (cs / n)
+        i = 0usize
+        while i < r {
+            let p = t[i * c + j] / n
+            sc += p * p / (row_sum(t, r, c, i) / n)
+            i += 1usize
+        }
+        j += 1usize
+    }
+    if dir == 1usize { ret (sa - sb) / (1.0f64 - sb) }
+    ret (sc - sd) / (1.0f64 - sd)
+}
+
+fn odds_ratio(t: []const f64) -> f64 { ret t[0usize] * t[3usize] / (t[1usize] * t[2usize]) }
+
+fn yule_q(t: []const f64) -> f64 {
+    let o = odds_ratio(t)
+    ret (o - 1.0f64) / (o + 1.0f64)
+}

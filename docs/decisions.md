@@ -45754,3 +45754,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.desctools` gains the chi-square based coefficients (CramerV, Phi, ContCoef, TschuprowT) and the pair-count based ordinal ones from the concordant and discordant counts C and D of an r by c table: Goodman-Kruskal gamma (C - D) / (C + D), Kendall tau-b (C - D) / sqrt((n0 - n1)(n0 - n2)), Stuart tau-c 2 m (C - D) / (n^2 (m - 1)) and Somers' d, where direction "row" divides by n0 - n2 (the column ties) and "column" by n0 - n1 (n0 = n(n - 1) / 2, n1 and n2 the tied pairs within rows and columns). All equal DescTools to 1e-9 on twenty random tables of 2 to 5 rows and columns. Not here: confidence intervals, the p values, Lambda, the Goodman-Kruskal tau, Cohen's kappa, the odds-ratio family and the rest of the package.
 
 **Result.** `oracle_desctools` equals DescTools on 440 cases on Windows; Linux pending. L363 stays partial.
+
+## D6431 — DescTools: kappa, lambda, Goodman-Kruskal tau, odds ratio and Yule's Q
+
+`e.algo.stat.desctools` gains Cohen's kappa of a square table ((po - pe) / (1 - pe) from the diagonal and the margins), Goodman-Kruskal lambda (direction "row" uses the sum of the column maxima against the largest row total, "column" the converse, "symmetric" the pooled form), Goodman-Kruskal tau (direction "row" is sum p_ij^2 / p_.j less sum p_i.^2 over one minus the latter; "column" the transpose, which is the reverse of what the name suggests, found by comparison), the 2 by 2 odds ratio and Yule's Q (OR - 1) / (OR + 1). All equal DescTools to 1e-9 on twenty random tables. Not here: the confidence intervals and p values, Winsorize, Mode, the weighted kappa and the rest of the package.
+
+**Result.** `oracle_desctools` equals DescTools on 600 cases on Windows; Linux pending. L363 stays partial.

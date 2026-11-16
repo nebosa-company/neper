@@ -16,4 +16,11 @@ for (rep in 1:20) {
   add("gamma", a, GoodmanKruskalGamma(tab)); add("taub", a, KendallTauB(tab)); add("tauc", a, StuartTauC(tab))
   add("somersr", a, SomersDelta(tab, direction = "row")); add("somersc", a, SomersDelta(tab, direction = "column"))
 }
+for (rep in 1:20) {
+  r <- sample(2:5, 1); tab <- matrix(sample(1:30, r * r, TRUE), r, r); a <- c(r, r, as.vector(t(tab)))
+  add("kappa", a, CohenKappa(tab))
+  for (d in c("symmetric", "row", "column")) add(paste0("lambda_", d), a, Lambda(tab, direction = d))
+  add("tau_row", a, GoodmanKruskalTau(tab, direction = "row")); add("tau_col", a, GoodmanKruskalTau(tab, direction = "column"))
+  t2 <- matrix(sample(1:30, 4, TRUE), 2); a2 <- c(2, 2, as.vector(t(t2))); add("or", a2, OddsRatio(t2)); add("yq", a2, YuleQ(t2))
+}
 emit("desctools", "DescTools", list(cases))
