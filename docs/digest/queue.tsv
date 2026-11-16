@@ -5,7 +5,6 @@ L329	library	0.6	445	ggsci and ggthemes palettes	Partial (D6034).
 L357	library	0.8	584	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).
 L388	library	0.6	402	fracdiff: fractional differencing and ARFIMA	Partial (D6039).
 L392	library	0.3	497	dqrng: random number generators	Partial (D6041).
-L402	library	0.4	419	ica: independent component analysis	Partial (D6043).
 L391	library	0.35	476	bridgesampling: marginal likelihoods	Partial (D6047).
 L410	library	0.25	485	AlgDesign: optimal experimental designs	Partly done (D6077): e.algo.stat.algdesign has gen.factorial and the eval.design measures from a model matrix, equal to AlgDesign on 200 values on Windows (oracle_algdesign);
 L420	library	0.5	534	minpack.lm: Levenberg-Marquardt least squares	Partly done (D6078): e.algo.stat.minpacklm.nls_lm is lmdif ported line for line with the package wrapper (bounds, iteration count, info codes), equal to nls.lm on 170 values on Windows including info 

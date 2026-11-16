@@ -45174,3 +45174,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `multiclass` builds every class metric from the confusion matrix (rows the estimate, columns the truth, as yardstick's `conf_mat` is) and averages per class with `weighted.mean(out, w)`, with the class weights 1/k for macro, the truth counts for macro_weighted and summed numerators and denominators for micro; kap and mcc use the closed forms. `pr_auc` and `gain_capture` are the trapezoid areas of the precision-recall and gain curves (thresholds from the largest estimate, ties collapsed to the last occurrence, the origin point first); `one_vs_all` averages them, and roc_auc, over the classes. `lift_curve` is the percent found over the percent tested; `iic` is the correlation times the ratio of the smaller to the larger one-sided mean absolute error. roc_auc's default multiclass estimator hand_till is not ported.
 
 **Result.** `oracle_metrics` equals yardstick on 656 cases on Windows; Linux pending. L405 is closed.
+
+## D6134 — icajade, icaimax and the deflation and wide-data forms of icafast
+
+**Context.** L402 had the parallel FastICA update for tall data.
+
+**Decision.** `prewhiten` and `finish_ica` are the shared whitening and finish; `prewhiten_wide` handles n < p through the eigenvectors of X X' / n. `icajade` joint-diagonalises the cumulant matrices by Jacobi rotations (the emats layout, the pair loop and the atan2 angle of the package); `icaimax` is the Newton or gradient infomax with the sign switch and the annealed rate; `icafast_gen` adds the deflation update. Every algorithm is equivariant under a sign flip of a whitened column, so the eigenvector signs R's LAPACK picks do not matter. A run that reaches maxit (or a deflation run in which an earlier component does) keeps rotating by rounding noise, so its vafs are not compared, only its iteration counts and flags.
+
+**Result.** `oracle_ica` equals ica on 1317 cases on Windows; Linux pending. L402 is closed.

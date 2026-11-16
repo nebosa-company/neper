@@ -70,17 +70,6 @@
       "evidence": "Partial (D6041). xoroshiro128+, xoroshiro128++, xoshiro256+, xoshiro256++ and dqrunif after dqset.seed equal dqrng 0.4.1 on Windows (Linux pending). Open: pcg64, threefry, dqrnorm and dqrexp (ziggurat), dqsample, streams, get_state. Was: Open (CRAN rank 461). Small. Verify which generators e.algo.rand already has. Acceptance, equal to dqrng value for value: xoshiro256++, xoroshiro128+, pcg64 and threefry streams, dqrunif, dqrnorm, dqrexp, dqsample, dqrng_get_state, seeds and stream selection."
     },
     {
-      "id": "L402",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 562,
-      "title": "ica: independent component analysis",
-      "score": 0.4,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6043). icafast (symmetric update, logcosh, kur, exp) equals ica 1.0-3 on Windows through vafs, iterations, convergence and S M (Linux pending). Open: alg def, n < p, icaimax, icajade. Was: Open (CRAN rank 548). Small. Acceptance, equal to ica under set.seed: icafast, icaimax and icajade with their whitening, contrasts and convergence, the mixing and source matrices up to the permutation and sign R reports."
-    },
-    {
       "id": "L391",
       "category": "library",
       "group": "CRAN parity",
