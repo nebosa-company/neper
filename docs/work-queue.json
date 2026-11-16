@@ -1835,10 +1835,10 @@
       "group": "CRAN parity",
       "order": 755,
       "title": "Matrix remainder: expm, condition numbers, sparse LU and QR, ordering",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN ranks 163, 144). Mid to large. e.algo.linalg.sparse has from_triplets, multiply and cholesky; decomp has qr, svd and eigen. Acceptance, equal to Matrix and SparseM: expm (Pade with scaling and squaring), logm, sqrtm, condest, rcond for the 1 and infinity norms, norm types, sparse LU and QR with COLAMD and AMD ordering, Cholesky with a fill-reducing permutation, Schur, kronecker, bandSparse, symmpart, skewpart, CSR conversion and slm."
+      "evidence": "Partly done (D6060): e.algo.linalg.mexp has expm (Ward Pade 8) and the 1, I, F, M norms, equal to Matrix on 210 values on Windows (oracle_matrix); Linux pending. Open: logm, sqrtm, condest, rcond, sparse LU and QR, orderings, Schur, kronecker, bandSparse, symmpart, skewpart, CSR, slm. Original: Open (CRAN ranks 163, 144). Mid to large. e.algo.linalg.sparse has from_triplets, multiply and cholesky; decomp has qr, svd and eigen. Acceptance, equal to Matrix and SparseM: expm (Pade with scaling and squaring), logm, sqrtm, condest, rcond for the 1 and infinity norms, norm types, sparse LU and QR with COLAMD and AMD ordering, Cholesky with a fill-reducing permutation, Schur, kronecker, bandSparse, symmpart, skewpart, CSR conversion and slm."
     },
     {
       "id": "L316",

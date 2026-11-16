@@ -165,7 +165,7 @@ L513	library	0	272	Epi: epidemiology tools	Open (CRAN rank 929).
 L310	library	0.12	756	glmnet: elastic-net path and families	Partly done (D6055): e.algo.stat.glmnet.gaussian equals glmnet at a user lambda sequence (alpha 0..1, standardize, penalty.factor) on Windows (oracle_glmnet);
 L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);
 L304	library	0.2	782	haven: SAS, SPSS and Stata file formats	Partial (D6049).
-L315	library	0	448	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Open (CRAN ranks 163, 144).
+L315	library	0.1	744	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Partly done (D6060): e.algo.linalg.mexp has expm (Ward Pade 8) and the 1, I, F, M norms, equal to Matrix on 210 values on Windows (oracle_matrix);
 L316	library	0	542	igraph: deterministic structure and community detection	Open (CRAN rank 109).
 L344	library	0	359	randomForest: Breiman forests equal to R	Open (CRAN rank 255;
 L345	library	0	324	FactoMineR and factoextra: multivariate exploration	Open (CRAN ranks 232, 277).

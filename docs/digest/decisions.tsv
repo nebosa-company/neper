@@ -3131,4 +3131,5 @@ D6055	1230	glmnet gaussian: the ridge part is divided by sd(y)
 D6056	1164	coxph: Newton on the Efron or Breslow partial likelihood, columns centred
 D6057	1221	psych closed-form part; ICC follows the mixed model, not the ANOVA table
 D6058	1122	emmeans for lm: the caller builds the grid row, the module does the linear algebra and adjustments
-D6059	1434	lubridate and timeDate date part: add_with_rollback clamps, it does not overflow
+D6059	1435	lubridate and timeDate date part: add_with_rollback clamps, it does not overflow
+D6060	980	Matrix dense part: expm by Ward's Pade 8, the four norms

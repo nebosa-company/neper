@@ -195,3 +195,4 @@ oracle_coxph
 oracle_psych
 oracle_emmeans
 oracle_lubridate
+oracle_matrix
