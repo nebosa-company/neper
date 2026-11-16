@@ -259,3 +259,4 @@ oracle_wrs2
 oracle_qcc
 oracle_laeken
 oracle_compositions
+oracle_rcompanion

@@ -45230,3 +45230,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.compositions` ports closure, clr, alr (any divisor part), ilr with the default basis (the normalised Helmert contrasts) and the inverses, the Aitchison norm and distance, perturbation, powering, the compositional mean, the clr covariance and the variation matrix, on positive data. Zeros, missing values, robust estimates, balance bases and the normality tests are not here.
 
 **Result.** `oracle_compositions` equals compositions on 392 cases on Windows; Linux pending. L477 is partial.
+
+## D6141 — rcompanion effect sizes
+
+**Context.** L504 asked for rcompanion's nonparametric and categorical helpers.
+
+**Decision.** `e.algo.stat.rcompanion` ports epsilonSquared (the tie-corrected Kruskal-Wallis statistic over n - 1), freemanTheta, cliffDelta, vda, cramerV (with its bias correction) and cohenW, each rounded with `signif` to the package's digits (3, or 4 for V and w). The bootstrap intervals, scheirerRayHare, the pairwise median test and the nominal helpers are not here.
+
+**Result.** `oracle_rcompanion` equals rcompanion on 70 cases on Windows; Linux pending. L504 is partial.
