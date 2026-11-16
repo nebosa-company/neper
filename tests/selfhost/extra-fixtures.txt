@@ -170,3 +170,5 @@ oracle_kstseries
 oracle_ttr
 oracle_nortest
 oracle_palettes
+oracle_truncnorm
+oracle_pbivnorm
