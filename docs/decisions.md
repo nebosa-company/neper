@@ -47164,3 +47164,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6674 — shell.linux parse_id cannot overflow
 
 **Decision.** `parse_id` accumulated a notify-send id in a `u32`, so a long digit string trapped. It now accumulates in `u64` and answers not-a-number once the value passes the `u32` maximum. Linux-only code: it is not exercisable on Windows, so the Linux batch will run it. L245 is closed.
+
+## D6675 — pmvnorm_sigma takes a mean and a covariance matrix
+
+**Decision.** `mvt.pmvnorm_sigma` reads `pmvnorm(lower, upper, mean, sigma)` as R does: subtract the mean from the limits, and divide by the standard deviations and turn sigma into a correlation matrix only when its diagonal is not 1 within `all.equal`'s 1.5e-8, so a near-correlation input follows R's un-scaled path. Limits at or beyond ±1e300 are infinite. `oracle_mvt_sigma` equals R on 160 seeded values on Windows; Linux pending. The t case still takes a `delta` through `mvtdst`.

@@ -3,8 +3,8 @@
 // factor, the one- and two-dimensional special cases (Drezner-Wesolowsky bivariate normal, Dunnett-Sobel bivariate t)
 // and the lattice parameters of the paper, line for line. Fortran's 1-based arrays are kept: slot 0 is unused.
 //
-// Not here: the Miwa and TVPACK algorithms, qmvnorm and qmvt, the sigma and mean pre-scaling of `pmvnorm` and `pmvt`
-// (done by the callers: standardise to a correlation matrix and shift by the mean).
+// Not here: the Miwa and TVPACK algorithms, qmvnorm and qmvt, the mean pre-shift of `pmvt` (`pmvnorm_sigma` takes a
+// mean and a covariance matrix; `mvtdst` takes a delta).
 
 use e.algo.rand.r as rng
 use e.algo.stat.mvt_tables as tables
@@ -818,4 +818,66 @@ fn mvtdst(a: *mem.Arena, g: *rng.Rng, lat: *const Lat, n: usize, nu: i64, lower:
     }
     let (r2, ke) = mvkbrv(a, g, lat, &m, m.nd, maxpts, abseps, releps)
     ret (r2, ke)
+}
+
+// pmvnorm(lower, upper, mean, sigma) for a covariance matrix `sigma` (n x n, row-major), as R's pmvnorm reads it: the mean
+// is taken off both limits, and when the diagonal is not 1 (all.equal, 1.5e-8) the limits are divided by the standard
+// deviations and sigma becomes a correlation matrix (cov2cor: (1/sd_i * sigma_ij) * (1/sd_j)). A limit at or beyond
+// +-1e300 is infinite. `nu` < 1 is the normal; for a t, mvtnorm shifts by `delta` instead, so use mvtdst.
+fn pmvnorm_sigma(a: *mem.Arena, g: *rng.Rng, lat: *const Lat, n: usize, lower: []const f64, upper: []const f64, mean: []const f64, sigma: []const f64, maxpts: i64, abseps: f64, releps: f64) -> (Res, err) {
+    var res: Res = zero
+    let (lo, e1) = mem.alloc[f64](a, n)
+    let (up, e2) = mem.alloc[f64](a, n)
+    let (dl, e3) = mem.alloc[f64](a, n)
+    let (infin, e4) = mem.alloc[i64](a, n)
+    let (cor, e5) = mem.alloc[f64](a, n * (n - 1usize) / 2usize + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (res, e1) }
+    var off = 0.0f64
+    var tot = 0.0f64
+    var i = 0usize
+    while i < n {
+        let d = sigma[i * n + i]
+        tot += math.abs[f64](d)
+        off += math.abs[f64](d - 1.0f64)
+        i += 1usize
+    }
+    let scale = off / tot >= 1.5e-8f64
+    i = 0usize
+    while i < n {
+        var s = 1.0f64
+        if scale { s = math.sqrt[f64](sigma[i * n + i]) }
+        let l = lower[i]
+        let u = upper[i]
+        let lf = l <= 0.0f64 - 1.0e300f64
+        let uf = u >= 1.0e300f64
+        infin[i] = 2i64
+        if uf { infin[i] = 1i64 }
+        if lf { infin[i] = 0i64 }
+        if lf && uf { infin[i] = 0i64 - 1i64 }
+        lo[i] = 0.0f64
+        up[i] = 0.0f64
+        if !lf { lo[i] = (l - mean[i]) / s }
+        if !uf { up[i] = (u - mean[i]) / s }
+        dl[i] = 0.0f64
+        i += 1usize
+    }
+    var k = 0usize
+    i = 1usize
+    while i < n {
+        var j = 0usize
+        while j < i {
+            if scale {
+                let si = 1.0f64 / math.sqrt[f64](sigma[i * n + i])
+                let sj = 1.0f64 / math.sqrt[f64](sigma[j * n + j])
+                cor[k] = si * sigma[j * n + i] * sj
+            } else {
+                cor[k] = sigma[j * n + i]
+            }
+            k += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (r2, e6) = mvtdst(a, g, lat, n, 0i64, lo, up, infin, cor[0usize..n * (n - 1usize) / 2usize], dl, maxpts, abseps, releps)
+    ret (r2, e6)
 }
