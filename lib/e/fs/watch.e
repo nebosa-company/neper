@@ -1,6 +1,6 @@
 // Directory watching by path, over `e.os`'s watch: the same actions and events, with
 // paths relative to the watched root as the host reports them. A recursive watch is
-// `Unsupported` on both hosts today, and the error says so in this module's name.
+// `Unsupported` on Linux and Windows and implemented on macOS, and the error says so in this module's name.
 
 use e.mem
 use e.os

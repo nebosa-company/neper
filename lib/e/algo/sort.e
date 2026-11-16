@@ -7,6 +7,9 @@
 // Every module-scope declaration is exported (spec section 5), so the sift, merge
 // and counting loops are written out at each site rather than factored into helpers
 // that would widen the module's public surface beyond its frozen API.
+//
+// The algorithms are the plain ones: `in_place` is a heapsort and `stable_in_place` a bottom-up
+// merge sort, with no introsort cutoff and no Timsort run detection (docs/algos.md says so).
 
 use e.mem
 

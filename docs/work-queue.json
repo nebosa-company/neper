@@ -4855,17 +4855,6 @@
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: the count is 0 and the suite's goldens are unchanged. Notes: docs/library-hardening-plan.md."
     },
     {
-      "id": "L261",
-      "category": "library",
-      "group": "Library",
-      "order": 461,
-      "title": "Stale comments found",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "low",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: each listed comment is corrected or deleted; goldens unchanged. Notes: docs/library-hardening-plan.md."
-    },
-    {
       "id": "T080",
       "category": "tooling",
       "group": "Tooling",

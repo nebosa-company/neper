@@ -2083,14 +2083,14 @@ fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err
 }
 
 
-// (D2165, C110) Dynamic linking and the thread id: NeperOS has no shared libraries, so dlopen is
+// (D2165, C110) Dynamic linking and the thread id: a WASI module has no shared libraries, so dlopen is
 // Unsupported (the modules that reach for it -- e.gpu's Vulkan backend -- only use the CPU backend
-// here, where that path is pruned). current_thread_id is a single value for a NeperOS program.
+// here, where that path is pruned). current_thread_id is a single value for a plain module.
 type Lib = resource(dlclose) struct { raw: usize }
 fn dlopen(a: *mem.Arena, name: str) -> (Lib, err) { ret (Lib { raw: 0usize }, Unsupported) }
 fn dlclose(l: own Lib) -> err { ret ok }
 // The symbol lookup `os.dlsym[fn ...]` is intercepted onto: without it the checker reports dlsym as
-// Unsupported. NeperOS has no dynamic symbols, so it always answers not-found; the modules that use
+// Unsupported. A WASI module has no dynamic symbols, so it always answers not-found; the modules that use
 // dlsym (e.gpu's Vulkan backend) only run their CPU backend here, where this path is pruned.
 fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) { ret (0usize, Unsupported) }
 // The wasi-threads tid plus one: 1 on the main thread (tid 0) and in a plain module, non-zero and

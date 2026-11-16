@@ -5933,8 +5933,9 @@ fn sandbox_child_call(index: usize) -> u32 {
 //
 // ponytail: `deny_dynamic_code` is not enforced here. Saying it in seccomp means filtering
 // `mprotect` and `mmap` on their protection argument rather than on their number, which is
-// a second kind of filter; until it is written the policy is applied as far as it goes and
-// the answer says the rest was not. The upgrade path is argument filtering on `PROT_EXEC`.
+// a second kind of filter; until it is written a policy that asks for it is refused with
+// `Unsupported` before anything is applied (NO_NEW_PRIVS cannot be undone). The upgrade path
+// is argument filtering on `PROT_EXEC`.
 fn sandbox(policy: *const SandboxPolicy) -> err {
     // Reject what this backend cannot implement before any prctl: NO_NEW_PRIVS is
     // irreversible, so an unsupported field must not leave the process half-changed.

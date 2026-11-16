@@ -128,9 +128,9 @@ fn arm_watch(state: *WatchState) -> err {
 
 fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
     var watch: Watch = zero
-    // This host would take `recursive` as a parameter and the other needs a watch per
-    // directory, so honouring it here alone would make a program that works here fail there.
-    // Both refuse until both can.
+    // This host would take `recursive` as a parameter and Linux needs a watch per directory,
+    // so honouring it here alone would make a program that works here fail there. Linux and
+    // Windows refuse until both can; macOS already implements it.
     if recursive { ret (watch, Unsupported) }
     let checkpoint = mem.mark(a)
     let (name, name_error) = widen(a, path)

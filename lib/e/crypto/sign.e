@@ -2175,8 +2175,10 @@ fn dsa_absorb_w1(xof: *hash.Shake, w1: []const i64) {
     hash.shake_absorb(xof, packed[0..])
 }
 
-// ML-DSA.Sign_internal with rnd = 0^32 (the deterministic variant); ctx may be empty
-// and at most 255 bytes. sig is c_tilde || z || hints (2420 bytes).
+// ML-DSA signing is disabled: this answers `Unsupported` before anything else runs, because the
+// signer below is not constant-time on this library's variable-time bignum and a signing key must
+// not touch it. The unreachable body is ML-DSA.Sign_internal with rnd = 0^32 (the deterministic
+// variant); ctx may be empty and at most 255 bytes; sig would be c_tilde || z || hints (2420 bytes).
 fn ml_dsa_sign(sk: []const u8, message: []const u8, ctx: []const u8, sig: []u8) -> err {
     ret Unsupported
     if sk.len < 2560usize || sig.len < 2420usize { ret TooSmall }

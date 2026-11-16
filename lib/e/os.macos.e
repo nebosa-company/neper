@@ -919,8 +919,8 @@ fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path:
     ret answer
 }
 
-// File mappings and change watches are not served on macOS yet; e.fs compiles against these
-// and they answer Unsupported.
+// File mappings (mmap over address space set aside first) and change watches (kqueue) are
+// implemented below; e.fs compiles against these types.
 type Mapping = resource(mapping_close) struct { raw: usize, address: *u8, len: usize }
 type Watch = resource(watch_close) struct { state: *void }
 type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
@@ -2641,7 +2641,8 @@ fn file_unlock(lock: own FileLock) -> err {
 // deprecated since 10.8 and not a public interface, but what every browser's sandbox calls and what ships on every Mac.
 // A list of system calls is `(allow syscall-unix (syscall-number ...))` after a `(deny syscall-unix)`, the child
 // processes `process-fork` and `process-exec*`. Dynamic code has no profile rule (it is a hardened-runtime flag set
-// at signing), so it is `Unsupported`, as on Linux, after the rest has been applied.
+// at signing), so a policy that asks for it applies the rest and then answers `Unsupported`; Linux refuses such a
+// policy before applying anything.
 type SandboxPolicy = struct { allow_syscalls: []const u32, deny_child_processes: bool, deny_dynamic_code: bool, kill_on_violation: bool }
 
 @import("c", "sandbox_init")

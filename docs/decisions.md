@@ -47102,3 +47102,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `scripts/check_algos_names.py` resolves each library name that `docs/algos.md` maps an algorithm to against `lib/e` (a declaration in the module file or its per-host variants); `tests/test_algos_names.py` keeps it passing. Compiler intrinsics are marked in the row with "(the intrinsic's spelling)" and skipped. Six rows whose mapped function is a simpler algorithm than the one named now say what is delivered (Timsort is a bottom-up merge sort, IntroSort heapsort, Karatsuba schoolbook multiplication, Bentley-Ottmann an O(n^2) pairwise test, the ziggurat Marsaglia's polar method, BTPE inversion with a rounded normal approximation); the duplicate row #2004 for Bentley-Ottmann follows #528. The six rows (#2262 to #2267) that named functions never written now name the ones that were.
 
 **Result.** All 1476 mapped names resolve and the five tests pass; L249 leaves the queue.
+
+## D6664 — stale comments in lib/e corrected
+
+**Decision.** The comments the library review found out of step with the code beside them are rewritten to say what the code does: a disabled signer, mappings and watches that exist on macOS, WASI named as WASI, the finished M1 milestone, the two sandbox policies that treat `deny_dynamic_code` differently (Linux refuses first, macOS applies the rest first, which L251 may later unify), recursive watch refused on Linux and Windows and implemented on macOS, the MP4 fragmentation test (`mvex`), the `erf` switch at 2.5 and the plain sorting algorithms. Only comments changed. The fourteen generated headers that cite `ref/windows-1to1/` name generator scripts and reference directories that exist, so they stay.
+
+**Result.** The four fixtures that cover the touched modules pass on Windows; L261 leaves the queue.

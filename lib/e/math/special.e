@@ -69,7 +69,7 @@ fn gamma(x: f64) -> f64 {
     ret math.exp[f64](lgamma(x))
 }
 
-// The error function, by the erfc continued fraction for |x| >= 2 and the
+// The error function, by the erfc continued fraction for |x| >= 2.5 and the
 // Taylor series below (Abramowitz & Stegun 7.1.5 / 7.1.14).
 fn erf(x: f64) -> f64 {
     if x == infinity() { ret 1.0f64 }

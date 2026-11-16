@@ -3,7 +3,7 @@
 // (av1C, avcC or hvcC), and the sample table -- sizes (stsz), chunk offsets (stco, co64) mapped
 // to samples by the chunk runs (stsc), decoding times (stts), composition offsets (ctts) and the
 // sync samples (stss). The samples themselves stay in the caller's bytes: `bytes_of` returns a
-// slice of them. Only the first video track is read; fragmented files (moof) are `Unsupported`.
+// slice of them. Only the first video track is read; a fragmented file (a `mvex` box in `moov`) is `Unsupported`.
 // Boxes are bounds-checked against their parents, so a damaged file is `Invalid`, never a read
 // past the data.
 
@@ -79,7 +79,7 @@ fn find_nth(d: []const u8, start: usize, end: usize, kind: u32, n: usize) -> Box
     ret Box { start: 0usize, end: 0usize, found: false }
 }
 
-// A full box's version (its first byte), after which the fields start at `start + 4`.
+// Whether the box was found and holds at least `bytes` bytes between its start and end.
 fn need(b: Box, bytes: usize) -> bool {
     ret b.found && b.end - b.start >= bytes
 }

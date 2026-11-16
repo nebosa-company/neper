@@ -3522,4 +3522,5 @@ D6658	738	numeric defects: erf precision and empty-sample guards
 D6659	960	ml.tree: split search by one sort and one sweep
 D6660	818	page style sheets: each import once, a cap that says so
 D6661	880	a ratchet on duplicated helpers
-D6663	979	docs/algos.md: names that resolve and rows that say what was delivered
+D6663	980	docs/algos.md: names that resolve and rows that say what was delivered
+D6664	863	stale comments in lib/e corrected
