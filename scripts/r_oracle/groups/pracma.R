@@ -121,4 +121,9 @@ for (rep in 1:30) {
   for (i in sample(n, min(2, n))) for (j in sample(n, min(2, n))) add("nullproj", c(m, n, i - 1, j - 1, as.vector(t(M))), PN[i, j])
   for (i in sample(m, min(2, m))) for (j in sample(m, min(2, m))) add("orthproj", c(m, n, i - 1, j - 1, as.vector(t(M))), PO[i, j])
 }
+# expm: (n, i, j, A row-major...) -> element (i, j) of expm(A) (zapsmall to 7 digits)
+for (rep in 1:25) {
+  n <- sample(2:5, 1); A <- matrix(round(rnorm(n * n, 0, 0.8), 2), n, n); E <- expm(A)
+  for (i in sample(n, min(2, n))) for (j in sample(n, min(2, n))) cases[[length(cases) + 1]] <- case("expm", c(n, i - 1, j - 1, as.vector(t(A))), E[i, j], rel = 1e-9, abs = 1e-9)
+}
 emit("pracma", "pracma", list(cases))

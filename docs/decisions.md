@@ -46378,3 +46378,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `box_cox_ll` is the value boxCox plots: the Jacobian-adjusted power `(y^l - 1) / l / gm^(l - 1)` (`gm * log y` for |l| at most 1e-6, gm the geometric mean) regressed on X, log-likelihood `-n/2 log(RSS)`.
 
 **Result.** `oracle_carlmtest` agrees with car on 72 new values (six lambdas on positive responses) on Windows; Linux pending. The powerTransform maximiser stays open; L300 stays partial.
+
+## D6535 — pracma: expm
+
+**Decision.** pracma's `expm` is a 128-point contour integral of the resolvent, not the exact exponential (it differs from the true value by up to 4e-5 on these matrices), so `pracma.expm` repeats it: the circle centre `ceiling(mean(range(Re(eig))) + 0.1)` and radius `ceiling(max|eig - z0| + 0.1)` from the Schur eigenvalues, a complex Gauss-Jordan inverse per point, then zapsmall as R 4.6 does it: `round(x, digits = 7 - log10(max|x|))`, the digit count itself rounded (no `ceiling`, unlike the older zapsmall).
+
+**Result.** `oracle_pracma` agrees with pracma on 100 expm elements (2 to 5 dimensions) at 1e-9 on Windows; Linux pending. L333 stays partial.

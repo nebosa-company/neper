@@ -233,6 +233,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "cond") { ret sv[0usize] / sv[kk - 1usize] }
         ret sv[usize(x[2usize])]
     }
+    if str.eq(k, "expm") {
+        let nx = usize(x[0usize])
+        let (eo, ee) = mem.alloc[f64](a, nx * nx)
+        if ee != ok { os.exit(5) }
+        if pm.expm(a, x[3usize..3usize + nx * nx], nx, 128usize, eo) != ok { os.exit(5) }
+        ret eo[usize(x[1usize]) * nx + usize(x[2usize])]
+    }
     if str.eq(k, "nullproj") || str.eq(k, "orthproj") {
         ret pm.svd_projector(a, x[4usize..4usize + usize(x[0usize]) * usize(x[1usize])], usize(x[0usize]), usize(x[1usize]), str.eq(k, "orthproj"), usize(x[2usize]), usize(x[3usize]))
     }

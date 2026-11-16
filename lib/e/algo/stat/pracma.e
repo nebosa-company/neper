@@ -3,6 +3,7 @@
 // Not here: the rest of the toolbox (quadrature, root finders, interpolation, orthogonal polynomials, matrix functions).
 
 use e.math
+use e.algo.linalg.decomp as decomp
 use e.mem
 
 fn eps() -> f64 { ret 2.220446049250313e-16f64 }
@@ -1554,4 +1555,151 @@ fn svd_projector(a: *mem.Arena, m: []const f64, rows: usize, cols: usize, range:
     if range { ret acc }
     if i == j { ret 1.0f64 - acc }
     ret 0.0f64 - acc
+}
+
+// pracma::expm(A, np = 128): the contour integral of the resolvent over a circle (centre z0 = ceiling(mean(range(Re(eig(A)))) + 0.1), radius ceiling(max|eig - z0| + 0.1)),
+// as the package computes it, then zapsmall(digits = 7); m is n by n row-major
+fn expm(a: *mem.Arena, m: []const f64, n: usize, np: usize, out: []f64) -> err {
+    let nn = n * n
+    let (ev, ee) = decomp.eigen(a, m, n)
+    if ee != ok { ret ee }
+    var lo = ev.re[0usize]
+    var hi = ev.re[0usize]
+    var i = 0usize
+    while i < n {
+        if ev.re[i] < lo { lo = ev.re[i] }
+        if ev.re[i] > hi { hi = ev.re[i] }
+        i += 1usize
+    }
+    let z0 = math.ceil[f64]((lo + hi) / 2.0f64 + 0.1f64)
+    var rmax = 0.0f64
+    i = 0usize
+    while i < n {
+        let d = math.sqrt[f64]((ev.re[i] - z0) * (ev.re[i] - z0) + ev.im[i] * ev.im[i])
+        if d > rmax { rmax = d }
+        i += 1usize
+    }
+    let radius = math.ceil[f64](rmax + 0.1f64)
+    let (wr, e1) = mem.alloc[f64](a, n * 2usize * n)
+    let (wi, e2) = mem.alloc[f64](a, n * 2usize * n)
+    let (br, e3) = mem.alloc[f64](a, nn)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    i = 0usize
+    while i < nn {
+        br[i] = 0.0f64
+        i += 1usize
+    }
+    let w2 = 2usize * n
+    var k = 1usize
+    while k <= np {
+        let ang = 2.0f64 * 3.141592653589793238462643383279f64 * f64(k) / f64(np)
+        let zr = z0 + radius * math.cos[f64](ang)
+        let zi = radius * math.sin[f64](ang)
+        // [z I - A | I] by Gauss-Jordan with partial pivoting
+        var r = 0usize
+        while r < n {
+            var c = 0usize
+            while c < n {
+                wr[r * w2 + c] = 0.0f64 - m[r * n + c]
+                wi[r * w2 + c] = 0.0f64
+                if r == c {
+                    wr[r * w2 + c] += zr
+                    wi[r * w2 + c] = zi
+                }
+                wr[r * w2 + n + c] = 0.0f64
+                wi[r * w2 + n + c] = 0.0f64
+                if r == c { wr[r * w2 + n + c] = 1.0f64 }
+                c += 1usize
+            }
+            r += 1usize
+        }
+        var col = 0usize
+        while col < n {
+            var piv = col
+            var best = wr[col * w2 + col] * wr[col * w2 + col] + wi[col * w2 + col] * wi[col * w2 + col]
+            var rr = col + 1usize
+            while rr < n {
+                let mg = wr[rr * w2 + col] * wr[rr * w2 + col] + wi[rr * w2 + col] * wi[rr * w2 + col]
+                if mg > best {
+                    best = mg
+                    piv = rr
+                }
+                rr += 1usize
+            }
+            var cc = 0usize
+            while cc < w2 {
+                let t1 = wr[col * w2 + cc]
+                let t2 = wi[col * w2 + cc]
+                wr[col * w2 + cc] = wr[piv * w2 + cc]
+                wi[col * w2 + cc] = wi[piv * w2 + cc]
+                wr[piv * w2 + cc] = t1
+                wi[piv * w2 + cc] = t2
+                cc += 1usize
+            }
+            let pr = wr[col * w2 + col]
+            let pi = wi[col * w2 + col]
+            let den = pr * pr + pi * pi
+            cc = 0usize
+            while cc < w2 {
+                let xr = wr[col * w2 + cc]
+                let xi = wi[col * w2 + cc]
+                wr[col * w2 + cc] = (xr * pr + xi * pi) / den
+                wi[col * w2 + cc] = (xi * pr - xr * pi) / den
+                cc += 1usize
+            }
+            rr = 0usize
+            while rr < n {
+                if rr != col {
+                    let fr = wr[rr * w2 + col]
+                    let fi = wi[rr * w2 + col]
+                    cc = 0usize
+                    while cc < w2 {
+                        wr[rr * w2 + cc] -= fr * wr[col * w2 + cc] - fi * wi[col * w2 + cc]
+                        wi[rr * w2 + cc] -= fr * wi[col * w2 + cc] + fi * wr[col * w2 + cc]
+                        cc += 1usize
+                    }
+                }
+                rr += 1usize
+            }
+            col += 1usize
+        }
+        // weight (z - z0) exp(z)
+        let ex = math.exp[f64](zr)
+        let er = ex * math.cos[f64](zi)
+        let ei = ex * math.sin[f64](zi)
+        let dr = zr - z0
+        let di = zi
+        let sr = dr * er - di * ei
+        let si = dr * ei + di * er
+        r = 0usize
+        while r < n {
+            var c = 0usize
+            while c < n {
+                br[r * n + c] += wr[r * w2 + n + c] * sr - wi[r * w2 + n + c] * si
+                c += 1usize
+            }
+            r += 1usize
+        }
+        k += 1usize
+    }
+    var mx = 0.0f64
+    i = 0usize
+    while i < nn {
+        out[i] = br[i] / f64(np)
+        if math.abs[f64](out[i]) > mx { mx = math.abs[f64](out[i]) }
+        i += 1usize
+    }
+    if mx > 0.0f64 {
+        var dg = math.floor[f64](7.0f64 - math.log10[f64](mx) + 0.5f64)
+        if dg < 0.0f64 { dg = 0.0f64 }
+        let sc10 = math.pow[f64](10.0f64, dg)
+        i = 0usize
+        while i < nn {
+            out[i] = math.round[f64](out[i] * sc10) / sc10
+            i += 1usize
+        }
+    }
+    ret ok
 }
