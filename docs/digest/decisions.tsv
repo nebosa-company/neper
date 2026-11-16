@@ -3422,4 +3422,5 @@ D6550	418	lmtest: lrtest and waldtest
 D6551	489	lmtest: coeftest and grangertest
 D6552	428	car: influence measures
 D6553	504	lmtest: jtest
-D6554	491	car: powerTransform lambda
+D6554	492	car: powerTransform lambda
+D6555	572	car: Anova for factor terms

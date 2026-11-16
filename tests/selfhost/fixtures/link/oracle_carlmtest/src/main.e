@@ -74,6 +74,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "jt_t2") { ret jc }
         ret jd
     }
+    if str.eq(c.name, "ab_f") || str.eq(c.name, "ab_p") {
+        let (af, ap) = cl.anova_block(a, des, y, n, p, usize(x[2usize + n + n * p]), usize(x[3usize + n + n * p]), usize(x[4usize + n + n * p]))
+        if str.eq(c.name, "ab_f") { ret af }
+        ret ap
+    }
     if str.eq(c.name, "bc") { ret cl.box_cox_ll(a, des, y, n, p, x[2usize + n + n * p]) }
     if str.eq(c.name, "pt_lambda") { ret cl.power_transform_lambda(a, des, y, n, p) }
     if str.eq(c.name, "an") || str.eq(c.name, "anp") {

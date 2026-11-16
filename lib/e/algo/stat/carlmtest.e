@@ -1074,3 +1074,72 @@ fn power_transform_lambda(a: *mem.Arena, x: []const f64, y: []const f64, n: usiz
     }
     ret (lo + hi) / 2.0f64
 }
+
+// car::Anova / anova for a term spanning columns start .. start + q - 1 of the design: type 1 the sequential F (the term added to the columns before it), types 2 and 3 the marginal F (the term dropped from the full model, no interactions); returns F and p on (q, n - p)
+fn anova_block(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, start: usize, q: usize, ty: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (f0, e0) = ols(a, x, y, n, p)
+    if e0 != ok { ret (nan, nan) }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f0.resid[i] * f0.resid[i]
+        i += 1usize
+    }
+    let s2 = rss / f64(n - p)
+    // the smaller model: type 1 keeps the columns before start, the others every column outside the term
+    var pr = p - q
+    if ty == 1usize { pr = start }
+    let (xr, e1) = mem.alloc[f64](a, n * pr)
+    if e1 != ok { ret (nan, nan) }
+    i = 0usize
+    while i < n {
+        var m = 0usize
+        var c = 0usize
+        while c < p {
+            let inside = c >= start && c < start + q
+            var keep = !inside
+            if ty == 1usize { keep = c < start }
+            if keep {
+                xr[i * pr + m] = x[i * p + c]
+                m += 1usize
+            }
+            c += 1usize
+        }
+        i += 1usize
+    }
+    // type 1 compares with the model through the term, not the full one
+    var rss_big = rss
+    if ty == 1usize {
+        let pb = start + q
+        let (xb, e2) = mem.alloc[f64](a, n * pb)
+        if e2 != ok { ret (nan, nan) }
+        i = 0usize
+        while i < n {
+            var c = 0usize
+            while c < pb {
+                xb[i * pb + c] = x[i * p + c]
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let (fb, e3) = ols(a, xb, y, n, pb)
+        if e3 != ok { ret (nan, nan) }
+        rss_big = 0.0f64
+        i = 0usize
+        while i < n {
+            rss_big += fb.resid[i] * fb.resid[i]
+            i += 1usize
+        }
+    }
+    let (fr, e4) = ols(a, xr, y, n, pr)
+    if e4 != ok { ret (nan, nan) }
+    var rss_r = 0.0f64
+    i = 0usize
+    while i < n {
+        rss_r += fr.resid[i] * fr.resid[i]
+        i += 1usize
+    }
+    let fs = ((rss_r - rss_big) / f64(q)) / s2
+    ret (fs, p_f(fs, f64(q), f64(n - p)))
+}

@@ -46498,3 +46498,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `power_transform_lambda` maximises the Box-Cox profile log-likelihood of D6534 over [-3, 3] by golden-section search. R starts L-BFGS-B from an `optimize` result and stops at its own tolerance, so the oracle compares at 2e-3 rather than 1e-9.
 
 **Result.** `oracle_carlmtest` agrees with powerTransform on 12 samples (1200 cases in all) on Windows; Linux pending. L300 at 0.85: Anova for factors and the bootstrap covariances stay open.
+
+## D6555 — car: Anova for factor terms
+
+**Decision.** `anova_block` gives the F test of a term that spans q design columns: type I adds it to the columns before it (the sequential `anova`), types II and III drop it from the full model (the same for main effects without interactions); F on (q, n - p).
+
+**Result.** `oracle_carlmtest` agrees with car on 240 new values (a 3 to 5 level factor and a numeric term, all three types) on Windows (1440 cases in all); Linux pending. L300 stays partial: interactions in Anova (where type II differs from III), vcovBS and vcovPL.

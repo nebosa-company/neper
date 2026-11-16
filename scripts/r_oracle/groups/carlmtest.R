@@ -45,4 +45,11 @@ for (rep in 1:20) {
   gt <- suppressWarnings(grangertest(x, y, order = ord)); a <- c(n, 1, y, x, ord)
   cases[[length(cases) + 1]] <- case("gr_f", a, gt$F[2], rel = 1e-9, abs = 1e-12); cases[[length(cases) + 1]] <- case("gr_p", a, gt$`Pr(>F)`[2], rel = 1e-9, abs = 1e-12)
 }
+# Anova with a factor and a numeric predictor: ("ab_f" "ab_p") args (n, p, y, design row-major, start, q, type); terms: f (columns 1 .. nl - 1) and z (last column)
+for (rep in 1:20) {
+  n <- sample(30:90, 1); nl <- sample(3:5, 1); f <- factor(sample(seq_len(nl), n, TRUE)); if (nlevels(f) < nl) next; z <- rnorm(n); y <- as.numeric(f) * 0.4 + z * 0.7 + rnorm(n)
+  des <- cbind(1, model.matrix(~ f)[, -1], z); p <- ncol(des); mm <- lm(y ~ f + z); a <- c(n, p, y, as.vector(t(des)))
+  for (ty in 1:3) { an <- if (ty == 1) anova(mm) else Anova(mm, type = ty); jj <- if (ty == 3) 2:3 else 1:2; starts <- c(1, nl); qs <- c(nl - 1, 1)
+    for (t in 1:2) { add("ab_f", c(a, starts[t], qs[t], ty), an$`F value`[jj[t]]); add("ab_p", c(a, starts[t], qs[t], ty), an$`Pr(>F)`[jj[t]]) } }
+}
 emit("carlmtest", "car", list(cases))
