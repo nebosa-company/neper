@@ -56,7 +56,7 @@ L453	library	0	246	cubature: adaptive multidimensional integration	Open (CRAN ra
 L454	library	0	188	VIM: missing-value imputation	Open (CRAN rank 765).
 L468	library	0	233	fpc: cluster validity and flexible clustering procedures	Open (CRAN rank 803).
 L475	library	0	247	scoringRules: proper scoring rules	Open (CRAN rank 870).
-L477	library	0	253	compositions: compositional data analysis	Open (CRAN rank 860).
+L477	library	0.5	551	compositions: compositional data analysis	Partial (D6140).
 L478	library	0	237	dagitty: causal graph reasoning	Open (CRAN rank 845).
 L479	library	0	216	hdrcde: highest density regions	Open (CRAN rank 837).
 L480	library	0	199	aod: overdispersed binomial and count data	Open (CRAN rank 822).

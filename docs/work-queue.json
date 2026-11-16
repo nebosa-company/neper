@@ -636,10 +636,10 @@
       "group": "CRAN parity",
       "order": 639,
       "title": "compositions: compositional data analysis",
-      "score": 0,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 860). Small to mid. Acceptance, equal to compositions: acomp and rcomp objects, clr, ilr, alr and their inverses, the Aitchison distance and norm, perturbation and powering, mean, variance and balances, tests of normality in the simplex."
+      "evidence": "Partial (D6140). clo, clr, alr, ilr and inverses, Aitchison norm and distance, perturbation, powering, mean, clr variance and the variation matrix equal compositions on Windows (oracle_compositions; Linux pending). Open: balances, zeros and missing values, the normality tests in the simplex. Was: Open (CRAN rank 860). Small to mid. Acceptance, equal to compositions: acomp and rcomp objects, clr, ilr, alr and their inverses, the Aitchison distance and norm, perturbation and powering, mean, variance and balances, tests of normality in the simplex."
     },
     {
       "id": "L478",

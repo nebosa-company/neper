@@ -45222,3 +45222,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.laeken` ports the weighted quantile (R's `rw[select] == p` average can never fire, since `select` is the first cumulative weight above p, so the answer is the first value above), weighted median and mean, `incQuintile` with an optional tie-breaking sort key, the Gini coefficient, the quintile share ratio, arpt, arpr and rmpg.
 
 **Result.** `oracle_laeken` equals laeken on 300 cases on Windows; Linux pending. The variance estimates (bootstrap under set.seed, linearisation) and the Pareto tail fits stay open on L482.
+
+## D6140 — compositions: the Aitchison geometry
+
+**Context.** L477 asked for compositional data analysis.
+
+**Decision.** `e.algo.stat.compositions` ports closure, clr, alr (any divisor part), ilr with the default basis (the normalised Helmert contrasts) and the inverses, the Aitchison norm and distance, perturbation, powering, the compositional mean, the clr covariance and the variation matrix, on positive data. Zeros, missing values, robust estimates, balance bases and the normality tests are not here.
+
+**Result.** `oracle_compositions` equals compositions on 392 cases on Windows; Linux pending. L477 is partial.
