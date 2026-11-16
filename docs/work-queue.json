@@ -15,17 +15,6 @@
       "evidence": "Partial (D6000, D6009, D6010, D6015, D6019). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names (ten languages) and a time zone (every transition of the zones in e.tz.builtin); read_delim equals readr on rows shorter and longer than the header, under a one-column header and with a quote left open, on 15489 cases. Open: %Z naming a zone, and two unterminated-quote shapes that crash or confuse readr 2.2.0 (listed in D6016)."
     },
     {
-      "id": "L321",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 533,
-      "title": "boot: bootstrap and permutation confidence intervals",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 296). Small. Acceptance, equal to boot under set.seed: boot (ordinary, parametric, balanced, antithetic), boot.ci norm, basic, stud, perc and bca, tsboot (block and stationary), censboot, jack.after.boot, empinf, abc.ci."
-    },
-    {
       "id": "L322",
       "category": "library",
       "group": "CRAN parity",
@@ -310,6 +299,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6027). ur.df (none, drift, trend, fixed lags, AIC and BIC selection, tau and phi statistics, critical values) and ur.kpss equal urca 1.3.4 on both hosts. Open: ur.pp, ur.ers, ur.za, ur.sp, ca.jo, ca.po. Was: Open (CRAN rank 136). Mid. Acceptance, statistic and critical values equal to urca for ur.df (none, drift, trend, lag selection by AIC and BIC), ur.kpss, ur.pp, ur.ers (DF-GLS and P-test), ur.za, ur.sp, ca.jo (trace and eigen, with the constant, trend and seasonal specs and the Johansen critical-value tables) and ca.po."
+    },
+    {
+      "id": "L321",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 533,
+      "title": "boot: bootstrap and permutation confidence intervals",
+      "score": 0.5,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6028). Ordinary bootstrap of mean, median, sd, var and boot.ci norm, basic, perc, bca equal boot 1.3.32 on Windows (Linux run pending). Open: parametric, balanced, antithetic, stud, tsboot, censboot, jack.after.boot, abc.ci. Was: Open (CRAN rank 296). Small. Acceptance, equal to boot under set.seed: boot (ordinary, parametric, balanced, antithetic), boot.ci norm, basic, stud, perc and bca, tsboot (block and stationary), censboot, jack.after.boot, empinf, abc.ci."
     },
     {
       "id": "L406",

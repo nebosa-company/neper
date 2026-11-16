@@ -1,6 +1,5 @@
 id	category	score	evidence_bytes	title	status
 L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
-L321	library	0	236	boot: bootstrap and permutation confidence intervals	Open (CRAN rank 296).
 L322	library	0	267	class and FNN: knn variants, SOM, LVQ, entropy estimators	Open (CRAN ranks 276, 246).
 L323	library	0	221	permute: restricted permutation designs	Open (CRAN rank 281).
 L325	library	0	250	KernSmooth and tseries remainder	Open (CRAN ranks 273, 241).
@@ -27,6 +26,7 @@ L297	library	0.6	683	colorspace: HCL palettes, contrast ratio, colour-vision-def
 L301	library	0.3	551	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
 L302	library	0.7	833	GPArotation: gradient projection rotations	Partial (D6026).
 L303	library	0.3	539	urca: unit-root and cointegration tests	Partial (D6027).
+L321	library	0.5	476	boot: bootstrap and permutation confidence intervals	Partial (D6028).
 L406	library	0	263	DEoptimR: differential evolution	Open (CRAN rank 517).
 L410	library	0	230	AlgDesign: optimal experimental designs	Open (CRAN rank 586).
 L420	library	0	198	minpack.lm: Levenberg-Marquardt least squares	Open (CRAN rank 620).
