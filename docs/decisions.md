@@ -45238,3 +45238,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.rcompanion` ports epsilonSquared (the tie-corrected Kruskal-Wallis statistic over n - 1), freemanTheta, cliffDelta, vda, cramerV (with its bias correction) and cohenW, each rounded with `signif` to the package's digits (3, or 4 for V and w). The bootstrap intervals, scheirerRayHare, the pairwise median test and the nominal helpers are not here.
 
 **Result.** `oracle_rcompanion` equals rcompanion on 70 cases on Windows; Linux pending. L504 is partial.
+
+## D6142 — tsfeatures, the closed-form features
+
+**Context.** L483 asked for the tsfeatures functions.
+
+**Decision.** `e.algo.stat.tsfeatures` ports R's acf (denominator n) and the Durbin-Levinson pacf, acf_features and pacf_features (with the seasonal terms), crossing_points, flat_spots (cut's ten equal bins with the end breaks widened by a thousandth of the range), lumpiness and stability on the standardised series, max_level_shift and max_var_shift, firstmin_ac, firstzero_ac, ac_9, embed2_incircle, std1st_der, trev_num, walker_propcross, motiftwo_entro3 and zero_proportion. The features that fit models, sample or need Burg spectra are not here.
+
+**Result.** `oracle_tsfeatures` equals tsfeatures on 282 cases on Windows; Linux pending. L483 is partial.
