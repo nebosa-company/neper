@@ -4,6 +4,7 @@
 
 use e.algo.stat.suppdists as sd
 use e.io
+use e.algo.rand.r as rng
 use e.math
 use e.mem
 use e.os
@@ -144,6 +145,50 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if jw == 2usize { ret jf.xi }
         if jw == 3usize { ret jf.lambda }
         ret f64(jf.kind)
+    }
+    if str.starts_with(nm, "rv_") {
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(z[0usize]))
+        var xs: [8]f64 = zero
+        var ri = 0usize
+        if str.eq(nm, "rv_ig") {
+            sd.rv_inv_gauss(&rr, xs[0usize..8usize], z[1usize], z[2usize])
+            ri = usize(z[3usize])
+        } else if str.eq(nm, "rv_jo") {
+            sd.rv_johnson(&rr, xs[0usize..8usize], z[1usize], z[2usize], z[3usize], z[4usize], u8(z[5usize]))
+            ri = usize(z[6usize])
+        } else if str.eq(nm, "rv_mf") {
+            sd.rv_maxfratio(&rr, xs[0usize..8usize], i64(z[1usize]), i64(z[2usize]))
+            ri = usize(z[3usize])
+        } else if str.eq(nm, "rv_pc") {
+            let ce = sd.rv_corr(a, &rr, xs[0usize..8usize], z[2usize], usize(z[1usize]))
+            if ce != ok { ret nan }
+            ri = usize(z[3usize])
+        } else if str.eq(nm, "rv_kd") {
+            var k = 0usize
+            while k < 8usize {
+                let (kv, ke) = sd.xkendall_pkg(a, rng.unif(&rr), i64(z[1usize]))
+                if ke != ok { ret nan }
+                xs[k] = kv
+                k += 1usize
+            }
+            ri = usize(z[2usize])
+        } else if str.eq(nm, "rv_gh") {
+            var k = 0usize
+            while k < 8usize {
+                xs[k] = sd.xhyper(rng.unif(&rr), z[1usize], z[2usize], z[3usize])
+                k += 1usize
+            }
+            ri = usize(z[4usize])
+        } else {
+            var k = 0usize
+            while k < 8usize {
+                xs[k] = sd.xkruskal_wallis(rng.unif(&rr), i64(z[2usize]), i64(z[3usize]), z[4usize], z[1usize] == 1.0f64)
+                k += 1usize
+            }
+            ri = usize(z[5usize])
+        }
+        ret xs[ri]
     }
     if str.eq(nm, "gh_d") { ret sd.ghyper_d(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_p") { ret sd.ghyper_p(z[3usize], z[0usize], z[1usize], z[2usize]) }

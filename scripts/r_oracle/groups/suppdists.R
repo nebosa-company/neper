@@ -103,4 +103,18 @@ for (m in list(c(0, 1, 0.01, 3.02), c(2, 4, 3.5, 22), c(1, 2.25, 1, 5.5), c(0, 1
   if (is.null(f) || any(!is.finite(c(f$gamma, f$delta, f$xi, f$lambda)))) next
   for (w in 0:4) add("jf_m", c(m, w), jf_pick(f, w), 1e-5)
 }
+# random variates after set.seed: "rv_ig" (seed, nu, lambda, i), "rv_jo" (seed, g, d, xi, lm, kind, i), "rv_mf" (seed, df, k, i), "rv_pc" (seed, N, rho, i), "rv_kd" (seed, N, i), "rv_gh" (seed, a, k, N, i), "rv_kw" (seed, ns, c, N, U, i)
+rv_n <- 8
+rv_add <- function(fn, seed, par, v, tol = 1e-9) for (i in seq_along(v)) if (is.finite(v[i])) add(fn, c(seed, par, i - 1), v[i], tol)
+for (sd in c(11, 2024)) {
+  for (pp in list(c(1.5, 2), c(0.7, 4.2))) { set.seed(sd); rv_add("rv_ig", sd, pp, rinvGauss(rv_n, pp[1], pp[2])) }
+  jt <- c("SN", "SL", "SU", "SB"); jk <- c(0, 1, 3, 2)
+  for (ty in 1:4) { g <- c(0.3, -0.5, 0.8, -0.2)[ty]; dl <- c(1.2, 0.9, 1.5, 1.1)[ty]; xi <- c(0.1, 0, -0.4, 0.5)[ty]; lm <- if (ty == 2) 1 else c(2, 1, 1.5, 3)[ty]
+    set.seed(sd); rv_add("rv_jo", sd, c(g, dl, xi, lm, jk[ty]), rJohnson(rv_n, list(gamma = g, delta = dl, xi = xi, lambda = lm, type = jt[ty]))) }
+  for (pp in list(c(10, 4), c(25, 6))) { set.seed(sd); rv_add("rv_mf", sd, pp, rmaxFratio(rv_n, pp[1], pp[2])) }
+  for (pp in list(c(12, 0.4), c(30, -0.6))) { set.seed(sd); rv_add("rv_pc", sd, pp, rPearson(rv_n, pp[1], pp[2])) }
+  for (nn in c(8, 11, 16)) { set.seed(sd); rv_add("rv_kd", sd, nn, rKendall(rv_n, nn)) }
+  for (pp in list(c(10, 5, 30), c(4, 9, 25))) { set.seed(sd); rv_add("rv_gh", sd, pp, rghyper(rv_n, pp[1], pp[2], pp[3])) }
+  set.seed(sd); rv_add("rv_kw", sd, c(0, 4, 40, 0.1), rKruskalWallis(rv_n, 4, 40, 0.1), 1e-8)
+}
 emit("suppdists", "SuppDists", list(cases))

@@ -47278,3 +47278,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6702 — SuppDists classic hypergeometric moments
 
 **Decision.** `moments_ghyper` gives the six values `sghyper` reports for the classic (integer) variety: closed-form mean, mode, variance, third and fourth moments with the package's cut-offs (zero when the draws are 1, 2, 3 or 4 or fewer), and the median by the package's `xhypergeometric` search (start from a chi-square-squared guess, then step while the cdf crosses 0.5, accepting equality, unlike `qghyper`). The ten non-integer varieties (IAi, IAii, IB, IIA, IIB, IIIA, IIIB, IV) stay open with their d, p and q. Linux pending.
+
+## D6703 — SuppDists random variates
+
+**Decision.** The package's `r*` functions are the inverse-cdf `x*` functions fed `unif_rand()` (Kendall, Kruskal-Wallis, normal scores, classic hypergeometric), or built from the normal stream: inverse Gaussian draws all n normals first and then n uniforms (Michael, Schucany and Haas), Johnson transforms n normals, the maximum F ratio is the ratio of the largest to the smallest of k `rchisq`, and the correlation coefficient draws x then y = rho x + sqrt(1 - rho^2) z over the sample size. `rv_inv_gauss`, `rv_johnson`, `rv_maxfratio`, `rv_corr` and the `x*` functions over `e.algo.rand.r` equal R after `set.seed` for one parameter set; vectors of parameters (the interleaved fill) and rFriedman stay open. Linux pending.

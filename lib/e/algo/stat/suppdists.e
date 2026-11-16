@@ -11,6 +11,8 @@ use e.math.dist as dist
 use e.math.nmath as nmt
 use e.math.nmath_beta as nb
 use e.mem
+use e.algo.rand.r as rng
+use e.algo.rand.rdist as rd
 
 fn pnorm(z: f64) -> f64 { ret dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
 
@@ -1978,9 +1980,8 @@ fn johnson_moment_fit(mean: f64, sd: f64, sqrt_b1: f64, b2_in: f64) -> JFit {
 
 // ---- moments of the classic hypergeometric as sghyper reports them (a draws, m marked, N items) ----
 
-fn xhyper_median(a: f64, n: f64, nn: f64) -> f64 {
-    let p = 0.5f64
-    let t = 0.45493642311957283f64
+fn xhyper(p: f64, a: f64, n: f64, nn: f64) -> f64 {
+    let t = nmt.qchisq(1.0f64 - p, 1.0f64, true, false)
     let z = (t * (p * (1.0f64 - p) * (a * (nn - a)))) / (nn - 1.0f64)
     var x = math.floor[f64](0.5f64 + p * a + z * z)
     let min_x = math.max[f64](0.0f64, n + a - nn)
@@ -2007,7 +2008,7 @@ fn moments_ghyper(a: f64, m: f64, nn: f64) -> Mom {
     let big_a = math.max[f64](m, a)
     let b = nn - big_a
     let t = big_a + b
-    r.median = xhyper_median(a, m, nn)
+    r.median = xhyper(0.5f64, a, m, nn)
     var m1 = 0.0f64
     var m2 = 0.0f64
     if n > 1.0f64 { m1 = (n * big_a) / t }
@@ -2022,4 +2023,105 @@ fn moments_ghyper(a: f64, m: f64, nn: f64) -> Mom {
         r.fourth = (m2 / ((t - 2.0f64) * (t - 3.0f64))) * (t * (t + 1.0f64 - 6.0f64 * n) + 3.0f64 * big_a * b * (n - 2.0f64) + 6.0f64 * n * n + (3.0f64 * big_a * b * n * (6.0f64 - n)) / t - (18.0f64 * big_a * b * n * n) / (t * t))
     }
     ret r
+}
+
+// ---- random variates, value for value with SuppDists after set.seed (one parameter set) ----
+
+fn rv_inv_gauss(r: *rng.Rng, x: []f64, mu: f64, lambda: f64) {
+    let b = 0.5f64 * mu / lambda
+    let a = mu * b
+    let c = 4.0f64 * mu * lambda
+    let d = mu * mu
+    var i = 0usize
+    while i < x.len {
+        x[i] = rng.norm(r)
+        i += 1usize
+    }
+    i = 0usize
+    while i < x.len {
+        let u = rng.unif(r)
+        let v = x[i] * x[i]
+        let y = mu + a * v - b * math.sqrt[f64](c * v + d * v * v)
+        if u < mu / (mu + y) { x[i] = y } else { x[i] = d / y }
+        i += 1usize
+    }
+}
+
+fn rv_johnson(r: *rng.Rng, x: []f64, gamma: f64, delta: f64, xi: f64, lambda: f64, kind: u8) {
+    var i = 0usize
+    while i < x.len {
+        let z = rng.norm(r)
+        let w = (z - gamma) / delta
+        if kind == 0u8 {
+            x[i] = xi + lambda * w
+        } else if kind == 1u8 {
+            x[i] = xi + math.exp[f64](w)
+        } else if kind == 2u8 {
+            let u = math.exp[f64](w)
+            x[i] = xi + lambda * (u / (1.0f64 + u))
+        } else {
+            let u = math.exp[f64](w)
+            x[i] = xi + lambda * ((u * u - 1.0f64) / (2.0f64 * u))
+        }
+        i += 1usize
+    }
+}
+
+fn rv_maxfratio(r: *rng.Rng, x: []f64, df: i64, k: i64) {
+    var i = 0usize
+    while i < x.len {
+        var hi = 0.0f64 - 1.0f64
+        var lo = 1.0e20f64
+        var j = 0i64
+        while j < k {
+            let c = rd.rchisq(r, f64(df))
+            if c > hi { hi = c }
+            if c < lo { lo = c }
+            j += 1i64
+        }
+        x[i] = hi / lo
+        i += 1usize
+    }
+}
+
+fn rv_corr(a: *mem.Arena, r: *rng.Rng, x: []f64, rho: f64, n: usize) -> err {
+    let (xs, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    let (ys, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret e2 }
+    let sy = math.sqrt[f64](1.0f64 - rho * rho)
+    var i = 0usize
+    while i < x.len {
+        var j = 0usize
+        while j < n {
+            xs[j] = rng.norm(r)
+            j += 1usize
+        }
+        j = 0usize
+        while j < n {
+            ys[j] = rng.rnorm(r, 0.0f64, sy) + rho * xs[j]
+            j += 1usize
+        }
+        var sxx = 0.0f64
+        var syy = 0.0f64
+        var sxy = 0.0f64
+        var xm = 0.0f64
+        var ym = 0.0f64
+        j = 0usize
+        while j < n {
+            let di = f64(j + 1usize)
+            let dx = xs[j] - xm
+            let dy = ys[j] - ym
+            xm += dx / di
+            ym += dy / di
+            let dxu = xs[j] - xm
+            sxx += dx * dxu
+            syy += dy * (ys[j] - ym)
+            sxy += dy * dxu
+            j += 1usize
+        }
+        x[i] = sxy / math.sqrt[f64](sxx * syy)
+        i += 1usize
+    }
+    ret ok
 }
