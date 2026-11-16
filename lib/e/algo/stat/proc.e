@@ -155,3 +155,97 @@ fn ci_delong(auc: f64, v: f64, level: f64) -> (f64, f64) {
     if lo < 0.0f64 { lo = 0.0f64 }
     ret (lo, hi)
 }
+
+// the direction of roc(direction = "auto"): true when the cases are expected higher ("<"), i.e. median(controls) <= median(cases)
+fn cases_higher(a: *mem.Arena, y: []const f64, x: []const f64) -> bool {
+    let (nc, nn) = counts(y)
+    let (cs, e1) = mem.alloc[f64](a, nc)
+    if e1 != ok { ret true }
+    let (ct, e2) = mem.alloc[f64](a, nn)
+    if e2 != ok { ret true }
+    var p = 0usize
+    var q = 0usize
+    var i = 0usize
+    while i < y.len {
+        if y[i] > 0.5f64 {
+            cs[p] = x[i]
+            p += 1usize
+        } else {
+            ct[q] = x[i]
+            q += 1usize
+        }
+        i += 1usize
+    }
+    ret median_of(a, ct) <= median_of(a, cs)
+}
+
+// sensitivity and specificity of the rule at threshold t (the direction from cases_higher)
+fn coords_at(y: []const f64, x: []const f64, higher: bool, t: f64) -> (f64, f64) {
+    var hit = 0.0f64
+    var ok_n = 0.0f64
+    var nc = 0.0f64
+    var nn = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        if y[i] > 0.5f64 {
+            nc += 1.0f64
+            if higher && x[i] > t { hit += 1.0f64 }
+            if !higher && x[i] < t { hit += 1.0f64 }
+        } else {
+            nn += 1.0f64
+            if higher && x[i] <= t { ok_n += 1.0f64 }
+            if !higher && x[i] >= t { ok_n += 1.0f64 }
+        }
+        i += 1usize
+    }
+    ret (hit / nc, ok_n / nn)
+}
+
+// the curve of coords(r, "all"): thresholds are -Inf, the midpoints of consecutive distinct values, Inf; returns their count and the sums of sensitivity, specificity and the finite thresholds
+fn roc_sums(a: *mem.Arena, y: []const f64, x: []const f64) -> (f64, f64, f64, f64) {
+    let higher = cases_higher(a, y, x)
+    let (u, e) = mem.alloc[f64](a, x.len)
+    if e != ok { ret (0.0f64, 0.0f64, 0.0f64, 0.0f64) }
+    var i = 0usize
+    while i < x.len {
+        u[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < u.len {
+        let t = u[i]
+        var j = i
+        while j > 0usize && u[j - 1usize] > t {
+            u[j] = u[j - 1usize]
+            j -= 1usize
+        }
+        u[j] = t
+        i += 1usize
+    }
+    var k = 0usize
+    i = 0usize
+    while i < u.len {
+        if i == 0usize || u[i] != u[i - 1usize] {
+            u[k] = u[i]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let inf = 1.0f64 / 0.0f64
+    var ss = 0.0f64
+    var sp = 0.0f64
+    var st = 0.0f64
+    var cnt = 0.0f64
+    var j = 0usize
+    while j <= k {
+        var t = inf
+        if j == 0usize { t = 0.0f64 - inf } else if j < k { t = (u[j - 1usize] + u[j]) / 2.0f64 }
+        let (se, sc) = coords_at(y, x, higher, t)
+        ss += se
+        sp += sc
+        if j > 0usize && j < k { st += t }
+        cnt += 1.0f64
+        j += 1usize
+    }
+    ret (cnt, ss, sp, st)
+}

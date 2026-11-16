@@ -3388,4 +3388,5 @@ D6516	1099	modeest: parzen, tsybakov and lientz
 D6517	899	modeest: naive
 D6518	1059	isotone: activeSet with the LS solver
 D6519	525	isotone: activeSet with the L1 solver
-D6520	501	isotone: activeSet with the quantile solver
+D6520	502	isotone: activeSet with the quantile solver
+D6521	611	pROC: coords at thresholds

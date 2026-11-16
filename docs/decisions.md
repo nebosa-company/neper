@@ -46294,3 +46294,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `active_set` takes aw and bw; solver kind 2 is R's pSolver: block fit by weightedFractile(a = aw, b = bw) (the median routine with those weights), gradient `-w aw` where y <= z and `w bw` elsewhere, `f` the asymmetric absolute loss.
 
 **Result.** `oracle_isotone` agrees with isotone on 64 more values on Windows; Linux pending. L473 stays partial (Lp, asymmetric LS and the optim-based solvers, matrix and list responses, pava).
+
+## D6521 — pROC: coords at thresholds
+
+**Decision.** `proc.e` gains `cases_higher` (direction = "auto" by the group medians), `coords_at` (sensitivity and specificity at a threshold: cases beyond it, controls on the other side or equal) and `roc_sums` (the curve of coords(r, "all"): -Inf, midpoints of consecutive distinct values, Inf; count and sums of sensitivity, specificity and finite thresholds).
+
+**Result.** `oracle_proc` agrees with pROC on 240 new values on Windows; Linux pending. coords "best", partial and smoothed curves, bootstrap and the other roc.test methods stay open; L324 stays partial.

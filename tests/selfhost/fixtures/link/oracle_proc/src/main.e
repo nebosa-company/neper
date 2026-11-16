@@ -15,6 +15,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x1 = x[1usize + n..1usize + 2usize * n]
     let x2 = x[1usize + 2usize * n..1usize + 3usize * n]
     let k = c.name
+    if str.eq(k, "ncoord") || str.eq(k, "ssens") || str.eq(k, "sspec") || str.eq(k, "sthr") {
+        let (cn, ss, sp, st) = pr.roc_sums(a, y, x1)
+        if str.eq(k, "ncoord") { ret cn }
+        if str.eq(k, "ssens") { ret ss }
+        if str.eq(k, "sspec") { ret sp }
+        ret st
+    }
+    if str.eq(k, "atsens") || str.eq(k, "atspec") {
+        let (se, sc) = pr.coords_at(y, x1, pr.cases_higher(a, y, x1), x[1usize + 3usize * n])
+        if str.eq(k, "atsens") { ret se }
+        ret sc
+    }
     if str.eq(k, "z") || str.eq(k, "p") {
         let (z, p) = pr.delong_paired(a, y, x1, x2)
         if str.eq(k, "z") { ret z }

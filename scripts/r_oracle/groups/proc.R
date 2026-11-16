@@ -15,4 +15,12 @@ for (rep in 1:20) {
   rt <- roc.test(r1, r2, method = "delong", paired = TRUE)
   add("z", a, as.numeric(rt$statistic)); add("p", a, rt$p.value)
 }
+# coords: ("ncoord" "ssens" "sspec" "sthr") args (n, y, x1, x2) with r1 = roc(y, x1) at every threshold; ("atsens" "atspec") args (n, y, x1, x2, t) at the threshold t = a data midpoint
+for (rep in 1:20) {
+  n <- sample(20:80, 1); y <- rbinom(n, 1, 0.4); if (sum(y) < 3 || sum(y) > n - 3) next
+  s <- c(0.8, 1.5, -0.7, 0.3)[rep %% 4 + 1]; x1 <- round(rnorm(n) + s * y, if (rep %% 3 == 0) 1 else 4); r1 <- roc(y, x1, quiet = TRUE)
+  cc <- coords(r1, "all", ret = c("threshold", "sensitivity", "specificity"), transpose = FALSE); a <- c(n, y, x1, x1)
+  add("ncoord", a, nrow(cc)); add("ssens", a, sum(cc$sensitivity)); add("sspec", a, sum(cc$specificity)); add("sthr", a, sum(cc$threshold[is.finite(cc$threshold)]))
+  ux <- sort(unique(x1)); for (t in sample((ux[-1] + ux[-length(ux)]) / 2, 3)) { ct <- coords(r1, t, "threshold", ret = c("sensitivity", "specificity"), transpose = FALSE); add("atsens", c(a, t), ct$sensitivity); add("atspec", c(a, t), ct$specificity) }
+}
 emit("proc", "pROC", list(cases))
