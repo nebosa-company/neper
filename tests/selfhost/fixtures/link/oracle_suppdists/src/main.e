@@ -19,6 +19,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(nm, "pc_d") { ret sd.fcorrelation(z[2usize], z[0usize], i64(z[1usize])) }
     if str.eq(nm, "pc_p") { ret sd.pcorrelation(z[2usize], z[0usize], i64(z[1usize])) }
     if str.eq(nm, "pc_q") { ret sd.qcorrelation(z[2usize], z[0usize], i64(z[1usize])) }
+    if str.starts_with(nm, "kw_") {
+        let nsc = z[0usize] == 1.0f64
+        let kc = i64(z[1usize])
+        let kn = i64(z[2usize])
+        if str.eq(nm, "kw_p") { ret sd.pkruskal_wallis(z[4usize], kc, kn, z[3usize], nsc) }
+        if str.eq(nm, "kw_u") { ret sd.qkruskal_wallis_upper(z[4usize], kc, kn, z[3usize], nsc) }
+        if str.eq(nm, "kw_q") { ret sd.xkruskal_wallis(z[4usize], kc, kn, z[3usize], nsc) }
+        ret sd.fkruskal_wallis(z[4usize], kc, kn, z[3usize], nsc)
+    }
     if str.eq(nm, "gh_d") { ret sd.ghyper_d(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_p") { ret sd.ghyper_p(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_q") { ret sd.ghyper_q(z[3usize], z[0usize], z[1usize], z[2usize]) }

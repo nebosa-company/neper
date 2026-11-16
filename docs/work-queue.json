@@ -9,10 +9,10 @@
       "group": "CRAN parity",
       "order": 583,
       "title": "SuppDists: Johnson, Kendall, Spearman and related distributions",
-      "score": 0.4,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6075): e.algo.stat.suppdists has inverse Gaussian, exact Kendall and Spearman for small N, and Johnson SN, SL, SB, SU d, p and q, equal to SuppDists on 428 values on Windows (oracle_suppdists); Linux pending. D6597: ghyper d, p and q (the hypergeometric; qghyper takes the first x whose cdf exceeds p, where qhyper accepts equality) equal SuppDists on 275 values. D6693: Pearson correlation d, p and q (fcorrelation series, the Romberg integral and NewtonRoot of SuppDists ported, including its SQRT2 constant 1.41413562..., a typo the results depend on) equal dPearson, pPearson and qPearson on 120 values (oracle_suppdists). Open: large-N Edgeworth, off-support Spearman, Friedman, Kruskal-Wallis, normal scores, max F-ratio, moments, Johnson fit, r. Original: Open (CRAN rank 711). Small. Acceptance, equal to SuppDists: d, p, q, r and moments for Johnson (all families and the fit), Kendall, Spearman, normal scores, maximum F-ratio, Pearson-type, inverse Gaussian and Friedman distributions."
+      "evidence": "Partly done (D6075): e.algo.stat.suppdists has inverse Gaussian, exact Kendall and Spearman for small N, and Johnson SN, SL, SB, SU d, p and q, equal to SuppDists on 428 values on Windows (oracle_suppdists); Linux pending. D6597: ghyper d, p and q (the hypergeometric; qghyper takes the first x whose cdf exceeds p, where qhyper accepts equality) equal SuppDists on 275 values. D6693: Pearson correlation d, p and q (fcorrelation series, the Romberg integral and NewtonRoot of SuppDists ported, including its SQRT2 constant 1.41413562..., a typo the results depend on) equal dPearson, pPearson and qPearson on 120 values (oracle_suppdists). D6695: Kruskal-Wallis and normal scores (the beta approximations, with the forward-difference density) p, upper tail, q and d equal pKruskalWallis, qKruskalWallis, dKruskalWallis, pNormScore, qNormScore, dNormScore on 160 values (oracle_suppdists). Open: large-N Edgeworth, off-support Spearman, Friedman, max F-ratio, moments, Johnson fit, r. Original: Open (CRAN rank 711). Small. Acceptance, equal to SuppDists: d, p, q, r and moments for Johnson (all families and the fit), Kendall, Spearman, normal scores, maximum F-ratio, Pearson-type, inverse Gaussian and Friedman distributions."
     },
     {
       "id": "L445",

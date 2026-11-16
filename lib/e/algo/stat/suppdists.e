@@ -385,3 +385,72 @@ fn qcorrelation(p: f64, rho: f64, nn: i64) -> f64 {
     let guess = (z - 1.0f64) / (z + 1.0f64)
     ret newton_root[Corr](&c, guess, corr_dev, corr_density, 3.0e-8f64)
 }
+
+// ---- Kruskal-Wallis and normal scores (the beta approximations of Wallace 1959 and Lu and Smith 1979) ----
+
+fn kw_max_u(c: i64, n: i64) -> f64 { ret f64(c - 1i64) + 1.0f64 / f64(n - (c - 1i64)) }
+
+fn var_kruskal_wallis(n: f64, c: f64, u: f64) -> f64 {
+    var f = 2.0f64 * (c - 1.0f64)
+    f = f - 0.4f64 * (3.0f64 * c * c - 6.0f64 * c + n * (2.0f64 * c * c - 6.0f64 * c + 1.0f64)) / (n * (n + 1.0f64))
+    f = f - 1.2f64 * u
+    ret f
+}
+
+fn var_normal_scores(n: f64, c: f64, u: f64) -> f64 {
+    let alpha = 0.375f64
+    let np = n + 1.0f64
+    let nm = n - 1.0f64
+    let nc = n - c
+    let cm = c - 1.0f64
+    let den = 1.0f64 - 2.0f64 * alpha
+    let cnt = i64(0.1f64 + n / 2.0f64)
+    var e2 = 0.0f64
+    var e4 = 0.0f64
+    var i = 1i64
+    while i <= cnt {
+        var e = dist.qnorm((f64(i) - alpha) / (n + den), 0.0f64, 1.0f64, true, false)
+        e = e * e
+        e2 = e2 + e
+        e4 = e4 + e * e
+        i += 1i64
+    }
+    e2 = e2 * (4.0f64 * e2)
+    let g = (np * n * nm * nm * 2.0f64 * e4 - 3.0f64 * nm * nm * nm * e2) / (nm * (n - 2.0f64) * (n - 3.0f64) * e2)
+    var v = 2.0f64 * cm * nc / np
+    v = v - g * (np * c * c + 2.0f64 * cm * nc - n * np * u) / (n * np)
+    ret v
+}
+
+// the beta parameters (f1, f2) of the approximation
+fn kw_beta(c: i64, n: i64, u: f64, normal_score: bool) -> (f64, f64) {
+    let cc = f64(c)
+    let nn = f64(n)
+    var v = var_kruskal_wallis(nn, cc, u)
+    if normal_score { v = var_normal_scores(nn, cc, u) }
+    let d = ((nn - cc) * (cc - 1.0f64) - v) / ((nn - 1.0f64) * v)
+    ret ((cc - 1.0f64) * d, (nn - cc) * d)
+}
+
+fn pkruskal_wallis(h: f64, c: i64, n: i64, u: f64, normal_score: bool) -> f64 {
+    if h < 0.0f64 || u <= 0.0f64 || u > kw_max_u(c, n) { ret 0.0f64 / 0.0f64 }
+    let (f1, f2) = kw_beta(c, n, u, normal_score)
+    ret nb.pbeta(h / (f64(n) - 1.0f64), f1, f2, true, false)
+}
+
+fn qkruskal_wallis_upper(h: f64, c: i64, n: i64, u: f64, normal_score: bool) -> f64 {
+    if h < 0.0f64 || u <= 0.0f64 || u > kw_max_u(c, n) { ret 0.0f64 / 0.0f64 }
+    ret 1.0f64 - pkruskal_wallis(h, c, n, u, normal_score)
+}
+
+fn xkruskal_wallis(p: f64, c: i64, n: i64, u: f64, normal_score: bool) -> f64 {
+    if p < 0.0f64 || p > 1.0f64 || u <= 0.0f64 || u > kw_max_u(c, n) { ret 0.0f64 / 0.0f64 }
+    let (f1, f2) = kw_beta(c, n, u, normal_score)
+    ret (f64(n) - 1.0f64) * nb.qbeta(p, f1, f2, true, false)
+}
+
+// the density is the forward difference quotient of the cdf over 0.001, as SuppDists computes it
+fn fkruskal_wallis(h: f64, c: i64, n: i64, u: f64, normal_score: bool) -> f64 {
+    let delta = 0.001f64
+    ret (pkruskal_wallis(h + delta, c, n, u, normal_score) - pkruskal_wallis(h, c, n, u, normal_score)) / delta
+}

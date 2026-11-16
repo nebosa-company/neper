@@ -27,4 +27,12 @@ for (rep in 1:40) {
   N <- sample(5:60, 1); rho <- round(runif(1, -0.9, 0.9), 2); r <- round(runif(1, -0.95, 0.95), 3); pr <- round(runif(1, 0.05, 0.95), 3)
   add("pc_d", c(rho, N, r), dPearson(r, N, rho)); add("pc_p", c(rho, N, r), pPearson(r, N, rho), 1e-7); add("pc_q", c(rho, N, pr), qPearson(pr, N, rho), 1e-6)
 }
+# Kruskal-Wallis (ns 0) and normal scores (ns 1): "kw_p" "kw_u" "kw_q" "kw_d", args (ns, c, N, U, x or p)
+for (rep in 1:40) {
+  ns <- rep %% 2; cc <- sample(3:6, 1); ni <- sample(4:15, cc, TRUE); N <- sum(ni); U <- sum(1 / ni)
+  h <- round(runif(1, 0.3, 9), 2); pr <- round(runif(1, 0.05, 0.95), 3)
+  P <- if (ns == 0) pKruskalWallis else pNormScore; Q <- if (ns == 0) qKruskalWallis else qNormScore; D <- if (ns == 0) dKruskalWallis else dNormScore
+  add("kw_p", c(ns, cc, N, U, h), P(h, cc, N, U), 1e-8); add("kw_u", c(ns, cc, N, U, h), P(h, cc, N, U, lower.tail = FALSE), 1e-8)
+  add("kw_q", c(ns, cc, N, U, pr), Q(pr, cc, N, U), 1e-8); add("kw_d", c(ns, cc, N, U, h), D(h, cc, N, U), 1e-6)
+}
 emit("suppdists", "SuppDists", list(cases))
