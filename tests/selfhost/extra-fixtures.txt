@@ -254,3 +254,4 @@ oracle_tsutils
 oracle_compqf
 oracle_pcapp
 oracle_irr
+oracle_pls

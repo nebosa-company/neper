@@ -3207,4 +3207,5 @@ D6131	687	the remaining mlbench generators
 D6132	747	the non-central distributions and the rest of pwr
 D6133	1083	yardstick multiclass averaging, pr_auc, gain_capture, lift_curve and iic
 D6134	970	icajade, icaimax and the deflation and wide-data forms of icafast
-D6135	730	irr
+D6135	731	irr
+D6136	861	pls: the four plsr algorithms, pcr and cross-validation

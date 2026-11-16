@@ -45190,3 +45190,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.irr` takes the ratings as a row-major ns by nr matrix of numbers (categories are their numeric order, which is R's order for single digits; with ten or more categories R sorts the labels as text). kappa2's variance uses `outer(w.i, w.j, "+")` over (row, column) as R's matrices are laid out, kappam.light follows the package's disagreement-product variance, icc is the closed forms with the package's F quantile intervals, and kripp.alpha builds the coincidence matrix with the 1/(m - 1) weight when ratings are missing (NaN stands for NA).
 
 **Result.** `oracle_irr` equals irr on 853 cases on Windows; Linux pending. L476 is closed.
+
+## D6136 — pls: the four plsr algorithms, pcr and cross-validation
+
+**Context.** L359 had only the NIPALS PLS1 in e.ml.linear.
+
+**Decision.** `e.algo.stat.pls` ports `kernelpls.fit`, `simpls.fit`, `oscorespls.fit` and `widekernelpls.fit` (with the bidiagonal inverse of P'W for one response and the back-substitution for several), `svdpc.fit` for pcr (through the eigen decomposition of X'X) and `mvrCv` over given segments (PRESS, PRESS0 and the adjCV adjustment, ncomp lowered as the package lowers it); MSEP, RMSEP and R2 for the training, CV and adjCV estimates follow from them. Multi-response scores and loadings carry the solver's sign, so those are compared by their sign-free sums and the coefficients and fitted values exactly.
+
+**Result.** `oracle_pls` equals pls on 5040 cases on Windows; Linux pending. cppls and the jackknife stay open on L359.

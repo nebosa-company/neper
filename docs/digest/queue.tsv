@@ -28,7 +28,7 @@ L328	library	0.25	706	caret evaluation and resampling	Partly done (D6087): e.alg
 L331	library	0	327	dendextend and hclust operations	Open (CRAN rank 297).
 L332	library	0	222	foreign: dBase, ARFF, Octave, Minitab and Systat	Open (CRAN rank 249).
 L358	library	0	270	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Open (CRAN rank 368).
-L359	library	0	273	pls: partial least squares regression	Open (CRAN rank 370).
+L359	library	0.75	506	pls: partial least squares regression	Partial (D6136).
 L379	library	0	254	gmp: arbitrary-precision numbers	Open (CRAN rank 301).
 L380	library	0	378	tm and tidytext: text mining	Open (CRAN ranks 400, 383).
 L387	library	0.3	565	lmom and gld: L-moments and the generalized lambda distribution	Partly done (D6098): e.algo.stat.lmom has samlmu, and lmr and qua for exp, gum, glo, gpa, nor, gev and pel for the five closed forms, equal to lmom on 651 values on Windows (oracle_lmom);
