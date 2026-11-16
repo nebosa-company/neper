@@ -3139,4 +3139,5 @@ D6063	986	forecast Box-Cox: the sign-preserving transform and the grid log-likel
 D6064	1104	nlme gls at a fixed correlation: the objective by definition, sigma follows the method
 D6065	996	sf planar checks: the existing e.algo.geom agrees with GEOS
 D6066	1152	diptest: AS 217 ported whole, the quantile table generated, the simulated p value on the R stream
-D6067	1570	JDEoptim on the R stream: draw order is the specification
+D6067	1571	JDEoptim on the R stream: draw order is the specification
+D6068	1589	fdrtool for p values: eta0 from the censored sample, the Grenander density by isotonic slopes
