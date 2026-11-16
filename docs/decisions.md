@@ -45430,3 +45430,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.dicedesign` gains mesh_ratio: the square root of the largest over the smallest squared nearest-neighbour distance, where, as in the package, only the first n - 1 points are examined as the base (each against all n). Not here: init = "random" for wspDesign, GEOM_MORRIS, maximinESE_LHS and the other discrepSA_LHS criteria.
 
 **Result.** `oracle_dicedesign` equals DiceDesign on 184 cases on Windows; Linux pending. L426 stays partial.
+
+## D6173 — DHARMa: PIT residuals, the KS statistic and the binomial outlier test
+
+`e.algo.stat.dharma` computes the quantile (PIT) residuals of a simulated response matrix as createDHARMa does with method = "PIT": the fraction of simulations below the observation, randomised uniformly between that and the fraction at or below it when they differ, drawing one uniform per observation (n of them, even for the rows that need none) after set.seed(seed) as soon as any row needs it. It also gives the two-sided Kolmogorov-Smirnov statistic against the uniform, the outlier count (residuals under 1 / (nsim + 1) or over one minus that) and testOutliers' exact binomial p value at 2 / (nsim + 1) (R's two-sided rule with relative tolerance 1e-7). Not here: the traditional method and rotation, testDispersion, testZeroInflation, testTemporalAutocorrelation, refitted residuals, the bootstrap outlier test and the KS p value.
+
+**Result.** `oracle_dharma` equals DHARMa on 56 cases on Windows; Linux pending. L411 is partial.
