@@ -53,4 +53,8 @@ for (rep in 1:10) {
   add("fdn", b, length(fd$return)); add("fdr", b, sum(fd$return * seq_along(fd$return)))
   add("fdf", b, sum(fd$from * seq_along(fd$from))); add("fdt", b, sum(fd$trough * seq_along(fd$trough))); add("fde", b, sum(fd$to * seq_along(fd$to)))
 }
+for (rep in 1:20) {
+  n <- sample(10:80, 1); p <- round(100 * cumprod(1 + rnorm(n, 0.002, 0.02)), 3)
+  for (lg in 0:1) { rr <- as.numeric(Return.calculate(xts::xts(p, as.Date("2000-01-01") + seq_len(n)), method = if (lg == 1) "log" else "discrete"))[-1]; add("retcalc", c(lg, 0, n, p), sum(rr * seq_along(rr))) }
+}
 emit("perfanalytics", "PerformanceAnalytics", list(cases))

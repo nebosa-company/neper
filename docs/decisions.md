@@ -46168,3 +46168,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.metaforpkg` gains `rma_knha`: the variance of the pooled estimate becomes the weighted residual sum of squares over k - 1 divided by the sum of weights, with no truncation of that factor at one, and the test and the limits use a t distribution on k - 1 degrees of freedom (`pt` and `qt` of e.math.nmath_beta).
 
 **Result.** `oracle_metaforpkg` agrees with metafor on 3140 cases on Windows, the 500 new ones at rel 1e-9: se, t, p-value and both limits for the DL, HE, HS and SJ estimators over 25 data sets of 5 to 25 studies. The adhoc truncation, moderators and the iterative estimators under knha are open; Linux pending. L364 stays partial.
+
+## D6500 — PerformanceAnalytics: Return.calculate, and L408 lands
+
+`e.algo.stat.perfanalytics` gains `return_calculate` (discrete p_t / p_{t-1} - 1 and log ln(p_t / p_{t-1}) returns). With it every function the acceptance list names for L408 is covered: Return.calculate, Return.annualized, VaR (three methods), ES (including modified), SharpeRatio, SortinoRatio, maxDrawdown, findDrawdowns, CAPM.alpha and beta, InformationRatio, OmegaSharpeRatio, TrackingError and UpDownRatios. The queue entry's "Open:" list had not been trimmed as the earlier increments landed, so it overstated what remained; the other functions were already in the module and the oracle.
+
+**Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 528 cases on Windows at rel 1e-9, 38 of them new for Return.calculate over 20 price series. L408 reaches score 1: it leaves docs/work-queue.json for docs/work-done.jsonl; Linux pending until WSL answers.

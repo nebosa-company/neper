@@ -17,6 +17,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let k = c.name
     var rb = r
     if x.len >= 3usize + 2usize * n { rb = x[3usize + n..3usize + 2usize * n] }
+    if str.eq(k, "retcalc") {
+        let (rco, rce) = mem.alloc[f64](a, n)
+        if rce != ok { os.exit(12) }
+        pa.return_calculate(r, p1 > 0.5f64, rco[0usize..n - 1usize])
+        var tt2 = 0.0f64
+        var q = 0usize
+        while q + 1usize < n {
+            tt2 += rco[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret tt2
+    }
     if str.eq(k, "beta") { ret pa.capm_beta(r, rb, p1, a) }
     if str.eq(k, "alpha") { ret pa.capm_alpha(r, rb, p1, a) }
     if str.eq(k, "te") { ret pa.tracking_error(r, rb, a, p1) }

@@ -3367,4 +3367,5 @@ D6495	1092	metafor: rma.uni intercept-only
 D6496	645	metafor: escalc effect sizes
 D6497	1028	metafor: regtest, ranktest and fsn
 D6498	757	metafor: leave1out
-D6499	702	metafor: the Knapp-Hartung test
+D6499	703	metafor: the Knapp-Hartung test
+D6500	935	PerformanceAnalytics: Return.calculate, and L408 lands

@@ -411,17 +411,6 @@
       "evidence": "Partial (D6457 dghyp, dnig, dhyperb, dskewlap equal GeneralizedHyperbolic on Windows; oracle_ghyp; Linux pending). Open: p, q and r functions, moments, fits, stabledist. Was: Open (CRAN ranks 592, 555; fBasics 595 uses both). Small to mid. Acceptance, equal to R: stabledist dstable, pstable, qstable, rstable in every parameterization; GeneralizedHyperbolic dghyp, pghyp, qghyp, rghyp, the hyperbolic, NIG, VG and skew-Laplace specials and their moments and fits."
     },
     {
-      "id": "L408",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 611,
-      "title": "PerformanceAnalytics: portfolio risk and return",
-      "score": 0.8,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6153, D6154 benchmark-relative: CAPM beta and alpha, TrackingError, InformationRatio, OmegaSharpeRatio, UpDownRatios; D6181 Drawdowns and findDrawdowns; D6182 modified ES). Return.annualized, maxDrawdown, DownsideDeviation, SortinoRatio, CalmarRatio, SharpeRatio and single-series VaR (three methods) and ES (two) equal PerformanceAnalytics on Windows (oracle_perfanalytics; Linux pending). Open: modified ES, CAPM, InformationRatio, OmegaSharpeRatio, TrackingError, UpDownRatios, Return.calculate, findDrawdowns. Was: Open (CRAN rank 590). Small to mid. Acceptance, equal to PerformanceAnalytics: Return.calculate, Return.annualized, VaR (historical, gaussian, modified Cornish-Fisher), ES, SharpeRatio, SortinoRatio, maxDrawdown, findDrawdowns, CAPM.alpha, CAPM.beta, InformationRatio, OmegaSharpeRatio, TrackingError, UpDownRatios."
-    },
-    {
       "id": "L409",
       "category": "library",
       "group": "CRAN parity",

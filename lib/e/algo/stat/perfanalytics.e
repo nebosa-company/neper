@@ -360,3 +360,12 @@ fn es_modified(r: []const f64, p: f64) -> f64 {
     if h < q { q = h }
     ret 0.0f64 - mean_of(r) - sd_pop(r) * q
 }
+
+// Return.calculate(prices, method): the discrete returns p_t / p_{t-1} - 1 or the log returns ln(p_t / p_{t-1}), n - 1 values into out
+fn return_calculate(prices: []const f64, log_method: bool, out: []f64) {
+    var i = 1usize
+    while i < prices.len {
+        if log_method { out[i - 1usize] = math.log[f64](prices[i] / prices[i - 1usize]) } else { out[i - 1usize] = prices[i] / prices[i - 1usize] - 1.0f64 }
+        i += 1usize
+    }
+}
