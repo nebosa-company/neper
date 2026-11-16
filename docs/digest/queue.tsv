@@ -118,7 +118,7 @@ L437	library	0	315	gstat: geostatistics	Open (CRAN rank 699).
 L456	library	0	287	mlogit: discrete-choice models	Open (CRAN rank 723).
 L457	library	0	281	NMF: non-negative matrix factorization	Open (CRAN rank 740).
 L458	library	0	227	earth: multivariate adaptive regression splines	Open (CRAN rank 780).
-L459	library	0	233	energy: energy statistics	Open (CRAN rank 795).
+L459	library	0.3	487	energy: energy statistics	Partial (D6188).
 L460	library	0.25	621	epiR: epidemiology	Partial (D6187).
 L461	library	0	216	systemfit: equation systems	Open (CRAN rank 794).
 L462	library	0	271	arules: association rule mining	Open (CRAN rank 800).

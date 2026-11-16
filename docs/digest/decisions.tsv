@@ -3260,4 +3260,5 @@ D6185	956	agricolae: LSD, HSD and Scheffe pairwise comparisons
 D6185	622	signal: Savitzky-Golay smoothing weights
 D6186	658	signal: cheby1
 D6187	824	epiR: epi.2by2 measures of a cohort table
-D6187	670	signal: cheby2
+D6187	671	signal: cheby2
+D6188	902	energy: distance covariance, distance correlation and the two-sample energy statistic

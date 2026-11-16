@@ -45526,3 +45526,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.signalpkg` gains cheby2 (Chebyshev type II, stopband attenuation rs in dB, the cutoff being the stopband edge) for low-pass and high-pass: the poles are the reciprocals of the type I poles with eps = 1 / sqrt(10^(rs / 10) - 1), the finite zeros are j / cos(theta_k) (none where cos is 0), the same warp, inversion and bilinear steps follow, the missing zeros sit at z = -1 (low-pass) or z = +1 (high-pass), and the gain is unity at z = 1 or z = -1. Coefficients equal signal's. Not here: ellip, bessel and the band forms.
 
 **Result.** `oracle_signalpkg` equals signal on 266 cases on Windows; Linux pending. L340 stays partial.
+
+## D6188 — energy: distance covariance, distance correlation and the two-sample energy statistic
+
+`e.algo.stat.energy` computes dcov and dcor for two samples of points (the V-statistic form: doubly centred Euclidean distance matrices, optionally raised to an index in (0, 2); dcov is the square root of the mean elementwise product, dcor the square root of that over the geometric mean of the two self-products) and the statistic of edist and eqdist.etest: n1 n2 / (n1 + n2) times 2 E|X - Y| - E|X - X'| - E|Y - Y'| with all means over the full double sums. Not here: the permutation and bootstrap p values (they draw R's random permutations), the unbiased and partial distance correlations, the multivariate normality and Poisson energy tests, the clustering and the other statistics of the package.
+
+**Result.** `oracle_energy` equals energy on 48 cases on Windows; Linux pending. L459 is partial.

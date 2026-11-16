@@ -1318,10 +1318,10 @@
       "group": "CRAN parity",
       "order": 729,
       "title": "energy: energy statistics",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 795). Mid. Acceptance, equal to energy under set.seed: dcov, dcor, bcdcor, dcov.test and dcor.test (permutation), edist, eqdist.etest, disco and disco.between, mvnorm.etest, normal.test, poisson.mtest, kgroups, pdcor."
+      "evidence": "Partial (D6188). dcov, dcor (with index) and the two-sample energy statistic equal energy on Windows (oracle_energy; Linux pending). Open: permutation tests, unbiased and partial distance correlation, normality and Poisson tests, energy clustering. Was: Open (CRAN rank 795). Mid. Acceptance, equal to energy under set.seed: dcov, dcor, bcdcor, dcov.test and dcor.test (permutation), edist, eqdist.etest, disco and disco.between, mvnorm.etest, normal.test, poisson.mtest, kgroups, pdcor."
     },
     {
       "id": "L460",

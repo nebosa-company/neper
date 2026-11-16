@@ -287,3 +287,4 @@ oracle_arm
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
+oracle_energy
