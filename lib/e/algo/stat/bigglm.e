@@ -57,6 +57,20 @@ fn dev_resid(fam: u8, y: f64, mu: f64, w: f64) -> f64 {
 
 // x is n by p column-major with the intercept column included; coef and se receive p values
 fn bigglm(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usize, p: usize, fam: u8, maxit: usize, tol: f64, coef: []f64, se: []f64) -> (Fit, err) {
+    let (zo, ze) = mem.alloc[f64](a, n)
+    if ze != ok { var none: Fit = zero
+        ret (none, ze) }
+    var q = 0usize
+    while q < n {
+        zo[q] = 0.0f64
+        q += 1usize
+    }
+    let (ft, fe) = bigglm_off(a, x, y, w, zo, n, p, fam, maxit, tol, coef, se)
+    ret (ft, fe)
+}
+
+// bigglm with an offset: the linear predictor is x b + off, and z - off is what the weighted regression sees
+fn bigglm_off(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, off: []const f64, n: usize, p: usize, fam: u8, maxit: usize, tol: f64, coef: []f64, se: []f64) -> (Fit, err) {
     var fit: Fit = zero
     let (xtx, e1) = mem.alloc[f64](a, p * p)
     let (xtz, e2) = mem.alloc[f64](a, p)
@@ -76,7 +90,7 @@ fn bigglm(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usiz
         var sumw = 0.0f64
         var i = 0usize
         while i < n {
-            var eta = 0.0f64
+            var eta = off[i]
             if have {
                 var j = 0usize
                 while j < p {
@@ -86,7 +100,7 @@ fn bigglm(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usiz
             }
             let mu = linkinv(fam, eta)
             let dmu = mu_eta(fam, eta)
-            zz[i] = eta + (y[i] - mu) / dmu
+            zz[i] = eta + (y[i] - mu) / dmu - off[i]
             ww[i] = w[i] * dmu * dmu / variance(fam, mu)
             if have {
                 dev += dev_resid(fam, y[i], mu, w[i])

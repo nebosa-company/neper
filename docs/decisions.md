@@ -46588,3 +46588,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `blockparts(f, n)` lists the vectors with `0 <= x[i] <= f[i]` summing to n in the order partitions::blockparts prints them, which a test against R for random f and n confirmed: the same order as compositions, the last coordinate slowest and ascending, the first coordinate the remainder (so it must lie in `[0, f[1]]`).
 
 **Result.** `oracle_partitions` agrees with partitions on 180 new values on Windows (777 cases in all); Linux pending. setparts keeps its Gray-code order and stays open; L470 stays partial.
+
+## D6570 — biglm: offsets
+
+**Decision.** `bigglm_off` carries an offset: the linear predictor is `x b + off` (the offset alone on the first pass, as `etafun` returns zeros plus `off`), the working response is `eta + (y - mu)/dmu` and the weighted regression sees `z - off`; `bigglm` is the zero-offset call.
+
+**Result.** `oracle_bigglm` agrees with biglm on 262 new offset values (coefficients, standard errors, iterations, convergence, deviance; gaussian, binomial, Poisson) on Windows (538 cases in all); Linux pending. L423 stays partial: the sandwich option, other families and links, singular designs.
