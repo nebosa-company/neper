@@ -2077,10 +2077,10 @@
       "group": "CRAN parity",
       "order": 782,
       "title": "survival remainder: coxph, survfit, survreg, survdiff, cox.zph",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 200). Large. Read e.algo.stat.survival and survival_trial first; they hold Nelson-Aalen, cumulative incidence, RMST and weighted log-rank tests. Acceptance, equal to survival: coxph (Breslow, Efron and exact ties, strata, offset, counting-process time-varying covariates, robust and cluster variance, frailty), survfit (Kaplan-Meier and Fleming-Harrington, log, plain and log-log intervals, left and interval censoring), survreg (weibull, exponential, lognormal, loglogistic, gaussian, logistic, extreme), survdiff with rho, cox.zph, concordance, survSplit, tmerge, pyears, residual types."
+      "evidence": "Partly done (D6056): e.algo.stat.cox.coxph (Breslow and Efron, one stratum) equals survival on 152 values on Windows (oracle_coxph); Linux pending. Open: exact ties, strata, offsets, counting process, robust variance, frailty, survfit, survreg, survdiff, cox.zph, concordance, survSplit, tmerge, pyears, residuals. Original: Open (CRAN rank 200). Large. Read e.algo.stat.survival and survival_trial first; they hold Nelson-Aalen, cumulative incidence, RMST and weighted log-rank tests. Acceptance, equal to survival: coxph (Breslow, Efron and exact ties, strata, offset, counting-process time-varying covariates, robust and cluster variance, frailty), survfit (Kaplan-Meier and Fleming-Harrington, log, plain and log-log intervals, left and interval censoring), survreg (weibull, exponential, lognormal, loglogistic, gaussian, logistic, extreme), survdiff with rho, cox.zph, concordance, survSplit, tmerge, pyears, residual types."
     },
     {
       "id": "L490",
