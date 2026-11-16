@@ -46748,3 +46748,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `geweke_z` takes the first `ceiling(1 + frac1 (n - 1))` and the last `floor(n - frac2 (n - 1))` onwards observations as R's windows (1-based), the means and the spectrum0.ar variances over their lengths; `gelman_psrf` is gelman.diag for one variable (first half of each chain dropped by autoburnin, the PSRF with the Gelman-Rubin degrees of freedom adjustment and the F-quantile upper bound); `hpd` is HPDinterval's shortest interval over `round(n prob)` gaps (half to even).
 
 **Result.** `oracle_coda` agrees with coda on 100 more values on Windows (220 cases in all); Linux pending. L299 at 0.25: heidel, raftery, the multivariate PSRF, cramer.test, posterior, loo and ggdist remain.
+
+## D6592 — splines2: periodic B- and M-splines
+
+**Decision.** `periodic_row` builds the knot vector with `degree` wrapped knots on each side (`t[i] = u[i - degree]` extended by the period `hi - lo`), evaluates the `nk + 1 + degree` B-splines (or M-splines) at `x` with `x = hi` taken as `lo`, and folds function `f` onto column `(f - degree) mod (nk + 1)`; the offset was found by comparing every `nk` from 1 to 5 and degree from 1 to 4 against splines2 in R (it is `m - degree` mod `m`, a first guess of `+1` held only for one case). Without the intercept the first column drops. splines2 refuses degrees above `nk + 1`.
+
+**Result.** `oracle_splines2` agrees with splines2 on 120 periodic summaries (both kinds) on Windows (1280 cases in all); Linux pending. L445 stays partial: periodic I and C splines (their column counts differ) and natural splines with fewer than two knots.

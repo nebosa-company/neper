@@ -276,3 +276,56 @@ fn cspline_row(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degre
     }
     ret o
 }
+
+// the periodic B-spline (kind 0) or M-spline (kind 1) row at x on the circle of period hi - lo (splines2 periodic = TRUE): the splines of the knot vector extended by `degree` wrapped knots on each side, folded onto nk + 1 columns with function i going to column (i - degree) mod (nk + 1) (splines2 needs degree not above nk + 1); x = hi counts as lo; the first column drops without the intercept; t needs nk + 2 + 2 degree entries
+fn periodic_row(t: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize, intercept: bool, kind: u8, deriv: usize, x: f64, out: []f64) -> usize {
+    let nk = knots.len
+    let m = nk + 1usize
+    let per = hi - lo
+    let order = degree + 1usize
+    // u[0] = lo, u[1..nk] the knots, u[nk + 1] = hi; t[i] = u[i - degree] extended periodically
+    var i = 0usize
+    while i < nk + 2usize + 2usize * degree {
+        var pos = i64(i) - i64(degree)
+        var shift = 0i64
+        while pos < 0i64 {
+            pos += i64(m)
+            shift -= 1i64
+        }
+        while pos > i64(m) {
+            pos -= i64(m)
+            shift += 1i64
+        }
+        var u = lo
+        if pos == i64(m) { u = hi } else if pos > 0i64 { u = knots[usize(pos) - 1usize] }
+        t[i] = u + f64(shift) * per
+        i += 1usize
+    }
+    var xm = x
+    if x >= hi { xm = lo }
+    var c = 0usize
+    while c < m {
+        out[c] = 0.0f64
+        c += 1usize
+    }
+    let nf = nk + 1usize + degree
+    var f = 0usize
+    while f < nf {
+        var v = bval(t, f, order, xm, deriv, hi + per + 1.0f64)
+        if kind == 1u8 {
+            let w = t[f + order] - t[f]
+            if w > 0.0f64 { v = v * f64(order) / w } else { v = 0.0f64 }
+        }
+        out[(f + m * (degree / m + 1usize) - degree) % m] += v
+        f += 1usize
+    }
+    if !intercept {
+        c = 1usize
+        while c < m {
+            out[c - 1usize] = out[c]
+            c += 1usize
+        }
+        ret m - 1usize
+    }
+    ret m
+}

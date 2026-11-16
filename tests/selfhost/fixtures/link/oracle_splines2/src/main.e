@@ -50,7 +50,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var i = 0usize
     while i < n {
         var m = 0usize
-        if kind == 6usize || kind == 7usize {
+        if kind == 12usize || kind == 13usize {
+            let (tp, ep1) = mem.alloc[f64](a, nk + 2usize * degree + 4usize)
+            if ep1 != ok { ret 0.0f64 / 0.0f64 }
+            var kp = 0u8
+            if kind == 13usize { kp = 1u8 }
+            m = sp.periodic_row(tp, knots, lo, hi, degree, icp, kp, 0usize, xs[i], out)
+        } else if kind == 6usize || kind == 7usize {
             let (tn2, ec1) = mem.alloc[f64](a, nk + 2usize * (degree + 2usize))
             let (tmpn2, ec2) = mem.alloc[f64](a, 2usize * width + 4usize)
             let (outn2, ec3) = mem.alloc[f64](a, width + 2usize)

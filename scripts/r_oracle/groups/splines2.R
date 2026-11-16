@@ -65,4 +65,11 @@ for (rep in 1:30) {
       iSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = 1), iSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = 2)))
     v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, kind, x, kn); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v)) }
 }
+# periodic bSpline (kind 12) and mSpline (kind 13)
+for (rep in 1:30) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); nk <- sample(1:4, 1); degree <- sample(1:min(4, nk + 1), 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)); if (anyDuplicated(kn)) next
+  for (kind in 12:13) { m <- tryCatch(unclass(if (kind == 12) bSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), periodic = TRUE) else mSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), periodic = TRUE)), error = function(e) NULL); if (is.null(m)) next
+    v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, kind, x, kn); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v)) }
+}
 emit("splines2", "splines2", list(cases))
