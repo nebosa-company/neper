@@ -15,50 +15,6 @@
       "evidence": "Partial (D6000, D6009, D6010, D6015, D6019). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names (ten languages) and a time zone (every transition of the zones in e.tz.builtin); read_delim equals readr on rows shorter and longer than the header, under a one-column header and with a quote left open, on 15489 cases. Open: %Z naming a zone, and two unterminated-quote shapes that crash or confuse readr 2.2.0 (listed in D6016)."
     },
     {
-      "id": "L296",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 545,
-      "title": "proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener",
-      "score": 0.5,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6023). 42 proxy measures (binary, cosine family, Minkowski family, Canberra, Wave, divergence, Kullback, Bray, Soergel, Podani, Chord, Geodesic, Whittaker, Hellinger, fJaccard), e1071 skewness and kurtosis types 1 to 3 and countpattern equal R on both hosts. Open: Gower, Mahalanobis, Levenshtein, the nominal family, cmeans, cshell, rwiener, bclust, matchClasses. Was: Open (CRAN ranks 147, 152). Small to mid. Acceptance, each equal to R: proxy dist and simil for the registered measures (Jaccard, Dice, Kulczynski, Gower, Canberra, cosine, Minkowski, Mahalanobis, Hamming, Yule, Russel, Tanimoto, ...) with binary and numeric inputs; e1071 cmeans and cshell, skewness and kurtosis types 1 to 3, rwiener, bclust, countpattern, matchClasses. svm and naiveBayes exist."
-    },
-    {
-      "id": "L295",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 544,
-      "title": "classInt: classification intervals",
-      "score": 0.9,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6020, D6021). Every classInt style but bclust equals classInt 0.4.11 on both hosts (kmeans by AS 136, hclust, dpih, fixed, sd, equal, pretty, quantile, fisher, jenks, headtails, maximum, box, findCols). Open: bclust (e1071 bagged clustering: resampled kmeans with 20 centres, knn1, average-linkage hclust, cutree)."
-    },
-    {
-      "id": "L298",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 547,
-      "title": "xts: period handling and time-indexed series",
-      "score": 0.7,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6022). endpoints (all units, k), OHLC and sum/mean/max/min over endpoints (so to.period, to.weekly and split by period), align.time, periodicity, lag and diff equal xts 0.14.3 on both hosts. Open: first and last with period strings, merge and join by index, to.period index labels. Was: Open (CRAN rank 165). Small. e.algo.stat.zoo holds zoo, yearmon, yearqtr. Acceptance, equal to xts: endpoints, to.period and to.daily/weekly/monthly/quarterly (OHLC with volume), period.apply, apply.daily to apply.yearly, align.time, merge and join by index, first and last with period strings, lag and diff, periodicity, split by period."
-    },
-    {
-      "id": "L297",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 546,
-      "title": "colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation",
-      "score": 0.6,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6024). sequential_hcl, diverging_hcl and qualitative_hcl for every hcl_palettes() name (fixup on and off), WCAG contrast_ratio and deutan, protan, tritan at severities 0 to 1 equal colorspace 2.1.4 on both hosts. Open: polarLAB round trips, lighten and darken (max_chroma), rainbow_hcl, heat_hcl, APCA contrast. Was: Open (CRAN rank 110). Small to mid. e.gfx.colorspace converts; it generates no palettes. Acceptance, equal to colorspace: sequential_hcl, diverging_hcl, qualitative_hcl for every hcl_palettes() name and parameter set, polarLUV and polarLAB round trips, contrast_ratio, deutan, protan, tritan at severities 0 to 1, lighten and darken, rainbow_hcl, heat_hcl."
-    },
-    {
       "id": "L301",
       "category": "library",
       "group": "CRAN parity",
@@ -299,6 +255,50 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "Open (CRAN rank 159; sp 180 is superseded). Large. e.algo.geom has convex clipping, ear-clip triangulation and simplification, e.algo.geo has S2 cells and haversine. Acceptance, equal to sf and GEOS: WKT, WKB and GeoJSON read and write for every geometry type, st_relate and the DE-9IM predicates, st_buffer with all end and join styles, st_union, st_intersection, st_difference, st_sym_difference on arbitrary polygons, st_make_valid, st_voronoi, st_delaunay_triangulation, st_convex_hull, st_simplify, spherical st_area, st_length and st_distance (s2 and geodesic); the CRS transform comes from L285."
+    },
+    {
+      "id": "L296",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 545,
+      "title": "proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener",
+      "score": 0.5,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6023). 42 proxy measures (binary, cosine family, Minkowski family, Canberra, Wave, divergence, Kullback, Bray, Soergel, Podani, Chord, Geodesic, Whittaker, Hellinger, fJaccard), e1071 skewness and kurtosis types 1 to 3 and countpattern equal R on both hosts. Open: Gower, Mahalanobis, Levenshtein, the nominal family, cmeans, cshell, rwiener, bclust, matchClasses. Was: Open (CRAN ranks 147, 152). Small to mid. Acceptance, each equal to R: proxy dist and simil for the registered measures (Jaccard, Dice, Kulczynski, Gower, Canberra, cosine, Minkowski, Mahalanobis, Hamming, Yule, Russel, Tanimoto, ...) with binary and numeric inputs; e1071 cmeans and cshell, skewness and kurtosis types 1 to 3, rwiener, bclust, countpattern, matchClasses. svm and naiveBayes exist."
+    },
+    {
+      "id": "L295",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 544,
+      "title": "classInt: classification intervals",
+      "score": 0.9,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6020, D6021). Every classInt style but bclust equals classInt 0.4.11 on both hosts (kmeans by AS 136, hclust, dpih, fixed, sd, equal, pretty, quantile, fisher, jenks, headtails, maximum, box, findCols). Open: bclust (e1071 bagged clustering: resampled kmeans with 20 centres, knn1, average-linkage hclust, cutree)."
+    },
+    {
+      "id": "L298",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 547,
+      "title": "xts: period handling and time-indexed series",
+      "score": 0.7,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6022). endpoints (all units, k), OHLC and sum/mean/max/min over endpoints (so to.period, to.weekly and split by period), align.time, periodicity, lag and diff equal xts 0.14.3 on both hosts. Open: first and last with period strings, merge and join by index, to.period index labels. Was: Open (CRAN rank 165). Small. e.algo.stat.zoo holds zoo, yearmon, yearqtr. Acceptance, equal to xts: endpoints, to.period and to.daily/weekly/monthly/quarterly (OHLC with volume), period.apply, apply.daily to apply.yearly, align.time, merge and join by index, first and last with period strings, lag and diff, periodicity, split by period."
+    },
+    {
+      "id": "L297",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 546,
+      "title": "colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation",
+      "score": 0.6,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6024). sequential_hcl, diverging_hcl and qualitative_hcl for every hcl_palettes() name (fixup on and off), WCAG contrast_ratio and deutan, protan, tritan at severities 0 to 1 equal colorspace 2.1.4 on both hosts. Open: polarLAB round trips, lighten and darken (max_chroma), rainbow_hcl, heat_hcl, APCA contrast. Was: Open (CRAN rank 110). Small to mid. e.gfx.colorspace converts; it generates no palettes. Acceptance, equal to colorspace: sequential_hcl, diverging_hcl, qualitative_hcl for every hcl_palettes() name and parameter set, polarLUV and polarLAB round trips, contrast_ratio, deutan, protan, tritan at severities 0 to 1, lighten and darken, rainbow_hcl, heat_hcl."
     },
     {
       "id": "L275",
