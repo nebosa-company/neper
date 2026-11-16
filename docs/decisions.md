@@ -45628,3 +45628,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.drc` fits the four-parameter log-logistic model, f(x) = c + (d - c) / (1 + exp(b (log x - log e))), by Levenberg-Marquardt from a start taken from the data (the dose nearest the response midpoint for e, the response range for c and d, the sign of b from the trend), through `e.algo.stat.minpacklm`, and reports the estimates and the residual sum of squares. It is the least-squares optimum; drm stops at its own criteria, so the estimates agree to 3e-3 relative (the poorly determined c and b show the difference) and the residual sum of squares to 1e-5, on 20 simulated curves with 2 to 4 replicates, not bit for bit. Not here: the other model functions (Weibull, log-normal, Cedergreen, Brain-Cousens), fixed parameters, variance-covariance matrices, ED intervals, robust fitting, model comparison and the plots.
 
 **Result.** `oracle_drc` agrees with drc on 100 cases on Windows at those tolerances; Linux pending. L488 is partial.
+
+## D6411 — pracma: conv, deconv and polyint
+
+`e.algo.stat.pracma` gains conv (the polynomial product), deconv (long division returning the quotient and the remainder; the package's remainder has length(a) - 1 entries, the leading zeros being dropped) and polyint (the antiderivative with a constant). All equal pracma's to 1e-9. Not here: polyder, polyadd, polyroots and the rest of the polynomial toolbox.
+
+**Result.** `oracle_pracma` equals pracma on 472 cases on Windows; Linux pending. L333 stays partial.

@@ -747,3 +747,52 @@ fn poly_roots(p: []const f64, re: []f64, im: []f64) {
         it += 1usize
     }
 }
+
+// conv(a, b): the polynomial product, highest power first; out has a.len + b.len - 1 entries
+fn conv(a: []const f64, b: []const f64, out: []f64) {
+    var i = 0usize
+    while i < a.len + b.len - 1usize {
+        out[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < a.len {
+        var j = 0usize
+        while j < b.len {
+            out[i + j] += a[i] * b[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// deconv(y, a): the quotient q (y.len - a.len + 1 entries) and remainder r (y.len entries) with y = conv(a, q) + r
+fn deconv(y: []const f64, a: []const f64, q: []f64, r: []f64) {
+    var i = 0usize
+    while i < y.len {
+        r[i] = y[i]
+        i += 1usize
+    }
+    let nq = y.len - a.len + 1usize
+    i = 0usize
+    while i < nq {
+        q[i] = r[i] / a[0usize]
+        var j = 0usize
+        while j < a.len {
+            r[i + j] -= q[i] * a[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// polyint(p, k): the antiderivative with constant k; out has p.len + 1 entries
+fn polyint(p: []const f64, k: f64, out: []f64) {
+    let n = p.len
+    var i = 0usize
+    while i < n {
+        out[i] = p[i] / f64(n - i)
+        i += 1usize
+    }
+    out[n] = k
+}

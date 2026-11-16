@@ -64,6 +64,12 @@ for (rep in 1:20) {
   rr <- sort(Re(roots(co)))
   add("roots", c(length(co), co), sum(rr * seq_along(rr)))
 }
+for (rep in 1:20) {
+  na <- sample(2:6, 1); nb <- sample(2:5, 1); pa <- round(rnorm(na), 3); pb <- round(rnorm(nb), 3); pb[1] <- pb[1] + 2 * sign(pb[1] + 0.01)
+  cv <- conv(pa, pb); add("conv", c(na, nb, pa, pb), sum(cv * seq_along(cv)))
+  if (na >= nb) { dv <- deconv(pa, pb); add("deconvq", c(na, nb, pa, pb), sum(dv$q * seq_along(dv$q))); add("deconvr", c(na, nb, pa, pb), sum(dv$r * seq_along(dv$r))) }
+  pi_ <- polyint(pa, 1.5); add("polyint", c(na, nb, pa, pb), sum(pi_ * seq_along(pi_)))
+}
 # nchoosek reference values are filled from R directly
 cases <- lapply(cases, function(cs) { if (cs$fn == "nchoosek") cs$want <- choose(cs$args[1], cs$args[2]); cs })
 emit("pracma", "pracma", list(cases))

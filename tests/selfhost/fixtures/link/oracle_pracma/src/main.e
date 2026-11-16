@@ -110,6 +110,52 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(k, "conv") || str.eq(k, "deconvq") || str.eq(k, "deconvr") || str.eq(k, "polyint") {
+        let na = usize(x[0usize])
+        let nb = usize(x[1usize])
+        let pa = x[2usize..2usize + na]
+        let pb = x[2usize + na..2usize + na + nb]
+        var tt = 0.0f64
+        var q = 0usize
+        if str.eq(k, "conv") {
+            let (o, e1) = mem.alloc[f64](a, na + nb - 1usize)
+            if e1 != ok { os.exit(5) }
+            pm.conv(pa, pb, o)
+            while q < o.len {
+                tt += o[q] * f64(q + 1usize)
+                q += 1usize
+            }
+            ret tt
+        }
+        if str.eq(k, "polyint") {
+            let (o, e2) = mem.alloc[f64](a, na + 1usize)
+            if e2 != ok { os.exit(6) }
+            pm.polyint(pa, 1.5f64, o)
+            while q < o.len {
+                tt += o[q] * f64(q + 1usize)
+                q += 1usize
+            }
+            ret tt
+        }
+        let (qq, e3) = mem.alloc[f64](a, na - nb + 1usize)
+        if e3 != ok { os.exit(7) }
+        let (rr, e4) = mem.alloc[f64](a, na)
+        if e4 != ok { os.exit(8) }
+        pm.deconv(pa, pb, qq, rr)
+        if str.eq(k, "deconvq") {
+            while q < qq.len {
+                tt += qq[q] * f64(q + 1usize)
+                q += 1usize
+            }
+        } else {
+            q = na - nb + 1usize
+            while q < rr.len {
+                tt += rr[q] * f64(q - (na - nb) )
+                q += 1usize
+            }
+        }
+        ret tt
+    }
     if str.eq(k, "legendre") {
         let (o, e) = mem.alloc[f64](a, usize(x[0usize]) + 1usize)
         if e != ok { os.exit(5) }
