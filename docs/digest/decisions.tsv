@@ -3297,4 +3297,5 @@ D6425	745	sandwich: NeweyWest
 D6426	745	sandwich: vcovCL
 D6427	777	lpSolve: e.math.opt.simplex against lp("max")
 D6428	688	clue and lpSolve: the assignment problem
-D6429	923	DescTools: Skew, Kurt, Gini and the simple location and spread measures
+D6429	924	DescTools: Skew, Kurt, Gini and the simple location and spread measures
+D6430	913	DescTools: association measures of a contingency table

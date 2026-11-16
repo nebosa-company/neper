@@ -13,6 +13,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(x[0usize])
     let v = x[1usize..1usize + n]
     let k = c.name
+    if str.eq(k, "cramer") || str.eq(k, "phi") || str.eq(k, "cont") || str.eq(k, "tschuprow") || str.eq(k, "gamma") || str.eq(k, "taub") || str.eq(k, "tauc") || str.eq(k, "somersr") || str.eq(k, "somersc") {
+        let r = usize(x[0usize])
+        let cc = usize(x[1usize])
+        let tb = x[2usize..2usize + r * cc]
+        if str.eq(k, "cramer") { ret dt.cramer_v(tb, r, cc) }
+        if str.eq(k, "phi") { ret dt.phi_coef(tb, r, cc) }
+        if str.eq(k, "cont") { ret dt.cont_coef(tb, r, cc) }
+        if str.eq(k, "tschuprow") { ret dt.tschuprow_t(tb, r, cc) }
+        if str.eq(k, "gamma") { ret dt.ordinal_assoc(tb, r, cc, 0usize) }
+        if str.eq(k, "taub") { ret dt.ordinal_assoc(tb, r, cc, 1usize) }
+        if str.eq(k, "tauc") { ret dt.ordinal_assoc(tb, r, cc, 2usize) }
+        if str.eq(k, "somersr") { ret dt.ordinal_assoc(tb, r, cc, 3usize) }
+        ret dt.ordinal_assoc(tb, r, cc, 4usize)
+    }
     if str.eq(k, "skew1") { ret dt.skew(v, 1usize) }
     if str.eq(k, "skew2") { ret dt.skew(v, 2usize) }
     if str.eq(k, "skew3") { ret dt.skew(v, 3usize) }

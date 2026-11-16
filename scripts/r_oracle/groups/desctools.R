@@ -10,4 +10,10 @@ for (rep in 1:20) {
   add("gini", a, Gini(x)); add("ginib", a, Gini(x, unbiased = FALSE)); add("meanad", a, MeanAD(x)); add("gmean", a, Gmean(x)); add("hmean", a, Hmean(x))
   add("entropy", a, Entropy(x)); add("cv", a, CoefVar(x))
 }
+for (rep in 1:20) {
+  r <- sample(2:5, 1); cc <- sample(2:5, 1); tab <- matrix(sample(1:30, r * cc, TRUE), r, cc); a <- c(r, cc, as.vector(t(tab)))
+  add("cramer", a, CramerV(tab)); add("phi", a, Phi(tab)); add("cont", a, ContCoef(tab)); add("tschuprow", a, TschuprowT(tab))
+  add("gamma", a, GoodmanKruskalGamma(tab)); add("taub", a, KendallTauB(tab)); add("tauc", a, StuartTauC(tab))
+  add("somersr", a, SomersDelta(tab, direction = "row")); add("somersc", a, SomersDelta(tab, direction = "column"))
+}
 emit("desctools", "DescTools", list(cases))

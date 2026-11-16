@@ -150,3 +150,130 @@ fn entropy(x: []const f64) -> f64 {
 }
 
 fn coef_var(x: []const f64) -> f64 { ret sd_of(x) / mean_of(x) }
+
+// ---- association measures of an r by c table of counts (row-major)
+
+fn chisq_of(t: []const f64, r: usize, c: usize) -> f64 {
+    var n = 0.0f64
+    var i = 0usize
+    while i < r * c {
+        n += t[i]
+        i += 1usize
+    }
+    var chi = 0.0f64
+    i = 0usize
+    while i < r {
+        var rs = 0.0f64
+        var j = 0usize
+        while j < c {
+            rs += t[i * c + j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < c {
+            var cs = 0.0f64
+            var k = 0usize
+            while k < r {
+                cs += t[k * c + j]
+                k += 1usize
+            }
+            let e = rs * cs / n
+            chi += (t[i * c + j] - e) * (t[i * c + j] - e) / e
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret chi
+}
+
+fn total_of(t: []const f64) -> f64 {
+    var n = 0.0f64
+    var i = 0usize
+    while i < t.len {
+        n += t[i]
+        i += 1usize
+    }
+    ret n
+}
+
+fn cramer_v(t: []const f64, r: usize, c: usize) -> f64 {
+    var m = r
+    if c < m { m = c }
+    ret math.sqrt[f64](chisq_of(t, r, c) / (total_of(t) * f64(m - 1usize)))
+}
+
+fn phi_coef(t: []const f64, r: usize, c: usize) -> f64 { ret math.sqrt[f64](chisq_of(t, r, c) / total_of(t)) }
+
+fn cont_coef(t: []const f64, r: usize, c: usize) -> f64 {
+    let chi = chisq_of(t, r, c)
+    ret math.sqrt[f64](chi / (chi + total_of(t)))
+}
+
+fn tschuprow_t(t: []const f64, r: usize, c: usize) -> f64 {
+    ret math.sqrt[f64](chisq_of(t, r, c) / (total_of(t) * math.sqrt[f64](f64((r - 1usize) * (c - 1usize)))))
+}
+
+// the concordant and discordant pair counts
+fn pairs_cd(t: []const f64, r: usize, c: usize) -> (f64, f64) {
+    var cc = 0.0f64
+    var dd = 0.0f64
+    var i = 0usize
+    while i < r {
+        var j = 0usize
+        while j < c {
+            var k = i + 1usize
+            while k < r {
+                var l = 0usize
+                while l < c {
+                    if l > j { cc += t[i * c + j] * t[k * c + l] }
+                    if l < j { dd += t[i * c + j] * t[k * c + l] }
+                    l += 1usize
+                }
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (cc, dd)
+}
+
+// kind: 0 Goodman-Kruskal gamma, 1 Kendall tau-b, 2 Stuart tau-c, 3 Somers d (row), 4 Somers d (column)
+fn ordinal_assoc(t: []const f64, r: usize, c: usize, kind: usize) -> f64 {
+    let (cc, dd) = pairs_cd(t, r, c)
+    let n = total_of(t)
+    let n0 = n * (n - 1.0f64) / 2.0f64
+    var n1 = 0.0f64
+    var i = 0usize
+    while i < r {
+        var rs = 0.0f64
+        var j = 0usize
+        while j < c {
+            rs += t[i * c + j]
+            j += 1usize
+        }
+        n1 += rs * (rs - 1.0f64) / 2.0f64
+        i += 1usize
+    }
+    var n2 = 0.0f64
+    var j = 0usize
+    while j < c {
+        var cs = 0.0f64
+        i = 0usize
+        while i < r {
+            cs += t[i * c + j]
+            i += 1usize
+        }
+        n2 += cs * (cs - 1.0f64) / 2.0f64
+        j += 1usize
+    }
+    if kind == 0usize { ret (cc - dd) / (cc + dd) }
+    if kind == 1usize { ret (cc - dd) / math.sqrt[f64]((n0 - n1) * (n0 - n2)) }
+    if kind == 2usize {
+        var m = r
+        if c < m { m = c }
+        ret 2.0f64 * f64(m) * (cc - dd) / (n * n * f64(m - 1usize))
+    }
+    if kind == 3usize { ret (cc - dd) / (n0 - n2) }
+    ret (cc - dd) / (n0 - n1)
+}
