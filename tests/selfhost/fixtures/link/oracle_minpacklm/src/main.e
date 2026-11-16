@@ -66,11 +66,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     let lo = z[3usize + 2usize * n + np..3usize + 2usize * n + 2usize * np]
     let hi = z[3usize + 2usize * n + 2usize * np..3usize + 2usize * n + 3usize * np]
-    let q = usize(z[3usize + 2usize * n + 3usize * np])
+    var q = usize(z[3usize + 2usize * n + 3usize * np])
+    var fac = 100.0f64
+    var dgv = z[3usize..3usize]
+    if str.eq(c.name, "lmopt") {
+        fac = z[3usize + 2usize * n + 3usize * np]
+        dgv = z[3usize + 2usize * n + 3usize * np + 1usize..3usize + 2usize * n + 4usize * np + 1usize]
+        q = usize(z[3usize + 2usize * n + 4usize * np + 1usize])
+    }
     let sq = 1.4901161193847656e-8f64
     var fit: ml.Fit = zero
     var e: err = ok
-    if str.eq(c.name, "lmder") {
+    if str.eq(c.name, "lmopt") {
+        let (f2, e2) = ml.nls_lm_opts[Data](a, resid, &d, n, np, x, lo, hi, sq, sq, 0.0f64, i64(100usize * (np + 1usize)), 50i64, fac, dgv)
+        fit = f2
+        e = e2
+    } else if str.eq(c.name, "lmder") {
         let (f2, e2) = ml.nls_lm_der[Data](a, resid, jac, &d, n, np, x, lo, hi, sq, sq, 0.0f64, i64(100usize * (np + 1usize)), 50i64)
         fit = f2
         e = e2

@@ -46192,3 +46192,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.minpacklm` now has one core, `nls_lm_core`, with the numerical-Jacobian path (lmdif, which charges n function evaluations) and an analytic one (lmder, where the user's Jacobian of the residuals is taken at the clamped parameters and no evaluations are charged); `nls_lm` and the new `nls_lm_der` are thin entries over it, so the drc module that calls `nls_lm` is unchanged.
 
 **Result.** `oracle_minpacklm` agrees with minpack.lm on 340 values on Windows, 170 of them new: nls.lm with `jac` on 30 fits of the three model families (one with a bound), parameters, deviance, info code and iteration count, rel 1e-6. The diag option, hessian and the nlsLM model interface are open; Linux pending. L420 stays partial.
+
+## D6504 — minpack.lm: the factor and diag controls
+
+`nls_lm_core` takes the initial step-bound factor and a user `diag`; an empty diag keeps lmdif's scaling mode 1 (diag set from the first Jacobian's column norms and raised as they grow), and a given one switches to mode 2 (the supplied scales are used as they are and never updated). `nls_lm_opts` exposes both.
+
+**Result.** `oracle_minpacklm` agrees with minpack.lm on 510 values on Windows, the 170 new ones from 30 fits with a factor of 1, 10, 100 or 1000 and a random diag: parameters, deviance, info code and iteration count at rel 1e-6. The hessian and the nlsLM model interface are open; Linux pending. L420 stays partial.

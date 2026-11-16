@@ -393,7 +393,7 @@ fn lmpar(n: usize, ldr: usize, r: []f64, ipvt: []const usize, diag: []const f64,
 // nls.lm(par, lower, upper, fn) with the default control (ftol = ptol = sqrt(eps), gtol = 0, epsfcn = 0,
 // factor = 100, maxiter = 50, maxfev = 100 (n + 1)); x holds the start and receives the solution; fn writes the
 // m residuals
-fn nls_lm_core[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C, []const f64, []f64), analytic: bool, user: *C, m: usize, n: usize, x: []f64, lower: []const f64, upper: []const f64, ftol: f64, ptol: f64, gtol: f64, maxfev: i64, maxiter: i64) -> (Fit, err) {
+fn nls_lm_core[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C, []const f64, []f64), analytic: bool, factor: f64, diag_in: []const f64, user: *C, m: usize, n: usize, x: []f64, lower: []const f64, upper: []const f64, ftol: f64, ptol: f64, gtol: f64, maxfev: i64, maxiter: i64) -> (Fit, err) {
     var fit: Fit = zero
     let (fvec, e1) = mem.alloc[f64](a, m)
     let (fjac, e2) = mem.alloc[f64](a, m * n)
@@ -407,7 +407,6 @@ fn nls_lm_core[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret (fit, e1) }
     var o = Ctx[C] { f: f, user: user, lower: lower, upper: upper, niter: 0i64, maxiter: maxiter }
     let epsmch = 2.220446049250313e-16f64
-    let factor = 100.0f64
     var info = 0i64
     var nfev = 0i64
     var iflag = call[C](&o, x, fvec, 1i64)
@@ -436,8 +435,8 @@ fn nls_lm_core[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C
         if iter == 1i64 {
             j = 0usize
             while j < n {
-                diag[j] = wa2[j]
-                if wa2[j] == 0.0f64 { diag[j] = 1.0f64 }
+                if diag_in.len > 0usize { diag[j] = diag_in[j] } else { diag[j] = wa2[j] }
+                if diag_in.len == 0usize && wa2[j] == 0.0f64 { diag[j] = 1.0f64 }
                 wa3[j] = diag[j] * x[j]
                 j += 1usize
             }
@@ -493,7 +492,7 @@ fn nls_lm_core[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C
         if info != 0i64 { break }
         j = 0usize
         while j < n {
-            if wa2[j] > diag[j] { diag[j] = wa2[j] }
+            if diag_in.len == 0usize && wa2[j] > diag[j] { diag[j] = wa2[j] }
             j += 1usize
         }
         var inner = true
@@ -603,12 +602,23 @@ fn nls_lm_core[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C
 
 // nls.lm with the numerical Jacobian (lmdif)
 fn nls_lm[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), user: *C, m: usize, n: usize, x: []f64, lower: []const f64, upper: []const f64, ftol: f64, ptol: f64, gtol: f64, maxfev: i64, maxiter: i64) -> (Fit, err) {
-    let (fit, e) = nls_lm_core[C](a, f, f, false, user, m, n, x, lower, upper, ftol, ptol, gtol, maxfev, maxiter)
+    let (fit, e) = nls_lm_core[C](a, f, f, false, 100.0f64, diag_empty(), user, m, n, x, lower, upper, ftol, ptol, gtol, maxfev, maxiter)
     ret (fit, e)
 }
 
 // nls.lm with an analytic Jacobian (lmder): jac fills the m by n Jacobian of the residuals column by column (fjac[j * m + i] = d resid_i / d x_j)
 fn nls_lm_der[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C, []const f64, []f64), user: *C, m: usize, n: usize, x: []f64, lower: []const f64, upper: []const f64, ftol: f64, ptol: f64, gtol: f64, maxfev: i64, maxiter: i64) -> (Fit, err) {
-    let (fit, e) = nls_lm_core[C](a, f, jac, true, user, m, n, x, lower, upper, ftol, ptol, gtol, maxfev, maxiter)
+    let (fit, e) = nls_lm_core[C](a, f, jac, true, 100.0f64, diag_empty(), user, m, n, x, lower, upper, ftol, ptol, gtol, maxfev, maxiter)
+    ret (fit, e)
+}
+
+fn diag_empty() -> []const f64 {
+    var z: [1]f64 = zero
+    ret z[0usize..0usize]
+}
+
+// nls.lm with the options of nls.lm.control that the core takes: the initial step-bound factor and a user diag (the scaling mode 2 of lmdif; an empty diag is mode 1)
+fn nls_lm_opts[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), user: *C, m: usize, n: usize, x: []f64, lower: []const f64, upper: []const f64, ftol: f64, ptol: f64, gtol: f64, maxfev: i64, maxiter: i64, factor: f64, diag_in: []const f64) -> (Fit, err) {
+    let (fit, e) = nls_lm_core[C](a, f, f, false, factor, diag_in, user, m, n, x, lower, upper, ftol, ptol, gtol, maxfev, maxiter)
     ret (fit, e)
 }
