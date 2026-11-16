@@ -220,3 +220,4 @@ oracle_allperms
 oracle_locpoly
 oracle_rngseq
 oracle_gaussq
+oracle_carets
