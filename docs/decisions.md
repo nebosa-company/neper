@@ -45646,3 +45646,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pracma` gains newton_raphson as the package writes it: the numerical derivative by a central difference with h = tol^(2/3), steps until the step is below tol or maxiter is exceeded, and the (root, f(root), iterations, estimated precision) answer; the function is one of five fixed ones chosen by index since the module takes no closures. Root, iteration count and precision equal pracma's (the iteration count exactly). Not here: a user-supplied derivative, fzero (Brent-style zeroin with its bracket search) and the other root finders.
 
 **Result.** `oracle_pracma` equals pracma on 532 cases on Windows; Linux pending. L333 stays partial.
+
+## D6413 — pracma: romberg
+
+`e.algo.stat.pracma` gains romberg, the package's Romberg integration: the trapezoid sum on 2, 4, 8, ... panels, the Richardson table I[j, k] = (4^(k-1) I[j+1, k-1] - I[j, k-1]) / (4^(k-1) - 1), and the stop when |I[1, iter + 1] - I[2, iter]| falls to tol (1e-12) or maxit is reached, over the five fixed integrands of quadgk. Value and iteration count equal pracma's. The first attempt took the table row index one too high (R's j = 2 + iter - k is 1-based). Not here: quadl (the adaptive Lobatto rule), integral and the infinite-range forms.
+
+**Result.** `oracle_pracma` equals pracma on 562 cases on Windows; Linux pending. L333 stays partial.

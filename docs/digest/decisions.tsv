@@ -3280,4 +3280,5 @@ D6410	668	pracma: roots
 D6411	994	drc: the LL.4 dose-response fit
 D6411	513	pracma: conv, deconv and polyint
 D6412	816	Epi: twoby2
-D6412	689	pracma: newtonRaphson
+D6412	690	pracma: newtonRaphson
+D6413	677	pracma: romberg

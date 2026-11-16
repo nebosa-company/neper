@@ -162,6 +162,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "nr_iter") { ret f64(ni) }
         ret pr
     }
+    if str.eq(k, "romb_v") || str.eq(k, "romb_it") {
+        let (v, it, er) = pm.romberg(usize(x[0usize]), x[1usize], x[2usize], 12usize, 1.0e-12f64)
+        if str.eq(k, "romb_v") { ret v }
+        ret f64(it)
+    }
     if str.eq(k, "legendre") {
         let (o, e) = mem.alloc[f64](a, usize(x[0usize]) + 1usize)
         if e != ok { os.exit(5) }

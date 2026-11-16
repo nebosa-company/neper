@@ -76,6 +76,12 @@ for (rep in 1:20) {
   nr <- newtonRaphson(fs[[id + 1]], x0)
   add("nr_root", c(id, x0), nr$root); add("nr_iter", c(id, x0), nr$niter); add("nr_prec", c(id, x0), nr$estim.prec)
 }
+fq <- list(sin, function(x) exp(-x^2), function(x) 1 / (1 + x^2), sqrt, function(x) cos(5 * x) * exp(-x))
+for (rep in 1:15) {
+  id <- (rep - 1) %% 5; lo <- if (id == 3) 0 else runif(1, -2, 0); hi <- runif(1, 0.5, 3)
+  rb <- suppressWarnings(romberg(fq[[id + 1]], lo, hi, maxit = 12))
+  add("romb_v", c(id, lo, hi), rb$value); add("romb_it", c(id, lo, hi), rb$iter)
+}
 # nchoosek reference values are filled from R directly
 cases <- lapply(cases, function(cs) { if (cs$fn == "nchoosek") cs$want <- choose(cs$args[1], cs$args[2]); cs })
 emit("pracma", "pracma", list(cases))

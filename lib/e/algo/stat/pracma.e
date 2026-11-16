@@ -824,3 +824,44 @@ fn newton_raphson(id: usize, x0: f64, maxiter: usize, tol: f64) -> (f64, f64, us
     }
     ret (x, fx, niter, diff)
 }
+
+// romberg(f, a, b, maxit = 25, tol = 1e-12) over the fixed integrands of quadgk: (value, iterations, estimated error)
+fn romberg(id: usize, a: f64, b: f64, maxit: usize, tol: f64) -> (f64, usize, f64) {
+    let (value, iter, esti) = romberg_run(id, a, b, maxit, tol)
+    ret (value, iter, esti)
+}
+
+fn romberg_run(id: usize, a: f64, b: f64, maxit: usize, tol: f64) -> (f64, usize, f64) {
+    if a == b { ret (0.0f64, 0usize, 0.0f64) }
+    if a > b {
+        let (v, it, er) = romberg_run(id, b, a, maxit, tol)
+        ret (0.0f64 - v, it, er)
+    }
+    let w = maxit + 1usize
+    var tab: [676]f64 = zero
+    var n = 1usize
+    var iter = 0usize
+    var esti = 1.0f64
+    while esti > tol && iter < maxit {
+        iter += 1usize
+        n = 2usize * n
+        let h = (b - a) / f64(n)
+        var s = quad_f(id, a)
+        var i = 1usize
+        while i < n {
+            s += 2.0f64 * quad_f(id, a + h * f64(i))
+            i += 1usize
+        }
+        s = (s + quad_f(id, b)) * h / 2.0f64
+        tab[iter * w] = s
+        var k = 2usize
+        while k <= iter + 1usize {
+            let j = iter + 1usize - k
+            let p = math.pow[f64](4.0f64, f64(k - 1usize))
+            tab[j * w + (k - 1usize)] = (p * tab[(j + 1usize) * w + (k - 2usize)] - tab[j * w + (k - 2usize)]) / (p - 1.0f64)
+            k += 1usize
+        }
+        esti = math.abs[f64](tab[iter] - tab[1usize * w + (iter - 1usize)])
+    }
+    ret (tab[iter], iter, esti)
+}
