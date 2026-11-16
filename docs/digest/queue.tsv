@@ -89,7 +89,7 @@ L336	library	0	247	nnet: single-hidden-layer networks and multinom	Open (CRAN ra
 L337	library	0.4	634	rpart: CART trees	Partial (D6434, D6435 classification trees with cost-complexity pruning, 29 of 30 data sets).
 L394	library	0	193	ipred: bagging and error estimation	Open (CRAN rank 439).
 L338	library	0.2	461	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
-L339	library	0	435	bayestestR, performance and parameters: model summary indices	Open (CRAN ranks 254, 251, 272).
+L339	library	0.08	625	bayestestR, performance and parameters: model summary indices	Partial (D6473 bayestestR hdi, eti, p_direction, rope on a sample equal bayestestR on Windows;
 L340	library	0.55	723	signal: filter design and spectral tools	Partial (D6183, D6184 filtfilt and freqz, D6400 sgolay central row, D6401 cheby1, D6402 cheby2, D6403 grpdelay, D6404 band-pass butter, D6443 fir2, D6444 fir1 band types, D6445 decimate, unwrap).
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
 L346	library	0	284	mice: imputation parity	Open (CRAN rank 293).

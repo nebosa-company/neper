@@ -294,6 +294,7 @@ oracle_drdid
 oracle_gstatpkg
 oracle_fieldspkg
 oracle_gamlssdist
+oracle_bayestestr
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -332,3 +333,4 @@ oracle_drdid
 oracle_gstatpkg
 oracle_fieldspkg
 oracle_gamlssdist
+oracle_bayestestr

@@ -46006,3 +46006,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.gamlssdist` gains `dwei`, `dlogno`, `dnbi`, `dzip`, `djsu`, `dshash` and `dbct` (the Box-Cox t on `pt` from `e.math.nmath_beta`), with the package's parametrizations: WEI scale mu and shape sigma, NBI variance mu + sigma mu^2, ZIP zero mass sigma, the JSU and SHASH location-scale-skew-tail forms.
 
 **Result.** `oracle_gamlssdist` equals gamlss.dist on 1860 cases on Windows at rel 1e-9, 840 of them new over 30 parameter draws, with discrete counts 0 to 12 for NBI and ZIP. The other families, p and q for most, random numbers, moments and link functions are open; Linux pending. L464 stays partial.
+
+## D6473 — bayestestR: hdi, eti, p_direction and rope
+
+`e.algo.stat.bayestestr` is new, on a posterior sample: `hdi` (the narrowest window of ceiling(ci n) sorted draws, with the package's tie rule: the middle of a contiguous run, the rightmost of separated runs), `eti` (type-7 quantiles at (1 -+ ci) / 2), `p_direction` (the larger side's share of draws) and `rope_share` (the share inside a range).
+
+**Result.** `oracle_bayestestr` equals bayestestR on 180 cases on Windows at rel 1e-9, 30 samples of 100 to 600 draws, a third skewed gamma. The density-based point estimates, bayes factors, the other indices and the model-object interface are open; performance and parameters are not started; Linux pending. L339 is partial.
