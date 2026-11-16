@@ -45670,3 +45670,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.math.ode.euler` and `rk4` agree with deSolve's ode(method = "euler") and ode(method = "rk4") on Lotka-Volterra, Lorenz, logistic and damped-oscillator systems with steps of 0.01 to 0.1 over 5 to 60 steps, to 1e-9 relative, so the module's fixed-step integrators are the same classical schemes. The oracle fixture is new; no library change was needed. Not here: lsoda, lsode, lsodar, vode, radau, daspk, the embedded Runge-Kutta methods ode23 and ode45, bdf and adams, events and root functions, dede and DAE problems; the adaptive methods agree only to their tolerances.
 
 **Result.** `oracle_desolve` equals deSolve on 48 cases on Windows; Linux pending. L343 is partial.
+
+## D6417 — foreign: read.arff for dense files
+
+`e.fmt.arff` reads dense ARFF files as foreign::read.arff does: @relation, @attribute (numeric, real, integer, string, date, and nominal sets with quoted names or levels), @data rows with '?' missing, % comments, quoted fields. Numeric columns keep their values; a nominal value is its 1-based rank in the declared levels sorted bytewise, because read.arff returns the factor with sorted levels, not in the declared order (the first attempt used the declared order and the factor-code sums showed it). String and date columns are recorded by kind and read as missing. The oracle writes six ARFF files with write.arff (numeric and factor columns with missing values) under tests/oracle/data and compares row and column counts, per-column sums and missing counts. Not here: sparse rows, relational attributes, date parsing, weights, read.dbf, read.octave, read.mtp, read.systat and write.dbf.
+
+**Result.** `oracle_foreign` equals foreign on 60 cases on Windows; Linux pending. L332 is partial.

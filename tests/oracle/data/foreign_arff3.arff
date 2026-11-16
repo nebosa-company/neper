@@ -1,0 +1,38 @@
+@relation df
+@attribute a numeric
+@attribute b {'red','green','blue','yellow'}
+@attribute c numeric
+@attribute d {'no','yes'}
+@data
+0.2382,'blue',25,'yes'
+0.0876,'blue',25,'no'
+-1.0288,'green',69,'no'
+-0.9644,'yellow',56,'no'
+-1.0127,'yellow',12,'no'
+0.5651,'green',1,'no'
+0.2164,'yellow',37,'no'
+-0.4466,'green',47,'yes'
+?,'yellow',13,'yes'
+-0.1819,'yellow',20,'yes'
+-0.1634,'red',2,'no'
+-0.2203,?,93,'no'
+0.0279,'yellow',40,'yes'
+?,'yellow',72,'no'
+-0.1975,'yellow',9,'no'
+0.0353,'red',30,'yes'
+0.1802,'yellow',5,'yes'
+0.1123,'green',80,'yes'
+0.0296,'red',68,'no'
+0.2899,'green',25,'no'
+1.6876,'green',84,'no'
+-1.0647,'blue',91,'yes'
+-0.7631,'red',64,'no'
+-0.3983,'blue',29,'no'
+0.1393,'green',39,'no'
+-0.1756,'yellow',18,'no'
+1.9407,'red',69,'no'
+0.8756,?,76,'yes'
+-0.1942,'green',61,'no'
+1.4074,'green',75,'no'
+0.7342,'yellow',36,'no'
+0.2635,'yellow',9,'no'

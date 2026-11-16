@@ -1,0 +1,20 @@
+@relation df
+@attribute a numeric
+@attribute b {'red','green','blue','yellow'}
+@attribute c numeric
+@attribute d {'no','yes'}
+@data
+-1.2106,'red',88,'yes'
+1.8186,'yellow',42,'yes'
+0.3468,?,89,'yes'
+-1.2125,'red',1,'no'
+-0.3224,'blue',36,'no'
+2.6294,'yellow',29,'yes'
+-0.0485,'red',27,'no'
+0.2003,'green',52,'no'
+1.3855,'yellow',76,'yes'
+0.2088,'green',52,'no'
+-0.3402,'green',85,'yes'
+?,?,4,'yes'
+-1.4914,'red',61,'no'
+?,'yellow',16,'no'
