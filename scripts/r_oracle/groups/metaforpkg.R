@@ -1,4 +1,5 @@
 # metaforpkg: metafor rma.uni intercept-only models.
+#   "knha" (method, what 0 se 1 t 2 pval 3 ci.lb 4 ci.ub, k, yi, vi) is test = "knha" for the closed-form estimators.
 #   args: (method 0 FE 1 DL 2 HE 3 HS 4 SJ 5 PM 6 ML 7 REML, what 0 beta 1 se 2 tau2 3 I2 4 H2 5 QE 6 QEp 7 zval 8 pval 9 ci.lb 10 ci.ub, k, yi (k), vi (k)).
 #   DL, HE, HS, SJ and FE are closed forms (rel 1e-9); PM, ML and REML are iterative in metafor (threshold 1e-5) and here exact maxima, so they are compared at rel 1e-2 and abs 1e-2: when the likelihood is nearly flat at zero metafor stops at a small positive tau2 (up to about 0.008 here) where the exact maximum is the boundary.
 suppressMessages(library(metafor))
@@ -14,5 +15,9 @@ for (rep in 1:30) {
     rel <- if (m %in% c(5, 6, 7)) 1e-2 else 1e-9
     for (w in 0:10) add("rma", c(m, w, k, yi, vi), vals[w + 1], if (w %in% c(5, 6)) 1e-9 else rel)
   }
+}
+for (rep in 1:25) {
+  k <- sample(5:25, 1); vi <- round(runif(k, 0.02, 0.3), 4); yi <- round(rnorm(k, 0.3, sqrt(vi + 0.05)), 4)
+  for (m in c(1, 2, 3, 4)) { r <- rma(yi, vi, method = ms[m + 1], test = "knha"); vals <- c(r$se, r$zval, r$pval, r$ci.lb, r$ci.ub); for (w in 0:4) add("knha", c(m, w, k, yi, vi), vals[w + 1], 1e-9) }
 }
 emit("metaforpkg", "metafor", list(cases))

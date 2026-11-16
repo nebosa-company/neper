@@ -46162,3 +46162,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.metaforbias` gains `leave1out`, which refits `rma` on the data without one study and returns the estimate, standard error, z, p-value, tau2 and Q (tau2 is zero for the fixed-effect model, where metafor reports NA).
 
 **Result.** `oracle_metaforbias` agrees with metafor on 621 cases on Windows at rel 1e-8, the 360 new ones over 20 data sets of 6 to 20 studies, three dropped studies each, FE and DL. One bug was in the oracle: the fixed-effect leave1out has no tau2 component, so building the reference vector with c() shifted Q one place; the reference now fills a zero there. trimfill, influence, permutest, the other estimators under leave1out and Knapp-Hartung are open; Linux pending. L364 stays partial.
+
+## D6499 — metafor: the Knapp-Hartung test
+
+`e.algo.stat.metaforpkg` gains `rma_knha`: the variance of the pooled estimate becomes the weighted residual sum of squares over k - 1 divided by the sum of weights, with no truncation of that factor at one, and the test and the limits use a t distribution on k - 1 degrees of freedom (`pt` and `qt` of e.math.nmath_beta).
+
+**Result.** `oracle_metaforpkg` agrees with metafor on 3140 cases on Windows, the 500 new ones at rel 1e-9: se, t, p-value and both limits for the DL, HE, HS and SJ estimators over 25 data sets of 5 to 25 studies. The adhoc truncation, moderators and the iterative estimators under knha are open; Linux pending. L364 stays partial.

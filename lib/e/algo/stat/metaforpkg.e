@@ -7,6 +7,7 @@
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
+use e.math.nmath_beta as nb
 
 // Q(tau2) = sum w (y - ybar_w)^2 with w = 1 / (v + tau2)
 fn q_of(y: []const f64, v: []const f64, tau2: f64) -> f64 {
@@ -182,4 +183,30 @@ fn rma(y: []const f64, v: []const f64, method: usize, what: usize) -> f64 {
     let zc = dist.qnorm(0.975f64, 0.0f64, 1.0f64, true, false)
     if what == 9usize { ret beta - zc * se }
     ret beta + zc * se
+}
+
+// the Knapp-Hartung adjustment (test = "knha"): the variance of the pooled estimate is the weighted residual sum of squares over k - 1 divided by the sum of weights, with a t
+// reference distribution on k - 1 degrees of freedom; what 0 se, 1 t, 2 p-value, 3 ci.lb, 4 ci.ub
+fn rma_knha(y: []const f64, v: []const f64, method: usize, what: usize) -> f64 {
+    let k = f64(y.len)
+    let tau2 = tau2_of(y, v, method)
+    var sw = 0.0f64
+    var swy = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        let w = 1.0f64 / (v[i] + tau2)
+        sw += w
+        swy += w * y[i]
+        i += 1usize
+    }
+    let beta = swy / sw
+    let s2 = q_of(y, v, tau2) / (k - 1.0f64)
+    let se = math.sqrt[f64](s2 / sw)
+    if what == 0usize { ret se }
+    let t = beta / se
+    if what == 1usize { ret t }
+    if what == 2usize { ret 2.0f64 * nb.pt(0.0f64 - math.abs[f64](t), k - 1.0f64, true, false) }
+    let tc = nb.qt(0.975f64, k - 1.0f64, true, false)
+    if what == 3usize { ret beta - tc * se }
+    ret beta + tc * se
 }
