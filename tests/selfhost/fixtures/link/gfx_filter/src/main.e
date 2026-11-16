@@ -276,6 +276,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
 
+    // L245: a width and height whose product does not fit a usize are refused with TooLarge, not a trap on the multiplication
+    let huge = 6000000000usize
+    var tiny_f: [4]f64 = zero
+    var tiny_u: [4]u8 = zero
+    var tiny_l: [4]u32 = zero
+    var tiny_s: [4]f64 = zero
+    if filter.gaussian_blur(tiny_f[..], huge, huge, 1.0f64, tiny_s[..], tiny_s[..]) != filter.TooLarge { os.exit(60i32) }
+    let (big_canny_n, big_canny_error) = filter.canny(tiny_f[..], huge, huge, 0.1f64, 0.3f64, 1.0f64, tiny_u[..], tiny_s[..])
+    if big_canny_error != filter.TooLarge || big_canny_n != 0usize { os.exit(61i32) }
+    let (big_comp_n, big_comp_error) = filter.label_components(tiny_u[..], huge, huge, 4u32, tiny_l[..], tiny_l[..])
+    if big_comp_error != filter.TooLarge || big_comp_n != 0u32 { os.exit(62i32) }
+    let (big_shift_n, big_shift_error) = filter.mean_shift(tiny_f[..], huge, huge, 1.0f64, 1.0f64, 1usize, tiny_s[..], tiny_s[..])
+    if big_shift_error != filter.TooLarge || big_shift_n != 0usize { os.exit(63i32) }
+
     try io.print("gfx filter ok\n")
     ret ok
 }

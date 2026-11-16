@@ -3529,4 +3529,5 @@ D6666	909	recursion depth guards: the JavaScript engine
 D6667	946	quicksort recurses on the smaller part
 D6668	926	a step budget for every page task
 D6669	734	declared ceilings as generated metadata
-D6670	889	silent truncation: two sites named and counted
+D6670	890	silent truncation: two sites named and counted
+D6671	663	gfx.filter: pixel counts that overflow are refused

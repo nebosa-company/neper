@@ -89,6 +89,7 @@ fn conv_v(src: []const f64, w: usize, h: usize, r: usize, k: []const f64, dst: [
 // Separable Gaussian, radius `int(4*sigma + 0.5)` (at most 64), reflected borders;
 // `scratch` holds `w*h`.
 fn gaussian_blur(src: []const f64, w: usize, h: usize, sigma: f64, dst: []f64, scratch: []f64) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if src.len < n || dst.len < n || scratch.len < n { ret TooSmall }
     if !(sigma > 0.0f64) { ret Invalid }
@@ -117,6 +118,7 @@ fn gaussian_blur(src: []const f64, w: usize, h: usize, sigma: f64, dst: []f64, s
 // scipy's Sobel: `gx` is `[-1 0 1]` along x smoothed by `[1 2 1]` along y, `gy` the
 // transpose, `magnitude` their Euclidean length.
 fn sobel(src: []const f64, w: usize, h: usize, gx: []f64, gy: []f64, magnitude: []f64) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if src.len < n || gx.len < n || gy.len < n || magnitude.len < n { ret TooSmall }
     var y = 0usize
@@ -144,6 +146,7 @@ fn sobel(src: []const f64, w: usize, h: usize, gx: []f64, gy: []f64, magnitude: 
 // `scratch` holds `4*w*h`. Magnitudes below `low` are dropped, at or above `high`
 // seed the hysteresis, which keeps every 8-connected chain reaching a seed.
 fn canny(src: []const f64, w: usize, h: usize, low: f64, high: f64, sigma: f64, edges: []u8, scratch: []f64) -> (usize, err) {
+    if w != 0usize && h > 18446744073709551615usize / w { ret (zero, TooLarge) }
     let n = w * h
     if src.len < n || edges.len < n || scratch.len < 4usize * n { ret (0usize, TooSmall) }
     if w < 3usize || h < 3usize { ret (0usize, Invalid) }
@@ -240,6 +243,7 @@ fn canny(src: []const f64, w: usize, h: usize, low: f64, high: f64, sigma: f64, 
 
 // Median of the `(2r+1)^2` reflected window; `scratch` holds `(2r+1)^2`.
 fn median(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, scratch: []f64) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     let side = 2usize * radius + 1usize
     if src.len < n || dst.len < n || scratch.len < side * side { ret TooSmall }
@@ -277,6 +281,7 @@ fn median(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, scrat
 // Bilateral filter: Gaussian weights in space (`sigma_s`) and in value (`sigma_r`)
 // over the reflected window of radius `ceil(2*sigma_s)`.
 fn bilateral(src: []const f64, w: usize, h: usize, sigma_s: f64, sigma_r: f64, dst: []f64) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if src.len < n || dst.len < n { ret TooSmall }
     if !(sigma_s > 0.0f64) || !(sigma_r > 0.0f64) { ret Invalid }
@@ -313,6 +318,7 @@ fn bilateral(src: []const f64, w: usize, h: usize, sigma_s: f64, sigma_r: f64, d
 // Mean over the in-bounds `(2r+1)` square (the window shrinks at the border);
 // `scratch` holds `w*h`.
 fn box_mean(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, scratch: []f64) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if src.len < n || dst.len < n || scratch.len < n { ret TooSmall }
     var y = 0usize
@@ -361,6 +367,7 @@ fn box_mean(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, scr
 // Guided filter (He, Sun, Tang) of `src` steered by `guide`: `dst = mean(a)*guide +
 // mean(b)` with `a = cov(guide, src) / (var(guide) + eps)`; `scratch` holds `7*w*h`.
 fn guided(src: []const f64, guide: []const f64, w: usize, h: usize, radius: usize, eps: f64, dst: []f64, scratch: []f64) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if src.len < n || guide.len < n || dst.len < n || scratch.len < 7usize * n { ret TooSmall }
     let mean_i = scratch[..n]
@@ -499,6 +506,7 @@ fn threshold_otsu(src: []const u8, w: usize, h: usize) -> u8 {
 // ---- morphology ----------------------------------------------------------------
 
 fn morph_extreme(src: []const f64, w: usize, h: usize, radius: usize, dst: []f64, dilate: bool) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if src.len < n || dst.len < n { ret TooSmall }
     var y = 0usize
@@ -580,6 +588,7 @@ fn uf_union(parent: []u32, a: u32, b: u32) {
 // `1..count` in order of first raster appearance, 0 for background. `parent` holds
 // `w*h + 1` union-find slots.
 fn label_components(src: []const u8, w: usize, h: usize, connectivity: u32, labels: []u32, parent: []u32) -> (u32, err) {
+    if w != 0usize && h > 18446744073709551615usize / w { ret (zero, TooLarge) }
     let n = w * h
     if src.len < n || labels.len < n || parent.len < n + 1usize { ret (0u32, TooSmall) }
     if connectivity != 4u32 && connectivity != 8u32 { ret (0u32, Invalid) }
@@ -781,6 +790,7 @@ fn dt1d(f: []const f64, n: usize, d: []f64, v: []f64, z: []f64) {
 // pixel (Felzenszwalb-Huttenlocher, columns then rows); `scratch` holds
 // `4*max(w, h) + 1`. With no zero pixel every answer is `1e20` or above.
 fn distance_transform(binary: []const u8, w: usize, h: usize, out: []f64, scratch: []f64) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     var m = w
     if h > m { m = h }
@@ -898,6 +908,7 @@ fn sift_down(key: []const f64, tie: []const u32, heap: []u32, pos: []u32, size: 
 // Fast marching: arrival times `out` from the `sources` (pixel indices at time 0)
 // at unit spacing through `speed`; `heap` and `pos` hold `w*h`.
 fn fast_marching(speed: []const f64, w: usize, h: usize, sources: []const u32, out: []f64, heap: []u32, pos: []u32) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if speed.len < n || out.len < n || heap.len < n || pos.len < n { ret TooSmall }
     var i = 0usize
@@ -966,6 +977,7 @@ fn fast_marching(speed: []const f64, w: usize, h: usize, sources: []const u32, o
 // discrete solution as `fast_marching` once converged (a handful of sweeps at a
 // constant speed, more where the speed varies).
 fn fast_sweeping(speed: []const f64, w: usize, h: usize, sources: []const u32, out: []f64, sweeps: usize) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if speed.len < n || out.len < n { ret TooSmall }
     var i = 0usize
@@ -1110,6 +1122,7 @@ fn expand(src: []const f64, w2: usize, h2: usize, w: usize, h: usize, dst: []f64
 // The Laplacian pyramid of `src`: `levels - 1` band-pass levels then the Gaussian
 // residual, packed in `out` (`pyramid_size` long); `scratch` holds `2*w*h`.
 fn laplacian_pyramid(src: []const f64, w: usize, h: usize, levels: usize, out: []f64, scratch: []f64) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if levels == 0usize { ret Invalid }
     if src.len < n || out.len < pyramid_size(w, h, levels) || scratch.len < 2usize * n { ret TooSmall }
@@ -1145,6 +1158,7 @@ fn laplacian_pyramid(src: []const f64, w: usize, h: usize, levels: usize, out: [
 
 // Rebuild the image from its pyramid into `dst` (`w*h`); `scratch` holds `2*w*h`.
 fn laplacian_collapse(pyramid: []const f64, w: usize, h: usize, levels: usize, dst: []f64, scratch: []f64) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if levels == 0usize { ret Invalid }
     if pyramid.len < pyramid_size(w, h, levels) || dst.len < n || scratch.len < 2usize * n { ret TooSmall }
@@ -1246,6 +1260,7 @@ fn max_rectangle(binary: []const u8, w: usize, h: usize, heights: []u32, stack: 
 // (x, y, value) triples (a reached point within `hs` and `hr` of an earlier mode
 // joins it); answers the mode count, `TooSmall` when `modes` (3 per mode) fills.
 fn mean_shift(src: []const f64, w: usize, h: usize, hs: f64, hr: f64, iterations: usize, dst: []f64, modes: []f64) -> (usize, err) {
+    if w != 0usize && h > 18446744073709551615usize / w { ret (zero, TooLarge) }
     let n = w * h
     if src.len < n || dst.len < n { ret (0usize, TooSmall) }
     if !(hs > 0.0f64) || !(hr >= 0.0f64) { ret (0usize, Invalid) }
@@ -1327,6 +1342,7 @@ fn mean_shift(src: []const f64, w: usize, h: usize, hs: f64, hr: f64, iterations
 // height, first-come among equal heights, 4-connected in the order up, left,
 // right, down; `labels` gets every pixel's basin. `heap` and `age` hold `w*h`.
 fn watershed(gradient: []const f64, w: usize, h: usize, markers: []const u32, labels: []u32, heap: []u32, age: []u32) -> err {
+    if w != 0usize && h > 18446744073709551615usize / w { ret TooLarge }
     let n = w * h
     if gradient.len < n || markers.len < n || labels.len < n || heap.len < n || age.len < n { ret TooSmall }
     var no_pos: [0]u32 = zero

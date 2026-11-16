@@ -47144,3 +47144,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `time.recur.expand` and `expand_from` ended quietly after 4,000,000 search steps; they now answer the new error `SearchBound` together with the occurrences found, so a rule too sparse to be found is told apart from one that has run out (the year-9999 end stays an ordinary end, since no later date exists). `test.coverage.hit` dropped every hit for a region past the 4096-entry table; it now counts them and `dropped_hits()` reports the count, cleared by `reset`. The fish completion chain of 16 looked like a cut but `count_commands` already refuses a deeper tree, so it is left as is.
 
 **Result.** `time_recur`, `ui_schedule` (and its three siblings) and `test_coverage` pass on Windows; Linux pending. L245 is at 0.35 with the shell accumulator, `mem.copy`, `pool_free` and the unchecked `w * h` products open.
+
+## D6671 — gfx.filter: pixel counts that overflow are refused
+
+**Decision.** Sixteen functions of `e.gfx.filter` took `w * h` as the pixel count with a bare multiplication, which traps for a width and height whose product does not fit a `usize`, where `e.gfx.image` already answers `TooLarge`. Each now checks `h > max / w` first and returns `TooLarge` in the shape of its own result (the error alone, or a zero value with the error). `threshold_otsu`, which returns a bare byte, and the `src.len < w * h` comparisons are left.
+
+**Result.** `gfx_filter` passes on Windows with four oversized calls and exits 134 on the old code; Linux pending. L245 is at 0.55.
