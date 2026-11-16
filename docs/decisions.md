@@ -46102,3 +46102,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.lowesspkg` is new: `lowest` and `clowess` are R's C routine line for line, with its 1-based indexing kept: the window of ns = f n nearest points advanced while the right neighbour is closer, tricube weights with the 0.001 and 0.999 cut-offs, the local linear fit with the curvature correction applied only when the weighted spread exceeds 0.001 of the range, linear interpolation across points closer than delta, and the robustness weights from 6 times the median absolute residual (3 times the sum of the two middle values for even n) with the c1 and c9 cut-offs.
 
 **Result.** `oracle_lowesspkg` agrees with stats::lowess on 180 cases on Windows at rel 1e-9: 30 series of 15 to 80 points with outliers, spans 0.3 to 0.9, 0 to 4 robustness iterations, delta zero or 1 per cent of the range. The R wrapper's sorting and ties in x are not covered; Linux pending. L333 stays partial.
+
+## D6489 — stats::spline: fmm and natural
+
+`e.algo.stat.splinepkg` is new: `fmm_spline` and `natural_spline` are R's C routines line for line (the n = 2 linear fallback, the Forsythe-Malcolm-Moler end conditions that fit a cubic through the first and last four points, the tridiagonal elimination and the conversion to b, c, d coefficients) and `spline_eval` evaluates inside the data range by binary search.
+
+**Result.** `oracle_splinepkg` agrees with stats::spline on 320 cases on Windows at rel 1e-9: both methods, 40 knot sets of 2 to 14 points, four interior evaluation points each. The periodic and monotone methods, extrapolation, ties in x and derivatives are open; Linux pending. L333 stays partial.
