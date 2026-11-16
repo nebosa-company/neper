@@ -3441,4 +3441,5 @@ D6569	563	partitions: blockparts
 D6570	610	biglm: offsets
 D6571	632	biglm: sandwich standard errors
 D6572	756	biglm: more families and links
-D6573	806	biglm: singular designs
+D6573	807	biglm: singular designs
+D6574	485	biglm: inverse.gaussian with a log link

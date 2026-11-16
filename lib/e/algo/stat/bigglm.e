@@ -14,10 +14,11 @@ use e.mem
 
 type Fit = struct { iterations: usize, converged: bool, deviance: f64, rss: f64 }
 
-// family ids: 0 gaussian(identity), 1 binomial(logit), 2 poisson(log), 3 Gamma(inverse), 4 Gamma(log), 5 gaussian(log), 6 binomial(probit), 7 binomial(cloglog)
+// family ids: 8 inverse.gaussian(log), 0 gaussian(identity), 1 binomial(logit), 2 poisson(log), 3 Gamma(inverse), 4 Gamma(log), 5 gaussian(log), 6 binomial(probit), 7 binomial(cloglog)
 fn base_kind(fam: u8) -> u8 {
     if fam == 0u8 || fam == 5u8 { ret 0u8 }
     if fam == 1u8 || fam == 6u8 || fam == 7u8 { ret 1u8 }
+    if fam == 8u8 { ret 4u8 }
     if fam == 2u8 { ret 2u8 }
     ret 3u8
 }
@@ -26,7 +27,7 @@ fn base_kind(fam: u8) -> u8 {
 fn link_kind(fam: u8) -> u8 {
     if fam == 0u8 { ret 0u8 }
     if fam == 1u8 { ret 1u8 }
-    if fam == 2u8 || fam == 4u8 || fam == 5u8 { ret 2u8 }
+    if fam == 2u8 || fam == 4u8 || fam == 5u8 || fam == 8u8 { ret 2u8 }
     if fam == 3u8 { ret 3u8 }
     if fam == 6u8 { ret 4u8 }
     ret 5u8
@@ -89,6 +90,7 @@ fn variance(fam: u8, mu: f64) -> f64 {
     if bk == 0u8 { ret 1.0f64 }
     if bk == 1u8 { ret mu * (1.0f64 - mu) }
     if bk == 3u8 { ret mu * mu }
+    if bk == 4u8 { ret mu * mu * mu }
     ret mu
 }
 
@@ -103,6 +105,7 @@ fn dev_resid(fam: u8, y: f64, mu: f64, w: f64) -> f64 {
         ret 2.0f64 * w * (a + b)
     }
     if bk == 3u8 { ret 0.0f64 - 2.0f64 * w * (math.log[f64](y / mu) - (y - mu) / mu) }
+    if bk == 4u8 { ret w * (y - mu) * (y - mu) / (y * mu * mu) }
     var t = 0.0f64
     if y > 0.0f64 { t = y * math.log[f64](y / mu) }
     ret 2.0f64 * w * (t - (y - mu))

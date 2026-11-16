@@ -46612,3 +46612,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `bigglm_alias` finds the columns that are exact combinations of the earlier ones (Gram-Schmidt residual below 1e-10 of the column's own squared norm, which does not depend on the iteration weights), fits the remaining columns, and reports NaN, R's NA, for the aliased coefficient and standard errors, as biglm's singcheck and `coef.biglm` do; the residual degrees of freedom are `n - p + aliased` as in `vcov.biglm`.
 
 **Result.** `oracle_bigglm` agrees with biglm on 63 new values (a design whose last column is a combination of two others; gaussian, binomial, Poisson; the finite coefficients and errors and the count of NA) on Windows (973 cases in all); Linux pending. L423 at 0.9: the inverse.gaussian and quasi families and further links stay open.
+
+## D6574 — biglm: inverse.gaussian with a log link
+
+**Decision.** Family id 8 is inverse.gaussian(log): variance `mu^3`, deviance residuals `w (y - mu)^2 / (y mu^2)`, the log link; the default `1/mu^2` link would start at `eta = 0` with an infinite mean, so biglm fails on it and it is not ported.
+
+**Result.** `oracle_bigglm` agrees with biglm on 44 new inverse.gaussian values on Windows (1017 cases in all); Linux pending. L423 stays at 0.9: the quasi families and further links.
