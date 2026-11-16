@@ -3575,4 +3575,5 @@ D6712	924	pastecs: decaverage
 D6713	545	pastecs: decevf
 D6714	773	pastecs: trend.test and AS 89 prho
 D6715	1321	ggm: partial correlations and the Gaussian graph fits
-D6716	1159	ggm: dSep and marg.param
+D6716	1160	ggm: dSep and marg.param
+D6717	1045	ggm: fitAncestralGraph

@@ -904,3 +904,354 @@ fn marg_param(a: *mem.Arena, lev: []const usize, typ: []const u8) -> (MargParam,
     res.g = gm
     ret (res, ok)
 }
+
+// ---- fitAncestralGraph: the iterative conditional fitting of a maximal ancestral graph (RICF) ----
+
+fn gg_t(a: *mem.Arena, m: []const f64, r: usize, c: usize) -> ([]f64, err) {
+    let (out, e) = mem.alloc[f64](a, r * c + 1usize)
+    if e != ok { ret (out, e) }
+    var i = 0usize
+    while i < r {
+        var j = 0usize
+        while j < c {
+            out[j * r + i] = m[i * c + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (out, ok)
+}
+
+type AgFit = struct { dev: f64, df: f64, it: i64 }
+
+// fitAncestralGraph(mag, S, n): the mixed matrix of the graph is coded as in ggm (1 arrow j -> i at [j, i], 10 line, 100 bi-directed arc, sums for several edges); shat, bhat (I minus the path coefficients), ohat (the error covariance, zero on the undirected part) and lhat (the covariance of the non-undirected part) are written out
+fn fitancestral(a: *mem.Arena, mag: []const f64, s: []const f64, p: usize, n: f64, tol: f64, shat: []f64, bhat: []f64, ohat: []f64, lhat: []f64) -> (AgFit, err) {
+    var res: AgFit = zero
+    let (dg, e0) = mem.alloc[f64](a, p * p)
+    let (ug, e1) = mem.alloc[f64](a, p * p)
+    let (bg, e2) = mem.alloc[f64](a, p * p)
+    let (omega, e3) = mem.alloc[f64](a, p * p)
+    let (bm, e4) = mem.alloc[f64](a, p * p)
+    let (oldo, e5) = mem.alloc[f64](a, p * p)
+    let (oldb, e6) = mem.alloc[f64](a, p * p)
+    let (allc, e7) = mem.alloc[usize](a, p)
+    let (inug, e8) = mem.alloc[usize](a, p)
+    let (isug, e9) = mem.alloc[bool](a, p)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret (res, e0) }
+    var i = 0usize
+    while i < p * p {
+        let v = i64(mag[i])
+        dg[i] = f64(v % 10i64)
+        ug[i] = f64((v / 10i64) % 10i64)
+        bg[i] = f64((v / 100i64) % 10i64)
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        allc[i] = i
+        i += 1usize
+    }
+    i = 0usize
+    while i < p * p {
+        omega[i] = 0.0f64
+        bm[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        omega[i * p + i] = s[i * p + i]
+        bm[i * p + i] = 1.0f64
+        i += 1usize
+    }
+    // the undirected part: nodes with no parent and no spouse
+    var nu = 0usize
+    i = 0usize
+    while i < p {
+        var cs = 0.0f64
+        var r = 0usize
+        while r < p {
+            cs += dg[r * p + i] + bg[r * p + i]
+            r += 1usize
+        }
+        isug[i] = cs == 0.0f64
+        if isug[i] {
+            inug[nu] = i
+            nu += 1usize
+        }
+        i += 1usize
+    }
+    if nu > 0usize {
+        let (ugs, ea) = gg_sub(a, ug, p, inug[0usize..nu], inug[0usize..nu])
+        let (ss, eb) = gg_sub(a, s, p, inug[0usize..nu], inug[0usize..nu])
+        let (lam, ec) = mem.alloc[f64](a, nu * nu + 1usize)
+        if ea != ok || eb != ok || ec != ok { ret (res, ea) }
+        var any = false
+        i = 0usize
+        while i < nu * nu {
+            if ugs[i] != 0.0f64 { any = true }
+            i += 1usize
+        }
+        if any {
+            let (cf, ef) = fitcongraph(a, ugs, ss, nu, f64(p) + 1.0f64, tol, lam)
+            if ef != ok { ret (res, ef) }
+        } else {
+            i = 0usize
+            while i < nu * nu {
+                lam[i] = 0.0f64
+                i += 1usize
+            }
+            i = 0usize
+            while i < nu {
+                lam[i * nu + i] = ss[i * nu + i]
+                i += 1usize
+            }
+        }
+        i = 0usize
+        while i < nu {
+            var j = 0usize
+            while j < nu {
+                omega[inug[i] * p + inug[j]] = lam[i * nu + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    let (spo, e10) = mem.alloc[usize](a, p)
+    let (pars, e11) = mem.alloc[usize](a, p)
+    let (oth, e12) = mem.alloc[usize](a, p)
+    if e10 != ok || e11 != ok || e12 != ok { ret (res, e10) }
+    var it = 0i64
+    var going = true
+    while going {
+        it += 1i64
+        i = 0usize
+        while i < p * p {
+            oldo[i] = omega[i]
+            oldb[i] = bm[i]
+            i += 1usize
+        }
+        var v = 0usize
+        while v < p {
+            if !isug[v] {
+                var nsp = 0usize
+                var npar = 0usize
+                var no = 0usize
+                var q = 0usize
+                while q < p {
+                    if q != v {
+                        oth[no] = q
+                        no += 1usize
+                    }
+                    if bg[q * p + v] == 1.0f64 {
+                        spo[nsp] = q
+                        nsp += 1usize
+                    }
+                    if dg[q * p + v] == 1.0f64 {
+                        pars[npar] = q
+                        npar += 1usize
+                    }
+                    q += 1usize
+                }
+                if nsp == 0usize {
+                    if npar != 0usize && it == 1i64 {
+                        let (spp, ea) = gg_sub(a, s, p, pars[0usize..npar], pars[0usize..npar])
+                        if ea != ok { ret (res, ea) }
+                        let (ispp, eb) = gg_inv(a, spp, npar)
+                        if eb != ok { ret (res, eb) }
+                        var acc = 0.0f64
+                        q = 0usize
+                        while q < npar {
+                            var c = 0.0f64
+                            var r = 0usize
+                            while r < npar {
+                                c += s[v * p + pars[r]] * ispp[r * npar + q]
+                                r += 1usize
+                            }
+                            bm[v * p + pars[q]] = 0.0f64 - c
+                            acc += bm[v * p + pars[q]] * s[pars[q] * p + v]
+                            q += 1usize
+                        }
+                        omega[v * p + v] = s[v * p + v] + acc
+                    }
+                } else {
+                    // Z = Oinv[spo, -v] B[-v, ]
+                    let (oo, ea) = gg_sub(a, omega, p, oth[0usize..no], oth[0usize..no])
+                    if ea != ok { ret (res, ea) }
+                    let (ioo, eb) = gg_inv(a, oo, no)
+                    if eb != ok { ret (res, eb) }
+                    // rows of the full Oinv for spo, columns -v, in the coordinates of `oth`
+                    let (zs, ec) = mem.alloc[f64](a, nsp * no + 1usize)
+                    if ec != ok { ret (res, ec) }
+                    var r = 0usize
+                    while r < nsp {
+                        var pos = 0usize
+                        q = 0usize
+                        while q < no {
+                            if oth[q] == spo[r] { pos = q }
+                            q += 1usize
+                        }
+                        q = 0usize
+                        while q < no {
+                            zs[r * no + q] = ioo[pos * no + q]
+                            q += 1usize
+                        }
+                        r += 1usize
+                    }
+                    let (bo, ed) = gg_sub(a, bm, p, oth[0usize..no], allc[0usize..p])
+                    if ed != ok { ret (res, ed) }
+                    let (z, ee) = mem.alloc[f64](a, nsp * p + 1usize)
+                    if ee != ok { ret (res, ee) }
+                    gg_mul(zs, bo, nsp, no, p, z)
+                    let (zt, ef) = gg_t(a, z, nsp, p)
+                    if ef != ok { ret (res, ef) }
+                    // S t(Z) (p by nsp) and Z S t(Z) (nsp by nsp)
+                    let (stz, eg) = mem.alloc[f64](a, p * nsp + 1usize)
+                    let (zstz, eh) = mem.alloc[f64](a, nsp * nsp + 1usize)
+                    if eg != ok || eh != ok { ret (res, eg) }
+                    gg_mul(s, zt, p, p, nsp, stz)
+                    gg_mul(z, stz, nsp, p, nsp, zstz)
+                    let tot = npar + nsp
+                    let (xx, ei) = mem.alloc[f64](a, tot * tot + 1usize)
+                    let (yx, ej) = mem.alloc[f64](a, tot + 1usize)
+                    if ei != ok || ej != ok { ret (res, ei) }
+                    r = 0usize
+                    while r < npar {
+                        q = 0usize
+                        while q < npar {
+                            xx[r * tot + q] = s[pars[r] * p + pars[q]]
+                            q += 1usize
+                        }
+                        q = 0usize
+                        while q < nsp {
+                            xx[r * tot + npar + q] = stz[pars[r] * nsp + q]
+                            xx[(npar + q) * tot + r] = stz[pars[r] * nsp + q]
+                            q += 1usize
+                        }
+                        yx[r] = s[v * p + pars[r]]
+                        r += 1usize
+                    }
+                    r = 0usize
+                    while r < nsp {
+                        q = 0usize
+                        while q < nsp {
+                            xx[(npar + r) * tot + npar + q] = zstz[r * nsp + q]
+                            q += 1usize
+                        }
+                        yx[npar + r] = stz[v * nsp + r]
+                        r += 1usize
+                    }
+                    let (ixx, ek) = gg_inv(a, xx, tot)
+                    if ek != ok { ret (res, ek) }
+                    let (temp, el) = mem.alloc[f64](a, tot + 1usize)
+                    if el != ok { ret (res, el) }
+                    gg_mul(yx, ixx, 1usize, tot, tot, temp)
+                    r = 0usize
+                    while r < npar {
+                        bm[v * p + pars[r]] = 0.0f64 - temp[r]
+                        r += 1usize
+                    }
+                    r = 0usize
+                    while r < nsp {
+                        omega[v * p + spo[r]] = temp[npar + r]
+                        omega[spo[r] * p + v] = temp[npar + r]
+                        r += 1usize
+                    }
+                    var tv = s[v * p + v]
+                    r = 0usize
+                    while r < tot {
+                        tv -= temp[r] * yx[r]
+                        r += 1usize
+                    }
+                    // Omega[v, v] = tv + Omega[v, spo] Oinv[spo, spo] Omega[spo, v]; Oinv[spo, spo] is the spo block of ioo
+                    var quad = 0.0f64
+                    r = 0usize
+                    while r < nsp {
+                        var pr = 0usize
+                        q = 0usize
+                        while q < no {
+                            if oth[q] == spo[r] { pr = q }
+                            q += 1usize
+                        }
+                        var c = 0usize
+                        while c < nsp {
+                            var pc = 0usize
+                            q = 0usize
+                            while q < no {
+                                if oth[q] == spo[c] { pc = q }
+                                q += 1usize
+                            }
+                            quad += omega[v * p + spo[r]] * ioo[pr * no + pc] * omega[spo[c] * p + v]
+                            c += 1usize
+                        }
+                        r += 1usize
+                    }
+                    omega[v * p + v] = tv + quad
+                }
+            }
+            v += 1usize
+        }
+        var diff = 0.0f64
+        i = 0usize
+        while i < p * p {
+            diff += math.abs[f64](oldo[i] - omega[i]) + math.abs[f64](oldb[i] - bm[i])
+            i += 1usize
+        }
+        if diff < tol { going = false }
+    }
+    // Sigma = B^-1 Omega B^-T; Lambda: Omega off the undirected part
+    let (ib, ef1) = gg_inv(a, bm, p)
+    let (ibt, ef2) = gg_t(a, ib, p, p)
+    let (tmp, ef3) = mem.alloc[f64](a, p * p)
+    if ef1 != ok || ef2 != ok || ef3 != ok { ret (res, ef1) }
+    gg_mul(ib, omega, p, p, p, tmp)
+    gg_mul(tmp, ibt, p, p, p, shat)
+    i = 0usize
+    while i < p * p {
+        lhat[i] = 0.0f64
+        bhat[i] = bm[i]
+        i += 1usize
+    }
+    if nu > 0usize {
+        i = 0usize
+        while i < p {
+            var j = 0usize
+            while j < p {
+                if !isug[i] && !isug[j] { lhat[i * p + j] = omega[i * p + j] }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        i = 0usize
+        while i < nu {
+            var j = 0usize
+            while j < nu {
+                omega[inug[i] * p + inug[j]] = 0.0f64
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    i = 0usize
+    while i < p * p {
+        ohat[i] = omega[i]
+        i += 1usize
+    }
+    var nz = 0.0f64
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            if mag[i * p + j] + mag[j * p + i] != 0.0f64 { nz += 1.0f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    res.df = f64(p) * (f64(p) - 1.0f64) / 2.0f64 - nz / 2.0f64
+    let (kh, eh2) = gg_inv(a, shat, p)
+    if eh2 != ok { ret (res, eh2) }
+    let (dv, ed2) = likgau(a, kh, s, n, p)
+    if ed2 != ok { ret (res, ed2) }
+    res.dev = dv
+    res.it = it
+    ret (res, ok)
+}

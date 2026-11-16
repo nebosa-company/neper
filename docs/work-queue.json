@@ -603,10 +603,10 @@
       "group": "CRAN parity",
       "order": 663,
       "title": "ggm: Gaussian graphical models",
-      "score": 0.7,
+      "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "D6715: e.algo.stat.ggm has pcor, parcor, pcor.test, fitDag, fitConGraph (algorithm 3) and fitCovGraph (icf), equal to ggm on 2415 values on Windows (oracle_ggm); Linux pending. D6716: dSep (150 queries) and marg.param (360 matrix summaries) equal ggm. Open: the other graph algorithms (induced graphs, MAGs, topOrder), fitConGraph with cliques and algorithms 1 and 2, the dual algorithm of fitCovGraph, fitAncestralGraph with its deviance and degrees of freedom. Original: Open (CRAN rank 964). Small to mid. Acceptance, equal to ggm: fitDag, fitCovGraph, fitConGraph, marg, pcor and pcor.test, parcor, dSep, fitAncestralGraph with its deviance and degrees of freedom."
+      "evidence": "D6715: e.algo.stat.ggm has pcor, parcor, pcor.test, fitDag, fitConGraph (algorithm 3) and fitCovGraph (icf), equal to ggm on 2415 values on Windows (oracle_ggm); Linux pending. D6716: dSep (150 queries) and marg.param (360 matrix summaries) equal ggm. D6717: fitAncestralGraph (icfmag) equals ggm on 1676 values. Open: the other graph algorithms (induced graphs, MAG construction, topOrder), fitConGraph with cliques and algorithms 1 and 2, the dual algorithm of fitCovGraph, fitAncestralGraph with its deviance and degrees of freedom. Original: Open (CRAN rank 964). Small to mid. Acceptance, equal to ggm: fitDag, fitCovGraph, fitConGraph, marg, pcor and pcor.test, parcor, dSep, fitAncestralGraph with its deviance and degrees of freedom."
     },
     {
       "id": "L299",

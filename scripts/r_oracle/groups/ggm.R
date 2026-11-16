@@ -59,4 +59,20 @@ for (rep in 1:30) {
     out <- c(nrow(M), ncol(M), sum(v), sum(seq_along(v) * v))
     for (q in 1:4) cases[[length(cases) + 1]] <- case("mp", c(r, lev, utf8ToInt(paste(typ, collapse = "")), w - 1, q - 1), out[q], rel = 1e-9, abs = 1e-9) }
 }
+# fitAncestralGraph ("ag": args (p, n, S[p*p], mag[p*p], q); q 0..p*p-1 Shat, then dev, df, it, sum Bhat, sum Ohat, sum Lhat)
+for (rep in 1:60) {
+  p0 <- sample(5:7, 1); A <- matrix(0, p0, p0); for (i in 1:(p0 - 1)) for (j in (i + 1):p0) A[i, j] <- rbinom(1, 1, 0.45)
+  dimnames(A) <- list(letters[1:p0], letters[1:p0])
+  nm <- sample(0:2, 1); nc <- sample(0:1, 1); pick <- sample(p0, nm + nc)
+  M <- if (nm > 0) letters[pick[1:nm]] else c(); C <- if (nc > 0) letters[pick[nm + 1]] else c()
+  mag <- tryCatch(suppressWarnings(MAG(A, M, C, showmat = FALSE)), error = function(e) NULL)
+  if (is.null(mag) || nrow(mag) < 3) next
+  p <- nrow(mag); n <- sample(60:150, 1)
+  x <- matrix(rnorm(n * p0), n, p0); for (j in 1:p0) for (i in which(A[, j] == 1)) x[, j] <- x[, j] + 0.5 * x[, i]
+  S0 <- crossprod(scale(x, scale = FALSE)) / n; dimnames(S0) <- list(letters[1:p0], letters[1:p0]); S <- S0[rownames(mag), rownames(mag)]
+  f <- tryCatch(suppressWarnings(fitAncestralGraph(mag, S, n)), error = function(e) NULL)
+  if (is.null(f)) next
+  out <- c(rowm(f$Shat), f$dev, f$df, f$it, sum(f$Bhat), sum(f$Ohat), sum(f$Lhat))
+  for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("ag", c(p, n, rowm(S), rowm(mag), q - 1), out[q], rel = 1e-6, abs = 1e-8)
+}
 emit("ggm", "ggm", list(cases))

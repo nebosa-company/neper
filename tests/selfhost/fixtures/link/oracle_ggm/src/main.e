@@ -112,6 +112,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let q = usize(z[2usize + 2usize * p * p])
     let (sh, e1) = mem.alloc[f64](a, p * p)
     if e1 != ok { ret nan }
+    if str.eq(nm, "ag") {
+        let (ah, e2) = mem.alloc[f64](a, p * p)
+        let (oh, e3) = mem.alloc[f64](a, p * p)
+        let (lh, e4) = mem.alloc[f64](a, p * p)
+        if e2 != ok || e3 != ok || e4 != ok { ret nan }
+        let (r, e5) = gg.fitancestral(a, am, s, p, n, 0.000001f64, sh, ah, oh, lh)
+        if e5 != ok { ret nan }
+        if q < p * p { ret sh[q] }
+        if q == p * p { ret r.dev }
+        if q == p * p + 1usize { ret r.df }
+        if q == p * p + 2usize { ret f64(r.it) }
+        var tot = 0.0f64
+        var i = 0usize
+        while i < p * p {
+            if q == p * p + 3usize { tot += ah[i] }
+            if q == p * p + 4usize { tot += oh[i] }
+            if q == p * p + 5usize { tot += lh[i] }
+            i += 1usize
+        }
+        ret tot
+    }
     if str.eq(nm, "dag") {
         let (ah, e2) = mem.alloc[f64](a, p * p)
         let (dh, e3) = mem.alloc[f64](a, p)
