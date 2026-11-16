@@ -322,3 +322,146 @@ fn interp1(v: []const f64, xo: f64) -> f64 {
     let fr = xo - lo
     ret v[i] + (v[i + 1usize] - v[i]) * fr
 }
+
+// ---- kendallSeasonalTrendTest (independent observations) ----
+
+// the finite pairwise slopes of y against x, unsorted; answers the count (np0 = n (n - 1) / 2 spaces in out)
+fn pair_slopes(y: []const f64, x: []const f64, out: []f64) -> usize {
+    var cnt = 0usize
+    var i = 1usize
+    while i < y.len {
+        var j = 0usize
+        while j < i {
+            let q = (y[i] - y[j]) / (x[i] - x[j])
+            if q - q == 0.0f64 {
+                out[cnt] = q
+                cnt += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret cnt
+}
+
+// EnvStats::kendallSeasonalTrendTest with independent.obs = TRUE and finite data: season holds numeric season ids and year the years; out receives the heterogeneity chi-square and its p value, z and its p value, tau, slope, intercept, the confidence limits, S, var.S, the number of slopes and the number of seasons used (0..10)
+fn kendall_seasonal(a: *mem.Arena, y: []const f64, season: []const f64, year: []const f64, alt: usize, correct: bool, conf: f64, out: []f64) -> err {
+    let n = y.len
+    let nan = 0.0f64 / 0.0f64
+    let (ids, e0) = mem.alloc[f64](a, n)
+    let (sy, e1) = mem.alloc[f64](a, n)
+    let (sx, e2) = mem.alloc[f64](a, n)
+    let (allsl, e3) = mem.alloc[f64](a, n * n + 1usize)
+    let (ints, e4) = mem.alloc[f64](a, n)
+    let (zs, e5) = mem.alloc[f64](a, n)
+    let (ko, e6) = mem.alloc[f64](a, 10usize)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret mem.Full }
+    var ns = 0usize
+    var i = 0usize
+    while i < n {
+        var seen = false
+        var j = 0usize
+        while j < ns {
+            if ids[j] == season[i] { seen = true }
+            j += 1usize
+        }
+        if !seen {
+            ids[ns] = season[i]
+            ns += 1usize
+        }
+        i += 1usize
+    }
+    sort_f(ids[0usize..ns])
+    var nslopes = 0usize
+    var sumn = 0.0f64
+    var sumtau = 0.0f64
+    var stot = 0.0f64
+    var vtot = 0.0f64
+    var nact = 0usize
+    var sumz = 0.0f64
+    var sumz2 = 0.0f64
+    var k = 0usize
+    while k < ns {
+        var m = 0usize
+        i = 0usize
+        while i < n {
+            if season[i] == ids[k] {
+                sy[m] = y[i]
+                sx[m] = year[i]
+                m += 1usize
+            }
+            i += 1usize
+        }
+        var distinct = false
+        i = 1usize
+        while i < m {
+            if sx[i] != sx[0usize] { distinct = true }
+            i += 1usize
+        }
+        if m >= 2usize && distinct {
+            let ek = kendall_trend(a, sy[0usize..m], sx[0usize..m], 0usize, true, 0.95f64, ko)
+            if ek != ok { ret ek }
+            let c = pair_slopes(sy[0usize..m], sx[0usize..m], allsl[nslopes..n * n])
+            nslopes += c
+            sumn += f64(m)
+            sumtau += f64(m) * ko[4usize]
+            stot += ko[0usize]
+            vtot += ko[1usize]
+            ints[nact] = ko[6usize]
+            let zv = ko[0usize] / math.sqrt[f64](ko[1usize])
+            zs[nact] = zv
+            sumz += zv
+            sumz2 += zv * zv
+            nact += 1usize
+        }
+        k += 1usize
+    }
+    let slopes = allsl[0usize..nslopes]
+    sort_f(slopes)
+    sort_f(ints[0usize..nact])
+    let kf = f64(nact)
+    let chisq = sumz2 - kf * (sumz / kf) * (sumz / kf)
+    out[0usize] = chisq
+    out[1usize] = 1.0f64 - nm.pchisq(chisq, kf - 1.0f64, true, false)
+    var z = stot / math.sqrt[f64](vtot)
+    if correct {
+        var sg = 0.0f64
+        if stot > 0.0f64 { sg = 1.0f64 }
+        if stot < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+        z = (stot - sg) / math.sqrt[f64](vtot)
+    }
+    var p = 2.0f64 * dist.pnorm(0.0f64 - math.abs[f64](z), 0.0f64, 1.0f64, true, false)
+    if alt == 1usize { p = 1.0f64 - dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
+    if alt == 2usize { p = dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
+    out[2usize] = z
+    out[3usize] = p
+    out[4usize] = sumtau / sumn
+    out[5usize] = median_sorted(slopes)
+    out[6usize] = median_sorted(ints[0usize..nact])
+    let alpha = 1.0f64 - conf
+    var zq = dist.qnorm(conf, 0.0f64, 1.0f64, true, false)
+    if alt == 0usize { zq = dist.qnorm(1.0f64 - alpha / 2.0f64, 0.0f64, 1.0f64, true, false) }
+    let npr = f64(nslopes)
+    let ca = zq * math.sqrt[f64](vtot)
+    let m1 = (npr - ca) / 2.0f64
+    let m2 = (npr + ca) / 2.0f64
+    var lcl = nan
+    var ucl = nan
+    if alt == 0usize {
+        lcl = interp1(slopes, m1)
+        ucl = interp1(slopes, m2 + 1.0f64)
+    } else if alt == 1usize {
+        lcl = interp1(slopes, m1)
+        ucl = 1.0f64 / 0.0f64
+    } else {
+        lcl = 0.0f64 - 1.0f64 / 0.0f64
+        ucl = interp1(slopes, m2 + 1.0f64)
+    }
+    out[7usize] = lcl
+    out[8usize] = ucl
+    out[9usize] = stot
+    out[10usize] = vtot
+    out[11usize] = npr
+    out[12usize] = kf
+    ret ok
+}

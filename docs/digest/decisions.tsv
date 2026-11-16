@@ -3597,4 +3597,5 @@ D6734	1117	SuppDists: the generalised hypergeometric varieties
 D6735	1108	SuppDists: off-support Spearman and vector parameters of the r functions
 D6736	746	pastecs: regul by spline
 D6737	1185	pastecs: regul matching tolerance and regul.screen
-D6738	981	EnvStats: kendallTrendTest
+D6738	982	EnvStats: kendallTrendTest
+D6739	1093	EnvStats: kendallSeasonalTrendTest (independent observations)
