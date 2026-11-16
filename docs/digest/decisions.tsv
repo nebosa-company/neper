@@ -3526,4 +3526,5 @@ D6663	980	docs/algos.md: names that resolve and rows that say what was delivered
 D6664	864	stale comments in lib/e corrected
 D6665	796	recursion depth guards: parser combinators and Avro
 D6666	909	recursion depth guards: the JavaScript engine
-D6667	945	quicksort recurses on the smaller part
+D6667	946	quicksort recurses on the smaller part
+D6668	925	a step budget for every page task

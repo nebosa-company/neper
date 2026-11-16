@@ -1402,10 +1402,31 @@ fn report_thrown(it: *js.Interp, name: str) {
     host_of(it).errors += 1u32
 }
 
+// The steps one page task (a script, a lifecycle event, a timer turn, a mouse event) may take before it is stopped with a RangeError
+// that goes to the page's error reporter: a page whose script loops forever gets an error, not a hang. The count and limit of an
+// enclosing task are put back when the nested one ends.
+const TASK_STEP_BUDGET: u64 = 50000000u64
+
+type TaskBudget = struct { steps: u64, limit: u64 }
+
+fn begin_task(it: *js.Interp) -> TaskBudget {
+    let saved = TaskBudget { steps: it.steps, limit: it.step_limit }
+    it.steps = 0u64
+    it.step_limit = TASK_STEP_BUDGET
+    ret saved
+}
+
+fn end_task(it: *js.Interp, saved: TaskBudget) {
+    it.steps = saved.steps
+    it.step_limit = saved.limit
+}
+
 // Evaluates a classic script; an uncaught exception goes to `window.__reportError`, then false is answered.
 fn run_script(it: *js.Interp, source: str, name: str) -> bool {
     it.script_url = name
+    let budget = begin_task(it)
     let (v, e) = js.eval_source(it, source)
+    end_task(it, budget)
     if e == ok { ret true }
     report_thrown(it, name)
     ret false
@@ -1428,7 +1449,9 @@ fn lifecycle(it: *js.Interp, name: str) {
     if le != ok || !js.is_object(lc) { ret }
     let (f, fe) = js.get_prop(it, js.as_object(lc), js.key_of(name), lc)
     if fe != ok || !js.is_callable(f) { ret }
+    let budget = begin_task(it)
     let (r, re) = js.call_function(it, f, lc, js.zero_args())
+    end_task(it, budget)
     if re != ok { report_thrown(it, name) }
 }
 
@@ -1451,6 +1474,13 @@ fn pump_once(it: *js.Interp) -> f64 {
 }
 
 fn pump_self(it: *js.Interp) -> f64 {
+    let budget = begin_task(it)
+    let ret_value = pump_self_task(it)
+    end_task(it, budget)
+    ret ret_value
+}
+
+fn pump_self_task(it: *js.Interp) -> f64 {
     let je = js.run_jobs(it)
     let (run, re) = js.get_prop(it, it.global, js.key_of("__runTimers"), js.obj_value(it.global))
     if re != ok || !js.is_callable(run) { ret -1.0f64 }
@@ -1523,12 +1553,15 @@ fn dispatch_mouse(it: *js.Interp, node: u32, kind: str, x: f64, y: f64) -> bool 
     cell[1usize] = js.str_value(kind)
     cell[2usize] = js.num_value(x)
     cell[3usize] = js.num_value(y)
+    let budget = begin_task(it)
     let (r, re) = js.call_function(it, f, lc, cell[0usize..4usize])
     if re != ok {
+        end_task(it, budget)
         report_thrown(it, "mouse")
         ret true
     }
     let go = js.to_boolean(r)
     let jr = js.run_jobs(it)
+    end_task(it, budget)
     ret go
 }

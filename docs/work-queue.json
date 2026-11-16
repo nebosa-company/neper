@@ -4789,17 +4789,6 @@
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: the script fails when the count rises. Notes: docs/library-hardening-plan.md."
     },
     {
-      "id": "L237",
-      "category": "library",
-      "group": "Library",
-      "order": 450,
-      "title": "Page scripts have no step limit",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a page with `while(true){}` returns a script error within the budget. Notes: docs/library-hardening-plan.md."
-    },
-    {
       "id": "L239",
       "category": "library",
       "group": "Library",

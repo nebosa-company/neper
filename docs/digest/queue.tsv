@@ -434,7 +434,6 @@ C331	compiler	0	200	A baseline that is one command	Opened from the 2026-11-12 co
 C339	compiler	0	261	Roadmap corrections	Opened from the 2026-11-12 compiler review.
 L230	library	0	214	A library line-coverage number	Opened from the 2026-11-13 library review.
 L231	library	0	132	The unreached-function list as a gate	Opened from the 2026-11-13 library review.
-L237	library	0	163	Page scripts have no step limit	Opened from the 2026-11-13 library review.
 L239	library	0	521	WAL replay swallows a failed delete	Opened from the 2026-11-13 library review.
 L247	library	0	156	`partial` means partial	Opened from the 2026-11-13 library review.
 L248	library	0	226	Every source module is in the plan	Opened from the 2026-11-13 library review.
