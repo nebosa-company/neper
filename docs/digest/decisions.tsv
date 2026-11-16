@@ -3406,4 +3406,5 @@ D6534	457	car: boxCox profile log-likelihood
 D6535	687	pracma: expm
 D6536	315	pracma: integral
 D6537	895	pracma: polyroots
-D6538	607	DHARMa: spatial and temporal autocorrelation
+D6538	608	DHARMa: spatial and temporal autocorrelation
+D6539	688	boot: censboot model

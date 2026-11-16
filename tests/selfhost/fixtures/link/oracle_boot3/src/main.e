@@ -39,6 +39,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "model_t0") || str.eq(c.name, "model_t") || str.eq(c.name, "model_tsum") {
+        let seed = i64(z[0usize])
+        let st = u8(z[1usize])
+        let r = usize(z[2usize])
+        let n = usize(z[3usize])
+        let mf = usize(z[4usize + 3usize * n])
+        let gb = 5usize + 3usize * n + 2usize * mf
+        let mg = usize(z[gb])
+        var g: rng.Rng = zero
+        rng.seed(&g, seed)
+        let (b, be) = bt.censboot_model(a, &g, z[4usize..4usize + n], z[4usize + n..4usize + 2usize * n], z[4usize + 2usize * n..4usize + 3usize * n], z[5usize + 3usize * n..5usize + 3usize * n + mf], z[5usize + 3usize * n + mf..gb], z[gb + 1usize..gb + 1usize + mg], z[gb + 1usize + mg..gb + 1usize + 2usize * mg], st, r)
+        if be != ok { ret nan }
+        if str.eq(c.name, "model_t0") { ret b.t0 }
+        if str.eq(c.name, "model_t") { ret b.t[usize(z[gb + 1usize + 2usize * mg])] }
+        var s = 0.0f64
+        var i = 0usize
+        while i < r {
+            s += b.t[i]
+            i += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "cond_t0") || str.eq(c.name, "cond_t") || str.eq(c.name, "cond_tsum") {
         let seed = i64(z[0usize])
         let st = u8(z[1usize])

@@ -927,3 +927,103 @@ fn censboot_cond(a: *mem.Arena, g: *rng.Rng, time: []const f64, status: []const 
     if ie != ok { ret (none, ie) }
     ret (Boot { t0: stat_of(a, kind, time), t: t, idx: idx, n: n, r: nrep }, ok)
 }
+
+// censboot(sim = "model") with one stratum and a Cox fit: failure times from the conditional distribution 1 - F0(t)^exp(eta_i) of each case (F0 the baseline survival ft, fs), censoring times from the censoring survival gt, gs; the draws follow cens.resamp (gety2 per column, then getc1 in one call)
+fn censboot_model(a: *mem.Arena, g: *rng.Rng, time: []const f64, status: []const f64, eta: []const f64, ft: []const f64, fs: []const f64, gt: []const f64, gs: []const f64, kind: u8, nrep: usize) -> (Boot, err) {
+    var none: Boot = zero
+    let n = time.len
+    let inf = 1.0f64 / 0.0f64
+    var mf = ft.len
+    var mg = gt.len
+    let (xt, e1) = mem.alloc[f64](a, mf + 1usize)
+    let (xs, e2) = mem.alloc[f64](a, mf + 1usize)
+    let (ct, e3) = mem.alloc[f64](a, mg + 1usize)
+    let (cs, e4) = mem.alloc[f64](a, mg + 1usize)
+    let (pf, e5) = mem.alloc[f64](a, mf + 2usize)
+    let (pg, e6) = mem.alloc[f64](a, mg + 1usize)
+    let (y0, e7) = mem.alloc[f64](a, n * nrep)
+    let (c0, e8) = mem.alloc[f64](a, n * nrep)
+    let (buf, e9) = mem.alloc[f64](a, n)
+    let (t, e10) = mem.alloc[f64](a, nrep)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret (none, e1) }
+    var i = 0usize
+    while i < mf {
+        xt[i] = ft[i]
+        xs[i] = fs[i]
+        i += 1usize
+    }
+    if xs[mf - 1usize] > 0.0f64 {
+        xt[mf] = inf
+        xs[mf] = 0.0f64
+        mf += 1usize
+    }
+    i = 0usize
+    while i < mg {
+        ct[i] = gt[i]
+        cs[i] = gs[i]
+        i += 1usize
+    }
+    if cs[mg - 1usize] > 0.0f64 {
+        ct[mg] = inf
+        cs[mg] = 0.0f64
+        mg += 1usize
+    }
+    // y0 column by column: probabilities diff(c(0, 1 - F0^exp(eta)))
+    i = 0usize
+    while i < n {
+        let ex = math.exp[f64](eta[i])
+        var prev = 0.0f64
+        var j = 0usize
+        while j < mf {
+            let cur = 1.0f64 - math.pow[f64](xs[j], ex)
+            pf[j] = cur - prev
+            prev = cur
+            j += 1usize
+        }
+        let (d, de) = rdist.sample_prob(a, g, mf, nrep, true, pf[0usize..mf])
+        if de != ok { ret (none, de) }
+        var r = 0usize
+        while r < nrep {
+            y0[r + nrep * i] = xt[usize(d[r]) - 1usize]
+            r += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < mg {
+        var prev = 1.0f64
+        if i > 0usize { prev = cs[i - 1usize] }
+        pg[i] = prev - cs[i]
+        i += 1usize
+    }
+    let (dc, dce) = rdist.sample_prob(a, g, mg, n * nrep, true, pg[0usize..mg])
+    if dce != ok { ret (none, dce) }
+    i = 0usize
+    while i < n * nrep {
+        c0[i] = ct[usize(dc[i]) - 1usize]
+        i += 1usize
+    }
+    var maxf = 0.0f64
+    i = 0usize
+    while i < n {
+        if status[i] > 0.5f64 && time[i] > maxf { maxf = time[i] }
+        i += 1usize
+    }
+    var r = 0usize
+    while r < nrep {
+        i = 0usize
+        while i < n {
+            var yy = y0[r + nrep * i]
+            let cc = c0[r + nrep * i]
+            if yy == inf && cc == inf { yy = maxf }
+            if yy < cc { buf[i] = yy } else { buf[i] = cc }
+            i += 1usize
+        }
+        sort_up(buf)
+        t[r] = stat_of(a, kind, buf)
+        r += 1usize
+    }
+    let (idx, ie) = mem.alloc[i64](a, 1usize)
+    if ie != ok { ret (none, ie) }
+    ret (Boot { t0: stat_of(a, kind, time), t: t, idx: idx, n: n, r: nrep }, ok)
+}

@@ -46402,3 +46402,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `moran_i` is ape::Moran.I on the scaled residuals with `1/distance` weights (zero diagonal), row-standardised, with the normal-theory sd and the two-sided p value; `dw_time` is the Durbin-Watson d of the centred residuals ordered by time (the statistic of the intercept-only dwtest that testTemporalAutocorrelation runs).
 
 **Result.** `oracle_dharma` agrees with DHARMa on 56 new values on Windows; Linux pending. The dwtest p value (pan or normal), traditional residuals and the bootstrap outlier test stay open; L411 stays partial.
+
+## D6539 — boot: censboot model
+
+**Decision.** `boot.censboot_model` (one stratum) takes the baseline survival, the censoring survival and the linear predictors as inputs, as cens.resamp reads them from `F.surv`, `G.surv` and `cox$linear.predictors`: failure times drawn per case from `diff(c(0, 1 - F0^exp(eta)))`, one column at a time, then all censoring times in one draw (getc1). The oracle passes R objects built from survfit and random linear predictors, so the Cox fit itself is not exercised.
+
+**Result.** `oracle_boot3` agrees with boot on 240 new model values on Windows (1650 in all); Linux pending. censboot cond with a Cox object and the coxph fit stay open; L321 at 0.97.
