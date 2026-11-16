@@ -31,7 +31,6 @@ L420	library	0	198	minpack.lm: Levenberg-Marquardt least squares	Open (CRAN rank
 L421	library	0	215	fdrtool: false discovery rate estimation	Open (CRAN rank 677).
 L423	library	0	215	biglm: bounded-memory linear and generalized linear models	Open (CRAN rank 672).
 L431	library	0	261	TSP: travelling-salesperson tools	Open (CRAN rank 631).
-L443	library	0	201	diptest: Hartigan dip test	Open (CRAN rank 792).
 L444	library	0	233	SuppDists: Johnson, Kendall, Spearman and related distributions	Open (CRAN rank 711).
 L445	library	0	230	splines2: spline bases	Open (CRAN rank 782).
 L446	library	0	195	mixsqp: mixture proportions by SQP	Open (CRAN rank 760).

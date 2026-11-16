@@ -356,17 +356,6 @@
       "evidence": "Open (CRAN rank 631). Small. Verify e.algo.combopt first. Acceptance, equal to TSP under set.seed: solve_TSP with nearest, farthest, cheapest and arbitrary insertion, nn, repetitive_nn, two_opt, and the exact tour length, ATSP reduction, tour objects, cut_tour."
     },
     {
-      "id": "L443",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 582,
-      "title": "diptest: Hartigan dip test",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 792). Small. Acceptance, equal to diptest: dip and dip.test with the dip statistic, the interpolated p-value and the simulated p-value under set.seed, and the modes and critical values."
-    },
-    {
       "id": "L444",
       "category": "library",
       "group": "CRAN parity",

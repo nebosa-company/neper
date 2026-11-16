@@ -3137,4 +3137,5 @@ D6061	1317	igraph structure measures on a dense adjacency matrix
 D6062	1035	igraph deterministic layouts; the random generators wait on igraph's RNG wrapper
 D6063	986	forecast Box-Cox: the sign-preserving transform and the grid log-likelihood
 D6064	1104	nlme gls at a fixed correlation: the objective by definition, sigma follows the method
-D6065	995	sf planar checks: the existing e.algo.geom agrees with GEOS
+D6065	996	sf planar checks: the existing e.algo.geom agrees with GEOS
+D6066	1151	diptest: AS 217 ported whole, the quantile table generated, the simulated p value on the R stream

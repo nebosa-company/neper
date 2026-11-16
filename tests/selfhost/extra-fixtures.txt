@@ -201,3 +201,4 @@ oracle_layout
 oracle_fcast
 oracle_gls
 oracle_sf
+oracle_diptest
