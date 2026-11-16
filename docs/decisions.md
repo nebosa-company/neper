@@ -45262,3 +45262,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.extradistr` ports d, p and q of the Gumbel, Frechet, Kumaraswamy, Laplace, Lomax, Pareto, Rayleigh, triangular, Gompertz, power, inverse gamma, half-normal, half-Cauchy, Birnbaum-Saunders, Wald (no q) and beta-prime distributions with the package's parameterisations (found by comparison: Gompertz takes the rate first and the shape second, power takes the upper bound first and the exponent second). The discrete and multivariate families, the truncated and half variants and the generators are not here.
 
 **Result.** `oracle_extradistr` equals extraDistr on 752 cases on Windows; Linux pending. L422 is partial.
+
+## D6145 — scoringRules: closed-form and sample-based proper scores
+
+`e.algo.stat.scoringrules` reports CRPS, log score and Dawid-Sebastiani score for the normal, logistic, Laplace, exponential, uniform (with point masses), log-normal and gamma forecasts, the binomial CRPS, the Poisson log and Dawid-Sebastiani scores, and the sample scores: empirical CRPS, Dawid-Sebastiani (population variance), the bw.nrd kernel log score, the energy score, the variogram score, the type-7 quantile score and the ranked probability score. Not here: the Poisson and negative binomial CRPS (they need exp-scaled Bessel I), the t, truncated and censored families, the kernel CRPS and the weighted variants.
+
+**Result.** `oracle_scoringrules` equals scoringRules on 526 cases on Windows; Linux pending. L475 is partial.
