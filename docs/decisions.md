@@ -47138,3 +47138,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** The library already says where it stops with `ponytail:` comments: a global lock, a quadratic scan, a missing encoding, each with its upgrade path. `scripts/ceilings.py` reads them from `lib/e` (a marker and the comment lines that continue it) and `render_progress.py` writes them into `docs/progress.html` grouped by module, so the page lists every declared ceiling and cannot drift from the source.
 
 **Result.** 405 markers in 187 modules are listed; `tests/test_ceilings.py` passes. L253 is at 0.6: the AV1 decoder still answers `Unsupported` when its coefficient pool runs out, and fixing that with a fixture needs an AV1 test stream, which is L232's question.
+
+## D6670 — silent truncation: two sites named and counted
+
+**Decision.** `time.recur.expand` and `expand_from` ended quietly after 4,000,000 search steps; they now answer the new error `SearchBound` together with the occurrences found, so a rule too sparse to be found is told apart from one that has run out (the year-9999 end stays an ordinary end, since no later date exists). `test.coverage.hit` dropped every hit for a region past the 4096-entry table; it now counts them and `dropped_hits()` reports the count, cleared by `reset`. The fish completion chain of 16 looked like a cut but `count_commands` already refuses a deeper tree, so it is left as is.
+
+**Result.** `time_recur`, `ui_schedule` (and its three siblings) and `test_coverage` pass on Windows; Linux pending. L245 is at 0.35 with the shell accumulator, `mem.copy`, `pool_free` and the unchecked `w * h` products open.

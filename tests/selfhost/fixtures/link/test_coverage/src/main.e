@@ -100,6 +100,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try coverage.write_json(&w, &nothing)
     if sink.off != 15usize { os.exit(15i32) }
 
+    // L245: hits past the 4096-region table are counted as dropped, not lost without a trace
+    if coverage.dropped_hits() != 0u64 { os.exit(30i32) }
+    var fill = 0u32
+    while fill < 4100u32 {
+        coverage.hit(500u32, fill)
+        fill += 1u32
+    }
+    // four regions were already in the table: 4100 + 4 - 4096 hits found no slot
+    if coverage.dropped_hits() != 8u64 { os.exit(31i32) }
+    coverage.hit(500u32, 0u32)
+    if coverage.dropped_hits() != 8u64 { os.exit(32i32) }
+    coverage.reset()
+    if coverage.dropped_hits() != 0u64 { os.exit(33i32) }
+
     try io.print("test coverage ok\n")
     ret ok
 }

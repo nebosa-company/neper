@@ -28,6 +28,7 @@ const MAX_COUNTERS: usize = 4096usize
 
 var table: [4096]Counter = zero
 var used: usize = 0usize
+var dropped: u64 = 0u64
 var coverage_locks: [1]sync.Mutex = zero
 
 // The instrumentation's entry: one more hit on (file_id, region_id).
@@ -47,8 +48,19 @@ fn hit(file_id: u32, region_id: u32) {
     if !found && used < MAX_COUNTERS {
         table[used] = Counter { file_id: file_id, region_id: region_id, hits: 1u64 }
         used += 1usize
+    } else if !found {
+        dropped += 1u64
     }
     sync.mutex_unlock(&coverage_locks[0usize])
+}
+
+// How many hits were refused because the table of MAX_COUNTERS distinct regions was full; a profile with a nonzero count is
+// missing regions, and a report should say so.
+fn dropped_hits() -> u64 {
+    sync.mutex_lock(&coverage_locks[0usize])
+    let n = dropped
+    sync.mutex_unlock(&coverage_locks[0usize])
+    ret n
 }
 
 fn snapshot(dst: []Counter) -> ([]Counter, err) {
@@ -74,6 +86,7 @@ fn reset() {
         table[i].hits = 0u64
         i += 1usize
     }
+    dropped = 0u64
     sync.mutex_unlock(&coverage_locks[0usize])
 }
 

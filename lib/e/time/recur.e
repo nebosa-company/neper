@@ -10,7 +10,9 @@
 // start itself is produced only when the rule matches it.
 //
 // ponytail: a rule whose periods stay empty is searched for a bounded number of
-// iterations (the year 9999 or 4,000,000 sub-daily steps) and then ends quietly.
+// iterations: the year 9999 ends the rule, and 4,000,000 steps without finishing answer
+// `SearchBound` with whatever was found, so a caller can tell a rule that matches too
+// rarely to be found from one that has no more occurrences.
 
 use e.time
 use e.time.calendar
@@ -45,6 +47,7 @@ type Rule = struct {
     setpos: [32]i64,
 }
 error Invalid
+error SearchBound
 
 fn upper(b: u8) -> u8 {
     if b >= 97u8 && b <= 122u8 { ret b - 32u8 }
@@ -399,7 +402,7 @@ fn stamp_of(day: i64, hour: i64, minute: i64, second: i64) -> calendar.DateTime 
 
 // Expands the rule from `start`, writing the occurrences at or after `from` into
 // `out` until it is full, COUNT or UNTIL ends the rule, or the search bound is met.
-// Returns how many were written.
+// Returns how many were written; `SearchBound` when 4,000,000 steps passed without the rule ending.
 fn expand_from(rule: Rule, start: calendar.DateTime, from: calendar.DateTime, out: []calendar.DateTime) -> (usize, err) {
     if !calendar.valid_date(start.date) || !calendar.valid_time(start.time) { ret (0usize, Invalid) }
     var r = rule
@@ -436,7 +439,7 @@ fn expand_from(rule: Rule, start: calendar.DateTime, from: calendar.DateTime, ou
     var steps = 0i64
     while true {
         steps += 1i64
-        if steps > 4000000i64 { break }
+        if steps > 4000000i64 { ret (written, SearchBound) }
         var nd = 0usize
         var h_mask = hours
         var m_mask = minutes

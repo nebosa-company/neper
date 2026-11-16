@@ -257,6 +257,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // expand_from drops what is before `from` but counts it toward COUNT.
     let (m, m_error) = recur.expand_from(r, start, out[1usize], out[0usize..64usize])
     if m_error != ok || m != 2usize || out[0usize].date.day != 29u8 { os.exit(93i32) }
+    // L245: a sub-daily rule that never matches (February 30th) is searched 4,000,000 steps and then reported, not ended as if it
+    // had simply run out of occurrences.
+    let (never, never_error) = recur.parse_rule("FREQ=SECONDLY;BYMONTH=2;BYMONTHDAY=30")
+    if never_error != ok { os.exit(95i32) }
+    let (never_written, never_expand) = recur.expand(never, start, out[0usize..64usize])
+    if never_expand != recur.SearchBound || never_written != 0usize { os.exit(96i32) }
+    // a rule that ends by COUNT is an ordinary result
+    let (counted, counted_error) = recur.parse_rule("FREQ=SECONDLY;COUNT=5")
+    if counted_error != ok { os.exit(97i32) }
+    let (counted_written, counted_expand) = recur.expand(counted, start, out[0usize..64usize])
+    if counted_expand != ok || counted_written != 5usize { os.exit(98i32) }
     // An invalid start is refused.
     var bad_start = start
     bad_start.date.month = 13u8
