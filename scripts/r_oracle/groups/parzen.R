@@ -15,4 +15,10 @@ for (rep in 1:25) {
   fx <- sort(statip::densityfun(x, bw = bw, kernel = "uniform")(x), decreasing = TRUE); if (length(fx) > 1 && fx[1] - fx[2] < 1e-9) next
   nv <- naive(x, bw = bw); add("naive", c(bw, length(x), x, 0), length(nv)); add("naive", c(bw, length(x), x, 1), nv[1])
 }
+# vieu (gaussian): ("vieu") args (bw or 0 for nrd0, n, x...)
+for (rep in 1:25) {
+  n <- sample(15:100, 1); x <- round(if (rep %% 3 == 0) c(rnorm(n %/% 2, 0, 1), rnorm(n - n %/% 2, 4, 1.3)) else rgamma(n, 3, 1), 3); bw <- if (rep %% 2 == 0) 0 else runif(1, 0.3, 1)
+  v <- tryCatch(if (bw == 0) vieu(x) else vieu(x, bw = bw), error = function(e) NULL); if (is.null(v)) next
+  cases[[length(cases) + 1]] <- case("vieu", c(bw, length(x), x), v, rel = 1e-9, abs = 1e-9)
+}
 emit("parzen", "modeest", list(cases))

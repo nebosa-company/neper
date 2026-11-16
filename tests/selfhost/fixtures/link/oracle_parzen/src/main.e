@@ -19,7 +19,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let x = c.args
         let n = usize(x[1usize])
         var got = pz.parzen(a, x[2usize..2usize + n], x[0usize])
-        if c.name.len == 5usize { got = pz.naive(a, x[2usize..2usize + n], x[0usize], usize(x[2usize + n])) }
+        if c.name.len == 4usize { got = pz.vieu(a, x[2usize..2usize + n], x[0usize]) } else if c.name.len == 5usize { got = pz.naive(a, x[2usize..2usize + n], x[0usize], usize(x[2usize + n])) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

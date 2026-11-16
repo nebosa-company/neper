@@ -46312,3 +46312,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `partial_auc` builds the roc() curve sorted by ascending specificity (sort_roc), swaps axes for sensitivity focus, and ports auc.roc line by line: trapezoids over the points inside [lo, hi], interpolated boundary pieces where hi or lo is not a point (exact `%in%` equality), the no-point-inside case, and the McClish correction `(1 + (auc - min)/(max - min))/2` with NaN below the diagonal.
 
 **Result.** `oracle_proc` agrees with pROC on 117 partial-AUC values on Windows; Linux pending. Smoothed curves, bootstrap and other roc.test methods stay open; L324 stays partial.
+
+## D6524 — modeest: vieu
+
+**Decision.** `parzen.vieu` is the root of the Gaussian kernel-derivative sum `sum(-u phi(u))`, `u = (z - x)/bw`, over range(x) by a copy of R_zeroin2 (tol eps^0.25, 1000 iterations), bw from bw.nrd0. modeest's `vieu` calls `statip::bandwidth(x, bw)` after densityfun, which stops for a numeric bw, so only the nrd0 default can be compared; the root is the Brent iterate, not necessarily the global mode (3.77 for a gamma(3,1) sample).
+
+**Result.** `oracle_parzen` agrees with modeest on 12 vieu values at 1e-9 on Windows; Linux pending. The other parzen kernels and meanshift bandwidths stay open; L472 stays partial.
