@@ -3173,4 +3173,5 @@ D6097	1330	Kendall: tau, MannKendall and SeasonalMannKendall; L498 closed
 D6098	1372	lmom: sample L-moments and the closed-form distributions
 D6099	1291	leaps regsubsets by enumeration, with the summary formulas of summary.regsubsets
 D6100	1490	biglm bigglm: the stopping rule and the reported errors use different dispersions
-D6101	1601	vcd and effectsize point estimates
+D6101	1602	vcd and effectsize point estimates
+D6102	800	cmprsk cuminc estimates and variances: Gray's cinc routine

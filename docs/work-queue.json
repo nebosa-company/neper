@@ -636,10 +636,10 @@
       "group": "CRAN parity",
       "order": 620,
       "title": "cmprsk: competing risks",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 602). Small to mid. e.algo.stat.survival has cumulative_incidence. Acceptance, equal to cmprsk: cuminc with its variance and Gray k-sample test, crr Fine-Gray regression with time-varying covariates, predict.crr, timepoints."
+      "evidence": "Partial (D6102): e.algo.stat.cmprsk.cinc equals cuminc estimates and variances per cause (oracle_cmprsk, Windows). Open: Gray k-sample test (crstm), crr Fine-Gray with time-varying covariates, predict.crr, timepoints. Acceptance, equal to cmprsk: cuminc with its variance and Gray k-sample test, crr Fine-Gray regression with time-varying covariates, predict.crr, timepoints."
     },
     {
       "id": "L422",
