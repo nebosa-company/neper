@@ -301,3 +301,4 @@ oracle_osqp
 oracle_mumin
 oracle_desolve
 oracle_foreign
+oracle_matlab

@@ -45682,3 +45682,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.fmt.dbf` reads dBase III/IV files: the record count, header length and record length from the header, the 32-byte field descriptors up to the 0x0D terminator, and the fixed-width records with the deletion flag (deleted records skipped). Numeric (N, F) fields are parsed from the padded text with an empty field missing, logical (L) fields are 1, 0 or missing, character fields are kept by their trimmed text length, and date fields are not decoded. The oracle writes six .dbf files with write.dbf (doubles with decimals, integers, character with embedded spaces, logicals) and compares dimensions, per-column numeric sums, character-length totals and missing counts to read.dbf(as.is = TRUE). Not here: memo fields, date decoding, code pages, write.dbf and the remaining readers (octave, mtp, systat).
 
 **Result.** `oracle_foreign` equals foreign on 120 cases on Windows; Linux pending. L332 stays partial.
+
+## D6419 — R.matlab: level 5 MAT-file reader
+
+`e.fmt.mat5` reads uncompressed little-endian MATLAB level 5 files: the 128-byte header with the "IM" endian marker, then the miMATRIX elements, each with its array flags (class), dimensions, name (small-element form handled) and real part. The real part of any numeric stored type (int8 to uint32, single, double) becomes f64 by assembling the IEEE fields, characters become their code units, and elements are padded to 8 bytes as the format requires. Dimensions, counts and sums equal readMat's for double and integer matrices, a double vector and a character string (readMat gives a string as one element, which the oracle counts) in six files written by writeMat. Not here: compressed (v7) elements, big-endian files, structs, cells, sparse arrays, complex parts, level 4 files and v7.3 (HDF5).
+
+**Result.** `oracle_matlab` equals R.matlab on 54 cases on Windows; Linux pending. L390 is partial.

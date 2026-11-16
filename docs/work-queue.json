@@ -383,10 +383,10 @@
       "group": "CRAN parity",
       "order": 608,
       "title": "R.matlab: MATLAB MAT files",
-      "score": 0,
+      "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 444). Small to mid. Acceptance, equal to R.matlab on real files: readMat for level 4 and level 5 files including compressed (v7) variables, structs, cells, sparse matrices, logical and char arrays; writeMat round trip. v7.3 files are HDF5 and wait for L352."
+      "evidence": "Partial (D6419). Level 5 uncompressed numeric and character arrays (e.fmt.mat5) equal readMat on writeMat files on Windows (oracle_matlab; Linux pending). Open: compressed v7, structs, cells, sparse, complex, level 4, writeMat. Was: Open (CRAN rank 444). Small to mid. Acceptance, equal to R.matlab on real files: readMat for level 4 and level 5 files including compressed (v7) variables, structs, cells, sparse matrices, logical and char arrays; writeMat round trip. v7.3 files are HDF5 and wait for L352."
     },
     {
       "id": "L401",
