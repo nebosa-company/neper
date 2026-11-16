@@ -584,7 +584,7 @@
       "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6190, D6191 McLeod.Li.test). periodogram equals TSA on Windows (oracle_tsa; Linux pending). Open: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax, cumulative periodogram, eacf, BIC table, tsdiag. Was: Open (CRAN rank 735). Small to mid. Acceptance, equal to TSA: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax with intervention terms, periodogram, cumulative periodogram data, eacf, BIC table, tsdiag statistics."
+      "evidence": "Partial (D6190, D6406 McLeod.Li.test). periodogram equals TSA on Windows (oracle_tsa; Linux pending). Open: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax, cumulative periodogram, eacf, BIC table, tsdiag. Was: Open (CRAN rank 735). Small to mid. Acceptance, equal to TSA: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax with intervention terms, periodogram, cumulative periodogram data, eacf, BIC table, tsdiag statistics."
     },
     {
       "id": "L453",
@@ -991,7 +991,7 @@
       "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6192, D6193 scaleTau2, D6194 mc without ties). Qn (to 1e-6), Sn and huberM agree with robustbase on Windows (oracle_robustbase; Linux pending). Open: mc, scaleTau2, covMcd, lmrob, ltsReg, adjOutlyingness. Was: Open (CRAN rank 285). Mid. Pairs with the MASS robust fits in L306. Acceptance, equal to robustbase: lmrob (MM and SMDM), covMcd (FastMCD), ltsReg, glmrob, nlrob, huberM, medcouple (mc), adjbox, Qn, Sn and scaleTau2, with seeded subsampling."
+      "evidence": "Partial (D6192, D6408 scaleTau2, D6409 mc without ties). Qn (to 1e-6), Sn and huberM agree with robustbase on Windows (oracle_robustbase; Linux pending). Open: mc, scaleTau2, covMcd, lmrob, ltsReg, adjOutlyingness. Was: Open (CRAN rank 285). Mid. Pairs with the MASS robust fits in L306. Acceptance, equal to robustbase: lmrob (MM and SMDM), covMcd (FastMCD), ltsReg, glmrob, nlrob, huberM, medcouple (mc), adjbox, Qn, Sn and scaleTau2, with seeded subsampling."
     },
     {
       "id": "L339",
@@ -1013,7 +1013,7 @@
       "score": 0.55,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6183, D6184 filtfilt and freqz, D6185 sgolay central row, D6186 cheby1, D6187 cheby2, D6188 grpdelay, D6189 band-pass butter). butter (low and high, any order, one cutoff) and filter equal signal on Windows (oracle_signalpkg; Linux pending). Open: band filters, cheby1, cheby2, ellip, bessel, fir1 and fir2, remez, filtfilt, freqz, grpdelay, sgolay, resample, decimate, specgram. Was: Open (CRAN rank 253). Mid. Verify what e.dsp and e.math.filter already design. Acceptance, equal to signal: butter, cheby1, cheby2, ellip, bessel, fir1, fir2, remez, filter, filtfilt, freqz, grpdelay, sgolay and sgolayfilt, resample, decimate, interp, specgram, unwrap."
+      "evidence": "Partial (D6183, D6184 filtfilt and freqz, D6400 sgolay central row, D6401 cheby1, D6402 cheby2, D6403 grpdelay, D6404 band-pass butter). butter (low and high, any order, one cutoff) and filter equal signal on Windows (oracle_signalpkg; Linux pending). Open: band filters, cheby1, cheby2, ellip, bessel, fir1 and fir2, remez, filtfilt, freqz, grpdelay, sgolay, resample, decimate, specgram. Was: Open (CRAN rank 253). Mid. Verify what e.dsp and e.math.filter already design. Acceptance, equal to signal: butter, cheby1, cheby2, ellip, bessel, fir1, fir2, remez, filter, filtfilt, freqz, grpdelay, sgolay and sgolayfilt, resample, decimate, interp, specgram, unwrap."
     },
     {
       "id": "L343",
@@ -1387,7 +1387,7 @@
       "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6192), p.adjust six methods (D6193). Dunn, Conover (t and single-step Tukey) and Nemenyi (Tukey) all-pairs tests with tie corrections and Holm adjustment equal PMCMRplus on Windows (oracle_pmcmr; Linux pending). Open: van der Waerden, Steel, Quade, Friedman and other post-hoc tests, many-to-one comparisons, other adjustments. Was: Open (CRAN rank 821). Mid. Builds on the rstatix module. Acceptance, equal to PMCMRplus: kwAllPairs for Conover, Nemenyi, Dunn, Steel-Dwass and Dunnett, frdAllPairs for Conover, Nemenyi, Siegel and Exact, quadeAllPairs, vanWaerden, and the ANOVA post-hoc family with their adjustments."
+      "evidence": "Partial (D6407), p.adjust six methods (D6193). Dunn, Conover (t and single-step Tukey) and Nemenyi (Tukey) all-pairs tests with tie corrections and Holm adjustment equal PMCMRplus on Windows (oracle_pmcmr; Linux pending). Open: van der Waerden, Steel, Quade, Friedman and other post-hoc tests, many-to-one comparisons, other adjustments. Was: Open (CRAN rank 821). Mid. Builds on the rstatix module. Acceptance, equal to PMCMRplus: kwAllPairs for Conover, Nemenyi, Dunn, Steel-Dwass and Dunnett, frdAllPairs for Conover, Nemenyi, Siegel and Exact, quadeAllPairs, vanWaerden, and the ANOVA post-hoc family with their adjustments."
     },
     {
       "id": "L488",
@@ -1431,7 +1431,7 @@
       "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6190). The alpha spending functions equal gsDesign on Windows (oracle_gsdesign; Linux pending). Open: boundary computation by recursive integration, gsProbability, sample size, futility bounds, four-point spending parameterisations. Was: Open (CRAN rank 939). Mid. Acceptance, equal to gsDesign: gsDesign for the Lan-DeMets O'Brien-Fleming and Pocock, Hwang-Shih-DeCani, power and exponential spending functions, gsProbability, gsCP, nBinomial, nSurv, nNormal, sfLDOF and the boundaries and sample sizes."
+      "evidence": "Partial (D6405). The alpha spending functions equal gsDesign on Windows (oracle_gsdesign; Linux pending). Open: boundary computation by recursive integration, gsProbability, sample size, futility bounds, four-point spending parameterisations. Was: Open (CRAN rank 939). Mid. Acceptance, equal to gsDesign: gsDesign for the Lan-DeMets O'Brien-Fleming and Pocock, Hwang-Shih-DeCani, power and exponential spending functions, gsProbability, gsCP, nBinomial, nSurv, nNormal, sfLDOF and the boundaries and sample sizes."
     },
     {
       "id": "L508",

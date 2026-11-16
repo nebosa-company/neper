@@ -45503,13 +45503,13 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_agricolae` equals agricolae on 168 cases on Windows; Linux pending. L396 is partial.
 
-## D6185 — signal: Savitzky-Golay smoothing weights
+## D6400 — signal: Savitzky-Golay smoothing weights
 
 `e.algo.stat.signalpkg` gains sgolay_center, the central row of sgolay(p, n): the weights of the polynomial smoother of order p over an odd window of n points, from the normal equations of the Vandermonde basis (the first row of the pseudo-inverse of the window's polynomial matrix). It equals signal's to 1e-8 for windows up to 21 and orders up to 5. Not here: the other rows (edge filters), derivatives, sgolayfilt's edge handling and the remaining designs.
 
 **Result.** `oracle_signalpkg` equals signal on 170 cases on Windows; Linux pending. L340 stays partial.
 
-## D6186 — signal: cheby1
+## D6401 — signal: cheby1
 
 `e.algo.stat.signalpkg` gains cheby1 for low-pass and high-pass Chebyshev type I filters with a passband ripple in dB: the prototype poles -sinh(mu) sin(theta_k) + j cosh(mu) cos(theta_k) with mu = asinh(1 / eps) / n and eps = sqrt(10^(rp / 10) - 1), the same warp, inversion and bilinear steps as butter, and the passband gain fixed at 1 for odd orders and 1 / sqrt(1 + eps^2) for even orders (at z = 1 for low-pass, z = -1 for high-pass). Coefficients equal signal's. Not here: cheby2, ellip, bessel and the band forms.
 
@@ -45521,7 +45521,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_epir` equals epiR on 525 cases on Windows; Linux pending. L460 is partial.
 
-## D6187 — signal: cheby2
+## D6402 — signal: cheby2
 
 `e.algo.stat.signalpkg` gains cheby2 (Chebyshev type II, stopband attenuation rs in dB, the cutoff being the stopband edge) for low-pass and high-pass: the poles are the reciprocals of the type I poles with eps = 1 / sqrt(10^(rs / 10) - 1), the finite zeros are j / cos(theta_k) (none where cos is 0), the same warp, inversion and bilinear steps follow, the missing zeros sit at z = -1 (low-pass) or z = +1 (high-pass), and the gain is unity at z = 1 or z = -1. Coefficients equal signal's. Not here: ellip, bessel and the band forms.
 
@@ -45533,7 +45533,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_energy` equals energy on 48 cases on Windows; Linux pending. L459 is partial.
 
-## D6188 — signal: grpdelay
+## D6403 — signal: grpdelay
 
 `e.algo.stat.signalpkg` gains grpdelay_at, the group delay of B / A at a frequency as the package computes it: the real part of the k-weighted over plain response of the product polynomial b * rev(a), minus the order of a, with the ratio set to 0 (so the delay to minus the order of a) where the product vanishes. The grid point w = 0 of a high-pass design is left out of the oracle: the package flags a singularity only below 2 eps in the FFT of the product, so whether it divides roundoff noise or zero there depends on rounding that cannot be reproduced. Not here: the whole-circle grid, the Hz option and the other filters.
 
@@ -45545,7 +45545,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_bayesfactor` agrees with BayesFactor on 40 cases on Windows at that tolerance; Linux pending. L465 is partial.
 
-## D6189 — signal: band-pass Butterworth
+## D6404 — signal: band-pass Butterworth
 
 `e.algo.stat.signalpkg` gains butter_band for butter(n, c(w1, w2), "pass"): the low-pass prototype poles are mapped to the band by the quadratic s^2 - (BW p) s + W0^2 = 0 with the warped edges 4 tan(pi w / 2), BW = W2 - W1 and W0^2 = W1 W2, which doubles the order, the zeros are n at z = +1 and n at z = -1, and the gain makes the response unity at the digital image of the analog centre sqrt(W1 W2). Coefficients equal signal's. Not here: the band-stop and the band forms of cheby1, cheby2, ellip and bessel.
 
@@ -45557,7 +45557,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_gsdesign` equals gsDesign on 720 cases on Windows; Linux pending. L507 is partial.
 
-## D6190 — TSA: periodogram
+## D6405 — TSA: periodogram
 
 `e.algo.stat.tsa` gives TSA::periodogram: the mean is removed, the series is padded with zeros to the next length N whose prime factors are only 2, 3 and 5 (stats::nextn, as spec.pgram does), the value at frequency j / N for j = 1 .. floor(N / 2) is 2 |F_j|^2 / n for the original length n, and the entry whose frequency equals 0.5 is halved. The comparison is exact floating point: the package builds the frequencies as seq.int(1 / N, by = 1 / N), and for N = 12 the sixth is 0.5000000000000001, so the Nyquist value is not halved there but is for N = 36 and 54; the port builds the frequencies the same way. Not here: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax, the cumulative periodogram, eacf and the diagnostics.
 
@@ -45569,7 +45569,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_sampling` equals sampling on 191 cases on Windows; Linux pending. L508 is partial.
 
-## D6191 — TSA: McLeod.Li.test
+## D6406 — TSA: McLeod.Li.test
 
 `e.algo.stat.tsa` gains mcleod_li, the p values of McLeod.Li.test(y = x, gof.lag) for lags 1 .. gof: the Ljung-Box statistic n (n + 2) sum_k r_k^2 / (n - k) of the squared series at lags 1 .. lag, referred to a chi-square with `lag` degrees of freedom. The package's own source reads the autocorrelations as `acf(...)$acf[1:lag]`, which looks like it includes lag 0; it does not, because TSA masks acf with a version that drops lag 0 by default, which the first attempt (including lag 0) missed. Not here: the object form (residuals of an arima fit, omit.initial) and the default gof.lag of 10 log10(n).
 
@@ -45587,7 +45587,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_pmcmr` equals PMCMRplus and stats::p.adjust on 306 cases on Windows; Linux pending. L487 stays partial.
 
-## D6192 — robustbase: Qn, Sn and huberM
+## D6407 — robustbase: Qn, Sn and huberM
 
 `e.algo.stat.robustbase` computes the Rousseeuw-Croux scale estimators from all pairwise differences: Qn is the constant 2.21914 times the k-th smallest |x_i - x_j| with k = choose(floor(n / 2) + 1, 2), with the package's small-sample table up to n = 12 and Qn.finite.c above; Sn is 1.1926 times the low median over i of the high median over j of |x_i - x_j|, with its factors for n <= 9 and n / (n - 0.9) for odd n. huberM is the Huber location (k = 1.5, tolerance 1e-6 of the scale) from the median start with the MAD (constant 1.4826) as scale, with the same iteration count. Sn and huberM equal robustbase to 1e-9; Qn agrees to 1e-6 relative, not 1e-9: in some samples (a few in every ten) the package's value deviates from the exact order statistic by up to 4e-8 relative, which looks like the compiled search's tolerance, so the oracle compares Qn at 1e-6. Not here: mc (the medcouple), scaleTau2, covMcd, lmrob and the rest.
 
@@ -45599,7 +45599,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_mixtools` equals mixtools on 50 cases on Windows; Linux pending. L486 is partial.
 
-## D6193 — robustbase: scaleTau2
+## D6408 — robustbase: scaleTau2
 
 `e.algo.stat.robustbase` gains scale_tau2, the Yohai-Zamar tau scale with the package's defaults (c1 = 4.5, c2 = 3, one iteration from mu0 = median and sigma0 = the raw median absolute deviation, with the asymptotic consistency factor n E rho(c2 qnorm(3/4))): the location is the biweight-weighted mean with weights (1 - (|x - mu0| / (c1 sigma0))^2)^2 truncated at 0, and the scale is sigma0 sqrt(sum min(((x - mu) / sigma0)^2, c2^2) / (n E)). Both the location and the scale equal robustbase's to 1e-9. Not here: the finite-sample consistency, further iterations and the rest of the package (mc, covMcd, lmrob, ltsReg).
 
@@ -45611,7 +45611,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_klar` equals klaR on 70 cases on Windows; Linux pending. L481 is partial.
 
-## D6194 — robustbase: mc, the medcouple
+## D6409 — robustbase: mc, the medcouple
 
 `e.algo.stat.robustbase` gains mc, the medcouple: the median over pairs x_i <= med <= x_j with x_i < x_j of ((x_j - med) - (med - x_i)) / (x_j - x_i), computed over all pairs. It equals mc() (doReflect on, so the package averages the estimate with the reflected one, the same number when there are no ties) on even-sized samples. Odd-sized samples put an observation exactly on the median, where the package's tie kernel applies, and are not covered; neither are other ties at the median. Not here: that kernel, doScale, scaleTau2's finite-sample consistency, covMcd, lmrob, ltsReg and adjOutlyingness.
 
