@@ -1,7 +1,7 @@
 // R cmprsk::cuminc for one group and one cause: Gray's `cinc` routine, the estimate of the cumulative incidence
 // function of a cause with its variance, written as the corner points of the step function (x, f, v), line for line.
 //
-// Not here: crr (Fine-Gray regression), predict.crr and timepoints.
+// Also `timepoints`. Not here: the plot and print methods.
 
 use e.algo.stat.psych as ps
 use e.math
@@ -381,5 +381,40 @@ fn crst(a: *mem.Arena, y: []const f64, m: []const i64, ig: []const i64, ng: usiz
             j += 1usize
         }
         i += 1usize
+    }
+}
+
+// timepoints: the estimate and variance of a cuminc step function (corners x, f, v, k of them) at ascending times; NaN beyond the last corner or before the first
+fn timepoints(x: []const f64, f: []const f64, v: []const f64, times: []const f64, est: []f64, var_: []f64) {
+    let nan = 0.0f64 / 0.0f64
+    let n = x.len
+    var t = 0usize
+    while t < times.len {
+        est[t] = nan
+        var_[t] = nan
+        let tp = times[t]
+        if x[n - 1usize] < tp { t += 1usize
+            continue }
+        var at = 0usize
+        var have = false
+        if x[n - 1usize] == tp {
+            at = n
+            have = true
+        } else {
+            var k = n - 1usize
+            while k >= 1usize {
+                if x[k - 1usize] <= tp {
+                    at = k + 1usize
+                    have = true
+                    break
+                }
+                k -= 1usize
+            }
+        }
+        if have {
+            est[t] = f[at - 1usize]
+            var_[t] = v[at - 1usize]
+        }
+        t += 1usize
     }
 }

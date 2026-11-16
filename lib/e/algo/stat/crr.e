@@ -6,7 +6,7 @@
 // column-major, tf (ndf by ncov2, column-major) the time functions of x2 at the distinct cause times; wt (ncg by n,
 // column-major) holds the censoring weights; icg is the 0-based censoring group.
 //
-// Not here: the score residuals (`crrsr`), predict.crr, timepoints.
+// Also `crrsr` (score residuals), `crrfit` (the baseline jumps) and `predict` (predict.crr).
 
 use e.algo.stat.psych as ps
 use e.math
@@ -684,5 +684,179 @@ fn variance(a: *mem.Arena, d: *const Data, b: []const f64, np: usize, info: []f6
     }
     ret ok
 }
+
+
+// Gray's crrsr: res (np by ndf, column-major) is the contribution of each distinct cause-1 time to the score
+fn crrsr(a: *mem.Arena, d: *const Data, b: []const f64, np: usize, res: []f64) {
+    let n = d.n
+    let (xb, e1) = mem.alloc[f64](a, np)
+    let (xbt, e2) = mem.alloc[f64](a, np)
+    if e1 != ok || e2 != ok { ret }
+    var i = 0usize
+    while i < np * d.ndf {
+        res[i] = 0.0f64
+        i += 1usize
+    }
+    var iuc = n
+    var ldf = d.ndf + 1usize
+    while true {
+        var found = false
+        var cft = 0.0f64
+        var q = iuc
+        while q >= 1usize {
+            if d.ici[q - 1usize] == 1i64 {
+                cft = d.t2[q - 1usize]
+                found = true
+                break
+            }
+            q -= 1usize
+        }
+        if !found { ret }
+        iuc = q
+        ldf -= 1usize
+        var twf = 0.0f64
+        var itmp = iuc
+        i = iuc
+        while i >= 1usize {
+            if d.t2[i - 1usize] < cft { break }
+            itmp = i
+            if d.ici[i - 1usize] == 1i64 {
+                let wk = covt(d, i - 1usize, ldf - 1usize, b, xbt)
+                twf += 1.0f64
+                var j = 0usize
+                while j < np {
+                    res[j + np * (ldf - 1usize)] += xbt[j]
+                    j += 1usize
+                }
+            }
+            i -= 1usize
+        }
+        iuc = itmp
+        var xb1 = 0.0f64
+        i = 0usize
+        while i < np {
+            xb[i] = 0.0f64
+            i += 1usize
+        }
+        i = 1usize
+        while i <= n {
+            var twt = 0.0f64
+            var skip = false
+            if d.t2[i - 1usize] < cft {
+                if d.ici[i - 1usize] <= 1i64 { skip = true } else {
+                    let wk = covt(d, i - 1usize, ldf - 1usize, b, xbt)
+                    let g = usize(d.icg[i - 1usize])
+                    twt = math.exp[f64](wk) * d.wt[g + d.ncg * (iuc - 1usize)] / d.wt[g + d.ncg * (i - 1usize)]
+                }
+            } else {
+                let wk = covt(d, i - 1usize, ldf - 1usize, b, xbt)
+                twt = math.exp[f64](wk)
+            }
+            if !skip {
+                xb1 += twt
+                var j = 0usize
+                while j < np {
+                    xb[j] += twt * xbt[j]
+                    j += 1usize
+                }
+            }
+            i += 1usize
+        }
+        let twt = 0.0f64 - twf / xb1
+        i = 0usize
+        while i < np {
+            res[i + np * (ldf - 1usize)] += twt * xb[i]
+            i += 1usize
+        }
+        iuc -= 1usize
+        if iuc == 0usize { ret }
+    }
+}
+
+// Gray's crrfit: res (ndf) the jump of the underlying cumulative subdistribution hazard at each distinct cause-1 time
+fn crrfit(a: *mem.Arena, d: *const Data, b: []const f64, np: usize, res: []f64) {
+    let n = d.n
+    let (xbt, e1) = mem.alloc[f64](a, np)
+    if e1 != ok { ret }
+    var i = 0usize
+    while i < d.ndf {
+        res[i] = 0.0f64
+        i += 1usize
+    }
+    var iuc = 1usize
+    var ldf = 0usize
+    while true {
+        var found = false
+        var cft = 0.0f64
+        var q = iuc
+        while q <= n {
+            if d.ici[q - 1usize] == 1i64 {
+                cft = d.t2[q - 1usize]
+                found = true
+                break
+            }
+            q += 1usize
+        }
+        if !found { ret }
+        iuc = q
+        ldf += 1usize
+        var twf = 0.0f64
+        var itmp = iuc
+        i = iuc
+        while i <= n {
+            if d.t2[i - 1usize] > cft { break }
+            itmp = i
+            if d.ici[i - 1usize] == 1i64 { twf += 1.0f64 }
+            i += 1usize
+        }
+        iuc = itmp
+        var xb1 = 0.0f64
+        i = 1usize
+        while i <= n {
+            if d.t2[i - 1usize] < cft {
+                if d.ici[i - 1usize] > 1i64 {
+                    let wk = covt(d, i - 1usize, ldf - 1usize, b, xbt)
+                    let g = usize(d.icg[i - 1usize])
+                    xb1 += math.exp[f64](wk) * d.wt[g + d.ncg * (iuc - 1usize)] / d.wt[g + d.ncg * (i - 1usize)]
+                }
+            } else {
+                let wk = covt(d, i - 1usize, ldf - 1usize, b, xbt)
+                xb1 += math.exp[f64](wk)
+            }
+            i += 1usize
+        }
+        res[ldf - 1usize] += twf / xb1
+        iuc += 1usize
+        if iuc > n { ret }
+    }
+}
+
+// predict.crr for one covariate row: the predicted cumulative incidence at each distinct cause-1 time, 1 - exp(-cumsum(exp(c1 b1 + tf c2 b2) jump));
+// c1 has ncov values, c2 ncov2; tf is the time-function matrix of the fit
+fn predict(a: *mem.Arena, d: *const Data, b: []const f64, np: usize, c1: []const f64, c2: []const f64, out: []f64) {
+    let (jump, e1) = mem.alloc[f64](a, d.ndf)
+    if e1 != ok { ret }
+    crrfit(a, d, b, np, jump)
+    var base = 0.0f64
+    var i = 0usize
+    while i < d.ncov {
+        base += c1[i] * b[i]
+        i += 1usize
+    }
+    var cum = 0.0f64
+    i = 0usize
+    while i < d.ndf {
+        var lp = base
+        var j = 0usize
+        while j < d.ncov2 {
+            lp += d.tf[i + d.ndf * j] * (c2[j] * b[d.ncov + j])
+            j += 1usize
+        }
+        cum += math.exp[f64](lp) * jump[i]
+        out[i] = 1.0f64 - math.exp[f64](0.0f64 - cum)
+        i += 1usize
+    }
+}
+
 
 error Singular

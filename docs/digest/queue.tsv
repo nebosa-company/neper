@@ -56,7 +56,6 @@ L407	library	0	289	stabledist and GeneralizedHyperbolic: heavy-tailed distributi
 L408	library	0	315	PerformanceAnalytics: portfolio risk and return	Open (CRAN rank 590).
 L409	library	0	221	arm: applied regression helpers	Open (CRAN rank 570).
 L411	library	0	303	DHARMa: simulated residual diagnostics	Open (CRAN rank 550).
-L419	library	0.8	498	cmprsk: competing risks	Partial (D6102, D6103): e.algo.stat.cmprsk cinc and crstm equal cuminc estimates, variances and the Gray test (oracle_cmprsk), and e.algo.stat.crr equals crr coefficients, log likelihoods and variance
 L422	library	0	342	extraDistr: extra probability distributions	Open (CRAN rank 678).
 L424	library	0	214	logistf: Firth penalized logistic regression	Open (CRAN rank 689).
 L425	library	0	222	ismev: extreme-value model fits	Open (CRAN rank 647).

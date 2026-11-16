@@ -44986,3 +44986,9 @@ No new geometry code: `oracle_sf` runs the planar part of `e.algo.geom` against 
 `e.algo.stat.crr.crrvv` ports Gray's `crrvv` line for line (the information `v` and the score variance `v2`, with the censoring-process terms `qu`, `ss2` and the `icrsk` risk counts, including the loop that falls into the block when no later time follows) and `variance` forms `inv(v) v2 inv(v)` as `crr` does.
 
 **Result.** `oracle_crr` equals cmprsk's `crr(variance = TRUE)$var` too: 256 values in all (coefficients, log likelihoods and the variance matrices of the converging fits, with time-varying covariates, two censoring groups and tied times) on Windows; the Linux run is pending (WSL). Open under L419: score residuals (`crrsr`), `predict.crr`, `timepoints`.
+
+## D6106 — cmprsk residuals, baseline jumps, predict and timepoints close L419
+
+`crrsr` (score residuals), `crrfit` (the baseline hazard jumps), `predict` (predict.crr for one covariate row, `1 - exp(-cumsum(exp(lp) jump))` with the time functions on the second block) and `timepoints` (Gray's `tpoi`, the step function read at times, NaN beyond the last corner) complete the package's surface that L419 listed.
+
+**Result.** `oracle_crr` is 404 values and `oracle_cmprsk` 1240 on Windows, all equal to cmprsk 2.2-12; the Linux run is pending (WSL). L419 is closed.

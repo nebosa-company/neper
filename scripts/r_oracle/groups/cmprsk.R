@@ -1,5 +1,5 @@
 # cmprsk::cuminc for one group: the step-function corners (time, estimate, variance) of each cause.
-#   args: (n, time[n] sorted, status[n] 0 censored 1.. causes, cause, q)  fn "ci" q 0 npoints, 1 sum t, 2 sum est, 3 sum var, 4 last est, 5 last var, 6 weighted sum est, 7 weighted sum var
+#   args: (n, time[n] sorted, status[n] 0 censored 1.. causes, cause, q)  fn "ci" q 0 npoints (q 8..11 est and 12..15 var at the 4 times that follow q in args via timepoints), 1 sum t, 2 sum est, 3 sum var, 4 last est, 5 last var, 6 weighted sum est, 7 weighted sum var
 suppressMessages(library(cmprsk))
 cases <- list()
 add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-12)
@@ -12,6 +12,11 @@ for (rep in 1:40) {
     p <- ci[[cs]]; k <- length(p$time)
     vals <- c(k, sum(p$time), sum(p$est), sum(p$var), p$est[k], p$var[k], sum(seq_len(k) * p$est), sum(seq_len(k) * p$var))
     for (q in seq_along(vals)) add("ci", c(n, tm, st, cs, q - 1), vals[q])
+    tps <- c(tm[ceiling(n * 0.2)], tm[ceiling(n * 0.5)] + 0.003, tm[n], tm[n] * 1.5); tpo <- timepoints(ci, tps)
+    for (j in 1:4) {
+      if (is.finite(tpo$est[cs, j])) add("ci", c(n, tm, st, cs, 8 + j - 1, tps), tpo$est[cs, j])
+      if (is.finite(tpo$var[cs, j])) add("ci", c(n, tm, st, cs, 12 + j - 1, tps), tpo$var[cs, j])
+    }
   }
 }
 # Gray k-sample test: fn "gray" args (n, ng, nst, rho, cause, time[n], status[n], group[n] 1.., strata[n] 1.., 0) -> statistic of that cause

@@ -1,6 +1,6 @@
 # cmprsk::crr point estimates (variance = TRUE): Fine-Gray coefficients, log likelihood and null log likelihood.
 #   args: (n, ncov, ncov2, ncg, q, time[n] sorted, status[n] 0/1/2, cengroup[n] 0.., cov1 col-major[n*ncov], cov2 col-major[n*ncov2])
-#   q 0..np-1 coefficient, np loglik, np+1 loglik.null, np+2+i*np+j variance[i, j]; time function of column j of cov2: j = 0 log(1 + t), j = 1 t
+#   q 0..np-1 coefficient, np loglik, np+1 loglik.null, np+2+i*np+j variance[i, j], then o = np+2+np*np: o+j sum of score residuals j, o+np+j position-weighted, o+2np sum of baseline jumps, o+2np+1 weighted, o+2np+2 sum of the prediction for row 1, o+2np+3 its last; time function of column j of cov2: j = 0 log(1 + t), j = 1 t
 suppressMessages(library(cmprsk))
 cases <- list()
 add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-6, abs = 1e-8)
@@ -16,7 +16,9 @@ for (rep in 1:40) {
   tf <- if (nc2 == 1) function(u) cbind(log(1 + u)) else if (nc2 == 2) function(u) cbind(log(1 + u), u) else NULL
   fit <- tryCatch(suppressWarnings(crr(tm, st, x1, x2, tf, cengroup = cg + 1, variance = TRUE)), error = function(e) NULL)
   if (is.null(fit) || !fit$converged) next
-  np <- nc1 + nc2; vals <- c(fit$coef, fit$loglik, fit$loglik.null, as.vector(t(fit$var)))
+  np <- nc1 + nc2; pr <- tryCatch(predict(fit, cov1 = x1[1, ], cov2 = if (nc2 > 0) x2[1, ] else NULL)[, 2], error = function(e) NULL)
+  if (is.null(pr)) next
+  vals <- c(fit$coef, fit$loglik, fit$loglik.null, as.vector(t(fit$var)), colSums(fit$res), colSums(fit$res * seq_len(nrow(fit$res))), sum(fit$bfitj), sum(seq_along(fit$bfitj) * fit$bfitj), sum(pr), pr[length(pr)])
   for (q in seq_along(vals)) add("crr", c(n, nc1, nc2, ncg, q - 1, tm, st, cg, as.vector(x1), if (nc2 > 0) as.vector(x2)), vals[q])
 }
 emit("crr", "cmprsk", list(cases))

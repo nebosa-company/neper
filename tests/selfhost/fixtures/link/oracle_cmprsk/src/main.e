@@ -56,6 +56,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         i += 1usize
     }
     let k = cm.cinc(tm, ic, icc, x, f, v)
+    if q >= 8usize {
+        let tps = z[3usize + 2usize * n..7usize + 2usize * n]
+        var e: [4]f64 = zero
+        var vv: [4]f64 = zero
+        cm.timepoints(x[0usize..k], f[0usize..k], v[0usize..k], tps, e[0usize..4usize], vv[0usize..4usize])
+        if q < 12usize { ret e[q - 8usize] }
+        ret vv[q - 12usize]
+    }
     if q == 0usize { ret f64(k) }
     var s = 0.0f64
     i = 0usize

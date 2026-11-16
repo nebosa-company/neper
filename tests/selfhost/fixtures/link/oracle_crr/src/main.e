@@ -72,7 +72,54 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (vr, e9) = mem.alloc[f64](a, np * np)
     if e8 != ok || e9 != ok { ret nan }
     if cr.variance(a, &d, b, np, info, vr) != ok { ret nan }
-    ret vr[q - np - 2usize]
+    if q < np + 2usize + np * np { ret vr[q - np - 2usize] }
+    let o = np + 2usize + np * np
+    let (res, e10) = mem.alloc[f64](a, np * d.ndf + 1usize)
+    let (jump, e11) = mem.alloc[f64](a, d.ndf + 1usize)
+    let (pred, e12) = mem.alloc[f64](a, d.ndf + 1usize)
+    let (c1, e13) = mem.alloc[f64](a, np + 1usize)
+    if e10 != ok || e11 != ok || e12 != ok || e13 != ok { ret nan }
+    if q < o + 2usize * np {
+        cr.crrsr(a, &d, b, np, res)
+        let jj = (q - o) % np
+        var s = 0.0f64
+        var t = 0usize
+        while t < d.ndf {
+            if q - o < np { s += res[jj + np * t] } else { s += f64(t + 1usize) * res[jj + np * t] }
+            t += 1usize
+        }
+        ret s
+    }
+    if q < o + 2usize * np + 2usize {
+        cr.crrfit(a, &d, b, np, jump)
+        var s = 0.0f64
+        var t = 0usize
+        while t < d.ndf {
+            if q == o + 2usize * np { s += jump[t] } else { s += f64(t + 1usize) * jump[t] }
+            t += 1usize
+        }
+        ret s
+    }
+    // the covariates of the first row (sorted order): cov1 then cov2
+    j = 0usize
+    while j < ncov {
+        c1[j] = d.x[n * j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < ncov2 {
+        c1[ncov + j] = d.x2[n * j]
+        j += 1usize
+    }
+    cr.predict(a, &d, b, np, c1[0usize..ncov], c1[ncov..np], pred)
+    if q == o + 2usize * np + 3usize { ret pred[d.ndf - 1usize] }
+    var s = 0.0f64
+    var t = 0usize
+    while t < d.ndf {
+        s += pred[t]
+        t += 1usize
+    }
+    ret s
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
