@@ -299,6 +299,7 @@ oracle_performancepkg
 oracle_cubaturepkg
 oracle_geepackpkg
 oracle_rdensity
+oracle_hdrcdepkg
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -342,3 +343,4 @@ oracle_performancepkg
 oracle_cubaturepkg
 oracle_geepackpkg
 oracle_rdensity
+oracle_hdrcdepkg

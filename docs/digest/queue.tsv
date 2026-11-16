@@ -58,7 +58,7 @@ L468	library	0.35	466	fpc: cluster validity and flexible clustering procedures	P
 L475	library	0.5	558	scoringRules: proper scoring rules	Partial (D6145).
 L477	library	0.5	551	compositions: compositional data analysis	Partial (D6140).
 L478	library	0.4	519	dagitty: causal graph reasoning	Partial (D6159).
-L479	library	0.1	424	hdrcde: highest density regions	Partial (D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows;
+L479	library	0.25	481	hdrcde: highest density regions	Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows;
 L480	library	0.1	416	aod: overdispersed binomial and count data	Partial (D6463 varbin non-bootstrap rows and iccbin method C equal aod on Windows;
 L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
 L482	library	0.5	471	laeken: inequality and poverty indicators	Partial (D6139).
