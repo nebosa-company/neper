@@ -471,10 +471,10 @@
       "group": "CRAN parity",
       "order": 623,
       "title": "ismev: extreme-value model fits",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 647). Small to mid. Acceptance, equal to ismev: gev.fit, gpd.fit, pp.fit, rlarg.fit and gum.fit with covariates and link functions, standard errors, return levels, profile likelihoods gev.prof and gpd.prof."
+      "evidence": "Partial (D6155). Stationary gev.fit, gpd.fit and gum.fit (parameters, standard errors, negative log-likelihood) agree with ismev on Windows at optimiser tolerance, not bit for bit (oracle_ismev; Linux pending). Open: covariates and links, pp.fit, rlarg.fit, return levels, profile likelihoods. Was: Open (CRAN rank 647). Small to mid. Acceptance, equal to ismev: gev.fit, gpd.fit, pp.fit, rlarg.fit and gum.fit with covariates and link functions, standard errors, return levels, profile likelihoods gev.prof and gpd.prof."
     },
     {
       "id": "L426",

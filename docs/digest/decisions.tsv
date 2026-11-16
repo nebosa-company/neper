@@ -3226,4 +3226,5 @@ D6150	736	imputeTS: moving-average and constant imputation
 D6151	775	pracma: integration, polynomial fit, peaks and number-theory helpers
 D6152	728	pracma: pchip and the Gauss-Kronrod quadgk
 D6153	960	PerformanceAnalytics: return and risk measures of one series
-D6154	797	PerformanceAnalytics: benchmark-relative measures
+D6154	798	PerformanceAnalytics: benchmark-relative measures
+D6155	949	ismev: stationary GEV, GPD and Gumbel fits

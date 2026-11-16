@@ -45322,3 +45322,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.perfanalytics` gains CAPM.beta and CAPM.alpha (least squares on excess returns), TrackingError (standard deviation of the active return times the root of the scale), InformationRatio (geometric annualized active premium over tracking error), OmegaSharpeRatio (upside potential less downside potential, over the downside potential, both divided by the full count) and UpDownRatios (Capture, Number and Percent, up and down, geometric or arithmetic; the down side is `<= 0` for Capture and `< 0` for the other two, as in the package). Not here: the modified ES, Return.calculate and findDrawdowns.
 
 **Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 410 cases on Windows; Linux pending. L408 stays partial.
+
+## D6155 — ismev: stationary GEV, GPD and Gumbel fits
+
+`e.algo.stat.ismev` fits gev.fit, gpd.fit (exceedances of a threshold) and gum.fit by Nelder-Mead on the package's negative log-likelihood (penalty 1e6 outside the support), from the package's starting values, with standard errors from a copy of optimhess (step 1e-3 on a central-difference gradient, symmetrised) inverted. The minimiser restarts until the value stops moving, so it lands on the likelihood optimum rather than on R's reltol 1e-8 stopping point; the oracle therefore compares parameters to 2e-2 and standard errors to 5e-2 relative, and the negative log-likelihood to 1e-6, instead of the 1e-9 used elsewhere. Not here: covariates and link functions, pp.fit, rlarg.fit, gev.rl and gpd.rl return levels, the profile likelihoods and the diagnostic plots.
+
+**Result.** `oracle_ismev` agrees with ismev on 153 cases on Windows at those tolerances; Linux pending. L425 is partial.
