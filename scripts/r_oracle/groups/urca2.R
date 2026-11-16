@@ -30,4 +30,26 @@ for (y in series) {
     add("za", c(a, 0), r@teststat); add("za", c(a, 1), r@bpoint); for (l in 1:3) add("za", c(a, 1 + l), r@cval[l])
   }
 }
+# ur.sp: (type 0 tau 1 rho, pol.deg, signif index 0 1% 1 5% 2 10%, n, y...) fn "sp" q 0 stat 1 cval
+# ca.po: (demean 0 none 1 constant 2 trend, lag 0 short 1 long, type 0 Pu 1 Pz, n, m, z col-major..., q) fn "po" q 0 stat 1 cval10 2 cval5 3 cval1 4 lag
+for (y in series) {
+  n <- length(y)
+  for (ty in 0:1) for (dg in 1:4) for (sg in 0:2) {
+    r <- tryCatch(suppressWarnings(ur.sp(y, type = c("tau", "rho")[ty + 1], pol.deg = dg, signif = c(0.01, 0.05, 0.1)[sg + 1])), error = function(e) NULL)
+    if (is.null(r)) next
+    a <- c(ty, dg, sg, n, y)
+    add("sp", c(a, 0), r@teststat); add("sp", c(a, 1), r@cval)
+  }
+}
+for (rep in 1:30) {
+  m <- sample(2:5, 1); n <- sample(60:200, 1)
+  z <- matrix(0, n, m); z[, 1] <- cumsum(rnorm(n)); for (j in 2:m) z[, j] <- if (runif(1) < 0.5) 0.7 * z[, 1] + rnorm(n) else cumsum(rnorm(n))
+  z <- round(z, 4)
+  for (dm in 0:2) for (lg in 0:1) for (ty in 0:1) {
+    r <- tryCatch(suppressWarnings(ca.po(z, demean = c("none", "constant", "trend")[dm + 1], lag = c("short", "long")[lg + 1], type = c("Pu", "Pz")[ty + 1])), error = function(e) NULL)
+    if (is.null(r)) next
+    a <- c(dm, lg, ty, n, m, as.vector(z))
+    add("po", c(a, 0), r@teststat); for (l in 1:3) add("po", c(a, l), r@cval[1, l]); add("po", c(a, 4), r@lag)
+  }
+}
 emit("urca2", "urca", list(cases))

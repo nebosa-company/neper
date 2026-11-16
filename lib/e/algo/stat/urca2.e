@@ -6,6 +6,7 @@
 use e.algo.stat.olsfit as ols
 use e.math
 use e.mem
+use e.str
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
@@ -393,3 +394,427 @@ fn ur_za(a: *mem.Arena, y: []const f64, model: u8, lag: usize) -> (Za, err) {
     }
     ret (out, ok)
 }
+
+// a space separated list of numbers
+fn numlist(a: *mem.Arena, text: str, n: usize) -> ([]f64, err) {
+    let (v, e) = mem.alloc[f64](a, n)
+    if e != ok { ret (v, e) }
+    var at = 0usize
+    var start = 0usize
+    var i = 0usize
+    while i <= text.len {
+        if i == text.len || text[i] == 32u8 {
+            if i > start && at < n {
+                let (x, pe) = str.parse_f64(text[start..i])
+                if pe != ok { ret (v, pe) }
+                v[at] = x
+                at += 1usize
+            }
+            start = i + 1usize
+        }
+        i += 1usize
+    }
+    ret (v, ok)
+}
+
+type Sp = struct { stat: f64, cval: f64 }
+
+// ur.sp(y, type = tau (0) or rho (1), pol.deg 1 to 4, signif index 0 (1%), 1 (5%), 2 (10%))
+fn ur_sp(a: *mem.Arena, y: []const f64, qtype: u8, deg: usize, sig_ix: usize) -> (Sp, err) {
+    var out: Sp = zero
+    let n = y.len
+    let nf = f64(n)
+    let lag = usize(math.floor[f64](12.0f64 * math.pow[f64](nf / 100.0f64, 0.25f64)))
+    let m = n - 1usize
+    let (sh, e1) = mem.alloc[f64](a, n)
+    let (yd, ye) = mem.alloc[f64](a, m)
+    if e1 != ok { ret (out, e1) }
+    if ye != ok { ret (out, ye) }
+    var i = 0usize
+    while i < m {
+        yd[i] = y[i + 1usize] - y[i]
+        i += 1usize
+    }
+    var stat0 = 0.0f64
+    if deg == 1usize {
+        let yi = (y[n - 1usize] - y[0usize]) / (nf - 1.0f64)
+        let phi = y[0usize] - yi
+        i = 0usize
+        while i < n {
+            sh[i] = y[i] - phi - yi * f64(i + 1usize)
+            i += 1usize
+        }
+        let (d, de) = mem.alloc[f64](a, m * 2usize)
+        if de != ok { ret (out, de) }
+        i = 0usize
+        while i < m {
+            d[i] = 1.0f64
+            d[m + i] = sh[i]
+            i += 1usize
+        }
+        let (o, oe) = ols.fit(a, d, m, 2usize, yd)
+        if oe != ok { ret (out, oe) }
+        if qtype == 1u8 { stat0 = nf * o.coef[1usize] } else { stat0 = o.tval[1usize] }
+    } else {
+        // the polynomial of degree deg - 1 in the trend for the differences
+        let (d1, d1e) = mem.alloc[f64](a, m * deg)
+        if d1e != ok { ret (out, d1e) }
+        i = 0usize
+        while i < m {
+            d1[i] = 1.0f64
+            var q = 1usize
+            while q < deg {
+                d1[q * m + i] = math.pow[f64](f64(i + 2usize), f64(q))
+                q += 1usize
+            }
+            i += 1usize
+        }
+        let (o1, o1e) = ols.fit(a, d1, m, deg, yd)
+        if o1e != ok { ret (out, o1e) }
+        sh[0usize] = 0.0f64
+        var cs = 0.0f64
+        i = 0usize
+        while i < m {
+            cs += o1.resid[i]
+            sh[i + 1usize] = cs
+            i += 1usize
+        }
+        let (d2, d2e) = mem.alloc[f64](a, m * (deg + 1usize))
+        if d2e != ok { ret (out, d2e) }
+        i = 0usize
+        while i < m {
+            d2[i] = 1.0f64
+            d2[m + i] = sh[i]
+            var q = 1usize
+            while q < deg {
+                d2[(1usize + q) * m + i] = math.pow[f64](f64(i + 2usize), f64(q))
+                q += 1usize
+            }
+            i += 1usize
+        }
+        let (o2, o2e) = ols.fit(a, d2, m, deg + 1usize, yd)
+        if o2e != ok { ret (out, o2e) }
+        if qtype == 1u8 { stat0 = nf * o2.coef[1usize] } else { stat0 = o2.tval[1usize] }
+    }
+    // the correction regression: y[2:n] ~ y[1:(n-1)] + trend .. trend^deg
+    let (d3, d3e) = mem.alloc[f64](a, m * (deg + 2usize))
+    let (y3, y3e) = mem.alloc[f64](a, m)
+    if d3e != ok { ret (out, d3e) }
+    if y3e != ok { ret (out, y3e) }
+    i = 0usize
+    while i < m {
+        d3[i] = 1.0f64
+        d3[m + i] = y[i]
+        var q = 1usize
+        while q <= deg {
+            d3[(1usize + q) * m + i] = math.pow[f64](f64(i + 2usize), f64(q))
+            q += 1usize
+        }
+        y3[i] = y[i + 1usize]
+        i += 1usize
+    }
+    let (o3, o3e) = ols.fit(a, d3, m, deg + 2usize, y3)
+    if o3e != ok { ret (out, o3e) }
+    var sig_eps = 0.0f64
+    i = 0usize
+    while i < m {
+        sig_eps += o3.resid[i] * o3.resid[i]
+        i += 1usize
+    }
+    sig_eps = sig_eps / nf
+    var acc = 0.0f64
+    var l = 1usize
+    while l <= lag {
+        var cp = 0.0f64
+        i = l
+        while i < m {
+            cp += o3.resid[i] * o3.resid[i - l]
+            i += 1usize
+        }
+        let w = 2.0f64 * f64(lag - l) / f64(lag)
+        acc += w * w * cp
+        l += 1usize
+    }
+    let sg = sig_eps + (2.0f64 / nf) * acc
+    let omega2 = sig_eps / sg
+    if qtype == 1u8 { out.stat = stat0 / omega2 } else { out.stat = stat0 / math.sqrt[f64](omega2) }
+    // the critical value table: 7 sample sizes by 3 levels by 4 degrees
+    var rng = 6usize
+    var bounds: [6]f64 = zero
+    bounds[0usize] = 25.0f64
+    bounds[1usize] = 50.0f64
+    bounds[2usize] = 100.0f64
+    bounds[3usize] = 200.0f64
+    bounds[4usize] = 500.0f64
+    bounds[5usize] = 1000.0f64
+    var r = 0usize
+    while r < 6usize {
+        if bounds[r] >= nf {
+            rng = r
+            break
+        }
+        r += 1usize
+    }
+    var text = "3.9 3.73 3.63 3.61 3.59 3.58 3.56 3.18 3.11 3.06 3.04 3.04 3.02 3.02 2.85 2.8 2.77 2.76 2.76 2.75 2.75 4.52 4.28 4.16 4.12 4.08 4.06 4.06 3.78 3.77 3.65 3.6 3.55 3.55 3.53 3.52 3.41 3.34 3.31 3.28 3.26 3.26 3.26 5.07 4.73 4.59 4.53 4.5 4.49 4.44 4.26 4.08 4.03 3.99 3.96 3.95 3.93 3.89 3.77 3.72 3.69 3.68 3.68 3.67 5.57 5.13 4.99 4.9 4.85 4.83 4.81 4.7 4.47 4.39 4.33 4.31 4.31 4.29 4.3 4.15 4.1 4.06 4.03 4.03 4.01"
+    if qtype == 1u8 { text = "20.4 22.8 23.8 24.8 25.3 25.3 25.2 15.7 17.0 17.5 17.9 18.1 18.1 18.1 13.4 14.3 14.6 14.9 15.0 15.0 15.0 24.6 28.4 30.4 31.8 32.4 32.5 32.6 20.1 22.4 23.7 24.2 24.8 24.6 24.7 17.8 19.5 20.4 20.7 21.0 21.1 21.1 28.1 33.1 36.3 38.0 39.1 39.5 39.7 23.8 27.0 29.1 30.1 30.6 30.8 30.6 21.5 24.0 25.4 26.1 26.6 26.7 26.7 31.0 37.4 41.8 44.0 45.3 45.7 45.8 26.9 31.2 34.0 35.2 36.2 36.6 36.4 24.7 28.1 30.2 31.2 31.8 32.0 31.9" }
+    let (tb, te) = numlist(a, text, 84usize)
+    if te != ok { ret (out, te) }
+    out.cval = 0.0f64 - tb[rng + 7usize * sig_ix + 21usize * (deg - 1usize)]
+    ret (out, ok)
+}
+
+// the inverse of a k x k row-major matrix by Gauss-Jordan with partial pivoting; false when singular
+fn inv_small(a: *mem.Arena, x: []const f64, k: usize, out: []f64) -> bool {
+    let (w, e) = mem.alloc[f64](a, k * k)
+    if e != ok { ret false }
+    var i = 0usize
+    while i < k * k {
+        w[i] = x[i]
+        out[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        out[i * k + i] = 1.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < k {
+        var pv = c
+        var best = math.abs[f64](w[c * k + c])
+        var r = c + 1usize
+        while r < k {
+            if math.abs[f64](w[r * k + c]) > best {
+                best = math.abs[f64](w[r * k + c])
+                pv = r
+            }
+            r += 1usize
+        }
+        if best == 0.0f64 { ret false }
+        if pv != c {
+            var j = 0usize
+            while j < k {
+                let t = w[c * k + j]
+                w[c * k + j] = w[pv * k + j]
+                w[pv * k + j] = t
+                let t2 = out[c * k + j]
+                out[c * k + j] = out[pv * k + j]
+                out[pv * k + j] = t2
+                j += 1usize
+            }
+        }
+        let d = w[c * k + c]
+        var j = 0usize
+        while j < k {
+            w[c * k + j] = w[c * k + j] / d
+            out[c * k + j] = out[c * k + j] / d
+            j += 1usize
+        }
+        r = 0usize
+        while r < k {
+            if r != c {
+                let f = w[r * k + c]
+                j = 0usize
+                while j < k {
+                    w[r * k + j] -= f * w[c * k + j]
+                    out[r * k + j] -= f * out[c * k + j]
+                    j += 1usize
+                }
+            }
+            r += 1usize
+        }
+        c += 1usize
+    }
+    ret true
+}
+
+type Po = struct { stat: f64, cval10: f64, cval5: f64, cval1: f64, lag: usize }
+
+// ca.po(z, demean = none (0), constant (1), trend (2), lag = short (0) or long (1), type = Pu (0) or Pz (1)); z is n by m column-major
+fn ca_po(a: *mem.Arena, z: []const f64, n0: usize, m: usize, demean: u8, lagsel: u8, qtype: u8) -> (Po, err) {
+    var out: Po = zero
+    let nobs = n0 - 1usize
+    let nf = f64(nobs)
+    var lmax = usize(math.floor[f64](4.0f64 * math.pow[f64](nf / 100.0f64, 0.25f64)))
+    if lagsel == 1u8 { lmax = usize(math.floor[f64](12.0f64 * math.pow[f64](nf / 100.0f64, 0.25f64))) }
+    var nreg = m
+    if demean >= 1u8 { nreg += 1usize }
+    if demean == 2u8 { nreg += 1usize }
+    let (d, de) = mem.alloc[f64](a, nobs * nreg)
+    let (res, re) = mem.alloc[f64](a, nobs * m)
+    let (yv, ye) = mem.alloc[f64](a, nobs)
+    if de != ok { ret (out, de) }
+    if re != ok { ret (out, re) }
+    if ye != ok { ret (out, ye) }
+    var i = 0usize
+    while i < nobs {
+        var c = 0usize
+        if demean >= 1u8 {
+            d[i] = 1.0f64
+            c = 1usize
+        }
+        var j = 0usize
+        while j < m {
+            d[(c + j) * nobs + i] = z[j * n0 + i]
+            j += 1usize
+        }
+        if demean == 2u8 { d[(c + m) * nobs + i] = f64(i + 1usize) }
+        i += 1usize
+    }
+    var j = 0usize
+    while j < m {
+        i = 0usize
+        while i < nobs {
+            yv[i] = z[j * n0 + i + 1usize]
+            i += 1usize
+        }
+        let (o, oe) = ols.fit(a, d, nobs, nreg, yv)
+        if oe != ok { ret (out, oe) }
+        i = 0usize
+        while i < nobs {
+            res[j * nobs + i] = o.resid[i]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    let (om, ome) = mem.alloc[f64](a, m * m)
+    if ome != ok { ret (out, ome) }
+    var p = 0usize
+    while p < m {
+        var q = 0usize
+        while q < m {
+            var s0 = 0.0f64
+            i = 0usize
+            while i < nobs {
+                s0 += res[p * nobs + i] * res[q * nobs + i]
+                i += 1usize
+            }
+            var sm = 0.0f64
+            var l = 1usize
+            while l <= lmax {
+                var t1 = 0.0f64
+                var t2 = 0.0f64
+                i = l
+                while i < nobs {
+                    t1 += res[p * nobs + i] * res[q * nobs + i - l]
+                    t2 += res[p * nobs + i - l] * res[q * nobs + i]
+                    i += 1usize
+                }
+                sm += (1.0f64 - f64(l) / f64(lmax + 1usize)) * (t1 + t2)
+                l += 1usize
+            }
+            om[p * m + q] = s0 / nf + sm / nf
+            q += 1usize
+        }
+        p += 1usize
+    }
+    let off = m - 2usize
+    var cp: []f64 = zero
+    if qtype == 1u8 {
+        let (mz, mze) = mem.alloc[f64](a, m * m)
+        let (mzi, mzie) = mem.alloc[f64](a, m * m)
+        if mze != ok { ret (out, mze) }
+        if mzie != ok { ret (out, mzie) }
+        p = 0usize
+        while p < m {
+            var q = 0usize
+            while q < m {
+                var s0 = 0.0f64
+                i = 0usize
+                while i < nobs {
+                    s0 += z[p * n0 + i + 1usize] * z[q * n0 + i + 1usize]
+                    i += 1usize
+                }
+                mz[p * m + q] = s0 / nf
+                q += 1usize
+            }
+            p += 1usize
+        }
+        if !inv_small(a, mz, m, mzi) { ret (out, Singular) }
+        var tr = 0.0f64
+        p = 0usize
+        while p < m {
+            var q = 0usize
+            while q < m {
+                tr += om[p * m + q] * mzi[q * m + p]
+                q += 1usize
+            }
+            p += 1usize
+        }
+        out.stat = nf * tr
+        let (tb, te) = numlist(a, "33.9267 62.1436 99.2664 143.0775 195.6202 40.8217 71.2751 109.7426 155.8019 210.2910 55.1911 89.6679 131.5716 180.4845 237.7723 47.5877 80.2034 120.3035 168.8572 225.2303 55.2202 89.7619 132.2207 182.0749 241.3316 71.9273 109.4525 153.4504 209.8054 270.5018 71.9586 113.4929 163.1050 219.5098 284.0100 81.3812 124.3933 175.9902 234.2865 301.0949 102.0167 145.8644 201.0905 264.4988 335.9054", 45usize)
+        if te != ok { ret (out, te) }
+        cp = tb
+    } else {
+        var nr = m - 1usize
+        if demean >= 1u8 { nr += 1usize }
+        if demean == 2u8 { nr += 1usize }
+        let (d2, d2e) = mem.alloc[f64](a, n0 * nr)
+        let (y2, y2e) = mem.alloc[f64](a, n0)
+        if d2e != ok { ret (out, d2e) }
+        if y2e != ok { ret (out, y2e) }
+        i = 0usize
+        while i < n0 {
+            var c = 0usize
+            if demean >= 1u8 {
+                d2[i] = 1.0f64
+                c = 1usize
+            }
+            var jj = 1usize
+            while jj < m {
+                d2[(c + jj - 1usize) * n0 + i] = z[jj * n0 + i]
+                jj += 1usize
+            }
+            if demean == 2u8 { d2[(c + m - 1usize) * n0 + i] = f64(i + 1usize) }
+            y2[i] = z[i]
+            i += 1usize
+        }
+        let (o2, o2e) = ols.fit(a, d2, n0, nr, y2)
+        if o2e != ok { ret (out, o2e) }
+        var ssq = 0.0f64
+        i = 0usize
+        while i < n0 {
+            ssq += o2.resid[i] * o2.resid[i]
+            i += 1usize
+        }
+        let ssqr = ssq / nf
+        let k = m - 1usize
+        let (o22, o22e) = mem.alloc[f64](a, k * k)
+        let (o22i, o22ie) = mem.alloc[f64](a, k * k)
+        if o22e != ok { ret (out, o22e) }
+        if o22ie != ok { ret (out, o22ie) }
+        p = 0usize
+        while p < k {
+            var q = 0usize
+            while q < k {
+                o22[p * k + q] = om[(p + 1usize) * m + q + 1usize]
+                q += 1usize
+            }
+            p += 1usize
+        }
+        if !inv_small(a, o22, k, o22i) { ret (out, Singular) }
+        var quad = 0.0f64
+        p = 0usize
+        while p < k {
+            var q = 0usize
+            while q < k {
+                quad += om[(p + 1usize) * m] * o22i[p * k + q] * om[(q + 1usize) * m]
+                q += 1usize
+            }
+            p += 1usize
+        }
+        let w112 = om[0usize] - quad
+        out.stat = nf * w112 / ssqr
+        let (tb, te) = numlist(a, "20.3933 26.7022 33.5359 39.2826 44.3725 25.9711 32.9392 40.1220 46.2691 51.8614 38.3413 46.4097 55.7341 63.2149 69.4939 27.8536 33.6955 39.6949 45.3308 50.3537 33.713 40.5252 46.7281 53.2502 57.7855 48.0021 53.8731 63.4128 71.5214 76.7705 41.2488 46.1061 52.0015 57.3667 61.6155 48.8439 53.8300 60.2384 65.8706 70.7416 65.1714 69.2629 78.3470 84.5480 91.0392", 45usize)
+        if te != ok { ret (out, te) }
+        cp = tb
+    }
+    let base = off + 15usize * usize(demean)
+    out.cval10 = cp[base]
+    out.cval5 = cp[base + 5usize]
+    out.cval1 = cp[base + 10usize]
+    out.lag = lmax
+    ret (out, ok)
+}
+
+error Singular

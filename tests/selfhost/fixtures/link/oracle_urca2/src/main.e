@@ -32,6 +32,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if q == 3usize { ret r.cval10 }
         ret f64(r.lag)
     }
+    if str.eq(c.name, "sp") {
+        let n = usize(x[3usize])
+        let (r, e) = u.ur_sp(a, x[4usize..4usize + n], u8(x[0usize]), usize(x[1usize]), usize(x[2usize]))
+        if e != ok { ret nan }
+        if q == 0usize { ret r.stat }
+        ret r.cval
+    }
+    if str.eq(c.name, "po") {
+        let n = usize(x[3usize])
+        let m = usize(x[4usize])
+        let (r, e) = u.ca_po(a, x[5usize..5usize + n * m], n, m, u8(x[0usize]), u8(x[1usize]), u8(x[2usize]))
+        if e != ok { ret nan }
+        if q == 0usize { ret r.stat }
+        if q == 1usize { ret r.cval10 }
+        if q == 2usize { ret r.cval5 }
+        if q == 3usize { ret r.cval1 }
+        ret f64(r.lag)
+    }
     let n = usize(x[2usize])
     let (r, e) = u.ur_za(a, x[3usize..3usize + n], u8(x[0usize]), usize(x[1usize]))
     if e != ok { ret nan }

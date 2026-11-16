@@ -241,3 +241,4 @@ oracle_cshell
 oracle_hclops
 oracle_mvt
 oracle_urca2
+oracle_johansen
