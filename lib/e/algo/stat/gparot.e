@@ -165,6 +165,10 @@ fn sum_of(x: []const f64) -> f64 {
 // 4 bentler, 5 infomax, 6 geomin(par[0] = delta), 7 entropy, 8 oblimax, 9 varimax, 10 varimin,
 // 11 target(par = Target p*k), 12 pst(par = W p*k, then Target p*k), 13 tandem I, 14 tandem II
 fn vgq(a: *mem.Arena, id: u8, l: []const f64, p: usize, k: usize, par: []const f64) -> ([]f64, f64, err) {
+    if id >= 15u8 {
+        let (g0, f0, e0) = vgq_group(a, id, l, p, k, par)
+        ret (g0, f0, e0)
+    }
     let (gq, ge) = mem.alloc[f64](a, p * k)
     let (l2, le) = mem.alloc[f64](a, p * k)
     if ge != ok { ret (gq, 0.0f64, ge) }
@@ -526,6 +530,124 @@ fn vgq(a: *mem.Arena, id: u8, l: []const f64, p: usize, k: usize, par: []const f
     ret (gq, f, ok)
 }
 
+// the criteria of GPArotation 2026.8 that act on a group of columns: 15 simplimax(par[0] = number of near-zero loadings), 16 bifactor,
+// 17 bi-geomin(par[0] = delta); the first column is the general factor, outside the criterion
+fn vgq_group(a: *mem.Arena, id: u8, l: []const f64, p: usize, k: usize, par: []const f64) -> ([]f64, f64, err) {
+    let (gq, ge) = mem.alloc[f64](a, p * k)
+    if ge != ok { ret (gq, 0.0f64, ge) }
+    var i = 0usize
+    while i < p * k {
+        gq[i] = 0.0f64
+        i += 1usize
+    }
+    if id == 15u8 {
+        let kk = usize(par[0usize])
+        let (used, ue) = mem.alloc[bool](a, p * k)
+        if ue != ok { ret (gq, 0.0f64, ue) }
+        i = 0usize
+        while i < p * k {
+            used[i] = false
+            i += 1usize
+        }
+        var f = 0.0f64
+        var t = 0usize
+        while t < kk {
+            // the t-th smallest squared loading, ties by position in R's column-major order
+            var bi = p * k
+            var bv = 0.0f64
+            var c = 0usize
+            while c < k {
+                var r = 0usize
+                while r < p {
+                    let ix = r * k + c
+                    if !used[ix] && (bi == p * k || l[ix] * l[ix] < bv) {
+                        bi = ix
+                        bv = l[ix] * l[ix]
+                    }
+                    r += 1usize
+                }
+                c += 1usize
+            }
+            used[bi] = true
+            gq[bi] = 2.0f64 * l[bi]
+            f += bv
+            t += 1usize
+        }
+        ret (gq, f, ok)
+    }
+    let kg = k - 1usize
+    let (sub, se) = mem.alloc[f64](a, p * kg)
+    if se != ok { ret (gq, 0.0f64, se) }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < kg {
+            sub[i * kg + j] = l[i * k + j + 1usize]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if id == 16u8 {
+        var f = 0.0f64
+        var s4 = 0.0f64
+        i = 0usize
+        while i < p {
+            var rs = 0.0f64
+            var j = 0usize
+            while j < kg {
+                rs += sub[i * kg + j] * sub[i * kg + j]
+                j += 1usize
+            }
+            f += rs * rs
+            j = 0usize
+            while j < kg {
+                let q = sub[i * kg + j] * sub[i * kg + j]
+                s4 += q * q
+                gq[i * k + j + 1usize] = 4.0f64 * sub[i * kg + j] * (rs - q)
+                j += 1usize
+            }
+            i += 1usize
+        }
+        ret (gq, f - s4, ok)
+    }
+    let (g2, f2, ge2) = vgq(a, 6u8, sub, p, kg, par)
+    if ge2 != ok { ret (gq, 0.0f64, ge2) }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < kg {
+            gq[i * k + j + 1usize] = g2[i * kg + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (gq, f2, ok)
+}
+
+// the weights of NormalizingWeight: Kaiser (the row length) or Cureton-Mulaik (that over the weights built from the angle of the
+// row to the first unrotated factor)
+fn norm_weights(a: *mem.Arena, x: []const f64, p: usize, k: usize, nmode: u8) -> ([]f64, err) {
+    let (w, e) = kaiser(a, x, p, k)
+    if e != ok || nmode != 2u8 { ret (w, e) }
+    let m = f64(k)
+    let acosi = math.acos[f64](math.pow[f64](m, 0.0f64 - 0.5f64))
+    var i = 0usize
+    while i < p {
+        let h = w[i]
+        var fp = x[i * k] / h
+        if fp < 0.0f64 - 1.0f64 { fp = 0.0f64 - 1.0f64 }
+        if fp > 1.0f64 { fp = 1.0f64 }
+        let alpha = math.acos[f64](math.abs[f64](fp))
+        var dem = acosi
+        if math.abs[f64](fp) < math.pow[f64](m, 0.0f64 - 0.5f64) { dem = acosi - 3.141592653589793f64 / 2.0f64 }
+        let num = acosi - alpha
+        let c = math.cos[f64]((num / dem) * (3.141592653589793f64 / 2.0f64))
+        w[i] = h / (c * c + 0.001f64)
+        i += 1usize
+    }
+    ret (w, ok)
+}
+
 // Kaiser weights: the row length, at least machine epsilon
 fn kaiser(a: *mem.Arena, x: []const f64, p: usize, k: usize) -> ([]f64, err) {
     let (w, e) = mem.alloc[f64](a, p)
@@ -562,11 +684,26 @@ fn window_max(table: []const f64, iter: usize, fwindow: usize) -> f64 {
 // GPForth (orthogonal rotation), algorithm "bb" with fwindow 10. Answers the rotated loadings, the
 // rotation matrix and the final criterion value.
 fn gpf_orth(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []const f64, normalize: bool, tol: f64, maxit: usize) -> (Rotation, err) {
+    var nm = 0u8
+    if normalize { nm = 1u8 }
+    let (r0, e0) = gpf_orth_n(a, x, p, k, id, par, nm, tol, maxit)
+    ret (r0, e0)
+}
+
+// nmode 0 no normalization, 1 Kaiser, 2 Cureton-Mulaik
+fn gpf_orth_n(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []const f64, nmode: u8, tol: f64, maxit: usize) -> (Rotation, err) {
+    let (r0, e0) = gpf_orth_alg(a, x, p, k, id, par, nmode, 0u8, 10usize, tol, maxit)
+    ret (r0, e0)
+}
+
+// algo 0 the Barzilai-Borwein step, 1 legacy (the step doubled every iteration, window 1), 2 Cayley (orthogonal only); fw the window of the
+// nonmonotone test
+fn gpf_orth_alg(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []const f64, nmode: u8, algo: u8, fw: usize, tol: f64, maxit: usize) -> (Rotation, err) {
     var none: Rotation = zero
     var w: []f64 = zero
     var am = x
-    if normalize {
-        let (wv, we) = kaiser(a, x, p, k)
+    if nmode > 0u8 {
+        let (wv, we) = norm_weights(a, x, p, k, nmode)
         if we != ok { ret (none, we) }
         w = wv
         let (an, ae) = mem.alloc[f64](a, p * k)
@@ -668,7 +805,7 @@ fn gpf_orth(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []co
         if s < tol {
             done = true
         } else {
-            if havep {
+            if havep && algo != 1u8 {
                 var ddt = 0.0f64
                 var ddg = 0.0f64
                 var dtg = 0.0f64
@@ -689,7 +826,7 @@ fn gpf_orth(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []co
             } else {
                 alpha = 2.0f64 * alpha
             }
-            let tgt = window_max(tab, iter, 10usize)
+            let tgt = window_max(tab, iter, fw)
             var tmatt: []f64 = zero
             var lt: []f64 = zero
             var gqt: []f64 = zero
@@ -704,13 +841,45 @@ fn gpf_orth(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []co
                     xm[i] = th[i] - alpha * gp[i]
                     i += 1usize
                 }
-                let (sv, svee) = decomp.svd(a, xm, k, k)
-                if svee != ok { ret (none, svee) }
-                // decomp reads and writes column-major: it saw t(X), so the polar factor of X is t(Vr) Ur
-                let (vt, vte) = transpose(a, sv.v, k, k)
-                if vte != ok { ret (none, vte) }
-                let (tm, tme) = matmul(a, vt, sv.u, k, k, k)
-                if tme != ok { ret (none, tme) }
+                var tm: []f64 = zero
+                if algo == 2u8 {
+                    // Cayley: W = Gp Th' - Th Gp', Th_new = (I + a / 2 W)^-1 (I - a / 2 W) Th
+                    let (gpt, gte) = transpose(a, gp, k, k)
+                    if gte != ok { ret (none, gte) }
+                    let (g1, g1e) = matmul(a, gp, tht, k, k, k)
+                    if g1e != ok { ret (none, g1e) }
+                    let (g2, g2e) = matmul(a, th, gpt, k, k, k)
+                    if g2e != ok { ret (none, g2e) }
+                    let (plus, pe2) = mem.alloc[f64](a, k * k)
+                    let (minus, me2) = mem.alloc[f64](a, k * k)
+                    if pe2 != ok { ret (none, pe2) }
+                    if me2 != ok { ret (none, me2) }
+                    i = 0usize
+                    while i < k * k {
+                        let wv = g1[i] - g2[i]
+                        var idm = 0.0f64
+                        if i / k == i % k { idm = 1.0f64 }
+                        plus[i] = idm + alpha / 2.0f64 * wv
+                        minus[i] = idm - alpha / 2.0f64 * wv
+                        i += 1usize
+                    }
+                    let (xinv, xie) = invert(a, plus, k)
+                    if xie != ok { ret (none, xie) }
+                    let (m1, m1e) = matmul(a, xinv, minus, k, k, k)
+                    if m1e != ok { ret (none, m1e) }
+                    let (m2, m2e) = matmul(a, m1, th, k, k, k)
+                    if m2e != ok { ret (none, m2e) }
+                    tm = m2
+                } else {
+                    let (sv, svee) = decomp.svd(a, xm, k, k)
+                    if svee != ok { ret (none, svee) }
+                    // decomp reads and writes column-major: it saw t(X), so the polar factor of X is t(Vr) Ur
+                    let (vt, vte) = transpose(a, sv.v, k, k)
+                    if vte != ok { ret (none, vte) }
+                    let (tm0, tme) = matmul(a, vt, sv.u, k, k, k)
+                    if tme != ok { ret (none, tme) }
+                    tm = tm0
+                }
                 tmatt = tm
                 let (lm, lme) = matmul(a, am, tm, p, k, k)
                 if lme != ok { ret (none, lme) }
@@ -770,7 +939,7 @@ fn gpf_orth(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []co
         var j = 0usize
         while j < k {
             out[i * k + j] = lbuf[i * k + j]
-            if normalize { out[i * k + j] = lbuf[i * k + j] * w[i] }
+            if nmode > 0u8 { out[i * k + j] = lbuf[i * k + j] * w[i] }
             j += 1usize
         }
         i += 1usize
@@ -810,11 +979,23 @@ fn obl_loadings(a: *mem.Arena, am: []const f64, tinv: []const f64, p: usize, k: 
 // GPFoblq (oblique rotation), algorithm bb with fwindow 10. th of the answer is the rotation matrix
 // whose columns have unit length; the factor correlations are t(th) th.
 fn gpf_obl(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []const f64, normalize: bool, tol: f64, maxit: usize) -> (Rotation, err) {
+    var nm = 0u8
+    if normalize { nm = 1u8 }
+    let (r0, e0) = gpf_obl_n(a, x, p, k, id, par, nm, tol, maxit)
+    ret (r0, e0)
+}
+
+fn gpf_obl_n(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []const f64, nmode: u8, tol: f64, maxit: usize) -> (Rotation, err) {
+    let (r0, e0) = gpf_obl_alg(a, x, p, k, id, par, nmode, 0u8, 10usize, tol, maxit)
+    ret (r0, e0)
+}
+
+fn gpf_obl_alg(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []const f64, nmode: u8, algo: u8, fw: usize, tol: f64, maxit: usize) -> (Rotation, err) {
     var none: Rotation = zero
     var w: []f64 = zero
     var am = x
-    if normalize {
-        let (wv, we) = kaiser(a, x, p, k)
+    if nmode > 0u8 {
+        let (wv, we) = norm_weights(a, x, p, k, nmode)
         if we != ok { ret (none, we) }
         w = wv
         let (an, ae) = mem.alloc[f64](a, p * k)
@@ -908,7 +1089,7 @@ fn gpf_obl(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []con
         if s < tol {
             done = true
         } else {
-            if havep {
+            if havep && algo != 1u8 {
                 var ddt = 0.0f64
                 var ddg = 0.0f64
                 var dtg = 0.0f64
@@ -929,7 +1110,7 @@ fn gpf_obl(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []con
             } else {
                 alpha = 2.0f64 * alpha
             }
-            let tgt = window_max(tab, iter, 10usize)
+            let tgt = window_max(tab, iter, fw)
             var tmatt: []f64 = zero
             var tinvt: []f64 = zero
             var lt: []f64 = zero
@@ -1007,7 +1188,7 @@ fn gpf_obl(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []con
         var j = 0usize
         while j < k {
             out[i * k + j] = lbuf[i * k + j]
-            if normalize { out[i * k + j] = lbuf[i * k + j] * w[i] }
+            if nmode > 0u8 { out[i * k + j] = lbuf[i * k + j] * w[i] }
             j += 1usize
         }
         i += 1usize

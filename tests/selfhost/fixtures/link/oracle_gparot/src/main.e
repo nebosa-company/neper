@@ -15,7 +15,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "load") || str.eq(c.name, "th") { n = x.len - 1usize }
     let orth = x[0usize] != 0.0f64
     let id = u8(x[1usize])
-    let normalize = x[2usize] != 0.0f64
+    let code = usize(x[2usize])
+    let nmode = u8(code % 10usize)
+    let algo = u8(code / 10usize)
+    var fw = 10usize
+    if algo == 1u8 { fw = 1usize }
     let p = usize(x[3usize])
     let k = usize(x[4usize])
     let npar = usize(x[5usize])
@@ -24,11 +28,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var rot: gp.Rotation = zero
     var e = ok
     if orth {
-        let (r, re) = gp.gpf_orth(a, am, p, k, id, par, normalize, 0.00001f64, 2000usize)
+        let (r, re) = gp.gpf_orth_alg(a, am, p, k, id, par, nmode, algo, fw, 0.00001f64, 2000usize)
         rot = r
         e = re
     } else {
-        let (r, re) = gp.gpf_obl(a, am, p, k, id, par, normalize, 0.00001f64, 2000usize)
+        let (r, re) = gp.gpf_obl_alg(a, am, p, k, id, par, nmode, algo, fw, 0.00001f64, 2000usize)
         rot = r
         e = re
     }

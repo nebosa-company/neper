@@ -3186,4 +3186,5 @@ D6110	1206	e1071 cshell with given centres, and R's optim conjugate gradients
 D6111	1131	colorspace lighten, darken, max_chroma, polar coordinates, APCA, rainbow and heat
 D6112	1181	mvtnorm Genz-Bretz: pmvnorm and pmvt draw for draw
 D6113	1390	leaps: nbest above 1, force.in, force.out and seqrep
-D6114	500	leaps observation weights close L330
+D6114	501	leaps observation weights close L330
+D6115	1171	GPArotation simplimax, bifactor, bi-geomin, Cureton-Mulaik, legacy and Cayley close L302

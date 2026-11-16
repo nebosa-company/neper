@@ -45040,3 +45040,9 @@ No new geometry code: `oracle_sf` runs the planar part of `e.algo.geom` against 
 `subset_rss_w` fits on the square roots of the weights (the intercept column becomes `sqrt(w)`), so the residual sum of squares is `sum w r^2`; the null sum of squares is taken about the weighted mean. `best_subsets` and `seqrep` take the weights; the unweighted `regsubsets` keeps `subset_rss`.
 
 **Result.** `oracle_leaps` equals leaps on 6054 values with a quarter of the fits weighted, on Windows; the Linux run is pending (WSL). L330 is closed.
+
+## D6115 — GPArotation simplimax, bifactor, bi-geomin, Cureton-Mulaik, legacy and Cayley close L302
+
+Three criteria join the table: simplimax (the `k` smallest squared loadings, ties by R's column-major order), bifactor (the biquartimin of the group columns, the general factor's gradient zero) and bi-geomin (geomin on the group columns). Normalization takes a mode: Kaiser, or Cureton-Mulaik, whose weights are `h / (cos((acos(m^-1/2) - alpha) / dem * pi / 2)^2 + 0.001)` from the angle of the row to the first unrotated factor, `dem` shifted by a right angle inside the cone. The algorithm is a parameter: the Barzilai-Borwein step as before, `legacy` (the step doubled each iteration, window of one) and `cayley` (the curve `(I + a/2 W)^-1 (I - a/2 W) T` with `W = Gp T' - T Gp'`, orthogonal only, in place of the SVD snap-back).
+
+**Result.** `oracle_gparot` equals GPArotation 2026.8.2 on 11160 values on Windows (new criteria, both normalizations, both algorithms; fits that need more than 100 iterations are left out of the new blocks, where a flat objective makes the iteration count itself tolerance-sensitive); the Linux run is pending (WSL). L302 is closed.

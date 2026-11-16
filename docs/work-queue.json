@@ -15,17 +15,6 @@
       "evidence": "Partial (D6025). dmvnorm, dmvt, rmvnorm (eigen, svd, chol) and rmvt equal mvtnorm 1.4.2 on both hosts. Plus (D6112) pmvnorm and pmvt by Genz-Bretz draw for draw under a seed (oracle_mvt, Windows). Open: the TVPACK trivariate, Miwa, qmvnorm and qmvt. Two-dimensional pmvnorm (TVPACK) equals R on 200 cases on Windows (D6094, oracle_pmvnorm). Was: Open (CRAN rank 130). Mid. Acceptance: pmvnorm and pmvt for the Genz-Bretz (seeded QMC, equal to R at its stated abseps), Miwa and TVPACK algorithms, qmvnorm and qmvt for every tail and the equicoordinate form, dmvnorm, dmvt, rmvnorm (equal to R value for value under set.seed, chol, eigen and svd methods), rmvt, and the lower, upper and correlation inputs R accepts."
     },
     {
-      "id": "L302",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 551,
-      "title": "GPArotation: gradient projection rotations",
-      "score": 0.8,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6026). GPForth and GPFoblq (algorithm bb, Kaiser normalization) over oblimin, quartimin, quartimax, cf, bentler, infomax, geomin, entropy, oblimax, varimax, varimin, target, pst and tandem I and II equal GPArotation 2026.8.2 on both hosts (oblique entropy and oblimax, and paths past 150 iterations, not probed). Open: simplimax, cayley and legacy algorithms, Cureton-Mulaik normalization, bifactor. Promax and varimax (stats) equal R on 2262 values on Windows (D6091, oracle_promax). Was: Open (CRAN rank 196). Mid. e.ml.multivariate has varimax. Acceptance, equal to GPArotation loadings, rotation matrix and criterion value: GPForth and GPFoblq driving oblimin, quartimin, geominT and geominQ, bentlerT and bentlerQ, infomaxT and infomaxQ, cfT and cfQ (Crawford-Ferguson), simplimax, tandemI and tandemII, entropy, varimin, targetT and targetQ, pstT and pstQ, plus promax and Kaiser normalization."
-    },
-    {
       "id": "L303",
       "category": "library",
       "group": "CRAN parity",

@@ -52,4 +52,42 @@ for (rep in 1:2) {
     add("f", a, tb[nrow(tb), 2]); add("iter", a, nrow(tb) - 1)
   }
 }
+# 15 simplimax(k), 16 bifactor, 17 bigeomin(delta), and Cureton-Mulaik normalization (normalize 2 stands for "CM")
+for (rep in 1:3) {
+  p <- c(8, 10, 9)[rep]; k <- c(3, 3, 4)[rep]
+  A <- mkA(p, k)
+  kk <- round(p * (k - 1) * 0.8)
+  for (orth in c(1, 0)) for (nz in c(0, 1, 2)) for (ci in list(list(15, "simplimax", list(k = kk), kk), list(16, "bifactor", NULL, NULL), list(17, "bigeomin", list(delta = 0.01), 0.01), list(1, "quartimin", NULL, NULL), list(6, "geomin", list(delta = 0.01), 0.01), list(9, "varimax", NULL, NULL))) {
+    if (ci[[2]] == "simplimax" && orth) next
+    if (ci[[2]] == "varimax" && !orth) next
+    f <- if (orth) GPForth else GPFoblq
+    nzarg <- if (nz == 2) "CM" else nz == 1
+    r <- tryCatch(suppressWarnings(f(A, normalize = nzarg, method = ci[[2]], methodArgs = ci[[3]])), error = function(e) NULL)
+    if (is.null(r) || !isTRUE(r$convergence) || nrow(r$Table) > 100) next
+    par <- if (is.null(ci[[4]])) numeric(0) else ci[[4]]
+    a <- c(orth, ci[[1]], nz, p, k, length(par), par, rowvec(A))
+    L <- unclass(r$loadings); tb <- r$Table
+    for (i in seq_along(rowvec(L))) add("load", c(a, i - 1), rowvec(L)[i])
+    for (i in seq_along(rowvec(r$Th))) add("th", c(a, i - 1), rowvec(r$Th)[i])
+    add("f", a, tb[nrow(tb), 2]); add("iter", a, nrow(tb) - 1)
+  }
+}
+# algorithm "legacy" (window 1, doubling step) and "cayley" (orthogonal only): the normalize slot carries normalize + 10 * algorithm (1 legacy, 2 cayley)
+for (rep in 1:3) {
+  p <- c(8, 10, 9)[rep]; k <- c(3, 2, 3)[rep]
+  A <- mkA(p, k)
+  for (orth in c(1, 0)) for (alg in 1:2) for (nz in c(0, 1)) for (ci in list(list(1, "quartimin", NULL, NULL), list(6, "geomin", list(delta = 0.01), 0.01), list(9, "varimax", NULL, NULL), list(2, "quartimax", NULL, NULL), list(3, "cf", list(kappa = 0.2), 0.2), list(5, "infomax", NULL, NULL))) {
+    if (alg == 2 && !orth) next
+    if (!orth && ci[[2]] %in% c("varimax", "quartimax")) next
+    f <- if (orth) GPForth else GPFoblq
+    r <- tryCatch(suppressWarnings(f(A, normalize = nz == 1, method = ci[[2]], methodArgs = ci[[3]], algorithm = c("legacy", "cayley")[alg], fwindow = if (alg == 1) 1 else 10)), error = function(e) NULL)
+    if (is.null(r) || !isTRUE(r$convergence) || nrow(r$Table) > 100) next
+    par <- if (is.null(ci[[4]])) numeric(0) else ci[[4]]
+    a <- c(orth, ci[[1]], nz + 10 * alg, p, k, length(par), par, rowvec(A))
+    L <- unclass(r$loadings); tb <- r$Table
+    for (i in seq_along(rowvec(L))) add("load", c(a, i - 1), rowvec(L)[i])
+    for (i in seq_along(rowvec(r$Th))) add("th", c(a, i - 1), rowvec(r$Th)[i])
+    add("f", a, tb[nrow(tb), 2]); add("iter", a, nrow(tb) - 1)
+  }
+}
 emit("gparot", "GPArotation", list(cases))
