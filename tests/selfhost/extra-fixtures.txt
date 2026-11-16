@@ -180,3 +180,4 @@ oracle_nnls
 oracle_dqrng
 oracle_pwr
 oracle_ica
+oracle_lecuyer
