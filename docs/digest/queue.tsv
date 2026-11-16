@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-L444	library	0.97	3697	SuppDists: Johnson, Kendall, Spearman and related distributions	Partly done (D6075): e.algo.stat.suppdists has inverse Gaussian, exact Kendall and Spearman for small N, and Johnson SN, SL, SB, SU d, p and q, equal to SuppDists on 428 values on Windows (oracle_supp
 L445	library	0.4	1784	splines2: spline bases	Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2);
 L469	library	0.95	1458	pastecs: decomposition, turning points and descriptive statistics	Partly done (D6073): e.algo.stat.pastecs has turnpoints with probabilities and information, and stat.desc with the moment entries, equal to pastecs on 1040 values on Windows (oracle_pastecs);
 L470	library	0.5	720	partitions: integer and set partitions	Partly done (D6070): e.algo.parts has P, Q, parts, restrictedparts and diffparts in the package order, equal to partitions on 423 values on Windows (oracle_partitions);

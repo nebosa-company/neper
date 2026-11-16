@@ -2367,3 +2367,20 @@ fn gh_moments(a: f64, m: f64, nn: f64, v: i64) -> Mom {
     }
     ret r
 }
+
+// ---- vector parameters of the r functions ----
+
+// SuppDists draws ceil(N / M) values for each of the M parameter sets in turn and interleaves them: draws holds the sets one after another (D = ceil(N / M) values each), out receives value k of set j at position j + k * M while it is below N
+fn rv_interleave(draws: []const f64, n_total: usize, m: usize, out: []f64) {
+    let d = (n_total + m - 1usize) / m
+    var j = 0usize
+    while j < m {
+        var k = 0usize
+        while k < d {
+            let loc = j + k * m
+            if loc < n_total { out[loc] = draws[j * d + k] }
+            k += 1usize
+        }
+        j += 1usize
+    }
+}

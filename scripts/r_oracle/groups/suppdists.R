@@ -81,8 +81,8 @@ for (N in c(5, 8, 12, 13, 15, 20, 40)) {
 }
 # Spearman as the package answers (the exact Friedman distribution for 2 blocks to r = 11, Walsh's beta approximation beyond): "sq_p" "sq_u" "sq_d" args (r, rho), "sq_q" args (r, p)
 for (r in c(4, 5, 8, 11, 12, 15, 20)) {
-  for (rho in c(-0.7, -0.3, 0.05, 0.4, 0.8)) { add("sq_p", c(r, rho), pSpearman(rho, r), 1e-8); add("sq_u", c(r, rho), pSpearman(rho, r, lower.tail = FALSE), 1e-8); add("sq_d", c(r, rho), dSpearman(rho, r), 1e-8) }
-  for (pr in c(0.05, 0.3, 0.5, 0.95)) add("sq_q", c(r, pr), qSpearman(pr, r), 1e-8)
+  for (rho in c(-1.4, -1, -0.95, -0.7, -0.3, 0, 0.05, 0.4, 0.8, 0.999, 1, 1.3)) { add("sq_p", c(r, rho), pSpearman(rho, r), 1e-8); add("sq_u", c(r, rho), pSpearman(rho, r, lower.tail = FALSE), 1e-8); add("sq_d", c(r, rho), dSpearman(rho, r), 1e-8) }
+  for (pr in c(0, 0.001, 0.05, 0.3, 0.5, 0.95, 0.999, 1)) add("sq_q", c(r, pr), qSpearman(pr, r), 1e-8)
 }
 # Johnson fits: "jf_q" args (x95, x79.4, x50, x20.6, x5, what 0 gamma 1 delta 2 xi 3 lambda 4 type), "jf_m" args (mean, variance, m3, m4, what)
 jf_code <- c(SN = 0, SL = 1, SB = 2, SU = 3)
@@ -138,5 +138,10 @@ for (try_gv in 1:6000) {
   for (pr in c(0.1, 0.5, 0.9)) { qv <- suppressWarnings(qghyper(pr, a, k, N)); if (is.finite(qv)) add("gv", c(3, pr, a, k, N, 0), qv, 1e-9) }
   s <- tryCatch(suppressWarnings(sghyper(a, k, N)), error = function(e) NULL)
   if (!is.null(s)) { vals <- c(s$Mean, s$Median, s$Mode, s$Variance, s$ThirdCentralMoment, s$FourthCentralMoment); for (f in 1:6) if (is.finite(vals[f])) add("gv", c(4, 0, a, k, N, f - 1), vals[f], 1e-7) }
+}
+# vector parameters of rFriedman: "rv_fv" args (seed, n, M, r[M], N[M], i)
+for (sd in c(5, 77)) for (cs in list(list(c(3, 4), c(5, 6), 7), list(c(3, 5, 6), c(4, 4, 8), 10), list(c(4, 6, 8, 5), c(6, 5, 4, 9), 9))) {
+  set.seed(sd); v <- rFriedman(cs[[3]], cs[[1]], cs[[2]]); M <- length(cs[[1]])
+  for (i in seq_along(v)) add("rv_fv", c(sd, cs[[3]], M, cs[[1]], cs[[2]], i - 1), v[i], 1e-9)
 }
 emit("suppdists", "SuppDists", list(cases))

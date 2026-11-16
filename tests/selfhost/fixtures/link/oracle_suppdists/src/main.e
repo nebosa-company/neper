@@ -146,6 +146,29 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if jw == 3usize { ret jf.lambda }
         ret f64(jf.kind)
     }
+    if str.eq(nm, "rv_fv") {
+        var vr: rng.Rng = zero
+        rng.seed(&vr, i64(z[0usize]))
+        let nt = usize(z[1usize])
+        let vm = usize(z[2usize])
+        let vd = (nt + vm - 1usize) / vm
+        let (draws, e1) = mem.alloc[f64](a, vd * vm)
+        let (outv, e2) = mem.alloc[f64](a, nt)
+        if e1 != ok || e2 != ok { ret nan }
+        var vj = 0usize
+        while vj < vm {
+            let (fd, fe) = sd.friedman_exact(a, i64(z[3usize + vj]), i64(z[3usize + vm + vj]))
+            if fe != ok { ret nan }
+            var vk = 0usize
+            while vk < vd {
+                draws[vj * vd + vk] = sd.xfrie(&fd, rng.unif(&vr), i64(z[3usize + vj]), i64(z[3usize + vm + vj]))
+                vk += 1usize
+            }
+            vj += 1usize
+        }
+        sd.rv_interleave(draws, nt, vm, outv)
+        ret outv[usize(z[3usize + 2usize * vm])]
+    }
     if str.starts_with(nm, "rv_") {
         var rr: rng.Rng = zero
         rng.seed(&rr, i64(z[0usize]))
