@@ -67,6 +67,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if me != ok { ret nan }
             mm = sd.moments_friedman(&md, i64(z[0usize]), i64(z[1usize]))
             what = usize(z[2usize])
+        } else if str.eq(nm, "mo_gh") {
+            mm = sd.moments_ghyper(z[0usize], z[1usize], z[2usize])
+            what = usize(z[3usize])
         } else if str.eq(nm, "mo_sp") {
             mm = sd.moments_spearman(i64(z[0usize]))
             what = usize(z[1usize])

@@ -69,6 +69,7 @@ for (rep in 1:12) {
 }
 for (cs in list(c(3, 4), c(3, 9), c(4, 5), c(5, 4), c(6, 5), c(4, 20))) { s <- sFriedman(cs[1], cs[2]); mom_add("mo_fr", c(cs[1], cs[2]), s, 1e-6) }
 for (r in c(3, 5, 8, 11)) { s <- sSpearman(r); mom_add("mo_sp", c(r), s, 1e-9) }
+for (cs in list(c(10, 5, 30), c(4, 9, 25), c(12, 12, 40), c(3, 20, 50), c(8, 3, 15), c(15, 7, 60), c(6, 6, 20), c(20, 10, 100))) { s <- sghyper(cs[1], cs[2], cs[3]); mom_add("mo_gh", cs, s, 1e-9) }
 for (rep in 1:10) { N <- sample(5:50, 1); rho <- round(runif(1, -0.9, 0.9), 2); s <- sPearson(N, rho); mom_add("mo_pc", c(rho, N), s, 1e-6) }
 # Kendall as the package answers (exact to N = 12, Edgeworth beyond): "kp_p" "kp_u" "kp_d" args (N, tau), "kp_q" args (N, p), "kp_m" args (N, what 0 var, 1 fourth)
 for (N in c(5, 8, 12, 13, 15, 20, 40)) {

@@ -47274,3 +47274,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6701 — SuppDists Johnson fit
 
 **Decision.** `johnson_fit_quantiles` is Wheeler's fit from the 5, 20.6, 50, 79.4 and 95 percent quantiles (type by the t, tu and tb ratios with the 0.1 tolerance, xi and lambda by Givens least squares over the five points, `jf_rotate3`), and `johnson_moment_fit` is the moment fit (SN and SL closed forms, SU by Hill, Hill and Holder's iteration, SB by Newton on gamma and delta with the package Romberg-style trapezoid series `jf_mom` for the first six SB moments). Kind coding stays the Neper one (SN 0, SL 1, SB 2, SU 3), not R's type index. A fit that does not converge answers `ok_ = false`, as the package returns an error type. Linux pending.
+
+## D6702 — SuppDists classic hypergeometric moments
+
+**Decision.** `moments_ghyper` gives the six values `sghyper` reports for the classic (integer) variety: closed-form mean, mode, variance, third and fourth moments with the package's cut-offs (zero when the draws are 1, 2, 3 or 4 or fewer), and the median by the package's `xhypergeometric` search (start from a chi-square-squared guess, then step while the cdf crosses 0.5, accepting equality, unlike `qghyper`). The ten non-integer varieties (IAi, IAii, IB, IIA, IIB, IIIA, IIIB, IV) stay open with their d, p and q. Linux pending.

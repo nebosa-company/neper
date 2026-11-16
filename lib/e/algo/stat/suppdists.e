@@ -1975,3 +1975,51 @@ fn johnson_moment_fit(mean: f64, sd: f64, sqrt_b1: f64, b2_in: f64) -> JFit {
     if test <= 0.0f64 { ret jf_moment_su(mean, sd, sqrt_b1, b2) }
     ret jf_moment_sb(mean, sd, sqrt_b1, b2)
 }
+
+// ---- moments of the classic hypergeometric as sghyper reports them (a draws, m marked, N items) ----
+
+fn xhyper_median(a: f64, n: f64, nn: f64) -> f64 {
+    let p = 0.5f64
+    let t = 0.45493642311957283f64
+    let z = (t * (p * (1.0f64 - p) * (a * (nn - a)))) / (nn - 1.0f64)
+    var x = math.floor[f64](0.5f64 + p * a + z * z)
+    let min_x = math.max[f64](0.0f64, n + a - nn)
+    let max_x = math.min[f64](n, a)
+    x = math.min[f64](math.max[f64](x, min_x), max_x)
+    var larger = p <= nb.phyper(x, n, nn - n, a, true, false)
+    while larger {
+        if x == min_x { ret x }
+        x -= 1.0f64
+        larger = p <= nb.phyper(x, n, nn - n, a, true, false)
+        if !larger { ret x + 1.0f64 }
+    }
+    while !larger {
+        x += 1.0f64
+        larger = p <= nb.phyper(x, n, nn - n, a, true, false)
+        if larger { ret x }
+    }
+    ret 0.0f64
+}
+
+fn moments_ghyper(a: f64, m: f64, nn: f64) -> Mom {
+    var r: Mom = zero
+    let n = math.min[f64](m, a)
+    let big_a = math.max[f64](m, a)
+    let b = nn - big_a
+    let t = big_a + b
+    r.median = xhyper_median(a, m, nn)
+    var m1 = 0.0f64
+    var m2 = 0.0f64
+    if n > 1.0f64 { m1 = (n * big_a) / t }
+    r.mean = m1
+    r.mode = math.floor[f64](((n + 1.0f64) * (big_a + 1.0f64)) / (t + 2.0f64))
+    if n > 2.0f64 {
+        m2 = m1 * (b * (t - n)) / (t * (t - 1.0f64))
+        r.variance = m2
+    }
+    if n > 3.0f64 { r.third = m2 * ((b - big_a) * (t - 2.0f64 * n)) / (t * (t - 2.0f64)) }
+    if n > 4.0f64 {
+        r.fourth = (m2 / ((t - 2.0f64) * (t - 3.0f64))) * (t * (t + 1.0f64 - 6.0f64 * n) + 3.0f64 * big_a * b * (n - 2.0f64) + 6.0f64 * n * n + (3.0f64 * big_a * b * n * (6.0f64 - n)) / t - (18.0f64 * big_a * b * n * n) / (t * t))
+    }
+    ret r
+}
