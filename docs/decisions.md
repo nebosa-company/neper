@@ -45766,3 +45766,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.fitdist` fits the normal, log-normal and exponential distributions by maximum likelihood in closed form (the scale with divisor n, the log-normal on the logs, the exponential rate n / sum) and reports the log-likelihood, AIC and BIC and gofstat's Kolmogorov-Smirnov, Cramer-von Mises (1 / (12 n) + sum (F - (2i - 1) / (2n))^2) and Anderson-Darling statistics of the fitted distribution. All agree with fitdist and gofstat to 1e-6 relative on 18 samples of 15 to 60 values (the package's maximum-likelihood step is closed form for these three, so the tolerance only absorbs its printing). Not here: the iterative fits, the other estimation methods, the standard errors (numerical Hessian), bootstrap, censoring and the discrete distributions.
 
 **Result.** `oracle_fitdist` agrees with fitdistrplus on 138 cases on Windows; Linux pending. L362 is partial.
+
+## D6433 — fitdistrplus: gamma and Weibull maximum-likelihood fits
+
+`e.algo.stat.fitdist` gains the gamma (shape from ln s - psi(s) = ln(mean) - mean(ln x), rate s / mean) and Weibull (shape from sum x^k ln x / sum x^k - 1 / k = mean(ln x), scale (sum x^k / n)^(1/k)) fits by Newton iterations with numerical derivatives, with their log-likelihoods, AIC, BIC and goodness-of-fit statistics. fitdist maximises these by optim (reltol 1e-8), so it stops short of the exact optimum; the oracle compares parameters and the goodness-of-fit statistics to 2e-3 relative and the likelihood summaries (which are flat at the optimum) to 1e-6, and the gamma and Weibull cases hold at those tolerances on 12 samples. Not here: the other distributions, the other estimation methods, standard errors, bootstrap, censoring and the discrete distributions.
+
+**Result.** `oracle_fitdist` agrees with fitdistrplus on 234 cases on Windows; Linux pending. L362 stays partial.

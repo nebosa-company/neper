@@ -3300,4 +3300,5 @@ D6428	688	clue and lpSolve: the assignment problem
 D6429	924	DescTools: Skew, Kurt, Gini and the simple location and spread measures
 D6430	914	DescTools: association measures of a contingency table
 D6431	891	DescTools: kappa, lambda, Goodman-Kruskal tau, odds ratio and Yule's Q
-D6432	924	fitdistrplus: closed-form fits and gofstat
+D6432	925	fitdistrplus: closed-form fits and gofstat
+D6433	956	fitdistrplus: gamma and Weibull maximum-likelihood fits
