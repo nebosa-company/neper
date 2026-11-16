@@ -45182,3 +45182,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `prewhiten` and `finish_ica` are the shared whitening and finish; `prewhiten_wide` handles n < p through the eigenvectors of X X' / n. `icajade` joint-diagonalises the cumulant matrices by Jacobi rotations (the emats layout, the pair loop and the atan2 angle of the package); `icaimax` is the Newton or gradient infomax with the sign switch and the annealed rate; `icafast_gen` adds the deflation update. Every algorithm is equivariant under a sign flip of a whitened column, so the eigenvector signs R's LAPACK picks do not matter. A run that reaches maxit (or a deflation run in which an earlier component does) keeps rotating by rounding noise, so its vafs are not compared, only its iteration counts and flags.
 
 **Result.** `oracle_ica` equals ica on 1317 cases on Windows; Linux pending. L402 is closed.
+
+## D6135 — irr
+
+**Context.** L476 asked for the irr coefficients.
+
+**Decision.** `e.algo.stat.irr` takes the ratings as a row-major ns by nr matrix of numbers (categories are their numeric order, which is R's order for single digits; with ten or more categories R sorts the labels as text). kappa2's variance uses `outer(w.i, w.j, "+")` over (row, column) as R's matrices are laid out, kappam.light follows the package's disagreement-product variance, icc is the closed forms with the package's F quantile intervals, and kripp.alpha builds the coincidence matrix with the 1/(m - 1) weight when ratings are missing (NaN stands for NA).
+
+**Result.** `oracle_irr` equals irr on 853 cases on Windows; Linux pending. L476 is closed.

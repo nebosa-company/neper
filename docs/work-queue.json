@@ -631,17 +631,6 @@
       "evidence": "Open (CRAN rank 870). Small to mid. Acceptance, equal to scoringRules: crps, logs, dss, qs, rps and es_sample, vs_sample, crps_sample for every parametric family it lists and for sample forecasts, with the kernel and the quantile-based estimators."
     },
     {
-      "id": "L476",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 638,
-      "title": "irr: inter-rater reliability",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 867). Small to mid. Acceptance, equal to irr: agree, kappa2 (weighted), kappam.fleiss, kappam.light, icc (all models and types), kripp.alpha, kendall, meancor, maxwell, robinson, iota, finn, anova data."
-    },
-    {
       "id": "L477",
       "category": "library",
       "group": "CRAN parity",
