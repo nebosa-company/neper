@@ -3,6 +3,8 @@
 // scripts/r_oracle/groups/mixsqp.R.
 
 use e.algo.stat.mixsqp as mq
+use e.algo.stat.mixsqp_sqp as sq
+use e.str
 use e.io
 use e.mem
 use e.os
@@ -17,6 +19,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let q = usize(z[2usize + n * m + n])
     let (x, e) = mem.alloc[f64](a, m)
     if e != ok { ret 0.0f64 / 0.0f64 }
+    if str.eq(c.name, "sqp") {
+        var j = 0usize
+        while j < m {
+            x[j] = 1.0f64
+            j += 1usize
+        }
+        let (r, se) = sq.mixsqp_sqp(a, l, w, n, m, x, sq.sqp_default())
+        if se != ok { ret 0.0f64 / 0.0f64 }
+        if q < m { ret x[q] }
+        if q == m { ret r.value }
+        if q == m + 1usize { ret f64(r.status) }
+        if q == m + 2usize { ret f64(r.iterations) }
+        if q == m + 3usize { ret f64(r.nqp) }
+        if q == m + 4usize { ret f64(r.nls) }
+        ret f64(r.nnz)
+    }
     let (v, me) = mq.mixsqp(a, l, w, n, m, x)
     if me != ok { ret 0.0f64 / 0.0f64 }
     if q < m { ret x[q] }

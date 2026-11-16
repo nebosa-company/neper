@@ -31,10 +31,10 @@
       "group": "CRAN parity",
       "order": 585,
       "title": "mixsqp: mixture proportions by SQP",
-      "score": 0.4,
+      "score": 0.75,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6076): e.algo.stat.mixsqp finds the mixsqp optimum (proportions and value) by SQUAREM-accelerated EM, equal on 156 values at 1e-5 on Windows (oracle_mixsqp); Linux pending. Open: the SQP iterations, active-set and QR options, status and iteration counts. Original: Open (CRAN rank 760). Small. Acceptance, equal to mixsqp: mixsqp solutions and objective values, the active-set and QR options, the convergence status and iteration counts on likelihood matrices."
+      "evidence": "Partly done (D6076): e.algo.stat.mixsqp finds the mixsqp optimum (proportions and value) by SQUAREM-accelerated EM, equal on 156 values at 1e-5 on Windows (oracle_mixsqp); Linux pending. D6707: the SQP algorithm itself (EM warm-up, active-set subproblem, backtracking line search) over the full matrix equals mixsqp on 30 problems: solution, value, status, progress rows, active-set and line-search counts, nonzeros (oracle_mixsqp). Open: the truncated SVD path (the default for more than four columns when the rank is below m), zero columns, log = TRUE, the returned gradient and Hessian, control validation. Original: Open (CRAN rank 760). Small. Acceptance, equal to mixsqp: mixsqp solutions and objective values, the active-set and QR options, the convergence status and iteration counts on likelihood matrices."
     },
     {
       "id": "L447",
