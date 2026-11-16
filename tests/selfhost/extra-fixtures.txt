@@ -358,3 +358,4 @@ oracle_plm
 oracle_arules
 oracle_systemfit
 oracle_fixest
+oracle_spdep

@@ -3483,4 +3483,5 @@ D6619	773	VIM: kNN imputation of one numeric variable
 D6620	880	plm: balanced-panel within, between and random effects
 D6621	722	arules: apriori by exhaustive counting
 D6622	777	systemfit: SUR by feasible GLS
-D6623	851	fixest: feols with fixed effects
+D6623	852	fixest: feols with fixed effects
+D6624	736	spdep: Moran and Geary statistics

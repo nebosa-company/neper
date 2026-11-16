@@ -46868,3 +46868,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `fixestpkg.feols` demeans the response and regressors by alternating projections over one or two fixed effects (stopping at a change of 1e-14), then runs OLS on the demeaned data. IID standard errors divide by `n - k - (G1 + G2 - components)`, HC1 uses `n / (n - K)` with the same K, and the clustered errors (by the first effect) use `G/(G-1) * (n-1)/(n-K)` with `K = k + 1` for one effect and `k + G2` for two, which is fixest's "nonnested" fixed-effect count: the effect nested in the cluster counts once, not G1 times.
 
 **Result.** `oracle_fixest` agrees with fixest on coefficients and the three standard errors on Windows (96 values, R fitted with `fixef.tol` 3e-12, the smallest it allows); Linux pending. L368 stays partial: other clusters, IV, GLM families, more than two effects.
+
+## D6624 — spdep: Moran and Geary statistics
+
+**Decision.** `spdeppkg.autocorr` takes a dense weights matrix and computes S0, S1 (half the sum of squared symmetrised weights) and S2 (sum of squared row-plus-column sums), then Moran's I with E = -1/(n-1) and the normality and randomisation variances, and Geary's C with the two variances. The Geary normality variance is `((2 S1 + S2)(n-1) - 4 S0^2) / (2(n+1) S0^2)`; `2 (S1 + S2)` is a mistake that shows as a variance 4 to 8 times too large.
+
+**Result.** `oracle_spdep` agrees with spdep on Windows (168 values, graphs of 12 to 60 points, styles B, W and C); Linux pending. L372 stays partial: neighbour construction, Monte Carlo, residual and local statistics, spatial regression.

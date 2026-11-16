@@ -1527,10 +1527,10 @@
       "group": "CRAN parity",
       "order": 764,
       "title": "spdep: spatial autocorrelation and spatial regression",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 336). Mid to large. Acceptance, equal to spdep: poly2nb, knn2nb, dnearneigh, tri2nb, nb2listw, moran.test and moran.mc, geary.test, globalG.test, localmoran, localG, joincount.test, lagsarlm, errorsarlm and sacsarlm by ML, impacts, lm.LMtests."
+      "evidence": "Partial (D6624). e.algo.stat.spdeppkg.autocorr (Moran I and Geary C with expectations and variances under normality and randomisation, on a dense weights matrix, binary, row-standardised or globally standardised) equals spdep moran.test and geary.test on Windows (oracle_spdep, 168 values; Linux pending). Open: neighbour construction and listw objects, Monte Carlo tests, Moran I on regression residuals, local indicators, Getis-Ord, spatial lag and error models. Was: Open (CRAN rank 336). Mid to large. Acceptance, equal to spdep: poly2nb, knn2nb, dnearneigh, tri2nb, nb2listw, moran.test and moran.mc, geary.test, globalG.test, localmoran, localG, joincount.test, lagsarlm, errorsarlm and sacsarlm by ML, impacts, lm.LMtests."
     },
     {
       "id": "L397",
