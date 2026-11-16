@@ -3101,4 +3101,5 @@ D6025	1020	mvtnorm densities and draws: the Cholesky route, and a symmetric squa
 D6026	1685	GPArotation is the bb step over a polar factor, and decomp's SVD is column-major
 D6027	1313	urca ADF reads its regressors from embed(diff(y)), and the reported lags are the input
 D6028	1307	boot draws its index array by column and gets BCa influence values by regression
-D6029	1158	class knn follows VR_knn line by line, including its reservoir slip
+D6029	1159	class knn follows VR_knn line by line, including its reservoir slip
+D6030	1456	permute shuffles block by block, and draws the plot flip before it knows the plots are free
