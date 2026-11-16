@@ -46952,3 +46952,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `copulapkg` gives the distribution function, density and Kendall's tau of the Clayton, Frank, Gumbel, AMH and Joe copulas. The Gumbel density is `C (uv)^-1 (lu lv)^(theta-1) A^(2/theta - 2) (1 + (theta-1) A^(-1/theta))` with `A = lu^theta + lv^theta`; writing the last factor as `A^(1/theta) + theta - 1` is wrong by a factor `A^(1/theta)` and showed as densities off by 20 to 80 percent. Frank's tau uses the Debye function by composite Gauss-Legendre; Joe's tau is `1 - 4 sum 1 / (k (theta k + 2)(theta (k-1) + 2))`.
 
 **Result.** `oracle_copula` agrees with copula on Windows (180 values, 60 parameter and point draws over five families); Linux pending. L514 stays partial: elliptical and extreme-value copulas, higher dimensions, rho, fitting, simulation.
+
+## D6638 — MatchIt: greedy nearest-neighbour matching
+
+**Decision.** `matchitpkg.nearest` fits a logistic regression of treatment on the covariates (`rmspkg.lrm`), orders treated units by decreasing fitted score, and for each of `ratio` passes lets every treated unit take the nearest still-unmatched control by absolute score difference (first control on ties). Matched units get weight 1 and unmatched controls 0; without replacement MatchIt does not rescale the control weights, so a scale of `n_treated / n_controls_matched` (tried first) halved every ratio-2 weight and disagreed on all ratio-2 cases.
+
+**Result.** `oracle_matchit` agrees with MatchIt on Windows (32 values, 50 to 200 units, ratios 1 and 2); Linux pending. L436 stays partial: replacement, calipers, other distances, subclassification, optimal and full matching.

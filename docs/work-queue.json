@@ -1153,10 +1153,10 @@
       "group": "CRAN parity",
       "order": 724,
       "title": "MatchIt: matching for causal inference",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 656). Mid. e.algo.stat.causal has propensity scores and weighting. Acceptance, equal to MatchIt: matchit with nearest (with calipers, ratios, replacement), optimal, full, exact, subclass, cem and genetic methods, distance estimators, match.data, summary balance statistics, weights."
+      "evidence": "Partial (D6638). e.algo.stat.matchitpkg.nearest (nearest-neighbour matching without replacement on a logistic propensity score, ratio passes, greedy in decreasing score order) equals MatchIt weights on Windows (oracle_matchit, 32 values; Linux pending). Open: replacement (fractional weights), calipers, m.order variants, exact and Mahalanobis distances, subclassification, full and optimal matching, genetic matching, balance summaries and love plots. Was: Open (CRAN rank 656). Mid. e.algo.stat.causal has propensity scores and weighting. Acceptance, equal to MatchIt: matchit with nearest (with calipers, ratios, replacement), optimal, full, exact, subclass, cem and genetic methods, distance estimators, match.data, summary balance statistics, weights."
     },
     {
       "id": "L437",

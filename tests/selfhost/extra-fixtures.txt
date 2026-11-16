@@ -372,3 +372,4 @@ oracle_kernlab
 oracle_locfit
 oracle_sna
 oracle_copula
+oracle_matchit
