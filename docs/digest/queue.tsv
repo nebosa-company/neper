@@ -131,7 +131,7 @@ L304	library	0.2	782	haven: SAS, SPSS and Stata file formats	Partial (D6049).
 L315	library	0.1	744	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Partly done (D6060): e.algo.linalg.mexp has expm (Ward Pade 8) and the 1, I, F, M norms, equal to Matrix on 210 values on Windows (oracle_matrix);
 L316	library	0.1	976	igraph: deterministic structure and community detection	Partly done (D6061): e.algo.graph.metrics has transitivity (global, local, average), coreness, degree assortativity, jaccard and dice similarity, eccentricity, radius and diameter, equal to igraph on 
 L344	library	0	359	randomForest: Breiman forests equal to R	Open (CRAN rank 255;
-L345	library	0	324	FactoMineR and factoextra: multivariate exploration	Open (CRAN ranks 232, 277).
+L345	library	0.15	809	FactoMineR and factoextra: multivariate exploration	Partial (D6633).
 L347	library	0	276	locfit: local regression and likelihood	Open (CRAN rank 259).
 L364	library	0.36	803	metafor: meta-analysis	Partial (D6499 Knapp-Hartung, D6498 leave1out, D6497 regtest, ranktest, fsn on a fixed-effect model, D6496 escalc MD, SMD, ROM, RR, OR, RD, COR, ZCOR, D6495 rma.uni intercept-only with FE, DL, HE, HS,
 L366	library	0	277	kernlab: kernel methods	Open (CRAN rank 312).

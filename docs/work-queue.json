@@ -1461,10 +1461,10 @@
       "group": "CRAN parity",
       "order": 758,
       "title": "FactoMineR and factoextra: multivariate exploration",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN ranks 232, 277). Mid to large. e.ml.reduce has PCA. Acceptance, equal to FactoMineR: PCA with supplementary individuals and variables and weights, CA, MCA with supplementary categories, MFA, FAMD, HCPC with consolidation, dimdesc; factoextra get_pca_var, get_pca_ind, get_eigenvalue, hcut and the nbclust indices."
+      "evidence": "Partial (D6633). e.algo.stat.factominepkg equals FactoMineR on Windows: PCA with scale.unit (eigenvalues, variable coordinates and contributions, individual coordinates, cos2, contributions and distances) and CA (eigenvalues, row coordinates and contributions, column coordinates and cos2), axis signs compared as absolute values (oracle_factominer, 120 values; Linux pending). Open: supplementary elements, weights, scale.unit = FALSE, MCA, MFA, FAMD, HCPC, dimdesc, factoextra. Was: Open (CRAN ranks 232, 277). Mid to large. e.ml.reduce has PCA. Acceptance, equal to FactoMineR: PCA with supplementary individuals and variables and weights, CA, MCA with supplementary categories, MFA, FAMD, HCPC with consolidation, dimdesc; factoextra get_pca_var, get_pca_ind, get_eigenvalue, hcut and the nbclust indices."
     },
     {
       "id": "L347",

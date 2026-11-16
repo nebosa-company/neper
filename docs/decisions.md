@@ -46922,3 +46922,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `xgboostpkg.boost` starts from the mean of y and adds trees grown by the exact greedy algorithm on gradients `pred - y` with unit Hessians: candidate splits between distinct sorted values at their midpoint (a row goes left when `x < split`), gain `1/2 (G_L^2/(H_L+lambda) + G_R^2/(H_R+lambda) - G^2/(H+lambda))`, both children at least `min_child_weight`, leaf value `-G/(H+lambda) * eta`. A split whose children are both leaves is pruned when its gain, counted without the factor one half as xgboost does, is below gamma; comparing the half-gain with gamma kept too many splits and disagreed on every case with gamma above 0.
 
 **Result.** `oracle_xgboost` agrees with xgboost 3.2.1.1 (`xgb.train`, exact, one thread) at 1e-4 on Windows (40 values, 40 to 150 rows, up to 12 rounds, depth 1 to 5); Linux pending. L377 stays partial: other objectives, hist, sampling, missing values.
+
+## D6633 — FactoMineR: PCA and CA
+
+**Decision.** `factominepkg.pca` standardises columns with the divisor-n standard deviation, takes the Jacobi eigen decomposition of the correlation matrix, and reports variable coordinates `v sqrt(lambda)`, contributions `coord^2 / lambda * 100`, individual coordinates `Z v`, cos2 `coord^2 / ||z||^2` and contributions `coord^2 / (n lambda) * 100`. `ca` takes the SVD of `D_r^-1/2 (P - r c') D_c^-1/2`, eigenvalues as squared singular values, row coordinates `D_r^-1/2 U sigma`, contributions `r_i coord^2 / lambda * 100` and column cos2 against the chi-square distance. The SVD needs a tolerance of 1e-14; 1e-30 never converges and returns NaN.
+
+**Result.** `oracle_factominer` agrees with FactoMineR on Windows (120 values; signs compared as absolute values); Linux pending. L345 stays partial: supplementary elements, weights, MCA, MFA, FAMD, HCPC.
