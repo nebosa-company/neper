@@ -45,4 +45,11 @@ for (rep in 1:10) {
     add("updown", b(m * 10 + s, g), as.numeric(UpDownRatios(ra, rb, method = c("Capture", "Number", "Percent")[m + 1], side = c("Up", "Down")[s + 1], geometric = g == 1)))
   }
 }
+for (rep in 1:10) {
+  n <- sample(15:60, 1); r <- round(rnorm(n, 0.004, 0.03), 4)
+  fd <- findDrawdowns(xts::xts(r, as.Date("2000-01-01") + seq_len(n)))
+  b <- c(0, 0, n, r)
+  add("fdn", b, length(fd$return)); add("fdr", b, sum(fd$return * seq_along(fd$return)))
+  add("fdf", b, sum(fd$from * seq_along(fd$from))); add("fdt", b, sum(fd$trough * seq_along(fd$trough))); add("fde", b, sum(fd$to * seq_along(fd$to)))
+}
 emit("perfanalytics", "PerformanceAnalytics", list(cases))

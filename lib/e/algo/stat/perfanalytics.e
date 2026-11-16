@@ -286,3 +286,62 @@ fn up_down(a: *mem.Arena, ra: []const f64, rb: []const f64, method: usize, side:
     if geometric { ret cum_return(ra, k) / cum_return(rb, kb) }
     ret sa / sb
 }
+
+// Drawdowns(): the running drawdown of each return from the peak of the cumulative value (starting at 1)
+fn drawdowns(r: []const f64, geometric: bool, out: []f64) {
+    var level = 1.0f64
+    var cum = 1.0f64
+    var top = 1.0f64
+    var i = 0usize
+    while i < r.len {
+        if geometric {
+            level = level * (1.0f64 + r[i])
+        } else {
+            cum += r[i]
+            level = cum
+        }
+        if level > top { top = level }
+        out[i] = level / top - 1.0f64
+        i += 1usize
+    }
+}
+
+// findDrawdowns: the runs of the sign of the drawdown series (1-based from, trough and to as the package lists them); the count is returned
+fn find_drawdowns(dd: []const f64, ret_v: []f64, from: []f64, trough: []f64, to: []f64) -> usize {
+    var index = 0usize
+    var prior = 0.0f64
+    if dd[0usize] >= 0.0f64 { prior = 1.0f64 }
+    var fr = 1usize
+    var sofar = dd[0usize]
+    var tt = 1usize
+    var dmin = 1usize
+    var i = 0usize
+    while i < dd.len {
+        var sign = 1.0f64
+        if dd[i] < 0.0f64 { sign = 0.0f64 }
+        if sign == prior {
+            if dd[i] < sofar {
+                sofar = dd[i]
+                dmin = i + 1usize
+            }
+            tt = i + 2usize
+        } else {
+            ret_v[index] = sofar
+            from[index] = f64(fr)
+            trough[index] = f64(dmin)
+            to[index] = f64(tt)
+            fr = i + 1usize
+            sofar = dd[i]
+            tt = i + 2usize
+            dmin = i + 1usize
+            index += 1usize
+            prior = sign
+        }
+        i += 1usize
+    }
+    ret_v[index] = sofar
+    from[index] = f64(fr)
+    trough[index] = f64(dmin)
+    to[index] = f64(tt)
+    ret index + 1usize
+}

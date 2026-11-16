@@ -45478,3 +45478,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pamcluster` gains diana: the cluster with the largest diameter is split each step (the first of equals in list order, the two parts appended after the removal); the splinter group starts from the object with the largest mean dissimilarity to the others and takes, one at a time, the object whose mean dissimilarity to the rest minus its mean to the splinter group is largest while that is positive. The split heights (the diameters) equal diana$height, and the divisive coefficient, one minus the mean over objects of the height at which they became a singleton relative to the largest, equals diana$dc. Not here: diana's banner order, the merge matrix and the coefficient plot data.
 
 **Result.** `oracle_pamcluster` equals cluster on 142 cases on Windows; Linux pending. L335 stays partial.
+
+## D6181 — PerformanceAnalytics: Drawdowns and findDrawdowns
+
+`e.algo.stat.perfanalytics` gains drawdowns (the running drawdown from the cumulative peak, geometric or additive) and find_drawdowns, a line-for-line port of findDrawdowns: the runs of the drawdown sign with their worst value, 1-based start, trough and end positions, so the lengths, peak-to-trough and recovery counts follow. Not here: sortDrawdowns, the table and chart helpers, modified ES and Return.calculate.
+
+**Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 460 cases on Windows; Linux pending. L408 stays partial.

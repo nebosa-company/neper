@@ -26,6 +26,31 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let code = usize(p1)
         ret pa.up_down(a, r, rb, code / 10usize, code % 10usize, p2 > 0.5f64)
     }
+    if str.eq(k, "fdn") || str.eq(k, "fdr") || str.eq(k, "fdf") || str.eq(k, "fdt") || str.eq(k, "fde") {
+        let (dd, e1) = mem.alloc[f64](a, n)
+        if e1 != ok { os.exit(5) }
+        let (rr, e2) = mem.alloc[f64](a, n + 1usize)
+        if e2 != ok { os.exit(6) }
+        let (ff, e3) = mem.alloc[f64](a, n + 1usize)
+        if e3 != ok { os.exit(7) }
+        let (tr, e4) = mem.alloc[f64](a, n + 1usize)
+        if e4 != ok { os.exit(8) }
+        let (tt, e5) = mem.alloc[f64](a, n + 1usize)
+        if e5 != ok { os.exit(9) }
+        pa.drawdowns(r, true, dd)
+        let cnt = pa.find_drawdowns(dd, rr, ff, tr, tt)
+        if str.eq(k, "fdn") { ret f64(cnt) }
+        var s = 0.0f64
+        var i = 0usize
+        while i < cnt {
+            if str.eq(k, "fdr") { s += rr[i] * f64(i + 1usize) }
+            if str.eq(k, "fdf") { s += ff[i] * f64(i + 1usize) }
+            if str.eq(k, "fdt") { s += tr[i] * f64(i + 1usize) }
+            if str.eq(k, "fde") { s += tt[i] * f64(i + 1usize) }
+            i += 1usize
+        }
+        ret s
+    }
     if str.eq(k, "annual") { ret pa.return_annualized(r, p1, p2 > 0.5f64) }
     if str.eq(k, "maxdd") { ret pa.max_drawdown(r, p2 > 0.5f64) }
     if str.eq(k, "dd") { ret pa.downside_deviation(r, p1, p2 > 0.5f64 && p2 < 1.5f64, p2 > 1.5f64) }
