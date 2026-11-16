@@ -9,6 +9,73 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
+fn stat(v: []const f64, j: u8) -> f64 {
+    if j == 0u8 { ret f64(v.len) }
+    if j == 3u8 { ret v[0usize] }
+    if j == 4u8 { ret v[v.len - 1usize] }
+    var s = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        if j == 1u8 { s += v[i] } else { s += f64(i + 1usize) * v[i] }
+        i += 1usize
+    }
+    ret s
+}
+
+fn extra(a: *mem.Arena, c: *const oracle.Case, b: hb.Bin, ys: []const f64, xbins: f64, shape: f64, xlo: f64, xhi: f64, ylo: f64, yhi: f64) -> f64 {
+    let x = c.args
+    let len = x.len
+    let j = u8(x[len - 1usize])
+    if str.eq(c.name, "tap") {
+        let (v, e) = hb.hex_tapply(a, b, ys, u8(x[len - 2usize]))
+        if e != ok { os.exit(6) }
+        ret stat(v, j)
+    }
+    if str.eq(c.name, "erode") || str.eq(c.name, "eroded") {
+        let (r, e) = hb.erode(a, b.cell, b.count, b.imax, b.jmax, x[len - 2usize])
+        if e != ok { os.exit(6) }
+        if str.eq(c.name, "erode") {
+            let (v, ve) = mem.alloc[f64](a, r.nsel)
+            if ve != ok { os.exit(5) }
+            var k = 0usize
+            while k < r.nsel {
+                v[k] = f64(r.erode[k])
+                k += 1usize
+            }
+            ret stat(v, j)
+        }
+        let (v, ve) = mem.alloc[f64](a, r.good.len)
+        if ve != ok { os.exit(5) }
+        var k = 0usize
+        while k < r.good.len {
+            v[k] = 0.0f64
+            if r.good[k] { v[k] = 1.0f64 }
+            k += 1usize
+        }
+        ret stat(v, j)
+    }
+    let (s, e) = hb.smooth(a, b.cell, b.count, b.imax, b.jmax, i64(x[len - 4usize]), i64(x[len - 3usize]), i64(x[len - 2usize]))
+    if e != ok { os.exit(6) }
+    if str.eq(c.name, "sdim") {
+        if j == 0u8 { ret f64(s.imax) }
+        ret f64(s.jmax)
+    }
+    let (v, ve) = mem.alloc[f64](a, s.ncells)
+    if ve != ok { os.exit(5) }
+    let f = 2.0f64 / xbins
+    var k = 0usize
+    while k < s.ncells {
+        if str.eq(c.name, "scell") { v[k] = f64(s.cell[k]) }
+        if str.eq(c.name, "scount") { v[k] = f64(s.count[k]) }
+        if str.eq(c.name, "scx") || str.eq(c.name, "scy") {
+            let (cx, cy) = hb.hcell2xy(s.cell[k], s.jmax, xbins + 4.0f64, shape, xlo - f * (xhi - xlo), xhi + f * (xhi - xlo), ylo - f * (yhi - ylo), yhi + f * (yhi - ylo))
+            if str.eq(c.name, "scx") { v[k] = cx } else { v[k] = cy }
+        }
+        k += 1usize
+    }
+    ret stat(v, j)
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let xbins = x[0usize]
@@ -31,6 +98,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (b, e) = hb.hexbin(a, xs, ys, xbins, shape, xlo, xhi, ylo, yhi)
     if e != ok { os.exit(6) }
     let j = u8(x[x.len - 1usize])
+    if str.eq(c.name, "tap") || str.eq(c.name, "erode") || str.eq(c.name, "eroded") || str.eq(c.name, "sdim") || str.eq(c.name, "scell") || str.eq(c.name, "scount") || str.eq(c.name, "scx") || str.eq(c.name, "scy") { ret extra(a, c, b, ys, xbins, shape, xlo, xhi, ylo, yhi) }
     if str.eq(c.name, "dims") {
         if j == 0u8 { ret f64(b.imax) }
         ret f64(b.jmax)

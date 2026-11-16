@@ -45134,3 +45134,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `squarem1` takes the objective as `fn(*Ctx, []const f64) -> f64` and judges the stabilised step by it (monotone to within objfn.inc, with the adaptive step.max); `cyclem` is cyclem1 when it is given the objective and cyclem2 when not, for K up to the dimension, RRE or MPE, squared or not. The coefficient systems go through a Householder QR (`lstsq`), so the MPE least squares is exact for any n ≥ K. A run in which R stops with an error sets `failed`. Cases with RRE and K + 1 > n are not compared: crossprod(U) is then singular and R solves it from rounding noise.
 
 **Result.** `oracle_squarem` equals SQUAREM on every iterate count, evaluation count, objective value and parameter for the four maps on Windows; Linux pending. L386 is closed.
+
+## D6129 — hexbin hexTapply, smooth.hexbin and erode.hexbin
+
+**Context.** L385 had binning and cell centres; hexTapply, the smoother and the erosion were open.
+
+**Decision.** `Bin` now carries the per-observation cell ids (`cid`, the IDs = TRUE slot). `hex_tapply` groups a data vector by cell in cell order (sum, mean, length, min, max). `smooth` is `hsm.f` on the lattice padded by two cells each side (integer weights), `erode` is `herode.f` with R's cdfcut selection of the cells; both keep the Fortran's neighbour tables and its out-of-bounds zeroing.
+
+**Result.** `oracle_hexbin` equals hexbin on 3674 more cases on Windows; Linux pending. L385 is closed.

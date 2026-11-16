@@ -48,17 +48,6 @@
       "evidence": "Partial (D6036). corpcor (unweighted) cov.shrink, cor.shrink, var.shrink, both lambda estimates, pcor.shrink, pseudoinverse equal R on Windows (Linux pending). Plus (D6126) pcaPP cor.fk, l1median_HoCr and l1median_VaZh equal R on Windows (oracle_pcapp). Plus (D6127) pcaPP PCAproj (eachobs, sd, mad and qn, with and without the update) equal R. Open: PCAgrid, sPCAgrid. Was: Open (CRAN ranks 375, 366). Small. Acceptance, equal to R: cov.shrink, cor.shrink, var.shrink with their lambda estimates, pseudoinverse, fast.svd, pcor.shrink; PCAproj, PCAgrid, cor.fk, l1median and sPCAgrid."
     },
     {
-      "id": "L385",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 555,
-      "title": "hexbin: hexagonal binning",
-      "score": 0.6,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6038). hexbin counts, cell ids, centres of mass and hcell2xy for any xbins, shape and range equal hexbin 1.28.6 on Windows (Linux pending). Open: hexcoords, erode, hexTapply, smoothing helpers. Was: Open (CRAN rank 434). Small. Acceptance, equal to hexbin: hexbin counts and cell ids for any xbins, shape and range, hcell2xy, hexcoords, erode, hexTapply and the smoothing helpers."
-    },
-    {
       "id": "L388",
       "category": "library",
       "group": "CRAN parity",
