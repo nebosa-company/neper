@@ -289,6 +289,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if big_comp_error != filter.TooLarge || big_comp_n != 0u32 { os.exit(62i32) }
     let (big_shift_n, big_shift_error) = filter.mean_shift(tiny_f[..], huge, huge, 1.0f64, 1.0f64, 1usize, tiny_s[..], tiny_s[..])
     if big_shift_error != filter.TooLarge || big_shift_n != 0usize { os.exit(63i32) }
+    // L245: a size comparison against w*h refuses an overflowing product with TooSmall instead of trapping
+    var tiny_i: [4]u64 = zero
+    if filter.integral_image(tiny_f[..], huge, huge, tiny_s[..]) != filter.TooSmall { os.exit(64i32) }
+    if filter.integral_image_u8(tiny_u[..], huge, huge, tiny_i[..]) != filter.TooSmall { os.exit(65i32) }
+    let (big_fill_n, big_fill_error) = filter.flood_fill(tiny_u[..], huge, huge, 0usize, 0usize, 1u8, tiny_l[..])
+    if big_fill_error != filter.TooSmall || big_fill_n != 0usize { os.exit(66i32) }
+    if filter.threshold_otsu(tiny_u[..], huge, huge) != 0u8 { os.exit(67i32) }
 
     try io.print("gfx filter ok\n")
     ret ok

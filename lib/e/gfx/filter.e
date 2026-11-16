@@ -408,7 +408,7 @@ fn guided(src: []const f64, guide: []const f64, w: usize, h: usize, radius: usiz
 // Summed-area table of `(w+1)*(h+1)` entries, row 0 and column 0 zero.
 fn integral_image(src: []const f64, w: usize, h: usize, out: []f64) -> err {
     let stride = w + 1usize
-    if src.len < w * h || out.len < stride * (h + 1usize) { ret TooSmall }
+    if (w != 0usize && h > 18446744073709551615usize / w) || src.len < w * h || out.len < stride * (h + 1usize) { ret TooSmall }
     var x = 0usize
     while x < stride {
         out[x] = 0.0f64
@@ -437,7 +437,7 @@ fn integral_sum(integral: []const f64, w: usize, x: usize, y: usize, rw: usize, 
 
 fn integral_image_u8(src: []const u8, w: usize, h: usize, out: []u64) -> err {
     let stride = w + 1usize
-    if src.len < w * h || out.len < stride * (h + 1usize) { ret TooSmall }
+    if (w != 0usize && h > 18446744073709551615usize / w) || src.len < w * h || out.len < stride * (h + 1usize) { ret TooSmall }
     var x = 0usize
     while x < stride {
         out[x] = 0u64
@@ -468,6 +468,7 @@ fn integral_sum_u64(integral: []const u64, w: usize, x: usize, y: usize, rw: usi
 // answer; a pixel above `t` is foreground).
 fn threshold_otsu(src: []const u8, w: usize, h: usize) -> u8 {
     var hist: [256]u32 = zero
+    if w != 0usize && h > 18446744073709551615usize / w { ret 0u8 }
     let n = w * h
     var i = 0usize
     while i < n {
@@ -666,7 +667,7 @@ fn label_components(src: []const u8, w: usize, h: usize, connectivity: u32, labe
 // pixel count. `stack` holds `w*h` at most (a pixel is pushed once). `TooSmall`
 // leaves a partial fill behind.
 fn flood_fill(image: []u8, w: usize, h: usize, x: usize, y: usize, new_value: u8, stack: []u32) -> (usize, err) {
-    if image.len < w * h || x >= w || y >= h { ret (0usize, TooSmall) }
+    if (w != 0usize && h > 18446744073709551615usize / w) || image.len < w * h || x >= w || y >= h { ret (0usize, TooSmall) }
     let old = image[y * w + x]
     if old == new_value { ret (0usize, ok) }
     if stack.len == 0usize { ret (0usize, TooSmall) }
@@ -703,7 +704,7 @@ fn flood_fill(image: []u8, w: usize, h: usize, x: usize, y: usize, new_value: u8
 // The same fill by horizontal spans: a popped seed extends left and right, and the
 // rows above and below push one seed per run of the old value.
 fn flood_fill_scanline(image: []u8, w: usize, h: usize, x: usize, y: usize, new_value: u8, stack: []u32) -> (usize, err) {
-    if image.len < w * h || x >= w || y >= h { ret (0usize, TooSmall) }
+    if (w != 0usize && h > 18446744073709551615usize / w) || image.len < w * h || x >= w || y >= h { ret (0usize, TooSmall) }
     let old = image[y * w + x]
     if old == new_value { ret (0usize, ok) }
     if stack.len == 0usize { ret (0usize, TooSmall) }
@@ -1215,7 +1216,7 @@ fn level_width(n: usize, level: usize) -> usize {
 // Largest all-nonzero rectangle by the histogram stack, one row at a time; the
 // first of equal areas in raster order wins. `heights` and `stack` hold `w + 1`.
 fn max_rectangle(binary: []const u8, w: usize, h: usize, heights: []u32, stack: []u32) -> (Rect, err) {
-    if binary.len < w * h || heights.len < w + 1usize || stack.len < w + 1usize { ret (zero, TooSmall) }
+    if (w != 0usize && h > 18446744073709551615usize / w) || binary.len < w * h || heights.len < w + 1usize || stack.len < w + 1usize { ret (zero, TooSmall) }
     var best = Rect { x: 0usize, y: 0usize, w: 0usize, h: 0usize, area: 0usize }
     var x = 0usize
     while x <= w {

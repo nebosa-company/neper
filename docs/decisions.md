@@ -47156,3 +47156,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `pool_free` accepted any aligned offset, so freeing a slot twice linked it into the free list twice and handed one slot to two owners. It now answers `Invalid`, leaving the pool unchanged, when every slot is already free or when the offset is among the first 256 entries of the free list. The bound is deliberate: the repeat of a recent free is the common mistake, and walking the whole list on each free would make a busy pool quadratic.
 
 **Result.** `runtime_gaps` passes on Windows and fails (exit 11) on the old code; `mem_heap`, `mem_pages`, `data_objpool`, `db_pool` and `algo_sort` still pass; Linux pending. L245 is at 0.7: the Linux shell accumulator, `mem.copy`'s documented shorter-length contract, `threshold_otsu` and five size comparisons remain.
+
+## D6673 — filter size comparisons test the product for overflow
+
+**Decision.** `src.len < w * h` multiplied before comparing, so a huge width and height trapped (or wrapped to a small product that passed). Each such site now checks `h > MAX / w` first and answers `TooSmall`; `threshold_otsu` answers 0. `gfx_filter` checks 64-67 cover it; Linux pending.
