@@ -403,7 +403,7 @@ fn sqp_activeset(a: *mem.Arena, h: []const f64, g: []const f64, y: []f64, m: usi
 }
 
 // Solve the problem; x0 (positive, summing to anything) is replaced by the solution (summing to 1); l is n by m column-major with at least one positive entry in every row and column
-fn mixsqp_sqp(a: *mem.Arena, l0: []const f64, w0: []const f64, n: usize, m: usize, x: []f64, c: SqpControl) -> (SqpResult, err) {
+fn mixsqp_sqp(a: *mem.Arena, l0: []const f64, w0: []const f64, n: usize, m: usize, x: []f64, c: SqpControl, gout: []f64, hout: []f64) -> (SqpResult, err) {
     var res: SqpResult = zero
     let (l, e0) = mem.alloc[f64](a, n * m)
     let (w, e1) = mem.alloc[f64](a, n)
@@ -607,5 +607,107 @@ fn mixsqp_sqp(a: *mem.Arena, l0: []const f64, w0: []const f64, n: usize, m: usiz
     let (v, ev) = sqp_obj(l, w, z, n, m, 0.0f64, x)
     if ev != ok { ret (res, ev) }
     res.value = v
+    if gout.len >= m && hout.len >= m * m { sqp_grad(l, w, n, m, c.eps, x, gout, hout, zz) }
     ret (res, ok)
+}
+
+// The package's front end: `logl` reads l0 as log-likelihoods (row maximum subtracted, then exponentiated); columns that are all zero get a zero weight; one nonzero column is the trivial solution (status 2, nothing run). gout and hout (at least m and m by m long, or empty; filled over the nonzero columns, the Hessian with the stride of the nonzero count) receive the gradient and Hessian at the solution
+fn mixsqp_run(a: *mem.Arena, l0: []const f64, w0: []const f64, n: usize, m: usize, x: []f64, c: SqpControl, logl: bool, gout: []f64, hout: []f64) -> (SqpResult, err) {
+    var res: SqpResult = zero
+    let (l, e0) = mem.alloc[f64](a, n * m)
+    let (flag, e1) = mem.alloc[bool](a, m)
+    if e0 != ok || e1 != ok { ret (res, mem.Full) }
+    var i = 0usize
+    while i < n * m {
+        l[i] = l0[i]
+        i += 1usize
+    }
+    if logl {
+        i = 0usize
+        while i < n {
+            var mx = l0[i]
+            var j = 1usize
+            while j < m {
+                if l0[j * n + i] > mx { mx = l0[j * n + i] }
+                j += 1usize
+            }
+            j = 0usize
+            while j < m {
+                l[j * n + i] = math.exp[f64](l0[j * n + i] - mx)
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    var nz = 0usize
+    var first = 0usize
+    var j = 0usize
+    while j < m {
+        var mx = 0.0f64
+        i = 0usize
+        while i < n {
+            if l[j * n + i] > mx { mx = l[j * n + i] }
+            i += 1usize
+        }
+        flag[j] = mx > 0.0f64
+        if flag[j] {
+            if nz == 0usize { first = j }
+            nz += 1usize
+        }
+        j += 1usize
+    }
+    if m == 1usize || nz == 1usize {
+        j = 0usize
+        while j < m {
+            x[j] = 0.0f64
+            j += 1usize
+        }
+        x[first] = 1.0f64
+        var sw = 0.0f64
+        var s = 0.0f64
+        i = 0usize
+        while i < n {
+            sw += w0[i]
+            s += w0[i] * math.log[f64](l[first * n + i])
+            i += 1usize
+        }
+        res.status = 2i64
+        res.value = 0.0f64 - s / sw
+        ret (res, ok)
+    }
+    if nz == m {
+        let (r1, e5) = mixsqp_sqp(a, l, w0, n, m, x, c, gout, hout)
+        ret (r1, e5)
+    }
+    let (lc, e2) = mem.alloc[f64](a, n * nz)
+    let (xc, e3) = mem.alloc[f64](a, nz)
+    if e2 != ok || e3 != ok { ret (res, mem.Full) }
+    var k = 0usize
+    j = 0usize
+    while j < m {
+        if flag[j] {
+            i = 0usize
+            while i < n {
+                lc[k * n + i] = l[j * n + i]
+                i += 1usize
+            }
+            xc[k] = x[j]
+            k += 1usize
+        }
+        j += 1usize
+    }
+    let (r2, e4) = mixsqp_sqp(a, lc, w0, n, nz, xc, c, gout, hout)
+    if e4 != ok { ret (r2, e4) }
+    k = 0usize
+    j = 0usize
+    while j < m {
+        if flag[j] {
+            x[j] = xc[k]
+            k += 1usize
+        } else {
+            x[j] = 0.0f64
+        }
+        j += 1usize
+    }
+    ret (r2, ok)
 }

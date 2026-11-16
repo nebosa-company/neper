@@ -3566,4 +3566,5 @@ D6703	768	SuppDists random variates
 D6704	392	splines2 ibs
 D6705	424	splines2 bernsteinPoly
 D6706	547	splines2 nsk
-D6707	1115	mixsqp: the SQP algorithm itself
+D6707	1116	mixsqp: the SQP algorithm itself
+D6708	808	mixsqp front end: zero columns, log input, gradient and Hessian

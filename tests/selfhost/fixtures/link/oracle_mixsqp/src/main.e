@@ -10,6 +10,16 @@ use e.mem
 use e.os
 use e.test.oracle as oracle
 
+fn vsum(v: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        s += v[i]
+        i += 1usize
+    }
+    ret s
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let n = usize(z[0usize])
@@ -19,13 +29,26 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let q = usize(z[2usize + n * m + n])
     let (x, e) = mem.alloc[f64](a, m)
     if e != ok { ret 0.0f64 / 0.0f64 }
-    if str.eq(c.name, "sqp") {
+    if str.eq(c.name, "sqp") || str.eq(c.name, "sqplog") {
         var j = 0usize
         while j < m {
             x[j] = 1.0f64
             j += 1usize
         }
-        let (r, se) = sq.mixsqp_sqp(a, l, w, n, m, x, sq.sqp_default())
+        let (gv, ge) = mem.alloc[f64](a, m)
+        let (hv, he) = mem.alloc[f64](a, m * m)
+        if ge != ok || he != ok { ret 0.0f64 / 0.0f64 }
+        var zi = 0usize
+        while zi < m {
+            gv[zi] = 0.0f64
+            zi += 1usize
+        }
+        zi = 0usize
+        while zi < m * m {
+            hv[zi] = 0.0f64
+            zi += 1usize
+        }
+        let (r, se) = sq.mixsqp_run(a, l, w, n, m, x, sq.sqp_default(), str.eq(c.name, "sqplog"), gv, hv)
         if se != ok { ret 0.0f64 / 0.0f64 }
         if q < m { ret x[q] }
         if q == m { ret r.value }
@@ -33,7 +56,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if q == m + 2usize { ret f64(r.iterations) }
         if q == m + 3usize { ret f64(r.nqp) }
         if q == m + 4usize { ret f64(r.nls) }
-        ret f64(r.nnz)
+        if q == m + 5usize { ret f64(r.nnz) }
+        let gsum = vsum(gv)
+        if q == m + 6usize { ret gsum }
+        ret vsum(hv)
     }
     let (v, me) = mq.mixsqp(a, l, w, n, m, x)
     if me != ok { ret 0.0f64 / 0.0f64 }
