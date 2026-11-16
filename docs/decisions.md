@@ -47172,3 +47172,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6676 — TVPACK trivariate in its own module
 
 **Decision.** `e.algo.stat.tvpack.tvtl` ports `tvtlr` of tvpack.f line for line (argument sorting, the special cases, Plackett's integrand, 23-point Kronrod with global adaptive bisection) and reuses `mvt`'s bivariate normal and t and its closed-form t distribution function, which stands for R's `pt` at integer df. The integrand's context is a struct passed by pointer, since there are no closures. `oracle_tvpack` equals R on 200 cases at 1e-8 on Windows; Linux pending.
+
+## D6677 — Miwa orthant algorithm as one function over a work struct
+
+**Decision.** `e.algo.stat.miwa.pmvnorm_miwa` ports `miwa.c` and `pmvnorm`'s Miwa pre-processing. The C statics become slices in a `Work` struct allocated once per call, and the per-cone scratch is reset after every orthant. The two-sided box sums subsets of lowered limits only up to size eight, because R's `R_miwa` has no larger case; a higher-dimensional box answers what R answers, not the exact inclusion-exclusion. An upper-only coordinate is flipped to lower-only with its correlations negated, as R does. `checkCorr`'s singular-matrix error is not reproduced. `oracle_miwa` equals R on 120 cases at 1e-8 on Windows; Linux pending.
