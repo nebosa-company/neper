@@ -164,4 +164,14 @@ for (z in zones) {
     tzcase(sprintf("2024-%02d-%02dT%s:00", mo, d, hm), "", z)
   }
 }
+# %Z names a zone: the time is local to it (the earlier instant when repeated, NA when skipped); an offset read before it is ignored, one read after it rules, and UTC leaves the offset in force
+for (zn in zones) for (lz in c("UTC", "Asia/Tokyo")) {
+  tzcase(paste("2024-06-15 12:00", zn), "%Y-%m-%d %H:%M %Z", lz)
+  tzcase(paste("2024-12-15 12:00", zn), "%Y-%m-%d %H:%M %Z", lz)
+  tzcase(paste("2024-06-15 12:00 +0100", zn), "%Y-%m-%d %H:%M %z %Z", lz)
+  tzcase(paste("2024-06-15 12:00", zn, "+0100"), "%Y-%m-%d %H:%M %Z %z", lz)
+  tzcase(paste(zn, "2024-06-15 12:00:30"), "%Z %Y-%m-%d %H:%M:%S", lz)
+  tzcase(paste("2024-06-15T12:00:00", zn, "x"), "%Y-%m-%dT%H:%M:%S %Z x", lz)
+  for (mo in c(3, 10, 11)) for (d in 1:31) for (hm in c("00:30", "01:30", "02:30")) tzcase(sprintf("2024-%02d-%02d %s %s", mo, d, hm, zn), "%Y-%m-%d %H:%M %Z", lz)
+}
 emit("readr", "readr", list(cases))

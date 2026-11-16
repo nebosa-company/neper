@@ -213,10 +213,10 @@ fn parse_logical(s0: str) -> f64 {
 
 // --- Dates and times.
 
-type Parser = struct { s: str, at: usize, year: i64, mon: i64, day: i64, hour: i64, min: i64, sec: i64, psec: f64, ampm: i64, tzh: i64, tzm: i64, sign: i64, utc: bool, compact: bool, names: str }
+type Parser = struct { s: str, at: usize, year: i64, mon: i64, day: i64, hour: i64, min: i64, sec: i64, psec: f64, ampm: i64, tzh: i64, tzm: i64, sign: i64, utc: bool, compact: bool, names: str, zname: str }
 
 fn new_parser(s: str) -> Parser {
-    ret Parser { s: s, at: 0usize, year: -1i64, mon: 1i64, day: 1i64, hour: 0i64, min: 0i64, sec: 0i64, psec: 0.0f64, ampm: -1i64, tzh: 0i64, tzm: 0i64, sign: 1i64, utc: false, compact: true, names: "" }
+    ret Parser { s: s, at: 0usize, year: -1i64, mon: 1i64, day: 1i64, hour: 0i64, min: 0i64, sec: 0i64, psec: 0.0f64, ampm: -1i64, tzh: 0i64, tzm: 0i64, sign: 1i64, utc: false, compact: true, names: "", zname: "" }
 }
 
 fn done(p: *Parser) -> bool { ret p.at >= p.s.len }
@@ -584,11 +584,23 @@ fn parse_fmt(p: *Parser, fmt: str) -> bool {
                 if !take_ampm(p) { ret false }
             } else if f == 122u8 {
                 p.utc = true
+                p.zname = ""
                 if !take_tz_offset(p) { ret false }
             } else if f == 90u8 {
                 let start = p.at
                 while p.at < p.s.len && !is_space(p.s[p.at]) { p.at += 1usize }
                 if p.at == start { ret false }
+                // a zone name rules the later reading, as an offset does; UTC itself leaves the offset in force
+                let name = p.s[start..p.at]
+                if str.eq(name, "UTC") {
+                    p.zname = ""
+                    p.utc = true
+                } else {
+                    p.zname = name
+                    p.utc = false
+                    p.tzh = 0i64
+                    p.tzm = 0i64
+                }
             } else if f == 46u8 {
                 if p.at >= p.s.len || is_digit(p.s[p.at]) { ret false }
                 p.at += 1usize
@@ -733,8 +745,9 @@ fn parse_datetime_zone(s: str, fmt: str, names: str, db: *const tz.Database, zon
     if !valid_date(&p) { ret nan() }
     let h = hour_of(&p)
     if h < 0i64 || h > 23i64 || p.min < 0i64 || p.min > 59i64 || p.sec < 0i64 || p.sec > 60i64 { ret nan() }
-    if p.utc { ret parse_datetime_in(s, fmt, names) }
-    let (z, ze) = tz.zone(db, zone_name)
+    var zn = zone_name
+    if p.zname.len > 0usize { zn = p.zname } else if p.utc { ret parse_datetime_in(s, fmt, names) }
+    let (z, ze) = tz.zone(db, zn)
     if ze != ok { ret nan() }
     var sec = p.sec
     var extra = 0i64

@@ -44998,3 +44998,9 @@ No new geometry code: `oracle_sf` runs the planar part of `e.algo.geom` against 
 `e.algo.stat.tsp` ports the TSP package's constructions on a full distance matrix: `nn` and `repetitive_nn`, nearest, farthest, cheapest and arbitrary insertion with the package's choice among ties drawn from R's stream (`sample(x, 1)` only when more than one candidate, after the default `start = sample(n, 1)` the package's control list always draws), best-improvement `two_opt` from `sample(n)`, `tour_length`, `reformulate_ATSP_as_TSP` and the single-cut `cut_tour`. A dist object has no diagonal, so the reformulated matrix reads 0 there, not `infeasible`.
 
 **Result.** `oracle_tsp` equals TSP 1.3.0 on 720 values (40 point sets of 6 to 25 cities, every method, seeded draws included) on Windows; the Linux run is pending (WSL). The exact solvers (concorde, linkern) are external programs and stay out; L431 is closed.
+
+## D6108 — %Z names a zone in readr datetimes
+
+`parse_datetime_zone` reads `%Z` as readr does: the token up to the next space names an IANA zone and the time is local to it, the earlier instant when the clock repeats and NaN when it was skipped. The later of `%z` and `%Z` rules (a zone name read after an offset drops the offset; an offset read after the name keeps the offset), and the name `UTC` itself leaves an offset in force. A name outside the database, or a bare abbreviation like CDT, is an error in readr 2.2.0 (the oracle leaves those out) and NaN here.
+
+**Result.** `oracle_readr` equals readr on 22899 cases, 7410 of them `%Z` cases over the thirteen zones of `e.tz.builtin`, both locale zones UTC and Asia/Tokyo, offsets before and after, and every day of the March, October and November transitions, on Windows; the Linux run is pending (WSL). The two unterminated-quote shapes that crash or confuse readr 2.2.0 (D6016's list) cannot be matched to an answer readr does not give, so L290 is closed.
