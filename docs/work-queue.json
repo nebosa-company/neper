@@ -1241,10 +1241,10 @@
       "group": "CRAN parity",
       "order": 722,
       "title": "vars: vector autoregression",
-      "score": 0.4,
+      "score": 0.45,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6436, D6437 forecasts and non-orthogonal irf equal vars). VAR(type const) coefficients, residual covariance and VARselect AIC, HQ, SC and FPE equal vars on Windows (oracle_vars; Linux pending). Open: trend types, exogenous, restrictions, tests, IRF, forecasts, causality. Was: Open (CRAN rank 606). Mid. e.algo.timeseries has var_fit and var_forecast. Needs L303 for the VECM part. Acceptance, equal to vars: VAR with trend, constant and seasonal terms, VARselect, SVAR and SVEC, vec2var, irf with bootstrap bands under set.seed, fevd, causality, serial.test, arch.test, normality.test, stability."
+      "evidence": "Partial (D6436, D6437 forecasts and non-orthogonal irf, D6438 orthogonal irf equal vars). VAR(type const) coefficients, residual covariance and VARselect AIC, HQ, SC and FPE equal vars on Windows (oracle_vars; Linux pending). Open: trend types, exogenous, restrictions, tests, IRF, forecasts, causality. Was: Open (CRAN rank 606). Mid. e.algo.timeseries has var_fit and var_forecast. Needs L303 for the VECM part. Acceptance, equal to vars: VAR with trend, constant and seasonal terms, VARselect, SVAR and SVEC, vec2var, irf with bootstrap bands under set.seed, fevd, causality, serial.test, arch.test, normality.test, stability."
     },
     {
       "id": "L434",

@@ -20,7 +20,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(nm, "hq") { ret vr.var_select(a, y, t0, k, p, lm, 1usize) }
     if str.eq(nm, "sc") { ret vr.var_select(a, y, t0, k, p, lm, 2usize) }
     if str.eq(nm, "fpe") { ret vr.var_select(a, y, t0, k, p, lm, 3usize) }
-    if str.eq(nm, "fcst") || str.eq(nm, "irf") {
+    if str.eq(nm, "fcst") || str.eq(nm, "irf") || str.eq(nm, "oirf") {
         let rows = t0 - p
         let w = k * p + 1usize
         let (cf, g1) = mem.alloc[f64](a, k * w)
@@ -45,6 +45,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (ph, g5) = mem.alloc[f64](a, 6usize * k * k)
         if g5 != ok { os.exit(14) }
         vr.var_phi(cf, k, p, 5usize, ph)
+        var src = ph
+        if str.eq(nm, "oirf") {
+            let (sg0, g6) = mem.alloc[f64](a, k * k)
+            if g6 != ok { os.exit(15) }
+            vr.sigma_u(rs, rows, k, p, sg0)
+            let (pc, g7) = mem.alloc[f64](a, k * k)
+            if g7 != ok { os.exit(16) }
+            if !vr.var_chol(sg0, k, pc) { os.exit(17) }
+            let (oo, g8) = mem.alloc[f64](a, 6usize * k * k)
+            if g8 != ok { os.exit(18) }
+            vr.var_oirf(ph, pc, k, 5usize, oo)
+            src = oo
+        }
         // R lists the responses to each impulse in turn: impulse j, then horizon, then the responding series
         var pos = 0usize
         var imp = 0usize
@@ -54,7 +67,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
                 var resp = 0usize
                 while resp < k {
                     pos += 1usize
-                    tot += ph[s * k * k + resp * k + imp] * f64(pos)
+                    tot += src[s * k * k + resp * k + imp] * f64(pos)
                     resp += 1usize
                 }
                 s += 1usize

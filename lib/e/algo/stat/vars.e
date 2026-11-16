@@ -233,3 +233,56 @@ fn var_phi(coef: []const f64, k: usize, p: usize, h: usize, phi: []f64) {
         s += 1usize
     }
 }
+
+// the lower Cholesky factor P of the k by k symmetric s (P P' = s); false when s is not positive definite
+fn var_chol(s: []const f64, k: usize, p: []f64) -> bool {
+    var i = 0usize
+    while i < k * k {
+        p[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        var j = 0usize
+        while j <= i {
+            var v = s[i * k + j]
+            var m = 0usize
+            while m < j {
+                v -= p[i * k + m] * p[j * k + m]
+                m += 1usize
+            }
+            if i == j {
+                if v <= 0.0f64 { ret false }
+                p[i * k + i] = math.sqrt[f64](v)
+            } else {
+                p[i * k + j] = v / p[j * k + j]
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}
+
+// orthogonalised responses Phi_s P for s = 0 ..= h into out (h + 1 matrices of k by k)
+fn var_oirf(phi: []const f64, p: []const f64, k: usize, h: usize, out: []f64) {
+    var s = 0usize
+    while s <= h {
+        var i = 0usize
+        while i < k {
+            var j = 0usize
+            while j < k {
+                var v = 0.0f64
+                var m = 0usize
+                while m < k {
+                    v += phi[s * k * k + i * k + m] * p[m * k + j]
+                    m += 1usize
+                }
+                out[s * k * k + i * k + j] = v
+                j += 1usize
+            }
+            i += 1usize
+        }
+        s += 1usize
+    }
+}

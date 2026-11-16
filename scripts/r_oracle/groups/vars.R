@@ -23,5 +23,8 @@ for (rep in 1:15) {
   ir <- irf(v, n.ahead = h, ortho = FALSE, boot = FALSE)$irf
   tot <- 0; pos <- 0; for (imp in names(ir)) for (i in 0:h) for (j in seq_len(K)) { pos <- pos + 1; tot <- tot + ir[[imp]][i + 1, j] * pos }
   add("irf", a, tot)
+  io <- irf(v, n.ahead = h, ortho = TRUE, boot = FALSE)$irf
+  tot <- 0; pos <- 0; for (imp in names(io)) for (i in 0:h) for (j in seq_len(K)) { pos <- pos + 1; tot <- tot + io[[imp]][i + 1, j] * pos }
+  add("oirf", a, tot)
 }
 emit("vars", "vars", list(cases))

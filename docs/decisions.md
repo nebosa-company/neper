@@ -45796,3 +45796,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.vars` gains `var_forecast` (h-step point forecasts by recursing the fitted equations from the last p observations) and `var_phi` (the moving-average matrices Phi_0..Phi_h, Phi_s = sum A_j Phi_{s-j}), the non-orthogonal irf.
 
 **Result.** `oracle_vars` equals vars predict() and irf(ortho = FALSE) on 150 cases on Windows; Linux pending. L433 stays partial.
+
+## D6438 — vars: orthogonalised impulse responses
+
+`e.algo.stat.vars` gains `var_chol` (lower Cholesky of summary()'s residual covariance) and `var_oirf` (Phi_s P), the irf(ortho = TRUE) responses.
+
+**Result.** `oracle_vars` equals vars on 165 cases on Windows; Linux pending. L433 stays partial.
