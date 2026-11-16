@@ -366,3 +366,4 @@ oracle_ape
 oracle_rms
 oracle_bnlearn
 oracle_multcomp
+oracle_xgboost

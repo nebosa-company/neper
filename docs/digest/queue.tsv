@@ -171,7 +171,7 @@ L371	library	0.15	866	coin: conditional and permutation tests	Partial (D6625).
 L373	library	0.15	662	bnlearn: Bayesian network learning	Partial (D6630).
 L374	library	0.2	759	rms: regression modelling strategies	Partial (D6629).
 L375	library	0	219	partykit: conditional inference trees and MOB	Open (CRAN rank 386).
-L377	library	0	419	xgboost: gradient-boosted trees	Open (CRAN rank 306).
+L377	library	0.15	912	xgboost: gradient-boosted trees	Partial (D6632).
 L398	library	0	447	rugarch: the GARCH family	Open (CRAN rank 497).
 L441	library	0	300	msm and mstate: multi-state models	Open (CRAN ranks 642, 679).
 L442	library	0	264	phangorn: phylogenetic inference	Open (CRAN rank 666).

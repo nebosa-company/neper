@@ -3491,4 +3491,5 @@ D6627	736	vegan: diversity, rarefaction and dissimilarities
 D6628	784	ape: neighbour joining edge lengths
 D6629	762	rms: spline basis, ols and lrm
 D6630	840	bnlearn: network scores of a given DAG
-D6631	718	multcomp: linear hypotheses of an lm
+D6631	719	multcomp: linear hypotheses of an lm
+D6632	955	xgboost: exact greedy squared-error boosting

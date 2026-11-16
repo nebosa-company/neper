@@ -1901,10 +1901,10 @@
       "group": "CRAN parity",
       "order": 813,
       "title": "xgboost: gradient-boosted trees",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 306). Large. e.ml.tree has gradient boosting; verify it first. Acceptance, predictions and importances equal to xgboost for deterministic fits (no subsampling) with tree_method exact and hist, objectives reg:squarederror, binary:logistic, multi:softprob, count:poisson, rank:pairwise, lambda, alpha, gamma, eta, max_depth, min_child_weight, early stopping and the cross-validation helper under set.seed."
+      "evidence": "Partial (D6632). e.algo.stat.xgboostpkg.boost (reg:squarederror, exact greedy trees with eta, max_depth, lambda, gamma and min_child_weight, no sampling) equals xgboost 3.2 training predictions on Windows to 1e-4 (oracle_xgboost, 40 values; Linux pending). Open: other objectives (logistic, softmax, poisson), hist and approx methods, subsampling and column sampling with the xgboost generator, missing values, constraints, DART and linear boosters, feature importance, cross-validation. Was: Open (CRAN rank 306). Large. e.ml.tree has gradient boosting; verify it first. Acceptance, predictions and importances equal to xgboost for deterministic fits (no subsampling) with tree_method exact and hist, objectives reg:squarederror, binary:logistic, multi:softprob, count:poisson, rank:pairwise, lambda, alpha, gamma, eta, max_depth, min_child_weight, early stopping and the cross-validation helper under set.seed."
     },
     {
       "id": "L398",

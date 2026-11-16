@@ -46916,3 +46916,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `multcomppkg.glht` fits the least-squares model and, for each row of the contrast matrix K, reports `K b`, `sqrt(s2 K (X'X)^-1 K')`, the t statistic and the two-sided p value on the residual degrees of freedom, with Bonferroni (`min(1, m p)`) and Holm (sorted `(m - rank) p`, running maximum, capped at 1) adjustments. The default single-step adjustment needs the multivariate t distribution, so it is left open.
 
 **Result.** `oracle_multcomp` agrees with multcomp on Windows (144 values, 2 to 5 contrasts, 3 to 5 coefficients); Linux pending. L341 stays partial: Tukey, Dunnett and the single-step family, Westfall, confidence intervals, other models.
+
+## D6632 — xgboost: exact greedy squared-error boosting
+
+**Decision.** `xgboostpkg.boost` starts from the mean of y and adds trees grown by the exact greedy algorithm on gradients `pred - y` with unit Hessians: candidate splits between distinct sorted values at their midpoint (a row goes left when `x < split`), gain `1/2 (G_L^2/(H_L+lambda) + G_R^2/(H_R+lambda) - G^2/(H+lambda))`, both children at least `min_child_weight`, leaf value `-G/(H+lambda) * eta`. A split whose children are both leaves is pruned when its gain, counted without the factor one half as xgboost does, is below gamma; comparing the half-gain with gamma kept too many splits and disagreed on every case with gamma above 0.
+
+**Result.** `oracle_xgboost` agrees with xgboost 3.2.1.1 (`xgb.train`, exact, one thread) at 1e-4 on Windows (40 values, 40 to 150 rows, up to 12 rounds, depth 1 to 5); Linux pending. L377 stays partial: other objectives, hist, sampling, missing values.
