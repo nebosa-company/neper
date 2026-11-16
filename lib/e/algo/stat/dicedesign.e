@@ -359,12 +359,21 @@ fn lhs_from(a: *mem.Arena, g: *rr.Rng, n: usize, dimension: usize, out: []f64) -
 // maximinSA_LHS with the GEOM (profile 0) or LINEAR (profile 1) temperature: simulated annealing of an LHS by element exchange on phiP,
 // accepting a worse design with probability exp((phiP - phiP') / T) through rbinom(1, 1, .) exactly as the package draws it.
 // m is the working design (n by d row-major) and holds the answer; the final phiP is returned
-fn maximin_sa(a: *mem.Arena, g: *rr.Rng, m: []f64, n: usize, d: usize, t0: f64, cc: f64, it: usize, p: f64, profile: usize) -> f64 {
+fn maximin_sa(a: *mem.Arena, g: *rr.Rng, m: []f64, n: usize, d: usize, t0: f64, cc: f64, it: usize, p: f64, profile: usize) -> f64 { ret anneal(a, g, m, n, d, t0, cc, it, p, profile, 100usize) }
+
+// the same annealing on any score: ck 100 is phiP at p, ck 0..6 a discrepancy criterion of discrepancy()
+fn score(x: []const f64, n: usize, d: usize, p: f64, ck: usize) -> f64 {
+    if ck == 100usize { ret phi_p(x, n, d, p) }
+    if ck == 0usize { ret c2_exact(x, n, d) }
+    ret discrepancy(x, n, d, ck)
+}
+
+fn anneal(a: *mem.Arena, g: *rr.Rng, m: []f64, n: usize, d: usize, t0: f64, cc: f64, it: usize, p: f64, profile: usize, ck: usize) -> f64 {
     let (gm, e1) = mem.alloc[f64](a, n * d)
     if e1 != ok { ret 0.0f64 / 0.0f64 }
     var temp = t0
     var i = 0usize
-    var fi = phi_p(m, n, d, p)
+    var fi = score(m, n, d, p, ck)
     while temp > 0.0f64 && i < it {
         var k = 0usize
         while k < n * d {
@@ -378,7 +387,8 @@ fn maximin_sa(a: *mem.Arena, g: *rr.Rng, m: []f64, n: usize, d: usize, t0: f64, 
         let x = gm[r1 * d + col]
         gm[r1 * d + col] = gm[r2 * d + col]
         gm[r2 * d + col] = x
-        let fn2 = phi_p(gm, n, d, p)
+        var fn2 = score(gm, n, d, p, ck)
+        if ck == 0usize { fn2 = math.sqrt[f64](c2_ep(m, n, d, r1, r2, col, fi * fi)) }
         var diff = math.exp[f64]((fi - fn2) / temp)
         if diff > 1.0f64 { diff = 1.0f64 }
         var accept = false
@@ -400,4 +410,147 @@ fn maximin_sa(a: *mem.Arena, g: *rr.Rng, m: []f64, n: usize, d: usize, t0: f64, 
         if profile == 0usize { temp = math.pow[f64](cc, f64(i)) * t0 } else { temp = t0 * (1.0f64 - f64(i) / f64(it)) }
     }
     ret fi
+}
+
+fn c2_g(m: []const f64, d: usize, i: usize) -> f64 {
+    var t: [16]f64 = zero
+    var j = 0usize
+    while j < d {
+        t[j] = 1.0f64 + ab(m[i * d + j] - 0.5f64)
+        j += 1usize
+    }
+    ret prod_ld(t[0usize..d])
+}
+
+fn c2_h(m: []const f64, d: usize, i: usize) -> f64 {
+    var t: [16]f64 = zero
+    var j = 0usize
+    while j < d {
+        let x = m[i * d + j] - 0.5f64
+        t[j] = (1.0f64 + ab(x) / 2.0f64) - 0.5f64 * (x * x)
+        j += 1usize
+    }
+    ret prod_ld(t[0usize..d])
+}
+
+fn c2_cc(m: []const f64, n: usize, d: usize, i: usize, j: usize) -> f64 {
+    let nf = f64(n)
+    if i == j { ret c2_g(m, d, i) / (nf * nf) - 2.0f64 * c2_h(m, d, i) / nf }
+    var t: [16]f64 = zero
+    var k = 0usize
+    while k < d {
+        let xi = m[i * d + k] - 0.5f64
+        let xj = m[j * d + k] - 0.5f64
+        t[k] = 0.5f64 * (((2.0f64 + ab(xi)) + ab(xj)) - ab(xi - xj))
+        k += 1usize
+    }
+    ret prod_ld(t[0usize..d]) / (nf * nf)
+}
+
+// discrepancyC2_EP: the squared C2 discrepancy after exchanging entries (i1, k) and (i2, k) of m, from the squared discrepancy p of m. This is
+// the package's update formula (rows i1 == i2 included, where it does not return the unchanged value)
+fn c2_ep(m: []const f64, n: usize, d: usize, i1: usize, i2: usize, k: usize, p: f64) -> f64 {
+    let nf = f64(n)
+    let x1 = m[i1 * d + k] - 0.5f64
+    let x2 = m[i2 * d + k] - 0.5f64
+    let alpha = (1.0f64 + ab(x2)) / (1.0f64 + ab(x1))
+    let beta = (2.0f64 - ab(x2)) / (2.0f64 - ab(x1))
+    var v = p + c2_g(m, d, i1) * alpha / (nf * nf) - 2.0f64 * alpha * beta * c2_h(m, d, i1) / nf
+    v = v - c2_cc(m, n, d, i1, i1) - c2_cc(m, n, d, i2, i2)
+    v = v + c2_g(m, d, i2) / (nf * nf * alpha) - 2.0f64 * c2_h(m, d, i2) / (nf * alpha * beta)
+    var xs: [64]f64 = zero
+    var w = 0usize
+    var j = 0usize
+    while j < n {
+        if j != i1 && j != i2 {
+            let xj = m[j * d + k] - 0.5f64
+            let gm = (((2.0f64 + ab(x2)) + ab(xj)) - ab(x2 - xj)) / (((2.0f64 + ab(x1)) + ab(xj)) - ab(x1 - xj))
+            let c1 = c2_cc(m, n, d, i1, j)
+            let c2 = c2_cc(m, n, d, i2, j)
+            xs[w] = ((gm * c1 - c1) + c2 / gm) - c2
+            w += 1usize
+        }
+        j += 1usize
+    }
+    ret v + 2.0f64 * sum_ld(xs[0usize..w])
+}
+
+// R's prod() and sum() accumulate in extended precision and round once to double; double-double arithmetic gives the same rounded
+// result, which keeps the incremental C2 update bit-compatible where a value that is mathematically unchanged is compared with itself
+fn two_sum(a: f64, b: f64) -> (f64, f64) {
+    let s = a + b
+    let bb = s - a
+    ret (s, (a - (s - bb)) + (b - bb))
+}
+
+fn split(a: f64) -> (f64, f64) {
+    let t = 134217729.0f64 * a
+    let hi = t - (t - a)
+    ret (hi, a - hi)
+}
+
+fn two_prod(a: f64, b: f64) -> (f64, f64) {
+    let p = a * b
+    let (ah, al) = split(a)
+    let (bh, bl) = split(b)
+    ret (p, ((ah * bh - p) + ah * bl + al * bh) + al * bl)
+}
+
+fn prod_ld(v: []const f64) -> f64 {
+    var hi = 1.0f64
+    var lo = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        let (p, e) = two_prod(hi, v[i])
+        let nlo = e + hi * 0.0f64 + lo * v[i]
+        let (s, t) = two_sum(p, nlo)
+        hi = s
+        lo = t
+        i += 1usize
+    }
+    ret hi + lo
+}
+
+
+fn sum_ld(v: []const f64) -> f64 {
+    var hi = 0.0f64
+    var lo = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        let (s, e) = two_sum(hi, v[i])
+        hi = s
+        lo = lo + e
+        i += 1usize
+    }
+    ret hi + lo
+}
+
+// the C2 discrepancy with R's operation order and its extended-precision products, for the annealing's starting value
+fn c2_exact(x: []const f64, n: usize, d: usize) -> f64 {
+    let nf = f64(n)
+    var s1 = 0.0f64
+    var s2 = 0.0f64
+    var t: [16]f64 = zero
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < d {
+            let a = ab(x[i * d + j] - 0.5f64)
+            t[j] = (1.0f64 + 0.5f64 * a) - 0.5f64 * (a * a)
+            j += 1usize
+        }
+        s1 = s1 + prod_ld(t[0usize..d])
+        var k = 0usize
+        while k < n {
+            j = 0usize
+            while j < d {
+                t[j] = ((1.0f64 + 0.5f64 * ab(x[i * d + j] - 0.5f64)) + 0.5f64 * ab(x[k * d + j] - 0.5f64)) - 0.5f64 * ab(x[i * d + j] - x[k * d + j])
+                j += 1usize
+            }
+            s2 = s2 + prod_ld(t[0usize..d])
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret math.sqrt[f64](math.pow[f64](13.0f64 / 12.0f64, f64(d)) - (2.0f64 / nf) * s1 + (1.0f64 / (nf * nf)) * s2)
 }

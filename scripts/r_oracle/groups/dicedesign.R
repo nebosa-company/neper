@@ -29,4 +29,17 @@ for (rep in 1:8) {
   add("sa", c(n, d, sd, rep %% 2), sum(as.vector(t(S$design)) * seq_len(length(S$design))))
   add("sa_phi", c(n, d, sd, rep %% 2), tail(S$critValues, 1))
 }
+for (rep in 1:8) {
+  n <- sample(6:14, 1); d <- sample(2:4, 1); sd <- sample(1:100000, 1); prof <- c("GEOM", "LINEAR")[rep %% 2 + 1]
+  L <- lhsDesign(n, d, seed = sd)$design
+  S <- discrepSA_LHS(L, T0 = 0.05, c = 0.9, it = 60, criterion = "C2", profile = prof)
+  add("dsa", c(n, d, sd, rep %% 2), sum(as.vector(t(S$design)) * seq_len(length(S$design))))
+  add("dsa_c2", c(n, d, sd, rep %% 2), tail(S$critValues, 1))
+}
+for (itn in 1:6) {
+  n <- 8; d <- 4; sd <- 63366
+  L <- lhsDesign(n, d, seed = sd)$design
+  S <- discrepSA_LHS(L, T0 = 0.05, c = 0.9, it = itn, criterion = "C2", profile = "GEOM")
+  add("dsa_it", c(n, d, sd, 0, itn), tail(S$critValues, 1))
+}
 emit("dicedesign", "DiceDesign", list(cases))
