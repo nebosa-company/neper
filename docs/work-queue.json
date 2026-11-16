@@ -5212,10 +5212,10 @@
       "group": "Library",
       "order": 496,
       "title": "Declared ceilings become metadata",
-      "score": 0,
+      "score": 0.6,
       "model": "sonnet",
       "thinking": "low",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a generated table in docs/progress.html lists every ceiling declared by a source marker; AV1 pool exhaustion returns TooLarge, with a fixture. Notes: docs/library-hardening-plan.md."
+      "evidence": "Partial (D6669). docs/progress.html now carries a generated Declared ceilings table: scripts/ceilings.py reads every ponytail marker in lib/e (405 in 187 modules, continuation comment lines joined) and render_progress.py renders them grouped by module in source order, so two runs agree. tests/test_ceilings.py (4 python unittest cases) pins that every marker is listed, that the page carries the count, that two runs agree and that a continued marker is joined. Open: AV1 pool exhaustion still answers Unsupported (fmt/av1_recon.e near lines 386 and 779) where the acceptance wants TooLarge with a fixture; there is no AV1 fixture yet (L232 is the item for testing or removing AV1). Was: Opened from the 2026-11-13 library review. Acceptance: a generated table in docs/progress.html lists every ceiling declared by a source marker; AV1 pool exhaustion returns TooLarge, with a fixture. Notes: docs/library-hardening-plan.md."
     },
     {
       "id": "L254",
