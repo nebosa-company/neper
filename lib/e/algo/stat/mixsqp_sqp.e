@@ -711,3 +711,48 @@ fn mixsqp_run(a: *mem.Arena, l0: []const f64, w0: []const f64, n: usize, m: usiz
     }
     ret (r2, ok)
 }
+
+fn nonneg_ok(v: f64) -> bool { ret v == v && v - v == 0.0f64 && v >= 0.0f64 }
+
+fn int_ok(v: f64) -> bool { ret v == v && v - v == 0.0f64 && v > 0.0f64 && math.floor[f64](v + 0.5f64) == v }
+
+// mixsqp's argument checks in the package's order: 0 valid, 1 L is not a nonnegative finite matrix with a positive entry, 2 w is not a nonnegative finite vector of length n, 3 x0 is not nonnegative finite of length m, 4 L x0 has a zero entry, 5 maxiter.activeset (a zero here is the package's NULL, the default) or 6 maxiter.sqp is not a positive integer, 7 a scalar control is negative or not finite, 8 stepsizereduce outside (0, 1) or suffdecr.linesearch, identity.contrib.increase or minstepsize not positive, 9 zero.threshold.solution at least 1/m
+fn sqp_validate(l: []const f64, w: []const f64, x0: []const f64, n: usize, m: usize, c: SqpControl, maxiter_sqp: f64, maxiter_activeset: f64) -> i64 {
+    var pos = false
+    var i = 0usize
+    while i < n * m {
+        if !nonneg_ok(l[i]) { ret 1i64 }
+        if l[i] > 0.0f64 { pos = true }
+        i += 1usize
+    }
+    if !pos || n < 1usize || m < 1usize { ret 1i64 }
+    if w.len != n { ret 2i64 }
+    i = 0usize
+    while i < n {
+        if !nonneg_ok(w[i]) { ret 2i64 }
+        i += 1usize
+    }
+    if x0.len != m { ret 3i64 }
+    i = 0usize
+    while i < m {
+        if !nonneg_ok(x0[i]) { ret 3i64 }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var u = 0.0f64
+        var j = 0usize
+        while j < m {
+            u += l[j * n + i] * x0[j]
+            j += 1usize
+        }
+        if !(u > 0.0f64) { ret 4i64 }
+        i += 1usize
+    }
+    if maxiter_activeset != 0.0f64 && !int_ok(maxiter_activeset) { ret 5i64 }
+    if !int_ok(maxiter_sqp) { ret 6i64 }
+    if !nonneg_ok(c.convtol_sqp) || !nonneg_ok(c.convtol_activeset) || !nonneg_ok(f64(c.numiter_em)) || !nonneg_ok(c.zero_solution) || !nonneg_ok(c.zero_searchdir) || !nonneg_ok(c.suffdecr) || !nonneg_ok(c.stepreduce) || !nonneg_ok(c.minstep) || !nonneg_ok(c.identity_increase) || !nonneg_ok(c.eps) { ret 7i64 }
+    if !(0.0f64 < c.stepreduce && c.stepreduce < 1.0f64 && c.identity_increase > 0.0f64 && c.suffdecr > 0.0f64 && c.minstep > 0.0f64) { ret 8i64 }
+    if c.zero_solution >= 1.0f64 / f64(m) { ret 9i64 }
+    ret 0i64
+}

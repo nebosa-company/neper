@@ -22,6 +22,26 @@ fn vsum(v: []const f64) -> f64 {
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if str.eq(c.name, "val") {
+        let vn = usize(z[0usize])
+        let vm = usize(z[1usize])
+        let vl = z[2usize..2usize + vn * vm]
+        let vw = z[2usize + vn * vm..2usize + vn * vm + vn]
+        let vx = z[2usize + vn * vm + vn..2usize + vn * vm + vn + vm]
+        let b = 2usize + vn * vm + vn + vm
+        var ctl = sq.sqp_default()
+        ctl.convtol_sqp = z[b]
+        ctl.convtol_activeset = z[b + 1usize]
+        ctl.zero_solution = z[b + 2usize]
+        ctl.zero_searchdir = z[b + 3usize]
+        ctl.suffdecr = z[b + 4usize]
+        ctl.stepreduce = z[b + 5usize]
+        ctl.minstep = z[b + 6usize]
+        ctl.identity_increase = z[b + 7usize]
+        ctl.eps = z[b + 8usize]
+        ctl.numiter_em = i64(z[b + 11usize])
+        ret f64(sq.sqp_validate(vl, vw, vx, vn, vm, ctl, z[b + 9usize], z[b + 10usize]))
+    }
     let n = usize(z[0usize])
     let m = usize(z[1usize])
     let l = z[2usize..2usize + n * m]

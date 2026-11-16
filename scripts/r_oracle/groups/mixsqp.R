@@ -36,4 +36,34 @@ for (rep in 1:3) {
   r <- suppressWarnings(mixsqp(L, w, control = list(verbose = FALSE, tol.svd = 0)))
   for (q in 1:(m + 2)) cases[[length(cases) + 1]] <- case("sqp", c(n, m, L, w, q - 1), c(r$x, r$value, 2)[q], rel = 1e-9, abs = 1e-9)
 }
+# argument validation (fn "val"): args (n, m, L, w, x0, convtol.sqp, convtol.activeset, zero.threshold.solution, zero.threshold.searchdir, suffdecr.linesearch, stepsizereduce, minstepsize, identity.contrib.increase, eps, maxiter.sqp, maxiter.activeset (0 is NULL), numiter.em); the value is the code of the first failed check (0 passes)
+code_of <- function(e) {
+  m <- conditionMessage(e)
+  if (grepl("Input argument \"L\"", m)) 1 else if (grepl("Input argument \"w\"", m)) 2 else if (grepl("\"x0\" should be", m)) 3 else if (grepl("not a valid initial", m)) 4
+  else if (grepl("maxiter.activeset", m)) 5 else if (grepl("maxiter.sqp", m)) 6 else if (grepl("non-negative number", m)) 7 else if (grepl("stepsizereduce", m)) 8 else if (grepl("unpredictable", m)) 9 else 99
+}
+for (rep in 1:300) {
+  n <- sample(3:12, 1); m <- sample(2:6, 1); L <- round(matrix(runif(n * m, 0.1, 2), n, m), 3); w <- round(runif(n, 0.2, 2), 2); x0 <- rep(1, m)
+  ct <- c(1e-8, 1e-10, 1e-8, 1e-14, 0.01, 0.75, 1e-8, 10, 1e-8); ms <- 1000; ma <- 0; ne <- 10
+  k <- sample(0:14, 1)
+  if (k == 1) L[sample(length(L), 1)] <- -0.5
+  if (k == 2) L[sample(length(L), 1)] <- NaN
+  if (k == 3) L[] <- 0
+  if (k == 4) w[sample(n, 1)] <- -1
+  if (k == 5) x0[sample(m, 1)] <- -1
+  if (k == 6) { L[1, ] <- 0; x0 <- c(1, rep(0, m - 1)); L[1, 1] <- 0; if (m > 1) L[1, 2] <- 0.5 }
+  if (k == 7) ms <- sample(c(0, -3, 1.5), 1)
+  if (k == 8) ma <- sample(c(-2, 2.5), 1)
+  if (k == 9) ct[sample(c(1, 2, 3, 4, 5, 7, 9), 1)] <- -1
+  if (k == 10) ne <- -1
+  if (k == 11) ct[6] <- sample(c(0, 1, 1.5), 1)
+  if (k == 12) ct[sample(c(5, 7, 8), 1)] <- 0
+  if (k == 13) ct[3] <- 1 / m
+  if (k == 14) ct[sample(c(1, 2), 1)] <- Inf
+  ctl <- list(verbose = FALSE, convtol.sqp = ct[1], convtol.activeset = ct[2], zero.threshold.solution = ct[3], zero.threshold.searchdir = ct[4], suffdecr.linesearch = ct[5], stepsizereduce = ct[6], minstepsize = ct[7], identity.contrib.increase = ct[8], eps = ct[9], maxiter.sqp = ms, numiter.em = ne)
+  if (ma != 0) ctl$maxiter.activeset <- ma
+  code <- tryCatch({ suppressWarnings(mixsqp(L, w, x0, control = ctl)); 0 }, error = function(e) code_of(e))
+  if (code == 99) next
+  cases[[length(cases) + 1]] <- case("val", c(n, m, L, w, x0, ct, ms, ma, ne), code, rel = 0, abs = 0)
+}
 emit("mixsqp", "mixsqp", list(cases))
