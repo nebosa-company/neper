@@ -48,6 +48,47 @@ fn subset_rss(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize,
     ret s
 }
 
+// the weighted residual sum of squares, sum w (y - fit)^2, for observation weights given as their square roots
+fn subset_rss_w(a: *mem.Arena, x: []const f64, y: []const f64, sw: []const f64, n: usize, p: usize, mask: u32) -> f64 {
+    var k = 0usize
+    var j = 0usize
+    while j < p {
+        if (mask >> u32(j)) & 1u32 == 1u32 { k += 1usize }
+        j += 1usize
+    }
+    let (d, e1) = mem.alloc[f64](a, n * (k + 1usize))
+    let (yw, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        d[i] = sw[i]
+        yw[i] = y[i] * sw[i]
+        i += 1usize
+    }
+    var c = 1usize
+    j = 0usize
+    while j < p {
+        if (mask >> u32(j)) & 1u32 == 1u32 {
+            i = 0usize
+            while i < n {
+                d[c * n + i] = x[j * n + i] * sw[i]
+                i += 1usize
+            }
+            c += 1usize
+        }
+        j += 1usize
+    }
+    let (fit, fe) = decomp.lm_fit(a, d, n, k + 1usize, yw, 1.0e-11f64)
+    if fe != ok { ret 0.0f64 / 0.0f64 }
+    var t = 0.0f64
+    i = 0usize
+    while i < n {
+        t += fit.residuals[i] * fit.residuals[i]
+        i += 1usize
+    }
+    ret t
+}
+
 fn popcount(m: u32) -> usize {
     var c = 0usize
     var t = m
@@ -152,7 +193,7 @@ fn summarise(n: usize, p: usize, k: usize, rss: f64, nullrss: f64, fullrss: f64)
 // regsubsets(nbest, nvmax, force.in, force.out) by exhaustive search: for each size s (variables including the forced-in ones,
 // from the number forced in plus one up to nvmax or the number allowed), the nbest subsets with the smallest residual sum of
 // squares, best first. Slot s * nbest + j of masks and rss holds the j-th best of size s; an empty slot has rss 1e35.
-fn best_subsets(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, nvmax: usize, nbest: usize, fin: u32, fout: u32, masks: []u32, rss: []f64) {
+fn best_subsets(a: *mem.Arena, x: []const f64, y: []const f64, sw: []const f64, n: usize, p: usize, nvmax: usize, nbest: usize, fin: u32, fout: u32, masks: []u32, rss: []f64) {
     let total = u32(1usize << p)
     var i = 0usize
     while i < (nvmax + 1usize) * nbest {
@@ -166,7 +207,7 @@ fn best_subsets(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usiz
         if (m & fin) == fin && (m & fout) == 0u32 {
             let s = popcount(m)
             if s > nf && s <= nvmax {
-                let r = subset_rss(a, x, y, n, p, m)
+                let r = subset_rss_w(a, x, y, sw, n, p, m)
                 // insert into the sorted top nbest of size s
                 var j = 0usize
                 while j < nbest && rss[s * nbest + j] <= r { j += 1usize }
@@ -219,7 +260,7 @@ fn prefix_mask(ord: []const usize, upto: usize) -> u32 {
 // regsubsets(method = "seqrep", nbest = 1, force.in, force.out): the initial ordering (intercept, forced in, free, forced out)
 // is reported as nested subsets, then the sequential replacement of the package improves each size; best[k - 1] the best
 // subset found with k variables (including the forced ones), 1e35 where none was reported
-fn seqrep(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, nvmax: usize, fin: u32, fout: u32, masks: []u32, rss: []f64) {
+fn seqrep(a: *mem.Arena, x: []const f64, y: []const f64, sw: []const f64, n: usize, p: usize, nvmax: usize, fin: u32, fout: u32, masks: []u32, rss: []f64) {
     let (ord, e1) = mem.alloc[usize](a, p + 2usize)
     if e1 != ok { ret }
     // positions 1 .. last: intercept (variable index unused), forced in, free, then the forced out are left out of the search
@@ -254,7 +295,7 @@ fn seqrep(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, nvm
     var row = first
     while row <= nvm && row <= last {
         let m = prefix_mask(ord, row)
-        let r = subset_rss(a, x, y, n, p, m)
+        let r = subset_rss_w(a, x, y, sw, n, p, m)
         if r < rss[row - 2usize] {
             rss[row - 2usize] = r
             masks[row - 2usize] = m
@@ -275,12 +316,12 @@ fn seqrep(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, nvm
             while i <= size {
                 // ADD1: positions size .. last added to the first size - 1 variables
                 let base = prefix_mask(ord, size - 1usize)
-                let rss0 = subset_rss(a, x, y, n, p, base)
+                let rss0 = subset_rss_w(a, x, y, sw, n, p, base)
                 var smax = 0.0f64
                 var jmax = 0usize
                 var q = size
                 while q <= last {
-                    let rq = subset_rss(a, x, y, n, p, base | (1u32 << u32(ord[q - 1usize])))
+                    let rq = subset_rss_w(a, x, y, sw, n, p, base | (1u32 << u32(ord[q - 1usize])))
                     let red = rss0 - rq
                     if red > smax {
                         smax = red

@@ -422,17 +422,6 @@
       "evidence": "Partly done (D6087): e.algo.stat.carets has two-class confusionMatrix with all statistics and intervals, and postResample, equal to caret on 700 values on Windows (oracle_carets); Linux pending. Open: multi-class tables, prevalence argument, the create* resampling functions, preProcess, varImp. Original: Open (CRAN rank 235). Small to mid. train() is a wrapper and stays out. Acceptance, equal to caret under set.seed: createDataPartition, createFolds, createMultiFolds, createResample, createTimeSlices, groupKFold, confusionMatrix with every statistic and interval, sensitivity, specificity, postResample, preProcess (center, scale, range, YeoJohnson, BoxCox, pca, knnImpute), varImp for linear models."
     },
     {
-      "id": "L330",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 599,
-      "title": "leaps: best-subset regression",
-      "score": 0.9,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6099, D6113): e.algo.stat.leaps regsubsets nbest 1 (exhaustive, forward, backward), nbest above 1, force.in, force.out and seqrep with the summary statistics equal leaps on 6222 values on Windows (oracle_leaps); Linux pending. Open: observation weights. Acceptance, equal to leaps: regsubsets exhaustive, forward, backward and seqrep with nbest, nvmax, force.in and force.out, and the bic, cp, adjr2 and rss summaries."
-    },
-    {
       "id": "L331",
       "category": "library",
       "group": "CRAN parity",

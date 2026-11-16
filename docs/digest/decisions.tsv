@@ -3185,4 +3185,5 @@ D6109	805	e1071 matchClasses
 D6110	1206	e1071 cshell with given centres, and R's optim conjugate gradients
 D6111	1131	colorspace lighten, darken, max_chroma, polar coordinates, APCA, rainbow and heat
 D6112	1181	mvtnorm Genz-Bretz: pmvnorm and pmvt draw for draw
-D6113	1389	leaps: nbest above 1, force.in, force.out and seqrep
+D6113	1390	leaps: nbest above 1, force.in, force.out and seqrep
+D6114	500	leaps observation weights close L330

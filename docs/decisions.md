@@ -45034,3 +45034,9 @@ No new geometry code: `oracle_sf` runs the planar part of `e.algo.geom` against 
 `best_subsets` answers `regsubsets(nbest, nvmax, force.in, force.out)` by exhaustive search: for each size (counting the forced variables) the nbest smallest residual sums of squares, best first; a forced-in variable is in every row, sizes start one above their number, and the full model of the allowed variables is the last size. `seqrep` ports the package's sequential replacement (`SEQREP` with `ADD1`, `EXADD1` and `VMOVE`): the initial ordering (intercept, forced in, free) reported as nested subsets, then the rotation of positions `start .. size`, the candidate of largest reduction against the first `size - 1` variables, and the move of the replaced variable to the end and the new one to `first`; the best subset reported for each size is the answer. Two traps in the summary statistics: `sserr` of `summary.regsubsets` is the residual sum of squares of the model with every column, forced out or not, while the degrees of freedom use the number of columns allowed; and `which` comes back with the forced variables first and the names, not the positions, say which they are.
 
 **Result.** `oracle_leaps` equals leaps 3.2 on 6222 values (nbest 1 to 4, force.in and force.out, seqrep, every row's mask, rss, rsq, adjr2, Cp and BIC) on Windows; the Linux run is pending (WSL). Open under L330: observation weights.
+
+## D6114 — leaps observation weights close L330
+
+`subset_rss_w` fits on the square roots of the weights (the intercept column becomes `sqrt(w)`), so the residual sum of squares is `sum w r^2`; the null sum of squares is taken about the weighted mean. `best_subsets` and `seqrep` take the weights; the unweighted `regsubsets` keeps `subset_rss`.
+
+**Result.** `oracle_leaps` equals leaps on 6054 values with a quarter of the fits weighted, on Windows; the Linux run is pending (WSL). L330 is closed.
