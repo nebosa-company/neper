@@ -1274,10 +1274,10 @@
       "group": "CRAN parity",
       "order": 725,
       "title": "gstat: geostatistics",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 699). Mid. Pairs with fields in L370. Acceptance, equal to gstat: variogram (omnidirectional and directional, cloud, cross), fit.variogram with every model and the fitting weights, krige for simple, ordinary and universal kriging with variance, gstat conditional simulation under set.seed, krige.cv."
+      "evidence": "Partial (D6468 vgm Sph, Exp, Gau, Lin, the empirical variogram and ordinary kriging equal gstat on Windows; oracle_gstatpkg; Linux pending). Open: anisotropy, directions, nested and other models, fitting, simple and universal kriging, co-kriging. Was: Open (CRAN rank 699). Mid. Pairs with fields in L370. Acceptance, equal to gstat: variogram (omnidirectional and directional, cloud, cross), fit.variogram with every model and the fitting weights, krige for simple, ordinary and universal kriging with variance, gstat conditional simulation under set.seed, krige.cv."
     },
     {
       "id": "L456",

@@ -114,7 +114,7 @@ L432	library	0	223	seriation: ordering of objects	Open (CRAN rank 609).
 L433	library	0.55	660	vars: vector autoregression	Partial (D6436, D6437 forecasts and non-orthogonal irf, D6438 orthogonal irf, D6439 trend types, D6440 fevd equal vars).
 L434	library	0	258	qgraph: network estimation	Open (CRAN rank 690).
 L436	library	0	298	MatchIt: matching for causal inference	Open (CRAN rank 656).
-L437	library	0	315	gstat: geostatistics	Open (CRAN rank 699).
+L437	library	0.15	567	gstat: geostatistics	Partial (D6468 vgm Sph, Exp, Gau, Lin, the empirical variogram and ordinary kriging equal gstat on Windows;
 L456	library	0	287	mlogit: discrete-choice models	Open (CRAN rank 723).
 L457	library	0	281	NMF: non-negative matrix factorization	Open (CRAN rank 740).
 L458	library	0	227	earth: multivariate adaptive regression splines	Open (CRAN rank 780).

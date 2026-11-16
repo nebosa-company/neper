@@ -45976,3 +45976,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.drdid` gains `sub_ols` and `reg_did_rc`, the outcome-regression estimator for repeated cross-sections: separate control-unit regressions in the pre and post periods, treated pre and post means, the control prediction change over the treated, and the influence function with both regression terms.
 
 **Result.** `oracle_drdid` equals DRDID on 240 cases on Windows, the 40 new ones at rel 1e-8, 20 samples of 200 to 500 observations; the ipw, doubly robust and improved cross-section estimators and bootstrap inference are open; Linux pending. L485 stays partial.
+
+## D6468 — gstat: variogram models, the empirical variogram and ordinary kriging
+
+`e.algo.stat.gstatpkg` is new: `vgm_gamma` (single-structure Sph, Exp, Gau and Lin with nugget, zero at lag 0), `empirical_variogram` (omnidirectional bins by floor(d / width) up to the cutoff, each as pair count, mean distance and half the mean squared difference) and `ordinary_krige` (the bordered semivariance system, prediction and kriging variance).
+
+**Result.** `oracle_gstatpkg` equals gstat on 383 cases on Windows, at rel 1e-9 for the models and the variogram and 1e-8 for kriging: 20 model draws, 15 empirical variograms of 25 to 70 points and 15 kriging problems of 12 to 35 points. Anisotropy, directions, nested structures, the other model families, fitting, simple and universal kriging, co-kriging and the spatio-temporal functions are open; Linux pending. L437 is partial.
