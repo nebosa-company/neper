@@ -65,7 +65,7 @@ L482	library	0.5	471	laeken: inequality and poverty indicators	Partial (D6139).
 L483	library	0.4	733	tsfeatures: time-series features	Partial (D6142).
 L484	library	0.25	506	LearnBayes: Bayesian computation helpers	Partial (D6156).
 L485	library	0	222	DRDID: difference-in-differences	Open (CRAN rank 893).
-L501	library	0	261	randtoolbox and qrng: quasi-random generators	Open (CRAN ranks 926, 963).
+L501	library	0.2	493	randtoolbox and qrng: quasi-random generators	Partial (D6160).
 L503	library	0.35	508	WRS2: robust tests and ANOVA	Partial (D6137).
 L504	library	0.3	600	rcompanion: nonparametric and categorical helpers	Partial (D6141).
 L505	library	0	208	sm: nonparametric smoothing methods	Open (CRAN rank 954).

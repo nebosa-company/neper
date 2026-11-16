@@ -735,10 +735,10 @@
       "group": "CRAN parity",
       "order": 648,
       "title": "randtoolbox and qrng: quasi-random generators",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN ranks 926, 963). Small to mid. Verify e.algo.rand.quasi first. Acceptance, equal to R value for value: randtoolbox sobol (with scrambling), halton, torus, WELL, SFMT, congruRand and the Knuth-TAOCP generators; qrng sobol, halton, ghalton and korobov."
+      "evidence": "Partial (D6160). randtoolbox halton, unscrambled sobol (eight dimensions, Bratley-Fox numbers) and torus equal R on Windows (oracle_randtoolbox; Linux pending). Open: scrambled sobol, WELL, SFMT, congruRand, Knuth-TAOCP, qrng. Was: Open (CRAN ranks 926, 963). Small to mid. Verify e.algo.rand.quasi first. Acceptance, equal to R value for value: randtoolbox sobol (with scrambling), halton, torus, WELL, SFMT, congruRand and the Knuth-TAOCP generators; qrng sobol, halton, ghalton and korobov."
     },
     {
       "id": "L503",

@@ -45352,3 +45352,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.dagitty` works on a DAG of up to 20 nodes given as an adjacency matrix, with node sets as bit masks: ancestors and descendants, d-separation by the moralised ancestral graph, and the minimal adjustment sets for the total effect of one node on another by the generalized adjustment criterion (no node of Z among the descendants of the proper causal path nodes, and Z separating the two once the first edges of the proper causal paths are removed), enumerated over all subsets and filtered for minimality. Not here: direct effects, the canonical and exhaustive set types, instrumentalVariables, paths, equivalentDAGs, localTests and the mixed-graph forms.
 
 **Result.** `oracle_dagitty` equals dagitty on 280 cases (random DAGs of 4 to 8 nodes) on Windows; Linux pending. L478 is partial.
+
+## D6160 — randtoolbox: Halton, unscrambled Sobol and torus sequences
+
+`e.algo.stat.randtoolbox` holds the torus sequence (frac(k sqrt(p_j))) and an unscrambled Sobol sequence over the Bratley-Fox direction numbers that randtoolbox uses; `e.algo.rand.quasi` keeps the Joe-Kuo numbers, which agree with randtoolbox only in the first two dimensions (found by comparison, then the initial values were read back from the package's points: dimension 3 uses m = 1, 1, dimension 4 m = 1, 3, 7, and so on). Halton points from `e.algo.rand.quasi` equal randtoolbox as they stand. Not here: scrambled Sobol, the generators WELL, SFMT, congruRand and the Knuth-TAOCP family, more than eight Sobol dimensions, and qrng.
+
+**Result.** `oracle_randtoolbox` equals randtoolbox on 96 cases (n up to 100, up to 8 dimensions) on Windows; Linux pending. L501 is partial.

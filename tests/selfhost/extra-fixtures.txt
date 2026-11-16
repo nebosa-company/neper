@@ -275,3 +275,4 @@ oracle_learnbayes
 oracle_logistf
 oracle_betareg
 oracle_dagitty
+oracle_randtoolbox
