@@ -3166,4 +3166,5 @@ D6090	958	xts to.period index labels; L298 closed
 D6091	1199	stats varimax and promax beside the GPA rotations
 D6092	1296	e1071 rwiener and cmeans
 D6093	924	proxy Gower and Levenshtein
-D6094	1124	pmvnorm in two dimensions through the analytic bivariate routine
+D6094	1125	pmvnorm in two dimensions through the analytic bivariate routine
+D6095	1418	isotone gpava: contiguous blocks, three ties rules, and the long-double total
