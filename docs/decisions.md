@@ -45286,3 +45286,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.sn` holds dsn (with the extension parameter tau), psn through the package's Owen's T (the series for h up to 8, the closed approximation above, and the a > 1 reflection), qsn for tau = 0 by the Cornish-Fisher start from the closed-form skew-normal cumulants and Newton steps to 1e-8, and dst. The package picks the Owen engine only for a vector of more than three points with every z * alpha above -5 and tau = 0, so the oracle asks for psn only in that case. Not here: psn through the bivariate normal, pst, qst, the generators, the multivariate families, cumulants for tau != 0 and selm.
 
 **Result.** `oracle_sn` equals sn on 258 cases on Windows; Linux pending. L449 is partial.
+
+## D6149 — DiceDesign: discrepancy criteria and distance measures
+
+`e.algo.stat.dicedesign` computes the C2, L2, L2star, M2, S2, W2 and Mix2 discrepancies of a design in the unit cube (L2star uses the package's separate diagonal term), plus mindist, phiP and coverage. Not here: the design generators (lhsDesign, maximinSA_LHS, discrepSA_LHS, maximinESE_LHS, wspDesign, factDesign, the low-discrepancy sequences) and meshRatio.
+
+**Result.** `oracle_dicedesign` equals DiceDesign on 80 cases on Windows; Linux pending. L426 is partial.

@@ -266,3 +266,4 @@ oracle_extradistr
 oracle_scoringrules
 oracle_geosphere
 oracle_sn
+oracle_dicedesign
