@@ -45574,3 +45574,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.tsa` gains mcleod_li, the p values of McLeod.Li.test(y = x, gof.lag) for lags 1 .. gof: the Ljung-Box statistic n (n + 2) sum_k r_k^2 / (n - k) of the squared series at lags 1 .. lag, referred to a chi-square with `lag` degrees of freedom. The package's own source reads the autocorrelations as `acf(...)$acf[1:lag]`, which looks like it includes lag 0; it does not, because TSA masks acf with a version that drops lag 0 by default, which the first attempt (including lag 0) missed. Not here: the object form (residuals of an arima fit, omit.initial) and the default gof.lag of 10 log10(n).
 
 **Result.** `oracle_tsa` equals TSA on 34 cases on Windows; Linux pending. L452 stays partial.
+
+## D6192 — PMCMRplus: the Kruskal-Wallis all-pairs post-hoc tests
+
+`e.algo.stat.pmcmr` ports the package's kwAllPairsDunnTest (z on rank-mean differences with the tie correction to the variance and a two-sided normal p), kwAllPairsConoverTest (t on the rank means with the tie-corrected rank variance and the Kruskal H adjustment, with the t p value or the single-step Tukey p value) and kwAllPairsNemenyiTest (sqrt(2) times the studentised rank difference, p from the studentised range with infinite degrees of freedom), plus the Holm adjustment of the pairwise p values, with and without ties. Not here: the other designs of the package (van der Waerden, Steel, Quade, Friedman, Skillings-Mack post-hoc tests, many-to-one comparisons), the other adjustment methods and the chi-square form of Nemenyi's test.
+
+**Result.** `oracle_pmcmr` equals PMCMRplus on 126 cases on Windows; Linux pending. L487 is partial.

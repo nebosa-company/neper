@@ -1,0 +1,179 @@
+// R PMCMRplus: the Kruskal-Wallis all-pairs post-hoc tests on a one-way layout: Dunn's z test, Conover's t test (also with the Tukey
+// single-step p value) and the Tukey-Kramer-Nemenyi test, with the tie corrections of the package, plus the Holm adjustment of p values.
+//
+// Not here: the many-to-one and other design tests of the package (van der Waerden, Steel, Quade, Friedman post-hoc and the rest),
+// the other adjustment methods, the chi-square form of Nemenyi's test.
+
+use e.math
+use e.math.dist as dist
+use e.math.nmath_beta as nb
+use e.mem
+
+type Ranks = struct { n: f64, k: usize, ties_dunn: f64, ties_kw: f64, h: f64, s2: f64 }
+
+// average ranks of x written to r
+fn rank_avg(a: *mem.Arena, x: []const f64, r: []f64) -> err {
+    let n = x.len
+    let (idx, e) = mem.alloc[usize](a, n)
+    if e != ok { ret e }
+    var i = 0usize
+    while i < n {
+        idx[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let t = idx[i]
+        var j = i
+        while j > 0usize && x[idx[j - 1usize]] > x[t] {
+            idx[j] = idx[j - 1usize]
+            j -= 1usize
+        }
+        idx[j] = t
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = i
+        while j + 1usize < n && x[idx[j + 1usize]] == x[idx[i]] { j += 1usize }
+        let avg = (f64(i) + f64(j)) / 2.0f64 + 1.0f64
+        var q = i
+        while q <= j {
+            r[idx[q]] = avg
+            q += 1usize
+        }
+        i = j + 1usize
+    }
+    ret ok
+}
+
+// group means of ranks and sizes; the common quantities of the three tests
+fn setup(a: *mem.Arena, x: []const f64, grp: []const usize, k: usize, rbar: []f64, rn: []f64) -> (Ranks, err) {
+    let n = x.len
+    let (r, e) = mem.alloc[f64](a, n)
+    if e != ok { ret (zero, e) }
+    let e2 = rank_avg(a, x, r)
+    if e2 != ok { ret (zero, e2) }
+    var i = 0usize
+    while i < k {
+        rbar[i] = 0.0f64
+        rn[i] = 0.0f64
+        i += 1usize
+    }
+    var sr2 = 0.0f64
+    i = 0usize
+    while i < n {
+        rbar[grp[i] - 1usize] += r[i]
+        rn[grp[i] - 1usize] += 1.0f64
+        sr2 += r[i] * r[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        rbar[i] = rbar[i] / rn[i]
+        i += 1usize
+    }
+    let nf = f64(n)
+    // tie groups from the sorted values
+    var tsum = 0.0f64
+    let (s, e3) = mem.alloc[f64](a, n)
+    if e3 != ok { ret (zero, e3) }
+    i = 0usize
+    while i < n {
+        s[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let t = s[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > t {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = t
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = i
+        while j + 1usize < n && s[j + 1usize] == s[i] { j += 1usize }
+        let tt = f64(j - i + 1usize)
+        tsum += tt * tt * tt - tt
+        i = j + 1usize
+    }
+    var hs = 0.0f64
+    i = 0usize
+    while i < k {
+        hs += rn[i] * (rbar[i] - (nf + 1.0f64) / 2.0f64) * (rbar[i] - (nf + 1.0f64) / 2.0f64)
+        i += 1usize
+    }
+    let ckw = 1.0f64 - tsum / (nf * nf * nf - nf)
+    var s2 = nf * (nf + 1.0f64) / 12.0f64
+    if ckw != 1.0f64 { s2 = (sr2 - nf * ((nf + 1.0f64) * (nf + 1.0f64) / 4.0f64)) / (nf - 1.0f64) }
+    ret (Ranks { n: nf, k: k, ties_dunn: tsum / (12.0f64 * (nf - 1.0f64)), ties_kw: ckw, h: 12.0f64 / (nf * (nf + 1.0f64)) * hs, s2: s2 }, ok)
+}
+
+// Dunn: z and the unadjusted two-sided p
+fn dunn(q: Ranks, rbar: []const f64, rn: []const f64, i: usize, j: usize) -> (f64, f64) {
+    var dif = rbar[i] - rbar[j]
+    if dif < 0.0f64 { dif = 0.0f64 - dif }
+    let z = dif / math.sqrt[f64]((q.n * (q.n + 1.0f64) / 12.0f64 - q.ties_dunn) * (1.0f64 / rn[i] + 1.0f64 / rn[j]))
+    ret (z, 2.0f64 * dist.pnorm(0.0f64 - z, 0.0f64, 1.0f64, true, false))
+}
+
+// Conover: the signed t statistic, its unadjusted two-sided p, and the single-step Tukey p
+fn conover(q: Ranks, rbar: []const f64, rn: []const f64, i: usize, j: usize) -> (f64, f64, f64) {
+    let hc = q.h / q.ties_kw
+    let df = q.n - f64(q.k)
+    let b = 1.0f64 / rn[i] + 1.0f64 / rn[j]
+    let d = (q.n - 1.0f64 - hc) / df
+    let t = (rbar[i] - rbar[j]) / math.sqrt[f64](q.s2 * b * d)
+    var at = t
+    if at < 0.0f64 { at = 0.0f64 - at }
+    let p = 2.0f64 * nb.pt(0.0f64 - at, df, true, false)
+    let pt = nb.ptukey(math.sqrt[f64](2.0f64) * at, 1.0f64, f64(q.k), df, false, false)
+    ret (t, p, pt)
+}
+
+// Tukey-Kramer-Nemenyi: sqrt(2) times the studentised rank difference and its p value (infinite degrees of freedom)
+fn nemenyi(q: Ranks, rbar: []const f64, rn: []const f64, i: usize, j: usize) -> (f64, f64) {
+    var dif = rbar[i] - rbar[j]
+    if dif < 0.0f64 { dif = 0.0f64 - dif }
+    let qv = dif / math.sqrt[f64](q.n * (q.n + 1.0f64) / 12.0f64 * (1.0f64 / rn[i] + 1.0f64 / rn[j])) * math.sqrt[f64](2.0f64)
+    ret (qv, 1.0f64 - nb.ptukey(qv, 1.0f64, f64(q.k), 1.0e300f64, true, false))
+}
+
+// p.adjust(p, "holm") in place
+fn holm(a: *mem.Arena, p: []f64) -> err {
+    let m = p.len
+    let (idx, e) = mem.alloc[usize](a, m)
+    if e != ok { ret e }
+    var i = 0usize
+    while i < m {
+        idx[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < m {
+        let t = idx[i]
+        var j = i
+        while j > 0usize && p[idx[j - 1usize]] > p[t] {
+            idx[j] = idx[j - 1usize]
+            j -= 1usize
+        }
+        idx[j] = t
+        i += 1usize
+    }
+    var run = 0.0f64
+    i = 0usize
+    while i < m {
+        var v = (f64(m) - f64(i)) * p[idx[i]]
+        if v > 1.0f64 { v = 1.0f64 }
+        if v > run { run = v }
+        idx[i] = idx[i]
+        p[idx[i]] = run
+        i += 1usize
+    }
+    ret ok
+}

@@ -292,3 +292,4 @@ oracle_bayesfactor
 oracle_tsa
 oracle_gsdesign
 oracle_sampling
+oracle_pmcmr
