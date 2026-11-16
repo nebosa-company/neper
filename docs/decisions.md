@@ -47108,3 +47108,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** The comments the library review found out of step with the code beside them are rewritten to say what the code does: a disabled signer, mappings and watches that exist on macOS, WASI named as WASI, the finished M1 milestone, the two sandbox policies that treat `deny_dynamic_code` differently (Linux refuses first, macOS applies the rest first, which L251 may later unify), recursive watch refused on Linux and Windows and implemented on macOS, the MP4 fragmentation test (`mvex`), the `erf` switch at 2.5 and the plain sorting algorithms. Only comments changed. The fourteen generated headers that cite `ref/windows-1to1/` name generator scripts and reference directories that exist, so they stay.
 
 **Result.** The four fixtures that cover the touched modules pass on Windows; L261 leaves the queue.
+
+## D6665 — recursion depth guards: parser combinators and Avro
+
+**Decision.** A recursive grammar or a self-referencing schema hands the nesting depth to the input. `e.parse.comb.call` runs every combinator's inner parser one level deeper and, past 2048, abandons the parse with `cx.too_deep` and `cx.overflow` set, which the existing overflow checks already unwind; `e.fmt.avro` counts depth in the decoder around `skip` and `decode_resolved` (512, `TooDeep`). Both limits sit well inside a default stack and well above the nesting real documents reach.
+
+**Result.** `parse_comb` and `fmt_avro` pass on Windows with a 100000-level input that overflowed the stack before; Linux pending. L241 moves to 0.4: the JavaScript parser, interpreter, JSON and array builtins and `sort.quick` are open.

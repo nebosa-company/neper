@@ -436,7 +436,7 @@ L230	library	0	214	A library line-coverage number	Opened from the 2026-11-13 lib
 L231	library	0	132	The unreached-function list as a gate	Opened from the 2026-11-13 library review.
 L237	library	0	163	Page scripts have no step limit	Opened from the 2026-11-13 library review.
 L239	library	0	521	WAL replay swallows a failed delete	Opened from the 2026-11-13 library review.
-L241	library	0	162	Recursion without a depth guard	Opened from the 2026-11-13 library review.
+L241	library	0.4	946	Recursion without a depth guard	Partial (D6665).
 L247	library	0	156	`partial` means partial	Opened from the 2026-11-13 library review.
 L248	library	0	226	Every source module is in the plan	Opened from the 2026-11-13 library review.
 L260	library	0	147	Comments carry no history	Opened from the 2026-11-13 library review.

@@ -21,11 +21,15 @@
 // and memoisation are not provided: write the loop with `chainl1` or `many0`.
 
 type Event = struct { kind: u32, start: usize, end: usize }
-type Cx = struct { src: str, furthest: usize, expected: str, noted: bool, events: []Event, count: usize, overflow: bool }
+type Cx = struct { src: str, furthest: usize, expected: str, noted: bool, events: []Event, count: usize, overflow: bool, depth: usize, too_deep: bool }
+
+// How deeply parsers may nest (a parser run inside a parser, as a recursive grammar does). Past it the parse fails with `cx.too_deep` set,
+// not with a stack overflow on the input's nesting.
+const MAX_DEPTH: usize = 2048usize
 
 // A fresh context over `src` with `events` as the event buffer.
 fn context(src: str, events: []Event) -> Cx {
-    ret Cx { src: src, furthest: 0usize, expected: "", noted: false, events: events, count: 0usize, overflow: false }
+    ret Cx { src: src, furthest: 0usize, expected: "", noted: false, events: events, count: 0usize, overflow: false, depth: 0usize, too_deep: false }
 }
 
 // Forget every outcome and event so one context parses again.
@@ -35,6 +39,21 @@ fn reset(cx: *Cx) {
     cx.noted = false
     cx.count = 0usize
     cx.overflow = false
+    cx.depth = 0usize
+    cx.too_deep = false
+}
+
+// Run a parser one level deeper; past MAX_DEPTH the parse is abandoned (`cx.too_deep` and `cx.overflow` set, every combinator then unwinds).
+fn call(cx: *Cx, f: fn(*Cx, usize) -> (usize, bool), off: usize) -> (usize, bool) {
+    if cx.depth >= MAX_DEPTH {
+        cx.too_deep = true
+        cx.overflow = true
+        ret (off, false)
+    }
+    cx.depth += 1usize
+    let (next, good) = f(cx, off)
+    cx.depth -= 1usize
+    ret (next, good)
 }
 
 // Record a failure at `off`: the furthest one wins, the first at that offset keeps its label.
@@ -145,12 +164,12 @@ fn eof(cx: *Cx, off: usize) -> (usize, bool) {
 
 fn seq2(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (a, good_a) = p(cx, off)
+    let (a, good_a) = call(cx, p, off)
     if !good_a || cx.overflow {
         cx.count = mark
         ret (off, false)
     }
-    let (b, good_b) = q(cx, a)
+    let (b, good_b) = call(cx, q, a)
     if !good_b || cx.overflow {
         cx.count = mark
         ret (off, false)
@@ -160,17 +179,17 @@ fn seq2(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usiz
 
 fn seq3(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool), r: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (a, good_a) = p(cx, off)
+    let (a, good_a) = call(cx, p, off)
     if !good_a || cx.overflow {
         cx.count = mark
         ret (off, false)
     }
-    let (b, good_b) = q(cx, a)
+    let (b, good_b) = call(cx, q, a)
     if !good_b || cx.overflow {
         cx.count = mark
         ret (off, false)
     }
-    let (c, good_c) = r(cx, b)
+    let (c, good_c) = call(cx, r, b)
     if !good_c || cx.overflow {
         cx.count = mark
         ret (off, false)
@@ -180,11 +199,11 @@ fn seq3(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usiz
 
 fn choice2(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (a, good_a) = p(cx, off)
+    let (a, good_a) = call(cx, p, off)
     if good_a && !cx.overflow { ret (a, true) }
     cx.count = mark
     if cx.overflow { ret (off, false) }
-    let (b, good_b) = q(cx, off)
+    let (b, good_b) = call(cx, q, off)
     if good_b && !cx.overflow { ret (b, true) }
     cx.count = mark
     ret (off, false)
@@ -192,15 +211,15 @@ fn choice2(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, u
 
 fn choice3(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool), r: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (a, good_a) = p(cx, off)
+    let (a, good_a) = call(cx, p, off)
     if good_a && !cx.overflow { ret (a, true) }
     cx.count = mark
     if cx.overflow { ret (off, false) }
-    let (b, good_b) = q(cx, off)
+    let (b, good_b) = call(cx, q, off)
     if good_b && !cx.overflow { ret (b, true) }
     cx.count = mark
     if cx.overflow { ret (off, false) }
-    let (c, good_c) = r(cx, off)
+    let (c, good_c) = call(cx, r, off)
     if good_c && !cx.overflow { ret (c, true) }
     cx.count = mark
     ret (off, false)
@@ -208,19 +227,19 @@ fn choice3(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, u
 
 fn choice4(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), q: fn(*Cx, usize) -> (usize, bool), r: fn(*Cx, usize) -> (usize, bool), s: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (a, good_a) = p(cx, off)
+    let (a, good_a) = call(cx, p, off)
     if good_a && !cx.overflow { ret (a, true) }
     cx.count = mark
     if cx.overflow { ret (off, false) }
-    let (b, good_b) = q(cx, off)
+    let (b, good_b) = call(cx, q, off)
     if good_b && !cx.overflow { ret (b, true) }
     cx.count = mark
     if cx.overflow { ret (off, false) }
-    let (c, good_c) = r(cx, off)
+    let (c, good_c) = call(cx, r, off)
     if good_c && !cx.overflow { ret (c, true) }
     cx.count = mark
     if cx.overflow { ret (off, false) }
-    let (d, good_d) = s(cx, off)
+    let (d, good_d) = call(cx, s, off)
     if good_d && !cx.overflow { ret (d, true) }
     cx.count = mark
     ret (off, false)
@@ -232,7 +251,7 @@ fn many0(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, boo
     var cur = off
     while true {
         let mark = cx.count
-        let (next, good) = p(cx, cur)
+        let (next, good) = call(cx, p, cur)
         if !good || cx.overflow {
             cx.count = mark
             if cx.overflow {
@@ -252,7 +271,7 @@ fn many0(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, boo
 
 fn many1(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (first, good) = p(cx, off)
+    let (first, good) = call(cx, p, off)
     if !good || cx.overflow {
         cx.count = mark
         ret (off, false)
@@ -268,7 +287,7 @@ fn many1(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, boo
 
 fn opt(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (next, good) = p(cx, off)
+    let (next, good) = call(cx, p, off)
     if good && !cx.overflow { ret (next, true) }
     cx.count = mark
     if cx.overflow { ret (off, false) }
@@ -295,7 +314,7 @@ fn terminated(cx: *Cx, off: usize, first: fn(*Cx, usize) -> (usize, bool), secon
 // is left unconsumed.
 fn separated0(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (first, good) = item(cx, off)
+    let (first, good) = call(cx, item, off)
     if !good || cx.overflow {
         cx.count = mark
         if cx.overflow { ret (off, false) }
@@ -304,7 +323,7 @@ fn separated0(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: f
     var cur = first
     while true {
         let loop_mark = cx.count
-        let (after_sep, good_sep) = sep(cx, cur)
+        let (after_sep, good_sep) = call(cx, sep, cur)
         if !good_sep || cx.overflow {
             cx.count = loop_mark
             if cx.overflow {
@@ -313,7 +332,7 @@ fn separated0(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: f
             }
             break
         }
-        let (after_item, good_item) = item(cx, after_sep)
+        let (after_item, good_item) = call(cx, item, after_sep)
         if !good_item || cx.overflow {
             cx.count = loop_mark
             if cx.overflow {
@@ -333,7 +352,7 @@ fn separated0(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: f
 
 fn separated1(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (first, good) = item(cx, off)
+    let (first, good) = call(cx, item, off)
     if !good || cx.overflow {
         cx.count = mark
         ret (off, false)
@@ -341,7 +360,7 @@ fn separated1(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: f
     var cur = first
     while true {
         let loop_mark = cx.count
-        let (after_sep, good_sep) = sep(cx, cur)
+        let (after_sep, good_sep) = call(cx, sep, cur)
         if !good_sep || cx.overflow {
             cx.count = loop_mark
             if cx.overflow {
@@ -350,7 +369,7 @@ fn separated1(cx: *Cx, off: usize, item: fn(*Cx, usize) -> (usize, bool), sep: f
             }
             break
         }
-        let (after_item, good_item) = item(cx, after_sep)
+        let (after_item, good_item) = call(cx, item, after_sep)
         if !good_item || cx.overflow {
             cx.count = loop_mark
             if cx.overflow {
@@ -374,7 +393,7 @@ fn count(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), n: usize) -> (
     var cur = off
     var i = 0usize
     while i < n {
-        let (next, good) = p(cx, cur)
+        let (next, good) = call(cx, p, cur)
         if !good || cx.overflow {
             cx.count = mark
             ret (off, false)
@@ -388,7 +407,7 @@ fn count(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), n: usize) -> (
 // `p` without consuming: success keeps the offset and drops p's events.
 fn peek(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (next, good) = p(cx, off)
+    let (next, good) = call(cx, p, off)
     cx.count = mark
     if cx.overflow { ret (off, false) }
     ret (off, good)
@@ -397,7 +416,7 @@ fn peek(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool
 // Negative lookahead: succeeds, consuming nothing, exactly when `p` fails.
 fn not(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), name: str) -> (usize, bool) {
     let mark = cx.count
-    let (next, good) = p(cx, off)
+    let (next, good) = call(cx, p, off)
     cx.count = mark
     if cx.overflow { ret (off, false) }
     if good {
@@ -410,7 +429,7 @@ fn not(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), name: str) -> (u
 // Run `p`; on success append one event spanning what it matched, after p's own.
 fn node(cx: *Cx, off: usize, kind: u32, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     let mark = cx.count
-    let (next, good) = p(cx, off)
+    let (next, good) = call(cx, p, off)
     if !good || cx.overflow {
         cx.count = mark
         ret (off, false)
@@ -428,7 +447,7 @@ fn node(cx: *Cx, off: usize, kind: u32, p: fn(*Cx, usize) -> (usize, bool)) -> (
 
 // Name what was expected when `p` fails at its own start and nothing further was seen.
 fn label(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), name: str) -> (usize, bool) {
-    let (next, good) = p(cx, off)
+    let (next, good) = call(cx, p, off)
     if good && !cx.overflow { ret (next, true) }
     if cx.overflow { ret (off, false) }
     if !cx.noted || cx.furthest <= off {
@@ -443,7 +462,7 @@ fn label(cx: *Cx, off: usize, p: fn(*Cx, usize) -> (usize, bool), name: str) -> 
 // spanning the operator, after both operands' events.
 fn chainl1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn(*Cx, usize) -> (usize, bool), kind: u32) -> (usize, bool) {
     let mark = cx.count
-    let (first, good) = operand(cx, off)
+    let (first, good) = call(cx, operand, off)
     if !good || cx.overflow {
         cx.count = mark
         ret (off, false)
@@ -451,7 +470,7 @@ fn chainl1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn
     var cur = first
     while true {
         let loop_mark = cx.count
-        let (after_op, good_op) = op(cx, cur)
+        let (after_op, good_op) = call(cx, op, cur)
         if !good_op || cx.overflow {
             cx.count = loop_mark
             if cx.overflow {
@@ -460,7 +479,7 @@ fn chainl1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn
             }
             break
         }
-        let (after_rhs, good_rhs) = operand(cx, after_op)
+        let (after_rhs, good_rhs) = call(cx, operand, after_op)
         if !good_rhs || cx.overflow {
             cx.count = loop_mark
             if cx.overflow {
@@ -490,7 +509,7 @@ fn chainl1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn
 fn chainr1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn(*Cx, usize) -> (usize, bool), kind: u32) -> (usize, bool) {
     let mark = cx.count
     let all_events = cx.events
-    let (first, good) = operand(cx, off)
+    let (first, good) = call(cx, operand, off)
     if !good || cx.overflow {
         cx.count = mark
         ret (off, false)
@@ -499,7 +518,7 @@ fn chainr1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn
     var operators = 0usize
     while true {
         let loop_mark = cx.count
-        let (after_op, good_op) = op(cx, cur)
+        let (after_op, good_op) = call(cx, op, cur)
         if !good_op || cx.overflow {
             cx.count = loop_mark
             if cx.overflow {
@@ -509,7 +528,7 @@ fn chainr1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn
             }
             break
         }
-        let (after_rhs, good_rhs) = operand(cx, after_op)
+        let (after_rhs, good_rhs) = call(cx, operand, after_op)
         if !good_rhs || cx.overflow {
             cx.count = loop_mark
             if cx.overflow {
@@ -550,7 +569,7 @@ fn chainr1(cx: *Cx, off: usize, operand: fn(*Cx, usize) -> (usize, bool), op: fn
 // and why.
 fn parse_all(cx: *Cx, p: fn(*Cx, usize) -> (usize, bool)) -> (usize, bool) {
     reset(cx)
-    let (next, good) = p(cx, 0usize)
+    let (next, good) = call(cx, p, 0usize)
     if !good || cx.overflow { ret (next, false) }
     if next != cx.src.len {
         note(cx, next, "end of input")

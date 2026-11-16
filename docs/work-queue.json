@@ -4816,10 +4816,10 @@
       "group": "Library",
       "order": 454,
       "title": "Recursion without a depth guard",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a 100,000-deep input to each returns an error, not a stack overflow. Notes: docs/library-hardening-plan.md."
+      "evidence": "Partial (D6665). Two of the sites now stop at a depth limit with a named result and a regression that fails before: e.parse.comb counts nesting in a call helper that every combinator runs its parsers through (MAX_DEPTH 2048; a hundred thousand open parentheses fail with cx.too_deep and cx.overflow set, 200 still parse; parse_comb) and e.fmt.avro skip and decode_resolved count depth in the decoder (MAX_DEPTH 512; a self-referencing list schema with 100000 levels answers TooDeep, a 50-level one skips; fmt_avro). Open: js/parser.e:916, js/interp.e:4708, js/b_json.e:425, js/b_array.e:1029 (the JS recursion limit counts calls only), and algo/sort.e quick, which should recurse on the smaller half and loop on the larger (a regression needs a median-of-three killer sequence). Was: Opened from the 2026-11-13 library review. Acceptance: a 100,000-deep input to each returns an error, not a stack overflow. Notes: docs/library-hardening-plan.md."
     },
     {
       "id": "L247",

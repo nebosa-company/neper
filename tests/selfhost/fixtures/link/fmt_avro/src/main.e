@@ -231,6 +231,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var d20 = avro.decoder(huge_null_block[..])
     var o11 = avro.sink(buffer[..])
     if avro.decode_resolved(&array_schema, 0u32, &array_schema, 0u32, &d20, &o11) != ok || d20.pos != huge_null_block.len || !same(buffer[..o11.used], huge_null_block[..]) { os.exit(32i32) }
+    // L241: a schema that names itself (a linked list: a record holding a union of null and the record) lets the data choose
+    // how deep a value nests. A hundred thousand levels answer TooDeep, not a stack overflow; a short list still skips.
+    var lk: [3]avro.Kind = zero
+    lk[0usize] = .Record
+    lk[1usize] = .Union
+    lk[2usize] = .Null
+    var lname: [3]str = zero
+    var lstart: [3]usize = zero
+    var lcount: [3]usize = zero
+    var lchildren: [3]u32 = zero
+    var lsize: [3]usize = zero
+    var ldef: [3]str = zero
+    lstart[0usize] = 0usize
+    lcount[0usize] = 1usize
+    lstart[1usize] = 1usize
+    lcount[1usize] = 2usize
+    lstart[2usize] = 3usize
+    lcount[2usize] = 0usize
+    lchildren[0usize] = 1u32
+    lchildren[1usize] = 2u32
+    lchildren[2usize] = 0u32
+    var list_schema = avro.Schema { kind: lk[..], name: lname[..], child_start: lstart[..], child_count: lcount[..], children: lchildren[..], size: lsize[..], fallback: ldef[..] }
+    let levels = 100000usize
+    let (chain, chain_error) = mem.alloc[u8](a, levels + 1usize)
+    if chain_error != ok { os.exit(40i32) }
+    var level = 0usize
+    while level < levels {
+        chain[level] = 2u8
+        level += 1usize
+    }
+    chain[levels] = 0u8
+    var deep_d = avro.decoder(chain[0..])
+    if avro.skip(&list_schema, 0u32, &deep_d) != avro.TooDeep || deep_d.depth != 0usize { os.exit(41i32) }
+    var short_d = avro.decoder(chain[levels - 50usize..])
+    if avro.skip(&list_schema, 0u32, &short_d) != ok || short_d.pos != 51usize || short_d.depth != 0usize { os.exit(42i32) }
     try io.print("fmt avro ok\n")
     ret ok
 }

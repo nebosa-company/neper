@@ -17,13 +17,18 @@ use e.text.utf8
 
 type Kind = enum u8 { Null, Boolean, Int, Long, Float, Double, Bytes, String, Record, Enum, Array, Map, Union, Fixed }
 type Schema = struct { kind: []Kind, name: []str, child_start: []usize, child_count: []usize, children: []u32, size: []usize, fallback: []str }
-type Decoder = struct { data: []const u8, pos: usize }
+type Decoder = struct { data: []const u8, pos: usize, depth: usize }
 type Sink = struct { data: []u8, used: usize }
 error Mismatch
 error Malformed
 error TooSmall
+error TooDeep
 
-fn decoder(data: []const u8) -> Decoder { ret Decoder { data: data, pos: 0usize } }
+// How deeply values may nest. A schema may name itself (a linked list is a record that holds a union of null and itself),
+// so the depth of a value is the data's to choose: past this the decode answers TooDeep, not a stack overflow.
+const MAX_DEPTH: usize = 512usize
+
+fn decoder(data: []const u8) -> Decoder { ret Decoder { data: data, pos: 0usize, depth: 0usize } }
 fn sink(data: []u8) -> Sink { ret Sink { data: data, used: 0usize } }
 
 fn decode_zigzag(n: u64) -> i64 {
@@ -206,6 +211,14 @@ fn read_index(d: *Decoder, s: *const Schema, node: u32) -> (usize, err) {
 
 // Skip one value of `node`'s type.
 fn skip(s: *const Schema, node: u32, d: *Decoder) -> err {
+    if d.depth >= MAX_DEPTH { ret TooDeep }
+    d.depth += 1usize
+    let result = skip_value(s, node, d)
+    d.depth -= 1usize
+    ret result
+}
+
+fn skip_value(s: *const Schema, node: u32, d: *Decoder) -> err {
     let k = s.kind[usize(node)]
     if k == .Null { ret ok }
     if k == .Boolean {
@@ -354,6 +367,14 @@ fn copy_value(w: *const Schema, wn: u32, d: *Decoder, o: *Sink) -> err {
 // Read one value of writer type `wn0` from `d` and append it to `o` encoded in
 // reader type `rn0`.
 fn decode_resolved(w: *const Schema, wn0: u32, r: *const Schema, rn0: u32, d: *Decoder, o: *Sink) -> err {
+    if d.depth >= MAX_DEPTH { ret TooDeep }
+    d.depth += 1usize
+    let result = decode_resolved_value(w, wn0, r, rn0, d, o)
+    d.depth -= 1usize
+    ret result
+}
+
+fn decode_resolved_value(w: *const Schema, wn0: u32, r: *const Schema, rn0: u32, d: *Decoder, o: *Sink) -> err {
     var wn = wn0
     var rn = rn0
     if w.kind[usize(wn)] == .Union {

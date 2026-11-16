@@ -564,8 +564,45 @@ fn contracts() -> i32 {
     ret 0i32
 }
 
+// L241: a hundred thousand open parentheses fail the parse with `too_deep` set, not with a stack overflow, and a nesting inside the limit still parses
+fn check_depth(a: *mem.Arena) -> i32 {
+    let deep = 100000usize
+    let (text, text_error) = mem.alloc[u8](a, 2usize * deep + 1usize)
+    if text_error != ok { ret 20i32 }
+    var i = 0usize
+    while i < deep {
+        text[i] = 40u8
+        text[deep + 1usize + i] = 41u8
+        i += 1usize
+    }
+    text[deep] = 49u8
+    var events: [256]comb.Event = zero
+    var cx = comb.context(text[0..], events[0..])
+    let (_, good) = comb.parse_all(&cx, top)
+    if good || !cx.too_deep || !cx.overflow { ret 21i32 }
+    // within the limit: 200 nested parentheses
+    let shallow = 200usize
+    let (small, small_error) = mem.alloc[u8](a, 2usize * shallow + 1usize)
+    if small_error != ok { ret 22i32 }
+    i = 0usize
+    while i < shallow {
+        small[i] = 40u8
+        small[shallow + 1usize + i] = 41u8
+        i += 1usize
+    }
+    small[shallow] = 49u8
+    var cx2 = comb.context(small[0..], events[0..])
+    let (_, good2) = comb.parse_all(&cx2, top)
+    if !good2 || cx2.too_deep { ret 23i32 }
+    // the context is reusable: reset clears the depth state
+    let (_, again) = comb.parse_all(&cx, top)
+    if again || !cx.too_deep { ret 24i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var code = check_expr(a)
+    if code == 0i32 { code = check_depth(a) }
     if code == 0i32 { code = check_kv(a) }
     if code == 0i32 { code = contracts() }
     if code != 0i32 { os.exit(code) }
