@@ -14,6 +14,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(z[2usize])
     let x = z[3usize..3usize + n]
     let nm = c.name
+    if str.eq(nm, "dec") {
+        let b = 3usize + n
+        let (f, ef) = mem.alloc[f64](a, n + 8usize)
+        let (rs, er) = mem.alloc[f64](a, n + 8usize)
+        if ef != ok || er != ok { ret 0.0f64 / 0.0f64 }
+        let which = usize(z[b + 4usize])
+        let idx = usize(z[b + 5usize])
+        if z[0usize] == 2.0f64 {
+            let (m, de) = pc.decdiff(a, x, u8(z[b]), usize(z[b + 1usize]), usize(z[b + 2usize]), u8(z[b + 3usize]), f, rs)
+            if de != ok { ret 0.0f64 / 0.0f64 }
+        } else {
+            let de = pc.decmedian(a, x, u8(z[b]), usize(z[b + 1usize]), usize(z[b + 2usize]), u8(z[b + 3usize]), f, rs)
+            if de != ok { ret 0.0f64 / 0.0f64 }
+        }
+        if which == 0usize { ret f[idx] }
+        ret rs[idx]
+    }
     if str.starts_with(nm, "d_") {
         let (d, e) = pc.stat_desc(a, x, z[1usize])
         if e != ok { ret 0.0f64 / 0.0f64 }

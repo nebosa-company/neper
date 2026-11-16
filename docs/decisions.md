@@ -47310,3 +47310,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6710 — norm: em.norm with a prior
 
 **Decision.** `em_norm_prior` is the package's posterior-mode EM: the E step is unchanged and the M step turns the expected sums T1 and T2 into `mu = (T1 + tau mu0) / (n + tau)` and `Sigma = n / (n + m + p + 2) / n * (T2 + Lambda^-1 - T1 T1' / n + tau / (n (n + tau)) (T1 - n mu0)(T1 - n mu0)')`, on the standardised scale where the prior lives (norm's `moden`). `em_norm` is the same code with the maximum-likelihood step. Equal to em.norm with a prior on 120 values (oracle_norm). Linux pending.
+
+## D6711 — pastecs: decdiff and decmedian
+
+**Decision.** `decdiff` pads the front of the series by lag times order points (NaN for ends "NAs", the mean of the first lag times order values for "fill", nothing for "drop", which shortens the series), takes the lag-`lag` difference `order` times and forms the residual as `x - filtered` or `x / filtered` over the points both series cover. `decmedian` runs `times` passes of the median of 2 order + 1 points over a copy padded with NA; "NAs" leaves NaN wherever the window touches the padding, "fill" takes the median of the values present. Equal to pastecs on 5337 values (oracle_pastecs). Linux pending.

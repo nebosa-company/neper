@@ -3569,4 +3569,5 @@ D6706	547	splines2 nsk
 D6707	1116	mixsqp: the SQP algorithm itself
 D6708	809	mixsqp front end: zero columns, log input, gradient and Hessian
 D6709	798	norm: logpost.norm and mi.inference
-D6710	539	norm: em.norm with a prior
+D6710	540	norm: em.norm with a prior
+D6711	655	pastecs: decdiff and decmedian

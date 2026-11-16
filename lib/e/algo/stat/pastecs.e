@@ -168,3 +168,135 @@ fn stat_desc(a: *mem.Arena, x: []const f64, p: f64) -> (Desc, err) {
     d.kurt_2se = d.kurtosis / (2.0f64 * se2)
     ret (d, ok)
 }
+
+// ---- the tsd decompositions by differencing and by running medians ----
+
+// pastecs::decdiff: lag-`lag` differences of the given order; ends 0 pads the front with NaN, 1 with the mean of the first lag*order values, 2 drops the first lag*order points; answers the length m of `filt` and `resid` (n, or n - lag*order for ends 2); type 0 additive residual x - filtered, 1 multiplicative x / filtered
+fn decdiff(a: *mem.Arena, x: []const f64, ty: u8, lag: usize, order: usize, ends: u8, filt: []f64, resid: []f64) -> (usize, err) {
+    let n = x.len
+    let pad = lag * order
+    var len = n
+    if ends != 2u8 { len = n + pad }
+    let (cur, e1) = mem.alloc[f64](a, len)
+    let (nxt, e2) = mem.alloc[f64](a, len)
+    if e1 != ok || e2 != ok { ret (0usize, e1) }
+    var i = 0usize
+    if ends != 2u8 {
+        var fillv = 0.0f64 / 0.0f64
+        if ends == 1u8 {
+            var s = 0.0f64
+            while i < pad {
+                s += x[i]
+                i += 1usize
+            }
+            fillv = s / f64(pad)
+        }
+        i = 0usize
+        while i < pad {
+            cur[i] = fillv
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            cur[pad + i] = x[i]
+            i += 1usize
+        }
+    } else {
+        i = 0usize
+        while i < n {
+            cur[i] = x[i]
+            i += 1usize
+        }
+    }
+    var cl = len
+    var d = 0usize
+    while d < order {
+        i = 0usize
+        while i + lag < cl {
+            nxt[i] = cur[i + lag] - cur[i]
+            i += 1usize
+        }
+        cl -= lag
+        i = 0usize
+        while i < cl {
+            cur[i] = nxt[i]
+            i += 1usize
+        }
+        d += 1usize
+    }
+    var off = 0usize
+    if ends == 2u8 { off = pad }
+    i = 0usize
+    while i < cl {
+        filt[i] = cur[i]
+        if ty == 0u8 { resid[i] = x[off + i] - cur[i] } else { resid[i] = x[off + i] / cur[i] }
+        i += 1usize
+    }
+    ret (cl, ok)
+}
+
+// pastecs::decmedian: `times` passes of a running median of 2 order + 1 points; ends 0 leaves NaN where the window runs off the series, 1 takes the median of the points inside
+fn decmedian(a: *mem.Arena, x: []const f64, ty: u8, order: usize, times: usize, ends: u8, filt: []f64, resid: []f64) -> err {
+    let n = x.len
+    let term = 2usize * order + 1usize
+    let (cur, e1) = mem.alloc[f64](a, n)
+    let (nxt, e2) = mem.alloc[f64](a, n)
+    let (win, e3) = mem.alloc[f64](a, term)
+    if e1 != ok || e2 != ok || e3 != ok { ret e1 }
+    var i = 0usize
+    while i < n {
+        cur[i] = x[i]
+        i += 1usize
+    }
+    var t = 0usize
+    while t < times {
+        i = 0usize
+        while i < n {
+            var cnt = 0usize
+            var hasna = false
+            var k = 0usize
+            while k < term {
+                // window k covers original index i + k - order; outside the series it is NA
+                var v = 0.0f64 / 0.0f64
+                if i + k >= order && i + k - order < n { v = cur[i + k - order] }
+                if v != v {
+                    hasna = true
+                } else {
+                    win[cnt] = v
+                    cnt += 1usize
+                }
+                k += 1usize
+            }
+            if (ends == 0u8 && hasna) || cnt == 0usize {
+                nxt[i] = 0.0f64 / 0.0f64
+            } else {
+                var q = 1usize
+                while q < cnt {
+                    let key = win[q]
+                    var r = q
+                    while r > 0usize && win[r - 1usize] > key {
+                        win[r] = win[r - 1usize]
+                        r -= 1usize
+                    }
+                    win[r] = key
+                    q += 1usize
+                }
+                if cnt % 2usize == 1usize { nxt[i] = win[cnt / 2usize] } else { nxt[i] = (win[cnt / 2usize - 1usize] + win[cnt / 2usize]) / 2.0f64 }
+            }
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            cur[i] = nxt[i]
+            i += 1usize
+        }
+        t += 1usize
+    }
+    i = 0usize
+    while i < n {
+        filt[i] = cur[i]
+        if ty == 0u8 { resid[i] = x[i] - cur[i] } else { resid[i] = x[i] / cur[i] }
+        i += 1usize
+    }
+    ret ok
+}
