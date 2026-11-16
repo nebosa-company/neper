@@ -15,6 +15,26 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (q, e1) = mem.alloc[f64](a, n)
     let (l, e2) = mem.alloc[f64](a, n)
     if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    if str.starts_with(c.name, "z_") {
+        let (zr, ze) = fd.fdrtool_normal(a, x[1usize..1usize + n], q, l)
+        if ze != ok { ret 0.0f64 / 0.0f64 }
+        let zn = c.name
+        if str.eq(zn, "z_eta0") { ret zr.eta0 }
+        if str.eq(zn, "z_cutoff") { ret zr.cutoff }
+        if str.eq(zn, "z_ncens") { ret f64(zr.ncens) }
+        if str.eq(zn, "z_sd") { ret zr.sd }
+        if str.eq(zn, "z_sdse") { ret zr.sd_se }
+        if str.eq(zn, "z_eta0se") { ret zr.eta0_se }
+        var zs = 0.0f64
+        var zi = 0usize
+        while zi < n {
+            var v = q[zi]
+            if str.starts_with(zn, "z_l_") { v = l[zi] }
+            if str.ends_with(zn, "_sum") { zs += v } else { zs += f64(zi + 1usize) * v }
+            zi += 1usize
+        }
+        ret zs
+    }
     let (r, e) = fd.fdrtool_pvalue(a, x[1usize..1usize + n], q, l)
     if e != ok { ret 0.0f64 / 0.0f64 }
     let nm = c.name

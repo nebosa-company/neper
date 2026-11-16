@@ -13,4 +13,17 @@ for (rep in 1:30) {
   add("eta0", a, r$param[1, 3]); add("cutoff", a, r$param[1, 1]); add("ncens", a, r$param[1, 2])
   add("q_sum", a, sum(r$qval)); add("q_w", a, sum(seq_len(n) * r$qval)); add("l_sum", a, sum(r$lfdr)); add("l_w", a, sum(seq_len(n) * r$lfdr))
 }
+#   statistic = "normal": args (n, x[n]) fn "z_eta0" "z_cutoff" "z_ncens" "z_sd" "z_sdse" "z_eta0se" "z_q_sum" "z_q_w" "z_l_sum" "z_l_w"
+for (rep in 1:30) {
+  n <- sample(300:1500, 1); frac <- runif(1, 0.05, 0.4); s0 <- runif(1, 0.8, 1.5)
+  na <- round(n * frac)
+  z <- c(rnorm(n - na, 0, s0), rnorm(na, sample(c(-3, 3, 4), 1), 1))
+  z <- if (rep %% 2 == 0) round(z, 3) else z
+  r <- tryCatch(suppressWarnings(fdrtool(z, statistic = "normal", plot = FALSE, verbose = FALSE)), error = function(e) NULL)
+  if (is.null(r)) next
+  a <- c(n, z)
+  add("z_eta0", a, r$param[1, 3]); add("z_cutoff", a, r$param[1, 1]); add("z_ncens", a, r$param[1, 2])
+  add("z_sd", a, r$param[1, 5]); cases[[length(cases) + 1]] <- case("z_sdse", a, r$param[1, 6], rel = 1e-6, abs = 1e-9)  # a fourth-order difference quotient of a sum near 1e3 over a step of 1e-4: its roundoff is about 1e-8; add("z_eta0se", a, r$param[1, 4])
+  add("z_q_sum", a, sum(r$qval)); add("z_q_w", a, sum(seq_along(z) * r$qval)); add("z_l_sum", a, sum(r$lfdr)); add("z_l_w", a, sum(seq_along(z) * r$lfdr))
+}
 emit("fdrtool", "fdrtool", list(cases))

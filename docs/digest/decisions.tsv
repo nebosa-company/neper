@@ -3549,4 +3549,5 @@ D6686	668	bridge sampler use_neff and error_measures; L391 closed
 D6687	1031	optFederov ported from FederovOpt.c, with the tie limit named
 D6688	1019	optMonteCarlo over the Fedorov search
 D6689	875	optBlock D criterion, which is the block design search
-D6690	496	L410 closed at its acceptance list
+D6690	497	L410 closed at its acceptance list
+D6690	625	fdrtool normal statistic; the Brent minimiser's eps
