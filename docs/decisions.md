@@ -47188,3 +47188,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6680 — fast.svd values and the n < p PCAgrid reduction; L357 closed
 
 **Decision.** `fast_svd_d` returns the singular values above corpcor's default or a given tolerance; R's three SVD routes (psmall, nsmall, plain) return the same values, and the vectors depend on LAPACK's signs, so they are not returned. `pca_grid_hd` follows R for n < p: SVD of t(x), the search on V D, loadings mapped back by U. R centres the reduced data after the reduction, so a centre of the original length is not applied (R warns and skips it); the oracle passes no centre for those cases and the caller centres otherwise. Centring and scaling stay with the caller. L357 is closed.
+
+## D6681 — fracdiff fit over the existing MINPACK lmder
+
+**Decision.** `fracdiff_fit.fracdf` ports `fracdf`, `dopt` (Brent), `pqopt`, `fdfilt` and `ajqp` and drives the ARMA coefficients through `minpacklm.nls_lm_der`, the same MINPACK iteration as fracdiff's embedded lmder, with the Jacobian callback re-evaluating the residuals at x so it needs no shared work array. As in the C code the returned ar, ma, `fnormMin` and noise variance are those of the last d evaluated, not of the best d, and `fdfilt`'s leftover `z__` (the last vk) is what is subtracted from the filtered series when p + q > 0. gamma comes from `nmath.gammafn`, not SLATEC's. `oracle_fracdiff_fit` equals R at 1e-6 on 131 values over 24 series, p 0..2, q 0..1, M 30 and 100, on Windows; Linux pending. The Hessian and covariance are not ported.
