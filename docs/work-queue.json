@@ -1043,10 +1043,10 @@
       "group": "CRAN parity",
       "order": 694,
       "title": "nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation",
-      "score": 0.08,
+      "score": 0.14,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree with nleqslv and multiroot on Windows, roots only; oracle_nleqslvpkg; Linux pending). Open: the global strategies and Broyden, termination codes, jacobian.full, gradient, hessian, uniroot.all, steady, maxLik, bbmle. Was: Open (CRAN ranks 337, 348, 393, 355; Rsolnp 357 is in L309). Mid. Acceptance, equal to R: nleqslv Newton and Broyden with global strategies (line search, double dogleg, pwl) and its termination codes; rootSolve multiroot, uniroot.all, steady, jacobian.full, gradient, hessian; maxLik with NR, BHHH, BFGS, NM and its standard errors; bbmle mle2, profile, confint and AICctab."
+      "evidence": "Partial (D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree with nleqslv and multiroot on Windows, roots only; oracle_nleqslvpkg; Linux pending). Open: the global strategies and Broyden, termination codes, jacobian.full, uniroot.all, steady, maxLik, bbmle. Was: Open (CRAN ranks 337, 348, 393, 355; Rsolnp 357 is in L309). Mid. Acceptance, equal to R: nleqslv Newton and Broyden with global strategies (line search, double dogleg, pwl) and its termination codes; rootSolve multiroot, uniroot.all, steady, jacobian.full, gradient, hessian; maxLik with NR, BHHH, BFGS, NM and its standard errors; bbmle mle2, profile, confint and AICctab."
     },
     {
       "id": "L361",

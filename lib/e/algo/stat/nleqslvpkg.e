@@ -2,7 +2,7 @@
 // forward-difference Jacobian, a backtracking line search on the residual norm and a Levenberg-Marquardt step when no damped Newton step reduces it. It reaches the root nleqslv and multiroot reach; the package's trust-region global strategies,
 // Broyden updates, termination codes and iteration counts are not reproduced.
 //
-// Not here: user functions, the pwl and double-dogleg strategies, Broyden, jacobian.full, gradient and hessian.
+// Also rootSolve::gradient and hessian (forward and centred, perturbation max(|x| 1e-8, 1e-8)) on two polynomial test functions. Not here: user functions, the pwl and double-dogleg strategies, Broyden, jacobian.full.
 
 use e.algo.stat.carlmtest as ols
 use e.math
@@ -177,4 +177,106 @@ fn solve(a: *mem.Arena, sys: usize, x0: []const f64, x: []f64) -> usize {
         it += 1usize
     }
     ret 0usize
+}
+
+// rootSolve::gradient and hessian on polynomial test functions (so the finite differences are bit-reproducible): function 0 is the scalar x1^3 x2 + 2 x2^2 - 3 x1 x2,
+// function 1 the pair (x1^2 x2 - x3, x1 + x2 x3^2) of three variables
+
+fn poly_dim(fid: usize) -> usize {
+    if fid == 1usize { ret 3usize }
+    ret 2usize
+}
+
+fn poly_out(fid: usize) -> usize {
+    if fid == 1usize { ret 2usize }
+    ret 1usize
+}
+
+fn poly_f(fid: usize, x: []const f64, out: []f64) {
+    if fid == 0usize {
+        out[0usize] = x[0usize] * x[0usize] * x[0usize] * x[1usize] + 2.0f64 * x[1usize] * x[1usize] - x[0usize] * x[1usize] * 3.0f64
+    } else {
+        out[0usize] = x[0usize] * x[0usize] * x[1usize] - x[2usize]
+        out[1usize] = x[0usize] + x[1usize] * x[2usize] * x[2usize]
+    }
+}
+
+fn perturb(v: f64) -> f64 {
+    var d = math.abs[f64](v) * 1.0e-8f64
+    if d < 1.0e-8f64 { d = 1.0e-8f64 }
+    ret d
+}
+
+// gradient(f, x, centered): the Nf by Nx matrix of finite differences into jac (row-major); xw is scratch of Nx values, f0 and f1 of Nf
+fn fd_gradient(fid: usize, x: []const f64, centered: bool, jac: []f64, xw: []f64, f0: []f64, f1: []f64) {
+    let nx = poly_dim(fid)
+    let nf = poly_out(fid)
+    var fb: [2]f64 = zero
+    var i = 0usize
+    while i < nx {
+        xw[i] = x[i]
+        i += 1usize
+    }
+    poly_f(fid, xw, f0)
+    var j = 0usize
+    while j < nx {
+        let d = perturb(x[j])
+        xw[j] = xw[j] + d
+        poly_f(fid, xw, f1)
+        if centered {
+            xw[j] = x[j] - d
+            poly_f(fid, xw, fb[0usize..2usize])
+        }
+        var r = 0usize
+        while r < nf {
+            var del = (f1[r] - f0[r]) / d
+            if centered { del = (del - (fb[r] - f0[r]) / d) / 2.0f64 }
+            jac[r * nx + j] = del
+            r += 1usize
+        }
+        xw[j] = x[j]
+        j += 1usize
+    }
+}
+
+// hessian(f, x, centered) of the scalar function 0: reference gradient forward, perturbed gradients as asked; into hess (2 by 2 row-major)
+fn fd_hessian(x: []const f64, centered: bool, hess: []f64) {
+    var xw: [2]f64 = zero
+    var f0: [1]f64 = zero
+    var f1: [1]f64 = zero
+    var ref: [2]f64 = zero
+    var g: [2]f64 = zero
+    fd_gradient(0usize, x, false, ref[0usize..2usize], xw[0usize..2usize], f0[0usize..1usize], f1[0usize..1usize])
+    var xp: [2]f64 = zero
+    var j = 0usize
+    while j < 2usize {
+        let d = perturb(x[j])
+        xp[0usize] = x[0usize]
+        xp[1usize] = x[1usize]
+        xp[j] = xp[j] + d
+        fd_gradient(0usize, xp[0usize..2usize], centered, g[0usize..2usize], xw[0usize..2usize], f0[0usize..1usize], f1[0usize..1usize])
+        var r = 0usize
+        var col: [2]f64 = zero
+        while r < 2usize {
+            col[r] = (g[r] - ref[r]) / d
+            r += 1usize
+        }
+        if centered {
+            xp[0usize] = x[0usize]
+            xp[1usize] = x[1usize]
+            xp[j] = x[j] - d
+            fd_gradient(0usize, xp[0usize..2usize], centered, g[0usize..2usize], xw[0usize..2usize], f0[0usize..1usize], f1[0usize..1usize])
+            r = 0usize
+            while r < 2usize {
+                col[r] = (col[r] - (g[r] - ref[r]) / d) / 2.0f64
+                r += 1usize
+            }
+        }
+        r = 0usize
+        while r < 2usize {
+            hess[r * 2usize + j] = col[r]
+            r += 1usize
+        }
+        j += 1usize
+    }
 }

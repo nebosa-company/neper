@@ -3351,4 +3351,5 @@ D6479	957	gmm: linear two-step estimator, iid and MDS weighting
 D6480	854	gmm: HAC weighting with five kernels
 D6481	1038	QCA: the minimal models of minimize()
 D6482	932	QCA: pof parameters of fit
-D6483	1007	nleqslv and multiroot: roots of fixed systems
+D6483	1008	nleqslv and multiroot: roots of fixed systems
+D6484	880	rootSolve: gradient and hessian

@@ -5,6 +5,7 @@ use e.algo.stat.nleqslvpkg as nl
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -17,6 +18,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let x = c.args
+        if str.eq(c.name, "grad") || str.eq(c.name, "hess") {
+            var gv = 0.0f64
+            if str.eq(c.name, "hess") {
+                var hs: [4]f64 = zero
+                nl.fd_hessian(x[4usize..6usize], x[1usize] == 1.0f64, hs[0usize..4usize])
+                gv = hs[usize(x[2usize]) * 2usize + usize(x[3usize])]
+            } else {
+                let fid = usize(x[0usize])
+                let nxx = nl.poly_dim(fid)
+                let nff = nl.poly_out(fid)
+                var jb: [6]f64 = zero
+                var xwb: [3]f64 = zero
+                var f0b: [2]f64 = zero
+                var f1b: [2]f64 = zero
+                nl.fd_gradient(fid, x[4usize..4usize + nxx], x[1usize] == 1.0f64, jb[0usize..6usize], xwb[0usize..3usize], f0b[0usize..2usize], f1b[0usize..2usize])
+                let _ = nff
+                gv = jb[usize(x[2usize]) * nxx + usize(x[3usize])]
+            }
+            if !oracle.agrees(gv, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, gv))
+                    let _ = io.print("\n")
+                }
+            }
+            at += 1usize
+            continue
+        }
         let sys = usize(x[0usize])
         let n = nl.dim_of(sys)
         let (root, e1) = mem.alloc[f64](a, n)

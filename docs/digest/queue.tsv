@@ -93,7 +93,7 @@ L339	library	0.16	634	bayestestR, performance and parameters: model summary indi
 L340	library	0.55	723	signal: filter design and spectral tools	Partial (D6183, D6184 filtfilt and freqz, D6400 sgolay central row, D6401 cheby1, D6402 cheby2, D6403 grpdelay, D6404 band-pass butter, D6443 fir2, D6444 fir1 band types, D6445 decimate, unwrap).
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
 L346	library	0	284	mice: imputation parity	Open (CRAN rank 293).
-L360	library	0.08	697	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree with nleqslv and multiroot on Windows, roots only;
+L360	library	0.14	727	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree with nleqslv and multiroot on Windows, roots only
 L361	library	0	272	segmented and strucchange: breakpoints and structural change	Open (CRAN ranks 338, 344).
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
 L363	library	0.3	807	DescTools: descriptive statistics and tests	Partial (D6429, D6430 table association measures, D6431 kappa, lambda, tau, OR, Q, D6446 BinomCI x11, D6447 Winsorize, HodgesLehmann, MedianCI, Trim, D6448 Cochran-Armitage, MH odds ratio, Breslow-Day

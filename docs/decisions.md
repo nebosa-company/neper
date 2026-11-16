@@ -46072,3 +46072,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.nleqslvpkg` is new: `system` (five fixed two- and three-equation systems), `solve` (Newton with a forward-difference Jacobian, a halving line search on the residual norm, and a Levenberg-Marquardt fallback when no damped Newton step reduces it; it stops at max |f| of 1e-10). A start that stalled the plain damped Newton in the three-variable system, where nleqslv's double-dogleg converges, is what the fallback is for. The package's trust-region strategies, Broyden updates, termination codes and iteration counts are not reproduced, only the root they reach.
 
 **Result.** `oracle_nleqslvpkg` agrees with nleqslv, and with multiroot where both converge, on 111 roots on Windows at rel and abs 1e-6, 60 random starts over five systems with the ones nleqslv does not converge on dropped. Broyden, the global strategies, jacobian.full, gradient, hessian, uniroot.all, steady, maxLik and bbmle are open; Linux pending. L360 is partial.
+
+## D6484 — rootSolve: gradient and hessian
+
+`e.algo.stat.nleqslvpkg` gains `fd_gradient` and `fd_hessian`, the finite-difference Jacobian and Hessian of rootSolve with its perturbation max(|x| 1e-8, 1e-8), forward or centred. The hessian takes its reference gradient forward even when centred is asked, as the package's source does. The test functions are polynomials written with products only: R's `^` goes through libm `pow`, whose last bit can differ from `x * x * x`, and a difference quotient with a 1e-8 step multiplies that by 1e8.
+
+**Result.** `oracle_nleqslvpkg` agrees with R on 471 cases on Windows, the 360 new ones at 1e-9: forward and centred gradients of a scalar and a two-equation function, and the forward and centred Hessian of the scalar one, over 30 points. uniroot.all, jacobian.full, steady, maxLik and bbmle are open; Linux pending. L360 stays partial.
