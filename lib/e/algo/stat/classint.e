@@ -1,9 +1,9 @@
-// The break rules of R's classInt::classIntervals that need no random numbers: fixed, sd, equal,
-// pretty, quantile (types 1 to 9), jenks, fisher, headtails, maximum, box, hclust (complete linkage)
-// and dpih, plus `find_cols` (the class of each value, left or right closed). Each rule answers the
+// The break rules of R classInt::classIntervals: fixed, sd, equal,
+// pretty, quantile (types 1 to 9), jenks, fisher, headtails, maximum, box, hclust (complete linkage),
+// dpih, kmeans (Hartigan-Wong with the R stream) and bclust (bagged clustering), plus `find_cols` (the class of each value, left or right closed). Each rule answers the
 // breaks, ascending.
 //
-// Not here: kmeans and bclust (R's Hartigan-Wong and bagged clustering with random starts), and the
+// Not here: the
 // sampling classInt imposes past 3000 values for jenks and fisher: the caller samples.
 
 use e.algo.rand.r as rng
