@@ -271,3 +271,4 @@ oracle_imputets
 oracle_pracma
 oracle_perfanalytics
 oracle_ismev
+oracle_learnbayes

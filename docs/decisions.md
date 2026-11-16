@@ -45328,3 +45328,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.ismev` fits gev.fit, gpd.fit (exceedances of a threshold) and gum.fit by Nelder-Mead on the package's negative log-likelihood (penalty 1e6 outside the support), from the package's starting values, with standard errors from a copy of optimhess (step 1e-3 on a central-difference gradient, symmetrised) inverted. The minimiser restarts until the value stops moving, so it lands on the likelihood optimum rather than on R's reltol 1e-8 stopping point; the oracle therefore compares parameters to 2e-2 and standard errors to 5e-2 relative, and the negative log-likelihood to 1e-6, instead of the 1e-9 used elsewhere. Not here: covariates and link functions, pp.fit, rlarg.fit, gev.rl and gpd.rl return levels, the profile likelihoods and the diagnostic plots.
 
 **Result.** `oracle_ismev` agrees with ismev on 153 cases on Windows at those tolerances; Linux pending. L425 is partial.
+
+## D6156 — LearnBayes: closed-form helpers
+
+`e.algo.stat.learnbayes` holds pbetap, discint (the set size and probability reached, ties ordered as R's ascending sort then reversal), mnormt.onesided (the one-sided Bayes factor), normal.select, beta.select (the package's K grid of 100 log values, bisection to 1e-4, linear approx of log K, result rounded to two digits as in R) and bfexch. Not here: laplace (it depends on optim), rejectsampling, importance sampling, the Gibbs and Metropolis helpers and the other book models.
+
+**Result.** `oracle_learnbayes` equals LearnBayes on 180 cases on Windows; Linux pending. L484 is partial.
