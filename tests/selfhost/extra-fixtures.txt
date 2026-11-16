@@ -293,6 +293,7 @@ oracle_aod
 oracle_drdid
 oracle_gstatpkg
 oracle_fieldspkg
+oracle_gamlssdist
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -330,3 +331,4 @@ oracle_aod
 oracle_drdid
 oracle_gstatpkg
 oracle_fieldspkg
+oracle_gamlssdist

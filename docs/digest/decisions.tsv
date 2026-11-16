@@ -3338,4 +3338,5 @@ D6466	638	DRDID: ipw_did_panel and std_ipw_did_panel
 D6467	607	DRDID: reg_did_rc
 D6468	875	gstat: variogram models, the empirical variogram and ordinary kriging
 D6469	605	fields: the Matern covariance and Exp.cov
-D6470	587	gstat: universal and simple kriging
+D6470	588	gstat: universal and simple kriging
+D6471	696	gamlss.dist: six families' densities, GU and LO p and q

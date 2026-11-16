@@ -156,7 +156,7 @@ L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
 L439	library	0	309	MCMCpack: Bayesian MCMC for common models	Open (CRAN rank 636).
 L455	library	0	290	geometry: Qhull in n dimensions	Open (CRAN rank 722).
 L463	library	0.25	784	actuar: actuarial science	Partial (D6143).
-L464	library	0	255	gamlss.dist: GAMLSS distribution families	Open (CRAN rank 788).
+L464	library	0.08	438	gamlss.dist: GAMLSS distribution families	Partial (D6471 GU, LO, GA, IG, BCCG, PE densities, LO p and q, GU q equal gamlss.dist on Windows;
 L467	library	0	280	hetGP: heteroskedastic Gaussian processes	Open (CRAN rank 784).
 L494	library	0	261	bayesm: Bayesian econometrics	Open (CRAN rank 829).
 L514	library	0	268	copula: dependence models	Open (CRAN rank 914).

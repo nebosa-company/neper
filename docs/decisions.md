@@ -45994,3 +45994,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.gstatpkg` gains `universal_krige` (the bordered semivariance system with the drift basis (1) or (1, x, y), prediction and variance) and `simple_krige` (known mean, on the covariance sill - gamma with the full nugget-plus-partial-sill variance at lag 0).
 
 **Result.** `oracle_gstatpkg` equals gstat on 443 cases on Windows, the 60 new ones at rel 1e-8 over 15 data sets of 15 to 40 points with a planar drift. The other model families, anisotropy, nesting, fitting and co-kriging are open; Linux pending. L437 stays partial.
+
+## D6471 — gamlss.dist: six families' densities, GU and LO p and q
+
+`e.algo.stat.gamlssdist` is new: densities of GU, LO, GA, IG, BCCG and PE in the package's (mu, sigma, nu) parametrization, and p and q of LO and q of GU. `pGU` is left out on purpose: this release of gamlss.dist ends it with `cdf[q >= -Inf] <- 0`, so it returns 0 for every finite argument, which is a defect in the package and not a behaviour to copy.
+
+**Result.** `oracle_gamlssdist` equals gamlss.dist on 1020 cases on Windows at rel 1e-9, 30 parameter draws at four points each (BCCG with either sign of nu). The other 90-odd families, random numbers, moments and link functions are open; Linux pending. L464 is partial.
