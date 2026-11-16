@@ -45466,3 +45466,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pamcluster` gains daisy_gower for numeric (range-scaled absolute difference) and nominal (0 or 1) columns with missing values: the dissimilarity of two rows is the sum over the columns observed in both of the column's contribution divided by the number of such columns. It equals daisy(metric = "gower") on random mixed data with missing entries. Not here: ordinal and asymmetric-binary columns, column weights, the euclidean and manhattan metrics with standardisation, and the types argument.
 
 **Result.** `oracle_pamcluster` equals cluster on 90 cases on Windows; Linux pending. L335 stays partial.
+
+## D6179 — cluster: silhouette widths
+
+`e.algo.stat.pamcluster` gains silhouette: for every observation the mean dissimilarity to the rest of its own cluster (a) and the smallest mean dissimilarity to another cluster (b), width (b - a) / max(a, b), and 0 for a singleton cluster, exactly as cluster::silhouette does. Not here: the per-cluster summaries and the neighbour column, the plot and silhouette of a pam or clara object.
+
+**Result.** `oracle_pamcluster` equals cluster on 114 cases on Windows; Linux pending. L335 stays partial.

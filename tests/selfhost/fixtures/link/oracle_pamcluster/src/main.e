@@ -46,8 +46,45 @@ fn daisy_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret s
 }
 
+fn sil_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let k = usize(x[1usize])
+    let (d, e1) = mem.alloc[f64](a, n * n)
+    if e1 != ok { os.exit(5) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            let dx = x[2usize + 2usize * i] - x[2usize + 2usize * j]
+            let dy = x[3usize + 2usize * i] - x[3usize + 2usize * j]
+            d[i * n + j] = math.sqrt[f64](dx * dx + dy * dy)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (cl, e2) = mem.alloc[usize](a, n)
+    if e2 != ok { os.exit(6) }
+    i = 0usize
+    while i < n {
+        cl[i] = usize(x[2usize + 2usize * n + i])
+        i += 1usize
+    }
+    let (w, e3) = mem.alloc[f64](a, n)
+    if e3 != ok { os.exit(7) }
+    if pc.silhouette(a, d, n, cl, k, w) != ok { os.exit(8) }
+    var s = 0.0f64
+    i = 0usize
+    while i < n {
+        if str.eq(c.name, "sil") { s += w[i] * f64(i + 1usize) } else { s += w[i] / f64(n) }
+        i += 1usize
+    }
+    ret s
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "daisy") { ret daisy_case(a, c) }
+    if str.eq(c.name, "sil") || str.eq(c.name, "silavg") { ret sil_case(a, c) }
     let x = c.args
     let n = usize(x[0usize])
     let k = usize(x[1usize])

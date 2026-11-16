@@ -207,3 +207,54 @@ fn daisy_gower(a: *mem.Arena, x: []const f64, n: usize, p: usize, kind: []const 
     }
     ret ok
 }
+
+// silhouette widths of a clustering with labels 1..k from a full dissimilarity matrix; a singleton cluster has width 0
+fn silhouette(a: *mem.Arena, d: []const f64, n: usize, cl: []const usize, k: usize, out: []f64) -> err {
+    let (size, e) = mem.alloc[f64](a, k)
+    if e != ok { ret e }
+    var i = 0usize
+    while i < k {
+        size[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        size[cl[i] - 1usize] += 1.0f64
+        i += 1usize
+    }
+    let (sums, e2) = mem.alloc[f64](a, k)
+    if e2 != ok { ret e2 }
+    i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < k {
+            sums[c] = 0.0f64
+            c += 1usize
+        }
+        var j = 0usize
+        while j < n {
+            if j != i { sums[cl[j] - 1usize] += d[i * n + j] }
+            j += 1usize
+        }
+        let own = cl[i] - 1usize
+        if size[own] <= 1.0f64 {
+            out[i] = 0.0f64
+        } else {
+            let ai = sums[own] / (size[own] - 1.0f64)
+            var bi = 1.0e300f64
+            c = 0usize
+            while c < k {
+                if c != own && size[c] > 0.0f64 {
+                    let m = sums[c] / size[c]
+                    if m < bi { bi = m }
+                }
+                c += 1usize
+            }
+            var mx = ai
+            if bi > mx { mx = bi }
+            out[i] = (bi - ai) / mx
+        }
+        i += 1usize
+    }
+    ret ok
+}

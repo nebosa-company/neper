@@ -28,4 +28,11 @@ for (rep in 1:12) {
   enc <- Mna; enc[is.na(enc)] <- -999999
   add("daisy", c(n, p, 0, ty, as.vector(t(enc))), sum(as.vector(d[lower.tri(d)]) * seq_len(sum(lower.tri(d)))))
 }
+for (rep in 1:12) {
+  n <- sample(12:40, 1); k <- sample(2:5, 1)
+  X <- matrix(round(rnorm(n * 2) * 3, 4), n, 2); cl <- sample(rep(1:k, length.out = n))
+  s <- silhouette(cl, dist(X))
+  add("sil", c(n, k, as.vector(t(X)), cl), sum(s[, 3] * seq_len(n)))
+  add("silavg", c(n, k, as.vector(t(X)), cl), mean(s[, 3]))
+}
 emit("pamcluster", "cluster", list(cases))
