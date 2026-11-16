@@ -1,7 +1,6 @@
 id	category	score	evidence_bytes	title	status
 L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
 L391	library	0	183	bridgesampling: marginal likelihoods	Open (CRAN rank 496).
-L399	library	0	328	pwr: power analysis	Open (CRAN rank 558).
 L402	library	0	220	ica: independent component analysis	Open (CRAN rank 548).
 L403	library	0	245	rngtools and doRNG: parallel random streams	Open (CRAN ranks 538, 576).
 L404	library	0	238	mlbench: benchmark data generators	Open (CRAN rank 547).
@@ -25,6 +24,7 @@ L386	library	0.6	432	SQUAREM: accelerated fixed-point iteration	Partial (D6037).
 L385	library	0.6	390	hexbin: hexagonal binning	Partial (D6038).
 L388	library	0.4	381	fracdiff: fractional differencing and ARFIMA	Partial (D6039).
 L392	library	0.3	497	dqrng: random number generators	Partial (D6041).
+L399	library	0.4	644	pwr: power analysis	Partial (D6042).
 L406	library	0	263	DEoptimR: differential evolution	Open (CRAN rank 517).
 L410	library	0	230	AlgDesign: optimal experimental designs	Open (CRAN rank 586).
 L420	library	0	198	minpack.lm: Levenberg-Marquardt least squares	Open (CRAN rank 620).

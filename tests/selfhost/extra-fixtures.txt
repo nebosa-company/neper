@@ -178,3 +178,4 @@ oracle_hexbin
 oracle_fracdiff
 oracle_nnls
 oracle_dqrng
+oracle_pwr

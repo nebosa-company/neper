@@ -26,17 +26,6 @@
       "evidence": "Open (CRAN rank 496). Small. Acceptance, equal to bridgesampling under set.seed: bridge_sampler with the normal and warp3 methods, the iterative scheme, bf, post_prob, error_measures."
     },
     {
-      "id": "L399",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 560,
-      "title": "pwr: power analysis",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 558). Small. e.algo.stat.infer has power_t and power_z. Acceptance, equal to pwr: pwr.t.test, pwr.t2n.test, pwr.2p.test, pwr.2p2n.test, pwr.p.test, pwr.norm.test, pwr.anova.test, pwr.chisq.test, pwr.r.test and pwr.f2.test solving for any one of n, power, effect size and alpha, plus ES.h, ES.w1, ES.w2, cohen.ES."
-    },
-    {
       "id": "L402",
       "category": "library",
       "group": "CRAN parity",
@@ -288,6 +277,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6041). xoroshiro128+, xoroshiro128++, xoshiro256+, xoshiro256++ and dqrunif after dqset.seed equal dqrng 0.4.1 on Windows (Linux pending). Open: pcg64, threefry, dqrnorm and dqrexp (ziggurat), dqsample, streams, get_state. Was: Open (CRAN rank 461). Small. Verify which generators e.algo.rand already has. Acceptance, equal to dqrng value for value: xoshiro256++, xoroshiro128+, pcg64 and threefry streams, dqrunif, dqrnorm, dqrexp, dqsample, dqrng_get_state, seeds and stream selection."
+    },
+    {
+      "id": "L399",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 560,
+      "title": "pwr: power analysis",
+      "score": 0.4,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6042). pwr.p.test, pwr.2p.test, pwr.2p2n.test, pwr.norm.test (power and every solved parameter), pwr.r.test power and ES.h equal pwr 1.3-0 on Windows (Linux pending). Open: pwr.t.test, pwr.t2n.test, pwr.chisq.test, pwr.anova.test, pwr.f2.test (noncentral distributions), solving pwr.r.test, cohen.ES. Was: Open (CRAN rank 558). Small. e.algo.stat.infer has power_t and power_z. Acceptance, equal to pwr: pwr.t.test, pwr.t2n.test, pwr.2p.test, pwr.2p2n.test, pwr.p.test, pwr.norm.test, pwr.anova.test, pwr.chisq.test, pwr.r.test and pwr.f2.test solving for any one of n, power, effect size and alpha, plus ES.h, ES.w1, ES.w2, cohen.ES."
     },
     {
       "id": "L406",
