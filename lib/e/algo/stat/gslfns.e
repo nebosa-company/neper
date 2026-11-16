@@ -129,3 +129,98 @@ fn hzeta(s: f64, q: f64) -> f64 {
     sum += c7 * poch * pw
     ret sum
 }
+
+fn euler_gamma() -> f64 { ret 0.577215664901532860606512090082f64 }
+
+// E_1(x), x > 0: the power series up to x = 1, the Lentz continued fraction beyond
+fn expint_e1(x: f64) -> f64 {
+    if x <= 1.0f64 {
+        var s = 0.0f64
+        var t = 1.0f64
+        var k = 1usize
+        while k < 200usize {
+            t = t * (0.0f64 - x) / f64(k)
+            let term = t / f64(k)
+            s += term
+            if math.abs[f64](term) < 1.0e-18f64 { break }
+            k += 1usize
+        }
+        ret 0.0f64 - euler_gamma() - math.log[f64](x) - s
+    }
+    var b = x + 1.0f64
+    var c = 1.0e300f64
+    var d = 1.0f64 / b
+    var h = d
+    var i = 1usize
+    while i < 500usize {
+        let an = 0.0f64 - f64(i) * f64(i)
+        b += 2.0f64
+        d = 1.0f64 / (an * d + b)
+        c = b + an / c
+        let del = c * d
+        h = h * del
+        if math.abs[f64](del - 1.0f64) < 1.0e-16f64 { break }
+        i += 1usize
+    }
+    ret h * math.exp[f64](0.0f64 - x)
+}
+
+// Ei(x): the series for x > 0, minus E_1(-x) for x < 0
+fn expint_ei(x: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 - expint_e1(0.0f64 - x) }
+    var s = 0.0f64
+    var t = 1.0f64
+    var k = 1usize
+    while k < 500usize {
+        t = t * x / f64(k)
+        let term = t / f64(k)
+        s += term
+        if term < s * 1.0e-17f64 { break }
+        k += 1usize
+    }
+    ret euler_gamma() + math.log[f64](x) + s
+}
+
+// Dawson's integral F(x) = exp(-x^2) integral_0^x exp(t^2) dt by Rybicki's sum over odd multiples of h = 0.2, whose error is below e^-240
+fn dawson(x: f64) -> f64 {
+    let h = 0.2f64
+    let n0 = 2.0f64 * math.floor[f64](0.5f64 * x / h + 0.5f64)
+    var s = 0.0f64
+    var m = -61i64
+    while m <= 61i64 {
+        let n = n0 + f64(m)
+        let z = x - n * h
+        s += math.exp[f64](0.0f64 - z * z) / n
+        m += 2i64
+    }
+    ret s / 1.7724538509055160273f64
+}
+
+// the Clausen function Cl_2(x) for 0 < x <= 1.5 by its Bernoulli-number series
+fn clausen(x: f64) -> f64 {
+    var s = x - x * math.log[f64](x)
+    var pw = x
+    var fact = 1.0f64
+    var k = 1usize
+    while k <= 10usize {
+        pw = pw * x * x
+        fact = fact * f64(2usize * k) * f64(2usize * k + 1usize)
+        s += bern(k) * pw / (f64(2usize * k) * fact)
+        k += 1usize
+    }
+    ret s
+}
+
+// |B_2k| for k = 1 .. 10
+fn bern(k: usize) -> f64 {
+    if k == 1usize { ret 1.0f64 / 6.0f64 }
+    if k == 2usize { ret 1.0f64 / 30.0f64 }
+    if k == 3usize { ret 1.0f64 / 42.0f64 }
+    if k == 4usize { ret 1.0f64 / 30.0f64 }
+    if k == 5usize { ret 5.0f64 / 66.0f64 }
+    if k == 6usize { ret 691.0f64 / 2730.0f64 }
+    if k == 7usize { ret 7.0f64 / 6.0f64 }
+    if k == 8usize { ret 3617.0f64 / 510.0f64 }
+    if k == 9usize { ret 43867.0f64 / 798.0f64 }
+    ret 174611.0f64 / 330.0f64
+}

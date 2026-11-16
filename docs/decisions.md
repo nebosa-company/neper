@@ -45922,3 +45922,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.gslfns` is new: `bessel_knu` (trapezoid on the integral representation, any real order), `bessel_inu` (all-positive power series), `bessel_jn` (periodic trapezoid for integer order), `lambert_w` (Halley on branches 0 and -1) and `hzeta` (25 explicit terms plus the Euler-Maclaurin tail). `e.algo.stat.ghyp` now calls `bessel_knu` instead of carrying its own copy.
 
 **Result.** `oracle_gslfns` equals gsl on 280 cases on Windows at rel 1e-9, and `oracle_ghyp` still passes. Y, the scaled forms, Airy, elliptic, hypergeometric, Legendre, Dawson, Fermi-Dirac, Coulomb, Clausen, dilogarithm, exponential integrals and the error estimates are open; I stops being safe past x of about 700; Linux pending. L417 is partial.
+
+## D6459 — gsl: exponential integrals, Dawson and Clausen
+
+`e.algo.stat.gslfns` gains `expint_e1` (series to x = 1, Lentz continued fraction beyond), `expint_ei` (series, and minus E1 for negative x), `dawson` (Rybicki's sum over odd multiples of 0.2) and `clausen` (Bernoulli-number series for 0 < x <= 1.5).
+
+**Result.** `oracle_gslfns` equals gsl on 430 cases on Windows at rel 1e-9, 150 of them new, E1 and Ei over (0.05, 30), Dawson over (-8, 8) and Clausen over (0.05, 1.5); Linux pending. L417 stays partial.

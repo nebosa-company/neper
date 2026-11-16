@@ -16,6 +16,10 @@ fn answer(c: *const oracle.Case) -> f64 {
     if str.eq(k, "jn") { ret gs.bessel_jn(i64(x[0usize]), x[1usize]) }
     if str.eq(k, "w0") { ret gs.lambert_w(x[0usize], 0i64) }
     if str.eq(k, "wm1") { ret gs.lambert_w(x[0usize], 0i64 - 1i64) }
+    if str.eq(k, "e1") { ret gs.expint_e1(x[0usize]) }
+    if str.eq(k, "ei") { ret gs.expint_ei(x[0usize]) }
+    if str.eq(k, "dawson") { ret gs.dawson(x[0usize]) }
+    if str.eq(k, "clausen") { ret gs.clausen(x[0usize]) }
     if str.eq(k, "hzeta") { ret gs.hzeta(x[0usize], x[1usize]) }
     ret gs.hzeta(x[0usize], 1.0f64)
 }
