@@ -168,3 +168,92 @@ fn mutinfo_direct(a: *mem.Arena, x: []const f64, p1: usize, y: []const f64, p2: 
     }
     ret (digamma_int(n) + digamma_int(k) - tot / f64(n), ok)
 }
+
+// the k nearest rows of x (n by p, column-major) to each query row of q (m by p, column-major): 1-based indices and distances,
+// m by k column-major, ascending distance, ties by row index; `same` leaves query i's own row out (get.knn)
+fn knn_index(a: *mem.Arena, x: []const f64, n: usize, q: []const f64, m: usize, p: usize, k: usize, same: bool, idx: []i64, dist: []f64) -> err {
+    let (d, e) = mem.alloc[f64](a, n)
+    let (o, oe) = mem.alloc[usize](a, n)
+    if e != ok { ret e }
+    if oe != ok { ret oe }
+    var i = 0usize
+    while i < m {
+        var cnt = 0usize
+        var j = 0usize
+        while j < n {
+            if !(same && j == i) {
+                var s = 0.0f64
+                var c = 0usize
+                while c < p {
+                    let t = q[c * m + i] - x[c * n + j]
+                    s += t * t
+                    c += 1usize
+                }
+                d[cnt] = math.sqrt[f64](s)
+                o[cnt] = j
+                cnt += 1usize
+            }
+            j += 1usize
+        }
+        // insertion of the k smallest, stable by index
+        var r = 0usize
+        while r < k && r < cnt {
+            var best = r
+            var t = r + 1usize
+            while t < cnt {
+                if d[t] < d[best] { best = t }
+                t += 1usize
+            }
+            let dv = d[best]
+            let ov = o[best]
+            d[best] = d[r]
+            o[best] = o[r]
+            d[r] = dv
+            o[r] = ov
+            idx[r * m + i] = i64(ov + 1usize)
+            dist[r * m + i] = dv
+            r += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// knn.reg predictions: the mean of y over the k nearest rows (R's rowMeans, a long double sum divided by k)
+fn knn_reg(a: *mem.Arena, x: []const f64, n: usize, q: []const f64, m: usize, p: usize, y: []const f64, k: usize, same: bool, pred: []f64) -> err {
+    let (idx, e1) = mem.alloc[i64](a, m * k)
+    let (dist, e2) = mem.alloc[f64](a, m * k)
+    let (v, e3) = mem.alloc[f64](a, k)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    let ke = knn_index(a, x, n, q, m, p, k, same, idx, dist)
+    if ke != ok { ret ke }
+    var i = 0usize
+    while i < m {
+        var r = 0usize
+        while r < k {
+            v[r] = y[usize(idx[r * m + i]) - 1usize]
+            r += 1usize
+        }
+        pred[i] = lsum_k(v) / f64(k)
+        i += 1usize
+    }
+    ret ok
+}
+
+fn lsum_k(v: []const f64) -> f64 {
+    var hi = 0.0f64
+    var lo = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        let xv = v[i]
+        let t = hi + xv
+        var e = 0.0f64
+        if math.abs[f64](hi) >= math.abs[f64](xv) { e = (hi - t) + xv } else { e = (xv - t) + hi }
+        hi = t
+        lo += e
+        i += 1usize
+    }
+    ret hi + lo
+}

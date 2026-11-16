@@ -244,3 +244,5 @@ oracle_urca2
 oracle_johansen
 oracle_tsboot
 oracle_boot3
+oracle_fnn2
+oracle_classlvq
