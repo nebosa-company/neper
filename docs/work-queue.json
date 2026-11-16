@@ -20,10 +20,10 @@
       "group": "CRAN parity",
       "order": 550,
       "title": "mvtnorm: multivariate normal and t probabilities and quantiles",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 130). Mid. Acceptance: pmvnorm and pmvt for the Genz-Bretz (seeded QMC, equal to R at its stated abseps), Miwa and TVPACK algorithms, qmvnorm and qmvt for every tail and the equicoordinate form, dmvnorm, dmvt, rmvnorm (equal to R value for value under set.seed, chol, eigen and svd methods), rmvt, and the lower, upper and correlation inputs R accepts."
+      "evidence": "Partial (D6025). dmvnorm, dmvt, rmvnorm (eigen, svd, chol) and rmvt equal mvtnorm 1.4.2 on both hosts. Open: pmvnorm and pmvt (Genz-Bretz mvt.f, Miwa, TVPACK), qmvnorm and qmvt. Was: Open (CRAN rank 130). Mid. Acceptance: pmvnorm and pmvt for the Genz-Bretz (seeded QMC, equal to R at its stated abseps), Miwa and TVPACK algorithms, qmvnorm and qmvt for every tail and the equicoordinate form, dmvnorm, dmvt, rmvnorm (equal to R value for value under set.seed, chol, eigen and svd methods), rmvt, and the lower, upper and correlation inputs R accepts."
     },
     {
       "id": "L302",

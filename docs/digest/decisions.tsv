@@ -3096,4 +3096,5 @@ D6020	927	classInt breaks follow R's quantile fuzz and its seq probabilities
 D6021	1022	classInt kmeans, hclust and dpih are ported, bclust waits
 D6022	1172	xts periods are endpoints over UTC keys, and align.time always moves forward
 D6023	1125	proxy measures are the native value, with the later row first
-D6024	1342	HCL palettes follow colorspace's own LUV path, and an out-of-gamut colour is NA by its rounded byte
+D6024	1343	HCL palettes follow colorspace's own LUV path, and an out-of-gamut colour is NA by its rounded byte
+D6025	1019	mvtnorm densities and draws: the Cholesky route, and a symmetric square root for eigen and svd
