@@ -2,7 +2,9 @@
 //
 // Not here: the multiple-chain diagnostics (gelman.diag, geweke.diag, heidel.diag, raftery.diag), HPDinterval and cramer.test.
 
+use e.algo.stat.mass as ms
 use e.math
+use e.math.dist as dist
 use e.math.nmath_beta as nb
 use e.mem
 
@@ -242,4 +244,106 @@ fn hpd(a: *mem.Arena, x: []const f64, prob: f64) -> (f64, f64) {
         i += 1usize
     }
     ret (s[best], s[best + gap])
+}
+
+// raftery.diag(x, q, r, s, converge.eps) for one series (thin 1): (M, N, Nmin, I) where I is signif(iratio, 3); NaN where the series is shorter than Nmin
+fn raftery(a: *mem.Arena, x: []const f64, q: f64, r: f64, s: f64, eps: f64) -> (f64, f64, f64, f64, err) {
+    let nan = 0.0f64 / 0.0f64
+    let n = x.len
+    let phi = dist.qnorm(0.5f64 * (1.0f64 + s), 0.0f64, 1.0f64, true, false)
+    let nmin = math.ceil[f64](q * (1.0f64 - q) * phi * phi / (r * r))
+    if nmin > f64(n) { ret (nan, nan, nmin, nan, ok) }
+    let (srt, e0) = mem.alloc[f64](a, n)
+    let (dich, e1) = mem.alloc[usize](a, n)
+    if e0 != ok { ret (nan, nan, nan, nan, e0) }
+    if e1 != ok { ret (nan, nan, nan, nan, e1) }
+    var i = 0usize
+    while i < n {
+        srt[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let t = srt[i]
+        var j = i
+        while j > 0usize && srt[j - 1usize] > t {
+            srt[j] = srt[j - 1usize]
+            j -= 1usize
+        }
+        srt[j] = t
+        i += 1usize
+    }
+    let quant = ms.quant7(srt, q)
+    i = 0usize
+    while i < n {
+        if x[i] <= quant { dich[i] = 1usize } else { dich[i] = 0usize }
+        i += 1usize
+    }
+    var kthin = 0usize
+    var bic = 1.0f64
+    var nd = 0usize
+    var tc: [8]f64 = zero
+    var tr: [4]f64 = zero
+    while bic >= 0.0f64 {
+        kthin += 1usize
+        // the thinned series: every kthin-th starting at 1
+        nd = (n - 1usize) / kthin + 1usize
+        var m = 0usize
+        while m < 8usize {
+            tc[m] = 0.0f64
+            m += 1usize
+        }
+        m = 0usize
+        while m < 4usize {
+            tr[m] = 0.0f64
+            m += 1usize
+        }
+        var k = 0usize
+        while k + 2usize < nd {
+            let a1 = dich[k * kthin]
+            let a2 = dich[(k + 1usize) * kthin]
+            let a3 = dich[(k + 2usize) * kthin]
+            tc[a1 * 4usize + a2 * 2usize + a3] += 1.0f64
+            k += 1usize
+        }
+        var g2 = 0.0f64
+        var i1 = 0usize
+        while i1 < 2usize {
+            var i2 = 0usize
+            while i2 < 2usize {
+                var i3 = 0usize
+                while i3 < 2usize {
+                    let cnt = tc[i1 * 4usize + i2 * 2usize + i3]
+                    if cnt != 0.0f64 {
+                        let rowsum = tc[i1 * 4usize + i2 * 2usize] + tc[i1 * 4usize + i2 * 2usize + 1usize]
+                        let colsum = tc[i2 * 2usize + i3] + tc[4usize + i2 * 2usize + i3]
+                        let mid = tc[i2 * 2usize] + tc[i2 * 2usize + 1usize] + tc[4usize + i2 * 2usize] + tc[4usize + i2 * 2usize + 1usize]
+                        let fitted = rowsum * colsum / mid
+                        g2 += cnt * math.log[f64](cnt / fitted) * 2.0f64
+                    }
+                    i3 += 1usize
+                }
+                i2 += 1usize
+            }
+            i1 += 1usize
+        }
+        bic = g2 - math.log[f64](f64(nd - 2usize)) * 2.0f64
+    }
+    var k2 = 0usize
+    while k2 + 1usize < nd {
+        tr[dich[k2 * kthin] * 2usize + dich[(k2 + 1usize) * kthin]] += 1.0f64
+        k2 += 1usize
+    }
+    let alpha = tr[1usize] / (tr[0usize] + tr[1usize])
+    let beta = tr[2usize] / (tr[2usize] + tr[3usize])
+    var mxab = alpha
+    if beta > mxab { mxab = beta }
+    let tempburn = math.log[f64](eps * (alpha + beta) / mxab) / math.log[f64](math.abs[f64](1.0f64 - alpha - beta))
+    let nburn = math.ceil[f64](tempburn) * f64(kthin)
+    let tempprec = ((2.0f64 - alpha - beta) * alpha * beta * phi * phi) / ((alpha + beta) * (alpha + beta) * (alpha + beta) * r * r)
+    let nkeep = math.ceil[f64](tempprec) * f64(kthin)
+    let iratio = (nburn + nkeep) / nmin
+    // signif(iratio, 3)
+    let mag = math.pow[f64](10.0f64, 2.0f64 - math.floor[f64](math.log10[f64](math.abs[f64](iratio))))
+    ret (nburn, nkeep + nburn, nmin, math.round[f64](iratio * mag) / mag, ok)
 }

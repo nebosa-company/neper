@@ -3469,4 +3469,5 @@ D6597	444	SuppDists: ghyper
 D6594	998	posterior: rhat, ess_bulk, ess_tail, mcse_mean
 D6595	755	loo: waic and PSIS-LOO
 D6596	397	loo: loo_compare
-D6610	937	mcmc: metrop
+D6610	938	mcmc: metrop
+D6597	660	coda: raftery.diag

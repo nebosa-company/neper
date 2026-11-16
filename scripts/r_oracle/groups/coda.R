@@ -20,4 +20,10 @@ for (rep in 1:20) {
   add("gp", a, g$psrf[1, 1]); add("gu", a, g$psrf[1, 2])
 }
 for (rep in 1:20) { n <- sample(c(50, 200, 1000), 1); x <- if (rep %% 2) rgamma(n, 2) else rnorm(n); pr <- sample(c(0.8, 0.9, 0.95), 1); h <- HPDinterval(mcmc(x), prob = pr); add("hl", c(n, x, pr), h[1, 1]); add("hu", c(n, x, pr), h[1, 2]) }
+# raftery.diag: ("rf_m" "rf_n" "rf_nmin" "rf_i"): args (n, x, q, r, s)
+for (rep in 1:20) {
+  n <- sample(c(1000, 3000, 6000), 1); x <- as.vector(arima.sim(list(ar = runif(1, 0, 0.9)), n)); q <- sample(c(0.025, 0.1, 0.5), 1); r <- sample(c(0.005, 0.01), 1); s <- sample(c(0.9, 0.95), 1)
+  rd <- tryCatch(raftery.diag(mcmc(x), q = q, r = r, s = s), error = function(e) NULL); if (is.null(rd) || is.character(rd$resmatrix)) next
+  a <- c(n, x, q, r, s); m <- rd$resmatrix[1, ]; add("rf_m", a, m["M"]); add("rf_n", a, m["N"]); add("rf_nmin", a, m["Nmin"]); add("rf_i", a, m["I"])
+}
 emit("coda", "coda", list(cases))

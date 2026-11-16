@@ -23,6 +23,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "hl") { ret hl }
         ret hu
     }
+    if str.eq(c.name, "rf_m") || str.eq(c.name, "rf_n") || str.eq(c.name, "rf_nmin") || str.eq(c.name, "rf_i") {
+        let rn = usize(x[0usize])
+        let (rm, rnn, rmin, ri, re) = cd.raftery(a, x[1usize..1usize + rn], x[1usize + rn], x[2usize + rn], x[3usize + rn], 0.001f64)
+        if re != ok { os.exit(8) }
+        if str.eq(c.name, "rf_m") { ret rm }
+        if str.eq(c.name, "rf_n") { ret rnn }
+        if str.eq(c.name, "rf_nmin") { ret rmin }
+        ret ri
+    }
     let n = usize(x[0usize])
     let s = x[1usize..1usize + n]
     let lm = usize(x[1usize + n])

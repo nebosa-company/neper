@@ -46784,3 +46784,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `mcmcpkg.metrop` reproduces `mcmc::metrop` on three fixed log densities (standard normal, normal plus a quartic penalty, Laplace): `blen` states per batch each `nspac` proposals apart, proposals `current + scale * rnorm` in coordinate order, an uphill move accepted without a uniform draw and a downhill one by `u < exp(delta)` with `u` drawn only then (testing the alternative of always drawing a uniform against R showed it consumes the stream differently), batch means, per-batch acceptance rates and the final state. Found by replicating the loop in R with set.seed and comparing to the package's output.
 
 **Result.** `oracle_mcmc` agrees with mcmc on 90 values (30 runs, three summaries each) on Windows at 1e-9; Linux pending. L448 stays partial: user densities, `outfun`, morph, temper and initseq. Decision numbers D6600 and up are mine from now on, to keep clear of the other session's.
+
+## D6597 — coda: raftery.diag
+
+**Decision.** `raftery` follows raftery.diag for one series: the dichotomised draws `x <= quantile(x, q)`, the thinning k raised until the BIC of the second-order against the first-order Markov chain (the three-way transition counts) turns negative, the two-state chain's alpha and beta from the thinned series, then burn-in, total and the dependence factor `(M + N)/Nmin` rounded to 3 significant digits.
+
+**Result.** `oracle_coda` agrees with coda on 20 raftery values on Windows (240 cases in all); Linux pending. heidel.diag needs the Cramer-von Mises distribution function (pcramer) and is not ported; L299 stays at 0.55.
