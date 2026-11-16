@@ -35,7 +35,7 @@ L387	library	0.3	565	lmom and gld: L-moments and the generalized lambda distribu
 L389	library	0.35	788	vcd and effectsize: categorical association and effect sizes	Partly done (D6101): e.algo.stat.vcdeffect has assocstats, Kappa with weights and errors, cohens_d, hedges_g, glass_delta, rank_biserial, cliffs_delta and one-way eta, omega, epsilon squared, equal to
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
 L401	library	0.3	629	geosphere: geodesic and spherical computations	Partial (D6147).
-L407	library	0	289	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Open (CRAN ranks 592, 555;
+L407	library	0.15	464	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial (D6457 dghyp, dnig, dhyperb, dskewlap equal GeneralizedHyperbolic on Windows;
 L408	library	0.8	844	PerformanceAnalytics: portfolio risk and return	Partial (D6153, D6154 benchmark-relative: CAPM beta and alpha, TrackingError, InformationRatio, OmegaSharpeRatio, UpDownRatios;
 L409	library	0.2	390	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids equal arm on Windows;
 L411	library	0.6	637	DHARMa: simulated residual diagnostics	Partial (D6173, D6174 KS p value, D6175 testZeroInflation and testDispersion).

@@ -45910,3 +45910,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.ml.cluster.density` gains `knn_list`, `snn_shared` and `frnn_count`. sNN's shared count for a neighbour j of i is the common members of the two k-neighbour lists plus one when i is in j's list (checked against sNN on 4,560 pairs in R before porting); sNN sorts its own id columns by shared count, so the oracle queries by kNN position.
 
 **Result.** `oracle_dbscanpkg` equals dbscan on 485 cases on Windows, 225 of them new over sNN, frNN counts and frNN distance sums; Linux pending. L358 stays partial.
+
+## D6457 — GeneralizedHyperbolic: densities on a real-order Bessel K
+
+`e.algo.stat.ghyp` is new: `bessel_k(nu, x)` by the trapezoid rule on the integral representation (the integrand falls off doubly exponentially, so step 0.02 reaches 1e-9 against R's besselK without a series or asymptotic switch), and on it `dghyp` with any lambda, `dnig`, `dhyperb` and `dskewlap`.
+
+**Result.** `oracle_ghyp` equals GeneralizedHyperbolic on 570 cases on Windows at rel 1e-9, 30 parameter draws with lambda in (-3, 3) at five points each. The distribution and quantile functions, random numbers, moments and fits, and stabledist, are open; Linux pending. L407 is partial.
