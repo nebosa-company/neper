@@ -9,7 +9,7 @@ L471	library	0.5	523	BiasedUrn: noncentral hypergeometric distributions	Partly d
 L473	library	0.8	1148	isotone: isotonic regression	Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers;
 L474	library	0.2	409	kSamples: k-sample rank tests	Partial (D6452 ad.test AD and T.AD statistics, both versions, equal kSamples on Windows;
 L499	library	0.4	412	ResourceSelection: Hosmer-Lemeshow and related tests	Partly done (D6096): e.algo.stat.hoslem (hoslem.test with observed and expected tables) equals ResourceSelection on 1128 values on Windows (oracle_hoslem);
-L500	library	0	212	ashr: adaptive shrinkage	Open (CRAN rank 977).
+L500	library	0.7	729	ashr: adaptive shrinkage	D6721: e.algo.stat.ashr has ash for the normal likelihood (uniform, halfuniform, +/-uniform and normal mixtures, fdr and shrink, mixSQP fit) with lfsr, lfdr, svalue, qvalue, NegativeProb, PositiveProb
 L324	library	0.75	1152	pROC and ROCR: ROC curves and threshold performance	Partial (D6166, D6167 ROCR measures and AUC).
 L327	library	0.3	534	statmod: Tweedie and inverse Gaussian, Gauss quadrature	Partly done (D6086): e.algo.stat.gaussq has gauss.quad (six kinds) and gauss.quad.prob (six distributions), equal to statmod on 1536 values on Windows (oracle_gaussq);
 L328	library	0.25	706	caret evaluation and resampling	Partly done (D6087): e.algo.stat.carets has two-class confusionMatrix with all statistics and intervals, and postResample, equal to caret on 700 values on Windows (oracle_carets);
