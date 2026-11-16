@@ -8,7 +8,45 @@ use e.mem
 use e.os
 use e.test.oracle as oracle
 
+fn active(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let z = c.args
+    let nan = 0.0f64 / 0.0f64
+    let n = usize(z[0usize])
+    let m = usize(z[1usize])
+    let y = z[2usize..2usize + n]
+    let w = z[2usize + n..2usize + 2usize * n]
+    let (p1, e1) = mem.alloc[usize](a, m)
+    if e1 != ok { ret nan }
+    let (p2, e2) = mem.alloc[usize](a, m)
+    if e2 != ok { ret nan }
+    var i = 0usize
+    while i < m {
+        p2[i] = usize(z[2usize + 2usize * n + i]) - 1usize
+        p1[i] = usize(z[2usize + 2usize * n + m + i]) - 1usize
+        i += 1usize
+    }
+    let st = usize(z[2usize + 2usize * n + 2usize * m])
+    let (out, e3) = mem.alloc[f64](a, n + m + 2usize)
+    if e3 != ok { ret nan }
+    if iso.active_set(a, y, w, p1, p2, out) != ok { ret nan }
+    if st == 0usize { ret out[n + m] }
+    if st == 1usize { ret out[n + m + 1usize] }
+    var s = 0.0f64
+    i = 0usize
+    while i < n && st == 2usize {
+        s += f64(i + 1usize) * out[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m && st == 3usize {
+        s += f64(i + 1usize) * out[n + i]
+        i += 1usize
+    }
+    ret s
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if c.name.len == 2usize { ret active(a, c) }
     let z = c.args
     let nan = 0.0f64 / 0.0f64
     let sv = u8(z[0usize])

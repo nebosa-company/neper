@@ -210,7 +210,7 @@
       "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers; primary, secondary, tertiary ties) equals isotone on 1800 values on Windows (oracle_isotone); Linux pending. Open: matrix and list responses, Lp and user solvers, activeSet, pava. Original: Open (CRAN rank 872). Small. Acceptance, equal to isotone: gpava with weights, ties handling and the Lp, quantile and user-defined solvers, activeSet with general partial orders, pava."
+      "evidence": "Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers; primary, secondary, tertiary ties) equals isotone on 1800 values on Windows (oracle_isotone); Linux pending. D6518: activeSet with the LS solver on general partial orders (zero start; fval, niter, x, multipliers with dqrdc2 aliasing as NA) equals isotone on 180 more values. Open: matrix and list responses, other activeSet solvers, pava. Original: Open (CRAN rank 872). Small. Acceptance, equal to isotone: gpava with weights, ties handling and the Lp, quantile and user-defined solvers, activeSet with general partial orders, pava."
     },
     {
       "id": "L474",

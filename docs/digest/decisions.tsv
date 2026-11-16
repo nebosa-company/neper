@@ -3385,4 +3385,5 @@ D6513	992	scoringRules: crps_beta, crps_hyper and the log and Dawid-Sebastiani s
 D6514	1055	scoringRules: interval scores, ess_moments, gradient and Hessian CRPS, clogs and mmds
 D6515	1231	scoringRules: weighted scores, the last log scores, and L475 lands
 D6516	1099	modeest: parzen, tsybakov and lientz
-D6517	898	modeest: naive
+D6517	899	modeest: naive
+D6518	1058	isotone: activeSet with the LS solver

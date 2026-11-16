@@ -234,3 +234,322 @@ fn gpava(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, kind: u8
     }
     ret ok
 }
+
+// the LS solver of activeSet for the active rows ia (indices into the m constraints, each constraint a1 >= a2 in 0-based positions p1, p2): fills y, the multipliers lbd (one per active row) and returns f
+fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, p1: []const usize, p2: []const usize, ia: []const usize, y: []f64, lbd: []f64, gy: []f64) -> f64 {
+    let n = z.len
+    let na = ia.len
+    var i = 0usize
+    if na == 0usize {
+        while i < n {
+            y[i] = z[i]
+            gy[i] = 0.0f64
+            i += 1usize
+        }
+        ret 0.0f64
+    }
+    let (lab, e0) = mem.alloc[usize](a, n)
+    if e0 != ok { ret 0.0f64 / 0.0f64 }
+    while i < n {
+        lab[i] = i
+        i += 1usize
+    }
+    var changed = true
+    while changed {
+        changed = false
+        var r = 0usize
+        while r < na {
+            let u = lab[p1[ia[r]]]
+            let v = lab[p2[ia[r]]]
+            if u < v {
+                lab[p2[ia[r]]] = u
+                changed = true
+            } else if v < u {
+                lab[p1[ia[r]]] = v
+                changed = true
+            }
+            r += 1usize
+        }
+        // propagate to every member of the relabelled blocks
+        i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < n {
+                if lab[i] == j && lab[j] < lab[i] {
+                    lab[i] = lab[j]
+                    changed = true
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    let (sw, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (swz, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i < n {
+        sw[i] = 0.0f64
+        swz[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        sw[lab[i]] += w[i]
+        swz[lab[i]] += w[i] * z[i]
+        i += 1usize
+    }
+    var f = 0.0f64
+    i = 0usize
+    while i < n {
+        y[i] = swz[lab[i]] / sw[lab[i]]
+        gy[i] = 2.0f64 * w[i] * (y[i] - z[i])
+        f += w[i] * (y[i] - z[i]) * (y[i] - z[i])
+        i += 1usize
+    }
+    // t(A) lbd = gy by R's qr.coef (LINPACK dqrdc2, tolerance 1e-7): a column that is dependent on the earlier ones is aliased and its coefficient NA; the others solve the normal equations
+    let (sel, e3) = mem.alloc[usize](a, na)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    let (qv, e4) = mem.alloc[f64](a, na * n)
+    if e4 != ok { ret 0.0f64 / 0.0f64 }
+    var ns = 0usize
+    var r = 0usize
+    while r < na {
+        let v = qv[ns * n..ns * n + n]
+        i = 0usize
+        while i < n {
+            v[i] = 0.0f64
+            i += 1usize
+        }
+        v[p1[ia[r]]] += 1.0f64
+        v[p2[ia[r]]] -= 1.0f64
+        let orig = math.sqrt[f64](2.0f64)
+        var k = 0usize
+        while k < ns {
+            var d = 0.0f64
+            i = 0usize
+            while i < n {
+                d += v[i] * qv[k * n + i]
+                i += 1usize
+            }
+            i = 0usize
+            while i < n {
+                v[i] -= d * qv[k * n + i]
+                i += 1usize
+            }
+            k += 1usize
+        }
+        var nrm = 0.0f64
+        i = 0usize
+        while i < n {
+            nrm += v[i] * v[i]
+            i += 1usize
+        }
+        nrm = math.sqrt[f64](nrm)
+        lbd[r] = 0.0f64 / 0.0f64
+        if nrm > 1.0e-7f64 * orig {
+            i = 0usize
+            while i < n {
+                v[i] = v[i] / nrm
+                i += 1usize
+            }
+            sel[ns] = r
+            ns += 1usize
+        }
+        r += 1usize
+    }
+    if ns == 0usize { ret f }
+    let wd = ns + 1usize
+    let (mat, e5) = mem.alloc[f64](a, ns * wd)
+    if e5 != ok { ret 0.0f64 / 0.0f64 }
+    r = 0usize
+    while r < ns {
+        var c = 0usize
+        while c < ns {
+            var s = 0.0f64
+            let r1 = p1[ia[sel[r]]]
+            let r2 = p2[ia[sel[r]]]
+            let c1 = p1[ia[sel[c]]]
+            let c2 = p2[ia[sel[c]]]
+            if r1 == c1 { s += 1.0f64 }
+            if r1 == c2 { s -= 1.0f64 }
+            if r2 == c1 { s -= 1.0f64 }
+            if r2 == c2 { s += 1.0f64 }
+            mat[r * wd + c] = s
+            c += 1usize
+        }
+        mat[r * wd + ns] = gy[p1[ia[sel[r]]]] - gy[p2[ia[sel[r]]]]
+        r += 1usize
+    }
+    var col = 0usize
+    while col < ns {
+        var piv = col
+        var rr = col + 1usize
+        while rr < ns {
+            if math.abs[f64](mat[rr * wd + col]) > math.abs[f64](mat[piv * wd + col]) { piv = rr }
+            rr += 1usize
+        }
+        var cc = 0usize
+        while cc < wd {
+            let t = mat[col * wd + cc]
+            mat[col * wd + cc] = mat[piv * wd + cc]
+            mat[piv * wd + cc] = t
+            cc += 1usize
+        }
+        rr = 0usize
+        while rr < ns {
+            if rr != col {
+                let fct = mat[rr * wd + col] / mat[col * wd + col]
+                cc = col
+                while cc < wd {
+                    mat[rr * wd + cc] -= fct * mat[col * wd + cc]
+                    cc += 1usize
+                }
+            }
+            rr += 1usize
+        }
+        col += 1usize
+    }
+    r = 0usize
+    while r < ns {
+        lbd[sel[r]] = mat[r * wd + ns] / mat[r * wd + r]
+        r += 1usize
+    }
+    ret f
+}
+
+// activeSet(isomat, "LS", y, weights) from the zero start: out receives x (n), the multipliers per constraint (m, zero for inactive), then fval and niter;
+// the constraints are the 0-based pairs (p1[i] >= p2[i]) of R's isomat[i, 2] >= isomat[i, 1]
+fn active_set(a: *mem.Arena, y0: []const f64, w: []const f64, p1: []const usize, p2: []const usize, out: []f64) -> err {
+    let n = y0.len
+    let m = p1.len
+    let ups = 1.0e-12f64
+    let big = 1.0e300f64
+    let (xold, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret e0 }
+    let (y, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    let (gy, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret e2 }
+    let (ax, e3) = mem.alloc[f64](a, m)
+    if e3 != ok { ret e3 }
+    let (ay, e4) = mem.alloc[f64](a, m)
+    if e4 != ok { ret e4 }
+    let (iab, e5) = mem.alloc[usize](a, m + 1usize)
+    if e5 != ok { ret e5 }
+    let (lb, e6) = mem.alloc[f64](a, m + 1usize)
+    if e6 != ok { ret e6 }
+    var i = 0usize
+    while i < n {
+        xold[i] = 0.0f64
+        i += 1usize
+    }
+    var nia = 0usize
+    i = 0usize
+    while i < m {
+        ax[i] = 0.0f64
+        iab[nia] = i
+        nia += 1usize
+        i += 1usize
+    }
+    var iter = 0usize
+    var f = 0.0f64
+    while true {
+        iter += 1usize
+        f = ls_solve(a, y0, w, p1, p2, iab[0usize..nia], y, lb, gy)
+        i = 0usize
+        var my = big
+        while i < m {
+            ay[i] = y[p1[i]] - y[p2[i]]
+            if ay[i] < my { my = ay[i] }
+            i += 1usize
+        }
+        var ml = big
+        var il = 0usize
+        i = 0usize
+        while i < nia {
+            if lb[i] < ml {
+                ml = lb[i]
+                il = i
+            }
+            i += 1usize
+        }
+        var done = false
+        if my > 0.0f64 - ups {
+            if ml > 0.0f64 - ups {
+                done = true
+            } else {
+                i = 0usize
+                while i < n {
+                    xold[i] = y[i]
+                    i += 1usize
+                }
+                i = 0usize
+                while i < m {
+                    ax[i] = ay[i]
+                    i += 1usize
+                }
+                i = il
+                while i + 1usize < nia {
+                    iab[i] = iab[i + 1usize]
+                    i += 1usize
+                }
+                nia -= 1usize
+            }
+        } else {
+            var best = 0.0f64 - big
+            var bk = m
+            i = 0usize
+            while i < m {
+                if ax[i] > 0.0f64 - ups && ay[i] < ups {
+                    let rat = 0.0f64 - ay[i] / (ax[i] - ay[i])
+                    if rat == rat && rat > best {
+                        best = rat
+                        bk = i
+                    }
+                }
+                i += 1usize
+            }
+            i = 0usize
+            while i < n {
+                xold[i] = y[i] + best * (xold[i] - y[i])
+                i += 1usize
+            }
+            i = 0usize
+            while i < m {
+                ax[i] = xold[p1[i]] - xold[p2[i]]
+                i += 1usize
+            }
+            if bk < m {
+                var at = nia
+                while at > 0usize && iab[at - 1usize] > bk {
+                    iab[at] = iab[at - 1usize]
+                    at -= 1usize
+                }
+                iab[at] = bk
+                nia += 1usize
+            }
+        }
+        if done { break }
+        if iter == 100usize { break }
+    }
+    i = 0usize
+    while i < n {
+        out[i] = y[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        out[n + i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < nia {
+        out[n + iab[i]] = lb[i]
+        i += 1usize
+    }
+    out[n + m] = f
+    out[n + m + 1usize] = f64(iter)
+    ret ok
+}
