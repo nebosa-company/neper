@@ -46766,3 +46766,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `e.algo.stat.posteriorpkg` follows posterior's draws pipeline for a chain-major draws matrix: split each chain in halves, rank-normalise with `qnorm((rank - 3/8) / (S + 1/4))` (average ranks over ties), the split Rhat `sqrt((B/W + n - 1)/n)` of the bulk and of the folded draws `|x - median|` (the larger), Geyer's initial-positive-sequence ESS with the paired-sum monotonisation and the `1/log10(ESS)` cap on tau, the tail ESS as the smaller of the 5% and 95% quantile-indicator ESS (`x <= quantile(x, p)`, type 7), and `mcse_mean = sd(x)/sqrt(ess_mean)`. The autocovariance is computed directly rather than by FFT (the same biased estimator).
 
 **Result.** `oracle_posterior` agrees with posterior on 120 values (1 to 5 chains, 60 to 400 draws, heavy-tailed and shifted chains) on Windows; Linux pending. L299 at 0.4: heidel, raftery, the multivariate PSRF, cramer.test, mcse_quantile and mcse_sd, loo and ggdist remain.
+
+## D6595 — loo: waic and PSIS-LOO
+
+**Decision.** `e.algo.stat.loopkg` has `gpdfit` (Zhang and Stephens with the weakly informative prior, `M = 30 + floor(sqrt n)` grid points, as posterior::gpdfit), `psis_i` (tail length `ceiling(min(0.2 S, 3 sqrt(S)))`, the largest tail draws replaced by the generalized Pareto quantiles at `(i - 1/2)/len` above the cutoff, weights capped at 0, k stored) and the totals of `waic` and `loo` over observations (`lpd - p`, `-2 elpd`).
+
+**Result.** `oracle_loo` agrees with loo on 125 totals (S 200 to 1000, 5 to 25 observations, heavy-tailed responses giving large k) on Windows; Linux pending. L299 at 0.55: heidel, raftery, the multivariate PSRF, cramer.test, loo_compare, loo_model_weights, E_loo and ggdist remain.

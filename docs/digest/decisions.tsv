@@ -3461,9 +3461,10 @@ D6589	1078	splines2: naturalSpline
 D6590	665	splines2: cSpline
 D6590	731	splines2: cSpline
 D6591	598	splines2: derivatives of the M- and I-splines
-D6591	553	splines2: derivatives of M- and I-splines
+D6595	553	splines2: derivatives of M- and I-splines
 D6592	730	coda: effectiveSize, ar and acf
 D6593	749	coda: geweke, gelman, HPDinterval
-D6592	884	splines2: periodic B- and M-splines
-D6593	444	SuppDists: ghyper
-D6594	997	posterior: rhat, ess_bulk, ess_tail, mcse_mean
+D6596	884	splines2: periodic B- and M-splines
+D6597	444	SuppDists: ghyper
+D6594	998	posterior: rhat, ess_bulk, ess_tail, mcse_mean
+D6595	754	loo: waic and PSIS-LOO
