@@ -3232,4 +3232,5 @@ D6156	637	LearnBayes: closed-form helpers
 D6157	1017	logistf: Firth penalized logistic regression
 D6158	684	betareg: logit-link beta regression with constant precision
 D6159	875	dagitty: ancestors, d-separation and minimal adjustment sets
-D6160	853	randtoolbox: Halton, unscrambled Sobol and torus sequences
+D6160	854	randtoolbox: Halton, unscrambled Sobol and torus sequences
+D6161	927	gmp: big-integer operations checked against R

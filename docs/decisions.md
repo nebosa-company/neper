@@ -45358,3 +45358,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.randtoolbox` holds the torus sequence (frac(k sqrt(p_j))) and an unscrambled Sobol sequence over the Bratley-Fox direction numbers that randtoolbox uses; `e.algo.rand.quasi` keeps the Joe-Kuo numbers, which agree with randtoolbox only in the first two dimensions (found by comparison, then the initial values were read back from the package's points: dimension 3 uses m = 1, 1, dimension 4 m = 1, 3, 7, and so on). Halton points from `e.algo.rand.quasi` equal randtoolbox as they stand. Not here: scrambled Sobol, the generators WELL, SFMT, congruRand and the Knuth-TAOCP family, more than eight Sobol dimensions, and qrng.
 
 **Result.** `oracle_randtoolbox` equals randtoolbox on 96 cases (n up to 100, up to 8 dimensions) on Windows; Linux pending. L501 is partial.
+
+## D6161 — gmp: big-integer operations checked against R
+
+`e.algo.gmp` adds the gmp operations that e.algo.bignum lacked: lcm, the modular inverse, a Miller-Rabin primality test over the first twelve primes, next prime, binomial, factorial, Fibonacci and Lucas numbers, the digit count in a base and the residue modulo 10^9. The oracle passes the operands as base-10^6 chunks (an f64 holds a chunk exactly) and compares each result by its value modulo 10^9 and its decimal digit count, which together pin a large result without carrying it through f64. Covered against gmp: add, multiply, integer quotient and remainder, gcd, lcm, powm, inverse, isprime, nextprime, chooseZ, fibnum, lucnum, factorialZ. Not here: factorize of large numbers, the vectorised and matrix forms, bigq beyond e.algo.bignum.Rat and the random generators.
+
+**Result.** `oracle_gmp` equals gmp on 308 cases on Windows; Linux pending. L379 is partial.
