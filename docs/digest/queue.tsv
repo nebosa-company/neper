@@ -66,7 +66,6 @@ L483	library	0	262	tsfeatures: time-series features	Open (CRAN rank 889).
 L484	library	0	249	LearnBayes: Bayesian computation helpers	Open (CRAN rank 891).
 L485	library	0	222	DRDID: difference-in-differences	Open (CRAN rank 893).
 L501	library	0	261	randtoolbox and qrng: quasi-random generators	Open (CRAN ranks 926, 963).
-L502	library	0	228	qcc: statistical quality control	Open (CRAN rank 999).
 L503	library	0.35	508	WRS2: robust tests and ANOVA	Partial (D6137).
 L504	library	0	291	rcompanion: nonparametric and categorical helpers	Open (CRAN rank 904).
 L505	library	0	208	sm: nonparametric smoothing methods	Open (CRAN rank 954).

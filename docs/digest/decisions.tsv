@@ -3209,4 +3209,5 @@ D6133	1083	yardstick multiclass averaging, pr_auc, gain_capture, lift_curve and 
 D6134	970	icajade, icaimax and the deflation and wide-data forms of icafast
 D6135	731	irr
 D6136	862	pls: the four plsr algorithms, pcr and cross-validation
-D6137	822	WRS2, the deterministic part
+D6137	823	WRS2, the deterministic part
+D6138	702	qcc

@@ -45206,3 +45206,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.wrs2` ports the closed-form functions: Winsorized and trimmed location and scale, `pbos`, yuen and yuend with the explanatory-power effect size for equal trimmed sizes (its `area` is the package's adaptive Simpson with limit 10 and eps 1e-5, ported as is, since it is not the exact integral), t1way with its equal-n effect size, wincor, pbcor, the AKP d, pairwise lincon with the Hochberg adjustment, and med1way's statistic. Everything that bootstraps or simulates (yuenbt, pb2gen, unequal-n effect sizes, med1way's critical value, lincon's studentised-maximum critical values) and t2way are not here.
 
 **Result.** `oracle_wrs2` equals WRS2 on 1544 cases on Windows; Linux pending. L503 is partial.
+
+## D6138 — qcc
+
+**Context.** L502 asked for the quality-control charts.
+
+**Decision.** `e.algo.stat.qcc` (with the generated tables `qcc_tables` of d2 and d3) ports the stats, sd and limits functions of every chart type, the beyond-limits rule and violating-runs rule (R lists the points from the rl-th of a run on, not the whole run), cusum, ewma (the sigma^2 of the exact variance factor), process.capability with its chi-squared and normal intervals, and the pareto table. Probability limits use qnorm, qchisq, a cumulative scan for qbinom and qpois. R-chart probability limits (qtukey) are not ported.
+
+**Result.** `oracle_qcc` equals qcc on 4786 cases on Windows; Linux pending. L502 is closed.

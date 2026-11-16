@@ -741,17 +741,6 @@
       "evidence": "Open (CRAN ranks 926, 963). Small to mid. Verify e.algo.rand.quasi first. Acceptance, equal to R value for value: randtoolbox sobol (with scrambling), halton, torus, WELL, SFMT, congruRand and the Knuth-TAOCP generators; qrng sobol, halton, ghalton and korobov."
     },
     {
-      "id": "L502",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 649,
-      "title": "qcc: statistical quality control",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 999). Small to mid. Acceptance, equal to qcc: qcc for xbar, R, S, p, np, c, u and individuals charts with limits and violation runs, cusum, ewma, processCapability and its intervals, pareto.chart data, run rules."
-    },
-    {
       "id": "L503",
       "category": "library",
       "group": "CRAN parity",
