@@ -14,4 +14,14 @@ for (rep in 1:40) {
     for (q in seq_along(vals)) add("ci", c(n, tm, st, cs, q - 1), vals[q])
   }
 }
+# Gray k-sample test: fn "gray" args (n, ng, nst, rho, cause, time[n], status[n], group[n] 1.., strata[n] 1.., 0) -> statistic of that cause
+for (rep in 1:60) {
+  n <- sample(30:150, 1); ng <- sample(2:4, 1); nst <- if (rep %% 3 == 0) 2 else 1; rho <- c(0, 1, 0.5)[rep %% 3 + 1]
+  tm <- if (rep %% 2 == 0) round(rexp(n, 0.3) + 0.01, 1) else rexp(n, 0.3) + 0.01
+  st <- sample(0:2, n, TRUE, prob = c(0.3, 0.4, 0.3)); gr <- sample(seq_len(ng), n, TRUE); sr <- sample(seq_len(nst), n, TRUE)
+  o <- order(tm); tm <- tm[o]; st <- st[o]; gr <- gr[o]; sr <- sr[o]
+  if (length(unique(gr)) < ng) next
+  ci <- cuminc(tm, st, gr, sr, rho = rho)
+  for (cs in 1:2) add("gray", c(n, ng, nst, rho, cs, tm, st, gr, sr, 0), ci$Tests[as.character(cs), "stat"])
+}
 emit("cmprsk", "cmprsk", list(cases))

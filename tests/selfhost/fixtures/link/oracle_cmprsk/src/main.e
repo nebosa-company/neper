@@ -6,11 +6,36 @@ use e.algo.stat.cmprsk as cm
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "gray") {
+        let n = usize(z[0usize])
+        let ng = usize(z[1usize])
+        let nst = usize(z[2usize])
+        let rho = z[3usize]
+        let cause = z[4usize]
+        let (m, g1) = mem.alloc[i64](a, n)
+        let (gi, g2) = mem.alloc[i64](a, n)
+        let (si, g3) = mem.alloc[i64](a, n)
+        let (s, g4) = mem.alloc[f64](a, ng)
+        let (vs, g5) = mem.alloc[f64](a, ng * ng)
+        if g1 != ok || g2 != ok || g3 != ok || g4 != ok || g5 != ok { ret nan }
+        var i = 0usize
+        while i < n {
+            let sv = z[5usize + n + i]
+            m[i] = 0i64
+            if sv != 0.0f64 { m[i] = 2i64 }
+            if sv == cause { m[i] = 1i64 }
+            gi[i] = i64(z[5usize + 2usize * n + i]) - 1i64
+            si[i] = i64(z[5usize + 3usize * n + i]) - 1i64
+            i += 1usize
+        }
+        ret cm.crstm(a, z[5usize..5usize + n], m, gi, si, nst, ng, rho, s, vs)
+    }
     let n = usize(z[0usize])
     let tm = z[1usize..1usize + n]
     let st = z[1usize + n..1usize + 2usize * n]

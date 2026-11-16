@@ -44968,3 +44968,9 @@ No new geometry code: `oracle_sf` runs the planar part of `e.algo.geom` against 
 `e.algo.stat.cmprsk.cinc` is the Fortran `cinc` of cmprsk line for line: sorted times, an any-cause failure indicator and a cause indicator give the corner points (x, f, v) of the cumulative incidence step function and its variance (accumulators v1, v2, v3 over other-cause and cause events, ties handled by the `1 - (nd - 1) / (rs - 1)` factor).
 
 **Result.** `oracle_cmprsk` equals cmprsk on 640 values (40 samples of 20 to 150 cases, rounded and unrounded times, two causes, point count, sums and last values of times, estimates and variances) on Windows; the Linux run is pending (WSL). Open under L419: the Gray k-sample test (`crstm`), `crr` Fine-Gray regression with time-varying covariates, `predict.crr`, `timepoints`.
+
+## D6103 — cmprsk Gray k-sample test
+
+`e.algo.stat.cmprsk.crstm` ports `crstm` and `crst` of cmprsk line for line (scores, packed lower-triangle variance, strata summed, the weight `(1 - F)^rho`) and answers the statistic `s' vs^-1 s`, or -1 for a singular variance as `cuminc` does.
+
+**Result.** `oracle_cmprsk` now also equals cuminc's Gray statistic on 120 cases (60 samples of 30 to 150 cases, 2 to 4 groups, one or two strata, rho 0, 0.5 and 1, both causes) on Windows; the Linux run is pending (WSL). Open under L419: `crr` Fine-Gray regression with time-varying covariates, `predict.crr`, `timepoints`.
