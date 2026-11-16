@@ -45616,3 +45616,15 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.robustbase` gains mc, the medcouple: the median over pairs x_i <= med <= x_j with x_i < x_j of ((x_j - med) - (med - x_i)) / (x_j - x_i), computed over all pairs. It equals mc() (doReflect on, so the package averages the estimate with the reflected one, the same number when there are no ties) on even-sized samples. Odd-sized samples put an observation exactly on the median, where the package's tie kernel applies, and are not covered; neither are other ties at the median. Not here: that kernel, doScale, scaleTau2's finite-sample consistency, covMcd, lmrob, ltsReg and adjOutlyingness.
 
 **Result.** `oracle_robustbase` agrees with robustbase on 226 cases on Windows; Linux pending. L338 stays partial.
+
+## D6410 — pracma: roots
+
+`e.algo.stat.pracma` gains poly_roots, the zeros of a polynomial by Aberth-Ehrlich iteration from a circle of starting points. pracma::roots takes the eigenvalues of the companion matrix, so the values agree up to the roots' conditioning rather than bit for bit; the oracle uses polynomials with distinct real roots in (-3, 3) and compares the sorted real parts to 1e-9, which both methods reach. Not here: complex-root ordering as the package returns it, polyroots (the multiplicity-aware form) and the rest of the polynomial toolbox.
+
+**Result.** `oracle_pracma` equals pracma on 404 cases on Windows; Linux pending. L333 stays partial.
+
+## D6411 — drc: the LL.4 dose-response fit
+
+`e.algo.stat.drc` fits the four-parameter log-logistic model, f(x) = c + (d - c) / (1 + exp(b (log x - log e))), by Levenberg-Marquardt from a start taken from the data (the dose nearest the response midpoint for e, the response range for c and d, the sign of b from the trend), through `e.algo.stat.minpacklm`, and reports the estimates and the residual sum of squares. It is the least-squares optimum; drm stops at its own criteria, so the estimates agree to 3e-3 relative (the poorly determined c and b show the difference) and the residual sum of squares to 1e-5, on 20 simulated curves with 2 to 4 replicates, not bit for bit. Not here: the other model functions (Weibull, log-normal, Cedergreen, Brain-Cousens), fixed parameters, variance-covariance matrices, ED intervals, robust fitting, model comparison and the plots.
+
+**Result.** `oracle_drc` agrees with drc on 100 cases on Windows at those tolerances; Linux pending. L488 is partial.

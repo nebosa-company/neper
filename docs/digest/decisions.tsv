@@ -3257,22 +3257,24 @@ D6181	605	PerformanceAnalytics: Drawdowns and findDrawdowns
 D6182	838	PerformanceAnalytics: modified expected shortfall
 D6184	650	signal: filtfilt and freqz
 D6185	956	agricolae: LSD, HSD and Scheffe pairwise comparisons
-D6185	622	signal: Savitzky-Golay smoothing weights
-D6186	658	signal: cheby1
+D6400	622	signal: Savitzky-Golay smoothing weights
+D6401	658	signal: cheby1
 D6187	824	epiR: epi.2by2 measures of a cohort table
-D6187	671	signal: cheby2
+D6402	671	signal: cheby2
 D6188	903	energy: distance covariance, distance correlation and the two-sample energy statistic
-D6188	766	signal: grpdelay
+D6403	766	signal: grpdelay
 D6189	867	BayesFactor: the JZS Bayes factor of a t statistic
-D6189	662	signal: band-pass Butterworth
+D6404	662	signal: band-pass Butterworth
 D6190	767	gsDesign: the alpha spending functions
-D6190	859	TSA: periodogram
+D6405	859	TSA: periodogram
 D6191	844	sampling: inclusion probabilities and the UP and SRS designs
-D6191	735	TSA: McLeod.Li.test
+D6406	735	TSA: McLeod.Li.test
 D6192	915	PMCMRplus: the Kruskal-Wallis all-pairs post-hoc tests
 D6193	671	p.adjust: Holm, Hochberg, Hommel, Bonferroni, Benjamini-Hochberg and Benjamini-Yekutieli
-D6192	1103	robustbase: Qn, Sn and huberM
+D6407	1103	robustbase: Qn, Sn and huberM
 D6194	1038	mixtools: normalmixEM
-D6193	774	robustbase: scaleTau2
+D6408	774	robustbase: scaleTau2
 D6195	720	klaR: Gaussian NaiveBayes
-D6194	763	robustbase: mc, the medcouple
+D6409	764	robustbase: mc, the medcouple
+D6410	668	pracma: roots
+D6411	993	drc: the LL.4 dose-response fit

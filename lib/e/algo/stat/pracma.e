@@ -661,3 +661,89 @@ fn laguerre(a: *mem.Arena, p: []const f64, x0: f64, nmax: usize) -> f64 {
     }
     ret x
 }
+
+// roots(p): the zeros of a polynomial (highest power first, leading coefficient non-zero) by Aberth-Ehrlich iteration; re and im receive them
+fn poly_roots(p: []const f64, re: []f64, im: []f64) {
+    let n = p.len - 1usize
+    // a starting circle of radius 1 + max |c_k / c_0|
+    var rad = 0.0f64
+    var k = 1usize
+    while k <= n {
+        let v = math.abs[f64](p[k] / p[0usize])
+        if v > rad { rad = v }
+        k += 1usize
+    }
+    rad = 1.0f64 + rad
+    k = 0usize
+    while k < n {
+        let ang = 2.0f64 * 3.141592653589793238462643383279f64 * f64(k) / f64(n) + 0.4f64
+        re[k] = rad * math.cos[f64](ang) * 0.5f64
+        im[k] = rad * math.sin[f64](ang) * 0.5f64
+        k += 1usize
+    }
+    var it = 0usize
+    while it < 500usize {
+        var worst = 0.0f64
+        k = 0usize
+        while k < n {
+            // Horner for p(z) and p'(z)
+            var fr = p[0usize]
+            var fi = 0.0f64
+            var dr = 0.0f64
+            var di = 0.0f64
+            var j = 1usize
+            while j <= n {
+                let ndr = dr * re[k] - di * im[k] + fr
+                let ndi = dr * im[k] + di * re[k] + fi
+                dr = ndr
+                di = ndi
+                let nfr = fr * re[k] - fi * im[k] + p[j]
+                let nfi = fr * im[k] + fi * re[k]
+                fr = nfr
+                fi = nfi
+                j += 1usize
+            }
+            // the Newton ratio p / p'
+            let den = dr * dr + di * di
+            var wr = 0.0f64
+            var wi = 0.0f64
+            if den > 0.0f64 {
+                wr = (fr * dr + fi * di) / den
+                wi = (fi * dr - fr * di) / den
+            }
+            // the repulsion sum 1 / (z_k - z_j)
+            var sr = 0.0f64
+            var si = 0.0f64
+            j = 0usize
+            while j < n {
+                if j != k {
+                    let ar = re[k] - re[j]
+                    let ai = im[k] - im[j]
+                    let dd = ar * ar + ai * ai
+                    if dd > 0.0f64 {
+                        sr += ar / dd
+                        si -= ai / dd
+                    }
+                }
+                j += 1usize
+            }
+            // w / (1 - w s)
+            let tr = 1.0f64 - (wr * sr - wi * si)
+            let ti = 0.0f64 - (wr * si + wi * sr)
+            let td = tr * tr + ti * ti
+            var cr = 0.0f64
+            var ci = 0.0f64
+            if td > 0.0f64 {
+                cr = (wr * tr + wi * ti) / td
+                ci = (wi * tr - wr * ti) / td
+            }
+            re[k] -= cr
+            im[k] -= ci
+            let mag = math.sqrt[f64](cr * cr + ci * ci)
+            if mag > worst { worst = mag }
+            k += 1usize
+        }
+        if worst < 1.0e-15f64 { break }
+        it += 1usize
+    }
+}

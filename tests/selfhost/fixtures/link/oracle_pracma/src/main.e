@@ -81,6 +81,35 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if w == 1usize { ret f64(cc) }
         ret f64(d)
     }
+    if str.eq(k, "roots") {
+        let m = usize(x[0usize])
+        let (rr, e1) = mem.alloc[f64](a, m)
+        if e1 != ok { os.exit(5) }
+        let (ri, e2) = mem.alloc[f64](a, m)
+        if e2 != ok { os.exit(6) }
+        pm.poly_roots(x[1usize..1usize + m], rr, ri)
+        // the real parts, sorted ascending, weighted by position
+        var q = 0usize
+        while q + 1usize < m {
+            var w = q + 1usize
+            while w + 1usize < m {
+                if rr[w] < rr[q] {
+                    let t = rr[q]
+                    rr[q] = rr[w]
+                    rr[w] = t
+                }
+                w += 1usize
+            }
+            q += 1usize
+        }
+        var tt = 0.0f64
+        q = 0usize
+        while q + 1usize < m {
+            tt += rr[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret tt
+    }
     if str.eq(k, "legendre") {
         let (o, e) = mem.alloc[f64](a, usize(x[0usize]) + 1usize)
         if e != ok { os.exit(5) }

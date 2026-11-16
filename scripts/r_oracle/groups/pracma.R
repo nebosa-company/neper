@@ -59,6 +59,11 @@ for (rep in 1:12) {
   lg <- tryCatch(laguerre(pcf, x0), error = function(e) NA, warning = function(w) NA)
   if (is.finite(lg)) add("laguerre", c(length(pcf), x0, pcf), lg)
 }
+for (rep in 1:20) {
+  n <- sample(2:7, 1); rt <- sort(round(runif(n, -3, 3), 3)); co <- Reduce(function(a, r) c(a, 0) - r * c(0, a), rt, 1) * runif(1, 0.5, 3)
+  rr <- sort(Re(roots(co)))
+  add("roots", c(length(co), co), sum(rr * seq_along(rr)))
+}
 # nchoosek reference values are filled from R directly
 cases <- lapply(cases, function(cs) { if (cs$fn == "nchoosek") cs$want <- choose(cs$args[1], cs$args[2]); cs })
 emit("pracma", "pracma", list(cases))

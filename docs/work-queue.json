@@ -922,10 +922,10 @@
       "group": "CRAN parity",
       "order": 683,
       "title": "pracma and polynom: numerical analysis toolbox",
-      "score": 0.3,
+      "score": 0.35,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6151, D6152 pchip and quadgk, D6164 legendre, chebPoly, laguerre). trapz, cumtrapz, polyval, polyfit, findpeaks, rref, primes, factors, gcd, nchoosek and cross equal pracma on Windows (oracle_pracma; Linux pending). Open: the rest of the acceptance list below. Was: Open (CRAN rank 203, 225, 231). Mid. Verify each function against e.math.root and e.math.special first. Acceptance, equal to R: pracma findpeaks, polyfit, polyval, polyroots, roots, quadgk, quadl, romberg, integral, cumtrapz, trapz, fzero, newtonRaphson, fminsearch, interp1 (all methods), pchip, spline, lowess, savgol, legendre, laguerre, hermite, chebyshev, primes, factors, gcd, nchoosek, cross, kron, rref, null, orth, pinv, expm, cond; polynom polynomial, predict, solve, deriv, integral, poly.calc, poly.orth; caTools runmean, runquantile, trapz, colAUC."
+      "evidence": "Partial (D6151, D6152 pchip and quadgk, D6164 legendre, chebPoly, laguerre, D6410 roots). trapz, cumtrapz, polyval, polyfit, findpeaks, rref, primes, factors, gcd, nchoosek and cross equal pracma on Windows (oracle_pracma; Linux pending). Open: the rest of the acceptance list below. Was: Open (CRAN rank 203, 225, 231). Mid. Verify each function against e.math.root and e.math.special first. Acceptance, equal to R: pracma findpeaks, polyfit, polyval, polyroots, roots, quadgk, quadl, romberg, integral, cumtrapz, trapz, fzero, newtonRaphson, fminsearch, interp1 (all methods), pchip, spline, lowess, savgol, legendre, laguerre, hermite, chebyshev, primes, factors, gcd, nchoosek, cross, kron, rref, null, orth, pinv, expm, cond; polynom polynomial, predict, solve, deriv, integral, poly.calc, poly.orth; caTools runmean, runquantile, trapz, colAUC."
     },
     {
       "id": "L334",
@@ -1395,10 +1395,10 @@
       "group": "CRAN parity",
       "order": 742,
       "title": "drc: dose-response models",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 813). Mid. Acceptance, equal to drc: drm with LL.2 to LL.5, W1 and W2 families, Gompertz, Brain-Cousens, Cedergreen, with ED and selectivity, compParm, mselect, modelFit and the robust and Poisson variants."
+      "evidence": "Partial (D6411). LL.4 estimates and residual sum of squares agree with drc on Windows at optimiser tolerance (oracle_drc; Linux pending). Open: other model functions, fixed parameters, covariance and ED intervals, robust fitting, model comparison. Was: Open (CRAN rank 813). Mid. Acceptance, equal to drc: drm with LL.2 to LL.5, W1 and W2 families, Gompertz, Brain-Cousens, Cedergreen, with ED and selectivity, compParm, mselect, modelFit and the robust and Poisson variants."
     },
     {
       "id": "L489",
