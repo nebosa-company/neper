@@ -15,6 +15,59 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (q, e1) = mem.alloc[f64](a, n)
     let (l, e2) = mem.alloc[f64](a, n)
     if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    if str.starts_with(c.name, "c_") {
+        let st = x[1usize] == 1.0f64
+        let meth = u8(x[2usize])
+        var eta = 0.0f64
+        var cut = 0.0f64
+        var nc = 0usize
+        if st {
+            let (r1, ec1) = fd.fdrtool_normal_cut(a, x[4usize..4usize + n], q, l, meth, x[3usize])
+            if ec1 != ok { ret 0.0f64 / 0.0f64 }
+            eta = r1.eta0
+            cut = r1.cutoff
+            nc = r1.ncens
+        } else {
+            let (r2, ec2) = fd.fdrtool_pvalue_cut(a, x[4usize..4usize + n], q, l, meth, x[3usize])
+            if ec2 != ok { ret 0.0f64 / 0.0f64 }
+            eta = r2.eta0
+            cut = r2.cutoff
+            nc = r2.ncens
+        }
+        let cn = c.name
+        if str.eq(cn, "c_eta0") { ret eta }
+        if str.eq(cn, "c_cutoff") { ret cut }
+        if str.eq(cn, "c_ncens") { ret f64(nc) }
+        var cs = 0.0f64
+        var ci = 0usize
+        while ci < n {
+            var v = q[ci]
+            if str.starts_with(cn, "c_l_") { v = l[ci] }
+            if str.ends_with(cn, "_sum") { cs += v } else { cs += f64(ci + 1usize) * v }
+            ci += 1usize
+        }
+        ret cs
+    }
+    if str.starts_with(c.name, "r_") {
+        let (rr, re) = fd.fdrtool_corr(a, x[1usize..1usize + n], q, l)
+        if re != ok { ret 0.0f64 / 0.0f64 }
+        let rn = c.name
+        if str.eq(rn, "r_eta0") { ret rr.eta0 }
+        if str.eq(rn, "r_cutoff") { ret rr.cutoff }
+        if str.eq(rn, "r_ncens") { ret f64(rr.ncens) }
+        if str.eq(rn, "r_kappa") { ret rr.sd }
+        if str.eq(rn, "r_kappase") { ret rr.sd_se }
+        if str.eq(rn, "r_eta0se") { ret rr.eta0_se }
+        var rs = 0.0f64
+        var ri = 0usize
+        while ri < n {
+            var v = q[ri]
+            if str.starts_with(rn, "r_l_") { v = l[ri] }
+            if str.ends_with(rn, "_sum") { rs += v } else { rs += f64(ri + 1usize) * v }
+            ri += 1usize
+        }
+        ret rs
+    }
     if str.starts_with(c.name, "z_") {
         let (zr, ze) = fd.fdrtool_normal(a, x[1usize..1usize + n], q, l)
         if ze != ok { ret 0.0f64 / 0.0f64 }

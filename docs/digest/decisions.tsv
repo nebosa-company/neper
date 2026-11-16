@@ -3551,4 +3551,4 @@ D6688	1019	optMonteCarlo over the Fedorov search
 D6689	875	optBlock D criterion, which is the block design search
 D6690	497	L410 closed at its acceptance list
 D6691	626	fdrtool normal statistic; the Brent minimiser's eps
-D6691	698	fdrtool for z statistics
+D6692	899	fdrtool null models over one statistic parameter; the correlation statistic
