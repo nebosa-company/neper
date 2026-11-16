@@ -9,12 +9,13 @@
 
 use e.algo.rand.r as rng
 use e.algo.sort
+use e.algo.stat.codapkg as coda
 use e.algo.stat.mvtnorm as mv
 use e.math
 use e.math.dist as dist
 use e.mem
 
-type Fit = struct { logml: f64, niter: i64, mcse: f64, converged: bool }
+type Fit = struct { logml: f64, niter: i64, mcse: f64, converged: bool, q11: []f64, q12: []f64, q21: []f64, q22: []f64 }
 
 fn cmp_up(ctx: *u8, x: f64, y: f64) -> i32 {
     if x < y { ret 0i32 - 1i32 }
@@ -72,12 +73,11 @@ fn round_half_even(x: f64) -> usize {
 }
 
 // the iterative scheme on the log densities: l1 = q11 - q12 (posterior draws), l2 = q21 - q22 (proposal draws)
-fn iterate(a: *mem.Arena, l1: []const f64, l2: []const f64, r0: f64, tol: f64, maxiter: i64) -> (Fit, err) {
+fn iterate(a: *mem.Arena, l1: []const f64, l2: []const f64, r0: f64, tol: f64, maxiter: i64, neff: f64, use_ess: bool) -> (Fit, err) {
     var none: Fit = zero
     let lstar = median_of(a, l1)
     let n1 = f64(l1.len)
     let n2 = f64(l2.len)
-    let neff = n1
     let s1 = neff / (neff + n2)
     let s2 = n2 / (neff + n2)
     var r = r0
@@ -103,7 +103,12 @@ fn iterate(a: *mem.Arena, l1: []const f64, l2: []const f64, r0: f64, tol: f64, m
             k += 1usize
         }
         let (mn, vn) = mean_var(numi)
-        let (md, vd) = mean_var(deni)
+        let (md, vd0) = mean_var(deni)
+        var vd = vd0
+        if use_ess {
+            let es = coda.effective_size(a, deni)
+            if es == es && es > 0.0f64 { vd = vd0 * f64(l1.len) / es }
+        }
         r = mn / md
         logml = math.log[f64](r) + lstar
         crit = math.abs[f64]((r - rold) / r)
@@ -112,12 +117,21 @@ fn iterate(a: *mem.Arena, l1: []const f64, l2: []const f64, r0: f64, tol: f64, m
         varr = varr / f64(l2.len)
         mcse = math.sqrt[f64](math.log[f64](1.0f64 + varr / (r * r)))
     }
-    if i >= maxiter { ret (Fit { logml: 0.0f64 / 0.0f64, niter: i - 1i64, mcse: mcse, converged: false }, ok) }
-    ret (Fit { logml: logml, niter: i - 1i64, mcse: mcse, converged: true }, ok)
+    var res: Fit = zero
+    res.niter = i - 1i64
+    res.mcse = mcse
+    if i >= maxiter {
+        res.logml = 0.0f64 / 0.0f64
+        res.converged = false
+    } else {
+        res.logml = logml
+        res.converged = true
+    }
+    ret (res, ok)
 }
 
 // bridge_sampler(samples, log_posterior, ..., method = "normal"); logpost(ctx, theta) is the log posterior
-fn bridge_normal[Ctx: type](a: *mem.Arena, g: *rng.Rng, ctx: *Ctx, logpost: fn(*Ctx, []const f64) -> f64, samples: []const f64, n: usize, p: usize, maxiter: i64) -> (Fit, err) {
+fn bridge_normal[Ctx: type](a: *mem.Arena, g: *rng.Rng, ctx: *Ctx, logpost: fn(*Ctx, []const f64) -> f64, samples: []const f64, n: usize, p: usize, maxiter: i64, use_neff: bool) -> (Fit, err) {
     var none: Fit = zero
     let nfit = round_half_even(f64(n) / 2.0f64)
     let niter_rows = n - nfit
@@ -189,7 +203,13 @@ fn bridge_normal[Ctx: type](a: *mem.Arena, g: *rng.Rng, ctx: *Ctx, logpost: fn(*
         l2[i] = q21[i] - q22[i]
         i += 1usize
     }
-    let (fit, fe) = iterate(a, l1, l2, 0.5f64, 1.0e-10f64, maxiter)
+    var neff = f64(niter_rows)
+    if use_neff { neff = median_ess(a, it, niter_rows, p) }
+    var (fit, fe) = iterate(a, l1, l2, 0.5f64, 1.0e-10f64, maxiter, neff, use_neff)
+    fit.q11 = q11
+    fit.q12 = q12
+    fit.q21 = q21
+    fit.q22 = q22
     ret (fit, fe)
 }
 
@@ -244,7 +264,7 @@ fn chol_lower(v: []const f64, p: usize, l: []f64) -> bool {
 
 // bridge_sampler(samples, log_posterior, ..., method = "warp3", use_neff = FALSE): the posterior draws and the standard normal draws
 // are reflected about the fit mean and scaled by the Cholesky factor of the fit covariance, and the proposal is the standard normal
-fn bridge_warp3[Ctx: type](a: *mem.Arena, g: *rng.Rng, ctx: *Ctx, logpost: fn(*Ctx, []const f64) -> f64, samples: []const f64, n: usize, p: usize, maxiter: i64) -> (Fit, err) {
+fn bridge_warp3[Ctx: type](a: *mem.Arena, g: *rng.Rng, ctx: *Ctx, logpost: fn(*Ctx, []const f64) -> f64, samples: []const f64, n: usize, p: usize, maxiter: i64, use_neff: bool) -> (Fit, err) {
     var none: Fit = zero
     let nfit = round_half_even(f64(n) / 2.0f64)
     let nit = n - nfit
@@ -346,7 +366,9 @@ fn bridge_warp3[Ctx: type](a: *mem.Arena, g: *rng.Rng, ctx: *Ctx, logpost: fn(*C
         l2[i] = c0 + (q21 - q22)
         i += 1usize
     }
-    let (fit, fe) = iterate(a, l1, l2, 0.5f64, 1.0e-10f64, maxiter)
+    var neff = f64(nit)
+    if use_neff { neff = median_ess(a, it, nit, p) }
+    let (fit, fe) = iterate(a, l1, l2, 0.5f64, 1.0e-10f64, maxiter, neff, use_neff)
     ret (fit, fe)
 }
 
@@ -381,7 +403,7 @@ fn tx_logpost[C: type](t: *Tx[C], th: []const f64) -> f64 {
 
 // bridge_sampler(samples, log_posterior, lb =, ub =, method = "normal" or "warp3", use_neff = FALSE) for real parameters with bounds;
 // method 0 normal, 1 warp3
-fn bridge_bounded[C: type](a: *mem.Arena, g: *rng.Rng, ctx: *C, logpost: fn(*C, []const f64) -> f64, samples: []const f64, n: usize, p: usize, lb: []const f64, ub: []const f64, method: u8, maxiter: i64) -> (Fit, err) {
+fn bridge_bounded[C: type](a: *mem.Arena, g: *rng.Rng, ctx: *C, logpost: fn(*C, []const f64) -> f64, samples: []const f64, n: usize, p: usize, lb: []const f64, ub: []const f64, method: u8, maxiter: i64, use_neff: bool) -> (Fit, err) {
     var none: Fit = zero
     let (ts, e1) = mem.alloc[f64](a, n * p)
     let (buf, e2) = mem.alloc[f64](a, p)
@@ -409,9 +431,56 @@ fn bridge_bounded[C: type](a: *mem.Arena, g: *rng.Rng, ctx: *C, logpost: fn(*C, 
     }
     var tx = Tx[C] { ctx: ctx, f: logpost, lb: lb, ub: ub, buf: buf }
     if method == 1u8 {
-        let (fw, ew) = bridge_warp3[Tx[C]](a, g, &tx, tx_logpost[C], ts, n, p, maxiter)
+        let (fw, ew) = bridge_warp3[Tx[C]](a, g, &tx, tx_logpost[C], ts, n, p, maxiter, use_neff)
         ret (fw, ew)
     }
-    let (fn1, en1) = bridge_normal[Tx[C]](a, g, &tx, tx_logpost[C], ts, n, p, maxiter)
+    let (fn1, en1) = bridge_normal[Tx[C]](a, g, &tx, tx_logpost[C], ts, n, p, maxiter, use_neff)
     ret (fn1, en1)
+}
+
+// median over the columns of the posterior draws (nrows by p, row-major) of coda's effectiveSize
+fn median_ess(a: *mem.Arena, it: []const f64, nrows: usize, p: usize) -> f64 {
+    let (col, e1) = mem.alloc[f64](a, nrows)
+    let (es, e2) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok { ret f64(nrows) }
+    var j = 0usize
+    while j < p {
+        var i = 0usize
+        while i < nrows {
+            col[i] = it[i * p + j]
+            i += 1usize
+        }
+        es[j] = coda.effective_size(a, col)
+        j += 1usize
+    }
+    ret median_of(a, es)
+}
+
+// error_measures(bridge) for the normal method: the relative mean-squared error of the estimate and its square root, from the
+// stored log densities of a bridge_normal fit (Fong and Holmes style frequency-domain term for the posterior draws)
+fn error_measures(a: *mem.Arena, fit: *const Fit) -> (f64, f64, err) {
+    let n1 = fit.q11.len
+    let n2 = fit.q22.len
+    let s1 = f64(n1) / f64(n1 + n2)
+    let s2 = f64(n2) / f64(n1 + n2)
+    let (f1, e1) = mem.alloc[f64](a, n2)
+    let (f2, e2) = mem.alloc[f64](a, n1)
+    if e1 != ok || e2 != ok { ret (0.0f64, 0.0f64, e1) }
+    var i = 0usize
+    while i < n2 {
+        f1[i] = 1.0f64 / (s1 + s2 * math.exp[f64](fit.q22[i] - fit.q21[i] + fit.logml))
+        i += 1usize
+    }
+    i = 0usize
+    while i < n1 {
+        f2[i] = 1.0f64 / (s1 * math.exp[f64](fit.q11[i] - fit.logml - fit.q12[i]) + s2)
+        i += 1usize
+    }
+    let (m1, v1) = mean_var(f1)
+    let (m2, v2) = mean_var(f2)
+    let (ord, sm, vp, ae) = coda.ar_yw(a, f2)
+    if ae != ok { ret (0.0f64, 0.0f64, ae) }
+    let rho = vp / ((1.0f64 - sm) * (1.0f64 - sm))
+    let re2 = 1.0f64 / f64(n2) * v1 / (m1 * m1) + rho / f64(n1) * v2 / (m2 * m2)
+    ret (re2, math.sqrt[f64](re2), ok)
 }

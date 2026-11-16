@@ -41,6 +41,11 @@ fn lp(id: *u8, th: []const f64) -> f64 {
     ret 0.0f64 - 0.5f64 * (th[0usize] * th[0usize] / 4.0f64 + q * q)
 }
 
+fn name_is(have: str, want: str) -> bool {
+    if str.eq(have, want) { ret true }
+    ret str.starts_with(have, "ne_") && str.eq(have[3usize..have.len], want)
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     if str.eq(c.name, "bf") { ret bs.bf(x[0usize], x[1usize]) }
@@ -50,7 +55,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var id = u8(x[1usize])
     let n = usize(x[2usize])
     let p = usize(x[3usize])
-    if str.eq(c.name, "logmlb") || str.eq(c.name, "niterb") || str.eq(c.name, "logml3b") || str.eq(c.name, "niter3b") {
+    let ne = str.starts_with(c.name, "ne_")
+    if name_is(c.name, "logmlb") || name_is(c.name, "niterb") || name_is(c.name, "logml3b") || name_is(c.name, "niter3b") {
         var lb: [2]f64 = zero
         var ub: [2]f64 = zero
         let inf = 1.0e308f64 * 10.0f64
@@ -62,21 +68,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             ub[0usize] = 2.0f64
         }
         var meth = 0u8
-        if str.eq(c.name, "logml3b") || str.eq(c.name, "niter3b") { meth = 1u8 }
-        let (fb, eb) = bs.bridge_bounded[u8](a, &g, &id, lp, x[4usize..4usize + n * p], n, p, lb[0usize..p], ub[0usize..p], meth, 1000i64)
+        if name_is(c.name, "logml3b") || name_is(c.name, "niter3b") { meth = 1u8 }
+        let (fb, eb) = bs.bridge_bounded[u8](a, &g, &id, lp, x[4usize..4usize + n * p], n, p, lb[0usize..p], ub[0usize..p], meth, 1000i64, ne)
         if eb != ok { os.exit(8) }
-        if str.eq(c.name, "logmlb") || str.eq(c.name, "logml3b") { ret fb.logml }
+        if name_is(c.name, "logmlb") || name_is(c.name, "logml3b") { ret fb.logml }
         ret f64(fb.niter)
     }
-    if str.eq(c.name, "logml3") || str.eq(c.name, "niter3") {
-        let (fw, ew) = bs.bridge_warp3[u8](a, &g, &id, lp, x[4usize..4usize + n * p], n, p, 1000i64)
+    if name_is(c.name, "logml3") || name_is(c.name, "niter3") {
+        let (fw, ew) = bs.bridge_warp3[u8](a, &g, &id, lp, x[4usize..4usize + n * p], n, p, 1000i64, ne)
         if ew != ok { os.exit(7) }
-        if str.eq(c.name, "logml3") { ret fw.logml }
+        if name_is(c.name, "logml3") { ret fw.logml }
         ret f64(fw.niter)
     }
-    let (fit, e) = bs.bridge_normal[u8](a, &g, &id, lp, x[4usize..4usize + n * p], n, p, 1000i64)
+    let (fit, e) = bs.bridge_normal[u8](a, &g, &id, lp, x[4usize..4usize + n * p], n, p, 1000i64, ne)
     if e != ok { os.exit(6) }
-    if str.eq(c.name, "logml") { ret fit.logml }
+    if name_is(c.name, "logml") { ret fit.logml }
+    if str.eq(c.name, "ne_re2") || str.eq(c.name, "ne_cv") {
+        let (re2, cv, ee) = bs.error_measures(a, &fit)
+        if ee != ok { os.exit(9) }
+        if str.eq(c.name, "ne_re2") { ret re2 }
+        ret cv
+    }
     ret f64(fit.niter)
 }
 

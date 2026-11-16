@@ -25,6 +25,19 @@ for (rep in 1:24) {
   w <- tryCatch(suppressWarnings(bridge_sampler(sm, log_posterior = if (id == 0) lp0 else lp1, data = list(), method = "warp3",
                   lb = setNames(rep(-Inf, p), colnames(sm)), ub = setNames(rep(Inf, p), colnames(sm)), use_neff = FALSE, silent = TRUE)), error = function(e) NULL)
   if (!is.null(w) && is.finite(w$logml)) { add("logml3", a, w$logml); add("niter3", a, w$niter) }
+  # use_neff = TRUE (the default): coda's effectiveSize for the iteration draws and the iterative scheme's variance
+  set.seed(seed)
+  bn <- tryCatch(suppressWarnings(bridge_sampler(sm, log_posterior = if (id == 0) lp0 else lp1, data = list(),
+                  lb = setNames(rep(-Inf, p), colnames(sm)), ub = setNames(rep(Inf, p), colnames(sm)), use_neff = TRUE, silent = TRUE)), error = function(e) NULL)
+  if (!is.null(bn) && is.finite(bn$logml)) {
+    add("ne_logml", a, bn$logml); add("ne_niter", a, bn$niter)
+    em <- tryCatch(error_measures(bn), error = function(e) NULL)
+    if (!is.null(em)) { add("ne_re2", a, em$re2); add("ne_cv", a, em$cv) }
+  }
+  set.seed(seed)
+  wn <- tryCatch(suppressWarnings(bridge_sampler(sm, log_posterior = if (id == 0) lp0 else lp1, data = list(), method = "warp3",
+                  lb = setNames(rep(-Inf, p), colnames(sm)), ub = setNames(rep(Inf, p), colnames(sm)), use_neff = TRUE, silent = TRUE)), error = function(e) NULL)
+  if (!is.null(wn) && is.finite(wn$logml)) { add("ne_logml3", a, wn$logml); add("ne_niter3", a, wn$niter) }
   if (!is.null(prev)) { add("bf", c(prev$logml, b$logml), bf(prev, b)$bf); add("post", c(prev$logml, b$logml, 0.3, 0.7), post_prob(prev, b, prior_prob = c(0.3, 0.7))[[1]]) }
   prev <- b
 }
