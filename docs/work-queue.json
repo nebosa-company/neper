@@ -235,17 +235,6 @@
       "evidence": "Partial (D6043). icafast (symmetric update, logcosh, kur, exp) equals ica 1.0-3 on Windows through vafs, iterations, convergence and S M (Linux pending). Open: alg def, n < p, icaimax, icajade. Was: Open (CRAN rank 548). Small. Acceptance, equal to ica under set.seed: icafast, icaimax and icajade with their whitening, contrasts and convergence, the mixing and source matrices up to the permutation and sign R reports."
     },
     {
-      "id": "L403",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 563,
-      "title": "rngtools and doRNG: parallel random streams",
-      "score": 0.8,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6044). L'Ecuyer-CMRG set.seed, runif, nextRNGStream and nextRNGSubStream equal R on Windows (Linux pending); a doRNG per-task stream is the k-th stream jump. Open: getRNG/setRNG .Random.seed bookkeeping and the RNGseq argument forms. Was: Open (CRAN ranks 538, 576). Small. Verify the RNG kinds in e.algo.rand.r first. Acceptance, equal to R value for value: the L'Ecuyer-CMRG generator, nextRNGStream and nextRNGSubStream, RNGseq, getRNG and setRNG, and doRNG-style per-task streams."
-    },
-    {
       "id": "L404",
       "category": "library",
       "group": "CRAN parity",

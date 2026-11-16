@@ -218,3 +218,4 @@ oracle_boot2
 oracle_fnn
 oracle_allperms
 oracle_locpoly
+oracle_rngseq

@@ -2,7 +2,8 @@
 // and the stream jumps of the parallel package, `next_stream` (2^127 steps) and `next_substream` (2^76
 // steps), by multiplying the state with the precomputed jump matrices.
 //
-// Not here: .Random.seed bookkeeping, RNGseq and the doRNG per-task conventions beyond the stream jumps.
+// Also rngseq_start, the seeding of rngtools::RNGseq. Not here: .Random.seed bookkeeping and the doRNG per-task
+// conventions beyond the stream jumps.
 
 type State = struct { s: [6]u64 }
 
@@ -128,4 +129,12 @@ fn jump(st: State, which: u8) -> State {
         i += 1usize
     }
     ret out
+}
+
+// rngtools::RNGseq(n, seed) for a single number seed under the default generator: set.seed(seed) with the
+// Mersenne-Twister, then RNGkind("L'Ecuyer-CMRG") reseeds the new generator from floor(u * (2^32 - 1)) for the
+// next uniform u of the old one; stream i is that state advanced by i stream jumps
+fn rngseq_start(u: f64) -> State {
+    let s = u32(u * 4294967295.0f64)
+    ret set_seed(s)
 }
