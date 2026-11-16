@@ -302,6 +302,7 @@ oracle_rdensity
 oracle_hdrcdepkg
 oracle_gmmpkg
 oracle_qcapkg
+oracle_nleqslvpkg
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -348,3 +349,4 @@ oracle_rdensity
 oracle_hdrcdepkg
 oracle_gmmpkg
 oracle_qcapkg
+oracle_nleqslvpkg

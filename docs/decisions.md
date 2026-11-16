@@ -46066,3 +46066,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.qcapkg` gains `expr_member` (a sum of products with optional negation: product as the minimum, sum as the maximum) and `pof`: sufficiency inclusion Σmin(x, y) / Σx, PRI (Σmin(x, y) - Σmin(x, y, 1 - y)) / (Σx - Σmin(x, y, 1 - y)) and coverage Σmin(x, y) / Σy, and for necessity inclusion Σmin(x, y) / Σy, relevance Σ(1 - x) / Σ(1 - min(x, y)) and coverage Σmin(x, y) / Σx. pof() defaults to necessity when the relation is not given, which the check against R showed before the oracle was written.
 
 **Result.** `oracle_qcapkg` agrees with QCA on 314 cases on Windows, the 174 new ones at rel 1e-8: both relations and three measures on 29 fuzzy data sets of 10 to 40 rows with one or two terms of one to three literals. covU, the intermediate solution, the inclusion and PRI cut-offs, superSubset and the necessity tests are open; Linux pending. L511 stays partial.
+
+## D6483 — nleqslv and multiroot: roots of fixed systems
+
+`e.algo.stat.nleqslvpkg` is new: `system` (five fixed two- and three-equation systems), `solve` (Newton with a forward-difference Jacobian, a halving line search on the residual norm, and a Levenberg-Marquardt fallback when no damped Newton step reduces it; it stops at max |f| of 1e-10). A start that stalled the plain damped Newton in the three-variable system, where nleqslv's double-dogleg converges, is what the fallback is for. The package's trust-region strategies, Broyden updates, termination codes and iteration counts are not reproduced, only the root they reach.
+
+**Result.** `oracle_nleqslvpkg` agrees with nleqslv, and with multiroot where both converge, on 111 roots on Windows at rel and abs 1e-6, 60 random starts over five systems with the ones nleqslv does not converge on dropped. Broyden, the global strategies, jacobian.full, gradient, hessian, uniroot.all, steady, maxLik and bbmle are open; Linux pending. L360 is partial.
