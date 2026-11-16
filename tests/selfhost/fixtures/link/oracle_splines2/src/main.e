@@ -57,6 +57,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             var kp = 0u8
             if kind == 13usize { kp = 1u8 }
             m = sp.periodic_row(tp, knots, lo, hi, degree, icp, kp, 0usize, xs[i], out)
+        } else if kind == 18usize {
+            let (tk, ek1) = mem.alloc[f64](a, nk + 12usize)
+            let (tmpk, ek2) = mem.alloc[f64](a, 2usize * (nk + 4usize) + 8usize)
+            let (outk, ek3) = mem.alloc[f64](a, nk + 6usize)
+            if ek1 != ok || ek2 != ok || ek3 != ok { ret 0.0f64 / 0.0f64 }
+            m = sp.nsk_row(a, tk, tmpk, knots, lo, hi, icp, xs[i], outk)
+            var jk = 0usize
+            while jk < m {
+                out[jk] = outk[jk]
+                jk += 1usize
+            }
         } else if kind >= 15usize && kind <= 17usize {
             m = sp.bern_row(degree, icp, lo, hi, kind - 15usize, xs[i], out)
         } else if kind == 6usize || kind == 7usize {

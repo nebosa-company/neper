@@ -47290,3 +47290,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6705 — splines2 bernsteinPoly
 
 **Decision.** `bern_row` is the Bernstein basis of the given degree on the boundary interval, u = (x - lo) / (hi - lo), with the k-th derivative as `n!/(n-k)! (hi - lo)^-k` times the alternating binomial sum of the degree n - k basis; the first column drops without the intercept. Values, first and second derivatives equal bernsteinPoly; its integral option stays open. Linux pending.
+
+## D6706 — splines2 nsk
+
+**Decision.** `nsk_row` is the cardinal natural cubic spline basis: the `naturalSpline` row with the intercept times the inverse of the same basis evaluated at the boundary and internal knots (Gaussian elimination with partial pivoting on the transposed system), so each column is one at its own knot and zero at the others, as the package documents. Without the intercept the first column drops. This reaches the package's H-matrix result in exact arithmetic; trim, derivatives and integrals stay open. Linux pending.

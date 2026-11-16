@@ -3564,4 +3564,5 @@ D6701	688	SuppDists Johnson fit
 D6702	590	SuppDists classic hypergeometric moments
 D6703	768	SuppDists random variates
 D6704	392	splines2 ibs
-D6705	423	splines2 bernsteinPoly
+D6705	424	splines2 bernsteinPoly
+D6706	546	splines2 nsk

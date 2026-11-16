@@ -1,6 +1,6 @@
 id	category	score	evidence_bytes	title	status
 L444	library	0.9	3559	SuppDists: Johnson, Kendall, Spearman and related distributions	Partly done (D6075): e.algo.stat.suppdists has inverse Gaussian, exact Kendall and Spearman for small N, and Johnson SN, SL, SB, SU d, p and q, equal to SuppDists on 428 values on Windows (oracle_supp
-L445	library	0.4	1639	splines2: spline bases	Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2);
+L445	library	0.4	1784	splines2: spline bases	Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2);
 L446	library	0.4	474	mixsqp: mixture proportions by SQP	Partly done (D6076): e.algo.stat.mixsqp finds the mixsqp optimum (proportions and value) by SQUAREM-accelerated EM, equal on 156 values at 1e-5 on Windows (oracle_mixsqp);
 L447	library	0.35	424	norm: EM and data augmentation for multivariate normal data	Partly done (D6074): e.algo.stat.normem has em.norm (path-exact) and loglik.norm, equal to norm on 355 values on Windows (oracle_norm);
 L469	library	0.3	544	pastecs: decomposition, turning points and descriptive statistics	Partly done (D6073): e.algo.stat.pastecs has turnpoints with probabilities and information, and stat.desc with the moment entries, equal to pastecs on 1040 values on Windows (oracle_pastecs);

@@ -380,3 +380,93 @@ fn bern_row(degree: usize, intercept: bool, lo: f64, hi: f64, deriv: usize, x: f
     }
     ret o
 }
+
+// splines2::nsk row at x: the natural basis (`nat_row` with the intercept) times the inverse of its values at the boundary and internal knots, so each column is the cardinal natural spline that is one at its own knot and zero at the others; the first column drops without the intercept
+fn nsk_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, intercept: bool, x: f64, out: []f64) -> usize {
+    let kn = knots.len + 2usize
+    let (m, e0) = mem.alloc[f64](a, kn * kn)
+    let (rhs, e1) = mem.alloc[f64](a, kn)
+    let (nrow, e2) = mem.alloc[f64](a, kn + 4usize)
+    if e0 != ok || e1 != ok || e2 != ok { ret 0usize }
+    // M^T r = N(x): column j of M^T is the basis at knot j, stored row-major as mt[c * kn + j]
+    var j = 0usize
+    while j < kn {
+        var kx = lo
+        if j == kn - 1usize { kx = hi } else if j > 0usize { kx = knots[j - 1usize] }
+        let c = nat_row(a, t, tmp, knots, lo, hi, true, kx, nrow)
+        if c != kn { ret 0usize }
+        var i = 0usize
+        while i < kn {
+            m[i * kn + j] = nrow[i]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    let c2 = nat_row(a, t, tmp, knots, lo, hi, true, x, nrow)
+    if c2 != kn { ret 0usize }
+    var i = 0usize
+    while i < kn {
+        rhs[i] = nrow[i]
+        i += 1usize
+    }
+    // Gaussian elimination with partial pivoting on m r = rhs
+    var col = 0usize
+    while col < kn {
+        var piv = col
+        var best = math.abs[f64](m[col * kn + col])
+        var r = col + 1usize
+        while r < kn {
+            let v = math.abs[f64](m[r * kn + col])
+            if v > best {
+                best = v
+                piv = r
+            }
+            r += 1usize
+        }
+        if piv != col {
+            var q = 0usize
+            while q < kn {
+                let tv = m[col * kn + q]
+                m[col * kn + q] = m[piv * kn + q]
+                m[piv * kn + q] = tv
+                q += 1usize
+            }
+            let tr = rhs[col]
+            rhs[col] = rhs[piv]
+            rhs[piv] = tr
+        }
+        r = col + 1usize
+        while r < kn {
+            let f = m[r * kn + col] / m[col * kn + col]
+            var q = col
+            while q < kn {
+                m[r * kn + q] = m[r * kn + q] - f * m[col * kn + q]
+                q += 1usize
+            }
+            rhs[r] = rhs[r] - f * rhs[col]
+            r += 1usize
+        }
+        col += 1usize
+    }
+    var sol_i = kn
+    while sol_i > 0usize {
+        sol_i -= 1usize
+        var s = rhs[sol_i]
+        var q = sol_i + 1usize
+        while q < kn {
+            s -= m[sol_i * kn + q] * rhs[q]
+            q += 1usize
+        }
+        rhs[sol_i] = s / m[sol_i * kn + sol_i]
+    }
+    var o = 0usize
+    var cidx = 0usize
+    while cidx < kn {
+        if cidx > 0usize || intercept {
+            out[o] = rhs[cidx]
+            o += 1usize
+        }
+        cidx += 1usize
+    }
+    ret o
+}
