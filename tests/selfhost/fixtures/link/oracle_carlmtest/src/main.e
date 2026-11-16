@@ -37,6 +37,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(c.name, "lh") || str.eq(c.name, "lhp") {
+        let q = usize(x[2usize + n + n * p])
+        let base = 3usize + n + n * p
+        let (hs, hp) = cl.linear_hypothesis(a, des, y, n, p, x[base..base + q * p], x[base + q * p..base + q * p + q], q)
+        if c.name.len == 2usize { ret hs }
+        ret hp
+    }
     if str.eq(c.name, "ncv") || str.eq(c.name, "ncvp") {
         let (ns, np) = cl.ncv_test(a, des, y, n, p)
         if c.name.len == 3usize { ret ns }

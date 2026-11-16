@@ -46360,3 +46360,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `ncv_test` regresses `e^2 / (RSS/n)` on the fitted values and returns RegSS/2 (df 1); `levene_test` is the one-way ANOVA F of `|y - group centre|` with the median (averaging the middle pair) or the mean as centre.
 
 **Result.** `oracle_carlmtest` agrees with car on 84 new values on Windows; Linux pending. L300 stays partial (car Anova, boxCox, powerTransform, linearHypothesis and the other lmtest tests).
+
+## D6532 — car: linearHypothesis
+
+**Decision.** `linear_hypothesis` is car's F test for an lm: `(R b - rhs)' [R (X'X)^-1 R']^-1 (R b - rhs) / (q s^2)` on (q, n - p) degrees of freedom, for any q-row hypothesis matrix.
+
+**Result.** `oracle_carlmtest` agrees with car on 24 new values on Windows; Linux pending. L300 stays partial (Anova, boxCox, powerTransform, other lmtest tests).

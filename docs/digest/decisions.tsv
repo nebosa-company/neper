@@ -3399,4 +3399,5 @@ D6527	880	mvtnorm: qmvnorm
 D6528	648	mvtnorm: qmvt
 D6529	609	lmtest: bgtest
 D6530	608	lmtest: raintest and harvtest
-D6531	463	car: ncvTest and leveneTest
+D6531	464	car: ncvTest and leveneTest
+D6532	384	car: linearHypothesis

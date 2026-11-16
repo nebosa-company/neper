@@ -764,3 +764,60 @@ fn levene_test(a: *mem.Arena, y: []const f64, grp: []const f64, ng: usize, cente
     let f = (ssb / f64(ng - 1usize)) / (ssw / f64(n - ng))
     ret (f, p_f(f, f64(ng - 1usize), f64(n - ng)))
 }
+
+// car::linearHypothesis(model, R, rhs) for an lm: the F statistic (R b - rhs)' [R (X'X)^-1 R']^-1 (R b - rhs) / (q s^2), with q rows of the p-column matrix hm and its p value
+fn linear_hypothesis(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, hm: []const f64, rhs: []const f64, q: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (f0, e1) = ols(a, x, y, n, p)
+    if e1 != ok { ret (nan, nan) }
+    let (d, e2) = mem.alloc[f64](a, q)
+    let (m, e3) = mem.alloc[f64](a, q * q)
+    let (mi, e4) = mem.alloc[f64](a, q * q)
+    if e2 != ok || e3 != ok || e4 != ok { ret (nan, nan) }
+    var i = 0usize
+    while i < q {
+        var s = 0.0f64
+        var j = 0usize
+        while j < p {
+            s += hm[i * p + j] * f0.beta[j]
+            j += 1usize
+        }
+        d[i] = s - rhs[i]
+        var k = 0usize
+        while k < q {
+            var t = 0.0f64
+            j = 0usize
+            while j < p {
+                var l = 0usize
+                while l < p {
+                    t += hm[i * p + j] * f0.xtx_inv[j * p + l] * hm[k * p + l]
+                    l += 1usize
+                }
+                j += 1usize
+            }
+            m[i * q + k] = t
+            k += 1usize
+        }
+        i += 1usize
+    }
+    if inverse(a, m, q, mi) != ok { ret (nan, nan) }
+    var rss = 0.0f64
+    i = 0usize
+    while i < n {
+        rss += f0.resid[i] * f0.resid[i]
+        i += 1usize
+    }
+    let s2 = rss / f64(n - p)
+    var quad = 0.0f64
+    i = 0usize
+    while i < q {
+        var j = 0usize
+        while j < q {
+            quad += d[i] * mi[i * q + j] * d[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let fs = quad / (f64(q) * s2)
+    ret (fs, p_f(fs, f64(q), f64(n - p)))
+}
