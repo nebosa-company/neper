@@ -3129,4 +3129,5 @@ D6053	981	box-constrained derivative-free minimiser: same optimum, not the BOBYQ
 D6054	1042	augmented Lagrangian over the box minimiser; dfree is generic over the context
 D6055	1230	glmnet gaussian: the ridge part is divided by sd(y)
 D6056	1164	coxph: Newton on the Efron or Breslow partial likelihood, columns centred
-D6057	1220	psych closed-form part; ICC follows the mixed model, not the ANOVA table
+D6057	1221	psych closed-form part; ICC follows the mixed model, not the ANOVA table
+D6058	1121	emmeans for lm: the caller builds the grid row, the module does the linear algebra and adjustments

@@ -2143,10 +2143,10 @@
       "group": "CRAN parity",
       "order": 788,
       "title": "emmeans: estimated marginal means and contrasts",
-      "score": 0,
+      "score": 0.12,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 192). Large. Needs L300 for Anova machinery and L301 for the mvt adjustment. Acceptance, equal to emmeans for lm and glm fits (and lmer once L274 lands): ref_grid, emmeans, emmip data, pairs, contrast methods (pairwise, revpairwise, trt.vs.ctrl, dunnett, poly, consec, eff), adjustments (tukey, sidak, bonferroni, holm, scheffe, mvt), joint_tests, emtrends, eff_size, regrid and the response-scale transforms."
+      "evidence": "Partly done (D6058): e.algo.stat.emmeans gives lm EMMs, SEs, pairwise contrasts and Tukey, Holm, Bonferroni, Sidak adjustments equal to emmeans on 8 models on Windows (oracle_emmeans); Linux pending. Open: model-frame grid, glm and mixed models, scheffe and mvt, other contrasts, joint_tests, emtrends, eff_size, regrid. Original: Open (CRAN rank 192). Large. Needs L300 for Anova machinery and L301 for the mvt adjustment. Acceptance, equal to emmeans for lm and glm fits (and lmer once L274 lands): ref_grid, emmeans, emmip data, pairs, contrast methods (pairwise, revpairwise, trt.vs.ctrl, dunnett, poly, consec, eff), adjustments (tukey, sidak, bonferroni, holm, scheffe, mvt), joint_tests, emtrends, eff_size, regrid and the response-scale transforms."
     },
     {
       "id": "L341",
