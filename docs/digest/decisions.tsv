@@ -3143,4 +3143,5 @@ D6067	1571	JDEoptim on the R stream: draw order is the specification
 D6068	1590	fdrtool for p values: eta0 from the censored sample, the Grenander density by isotonic slopes
 D6069	1266	splines2 bases by Cox-de Boor on the extended knots
 D6070	1094	partitions: integer partitions in R's orders, counts by the coin-change table
-D6071	1638	BiasedUrn: the mass function over the support, Wallenius by tanh-sinh, odds and mode in closed form
+D6071	1639	BiasedUrn: the mass function over the support, Wallenius by tanh-sinh, odds and mode in closed form
+D6072	1505	modeest: the shortest-half estimators, the grid rule of seq, the 1:0 quirk

@@ -207,3 +207,4 @@ oracle_fdrtool
 oracle_splines2
 oracle_partitions
 oracle_biasedurn
+oracle_modeest
