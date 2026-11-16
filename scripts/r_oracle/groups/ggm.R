@@ -89,4 +89,18 @@ for (rep in 1:60) {
   ord <- topOrder(A)
   for (q in seq_along(ord)) cases[[length(cases) + 1]] <- case("topo", c(p, rowm(A), q - 1), ord[q], rel = 0, abs = 0)
 }
+# fitConGraph with cliques ("clq": args (p, n, S, A, ncl, sizes[ncl], cliques flat 1-based, q); q 0..p*p-1 Shat, then dev, df, it) and fitCovGraph dual ("dual": args (p, n, S, A, q))
+for (rep in 1:40) {
+  p <- sample(4:7, 1); n <- sample(40:120, 1); S <- rndS(p, n)
+  ncl <- sample(2:3, 1); cl <- lapply(1:ncl, function(i) sort(sample(p, sample(2:3, 1))))
+  A <- matrix(0, p, p); for (c in cl) for (i in c) for (j in c) if (i != j) A[i, j] <- 1
+  dimnames(A) <- list(letters[1:p], letters[1:p])
+  f <- tryCatch(fitConGraph(A, S, n, cli = lapply(cl, function(c) letters[c])), error = function(e) NULL)
+  if (!is.null(f)) { out <- c(rowm(f$Shat), f$dev, f$df, f$it)
+    for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("clq", c(p, n, rowm(S), rowm(A), ncl, sapply(cl, length), unlist(cl), q - 1), out[q], rel = 1e-6, abs = 1e-8) }
+  if (all(A == 0)) next
+  f <- tryCatch(fitCovGraph(A, S, n, alg = "dual"), error = function(e) NULL)
+  if (!is.null(f)) { out <- c(rowm(f$Shat), f$dev, f$df, f$it)
+    for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("dual", c(p, n, rowm(S), rowm(A), q - 1), out[q], rel = 1e-5, abs = 1e-7) }
+}
 emit("ggm", "ggm", list(cases))

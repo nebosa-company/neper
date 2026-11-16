@@ -3577,4 +3577,5 @@ D6714	773	pastecs: trend.test and AS 89 prho
 D6715	1321	ggm: partial correlations and the Gaussian graph fits
 D6716	1160	ggm: dSep and marg.param
 D6717	1046	ggm: fitAncestralGraph
-D6718	792	ggm: induced graphs and topOrder
+D6718	793	ggm: induced graphs and topOrder
+D6719	846	ggm: fitConGraph with cliques and the dual fitCovGraph

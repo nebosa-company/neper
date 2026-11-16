@@ -1584,3 +1584,169 @@ fn toporder(a: *mem.Arena, amat: []const f64, p: usize, ord: []usize) -> err {
     }
     ret ok
 }
+
+// fitConGraph with the cliques of the graph given (the package's algorithm 2, iterative proportional scaling on the concentration matrix): `cliques` lists the cliques flat, `sizes` their sizes; amat (the graph, symmetric 0/1) only supplies the degrees of freedom
+fn fitcongraph_cli(a: *mem.Arena, amat: []const f64, s: []const f64, p: usize, n: f64, cliques: []const usize, sizes: []const usize, tol: f64, w: []f64) -> (ConFit, err) {
+    var res: ConFit = zero
+    let k = p
+    let nc = sizes.len
+    if nc == 1usize {
+        var i0 = 0usize
+        while i0 < k * k {
+            w[i0] = s[i0]
+            i0 += 1usize
+        }
+        res.it = 1i64
+        ret (res, ok)
+    }
+    let (km, e0) = mem.alloc[f64](a, k * k)
+    let (kold, e1) = mem.alloc[f64](a, k * k)
+    let (bidx, e2) = mem.alloc[usize](a, k + 1usize)
+    if e0 != ok || e1 != ok || e2 != ok { ret (res, e0) }
+    var i = 0usize
+    while i < k * k {
+        km[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        km[i * k + i] = 1.0f64 / s[i * k + i]
+        i += 1usize
+    }
+    var it = 0i64
+    var going = true
+    while going {
+        i = 0usize
+        while i < k * k {
+            kold[i] = km[i]
+            i += 1usize
+        }
+        it += 1i64
+        var off = 0usize
+        var c = 0usize
+        while c < nc {
+            let sz = sizes[c]
+            let aa = cliques[off..off + sz]
+            var nb2 = 0usize
+            var v = 0usize
+            while v < k {
+                var inside = false
+                var q = 0usize
+                while q < sz {
+                    if aa[q] == v { inside = true }
+                    q += 1usize
+                }
+                if !inside {
+                    bidx[nb2] = v
+                    nb2 += 1usize
+                }
+                v += 1usize
+            }
+            let bb = bidx[0usize..nb2]
+            let (saa, ea) = gg_sub(a, s, k, aa, aa)
+            let (kab, eb) = gg_sub(a, km, k, aa, bb)
+            let (kbb, ec) = gg_sub(a, km, k, bb, bb)
+            if ea != ok || eb != ok || ec != ok { ret (res, ea) }
+            let (isaa, ed) = gg_inv(a, saa, sz)
+            let (ikbb, ee) = gg_inv(a, kbb, nb2)
+            if ed != ok || ee != ok { ret (res, ed) }
+            let (kba, ef) = gg_t(a, kab, sz, nb2)
+            let (t1, eg) = mem.alloc[f64](a, sz * nb2 + 1usize)
+            let (t2, eh) = mem.alloc[f64](a, sz * sz + 1usize)
+            if ef != ok || eg != ok || eh != ok { ret (res, ef) }
+            gg_mul(kab, ikbb, sz, nb2, nb2, t1)
+            gg_mul(t1, kba, sz, nb2, sz, t2)
+            var r = 0usize
+            while r < sz {
+                var q = 0usize
+                while q < sz {
+                    km[aa[r] * k + aa[q]] = isaa[r * sz + q] + t2[r * sz + q]
+                    q += 1usize
+                }
+                r += 1usize
+            }
+            off += sz
+            c += 1usize
+        }
+        var diff = 0.0f64
+        i = 0usize
+        while i < k * k {
+            diff += math.abs[f64](km[i] - kold[i])
+            i += 1usize
+        }
+        if diff < tol { going = false }
+    }
+    let (wm, e3) = gg_inv(a, km, k)
+    if e3 != ok { ret (res, e3) }
+    i = 0usize
+    while i < k * k {
+        w[i] = wm[i]
+        i += 1usize
+    }
+    var zeros = 0.0f64
+    i = 0usize
+    while i < k * k {
+        zeros += 1.0f64 - amat[i]
+        i += 1usize
+    }
+    res.df = (zeros - f64(k)) / 2.0f64
+    let (dv, e4) = likgau(a, km, s, n, k)
+    if e4 != ok { ret (res, e4) }
+    res.dev = dv
+    res.it = it
+    ret (res, ok)
+}
+
+// base R 4.6 zapsmall: round to 7 - log10(max abs x) decimal places, the count itself rounded to the nearest integer
+fn gg_zapsmall(m: []f64) {
+    var mx = 0.0f64
+    var i = 0usize
+    while i < m.len {
+        if math.abs[f64](m[i]) > mx { mx = math.abs[f64](m[i]) }
+        i += 1usize
+    }
+    var digits = 7.0f64
+    if mx > 0.0f64 { digits = math.floor[f64](math.max[f64](0.0f64, 7.0f64 - math.log10[f64](mx)) + 0.5f64) }
+    let sc = math.pow[f64](10.0f64, digits)
+    i = 0usize
+    while i < m.len {
+        m[i] = math.round[f64](m[i] * sc) / sc
+        i += 1usize
+    }
+}
+
+// fitCovGraph(amat, S, n, alg = "dual"): the concentration-graph fit to the inverse of S, inverted and zapped
+fn fitcovgraph_dual(a: *mem.Arena, amat: []const f64, s: []const f64, p: usize, n: f64, tol: f64, sigma: []f64) -> (CovFit, err) {
+    var res: CovFit = zero
+    let (sinv, e1) = gg_inv(a, s, p)
+    let (w, e2) = mem.alloc[f64](a, p * p)
+    if e1 != ok || e2 != ok { ret (res, e1) }
+    let (cf, e3) = fitcongraph(a, amat, sinv, p, n, tol, w)
+    if e3 != ok { ret (res, e3) }
+    let (iw, e4) = gg_inv(a, w, p)
+    if e4 != ok { ret (res, e4) }
+    var i = 0usize
+    while i < p * p {
+        sigma[i] = iw[i]
+        i += 1usize
+    }
+    gg_zapsmall(sigma[0usize..p * p])
+    var zeros = 0.0f64
+    var r = 0usize
+    while r < p {
+        var c = r + 1usize
+        while c < p {
+            if amat[r * p + c] == 0.0f64 { zeros += 1.0f64 }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    res.df = zeros
+    let (kh, e5) = gg_inv(a, sigma, p)
+    if e5 != ok { ret (res, e5) }
+    let (dv, e6) = likgau(a, kh, s, n, p)
+    if e6 != ok { ret (res, e6) }
+    res.dev = dv
+    res.it = cf.it
+    ret (res, ok)
+}

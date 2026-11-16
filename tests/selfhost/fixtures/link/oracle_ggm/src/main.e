@@ -184,6 +184,41 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if q == p * p + p + 1usize { ret r.df }
         ret ah[q - p * p - p - 2usize]
     }
+    if str.eq(nm, "clq") {
+        let at = 2usize + 2usize * p * p
+        let ncl = usize(z[at])
+        let (sz, e2) = mem.alloc[usize](a, ncl)
+        if e2 != ok { ret nan }
+        var tot = 0usize
+        var i = 0usize
+        while i < ncl {
+            sz[i] = usize(z[at + 1usize + i])
+            tot += sz[i]
+            i += 1usize
+        }
+        let (cl, e3) = mem.alloc[usize](a, tot)
+        if e3 != ok { ret nan }
+        i = 0usize
+        while i < tot {
+            cl[i] = usize(z[at + 1usize + ncl + i]) - 1usize
+            i += 1usize
+        }
+        let qc = usize(z[at + 1usize + ncl + tot])
+        let (r, e4) = gg.fitcongraph_cli(a, am, s, p, n, cl, sz, 0.000001f64, sh)
+        if e4 != ok { ret nan }
+        if qc < p * p { ret sh[qc] }
+        if qc == p * p { ret r.dev }
+        if qc == p * p + 1usize { ret r.df }
+        ret f64(r.it)
+    }
+    if str.eq(nm, "dual") {
+        let (r, e2) = gg.fitcovgraph_dual(a, am, s, p, n, 0.000001f64, sh)
+        if e2 != ok { ret nan }
+        if q < p * p { ret sh[q] }
+        if q == p * p { ret r.dev }
+        if q == p * p + 1usize { ret r.df }
+        ret f64(r.it)
+    }
     if str.eq(nm, "con") {
         let (r, e2) = gg.fitcongraph(a, am, s, p, n, 0.000001f64, sh)
         if e2 != ok { ret nan }
