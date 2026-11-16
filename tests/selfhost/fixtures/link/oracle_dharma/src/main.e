@@ -29,6 +29,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret s
     }
     if str.eq(k, "ks") { ret dh.ks_uniform(a, r) }
+    if str.eq(k, "ksp") { ret dh.ks_pvalue(a, r) }
     let cnt = dh.outlier_count(r, ns)
     if str.eq(k, "nout") { ret f64(cnt) }
     ret dh.binom_test_p(cnt, n, 2.0f64 / f64(ns + 1usize))

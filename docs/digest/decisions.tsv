@@ -3245,4 +3245,5 @@ D6169	808	DiceDesign: maximinSA_LHS simulated annealing, draw for draw
 D6170	1164	DiceDesign: discrepSA_LHS (C2) draw for draw, with R's extended-precision products and sums
 D6171	787	DiceDesign: wspDesign
 D6172	484	DiceDesign: meshRatio
-D6173	1022	DHARMa: PIT residuals, the KS statistic and the binomial outlier test
+D6173	1023	DHARMa: PIT residuals, the KS statistic and the binomial outlier test
+D6174	808	DHARMa: the Kolmogorov-Smirnov p value as R's ks.test gives it

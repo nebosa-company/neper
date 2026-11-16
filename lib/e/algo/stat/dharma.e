@@ -145,3 +145,164 @@ fn binom_test_p(x: usize, n: usize, p: f64) -> f64 {
     if pv > 1.0f64 { pv = 1.0f64 }
     ret pv
 }
+
+fn mat_mul(a: []const f64, b: []const f64, c: []f64, m: usize) {
+    var i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            var s = 0.0f64
+            var k = 0usize
+            while k < m {
+                s += a[i * m + k] * b[k * m + j]
+                k += 1usize
+            }
+            c[i * m + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// Marsaglia-Tsang-Wang: V = A^n scaled, with the base-10 exponent in the second answer
+fn mat_power(arena: *mem.Arena, a: []const f64, ea: i64, v: []f64, m: usize, n: usize) -> (i64, err) {
+    if n == 1usize {
+        var i = 0usize
+        while i < m * m {
+            v[i] = a[i]
+            i += 1usize
+        }
+        ret (ea, ok)
+    }
+    let (ev, e1) = mat_power(arena, a, ea, v, m, n / 2usize)
+    if e1 != ok { ret (0i64, e1) }
+    let (b, e2) = mem.alloc[f64](arena, m * m)
+    if e2 != ok { ret (0i64, e2) }
+    mat_mul(v, v, b, m)
+    var eb = 2i64 * ev
+    var res = ev
+    if n % 2usize == 0usize {
+        var i = 0usize
+        while i < m * m {
+            v[i] = b[i]
+            i += 1usize
+        }
+        res = eb
+    } else {
+        mat_mul(a, b, v, m)
+        res = ea + eb
+    }
+    if v[(m / 2usize) * m + m / 2usize] > 1.0e140f64 {
+        var i = 0usize
+        while i < m * m {
+            v[i] = v[i] * 1.0e-140f64
+            i += 1usize
+        }
+        res += 140i64
+    }
+    ret (res, ok)
+}
+
+// the exact two-sided Kolmogorov-Smirnov distribution function P(D_n < d)
+fn ks_exact_cdf(arena: *mem.Arena, n: usize, d: f64) -> f64 {
+    let k = usize(f64(n) * d) + 1usize
+    let m = 2usize * k - 1usize
+    let h = f64(k) - f64(n) * d
+    let (hm, e1) = mem.alloc[f64](arena, m * m)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (q, e2) = mem.alloc[f64](arena, m * m)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            if i + 1usize < j { hm[i * m + j] = 0.0f64 } else { hm[i * m + j] = 1.0f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        hm[i * m] = hm[i * m] - math.pow[f64](h, f64(i + 1usize))
+        hm[(m - 1usize) * m + i] = hm[(m - 1usize) * m + i] - math.pow[f64](h, f64(m - i))
+        i += 1usize
+    }
+    if 2.0f64 * h - 1.0f64 > 0.0f64 { hm[(m - 1usize) * m] = hm[(m - 1usize) * m] + math.pow[f64](2.0f64 * h - 1.0f64, f64(m)) }
+    i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            if i + 1usize > j {
+                var g = 1usize
+                while g <= i - j + 1usize {
+                    hm[i * m + j] = hm[i * m + j] / f64(g)
+                    g += 1usize
+                }
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (eq, e3) = mat_power(arena, hm, 0i64, q, m, n)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    var s = q[(k - 1usize) * m + k - 1usize]
+    var ex = eq
+    i = 1usize
+    while i <= n {
+        s = s * f64(i) / f64(n)
+        if s < 1.0e-140f64 {
+            s = s * 1.0e140f64
+            ex -= 140i64
+        }
+        i += 1usize
+    }
+    ret s * math.pow[f64](10.0f64, f64(ex))
+}
+
+fn has_ties(a: *mem.Arena, r: []const f64) -> bool {
+    let (s, e) = sorted(a, r)
+    if e != ok { ret false }
+    var i = 1usize
+    while i < s.len {
+        if s[i] == s[i - 1usize] { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// the Kolmogorov-Smirnov p value of ks.test(r, "punif"): exact below 100 observations without ties, the limiting distribution otherwise
+fn ks_pvalue(a: *mem.Arena, r: []const f64) -> f64 {
+    let n = r.len
+    let d = ks_uniform(a, r)
+    if n < 100usize && !has_ties(a, r) { ret 1.0f64 - ks_exact_cdf(a, n, d) }
+    let x = math.sqrt[f64](f64(n)) * d
+    var lower = 0.0f64
+    let tol = 1.0e-6f64
+    let pi = 3.141592653589793238462643383279f64
+    if x > 0.0f64 && x < 1.0f64 {
+        let kmax = usize(math.sqrt[f64](2.0f64 - math.log[f64](tol)))
+        let z = 0.0f64 - (pi / 2.0f64 * pi / 4.0f64) / (x * x)
+        let w = math.log[f64](x)
+        var s = 0.0f64
+        var k = 1usize
+        while k < kmax {
+            s += math.exp[f64](f64(k * k) * z - w)
+            k += 2usize
+        }
+        lower = s / (1.0f64 / math.sqrt[f64](2.0f64 * pi))
+    } else if x >= 1.0f64 {
+        let z = 0.0f64 - 2.0f64 * x * x
+        var s = 0.0f64 - 1.0f64
+        var k = 1usize
+        var old = 0.0f64
+        var nw = 1.0f64
+        while math.abs[f64](old - nw) > tol {
+            old = nw
+            nw += 2.0f64 * s * math.exp[f64](z * f64(k * k))
+            s = 0.0f64 - s
+            k += 1usize
+        }
+        lower = nw
+    }
+    ret 1.0f64 - lower
+}

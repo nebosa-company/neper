@@ -438,10 +438,10 @@
       "group": "CRAN parity",
       "order": 613,
       "title": "DHARMa: simulated residual diagnostics",
-      "score": 0.3,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6173). PIT residuals, the KS statistic, the outlier count and the binomial outlier test equal DHARMa on Windows (oracle_dharma; Linux pending). Open: traditional residuals, testDispersion, testZeroInflation, autocorrelation, bootstrap outliers, KS p value. Was: Open (CRAN rank 550). Small to mid. Needs fitted models with a simulate method. Acceptance, equal to DHARMa under set.seed: simulateResiduals scaled residuals, testUniformity, testDispersion, testOutliers, testZeroInflation, testTemporalAutocorrelation, testSpatialAutocorrelation, recalculateResiduals."
+      "evidence": "Partial (D6173, D6174 KS p value). PIT residuals, the KS statistic, the outlier count and the binomial outlier test equal DHARMa on Windows (oracle_dharma; Linux pending). Open: traditional residuals, testDispersion, testZeroInflation, autocorrelation, bootstrap outliers, KS p value. Was: Open (CRAN rank 550). Small to mid. Needs fitted models with a simulate method. Acceptance, equal to DHARMa under set.seed: simulateResiduals scaled residuals, testUniformity, testDispersion, testOutliers, testZeroInflation, testTemporalAutocorrelation, testSpatialAutocorrelation, recalculateResiduals."
     },
     {
       "id": "L422",

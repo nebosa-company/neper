@@ -14,5 +14,6 @@ for (rep in 1:14) {
   add("res", a, sum(sr * seq_along(sr))); add("ks", a, as.numeric(suppressWarnings(ks.test(sr, "punif")$statistic)))
   to <- suppressMessages(testOutliers(r, plot = FALSE))
   add("nout", a, as.numeric(to$statistic)); add("pout", a, to$p.value)
+  add("ksp", a, suppressWarnings(ks.test(sr, "punif")$p.value))
 }
 emit("dharma", "DHARMa", list(cases))

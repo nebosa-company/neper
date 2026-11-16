@@ -45436,3 +45436,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.dharma` computes the quantile (PIT) residuals of a simulated response matrix as createDHARMa does with method = "PIT": the fraction of simulations below the observation, randomised uniformly between that and the fraction at or below it when they differ, drawing one uniform per observation (n of them, even for the rows that need none) after set.seed(seed) as soon as any row needs it. It also gives the two-sided Kolmogorov-Smirnov statistic against the uniform, the outlier count (residuals under 1 / (nsim + 1) or over one minus that) and testOutliers' exact binomial p value at 2 / (nsim + 1) (R's two-sided rule with relative tolerance 1e-7). Not here: the traditional method and rotation, testDispersion, testZeroInflation, testTemporalAutocorrelation, refitted residuals, the bootstrap outlier test and the KS p value.
 
 **Result.** `oracle_dharma` equals DHARMa on 56 cases on Windows; Linux pending. L411 is partial.
+
+## D6174 — DHARMa: the Kolmogorov-Smirnov p value as R's ks.test gives it
+
+`e.algo.stat.dharma` gains ks_pvalue: for fewer than 100 residuals without ties the exact two-sided distribution (Marsaglia-Tsang-Wang matrix power with its scaling exponent, as in R's C code), otherwise the limiting distribution evaluated as R does, with its truncated series (three terms below x = 1 through the theta-function form, the alternating series to tolerance 1e-6 above), which differs from the converged series in the sixth digit and so has to be copied. Residuals tie when the simulation puts the observation outside all draws (several exact 0 or 1 values), which is why the oracle meets both branches.
+
+**Result.** `oracle_dharma` equals DHARMa and ks.test on 70 cases on Windows; Linux pending. L411 stays partial.
