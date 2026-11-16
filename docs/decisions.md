@@ -47322,3 +47322,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6713 — pastecs: decevf
 
 **Decision.** `decevf` embeds the series with `lag` lags (row r holds x[r + lag - 1 - c] in column c), takes the principal axes of the embedded matrix by a Jacobi eigen decomposition of its covariance with divisor N (princomp's), projects onto the requested axes (`V_s V_s'`, so the sign of an axis does not matter), and averages the rebuilt matrix along its diagonals back to a series of the original length. Equal to pastecs on 5268 values over lags 4 to 8 and one to three axes (oracle_pastecs). Linux pending.
+
+## D6714 — pastecs: trend.test and AS 89 prho
+
+**Decision.** `trend_test` is `cor.test(x, time(x), method = "spearman")` as R 4.6 answers it: rho is the Pearson correlation of the average ranks, S = (n^3 - n)(1 - rho)/6, and the two-sided p-value doubles the tail on the side of the mean of S, with no continuity shift (R 4.6 dropped the `q - 1` of older releases). Without ties and for n below 1290 the tail is `prho`, Algorithm AS 89 ported from R's `prho.c` (exact by enumerating the n! permutations for n up to 9, the Edgeworth series beyond, with `round(S) + 2` for the lower tail); with ties it is the t approximation on n - 2 degrees of freedom. Equal to pastecs::trend.test on 120 values for n from 5 to 60 with and without ties (oracle_pastecs). Linux pending.

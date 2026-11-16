@@ -48,4 +48,13 @@ for (rep in 1:30) {
   r <- decevf(ts(x), type = tn, lag = lag, axes = axes)
   for (w in 0:1) { v <- as.vector(r$series[, w + 1]); for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("dec", c(5, 0, n, x, ty, lag, na, axes, w, i - 1), v[i], rel = 1e-7, abs = 1e-8) }
 }
+# trend.test (kind 6: args (6, 0, n, x); fn "tt_rho" "tt_s" "tt_p"); series with and without ties, short (exact, n <= 9 and the Edgeworth range) and long
+for (rep in 1:40) {
+  n <- sample(c(5:9, 10:40, 60), 1); x <- if (rep %% 2 == 0) round(cumsum(rnorm(n)), 1) else cumsum(rnorm(n)) + (if (rep %% 3 == 0) 0 else seq_len(n) * 0.3)
+  r <- trend.test(x)
+  a <- c(6, 0, n, x)
+  cases[[length(cases) + 1]] <- case("tt_rho", a, unname(r$estimate), rel = 1e-9, abs = 1e-10)
+  cases[[length(cases) + 1]] <- case("tt_s", a, unname(r$statistic), rel = 1e-9, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("tt_p", a, r$p.value, rel = 1e-8, abs = 1e-12)
+}
 emit("pastecs", "pastecs", list(cases))

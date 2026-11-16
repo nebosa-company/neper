@@ -8,6 +8,7 @@
 use e.algo.sort
 use e.algo.stat.ica as ica
 use e.math
+use e.math.dist as dist
 use e.math.nmath_beta as nb
 use e.mem
 
@@ -555,4 +556,188 @@ fn decevf(a: *mem.Arena, x: []const f64, ty: u8, lag: usize, axes: []const usize
         t += 1usize
     }
     ret ok
+}
+
+// ---- trend.test: Spearman's rank correlation of the series with time, as stats::cor.test(method = "spearman") answers it ----
+
+// the average ranks of x
+fn average_ranks(a: *mem.Arena, x: []const f64, rk: []f64) -> err {
+    let n = x.len
+    let (idx, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < n {
+        idx[i] = i
+        i += 1usize
+    }
+    // insertion sort of idx by x (stable)
+    i = 1usize
+    while i < n {
+        let key = idx[i]
+        var j = i
+        while j > 0usize && x[idx[j - 1usize]] > x[key] {
+            idx[j] = idx[j - 1usize]
+            j -= 1usize
+        }
+        idx[j] = key
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = i
+        while j + 1usize < n && x[idx[j + 1usize]] == x[idx[i]] { j += 1usize }
+        let r = (f64(i) + f64(j)) / 2.0f64 + 1.0f64
+        var k = i
+        while k <= j {
+            rk[idx[k]] = r
+            k += 1usize
+        }
+        i = j + 1usize
+    }
+    ret ok
+}
+
+// AS 89: Pr[S >= is] (or Pr[S < is] when lower_tail), exact for n <= 9 and by Edgeworth series beyond
+fn prho(n: i64, is: f64, lower_tail: bool) -> f64 {
+    var pv = 1.0f64
+    if lower_tail { pv = 0.0f64 }
+    if n <= 1i64 { ret pv }
+    if is <= 0.0f64 { ret pv }
+    var n3 = f64(n)
+    n3 = n3 * (n3 * n3 - 1.0f64) / 3.0f64
+    if is > n3 { ret 1.0f64 - pv }
+    if n <= 9i64 {
+        var l: [9]i64 = zero
+        var nfac = 1i64
+        var i = 1i64
+        while i <= n {
+            nfac = nfac * i
+            l[usize(i - 1i64)] = i
+            i += 1i64
+        }
+        var ifr = 0i64
+        if is == n3 {
+            ifr = 1i64
+        } else {
+            var m = 0i64
+            while m < nfac {
+                var ise = 0i64
+                var q = 0i64
+                while q < n {
+                    let n1 = q + 1i64 - l[usize(q)]
+                    ise += n1 * n1
+                    q += 1i64
+                }
+                if is <= f64(ise) { ifr += 1i64 }
+                var n1 = n
+                var mt = 0i64
+                var going = true
+                while going {
+                    mt = l[0usize]
+                    var r = 1i64
+                    while r < n1 {
+                        l[usize(r - 1i64)] = l[usize(r)]
+                        r += 1i64
+                    }
+                    n1 -= 1i64
+                    l[usize(n1)] = mt
+                    going = mt == n1 + 1i64 && n1 > 1i64
+                }
+                m += 1i64
+            }
+        }
+        if lower_tail { ret f64(nfac - ifr) / f64(nfac) }
+        ret f64(ifr) / f64(nfac)
+    }
+    let c1 = 0.2274f64
+    let c2 = 0.2531f64
+    let c3 = 0.1745f64
+    let c4 = 0.0758f64
+    let c5 = 0.1033f64
+    let c6 = 0.3932f64
+    let c7 = 0.0879f64
+    let c8 = 0.0151f64
+    let c9 = 0.0072f64
+    let c10 = 0.0831f64
+    let c11 = 0.0131f64
+    let c12 = 4.6e-4f64
+    let y0 = f64(n)
+    let b = 1.0f64 / y0
+    let x = (6.0f64 * (is - 1.0f64) * b / (y0 * y0 - 1.0f64) - 1.0f64) * math.sqrt[f64](y0 - 1.0f64)
+    var y = x * x
+    let u = x * b * (c1 + b * (c2 + c3 * b) + y * (0.0f64 - c4 + b * (c5 + c6 * b) - y * b * (c7 + c8 * b - y * (c9 - c10 * b + y * b * (c11 - c12 * y)))))
+    y = u / math.exp[f64](y / 2.0f64)
+    var s = y
+    if lower_tail { s = 0.0f64 - y }
+    pv = s + dist.pnorm(x, 0.0f64, 1.0f64, lower_tail, false)
+    if pv < 0.0f64 { pv = 0.0f64 }
+    if pv > 1.0f64 { pv = 1.0f64 }
+    ret pv
+}
+
+type TrendTest = struct { rho: f64, s: f64, p: f64 }
+
+// pastecs::trend.test(x) for a single series: Spearman's test of x against time (two-sided; exact when n < 1290 and there are no ties)
+fn trend_test(a: *mem.Arena, x: []const f64) -> (TrendTest, err) {
+    var res: TrendTest = zero
+    let n = x.len
+    let (rx, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret (res, e1) }
+    let er = average_ranks(a, x, rx)
+    if er != ok { ret (res, er) }
+    // the ranks of time are 1..n; Pearson correlation of the two rank vectors
+    var mx = 0.0f64
+    var i = 0usize
+    while i < n {
+        mx += rx[i]
+        i += 1usize
+    }
+    mx = mx / f64(n)
+    let mt = (f64(n) + 1.0f64) / 2.0f64
+    var sxy = 0.0f64
+    var sxx = 0.0f64
+    var syy = 0.0f64
+    i = 0usize
+    while i < n {
+        let dx = rx[i] - mx
+        let dy = f64(i + 1usize) - mt
+        sxy += dx * dy
+        sxx += dx * dx
+        syy += dy * dy
+        i += 1usize
+    }
+    let r = sxy / math.sqrt[f64](sxx * syy)
+    let nf = f64(n)
+    let q = (nf * nf * nf - nf) * (1.0f64 - r) / 6.0f64
+    var ties = false
+    i = 0usize
+    while i < n {
+        var j = i + 1usize
+        while j < n {
+            if x[i] == x[j] { ties = true }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var p = 0.0f64
+    let exact = n < 1290usize && !ties
+    let big = (nf * nf * nf - nf) / 6.0f64
+    if q > big {
+        if exact { p = prho(i64(n), math.round[f64](q), false) } else {
+            let den = (nf * (nf * nf - 1.0f64)) / 6.0f64
+            let rr = 1.0f64 - q / den
+            p = nb.pt(rr / math.sqrt[f64]((1.0f64 - rr * rr) / (nf - 2.0f64)), nf - 2.0f64, true, false)
+        }
+    } else {
+        if exact { p = prho(i64(n), math.round[f64](q) + 2.0f64, true) } else {
+            let den = (nf * (nf * nf - 1.0f64)) / 6.0f64
+            let rr = 1.0f64 - q / den
+            p = nb.pt(rr / math.sqrt[f64]((1.0f64 - rr * rr) / (nf - 2.0f64)), nf - 2.0f64, false, false)
+        }
+    }
+    p = math.min[f64](2.0f64 * p, 1.0f64)
+    res.rho = r
+    res.s = q
+    res.p = p
+    ret (res, ok)
 }

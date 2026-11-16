@@ -14,6 +14,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(z[2usize])
     let x = z[3usize..3usize + n]
     let nm = c.name
+    if str.starts_with(nm, "tt_") {
+        let (tt, te) = pc.trend_test(a, x)
+        if te != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(nm, "tt_rho") { ret tt.rho }
+        if str.eq(nm, "tt_s") { ret tt.s }
+        ret tt.p
+    }
     if str.eq(nm, "dec") {
         let b = 3usize + n
         let (f, ef) = mem.alloc[f64](a, n + 8usize)
