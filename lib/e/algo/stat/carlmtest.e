@@ -999,3 +999,49 @@ fn influence(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     }
     ret ok
 }
+
+// lmtest::jtest(M1, M2) with M1 on columns 0 and 1 of the design and M2 on column 0 and columns 2 .. p - 1: the t value and p value of the other model's fitted values added to each model, (t1, p1, t2, p2)
+fn j_test(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (f64, f64, f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let p1 = 2usize
+    let p2 = p - 1usize
+    let (x1, e1) = mem.alloc[f64](a, n * (p1 + 1usize))
+    let (x2, e2) = mem.alloc[f64](a, n * (p2 + 1usize))
+    let (z1, e3) = mem.alloc[f64](a, n * p1)
+    let (z2, e4) = mem.alloc[f64](a, n * p2)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (nan, nan, nan, nan) }
+    var i = 0usize
+    while i < n {
+        z1[i * p1] = x[i * p]
+        z1[i * p1 + 1usize] = x[i * p + 1usize]
+        z2[i * p2] = x[i * p]
+        var c = 2usize
+        while c < p {
+            z2[i * p2 + c - 1usize] = x[i * p + c]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    let (f1, e5) = ols(a, z1, y, n, p1)
+    let (f2, e6) = ols(a, z2, y, n, p2)
+    if e5 != ok || e6 != ok { ret (nan, nan, nan, nan) }
+    i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p1 {
+            x1[i * (p1 + 1usize) + c] = z1[i * p1 + c]
+            c += 1usize
+        }
+        x1[i * (p1 + 1usize) + p1] = y[i] - f2.resid[i]
+        c = 0usize
+        while c < p2 {
+            x2[i * (p2 + 1usize) + c] = z2[i * p2 + c]
+            c += 1usize
+        }
+        x2[i * (p2 + 1usize) + p2] = y[i] - f1.resid[i]
+        i += 1usize
+    }
+    let (t1, q1) = coef_t(a, x1, y, n, p1 + 1usize, p1)
+    let (t2, q2) = coef_t(a, x2, y, n, p2 + 1usize, p2)
+    ret (t1, q1, t2, q2)
+}

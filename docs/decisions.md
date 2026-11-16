@@ -46486,3 +46486,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `influence` gives cooks.distance (`e^2 h / (p s^2 (1 - h)^2)`), rstandard (`e / sqrt(s^2 (1 - h))`), rstudent (with the leave-one-out sigma `sqrt((RSS - e^2/(1 - h)) / (n - p - 1))`), dffits (`rstudent sqrt(h/(1 - h))`) and hatvalues of an lm.
 
 **Result.** `oracle_carlmtest` agrees with R on 120 new values on Windows (1140 cases in all); Linux pending. L300 stays partial.
+
+## D6553 — lmtest: jtest
+
+**Decision.** `j_test` adds the fitted values of each non-nested model to the other (M1 on the intercept and the first predictor, M2 on the intercept and the remaining predictors) and reports the t value and p value of the added coefficient, as the coeftest rows of lmtest::jtest.
+
+**Result.** `oracle_carlmtest` agrees with lmtest on 48 new values on Windows (1188 cases in all); Linux pending. L300 stays partial (powerTransform, Anova for factors, bootstrap covariances).

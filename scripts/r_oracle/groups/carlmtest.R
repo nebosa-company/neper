@@ -23,6 +23,7 @@ for (rep in 1:12) {
     add("lr", a3, lt$Chisq[2]); add("lrp", a3, lt$`Pr(>Chisq)`[2]); add("wf", a3, wt$F[2]); add("wfp", a3, wt$`Pr(>F)`[2]) }
   for (j in 0:k) { cm <- coeftest(m); a4 <- c(a, j); add("ct_t", a4, cm[j + 1, 3]); add("ct_p", a4, cm[j + 1, 4]) }
   for (kd in 0:4) { v <- switch(kd + 1, cooks.distance(m), rstandard(m), rstudent(m), dffits(m), hatvalues(m)); a5 <- c(a, kd); add("inf_s", a5, sum(v * seq_along(v))); add("inf_1", a5, v[1]) }
+  if (k >= 2) { jt <- jtest(lm(y ~ v1, d), lm(as.formula(paste("y ~", paste0("v", 2:k, collapse = " + "))), d)); add("jt_t1", a, jt[1, 3]); add("jt_p1", a, jt[1, 4]); add("jt_t2", a, jt[2, 3]); add("jt_p2", a, jt[2, 4]) }
   for (ord in c(1, 2, 4)) { a2 <- c(a, ord); b1 <- bgtest(m, order = ord); b2 <- bgtest(m, order = ord, type = "F"); add("bg_c", a2, as.numeric(b1$statistic)); add("bg_cp", a2, b1$p.value); add("bg_f", a2, as.numeric(b2$statistic)); add("bg_fp", a2, b2$p.value) }
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
 }
