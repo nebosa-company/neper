@@ -1,6 +1,6 @@
 id	category	score	evidence_bytes	title	status
 L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
-L302	library	0	410	GPArotation: gradient projection rotations	Open (CRAN rank 196).
+L302	library	0.7	833	GPArotation: gradient projection rotations	Partial (D6026).
 L303	library	0	321	urca: unit-root and cointegration tests	Open (CRAN rank 136).
 L299	library	0	547	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Open (CRAN ranks 115, 116, 167, plus the interval summaries of ggdist 175).
 L300	library	0	503	car, lmtest and sandwich: linear-model tests and robust covariance	Open (CRAN ranks 111, 114, 155).

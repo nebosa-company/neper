@@ -20,10 +20,10 @@
       "group": "CRAN parity",
       "order": 551,
       "title": "GPArotation: gradient projection rotations",
-      "score": 0,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 196). Mid. e.ml.multivariate has varimax. Acceptance, equal to GPArotation loadings, rotation matrix and criterion value: GPForth and GPFoblq driving oblimin, quartimin, geominT and geominQ, bentlerT and bentlerQ, infomaxT and infomaxQ, cfT and cfQ (Crawford-Ferguson), simplimax, tandemI and tandemII, entropy, varimin, targetT and targetQ, pstT and pstQ, plus promax and Kaiser normalization."
+      "evidence": "Partial (D6026). GPForth and GPFoblq (algorithm bb, Kaiser normalization) over oblimin, quartimin, quartimax, cf, bentler, infomax, geomin, entropy, oblimax, varimax, varimin, target, pst and tandem I and II equal GPArotation 2026.8.2 on both hosts (oblique entropy and oblimax, and paths past 150 iterations, not probed). Open: simplimax, cayley and legacy algorithms, Cureton-Mulaik normalization, bifactor, promax. Was: Open (CRAN rank 196). Mid. e.ml.multivariate has varimax. Acceptance, equal to GPArotation loadings, rotation matrix and criterion value: GPForth and GPFoblq driving oblimin, quartimin, geominT and geominQ, bentlerT and bentlerQ, infomaxT and infomaxQ, cfT and cfQ (Crawford-Ferguson), simplimax, tandemI and tandemII, entropy, varimin, targetT and targetQ, pstT and pstQ, plus promax and Kaiser normalization."
     },
     {
       "id": "L303",

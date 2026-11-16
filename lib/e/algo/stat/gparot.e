@@ -1,0 +1,1069 @@
+// The gradient projection rotations of R's GPArotation (2026.8, the Barzilai-Borwein step with a
+// nonmonotone window): `gpf_orth` (GPForth) and `gpf_obl` (GPFoblq) over the criteria oblimin, quartimin,
+// quartimax, Crawford-Ferguson, Bentler, infomax, geomin, entropy, oblimax, varimax, varimin, target, pst,
+// tandem I and tandem II, with Kaiser normalization. Matrices are row-major; NA in a target is NaN.
+//
+// Not here: the "legacy" and "cayley" algorithms, the Cureton-Mulaik normalization, simplimax,
+// bifactor, lp and McCammon rotations, and promax.
+
+use e.algo.linalg.decomp as decomp
+use e.math
+use e.mem
+
+error Singular
+
+const FLAT: usize = 0usize
+
+fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
+
+fn eps() -> f64 { ret 2.220446049250313e-16f64 }
+
+// c = a (m x n) * b (n x q)
+fn matmul(a: *mem.Arena, x: []const f64, y: []const f64, m: usize, n: usize, q: usize) -> ([]f64, err) {
+    let (c, e) = mem.alloc[f64](a, m * q)
+    if e != ok { ret (c, e) }
+    var i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < q {
+            var s = 0.0f64
+            var k = 0usize
+            while k < n {
+                s += x[i * n + k] * y[k * q + j]
+                k += 1usize
+            }
+            c[i * q + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (c, ok)
+}
+
+// the transpose of x (m x n)
+fn transpose(a: *mem.Arena, x: []const f64, m: usize, n: usize) -> ([]f64, err) {
+    let (t, e) = mem.alloc[f64](a, m * n)
+    if e != ok { ret (t, e) }
+    var i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < n {
+            t[j * m + i] = x[i * n + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (t, ok)
+}
+
+// the inverse of a k x k matrix by Gauss-Jordan with partial pivoting
+fn invert(a: *mem.Arena, x: []const f64, k: usize) -> ([]f64, err) {
+    let (w, e1) = mem.alloc[f64](a, k * k)
+    if e1 != ok { ret (w, e1) }
+    let (inv, e2) = mem.alloc[f64](a, k * k)
+    if e2 != ok { ret (inv, e2) }
+    var i = 0usize
+    while i < k * k {
+        w[i] = x[i]
+        inv[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        inv[i * k + i] = 1.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < k {
+        var pv = c
+        var best = math.abs[f64](w[c * k + c])
+        var r = c + 1usize
+        while r < k {
+            if math.abs[f64](w[r * k + c]) > best {
+                best = math.abs[f64](w[r * k + c])
+                pv = r
+            }
+            r += 1usize
+        }
+        if best == 0.0f64 { ret (inv, Singular) }
+        if pv != c {
+            var j = 0usize
+            while j < k {
+                let t = w[c * k + j]
+                w[c * k + j] = w[pv * k + j]
+                w[pv * k + j] = t
+                let t2 = inv[c * k + j]
+                inv[c * k + j] = inv[pv * k + j]
+                inv[pv * k + j] = t2
+                j += 1usize
+            }
+        }
+        let d = w[c * k + c]
+        var j = 0usize
+        while j < k {
+            w[c * k + j] = w[c * k + j] / d
+            inv[c * k + j] = inv[c * k + j] / d
+            j += 1usize
+        }
+        r = 0usize
+        while r < k {
+            if r != c {
+                let f = w[r * k + c]
+                j = 0usize
+                while j < k {
+                    w[r * k + j] -= f * w[c * k + j]
+                    inv[r * k + j] -= f * inv[c * k + j]
+                    j += 1usize
+                }
+            }
+            r += 1usize
+        }
+        c += 1usize
+    }
+    ret (inv, ok)
+}
+
+fn log_det_spd(x: []const f64, k: usize) -> f64 {
+    // log determinant by Gaussian elimination without pivoting on a copy (M is crossprod of squares)
+    var s = 0.0f64
+    var buf: [64]f64 = zero
+    var i = 0usize
+    while i < k * k {
+        buf[i] = x[i]
+        i += 1usize
+    }
+    var c = 0usize
+    while c < k {
+        let d = buf[c * k + c]
+        s += math.log[f64](math.abs[f64](d))
+        var r = c + 1usize
+        while r < k {
+            let f = buf[r * k + c] / d
+            var j = c
+            while j < k {
+                buf[r * k + j] -= f * buf[c * k + j]
+                j += 1usize
+            }
+            r += 1usize
+        }
+        c += 1usize
+    }
+    ret s
+}
+
+fn sum_of(x: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += x[i]
+        i += 1usize
+    }
+    ret s
+}
+
+// the criterion: Gq (p x k) and f. id 0 oblimin(par[0] = gam), 1 quartimin, 2 quartimax, 3 cf(par[0] = kappa),
+// 4 bentler, 5 infomax, 6 geomin(par[0] = delta), 7 entropy, 8 oblimax, 9 varimax, 10 varimin,
+// 11 target(par = Target p*k), 12 pst(par = W p*k, then Target p*k), 13 tandem I, 14 tandem II
+fn vgq(a: *mem.Arena, id: u8, l: []const f64, p: usize, k: usize, par: []const f64) -> ([]f64, f64, err) {
+    let (gq, ge) = mem.alloc[f64](a, p * k)
+    let (l2, le) = mem.alloc[f64](a, p * k)
+    if ge != ok { ret (gq, 0.0f64, ge) }
+    if le != ok { ret (gq, 0.0f64, le) }
+    var i = 0usize
+    while i < p * k {
+        l2[i] = l[i] * l[i]
+        i += 1usize
+    }
+    var f = 0.0f64
+    if id == 0u8 || id == 1u8 {
+        var gam = 0.0f64
+        if id == 0u8 { gam = par[0usize] }
+        let (x, xe) = mem.alloc[f64](a, p * k)
+        if xe != ok { ret (gq, 0.0f64, xe) }
+        i = 0usize
+        while i < p {
+            var rs = 0.0f64
+            var j = 0usize
+            while j < k {
+                rs += l2[i * k + j]
+                j += 1usize
+            }
+            j = 0usize
+            while j < k {
+                x[i * k + j] = rs - l2[i * k + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        if gam != 0.0f64 {
+            var j = 0usize
+            while j < k {
+                var cs = 0.0f64
+                i = 0usize
+                while i < p {
+                    cs += x[i * k + j]
+                    i += 1usize
+                }
+                i = 0usize
+                while i < p {
+                    x[i * k + j] -= (gam / f64(p)) * cs
+                    i += 1usize
+                }
+                j += 1usize
+            }
+        }
+        i = 0usize
+        while i < p * k {
+            gq[i] = l[i] * x[i]
+            f += l2[i] * x[i]
+            i += 1usize
+        }
+        ret (gq, f / 4.0f64, ok)
+    }
+    if id == 2u8 {
+        i = 0usize
+        while i < p * k {
+            gq[i] = 0.0f64 - l[i] * l[i] * l[i]
+            f += l2[i] * l2[i]
+            i += 1usize
+        }
+        ret (gq, 0.0f64 - f / 4.0f64, ok)
+    }
+    if id == 3u8 {
+        let kappa = par[0usize]
+        let (cs, ce) = mem.alloc[f64](a, k)
+        if ce != ok { ret (gq, 0.0f64, ce) }
+        var j = 0usize
+        while j < k {
+            cs[j] = 0.0f64
+            i = 0usize
+            while i < p {
+                cs[j] += l2[i * k + j]
+                i += 1usize
+            }
+            j += 1usize
+        }
+        var f1 = 0.0f64
+        var f2 = 0.0f64
+        i = 0usize
+        while i < p {
+            var rs = 0.0f64
+            j = 0usize
+            while j < k {
+                rs += l2[i * k + j]
+                j += 1usize
+            }
+            j = 0usize
+            while j < k {
+                let l2n = rs - l2[i * k + j]
+                let ml2 = cs[j] - l2[i * k + j]
+                f1 += l2[i * k + j] * l2n
+                f2 += l2[i * k + j] * ml2
+                gq[i * k + j] = (1.0f64 - kappa) * l[i * k + j] * l2n + kappa * l[i * k + j] * ml2
+                j += 1usize
+            }
+            i += 1usize
+        }
+        ret (gq, (1.0f64 - kappa) * f1 / 4.0f64 + kappa * f2 / 4.0f64, ok)
+    }
+    if id == 4u8 {
+        let (lt, lte) = transpose(a, l2, p, k)
+        if lte != ok { ret (gq, 0.0f64, lte) }
+        let (m, me) = matmul(a, lt, l2, k, p, k)
+        if me != ok { ret (gq, 0.0f64, me) }
+        var logdd = 0.0f64
+        let (dm, de) = mem.alloc[f64](a, k)
+        if de != ok { ret (gq, 0.0f64, de) }
+        var j = 0usize
+        while j < k {
+            dm[j] = m[j * k + j]
+            logdd += math.log[f64](dm[j])
+            j += 1usize
+        }
+        let (minv, ie) = invert(a, m, k)
+        if ie != ok { ret (gq, 0.0f64, ie) }
+        i = 0usize
+        while i < k {
+            minv[i * k + i] -= 1.0f64 / dm[i]
+            i += 1usize
+        }
+        let (prod, pe) = matmul(a, l2, minv, p, k, k)
+        if pe != ok { ret (gq, 0.0f64, pe) }
+        i = 0usize
+        while i < p * k {
+            gq[i] = 0.0f64 - l[i] * prod[i]
+            i += 1usize
+        }
+        ret (gq, 0.0f64 - (log_det_spd(m, k) - logdd) / 4.0f64, ok)
+    }
+    if id == 5u8 {
+        var s = 0.0f64
+        i = 0usize
+        while i < p * k {
+            s += l2[i]
+            i += 1usize
+        }
+        let (e1, e1e) = mem.alloc[f64](a, p)
+        let (e2, e2e) = mem.alloc[f64](a, k)
+        if e1e != ok { ret (gq, 0.0f64, e1e) }
+        if e2e != ok { ret (gq, 0.0f64, e2e) }
+        i = 0usize
+        while i < p {
+            e1[i] = 0.0f64
+            i += 1usize
+        }
+        var j = 0usize
+        while j < k {
+            e2[j] = 0.0f64
+            j += 1usize
+        }
+        i = 0usize
+        while i < p {
+            j = 0usize
+            while j < k {
+                e1[i] += l2[i * k + j]
+                e2[j] += l2[i * k + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        var q0 = 0.0f64
+        var q1 = 0.0f64
+        var q2 = 0.0f64
+        var sh = 0.0f64
+        var sh1 = 0.0f64
+        var sh2 = 0.0f64
+        let (h, he) = mem.alloc[f64](a, p * k)
+        if he != ok { ret (gq, 0.0f64, he) }
+        i = 0usize
+        while i < p {
+            e1[i] = e1[i] / s
+            i += 1usize
+        }
+        j = 0usize
+        while j < k {
+            e2[j] = e2[j] / s
+            j += 1usize
+        }
+        i = 0usize
+        while i < p {
+            j = 0usize
+            while j < k {
+                let e = l2[i * k + j] / s
+                q0 -= e * math.log[f64](e + eps())
+                h[i * k + j] = 0.0f64 - (math.log[f64](e + eps()) + 1.0f64)
+                sh += l2[i * k + j] * h[i * k + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        let (h1, h1e) = mem.alloc[f64](a, p)
+        let (h2, h2e) = mem.alloc[f64](a, k)
+        if h1e != ok { ret (gq, 0.0f64, h1e) }
+        if h2e != ok { ret (gq, 0.0f64, h2e) }
+        i = 0usize
+        while i < p {
+            q1 -= e1[i] * math.log[f64](e1[i] + eps())
+            h1[i] = 0.0f64 - (math.log[f64](e1[i] + eps()) + 1.0f64)
+            sh1 += e1[i] * s * h1[i]
+            i += 1usize
+        }
+        j = 0usize
+        while j < k {
+            q2 -= e2[j] * math.log[f64](e2[j] + eps())
+            h2[j] = 0.0f64 - (math.log[f64](e2[j] + eps()) + 1.0f64)
+            sh2 += e2[j] * s * h2[j]
+            j += 1usize
+        }
+        i = 0usize
+        while i < p {
+            j = 0usize
+            while j < k {
+                let g0 = (h[i * k + j] - sh / s) / s
+                let g1 = (h1[i] - sh1 / s) / s
+                let g2 = (h2[j] - sh2 / s) / s
+                gq[i * k + j] = 2.0f64 * l[i * k + j] * (g0 - g1 - g2)
+                j += 1usize
+            }
+            i += 1usize
+        }
+        ret (gq, math.log[f64](f64(k)) + q0 - q1 - q2, ok)
+    }
+    if id == 6u8 {
+        let delta = par[0usize]
+        i = 0usize
+        while i < p {
+            var lm = 0.0f64
+            var j = 0usize
+            while j < k {
+                lm += math.log[f64](l2[i * k + j] + delta)
+                j += 1usize
+            }
+            let pro = math.exp[f64](lm / f64(k))
+            f += pro
+            j = 0usize
+            while j < k {
+                gq[i * k + j] = (2.0f64 / f64(k)) * (l[i * k + j] / (l2[i * k + j] + delta)) * pro
+                j += 1usize
+            }
+            i += 1usize
+        }
+        ret (gq, f, ok)
+    }
+    if id == 7u8 {
+        i = 0usize
+        while i < p * k {
+            let lg = math.log[f64](l2[i] + eps())
+            gq[i] = 0.0f64 - (l[i] * lg + l[i])
+            f -= l2[i] * lg
+            i += 1usize
+        }
+        ret (gq, f / 2.0f64, ok)
+    }
+    if id == 8u8 {
+        var s2 = 0.0f64
+        var s4 = 0.0f64
+        i = 0usize
+        while i < p * k {
+            s2 += l2[i]
+            s4 += l2[i] * l2[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < p * k {
+            gq[i] = 0.0f64 - (4.0f64 * l[i] * l[i] * l[i] / s4 - 4.0f64 * l[i] / s2)
+            i += 1usize
+        }
+        ret (gq, 0.0f64 - (math.log[f64](s4) - 2.0f64 * math.log[f64](s2)), ok)
+    }
+    if id == 9u8 || id == 10u8 {
+        let (ql, qe) = mem.alloc[f64](a, p * k)
+        if qe != ok { ret (gq, 0.0f64, qe) }
+        var j = 0usize
+        while j < k {
+            var cm = 0.0f64
+            i = 0usize
+            while i < p {
+                cm += l2[i * k + j]
+                i += 1usize
+            }
+            cm = cm / f64(p)
+            i = 0usize
+            while i < p {
+                ql[i * k + j] = l2[i * k + j] - cm
+                i += 1usize
+            }
+            j += 1usize
+        }
+        i = 0usize
+        while i < p * k {
+            f += ql[i] * ql[i]
+            if id == 9u8 { gq[i] = 0.0f64 - l[i] * ql[i] } else { gq[i] = l[i] * ql[i] }
+            i += 1usize
+        }
+        if id == 9u8 { ret (gq, 0.0f64 - f / 4.0f64, ok) }
+        ret (gq, f / 4.0f64, ok)
+    }
+    if id == 11u8 {
+        i = 0usize
+        while i < p * k {
+            let t = par[i]
+            if t == t {
+                gq[i] = 2.0f64 * (l[i] - t)
+                f += (l[i] - t) * (l[i] - t)
+            } else {
+                gq[i] = 0.0f64
+            }
+            i += 1usize
+        }
+        ret (gq, f, ok)
+    }
+    if id == 12u8 {
+        i = 0usize
+        while i < p * k {
+            let w = par[i]
+            let bt = w * par[p * k + i]
+            gq[i] = 2.0f64 * (w * l[i] - bt)
+            f += (w * l[i] - bt) * (w * l[i] - bt)
+            i += 1usize
+        }
+        ret (gq, f, ok)
+    }
+    // tandem I and II
+    let (lt, lte) = transpose(a, l, p, k)
+    if lte != ok { ret (gq, 0.0f64, lte) }
+    let (ll, lle) = matmul(a, l, lt, p, k, p)
+    if lle != ok { ret (gq, 0.0f64, lle) }
+    let (ll2, ll2e) = mem.alloc[f64](a, p * p)
+    if ll2e != ok { ret (gq, 0.0f64, ll2e) }
+    i = 0usize
+    while i < p * p {
+        ll2[i] = ll[i] * ll[i]
+        if id == 14u8 { ll2[i] = 1.0f64 - ll2[i] }
+        i += 1usize
+    }
+    let (mp, mpe) = matmul(a, ll2, l2, p, p, k)
+    if mpe != ok { ret (gq, 0.0f64, mpe) }
+    let (l2t, l2te) = transpose(a, l2, p, k)
+    if l2te != ok { ret (gq, 0.0f64, l2te) }
+    let (t2, t2e) = matmul(a, l2, l2t, p, k, p)
+    if t2e != ok { ret (gq, 0.0f64, t2e) }
+    i = 0usize
+    while i < p * p {
+        t2[i] = 4.0f64 * ll[i] * t2[i]
+        i += 1usize
+    }
+    let (g2, g2e) = matmul(a, t2, l, p, p, k)
+    if g2e != ok { ret (gq, 0.0f64, g2e) }
+    i = 0usize
+    while i < p * k {
+        f += l2[i] * mp[i]
+        let g1 = 4.0f64 * l[i] * mp[i]
+        if id == 13u8 { gq[i] = 0.0f64 - (g1 + g2[i]) } else { gq[i] = g1 - g2[i] }
+        i += 1usize
+    }
+    if id == 13u8 { f = 0.0f64 - f }
+    ret (gq, f, ok)
+}
+
+// Kaiser weights: the row length, at least machine epsilon
+fn kaiser(a: *mem.Arena, x: []const f64, p: usize, k: usize) -> ([]f64, err) {
+    let (w, e) = mem.alloc[f64](a, p)
+    if e != ok { ret (w, e) }
+    var i = 0usize
+    while i < p {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            s += x[i * k + j] * x[i * k + j]
+            j += 1usize
+        }
+        w[i] = math.sqrt[f64](s)
+        if w[i] < eps() { w[i] = eps() }
+        i += 1usize
+    }
+    ret (w, ok)
+}
+
+type Rotation = struct { loadings: []f64, th: []f64, f: f64, iterations: usize, converged: bool }
+
+fn window_max(table: []const f64, iter: usize, fwindow: usize) -> f64 {
+    var lo = 0usize
+    if iter + 1usize > fwindow { lo = iter + 1usize - fwindow }
+    var m = table[lo]
+    var i = lo
+    while i <= iter {
+        if table[i] > m { m = table[i] }
+        i += 1usize
+    }
+    ret m
+}
+
+// GPForth (orthogonal rotation), algorithm "bb" with fwindow 10. Answers the rotated loadings, the
+// rotation matrix and the final criterion value.
+fn gpf_orth(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []const f64, normalize: bool, tol: f64, maxit: usize) -> (Rotation, err) {
+    var none: Rotation = zero
+    var w: []f64 = zero
+    var am = x
+    if normalize {
+        let (wv, we) = kaiser(a, x, p, k)
+        if we != ok { ret (none, we) }
+        w = wv
+        let (an, ae) = mem.alloc[f64](a, p * k)
+        if ae != ok { ret (none, ae) }
+        var i = 0usize
+        while i < p {
+            var j = 0usize
+            while j < k {
+                an[i * k + j] = x[i * k + j] / w[i]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        am = an
+    }
+    let (th, te) = mem.alloc[f64](a, k * k)
+    let (thp, tpe) = mem.alloc[f64](a, k * k)
+    let (g, gge) = mem.alloc[f64](a, p * k)
+    let (gpp, gpe) = mem.alloc[f64](a, p * k)
+    let (tab, tbe) = mem.alloc[f64](a, maxit + 1usize)
+    if te != ok { ret (none, te) }
+    if tpe != ok { ret (none, tpe) }
+    if gge != ok { ret (none, gge) }
+    if gpe != ok { ret (none, gpe) }
+    if tbe != ok { ret (none, tbe) }
+    var i = 0usize
+    while i < k * k {
+        th[i] = 0.0f64
+        thp[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        th[i * k + i] = 1.0f64
+        i += 1usize
+    }
+    let (l0, l0e) = matmul(a, am, th, p, k, k)
+    if l0e != ok { ret (none, l0e) }
+    let (gq0, f0, ve) = vgq(a, id, l0, p, k, par)
+    if ve != ok { ret (none, ve) }
+    var f = f0
+    let (at, ate) = transpose(a, am, p, k)
+    if ate != ok { ret (none, ate) }
+    let (g0, g0e) = matmul(a, at, gq0, k, p, k)
+    if g0e != ok { ret (none, g0e) }
+    // G = crossprod(A, Gq) is p x k times... A' Gq is k x k, but R's G is A' Gq with A p x k: k x k
+    var gk: []f64 = zero
+    let (gkv, gke) = mem.alloc[f64](a, k * k)
+    if gke != ok { ret (none, gke) }
+    gk = gkv
+    i = 0usize
+    while i < k * k {
+        gk[i] = g0[i]
+        i += 1usize
+    }
+    var alpha = 1.0f64
+    var havep = false
+    var iter = 0usize
+    var s = 0.0f64
+    let (lbuf, lbe) = mem.alloc[f64](a, p * k)
+    if lbe != ok { ret (none, lbe) }
+    i = 0usize
+    while i < p * k {
+        lbuf[i] = l0[i]
+        i += 1usize
+    }
+    var done = false
+    while iter <= maxit && !done {
+        let mark = mem.mark(a)
+        // M = Th' G, S = (M + M') / 2, Gp = G - Th S
+        let (tht, tte) = transpose(a, th, k, k)
+        if tte != ok { ret (none, tte) }
+        let (m, me) = matmul(a, tht, gk, k, k, k)
+        if me != ok { ret (none, me) }
+        let (sm, sme) = mem.alloc[f64](a, k * k)
+        if sme != ok { ret (none, sme) }
+        i = 0usize
+        while i < k {
+            var j = 0usize
+            while j < k {
+                sm[i * k + j] = (m[i * k + j] + m[j * k + i]) / 2.0f64
+                j += 1usize
+            }
+            i += 1usize
+        }
+        let (ts, tse) = matmul(a, th, sm, k, k, k)
+        if tse != ok { ret (none, tse) }
+        let (gp, gpe2) = mem.alloc[f64](a, k * k)
+        if gpe2 != ok { ret (none, gpe2) }
+        s = 0.0f64
+        i = 0usize
+        while i < k * k {
+            gp[i] = gk[i] - ts[i]
+            s += gp[i] * gp[i]
+            i += 1usize
+        }
+        s = math.sqrt[f64](s)
+        tab[iter] = f
+        if s < tol {
+            done = true
+        } else {
+            if havep {
+                var ddt = 0.0f64
+                var ddg = 0.0f64
+                var dtg = 0.0f64
+                i = 0usize
+                while i < k * k {
+                    let dt = th[i] - thp[i]
+                    let dg = gp[i] - gpp[i]
+                    ddt += dt * dt
+                    ddg += dg * dg
+                    dtg += dt * dg
+                    i += 1usize
+                }
+                if ddg > 0.0f64 {
+                    alpha = ddt / math.abs[f64](dtg)
+                    if alpha > 20.0f64 { alpha = 20.0f64 }
+                    if alpha < 1.0e-10f64 { alpha = 1.0e-10f64 }
+                }
+            } else {
+                alpha = 2.0f64 * alpha
+            }
+            let tgt = window_max(tab, iter, 10usize)
+            var tmatt: []f64 = zero
+            var lt: []f64 = zero
+            var gqt: []f64 = zero
+            var ft = 0.0f64
+            var trial = 0usize
+            var accepted = false
+            while trial <= 10usize && !accepted {
+                let (xm, xe) = mem.alloc[f64](a, k * k)
+                if xe != ok { ret (none, xe) }
+                i = 0usize
+                while i < k * k {
+                    xm[i] = th[i] - alpha * gp[i]
+                    i += 1usize
+                }
+                let (sv, svee) = decomp.svd(a, xm, k, k)
+                if svee != ok { ret (none, svee) }
+                // decomp reads and writes column-major: it saw t(X), so the polar factor of X is t(Vr) Ur
+                let (vt, vte) = transpose(a, sv.v, k, k)
+                if vte != ok { ret (none, vte) }
+                let (tm, tme) = matmul(a, vt, sv.u, k, k, k)
+                if tme != ok { ret (none, tme) }
+                tmatt = tm
+                let (lm, lme) = matmul(a, am, tm, p, k, k)
+                if lme != ok { ret (none, lme) }
+                lt = lm
+                let (gqv, fv, vee) = vgq(a, id, lm, p, k, par)
+                if vee != ok { ret (none, vee) }
+                gqt = gqv
+                ft = fv
+                if tgt - ft > 0.5f64 * s * s * alpha {
+                    accepted = true
+                } else {
+                    alpha = alpha / 2.0f64
+                    trial += 1usize
+                }
+            }
+            // keep the accepted step (R keeps the last trial even when none passed)
+            i = 0usize
+            while i < k * k {
+                thp[i] = th[i]
+                th[i] = tmatt[i]
+                i += 1usize
+            }
+            i = 0usize
+            while i < p * k {
+                gpp[i] = 0.0f64
+                i += 1usize
+            }
+            i = 0usize
+            while i < k * k {
+                gpp[i] = gp[i]
+                i += 1usize
+            }
+            havep = true
+            f = ft
+            let (at2, at2e) = transpose(a, am, p, k)
+            if at2e != ok { ret (none, at2e) }
+            let (gn, gne) = matmul(a, at2, gqt, k, p, k)
+            if gne != ok { ret (none, gne) }
+            i = 0usize
+            while i < k * k {
+                gk[i] = gn[i]
+                i += 1usize
+            }
+            i = 0usize
+            while i < p * k {
+                lbuf[i] = lt[i]
+                i += 1usize
+            }
+            iter += 1usize
+        }
+        mem.reset(a, mark)
+    }
+    let (out, oe) = mem.alloc[f64](a, p * k)
+    if oe != ok { ret (none, oe) }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < k {
+            out[i * k + j] = lbuf[i * k + j]
+            if normalize { out[i * k + j] = lbuf[i * k + j] * w[i] }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (Rotation { loadings: out, th: th, f: f, iterations: iter, converged: s < tol }, ok)
+}
+
+// G = -t(t(L) %*% Gq %*% Tinv) for the oblique rotation: k x k
+fn obl_gradient(a: *mem.Arena, l: []const f64, gq: []const f64, tinv: []const f64, p: usize, k: usize) -> ([]f64, err) {
+    let (lt, lte) = transpose(a, l, p, k)
+    if lte != ok {
+        var none: []f64 = zero
+        ret (none, lte)
+    }
+    let (m1, m1e) = matmul(a, lt, gq, k, p, k)
+    if m1e != ok { ret (m1, m1e) }
+    let (m2, m2e) = matmul(a, m1, tinv, k, k, k)
+    if m2e != ok { ret (m2, m2e) }
+    let (g, ge) = transpose(a, m2, k, k)
+    if ge != ok { ret (g, ge) }
+    var i = 0usize
+    while i < k * k {
+        g[i] = 0.0f64 - g[i]
+        i += 1usize
+    }
+    ret (g, ok)
+}
+
+// the loadings A t(Tinv) of a rotation matrix with unit columns
+fn obl_loadings(a: *mem.Arena, am: []const f64, tinv: []const f64, p: usize, k: usize) -> ([]f64, err) {
+    let (tit, te) = transpose(a, tinv, k, k)
+    if te != ok { ret (tit, te) }
+    let (l, le) = matmul(a, am, tit, p, k, k)
+    ret (l, le)
+}
+
+// GPFoblq (oblique rotation), algorithm bb with fwindow 10. th of the answer is the rotation matrix
+// whose columns have unit length; the factor correlations are t(th) th.
+fn gpf_obl(a: *mem.Arena, x: []const f64, p: usize, k: usize, id: u8, par: []const f64, normalize: bool, tol: f64, maxit: usize) -> (Rotation, err) {
+    var none: Rotation = zero
+    var w: []f64 = zero
+    var am = x
+    if normalize {
+        let (wv, we) = kaiser(a, x, p, k)
+        if we != ok { ret (none, we) }
+        w = wv
+        let (an, ae) = mem.alloc[f64](a, p * k)
+        if ae != ok { ret (none, ae) }
+        var i = 0usize
+        while i < p {
+            var j = 0usize
+            while j < k {
+                an[i * k + j] = x[i * k + j] / w[i]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        am = an
+    }
+    let (th, te) = mem.alloc[f64](a, k * k)
+    let (thp, tpe) = mem.alloc[f64](a, k * k)
+    let (gk, gke) = mem.alloc[f64](a, k * k)
+    let (gpp, gpe) = mem.alloc[f64](a, k * k)
+    let (tab, tbe) = mem.alloc[f64](a, maxit + 1usize)
+    let (lbuf, lbe) = mem.alloc[f64](a, p * k)
+    if te != ok { ret (none, te) }
+    if tpe != ok { ret (none, tpe) }
+    if gke != ok { ret (none, gke) }
+    if gpe != ok { ret (none, gpe) }
+    if tbe != ok { ret (none, tbe) }
+    if lbe != ok { ret (none, lbe) }
+    var i = 0usize
+    while i < k * k {
+        th[i] = 0.0f64
+        thp[i] = 0.0f64
+        gpp[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        th[i * k + i] = 1.0f64
+        i += 1usize
+    }
+    let (tinv0, ie0) = safe_inverse(a, th, k)
+    if ie0 != ok { ret (none, ie0) }
+    let (l0, l0e) = obl_loadings(a, am, tinv0, p, k)
+    if l0e != ok { ret (none, l0e) }
+    let (gq0, f0, ve) = vgq(a, id, l0, p, k, par)
+    if ve != ok { ret (none, ve) }
+    var f = f0
+    let (g0, g0e) = obl_gradient(a, l0, gq0, tinv0, p, k)
+    if g0e != ok { ret (none, g0e) }
+    i = 0usize
+    while i < k * k {
+        gk[i] = g0[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < p * k {
+        lbuf[i] = l0[i]
+        i += 1usize
+    }
+    var alpha = 1.0f64
+    var havep = false
+    var iter = 0usize
+    var s = 0.0f64
+    var done = false
+    while iter <= maxit && !done {
+        let mark = mem.mark(a)
+        let (gp, gpe2) = mem.alloc[f64](a, k * k)
+        if gpe2 != ok { ret (none, gpe2) }
+        var j = 0usize
+        while j < k {
+            var cs = 0.0f64
+            i = 0usize
+            while i < k {
+                cs += th[i * k + j] * gk[i * k + j]
+                i += 1usize
+            }
+            i = 0usize
+            while i < k {
+                gp[i * k + j] = gk[i * k + j] - th[i * k + j] * cs
+                i += 1usize
+            }
+            j += 1usize
+        }
+        s = 0.0f64
+        i = 0usize
+        while i < k * k {
+            s += gp[i] * gp[i]
+            i += 1usize
+        }
+        s = math.sqrt[f64](s)
+        tab[iter] = f
+        if s < tol {
+            done = true
+        } else {
+            if havep {
+                var ddt = 0.0f64
+                var ddg = 0.0f64
+                var dtg = 0.0f64
+                i = 0usize
+                while i < k * k {
+                    let dt = th[i] - thp[i]
+                    let dg = gp[i] - gpp[i]
+                    ddt += dt * dt
+                    ddg += dg * dg
+                    dtg += dt * dg
+                    i += 1usize
+                }
+                if ddg > 0.0f64 {
+                    alpha = ddt / math.abs[f64](dtg)
+                    if alpha > 20.0f64 { alpha = 20.0f64 }
+                    if alpha < 1.0e-10f64 { alpha = 1.0e-10f64 }
+                }
+            } else {
+                alpha = 2.0f64 * alpha
+            }
+            let tgt = window_max(tab, iter, 10usize)
+            var tmatt: []f64 = zero
+            var tinvt: []f64 = zero
+            var lt: []f64 = zero
+            var gqt: []f64 = zero
+            var ft = 0.0f64
+            var trial = 0usize
+            var accepted = false
+            while trial <= 10usize && !accepted {
+                let (xm, xe) = mem.alloc[f64](a, k * k)
+                if xe != ok { ret (none, xe) }
+                j = 0usize
+                while j < k {
+                    var cn = 0.0f64
+                    i = 0usize
+                    while i < k {
+                        xm[i * k + j] = th[i * k + j] - alpha * gp[i * k + j]
+                        cn += xm[i * k + j] * xm[i * k + j]
+                        i += 1usize
+                    }
+                    let v = 1.0f64 / math.sqrt[f64](cn)
+                    i = 0usize
+                    while i < k {
+                        xm[i * k + j] = xm[i * k + j] * v
+                        i += 1usize
+                    }
+                    j += 1usize
+                }
+                tmatt = xm
+                let (ti, tie) = safe_inverse(a, xm, k)
+                if tie != ok { ret (none, tie) }
+                tinvt = ti
+                let (lm, lme) = obl_loadings(a, am, ti, p, k)
+                if lme != ok { ret (none, lme) }
+                lt = lm
+                let (gqv, fv, vee) = vgq(a, id, lm, p, k, par)
+                if vee != ok { ret (none, vee) }
+                gqt = gqv
+                ft = fv
+                if tgt - ft > 0.5f64 * s * s * alpha {
+                    accepted = true
+                } else {
+                    alpha = alpha / 2.0f64
+                    trial += 1usize
+                }
+            }
+            i = 0usize
+            while i < k * k {
+                thp[i] = th[i]
+                th[i] = tmatt[i]
+                gpp[i] = gp[i]
+                i += 1usize
+            }
+            havep = true
+            f = ft
+            let (gn, gne) = obl_gradient(a, lt, gqt, tinvt, p, k)
+            if gne != ok { ret (none, gne) }
+            i = 0usize
+            while i < k * k {
+                gk[i] = gn[i]
+                i += 1usize
+            }
+            i = 0usize
+            while i < p * k {
+                lbuf[i] = lt[i]
+                i += 1usize
+            }
+            iter += 1usize
+        }
+        mem.reset(a, mark)
+    }
+    let (out, oe) = mem.alloc[f64](a, p * k)
+    if oe != ok { ret (none, oe) }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < k {
+            out[i * k + j] = lbuf[i * k + j]
+            if normalize { out[i * k + j] = lbuf[i * k + j] * w[i] }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (Rotation { loadings: out, th: th, f: f, iterations: iter, converged: s < tol }, ok)
+}
+
+fn norm1(x: []const f64, k: usize) -> f64 {
+    var m = 0.0f64
+    var j = 0usize
+    while j < k {
+        var s = 0.0f64
+        var i = 0usize
+        while i < k {
+            s += math.abs[f64](x[i * k + j])
+            i += 1usize
+        }
+        if s > m { m = s }
+        j += 1usize
+    }
+    ret m
+}
+
+// R's solve() when the matrix is not computationally singular (reciprocal condition at least eps),
+// else the pseudo-inverse with tolerance sqrt(eps), as GPFoblq's safe_inverse does.
+fn safe_inverse(a: *mem.Arena, x: []const f64, k: usize) -> ([]f64, err) {
+    let (inv, e) = invert(a, x, k)
+    if e == ok {
+        let rc = 1.0f64 / (norm1(x, k) * norm1(inv, k))
+        if rc >= eps() { ret (inv, ok) }
+    }
+    let (sv, se) = decomp.svd(a, x, k, k)
+    if se != ok { ret (inv, se) }
+    let (out, oe) = mem.alloc[f64](a, k * k)
+    if oe != ok { ret (out, oe) }
+    var dmax = 0.0f64
+    var t = 0usize
+    while t < k {
+        if sv.d[t] > dmax { dmax = sv.d[t] }
+        t += 1usize
+    }
+    let tol = math.sqrt[f64](eps())
+    var i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            var s = 0.0f64
+            t = 0usize
+            while t < k {
+                if sv.d[t] > tol { s += sv.u[t * k + i] * (1.0f64 / sv.d[t]) * sv.v[t * k + j] }
+                t += 1usize
+            }
+            out[i * k + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (out, ok)
+}

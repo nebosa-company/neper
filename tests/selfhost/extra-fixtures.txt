@@ -161,3 +161,4 @@ oracle_proxy
 oracle_e1071
 oracle_hclpal
 oracle_mvtnorm
+oracle_gparot
