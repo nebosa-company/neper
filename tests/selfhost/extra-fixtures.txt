@@ -383,3 +383,4 @@ oracle_geometry
 oracle_qgraph
 oracle_hetgp
 oracle_mcmcpack
+oracle_cmdscale

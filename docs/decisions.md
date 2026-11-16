@@ -47018,3 +47018,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `mcmcpackpkg` writes the Wishart density with degrees of freedom v and scale S as `|W|^((v-p-1)/2) exp(-tr(S^-1 W)/2) / (2^(vp/2) |S|^(v/2) Gamma_p(v/2))`, and the inverse Wishart of `diwish` with scale S as `|S|^(v/2) |W|^(-(v+p+1)/2) exp(-tr(S W^-1)/2) / (2^(vp/2) Gamma_p(v/2))`, the log multivariate gamma by `p(p-1)/4 log pi + sum lgamma(x - j/2)`, plus the inverse gamma and Dirichlet densities.
 
 **Result.** `oracle_mcmcpack` agrees with MCMCpack on Windows at 1e-9 (120 values, matrices of order 1 to 4); Linux pending. L439 stays at 0.05, since the samplers that make up most of the package are open.
+
+## D6649 — e.ml.mds: classical MDS and the Johnson-Lindenstrauss bound
+
+**Decision.** `e.ml.mds.cmdscale` squares the distances, double-centres them (`-1/2 (d^2 - row mean - column mean + grand mean)`), takes the Jacobi eigen decomposition and returns the leading k eigenvectors scaled by the square roots of their eigenvalues, as R's `cmdscale`; `jl_dimension` is the scikit-learn bound `ceil(4 ln n / (eps^2/2 - eps^3/3))`. The oracle is R's `cmdscale` rather than scikit-learn's stress, since classical MDS has no stress to optimise.
+
+**Result.** `oracle_cmdscale` agrees with R on eigenvalues and absolute coordinates (46 values, 5 to 25 points, Euclidean and Manhattan distances) and the bound on n = 1000, eps = 0.1 is 5921; Linux pending. L212 stays partial: SMACOF MDS against scikit-learn stress and the random projections.

@@ -3881,10 +3881,10 @@
       "group": "Algorithms",
       "order": 351,
       "title": "Add classical MDS and Johnson-Lindenstrauss random projection to e.ml.reduce",
-      "score": 0,
+      "score": 0.3,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Opened 2026-11-03 from docs/algos-2.md:244 by the single-list audit; not previously a queue row. Acceptance: mds embeds a distance matrix with stress matching scikit-learn on fixtures; jl_dimension(n, eps) and Gaussian/sparse random_projection preserve pairwise distances within (1+-eps) on a seeded test set. Size S. Checked open: grep lib for multidimensional scaling, johnson-lindenstrauss, random_proj: only an LSH note in algo/sketch.e; e/ml/reduce.e fns are pca, tsne, umap, frequent_directions only"
+      "evidence": "Partial (D6649). e.ml.mds.cmdscale (classical MDS by double-centring and the Jacobi eigen decomposition) equals base R cmdscale on Windows: eigenvalues and coordinates up to sign (oracle_cmdscale, 46 values; Linux pending), and jl_dimension(n, eps) gives the Johnson-Lindenstrauss bound 4 ln n / (eps^2 / 2 - eps^3 / 3). Open: metric and non-metric MDS by stress majorisation (SMACOF) matching scikit-learn stress, Gaussian and sparse random projection preserving distances on a seeded set. Was: Opened 2026-11-03 from docs/algos-2.md:244 by the single-list audit; not previously a queue row. Acceptance: mds embeds a distance matrix with stress matching scikit-learn on fixtures; jl_dimension(n, eps) and Gaussian/sparse random_projection preserve pairwise distances within (1+-eps) on a seeded test set. Size S. Checked open: grep lib for multidimensional scaling, johnson-lindenstrauss, random_proj: only an LSH note in algo/sketch.e; e/ml/reduce.e fns are pca, tsne, umap, frequent_directions only"
     },
     {
       "id": "L213",
