@@ -45382,3 +45382,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.pracma` gains legendre (the package's coefficient recurrence, polyder and the (-1)^j sqrt((1 - x^2)^j) factor for orders 0 to n), chebPoly (coefficients of T_n, highest power first, and its value) and laguerre (the package's root iteration for a real polynomial, stopping at |p(x)| below sqrt(eps)). Not here: the other orthogonal polynomial families, polyroots and roots (eigenvalues of the companion matrix), the root finders newtonRaphson, fzero and the rest of the acceptance list.
 
 **Result.** `oracle_pracma` equals pracma on 384 cases on Windows; Linux pending. L333 stays partial.
+
+## D6165 — fpc: cluster.stats validity indexes
+
+`e.algo.stat.fpc` computes the cluster.stats indexes from a full distance matrix and a clustering with labels 1..k (no noise cluster): the average between and within distances, the maximum diameter, the minimum separation, the within-cluster sum of squares, the Calinski-Harabasz index, the average silhouette width (singleton clusters count 0), the Dunn and Dunn2 indices, the entropy, the Pearson gamma, G2 and G3, the widest gap (the longest minimum-spanning-tree edge inside a cluster, which is the largest single-linkage height), the separation index at sepprob 0.1, and against a second clustering the corrected Rand index and the variation of information. Not here: noise clusters, clusterboot, nselectboot, mergenormals, dbscan, cluster.varstats and the discriminant coordinates.
+
+**Result.** `oracle_fpc` equals fpc on 252 cases (18 indexes, 14 clusterings) on Windows; Linux pending. L468 is partial.

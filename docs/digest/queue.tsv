@@ -54,7 +54,7 @@ L451	library	0.3	505	betareg: beta regression	Partial (D6158).
 L452	library	0	223	TSA: time-series analysis toolkit	Open (CRAN rank 735).
 L453	library	0	246	cubature: adaptive multidimensional integration	Open (CRAN rank 753).
 L454	library	0	188	VIM: missing-value imputation	Open (CRAN rank 765).
-L468	library	0	233	fpc: cluster validity and flexible clustering procedures	Open (CRAN rank 803).
+L468	library	0.35	466	fpc: cluster validity and flexible clustering procedures	Partial (D6165).
 L475	library	0.5	558	scoringRules: proper scoring rules	Partial (D6145).
 L477	library	0.5	551	compositions: compositional data analysis	Partial (D6140).
 L478	library	0.4	519	dagitty: causal graph reasoning	Partial (D6159).
