@@ -1824,10 +1824,10 @@
       "group": "CRAN parity",
       "order": 754,
       "title": "haven: SAS, SPSS and Stata file formats",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 123). Mid to large. New e.fmt modules; no reader exists. Acceptance, each equal to haven on a corpus of real files: read of SAS7BDAT (all compression, both endians, 32 and 64 bit), XPORT v5 and v8, SPSS sav and zsav (compressed, long strings, weights), Stata dta 102 to 119 (strLs, value labels, tagged and extended missing); variable and value labels, formats and user-missing values preserved; write of dta, sav and xpt round trips through haven read."
+      "evidence": "Partial (D6049). e.fmt.dta reads Stata 117, 118 and 119 (labels, doubles and strings with missing codes, value labels) equal to haven 2.5.5 on files from haven::write_dta, Windows (Linux pending). Open: SAS7BDAT, XPORT, SPSS sav and zsav, Stata 102-116, strLs, tagged missing, narrow integer types, writers. Was: Open (CRAN rank 123). Mid to large. New e.fmt modules; no reader exists. Acceptance, each equal to haven on a corpus of real files: read of SAS7BDAT (all compression, both endians, 32 and 64 bit), XPORT v5 and v8, SPSS sav and zsav (compressed, long strings, weights), Stata dta 102 to 119 (strLs, value labels, tagged and extended missing); variable and value labels, formats and user-missing values preserved; write of dta, sav and xpt round trips through haven read."
     },
     {
       "id": "L315",

@@ -164,7 +164,7 @@ L512	library	0	251	poLCA: latent class analysis	Open (CRAN rank 998).
 L513	library	0	272	Epi: epidemiology tools	Open (CRAN rank 929).
 L310	library	0	484	glmnet: elastic-net path and families	Open (CRAN rank 182).
 L308	library	0	451	minqa and nloptr: derivative-free optimizers	Open (CRAN ranks 120, 122).
-L304	library	0	469	haven: SAS, SPSS and Stata file formats	Open (CRAN rank 123).
+L304	library	0.2	782	haven: SAS, SPSS and Stata file formats	Partial (D6049).
 L315	library	0	448	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Open (CRAN ranks 163, 144).
 L316	library	0	542	igraph: deterministic structure and community detection	Open (CRAN rank 109).
 L344	library	0	359	randomForest: Breiman forests equal to R	Open (CRAN rank 255;

@@ -184,3 +184,4 @@ oracle_lecuyer
 oracle_mlbench
 oracle_metrics
 oracle_bridgesampling
+oracle_haven
