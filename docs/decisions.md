@@ -46384,3 +46384,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** pracma's `expm` is a 128-point contour integral of the resolvent, not the exact exponential (it differs from the true value by up to 4e-5 on these matrices), so `pracma.expm` repeats it: the circle centre `ceiling(mean(range(Re(eig))) + 0.1)` and radius `ceiling(max|eig - z0| + 0.1)` from the Schur eigenvalues, a complex Gauss-Jordan inverse per point, then zapsmall as R 4.6 does it: `round(x, digits = 7 - log10(max|x|))`, the digit count itself rounded (no `ceiling`, unlike the older zapsmall).
 
 **Result.** `oracle_pracma` agrees with pracma on 100 expm elements (2 to 5 dimensions) at 1e-9 on Windows; Linux pending. L333 stays partial.
+
+## D6536 — pracma: integral
+
+**Decision.** `pracma.integral` is the default Kronrod method: `quadgk` at tolerance 1e-8 on each of the 8 pieces of `linspace(lo, hi, 9)`, summed.
+
+**Result.** `oracle_pracma` agrees with pracma on 12 integral values (five integrands) on Windows; Linux pending. L333 stays partial.

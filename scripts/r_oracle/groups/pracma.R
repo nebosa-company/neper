@@ -47,6 +47,7 @@ for (rep in 1:12) {
   lo <- if (id == 3) 0 else runif(1, -2, 0); hi <- runif(1, 0.5, 3)
   add("quadgk", c(id, lo, hi, 1e-8), quadgk(f, lo, hi, tol = 1e-8))
   add("quadgk", c(id, hi, lo, 1e-5), quadgk(f, hi, lo, tol = 1e-5))
+  add("integral", c(id, lo, hi), integral(f, lo, hi))
 }
 for (rep in 1:12) {
   n <- sample(1:7, 1); xx <- runif(1, -0.95, 0.95)

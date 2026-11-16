@@ -1703,3 +1703,20 @@ fn expm(a: *mem.Arena, m: []const f64, n: usize, np: usize, out: []f64) -> err {
     }
     ret ok
 }
+
+// pracma::integral(f, lo, hi) (method "Kronrod", no_intervals = 8, reltol 1e-8): quadgk on the 8 pieces of linspace(lo, hi, 9)
+fn integral(id: usize, lo: f64, hi: f64) -> f64 {
+    if lo == hi { ret 0.0f64 }
+    let by = (hi - lo) / 8.0f64
+    var q = 0.0f64
+    var i = 0usize
+    while i < 8usize {
+        var x0 = lo + f64(i) * by
+        var x1 = lo + f64(i + 1usize) * by
+        if i + 1usize == 8usize { x1 = hi }
+        if i == 0usize { x0 = lo }
+        q = q + quadgk(id, x0, x1, 1.0e-8f64)
+        i += 1usize
+    }
+    ret q
+}
