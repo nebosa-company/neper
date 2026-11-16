@@ -21,6 +21,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "tt_s") { ret tt.s }
         ret tt.p
     }
+    if str.eq(nm, "lt") {
+        let (lo, le) = mem.alloc[f64](a, n)
+        if le != ok { ret 0.0f64 / 0.0f64 }
+        pc.local_trend(x, z[1usize], lo)
+        ret lo[usize(z[3usize + n])]
+    }
+    if str.eq(nm, "esc") {
+        let en = usize(z[3usize + n])
+        let ep = usize(z[4usize + n])
+        let (vr, ev) = mem.alloc[usize](a, ep)
+        let (rv, er) = mem.alloc[f64](a, ep)
+        if ev != ok || er != ok { ret 0.0f64 / 0.0f64 }
+        let (cnt, ee) = pc.escouf(a, x, en, ep, z[1usize], vr, rv)
+        if ee != ok { ret 0.0f64 / 0.0f64 }
+        let eq = usize(z[5usize + n])
+        if eq == 0usize { ret f64(cnt) }
+        if eq <= cnt { ret f64(vr[eq - 1usize]) }
+        ret rv[eq - 1usize - cnt]
+    }
     if str.eq(nm, "pg") {
         let (v, ge) = pc.pgleissberg(a, usize(z[3usize]), z[4usize], z[5usize] > 0.5f64, z[6usize] > 0.5f64)
         if ge != ok { ret 0.0f64 / 0.0f64 }

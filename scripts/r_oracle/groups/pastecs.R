@@ -80,4 +80,17 @@ for (rep in 1:60) {
   nx <- sample(2:40, 1); x <- ifelse(runif(nx) < c(0, 0.3, 0.6)[rep %% 3 + 1], 0, round(rlnorm(nx, 1, c(0.5, 1, 1.5)[sample(3, 1)]), 3))
   for (ca in 0:2) { v <- pennington(x, calc = c("mean", "var", "mean.var")[ca + 1]); if (is.finite(v)) cases[[length(cases) + 1]] <- case("pen", c(8, 0, nx, x, ca), unname(v), rel = 1e-9, abs = 1e-12) }
 }
+# local.trend (fn "lt", args (9, k, n, x, q)) and escouf (fn "esc", args (10, level, n*p, x column-major, n, p, q): q 0 count, 1..count vr, count+1.. RV)
+for (rep in 1:30) {
+  n <- sample(5:40, 1); x <- round(cumsum(rnorm(n)) + 5, 3); k <- if (rep %% 2 == 0) mean(x) else round(runif(1, 3, 7), 2)
+  v <- as.vector(local.trend(x, k = k, plotit = FALSE))
+  for (q in seq_len(n)) cases[[length(cases) + 1]] <- case("lt", c(9, k, n, x, q - 1), v[q], rel = 1e-9, abs = 1e-10)
+}
+for (rep in 1:40) {
+  n <- sample(15:60, 1); p <- sample(3:8, 1); B <- matrix(rnorm(p * p), p, p); X <- round(matrix(rnorm(n * p), n, p) %*% B, 3)
+  df <- as.data.frame(X); lv <- c(1, 0.95, 0.9, 0.8)[rep %% 4 + 1]
+  r <- suppressMessages(escouf(df, level = lv, verbose = FALSE)); cnt <- length(r$vr)
+  out <- c(cnt, unname(r$vr), unname(r$RV))
+  for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("esc", c(10, lv, n * p, as.vector(X), n, p, q - 1), out[q], rel = 1e-9, abs = 1e-10)
+}
 emit("pastecs", "pastecs", list(cases))

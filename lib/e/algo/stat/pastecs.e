@@ -1038,3 +1038,122 @@ fn pennington(x: []const f64, calc: usize) -> f64 {
     if calc == 1usize { ret m / n * math.exp[f64](2.0f64 * ml) * (gmt(m, 2.0f64 * vl) - (m - 1.0f64) / (n - 1.0f64) * gmt(m, (m - 2.0f64) / (m - 1.0f64) * vl)) }
     ret m / n * math.exp[f64](2.0f64 * ml) * (m / n * gmt(m, vl / 2.0f64) * gmt(m, vl / 2.0f64) - (m - 1.0f64) / (n - 1.0f64) * gmt(m, (m - 2.0f64) / (m - 1.0f64) * vl))
 }
+
+// ---- escouf and local.trend ----
+
+// pastecs::local.trend's cusum: cumsum(x - k)
+fn local_trend(x: []const f64, k: f64, out: []f64) {
+    var s = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += x[i] - k
+        out[i] = s
+        i += 1usize
+    }
+}
+
+// the Pearson correlation of columns a and b of the n by p column-major matrix x (columns indexed from 0)
+fn colcor(x: []const f64, n: usize, ca: usize, cb: usize) -> f64 {
+    var ma = 0.0f64
+    var mb = 0.0f64
+    var i = 0usize
+    while i < n {
+        ma += x[ca * n + i]
+        mb += x[cb * n + i]
+        i += 1usize
+    }
+    ma = ma / f64(n)
+    mb = mb / f64(n)
+    var sab = 0.0f64
+    var saa = 0.0f64
+    var sbb = 0.0f64
+    i = 0usize
+    while i < n {
+        let da = x[ca * n + i] - ma
+        let db = x[cb * n + i] - mb
+        sab += da * db
+        saa += da * da
+        sbb += db * db
+        i += 1usize
+    }
+    ret sab / math.sqrt[f64](saa * sbb)
+}
+
+// pastecs::escouf: Escoufier's equivalent vectors on the n by p column-major data; vr (the variables in order, 1-based) and rv (their RV coefficients) receive up to p entries, the count is returned; the loop stops after the first RV above `level`
+fn escouf(a: *mem.Arena, x: []const f64, n: usize, p: usize, level: f64, vr: []usize, rv: []f64) -> (usize, err) {
+    let (cor, e1) = mem.alloc[f64](a, p * p)
+    let (vt, e2) = mem.alloc[usize](a, p)
+    if e1 != ok || e2 != ok { ret (0usize, mem.Full) }
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            if i == j { cor[i * p + j] = 1.0f64 } else { cor[i * p + j] = colcor(x, n, i, j) }
+            j += 1usize
+        }
+        vt[i] = i
+        i += 1usize
+    }
+    var ryy = 0.0f64
+    i = 0usize
+    while i < p * p {
+        ryy += cor[i] * cor[i]
+        i += 1usize
+    }
+    var nvt = p
+    var cnt = 0usize
+    var vrt = 0usize
+    i = 1usize
+    while i <= p {
+        var rvmax = 0.0f64
+        var j = 0usize
+        while j < nvt {
+            // the chosen set: the earlier picks then candidate j
+            var sxy = 0.0f64
+            var sxx = 0.0f64
+            var q = 0usize
+            while q < i {
+                var cq = vt[j]
+                if q < i - 1usize { cq = vr[q] - 1usize }
+                var w = 0usize
+                while w < p {
+                    let c = cor[cq * p + w]
+                    sxy += c * c
+                    w += 1usize
+                }
+                var r2 = 0usize
+                while r2 < i {
+                    var cr = vt[j]
+                    if r2 < i - 1usize { cr = vr[r2] - 1usize }
+                    var c2 = 1.0f64
+                    if cq != cr { c2 = cor[cq * p + cr] }
+                    sxx += c2 * c2
+                    r2 += 1usize
+                }
+                q += 1usize
+            }
+            let rvv = sxy / math.sqrt[f64](ryy * sxx)
+            if rvv > rvmax {
+                rvmax = rvv
+                vrt = vt[j]
+            }
+            j += 1usize
+        }
+        vr[cnt] = vrt + 1usize
+        rv[cnt] = rvmax
+        cnt += 1usize
+        var m = 0usize
+        j = 0usize
+        while j < nvt {
+            if vt[j] != vrt {
+                vt[m] = vt[j]
+                m += 1usize
+            }
+            j += 1usize
+        }
+        nvt = m
+        if rvmax > level { ret (cnt, ok) }
+        i += 1usize
+    }
+    ret (cnt, ok)
+}
