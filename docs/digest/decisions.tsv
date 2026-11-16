@@ -3352,4 +3352,5 @@ D6480	854	gmm: HAC weighting with five kernels
 D6481	1038	QCA: the minimal models of minimize()
 D6482	932	QCA: pof parameters of fit
 D6483	1008	nleqslv and multiroot: roots of fixed systems
-D6484	880	rootSolve: gradient and hessian
+D6484	881	rootSolve: gradient and hessian
+D6485	948	stats::uniroot and rootSolve::uniroot.all

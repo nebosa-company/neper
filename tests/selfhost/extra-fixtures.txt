@@ -303,6 +303,7 @@ oracle_hdrcdepkg
 oracle_gmmpkg
 oracle_qcapkg
 oracle_nleqslvpkg
+oracle_rootfind
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -350,3 +351,4 @@ oracle_hdrcdepkg
 oracle_gmmpkg
 oracle_qcapkg
 oracle_nleqslvpkg
+oracle_rootfind

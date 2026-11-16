@@ -46078,3 +46078,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.nleqslvpkg` gains `fd_gradient` and `fd_hessian`, the finite-difference Jacobian and Hessian of rootSolve with its perturbation max(|x| 1e-8, 1e-8), forward or centred. The hessian takes its reference gradient forward even when centred is asked, as the package's source does. The test functions are polynomials written with products only: R's `^` goes through libm `pow`, whose last bit can differ from `x * x * x`, and a difference quotient with a 1e-8 step multiplies that by 1e8.
 
 **Result.** `oracle_nleqslvpkg` agrees with R on 471 cases on Windows, the 360 new ones at 1e-9: forward and centred gradients of a scalar and a two-equation function, and the forward and centred Hessian of the scalar one, over 30 points. uniroot.all, jacobian.full, steady, maxLik and bbmle are open; Linux pending. L360 stays partial.
+
+## D6485 — stats::uniroot and rootSolve::uniroot.all
+
+`e.algo.stat.rootfind` is new: `zeroin2` is R's C routine R_zeroin2 line for line (Brent's method with R's tolerance rule 2 eps |b| + tol / 2 and its inverse-quadratic and secant choices), `uniroot` calls it with maxit 1000, and `uniroot_all` is the 101-point scan that refines each sign change at tol eps^0.2 and sorts. Grid points follow seq()'s from + i * by with the last set to the upper end. Because the arithmetic is R's, the root, the iteration count and the estimated precision agree, not just the root.
+
+**Result.** `oracle_rootfind` agrees with R on 204 cases on Windows: root at rel 1e-9, the iteration count exactly and estim.prec at 1e-6, over five functions, three tolerances and 50 intervals, plus the root count and every root of uniroot.all. User functions, extendInt, the other uniroot arguments and the other rootSolve solvers are open; Linux pending. L360 stays partial.
