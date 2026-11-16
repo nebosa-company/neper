@@ -466,17 +466,6 @@
       "evidence": "Partial (D6155). Stationary gev.fit, gpd.fit and gum.fit (parameters, standard errors, negative log-likelihood) agree with ismev on Windows at optimiser tolerance, not bit for bit (oracle_ismev; Linux pending). Open: covariates and links, pp.fit, rlarg.fit, return levels, profile likelihoods. Was: Open (CRAN rank 647). Small to mid. Acceptance, equal to ismev: gev.fit, gpd.fit, pp.fit, rlarg.fit and gum.fit with covariates and link functions, standard errors, return levels, profile likelihoods gev.prof and gpd.prof."
     },
     {
-      "id": "L426",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 624,
-      "title": "DiceDesign: space-filling designs",
-      "score": 0.9,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6501 maximinESE_LHS and discrepESE_LHS C2, D6149, D6168 lhsDesign, factDesign, runif.faure, D6169 maximinSA_LHS GEOM and LINEAR, D6170 discrepSA_LHS C2, D6171 wspDesign, D6172 meshRatio). The seven discrepancy criteria, mindist, phiP and coverage equal DiceDesign on Windows (oracle_dicedesign; Linux pending). Open: discrepESE_LHS with L2star, faureprimeDesign. Was: Open (CRAN rank 604). Small to mid. Acceptance, equal to DiceDesign under set.seed: lhsDesign, maximinSA_LHS, discrepSA_LHS, maximinESE_LHS, wspDesign, factDesign, runif and low-discrepancy sequences, discrepancyCriteria (L2, centered, wrap-around, mixture), mindist, phiP and coverage measures."
-    },
-    {
       "id": "L427",
       "category": "library",
       "group": "CRAN parity",

@@ -857,3 +857,134 @@ fn discrep_ese_c2(a: *mem.Arena, g: *rr.Rng, m: []f64, n: usize, d: usize, t0: f
     }
     ret best
 }
+
+// faureprimeDesign(dimension, u) with the default range c(0, -1): the Faure sequence of n = prime^u - 1 points scaled by prime^u and divided by n + 1, where prime is the first prime
+// at or above dimension; out holds n * dimension values and the point count is returned
+fn faure_prime(a: *mem.Arena, dimension: usize, u: usize, out: []f64) -> usize {
+    var prime = dimension
+    var found = false
+    while !found {
+        var is_p = prime >= 2usize
+        var q = 2usize
+        while q * q <= prime && is_p {
+            if prime % q == 0usize { is_p = false }
+            q += 1usize
+        }
+        if is_p { found = true } else { prime += 1usize }
+    }
+    var pu = 1usize
+    var k = 0usize
+    while k < u {
+        pu *= prime
+        k += 1usize
+    }
+    let n = pu - 1usize
+    if faure(a, n, dimension, out) != ok { ret 0usize }
+    k = 0usize
+    while k < n * dimension {
+        out[k] = (f64(pu) * out[k]) / f64(n + 1usize)
+        k += 1usize
+    }
+    ret n
+}
+
+// discrepESE_LHS with criterion L2star as the package runs it: the search carries dL2, the L2star discrepancy at the start but, after the first accepted swap, the squared value that
+// each candidate returns, and passes p = dL2^2 to the update; a candidate's value is p plus the change in the squared discrepancy. Returns the best value and leaves the best design in m.
+fn discrep_ese_l2star(a: *mem.Arena, g: *rr.Rng, m: []f64, n: usize, d: usize, t0: f64, inner_it: usize, jj: usize, it: usize) -> f64 {
+    let (cur, e1) = mem.alloc[f64](a, n * d)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (bestd, e2) = mem.alloc[f64](a, n * d)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    let (trial, e3) = mem.alloc[f64](a, n * d)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    let (cand, e4) = mem.alloc[f64](a, n * d)
+    if e4 != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    while k < n * d {
+        cur[k] = m[k]
+        bestd[k] = m[k]
+        k += 1usize
+    }
+    var temp = t0
+    var dl2 = discrepancy(cur, n, d, 2usize)
+    var best = dl2
+    var q = 0usize
+    while q < it {
+        let bold_val = best
+        var ni = 0.0f64
+        var na = 0.0f64
+        var count = 0usize
+        while count <= inner_it {
+            count += 1usize
+            let col = count % d
+            let p = dl2 * dl2
+            let cur2 = discrepancy(cur, n, d, 2usize) * discrepancy(cur, n, d, 2usize)
+            var bv = 0.0f64
+            var have = false
+            var jx = 0usize
+            while jx < jj {
+                k = 0usize
+                while k < n * d {
+                    trial[k] = cur[k]
+                    k += 1usize
+                }
+                let r1 = usize(math.floor[f64](rr.runif(g, 0.0f64, f64(n))))
+                let r2 = usize(math.floor[f64](rr.runif(g, 0.0f64, f64(n))))
+                let x = trial[r1 * d + col]
+                trial[r1 * d + col] = trial[r2 * d + col]
+                trial[r2 * d + col] = x
+                let dv = discrepancy(trial, n, d, 2usize)
+                let v = p + (dv * dv - cur2)
+                if !have || v < bv {
+                    bv = v
+                    have = true
+                    k = 0usize
+                    while k < n * d {
+                        cand[k] = trial[k]
+                        k += 1usize
+                    }
+                }
+                jx += 1usize
+            }
+            let delta = bv - dl2
+            if delta <= temp * rr.runif(g, 0.0f64, 1.0f64) {
+                k = 0usize
+                while k < n * d {
+                    cur[k] = cand[k]
+                    k += 1usize
+                }
+                dl2 = bv
+                na += 1.0f64
+                if bv <= best {
+                    k = 0usize
+                    while k < n * d {
+                        bestd[k] = cand[k]
+                        k += 1usize
+                    }
+                    best = bv
+                    ni += 1.0f64
+                }
+            }
+        }
+        let v1 = na / f64(inner_it)
+        let v2 = ni / f64(inner_it)
+        if best - bold_val < 0.0f64 {
+            if v1 >= 0.1f64 && v2 <= v1 {
+                temp = 0.8f64 * temp
+            } else if v1 >= 0.1f64 && v2 == v1 {
+                temp = temp
+            } else {
+                temp = temp / 0.8f64
+            }
+        } else {
+            if v1 <= 0.1f64 { temp = temp / 0.7f64 } else { temp = temp * 0.9f64 }
+        }
+        q += 1usize
+    }
+    k = 0usize
+    while k < n * d {
+        m[k] = bestd[k]
+        k += 1usize
+    }
+    ret best
+}

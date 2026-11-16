@@ -67,4 +67,14 @@ for (rep in 1:8) {
   add("dese", c(n, d, sd, itn), sum(as.vector(t(S$design)) * seq_len(length(S$design))))
   add("dese_c2", c(n, d, sd, itn), discrepancyCriteria(S$design, type = "C2")[[1]])
 }
+for (rep in 1:8) {
+  n <- sample(6:12, 1); d <- sample(2:4, 1); sd <- sample(1:100000, 1); itn <- sample(1:2, 1)
+  L <- lhsDesign(n, d, seed = sd)$design
+  S <- discrepESE_LHS(L, it = itn, inner_it = 20, J = 5, T0 = 0.005 * discrepancyCriteria(L, type = "L2star")[[1]], criterion = "L2star")
+  add("dese2", c(n, d, sd, itn), sum(as.vector(t(S$design)) * seq_len(length(S$design))))
+}
+for (rep in 1:10) {
+  dm <- sample(3:9, 1); u <- sample(1:2, 1); fp <- tryCatch(faureprimeDesign(dm, u), error = function(e) NULL); if (is.null(fp) || fp$n > 200) next
+  add("faureprime", c(dm, u, 0, 0), sum(as.vector(t(fp$design)) * seq_len(length(fp$design))))
+}
 emit("dicedesign", "DiceDesign", list(cases))
