@@ -3475,4 +3475,5 @@ D6611	471	randtoolbox: congruRand
 D6612	751	RSpectra and irlba: partial decompositions
 D6613	661	strucchange: Fstats and breakpoints
 D6614	883	afex: split-plot repeated-measures ANOVA
-D6615	556	nnet: multinom by Newton
+D6615	557	nnet: multinom by Newton
+D6616	660	ordinal: cumulative link models

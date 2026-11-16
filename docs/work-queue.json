@@ -1032,10 +1032,10 @@
       "group": "CRAN parity",
       "order": 713,
       "title": "ordinal: cumulative link models",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 447). Mid. e.algo.stat.regression has ordinal_logistic. Acceptance, equal to ordinal: clm with logit, probit, cloglog, loglog, cauchit and the flexible links, nominal and scale effects, thresholds symmetric and equidistant; clmm with random intercepts by Laplace and adaptive quadrature; predict, anova, profile."
+      "evidence": "Partial (D6616). e.algo.stat.ordinalpkg.clm (logit, probit and cloglog links, flexible thresholds, no constant column) equals ordinal clm on Windows: log-likelihood, thresholds and coefficients to 1e-6 by Newton with step halving on the exact Hessian (oracle_ordinal, 69 values; Linux pending). Open: nominal and scale effects, symmetric and equidistant thresholds, the other links, weights, predictions, clmm. Was: Open (CRAN rank 447). Mid. e.algo.stat.regression has ordinal_logistic. Acceptance, equal to ordinal: clm with logit, probit, cloglog, loglog, cauchit and the flexible links, nominal and scale effects, thresholds symmetric and equidistant; clmm with random intercepts by Laplace and adaptive quadrature; predict, anova, profile."
     },
     {
       "id": "L395",

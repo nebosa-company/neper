@@ -92,7 +92,7 @@ L367	library	0.3	582	lpSolve, lpSolveAPI and clue: linear programming and cluste
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;
 L376	library	0	240	gam: backfitting generalized additive models	Open (CRAN rank 388).
 L378	library	0	318	uwot and Rtsne: embeddings equal to R	Open (CRAN ranks 311, 315).
-L393	library	0	328	ordinal: cumulative link models	Open (CRAN rank 447).
+L393	library	0.3	744	ordinal: cumulative link models	Partial (D6616).
 L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463).
 L396	library	0.25	574	agricolae: experimental designs and post-hoc tests	Partial (D6185).
 L412	library	0	212	pscl: zero-inflated and hurdle count models	Open (CRAN rank 584).

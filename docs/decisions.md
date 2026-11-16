@@ -46820,3 +46820,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `nnetpkg.multinom` fits the multinomial logit with class 0 as reference by Newton's method with the full Hessian, instead of nnet's BFGS; both maximise one concave likelihood, so the oracle fits R at reltol and abstol 1e-14 and compares the optimum, not the iteration path. No weight decay.
 
 **Result.** `oracle_nnet` agrees with `nnet::multinom` on deviance and coefficients at 1e-5 on Windows (40 values, 3 and 4 classes); Linux pending. L336 stays partial: decay, weights, the hidden-layer `nnet()`.
+
+## D6616 — ordinal: cumulative link models
+
+**Decision.** `ordinalpkg.clm` maximises the cumulative-link likelihood `P(y <= j) = F(theta_j - x beta)` for logit, probit and cloglog by Newton's method with step halving, on the analytic gradient and Hessian built from the link's F, f and f'; thresholds start at the link of the observed cumulative proportions and coefficients at zero.
+
+**Result.** `oracle_ordinal` agrees with `ordinal::clm` on log-likelihood, thresholds and coefficients at 1e-6 on Windows (69 values, three to five classes); Linux pending. L393 stays partial: nominal and scale effects, other threshold structures and links, weights, clmm.
