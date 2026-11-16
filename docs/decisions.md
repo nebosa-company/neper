@@ -47060,3 +47060,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `e.fmt.tiff.inflate` rejected nothing about the zlib wrapper: it dropped two header bytes and ignored the Adler-32. It now requires method 8, a window of at most 32 KiB, a header check value divisible by 31 and no preset dictionary, and compares the big-endian Adler-32 in the last four bytes of the strip with the Adler-32 of the inflated bytes, answering `Invalid` otherwise. The trailer is read from the end of the strip rather than from the decoder's consumed count, which includes bytes the bit reader pulled ahead.
 
 **Result.** `fmt_images` passes on Windows and its new checks fail without the change (a flipped trailer byte, a flipped header byte); Linux pending. L240 leaves the queue. L239 stays open with a note: a strict replay needs a decision on whether redoing a delete is idempotent, since the existing WAL fixture deletes absent keys.
+
+## D6656 — formula engine: secrets and identities do not come from the seeded generator
+
+**Decision.** `UUID()` and `GENERATEPASSWORD()` take their randomness from `os.random` (`secure_unit` in `algo/formula/misc.e`), because a password or an identifier derived from a context's `random_seed` is reproducible by anyone who knows or guesses the seed. `RAND`, `RANDBETWEEN` and the other volatile functions keep the evaluator's xorshift64* so a given seed still reproduces a calculation. When the system source fails (or does not exist, as on NeperOS) `secure_unit` falls back to the seeded generator so the function still answers.
+
+**Result.** `algo_formula_misc` passes on Windows and its new check fails without the change; the other formula fixtures are unchanged; Linux pending. L238 leaves the queue.

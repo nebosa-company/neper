@@ -4800,17 +4800,6 @@
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: a page with `while(true){}` returns a script error within the budget. Notes: docs/library-hardening-plan.md."
     },
     {
-      "id": "L238",
-      "category": "library",
-      "group": "Library",
-      "order": 451,
-      "title": "Predictable passwords and UUIDs in the formula engine",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: two evaluators with the same seed give different passwords. Notes: docs/library-hardening-plan.md."
-    },
-    {
       "id": "L239",
       "category": "library",
       "group": "Library",

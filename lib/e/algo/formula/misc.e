@@ -17,6 +17,7 @@ use e.crypto.hash as hash
 use e.fmt.json as json
 use e.math
 use e.mem
+use e.os
 use e.str
 use e.text.utf8 as utf8
 
@@ -138,6 +139,21 @@ fn hex_digit(v: u64) -> u8 {
     ret u8(87u64 + v)
 }
 
+// A uniform number in [0, 1) from the operating system's random source, for the functions whose output is a secret or an
+// identity (UUID, GENERATEPASSWORD); RAND and the other volatile functions keep the seeded generator. If the system
+// source cannot be read, the seeded generator answers so the function still returns a value.
+fn secure_unit(c: *f.Call) -> f64 {
+    var b: [8]u8 = zero
+    if os.random(b[..]) != ok { ret f.random(c.ev) }
+    var v = 0u64
+    var i = 0usize
+    while i < 8usize {
+        v = (v << 8u64) | u64(b[i])
+        i += 1usize
+    }
+    ret f64(v >> 11u64) / 9007199254740992.0f64
+}
+
 fn h_uuid(c: *f.Call) -> f.Value {
     let (out, e) = mem.alloc[u8](c.a, 36usize)
     if e != ok { ret f.generic_error("Out of memory") }
@@ -146,7 +162,7 @@ fn h_uuid(c: *f.Call) -> f.Value {
     while i < 36usize {
         let t = template[i]
         if t == 120u8 || t == 121u8 {
-            let r = u64(math.trunc[f64](f.random(c.ev) * 16.0f64))
+            let r = u64(math.trunc[f64](secure_unit(c) * 16.0f64))
             var v = r
             if t == 121u8 { v = (r & 3u64) | 8u64 }
             out[i] = hex_digit(v)
@@ -399,7 +415,7 @@ fn h_generatepassword(c: *f.Call) -> f.Value {
     var w = 0usize
     var k = 0usize
     while k < count {
-        var pick = usize(math.trunc[f64](f.random(c.ev) * f64(scalars)))
+        var pick = usize(math.trunc[f64](secure_unit(c) * f64(scalars)))
         if pick >= scalars { pick = scalars - 1usize }
         var piece: [4]u8 = zero
         let (width, we) = utf8.encode(alphabet_scalars[pick], piece[0..])

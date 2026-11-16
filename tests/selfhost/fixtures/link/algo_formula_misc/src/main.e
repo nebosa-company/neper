@@ -244,6 +244,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if sibling.kind != .Text || !str.eq(sibling.s, "2") || !f.is_blank(masked) { os.exit(96i32) }
     let password = f.evaluate(a, "GENERATEPASSWORD(20000, REPT(\"ab\", 20000))", &ctx, &registry)
     if password.kind != .Text || password.s.len != 20000usize || !password_chars_ok(password.s) { os.exit(97i32) }
+    // L238: two evaluators with the same seed draw different passwords and UUIDs; RAND stays reproducible
+    var seeded_a = make_context(a)
+    var seeded_b = make_context(a)
+    seeded_a.random_seed = 12345u64
+    seeded_b.random_seed = 12345u64
+    let pw_a = f.evaluate(a, "GENERATEPASSWORD(24, \"abcdefghijklmnopqrstuvwxyz0123456789\")", &seeded_a, &registry)
+    let pw_b = f.evaluate(a, "GENERATEPASSWORD(24, \"abcdefghijklmnopqrstuvwxyz0123456789\")", &seeded_b, &registry)
+    if pw_a.kind != .Text || pw_b.kind != .Text || pw_a.s.len != 24usize || str.eq(pw_a.s, pw_b.s) { os.exit(98i32) }
+    let id_a = f.evaluate(a, "UUID()", &seeded_a, &registry)
+    let id_b = f.evaluate(a, "UUID()", &seeded_b, &registry)
+    if id_a.kind != .Text || id_b.kind != .Text || id_a.s.len != 36usize || str.eq(id_a.s, id_b.s) { os.exit(99i32) }
+    if id_a.s[8usize] != 45u8 || id_a.s[14usize] != 52u8 { os.exit(99i32) }
+    let rand_a = f.evaluate(a, "RAND()", &seeded_a, &registry)
+    let rand_b = f.evaluate(a, "RAND()", &seeded_b, &registry)
+    if rand_a.kind != .Number || rand_b.kind != .Number || rand_a.n != rand_b.n { os.exit(100i32) }
     //__VECTOR_CALLS__
     try io.print("algo formula misc ok")
     ret ok

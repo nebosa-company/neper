@@ -435,7 +435,6 @@ C339	compiler	0	261	Roadmap corrections	Opened from the 2026-11-12 compiler revi
 L230	library	0	214	A library line-coverage number	Opened from the 2026-11-13 library review.
 L231	library	0	132	The unreached-function list as a gate	Opened from the 2026-11-13 library review.
 L237	library	0	163	Page scripts have no step limit	Opened from the 2026-11-13 library review.
-L238	library	0	153	Predictable passwords and UUIDs in the formula engine	Opened from the 2026-11-13 library review.
 L239	library	0	521	WAL replay swallows a failed delete	Opened from the 2026-11-13 library review.
 L241	library	0	162	Recursion without a depth guard	Opened from the 2026-11-13 library review.
 L242	library	0	169	`@import` fan-out	Opened from the 2026-11-13 library review.

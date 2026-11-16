@@ -3515,4 +3515,5 @@ D6651	939	e.algo.online: online algorithms beside their offline optima
 D6652	890	e.algo.linalg.iterative: conjugate gradients and GMRES over an operator
 D6653	974	e.algo.discrepancy: Beck-Fiala, vector balancing and derandomised max-cut
 D6654	986	e.fmt.macho: read-only Mach-O
-D6655	936	e.fmt.tiff: validate the zlib framing of Deflate strips
+D6655	937	e.fmt.tiff: validate the zlib framing of Deflate strips
+D6656	807	formula engine: secrets and identities do not come from the seeded generator
