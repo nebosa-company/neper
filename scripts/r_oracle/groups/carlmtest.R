@@ -14,6 +14,7 @@ for (rep in 1:12) {
   add("dw", a, as.numeric(dwtest(m)$statistic)); add("bp", a, as.numeric(bptest(m)$statistic))
   add("bpc", a, as.numeric(bptest(m, studentize = FALSE)$statistic)); add("reset", a, as.numeric(resettest(m)$statistic)); add("bpp", a, bptest(m)$p.value); g <- gqtest(m); add("gq", a, as.numeric(g$statistic)); add("gqp", a, g$p.value); add("resetp", a, resettest(m)$p.value)
   for (lg in c(2, 4)) for (ad in c(FALSE, TRUE)) { dv <- diag(NeweyWest(m, lag = lg, prewhite = FALSE, adjust = ad)); add("nw", c(a, lg, as.numeric(ad)), sum(dv * seq_along(dv))) }
+  for (ty in 1:3) { an <- if (ty == 1) anova(m) else Anova(m, type = ty); for (j in 1:k) { jj <- if (ty == 3) j + 1 else j; add("an", c(a, ty, j), an$`F value`[jj]); add("anp", c(a, ty, j), an$`Pr(>F)`[jj]) } }
   q <- sample(1:min(3, k + 1), 1); H <- matrix(round(rnorm(q * (k + 1)), 2), q, k + 1); rh <- round(rnorm(q, 0, 0.5), 2); lh <- suppressWarnings(linearHypothesis(m, H, rh)); add("lh", c(a, q, as.vector(t(H)), rh), lh$F[2]); add("lhp", c(a, q, as.vector(t(H)), rh), lh$`Pr(>F)`[2])
   nv <- ncvTest(m); add("ncv", a, nv$ChiSquare); add("ncvp", a, nv$p)
   rt <- raintest(m); add("rain", a, as.numeric(rt$statistic)); add("rainp", a, rt$p.value); ht <- harvtest(m); add("harv", a, as.numeric(ht$statistic)); add("harvp", a, ht$p.value)

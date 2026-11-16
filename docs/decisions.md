@@ -46366,3 +46366,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `linear_hypothesis` is car's F test for an lm: `(R b - rhs)' [R (X'X)^-1 R']^-1 (R b - rhs) / (q s^2)` on (q, n - p) degrees of freedom, for any q-row hypothesis matrix.
 
 **Result.** `oracle_carlmtest` agrees with car on 24 new values on Windows; Linux pending. L300 stays partial (Anova, boxCox, powerTransform, other lmtest tests).
+
+## D6533 — car: Anova for numeric terms
+
+**Decision.** `anova_term` gives, for one numeric column, the sequential F of anova(lm) (type I: the change in residual sum of squares when the column joins the earlier ones, over s^2) and the marginal F of Anova types II and III (the squared t statistic; for numeric main effects the three marginal types coincide). Factor terms, interactions and the type III intercept row are not here.
+
+**Result.** `oracle_carlmtest` agrees with car on 222 new values on Windows; Linux pending. L300 stays partial.

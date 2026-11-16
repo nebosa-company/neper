@@ -821,3 +821,48 @@ fn linear_hypothesis(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p:
     let fs = quad / (f64(q) * s2)
     ret (fs, p_f(fs, f64(q), f64(n - p)))
 }
+
+// car::Anova(lm, type) for numeric terms, one column per term (the intercept first): type 1 sequential F, types 2 and 3 the marginal F (the squared t statistic); returns F and p of column j >= 1
+fn anova_term(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ty: usize, j: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (f0, e1) = ols(a, x, y, n, p)
+    if e1 != ok { ret (nan, nan) }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f0.resid[i] * f0.resid[i]
+        i += 1usize
+    }
+    let s2 = rss / f64(n - p)
+    if ty == 1usize {
+        let (xa, e2) = mem.alloc[f64](a, n * (j + 1usize))
+        let (xb, e3) = mem.alloc[f64](a, n * j)
+        if e2 != ok || e3 != ok { ret (nan, nan) }
+        i = 0usize
+        while i < n {
+            var c = 0usize
+            while c <= j {
+                xa[i * (j + 1usize) + c] = x[i * p + c]
+                if c < j { xb[i * j + c] = x[i * p + c] }
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let (fa, e4) = ols(a, xa, y, n, j + 1usize)
+        let (fb, e5) = ols(a, xb, y, n, j)
+        if e4 != ok || e5 != ok { ret (nan, nan) }
+        var ra = 0.0f64
+        var rb = 0.0f64
+        i = 0usize
+        while i < n {
+            ra += fa.resid[i] * fa.resid[i]
+            rb += fb.resid[i] * fb.resid[i]
+            i += 1usize
+        }
+        let fs = (rb - ra) / s2
+        ret (fs, p_f(fs, 1.0f64, f64(n - p)))
+    }
+    let t = f0.beta[j]
+    let fs = t * t / (f0.xtx_inv[j * p + j] * s2)
+    ret (fs, p_f(fs, 1.0f64, f64(n - p)))
+}

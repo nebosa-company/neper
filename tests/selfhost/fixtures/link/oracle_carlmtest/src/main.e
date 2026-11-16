@@ -37,6 +37,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(c.name, "an") || str.eq(c.name, "anp") {
+        let (as1, ap1) = cl.anova_term(a, des, y, n, p, usize(x[2usize + n + n * p]), usize(x[3usize + n + n * p]))
+        if c.name.len == 2usize { ret as1 }
+        ret ap1
+    }
     if str.eq(c.name, "lh") || str.eq(c.name, "lhp") {
         let q = usize(x[2usize + n + n * p])
         let base = 3usize + n + n * p
