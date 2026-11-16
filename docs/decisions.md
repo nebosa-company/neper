@@ -47168,3 +47168,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6675 — pmvnorm_sigma takes a mean and a covariance matrix
 
 **Decision.** `mvt.pmvnorm_sigma` reads `pmvnorm(lower, upper, mean, sigma)` as R does: subtract the mean from the limits, and divide by the standard deviations and turn sigma into a correlation matrix only when its diagonal is not 1 within `all.equal`'s 1.5e-8, so a near-correlation input follows R's un-scaled path. Limits at or beyond ±1e300 are infinite. `oracle_mvt_sigma` equals R on 160 seeded values on Windows; Linux pending. The t case still takes a `delta` through `mvtdst`.
+
+## D6676 — TVPACK trivariate in its own module
+
+**Decision.** `e.algo.stat.tvpack.tvtl` ports `tvtlr` of tvpack.f line for line (argument sorting, the special cases, Plackett's integrand, 23-point Kronrod with global adaptive bisection) and reuses `mvt`'s bivariate normal and t and its closed-form t distribution function, which stands for R's `pt` at integer df. The integrand's context is a struct passed by pointer, since there are no closures. `oracle_tvpack` equals R on 200 cases at 1e-8 on Windows; Linux pending.
