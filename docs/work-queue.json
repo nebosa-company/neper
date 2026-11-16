@@ -1175,10 +1175,10 @@
       "group": "CRAN parity",
       "order": 726,
       "title": "mlogit: discrete-choice models",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 723). Mid. Acceptance, equal to mlogit: multinomial, conditional and nested logit with alternative-specific and individual-specific variables, heteroskedastic logit, mixed logit by simulated maximum likelihood (Halton draws), panel data, hypothesis tests and predictions."
+      "evidence": "Partial (D6639). e.algo.stat.mlogitpkg.clogit (conditional logit with alternative-specific covariates, optional alternative-specific constants, Newton on the exact Hessian) equals mlogit on Windows to 1e-4: coefficients, standard errors, log-likelihood (oracle_mlogit, 60 values; Linux pending; R stops short of the optimum for large coefficients, hence the tolerance). Open: individual-specific covariates with alternative-specific coefficients, nested and mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, predictions and marginal effects. Was: Open (CRAN rank 723). Mid. Acceptance, equal to mlogit: multinomial, conditional and nested logit with alternative-specific and individual-specific variables, heteroskedastic logit, mixed logit by simulated maximum likelihood (Halton draws), panel data, hypothesis tests and predictions."
     },
     {
       "id": "L457",

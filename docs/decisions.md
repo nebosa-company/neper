@@ -46958,3 +46958,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `matchitpkg.nearest` fits a logistic regression of treatment on the covariates (`rmspkg.lrm`), orders treated units by decreasing fitted score, and for each of `ratio` passes lets every treated unit take the nearest still-unmatched control by absolute score difference (first control on ties). Matched units get weight 1 and unmatched controls 0; without replacement MatchIt does not rescale the control weights, so a scale of `n_treated / n_controls_matched` (tried first) halved every ratio-2 weight and disagreed on all ratio-2 cases.
 
 **Result.** `oracle_matchit` agrees with MatchIt on Windows (32 values, 50 to 200 units, ratios 1 and 2); Linux pending. L436 stays partial: replacement, calipers, other distances, subclassification, optimal and full matching.
+
+## D6639 — mlogit: conditional logit
+
+**Decision.** `mlogitpkg.clogit` maximises `sum_i log P(choice_i)` with `P_ij = softmax(asc_j + x_ij b)` by Newton's method, the Hessian being the probability-weighted covariance of the regressors within each chooser; the first alternative is the reference for the constants. The standard errors are the square roots of the inverse information at the optimum.
+
+**Result.** `oracle_mlogit` agrees with mlogit on Windows (60 values, 60 to 200 choosers, 3 to 5 alternatives, with and without constants) at 1e-4; the first tolerance, 1e-6, failed on two fits with coefficients near 8 where mlogit's optimiser stops about 1e-5 short even with `reltol = 1e-14`. Linux pending. L456 stays partial: individual-specific coefficients, nested and mixed logit, probit, ranked data.

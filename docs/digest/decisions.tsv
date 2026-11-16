@@ -3498,4 +3498,5 @@ D6634	886	kernlab: kernel matrices and kernel PCA
 D6635	781	locfit: local polynomial regression at the data points
 D6636	1058	sna: centrality of a digraph
 D6637	827	copula: bivariate Archimedean families
-D6638	837	MatchIt: greedy nearest-neighbour matching
+D6638	838	MatchIt: greedy nearest-neighbour matching
+D6639	810	mlogit: conditional logit
