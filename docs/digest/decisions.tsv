@@ -3221,4 +3221,5 @@ D6145	807	scoringRules: closed-form and sample-based proper scores
 D6146	507	bridgesampling: Bayes factor and posterior model probabilities
 D6147	721	geosphere: spherical, Vincenty, Meeus and rhumb-line formulas
 D6148	786	sn: skew-normal density, distribution function, quantile and skew-t density
-D6149	537	DiceDesign: discrepancy criteria and distance measures
+D6149	538	DiceDesign: discrepancy criteria and distance measures
+D6150	735	imputeTS: moving-average and constant imputation

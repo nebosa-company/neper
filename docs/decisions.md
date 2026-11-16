@@ -45292,3 +45292,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.dicedesign` computes the C2, L2, L2star, M2, S2, W2 and Mix2 discrepancies of a design in the unit cube (L2star uses the package's separate diagonal term), plus mindist, phiP and coverage. Not here: the design generators (lhsDesign, maximinSA_LHS, discrepSA_LHS, maximinESE_LHS, wspDesign, factDesign, the low-discrepancy sequences) and meshRatio.
 
 **Result.** `oracle_dicedesign` equals DiceDesign on 80 cases on Windows; Linux pending. L426 is partial.
+
+## D6150 — imputeTS: moving-average and constant imputation
+
+`e.algo.stat.imputets` holds na_ma with simple, linear (1 / (1 + d)) and exponential (1 / 2^d) weights and na_mean's fill value for the mean, median, mode, geometric and harmonic options. The package's na_ma is compiled, so the rules were found by comparison: a gap is filled from the original observations only (earlier fills are not reused), and the window of k on each side widens by one until it holds at least two observed values. Not here: na_kalman, na_seadec, na_seasplit, na_random, statsNA and maxgap; na_locf and the interpolations live in e.algo.stat.zoo.
+
+**Result.** `oracle_imputets` equals imputeTS on 240 cases on Windows; Linux pending. L429 is partial.

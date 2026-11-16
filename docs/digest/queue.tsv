@@ -45,7 +45,7 @@ L425	library	0	222	ismev: extreme-value model fits	Open (CRAN rank 647).
 L426	library	0.3	568	DiceDesign: space-filling designs	Partial (D6149).
 L427	library	0	320	afex: repeated-measures and mixed ANOVA	Open (CRAN rank 607).
 L428	library	0	224	MuMIn: model selection and averaging	Open (CRAN rank 667).
-L429	library	0	316	imputeTS: time-series imputation	Open (CRAN rank 658).
+L429	library	0.3	583	imputeTS: time-series imputation	Partial (D6150).
 L430	library	0	287	geepack: generalized estimating equations	Open (CRAN rank 644).
 L448	library	0	272	mcmc: Metropolis and tempering samplers	Open (CRAN rank 789).
 L449	library	0.2	412	sn: skew-normal and skew-t distributions	Partial (D6148).

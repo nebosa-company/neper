@@ -515,10 +515,10 @@
       "group": "CRAN parity",
       "order": 627,
       "title": "imputeTS: time-series imputation",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 658). Small to mid. e.algo.stat.zoo has locf, approx and spline. Acceptance, equal to imputeTS: na_interpolation (linear, spline, stine), na_kalman (StructTS and auto.arima models), na_ma (simple, linear, exponential weights), na_seadec, na_seasplit, na_locf, na_mean, na_random, na_replace, statsNA."
+      "evidence": "Partial (D6150). na_ma (three weightings) and na_mean (five options) equal imputeTS on Windows (oracle_imputets; Linux pending). Open: na_kalman, na_seadec, na_seasplit, na_random, statsNA, maxgap, and a parity run of the zoo-based na_locf and na_interpolation. Was: Open (CRAN rank 658). Small to mid. e.algo.stat.zoo has locf, approx and spline. Acceptance, equal to imputeTS: na_interpolation (linear, spline, stine), na_kalman (StructTS and auto.arima models), na_ma (simple, linear, exponential weights), na_seadec, na_seasplit, na_locf, na_mean, na_random, na_replace, statsNA."
     },
     {
       "id": "L430",
