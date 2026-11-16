@@ -103,4 +103,23 @@ for (rep in 1:40) {
   if (!is.null(f)) { out <- c(rowm(f$Shat), f$dev, f$df, f$it)
     for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("dual", c(p, n, rowm(S), rowm(A), q - 1), out[q], rel = 1e-5, abs = 1e-7) }
 }
+# ggm mixed graph constructions (fn "mg": args (n, amat row-major, nM, M[], nC, C[], what, idx): what 0 RG 1 SG 2 AG 3 MRG 4 MSG 5 MAG; the value is entry idx of the resulting matrix (row-major), idx -1 the size k)
+for (rep in 1:80) {
+  p <- sample(4:8, 1); dag <- matrix(0, p, p); for (i in 1:(p - 1)) for (j in (i + 1):p) if (runif(1) < 0.35) dag[i, j] <- 1
+  nb <- sample(0:2, 1); bg <- matrix(0, p, p); if (nb > 0) for (b in 1:nb) { ij <- sample(p, 2); bg[ij[1], ij[2]] <- 1; bg[ij[2], ij[1]] <- 1 }
+  nug <- sample(0:2, 1); ug <- matrix(0, p, p); if (nug > 0) for (b in 1:nug) { ij <- sample(p, 2); ug[ij[1], ij[2]] <- 1; ug[ij[2], ij[1]] <- 1 }
+  rownames(dag) <- colnames(dag) <- rownames(bg) <- colnames(bg) <- rownames(ug) <- colnames(ug) <- as.character(1:p)
+  am <- makeMG(dg = t(dag), ug = ug, bg = bg)
+  nm <- sample(0:2, 1); ncn <- sample(0:2, 1); pick <- sample(p, nm + ncn); M <- pick[seq_len(nm)]; C <- pick[nm + seq_len(ncn)]
+  if (p - nm - ncn < 2) next
+  for (what in 0:5) {
+    fn <- list(RG, SG, AG, MRG, MSG, MAG)[[what + 1]]
+    r <- tryCatch(suppressWarnings(fn(am, M = if (nm) M else c(), C = if (ncn) C else c(), showmat = FALSE)), error = function(e) NULL)
+    if (is.null(r) || !is.matrix(r)) next
+    k <- nrow(r); vals <- rowm(r)
+    args <- c(p, rowm(am), nm, M - 1, ncn, C - 1, what)
+    cases[[length(cases) + 1]] <- case("mg", c(args, -1), k, rel = 0, abs = 0)
+    for (i in seq_along(vals)) cases[[length(cases) + 1]] <- case("mg", c(args, i - 1), vals[i], rel = 0, abs = 0)
+  }
+}
 emit("ggm", "ggm", list(cases))

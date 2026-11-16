@@ -3,6 +3,7 @@
 // top of scripts/r_oracle/groups/ggm.R.
 
 use e.algo.stat.ggm as gg
+use e.algo.stat.ggm_mag as gm
 use e.io
 use e.mem
 use e.os
@@ -13,6 +14,48 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nm = c.name
     let nan = 0.0f64 / 0.0f64
+    if str.eq(nm, "mg") {
+        let mn = usize(z[0usize])
+        let nmv = usize(z[1usize + mn * mn])
+        let ncv = usize(z[2usize + mn * mn + nmv])
+        let (am, e1) = mem.alloc[i64](a, mn * mn)
+        let (mv, e2) = mem.alloc[usize](a, nmv + 1usize)
+        let (cv, e3) = mem.alloc[usize](a, ncv + 1usize)
+        let (mo, e4) = mem.alloc[i64](a, mn * mn)
+        if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret nan }
+        var q = 0usize
+        while q < mn * mn {
+            am[q] = i64(z[1usize + q])
+            q += 1usize
+        }
+        q = 0usize
+        while q < nmv {
+            mv[q] = usize(z[2usize + mn * mn + q])
+            q += 1usize
+        }
+        q = 0usize
+        while q < ncv {
+            cv[q] = usize(z[3usize + mn * mn + nmv + q])
+            q += 1usize
+        }
+        let what = usize(z[3usize + mn * mn + nmv + ncv])
+        let idx = i64(z[4usize + mn * mn + nmv + ncv])
+        var kk = 0usize
+        var me = ok
+        if what < 3usize {
+            let (k1, e5) = gm.ag(a, am, mn, mv[0usize..nmv], cv[0usize..ncv], what, mo)
+            kk = k1
+            me = e5
+        } else {
+            let (k2, e6) = gm.mag(a, am, mn, mv[0usize..nmv], cv[0usize..ncv], what - 3usize, mo)
+            kk = k2
+            me = e6
+        }
+        if me != ok { ret nan }
+        if idx < 0i64 { ret f64(kk) }
+        if usize(idx) >= kk * kk { ret nan }
+        ret f64(mo[usize(idx)])
+    }
     if str.eq(nm, "pctest") {
         let (t, df, pv) = gg.pcor_test(z[0usize], z[1usize], z[2usize])
         let w = usize(z[3usize])

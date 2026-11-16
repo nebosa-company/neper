@@ -3599,4 +3599,5 @@ D6736	746	pastecs: regul by spline
 D6737	1185	pastecs: regul matching tolerance and regul.screen
 D6738	982	EnvStats: kendallTrendTest
 D6739	1094	EnvStats: kendallSeasonalTrendTest (independent observations)
-D6740	1024	EnvStats: gofTest for the normal and lognormal distributions
+D6740	1025	EnvStats: gofTest for the normal and lognormal distributions
+D6741	1424	ggm: the ancestral graph constructions RG, SG, AG, Max, MRG, MSG and MAG

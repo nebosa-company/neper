@@ -565,17 +565,6 @@
       "evidence": "Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows; oracle_sm; Linux pending). Open: hcv and h.select, bands, sm.ancova, sm.survival, sm.options, binning above 100 observations. Was: Open (CRAN rank 954). Small to mid. Acceptance, equal to sm: sm.density in one and two dimensions with the bandwidths hnorm, hcv and h.select, sm.regression with its bands, sm.ancova, sm.survival, sm.options."
     },
     {
-      "id": "L506",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 663,
-      "title": "ggm: Gaussian graphical models",
-      "score": 0.95,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "D6715: e.algo.stat.ggm has pcor, parcor, pcor.test, fitDag, fitConGraph (algorithm 3) and fitCovGraph (icf), equal to ggm on 2415 values on Windows (oracle_ggm); Linux pending. D6716: dSep (150 queries) and marg.param (360 matrix summaries) equal ggm. D6717: fitAncestralGraph (icfmag) equals ggm on 1676 values. D6718: inducedCovGraph, inducedConGraph and topOrder equal ggm on 1100 values. D6719: fitConGraph with cliques and the dual fitCovGraph equal ggm on 2812 values. Open: MAG construction (AG, MAG, SG, RG, MSG, MRG), fitAncestralGraph with its deviance and degrees of freedom. Original: Open (CRAN rank 964). Small to mid. Acceptance, equal to ggm: fitDag, fitCovGraph, fitConGraph, marg, pcor and pcor.test, parcor, dSep, fitAncestralGraph with its deviance and degrees of freedom."
-    },
-    {
       "id": "L299",
       "category": "library",
       "group": "CRAN parity",
