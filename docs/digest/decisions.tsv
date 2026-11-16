@@ -3189,4 +3189,5 @@ D6113	1390	leaps: nbest above 1, force.in, force.out and seqrep
 D6114	501	leaps observation weights close L330
 D6115	1172	GPArotation simplimax, bifactor, bi-geomin, Cureton-Mulaik, legacy and Cayley close L302
 D6116	979	urca ur.pp, ur.ers and ur.za
-D6117	1297	urca ur.sp, ca.po and ca.jo close L303
+D6117	1298	urca ur.sp, ca.po and ca.jo close L303
+D6118	1412	boot: tsboot, studentized intervals, abc.ci, antithetic resampling, censboot ordinary

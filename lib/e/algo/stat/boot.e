@@ -8,6 +8,7 @@
 
 use e.algo.linalg.decomp as decomp
 use e.algo.rand.r as rng
+use e.algo.rand.rdist as rdist
 use e.algo.sort
 use e.math
 use e.math.dist as dist
@@ -316,4 +317,379 @@ fn boot_parametric_norm(a: *mem.Arena, g: *rng.Rng, x: []const f64, kind: u8, nr
         r += 1usize
     }
     ret (Boot { t0: stat_of(a, kind, x), t: t, idx: ix[0usize..0usize], n: n, r: nrep }, ok)
+}
+
+// tsboot(sim = "fixed" or "geom", l, endcorr): blocks of the series from the stream of boot's ts.array; sim 0 fixed blocks of length l, 1 geometric
+// lengths with mean l (always with the end correction); n.sim = n. t[r] the statistic of the r-th resample.
+fn tsboot(a: *mem.Arena, g: *rng.Rng, x: []const f64, kind: u8, nrep: usize, l: usize, sim: u8, endcorr: bool) -> (Boot, err) {
+    var none: Boot = zero
+    let n = x.len
+    let nsim = n
+    var endpt = n
+    if !endcorr && sim == 0u8 { endpt = n - l + 1usize }
+    // block lengths: nrep rows by nn columns (column-major), or the single vector for the fixed rule
+    var nn = 0usize
+    var lens: []usize = zero
+    if sim == 1u8 {
+        let (lt, lte) = mem.alloc[usize](a, nrep * (nsim + 1usize))
+        let (tot, tote) = mem.alloc[usize](a, nrep)
+        if lte != ok { ret (none, lte) }
+        if tote != ok { ret (none, tote) }
+        var r = 0usize
+        while r < nrep {
+            tot[r] = 0usize
+            r += 1usize
+        }
+        var more = true
+        while more {
+            r = 0usize
+            while r < nrep {
+                var tmp = 1usize + usize(rdist.rgeom(g, 1.0f64 / f64(l)))
+                let room = nsim - tot[r]
+                if tmp > room { tmp = room }
+                lt[nn * nrep + r] = tmp
+                tot[r] += tmp
+                r += 1usize
+            }
+            nn += 1usize
+            more = false
+            r = 0usize
+            while r < nrep {
+                if tot[r] < nsim { more = true }
+                r += 1usize
+            }
+        }
+        lens = lt
+    } else {
+        nn = (nsim + l - 1usize) / l
+        let (lt, lte) = mem.alloc[usize](a, nn)
+        if lte != ok { ret (none, lte) }
+        var c = 0usize
+        while c + 1usize < nn {
+            lt[c] = l
+            c += 1usize
+        }
+        lt[nn - 1usize] = 1usize + (nsim - 1usize) % l
+        lens = lt
+    }
+    let (st, se) = rng.sample_int(a, g, i64(endpt), i64(nn * nrep), true)
+    if se != ok { ret (none, se) }
+    let (t, te) = mem.alloc[f64](a, nrep)
+    let (buf, be) = mem.alloc[f64](a, nsim)
+    if te != ok || be != ok { ret (none, te) }
+    var r = 0usize
+    while r < nrep {
+        var at = 0usize
+        var c = 0usize
+        while c < nn && at < nsim {
+            var len = lens[c]
+            if sim == 1u8 { len = lens[c * nrep + r] }
+            let s = usize(st[c * nrep + r])
+            var q = 0usize
+            while q < len && at < nsim {
+                buf[at] = x[(s - 1usize + q) % n]
+                at += 1usize
+                q += 1usize
+            }
+            c += 1usize
+        }
+        t[r] = stat_of(a, kind, buf)
+        r += 1usize
+    }
+    var noidx: []i64 = zero
+    ret (Boot { t0: stat_of(a, kind, x), t: t, idx: noidx, n: n, r: nrep }, ok)
+}
+
+// boot.ci(type = "stud") of the mean with the variance statistic var(d[i]) / n: from the bootstrap of the mean (kind 0) with its index array
+fn stud_mean_ci(a: *mem.Arena, b: *const Boot, x: []const f64, conf: f64) -> (f64, f64, err) {
+    let n = b.n
+    let nf = f64(n)
+    let (z, ze) = mem.alloc[f64](a, b.r)
+    let (buf, be) = mem.alloc[f64](a, n)
+    if ze != ok { ret (0.0f64, 0.0f64, ze) }
+    if be != ok { ret (0.0f64, 0.0f64, be) }
+    var r = 0usize
+    while r < b.r {
+        var j = 0usize
+        while j < n {
+            buf[j] = x[usize(b.idx[r * n + j]) - 1usize]
+            j += 1usize
+        }
+        let v = var_of(buf) / nf
+        z[r] = (b.t[r] - b.t0) / math.sqrt[f64](v)
+        r += 1usize
+    }
+    let v0 = var_of(x) / nf
+    let (qh, e1) = norm_inter(a, z, (1.0f64 + conf) / 2.0f64)
+    if e1 != ok { ret (0.0f64, 0.0f64, e1) }
+    let (ql, e2) = norm_inter(a, z, (1.0f64 - conf) / 2.0f64)
+    if e2 != ok { ret (0.0f64, 0.0f64, e2) }
+    ret (b.t0 - math.sqrt[f64](v0) * qh, b.t0 - math.sqrt[f64](v0) * ql, ok)
+}
+
+// a sum rounded once from a compensated accumulation, standing in for R's long double sum
+fn lsum(v: []const f64) -> f64 {
+    var hi = 0.0f64
+    var lo = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        let xv = v[i]
+        let t = hi + xv
+        var e = 0.0f64
+        if math.abs[f64](hi) >= math.abs[f64](xv) { e = (hi - t) + xv } else { e = (xv - t) + hi }
+        hi = t
+        lo += e
+        i += 1usize
+    }
+    ret hi + lo
+}
+
+// the weighted statistic of abc.ci: weighted mean (kind 0) or the weighted variance sum w (d - m)^2 (kind 1); R's sums are long double
+fn wstat(a: *mem.Arena, kind: u8, x: []const f64, w: []const f64) -> f64 {
+    let (buf, e) = mem.alloc[f64](a, x.len)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < x.len {
+        buf[i] = x[i] * w[i]
+        i += 1usize
+    }
+    let sdw = lsum(buf)
+    let sw = lsum(w)
+    let m = sdw / sw
+    if kind == 0u8 { ret m }
+    i = 0usize
+    while i < x.len {
+        buf[i] = w[i] * ((x[i] - m) * (x[i] - m))
+        i += 1usize
+    }
+    ret lsum(buf) / sw
+}
+
+// abc.ci(data, statistic, conf) for one stratum: the approximate bootstrap confidence limits, (lower, upper)
+fn abc_ci(a: *mem.Arena, x: []const f64, kind: u8, conf: f64) -> (f64, f64, err) {
+    let n = x.len
+    let nf = f64(n)
+    let eps = 0.001f64 / nf
+    let (w0, e0) = mem.alloc[f64](a, n)
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (ll, e2) = mem.alloc[f64](a, n)
+    let (l2, e3) = mem.alloc[f64](a, n)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret (0.0f64, 0.0f64, e0) }
+    var i = 0usize
+    while i < n {
+        w0[i] = 1.0f64 / nf
+        i += 1usize
+    }
+    // the weights are rescaled to sum to one, as w / (w %*% mat), the original ones too (their sum is not exactly one)
+    var s0 = 0.0f64
+    i = 0usize
+    while i < n {
+        s0 += w0[i]
+        i += 1usize
+    }
+    let (w0n, e0n) = mem.alloc[f64](a, n)
+    if e0n != ok { ret (0.0f64, 0.0f64, e0n) }
+    i = 0usize
+    while i < n {
+        w0n[i] = w0[i] / s0
+        i += 1usize
+    }
+    let t0 = wstat(a, kind, x, w0n)
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        var s1 = 0.0f64
+        while j < n {
+            w[j] = (1.0f64 - eps) * w0[j]
+            if j == i { w[j] = w[j] + eps }
+            s1 += w[j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < n {
+            w[j] = w[j] / s1
+            j += 1usize
+        }
+        let t1 = wstat(a, kind, x, w)
+        var s2 = 0.0f64
+        j = 0usize
+        while j < n {
+            w[j] = (1.0f64 + eps) * w0[j]
+            if j == i { w[j] = w[j] - eps }
+            s2 += w[j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < n {
+            w[j] = w[j] / s2
+            j += 1usize
+        }
+        let t2 = wstat(a, kind, x, w)
+        ll[i] = (t1 - t2) / (2.0f64 * eps)
+        l2[i] = (t1 - 2.0f64 * t0 + t2) / (eps * eps)
+        i += 1usize
+    }
+    let (sq, sqe) = mem.alloc[f64](a, n)
+    let (cb, cbe) = mem.alloc[f64](a, n)
+    if sqe != ok || cbe != ok { ret (0.0f64, 0.0f64, sqe) }
+    i = 0usize
+    while i < n {
+        sq[i] = ll[i] * ll[i]
+        cb[i] = math.pow[f64](ll[i], 3.0f64)
+        i += 1usize
+    }
+    let temp1 = lsum(sq)
+    let cube = lsum(cb)
+    let sl2 = lsum(l2)
+    let sigmahat = math.sqrt[f64](temp1) / nf
+    let ahat = cube / (6.0f64 * math.pow[f64](temp1, 1.5f64))
+    let bhat = sl2 / (2.0f64 * nf * nf)
+    let (w3, e4) = mem.alloc[f64](a, n)
+    let (w4, e5) = mem.alloc[f64](a, n)
+    if e4 != ok || e5 != ok { ret (0.0f64, 0.0f64, e4) }
+    var s3 = 0.0f64
+    var s4 = 0.0f64
+    i = 0usize
+    while i < n {
+        let dh = ll[i] / (nf * nf * sigmahat)
+        w3[i] = w0[i] + eps * dh
+        w4[i] = w0[i] - eps * dh
+        s3 += w3[i]
+        s4 += w4[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        w3[i] = w3[i] / s3
+        w4[i] = w4[i] / s4
+        i += 1usize
+    }
+    let chat = (wstat(a, kind, x, w3) - 2.0f64 * t0 + wstat(a, kind, x, w4)) / (2.0f64 * eps * eps * sigmahat)
+    let bprime = ahat - (bhat / sigmahat - chat)
+    var out2: [2]f64 = zero
+    var k = 0usize
+    while k < 2usize {
+        var alpha = (1.0f64 - conf) / 2.0f64
+        if k == 1usize { alpha = (1.0f64 + conf) / 2.0f64 }
+        let za = qn(alpha)
+        let la = (bprime + za) / ((1.0f64 - ahat * (bprime + za)) * (1.0f64 - ahat * (bprime + za)))
+        var sf = 0.0f64
+        i = 0usize
+        while i < n {
+            let dh = ll[i] / (nf * nf * sigmahat)
+            w[i] = w0[i] + la * dh
+            sf += w[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            w[i] = w[i] / sf
+            i += 1usize
+        }
+        out2[k] = wstat(a, kind, x, w)
+        k += 1usize
+    }
+    ret (out2[0usize], out2[1usize], ok)
+}
+
+// boot(sim = "antithetic", L): the first R %/% 2 resamples are ordinary; the next R %/% 2 replace each observation by the one whose
+// influence value L has the reverse rank; an odd R adds one more ordinary resample. L must have no ties here (R breaks ties at random).
+fn boot_antithetic(a: *mem.Arena, g: *rng.Rng, x: []const f64, kind: u8, nrep: usize, lv: []const f64) -> (Boot, err) {
+    var none: Boot = zero
+    let n = x.len
+    let r1 = nrep / 2usize
+    let (draw, de) = rng.sample_int(a, g, i64(n), i64(r1 * n), true)
+    if de != ok { ret (none, de) }
+    let (rank, ke) = mem.alloc[usize](a, n)
+    let (rev, re) = mem.alloc[usize](a, n)
+    if ke != ok || re != ok { ret (none, ke) }
+    var i = 0usize
+    while i < n {
+        var below = 0usize
+        var j = 0usize
+        while j < n {
+            if lv[j] < lv[i] { below += 1usize }
+            j += 1usize
+        }
+        rank[i] = below + 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            if rank[j] == n + 1usize - rank[i] { rev[i] = j + 1usize }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var extra = 0usize
+    if nrep != 2usize * r1 { extra = 1usize }
+    let (idx, ie) = mem.alloc[i64](a, nrep * n)
+    let (t, te) = mem.alloc[f64](a, nrep)
+    let (buf, be) = mem.alloc[f64](a, n)
+    if ie != ok || te != ok || be != ok { ret (none, ie) }
+    var r = 0usize
+    while r < r1 {
+        var j = 0usize
+        while j < n {
+            // the first block, then the antithetic block with the observation replaced by its reverse
+            let k = draw[j * r1 + r]
+            idx[r * n + j] = k
+            idx[(r1 + r) * n + j] = i64(rev[usize(k) - 1usize])
+            j += 1usize
+        }
+        r += 1usize
+    }
+    if extra == 1usize {
+        let (d2, e2) = rng.sample_int(a, g, i64(n), i64(n), true)
+        if e2 != ok { ret (none, e2) }
+        var j = 0usize
+        while j < n {
+            idx[2usize * r1 * n + j] = d2[j]
+            j += 1usize
+        }
+    }
+    r = 0usize
+    while r < nrep {
+        var j = 0usize
+        while j < n {
+            buf[j] = x[usize(idx[r * n + j]) - 1usize]
+            j += 1usize
+        }
+        t[r] = stat_of(a, kind, buf)
+        r += 1usize
+    }
+    ret (Boot { t0: stat_of(a, kind, x), t: t, idx: idx, n: n, r: nrep }, ok)
+}
+
+// censboot(sim = "ordinary") with one stratum: the cases drawn as boot does, then taken in sorted order before the statistic is formed
+fn censboot_ordinary(a: *mem.Arena, g: *rng.Rng, x: []const f64, kind: u8, nrep: usize) -> (Boot, err) {
+    var none: Boot = zero
+    let n = x.len
+    let (draw, de) = rng.sample_int(a, g, i64(n), i64(n * nrep), true)
+    if de != ok { ret (none, de) }
+    let (idx, ie) = mem.alloc[i64](a, n * nrep)
+    let (t, te) = mem.alloc[f64](a, nrep)
+    let (buf, be) = mem.alloc[f64](a, n)
+    let (key, ke) = mem.alloc[f64](a, n)
+    if ie != ok || te != ok || be != ok || ke != ok { ret (none, ie) }
+    var r = 0usize
+    while r < nrep {
+        var j = 0usize
+        while j < n {
+            key[j] = f64(draw[j * nrep + r])
+            j += 1usize
+        }
+        sort_up(key)
+        j = 0usize
+        while j < n {
+            idx[r * n + j] = i64(key[j])
+            buf[j] = x[usize(key[j]) - 1usize]
+            j += 1usize
+        }
+        t[r] = stat_of(a, kind, buf)
+        r += 1usize
+    }
+    ret (Boot { t0: stat_of(a, kind, x), t: t, idx: idx, n: n, r: nrep }, ok)
 }
