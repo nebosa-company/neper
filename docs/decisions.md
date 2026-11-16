@@ -47240,3 +47240,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6693 — SuppDists Pearson correlation, with the package's constants
 
 **Decision.** `fcorrelation`, `pcorrelation` and `qcorrelation` port SuppDists' density series, its Romberg `Integral` (tolerance 3e-8, relative, on halved steps) and its `NewtonRoot` (a step of f / 2f' damped by a scale that halves when the step grows, with the `continue` that still advances the iteration counter). The package defines `SQRT2` as 1.414135623730950488, a digit short of the true value, and its Pearson density carries that error as a constant factor of 1.0000551; the port keeps it, because the result is what dPearson returns. `loggamma` is the package's own series, not nmath's. Source: the CRAN tarball SuppDists 1.1-9.9, the version installed. Linux pending.
+
+## D6693 — fdrtool helpers and the Student t null; L421 closed
+
+**Decision.** `monoreg`, `gcmlcm` and `grenander` are ported with the isotonic pool-adjacent-violators core already used by the p-value route. `monoreg` keeps R's behaviour when zero weights and duplicated x occur together: the non-duplicated y values are then read from the unfiltered y by their filtered position, which misaligns them; the port does the same and the oracle covers it. The Student t null is a third statistic (df fitted over (1, 1000) from an interquartile start); it is reachable only through `censored.fit` in R, so it is compared at that level, with the df to the optimizer tolerance because the likelihood is flat in df. L421 is closed.

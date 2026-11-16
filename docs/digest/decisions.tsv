@@ -3552,4 +3552,5 @@ D6689	875	optBlock D criterion, which is the block design search
 D6690	497	L410 closed at its acceptance list
 D6691	626	fdrtool normal statistic; the Brent minimiser's eps
 D6692	900	fdrtool null models over one statistic parameter; the correlation statistic
-D6693	755	SuppDists Pearson correlation, with the package's constants
+D6693	756	SuppDists Pearson correlation, with the package's constants
+D6693	725	fdrtool helpers and the Student t null; L421 closed

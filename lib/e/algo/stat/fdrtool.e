@@ -320,6 +320,7 @@ fn r2t(r: f64, kappa: f64) -> f64 { ret r * math.sqrt[f64]((kappa - 1.0f64) / (1
 
 fn stat_cdf(stat: u8, x: f64, p: f64) -> f64 {
     if stat == 0u8 { ret dist.pnorm(x, 0.0f64, p, true, false) }
+    if stat == 2u8 { ret nb.pt(x, p, true, false) }
     ret nb.pt(r2t(x, p), p - 1.0f64, true, false)
 }
 
@@ -335,6 +336,7 @@ fn stat_pval(stat: u8, x: f64, p: f64) -> f64 {
 // the log density of the untruncated null
 fn stat_logf0(stat: u8, x: f64, p: f64) -> f64 {
     if stat == 0u8 { ret dist.dnorm(x, 0.0f64, p, true) }
+    if stat == 2u8 { ret nb.dt(x, p, true) }
     let df = p - 1.0f64
     let vol = math.sqrt[f64](df) * math.pow[f64](1.0f64 - x * x, 0.0f64 - 1.5f64)
     ret nb.dt(r2t(x, p), df, true) + math.log[f64](vol)
@@ -343,6 +345,7 @@ fn stat_logf0(stat: u8, x: f64, p: f64) -> f64 {
 // the interquartile range of the null at the parameter
 fn stat_iqr(stat: u8, p: f64) -> f64 {
     if stat == 0u8 { ret p * 2.0f64 * dist.qnorm(0.75f64, 0.0f64, 1.0f64, true, false) }
+    if stat == 2u8 { ret nb.qt(0.75f64, p, true, false) - nb.qt(0.25f64, p, true, false) }
     let df = p - 1.0f64
     let q3 = nb.qt(0.75f64, df, true, false)
     let q1 = nb.qt(0.25f64, df, true, false)
@@ -472,7 +475,13 @@ fn iqr_fit(a: *mem.Arena, stat: u8, x: []const f64) -> (f64, err) {
     let (s, e) = sorted_copy(a, x)
     if e != ok { ret (0.0f64, e) }
     var c = IqrCtx { stat: stat, obs: ms.quant7(s, 0.75f64) - ms.quant7(s, 0.25f64) }
-    let v1 = brent_min[IqrCtx](&c, iqr_obj, 3.0f64, 1.0e9f64)
+    var slo = 3.0f64
+    var shi = 1.0e9f64
+    if stat == 2u8 {
+        slo = 1.0f64
+        shi = 1000.0f64
+    }
+    let v1 = brent_min[IqrCtx](&c, iqr_obj, slo, shi)
     ret (v1, ok)
 }
 
@@ -489,6 +498,12 @@ fn fdrtool_normal_cut(a: *mem.Arena, x: []const f64, qval: []f64, lfdr: []f64, m
 // statistic = "correlation" with the fndr cutoff: the scale fields hold kappa
 fn fdrtool_corr(a: *mem.Arena, x: []const f64, qval: []f64, lfdr: []f64) -> (Nf, err) {
     let (r, e) = fdrtool_stat_cut(a, 1u8, x, qval, lfdr, 0u8, 0.75f64)
+    ret (r, e)
+}
+
+// the Student t null (censored.fit's statistic = "studentt" after fndr.cutoff); the scale fields hold the degrees of freedom
+fn fdrtool_t(a: *mem.Arena, x: []const f64, qval: []f64, lfdr: []f64) -> (Nf, err) {
+    let (r, e) = fdrtool_stat_cut(a, 2u8, x, qval, lfdr, 0u8, 0.75f64)
     ret (r, e)
 }
 
@@ -577,6 +592,9 @@ fn fdrtool_stat_cut(a: *mem.Arena, stat: u8, x: []const f64, qval: []f64, lfdr: 
     var up = start * 1000.0f64
     if stat == 0u8 {
         if lo < 1.0e-9f64 { lo = 1.0e-9f64 }
+    } else if stat == 2u8 {
+        if lo < 1.0f64 { lo = 1.0f64 }
+        if up > 1000.0f64 { up = 1000.0f64 }
     } else {
         if lo < 3.0f64 { lo = 3.0f64 }
         if up > 1.0e9f64 { up = 1.0e9f64 }
@@ -628,4 +646,224 @@ fn fndr_norm(stat: u8, ax: []const f64, e0: f64, sc: f64, x: f64) -> f64 {
     let v = (fx - e0 * (2.0f64 * stat_cdf(stat, x, sc) - 1.0f64)) / fx
     if v < 0.0f64 { ret 0.0f64 }
     ret v
+}
+
+// ---- the exported helpers: monoreg, gcmlcm, grenander ----
+
+type Mono = struct { x: []f64, y: []f64, w: []f64, yf: []f64 }
+
+// monoreg(x, y, w, type): zero weights dropped, equal x merged (weights added, y the weighted mean), sorted by x, then the weighted
+// isotonic (or, negated, antitonic) regression of y
+fn monoreg(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, antitonic: bool) -> (Mono, err) {
+    var res: Mono = zero
+    let n = x.len
+    let (idx, e1) = mem.alloc[usize](a, n)
+    let (fpos, e0) = mem.alloc[usize](a, n)
+    if e1 != ok || e0 != ok { ret (res, e1) }
+    var m = 0usize
+    var i = 0usize
+    while i < n {
+        if w[i] != 0.0f64 {
+            idx[m] = i
+            fpos[i] = m
+            m += 1usize
+        }
+        i += 1usize
+    }
+    i = 1usize
+    while i < m {
+        let v = idx[i]
+        var j = i
+        while j > 0usize && x[idx[j - 1usize]] > x[v] {
+            idx[j] = idx[j - 1usize]
+            j -= 1usize
+        }
+        idx[j] = v
+        i += 1usize
+    }
+    // R merges duplicated x values with y taken by the filtered position from the unfiltered y (a quirk of monoreg when zero weights
+    // and duplicates occur together); with no duplicates it uses the filtered y
+    var groups = 0usize
+    i = 0usize
+    while i < m {
+        var j = i
+        while j < m && x[idx[j]] == x[idx[i]] { j += 1usize }
+        groups += 1usize
+        i = j
+    }
+    let has_dup = groups != m
+    let (xv, e2) = mem.alloc[f64](a, m)
+    let (yv, e3) = mem.alloc[f64](a, m)
+    let (wv, e4) = mem.alloc[f64](a, m)
+    if e2 != ok || e3 != ok || e4 != ok { ret (res, e2) }
+    var lx = 0usize
+    i = 0usize
+    while i < m {
+        var j = i
+        var sw = 0.0f64
+        var sy = 0.0f64
+        while j < m && x[idx[j]] == x[idx[i]] {
+            sw += w[idx[j]]
+            sy += y[idx[j]] * w[idx[j]]
+            j += 1usize
+        }
+        xv[lx] = x[idx[i]]
+        if j - i > 1usize {
+            wv[lx] = sw
+            yv[lx] = sy / sw
+        } else {
+            wv[lx] = w[idx[i]]
+            if has_dup { yv[lx] = y[fpos[idx[i]]] } else { yv[lx] = y[idx[i]] }
+        }
+        lx += 1usize
+        i = j
+    }
+    let (yf, e5) = mem.alloc[f64](a, lx)
+    let (gew, e6) = mem.alloc[f64](a, lx)
+    let (kk, e7) = mem.alloc[usize](a, lx)
+    let (yy, e8) = mem.alloc[f64](a, lx)
+    if e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret (res, e5) }
+    i = 0usize
+    while i < lx {
+        yy[i] = yv[i]
+        if antitonic { yy[i] = 0.0f64 - yv[i] }
+        i += 1usize
+    }
+    if lx > 0usize { isomean(yy, wv[0usize..lx], yf, gew, kk) }
+    if antitonic {
+        i = 0usize
+        while i < lx {
+            yf[i] = 0.0f64 - yf[i]
+            i += 1usize
+        }
+    }
+    res.x = xv[0usize..lx]
+    res.y = yv[0usize..lx]
+    res.w = wv[0usize..lx]
+    res.yf = yf
+    ret (res, ok)
+}
+
+type Gcm = struct { xk: []f64, yk: []f64, sk: []f64 }
+
+// gcmlcm(x, y, type): the greatest convex minorant (lcm false) or the least concave majorant (lcm true) of the points, as knots
+fn gcmlcm(a: *mem.Arena, x: []const f64, y: []const f64, lcm: bool) -> (Gcm, err) {
+    var res: Gcm = zero
+    let n = x.len
+    if n < 2usize { ret (res, mem.Invalid) }
+    let nm1 = n - 1usize
+    let (dx, e1) = mem.alloc[f64](a, nm1)
+    let (slope, e3) = mem.alloc[f64](a, nm1)
+    let (gew, e4) = mem.alloc[f64](a, nm1)
+    let (kk, e5) = mem.alloc[usize](a, nm1)
+    let (tmp, e6) = mem.alloc[f64](a, nm1)
+    if e1 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (res, e1) }
+    var i = 0usize
+    while i < nm1 {
+        dx[i] = x[i + 1usize] - x[i]
+        var r = (y[i + 1usize] - y[i]) / dx[i]
+        if r > 1.7976931348623157e308f64 { r = 1.7976931348623157e308f64 }
+        if r < 0.0f64 - 1.7976931348623157e308f64 { r = 0.0f64 - 1.7976931348623157e308f64 }
+        tmp[i] = r
+        if lcm { tmp[i] = 0.0f64 - r }
+        i += 1usize
+    }
+    isomean(tmp, dx, slope, gew, kk)
+    if lcm {
+        i = 0usize
+        while i < nm1 {
+            slope[i] = 0.0f64 - slope[i]
+            i += 1usize
+        }
+    }
+    let (xk, e7) = mem.alloc[f64](a, n)
+    let (sk, e8) = mem.alloc[f64](a, nm1)
+    if e7 != ok || e8 != ok { ret (res, e7) }
+    var nk = 0usize
+    i = 0usize
+    while i < nm1 {
+        var dup = false
+        var j = 0usize
+        while j < nk {
+            if sk[j] == slope[i] { dup = true }
+            j += 1usize
+        }
+        if !dup {
+            xk[nk] = x[i]
+            sk[nk] = slope[i]
+            nk += 1usize
+        }
+        i += 1usize
+    }
+    xk[nk] = x[n - 1usize]
+    let (yk, e9) = mem.alloc[f64](a, nk + 1usize)
+    if e9 != ok { ret (res, e9) }
+    yk[0usize] = y[0usize]
+    var cum = 0.0f64
+    i = 0usize
+    while i < nk {
+        cum += (xk[i + 1usize] - xk[i]) * sk[i]
+        yk[i + 1usize] = y[0usize] + cum
+        i += 1usize
+    }
+    res.xk = xk[0usize..nk + 1usize]
+    res.yk = yk
+    res.sk = sk[0usize..nk]
+    ret (res, ok)
+}
+
+type Gren = struct { xk: []f64, fk_cdf: []f64, fk: []f64 }
+
+// grenander(ecdf(x), type): the knots of the decreasing (least concave majorant) or increasing (greatest convex minorant) density
+// estimate of the sample x; fk repeats its last slope, as R's f.knots does
+fn grenander(a: *mem.Arena, x: []const f64, decreasing: bool) -> (Gren, err) {
+    var res: Gren = zero
+    let n = x.len
+    let (s, e1) = sorted_copy(a, x)
+    if e1 != ok { ret (res, e1) }
+    let (ux, e2) = mem.alloc[f64](a, n)
+    let (uy, e3) = mem.alloc[f64](a, n)
+    let (uy0, e4) = mem.alloc[f64](a, n)
+    if e2 != ok || e3 != ok || e4 != ok { ret (res, e2) }
+    var m = 0usize
+    var i = 0usize
+    while i < n {
+        var j = i
+        while j < n && s[j] == s[i] { j += 1usize }
+        ux[m] = s[i]
+        uy[m] = f64(j) / f64(n)
+        m += 1usize
+        i = j
+    }
+    var gres: Gcm = zero
+    var ge: err = ok
+    if decreasing {
+        let (g1, ge1) = gcmlcm(a, ux[0usize..m], uy[0usize..m], true)
+        gres = g1
+        ge = ge1
+    } else {
+        uy0[0usize] = 0.0f64
+        i = 1usize
+        while i < m {
+            uy0[i] = uy[i - 1usize]
+            i += 1usize
+        }
+        let (g2, ge2) = gcmlcm(a, ux[0usize..m], uy0[0usize..m], false)
+        gres = g2
+        ge = ge2
+    }
+    if ge != ok { ret (res, ge) }
+    let nk = gres.sk.len
+    let (fk, e5) = mem.alloc[f64](a, nk + 1usize)
+    if e5 != ok { ret (res, e5) }
+    i = 0usize
+    while i < nk {
+        fk[i] = gres.sk[i]
+        i += 1usize
+    }
+    fk[nk] = gres.sk[nk - 1usize]
+    res.xk = gres.xk
+    res.fk_cdf = gres.yk
+    res.fk = fk
+    ret (res, ok)
 }

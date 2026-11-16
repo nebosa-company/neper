@@ -11,6 +11,38 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "mono") || str.eq(c.name, "gcm") || str.eq(c.name, "gren") {
+        let nan = 0.0f64 / 0.0f64
+        let nn = usize(x[0usize])
+        let fl = x[1usize] != 0.0f64
+        if str.eq(c.name, "mono") {
+            let (m, me) = fd.monoreg(a, x[2usize..2usize + nn], x[2usize + nn..2usize + 2usize * nn], x[2usize + 2usize * nn..2usize + 3usize * nn], fl)
+            if me != ok { ret nan }
+            let what = usize(x[2usize + 3usize * nn])
+            let ix = usize(x[3usize + 3usize * nn])
+            if what == 0usize { ret f64(m.x.len) }
+            if what == 1usize { ret m.x[ix - 1usize] }
+            ret m.yf[ix - 1usize]
+        }
+        if str.eq(c.name, "gcm") {
+            let (g, ge) = fd.gcmlcm(a, x[2usize..2usize + nn], x[2usize + nn..2usize + 2usize * nn], fl)
+            if ge != ok { ret nan }
+            let what = usize(x[2usize + 2usize * nn])
+            let ix = usize(x[3usize + 2usize * nn])
+            if what == 0usize { ret f64(g.xk.len) }
+            if what == 1usize { ret g.xk[ix - 1usize] }
+            if what == 2usize { ret g.yk[ix - 1usize] }
+            ret g.sk[ix - 1usize]
+        }
+        let (gr, gre) = fd.grenander(a, x[2usize..2usize + nn], fl)
+        if gre != ok { ret nan }
+        let what = usize(x[2usize + nn])
+        let ix = usize(x[3usize + nn])
+        if what == 0usize { ret f64(gr.xk.len) }
+        if what == 1usize { ret gr.xk[ix - 1usize] }
+        if what == 2usize { ret gr.fk_cdf[ix - 1usize] }
+        ret gr.fk[ix - 1usize]
+    }
     let n = usize(x[0usize])
     let (q, e1) = mem.alloc[f64](a, n)
     let (l, e2) = mem.alloc[f64](a, n)
@@ -47,6 +79,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             ci += 1usize
         }
         ret cs
+    }
+    if str.starts_with(c.name, "t_") {
+        let (tr, te) = fd.fdrtool_t(a, x[1usize..1usize + n], q, l)
+        if te != ok { ret 0.0f64 / 0.0f64 }
+        let tn = c.name
+        if str.eq(tn, "t_eta0") { ret tr.eta0 }
+        if str.eq(tn, "t_cutoff") { ret tr.cutoff }
+        if str.eq(tn, "t_ncens") { ret f64(tr.ncens) }
+        if str.eq(tn, "t_df") { ret tr.sd }
+        if str.eq(tn, "t_dfse") { ret tr.sd_se }
+        ret tr.eta0_se
     }
     if str.starts_with(c.name, "r_") {
         let (rr, re) = fd.fdrtool_corr(a, x[1usize..1usize + n], q, l)
