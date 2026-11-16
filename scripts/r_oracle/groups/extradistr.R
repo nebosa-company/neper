@@ -33,4 +33,12 @@ for (rep in 1:3) {
   for (xx in seq(lo, hi, length.out = 4)) { add2("d2", c(5, pr, xx), dtnorm(xx, mu, sdv, lo, hi)); add2("p2", c(5, pr, xx), ptnorm(xx, mu, sdv, lo, hi)) }
   for (pq in c(0.1, 0.5, 0.8)) add2("q2", c(5, pr, pq), qtnorm(pq, mu, sdv, lo, hi))
 }
+# zero-inflated, gamma-Poisson and truncated Poisson masses: fn "d3"; args (dist, p1, p2, p3, v): 0 zip(lambda, pi) 1 zib(size, prob, pi) 2 zinb(size, prob, pi) 3 gpois(shape, scale) 4 tpois(lambda, a, b)
+for (rep in 1:3) {
+  l <- runif(1, 0.5, 5); pz <- runif(1, 0.05, 0.6); n <- sample(5:20, 1); pr <- runif(1, 0.2, 0.8); sh <- runif(1, 1, 5); sc <- runif(1, 0.3, 2); a <- sample(0:2, 1); b <- sample(8:15, 1)
+  for (xx in c(0, 1, 2, 5, 9)) {
+    add2("d3", c(0, l, pz, 0, xx), dzip(xx, l, pz)); add2("d3", c(1, n, pr, pz, xx), dzib(xx, n, pr, pz)); add2("d3", c(2, n, pr, pz, xx), dzinb(xx, n, pr, pz))
+    add2("d3", c(3, sh, sc, 0, xx), dgpois(xx, sh, scale = sc)); add2("d3", c(4, l, a, b, xx), dtpois(xx, l, a, b))
+  }
+}
 emit("extradistr", "extraDistr", list(cases))

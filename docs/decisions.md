@@ -46648,3 +46648,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** Added the beta-binomial, beta-negative-binomial, discrete Laplace (location 0), logarithmic series and truncated normal to `extradistr.e` with lchoose, lbeta and lgamma forms of the masses and partial sums for the cdfs. extraDistr's truncated normal is zero at the endpoints `a` and `b` (open interval). Maxwell is in the item's list but not in the package.
 
 **Result.** `oracle_extradistr` agrees with extraDistr on the new values on Windows (893 cases in all); Linux pending. L422 stays partial: Skellam, Zipf, the other families and the generators.
+
+## D6580 — extraDistr: zero-inflated, gamma-Poisson and truncated Poisson masses
+
+**Decision.** `zip_d`, `zib_d`, `zinb_d` mix the base mass with a point mass at 0 (`pi + (1 - pi) f(0)` at zero, `(1 - pi) f(x)` elsewhere), `gpois_d` is the negative binomial with `prob = 1/(1 + scale)`, and `tpois_d` renormalises the Poisson mass on `a < x <= b` by `P(X <= b) - P(X <= a)`.
+
+**Result.** `oracle_extradistr` agrees with extraDistr on 75 new masses on Windows (968 cases in all); Linux pending. L422 stays partial.

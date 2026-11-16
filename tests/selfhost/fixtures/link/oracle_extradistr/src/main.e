@@ -44,6 +44,18 @@ fn answer(c: *const oracle.Case) -> f64 {
         if ip2 { ret ed.tnorm_p(vv, u1, u2, u3, u4) }
         ret ed.tnorm_q(vv, u1, u2, u3, u4)
     }
+    if str.eq(c.name, "d3") {
+        let d3 = usize(x[0usize])
+        let w1 = x[1usize]
+        let w2 = x[2usize]
+        let w3 = x[3usize]
+        let vx = x[4usize]
+        if d3 == 0usize { ret ed.zip_d(vx, w1, w2) }
+        if d3 == 1usize { ret ed.zib_d(vx, w1, w2, w3) }
+        if d3 == 2usize { ret ed.zinb_d(vx, w1, w2, w3) }
+        if d3 == 3usize { ret ed.gpois_d(vx, w1, w2) }
+        ret ed.tpois_d(vx, w1, w2, w3)
+    }
     let di = usize(x[0usize])
     let a = x[1usize]
     let b = x[2usize]

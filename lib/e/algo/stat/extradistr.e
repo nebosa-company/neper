@@ -298,3 +298,32 @@ fn tnorm_q(p: f64, m: f64, s: f64, a: f64, b: f64) -> f64 {
     let pb = pn((b - m) / s)
     ret m + s * qn(pa + p * (pb - pa))
 }
+
+// zero-inflated Poisson(lambda, pi), binomial(size, prob, pi), negative binomial(size, prob, pi): the mass at 0 mixed with the base distribution
+fn zip_d(x: f64, l: f64, pi0: f64) -> f64 {
+    if x < 0.0f64 || x != math.floor[f64](x) { ret 0.0f64 }
+    if x == 0.0f64 { ret pi0 + (1.0f64 - pi0) * nm.dpois(0.0f64, l, false) }
+    ret (1.0f64 - pi0) * nm.dpois(x, l, false)
+}
+fn zib_d(x: f64, n: f64, pr: f64, pi0: f64) -> f64 {
+    if x < 0.0f64 || x > n || x != math.floor[f64](x) { ret 0.0f64 }
+    if x == 0.0f64 { ret pi0 + (1.0f64 - pi0) * nb.dbinom(0.0f64, n, pr, false) }
+    ret (1.0f64 - pi0) * nb.dbinom(x, n, pr, false)
+}
+fn zinb_d(x: f64, n: f64, pr: f64, pi0: f64) -> f64 {
+    if x < 0.0f64 || x != math.floor[f64](x) { ret 0.0f64 }
+    if x == 0.0f64 { ret pi0 + (1.0f64 - pi0) * nb.dnbinom(0.0f64, n, pr, false) }
+    ret (1.0f64 - pi0) * nb.dnbinom(x, n, pr, false)
+}
+
+// gamma-Poisson(shape, scale)
+fn gpois_d(x: f64, shape: f64, scale: f64) -> f64 {
+    if x < 0.0f64 || x != math.floor[f64](x) { ret 0.0f64 }
+    ret nb.dnbinom(x, shape, 1.0f64 / (1.0f64 + scale), false)
+}
+
+// Poisson(lambda) truncated to a < x <= b
+fn tpois_d(x: f64, l: f64, a: f64, b: f64) -> f64 {
+    if x <= a || x > b || x != math.floor[f64](x) { ret 0.0f64 }
+    ret nm.dpois(x, l, false) / (nm.ppois(b, l, true, false) - nm.ppois(a, l, true, false))
+}
