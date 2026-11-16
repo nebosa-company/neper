@@ -81,4 +81,15 @@ for (rep in 1:30) {
   sz <- runif(1, 0.5, 12); pr <- runif(1, 0.15, 0.9); yy <- sample(0:15, 1)
   v <- tryCatch(crps_nbinom(yy, sz, pr), error = function(e) NA); if (is.finite(v)) add("crps", c(19, sz, pr, 0, 0, yy), v)
 }
+for (rep in 1:25) {
+  yy <- rnorm(1, 0.5, 2); yp <- abs(rnorm(1, 1, 1.5)) + 0.05
+  k <- sample(2:4, 1); mm <- rnorm(k); ss <- runif(k, 0.3, 2); ww <- runif(k, 0.1, 1)
+  add("crpsmix", c(yy, k, mm, ss, ww), crps_mixnorm(yy, matrix(mm, 1), matrix(ss, 1), matrix(ww, 1)))
+  shp <- runif(1, -0.45, 0.8); lc <- rnorm(1); sc <- runif(1, 0.5, 2.5)
+  add("crps", c(21, shp, lc, sc, 0, yy), crps_gev(yy, shp, lc, sc)); add("crps", c(21, 1e-14, lc, sc, 0, yy), crps_gev(yy, 1e-14, lc, sc))
+  ms <- runif(1, 0, 0.5); add("crps", c(22, shp, lc, sc, ms, yp + lc), crps_gpd(yp + lc, shp, lc, sc, ms)); add("crps", c(22, 0, lc, sc, ms, yp + lc), crps_gpd(yp + lc, 0, lc, sc, ms))
+  sl <- runif(1, 0.1, 0.9); add("crps", c(23, lc, sl, 0, 0, yp), crps_llapl(yp, lc, sl)); add("crps", c(24, lc, sl, 0, 0, yp), crps_llogis(yp, lc, sl))
+  s1 <- runif(1, 0.3, 2); s2 <- runif(1, 0.3, 2); add("crps", c(25, s1, s2, lc, 0, yy), crps_2pexp(yy, s1, s2, lc)); add("crps", c(26, s1, s2, lc, 0, yy), crps_2pnorm(yy, s1, s2, lc))
+  add("crps", c(27, lc, sc, ms, 0, yy), crps_expM(yy, lc, sc, ms))
+}
 emit("scoringrules", "scoringRules", list(cases))

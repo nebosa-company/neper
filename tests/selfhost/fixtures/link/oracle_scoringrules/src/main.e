@@ -21,7 +21,14 @@ fn param(c: *const oracle.Case) -> f64 {
     let isc = str.eq(k, "crps")
     let isl = str.eq(k, "logs")
     if fam == 19usize { ret sr.crps_nbinom(y, a, b) }
-    if fam >= 16usize {
+    if fam == 21usize { ret sr.crps_gev(y, a, b, cc) }
+    if fam == 22usize { ret sr.crps_gpd(y, a, b, cc, d) }
+    if fam == 23usize { ret sr.crps_llapl(y, a, b) }
+    if fam == 24usize { ret sr.crps_llogis(y, a, b) }
+    if fam == 25usize { ret sr.crps_2pexp(y, a, b, cc) }
+    if fam == 26usize { ret sr.crps_2pnorm(y, a, b, cc) }
+    if fam == 27usize { ret sr.crps_expm(y, a, b, cc) }
+    if fam >= 16usize && fam <= 18usize {
         // (fam, df, loc, scale, lower, upper, y, lmass, umass)
         let dfv = x[1usize]
         let lo2 = x[4usize]
@@ -103,7 +110,8 @@ fn weighted(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let n = usize(x[1usize])
     if str.eq(c.name, "crpsw") { ret sr.crps_edf_w(a, x[0usize], x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n]) }
-    ret sr.crps_kde(a, x[0usize], x[2usize..2usize + n], x[2usize + n])
+    if str.eq(c.name, "crpskde") { ret sr.crps_kde(a, x[0usize], x[2usize..2usize + n], x[2usize + n]) }
+    ret sr.crps_mixnorm(x[0usize], x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n])
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -115,7 +123,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while at < golden.cases.len {
         let c = &golden.cases[at]
         var got = 0.0f64
-        if str.eq(c.name, "sample") { got = sample(a, c) } else if str.eq(c.name, "crpsw") || str.eq(c.name, "crpskde") { got = weighted(a, c) } else { got = param(c) }
+        if str.eq(c.name, "sample") { got = sample(a, c) } else if str.eq(c.name, "crpsw") || str.eq(c.name, "crpskde") || str.eq(c.name, "crpsmix") { got = weighted(a, c) } else { got = param(c) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

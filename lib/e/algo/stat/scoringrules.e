@@ -10,6 +10,7 @@ use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
+use e.math.special as sp
 use e.mem
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
@@ -636,4 +637,119 @@ fn crps_nbinom(y: f64, size: f64, prob: f64) -> f64 {
     let c2 = (1.0f64 - prob) / (prob * prob)
     let c3 = prob * (2.0f64 * nb.pnbinom(y - 1.0f64, size + 1.0f64, prob, true, false) - 1.0f64) + hypergeo_half_2(size + 1.0f64, 0.0f64 - 4.0f64 * c2)
     ret c1 - size * c2 * c3
+}
+
+// crps_mixnorm(y, m, s, w): the CRPS of a normal mixture, sum w_i A(y - m_i, s_i^2) - 0.5 sum sum w_i w_j A(m_i - m_j, s_i^2 + s_j^2), weights normalised
+fn crps_mixnorm(y: f64, m: []const f64, s: []const f64, w: []const f64) -> f64 {
+    var tw = 0.0f64
+    var i = 0usize
+    while i < m.len {
+        tw += w[i]
+        i += 1usize
+    }
+    var s1 = 0.0f64
+    i = 0usize
+    while i < m.len {
+        s1 += w[i] / tw * a_mix(y - m[i], s[i] * s[i])
+        i += 1usize
+    }
+    var s2 = 0.0f64
+    i = 0usize
+    while i < m.len {
+        var j = 0usize
+        while j < m.len {
+            s2 += w[i] / tw * w[j] / tw * a_mix(m[i] - m[j], s[i] * s[i] + s[j] * s[j])
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret s1 - 0.5f64 * s2
+}
+
+// crps_expM(y, location, scale, mass)
+fn crps_expm(y0: f64, loc: f64, scale: f64, mass: f64) -> f64 {
+    let y = y0 - loc
+    let a = 1.0f64 - mass
+    var pe = 0.0f64
+    if y > 0.0f64 { pe = 1.0f64 - math.exp[f64](0.0f64 - y / scale) }
+    ret math.abs[f64](y) - scale * a * (2.0f64 * pe - 0.5f64 * a)
+}
+
+// crps_2pexp(y, scale1, scale2, location)
+fn crps_2pexp(y0: f64, s1: f64, s2: f64, loc: f64) -> f64 {
+    let y = y0 - loc
+    var z = y
+    if z < 0.0f64 { z = 0.0f64 }
+    var yn = y
+    if yn > 0.0f64 { yn = 0.0f64 }
+    var s = s1 + s2
+    if s == 0.0f64 { s = 1.0f64 / 0.0f64 }
+    ret crps_expm(0.0f64 - yn, 0.0f64, s1, s2 / s) + crps_expm(z, 0.0f64, s2, s1 / s)
+}
+
+// crps_2pnorm(y, scale1, scale2, location)
+fn crps_2pnorm(y0: f64, s1: f64, s2: f64, loc: f64) -> f64 {
+    let y = y0 - loc
+    var z = y
+    if z < 0.0f64 { z = 0.0f64 }
+    var yn = y
+    if yn > 0.0f64 { yn = 0.0f64 }
+    var s = s1 + s2
+    if s == 0.0f64 { s = 1.0f64 / 0.0f64 }
+    let inf = 1.0f64 / 0.0f64
+    ret crps_gtcnorm(yn, 0.0f64, s1, 0.0f64 - inf, 0.0f64, 0.0f64, s2 / s) + crps_gtcnorm(z, 0.0f64, s2, 0.0f64, inf, s1 / s, 0.0f64)
+}
+
+// crps_gpd(y, shape, location, scale, mass) for shape < 1
+fn crps_gpd(y0: f64, shape: f64, loc: f64, scale: f64, mass: f64) -> f64 {
+    let y = y0 - loc
+    let z = y / scale
+    var x = 1.0f64 + shape * z
+    if x < 0.0f64 { x = 0.0f64 }
+    if math.abs[f64](shape) < 1.0e-12f64 { x = math.exp[f64](0.0f64 - z) } else { x = math.pow[f64](x, 0.0f64 - 1.0f64 / shape) }
+    if x > 1.0f64 { x = 1.0f64 }
+    let a = 1.0f64 - mass
+    let b = 1.0f64 - shape
+    ret math.abs[f64](y) - scale * a * (2.0f64 / b * (1.0f64 - math.pow[f64](x, b)) - a / (2.0f64 - shape))
+}
+
+// crps_gev(y, shape, location, scale) for shape < 1
+fn crps_gev(y0: f64, shape: f64, loc: f64, scale: f64) -> f64 {
+    let y = (y0 - loc) / scale
+    if math.abs[f64](shape) < 1.0e-12f64 {
+        ret scale * (0.0f64 - y - gs.psi(1.0f64) - math.log[f64](2.0f64) - 2.0f64 * gs.expint_ei(0.0f64 - math.exp[f64](0.0f64 - y)))
+    }
+    var x = 1.0f64 + shape * y
+    if x < 0.0f64 { x = 0.0f64 }
+    x = math.pow[f64](x, 0.0f64 - 1.0f64 / shape)
+    let c1 = 2.0f64 * math.exp[f64](0.0f64 - x) - 1.0f64
+    let out = (y + 1.0f64 / shape) * c1 + math.exp[f64](sp.lgamma(1.0f64 - shape)) / shape * (2.0f64 * nm.pgamma(x, 1.0f64 - shape, 1.0f64, true, false) - math.pow[f64](2.0f64, shape))
+    ret scale * out
+}
+
+// crps_llapl(y, locationlog, scalelog) for scalelog in [0, 1)
+fn crps_llapl(y: f64, ll: f64, sl: f64) -> f64 {
+    var y1 = y
+    if y1 < 0.0f64 { y1 = 0.0f64 }
+    let z = (math.log[f64](y1) - ll) / sl
+    var sg = 0.0f64
+    if z > 0.0f64 { sg = 1.0f64 }
+    if z < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+    let p = 0.5f64 + 0.5f64 * sg * (1.0f64 - math.exp[f64](0.0f64 - math.abs[f64](z)))
+    let c1 = y * (2.0f64 * p - 1.0f64)
+    var c2 = 0.0f64
+    if z < 0.0f64 { c2 = (1.0f64 - math.pow[f64](2.0f64 * p, 1.0f64 + sl)) / (1.0f64 + sl) } else { c2 = 0.0f64 - (1.0f64 - math.pow[f64](2.0f64 * (1.0f64 - p), 1.0f64 - sl)) / (1.0f64 - sl) }
+    let c3 = sl / (4.0f64 - sl * sl)
+    ret c1 + math.exp[f64](ll) * (c2 + c3)
+}
+
+// crps_llogis(y, locationlog, scalelog) for scalelog in [0, 1)
+fn crps_llogis(y: f64, ll: f64, sl: f64) -> f64 {
+    var y1 = y
+    if y1 < 0.0f64 { y1 = 0.0f64 }
+    let p = plogis_std((math.log[f64](y1) - ll) / sl)
+    let c1 = y * (2.0f64 * p - 1.0f64)
+    let c2 = 2.0f64 * math.exp[f64](ll) * math.exp[f64](nb.lbeta(1.0f64 + sl, 1.0f64 - sl))
+    let c3 = (1.0f64 - sl) / 2.0f64 - nb.pbeta(p, 1.0f64 + sl, 1.0f64 - sl, true, false)
+    ret c1 + c2 * c3
 }
