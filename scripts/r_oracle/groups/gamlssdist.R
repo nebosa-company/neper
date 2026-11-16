@@ -13,4 +13,13 @@ for (rep in 1:30) {
   }
   for (p in runif(3, 0.02, 0.98)) { add("qGU", c(p, mu, sg, 0), qGU(p, mu, sg)); add("qLO", c(p, mu, sg, 0), qLO(p, mu, sg)) }
 }
+for (rep in 1:30) {
+  mu <- runif(1, 0.5, 3); sg <- runif(1, 0.2, 1.5); nu <- runif(1, 0.3, 2.5) * sample(c(-1, 1), 1); tau <- runif(1, 0.5, 3); df <- runif(1, 2, 20)
+  for (x in runif(4, 0.05, 6)) {
+    add("dWEI", c(x, mu, sg, 0, 0), dWEI(x, mu, sg)); add("dLOGNO", c(x, mu, sg, 0, 0), dLOGNO(x, mu, sg))
+    add("dJSU", c(x, mu, sg, nu, tau), dJSU(x, mu, sg, nu, tau)); add("dSHASH", c(x, mu, sg, abs(nu), tau), dSHASH(x, mu, sg, abs(nu), tau))
+    add("dBCT", c(x, mu, sg, nu, df), dBCT(x, mu, sg, nu, df))
+  }
+  for (k in sample(0:12, 4)) { add("dNBI", c(k, mu * 3, sg, 0, 0), dNBI(k, mu * 3, sg)); add("dZIP", c(k, mu * 3, min(sg, 0.9) / 2, 0, 0), dZIP(k, mu * 3, min(sg, 0.9) / 2)) }
+}
 emit("gamlssdist", "gamlss.dist", list(cases))

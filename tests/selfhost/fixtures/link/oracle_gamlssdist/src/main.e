@@ -11,6 +11,13 @@ use e.test.oracle as oracle
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "dWEI") { ret gd.dwei(x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "dLOGNO") { ret gd.dlogno(x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "dNBI") { ret gd.dnbi(x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "dZIP") { ret gd.dzip(x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "dJSU") { ret gd.djsu(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
+    if str.eq(k, "dSHASH") { ret gd.dshash(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
+    if str.eq(k, "dBCT") { ret gd.dbct(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
     if str.eq(k, "dGU") { ret gd.dgu(x[0usize], x[1usize], x[2usize]) }
     if str.eq(k, "dLO") { ret gd.dlo(x[0usize], x[1usize], x[2usize]) }
     if str.eq(k, "dGA") { ret gd.dga(x[0usize], x[1usize], x[2usize]) }
