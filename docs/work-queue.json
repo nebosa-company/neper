@@ -15,17 +15,6 @@
       "evidence": "Partial (D6000, D6009, D6010, D6015, D6019). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names (ten languages) and a time zone (every transition of the zones in e.tz.builtin); read_delim equals readr on rows shorter and longer than the header, under a one-column header and with a quote left open, on 15489 cases. Open: %Z naming a zone, and two unterminated-quote shapes that crash or confuse readr 2.2.0 (listed in D6016)."
     },
     {
-      "id": "L302",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 551,
-      "title": "GPArotation: gradient projection rotations",
-      "score": 0.7,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6026). GPForth and GPFoblq (algorithm bb, Kaiser normalization) over oblimin, quartimin, quartimax, cf, bentler, infomax, geomin, entropy, oblimax, varimax, varimin, target, pst and tandem I and II equal GPArotation 2026.8.2 on both hosts (oblique entropy and oblimax, and paths past 150 iterations, not probed). Open: simplimax, cayley and legacy algorithms, Cureton-Mulaik normalization, bifactor, promax. Was: Open (CRAN rank 196). Mid. e.ml.multivariate has varimax. Acceptance, equal to GPArotation loadings, rotation matrix and criterion value: GPForth and GPFoblq driving oblimin, quartimin, geominT and geominQ, bentlerT and bentlerQ, infomaxT and infomaxQ, cfT and cfQ (Crawford-Ferguson), simplimax, tandemI and tandemII, entropy, varimin, targetT and targetQ, pstT and pstQ, plus promax and Kaiser normalization."
-    },
-    {
       "id": "L303",
       "category": "library",
       "group": "CRAN parity",
@@ -299,6 +288,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6025). dmvnorm, dmvt, rmvnorm (eigen, svd, chol) and rmvt equal mvtnorm 1.4.2 on both hosts. Open: pmvnorm and pmvt (Genz-Bretz mvt.f, Miwa, TVPACK), qmvnorm and qmvt. Was: Open (CRAN rank 130). Mid. Acceptance: pmvnorm and pmvt for the Genz-Bretz (seeded QMC, equal to R at its stated abseps), Miwa and TVPACK algorithms, qmvnorm and qmvt for every tail and the equicoordinate form, dmvnorm, dmvt, rmvnorm (equal to R value for value under set.seed, chol, eigen and svd methods), rmvt, and the lower, upper and correlation inputs R accepts."
+    },
+    {
+      "id": "L302",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 551,
+      "title": "GPArotation: gradient projection rotations",
+      "score": 0.7,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6026). GPForth and GPFoblq (algorithm bb, Kaiser normalization) over oblimin, quartimin, quartimax, cf, bentler, infomax, geomin, entropy, oblimax, varimax, varimin, target, pst and tandem I and II equal GPArotation 2026.8.2 on both hosts (oblique entropy and oblimax, and paths past 150 iterations, not probed). Open: simplimax, cayley and legacy algorithms, Cureton-Mulaik normalization, bifactor, promax. Was: Open (CRAN rank 196). Mid. e.ml.multivariate has varimax. Acceptance, equal to GPArotation loadings, rotation matrix and criterion value: GPForth and GPFoblq driving oblimin, quartimin, geominT and geominQ, bentlerT and bentlerQ, infomaxT and infomaxQ, cfT and cfQ (Crawford-Ferguson), simplimax, tandemI and tandemII, entropy, varimin, targetT and targetQ, pstT and pstQ, plus promax and Kaiser normalization."
     },
     {
       "id": "L275",
