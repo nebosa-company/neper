@@ -427,10 +427,10 @@
       "group": "CRAN parity",
       "order": 594,
       "title": "ResourceSelection: Hosmer-Lemeshow and related tests",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 981). Small. Acceptance, equal to ResourceSelection under set.seed: hoslem.test with its g groups and expected tables, kfold, and the resource-selection function fits."
+      "evidence": "Partly done (D6096): e.algo.stat.hoslem (hoslem.test with observed and expected tables) equals ResourceSelection on 1128 values on Windows (oracle_hoslem); Linux pending. Open: kfold, rsf, rspf, used-available helpers. Original: Open (CRAN rank 981). Small. Acceptance, equal to ResourceSelection under set.seed: hoslem.test with its g groups and expected tables, kfold, and the resource-selection function fits."
     },
     {
       "id": "L500",
