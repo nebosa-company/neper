@@ -13,6 +13,7 @@ for (rep in 1:12) {
   for (t in 0:4) { dv <- diag(vcovHC(m, paste0("HC", t))); add(paste0("hc", t), a, sum(dv * seq_along(dv))) }
   add("dw", a, as.numeric(dwtest(m)$statistic)); add("bp", a, as.numeric(bptest(m)$statistic))
   add("bpc", a, as.numeric(bptest(m, studentize = FALSE)$statistic)); add("reset", a, as.numeric(resettest(m)$statistic)); add("bpp", a, bptest(m)$p.value); g <- gqtest(m); add("gq", a, as.numeric(g$statistic)); add("gqp", a, g$p.value); add("resetp", a, resettest(m)$p.value)
+  for (lg in c(2, 4)) for (ad in c(FALSE, TRUE)) { dv <- diag(NeweyWest(m, lag = lg, prewhite = FALSE, adjust = ad)); add("nw", c(a, lg, as.numeric(ad)), sum(dv * seq_along(dv))) }
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
 }
 emit("carlmtest", "car", list(cases))

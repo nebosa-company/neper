@@ -380,3 +380,67 @@ fn goldfeld_quandt(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: u
     let df2 = f64(point1 - p)
     ret ((r2 / df1) / (r1 / df2), df1, df2)
 }
+
+// NeweyWest(m, lag, prewhite = FALSE, adjust): the Bartlett-kernel HAC covariance diagonal (X'X)^-1 [sum_l w_l (G_l + G_l')] (X'X)^-1 with w_l = 1 - l / (lag + 1),
+// G_l = sum_t u_t u_{t-l}' for u_t = x_t e_t, scaled by n / (n - p) when adjust
+fn newey_west_diag(a: *mem.Arena, x: []const f64, n: usize, p: usize, f: *const Fit, lag: usize, adjust: bool, out: []f64) -> err {
+    let (meat, e1) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < p * p {
+        meat[i] = 0.0f64
+        i += 1usize
+    }
+    var l = 0usize
+    while l <= lag {
+        var w = 1.0f64
+        if l > 0usize { w = 1.0f64 - f64(l) / f64(lag + 1usize) }
+        var t = l
+        while t < n {
+            var j = 0usize
+            while j < p {
+                var k = 0usize
+                while k < p {
+                    let g = x[t * p + j] * f.resid[t] * x[(t - l) * p + k] * f.resid[t - l]
+                    meat[j * p + k] += w * g
+                    if l > 0usize { meat[k * p + j] += w * g }
+                    k += 1usize
+                }
+                j += 1usize
+            }
+            t += 1usize
+        }
+        l += 1usize
+    }
+    var scale = 1.0f64
+    if adjust { scale = f64(n) / f64(n - p) }
+    let (tmp, e2) = mem.alloc[f64](a, p * p)
+    if e2 != ok { ret e2 }
+    var j = 0usize
+    while j < p {
+        var k = 0usize
+        while k < p {
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                s += f.xtx_inv[j * p + q] * meat[q * p + k]
+                q += 1usize
+            }
+            tmp[j * p + k] = s
+            k += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var s = 0.0f64
+        var k = 0usize
+        while k < p {
+            s += tmp[j * p + k] * f.xtx_inv[k * p + j]
+            k += 1usize
+        }
+        out[j] = s * scale
+        j += 1usize
+    }
+    ret ok
+}

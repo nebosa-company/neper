@@ -15,6 +15,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let y = x[2usize..2usize + n]
     let des = x[2usize + n..2usize + n + n * p]
     let (f, e) = cl.ols(a, des, y, n, p)
+    if str.eq(c.name, "nw") {
+        let (dv0, e0) = mem.alloc[f64](a, p)
+        if e0 != ok { os.exit(8) }
+        let lg = usize(x[2usize + n + n * p])
+        if cl.newey_west_diag(a, des, n, p, &f, lg, x[3usize + n + n * p] > 0.5f64, dv0) != ok { os.exit(9) }
+        var tt = 0.0f64
+        var q = 0usize
+        while q < p {
+            tt += dv0[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret tt
+    }
     if e != ok { os.exit(5) }
     let k = c.name
     if str.eq(k, "dw") { ret cl.durbin_watson(f.resid) }

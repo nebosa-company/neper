@@ -45718,3 +45718,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.carlmtest` gains goldfeld_quandt for gqtest(point = 0.5, fraction = 0): the design is split at floor(n / 2) and ceiling(n / 2 + 0.01) (so an odd n drops no row and an even n drops none either), each segment is fitted by OLS, and the statistic is the ratio of the residual mean squares, last over first, with its two degrees of freedom; the upper-tail F p value uses p_f. Statistic and p value equal lmtest's to 1e-8. Not here: other points and fractions, the other alternatives, ordering by a variable, Harvey-Collier, the Durbin-Watson p value, HAC and clustered covariances and car's Anova.
 
 **Result.** `oracle_carlmtest` equals the packages on 168 cases on Windows; Linux pending. L300 stays partial.
+
+## D6425 — sandwich: NeweyWest
+
+`e.algo.stat.carlmtest` gains newey_west_diag, NeweyWest(m, lag, prewhite = FALSE, adjust) from the Bartlett kernel: the meat is the sum over lags l = 0 .. lag of (1 - l / (lag + 1)) (G_l + G_l') (G_0 once) with G_l = sum_t u_t u_{t-l}' for the scores u_t = x_t e_t, sandwiched between (X'X)^-1, and scaled by n / (n - p) when adjust is TRUE. The diagonals equal sandwich's to 1e-8 for lags 2 and 4 with and without the adjustment on twelve designs. Not here: prewhitening, the automatic lag selection, other kernels (Andrews, Parzen), clustered and bootstrap covariances, and the remaining tests.
+
+**Result.** `oracle_carlmtest` equals the packages on 216 cases on Windows; Linux pending. L300 stays partial.
