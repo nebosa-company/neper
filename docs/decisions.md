@@ -47270,3 +47270,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6700 — SuppDists Spearman as a Friedman statistic
 
 **Decision.** The package computes Spearman's rho with its Friedman code: two blocks, `S = (M/2)(1 + rho)` with the rho flag on. `pfrie`, `qfrie` and `ffrie` take that flag so the rounding of S is the package's (computed from rho, not from the Friedman scale, which flips the rounding on some arguments), and `friedman_exact_rho` builds the exact distribution for r up to 11 from the counts of the sum of squared rank differences, `S = c^2 (r(r^2 - 1)/3 - D2)`. The quantile search calls the Friedman cdf with the flag off and n = 2, which is exact only for r up to 5 and Walsh's beta approximation otherwise; the port does the same, so qSpearman for r from 6 to 11 is the approximation-driven answer. Linux pending.
+
+## D6701 — SuppDists Johnson fit
+
+**Decision.** `johnson_fit_quantiles` is Wheeler's fit from the 5, 20.6, 50, 79.4 and 95 percent quantiles (type by the t, tu and tb ratios with the 0.1 tolerance, xi and lambda by Givens least squares over the five points, `jf_rotate3`), and `johnson_moment_fit` is the moment fit (SN and SL closed forms, SU by Hill, Hill and Holder's iteration, SB by Newton on gamma and delta with the package Romberg-style trapezoid series `jf_mom` for the first six SB moments). Kind coding stays the Neper one (SN 0, SL 1, SB 2, SU 3), not R's type index. A fit that does not converge answers `ok_ = false`, as the package returns an error type. Linux pending.

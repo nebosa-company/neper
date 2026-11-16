@@ -4,6 +4,7 @@
 
 use e.algo.stat.suppdists as sd
 use e.io
+use e.math
 use e.mem
 use e.os
 use e.str
@@ -121,6 +122,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (qdist, qe) = sd.friedman_exact(a, sr, 2i64)
         if qe != ok { ret nan }
         ret sd.xspearman_pkg(&qdist, z[1usize], sr)
+    }
+    if str.starts_with(nm, "jf_") {
+        var jf: sd.JFit = zero
+        var jw = 0usize
+        if str.eq(nm, "jf_q") {
+            jf = sd.johnson_fit_quantiles(z[0usize], z[1usize], z[2usize], z[3usize], z[4usize])
+            jw = usize(z[5usize])
+        } else {
+            let jv = z[1usize]
+            let jsd = math.sqrt[f64](jv)
+            jf = sd.johnson_moment_fit(z[0usize], jsd, z[2usize] / (jsd * jv), z[3usize] / (jv * jv))
+            jw = usize(z[4usize])
+        }
+        if !jf.ok_ { ret nan }
+        if jw == 0usize { ret jf.gamma }
+        if jw == 1usize { ret jf.delta }
+        if jw == 2usize { ret jf.xi }
+        if jw == 3usize { ret jf.lambda }
+        ret f64(jf.kind)
     }
     if str.eq(nm, "gh_d") { ret sd.ghyper_d(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_p") { ret sd.ghyper_p(z[3usize], z[0usize], z[1usize], z[2usize]) }

@@ -83,4 +83,23 @@ for (r in c(4, 5, 8, 11, 12, 15, 20)) {
   for (rho in c(-0.7, -0.3, 0.05, 0.4, 0.8)) { add("sq_p", c(r, rho), pSpearman(rho, r), 1e-8); add("sq_u", c(r, rho), pSpearman(rho, r, lower.tail = FALSE), 1e-8); add("sq_d", c(r, rho), dSpearman(rho, r), 1e-8) }
   for (pr in c(0.05, 0.3, 0.5, 0.95)) add("sq_q", c(r, pr), qSpearman(pr, r), 1e-8)
 }
+# Johnson fits: "jf_q" args (x95, x79.4, x50, x20.6, x5, what 0 gamma 1 delta 2 xi 3 lambda 4 type), "jf_m" args (mean, variance, m3, m4, what)
+jf_code <- c(SN = 0, SL = 1, SB = 2, SU = 3)
+jf_pick <- function(f, w) switch(w + 1, f$gamma, f$delta, f$xi, f$lambda, jf_code[[f$type]])
+jf_fit_cases <- list(list(0, 1, 0.1, 3.0), list(1, 2, 0.3, 3.3), list(0, 1, 1, 8))
+for (pr in list(c(0.3, 1.2, 2, 3), c(-1, 1.5, 0, 2), c(0.5, 1, 1, 3), c(-2, 0.7, 4, 5), c(1.5, 2, -1.5, 3), c(-0.4, 2.5, -2, 1.5), c(0, 1, 0, 1))) {
+  v <- qJohnson(ppoints(400), list(gamma = pr[1], delta = pr[2], xi = pr[3], lambda = pr[4], type = "SU"))
+  for (typ in c("SU", "SB", "SL")) {
+    vv <- if (typ == "SU") v else if (typ == "SB") qJohnson(ppoints(400), list(gamma = pr[1], delta = pr[2], xi = pr[3], lambda = pr[4], type = "SB")) else qJohnson(ppoints(400), list(gamma = pr[1], delta = pr[2], xi = pr[3], lambda = pr[4], type = "SL"))
+    qq <- quantile(vv, probs = c(0.95, 0.794, 0.5, 0.206, 0.05), names = FALSE)
+    f <- tryCatch(JohnsonFit(vv, moment = "quant"), error = function(e) NULL)
+    if (is.null(f) || any(!is.finite(c(f$gamma, f$delta, f$xi, f$lambda)))) next
+    for (w in 0:4) add("jf_q", c(qq, w), jf_pick(f, w), 1e-7)
+  }
+}
+for (m in list(c(0, 1, 0.01, 3.02), c(2, 4, 3.5, 22), c(1, 2.25, 1, 5.5), c(0, 1, 0.4, 3.5), c(5, 9, 3, 25), c(0, 1, 0, 2.2), c(3, 1, -0.5, 3.6), c(0, 1, 0.8, 4.2), c(0, 1, -2, 12), c(10, 3, 0.8, 4.5))) {
+  f <- tryCatch(JohnsonFit(m, moment = "use"), error = function(e) NULL)
+  if (is.null(f) || any(!is.finite(c(f$gamma, f$delta, f$xi, f$lambda)))) next
+  for (w in 0:4) add("jf_m", c(m, w), jf_pick(f, w), 1e-5)
+}
 emit("suppdists", "SuppDists", list(cases))

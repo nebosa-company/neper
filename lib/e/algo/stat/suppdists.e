@@ -1543,3 +1543,435 @@ fn xspearman_pkg(d: *const Fdist, p: f64, r: i64) -> f64 {
     let x = xfrie(d, p, r, 2i64)
     ret x / f64(r - 1i64) - 1.0f64
 }
+
+// ---- fitting the Johnson system (Wheeler 1980 from five quantiles; Hill, Hill and Holder's AS 99 from moments) ----
+
+type JFit = struct { gamma: f64, delta: f64, xi: f64, lambda: f64, kind: u8, ok_: bool }
+
+fn jf_bad() -> JFit {
+    var r: JFit = zero
+    r.ok_ = false
+    ret r
+}
+
+// Rotate3: the Givens rotation of a three element row into the 3 by 3 matrix (row-major, weights on the diagonal)
+fn jf_rotate3(v: []f64, m: []f64) {
+    var w = 1.0f64
+    var skip = false
+    var i = 0usize
+    while i < 2usize {
+        if !skip {
+            let x = v[i]
+            if x == 0.0f64 {
+                i += 1usize
+                continue
+            }
+            let d = m[i * 3usize + i]
+            let dp = d + w * x * x
+            m[i * 3usize + i] = dp
+            let c = d / dp
+            let s = w * x / dp
+            if d == 0.0f64 { skip = true } else { w = w * c }
+            var j = i + 1usize
+            while j < 3usize {
+                let r = m[i * 3usize + j]
+                m[i * 3usize + j] = s * v[j] + c * r
+                v[j] = v[j] - x * r
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+}
+
+// JohnsonFit(xn = x95, xm = x79.4, x0 = x50, xk = x20.6, xp = x5)
+fn johnson_fit_quantiles(xn: f64, xm: f64, x0: f64, xk: f64, xp: f64) -> JFit {
+    let zn = 1.64485363f64
+    var res: JFit = zero
+    var m: [9]f64 = zero
+    var delta = 0.0f64
+    var gamma = 0.0f64
+    var kind = 0u8
+    let t = (xn - x0) / (x0 - xp)
+    var tu = (xn - xp) / (xm - xk)
+    var tb = 0.5f64 * (((xm - x0) * (xn - xp)) / ((xn - xm) * (x0 - xp)) + ((xk - x0) * (xp - xn)) / ((xp - xk) * (x0 - xn)))
+    let tbu = tb / tu
+    if math.abs[f64](math.abs[f64](tbu) - 1.0f64) < 0.1f64 && math.abs[f64](math.abs[f64](t - 1.0f64)) < 0.1f64 {
+        kind = 0u8
+        delta = 1.0f64
+        gamma = 0.0f64
+    } else if math.abs[f64](math.abs[f64](tbu) - 1.0f64) < 0.1f64 {
+        kind = 1u8
+        delta = zn / math.log[f64](t)
+        if delta != delta || delta > 1.0e300f64 || delta < 0.0f64 - 1.0e300f64 { ret jf_bad() }
+    } else if tbu > 1.0f64 {
+        kind = 2u8
+        tb = tb * 0.5f64
+        var b = tb + math.sqrt[f64](tb * tb - 1.0f64)
+        delta = zn / (2.0f64 * math.log[f64](b))
+        b = b * b
+        if t > b || t < 1.0f64 / b { ret jf_bad() }
+        let a = (t - b) / (1.0f64 - t * b)
+        gamma = 0.0f64 - delta * math.log[f64](a)
+    } else {
+        kind = 3u8
+        tu = tu * 0.5f64
+        var b = tu + math.sqrt[f64](tu * tu - 1.0f64)
+        delta = zn / (2.0f64 * math.log[f64](b))
+        b = b * b
+        if t > b || t < 1.0f64 / b { ret jf_bad() }
+        let a = (1.0f64 - t * b) / (t - b)
+        gamma = 0.0f64 - 0.5f64 * delta * math.log[f64](a)
+    }
+    var zs: [5]f64 = zero
+    var xs: [5]f64 = zero
+    zs[0usize] = zn
+    xs[0usize] = xn
+    zs[1usize] = zn / 2.0f64
+    xs[1usize] = xm
+    zs[2usize] = 0.0f64
+    xs[2usize] = x0
+    zs[3usize] = 0.0f64 - zn / 2.0f64
+    xs[3usize] = xk
+    zs[4usize] = 0.0f64 - zn
+    xs[4usize] = xp
+    var i = 0usize
+    while i < 5usize {
+        var row: [3]f64 = zero
+        row[0usize] = 1.0f64
+        var u = zs[i]
+        if kind != 0u8 {
+            if kind == 1u8 {
+                u = math.exp[f64](u / delta)
+            } else {
+                u = math.exp[f64]((u - gamma) / delta)
+                if kind == 2u8 { u = u / (1.0f64 + u) } else { u = (u * u - 1.0f64) / (2.0f64 * u) }
+            }
+        }
+        row[1usize] = u
+        row[2usize] = xs[i]
+        jf_rotate3(row[0usize..3usize], m[0usize..9usize])
+        i += 1usize
+    }
+    let lambda = m[5usize]
+    res.gamma = gamma
+    res.delta = delta
+    res.lambda = lambda
+    res.xi = m[2usize] - lambda * m[1usize]
+    res.kind = kind
+    res.ok_ = true
+    ret res
+}
+
+// JohnsonMOM: the first six moments of the SB density by a trapezoidal series; false when it does not converge
+fn jf_mom(gamma: f64, delta: f64, mo: []f64) -> bool {
+    let n = 6usize
+    let iter_limit = 500i64
+    let inner_tol = 1.0e-8f64
+    let outer_tol = 1.0e-5f64
+    let recip_sqrt_pi = 0.5641895835477562869480795f64
+    let exp_a = 2.3025850929940456840179915f64 * 308.0f64
+    let exp_b = 0.0f64 - math.log[f64](2.220446049250313e-16f64)
+    var old: [6]f64 = zero
+    let w = gamma / delta
+    if w > exp_a { ret false }
+    var h = 0.75f64
+    let exp_w = math.exp[f64](w) + 1.0f64
+    if delta < 3.0f64 { h = delta / 4.0f64 }
+    var count = 0i64
+    var more = false
+    var outer = true
+    while outer {
+        if count != 0i64 {
+            var i = 0usize
+            while i < n {
+                old[i] = mo[i]
+                i += 1usize
+            }
+            h = h * 0.5f64
+        }
+        var t = w
+        var u = w
+        var y = h * h
+        let x = 2.0f64 * y
+        mo[0usize] = 1.0f64 / exp_w
+        var i = 1usize
+        while i < n {
+            mo[i] = mo[i - 1usize] / exp_w
+            i += 1usize
+        }
+        var v = y
+        let f = 1.414135623730950488f64 * h / delta
+        var count_inner = 0i64
+        var inner = true
+        while inner {
+            var b: [6]f64 = zero
+            i = 0usize
+            while i < n {
+                b[i] = mo[i]
+                i += 1usize
+            }
+            u = u - f
+            var z = 1.0f64
+            if u > 0.0f64 - exp_b { z = z + math.exp[f64](u) }
+            t = t + f
+            var bl = t > exp_b
+            var s = 0.0f64
+            if !bl { s = math.exp[f64](t) + 1.0f64 }
+            var p = math.exp[f64](0.0f64 - v)
+            var q = p
+            i = 0usize
+            while i < n {
+                var aa = mo[i]
+                p = p / z
+                var ab = aa
+                aa = aa + p
+                if aa == ab { break }
+                if !bl {
+                    q = q / s
+                    ab = aa
+                    aa = aa + q
+                    bl = aa == ab
+                }
+                mo[i] = aa
+                i += 1usize
+            }
+            y = y + x
+            v = v + y
+            more = false
+            i = 0usize
+            while i < n {
+                if mo[i] == 0.0f64 { ret false }
+                if math.abs[f64](mo[i] - b[i]) / mo[i] > inner_tol { more = true }
+                i += 1usize
+            }
+            let ci = count_inner
+            count_inner += 1i64
+            if !more || ci > iter_limit { inner = false }
+        }
+        if more { ret false }
+        i = 0usize
+        while i < n {
+            mo[i] = mo[i] * recip_sqrt_pi * h
+            i += 1usize
+        }
+        more = false
+        i = 0usize
+        while i < n {
+            if mo[i] == 0.0f64 { ret false }
+            if math.abs[f64](mo[i] - old[i]) / mo[i] > outer_tol { more = true }
+            i += 1usize
+        }
+        let cc = count
+        count += 1i64
+        if !more || cc > iter_limit { outer = false }
+    }
+    ret !more
+}
+
+fn jf_pow(x: f64, e: f64) -> f64 { ret math.pow[f64](x, e) }
+
+// JohnsonMomentSb
+fn jf_moment_sb(mean: f64, sd: f64, sqrt_b1: f64, b2: f64) -> JFit {
+    var res: JFit = zero
+    let tol_sb = 0.01f64
+    let t_tol = 1.0e-2f64
+    let iter_limit = 50i64
+    let abs_sqrt_b1 = math.abs[f64](sqrt_b1)
+    let b1 = sqrt_b1 * sqrt_b1
+    let negative_b1 = sqrt_b1 < 0.0f64
+    var delta = 0.0f64
+    let x = 1.0f64 + 0.5f64 * b1
+    let y = abs_sqrt_b1 * math.sqrt[f64](1.0f64 + b1 / 4.0f64)
+    let w0 = jf_pow(x + y, 1.0f64 / 3.0f64) + jf_pow(x - y, 1.0f64 / 3.0f64) - 1.0f64
+    var f = w0 * w0 * (3.0f64 + w0 * (2.0f64 + w0)) - 3.0f64
+    var e = 1.0f64 + b1
+    e = (b2 - e) / (f - e)
+    if abs_sqrt_b1 <= tol_sb {
+        f = 2.0f64
+    } else {
+        delta = 1.0f64 / math.sqrt[f64](math.log[f64](w0))
+        if delta < 0.64f64 {
+            f = 1.25f64 * delta
+        } else {
+            f = 2.0f64 - 8.5245f64 / (delta * (delta * (delta - 2.163f64) + 11.346f64))
+        }
+    }
+    f = 1.0f64 + e * f
+    if f < 1.8f64 {
+        delta = 0.8f64 * (f - 1.0f64)
+    } else {
+        delta = (0.626f64 * f - 0.408f64) * jf_pow(3.0f64 - f, 0.0f64 - 0.479f64)
+    }
+    var gamma = 0.0f64
+    if b1 >= t_tol {
+        if delta <= 1.0f64 {
+            gamma = (0.7466f64 * jf_pow(delta, 1.7973f64) + 0.5955f64) * jf_pow(b1, 0.485f64)
+        } else {
+            if delta <= 2.5f64 {
+                gamma = jf_pow(b1, 0.0623f64 * delta + 0.4043f64)
+            } else {
+                gamma = jf_pow(b1, 0.0124f64 * delta + 0.5291f64)
+            }
+            gamma = gamma * (0.9281f64 + delta * (1.0614f64 * delta - 0.7077f64))
+        }
+    }
+    var count = 0i64
+    var more = false
+    var error_set = false
+    var mo: [6]f64 = zero
+    var h2 = 0.0f64
+    var old_dg = 100.0f64
+    var old_dd = 100.0f64
+    var going = true
+    while going {
+        if jf_mom(gamma, delta, mo[0usize..6usize]) {
+            h2 = mo[1usize] - mo[0usize] * mo[0usize]
+            if h2 > 0.0f64 {
+                let h2a = math.sqrt[f64](h2) * h2
+                let h2b = h2 * h2
+                let h3 = mo[2usize] - mo[0usize] * (3.0f64 * mo[1usize] - 2.0f64 * mo[0usize] * mo[0usize])
+                let rbet = h3 / h2a
+                let h4 = mo[3usize] - mo[0usize] * (4.0f64 * mo[2usize] - mo[0usize] * (6.0f64 * mo[1usize] - 3.0f64 * mo[0usize] * mo[0usize]))
+                let bet2 = h4 / h2b
+                let w = gamma * delta
+                let u = delta * delta
+                var dd: [6]f64 = zero
+                var deriv: [6]f64 = zero
+                var j = 0usize
+                while j < 2usize {
+                    var k = 0usize
+                    while k < 4usize {
+                        let t = f64(k)
+                        var s = 0.0f64
+                        if j == 0usize {
+                            s = mo[k + 1usize] - mo[k]
+                        } else {
+                            s = ((w - t) * (mo[k] - mo[k + 1usize]) + (1.0f64 + t) * (mo[k + 1usize] - mo[k + 2usize])) / u
+                        }
+                        dd[k] = t * s / delta
+                        k += 1usize
+                    }
+                    let t = 2.0f64 * mo[0usize] * dd[0usize]
+                    let s = mo[0usize] * dd[1usize]
+                    let yy = dd[1usize] - t
+                    deriv[j] = (dd[2usize] - 3.0f64 * (s + mo[1usize] * dd[0usize] - t * mo[0usize]) - 1.5f64 * h3 * yy / h2) / h2a
+                    deriv[j + 2usize] = (dd[3usize] - 4.0f64 * (dd[2usize] * mo[0usize] + dd[0usize] * mo[2usize]) + 6.0f64 * (mo[1usize] * t + mo[0usize] * (s - t * mo[0usize])) - 2.0f64 * h4 * yy / h2) / h2b
+                    j += 1usize
+                }
+                let tt = 1.0f64 / (deriv[0usize] * deriv[3usize] - deriv[1usize] * deriv[2usize])
+                var delta_gamma = (deriv[3usize] * (rbet - abs_sqrt_b1) - deriv[1usize] * (bet2 - b2)) * tt
+                var delta_delta = (deriv[0usize] * (bet2 - b2) - deriv[2usize] * (rbet - abs_sqrt_b1)) * tt
+                gamma = gamma - delta_gamma
+                if b1 == 0.0f64 || gamma < 0.0f64 { gamma = 0.0f64 }
+                delta = delta - delta_delta
+                delta_gamma = math.abs[f64](delta_gamma)
+                delta_delta = math.abs[f64](delta_delta)
+                more = delta_gamma > t_tol || delta_delta > t_tol
+                error_set = delta_gamma > old_dg || delta_delta > old_dd
+                old_dg = delta_gamma
+                old_dd = delta_delta
+            }
+        }
+        let cc = count
+        count += 1i64
+        if !more || error_set || cc > iter_limit { going = false }
+    }
+    if !error_set && !more {
+        res.delta = delta
+        res.lambda = sd / math.sqrt[f64](h2)
+        if negative_b1 {
+            gamma = 0.0f64 - gamma
+            mo[0usize] = 1.0f64 - mo[0usize]
+        }
+        res.gamma = gamma
+        res.xi = mean - res.lambda * mo[0usize]
+        res.kind = 2u8
+        res.ok_ = true
+        ret res
+    }
+    ret jf_bad()
+}
+
+// JohnsonMomentSu (Hill, Hill and Holder's iteration)
+fn jf_moment_su(mean: f64, sd: f64, sqrt_b1: f64, b2: f64) -> JFit {
+    var res: JFit = zero
+    let tol_su = 0.01f64
+    let b1 = sqrt_b1 * sqrt_b1
+    let b2m3 = b2 - 3.0f64
+    var w = math.sqrt[f64](math.sqrt[f64](2.0f64 * b2 - 2.8f64 * b1 - 2.0f64) - 1.0f64)
+    var m = 0.0f64
+    var z = 0.0f64
+    if math.abs[f64](sqrt_b1) > tol_su {
+        var count = 0i64
+        var going = true
+        while going {
+            let wp1 = w + 1.0f64
+            let wm1 = w - 1.0f64
+            z = wp1 * b2m3
+            var v = w * (6.0f64 + w * (3.0f64 + w))
+            let a = 8.0f64 * (wm1 * (3.0f64 + w * (7.0f64 + v)) - z)
+            let b = 16.0f64 * (wm1 * (6.0f64 + v) - b2m3)
+            m = (math.sqrt[f64](a * a - 2.0f64 * b * (wm1 * (3.0f64 + w * (9.0f64 + w * (10.0f64 + v))) - 2.0f64 * wp1 * z)) - a) / b
+            z = 4.0f64 * (w + 2.0f64) * m + 3.0f64 * wp1 * wp1
+            let h = 2.0f64 * m + wp1
+            z = m * wm1 * (z * z) / (2.0f64 * h * h * h)
+            v = w * w
+            w = math.sqrt[f64](1.0f64 - 2.0f64 * (1.5f64 - b2 + (b1 * (b2 - 1.5f64 - v * (1.0f64 + 0.5f64 * v))) / z))
+            w = math.sqrt[f64](w - 1.0f64)
+            let cc = count
+            count += 1i64
+            if math.abs[f64](b1 - z) <= tol_su || cc > 100i64 { going = false }
+        }
+        if count > 100i64 { ret jf_bad() }
+        m = m / w
+        m = math.log[f64](math.sqrt[f64](m) + math.sqrt[f64](1.0f64 + m))
+        if sqrt_b1 > 0.0f64 { m = 0.0f64 - m }
+    }
+    res.delta = math.sqrt[f64](1.0f64 / math.log[f64](w))
+    let omega = m
+    res.gamma = omega * res.delta
+    let ch2 = (math.exp[f64](2.0f64 * omega) + math.exp[f64](0.0f64 - 2.0f64 * omega)) / 2.0f64
+    res.lambda = sd / math.sqrt[f64](0.5f64 * (w - 1.0f64) * (w * ch2 + 1.0f64))
+    let sh = (math.exp[f64](omega) - math.exp[f64](0.0f64 - omega)) / 2.0f64
+    res.xi = mean + (0.5f64 * math.sqrt[f64](w) * sh) * res.lambda
+    res.kind = 3u8
+    res.ok_ = true
+    ret res
+}
+
+// JohnsonMomentFit(mean, sd, sqrtB1, B2 = 3 + excess kurtosis)
+fn johnson_moment_fit(mean: f64, sd: f64, sqrt_b1: f64, b2_in: f64) -> JFit {
+    var res: JFit = zero
+    let tolj = 0.1f64
+    let b1 = sqrt_b1 * sqrt_b1
+    var b2 = b2_in
+    if b2 < b1 + 1.0f64 + tolj { ret jf_bad() }
+    if math.abs[f64](sqrt_b1) <= tolj && math.abs[f64](b2 - 3.0f64) <= tolj {
+        res.kind = 0u8
+        res.gamma = 0.0f64
+        res.delta = 1.0f64
+        res.lambda = sd
+        res.xi = mean
+        res.ok_ = true
+        ret res
+    }
+    let x = 0.5f64 * b1 + 1.0f64
+    let y = math.sqrt[f64](b1 + 0.25f64 * b1 * b1)
+    let u = jf_pow(x + y, 1.0f64 / 3.0f64)
+    let w = u + 1.0f64 / u - 1.0f64
+    let b2est = w * w * (3.0f64 + w * (2.0f64 + w)) - 3.0f64
+    if b2 < 0.0f64 { b2 = b2est }
+    let test = b2est - b2
+    if math.abs[f64](test) < tolj {
+        res.kind = 1u8
+        res.lambda = 1.0f64
+        res.delta = 1.0f64 / math.sqrt[f64](math.log[f64](w))
+        res.gamma = 0.5f64 * res.delta * math.log[f64](w * (w - 1.0f64) / (sd * sd))
+        res.xi = mean - sd / math.sqrt[f64](w - 1.0f64)
+        res.ok_ = true
+        ret res
+    }
+    if test <= 0.0f64 { ret jf_moment_su(mean, sd, sqrt_b1, b2) }
+    ret jf_moment_sb(mean, sd, sqrt_b1, b2)
+}
