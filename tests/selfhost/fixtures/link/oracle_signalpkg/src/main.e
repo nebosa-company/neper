@@ -11,6 +11,21 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "c1b") || str.eq(k, "c1a") {
+        let cn = usize(x[1usize])
+        let (cb, e1) = mem.alloc[f64](a, cn + 1usize)
+        if e1 != ok { os.exit(5) }
+        let (ca, e2) = mem.alloc[f64](a, cn + 1usize)
+        if e2 != ok { os.exit(6) }
+        sp.cheby1(cn, x[3usize], x[2usize], x[0usize] > 0.5f64, cb, ca)
+        var q = 0usize
+        var tt = 0.0f64
+        while q <= cn {
+            if str.eq(k, "c1b") { tt += cb[q] * f64(q + 1usize) } else { tt += ca[q] * f64(q + 1usize) }
+            q += 1usize
+        }
+        ret tt
+    }
     if str.eq(k, "sg") {
         let wn = usize(x[1usize])
         let po = usize(x[2usize])

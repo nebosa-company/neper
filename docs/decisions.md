@@ -45508,3 +45508,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.signalpkg` gains sgolay_center, the central row of sgolay(p, n): the weights of the polynomial smoother of order p over an odd window of n points, from the normal equations of the Vandermonde basis (the first row of the pseudo-inverse of the window's polynomial matrix). It equals signal's to 1e-8 for windows up to 21 and orders up to 5. Not here: the other rows (edge filters), derivatives, sgolayfilt's edge handling and the remaining designs.
 
 **Result.** `oracle_signalpkg` equals signal on 170 cases on Windows; Linux pending. L340 stays partial.
+
+## D6186 — signal: cheby1
+
+`e.algo.stat.signalpkg` gains cheby1 for low-pass and high-pass Chebyshev type I filters with a passband ripple in dB: the prototype poles -sinh(mu) sin(theta_k) + j cosh(mu) cos(theta_k) with mu = asinh(1 / eps) / n and eps = sqrt(10^(rp / 10) - 1), the same warp, inversion and bilinear steps as butter, and the passband gain fixed at 1 for odd orders and 1 / sqrt(1 + eps^2) for even orders (at z = 1 for low-pass, z = -1 for high-pass). Coefficients equal signal's. Not here: cheby2, ellip, bessel and the band forms.
+
+**Result.** `oracle_signalpkg` equals signal on 218 cases on Windows; Linux pending. L340 stays partial.

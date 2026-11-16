@@ -27,4 +27,9 @@ for (rep in 1:20) {
   sg <- sgolay(p, n); ce <- sg[(n + 1) / 2, ]
   add("sg", c(0, n, p), sum(ce * seq_along(ce)))
 }
+for (rep in 1:24) {
+  n <- sample(1:6, 1); w <- runif(1, 0.05, 0.9); hi <- rep %% 2; rp <- runif(1, 0.2, 3)
+  ch <- cheby1(n, rp, w, if (hi == 1) "high" else "low")
+  add("c1b", c(hi, n, w, rp), sum(ch$b * seq_along(ch$b))); add("c1a", c(hi, n, w, rp), sum(ch$a * seq_along(ch$a)))
+}
 emit("signalpkg", "signal", list(cases))

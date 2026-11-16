@@ -3257,4 +3257,5 @@ D6181	605	PerformanceAnalytics: Drawdowns and findDrawdowns
 D6182	838	PerformanceAnalytics: modified expected shortfall
 D6184	650	signal: filtfilt and freqz
 D6185	956	agricolae: LSD, HSD and Scheffe pairwise comparisons
-D6185	621	signal: Savitzky-Golay smoothing weights
+D6185	622	signal: Savitzky-Golay smoothing weights
+D6186	657	signal: cheby1

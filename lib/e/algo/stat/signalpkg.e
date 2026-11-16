@@ -296,3 +296,66 @@ fn sgolay_center(a: *mem.Arena, p: usize, n: usize, out: []f64) -> err {
     }
     ret ok
 }
+
+// cheby1(n, rp, w, type): Chebyshev type I (passband ripple rp dB), low-pass or high-pass; b and a have n + 1 entries
+fn cheby1(n: usize, rp: f64, w: f64, high: bool, b: []f64, a: []f64) {
+    let eps = math.sqrt[f64](math.pow[f64](10.0f64, rp / 10.0f64) - 1.0f64)
+    let mu = asinh_of(1.0f64 / eps) / f64(n)
+    let warped = 4.0f64 * math.tan[f64](pi() * w / 2.0f64)
+    var pr: [20]f64 = zero
+    var pim: [20]f64 = zero
+    var zr: [20]f64 = zero
+    var zi: [20]f64 = zero
+    var k = 1usize
+    while k <= n {
+        let th = pi() * f64(2usize * k - 1usize) / f64(2usize * n)
+        // the prototype pole -sinh(mu) sin(th) + j cosh(mu) cos(th)
+        var sr = 0.0f64 - sinh_of(mu) * math.sin[f64](th)
+        var si = cosh_of(mu) * math.cos[f64](th)
+        if high {
+            let den = sr * sr + si * si
+            sr = warped * sr / den
+            si = 0.0f64 - warped * si / den
+        } else {
+            sr = warped * sr
+            si = warped * si
+        }
+        let nr = 1.0f64 + sr / 4.0f64
+        let ni = si / 4.0f64
+        let dr = 1.0f64 - sr / 4.0f64
+        let di = 0.0f64 - si / 4.0f64
+        let dd = dr * dr + di * di
+        pr[k - 1usize] = (nr * dr + ni * di) / dd
+        pim[k - 1usize] = (ni * dr - nr * di) / dd
+        zr[k - 1usize] = -1.0f64
+        if high { zr[k - 1usize] = 1.0f64 }
+        zi[k - 1usize] = 0.0f64
+        k += 1usize
+    }
+    poly_from_roots(pr[0usize..n], pim[0usize..n], a)
+    poly_from_roots(zr[0usize..n], zi[0usize..n], b)
+    var g0 = 1.0f64
+    if n % 2usize == 0usize { g0 = 1.0f64 / math.sqrt[f64](1.0f64 + eps * eps) }
+    var x = 1.0f64
+    if high { x = 0.0f64 - 1.0f64 }
+    var nb = 0.0f64
+    var na = 0.0f64
+    var j = 0usize
+    while j <= n {
+        nb = nb * x + b[j]
+        na = na * x + a[j]
+        j += 1usize
+    }
+    let g = g0 * na / nb
+    j = 0usize
+    while j <= n {
+        b[j] = b[j] * g
+        j += 1usize
+    }
+}
+
+fn sinh_of(x: f64) -> f64 { ret (math.exp[f64](x) - math.exp[f64](0.0f64 - x)) / 2.0f64 }
+
+fn cosh_of(x: f64) -> f64 { ret (math.exp[f64](x) + math.exp[f64](0.0f64 - x)) / 2.0f64 }
+
+fn asinh_of(x: f64) -> f64 { ret math.log[f64](x + math.sqrt[f64](x * x + 1.0f64)) }

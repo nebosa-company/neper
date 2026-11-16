@@ -1010,10 +1010,10 @@
       "group": "CRAN parity",
       "order": 691,
       "title": "signal: filter design and spectral tools",
-      "score": 0.35,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6183, D6184 filtfilt and freqz, D6185 sgolay central row). butter (low and high, any order, one cutoff) and filter equal signal on Windows (oracle_signalpkg; Linux pending). Open: band filters, cheby1, cheby2, ellip, bessel, fir1 and fir2, remez, filtfilt, freqz, grpdelay, sgolay, resample, decimate, specgram. Was: Open (CRAN rank 253). Mid. Verify what e.dsp and e.math.filter already design. Acceptance, equal to signal: butter, cheby1, cheby2, ellip, bessel, fir1, fir2, remez, filter, filtfilt, freqz, grpdelay, sgolay and sgolayfilt, resample, decimate, interp, specgram, unwrap."
+      "evidence": "Partial (D6183, D6184 filtfilt and freqz, D6185 sgolay central row, D6186 cheby1). butter (low and high, any order, one cutoff) and filter equal signal on Windows (oracle_signalpkg; Linux pending). Open: band filters, cheby1, cheby2, ellip, bessel, fir1 and fir2, remez, filtfilt, freqz, grpdelay, sgolay, resample, decimate, specgram. Was: Open (CRAN rank 253). Mid. Verify what e.dsp and e.math.filter already design. Acceptance, equal to signal: butter, cheby1, cheby2, ellip, bessel, fir1, fir2, remez, filter, filtfilt, freqz, grpdelay, sgolay and sgolayfilt, resample, decimate, interp, specgram, unwrap."
     },
     {
       "id": "L343",
