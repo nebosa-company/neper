@@ -19,7 +19,7 @@ L470	library	0.5	490	partitions: integer and set partitions	Partly done (D6070):
 L471	library	0.5	523	BiasedUrn: noncentral hypergeometric distributions	Partly done (D6071): e.algo.stat.biasedurn has Fisher and Wallenius noncentral hypergeometric d, p, q, mean and var, Fisher mode and odds, equal to BiasedUrn on 472 values on Windows (oracle_biasedurn
 L472	library	0.5	463	modeest: mode estimation	Partly done (D6072): e.algo.stat.modeest has venter, shorth, hsm, grenander, meanshift and asselin, equal to modeest on 250 values on Windows (oracle_modeest);
 L473	library	0.5	488	isotone: isotonic regression	Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers;
-L474	library	0	237	kSamples: k-sample rank tests	Open (CRAN rank 844).
+L474	library	0.2	409	kSamples: k-sample rank tests	Partial (D6452 ad.test AD and T.AD statistics, both versions, equal kSamples on Windows;
 L499	library	0.4	412	ResourceSelection: Hosmer-Lemeshow and related tests	Partly done (D6096): e.algo.stat.hoslem (hoslem.test with observed and expected tables) equals ResourceSelection on 1128 values on Windows (oracle_hoslem);
 L500	library	0	212	ashr: adaptive shrinkage	Open (CRAN rank 977).
 L324	library	0.6	536	pROC and ROCR: ROC curves and threshold performance	Partial (D6166, D6167 ROCR measures and AUC).

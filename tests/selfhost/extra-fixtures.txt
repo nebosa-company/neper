@@ -310,3 +310,4 @@ oracle_desctools
 oracle_fitdist
 oracle_cart
 oracle_vars
+oracle_ksamples

@@ -229,10 +229,10 @@
       "group": "CRAN parity",
       "order": 592,
       "title": "kSamples: k-sample rank tests",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 844). Small. Acceptance, equal to kSamples under set.seed: ad.test with the exact, simulated and asymptotic p-values, qn.test (Conover and Steel-Dwass variants), contingency2xt, and the distribution functions behind them."
+      "evidence": "Partial (D6452 ad.test AD and T.AD statistics, both versions, equal kSamples on Windows; oracle_ksamples; Linux pending). Open: the p-values, qn.test, contingency2xt. Was: Open (CRAN rank 844). Small. Acceptance, equal to kSamples under set.seed: ad.test with the exact, simulated and asymptotic p-values, qn.test (Conover and Steel-Dwass variants), contingency2xt, and the distribution functions behind them."
     },
     {
       "id": "L499",

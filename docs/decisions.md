@@ -45880,3 +45880,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.desctools` gains `kappa_m`: multi-rater kappa by Fleiss (with its normal-theory limits) and Conger (the chance term corrected by the per-level variance across raters); Light's kappa stays open.
 
 **Result.** `oracle_desctools` equals DescTools on 2880 cases on Windows, 80 of them new; Linux pending. L363 stays partial.
+
+## D6452 — kSamples: the Anderson-Darling k-sample statistic
+
+`e.algo.stat.ksamples` is new: `ad_test` computes ad.test's AD statistic for both versions (version 1 the untied form summed over the N - 1 order-statistic cut points, version 2 the mid-rank form over distinct values) and the standardised T.AD with sigma_N from the Scholz-Stephens polynomial.
+
+**Result.** `oracle_ksamples` agrees on 120 cases on Windows, 30 draws of 2 to 5 samples, half with heavy ties. ad.test rounds its matrix to 3 to 5 significant digits, so the golden values are the same formulas in full precision, asserted against ad.test to its rounding inside the R group. The asymptotic, exact and simulated p-values, qn.test and contingency2xt are open; Linux pending. L474 is partial.
