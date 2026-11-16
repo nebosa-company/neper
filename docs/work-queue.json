@@ -944,10 +944,10 @@
       "group": "CRAN parity",
       "order": 685,
       "title": "cluster: pam, clara, fanny, agnes, diana, mona, daisy",
-      "score": 0.15,
+      "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6176). pam objectives, and the medoid set and partition on 19 of 20 random datasets, equal cluster::pam on Windows (oracle_pamcluster; Linux pending; one dataset reaches a different local optimum, see the decision). Open: clara, fanny, agnes, diana, mona, daisy, silhouette, pam swap order. Was: Open (CRAN rank 229). Mid. e.ml.cluster has kmedoids, agglomerative and silhouette_samples. Acceptance, equal to cluster: daisy for mixed types with Gower, pam (build and swap, medoids and clustering), clara with its seeded samples, fanny, agnes for every method, diana, mona, silhouette, clusGap, coef.hclust."
+      "evidence": "Partial (D6176, D6177 agnes heights and ac). pam objectives, and the medoid set and partition on 19 of 20 random datasets, equal cluster::pam on Windows (oracle_pamcluster; Linux pending; one dataset reaches a different local optimum, see the decision). Open: clara, fanny, agnes, diana, mona, daisy, silhouette, pam swap order. Was: Open (CRAN rank 229). Mid. e.ml.cluster has kmedoids, agglomerative and silhouette_samples. Acceptance, equal to cluster: daisy for mixed types with Gower, pam (build and swap, medoids and clustering), clara with its seeded samples, fanny, agnes for every method, diana, mona, silhouette, clusGap, coef.hclust."
     },
     {
       "id": "L336",

@@ -45454,3 +45454,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.pamcluster` ports pam from a full dissimilarity matrix: the first medoid is the one with the smallest total distance, each next the one with the largest summed gain, then the best total-distance-reducing swap is applied until none helps. The build and swap objectives (average distance to the nearest medoid) equal cluster::pam on all 20 random datasets. The medoid set and the partition equal pam's on 19 of the 20: on one dataset the package's swap sequence ends at a different local optimum than the greedy best-swap path (the package also reports the medoids in an order that depends on its swap sequence, so the oracle compares the sorted set and the partition numbered by first appearance), and that dataset is left out of the medoid and partition cases, not hidden: the objective cases include it. Not here: clara, fanny, agnes, diana, mona, daisy, silhouette widths and the package's exact swap order.
 
 **Result.** `oracle_pamcluster` equals cluster::pam on 78 cases on Windows; Linux pending. L335 is partial.
+
+## D6177 — cluster: agnes heights and agglomerative coefficient
+
+agnes needs no new algorithm: its merge heights equal hclust's for the matching linkage (average, single, complete, weighted = mcquitty, ward = ward.D2), and the agglomerative coefficient is one minus the mean over observations of the height of their first merge relative to the final height. `e.algo.stat.hclust` gains agnes_ac; `oracle_hclust` checks the coefficient and the sorted heights against agnes on random data. Not here: agnes' own dendrogram order and merge-column order (they differ from hclust's, e.g. a cluster listed before a singleton), the flexible and gaverage methods, diana, mona, clara, fanny and daisy.
+
+**Result.** `oracle_hclust` equals R, dendextend and cluster on 380 cases on Windows; Linux pending. L335 stays partial.

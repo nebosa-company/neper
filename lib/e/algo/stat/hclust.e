@@ -416,3 +416,24 @@ fn cor_cophenetic(a: *mem.Arena, t1: *const Tree, t2: *const Tree, n: usize) -> 
     let cov = sxy - sx * sy / cnt
     ret cov / math.sqrt[f64]((sxx - sx * sx / cnt) * (syy - sy * sy / cnt))
 }
+
+// agnes' agglomerative coefficient: one minus the mean over observations of the height of their first merge relative to the final height
+// (agnes' heights equal hclust's for the matching method: average, single, complete, ward = ward.D2, weighted = mcquitty)
+fn agnes_ac(a: *mem.Arena, t: *const Tree, n: usize) -> f64 {
+    let (first, e) = mem.alloc[f64](a, n)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i + 1usize < n {
+        if t.merge_a[i] < 0i32 { first[usize(0i32 - t.merge_a[i]) - 1usize] = t.height[i] }
+        if t.merge_b[i] < 0i32 { first[usize(0i32 - t.merge_b[i]) - 1usize] = t.height[i] }
+        i += 1usize
+    }
+    let hmax = t.height[n - 2usize]
+    var s = 0.0f64
+    i = 0usize
+    while i < n {
+        s += first[i] / hmax
+        i += 1usize
+    }
+    ret 1.0f64 - s / f64(n)
+}

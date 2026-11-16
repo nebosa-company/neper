@@ -2,7 +2,7 @@
 #   args: (method, n, k, x row-major n by 2...)   method 1 ward.D 2 single 3 complete 4 average 5 mcquitty 6 median 7 centroid 8 ward.D2
 #   fn "height" "merge" "order" (each the sum of value * (position + 1)), "cut" (cutree(k) weighted by observation), "coph" (the sum of the cophenetic distances weighted by pair)
 #   median and centroid are given the squared distances, as the documentation asks
-suppressMessages(library(stats)); suppressMessages(library(dendextend))
+suppressMessages(library(stats)); suppressMessages(library(dendextend)); suppressMessages(library(cluster))
 cases <- list()
 add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-9)
 meth <- c("ward.D", "single", "complete", "average", "mcquitty", "median", "centroid", "ward.D2")
@@ -27,5 +27,12 @@ for (rep in 1:10) {
   fm <- dendextend::FM_index_R(cutree(h1, k), cutree(h2, k))
   add("fm", a, as.numeric(fm)); add("fmE", a, attr(fm, "E_FM")); add("fmV", a, attr(fm, "V_FM"))
   add("corcoph", a, dendextend::cor_cophenetic(h1, h2))
+}
+for (rep in 1:10) {
+  n <- sample(8:25, 1); X <- matrix(round(rnorm(n * 2) * 3, 3), n, 2); mi <- sample(c(2, 3, 4, 5, 8), 1)
+  nm <- c("single", "complete", "average", "weighted", "ward")[match(mi, c(2, 3, 4, 5, 8))]
+  ag <- agnes(dist(X), method = nm)
+  add("ac", c(mi, n, 2, as.vector(t(X))), ag$ac)
+  add("agh", c(mi, n, 2, as.vector(t(X))), sum(sort(ag$height) * seq_along(ag$height)))
 }
 emit("hclust", "stats", list(cases))

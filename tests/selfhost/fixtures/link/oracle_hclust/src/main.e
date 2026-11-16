@@ -74,6 +74,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if e2 != ok { os.exit(6) }
     let kind = c.name
     var s = 0.0f64
+    if str.eq(kind, "ac") { ret hc.agnes_ac(a, &t, n) }
+    if str.eq(kind, "agh") {
+        i = 0usize
+        while i < n - 1usize {
+            s += t.height[i] * f64(i + 1usize)
+            i += 1usize
+        }
+        ret s
+    }
     if str.eq(kind, "height") {
         i = 0usize
         while i < n - 1usize {
