@@ -3183,4 +3183,5 @@ D6107	898	TSP: tours, insertion, 2-opt, ATSP reformulation, cut_tour
 D6108	1017	%Z names a zone in readr datetimes
 D6109	805	e1071 matchClasses
 D6110	1206	e1071 cshell with given centres, and R's optim conjugate gradients
-D6111	1130	colorspace lighten, darken, max_chroma, polar coordinates, APCA, rainbow and heat
+D6111	1131	colorspace lighten, darken, max_chroma, polar coordinates, APCA, rainbow and heat
+D6112	1180	mvtnorm Genz-Bretz: pmvnorm and pmvt draw for draw

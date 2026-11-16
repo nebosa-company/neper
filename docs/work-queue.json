@@ -9,10 +9,10 @@
       "group": "CRAN parity",
       "order": 550,
       "title": "mvtnorm: multivariate normal and t probabilities and quantiles",
-      "score": 0.4,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6025). dmvnorm, dmvt, rmvnorm (eigen, svd, chol) and rmvt equal mvtnorm 1.4.2 on both hosts. Open: pmvnorm beyond two dimensions (trivariate TVPACK, Genz-Bretz mvt.f, Miwa), pmvt, qmvnorm and qmvt. Two-dimensional pmvnorm (TVPACK) equals R on 200 cases on Windows (D6094, oracle_pmvnorm). Was: Open (CRAN rank 130). Mid. Acceptance: pmvnorm and pmvt for the Genz-Bretz (seeded QMC, equal to R at its stated abseps), Miwa and TVPACK algorithms, qmvnorm and qmvt for every tail and the equicoordinate form, dmvnorm, dmvt, rmvnorm (equal to R value for value under set.seed, chol, eigen and svd methods), rmvt, and the lower, upper and correlation inputs R accepts."
+      "evidence": "Partial (D6025). dmvnorm, dmvt, rmvnorm (eigen, svd, chol) and rmvt equal mvtnorm 1.4.2 on both hosts. Plus (D6112) pmvnorm and pmvt by Genz-Bretz draw for draw under a seed (oracle_mvt, Windows). Open: the TVPACK trivariate, Miwa, qmvnorm and qmvt. Two-dimensional pmvnorm (TVPACK) equals R on 200 cases on Windows (D6094, oracle_pmvnorm). Was: Open (CRAN rank 130). Mid. Acceptance: pmvnorm and pmvt for the Genz-Bretz (seeded QMC, equal to R at its stated abseps), Miwa and TVPACK algorithms, qmvnorm and qmvt for every tail and the equicoordinate form, dmvnorm, dmvt, rmvnorm (equal to R value for value under set.seed, chol, eigen and svd methods), rmvt, and the lower, upper and correlation inputs R accepts."
     },
     {
       "id": "L302",
