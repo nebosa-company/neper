@@ -9,24 +9,73 @@
 
 use e.algo.stat.psych as ps
 use e.math
+use e.math.dist as dist
 use e.mem
 
 type Fit = struct { iterations: usize, converged: bool, deviance: f64, rss: f64 }
 
+// family ids: 0 gaussian(identity), 1 binomial(logit), 2 poisson(log), 3 Gamma(inverse), 4 Gamma(log), 5 gaussian(log), 6 binomial(probit), 7 binomial(cloglog)
+fn base_kind(fam: u8) -> u8 {
+    if fam == 0u8 || fam == 5u8 { ret 0u8 }
+    if fam == 1u8 || fam == 6u8 || fam == 7u8 { ret 1u8 }
+    if fam == 2u8 { ret 2u8 }
+    ret 3u8
+}
+
+// 0 identity, 1 logit, 2 log, 3 inverse, 4 probit, 5 cloglog
+fn link_kind(fam: u8) -> u8 {
+    if fam == 0u8 { ret 0u8 }
+    if fam == 1u8 { ret 1u8 }
+    if fam == 2u8 || fam == 4u8 || fam == 5u8 { ret 2u8 }
+    if fam == 3u8 { ret 3u8 }
+    if fam == 6u8 { ret 4u8 }
+    ret 5u8
+}
+
 fn linkinv(fam: u8, eta: f64) -> f64 {
-    if fam == 0u8 { ret eta }
-    if fam == 1u8 {
+    let lk = link_kind(fam)
+    if lk == 0u8 { ret eta }
+    if lk == 1u8 {
         let e = math.exp[f64](eta)
         ret e / (1.0f64 + e)
+    }
+    if lk == 3u8 { ret 1.0f64 / eta }
+    if lk == 4u8 {
+        let thr = 0.0f64 - dist.qnorm(2.220446049250313e-16f64, 0.0f64, 1.0f64, true, false)
+        var e = eta
+        if e < 0.0f64 - thr { e = 0.0f64 - thr }
+        if e > thr { e = thr }
+        ret dist.pnorm(e, 0.0f64, 1.0f64, true, false)
+    }
+    if lk == 5u8 {
+        var v = 0.0f64 - dist.expm1(0.0f64 - math.exp[f64](eta))
+        if v > 1.0f64 - 2.220446049250313e-16f64 { v = 1.0f64 - 2.220446049250313e-16f64 }
+        if v < 2.220446049250313e-16f64 { v = 2.220446049250313e-16f64 }
+        ret v
     }
     ret math.exp[f64](eta)
 }
 
 fn mu_eta(fam: u8, eta: f64) -> f64 {
-    if fam == 0u8 { ret 1.0f64 }
-    if fam == 1u8 {
+    let lk = link_kind(fam)
+    if lk == 0u8 { ret 1.0f64 }
+    if lk == 1u8 {
         let e = math.exp[f64](eta)
         var v = e / ((1.0f64 + e) * (1.0f64 + e))
+        if v < 2.220446049250313e-16f64 { v = 2.220446049250313e-16f64 }
+        ret v
+    }
+    if lk == 3u8 { ret 0.0f64 - 1.0f64 / (eta * eta) }
+    if lk == 4u8 {
+        var v = math.exp[f64](0.0f64 - eta * eta / 2.0f64) / math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64)
+        if v < 2.220446049250313e-16f64 { v = 2.220446049250313e-16f64 }
+        ret v
+    }
+    if lk == 5u8 {
+        var ee = eta
+        if ee > 700.0f64 { ee = 700.0f64 }
+        let e = math.exp[f64](ee)
+        var v = e * math.exp[f64](0.0f64 - e)
         if v < 2.220446049250313e-16f64 { v = 2.220446049250313e-16f64 }
         ret v
     }
@@ -36,20 +85,24 @@ fn mu_eta(fam: u8, eta: f64) -> f64 {
 }
 
 fn variance(fam: u8, mu: f64) -> f64 {
-    if fam == 0u8 { ret 1.0f64 }
-    if fam == 1u8 { ret mu * (1.0f64 - mu) }
+    let bk = base_kind(fam)
+    if bk == 0u8 { ret 1.0f64 }
+    if bk == 1u8 { ret mu * (1.0f64 - mu) }
+    if bk == 3u8 { ret mu * mu }
     ret mu
 }
 
 fn dev_resid(fam: u8, y: f64, mu: f64, w: f64) -> f64 {
-    if fam == 0u8 { ret w * (y - mu) * (y - mu) }
-    if fam == 1u8 {
+    let bk = base_kind(fam)
+    if bk == 0u8 { ret w * (y - mu) * (y - mu) }
+    if bk == 1u8 {
         var a = 0.0f64
         var b = 0.0f64
         if y > 0.0f64 { a = y * math.log[f64](y / mu) }
         if y < 1.0f64 { b = (1.0f64 - y) * math.log[f64]((1.0f64 - y) / (1.0f64 - mu)) }
         ret 2.0f64 * w * (a + b)
     }
+    if bk == 3u8 { ret 0.0f64 - 2.0f64 * w * (math.log[f64](y / mu) - (y - mu) / mu) }
     var t = 0.0f64
     if y > 0.0f64 { t = y * math.log[f64](y / mu) }
     ret 2.0f64 * w * (t - (y - mu))
@@ -171,7 +224,7 @@ fn bigglm_sand(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, of
         // the stopping rule scales by ss / (n - p) for every family (the working fit is a biglm); the reported
         // errors have dispersion 1 for the binomial and Poisson families
         var rep_disp = disp
-        if fam >= 1u8 { rep_disp = 1.0f64 }
+        if base_kind(fam) == 1u8 || base_kind(fam) == 2u8 { rep_disp = 1.0f64 }
         j = 0usize
         while j < p {
             coef[j] = beta[j]

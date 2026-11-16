@@ -89,7 +89,7 @@
       "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6100): e.algo.stat.bigglm (gaussian, binomial and Poisson IRLS with the package stopping rule, errors and deviance) equals biglm on 276 values on Windows (oracle_bigglm); Linux pending. D6570: offsets (offset() in the formula, 262 more values) equal biglm. D6571: the sandwich standard errors (sandwich = TRUE) equal biglm on 92 values. Open: other families and links, singular designs. Original: Open (CRAN rank 672). Small. Acceptance, equal to biglm: biglm and bigglm fitted by chunked QR updating, update with new chunks, coefficients, standard errors, deviance and the chunk-size independence of the result."
+      "evidence": "Partly done (D6100): e.algo.stat.bigglm (gaussian, binomial and Poisson IRLS with the package stopping rule, errors and deviance) equals biglm on 276 values on Windows (oracle_bigglm); Linux pending. D6570: offsets (offset() in the formula, 262 more values) equal biglm. D6571: the sandwich standard errors (sandwich = TRUE) equal biglm on 92 values. D6572: Gamma(log), gaussian(log), binomial(probit) and binomial(cloglog) equal biglm on 280 values (Gamma(inverse) cannot start from eta = 0, in biglm as here). Open: further links, singular designs. Original: Open (CRAN rank 672). Small. Acceptance, equal to biglm: biglm and bigglm fitted by chunked QR updating, update with new chunks, coefficients, standard errors, deviance and the chunk-size independence of the result."
     },
     {
       "id": "L444",

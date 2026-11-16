@@ -3439,4 +3439,5 @@ D6567	995	isotone: gpava with a matrix response
 D6568	649	partitions: compositions
 D6569	563	partitions: blockparts
 D6570	610	biglm: offsets
-D6571	631	biglm: sandwich standard errors
+D6571	632	biglm: sandwich standard errors
+D6572	755	biglm: more families and links

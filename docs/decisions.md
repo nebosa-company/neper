@@ -46600,3 +46600,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `bigglm_sand` returns the standard errors of vcov(sandwich = TRUE): in biglm only the last pass feeds the sandwich QR, with the working response `z - off` at the previous coefficients and the working weights `ww`, so the centre is `sum ww^2 e^2 x x'` with `e = z - off - x b` at the final coefficients and the bread is the last pass's `(X'WX)^-1`.
 
 **Result.** `oracle_bigglm` agrees with biglm on 92 sandwich values (gaussian, binomial, Poisson, with weights) on Windows (630 cases in all); Linux pending. L423 stays partial: other families and links, singular designs.
+
+## D6572 — biglm: more families and links
+
+**Decision.** `bigglm` takes family ids 3 to 7 beside the three it had: Gamma(inverse), Gamma(log), gaussian(log), binomial(probit) and binomial(cloglog), each with R's `linkinv`, `mu.eta` (clamped at eps where R clamps), variance and deviance residuals; the reported standard errors keep the estimated dispersion for the gaussian and Gamma families and dispersion 1 for binomial and Poisson. Gamma(inverse) starts at `eta = 0`, where `1/eta` is infinite, so biglm itself fails on it and the oracle has no cases.
+
+**Result.** `oracle_bigglm` agrees with biglm on 280 new values (four families, with weights) on Windows (910 cases in all); Linux pending. L423 stays partial: singular designs and further links.
