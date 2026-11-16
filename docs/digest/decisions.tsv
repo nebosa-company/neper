@@ -3573,4 +3573,5 @@ D6710	540	norm: em.norm with a prior
 D6711	656	pastecs: decdiff and decmedian
 D6712	924	pastecs: decaverage
 D6713	545	pastecs: decevf
-D6714	772	pastecs: trend.test and AS 89 prho
+D6714	773	pastecs: trend.test and AS 89 prho
+D6715	1320	ggm: partial correlations and the Gaussian graph fits

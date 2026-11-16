@@ -1,0 +1,98 @@
+// e.algo.stat.ggm against ggm: pcor, parcor, pcor.test, fitDag, fitConGraph and fitCovGraph.
+// tests/oracle/ggm.json comes from `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R ggm`; the layout is at the
+// top of scripts/r_oracle/groups/ggm.R.
+
+use e.algo.stat.ggm as gg
+use e.io
+use e.mem
+use e.os
+use e.str
+use e.test.oracle as oracle
+
+fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let z = c.args
+    let nm = c.name
+    let nan = 0.0f64 / 0.0f64
+    if str.eq(nm, "pctest") {
+        let (t, df, pv) = gg.pcor_test(z[0usize], z[1usize], z[2usize])
+        let w = usize(z[3usize])
+        if w == 0usize { ret t }
+        if w == 1usize { ret df }
+        ret pv
+    }
+    let p = usize(z[0usize])
+    if str.eq(nm, "pcor") {
+        let nu = usize(z[1usize])
+        let (u, e1) = mem.alloc[usize](a, nu)
+        if e1 != ok { ret nan }
+        var i = 0usize
+        while i < nu {
+            u[i] = usize(z[2usize + i]) - 1usize
+            i += 1usize
+        }
+        let (v, e2) = gg.pcor(a, u, z[2usize + nu..2usize + nu + p * p], p)
+        if e2 != ok { ret nan }
+        ret v
+    }
+    if str.eq(nm, "parcor") {
+        let (out, e1) = mem.alloc[f64](a, p * p)
+        if e1 != ok { ret nan }
+        let e2 = gg.parcor(a, z[1usize..1usize + p * p], p, out)
+        if e2 != ok { ret nan }
+        ret out[usize(z[1usize + p * p]) * p + usize(z[2usize + p * p])]
+    }
+    let n = z[1usize]
+    let s = z[2usize..2usize + p * p]
+    let am = z[2usize + p * p..2usize + 2usize * p * p]
+    let q = usize(z[2usize + 2usize * p * p])
+    let (sh, e1) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret nan }
+    if str.eq(nm, "dag") {
+        let (ah, e2) = mem.alloc[f64](a, p * p)
+        let (dh, e3) = mem.alloc[f64](a, p)
+        if e2 != ok || e3 != ok { ret nan }
+        let (r, e4) = gg.fitdag(a, am, s, p, n, sh, ah, dh)
+        if e4 != ok { ret nan }
+        if q < p * p { ret sh[q] }
+        if q < p * p + p { ret dh[q - p * p] }
+        if q == p * p + p { ret r.dev }
+        if q == p * p + p + 1usize { ret r.df }
+        ret ah[q - p * p - p - 2usize]
+    }
+    if str.eq(nm, "con") {
+        let (r, e2) = gg.fitcongraph(a, am, s, p, n, 0.000001f64, sh)
+        if e2 != ok { ret nan }
+        if q < p * p { ret sh[q] }
+        if q == p * p { ret r.dev }
+        if q == p * p + 1usize { ret r.df }
+        ret f64(r.it)
+    }
+    let (r, e2) = gg.fitcovgraph(a, am, s, p, n, 0.000001f64, sh)
+    if e2 != ok { ret nan }
+    if q < p * p { ret sh[q] }
+    if q == p * p { ret r.dev }
+    if q == p * p + 1usize { ret r.df }
+    ret f64(r.it)
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let (golden, load_error) = oracle.load(a, "tests/oracle/ggm.json")
+    if load_error != ok { os.exit(2) }
+    if golden.cases.len == 0usize { os.exit(3) }
+    var failures = 0usize
+    var at = 0usize
+    while at < golden.cases.len {
+        let c = &golden.cases[at]
+        let got = answer(a, c)
+        if !oracle.agrees(got, c) {
+            failures += 1usize
+            if failures <= 12usize {
+                let _ = io.print(oracle.describe(a, c, got))
+                let _ = io.print("\n")
+            }
+        }
+        at += 1usize
+    }
+    if failures > 0usize { os.exit(1) }
+    ret ok
+}

@@ -603,10 +603,10 @@
       "group": "CRAN parity",
       "order": 663,
       "title": "ggm: Gaussian graphical models",
-      "score": 0,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 964). Small to mid. Acceptance, equal to ggm: fitDag, fitCovGraph, fitConGraph, marg, pcor and pcor.test, parcor, dSep, fitAncestralGraph with its deviance and degrees of freedom."
+      "evidence": "D6715: e.algo.stat.ggm has pcor, parcor, pcor.test, fitDag, fitConGraph (algorithm 3) and fitCovGraph (icf), equal to ggm on 2415 values on Windows (oracle_ggm); Linux pending. Open: marg, dSep and the graph algorithms, fitConGraph with cliques and algorithms 1 and 2, the dual algorithm of fitCovGraph, fitAncestralGraph with its deviance and degrees of freedom. Original: Open (CRAN rank 964). Small to mid. Acceptance, equal to ggm: fitDag, fitCovGraph, fitConGraph, marg, pcor and pcor.test, parcor, dSep, fitAncestralGraph with its deviance and degrees of freedom."
     },
     {
       "id": "L299",
