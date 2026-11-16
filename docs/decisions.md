@@ -45538,3 +45538,15 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.signalpkg` gains grpdelay_at, the group delay of B / A at a frequency as the package computes it: the real part of the k-weighted over plain response of the product polynomial b * rev(a), minus the order of a, with the ratio set to 0 (so the delay to minus the order of a) where the product vanishes. The grid point w = 0 of a high-pass design is left out of the oracle: the package flags a singularity only below 2 eps in the FFT of the product, so whether it divides roundoff noise or zero there depends on rounding that cannot be reproduced. Not here: the whole-circle grid, the Hz option and the other filters.
 
 **Result.** `oracle_signalpkg` equals signal on 286 cases on Windows; Linux pending. L340 stays partial.
+
+## D6189 — BayesFactor: the JZS Bayes factor of a t statistic
+
+`e.algo.stat.bayesfactor` gives the natural log of BF10 for a one- or two-sample t test (ttest.tstat) with a Cauchy prior of scale rscale: the ratio of the integral over the inverse-chi-square mixing variable g (effective sample size n g r^2, degrees of freedom nu) to the null density, integrated to 1e-10 relative with the infinite-range QUADPACK rule. The package integrates less tightly (its own proportional error estimate reaches 3e-5), so the oracle compares to 5e-5 absolute on the log. Not here: lmBF and anovaBF (the g-prior regression integrals), generalTestBF, contingency, proportion and correlation tests, interval null hypotheses and posterior sampling.
+
+**Result.** `oracle_bayesfactor` agrees with BayesFactor on 40 cases on Windows at that tolerance; Linux pending. L465 is partial.
+
+## D6189 — signal: band-pass Butterworth
+
+`e.algo.stat.signalpkg` gains butter_band for butter(n, c(w1, w2), "pass"): the low-pass prototype poles are mapped to the band by the quadratic s^2 - (BW p) s + W0^2 = 0 with the warped edges 4 tan(pi w / 2), BW = W2 - W1 and W0^2 = W1 W2, which doubles the order, the zeros are n at z = +1 and n at z = -1, and the gain makes the response unity at the digital image of the analog centre sqrt(W1 W2). Coefficients equal signal's. Not here: the band-stop and the band forms of cheby1, cheby2, ellip and bessel.
+
+**Result.** `oracle_signalpkg` equals signal on 326 cases on Windows; Linux pending. L340 stays partial.

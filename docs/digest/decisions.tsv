@@ -3262,4 +3262,6 @@ D6186	658	signal: cheby1
 D6187	824	epiR: epi.2by2 measures of a cohort table
 D6187	671	signal: cheby2
 D6188	903	energy: distance covariance, distance correlation and the two-sample energy statistic
-D6188	765	signal: grpdelay
+D6188	766	signal: grpdelay
+D6189	867	BayesFactor: the JZS Bayes factor of a t statistic
+D6189	661	signal: band-pass Butterworth

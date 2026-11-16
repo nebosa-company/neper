@@ -90,7 +90,7 @@ L337	library	0	288	rpart: CART trees	Open (CRAN rank 270).
 L394	library	0	193	ipred: bagging and error estimation	Open (CRAN rank 439).
 L338	library	0	241	robustbase: robust regression and scale	Open (CRAN rank 285).
 L339	library	0	435	bayestestR, performance and parameters: model summary indices	Open (CRAN ranks 254, 251, 272).
-L340	library	0.5	640	signal: filter design and spectral tools	Partial (D6183, D6184 filtfilt and freqz, D6185 sgolay central row, D6186 cheby1, D6187 cheby2, D6188 grpdelay).
+L340	library	0.55	664	signal: filter design and spectral tools	Partial (D6183, D6184 filtfilt and freqz, D6185 sgolay central row, D6186 cheby1, D6187 cheby2, D6188 grpdelay, D6189 band-pass butter).
 L343	library	0	330	deSolve: solver parity	Open (CRAN rank 216).
 L346	library	0	284	mice: imputation parity	Open (CRAN rank 293).
 L360	library	0	374	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Open (CRAN ranks 337, 348, 393, 355;
@@ -122,7 +122,7 @@ L459	library	0.3	487	energy: energy statistics	Partial (D6188).
 L460	library	0.25	621	epiR: epidemiology	Partial (D6187).
 L461	library	0	216	systemfit: equation systems	Open (CRAN rank 794).
 L462	library	0	271	arules: association rule mining	Open (CRAN rank 800).
-L465	library	0	249	BayesFactor: Bayes factors with JZS priors	Open (CRAN rank 712).
+L465	library	0.2	536	BayesFactor: Bayes factors with JZS priors	Partial (D6189).
 L486	library	0	206	mixtools: mixture models by EM	Open (CRAN rank 884).
 L487	library	0	285	PMCMRplus: nonparametric post-hoc tests	Open (CRAN rank 821).
 L488	library	0	222	drc: dose-response models	Open (CRAN rank 813).
