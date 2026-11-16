@@ -45158,3 +45158,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** cassini, hypercube, peak, shapes, simplex, smiley, spirals, threenorm and waveform are drawn in the order R draws them: matrices column by column (so a two-column block draws its first column whole), `sample(1:n, n/2)` before the spiral and threenorm points, rejection loops one `runif(1, ...)` pair at a time, and the waveform's unif, unif, then 21 norm draws per row. `round` is R's half-to-even (`round_even`), which matters for n / 2^d and n / 4.
 
 **Result.** `oracle_mlbench` equals mlbench on all seventeen generators on Windows; Linux pending. L404 is closed.
+
+## D6132 — the non-central distributions and the rest of pwr
+
+**Context.** pwr's t, chi-squared, ANOVA and f2 designs need `pt`, `pchisq` and `pf` with a non-centrality, which the library lacked.
+
+**Decision.** `e.math.nchisq` gains `pnt` (AS 243, with R's left-tail shortcut and the normal approximation for large df or ncp), `pnbeta2` (AS 226 with R84 and R95, x and 1 - x given apart) and `pnf` on top of it; R accumulates these in long double, this is f64. `e.algo.stat.pwr` adds the five designs with R's brackets for each unknown, the pwr.r.test solves, `cohen_es`, `es_w1` and `es_w2`.
+
+**Result.** `oracle_pwr` equals pwr on 2013 cases (non-central designs of every kind, each unknown solved) on Windows; Linux pending. L399 is closed.

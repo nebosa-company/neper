@@ -5,7 +5,6 @@ L329	library	0.6	445	ggsci and ggthemes palettes	Partial (D6034).
 L357	library	0.8	584	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).
 L388	library	0.6	402	fracdiff: fractional differencing and ARFIMA	Partial (D6039).
 L392	library	0.3	497	dqrng: random number generators	Partial (D6041).
-L399	library	0.4	644	pwr: power analysis	Partial (D6042).
 L402	library	0.4	419	ica: independent component analysis	Partial (D6043).
 L405	library	0.5	759	yardstick and ModelMetrics: model performance metrics	Partial (D6046).
 L391	library	0.35	476	bridgesampling: marginal likelihoods	Partial (D6047).

@@ -1,9 +1,11 @@
-// The non-central chi-squared distribution function of R's nmath (pnchisq.c, AS 275 with R's underflow regimes). R accumulates
+// The non-central distributions of R's nmath: chi-squared (pnchisq.c, AS 275), t (pnt.c, AS 243) and F (pnf.c over pnbeta.c, AS 226). R accumulates
 // in long double; this is f64 throughout, so results agree to about 1e-14 relative rather than bit for bit.
 
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
+use e.math.nmath_beta as nb
+use e.math.toms708 as tm
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
@@ -165,4 +167,139 @@ fn pnchisq(x: f64, df: f64, ncp: f64, lower: bool, lg: bool) -> f64 {
     if !lg || ans < 0.0f64 - 1.0e-8f64 { ret ans }
     let other = pnchisq_raw(x, df, ncp, 1.0e-12f64, 8.0f64 * 2.220446049250313e-16f64, 1000000i64, !lower, false)
     ret dist.log1p(0.0f64 - other)
+}
+
+// pnt: the non-central t distribution function (AS 243, Lenth 1989) with R's tail handling
+fn pnt(t: f64, df: f64, ncp: f64, lower0: bool, lg: bool) -> f64 {
+    if t != t || df != df || ncp != ncp { ret t + df + ncp }
+    if df <= 0.0f64 { ret nan() }
+    if ncp == 0.0f64 { ret nb.pt(t, df, lower0, lg) }
+    if !finite(t) {
+        if t < 0.0f64 { ret dist.dt0(lower0, lg) }
+        ret dist.dt1(lower0, lg)
+    }
+    var negdel = false
+    var tt = t
+    var del = ncp
+    if t < 0.0f64 {
+        if ncp > 40.0f64 && (!lg || !lower0) { ret dist.dt0(lower0, lg) }
+        negdel = true
+        tt = 0.0f64 - t
+        del = 0.0f64 - ncp
+    }
+    if df > 4.0e5f64 || del * del > 2.0f64 * 0.693147180559945309417232121458f64 * 1021.0f64 {
+        let s = 1.0f64 / (4.0f64 * df)
+        ret dist.pnorm(tt * (1.0f64 - s), del, math.sqrt[f64](1.0f64 + tt * tt * 2.0f64 * s), lower0 != negdel, lg)
+    }
+    var x = t * t
+    var rxb = df / (x + df)
+    x = x / (x + df)
+    var tnc = 0.0f64
+    if x > 0.0f64 {
+        let lambda = del * del
+        var p = 0.5f64 * math.exp[f64](0.0f64 - 0.5f64 * lambda)
+        if p == 0.0f64 { ret dist.dt0(lower0, lg) }
+        var q = 0.797884560802865355879892119869f64 * p * del
+        var s = 0.5f64 - p
+        if s < 1.0e-7f64 { s = 0.0f64 - 0.5f64 * dist.expm1(0.0f64 - 0.5f64 * lambda) }
+        var a = 0.5f64
+        let b = 0.5f64 * df
+        rxb = math.pow[f64](rxb, b)
+        let albeta = 0.572364942924700087071713675677f64 + nm.lgammafn(b) - nm.lgammafn(0.5f64 + b)
+        var xodd = nb.pbeta(x, a, b, true, false)
+        var godd = 2.0f64 * rxb * math.exp[f64](a * math.log[f64](x) - albeta)
+        tnc = b * x
+        var xeven = 1.0f64 - rxb
+        if tnc < 2.220446049250313e-16f64 { xeven = tnc }
+        var geven = tnc * rxb
+        tnc = p * xodd + q * xeven
+        var it = 1i64
+        var stop = false
+        while it <= 1000i64 && !stop {
+            a += 1.0f64
+            xodd -= godd
+            xeven -= geven
+            godd *= x * (a + b - 1.0f64) / a
+            geven *= x * (a + b - 0.5f64) / (a + 0.5f64)
+            p *= lambda / f64(2i64 * it)
+            q *= lambda / f64(2i64 * it + 1i64)
+            tnc += p * xodd + q * xeven
+            s -= p
+            if s < 0.0f64 - 1.0e-10f64 {
+                stop = true
+            } else if s <= 0.0f64 && it > 1i64 {
+                stop = true
+            } else {
+                let errbd = 2.0f64 * s * (xodd - godd)
+                if math.abs[f64](errbd) < 1.0e-12f64 { stop = true }
+            }
+            it += 1i64
+        }
+    }
+    tnc += dist.pnorm(0.0f64 - del, 0.0f64, 1.0f64, true, false)
+    let lower = lower0 != negdel
+    var tc = tnc
+    if tc > 1.0f64 { tc = 1.0f64 }
+    ret nb.dt_val(tc, lower, lg)
+}
+
+// pnbeta2: AS 226 with R84 and R95, x and o_x = 1 - x given separately
+fn pnbeta2(x: f64, o_x: f64, a: f64, b: f64, ncp: f64, lower: bool, lg: bool) -> f64 {
+    if ncp < 0.0f64 || a <= 0.0f64 || b <= 0.0f64 { ret nan() }
+    var ans = 0.0f64
+    if x < 0.0f64 || o_x > 1.0f64 || (x == 0.0f64 && o_x == 1.0f64) {
+        ans = 0.0f64
+    } else if x > 1.0f64 || o_x < 0.0f64 || (x == 1.0f64 && o_x == 0.0f64) {
+        ans = 1.0f64
+    } else {
+        let c = ncp / 2.0f64
+        var x0 = c - 7.0f64 * math.sqrt[f64](c)
+        if x0 < 0.0f64 { x0 = 0.0f64 }
+        x0 = math.floor[f64](x0)
+        let a0 = a + x0
+        let lbet = nb.lbeta(a0, b)
+        let (temp0, tc, ie) = tm.bratio(a0, b, x, o_x, false)
+        var temp = temp0
+        var lx = math.log[f64](o_x)
+        if x < 0.5f64 { lx = dist.log1p(0.0f64 - x) }
+        var gx = math.exp[f64](a0 * math.log[f64](x) + b * lx - lbet - math.log[f64](a0))
+        var q = math.exp[f64](0.0f64 - c)
+        if a0 > a { q = math.exp[f64](0.0f64 - c + x0 * math.log[f64](c) - nm.lgammafn(x0 + 1.0f64)) }
+        var sumq = 1.0f64 - q
+        ans = q * temp
+        var j = x0
+        var errbd = 1.0f64
+        var go = true
+        while go {
+            j += 1.0f64
+            temp -= gx
+            gx *= x * (a + b + j - 1.0f64) / (a + j)
+            q *= c / j
+            sumq -= q
+            let ax = temp * q
+            ans += ax
+            errbd = (temp - gx) * sumq
+            go = errbd > 1.0e-9f64 && j < 10000.0f64 + x0
+        }
+    }
+    if lower {
+        if lg { ret math.log[f64](ans) }
+        ret ans
+    }
+    if ans > 1.0f64 { ans = 1.0f64 }
+    if lg { ret dist.log1p(0.0f64 - ans) }
+    ret 1.0f64 - ans
+}
+
+// pnf: the non-central F distribution function
+fn pnf(x: f64, df1: f64, df2: f64, ncp: f64, lower: bool, lg: bool) -> f64 {
+    if x != x || df1 != df1 || df2 != df2 || ncp != ncp { ret x + df2 + df1 + ncp }
+    if df1 <= 0.0f64 || df2 <= 0.0f64 || ncp < 0.0f64 { ret nan() }
+    if !finite(ncp) { ret nan() }
+    if !finite(df1) && !finite(df2) { ret nan() }
+    if x <= 0.0f64 { ret dist.dt0(lower, lg) }
+    if x == inf() { ret dist.dt1(lower, lg) }
+    if df2 > 1.0e8f64 { ret pnchisq(x * df1, df1, ncp, lower, lg) }
+    let y = (df1 / df2) * x
+    ret pnbeta2(y / (1.0f64 + y), 1.0f64 / (1.0f64 + y), df1 / 2.0f64, df2 / 2.0f64, ncp, lower, lg)
 }
