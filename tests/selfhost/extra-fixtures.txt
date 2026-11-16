@@ -232,3 +232,4 @@ oracle_kendall
 oracle_lmom
 oracle_leaps
 oracle_bigglm
+oracle_vcdeffect
