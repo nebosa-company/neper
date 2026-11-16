@@ -46718,3 +46718,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `crow` is cSpline as the integral of the I-spline over `[lo, x]` (checked in R: the degree-2 I-spline integrates to the package's 0.9 at the upper knot), computed by 4-point Gauss-Legendre on each knot interval, which is exact for these piecewise polynomials; `scale` divides every column by its value at the upper boundary; the first column drops without the intercept.
 
 **Result.** `oracle_splines2` agrees with splines2 on 60 cSpline cases of each scaling (560 cases in all) on Windows; Linux pending. L445 stays partial: naturalSpline with fewer than two knots, periodic bases, the derivatives of M and I splines.
+
+## D6590 — splines2: cSpline
+
+**Decision.** `cspline_raw` integrates the I-spline columns through the identity `integral of b_{j,k} from the lower boundary = (t_{j+k} - t_j)/k * sum over m >= j of b_{m,k+1}` on the knot vector with `degree + 3` boundary repeats (the I-spline's `j >= c + 1` becomes `j' >= c + 2` after the extra repeat); `cspline_row` divides each column by its value at the upper boundary knot when `scale = TRUE`, and drops the first column without the intercept.
+
+**Result.** `oracle_splines2` agrees with splines2 on 120 cSpline summaries on Windows (680 cases in all); Linux pending. L445 stays partial: natural splines with fewer than two knots, periodic bases and the derivatives of the M and I splines.
