@@ -45126,3 +45126,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `pca_proj` ports `CPCAproj::Calc` and `CPCAprojU::Update` for the eachobs candidate set: the direction of each observation is scored by sd, mad or qn (`qn_of` takes the k-th smallest pairwise distance with k = C(n/2+1, 2) and pcaPP's small-sample factor, which equals the package's weighted-median search), the best one is refined by the sign-sum update with step halving, and the data are deflated between components. `proj_finish` is R's `.DataPostProc` and `.loadSgnU`. Two behaviours of the C are reproduced on purpose: the sign sum treats a score of exactly zero as positive (`ApaBm_signC` subtracts only for c < 0), and the last loading of a full-rank fit is completed around the first row because `which_max1` assigns `pMax = p` and so always answers 0.
 
 **Result.** `oracle_pcapp` equals pcaPP on 9462 values on Windows (sdev, loadings and scores for the three scales, with and without the update); Linux pending. lincomb and sphere draw random candidates, and PCAgrid and sPCAgrid stay open on L357.
+
+## D6128 — SQUAREM with an objective, and the cycled schemes
+
+**Context.** L386 had squarem2 and fpiter; squarem1, cyclem1 and cyclem2 were open.
+
+**Decision.** `squarem1` takes the objective as `fn(*Ctx, []const f64) -> f64` and judges the stabilised step by it (monotone to within objfn.inc, with the adaptive step.max); `cyclem` is cyclem1 when it is given the objective and cyclem2 when not, for K up to the dimension, RRE or MPE, squared or not. The coefficient systems go through a Householder QR (`lstsq`), so the MPE least squares is exact for any n ≥ K. A run in which R stops with an error sets `failed`. Cases with RRE and K + 1 > n are not compared: crossprod(U) is then singular and R solves it from rounding noise.
+
+**Result.** `oracle_squarem` equals SQUAREM on every iterate count, evaluation count, objective value and parameter for the four maps on Windows; Linux pending. L386 is closed.
