@@ -3347,4 +3347,5 @@ D6475	813	cubature: box integrals of fixed integrands
 D6476	947	geepack: Gaussian geeglm with independence and exchangeable correlation
 D6477	946	stats::density, Gaussian kernel
 D6478	1052	hdrcde: hdr on a sample with a given bandwidth
-D6479	956	gmm: linear two-step estimator, iid and MDS weighting
+D6479	957	gmm: linear two-step estimator, iid and MDS weighting
+D6480	853	gmm: HAC weighting with five kernels

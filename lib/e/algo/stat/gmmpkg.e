@@ -115,8 +115,63 @@ fn moment_cov(z: []const f64, e: []const f64, n: usize, q: usize, s: []f64, gbar
     }
 }
 
+// the HAC kernel weight at lag j for bandwidth bw: kind 2 Bartlett, 3 Parzen, 4 Truncated, 5 Tukey-Hanning, 6 Quadratic Spectral
+fn kernel_weight(kind: usize, j: f64, bw: f64) -> f64 {
+    let x = j / bw
+    let pi = 3.141592653589793238462643383279f64
+    if kind == 2usize {
+        if x < 1.0f64 { ret 1.0f64 - x }
+        ret 0.0f64
+    }
+    if kind == 3usize {
+        if x <= 0.5f64 { ret 1.0f64 - 6.0f64 * x * x + 6.0f64 * x * x * x }
+        if x <= 1.0f64 { ret 2.0f64 * (1.0f64 - x) * (1.0f64 - x) * (1.0f64 - x) }
+        ret 0.0f64
+    }
+    if kind == 4usize {
+        if x <= 1.0f64 { ret 1.0f64 }
+        ret 0.0f64
+    }
+    if kind == 5usize {
+        if x <= 1.0f64 { ret (1.0f64 + math.cos[f64](pi * x)) / 2.0f64 }
+        ret 0.0f64
+    }
+    let u = 6.0f64 * pi * x / 5.0f64
+    ret 25.0f64 / (12.0f64 * pi * pi * x * x) * (math.sin[f64](u) / u - math.cos[f64](u))
+}
+
+// the moment covariance of g_i = z_i e_i: the centred lag-0 term for mode 1, plus the kernel-weighted autocovariances for the HAC modes 2 to 6
+fn moment_cov_mode(z: []const f64, e: []const f64, n: usize, q: usize, mode: usize, bw: f64, s: []f64, gbar: []f64) {
+    moment_cov(z, e, n, q, s, gbar)
+    if mode < 2usize { ret }
+    var lag = 1usize
+    while lag < n {
+        let w = kernel_weight(mode, f64(lag), bw)
+        if w != 0.0f64 {
+            var j = 0usize
+            while j < q {
+                var k = 0usize
+                while k < q {
+                    var t = 0.0f64
+                    var i = lag
+                    while i < n {
+                        t += (z[i * q + j] * e[i] - gbar[j]) * (z[(i - lag) * q + k] * e[i - lag] - gbar[k])
+                        i += 1usize
+                    }
+                    s[j * q + k] += w * t / f64(n)
+                    s[k * q + j] += w * t / f64(n)
+                    k += 1usize
+                }
+                j += 1usize
+            }
+        } else if mode != 6usize { break }
+        lag += 1usize
+    }
+}
+
 // the linear two-step GMM: what 0 the coefficient `idx`, 1 the covariance entry idx (row * p + col), 2 the J statistic; mds is true for vcov = "MDS", false for "iid"
-fn gmm_linear(a: *mem.Arena, y: []const f64, x: []const f64, z: []const f64, n: usize, p: usize, q: usize, mds: bool, what: usize, idx: usize) -> f64 {
+fn gmm_linear(a: *mem.Arena, y: []const f64, x: []const f64, z: []const f64, n: usize, p: usize, q: usize, mode: usize, bw: f64, what: usize, idx: usize) -> f64 {
+    let mds = mode >= 1usize
     let nf = f64(n)
     let (xz, e1) = mem.alloc[f64](a, p * q)
     if e1 != ok { ret 0.0f64 / 0.0f64 }
@@ -177,7 +232,7 @@ fn gmm_linear(a: *mem.Arena, y: []const f64, x: []const f64, z: []const f64, n: 
         r += 1usize
     }
     if mds {
-        moment_cov(z, e, n, q, sm, gb)
+        moment_cov_mode(z, e, n, q, mode, bw, sm, gb)
         if ols.inverse(a, sm, q, w) != ok { ret 0.0f64 / 0.0f64 }
         if gmm_step(a, xz, zy, w, p, q, b) != ok { ret 0.0f64 / 0.0f64 }
     } else {
@@ -219,7 +274,7 @@ fn gmm_linear(a: *mem.Arena, y: []const f64, x: []const f64, z: []const f64, n: 
     }
     sig2 = sig2 / nf
     if mds {
-        moment_cov(z, e, n, q, sm, gb)
+        moment_cov_mode(z, e, n, q, mode, bw, sm, gb)
     } else {
         i = 0usize
         while i < q * q {

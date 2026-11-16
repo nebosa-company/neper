@@ -17,10 +17,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let x = c.args
-        let n = usize(x[3usize])
-        let p = usize(x[4usize])
-        let q = usize(x[5usize])
-        let got = gm.gmm_linear(a, x[6usize..6usize + n], x[6usize + n..6usize + n + n * p], x[6usize + n + n * p..6usize + n + n * p + n * q], n, p, q, x[2usize] == 1.0f64, usize(x[0usize]), usize(x[1usize]))
+        let n = usize(x[4usize])
+        let p = usize(x[5usize])
+        let q = usize(x[6usize])
+        let got = gm.gmm_linear(a, x[7usize..7usize + n], x[7usize + n..7usize + n + n * p], x[7usize + n + n * p..7usize + n + n * p + n * q], n, p, q, usize(x[2usize]), x[3usize], usize(x[0usize]), usize(x[1usize]))
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

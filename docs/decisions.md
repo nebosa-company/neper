@@ -46048,3 +46048,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.gmmpkg` is new: `gmm_linear` takes the first step with the weight (Z'Z / n)^-1 (two-stage least squares), and for vcov = "MDS" a second step with the inverse of the centred moment covariance of the first-step residuals; the covariance is (D' S^-1 D)^-1 / n with S re-evaluated at the final coefficients, and the J statistic is n times the criterion at the final coefficients under the weight the last step used, not under a re-estimated one. With vcov = "iid" the weight is proportional to Z'Z, so the two-step estimate is the 2SLS estimate.
 
 **Result.** `oracle_gmmpkg` agrees with gmm on 280 cases on Windows at rel 1e-6, 20 data sets of 100 to 400 rows with 3 to 5 instruments and heteroskedastic errors, both weightings. The HAC kernels and bandwidths, the iterated and CUE estimators, nonlinear moments and the hypothesis tests are open; Linux pending. L510 is partial.
+
+## D6480 — gmm: HAC weighting with five kernels
+
+`e.algo.stat.gmmpkg` gains `kernel_weight` (Bartlett, Parzen, Truncated, Tukey-Hanning and Quadratic Spectral, as functions of lag over bandwidth) and `moment_cov_mode`, which adds the kernel-weighted autocovariances of the centred moments to the MDS covariance; `gmm_linear` takes a mode and a bandwidth. A manual Bartlett check in R with weight max(0, 1 - j / bw) reproduced gmm to all printed digits before this was coded.
+
+**Result.** `oracle_gmmpkg` agrees with gmm on 980 cases on Windows at rel 1e-6, 700 of them new: seven weightings over 20 data sets, the HAC ones at fixed bandwidths 3 to 6 and prewhite = 0. The Andrews and Newey-West bandwidth selectors, prewhitening, the iterated and CUE estimators, nonlinear moments and the hypothesis tests are open; Linux pending. L510 stays partial.
