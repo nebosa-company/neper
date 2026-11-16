@@ -1016,3 +1016,324 @@ fn xfrie(d: *const Fdist, p: f64, r: i64, n: i64) -> f64 {
     }
     ret 0.0f64
 }
+
+// ---- the moments the s* functions return: mean, median, mode, variance and the third and fourth central moments ----
+
+type Mom = struct { mean: f64, median: f64, mode: f64, variance: f64, third: f64, fourth: f64 }
+
+// a density and the power of (x - centre) weighting it, for the package's Romberg integral (tolerance 1e-4)
+type MomCtx = struct { kind: u8, centre: f64, df: i64, k: i64, c: i64, n: i64, u: f64, ns: bool, g: f64, dl: f64, xi: f64, lm: f64, jk: u8, rho: f64 }
+
+fn mom_density(c: *MomCtx, x: f64) -> f64 {
+    if c.kind == 0u8 { ret fmaxfratio(x, c.df, c.k) }
+    ret djohnson(x, c.g, c.dl, c.xi, c.lm, c.jk)
+}
+
+fn mom_power(c: *MomCtx, x: f64, pw: i64) -> f64 {
+    var f = mom_density(c, x)
+    if pw == 1i64 { ret x * f }
+    let d = x - c.centre
+    var i = 0i64
+    while i < pw {
+        f = f * d
+        i += 1i64
+    }
+    ret f
+}
+
+fn mom_p1(c: *MomCtx, x: f64) -> f64 { ret mom_power(c, x, 1i64) }
+fn mom_p2(c: *MomCtx, x: f64) -> f64 { ret mom_power(c, x, 2i64) }
+fn mom_p3(c: *MomCtx, x: f64) -> f64 { ret mom_power(c, x, 3i64) }
+fn mom_p4(c: *MomCtx, x: f64) -> f64 { ret mom_power(c, x, 4i64) }
+
+// FindDistributionMode: the largest density over 128 equally spaced points of [lo, hi]
+fn mom_mode(c: *MomCtx, lo: f64, hi: f64) -> f64 {
+    var mode = 0.0f64
+    var fmode = 0.0f64 - 1.0f64
+    let step = (hi - lo) / 127.0f64
+    var x = lo
+    var i = 0usize
+    while i < 128usize {
+        let v = mom_density(c, x)
+        if v > fmode {
+            fmode = v
+            mode = x
+        }
+        x = x + step
+        i += 1usize
+    }
+    ret mode
+}
+
+fn mom_integrals(c: *MomCtx, lo: f64, hi: f64, m: *Mom) {
+    c.centre = 0.0f64
+    m.mean = romberg[MomCtx](c, mom_p1, lo, hi, 0.0001f64)
+    c.centre = m.mean
+    m.variance = romberg[MomCtx](c, mom_p2, lo, hi, 0.0001f64)
+    m.third = romberg[MomCtx](c, mom_p3, lo, hi, 0.0001f64)
+    m.fourth = romberg[MomCtx](c, mom_p4, lo, hi, 0.0001f64)
+}
+
+// sinvGauss
+fn moments_inv_gauss(nu: f64, lam: f64) -> Mom {
+    var m: Mom = zero
+    let factor = nu * nu / lam
+    let vr = nu * factor
+    let k3 = 3.0f64 * vr * factor
+    let k4 = 5.0f64 * k3 * factor
+    m.mean = nu
+    m.median = qinv_gauss(0.5f64, nu, lam)
+    m.variance = vr
+    m.mode = 0.0f64 - 1.5f64 * factor + nu * math.sqrt[f64](1.0f64 + 2.25f64 * (nu / lam) * (nu / lam))
+    m.third = k3
+    m.fourth = k4 + 3.0f64 * vr * vr
+    ret m
+}
+
+// sJohnson; kind 0 SN, 1 SL, 2 SB, 3 SU as in djohnson
+fn moments_johnson(gamma0: f64, delta: f64, xi0: f64, lambda: f64, kind: u8) -> Mom {
+    var m: Mom = zero
+    var gamma = gamma0
+    if math.abs[f64](gamma) < 1.0e-15f64 { gamma = 0.0f64 }
+    var xi = xi0
+    if math.abs[f64](xi) < 1.0e-15f64 { xi = 0.0f64 }
+    let w = math.exp[f64](1.0f64 / (delta * delta))
+    let gd = gamma / delta
+    let egd = math.exp[f64](0.0f64 - gd)
+    if kind == 0u8 {
+        m.mean = xi - gamma * lambda / delta
+        m.median = m.mean
+        m.mode = m.mean
+        var v = lambda / delta
+        v = v * v
+        m.variance = v
+        m.third = 0.0f64
+        m.fourth = 3.0f64 * v * v
+        ret m
+    }
+    if kind == 1u8 {
+        m.mean = xi + math.sqrt[f64](w) * egd * lambda
+        m.median = xi + egd * lambda
+        m.mode = xi + lambda * egd / w
+        m.variance = w * (w - 1.0f64) * egd * egd * lambda * lambda
+        m.third = egd * egd * egd * math.sqrt[f64](w * w * w) * (w - 1.0f64) * (w - 1.0f64) * (w + 2.0f64)
+        m.third = m.third * lambda * lambda * lambda
+        m.fourth = m.variance * m.variance * (((w + 2.0f64) * w + 3.0f64) * w * w - 3.0f64)
+        ret m
+    }
+    let lo = qjohnson(0.001f64, gamma0, delta, xi0, lambda, kind)
+    let hi = qjohnson(0.999f64, gamma0, delta, xi0, lambda, kind)
+    var c = MomCtx { kind: 1u8, centre: 0.0f64, df: 0i64, k: 0i64, c: 0i64, n: 0i64, u: 0.0f64, ns: false, g: gamma0, dl: delta, xi: xi0, lm: lambda, jk: kind, rho: 0.0f64 }
+    m.mode = mom_mode(&c, lo, hi)
+    if kind == 3u8 {
+        let sh = (math.exp[f64](gd) - math.exp[f64](0.0f64 - gd)) / 2.0f64
+        let ch = (math.exp[f64](gd) + math.exp[f64](0.0f64 - gd)) / 2.0f64
+        m.mean = xi - lambda * math.sqrt[f64](w) * sh
+        let c2 = (math.exp[f64](2.0f64 * gd) + math.exp[f64](0.0f64 - 2.0f64 * gd)) / 2.0f64
+        m.variance = 0.5f64 * lambda * lambda * (w - 1.0f64) * (w * c2 + 1.0f64)
+        m.median = xi - lambda * sh
+        let s3 = (math.exp[f64](3.0f64 * gd) - math.exp[f64](0.0f64 - 3.0f64 * gd)) / 2.0f64
+        var t3 = 0.25f64 * math.sqrt[f64](w) * (w - 1.0f64) * (w - 1.0f64) * (w * (w + 2.0f64) * s3 + 3.0f64 * sh)
+        t3 = t3 * lambda * lambda * lambda
+        if gamma >= 0.0f64 { t3 = 0.0f64 - t3 }
+        m.third = t3
+        let c4 = (math.exp[f64](4.0f64 * gd) + math.exp[f64](0.0f64 - 4.0f64 * gd)) / 2.0f64
+        var t4 = 0.125f64 * (w - 1.0f64) * (w - 1.0f64) * (w * w * (((w + 2.0f64) * w + 3.0f64) * w * w - 3.0f64) * c4 + 4.0f64 * w * w * (w + 2.0f64) * c2 + 3.0f64 * (2.0f64 * w + 1.0f64))
+        t4 = t4 * lambda * lambda * lambda * lambda
+        m.fourth = t4
+        ret m
+    }
+    mom_integrals(&c, lo, hi, &m)
+    m.median = qjohnson(0.5f64, gamma0, delta, xi0, lambda, kind)
+    ret m
+}
+
+// smaxFratio
+fn moments_maxfratio(df: i64, k: i64) -> Mom {
+    var m: Mom = zero
+    if df < 1i64 || k < 1i64 {
+        let nan = 0.0f64 / 0.0f64
+        m.mean = nan
+        m.median = nan
+        m.mode = nan
+        m.variance = nan
+        m.third = nan
+        m.fourth = nan
+        ret m
+    }
+    let lo = xmaxfratio(0.01f64, df, k)
+    let hi = xmaxfratio(0.99f64, df, k)
+    var c = MomCtx { kind: 0u8, centre: 0.0f64, df: df, k: k, c: 0i64, n: 0i64, u: 0.0f64, ns: false, g: 0.0f64, dl: 0.0f64, xi: 0.0f64, lm: 0.0f64, jk: 0u8, rho: 0.0f64 }
+    mom_integrals(&c, lo, hi, &m)
+    m.median = xmaxfratio(0.5f64, df, k)
+    m.mode = mom_mode(&c, lo, hi)
+    ret m
+}
+
+// sKruskalWallis / sNormScore: the mean is c - 1, the median the quantile, the variance the approximation's, the mode and the third and fourth
+// central moments from 128 equally spaced points between the 1% and 99% quantiles
+fn moments_kruskal_wallis(c: i64, n: i64, u: f64, ns: bool) -> Mom {
+    var m: Mom = zero
+    m.mean = f64(c - 1i64)
+    m.median = xkruskal_wallis(0.5f64, c, n, u, ns)
+    if u <= 0.0f64 || u > kw_max_u(c, n) {
+        let nan = 0.0f64 / 0.0f64
+        m.mode = nan
+        m.variance = nan
+        m.third = nan
+        m.fourth = nan
+        ret m
+    }
+    if ns { m.variance = var_normal_scores(f64(n), f64(c), u) } else { m.variance = var_kruskal_wallis(f64(n), f64(c), u) }
+    let min_h = xkruskal_wallis(0.01f64, c, n, u, ns)
+    let max_h = xkruskal_wallis(0.99f64, c, n, u, ns)
+    var md = 0.0f64
+    var max_v = 0.0f64
+    var m3 = 0.0f64
+    var m4 = 0.0f64
+    var sum = 0.0f64
+    let delta = (max_h - min_h) / 127.0f64
+    var h = min_h
+    var i = 0usize
+    while i < 128usize {
+        let val = fkruskal_wallis(h, c, n, u, ns)
+        if max_v < val {
+            max_v = val
+            md = h
+        }
+        sum += val
+        let dh = h - m.mean
+        m3 += val * dh * dh * dh
+        m4 += val * dh * dh * dh * dh
+        h = h + delta
+        i += 1usize
+    }
+    m.mode = md
+    m.third = m3 / sum
+    m.fourth = m4 / sum
+    ret m
+}
+
+// sFriedman (rho false): the Friedman statistic; the median interpolates between support points on the exact distribution
+fn moments_friedman(d: *const Fdist, r: i64, n: i64) -> Mom {
+    var m: Mom = zero
+    if r < 3i64 || n < 2i64 {
+        let nan = 0.0f64 / 0.0f64
+        m.mean = nan
+        m.median = nan
+        m.mode = nan
+        m.variance = nan
+        m.third = nan
+        m.fourth = nan
+        ret m
+    }
+    let rr = f64(r)
+    let nn = f64(n)
+    m.mean = rr - 1.0f64
+    // medianfrie
+    if !friedman_exact_ok(r, n) {
+        m.median = xfrie(d, 0.5f64, r, n)
+    } else {
+        let high = xfrie(d, 0.5f64, r, n)
+        let phigh = pfrie(d, high, r, n)
+        var low = high
+        var same = true
+        var plow = 0.0f64
+        var two_s = 24.0f64 / (nn * rr * (rr + 1.0f64))
+        if r % 2i64 == 0i64 { two_s = two_s * 4.0f64 }
+        while same {
+            low = low - two_s
+            plow = pfrie(d, low, r, n)
+            same = phigh == plow
+        }
+        let alpha = (phigh - 0.5f64) / (phigh - plow)
+        m.median = alpha * low + (1.0f64 - alpha) * high
+    }
+    // modefrie
+    let max_x = nn * (rr - 1.0f64)
+    var mode = 0.0f64
+    var mode_val = 0.0f64
+    let step = max_x / 127.0f64
+    var x = 0.0f64
+    var i = 0usize
+    while i < 128usize {
+        let cur = ffrie(d, x, r, n)
+        if mode_val < cur {
+            mode_val = cur
+            mode = x
+        }
+        x = x + step
+        i += 1usize
+    }
+    m.mode = mode
+    m.variance = f64(2i64 * (r - 1i64) * (n - 1i64)) / nn
+    m.third = m.variance * f64(4i64 * (n - 2i64)) / nn
+    m.fourth = m.variance * (rr - 1.0f64) / (nn * nn) * (f64(72i64 + r * (0i64 - 35i64 + r * (0i64 - 38i64 + r * 25i64))) / f64(25i64 * r * (r * r - 1i64)) + f64(2i64 * (r - 1i64) * (n - 2i64)) + 0.5f64 * f64((r + 3i64) * (n - 2i64) * (n - 3i64)))
+    ret m
+}
+
+// sSpearman (rho true): the Friedman code with n = 2 and the rho scale
+fn moments_spearman(r: i64) -> Mom {
+    var m: Mom = zero
+    if r < 3i64 {
+        let nan = 0.0f64 / 0.0f64
+        m.mean = nan
+        m.median = nan
+        m.mode = nan
+        m.variance = nan
+        m.third = nan
+        m.fourth = nan
+        ret m
+    }
+    m.mean = 0.0f64
+    m.median = 0.0f64
+    m.mode = 0.0f64
+    m.variance = 1.0f64 / f64(r - 1i64)
+    m.third = 0.0f64
+    m.fourth = (3.0f64 * m.variance / f64(r - 1i64)) * (f64(72i64 + r * (0i64 - 35i64 + r * (0i64 - 38i64 + r * 25i64))) / f64(25i64 * r * (r * r - 1i64)))
+    ret m
+}
+
+// scorr: the Pearson correlation
+fn moments_pearson(rho: f64, nn: i64) -> Mom {
+    var m: Mom = zero
+    if nn < 3i64 || rho < 0.0f64 - 1.0f64 || rho > 1.0f64 {
+        let nan = 0.0f64 / 0.0f64
+        m.mean = nan
+        m.median = nan
+        m.mode = nan
+        m.variance = nan
+        m.third = nan
+        m.fourth = nan
+        ret m
+    }
+    let mm = 1.0f64 / (f64(nn) + 6.0f64)
+    let m2 = mm * mm
+    let rho2 = rho * rho
+    let rho4 = rho2 * rho2
+    let one_min = 1.0f64 - rho2
+    let om2 = one_min * one_min
+    let om3 = om2 * one_min
+    let om4 = om2 * om2
+    m.mean = rho - 0.5f64 * mm * rho * one_min * (1.0f64 + 2.25f64 * mm * (3.0f64 + rho2) + 0.375f64 * m2 * (121.0f64 + 70.0f64 * rho2 + 25.0f64 * rho4))
+    m.median = qcorrelation(0.5f64, rho, nn)
+    var best = 0.0f64
+    var fbest = 0.0f64 - 1.0f64
+    let step = 2.0f64 / 127.0f64
+    var x = 0.0f64 - 1.0f64
+    var i = 0usize
+    while i < 128usize {
+        let v = fcorrelation(x, rho, nn)
+        if v > fbest {
+            fbest = v
+            best = x
+        }
+        x = x + step
+        i += 1usize
+    }
+    m.mode = best
+    m.third = 0.0f64 - m2 * rho * om3 * (6.0f64 + mm * (69.0f64 + 88.0f64 * rho2) + 0.75f64 * m2 * (797.0f64 + 1691.0f64 * rho2 + 1560.0f64 * rho4))
+    m.fourth = 3.0f64 * m2 * om4 * (1.0f64 + mm * (12.0f64 + 35.0f64 * rho2) + 0.25f64 * m2 * (436.0f64 + 2028.0f64 * rho2 + 3025.0f64 * rho4))
+    m.variance = mm * om2 * (1.0f64 + 0.5f64 * mm * (14.0f64 + 11.0f64 * rho2) + 0.5f64 * m2 * (98.0f64 + 130.0f64 * rho2 + 75.0f64 * rho4))
+    ret m
+}

@@ -49,4 +49,24 @@ for (cs in fr_cases) for (rep in 1:5) {
   add("fr_p", c(r, N, x), v, 1e-8); add("fr_u", c(r, N, x), pFriedman(x, r, N, lower.tail = FALSE), 1e-8)
   add("fr_d", c(r, N, x), dFriedman(x, r, N), 1e-8); add("fr_q", c(r, N, pr), qFriedman(pr, r, N), 1e-8)
 }
+# moments: fn "mo_<dist>", args (parameters..., what) what 0 mean, 1 median, 2 mode, 3 variance, 4 third, 5 fourth central moment
+mom_add <- function(fn, a, s, tol = 1e-8) {
+  v <- c(s$Mean, s$Median, s$Mode, s$Variance, s$ThirdCentralMoment, s$FourthCentralMoment)
+  for (i in 1:6) if (is.finite(v[i])) add(fn, c(a, i - 1), v[i], tol)
+}
+for (rep in 1:12) { nu <- round(runif(1, 0.5, 4), 2); lam <- round(runif(1, 0.5, 6), 2); mom_add("mo_ig", c(nu, lam), sinvGauss(nu, lam), 1e-7) }
+jtypes <- c("SN", "SL", "SU", "SB"); jk <- c(0, 1, 3, 2)
+for (rep in 1:24) {
+  ty <- (rep - 1) %% 4 + 1; g <- round(runif(1, -1.5, 1.5), 2); dl <- round(runif(1, 0.6, 2), 2); xi <- round(runif(1, -1, 1), 2); lm <- if (ty == 2) 1 else round(runif(1, 0.5, 3), 2)
+  s <- tryCatch(sJohnson(list(gamma = g, delta = dl, xi = xi, lambda = lm, type = jtypes[ty])), error = function(e) NULL); if (is.null(s)) next
+  mom_add("mo_jo", c(g, dl, xi, lm, jk[ty]), s, 1e-6)
+}
+for (rep in 1:10) { df <- sample(c(3, 5, 8, 16, 30), 1); k <- sample(3:10, 1); s <- smaxFratio(df, k); mom_add("mo_mf", c(df, k), s, 1e-5) }
+for (rep in 1:12) {
+  ns <- rep %% 2; cc <- sample(3:6, 1); ni <- sample(4:15, cc, TRUE); N <- sum(ni); U <- sum(1 / ni)
+  s <- if (ns == 0) sKruskalWallis(cc, N, U) else sNormScore(cc, N, U); mom_add("mo_kw", c(ns, cc, N, U), s, 1e-6)
+}
+for (cs in list(c(3, 4), c(3, 9), c(4, 5), c(5, 4), c(6, 5), c(4, 20))) { s <- sFriedman(cs[1], cs[2]); mom_add("mo_fr", c(cs[1], cs[2]), s, 1e-6) }
+for (r in c(3, 5, 8, 11)) { s <- sSpearman(r); mom_add("mo_sp", c(r), s, 1e-9) }
+for (rep in 1:10) { N <- sample(5:50, 1); rho <- round(runif(1, -0.9, 0.9), 2); s <- sPearson(N, rho); mom_add("mo_pc", c(rho, N), s, 1e-6) }
 emit("suppdists", "SuppDists", list(cases))

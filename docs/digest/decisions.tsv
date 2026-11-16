@@ -3556,4 +3556,5 @@ D6693	756	SuppDists Pearson correlation, with the package's constants
 D6694	726	fdrtool helpers and the Student t null; L421 closed
 D6695	556	SuppDists Kruskal-Wallis and normal scores
 D6696	685	SuppDists maximum F ratio
-D6697	925	SuppDists Friedman without the stored tables
+D6697	926	SuppDists Friedman without the stored tables
+D6698	687	SuppDists moments

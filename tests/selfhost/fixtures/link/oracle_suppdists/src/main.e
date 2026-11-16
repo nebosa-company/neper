@@ -46,6 +46,40 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "fr_d") { ret sd.ffrie(&fd, z[2usize], fr, fn_) }
         ret sd.xfrie(&fd, z[2usize], fr, fn_)
     }
+    if str.starts_with(nm, "mo_") {
+        var mm = sd.moments_pearson(0.0f64, 3i64)
+        var what = 0usize
+        if str.eq(nm, "mo_ig") {
+            mm = sd.moments_inv_gauss(z[0usize], z[1usize])
+            what = usize(z[2usize])
+        } else if str.eq(nm, "mo_jo") {
+            mm = sd.moments_johnson(z[0usize], z[1usize], z[2usize], z[3usize], u8(z[4usize]))
+            what = usize(z[5usize])
+        } else if str.eq(nm, "mo_mf") {
+            mm = sd.moments_maxfratio(i64(z[0usize]), i64(z[1usize]))
+            what = usize(z[2usize])
+        } else if str.eq(nm, "mo_kw") {
+            mm = sd.moments_kruskal_wallis(i64(z[1usize]), i64(z[2usize]), z[3usize], z[0usize] == 1.0f64)
+            what = usize(z[4usize])
+        } else if str.eq(nm, "mo_fr") {
+            let (md, me) = sd.friedman_exact(a, i64(z[0usize]), i64(z[1usize]))
+            if me != ok { ret nan }
+            mm = sd.moments_friedman(&md, i64(z[0usize]), i64(z[1usize]))
+            what = usize(z[2usize])
+        } else if str.eq(nm, "mo_sp") {
+            mm = sd.moments_spearman(i64(z[0usize]))
+            what = usize(z[1usize])
+        } else {
+            mm = sd.moments_pearson(z[0usize], i64(z[1usize]))
+            what = usize(z[2usize])
+        }
+        if what == 0usize { ret mm.mean }
+        if what == 1usize { ret mm.median }
+        if what == 2usize { ret mm.mode }
+        if what == 3usize { ret mm.variance }
+        if what == 4usize { ret mm.third }
+        ret mm.fourth
+    }
     if str.eq(nm, "gh_d") { ret sd.ghyper_d(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_p") { ret sd.ghyper_p(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_q") { ret sd.ghyper_q(z[3usize], z[0usize], z[1usize], z[2usize]) }
