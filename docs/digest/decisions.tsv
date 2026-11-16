@@ -3246,4 +3246,5 @@ D6170	1164	DiceDesign: discrepSA_LHS (C2) draw for draw, with R's extended-preci
 D6171	787	DiceDesign: wspDesign
 D6172	484	DiceDesign: meshRatio
 D6173	1023	DHARMa: PIT residuals, the KS statistic and the binomial outlier test
-D6174	808	DHARMa: the Kolmogorov-Smirnov p value as R's ks.test gives it
+D6174	809	DHARMa: the Kolmogorov-Smirnov p value as R's ks.test gives it
+D6175	843	DHARMa: testZeroInflation and testDispersion by simulation

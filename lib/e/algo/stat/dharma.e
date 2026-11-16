@@ -306,3 +306,82 @@ fn ks_pvalue(a: *mem.Arena, r: []const f64) -> f64 {
     }
     ret 1.0f64 - lower
 }
+
+// testGeneric's p value over the simulated summaries: alternative 0 two.sided, 1 greater, 2 less
+fn get_p(sim: []const f64, obs: f64, alt: usize) -> f64 {
+    var ge = 0.0f64
+    var le = 0.0f64
+    var i = 0usize
+    while i < sim.len {
+        if sim[i] >= obs { ge += 1.0f64 }
+        if sim[i] <= obs { le += 1.0f64 }
+        i += 1usize
+    }
+    let n = f64(sim.len)
+    if alt == 1usize { ret ge / n }
+    if alt == 2usize { ret le / n }
+    var m = le / n
+    if ge / n < m { m = ge / n }
+    var p = m * 2.0f64
+    if p > 1.0f64 { p = 1.0f64 }
+    ret p
+}
+
+fn var_of(x: []const f64) -> f64 {
+    var m = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        m += x[i]
+        i += 1usize
+    }
+    m = m / f64(x.len)
+    var s = 0.0f64
+    i = 0usize
+    while i < x.len {
+        s += (x[i] - m) * (x[i] - m)
+        i += 1usize
+    }
+    ret s / (f64(x.len) - 1.0f64)
+}
+
+// kind 0 testZeroInflation (the count of zeros), 1 testDispersion (var(x - fitted) / var(all simulations)); answers (observed / mean simulated, p)
+fn test_generic(a: *mem.Arena, sims: []const f64, obs: []const f64, fitted: []const f64, nsim: usize, kind: usize, alt: usize) -> (f64, f64) {
+    let n = obs.len
+    let (col, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret (0.0f64 / 0.0f64, 0.0f64) }
+    let (summ, e2) = mem.alloc[f64](a, nsim)
+    if e2 != ok { ret (0.0f64 / 0.0f64, 0.0f64) }
+    var ev = 1.0f64
+    if kind == 1usize { ev = var_of(sims) }
+    var observed = 0.0f64
+    var j = 0usize
+    while j <= nsim {
+        var i = 0usize
+        while i < n {
+            var v = obs[i]
+            if j < nsim { v = sims[i * nsim + j] }
+            if kind == 0usize { col[i] = v } else { col[i] = v - fitted[i] }
+            i += 1usize
+        }
+        var s = 0.0f64
+        if kind == 0usize {
+            i = 0usize
+            while i < n {
+                if col[i] == 0.0f64 { s += 1.0f64 }
+                i += 1usize
+            }
+        } else {
+            s = var_of(col) / ev
+        }
+        if j < nsim { summ[j] = s } else { observed = s }
+        j += 1usize
+    }
+    var ms = 0.0f64
+    j = 0usize
+    while j < nsim {
+        ms += summ[j]
+        j += 1usize
+    }
+    ms = ms / f64(nsim)
+    ret (observed / ms, get_p(summ, observed, alt))
+}

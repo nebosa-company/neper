@@ -15,10 +15,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let seed = i64(x[2usize])
     let obs = x[3usize..3usize + n]
     let sims = x[3usize + n..3usize + n + n * ns]
+    let k = c.name
+    if str.eq(k, "zi_ratio") || str.eq(k, "zi_p") || str.eq(k, "disp_ratio") || str.eq(k, "disp_p") {
+        let alt = usize(x[3usize + n + n * ns + n])
+        var kind = 0usize
+        if x[3usize] < 0.0f64 { kind = 0usize }
+        if str.eq(k, "disp_ratio") || str.eq(k, "disp_p") { kind = 1usize }
+        let (ratio, p) = dh.test_generic(a, sims, obs, x[3usize + n + n * ns..3usize + n + n * ns + n], ns, kind, alt)
+        if str.eq(k, "zi_ratio") || str.eq(k, "disp_ratio") { ret ratio }
+        ret p
+    }
     let (r, e) = mem.alloc[f64](a, n)
     if e != ok { os.exit(5) }
     if dh.pit(a, sims, obs, ns, seed, r) != ok { os.exit(6) }
-    let k = c.name
     if str.eq(k, "res") {
         var s = 0.0f64
         var i = 0usize

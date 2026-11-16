@@ -45442,3 +45442,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.dharma` gains ks_pvalue: for fewer than 100 residuals without ties the exact two-sided distribution (Marsaglia-Tsang-Wang matrix power with its scaling exponent, as in R's C code), otherwise the limiting distribution evaluated as R does, with its truncated series (three terms below x = 1 through the theta-function form, the alternating series to tolerance 1e-6 above), which differs from the converged series in the sixth digit and so has to be copied. Residuals tie when the simulation puts the observation outside all draws (several exact 0 or 1 values), which is why the oracle meets both branches.
 
 **Result.** `oracle_dharma` equals DHARMa and ks.test on 70 cases on Windows; Linux pending. L411 stays partial.
+
+## D6175 — DHARMa: testZeroInflation and testDispersion by simulation
+
+`e.algo.stat.dharma` gains test_generic, the package's testGeneric over the simulated response matrix: the summary of the observations and of each simulated column (the count of zeros for testZeroInflation; var(x - fitted) over the variance of all simulated values for the default testDispersion), the ratio of the observed summary to the mean simulated one, and the p value in the two-sided, greater and less forms (twice the smaller tail proportion, capped at 1). Not here: the Pearson-chi-square dispersion variant, the refit-based dispersion test, testTemporalAutocorrelation, testSpatialAutocorrelation, the traditional residuals and the bootstrap outlier test.
+
+**Result.** `oracle_dharma` equals DHARMa on 214 cases on Windows; Linux pending. L411 stays partial.

@@ -38,7 +38,7 @@ L401	library	0.3	629	geosphere: geodesic and spherical computations	Partial (D61
 L407	library	0	289	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Open (CRAN ranks 592, 555;
 L408	library	0.6	790	PerformanceAnalytics: portfolio risk and return	Partial (D6153, D6154 benchmark-relative: CAPM beta and alpha, TrackingError, InformationRatio, OmegaSharpeRatio, UpDownRatios).
 L409	library	0	221	arm: applied regression helpers	Open (CRAN rank 570).
-L411	library	0.4	593	DHARMa: simulated residual diagnostics	Partial (D6173, D6174 KS p value).
+L411	library	0.6	637	DHARMa: simulated residual diagnostics	Partial (D6173, D6174 KS p value, D6175 testZeroInflation and testDispersion).
 L422	library	0.25	735	extraDistr: extra probability distributions	Partial (D6144).
 L424	library	0.4	453	logistf: Firth penalized logistic regression	Partial (D6157).
 L425	library	0.3	521	ismev: extreme-value model fits	Partial (D6155).
