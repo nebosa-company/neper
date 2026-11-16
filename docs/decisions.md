@@ -45658,3 +45658,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.mumin` gives AICc (-2 logLik + 2k + 2k(k + 1) / (n - k - 1), k counting every estimated parameter, the residual variance included), the Akaike weights exp(-delta / 2) normalised, and the full model-averaged coefficient (a term missing from a model counting as 0 with standard error 0) with the package's "Std. Error" sqrt(sum w (se^2 + (b - bar)^2)). Estimates, standard errors, AICc values and weights equal MuMIn's on five nested and non-nested linear models. The "Adjusted SE" column is not reproduced: it is about 4 percent above the Std. Error here and is not the plain t-quantile rescaling of the per-model errors (tried). Not here: that column, the conditional average, QAIC and QIC, dredge, model.sel's tables, importance and r.squaredGLMM.
 
 **Result.** `oracle_mumin` equals MuMIn on 48 cases on Windows; Linux pending. L428 is partial.
+
+## D6415 — MuMIn: the conditional average and relative importance
+
+`e.algo.stat.mumin` gains average_conditional: the average over only the models that contain a term with their weights renormalised, its Std. Error by the same formula, and the term's relative importance (the summed Akaike weight of the models that contain it). The conditional estimates and errors equal model.avg's coefmat.subset and the importances equal sw() on five linear models. Not here: the Adjusted SE column, QAIC and QIC, dredge, model.sel's tables and r.squaredGLMM.
+
+**Result.** `oracle_mumin` equals MuMIn on 84 cases on Windows; Linux pending. L428 stays partial.

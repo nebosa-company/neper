@@ -53,6 +53,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(k, "cest") || str.eq(k, "cse") || str.eq(k, "imp") {
+        let (pres, e5) = mem.alloc[bool](a, m)
+        if e5 != ok { os.exit(9) }
+        var jj = 0usize
+        while jj < p {
+            var q = 0usize
+            while q < m {
+                // a term is in a model when its estimate is not exactly zero (the intercept is in all)
+                pres[q] = est[jj * m + q] != 0.0f64
+                q += 1usize
+            }
+            let (cb, cs2, imp) = mm.average_conditional(est[jj * m..jj * m + m], se[jj * m..jj * m + m], w, pres)
+            if str.eq(k, "cest") { s += cb * f64(jj + 1usize) }
+            if str.eq(k, "cse") { s += cs2 * f64(jj + 1usize) }
+            if str.eq(k, "imp") && jj >= 1usize { s += imp * f64(jj) }
+            jj += 1usize
+        }
+        ret s
+    }
     var j = 0usize
     while j < p {
         let (bar, sd) = mm.average_full(est[j * m..j * m + m], se[j * m..j * m + m], w)

@@ -3282,4 +3282,5 @@ D6411	513	pracma: conv, deconv and polyint
 D6412	816	Epi: twoby2
 D6412	690	pracma: newtonRaphson
 D6413	678	pracma: romberg
-D6414	928	MuMIn: AICc, Akaike weights and the full model average
+D6414	929	MuMIn: AICc, Akaike weights and the full model average
+D6415	649	MuMIn: the conditional average and relative importance

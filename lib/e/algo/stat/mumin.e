@@ -46,3 +46,27 @@ fn average_full(est: []const f64, se: []const f64, w: []const f64) -> (f64, f64)
     }
     ret (bar, math.sqrt[f64](v))
 }
+
+// the conditional average of one coefficient: only the models that contain the term (present[i] true), weights renormalised over them;
+// (estimate, Std. Error, relative importance = the summed weight of those models)
+fn average_conditional(est: []const f64, se: []const f64, w: []const f64, present: []const bool) -> (f64, f64, f64) {
+    var sw = 0.0f64
+    var i = 0usize
+    while i < est.len {
+        if present[i] { sw += w[i] }
+        i += 1usize
+    }
+    var bar = 0.0f64
+    i = 0usize
+    while i < est.len {
+        if present[i] { bar += w[i] / sw * est[i] }
+        i += 1usize
+    }
+    var v = 0.0f64
+    i = 0usize
+    while i < est.len {
+        if present[i] { v += w[i] / sw * (se[i] * se[i] + (est[i] - bar) * (est[i] - bar)) }
+        i += 1usize
+    }
+    ret (bar, math.sqrt[f64](v), sw)
+}
