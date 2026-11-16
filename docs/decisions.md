@@ -45376,3 +45376,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.hclust` gains fm_index (the Fowlkes-Mallows index of two clusterings with its expectation and variance under independence, as dendextend's FM_index_R) and cor_cophenetic (the Pearson correlation of the cophenetic distances of two trees over the same observations). Both agree with dendextend on pairs of hclust trees (single, complete, average, ward.D2) and cutree labels. Not here: cor_bakers_gamma, entanglement, untangle, ladderize, as.dendrogram and cutree by height.
 
 **Result.** `oracle_hclust` equals R and dendextend on 360 cases on Windows; Linux pending. L331 stays partial.
+
+## D6164 — pracma: associated Legendre functions, Chebyshev coefficients and the Laguerre root iteration
+
+`e.algo.stat.pracma` gains legendre (the package's coefficient recurrence, polyder and the (-1)^j sqrt((1 - x^2)^j) factor for orders 0 to n), chebPoly (coefficients of T_n, highest power first, and its value) and laguerre (the package's root iteration for a real polynomial, stopping at |p(x)| below sqrt(eps)). Not here: the other orthogonal polynomial families, polyroots and roots (eigenvalues of the companion matrix), the root finders newtonRaphson, fzero and the rest of the acceptance list.
+
+**Result.** `oracle_pracma` equals pracma on 384 cases on Windows; Linux pending. L333 stays partial.

@@ -48,6 +48,17 @@ for (rep in 1:12) {
   add("quadgk", c(id, lo, hi, 1e-8), quadgk(f, lo, hi, tol = 1e-8))
   add("quadgk", c(id, hi, lo, 1e-5), quadgk(f, hi, lo, tol = 1e-5))
 }
+for (rep in 1:12) {
+  n <- sample(1:7, 1); xx <- runif(1, -0.95, 0.95)
+  add("legendre", c(n, xx), sum(as.vector(legendre(n, xx)) * seq_len(n + 1)))
+  add("chebval", c(n, xx), chebPoly(n, xx))
+  ch <- chebPoly(n); for (k in 1:(n + 1)) add("cheb", c(n, k - 1), ch[n + 1, k])
+  rts <- sort(runif(3, -3, 3)); 
+  pcf <- Reduce(function(a, r) c(a, 0) - r * c(0, a), rts, 1)
+  x0 <- runif(1, -4, 4)
+  lg <- tryCatch(laguerre(pcf, x0), error = function(e) NA, warning = function(w) NA)
+  if (is.finite(lg)) add("laguerre", c(length(pcf), x0, pcf), lg)
+}
 # nchoosek reference values are filled from R directly
 cases <- lapply(cases, function(cs) { if (cs$fn == "nchoosek") cs$want <- choose(cs$args[1], cs$args[2]); cs })
 emit("pracma", "pracma", list(cases))

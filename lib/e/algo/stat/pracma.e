@@ -531,3 +531,133 @@ fn quadgk(id: usize, lo: f64, hi: f64, tol: f64) -> f64 {
     let q1 = quadgk(id, lo, mid, tol)
     ret q1 + q2
 }
+
+// the derivative of a polynomial given highest power first, into out (len p.len - 1)
+fn polyder(p: []const f64, out: []f64) {
+    let n = p.len
+    var i = 0usize
+    while i + 1usize < n {
+        out[i] = p[i] * f64(n - 1usize - i)
+        i += 1usize
+    }
+}
+
+// legendre(n, x): the associated Legendre functions P_n^m(x), m = 0..n, written to out (n + 1 values); a.arena scratch for the coefficients
+fn legendre(a: *mem.Arena, n: usize, x: f64, out: []f64) -> err {
+    if n == 0usize {
+        out[0usize] = 1.0f64
+        ret ok
+    }
+    let w = n + 1usize
+    let (lp, e) = mem.alloc[f64](a, w * w)
+    if e != ok { ret e }
+    var t = 0usize
+    while t < w * w {
+        lp[t] = 0.0f64
+        t += 1usize
+    }
+    lp[0usize * w + n] = 1.0f64
+    lp[1usize * w + n - 1usize] = 1.0f64
+    var i = 2usize
+    while i <= n {
+        let j = f64(i)
+        var c = n - i
+        // row i (0-based) of the 1-based recurrence over i + 1: columns (n - i + 1 ..= n)
+        while c <= n {
+            var prev_shift = 0.0f64
+            if c + 1usize <= n { prev_shift = lp[(i - 1usize) * w + c + 1usize] }
+            lp[i * w + c] = (2.0f64 * j - 1.0f64) / j * prev_shift - (j - 1.0f64) / j * lp[(i - 2usize) * w + c]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    let (cur, e2) = mem.alloc[f64](a, w)
+    if e2 != ok { ret e2 }
+    var len = w
+    var k = 0usize
+    while k < w {
+        cur[k] = lp[n * w + k]
+        k += 1usize
+    }
+    out[0usize] = polyval(cur[0usize..len], x)
+    var jj = 1usize
+    while jj <= n {
+        let (d, e3) = mem.alloc[f64](a, len)
+        if e3 != ok { ret e3 }
+        polyder(cur[0usize..len], d)
+        len -= 1usize
+        var k2 = 0usize
+        while k2 < len {
+            cur[k2] = d[k2]
+            k2 += 1usize
+        }
+        var sg = 1.0f64
+        if jj % 2usize == 1usize { sg = 0.0f64 - 1.0f64 }
+        out[jj] = sg * math.sqrt[f64](math.pow[f64](1.0f64 - x * x, f64(jj))) * polyval(cur[0usize..len], x)
+        jj += 1usize
+    }
+    ret ok
+}
+
+// chebPoly(n): the coefficients of T_n, highest power first, n + 1 values
+fn cheb_poly(a: *mem.Arena, n: usize, out: []f64) -> err {
+    var big = n + 1usize
+    if big < 2usize { big = 2usize }
+    let (t, e) = mem.alloc[f64](a, big * big)
+    if e != ok { ret e }
+    var q = 0usize
+    while q < big * big {
+        t[q] = 0.0f64
+        q += 1usize
+    }
+    t[0usize] = 1.0f64
+    t[1usize * big + 1usize] = 1.0f64
+    var i = 2usize
+    while i < big {
+        var c = 0usize
+        while c < big {
+            var sh = 0.0f64
+            if c >= 1usize { sh = t[(i - 1usize) * big + c - 1usize] }
+            t[i * big + c] = 2.0f64 * sh - t[(i - 2usize) * big + c]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    var c2 = 0usize
+    while c2 <= n {
+        out[c2] = t[n * big + (n - c2)]
+        c2 += 1usize
+    }
+    ret ok
+}
+
+// laguerre(p, x0): the package's Laguerre root iteration for a real polynomial (NaN when the square root is negative)
+fn laguerre(a: *mem.Arena, p: []const f64, x0: f64, nmax: usize) -> f64 {
+    let n = f64(p.len - 1usize)
+    let (p1, e1) = mem.alloc[f64](a, p.len - 1usize)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (p2, e2) = mem.alloc[f64](a, p.len - 2usize)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    polyder(p, p1)
+    polyder(p1, p2)
+    let tol = math.sqrt[f64](2.220446049250313e-16f64)
+    var xa = x0
+    var y0 = polyval(p, xa)
+    if math.abs[f64](y0) < tol { ret xa }
+    var x = xa
+    var m = 1usize
+    while m <= nmax {
+        let aa = polyval(p1, xa) / y0
+        let a2 = aa * aa
+        let b = a2 - polyval(p2, xa) / y0
+        let sq = math.sqrt[f64]((n - 1.0f64) * (n * b - a2))
+        x = xa - n / (aa + aa / math.abs[f64](aa) * sq)
+        if x != x { ret x }
+        let y = polyval(p, x)
+        if math.abs[f64](y) < tol { break }
+        xa = x
+        y0 = y
+        m += 1usize
+    }
+    ret x
+}

@@ -3235,4 +3235,5 @@ D6159	875	dagitty: ancestors, d-separation and minimal adjustment sets
 D6160	854	randtoolbox: Halton, unscrambled Sobol and torus sequences
 D6161	928	gmp: big-integer operations checked against R
 D6162	811	hclust: the Lance-Williams agglomeration of R
-D6163	673	dendextend: Fowlkes-Mallows index and cophenetic correlation
+D6163	674	dendextend: Fowlkes-Mallows index and cophenetic correlation
+D6164	710	pracma: associated Legendre functions, Chebyshev coefficients and the Laguerre root iteration

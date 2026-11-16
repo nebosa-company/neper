@@ -82,7 +82,7 @@ L275	library	0	387	Unicode collation, transliteration and encoding detection (st
 L274	library	0	381	General linear mixed models (lme4)	Open.
 L342	library	0	202	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Open (CRAN rank 262).
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
-L333	library	0.25	801	pracma and polynom: numerical analysis toolbox	Partial (D6151, D6152 pchip and quadgk).
+L333	library	0.3	837	pracma and polynom: numerical analysis toolbox	Partial (D6151, D6152 pchip and quadgk, D6164 legendre, chebPoly, laguerre).
 L334	library	0	304	RSpectra and irlba: partial eigen and singular value decompositions	Open (CRAN ranks 207, 289).
 L335	library	0	310	cluster: pam, clara, fanny, agnes, diana, mona, daisy	Open (CRAN rank 229).
 L336	library	0	247	nnet: single-hidden-layer networks and multinom	Open (CRAN rank 258).

@@ -81,6 +81,30 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if w == 1usize { ret f64(cc) }
         ret f64(d)
     }
+    if str.eq(k, "legendre") {
+        let (o, e) = mem.alloc[f64](a, usize(x[0usize]) + 1usize)
+        if e != ok { os.exit(5) }
+        if pm.legendre(a, usize(x[0usize]), x[1usize], o) != ok { os.exit(6) }
+        var t = 0.0f64
+        var i = 0usize
+        while i < o.len {
+            t += o[i] * f64(i + 1usize)
+            i += 1usize
+        }
+        ret t
+    }
+    if str.eq(k, "chebval") || str.eq(k, "cheb") {
+        let nn = usize(x[0usize])
+        let (o, e) = mem.alloc[f64](a, nn + 1usize)
+        if e != ok { os.exit(5) }
+        if pm.cheb_poly(a, nn, o) != ok { os.exit(7) }
+        if str.eq(k, "cheb") { ret o[usize(x[1usize])] }
+        ret pm.polyval(o, x[1usize])
+    }
+    if str.eq(k, "laguerre") {
+        let m = usize(x[0usize])
+        ret pm.laguerre(a, x[2usize..2usize + m], x[1usize], 25usize)
+    }
     if str.eq(k, "pchip") {
         let n = usize(x[0usize])
         ret pm.pchip(a, x[1usize..1usize + n], x[1usize + n..1usize + 2usize * n], x[1usize + 2usize * n])
