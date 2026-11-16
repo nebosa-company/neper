@@ -6,6 +6,7 @@
 // trend.test, the turnogram and the other estimators.
 
 use e.algo.sort
+use e.algo.stat.ica as ica
 use e.math
 use e.math.nmath_beta as nb
 use e.mem
@@ -455,6 +456,103 @@ fn decaverage(a: *mem.Arena, x: []const f64, ty: u8, times: usize, sides: usize,
         filt[i] = cur[i]
         if ty == 0u8 { resid[i] = x[i] - cur[i] } else { resid[i] = x[i] / cur[i] }
         i += 1usize
+    }
+    ret ok
+}
+
+// pastecs::decevf: the series is embedded with `lag` lags, projected onto the principal axes listed in `axes` (1-based, by decreasing variance; the covariance has divisor N as princomp's), rebuilt, and the diagonals of the rebuilt matrix averaged back into a series of the original length; type 0 additive, 1 multiplicative
+fn decevf(a: *mem.Arena, x: []const f64, ty: u8, lag: usize, axes: []const usize, filt: []f64, resid: []f64) -> err {
+    let n = x.len
+    let rows = n - lag + 1usize
+    let (xm, e1) = mem.alloc[f64](a, rows * lag)
+    let (ctr, e2) = mem.alloc[f64](a, lag)
+    let (cov, e3) = mem.alloc[f64](a, lag * lag)
+    let (proj, e4) = mem.alloc[f64](a, lag * lag)
+    let (acc, e5) = mem.alloc[f64](a, n)
+    let (cnt, e6) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret e1 }
+    var r = 0usize
+    while r < rows {
+        var c = 0usize
+        while c < lag {
+            xm[r * lag + c] = x[r + lag - 1usize - c]
+            c += 1usize
+        }
+        r += 1usize
+    }
+    var c = 0usize
+    while c < lag {
+        var s = 0.0f64
+        r = 0usize
+        while r < rows {
+            s += xm[r * lag + c]
+            r += 1usize
+        }
+        ctr[c] = s / f64(rows)
+        c += 1usize
+    }
+    c = 0usize
+    while c < lag {
+        var d = 0usize
+        while d < lag {
+            var s = 0.0f64
+            r = 0usize
+            while r < rows {
+                s += (xm[r * lag + c] - ctr[c]) * (xm[r * lag + d] - ctr[d])
+                r += 1usize
+            }
+            cov[c * lag + d] = s / f64(rows)
+            d += 1usize
+        }
+        c += 1usize
+    }
+    let (vals, vecs, ee) = ica.eigen_sym(a, cov, lag)
+    if ee != ok { ret ee }
+    // proj = V_s V_s' with the kept columns of V
+    c = 0usize
+    while c < lag {
+        var d = 0usize
+        while d < lag {
+            var s = 0.0f64
+            var q = 0usize
+            while q < axes.len {
+                let col = axes[q] - 1usize
+                s += vecs[c * lag + col] * vecs[d * lag + col]
+                q += 1usize
+            }
+            proj[c * lag + d] = s
+            d += 1usize
+        }
+        c += 1usize
+    }
+    var t = 0usize
+    while t < n {
+        acc[t] = 0.0f64
+        cnt[t] = 0.0f64
+        t += 1usize
+    }
+    r = 0usize
+    while r < rows {
+        c = 0usize
+        while c < lag {
+            var s = ctr[c]
+            var d = 0usize
+            while d < lag {
+                s += (xm[r * lag + d] - ctr[d]) * proj[d * lag + c]
+                d += 1usize
+            }
+            let tt = r + lag - 1usize - c
+            acc[tt] += s
+            cnt[tt] += 1.0f64
+            c += 1usize
+        }
+        r += 1usize
+    }
+    t = 0usize
+    while t < n {
+        filt[t] = acc[t] / cnt[t]
+        if ty == 0u8 { resid[t] = x[t] - filt[t] } else { resid[t] = x[t] / filt[t] }
+        t += 1usize
     }
     ret ok
 }

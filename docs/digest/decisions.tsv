@@ -3571,4 +3571,5 @@ D6708	809	mixsqp front end: zero columns, log input, gradient and Hessian
 D6709	798	norm: logpost.norm and mi.inference
 D6710	540	norm: em.norm with a prior
 D6711	656	pastecs: decdiff and decmedian
-D6712	923	pastecs: decaverage
+D6712	924	pastecs: decaverage
+D6713	544	pastecs: decevf

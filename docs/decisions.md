@@ -47318,3 +47318,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6712 — pastecs: decaverage
 
 **Decision.** `decaverage` runs `times` passes of R's `filter` convolution (out[i] = sum of w[j] z[i + o - j], o = k %/% 2 for two sides and 0 for one, NaN where the window leaves the series, wrapped when circular) with weights scaled to sum 1, over a series padded as the package does: "fill" repeats the mean of the first and last `order` values (the first 2 order values on the left for one side), "circular" wraps, "periodic" copies the matching points of the first and last period and falls back to no padding when there are fewer than two periods. The numeric-order and periodic-order weights are built by the caller (ones, with 0.5 at both ends for an even period). `decreg` is the regressor itself and is not ported separately. Equal to pastecs on 3388 values over three frequencies, both sides, one or two passes, all four ends and custom weights (oracle_pastecs). Linux pending.
+
+## D6713 — pastecs: decevf
+
+**Decision.** `decevf` embeds the series with `lag` lags (row r holds x[r + lag - 1 - c] in column c), takes the principal axes of the embedded matrix by a Jacobi eigen decomposition of its covariance with divisor N (princomp's), projects onto the requested axes (`V_s V_s'`, so the sign of an axis does not matter), and averages the rebuilt matrix along its diagonals back to a series of the original length. Equal to pastecs on 5268 values over lags 4 to 8 and one to three axes (oracle_pastecs). Linux pending.

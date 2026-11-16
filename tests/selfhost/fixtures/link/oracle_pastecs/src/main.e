@@ -21,6 +21,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if ef != ok || er != ok { ret 0.0f64 / 0.0f64 }
         let which = usize(z[b + 4usize])
         let idx = usize(z[b + 5usize])
+        if z[0usize] == 5.0f64 {
+            let na = usize(z[b + 2usize])
+            let (axs, eax) = mem.alloc[usize](a, na)
+            if eax != ok { ret 0.0f64 / 0.0f64 }
+            var q = 0usize
+            while q < na {
+                axs[q] = usize(z[b + 3usize + q])
+                q += 1usize
+            }
+            let ve = pc.decevf(a, x, u8(z[b]), usize(z[b + 1usize]), axs, f, rs)
+            if ve != ok { ret 0.0f64 / 0.0f64 }
+            if usize(z[b + 3usize + na]) == 0usize { ret f[usize(z[b + 4usize + na])] }
+            ret rs[usize(z[b + 4usize + na])]
+        }
         if z[0usize] == 4.0f64 {
             let nw = usize(z[b + 7usize])
             let ae = pc.decaverage(a, x, u8(z[b]), usize(z[b + 1usize]), usize(z[b + 2usize]), u8(z[b + 3usize]), z[b + 8usize..b + 8usize + nw], usize(z[b + 6usize]), f, rs)

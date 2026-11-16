@@ -41,4 +41,11 @@ for (rep in 1:60) {
   r <- suppressWarnings(if (mode == 3) decaverage(xs, type = tn, times = tm, sides = sd, ends = c("NAs", "fill", "circular", "periodic")[en + 1], weights = wts) else decaverage(xs, type = tn, order = ordarg, times = tm, sides = sd, ends = c("NAs", "fill", "circular", "periodic")[en + 1]))
   for (w in 0:1) { v <- as.vector(r$series[, w + 1]); for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("dec", c(4, 0, n, x, ty, tm, sd, en, w, i - 1, f, length(wts), wts), v[i], rel = 1e-9, abs = 1e-10) }
 }
+# decevf (kind 5: args (5, 0, n, x, type, lag, naxes, axes[naxes] (1-based), which, idx))
+for (rep in 1:30) {
+  n <- sample(40:120, 1); x <- round(cumsum(rnorm(n)) + 10 + 2 * sin(2 * pi * (1:n) / 12), 3); ty <- rep %% 2
+  tn <- c("additive", "multiplicative")[ty + 1]; lag <- sample(4:8, 1); na <- sample(1:3, 1); axes <- sort(sample(1:min(lag, 4), na))
+  r <- decevf(ts(x), type = tn, lag = lag, axes = axes)
+  for (w in 0:1) { v <- as.vector(r$series[, w + 1]); for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("dec", c(5, 0, n, x, ty, lag, na, axes, w, i - 1), v[i], rel = 1e-7, abs = 1e-8) }
+}
 emit("pastecs", "pastecs", list(cases))
