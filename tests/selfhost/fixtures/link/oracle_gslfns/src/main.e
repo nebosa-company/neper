@@ -28,6 +28,14 @@ fn answer(c: *const oracle.Case) -> f64 {
     if str.eq(k, "elle") { ret gs.ellint_e(x[0usize], x[1usize]) }
     if str.eq(k, "rf") { ret gs.ellint_rf(x[0usize], x[1usize], x[2usize]) }
     if str.eq(k, "rd") { ret gs.ellint_rd(x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "f01") { ret gs.hyperg_0f1(x[0usize], x[1usize]) }
+    if str.eq(k, "f11") { ret gs.hyperg_1f1(x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "f21") { ret gs.hyperg_2f1(x[0usize], x[1usize], x[2usize], x[3usize]) }
+    if str.eq(k, "pl") { ret gs.legendre_pl(usize(x[0usize]), x[1usize]) }
+    if str.eq(k, "plm") { ret gs.legendre_plm(usize(x[0usize]), usize(x[1usize]), x[2usize]) }
+    if str.eq(k, "fd0") { ret gs.fermi_dirac_0(x[0usize]) }
+    if str.eq(k, "dilog") { ret gs.dilog(x[0usize]) }
+    if str.eq(k, "psi") { ret gs.psi(x[0usize]) }
     if str.eq(k, "hzeta") { ret gs.hzeta(x[0usize], x[1usize]) }
     ret gs.hzeta(x[0usize], 1.0f64)
 }

@@ -45934,3 +45934,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.gslfns` gains `airy_ai` and `airy_bi` (through K and I of order 1/3 for x > 0, through the alternating series for J of order +-1/3 for x < 0), `ellint_rf` and `ellint_rd` (Carlson duplication with the fifth-order series), and on them `ellint_f`, `ellint_e`, `ellint_kcomp` and `ellint_ecomp` with modulus k.
 
 **Result.** `oracle_gslfns` equals gsl on 670 cases on Windows at rel 1e-9, 240 of them new: Airy over |x| in (0.05, 5) on both sides, the Legendre forms at k up to 0.98, and RF and RD over (0.05, 6). Elliptic Pi, RC and RJ, the Jacobian functions, the scaled forms and the error estimates are open; Linux pending. L417 stays partial.
+
+## D6461 — gsl: hypergeometric series, Legendre, Fermi-Dirac 0, dilogarithm and digamma
+
+`e.algo.stat.gslfns` gains `hyperg_0f1`, `hyperg_1f1` and `hyperg_2f1` (power series, 2F1 for |x| < 1), `legendre_pl` and `legendre_plm` (upward recurrence with the Condon-Shortley phase), `fermi_dirac_0`, `dilog` (series, Landen for x < 0, reflection above 1/2) and `psi` (recurrence to 12, then the asymptotic series).
+
+**Result.** `oracle_gslfns` equals gsl on 910 cases on Windows at rel 1e-9, 240 of them new, 2F1 over |x| < 0.9, Legendre to degree 12 and the dilogarithm over (-8, 1). Hypergeometric U, the 2F1 continuation beyond |x| = 1, Legendre Q, the higher Fermi-Dirac orders, Debye, synchrotron, transport, Coulomb, Bessel Y and the error estimates are open; Linux pending. L417 stays partial.

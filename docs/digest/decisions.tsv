@@ -3328,4 +3328,5 @@ D6456	572	dbscan: sNN shared counts and frNN neighbourhoods
 D6457	662	GeneralizedHyperbolic: densities on a real-order Bessel K
 D6458	795	gsl: Bessel K, I and J, Lambert W and Hurwitz zeta
 D6459	519	gsl: exponential integrals, Dawson and Clausen
-D6460	722	gsl: Airy, Carlson and Legendre elliptic integrals
+D6460	723	gsl: Airy, Carlson and Legendre elliptic integrals
+D6461	798	gsl: hypergeometric series, Legendre, Fermi-Dirac 0, dilogarithm and digamma

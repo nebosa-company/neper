@@ -360,3 +360,112 @@ fn ellint_ecomp(k: f64) -> f64 {
     let q = 1.0f64 - k * k
     ret ellint_rf(0.0f64, q, 1.0f64) - k * k * ellint_rd(0.0f64, q, 1.0f64) / 3.0f64
 }
+
+// 0F1(; b; x), 1F1(a; b; x) and 2F1(a, b; c; x) (|x| < 1) by their power series
+fn hyperg_0f1(b: f64, x: f64) -> f64 {
+    var t = 1.0f64
+    var s = 1.0f64
+    var k = 0usize
+    while k < 500usize {
+        t = t * x / ((b + f64(k)) * f64(k + 1usize))
+        s += t
+        if math.abs[f64](t) < 1.0e-18f64 * math.abs[f64](s) { break }
+        k += 1usize
+    }
+    ret s
+}
+
+fn hyperg_1f1(a: f64, b: f64, x: f64) -> f64 {
+    var t = 1.0f64
+    var s = 1.0f64
+    var k = 0usize
+    while k < 1000usize {
+        t = t * (a + f64(k)) * x / ((b + f64(k)) * f64(k + 1usize))
+        s += t
+        if math.abs[f64](t) < 1.0e-18f64 * math.abs[f64](s) { break }
+        k += 1usize
+    }
+    ret s
+}
+
+fn hyperg_2f1(a: f64, b: f64, c: f64, x: f64) -> f64 {
+    var t = 1.0f64
+    var s = 1.0f64
+    var k = 0usize
+    while k < 3000usize {
+        t = t * (a + f64(k)) * (b + f64(k)) * x / ((c + f64(k)) * f64(k + 1usize))
+        s += t
+        if math.abs[f64](t) < 1.0e-18f64 * math.abs[f64](s) { break }
+        k += 1usize
+    }
+    ret s
+}
+
+// P_l(x) and the associated P_l^m(x) with the Condon-Shortley phase, by the upward recurrence
+fn legendre_plm(l: usize, m: usize, x: f64) -> f64 {
+    var pmm = 1.0f64
+    if m > 0usize {
+        let somx2 = math.sqrt[f64]((1.0f64 - x) * (1.0f64 + x))
+        var fact = 1.0f64
+        var i = 1usize
+        while i <= m {
+            pmm = 0.0f64 - pmm * fact * somx2
+            fact += 2.0f64
+            i += 1usize
+        }
+    }
+    if l == m { ret pmm }
+    var pm1 = x * f64(2usize * m + 1usize) * pmm
+    if l == m + 1usize { ret pm1 }
+    var ll = m + 2usize
+    var pll = 0.0f64
+    while ll <= l {
+        pll = (x * f64(2usize * ll - 1usize) * pm1 - f64(ll + m - 1usize) * pmm) / f64(ll - m)
+        pmm = pm1
+        pm1 = pll
+        ll += 1usize
+    }
+    ret pll
+}
+
+fn legendre_pl(l: usize, x: f64) -> f64 { ret legendre_plm(l, 0usize, x) }
+
+// the Fermi-Dirac integral of order 0, ln(1 + e^x)
+fn fermi_dirac_0(x: f64) -> f64 {
+    if x > 35.0f64 { ret x + math.exp[f64](0.0f64 - x) }
+    ret math.log[f64](1.0f64 + math.exp[f64](x))
+}
+
+// Li_2(x) for real x <= 1: the series on [0, 1/2], Landen's transformation for x < 0, the reflection formula above 1/2
+fn dilog(x: f64) -> f64 {
+    if x == 1.0f64 { ret pi() * pi() / 6.0f64 }
+    if x < 0.0f64 {
+        let l = math.log[f64](1.0f64 - x)
+        ret 0.0f64 - dilog(x / (x - 1.0f64)) - 0.5f64 * l * l
+    }
+    if x > 0.5f64 { ret pi() * pi() / 6.0f64 - math.log[f64](x) * math.log[f64](1.0f64 - x) - dilog(1.0f64 - x) }
+    var t = 1.0f64
+    var s = 0.0f64
+    var k = 1usize
+    while k < 200usize {
+        t = t * x
+        let term = t / (f64(k) * f64(k))
+        s += term
+        if term < 1.0e-18f64 { break }
+        k += 1usize
+    }
+    ret s
+}
+
+// the digamma function for x > 0: upward recurrence to x >= 12, then the asymptotic series
+fn psi(x0: f64) -> f64 {
+    var x = x0
+    var s = 0.0f64
+    while x < 12.0f64 {
+        s -= 1.0f64 / x
+        x += 1.0f64
+    }
+    let i2 = 1.0f64 / (x * x)
+    let ser = i2 * (1.0f64 / 12.0f64 - i2 * (1.0f64 / 120.0f64 - i2 * (1.0f64 / 252.0f64 - i2 * (1.0f64 / 240.0f64 - i2 * (1.0f64 / 132.0f64 - i2 * 691.0f64 / 32760.0f64)))))
+    ret s + math.log[f64](x) - 0.5f64 / x - ser
+}
