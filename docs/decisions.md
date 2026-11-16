@@ -46934,3 +46934,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `kernlabpkg.kernel` computes the rbf `exp(-sigma ||x-y||^2)`, polynomial `(scale <x,y> + offset)^degree`, linear, tanh, Laplace `exp(-sigma ||x-y||)`, ANOVA `(sum_k exp(-sigma (x_k - y_k)^2))^degree` and spline `prod_k (1 + xy + xy min - (x+y)/2 min^2 + min^3/3)` kernels. `kpca` centres the kernel matrix (`K - row means - column means + grand mean`), takes the Jacobi eigen decomposition, reports eigenvalues divided by n, `pcv` as eigenvectors over the square root of that scaled eigenvalue (so a factor `sqrt(n)` above the unit vectors over `sqrt(lambda)`) and projections as the centred matrix times `pcv`.
 
 **Result.** `oracle_kernlab` agrees with kernlab on Windows (40 values; kpca vectors as absolute values); Linux pending. L366 stays partial: Bessel and string kernels, ksvm, rvm, gausspr, kkmeans, specc.
+
+## D6635 — locfit: local polynomial regression at the data points
+
+**Decision.** `locfitpkg.lpfit` fits, about each data point, a weighted polynomial of degree 0 to 3 with tricube weights `(1 - |u|^3)^3` for `|u| < 1` and returns its value at the point. The nearest-neighbour bandwidth is the distance to the `floor(nn n)`-th nearest point, counting the point itself; with `ceiling` the fit differs whenever `nn n` is not an integer (4 of 8 checked cases off by 0.02 to 0.07). A positive `h` is used as the bandwidth directly.
+
+**Result.** `oracle_locfit` agrees with locfit `ev = dat()` at 1e-6 on Windows (48 values, 30 to 120 points, degrees 0 to 3); Linux pending. L347 stays partial: other families, interpolated evaluation, bands, bandwidth selection, several predictors.
