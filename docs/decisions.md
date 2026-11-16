@@ -46772,3 +46772,15 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `e.algo.stat.loopkg` has `gpdfit` (Zhang and Stephens with the weakly informative prior, `M = 30 + floor(sqrt n)` grid points, as posterior::gpdfit), `psis_i` (tail length `ceiling(min(0.2 S, 3 sqrt(S)))`, the largest tail draws replaced by the generalized Pareto quantiles at `(i - 1/2)/len` above the cutoff, weights capped at 0, k stored) and the totals of `waic` and `loo` over observations (`lpd - p`, `-2 elpd`).
 
 **Result.** `oracle_loo` agrees with loo on 125 totals (S 200 to 1000, 5 to 25 observations, heavy-tailed responses giving large k) on Windows; Linux pending. L299 at 0.55: heidel, raftery, the multivariate PSRF, cramer.test, loo_compare, loo_model_weights, E_loo and ggdist remain.
+
+## D6596 — loo: loo_compare
+
+**Decision.** `loo_diff` takes the pointwise PSIS elpd of two models and reports the summed difference and `sqrt(N var(d_i))`, loo_compare's `elpd_diff` and `se_diff`.
+
+**Result.** `oracle_loo` agrees with loo on 30 values on Windows (155 cases in all); Linux pending. L299 stays at 0.55 with the model weights, E_loo and the remaining coda and ggdist pieces open.
+
+## D6610 — mcmc: metrop
+
+**Decision.** `mcmcpkg.metrop` reproduces `mcmc::metrop` on three fixed log densities (standard normal, normal plus a quartic penalty, Laplace): `blen` states per batch each `nspac` proposals apart, proposals `current + scale * rnorm` in coordinate order, an uphill move accepted without a uniform draw and a downhill one by `u < exp(delta)` with `u` drawn only then (testing the alternative of always drawing a uniform against R showed it consumes the stream differently), batch means, per-batch acceptance rates and the final state. Found by replicating the loop in R with set.seed and comparing to the package's output.
+
+**Result.** `oracle_mcmc` agrees with mcmc on 90 values (30 runs, three summaries each) on Windows at 1e-9; Linux pending. L448 stays partial: user densities, `outfun`, morph, temper and initseq. Decision numbers D6600 and up are mine from now on, to keep clear of the other session's.

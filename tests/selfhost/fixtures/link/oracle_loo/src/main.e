@@ -13,6 +13,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let s = usize(x[0usize])
     let n = usize(x[1usize])
     let ll = x[2usize..2usize + s * n]
+    if str.eq(c.name, "cmp_d") || str.eq(c.name, "cmp_se") {
+        let (dd, se, ce) = lp.loo_diff(a, ll, x[2usize + s * n..2usize + 2usize * s * n], s, n)
+        if ce != ok { os.exit(7) }
+        if str.eq(c.name, "cmp_d") { ret dd }
+        ret se
+    }
     let (o, e) = mem.alloc[f64](a, 4usize)
     if e != ok { os.exit(5) }
     if str.eq(c.name, "waic_elpd") || str.eq(c.name, "waic_p") {

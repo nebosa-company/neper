@@ -222,3 +222,61 @@ fn waic_totals(ll: []const f64, s: usize, nobs: usize, out: []f64) {
     out[1usize] = pw
     out[2usize] = 0.0f64 - 2.0f64 * elpd
 }
+
+// the pointwise elpd_loo of every observation into out (nobs values)
+fn loo_pointwise(a: *mem.Arena, ll: []const f64, s: usize, nobs: usize, out: []f64) -> err {
+    let (lw, e1) = mem.alloc[f64](a, s)
+    let (lr, e2) = mem.alloc[f64](a, s)
+    let (t, e3) = mem.alloc[f64](a, s)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    var o = 0usize
+    while o < nobs {
+        let start = mem.mark(a)
+        var i = 0usize
+        while i < s {
+            lr[i] = 0.0f64 - ll[o * s + i]
+            i += 1usize
+        }
+        let (k, pe) = psis_i(a, lr, lw)
+        if pe != ok { ret pe }
+        let lse = logsumexp(lw)
+        i = 0usize
+        while i < s {
+            t[i] = ll[o * s + i] + lw[i] - lse
+            i += 1usize
+        }
+        out[o] = logsumexp(t)
+        mem.reset(a, start)
+        o += 1usize
+    }
+    ret ok
+}
+
+// loo_compare of two models: elpd_diff = elpd(b) - elpd(a) and se_diff = sqrt(N var(pointwise differences)) (a the reference)
+fn loo_diff(a: *mem.Arena, ll_a: []const f64, ll_b: []const f64, s: usize, nobs: usize) -> (f64, f64, err) {
+    let (pa, e1) = mem.alloc[f64](a, nobs)
+    let (pb, e2) = mem.alloc[f64](a, nobs)
+    if e1 != ok { ret (nan(), nan(), e1) }
+    if e2 != ok { ret (nan(), nan(), e2) }
+    let r1 = loo_pointwise(a, ll_a, s, nobs, pa)
+    if r1 != ok { ret (nan(), nan(), r1) }
+    let r2 = loo_pointwise(a, ll_b, s, nobs, pb)
+    if r2 != ok { ret (nan(), nan(), r2) }
+    var m = 0.0f64
+    var i = 0usize
+    while i < nobs {
+        m += pb[i] - pa[i]
+        i += 1usize
+    }
+    let md = m / f64(nobs)
+    var v = 0.0f64
+    i = 0usize
+    while i < nobs {
+        let d = pb[i] - pa[i] - md
+        v += d * d
+        i += 1usize
+    }
+    ret (m, math.sqrt[f64](f64(nobs) * v / f64(nobs - 1usize)), ok)
+}
