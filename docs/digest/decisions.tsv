@@ -3532,4 +3532,5 @@ D6669	734	declared ceilings as generated metadata
 D6670	890	silent truncation: two sites named and counted
 D6671	664	gfx.filter: pixel counts that overflow are refused
 D6672	828	mem.pool_free refuses a repeated free
-D6673	358	filter size comparisons test the product for overflow
+D6673	359	filter size comparisons test the product for overflow
+D6674	342	shell.linux parse_id cannot overflow

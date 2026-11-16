@@ -47160,3 +47160,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6673 — filter size comparisons test the product for overflow
 
 **Decision.** `src.len < w * h` multiplied before comparing, so a huge width and height trapped (or wrapped to a small product that passed). Each such site now checks `h > MAX / w` first and answers `TooSmall`; `threshold_otsu` answers 0. `gfx_filter` checks 64-67 cover it; Linux pending.
+
+## D6674 — shell.linux parse_id cannot overflow
+
+**Decision.** `parse_id` accumulated a notify-send id in a `u32`, so a long digit string trapped. It now accumulates in `u64` and answers not-a-number once the value passes the `u32` maximum. Linux-only code: it is not exercisable on Windows, so the Linux batch will run it. L245 is closed.

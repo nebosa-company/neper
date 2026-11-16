@@ -358,15 +358,16 @@ fn notice_permission(a: *mem.Arena) -> NoticePermission {
 }
 
 fn parse_id(text: []const u8) -> (u32, bool) {
-    var value = 0u32
+    var value = 0u64
     var digits = 0usize
     var at = 0usize
     while at < text.len && text[at] >= 48u8 && text[at] <= 57u8 {
-        value = value * 10u32 + u32(text[at] - 48u8)
+        value = value * 10u64 + u64(text[at] - 48u8)
+        if value > 4294967295u64 { ret (0u32, false) }
         digits += 1usize
         at += 1usize
     }
-    ret (value, digits != 0usize)
+    ret (u32(value), digits != 0usize)
 }
 
 // `notify-send` with its output on a pipe, read to the end for the id it prints.
