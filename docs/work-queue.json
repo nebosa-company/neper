@@ -394,10 +394,10 @@
       "group": "CRAN parity",
       "order": 609,
       "title": "geosphere: geodesic and spherical computations",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 582). Small to mid. e.algo.geo has haversine and bearing. Acceptance, equal to geosphere: distGeo (Karney), distVincentySphere, distVincentyEllipsoid, distMeeus, distHaversine, distCosine, bearing and bearingRhumb, destPoint, midPoint, gcIntermediate, areaPolygon, perimeter, centroid, geomean."
+      "evidence": "Partial (D6147). distHaversine, distVincentySphere, distCosine, distMeeus, distVincentyEllipsoid, bearingRhumb, distRhumb and destPointRhumb equal geosphere on Windows (oracle_geosphere; Linux pending). Open: Karney distGeo, bearing, destPoint, midPoint, areaPolygon, perimeter, centroid, gcIntermediate, geomean. Was: Open (CRAN rank 582). Small to mid. e.algo.geo has haversine and bearing. Acceptance, equal to geosphere: distGeo (Karney), distVincentySphere, distVincentyEllipsoid, distMeeus, distHaversine, distCosine, bearing and bearingRhumb, destPoint, midPoint, gcIntermediate, areaPolygon, perimeter, centroid, geomean."
     },
     {
       "id": "L407",

@@ -3218,4 +3218,5 @@ D6142	767	tsfeatures, the closed-form features
 D6143	896	actuar loss distributions
 D6144	755	extraDistr, sixteen continuous families
 D6145	807	scoringRules: closed-form and sample-based proper scores
-D6146	506	bridgesampling: Bayes factor and posterior model probabilities
+D6146	507	bridgesampling: Bayes factor and posterior model probabilities
+D6147	720	geosphere: spherical, Vincenty, Meeus and rhumb-line formulas

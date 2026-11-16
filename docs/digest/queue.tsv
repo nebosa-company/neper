@@ -34,7 +34,7 @@ L380	library	0	378	tm and tidytext: text mining	Open (CRAN ranks 400, 383).
 L387	library	0.3	565	lmom and gld: L-moments and the generalized lambda distribution	Partly done (D6098): e.algo.stat.lmom has samlmu, and lmr and qua for exp, gum, glo, gpa, nor, gev and pel for the five closed forms, equal to lmom on 651 values on Windows (oracle_lmom);
 L389	library	0.35	788	vcd and effectsize: categorical association and effect sizes	Partly done (D6101): e.algo.stat.vcdeffect has assocstats, Kappa with weights and errors, cohens_d, hedges_g, glass_delta, rank_biserial, cliffs_delta and one-way eta, omega, epsilon squared, equal to
 L390	library	0	273	R.matlab: MATLAB MAT files	Open (CRAN rank 444).
-L401	library	0	310	geosphere: geodesic and spherical computations	Open (CRAN rank 582).
+L401	library	0.3	629	geosphere: geodesic and spherical computations	Partial (D6147).
 L407	library	0	289	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Open (CRAN ranks 592, 555;
 L408	library	0	315	PerformanceAnalytics: portfolio risk and return	Open (CRAN rank 590).
 L409	library	0	221	arm: applied regression helpers	Open (CRAN rank 570).

@@ -264,3 +264,4 @@ oracle_tsfeatures
 oracle_actuar
 oracle_extradistr
 oracle_scoringrules
+oracle_geosphere

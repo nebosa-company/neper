@@ -45274,3 +45274,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.bridgesampling` gains `bf` (exp of the log marginal likelihood difference) and `post_prob2` (the two-model softmax of log marginal likelihood plus log prior, with the maximum subtracted). Not here: warp3, bounded and simplex transformations, repetitions and error_measures.
 
 **Result.** `oracle_bridgesampling` equals bridgesampling on the added bf and post_prob cases on Windows; Linux pending. L391 stays partial.
+
+## D6147 — geosphere: spherical, Vincenty, Meeus and rhumb-line formulas
+
+`e.algo.stat.geosphere` holds distHaversine, distVincentySphere, distCosine, distMeeus, distVincentyEllipsoid (NaN where R answers NA), bearingRhumb, distRhumb and destPointRhumb. The package's bearingRhumb has a quirk the port keeps: after shifting a positive longitude difference beyond pi it re-tests the sign, so a positive difference ends unchanged and only a negative one gains 2 pi (found by comparison). Not here: Karney's distGeo, bearing, destPoint, midPoint, areaPolygon, perimeter, centroid, gcIntermediate and geomean.
+
+**Result.** `oracle_geosphere` equals geosphere 1.6-8 on 540 cases on Windows; Linux pending. L401 is partial.
