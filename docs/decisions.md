@@ -46832,3 +46832,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `psclpkg.zeroinfl` maximises the zero-inflated Poisson likelihood jointly in the count and zero coefficients by Newton with the analytic Hessian (cross block included), starting from the plain Poisson fit and zero zero-part coefficients; `hurdle` fits the zero-truncated Poisson count part on the positive rows and the logistic zero part on `y > 0` separately, each by the same Newton. Both are compared at the optimum, with R fitted at reltol 1e-14.
 
 **Result.** `oracle_pscl` agrees with `pscl::zeroinfl` and `pscl::hurdle` on log-likelihood and coefficients at 1e-4 on Windows (72 values); Linux pending. L412 stays partial: other count families and zero links, offsets, weights, standard errors, vuong.
+
+## D6618 — tm and tidytext: weightings on a count matrix
+
+**Decision.** `tmpkg` works on a document-term count matrix. `weightSMART` copies tm including two quirks: the cosine norm is taken from the tf weights before the idf is applied, and idf `p` is a single scalar, `max(0, log2((D - df) / df))` over all terms, applied to every term. `removeSparseTerms` keeps terms with `df > D (1 - sparse)` strictly. `bind_tf_idf` uses the natural log, tm's `weightTfIdf` log2.
+
+**Result.** `oracle_tm` agrees with tm and tidytext on Windows (144 values); Linux pending. L380 stays partial: tokenisation, stemming, corpora, associations, the u and b norms.

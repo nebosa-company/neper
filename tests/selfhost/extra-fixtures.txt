@@ -352,3 +352,4 @@ oracle_afex
 oracle_nnet
 oracle_ordinal
 oracle_pscl
+oracle_tm
