@@ -188,6 +188,10 @@ fn meanshift_g(a: *mem.Arena, x: []const f64, mode: usize, bwv: f64, kernel: usi
         let (b0, be) = bw_nrd0(a, x)
         if be != ok { ret (0.0f64, 0usize, be) }
         bw = b0
+    } else if mode == 3usize || mode == 4usize {
+        let (bcv, ce) = bw_cv(a, x, mode == 4usize)
+        if ce != ok { ret (0.0f64, 0usize, ce) }
+        bw = bcv
     } else if mode == 1usize {
         let (y, ye) = sorted_copy(a, x)
         if ye != ok { ret (0.0f64, 0usize, ye) }
@@ -516,4 +520,192 @@ fn lientz(a: *mem.Arena, x: []const f64, bw: f64, z: f64) -> f64 {
     let val = y[pos - 1usize]
     if jj == 1usize { ret val - z }
     ret z - val
+}
+
+// stats::bw.ucv / bw.bcv criterion at h from the pair counts (C_bw_ucv, C_bw_bcv): d the bin width, cnt the counts per lag
+fn bw_crit(bcv: bool, n: f64, d: f64, cnt: []const f64, h: f64) -> f64 {
+    var sum = 0.0f64
+    var i = 0usize
+    while i < cnt.len {
+        var delta = f64(i) * d / h
+        delta = delta * delta
+        if delta >= 1000.0f64 { break }
+        var term = 0.0f64
+        if bcv {
+            term = math.exp[f64](0.0f64 - delta / 4.0f64) * (delta * delta - 12.0f64 * delta + 12.0f64)
+        } else {
+            term = math.exp[f64](0.0f64 - delta / 4.0f64) - math.sqrt[f64](8.0f64) * math.exp[f64](0.0f64 - delta / 2.0f64)
+        }
+        sum += term * cnt[i]
+        i += 1usize
+    }
+    let sqrtpi = 1.772453850905516027298167483341f64
+    if bcv { ret (1.0f64 + sum / (32.0f64 * n)) / (2.0f64 * n * h * sqrtpi) }
+    ret (0.5f64 + sum / n) / (n * h * sqrtpi)
+}
+
+// bw.ucv (bcv false) or bw.bcv (bcv true) with nb = 1000 bins: R's optimize of the criterion over [0.1 hmax, hmax], tol = 0.1 lower; the unbinned pair counts of bw_den, or the binned counts when n > nb / 2
+fn bw_cv(a: *mem.Arena, x: []const f64, bcv: bool) -> (f64, err) {
+    let nb = 1000usize
+    let n = x.len
+    let nf = f64(n)
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += x[i]
+        i += 1usize
+    }
+    mean = mean / nf
+    var ss = 0.0f64
+    var xmin = x[0usize]
+    var xmax = x[0usize]
+    i = 0usize
+    while i < n {
+        ss += (x[i] - mean) * (x[i] - mean)
+        if x[i] < xmin { xmin = x[i] }
+        if x[i] > xmax { xmax = x[i] }
+        i += 1usize
+    }
+    let hmax = 1.144f64 * math.sqrt[f64](ss / (nf - 1.0f64)) * math.pow[f64](nf, 0.0f64 - 0.2f64)
+    let lower = 0.1f64 * hmax
+    let upper = hmax
+    let tol = 0.1f64 * lower
+    let (cnt, e1) = mem.alloc[f64](a, nb)
+    if e1 != ok { ret (0.0f64, e1) }
+    i = 0usize
+    while i < nb {
+        cnt[i] = 0.0f64
+        i += 1usize
+    }
+    var d = 0.0f64
+    if n * 2usize > nb {
+        d = (xmax - xmin) * 1.01f64 / f64(nb)
+        let (xxx, e2) = mem.alloc[f64](a, nb)
+        let (xx, e3) = mem.alloc[f64](a, n)
+        if e2 != ok { ret (0.0f64, e2) }
+        if e3 != ok { ret (0.0f64, e3) }
+        var mn = 1.0e300f64
+        i = 0usize
+        while i < n {
+            var s = 0.0f64
+            if x[i] > 0.0f64 { s = 1.0f64 } else if x[i] < 0.0f64 { s = 0.0f64 - 1.0f64 }
+            xx[i] = math.trunc[f64](math.abs[f64](x[i]) / d) * s
+            if xx[i] < mn { mn = xx[i] }
+            i += 1usize
+        }
+        i = 0usize
+        while i < nb {
+            xxx[i] = 0.0f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            let k = usize(xx[i] - mn + 1.0f64) - 1usize
+            if k < nb { xxx[k] += 1.0f64 }
+            i += 1usize
+        }
+        var ii = 0usize
+        while ii < nb {
+            let w = xxx[ii]
+            cnt[0usize] += w * (w - 1.0f64)
+            var jj = 0usize
+            while jj < ii {
+                cnt[ii - jj] += w * xxx[jj]
+                jj += 1usize
+            }
+            ii += 1usize
+        }
+        cnt[0usize] = cnt[0usize] * 0.5f64
+    } else {
+        let rang = (xmax - xmin) * 1.01f64
+        d = rang / f64(nb)
+        i = 1usize
+        while i < n {
+            let ii = i64(x[i] / d)
+            var j = 0usize
+            while j < i {
+                let jj = i64(x[j] / d)
+                var df = ii - jj
+                if df < 0i64 { df = 0i64 - df }
+                cnt[usize(df)] += 1.0f64
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    // R's Brent_fmin of the criterion
+    let c = (3.0f64 - math.sqrt[f64](5.0f64)) * 0.5f64
+    let eps = math.sqrt[f64](2.220446049250313e-16f64)
+    var aa = lower
+    var bb = upper
+    var v = aa + c * (bb - aa)
+    var w = v
+    var xm0 = v
+    var dd = 0.0f64
+    var e = 0.0f64
+    var fx = bw_crit(bcv, nf, d, cnt, xm0)
+    var fv = fx
+    var fw = fx
+    let tol3 = tol / 3.0f64
+    var guard = 0usize
+    while guard < 1000usize {
+        guard += 1usize
+        let xm = (aa + bb) * 0.5f64
+        let tol1 = eps * math.abs[f64](xm0) + tol3
+        let t2 = tol1 * 2.0f64
+        if math.abs[f64](xm0 - xm) <= t2 - (bb - aa) * 0.5f64 { break }
+        var p = 0.0f64
+        var q = 0.0f64
+        var r = 0.0f64
+        if math.abs[f64](e) > tol1 {
+            r = (xm0 - w) * (fx - fv)
+            q = (xm0 - v) * (fx - fw)
+            p = (xm0 - v) * q - (xm0 - w) * r
+            q = (q - r) * 2.0f64
+            if q > 0.0f64 { p = 0.0f64 - p } else { q = 0.0f64 - q }
+            r = e
+            e = dd
+        }
+        var u = 0.0f64
+        if math.abs[f64](p) >= math.abs[f64](q * 0.5f64 * r) || p <= q * (aa - xm0) || p >= q * (bb - xm0) {
+            if xm0 < xm { e = bb - xm0 } else { e = aa - xm0 }
+            dd = c * e
+        } else {
+            dd = p / q
+            u = xm0 + dd
+            if u - aa < t2 || bb - u < t2 {
+                dd = tol1
+                if xm0 >= xm { dd = 0.0f64 - dd }
+            }
+        }
+        if math.abs[f64](dd) >= tol1 {
+            u = xm0 + dd
+        } else if dd > 0.0f64 {
+            u = xm0 + tol1
+        } else {
+            u = xm0 - tol1
+        }
+        let fu = bw_crit(bcv, nf, d, cnt, u)
+        if fu <= fx {
+            if u < xm0 { bb = xm0 } else { aa = xm0 }
+            v = w
+            w = xm0
+            xm0 = u
+            fv = fw
+            fw = fx
+            fx = fu
+        } else {
+            if u < xm0 { aa = u } else { bb = u }
+            if fu <= fw || w == xm0 {
+                v = w
+                fv = fw
+                w = u
+                fw = fu
+            } else if fu <= fv || v == xm0 || v == w {
+                v = u
+                fv = fu
+            }
+        }
+    }
+    ret (xm0, ok)
 }

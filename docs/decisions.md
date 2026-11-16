@@ -46438,3 +46438,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `meanshift_g` generalises meanshift to the nrd bandwidth (`1.06 min(sd, IQR/1.34) n^-0.2`), a given numeric bandwidth and the eight statip kernels (the Gaussian by its exponential, the rest by `parzen.kfun`, the uniform added there), keeping the shorth start, the relative-change stop at sqrt(eps) and the iteration count.
 
 **Result.** `oracle_modeest` agrees with modeest on 120 new values (iterate and iteration count, 60 samples) on Windows; Linux pending. The ucv, bcv and SJ rules (binned, optimised) stay open; L472 stays partial.
+
+## D6545 — modeest: bw.ucv and bw.bcv
+
+**Decision.** `bw_cv` ports stats::bw.ucv and bw.bcv: hmax = 1.144 sd n^(-1/5), the criterion of C_bw_ucv or C_bw_bcv from the pair counts (unbinned `bw_den` for n up to 500, the binned counts of `bw_pair_cnts` above), and R's Brent `optimize` over [0.1 hmax, hmax] with tol 0.1 lower. meanshift takes them as modes 3 and 4.
+
+**Result.** `oracle_modeest` agrees with modeest on the new ucv and bcv meanshift values (both count paths) on Windows; Linux pending. The SJ rules stay open; L472 stays partial.

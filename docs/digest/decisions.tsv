@@ -3412,4 +3412,5 @@ D6540	680	boot: censboot cond with a Cox object, empinf
 D6541	700	boot: empinf reg and pos
 D6542	610	L321 closed
 D6543	672	modeest: parzen with the other statip kernels
-D6544	607	modeest: meanshift bandwidths and kernels
+D6544	608	modeest: meanshift bandwidths and kernels
+D6545	546	modeest: bw.ucv and bw.bcv

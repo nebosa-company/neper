@@ -26,9 +26,9 @@ for (rep in 1:25) {
 }
 # meanshift with other bandwidths and kernels: kinds 12 (iterate) and 13 (iterations); args (kind, 0, n, x..., mode 0 nrd0 1 nrd 2 numeric, bw, kernel id 0 gaussian 1 uniform 2 triangular 3 epanechnikov 4 biweight 5 cosine 6 optcosine 7 rectangular)
 kn2 <- c("gaussian", "uniform", "triangular", "epanechnikov", "biweight", "cosine", "optcosine", "rectangular")
-for (rep in 1:60) {
-  n <- sample(15:80, 1); x <- round(c(rnorm(n %/% 2, 1, 1), rnorm(n - n %/% 2, 4, 1.2)), 3); kid <- sample(0:7, 1); mode <- sample(0:2, 1); bw <- if (mode == 2) runif(1, 0.5, 1.5) else 0
-  r <- tryCatch(meanshift(x, bw = if (mode == 0) "nrd0" else if (mode == 1) "nrd" else bw, kernel = kn2[kid + 1]), error = function(e) NULL)
+for (rep in 1:90) {
+  n <- if (rep > 60) sample(c(15, 40, 600), 1) else sample(15:80, 1); x <- round(c(rnorm(n %/% 2, 1, 1), rnorm(n - n %/% 2, 4, 1.2)), 3); kid <- sample(0:7, 1); mode <- sample(0:4, 1); bw <- if (mode == 2) runif(1, 0.5, 1.5) else 0; if (rep > 60 && mode < 3) mode <- 3 + rep %% 2
+  r <- tryCatch(suppressWarnings(meanshift(x, bw = if (mode == 0) "nrd0" else if (mode == 1) "nrd" else if (mode == 3) "ucv" else if (mode == 4) "bcv" else bw, kernel = kn2[kid + 1])), error = function(e) NULL)
   if (is.null(r) || !is.finite(r)) next
   a <- c(12, 0, n, x, mode, bw, kid); add(a, as.numeric(r)); a[1] <- 13; add(a, attr(r, "iterations"))
 }
