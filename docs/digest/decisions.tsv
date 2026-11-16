@@ -3445,4 +3445,5 @@ D6573	807	biglm: singular designs
 D6574	486	biglm: inverse.gaussian with a log link
 D6575	463	L423 closed
 D6576	798	pls: cppls
-D6577	630	pls: the jackknife
+D6577	631	pls: the jackknife
+D6578	984	pls: cppls with Y.add, and a stable canonical direction

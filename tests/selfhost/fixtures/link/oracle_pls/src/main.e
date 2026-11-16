@@ -105,12 +105,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret ms
     }
-    let (fit, e) = pl.fit_method(a, m, xs, ys, n, p, q, ncomp, centre)
+    var fit: pl.Pls = zero
+    var e = ok
+    var tail2 = tail
+    if m == 6u8 {
+        let qa = usize(x[tail])
+        let (f6, e6) = pl.cppls_add(a, xs, ys, x[tail + 1usize..tail + 1usize + n * qa], qa, n, p, q, ncomp, centre)
+        fit = f6
+        e = e6
+        tail2 = tail + 1usize + n * qa
+    } else {
+        let (f7, e7) = pl.fit_method(a, m, xs, ys, n, p, q, ncomp, centre)
+        fit = f7
+        e = e7
+    }
     if e != ok { os.exit(6) }
     let nm = c.name
     if str.eq(nm, "coef") || str.eq(nm, "fit") {
-        let k = usize(x[tail]) - 1usize
-        let what = usize(x[tail + 1usize])
+        let k = usize(x[tail2]) - 1usize
+        let what = usize(x[tail2 + 1usize])
         if str.eq(nm, "coef") { ret sums(fit.coef[k * p * q..(k + 1usize) * p * q], what) }
         ret sums(fit.fitted[k * n * q..(k + 1usize) * n * q], what)
     }

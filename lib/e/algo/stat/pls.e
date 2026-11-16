@@ -8,6 +8,7 @@
 // jackknife.
 
 use e.algo.stat.ica as ic
+use e.algo.linalg.decomp as decomp
 use e.algo.stat.psych as ps
 use e.math
 use e.mem
@@ -1287,10 +1288,37 @@ fn train_sse(f: Pls, y: []const f64, n: usize, q: usize, j: usize, ac: usize) ->
 
 // cppls.fit(X, Y, ncomp, center) with the default powers (lower = upper = 0.5, no Y.add): canonical powered PLS, each weight vector the first canonical direction of X W0 (W0 = X'Y) against Y mapped back through W0, the first canonical vector found by power iteration on Szz^-1 Szy Syy^-1 Syz; the coefficients and fitted values follow the plain loops of cppls.fit (signs of weights, scores and loadings are free, the coefficients and fits are not)
 fn cppls(a: *mem.Arena, x0: []const f64, y0: []const f64, n: usize, p: usize, q: usize, ncomp: usize, doc: bool) -> (Pls, err) {
+    let (zz0, ze) = mem.alloc[f64](a, 1usize)
+    if ze != ok { var none0: Pls = zero
+        ret (none0, ze) }
+    let (r0, re0) = cppls_add(a, x0, y0, zz0[0usize..0usize], 0usize, n, p, q, ncomp, doc)
+    ret (r0, re0)
+}
+
+// cppls with the extra response columns ya (n by qa, row-major, centred like Y when centring) that enter the weights but not the canonical side or the coefficients (Y.add)
+fn cppls_add(a: *mem.Arena, x0: []const f64, y0: []const f64, ya0: []const f64, qa: usize, n: usize, p: usize, q: usize, ncomp: usize, doc: bool) -> (Pls, err) {
+    let qt = q + qa
     var none: Pls = zero
     let (xo, xm, e1) = centre(a, x0, n, p, doc)
     if e1 != ok { ret (none, e1) }
     let (y, ym, e2) = centre(a, y0, n, q, doc)
+    let (yan, yam, e2b) = centre(a, ya0, n, qa, doc)
+    let (yall, e2c) = mem.alloc[f64](a, n * qt)
+    if e2c != ok { ret (none, e2c) }
+    var ri = 0usize
+    while ri < n {
+        var ci = 0usize
+        while ci < q {
+            yall[ri * qt + ci] = y[ri * q + ci]
+            ci += 1usize
+        }
+        ci = 0usize
+        while ci < qa {
+            yall[ri * qt + q + ci] = yan[ri * qa + ci]
+            ci += 1usize
+        }
+        ri += 1usize
+    }
     if e2 != ok { ret (none, e2) }
     let (f, fe) = alloc_fit(a, n, p, q, ncomp)
     if fe != ok { ret (none, fe) }
@@ -1320,82 +1348,120 @@ fn cppls(a: *mem.Arena, x0: []const f64, y0: []const f64, n: usize, p: usize, q:
     let (syyi, e12) = mem.alloc[f64](a, q * q)
     if e12 != ok { ret (none, e12) }
     if !ps.invert(a, syy, q, syyi) { ret (none, e12) }
-    let (v, e13) = mem.alloc[f64](a, q)
-    let (v2, e14) = mem.alloc[f64](a, q)
+    let (v, e13) = mem.alloc[f64](a, qt)
+    let (v2, e14) = mem.alloc[f64](a, qt)
     let (wa, e15) = mem.alloc[f64](a, p)
     let (ta, e16) = mem.alloc[f64](a, n)
     let (pa, e17) = mem.alloc[f64](a, p)
     if e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok { ret (none, e13) }
     var ac = 0usize
     while ac < ncomp {
-        let (w0, e20) = tmm(a, x, y, n, p, q)
+        let (w0, e20) = tmm(a, x, yall, n, p, qt)
         if e20 != ok { ret (none, e20) }
-        let (z, e21) = mm(a, x, w0, n, p, q)
+        let (z, e21) = mm(a, x, w0, n, p, qt)
         if e21 != ok { ret (none, e21) }
-        let (szz, e22) = tmm(a, z, z, n, q, q)
-        let (szy, e23) = tmm(a, z, y, n, q, q)
+        // cancorr(Z, Yprim): column-pivoted Gram-Schmidt bases Qx of Z (Z[, piv] = Qx Rx) and Qy of Yprim with R's rank rule, the first left singular vector u of Qx'Qy, and a = Rx^-1 u
+        let (qx, e22) = mem.alloc[f64](a, n * qt)
+        let (rx, e23) = mem.alloc[f64](a, qt * qt)
+        let (kx, e24) = mem.alloc[usize](a, qt)
         if e22 != ok { ret (none, e22) }
         if e23 != ok { ret (none, e23) }
-        let (szzi, e24) = mem.alloc[f64](a, q * q)
         if e24 != ok { ret (none, e24) }
-        if !ps.invert(a, szz, q, szzi) { ret (none, e24) }
-        // M = Szz^-1 Szy Syy^-1 Szy'
-        let (m1, e25) = mm(a, szzi, szy, q, q, q)
+        let (dx, pe1) = pgs(a, z, n, qt, qx, rx, kx)
+        if pe1 != ok { ret (none, pe1) }
+        let (qy, e25) = mem.alloc[f64](a, n * q)
+        let (ry, e25b) = mem.alloc[f64](a, q * q)
+        let (ky, e25c) = mem.alloc[usize](a, q)
         if e25 != ok { ret (none, e25) }
-        let (m2, e26) = mm(a, m1, syyi, q, q, q)
+        if e25b != ok { ret (none, e25b) }
+        if e25c != ok { ret (none, e25c) }
+        let (dy, pe2) = pgs(a, y, n, q, qy, ry, ky)
+        if pe2 != ok { ret (none, pe2) }
+        // S = Qx' Qy (dx by dy) and S S' (dx by dx)
+        let (sm0, e26) = mem.alloc[f64](a, dx * dy)
+        let (ss0, e27) = mem.alloc[f64](a, dx * dx)
         if e26 != ok { ret (none, e26) }
-        let (mt, e27) = mem.alloc[f64](a, q * q)
         if e27 != ok { ret (none, e27) }
         var r = 0usize
-        while r < q {
+        while r < dx {
             var c = 0usize
-            while c < q {
-                mt[r * q + c] = szy[c * q + r]
+            while c < dy {
+                var sacc = 0.0f64
+                i = 0usize
+                while i < n {
+                    sacc += qx[i * qt + r] * qy[i * q + c]
+                    i += 1usize
+                }
+                sm0[r * dy + c] = sacc
                 c += 1usize
             }
             r += 1usize
         }
-        let (mm3, e28) = mm(a, m2, mt, q, q, q)
-        if e28 != ok { ret (none, e28) }
         r = 0usize
-        while r < q {
-            v[r] = 1.0f64 / math.sqrt[f64](f64(q))
+        while r < dx {
+            var c = 0usize
+            while c < dx {
+                var sacc = 0.0f64
+                var l = 0usize
+                while l < dy {
+                    sacc += sm0[r * dy + l] * sm0[c * dy + l]
+                    l += 1usize
+                }
+                ss0[r * dx + c] = sacc
+                c += 1usize
+            }
             r += 1usize
         }
-        var it = 0usize
-        while it < 5000usize {
-            var nv = 0.0f64
-            r = 0usize
-            while r < q {
-                var s = 0.0f64
-                var c = 0usize
-                while c < q {
-                    s += mm3[r * q + c] * v[c]
-                    c += 1usize
-                }
-                v2[r] = s
-                nv += s * s
-                r += 1usize
+        let (eg, ege) = decomp.eigen(a, ss0, dx)
+        if ege != ok { ret (none, ege) }
+        var best = 0usize
+        r = 1usize
+        while r < dx {
+            if eg.re[r] > eg.re[best] { best = r }
+            r += 1usize
+        }
+        var kk = 0usize
+        var bm = 0.0f64
+        r = 0usize
+        while r < dx {
+            let md = eg.vre[best * dx + r] * eg.vre[best * dx + r] + eg.vim[best * dx + r] * eg.vim[best * dx + r]
+            if md > bm {
+                bm = md
+                kk = r
             }
-            nv = math.sqrt[f64](nv)
-            var diff = 0.0f64
-            r = 0usize
-            while r < q {
-                let nw = v2[r] / nv
-                diff += math.abs[f64](nw - v[r])
-                v[r] = nw
-                r += 1usize
+            r += 1usize
+        }
+        let pr = eg.vre[best * dx + kk] / math.sqrt[f64](bm)
+        let pim = eg.vim[best * dx + kk] / math.sqrt[f64](bm)
+        r = 0usize
+        while r < dx {
+            v2[r] = eg.vre[best * dx + r] * pr + eg.vim[best * dx + r] * pim
+            r += 1usize
+        }
+        // a = Rx^-1 u by back-substitution, placed at the kept columns of Z
+        r = 0usize
+        while r < qt {
+            v[r] = 0.0f64
+            r += 1usize
+        }
+        var ri2 = dx
+        while ri2 > 0usize {
+            ri2 -= 1usize
+            var sacc = v2[ri2]
+            var l = ri2 + 1usize
+            while l < dx {
+                sacc -= rx[ri2 * qt + kx[l]] * v[kx[l]]
+                l += 1usize
             }
-            if diff < 1.0e-15f64 { break }
-            it += 1usize
+            v[kx[ri2]] = sacc / rx[ri2 * qt + kx[ri2]]
         }
         // a = Szz^-1 Szy Syy^-1 (Szy' ...) : the canonical vector of Z is Szz^-1 Szy u with u the Y-side eigenvector; v here is the Z-side eigenvector already
         i = 0usize
         while i < p {
             var s = 0.0f64
             var c = 0usize
-            while c < q {
-                s += w0[i * q + c] * v[c]
+            while c < qt {
+                s += w0[i * qt + c] * v[c]
                 c += 1usize
             }
             wa[i] = s
@@ -1606,4 +1672,88 @@ fn jack_test(a: *mem.Arena, method: u8, x: []const f64, y: []const f64, n: usize
         c += 1usize
     }
     ret ok
+}
+
+// column-pivoted modified Gram-Schmidt of the n by c matrix zm: the orthonormal columns go to qout (n by c, row-major, the first d used), rfull[j * c + col] is R[j, col] with col the original column index, piv the pivot order; a column is kept while its residual norm exceeds R's rank tolerance eps * 2^floor(log2 R11) * max(n, c); returns d
+fn pgs(a: *mem.Arena, zm: []const f64, n: usize, c: usize, qout: []f64, rfull: []f64, piv: []usize) -> (usize, err) {
+    let (res, e1) = mem.alloc[f64](a, n * c)
+    let (used, e2) = mem.alloc[usize](a, c)
+    if e1 != ok { ret (0usize, e1) }
+    if e2 != ok { ret (0usize, e2) }
+    var i = 0usize
+    while i < n * c {
+        res[i] = zm[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < c * c {
+        rfull[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < c {
+        used[i] = 0usize
+        i += 1usize
+    }
+    var tol = 0.0f64
+    var d = 0usize
+    var j = 0usize
+    while j < c {
+        var best = c
+        var bn = -1.0f64
+        var cc = 0usize
+        while cc < c {
+            if used[cc] == 0usize {
+                var s = 0.0f64
+                i = 0usize
+                while i < n {
+                    s += res[i * c + cc] * res[i * c + cc]
+                    i += 1usize
+                }
+                if s > bn {
+                    bn = s
+                    best = cc
+                }
+            }
+            cc += 1usize
+        }
+        if best == c { break }
+        let norm = math.sqrt[f64](bn)
+        if j == 0usize {
+            if norm == 0.0f64 { break }
+            var mx = n
+            if c > mx { mx = c }
+            tol = 2.220446049250313e-16f64 * math.pow[f64](2.0f64, math.floor[f64](math.log[f64](norm) / math.log[f64](2.0f64))) * f64(mx)
+        }
+        if norm <= tol { break }
+        used[best] = 1usize
+        piv[j] = best
+        i = 0usize
+        while i < n {
+            qout[i * c + j] = res[i * c + best] / norm
+            i += 1usize
+        }
+        rfull[j * c + best] = norm
+        cc = 0usize
+        while cc < c {
+            if used[cc] == 0usize {
+                var dd = 0.0f64
+                i = 0usize
+                while i < n {
+                    dd += qout[i * c + j] * res[i * c + cc]
+                    i += 1usize
+                }
+                rfull[j * c + cc] = dd
+                i = 0usize
+                while i < n {
+                    res[i * c + cc] -= dd * qout[i * c + j]
+                    i += 1usize
+                }
+            }
+            cc += 1usize
+        }
+        d += 1usize
+        j += 1usize
+    }
+    ret (d, ok)
 }

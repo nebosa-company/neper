@@ -46636,3 +46636,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `jack_test` refits the method on each leave-one-segment-out training set, takes the coefficients at `ncomp`, and reports `sd = sqrt((nseg - 1) mean_s (B_s - mean B)^2)` (var.jack with `use.mean = TRUE`, no covariance) beside the full-data coefficients; the t values are their ratio, tested on `nseg - 1` degrees of freedom.
 
 **Result.** `oracle_pls` agrees with pls on 384 new values (sd and t sums for kernelpls, simpls, oscorespls and pcr, two numbers of components) on Windows (5424 cases in all); Linux pending. L359 at 0.9: cppls with lower or upper powers and Y.add stay open.
+
+## D6578 — pls: cppls with Y.add, and a stable canonical direction
+
+**Decision.** `cppls_add` takes extra response columns that enter W0 = X'(Y | Y.add) and the weights but not the canonical side or the coefficients. The canonical vector now comes the way cancorr computes it: column-pivoted Gram-Schmidt bases of `Z = X W0` and of Yprim with R's rank tolerance (`eps * 2^floor(log2 R11) * max(n, ncol)`), the first left singular vector of `Qx'Qy` (eigenvector of `S S'` by the complex Schur solver, rotated to a real vector), and `a = R^-1 u` by back-substitution at the pivoted columns. The earlier normal-equation version was ill-conditioned once X had been deflated to a few dimensions.
+
+**Result.** `oracle_pls` agrees with pls on cppls with Y.add (312 new coefficient and fit sums, 1 to 3 responses and 1 or 2 extra columns, centred and not) and the earlier cppls cases on Windows (5808 cases in all); Linux pending. cppls with lower or upper powers stays open; L359 at 0.93.

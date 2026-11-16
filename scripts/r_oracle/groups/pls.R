@@ -43,6 +43,21 @@ for (rep in 1:8) {
     }
   }
 }
+# cppls with Y.add (fn "coef"/"fit" sums, method 6 = cppls with qa extra response columns): args (6, n, p, q, ncomp, center, X, Y, qa, Ya, k)
+for (rep in 1:8) {
+  n <- c(30, 40, 25, 50)[(rep - 1) %% 4 + 1]; p <- c(6, 8, 12, 5)[(rep - 1) %% 4 + 1]; q <- c(1, 2, 2, 3)[(rep - 1) %% 4 + 1]; qa <- sample(1:2, 1)
+  Z <- matrix(rnorm(n * 3), n, 3); X <- Z %*% matrix(rnorm(3 * p), 3, p) + matrix(rnorm(n * p, 0, 0.3), n, p)
+  Y <- Z %*% matrix(rnorm(3 * q), 3, q) + matrix(rnorm(n * q, 0, 0.3), n, q); Ya <- Z %*% matrix(rnorm(3 * qa), 3, qa) + matrix(rnorm(n * qa, 0, 0.3), n, qa)
+  ncomp <- min(4, p)
+  for (center in c(TRUE, FALSE)) {
+    fit <- tryCatch(suppressWarnings(cppls.fit(X, Y, ncomp = ncomp, Y.add = Ya, center = center)), error = function(e) NULL)
+    if (is.null(fit)) next
+    for (k in seq_len(ncomp)) {
+      a <- c(6, n, p, q, ncomp, as.numeric(center), flat(X), flat(Y), qa, flat(Ya), k)
+      sums("coef", a, flat(matrix(fit$coefficients[, , k], p, q))); sums("fit", a, flat(matrix(fit$fitted.values[, , k], n, q)))
+    }
+  }
+}
 #   method 4 is pcr (svdpc); cross-validation with the segments passed explicitly: fn "press" "adj" (args (m, n, p, q, ncomp, center, X, Y, nseg, segid[n], j, ac)), "press0" (j),
 #   "msep" and "r2" with (..., est 0 train 1 CV 2 adjCV (msep only), j, ac) where ac 0 is the intercept-only model
 for (rep in 1:8) {
