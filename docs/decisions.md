@@ -45334,3 +45334,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.learnbayes` holds pbetap, discint (the set size and probability reached, ties ordered as R's ascending sort then reversal), mnormt.onesided (the one-sided Bayes factor), normal.select, beta.select (the package's K grid of 100 log values, bisection to 1e-4, linear approx of log K, result rounded to two digits as in R) and bfexch. Not here: laplace (it depends on optim), rejectsampling, importance sampling, the Gibbs and Metropolis helpers and the other book models.
 
 **Result.** `oracle_learnbayes` equals LearnBayes on 180 cases on Windows; Linux pending. L484 is partial.
+
+## D6157 — logistf: Firth penalized logistic regression
+
+`e.algo.stat.logistf` fits Firth's penalized logistic regression by Newton steps with step halving on the penalized score (X'(y - p + h(0.5 - p))), and reports the coefficients, the penalized log-likelihood, the profile penalized-likelihood-ratio p value of each coefficient (refit with it fixed at zero) and the "null" log-likelihood. Found by comparison: the package's covariance is the inverse of X' diag(w (1 + h)) X (not the plain information inverse), and its null log-likelihood moves only the intercept while the penalty still uses the full design. Datasets for which R itself warns of fitted probabilities of 0 or 1 (separation) are left out of the oracle. Not here: the profile-likelihood confidence limits, FLIC and FLAC, weights, offsets, predict and the formula interface.
+
+**Result.** `oracle_logistf` agrees with logistf on 102 cases on Windows (coefficients and covariance to 1e-5, profile p values to 1e-4); Linux pending. L424 is partial.

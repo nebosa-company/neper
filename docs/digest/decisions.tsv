@@ -3228,4 +3228,5 @@ D6152	728	pracma: pchip and the Gauss-Kronrod quadgk
 D6153	960	PerformanceAnalytics: return and risk measures of one series
 D6154	798	PerformanceAnalytics: benchmark-relative measures
 D6155	950	ismev: stationary GEV, GPD and Gumbel fits
-D6156	636	LearnBayes: closed-form helpers
+D6156	637	LearnBayes: closed-form helpers
+D6157	1016	logistf: Firth penalized logistic regression

@@ -460,10 +460,10 @@
       "group": "CRAN parity",
       "order": 622,
       "title": "logistf: Firth penalized logistic regression",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 689). Small to mid. Acceptance, equal to logistf: logistf with Firth correction and FLIC and FLAC variants, profile penalized likelihood intervals and tests, forward and backward selection, predict."
+      "evidence": "Partial (D6157). Firth coefficients, covariance, penalized log-likelihoods and profile LR p values agree with logistf on Windows (oracle_logistf; Linux pending). Open: profile confidence limits, FLIC, FLAC, weights, offsets, predict. Was: Open (CRAN rank 689). Small to mid. Acceptance, equal to logistf: logistf with Firth correction and FLIC and FLAC variants, profile penalized likelihood intervals and tests, forward and backward selection, predict."
     },
     {
       "id": "L425",
