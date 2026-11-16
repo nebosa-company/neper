@@ -3478,4 +3478,5 @@ D6614	883	afex: split-plot repeated-measures ANOVA
 D6615	557	nnet: multinom by Newton
 D6616	661	ordinal: cumulative link models
 D6617	775	pscl: zero-inflated and hurdle Poisson
-D6618	649	tm and tidytext: weightings on a count matrix
+D6618	650	tm and tidytext: weightings on a count matrix
+D6619	772	VIM: kNN imputation of one numeric variable

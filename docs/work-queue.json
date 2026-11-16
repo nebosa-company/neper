@@ -515,10 +515,10 @@
       "group": "CRAN parity",
       "order": 635,
       "title": "VIM: missing-value imputation",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 765). Small to mid. Acceptance, equal to VIM under set.seed: kNN with Gower distance and aggregation choices, hotdeck, irmi, regressionImp, aggr summaries, matrixplot data."
+      "evidence": "Partial (D6619). e.algo.stat.vimpkg.knn_impute (one numeric variable, complete distance columns, Gower range-scaled distance, median or mean of k donors, ties by row order) equals VIM 7.3.1 kNN on Windows (oracle_vim, 40 values; Linux pending). Open: missing values in the distance columns (VIM imputes them first and reuses them; the plain skip, zero and one rules do not reproduce it), factors, ordered and mixed variables, weights, donor conditions, hotdeck, irmi, aggr. Was: Open (CRAN rank 765). Small to mid. Acceptance, equal to VIM under set.seed: kNN with Gower distance and aggregation choices, hotdeck, irmi, regressionImp, aggr summaries, matrixplot data."
     },
     {
       "id": "L468",

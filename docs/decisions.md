@@ -46838,3 +46838,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `tmpkg` works on a document-term count matrix. `weightSMART` copies tm including two quirks: the cosine norm is taken from the tf weights before the idf is applied, and idf `p` is a single scalar, `max(0, log2((D - df) / df))` over all terms, applied to every term. `removeSparseTerms` keeps terms with `df > D (1 - sparse)` strictly. `bind_tf_idf` uses the natural log, tm's `weightTfIdf` log2.
 
 **Result.** `oracle_tm` agrees with tm and tidytext on Windows (144 values); Linux pending. L380 stays partial: tokenisation, stemming, corpora, associations, the u and b norms.
+
+## D6619 — VIM: kNN imputation of one numeric variable
+
+**Decision.** `vimpkg.knn_impute` fills the NaN entries of one column with the median (or mean) of the k nearest rows that have a value, by Gower distance: absolute difference over the column range, averaged over the other columns, ties broken by row order. Only complete distance columns are claimed: with missing values there, three plain rules (skip and average, count as 0, count as 1) each disagreed with VIM on 54 to 172 of 200 random frames, because `kNN` imputes the other variables first and reuses them in the distance.
+
+**Result.** `oracle_vim` agrees with VIM 7.3.1 on Windows (40 values, k 1 to 7, median and mean); Linux pending. L454 stays partial: missing distance columns, factors, hotdeck, irmi.
