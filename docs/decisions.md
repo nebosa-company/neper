@@ -45370,3 +45370,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.hclust` ports hclust.f (Murtagh's nearest-neighbour list with the Lance-Williams updates for ward.D, ward.D2 — squared dissimilarities, square-rooted heights — single, complete, average, mcquitty, median and centroid) and hcass2 (the merge matrix with negative singletons and the dendrogram order), plus cutree and cophenetic distances. Merge matrices, orders, heights, cutree labels and cophenetic distances equal R's on every linkage. Not here: the dendextend functions (cor_bakers_gamma, cor_cophenetic, entanglement, untangle, fowlkes_mallows, ladderize), as.dendrogram, cutree by height and members.
 
 **Result.** `oracle_hclust` equals R on 320 cases (eight linkages, 8 to 25 points) on Windows; Linux pending. L331 is partial.
+
+## D6163 — dendextend: Fowlkes-Mallows index and cophenetic correlation
+
+`e.algo.stat.hclust` gains fm_index (the Fowlkes-Mallows index of two clusterings with its expectation and variance under independence, as dendextend's FM_index_R) and cor_cophenetic (the Pearson correlation of the cophenetic distances of two trees over the same observations). Both agree with dendextend on pairs of hclust trees (single, complete, average, ward.D2) and cutree labels. Not here: cor_bakers_gamma, entanglement, untangle, ladderize, as.dendrogram and cutree by height.
+
+**Result.** `oracle_hclust` equals R and dendextend on 360 cases on Windows; Linux pending. L331 stays partial.

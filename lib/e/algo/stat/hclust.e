@@ -320,3 +320,99 @@ fn cophenetic(a: *mem.Arena, t: *const Tree, n: usize, p: usize, q: usize) -> f6
     }
     ret 0.0f64
 }
+
+// Fowlkes-Mallows index of two clusterings with labels 1..k (dendextend FM_index): the index, its expectation and its variance under independence
+fn fm_index(a: *mem.Arena, l1: []const usize, l2: []const usize) -> (f64, f64, f64, err) {
+    let n = l1.len
+    var k1 = 0usize
+    var k2 = 0usize
+    var i = 0usize
+    while i < n {
+        if l1[i] > k1 { k1 = l1[i] }
+        if l2[i] > k2 { k2 = l2[i] }
+        i += 1usize
+    }
+    let (m, e) = mem.alloc[f64](a, k1 * k2)
+    if e != ok { ret (0.0f64, 0.0f64, 0.0f64, e) }
+    let (r, e2) = mem.alloc[f64](a, k1)
+    if e2 != ok { ret (0.0f64, 0.0f64, 0.0f64, e2) }
+    let (c, e3) = mem.alloc[f64](a, k2)
+    if e3 != ok { ret (0.0f64, 0.0f64, 0.0f64, e3) }
+    i = 0usize
+    while i < k1 * k2 {
+        m[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k1 {
+        r[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k2 {
+        c[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        m[(l1[i] - 1usize) * k2 + (l2[i] - 1usize)] += 1.0f64
+        r[l1[i] - 1usize] += 1.0f64
+        c[l2[i] - 1usize] += 1.0f64
+        i += 1usize
+    }
+    let nf = f64(n)
+    var tk = 0.0f64 - nf
+    i = 0usize
+    while i < k1 * k2 {
+        tk += m[i] * m[i]
+        i += 1usize
+    }
+    var pk = 0.0f64 - nf
+    var pk2 = 0.0f64
+    i = 0usize
+    while i < k1 {
+        pk += r[i] * r[i]
+        pk2 += r[i] * (r[i] - 1.0f64) * (r[i] - 2.0f64)
+        i += 1usize
+    }
+    var qk = 0.0f64 - nf
+    var qk2 = 0.0f64
+    i = 0usize
+    while i < k2 {
+        qk += c[i] * c[i]
+        qk2 += c[i] * (c[i] - 1.0f64) * (c[i] - 2.0f64)
+        i += 1usize
+    }
+    let fm = tk / math.sqrt[f64](pk * qk)
+    let ef = math.sqrt[f64](pk * qk) / (nf * (nf - 1.0f64))
+    let vf = 2.0f64 / (nf * (nf - 1.0f64)) + 4.0f64 * pk2 * qk2 / ((nf * (nf - 1.0f64) * (nf - 2.0f64)) * pk * qk) + (pk - 2.0f64 - 4.0f64 * pk2 / pk) * (qk - 2.0f64 - 4.0f64 * qk2 / qk) / (nf * (nf - 1.0f64) * (nf - 2.0f64) * (nf - 3.0f64)) - pk * qk / (nf * nf * (nf - 1.0f64) * (nf - 1.0f64))
+    ret (fm, ef, vf, ok)
+}
+
+// the Pearson correlation of the cophenetic distances of two trees over the same observations (dendextend cor_cophenetic)
+fn cor_cophenetic(a: *mem.Arena, t1: *const Tree, t2: *const Tree, n: usize) -> f64 {
+    var sx = 0.0f64
+    var sy = 0.0f64
+    var sxx = 0.0f64
+    var syy = 0.0f64
+    var sxy = 0.0f64
+    var cnt = 0.0f64
+    var col = 0usize
+    while col < n {
+        var row = col + 1usize
+        while row < n {
+            let x = cophenetic(a, t1, n, row, col)
+            let y = cophenetic(a, t2, n, row, col)
+            sx += x
+            sy += y
+            sxx += x * x
+            syy += y * y
+            sxy += x * y
+            cnt += 1.0f64
+            row += 1usize
+        }
+        col += 1usize
+    }
+    let cov = sxy - sx * sy / cnt
+    ret cov / math.sqrt[f64]((sxx - sx * sx / cnt) * (syy - sy * sy / cnt))
+}

@@ -9,7 +9,48 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
+fn dmat(a: *mem.Arena, x: []const f64, n: usize, at: usize) -> []f64 {
+    let (d, e) = mem.alloc[f64](a, n * n)
+    if e != ok { os.exit(5) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            let dx = x[at + 2usize * i] - x[at + 2usize * j]
+            let dy = x[at + 1usize + 2usize * i] - x[at + 1usize + 2usize * j]
+            d[i * n + j] = math.sqrt[f64](dx * dx + dy * dy)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret d
+}
+
+fn pair(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[2usize])
+    let k = usize(x[3usize])
+    let d = dmat(a, x, n, 4usize)
+    let (t1, e1) = hc.hclust(a, d, n, usize(x[0usize]))
+    if e1 != ok { os.exit(6) }
+    let (t2, e2) = hc.hclust(a, d, n, usize(x[1usize]))
+    if e2 != ok { os.exit(7) }
+    if str.eq(c.name, "corcoph") { ret hc.cor_cophenetic(a, &t1, &t2, n) }
+    let (l1, e3) = mem.alloc[usize](a, n)
+    if e3 != ok { os.exit(8) }
+    let (l2, e4) = mem.alloc[usize](a, n)
+    if e4 != ok { os.exit(9) }
+    if hc.cutree(a, &t1, n, k, l1) != ok { os.exit(10) }
+    if hc.cutree(a, &t2, n, k, l2) != ok { os.exit(11) }
+    let (fm, ef, vf, e5) = hc.fm_index(a, l1, l2)
+    if e5 != ok { os.exit(12) }
+    if str.eq(c.name, "fm") { ret fm }
+    if str.eq(c.name, "fmE") { ret ef }
+    ret vf
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "fm") || str.eq(c.name, "fmE") || str.eq(c.name, "fmV") || str.eq(c.name, "corcoph") { ret pair(a, c) }
     let x = c.args
     let method = usize(x[0usize])
     let n = usize(x[1usize])

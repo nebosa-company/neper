@@ -295,10 +295,10 @@
       "group": "CRAN parity",
       "order": 600,
       "title": "dendextend and hclust operations",
-      "score": 0.4,
+      "score": 0.55,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6162). hclust (all eight linkages: merge, order, heights), cutree by k and cophenetic equal R on Windows (oracle_hclust; Linux pending). Open: cutree by h, as.dendrogram, dendextend functions. Was: Open (CRAN rank 297). Small to mid. e.ml.cluster has agglomerative. Acceptance, equal to R: hclust ordering and merge for every linkage including ward.D, ward.D2 and centroid, cutree by k and h, cophenetic, as.dendrogram order, dendextend cor_bakers_gamma, cor_cophenetic, entanglement, untangle, fowlkes_mallows and ladderize."
+      "evidence": "Partial (D6162, D6163 fowlkes_mallows and cor_cophenetic). hclust (all eight linkages: merge, order, heights), cutree by k and cophenetic equal R on Windows (oracle_hclust; Linux pending). Open: cutree by h, as.dendrogram, dendextend functions. Was: Open (CRAN rank 297). Small to mid. e.ml.cluster has agglomerative. Acceptance, equal to R: hclust ordering and merge for every linkage including ward.D, ward.D2 and centroid, cutree by k and h, cophenetic, as.dendrogram order, dendextend cor_bakers_gamma, cor_cophenetic, entanglement, untangle, fowlkes_mallows and ladderize."
     },
     {
       "id": "L332",
