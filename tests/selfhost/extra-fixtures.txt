@@ -157,3 +157,5 @@ oracle_nmath_beta
 oracle_rstatix
 oracle_classint
 oracle_xts
+oracle_proxy
+oracle_e1071

@@ -1,0 +1,239 @@
+// The measures of R's proxy for two vectors, each as proxy computes it natively: a similarity for the
+// binary and the angular families, a distance for the metric ones (proxy::simil and proxy::dist convert
+// the other way with 1 - s or its own rule). Binary measures read a value as present when it is not 0
+// and use the counts a (both), b (x only), c (y only), d (neither). Quirks of the R code are kept: the
+// Wave-Hedges and Soergel measures take min and max of the whole pair of vectors, not per element.
+//
+// proxy::dist(m) passes the later row first, so an asymmetric measure (Fager, Kullback-Leibler) takes
+// (row 2, row 1): the caller of a matrix pair does the same.
+//
+// Not here: Gower, Mahalanobis, Levenshtein and the nominal (chi-squared) family, and the matrix
+// interface (the caller loops over pairs).
+
+use e.math
+
+fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
+
+fn sqrt_of(x: f64) -> f64 { ret math.sqrt[f64](x) }
+
+fn abs_of(x: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 - x }
+    ret x
+}
+
+fn dot(x: []const f64, y: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += x[i] * y[i]
+        i += 1usize
+    }
+    ret s
+}
+
+fn sum_of(x: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += x[i]
+        i += 1usize
+    }
+    ret s
+}
+
+fn min2(x: []const f64, y: []const f64) -> f64 {
+    var m = x[0usize]
+    var i = 0usize
+    while i < x.len {
+        if x[i] < m { m = x[i] }
+        if y[i] < m { m = y[i] }
+        i += 1usize
+    }
+    ret m
+}
+
+fn max2(x: []const f64, y: []const f64) -> f64 {
+    var m = x[0usize]
+    var i = 0usize
+    while i < x.len {
+        if x[i] > m { m = x[i] }
+        if y[i] > m { m = y[i] }
+        i += 1usize
+    }
+    ret m
+}
+
+// binary measures: id 0 Jaccard, 1 Kulczynski1, 2 Kulczynski2, 3 Mountford, 4 Fager, 5 Russel, 6 simple
+// matching, 7 Hamman, 8 Faith, 9 Tanimoto, 10 Dice, 11 Phi, 12 Stiles, 13 Michael, 14 Mozley, 15 Yule,
+// 16 Yule2, 17 Ochiai, 18 Simpson, 19 Braun-Blanquet
+fn binary_measure(id: u8, x: []const f64, y: []const f64) -> f64 {
+    var a = 0.0f64
+    var b = 0.0f64
+    var c = 0.0f64
+    var d = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        let px = x[i] != 0.0f64
+        let py = y[i] != 0.0f64
+        if px && py { a += 1.0f64 } else if px { b += 1.0f64 } else if py { c += 1.0f64 } else { d += 1.0f64 }
+        i += 1usize
+    }
+    let n = a + b + c + d
+    if id == 0u8 {
+        if a + b + c == 0.0f64 { ret 1.0f64 }
+        ret a / (a + b + c)
+    }
+    if id == 1u8 { ret a / (b + c) }
+    if id == 2u8 { ret (a / (a + b) + a / (a + c)) / 2.0f64 }
+    if id == 3u8 { ret 2.0f64 * a / (a * (b + c) + 2.0f64 * b * c) }
+    if id == 4u8 { ret a / (sqrt_of(a + b) * sqrt_of(a + c)) - sqrt_of(a + c) / 2.0f64 }
+    if id == 5u8 { ret a / n }
+    if id == 6u8 { ret (a + d) / n }
+    if id == 7u8 { ret (a + d - b - c) / n }
+    if id == 8u8 { ret (a + d / 2.0f64) / n }
+    if id == 9u8 { ret (a + d) / (a + 2.0f64 * (b + c) + d) }
+    if id == 10u8 { ret 2.0f64 * a / (2.0f64 * a + b + c) }
+    if id == 11u8 { ret (a * d - b * c) / (sqrt_of(a + b) * sqrt_of(c + d) * sqrt_of(a + c) * sqrt_of(b + d)) }
+    if id == 12u8 {
+        ret math.log[f64](n) + 2.0f64 * math.log[f64](abs_of(a * d - b * c) - 0.5f64 * n) - math.log[f64](a + b) - math.log[f64](c + d) - math.log[f64](a + c) - math.log[f64](b + d)
+    }
+    if id == 13u8 { ret 4.0f64 * (a * d - b * c) / ((a + d) * (a + d) + (b + c) * (b + c)) }
+    if id == 14u8 { ret a * n / ((a + b) * (a + c)) }
+    if id == 15u8 { ret (a * d - b * c) / (a * d + b * c) }
+    if id == 16u8 { ret (sqrt_of(a * d) - sqrt_of(b * c)) / (sqrt_of(a * d) + sqrt_of(b * c)) }
+    if id == 17u8 { ret a / sqrt_of((a + b) * (a + c)) }
+    if id == 18u8 {
+        var m = a + b
+        if a + c < m { m = a + c }
+        ret a / m
+    }
+    var m = a + b
+    if a + c > m { m = a + c }
+    ret a / m
+}
+
+fn podani(x: []const f64, y: []const f64) -> f64 {
+    let n = x.len
+    var a = 0.0f64
+    var b = 0.0f64
+    var c = 0.0f64
+    var d = 0.0f64
+    var i = 0usize
+    while i + 1usize < n {
+        var j = i + 1usize
+        while j < n {
+            if (x[i] < x[j] && y[i] < y[j]) || (x[i] > x[j] && y[i] > y[j]) { a += 1.0f64 }
+            if (x[i] < x[j] && y[i] > y[j]) || (x[i] > x[j] && y[i] < y[j]) { b += 1.0f64 }
+            if x[i] == x[j] && y[i] == y[j] && ((x[i] == 0.0f64 && y[i] == 0.0f64) || (x[i] > 0.0f64 && y[i] > 0.0f64)) { c += 1.0f64 }
+            var z = 0i64
+            if x[i] == 0.0f64 { z += 1i64 }
+            if x[j] == 0.0f64 { z += 1i64 }
+            if y[i] == 0.0f64 { z += 1i64 }
+            if y[j] == 0.0f64 { z += 1i64 }
+            if (x[i] == x[j] || y[i] == y[j]) && z > 0i64 && z < 4i64 { d += 1.0f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let nf = f64(n)
+    ret 1.0f64 - 2.0f64 * (a - b + c - d) / (nf * (nf - 1.0f64))
+}
+
+// numeric measures: id 20 cosine, 21 angular, 22 eJaccard, 23 eDice, 24 correlation, 25 Euclidean,
+// 26 Bhattacharyya, 27 Manhattan, 28 supremum, 29 Minkowski (power p), 30 Canberra, 31 Wave-Hedges,
+// 32 divergence, 33 Kullback-Leibler, 34 Bray-Curtis, 35 Soergel, 36 Podani, 37 Chord, 38 Geodesic,
+// 39 Whittaker, 40 Hellinger, 41 fuzzy Jaccard
+fn measure(id: u8, x: []const f64, y: []const f64, p: f64) -> f64 {
+    if id < 20u8 { ret binary_measure(id, x, y) }
+    let n = x.len
+    let xy = dot(x, y)
+    let xx = dot(x, x)
+    let yy = dot(y, y)
+    if id == 20u8 { ret xy / sqrt_of(xx * yy) }
+    if id == 21u8 { ret 1.0f64 - math.acos[f64](xy / sqrt_of(xx * yy)) / 3.141592653589793f64 }
+    if id == 22u8 { ret xy / (xx + yy - xy) }
+    if id == 23u8 { ret 2.0f64 * xy / (xx + yy) }
+    if id == 24u8 {
+        let mx = sum_of(x) / f64(n)
+        let my = sum_of(y) / f64(n)
+        var sxy = 0.0f64
+        var sxx = 0.0f64
+        var syy = 0.0f64
+        var i = 0usize
+        while i < n {
+            sxy += (x[i] - mx) * (y[i] - my)
+            sxx += (x[i] - mx) * (x[i] - mx)
+            syy += (y[i] - my) * (y[i] - my)
+            i += 1usize
+        }
+        ret sxy / sqrt_of(sxx * syy)
+    }
+    if id == 36u8 { ret podani(x, y) }
+    if id == 37u8 { ret sqrt_of(2.0f64 * (1.0f64 - xy / sqrt_of(xx * yy))) }
+    if id == 38u8 { ret math.acos[f64](xy / sqrt_of(xx * yy)) }
+    let sx = sum_of(x)
+    let sy = sum_of(y)
+    var s = 0.0f64
+    var smin = 0.0f64
+    var smax = 0.0f64
+    var used = 0usize
+    var i = 0usize
+    while i < n {
+        let dv = x[i] - y[i]
+        if id == 25u8 { s += dv * dv }
+        if id == 26u8 {
+            let t = sqrt_of(x[i]) - sqrt_of(y[i])
+            s += t * t
+        }
+        if id == 27u8 { s += abs_of(dv) }
+        if id == 28u8 && abs_of(dv) > s { s = abs_of(dv) }
+        if id == 29u8 { s += math.pow[f64](abs_of(dv), p) }
+        if id == 30u8 {
+            let sm = abs_of(x[i] + y[i])
+            let df = abs_of(dv)
+            if sm > 2.2250738585072014e-308f64 || df > 2.2250738585072014e-308f64 {
+                s += df / sm
+                used += 1usize
+            }
+        }
+        if id == 32u8 {
+            let t = dv * dv / ((x[i] + y[i]) * (x[i] + y[i]))
+            if t == t { s += t }
+        }
+        if id == 33u8 {
+            let pp = x[i] / sx
+            let qq = y[i] / sy
+            s += pp * math.log[f64](pp / qq)
+        }
+        if id == 34u8 { s += abs_of(dv) }
+        if id == 35u8 { s += abs_of(dv) }
+        if id == 39u8 { s += abs_of(x[i] / sx - y[i] / sy) }
+        if id == 40u8 {
+            let t = sqrt_of(x[i] / sx) - sqrt_of(y[i] / sy)
+            s += t * t
+        }
+        if id == 41u8 {
+            if x[i] > y[i] {
+                smax += x[i]
+                smin += y[i]
+            } else {
+                smax += y[i]
+                smin += x[i]
+            }
+        }
+        i += 1usize
+    }
+    if id == 25u8 || id == 26u8 || id == 40u8 { ret sqrt_of(s) }
+    if id == 29u8 { ret math.pow[f64](s, 1.0f64 / p) }
+    if id == 30u8 && used != n { ret s / (f64(used) / f64(n)) }
+    if id == 31u8 { ret 1.0f64 - min2(x, y) / max2(x, y) }
+    if id == 34u8 { ret s / (sx + sy) }
+    if id == 35u8 { ret s / max2(x, y) }
+    if id == 39u8 { ret s / 2.0f64 }
+    if id == 41u8 {
+        let r = smin / smax
+        if r != r { ret 0.0f64 }
+        ret 1.0f64 - r
+    }
+    ret s
+}

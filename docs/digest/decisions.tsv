@@ -3094,4 +3094,5 @@ D6018	728	a compound file past 109 FAT sectors reads through its DIFAT chain, an
 D6019	1189	the last column's quotes follow its first character; an open quote ends with a newline
 D6020	927	classInt breaks follow R's quantile fuzz and its seq probabilities
 D6021	1022	classInt kmeans, hclust and dpih are ported, bclust waits
-D6022	1171	xts periods are endpoints over UTC keys, and align.time always moves forward
+D6022	1172	xts periods are endpoints over UTC keys, and align.time always moves forward
+D6023	1124	proxy measures are the native value, with the later row first
