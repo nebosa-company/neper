@@ -47054,3 +47054,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `e.fmt.macho` mirrors `e.fmt.elf`: borrowed bytes, no allocation, `Truncated` for tables and strings outside the data and `Invalid` for a bad magic, a command size under 8 or not a multiple of 4, or an index out of range. It decodes the four thin magics (32- and 64-bit, both byte orders), the load-command walk bounded by `sizeofcmds`, segments and sections of both widths, `LC_SYMTAB` entries and names, `LC_DYLD_INFO(_ONLY)` offsets, `LC_UUID`, `LC_LOAD_DYLIB` install names, and fat headers (always big-endian, 20-byte entries, 32-byte for `FAT_MAGIC_64`). The command count and the fat architecture count are capped (4096 and 64) so a hostile header cannot make a walk long.
 
 **Result.** `fmt_macho` passes on Windows with hand-built images and the every-truncation sweep; Linux pending. L221 leaves the queue. The goldens are written by hand from the otool and nm output formats, since neither tool runs on this machine.
+
+## D6655 — e.fmt.tiff: validate the zlib framing of Deflate strips
+
+**Decision.** `e.fmt.tiff.inflate` rejected nothing about the zlib wrapper: it dropped two header bytes and ignored the Adler-32. It now requires method 8, a window of at most 32 KiB, a header check value divisible by 31 and no preset dictionary, and compares the big-endian Adler-32 in the last four bytes of the strip with the Adler-32 of the inflated bytes, answering `Invalid` otherwise. The trailer is read from the end of the strip rather than from the decoder's consumed count, which includes bytes the bit reader pulled ahead.
+
+**Result.** `fmt_images` passes on Windows and its new checks fail without the change (a flipped trailer byte, a flipped header byte); Linux pending. L240 leaves the queue. L239 stays open with a note: a strict replay needs a decision on whether redoing a delete is idempotent, since the existing WAL fixture deletes absent keys.

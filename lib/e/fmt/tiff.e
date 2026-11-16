@@ -12,6 +12,7 @@
 // samples and JPEG compression are `Unsupported`.
 
 use e.algo.deflate as deflate
+use e.fmt.zlib as zlib
 use e.io
 use e.mem
 use e.gfx.image
@@ -334,6 +335,8 @@ fn lzw(src: []const u8, out: []u8) -> (usize, err) {
 
 fn inflate(a: *mem.Arena, src: []const u8, out: []u8) -> (usize, err) {
     if src.len < 2usize { ret (0usize, Invalid) }
+    // the zlib header: deflate method, a window of at most 32 KiB, a valid check value and no preset dictionary
+    if (src[0usize] & 15u8) != 8u8 || (src[0usize] >> 4u8) > 7u8 || ((u32(src[0usize]) << 8u32) | u32(src[1usize])) % 31u32 != 0u32 || (src[1usize] & 32u8) != 0u8 { ret (0usize, Invalid) }
     let (size, size_error) = deflate.decoder_storage(32768usize)
     if size_error != ok { ret (0usize, size_error) }
     let (storage, storage_error) = mem.alloc[u8](a, size)
@@ -341,8 +344,14 @@ fn inflate(a: *mem.Arena, src: []const u8, out: []u8) -> (usize, err) {
     let (dec, dec_error) = deflate.decoder(storage, 32768usize)
     if dec_error != ok { ret (0usize, dec_error) }
     var decoder = dec
-    let (_, written, status, failure) = deflate.decode(&decoder, src[2..], out, true)
+    let (_, written, _, failure) = deflate.decode(&decoder, src[2..], out, true)
     if failure != ok { ret (written, Invalid) }
+    // the zlib trailer is the last four bytes of the strip: the big-endian Adler-32 of the inflated bytes
+    if src.len < 6usize { ret (written, Invalid) }
+    let (ad_a, ad_b) = zlib.adler_update(1u32, 0u32, out[..written])
+    let at = src.len - 4usize
+    let stored = (u32(src[at]) << 24u32) | (u32(src[at + 1usize]) << 16u32) | (u32(src[at + 2usize]) << 8u32) | u32(src[at + 3usize])
+    if stored != ((ad_b << 16u32) | ad_a) { ret (written, Invalid) }
     ret (written, ok)
 }
 

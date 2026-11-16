@@ -4819,18 +4819,7 @@
       "score": 0,
       "model": "sonnet",
       "thinking": "low",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a replay whose delete fails returns the error and the applied count excludes it. Notes: docs/library-hardening-plan.md."
-    },
-    {
-      "id": "L240",
-      "category": "library",
-      "group": "Library",
-      "order": 453,
-      "title": "TIFF inflate skips zlib validation",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "low",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a strip with a corrupt checksum is `Invalid`. Notes: docs/library-hardening-plan.md."
+      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a replay whose delete fails returns the error and the applied count excludes it. Notes: docs/library-hardening-plan.md. Checked 2026-11-16: table_delete answers only found or not, and the db_storage fixture (check 14) replays a log whose random deletes name keys the table never held, so making a missing key an error breaks its goldens (applied 20, sum 362); decide first whether redo of a delete is idempotent, then change the fixture log or the contract together."
     },
     {
       "id": "L241",
