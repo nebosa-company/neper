@@ -1296,10 +1296,10 @@
       "group": "CRAN parity",
       "order": 743,
       "title": "osqp and clarabel: quadratic and conic solvers",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN ranks 815, 880; CVXR 807 is the modelling layer over them). Mid. e.math.opt.convex has convex solvers. Acceptance, equal to osqp and clarabel within the solver tolerance: osqp ADMM with rho updates and warm starts, status codes and iteration counts; clarabel for zero, nonnegative, second-order, exponential and power cones."
+      "evidence": "Partial (D6643). e.algo.stat.osqppkg.solve (convex QP with two-sided constraints by the OSQP ADMM iteration, dense, run to primal and dual residuals below 1e-11) equals osqp solve_osqp on Windows: solution and objective at 1e-6 (oracle_osqp, 48 values; Linux pending). Open: sparse input, adaptive rho, polishing, infeasibility and unboundedness certificates, warm starts, update of problem data, clarabel and the conic solvers (SOCP, SDP, exponential cone). Was: Open (CRAN ranks 815, 880; CVXR 807 is the modelling layer over them). Mid. e.math.opt.convex has convex solvers. Acceptance, equal to osqp and clarabel within the solver tolerance: osqp ADMM with rho updates and warm starts, status codes and iteration counts; clarabel for zero, nonnegative, second-order, exponential and power cones."
     },
     {
       "id": "L493",

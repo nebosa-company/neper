@@ -46982,3 +46982,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `riskregpkg.score` weights subjects by the Kaplan-Meier censoring survival: an event by the horizon by `1/G(T_i-)` (the left limit), a subject still at risk by `1/G(horizon)`, a subject censored by the horizon by 0. The Brier score is the mean over all n of `(1 - p_i)^2 w_i` for events and `p_i^2 w_i` for those still at risk; the AUC is the weighted share of case-control pairs (cases the events by the horizon, controls those still at risk) with a higher risk for the case, ties counting one half.
 
 **Result.** `oracle_riskregression` agrees with riskRegression `Score(..., metrics = c("auc", "brier"), null.model = FALSE)` on Windows (48 values, 50 to 200 subjects); Linux pending. L491 stays partial: tied times, covariate-dependent censoring, competing risks, standard errors.
+
+## D6643 — osqp: ADMM quadratic programs
+
+**Decision.** `osqppkg.solve` runs OSQP's ADMM with rho 0.1, sigma 1e-6 and relaxation 1.6, factoring `P + sigma I + rho A'A` once (a dense inverse), and stops only when the primal residual `|Ax - z|` and the dual residual `|Px + q + A'y|` are both below 1e-11. Stopping on the size of the last step (below 1e-13) ended slowly converging cases early, with an objective 3 percent off on a two-variable, four-constraint problem.
+
+**Result.** `oracle_osqp` agrees with osqp (eps 1e-12, polishing) on Windows at 1e-6 (48 values; strictly convex problems with ranges and equalities); Linux pending. L489 stays partial: sparse input, adaptive rho, certificates, clarabel and the conic solvers.
