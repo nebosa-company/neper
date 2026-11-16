@@ -172,3 +172,4 @@ oracle_nortest
 oracle_palettes
 oracle_truncnorm
 oracle_pbivnorm
+oracle_corpcor
