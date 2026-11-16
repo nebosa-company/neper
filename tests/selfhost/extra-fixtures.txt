@@ -291,3 +291,4 @@ oracle_energy
 oracle_bayesfactor
 oracle_tsa
 oracle_gsdesign
+oracle_sampling

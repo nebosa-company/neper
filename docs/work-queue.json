@@ -1439,10 +1439,10 @@
       "group": "CRAN parity",
       "order": 746,
       "title": "sampling: survey sampling designs",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 980). Mid. Needs the R RNG streams. Acceptance, equal to sampling value for value under set.seed: srswor, srswr, UPsystematic, UPtille, UPmidzuno, UPbrewer, UPmaxentropy, balancedsampling and fastflightcube, strata, cluster, calib, inclusionprobabilities, rake."
+      "evidence": "Partial (D6191). inclusionprobabilities, UPsystematic, UPpoisson, srswor, UPrandomsystematic, UPtille draws and the Horvitz-Thompson estimator equal sampling on Windows (oracle_sampling; Linux pending). Open: the other UP designs, strata and clusters, calibration, joint inclusion probabilities, variance estimators. Was: Open (CRAN rank 980). Mid. Needs the R RNG streams. Acceptance, equal to sampling value for value under set.seed: srswor, srswr, UPsystematic, UPtille, UPmidzuno, UPbrewer, UPmaxentropy, balancedsampling and fastflightcube, strata, cluster, calib, inclusionprobabilities, rake."
     },
     {
       "id": "L509",

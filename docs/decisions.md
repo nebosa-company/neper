@@ -45562,3 +45562,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.tsa` gives TSA::periodogram: the mean is removed, the series is padded with zeros to the next length N whose prime factors are only 2, 3 and 5 (stats::nextn, as spec.pgram does), the value at frequency j / N for j = 1 .. floor(N / 2) is 2 |F_j|^2 / n for the original length n, and the entry whose frequency equals 0.5 is halved. The comparison is exact floating point: the package builds the frequencies as seq.int(1 / N, by = 1 / N), and for N = 12 the sixth is 0.5000000000000001, so the Nyquist value is not halved there but is for N = 36 and 54; the port builds the frequencies the same way. Not here: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax, the cumulative periodogram, eacf and the diagnostics.
 
 **Result.** `oracle_tsa` equals TSA on 20 cases on Windows; Linux pending. L452 is partial.
+
+## D6191 — sampling: inclusion probabilities and the UP and SRS designs
+
+`e.algo.stat.sampling` computes first-order inclusion probabilities (the capped-and-rescaled proportional rule of inclusionprobabilities), draws UPsystematic (one uniform, cumulative-sum differences modulo one), UPpoisson (one uniform per unit), srswor (sample.int), UPrandomsystematic (a random order, then systematic) and UPtille (the elimination procedure) from R's generator under the same seed so the selected units equal the package's, and gives the Horvitz-Thompson estimator. Not here: the other UP designs (Brewer, Midzuno, maxentropy, pivotal, cube), stratification and clustering, calibration, joint inclusion probabilities and the variance estimators.
+
+**Result.** `oracle_sampling` equals sampling on 191 cases on Windows; Linux pending. L508 is partial.
