@@ -658,10 +658,10 @@
       "group": "CRAN parity",
       "order": 641,
       "title": "hdrcde: highest density regions",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 837). Small to mid. Acceptance, equal to hdrcde: hdr and hdr.den for densities and samples, cde with the normal-reference and cross-validated bandwidths, hdr.cde, modal regions and the mode estimates."
+      "evidence": "Partial (D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows; oracle_rdensity; Linux pending). Open: hdr, hdr.den, cde, hdr.cde and the mode estimates. Was: Open (CRAN rank 837). Small to mid. Acceptance, equal to hdrcde: hdr and hdr.den for densities and samples, cde with the normal-reference and cross-validated bandwidths, hdr.cde, modal regions and the mode estimates."
     },
     {
       "id": "L480",

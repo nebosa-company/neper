@@ -3344,4 +3344,5 @@ D6472	663	gamlss.dist: seven more densities
 D6473	732	bayestestR: hdi, eti, p_direction and rope
 D6474	729	performance: lm indices
 D6475	813	cubature: box integrals of fixed integrands
-D6476	946	geepack: Gaussian geeglm with independence and exchangeable correlation
+D6476	947	geepack: Gaussian geeglm with independence and exchangeable correlation
+D6477	945	stats::density, Gaussian kernel

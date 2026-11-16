@@ -46030,3 +46030,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.geepackpkg` is new: `geeglm_gaussian` iterates the generalized least-squares step with the working correlation, the scale phi = RSS / N (not N - p) and, for exchangeable, alpha = sum of within-cluster residual cross products / phi / number of pairs (not pairs - p), then forms the robust sandwich H^-1 (sum X_i' R^-1 r_i r_i' R^-1 X_i) H^-1. The two denominators were found by comparing candidates in R before they were coded.
 
 **Result.** `oracle_geepackpkg` agrees with geepack on 408 cases on Windows: independence at rel 1e-8 and exchangeable at 1e-4, because geepack stops at tol 1e-5 while this iterates to 1e-12; 20 data sets of 15 to 40 clusters of 3 to 6. Other families and links, unequal clusters, AR(1) and unstructured correlation, jackknife and bootstrap variances, geese and the Wald tests are open; Linux pending. L430 is partial.
+
+## D6477 — stats::density, Gaussian kernel
+
+`e.algo.stat.rdensity` is new: `bw_nrd0`, `grid_for` and `density_gauss` reproduce density.default as R 4.6 computes it (old.coords = FALSE): cut 3 and ext 4, linear binning on a 2n grid, a kernel evaluated at offsets of (up - lo) / (n - 1), a circular convolution by the direct sum, and linear interpolation to the requested points. The grid is 512, or the next power of two at or above n.user when that is larger. Two traps cost runs: R before 4.4 spaced the kernel at 2 (up - lo) / (2n - 1), and a request of 1000 points silently moves the FFT grid to 1024.
+
+**Result.** `oracle_rdensity` equals stats::density on 140 cases on Windows at rel 1e-9, 20 samples of 30 to 300 draws at 512, 200 and 1000 output points with the default and explicit bandwidths. Weights, the other kernels and bandwidth rules and adjust are open; Linux pending. It is the base L479 (hdrcde) needs and is recorded there.

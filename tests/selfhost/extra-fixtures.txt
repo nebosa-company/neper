@@ -298,6 +298,7 @@ oracle_bayestestr
 oracle_performancepkg
 oracle_cubaturepkg
 oracle_geepackpkg
+oracle_rdensity
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -340,3 +341,4 @@ oracle_bayestestr
 oracle_performancepkg
 oracle_cubaturepkg
 oracle_geepackpkg
+oracle_rdensity
