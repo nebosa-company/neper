@@ -1045,3 +1045,32 @@ fn j_test(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> 
     let (t2, q2) = coef_t(a, x2, y, n, p2 + 1usize, p2)
     ret (t1, q1, t2, q2)
 }
+
+// car::powerTransform(lm)$lambda for a positive response: the maximiser of the Box-Cox profile log-likelihood over [-3, 3] by golden-section search to 1e-12; R reaches it through optimize and L-BFGS-B, so it agrees to the optimiser's tolerance (about 1e-4)
+fn power_transform_lambda(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> f64 {
+    let gr = (math.sqrt[f64](5.0f64) - 1.0f64) / 2.0f64
+    var lo = 0.0f64 - 3.0f64
+    var hi = 3.0f64
+    var c = hi - gr * (hi - lo)
+    var d = lo + gr * (hi - lo)
+    var fc = box_cox_ll(a, x, y, n, p, c)
+    var fd = box_cox_ll(a, x, y, n, p, d)
+    var it = 0usize
+    while it < 120usize && hi - lo > 1.0e-12f64 {
+        if fc > fd {
+            hi = d
+            d = c
+            fd = fc
+            c = hi - gr * (hi - lo)
+            fc = box_cox_ll(a, x, y, n, p, c)
+        } else {
+            lo = c
+            c = d
+            fc = fd
+            d = lo + gr * (hi - lo)
+            fd = box_cox_ll(a, x, y, n, p, d)
+        }
+        it += 1usize
+    }
+    ret (lo + hi) / 2.0f64
+}

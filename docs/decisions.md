@@ -46492,3 +46492,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `j_test` adds the fitted values of each non-nested model to the other (M1 on the intercept and the first predictor, M2 on the intercept and the remaining predictors) and reports the t value and p value of the added coefficient, as the coeftest rows of lmtest::jtest.
 
 **Result.** `oracle_carlmtest` agrees with lmtest on 48 new values on Windows (1188 cases in all); Linux pending. L300 stays partial (powerTransform, Anova for factors, bootstrap covariances).
+
+## D6554 — car: powerTransform lambda
+
+**Decision.** `power_transform_lambda` maximises the Box-Cox profile log-likelihood of D6534 over [-3, 3] by golden-section search. R starts L-BFGS-B from an `optimize` result and stops at its own tolerance, so the oracle compares at 2e-3 rather than 1e-9.
+
+**Result.** `oracle_carlmtest` agrees with powerTransform on 12 samples (1200 cases in all) on Windows; Linux pending. L300 at 0.85: Anova for factors and the bootstrap covariances stay open.

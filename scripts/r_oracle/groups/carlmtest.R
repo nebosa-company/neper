@@ -15,6 +15,7 @@ for (rep in 1:12) {
   add("bpc", a, as.numeric(bptest(m, studentize = FALSE)$statistic)); add("reset", a, as.numeric(resettest(m)$statistic)); add("bpp", a, bptest(m)$p.value); g <- gqtest(m); add("gq", a, as.numeric(g$statistic)); add("gqp", a, g$p.value); add("resetp", a, resettest(m)$p.value)
   for (lg in c(2, 4)) for (ad in c(FALSE, TRUE)) { dv <- diag(NeweyWest(m, lag = lg, prewhite = FALSE, adjust = ad)); add("nw", c(a, lg, as.numeric(ad)), sum(dv * seq_along(dv))) }
   yp <- exp(as.vector(y) / 3); d2 <- data.frame(yp = yp, X); mp <- lm(yp ~ ., d2); mp$call$data <- d2; mp$call$formula <- as.formula("yp ~ .", env = list2env(list(yp = yp)));  ap <- c(n, k + 1, yp, as.vector(t(des))); for (lm0 in c(-1.5, -0.5, 0, 0.3, 1, 2)) add("bc", c(ap, lm0), boxCox(mp, lambda = lm0, plotit = FALSE)$y)
+  ptl <- tryCatch(as.numeric(suppressWarnings(powerTransform(mp))$lambda), error = function(e) NA); if (is.finite(ptl)) cases[[length(cases) + 1]] <- case("pt_lambda", ap, ptl, rel = 2e-3, abs = 2e-3)
   for (ty in 1:3) { an <- if (ty == 1) anova(m) else Anova(m, type = ty); for (j in 1:k) { jj <- if (ty == 3) j + 1 else j; add("an", c(a, ty, j), an$`F value`[jj]); add("anp", c(a, ty, j), an$`Pr(>F)`[jj]) } }
   q <- sample(1:min(3, k + 1), 1); H <- matrix(round(rnorm(q * (k + 1)), 2), q, k + 1); rh <- round(rnorm(q, 0, 0.5), 2); lh <- suppressWarnings(linearHypothesis(m, H, rh)); add("lh", c(a, q, as.vector(t(H)), rh), lh$F[2]); add("lhp", c(a, q, as.vector(t(H)), rh), lh$`Pr(>F)`[2])
   nv <- ncvTest(m); add("ncv", a, nv$ChiSquare); add("ncvp", a, nv$p)
