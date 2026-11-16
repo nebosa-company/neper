@@ -359,3 +359,87 @@ fn sinh_of(x: f64) -> f64 { ret (math.exp[f64](x) - math.exp[f64](0.0f64 - x)) /
 fn cosh_of(x: f64) -> f64 { ret (math.exp[f64](x) + math.exp[f64](0.0f64 - x)) / 2.0f64 }
 
 fn asinh_of(x: f64) -> f64 { ret math.log[f64](x + math.sqrt[f64](x * x + 1.0f64)) }
+
+// cheby2(n, rs, w, type): Chebyshev type II (stopband attenuation rs dB, w the stopband edge), low-pass or high-pass
+fn cheby2(n: usize, rs: f64, w: f64, high: bool, b: []f64, a: []f64) {
+    let eps = 1.0f64 / math.sqrt[f64](math.pow[f64](10.0f64, rs / 10.0f64) - 1.0f64)
+    let mu = asinh_of(1.0f64 / eps) / f64(n)
+    let warped = 4.0f64 * math.tan[f64](pi() * w / 2.0f64)
+    var pr: [20]f64 = zero
+    var pim: [20]f64 = zero
+    var zr: [20]f64 = zero
+    var zi: [20]f64 = zero
+    var nz = 0usize
+    var k = 1usize
+    while k <= n {
+        let th = pi() * f64(2usize * k - 1usize) / f64(2usize * n)
+        // the type I pole inverted: 1 / (-sinh(mu) sin(th) + j cosh(mu) cos(th))
+        let cr = 0.0f64 - sinh_of(mu) * math.sin[f64](th)
+        let ci = cosh_of(mu) * math.cos[f64](th)
+        let cd = cr * cr + ci * ci
+        var sr = cr / cd
+        var si = 0.0f64 - ci / cd
+        if high {
+            let den = sr * sr + si * si
+            sr = warped * sr / den
+            si = 0.0f64 - warped * si / den
+        } else {
+            sr = warped * sr
+            si = warped * si
+        }
+        let nr = 1.0f64 + sr / 4.0f64
+        let ni = si / 4.0f64
+        let dr = 1.0f64 - sr / 4.0f64
+        let di = 0.0f64 - si / 4.0f64
+        let dd = dr * dr + di * di
+        pr[k - 1usize] = (nr * dr + ni * di) / dd
+        pim[k - 1usize] = (ni * dr - nr * di) / dd
+        // the zero j / cos(th) of the prototype, absent when cos(th) = 0 (the odd-order middle pole)
+        let ct = math.cos[f64](th)
+        if math.abs[f64](ct) > 1.0e-12f64 {
+            var yr = 0.0f64
+            var yi = 1.0f64 / ct
+            if high {
+                // w / (j y) = -j w / y
+                yi = 0.0f64 - warped / yi
+            } else {
+                yi = warped * yi
+            }
+            let znr = 1.0f64 + yr / 4.0f64
+            let zni = yi / 4.0f64
+            let zdr = 1.0f64 - yr / 4.0f64
+            let zdi = 0.0f64 - yi / 4.0f64
+            let zd = zdr * zdr + zdi * zdi
+            zr[nz] = (znr * zdr + zni * zdi) / zd
+            zi[nz] = (zni * zdr - znr * zdi) / zd
+            nz += 1usize
+            yr = 0.0f64
+        }
+        k += 1usize
+    }
+    // zeros at infinity of the prototype: z = -1 (low-pass) or z = +1 (high-pass)
+    while nz < n {
+        zr[nz] = -1.0f64
+        if high { zr[nz] = 1.0f64 }
+        zi[nz] = 0.0f64
+        nz += 1usize
+    }
+    poly_from_roots(pr[0usize..n], pim[0usize..n], a)
+    poly_from_roots(zr[0usize..n], zi[0usize..n], b)
+    var x = 1.0f64
+    if high { x = 0.0f64 - 1.0f64 }
+    var nb = 0.0f64
+    var na = 0.0f64
+    var j = 0usize
+    while j <= n {
+        nb = nb * x + b[j]
+        na = na * x + a[j]
+        j += 1usize
+    }
+    let g = na / nb
+    j = 0usize
+    while j <= n {
+        b[j] = b[j] * g
+        j += 1usize
+    }
+}

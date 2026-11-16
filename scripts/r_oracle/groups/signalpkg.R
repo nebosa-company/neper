@@ -32,4 +32,9 @@ for (rep in 1:24) {
   ch <- cheby1(n, rp, w, if (hi == 1) "high" else "low")
   add("c1b", c(hi, n, w, rp), sum(ch$b * seq_along(ch$b))); add("c1a", c(hi, n, w, rp), sum(ch$a * seq_along(ch$a)))
 }
+for (rep in 1:24) {
+  n <- sample(2:6, 1); w <- runif(1, 0.1, 0.9); hi <- rep %% 2; rs <- runif(1, 20, 60)
+  ch <- cheby2(n, rs, w, if (hi == 1) "high" else "low")
+  add("c2b", c(hi, n, w, rs), sum(ch$b * seq_along(ch$b))); add("c2a", c(hi, n, w, rs), sum(ch$a * seq_along(ch$a)))
+}
 emit("signalpkg", "signal", list(cases))
