@@ -65,6 +65,18 @@ fn series(a: *mem.Arena, x: []const f64, id: u8, n: usize, p2: f64, p3: f64, fla
     if id >= 21u8 && id <= 24u8 { let (r, re) = ttr.adx(a, px, y, z, n, id - 21u8)
         out = r
         e = re }
+    if id == 25u8 { let (r, re) = ttr.sar(a, px, y, p2, p3)
+        out = r
+        e = re }
+    if id == 26u8 || id == 27u8 { let (r, re) = ttr.delt(a, px, n, id == 27u8)
+        out = r
+        e = re }
+    if id >= 28u8 && id <= 30u8 {
+        let (buf, be) = mem.alloc[f64](a, len)
+        if be != ok { os.exit(6) }
+        let np = ttr.period_return(a, px, z, id - 28u8, flag, buf)
+        out = buf[0usize..np]
+    }
     if e != ok { os.exit(6) }
     ret out
 }

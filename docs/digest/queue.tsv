@@ -11,7 +11,6 @@ L321	library	0.65	572	boot: bootstrap and permutation confidence intervals	Parti
 L322	library	0.5	578	class and FNN: knn variants, SOM, LVQ, entropy estimators	Partial (D6029, D6080): FNN entropy, KL.divergence and mutinfo equal FNN on 338 values on Windows (oracle_fnn).
 L323	library	0.65	606	permute: restricted permutation designs	Partial (D6030, D6081): allPerms for free, series and mirrored series, alone and within blocks, equals permute on 90 values on Windows (oracle_allperms).
 L325	library	0.4	585	KernSmooth and tseries remainder	Partial (D6031, D6082): KernSmooth locpoly (scalar bandwidth, normal kernel) equals R on 150 values on Windows (oracle_locpoly).
-L326	library	0.8	458	quantmod and TTR: technical indicators	Partial (D6032, D6083): ZLEMA, CCI, stoch and ADX equal TTR on Windows (oracle_ttr).
 L329	library	0.6	445	ggsci and ggthemes palettes	Partial (D6034).
 L356	library	0.6	438	truncnorm, CompQuadForm and pbivnorm: three small distribution packages	Partial (D6035).
 L357	library	0.5	432	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).

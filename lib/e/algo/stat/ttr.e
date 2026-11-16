@@ -2,9 +2,11 @@
 // RSI, MACD, Bollinger bands, ROC (continuous and discrete), OBV, TR and ATR, as TTR 0.24 computes them.
 // NA is NaN and leads the output as TTR pads it.
 //
-// Not here: ZLEMA, ADX, CCI, stochastics, SAR, quantmod periodReturn and Delt, and the xts index handling.
+// Also ZLEMA, CCI, stochastics, ADX, SAR and quantmod Delt and periodReturn (on day numbers). Not here: the xts index
+// handling and the other quantmod helpers.
 
 use e.math
+use e.time
 use e.mem
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
@@ -399,4 +401,106 @@ fn adx(a: *mem.Arena, high: []const f64, low: []const f64, close: []const f64, n
     if part == 2u8 { ret (dx, ok) }
     let (av, ae) = ema(a, dx, n, true, 0.0f64)
     ret (av, ae)
+}
+
+// SAR(HL, accel = c(af0, afmax)): Wilder's parabolic stop and reverse; the initial gap is the sample sd of high - low
+fn sar(a: *mem.Arena, hi: []const f64, lo: []const f64, af_start: f64, af_max: f64) -> ([]f64, err) {
+    let n = hi.len
+    let (r, e) = filled(a, n)
+    if e != ok { ret (r, e) }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += hi[i] - lo[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    var ss = 0.0f64
+    i = 0usize
+    while i < n {
+        ss += (hi[i] - lo[i] - mean) * (hi[i] - lo[i] - mean)
+        i += 1usize
+    }
+    let gap = math.sqrt[f64](ss / f64(n - 1usize))
+    var sig0 = 1i64
+    var xpt0 = hi[0usize]
+    var af0 = af_start
+    r[0usize] = lo[0usize] - gap
+    i = 1usize
+    while i < n {
+        let sig1 = sig0
+        let xpt1 = xpt0
+        let af1 = af0
+        let lmin = math.min[f64](lo[i - 1usize], lo[i])
+        let lmax = math.max[f64](hi[i - 1usize], hi[i])
+        if sig1 == 1i64 {
+            if lo[i] > r[i - 1usize] { sig0 = 1i64 } else { sig0 = 0i64 - 1i64 }
+            xpt0 = math.max[f64](lmax, xpt1)
+        } else {
+            if hi[i] < r[i - 1usize] { sig0 = 0i64 - 1i64 } else { sig0 = 1i64 }
+            xpt0 = math.min[f64](lmin, xpt1)
+        }
+        if sig0 == sig1 {
+            r[i] = r[i - 1usize] + (xpt1 - r[i - 1usize]) * af1
+            if af1 == af_max { af0 = af_max } else { af0 = af_start + af1 }
+            if sig0 == 1i64 {
+                if !(xpt0 > xpt1) { af0 = af1 }
+                r[i] = math.min[f64](r[i], lmin)
+            } else {
+                if !(xpt0 < xpt1) { af0 = af1 }
+                r[i] = math.max[f64](r[i], lmax)
+            }
+        } else {
+            af0 = af_start
+            r[i] = xpt0
+        }
+        i += 1usize
+    }
+    ret (r, ok)
+}
+
+// Delt(x, k = lag, type): x[i] / x[i - k] - 1, or the log of the ratio
+fn delt(a: *mem.Arena, x: []const f64, k: usize, log_type: bool) -> ([]f64, err) {
+    let (r, e) = filled(a, x.len)
+    if e != ok { ret (r, e) }
+    var i = k
+    while i < x.len {
+        if log_type { r[i] = math.log[f64](x[i] / x[i - k]) } else { r[i] = x[i] / x[i - k] - 1.0f64 }
+        i += 1usize
+    }
+    ret (r, ok)
+}
+
+// periodReturn(x, period, leading = TRUE) for a single price series on day numbers `days` (1970 epoch):
+// period 0 monthly, 1 quarterly, 2 yearly; one return per period from the last price of each period, the first
+// against the first price of the series; returns the number of periods
+fn period_return(a: *mem.Arena, x: []const f64, days: []const f64, period: u8, log_type: bool, out: []f64) -> usize {
+    let n = x.len
+    var np = 0usize
+    var prev_key = 0i64 - 1i64
+    var last_close = 0.0f64
+    var i = 0usize
+    while i < n {
+        let (y, m, _d) = time.civil_from_days(i64(days[i]))
+        var key = y * 12i64 + (m - 1i64)
+        if period == 1u8 { key = y * 4i64 + (m - 1i64) / 3i64 }
+        if period == 2u8 { key = y }
+        if key != prev_key && i > 0usize {
+            out[np] = last_close
+            np += 1usize
+        }
+        prev_key = key
+        last_close = x[i]
+        i += 1usize
+    }
+    out[np] = last_close
+    np += 1usize
+    // closes of the periods are in out; convert to returns in place
+    var p = np
+    while p > 1usize {
+        p -= 1usize
+        if log_type { out[p] = math.log[f64](out[p] / out[p - 1usize]) } else { out[p] = out[p] / out[p - 1usize] - 1.0f64 }
+    }
+    if log_type { out[0usize] = math.log[f64](out[0usize] / x[0usize]) } else { out[0usize] = out[0usize] / x[0usize] - 1.0f64 }
+    ret np
 }

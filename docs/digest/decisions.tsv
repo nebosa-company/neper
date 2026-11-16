@@ -3155,4 +3155,5 @@ D6079	1148	boot: balanced and parametric simulation, drawn the way the package d
 D6080	1390	FNN entropy estimators by brute-force search
 D6081	1150	permute allPerms: the enumeration orders
 D6082	1348	KernSmooth locpoly: linear binning, then one weighted least-squares fit per grid point
-D6083	1457	TTR: ZLEMA with a fractional lag, CCI, stochastic oscillator, ADX
+D6083	1458	TTR: ZLEMA with a fractional lag, CCI, stochastic oscillator, ADX
+D6084	1048	TTR SAR, quantmod Delt and periodReturn; L326 closed
