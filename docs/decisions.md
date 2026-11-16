@@ -45118,3 +45118,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.pcapp` ports `kendallNlogN` (stable `order`, tied runs sorted, merge-sort inversion count, `s / sqrt(n1) / sqrt(n2)`) as `cor_fk`, and l1median_HoCr and l1median_VaZh with their return codes and iteration counts (the weights of HoCr are summed in order of increasing distance, as R does). R's `l1median` runs `nlm`; the minimiser is unique, so the result is compared to the tolerance asked (1e-5 on the position). HoCr's code and iteration count are not compared: it stops on a strict decrease of a sum of square roots, and the last bit of `pow` decides it near convergence.
 
 **Result.** `oracle_pcapp` equals pcaPP on 659 values on Windows; Linux pending. Open on L357: PCAproj, PCAgrid, sPCAgrid.
+
+## D6127 — pcaPP PCAproj
+
+**Context.** L357 still lacked PCAproj.
+
+**Decision.** `pca_proj` ports `CPCAproj::Calc` and `CPCAprojU::Update` for the eachobs candidate set: the direction of each observation is scored by sd, mad or qn (`qn_of` takes the k-th smallest pairwise distance with k = C(n/2+1, 2) and pcaPP's small-sample factor, which equals the package's weighted-median search), the best one is refined by the sign-sum update with step halving, and the data are deflated between components. `proj_finish` is R's `.DataPostProc` and `.loadSgnU`. Two behaviours of the C are reproduced on purpose: the sign sum treats a score of exactly zero as positive (`ApaBm_signC` subtracts only for c < 0), and the last loading of a full-rank fit is completed around the first row because `which_max1` assigns `pMax = p` and so always answers 0.
+
+**Result.** `oracle_pcapp` equals pcaPP on 9462 values on Windows (sdev, loadings and scores for the three scales, with and without the update); Linux pending. lincomb and sphere draw random candidates, and PCAgrid and sPCAgrid stay open on L357.

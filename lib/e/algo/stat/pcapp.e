@@ -2,7 +2,8 @@
 // Croux) and `l1median_vazh` (Vardi and Zhang) of L1Median_HoCr.cpp and L1Median_VardiZhang.cpp. R's `l1median` itself runs `nlm`;
 // the minimum of the sum of Euclidean distances is unique, so these reach it to the tolerance asked.
 //
-// Not here: PCAproj, PCAgrid and sPCAgrid.
+// And PCAproj (the eachobs search with the optional update, scale estimators sd, mad and qn). Not here: PCAgrid and sPCAgrid, the
+// lincomb and sphere candidate sets (they draw random directions) and the null-space completion R applies when the data collapse.
 
 use e.math
 use e.mem
@@ -444,4 +445,421 @@ fn l1median_vazh(a: *mem.Arena, x: []const f64, n: usize, p: usize, med: []f64, 
     }
     out.iter = maxit - i
     ret (out, ok)
+}
+
+fn sorted_copy(a: *mem.Arena, v: []const f64) -> []f64 {
+    let n = v.len
+    let (c, e1) = mem.alloc[f64](a, n)
+    let (b, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret c }
+    var i = 0usize
+    while i < n {
+        c[i] = v[i]
+        i += 1usize
+    }
+    let _ = msort(c, b, 0usize, n)
+    ret c
+}
+
+fn median_of(a: *mem.Arena, v: []const f64) -> f64 {
+    let n = v.len
+    if n == 0usize { ret 0.0f64 / 0.0f64 }
+    let s = sorted_copy(a, v)
+    if n % 2usize == 1usize { ret s[n / 2usize] }
+    ret (s[n / 2usize - 1usize] + s[n / 2usize]) / 2.0f64
+}
+
+fn mad_of(a: *mem.Arena, v: []const f64, centre: bool) -> f64 {
+    let n = v.len
+    let (d, e) = mem.alloc[f64](a, n)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var c = 0.0f64
+    if centre { c = median_of(a, v) }
+    var i = 0usize
+    while i < n {
+        d[i] = math.abs[f64](v[i] - c)
+        i += 1usize
+    }
+    ret median_of(a, d) * 1.482602218505602f64
+}
+
+fn sd_of(v: []const f64) -> f64 {
+    let n = v.len
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        s += v[i]
+        i += 1usize
+    }
+    let m = s / f64(n)
+    var d = 0.0f64
+    i = 0usize
+    while i < n {
+        d += (v[i] - m) * (v[i] - m)
+        i += 1usize
+    }
+    ret math.sqrt[f64](d / f64(n - 1usize))
+}
+
+// qn: the Croux and Rousseeuw scale, the k-th smallest pairwise distance with k = C(n/2 + 1, 2), times pcaPP's small-sample factor.
+fn qn_of(a: *mem.Arena, v: []const f64) -> f64 {
+    let n = v.len
+    let y = sorted_copy(a, v)
+    let m = n * (n - 1usize) / 2usize
+    let (dd, e1) = mem.alloc[f64](a, m)
+    let (bf, e2) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var t = 0usize
+    var i = 1usize
+    while i < n {
+        var j = 0usize
+        while j < i {
+            dd[t] = y[i] - y[j]
+            t += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let _ = msort(dd, bf, 0usize, m)
+    let h = n / 2usize + 1usize
+    let kk = h * (h - 1usize) / 2usize
+    let raw = dd[kk - 1usize]
+    var fact = 0.0f64
+    if n <= 9usize {
+        var c = 0.400f64
+        if n == 3usize { c = 0.993f64 }
+        if n == 4usize { c = 0.514f64 }
+        if n == 5usize { c = 0.845f64 }
+        if n == 6usize { c = 0.612f64 }
+        if n == 7usize { c = 0.859f64 }
+        if n == 8usize { c = 0.670f64 }
+        if n == 9usize { c = 0.874f64 }
+        fact = 2.21914446598508f64 * c
+    } else if n % 2usize == 1usize {
+        fact = 2.21914446598508f64 * f64(n) / (f64(n) + 1.4f64)
+    } else {
+        fact = 2.21914446598508f64 * f64(n) / (f64(n) + 3.8f64)
+    }
+    ret raw * fact
+}
+
+// ApplyMethod of pcaPP: 0 sd, 1 mad, 2 qn, 3 scaled median of absolute values, 5 mean square
+fn scale_method(a: *mem.Arena, v: []const f64, method: i64) -> f64 {
+    if method == 0i64 { ret sd_of(v) }
+    if method == 1i64 { ret mad_of(a, v, true) }
+    if method == 2i64 { ret qn_of(a, v) }
+    if method == 3i64 { ret mad_of(a, v, false) }
+    var s = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        s += v[i] * v[i]
+        i += 1usize
+    }
+    ret s / f64(v.len)
+}
+
+// out = x %*% w over the first nr rows of the nn by p column-major x
+fn proj(x: []const f64, nn: usize, p: usize, nr: usize, w: []const f64, out: []f64) {
+    var r = 0usize
+    while r < nr {
+        out[r] = 0.0f64
+        r += 1usize
+    }
+    var c = 0usize
+    while c < p {
+        r = 0usize
+        while r < nr {
+            out[r] += w[c] * x[c * nn + r]
+            r += 1usize
+        }
+        c += 1usize
+    }
+}
+
+// PCAproj on the centred data y (nn by p, column-major, the first nr rows are the observations): loadings (p by k), scores (nr by k) and
+// lambda (k) as C_pcaProj and C_pcaProj_up return them, before R sorts the components. A lambda of -1 marks a column left unfilled.
+fn pca_proj(a: *mem.Arena, y: []const f64, nn: usize, p: usize, nr: usize, k: usize, method: i64, zero_tol: f64, update: bool, maxit: usize, maxhalf: usize, load: []f64, z: []f64, lam: []f64) -> err {
+    let (x, e1) = mem.alloc[f64](a, nn * p)
+    let (hlp, e2) = mem.alloc[f64](a, nn)
+    let (tf, e3) = mem.alloc[bool](a, nn)
+    let (cs, e4) = mem.alloc[f64](a, nn)
+    let (ts, e5) = mem.alloc[f64](a, nn)
+    let (vh, e6) = mem.alloc[f64](a, p)
+    let (cur, e7) = mem.alloc[f64](a, p)
+    let (am, e8) = mem.alloc[f64](a, nn * p)
+    let (sg, e9) = mem.alloc[f64](a, nn)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret e1 }
+    var i = 0usize
+    while i < nn * p {
+        x[i] = y[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < p * k {
+        load[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < nr * k {
+        z[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        lam[i] = 0.0f64
+        i += 1usize
+    }
+    var cur_lambda = 0.0f64
+    var ki = 0usize
+    var done = false
+    while ki < k && !done {
+        var r = 0usize
+        while r < nn {
+            hlp[r] = 0.0f64
+            r += 1usize
+        }
+        var c = 0usize
+        while c < p {
+            r = 0usize
+            while r < nn {
+                hlp[r] += x[c * nn + r] * x[c * nn + r]
+                r += 1usize
+            }
+            c += 1usize
+        }
+        var short = 0usize
+        r = 0usize
+        while r < nn {
+            tf[r] = hlp[r] > zero_tol
+            if tf[r] { short += 1usize }
+            r += 1usize
+        }
+        if short == 0usize {
+            var q = ki
+            while q < k {
+                lam[q] = 0.0f64
+                if ki > 0usize { lam[q] = 0.0f64 - 1.0f64 }
+                q += 1usize
+            }
+            if ki == 0usize {
+                var d = 0usize
+                while d < p && d < k {
+                    load[d * p + d] = 1.0f64
+                    d += 1usize
+                }
+            }
+            done = true
+        } else {
+            var rr = 0usize
+            r = 0usize
+            while r < nn {
+                if tf[r] {
+                    c = 0usize
+                    while c < p {
+                        am[c * short + rr] = x[c * nn + r] / math.sqrt[f64](hlp[r])
+                        c += 1usize
+                    }
+                    rr += 1usize
+                }
+                r += 1usize
+            }
+            if ki < p - 1usize {
+                var best = short
+                var has_best = false
+                var j = short
+                while j > 0usize {
+                    j -= 1usize
+                    c = 0usize
+                    while c < p {
+                        cur[c] = am[c * short + j]
+                        c += 1usize
+                    }
+                    proj(x, nn, p, nr, cur, cs)
+                    let scat = scale_method(a, cs[0usize..nr], method)
+                    if !has_best || cur_lambda < scat {
+                        best = j
+                        has_best = true
+                        cur_lambda = scat
+                    }
+                }
+                c = 0usize
+                while c < p {
+                    load[ki * p + c] = am[c * short + best]
+                    c += 1usize
+                }
+                proj(x, nn, p, nn, load[ki * p..ki * p + p], cs)
+                if update {
+                    var m = maxit
+                    var stop = false
+                    while m > 0usize && !stop {
+                        var q = 0usize
+                        r = 0usize
+                        while r < nn {
+                            if tf[r] {
+                                sg[q] = 1.0f64
+                                if cs[r] < 0.0f64 { sg[q] = 0.0f64 - 1.0f64 }
+                                q += 1usize
+                            }
+                            r += 1usize
+                        }
+                        c = 0usize
+                        var sq = 0.0f64
+                        while c < p {
+                            var s = 0.0f64
+                            q = 0usize
+                            while q < short {
+                                s += am[c * short + q] * sg[q]
+                                q += 1usize
+                            }
+                            vh[c] = s
+                            sq += s * s
+                            c += 1usize
+                        }
+                        var new_obj = 0.0f64
+                        var kk = 0usize
+                        var step_ok = false
+                        while kk <= maxhalf && !step_ok {
+                            if kk > 0usize {
+                                sq = 0.0f64
+                                c = 0usize
+                                while c < p {
+                                    vh[c] = (vh[c] + load[ki * p + c]) / 2.0f64
+                                    sq += vh[c] * vh[c]
+                                    c += 1usize
+                                }
+                            }
+                            let nrm = math.sqrt[f64](sq)
+                            c = 0usize
+                            while c < p {
+                                vh[c] = vh[c] / nrm
+                                c += 1usize
+                            }
+                            proj(x, nn, p, nn, vh, ts)
+                            new_obj = scale_method(a, ts[0usize..nn], method)
+                            if new_obj >= cur_lambda { step_ok = true }
+                            kk += 1usize
+                        }
+                        if new_obj < cur_lambda {
+                            stop = true
+                        } else {
+                            r = 0usize
+                            while r < nn {
+                                cs[r] = ts[r]
+                                r += 1usize
+                            }
+                            c = 0usize
+                            while c < p {
+                                load[ki * p + c] = vh[c]
+                                c += 1usize
+                            }
+                            cur_lambda = new_obj
+                            m -= 1usize
+                        }
+                    }
+                }
+                r = 0usize
+                while r < nr {
+                    z[ki * nr + r] = cs[r]
+                    r += 1usize
+                }
+                if ki < k - 1usize {
+                    c = 0usize
+                    while c < p {
+                        r = 0usize
+                        while r < nn {
+                            x[c * nn + r] -= cs[r] * load[ki * p + c]
+                            r += 1usize
+                        }
+                        c += 1usize
+                    }
+                }
+                lam[ki] = cur_lambda
+            } else {
+                let lc = ki * p
+                var r2 = 0usize
+                while r2 < p {
+                    var s = 1.0f64
+                    c = 0usize
+                    while c < p - 1usize {
+                        s -= load[c * p + r2] * load[c * p + r2]
+                        c += 1usize
+                    }
+                    load[lc + r2] = math.sqrt[f64](s)
+                    r2 += 1usize
+                }
+                // pcaPP's which_max1 assigns pMax = p instead of pCur, so it always answers the first element
+                let nmax = 0usize
+                r2 = 0usize
+                while r2 < p {
+                    var s = 0.0f64
+                    c = 0usize
+                    while c < p - 1usize {
+                        s += load[c * p + r2] * load[c * p + nmax]
+                        c += 1usize
+                    }
+                    if r2 == nmax { s = 0.0f64 - s }
+                    if s > 0.0f64 { load[lc + r2] = 0.0f64 - load[lc + r2] }
+                    r2 += 1usize
+                }
+                proj(x, nn, p, nn, load[lc..lc + p], cs)
+                lam[ki] = scale_method(a, cs[0usize..nr], method)
+                r = 0usize
+                while r < nr {
+                    z[ki * nr + r] = cs[r]
+                    r += 1usize
+                }
+            }
+            ki += 1usize
+        }
+    }
+    ret ok
+}
+
+// R's .DataPostProc and .loadSgnU: the components in decreasing order of lambda (ties keep their order), each loading column signed so
+// its largest entry is positive.
+fn proj_finish(p: usize, nr: usize, k: usize, load: []f64, z: []f64, lam: []f64) {
+    var pass = 0usize
+    while pass < k {
+        var i = 0usize
+        while i + 1usize < k {
+            if lam[i + 1usize] > lam[i] {
+                let t = lam[i]
+                lam[i] = lam[i + 1usize]
+                lam[i + 1usize] = t
+                var c = 0usize
+                while c < p {
+                    let u = load[i * p + c]
+                    load[i * p + c] = load[(i + 1usize) * p + c]
+                    load[(i + 1usize) * p + c] = u
+                    c += 1usize
+                }
+                c = 0usize
+                while c < nr {
+                    let u = z[i * nr + c]
+                    z[i * nr + c] = z[(i + 1usize) * nr + c]
+                    z[(i + 1usize) * nr + c] = u
+                    c += 1usize
+                }
+            }
+            i += 1usize
+        }
+        pass += 1usize
+    }
+    var i = 0usize
+    while i < k {
+        var im = 0usize
+        var c = 1usize
+        while c < p {
+            if math.abs[f64](load[i * p + c]) > math.abs[f64](load[i * p + im]) { im = c }
+            c += 1usize
+        }
+        if load[i * p + im] < 0.0f64 {
+            c = 0usize
+            while c < p {
+                load[i * p + c] = 0.0f64 - load[i * p + c]
+                c += 1usize
+            }
+        }
+        i += 1usize
+    }
 }

@@ -3,6 +3,7 @@
 #   corfk: (n, x[n], y[n])
 #   hocr, vazh, nlm: (n, p, maxit, tol, zero.tol, X[n*p column-major], m0[p], what) what 0..p-1 par, p value, p+1 code, p+2 iterations
 suppressMessages(library(pcaPP))
+library(stats)
 cases <- list()
 add <- function(fn, args, want, rel = 1e-9, abs = 1e-12) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
 set.seed(20261120)
@@ -27,6 +28,27 @@ for (rep in 1:40) {
   if (!is.null(nl)) {
     for (j in 1:p) add("nlm", c(a, j - 1), nl$par[j], rel = 1e-5, abs = 1e-6)
     add("nlm", c(a, p), nl$value, rel = 1e-7, abs = 1e-8)
+  }
+}
+#   qn: (n, x[n], what 0) fn "qn"; pj: (n, p, k, method, update, maxit, maxhalf, zero.tol, X[n*p], m[p], what) what 0..k-1 sdev, then loadings (p*k), then scores (n*k)
+for (v in c(0, 5, 6, 7, 10, 11, 25, 60)) if (v) {
+  x <- if (v %% 2) rnorm(v) else round(rnorm(v), 1)
+  add("qn", c(v, x), qn(x))
+}
+for (rep in 1:30) {
+  p <- sample(2:4, 1); k <- sample(1:min(p, 3), 1); n <- sample(c(12, 25, 40), 1)
+  X <- matrix(rnorm(n * p), n, p) %*% matrix(rnorm(p * p), p, p)
+  if (rep %% 3 == 0) X[1:2, ] <- X[1:2, ] * 8
+  m <- apply(X, 2, median)
+  for (me in 0:2) for (up in c(TRUE, FALSE)) {
+    r <- tryCatch(suppressWarnings(PCAproj(X, k = k, method = c("sd", "mad", "qn")[me + 1], CalcMethod = "eachobs", update = up, center = m, scale = NULL)), error = function(e) NULL)
+    if (is.null(r)) next
+    a <- c(n, p, k, me, as.numeric(up), 5, 5, 1e-16, X, m)
+    for (j in 1:k) add("pj", c(a, j - 1), r$sdev[j], 1e-8, 1e-10)
+    L <- unclass(r$loadings)
+    for (j in 1:(p * k)) add("pj", c(a, k + j - 1), L[j], 1e-8, 1e-10)
+    S <- r$scores
+    for (j in 1:(n * k)) add("pj", c(a, k + p * k + j - 1), S[j], 1e-8, 1e-10)
   }
 }
 emit("pcapp", "pcaPP", list(cases))

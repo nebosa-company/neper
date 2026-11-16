@@ -3198,4 +3198,5 @@ D6122	1122	tseries bds.test, tsbootstrap, terasvirta.test and white.test
 D6123	1118	solve.QP and portfolio.optim close L325
 D6124	536	CompQuadForm davies and farebrother
 D6125	917	QUADPACK dqagie and the non-central chi-squared
-D6126	834	pcaPP cor.fk and the geometric median
+D6126	835	pcaPP cor.fk and the geometric median
+D6127	1092	pcaPP PCAproj

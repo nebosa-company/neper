@@ -13,6 +13,29 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let n = usize(z[0usize])
     if str.eq(c.name, "corfk") { ret pc.cor_fk(a, z[1usize..1usize + n], z[1usize + n..1usize + 2usize * n], true) }
+    if str.eq(c.name, "qn") { ret pc.qn_of(a, z[1usize..1usize + n]) }
+    if str.eq(c.name, "pj") {
+        let pp = usize(z[1usize])
+        let k = usize(z[2usize])
+        let off = 8usize
+        let (yy, ey) = mem.alloc[f64](a, n * pp)
+        let (ld, el) = mem.alloc[f64](a, pp * k)
+        let (zz, ez) = mem.alloc[f64](a, n * k)
+        let (lm, em) = mem.alloc[f64](a, k)
+        if ey != ok || el != ok || ez != ok || em != ok { ret nan }
+        var q = 0usize
+        while q < n * pp {
+            yy[q] = z[off + q] - z[off + n * pp + q / n]
+            q += 1usize
+        }
+        let e = pc.pca_proj(a, yy, n, pp, n, k, i64(z[3usize]), z[7usize], z[4usize] == 1.0f64, usize(z[5usize]), usize(z[6usize]), ld, zz, lm)
+        if e != ok { ret nan }
+        pc.proj_finish(pp, n, k, ld, zz, lm)
+        let wi = usize(z[off + n * pp + pp])
+        if wi < k { ret lm[wi] }
+        if wi < k + pp * k { ret ld[wi - k] }
+        ret zz[wi - k - pp * k]
+    }
     let p = usize(z[1usize])
     let x = z[5usize..5usize + n * p]
     let (med, e1) = mem.alloc[f64](a, p)

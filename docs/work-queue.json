@@ -42,10 +42,10 @@
       "group": "CRAN parity",
       "order": 554,
       "title": "corpcor and pcaPP: shrinkage covariance and robust PCA",
-      "score": 0.7,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6036). corpcor (unweighted) cov.shrink, cor.shrink, var.shrink, both lambda estimates, pcor.shrink, pseudoinverse equal R on Windows (Linux pending). Plus (D6126) pcaPP cor.fk, l1median_HoCr and l1median_VaZh equal R on Windows (oracle_pcapp). Open: pcaPP PCAproj, PCAgrid, sPCAgrid. Was: Open (CRAN ranks 375, 366). Small. Acceptance, equal to R: cov.shrink, cor.shrink, var.shrink with their lambda estimates, pseudoinverse, fast.svd, pcor.shrink; PCAproj, PCAgrid, cor.fk, l1median and sPCAgrid."
+      "evidence": "Partial (D6036). corpcor (unweighted) cov.shrink, cor.shrink, var.shrink, both lambda estimates, pcor.shrink, pseudoinverse equal R on Windows (Linux pending). Plus (D6126) pcaPP cor.fk, l1median_HoCr and l1median_VaZh equal R on Windows (oracle_pcapp). Plus (D6127) pcaPP PCAproj (eachobs, sd, mad and qn, with and without the update) equal R. Open: PCAgrid, sPCAgrid. Was: Open (CRAN ranks 375, 366). Small. Acceptance, equal to R: cov.shrink, cor.shrink, var.shrink with their lambda estimates, pseudoinverse, fast.svd, pcor.shrink; PCAproj, PCAgrid, cor.fk, l1median and sPCAgrid."
     },
     {
       "id": "L386",
