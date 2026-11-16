@@ -970,3 +970,32 @@ fn coef_t(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, j: 
     let t = f0.beta[j] / se
     ret (t, 2.0f64 * nb.pt(0.0f64 - math.abs[f64](t), f64(n - p), true, false))
 }
+
+// influence measures of an lm: kind 0 cooks.distance, 1 rstandard, 2 rstudent, 3 dffits, 4 hatvalues; out receives the n values
+fn influence(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, kind: usize, out: []f64) -> err {
+    let (f0, e1) = ols(a, x, y, n, p)
+    if e1 != ok { ret e1 }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f0.resid[i] * f0.resid[i]
+        i += 1usize
+    }
+    let dfr = f64(n - p)
+    let s2 = rss / dfr
+    i = 0usize
+    while i < n {
+        let h = f0.hat[i]
+        let e = f0.resid[i]
+        let rs = e / math.sqrt[f64](s2 * (1.0f64 - h))
+        let si = math.sqrt[f64]((rss - e * e / (1.0f64 - h)) / (dfr - 1.0f64))
+        let rt = e / (si * math.sqrt[f64](1.0f64 - h))
+        if kind == 0usize { out[i] = e * e * h / (f64(p) * s2 * (1.0f64 - h) * (1.0f64 - h)) }
+        if kind == 1usize { out[i] = rs }
+        if kind == 2usize { out[i] = rt }
+        if kind == 3usize { out[i] = rt * math.sqrt[f64](h / (1.0f64 - h)) }
+        if kind == 4usize { out[i] = h }
+        i += 1usize
+    }
+    ret ok
+}

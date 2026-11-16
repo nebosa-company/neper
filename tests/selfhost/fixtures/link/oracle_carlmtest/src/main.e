@@ -54,6 +54,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "ct_t") { ret ct }
         ret cp
     }
+    if str.eq(c.name, "inf_s") || str.eq(c.name, "inf_1") {
+        let (ib, ie) = mem.alloc[f64](a, n)
+        if ie != ok { ret 0.0f64 / 0.0f64 }
+        if cl.influence(a, des, y, n, p, usize(x[2usize + n + n * p]), ib) != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(c.name, "inf_1") { ret ib[0usize] }
+        var si = 0.0f64
+        var q = 0usize
+        while q < n {
+            si += ib[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret si
+    }
     if str.eq(c.name, "bc") { ret cl.box_cox_ll(a, des, y, n, p, x[2usize + n + n * p]) }
     if str.eq(c.name, "an") || str.eq(c.name, "anp") {
         let (as1, ap1) = cl.anova_term(a, des, y, n, p, usize(x[2usize + n + n * p]), usize(x[3usize + n + n * p]))

@@ -46480,3 +46480,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `coef_t` is coeftest for an lm: `beta_j / sqrt(s^2 (X'X)^-1_jj)` with `2 pt(-|t|, n - p)`; `granger_f` is grangertest(x, y, order): the regression of y_t on an intercept, its own `order` lags and the lags of x, tested for dropping the x lags by the waldtest F (the first `order` rows lost).
 
 **Result.** `oracle_carlmtest` agrees with lmtest on 134 new values on Windows (1020 cases in all); Linux pending. L300 stays partial.
+
+## D6552 — car: influence measures
+
+**Decision.** `influence` gives cooks.distance (`e^2 h / (p s^2 (1 - h)^2)`), rstandard (`e / sqrt(s^2 (1 - h))`), rstudent (with the leave-one-out sigma `sqrt((RSS - e^2/(1 - h)) / (n - p - 1))`), dffits (`rstudent sqrt(h/(1 - h))`) and hatvalues of an lm.
+
+**Result.** `oracle_carlmtest` agrees with R on 120 new values on Windows (1140 cases in all); Linux pending. L300 stays partial.

@@ -22,6 +22,7 @@ for (rep in 1:12) {
   if (k >= 2) { qd <- sample(1:k, 1); m0 <- if (k == qd) lm(y ~ 1, d) else lm(y ~ ., d[, seq_len(k + 1 - qd), drop = FALSE]); a3 <- c(a, qd); lt <- lrtest(m0, m); wt <- waldtest(m0, m)
     add("lr", a3, lt$Chisq[2]); add("lrp", a3, lt$`Pr(>Chisq)`[2]); add("wf", a3, wt$F[2]); add("wfp", a3, wt$`Pr(>F)`[2]) }
   for (j in 0:k) { cm <- coeftest(m); a4 <- c(a, j); add("ct_t", a4, cm[j + 1, 3]); add("ct_p", a4, cm[j + 1, 4]) }
+  for (kd in 0:4) { v <- switch(kd + 1, cooks.distance(m), rstandard(m), rstudent(m), dffits(m), hatvalues(m)); a5 <- c(a, kd); add("inf_s", a5, sum(v * seq_along(v))); add("inf_1", a5, v[1]) }
   for (ord in c(1, 2, 4)) { a2 <- c(a, ord); b1 <- bgtest(m, order = ord); b2 <- bgtest(m, order = ord, type = "F"); add("bg_c", a2, as.numeric(b1$statistic)); add("bg_cp", a2, b1$p.value); add("bg_f", a2, as.numeric(b2$statistic)); add("bg_fp", a2, b2$p.value) }
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
 }

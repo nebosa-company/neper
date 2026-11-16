@@ -3419,4 +3419,5 @@ D6547	496	L472 closed
 D6548	512	pROC: multiclass AUC
 D6549	545	pROC: unpaired DeLong test
 D6550	418	lmtest: lrtest and waldtest
-D6551	488	lmtest: coeftest and grangertest
+D6551	489	lmtest: coeftest and grangertest
+D6552	427	car: influence measures
