@@ -215,3 +215,4 @@ oracle_mixsqp
 oracle_algdesign
 oracle_minpacklm
 oracle_boot2
+oracle_fnn

@@ -108,10 +108,10 @@
       "group": "CRAN parity",
       "order": 535,
       "title": "class and FNN: knn variants, SOM, LVQ, entropy estimators",
-      "score": 0.25,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6029). class knn, knn1 and knn.cv (tie breaking, l, prob, use.all) equal class on Windows (Linux run pending). Open: SOM, batchSOM, lvqinit, lvq1, lvq2, lvq3, olvq1; FNN get.knn, knn.reg, entropy, mutinfo, KL.divergence. Was: Open (CRAN ranks 276, 246). Small. e.ml.knn searches; the rest is missing. Acceptance, equal to R under set.seed: class knn, knn1, knn.cv with its tie breaking, SOM and batchSOM, lvqinit, lvq1, lvq2, lvq3, olvq1; FNN get.knn, knn.reg, entropy, mutinfo, KL.divergence."
+      "evidence": "Partial (D6029, D6080): FNN entropy, KL.divergence and mutinfo equal FNN on 338 values on Windows (oracle_fnn). Earlier:  class knn, knn1 and knn.cv (tie breaking, l, prob, use.all) equal class on Windows (Linux run pending). Open: SOM, batchSOM, lvqinit, lvq1, lvq2, lvq3, olvq1; FNN get.knn and knn.reg. Was: Open (CRAN ranks 276, 246). Small. e.ml.knn searches; the rest is missing. Acceptance, equal to R under set.seed: class knn, knn1, knn.cv with its tie breaking, SOM and batchSOM, lvqinit, lvq1, lvq2, lvq3, olvq1; FNN get.knn, knn.reg, entropy, mutinfo, KL.divergence."
     },
     {
       "id": "L323",
