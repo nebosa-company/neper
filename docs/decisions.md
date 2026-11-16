@@ -45886,3 +45886,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.ksamples` is new: `ad_test` computes ad.test's AD statistic for both versions (version 1 the untied form summed over the N - 1 order-statistic cut points, version 2 the mid-rank form over distinct values) and the standardised T.AD with sigma_N from the Scholz-Stephens polynomial.
 
 **Result.** `oracle_ksamples` agrees on 120 cases on Windows, 30 draws of 2 to 5 samples, half with heavy ties. ad.test rounds its matrix to 3 to 5 significant digits, so the golden values are the same formulas in full precision, asserted against ad.test to its rounding inside the R group. The asymptotic, exact and simulated p-values, qn.test and contingency2xt are open; Linux pending. L474 is partial.
+
+## D6453 — arm: logit, invlogit, se.coef and binned.resids
+
+`e.algo.stat.arm` is new: `logit`, `invlogit`, `se_coef` for a linear model (sqrt of sigma^2 times the diagonal of the inverse cross-product) and `binned_resids`, the table behind binnedplot, including the tie branch that steps a break down to the next smaller distinct value or to minus infinity, and the unique() merge of equal breaks.
+
+**Result.** `oracle_arm` equals arm on 911 cases on Windows, 25 binned tables over 3 to 10 classes with and without tied x. sim, bayesglm, discrete, corrplot data and standardize are open; Linux pending. L409 is partial.

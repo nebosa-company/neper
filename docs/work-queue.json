@@ -427,10 +427,10 @@
       "group": "CRAN parity",
       "order": 612,
       "title": "arm: applied regression helpers",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 570). Small to mid. Acceptance, equal to arm under set.seed: sim for lm, glm and merMod, bayesglm with Cauchy and t priors, se.coef, invlogit, logit, binned residuals, discrete, corrplot data, standardize."
+      "evidence": "Partial (D6453 logit, invlogit, se.coef, binned.resids equal arm on Windows; oracle_arm; Linux pending). Open: sim, bayesglm, discrete, corrplot data, standardize. Was: Open (CRAN rank 570). Small to mid. Acceptance, equal to arm under set.seed: sim for lm, glm and merMod, bayesglm with Cauchy and t priors, se.coef, invlogit, logit, binned residuals, discrete, corrplot data, standardize."
     },
     {
       "id": "L411",
