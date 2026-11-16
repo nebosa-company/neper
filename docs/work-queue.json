@@ -26,17 +26,6 @@
       "evidence": "Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2); Linux pending. D6589: naturalSpline (cubic, at least two internal knots, with and without the intercept; the package's null-space basis, which is not splines::ns's) equals splines2 on 40 summaries. D6590: cSpline (scaled and unscaled; the integral of the I-spline by exact Gauss-Legendre on each knot interval) equals splines2 on 120 summaries. D6591: the derivatives of the M-splines (orders 1, 2) and I-splines (orders 1, 2) equal splines2 on 240 summaries (they were already in the code). D6595: the first and second derivatives of M-splines and the first two derivatives of I-splines (an I-spline derivative is an M-spline of one lower derivative order) equal splines2 on 240 summaries. D6596: periodic bSpline and mSpline (degree up to nk + 1) equal splines2 on 120 summaries. D6704: ibs (the integral of the B-splines, degree 1 to 4, with and without intercept and internal knots) equals splines2 on 60 summaries. D6705: bernsteinPoly values and first two derivatives (degree 2 to 6, with and without the intercept) equal splines2 on 180 summaries. D6706: nsk values (cubic, 2 to 4 internal knots, with and without the intercept) equal splines2 on 58 summaries. Open: periodic iSpline and cSpline, nsk derivatives, trim and integrals, bernsteinPoly integrals, naturalSpline with fewer knots or other degrees, periodic bases, integrals, extrapolation, df knots, predict and update. Original: Open (CRAN rank 782). Small. Acceptance, equal to splines2: bSpline, mSpline, iSpline, cSpline, naturalSpline and periodic bases with knots, degree, derivatives, integrals, boundary conditions and the predict and update behaviour."
     },
     {
-      "id": "L447",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 586,
-      "title": "norm: EM and data augmentation for multivariate normal data",
-      "score": 0.85,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6074): e.algo.stat.normem has em.norm (path-exact) and loglik.norm, equal to norm on 355 values on Windows (oracle_norm); Linux pending. D6709: logpost.norm (with and without a prior) and mi.inference equal norm on 172 values. D6710: em.norm with a prior (posterior-mode EM) equals norm on 120 values. D6729: e.algo.stat.normda has rngseed, imp.norm, da.norm (with and without a prior, several steps) and ninvwish, with the package random number generator and its single-precision rounding, equal to norm on 3308 values (oracle_norm). ecm.norm is not in the norm package. Open: mda.norm (monotone data augmentation), the getparam and makeparam getters. Original: Open (CRAN rank 757). Small. Acceptance, equal to norm under set.seed: prelim.norm, em.norm, ecm.norm, da.norm, imp.norm, rngseed, loglik.norm, logpost.norm, and the parameter getters."
-    },
-    {
       "id": "L469",
       "category": "library",
       "group": "CRAN parity",

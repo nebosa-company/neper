@@ -661,3 +661,373 @@ fn ninvwish(a: *mem.Arena, rn: *Rn, p: usize, tau: f64, m: f64, mu0: []const f64
     ninvwn(rn, &k, out, tau, m, mat, z, b, ci)
     ret ok
 }
+
+// ---- monotone data augmentation (mda.norm) ----
+
+fn max0(a: usize, b: usize) -> usize {
+    if a > b { ret a }
+    ret b
+}
+
+// sj(j): the last pattern for which variable j needs imputing to make the pattern monotone; 1-based values over npatt, zero for none
+fn sjn(p: usize, npatt: usize, r: []const i64, sj: []usize) {
+    var j = 1usize
+    while j <= p {
+        var patt = npatt + 1usize
+        var go = true
+        while go {
+            patt -= 1usize
+            go = false
+            if patt >= 1usize {
+                if r[(patt - 1usize) * p + j - 1usize] == 0i64 { go = true }
+            }
+        }
+        sj[j - 1usize] = patt
+        j += 1usize
+    }
+    var tmp = sj[p - 1usize]
+    j = p - 1usize
+    while j >= 1usize {
+        sj[j - 1usize] = max0(sj[j - 1usize], tmp)
+        tmp = sj[j - 1usize]
+        j -= 1usize
+    }
+}
+
+fn chol2(k: *const Pk, th: []f64, last: usize) {
+    var i = 0usize
+    while i <= last {
+        var tmp = 0.0f64
+        var q = 0usize
+        while q < i {
+            let v = th[ps(k, q, i)]
+            tmp += v * v
+            q += 1usize
+        }
+        th[ps(k, i, i)] = math.sqrt[f64](th[ps(k, i, i)] - tmp)
+        var j = i + 1usize
+        while j <= last {
+            tmp = 0.0f64
+            q = 0usize
+            while q < i {
+                tmp += th[ps(k, q, i)] * th[ps(k, q, j)]
+                q += 1usize
+            }
+            th[ps(k, i, j)] = (th[ps(k, i, j)] - tmp) / th[ps(k, i, i)]
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+fn ph2thn(k: *const Pk, th: []f64) {
+    let p = k.p
+    var j = 1usize
+    while j < p {
+        swp(k, th, j, j, 1.0f64)
+        j += 1usize
+    }
+    j = 1usize
+    while j < p {
+        swp(k, th, j, p, 0.0f64 - 1.0f64)
+        j += 1usize
+    }
+}
+
+// the columns of a pattern with the given code, up to column last
+fn gtcols_to(p: usize, r: []const i64, patt: usize, want: i64, last: usize, out: []usize) -> usize {
+    var n = 0usize
+    var j = 1usize
+    while j <= last {
+        if r[patt * p + j - 1usize] == want {
+            out[n] = j
+            n += 1usize
+        }
+        j += 1usize
+    }
+    ret n
+}
+
+// mda.norm: steps monotone I and P steps from theta; the new theta goes to theta
+fn mda_norm(a: *mem.Arena, rn: *Rn, x0: []const f64, n: usize, p: usize, theta: []f64, steps: usize) -> err {
+    let (s, e) = prelim(a, x0, n, p)
+    if e != ok { ret e }
+    let (k, ek) = mkpsi(a, p)
+    if ek != ok { ret ek }
+    let d = k.d
+    let npatt = s.npatt
+    let (sj, e1) = mem.alloc[usize](a, p)
+    let (nmon, e2) = mem.alloc[usize](a, p)
+    let (last, e3) = mem.alloc[usize](a, npatt)
+    let (layer, e4) = mem.alloc[usize](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    sjn(p, npatt, s.r, sj)
+    var j = 1usize
+    while j <= p {
+        var c0 = 0usize
+        var q = 0usize
+        while q < sj[j - 1usize] {
+            c0 += s.nmdp[q]
+            q += 1usize
+        }
+        nmon[j - 1usize] = c0
+        j += 1usize
+    }
+    j = p
+    while j >= 1usize {
+        var start = 1usize
+        if j < p { start = sj[j] + 1usize }
+        var q = start
+        while q <= sj[j - 1usize] {
+            last[q - 1usize] = j
+            q += 1usize
+        }
+        j -= 1usize
+    }
+    var nlayer = 0usize
+    j = p
+    while j >= 1usize {
+        if j == p {
+            if sj[j - 1usize] > 0usize { nlayer += 1usize }
+        } else if sj[j - 1usize] > sj[j] {
+            nlayer += 1usize
+        }
+        layer[j - 1usize] = nlayer
+        j -= 1usize
+    }
+    let (tobs, e5) = mem.alloc[f64](a, nlayer * d + 1usize)
+    let (t, e6) = mem.alloc[f64](a, d)
+    let (c, e7) = mem.alloc[f64](a, d)
+    let (th, e8) = mem.alloc[f64](a, d)
+    let (nt, e9) = mem.alloc[f64](a, d)
+    let (oc, e10) = mem.alloc[usize](a, p)
+    let (mc, e11) = mem.alloc[usize](a, p)
+    let (z, e12) = mem.alloc[f64](a, p)
+    let (v, e13) = mem.alloc[f64](a, p + 1usize)
+    if e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok { ret mem.Full }
+    var i = 0usize
+    while i < nlayer * d {
+        tobs[i] = 0.0f64
+        i += 1usize
+    }
+    var lpatt = 0usize
+    var l = 1usize
+    while l <= nlayer {
+        let fpatt = lpatt + 1usize
+        var jj = p + 1usize
+        var go = true
+        while go {
+            jj -= 1usize
+            if layer[jj - 1usize] == l { go = false }
+        }
+        lpatt = sj[jj - 1usize]
+        var patt = fpatt
+        while patt <= lpatt {
+            let noc = gtcols_to(p, s.r, patt - 1usize, 1i64, last[patt - 1usize], oc)
+            var row = s.mdpst[patt - 1usize]
+            while row < s.mdpst[patt - 1usize] + s.nmdp[patt - 1usize] {
+                tobs[(l - 1usize) * d + ps(&k, 0usize, 0usize)] += 1.0f64
+                var q = 0usize
+                while q < noc {
+                    tobs[(l - 1usize) * d + ps(&k, 0usize, oc[q])] += s.x[row * p + oc[q] - 1usize]
+                    var w = q
+                    while w < noc {
+                        tobs[(l - 1usize) * d + ps(&k, oc[q], oc[w])] += s.x[row * p + oc[q] - 1usize] * s.x[row * p + oc[w] - 1usize]
+                        w += 1usize
+                    }
+                    q += 1usize
+                }
+                row += 1usize
+            }
+            patt += 1usize
+        }
+        l += 1usize
+    }
+    var st = 0usize
+    while st < steps {
+        i = 0usize
+        while i < d {
+            th[i] = theta[i]
+            c[i] = theta[i]
+            i += 1usize
+        }
+        var junk = gauss(rn)
+        junk += 0.0f64
+        var patt = 1usize
+        while patt <= npatt {
+            swpobs(&k, th, s.r, patt - 1usize)
+            let nmc = gtcols_to(p, s.r, patt - 1usize, 0i64, last[patt - 1usize], mc)
+            let noc = gtcols_to(p, s.r, patt - 1usize, 1i64, last[patt - 1usize], oc)
+            var q = 0usize
+            while q < nmc {
+                var w = q
+                while w < nmc {
+                    c[ps(&k, mc[q], mc[w])] = th[ps(&k, mc[q], mc[w])]
+                    w += 1usize
+                }
+                q += 1usize
+            }
+            chols(&k, c, mc, nmc)
+            var row = s.mdpst[patt - 1usize]
+            while row < s.mdpst[patt - 1usize] + s.nmdp[patt - 1usize] {
+                var jx = 0usize
+                while jx < nmc {
+                    let cj = mc[jx]
+                    var xv = th[ps(&k, 0usize, cj)]
+                    q = 0usize
+                    while q < noc {
+                        xv += th[ps(&k, oc[q], cj)] * s.x[row * p + oc[q] - 1usize]
+                        q += 1usize
+                    }
+                    z[cj - 1usize] = gauss(rn)
+                    q = 0usize
+                    while q <= jx {
+                        xv += z[mc[q] - 1usize] * c[ps(&k, cj, mc[q])]
+                        q += 1usize
+                    }
+                    s.x[row * p + cj - 1usize] = xv
+                    jx += 1usize
+                }
+                row += 1usize
+            }
+            patt += 1usize
+        }
+        i = 0usize
+        while i < d {
+            t[i] = 0.0f64
+            nt[i] = 0.0f64
+            i += 1usize
+        }
+        var lsj = 0usize
+        var lay = 0usize
+        var jc = p
+        while jc >= 1usize {
+            if sj[jc - 1usize] > lsj {
+                lay += 1usize
+                t[ps(&k, 0usize, 0usize)] += tobs[(lay - 1usize) * d + ps(&k, 0usize, 0usize)]
+                var kk = 1usize
+                while kk <= jc {
+                    t[ps(&k, 0usize, kk)] += tobs[(lay - 1usize) * d + ps(&k, 0usize, kk)]
+                    var m = kk
+                    while m <= jc {
+                        t[ps(&k, m, kk)] += tobs[(lay - 1usize) * d + ps(&k, m, kk)]
+                        m += 1usize
+                    }
+                    kk += 1usize
+                }
+                var pt = lsj + 1usize
+                while pt <= sj[jc - 1usize] {
+                    let nmc = gtcols_to(p, s.r, pt - 1usize, 0i64, jc, mc)
+                    let noc = gtcols_to(p, s.r, pt - 1usize, 1i64, jc, oc)
+                    var row = s.mdpst[pt - 1usize]
+                    while row < s.mdpst[pt - 1usize] + s.nmdp[pt - 1usize] {
+                        var q = 0usize
+                        while q < nmc {
+                            let xm = s.x[row * p + mc[q] - 1usize]
+                            t[ps(&k, 0usize, mc[q])] += xm
+                            var w = 0usize
+                            while w < noc {
+                                t[ps(&k, mc[q], oc[w])] += xm * s.x[row * p + oc[w] - 1usize]
+                                w += 1usize
+                            }
+                            w = 0usize
+                            while w <= q {
+                                t[ps(&k, mc[q], mc[w])] += xm * s.x[row * p + mc[w] - 1usize]
+                                w += 1usize
+                            }
+                            q += 1usize
+                        }
+                        row += 1usize
+                    }
+                    pt += 1usize
+                }
+                kk = 0usize
+                while kk < jc {
+                    swp(&k, t, kk, jc, 1.0f64)
+                    kk += 1usize
+                }
+            }
+            let df = f64(nmon[jc - 1usize] + 3usize * (p - jc)) - 1.0f64
+            nt[ps(&k, jc, jc)] = t[ps(&k, jc, jc)] / r32(2.0f64 * gamm(rn, df / 2.0f64))
+            var kk = 0usize
+            while kk < jc {
+                var m = kk
+                while m < jc {
+                    c[ps(&k, kk, m)] = 0.0f64 - nt[ps(&k, jc, jc)] * t[ps(&k, kk, m)]
+                    m += 1usize
+                }
+                kk += 1usize
+            }
+            chol2(&k, c, jc - 1usize)
+            kk = 0usize
+            while kk < jc {
+                v[kk] = gauss(rn)
+                nt[ps(&k, kk, jc)] = t[ps(&k, kk, jc)]
+                var m = 0usize
+                while m <= kk {
+                    nt[ps(&k, kk, jc)] += c[ps(&k, m, kk)] * v[m]
+                    m += 1usize
+                }
+                kk += 1usize
+            }
+            if jc > 1usize {
+                if sj[jc - 2usize] > sj[jc - 1usize] {
+                    kk = 0usize
+                    while kk < jc {
+                        swp(&k, t, kk, jc - 1usize, 0.0f64 - 1.0f64)
+                        kk += 1usize
+                    }
+                } else if sj[jc - 2usize] == sj[jc - 1usize] {
+                    swp(&k, t, jc - 1usize, jc - 1usize, 0.0f64 - 1.0f64)
+                }
+            }
+            lsj = sj[jc - 1usize]
+            jc -= 1usize
+        }
+        nt[ps(&k, 0usize, 0usize)] = 0.0f64 - 1.0f64
+        ph2thn(&k, nt)
+        i = 0usize
+        while i < d {
+            theta[i] = nt[i]
+            i += 1usize
+        }
+        st += 1usize
+    }
+    ret ok
+}
+
+// getparam.norm: mu and sigma (row-major) on the original scale from a theta
+fn getparam(k: *const Pk, theta: []const f64, xbar: []const f64, sdv: []const f64, mu: []f64, sigma: []f64) {
+    let p = k.p
+    var j = 1usize
+    while j <= p {
+        mu[j - 1usize] = theta[ps(k, 0usize, j)] * sdv[j - 1usize] + xbar[j - 1usize]
+        var q = 1usize
+        while q <= p {
+            sigma[(j - 1usize) * p + q - 1usize] = theta[ps(k, j, q)] * sdv[j - 1usize] * sdv[q - 1usize]
+            q += 1usize
+        }
+        j += 1usize
+    }
+}
+
+// makeparam.norm for a (mu, sigma) pair: the theta on the standardised scale
+fn makeparam(k: *const Pk, mu: []const f64, sigma: []const f64, xbar: []const f64, sdv: []const f64, out: []f64) {
+    let p = k.p
+    var i = 0usize
+    while i < k.d {
+        out[i] = 0.0f64
+        i += 1usize
+    }
+    out[0usize] = 0.0f64 - 1.0f64
+    var j = 1usize
+    while j <= p {
+        out[ps(k, 0usize, j)] = (mu[j - 1usize] - xbar[j - 1usize]) / sdv[j - 1usize]
+        var q = 1usize
+        while q <= p {
+            out[ps(k, j, q)] = sigma[(j - 1usize) * p + q - 1usize] / (sdv[j - 1usize] * sdv[q - 1usize])
+            q += 1usize
+        }
+        j += 1usize
+    }
+}

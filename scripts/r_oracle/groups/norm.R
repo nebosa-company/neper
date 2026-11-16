@@ -86,4 +86,21 @@ for (rep in 1:30) {
   sd <- sample(1:100000, 1); burn(); rngseed(sd); res <- ninvwish(s, list(tau, m, mu0, li)); gcount <- gcount + 1 + p * (p - 1) / 2 + p
   for (q in seq_along(res)) cases[[length(cases) + 1]] <- case("niw", c(p, sd, tau, m, mu0, as.vector(t(li)), q - 1), res[q], rel = 1e-9, abs = 1e-10)
 }
+# mda.norm ("mda": (n, p, seed, steps, theta[d], x row-major, q), theta[q] after the steps) and the getters ("gp": (n, p, theta[d], x, q) for getparam mu then sigma row-major; "mp": (n, p, mu[p], sigma[p*p] row-major, x, q) for makeparam.norm)
+for (rep in 1:40) {
+  n <- sample(10:30, 1); p <- sample(2:4, 1)
+  L <- matrix(rnorm(p * p), p, p); S <- crossprod(L) + diag(p)
+  x <- round(matrix(rnorm(n * p), n, p) %*% chol(S) + rep(1:p, each = n), 3); miss <- sample(n * p, round(0.25 * n * p)); x[miss] <- NA
+  keep <- rowSums(!is.na(x)) > 0; x <- x[keep, , drop = FALSE]; n <- nrow(x)
+  if (sum(is.na(x)) == 0) next
+  s <- prelim.norm(x); th <- em.norm(s, showits = FALSE, criterion = 1e-6); xr <- as.vector(t(ifelse(is.na(x), NaN, x)))
+  steps <- sample(1:3, 1); sd <- sample(1:100000, 1)
+  nimp <- sum(sapply(seq_len(s$npatt), function(q) s$nmdp[q] * sum(s$r[q, seq_len(s$last[q])] == 0)))
+  burn(); rngseed(sd); res <- mda.norm(s, th, steps = steps); gcount <- gcount + steps * (1 + nimp + p * (p + 1) / 2)
+  for (q in seq_along(res)) cases[[length(cases) + 1]] <- case("mda", c(n, p, sd, steps, th, xr, q - 1), res[q], rel = 1e-9, abs = 1e-10)
+  g <- getparam.norm(s, th); gv <- c(g$mu, as.vector(t(g$sigma)))
+  for (q in seq_along(gv)) cases[[length(cases) + 1]] <- case("gp", c(n, p, th, xr, q - 1), gv[q], rel = 1e-9, abs = 1e-10)
+  mu <- round(rnorm(p), 3); sg <- crossprod(matrix(round(rnorm(p * p), 2), p, p)) + diag(p); mk <- makeparam.norm(s, list(mu, sg))
+  for (q in seq_along(mk)) cases[[length(cases) + 1]] <- case("mp", c(n, p, mu, as.vector(t(sg)), xr, q - 1), mk[q], rel = 1e-9, abs = 1e-10)
+}
 emit("norm", "norm", list(cases))

@@ -28,6 +28,45 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         nm.mi_inference(ev, sv, z[1usize], ov)
         ret ov[usize(z[3usize + 4usize * mm])]
     }
+    if str.eq(c.name, "mda") {
+        let mn = usize(z[0usize])
+        let mp = usize(z[1usize])
+        let md = (mp + 1usize) * (mp + 2usize) / 2usize
+        var mr: nd.Rn = zero
+        nd.rngseed(&mr, i64(z[2usize]))
+        let (mth, em1) = mem.alloc[f64](a, md)
+        if em1 != ok { ret 0.0f64 / 0.0f64 }
+        var mj = 0usize
+        while mj < md {
+            mth[mj] = z[4usize + mj]
+            mj += 1usize
+        }
+        let me = nd.mda_norm(a, &mr, z[4usize + md..4usize + md + mn * mp], mn, mp, mth, usize(z[3usize]))
+        if me != ok { ret 0.0f64 / 0.0f64 }
+        ret mth[usize(z[4usize + md + mn * mp])]
+    }
+    if str.eq(c.name, "gp") || str.eq(c.name, "mp") {
+        let gn = usize(z[0usize])
+        let gpp = usize(z[1usize])
+        let gd = (gpp + 1usize) * (gpp + 2usize) / 2usize
+        let (pre, ep) = nd.prelim(a, z[2usize + gd..2usize + gd + gn * gpp], gn, gpp)
+        if str.eq(c.name, "mp") {
+            let (pre2, ep2) = nd.prelim(a, z[2usize + gpp + gpp * gpp..2usize + gpp + gpp * gpp + gn * gpp], gn, gpp)
+            let (pk2, ek2) = nd.mkpsi(a, gpp)
+            let (mo, eo2) = mem.alloc[f64](a, gd)
+            if ep2 != ok || ek2 != ok || eo2 != ok { ret 0.0f64 / 0.0f64 }
+            nd.makeparam(&pk2, z[2usize..2usize + gpp], z[2usize + gpp..2usize + gpp + gpp * gpp], pre2.xbar, pre2.sdv, mo)
+            ret mo[usize(z[2usize + gpp + gpp * gpp + gn * gpp])]
+        }
+        let (pk, ek) = nd.mkpsi(a, gpp)
+        let (gm, eg1) = mem.alloc[f64](a, gpp)
+        let (gs, eg2) = mem.alloc[f64](a, gpp * gpp)
+        if ep != ok || ek != ok || eg1 != ok || eg2 != ok { ret 0.0f64 / 0.0f64 }
+        nd.getparam(&pk, z[2usize..2usize + gd], pre.xbar, pre.sdv, gm, gs)
+        let gq = usize(z[2usize + gd + gn * gpp])
+        if gq < gpp { ret gm[gq] }
+        ret gs[gq - gpp]
+    }
     if str.eq(c.name, "niw") {
         let wp = usize(z[0usize])
         let wd = (wp + 1usize) * (wp + 2usize) / 2usize
