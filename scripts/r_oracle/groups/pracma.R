@@ -37,6 +37,17 @@ for (rep in 1:10) {
   xx <- rnorm(3); yy <- rnorm(3); cr <- cross(xx, yy)
   for (c3 in 0:2) add("cross", c(xx, yy, c3), cr[c3 + 1])
 }
+for (rep in 1:12) {
+  n <- sample(5:14, 1); xs <- sort(runif(n, 0, 10)); ys <- cumsum(rnorm(n))
+  if (rep %% 3 == 0) ys <- sort(ys)
+  xq <- runif(4, min(xs), max(xs))
+  for (q in xq) add("pchip", c(n, xs, ys, q), pchip(xs, ys, q))
+  id <- (rep - 1) %% 5
+  f <- list(sin, function(x) exp(-x^2), function(x) 1 / (1 + x^2), sqrt, function(x) cos(5 * x) * exp(-x))[[id + 1]]
+  lo <- if (id == 3) 0 else runif(1, -2, 0); hi <- runif(1, 0.5, 3)
+  add("quadgk", c(id, lo, hi, 1e-8), quadgk(f, lo, hi, tol = 1e-8))
+  add("quadgk", c(id, hi, lo, 1e-5), quadgk(f, hi, lo, tol = 1e-5))
+}
 # nchoosek reference values are filled from R directly
 cases <- lapply(cases, function(cs) { if (cs$fn == "nchoosek") cs$want <- choose(cs$args[1], cs$args[2]); cs })
 emit("pracma", "pracma", list(cases))

@@ -81,6 +81,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if w == 1usize { ret f64(cc) }
         ret f64(d)
     }
+    if str.eq(k, "pchip") {
+        let n = usize(x[0usize])
+        ret pm.pchip(a, x[1usize..1usize + n], x[1usize + n..1usize + 2usize * n], x[1usize + 2usize * n])
+    }
+    if str.eq(k, "quadgk") { ret pm.quadgk(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "nchoosek") { ret pm.nchoosek(x[0usize], x[1usize]) }
     var o: [3]f64 = zero
     pm.cross(x[0usize..3usize], x[3usize..6usize], o[0usize..3usize])

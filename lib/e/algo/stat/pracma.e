@@ -400,3 +400,134 @@ fn cross(x: []const f64, y: []const f64, o: []f64) {
     o[1usize] = x[2usize] * y[0usize] - x[0usize] * y[2usize]
     o[2usize] = x[0usize] * y[1usize] - x[1usize] * y[0usize]
 }
+
+fn sgn(x: f64) -> f64 {
+    if x > 0.0f64 { ret 1.0f64 }
+    if x < 0.0f64 { ret 0.0f64 - 1.0f64 }
+    ret 0.0f64
+}
+
+fn pchip_end(h1: f64, h2: f64, del1: f64, del2: f64) -> f64 {
+    var d = ((2.0f64 * h1 + h2) * del1 - h1 * del2) / (h1 + h2)
+    if sgn(d) != sgn(del1) {
+        d = 0.0f64
+    } else if sgn(del1) != sgn(del2) && math.abs[f64](d) > math.abs[f64](3.0f64 * del1) {
+        d = 3.0f64 * del1
+    }
+    ret d
+}
+
+// pchip: shape-preserving cubic Hermite interpolation of (xi, yi) at x (xi sorted, at least three points)
+fn pchip(a: *mem.Arena, xi: []const f64, yi: []const f64, x: f64) -> f64 {
+    let n = xi.len
+    let (h, e1) = mem.alloc[f64](a, n - 1usize)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (dl, e2) = mem.alloc[f64](a, n - 1usize)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    let (d, e3) = mem.alloc[f64](a, n)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i + 1usize < n {
+        h[i] = xi[i + 1usize] - xi[i]
+        dl[i] = (yi[i + 1usize] - yi[i]) / h[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        d[i] = 0.0f64
+        i += 1usize
+    }
+    i = 1usize
+    while i + 1usize < n {
+        if sgn(dl[i - 1usize]) * sgn(dl[i]) > 0.0f64 {
+            let w1 = 2.0f64 * h[i] + h[i - 1usize]
+            let w2 = h[i] + 2.0f64 * h[i - 1usize]
+            d[i] = (w1 + w2) / (w1 / dl[i - 1usize] + w2 / dl[i])
+        }
+        i += 1usize
+    }
+    d[0usize] = pchip_end(h[0usize], h[1usize], dl[0usize], dl[1usize])
+    d[n - 1usize] = pchip_end(h[n - 2usize], h[n - 3usize], dl[n - 2usize], dl[n - 3usize])
+    var k = 0usize
+    var j = 1usize
+    while j + 1usize < n {
+        if xi[j] <= x { k = j }
+        j += 1usize
+    }
+    let aa = (3.0f64 * dl[k] - 2.0f64 * d[k] - d[k + 1usize]) / h[k]
+    let bb = (d[k] - 2.0f64 * dl[k] + d[k + 1usize]) / (h[k] * h[k])
+    let s = x - xi[k]
+    ret yi[k] + s * (d[k] + s * (aa + s * bb))
+}
+
+fn quad_f(id: usize, x: f64) -> f64 {
+    if id == 0usize { ret math.sin[f64](x) }
+    if id == 1usize { ret math.exp[f64](0.0f64 - x * x) }
+    if id == 2usize { ret 1.0f64 / (1.0f64 + x * x) }
+    if id == 3usize { ret math.sqrt[f64](x) }
+    ret math.cos[f64](5.0f64 * x) * math.exp[f64](0.0f64 - x)
+}
+
+fn gk_node15(i: usize) -> f64 {
+    if i == 0usize { ret 0.0f64 - 0.991455371120813f64 }
+    if i == 1usize { ret 0.0f64 - 0.949107912342758f64 }
+    if i == 2usize { ret 0.0f64 - 0.864864423359769f64 }
+    if i == 3usize { ret 0.0f64 - 0.741531185599394f64 }
+    if i == 4usize { ret 0.0f64 - 0.586087235467691f64 }
+    if i == 5usize { ret 0.0f64 - 0.405845151377397f64 }
+    if i == 6usize { ret 0.0f64 - 0.207784955007899f64 }
+    if i == 7usize { ret 0.0f64 }
+    if i == 8usize { ret 0.207784955007899f64 }
+    if i == 9usize { ret 0.405845151377397f64 }
+    if i == 10usize { ret 0.586087235467691f64 }
+    if i == 11usize { ret 0.741531185599394f64 }
+    if i == 12usize { ret 0.864864423359769f64 }
+    if i == 13usize { ret 0.949107912342758f64 }
+    ret 0.991455371120813f64
+}
+
+fn gk_w15(i: usize) -> f64 {
+    if i == 0usize || i == 14usize { ret 0.0229353220105292f64 }
+    if i == 1usize || i == 13usize { ret 0.0630920926299785f64 }
+    if i == 2usize || i == 12usize { ret 0.10479001032225f64 }
+    if i == 3usize || i == 11usize { ret 0.140653259715526f64 }
+    if i == 4usize || i == 10usize { ret 0.169004726639268f64 }
+    if i == 5usize || i == 9usize { ret 0.190350578064785f64 }
+    if i == 6usize || i == 8usize { ret 0.204432940075299f64 }
+    ret 0.209482141084728f64
+}
+
+fn gk_w7(i: usize) -> f64 {
+    if i == 0usize || i == 6usize { ret 0.12948496616887f64 }
+    if i == 1usize || i == 5usize { ret 0.279705391489277f64 }
+    if i == 2usize || i == 4usize { ret 0.381830050505119f64 }
+    ret 0.417959183673469f64
+}
+
+// quadgk: the package's recursive Gauss-Kronrod 7/15 with its truncated nodes, on a fixed set of integrands (id)
+fn quadgk(id: usize, lo: f64, hi: f64, tol: f64) -> f64 {
+    if lo == hi { ret 0.0f64 }
+    if lo > hi { ret 0.0f64 - quadgk(id, hi, lo, tol) }
+    var q7 = 0.0f64
+    var q15 = 0.0f64
+    var i = 0usize
+    while i < 15usize {
+        q15 += gk_w15(i) * quad_f(id, 0.5f64 * ((hi - lo) * gk_node15(i) + hi + lo))
+        i += 1usize
+    }
+    // the 7-point nodes are the odd-indexed 15-point nodes
+    i = 0usize
+    while i < 7usize {
+        q7 += gk_w7(i) * quad_f(id, 0.5f64 * ((hi - lo) * gk_node15(2usize * i + 1usize) + hi + lo))
+        i += 1usize
+    }
+    q7 = q7 * (hi - lo) / 2.0f64
+    q15 = q15 * (hi - lo) / 2.0f64
+    if q7 != q7 || q15 != q15 { ret q15 }
+    if math.abs[f64](q15 - q7) < tol { ret q15 }
+    let mid = (lo + hi) / 2.0f64
+    if math.abs[f64](hi - lo) < 16.0f64 * eps() { ret quadgk(id, mid, hi, tol) }
+    let q2 = quadgk(id, mid, hi, tol)
+    let q1 = quadgk(id, lo, mid, tol)
+    ret q1 + q2
+}

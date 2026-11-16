@@ -45304,3 +45304,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.pracma` holds trapz, cumtrapz, polyval, polyfit (Householder QR least squares), findpeaks (the package's regular-expression scan done as run-length matching, with its threshold, height, stable decreasing sort, minimum distance and peak count options), rref (with the package's tolerance), the prime count, prime factor sum and count, extended gcd (sign follows the first argument), nchoosek and cross. Not here: quadrature, the root finders, interpolation (pchip, interp1, spline), lowess, savgol, orthogonal polynomials, the matrix functions and the polynom and caTools parts.
 
 **Result.** `oracle_pracma` equals pracma on 212 cases on Windows; Linux pending. L333 is partial.
+
+## D6152 — pracma: pchip and the Gauss-Kronrod quadgk
+
+`e.algo.stat.pracma` gains pchip (shape-preserving cubic Hermite, with the package's end-slope rule) and quadgk, the package's recursive 7/15-point Gauss-Kronrod with its fifteen-digit truncated nodes (the truncation matters at the stated tolerances, so the constants are kept as written). The integrand is chosen by an index over five fixed functions, since the module takes no closures. Not here: the other quadrature routines (quadl, romberg, integral), the root finders, interp1 beyond linear, spline, lowess, savgol, orthogonal polynomials and matrix functions.
+
+**Result.** `oracle_pracma` equals pracma on 284 cases on Windows; Linux pending. L333 stays partial.
