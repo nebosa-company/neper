@@ -134,3 +134,236 @@ fn reg_did_panel(a: *mem.Arena, dy: []const f64, d: []const f64, x: []const f64,
     let sd = math.sqrt[f64](ss / (nf - 1.0f64))
     ret sd * math.sqrt[f64](nf - 1.0f64) / nf
 }
+
+// the logistic regression of d on x (n by p) by iteratively reweighted least squares into beta; false when it fails to converge in 100 steps
+fn logit_fit(a: *mem.Arena, d: []const f64, x: []const f64, n: usize, p: usize, beta: []f64) -> bool {
+    var u = 0usize
+    while u < p {
+        beta[u] = 0.0f64
+        u += 1usize
+    }
+    let (xtwx, e1) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret false }
+    let (inv, e2) = mem.alloc[f64](a, p * p)
+    if e2 != ok { ret false }
+    let (xtz, e3) = mem.alloc[f64](a, p)
+    if e3 != ok { ret false }
+    var it = 0usize
+    while it < 100usize {
+        u = 0usize
+        while u < p {
+            xtz[u] = 0.0f64
+            var v = 0usize
+            while v < p {
+                xtwx[u * p + v] = 0.0f64
+                v += 1usize
+            }
+            u += 1usize
+        }
+        var i = 0usize
+        while i < n {
+            var eta = 0.0f64
+            u = 0usize
+            while u < p {
+                eta += beta[u] * x[i * p + u]
+                u += 1usize
+            }
+            let pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta))
+            let w = pr * (1.0f64 - pr)
+            let z = eta + (d[i] - pr) / w
+            u = 0usize
+            while u < p {
+                xtz[u] += w * x[i * p + u] * z
+                var v = 0usize
+                while v < p {
+                    xtwx[u * p + v] += w * x[i * p + u] * x[i * p + v]
+                    v += 1usize
+                }
+                u += 1usize
+            }
+            i += 1usize
+        }
+        if ols.inverse(a, xtwx, p, inv) != ok { ret false }
+        var delta = 0.0f64
+        u = 0usize
+        while u < p {
+            var nb = 0.0f64
+            var v = 0usize
+            while v < p {
+                nb += inv[u * p + v] * xtz[v]
+                v += 1usize
+            }
+            let dd = math.abs[f64](nb - beta[u])
+            if dd > delta { delta = dd }
+            beta[u] = nb
+            u += 1usize
+        }
+        if delta < 1.0e-13f64 { ret true }
+        it += 1usize
+    }
+    ret false
+}
+
+// drdid_panel(y1, y0, D, covariates)$ATT (part 0) and $se (part 1), the locally efficient doubly robust DiD estimator with trim.level 0.995
+fn drdid_panel(a: *mem.Arena, dy: []const f64, d: []const f64, x: []const f64, n: usize, p: usize, part: usize) -> f64 {
+    let nf = f64(n)
+    let (pb, e0) = mem.alloc[f64](a, p)
+    if e0 != ok { ret 0.0f64 / 0.0f64 }
+    if !logit_fit(a, d, x, n, p, pb) { ret 0.0f64 / 0.0f64 }
+    var nc = 0usize
+    var i = 0usize
+    while i < n {
+        if d[i] == 0.0f64 { nc += 1usize }
+        i += 1usize
+    }
+    let (xc, e1) = mem.alloc[f64](a, nc * p)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (yc, e2) = mem.alloc[f64](a, nc)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var r = 0usize
+    i = 0usize
+    while i < n {
+        if d[i] == 0.0f64 {
+            var j = 0usize
+            while j < p {
+                xc[r * p + j] = x[i * p + j]
+                j += 1usize
+            }
+            yc[r] = dy[i]
+            r += 1usize
+        }
+        i += 1usize
+    }
+    let (f, e3) = ols.ols(a, xc, yc, nc, p)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    let (ps, e4) = mem.alloc[f64](a, n)
+    if e4 != ok { ret 0.0f64 / 0.0f64 }
+    let (res, e5) = mem.alloc[f64](a, n)
+    if e5 != ok { ret 0.0f64 / 0.0f64 }
+    let (wt, e6) = mem.alloc[f64](a, n)
+    if e6 != ok { ret 0.0f64 / 0.0f64 }
+    let (wc, e7) = mem.alloc[f64](a, n)
+    if e7 != ok { ret 0.0f64 / 0.0f64 }
+    var mwt = 0.0f64
+    var mwc = 0.0f64
+    var st = 0.0f64
+    var sc = 0.0f64
+    i = 0usize
+    while i < n {
+        var eta = 0.0f64
+        var od = 0.0f64
+        var j = 0usize
+        while j < p {
+            eta += pb[j] * x[i * p + j]
+            od += f.beta[j] * x[i * p + j]
+            j += 1usize
+        }
+        var pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta))
+        if pr > 1.0f64 - 1.0e-6f64 { pr = 1.0f64 - 1.0e-6f64 }
+        ps[i] = pr
+        res[i] = dy[i] - od
+        var trim = 1.0f64
+        if d[i] == 0.0f64 && pr >= 0.995f64 { trim = 0.0f64 }
+        wt[i] = trim * d[i]
+        wc[i] = trim * pr * (1.0f64 - d[i]) / (1.0f64 - pr)
+        mwt += wt[i]
+        mwc += wc[i]
+        st += wt[i] * res[i]
+        sc += wc[i] * res[i]
+        i += 1usize
+    }
+    mwt = mwt / nf
+    mwc = mwc / nf
+    let eta_t = (st / nf) / mwt
+    let eta_c = (sc / nf) / mwc
+    let att = eta_t - eta_c
+    if part == 0usize { ret att }
+    let (xpx, e8) = mem.alloc[f64](a, p * p)
+    if e8 != ok { ret 0.0f64 / 0.0f64 }
+    let (xw, e9) = mem.alloc[f64](a, p * p)
+    if e9 != ok { ret 0.0f64 / 0.0f64 }
+    var u = 0usize
+    while u < p {
+        var v = 0usize
+        while v < p {
+            var s1 = 0.0f64
+            var s2 = 0.0f64
+            i = 0usize
+            while i < n {
+                if d[i] == 0.0f64 { s1 += x[i * p + u] * x[i * p + v] }
+                s2 += ps[i] * (1.0f64 - ps[i]) * x[i * p + u] * x[i * p + v]
+                i += 1usize
+            }
+            xpx[u * p + v] = s1 / nf
+            xw[u * p + v] = s2
+            v += 1usize
+        }
+        u += 1usize
+    }
+    let (xi, e10) = mem.alloc[f64](a, p * p)
+    if e10 != ok { ret 0.0f64 / 0.0f64 }
+    if ols.inverse(a, xpx, p, xi) != ok { ret 0.0f64 / 0.0f64 }
+    let (hi, e11) = mem.alloc[f64](a, p * p)
+    if e11 != ok { ret 0.0f64 / 0.0f64 }
+    if ols.inverse(a, xw, p, hi) != ok { ret 0.0f64 / 0.0f64 }
+    let (m1, e12) = mem.alloc[f64](a, p)
+    if e12 != ok { ret 0.0f64 / 0.0f64 }
+    let (m2, e13) = mem.alloc[f64](a, p)
+    if e13 != ok { ret 0.0f64 / 0.0f64 }
+    let (m3, e14) = mem.alloc[f64](a, p)
+    if e14 != ok { ret 0.0f64 / 0.0f64 }
+    u = 0usize
+    while u < p {
+        var a1 = 0.0f64
+        var a2 = 0.0f64
+        var a3 = 0.0f64
+        i = 0usize
+        while i < n {
+            a1 += wt[i] * x[i * p + u]
+            a2 += wc[i] * (res[i] - eta_c) * x[i * p + u]
+            a3 += wc[i] * x[i * p + u]
+            i += 1usize
+        }
+        m1[u] = a1 / nf
+        m2[u] = a2 / nf
+        m3[u] = a3 / nf
+        u += 1usize
+    }
+    let (inf, e15) = mem.alloc[f64](a, n)
+    if e15 != ok { ret 0.0f64 / 0.0f64 }
+    var sum = 0.0f64
+    i = 0usize
+    while i < n {
+        var wols_m1 = 0.0f64
+        var wols_m3 = 0.0f64
+        var ps_m2 = 0.0f64
+        u = 0usize
+        while u < p {
+            var rw = 0.0f64
+            var rp = 0.0f64
+            var v = 0usize
+            while v < p {
+                if d[i] == 0.0f64 { rw += res[i] * x[i * p + v] * xi[v * p + u] }
+                rp += (d[i] - ps[i]) * x[i * p + v] * hi[v * p + u] * nf
+                v += 1usize
+            }
+            wols_m1 += rw * m1[u]
+            wols_m3 += rw * m3[u]
+            ps_m2 += rp * m2[u]
+            u += 1usize
+        }
+        let inf_t = (wt[i] * res[i] - wt[i] * eta_t - wols_m1) / mwt
+        let inf_c = (wc[i] * res[i] - wc[i] * eta_c + ps_m2 - wols_m3) / mwc
+        inf[i] = inf_t - inf_c
+        sum += inf[i]
+        i += 1usize
+    }
+    let mean = sum / nf
+    var ss = 0.0f64
+    i = 0usize
+    while i < n {
+        ss += (inf[i] - mean) * (inf[i] - mean)
+        i += 1usize
+    }
+    ret math.sqrt[f64](ss / (nf - 1.0f64)) * math.sqrt[f64](nf - 1.0f64) / nf
+}

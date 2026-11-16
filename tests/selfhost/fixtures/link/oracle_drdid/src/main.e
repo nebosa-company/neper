@@ -5,6 +5,7 @@ use e.algo.stat.drdid as dr
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -19,7 +20,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let x = c.args
         let n = usize(x[1usize])
         let p = usize(x[2usize])
-        let got = dr.reg_did_panel(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[3usize + 2usize * n..3usize + 2usize * n + n * p], n, p, usize(x[0usize]))
+        var got = dr.reg_did_panel(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[3usize + 2usize * n..3usize + 2usize * n + n * p], n, p, usize(x[0usize]))
+        if str.eq(c.name, "dr") { got = dr.drdid_panel(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[3usize + 2usize * n..3usize + 2usize * n + n * p], n, p, usize(x[0usize])) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
