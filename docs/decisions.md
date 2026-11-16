@@ -46642,3 +46642,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `cppls_add` takes extra response columns that enter W0 = X'(Y | Y.add) and the weights but not the canonical side or the coefficients. The canonical vector now comes the way cancorr computes it: column-pivoted Gram-Schmidt bases of `Z = X W0` and of Yprim with R's rank tolerance (`eps * 2^floor(log2 R11) * max(n, ncol)`), the first left singular vector of `Qx'Qy` (eigenvector of `S S'` by the complex Schur solver, rotated to a real vector), and `a = R^-1 u` by back-substitution at the pivoted columns. The earlier normal-equation version was ill-conditioned once X had been deflated to a few dimensions.
 
 **Result.** `oracle_pls` agrees with pls on cppls with Y.add (312 new coefficient and fit sums, 1 to 3 responses and 1 or 2 extra columns, centred and not) and the earlier cppls cases on Windows (5808 cases in all); Linux pending. cppls with lower or upper powers stays open; L359 at 0.93.
+
+## D6579 — extraDistr: discrete and truncated families
+
+**Decision.** Added the beta-binomial, beta-negative-binomial, discrete Laplace (location 0), logarithmic series and truncated normal to `extradistr.e` with lchoose, lbeta and lgamma forms of the masses and partial sums for the cdfs. extraDistr's truncated normal is zero at the endpoints `a` and `b` (open interval). Maxwell is in the item's list but not in the package.
+
+**Result.** `oracle_extradistr` agrees with extraDistr on the new values on Windows (893 cases in all); Linux pending. L422 stays partial: Skellam, Zipf, the other families and the generators.

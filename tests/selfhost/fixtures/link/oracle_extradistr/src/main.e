@@ -10,6 +10,40 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "d2") || str.eq(c.name, "p2") || str.eq(c.name, "q2") {
+        let d2 = usize(x[0usize])
+        let u1 = x[1usize]
+        let u2 = x[2usize]
+        let u3 = x[3usize]
+        let u4 = x[4usize]
+        let vv = x[5usize]
+        let id2 = str.eq(c.name, "d2")
+        let ip2 = str.eq(c.name, "p2")
+        if d2 == 0usize {
+            if id2 { ret ed.maxwell_d(vv, u1) }
+            if ip2 { ret ed.maxwell_p(vv, u1) }
+            ret ed.maxwell_q(vv, u1)
+        }
+        if d2 == 1usize {
+            if id2 { ret ed.bbinom_d(vv, u1, u2, u3) }
+            ret ed.bbinom_p(vv, u1, u2, u3)
+        }
+        if d2 == 2usize {
+            if id2 { ret ed.bnbinom_d(vv, u1, u2, u3) }
+            ret ed.bnbinom_p(vv, u1, u2, u3)
+        }
+        if d2 == 3usize {
+            if id2 { ret ed.dlaplace_d(vv, u1) }
+            ret ed.dlaplace_p(vv, u1)
+        }
+        if d2 == 4usize {
+            if id2 { ret ed.lgser_d(vv, u1) }
+            ret ed.lgser_p(vv, u1)
+        }
+        if id2 { ret ed.tnorm_d(vv, u1, u2, u3, u4) }
+        if ip2 { ret ed.tnorm_p(vv, u1, u2, u3, u4) }
+        ret ed.tnorm_q(vv, u1, u2, u3, u4)
+    }
     let di = usize(x[0usize])
     let a = x[1usize]
     let b = x[2usize]

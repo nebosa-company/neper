@@ -96,7 +96,7 @@ fn rayleigh_q(p: f64, s: f64) -> f64 { ret s * math.sqrt[f64](0.0f64 - 2.0f64 * 
 
 // triangular(a, b, c) with mode c
 fn triang_d(x: f64, a: f64, b: f64, c: f64) -> f64 {
-    if x < a || x > b { ret 0.0f64 }
+    if x <= a || x >= b { ret 0.0f64 }
     if x < c { ret 2.0f64 * (x - a) / ((b - a) * (c - a)) }
     if x == c { ret 2.0f64 / (b - a) }
     ret 2.0f64 * (b - x) / ((b - a) * (b - c))
@@ -210,4 +210,91 @@ fn betapr_p(x: f64, al: f64, be: f64, s: f64) -> f64 {
 fn betapr_q(p: f64, al: f64, be: f64, s: f64) -> f64 {
     let u = nb.qbeta(p, al, be, true, false)
     ret s * u / (1.0f64 - u)
+}
+
+// Maxwell(sigma)
+fn maxwell_d(x: f64, s: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret math.sqrt[f64](2.0f64 / pi()) * x * x * math.exp[f64](0.0f64 - x * x / (2.0f64 * s * s)) / (s * s * s)
+}
+fn maxwell_p(x: f64, s: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret nm.pgamma(x * x / (2.0f64 * s * s), 1.5f64, 1.0f64, true, false)
+}
+fn maxwell_q(p: f64, s: f64) -> f64 { ret s * math.sqrt[f64](2.0f64 * nm.qgamma(p, 1.5f64, 1.0f64, true, false)) }
+
+// beta-binomial(size n, alpha, beta)
+fn bbinom_d(x: f64, n: f64, a: f64, b: f64) -> f64 {
+    if x < 0.0f64 || x > n || x != math.floor[f64](x) { ret 0.0f64 }
+    ret math.exp[f64](nb.lchoose_int(n, x) + nb.lbeta(x + a, n - x + b) - nb.lbeta(a, b))
+}
+fn bbinom_p(x: f64, n: f64, a: f64, b: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x >= n { ret 1.0f64 }
+    var s = 0.0f64
+    var k = 0.0f64
+    while k <= math.floor[f64](x) {
+        s += bbinom_d(k, n, a, b)
+        k += 1.0f64
+    }
+    ret s
+}
+
+// beta-negative-binomial(size r, alpha, beta)
+fn bnbinom_d(x: f64, r: f64, a: f64, b: f64) -> f64 {
+    if x < 0.0f64 || x != math.floor[f64](x) { ret 0.0f64 }
+    ret math.exp[f64](nm.lgammafn(r + x) - nm.lgammafn(x + 1.0f64) - nm.lgammafn(r) + nb.lbeta(a + r, b + x) - nb.lbeta(a, b))
+}
+fn bnbinom_p(x: f64, r: f64, a: f64, b: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var k = 0.0f64
+    while k <= math.floor[f64](x) {
+        s += bnbinom_d(k, r, a, b)
+        k += 1.0f64
+    }
+    ret s
+}
+
+// discrete Laplace(scale p)
+fn dlaplace_d(x: f64, p: f64) -> f64 {
+    if x != math.floor[f64](x) { ret 0.0f64 }
+    ret (1.0f64 - p) / (1.0f64 + p) * math.pow[f64](p, math.abs[f64](x))
+}
+fn dlaplace_p(x: f64, p: f64) -> f64 {
+    let fx = math.floor[f64](x)
+    if fx < 0.0f64 { ret math.pow[f64](p, 0.0f64 - fx) / (1.0f64 + p) }
+    ret 1.0f64 - math.pow[f64](p, fx + 1.0f64) / (1.0f64 + p)
+}
+
+// logarithmic series(theta)
+fn lgser_d(x: f64, th: f64) -> f64 {
+    if x < 1.0f64 || x != math.floor[f64](x) { ret 0.0f64 }
+    ret 0.0f64 - math.pow[f64](th, x) / (x * math.log[f64](1.0f64 - th))
+}
+fn lgser_p(x: f64, th: f64) -> f64 {
+    var s = 0.0f64
+    var k = 1.0f64
+    while k <= math.floor[f64](x) {
+        s += lgser_d(k, th)
+        k += 1.0f64
+    }
+    ret s
+}
+
+// truncated normal(mean, sd, a, b)
+fn tnorm_d(x: f64, m: f64, s: f64, a: f64, b: f64) -> f64 {
+    if x <= a || x >= b { ret 0.0f64 }
+    ret dist.dnorm((x - m) / s, 0.0f64, 1.0f64, false) / s / (pn((b - m) / s) - pn((a - m) / s))
+}
+fn tnorm_p(x: f64, m: f64, s: f64, a: f64, b: f64) -> f64 {
+    if x <= a { ret 0.0f64 }
+    if x >= b { ret 1.0f64 }
+    let pa = pn((a - m) / s)
+    ret (pn((x - m) / s) - pa) / (pn((b - m) / s) - pa)
+}
+fn tnorm_q(p: f64, m: f64, s: f64, a: f64, b: f64) -> f64 {
+    let pa = pn((a - m) / s)
+    let pb = pn((b - m) / s)
+    ret m + s * qn(pa + p * (pb - pa))
 }

@@ -22,4 +22,15 @@ for (rep in 1:4) for (di in 0:15) {
   }
   if (di != 14) for (pq in c(0.03, 0.3, 0.6, 0.95)) add("q", c(di, pp3, pq), do.call(get(paste0("q", nm)), c(list(pq), as.list(pr))))
 }
+# discrete and truncated families: fn "d2" "p2" "q2"; args (dist, p1, p2, p3, p4, v): 0 maxwell(sigma) 1 bbinom(size, alpha, beta) 2 bnbinom(size, alpha, beta) 3 dlaplace(scale) 4 lgser(theta) 5 tnorm(mean, sd, a, b); q only for 0 and 5
+add2 <- function(fn, args, want) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-12)
+for (rep in 1:3) {
+  n <- sample(5:20, 1); a <- runif(1, 0.5, 3); b <- runif(1, 0.5, 3); for (xx in c(0, 1, 3, n - 1, n)) { add2("d2", c(1, n, a, b, 0, xx), dbbinom(xx, n, a, b)); add2("p2", c(1, n, a, b, 0, xx), pbbinom(xx, n, a, b)) }
+  r <- runif(1, 1, 6); a <- runif(1, 1.5, 4); b <- runif(1, 0.5, 3); for (xx in c(0, 1, 4, 10)) { add2("d2", c(2, r, a, b, 0, xx), dbnbinom(xx, r, a, b)); add2("p2", c(2, r, a, b, 0, xx), pbnbinom(xx, r, a, b)) }
+  sc <- runif(1, 0.2, 0.8); for (xx in c(-3, -1, 0, 2, 5)) { add2("d2", c(3, sc, 0, 0, 0, xx), ddlaplace(xx, 0, sc)); add2("p2", c(3, sc, 0, 0, 0, xx), pdlaplace(xx, 0, sc)) }
+  th <- runif(1, 0.2, 0.9); for (xx in c(1, 2, 5, 9)) { add2("d2", c(4, th, 0, 0, 0, xx), dlgser(xx, th)); add2("p2", c(4, th, 0, 0, 0, xx), plgser(xx, th)) }
+  mu <- rnorm(1); sdv <- runif(1, 0.5, 2); lo <- mu - runif(1, 0.5, 2); hi <- mu + runif(1, 0.5, 2); pr <- c(mu, sdv, lo, hi)
+  for (xx in seq(lo, hi, length.out = 4)) { add2("d2", c(5, pr, xx), dtnorm(xx, mu, sdv, lo, hi)); add2("p2", c(5, pr, xx), ptnorm(xx, mu, sdv, lo, hi)) }
+  for (pq in c(0.1, 0.5, 0.8)) add2("q2", c(5, pr, pq), qtnorm(pq, mu, sdv, lo, hi))
+}
 emit("extradistr", "extraDistr", list(cases))
