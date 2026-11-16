@@ -41,7 +41,7 @@ L500	library	0	212	ashr: adaptive shrinkage	Open (CRAN rank 977).
 L324	library	0	285	pROC and ROCR: ROC curves and threshold performance	Open (CRAN ranks 217, 294).
 L327	library	0.3	534	statmod: Tweedie and inverse Gaussian, Gauss quadrature	Partly done (D6086): e.algo.stat.gaussq has gauss.quad (six kinds) and gauss.quad.prob (six distributions), equal to statmod on 1536 values on Windows (oracle_gaussq);
 L328	library	0.25	706	caret evaluation and resampling	Partly done (D6087): e.algo.stat.carets has two-class confusionMatrix with all statistics and intervals, and postResample, equal to caret on 700 values on Windows (oracle_carets);
-L330	library	0	200	leaps: best-subset regression	Open (CRAN rank 268).
+L330	library	0.7	473	leaps: best-subset regression	Partly done (D6099): e.algo.stat.leaps (regsubsets nbest 1: exhaustive, forward, backward, and the rsq, adjr2, Cp and BIC summary) equals leaps on 3024 values on Windows (oracle_leaps);
 L331	library	0	327	dendextend and hclust operations	Open (CRAN rank 297).
 L332	library	0	222	foreign: dBase, ARFF, Octave, Minitab and Systat	Open (CRAN rank 249).
 L358	library	0	270	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Open (CRAN rank 368).

@@ -471,10 +471,10 @@
       "group": "CRAN parity",
       "order": 599,
       "title": "leaps: best-subset regression",
-      "score": 0,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 268). Small to mid. Acceptance, equal to leaps: regsubsets exhaustive, forward, backward and seqrep with nbest, nvmax, force.in and force.out, and the bic, cp, adjr2 and rss summaries."
+      "evidence": "Partly done (D6099): e.algo.stat.leaps (regsubsets nbest 1: exhaustive, forward, backward, and the rsq, adjr2, Cp and BIC summary) equals leaps on 3024 values on Windows (oracle_leaps); Linux pending. Open: seqrep, nbest above 1, force.in and force.out, weights. Original: Open (CRAN rank 268). Small to mid. Acceptance, equal to leaps: regsubsets exhaustive, forward, backward and seqrep with nbest, nvmax, force.in and force.out, and the bic, cp, adjr2 and rss summaries."
     },
     {
       "id": "L331",
