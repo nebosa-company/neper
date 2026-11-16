@@ -46796,3 +46796,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `quasi.congru_next` is the linear congruential step `x = (mult x + incr) mod m`, output `x / m`, on 64-bit state (the package refuses a multiplier not below the modulus); dimension d takes d consecutive outputs per row.
 
 **Result.** `oracle_randtoolbox` agrees with randtoolbox on the congruRand runs on Windows (112 cases in all); Linux pending. L501 stays partial: scrambled Sobol, WELL, SFMT, Knuth-TAOCP and qrng.
+
+## D6612 — RSpectra and irlba: partial decompositions
+
+**Decision.** `spectrapkg.svds` and `eigs_sym` take the k wanted triplets or pairs from the full Jacobi decompositions of `e.algo.linalg.matrix`; RSpectra's `eigs_sym` selects by `which` (LM by magnitude, LA, SA, SM by magnitude of smallest) and then lists the selected values in decreasing order, not in order of the selection key. Vectors are compared up to sign.
+
+**Result.** `oracle_spectra` agrees with RSpectra svds and eigs_sym and with irlba at 1e-6 on Windows (90 values); Linux pending. irlba fails to converge in R itself when its work space reaches the column count, so those cases use tall matrices. L334 stays partial: shift-invert, general and complex eigs, sparse input, svdr.

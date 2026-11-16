@@ -346,3 +346,4 @@ oracle_coda
 oracle_posterior
 oracle_loo
 oracle_mcmc
+oracle_spectra

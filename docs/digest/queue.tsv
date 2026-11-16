@@ -73,7 +73,7 @@ L274	library	0	381	General linear mixed models (lme4)	Open.
 L342	library	0	202	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Open (CRAN rank 262).
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L333	library	0.75	1596	pracma and polynom: numerical analysis toolbox	Partial (D6151, D6152 pchip and quadgk, D6164 legendre, chebPoly, laguerre, D6410 roots, D6411 conv, deconv, polyint, D6412 newtonRaphson, D6413 romberg, D6441 quadl, fzero, D6442 interp1, D6494 null 
-L334	library	0	304	RSpectra and irlba: partial eigen and singular value decompositions	Open (CRAN ranks 207, 289).
+L334	library	0.3	665	RSpectra and irlba: partial eigen and singular value decompositions	Partial (D6612).
 L335	library	0.45	729	cluster: pam, clara, fanny, agnes, diana, mona, daisy	Partial (D6176, D6177 agnes heights and ac, D6178 daisy gower numeric and nominal, D6179 silhouette, D6180 diana heights and dc).
 L336	library	0	247	nnet: single-hidden-layer networks and multinom	Open (CRAN rank 258).
 L337	library	0.4	634	rpart: CART trees	Partial (D6434, D6435 classification trees with cost-complexity pruning, 29 of 30 data sets).
