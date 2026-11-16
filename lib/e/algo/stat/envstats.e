@@ -6,6 +6,8 @@
 // Not here: the exact two-sided tolerance factor (a nested integral and optimiser), the exact multiple-prediction
 // factor (Dunnett's multivariate t), the other estimation, interval and testing families of the package.
 
+use e.algo.stat.nortest as nt
+use e.algo.stat.test as tst
 use e.math
 use e.math.dist as dist
 use e.math.nchisq as nc
@@ -463,5 +465,133 @@ fn kendall_seasonal(a: *mem.Arena, y: []const f64, season: []const f64, year: []
     out[10usize] = vtot
     out[11usize] = npr
     out[12usize] = kf
+    ret ok
+}
+
+// ---- gofTest for the normal and lognormal distributions ----
+
+// nortest::ad.test: the Anderson-Darling statistic A and its p value from the sample sorted in x
+fn ad_normal(x: []const f64) -> (f64, f64) {
+    let n = x.len
+    let nf = f64(n)
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += x[i]
+        i += 1usize
+    }
+    mean = mean / nf
+    var ss = 0.0f64
+    i = 0usize
+    while i < n {
+        ss += (x[i] - mean) * (x[i] - mean)
+        i += 1usize
+    }
+    let sd = math.sqrt[f64](ss / (nf - 1.0f64))
+    var h = 0.0f64
+    i = 0usize
+    while i < n {
+        let l1 = dist.pnorm((x[i] - mean) / sd, 0.0f64, 1.0f64, true, true)
+        let l2 = dist.pnorm(0.0f64 - (x[n - 1usize - i] - mean) / sd, 0.0f64, 1.0f64, true, true)
+        h += (2.0f64 * f64(i + 1usize) - 1.0f64) * (l1 + l2)
+        i += 1usize
+    }
+    let aa = 0.0f64 - nf - h / nf
+    let a2 = (1.0f64 + 0.75f64 / nf + 2.25f64 / (nf * nf)) * aa
+    var p = 3.7e-24f64
+    if a2 < 0.2f64 {
+        p = 1.0f64 - math.exp[f64](0.0f64 - 13.436f64 + 101.14f64 * a2 - 223.73f64 * a2 * a2)
+    } else if a2 < 0.34f64 {
+        p = 1.0f64 - math.exp[f64](0.0f64 - 8.318f64 + 42.796f64 * a2 - 59.938f64 * a2 * a2)
+    } else if a2 < 0.6f64 {
+        p = math.exp[f64](0.9177f64 - 4.279f64 * a2 - 1.38f64 * a2 * a2)
+    } else if a2 < 10.0f64 {
+        p = math.exp[f64](1.2937f64 - 5.709f64 * a2 + 0.0186f64 * a2 * a2)
+    }
+    ret (aa, p)
+}
+
+// EnvStats::gofTest of y against the normal (lnorm = false) or lognormal distribution: test 0 Shapiro-Wilk (W), 1 Shapiro-Francia (W'), 2 Anderson-Darling (A), 3 Cramer-von Mises, 4 Lilliefors, 5 zero skew (the skewness, with z in out[2]; alt 0 two-sided, 1 less, 2 greater), 6 probability plot correlation (the correlation); out receives the statistic, the p value and z
+fn gof_test(a: *mem.Arena, y: []const f64, test: usize, lnorm: bool, alt: usize, out: []f64) -> err {
+    let n = y.len
+    let (x, e1) = mem.alloc[f64](a, n)
+    let (sc, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        x[i] = y[i]
+        if lnorm { x[i] = math.log[f64](y[i]) }
+        i += 1usize
+    }
+    out[2usize] = 0.0f64 / 0.0f64
+    if test == 0usize {
+        let (r, e) = tst.shapiro_wilk(x, sc)
+        if e != ok { ret e }
+        out[0usize] = r.statistic
+        out[1usize] = r.p_value
+        out[2usize] = dist.qnorm(r.p_value, 0.0f64, 1.0f64, false, false)
+    } else if test == 1usize || test == 6usize {
+        let (w, p, e) = nt.sf(a, x)
+        if e != ok { ret e }
+        out[0usize] = w
+        out[1usize] = p
+        let u = math.log[f64](f64(n))
+        let v = math.log[f64](u)
+        let mu = 0.0f64 - 1.2725f64 + 1.0521f64 * (v - u)
+        let sig = 1.0308f64 - 0.26758f64 * (v + 2.0f64 / u)
+        out[2usize] = (math.log[f64](1.0f64 - w) - mu) / sig
+        if test == 6usize { out[0usize] = math.sqrt[f64](w) }
+    } else if test == 2usize {
+        sort_f(x)
+        let (aa, p) = ad_normal(x)
+        out[0usize] = aa
+        out[1usize] = p
+    } else if test == 3usize {
+        let (w, p, e) = nt.cvm(a, x)
+        if e != ok { ret e }
+        out[0usize] = w
+        out[1usize] = p
+    } else if test == 4usize {
+        let (d, p, e) = nt.lillie(a, x)
+        if e != ok { ret e }
+        out[0usize] = d
+        out[1usize] = p
+    } else {
+        let nf = f64(n)
+        var mean = 0.0f64
+        i = 0usize
+        while i < n {
+            mean += x[i]
+            i += 1usize
+        }
+        mean = mean / nf
+        var m2 = 0.0f64
+        var m3 = 0.0f64
+        i = 0usize
+        while i < n {
+            let d = x[i] - mean
+            m2 += d * d
+            m3 += d * d * d
+            i += 1usize
+        }
+        m2 = m2 / nf
+        m3 = m3 / nf
+        let sb1 = m3 / math.pow[f64](m2, 1.5f64)
+        var z = sb1 / math.sqrt[f64]((6.0f64 * (nf - 2.0f64)) / ((nf + 1.0f64) * (nf + 3.0f64)))
+        if n < 150usize {
+            let beta2 = (3.0f64 * (nf * nf + 27.0f64 * nf - 70.0f64) * (nf + 1.0f64) * (nf + 3.0f64)) / ((nf - 2.0f64) * (nf + 5.0f64) * (nf + 7.0f64) * (nf + 9.0f64))
+            let w = math.sqrt[f64](0.0f64 - 1.0f64 + math.sqrt[f64](2.0f64 * beta2 - 2.0f64))
+            let delta = 1.0f64 / math.sqrt[f64](math.log[f64](w))
+            let alpha = math.sqrt[f64](2.0f64 / (w * w - 1.0f64))
+            z = z / alpha
+            z = delta * math.log[f64](z + math.sqrt[f64](z * z + 1.0f64))
+        }
+        var p = 2.0f64 * dist.pnorm(0.0f64 - math.abs[f64](z), 0.0f64, 1.0f64, true, false)
+        if alt == 1usize { p = dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
+        if alt == 2usize { p = 1.0f64 - dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
+        out[0usize] = sb1
+        out[1usize] = p
+        out[2usize] = z
+    }
     ret ok
 }
