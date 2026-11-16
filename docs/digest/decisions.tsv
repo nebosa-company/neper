@@ -3194,4 +3194,5 @@ D6118	1413	boot: tsboot, studentized intervals, abc.ci, antithetic resampling, c
 D6119	1100	class SOM and LVQ, FNN get.knn and knn.reg close L322
 D6120	1355	permute grid designs, shuffleSet, allPerms with plot restrictions and numPerms of grids close L323
 D6121	1341	KernSmooth dpill and bkde2D; rlbin keeps the right end point
-D6122	1121	tseries bds.test, tsbootstrap, terasvirta.test and white.test
+D6122	1122	tseries bds.test, tsbootstrap, terasvirta.test and white.test
+D6123	1117	solve.QP and portfolio.optim close L325

@@ -21,6 +21,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if ts.bds_stat(a, z[3usize..3usize + n], m, z[1usize], out) != ok { ret nan }
         ret out[usize(z[3usize + n]) - 2usize]
     }
+    if str.eq(c.name, "po") {
+        let n = usize(z[0usize])
+        let k = usize(z[1usize])
+        let (w, we) = mem.alloc[f64](a, k)
+        if we != ok { ret nan }
+        let lo = z[7usize..7usize + k]
+        let hi = z[7usize + k..7usize + 2usize * k]
+        let x = z[7usize + 2usize * k..7usize + 2usize * k + n * k]
+        if !ts.portfolio_optim(a, x, n, k, z[2usize], z[3usize] == 1.0f64, z[4usize] == 1.0f64, z[5usize], z[6usize] == 1.0f64, lo, hi, w) { ret nan }
+        ret w[usize(z[7usize + 2usize * k + n * k])]
+    }
     if str.eq(c.name, "nn") {
         let kind = usize(z[0usize])
         var gg: rng.Rng = zero

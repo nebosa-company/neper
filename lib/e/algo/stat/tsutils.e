@@ -368,3 +368,418 @@ fn white(a: *mem.Arena, g: *rng.Rng, x0: []const f64, y0: []const f64, n: usize,
     let d2 = t - f64(qstar) - f64(nin)
     ret (((ssr0 - ssr) / f64(qstar)) / (ssr / d2), f64(qstar), d2, ok)
 }
+
+// ---- portfolio.optim: solve.QP for min 1/2 w' D w subject to A' w >= b (the first meq rows of A' are equalities), by the dual
+// method of Goldfarb and Idnani. D is k by k row-major (positive definite), A is k by q row-major (a column per constraint).
+// Answers false when the constraints cannot be met.
+
+fn mat_inverse(a: *mem.Arena, x: []const f64, k: usize, out: []f64) -> bool {
+    let (w, e) = mem.alloc[f64](a, k * k)
+    if e != ok { ret false }
+    var i = 0usize
+    while i < k * k {
+        w[i] = x[i]
+        out[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        out[i * k + i] = 1.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < k {
+        var pv = c
+        var best = math.abs[f64](w[c * k + c])
+        var r = c + 1usize
+        while r < k {
+            if math.abs[f64](w[r * k + c]) > best {
+                best = math.abs[f64](w[r * k + c])
+                pv = r
+            }
+            r += 1usize
+        }
+        if best == 0.0f64 { ret false }
+        if pv != c {
+            var j = 0usize
+            while j < k {
+                let t = w[c * k + j]
+                w[c * k + j] = w[pv * k + j]
+                w[pv * k + j] = t
+                let t2 = out[c * k + j]
+                out[c * k + j] = out[pv * k + j]
+                out[pv * k + j] = t2
+                j += 1usize
+            }
+        }
+        let d = w[c * k + c]
+        var j = 0usize
+        while j < k {
+            w[c * k + j] = w[c * k + j] / d
+            out[c * k + j] = out[c * k + j] / d
+            j += 1usize
+        }
+        r = 0usize
+        while r < k {
+            if r != c {
+                let f = w[r * k + c]
+                j = 0usize
+                while j < k {
+                    w[r * k + j] -= f * w[c * k + j]
+                    out[r * k + j] -= f * out[c * k + j]
+                    j += 1usize
+                }
+            }
+            r += 1usize
+        }
+        c += 1usize
+    }
+    ret true
+}
+
+// a_j' x - b_j for constraint j
+fn con_slack(amat: []const f64, k: usize, q: usize, bvec: []const f64, j: usize, x: []const f64) -> f64 {
+    var s = 0.0f64 - bvec[j]
+    var i = 0usize
+    while i < k {
+        s += amat[i * q + j] * x[i]
+        i += 1usize
+    }
+    ret s
+}
+
+fn solve_qp(a: *mem.Arena, dmat: []const f64, k: usize, amat: []const f64, q: usize, bvec: []const f64, meq: usize, sol: []f64) -> bool {
+    let (dinv, e1) = mem.alloc[f64](a, k * k)
+    let (act, e2) = mem.alloc[usize](a, q + 1usize)
+    let (asg, e3) = mem.alloc[f64](a, q + 1usize)
+    let (u, e4) = mem.alloc[f64](a, q + 1usize)
+    let (isact, e5) = mem.alloc[bool](a, q)
+    let (np, e6) = mem.alloc[f64](a, k)
+    let (dnp, e7) = mem.alloc[f64](a, k)
+    let (zv, e8) = mem.alloc[f64](a, k)
+    let (nm, e9) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret false }
+    if !mat_inverse(a, dmat, k, dinv) { ret false }
+    var i = 0usize
+    while i < k {
+        sol[i] = 0.0f64
+        i += 1usize
+    }
+    var j = 0usize
+    while j < q {
+        isact[j] = false
+        var s = 0.0f64
+        i = 0usize
+        while i < k {
+            s += amat[i * q + j] * amat[i * q + j]
+            i += 1usize
+        }
+        nm[j] = math.sqrt[f64](s)
+        j += 1usize
+    }
+    var na = 0usize
+    var outer = 0usize
+    while outer < 2000usize {
+        outer += 1usize
+        // the most violated constraint, equalities first
+        var p = q
+        var worst = 0.0f64
+        var sign = 1.0f64
+        j = 0usize
+        while j < q {
+            if !isact[j] {
+                let s = con_slack(amat, k, q, bvec, j, sol) / nm[j]
+                if j < meq {
+                    if s < 0.0f64 - 1.0e-12f64 || s > 1.0e-12f64 {
+                        p = j
+                        sign = 1.0f64
+                        if s > 0.0f64 { sign = 0.0f64 - 1.0f64 }
+                        j = q
+                    }
+                } else if s < worst - 1.0e-12f64 {
+                    worst = s
+                    p = j
+                    sign = 1.0f64
+                }
+            }
+            if j < q { j += 1usize }
+        }
+        if p == q { ret true }
+        var up = 0.0f64
+        var inner = 0usize
+        var added = false
+        while !added && inner < 2000usize {
+            inner += 1usize
+            i = 0usize
+            while i < k {
+                np[i] = sign * amat[i * q + p]
+                i += 1usize
+            }
+            i = 0usize
+            while i < k {
+                var s = 0.0f64
+                var c = 0usize
+                while c < k {
+                    s += dinv[i * k + c] * np[c]
+                    c += 1usize
+                }
+                dnp[i] = s
+                zv[i] = s
+                i += 1usize
+            }
+            let (r, re) = mem.alloc[f64](a, na + 1usize)
+            if re != ok { ret false }
+            if na > 0usize {
+                // M = N' D^-1 N and N' D^-1 np with N the signed active normals
+                let (mm, me) = mem.alloc[f64](a, na * na)
+                let (mi, mie) = mem.alloc[f64](a, na * na)
+                let (rhs, rhe) = mem.alloc[f64](a, na)
+                let (dn, dne) = mem.alloc[f64](a, k * na)
+                if me != ok || mie != ok || rhe != ok || dne != ok { ret false }
+                var ai = 0usize
+                while ai < na {
+                    i = 0usize
+                    while i < k {
+                        var s = 0.0f64
+                        var c = 0usize
+                        while c < k {
+                            s += dinv[i * k + c] * asg[ai] * amat[c * q + act[ai]]
+                            c += 1usize
+                        }
+                        dn[i * na + ai] = s
+                        i += 1usize
+                    }
+                    ai += 1usize
+                }
+                ai = 0usize
+                while ai < na {
+                    var aj = 0usize
+                    while aj < na {
+                        var s = 0.0f64
+                        i = 0usize
+                        while i < k {
+                            s += asg[ai] * amat[i * q + act[ai]] * dn[i * na + aj]
+                            i += 1usize
+                        }
+                        mm[ai * na + aj] = s
+                        aj += 1usize
+                    }
+                    var s2 = 0.0f64
+                    i = 0usize
+                    while i < k {
+                        s2 += asg[ai] * amat[i * q + act[ai]] * dnp[i]
+                        i += 1usize
+                    }
+                    rhs[ai] = s2
+                    ai += 1usize
+                }
+                if !mat_inverse(a, mm, na, mi) { ret false }
+                ai = 0usize
+                while ai < na {
+                    var s = 0.0f64
+                    var aj = 0usize
+                    while aj < na {
+                        s += mi[ai * na + aj] * rhs[aj]
+                        aj += 1usize
+                    }
+                    r[ai] = s
+                    ai += 1usize
+                }
+                i = 0usize
+                while i < k {
+                    var s = dnp[i]
+                    ai = 0usize
+                    while ai < na {
+                        s -= dn[i * na + ai] * r[ai]
+                        ai += 1usize
+                    }
+                    zv[i] = s
+                    i += 1usize
+                }
+            }
+            var t1 = 1.0e300f64
+            var drop = na
+            var ai = 0usize
+            while ai < na {
+                if act[ai] >= meq && r[ai] > 1.0e-14f64 {
+                    let ratio = u[ai] / r[ai]
+                    if ratio < t1 {
+                        t1 = ratio
+                        drop = ai
+                    }
+                }
+                ai += 1usize
+            }
+            var zn = 0.0f64
+            i = 0usize
+            while i < k {
+                zn += zv[i] * np[i]
+                i += 1usize
+            }
+            var sp = 0.0f64
+            i = 0usize
+            while i < k {
+                sp += np[i] * sol[i]
+                i += 1usize
+            }
+            sp = sp - sign * bvec[p]
+            var t2 = 1.0e300f64
+            var zz = 0.0f64
+            i = 0usize
+            while i < k {
+                zz += zv[i] * zv[i]
+                i += 1usize
+            }
+            let zfull = zz > 1.0e-24f64
+            if zfull && zn > 0.0f64 { t2 = 0.0f64 - sp / zn }
+            var t = t2
+            if t1 < t { t = t1 }
+            if t >= 1.0e299f64 { ret false }
+            if zfull {
+                i = 0usize
+                while i < k {
+                    sol[i] += t * zv[i]
+                    i += 1usize
+                }
+            }
+            ai = 0usize
+            while ai < na {
+                u[ai] = u[ai] - t * r[ai]
+                ai += 1usize
+            }
+            up += t
+            if zfull && t2 <= t1 {
+                act[na] = p
+                asg[na] = sign
+                u[na] = up
+                isact[p] = true
+                na += 1usize
+                added = true
+            } else {
+                // the multiplier of the constraint at `drop` is zero: remove it and go on
+                var m = drop
+                isact[act[m]] = false
+                while m + 1usize < na {
+                    act[m] = act[m + 1usize]
+                    asg[m] = asg[m + 1usize]
+                    u[m] = u[m + 1usize]
+                    m += 1usize
+                }
+                na -= 1usize
+            }
+        }
+        if !added { ret false }
+    }
+    ret false
+}
+
+// portfolio.optim.default(x, pm, riskless, shorts, rf, reslow, reshigh): the weights; x is n by k column-major; reslow and reshigh are
+// given (both, with 1e100 standing for none) when has_res
+fn portfolio_optim(a: *mem.Arena, x: []const f64, n: usize, k: usize, pm: f64, riskless: bool, shorts: bool, rf: f64, has_res: bool, reslow: []const f64, reshigh: []const f64, w: []f64) -> bool {
+    // covariance and means
+    let (mu, e1) = mem.alloc[f64](a, k)
+    let (cv, e2) = mem.alloc[f64](a, k * k)
+    if e1 != ok || e2 != ok { ret false }
+    var j = 0usize
+    while j < k {
+        var s = 0.0f64
+        var i = 0usize
+        while i < n {
+            s += x[j * n + i]
+            i += 1usize
+        }
+        mu[j] = s / f64(n)
+        j += 1usize
+    }
+    j = 0usize
+    while j < k {
+        var l = 0usize
+        while l < k {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += (x[j * n + i] - mu[j]) * (x[l * n + i] - mu[l])
+                i += 1usize
+            }
+            cv[j * k + l] = s / f64(n - 1usize)
+            l += 1usize
+        }
+        j += 1usize
+    }
+    // the constraint columns in R's order
+    var q = 0usize
+    var meq = 1usize
+    if !riskless { meq = 2usize }
+    q = meq
+    if !(shorts && riskless) {
+        if !(riskless && shorts) {
+            if !shorts { q += k }
+        }
+    }
+    if has_res { q += 2usize * k }
+    let (am, e3) = mem.alloc[f64](a, k * q)
+    let (bv, e4) = mem.alloc[f64](a, q)
+    if e3 != ok || e4 != ok { ret false }
+    var c = 0usize
+    var i = 0usize
+    if riskless {
+        i = 0usize
+        while i < k {
+            am[i * q] = mu[i] - rf
+            i += 1usize
+        }
+        bv[0usize] = pm - rf
+        c = 1usize
+    } else {
+        i = 0usize
+        while i < k {
+            am[i * q] = 1.0f64
+            am[i * q + 1usize] = mu[i]
+            i += 1usize
+        }
+        bv[0usize] = 1.0f64
+        bv[1usize] = pm
+        c = 2usize
+    }
+    if !shorts {
+        j = 0usize
+        while j < k {
+            i = 0usize
+            while i < k {
+                am[i * q + c] = 0.0f64
+                i += 1usize
+            }
+            am[j * q + c] = 1.0f64
+            bv[c] = 0.0f64
+            c += 1usize
+            j += 1usize
+        }
+    }
+    if has_res {
+        j = 0usize
+        while j < k {
+            i = 0usize
+            while i < k {
+                am[i * q + c] = 0.0f64
+                i += 1usize
+            }
+            am[j * q + c] = 1.0f64
+            bv[c] = reslow[j]
+            c += 1usize
+            j += 1usize
+        }
+        j = 0usize
+        while j < k {
+            i = 0usize
+            while i < k {
+                am[i * q + c] = 0.0f64
+                i += 1usize
+            }
+            am[j * q + c] = 0.0f64 - 1.0f64
+            bv[c] = 0.0f64 - reshigh[j]
+            c += 1usize
+            j += 1usize
+        }
+    }
+    ret solve_qp(a, cv, k, am, q, bv, meq, w)
+}

@@ -32,4 +32,16 @@ for (rep in 1:60) {
   a <- c(kind, seed, n, nin, ty, sc, qstar, q, rg, as.vector(x), y)
   add("nn", c(a, 0), as.numeric(r$statistic)); add("nn", c(a, 1), r$parameter[1]); if (ty == 1) add("nn", c(a, 2), r$parameter[2])
 }
+# portfolio.optim: (n, k, pm, riskless, shorts, rf, has_res, reslow[k], reshigh[k], x col-major[n*k], i) fn "po" -> weight i
+for (rep in 1:80) {
+  k <- sample(3:6, 1); n <- sample(80:200, 1)
+  x <- matrix(rnorm(n * k, rep(runif(k, 0.0, 0.02), each = n), rep(runif(k, 0.02, 0.06), each = n)), n, k)
+  riskless <- sample(0:1, 1); shorts <- sample(0:1, 1); rf <- if (riskless == 1) runif(1, 0, 0.005) else 0
+  mu <- colMeans(x); pm <- if (riskless == 1) runif(1, rf + 0.001, max(mu) * 0.9 + 0.001) else runif(1, min(mu) + 0.1 * diff(range(mu)), max(mu) - 0.1 * diff(range(mu)))
+  hasres <- sample(0:1, 1); lo <- rep(-0.5, k); hi <- rep(1.5, k); if (hasres == 1 && shorts == 0) { lo <- rep(0.02, k); hi <- rep(0.8, k) }
+  r <- tryCatch(suppressWarnings(if (hasres == 1) portfolio.optim(x, pm = pm, riskless = riskless == 1, shorts = shorts == 1, rf = rf, reslow = lo, reshigh = hi) else portfolio.optim(x, pm = pm, riskless = riskless == 1, shorts = shorts == 1, rf = rf)), error = function(e) NULL)
+  if (is.null(r)) next
+  a <- c(n, k, pm, riskless, shorts, rf, hasres, lo, hi, x)
+  for (i in seq_len(k)) add("po", c(a, i - 1), r$pw[i])
+}
 emit("tsutils", "tseries", list(cases))
