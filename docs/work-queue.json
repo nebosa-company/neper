@@ -1659,10 +1659,10 @@
       "group": "CRAN parity",
       "order": 781,
       "title": "copula: dependence models",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 914). Mid to large. Acceptance, equal to copula under set.seed: normal, t, Clayton, Frank, Gumbel and Joe copulas with density, distribution and rCopula, fitCopula by mpl, ml, itau and irho, gofCopula, pobs, empirical copulas, tail dependence and mvdc."
+      "evidence": "Partial (D6637). e.algo.stat.copulapkg equals copula on Windows for the bivariate Clayton, Frank, Gumbel, AMH and Joe copulas: dCopula, pCopula and Kendall tau (Debye integral for Frank, a series for Joe) (oracle_copula, 180 values; Linux pending). Open: normal, t and extreme-value copulas, higher dimensions, Spearman rho, fitCopula, rCopula, goodness of fit, mvdc. Was: Open (CRAN rank 914). Mid to large. Acceptance, equal to copula under set.seed: normal, t, Clayton, Frank, Gumbel and Joe copulas with density, distribution and rCopula, fitCopula by mpl, ml, itau and irho, gofCopula, pobs, empirical copulas, tail dependence and mvdc."
     },
     {
       "id": "L311",

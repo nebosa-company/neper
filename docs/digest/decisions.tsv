@@ -3496,4 +3496,5 @@ D6632	956	xgboost: exact greedy squared-error boosting
 D6633	892	FactoMineR: PCA and CA
 D6634	886	kernlab: kernel matrices and kernel PCA
 D6635	781	locfit: local polynomial regression at the data points
-D6636	1057	sna: centrality of a digraph
+D6636	1058	sna: centrality of a digraph
+D6637	826	copula: bivariate Archimedean families

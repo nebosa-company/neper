@@ -149,7 +149,7 @@ L463	library	0.25	784	actuar: actuarial science	Partial (D6143).
 L464	library	0.16	483	gamlss.dist: GAMLSS distribution families	Partial (D6471 GU, LO, GA, IG, BCCG, PE, D6472 WEI, LOGNO, NBI, ZIP, JSU, SHASH, BCT densities, LO p and q, GU q equal gamlss.dist on Windows;
 L467	library	0	280	hetGP: heteroskedastic Gaussian processes	Open (CRAN rank 784).
 L494	library	0	261	bayesm: Bayesian econometrics	Open (CRAN rank 829).
-L514	library	0	268	copula: dependence models	Open (CRAN rank 914).
+L514	library	0.1	641	copula: dependence models	Partial (D6637).
 L311	library	0.1	930	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	Partly done (D6056): e.algo.stat.cox.coxph (Breslow and Efron, one stratum) equals survival on 152 values on Windows (oracle_coxph);
 L490	library	0	249	timereg: Aalen additive and Cox-Aalen hazard models	Open (CRAN rank 853).
 L491	library	0	208	riskRegression: risk prediction scoring	Open (CRAN rank 850).

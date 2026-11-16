@@ -46946,3 +46946,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `snapkg.centrality` runs a BFS from every node, counting shortest paths, and gives Freeman betweenness (sum over ordered pairs of the share of shortest paths through a node, Brandes' dependency accumulation), stress (the number of shortest paths through it), closeness `(n-1) / sum of distances` and graph centrality `1 / eccentricity`, both **0 unless the node reaches every other node** (sna returns 0 for any infinite distance, not a sum over the reachable ones), and the dominant adjacency eigenvector at unit length. Freeman centralization divides `sum(max - c)` by `(n-1)(2n-4)` for total degree, `(n-1)^2 (n-2)` for betweenness and `(n-1)^2 / n` for closeness.
 
 **Result.** `oracle_sna` agrees with sna on Windows (284 values, digraphs of 5 to 20 nodes); eigenvector centrality is only checked on strongly connected graphs with a unique dominant eigenvalue, where both are well defined. Linux pending. L435 stays partial: undirected and valued graphs, triads, reciprocity, blockmodels, tests.
+
+## D6637 — copula: bivariate Archimedean families
+
+**Decision.** `copulapkg` gives the distribution function, density and Kendall's tau of the Clayton, Frank, Gumbel, AMH and Joe copulas. The Gumbel density is `C (uv)^-1 (lu lv)^(theta-1) A^(2/theta - 2) (1 + (theta-1) A^(-1/theta))` with `A = lu^theta + lv^theta`; writing the last factor as `A^(1/theta) + theta - 1` is wrong by a factor `A^(1/theta)` and showed as densities off by 20 to 80 percent. Frank's tau uses the Debye function by composite Gauss-Legendre; Joe's tau is `1 - 4 sum 1 / (k (theta k + 2)(theta (k-1) + 2))`.
+
+**Result.** `oracle_copula` agrees with copula on Windows (180 values, 60 parameter and point draws over five families); Linux pending. L514 stays partial: elliptical and extreme-value copulas, higher dimensions, rho, fitting, simulation.
