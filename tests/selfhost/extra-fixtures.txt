@@ -252,3 +252,4 @@ oracle_permall
 oracle_dpill
 oracle_tsutils
 oracle_compqf
+oracle_pcapp

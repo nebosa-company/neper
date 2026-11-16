@@ -45110,3 +45110,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.math.quadpack` ports `rdqagie` with `rdqk15i`, `rdqelg` and `rdqpsrt` (1-based tables, the C gotos as phase flags) behind `qagi[Ctx]`, taking the integrand as `fn(*Ctx, f64) -> f64`; the second pass of the 15-point rule evaluates the integrand again instead of keeping the 14 values. `e.math.nchisq` ports `pnchisq` and `pnchisq_raw` (the Poisson mixture below ncp 80, AS 275 with R's underflow regimes above) in f64 where R uses long double. `imhof` and `liu` sit in `e.algo.stat.compqf`.
 
 **Result.** `oracle_compqf` equals CompQuadForm and pchisq(ncp) on 5543 values on Windows; Linux pending. L356 is closed. Traps met: an all-caps type name (`K15`) is a constant, so it cannot head a struct literal.
+
+## D6126 — pcaPP cor.fk and the geometric median
+
+**Context.** L357 left pcaPP cor.fk and l1median open.
+
+**Decision.** `e.algo.stat.pcapp` ports `kendallNlogN` (stable `order`, tied runs sorted, merge-sort inversion count, `s / sqrt(n1) / sqrt(n2)`) as `cor_fk`, and l1median_HoCr and l1median_VaZh with their return codes and iteration counts (the weights of HoCr are summed in order of increasing distance, as R does). R's `l1median` runs `nlm`; the minimiser is unique, so the result is compared to the tolerance asked (1e-5 on the position). HoCr's code and iteration count are not compared: it stops on a strict decrease of a sum of square roots, and the last bit of `pow` decides it near convergence.
+
+**Result.** `oracle_pcapp` equals pcaPP on 659 values on Windows; Linux pending. Open on L357: PCAproj, PCAgrid, sPCAgrid.
