@@ -45982,3 +45982,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.gstatpkg` is new: `vgm_gamma` (single-structure Sph, Exp, Gau and Lin with nugget, zero at lag 0), `empirical_variogram` (omnidirectional bins by floor(d / width) up to the cutoff, each as pair count, mean distance and half the mean squared difference) and `ordinary_krige` (the bordered semivariance system, prediction and kriging variance).
 
 **Result.** `oracle_gstatpkg` equals gstat on 383 cases on Windows, at rel 1e-9 for the models and the variogram and 1e-8 for kriging: 20 model draws, 15 empirical variograms of 25 to 70 points and 15 kriging problems of 12 to 35 points. Anisotropy, directions, nested structures, the other model families, fitting, simple and universal kriging, co-kriging and the spatio-temporal functions are open; Linux pending. L437 is partial.
+
+## D6469 — fields: the Matern covariance and Exp.cov
+
+`e.algo.stat.fieldspkg` is new: `matern` (the exact forms at smoothness 1/2, 3/2 and 5/2, otherwise the Bessel-K form with the package's 1e-10 stand-in for a zero distance) on `e.algo.stat.gslfns.bessel_knu`, and `exp_cov` (exp(-(d / range)^p)).
+
+**Result.** `oracle_fieldspkg` equals fields on 240 cases on Windows, 30 parameter draws with smoothness among the three closed forms and two random values, each at a zero distance and four others. Tps, Krig, the other covariances and spatial process fitting are open; Linux pending. L370 is partial.

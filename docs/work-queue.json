@@ -1109,10 +1109,10 @@
       "group": "CRAN parity",
       "order": 710,
       "title": "fields and interp: spatial smoothing and interpolation",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN ranks 367, 351). Mid. Acceptance, equal to R: fields Tps and fastTps, Krig and spatialProcess with the Matern and exponential covariances, vgram, predictSE, surface data; interp on irregular data (linear, Akima, bilinear), tri.mesh, voronoi.mosaic, circles."
+      "evidence": "Partial (D6469 fields Matern and Exp.cov equal fields on Windows; oracle_fieldspkg; Linux pending). Open: Tps, Krig, the other covariances, interp. Was: Open (CRAN ranks 367, 351). Mid. Acceptance, equal to R: fields Tps and fastTps, Krig and spatialProcess with the Matern and exponential covariances, vgram, predictSE, surface data; interp on irregular data (linear, Akima, bilinear), tri.mesh, voronoi.mosaic, circles."
     },
     {
       "id": "L376",

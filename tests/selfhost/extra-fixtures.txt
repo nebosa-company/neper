@@ -292,6 +292,7 @@ oracle_ks
 oracle_aod
 oracle_drdid
 oracle_gstatpkg
+oracle_fieldspkg
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -328,3 +329,4 @@ oracle_ks
 oracle_aod
 oracle_drdid
 oracle_gstatpkg
+oracle_fieldspkg

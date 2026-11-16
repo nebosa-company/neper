@@ -3336,4 +3336,5 @@ D6464	691	DRDID: reg_did_panel
 D6465	741	DRDID: drdid_panel
 D6466	638	DRDID: ipw_did_panel and std_ipw_did_panel
 D6467	607	DRDID: reg_did_rc
-D6468	874	gstat: variogram models, the empirical variogram and ordinary kriging
+D6468	875	gstat: variogram models, the empirical variogram and ordinary kriging
+D6469	604	fields: the Matern covariance and Exp.cov
