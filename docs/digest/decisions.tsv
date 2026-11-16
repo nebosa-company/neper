@@ -3240,4 +3240,5 @@ D6164	711	pracma: associated Legendre functions, Chebyshev coefficients and the 
 D6165	962	fpc: cluster.stats validity indexes
 D6166	765	pROC: AUC, DeLong variance and interval, paired DeLong test
 D6167	721	ROCR: performance measures at every cutoff
-D6168	849	DiceDesign: lhsDesign, factDesign and the Faure sequence
+D6168	850	DiceDesign: lhsDesign, factDesign and the Faure sequence
+D6169	807	DiceDesign: maximinSA_LHS simulated annealing, draw for draw

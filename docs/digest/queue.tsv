@@ -42,7 +42,7 @@ L411	library	0	303	DHARMa: simulated residual diagnostics	Open (CRAN rank 550).
 L422	library	0.25	735	extraDistr: extra probability distributions	Partial (D6144).
 L424	library	0.4	453	logistf: Firth penalized logistic regression	Partial (D6157).
 L425	library	0.3	521	ismev: extreme-value model fits	Partial (D6155).
-L426	library	0.45	610	DiceDesign: space-filling designs	Partial (D6149, D6168 lhsDesign, factDesign, runif.faure).
+L426	library	0.6	647	DiceDesign: space-filling designs	Partial (D6149, D6168 lhsDesign, factDesign, runif.faure, D6169 maximinSA_LHS GEOM and LINEAR).
 L427	library	0	320	afex: repeated-measures and mixed ANOVA	Open (CRAN rank 607).
 L428	library	0	224	MuMIn: model selection and averaging	Open (CRAN rank 667).
 L429	library	0.3	583	imputeTS: time-series imputation	Partial (D6150).

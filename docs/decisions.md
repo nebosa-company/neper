@@ -45406,3 +45406,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.dicedesign` gains lhs_design (set.seed, the n * dimension uniforms for the jitter filled by column, then one sample(1:n) permutation per dimension, which equals R draw for draw), fact_design (the full factorial grid on [0, 1], the first factor varying slowest) and faure (runif.faure: the smallest prime at or above the dimension, the Pascal matrix modulo it, digit expansions of 1..n). The digit count m is the smallest m with r^m >= n by integers, since the package's ceiling(log(n)/log(r)) depends on one ulp of the logarithm at exact powers. Not here: the optimisers (maximinSA_LHS, discrepSA_LHS, maximinESE_LHS), wspDesign and the other sequences.
 
 **Result.** `oracle_dicedesign` equals DiceDesign on 116 cases on Windows; Linux pending. L426 stays partial.
+
+## D6169 — DiceDesign: maximinSA_LHS simulated annealing, draw for draw
+
+`e.algo.stat.dicedesign` gains maximin_sa, the GEOM and LINEAR temperature profiles of maximinSA_LHS: element exchange on phiP (two rows and a column from three uniform draws, each truncated plus one), the Metropolis acceptance through rbinom(1, 1, p) on the shared stream, and lhs_from, the lhsDesign draw on an existing generator (the package seeds once, then optimises on the same stream). The final design and its phiP equal the package's under the same seed, which pins the exact RNG consumption of runif, sample and rbinom. Not here: the GEOM_MORRIS profile, discrepSA_LHS, maximinESE_LHS, wspDesign and meshRatio.
+
+**Result.** `oracle_dicedesign` equals DiceDesign on 132 cases on Windows; Linux pending. L426 stays partial.

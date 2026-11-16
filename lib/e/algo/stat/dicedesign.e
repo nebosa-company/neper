@@ -4,6 +4,7 @@
 // Not here: the design generators (lhsDesign, the simulated-annealing and ESE optimisers, wspDesign, factDesign) and meshRatio.
 
 use e.algo.rand.r as rr
+use e.algo.rand.rdist as rd
 use e.math
 use e.mem
 
@@ -330,4 +331,73 @@ fn faure(a: *mem.Arena, n: usize, dimension: usize, out: []f64) -> err {
         i += 1usize
     }
     ret ok
+}
+
+// lhsDesign drawing from a generator already in use (the package seeds it once, then goes on to optimise with the same stream)
+fn lhs_from(a: *mem.Arena, g: *rr.Rng, n: usize, dimension: usize, out: []f64) -> err {
+    let (ran, e1) = mem.alloc[f64](a, n * dimension)
+    if e1 != ok { ret e1 }
+    var k = 0usize
+    while k < n * dimension {
+        ran[k] = rr.unif(g)
+        k += 1usize
+    }
+    var j = 0usize
+    while j < dimension {
+        let (idx, e2) = rr.sample_int(a, g, i64(n), i64(n), false)
+        if e2 != ok { ret e2 }
+        var i = 0usize
+        while i < n {
+            out[i * dimension + j] = (f64(idx[i]) - ran[j * n + i]) / f64(n)
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
+// maximinSA_LHS with the GEOM (profile 0) or LINEAR (profile 1) temperature: simulated annealing of an LHS by element exchange on phiP,
+// accepting a worse design with probability exp((phiP - phiP') / T) through rbinom(1, 1, .) exactly as the package draws it.
+// m is the working design (n by d row-major) and holds the answer; the final phiP is returned
+fn maximin_sa(a: *mem.Arena, g: *rr.Rng, m: []f64, n: usize, d: usize, t0: f64, cc: f64, it: usize, p: f64, profile: usize) -> f64 {
+    let (gm, e1) = mem.alloc[f64](a, n * d)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var temp = t0
+    var i = 0usize
+    var fi = phi_p(m, n, d, p)
+    while temp > 0.0f64 && i < it {
+        var k = 0usize
+        while k < n * d {
+            gm[k] = m[k]
+            k += 1usize
+        }
+        // lhs_EP: two rows and a column, each trunc(runif(.., 0, n)) + 1
+        let r1 = usize(math.floor[f64](rr.runif(g, 0.0f64, f64(n))))
+        let r2 = usize(math.floor[f64](rr.runif(g, 0.0f64, f64(n))))
+        let col = usize(math.floor[f64](rr.runif(g, 0.0f64, f64(d))))
+        let x = gm[r1 * d + col]
+        gm[r1 * d + col] = gm[r2 * d + col]
+        gm[r2 * d + col] = x
+        let fn2 = phi_p(gm, n, d, p)
+        var diff = math.exp[f64]((fi - fn2) / temp)
+        if diff > 1.0f64 { diff = 1.0f64 }
+        var accept = false
+        if diff == 1.0f64 {
+            accept = true
+        } else {
+            let b = rd.rbinom(g, 1.0f64, diff)
+            if b == 1.0f64 { accept = true }
+        }
+        if accept {
+            k = 0usize
+            while k < n * d {
+                m[k] = gm[k]
+                k += 1usize
+            }
+            fi = fn2
+        }
+        i += 1usize
+        if profile == 0usize { temp = math.pow[f64](cc, f64(i)) * t0 } else { temp = t0 * (1.0f64 - f64(i) / f64(it)) }
+    }
+    ret fi
 }

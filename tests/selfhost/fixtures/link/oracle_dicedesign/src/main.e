@@ -1,6 +1,7 @@
 // e.algo.stat.dicedesign against DiceDesign. tests/oracle/dicedesign.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R dicedesign`; the layout is at the top of scripts/r_oracle/groups/dicedesign.R.
 
+use e.algo.rand.r as rr
 use e.algo.stat.dicedesign as dd
 use e.io
 use e.mem
@@ -32,8 +33,23 @@ fn gen(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret total
     }
+    var g: rr.Rng = zero
     let (o, e) = mem.alloc[f64](a, n * d)
     if e != ok { os.exit(6) }
+    if str.eq(c.name, "sa") || str.eq(c.name, "sa_phi") {
+        rr.seed(&g, i64(x[2usize]))
+        if dd.lhs_from(a, &g, n, d, o) != ok { os.exit(9) }
+        var prof = 0usize
+        if x[3usize] > 0.5f64 { prof = 1usize }
+        let fi = dd.maximin_sa(a, &g, o, n, d, 5.0f64, 0.9f64, 60usize, 15.0f64, prof)
+        if str.eq(c.name, "sa_phi") { ret fi }
+        var q = 0usize
+        while q < n * d {
+            total += o[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret total
+    }
     if str.eq(c.name, "lhs") {
         if dd.lhs_design(a, n, d, x[3usize] > 0.5f64, i64(x[2usize]), o) != ok { os.exit(7) }
     } else {
@@ -48,7 +64,7 @@ fn gen(a: *mem.Arena, c: *const oracle.Case) -> f64 {
 }
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
-    if str.eq(c.name, "lhs") || str.eq(c.name, "fact") || str.eq(c.name, "faure") { ret gen(a, c) }
+    if str.eq(c.name, "lhs") || str.eq(c.name, "fact") || str.eq(c.name, "faure") || str.eq(c.name, "sa") || str.eq(c.name, "sa_phi") { ret gen(a, c) }
     let x = c.args
     let n = usize(x[0usize])
     let d = usize(x[1usize])

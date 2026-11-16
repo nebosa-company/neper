@@ -22,4 +22,11 @@ for (rep in 1:12) {
   d2 <- max(d, 2); Fa <- runif.faure(n, d2)$design
   add("faure", c(n, d2, 0, 0), sum(as.vector(t(Fa)) * seq_len(length(Fa))))
 }
+for (rep in 1:8) {
+  n <- sample(6:14, 1); d <- sample(2:4, 1); sd <- sample(1:100000, 1); prof <- c("GEOM", "LINEAR")[rep %% 2 + 1]
+  L <- lhsDesign(n, d, seed = sd)$design
+  S <- maximinSA_LHS(L, T0 = 5, c = 0.9, it = 60, p = 15, profile = prof)
+  add("sa", c(n, d, sd, rep %% 2), sum(as.vector(t(S$design)) * seq_len(length(S$design))))
+  add("sa_phi", c(n, d, sd, rep %% 2), tail(S$critValues, 1))
+}
 emit("dicedesign", "DiceDesign", list(cases))
