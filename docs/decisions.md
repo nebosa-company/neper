@@ -46724,3 +46724,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `cspline_raw` integrates the I-spline columns through the identity `integral of b_{j,k} from the lower boundary = (t_{j+k} - t_j)/k * sum over m >= j of b_{m,k+1}` on the knot vector with `degree + 3` boundary repeats (the I-spline's `j >= c + 1` becomes `j' >= c + 2` after the extra repeat); `cspline_row` divides each column by its value at the upper boundary knot when `scale = TRUE`, and drops the first column without the intercept.
 
 **Result.** `oracle_splines2` agrees with splines2 on 120 cSpline summaries on Windows (680 cases in all); Linux pending. L445 stays partial: natural splines with fewer than two knots, periodic bases and the derivatives of the M and I splines.
+
+## D6591 — splines2: derivatives of the M- and I-splines
+
+**Decision.** No code: `row` already differentiates the B-splines inside the M-spline scaling, and the I-spline derivative of order k is the M-spline derivative of order k - 1 (the first is the M-spline itself). The oracle now checks mSpline derivs 1 and 2 and iSpline derivs 1 and 2.
+
+**Result.** `oracle_splines2` agrees with splines2 on those 240 summaries on Windows (920 cases in all); Linux pending. L445 stays partial: periodic bases, naturalSpline with fewer than two internal knots, integrals, extrapolation and df-based knots.
