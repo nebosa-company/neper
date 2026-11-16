@@ -796,3 +796,31 @@ fn polyint(p: []const f64, k: f64, out: []f64) {
     }
     out[n] = k
 }
+
+fn root_f(id: usize, x: f64) -> f64 {
+    if id == 0usize { ret x * x * x - 2.0f64 * x - 5.0f64 }
+    if id == 1usize { ret math.cos[f64](x) - x }
+    if id == 2usize { ret math.exp[f64](x) - 3.0f64 }
+    if id == 3usize { ret x * math.exp[f64](x) - 1.0f64 }
+    ret math.log[f64](x) + x - 2.0f64
+}
+
+// newtonRaphson over one of five fixed functions with the package's numerical derivative (central difference, h = tol^(2/3)); (root, f(root), iterations, estimated precision)
+fn newton_raphson(id: usize, x0: f64, maxiter: usize, tol: f64) -> (f64, f64, usize, f64) {
+    let h = math.pow[f64](tol, 2.0f64 / 3.0f64)
+    var x = x0
+    var fx = root_f(id, x)
+    var dfx = (root_f(id, x + h) - root_f(id, x - h)) / (2.0f64 * h)
+    var niter = 0usize
+    var diff = tol + 1.0f64
+    while diff >= tol && niter <= maxiter {
+        niter += 1usize
+        if dfx == 0.0f64 { break }
+        diff = 0.0f64 - fx / dfx
+        x = x + diff
+        diff = math.abs[f64](diff)
+        fx = root_f(id, x)
+        dfx = (root_f(id, x + h) - root_f(id, x - h)) / (2.0f64 * h)
+    }
+    ret (x, fx, niter, diff)
+}

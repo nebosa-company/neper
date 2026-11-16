@@ -156,6 +156,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(k, "nr_root") || str.eq(k, "nr_iter") || str.eq(k, "nr_prec") {
+        let (rt, fr, ni, pr) = pm.newton_raphson(usize(x[0usize]), x[1usize], 500usize, 1.0e-8f64)
+        if str.eq(k, "nr_root") { ret rt }
+        if str.eq(k, "nr_iter") { ret f64(ni) }
+        ret pr
+    }
     if str.eq(k, "legendre") {
         let (o, e) = mem.alloc[f64](a, usize(x[0usize]) + 1usize)
         if e != ok { os.exit(5) }

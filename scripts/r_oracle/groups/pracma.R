@@ -70,6 +70,12 @@ for (rep in 1:20) {
   if (na >= nb) { dv <- deconv(pa, pb); add("deconvq", c(na, nb, pa, pb), sum(dv$q * seq_along(dv$q))); add("deconvr", c(na, nb, pa, pb), sum(dv$r * seq_along(dv$r))) }
   pi_ <- polyint(pa, 1.5); add("polyint", c(na, nb, pa, pb), sum(pi_ * seq_along(pi_)))
 }
+fs <- list(function(x) x^3 - 2*x - 5, function(x) cos(x) - x, function(x) exp(x) - 3, function(x) x*exp(x) - 1, function(x) log(x) + x - 2)
+for (rep in 1:20) {
+  id <- (rep - 1) %% 5; x0 <- c(2, 1, 0.5, 1, 1.5)[id + 1] + runif(1, 0, 1)
+  nr <- newtonRaphson(fs[[id + 1]], x0)
+  add("nr_root", c(id, x0), nr$root); add("nr_iter", c(id, x0), nr$niter); add("nr_prec", c(id, x0), nr$estim.prec)
+}
 # nchoosek reference values are filled from R directly
 cases <- lapply(cases, function(cs) { if (cs$fn == "nchoosek") cs$want <- choose(cs$args[1], cs$args[2]); cs })
 emit("pracma", "pracma", list(cases))
