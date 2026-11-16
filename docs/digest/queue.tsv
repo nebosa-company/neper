@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L421	library	0.65	941	fdrtool: false discovery rate estimation	Partly done (D6068): e.algo.stat.fdrtool.fdrtool_pvalue (fndr cutoff, eta0, Grenander density, local fdr and q values for p values) equals fdrtool on 210 values on Windows (oracle_fdrtool);
+L421	library	0.5	941	fdrtool: false discovery rate estimation	Partly done (D6068): e.algo.stat.fdrtool.fdrtool_pvalue (fndr cutoff, eta0, Grenander density, local fdr and q values for p values) equals fdrtool on 210 values on Windows (oracle_fdrtool);
 L444	library	0.3	756	SuppDists: Johnson, Kendall, Spearman and related distributions	Partly done (D6075): e.algo.stat.suppdists has inverse Gaussian, exact Kendall and Spearman for small N, and Johnson SN, SL, SB, SU d, p and q, equal to SuppDists on 428 values on Windows (oracle_supp
 L445	library	0.4	1336	splines2: spline bases	Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2);
 L446	library	0.4	474	mixsqp: mixture proportions by SQP	Partly done (D6076): e.algo.stat.mixsqp finds the mixsqp optimum (proportions and value) by SQUAREM-accelerated EM, equal on 156 values at 1e-5 on Windows (oracle_mixsqp);

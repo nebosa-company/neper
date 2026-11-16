@@ -23,7 +23,8 @@ for (rep in 1:30) {
   if (is.null(r)) next
   a <- c(n, z)
   add("z_eta0", a, r$param[1, 3]); add("z_cutoff", a, r$param[1, 1]); add("z_ncens", a, r$param[1, 2])
-  add("z_sd", a, r$param[1, 5]); cases[[length(cases) + 1]] <- case("z_sdse", a, r$param[1, 6], rel = 1e-6, abs = 1e-9)  # a fourth-order difference quotient of a sum near 1e3 over a step of 1e-4: its roundoff is about 1e-8; add("z_eta0se", a, r$param[1, 4])
+  # the standard error of the scale is a fourth-order difference quotient of a sum near 1e3 over a step of 1e-4: its roundoff is about 1e-8
+  add("z_sd", a, r$param[1, 5]); cases[[length(cases) + 1]] <- case("z_sdse", a, r$param[1, 6], rel = 1e-6, abs = 1e-9); add("z_eta0se", a, r$param[1, 4])
   add("z_q_sum", a, sum(r$qval)); add("z_q_w", a, sum(seq_along(z) * r$qval)); add("z_l_sum", a, sum(r$lfdr)); add("z_l_w", a, sum(seq_along(z) * r$lfdr))
 }
 emit("fdrtool", "fdrtool", list(cases))

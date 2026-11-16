@@ -47232,3 +47232,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6691 — fdrtool normal statistic; the Brent minimiser's eps
 
 **Decision.** `fdrtool_pvalue`'s steps 3 and 4 are now `fdrtool_core`, shared with `fdrtool_normal`. The scale of the censored normal null is found by `brent_min`, R's `Brent_fmin` with tol = eps^0.25; its internal `eps` is sqrt(DBL_EPSILON), not the fourth root, which a first version had and which moved the minimum by 3e-5. The log-likelihood sum is accumulated with a two-sum compensation to stand for R's long double `sum`. sd.SE is a five-point difference quotient over a step of 1e-4 and agrees to about 1e-8, so it is compared at 1e-6. Linux pending.
+
+## D6691 — fdrtool for z statistics
+
+**Decision.** `fdrtool_normal` follows `fdrtool(statistic = "normal", cutoff.method = "fndr")`: the approximate null from the interquartile range, eta0 from its two-sided p values, the fndr cutoff, the censored-normal likelihood minimised with R's Brent `optimize`, the standard errors from the numerical curvature and from the censored share, and then the p values through the fitted null into the p-value routine. The standard error of the scale is a fourth-order difference over a step near 1e-4 of a sum near 1e3, so its roundoff is about 1e-8 and it is compared at 1e-6. The work was left in the tree by another session and verified here. Linux pending.
