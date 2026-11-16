@@ -7,6 +7,7 @@
 use e.algo.rand.r as rng
 use e.algo.stat.bigglm as bgl
 use e.math
+use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
@@ -1849,4 +1850,81 @@ fn hac_weight(kernel: usize, x: f64) -> f64 {
     }
     if ax > 1.0f64 { ret 0.0f64 }
     ret (1.0f64 + math.cos[f64](3.141592653589793238462643383279f64 * x)) / 2.0f64
+}
+
+// lmtest::dwtest(exact = FALSE): the Durbin-Watson d and its normal-approximation p value for the alternative "greater" (alt 0), "less" (1) or "two.sided" (2)
+fn dw_approx(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alt: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (f0, e0) = ols(a, x, y, n, p)
+    if e0 != ok { ret (nan, nan) }
+    let dw = durbin_watson(f0.resid)
+    let (ax, e1) = mem.alloc[f64](a, n * p)
+    let (xaxq, e2) = mem.alloc[f64](a, p * p)
+    let (axq, e3) = mem.alloc[f64](a, p * p)
+    if e1 != ok || e2 != ok || e3 != ok { ret (nan, nan) }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            if i == 0usize {
+                ax[c] = x[c] - x[p + c]
+            } else if i == n - 1usize {
+                ax[i * p + c] = x[i * p + c] - x[(i - 1usize) * p + c]
+            } else {
+                ax[i * p + c] = 2.0f64 * x[i * p + c] - x[(i - 1usize) * p + c] - x[(i + 1usize) * p + c]
+            }
+            c += 1usize
+        }
+        i += 1usize
+    }
+    var r = 0usize
+    while r < p {
+        var c = 0usize
+        while c < p {
+            var s = 0.0f64
+            var t = 0.0f64
+            var q = 0usize
+            while q < p {
+                var xa = 0.0f64
+                var aa = 0.0f64
+                i = 0usize
+                while i < n {
+                    xa += x[i * p + r] * ax[i * p + q]
+                    aa += ax[i * p + r] * ax[i * p + q]
+                    i += 1usize
+                }
+                s += xa * f0.xtx_inv[q * p + c]
+                t += aa * f0.xtx_inv[q * p + c]
+                q += 1usize
+            }
+            xaxq[r * p + c] = s
+            axq[r * p + c] = t
+            c += 1usize
+        }
+        r += 1usize
+    }
+    var tr1 = 0.0f64
+    var tr2 = 0.0f64
+    var tr3 = 0.0f64
+    r = 0usize
+    while r < p {
+        tr1 += xaxq[r * p + r]
+        tr2 += axq[r * p + r]
+        var c = 0usize
+        while c < p {
+            tr3 += xaxq[r * p + c] * xaxq[c * p + r]
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let nf = f64(n)
+    let kf = f64(p)
+    let pp = 2.0f64 * (nf - 1.0f64) - tr1
+    let qq = 2.0f64 * (3.0f64 * nf - 4.0f64) - 2.0f64 * tr2 + tr3
+    let dmean = pp / (nf - kf)
+    let dvar = 2.0f64 / ((nf - kf) * (nf - kf + 2.0f64)) * (qq - pp * dmean)
+    let sd = math.sqrt[f64](dvar)
+    if alt == 2usize { ret (dw, 2.0f64 * dist.pnorm(math.abs[f64](dw - dmean), 0.0f64, sd, false, false)) }
+    if alt == 1usize { ret (dw, dist.pnorm(dw, dmean, sd, false, false)) }
+    ret (dw, dist.pnorm(dw, dmean, sd, true, false))
 }

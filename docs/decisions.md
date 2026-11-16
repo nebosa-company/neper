@@ -46540,3 +46540,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `kern_hac_diag` takes the kernel: Quadratic Spectral, Truncated (bandwidth 0.6611 (n alpha2)^(1/5)), Bartlett (1.1447 (n alpha1)^(1/3)), Parzen (2.6614) and Tukey-Hanning (1.7462), each with sandwich's `kweights` form; alpha1 joins alpha2 from the same AR(1) fits.
 
 **Result.** `oracle_carlmtest` agrees with sandwich on 48 new kernHAC values (2260 cases in all) on Windows; Linux pending. L300 stays partial (the ARMA(1,1) approximation, the dwtest p value).
+
+## D6562 — lmtest: dwtest approximate p value
+
+**Decision.** `dw_approx` is dwtest(exact = FALSE): the mean and variance of d from `P = 2(n - 1) - tr(X'AX Q)` and `Q = 2(3n - 4) - 2 tr(AX'AX Q) + tr((X'AX Q)^2)` (AX the second-difference filter of X with its end rows), then the normal tail for "greater", "less" or "two.sided". The exact path (n below 100 by default) needs the eigenvalues of M A and Farebrother's `pan` routine and is not here.
+
+**Result.** `oracle_carlmtest` agrees with lmtest on 36 new values (2296 cases in all) on Windows; Linux pending. L300 stays partial.

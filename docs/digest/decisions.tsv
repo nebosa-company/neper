@@ -3429,4 +3429,5 @@ D6557	944	sandwich: vcovPL; car: Anova with an interaction
 D6558	511	car: gvif
 D6559	632	car: Anova for binomial and Poisson glms
 D6560	751	sandwich: kernHAC
-D6561	514	sandwich: kernHAC kernels
+D6561	515	sandwich: kernHAC kernels
+D6562	584	lmtest: dwtest approximate p value
