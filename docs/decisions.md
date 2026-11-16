@@ -46204,3 +46204,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `Fit` now carries `hess`: the package's hessian is P R'R P' taken from the last QR factorisation of the Jacobian (R is the upper triangle of fjac, the columns pivoted by ipvt), which is the Jacobian at the last iterate before the final step, not at the returned parameters; a J'J at the final parameters differs from it by about 5e-5 relative, which is how this was found.
 
 **Result.** `oracle_minpacklm` agrees with minpack.lm on 730 values on Windows, the 220 new ones the hessian entries of 30 fits at rel 1e-5; `oracle_drc`, which also uses the module, still passes. Only the nlsLM model interface (formula, weights, summary standard errors) is open; Linux pending. L420 stays partial.
+
+## D6506 — minpack.lm: the nlsLM summary, and L420 lands
+
+`e.algo.stat.minpacklm` gains `nls_summary`: sigma = sqrt(deviance / (m - n)) and the coefficient standard errors from sigma^2 (J'J)^-1 at the fitted parameters, which is what summary(nlsLM(...)) reports. With the analytic Jacobian, nls differentiates numerically, so the comparison is at rel 1e-4.
+
+**Result.** `oracle_minpacklm` agrees with minpack.lm and nlsLM on 840 values on Windows, 110 of them new (sigma and the standard errors of 30 fits). What nlsLM adds in R beyond that is formula and data-frame plumbing and weights, which a residual-function entry replaces; they are not ported, and the evidence line says so. L420 moves from docs/work-queue.json to docs/work-done.jsonl; Linux pending until WSL answers.

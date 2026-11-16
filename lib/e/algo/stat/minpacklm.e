@@ -6,6 +6,7 @@
 //
 // Not here: lmder (an analytic Jacobian), the `diag` option (mode 2), the hessian output, nlsLM's model interface.
 
+use e.algo.stat.carlmtest as ols
 use e.math
 use e.mem
 
@@ -643,4 +644,36 @@ fn diag_empty() -> []const f64 {
 fn nls_lm_opts[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), user: *C, m: usize, n: usize, x: []f64, lower: []const f64, upper: []const f64, ftol: f64, ptol: f64, gtol: f64, maxfev: i64, maxiter: i64, factor: f64, diag_in: []const f64) -> (Fit, err) {
     let (fit, e) = nls_lm_core[C](a, f, f, false, factor, diag_in, user, m, n, x, lower, upper, ftol, ptol, gtol, maxfev, maxiter)
     ret (fit, e)
+}
+
+// summary(nlsLM(...)): the residual standard error sqrt(deviance / (m - n)) and the coefficient standard errors from sigma^2 (J'J)^-1, J the model Jacobian (m by n, column-major as
+// the Jacobian callbacks fill it) at the fitted parameters; se receives n values and sigma is returned
+fn nls_summary(a: *mem.Arena, jac: []const f64, m: usize, n: usize, deviance: f64, se: []f64) -> f64 {
+    let (jj, e1) = mem.alloc[f64](a, n * n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (ji, e2) = mem.alloc[f64](a, n * n)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var p = 0usize
+    while p < n {
+        var q = 0usize
+        while q < n {
+            var s = 0.0f64
+            var r = 0usize
+            while r < m {
+                s += jac[p * m + r] * jac[q * m + r]
+                r += 1usize
+            }
+            jj[p * n + q] = s
+            q += 1usize
+        }
+        p += 1usize
+    }
+    if ols.inverse(a, jj, n, ji) != ok { ret 0.0f64 / 0.0f64 }
+    let sigma2 = deviance / f64(m - n)
+    p = 0usize
+    while p < n {
+        se[p] = math.sqrt[f64](sigma2 * ji[p * n + p])
+        p += 1usize
+    }
+    ret math.sqrt[f64](sigma2)
 }

@@ -91,6 +91,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         e = e2
     }
     if e != ok { ret 0.0f64 / 0.0f64 }
+    if str.eq(c.name, "lmsum") {
+        let (jb, je) = mem.alloc[f64](a, n * np)
+        if je != ok { ret 0.0f64 / 0.0f64 }
+        jac(&d, x, jb)
+        let (se, ee) = mem.alloc[f64](a, np)
+        if ee != ok { ret 0.0f64 / 0.0f64 }
+        let sg = ml.nls_summary(a, jb, n, np, fit.deviance, se)
+        if q == 0usize { ret sg }
+        ret se[q - 1usize]
+    }
     if str.eq(c.name, "lmhess") { ret fit.hess[q] }
     if q < np { ret x[q] }
     if q == np { ret fit.deviance }
