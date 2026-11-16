@@ -56,6 +56,9 @@ fn param(c: *const oracle.Case) -> f64 {
     }
     if fam == 7usize { ret sr.crps_binom(y, a, b) }
     if fam == 8usize && isc { ret sr.crps_pois(y, a) }
+    if fam == 10usize { ret sr.crps_gtcnorm(y, a, b, cc, d, x[6usize], x[7usize]) }
+    if fam == 11usize { ret sr.crps_gtcnorm(y, a, b, cc, d, 0.0f64, 0.0f64) }
+    if fam == 12usize { ret sr.crps_gtcnorm(y, a, b, cc, d, sr.pn((cc - a) / b), 1.0f64 - sr.pn((d - a) / b)) }
     if fam == 9usize {
         if isc { ret sr.crps_t(y, a, b, cc) }
         ret sr.logs_t(y, a, b, cc)

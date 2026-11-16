@@ -48,4 +48,12 @@ for (rep in 1:25) {
   y <- round(abs(rnorm(1, 3, 3))); lam <- runif(1, 0.2, 25); df <- runif(1, 1.5, 12); loc <- rnorm(1); sc <- runif(1, 0.3, 3); yt <- rnorm(1, 0, 3)
   add("crps", P(8, lam, y), crps_pois(y, lam)); add("crps", P(9, c(df, loc, sc), yt), crps_t(yt, df, loc, sc)); add("logs", P(9, c(df, loc, sc), yt), logs_t(yt, df, loc, sc))
 }
+for (rep in 1:30) {
+  loc <- rnorm(1); sc <- runif(1, 0.5, 2.5); lo <- loc + sc * runif(1, -2, 1.5); hi <- lo + sc * runif(1, 0.5, 4); yy <- rnorm(1, loc, 2 * sc)
+  lm <- runif(1, 0, 0.3); um <- runif(1, 0, 0.3)
+  add("crps", c(10, loc, sc, lo, hi, yy, lm, um), crps_gtcnorm(yy, loc, sc, lo, hi, lm, um))
+  add("crps", c(11, loc, sc, lo, hi, yy, 0, 0), crps_tnorm(yy, loc, sc, lo, hi))
+  add("crps", c(12, loc, sc, lo, hi, yy, 0, 0), crps_cnorm(yy, loc, sc, lo, hi))
+  lh <- loc + sc * runif(1, 3.2, 5); add("crps", c(11, loc, sc, lh, lh + sc * 2, yy + lh - loc, 0, 0), crps_tnorm(yy + lh - loc, loc, sc, lh, lh + sc * 2))
+}
 emit("scoringrules", "scoringRules", list(cases))

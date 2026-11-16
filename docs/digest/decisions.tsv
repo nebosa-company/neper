@@ -3375,4 +3375,5 @@ D6503	784	minpack.lm: lmder with an analytic Jacobian
 D6504	686	minpack.lm: the factor and diag controls
 D6505	729	minpack.lm: the hessian
 D6506	781	minpack.lm: the nlsLM summary, and L420 lands
-D6507	688	scoringRules: crps_pois, crps_t and logs_t
+D6507	689	scoringRules: crps_pois, crps_t and logs_t
+D6508	951	scoringRules: truncated and censored normal CRPS
