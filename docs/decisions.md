@@ -46988,3 +46988,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `osqppkg.solve` runs OSQP's ADMM with rho 0.1, sigma 1e-6 and relaxation 1.6, factoring `P + sigma I + rho A'A` once (a dense inverse), and stops only when the primal residual `|Ax - z|` and the dual residual `|Px + q + A'y|` are both below 1e-11. Stopping on the size of the last step (below 1e-13) ended slowly converging cases early, with an objective 3 percent off on a two-variable, four-constraint problem.
 
 **Result.** `oracle_osqp` agrees with osqp (eps 1e-12, polishing) on Windows at 1e-6 (48 values; strictly convex problems with ranges and equalities); Linux pending. L489 stays partial: sparse input, adaptive rho, certificates, clarabel and the conic solvers.
+
+## D6644 — poLCA: latent class EM
+
+**Decision.** `polcapkg.em` takes the starting response probabilities for each class, variable and category (a uniform class prior, as poLCA does when `probs.start` is given), then alternates the posterior class weights with the re-estimated class sizes and response probabilities until the log-likelihood changes by less than the tolerance. With the same start it reaches poLCA's local optimum, so the comparison is on that fit, not on a global one.
+
+**Result.** `oracle_polca` agrees with poLCA on Windows (80 values, 150 to 400 respondents, 3 to 5 variables, 2 to 3 classes) at 1e-4; at 1e-5 one class-size sum was off by 1.5e-5, the slack of poLCA's own stopping rule. Linux pending. L512 stays partial: restarts, covariates, standard errors, fit statistics, missing responses.

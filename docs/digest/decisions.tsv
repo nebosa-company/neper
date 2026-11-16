@@ -3503,4 +3503,5 @@ D6639	811	mlogit: conditional logit
 D6640	1050	flexsurv: parametric survival families
 D6641	816	timereg: Aalen additive hazards
 D6642	853	riskRegression: IPCW Brier score and AUC
-D6643	732	osqp: ADMM quadratic programs
+D6643	733	osqp: ADMM quadratic programs
+D6644	819	poLCA: latent class EM
