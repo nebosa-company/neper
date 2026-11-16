@@ -1164,10 +1164,10 @@
       "group": "CRAN parity",
       "order": 672,
       "title": "igraph: random graph generators and layouts",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 109). Mid. Needs the R RNG streams (e.algo.rand.r). Acceptance, equal to igraph value for value under set.seed: sample_gnp, sample_gnm, sample_pa (Barabasi), sample_smallworld, sample_sbm, sample_degseq (configuration and Viger-Latapy), sample_k_regular; layout_with_fr, layout_with_kk, layout_with_mds, layout_with_graphopt, layout_with_drl, layout_in_circle, layout_as_tree, layout_nicely."
+      "evidence": "Partly done (D6062): e.algo.graph.layout has layout_in_circle (with order), as_star, on_grid and on_sphere, equal to igraph on 580 summaries on Windows (oracle_layout); Linux pending. Open: all random generators, layout_with_fr, kk, mds, graphopt, drl, as_tree, nicely. Original: Open (CRAN rank 109). Mid. Needs the R RNG streams (e.algo.rand.r). Acceptance, equal to igraph value for value under set.seed: sample_gnp, sample_gnm, sample_pa (Barabasi), sample_smallworld, sample_sbm, sample_degseq (configuration and Viger-Latapy), sample_k_regular; layout_with_fr, layout_with_kk, layout_with_mds, layout_with_graphopt, layout_with_drl, layout_in_circle, layout_as_tree, layout_nicely."
     },
     {
       "id": "L275",

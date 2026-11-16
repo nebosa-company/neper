@@ -104,7 +104,7 @@ L306	library	0.15	919	MASS remainder: robust fits, fitdistr, boxcox, density and
 L307	library	0.15	583	quantreg: quantile regression inference and algorithms	Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg);
 L309	library	0.1	702	nloptr: gradient-based and constrained optimizers	Partly done (D6054): e.algo.stat.dfree.auglag (augmented Lagrangian over the box minimiser, no gradients) equals nloptr on HS071 and two more constrained problems on Windows (oracle_auglag);
 L314	library	0.15	1107	lubridate and timeDate: date-time parsing, periods, business calendars	Partly done (D6059): e.time.lubridate has Easter, month arithmetic with the month-end rules, quarter, semester, decimal_date, epiweek, isoweek, floor_date and ceiling_date for dates, equal to lubridat
-L317	library	0	407	igraph: random graph generators and layouts	Open (CRAN rank 109).
+L317	library	0.08	687	igraph: random graph generators and layouts	Partly done (D6062): e.algo.graph.layout has layout_in_circle (with order), as_star, on_grid and on_sphere, equal to igraph on 580 summaries on Windows (oracle_layout);
 L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
 L274	library	0	381	General linear mixed models (lme4)	Open.
 L342	library	0	202	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Open (CRAN rank 262).

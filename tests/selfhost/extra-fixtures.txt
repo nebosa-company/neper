@@ -197,3 +197,4 @@ oracle_emmeans
 oracle_lubridate
 oracle_matrix
 oracle_igraph
+oracle_layout
