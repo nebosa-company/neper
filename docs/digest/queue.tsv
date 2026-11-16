@@ -207,6 +207,26 @@ L494	library	0	261	bayesm: Bayesian econometrics	Open (CRAN rank 829).
 L495	library	0	260	mirt: item response theory	Open (CRAN rank 841).
 L496	library	0	277	fda: functional data analysis	Open (CRAN rank 838).
 L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
+L498	library	0	196	Kendall: rank correlation and Mann-Kendall trend tests	Open (CRAN rank 920).
+L499	library	0	183	ResourceSelection: Hosmer-Lemeshow and related tests	Open (CRAN rank 981).
+L500	library	0	212	ashr: adaptive shrinkage	Open (CRAN rank 977).
+L501	library	0	261	randtoolbox and qrng: quasi-random generators	Open (CRAN ranks 926, 963).
+L502	library	0	228	qcc: statistical quality control	Open (CRAN rank 999).
+L503	library	0	196	WRS2: robust tests and ANOVA	Open (CRAN rank 985).
+L504	library	0	291	rcompanion: nonparametric and categorical helpers	Open (CRAN rank 904).
+L505	library	0	208	sm: nonparametric smoothing methods	Open (CRAN rank 954).
+L506	library	0	195	ggm: Gaussian graphical models	Open (CRAN rank 964).
+L507	library	0	266	gsDesign: group sequential designs	Open (CRAN rank 939).
+L508	library	0	277	sampling: survey sampling designs	Open (CRAN rank 980).
+L509	library	0	229	Cubist: rule-based regression models	Open (CRAN rank 924).
+L510	library	0	244	gmm: generalized method of moments	Open (CRAN rank 906).
+L511	library	0	263	QCA: qualitative comparative analysis	Open (CRAN rank 956).
+L512	library	0	251	poLCA: latent class analysis	Open (CRAN rank 998).
+L513	library	0	272	Epi: epidemiology tools	Open (CRAN rank 929).
+L514	library	0	268	copula: dependence models	Open (CRAN rank 914).
+L515	library	0	241	unmarked: occupancy and abundance models	Open (CRAN rank 905).
+L516	library	0	273	tgp: Bayesian treed Gaussian processes	Open (CRAN rank 909).
+L517	library	0	354	grf: generalized random forests	Open (CRAN rank 944).
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU

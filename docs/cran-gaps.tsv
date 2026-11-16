@@ -933,3 +933,103 @@ topicmodels	897	topic models: latent Dirichlet allocation by VEM and Gibbs, corr
 gee	898	generalized estimating equations, see L430	-	covered-by-other-item	-		
 exactextractr	899	raster-polygon statistics, see L285	-	covered-by-other-item	-		
 coxme	900	mixed-effects Cox models with random effects and frailty covariance structures	coxme, ranef, VarCorr	gap	-	~8k	needs L311; L492
+olsrr	901	OLS regression diagnostics, see L300	-	covered-by-other-item	-		
+enrichR	902	gene set enrichment web client	-	out-of-scope	-		
+dynlm	903	dynamic linear models with lags, see L433	-	covered-by-other-item	-		
+rcompanion	904	helpers for nonparametric and categorical analysis: effect sizes, Scheirer-Ray-Hare, pairwise median tests, nominal symmetry, group-wise means with intervals	epsilonSquared, scheirerRayHare, pairwiseMedianTest, nominalSymmetryTest, groupwiseMean	partial	e.algo.stat.rstatix, e.algo.stat.infer	~20k	L504
+unmarked	905	occupancy and abundance models: occu, pcount, distsamp, colext, multinomPois with detection submodels	occu, pcount, distsamp, colext, gmultmix	gap	-	~40k	L515
+gmm	906	generalized method of moments with HAC weighting, iterated and continuously updated estimators, overidentification tests	gmm, J-test, getDat	gap	-	~8k	L510
+umap	907	UMAP, see L378	-	covered-by-other-item	-		
+MLmetrics	908	metrics, see L405	-	covered-by-other-item	-		
+tgp	909	Bayesian treed Gaussian process models and Latin hypercube designs by reversible-jump MCMC	btgp, bgp, bcart, tgp.design	gap	-	~25k	large; ask the user before starting; L516
+padr	910	date padding helpers	-	out-of-scope	-		
+did	911	staggered difference-in-differences, see L485	-	covered-by-other-item	-		
+BBmisc	912	utilities	-	out-of-scope	-		
+gamm4	913	GAMs with lme4, see L353	-	covered-by-other-item	-		
+copula	914	copulas: elliptical and Archimedean families, fitting by MPL, IFM and inversion of tau, goodness of fit, empirical copulas, sampling	normalCopula, claytonCopula, fitCopula, gofCopula, rCopula	gap	-	~50k	L514
+seasonal	915	(not classified)	-	skip	-		
+ROI	916	optimization infrastructure, see L367	-	covered-by-other-item	-		
+av	917	ffmpeg video and audio bridge	-	out-of-scope	-		
+aws.signature	918	AWS signing, x.cloud.awssig	-	covered	x.cloud.awssig		
+lfe	919	fixed-effects linear models, see L368	-	covered-by-other-item	-		
+Kendall	920	Kendall rank correlation with exact p-values and the Mann-Kendall trend test	Kendall, MannKendall, SeasonalMannKendall	gap	-	~1k	L498
+feasts	921	time-series features and decomposition, see L483	-	covered-by-other-item	-		
+fasttime	922	fast timestamp parsing	-	out-of-scope	-		
+carrier	923	function serialization	-	out-of-scope	-		
+Cubist	924	rule-based regression models with committees and instance-based correction (M5 style)	cubist, predict.cubist, summary	gap	-	~25k	L509
+ggpattern	925	chart patterns	-	out-of-scope	-		
+randtoolbox	926	quasi-random and pseudo-random generators: Sobol, Halton, Torus, WELL, SFMT, Knuth-TAOCP	sobol, halton, torus, WELL, SFMT, congruRand	partial	e.algo.rand.quasi	~10k	verify which generators and scramblings exist; with qrng (963); L501
+ivreg	927	instrumental variable regression, see L369	-	covered-by-other-item	-		
+rgbif	928	biodiversity data client	-	out-of-scope	-		
+Epi	929	epidemiology: Lexis objects, cutLexis, age-period-cohort models, ROC and diagnostic tools, Poisson rate models	Lexis, splitLexis, apc.fit, ROC, ci.lin	gap	-	~25k	with epiR (L460); L513
+readODS	930	OpenDocument spreadsheets, e.fmt.odf	-	covered	e.fmt.odf		
+fst	931	R-specific columnar file format	-	out-of-scope	-		
+pec	932	prediction error curves, see L491	-	covered-by-other-item	-		
+ParallelLogger	933	parallel logging	-	out-of-scope	-		
+shinyBS	934	shiny	-	out-of-scope	-		
+DiceKriging	935	kriging and Gaussian processes, see L467	-	covered-by-other-item	-		
+fable	936	forecasting, see L318	-	covered-by-other-item	-		
+katex	937	math typesetting	-	out-of-scope	-		
+kknn	938	weighted k-nearest neighbours, see L322	-	covered-by-other-item	-		
+gsDesign	939	group sequential designs: boundaries with spending functions, power, sample size, conditional power, non-binding futility	gsDesign, gsProbability, sfLDOF, nBinomial	gap	-	~15k	L507
+bibtex	940	bibliography parsing	-	out-of-scope	-		
+archive	941	archive files, e.fmt.tar and e.fmt.zip	-	covered	e.fmt.tar and e.fmt.zip		
+mlr3misc	942	framework helpers	-	out-of-scope	-		
+psychTools	943	psych helpers, see L312	-	covered-by-other-item	-		
+grf	944	generalized random forests: causal, quantile, survival and instrumental forests with honest splitting	causal_forest, regression_forest, quantile_forest	gap	-	~30k	large; seeded C++ RNG; ask the user before starting; L517
+ggExtra	945	chart engine	-	out-of-scope	-		
+doSNOW	946	parallel backend	-	out-of-scope	-		
+paws.storage	947	AWS SDK, x.cloud.awssdk	-	covered	x.cloud.awssdk		
+memisc	948	survey data helpers	-	out-of-scope	-		
+DFBA	949	specialist Bayesian helpers	-	out-of-scope	-		
+neuralnet	950	resilient backpropagation networks, see L336	-	covered-by-other-item	-		
+tfruns	951	TensorFlow run tracking	-	out-of-scope	-		
+missForest	952	random-forest imputation, see L344	-	covered-by-other-item	-		
+speedglm	953	fast GLM fitting, see L423	-	covered-by-other-item	-		
+sm	954	nonparametric smoothing: sm.density, sm.regression, sm.ancova, sm.survival, with bandwidths hnorm, hcv and h.select	sm.density, sm.regression, sm.ancova, h.select	gap	-	~8k	L505
+weights	955	weighted statistics, see L305	-	covered-by-other-item	-		
+QCA	956	qualitative comparative analysis: truth tables, Quine-McCluskey minimization, set-theoretic parameters of fit, necessity and sufficiency	truthTable, minimize, superSubset, pof	partial	e.algo.logic	~30k	verify the Quine-McCluskey in e.algo.logic; L511
+gbutils	957	utilities	-	out-of-scope	-		
+shinybusy	958	shiny	-	out-of-scope	-		
+RobStatTM	959	robust regression and covariance, see L338	-	covered-by-other-item	-		
+numbers	960	number theory, e.math.ntheory	-	covered	e.math.ntheory		
+lsr	961	textbook helpers	-	out-of-scope	-		
+bbotk	962	optimization framework	-	out-of-scope	-		
+qrng	963	quasi-random numbers, see L501	-	covered-by-other-item	-		
+ggm	964	Gaussian graphical models: DAG and covariance graph fitting, marginalization, d-separation, partial correlations	fitDag, fitCovGraph, marg, pcor, dSep	gap	-	~6k	with dagitty (L478); L506
+aws.s3	965	S3 client, x.cloud.aws	-	covered	x.cloud.aws		
+misc3d	966	3D isosurface graphics	-	out-of-scope	-		
+mda	967	mixture and flexible discriminant analysis, see L481	-	covered-by-other-item	-		
+rmutil	968	utilities	-	out-of-scope	-		
+formatters	969	text table formatting	-	out-of-scope	-		
+treemapify	970	chart engine	-	out-of-scope	-		
+BMisc	971	utilities	-	out-of-scope	-		
+phylolm	972	phylogenetic regression, see L350	-	covered-by-other-item	-		
+ggVennDiagram	973	Venn diagrams	-	out-of-scope	-		
+invgamma	974	inverse gamma distribution, see L422	-	covered-by-other-item	-		
+mlr3measures	975	measures, see L405	-	covered-by-other-item	-		
+nor1mix	976	normal mixtures in one dimension, see L486	-	covered-by-other-item	-		
+ashr	977	adaptive shrinkage of effect estimates with unimodal mixture priors	ash, get_lfsr, get_pm	gap	-	~6k	uses mixsqp (L446); L500
+logging	978	logging, e.log	-	covered	e.log		
+cplm	979	compound Poisson models, see L327	-	covered-by-other-item	-		
+sampling	980	survey sampling: srswor, systematic, Poisson, UPtille, balanced cube sampling, stratified and cluster, calibration and inclusion probabilities	srswor, UPsystematic, balancedsampling, calib, inclusionprobabilities	gap	-	~15k	L508
+ResourceSelection	981	Hosmer-Lemeshow and Kvamme goodness of fit and resource selection functions	hoslem.test, kfold, rsf	gap	-	~2k	L499
+prophet	982	Stan-based forecasting	-	out-of-scope	-		
+shinyAce	983	shiny	-	out-of-scope	-		
+huxtable	984	table rendering	-	out-of-scope	-		
+WRS2	985	robust location and ANOVA tests: Yuen, trimmed means, M-estimators, bootstrap-t, robust ANCOVA and mediation	yuen, t1way, med1way, pb2gen, mcp2atm	gap	-	~10k	L503
+osmdata	986	OpenStreetMap download	-	out-of-scope	-		
+ggpmisc	987	chart engine	-	out-of-scope	-		
+dismo	988	species distribution models over maxent	-	out-of-scope	-		
+mlr3tuning	989	tuning framework	-	out-of-scope	-		
+ggstatsplot	990	statistical plots	-	out-of-scope	-		
+whoami	991	user name lookup	-	out-of-scope	-		
+GenSA	992	generalized simulated annealing, see L406	-	covered-by-other-item	-		
+fmesher	993	meshes for INLA	-	out-of-scope	-		
+matrixcalc	994	matrix functions, see L315	-	covered-by-other-item	-		
+effsize	995	effect sizes, see L389	-	covered-by-other-item	-		
+AICcmodavg	996	model averaging, see L428	-	covered-by-other-item	-		
+brglm	997	bias-reduced GLMs, see L424	-	covered-by-other-item	-		
+poLCA	998	polytomous latent class analysis by EM with covariates	poLCA, poLCA.entropy, poLCA.predcell	gap	-	~3k	L512
+qcc	999	statistical quality control: Shewhart, CUSUM and EWMA charts, process capability, Pareto, run rules	qcc, cusum, ewma, processCapability	gap	-	~5k	L502
+paradox	1000	parameter spaces	-	out-of-scope	-		
