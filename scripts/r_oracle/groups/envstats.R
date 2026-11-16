@@ -30,4 +30,13 @@ for (rep in 1:60) {
   v <- predIntNormK(n, n.mean = nm, k = k, method = if (k == 1) "exact" else "Bonferroni", pi.type = if (ts == 1) "two-sided" else "upper", conf.level = cl)
   cases[[length(cases) + 1]] <- case("pk", c(n, nm, k, ts, cl), as.numeric(v), rel = 1e-9, abs = 1e-10)
 }
+# kendallTrendTest ("kt": (n, y, x, alt 0 two.sided 1 greater 2 less, correct, conf.level, field): 0 S 1 var.S 2 z 3 p 4 tau 5 slope 6 intercept 7 LCL 8 UCL 9 slopes count)
+alts <- c("two.sided", "greater", "less")
+for (rep in 1:60) {
+  n <- sample(6:40, 1); x <- if (rep %% 3 == 0) sort(sample(1:(n %/% 2 + 2), n, TRUE)) else seq_len(n); y <- round(0.3 * x + rnorm(n, 0, 2), if (rep %% 2 == 0) 0 else 3)
+  al <- sample(0:2, 1); cr <- rep %% 4 != 0; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
+  r <- tryCatch(suppressWarnings(kendallTrendTest(y, x, alternative = alts[al + 1], correct = cr, conf.level = cl)), error = function(e) NULL); if (is.null(r)) next
+  out <- c(r$S, r$var.S, unname(r$statistic), r$p.value, unname(r$estimate["tau"]), unname(r$estimate["slope"]), unname(r$estimate["intercept"]), unname(r$interval$limits[1]), unname(r$interval$limits[2]), length(r$slopes))
+  for (f in 0:9) cases[[length(cases) + 1]] <- case("kt", c(n, y, x, al, as.numeric(cr), cl, f), out[f + 1], rel = 1e-9, abs = 1e-10)
+}
 emit("envstats", "EnvStats", list(cases))

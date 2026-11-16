@@ -183,3 +183,142 @@ fn pred_k(n: f64, n_mean: f64, k: f64, two_sided: bool, conf: f64) -> f64 {
     if two_sided { a = a / 2.0f64 }
     ret nb.qt(1.0f64 - a, n - 1.0f64, true, false) * math.sqrt[f64](1.0f64 / n_mean + 1.0f64 / n)
 }
+
+// ---- kendallTrendTest ----
+
+fn sort_f(v: []f64) {
+    var i = 1usize
+    while i < v.len {
+        let t = v[i]
+        var j = i
+        while j > 0usize && v[j - 1usize] > t {
+            v[j] = v[j - 1usize]
+            j -= 1usize
+        }
+        v[j] = t
+        i += 1usize
+    }
+}
+
+fn median_sorted(v: []const f64) -> f64 {
+    let n = v.len
+    if n % 2usize == 1usize { ret v[n / 2usize] }
+    ret (v[n / 2usize - 1usize] + v[n / 2usize]) / 2.0f64
+}
+
+// sum over the tie groups of the sorted values of f(t)
+fn tie_sums(s: []const f64, k: usize) -> f64 {
+    var total = 0.0f64
+    var i = 0usize
+    while i < s.len {
+        var j = i
+        while j + 1usize < s.len && s[j + 1usize] == s[i] { j += 1usize }
+        let t = f64(j - i + 1usize)
+        if k == 1usize { total += t * (t - 1.0f64) }
+        if k == 2usize { total += t * (t - 1.0f64) * (2.0f64 * t + 5.0f64) }
+        if k == 3usize { total += t * (t - 1.0f64) * (t - 2.0f64) }
+        i = j + 1usize
+    }
+    ret total
+}
+
+// EnvStats::kendallTrendTest: out receives S, var.S, z, p, tau, slope, intercept, the confidence limits (lower, upper) and the number of slopes; alt 0 two-sided, 1 greater, 2 less
+fn kendall_trend(a: *mem.Arena, y: []const f64, x: []const f64, alt: usize, correct: bool, conf: f64, out: []f64) -> err {
+    let n = y.len
+    let nf = f64(n)
+    var s = 0.0f64
+    let np0 = n * (n - 1usize) / 2usize
+    let (sl, e1) = mem.alloc[f64](a, np0)
+    let (sx, e2) = mem.alloc[f64](a, n)
+    let (sy, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var cnt = 0usize
+    var i = 1usize
+    while i < n {
+        var j = 0usize
+        while j < i {
+            let pr = (x[i] - x[j]) * (y[i] - y[j])
+            if pr > 0.0f64 { s += 1.0f64 }
+            if pr < 0.0f64 { s -= 1.0f64 }
+            let q = (y[i] - y[j]) / (x[i] - x[j])
+            if q - q == 0.0f64 {
+                sl[cnt] = q
+                cnt += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let slopes = sl[0usize..cnt]
+    sort_f(slopes)
+    i = 0usize
+    while i < n {
+        sx[i] = x[i]
+        sy[i] = y[i]
+        i += 1usize
+    }
+    sort_f(sx)
+    sort_f(sy)
+    let tau = 2.0f64 * s / (nf * (nf - 1.0f64))
+    let slope = median_sorted(slopes)
+    let intercept = median_sorted(sy) - slope * median_sorted(sx)
+    var v1 = (nf * (nf - 1.0f64) * (2.0f64 * nf + 5.0f64) - tie_sums(sx, 2usize) - tie_sums(sy, 2usize)) / 18.0f64
+    var v2 = 0.0f64
+    if n > 2usize { v2 = (tie_sums(sx, 3usize) * tie_sums(sy, 3usize)) / (9.0f64 * nf * (nf - 1.0f64) * (nf - 2.0f64)) }
+    let v3 = (tie_sums(sx, 1usize) * tie_sums(sy, 1usize)) / (2.0f64 * nf * (nf - 1.0f64))
+    let vars = v1 + v2 + v3
+    var z = s / math.sqrt[f64](vars)
+    if correct {
+        var sg = 0.0f64
+        if s > 0.0f64 { sg = 1.0f64 }
+        if s < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+        z = (s - sg) / math.sqrt[f64](vars)
+    }
+    var p = 2.0f64 * dist.pnorm(0.0f64 - math.abs[f64](z), 0.0f64, 1.0f64, true, false)
+    if alt == 1usize { p = 1.0f64 - dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
+    if alt == 2usize { p = dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
+    let alpha = 1.0f64 - conf
+    var zq = dist.qnorm(conf, 0.0f64, 1.0f64, true, false)
+    if alt == 0usize { zq = dist.qnorm(1.0f64 - alpha / 2.0f64, 0.0f64, 1.0f64, true, false) }
+    let npr = f64(cnt)
+    let ca = zq * math.sqrt[f64](vars)
+    let m1 = (npr - ca) / 2.0f64
+    let m2 = (npr + ca) / 2.0f64
+    let nan = 0.0f64 / 0.0f64
+    var lcl = nan
+    var ucl = nan
+    if alt == 0usize {
+        lcl = interp1(slopes, m1)
+        ucl = interp1(slopes, m2 + 1.0f64)
+    } else if alt == 1usize {
+        lcl = interp1(slopes, m1)
+        ucl = 1.0f64 / 0.0f64
+    } else {
+        lcl = 0.0f64 - 1.0f64 / 0.0f64
+        ucl = interp1(slopes, m2 + 1.0f64)
+    }
+    out[0usize] = s
+    out[1usize] = vars
+    out[2usize] = z
+    out[3usize] = p
+    out[4usize] = tau
+    out[5usize] = slope
+    out[6usize] = intercept
+    out[7usize] = lcl
+    out[8usize] = ucl
+    out[9usize] = npr
+    v1 += 0.0f64
+    v2 += 0.0f64
+    ret ok
+}
+
+// approx(1:n, v, xout): linear interpolation on the index, NaN outside 1..n
+fn interp1(v: []const f64, xo: f64) -> f64 {
+    let n = v.len
+    if xo < 1.0f64 || xo > f64(n) || xo != xo { ret 0.0f64 / 0.0f64 }
+    let lo = math.floor[f64](xo)
+    if lo >= f64(n) { ret v[n - 1usize] }
+    let i = usize(lo) - 1usize
+    let fr = xo - lo
+    ret v[i] + (v[i + 1usize] - v[i]) * fr
+}

@@ -14,6 +14,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nan = 0.0f64 / 0.0f64
     if str.eq(c.name, "tk") { ret es.tol_k(z[0usize], z[1usize], z[2usize], i64(z[3usize])) }
     if str.eq(c.name, "pk") { ret es.pred_k(z[0usize], z[1usize], z[2usize], z[3usize] > 0.5f64, z[4usize]) }
+    if str.eq(c.name, "kt") {
+        let kn = usize(z[0usize])
+        let (ko, ke) = mem.alloc[f64](a, 10usize)
+        if ke != ok { ret nan }
+        let kr = es.kendall_trend(a, z[1usize..1usize + kn], z[1usize + kn..1usize + 2usize * kn], usize(z[1usize + 2usize * kn]), z[2usize + 2usize * kn] > 0.5f64, z[3usize + 2usize * kn], ko)
+        if kr != ok { ret nan }
+        ret ko[usize(z[4usize + 2usize * kn])]
+    }
     let n = usize(z[0usize])
     let k = usize(z[1usize])
     let (r, e) = es.rosner_test(a, z[3usize..3usize + n], k, z[2usize])
