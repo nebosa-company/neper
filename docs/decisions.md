@@ -45394,3 +45394,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.proc` computes the area under the ROC curve (the direction chosen as direction = "auto", controls below cases when the control median is not above the case median), its DeLong variance from the placement values, the DeLong confidence interval (normal quantile, capped to [0, 1]) and the paired DeLong test of two predictors on the same cases (Z and the two-sided p value, each curve using its own direction as pROC does, which it warns about). Not here: smoothed and partial curves, bootstrap methods, coords, the other roc.test methods and the multi-class AUC. ROCR remains open.
 
 **Result.** `oracle_proc` equals pROC on 120 cases on Windows; Linux pending. L324 is partial.
+
+## D6167 — ROCR: performance measures at every cutoff
+
+`e.algo.stat.rocr` evaluates ROCR's measures over the cutoff set Inf plus the distinct predictions in decreasing order (a cutoff predicts positive for scores at or above it): acc, err, fpr, tpr, fnr, tnr, prec, f at alpha 0.5, lift, mat, sens, spec, npv, ppv, and the trapezoid AUC over the (fpr, tpr) points. Values that are undefined at a cutoff (the 0/0 at the Inf cutoff) are NaN, and the oracle compares only the finite ones, with their count. Not here: the other measures (rch, phi, cal, prbe, mxe, rmse, ecost), the averaging of several runs and the plots.
+
+**Result.** `oracle_rocr` equals ROCR on 348 cases on Windows; Linux pending. L324 stays partial.

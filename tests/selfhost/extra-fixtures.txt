@@ -280,3 +280,4 @@ oracle_gmp
 oracle_hclust
 oracle_fpc
 oracle_proc
+oracle_rocr
