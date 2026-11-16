@@ -408,7 +408,7 @@
       "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6614). e.algo.stat.afexpkg.rm_anova (one within factor, optional between factor of equal groups, Type III) equals afex aov_ez on Windows: F and p of A, B and A:B, Greenhouse-Geisser and Huynh-Feldt epsilons and corrected p, generalized eta squared, Mauchly W and p (oracle_afex, 230 values; Linux pending). Open: several within or between factors, unequal groups, covariates, Type II, emmeans follow-ups. Was: Open (CRAN rank 607). Small to mid. Acceptance, equal to afex: aov_car and aov_ez with Type III sums of squares, within, between and mixed designs, Mauchly sphericity test, Greenhouse-Geisser and Huynh-Feldt corrections, generalized eta squared, follow-up marginal means through the emmeans item. mixed() waits for L274."
+      "evidence": "Partial (D6614). e.algo.stat.afexpkg.rm_anova (one within factor, optional between factor of equal groups, Type III) equals afex aov_ez on Windows: F and p of A, B and A:B, Greenhouse-Geisser and Huynh-Feldt epsilons and corrected p, generalized eta squared, Mauchly W and p (oracle_afex, 240 values; Linux pending). Open: several within or between factors, unequal groups, covariates, Type II, emmeans follow-ups. Was: Open (CRAN rank 607). Small to mid. Acceptance, equal to afex: aov_car and aov_ez with Type III sums of squares, within, between and mixed designs, Mauchly sphericity test, Greenhouse-Geisser and Huynh-Feldt corrections, generalized eta squared, follow-up marginal means through the emmeans item. mixed() waits for L274."
     },
     {
       "id": "L428",
