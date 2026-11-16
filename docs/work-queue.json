@@ -26,17 +26,6 @@
       "evidence": "Open (CRAN rank 434). Small. Acceptance, equal to hexbin: hexbin counts and cell ids for any xbins, shape and range, hcell2xy, hexcoords, erode, hexTapply and the smoothing helpers."
     },
     {
-      "id": "L386",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 556,
-      "title": "SQUAREM: accelerated fixed-point iteration",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 437). Small. Acceptance, equal to SQUAREM: squarem with the three step-length schemes, cyclem1 and cyclem2, fpiter, with the same iterates, convergence flags and function-evaluation counts."
-    },
-    {
       "id": "L388",
       "category": "library",
       "group": "CRAN parity",
@@ -299,6 +288,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6036). corpcor (unweighted) cov.shrink, cor.shrink, var.shrink, both lambda estimates, pcor.shrink, pseudoinverse equal R on Windows (Linux pending). Open: pcaPP PCAproj, PCAgrid, cor.fk, l1median, sPCAgrid. Was: Open (CRAN ranks 375, 366). Small. Acceptance, equal to R: cov.shrink, cor.shrink, var.shrink with their lambda estimates, pseudoinverse, fast.svd, pcor.shrink; PCAproj, PCAgrid, cor.fk, l1median and sPCAgrid."
+    },
+    {
+      "id": "L386",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 556,
+      "title": "SQUAREM: accelerated fixed-point iteration",
+      "score": 0.6,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6037). squarem (objective-free, methods 1 to 3) and fpiter equal SQUAREM 2026.1 with the same iterates and evaluation counts on Windows (Linux pending). Open: squarem1 and cyclem1 with objfn, cyclem2 (RRE, MPE). Was: Open (CRAN rank 437). Small. Acceptance, equal to SQUAREM: squarem with the three step-length schemes, cyclem1 and cyclem2, fpiter, with the same iterates, convergence flags and function-evaluation counts."
     },
     {
       "id": "L406",

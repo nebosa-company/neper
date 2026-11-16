@@ -1,7 +1,6 @@
 id	category	score	evidence_bytes	title	status
 L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
 L385	library	0	181	hexbin: hexagonal binning	Open (CRAN rank 434).
-L386	library	0	205	SQUAREM: accelerated fixed-point iteration	Open (CRAN rank 437).
 L388	library	0	204	fracdiff: fractional differencing and ARFIMA	Open (CRAN rank 411).
 L391	library	0	183	bridgesampling: marginal likelihoods	Open (CRAN rank 496).
 L392	library	0	259	dqrng: random number generators	Open (CRAN rank 461).
@@ -26,6 +25,7 @@ L326	library	0.6	404	quantmod and TTR: technical indicators	Partial (D6032).
 L329	library	0.6	445	ggsci and ggthemes palettes	Partial (D6034).
 L356	library	0.6	438	truncnorm, CompQuadForm and pbivnorm: three small distribution packages	Partial (D6035).
 L357	library	0.5	432	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).
+L386	library	0.6	432	SQUAREM: accelerated fixed-point iteration	Partial (D6037).
 L406	library	0	263	DEoptimR: differential evolution	Open (CRAN rank 517).
 L410	library	0	230	AlgDesign: optimal experimental designs	Open (CRAN rank 586).
 L420	library	0	198	minpack.lm: Levenberg-Marquardt least squares	Open (CRAN rank 620).
