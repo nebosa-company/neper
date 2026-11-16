@@ -45706,3 +45706,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.carlmtest` gains bp_test, lmtest's Breusch-Pagan statistic from the scores f = e^2 / sigma2 - 1 (sigma2 = sum e^2 / n) regressed on the design, giving n ESS / sum f^2 studentized and ESS / 2 in the classical form, and reset_f, resettest(power = 2:3, type = "fitted"): the F statistic of adding the squared and cubed fitted values, ((RSS0 - RSS1) / 2) / (RSS1 / (n - p - 2)). Both equal the package's to 1e-8. Not here: the p values, the other powers and types of RESET, Harvey-Collier, Goldfeld-Quandt, HAC and clustered covariances and car's Anova.
 
 **Result.** `oracle_carlmtest` equals the packages on 120 cases on Windows; Linux pending. L300 stays partial.
+
+## D6423 — lmtest: the p values of bptest and resettest
+
+`e.algo.stat.carlmtest` gains p_chisq and p_f, the upper-tail p values: the Breusch-Pagan statistic against a chi-square with p - 1 degrees of freedom (the design's columns less one) and the RESET F statistic against F(2, n - p - 2). Both equal the package's p values to 1e-8. Not here: the Durbin-Watson p value (the Pan exact distribution), the other RESET powers, Harvey-Collier, Goldfeld-Quandt, HAC and clustered covariances and car's Anova.
+
+**Result.** `oracle_carlmtest` equals the packages on 144 cases on Windows; Linux pending. L300 stays partial.

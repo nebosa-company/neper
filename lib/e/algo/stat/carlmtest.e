@@ -5,6 +5,8 @@
 // Breusch-Pagan), p values, Anova and the rest of car.
 
 use e.math
+use e.math.nmath as nm
+use e.math.nmath_beta as nb
 use e.mem
 
 type Fit = struct { beta: []f64, resid: []f64, hat: []f64, xtx_inv: []f64 }
@@ -346,3 +348,8 @@ fn reset_f(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) ->
     }
     ret ((rss0 - rss1) / 2.0f64) / (rss1 / f64(n - p - 2usize))
 }
+
+// the upper-tail p value of a chi-square statistic and of an F statistic
+fn p_chisq(stat: f64, df: f64) -> f64 { ret nm.pchisq(stat, df, false, false) }
+
+fn p_f(stat: f64, df1: f64, df2: f64) -> f64 { ret nb.pf(stat, df1, df2, false, false) }

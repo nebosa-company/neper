@@ -3290,4 +3290,5 @@ D6418	970	foreign: read.dbf for the common field types
 D6419	949	R.matlab: level 5 MAT-file reader
 D6420	1073	foreign: read.octave for scalars, matrices and strings
 D6421	1088	car, lmtest and sandwich: HC covariances, Durbin-Watson, Breusch-Pagan and VIF
-D6422	745	lmtest: the classical Breusch-Pagan statistic and RESET
+D6422	746	lmtest: the classical Breusch-Pagan statistic and RESET
+D6423	618	lmtest: the p values of bptest and resettest
