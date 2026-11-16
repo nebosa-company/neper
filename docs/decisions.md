@@ -46731,7 +46731,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_splines2` agrees with splines2 on those 240 summaries on Windows (920 cases in all); Linux pending. L445 stays partial: periodic bases, naturalSpline with fewer than two internal knots, integrals, extrapolation and df-based knots.
 
-## D6591 — splines2: derivatives of M- and I-splines
+## D6595 — splines2: derivatives of M- and I-splines
 
 **Decision.** No new arithmetic: the M-spline derivative is the B-spline derivative with the M-spline normalisation (`row` kind 1 with `deriv`), and the d-th derivative of an I-spline is the (d - 1)-th derivative of the M-spline of the same degree, knots and intercept.
 
@@ -46749,13 +46749,13 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 
 **Result.** `oracle_coda` agrees with coda on 100 more values on Windows (220 cases in all); Linux pending. L299 at 0.25: heidel, raftery, the multivariate PSRF, cramer.test, posterior, loo and ggdist remain.
 
-## D6592 — splines2: periodic B- and M-splines
+## D6596 — splines2: periodic B- and M-splines
 
 **Decision.** `periodic_row` builds the knot vector with `degree` wrapped knots on each side (`t[i] = u[i - degree]` extended by the period `hi - lo`), evaluates the `nk + 1 + degree` B-splines (or M-splines) at `x` with `x = hi` taken as `lo`, and folds function `f` onto column `(f - degree) mod (nk + 1)`; the offset was found by comparing every `nk` from 1 to 5 and degree from 1 to 4 against splines2 in R (it is `m - degree` mod `m`, a first guess of `+1` held only for one case). Without the intercept the first column drops. splines2 refuses degrees above `nk + 1`.
 
 **Result.** `oracle_splines2` agrees with splines2 on 120 periodic summaries (both kinds) on Windows (1280 cases in all); Linux pending. L445 stays partial: periodic I and C splines (their column counts differ) and natural splines with fewer than two knots.
 
-## D6593 — SuppDists: ghyper
+## D6597 — SuppDists: ghyper
 
 **Decision.** `ghyper_d` and `ghyper_p` are R's hypergeometric with `a` successes, `N - a` failures and `k` draws; `ghyper_q` moves qhyper's answer up one when the cdf there does not exceed p (within 1e-12), because SuppDists returns the first x with cdf strictly above p.
 
