@@ -46976,3 +46976,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `timeregpkg.aalen` adds, at each event time, `(X'X)^-1 x_i` to the cumulative regression coefficients, X being the intercept and covariates of the risk set. A time whose risk-set design is singular still gets a row, carrying the previous cumulative values unchanged; singular is a 1-norm condition number above about 1e11, since a design of rank below the number of columns does not always fail an exact-zero pivot test. Dropping those rows gave one row too few and the wrong final coefficients on 22 of 72 values.
 
 **Result.** `oracle_timereg` agrees with timereg `aalen(..., n.sim = 0, robust = 0)` on Windows (72 values: row count, final row and every entry); Linux pending. L490 stays partial: robust variances, tests, constant effects, other models.
+
+## D6642 — riskRegression: IPCW Brier score and AUC
+
+**Decision.** `riskregpkg.score` weights subjects by the Kaplan-Meier censoring survival: an event by the horizon by `1/G(T_i-)` (the left limit), a subject still at risk by `1/G(horizon)`, a subject censored by the horizon by 0. The Brier score is the mean over all n of `(1 - p_i)^2 w_i` for events and `p_i^2 w_i` for those still at risk; the AUC is the weighted share of case-control pairs (cases the events by the horizon, controls those still at risk) with a higher risk for the case, ties counting one half.
+
+**Result.** `oracle_riskregression` agrees with riskRegression `Score(..., metrics = c("auc", "brier"), null.model = FALSE)` on Windows (48 values, 50 to 200 subjects); Linux pending. L491 stays partial: tied times, covariate-dependent censoring, competing risks, standard errors.

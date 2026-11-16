@@ -376,3 +376,4 @@ oracle_matchit
 oracle_mlogit
 oracle_flexsurv
 oracle_timereg
+oracle_riskregression

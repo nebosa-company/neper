@@ -1692,10 +1692,10 @@
       "group": "CRAN parity",
       "order": 784,
       "title": "riskRegression: risk prediction scoring",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 850). Mid. Needs L311 and L419. Acceptance, equal to riskRegression under set.seed: Score for Brier and AUC over time with censoring weights, predictRisk, FGR, CSC, ate, with cross-validation."
+      "evidence": "Partial (D6642). e.algo.stat.riskregpkg.score (IPCW Brier score and AUC of a predicted risk at one horizon, Kaplan-Meier censoring weights, untied times) equals riskRegression Score() on Windows (oracle_riskregression, 48 values; Linux pending). Open: censoring models conditional on covariates, ties, several horizons, competing risks (CIF), standard errors and confidence intervals, model comparison, calibration, net benefit, predictRisk for fitted models. Was: Open (CRAN rank 850). Mid. Needs L311 and L419. Acceptance, equal to riskRegression under set.seed: Score for Brier and AUC over time with censoring weights, predictRisk, FGR, CSC, ate, with cross-validation."
     },
     {
       "id": "L492",
