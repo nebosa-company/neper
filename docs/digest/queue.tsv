@@ -100,7 +100,7 @@ L506	library	0	195	ggm: Gaussian graphical models	Open (CRAN rank 964).
 L299	library	0	547	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Open (CRAN ranks 115, 116, 167, plus the interval summaries of ggdist 175).
 L300	library	0	503	car, lmtest and sandwich: linear-model tests and robust covariance	Open (CRAN ranks 111, 114, 155).
 L305	library	0.2	702	Hmisc: numerically defined core	Partial (D6050).
-L306	library	0	455	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Open (CRAN rank 173).
+L306	library	0.15	919	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood an
 L307	library	0	329	quantreg: quantile regression inference and algorithms	Open (CRAN rank 131).
 L309	library	0	371	nloptr: gradient-based and constrained optimizers	Open (CRAN rank 120).
 L314	library	0	682	lubridate and timeDate: date-time parsing, periods, business calendars	Open (CRAN ranks 102, 134).
