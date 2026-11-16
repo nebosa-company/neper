@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L301	library	0.7	942	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
+L301	library	0.8	942	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
 L321	library	0.95	973	boot: bootstrap and permutation confidence intervals	Partial (D6028, D6079): balanced and parametric (normal) simulation equal boot on 936 more values on Windows (oracle_boot2).
 L329	library	0.6	445	ggsci and ggthemes palettes	Partial (D6034).
 L357	library	0.8	584	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).
@@ -16,12 +16,12 @@ L447	library	0.35	424	norm: EM and data augmentation for multivariate normal dat
 L469	library	0.3	544	pastecs: decomposition, turning points and descriptive statistics	Partly done (D6073): e.algo.stat.pastecs has turnpoints with probabilities and information, and stat.desc with the moment entries, equal to pastecs on 1040 values on Windows (oracle_pastecs);
 L470	library	0.5	490	partitions: integer and set partitions	Partly done (D6070): e.algo.parts has P, Q, parts, restrictedparts and diffparts in the package order, equal to partitions on 423 values on Windows (oracle_partitions);
 L471	library	0.5	523	BiasedUrn: noncentral hypergeometric distributions	Partly done (D6071): e.algo.stat.biasedurn has Fisher and Wallenius noncentral hypergeometric d, p, q, mean and var, Fisher mode and odds, equal to BiasedUrn on 472 values on Windows (oracle_biasedurn
-L472	library	0.75	565	modeest: mode estimation	Partly done (D6517 naive, D6516 parzen Gaussian, tsybakov, lientz, D6072): e.algo.stat.modeest has venter, shorth, hsm, grenander, meanshift and asselin, equal to modeest on 250 values on Windows (ora
-L473	library	0.5	859	isotone: isotonic regression	Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers;
+L472	library	0.8	565	modeest: mode estimation	Partly done (D6517 naive, D6516 parzen Gaussian, tsybakov, lientz, D6072): e.algo.stat.modeest has venter, shorth, hsm, grenander, meanshift and asselin, equal to modeest on 250 values on Windows (ora
+L473	library	0.7	859	isotone: isotonic regression	Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers;
 L474	library	0.2	409	kSamples: k-sample rank tests	Partial (D6452 ad.test AD and T.AD statistics, both versions, equal kSamples on Windows;
 L499	library	0.4	412	ResourceSelection: Hosmer-Lemeshow and related tests	Partly done (D6096): e.algo.stat.hoslem (hoslem.test with observed and expected tables) equals ResourceSelection on 1128 values on Windows (oracle_hoslem);
 L500	library	0	212	ashr: adaptive shrinkage	Open (CRAN rank 977).
-L324	library	0.6	867	pROC and ROCR: ROC curves and threshold performance	Partial (D6166, D6167 ROCR measures and AUC).
+L324	library	0.75	867	pROC and ROCR: ROC curves and threshold performance	Partial (D6166, D6167 ROCR measures and AUC).
 L327	library	0.3	534	statmod: Tweedie and inverse Gaussian, Gauss quadrature	Partly done (D6086): e.algo.stat.gaussq has gauss.quad (six kinds) and gauss.quad.prob (six distributions), equal to statmod on 1536 values on Windows (oracle_gaussq);
 L328	library	0.25	706	caret evaluation and resampling	Partly done (D6087): e.algo.stat.carets has two-class confusionMatrix with all statistics and intervals, and postResample, equal to caret on 700 values on Windows (oracle_carets);
 L331	library	0.55	577	dendextend and hclust operations	Partial (D6162, D6163 fowlkes_mallows and cor_cophenetic).
@@ -36,7 +36,7 @@ L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
 L401	library	0.3	629	geosphere: geodesic and spherical computations	Partial (D6147).
 L407	library	0.15	464	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial (D6457 dghyp, dnig, dhyperb, dskewlap equal GeneralizedHyperbolic on Windows;
 L409	library	0.2	390	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids equal arm on Windows;
-L411	library	0.6	738	DHARMa: simulated residual diagnostics	Partial (D6173, D6174 KS p value, D6175 testZeroInflation and testDispersion).
+L411	library	0.65	738	DHARMa: simulated residual diagnostics	Partial (D6173, D6174 KS p value, D6175 testZeroInflation and testDispersion).
 L422	library	0.25	735	extraDistr: extra probability distributions	Partial (D6144).
 L424	library	0.4	453	logistf: Firth penalized logistic regression	Partial (D6157).
 L425	library	0.3	521	ismev: extreme-value model fits	Partial (D6155).
@@ -67,7 +67,7 @@ L504	library	0.3	600	rcompanion: nonparametric and categorical helpers	Partial (
 L505	library	0.2	446	sm: nonparametric smoothing methods	Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows;
 L506	library	0	195	ggm: Gaussian graphical models	Open (CRAN rank 964).
 L299	library	0	547	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Open (CRAN ranks 115, 116, 167, plus the interval summaries of ggdist 175).
-L300	library	0.6	1444	car, lmtest and sandwich: linear-model tests and robust covariance	Partial (D6421, D6422 classical bptest and RESET, D6423 bptest and resettest p values, D6424 Goldfeld-Quandt, D6425 NeweyWest, D6426 vcovCL).
+L300	library	0.7	1444	car, lmtest and sandwich: linear-model tests and robust covariance	Partial (D6421, D6422 classical bptest and RESET, D6423 bptest and resettest p values, D6424 Goldfeld-Quandt, D6425 NeweyWest, D6426 vcovCL).
 L305	library	0.2	702	Hmisc: numerically defined core	Partial (D6050).
 L306	library	0.15	919	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, b
 L307	library	0.15	583	quantreg: quantile regression inference and algorithms	Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg);
@@ -78,7 +78,7 @@ L275	library	0	387	Unicode collation, transliteration and encoding detection (st
 L274	library	0	381	General linear mixed models (lme4)	Open.
 L342	library	0	202	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Open (CRAN rank 262).
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
-L333	library	0.7	1596	pracma and polynom: numerical analysis toolbox	Partial (D6151, D6152 pchip and quadgk, D6164 legendre, chebPoly, laguerre, D6410 roots, D6411 conv, deconv, polyint, D6412 newtonRaphson, D6413 romberg, D6441 quadl, fzero, D6442 interp1, D6494 null 
+L333	library	0.75	1596	pracma and polynom: numerical analysis toolbox	Partial (D6151, D6152 pchip and quadgk, D6164 legendre, chebPoly, laguerre, D6410 roots, D6411 conv, deconv, polyint, D6412 newtonRaphson, D6413 romberg, D6441 quadl, fzero, D6442 interp1, D6494 null 
 L334	library	0	304	RSpectra and irlba: partial eigen and singular value decompositions	Open (CRAN ranks 207, 289).
 L335	library	0.45	729	cluster: pam, clara, fanny, agnes, diana, mona, daisy	Partial (D6176, D6177 agnes heights and ac, D6178 daisy gower numeric and nominal, D6179 silhouette, D6180 diana heights and dc).
 L336	library	0	247	nnet: single-hidden-layer networks and multinom	Open (CRAN rank 258).

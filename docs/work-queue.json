@@ -9,7 +9,7 @@
       "group": "CRAN parity",
       "order": 550,
       "title": "mvtnorm: multivariate normal and t probabilities and quantiles",
-      "score": 0.7,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6025). dmvnorm, dmvt, rmvnorm (eigen, svd, chol) and rmvt equal mvtnorm 1.4.2 on both hosts. Plus (D6112) pmvnorm and pmvt by Genz-Bretz draw for draw under a seed (oracle_mvt, Windows). D6527: qmvnorm (Genz-Bretz, equicoordinate, all three tails, correlation input) equals R on 80 values on Windows (oracle_qmvnorm). D6528: qmvt (probit link for df above 7, cauchit at or below 7) equals R on 60 more values. Open: the TVPACK trivariate, Miwa, a mean or sigma input. Two-dimensional pmvnorm (TVPACK) equals R on 200 cases on Windows (D6094, oracle_pmvnorm). Was: Open (CRAN rank 130). Mid. Acceptance: pmvnorm and pmvt for the Genz-Bretz (seeded QMC, equal to R at its stated abseps), Miwa and TVPACK algorithms, qmvnorm and qmvt for every tail and the equicoordinate form, dmvnorm, dmvt, rmvnorm (equal to R value for value under set.seed, chol, eigen and svd methods), rmvt, and the lower, upper and correlation inputs R accepts."
@@ -196,7 +196,7 @@
       "group": "CRAN parity",
       "order": 590,
       "title": "modeest: mode estimation",
-      "score": 0.75,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
       "evidence": "Partly done (D6517 naive, D6516 parzen Gaussian, tsybakov, lientz, D6072): e.algo.stat.modeest has venter, shorth, hsm, grenander, meanshift and asselin, equal to modeest on 250 values on Windows (oracle_modeest); Linux pending. D6524: vieu (Gaussian, nrd0; modeest rejects a numeric bw there) equals R on 12 values. Open: the other parzen kernels, other meanshift bandwidths. Original: Open (CRAN rank 852). Small. Acceptance, equal to modeest: mlv with the naive, parzen, shorth, hsm, hrm, venter, grenander, lientz, meanshift, tsybakov, asselin and vieu methods."
@@ -207,7 +207,7 @@
       "group": "CRAN parity",
       "order": 591,
       "title": "isotone: isotonic regression",
-      "score": 0.5,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
       "evidence": "Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers; primary, secondary, tertiary ties) equals isotone on 1800 values on Windows (oracle_isotone); Linux pending. D6518: activeSet with the LS solver on general partial orders (zero start; fval, niter, x, multipliers with dqrdc2 aliasing as NA) equals isotone on 180 more values. D6519: the L1 solver (block weighted medians, sign gradient) equals isotone on 164 more values. D6520: the asymmetric quantile solver (weighted fractile with aw, bw) equals isotone on 64 more values. Open: matrix and list responses, Lp, asymmetric LS and other solvers, pava. Original: Open (CRAN rank 872). Small. Acceptance, equal to isotone: gpava with weights, ties handling and the Lp, quantile and user-defined solvers, activeSet with general partial orders, pava."
@@ -251,7 +251,7 @@
       "group": "CRAN parity",
       "order": 596,
       "title": "pROC and ROCR: ROC curves and threshold performance",
-      "score": 0.6,
+      "score": 0.75,
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6166, D6167 ROCR measures and AUC). pROC auc, DeLong variance and interval and the paired DeLong test equal R on Windows (oracle_proc; Linux pending). D6521: the ROC curve at every threshold and coords at a threshold (sensitivity, specificity) equal R (oracle_proc, 240 values). D6522: coords best (youden and closest.topleft, any best.weights; count of tied thresholds, lowest threshold, criterion) equals R on 120 values. D6523: partial AUC (either focus, McClish correction) equals R on 117 values. Open: smoothed curves, bootstrap CIs, ROCR performance measures. Was: Open (CRAN ranks 217, 294). Small to mid. Acceptance, equal to R: pROC roc, auc, partial auc, ci.auc (DeLong and seeded bootstrap), roc.test (DeLong, bootstrap, venkatraman), coords, smooth, multiclass.roc; ROCR prediction and performance for tpr, fpr, prec, rec, lift, auc, cost, rch."
@@ -416,7 +416,7 @@
       "group": "CRAN parity",
       "order": 613,
       "title": "DHARMa: simulated residual diagnostics",
-      "score": 0.6,
+      "score": 0.65,
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6173, D6174 KS p value, D6175 testZeroInflation and testDispersion). PIT residuals, the KS statistic, the outlier count and the binomial outlier test equal DHARMa on Windows (oracle_dharma; Linux pending). D6538: testSpatialAutocorrelation (Moran I, its sd and p) and the testTemporalAutocorrelation Durbin-Watson statistic equal DHARMa on 56 values. Open: traditional residuals, the dwtest p value, bootstrap outliers. Was: Open (CRAN rank 550). Small to mid. Needs fitted models with a simulate method. Acceptance, equal to DHARMa under set.seed: simulateResiduals scaled residuals, testUniformity, testDispersion, testOutliers, testZeroInflation, testTemporalAutocorrelation, testSpatialAutocorrelation, recalculateResiduals."
@@ -757,7 +757,7 @@
       "group": "CRAN parity",
       "order": 666,
       "title": "car, lmtest and sandwich: linear-model tests and robust covariance",
-      "score": 0.6,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6421, D6422 classical bptest and RESET, D6423 bptest and resettest p values, D6424 Goldfeld-Quandt, D6425 NeweyWest, D6426 vcovCL). vcovHC HC0 to HC4, dwtest, studentized bptest and vif equal sandwich, lmtest and car on Windows (oracle_carlmtest; Linux pending). D6529: bgtest (Chisq and F, orders 1, 2, 4, statistics and p values) equals lmtest on 144 values. D6530: raintest and harvtest (statistics and p values) equal lmtest on 48 values. D6531: car ncvTest (fitted values) and leveneTest (median and mean centres) equal R on 84 values. D6532: linearHypothesis for lm (general R and rhs, F and p) equals car on 24 values. D6533: car Anova types I, II and III for numeric terms equal R on 222 values. D6534: boxCox profile log-likelihood (bcPower with the Jacobian) equals car on 72 values. Open: powerTransform maximiser, factor terms and interactions in Anova, bootstrap covariances, other lmtest tests, Anova, p values. Was: Open (CRAN ranks 111, 114, 155). Mid. Needs only e.ml.linear.ols. Acceptance, equal to R: car Anova type I, II and III (lm and glm), vif and gvif, durbinWatsonTest, leveneTest, ncvTest, boxCox, powerTransform, linearHypothesis, hccm, influence and cooks measures; lmtest bptest, dwtest, bgtest, resettest, coeftest, waldtest, lrtest, grangertest, gqtest, harvtest, raintest, jtest; sandwich vcovHC (HC0 to HC5), vcovHAC, NeweyWest, kernHAC, vcovCL (one and two way), vcovBS, vcovPL, bread, meat, estfun."
@@ -878,7 +878,7 @@
       "group": "CRAN parity",
       "order": 683,
       "title": "pracma and polynom: numerical analysis toolbox",
-      "score": 0.7,
+      "score": 0.75,
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6151, D6152 pchip and quadgk, D6164 legendre, chebPoly, laguerre, D6410 roots, D6411 conv, deconv, polyint, D6412 newtonRaphson, D6413 romberg, D6441 quadl, fzero, D6442 interp1, D6494 null and orth projectors, D6493 polynom predict, deriv, integral, poly.calc, poly.orth and colAUC, D6492 caTools runmean, runmin, runmax, runsd, runquantile, D6491 singular values, cond, D6490 kron, pinv for full rank, D6489 spline fmm and natural, D6488 lowess, D6487 savgol, D6486 fminsearch Nelder-Mead with exact evaluation and restart counts). trapz, cumtrapz, polyval, polyfit, findpeaks, rref, primes, factors, gcd, nchoosek and cross equal pracma on Windows (oracle_pracma; Linux pending). D6535: expm (the 128-point contour integral, R 4.6 zapsmall) equals pracma on 100 values at 1e-9. D6536: integral (Kronrod, 8 pieces) equals pracma on 12 values. D6537: polyroots (the gcd of p and p-prime by pracma own loop, then simple roots and multiplicities) equals pracma on 100 values. Open: the rest of the acceptance list below. Was: Open (CRAN rank 203, 225, 231). Mid. Verify each function against e.math.root and e.math.special first. Acceptance, equal to R: pracma findpeaks, polyfit, polyval, polyroots, roots, quadgk, quadl, romberg, integral, cumtrapz, trapz, fzero, newtonRaphson, fminsearch, interp1 (all methods), pchip, spline, lowess, savgol, legendre, laguerre, hermite, chebyshev, primes, factors, gcd, nchoosek, cross, kron, rref, null, orth, pinv, expm, cond; polynom polynomial, predict, solve, deriv, integral, poly.calc, poly.orth; caTools runmean, runquantile, trapz, colAUC."
