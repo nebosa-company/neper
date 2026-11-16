@@ -691,10 +691,10 @@
       "group": "CRAN parity",
       "order": 644,
       "title": "laeken: inequality and poverty indicators",
-      "score": 0,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 888). Small to mid. Acceptance, equal to laeken: gini, qsr, rmpg, arpr, arpt, atkinson, theil and the weighted quantile and median, with the bootstrap and linearization variance estimates under set.seed."
+      "evidence": "Partial (D6139). Weighted quantile, median and mean, incQuintile, gini, qsr, arpt, arpr and rmpg equal laeken on Windows (oracle_laeken; Linux pending). Open: the bootstrap and linearisation variances under set.seed, the Pareto tail fits and gpg. Was: Open (CRAN rank 888). Small to mid. Acceptance, equal to laeken: gini, qsr, rmpg, arpr, arpt, atkinson, theil and the weighted quantile and median, with the bootstrap and linearization variance estimates under set.seed."
     },
     {
       "id": "L483",

@@ -257,3 +257,4 @@ oracle_irr
 oracle_pls
 oracle_wrs2
 oracle_qcc
+oracle_laeken

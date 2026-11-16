@@ -45214,3 +45214,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.qcc` (with the generated tables `qcc_tables` of d2 and d3) ports the stats, sd and limits functions of every chart type, the beyond-limits rule and violating-runs rule (R lists the points from the rl-th of a run on, not the whole run), cusum, ewma (the sigma^2 of the exact variance factor), process.capability with its chi-squared and normal intervals, and the pareto table. Probability limits use qnorm, qchisq, a cumulative scan for qbinom and qpois. R-chart probability limits (qtukey) are not ported.
 
 **Result.** `oracle_qcc` equals qcc on 4786 cases on Windows; Linux pending. L502 is closed.
+
+## D6139 — laeken indicators
+
+**Context.** L482 asked for the EU-SILC indicators of laeken.
+
+**Decision.** `e.algo.stat.laeken` ports the weighted quantile (R's `rw[select] == p` average can never fire, since `select` is the first cumulative weight above p, so the answer is the first value above), weighted median and mean, `incQuintile` with an optional tie-breaking sort key, the Gini coefficient, the quintile share ratio, arpt, arpr and rmpg.
+
+**Result.** `oracle_laeken` equals laeken on 300 cases on Windows; Linux pending. The variance estimates (bootstrap under set.seed, linearisation) and the Pareto tail fits stay open on L482.
