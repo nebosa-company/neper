@@ -3512,4 +3512,5 @@ D6648	667	MCMCpack: density functions
 D6649	836	e.ml.mds: classical MDS and the Johnson-Lindenstrauss bound
 D6650	935	e.algo.approx: approximation algorithms with their ratios
 D6651	939	e.algo.online: online algorithms beside their offline optima
-D6652	889	e.algo.linalg.iterative: conjugate gradients and GMRES over an operator
+D6652	890	e.algo.linalg.iterative: conjugate gradients and GMRES over an operator
+D6653	973	e.algo.discrepancy: Beck-Fiala, vector balancing and derandomised max-cut

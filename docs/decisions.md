@@ -47042,3 +47042,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `cg_parts` takes the residual, direction and product scratch as three slices and stops when the residual norm is at most `max(tol * |b|, abs_tol)`; `cg` wraps it with one scratch slice of 3 n values. `gmres` is restarted GMRES(m) with modified Gram-Schmidt and Givens rotations over `fn(*Ctx, []const f64, []f64)`. e.gfx.mesh's private conjugate gradient became a call to `cg_parts` with `tol = 0` and `abs_tol = 1e-14`, which is its old `rr > 1e-28` stop, so the iteration is identical and the mesh fixture is unchanged; its Operator is now passed as `*Operator` so it fits the callback's context type.
 
 **Result.** `algo_iterative` agrees with the dense LU solve to 1e-8 on 20 symmetric and 20 nonsymmetric systems and `gfx_mesh` passes on Windows; Linux pending. L211 leaves the queue.
+
+## D6653 — e.algo.discrepancy: Beck-Fiala, vector balancing and derandomised max-cut
+
+**Decision.** `beck_fiala` keeps a fractional colouring, collects the sets with more than t active elements (fewer than the active elements, since each element lies in at most t sets), finds a null vector of that constraint matrix by reduced row echelon form, and moves along it until an element reaches plus or minus one, until all are fixed; every set then has discrepancy below 2t. `balance` picks each sign so the inner product with the running sum is not positive; `max_cut` puts each vertex opposite the larger group of its decided neighbours, the method of conditional expectations.
+
+**Result.** `algo_discrepancy` passes on Windows against brute force on 50 seeded instances; Linux pending. L213 leaves the queue. Spencer's theorem itself (existential, by partial colouring) is not implemented and the item's own acceptance asks only for the Beck-Fiala bound and the half-cut.
