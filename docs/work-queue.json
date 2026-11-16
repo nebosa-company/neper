@@ -1153,10 +1153,10 @@
       "group": "CRAN parity",
       "order": 671,
       "title": "lubridate and timeDate: date-time parsing, periods, business calendars",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN ranks 102, 134). Mid. e.time and e.time.parse exist; verify each row against R first. Acceptance, equal to lubridate: parse_date_time with every orders and the guess_formats heuristic, ymd_hms family, period and duration arithmetic with the %m+%, %m-% and add_with_rollback month-end rules, floor_date, round_date, ceiling_date with every unit and week_start, intervals (int_overlaps, int_aligns, int_diff, %within%), with_tz, force_tz, epiweek, isoweek, quarter, semester, decimal_date; equal to timeDate: holiday calendars for NYSE, LONDON, TARGET, Zurich and the other financial centres, Easter and the movable feasts, isBizday, timeNthNdayInMonth, timeLastDayInMonth."
+      "evidence": "Partly done (D6059): e.time.lubridate has Easter, month arithmetic with the month-end rules, quarter, semester, decimal_date, epiweek, isoweek, floor_date and ceiling_date for dates, equal to lubridate and timeDate on 6249 cases on Windows (oracle_lubridate); Linux pending. Open: parse_date_time, periods and durations, intervals, time zones, financial holiday calendars, isBizday, timeNthNdayInMonth, date-times. Original: Open (CRAN ranks 102, 134). Mid. e.time and e.time.parse exist; verify each row against R first. Acceptance, equal to lubridate: parse_date_time with every orders and the guess_formats heuristic, ymd_hms family, period and duration arithmetic with the %m+%, %m-% and add_with_rollback month-end rules, floor_date, round_date, ceiling_date with every unit and week_start, intervals (int_overlaps, int_aligns, int_diff, %within%), with_tz, force_tz, epiweek, isoweek, quarter, semester, decimal_date; equal to timeDate: holiday calendars for NYSE, LONDON, TARGET, Zurich and the other financial centres, Easter and the movable feasts, isBizday, timeNthNdayInMonth, timeLastDayInMonth."
     },
     {
       "id": "L317",
