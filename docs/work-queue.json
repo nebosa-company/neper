@@ -1461,10 +1461,10 @@
       "group": "CRAN parity",
       "order": 748,
       "title": "gmm: generalized method of moments",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 906). Mid. Acceptance, equal to gmm: gmm with the two-step, iterated and CUE estimators, kernel HAC weighting (Bartlett, Parzen, Quadratic Spectral, Andrews and Newey-West bandwidths), the J test and the linear hypothesis tests."
+      "evidence": "Partial (D6479 linear two-step gmm with iid and MDS weighting, covariance and J agree with gmm on Windows; oracle_gmmpkg; Linux pending). Open: HAC kernels and bandwidths, iterated and CUE, nonlinear moments, hypothesis tests. Was: Open (CRAN rank 906). Mid. Acceptance, equal to gmm: gmm with the two-step, iterated and CUE estimators, kernel HAC weighting (Bartlett, Parzen, Quadratic Spectral, Andrews and Newey-West bandwidths), the J test and the linear hypothesis tests."
     },
     {
       "id": "L511",

@@ -3346,4 +3346,5 @@ D6474	729	performance: lm indices
 D6475	813	cubature: box integrals of fixed integrands
 D6476	947	geepack: Gaussian geeglm with independence and exchangeable correlation
 D6477	946	stats::density, Gaussian kernel
-D6478	1051	hdrcde: hdr on a sample with a given bandwidth
+D6478	1052	hdrcde: hdr on a sample with a given bandwidth
+D6479	956	gmm: linear two-step estimator, iid and MDS weighting

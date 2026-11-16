@@ -300,6 +300,7 @@ oracle_cubaturepkg
 oracle_geepackpkg
 oracle_rdensity
 oracle_hdrcdepkg
+oracle_gmmpkg
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -344,3 +345,4 @@ oracle_cubaturepkg
 oracle_geepackpkg
 oracle_rdensity
 oracle_hdrcdepkg
+oracle_gmmpkg

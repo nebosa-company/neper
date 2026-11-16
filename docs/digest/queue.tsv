@@ -131,7 +131,7 @@ L493	library	0	218	topicmodels: LDA and CTM	Open (CRAN rank 897).
 L507	library	0.2	514	gsDesign: group sequential designs	Partial (D6405).
 L508	library	0.3	599	sampling: survey sampling designs	Partial (D6191).
 L509	library	0	229	Cubist: rule-based regression models	Open (CRAN rank 924).
-L510	library	0	244	gmm: generalized method of moments	Open (CRAN rank 906).
+L510	library	0.2	476	gmm: generalized method of moments	Partial (D6479 linear two-step gmm with iid and MDS weighting, covariance and J agree with gmm on Windows;
 L511	library	0	263	QCA: qualitative comparative analysis	Open (CRAN rank 956).
 L512	library	0	251	poLCA: latent class analysis	Open (CRAN rank 998).
 L513	library	0.15	509	Epi: epidemiology tools	Partial (D6412).
