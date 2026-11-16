@@ -45400,3 +45400,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.rocr` evaluates ROCR's measures over the cutoff set Inf plus the distinct predictions in decreasing order (a cutoff predicts positive for scores at or above it): acc, err, fpr, tpr, fnr, tnr, prec, f at alpha 0.5, lift, mat, sens, spec, npv, ppv, and the trapezoid AUC over the (fpr, tpr) points. Values that are undefined at a cutoff (the 0/0 at the Inf cutoff) are NaN, and the oracle compares only the finite ones, with their count. Not here: the other measures (rch, phi, cal, prbe, mxe, rmse, ecost), the averaging of several runs and the plots.
 
 **Result.** `oracle_rocr` equals ROCR on 348 cases on Windows; Linux pending. L324 stays partial.
+
+## D6168 — DiceDesign: lhsDesign, factDesign and the Faure sequence
+
+`e.algo.stat.dicedesign` gains lhs_design (set.seed, the n * dimension uniforms for the jitter filled by column, then one sample(1:n) permutation per dimension, which equals R draw for draw), fact_design (the full factorial grid on [0, 1], the first factor varying slowest) and faure (runif.faure: the smallest prime at or above the dimension, the Pascal matrix modulo it, digit expansions of 1..n). The digit count m is the smallest m with r^m >= n by integers, since the package's ceiling(log(n)/log(r)) depends on one ulp of the logarithm at exact powers. Not here: the optimisers (maximinSA_LHS, discrepSA_LHS, maximinESE_LHS), wspDesign and the other sequences.
+
+**Result.** `oracle_dicedesign` equals DiceDesign on 116 cases on Windows; Linux pending. L426 stays partial.

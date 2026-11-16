@@ -8,7 +8,47 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
-fn answer(c: *const oracle.Case) -> f64 {
+fn gen(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let d = usize(x[1usize])
+    var total = 0.0f64
+    if str.eq(c.name, "fact") {
+        var lv: [5]usize = zero
+        var cnt = 1usize
+        var i = 0usize
+        while i < d {
+            lv[i] = usize(x[4usize + i])
+            cnt = cnt * lv[i]
+            i += 1usize
+        }
+        let (o, e) = mem.alloc[f64](a, cnt * d)
+        if e != ok { os.exit(5) }
+        dd.fact_design(lv[0usize..d], o)
+        i = 0usize
+        while i < cnt * d {
+            total += o[i] * f64(i + 1usize)
+            i += 1usize
+        }
+        ret total
+    }
+    let (o, e) = mem.alloc[f64](a, n * d)
+    if e != ok { os.exit(6) }
+    if str.eq(c.name, "lhs") {
+        if dd.lhs_design(a, n, d, x[3usize] > 0.5f64, i64(x[2usize]), o) != ok { os.exit(7) }
+    } else {
+        if dd.faure(a, n, d, o) != ok { os.exit(8) }
+    }
+    var i = 0usize
+    while i < n * d {
+        total += o[i] * f64(i + 1usize)
+        i += 1usize
+    }
+    ret total
+}
+
+fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "lhs") || str.eq(c.name, "fact") || str.eq(c.name, "faure") { ret gen(a, c) }
     let x = c.args
     let n = usize(x[0usize])
     let d = usize(x[1usize])
@@ -35,7 +75,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var at = 0usize
     while at < golden.cases.len {
         let c = &golden.cases[at]
-        let got = answer(c)
+        let got = answer(a, c)
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

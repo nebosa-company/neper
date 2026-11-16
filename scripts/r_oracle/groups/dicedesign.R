@@ -13,4 +13,13 @@ for (rep in 1:8) {
   for (k in c("C2", "L2", "L2star", "M2", "S2", "W2", "Mix2")) add(k, a, dc[[paste0("Dis", k)]])
   add("mindist", a, mindist(X)); add("phip", a, phiP(X, p)); add("coverage", a, coverage(X))
 }
+for (rep in 1:12) {
+  n <- sample(5:30, 1); d <- sample(1:5, 1); sd <- sample(1:100000, 1); rz <- rep %% 3 != 0
+  L <- lhsDesign(n, d, randomized = rz, seed = sd)$design
+  add("lhs", c(n, d, sd, as.numeric(rz)), sum(as.vector(t(L)) * seq_len(length(L))))
+  lv <- sample(2:4, d, replace = TRUE); Fd <- factDesign(d, lv)$design
+  add("fact", c(length(lv), d, 0, 0, lv), sum(as.vector(t(Fd)) * seq_len(length(Fd))))
+  d2 <- max(d, 2); Fa <- runif.faure(n, d2)$design
+  add("faure", c(n, d2, 0, 0), sum(as.vector(t(Fa)) * seq_len(length(Fa))))
+}
 emit("dicedesign", "DiceDesign", list(cases))

@@ -3,7 +3,9 @@
 //
 // Not here: the design generators (lhsDesign, the simulated-annealing and ESE optimisers, wspDesign, factDesign) and meshRatio.
 
+use e.algo.rand.r as rr
 use e.math
+use e.mem
 
 fn at(x: []const f64, d: usize, i: usize, j: usize) -> f64 { ret x[i * d + j] }
 
@@ -173,4 +175,159 @@ fn coverage(x: []const f64, n: usize, d: usize) -> f64 {
         i += 1usize
     }
     ret 1.0f64 / gbar * math.sqrt[f64](sq / f64(n))
+}
+
+// lhsDesign(n, dimension, randomized, seed): the points row-major n by dimension; set.seed(seed), then n * dimension uniforms for the jitter
+// and one random permutation per dimension, exactly as the package draws them
+fn lhs_design(a: *mem.Arena, n: usize, dimension: usize, randomized: bool, seed: i64, out: []f64) -> err {
+    var g: rr.Rng = zero
+    rr.seed(&g, seed)
+    let (ran, e1) = mem.alloc[f64](a, n * dimension)
+    if e1 != ok { ret e1 }
+    var k = 0usize
+    while k < n * dimension {
+        if randomized { ran[k] = rr.unif(&g) } else { ran[k] = 0.5f64 }
+        k += 1usize
+    }
+    // matrix(runif(...), n, dimension) fills by column: element (i, j) is ran[j * n + i]
+    var j = 0usize
+    while j < dimension {
+        let (idx, e2) = rr.sample_int(a, &g, i64(n), i64(n), false)
+        if e2 != ok { ret e2 }
+        var i = 0usize
+        while i < n {
+            out[i * dimension + j] = (f64(idx[i]) - ran[j * n + i]) / f64(n)
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
+// factDesign(dimension, levels): the full factorial grid on [0, 1], the first factor varying slowest; levels has one entry per dimension
+fn fact_design(levels: []const usize, out: []f64) {
+    let d = levels.len
+    var total = 1usize
+    var i = 0usize
+    while i < d {
+        total = total * levels[i]
+        i += 1usize
+    }
+    var r = 0usize
+    while r < total {
+        var rem = r
+        var j = d
+        while j > 0usize {
+            j -= 1usize
+            let lv = levels[j]
+            let pos = rem % lv
+            rem = rem / lv
+            var v = 0.0f64
+            if lv > 1usize { v = f64(pos) / f64(lv - 1usize) }
+            out[r * d + j] = v
+        }
+        r += 1usize
+    }
+}
+
+// runif.faure(n, dimension): the Faure sequence, row-major n by dimension
+fn faure(a: *mem.Arena, n: usize, dimension: usize, out: []f64) -> err {
+    var base = 2usize
+    var found = false
+    while !found {
+        var isp = base >= 2usize
+        var q = 2usize
+        while q * q <= base {
+            if base % q == 0usize { isp = false }
+            q += 1usize
+        }
+        if isp && base >= dimension { found = true } else { base += 1usize }
+    }
+    let r = f64(base)
+    var m = 1usize
+    var pw = r
+    while pw < f64(n) {
+        pw = pw * r
+        m += 1usize
+    }
+    let (c, e1) = mem.alloc[f64](a, m * m)
+    if e1 != ok { ret e1 }
+    var t = 0usize
+    while t < m * m {
+        c[t] = 0.0f64
+        t += 1usize
+    }
+    var jj = 0usize
+    while jj < m {
+        c[jj] = 1.0f64
+        jj += 1usize
+    }
+    jj = 1usize
+    while jj < m {
+        c[jj * m + jj] = 1.0f64
+        if jj >= 2usize {
+            var ii = 1usize
+            while ii < jj {
+                c[ii * m + jj] = c[ii * m + jj - 1usize] + c[(ii - 1usize) * m + jj - 1usize]
+                ii += 1usize
+            }
+        }
+        jj += 1usize
+    }
+    t = 0usize
+    while t < m * m {
+        c[t] = c[t] - r * math.floor[f64](c[t] / r)
+        t += 1usize
+    }
+    let (nr, e2) = mem.alloc[f64](a, m)
+    if e2 != ok { ret e2 }
+    let (nr2, e3) = mem.alloc[f64](a, m)
+    if e3 != ok { ret e3 }
+    var i = 1usize
+    while i <= n {
+        var number = f64(i)
+        var k = 0usize
+        while k < m {
+            let quo = math.floor[f64](number / r)
+            nr[k] = number - quo * r
+            number = quo
+            k += 1usize
+        }
+        var s = 0.0f64
+        var dg = 1.0f64
+        k = 0usize
+        while k < m {
+            dg = dg / r
+            s += dg * nr[k]
+            k += 1usize
+        }
+        out[(i - 1usize) * dimension] = s
+        var j = 1usize
+        while j < dimension {
+            k = 0usize
+            while k < m {
+                var acc = 0.0f64
+                var l = 0usize
+                while l < m {
+                    acc += c[k * m + l] * nr[l]
+                    l += 1usize
+                }
+                nr2[k] = acc - r * math.floor[f64](acc / r)
+                k += 1usize
+            }
+            k = 0usize
+            s = 0.0f64
+            dg = 1.0f64
+            while k < m {
+                nr[k] = nr2[k]
+                dg = dg / r
+                s += dg * nr[k]
+                k += 1usize
+            }
+            out[(i - 1usize) * dimension + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
 }

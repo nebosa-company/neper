@@ -3239,4 +3239,5 @@ D6163	674	dendextend: Fowlkes-Mallows index and cophenetic correlation
 D6164	711	pracma: associated Legendre functions, Chebyshev coefficients and the Laguerre root iteration
 D6165	962	fpc: cluster.stats validity indexes
 D6166	765	pROC: AUC, DeLong variance and interval, paired DeLong test
-D6167	720	ROCR: performance measures at every cutoff
+D6167	721	ROCR: performance measures at every cutoff
+D6168	849	DiceDesign: lhsDesign, factDesign and the Faure sequence

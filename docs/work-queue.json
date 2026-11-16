@@ -482,10 +482,10 @@
       "group": "CRAN parity",
       "order": 624,
       "title": "DiceDesign: space-filling designs",
-      "score": 0.3,
+      "score": 0.45,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6149). The seven discrepancy criteria, mindist, phiP and coverage equal DiceDesign on Windows (oracle_dicedesign; Linux pending). Open: the generators (lhsDesign, maximinSA_LHS, discrepSA_LHS, maximinESE_LHS, wspDesign, factDesign, sequences) and meshRatio. Was: Open (CRAN rank 604). Small to mid. Acceptance, equal to DiceDesign under set.seed: lhsDesign, maximinSA_LHS, discrepSA_LHS, maximinESE_LHS, wspDesign, factDesign, runif and low-discrepancy sequences, discrepancyCriteria (L2, centered, wrap-around, mixture), mindist, phiP and coverage measures."
+      "evidence": "Partial (D6149, D6168 lhsDesign, factDesign, runif.faure). The seven discrepancy criteria, mindist, phiP and coverage equal DiceDesign on Windows (oracle_dicedesign; Linux pending). Open: the generators (lhsDesign, maximinSA_LHS, discrepSA_LHS, maximinESE_LHS, wspDesign, factDesign, sequences) and meshRatio. Was: Open (CRAN rank 604). Small to mid. Acceptance, equal to DiceDesign under set.seed: lhsDesign, maximinSA_LHS, discrepSA_LHS, maximinESE_LHS, wspDesign, factDesign, runif and low-discrepancy sequences, discrepancyCriteria (L2, centered, wrap-around, mixture), mindist, phiP and coverage measures."
     },
     {
       "id": "L427",
