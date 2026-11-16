@@ -47024,3 +47024,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `e.ml.mds.cmdscale` squares the distances, double-centres them (`-1/2 (d^2 - row mean - column mean + grand mean)`), takes the Jacobi eigen decomposition and returns the leading k eigenvectors scaled by the square roots of their eigenvalues, as R's `cmdscale`; `jl_dimension` is the scikit-learn bound `ceil(4 ln n / (eps^2/2 - eps^3/3))`. The oracle is R's `cmdscale` rather than scikit-learn's stress, since classical MDS has no stress to optimise.
 
 **Result.** `oracle_cmdscale` agrees with R on eigenvalues and absolute coordinates (46 values, 5 to 25 points, Euclidean and Manhattan distances) and the bound on n = 1000, eps = 0.1 is 5921; Linux pending. L212 stays partial: SMACOF MDS against scikit-learn stress and the random projections.
+
+## D6650 — e.algo.approx: approximation algorithms with their ratios
+
+**Decision.** `e.algo.approx` collects vertex cover by a maximal matching (both ends of each matched edge, ratio 2), list scheduling and longest-processing-time-first for makespan (ratios `2 - 1/m` and `4/3 - 1/(3m)`), the knapsack FPTAS (values scaled by `eps vmax / n`, a minimum-weight programme over the scaled total, ratio `1 - eps`) and a local-search max-cut (ratio 1/2), each next to a function giving its ratio; `set_cover` and `bin_pack` call `e.algo.combopt` and add the harmonic and `11/9 OPT + 6/9` bounds. The fixture compares each routine with a brute-force optimum on 40 seeded instances (8 vertices, 7 jobs on 3 machines, 10 items).
+
+**Result.** `algo_approx` passes on Windows; Linux pending. L209 stays at 0.8: the set-cover wrapper is checked only for shape and the bin-pack bound against a size lower bound, and Christofides is not wrapped.

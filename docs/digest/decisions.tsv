@@ -3509,4 +3509,5 @@ D6645	820	geometry: convex hull in two and three dimensions
 D6646	796	qgraph: centrality of a weighted network
 D6647	971	hetGP: homoskedastic GP with known hyperparameters
 D6648	667	MCMCpack: density functions
-D6649	835	e.ml.mds: classical MDS and the Johnson-Lindenstrauss bound
+D6649	836	e.ml.mds: classical MDS and the Johnson-Lindenstrauss bound
+D6650	934	e.algo.approx: approximation algorithms with their ratios
