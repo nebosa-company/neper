@@ -46582,3 +46582,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `compositions(n, m, with_zero)` lists the ordered m-part sums of n in the order partitions::compositions prints them, found by testing a rule against R for n 2 to 8 and m 2 to 5: ascending lexicographic on the coordinates `(x_m, x_{m-1}, ..., x_2)`, the first coordinate being the remainder; no-zero compositions keep every part at least 1.
 
 **Result.** `oracle_partitions` agrees with partitions on 168 new values (column count, sum, position-weighted sum) on Windows (597 cases in all); Linux pending. setparts and blockparts keep their Gray-code-like order and stay open; L470 stays partial.
+
+## D6569 — partitions: blockparts
+
+**Decision.** `blockparts(f, n)` lists the vectors with `0 <= x[i] <= f[i]` summing to n in the order partitions::blockparts prints them, which a test against R for random f and n confirmed: the same order as compositions, the last coordinate slowest and ascending, the first coordinate the remainder (so it must lie in `[0, f[1]]`).
+
+**Result.** `oracle_partitions` agrees with partitions on 180 new values on Windows (777 cases in all); Linux pending. setparts keeps its Gray-code order and stays open; L470 stays partial.

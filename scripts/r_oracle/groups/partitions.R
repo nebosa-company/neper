@@ -12,4 +12,9 @@ for (n in 2:18) {
   for (m in 1:min(5, n)) summ(c(3, n, m), restrictedparts(n, m))
 }
 for (n in 2:9) for (m in 2:5) for (z in c(TRUE, FALSE)) { if (!z && n < m) next; summ(c(if (z) 5 else 6, n, m), compositions(n, m, include.zero = z)) }
+# blockparts: ("bp") args (m, n, f[m]) -> columns, sum, position-weighted sum as fn "bpc", "bps", "bpw"
+set.seed(11)
+for (rep in 1:60) { m <- sample(2:5, 1); f <- sample(0:4, m, TRUE); if (sum(f) == 0) next; n <- sample(1:sum(f), 1)
+  M <- tryCatch(as.matrix(blockparts(f, n)), error = function(e) NULL); if (is.null(M)) next; v <- as.vector(M); a <- c(m, n, f)
+  add("bpc", a, ncol(M)); add("bps", a, sum(v)); add("bpw", a, sum(seq_along(v) * v)) }
 emit("partitions", "partitions", list(cases))

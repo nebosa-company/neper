@@ -11,6 +11,21 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if c.name.len == 3usize && c.name[0usize] == 98u8 {
+        let bm = usize(x[0usize])
+        let (bo, be) = mem.alloc[f64](a, 400000usize)
+        if be != ok { ret 0.0f64 / 0.0f64 }
+        let (bc, bce) = pt.blockparts(a, x[2usize..2usize + bm], usize(x[1usize]), bo)
+        if bce != ok { ret 0.0f64 / 0.0f64 }
+        if c.name[2usize] == 99u8 { ret f64(bc) }
+        var bs = 0.0f64
+        var bi = 0usize
+        while bi < bc * bm {
+            if c.name[2usize] == 115u8 { bs += bo[bi] } else { bs += f64(bi + 1usize) * bo[bi] }
+            bi += 1usize
+        }
+        ret bs
+    }
     let kind = usize(x[0usize])
     let n = usize(x[1usize])
     let m = usize(x[2usize])

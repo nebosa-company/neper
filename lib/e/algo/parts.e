@@ -143,3 +143,37 @@ fn compositions(a: *mem.Arena, n: usize, m: usize, with_zero: bool, out: []f64) 
     comp_walk(&g, m - 1usize, n)
     ret (g.cols, ok)
 }
+
+type BGen = struct { out: []f64, m: usize, cols: usize, cur: []f64, f: []const f64 }
+
+// the vectors with 0 <= x[i] <= f[i] and the given sum, the last coordinate the slowest and ascending, the first the remainder (partitions::blockparts)
+fn bp_walk(g: *BGen, pos: usize, rem: usize) {
+    if pos == 0usize {
+        if f64(rem) <= g.f[0usize] {
+            var j = 1usize
+            while j < g.m {
+                g.out[g.cols * g.m + j] = g.cur[j]
+                j += 1usize
+            }
+            g.out[g.cols * g.m] = f64(rem)
+            g.cols += 1usize
+        }
+        ret
+    }
+    var v = 0usize
+    while v <= rem && f64(v) <= g.f[pos] {
+        g.cur[pos] = f64(v)
+        bp_walk(g, pos - 1usize, rem - v)
+        v += 1usize
+    }
+}
+
+// blockparts(f, n): the columns of m = f.len entries into out; returns the number of columns
+fn blockparts(a: *mem.Arena, f: []const f64, n: usize, out: []f64) -> (usize, err) {
+    let m = f.len
+    let (cur, e) = mem.alloc[f64](a, m + 1usize)
+    if e != ok { ret (0usize, e) }
+    var g = BGen { out: out, m: m, cols: 0usize, cur: cur, f: f }
+    bp_walk(&g, m - 1usize, n)
+    ret (g.cols, ok)
+}
