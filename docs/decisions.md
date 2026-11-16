@@ -45634,3 +45634,15 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pracma` gains conv (the polynomial product), deconv (long division returning the quotient and the remainder; the package's remainder has length(a) - 1 entries, the leading zeros being dropped) and polyint (the antiderivative with a constant). All equal pracma's to 1e-9. Not here: polyder, polyadd, polyroots and the rest of the polynomial toolbox.
 
 **Result.** `oracle_pracma` equals pracma on 472 cases on Windows; Linux pending. L333 stays partial.
+
+## D6412 — Epi: twoby2
+
+`e.algo.stat.epi` computes, for a 2 by 2 table, what Epi::twoby2 prints: each row's outcome risk with the package's own interval (the odds scaled by exp(z / sqrt(x (n - x) / n)), not Wilson's), the risk ratio and odds ratio with Wald intervals (shared with `e.algo.stat.epir`), the probability difference with Newcombe's score interval from ci.pd (the two Wilson quadratics combined in quadrature), the asymptotic p value of the log odds ratio (chi-squared, one degree of freedom) and the exact two-sided Fisher p value. Not here: the conditional maximum-likelihood odds ratio and its exact interval, ci.pd's "AC" method, ci.ratio, Lexis objects, clogistic, ROC and the rate and survival tools.
+
+**Result.** `oracle_epi` equals Epi on 425 cases on Windows; Linux pending. L513 is partial.
+
+## D6412 — pracma: newtonRaphson
+
+`e.algo.stat.pracma` gains newton_raphson as the package writes it: the numerical derivative by a central difference with h = tol^(2/3), steps until the step is below tol or maxiter is exceeded, and the (root, f(root), iterations, estimated precision) answer; the function is one of five fixed ones chosen by index since the module takes no closures. Root, iteration count and precision equal pracma's (the iteration count exactly). Not here: a user-supplied derivative, fzero (Brent-style zeroin with its bracket search) and the other root finders.
+
+**Result.** `oracle_pracma` equals pracma on 532 cases on Windows; Linux pending. L333 stays partial.

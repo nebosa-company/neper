@@ -3278,4 +3278,6 @@ D6195	720	klaR: Gaussian NaiveBayes
 D6409	764	robustbase: mc, the medcouple
 D6410	668	pracma: roots
 D6411	994	drc: the LL.4 dose-response fit
-D6411	512	pracma: conv, deconv and polyint
+D6411	513	pracma: conv, deconv and polyint
+D6412	816	Epi: twoby2
+D6412	689	pracma: newtonRaphson
