@@ -3586,4 +3586,5 @@ D6723	1122	EnvStats: rosnerTest and the normal tolerance and prediction factors
 D6724	486	pastecs: the Shapiro-Wilk entries of stat.desc
 D6725	1081	pastecs: regul by constant, linear and area interpolation
 D6726	1044	pastecs: pgleissberg and pennington
-D6727	965	mixsqp: argument validation
+D6727	966	mixsqp: argument validation
+D6728	606	SuppDists: rFriedman and rSpearman

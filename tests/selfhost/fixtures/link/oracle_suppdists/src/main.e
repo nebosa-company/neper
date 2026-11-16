@@ -173,6 +173,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
                 k += 1usize
             }
             ri = usize(z[2usize])
+        } else if str.eq(nm, "rv_fr") {
+            let (fd, fe) = sd.friedman_exact(a, i64(z[1usize]), i64(z[2usize]))
+            if fe != ok { ret nan }
+            var k = 0usize
+            while k < 8usize {
+                xs[k] = sd.xfrie(&fd, rng.unif(&rr), i64(z[1usize]), i64(z[2usize]))
+                k += 1usize
+            }
+            ri = usize(z[3usize])
+        } else if str.eq(nm, "rv_sp") {
+            let (sdist, se) = sd.friedman_exact(a, i64(z[1usize]), 2i64)
+            if se != ok { ret nan }
+            var k = 0usize
+            while k < 8usize {
+                xs[k] = sd.xspearman_pkg(&sdist, rng.unif(&rr), i64(z[1usize]))
+                k += 1usize
+            }
+            ri = usize(z[2usize])
         } else if str.eq(nm, "rv_gh") {
             var k = 0usize
             while k < 8usize {
