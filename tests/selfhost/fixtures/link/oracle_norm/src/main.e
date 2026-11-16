@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R norm`; the layout is at the top of
 // scripts/r_oracle/groups/norm.R.
 
+use e.algo.stat.normda as nd
 use e.algo.stat.normem as nm
 use e.io
 use e.mem
@@ -26,6 +27,42 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         nm.mi_inference(ev, sv, z[1usize], ov)
         ret ov[usize(z[3usize + 4usize * mm])]
+    }
+    if str.eq(c.name, "niw") {
+        let wp = usize(z[0usize])
+        let wd = (wp + 1usize) * (wp + 2usize) / 2usize
+        var wr: nd.Rn = zero
+        nd.rngseed(&wr, i64(z[1usize]))
+        let (wo, ew) = mem.alloc[f64](a, wd)
+        if ew != ok { ret 0.0f64 / 0.0f64 }
+        let we = nd.ninvwish(a, &wr, wp, z[2usize], z[3usize], z[4usize..4usize + wp], z[4usize + wp..4usize + wp + wp * wp], wo)
+        if we != ok { ret 0.0f64 / 0.0f64 }
+        ret wo[usize(z[4usize + wp + wp * wp])]
+    }
+    if str.eq(c.name, "imp") || str.eq(c.name, "da") {
+        let dn = usize(z[0usize])
+        let dp = usize(z[1usize])
+        let dd = (dp + 1usize) * (dp + 2usize) / 2usize
+        var rn: nd.Rn = zero
+        nd.rngseed(&rn, i64(z[2usize]))
+        if str.eq(c.name, "imp") {
+            let (out, eo) = mem.alloc[f64](a, dn * dp)
+            if eo != ok { ret 0.0f64 / 0.0f64 }
+            let ie = nd.imp_norm(a, &rn, z[3usize + dd..3usize + dd + dn * dp], dn, dp, z[3usize..3usize + dd], out)
+            if ie != ok { ret 0.0f64 / 0.0f64 }
+            ret out[usize(z[3usize + dd + dn * dp])]
+        }
+        let (st, es) = mem.alloc[f64](a, dd)
+        if es != ok { ret 0.0f64 / 0.0f64 }
+        let b = 4usize + 2usize + dp + dp * dp
+        var j = 0usize
+        while j < dd {
+            st[j] = z[b + j]
+            j += 1usize
+        }
+        let de = nd.da_norm(a, &rn, z[b + dd..b + dd + dn * dp], dn, dp, st, usize(z[3usize]), z[4usize], z[5usize], z[6usize..6usize + dp], z[6usize + dp..6usize + dp + dp * dp])
+        if de != ok { ret 0.0f64 / 0.0f64 }
+        ret st[usize(z[b + dd + dn * dp])]
     }
     let n = usize(z[0usize])
     let p = usize(z[1usize])

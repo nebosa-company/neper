@@ -49,4 +49,41 @@ for (rep in 1:14) {
   xa <- ifelse(is.na(x), NaN, x); out <- c(g$mu, as.vector(t(g$sigma)))
   for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("emp", c(n, p, crit, as.vector(xa), tau, m, mu0, as.vector(t(li)), q - 1), out[q], rel = 1e-8, abs = 1e-9)
 }
+# data augmentation under rngseed (norm's own generator and its single-precision rounding):
+#   "imp" args (n, p, seed, theta[d], x row-major with NaN, q): the q-th cell of imp.norm's completed data (row-major, original row order)
+#   "da" args (n, p, seed, steps, tau, m, mu0[p], lambdainv[p*p] row-major, theta[d], x row-major, q): theta[q] after da.norm
+# the Fortran gauss keeps a pairing flag between calls, so a case starts with the flag clear: an odd number of earlier normal draws is made even by an imputation of two missing cells
+gcount <- 0
+burn <- function() {
+  if (gcount %% 2 == 1) {
+    b <- prelim.norm(matrix(c(1, NA, NA, 4, 5, 6, 7, 8, 2, 1, 3, 9), 6, 2)); invisible(imp.norm(b, em.norm(b, showits = FALSE)))
+    gcount <<- gcount + 1 + sum(is.na(b$x))
+  }
+}
+for (rep in 1:40) {
+  n <- sample(8:30, 1); p <- sample(2:4, 1)
+  L <- matrix(rnorm(p * p), p, p); S <- crossprod(L) + diag(p)
+  x <- round(matrix(rnorm(n * p), n, p) %*% chol(S) + rep(1:p, each = n), 3); miss <- sample(n * p, round(0.25 * n * p)); x[miss] <- NA
+  keep <- rowSums(!is.na(x)) > 0; x <- x[keep, , drop = FALSE]; n <- nrow(x)
+  if (sum(is.na(x)) == 0) next
+  s <- prelim.norm(x); th <- em.norm(s, showits = FALSE, criterion = 1e-6)
+  xr <- as.vector(t(ifelse(is.na(x), NaN, x))); sd <- sample(1:100000, 1); nm <- sum(is.na(x))
+  burn(); rngseed(sd); out <- as.vector(t(imp.norm(s, th))); gcount <- gcount + 1 + nm
+  for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("imp", c(n, p, sd, th, xr, q - 1), out[q], rel = 1e-9, abs = 1e-10)
+  steps <- sample(1:3, 1); sd <- sample(1:100000, 1)
+  usep <- rep %% 2 == 0
+  if (usep) { tau <- round(runif(1, 0.5, 3), 2); m <- round(runif(1, 1, 5), 2); mu0 <- round(rnorm(p, 0, 0.5), 2); li <- crossprod(matrix(round(rnorm(p * p, 0, 0.3), 2), p, p)) + diag(p) }
+  else { tau <- 0; m <- -1; mu0 <- rep(0, p); li <- matrix(0, p, p) }
+  burn(); rngseed(sd)
+  res <- if (usep) da.norm(s, th, prior = list(tau, m, mu0, li), steps = steps) else da.norm(s, th, steps = steps)
+  gcount <- gcount + steps * (2 + nm + p * (p - 1) / 2 + p)
+  for (q in seq_along(res)) cases[[length(cases) + 1]] <- case("da", c(n, p, sd, steps, tau, m, mu0, as.vector(t(li)), th, xr, q - 1), res[q], rel = 1e-9, abs = 1e-10)
+}
+# ninvwish ("niw"): args (p, seed, tau, m, mu0[p], lambdainv[p*p] row-major, q), theta[q]
+for (rep in 1:30) {
+  p <- sample(2:4, 1); s <- prelim.norm(matrix(c(rnorm(10 * p), NA, rep(1, p - 1)), 11, p, byrow = FALSE)[, seq_len(p)])
+  tau <- round(runif(1, 0.5, 4), 2); m <- round(runif(1, p, p + 8), 2); mu0 <- round(rnorm(p), 2); li <- crossprod(matrix(round(rnorm(p * p, 0, 0.5), 2), p, p)) + diag(p)
+  sd <- sample(1:100000, 1); burn(); rngseed(sd); res <- ninvwish(s, list(tau, m, mu0, li)); gcount <- gcount + 1 + p * (p - 1) / 2 + p
+  for (q in seq_along(res)) cases[[length(cases) + 1]] <- case("niw", c(p, sd, tau, m, mu0, as.vector(t(li)), q - 1), res[q], rel = 1e-9, abs = 1e-10)
+}
 emit("norm", "norm", list(cases))

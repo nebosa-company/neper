@@ -31,10 +31,10 @@
       "group": "CRAN parity",
       "order": 586,
       "title": "norm: EM and data augmentation for multivariate normal data",
-      "score": 0.55,
+      "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6074): e.algo.stat.normem has em.norm (path-exact) and loglik.norm, equal to norm on 355 values on Windows (oracle_norm); Linux pending. D6709: logpost.norm (with and without a prior) and mi.inference equal norm on 172 values. D6710: em.norm with a prior (posterior-mode EM) equals norm on 120 values. Open: ecm.norm, da.norm, imp.norm, mda.norm and rngseed. Original: Open (CRAN rank 757). Small. Acceptance, equal to norm under set.seed: prelim.norm, em.norm, ecm.norm, da.norm, imp.norm, rngseed, loglik.norm, logpost.norm, and the parameter getters."
+      "evidence": "Partly done (D6074): e.algo.stat.normem has em.norm (path-exact) and loglik.norm, equal to norm on 355 values on Windows (oracle_norm); Linux pending. D6709: logpost.norm (with and without a prior) and mi.inference equal norm on 172 values. D6710: em.norm with a prior (posterior-mode EM) equals norm on 120 values. D6729: e.algo.stat.normda has rngseed, imp.norm, da.norm (with and without a prior, several steps) and ninvwish, with the package random number generator and its single-precision rounding, equal to norm on 3308 values (oracle_norm). ecm.norm is not in the norm package. Open: mda.norm (monotone data augmentation), the getparam and makeparam getters. Original: Open (CRAN rank 757). Small. Acceptance, equal to norm under set.seed: prelim.norm, em.norm, ecm.norm, da.norm, imp.norm, rngseed, loglik.norm, logpost.norm, and the parameter getters."
     },
     {
       "id": "L469",
