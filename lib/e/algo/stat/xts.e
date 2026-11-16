@@ -2,8 +2,9 @@
 // months, weeks, days, hours, minutes, seconds, with k), the open, high, low, close and a reducer
 // (sum, mean, max, min) over those endpoints (to.period and period.apply), `align_time`,
 // `periodicity` and `lag` and `diff`. NA is NaN. A series is an ascending index of seconds and its values.
-//
-// Not here: time zones other than UTC, sub-second units, `first` and `last` with period strings and
+// Also first and last with period strings, merge by index and the to.period index labels. Not here: time zones other
+// than UTC, sub-second units, and indexAt = "firstof" (R builds it in the host local zone).
+
 // merge and join of two series (e.algo.stat.zoo merges by index).
 
 use e.math
@@ -341,6 +342,54 @@ fn merge2(idx_x: []const f64, x: []const f64, idx_y: []const f64, y: []const f64
         }
         if take_x { i += 1usize }
         if take_y { j += 1usize }
+    }
+    ret r
+}
+
+fn days_from_ymd(y0: i64, m: i64, d: i64) -> i64 {
+    var y = y0
+    if m <= 2i64 { y -= 1i64 }
+    let era = floor_div(y, 400i64)
+    let yoe = y - era * 400i64
+    var mp = m - 3i64
+    if m <= 2i64 { mp = m + 9i64 }
+    let doy = (153i64 * mp + 2i64) / 5i64 + d - 1i64
+    let doe = yoe * 365i64 + yoe / 4i64 - yoe / 100i64 + doy
+    ret era * 146097i64 + doe - 719468i64
+}
+
+// the index of to.period(x, period, indexAt = ...) given the series index (UTC seconds) and the endpoints `ep`:
+// mode 0 endof (the last observation of each period), 1 startof (the first), 2 firstof (the first of the month of the
+// end index at 00:00 when `period_on` is years, quarters, months or days, else the end index), 3 lastof (the last day of
+// that month), 4 yearmon and 5 yearqtr (the zoo values year + (month - 1) / 12 and year + (quarter - 1) / 4 of the end index)
+fn period_index(idx: []const f64, ep: []const usize, mode: u8, period_on: u8, out: []f64) -> usize {
+    var r = 0usize
+    while r + 1usize < ep.len {
+        let last = idx[ep[r + 1usize] - 1usize]
+        let first = idx[ep[r] + 0usize]
+        let secs = i64(math.floor[f64](last))
+        let days = floor_div(secs, 86400i64)
+        let (y0, mon0, _yd) = civil(days)
+        // civil returns the year of the shifted calendar; recover the calendar year and month
+        let y = y0
+        let m = mon0
+        var v = last
+        if mode == 1u8 { v = first }
+        let coarse = period_on <= 2u8 || period_on == 4u8
+        if mode == 2u8 && coarse { v = f64(days_from_ymd(y, m + 1i64, 1i64)) * 86400.0f64 }
+        if mode == 3u8 && coarse {
+            var ny = y
+            var nm = m + 2i64
+            if nm > 12i64 {
+                nm = 1i64
+                ny += 1i64
+            }
+            v = f64(days_from_ymd(ny, nm, 1i64) - 1i64) * 86400.0f64
+        }
+        if mode == 4u8 { v = f64(y) + f64(m) / 12.0f64 }
+        if mode == 5u8 { v = f64(y) + f64(m / 3i64) / 4.0f64 }
+        out[r] = v
+        r += 1usize
     }
     ret r
 }

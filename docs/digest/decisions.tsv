@@ -3161,4 +3161,5 @@ D6085	1329	RNGseq seeds: three forms, and the current generator decides the scal
 D6086	1333	statmod Gauss quadrature by implicit QL on the Jacobi matrix
 D6087	1363	caret: confusionMatrix for two classes, postResample
 D6088	1385	classInt bclust: committee k-means on bootstrap resamples, then average-linkage hclust
-D6089	1250	xts first and last with period strings; merge by index
+D6089	1251	xts first and last with period strings; merge by index
+D6090	957	xts to.period index labels; L298 closed

@@ -32,4 +32,16 @@ for (rep in 1:20) {
     vec("mx", a, as.numeric(m[, 1])); vec("my", a, as.numeric(m[, 2])); vec("mi", a, as.numeric(index(m)) / 86400)
   }
 }
+#   pi: (mode 0 endof 1 startof 2 firstof 3 lastof 4 yearmon 5 yearqtr, on 0 years 1 quarters 2 months 3 weeks 4 days, n, secs...)  fn "stat:pi" the index of to.period (six cases)
+modes <- c("endof", "startof", "firstof", "lastof", "yearmon", "yearqtr")
+for (idx in idxs) {
+  secs <- (t0 + idx) * 86400 + 37800; n <- length(idx); xs <- xts(round(rnorm(n), 3), .POSIXct(secs, tz = "UTC"))
+  for (u in 0:4) for (md in c(0, 1, 3, 4, 5)) {
+    r <- tryCatch(suppressWarnings(to.period(xs, units[u + 1], indexAt = modes[md + 1])), error = function(e) NULL)
+    if (is.null(r)) next
+    v <- if (md >= 4) as.numeric(zoo::as.yearmon(.POSIXct(as.numeric(.index(r)), tz = "UTC"))) else as.numeric(.index(r))
+    if (md == 5) v <- as.numeric(zoo::as.yearqtr(.POSIXct(as.numeric(.index(r)), tz = "UTC")))
+    vec("pi", c(md, u, n, secs), v)
+  }
+}
 emit("xts2", "xts", list(cases))

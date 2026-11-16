@@ -29,6 +29,17 @@ fn values(a: *mem.Arena, name: str, x: []const f64) -> []const f64 {
         if e < s { ret vals[0usize..0usize] }
         ret vals[s - 1usize..e]
     }
+    if str.eq(name, "stat:pi") {
+        let mode = u8(x[0usize])
+        let on = u8(x[1usize])
+        let n = usize(x[2usize])
+        let sec = x[3usize..3usize + n]
+        let (ep, e1) = xts.endpoints(a, sec, on, 1i64)
+        let (out2, e2) = mem.alloc[f64](a, n)
+        if e1 != ok || e2 != ok { os.exit(6) }
+        let r = xts.period_index(sec, ep, mode, on, out2)
+        ret out2[0usize..r]
+    }
     let jn = u8(x[0usize])
     let nx = usize(x[1usize])
     let ny = usize(x[2usize])
