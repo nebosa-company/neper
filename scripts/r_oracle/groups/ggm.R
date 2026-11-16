@@ -75,4 +75,18 @@ for (rep in 1:60) {
   out <- c(rowm(f$Shat), f$dev, f$df, f$it, sum(f$Bhat), sum(f$Ohat), sum(f$Lhat))
   for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("ag", c(p, n, rowm(S), rowm(mag), q - 1), out[q], rel = 1e-6, abs = 1e-8)
 }
+# inducedCovGraph ("icov") and inducedConGraph ("icon"): args (p, A[p*p], ns, sel, nc, cond, q) with q the row-major index into the |sel| by |sel| answer; topOrder ("topo": args (p, A[p*p], q), the q-th node of the order, 1-based)
+for (rep in 1:60) {
+  p <- sample(4:8, 1); A <- matrix(0, p, p); for (i in 1:(p - 1)) for (j in (i + 1):p) A[i, j] <- rbinom(1, 1, 0.4)
+  perm <- sample(p); A <- A[order(perm), order(perm)]; dimnames(A) <- list(letters[1:p], letters[1:p])
+  nodes <- sample(p); ns <- sample(2:3, 1); nc <- sample(0:min(2, p - ns), 1)
+  sel <- nodes[1:ns]; cnd <- if (nc > 0) nodes[ns + 1:nc] else integer(0)
+  for (fn in c("icov", "icon")) {
+    m <- if (fn == "icov") inducedCovGraph(A, letters[sel], if (nc > 0) letters[cnd] else NULL) else inducedConGraph(A, letters[sel], if (nc > 0) letters[cnd] else NULL)
+    v <- rowm(m)
+    for (q in seq_along(v)) cases[[length(cases) + 1]] <- case(fn, c(p, rowm(A), ns, sel, nc, cnd, q - 1), v[q], rel = 0, abs = 0)
+  }
+  ord <- topOrder(A)
+  for (q in seq_along(ord)) cases[[length(cases) + 1]] <- case("topo", c(p, rowm(A), q - 1), ord[q], rel = 0, abs = 0)
+}
 emit("ggm", "ggm", list(cases))

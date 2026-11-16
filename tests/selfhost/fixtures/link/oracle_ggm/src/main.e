@@ -52,6 +52,45 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret sw
     }
     let p = usize(z[0usize])
+    if str.eq(nm, "topo") {
+        let (ord, eo) = mem.alloc[usize](a, p)
+        if eo != ok { ret nan }
+        let et = gg.toporder(a, z[1usize..1usize + p * p], p, ord)
+        if et != ok { ret nan }
+        ret f64(ord[usize(z[1usize + p * p])] + 1usize)
+    }
+    if str.eq(nm, "icov") || str.eq(nm, "icon") {
+        let am3 = z[1usize..1usize + p * p]
+        var at = 1usize + p * p
+        let ns = usize(z[at])
+        let (ss, e1) = mem.alloc[usize](a, ns + 1usize)
+        if e1 != ok { ret nan }
+        var i = 0usize
+        while i < ns {
+            ss[i] = usize(z[at + 1usize + i]) - 1usize
+            i += 1usize
+        }
+        at = at + 1usize + ns
+        let nc = usize(z[at])
+        let (cs, e2) = mem.alloc[usize](a, nc + 1usize)
+        if e2 != ok { ret nan }
+        i = 0usize
+        while i < nc {
+            cs[i] = usize(z[at + 1usize + i]) - 1usize
+            i += 1usize
+        }
+        let qq = usize(z[at + 1usize + nc])
+        let (out, e3) = mem.alloc[f64](a, ns * ns + 1usize)
+        if e3 != ok { ret nan }
+        var e4 = ok
+        if str.eq(nm, "icov") {
+            e4 = gg.inducedcovgraph(a, am3, p, ss[0usize..ns], cs[0usize..nc], out)
+        } else {
+            e4 = gg.inducedcongraph(a, am3, p, ss[0usize..ns], cs[0usize..nc], out)
+        }
+        if e4 != ok { ret nan }
+        ret out[qq]
+    }
     if str.eq(nm, "dsep") {
         let am2 = z[1usize..1usize + p * p]
         var at = 1usize + p * p

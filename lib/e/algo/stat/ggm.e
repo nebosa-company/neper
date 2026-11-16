@@ -1255,3 +1255,332 @@ fn fitancestral(a: *mem.Arena, mag: []const f64, s: []const f64, p: usize, n: f6
     res.it = it
     ret (res, ok)
 }
+
+// ---- induced graphs of a DAG and a topological order ----
+
+fn gg_in(m: []f64) {
+    var i = 0usize
+    while i < m.len {
+        if m[i] != 0.0f64 { m[i] = 1.0f64 }
+        i += 1usize
+    }
+}
+
+// In(solve(2 I - A)) for the node set of A (A has a unit diagonal): the ancestor relation of the sub-graph, [i, j] = 1 when j is an ancestor of i (or i = j)
+fn gg_ancgraph(a: *mem.Arena, am: []const f64, k: usize) -> ([]f64, err) {
+    let (m, e1) = mem.alloc[f64](a, k * k + 1usize)
+    if e1 != ok { ret (m, e1) }
+    var i = 0usize
+    while i < k * k {
+        m[i] = 0.0f64 - am[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        m[i * k + i] += 2.0f64
+        i += 1usize
+    }
+    let (inv, e2) = gg_inv(a, m, k)
+    if e2 != ok { ret (inv, e2) }
+    gg_in(inv[0usize..k * k])
+    ret (inv, ok)
+}
+
+// transClos with the diagonal then set to 1 (the package's trclos): m is k by k 0/1, rewritten in place
+fn gg_trclos(a: *mem.Arena, m: []f64, k: usize) -> err {
+    let (b, e) = mem.alloc[f64](a, k * k + 1usize)
+    if e != ok { ret e }
+    var i = 0usize
+    while i < k {
+        m[i * k + i] = 1.0f64
+        i += 1usize
+    }
+    var going = true
+    while going {
+        gg_mul(m, m, k, k, k, b)
+        gg_in(b[0usize..k * k])
+        going = false
+        i = 0usize
+        while i < k * k {
+            if b[i] != m[i] { going = true }
+            i += 1usize
+        }
+        i = 0usize
+        while i < k * k {
+            m[i] = b[i]
+            i += 1usize
+        }
+    }
+    ret ok
+}
+
+// the unit-diagonal transposed edge matrix of a DAG: A[i, j] = amat[j, i], A[i, i] = 1
+fn gg_edgemat(a: *mem.Arena, amat: []const f64, p: usize) -> ([]f64, err) {
+    let (m, e) = mem.alloc[f64](a, p * p + 1usize)
+    if e != ok { ret (m, e) }
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            if amat[j * p + i] != 0.0f64 { m[i * p + j] = 1.0f64 } else { m[i * p + j] = 0.0f64 }
+            j += 1usize
+        }
+        m[i * p + i] = 1.0f64
+        i += 1usize
+    }
+    ret (m, ok)
+}
+
+// the nodes of 0..p not in sel or cond, then sel
+fn gg_rest(a: *mem.Arena, p: usize, sel: []const usize, cond: []const usize) -> ([]usize, err) {
+    let (l, e) = mem.alloc[usize](a, p + 1usize)
+    if e != ok { ret (l, e) }
+    var n = 0usize
+    var v = 0usize
+    while v < p {
+        var used = false
+        var q = 0usize
+        while q < sel.len {
+            if sel[q] == v { used = true }
+            q += 1usize
+        }
+        q = 0usize
+        while q < cond.len {
+            if cond[q] == v { used = true }
+            q += 1usize
+        }
+        if !used {
+            l[n] = v
+            n += 1usize
+        }
+        v += 1usize
+    }
+    ret (l[0usize..n], ok)
+}
+
+// the package's adjMatrix(out) * scale on a |g| by |g| result: transposed with a zero diagonal
+fn gg_adj_scale(m: []const f64, k: usize, scale: f64, out: []f64) {
+    var i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            if i == j { out[i * k + j] = 0.0f64 } else { out[i * k + j] = m[j * k + i] * scale }
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// inducedCovGraph(amat, sel, cond): the covariance graph (entries 100) among `sel` after marginalising the other nodes and conditioning on `cond`; |sel| by |sel| row-major in `out`
+fn inducedcovgraph(a: *mem.Arena, amat: []const f64, p: usize, sel: []const usize, cond: []const usize, out: []f64) -> err {
+    let (am, e0) = gg_edgemat(a, amat, p)
+    if e0 != ok { ret e0 }
+    let (l, e1) = gg_rest(a, p, sel, cond)
+    if e1 != ok { ret e1 }
+    let nl = l.len
+    let ng = sel.len
+    let nL = nl + ng
+    let (big, e2) = mem.alloc[usize](a, nL + 1usize)
+    if e2 != ok { ret e2 }
+    var i = 0usize
+    while i < nl {
+        big[i] = l[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < ng {
+        big[nl + i] = sel[i]
+        i += 1usize
+    }
+    let bigl = big[0usize..nL]
+    let (all, e3) = gg_sub(a, am, p, bigl, bigl)
+    if e3 != ok { ret e3 }
+    let (al, e4) = gg_ancgraph(a, all, nL)
+    if e4 != ok { ret e4 }
+    let nr = cond.len
+    // TrL = In(A[r, L] AL) (nr by nL)
+    let (arl, e5) = gg_sub(a, am, p, cond, bigl)
+    if e5 != ok { ret e5 }
+    let (trl, e6) = mem.alloc[f64](a, nr * nL + 1usize)
+    if e6 != ok { ret e6 }
+    gg_mul(arl, al, nr, nL, nL, trl)
+    gg_in(trl[0usize..nr * nL])
+    // DLr = In(I + t(TrL) TrL)
+    let (trt, e7) = gg_t(a, trl, nr, nL)
+    let (dlr, e8) = mem.alloc[f64](a, nL * nL + 1usize)
+    if e7 != ok || e8 != ok { ret e7 }
+    gg_mul(trt, trl, nL, nr, nL, dlr)
+    i = 0usize
+    while i < nL {
+        dlr[i * nL + i] += 1.0f64
+        i += 1usize
+    }
+    gg_in(dlr[0usize..nL * nL])
+    let ec = gg_trclos(a, dlr[0usize..nL * nL], nL)
+    if ec != ok { ret ec }
+    // out = In(AL cl t(AL))[g, g]
+    let (alt, e9) = gg_t(a, al, nL, nL)
+    let (t1, e10) = mem.alloc[f64](a, nL * nL + 1usize)
+    let (t2, e11) = mem.alloc[f64](a, nL * nL + 1usize)
+    if e9 != ok || e10 != ok || e11 != ok { ret e9 }
+    gg_mul(al, dlr, nL, nL, nL, t1)
+    gg_mul(t1, alt, nL, nL, nL, t2)
+    gg_in(t2[0usize..nL * nL])
+    let (gg2, e12) = mem.alloc[f64](a, ng * ng + 1usize)
+    if e12 != ok { ret e12 }
+    i = 0usize
+    while i < ng {
+        var j = 0usize
+        while j < ng {
+            gg2[i * ng + j] = t2[(nl + i) * nL + nl + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    gg_adj_scale(gg2, ng, 100.0f64, out)
+    ret ok
+}
+
+// inducedConGraph(amat, sel, cond): the concentration graph (entries 10) among `sel` after marginalising the others and conditioning on `cond`
+fn inducedcongraph(a: *mem.Arena, amat: []const f64, p: usize, sel: []const usize, cond: []const usize, out: []f64) -> err {
+    let (am, e0) = gg_edgemat(a, amat, p)
+    if e0 != ok { ret e0 }
+    let (l, e1) = gg_rest(a, p, sel, cond)
+    if e1 != ok { ret e1 }
+    let nl = l.len
+    let ng = sel.len
+    let nr0 = ng + cond.len
+    let (rr, e2) = mem.alloc[usize](a, nr0 + 1usize)
+    if e2 != ok { ret e2 }
+    var i = 0usize
+    while i < ng {
+        rr[i] = sel[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < cond.len {
+        rr[ng + i] = cond[i]
+        i += 1usize
+    }
+    let rs = rr[0usize..nr0]
+    let (all, e3) = gg_sub(a, am, p, l, l)
+    if e3 != ok { ret e3 }
+    let (al, e4) = gg_ancgraph(a, all, nl)
+    if e4 != ok { ret e4 }
+    let (arr, e5) = gg_sub(a, am, p, rs, rs)
+    let (arl, e6) = gg_sub(a, am, p, rs, l)
+    let (alr, e7) = gg_sub(a, am, p, l, rs)
+    if e5 != ok || e6 != ok || e7 != ok { ret e5 }
+    // ARR.l = In(A[R, R] + A[R, l] Al A[l, R])
+    let (t1, e8) = mem.alloc[f64](a, nr0 * nl + 1usize)
+    let (t2, e9) = mem.alloc[f64](a, nr0 * nr0 + 1usize)
+    if e8 != ok || e9 != ok { ret e8 }
+    gg_mul(arl, al, nr0, nl, nl, t1)
+    gg_mul(t1, alr, nr0, nl, nr0, t2)
+    let (arrl, e10) = mem.alloc[f64](a, nr0 * nr0 + 1usize)
+    if e10 != ok { ret e10 }
+    i = 0usize
+    while i < nr0 * nr0 {
+        arrl[i] = arr[i] + t2[i]
+        i += 1usize
+    }
+    gg_in(arrl[0usize..nr0 * nr0])
+    // TRl = In(A[R, l] Al); DRl = In(I + TRl t(TRl))
+    let (trl, e11) = mem.alloc[f64](a, nr0 * nl + 1usize)
+    if e11 != ok { ret e11 }
+    gg_mul(arl, al, nr0, nl, nl, trl)
+    gg_in(trl[0usize..nr0 * nl])
+    let (trt, e12) = gg_t(a, trl, nr0, nl)
+    let (drl, e13) = mem.alloc[f64](a, nr0 * nr0 + 1usize)
+    if e12 != ok || e13 != ok { ret e12 }
+    gg_mul(trl, trt, nr0, nl, nr0, drl)
+    i = 0usize
+    while i < nr0 {
+        drl[i * nr0 + i] += 1.0f64
+        i += 1usize
+    }
+    gg_in(drl[0usize..nr0 * nr0])
+    let ec = gg_trclos(a, drl[0usize..nr0 * nr0], nr0)
+    if ec != ok { ret ec }
+    // out = In(t(ARR.l) cl ARR.l)[g, g]
+    let (art, e14) = gg_t(a, arrl, nr0, nr0)
+    let (u1, e15) = mem.alloc[f64](a, nr0 * nr0 + 1usize)
+    let (u2, e16) = mem.alloc[f64](a, nr0 * nr0 + 1usize)
+    if e14 != ok || e15 != ok || e16 != ok { ret e14 }
+    gg_mul(art, drl, nr0, nr0, nr0, u1)
+    gg_mul(u1, arrl, nr0, nr0, nr0, u2)
+    gg_in(u2[0usize..nr0 * nr0])
+    let (g2, e17) = mem.alloc[f64](a, ng * ng + 1usize)
+    if e17 != ok { ret e17 }
+    i = 0usize
+    while i < ng {
+        var j = 0usize
+        while j < ng {
+            g2[i * ng + j] = u2[i * nr0 + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    gg_adj_scale(g2, ng, 10.0f64, out)
+    ret ok
+}
+
+// topOrder(amat) for a DAG (amat[v, k] = 1 an arrow v to k): the package's order, stack of zero in-degree nodes with the newest first; 0-based nodes in `ord`
+fn toporder(a: *mem.Arena, amat: []const f64, p: usize, ord: []usize) -> err {
+    let (indeg, e1) = mem.alloc[usize](a, p)
+    let (stack, e2) = mem.alloc[usize](a, p + 1usize)
+    if e1 != ok || e2 != ok { ret e1 }
+    var low = false
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < i {
+            if amat[i * p + j] != 0.0f64 { low = true }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if !low {
+        i = 0usize
+        while i < p {
+            ord[i] = i
+            i += 1usize
+        }
+        ret ok
+    }
+    var top = 0usize
+    i = 0usize
+    while i < p {
+        var cs = 0usize
+        var r = 0usize
+        while r < p {
+            if amat[r * p + i] != 0.0f64 { cs += 1usize }
+            r += 1usize
+        }
+        indeg[i] = cs
+        if cs == 0usize {
+            stack[top] = i
+            top += 1usize
+        }
+        i += 1usize
+    }
+    var s = 0usize
+    while top > 0usize {
+        top -= 1usize
+        let v = stack[top]
+        ord[s] = v
+        s += 1usize
+        var k = 0usize
+        while k < p {
+            if amat[v * p + k] != 0.0f64 {
+                indeg[k] -= 1usize
+                if indeg[k] == 0usize {
+                    stack[top] = k
+                    top += 1usize
+                }
+            }
+            k += 1usize
+        }
+    }
+    ret ok
+}
