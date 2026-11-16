@@ -46964,3 +46964,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `mlogitpkg.clogit` maximises `sum_i log P(choice_i)` with `P_ij = softmax(asc_j + x_ij b)` by Newton's method, the Hessian being the probability-weighted covariance of the regressors within each chooser; the first alternative is the reference for the constants. The standard errors are the square roots of the inverse information at the optimum.
 
 **Result.** `oracle_mlogit` agrees with mlogit on Windows (60 values, 60 to 200 choosers, 3 to 5 alternatives, with and without constants) at 1e-4; the first tolerance, 1e-6, failed on two fits with coefficients near 8 where mlogit's optimiser stops about 1e-5 short even with `reltol = 1e-14`. Linux pending. L456 stays partial: individual-specific coefficients, nested and mixed logit, probit, ranked data.
+
+## D6640 — flexsurv: parametric survival families
+
+**Decision.** `flexsurvpkg.fit` maximises the right-censored log-likelihood of five families with covariates on the location parameter, parameters kept on flexsurv's `res.t` scale (log shape and log scale for Weibull and log-logistic, log rate for the exponential, meanlog and log sdlog for the lognormal, shape and log rate for the Gompertz). Derivatives are central differences of the exact log-likelihood; the Newton step is used when it is an ascent direction, otherwise a gradient step scaled by the largest diagonal curvature, with step halving. Without that fallback the lognormal fits stalled far from the optimum (log-likelihood -192 against -140).
+
+**Result.** `oracle_flexsurv` agrees with flexsurv 2.x on Windows (60 values over 60 to 180 observations): log-likelihood at 1e-4 and parameters at 1e-3, where flexsurv's own BFGS leaves about 4e-4 of slack even with `reltol = 1e-14`. Linux pending. L440 stays partial: ancillary covariates, generalised gamma, splines, standard errors.

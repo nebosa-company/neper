@@ -154,7 +154,7 @@ L311	library	0.1	930	survival remainder: coxph, survfit, survreg, survdiff, cox.
 L490	library	0	249	timereg: Aalen additive and Cox-Aalen hazard models	Open (CRAN rank 853).
 L491	library	0	208	riskRegression: risk prediction scoring	Open (CRAN rank 850).
 L492	library	0	236	coxme: mixed-effects Cox models	Open (CRAN rank 900).
-L440	library	0	347	flexsurv and rstpm2: flexible parametric survival models	Open (CRAN ranks 697, 694).
+L440	library	0.15	855	flexsurv and rstpm2: flexible parametric survival models	Partial (D6640).
 L312	library	0.15	702	psych: reliability, factor analysis and correlation tools	Partly done (D6057): e.algo.stat.psych has alpha, KMO, cortest.bartlett, ICC, cohen.kappa and mardia, equal to psych on 220 cases on Windows (oracle_psych);
 L313	library	0.12	756	emmeans: estimated marginal means and contrasts	Partly done (D6058): e.algo.stat.emmeans gives lm EMMs, SEs, pairwise contrasts and Tukey, Holm, Bonferroni, Sidak adjustments equal to emmeans on 8 models on Windows (oracle_emmeans);
 L341	library	0.15	785	multcomp: general linear hypotheses	Partial (D6631).

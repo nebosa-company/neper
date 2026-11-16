@@ -1714,10 +1714,10 @@
       "group": "CRAN parity",
       "order": 786,
       "title": "flexsurv and rstpm2: flexible parametric survival models",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN ranks 697, 694). Mid to large. Needs L311. Acceptance, equal to R: flexsurvreg for the Weibull, gamma, generalized gamma, generalized F, Gompertz, log-logistic and log-normal families, flexsurvspline (hazard, odds and normal scales), psurvspline and the d, p, q, r functions, standardized survival; rstpm2 stpm2 and pstpm2 with predict."
+      "evidence": "Partial (D6640). e.algo.stat.flexsurvpkg.fit (weibull, exponential, lognormal, loglogistic and gompertz with covariates on the location parameter; Newton with central-difference derivatives and an ascent safeguard) equals flexsurvreg on Windows: log-likelihood at 1e-4 and the res.t estimates at 1e-3 (oracle_flexsurv, 60 values; Linux pending). Open: covariates on ancillary parameters, generalised gamma and F, flexsurvspline and rstpm2, standard errors, hazard and survival predictions, cure models. Was: Open (CRAN ranks 697, 694). Mid to large. Needs L311. Acceptance, equal to R: flexsurvreg for the Weibull, gamma, generalized gamma, generalized F, Gompertz, log-logistic and log-normal families, flexsurvspline (hazard, odds and normal scales), psurvspline and the d, p, q, r functions, standardized survival; rstpm2 stpm2 and pstpm2 with predict."
     },
     {
       "id": "L312",
