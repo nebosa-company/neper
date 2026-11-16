@@ -50,4 +50,9 @@ for (rep in 1:25) {
   k <- sample(3:6, 1); cnt <- rpois(k, 15) + 2; i <- sample(k, 1)
   for (m in 1:4) { r <- MultinomCI(cnt, conf.level = cl, method = mm[m]); for (pt in 0:2) add("multici", c(m - 1, i - 1, cl, pt, k, cnt), r[i, pt + 1]) }
 }
+for (rep in 1:15) {
+  ns <- sample(6:20, 1); nr <- sample(3:5, 1); subj <- rnorm(ns, 0, 2); rt <- round(outer(subj, rep(1, nr)) + matrix(rnorm(ns * nr), ns, nr) + rep(rnorm(nr, 0, 0.5), each = ns), 5)
+  cl <- sample(c(0.9, 0.95), 1); ty <- c("ICC1", "ICC2", "ICC3", "ICC1k", "ICC2k", "ICC3k")
+  for (m in 1:6) { r <- ICC(rt, type = ty[m], conf.level = cl); for (pt in 0:2) add("icc", c(m - 1, pt, ns, nr, cl, as.vector(t(rt))), r[pt + 1]) }
+}
 emit("desctools", "DescTools", list(cases))

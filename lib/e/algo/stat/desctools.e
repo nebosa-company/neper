@@ -747,3 +747,110 @@ fn multinom_ci(x: []const f64, i: usize, conf: f64, method: usize, part: usize) 
     if part == 1usize { ret max_f(0.0f64, lo) }
     ret min_f(1.0f64, hi)
 }
+
+// ICC(ratings, type, conf) for an ns by nr matrix (row-major, subjects by raters): the six intraclass correlations from the two-way ANOVA (type 0 ICC1, 1 ICC2, 2 ICC3, 3 ICC1k, 4 ICC2k, 5 ICC3k); part 0 the estimate, 1 the lower and 2 the upper limit
+fn icc(x: []const f64, ns: usize, nr: usize, conf: f64, ty: usize, part: usize) -> f64 {
+    let n = f64(ns)
+    let r = f64(nr)
+    var gm = 0.0f64
+    var i = 0usize
+    while i < ns * nr {
+        gm += x[i]
+        i += 1usize
+    }
+    gm = gm / (n * r)
+    var ssb = 0.0f64
+    i = 0usize
+    while i < ns {
+        var m = 0.0f64
+        var j = 0usize
+        while j < nr {
+            m += x[i * nr + j]
+            j += 1usize
+        }
+        m = m / r
+        ssb += r * (m - gm) * (m - gm)
+        i += 1usize
+    }
+    var ssj = 0.0f64
+    var j = 0usize
+    while j < nr {
+        var m = 0.0f64
+        i = 0usize
+        while i < ns {
+            m += x[i * nr + j]
+            i += 1usize
+        }
+        m = m / n
+        ssj += n * (m - gm) * (m - gm)
+        j += 1usize
+    }
+    var sst = 0.0f64
+    i = 0usize
+    while i < ns * nr {
+        sst += (x[i] - gm) * (x[i] - gm)
+        i += 1usize
+    }
+    let sse = sst - ssb - ssj
+    let msb = ssb / (n - 1.0f64)
+    let msj = ssj / (r - 1.0f64)
+    let mse = sse / ((n - 1.0f64) * (r - 1.0f64))
+    let msw = (ssj + sse) / ((r - 1.0f64) + (n - 1.0f64) * (r - 1.0f64))
+    let icc1 = (msb - msw) / (msb + (r - 1.0f64) * msw)
+    let icc2 = (msb - mse) / (msb + (r - 1.0f64) * mse + r * (msj - mse) / n)
+    let icc3 = (msb - mse) / (msb + (r - 1.0f64) * mse)
+    let icc12 = (msb - msw) / msb
+    let icc22 = (msb - mse) / (msb + (msj - mse) / n)
+    let icc32 = (msb - mse) / msb
+    if part == 0usize {
+        if ty == 0usize { ret icc1 }
+        if ty == 1usize { ret icc2 }
+        if ty == 2usize { ret icc3 }
+        if ty == 3usize { ret icc12 }
+        if ty == 4usize { ret icc22 }
+        ret icc32
+    }
+    let alpha = 1.0f64 - conf
+    let f11 = msb / msw
+    let d11n = n - 1.0f64
+    let d11d = n * (r - 1.0f64)
+    let f21 = msb / mse
+    let d21d = (n - 1.0f64) * (r - 1.0f64)
+    let f1l = f11 / nb.qf(1.0f64 - alpha / 2.0f64, d11n, d11d, true, false)
+    let f1u = f11 * nb.qf(1.0f64 - alpha / 2.0f64, d11d, d11n, true, false)
+    let f3l = f21 / nb.qf(1.0f64 - alpha / 2.0f64, d11n, d21d, true, false)
+    let f3u = f21 * nb.qf(1.0f64 - alpha / 2.0f64, d21d, d11n, true, false)
+    let fj = msj / mse
+    let t1 = r * icc2 * fj + n * (1.0f64 + (r - 1.0f64) * icc2) - r * icc2
+    let vn = (r - 1.0f64) * (n - 1.0f64) * t1 * t1
+    let t2 = n * (1.0f64 + (r - 1.0f64) * icc2) - r * icc2
+    let vd = (n - 1.0f64) * r * r * icc2 * icc2 * fj * fj + t2 * t2
+    let v = vn / vd
+    let g3u = nb.qf(1.0f64 - alpha / 2.0f64, n - 1.0f64, v, true, false)
+    let g3l = nb.qf(1.0f64 - alpha / 2.0f64, v, n - 1.0f64, true, false)
+    let l3 = n * (msb - g3u * mse) / (g3u * (r * msj + (r * n - r - n) * mse) + n * msb)
+    let u3 = n * (g3l * msb - mse) / (r * msj + (r * n - r - n) * mse + n * g3l * msb)
+    var lo = 0.0f64
+    var hi = 0.0f64
+    if ty == 0usize {
+        lo = (f1l - 1.0f64) / (f1l + (r - 1.0f64))
+        hi = (f1u - 1.0f64) / (f1u + r - 1.0f64)
+    } else if ty == 1usize {
+        lo = l3
+        hi = u3
+    } else if ty == 2usize {
+        lo = (f3l - 1.0f64) / (f3l + r - 1.0f64)
+        hi = (f3u - 1.0f64) / (f3u + r - 1.0f64)
+    } else if ty == 3usize {
+        lo = 1.0f64 - 1.0f64 / f1l
+        hi = 1.0f64 - 1.0f64 / f1u
+    } else if ty == 4usize {
+        lo = l3 * r / (1.0f64 + l3 * (r - 1.0f64))
+        hi = u3 * r / (1.0f64 + u3 * (r - 1.0f64))
+    } else {
+        lo = 1.0f64 - 1.0f64 / f3l
+        hi = 1.0f64 - 1.0f64 / f3u
+    }
+    if part == 1usize { ret lo }
+    ret hi
+}

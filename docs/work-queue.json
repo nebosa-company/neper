@@ -1079,7 +1079,7 @@
       "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6429, D6430 table association measures, D6431 kappa, lambda, tau, OR, Q, D6446 BinomCI x11, D6447 Winsorize, HodgesLehmann, MedianCI, Trim, D6448 Cochran-Armitage, MH odds ratio, Breslow-Day, D6449 PoissonCI, MultinomCI x4). Skew, Kurt (three methods), Gini, MeanAD, Gmean, Hmean, Entropy and CoefVar equal DescTools on Windows (oracle_desctools; Linux pending). Open: the rest of the package. Was: Open (CRAN rank 320). Mid. Acceptance, equal to DescTools for the numeric functions: Gini and its intervals, BinomCI (all 15 methods), MultinomCI, PoissonCI, MedianCI, CohenKappa, KappaM, ICC, Winsorize, Trim, CochranArmitageTest, BreslowDayTest, MantelHaenszelTest, cramers V and the association measures, effect sizes, MAD, Mode, Outlier, HodgesLehmann."
+      "evidence": "Partial (D6429, D6430 table association measures, D6431 kappa, lambda, tau, OR, Q, D6446 BinomCI x11, D6447 Winsorize, HodgesLehmann, MedianCI, Trim, D6448 Cochran-Armitage, MH odds ratio, Breslow-Day, D6449 PoissonCI, MultinomCI x4, D6450 ICC). Skew, Kurt (three methods), Gini, MeanAD, Gmean, Hmean, Entropy and CoefVar equal DescTools on Windows (oracle_desctools; Linux pending). Open: the rest of the package. Was: Open (CRAN rank 320). Mid. Acceptance, equal to DescTools for the numeric functions: Gini and its intervals, BinomCI (all 15 methods), MultinomCI, PoissonCI, MedianCI, CohenKappa, KappaM, ICC, Winsorize, Trim, CochranArmitageTest, BreslowDayTest, MantelHaenszelTest, cramers V and the association measures, effect sizes, MAD, Mode, Outlier, HodgesLehmann."
     },
     {
       "id": "L365",

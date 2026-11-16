@@ -45868,3 +45868,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.desctools` gains `poisson_ci` (exact by gamma quantiles, score, wald, byar) and `multinom_ci` (goodman, wald, waldcc, wilson; sisonglaz, cplus1, qh and fs stay open).
 
 **Result.** `oracle_desctools` equals DescTools on 2530 cases on Windows, 600 of them new; Linux pending. L363 stays partial.
+
+## D6450 — DescTools: ICC
+
+`e.algo.stat.desctools` gains `icc`: the six intraclass correlations (ICC1, ICC2, ICC3 and their k-rater averages) from the two-way subjects-by-raters ANOVA, with the estimate and the package's confidence limits, including the Satterthwaite-style degrees of freedom for ICC2.
+
+**Result.** `oracle_desctools` equals DescTools on 2800 cases on Windows, 270 of them new, over 15 rating matrices of 6 to 20 subjects and 3 to 5 raters; Linux pending. L363 stays partial.
