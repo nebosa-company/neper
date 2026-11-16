@@ -35,4 +35,12 @@ for (rep in 1:25) {
   mc <- MedianCI(x, conf.level = cl); add("medci", c(n, cl, 0, x), mc[1]); add("medci", c(n, cl, 1, x), mc[2]); add("medci", c(n, cl, 2, x), mc[3]); add("medci", c(n, cl, 3, x), attr(mc, "conf.level"))
   tx <- as.numeric(Trim(x, tr)); add("trim", c(n, tr, 0, x), sum(tx * seq_along(tx)))
 }
+for (rep in 1:20) {
+  r <- sample(3:6, 1); tb <- matrix(rpois(2 * r, 20) + 3, r, 2); tb[, 1] <- tb[, 1] + round(seq_len(r) * runif(1, 0, 4))
+  ca <- CochranArmitageTest(tb); add("catz", c(r, 0, 0, as.vector(t(tb))), ca$statistic); add("catp", c(r, 0, 0, as.vector(t(tb))), ca$p.value)
+  K <- sample(2:5, 1); arr <- array(rpois(4 * K, 25) + 4, c(2, 2, K)); sv <- as.vector(sapply(1:K, function(j) c(arr[1, 1, j], arr[1, 2, j], arr[2, 1, j], arr[2, 2, j])))
+  add("mhor", c(K, 0, 0, sv), mantelhaen.test(arr)$estimate)
+  bd <- BreslowDayTest(arr); add("bdx", c(K, 0, 0, sv), bd$statistic); add("bdp", c(K, 0, 0, sv), bd$p.value)
+  bt <- BreslowDayTest(arr, correct = TRUE); add("bdtx", c(K, 0, 0, sv), bt$statistic); add("bdtp", c(K, 0, 0, sv), bt$p.value)
+}
 emit("desctools", "DescTools", list(cases))

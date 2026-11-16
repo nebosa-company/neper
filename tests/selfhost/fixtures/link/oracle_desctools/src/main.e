@@ -11,6 +11,13 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     if str.eq(c.name, "binomci") { ret dt.binom_ci(x[1usize], x[2usize], x[3usize], usize(x[0usize]), usize(x[4usize])) }
+    if str.eq(c.name, "catz") { ret dt.cochran_armitage(x[3usize..3usize + 2usize * usize(x[0usize])], usize(x[0usize]), 0usize) }
+    if str.eq(c.name, "catp") { ret dt.cochran_armitage(x[3usize..3usize + 2usize * usize(x[0usize])], usize(x[0usize]), 1usize) }
+    if str.eq(c.name, "mhor") { ret dt.mh_or(x[3usize..3usize + 4usize * usize(x[0usize])], usize(x[0usize])) }
+    if str.eq(c.name, "bdx") { ret dt.breslow_day(x[3usize..3usize + 4usize * usize(x[0usize])], usize(x[0usize]), false, 0usize) }
+    if str.eq(c.name, "bdp") { ret dt.breslow_day(x[3usize..3usize + 4usize * usize(x[0usize])], usize(x[0usize]), false, 1usize) }
+    if str.eq(c.name, "bdtx") { ret dt.breslow_day(x[3usize..3usize + 4usize * usize(x[0usize])], usize(x[0usize]), true, 0usize) }
+    if str.eq(c.name, "bdtp") { ret dt.breslow_day(x[3usize..3usize + 4usize * usize(x[0usize])], usize(x[0usize]), true, 1usize) }
     if str.eq(c.name, "winsor") { ret dt.winsor_sum(a, x[3usize..3usize + usize(x[0usize])], x[1usize], x[2usize]) }
     if str.eq(c.name, "hl1") { ret dt.hodges_lehmann(a, x[3usize..3usize + usize(x[0usize])], x[0usize..0usize]) }
     if str.eq(c.name, "hl2") {

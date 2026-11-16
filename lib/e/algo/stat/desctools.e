@@ -581,3 +581,102 @@ fn trim_sum(a: *mem.Arena, x: []const f64, trim: f64) -> f64 {
     }
     ret t
 }
+
+// CochranArmitageTest on an r by 2 table (row-major) with scores 1 .. r: part 0 the statistic Z, 1 the two-sided p-value
+fn cochran_armitage(t: []const f64, r: usize, part: usize) -> f64 {
+    var n = 0.0f64
+    var s1 = 0.0f64
+    var i = 0usize
+    while i < r {
+        n += t[2usize * i] + t[2usize * i + 1usize]
+        s1 += t[2usize * i]
+        i += 1usize
+    }
+    var rbar = 0.0f64
+    i = 0usize
+    while i < r {
+        rbar += (t[2usize * i] + t[2usize * i + 1usize]) * f64(i + 1usize)
+        i += 1usize
+    }
+    rbar = rbar / n
+    var s2 = 0.0f64
+    var num = 0.0f64
+    i = 0usize
+    while i < r {
+        let d = f64(i + 1usize) - rbar
+        s2 += (t[2usize * i] + t[2usize * i + 1usize]) * d * d
+        num += t[2usize * i] * d
+        i += 1usize
+    }
+    let p1 = s1 / n
+    let z = num / math.sqrt[f64](p1 * (1.0f64 - p1) * s2)
+    if part == 0usize { ret z }
+    ret 2.0f64 * dist.pnorm(math.abs[f64](z), 0.0f64, 1.0f64, false, false)
+}
+
+// the Mantel-Haenszel common odds ratio over strata of 2 by 2 tables (a, b, c, d per stratum)
+fn mh_or(s: []const f64, k: usize) -> f64 {
+    var num = 0.0f64
+    var den = 0.0f64
+    var j = 0usize
+    while j < k {
+        let a = s[4usize * j]
+        let b = s[4usize * j + 1usize]
+        let c = s[4usize * j + 2usize]
+        let d = s[4usize * j + 3usize]
+        let n = a + b + c + d
+        num += a * d / n
+        den += b * c / n
+        j += 1usize
+    }
+    ret num / den
+}
+
+// BreslowDayTest(x) statistic (tarone false) or with Tarone's correction (true), and the p-value as part 1, on the MH odds ratio
+fn breslow_day(s: []const f64, k: usize, tarone: bool, part: usize) -> f64 {
+    let orh = mh_or(s, k)
+    var x2 = 0.0f64
+    var sa = 0.0f64
+    var st = 0.0f64
+    var sv = 0.0f64
+    var j = 0usize
+    while j < k {
+        let a = s[4usize * j]
+        let b = s[4usize * j + 1usize]
+        let c = s[4usize * j + 2usize]
+        let d = s[4usize * j + 3usize]
+        let m1 = a + b
+        let m2 = c + d
+        let n1 = a + c
+        let n2 = b + d
+        // c2 z^2 + c1 z + c0 = 0 with the package's coefficients
+        let c0 = 0.0f64 - m1 * n1 * orh
+        let c1 = n2 - m1 + orh * (n1 + m1)
+        let c2 = 1.0f64 - orh
+        var lim = n1
+        if m1 < lim { lim = m1 }
+        var ta = 0.0f64 / 0.0f64
+        if c2 == 0.0f64 {
+            ta = 0.0f64 - c0 / c1
+        } else {
+            let disc = c1 * c1 - 4.0f64 * c2 * c0
+            let sq = math.sqrt[f64](disc)
+            let r1 = (0.0f64 - c1 + sq) / (2.0f64 * c2)
+            let r2 = (0.0f64 - c1 - sq) / (2.0f64 * c2)
+            if r1 > 0.0f64 && r1 <= lim { ta = r1 } else { ta = r2 }
+        }
+        let tb = m1 - ta
+        let tc = n1 - ta
+        let td = m2 - tc
+        let v = 1.0f64 / (1.0f64 / ta + 1.0f64 / tb + 1.0f64 / tc + 1.0f64 / td)
+        x2 += (a - ta) * (a - ta) / v
+        sa += a
+        st += ta
+        sv += v
+        j += 1usize
+    }
+    var stat = x2
+    if tarone { stat = x2 - (sa - st) * (sa - st) / sv }
+    if part == 0usize { ret stat }
+    ret nm.pchisq(stat, f64(k - 1usize), false, false)
+}

@@ -45856,3 +45856,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.desctools` gains `winsor_sum` (clamping at type-7 quantiles with R's rounding fuzz), `hodges_lehmann` (median of Walsh averages, or of pairwise differences with a second sample), `median_ci` (exact binomial order statistics and their achieved level) and `trim_sum` (what Trim keeps, in original order).
 
 **Result.** `oracle_desctools` equals DescTools on 1790 cases on Windows, 200 of them new, with distinct values so Trim's tie order is not exercised, and n >= 12 so MedianCI's k is at least 1; Linux pending. L363 stays partial.
+
+## D6448 — DescTools: Cochran-Armitage, Mantel-Haenszel odds ratio, Breslow-Day
+
+`e.algo.stat.desctools` gains `cochran_armitage` (Z and two-sided p with scores 1 .. r), `mh_or` (the common odds ratio over 2 by 2 strata) and `breslow_day` (statistic and p-value, with or without Tarone's correction; the expected cell is the quadratic's root in (0, min(n1, m1)]).
+
+**Result.** `oracle_desctools` equals DescTools on 1930 cases on Windows, 140 of them new, over 20 draws of 3 to 6 rows and 2 to 5 strata; Linux pending. L363 stays partial.
