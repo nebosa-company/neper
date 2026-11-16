@@ -45,4 +45,22 @@ for (k in 1:10) {
     }
   }
 }
+# nominal measures on integer-coded vectors: (id 0 Chi-squared 1 Phi-squared 2 Tschuprow 3 Cramer 4 Pearson, n, x..., y...)
+nm <- c("Chi-squared", "Phi-squared", "Tschuprow", "Cramer", "Pearson")
+for (rep in 1:30) {
+  n <- sample(12:40, 1); kx <- sample(2:4, 1); ky <- sample(2:5, 1)
+  x <- sample(kx, n, TRUE); y <- sample(ky, n, TRUE)
+  if (length(unique(x)) < 2 || length(unique(y)) < 2) next
+  for (id in 0:4) {
+    v <- tryCatch(suppressWarnings(as.numeric(simil(rbind(x, y), nm[id + 1]))), error = function(e) NA)
+    if (length(v) == 1 && is.finite(v)) cases[[length(cases) + 1]] <- case("nominal", c(id, n, x, y), v, rel = 1e-11, abs = 1e-12)
+  }
+}
+# Mahalanobis with a given covariance: (p, x, y, cov row-wise)
+for (rep in 1:20) {
+  p <- sample(2:5, 1); m <- matrix(rnorm(p * p), p); S <- round(crossprod(m) + diag(p) * 0.5, 4)
+  x <- round(rnorm(p), 3); y <- round(rnorm(p), 3)
+  v <- as.numeric(dist(rbind(x, y), "Mahalanobis", cov = S))
+  cases[[length(cases) + 1]] <- case("mahal", c(p, x, y, as.vector(t(S))), v, rel = 1e-10, abs = 1e-12)
+}
 emit("proxy", "proxy", list(cases))

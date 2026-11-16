@@ -7,10 +7,12 @@
 // proxy::dist(m) passes the later row first, so an asymmetric measure (Fager, Kullback-Leibler) takes
 // (row 2, row 1): the caller of a matrix pair does the same.
 //
-// Not here: Gower, Mahalanobis, Levenshtein and the nominal (chi-squared) family, and the matrix
-// interface (the caller loops over pairs).
+// Also here: the nominal family (nominal) and the Mahalanobis distance for a given covariance.
+//
+// Not here: Gower, Levenshtein and the matrix interface (the caller loops over pairs).
 
 use e.math
+use e.mem
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
@@ -236,4 +238,147 @@ fn measure(id: u8, x: []const f64, y: []const f64, p: f64) -> f64 {
         ret 1.0f64 - r
     }
     ret s
+}
+
+// --- nominal measures on two categorical vectors (values are integer codes), from their contingency table
+
+// id 0 Chi-squared, 1 Phi-squared, 2 Tschuprow, 3 Cramer, 4 Pearson contingency coefficient
+fn nominal(a: *mem.Arena, id: u8, x: []const f64, y: []const f64) -> (f64, err) {
+    let n = x.len
+    // the distinct values of each, ascending
+    var xs: [64]f64 = zero
+    var ys: [64]f64 = zero
+    var nx = 0usize
+    var ny = 0usize
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        var found = false
+        while j < nx {
+            if xs[j] == x[i] { found = true }
+            j += 1usize
+        }
+        if !found {
+            xs[nx] = x[i]
+            nx += 1usize
+        }
+        j = 0usize
+        found = false
+        while j < ny {
+            if ys[j] == y[i] { found = true }
+            j += 1usize
+        }
+        if !found {
+            ys[ny] = y[i]
+            ny += 1usize
+        }
+        i += 1usize
+    }
+    let (tab, te) = mem.alloc[f64](a, nx * ny)
+    if te != ok { ret (0.0f64, te) }
+    i = 0usize
+    while i < nx * ny {
+        tab[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var r = 0usize
+        while xs[r] != x[i] { r += 1usize }
+        var c = 0usize
+        while ys[c] != y[i] { c += 1usize }
+        tab[r * ny + c] += 1.0f64
+        i += 1usize
+    }
+    let (rs, re) = mem.alloc[f64](a, nx)
+    let (cs, ce) = mem.alloc[f64](a, ny)
+    if re != ok { ret (0.0f64, re) }
+    if ce != ok { ret (0.0f64, ce) }
+    var tot = 0.0f64
+    var r = 0usize
+    while r < nx {
+        rs[r] = 0.0f64
+        r += 1usize
+    }
+    var c = 0usize
+    while c < ny {
+        cs[c] = 0.0f64
+        c += 1usize
+    }
+    r = 0usize
+    while r < nx {
+        c = 0usize
+        while c < ny {
+            rs[r] += tab[r * ny + c]
+            cs[c] += tab[r * ny + c]
+            tot += tab[r * ny + c]
+            c += 1usize
+        }
+        r += 1usize
+    }
+    var chi = 0.0f64
+    r = 0usize
+    while r < nx {
+        c = 0usize
+        while c < ny {
+            let ex = rs[r] * cs[c] / tot
+            chi += (tab[r * ny + c] - ex) * (tab[r * ny + c] - ex) / ex
+            c += 1usize
+        }
+        r += 1usize
+    }
+    if id == 0u8 { ret (chi, ok) }
+    if id == 1u8 { ret (chi / tot, ok) }
+    let p1 = f64(nx) - 1.0f64
+    let q1 = f64(ny) - 1.0f64
+    if id == 2u8 { ret (math.sqrt[f64](chi / tot / math.sqrt[f64](p1 * q1)), ok) }
+    if id == 3u8 {
+        var mn = p1
+        if q1 < mn { mn = q1 }
+        ret (math.sqrt[f64](chi / tot / mn), ok)
+    }
+    ret (math.sqrt[f64](chi / (tot + chi)), ok)
+}
+
+// Mahalanobis distance sqrt((x - y)' S^-1 (x - y)) for a given p x p covariance S (row-major), by Cholesky
+fn mahalanobis(a: *mem.Arena, x: []const f64, y: []const f64, cov: []const f64) -> (f64, err) {
+    let p = x.len
+    let (l, le) = mem.alloc[f64](a, p * p)
+    if le != ok { ret (0.0f64, le) }
+    var i = 0usize
+    while i < p * p {
+        l[i] = 0.0f64
+        i += 1usize
+    }
+    var r = 0usize
+    while r < p {
+        var c = 0usize
+        while c <= r {
+            var s = cov[r * p + c]
+            var k = 0usize
+            while k < c {
+                s -= l[r * p + k] * l[c * p + k]
+                k += 1usize
+            }
+            if r == c { l[r * p + c] = math.sqrt[f64](s) } else { l[r * p + c] = s / l[c * p + c] }
+            c += 1usize
+        }
+        r += 1usize
+    }
+    // solve L z = x - y, answer |z|
+    var z: [64]f64 = zero
+    var q = 0.0f64
+    r = 0usize
+    while r < p {
+        var s = x[r] - y[r]
+        var k = 0usize
+        while k < r {
+            s -= l[r * p + k] * z[k]
+            k += 1usize
+        }
+        z[r] = s / l[r * p + r]
+        q += z[r] * z[r]
+        r += 1usize
+    }
+    ret (math.sqrt[f64](q), ok)
 }
