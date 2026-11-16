@@ -205,3 +205,4 @@ oracle_diptest
 oracle_deoptimr
 oracle_fdrtool
 oracle_splines2
+oracle_partitions

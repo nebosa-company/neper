@@ -3141,4 +3141,5 @@ D6065	996	sf planar checks: the existing e.algo.geom agrees with GEOS
 D6066	1152	diptest: AS 217 ported whole, the quantile table generated, the simulated p value on the R stream
 D6067	1571	JDEoptim on the R stream: draw order is the specification
 D6068	1590	fdrtool for p values: eta0 from the censored sample, the Grenander density by isotonic slopes
-D6069	1265	splines2 bases by Cox-de Boor on the extended knots
+D6069	1266	splines2 bases by Cox-de Boor on the extended knots
+D6070	1093	partitions: integer partitions in R's orders, counts by the coin-change table

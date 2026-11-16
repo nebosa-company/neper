@@ -405,10 +405,10 @@
       "group": "CRAN parity",
       "order": 588,
       "title": "partitions: integer and set partitions",
-      "score": 0,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 833). Small. Verify e.algo.combin first. Acceptance, equal to partitions: parts, restricted_parts, diffparts, distinct_parts, compositions, setparts, P, Q and blockparts in the order R prints them, with the counts for large n."
+      "evidence": "Partly done (D6070): e.algo.parts has P, Q, parts, restrictedparts and diffparts in the package order, equal to partitions on 423 values on Windows (oracle_partitions); Linux pending. Open: compositions, setparts, blockparts, big counts. Original: Open (CRAN rank 833). Small. Verify e.algo.combin first. Acceptance, equal to partitions: parts, restricted_parts, diffparts, distinct_parts, compositions, setparts, P, Q and blockparts in the order R prints them, with the counts for large n."
     },
     {
       "id": "L471",

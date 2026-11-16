@@ -35,7 +35,7 @@ L445	library	0.4	535	splines2: spline bases	Partly done (D6069): e.algo.stat.spl
 L446	library	0	195	mixsqp: mixture proportions by SQP	Open (CRAN rank 760).
 L447	library	0	184	norm: EM and data augmentation for multivariate normal data	Open (CRAN rank 757).
 L469	library	0	226	pastecs: decomposition, turning points and descriptive statistics	Open (CRAN rank 823).
-L470	library	0	242	partitions: integer and set partitions	Open (CRAN rank 833).
+L470	library	0.5	490	partitions: integer and set partitions	Partly done (D6070): e.algo.parts has P, Q, parts, restrictedparts and diffparts in the package order, equal to partitions on 423 values on Windows (oracle_partitions);
 L471	library	0	191	BiasedUrn: noncentral hypergeometric distributions	Open (CRAN rank 851).
 L472	library	0	178	modeest: mode estimation	Open (CRAN rank 852).
 L473	library	0	184	isotone: isotonic regression	Open (CRAN rank 872).
