@@ -159,3 +159,4 @@ oracle_classint
 oracle_xts
 oracle_proxy
 oracle_e1071
+oracle_hclpal

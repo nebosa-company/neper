@@ -20,10 +20,10 @@
       "group": "CRAN parity",
       "order": 546,
       "title": "colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation",
-      "score": 0,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 110). Small to mid. e.gfx.colorspace converts; it generates no palettes. Acceptance, equal to colorspace: sequential_hcl, diverging_hcl, qualitative_hcl for every hcl_palettes() name and parameter set, polarLUV and polarLAB round trips, contrast_ratio, deutan, protan, tritan at severities 0 to 1, lighten and darken, rainbow_hcl, heat_hcl."
+      "evidence": "Partial (D6024). sequential_hcl, diverging_hcl and qualitative_hcl for every hcl_palettes() name (fixup on and off), WCAG contrast_ratio and deutan, protan, tritan at severities 0 to 1 equal colorspace 2.1.4 on both hosts. Open: polarLAB round trips, lighten and darken (max_chroma), rainbow_hcl, heat_hcl, APCA contrast. Was: Open (CRAN rank 110). Small to mid. e.gfx.colorspace converts; it generates no palettes. Acceptance, equal to colorspace: sequential_hcl, diverging_hcl, qualitative_hcl for every hcl_palettes() name and parameter set, polarLUV and polarLAB round trips, contrast_ratio, deutan, protan, tritan at severities 0 to 1, lighten and darken, rainbow_hcl, heat_hcl."
     },
     {
       "id": "L296",
