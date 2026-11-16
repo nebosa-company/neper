@@ -20,8 +20,13 @@ fn rlbin(x: []const f64, y: []const f64, a: f64, b: f64, m: usize, truncate: boo
     var i = 0usize
     while i < x.len {
         let lxi = (x[i] - a) / delta + 1.0f64
-        let li = i64(math.floor[f64](lxi))
-        let rem = lxi - f64(li)
+        var li = i64(math.floor[f64](lxi))
+        var rem = lxi - f64(li)
+        // KernSmooth 2009: an observation at the right end point goes wholly to the last grid point
+        if x[i] == b {
+            li = i64(m) - 1i64
+            rem = 1.0f64
+        }
         if li >= 1i64 && li < i64(m) {
             xc[usize(li) - 1usize] += 1.0f64 - rem
             xc[usize(li)] += rem

@@ -12,10 +12,16 @@ type Ols = struct { coef: []f64, se: []f64, tval: []f64, sigma2: f64, rss: f64, 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
 fn fit(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64) -> (Ols, err) {
+    let (o, e) = fit_tol(a, x, n, p, y, 1.0e-7f64)
+    ret (o, e)
+}
+
+// the same with the rank tolerance given (LINPACK dqrdc without pivoting never drops a column: pass a tiny one)
+fn fit_tol(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, tol: f64) -> (Ols, err) {
     var none: Ols = zero
-    let (lf, le) = decomp.lm_fit(a, x, n, p, y, 1.0e-7f64)
+    let (lf, le) = decomp.lm_fit(a, x, n, p, y, tol)
     if le != ok { ret (none, le) }
-    let (f, qe) = decomp.qr(a, x, n, p, 1.0e-7f64)
+    let (f, qe) = decomp.qr(a, x, n, p, tol)
     if qe != ok { ret (none, qe) }
     let k = f.rank
     let (rinv, re) = mem.alloc[f64](a, k * k + 1usize)

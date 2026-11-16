@@ -1,7 +1,7 @@
 id	category	score	evidence_bytes	title	status
 L301	library	0.7	714	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
 L321	library	0.9	745	boot: bootstrap and permutation confidence intervals	Partial (D6028, D6079): balanced and parametric (normal) simulation equal boot on 936 more values on Windows (oracle_boot2).
-L325	library	0.4	585	KernSmooth and tseries remainder	Partial (D6031, D6082): KernSmooth locpoly (scalar bandwidth, normal kernel) equals R on 150 values on Windows (oracle_locpoly).
+L325	library	0.6	658	KernSmooth and tseries remainder	Partial (D6031, D6082): KernSmooth locpoly (scalar bandwidth, normal kernel) equals R on 150 values on Windows (oracle_locpoly).
 L329	library	0.6	445	ggsci and ggthemes palettes	Partial (D6034).
 L356	library	0.6	438	truncnorm, CompQuadForm and pbivnorm: three small distribution packages	Partial (D6035).
 L357	library	0.5	432	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).
