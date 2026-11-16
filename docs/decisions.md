@@ -46330,3 +46330,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `boot.censboot_cond` (one stratum, no Cox fit) follows cens.resamp: failure times drawn with probabilities `-diff(c(1, S_F))` from the Kaplan-Meier curve of (time, status), then for each failure the censoring time drawn among the censoring-KM times beyond its own time (a censored case keeps its time), the two matrices filled column-major in R's order through rdist's sample.int-with-prob. The KM must multiply as `s * ((n - d) / n)`: the form `1 - d/n` differs in the last bits, and the revsort order of near-tied probabilities then changes every draw.
 
 **Result.** `oracle_boot3` agrees with boot on the cond cases on Windows (1410 values in all); Linux pending. censboot model and cond with a coxph fit stay open; L321 at 0.95.
+
+## D6527 — mvtnorm: qmvnorm
+
+**Decision.** `e.algo.stat.mvtq.qmvnorm` ports the equicoordinate quantile search: getInt's start interval (uniroot of the product of margins minus p, widened by 0.2 max(diff, 0.1)), then get_quant_loclin's loop with a quasi probit glm (R's IRLS from mustart = y, deviance epsilon 1e-8, dispersion from the final working residuals), its distance weights (all 1 unless three points lie within 1 of the target), the stop rule from the glm standard errors with qt(0.975, df.residual), and the lower and upper confidence points as the next quantiles. pfct re-seeds before each pmvnorm, so every evaluation uses the same stream, as R's does.
+
+**Result.** `oracle_qmvnorm` agrees with mvtnorm on 80 values (quantile and f.quantile, n 3 to 5, every tail) on Windows; Linux pending. qmvt, a mean, sigma input and TVPACK/Miwa stay open; L301 stays partial.

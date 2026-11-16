@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L301	library	0.7	714	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
+L301	library	0.7	856	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
 L321	library	0.95	973	boot: bootstrap and permutation confidence intervals	Partial (D6028, D6079): balanced and parametric (normal) simulation equal boot on 936 more values on Windows (oracle_boot2).
 L329	library	0.6	445	ggsci and ggthemes palettes	Partial (D6034).
 L357	library	0.8	584	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).
