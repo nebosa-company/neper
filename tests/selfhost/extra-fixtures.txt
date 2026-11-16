@@ -295,3 +295,4 @@ oracle_sampling
 oracle_pmcmr
 oracle_robustbase
 oracle_mixtools
+oracle_klar
