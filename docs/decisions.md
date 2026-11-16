@@ -46874,3 +46874,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `spdeppkg.autocorr` takes a dense weights matrix and computes S0, S1 (half the sum of squared symmetrised weights) and S2 (sum of squared row-plus-column sums), then Moran's I with E = -1/(n-1) and the normality and randomisation variances, and Geary's C with the two variances. The Geary normality variance is `((2 S1 + S2)(n-1) - 4 S0^2) / (2(n+1) S0^2)`; `2 (S1 + S2)` is a mistake that shows as a variance 4 to 8 times too large.
 
 **Result.** `oracle_spdep` agrees with spdep on Windows (168 values, graphs of 12 to 60 points, styles B, W and C); Linux pending. L372 stays partial: neighbour construction, Monte Carlo, residual and local statistics, spatial regression.
+
+## D6625 — coin: asymptotic linear-statistic tests
+
+**Decision.** `coinpkg` standardises the sum of scores of the first group by its permutation mean `n1/N * sum(s)` and variance `n1 n2 / (N (N-1)) * (sum(s^2) - sum(s)^2 / N)`: average ranks for wilcox, `qnorm(rank / (N + 1))` for normal, an indicator of exceeding the median for median, and the raw values for oneway. Kruskal-Wallis is `(N-1) sum n_g (mean_g - mean)^2 / sum (s - mean)^2` on K-1 degrees of freedom; Spearman is `r sqrt(N-1)` with `r` the correlation of average ranks.
+
+**Result.** `oracle_coin` agrees with coin on statistics and two-sided or upper-tail p values on Windows (72 values over 12 to 60 observations); Linux pending. L371 stays partial: exact and Monte Carlo distributions, strata, maxT, scale tests, Savage scores.

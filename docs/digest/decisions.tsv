@@ -3484,4 +3484,5 @@ D6620	880	plm: balanced-panel within, between and random effects
 D6621	722	arules: apriori by exhaustive counting
 D6622	777	systemfit: SUR by feasible GLS
 D6623	852	fixest: feols with fixed effects
-D6624	736	spdep: Moran and Geary statistics
+D6624	737	spdep: Moran and Geary statistics
+D6625	799	coin: asymptotic linear-statistic tests

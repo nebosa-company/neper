@@ -1857,10 +1857,10 @@
       "group": "CRAN parity",
       "order": 799,
       "title": "coin: conditional and permutation tests",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 372). Large. Also closes the L294 leftovers wilcox_effsize and pairwise_wilcox_test. Acceptance, equal to coin: independence_test with asymptotic, approximate (seeded) and exact distributions, wilcox_test with the exact and normal-approximation intervals, oneway_test, kruskal_test, symmetry_test, maxstat_test, chisq_test, mh_test, lbl_test, and wilcox.test equal to base R for every exact, correct and conf.int combination."
+      "evidence": "Partial (D6625). e.algo.stat.coinpkg asymptotic conditional tests equal coin on Windows: wilcox_test, normal_test, median_test and oneway_test two-sample z with p, kruskal_test chi-square, spearman_test z (oracle_coin, 72 values; Linux pending). Open: exact and Monte Carlo distributions, strata, maxT, scale tests (Ansari, Mood, Fligner), Savage scores, general independence_test and symmetry tests, categorical tests. Was: Open (CRAN rank 372). Large. Also closes the L294 leftovers wilcox_effsize and pairwise_wilcox_test. Acceptance, equal to coin: independence_test with asymptotic, approximate (seeded) and exact distributions, wilcox_test with the exact and normal-approximation intervals, oneway_test, kruskal_test, symmetry_test, maxstat_test, chisq_test, mh_test, lbl_test, and wilcox.test equal to base R for every exact, correct and conf.int combination."
     },
     {
       "id": "L373",
