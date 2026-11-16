@@ -43,4 +43,9 @@ for (rep in 1:20) {
   g <- suppressWarnings(grpdelay(bt, n = 16))
   add("gd", c(hi, n, w), sum(g$gd[-1] * seq_along(g$gd[-1])))
 }
+for (rep in 1:20) {
+  n <- sample(1:4, 1); w1 <- runif(1, 0.05, 0.5); w2 <- w1 + runif(1, 0.05, 0.4)
+  bt <- butter(n, c(w1, w2), "pass")
+  add("bpb", c(0, n, w1, w2), sum(bt$b * seq_along(bt$b))); add("bpa", c(0, n, w1, w2), sum(bt$a * seq_along(bt$a)))
+}
 emit("signalpkg", "signal", list(cases))

@@ -475,3 +475,78 @@ fn grpdelay_at(b: []const f64, a: []const f64, w: f64) -> f64 {
     let ga = (awr * ar + awi * ai) / ad
     ret gb - ga
 }
+
+// butter(n, c(w1, w2)): the band-pass Butterworth filter, order 2n (b and a have 2n + 1 entries); the gain is unity at the centre of the band
+fn butter_band(n: usize, w1: f64, w2: f64, b: []f64, a: []f64) {
+    let ww1 = 4.0f64 * math.tan[f64](pi() * w1 / 2.0f64)
+    let ww2 = 4.0f64 * math.tan[f64](pi() * w2 / 2.0f64)
+    let bw = ww2 - ww1
+    let w0sq = ww1 * ww2
+    var pr: [40]f64 = zero
+    var pim: [40]f64 = zero
+    var np = 0usize
+    var k = 1usize
+    while k <= n {
+        let ang = pi() * f64(2usize * k + n - 1usize) / f64(2usize * n)
+        let sr = math.cos[f64](ang)
+        let si = math.sin[f64](ang)
+        // roots of s^2 - (bw p) s + w0sq = 0: s = (bw p / 2) +- sqrt((bw p / 2)^2 - w0sq)
+        let hr = bw * sr / 2.0f64
+        let hi = bw * si / 2.0f64
+        let dr = hr * hr - hi * hi - w0sq
+        let di = 2.0f64 * hr * hi
+        // complex square root
+        let mag = math.sqrt[f64](dr * dr + di * di)
+        var rr = math.sqrt[f64]((mag + dr) / 2.0f64)
+        var ri = math.sqrt[f64]((mag - dr) / 2.0f64)
+        if di < 0.0f64 { ri = 0.0f64 - ri }
+        let s1r = hr + rr
+        let s1i = hi + ri
+        let s2r = hr - rr
+        let s2i = hi - ri
+        rr = 0.0f64
+        pr[np] = bilin_re(s1r, s1i)
+        pim[np] = bilin_im(s1r, s1i)
+        np += 1usize
+        pr[np] = bilin_re(s2r, s2i)
+        pim[np] = bilin_im(s2r, s2i)
+        np += 1usize
+        k += 1usize
+    }
+    var zr: [40]f64 = zero
+    var zi: [40]f64 = zero
+    var j = 0usize
+    while j < n {
+        zr[j] = 1.0f64
+        zr[n + j] = -1.0f64
+        j += 1usize
+    }
+    poly_from_roots(pr[0usize..2usize * n], pim[0usize..2usize * n], a)
+    poly_from_roots(zr[0usize..2usize * n], zi[0usize..2usize * n], b)
+    // unit gain at the digital image of the analog centre frequency sqrt(w1 w2)
+    let theta = 2.0f64 * math.atan[f64](math.sqrt[f64](w0sq) / 4.0f64)
+    let (br, bi, wr1, wi1) = poly_resp(b, theta)
+    let (ar, ai, wr2, wi2) = poly_resp(a, theta)
+    let gm = math.sqrt[f64]((ar * ar + ai * ai) / (br * br + bi * bi))
+    j = 0usize
+    while j <= 2usize * n {
+        b[j] = b[j] * gm
+        j += 1usize
+    }
+}
+
+fn bilin_re(sr: f64, si: f64) -> f64 {
+    let nr = 1.0f64 + sr / 4.0f64
+    let ni = si / 4.0f64
+    let dr = 1.0f64 - sr / 4.0f64
+    let di = 0.0f64 - si / 4.0f64
+    ret (nr * dr + ni * di) / (dr * dr + di * di)
+}
+
+fn bilin_im(sr: f64, si: f64) -> f64 {
+    let nr = 1.0f64 + sr / 4.0f64
+    let ni = si / 4.0f64
+    let dr = 1.0f64 - sr / 4.0f64
+    let di = 0.0f64 - si / 4.0f64
+    ret (ni * dr - nr * di) / (dr * dr + di * di)
+}

@@ -94,6 +94,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(k, "bpb") || str.eq(k, "bpa") {
+        let bn = usize(x[1usize])
+        let (bb, g1) = mem.alloc[f64](a, 2usize * bn + 1usize)
+        if g1 != ok { os.exit(5) }
+        let (ba, g2) = mem.alloc[f64](a, 2usize * bn + 1usize)
+        if g2 != ok { os.exit(6) }
+        sp.butter_band(bn, x[2usize], x[3usize], bb, ba)
+        var q = 0usize
+        var tt = 0.0f64
+        while q <= 2usize * bn {
+            if str.eq(k, "bpb") { tt += bb[q] * f64(q + 1usize) } else { tt += ba[q] * f64(q + 1usize) }
+            q += 1usize
+        }
+        ret tt
+    }
     if str.eq(k, "gd") {
         var q = 1usize
         var tt = 0.0f64
