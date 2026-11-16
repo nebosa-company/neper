@@ -47282,3 +47282,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6703 — SuppDists random variates
 
 **Decision.** The package's `r*` functions are the inverse-cdf `x*` functions fed `unif_rand()` (Kendall, Kruskal-Wallis, normal scores, classic hypergeometric), or built from the normal stream: inverse Gaussian draws all n normals first and then n uniforms (Michael, Schucany and Haas), Johnson transforms n normals, the maximum F ratio is the ratio of the largest to the smallest of k `rchisq`, and the correlation coefficient draws x then y = rho x + sqrt(1 - rho^2) z over the sample size. `rv_inv_gauss`, `rv_johnson`, `rv_maxfratio`, `rv_corr` and the `x*` functions over `e.algo.rand.r` equal R after `set.seed` for one parameter set; vectors of parameters (the interleaved fill) and rFriedman stay open. Linux pending.
+
+## D6704 — splines2 ibs
+
+**Decision.** `ibs` (the integral of each B-spline from the left boundary knot) is the I-spline row of the next order with each column scaled by `(t[c + order + 1] - t[c + 1]) / order`, the knot span the B-spline integrates over; it is `row` kind 3 beside the I-spline kind 2, and the first column drops without the intercept as in the other bases. Linux pending.

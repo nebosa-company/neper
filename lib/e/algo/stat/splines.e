@@ -51,12 +51,12 @@ fn extend(t: []f64, knots: []const f64, lo: f64, hi: f64, reps: usize) {
     }
 }
 
-// one row of the basis at x: kind 0 B-spline (derivative order `deriv`), 1 M-spline, 2 I-spline; `out` receives
+// one row of the basis at x: kind 0 B-spline (derivative order `deriv`), 1 M-spline, 2 I-spline, 3 the integral of the B-spline from the left boundary (splines2::ibs); `out` receives
 // nk + degree + 1 values, the first dropped (shifting the rest left) when not `intercept`; answers the count
 fn row(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize, intercept: bool, kind: u8, deriv: usize, x: f64, out: []f64) -> usize {
     let order = degree + 1usize
     let n = knots.len + order
-    if kind == 2u8 {
+    if kind == 2u8 || kind == 3u8 {
         extend(t, knots, lo, hi, order + 1usize)
         var j = 0usize
         while j < n + 1usize {
@@ -71,6 +71,7 @@ fn row(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize
                 s += tmp[i]
                 i += 1usize
             }
+            if kind == 3u8 { s = s * (t[c + order + 1usize] - t[c + 1usize]) / f64(order) }
             tmp[n + 1usize + c] = s
             c += 1usize
         }

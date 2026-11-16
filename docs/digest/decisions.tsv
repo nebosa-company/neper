@@ -3562,4 +3562,5 @@ D6699	687	SuppDists Kendall past N = 12
 D6700	775	SuppDists Spearman as a Friedman statistic
 D6701	688	SuppDists Johnson fit
 D6702	590	SuppDists classic hypergeometric moments
-D6703	767	SuppDists random variates
+D6703	768	SuppDists random variates
+D6704	391	splines2 ibs

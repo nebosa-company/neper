@@ -29,6 +29,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var deriv = 0usize
     if kind == 1usize { k8 = 1u8 }
     if kind == 2usize { k8 = 2u8 }
+    if kind == 14usize { k8 = 3u8 }
     if kind == 3usize { deriv = 1usize }
     if kind == 4usize { deriv = 2usize }
     if kind == 8usize { k8 = 1u8
