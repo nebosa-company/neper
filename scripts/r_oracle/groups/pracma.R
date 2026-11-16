@@ -82,6 +82,14 @@ for (rep in 1:15) {
   rb <- suppressWarnings(romberg(fq[[id + 1]], lo, hi, maxit = 12))
   add("romb_v", c(id, lo, hi), rb$value); add("romb_it", c(id, lo, hi), rb$iter)
 }
+for (rep in 1:20) {
+  id <- (rep - 1) %% 5; lo <- if (id == 3) 0 else runif(1, -2, 0); hi <- runif(1, 0.5, 3)
+  add("quadl", c(id, lo, hi, 1e-8), quadl(fq[[id + 1]], lo, hi, tol = 1e-8))
+  add("quadl", c(id, hi, lo, 1e-6), quadl(fq[[id + 1]], hi, lo, tol = 1e-6))
+}
+fzs <- list(function(x) cos(x) - x, function(x) x^3 - 2 * x - 5, function(x) exp(x) - 3, function(x) x * exp(-x) - 0.2, function(x) sin(x) - 0.5 * x)
+fzb <- list(c(0, 1), c(2, 3), c(0, 2), c(0, 1), c(1, 3))
+for (rep in 1:10) { id <- (rep - 1) %% 5; b <- fzb[[id + 1]] + c(-1, 1) * runif(1, 0, 0.1) * (rep > 5); add("fzero", c(id, b, 1e-12), fzero(fzs[[id + 1]], b, tol = 1e-12)$x) }
 # nchoosek reference values are filled from R directly
 cases <- lapply(cases, function(cs) { if (cs$fn == "nchoosek") cs$want <- choose(cs$args[1], cs$args[2]); cs })
 emit("pracma", "pracma", list(cases))

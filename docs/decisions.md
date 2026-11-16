@@ -45814,3 +45814,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.vars` gains `var_fevd`: shares of each series' n-step error variance from the squared orthogonalised responses, normalised per row, as fevd().
 
 **Result.** `oracle_vars` equals vars on 196 cases on Windows; Linux pending. L433 stays partial.
+
+## D6441 — pracma: quadl and fzero
+
+`e.algo.stat.pracma` gains `quadl` (the package's adaptive Gauss-Lobatto, including its tolerance rescaling by the error ratio and its reversed-limits sign) and `fzero` (Brent on a bracket to tol, the root as reported), on fixed integrand and function sets.
+
+**Result.** `oracle_pracma` equals pracma on 612 cases on Windows at rel 1e-9, 60 of them new; Linux pending. L333 stays partial.

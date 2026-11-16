@@ -865,3 +865,159 @@ fn romberg_run(id: usize, a: f64, b: f64, maxit: usize, tol: f64) -> (f64, usize
     }
     ret (tab[iter], iter, esti)
 }
+
+// quadl: the package's adaptive Gauss-Lobatto (Gander and Gautschi) on the quad_f integrands
+fn lob_step(id: usize, a: f64, b: f64, fa: f64, fb: f64, ab: f64) -> f64 {
+    let h = (b - a) / 2.0f64
+    let m = (a + b) / 2.0f64
+    let alpha = math.sqrt[f64](2.0f64 / 3.0f64)
+    let beta = 1.0f64 / math.sqrt[f64](5.0f64)
+    let mll = m - alpha * h
+    let ml = m - beta * h
+    let mr = m + beta * h
+    let mrr = m + alpha * h
+    let fmll = quad_f(id, mll)
+    let fml = quad_f(id, ml)
+    let fm = quad_f(id, m)
+    let fmr = quad_f(id, mr)
+    let fmrr = quad_f(id, mrr)
+    let i2 = (h / 6.0f64) * (fa + fb + 5.0f64 * (fml + fmr))
+    let i1 = (h / 1470.0f64) * (77.0f64 * (fa + fb) + 432.0f64 * (fmll + fmrr) + 625.0f64 * (fml + fmr) + 672.0f64 * fm)
+    if ab + (i1 - i2) == ab || mll <= a || b <= mrr { ret i1 }
+    ret lob_step(id, a, mll, fa, fmll, ab) + lob_step(id, mll, ml, fmll, fml, ab) + lob_step(id, ml, m, fml, fm, ab) + lob_step(id, m, mr, fm, fmr, ab) + lob_step(id, mr, mrr, fmr, fmrr, ab) + lob_step(id, mrr, b, fmrr, fb, ab)
+}
+
+fn quadl(id: usize, xa0: f64, xb0: f64, tol0: f64) -> f64 {
+    if xa0 == xb0 { ret 0.0f64 }
+    var xa = xa0
+    var xb = xb0
+    var rev = false
+    if xa > xb {
+        xa = xb0
+        xb = xa0
+        rev = true
+    }
+    let e = eps()
+    if quad_f(id, xa) - quad_f(id, xa) != 0.0f64 { xa += 2.0f64 * e }
+    if quad_f(id, xb) - quad_f(id, xb) != 0.0f64 { xb -= 2.0f64 * e }
+    let a = xa
+    let b = xb
+    let m = (a + b) / 2.0f64
+    let h = (b - a) / 2.0f64
+    let alpha = math.sqrt[f64](2.0f64 / 3.0f64)
+    let beta = 1.0f64 / math.sqrt[f64](5.0f64)
+    let x1 = 0.94288241569548f64
+    let x2 = 0.641853342345781f64
+    let x3 = 0.23638319966215f64
+    let y1 = quad_f(id, a)
+    let y2 = quad_f(id, m - x1 * h)
+    let y3 = quad_f(id, m - alpha * h)
+    let y4 = quad_f(id, m - x2 * h)
+    let y5 = quad_f(id, m - beta * h)
+    let y6 = quad_f(id, m - x3 * h)
+    let y7 = quad_f(id, m)
+    let y8 = quad_f(id, m + x3 * h)
+    let y9 = quad_f(id, m + beta * h)
+    let y10 = quad_f(id, m + x2 * h)
+    let y11 = quad_f(id, m + alpha * h)
+    let y12 = quad_f(id, m + x1 * h)
+    let y13 = quad_f(id, b)
+    let i2 = (h / 6.0f64) * (y1 + y13 + 5.0f64 * (y5 + y9))
+    let i1 = (h / 1470.0f64) * (77.0f64 * (y1 + y13) + 432.0f64 * (y3 + y11) + 625.0f64 * (y5 + y9) + 672.0f64 * y7)
+    var ab = h * (0.0158271919734802f64 * (y1 + y13) + 0.09427384021885f64 * (y2 + y12) + 0.155071987336585f64 * (y3 + y11) + 0.188821573960182f64 * (y4 + y10) + 0.199773405226859f64 * (y5 + y9) + 0.22492646533334f64 * (y6 + y8) + 0.242611071901408f64 * y7)
+    var s = 1.0f64
+    if ab < 0.0f64 { s = 0.0f64 - 1.0f64 }
+    let erri1 = math.abs[f64](i1 - ab)
+    let erri2 = math.abs[f64](i2 - ab)
+    var r = 1.0f64
+    if erri2 != 0.0f64 { r = erri1 / erri2 }
+    var tol = tol0
+    if r > 0.0f64 && r < 1.0f64 { tol = tol / r }
+    ab = s * math.abs[f64](ab) * tol / e
+    if ab == 0.0f64 { ab = b - a }
+    var q = lob_step(id, a, b, y1, y13, ab)
+    if rev { q = 0.0f64 - q }
+    ret q
+}
+
+fn fz_f(id: usize, x: f64) -> f64 {
+    if id == 0usize { ret math.cos[f64](x) - x }
+    if id == 1usize { ret x * x * x - 2.0f64 * x - 5.0f64 }
+    if id == 2usize { ret math.exp[f64](x) - 3.0f64 }
+    if id == 3usize { ret x * math.exp[f64](0.0f64 - x) - 0.2f64 }
+    ret math.sin[f64](x) - 0.5f64 * x
+}
+
+// fzero on a bracket [a, b] with f(a) f(b) < 0: Brent's method to tol, the root the package reports
+fn fzero(id: usize, a0: f64, b0: f64, tol: f64) -> f64 {
+    var a = a0
+    var b = b0
+    var fa = fz_f(id, a)
+    var fb = fz_f(id, b)
+    var c = a
+    var fc = fa
+    var d = b - a
+    var e = d
+    var it = 0usize
+    while it < 500usize {
+        if (fb > 0.0f64 && fc > 0.0f64) || (fb < 0.0f64 && fc < 0.0f64) {
+            c = a
+            fc = fa
+            d = b - a
+            e = d
+        }
+        if math.abs[f64](fc) < math.abs[f64](fb) {
+            a = b
+            b = c
+            c = a
+            fa = fb
+            fb = fc
+            fc = fa
+        }
+        let tol1 = 2.0f64 * eps() * math.abs[f64](b) + 0.5f64 * tol
+        let xm = 0.5f64 * (c - b)
+        if math.abs[f64](xm) <= tol1 || fb == 0.0f64 { ret b }
+        if math.abs[f64](e) >= tol1 && math.abs[f64](fa) > math.abs[f64](fb) {
+            let sv = fb / fa
+            var p = 0.0f64
+            var q = 0.0f64
+            if a == c {
+                p = 2.0f64 * xm * sv
+                q = 1.0f64 - sv
+            } else {
+                let qq = fa / fc
+                let r = fb / fc
+                p = sv * (2.0f64 * xm * qq * (qq - r) - (b - a) * (r - 1.0f64))
+                q = (qq - 1.0f64) * (r - 1.0f64) * (sv - 1.0f64)
+            }
+            if p > 0.0f64 { q = 0.0f64 - q }
+            p = math.abs[f64](p)
+            let m1 = 3.0f64 * xm * q - math.abs[f64](tol1 * q)
+            let m2 = math.abs[f64](e * q)
+            var mn = m1
+            if m2 < mn { mn = m2 }
+            if 2.0f64 * p < mn {
+                e = d
+                d = p / q
+            } else {
+                d = xm
+                e = d
+            }
+        } else {
+            d = xm
+            e = d
+        }
+        a = b
+        fa = fb
+        if math.abs[f64](d) > tol1 {
+            b += d
+        } else if xm > 0.0f64 {
+            b += tol1
+        } else {
+            b -= tol1
+        }
+        fb = fz_f(id, b)
+        it += 1usize
+    }
+    ret b
+}

@@ -196,6 +196,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret pm.pchip(a, x[1usize..1usize + n], x[1usize + n..1usize + 2usize * n], x[1usize + 2usize * n])
     }
     if str.eq(k, "quadgk") { ret pm.quadgk(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
+    if str.eq(k, "quadl") { ret pm.quadl(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
+    if str.eq(k, "fzero") { ret pm.fzero(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "nchoosek") { ret pm.nchoosek(x[0usize], x[1usize]) }
     var o: [3]f64 = zero
     pm.cross(x[0usize..3usize], x[3usize..6usize], o[0usize..3usize])
