@@ -691,10 +691,10 @@
       "group": "CRAN parity",
       "order": 665,
       "title": "coda, posterior and loo: MCMC diagnostics and PSIS-LOO",
-      "score": 0.1,
+      "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6592): e.algo.stat.codapkg has acf, the Yule-Walker ar(aic = TRUE) of spectrum0.ar and effectiveSize for one chain, equal to coda on 120 values on Windows (oracle_coda; Linux pending). Open (the rest of the CRAN rank 115, 116, 167 acceptance, plus the interval summaries of ggdist 175). Mid. e.math.mcmc has the samplers and no diagnostics. Acceptance, equal to R: posterior rhat, rhat_basic, ess_bulk, ess_tail, ess_quantile, mcse_mean, mcse_quantile, rank_normalize, summarise_draws; coda gelman.diag (with multivariate psrf), geweke.diag, heidel.diag, raftery.diag, autocorr, effectiveSize, HPDinterval, cramer.test; loo psis (generalized Pareto tail fit), loo, waic, loo_compare, loo_model_weights (stacking, pseudo-BMA), E_loo; ggdist hdi, qi, mode_hdi."
+      "evidence": "Partial (D6592): e.algo.stat.codapkg has acf, the Yule-Walker ar(aic = TRUE) of spectrum0.ar and effectiveSize for one chain, equal to coda on 120 values on Windows (oracle_coda; Linux pending). D6593: geweke.diag z, gelman.diag (univariate psrf and its upper bound, autoburnin) and HPDinterval equal coda on 100 more values. Open (heidel.diag, raftery.diag, the multivariate psrf, cramer.test, posterior, loo, ggdist 175). Mid. e.math.mcmc has the samplers and no diagnostics. Acceptance, equal to R: posterior rhat, rhat_basic, ess_bulk, ess_tail, ess_quantile, mcse_mean, mcse_quantile, rank_normalize, summarise_draws; coda gelman.diag (with multivariate psrf), geweke.diag, heidel.diag, raftery.diag, autocorr, effectiveSize, HPDinterval, cramer.test; loo psis (generalized Pareto tail fit), loo, waic, loo_compare, loo_model_weights (stacking, pseudo-BMA), E_loo; ggdist hdi, qi, mode_hdi."
     },
     {
       "id": "L305",

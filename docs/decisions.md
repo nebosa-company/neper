@@ -46742,3 +46742,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `e.algo.stat.codapkg` (new) has `acf` (biased autocovariances over the lag-0 value), `ar_yw` (the Yule-Walker fit of ar(aic = TRUE): Levinson-Durbin to `order.max = floor(10 log10 n)`, AIC `n log(var) + 2 k`, `var.pred = var_k n / (n - k - 1)`) and `effective_size` (`n var(x) / (var.pred / (1 - sum ar)^2)`, spectrum0.ar's estimate); a straight-line series is not special-cased.
 
 **Result.** `oracle_coda` agrees with coda on 120 values (ess, selected order, spectral estimate, acf sums; 30 AR(1) series, a third with a linear trend) on Windows; Linux pending. L299 starts at 0.1: geweke, gelman, heidel, raftery, HPDinterval, cramer.test, posterior and loo are open.
+
+## D6593 — coda: geweke, gelman, HPDinterval
+
+**Decision.** `geweke_z` takes the first `ceiling(1 + frac1 (n - 1))` and the last `floor(n - frac2 (n - 1))` onwards observations as R's windows (1-based), the means and the spectrum0.ar variances over their lengths; `gelman_psrf` is gelman.diag for one variable (first half of each chain dropped by autoburnin, the PSRF with the Gelman-Rubin degrees of freedom adjustment and the F-quantile upper bound); `hpd` is HPDinterval's shortest interval over `round(n prob)` gaps (half to even).
+
+**Result.** `oracle_coda` agrees with coda on 100 more values on Windows (220 cases in all); Linux pending. L299 at 0.25: heidel, raftery, the multivariate PSRF, cramer.test, posterior, loo and ggdist remain.

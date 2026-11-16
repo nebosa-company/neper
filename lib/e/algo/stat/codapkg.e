@@ -3,6 +3,7 @@
 // Not here: the multiple-chain diagnostics (gelman.diag, geweke.diag, heidel.diag, raftery.diag), HPDinterval and cramer.test.
 
 use e.math
+use e.math.nmath_beta as nb
 use e.mem
 
 // the biased autocovariances c_0 .. c_m of the series about its mean (acf's estimator: divided by n)
@@ -113,4 +114,132 @@ fn effective_size(a: *mem.Arena, x: []const f64) -> f64 {
     let spec = vp / ((1.0f64 - sm) * (1.0f64 - sm))
     if spec == 0.0f64 { ret 0.0f64 }
     ret f64(n) * v / spec
+}
+
+fn mean_of(x: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += x[i]
+        i += 1usize
+    }
+    ret s / f64(x.len)
+}
+
+// geweke.diag(x, frac1, frac2)$z for one series: the first frac1 and the last frac2 of the run (R's window rounding), spectral variances from spectrum0.ar
+fn geweke_z(a: *mem.Arena, x: []const f64, frac1: f64, frac2: f64) -> f64 {
+    let n = x.len
+    let nm1 = f64(n - 1usize)
+    let end1 = usize(math.ceil[f64](1.0f64 + frac1 * nm1))
+    let start2 = usize(math.floor[f64](f64(n) - frac2 * nm1))
+    let y1 = x[0usize..end1]
+    let y2 = x[start2 - 1usize..n]
+    let (o1, s1, v1, e1) = ar_yw(a, y1)
+    let (o2, s2, v2, e2) = ar_yw(a, y2)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    let sp1 = v1 / ((1.0f64 - s1) * (1.0f64 - s1)) / f64(y1.len)
+    let sp2 = v2 / ((1.0f64 - s2) * (1.0f64 - s2)) / f64(y2.len)
+    ret (mean_of(y1) - mean_of(y2)) / math.sqrt[f64](sp1 + sp2)
+}
+
+fn var_of(x: []const f64) -> f64 {
+    let m = mean_of(x)
+    var s = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += (x[i] - m) * (x[i] - m)
+        i += 1usize
+    }
+    ret s / f64(x.len - 1usize)
+}
+
+fn cov_of(x: []const f64, y: []const f64) -> f64 {
+    let mx = mean_of(x)
+    let my = mean_of(y)
+    var s = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += (x[i] - mx) * (y[i] - my)
+        i += 1usize
+    }
+    ret s / f64(x.len - 1usize)
+}
+
+// gelman.diag(chains, confidence, autoburnin = TRUE) for one variable: chains is nchain by niter row-major, niter even; the first half is dropped; returns the point estimate and upper bound of the potential scale reduction factor
+fn gelman_psrf(a: *mem.Arena, chains: []const f64, nchain: usize, niter0: usize, confidence: f64) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let half = niter0 / 2usize
+    let niter = niter0 - half
+    let (s2, e1) = mem.alloc[f64](a, nchain)
+    let (xb, e2) = mem.alloc[f64](a, nchain)
+    let (xb2, e3) = mem.alloc[f64](a, nchain)
+    if e1 != ok || e2 != ok || e3 != ok { ret (nan, nan) }
+    var c = 0usize
+    while c < nchain {
+        let ch = chains[c * niter0 + half..(c + 1usize) * niter0]
+        s2[c] = var_of(ch)
+        xb[c] = mean_of(ch)
+        xb2[c] = xb[c] * xb[c]
+        c += 1usize
+    }
+    let nn = f64(niter)
+    let nc = f64(nchain)
+    let w = mean_of(s2)
+    let b = nn * var_of(xb)
+    let muhat = mean_of(xb)
+    let var_w = var_of(s2) / nc
+    let var_b = 2.0f64 * b * b / (nc - 1.0f64)
+    let cov_wb = (nn / nc) * (cov_of(s2, xb2) - 2.0f64 * muhat * cov_of(s2, xb))
+    let vv = (nn - 1.0f64) * w / nn + (1.0f64 + 1.0f64 / nc) * b / nn
+    let var_v = ((nn - 1.0f64) * (nn - 1.0f64) * var_w + (1.0f64 + 1.0f64 / nc) * (1.0f64 + 1.0f64 / nc) * var_b + 2.0f64 * (nn - 1.0f64) * (1.0f64 + 1.0f64 / nc) * cov_wb) / (nn * nn)
+    let df_v = 2.0f64 * vv * vv / var_v
+    let df_adj = (df_v + 3.0f64) / (df_v + 1.0f64)
+    let b_df = nc - 1.0f64
+    let w_df = 2.0f64 * w * w / var_w
+    let r2_fixed = (nn - 1.0f64) / nn
+    let r2_random = (1.0f64 + 1.0f64 / nc) * (1.0f64 / nn) * (b / w)
+    let r2_est = r2_fixed + r2_random
+    let r2_up = r2_fixed + nb.qf((1.0f64 + confidence) / 2.0f64, b_df, w_df, true, false) * r2_random
+    ret (math.sqrt[f64](df_adj * r2_est), math.sqrt[f64](df_adj * r2_up))
+}
+
+// HPDinterval(x, prob) for one sample: the shortest interval holding round(n prob) of the sorted draws (R's round: half to even), the first shortest one on ties
+fn hpd(a: *mem.Arena, x: []const f64, prob: f64) -> (f64, f64) {
+    let n = x.len
+    let (s, e) = mem.alloc[f64](a, n)
+    if e != ok { ret (0.0f64 / 0.0f64, 0.0f64 / 0.0f64) }
+    var i = 0usize
+    while i < n {
+        s[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let t = s[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > t {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = t
+        i += 1usize
+    }
+    let r0 = f64(n) * prob
+    var gp = math.floor[f64](r0 + 0.5f64)
+    if r0 + 0.5f64 == gp && gp - 2.0f64 * math.floor[f64](gp / 2.0f64) != 0.0f64 { gp = gp - 1.0f64 }
+    var gap = usize(gp)
+    if gap > n - 1usize { gap = n - 1usize }
+    if gap < 1usize { gap = 1usize }
+    var best = 0usize
+    var bw = s[gap] - s[0usize]
+    i = 1usize
+    while i + gap < n {
+        let w = s[i + gap] - s[i]
+        if w < bw {
+            bw = w
+            best = i
+        }
+        i += 1usize
+    }
+    ret (s[best], s[best + gap])
 }

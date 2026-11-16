@@ -3462,4 +3462,5 @@ D6590	665	splines2: cSpline
 D6590	731	splines2: cSpline
 D6591	598	splines2: derivatives of the M- and I-splines
 D6591	553	splines2: derivatives of M- and I-splines
-D6592	729	coda: effectiveSize, ar and acf
+D6592	730	coda: effectiveSize, ar and acf
+D6593	748	coda: geweke, gelman, HPDinterval

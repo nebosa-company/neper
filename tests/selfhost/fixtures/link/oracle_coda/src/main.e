@@ -10,6 +10,19 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "gz") { ret cd.geweke_z(a, x[1usize..1usize + usize(x[0usize])], x[1usize + usize(x[0usize])], x[2usize + usize(x[0usize])]) }
+    if str.eq(c.name, "gp") || str.eq(c.name, "gu") {
+        let nchain = usize(x[0usize])
+        let niter = usize(x[1usize])
+        let (gp, gu) = cd.gelman_psrf(a, x[2usize..2usize + nchain * niter], nchain, niter, x[2usize + nchain * niter])
+        if str.eq(c.name, "gp") { ret gp }
+        ret gu
+    }
+    if str.eq(c.name, "hl") || str.eq(c.name, "hu") {
+        let (hl, hu) = cd.hpd(a, x[1usize..1usize + usize(x[0usize])], x[1usize + usize(x[0usize])])
+        if str.eq(c.name, "hl") { ret hl }
+        ret hu
+    }
     let n = usize(x[0usize])
     let s = x[1usize..1usize + n]
     let lm = usize(x[1usize + n])
