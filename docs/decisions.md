@@ -45874,3 +45874,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.desctools` gains `icc`: the six intraclass correlations (ICC1, ICC2, ICC3 and their k-rater averages) from the two-way subjects-by-raters ANOVA, with the estimate and the package's confidence limits, including the Satterthwaite-style degrees of freedom for ICC2.
 
 **Result.** `oracle_desctools` equals DescTools on 2800 cases on Windows, 270 of them new, over 15 rating matrices of 6 to 20 subjects and 3 to 5 raters; Linux pending. L363 stays partial.
+
+## D6451 — DescTools: KappaM, Fleiss and Conger
+
+`e.algo.stat.desctools` gains `kappa_m`: multi-rater kappa by Fleiss (with its normal-theory limits) and Conger (the chance term corrected by the per-level variance across raters); Light's kappa stays open.
+
+**Result.** `oracle_desctools` equals DescTools on 2880 cases on Windows, 80 of them new; Linux pending. L363 stays partial.

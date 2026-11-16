@@ -854,3 +854,91 @@ fn icc(x: []const f64, ns: usize, nr: usize, conf: f64, ty: usize, part: usize) 
     if part == 1usize { ret lo }
     ret hi
 }
+
+// KappaM(ratings) for ns subjects by nr raters coded 0 .. nl - 1 (row-major): method 0 Fleiss, 1 Conger; part 0 the kappa, 1 and 2 the limits (Fleiss only)
+fn kappa_m(x: []const f64, ns: usize, nr: usize, nl: usize, conf: f64, method: usize, part: usize) -> f64 {
+    let n = f64(ns)
+    let r = f64(nr)
+    var agree = 0.0f64
+    var i = 0usize
+    var pq = 0.0f64
+    var pqq = 0.0f64
+    var chance_t = 0.0f64
+    var l = 0usize
+    while l < nl {
+        var c = 0.0f64
+        i = 0usize
+        while i < ns {
+            var j = 0usize
+            while j < nr {
+                if usize(x[i * nr + j]) == l { c += 1.0f64 }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        chance_t += c * c
+        let pj = c / (n * r)
+        let qj = 1.0f64 - pj
+        pq += pj * qj
+        pqq += pj * qj * (qj - pj)
+        l += 1usize
+    }
+    i = 0usize
+    while i < ns {
+        var rs = 0.0f64
+        l = 0usize
+        while l < nl {
+            var c = 0.0f64
+            var j = 0usize
+            while j < nr {
+                if usize(x[i * nr + j]) == l { c += 1.0f64 }
+                j += 1usize
+            }
+            rs += c * c
+            l += 1usize
+        }
+        agree += (rs - r) / (r * (r - 1.0f64)) / n
+        i += 1usize
+    }
+    var chance = chance_t / ((n * r) * (n * r))
+    if method == 1usize {
+        var vs = 0.0f64
+        l = 0usize
+        while l < nl {
+            var mean = 0.0f64
+            var j = 0usize
+            while j < nr {
+                var c = 0.0f64
+                i = 0usize
+                while i < ns {
+                    if usize(x[i * nr + j]) == l { c += 1.0f64 }
+                    i += 1usize
+                }
+                mean += c / n
+                j += 1usize
+            }
+            mean = mean / r
+            var ss = 0.0f64
+            j = 0usize
+            while j < nr {
+                var c = 0.0f64
+                i = 0usize
+                while i < ns {
+                    if usize(x[i * nr + j]) == l { c += 1.0f64 }
+                    i += 1usize
+                }
+                ss += (c / n - mean) * (c / n - mean)
+                j += 1usize
+            }
+            vs += ss / (r - 1.0f64)
+            l += 1usize
+        }
+        chance = chance - vs * (r - 1.0f64) / r / (r - 1.0f64)
+    }
+    let value = (agree - chance) / (1.0f64 - chance)
+    if part == 0usize { ret value }
+    let var_k = (2.0f64 / (pq * pq * (n * r * (r - 1.0f64)))) * (pq * pq - pqq)
+    let z = dist.qnorm((1.0f64 - conf) / 2.0f64, 0.0f64, 1.0f64, true, false)
+    if part == 1usize { ret value + z * math.sqrt[f64](var_k) }
+    ret value - z * math.sqrt[f64](var_k)
+}

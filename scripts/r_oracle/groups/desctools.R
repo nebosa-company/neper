@@ -55,4 +55,12 @@ for (rep in 1:15) {
   cl <- sample(c(0.9, 0.95), 1); ty <- c("ICC1", "ICC2", "ICC3", "ICC1k", "ICC2k", "ICC3k")
   for (m in 1:6) { r <- ICC(rt, type = ty[m], conf.level = cl); for (pt in 0:2) add("icc", c(m - 1, pt, ns, nr, cl, as.vector(t(rt))), r[pt + 1]) }
 }
+for (rep in 1:20) {
+  ns <- sample(8:30, 1); nr <- sample(3:5, 1); nl <- sample(3:4, 1); base <- sample(1:nl, ns, TRUE); rt <- matrix(sapply(1:nr, function(j) ifelse(runif(ns) < 0.7, base, sample(1:nl, ns, TRUE))), ns, nr)
+  if (length(unique(as.vector(rt))) < nl) next
+  cl <- sample(c(0.9, 0.95), 1)
+  f <- KappaM(rt, method = "Fleiss", conf.level = cl); cg <- KappaM(rt, method = "Conger")
+  for (pt in 0:2) add("kappam", c(0, pt, ns, nr, nl, cl, as.vector(t(rt - 1))), f[pt + 1])
+  add("kappam", c(1, 0, ns, nr, nl, cl, as.vector(t(rt - 1))), cg)
+}
 emit("desctools", "DescTools", list(cases))

@@ -3318,4 +3318,5 @@ D6446	554	DescTools: BinomCI, eleven methods
 D6447	615	DescTools: Winsorize, HodgesLehmann, MedianCI and Trim
 D6448	542	DescTools: Cochran-Armitage, Mantel-Haenszel odds ratio, Breslow-Day
 D6449	358	DescTools: PoissonCI and MultinomCI
-D6450	495	DescTools: ICC
+D6450	496	DescTools: ICC
+D6451	384	DescTools: KappaM, Fleiss and Conger
