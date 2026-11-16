@@ -45916,3 +45916,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.ghyp` is new: `bessel_k(nu, x)` by the trapezoid rule on the integral representation (the integrand falls off doubly exponentially, so step 0.02 reaches 1e-9 against R's besselK without a series or asymptotic switch), and on it `dghyp` with any lambda, `dnig`, `dhyperb` and `dskewlap`.
 
 **Result.** `oracle_ghyp` equals GeneralizedHyperbolic on 570 cases on Windows at rel 1e-9, 30 parameter draws with lambda in (-3, 3) at five points each. The distribution and quantile functions, random numbers, moments and fits, and stabledist, are open; Linux pending. L407 is partial.
+
+## D6458 — gsl: Bessel K, I and J, Lambert W and Hurwitz zeta
+
+`e.algo.stat.gslfns` is new: `bessel_knu` (trapezoid on the integral representation, any real order), `bessel_inu` (all-positive power series), `bessel_jn` (periodic trapezoid for integer order), `lambert_w` (Halley on branches 0 and -1) and `hzeta` (25 explicit terms plus the Euler-Maclaurin tail). `e.algo.stat.ghyp` now calls `bessel_knu` instead of carrying its own copy.
+
+**Result.** `oracle_gslfns` equals gsl on 280 cases on Windows at rel 1e-9, and `oracle_ghyp` still passes. Y, the scaled forms, Airy, elliptic, hypergeometric, Legendre, Dawson, Fermi-Dirac, Coulomb, Clausen, dilogarithm, exponential integrals and the error estimates are open; I stops being safe past x of about 700; Linux pending. L417 is partial.

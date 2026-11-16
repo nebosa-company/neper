@@ -3325,4 +3325,5 @@ D6453	623	arm: logit, invlogit, se.coef and binned.resids
 D6454	573	sm: hnorm, sm.density and sm.regression
 D6455	675	dbscan: kNNdist and lof
 D6456	572	dbscan: sNN shared counts and frNN neighbourhoods
-D6457	661	GeneralizedHyperbolic: densities on a real-order Bessel K
+D6457	662	GeneralizedHyperbolic: densities on a real-order Bessel K
+D6458	794	gsl: Bessel K, I and J, Lambert W and Hurwitz zeta
