@@ -19,6 +19,8 @@ for (rep in 1:12) {
   q <- sample(1:min(3, k + 1), 1); H <- matrix(round(rnorm(q * (k + 1)), 2), q, k + 1); rh <- round(rnorm(q, 0, 0.5), 2); lh <- suppressWarnings(linearHypothesis(m, H, rh)); add("lh", c(a, q, as.vector(t(H)), rh), lh$F[2]); add("lhp", c(a, q, as.vector(t(H)), rh), lh$`Pr(>F)`[2])
   nv <- ncvTest(m); add("ncv", a, nv$ChiSquare); add("ncvp", a, nv$p)
   rt <- raintest(m); add("rain", a, as.numeric(rt$statistic)); add("rainp", a, rt$p.value); ht <- harvtest(m); add("harv", a, as.numeric(ht$statistic)); add("harvp", a, ht$p.value)
+  if (k >= 2) { qd <- sample(1:k, 1); m0 <- if (k == qd) lm(y ~ 1, d) else lm(y ~ ., d[, seq_len(k + 1 - qd), drop = FALSE]); a3 <- c(a, qd); lt <- lrtest(m0, m); wt <- waldtest(m0, m)
+    add("lr", a3, lt$Chisq[2]); add("lrp", a3, lt$`Pr(>Chisq)`[2]); add("wf", a3, wt$F[2]); add("wfp", a3, wt$`Pr(>F)`[2]) }
   for (ord in c(1, 2, 4)) { a2 <- c(a, ord); b1 <- bgtest(m, order = ord); b2 <- bgtest(m, order = ord, type = "F"); add("bg_c", a2, as.numeric(b1$statistic)); add("bg_cp", a2, b1$p.value); add("bg_f", a2, as.numeric(b2$statistic)); add("bg_fp", a2, b2$p.value) }
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
 }

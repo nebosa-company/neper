@@ -897,3 +897,35 @@ fn box_cox_ll(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize,
     }
     ret 0.0f64 - f64(n) / 2.0f64 * math.log[f64](rss)
 }
+
+// lmtest::lrtest(restricted, full) and waldtest(restricted, full) for nested lm fits, the restricted model dropping the last q columns of x: (LR statistic, chisq p, Wald F, F p)
+fn nested_tests(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, q: usize) -> (f64, f64, f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let pr = p - q
+    let (xr, e1) = mem.alloc[f64](a, n * pr)
+    if e1 != ok { ret (nan, nan, nan, nan) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < pr {
+            xr[i * pr + j] = x[i * p + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (f1, e2) = ols(a, xr, y, n, pr)
+    let (f2, e3) = ols(a, x, y, n, p)
+    if e2 != ok || e3 != ok { ret (nan, nan, nan, nan) }
+    var r1 = 0.0f64
+    var r2 = 0.0f64
+    i = 0usize
+    while i < n {
+        r1 += f1.resid[i] * f1.resid[i]
+        r2 += f2.resid[i] * f2.resid[i]
+        i += 1usize
+    }
+    let nf = f64(n)
+    let lr = nf * (math.log[f64](r1 / nf) - math.log[f64](r2 / nf))
+    let wf = ((r1 - r2) / f64(q)) / (r2 / f64(n - p))
+    ret (lr, p_chisq(lr, f64(q)), wf, p_f(wf, f64(q), f64(n - p)))
+}

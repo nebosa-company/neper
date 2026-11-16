@@ -46468,3 +46468,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `delong_unpaired` is delong.unpaired.test: the statistic `(auc1 - auc2) / sqrt(SR + SS)` with the DeLong variances of the two independent samples, degrees of freedom `(SR + SS)^2 / (SR^2/(n1 - 1) + SS^2/(n2 - 1))` (n the sample sizes), and `2 pt(-|t|, df)`; it is a t test, not the normal one the paired test uses.
 
 **Result.** `oracle_proc` agrees with pROC on 50 new values on Windows; Linux pending. L324 stays partial (smoothed curves, bootstrap and venkatraman tests, ROCR measures).
+
+## D6550 — lmtest: lrtest and waldtest
+
+**Decision.** `nested_tests` fits the full model and the one without its last q columns: lrtest's `n (log(RSS1/n) - log(RSS2/n))` (the lm log-likelihood difference) on q degrees of freedom, waldtest's F `((RSS1 - RSS2)/q) / (RSS2/(n - p))`.
+
+**Result.** `oracle_carlmtest` agrees with lmtest on 48 new values on Windows (886 cases in all); Linux pending. L300 stays partial.
