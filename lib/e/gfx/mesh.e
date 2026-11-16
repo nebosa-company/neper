@@ -22,6 +22,7 @@
 // `revolve` sweeps a profile.
 
 use e.algo.geom3 as g3
+use e.algo.linalg.iterative as iter
 use e.algo.sort
 use e.math
 
@@ -1326,46 +1327,14 @@ fn apply(op: *const Operator, x: []const f64, y: []f64) {
     }
 }
 
-// Conjugate gradients on the operator: `x` starts as given (its pinned
-// entries stay), `b` is the right-hand side; `r`, `p`, `q` are scratch.
-fn conjugate_gradient(op: *const Operator, b: []const f64, x: []f64, r: []f64, p: []f64, q: []f64, iterations: usize) {
-    apply(op, x, q)
-    var i = 0usize
-    var rr = 0.0f64
-    while i < x.len {
-        r[i] = b[i] - q[i]
-        p[i] = r[i]
-        rr += r[i] * r[i]
-        i += 1usize
-    }
-    var it = 0usize
-    while it < iterations && rr > 1.0e-28f64 {
-        apply(op, p, q)
-        var pq = 0.0f64
-        i = 0usize
-        while i < x.len {
-            pq += p[i] * q[i]
-            i += 1usize
-        }
-        if pq <= 0.0f64 { break }
-        let alpha = rr / pq
-        var rr_next = 0.0f64
-        i = 0usize
-        while i < x.len {
-            x[i] += alpha * p[i]
-            r[i] -= alpha * q[i]
-            rr_next += r[i] * r[i]
-            i += 1usize
-        }
-        let beta = rr_next / rr
-        i = 0usize
-        while i < x.len {
-            p[i] = r[i] + beta * p[i]
-            i += 1usize
-        }
-        rr = rr_next
-        it += 1usize
-    }
+// Conjugate gradients on the operator through the shared solver of
+// e.algo.linalg.iterative: `x` starts as given (its pinned entries stay), `b`
+// is the right-hand side; `r`, `p`, `q` are scratch. Stops at an absolute
+// residual of 1e-14 or after `iterations` steps.
+fn apply_mut(op: *Operator, x: []const f64, y: []f64) { apply(op, x, y) }
+
+fn conjugate_gradient(op: *Operator, b: []const f64, x: []f64, r: []f64, p: []f64, q: []f64, iterations: usize) {
+    let _ = iter.cg_parts[Operator](op, apply_mut, b, x, 0.0f64, 1.0e-14f64, iterations, r, p, q)
 }
 
 // Geodesic distance from `source` by the heat method (Crane, Weischedel,
@@ -1499,7 +1468,7 @@ fn parameterize_lscm(vertices: []const f64, triangles: []const u32, pin_a: u32, 
         w[6usize * f + 5usize] = 0.0f64
         f += 1usize
     }
-    let op = Operator { triangles: triangles, cot: w, mass: b, t: 1.0f64, kind: OP_LSCM, pin_a: usize(pin_a), pin_b: usize(pin_b) }
+    var op = Operator { triangles: triangles, cot: w, mass: b, t: 1.0f64, kind: OP_LSCM, pin_a: usize(pin_a), pin_b: usize(pin_b) }
     fill(uv[..2usize * n], 0.0f64)
     uv[2usize * usize(pin_b)] = 1.0f64
     // The pins enter through the initial residual: b is zero and the pinned

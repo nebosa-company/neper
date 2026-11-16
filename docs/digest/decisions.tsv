@@ -3511,4 +3511,5 @@ D6647	971	hetGP: homoskedastic GP with known hyperparameters
 D6648	667	MCMCpack: density functions
 D6649	836	e.ml.mds: classical MDS and the Johnson-Lindenstrauss bound
 D6650	935	e.algo.approx: approximation algorithms with their ratios
-D6651	938	e.algo.online: online algorithms beside their offline optima
+D6651	939	e.algo.online: online algorithms beside their offline optima
+D6652	889	e.algo.linalg.iterative: conjugate gradients and GMRES over an operator

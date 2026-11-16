@@ -3854,17 +3854,6 @@
       "evidence": "Partial (D6650). e.algo.approx has vertex_cover (maximal matching, ratio 2), list_schedule (2 - 1/m) and lpt (4/3 - 1/(3m)) for makespan, knapsack_fptas ((1 - eps) of the optimum) and max_cut (local search, half), each with a ratio function and checked against brute-force optima on 40 seeded small instances; set_cover and bin_pack wrap e.algo.combopt with their ratio bounds (fixture algo_approx passes on Windows; Linux pending). Open: a brute-force optimum check for the set-cover wrapper, bin packing against the true optimum instead of the size lower bound, and a Christofides wrapper. Was: Opened 2026-11-03 from docs/algos-2.md:86 by the single-list audit; not previously a queue row. Acceptance: Each routine returns a solution plus its proven ratio bound and is checked against a brute-force optimum on small instances (cost <= ratio * OPT). Set-cover and bin-pack wrappers reuse e.algo.combopt (set_cover_greedy, bin_pack_ffd, Christofides) instead of reimplementing. Size M. Checked open: grep lib for vertex_cover, fptas, lpt, makespan, longest processing: no hits; combopt only has set_cover_greedy/bin_pack_ffd/tsp_*; not in queue.tsv or work-done.jsonl"
     },
     {
-      "id": "L211",
-      "category": "library",
-      "group": "Algorithms",
-      "order": 350,
-      "title": "Add iterative linear solvers (CG, GMRES with restart) to e.algo.linalg over a matrix-free operator",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Opened 2026-11-03 from docs/algos-2.md:171 by the single-list audit; not previously a queue row. Acceptance: cg and gmres solve SPD and general nonsymmetric systems given an operator callback, converging to a stated tolerance and agreeing with the dense LU solution on fixtures. gfx.mesh's private conjugate_gradient is replaced by the shared one. Size S. Checked open: grep lib for gmres: none; only conjugate_gradient is lib/e/gfx/mesh.e:1331 (mesh-private) and math/opt.e (nonlinear CG); linalg/matrix.e has qr/eigen/svd but no iterative solver; Strassen was explicitly skipped in algos.md:878"
-    },
-    {
       "id": "L212",
       "category": "library",
       "group": "Algorithms",

@@ -349,7 +349,6 @@ L207	library	0	507	GP-11/GP-14 workloads: interactive terminal application and i
 L208	library	0	500	GP-12 workload: multi-package application with reproducible vendoring and clean-room rebuild	Opened 2026-11-03 from docs/general-purpose-verification.md:157 by the single-list audit;
 C234	compiler	0	690	Containers that hold obligated or borrowed values: failure-safe insert and dynamic retention checking	Opened 2026-11-03 from docs/m25-h01-ownership.md:389 by the single-list audit;
 L209	library	0.8	1168	Add e.algo.approx: vertex cover, knapsack FPTAS, LPT and greedy makespan, half-approx max-cut	Partial (D6650).
-L211	library	0	596	Add iterative linear solvers (CG, GMRES with restart) to e.algo.linalg over a matrix-free operator	Opened 2026-11-03 from docs/algos-2.md:171 by the single-list audit;
 L212	library	0.3	1001	Add classical MDS and Johnson-Lindenstrauss random projection to e.ml.reduce	Partial (D6649).
 L213	library	0	535	Add e.algo.discrepancy: Beck-Fiala, Spencer-style balancing, derandomized max-cut by conditional expectations	Opened 2026-11-03 from docs/algos-2.md:290 by the single-list audit;
 L214	library	0	569	Add WireGuard packet framing over e.crypto.noise (MAC1/MAC2, TAI64N, cookie reply, transport messages)	Opened 2026-11-03 from scripts/algos/decisions-pending.md:743 by the single-list audit;

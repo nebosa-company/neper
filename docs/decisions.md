@@ -47036,3 +47036,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `e.algo.online` holds ski rental (break-even, and the prediction-augmented rule that buys on day `ceil(lambda B)` when the prediction is at least B and `ceil(B / lambda)` otherwise), Belady's furthest-in-future paging as the offline optimum with LRU and a lowest-index marking algorithm online, move-to-front against the cost of the best static order, and a deterministic facility-location rule for points on a line that opens a facility when the savings it would have given earlier clients, plus the new client's own connection cost, reach the opening cost.
 
 **Result.** `algo_online` asserts the competitive ratios on Windows (ski rental 2, prediction bounds `1 + lambda` and `1 + 1/lambda`, marking and LRU at most k, move-to-front 2, facility cost within 6 of a brute-force optimum on 60 seeded instances); Linux pending. L210 leaves the queue.
+
+## D6652 — e.algo.linalg.iterative: conjugate gradients and GMRES over an operator
+
+**Decision.** `cg_parts` takes the residual, direction and product scratch as three slices and stops when the residual norm is at most `max(tol * |b|, abs_tol)`; `cg` wraps it with one scratch slice of 3 n values. `gmres` is restarted GMRES(m) with modified Gram-Schmidt and Givens rotations over `fn(*Ctx, []const f64, []f64)`. e.gfx.mesh's private conjugate gradient became a call to `cg_parts` with `tol = 0` and `abs_tol = 1e-14`, which is its old `rr > 1e-28` stop, so the iteration is identical and the mesh fixture is unchanged; its Operator is now passed as `*Operator` so it fits the callback's context type.
+
+**Result.** `algo_iterative` agrees with the dense LU solve to 1e-8 on 20 symmetric and 20 nonsymmetric systems and `gfx_mesh` passes on Windows; Linux pending. L211 leaves the queue.
