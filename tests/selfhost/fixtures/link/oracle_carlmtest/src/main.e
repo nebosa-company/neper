@@ -44,6 +44,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "wf") { ret w1 }
         ret w2
     }
+    if str.eq(c.name, "gr_f") || str.eq(c.name, "gr_p") {
+        let (gf, gp) = cl.granger_f(a, des, y, usize(x[2usize + n + n * p]))
+        if str.eq(c.name, "gr_f") { ret gf }
+        ret gp
+    }
+    if str.eq(c.name, "ct_t") || str.eq(c.name, "ct_p") {
+        let (ct, cp) = cl.coef_t(a, des, y, n, p, usize(x[2usize + n + n * p]))
+        if str.eq(c.name, "ct_t") { ret ct }
+        ret cp
+    }
     if str.eq(c.name, "bc") { ret cl.box_cox_ll(a, des, y, n, p, x[2usize + n + n * p]) }
     if str.eq(c.name, "an") || str.eq(c.name, "anp") {
         let (as1, ap1) = cl.anova_term(a, des, y, n, p, usize(x[2usize + n + n * p]), usize(x[3usize + n + n * p]))

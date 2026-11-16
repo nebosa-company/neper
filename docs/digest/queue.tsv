@@ -65,7 +65,7 @@ L504	library	0.3	600	rcompanion: nonparametric and categorical helpers	Partial (
 L505	library	0.2	446	sm: nonparametric smoothing methods	Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows;
 L506	library	0	195	ggm: Gaussian graphical models	Open (CRAN rank 964).
 L299	library	0	547	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Open (CRAN ranks 115, 116, 167, plus the interval summaries of ggdist 175).
-L300	library	0.7	1444	car, lmtest and sandwich: linear-model tests and robust covariance	Partial (D6421, D6422 classical bptest and RESET, D6423 bptest and resettest p values, D6424 Goldfeld-Quandt, D6425 NeweyWest, D6426 vcovCL).
+L300	library	0.7	1635	car, lmtest and sandwich: linear-model tests and robust covariance	Partial (D6421, D6422 classical bptest and RESET, D6423 bptest and resettest p values, D6424 Goldfeld-Quandt, D6425 NeweyWest, D6426 vcovCL).
 L305	library	0.2	702	Hmisc: numerically defined core	Partial (D6050).
 L306	library	0.15	919	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, b
 L307	library	0.15	583	quantreg: quantile regression inference and algorithms	Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg);

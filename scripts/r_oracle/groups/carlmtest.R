@@ -21,6 +21,7 @@ for (rep in 1:12) {
   rt <- raintest(m); add("rain", a, as.numeric(rt$statistic)); add("rainp", a, rt$p.value); ht <- harvtest(m); add("harv", a, as.numeric(ht$statistic)); add("harvp", a, ht$p.value)
   if (k >= 2) { qd <- sample(1:k, 1); m0 <- if (k == qd) lm(y ~ 1, d) else lm(y ~ ., d[, seq_len(k + 1 - qd), drop = FALSE]); a3 <- c(a, qd); lt <- lrtest(m0, m); wt <- waldtest(m0, m)
     add("lr", a3, lt$Chisq[2]); add("lrp", a3, lt$`Pr(>Chisq)`[2]); add("wf", a3, wt$F[2]); add("wfp", a3, wt$`Pr(>F)`[2]) }
+  for (j in 0:k) { cm <- coeftest(m); a4 <- c(a, j); add("ct_t", a4, cm[j + 1, 3]); add("ct_p", a4, cm[j + 1, 4]) }
   for (ord in c(1, 2, 4)) { a2 <- c(a, ord); b1 <- bgtest(m, order = ord); b2 <- bgtest(m, order = ord, type = "F"); add("bg_c", a2, as.numeric(b1$statistic)); add("bg_cp", a2, b1$p.value); add("bg_f", a2, as.numeric(b2$statistic)); add("bg_fp", a2, b2$p.value) }
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
 }
@@ -34,5 +35,11 @@ for (rep in 1:15) {
   n <- sample(20:70, 1); ng <- sample(2:4, 1); gr <- sample(0:(ng - 1), n, TRUE); ng <- length(unique(gr)); gr <- match(gr, sort(unique(gr))) - 1
   y <- rnorm(n) * (1 + gr) + gr * 0.3; if (rep %% 3 == 0) y <- rexp(n)
   for (ce in 0:1) { lt <- leveneTest(y, factor(gr), center = if (ce == 0) median else mean); add("lev", c(n, 1, y, gr, ng, ce), lt[1, "F value"]); add("levp", c(n, 1, y, gr, ng, ce), lt[1, "Pr(>F)"]) }
+}
+# grangertest: ("gr_f" "gr_p") args (n, 1, y[n], x[n], order)
+for (rep in 1:20) {
+  n <- sample(40:120, 1); x <- as.vector(arima.sim(list(ar = 0.5), n)); y <- c(0, 0.5 * x[-n]) + 0.4 * c(0, rnorm(n - 1)) + rnorm(n); ord <- sample(1:4, 1)
+  gt <- suppressWarnings(grangertest(x, y, order = ord)); a <- c(n, 1, y, x, ord)
+  cases[[length(cases) + 1]] <- case("gr_f", a, gt$F[2], rel = 1e-9, abs = 1e-12); cases[[length(cases) + 1]] <- case("gr_p", a, gt$`Pr(>F)`[2], rel = 1e-9, abs = 1e-12)
 }
 emit("carlmtest", "car", list(cases))

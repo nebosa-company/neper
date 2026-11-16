@@ -46474,3 +46474,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `nested_tests` fits the full model and the one without its last q columns: lrtest's `n (log(RSS1/n) - log(RSS2/n))` (the lm log-likelihood difference) on q degrees of freedom, waldtest's F `((RSS1 - RSS2)/q) / (RSS2/(n - p))`.
 
 **Result.** `oracle_carlmtest` agrees with lmtest on 48 new values on Windows (886 cases in all); Linux pending. L300 stays partial.
+
+## D6551 — lmtest: coeftest and grangertest
+
+**Decision.** `coef_t` is coeftest for an lm: `beta_j / sqrt(s^2 (X'X)^-1_jj)` with `2 pt(-|t|, n - p)`; `granger_f` is grangertest(x, y, order): the regression of y_t on an intercept, its own `order` lags and the lags of x, tested for dropping the x lags by the waldtest F (the first `order` rows lost).
+
+**Result.** `oracle_carlmtest` agrees with lmtest on 134 new values on Windows (1020 cases in all); Linux pending. L300 stays partial.

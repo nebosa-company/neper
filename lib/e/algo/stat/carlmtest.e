@@ -929,3 +929,44 @@ fn nested_tests(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usiz
     let wf = ((r1 - r2) / f64(q)) / (r2 / f64(n - p))
     ret (lr, p_chisq(lr, f64(q)), wf, p_f(wf, f64(q), f64(n - p)))
 }
+
+// lmtest::grangertest(x, y, order): the Wald F of the lags of x in the regression of y on its own lags and the lags of x, with its p value
+fn granger_f(a: *mem.Arena, xs: []const f64, ys: []const f64, order: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let rows = ys.len - order
+    let w = 1usize + 2usize * order
+    let (des, e1) = mem.alloc[f64](a, rows * w)
+    let (yv, e2) = mem.alloc[f64](a, rows)
+    if e1 != ok || e2 != ok { ret (nan, nan) }
+    var r = 0usize
+    while r < rows {
+        let t = r + order
+        yv[r] = ys[t]
+        des[r * w] = 1.0f64
+        var k = 1usize
+        while k <= order {
+            des[r * w + k] = ys[t - k]
+            des[r * w + order + k] = xs[t - k]
+            k += 1usize
+        }
+        r += 1usize
+    }
+    let (l1, l2, f1, p1) = nested_tests(a, des, yv, rows, w, order)
+    ret (f1, p1)
+}
+
+// lmtest::coeftest of an lm: the t value and two-sided p value of coefficient j
+fn coef_t(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, j: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (f0, e1) = ols(a, x, y, n, p)
+    if e1 != ok { ret (nan, nan) }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f0.resid[i] * f0.resid[i]
+        i += 1usize
+    }
+    let se = math.sqrt[f64](rss / f64(n - p) * f0.xtx_inv[j * p + j])
+    let t = f0.beta[j] / se
+    ret (t, 2.0f64 * nb.pt(0.0f64 - math.abs[f64](t), f64(n - p), true, false))
+}
