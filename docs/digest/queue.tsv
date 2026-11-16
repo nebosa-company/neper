@@ -196,7 +196,7 @@ L312	library	0.15	702	psych: reliability, factor analysis and correlation tools	
 L313	library	0.12	756	emmeans: estimated marginal means and contrasts	Partly done (D6058): e.algo.stat.emmeans gives lm EMMs, SEs, pairwise contrasts and Tukey, Holm, Bonferroni, Sidak adjustments equal to emmeans on 8 models on Windows (oracle_emmeans);
 L341	library	0	313	multcomp: general linear hypotheses	Open (CRAN rank 224;
 L318	library	0.05	735	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Partly done (D6063): e.algo.stat.fcast has BoxCox, InvBoxCox and BoxCox.lambda by loglik, equal to forecast on 171 cases on Windows (oracle_fcast);
-L319	library	0	471	nlme: gls, correlation structures and variance functions	Open (CRAN rank 195).
+L319	library	0.08	803	nlme: gls, correlation structures and variance functions	Partly done (D6064): e.algo.stat.gls has gls at a fixed AR1, compound-symmetry or exponential correlation, REML and ML, equal to nlme on 492 values on Windows (oracle_gls);
 L320	library	0	602	sf: simple-features geometry, predicates and spherical geometry	Open (CRAN rank 159;
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
 L348	library	0	308	mclust: Gaussian mixture model selection	Open (CRAN rank 280).

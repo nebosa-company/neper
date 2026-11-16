@@ -3135,4 +3135,5 @@ D6059	1435	lubridate and timeDate date part: add_with_rollback clamps, it does n
 D6060	981	Matrix dense part: expm by Ward's Pade 8, the four norms
 D6061	1317	igraph structure measures on a dense adjacency matrix
 D6062	1035	igraph deterministic layouts; the random generators wait on igraph's RNG wrapper
-D6063	985	forecast Box-Cox: the sign-preserving transform and the grid log-likelihood
+D6063	986	forecast Box-Cox: the sign-preserving transform and the grid log-likelihood
+D6064	1103	nlme gls at a fixed correlation: the objective by definition, sigma follows the method

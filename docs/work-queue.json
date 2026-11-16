@@ -2176,10 +2176,10 @@
       "group": "CRAN parity",
       "order": 791,
       "title": "nlme: gls, correlation structures and variance functions",
-      "score": 0,
+      "score": 0.08,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 195). Large. e.algo.stat.mixed has random-intercept and slope fits, MMRM and GEE. Acceptance, equal to nlme: gls and lme with corAR1, corARMA, corCAR1, corCompSymm, corSymm, corGaus, corExp, corSpher, corLin, corRatio and the variance functions varIdent, varPower, varExp, varFixed, varComb, varConstPower; REML and ML objective, AIC, anova between models, intervals; lmList; nlme and nls self-start models (SSlogis, SSasymp, SSmicmen, SSfpl, SSgompertz)."
+      "evidence": "Partly done (D6064): e.algo.stat.gls has gls at a fixed AR1, compound-symmetry or exponential correlation, REML and ML, equal to nlme on 492 values on Windows (oracle_gls); Linux pending. Open: estimating correlation parameters, groups, variance functions, lme, lmList, other classes, anova, intervals, self-start models. Original: Open (CRAN rank 195). Large. e.algo.stat.mixed has random-intercept and slope fits, MMRM and GEE. Acceptance, equal to nlme: gls and lme with corAR1, corARMA, corCAR1, corCompSymm, corSymm, corGaus, corExp, corSpher, corLin, corRatio and the variance functions varIdent, varPower, varExp, varFixed, varComb, varConstPower; REML and ML objective, AIC, anova between models, intervals; lmList; nlme and nls self-start models (SSlogis, SSasymp, SSmicmen, SSfpl, SSgompertz)."
     },
     {
       "id": "L320",
