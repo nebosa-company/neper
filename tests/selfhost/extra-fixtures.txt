@@ -288,6 +288,7 @@ oracle_sm
 oracle_dbscanpkg
 oracle_ghyp
 oracle_gslfns
+oracle_ks
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -320,3 +321,4 @@ oracle_sm
 oracle_dbscanpkg
 oracle_ghyp
 oracle_gslfns
+oracle_ks

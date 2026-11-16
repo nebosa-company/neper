@@ -1087,10 +1087,10 @@
       "group": "CRAN parity",
       "order": 698,
       "title": "ks: multivariate kernel density estimation",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 331). Mid. Acceptance, equal to ks: kde with Hpi, Hscv, Hlscv, Hns and diagonal variants, density regions and contours, kde.test, kde.local.test, kroc, kcurv, ksupp, rkde and the binned estimates in 1 to 4 dimensions."
+      "evidence": "Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows; oracle_ks; Linux pending). Open: the plug-in, SCV and LSCV selectors, binning, regions and the rest. Was: Open (CRAN rank 331). Mid. Acceptance, equal to ks: kde with Hpi, Hscv, Hlscv, Hns and diagonal variants, density regions and contours, kde.test, kde.local.test, kroc, kcurv, ksupp, rkde and the binned estimates in 1 to 4 dimensions."
     },
     {
       "id": "L367",

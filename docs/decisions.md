@@ -45940,3 +45940,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.gslfns` gains `hyperg_0f1`, `hyperg_1f1` and `hyperg_2f1` (power series, 2F1 for |x| < 1), `legendre_pl` and `legendre_plm` (upward recurrence with the Condon-Shortley phase), `fermi_dirac_0`, `dilog` (series, Landen for x < 0, reflection above 1/2) and `psi` (recurrence to 12, then the asymptotic series).
 
 **Result.** `oracle_gslfns` equals gsl on 910 cases on Windows at rel 1e-9, 240 of them new, 2F1 over |x| < 0.9, Legendre to degree 12 and the dilogarithm over (-8, 1). Hypergeometric U, the 2F1 continuation beyond |x| = 1, Legendre Q, the higher Fermi-Dirac orders, Debye, synchrotron, transport, Coulomb, Bessel Y and the error estimates are open; Linux pending. L417 stays partial.
+
+## D6462 — ks: normal-scale bandwidths and kde at points
+
+`e.algo.stat.ks` is new: `hns` and `hns_matrix` (the normal-scale bandwidth (4 / (n (d + 2r + 2)))^(1 / (d + 2r + 4)) times the standard deviation, or its square times the covariance, for derivative order r) and `kde_at` (the mean of N(x_i, H) densities at a point, via the inverse and determinant of H), unbinned.
+
+**Result.** `oracle_ks` equals ks on 205 cases on Windows at rel 1e-9, 25 samples of 20 to 80 rows in 1 to 3 dimensions. The plug-in, smoothed cross-validation and least-squares selectors, binned estimation, density regions and the rest of the package are open; Linux pending. L365 is partial.
