@@ -46558,3 +46558,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `scripts/gen_palettes_ramp.R` writes `labramp_data.e` (gsea default, 19 material and 22 tw3 palettes, one `set:palette|#RRGGBB,...` row each, as palettes_data.e does for the discrete ones); `palette_colour(idx, n, k, alpha)` reads the row and ramps it with `lab_ramp`.
 
 **Result.** `oracle_labramp` agrees with ggsci on 3276 more colours chosen by table row on Windows (6552 cases in all); Linux pending. L329 stays partial: the ggthemes palettes with arguments and the gradient palettes.
+
+## D6565 — ggthemes palettes with arguments
+
+**Decision.** `scripts/gen_palettes.R` writes a table row for every valid value of the first argument of canva_pal, colorblind_pal, economist_pal, excel_new_pal, excel_pal, few_pal, hc_pal, numbers_pal, solarized_pal, stata_pal and wsj_pal (the value lists come from `ggthemes_data` and `canva_palettes`, or TRUE and FALSE for a logical), after the default rows so existing row numbers keep their place; the oracle walks the same lists.
+
+**Result.** `oracle_palettes` agrees with ggthemes and ggsci on 2793 cases (the table is 232 rows) on Windows; Linux pending. L329 stays partial: the ggthemes gradient palettes.

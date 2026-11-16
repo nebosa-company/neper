@@ -1,6 +1,6 @@
 id	category	score	evidence_bytes	title	status
 L301	library	0.8	942	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
-L329	library	0.6	790	ggsci and ggthemes palettes	Partial (D6034).
+L329	library	0.85	1024	ggsci and ggthemes palettes	Partial (D6034).
 L357	library	0.8	584	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).
 L388	library	0.6	402	fracdiff: fractional differencing and ARFIMA	Partial (D6039).
 L392	library	0.3	497	dqrng: random number generators	Partial (D6041).

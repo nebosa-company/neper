@@ -34,4 +34,27 @@ for (ty in names(tp)) for (nm in names(tp[[ty]])) {
   for (k in seq_along(cols)) add("colour", c(row, k - 1, 1), pack(cols[k]))
   row <- row + 1
 }
+for (fn in c("economist_pal", "colorblind_pal", "fivethirtyeight_pal", "few_pal", "calc_pal", "excel_pal", "gdocs_pal", "hc_pal", "pander_pal", "solarized_pal", "stata_pal", "wsj_pal", "tableau_color_pal")) {
+  f <- tryCatch(get(fn, asNamespace("ggthemes")), error = function(e) NULL); if (is.null(f)) next
+  pf <- tryCatch(f(), error = function(e) NULL); if (is.null(pf)) next
+  mx <- attr(pf, "max_n"); if (is.null(mx)) next
+  cols <- toupper(substr(pf(mx), 1, 7)); if (!all(grepl("^#[0-9A-F]{6}$", cols))) next
+  add("size", c(row), length(cols)); for (k in seq_along(cols)) add("colour", c(row, k - 1, 1), pack(cols[k])); row <- row + 1
+}
+vfns <- c("canva_pal", "colorblind_pal", "economist_pal", "excel_new_pal", "excel_pal", "few_pal", "hc_pal", "numbers_pal", "solarized_pal", "stata_pal", "wsj_pal")
+gd <- ggthemes::ggthemes_data
+vv <- list(canva_pal = names(ggthemes::canva_palettes), few_pal = names(gd$few$colors), hc_pal = names(gd$hc), numbers_pal = names(gd$numbers), wsj_pal = names(gd$wsj$palettes), solarized_pal = names(gd$solarized$palettes), stata_pal = names(gd$stata$colors$schemes), excel_new_pal = names(gd$excel$themes))
+for (fn in vfns) {
+  f <- tryCatch(get(fn, asNamespace("ggthemes")), error = function(e) NULL); if (is.null(f)) next
+  fm <- formals(f); if (length(fm) == 0) next
+  nm <- names(fm)[1]; d <- tryCatch(eval(fm[[1]]), error = function(e) NULL)
+  vals <- if (!is.null(vv[[fn]])) vv[[fn]] else if (is.logical(d)) c(TRUE, FALSE) else if (is.character(d)) unique(d) else NULL
+  for (v in vals) {
+    args <- list(v); names(args) <- nm
+    pf <- tryCatch(do.call(f, args), error = function(e) NULL); if (is.null(pf)) next
+    mx <- attr(pf, "max_n"); if (is.null(mx)) next
+    cols <- toupper(substr(pf(mx), 1, 7)); if (!all(grepl("^#[0-9A-F]{6}$", cols))) next
+    add("size", c(row), length(cols)); for (k in seq_along(cols)) add("colour", c(row, k - 1, 1), pack(cols[k])); row <- row + 1
+  }
+}
 emit("palettes", c("ggsci", "ggthemes"), list(cases))
