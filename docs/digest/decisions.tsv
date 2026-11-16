@@ -3242,4 +3242,5 @@ D6166	765	pROC: AUC, DeLong variance and interval, paired DeLong test
 D6167	721	ROCR: performance measures at every cutoff
 D6168	850	DiceDesign: lhsDesign, factDesign and the Faure sequence
 D6169	808	DiceDesign: maximinSA_LHS simulated annealing, draw for draw
-D6170	1163	DiceDesign: discrepSA_LHS (C2) draw for draw, with R's extended-precision products and sums
+D6170	1164	DiceDesign: discrepSA_LHS (C2) draw for draw, with R's extended-precision products and sums
+D6171	786	DiceDesign: wspDesign

@@ -42,4 +42,11 @@ for (itn in 1:6) {
   S <- discrepSA_LHS(L, T0 = 0.05, c = 0.9, it = itn, criterion = "C2", profile = "GEOM")
   add("dsa_it", c(n, d, sd, 0, itn), tail(S$critValues, 1))
 }
+for (rep in 1:12) {
+  n <- sample(8:30, 1); d <- sample(2:4, 1); sd <- sample(1:100000, 1); dm <- c(0.1, 0.2, 0.3)[rep %% 3 + 1]
+  L <- lhsDesign(n, d, seed = sd)$design
+  w <- wspDesign(L, dm)
+  x <- match(apply(w$design, 1, paste, collapse = ","), apply(L, 1, paste, collapse = ","))
+  add("wsp_n", c(n, d, sd, dm), length(x)); add("wsp", c(n, d, sd, dm), sum(x * seq_along(x)))
+}
 emit("dicedesign", "DiceDesign", list(cases))

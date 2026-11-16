@@ -45418,3 +45418,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.dicedesign` gains the C2 discrepSA_LHS annealing (GEOM and LINEAR profiles) on the same loop as maximinSA_LHS, scoring a swap with the package's discrepancyC2_EP update formula instead of recomputing, and c2_exact for the starting value. The update formula returns the unchanged value only up to rounding when both rows coincide, and whether it lands at or just above the old value decides whether rbinom is drawn, so the random stream stays aligned only if the rounding agrees with R's. R's prod() and sum() accumulate in extended precision and round once, which double-double arithmetic reproduces (prod_ld, sum_ld); the helpers also use the shifted matrix, as the package does, so differences of shifted entries round alike. With that the final design and C2 equal the package's draw for draw, including runs of up to 60 steps. Not here: the other criteria of discrepSA_LHS, the GEOM_MORRIS profile, maximinESE_LHS and wspDesign.
 
 **Result.** `oracle_dicedesign` equals DiceDesign on 154 cases on Windows; Linux pending. L426 stays partial.
+
+## D6171 — DiceDesign: wspDesign
+
+`e.algo.stat.dicedesign` gains wsp (wspDesign with init "center"): the row nearest the centre is the base, rows closer than dmin to the base are removed together with the base, and the nearest remaining row becomes the next base, with the package's bookkeeping (the `points` count includes the removed rows and the loop ends when it reaches n; which.min answers the first minimum, row 1 when every distance is infinite). The selected row indices and their order equal the package's on random LHS designs of 8 to 30 points. Not here: init = "random", the GEOM_MORRIS profile, maximinESE_LHS, the other discrepSA_LHS criteria and meshRatio.
+
+**Result.** `oracle_dicedesign` equals DiceDesign on 178 cases on Windows; Linux pending. L426 stays partial.

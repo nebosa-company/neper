@@ -554,3 +554,90 @@ fn c2_exact(x: []const f64, n: usize, d: usize) -> f64 {
     }
     ret math.sqrt[f64](math.pow[f64](13.0f64 / 12.0f64, f64(d)) - (2.0f64 / nf) * s1 + (1.0f64 / (nf * nf)) * s2)
 }
+
+// wspDesign (init "center"): the indices (1-based) of the selected rows, in the package's order; the count is returned, x needs room for n
+fn wsp(a: *mem.Arena, m: []const f64, n: usize, d: usize, dmin: f64, x: []usize) -> usize {
+    let inf = 1.0e308f64 * 10.0f64
+    let (dm, e1) = mem.alloc[f64](a, n * n)
+    if e1 != ok { ret 0usize }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            if i == j { dm[i * n + j] = inf } else { dm[i * n + j] = dist2(m, d, i, j) }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // the centre point's distance to every row picks the base
+    var base = 0usize
+    var best = inf
+    i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var k = 0usize
+        while k < d {
+            let v = m[i * d + k] - 0.5f64
+            s += v * v
+            k += 1usize
+        }
+        let dc = math.sqrt[f64](s)
+        if dc < best {
+            best = dc
+            base = i
+        }
+        i += 1usize
+    }
+    var npoints = 1usize
+    var cnt = 1usize
+    x[0usize] = base + 1usize
+    while npoints < n {
+        var j = 0usize
+        var added = 0usize
+        let (co, e2) = mem.alloc[usize](a, n)
+        if e2 != ok { ret cnt }
+        while j < n {
+            if dm[base * n + j] < dmin {
+                co[added] = j
+                added += 1usize
+            }
+            j += 1usize
+        }
+        if added > 0usize {
+            var q = 0usize
+            while q < added {
+                var r = 0usize
+                while r < n {
+                    dm[r * n + co[q]] = inf
+                    dm[co[q] * n + r] = inf
+                    r += 1usize
+                }
+                q += 1usize
+            }
+            npoints += added
+        }
+        var nb = 0usize
+        var mv = dm[base * n]
+        j = 1usize
+        while j < n {
+            if dm[base * n + j] < mv {
+                mv = dm[base * n + j]
+                nb = j
+            }
+            j += 1usize
+        }
+        npoints += 1usize
+        j = 0usize
+        while j < n {
+            dm[base * n + j] = inf
+            dm[j * n + base] = inf
+            j += 1usize
+        }
+        base = nb
+        if cnt < n {
+            x[cnt] = base + 1usize
+            cnt += 1usize
+        }
+    }
+    ret cnt
+}

@@ -66,6 +66,20 @@ fn gen(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret total
     }
+    if str.eq(c.name, "wsp") || str.eq(c.name, "wsp_n") {
+        rr.seed(&g, i64(x[2usize]))
+        if dd.lhs_from(a, &g, n, d, o) != ok { os.exit(9) }
+        let (xs, e5) = mem.alloc[usize](a, n)
+        if e5 != ok { os.exit(10) }
+        let cnt = dd.wsp(a, o, n, d, x[3usize], xs)
+        if str.eq(c.name, "wsp_n") { ret f64(cnt) }
+        var q = 0usize
+        while q < cnt {
+            total += f64(xs[q]) * f64(q + 1usize)
+            q += 1usize
+        }
+        ret total
+    }
     if str.eq(c.name, "lhs") {
         if dd.lhs_design(a, n, d, x[3usize] > 0.5f64, i64(x[2usize]), o) != ok { os.exit(7) }
     } else {
@@ -80,7 +94,7 @@ fn gen(a: *mem.Arena, c: *const oracle.Case) -> f64 {
 }
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
-    if str.eq(c.name, "lhs") || str.eq(c.name, "fact") || str.eq(c.name, "faure") || str.eq(c.name, "sa") || str.eq(c.name, "sa_phi") || str.eq(c.name, "dsa") || str.eq(c.name, "dsa_c2") || str.eq(c.name, "dsa_it") { ret gen(a, c) }
+    if str.eq(c.name, "lhs") || str.eq(c.name, "fact") || str.eq(c.name, "faure") || str.eq(c.name, "sa") || str.eq(c.name, "sa_phi") || str.eq(c.name, "dsa") || str.eq(c.name, "dsa_c2") || str.eq(c.name, "dsa_it") || str.eq(c.name, "wsp") || str.eq(c.name, "wsp_n") { ret gen(a, c) }
     let x = c.args
     let n = usize(x[0usize])
     let d = usize(x[1usize])
