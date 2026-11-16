@@ -196,6 +196,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret pm.pchip(a, x[1usize..1usize + n], x[1usize + n..1usize + 2usize * n], x[1usize + 2usize * n])
     }
     if str.eq(k, "quadgk") { ret pm.quadgk(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
+    if str.eq(k, "interp1") {
+        let ni = usize(x[1usize])
+        ret pm.interp1(a, x[2usize..2usize + ni], x[2usize + ni..2usize + 2usize * ni], x[2usize + 2usize * ni], usize(x[0usize]))
+    }
     if str.eq(k, "quadl") { ret pm.quadl(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "fzero") { ret pm.fzero(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "nchoosek") { ret pm.nchoosek(x[0usize], x[1usize]) }

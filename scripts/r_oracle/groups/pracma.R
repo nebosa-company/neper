@@ -90,6 +90,10 @@ for (rep in 1:20) {
 fzs <- list(function(x) cos(x) - x, function(x) x^3 - 2 * x - 5, function(x) exp(x) - 3, function(x) x * exp(-x) - 0.2, function(x) sin(x) - 0.5 * x)
 fzb <- list(c(0, 1), c(2, 3), c(0, 2), c(0, 1), c(1, 3))
 for (rep in 1:10) { id <- (rep - 1) %% 5; b <- fzb[[id + 1]] + c(-1, 1) * runif(1, 0, 0.1) * (rep > 5); add("fzero", c(id, b, 1e-12), fzero(fzs[[id + 1]], b, tol = 1e-12)$x) }
+for (rep in 1:18) {
+  n <- sample(4:12, 1); xs <- sort(runif(n, 0, 10)); ys <- cumsum(rnorm(n)); xq <- c(min(xs), max(xs), runif(4, min(xs), max(xs)))
+  for (q in xq) for (m in 0:2) add("interp1", c(m, n, xs, ys, q), interp1(xs, ys, q, method = c("linear", "nearest", "spline")[m + 1]), rel = 1e-8)
+}
 # nchoosek reference values are filled from R directly
 cases <- lapply(cases, function(cs) { if (cs$fn == "nchoosek") cs$want <- choose(cs$args[1], cs$args[2]); cs })
 emit("pracma", "pracma", list(cases))

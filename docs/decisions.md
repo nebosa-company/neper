@@ -45820,3 +45820,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pracma` gains `quadl` (the package's adaptive Gauss-Lobatto, including its tolerance rescaling by the error ratio and its reversed-limits sign) and `fzero` (Brent on a bracket to tol, the root as reported), on fixed integrand and function sets.
 
 **Result.** `oracle_pracma` equals pracma on 612 cases on Windows at rel 1e-9, 60 of them new; Linux pending. L333 stays partial.
+
+## D6442 — pracma: interp1 linear, nearest and spline
+
+`e.algo.stat.pracma` gains `interp1`: linear (approx), nearest (constant between knot midpoints, right-continuous) and the package's own spline, whose end slopes come from its tridiagonal solve rather than R's fmm or natural splines.
+
+**Result.** `oracle_pracma` equals pracma on 936 cases on Windows at rel 1e-8, 324 of them new, including both end knots; Linux pending. L333 stays partial.

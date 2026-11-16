@@ -1021,3 +1021,87 @@ fn fzero(id: usize, a0: f64, b0: f64, tol: f64) -> f64 {
     }
     ret b
 }
+
+// interp1(x, y, xi, method) at one xi inside [x[0], x[n-1]] (x sorted): method 0 linear, 1 nearest, 2 spline (the package's not-a-knot slopes, at least three points)
+fn interp1(a: *mem.Arena, x: []const f64, y: []const f64, xi: f64, method: usize) -> f64 {
+    let n = x.len
+    var k = 0usize
+    var j = 1usize
+    // approx: the last knot at or below xi, the final interval when xi is the last knot
+    while j < n - 1usize {
+        if x[j] <= xi { k = j }
+        j += 1usize
+    }
+    if method == 0usize {
+        let t = (xi - x[k]) / (x[k + 1usize] - x[k])
+        if xi == x[n - 1usize] { ret y[n - 1usize] }
+        ret y[k] + t * (y[k + 1usize] - y[k])
+    }
+    if method == 1usize {
+        // constant on the midpoints, right-continuous: the knot whose cell [mid_left, mid_right) holds xi
+        var i = 0usize
+        while i + 1usize < n && xi >= (x[i] + x[i + 1usize]) / 2.0f64 { i += 1usize }
+        ret y[i]
+    }
+    let (h, e1) = mem.alloc[f64](a, n - 1usize)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (dl, e2) = mem.alloc[f64](a, n - 1usize)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i + 1usize < n {
+        h[i] = x[i + 1usize] - x[i]
+        dl[i] = (y[i + 1usize] - y[i]) / h[i]
+        i += 1usize
+    }
+    let (sa, e3) = mem.alloc[f64](a, n - 1usize)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    let (sb, e4) = mem.alloc[f64](a, n)
+    if e4 != ok { ret 0.0f64 / 0.0f64 }
+    let (sc, e5) = mem.alloc[f64](a, n - 1usize)
+    if e5 != ok { ret 0.0f64 / 0.0f64 }
+    let (r, e6) = mem.alloc[f64](a, n)
+    if e6 != ok { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i + 2usize < n {
+        sa[i] = h[i + 1usize]
+        i += 1usize
+    }
+    sa[n - 2usize] = h[n - 3usize] + h[n - 2usize]
+    sb[0usize] = h[1usize]
+    i = 1usize
+    while i + 1usize < n {
+        sb[i] = 2.0f64 * (h[i] + h[i - 1usize])
+        i += 1usize
+    }
+    sb[n - 1usize] = h[n - 3usize]
+    sc[0usize] = h[0usize] + h[1usize]
+    i = 1usize
+    while i + 1usize < n {
+        sc[i] = h[i - 1usize]
+        i += 1usize
+    }
+    r[0usize] = ((h[0usize] + 2.0f64 * sc[0usize]) * h[1usize] * dl[0usize] + h[0usize] * h[0usize] * dl[1usize]) / sc[0usize]
+    i = 1usize
+    while i + 1usize < n {
+        r[i] = 3.0f64 * (h[i] * dl[i - 1usize] + h[i - 1usize] * dl[i])
+        i += 1usize
+    }
+    r[n - 1usize] = (h[n - 2usize] * h[n - 2usize] * dl[n - 3usize] + (2.0f64 * sa[n - 2usize] + h[n - 2usize]) * h[n - 3usize] * dl[n - 2usize]) / sa[n - 2usize]
+    i = 0usize
+    while i + 1usize < n {
+        let mu = sa[i] / sb[i]
+        sb[i + 1usize] = sb[i + 1usize] - mu * sc[i]
+        r[i + 1usize] = r[i + 1usize] - mu * r[i]
+        i += 1usize
+    }
+    r[n - 1usize] = r[n - 1usize] / sb[n - 1usize]
+    i = n - 1usize
+    while i > 0usize {
+        r[i - 1usize] = (r[i - 1usize] - sc[i - 1usize] * r[i]) / sb[i - 1usize]
+        i -= 1usize
+    }
+    let cc = (3.0f64 * dl[k] - 2.0f64 * r[k] - r[k + 1usize]) / h[k]
+    let bb = (r[k] - 2.0f64 * dl[k] + r[k + 1usize]) / (h[k] * h[k])
+    let s = xi - x[k]
+    ret y[k] + s * (r[k] + s * (cc + s * bb))
+}
