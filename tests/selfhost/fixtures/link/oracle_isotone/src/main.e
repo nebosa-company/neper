@@ -30,7 +30,14 @@ fn active(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if e3 != ok { ret nan }
     var kind = 0u8
     if c.name[1usize] == 100u8 { kind = 1u8 }
-    if iso.active_set(a, y, w, p1, p2, kind, out) != ok { ret nan }
+    var aw = 1.0f64
+    var bw = 1.0f64
+    if c.name[1usize] == 113u8 {
+        kind = 2u8
+        aw = z[2usize + 2usize * n + 2usize * m + 1usize]
+        bw = z[2usize + 2usize * n + 2usize * m + 2usize]
+    }
+    if iso.active_set(a, y, w, p1, p2, kind, aw, bw, out) != ok { ret nan }
     if st == 0usize { ret out[n + m] }
     if st == 1usize { ret out[n + m + 1usize] }
     var s = 0.0f64

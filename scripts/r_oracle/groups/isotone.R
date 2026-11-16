@@ -31,4 +31,13 @@ for (rep in 1:60) {
   st <- c(r$fval, r$niter, sum(seq_along(r$x) * r$x), sum(seq_along(r$lambda) * r$lambda))
   for (j in 0:3) add("ad", c(a, j), st[j + 1])
 }
+for (rep in 1:40) {
+  n <- sample(4:9, 1); y <- round(rnorm(n), 3); w <- round(runif(n, 0.5, 3), 2); perm <- sample(n); ed <- NULL; aw <- round(runif(1, 0.3, 2), 2); bw <- round(runif(1, 0.3, 2), 2)
+  for (i in 1:(n - 1)) for (j in (i + 1):n) if (runif(1) < 0.3) ed <- rbind(ed, c(perm[i], perm[j]))
+  if (is.null(ed)) next
+  r <- tryCatch(suppressWarnings(activeSet(ed, "quantile", y = y, weights = w, aw = aw, bw = bw, check = FALSE)), error = function(e) NULL)
+  if (is.null(r) || r$niter >= 100 || any(is.na(r$lambda)) || any(is.na(r$x))) next
+  a <- c(n, nrow(ed), y, w, ed[, 1], ed[, 2]); st <- c(r$fval, r$niter, sum(seq_along(r$x) * r$x), sum(seq_along(r$lambda) * r$lambda))
+  for (j in 0:3) add("aq", c(a, j, aw, bw), st[j + 1])
+}
 emit("isotone", "isotone", list(cases))
