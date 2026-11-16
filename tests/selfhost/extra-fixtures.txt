@@ -285,3 +285,4 @@ oracle_dharma
 oracle_pamcluster
 oracle_arm
 oracle_signalpkg
+oracle_agricolae

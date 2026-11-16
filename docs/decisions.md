@@ -45496,3 +45496,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.signalpkg` gains filtfilt as the package writes it (the signal followed by 2 * max(length(a), length(b)) zeros goes through the filter, is reversed, filtered again and reversed, and the first length(x) values are kept, so there is no edge reflection or initial-state matching) and freqz_at, the response B(e^{-jw}) / A(e^{-jw}) at chosen frequencies. Both equal signal's on Butterworth designs. Not here: freqz on the FFT grid with region "whole", grpdelay, the other designs and filters.
 
 **Result.** `oracle_signalpkg` equals signal on 150 cases on Windows; Linux pending. L340 stays partial.
+
+## D6185 — agricolae: LSD, HSD and Scheffe pairwise comparisons
+
+`e.algo.stat.agricolae` computes the one-way group means, sizes, residual mean square and degrees of freedom, and for any pair of groups the difference of means, its p value and the confidence limits for LSD.test (unadjusted t), HSD.test (Tukey, studentised range at the pair's own harmonic-mean standard error) and scheffe.test, for balanced and unbalanced groups. The package rounds the printed p values to four decimals, so the oracle compares them to that granularity and the limits to full precision. Not here: SNK.test and duncan.test (their standard error for unbalanced groups was not the pairwise one and was not recovered, so they are left out rather than approximated), waller.test, the grouping letters, the non-parametric post-hoc tests, the design functions and AMMI.
+
+**Result.** `oracle_agricolae` equals agricolae on 168 cases on Windows; Linux pending. L396 is partial.
