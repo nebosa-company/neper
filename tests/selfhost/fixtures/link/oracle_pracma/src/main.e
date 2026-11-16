@@ -195,6 +195,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let n = usize(x[0usize])
         ret pm.pchip(a, x[1usize..1usize + n], x[1usize + n..1usize + 2usize * n], x[1usize + 2usize * n])
     }
+    if str.eq(k, "savgol") {
+        let sn = usize(x[4usize])
+        let (so, se) = mem.alloc[f64](a, sn)
+        if se != ok { os.exit(7) }
+        if pm.savgol(a, x[5usize..5usize + sn], usize(x[0usize]), usize(x[1usize]), usize(x[2usize]), so) != ok { os.exit(8) }
+        ret so[usize(x[3usize])]
+    }
     if str.eq(k, "quadgk") { ret pm.quadgk(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "interp1") {
         let ni = usize(x[1usize])

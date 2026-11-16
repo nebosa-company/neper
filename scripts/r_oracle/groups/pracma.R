@@ -96,4 +96,9 @@ for (rep in 1:18) {
 }
 # nchoosek reference values are filled from R directly
 cases <- lapply(cases, function(cs) { if (cs$fn == "nchoosek") cs$want <- choose(cs$args[1], cs$args[2]); cs })
+for (rep in 1:30) {
+  n <- sample(20:60, 1); tt <- round(cumsum(rnorm(n)), 4); fl <- sample(c(5, 7, 9, 11), 1); fo <- sample(2:4, 1); dord <- sample(0:min(2, fo), 1)
+  s <- savgol(tt, fl, fo, dord)
+  for (i in sample(n, 5)) add("savgol", c(fl, fo, dord, i - 1, n, tt), s[i])
+}
 emit("pracma", "pracma", list(cases))

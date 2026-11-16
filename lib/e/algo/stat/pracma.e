@@ -1105,3 +1105,110 @@ fn interp1(a: *mem.Arena, x: []const f64, y: []const f64, xi: f64, method: usize
     let s = xi - x[k]
     ret y[k] + s * (r[k] + s * (cc + s * bb))
 }
+
+// savgol(T, fl, forder, dorder): row dorder of the pseudo-inverse of the Vandermonde matrix (-fc .. fc)^(0 .. forder), convolved with T and trimmed to T's length (zero outside the data)
+fn savgol(a: *mem.Arena, t: []const f64, fl: usize, forder: usize, dorder: usize, out: []f64) -> err {
+    let fc = (fl - 1usize) / 2usize
+    let p = forder + 1usize
+    let (xt, e1) = mem.alloc[f64](a, p * fl)
+    if e1 != ok { ret e1 }
+    var r = 0usize
+    while r < fl {
+        let v = f64(r) - f64(fc)
+        var pw = 1.0f64
+        var c = 0usize
+        while c < p {
+            xt[c * fl + r] = pw
+            pw = pw * v
+            c += 1usize
+        }
+        r += 1usize
+    }
+    // X'X (p by p), inverted by Gauss-Jordan, then row dorder of (X'X)^-1 X'
+    let (g, e2) = mem.alloc[f64](a, p * 2usize * p)
+    if e2 != ok { ret e2 }
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            var s = 0.0f64
+            var k = 0usize
+            while k < fl {
+                s += xt[i * fl + k] * xt[j * fl + k]
+                k += 1usize
+            }
+            g[i * 2usize * p + j] = s
+            g[i * 2usize * p + p + j] = 0.0f64
+            if i == j { g[i * 2usize * p + p + j] = 1.0f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var col = 0usize
+    while col < p {
+        var piv = col
+        var rr = col + 1usize
+        while rr < p {
+            if math.abs[f64](g[rr * 2usize * p + col]) > math.abs[f64](g[piv * 2usize * p + col]) { piv = rr }
+            rr += 1usize
+        }
+        if piv != col {
+            var k = 0usize
+            while k < 2usize * p {
+                let tmp = g[col * 2usize * p + k]
+                g[col * 2usize * p + k] = g[piv * 2usize * p + k]
+                g[piv * 2usize * p + k] = tmp
+                k += 1usize
+            }
+        }
+        let d = g[col * 2usize * p + col]
+        var k = 0usize
+        while k < 2usize * p {
+            g[col * 2usize * p + k] = g[col * 2usize * p + k] / d
+            k += 1usize
+        }
+        rr = 0usize
+        while rr < p {
+            if rr != col {
+                let f = g[rr * 2usize * p + col]
+                k = 0usize
+                while k < 2usize * p {
+                    g[rr * 2usize * p + k] = g[rr * 2usize * p + k] - f * g[col * 2usize * p + k]
+                    k += 1usize
+                }
+            }
+            rr += 1usize
+        }
+        col += 1usize
+    }
+    let (y, e3) = mem.alloc[f64](a, fl)
+    if e3 != ok { ret e3 }
+    var k = 0usize
+    while k < fl {
+        var s = 0.0f64
+        var q = 0usize
+        while q < p {
+            s += g[dorder * 2usize * p + p + q] * xt[q * fl + k]
+            q += 1usize
+        }
+        y[k] = s
+        k += 1usize
+    }
+    var sign = 1.0f64
+    if dorder % 2usize == 1usize { sign = 0.0f64 - 1.0f64 }
+    let n = t.len
+    i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var m = 0usize
+        while m < fl {
+            // the coefficient on T[i + m - fc] is y[fl - 1 - m]
+            let idx = i + m
+            if idx >= fc && idx - fc < n { s += t[idx - fc] * y[fl - 1usize - m] }
+            m += 1usize
+        }
+        out[i] = sign * s
+        i += 1usize
+    }
+    ret ok
+}

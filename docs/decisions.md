@@ -46090,3 +46090,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.fminsearchpkg` is new: `nelder_mead` is pracma's nelder_mead step by step (Algorithm AS 47 with the adaptive coefficients 1 + 2/n, 0.75 - 1/(2n) and 1 - 1/n, the convergence test on the variance of the simplex values every maxfeval / 100 steps, and the restart that perturbs each coordinate by 0.001 to confirm a local minimum), on five fixed test functions: Rosenbrock, a shifted sphere in three variables, Beale, Himmelblau and a quartic bowl.
 
 **Result.** `oracle_fminsearchpkg` agrees with pracma on 208 cases on Windows: the minimiser at rel 1e-6, the minimum, and the evaluation count and restart count exactly, over 40 random starts. User functions, the non-adaptive coefficients, Hooke-Jeeves and bounds are open; Linux pending. L333 stays partial.
+
+## D6487 — pracma: savgol
+
+`e.algo.stat.pracma` gains `savgol`: row dorder of the pseudo-inverse of the Vandermonde matrix (-fc .. fc)^(0 .. forder), found as (X'X)^-1 X' by Gauss-Jordan, convolved with the series and trimmed to its length with the data taken as zero outside, times (-1)^dorder, as the package does.
+
+**Result.** `oracle_pracma` equals pracma on 1086 cases on Windows at rel 1e-9, 150 of them new: five positions of each of 30 series of 20 to 60 values, window 5 to 11, polynomial order 2 to 4, derivative order 0 to 2, including the zero-padded ends. Linux pending. L333 stays partial.
