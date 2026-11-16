@@ -47306,3 +47306,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6709 — norm: logpost.norm and mi.inference
 
 **Decision.** `logpost_norm` is `loglik_norm` plus the package's log normal-inverted-Wishart prior on the standardised parameter, `-(m + p + 2)/2 log|Sigma| - 1/2 tr(Sigma^-1 (Lambda^-1 + tau (mu - mu0)(mu - mu0)'))`, where the mean and covariance are first moved to the standardised scale by the observed-data mean and ML standard deviation as `prelim.norm` does; with no prior the package passes tau = 0, m = -1 and a zero Lambda^-1 (Jeffreys). `mi_inference` is Rubin's rules for one quantity over m imputations (between and within variance, the reference degrees of freedom, the t interval, the p-value and the fraction of missing information). Equal to logpost.norm on 12 problems and mi.inference on 160 values (oracle_norm). Linux pending.
+
+## D6710 — norm: em.norm with a prior
+
+**Decision.** `em_norm_prior` is the package's posterior-mode EM: the E step is unchanged and the M step turns the expected sums T1 and T2 into `mu = (T1 + tau mu0) / (n + tau)` and `Sigma = n / (n + m + p + 2) / n * (T2 + Lambda^-1 - T1 T1' / n + tau / (n (n + tau)) (T1 - n mu0)(T1 - n mu0)')`, on the standardised scale where the prior lives (norm's `moden`). `em_norm` is the same code with the maximum-likelihood step. Equal to em.norm with a prior on 120 values (oracle_norm). Linux pending.

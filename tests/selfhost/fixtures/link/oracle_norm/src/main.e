@@ -30,6 +30,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(z[0usize])
     let p = usize(z[1usize])
     let x = z[3usize..3usize + n * p]
+    if str.eq(c.name, "emp") {
+        let (qm, eq1) = mem.alloc[f64](a, p)
+        let (qs, eq2) = mem.alloc[f64](a, p * p)
+        if eq1 != ok || eq2 != ok { ret 0.0f64 / 0.0f64 }
+        let b = 3usize + n * p
+        let pri = nm.Prior { mle: false, tau: z[b], m: z[b + 1usize], mu0: z[b + 2usize..b + 2usize + p], lambdainv: z[b + 2usize + p..b + 2usize + p + p * p] }
+        let (qit, qe) = nm.em_norm_prior(a, x, n, p, z[2usize], 1000usize, qm, qs, &pri)
+        if qe != ok { ret 0.0f64 / 0.0f64 }
+        let qq = usize(z[b + 2usize + p + p * p])
+        if qq < p { ret qm[qq] }
+        ret qs[qq - p]
+    }
     if str.eq(c.name, "post") {
         let (pm, ep1) = mem.alloc[f64](a, p)
         let (ps2, ep2) = mem.alloc[f64](a, p * p)

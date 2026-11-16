@@ -12,7 +12,10 @@ use e.math.nmath_beta as nb
 use e.mem
 
 // one EM step in the standardised scale: from (mu, sg) to (nmu, nsg); n by p column-major z
-fn em_step(a: *mem.Arena, z: []const f64, n: usize, p: usize, mu: []const f64, sg: []const f64, nmu: []f64, nsg: []f64) -> err {
+// the prior of em.norm / logpost.norm on the standardised scale; mle = true ignores the rest
+type Prior = struct { mle: bool, tau: f64, m: f64, mu0: []const f64, lambdainv: []const f64 }
+
+fn em_step(a: *mem.Arena, z: []const f64, n: usize, p: usize, mu: []const f64, sg: []const f64, nmu: []f64, nsg: []f64, pr: *const Prior) -> err {
     let (t1, e1) = mem.alloc[f64](a, p)
     let (t2, e2) = mem.alloc[f64](a, p * p)
     let (xt, e3) = mem.alloc[f64](a, p)
@@ -124,6 +127,26 @@ fn em_step(a: *mem.Arena, z: []const f64, n: usize, p: usize, mu: []const f64, s
     }
     let nf = f64(n)
     var j = 0usize
+    if !pr.mle {
+        // the posterior mode: the prior shrinks the sums before they are divided by n (norm's moden)
+        let cc = pr.tau / (nf * (pr.tau + nf))
+        let ee = nf / (nf + pr.m + f64(p) + 2.0f64)
+        while j < p {
+            nmu[j] = t1[j] / (pr.tau + nf) + pr.tau * pr.mu0[j] / (pr.tau + nf)
+            j += 1usize
+        }
+        j = 0usize
+        while j < p {
+            var l = 0usize
+            while l < p {
+                let v = t2[j * p + l] + pr.lambdainv[j * p + l] - t1[j] * t1[l] / nf + cc * (t1[j] - nf * pr.mu0[j]) * (t1[l] - nf * pr.mu0[l])
+                nsg[j * p + l] = v * ee / nf
+                l += 1usize
+            }
+            j += 1usize
+        }
+        ret ok
+    }
     while j < p {
         nmu[j] = t1[j] / nf
         j += 1usize
@@ -144,6 +167,13 @@ fn em_step(a: *mem.Arena, z: []const f64, n: usize, p: usize, mu: []const f64, s
 // the largest parameter change is at most `criterion`, and answers the mean and covariance on the original scale;
 // returns the iteration count
 fn em_norm(a: *mem.Arena, x: []const f64, n: usize, p: usize, criterion: f64, maxits: usize, mu_out: []f64, sigma_out: []f64) -> (usize, err) {
+    let pr = Prior { mle: true, tau: 0.0f64, m: 0.0f64, mu0: mu_out, lambdainv: sigma_out }
+    let (it, e) = em_norm_prior(a, x, n, p, criterion, maxits, mu_out, sigma_out, &pr)
+    ret (it, e)
+}
+
+// em.norm with a prior: the posterior mode by EM
+fn em_norm_prior(a: *mem.Arena, x: []const f64, n: usize, p: usize, criterion: f64, maxits: usize, mu_out: []f64, sigma_out: []f64, pr: *const Prior) -> (usize, err) {
     let (z, e1) = mem.alloc[f64](a, n * p)
     let (xbar, e2) = mem.alloc[f64](a, p)
     let (sdv, e3) = mem.alloc[f64](a, p)
@@ -189,7 +219,7 @@ fn em_norm(a: *mem.Arena, x: []const f64, n: usize, p: usize, criterion: f64, ma
     var it = 0usize
     var converged = false
     while !converged && it < maxits {
-        let e = em_step(a, z, n, p, mu, sg, nmu, nsg)
+        let e = em_step(a, z, n, p, mu, sg, nmu, nsg, pr)
         if e != ok { ret (it, e) }
         var mx = 0.0f64
         j = 0usize

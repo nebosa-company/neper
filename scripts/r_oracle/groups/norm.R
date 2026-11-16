@@ -36,4 +36,17 @@ for (rep in 1:10) {
   vals <- cbind(r$est, r$std.err, r$df, r$signif, r$lower, r$upper, r$r, r$fminf)
   for (qq in 1:2) for (w in 1:8) cases[[length(cases) + 1]] <- case("mi", c(M, conf, unlist(est), unlist(se), qq - 1, w - 1), vals[qq, w], rel = 1e-8, abs = 1e-10)
 }
+# em.norm with a prior ("emp": args (n, p, criterion, x, tau, m, mu0[p], lambdainv[p*p], q) q 0..p-1 mu, then sigma row-major)
+for (rep in 1:14) {
+  n <- sample(30:100, 1); p <- sample(2:3, 1)
+  L <- matrix(rnorm(p * p), p, p); S <- crossprod(L) + diag(p)
+  x <- round(matrix(rnorm(n * p), n, p) %*% chol(S) + rep(1:p, each = n), 3); miss <- sample(n * p, round(0.15 * n * p)); x[miss] <- NA
+  keep <- rowSums(!is.na(x)) > 0; x <- x[keep, , drop = FALSE]; n <- nrow(x)
+  s <- prelim.norm(x)
+  tau <- round(runif(1, 0.1, 4), 2); m <- round(runif(1, 1, 8), 2); mu0 <- round(rnorm(p, 0, 0.5), 2); li <- crossprod(matrix(round(rnorm(p * p, 0, 0.5), 2), p, p)) + diag(p)
+  crit <- c(1e-4, 1e-8)[rep %% 2 + 1]
+  th <- em.norm(s, showits = FALSE, criterion = crit, prior = list(tau, m, mu0, li)); g <- getparam.norm(s, th)
+  xa <- ifelse(is.na(x), NaN, x); out <- c(g$mu, as.vector(t(g$sigma)))
+  for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("emp", c(n, p, crit, as.vector(xa), tau, m, mu0, as.vector(t(li)), q - 1), out[q], rel = 1e-8, abs = 1e-9)
+}
 emit("norm", "norm", list(cases))
