@@ -46660,3 +46660,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `skellam_d` is `exp(-(m1 + m2)) (m1/m2)^(x/2) I_|x|(2 sqrt(m1 m2))` with the modified Bessel function of the first kind from `gslfns.bessel_inu`.
 
 **Result.** `oracle_extradistr` agrees with extraDistr on 24 Skellam masses (negative, zero and positive counts) on Windows (992 cases in all); Linux pending. L422 stays partial.
+
+## D6582 — extraDistr: more densities
+
+**Decision.** `tbinom_d`, `nsbeta_d`, `ht_d`, `slash_d` and `sgomp_d` join extradistr.e. The package's slash density at `x = mu` is `1/(2 sqrt(2 pi))` without the division by sigma, which differs from the limit of the formula for sigma not 1; the port keeps the package's value.
+
+**Result.** `oracle_extradistr` agrees with extraDistr on 69 new values on Windows (1061 cases in all); Linux pending. L422 stays partial.

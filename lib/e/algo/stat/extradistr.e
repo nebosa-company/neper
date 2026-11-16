@@ -334,3 +334,35 @@ fn skellam_d(x: f64, m1: f64, m2: f64) -> f64 {
     if x != math.floor[f64](x) { ret 0.0f64 }
     ret math.exp[f64](0.0f64 - (m1 + m2)) * math.pow[f64](m1 / m2, x / 2.0f64) * gsl.bessel_inu(math.abs[f64](x), 2.0f64 * math.sqrt[f64](m1 * m2))
 }
+
+// binomial(size, prob) truncated to a < x <= b
+fn tbinom_d(x: f64, n: f64, pr: f64, a: f64, b: f64) -> f64 {
+    if x <= a || x > b || x != math.floor[f64](x) { ret 0.0f64 }
+    ret nb.dbinom(x, n, pr, false) / (nb.pbinom(b, n, pr, true, false) - nb.pbinom(a, n, pr, true, false))
+}
+
+// non-standard beta(shape1, shape2, min, max)
+fn nsbeta_d(x: f64, s1: f64, s2: f64, lo: f64, hi: f64) -> f64 {
+    if x < lo || x > hi { ret 0.0f64 }
+    ret nb.dbeta((x - lo) / (hi - lo), s1, s2, false) / (hi - lo)
+}
+
+// half-t(nu, sigma)
+fn ht_d(x: f64, nu: f64, s: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret 2.0f64 * nb.dt(x / s, nu, false) / s
+}
+
+// slash(mu, sigma)
+fn slash_d(x: f64, mu: f64, s: f64) -> f64 {
+    let z = (x - mu) / s
+    if z == 0.0f64 { ret 1.0f64 / (2.0f64 * math.sqrt[f64](2.0f64 * pi())) }
+    ret (dist.dnorm(0.0f64, 0.0f64, 1.0f64, false) - dist.dnorm(z, 0.0f64, 1.0f64, false)) / (s * z * z)
+}
+
+// shifted Gompertz(b, eta)
+fn sgomp_d(x: f64, b: f64, eta: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    let e = math.exp[f64](0.0f64 - b * x)
+    ret b * e * math.exp[f64](0.0f64 - eta * e) * (1.0f64 + eta * (1.0f64 - e))
+}

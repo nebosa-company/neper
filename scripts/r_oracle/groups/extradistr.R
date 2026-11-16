@@ -42,4 +42,12 @@ for (rep in 1:3) {
   }
 }
 for (rep in 1:4) { m1 <- runif(1, 0.5, 6); m2 <- runif(1, 0.5, 6); for (xx in c(-6, -2, 0, 1, 3, 7)) add2("d3", c(5, m1, m2, 0, xx), dskellam(xx, m1, m2)) }
+# more densities and masses: fn "d3" with dist 6 tbinom(size, prob, a, b) [args: dist, size, prob, a, b, v] needs a 6-slot layout, so these use fn "d4": (dist, p1, p2, p3, p4, v): 0 tbinom(size, prob, a, b) 1 nsbeta(s1, s2, min, max) 2 ht(nu, sigma) 3 slash(mu, sigma) 4 sgomp(b, eta)
+for (rep in 1:3) {
+  n <- sample(8:20, 1); pr <- runif(1, 0.2, 0.8); a <- sample(0:2, 1); b <- sample(5:n, 1); for (xx in c(0, 1, 3, 5, n)) add2("d4", c(0, n, pr, a, b, xx), dtbinom(xx, n, pr, a, b))
+  s1 <- runif(1, 0.8, 4); s2 <- runif(1, 0.8, 4); lo <- runif(1, -2, 0); hi <- lo + runif(1, 1, 4); for (xx in seq(lo, hi, length.out = 5)) add2("d4", c(1, s1, s2, lo, hi, xx), dnsbeta(xx, s1, s2, lo, hi))
+  nu <- runif(1, 1, 8); sg <- runif(1, 0.5, 2); for (xx in c(0, 0.5, 2, 5)) add2("d4", c(2, nu, sg, 0, 0, xx), dht(xx, nu, sg))
+  mu <- rnorm(1); for (xx in c(mu - 3, mu - 0.2, mu, mu + 1, mu + 4)) add2("d4", c(3, mu, sg, 0, 0, xx), dslash(xx, mu, sg))
+  bb <- runif(1, 0.3, 2); et <- runif(1, 0.2, 3); for (xx in c(0, 0.3, 1, 3)) add2("d4", c(4, bb, et, 0, 0, xx), dsgomp(xx, bb, et))
+}
 emit("extradistr", "extraDistr", list(cases))

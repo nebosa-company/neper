@@ -57,6 +57,19 @@ fn answer(c: *const oracle.Case) -> f64 {
         if d3 == 5usize { ret ed.skellam_d(vx, w1, w2) }
         ret ed.tpois_d(vx, w1, w2, w3)
     }
+    if str.eq(c.name, "d4") {
+        let d4 = usize(x[0usize])
+        let q1 = x[1usize]
+        let q2 = x[2usize]
+        let q3 = x[3usize]
+        let q4 = x[4usize]
+        let qv = x[5usize]
+        if d4 == 0usize { ret ed.tbinom_d(qv, q1, q2, q3, q4) }
+        if d4 == 1usize { ret ed.nsbeta_d(qv, q1, q2, q3, q4) }
+        if d4 == 2usize { ret ed.ht_d(qv, q1, q2) }
+        if d4 == 3usize { ret ed.slash_d(qv, q1, q2) }
+        ret ed.sgomp_d(qv, q1, q2)
+    }
     let di = usize(x[0usize])
     let a = x[1usize]
     let b = x[2usize]
