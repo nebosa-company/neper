@@ -143,7 +143,7 @@ L417	library	0.35	747	gsl: special functions of the GNU Scientific Library	Parti
 L418	library	0	333	Rmpfr: arbitrary-precision floating point	Open (CRAN rank 567).
 L435	library	0.15	840	sna: social network analysis	Partial (D6636).
 L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
-L439	library	0	309	MCMCpack: Bayesian MCMC for common models	Open (CRAN rank 636).
+L439	library	0.05	714	MCMCpack: Bayesian MCMC for common models	Partial (D6648).
 L455	library	0.1	742	geometry: Qhull in n dimensions	Partial (D6645).
 L463	library	0.25	784	actuar: actuarial science	Partial (D6143).
 L464	library	0.16	483	gamlss.dist: GAMLSS distribution families	Partial (D6471 GU, LO, GA, IG, BCCG, PE, D6472 WEI, LOGNO, NBI, ZIP, JSU, SHASH, BCT densities, LO p and q, GU q equal gamlss.dist on Windows;

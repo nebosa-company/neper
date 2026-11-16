@@ -1593,10 +1593,10 @@
       "group": "CRAN parity",
       "order": 775,
       "title": "MCMCpack: Bayesian MCMC for common models",
-      "score": 0,
+      "score": 0.05,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 636). Mid to large. Needs the R RNG streams. Acceptance, equal to MCMCpack value for value under set.seed: MCMCregress, MCMClogit, MCMCprobit, MCMCpoisson, MCMCoprobit, MCMCirt1d and MCMCirtKd, MCMCfactanal, MCMCmetrop1R, MCMCpanel, rwish, riwish, rdirichlet and the posterior summary helpers."
+      "evidence": "Partial (D6648). e.algo.stat.mcmcpackpkg equals the MCMCpack density functions dwish, diwish, dinvgamma and ddirichlet on Windows (oracle_mcmcpack, 120 values; Linux pending). Open: the samplers (MCMCregress, MCMClogit, MCMCpoisson, MCMCprobit, MCMCfactanal, MCMCirt1d, MCMChregress and the rest) under R random streams, rwish and riwish, posterior summaries, Bayes factors and marginal likelihoods. Was: Open (CRAN rank 636). Mid to large. Needs the R RNG streams. Acceptance, equal to MCMCpack value for value under set.seed: MCMCregress, MCMClogit, MCMCprobit, MCMCpoisson, MCMCoprobit, MCMCirt1d and MCMCirtKd, MCMCfactanal, MCMCmetrop1R, MCMCpanel, rwish, riwish, rdirichlet and the posterior summary helpers."
     },
     {
       "id": "L455",
