@@ -37,4 +37,10 @@ for (rep in 1:24) {
   ch <- cheby2(n, rs, w, if (hi == 1) "high" else "low")
   add("c2b", c(hi, n, w, rs), sum(ch$b * seq_along(ch$b))); add("c2a", c(hi, n, w, rs), sum(ch$a * seq_along(ch$a)))
 }
+for (rep in 1:20) {
+  n <- sample(1:5, 1); w <- runif(1, 0.1, 0.8); hi <- rep %% 2
+  bt <- butter(n, w, if (hi == 1) "high" else "low")
+  g <- suppressWarnings(grpdelay(bt, n = 16))
+  add("gd", c(hi, n, w), sum(g$gd[-1] * seq_along(g$gd[-1])))
+}
 emit("signalpkg", "signal", list(cases))

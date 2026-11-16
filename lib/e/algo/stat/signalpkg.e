@@ -443,3 +443,35 @@ fn cheby2(n: usize, rs: f64, w: f64, high: bool, b: []f64, a: []f64) {
         j += 1usize
     }
 }
+
+// the response of the polynomial c(e^{-jw}) and of its k-weighted copy, as (re, im, wre, wim)
+fn poly_resp(c: []const f64, w: f64) -> (f64, f64, f64, f64) {
+    var re = 0.0f64
+    var im = 0.0f64
+    var wre = 0.0f64
+    var wim = 0.0f64
+    var k = 0usize
+    while k < c.len {
+        let cr = math.cos[f64](w * f64(k))
+        let ci = 0.0f64 - math.sin[f64](w * f64(k))
+        re += c[k] * cr
+        im += c[k] * ci
+        wre += f64(k) * c[k] * cr
+        wim += f64(k) * c[k] * ci
+        k += 1usize
+    }
+    ret (re, im, wre, wim)
+}
+
+// the group delay of B / A at w radians per sample: Re(B'/B) - Re(A'/A) with the k-weighted sums; 0 at a singularity as the package sets it
+fn grpdelay_at(b: []const f64, a: []const f64, w: f64) -> f64 {
+    let (br, bi, bwr, bwi) = poly_resp(b, w)
+    let (ar, ai, awr, awi) = poly_resp(a, w)
+    let bd = br * br + bi * bi
+    let ad = ar * ar + ai * ai
+    // the package works on the product polynomial c = b * rev(a), sets its ratio to 0 where it vanishes and subtracts length(a) - 1
+    if bd < 1.0e-14f64 || ad < 1.0e-14f64 { ret 0.0f64 - f64(a.len - 1usize) }
+    let gb = (bwr * br + bwi * bi) / bd
+    let ga = (awr * ar + awi * ai) / ad
+    ret gb - ga
+}

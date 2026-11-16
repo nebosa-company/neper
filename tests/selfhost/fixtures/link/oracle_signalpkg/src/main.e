@@ -94,6 +94,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(k, "gd") {
+        var q = 1usize
+        var tt = 0.0f64
+        while q < 16usize {
+            tt += sp.grpdelay_at(b, aa, 3.141592653589793238462643383279f64 * f64(q) / 16.0f64) * f64(q)
+            q += 1usize
+        }
+        ret tt
+    }
     if str.eq(k, "fre") || str.eq(k, "fim") {
         var fr: [5]f64 = zero
         fr[0usize] = 0.1f64
