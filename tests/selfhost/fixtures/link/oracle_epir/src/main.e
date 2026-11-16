@@ -1,0 +1,80 @@
+// e.algo.stat.epir against epiR. tests/oracle/epir.json comes from
+// `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R epir`; the layout is at the top of scripts/r_oracle/groups/epir.R.
+
+use e.algo.stat.epir as ep
+use e.io
+use e.mem
+use e.os
+use e.test.oracle as oracle
+
+fn answer(c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let t = ep.Table2 { a: x[0usize], b: x[1usize], c: x[2usize], d: x[3usize] }
+    let units = x[4usize]
+    let w = usize(x[5usize])
+    if w < 3usize {
+        let (e, lo, hi) = ep.risk_ratio(t, 0.95f64)
+        if w == 0usize { ret e }
+        if w == 1usize { ret lo }
+        ret hi
+    }
+    if w < 6usize {
+        let (e, lo, hi) = ep.odds_ratio(t, 0.95f64)
+        if w == 3usize { ret e }
+        if w == 4usize { ret lo }
+        ret hi
+    }
+    if w < 9usize {
+        let (e, lo, hi) = ep.risk_difference(t, 0.95f64, units)
+        if w == 6usize { ret e }
+        if w == 7usize { ret lo }
+        ret hi
+    }
+    if w < 12usize {
+        let (e, lo, hi) = ep.nnt(t, 0.95f64, units)
+        if w == 9usize { ret e }
+        if w == 10usize { ret lo }
+        ret hi
+    }
+    if w == 12usize { ret ep.par_risk(t, units) }
+    if w < 15usize {
+        let (z, p) = ep.wald_test(t, 0usize)
+        if w == 13usize { ret z }
+        ret p
+    }
+    if w < 17usize {
+        let (z, p) = ep.wald_test(t, 1usize)
+        if w == 15usize { ret z }
+        ret p
+    }
+    if w < 19usize {
+        let (s, p) = ep.chi2(t, false)
+        if w == 17usize { ret s }
+        ret p
+    }
+    let (s, p) = ep.chi2(t, true)
+    if w == 19usize { ret s }
+    ret p
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let (golden, load_error) = oracle.load(a, "tests/oracle/epir.json")
+    if load_error != ok { os.exit(2) }
+    if golden.cases.len == 0usize { os.exit(3) }
+    var failures = 0usize
+    var at = 0usize
+    while at < golden.cases.len {
+        let c = &golden.cases[at]
+        let got = answer(c)
+        if !oracle.agrees(got, c) {
+            failures += 1usize
+            if failures <= 12usize {
+                let _ = io.print(oracle.describe(a, c, got))
+                let _ = io.print("\n")
+            }
+        }
+        at += 1usize
+    }
+    if failures > 0usize { os.exit(1) }
+    ret ok
+}

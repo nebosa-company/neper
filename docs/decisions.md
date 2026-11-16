@@ -45514,3 +45514,15 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.signalpkg` gains cheby1 for low-pass and high-pass Chebyshev type I filters with a passband ripple in dB: the prototype poles -sinh(mu) sin(theta_k) + j cosh(mu) cos(theta_k) with mu = asinh(1 / eps) / n and eps = sqrt(10^(rp / 10) - 1), the same warp, inversion and bilinear steps as butter, and the passband gain fixed at 1 for odd orders and 1 / sqrt(1 + eps^2) for even orders (at z = 1 for low-pass, z = -1 for high-pass). Coefficients equal signal's. Not here: cheby2, ellip, bessel and the band forms.
 
 **Result.** `oracle_signalpkg` equals signal on 218 cases on Windows; Linux pending. L340 stays partial.
+
+## D6187 — epiR: epi.2by2 measures of a cohort table
+
+`e.algo.stat.epir` computes, from the four counts of an exposed/unexposed by outcome table, the risk ratio and odds ratio with Wald (Taylor) intervals, the risk difference per `units` with its Wald interval, the number needed to treat with its limits ordered numerically (a difference interval that spans zero gives a negative lower limit, as the package does), the population attributable risk, the Wald tests of the two ratios and the Pearson chi-squared statistic with and without Yates' correction. Not here: the score, Koopman, conditional-MLE and mid-p intervals, the attributable fractions, the Mantel-Haenszel stratified tables and the other designs of epi.2by2.
+
+**Result.** `oracle_epir` equals epiR on 525 cases on Windows; Linux pending. L460 is partial.
+
+## D6187 — signal: cheby2
+
+`e.algo.stat.signalpkg` gains cheby2 (Chebyshev type II, stopband attenuation rs in dB, the cutoff being the stopband edge) for low-pass and high-pass: the poles are the reciprocals of the type I poles with eps = 1 / sqrt(10^(rs / 10) - 1), the finite zeros are j / cos(theta_k) (none where cos is 0), the same warp, inversion and bilinear steps follow, the missing zeros sit at z = -1 (low-pass) or z = +1 (high-pass), and the gain is unity at z = 1 or z = -1. Coefficients equal signal's. Not here: ellip, bessel and the band forms.
+
+**Result.** `oracle_signalpkg` equals signal on 266 cases on Windows; Linux pending. L340 stays partial.

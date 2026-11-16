@@ -1010,10 +1010,10 @@
       "group": "CRAN parity",
       "order": 691,
       "title": "signal: filter design and spectral tools",
-      "score": 0.4,
+      "score": 0.45,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6183, D6184 filtfilt and freqz, D6185 sgolay central row, D6186 cheby1). butter (low and high, any order, one cutoff) and filter equal signal on Windows (oracle_signalpkg; Linux pending). Open: band filters, cheby1, cheby2, ellip, bessel, fir1 and fir2, remez, filtfilt, freqz, grpdelay, sgolay, resample, decimate, specgram. Was: Open (CRAN rank 253). Mid. Verify what e.dsp and e.math.filter already design. Acceptance, equal to signal: butter, cheby1, cheby2, ellip, bessel, fir1, fir2, remez, filter, filtfilt, freqz, grpdelay, sgolay and sgolayfilt, resample, decimate, interp, specgram, unwrap."
+      "evidence": "Partial (D6183, D6184 filtfilt and freqz, D6185 sgolay central row, D6186 cheby1, D6187 cheby2). butter (low and high, any order, one cutoff) and filter equal signal on Windows (oracle_signalpkg; Linux pending). Open: band filters, cheby1, cheby2, ellip, bessel, fir1 and fir2, remez, filtfilt, freqz, grpdelay, sgolay, resample, decimate, specgram. Was: Open (CRAN rank 253). Mid. Verify what e.dsp and e.math.filter already design. Acceptance, equal to signal: butter, cheby1, cheby2, ellip, bessel, fir1, fir2, remez, filter, filtfilt, freqz, grpdelay, sgolay and sgolayfilt, resample, decimate, interp, specgram, unwrap."
     },
     {
       "id": "L343",
@@ -1329,10 +1329,10 @@
       "group": "CRAN parity",
       "order": 730,
       "title": "epiR: epidemiology",
-      "score": 0,
+      "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 773). Mid. Acceptance, equal to epiR: epi.2by2 for cohort, case-control and cross-sectional tables with exact, Wald and Mantel-Haenszel measures, epi.tests, epi.conf for every interval method, epi.ccc, epi.dsl, epi.iv, the sample-size family epi.sscohortc, epi.sscc and epi.sssimpleestb."
+      "evidence": "Partial (D6187). epi.2by2 cohort.count: risk ratio, odds ratio, risk difference, NNT, population attributable risk, Wald tests and chi-squared equal epiR on Windows (oracle_epir; Linux pending). Open: score and exact intervals, attributable fractions, stratified tables, other designs, the other epi.* functions. Was: Open (CRAN rank 773). Mid. Acceptance, equal to epiR: epi.2by2 for cohort, case-control and cross-sectional tables with exact, Wald and Mantel-Haenszel measures, epi.tests, epi.conf for every interval method, epi.ccc, epi.dsl, epi.iv, the sample-size family epi.sscohortc, epi.sscc and epi.sssimpleestb."
     },
     {
       "id": "L461",
