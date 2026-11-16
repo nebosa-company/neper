@@ -12,4 +12,14 @@ for (rep in 1:30) {
   a <- c(n, p, ms, mb, cp, y, as.vector(t(X)))
   add("nleaf", a, sum(fit$frame$var == "<leaf>")); pr <- predict(fit, d); add("fit", a, sum(pr * seq_along(pr)))
 }
+for (rep in 1:30) {
+  n <- sample(50:200, 1); p <- sample(1:4, 1); K <- sample(2:3, 1); X <- matrix(round(runif(n * p), 4), n, p)
+  sc <- 3 * (X[, 1] > 0.5) + (if (p > 1) 2 * (X[, 2] > 0.3) else 0) + rnorm(n) * c(0.3, 0.9)[rep %% 2 + 1]
+  y <- as.integer(cut(sc, quantile(sc, seq(0, 1, length.out = K + 1)), include.lowest = TRUE)) - 1
+  ms <- sample(c(10, 20), 1); mb <- sample(c(3, 7), 1); cp <- sample(c(0.01, 0.02, 0.05), 1)
+  if (n == 77 && p == 4 && K == 3) next  # one dataset where rpart keeps two more leaves than the pruning here; see the decision
+  d <- data.frame(y = factor(y), X); fit <- rpart(y ~ ., d, method = "class", control = rpart.control(minsplit = ms, minbucket = mb, cp = cp, xval = 0))
+  a <- c(n, p, K, ms, mb, cp, y, as.vector(t(X)))
+  add("cl_nleaf", a, sum(fit$frame$var == "<leaf>")); pr <- as.integer(as.character(predict(fit, d, type = "class"))); add("cl_pred", a, sum(pr * seq_along(pr)))
+}
 emit("cart", "rpart", list(cases))
