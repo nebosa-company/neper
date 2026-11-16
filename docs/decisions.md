@@ -47248,3 +47248,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6695 — SuppDists Kruskal-Wallis and normal scores
 
 **Decision.** `pkruskal_wallis`, `xkruskal_wallis` and the upper tail follow the beta approximations of SuppDists (Wallace 1959 for the rank sums, Lu and Smith 1979 for the normal scores): H over N - 1 is a beta variate whose parameters come from a variance of H that depends on the harmonic term U = sum(1 / n_i). The density is the forward difference quotient of the cdf over 0.001, as the package computes it, so it is compared at 1e-6. `oracle_suppdists` holds 40 draws of each. Linux pending.
+
+## D6696 — SuppDists maximum F ratio
+
+**Decision.** `pmaxfratio` and `fmaxfratio` integrate over (qchisq(1e-4), qchisq(0.9999)) with the package's own Romberg loop, which stops at a relative 1e-4, so the values agree with R only because the same iterates are formed; the constants use SuppDists' Pike-Hill `loggamma` rather than the exact one. `xmaxfratio` is Newton on the cdf and density from the closest of the 28 Johnson fits (df by log2, N by thirds), keeps the last step if the step grows, and answers NaN beyond df 160 or N 24; N = 2 is a folded F. The fit table is a string parsed on each call, which is slow but keeps the 28 rows as the package prints them. Linux pending.

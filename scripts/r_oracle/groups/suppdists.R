@@ -35,4 +35,10 @@ for (rep in 1:40) {
   add("kw_p", c(ns, cc, N, U, h), P(h, cc, N, U), 1e-8); add("kw_u", c(ns, cc, N, U, h), P(h, cc, N, U, lower.tail = FALSE), 1e-8)
   add("kw_q", c(ns, cc, N, U, pr), Q(pr, cc, N, U), 1e-8); add("kw_d", c(ns, cc, N, U, h), D(h, cc, N, U), 1e-6)
 }
+# maximum F ratio: "mf_p" "mf_u" "mf_d" args (df, k, x), "mf_q" args (df, k, p)
+for (rep in 1:40) {
+  df <- sample(c(2, 3, 5, 8, 16, 30, 64), 1); k <- sample(3:12, 1); x <- round(runif(1, 1.1, 8), 3); pr <- round(runif(1, 0.05, 0.95), 3)
+  add("mf_p", c(df, k, x), pmaxFratio(x, df, k), 1e-6); add("mf_u", c(df, k, x), pmaxFratio(x, df, k, lower.tail = FALSE), 1e-6)
+  add("mf_d", c(df, k, x), dmaxFratio(x, df, k), 1e-6); add("mf_q", c(df, k, pr), qmaxFratio(pr, df, k), 1e-5)
+}
 emit("suppdists", "SuppDists", list(cases))

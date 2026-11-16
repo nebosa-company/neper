@@ -28,6 +28,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "kw_q") { ret sd.xkruskal_wallis(z[4usize], kc, kn, z[3usize], nsc) }
         ret sd.fkruskal_wallis(z[4usize], kc, kn, z[3usize], nsc)
     }
+    if str.starts_with(nm, "mf_") {
+        let mdf = i64(z[0usize])
+        let mk = i64(z[1usize])
+        if str.eq(nm, "mf_p") { ret sd.pmaxfratio(z[2usize], mdf, mk) }
+        if str.eq(nm, "mf_u") { ret sd.qmaxfratio_upper(z[2usize], mdf, mk) }
+        if str.eq(nm, "mf_d") { ret sd.fmaxfratio(z[2usize], mdf, mk) }
+        ret sd.xmaxfratio(z[2usize], mdf, mk)
+    }
     if str.eq(nm, "gh_d") { ret sd.ghyper_d(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_p") { ret sd.ghyper_p(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_q") { ret sd.ghyper_q(z[3usize], z[0usize], z[1usize], z[2usize]) }

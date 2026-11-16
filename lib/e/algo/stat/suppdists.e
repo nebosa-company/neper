@@ -8,6 +8,7 @@
 
 use e.math
 use e.math.dist as dist
+use e.math.nmath as nmt
 use e.math.nmath_beta as nb
 use e.mem
 
@@ -453,4 +454,173 @@ fn xkruskal_wallis(p: f64, c: i64, n: i64, u: f64, normal_score: bool) -> f64 {
 fn fkruskal_wallis(h: f64, c: i64, n: i64, u: f64, normal_score: bool) -> f64 {
     let delta = 0.001f64
     ret (pkruskal_wallis(h + delta, c, n, u, normal_score) - pkruskal_wallis(h, c, n, u, normal_score)) / delta
+}
+
+// ---- the maximum F ratio (Hartley's) of N mean squares on df degrees of freedom each ----
+
+fn mf_integrand_p(x: f64, f: f64, df: i64, n: i64, logc: f64) -> f64 {
+    var logv = logc - 0.5f64 * x
+    logv = logv + (0.5f64 * f64(df) - 1.0f64) * math.log[f64](x) + f64(n - 1i64) * math.log[f64](nmt.pchisq(x * f, f64(df), true, false) - nmt.pchisq(x, f64(df), true, false))
+    ret math.exp[f64](logv)
+}
+
+fn mf_integrand_d(x: f64, f: f64, df: i64, n: i64, logc: f64) -> f64 {
+    var logv = logc - 0.5f64 * x * (1.0f64 + f)
+    logv = logv + (f64(df) - 1.0f64) * math.log[f64](x) + (0.5f64 * f64(df) - 1.0f64) * math.log[f64](f)
+    logv = logv + f64(n - 2i64) * math.log[f64](math.abs[f64](nmt.pchisq(x * f, f64(df), true, false) - nmt.pchisq(x, f64(df), true, false)))
+    ret math.exp[f64](logv)
+}
+
+fn mf_eval(x: f64, f: f64, df: i64, n: i64, logc: f64, dens: bool) -> f64 {
+    if dens { ret mf_integrand_d(x, f, df, n, logc) }
+    ret mf_integrand_p(x, f, df, n, logc)
+}
+
+// Romberg's rule over (qchisq(1e-4), qchisq(0.9999)) to a relative 1e-4 and at most 15 halvings, as the package does
+fn mf_romberg(f: f64, df: i64, n: i64, logc: f64, dens: bool) -> f64 {
+    let up = nmt.qchisq(0.9999f64, f64(df), true, false)
+    let lo = nmt.qchisq(0.0001f64, f64(df), true, false)
+    let h = up - lo
+    var arr: [256]f64 = zero
+    var delta = h
+    var value = 0.0f64
+    arr[0usize] = (h / 2.0f64) * (mf_eval(lo, f, df, n, logc, dens) + mf_eval(up, f, df, n, logc, dens))
+    var two_power = 1.0f64
+    var k = 0usize
+    var cnt = 1usize
+    var going = true
+    while going {
+        k += 1usize
+        delta = delta * 0.5f64
+        if k > 1usize { cnt = cnt * 2usize }
+        two_power = two_power * 2.0f64
+        var sum = 0.0f64
+        var z = up - delta
+        var m = cnt
+        while m > 0usize {
+            m -= 1usize
+            sum += mf_eval(z, f, df, n, logc, dens)
+            z = z - 2.0f64 * delta
+        }
+        arr[k] = arr[k - 1usize] / 2.0f64 + h * sum / two_power
+        var four_power = 1.0f64
+        var i = 1usize
+        while i <= k {
+            four_power = four_power * 4.0f64
+            arr[i * 16usize + (k - i)] = (four_power * arr[(i - 1usize) * 16usize + (k - i + 1usize)] - arr[(i - 1usize) * 16usize + (k - i)]) / (four_power - 1.0f64)
+            i += 1usize
+        }
+        value = arr[k * 16usize]
+        if math.abs[f64]((value - arr[(k - 1usize) * 16usize]) / value) < 1.0e-4f64 { break }
+        if k >= 15usize { going = false }
+    }
+    ret value
+}
+
+fn pmaxfratio(f: f64, df: i64, n: i64) -> f64 {
+    if f <= 0.0f64 || df < 1i64 || n < 1i64 { ret 0.0f64 / 0.0f64 }
+    if n == 2i64 { ret 1.0f64 - 2.0f64 * (1.0f64 - nb.pf(f, f64(df), f64(df), true, false)) }
+    let logc = math.log[f64](f64(n)) - (0.5f64 * f64(df)) * 0.6931471805599453094172321f64 - pik_loggamma(0.5f64 * f64(df))
+    ret mf_romberg(f, df, n, logc, false)
+}
+
+fn qmaxfratio_upper(f: f64, df: i64, n: i64) -> f64 {
+    if f <= 0.0f64 || df < 1i64 || n < 1i64 { ret 0.0f64 / 0.0f64 }
+    ret 1.0f64 - pmaxfratio(f, df, n)
+}
+
+fn fmaxfratio(f: f64, df: i64, n: i64) -> f64 {
+    if f <= 0.0f64 || df < 1i64 || n < 1i64 { ret 0.0f64 / 0.0f64 }
+    if n == 2i64 { ret 2.0f64 * nb.df(f, f64(df), f64(df), false) }
+    let logc = math.log[f64](f64(n * (n - 1i64))) - f64(df) * 0.6931471805599453094172321f64 - 2.0f64 * pik_loggamma(f64(df) / 2.0f64)
+    ret mf_romberg(f, df, n, logc, true)
+}
+
+// the Johnson parameters (gamma, delta, xi, lambda, kind: 2 SB, 3 SU) closest to df and N, the starting point of the Newton inversion
+fn mf_start(p: f64, df: i64, n: i64) -> f64 {
+    var gm: [28]f64 = zero
+    var dl: [28]f64 = zero
+    var xi: [28]f64 = zero
+    var lm: [28]f64 = zero
+    var kd: [28]u8 = zero
+    let tab = "-1.019 0.510 2.750 0.915 3|-1.000 0.512 7.904 2.941 3|-0.996 0.512 14.124 5.302 3|-0.995 0.512 21.008 7.887 3|-1.542 0.834 1.425 0.616 3|-1.403 0.857 2.919 1.519 3|-1.372 0.862 4.317 2.235 3|-1.358 0.865 5.612 2.858 3|-2.892 1.252 0.927 0.271 3|-2.043 1.302 1.625 0.872 3|-1.931 1.314 2.184 1.175 3|-1.883 1.319 2.649 1.395 3|4.014 1.447 0.862 15.467 2|-3.054 1.848 1.127 0.523 3|-2.712 1.860 1.439 0.705 3|-2.571 1.862 1.681 0.814 3|2.995 1.509 0.896 4.930 2|-5.061 2.518 0.884 0.268 3|-3.699 2.480 1.126 0.457 3|-3.524 2.497 1.261 0.514 3|2.439 1.528 0.927 2.357 2|8.346 2.888 0.832 13.668 2|-6.664 3.306 0.907 0.209 3|-4.496 3.145 1.083 0.348 3|2.326 1.620 0.937 1.515 2|8.411 3.231 0.851 7.635 2|-7.810 3.947 0.880 0.163 3|-4.428 3.497 1.062 0.277 3"
+    var entry = 0usize
+    var field = 0usize
+    var i = 0usize
+    var cur = 0.0f64
+    var neg = false
+    var frac = 0.0f64
+    var infrac = false
+    while i <= tab.len {
+        var ch = 124u8
+        if i < tab.len { ch = tab[i] }
+        if ch == 32u8 || ch == 124u8 {
+            var v = cur
+            if neg { v = 0.0f64 - cur }
+            if field == 0usize { gm[entry] = v }
+            if field == 1usize { dl[entry] = v }
+            if field == 2usize { xi[entry] = v }
+            if field == 3usize { lm[entry] = v }
+            if field == 4usize { kd[entry] = u8(v) }
+            field += 1usize
+            cur = 0.0f64
+            neg = false
+            infrac = false
+            frac = 0.0f64
+            if ch == 124u8 {
+                entry += 1usize
+                field = 0usize
+            }
+        } else if ch == 45u8 {
+            neg = true
+        } else if ch == 46u8 {
+            infrac = true
+            frac = 0.1f64
+        } else {
+            let dgt = f64(ch - 48u8)
+            if infrac {
+                cur = cur + dgt * frac
+                frac = frac / 10.0f64
+            } else {
+                cur = cur * 10.0f64 + dgt
+            }
+        }
+        i += 1usize
+    }
+    var col = i64(math.floor[f64](0.5f64 + f64(n) / 3.0f64)) - 1i64
+    if col < 0i64 { col = 0i64 }
+    if col > 3i64 { col = 3i64 }
+    let ddf = math.log[f64](f64(df)) / 0.69314718055994172321f64
+    var row = i64(math.floor[f64](0.5f64 + ddf)) - 1i64
+    if row < 0i64 { row = 0i64 }
+    if row > 6i64 { row = 6i64 }
+    let at = usize(row * 4i64 + col)
+    ret qjohnson(p, gm[at], dl[at], xi[at], lm[at], kd[at])
+}
+
+// the quantile by Newton's method from the Johnson fit; NaN beyond df 160 or N 24, as the package answers
+fn xmaxfratio(p: f64, df: i64, n: i64) -> f64 {
+    if p < 0.0f64 || p > 1.0f64 || df < 1i64 || n < 1i64 { ret 0.0f64 / 0.0f64 }
+    if n == 2i64 { ret nb.qf(1.0f64 - 0.5f64 * (1.0f64 - p), f64(df), f64(df), true, false) }
+    if df > 160i64 || n > 24i64 { ret 0.0f64 / 0.0f64 }
+    var x = mf_start(p, df, n)
+    if x < 1.000001f64 { x = 1.000001f64 }
+    var ho = 1.0e6f64
+    var m = 0i64
+    var going = true
+    while going {
+        let h = (p - pmaxfratio(x, df, n)) / fmaxfratio(x, df, n)
+        x = x + h
+        var more = math.abs[f64](h / x) > 3.0e-8f64
+        if ho < math.abs[f64](h) {
+            more = false
+            x = x - h
+        }
+        ho = math.abs[f64](h)
+        let prev = m
+        m += 1i64
+        if prev > 20i64 || !more { going = false }
+    }
+    if x < 1.0f64 { x = 1.000001f64 }
+    ret x
 }

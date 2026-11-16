@@ -3554,4 +3554,5 @@ D6691	626	fdrtool normal statistic; the Brent minimiser's eps
 D6692	900	fdrtool null models over one statistic parameter; the correlation statistic
 D6693	756	SuppDists Pearson correlation, with the package's constants
 D6694	726	fdrtool helpers and the Student t null; L421 closed
-D6695	555	SuppDists Kruskal-Wallis and normal scores
+D6695	556	SuppDists Kruskal-Wallis and normal scores
+D6696	684	SuppDists maximum F ratio
