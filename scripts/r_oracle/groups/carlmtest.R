@@ -12,7 +12,7 @@ for (rep in 1:12) {
   des <- cbind(1, X); a <- c(n, k + 1, as.vector(y), as.vector(t(des)))
   for (t in 0:4) { dv <- diag(vcovHC(m, paste0("HC", t))); add(paste0("hc", t), a, sum(dv * seq_along(dv))) }
   add("dw", a, as.numeric(dwtest(m)$statistic)); add("bp", a, as.numeric(bptest(m)$statistic))
-  add("bpc", a, as.numeric(bptest(m, studentize = FALSE)$statistic)); add("reset", a, as.numeric(resettest(m)$statistic)); add("bpp", a, bptest(m)$p.value); add("resetp", a, resettest(m)$p.value)
+  add("bpc", a, as.numeric(bptest(m, studentize = FALSE)$statistic)); add("reset", a, as.numeric(resettest(m)$statistic)); add("bpp", a, bptest(m)$p.value); g <- gqtest(m); add("gq", a, as.numeric(g$statistic)); add("gqp", a, g$p.value); add("resetp", a, resettest(m)$p.value)
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
 }
 emit("carlmtest", "car", list(cases))

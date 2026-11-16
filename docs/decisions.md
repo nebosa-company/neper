@@ -45712,3 +45712,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.carlmtest` gains p_chisq and p_f, the upper-tail p values: the Breusch-Pagan statistic against a chi-square with p - 1 degrees of freedom (the design's columns less one) and the RESET F statistic against F(2, n - p - 2). Both equal the package's p values to 1e-8. Not here: the Durbin-Watson p value (the Pan exact distribution), the other RESET powers, Harvey-Collier, Goldfeld-Quandt, HAC and clustered covariances and car's Anova.
 
 **Result.** `oracle_carlmtest` equals the packages on 144 cases on Windows; Linux pending. L300 stays partial.
+
+## D6424 — lmtest: Goldfeld-Quandt
+
+`e.algo.stat.carlmtest` gains goldfeld_quandt for gqtest(point = 0.5, fraction = 0): the design is split at floor(n / 2) and ceiling(n / 2 + 0.01) (so an odd n drops no row and an even n drops none either), each segment is fitted by OLS, and the statistic is the ratio of the residual mean squares, last over first, with its two degrees of freedom; the upper-tail F p value uses p_f. Statistic and p value equal lmtest's to 1e-8. Not here: other points and fractions, the other alternatives, ordering by a variable, Harvey-Collier, the Durbin-Watson p value, HAC and clustered covariances and car's Anova.
+
+**Result.** `oracle_carlmtest` equals the packages on 168 cases on Windows; Linux pending. L300 stays partial.

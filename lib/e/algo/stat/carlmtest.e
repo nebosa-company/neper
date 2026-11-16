@@ -353,3 +353,30 @@ fn reset_f(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) ->
 fn p_chisq(stat: f64, df: f64) -> f64 { ret nm.pchisq(stat, df, false, false) }
 
 fn p_f(stat: f64, df1: f64, df2: f64) -> f64 { ret nb.pf(stat, df1, df2, false, false) }
+
+// gqtest(point = 0.5, fraction = 0): the ratio of the residual mean squares of the fits to the last and the first segment; the segments are the rows
+// 1 .. floor(n / 2) and ceiling(n / 2 + 0.01) .. n; (statistic, df1, df2)
+fn goldfeld_quandt(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (f64, f64, f64) {
+    let point1 = n / 2usize
+    let point2 = usize(math.ceil[f64](f64(n) * 0.5f64 + 0.01f64))
+    let n2 = n - point2 + 1usize
+    let (f1, e1) = ols(a, x[0usize..point1 * p], y[0usize..point1], point1, p)
+    if e1 != ok { ret (0.0f64 / 0.0f64, 0.0f64, 0.0f64) }
+    let (f2, e2) = ols(a, x[(point2 - 1usize) * p..n * p], y[point2 - 1usize..n], n2, p)
+    if e2 != ok { ret (0.0f64 / 0.0f64, 0.0f64, 0.0f64) }
+    var r1 = 0.0f64
+    var i = 0usize
+    while i < point1 {
+        r1 += f1.resid[i] * f1.resid[i]
+        i += 1usize
+    }
+    var r2 = 0.0f64
+    i = 0usize
+    while i < n2 {
+        r2 += f2.resid[i] * f2.resid[i]
+        i += 1usize
+    }
+    let df1 = f64(n2 - p)
+    let df2 = f64(point1 - p)
+    ret ((r2 / df1) / (r1 / df2), df1, df2)
+}

@@ -21,6 +21,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "bp") { ret cl.bp_studentized(a, des, n, p, f.resid) }
     if str.eq(k, "bpc") { ret cl.bp_test(a, des, n, p, f.resid, false) }
     if str.eq(k, "reset") { ret cl.reset_f(a, des, y, n, p) }
+    if str.eq(k, "gq") || str.eq(k, "gqp") {
+        let (gqs, d1, d2) = cl.goldfeld_quandt(a, des, y, n, p)
+        if str.eq(k, "gq") { ret gqs }
+        ret cl.p_f(gqs, d1, d2)
+    }
     if str.eq(k, "bpp") { ret cl.p_chisq(cl.bp_studentized(a, des, n, p, f.resid), f64(p - 1usize)) }
     if str.eq(k, "resetp") { ret cl.p_f(cl.reset_f(a, des, y, n, p), 2.0f64, f64(n - p - 2usize)) }
     var s = 0.0f64
