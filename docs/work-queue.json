@@ -526,10 +526,10 @@
       "group": "CRAN parity",
       "order": 628,
       "title": "geepack: generalized estimating equations",
-      "score": 0,
+      "score": 0.12,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 644). Small to mid. Verify the working correlations of e.algo.stat.mixed first. Acceptance, equal to geepack: geeglm and geese with independence, exchangeable, AR-1, unstructured and fixed correlations, robust and jackknife variance, ordgee, anova.geeglm Wald tests, QIC."
+      "evidence": "Partial (D6476 Gaussian geeglm with independence and exchangeable correlation, scale, alpha and sandwich covariance agree with geepack on Windows; oracle_geepackpkg; Linux pending). Open: other families and links, unequal clusters, AR1 and unstructured, jackknife and bootstrap variances, geese, Wald tests. Was: Open (CRAN rank 644). Small to mid. Verify the working correlations of e.algo.stat.mixed first. Acceptance, equal to geepack: geeglm and geese with independence, exchangeable, AR-1, unstructured and fixed correlations, robust and jackknife variance, ordgee, anova.geeglm Wald tests, QIC."
     },
     {
       "id": "L448",

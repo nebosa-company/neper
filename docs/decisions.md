@@ -46024,3 +46024,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.cubaturepkg` is new: `gauss_legendre` (Newton on the Legendre recurrence) and `integral_box`, a tensor 12-point Gauss-Legendre rule on a 4-per-dimension grid of sub-boxes, for four fixed smooth integrands in one to three dimensions. It reaches the value hcubature and pcubature reach to their tolerance; it is not their Genz-Malik and Clenshaw-Curtis recursion, so the error estimate and the adaptive subdivision are not covered.
 
 **Result.** `oracle_cubaturepkg` agrees with cubature on 24 cases on Windows at rel 1e-8 (the package stops at tol 1e-10), half from hcubature and half from pcubature. The adaptive algorithms, vector-valued and user integrands, infinite limits and the error estimates are open; Linux pending. L453 is partial.
+
+## D6476 — geepack: Gaussian geeglm with independence and exchangeable correlation
+
+`e.algo.stat.geepackpkg` is new: `geeglm_gaussian` iterates the generalized least-squares step with the working correlation, the scale phi = RSS / N (not N - p) and, for exchangeable, alpha = sum of within-cluster residual cross products / phi / number of pairs (not pairs - p), then forms the robust sandwich H^-1 (sum X_i' R^-1 r_i r_i' R^-1 X_i) H^-1. The two denominators were found by comparing candidates in R before they were coded.
+
+**Result.** `oracle_geepackpkg` agrees with geepack on 408 cases on Windows: independence at rel 1e-8 and exchangeable at 1e-4, because geepack stops at tol 1e-5 while this iterates to 1e-12; 20 data sets of 15 to 40 clusters of 3 to 6. Other families and links, unequal clusters, AR(1) and unstructured correlation, jackknife and bootstrap variances, geese and the Wald tests are open; Linux pending. L430 is partial.

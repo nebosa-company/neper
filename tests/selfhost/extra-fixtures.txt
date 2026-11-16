@@ -297,6 +297,7 @@ oracle_gamlssdist
 oracle_bayestestr
 oracle_performancepkg
 oracle_cubaturepkg
+oracle_geepackpkg
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -338,3 +339,4 @@ oracle_gamlssdist
 oracle_bayestestr
 oracle_performancepkg
 oracle_cubaturepkg
+oracle_geepackpkg
