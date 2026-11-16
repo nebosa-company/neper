@@ -30,4 +30,19 @@ for (rep in 1:14) {
     add("es", a(p, 1), as.numeric(ES(r, p = p, method = "gaussian", invert = FALSE)))
   }
 }
+for (rep in 1:10) {
+  n <- sample(30:100, 1); rb <- round(rnorm(n, 0.003, 0.025), 4); ra <- round(0.002 + 0.8 * rb + rnorm(n, 0, 0.015), 4)
+  b <- function(p1, p2) c(p1, p2, n, ra, rb)
+  rf <- c(0, 0.001)[rep %% 2 + 1]; sc <- c(12, 52, 252)[rep %% 3 + 1]
+  add("beta", b(rf, 0), as.numeric(CAPM.beta(ra, rb, Rf = rf)))
+  add("alpha", b(rf, 0), as.numeric(CAPM.alpha(ra, rb, Rf = rf)))
+  add("te", b(sc, 0), as.numeric(TrackingError(ra, rb, scale = sc)))
+  dts <- as.Date("2000-01-01") + seq_len(n); add("ir", b(sc, 0), as.numeric(InformationRatio(xts::xts(ra, dts), xts::xts(rb, dts), scale = sc)))
+  mar <- c(0, 0.002)[rep %% 2 + 1]
+  add("omega", b(mar, 0), as.numeric(OmegaSharpeRatio(ra, MAR = mar)))
+  for (m in 0:2) for (s in 0:1) for (g in 0:1) {
+    if (m > 0 && g == 1) next
+    add("updown", b(m * 10 + s, g), as.numeric(UpDownRatios(ra, rb, method = c("Capture", "Number", "Percent")[m + 1], side = c("Up", "Down")[s + 1], geometric = g == 1)))
+  }
+}
 emit("perfanalytics", "PerformanceAnalytics", list(cases))

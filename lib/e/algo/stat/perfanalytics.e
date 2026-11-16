@@ -179,3 +179,110 @@ fn es_loss(a: *mem.Arena, r: []const f64, p: f64, method: usize) -> f64 {
 
 // the package's Gaussian and Cornish-Fisher risk measures scale by the population standard deviation (sqrt of the second central moment)
 fn sd_pop(r: []const f64) -> f64 { ret sd_of(r) * math.sqrt[f64]((f64(r.len) - 1.0f64) / f64(r.len)) }
+
+// ---- two series: ra the asset, rb the benchmark, equal length
+
+fn cov_of(x: []const f64, y: []const f64) -> f64 {
+    let mx = mean_of(x)
+    let my = mean_of(y)
+    var s = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        s += (x[i] - mx) * (y[i] - my)
+        i += 1usize
+    }
+    ret s / (f64(x.len) - 1.0f64)
+}
+
+// CAPM.beta on excess returns (rf subtracted from both)
+fn capm_beta(ra: []const f64, rb: []const f64, rf: f64, a: *mem.Arena) -> f64 {
+    let (xa, e1) = mem.alloc[f64](a, ra.len)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (xb, e2) = mem.alloc[f64](a, ra.len)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < ra.len {
+        xa[i] = ra[i] - rf
+        xb[i] = rb[i] - rf
+        i += 1usize
+    }
+    ret cov_of(xa, xb) / cov_of(xb, xb)
+}
+
+fn capm_alpha(ra: []const f64, rb: []const f64, rf: f64, a: *mem.Arena) -> f64 {
+    let b = capm_beta(ra, rb, rf, a)
+    ret (mean_of(ra) - rf) - b * (mean_of(rb) - rf)
+}
+
+fn tracking_error(ra: []const f64, rb: []const f64, a: *mem.Arena, scale: f64) -> f64 {
+    let (d, e) = mem.alloc[f64](a, ra.len)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < ra.len {
+        d[i] = ra[i] - rb[i]
+        i += 1usize
+    }
+    ret sd_of(d) * math.sqrt[f64](scale)
+}
+
+fn information_ratio(ra: []const f64, rb: []const f64, a: *mem.Arena, scale: f64) -> f64 {
+    let ap = return_annualized(ra, scale, true) - return_annualized(rb, scale, true)
+    ret ap / tracking_error(ra, rb, a, scale)
+}
+
+fn omega_sharpe(r: []const f64, mar: f64) -> f64 {
+    let n = f64(r.len)
+    var up = 0.0f64
+    var dn = 0.0f64
+    var i = 0usize
+    while i < r.len {
+        if r[i] > mar { up += (r[i] - mar) / n }
+        if r[i] < mar { dn += (mar - r[i]) / n }
+        i += 1usize
+    }
+    ret (up - dn) / dn
+}
+
+fn cum_return(r: []const f64, keep: []const bool) -> f64 {
+    var p = 1.0f64
+    var i = 0usize
+    while i < r.len {
+        if keep[i] { p = p * (1.0f64 + r[i]) }
+        i += 1usize
+    }
+    ret p - 1.0f64
+}
+
+// method 0 Capture, 1 Number, 2 Percent; side 0 Up, 1 Down; geometric as in the package
+fn up_down(a: *mem.Arena, ra: []const f64, rb: []const f64, method: usize, side: usize, geometric: bool) -> f64 {
+    let (k, e) = mem.alloc[bool](a, ra.len)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let (kb, e2) = mem.alloc[bool](a, ra.len)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    var cnt_i = 0usize
+    var cnt_b = 0usize
+    var sa = 0.0f64
+    var sb = 0.0f64
+    while i < ra.len {
+        var inb = rb[i] > 0.0f64
+        if side == 1usize { inb = rb[i] <= 0.0f64 }
+        if method > 0usize && side == 1usize { inb = rb[i] < 0.0f64 }
+        k[i] = inb
+        kb[i] = inb
+        if inb {
+            cnt_b += 1usize
+            sa += ra[i]
+            sb += rb[i]
+            if method == 1usize {
+                if side == 0usize && ra[i] > 0.0f64 { cnt_i += 1usize }
+                if side == 1usize && ra[i] < 0.0f64 { cnt_i += 1usize }
+            }
+            if method == 2usize && ra[i] > rb[i] { cnt_i += 1usize }
+        }
+        i += 1usize
+    }
+    if method > 0usize { ret f64(cnt_i) / f64(cnt_b) }
+    if geometric { ret cum_return(ra, k) / cum_return(rb, kb) }
+    ret sa / sb
+}

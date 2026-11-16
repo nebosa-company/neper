@@ -15,6 +15,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(x[2usize])
     let r = x[3usize..3usize + n]
     let k = c.name
+    var rb = r
+    if x.len >= 3usize + 2usize * n { rb = x[3usize + n..3usize + 2usize * n] }
+    if str.eq(k, "beta") { ret pa.capm_beta(r, rb, p1, a) }
+    if str.eq(k, "alpha") { ret pa.capm_alpha(r, rb, p1, a) }
+    if str.eq(k, "te") { ret pa.tracking_error(r, rb, a, p1) }
+    if str.eq(k, "ir") { ret pa.information_ratio(r, rb, a, p1) }
+    if str.eq(k, "omega") { ret pa.omega_sharpe(r, p1) }
+    if str.eq(k, "updown") {
+        let code = usize(p1)
+        ret pa.up_down(a, r, rb, code / 10usize, code % 10usize, p2 > 0.5f64)
+    }
     if str.eq(k, "annual") { ret pa.return_annualized(r, p1, p2 > 0.5f64) }
     if str.eq(k, "maxdd") { ret pa.max_drawdown(r, p2 > 0.5f64) }
     if str.eq(k, "dd") { ret pa.downside_deviation(r, p1, p2 > 0.5f64 && p2 < 1.5f64, p2 > 1.5f64) }

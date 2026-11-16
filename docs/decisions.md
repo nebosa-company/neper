@@ -45316,3 +45316,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.perfanalytics` holds Return.annualized (geometric and arithmetic), maxDrawdown, DownsideDeviation (full, subset, potential), SortinoRatio, CalmarRatio, SharpeRatio (StdDev), and VaR (historical, Gaussian, Cornish-Fisher) and ES (historical, Gaussian) as positive losses. Found by comparison: the Gaussian and Cornish-Fisher forms scale by the population standard deviation, the historical ES averages the returns strictly below the quantile and falls back to the VaR when none is, and the Cornish-Fisher skewness and excess kurtosis are the moment estimators. Not here: the modified ES, portfolio and component forms, kernel, GPD, lognormal and Monte Carlo methods, CAPM, information, omega and tracking measures, Return.calculate and findDrawdowns.
 
 **Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 280 cases on Windows; Linux pending. L408 is partial.
+
+## D6154 — PerformanceAnalytics: benchmark-relative measures
+
+`e.algo.stat.perfanalytics` gains CAPM.beta and CAPM.alpha (least squares on excess returns), TrackingError (standard deviation of the active return times the root of the scale), InformationRatio (geometric annualized active premium over tracking error), OmegaSharpeRatio (upside potential less downside potential, over the downside potential, both divided by the full count) and UpDownRatios (Capture, Number and Percent, up and down, geometric or arithmetic; the down side is `<= 0` for Capture and `< 0` for the other two, as in the package). Not here: the modified ES, Return.calculate and findDrawdowns.
+
+**Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 410 cases on Windows; Linux pending. L408 stays partial.

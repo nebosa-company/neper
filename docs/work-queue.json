@@ -416,10 +416,10 @@
       "group": "CRAN parity",
       "order": 611,
       "title": "PerformanceAnalytics: portfolio risk and return",
-      "score": 0.3,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6153). Return.annualized, maxDrawdown, DownsideDeviation, SortinoRatio, CalmarRatio, SharpeRatio and single-series VaR (three methods) and ES (two) equal PerformanceAnalytics on Windows (oracle_perfanalytics; Linux pending). Open: modified ES, CAPM, InformationRatio, OmegaSharpeRatio, TrackingError, UpDownRatios, Return.calculate, findDrawdowns. Was: Open (CRAN rank 590). Small to mid. Acceptance, equal to PerformanceAnalytics: Return.calculate, Return.annualized, VaR (historical, gaussian, modified Cornish-Fisher), ES, SharpeRatio, SortinoRatio, maxDrawdown, findDrawdowns, CAPM.alpha, CAPM.beta, InformationRatio, OmegaSharpeRatio, TrackingError, UpDownRatios."
+      "evidence": "Partial (D6153, D6154 benchmark-relative: CAPM beta and alpha, TrackingError, InformationRatio, OmegaSharpeRatio, UpDownRatios). Return.annualized, maxDrawdown, DownsideDeviation, SortinoRatio, CalmarRatio, SharpeRatio and single-series VaR (three methods) and ES (two) equal PerformanceAnalytics on Windows (oracle_perfanalytics; Linux pending). Open: modified ES, CAPM, InformationRatio, OmegaSharpeRatio, TrackingError, UpDownRatios, Return.calculate, findDrawdowns. Was: Open (CRAN rank 590). Small to mid. Acceptance, equal to PerformanceAnalytics: Return.calculate, Return.annualized, VaR (historical, gaussian, modified Cornish-Fisher), ES, SharpeRatio, SortinoRatio, maxDrawdown, findDrawdowns, CAPM.alpha, CAPM.beta, InformationRatio, OmegaSharpeRatio, TrackingError, UpDownRatios."
     },
     {
       "id": "L409",
