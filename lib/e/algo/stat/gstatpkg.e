@@ -93,3 +93,107 @@ fn ordinary_krige(a: *mem.Arena, xy: []const f64, z: []const f64, n: usize, mode
     if part == 0usize { ret pred }
     ret variance
 }
+
+// universal kriging with the drift basis (1) for ndrift 1, (1, x, y) for ndrift 3: part 0 the prediction, 1 the kriging variance
+fn universal_krige(a: *mem.Arena, xy: []const f64, z: []const f64, n: usize, model: usize, psill: f64, range: f64, nugget: f64, px: f64, py: f64, ndrift: usize, part: usize) -> f64 {
+    let m = n + ndrift
+    let (g, e1) = mem.alloc[f64](a, m * m)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (gi, e2) = mem.alloc[f64](a, m * m)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    let (rhs, e3) = mem.alloc[f64](a, m)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < m * m {
+        g[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            g[i * m + j] = vgm_gamma(model, psill, range, nugget, pair_dist(xy, i, j))
+            j += 1usize
+        }
+        var k = 0usize
+        while k < ndrift {
+            var f = 1.0f64
+            if k == 1usize { f = xy[2usize * i] }
+            if k == 2usize { f = xy[2usize * i + 1usize] }
+            g[i * m + n + k] = f
+            g[(n + k) * m + i] = f
+            k += 1usize
+        }
+        let dx = xy[2usize * i] - px
+        let dy = xy[2usize * i + 1usize] - py
+        rhs[i] = vgm_gamma(model, psill, range, nugget, math.sqrt[f64](dx * dx + dy * dy))
+        i += 1usize
+    }
+    var k = 0usize
+    while k < ndrift {
+        var f = 1.0f64
+        if k == 1usize { f = px }
+        if k == 2usize { f = py }
+        rhs[n + k] = f
+        k += 1usize
+    }
+    if ols.inverse(a, g, m, gi) != ok { ret 0.0f64 / 0.0f64 }
+    var pred = 0.0f64
+    var variance = 0.0f64
+    i = 0usize
+    while i < m {
+        var w = 0.0f64
+        var j = 0usize
+        while j < m {
+            w += gi[i * m + j] * rhs[j]
+            j += 1usize
+        }
+        if i < n { pred += w * z[i] }
+        variance += w * rhs[i]
+        i += 1usize
+    }
+    if part == 0usize { ret pred }
+    ret variance
+}
+
+// simple kriging with a known mean: part 0 the prediction, 1 the variance, on the covariance C(h) = nugget + psill - gamma(h)
+fn simple_krige(a: *mem.Arena, xy: []const f64, z: []const f64, n: usize, model: usize, psill: f64, range: f64, nugget: f64, px: f64, py: f64, mean: f64, part: usize) -> f64 {
+    let sill = nugget + psill
+    let (c, e1) = mem.alloc[f64](a, n * n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (ci, e2) = mem.alloc[f64](a, n * n)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    let (c0, e3) = mem.alloc[f64](a, n)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var v = sill
+            if i != j { v = sill - vgm_gamma(model, psill, range, nugget, pair_dist(xy, i, j)) }
+            c[i * n + j] = v
+            j += 1usize
+        }
+        let dx = xy[2usize * i] - px
+        let dy = xy[2usize * i + 1usize] - py
+        c0[i] = sill - vgm_gamma(model, psill, range, nugget, math.sqrt[f64](dx * dx + dy * dy))
+        i += 1usize
+    }
+    if ols.inverse(a, c, n, ci) != ok { ret 0.0f64 / 0.0f64 }
+    var pred = mean
+    var wc = 0.0f64
+    i = 0usize
+    while i < n {
+        var w = 0.0f64
+        var j = 0usize
+        while j < n {
+            w += ci[i * n + j] * c0[j]
+            j += 1usize
+        }
+        pred += w * (z[i] - mean)
+        wc += w * c0[i]
+        i += 1usize
+    }
+    if part == 0usize { ret pred }
+    ret sill - wc
+}

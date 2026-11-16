@@ -13,6 +13,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let k = c.name
     if str.eq(k, "vgm") { ret gs.vgm_gamma(usize(x[0usize]), x[1usize], x[2usize], x[3usize], x[4usize]) }
     let n = usize(x[0usize])
+    if str.eq(k, "uk") || str.eq(k, "sk") {
+        let xyz9 = x[9usize..9usize + 3usize * n]
+        let (xy9, f1) = mem.alloc[f64](a, 2usize * n)
+        if f1 != ok { os.exit(9) }
+        let (z9, f2) = mem.alloc[f64](a, n)
+        if f2 != ok { os.exit(10) }
+        var q = 0usize
+        while q < n {
+            xy9[2usize * q] = xyz9[3usize * q]
+            xy9[2usize * q + 1usize] = xyz9[3usize * q + 1usize]
+            z9[q] = xyz9[3usize * q + 2usize]
+            q += 1usize
+        }
+        if str.eq(k, "uk") { ret gs.universal_krige(a, xy9, z9, n, usize(x[1usize]), x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], usize(x[7usize]), usize(x[8usize])) }
+        ret gs.simple_krige(a, xy9, z9, n, usize(x[1usize]), x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], x[7usize], usize(x[8usize]))
+    }
     if str.eq(k, "ev") {
         let xyz = x[5usize..5usize + 3usize * n]
         let (xy, e1) = mem.alloc[f64](a, 2usize * n)

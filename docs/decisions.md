@@ -45988,3 +45988,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.fieldspkg` is new: `matern` (the exact forms at smoothness 1/2, 3/2 and 5/2, otherwise the Bessel-K form with the package's 1e-10 stand-in for a zero distance) on `e.algo.stat.gslfns.bessel_knu`, and `exp_cov` (exp(-(d / range)^p)).
 
 **Result.** `oracle_fieldspkg` equals fields on 240 cases on Windows, 30 parameter draws with smoothness among the three closed forms and two random values, each at a zero distance and four others. Tps, Krig, the other covariances and spatial process fitting are open; Linux pending. L370 is partial.
+
+## D6470 — gstat: universal and simple kriging
+
+`e.algo.stat.gstatpkg` gains `universal_krige` (the bordered semivariance system with the drift basis (1) or (1, x, y), prediction and variance) and `simple_krige` (known mean, on the covariance sill - gamma with the full nugget-plus-partial-sill variance at lag 0).
+
+**Result.** `oracle_gstatpkg` equals gstat on 443 cases on Windows, the 60 new ones at rel 1e-8 over 15 data sets of 15 to 40 points with a planar drift. The other model families, anisotropy, nesting, fitting and co-kriging are open; Linux pending. L437 stays partial.
