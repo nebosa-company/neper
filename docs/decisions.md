@@ -45550,3 +45550,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.signalpkg` gains butter_band for butter(n, c(w1, w2), "pass"): the low-pass prototype poles are mapped to the band by the quadratic s^2 - (BW p) s + W0^2 = 0 with the warped edges 4 tan(pi w / 2), BW = W2 - W1 and W0^2 = W1 W2, which doubles the order, the zeros are n at z = +1 and n at z = -1, and the gain makes the response unity at the digital image of the analog centre sqrt(W1 W2). Coefficients equal signal's. Not here: the band-stop and the band forms of cheby1, cheby2, ellip and bessel.
 
 **Result.** `oracle_signalpkg` equals signal on 326 cases on Windows; Linux pending. L340 stays partial.
+
+## D6190 — gsDesign: the alpha spending functions
+
+`e.algo.stat.gsdesign` gives the cumulative alpha spent at information fraction t (capped at 1) for sfHSD (Hwang-Shih-DeCani, linear at gamma = 0), sfPower, sfExponential, sfLogistic, sfNormal, sfCauchy and sfExtremeValue in their two-parameter (a, b) form, sfBetaDist, and the Lan-DeMets O'Brien-Fleming (with its generalised rho) and Pocock approximations; the (a, b) families spend the whole alpha at t = 1. Not here: the four-point parameterisations (they solve for a and b), sfPoints and sfStep, the boundary computation of gsDesign() and gsProbability, sample sizes and the non-binding futility bounds.
+
+**Result.** `oracle_gsdesign` equals gsDesign on 720 cases on Windows; Linux pending. L507 is partial.

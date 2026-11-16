@@ -1428,10 +1428,10 @@
       "group": "CRAN parity",
       "order": 745,
       "title": "gsDesign: group sequential designs",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 939). Mid. Acceptance, equal to gsDesign: gsDesign for the Lan-DeMets O'Brien-Fleming and Pocock, Hwang-Shih-DeCani, power and exponential spending functions, gsProbability, gsCP, nBinomial, nSurv, nNormal, sfLDOF and the boundaries and sample sizes."
+      "evidence": "Partial (D6190). The alpha spending functions equal gsDesign on Windows (oracle_gsdesign; Linux pending). Open: boundary computation by recursive integration, gsProbability, sample size, futility bounds, four-point spending parameterisations. Was: Open (CRAN rank 939). Mid. Acceptance, equal to gsDesign: gsDesign for the Lan-DeMets O'Brien-Fleming and Pocock, Hwang-Shih-DeCani, power and exponential spending functions, gsProbability, gsCP, nBinomial, nSurv, nNormal, sfLDOF and the boundaries and sample sizes."
     },
     {
       "id": "L508",

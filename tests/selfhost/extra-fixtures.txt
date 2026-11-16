@@ -289,3 +289,5 @@ oracle_agricolae
 oracle_epir
 oracle_energy
 oracle_bayesfactor
+oracle_tsa
+oracle_gsdesign

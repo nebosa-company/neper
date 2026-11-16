@@ -128,7 +128,7 @@ L487	library	0	285	PMCMRplus: nonparametric post-hoc tests	Open (CRAN rank 821).
 L488	library	0	222	drc: dose-response models	Open (CRAN rank 813).
 L489	library	0	335	osqp and clarabel: quadratic and conic solvers	Open (CRAN ranks 815, 880;
 L493	library	0	218	topicmodels: LDA and CTM	Open (CRAN rank 897).
-L507	library	0	266	gsDesign: group sequential designs	Open (CRAN rank 939).
+L507	library	0.2	514	gsDesign: group sequential designs	Partial (D6190).
 L508	library	0	277	sampling: survey sampling designs	Open (CRAN rank 980).
 L509	library	0	229	Cubist: rule-based regression models	Open (CRAN rank 924).
 L510	library	0	244	gmm: generalized method of moments	Open (CRAN rank 906).

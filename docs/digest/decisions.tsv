@@ -3264,4 +3264,5 @@ D6187	671	signal: cheby2
 D6188	903	energy: distance covariance, distance correlation and the two-sample energy statistic
 D6188	766	signal: grpdelay
 D6189	867	BayesFactor: the JZS Bayes factor of a t statistic
-D6189	661	signal: band-pass Butterworth
+D6189	662	signal: band-pass Butterworth
+D6190	766	gsDesign: the alpha spending functions
