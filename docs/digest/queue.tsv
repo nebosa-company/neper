@@ -1,138 +1,71 @@
 id	category	score	evidence_bytes	title	status
 L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
-L303	library	0	321	urca: unit-root and cointegration tests	Open (CRAN rank 136).
-L299	library	0	547	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Open (CRAN ranks 115, 116, 167, plus the interval summaries of ggdist 175).
-L300	library	0	503	car, lmtest and sandwich: linear-model tests and robust covariance	Open (CRAN ranks 111, 114, 155).
-L305	library	0	392	Hmisc: numerically defined core	Open (CRAN rank 184).
-L306	library	0	455	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Open (CRAN rank 173).
-L307	library	0	329	quantreg: quantile regression inference and algorithms	Open (CRAN rank 131).
-L309	library	0	371	nloptr: gradient-based and constrained optimizers	Open (CRAN rank 120).
-L314	library	0	682	lubridate and timeDate: date-time parsing, periods, business calendars	Open (CRAN ranks 102, 134).
-L317	library	0	407	igraph: random graph generators and layouts	Open (CRAN rank 109).
-L310	library	0	484	glmnet: elastic-net path and families	Open (CRAN rank 182).
-L308	library	0	451	minqa and nloptr: derivative-free optimizers	Open (CRAN ranks 120, 122).
-L304	library	0	469	haven: SAS, SPSS and Stata file formats	Open (CRAN rank 123).
-L315	library	0	448	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Open (CRAN ranks 163, 144).
-L316	library	0	542	igraph: deterministic structure and community detection	Open (CRAN rank 109).
-L311	library	0	605	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	Open (CRAN rank 200).
-L312	library	0	392	psych: reliability, factor analysis and correlation tools	Open (CRAN rank 168).
-L313	library	0	425	emmeans: estimated marginal means and contrasts	Open (CRAN rank 192).
-L318	library	0	473	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Open (CRAN rank 128).
-L319	library	0	471	nlme: gls, correlation structures and variance functions	Open (CRAN rank 195).
-L320	library	0	602	sf: simple-features geometry, predicates and spherical geometry	Open (CRAN rank 159;
+L321	library	0	236	boot: bootstrap and permutation confidence intervals	Open (CRAN rank 296).
+L322	library	0	267	class and FNN: knn variants, SOM, LVQ, entropy estimators	Open (CRAN ranks 276, 246).
+L323	library	0	221	permute: restricted permutation designs	Open (CRAN rank 281).
+L325	library	0	250	KernSmooth and tseries remainder	Open (CRAN ranks 273, 241).
+L326	library	0	205	quantmod and TTR: technical indicators	Open (CRAN rank 215).
+L329	library	0	184	ggsci and ggthemes palettes	Open (CRAN ranks 220, 226).
+L355	library	0	288	nortest and moments: normality tests and sample moments	Open (CRAN ranks 305, 326).
+L356	library	0	281	truncnorm, CompQuadForm and pbivnorm: three small distribution packages	Open (CRAN ranks 363, 379, 321).
+L357	library	0	209	corpcor and pcaPP: shrinkage covariance and robust PCA	Open (CRAN ranks 375, 366).
+L385	library	0	181	hexbin: hexagonal binning	Open (CRAN rank 434).
+L386	library	0	205	SQUAREM: accelerated fixed-point iteration	Open (CRAN rank 437).
+L388	library	0	204	fracdiff: fractional differencing and ARFIMA	Open (CRAN rank 411).
+L391	library	0	183	bridgesampling: marginal likelihoods	Open (CRAN rank 496).
+L392	library	0	259	dqrng: random number generators	Open (CRAN rank 461).
+L399	library	0	328	pwr: power analysis	Open (CRAN rank 558).
+L400	library	0	196	nnls: non-negative least squares	Open (CRAN rank 557).
+L402	library	0	220	ica: independent component analysis	Open (CRAN rank 548).
+L403	library	0	245	rngtools and doRNG: parallel random streams	Open (CRAN ranks 538, 576).
+L404	library	0	238	mlbench: benchmark data generators	Open (CRAN rank 547).
+L405	library	0	339	yardstick and ModelMetrics: model performance metrics	Open (CRAN rank 553, 518).
 L296	library	0.5	778	proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener	Partial (D6023).
 L295	library	0.9	324	classInt: classification intervals	Partial (D6020, D6021).
 L298	library	0.7	635	xts: period handling and time-indexed series	Partial (D6022).
 L297	library	0.6	683	colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation	Partial (D6024).
 L301	library	0.3	551	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
 L302	library	0.7	833	GPArotation: gradient projection rotations	Partial (D6026).
-L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
-L274	library	0	381	General linear mixed models (lme4)	Open.
-L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
-L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
-L321	library	0	236	boot: bootstrap and permutation confidence intervals	Open (CRAN rank 296).
-L322	library	0	267	class and FNN: knn variants, SOM, LVQ, entropy estimators	Open (CRAN ranks 276, 246).
-L323	library	0	221	permute: restricted permutation designs	Open (CRAN rank 281).
+L406	library	0	263	DEoptimR: differential evolution	Open (CRAN rank 517).
+L410	library	0	230	AlgDesign: optimal experimental designs	Open (CRAN rank 586).
+L420	library	0	198	minpack.lm: Levenberg-Marquardt least squares	Open (CRAN rank 620).
+L421	library	0	215	fdrtool: false discovery rate estimation	Open (CRAN rank 677).
+L423	library	0	215	biglm: bounded-memory linear and generalized linear models	Open (CRAN rank 672).
+L431	library	0	261	TSP: travelling-salesperson tools	Open (CRAN rank 631).
+L443	library	0	201	diptest: Hartigan dip test	Open (CRAN rank 792).
+L444	library	0	233	SuppDists: Johnson, Kendall, Spearman and related distributions	Open (CRAN rank 711).
+L445	library	0	230	splines2: spline bases	Open (CRAN rank 782).
+L446	library	0	195	mixsqp: mixture proportions by SQP	Open (CRAN rank 760).
+L447	library	0	184	norm: EM and data augmentation for multivariate normal data	Open (CRAN rank 757).
+L469	library	0	226	pastecs: decomposition, turning points and descriptive statistics	Open (CRAN rank 823).
+L470	library	0	242	partitions: integer and set partitions	Open (CRAN rank 833).
+L471	library	0	191	BiasedUrn: noncentral hypergeometric distributions	Open (CRAN rank 851).
+L472	library	0	178	modeest: mode estimation	Open (CRAN rank 852).
+L473	library	0	184	isotone: isotonic regression	Open (CRAN rank 872).
+L474	library	0	237	kSamples: k-sample rank tests	Open (CRAN rank 844).
+L498	library	0	196	Kendall: rank correlation and Mann-Kendall trend tests	Open (CRAN rank 920).
+L499	library	0	183	ResourceSelection: Hosmer-Lemeshow and related tests	Open (CRAN rank 981).
+L500	library	0	212	ashr: adaptive shrinkage	Open (CRAN rank 977).
 L324	library	0	285	pROC and ROCR: ROC curves and threshold performance	Open (CRAN ranks 217, 294).
-L325	library	0	250	KernSmooth and tseries remainder	Open (CRAN ranks 273, 241).
-L326	library	0	205	quantmod and TTR: technical indicators	Open (CRAN rank 215).
 L327	library	0	252	statmod: Tweedie and inverse Gaussian, Gauss quadrature	Open (CRAN rank 218).
 L328	library	0	400	caret evaluation and resampling	Open (CRAN rank 235).
-L329	library	0	184	ggsci and ggthemes palettes	Open (CRAN ranks 220, 226).
 L330	library	0	200	leaps: best-subset regression	Open (CRAN rank 268).
 L331	library	0	327	dendextend and hclust operations	Open (CRAN rank 297).
 L332	library	0	222	foreign: dBase, ARFF, Octave, Minitab and Systat	Open (CRAN rank 249).
-L333	library	0	561	pracma and polynom: numerical analysis toolbox	Open (CRAN rank 203, 225, 231).
-L334	library	0	304	RSpectra and irlba: partial eigen and singular value decompositions	Open (CRAN ranks 207, 289).
-L335	library	0	310	cluster: pam, clara, fanny, agnes, diana, mona, daisy	Open (CRAN rank 229).
-L336	library	0	247	nnet: single-hidden-layer networks and multinom	Open (CRAN rank 258).
-L337	library	0	288	rpart: CART trees	Open (CRAN rank 270).
-L338	library	0	241	robustbase: robust regression and scale	Open (CRAN rank 285).
-L339	library	0	435	bayestestR, performance and parameters: model summary indices	Open (CRAN ranks 254, 251, 272).
-L340	library	0	269	signal: filter design and spectral tools	Open (CRAN rank 253).
-L341	library	0	313	multcomp: general linear hypotheses	Open (CRAN rank 224;
-L342	library	0	202	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Open (CRAN rank 262).
-L343	library	0	330	deSolve: solver parity	Open (CRAN rank 216).
-L344	library	0	359	randomForest: Breiman forests equal to R	Open (CRAN rank 255;
-L345	library	0	324	FactoMineR and factoextra: multivariate exploration	Open (CRAN ranks 232, 277).
-L346	library	0	284	mice: imputation parity	Open (CRAN rank 293).
-L347	library	0	276	locfit: local regression and likelihood	Open (CRAN rank 259).
-L348	library	0	308	mclust: Gaussian mixture model selection	Open (CRAN rank 280).
-L349	library	0	268	vegan: community ecology	Open (CRAN rank 247).
-L350	library	0	308	ape: phylogenetic trees	Open (CRAN rank 238).
-L351	library	0	262	survey: design-based inference	Open (CRAN rank 267).
-L352	library	0	306	ncdf4: NetCDF and HDF5 files	Open (CRAN rank 237).
-L353	library	0	285	mgcv: generalized additive models	Open (CRAN rank 239).
-L354	library	0	286	lavaan: structural equation models	Open (CRAN rank 275).
-L355	library	0	288	nortest and moments: normality tests and sample moments	Open (CRAN ranks 305, 326).
-L356	library	0	281	truncnorm, CompQuadForm and pbivnorm: three small distribution packages	Open (CRAN ranks 363, 379, 321).
-L357	library	0	209	corpcor and pcaPP: shrinkage covariance and robust PCA	Open (CRAN ranks 375, 366).
 L358	library	0	270	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Open (CRAN rank 368).
 L359	library	0	273	pls: partial least squares regression	Open (CRAN rank 370).
-L360	library	0	374	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Open (CRAN ranks 337, 348, 393, 355;
-L361	library	0	272	segmented and strucchange: breakpoints and structural change	Open (CRAN ranks 338, 344).
-L362	library	0	247	fitdistrplus: fitting and comparing distributions	Open (CRAN rank 334).
-L363	library	0	355	DescTools: descriptive statistics and tests	Open (CRAN rank 320).
-L364	library	0	374	metafor: meta-analysis	Open (CRAN rank 346).
-L365	library	0	233	ks: multivariate kernel density estimation	Open (CRAN rank 331).
-L366	library	0	277	kernlab: kernel methods	Open (CRAN rank 312).
-L367	library	0	326	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Open (CRAN ranks 302, 396, 329).
-L368	library	0	273	fixest: high-dimensional fixed-effects estimation	Open (CRAN rank 349).
-L369	library	0	366	plm and AER: panel data and applied econometrics	Open (CRAN ranks 392, 354).
-L370	library	0	268	fields and interp: spatial smoothing and interpolation	Open (CRAN ranks 367, 351).
-L371	library	0	441	coin: conditional and permutation tests	Open (CRAN rank 372).
-L372	library	0	259	spdep: spatial autocorrelation and spatial regression	Open (CRAN rank 336).
-L373	library	0	279	bnlearn: Bayesian network learning	Open (CRAN rank 397).
-L374	library	0	249	rms: regression modelling strategies	Open (CRAN rank 395).
-L375	library	0	219	partykit: conditional inference trees and MOB	Open (CRAN rank 386).
-L376	library	0	240	gam: backfitting generalized additive models	Open (CRAN rank 388).
-L377	library	0	419	xgboost: gradient-boosted trees	Open (CRAN rank 306).
-L378	library	0	318	uwot and Rtsne: embeddings equal to R	Open (CRAN ranks 311, 315).
 L379	library	0	254	gmp: arbitrary-precision numbers	Open (CRAN rank 301).
 L380	library	0	378	tm and tidytext: text mining	Open (CRAN ranks 400, 383).
-L381	library	0	298	ade4: multivariate analysis of ecological data	Open (CRAN rank 364).
-L382	library	0	298	VGAM: vector generalized linear and additive models	Open (CRAN rank 382).
-L383	library	0	315	glmmTMB: generalized linear mixed models by Laplace approximation	Open (CRAN rank 342).
-L384	library	0	415	spatstat: point pattern analysis	Open (CRAN ranks 304, 314, 316, 323).
-L385	library	0	181	hexbin: hexagonal binning	Open (CRAN rank 434).
-L386	library	0	205	SQUAREM: accelerated fixed-point iteration	Open (CRAN rank 437).
 L387	library	0	269	lmom and gld: L-moments and the generalized lambda distribution	Open (CRAN ranks 480, 485).
-L388	library	0	204	fracdiff: fractional differencing and ARFIMA	Open (CRAN rank 411).
 L389	library	0	409	vcd and effectsize: categorical association and effect sizes	Open (CRAN ranks 473, 457).
 L390	library	0	273	R.matlab: MATLAB MAT files	Open (CRAN rank 444).
-L391	library	0	183	bridgesampling: marginal likelihoods	Open (CRAN rank 496).
-L392	library	0	259	dqrng: random number generators	Open (CRAN rank 461).
-L393	library	0	328	ordinal: cumulative link models	Open (CRAN rank 447).
-L394	library	0	193	ipred: bagging and error estimation	Open (CRAN rank 439).
-L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463).
-L396	library	0	308	agricolae: experimental designs and post-hoc tests	Open (CRAN rank 500).
-L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
-L398	library	0	447	rugarch: the GARCH family	Open (CRAN rank 497).
-L399	library	0	328	pwr: power analysis	Open (CRAN rank 558).
-L400	library	0	196	nnls: non-negative least squares	Open (CRAN rank 557).
 L401	library	0	310	geosphere: geodesic and spherical computations	Open (CRAN rank 582).
-L402	library	0	220	ica: independent component analysis	Open (CRAN rank 548).
-L403	library	0	245	rngtools and doRNG: parallel random streams	Open (CRAN ranks 538, 576).
-L404	library	0	238	mlbench: benchmark data generators	Open (CRAN rank 547).
-L405	library	0	339	yardstick and ModelMetrics: model performance metrics	Open (CRAN rank 553, 518).
-L406	library	0	263	DEoptimR: differential evolution	Open (CRAN rank 517).
 L407	library	0	289	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Open (CRAN ranks 592, 555;
 L408	library	0	315	PerformanceAnalytics: portfolio risk and return	Open (CRAN rank 590).
 L409	library	0	221	arm: applied regression helpers	Open (CRAN rank 570).
-L410	library	0	230	AlgDesign: optimal experimental designs	Open (CRAN rank 586).
 L411	library	0	303	DHARMa: simulated residual diagnostics	Open (CRAN rank 550).
-L412	library	0	212	pscl: zero-inflated and hurdle count models	Open (CRAN rank 584).
-L413	library	0	265	flexmix: finite mixture regression	Open (CRAN rank 568).
-L414	library	0	343	gbm: gradient boosting machines	Open (CRAN rank 561).
-L415	library	0	366	marginaleffects: predictions, slopes and comparisons	Open (CRAN ranks 541, 533, 577).
-L416	library	0	231	polspline: polynomial spline models	Open (CRAN rank 597).
-L417	library	0	429	gsl: special functions of the GNU Scientific Library	Open (CRAN rank 594).
-L418	library	0	333	Rmpfr: arbitrary-precision floating point	Open (CRAN rank 567).
 L419	library	0	240	cmprsk: competing risks	Open (CRAN rank 602).
-L420	library	0	198	minpack.lm: Levenberg-Marquardt least squares	Open (CRAN rank 620).
-L421	library	0	215	fdrtool: false discovery rate estimation	Open (CRAN rank 677).
 L422	library	0	342	extraDistr: extra probability distributions	Open (CRAN rank 678).
-L423	library	0	215	biglm: bounded-memory linear and generalized linear models	Open (CRAN rank 672).
 L424	library	0	214	logistf: Firth penalized logistic regression	Open (CRAN rank 689).
 L425	library	0	222	ismev: extreme-value model fits	Open (CRAN rank 647).
 L426	library	0	295	DiceDesign: space-filling designs	Open (CRAN rank 604).
@@ -140,23 +73,6 @@ L427	library	0	320	afex: repeated-measures and mixed ANOVA	Open (CRAN rank 607).
 L428	library	0	224	MuMIn: model selection and averaging	Open (CRAN rank 667).
 L429	library	0	316	imputeTS: time-series imputation	Open (CRAN rank 658).
 L430	library	0	287	geepack: generalized estimating equations	Open (CRAN rank 644).
-L431	library	0	261	TSP: travelling-salesperson tools	Open (CRAN rank 631).
-L432	library	0	223	seriation: ordering of objects	Open (CRAN rank 609).
-L433	library	0	320	vars: vector autoregression	Open (CRAN rank 606).
-L434	library	0	258	qgraph: network estimation	Open (CRAN rank 690).
-L435	library	0	312	sna: social network analysis	Open (CRAN rank 629).
-L436	library	0	298	MatchIt: matching for causal inference	Open (CRAN rank 656).
-L437	library	0	315	gstat: geostatistics	Open (CRAN rank 699).
-L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
-L439	library	0	309	MCMCpack: Bayesian MCMC for common models	Open (CRAN rank 636).
-L440	library	0	347	flexsurv and rstpm2: flexible parametric survival models	Open (CRAN ranks 697, 694).
-L441	library	0	300	msm and mstate: multi-state models	Open (CRAN ranks 642, 679).
-L442	library	0	264	phangorn: phylogenetic inference	Open (CRAN rank 666).
-L443	library	0	201	diptest: Hartigan dip test	Open (CRAN rank 792).
-L444	library	0	233	SuppDists: Johnson, Kendall, Spearman and related distributions	Open (CRAN rank 711).
-L445	library	0	230	splines2: spline bases	Open (CRAN rank 782).
-L446	library	0	195	mixsqp: mixture proportions by SQP	Open (CRAN rank 760).
-L447	library	0	184	norm: EM and data augmentation for multivariate normal data	Open (CRAN rank 757).
 L448	library	0	272	mcmc: Metropolis and tempering samplers	Open (CRAN rank 789).
 L449	library	0	218	sn: skew-normal and skew-t distributions	Open (CRAN rank 798).
 L450	library	0	289	mediation: causal mediation analysis	Open (CRAN rank 755).
@@ -164,26 +80,7 @@ L451	library	0	245	betareg: beta regression	Open (CRAN rank 710).
 L452	library	0	223	TSA: time-series analysis toolkit	Open (CRAN rank 735).
 L453	library	0	246	cubature: adaptive multidimensional integration	Open (CRAN rank 753).
 L454	library	0	188	VIM: missing-value imputation	Open (CRAN rank 765).
-L455	library	0	290	geometry: Qhull in n dimensions	Open (CRAN rank 722).
-L456	library	0	287	mlogit: discrete-choice models	Open (CRAN rank 723).
-L457	library	0	281	NMF: non-negative matrix factorization	Open (CRAN rank 740).
-L458	library	0	227	earth: multivariate adaptive regression splines	Open (CRAN rank 780).
-L459	library	0	233	energy: energy statistics	Open (CRAN rank 795).
-L460	library	0	303	epiR: epidemiology	Open (CRAN rank 773).
-L461	library	0	216	systemfit: equation systems	Open (CRAN rank 794).
-L462	library	0	271	arules: association rule mining	Open (CRAN rank 800).
-L463	library	0	356	actuar: actuarial science	Open (CRAN rank 781).
-L464	library	0	255	gamlss.dist: GAMLSS distribution families	Open (CRAN rank 788).
-L465	library	0	249	BayesFactor: Bayes factors with JZS priors	Open (CRAN rank 712).
-L466	library	0	326	EnvStats: environmental statistics	Open (CRAN rank 708).
-L467	library	0	280	hetGP: heteroskedastic Gaussian processes	Open (CRAN rank 784).
 L468	library	0	233	fpc: cluster validity and flexible clustering procedures	Open (CRAN rank 803).
-L469	library	0	226	pastecs: decomposition, turning points and descriptive statistics	Open (CRAN rank 823).
-L470	library	0	242	partitions: integer and set partitions	Open (CRAN rank 833).
-L471	library	0	191	BiasedUrn: noncentral hypergeometric distributions	Open (CRAN rank 851).
-L472	library	0	178	modeest: mode estimation	Open (CRAN rank 852).
-L473	library	0	184	isotone: isotonic regression	Open (CRAN rank 872).
-L474	library	0	237	kSamples: k-sample rank tests	Open (CRAN rank 844).
 L475	library	0	247	scoringRules: proper scoring rules	Open (CRAN rank 870).
 L476	library	0	218	irr: inter-rater reliability	Open (CRAN rank 867).
 L477	library	0	253	compositions: compositional data analysis	Open (CRAN rank 860).
@@ -195,27 +92,71 @@ L482	library	0	219	laeken: inequality and poverty indicators	Open (CRAN rank 888
 L483	library	0	262	tsfeatures: time-series features	Open (CRAN rank 889).
 L484	library	0	249	LearnBayes: Bayesian computation helpers	Open (CRAN rank 891).
 L485	library	0	222	DRDID: difference-in-differences	Open (CRAN rank 893).
-L486	library	0	206	mixtools: mixture models by EM	Open (CRAN rank 884).
-L487	library	0	285	PMCMRplus: nonparametric post-hoc tests	Open (CRAN rank 821).
-L488	library	0	222	drc: dose-response models	Open (CRAN rank 813).
-L489	library	0	335	osqp and clarabel: quadratic and conic solvers	Open (CRAN ranks 815, 880;
-L490	library	0	249	timereg: Aalen additive and Cox-Aalen hazard models	Open (CRAN rank 853).
-L491	library	0	208	riskRegression: risk prediction scoring	Open (CRAN rank 850).
-L492	library	0	236	coxme: mixed-effects Cox models	Open (CRAN rank 900).
-L493	library	0	218	topicmodels: LDA and CTM	Open (CRAN rank 897).
-L494	library	0	261	bayesm: Bayesian econometrics	Open (CRAN rank 829).
-L495	library	0	260	mirt: item response theory	Open (CRAN rank 841).
-L496	library	0	277	fda: functional data analysis	Open (CRAN rank 838).
-L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
-L498	library	0	196	Kendall: rank correlation and Mann-Kendall trend tests	Open (CRAN rank 920).
-L499	library	0	183	ResourceSelection: Hosmer-Lemeshow and related tests	Open (CRAN rank 981).
-L500	library	0	212	ashr: adaptive shrinkage	Open (CRAN rank 977).
 L501	library	0	261	randtoolbox and qrng: quasi-random generators	Open (CRAN ranks 926, 963).
 L502	library	0	228	qcc: statistical quality control	Open (CRAN rank 999).
 L503	library	0	196	WRS2: robust tests and ANOVA	Open (CRAN rank 985).
 L504	library	0	291	rcompanion: nonparametric and categorical helpers	Open (CRAN rank 904).
 L505	library	0	208	sm: nonparametric smoothing methods	Open (CRAN rank 954).
 L506	library	0	195	ggm: Gaussian graphical models	Open (CRAN rank 964).
+L303	library	0	321	urca: unit-root and cointegration tests	Open (CRAN rank 136).
+L299	library	0	547	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Open (CRAN ranks 115, 116, 167, plus the interval summaries of ggdist 175).
+L300	library	0	503	car, lmtest and sandwich: linear-model tests and robust covariance	Open (CRAN ranks 111, 114, 155).
+L305	library	0	392	Hmisc: numerically defined core	Open (CRAN rank 184).
+L306	library	0	455	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Open (CRAN rank 173).
+L307	library	0	329	quantreg: quantile regression inference and algorithms	Open (CRAN rank 131).
+L309	library	0	371	nloptr: gradient-based and constrained optimizers	Open (CRAN rank 120).
+L314	library	0	682	lubridate and timeDate: date-time parsing, periods, business calendars	Open (CRAN ranks 102, 134).
+L317	library	0	407	igraph: random graph generators and layouts	Open (CRAN rank 109).
+L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
+L274	library	0	381	General linear mixed models (lme4)	Open.
+L342	library	0	202	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Open (CRAN rank 262).
+L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
+L333	library	0	561	pracma and polynom: numerical analysis toolbox	Open (CRAN rank 203, 225, 231).
+L334	library	0	304	RSpectra and irlba: partial eigen and singular value decompositions	Open (CRAN ranks 207, 289).
+L335	library	0	310	cluster: pam, clara, fanny, agnes, diana, mona, daisy	Open (CRAN rank 229).
+L336	library	0	247	nnet: single-hidden-layer networks and multinom	Open (CRAN rank 258).
+L337	library	0	288	rpart: CART trees	Open (CRAN rank 270).
+L394	library	0	193	ipred: bagging and error estimation	Open (CRAN rank 439).
+L338	library	0	241	robustbase: robust regression and scale	Open (CRAN rank 285).
+L339	library	0	435	bayestestR, performance and parameters: model summary indices	Open (CRAN ranks 254, 251, 272).
+L340	library	0	269	signal: filter design and spectral tools	Open (CRAN rank 253).
+L343	library	0	330	deSolve: solver parity	Open (CRAN rank 216).
+L346	library	0	284	mice: imputation parity	Open (CRAN rank 293).
+L360	library	0	374	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Open (CRAN ranks 337, 348, 393, 355;
+L361	library	0	272	segmented and strucchange: breakpoints and structural change	Open (CRAN ranks 338, 344).
+L362	library	0	247	fitdistrplus: fitting and comparing distributions	Open (CRAN rank 334).
+L363	library	0	355	DescTools: descriptive statistics and tests	Open (CRAN rank 320).
+L365	library	0	233	ks: multivariate kernel density estimation	Open (CRAN rank 331).
+L367	library	0	326	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Open (CRAN ranks 302, 396, 329).
+L370	library	0	268	fields and interp: spatial smoothing and interpolation	Open (CRAN ranks 367, 351).
+L376	library	0	240	gam: backfitting generalized additive models	Open (CRAN rank 388).
+L378	library	0	318	uwot and Rtsne: embeddings equal to R	Open (CRAN ranks 311, 315).
+L393	library	0	328	ordinal: cumulative link models	Open (CRAN rank 447).
+L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463).
+L396	library	0	308	agricolae: experimental designs and post-hoc tests	Open (CRAN rank 500).
+L412	library	0	212	pscl: zero-inflated and hurdle count models	Open (CRAN rank 584).
+L413	library	0	265	flexmix: finite mixture regression	Open (CRAN rank 568).
+L414	library	0	343	gbm: gradient boosting machines	Open (CRAN rank 561).
+L415	library	0	366	marginaleffects: predictions, slopes and comparisons	Open (CRAN ranks 541, 533, 577).
+L416	library	0	231	polspline: polynomial spline models	Open (CRAN rank 597).
+L432	library	0	223	seriation: ordering of objects	Open (CRAN rank 609).
+L433	library	0	320	vars: vector autoregression	Open (CRAN rank 606).
+L434	library	0	258	qgraph: network estimation	Open (CRAN rank 690).
+L436	library	0	298	MatchIt: matching for causal inference	Open (CRAN rank 656).
+L437	library	0	315	gstat: geostatistics	Open (CRAN rank 699).
+L456	library	0	287	mlogit: discrete-choice models	Open (CRAN rank 723).
+L457	library	0	281	NMF: non-negative matrix factorization	Open (CRAN rank 740).
+L458	library	0	227	earth: multivariate adaptive regression splines	Open (CRAN rank 780).
+L459	library	0	233	energy: energy statistics	Open (CRAN rank 795).
+L460	library	0	303	epiR: epidemiology	Open (CRAN rank 773).
+L461	library	0	216	systemfit: equation systems	Open (CRAN rank 794).
+L462	library	0	271	arules: association rule mining	Open (CRAN rank 800).
+L465	library	0	249	BayesFactor: Bayes factors with JZS priors	Open (CRAN rank 712).
+L486	library	0	206	mixtools: mixture models by EM	Open (CRAN rank 884).
+L487	library	0	285	PMCMRplus: nonparametric post-hoc tests	Open (CRAN rank 821).
+L488	library	0	222	drc: dose-response models	Open (CRAN rank 813).
+L489	library	0	335	osqp and clarabel: quadratic and conic solvers	Open (CRAN ranks 815, 880;
+L493	library	0	218	topicmodels: LDA and CTM	Open (CRAN rank 897).
 L507	library	0	266	gsDesign: group sequential designs	Open (CRAN rank 939).
 L508	library	0	277	sampling: survey sampling designs	Open (CRAN rank 980).
 L509	library	0	229	Cubist: rule-based regression models	Open (CRAN rank 924).
@@ -223,8 +164,67 @@ L510	library	0	244	gmm: generalized method of moments	Open (CRAN rank 906).
 L511	library	0	263	QCA: qualitative comparative analysis	Open (CRAN rank 956).
 L512	library	0	251	poLCA: latent class analysis	Open (CRAN rank 998).
 L513	library	0	272	Epi: epidemiology tools	Open (CRAN rank 929).
+L310	library	0	484	glmnet: elastic-net path and families	Open (CRAN rank 182).
+L308	library	0	451	minqa and nloptr: derivative-free optimizers	Open (CRAN ranks 120, 122).
+L304	library	0	469	haven: SAS, SPSS and Stata file formats	Open (CRAN rank 123).
+L315	library	0	448	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Open (CRAN ranks 163, 144).
+L316	library	0	542	igraph: deterministic structure and community detection	Open (CRAN rank 109).
+L344	library	0	359	randomForest: Breiman forests equal to R	Open (CRAN rank 255;
+L345	library	0	324	FactoMineR and factoextra: multivariate exploration	Open (CRAN ranks 232, 277).
+L347	library	0	276	locfit: local regression and likelihood	Open (CRAN rank 259).
+L364	library	0	374	metafor: meta-analysis	Open (CRAN rank 346).
+L366	library	0	277	kernlab: kernel methods	Open (CRAN rank 312).
+L368	library	0	273	fixest: high-dimensional fixed-effects estimation	Open (CRAN rank 349).
+L369	library	0	366	plm and AER: panel data and applied econometrics	Open (CRAN ranks 392, 354).
+L372	library	0	259	spdep: spatial autocorrelation and spatial regression	Open (CRAN rank 336).
+L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
+L417	library	0	429	gsl: special functions of the GNU Scientific Library	Open (CRAN rank 594).
+L418	library	0	333	Rmpfr: arbitrary-precision floating point	Open (CRAN rank 567).
+L435	library	0	312	sna: social network analysis	Open (CRAN rank 629).
+L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
+L439	library	0	309	MCMCpack: Bayesian MCMC for common models	Open (CRAN rank 636).
+L455	library	0	290	geometry: Qhull in n dimensions	Open (CRAN rank 722).
+L463	library	0	356	actuar: actuarial science	Open (CRAN rank 781).
+L464	library	0	255	gamlss.dist: GAMLSS distribution families	Open (CRAN rank 788).
+L467	library	0	280	hetGP: heteroskedastic Gaussian processes	Open (CRAN rank 784).
+L494	library	0	261	bayesm: Bayesian econometrics	Open (CRAN rank 829).
 L514	library	0	268	copula: dependence models	Open (CRAN rank 914).
+L311	library	0	605	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	Open (CRAN rank 200).
+L490	library	0	249	timereg: Aalen additive and Cox-Aalen hazard models	Open (CRAN rank 853).
+L491	library	0	208	riskRegression: risk prediction scoring	Open (CRAN rank 850).
+L492	library	0	236	coxme: mixed-effects Cox models	Open (CRAN rank 900).
+L440	library	0	347	flexsurv and rstpm2: flexible parametric survival models	Open (CRAN ranks 697, 694).
+L312	library	0	392	psych: reliability, factor analysis and correlation tools	Open (CRAN rank 168).
+L313	library	0	425	emmeans: estimated marginal means and contrasts	Open (CRAN rank 192).
+L341	library	0	313	multcomp: general linear hypotheses	Open (CRAN rank 224;
+L318	library	0	473	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Open (CRAN rank 128).
+L319	library	0	471	nlme: gls, correlation structures and variance functions	Open (CRAN rank 195).
+L320	library	0	602	sf: simple-features geometry, predicates and spherical geometry	Open (CRAN rank 159;
+L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
+L348	library	0	308	mclust: Gaussian mixture model selection	Open (CRAN rank 280).
+L349	library	0	268	vegan: community ecology	Open (CRAN rank 247).
+L350	library	0	308	ape: phylogenetic trees	Open (CRAN rank 238).
+L351	library	0	262	survey: design-based inference	Open (CRAN rank 267).
+L352	library	0	306	ncdf4: NetCDF and HDF5 files	Open (CRAN rank 237).
+L371	library	0	441	coin: conditional and permutation tests	Open (CRAN rank 372).
+L373	library	0	279	bnlearn: Bayesian network learning	Open (CRAN rank 397).
+L374	library	0	249	rms: regression modelling strategies	Open (CRAN rank 395).
+L375	library	0	219	partykit: conditional inference trees and MOB	Open (CRAN rank 386).
+L377	library	0	419	xgboost: gradient-boosted trees	Open (CRAN rank 306).
+L398	library	0	447	rugarch: the GARCH family	Open (CRAN rank 497).
+L441	library	0	300	msm and mstate: multi-state models	Open (CRAN ranks 642, 679).
+L442	library	0	264	phangorn: phylogenetic inference	Open (CRAN rank 666).
+L466	library	0	326	EnvStats: environmental statistics	Open (CRAN rank 708).
+L495	library	0	260	mirt: item response theory	Open (CRAN rank 841).
+L496	library	0	277	fda: functional data analysis	Open (CRAN rank 838).
+L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
 L515	library	0	241	unmarked: occupancy and abundance models	Open (CRAN rank 905).
+L353	library	0	285	mgcv: generalized additive models	Open (CRAN rank 239).
+L354	library	0	286	lavaan: structural equation models	Open (CRAN rank 275).
+L381	library	0	298	ade4: multivariate analysis of ecological data	Open (CRAN rank 364).
+L382	library	0	298	VGAM: vector generalized linear and additive models	Open (CRAN rank 382).
+L383	library	0	315	glmmTMB: generalized linear mixed models by Laplace approximation	Open (CRAN rank 342).
+L384	library	0	415	spatstat: point pattern analysis	Open (CRAN ranks 304, 314, 316, 323).
 L516	library	0	273	tgp: Bayesian treed Gaussian processes	Open (CRAN rank 909).
 L517	library	0	354	grf: generalized random forests	Open (CRAN rank 944).
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
