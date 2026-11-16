@@ -87,6 +87,13 @@ fn breaks(a: *mem.Arena, x: []const f64) -> []f64 {
         out = r
         e = re
     }
+    if style == 12u8 {
+        var g: rr.Rng = zero
+        rr.seed(&g, i64(extra))
+        let (r, re) = ci.bclust_breaks(a, &g, data, n)
+        out = r
+        e = re
+    }
     if e != ok { os.exit(7) }
     ret out
 }

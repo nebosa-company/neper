@@ -1,7 +1,7 @@
 # classInt::classIntervals break rules that need no random numbers. A vector answer is one case per
 # element (fn "v:<style>") plus a length case ("len:<style>"); the last argument of an element case is its position.
 #   args: (style, n, extra, len, x..., [pos])   style 0 equal 1 pretty 2 sd 3 quantile (extra = type) 4 jenks 5 fisher
-#   6 headtails (n unused, extra = thr) 7 maximum 9 dpih, 10 hclust, 11 kmeans (extra = the seed), 8 box (extra = iqr_mult, n = quantile type, legacy in n >= 100) 
+#   6 headtails (n unused, extra = thr) 7 maximum 9 dpih, 10 hclust, 11 kmeans (extra = the seed) 12 bclust (extra = the seed), 8 box (extra = iqr_mult, n = quantile type, legacy in n >= 100) 
 #   "cols": (left, x, nb, brks...) -> the 0-based class of x from findCols, -1 outside
 suppressMessages(library(classInt))
 set.seed(20261115)
@@ -36,6 +36,13 @@ for (x in xs) {
     b <- withCallingHandlers(quiet2 <- tryCatch({ set.seed(sd); classIntervals(x, n, "kmeans", warnSmallN = FALSE)$brks }, error = function(e) NULL),
                              warning = function(w) { if (grepl("jitter", conditionMessage(w))) jit <<- TRUE; invokeRestart("muffleWarning") })
     if (!is.null(b) && !jit) vec("kmeans", c(11, n, sd, length(x), x), b)
+  }
+  for (sd in 1:3) for (n in c(2, 3, 4, 5)) {
+    if (n >= nobs || length(x) < 25) next
+    jit <- FALSE
+    b <- withCallingHandlers(tryCatch({ set.seed(sd); classIntervals(x, n, "bclust", warnSmallN = FALSE, verbose = FALSE)$brks }, error = function(e) NULL),
+                             warning = function(w) { if (grepl("jitter", conditionMessage(w))) jit <<- TRUE; invokeRestart("muffleWarning") })
+    if (!is.null(b) && !jit) vec("bclust", c(12, n, sd, length(x), x), b)
   }
   b <- cls(x, 4, "dpih"); if (!is.null(b)) vec("dpih", c(9, 0, 0, length(x), x), b)
   for (thr in c(0.4, 0.25, 0.6)) { b <- cls(x, 4, "headtails", thr = thr); if (!is.null(b)) vec("headtails", c(6, 0, thr, length(x), x), b) }

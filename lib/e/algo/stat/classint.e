@@ -918,9 +918,9 @@ fn qtran(a: []const f64, m: i64, c: []f64, ic1: []i64, ic2: []i64, nc: []i64, an
 
 // kmeans(x, k) with the defaults of R (Hartigan-Wong, nstart 1, iter.max 10): centres from sample.int,
 // then from unique(x) when two coincide. Answers the class breaks of classInt style "kmeans".
-fn kmeans_breaks(a: *mem.Arena, r: *rng.Rng, x: []const f64, kk: usize) -> ([]f64, err) {
+fn kmeans_labels(a: *mem.Arena, r: *rng.Rng, x: []const f64, kk: usize) -> ([]usize, err) {
     let m = x.len
-    var none: []f64 = zero
+    var none: []usize = zero
     let (pick, pe) = rng.sample_int(a, r, i64(m), i64(kk), false)
     if pe != ok { ret (none, pe) }
     let (cen, ce) = mem.alloc[f64](a, kk + 1usize)
@@ -1084,6 +1084,189 @@ fn kmeans_breaks(a: *mem.Arena, r: *rng.Rng, x: []const f64, kk: usize) -> ([]f6
         label[i] = usize(ic1[i + 1usize]) - 1usize
         i += 1usize
     }
+    ret (label, ok)
+}
+
+fn kmeans_breaks(a: *mem.Arena, r: *rng.Rng, x: []const f64, kk: usize) -> ([]f64, err) {
+    let (label, le) = kmeans_labels(a, r, x, kk)
+    if le != ok {
+        var none: []f64 = zero
+        ret (none, le)
+    }
     let (cb, cbe) = class_breaks(a, x, label, kk)
+    ret (cb, cbe)
+}
+
+
+// style "bclust" (e1071::bclust(x, centers = k) with iter.base = 10 committee members of 20 k-means centres, each on a
+// bootstrap resample, average-linkage hclust of all centres, cutree to k, every observation to the cluster of its
+// nearest committee centre); n is the number of classes
+fn bclust_breaks(a: *mem.Arena, r: *rng.Rng, x: []const f64, k: usize) -> ([]f64, err) {
+    var none: []f64 = zero
+    let m = x.len
+    let nb = 20usize
+    let (allc, e0) = mem.alloc[f64](a, 10usize * nb)
+    let (x1, e1) = mem.alloc[f64](a, m)
+    if e0 != ok || e1 != ok { ret (none, e0) }
+    var total = 0usize
+    var member = 0usize
+    while member < 10usize {
+        let (draw, de) = rng.sample_int(a, r, i64(m), i64(m), true)
+        if de != ok { ret (none, de) }
+        var i = 0usize
+        while i < m {
+            x1[i] = x[usize(draw[i]) - 1usize]
+            i += 1usize
+        }
+        var tries = 0usize
+        var got = false
+        while tries < 20usize && !got {
+            let (lab, le) = kmeans_labels(a, r, x1, nb)
+            if le == ok {
+                var c = 0usize
+                while c < nb {
+                    var s = 0.0f64
+                    var cnt = 0.0f64
+                    i = 0usize
+                    while i < m {
+                        if lab[i] == c {
+                            s += x1[i]
+                            cnt += 1.0f64
+                        }
+                        i += 1usize
+                    }
+                    allc[total + c] = s / cnt
+                    c += 1usize
+                }
+                total += nb
+                got = true
+            }
+            tries += 1usize
+        }
+        if !got { ret (none, Unsupported) }
+        member += 1usize
+    }
+    // average linkage on the 1-d distances between the committee centres
+    let nc = total
+    let (d, e2) = mem.alloc[f64](a, nc * nc)
+    let (size, e3) = mem.alloc[f64](a, nc)
+    let (live, e4) = mem.alloc[bool](a, nc)
+    let (grp, e5) = mem.alloc[usize](a, nc)
+    if e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (none, e2) }
+    var i = 0usize
+    while i < nc {
+        size[i] = 1.0f64
+        live[i] = true
+        grp[i] = i
+        var j = 0usize
+        while j < nc {
+            var t = allc[i] - allc[j]
+            if t < 0.0f64 { t = 0.0f64 - t }
+            d[i * nc + j] = t
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var clusters = nc
+    while clusters > k {
+        var best = 1.0e308f64
+        var bi = 0usize
+        var bj = 0usize
+        i = 0usize
+        while i < nc {
+            if live[i] {
+                var j = i + 1usize
+                while j < nc {
+                    if live[j] && d[i * nc + j] < best {
+                        best = d[i * nc + j]
+                        bi = i
+                        bj = j
+                    }
+                    j += 1usize
+                }
+            }
+            i += 1usize
+        }
+        var q = 0usize
+        while q < nc {
+            if live[q] && q != bi && q != bj {
+                let v = (size[bi] * d[bi * nc + q] + size[bj] * d[bj * nc + q]) / (size[bi] + size[bj])
+                d[bi * nc + q] = v
+                d[q * nc + bi] = v
+            }
+            q += 1usize
+        }
+        size[bi] += size[bj]
+        live[bj] = false
+        q = 0usize
+        while q < nc {
+            if grp[q] == bj { grp[q] = bi }
+            q += 1usize
+        }
+        clusters -= 1usize
+    }
+    // label every observation by the cluster of its nearest committee centre
+    let (label, e6) = mem.alloc[usize](a, m)
+    let (rank, e7) = mem.alloc[usize](a, nc)
+    if e6 != ok || e7 != ok { ret (none, e6) }
+    var next = 0usize
+    i = 0usize
+    while i < nc {
+        rank[i] = nc
+        i += 1usize
+    }
+    i = 0usize
+    while i < nc {
+        if rank[grp[i]] == nc {
+            rank[grp[i]] = next
+            next += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        var bestd = 1.0e308f64
+        var bc = 0usize
+        var c = 0usize
+        while c < nc {
+            var t = x[i] - allc[c]
+            if t < 0.0f64 { t = 0.0f64 - t }
+            if t < bestd {
+                bestd = t
+                bc = c
+            }
+            c += 1usize
+        }
+        label[i] = rank[grp[bc]]
+        i += 1usize
+    }
+    // classes that no observation falls in vanish (tapply over the observed levels)
+    let (used, e8) = mem.alloc[usize](a, k)
+    if e8 != ok { ret (none, e8) }
+    i = 0usize
+    while i < k {
+        used[i] = k
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        used[label[i]] = 0usize
+        i += 1usize
+    }
+    var nk = 0usize
+    i = 0usize
+    while i < k {
+        if used[i] == 0usize {
+            used[i] = nk
+            nk += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        label[i] = used[label[i]]
+        i += 1usize
+    }
+    let (cb, cbe) = class_breaks(a, x, label, nk)
     ret (cb, cbe)
 }
