@@ -17,7 +17,9 @@ type Result = struct { statistic: f64, p_value: f64 }
 error TooSmall
 error Invalid
 
+// NaN for an empty sample.
 fn mean(values: []const f64) -> f64 {
+    if values.len == 0usize { ret 0.0f64 / 0.0f64 }
     var sum = 0.0f64
     var i = 0usize
     while i < values.len {
@@ -27,7 +29,9 @@ fn mean(values: []const f64) -> f64 {
     ret sum / f64(values.len)
 }
 
+// NaN for fewer than two values (the divisor len - 1 is then zero or does not exist).
 fn sample_variance(values: []const f64) -> f64 {
+    if values.len < 2usize { ret 0.0f64 / 0.0f64 }
     let m = mean(values)
     var sum = 0.0f64
     var i = 0usize

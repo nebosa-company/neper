@@ -274,6 +274,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // #140 (6): C(n,k) = C(n,n-k) keeps the short side; the long side overflowed.
     let combin = f.evaluate(a, "COMBIN(2000,1999)", &ctx, &group)
     if combin.kind != .Number || combin.n != 2000.0f64 { os.exit(82i32) }
+    // L250: the error function is accurate to double precision, not the 1.5e-7 of Abramowitz and Stegun 7.1.26
+    if fmath.erf(0.5f64) - 0.5204998778130465f64 > 1.0e-14f64 || 0.5204998778130465f64 - fmath.erf(0.5f64) > 1.0e-14f64 { os.exit(83i32) }
+    if fmath.erf(2.0f64) - 0.9953222650189527f64 > 1.0e-14f64 || 0.9953222650189527f64 - fmath.erf(2.0f64) > 1.0e-14f64 { os.exit(83i32) }
     try io.print("algo formula math ok")
     ret ok
 }

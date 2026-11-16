@@ -83,6 +83,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (far_u, far_u_error) = test.mann_whitney(low[..], high[..], far_scratch[..], far_order[..])
     if far_u_error != ok || !(far_u.p_value > 0.0f64) || far_u.p_value > 1.0e-15f64 { os.exit(42i32) }
 
+    // L250: an empty or one-value sample gives NaN, not a trap or a division by zero
+    var none: [1]f64 = zero
+    let empty_mean = test.mean(none[..0usize])
+    let empty_variance = test.sample_variance(none[..0usize])
+    let single_variance = test.sample_variance(none[..1usize])
+    if empty_mean == empty_mean || empty_variance == empty_variance || single_variance == single_variance { os.exit(43i32) }
+
     // 2: rank tests.
     let (mw, mw_error) = test.mann_whitney(x[..], y[..], scratch[..], order[..])
     if mw_error != ok || mw.statistic != 10.0f64 || !near(mw.p_value, 0.0028065622375925453f64, eps) { os.exit(2i32) }

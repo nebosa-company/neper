@@ -47072,3 +47072,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `two_sided_t` and `two_sided_normal` return `2 * cdf(-|x|)`, the lower tail, in place of `2 * (1 - cdf(|x|))`, which is exactly 0 once the upper tail drops below the double epsilon (z beyond about 8.3). `kth` partitions three ways (below, equal, above the pivot), so a run of equal keys is finished in one pass. `kmeans` with `max_iterations == 0` performs the nearest-centroid assignment without updating centroids instead of leaving every label at the unset value `k` under an `ok` result.
 
 **Result.** `algo_stat_test`, `algo_search` and `ml_cluster` pass on Windows; the first and last fail on the old code, the selection test runs in 0.4 s against 37 s. Linux pending. L250 stays at 0.6: the reviewer's tree insertion sorts, the 1.5e-7 `erf` in the formula engine and the unguarded divisions in `stat/test.e` are open.
+
+## D6658 — numeric defects: erf precision and empty-sample guards
+
+**Decision.** The formula engine's `erf` delegates to `e.math.special.erf`; the Abramowitz and Stegun 7.1.26 form it replaced is good to 1.5e-7. `stat/test.e` `mean` and `sample_variance` answer NaN for an empty sample and for fewer than two values, where the old variance subtracted one from a zero length and trapped.
+
+**Result.** `algo_formula_math` and `algo_stat_test` pass on Windows and both fail on the old code; Linux pending. L250 moves to 0.85. The tree-building cost named by the reviewer is a pair of quadratic loops (the insertion sort and a per-threshold impurity rescan), so it is left for a change that removes both with a one-pass class-count sweep.

@@ -11,6 +11,7 @@
 
 use e.algo.formula as f
 use e.math
+use e.math.special as special
 use e.mem
 use e.str
 
@@ -1051,13 +1052,9 @@ fn h_skewness(c: *f.Call) -> f.Value {
     ret f.number((big_n / ((big_n - 1.0f64) * (big_n - 2.0f64))) * s3)
 }
 
-// Abramowitz and Stegun 7.1.26.
-fn erf(x: f64) -> f64 {
-    let u = 1.0f64 / (1.0f64 + 0.3275911f64 * abs_f(x))
-    let y = 1.0f64 - ((((1.061405429f64 * u - 1.453152027f64) * u + 1.421413741f64) * u - 0.284496736f64) * u + 0.254829592f64) * u * math.exp[f64](0.0f64 - x * x)
-    if x >= 0.0f64 { ret y }
-    ret 0.0f64 - y
-}
+// The error function of e.math.special (a double-precision series and continued fraction); the Abramowitz and Stegun
+// 7.1.26 approximation that stood here is good to only 1.5e-7.
+fn erf(x: f64) -> f64 { ret special.erf(x) }
 
 fn h_is_normal(c: *f.Call) -> f.Value {
     let (nums, failure) = numbers(c, c.args)
