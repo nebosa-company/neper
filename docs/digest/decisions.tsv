@@ -3542,4 +3542,5 @@ D6679	798	PCAgrid and sPCAgrid as one function with an optional penalty
 D6680	667	fast.svd values and the n < p PCAgrid reduction; L357 closed
 D6681	819	fracdiff fit over the existing MINPACK lmder
 D6682	844	fracdiff covariance, and the limit of reproducing R's uninitialised reads; L388 closed
-D6683	716	dqrng ziggurat normal and exponential from Boost's tables
+D6683	717	dqrng ziggurat normal and exponential from Boost's tables
+D6684	879	dqrng pcg64, threefry, dqsample and streams; L392 closed

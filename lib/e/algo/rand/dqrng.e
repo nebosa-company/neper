@@ -2,12 +2,14 @@
 // splitmix64 chain of dqset.seed, and `unif` (dqrunif: the top 53 bits scaled by 2^-53, then min + (max -
 // min) * u). The state is four words; the 128-bit generators use the first two.
 //
-// Not here: pcg64 and threefry, the ziggurat normal and exponential generators, dqsample, streams and
-// jumps, and multi-word seeds.
+// Also: pcg64 and threefry (20 rounds, 64 bit), the xoroshiro128** and xoshiro256** kinds (not selectable from R, so untested), the
+// Boost ziggurat normal and exponential, dqsample.int for n up to .Machine$integer.max, streams (jump, long jump, pcg and threefry
+// offsets) and dqrng_get_state. Not here: multi-word seeds, dqsample on doubles, dqrrademacher and the vector/prob forms.
 
 use e.math
+use e.mem
 
-type Gen = struct { s0: u64, s1: u64, s2: u64, s3: u64, kind: u8 }
+type Gen = struct { s0: u64, s1: u64, s2: u64, s3: u64, kind: u8, hc: bool, cache: u32, tk: [5]u64, tc: [4]u64, to_: [4]u64, toc: u64 }
 
 fn rotl(v: u64, k: u64) -> u64 { ret (v << k) | (v >> (64u64 - k)) }
 
@@ -20,15 +22,160 @@ fn splitmix(x: u64) -> (u64, u64) {
     ret (y, z ^ (z >> 31u64))
 }
 
-// kind: 0 xoroshiro128+, 1 xoroshiro128++, 2 xoshiro256+, 3 xoshiro256++
+// kind: 0 xoroshiro128+, 1 xoroshiro128++, 2 xoshiro256+, 3 xoshiro256++, 4 pcg64, 5 threefry (20 rounds, 64 bits), 6 xoroshiro128**, 7 xoshiro256**
+fn is128(kind: u8) -> bool { ret kind <= 1u8 || kind == 6u8 }
+
+fn mulhi(a: u64, b: u64) -> u64 {
+    let m = 4294967295u64
+    let a0 = a & m
+    let a1 = a >> 32u64
+    let b0 = b & m
+    let b1 = b >> 32u64
+    let p00 = a0 * b0
+    let p01 = a0 * b1
+    let p10 = a1 * b0
+    let p11 = a1 * b1
+    let mid = (p00 >> 32u64) + (p01 & m) + (p10 & m)
+    ret p11 + (p01 >> 32u64) + (p10 >> 32u64) + (mid >> 32u64)
+}
+
+// pcg64: state = state * multiplier + increment over 128 bits (hi in s1, lo in s0; the increment hi in s3, lo in s2)
+fn pcg_bump(g: *Gen) {
+    let mh = 2549297995355413924u64
+    let ml = 4865540595714422341u64
+    let lo = g.s0 *% ml
+    let hi = mulhi(g.s0, ml) +% g.s1 *% ml +% g.s0 *% mh
+    let nlo = lo +% g.s2
+    var carry = 0u64
+    if nlo < lo { carry = 1u64 }
+    g.s0 = nlo
+    g.s1 = hi +% g.s3 +% carry
+}
+
+fn pcg_seed(g: *Gen, sd: u64, stream_hi: u64, stream_lo: u64, has_stream: bool) {
+    if has_stream {
+        g.s2 = (stream_lo << 1u64) | 1u64
+        g.s3 = (stream_hi << 1u64) | (stream_lo >> 63u64)
+    } else {
+        g.s2 = 1442695040888963407u64
+        g.s3 = 6364136223846793005u64
+    }
+    let lo = sd +% g.s2
+    var carry = 0u64
+    if lo < sd { carry = 1u64 }
+    g.s0 = lo
+    g.s1 = g.s3 +% carry
+    pcg_bump(g)
+}
+
+fn tf_encrypt(g: *Gen) {
+    var o0 = g.tc[0usize] +% g.tk[0usize]
+    var o1 = g.tc[1usize] +% g.tk[1usize]
+    var o2 = g.tc[2usize] +% g.tk[2usize]
+    var o3 = g.tc[3usize] +% g.tk[3usize]
+    var cyc = 0u64
+    var round = 0usize
+    while round < 20usize {
+        let q = round % 8usize
+        var ra = 0u64
+        var rb = 0u64
+        var swap = false
+        if q == 0usize {
+            ra = 14u64
+            rb = 16u64
+        }
+        if q == 1usize {
+            ra = 52u64
+            rb = 57u64
+            swap = true
+        }
+        if q == 2usize {
+            ra = 23u64
+            rb = 40u64
+        }
+        if q == 3usize {
+            ra = 5u64
+            rb = 37u64
+            swap = true
+        }
+        if q == 4usize {
+            ra = 25u64
+            rb = 33u64
+        }
+        if q == 5usize {
+            ra = 46u64
+            rb = 12u64
+            swap = true
+        }
+        if q == 6usize {
+            ra = 58u64
+            rb = 22u64
+        }
+        if q == 7usize {
+            ra = 32u64
+            rb = 32u64
+            swap = true
+        }
+        if !swap {
+            o0 = o0 +% o1
+            o1 = rotl(o1, ra) ^ o0
+            o2 = o2 +% o3
+            o3 = rotl(o3, rb) ^ o2
+        } else {
+            o0 = o0 +% o3
+            o3 = rotl(o3, ra) ^ o0
+            o2 = o2 +% o1
+            o1 = rotl(o1, rb) ^ o2
+        }
+        round += 1usize
+        if round % 4usize == 0usize {
+            cyc += 1u64
+            let off = (round / 4usize) % 5usize
+            o0 = o0 +% g.tk[off % 5usize]
+            o1 = o1 +% g.tk[(off + 1usize) % 5usize]
+            o2 = o2 +% g.tk[(off + 2usize) % 5usize]
+            o3 = o3 +% g.tk[(off + 3usize) % 5usize] +% cyc
+        }
+    }
+    g.to_[0usize] = o0
+    g.to_[1usize] = o1
+    g.to_[2usize] = o2
+    g.to_[3usize] = o3
+}
+
+fn tf_seed(g: *Gen, value: u64) {
+    g.tk[0usize] = value
+    g.tk[1usize] = 0u64
+    g.tk[2usize] = 0u64
+    g.tk[3usize] = 0u64
+    g.tk[4usize] = 2004413935125273122u64 ^ value
+    g.tc[0usize] = 0u64
+    g.tc[1usize] = 0u64
+    g.tc[2usize] = 0u64
+    g.tc[3usize] = 0u64
+    g.toc = 0u64
+    tf_encrypt(g)
+}
+
 fn seed(kind: u8, s: u64) -> Gen {
-    var x = s
-    var g = Gen { s0: 0u64, s1: 0u64, s2: 0u64, s3: 0u64, kind: kind }
+    var g: Gen = zero
+    g.kind = kind
+    g.hc = false
+    g.cache = 0u32
+    if kind == 4u8 {
+        pcg_seed(&g, s, 0u64, 0u64, false)
+        ret g
+    }
+    if kind == 5u8 {
+        tf_seed(&g, s)
+        ret g
+    }
+    let x = s
     let (x1, v1) = splitmix(x)
     let (x2, v2) = splitmix(x1)
     g.s0 = v1
     g.s1 = v2
-    if kind >= 2u8 {
+    if !is128(kind) {
         let (x3, v3) = splitmix(x2)
         let (x4, v4) = splitmix(x3)
         g.s2 = v3
@@ -39,9 +186,37 @@ fn seed(kind: u8, s: u64) -> Gen {
 
 // the next 64-bit output
 fn next(g: *Gen) -> u64 {
-    if g.kind <= 1u8 {
+    if g.kind == 4u8 {
+        pcg_bump(g)
+        let hi = g.s1
+        let lo = g.s0
+        let rot = hi >> 58u64
+        let xv = hi ^ lo
+        if rot == 0u64 { ret xv }
+        ret (xv >> rot) | (xv << (64u64 - rot))
+    }
+    if g.kind == 5u8 {
+        if g.toc < 4u64 {
+            let v = g.to_[usize(g.toc)]
+            g.toc += 1u64
+            ret v
+        }
+        g.tc[0usize] = g.tc[0usize] +% 1u64
+        if g.tc[0usize] == 0u64 {
+            g.tc[1usize] = g.tc[1usize] +% 1u64
+            if g.tc[1usize] == 0u64 {
+                g.tc[2usize] = g.tc[2usize] +% 1u64
+                if g.tc[2usize] == 0u64 { g.tc[3usize] = g.tc[3usize] +% 1u64 }
+            }
+        }
+        tf_encrypt(g)
+        g.toc = 1u64
+        ret g.to_[0usize]
+    }
+    if is128(g.kind) {
         var r = g.s0 +% g.s1
         if g.kind == 1u8 { r = rotl(g.s0 +% g.s1, 17u64) +% g.s0 }
+        if g.kind == 6u8 { r = rotl(g.s0 *% 5u64, 7u64) *% 9u64 }
         let t = g.s1 ^ g.s0
         if g.kind == 1u8 {
             g.s0 = rotl(g.s0, 49u64) ^ t ^ (t << 21u64)
@@ -54,6 +229,7 @@ fn next(g: *Gen) -> u64 {
     }
     var r = g.s0 +% g.s3
     if g.kind == 3u8 { r = rotl(g.s0 +% g.s3, 23u64) +% g.s0 }
+    if g.kind == 7u8 { r = rotl(g.s1 *% 5u64, 7u64) *% 9u64 }
     let t = g.s1 << 17u64
     g.s2 = g.s2 ^ g.s0
     g.s3 = g.s3 ^ g.s1
@@ -70,7 +246,7 @@ fn unif(g: *Gen, lo: f64, hi: f64) -> f64 {
     ret lo + (hi - lo) * u
 }
 
-// Boost.Random 1.8x ziggurat tables (normal_table, exponential_table) as dqrng uses them; generated by D:/Temp/gen_zig.py from the BH headers
+// Boost.Random 1.8x ziggurat tables (normal_table, exponential_table) as dqrng uses them; generated by scripts/gen_dqrng_zig.py from the BH headers
 type Zig = struct { nx: [129]f64, ny: [129]f64, ex: [257]f64, ey: [257]f64 }
 
 fn zig_init(z: *Zig) {
@@ -917,3 +1093,283 @@ fn rnorm(g: *Gen, z: *const Zig, mean: f64, sd: f64) -> f64 { ret unit_norm(g, z
 
 // dqrexp(1, rate)
 fn rexp(g: *Gen, z: *const Zig, rate: f64) -> f64 { ret unit_exp(g, z) / rate }
+
+// one jump of xoshiro/xoroshiro: the polynomial `j` (words entries) applied to the state
+fn jump_once(g: *Gen, j: []const u64) {
+    var a0 = 0u64
+    var a1 = 0u64
+    var a2 = 0u64
+    var a3 = 0u64
+    var i = 0usize
+    while i < j.len {
+        var b = 0u64
+        while b < 64u64 {
+            if ((j[i] >> b) & 1u64) != 0u64 {
+                a0 = a0 ^ g.s0
+                a1 = a1 ^ g.s1
+                a2 = a2 ^ g.s2
+                a3 = a3 ^ g.s3
+            }
+            let _ = next(g)
+            b += 1u64
+        }
+        i += 1usize
+    }
+    g.s0 = a0
+    g.s1 = a1
+    g.s2 = a2
+    g.s3 = a3
+}
+
+// random_64bit_wrapper::set_stream: jump(stream) for the 128-bit generators, long_jump(stream) for the 256-bit ones, a counter
+// offset for threefry and a stream offset relative to the current one for pcg64
+fn set_stream(g: *Gen, stream: u64) {
+    if g.kind == 4u8 {
+        let hi = g.s3 >> 1u64
+        let lo = (g.s2 >> 1u64) | (g.s3 << 63u64)
+        let nlo = lo +% stream
+        var carry = 0u64
+        if nlo < lo { carry = 1u64 }
+        let nhi = hi +% carry
+        g.s3 = (nhi << 1u64) | (nlo >> 63u64)
+        g.s2 = (nlo << 1u64) | 1u64
+    } else if g.kind == 5u8 {
+        g.tc[3usize] = g.tc[3usize] +% stream
+        g.toc = 0u64
+        tf_encrypt(g)
+    } else {
+        var j: [4]u64 = zero
+        var n = 2usize
+        if is128(g.kind) {
+            if g.kind == 1u8 {
+                j[0usize] = 3159176899437800924u64
+                j[1usize] = 689838746718161413u64
+            } else {
+                j[0usize] = 16109378705422636197u64
+                j[1usize] = 1659688472399708668u64
+            }
+        } else {
+            n = 4usize
+            j[0usize] = 8566230491382795199u64
+            j[1usize] = 14195432079911694259u64
+            j[2usize] = 8606660816089834049u64
+            j[3usize] = 4111957640723818037u64
+        }
+        var k = 0u64
+        while k < stream {
+            jump_once(g, j[0usize..n])
+            k += 1u64
+        }
+    }
+}
+
+// dqset.seed(seed, stream)
+fn seed_stream(kind: u8, s: u64, stream: u64) -> Gen {
+    if kind == 4u8 {
+        var g: Gen = zero
+        g.kind = kind
+        pcg_seed(&g, s, 0u64, stream, true)
+        ret g
+    }
+    var g = seed(kind, s)
+    set_stream(&g, stream)
+    ret g
+}
+
+// bit32 of random_64bit_generator: the high half of a draw first, then the cached low half
+fn bit32(g: *Gen) -> u32 {
+    if g.hc {
+        g.hc = false
+        ret g.cache
+    }
+    let r = next(g)
+    g.cache = u32(r & 4294967295u64)
+    g.hc = true
+    ret u32(r >> 32u64)
+}
+
+// operator()(uint32_t range): Lemire's nearly divisionless bounded integer on bit32
+fn bounded32(g: *Gen, range: u32) -> u32 {
+    var x = bit32(g)
+    var m = u64(x) * u64(range)
+    var l = u32(m & 4294967295u64)
+    if l < range {
+        var t = 0u32 -% range
+        if t >= range {
+            t = t - range
+            if t >= range { t = t % range }
+        }
+        while l < t {
+            x = bit32(g)
+            m = u64(x) * u64(range)
+            l = u32(m & 4294967295u64)
+        }
+    }
+    ret u32(m >> 32u64)
+}
+
+// dqsample.int(n, size, replace) for n <= .Machine$integer.max: 1-based values
+fn sample_int(a: *mem.Arena, g: *Gen, n: u32, size: usize, replace: bool) -> ([]i64, err) {
+    let (out, e) = mem.alloc[i64](a, size + 1usize)
+    if e != ok { ret (out, e) }
+    var i = 0usize
+    if replace || size <= 1usize {
+        while i < size {
+            out[i] = 1i64 + i64(bounded32(g, n))
+            i += 1usize
+        }
+        ret (out[0usize..size], ok)
+    }
+    if usize(n) < size { ret (out[0usize..size], mem.Invalid) }
+    if usize(n) < 2usize * size {
+        let (tmp, e2) = mem.alloc[i64](a, usize(n))
+        if e2 != ok { ret (out, e2) }
+        i = 0usize
+        while i < usize(n) {
+            tmp[i] = 1i64 + i64(i)
+            i += 1usize
+        }
+        i = 0usize
+        while i < size {
+            let j = i + usize(bounded32(g, n - u32(i)))
+            let t = tmp[i]
+            tmp[i] = tmp[j]
+            tmp[j] = t
+            i += 1usize
+        }
+        ret (tmp[0usize..size], ok)
+    }
+    if usize(n) < 1000usize * size {
+        let (seen, e3) = mem.alloc[bool](a, usize(n))
+        if e3 != ok { ret (out, e3) }
+        i = 0usize
+        while i < usize(n) {
+            seen[i] = false
+            i += 1usize
+        }
+        i = 0usize
+        while i < size {
+            var v = bounded32(g, n)
+            while seen[usize(v)] { v = bounded32(g, n) }
+            seen[usize(v)] = true
+            out[i] = 1i64 + i64(v)
+            i += 1usize
+        }
+        ret (out[0usize..size], ok)
+    }
+    // minimal_hash_set: open addressing with quadratic probing over a power of two between 1.5 n and 3 n slots
+    var total = 1usize
+    while f64(total) < 1.5f64 * f64(size) { total = total * 2usize }
+    let mask = total - 1usize
+    let (tab, e4) = mem.alloc[i64](a, total)
+    if e4 != ok { ret (out, e4) }
+    i = 0usize
+    while i < total {
+        tab[i] = 0i64 - 1i64
+        i += 1usize
+    }
+    i = 0usize
+    while i < size {
+        var fresh = false
+        var v = 0u32
+        while !fresh {
+            v = bounded32(g, n)
+            let home = usize(v) & mask
+            var pos = home
+            var step = 1usize
+            var dup = false
+            while tab[pos] != 0i64 - 1i64 {
+                if tab[pos] == i64(v) {
+                    dup = true
+                    break
+                }
+                pos = (home + (step * step + step) / 2usize) & mask
+                step += 1usize
+            }
+            if !dup {
+                tab[pos] = i64(v)
+                fresh = true
+            }
+        }
+        out[i] = 1i64 + i64(v)
+        i += 1usize
+    }
+    ret (out[0usize..size], ok)
+}
+
+// decimal digits of the 128-bit value (hi, lo), most significant first
+fn dec128(a: *mem.Arena, hi: u64, lo: u64) -> ([]u8, err) {
+    let (buf, e) = mem.alloc[u8](a, 40usize)
+    if e != ok { ret (buf, e) }
+    var l3 = hi >> 32u64
+    var l2 = hi & 4294967295u64
+    var l1 = lo >> 32u64
+    var l0 = lo & 4294967295u64
+    var n = 0usize
+    while l3 != 0u64 || l2 != 0u64 || l1 != 0u64 || l0 != 0u64 {
+        var rem = 0u64
+        var cur = (rem << 32u64) | l3
+        l3 = cur / 10u64
+        rem = cur % 10u64
+        cur = (rem << 32u64) | l2
+        l2 = cur / 10u64
+        rem = cur % 10u64
+        cur = (rem << 32u64) | l1
+        l1 = cur / 10u64
+        rem = cur % 10u64
+        cur = (rem << 32u64) | l0
+        l0 = cur / 10u64
+        rem = cur % 10u64
+        buf[n] = u8(48u64 + rem)
+        n += 1usize
+    }
+    if n == 0usize {
+        buf[0usize] = 48u8
+        n = 1usize
+    }
+    var i = 0usize
+    while i < n / 2usize {
+        let t = buf[i]
+        buf[i] = buf[n - 1usize - i]
+        buf[n - 1usize - i] = t
+        i += 1usize
+    }
+    ret (buf[0usize..n], ok)
+}
+
+// dqrng_get_state() without the generator name: the state words as decimal digits, as the C++ stream operators print them
+// (xoshiro: s; pcg64: multiplier, increment, state; threefry: key, counter, output counter)
+fn get_state(a: *mem.Arena, g: *Gen, word: usize) -> ([]u8, err) {
+    var hi = 0u64
+    var lo = 0u64
+    if g.kind == 4u8 {
+        if word == 0usize {
+            hi = 2549297995355413924u64
+            lo = 4865540595714422341u64
+        } else if word == 1usize {
+            hi = g.s3
+            lo = g.s2
+        } else {
+            hi = g.s1
+            lo = g.s0
+        }
+    } else if g.kind == 5u8 {
+        if word < 4usize {
+            lo = g.tk[word]
+        } else if word < 8usize {
+            lo = g.tc[word - 4usize]
+        } else {
+            lo = g.toc
+        }
+    } else if word == 0usize {
+        lo = g.s0
+    } else if word == 1usize {
+        lo = g.s1
+    } else if word == 2usize {
+        lo = g.s2
+    } else {
+        lo = g.s3
+    }
+    let (dd, de) = dec128(a, hi, lo)
+    ret (dd, de)
+}
