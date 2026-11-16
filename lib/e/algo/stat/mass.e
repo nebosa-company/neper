@@ -270,3 +270,38 @@ fn quant7(s: []const f64, p: f64) -> f64 {
     if index > lo && xh != q { ret (1.0f64 - (index - lo)) * q + (index - lo) * xh }
     ret q
 }
+
+// ginv(x) for an m by n column-major x: the n by m Moore-Penrose inverse, singular values below sqrt(eps) * max dropped
+fn ginv(a: *mem.Arena, x: []const f64, m: usize, n: usize) -> ([]f64, err) {
+    let (s, e) = decomp.svd(a, x, m, n)
+    let (out, oe) = mem.alloc[f64](a, n * m)
+    if e != ok || oe != ok { ret (out, e) }
+    var i = 0usize
+    while i < n * m {
+        out[i] = 0.0f64
+        i += 1usize
+    }
+    var mx = 0.0f64
+    var j = 0usize
+    while j < s.k {
+        if s.d[j] > mx { mx = s.d[j] }
+        j += 1usize
+    }
+    let tol = 1.4901161193847656e-8f64 * mx
+    j = 0usize
+    while j < s.k {
+        if s.d[j] > tol {
+            var r = 0usize
+            while r < n {
+                var c = 0usize
+                while c < m {
+                    out[c * n + r] += s.v[j * n + r] * s.u[j * m + c] / s.d[j]
+                    c += 1usize
+                }
+                r += 1usize
+            }
+        }
+        j += 1usize
+    }
+    ret (out, ok)
+}

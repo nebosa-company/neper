@@ -23,4 +23,10 @@ for (rep in 1:10) {
   lm0 <- lm(y ~ cv, y = TRUE, qr = TRUE)
   for (lam in c(-1, -0.5, 0, 0.01, 0.3, 1, 2)) add("boxcox", c(n, y, cv, lam), boxcox(lm0, lambda = lam, plotit = FALSE)$y)
 }
+for (rep in 1:30) {
+  m <- sample(2:8, 1); n <- sample(2:8, 1); X <- matrix(round(rnorm(m * n), 3), m, n)
+  if (rep %% 3 == 0 && n > 2) X[, n] <- X[, 1] + X[, 2]
+  g <- as.vector(ginv(X)); w <- seq_along(g)
+  add("ginv_sum", c(m, n, X), sum(g)); add("ginv_w", c(m, n, X), sum(w * g)); add("ginv_len", c(m, n, X), length(g))
+}
 emit("mass", "MASS", list(cases))

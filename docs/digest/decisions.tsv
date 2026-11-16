@@ -3123,4 +3123,4 @@ D6047	1374	the bridge sampler reuses the mvtnorm port, and the proposal draws co
 D6048	890	the nominal measures read a contingency table of the codes, and Mahalanobis takes its covariance as given
 D6049	1454	the dta reader follows the section tags and map, and the missing codes sit above the data range
 D6050	940	the Hmisc closed forms follow the package, including the exact-limit shortcuts
-D6051	1185	MASS closed-form part: huber returns the previous mu, fitdistr standard errors are the Fisher ones
+D6051	1265	MASS closed-form part: huber returns the previous mu, fitdistr standard errors are the Fisher ones

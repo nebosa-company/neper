@@ -11,6 +11,20 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.starts_with(c.name, "ginv") {
+        let m = usize(x[0usize])
+        let nc = usize(x[1usize])
+        let (g, ge) = ms.ginv(a, x[2usize..2usize + m * nc], m, nc)
+        if ge != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(c.name, "ginv_len") { ret f64(g.len) }
+        var s = 0.0f64
+        var i = 0usize
+        while i < g.len {
+            if str.eq(c.name, "ginv_sum") { s += g[i] } else { s += f64(i + 1usize) * g[i] }
+            i += 1usize
+        }
+        ret s
+    }
     let n = usize(x[0usize])
     let y = x[1usize..1usize + n]
     if str.eq(c.name, "mad") { ret ms.mad(a, y) }
