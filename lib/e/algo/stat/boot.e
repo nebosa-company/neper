@@ -1027,3 +1027,215 @@ fn censboot_model(a: *mem.Arena, g: *rng.Rng, time: []const f64, status: []const
     if ie != ok { ret (none, ie) }
     ret (Boot { t0: stat_of(a, kind, time), t: t, idx: idx, n: n, r: nrep }, ok)
 }
+// censboot(sim = "cond") with a Cox fit: failure times as in model (gety2), each censoring time drawn beyond the case's own time (getc2), the two matrices filled in R's order
+fn censboot_condcox(a: *mem.Arena, g: *rng.Rng, time: []const f64, status: []const f64, eta: []const f64, ft: []const f64, fs: []const f64, gt: []const f64, gs: []const f64, kind: u8, nrep: usize) -> (Boot, err) {
+    var none: Boot = zero
+    let n = time.len
+    let inf = 1.0f64 / 0.0f64
+    var mf = ft.len
+    var mg = gt.len
+    let (xt, e1) = mem.alloc[f64](a, mf + 1usize)
+    let (xs, e2) = mem.alloc[f64](a, mf + 1usize)
+    let (ct, e3) = mem.alloc[f64](a, mg + 1usize)
+    let (cs, e4) = mem.alloc[f64](a, mg + 1usize)
+    let (pf, e5) = mem.alloc[f64](a, mf + 2usize)
+    let (pg, e6) = mem.alloc[f64](a, mg + 1usize)
+    let (y0, e7) = mem.alloc[f64](a, n * nrep)
+    let (c0, e8) = mem.alloc[f64](a, n * nrep)
+    let (buf, e9) = mem.alloc[f64](a, n)
+    let (t, e10) = mem.alloc[f64](a, nrep)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret (none, e1) }
+    var i = 0usize
+    while i < mf {
+        xt[i] = ft[i]
+        xs[i] = fs[i]
+        i += 1usize
+    }
+    if xs[mf - 1usize] > 0.0f64 {
+        xt[mf] = inf
+        xs[mf] = 0.0f64
+        mf += 1usize
+    }
+    i = 0usize
+    while i < mg {
+        ct[i] = gt[i]
+        cs[i] = gs[i]
+        i += 1usize
+    }
+    if cs[mg - 1usize] > 0.0f64 {
+        ct[mg] = inf
+        cs[mg] = 0.0f64
+        mg += 1usize
+    }
+    // y0 column by column: probabilities diff(c(0, 1 - F0^exp(eta)))
+    i = 0usize
+    while i < n {
+        let ex = math.exp[f64](eta[i])
+        var prev = 0.0f64
+        var j = 0usize
+        while j < mf {
+            let cur = 1.0f64 - math.pow[f64](xs[j], ex)
+            pf[j] = cur - prev
+            prev = cur
+            j += 1usize
+        }
+        let (d, de) = rdist.sample_prob(a, g, mf, nrep, true, pf[0usize..mf])
+        if de != ok { ret (none, de) }
+        var r = 0usize
+        while r < nrep {
+            y0[r + nrep * i] = xt[usize(d[r]) - 1usize]
+            r += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < mg {
+        var prev = 1.0f64
+        if i > 0usize { prev = cs[i - 1usize] }
+        pg[i] = prev - cs[i]
+        i += 1usize
+    }
+    let (ti, e11) = mem.alloc[f64](a, mg + 1usize)
+    let (pri, e12) = mem.alloc[f64](a, mg + 1usize)
+    if e11 != ok || e12 != ok { ret (none, e11) }
+    i = 0usize
+    while i < n {
+        if status[i] < 0.5f64 {
+            var r = 0usize
+            while r < nrep {
+                c0[r + nrep * i] = time[i]
+                r += 1usize
+            }
+        } else {
+            var cnt = 0usize
+            var q = 0usize
+            while q < mg {
+                if ct[q] > time[i] {
+                    ti[cnt] = ct[q]
+                    pri[cnt] = pg[q]
+                    cnt += 1usize
+                }
+                q += 1usize
+            }
+            if cnt == 1usize {
+                var r = 0usize
+                while r < nrep {
+                    c0[r + nrep * i] = ti[0usize]
+                    r += 1usize
+                }
+            } else {
+                let (dc, dce) = rdist.sample_prob(a, g, cnt, nrep, true, pri[0usize..cnt])
+                if dce != ok { ret (none, dce) }
+                var r = 0usize
+                while r < nrep {
+                    c0[r + nrep * i] = ti[usize(dc[r]) - 1usize]
+                    r += 1usize
+                }
+            }
+        }
+        i += 1usize
+    }
+    var maxf = 0.0f64
+    i = 0usize
+    while i < n {
+        if status[i] > 0.5f64 && time[i] > maxf { maxf = time[i] }
+        i += 1usize
+    }
+    var r = 0usize
+    while r < nrep {
+        i = 0usize
+        while i < n {
+            var yy = y0[r + nrep * i]
+            let cc = c0[r + nrep * i]
+            if yy == inf && cc == inf { yy = maxf }
+            if yy < cc { buf[i] = yy } else { buf[i] = cc }
+            i += 1usize
+        }
+        sort_up(buf)
+        t[r] = stat_of(a, kind, buf)
+        r += 1usize
+    }
+    let (idx, ie) = mem.alloc[i64](a, 1usize)
+    if ie != ok { ret (none, ie) }
+    ret (Boot { t0: stat_of(a, kind, time), t: t, idx: idx, n: n, r: nrep }, ok)
+}
+
+// empinf(type = "inf", stype = "w") for one stratum: out[i] = (stat(data, w_i) - stat(data, 1/n)) / (eps / n) with weight eps / n moved onto case i; kind as in wstat
+fn empinf_inf(a: *mem.Arena, x: []const f64, kind: u8, eps0: f64, out: []f64) -> err {
+    let n = x.len
+    let (w, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    let eps = eps0 / f64(n)
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64 / f64(n)
+        i += 1usize
+    }
+    let tobs = wstat(a, kind, x, w)
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            w[j] = (1.0f64 - eps) * (1.0f64 / f64(n))
+            j += 1usize
+        }
+        w[i] = w[i] + eps
+        out[i] = (wstat(a, kind, x, w) - tobs) / eps
+        i += 1usize
+    }
+    ret ok
+}
+
+// empinf(type = "jack") for one stratum: stype "w" (wsel true, weighted statistic of kind 0 or 1 with case i given weight 0) or stype "i" (stat_of kind on the data without case i); out[i] = (n - 1) (tobs - stat_without_i)
+fn empinf_jack(a: *mem.Arena, x: []const f64, kind: u8, wsel: bool, out: []f64) -> err {
+    let n = x.len
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (buf, e2) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    var i = 0usize
+    var tobs = 0.0f64
+    if wsel {
+        while i < n {
+            w[i] = 1.0f64 / f64(n)
+            i += 1usize
+        }
+        tobs = wstat(a, kind, x, w)
+    } else {
+        tobs = stat_of(a, kind, x)
+    }
+    i = 0usize
+    while i < n {
+        var other = 0.0f64
+        if wsel {
+            var s = 0.0f64
+            var j = 0usize
+            while j < n {
+                w[j] = 1.0f64 / f64(n)
+                if j == i { w[j] = 0.0f64 }
+                s += w[j]
+                j += 1usize
+            }
+            j = 0usize
+            while j < n {
+                w[j] = w[j] / s
+                j += 1usize
+            }
+            other = wstat(a, kind, x, w)
+        } else {
+            var m = 0usize
+            var j = 0usize
+            while j < n {
+                if j != i {
+                    buf[m] = x[j]
+                    m += 1usize
+                }
+                j += 1usize
+            }
+            other = stat_of(a, kind, buf[0usize..m])
+        }
+        out[i] = f64(n - 1usize) * (tobs - other)
+        i += 1usize
+    }
+    ret ok
+}

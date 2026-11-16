@@ -80,4 +80,27 @@ for (x in xs) for (st in 0:3) for (R in c(19, 99)) {
   for (i in c(1, 2, R %/% 2, R)) add("model_t", c(a, i - 1), b$t[i, 1])
   add("model_tsum", a, sum(b$t))
 }
+# censboot(sim = "cond") with a supplied Cox object (linear predictors, baseline survival): (seed, stat, R, n, x..., status..., eta..., mF, Ft..., Fs..., mG, Gt..., Gs...)
+for (x in xs) for (st in 0:3) for (R in c(19, 99)) {
+  seed <- sample(1:1e6, 1); set.seed(seed)
+  fcs <- list(function(d) mean(d[, 1]), function(d) median(d[, 1]), function(d) sd(d[, 1]), function(d) var(d[, 1]))
+  sv <- rbinom(length(x), 1, 0.7); if (sum(sv) == 0) next; dat <- cbind(x, sv); F <- survfit(Surv(x, sv) ~ 1); G <- survfit(Surv(x, 1 - sv) ~ 1)
+  eta <- round(rnorm(length(x), 0, 0.5), 3); cx <- list(coefficients = 1, linear.predictors = eta); set.seed(seed)
+  b <- censboot(dat, fcs[[st + 1]], R, F.surv = F, G.surv = G, sim = "cond", cox = cx)
+  a <- c(seed, st, R, length(x), x, sv, eta, length(F$time), F$time, F$surv, length(G$time), G$time, G$surv)
+  add("condcox_t0", a, b$t0)
+  for (i in c(1, 2, R %/% 2, R)) add("condcox_t", c(a, i - 1), b$t[i, 1])
+  add("condcox_tsum", a, sum(b$t))
+}
+# empinf: ("ei_inf" "ei_jw" kind 0 mean 1 variance; "ei_ji" kind 0 mean 1 median 2 sd 3 var) (kind, n, x...) -> sum(L * position) and L[1] as fn + "_s", "_1"
+for (x in xs) {
+  a <- function(k) c(k, length(x), x)
+  wst <- list(function(d, w) sum(d * w) / sum(w), function(d, w) { m <- sum(d * w) / sum(w); sum(w * (d - m)^2) / sum(w) })
+  ist <- list(function(d, i) mean(d[i]), function(d, i) median(d[i]), function(d, i) sd(d[i]), function(d, i) var(d[i]))
+  for (k in 0:1) {
+    L <- empinf(data = x, statistic = wst[[k + 1]], stype = "w", type = "inf"); add("ei_inf_s", a(k), sum(L * seq_along(L))); add("ei_inf_1", a(k), L[1])
+    L <- empinf(data = x, statistic = wst[[k + 1]], stype = "w", type = "jack"); add("ei_jw_s", a(k), sum(L * seq_along(L))); add("ei_jw_1", a(k), L[1])
+  }
+  for (k in 0:3) { L <- empinf(data = x, statistic = ist[[k + 1]], stype = "i", type = "jack"); add("ei_ji_s", a(k), sum(L * seq_along(L))); add("ei_ji_1", a(k), L[1]) }
+}
 emit("boot3", "boot", list(cases))

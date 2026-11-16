@@ -61,6 +61,47 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "condcox_t0") || str.eq(c.name, "condcox_t") || str.eq(c.name, "condcox_tsum") {
+        let seed = i64(z[0usize])
+        let st = u8(z[1usize])
+        let r = usize(z[2usize])
+        let n = usize(z[3usize])
+        let mf = usize(z[4usize + 3usize * n])
+        let gb = 5usize + 3usize * n + 2usize * mf
+        let mg = usize(z[gb])
+        var g: rng.Rng = zero
+        rng.seed(&g, seed)
+        let (b, be) = bt.censboot_condcox(a, &g, z[4usize..4usize + n], z[4usize + n..4usize + 2usize * n], z[4usize + 2usize * n..4usize + 3usize * n], z[5usize + 3usize * n..5usize + 3usize * n + mf], z[5usize + 3usize * n + mf..gb], z[gb + 1usize..gb + 1usize + mg], z[gb + 1usize + mg..gb + 1usize + 2usize * mg], st, r)
+        if be != ok { ret nan }
+        if str.eq(c.name, "condcox_t0") { ret b.t0 }
+        if str.eq(c.name, "condcox_t") { ret b.t[usize(z[gb + 1usize + 2usize * mg])] }
+        var s = 0.0f64
+        var i = 0usize
+        while i < r {
+            s += b.t[i]
+            i += 1usize
+        }
+        ret s
+    }
+    if str.eq(c.name, "ei_inf_s") || str.eq(c.name, "ei_inf_1") || str.eq(c.name, "ei_jw_s") || str.eq(c.name, "ei_jw_1") || str.eq(c.name, "ei_ji_s") || str.eq(c.name, "ei_ji_1") {
+        let kd = u8(z[0usize])
+        let n = usize(z[1usize])
+        let (lo, le) = mem.alloc[f64](a, n)
+        if le != ok { ret nan }
+        var ee = ok
+        if c.name[3usize] == 105u8 { ee = bt.empinf_inf(a, z[2usize..2usize + n], kd, 0.001f64, lo) }
+        if c.name[3usize] == 106u8 && c.name[4usize] == 119u8 { ee = bt.empinf_jack(a, z[2usize..2usize + n], kd, true, lo) }
+        if c.name[3usize] == 106u8 && c.name[4usize] == 105u8 { ee = bt.empinf_jack(a, z[2usize..2usize + n], kd, false, lo) }
+        if ee != ok { ret nan }
+        if c.name[c.name.len - 1usize] == 49u8 { ret lo[0usize] }
+        var s = 0.0f64
+        var i = 0usize
+        while i < n {
+            s += lo[i] * f64(i + 1usize)
+            i += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "cond_t0") || str.eq(c.name, "cond_t") || str.eq(c.name, "cond_tsum") {
         let seed = i64(z[0usize])
         let st = u8(z[1usize])

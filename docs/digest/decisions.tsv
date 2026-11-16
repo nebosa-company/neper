@@ -3407,4 +3407,5 @@ D6535	687	pracma: expm
 D6536	315	pracma: integral
 D6537	895	pracma: polyroots
 D6538	608	DHARMa: spatial and temporal autocorrelation
-D6539	688	boot: censboot model
+D6539	689	boot: censboot model
+D6540	679	boot: censboot cond with a Cox object, empinf

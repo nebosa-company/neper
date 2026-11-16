@@ -46408,3 +46408,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `boot.censboot_model` (one stratum) takes the baseline survival, the censoring survival and the linear predictors as inputs, as cens.resamp reads them from `F.surv`, `G.surv` and `cox$linear.predictors`: failure times drawn per case from `diff(c(0, 1 - F0^exp(eta)))`, one column at a time, then all censoring times in one draw (getc1). The oracle passes R objects built from survfit and random linear predictors, so the Cox fit itself is not exercised.
 
 **Result.** `oracle_boot3` agrees with boot on 240 new model values on Windows (1650 in all); Linux pending. censboot cond with a Cox object and the coxph fit stay open; L321 at 0.97.
+
+## D6540 — boot: censboot cond with a Cox object, empinf
+
+**Decision.** `censboot_condcox` combines gety2 (failure times per case from the Cox baseline and linear predictors) with getc2 (each censoring time drawn beyond the case's own time), in R's draw order. `empinf_inf` is inf.jack for stype "w" (weight eps/n moved onto case i, eps = 0.001/n) and `empinf_jack` is usual.jack for stype "w" and "i" (`(n - 1)(tobs - stat without case i)`).
+
+**Result.** `oracle_boot3` agrees with boot on 240 cond-with-Cox values and 80 empinf values on Windows (1970 in all); Linux pending. empinf reg and pos, the coxph fit itself and jack.after.boot (plots only) stay open; L321 at 0.98.
