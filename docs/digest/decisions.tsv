@@ -3455,4 +3455,5 @@ D6583	825	lmtest: the exact dwtest p value
 D6584	778	sandwich: vcovBS types
 D6585	547	sandwich: the other wild bootstraps
 D6586	420	L300 closed
-D6587	1094	pls: cppls powers, and a correction; L359 closed
+D6587	1095	pls: cppls powers, and a correction; L359 closed
+D6588	509	ROCR: rpp, phi, cost, mxe, rmse

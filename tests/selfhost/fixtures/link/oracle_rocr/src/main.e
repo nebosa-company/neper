@@ -15,6 +15,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let pred = x[2usize..2usize + n]
     let lab = x[2usize + n..2usize + 2usize * n]
     if kind == 99usize { ret rc.auc(a, pred, lab) }
+    if kind == 90usize { ret rc.mxe(pred, lab) }
+    if kind == 91usize { ret rc.rmse(pred, lab) }
     let m = rc.cutoff_count(a, pred)
     let (out, e) = mem.alloc[f64](a, m)
     if e != ok { os.exit(5) }

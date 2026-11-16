@@ -46700,3 +46700,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Correction to D6576.** The plain-cppls cases of that record were never generated: `plsr(method = "cppls")` is not accepted by the package (the fit is `cppls()`), the generator's tryCatch skipped them, and the 288 values it quoted did not exist. They exist now (`cppls(Y ~ X, ...)`, with the squared norms of scores and loadings, Xvar, cross-validation and the jackknife) and pass; the Y.add and power cases were generated with `cppls.fit` and were real.
 
 **Result.** `oracle_pls` agrees with pls on 7532 cases on Windows; L359 leaves the queue (cppls with trunc.pow and weights are not ported); Linux pending.
+
+## D6588 — ROCR: rpp, phi, cost, mxe, rmse
+
+**Decision.** `rocr.measure` gains kinds 14 rpp (`(tp + fp)/n`), 15 phi (the Matthews form, as `mat`) and 16 cost with `cost.fp = cost.fn = 1` (`(npos/n)(fn/npos) + (nneg/n)(fp/nneg)`), and `mxe` and `rmse` are the two scalar measures on predictions in (0, 1).
+
+**Result.** `oracle_rocr` agrees with ROCR on the new values on Windows (428 cases in all); Linux pending. L324 stays partial: rch, prbe, cal and ecost, smoothed curves and the bootstrap pROC methods.

@@ -90,6 +90,9 @@ fn measure(a: *mem.Arena, pred: []const f64, lab: []const f64, kind: usize, out:
         if kind == 8usize { v = (tp / npos) / ((tp + fp) / f64(n)) }
         if kind == 9usize { v = (tp * tn - fp * fneg) / math.sqrt[f64]((tp + fneg) * (tn + fp) * (tp + fp) * (tn + fneg)) }
         if kind == 12usize { v = tn / (tn + fneg) }
+        if kind == 14usize { v = (tp + fp) / f64(n) }
+        if kind == 15usize { v = (tp * tn - fp * fneg) / math.sqrt[f64]((tp + fneg) * (tn + fp) * (tp + fp) * (tn + fneg)) }
+        if kind == 16usize { v = (npos / f64(n)) * (fneg / npos) + (nneg / f64(n)) * (fp / nneg) }
         out[count] = v
         count += 1usize
     }
@@ -113,4 +116,28 @@ fn auc(a: *mem.Arena, pred: []const f64, lab: []const f64) -> f64 {
         i += 1usize
     }
     ret s
+}
+
+// mxe: the mean cross entropy -1/n (sum of log p over the positives + sum of log (1 - p) over the negatives); predictions in [0, 1]
+fn mxe(pred: []const f64, lab: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < pred.len {
+        if lab[i] > 0.5f64 { s += math.log[f64](pred[i]) } else { s += math.log[f64](1.0f64 - pred[i]) }
+        i += 1usize
+    }
+    ret 0.0f64 - s / f64(pred.len)
+}
+
+// rmse of the predictions against the 0 and 1 labels
+fn rmse(pred: []const f64, lab: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < pred.len {
+        var yv = 0.0f64
+        if lab[i] > 0.5f64 { yv = 1.0f64 }
+        s += (pred[i] - yv) * (pred[i] - yv)
+        i += 1usize
+    }
+    ret math.sqrt[f64](s / f64(pred.len))
 }

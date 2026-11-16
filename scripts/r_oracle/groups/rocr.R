@@ -18,4 +18,12 @@ for (rep in 1:12) {
   }
   add("meas", c(99, n, pred, lab), performance(p, "auc")@y.values[[1]])
 }
+# more measures: kinds 14 rpp, 15 phi, 16 cost (cost.fp = cost.fn = 1) through "meas"/"cnt" as above; "mxe" and "rmse" on predictions in (0, 1): args (kind, n, pred, labels)
+meas2 <- c("rpp", "phi", "cost")
+for (rep in 1:10) {
+  n <- sample(15:60, 1); lab <- rbinom(n, 1, 0.45); if (sum(lab) < 2 || sum(lab) > n - 2) next
+  pred <- round(plogis(rnorm(n) + 0.9 * lab), if (rep %% 3 == 0) 2 else 4); p <- prediction(pred, lab)
+  for (kd in 14:16) { v <- performance(p, meas2[kd - 13])@y.values[[1]]; ok <- is.finite(v); add("meas", c(kd, n, pred, lab), sum(v[ok] * seq_along(v)[ok])); add("cnt", c(kd, n, pred, lab), sum(ok)) }
+  if (all(pred > 0 & pred < 1)) { add("mxe", c(90, n, pred, lab), performance(p, "mxe")@y.values[[1]]); add("rmse", c(91, n, pred, lab), performance(p, "rmse")@y.values[[1]]) }
+}
 emit("rocr", "ROCR", list(cases))
