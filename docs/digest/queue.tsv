@@ -141,7 +141,7 @@ L372	library	0.15	729	spdep: spatial autocorrelation and spatial regression	Part
 L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
 L417	library	0.35	747	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
 L418	library	0	333	Rmpfr: arbitrary-precision floating point	Open (CRAN rank 567).
-L435	library	0	312	sna: social network analysis	Open (CRAN rank 629).
+L435	library	0.15	840	sna: social network analysis	Partial (D6636).
 L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
 L439	library	0	309	MCMCpack: Bayesian MCMC for common models	Open (CRAN rank 636).
 L455	library	0	290	geometry: Qhull in n dimensions	Open (CRAN rank 722).

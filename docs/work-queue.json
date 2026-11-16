@@ -1571,10 +1571,10 @@
       "group": "CRAN parity",
       "order": 773,
       "title": "sna: social network analysis",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 629). Mid to large. Overlaps igraph (L316). Acceptance, equal to sna: degree, betweenness, closeness, evcent, stresscent, graphcent, infocent, prestige, QAP tests (qaptest, netlm, netlogit), blockmodel and equiv.clust, sedist, triad.census, dyad.census, mutuality, gden, connectedness, hierarchy."
+      "evidence": "Partial (D6636). e.algo.stat.snapkg on a directed adjacency matrix equals sna on Windows: degree (in, out, total), Freeman betweenness, stress, closeness, graph centrality, eigenvector centrality (primitive strongly connected graphs), density and Freeman centralization of degree, betweenness and closeness (oracle_sna, 284 values; Linux pending). Open: undirected and valued graphs, triad census, reciprocity, transitivity, structural equivalence, blockmodels, bn and ERGM-style models, QAP and conditional uniform tests. Was: Open (CRAN rank 629). Mid to large. Overlaps igraph (L316). Acceptance, equal to sna: degree, betweenness, closeness, evcent, stresscent, graphcent, infocent, prestige, QAP tests (qaptest, netlm, netlogit), blockmodel and equiv.clust, sedist, triad.census, dyad.census, mutuality, gden, connectedness, hierarchy."
     },
     {
       "id": "L438",

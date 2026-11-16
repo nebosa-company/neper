@@ -46940,3 +46940,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `locfitpkg.lpfit` fits, about each data point, a weighted polynomial of degree 0 to 3 with tricube weights `(1 - |u|^3)^3` for `|u| < 1` and returns its value at the point. The nearest-neighbour bandwidth is the distance to the `floor(nn n)`-th nearest point, counting the point itself; with `ceiling` the fit differs whenever `nn n` is not an integer (4 of 8 checked cases off by 0.02 to 0.07). A positive `h` is used as the bandwidth directly.
 
 **Result.** `oracle_locfit` agrees with locfit `ev = dat()` at 1e-6 on Windows (48 values, 30 to 120 points, degrees 0 to 3); Linux pending. L347 stays partial: other families, interpolated evaluation, bands, bandwidth selection, several predictors.
+
+## D6636 — sna: centrality of a digraph
+
+**Decision.** `snapkg.centrality` runs a BFS from every node, counting shortest paths, and gives Freeman betweenness (sum over ordered pairs of the share of shortest paths through a node, Brandes' dependency accumulation), stress (the number of shortest paths through it), closeness `(n-1) / sum of distances` and graph centrality `1 / eccentricity`, both **0 unless the node reaches every other node** (sna returns 0 for any infinite distance, not a sum over the reachable ones), and the dominant adjacency eigenvector at unit length. Freeman centralization divides `sum(max - c)` by `(n-1)(2n-4)` for total degree, `(n-1)^2 (n-2)` for betweenness and `(n-1)^2 / n` for closeness.
+
+**Result.** `oracle_sna` agrees with sna on Windows (284 values, digraphs of 5 to 20 nodes); eigenvector centrality is only checked on strongly connected graphs with a unique dominant eigenvalue, where both are well defined. Linux pending. L435 stays partial: undirected and valued graphs, triads, reciprocity, blockmodels, tests.

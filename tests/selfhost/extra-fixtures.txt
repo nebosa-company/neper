@@ -370,3 +370,4 @@ oracle_xgboost
 oracle_factominer
 oracle_kernlab
 oracle_locfit
+oracle_sna
