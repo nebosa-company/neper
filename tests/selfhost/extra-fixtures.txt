@@ -204,3 +204,4 @@ oracle_sf
 oracle_diptest
 oracle_deoptimr
 oracle_fdrtool
+oracle_splines2

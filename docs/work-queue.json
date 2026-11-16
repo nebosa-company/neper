@@ -361,10 +361,10 @@
       "group": "CRAN parity",
       "order": 584,
       "title": "splines2: spline bases",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 782). Small. Acceptance, equal to splines2: bSpline, mSpline, iSpline, cSpline, naturalSpline and periodic bases with knots, degree, derivatives, integrals, boundary conditions and the predict and update behaviour."
+      "evidence": "Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2); Linux pending. Open: cSpline, naturalSpline, periodic bases, M and I derivatives, integrals, extrapolation, df knots, predict and update. Original: Open (CRAN rank 782). Small. Acceptance, equal to splines2: bSpline, mSpline, iSpline, cSpline, naturalSpline and periodic bases with knots, degree, derivatives, integrals, boundary conditions and the predict and update behaviour."
     },
     {
       "id": "L446",

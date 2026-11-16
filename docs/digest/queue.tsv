@@ -31,7 +31,7 @@ L421	library	0.4	539	fdrtool: false discovery rate estimation	Partly done (D6068
 L423	library	0	215	biglm: bounded-memory linear and generalized linear models	Open (CRAN rank 672).
 L431	library	0	261	TSP: travelling-salesperson tools	Open (CRAN rank 631).
 L444	library	0	233	SuppDists: Johnson, Kendall, Spearman and related distributions	Open (CRAN rank 711).
-L445	library	0	230	splines2: spline bases	Open (CRAN rank 782).
+L445	library	0.4	535	splines2: spline bases	Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2);
 L446	library	0	195	mixsqp: mixture proportions by SQP	Open (CRAN rank 760).
 L447	library	0	184	norm: EM and data augmentation for multivariate normal data	Open (CRAN rank 757).
 L469	library	0	226	pastecs: decomposition, turning points and descriptive statistics	Open (CRAN rank 823).
