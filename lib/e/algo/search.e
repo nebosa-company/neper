@@ -181,23 +181,30 @@ fn kth[T: type](items: []T, k: usize) -> T {
             items[high] = items[middle]
             items[middle] = s
         }
+        // Three-way partition around the pivot: equal keys stay in the middle, so a range of equal keys ends at
+        // once instead of peeling one element per pass.
         let pivot = items[high]
-        var store = low
+        var below = low
+        var above = high
         var i = low
-        while i < high {
-            if T.cmp(items[i], pivot) < 0i32 {
+        while i <= above {
+            let order = T.cmp(items[i], pivot)
+            if order < 0i32 {
                 let s = items[i]
-                items[i] = items[store]
-                items[store] = s
-                store += 1usize
+                items[i] = items[below]
+                items[below] = s
+                below += 1usize
+                i += 1usize
+            } else if order > 0i32 {
+                let s = items[i]
+                items[i] = items[above]
+                items[above] = s
+                above -= 1usize
+            } else {
+                i += 1usize
             }
-            i += 1usize
         }
-        let s = items[store]
-        items[store] = items[high]
-        items[high] = s
-        if k == store { ret items[k] }
-        if k < store { high = store - 1usize } else { low = store + 1usize }
+        if k < below { high = below - 1usize } else if k > above { low = above + 1usize } else { ret pivot }
     }
     ret items[k]
 }

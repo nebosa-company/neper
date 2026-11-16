@@ -47066,3 +47066,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `UUID()` and `GENERATEPASSWORD()` take their randomness from `os.random` (`secure_unit` in `algo/formula/misc.e`), because a password or an identifier derived from a context's `random_seed` is reproducible by anyone who knows or guesses the seed. `RAND`, `RANDBETWEEN` and the other volatile functions keep the evaluator's xorshift64* so a given seed still reproduces a calculation. When the system source fails (or does not exist, as on NeperOS) `secure_unit` falls back to the seeded generator so the function still answers.
 
 **Result.** `algo_formula_misc` passes on Windows and its new check fails without the change; the other formula fixtures are unchanged; Linux pending. L238 leaves the queue.
+
+## D6657 — numeric defects: tails, selection and k-means with no iterations
+
+**Decision.** `two_sided_t` and `two_sided_normal` return `2 * cdf(-|x|)`, the lower tail, in place of `2 * (1 - cdf(|x|))`, which is exactly 0 once the upper tail drops below the double epsilon (z beyond about 8.3). `kth` partitions three ways (below, equal, above the pivot), so a run of equal keys is finished in one pass. `kmeans` with `max_iterations == 0` performs the nearest-centroid assignment without updating centroids instead of leaving every label at the unset value `k` under an `ok` result.
+
+**Result.** `algo_stat_test`, `algo_search` and `ml_cluster` pass on Windows; the first and last fail on the old code, the selection test runs in 0.4 s against 37 s. Linux pending. L250 stays at 0.6: the reviewer's tree insertion sorts, the 1.5e-7 `erf` in the formula engine and the unguarded divisions in `stat/test.e` are open.

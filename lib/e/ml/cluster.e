@@ -57,6 +57,15 @@ fn kmeans(x: []const f64, n: usize, d: usize, k: usize, centroids: []f64, labels
     }
     var iteration = 0u32
     var changed = true
+    if max_iterations == 0u32 {
+        // no iterations asked for: the labels are still the nearest-centroid assignment, never the unset value k
+        i = 0usize
+        while i < n {
+            let (c, _) = nearest(x, d, i, centroids, k)
+            labels[i] = c
+            i += 1usize
+        }
+    }
     while iteration < max_iterations && changed {
         changed = false
         i = 0usize

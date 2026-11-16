@@ -197,6 +197,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if search.kth_deterministic[i64](dupes[..], 3usize) != 5i64 { os.exit(9i32) }
     var one: [1]i64 = zero
     one[0usize] = 8i64
+    // L250: selection over a long run of equal keys ends in one pass (the two-way partition took quadratic time here)
+    var equal: [200000]i64 = zero
+    var qi = 0usize
+    while qi < 200000usize {
+        equal[qi] = 7i64
+        qi += 1usize
+    }
+    equal[3usize] = 1i64
+    equal[199990usize] = 99i64
+    if search.kth[i64](equal[..], 100000usize) != 7i64 || search.kth[i64](equal[..], 0usize) != 1i64 || search.kth[i64](equal[..], 199999usize) != 99i64 { os.exit(9i32) }
     if search.kth[i64](one[..], 0usize) != 8i64 || search.kth_deterministic[i64](one[..], 0usize) != 8i64 { os.exit(9i32) }
 
     // 10: the cycle finders agree, and Brent calls the map fewer times.

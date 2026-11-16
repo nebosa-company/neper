@@ -61,6 +61,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, short_error) = test.t_test(x[..1usize], 1.0f64)
     if short_error != test.Invalid { os.exit(1i32) }
 
+    // L250: a two-sided p value far in the tail stays above zero (2 * (1 - cdf) is exactly 0 past z of about 8.3)
+    var big: [5]f64 = zero
+    big[0usize] = 1000.0f64
+    big[1usize] = 1000.1f64
+    big[2usize] = 999.9f64
+    big[3usize] = 1000.0f64
+    big[4usize] = 1000.05f64
+    let (far_t, far_t_error) = test.t_test(big[..], 0.0f64)
+    if far_t_error != ok || !(far_t.p_value > 0.0f64) || far_t.p_value > 1.0e-9f64 { os.exit(41i32) }
+    var low: [60]f64 = zero
+    var high: [60]f64 = zero
+    var li = 0usize
+    while li < 60usize {
+        low[li] = f64(li + 1usize)
+        high[li] = f64(1001usize + li)
+        li += 1usize
+    }
+    var far_scratch: [256]f64 = zero
+    var far_order: [128]usize = zero
+    let (far_u, far_u_error) = test.mann_whitney(low[..], high[..], far_scratch[..], far_order[..])
+    if far_u_error != ok || !(far_u.p_value > 0.0f64) || far_u.p_value > 1.0e-15f64 { os.exit(42i32) }
+
     // 2: rank tests.
     let (mw, mw_error) = test.mann_whitney(x[..], y[..], scratch[..], order[..])
     if mw_error != ok || mw.statistic != 10.0f64 || !near(mw.p_value, 0.0028065622375925453f64, eps) { os.exit(2i32) }

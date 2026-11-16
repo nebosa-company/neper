@@ -441,7 +441,7 @@ L242	library	0	169	`@import` fan-out	Opened from the 2026-11-13 library review.
 L247	library	0	156	`partial` means partial	Opened from the 2026-11-13 library review.
 L248	library	0	226	Every source module is in the plan	Opened from the 2026-11-13 library review.
 L249	library	0	232	`docs/algos.md` says what was delivered	Opened from the 2026-11-13 library review.
-L250	library	0	141	Numeric defects	Opened from the 2026-11-13 library review.
+L250	library	0.6	920	Numeric defects	Partial (D6657).
 L260	library	0	147	Comments carry no history	Opened from the 2026-11-13 library review.
 L261	library	0	157	Stale comments found	Opened from the 2026-11-13 library review.
 T080	tooling	0	385	Bounded, compact answers by default	Opened from the 2026-11-12 compiler review.

@@ -4871,10 +4871,10 @@
       "group": "Library",
       "order": 459,
       "title": "Numeric defects",
-      "score": 0,
+      "score": 0.6,
       "model": "sonnet",
       "thinking": "medium",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: one fixture per item that fails before the fix. Notes: docs/library-hardening-plan.md."
+      "evidence": "Partial (D6657). The three verified defects are fixed, each with a regression that fails before: stat/test.e two-sided p values come from the lower tail at minus the magnitude (algo_stat_test: a t of about 3e4 and a Mann-Whitney z of about 9.5 give p above zero, exit 41 on the old code), search.e kth uses a three-way partition (algo_search: a 200000-key run of equal values takes 0.4 s, 37 s before, so the old code is caught by timing), and ml/cluster.e kmeans with zero iterations labels every point with its nearest centroid (ml_cluster, exit 1 before). Open from the reviewer list: tree.e insertion-sorts every feature at every node, formula/math.e erf is 1.5e-7 accurate beside special.e, and stat/test.e mean and sample_variance divide by len and len - 1 unguarded. Was: Opened from the 2026-11-13 library review. Acceptance: one fixture per item that fails before the fix. Notes: docs/library-hardening-plan.md."
     },
     {
       "id": "L260",

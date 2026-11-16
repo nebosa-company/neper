@@ -38,12 +38,14 @@ fn sample_variance(values: []const f64) -> f64 {
     ret sum / f64(values.len - 1usize)
 }
 
+// The two-sided tail probabilities come from the lower tail at minus the magnitude: 2 * (1 - cdf) is exactly 0 for
+// a normal z beyond about 8.3, while the lower tail keeps its relative precision.
 fn two_sided_t(t: f64, df: f64) -> f64 {
-    ret 2.0f64 * (1.0f64 - special.t_cdf(math.abs[f64](t), df))
+    ret 2.0f64 * special.t_cdf(0.0f64 - math.abs[f64](t), df)
 }
 
 fn two_sided_normal(z: f64) -> f64 {
-    ret 2.0f64 * (1.0f64 - special.normal_cdf(math.abs[f64](z)))
+    ret 2.0f64 * special.normal_cdf(0.0f64 - math.abs[f64](z))
 }
 
 // One-sample t-test of the mean against `mu`.

@@ -3516,4 +3516,5 @@ D6652	890	e.algo.linalg.iterative: conjugate gradients and GMRES over an operato
 D6653	974	e.algo.discrepancy: Beck-Fiala, vector balancing and derandomised max-cut
 D6654	986	e.fmt.macho: read-only Mach-O
 D6655	937	e.fmt.tiff: validate the zlib framing of Deflate strips
-D6656	807	formula engine: secrets and identities do not come from the seeded generator
+D6656	808	formula engine: secrets and identities do not come from the seeded generator
+D6657	917	numeric defects: tails, selection and k-means with no iterations

@@ -81,6 +81,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     if !near(inertia, 7.5f64, 0.0000001f64) { os.exit(1i32) }
+    // L250: zero iterations still labels every point with its nearest centroid, never the unset value k
+    let (zero_took, zero_error) = cluster.kmeans(x[..], 24usize, 2usize, 3usize, centroids[..6usize], labels[..], 0u32, marks[..])
+    if zero_error != ok || zero_took != 0u32 || !partitioned(labels[..], 3usize) { os.exit(1i32) }
     let (_, kmeans_invalid) = cluster.kmeans(x[..], 24usize, 2usize, 0usize, centroids[..], labels[..], 100u32, marks[..])
     if kmeans_invalid != cluster.Invalid { os.exit(1i32) }
     let (_, kmeans_room) = cluster.kmeans(x[..], 24usize, 2usize, 3usize, centroids[..], labels[..10usize], 100u32, marks[..])
