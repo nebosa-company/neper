@@ -45,4 +45,16 @@ for (x in xs) for (st in 0:3) for (R in c(19, 99)) {
   for (i in c(1, 2, R %/% 2, R)) add("cens_t", c(a, i - 1), b$t[i, 1])
   add("cens_tsum", a, sum(b$t))
 }
+# censboot(sim = "weird"): (seed, stat, R, n, x..., status...) fn "weird_t0", "weird_t", "weird_tsum"
+library(survival)
+for (x in xs) for (st in 0:3) for (R in c(19, 99)) {
+  seed <- sample(1:1e6, 1); set.seed(seed)
+  fcs <- list(function(d) mean(d[, 1]), function(d) median(d[, 1]), function(d) sd(d[, 1]), function(d) var(d[, 1]))
+  sv <- rbinom(length(x), 1, 0.7); if (sum(sv) == 0) next; dat <- cbind(x, sv); F <- survfit(Surv(x, sv) ~ 1); set.seed(seed)
+  b <- censboot(dat, fcs[[st + 1]], R, F.surv = F, sim = "weird")
+  a <- c(seed, st, R, length(x), x, sv)
+  add("weird_t0", a, b$t0)
+  for (i in c(1, 2, R %/% 2, R)) add("weird_t", c(a, i - 1), b$t[i, 1])
+  add("weird_tsum", a, sum(b$t))
+}
 emit("boot3", "boot", list(cases))

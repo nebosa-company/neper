@@ -693,3 +693,83 @@ fn censboot_ordinary(a: *mem.Arena, g: *rng.Rng, x: []const f64, kind: u8, nrep:
     }
     ret (Boot { t0: stat_of(a, kind, x), t: t, idx: idx, n: n, r: nrep }, ok)
 }
+
+// censboot(sim = "weird") with one stratum, F.surv = survfit(Surv(time, status) ~ 1): each replicate redraws the number of deaths at every distinct time as rbinom(n.risk, n.event / n.risk) (repeating until there is a death), adds the censored cases, and applies the statistic to the sorted times
+fn censboot_weird(a: *mem.Arena, g: *rng.Rng, time: []const f64, status: []const f64, kind: u8, nrep: usize) -> (Boot, err) {
+    var none: Boot = zero
+    let n = time.len
+    let (ut, e1) = mem.alloc[f64](a, n)
+    let (risk, e2) = mem.alloc[f64](a, n)
+    let (ev, e3) = mem.alloc[f64](a, n)
+    let (nev, e4) = mem.alloc[f64](a, n)
+    let (buf, e5) = mem.alloc[f64](a, 2usize * n)
+    let (t, e6) = mem.alloc[f64](a, nrep)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (none, e1) }
+    var i = 0usize
+    while i < n {
+        buf[i] = time[i]
+        i += 1usize
+    }
+    sort_up(buf[0usize..n])
+    var m = 0usize
+    i = 0usize
+    while i < n {
+        if i == 0usize || buf[i] != buf[i - 1usize] {
+            ut[m] = buf[i]
+            m += 1usize
+        }
+        i += 1usize
+    }
+    var j = 0usize
+    while j < m {
+        var rk = 0.0f64
+        var d = 0.0f64
+        i = 0usize
+        while i < n {
+            if time[i] >= ut[j] { rk += 1.0f64 }
+            if time[i] == ut[j] && status[i] > 0.5f64 { d += 1.0f64 }
+            i += 1usize
+        }
+        risk[j] = rk
+        ev[j] = d
+        j += 1usize
+    }
+    var r = 0usize
+    while r < nrep {
+        var total = 0.0f64
+        while total == 0.0f64 {
+            j = 0usize
+            while j < m {
+                nev[j] = rdist.rbinom(g, risk[j], ev[j] / risk[j])
+                total += nev[j]
+                j += 1usize
+            }
+            if total != 0.0f64 { break }
+        }
+        var cnt = 0usize
+        j = 0usize
+        while j < m {
+            var q = 0usize
+            while q < usize(nev[j]) {
+                buf[cnt] = ut[j]
+                cnt += 1usize
+                q += 1usize
+            }
+            j += 1usize
+        }
+        i = 0usize
+        while i < n {
+            if status[i] < 0.5f64 {
+                buf[cnt] = time[i]
+                cnt += 1usize
+            }
+            i += 1usize
+        }
+        sort_up(buf[0usize..cnt])
+        t[r] = stat_of(a, kind, buf[0usize..cnt])
+        r += 1usize
+    }
+    let (idx, ie) = mem.alloc[i64](a, 1usize)
+    if ie != ok { ret (none, ie) }
+    ret (Boot { t0: stat_of(a, kind, time), t: t, idx: idx, n: n, r: nrep }, ok)
+}

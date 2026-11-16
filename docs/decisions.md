@@ -46318,3 +46318,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `parzen.vieu` is the root of the Gaussian kernel-derivative sum `sum(-u phi(u))`, `u = (z - x)/bw`, over range(x) by a copy of R_zeroin2 (tol eps^0.25, 1000 iterations), bw from bw.nrd0. modeest's `vieu` calls `statip::bandwidth(x, bw)` after densityfun, which stops for a numeric bw, so only the nrd0 default can be compared; the root is the Brent iterate, not necessarily the global mode (3.77 for a gamma(3,1) sample).
 
 **Result.** `oracle_parzen` agrees with modeest on 12 vieu values at 1e-9 on Windows; Linux pending. The other parzen kernels and meanshift bandwidths stay open; L472 stays partial.
+
+## D6525 — boot: censboot weird
+
+**Decision.** `boot.censboot_weird` follows cens.weird for one stratum: the Kaplan-Meier risk-set sizes and death counts at the distinct times, `rbinom(m, n.risk, n.event/n.risk)` per time (redrawn while there are no deaths), the drawn deaths plus the censored cases, then the statistic of the sorted times. rbinom is rdist's R-exact port, so the stream agrees after set.seed.
+
+**Result.** `oracle_boot3` agrees with boot on the new weird cases on Windows (1170 values in all); Linux pending. censboot model and cond need coxph and survfit fits and stay open; L321 at 0.95.
