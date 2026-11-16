@@ -22,6 +22,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "sspec") { ret sp }
         ret st
     }
+    if str.eq(k, "bcnt") || str.eq(k, "bthr") || str.eq(k, "bcrit") {
+        let (bc, bt, bq) = pr.roc_best(a, y, x1, x[3usize * n + 2usize], x[3usize * n + 3usize], usize(x[3usize * n + 1usize]))
+        if str.eq(k, "bcnt") { ret bc }
+        if str.eq(k, "bthr") { ret bt }
+        ret bq
+    }
     if str.eq(k, "atsens") || str.eq(k, "atspec") {
         let (se, sc) = pr.coords_at(y, x1, pr.cases_higher(a, y, x1), x[1usize + 3usize * n])
         if str.eq(k, "atsens") { ret se }

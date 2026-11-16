@@ -46300,3 +46300,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `proc.e` gains `cases_higher` (direction = "auto" by the group medians), `coords_at` (sensitivity and specificity at a threshold: cases beyond it, controls on the other side or equal) and `roc_sums` (the curve of coords(r, "all"): -Inf, midpoints of consecutive distinct values, Inf; count and sums of sensitivity, specificity and finite thresholds).
 
 **Result.** `oracle_proc` agrees with pROC on 240 new values on Windows; Linux pending. coords "best", partial and smoothed curves, bootstrap and the other roc.test methods stay open; L324 stays partial.
+
+## D6522 — pROC: coords best
+
+**Decision.** `roc_best` evaluates pROC's `roc_utils_optim_crit` (youden `se + r sp`, closest.topleft `-((1-se)^2 + r (1-sp)^2)`, `r = (1-prev)/(cost*prev)`) over the curve and returns the number of thresholds tied at the maximum (exact equality, as R), the lowest of them and the maximum.
+
+**Result.** `oracle_proc` agrees with pROC on 120 more values on Windows; Linux pending. Partial and smoothed curves, bootstrap and other roc.test methods stay open; L324 stays partial.

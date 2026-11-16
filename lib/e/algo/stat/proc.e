@@ -249,3 +249,58 @@ fn roc_sums(a: *mem.Arena, y: []const f64, x: []const f64) -> (f64, f64, f64, f6
     }
     ret (cnt, ss, sp, st)
 }
+
+// coords(r, "best", best.method, best.weights = c(cost, prev)): method 0 "youden" (se + r sp), 1 "closest.topleft"; returns the number of thresholds attaining the maximum, the lowest of them and the maximum criterion
+fn roc_best(a: *mem.Arena, y: []const f64, x: []const f64, cost: f64, prev: f64, method: usize) -> (f64, f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let higher = cases_higher(a, y, x)
+    let r = (1.0f64 - prev) / (cost * prev)
+    let (u, e) = mem.alloc[f64](a, x.len)
+    if e != ok { ret (nan, nan, nan) }
+    var i = 0usize
+    while i < x.len {
+        u[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < u.len {
+        let t = u[i]
+        var j = i
+        while j > 0usize && u[j - 1usize] > t {
+            u[j] = u[j - 1usize]
+            j -= 1usize
+        }
+        u[j] = t
+        i += 1usize
+    }
+    var k = 0usize
+    i = 0usize
+    while i < u.len {
+        if i == 0usize || u[i] != u[i - 1usize] {
+            u[k] = u[i]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let inf = 1.0f64 / 0.0f64
+    var best = 0.0f64 - inf
+    var cnt = 0.0f64
+    var first = nan
+    var j = 0usize
+    while j <= k {
+        var t = inf
+        if j == 0usize { t = 0.0f64 - inf } else if j < k { t = (u[j - 1usize] + u[j]) / 2.0f64 }
+        let (se, sp) = coords_at(y, x, higher, t)
+        var crit = se + r * sp
+        if method == 1usize { crit = 0.0f64 - ((1.0f64 - se) * (1.0f64 - se) + r * (1.0f64 - sp) * (1.0f64 - sp)) }
+        if crit > best {
+            best = crit
+            cnt = 1.0f64
+            first = t
+        } else if crit == best {
+            cnt += 1.0f64
+        }
+        j += 1usize
+    }
+    ret (cnt, first, best)
+}

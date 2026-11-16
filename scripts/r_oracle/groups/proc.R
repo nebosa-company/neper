@@ -23,4 +23,13 @@ for (rep in 1:20) {
   add("ncoord", a, nrow(cc)); add("ssens", a, sum(cc$sensitivity)); add("sspec", a, sum(cc$specificity)); add("sthr", a, sum(cc$threshold[is.finite(cc$threshold)]))
   ux <- sort(unique(x1)); for (t in sample((ux[-1] + ux[-length(ux)]) / 2, 3)) { ct <- coords(r1, t, "threshold", ret = c("sensitivity", "specificity"), transpose = FALSE); add("atsens", c(a, t), ct$sensitivity); add("atspec", c(a, t), ct$specificity) }
 }
+# coords best: ("bcnt" "bthr" "bcrit") args (n, y, x1, x2, method 0 youden 1 closest.topleft, cost, prev)
+for (rep in 1:20) {
+  n <- sample(20:80, 1); y <- rbinom(n, 1, 0.4); if (sum(y) < 3 || sum(y) > n - 3) next
+  s <- c(0.8, 1.5, -0.7, 0.3)[rep %% 4 + 1]; x1 <- round(rnorm(n) + s * y, if (rep %% 3 == 0) 1 else 4); r1 <- roc(y, x1, quiet = TRUE)
+  for (m in 0:1) { cost <- if (rep %% 2 == 0) 1 else round(runif(1, 0.5, 2), 2); prev <- if (rep %% 2 == 0) 0.5 else round(runif(1, 0.2, 0.8), 2)
+    cb <- coords(r1, "best", ret = c("threshold", "sensitivity", "specificity"), best.method = c("youden", "closest.topleft")[m + 1], best.weights = c(cost, prev), transpose = FALSE)
+    a <- c(n, y, x1, x1, m, cost, prev); add("bcnt", a, nrow(cb)); add("bthr", a, cb$threshold[1]); r <- (1 - prev) / (cost * prev)
+    add("bcrit", a, if (m == 0) max(cb$sensitivity + r * cb$specificity) else max(-((1 - cb$sensitivity)^2 + r * (1 - cb$specificity)^2))) }
+}
 emit("proc", "pROC", list(cases))
