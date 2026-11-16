@@ -305,3 +305,4 @@ oracle_matlab
 oracle_octave
 oracle_carlmtest
 oracle_lpsolve
+oracle_assign

@@ -3295,4 +3295,5 @@ D6423	619	lmtest: the p values of bptest and resettest
 D6424	757	lmtest: Goldfeld-Quandt
 D6425	745	sandwich: NeweyWest
 D6426	745	sandwich: vcovCL
-D6427	776	lpSolve: e.math.opt.simplex against lp("max")
+D6427	777	lpSolve: e.math.opt.simplex against lp("max")
+D6428	687	clue and lpSolve: the assignment problem

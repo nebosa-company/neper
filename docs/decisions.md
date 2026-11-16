@@ -45736,3 +45736,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.math.opt.simplex` (two-phase dense simplex, Bland's rule) agrees with lpSolve::lp("max", ...) on thirty random linear programs of 2 to 5 variables and 3 to 7 rows with a mix of <= and >= constraints (the >= rows given to the simplex negated, which needs its phase one) and a bounding row: the optimal value and the solution equal to 1e-8. Infeasible programs are left out of the draw. The oracle fixture is new; no library change was needed. Not here: equality rows, integer and binary variables (lp's int.vec and binary.vec), the transportation and assignment solvers, sensitivity analysis and lpSolveAPI.
 
 **Result.** `oracle_lpsolve` agrees with lpSolve on 60 cases on Windows; Linux pending. L367 is partial.
+
+## D6428 — clue and lpSolve: the assignment problem
+
+`e.algo.graph.match.hungarian` agrees with clue::solve_LSAP (the optimal assignment, and its cost) and with lpSolve::lp.assign (the optimal cost) on thirty random real-valued square cost matrices of order 2 to 9, where the optimum is unique. The oracle fixture is new; no library change was needed. Not here: rectangular and maximisation problems (solve_LSAP(maximum = TRUE), forbidden cells), lp.transport, the ties the packages break their own way, and the rest of clue (cluster ensembles, consensus partitions).
+
+**Result.** `oracle_assign` agrees with clue and lpSolve on 90 cases on Windows; Linux pending. L367 stays partial.
