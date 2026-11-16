@@ -1,0 +1,16 @@
+# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>
+# name: sc
+# type: scalar
+-0.456891
+# name: mm
+# type: matrix
+# rows: 3
+# columns: 5
+ -1.15148 -4.91837 7.50623 -1.5512 1.14012
+ 0.28286 -7.53235 -0.94778 3.13769 5.21293
+ 0.23332 -3.72917 -2.71999 1.52513 1.41522
+# name: txt
+# type: string
+# elements: 1
+# length: 10
+fhzgyuxeqb
