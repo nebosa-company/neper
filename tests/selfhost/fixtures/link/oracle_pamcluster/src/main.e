@@ -82,8 +82,53 @@ fn sil_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret s
 }
 
+fn diana_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let (d, e1) = mem.alloc[f64](a, n * n)
+    if e1 != ok { os.exit(5) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            let dx = x[2usize + 2usize * i] - x[2usize + 2usize * j]
+            let dy = x[3usize + 2usize * i] - x[3usize + 2usize * j]
+            d[i * n + j] = math.sqrt[f64](dx * dx + dy * dy)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (h, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { os.exit(6) }
+    let (dc, e3) = pc.diana(a, d, n, h)
+    if e3 != ok { os.exit(7) }
+    if str.eq(c.name, "dianadc") { ret dc }
+    // the heights in decreasing order, weighted by position
+    var m = 0usize
+    while m + 1usize < n {
+        var k = m + 1usize
+        while k + 1usize < n {
+            if h[k] > h[m] {
+                let t = h[m]
+                h[m] = h[k]
+                h[k] = t
+            }
+            k += 1usize
+        }
+        m += 1usize
+    }
+    var s = 0.0f64
+    i = 0usize
+    while i + 1usize < n {
+        s += h[i] * f64(i + 1usize)
+        i += 1usize
+    }
+    ret s
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "daisy") { ret daisy_case(a, c) }
+    if str.eq(c.name, "dianah") || str.eq(c.name, "dianadc") { ret diana_case(a, c) }
     if str.eq(c.name, "sil") || str.eq(c.name, "silavg") { ret sil_case(a, c) }
     let x = c.args
     let n = usize(x[0usize])

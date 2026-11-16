@@ -3251,4 +3251,5 @@ D6175	844	DHARMa: testZeroInflation and testDispersion by simulation
 D6176	1077	cluster: pam (BUILD and SWAP)
 D6177	816	cluster: agnes heights and agglomerative coefficient
 D6178	664	cluster: daisy Gower dissimilarity
-D6179	539	cluster: silhouette widths
+D6179	540	cluster: silhouette widths
+D6180	834	cluster: diana

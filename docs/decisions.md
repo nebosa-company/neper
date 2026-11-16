@@ -45472,3 +45472,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pamcluster` gains silhouette: for every observation the mean dissimilarity to the rest of its own cluster (a) and the smallest mean dissimilarity to another cluster (b), width (b - a) / max(a, b), and 0 for a singleton cluster, exactly as cluster::silhouette does. Not here: the per-cluster summaries and the neighbour column, the plot and silhouette of a pam or clara object.
 
 **Result.** `oracle_pamcluster` equals cluster on 114 cases on Windows; Linux pending. L335 stays partial.
+
+## D6180 — cluster: diana
+
+`e.algo.stat.pamcluster` gains diana: the cluster with the largest diameter is split each step (the first of equals in list order, the two parts appended after the removal); the splinter group starts from the object with the largest mean dissimilarity to the others and takes, one at a time, the object whose mean dissimilarity to the rest minus its mean to the splinter group is largest while that is positive. The split heights (the diameters) equal diana$height, and the divisive coefficient, one minus the mean over objects of the height at which they became a singleton relative to the largest, equals diana$dc. Not here: diana's banner order, the merge matrix and the coefficient plot data.
+
+**Result.** `oracle_pamcluster` equals cluster on 142 cases on Windows; Linux pending. L335 stays partial.

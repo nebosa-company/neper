@@ -258,3 +258,186 @@ fn silhouette(a: *mem.Arena, d: []const f64, n: usize, cl: []const usize, k: usi
     }
     ret ok
 }
+
+fn cdiam(d: []const f64, n: usize, lab: []const usize, id: usize) -> f64 {
+    var m = 0.0f64
+    var i = 0usize
+    while i < n {
+        if lab[i] == id {
+            var j = 0usize
+            while j < n {
+                if lab[j] == id && d[i * n + j] > m { m = d[i * n + j] }
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    ret m
+}
+
+fn csize(n: usize, lab: []const usize, id: usize) -> usize {
+    var c = 0usize
+    var i = 0usize
+    while i < n {
+        if lab[i] == id { c += 1usize }
+        i += 1usize
+    }
+    ret c
+}
+
+// mean dissimilarity of observation i to the members of cluster id other than i (members of `lab` equal to id)
+fn avg_to(d: []const f64, n: usize, lab: []const usize, id: usize, i: usize) -> f64 {
+    var s = 0.0f64
+    var c = 0.0f64
+    var j = 0usize
+    while j < n {
+        if lab[j] == id && j != i {
+            s += d[i * n + j]
+            c += 1.0f64
+        }
+        j += 1usize
+    }
+    ret s / c
+}
+
+// diana: the n - 1 split heights (the diameters of the clusters split, in split order) and the divisive coefficient
+fn diana(a: *mem.Arena, d: []const f64, n: usize, height: []f64) -> (f64, err) {
+    let (lab, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { ret (0.0f64, e1) }
+    let (ids, e2) = mem.alloc[usize](a, n)
+    if e2 != ok { ret (0.0f64, e2) }
+    let (sing, e3) = mem.alloc[f64](a, n)
+    if e3 != ok { ret (0.0f64, e3) }
+    var i = 0usize
+    while i < n {
+        lab[i] = 0usize
+        sing[i] = 0.0f64
+        i += 1usize
+    }
+    ids[0usize] = 0usize
+    var nc = 1usize
+    var nextid = 1usize
+    var step = 0usize
+    while step + 1usize < n {
+        var ci = 0usize
+        var bd = 0.0f64 - 1.0f64
+        var q = 0usize
+        while q < nc {
+            let dm = cdiam(d, n, lab, ids[q])
+            if dm > bd {
+                bd = dm
+                ci = q
+            }
+            q += 1usize
+        }
+        let cid = ids[ci]
+        height[step] = bd
+        // the splinter group gets the new id sp, the rest keeps cid
+        let sp = nextid
+        nextid += 1usize
+        let size = csize(n, lab, cid)
+        // the splinter starts with the object of largest average dissimilarity to the others
+        var first = n
+        var bv = 0.0f64 - 1.0f64
+        i = 0usize
+        while i < n {
+            if lab[i] == cid {
+                var v = 0.0f64
+                if size > 1usize { v = avg_to(d, n, lab, cid, i) }
+                if size == 2usize { v = d[i * n + i] }
+                if v > bv {
+                    bv = v
+                    first = i
+                }
+            }
+            i += 1usize
+        }
+        if size == 2usize {
+            // the two members: the first found is the splinter, as which.max over equal values does
+            i = 0usize
+            while i < n {
+                if lab[i] == cid {
+                    first = i
+                    break
+                }
+                i += 1usize
+            }
+        }
+        lab[first] = sp
+        var rest = size - 1usize
+        var go = size > 2usize
+        while go && rest > 1usize {
+            var bj = n
+            var bdiff = 0.0f64 - 1.0e300f64
+            i = 0usize
+            while i < n {
+                if lab[i] == cid {
+                    let df = avg_to(d, n, lab, cid, i) - avg_to2(d, n, lab, sp, i)
+                    if df > bdiff {
+                        bdiff = df
+                        bj = i
+                    }
+                }
+                i += 1usize
+            }
+            if bdiff <= 0.0f64 {
+                go = false
+            } else {
+                lab[bj] = sp
+                rest -= 1usize
+            }
+        }
+        if csize(n, lab, sp) == 1usize {
+            i = 0usize
+            while i < n {
+                if lab[i] == sp { sing[i] = bd }
+                i += 1usize
+            }
+        }
+        if csize(n, lab, cid) == 1usize {
+            i = 0usize
+            while i < n {
+                if lab[i] == cid { sing[i] = bd }
+                i += 1usize
+            }
+        }
+        // list order: drop ci, append the splinter group then the rest
+        q = ci
+        while q + 1usize < nc {
+            ids[q] = ids[q + 1usize]
+            q += 1usize
+        }
+        ids[nc - 1usize] = sp
+        ids[nc] = cid
+        nc += 1usize
+        step += 1usize
+    }
+    var hmax = 0.0f64
+    i = 0usize
+    while i + 1usize < n {
+        if height[i] > hmax { hmax = height[i] }
+        i += 1usize
+    }
+    var s = 0.0f64
+    i = 0usize
+    while i < n {
+        s += sing[i] / hmax
+        i += 1usize
+    }
+    ret (1.0f64 - s / f64(n), ok)
+}
+
+// mean dissimilarity of observation i to all members of cluster id (i is not a member)
+fn avg_to2(d: []const f64, n: usize, lab: []const usize, id: usize, i: usize) -> f64 {
+    var s = 0.0f64
+    var c = 0.0f64
+    var j = 0usize
+    while j < n {
+        if lab[j] == id {
+            s += d[i * n + j]
+            c += 1.0f64
+        }
+        j += 1usize
+    }
+    ret s / c
+}

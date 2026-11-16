@@ -35,4 +35,10 @@ for (rep in 1:12) {
   add("sil", c(n, k, as.vector(t(X)), cl), sum(s[, 3] * seq_len(n)))
   add("silavg", c(n, k, as.vector(t(X)), cl), mean(s[, 3]))
 }
+for (rep in 1:14) {
+  n <- sample(6:30, 1); X <- matrix(round(rnorm(n * 2) * 3, 4), n, 2) + matrix(rep(sample(0:2, n, replace = TRUE) * 4, 2), n, 2)
+  dv <- diana(dist(X))
+  add("dianah", c(n, 0, as.vector(t(X))), sum(sort(dv$height, decreasing = TRUE) * seq_along(dv$height)))
+  add("dianadc", c(n, 0, as.vector(t(X))), dv$dc)
+}
 emit("pamcluster", "cluster", list(cases))
