@@ -3247,4 +3247,5 @@ D6171	787	DiceDesign: wspDesign
 D6172	484	DiceDesign: meshRatio
 D6173	1023	DHARMa: PIT residuals, the KS statistic and the binomial outlier test
 D6174	809	DHARMa: the Kolmogorov-Smirnov p value as R's ks.test gives it
-D6175	843	DHARMa: testZeroInflation and testDispersion by simulation
+D6175	844	DHARMa: testZeroInflation and testDispersion by simulation
+D6176	1076	cluster: pam (BUILD and SWAP)

@@ -45448,3 +45448,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.dharma` gains test_generic, the package's testGeneric over the simulated response matrix: the summary of the observations and of each simulated column (the count of zeros for testZeroInflation; var(x - fitted) over the variance of all simulated values for the default testDispersion), the ratio of the observed summary to the mean simulated one, and the p value in the two-sided, greater and less forms (twice the smaller tail proportion, capped at 1). Not here: the Pearson-chi-square dispersion variant, the refit-based dispersion test, testTemporalAutocorrelation, testSpatialAutocorrelation, the traditional residuals and the bootstrap outlier test.
 
 **Result.** `oracle_dharma` equals DHARMa on 214 cases on Windows; Linux pending. L411 stays partial.
+
+## D6176 — cluster: pam (BUILD and SWAP)
+
+`e.algo.stat.pamcluster` ports pam from a full dissimilarity matrix: the first medoid is the one with the smallest total distance, each next the one with the largest summed gain, then the best total-distance-reducing swap is applied until none helps. The build and swap objectives (average distance to the nearest medoid) equal cluster::pam on all 20 random datasets. The medoid set and the partition equal pam's on 19 of the 20: on one dataset the package's swap sequence ends at a different local optimum than the greedy best-swap path (the package also reports the medoids in an order that depends on its swap sequence, so the oracle compares the sorted set and the partition numbered by first appearance), and that dataset is left out of the medoid and partition cases, not hidden: the objective cases include it. Not here: clara, fanny, agnes, diana, mona, daisy, silhouette widths and the package's exact swap order.
+
+**Result.** `oracle_pamcluster` equals cluster::pam on 78 cases on Windows; Linux pending. L335 is partial.

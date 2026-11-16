@@ -282,3 +282,4 @@ oracle_fpc
 oracle_proc
 oracle_rocr
 oracle_dharma
+oracle_pamcluster
