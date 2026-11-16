@@ -231,3 +231,4 @@ oracle_hoslem
 oracle_kendall
 oracle_lmom
 oracle_leaps
+oracle_bigglm
