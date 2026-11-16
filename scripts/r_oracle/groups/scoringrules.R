@@ -92,4 +92,25 @@ for (rep in 1:25) {
   s1 <- runif(1, 0.3, 2); s2 <- runif(1, 0.3, 2); add("crps", c(25, s1, s2, lc, 0, yy), crps_2pexp(yy, s1, s2, lc)); add("crps", c(26, s1, s2, lc, 0, yy), crps_2pnorm(yy, s1, s2, lc))
   add("crps", c(27, lc, sc, ms, 0, yy), crps_expM(yy, lc, sc, ms))
 }
+for (rep in 1:25) {
+  yy <- rnorm(1, 0.5, 2); yp <- abs(rnorm(1, 1, 1.5)) + 0.05; lc <- rnorm(1); sc <- runif(1, 0.5, 2.5); yb <- runif(1, 0.05, 0.95)
+  a1 <- runif(1, 0.5, 5); b1 <- runif(1, 0.5, 5); lo <- runif(1, -2, 0); hi <- lo + runif(1, 0.5, 4); yl <- lo + (hi - lo) * yb
+  add("crps", c(28, a1, b1, 0, 1, yb), crps_beta(yb, a1, b1)); add("crps", c(28, a1, b1, lo, hi, yl), crps_beta(yl, a1, b1, lo, hi))
+  add("logs", c(28, a1, b1, lo, hi, yl), logs_beta(yl, a1, b1, lo, hi)); add("dss", c(28, a1, b1, lo, hi, yl), dss_beta(yl, a1, b1, lo, hi))
+  mh <- sample(3:12, 1); nh <- sample(3:12, 1); kh <- sample(2:min(mh + nh, 10), 1); yh <- sample(0:kh, 1)
+  add("crps", c(29, mh, nh, kh, 0, yh), crps_hyper(yh, mh, nh, kh)); add("logs", c(29, mh, nh, kh, 0, min(yh, mh)), logs_hyper(min(yh, mh), mh, nh, kh))
+  sz <- runif(1, 0.5, 10); pr <- runif(1, 0.15, 0.9); yn <- sample(0:12, 1)
+  add("logs", c(30, sz, pr, 0, 0, yn), logs_nbinom(yn, sz, pr)); add("dss", c(30, sz, pr, 0, 0, yn), dss_nbinom(yn, sz, pr))
+  df <- runif(1, 2.5, 15); add("logs", c(31, df, lc, sc, 0, yy), logs_t(yy, df, lc, sc)); add("dss", c(31, df, lc, sc, 0, yy), dss_t(yy, df, lc, sc))
+  add("dss", c(32, lc, sc * sc, 0, 0, yy), dss_moments(yy, lc, sc * sc))
+  tl <- lc - runif(1, 0, 3); tu <- lc + runif(1, 0.5, 3); yt <- runif(1, tl, tu); add("logs", c(33, lc, sc, tl, tu, yt), logs_tnorm(yt, lc, sc, tl, tu))
+  shp <- runif(1, -0.4, 0.45); yg <- lc + sc * runif(1, 0.1, 2) / (1 + abs(shp))
+  add("logs", c(21, shp, lc, sc, 0, yg), logs_gev(yg, shp, lc, sc)); add("dss", c(21, shp, lc, sc, 0, yg), dss_gev(yg, shp, lc, sc)); add("dss", c(21, 1e-14, lc, sc, 0, yg), dss_gev(yg, 1e-14, lc, sc))
+  add("logs", c(22, shp, lc, sc, 0, yp + lc), logs_gpd(yp + lc, shp, lc, sc)); add("dss", c(22, shp, lc, sc, 0, yp + lc), dss_gpd(yp + lc, shp, lc, sc))
+  sl <- runif(1, 0.05, 0.45); add("logs", c(23, lc, sl, 0, 0, yp), logs_llapl(yp, lc, sl)); add("dss", c(23, lc, sl, 0, 0, yp), dss_llapl(yp, lc, sl))
+  add("logs", c(24, lc, sl, 0, 0, yp), logs_llogis(yp, lc, sl)); add("dss", c(24, lc, sl, 0, 0, yp), dss_llogis(yp, lc, sl))
+  s1 <- runif(1, 0.3, 2); s2 <- runif(1, 0.3, 2); add("logs", c(25, s1, s2, lc, 0, yy), logs_2pexp(yy, s1, s2, lc)); add("logs", c(26, s1, s2, lc, 0, yy), logs_2pnorm(yy, s1, s2, lc))
+  k <- sample(2:4, 1); mm <- rnorm(k); ss <- runif(k, 0.3, 2); ww <- runif(k, 0.1, 1)
+  add("logsmix", c(yy, k, mm, ss, ww), logs_mixnorm(yy, matrix(mm, 1), matrix(ss, 1), matrix(ww, 1))); add("dssmix", c(yy, k, mm, ss, ww), dss_mixnorm(yy, matrix(mm, 1), matrix(ss, 1), matrix(ww, 1)))
+}
 emit("scoringrules", "scoringRules", list(cases))

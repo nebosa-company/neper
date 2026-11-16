@@ -3380,4 +3380,5 @@ D6508	952	scoringRules: truncated and censored normal CRPS
 D6509	653	scoringRules: truncated and censored logistic CRPS
 D6510	728	scoringRules: truncated and censored t CRPS
 D6511	1060	scoringRules: weighted and kernel CRPS, and the negative binomial CRPS
-D6512	1010	scoringRules: mixture, extreme-value, log-Laplace, log-logistic and two-piece CRPS
+D6512	1011	scoringRules: mixture, extreme-value, log-Laplace, log-logistic and two-piece CRPS
+D6513	991	scoringRules: crps_beta, crps_hyper and the log and Dawid-Sebastiani scores of the wider families

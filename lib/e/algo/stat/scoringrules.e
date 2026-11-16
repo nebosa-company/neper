@@ -753,3 +753,186 @@ fn crps_llogis(y: f64, ll: f64, sl: f64) -> f64 {
     let c3 = (1.0f64 - sl) / 2.0f64 - nb.pbeta(p, 1.0f64 + sl, 1.0f64 - sl, true, false)
     ret c1 + c2 * c3
 }
+
+// crps_beta(y, shape1, shape2, lower, upper)
+fn crps_beta(y0: f64, a: f64, b: f64, lower: f64, upper: f64) -> f64 {
+    let scale = upper - lower
+    let y = (y0 - lower) / scale
+    let c1 = y * (2.0f64 * nb.pbeta(y, a, b, true, false) - 1.0f64)
+    let c2 = a / (a + b)
+    let c3 = 1.0f64 - 2.0f64 * nb.pbeta(y, a + 1.0f64, b, true, false)
+    var c4 = 2.0f64 / a * math.exp[f64](nb.lbeta(2.0f64 * a, 2.0f64 * b) - 2.0f64 * nb.lbeta(a, b))
+    if !(c4 < 1.0e300f64) { c4 = math.sqrt[f64](b / (pi() * a * (a + b))) }
+    ret scale * (c1 + c2 * (c3 - c4))
+}
+
+// crps_hyper(y, m, n, k): the hypergeometric CRPS, 2 sum w ((y < x) - a)(x - y) over x = max(0, k - n) .. min(k, m)
+fn crps_hyper(y: f64, m: f64, n: f64, k: f64) -> f64 {
+    var lo = k - n
+    if lo < 0.0f64 { lo = 0.0f64 }
+    var hi = k
+    if m < hi { hi = m }
+    var s = 0.0f64
+    var x = lo
+    while x <= hi {
+        let w = nb.dhyper(x, m, n, k, false)
+        let a = nb.phyper(x, m, n, k, true, false) - 0.5f64 * w
+        var ind = 0.0f64
+        if y < x { ind = 1.0f64 }
+        s += w * (ind - a) * (x - y)
+        x += 1.0f64
+    }
+    ret 2.0f64 * s
+}
+
+fn logs_nbinom(y: f64, size: f64, prob: f64) -> f64 { ret 0.0f64 - nb.dnbinom(y, size, prob, true) }
+
+fn dss_moments(y: f64, mean: f64, v: f64) -> f64 { ret (y - mean) * (y - mean) / v + math.log[f64](v) }
+
+fn dss_nbinom(y: f64, size: f64, prob: f64) -> f64 {
+    let mu = size * (1.0f64 - prob) / prob
+    ret dss_moments(y, mu, mu / prob)
+}
+
+fn dss_t(y0: f64, df: f64, loc: f64, scale: f64) -> f64 {
+    let v = scale * scale * df / (df - 2.0f64)
+    let y = y0 - loc
+    ret y * y / v + math.log[f64](v)
+}
+
+fn dss_beta(y0: f64, a: f64, b: f64, lower: f64, upper: f64) -> f64 {
+    let scale = upper - lower
+    let r = b / a
+    let m = scale / (1.0f64 + r)
+    let v = m * m * r / (1.0f64 + a + b)
+    ret dss_moments(y0 - lower, m, v)
+}
+
+fn dss_gev(y0: f64, shape: f64, loc: f64, scale: f64) -> f64 {
+    var m1 = 0.0f64
+    var v1 = 0.0f64
+    if math.abs[f64](shape) < 1.0e-12f64 {
+        m1 = 0.0f64 - gs.psi(1.0f64)
+        v1 = pi() * pi() / 6.0f64
+    } else {
+        let g1 = math.exp[f64](sp.lgamma(1.0f64 - shape))
+        m1 = (g1 - 1.0f64) / shape
+        v1 = (math.exp[f64](sp.lgamma(1.0f64 - 2.0f64 * shape)) - g1 * g1) / (shape * shape)
+    }
+    ret dss_moments(y0 - loc, m1 * scale, v1 * scale * scale)
+}
+
+fn dss_gpd(y0: f64, shape: f64, loc: f64, scale: f64) -> f64 {
+    let m = scale / (1.0f64 - shape)
+    ret dss_moments(y0 - loc, m, m * m / (1.0f64 - 2.0f64 * shape))
+}
+
+fn dss_llapl(y: f64, ll: f64, sl: f64) -> f64 {
+    let sl2 = sl * sl
+    let ell = math.exp[f64](ll)
+    ret dss_moments(y, ell / (1.0f64 - sl2), ell * ell * (1.0f64 / (1.0f64 - 4.0f64 * sl2) - 1.0f64 / ((1.0f64 - sl2) * (1.0f64 - sl2))))
+}
+
+fn dss_llogis(y: f64, ll: f64, sl: f64) -> f64 {
+    let b = pi() * sl
+    let sb = math.sin[f64](b)
+    let ell = math.exp[f64](ll)
+    ret dss_moments(y, ell * b / sb, ell * ell * 2.0f64 * b / math.sin[f64](2.0f64 * b) - b * b / (sb * sb))
+}
+
+fn logs_beta(y: f64, a: f64, b: f64, lower: f64, upper: f64) -> f64 {
+    let scale = upper - lower
+    ret 0.0f64 - nb.dbeta((y - lower) / scale, a, b, true) + math.log[f64](scale)
+}
+
+fn logs_hyper(y: f64, m: f64, n: f64, k: f64) -> f64 { ret 0.0f64 - nb.dhyper(y, m, n, k, true) }
+
+fn logs_gev(y0: f64, shape: f64, loc: f64, scale: f64) -> f64 {
+    let z = (y0 - loc) / scale
+    var f = 0.0f64
+    if math.abs[f64](shape) < 1.0e-12f64 {
+        f = math.exp[f64](0.0f64 - z - math.exp[f64](0.0f64 - z)) / scale
+    } else {
+        let t0 = 1.0f64 + shape * z
+        if t0 > 0.0f64 {
+            let t = math.pow[f64](t0, 0.0f64 - 1.0f64 / shape)
+            f = math.pow[f64](t, shape + 1.0f64) * math.exp[f64](0.0f64 - t) / scale
+        }
+    }
+    ret 0.0f64 - math.log[f64](f)
+}
+
+fn logs_gpd(y0: f64, shape: f64, loc: f64, scale: f64) -> f64 {
+    let z = (y0 - loc) / scale
+    var lf = 0.0f64
+    if math.abs[f64](shape) < 1.0e-12f64 {
+        lf = 0.0f64 - z - math.log[f64](scale)
+    } else {
+        lf = (0.0f64 - 1.0f64 / shape - 1.0f64) * math.log[f64](1.0f64 + shape * z) - math.log[f64](scale)
+    }
+    ret 0.0f64 - lf
+}
+
+fn logs_llapl(y: f64, ll: f64, sl: f64) -> f64 {
+    let z = (math.log[f64](y) - ll) / sl
+    ret 0.0f64 - math.log[f64](math.exp[f64](0.0f64 - math.abs[f64](z)) / (2.0f64 * sl * y))
+}
+
+fn logs_llogis(y: f64, ll: f64, sl: f64) -> f64 {
+    let z = (math.log[f64](y) - ll) / sl
+    let e = math.exp[f64](0.0f64 - z)
+    ret 0.0f64 - math.log[f64](e / (sl * (1.0f64 + e) * (1.0f64 + e) * y))
+}
+
+fn logs_2pexp(y0: f64, s1: f64, s2: f64, loc: f64) -> f64 {
+    let z = y0 - loc
+    var f = 0.0f64
+    if z < 0.0f64 { f = math.exp[f64](z / s1) / (s1 + s2) } else { f = math.exp[f64](0.0f64 - z / s2) / (s1 + s2) }
+    ret 0.0f64 - math.log[f64](f)
+}
+
+fn logs_2pnorm(y0: f64, s1: f64, s2: f64, loc: f64) -> f64 {
+    let z = y0 - loc
+    var f = 0.0f64
+    if z < 0.0f64 { f = 2.0f64 / (s1 + s2) * dist.dnorm(z / s1, 0.0f64, 1.0f64, false) } else { f = 2.0f64 / (s1 + s2) * dist.dnorm(z / s2, 0.0f64, 1.0f64, false) }
+    ret 0.0f64 - math.log[f64](f)
+}
+
+fn logs_tnorm(y: f64, loc: f64, scale: f64, lower: f64, upper: f64) -> f64 {
+    let p = pn((upper - loc) / scale) - pn((lower - loc) / scale)
+    ret 0.0f64 - (dist.dnorm((y - loc) / scale, 0.0f64, 1.0f64, true) - math.log[f64](scale) - math.log[f64](p))
+}
+
+fn logs_mixnorm(y: f64, m: []const f64, s: []const f64, w: []const f64) -> f64 {
+    var tw = 0.0f64
+    var i = 0usize
+    while i < m.len {
+        tw += w[i]
+        i += 1usize
+    }
+    var d = 0.0f64
+    i = 0usize
+    while i < m.len {
+        d += w[i] / tw * dist.dnorm((y - m[i]) / s[i], 0.0f64, 1.0f64, false) / s[i]
+        i += 1usize
+    }
+    ret 0.0f64 - math.log[f64](d)
+}
+
+fn dss_mixnorm(y: f64, m: []const f64, s: []const f64, w: []const f64) -> f64 {
+    var tw = 0.0f64
+    var i = 0usize
+    while i < m.len {
+        tw += w[i]
+        i += 1usize
+    }
+    var mean = 0.0f64
+    var m2 = 0.0f64
+    i = 0usize
+    while i < m.len {
+        mean += w[i] / tw * m[i]
+        m2 += w[i] / tw * (s[i] * s[i] + m[i] * m[i])
+        i += 1usize
+    }
+    ret dss_moments(y, mean, m2 - mean * mean)
+}

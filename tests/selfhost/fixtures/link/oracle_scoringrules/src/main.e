@@ -20,6 +20,36 @@ fn param(c: *const oracle.Case) -> f64 {
     let k = c.name
     let isc = str.eq(k, "crps")
     let isl = str.eq(k, "logs")
+    let isd = str.eq(k, "dss")
+    if fam == 21usize && isl { ret sr.logs_gev(y, a, b, cc) }
+    if fam == 21usize && isd { ret sr.dss_gev(y, a, b, cc) }
+    if fam == 22usize && isl { ret sr.logs_gpd(y, a, b, cc) }
+    if fam == 22usize && isd { ret sr.dss_gpd(y, a, b, cc) }
+    if fam == 23usize && isl { ret sr.logs_llapl(y, a, b) }
+    if fam == 23usize && isd { ret sr.dss_llapl(y, a, b) }
+    if fam == 24usize && isl { ret sr.logs_llogis(y, a, b) }
+    if fam == 24usize && isd { ret sr.dss_llogis(y, a, b) }
+    if fam == 25usize && isl { ret sr.logs_2pexp(y, a, b, cc) }
+    if fam == 26usize && isl { ret sr.logs_2pnorm(y, a, b, cc) }
+    if fam == 28usize {
+        if isc { ret sr.crps_beta(y, a, b, cc, d) }
+        if isl { ret sr.logs_beta(y, a, b, cc, d) }
+        ret sr.dss_beta(y, a, b, cc, d)
+    }
+    if fam == 29usize {
+        if isc { ret sr.crps_hyper(y, a, b, cc) }
+        ret sr.logs_hyper(y, a, b, cc)
+    }
+    if fam == 30usize {
+        if isl { ret sr.logs_nbinom(y, a, b) }
+        ret sr.dss_nbinom(y, a, b)
+    }
+    if fam == 31usize {
+        if isl { ret sr.logs_t(y, a, b, cc) }
+        ret sr.dss_t(y, a, b, cc)
+    }
+    if fam == 32usize { ret sr.dss_moments(y, a, b) }
+    if fam == 33usize { ret sr.logs_tnorm(y, a, b, cc, d) }
     if fam == 19usize { ret sr.crps_nbinom(y, a, b) }
     if fam == 21usize { ret sr.crps_gev(y, a, b, cc) }
     if fam == 22usize { ret sr.crps_gpd(y, a, b, cc, d) }
@@ -111,6 +141,8 @@ fn weighted(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(x[1usize])
     if str.eq(c.name, "crpsw") { ret sr.crps_edf_w(a, x[0usize], x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n]) }
     if str.eq(c.name, "crpskde") { ret sr.crps_kde(a, x[0usize], x[2usize..2usize + n], x[2usize + n]) }
+    if str.eq(c.name, "logsmix") { ret sr.logs_mixnorm(x[0usize], x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n]) }
+    if str.eq(c.name, "dssmix") { ret sr.dss_mixnorm(x[0usize], x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n]) }
     ret sr.crps_mixnorm(x[0usize], x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n])
 }
 
@@ -123,7 +155,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while at < golden.cases.len {
         let c = &golden.cases[at]
         var got = 0.0f64
-        if str.eq(c.name, "sample") { got = sample(a, c) } else if str.eq(c.name, "crpsw") || str.eq(c.name, "crpskde") || str.eq(c.name, "crpsmix") { got = weighted(a, c) } else { got = param(c) }
+        if str.eq(c.name, "sample") { got = sample(a, c) } else if str.eq(c.name, "crpsw") || str.eq(c.name, "crpskde") || str.eq(c.name, "crpsmix") || str.eq(c.name, "logsmix") || str.eq(c.name, "dssmix") { got = weighted(a, c) } else { got = param(c) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
