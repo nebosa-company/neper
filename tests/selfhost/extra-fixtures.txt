@@ -375,3 +375,4 @@ oracle_copula
 oracle_matchit
 oracle_mlogit
 oracle_flexsurv
+oracle_timereg

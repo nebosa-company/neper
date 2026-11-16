@@ -46970,3 +46970,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `flexsurvpkg.fit` maximises the right-censored log-likelihood of five families with covariates on the location parameter, parameters kept on flexsurv's `res.t` scale (log shape and log scale for Weibull and log-logistic, log rate for the exponential, meanlog and log sdlog for the lognormal, shape and log rate for the Gompertz). Derivatives are central differences of the exact log-likelihood; the Newton step is used when it is an ascent direction, otherwise a gradient step scaled by the largest diagonal curvature, with step halving. Without that fallback the lognormal fits stalled far from the optimum (log-likelihood -192 against -140).
 
 **Result.** `oracle_flexsurv` agrees with flexsurv 2.x on Windows (60 values over 60 to 180 observations): log-likelihood at 1e-4 and parameters at 1e-3, where flexsurv's own BFGS leaves about 4e-4 of slack even with `reltol = 1e-14`. Linux pending. L440 stays partial: ancillary covariates, generalised gamma, splines, standard errors.
+
+## D6641 — timereg: Aalen additive hazards
+
+**Decision.** `timeregpkg.aalen` adds, at each event time, `(X'X)^-1 x_i` to the cumulative regression coefficients, X being the intercept and covariates of the risk set. A time whose risk-set design is singular still gets a row, carrying the previous cumulative values unchanged; singular is a 1-norm condition number above about 1e11, since a design of rank below the number of columns does not always fail an exact-zero pivot test. Dropping those rows gave one row too few and the wrong final coefficients on 22 of 72 values.
+
+**Result.** `oracle_timereg` agrees with timereg `aalen(..., n.sim = 0, robust = 0)` on Windows (72 values: row count, final row and every entry); Linux pending. L490 stays partial: robust variances, tests, constant effects, other models.

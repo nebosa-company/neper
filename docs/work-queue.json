@@ -1681,10 +1681,10 @@
       "group": "CRAN parity",
       "order": 783,
       "title": "timereg: Aalen additive and Cox-Aalen hazard models",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 853). Mid. Needs L311. Acceptance, equal to timereg: aalen, cox.aalen, comp.risk, prop.excess, with the cumulative regression functions, resampled confidence bands under set.seed and the Kolmogorov-Smirnov and Cramer-von Mises tests."
+      "evidence": "Partial (D6641). e.algo.stat.timeregpkg.aalen (Aalen additive hazards, intercept plus covariates, cumulative regression coefficients at every event time) equals timereg aalen cum on Windows (oracle_timereg, 72 values; Linux pending). Open: robust variances and resampling tests, constant effects (semi-parametric additive model), weights, Cox-Aalen, other timereg models (comp.risk, cox.aalen, dynreg). Was: Open (CRAN rank 853). Mid. Needs L311. Acceptance, equal to timereg: aalen, cox.aalen, comp.risk, prop.excess, with the cumulative regression functions, resampled confidence bands under set.seed and the Kolmogorov-Smirnov and Cramer-von Mises tests."
     },
     {
       "id": "L491",

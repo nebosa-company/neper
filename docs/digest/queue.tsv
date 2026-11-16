@@ -151,7 +151,7 @@ L467	library	0	280	hetGP: heteroskedastic Gaussian processes	Open (CRAN rank 784
 L494	library	0	261	bayesm: Bayesian econometrics	Open (CRAN rank 829).
 L514	library	0.1	641	copula: dependence models	Partial (D6637).
 L311	library	0.1	930	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	Partly done (D6056): e.algo.stat.cox.coxph (Breslow and Efron, one stratum) equals survival on 152 values on Windows (oracle_coxph);
-L490	library	0	249	timereg: Aalen additive and Cox-Aalen hazard models	Open (CRAN rank 853).
+L490	library	0.15	657	timereg: Aalen additive and Cox-Aalen hazard models	Partial (D6641).
 L491	library	0	208	riskRegression: risk prediction scoring	Open (CRAN rank 850).
 L492	library	0	236	coxme: mixed-effects Cox models	Open (CRAN rank 900).
 L440	library	0.15	855	flexsurv and rstpm2: flexible parametric survival models	Partial (D6640).
