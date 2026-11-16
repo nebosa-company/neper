@@ -54,6 +54,7 @@ fn answer(c: *const oracle.Case) -> f64 {
         if d3 == 1usize { ret ed.zib_d(vx, w1, w2, w3) }
         if d3 == 2usize { ret ed.zinb_d(vx, w1, w2, w3) }
         if d3 == 3usize { ret ed.gpois_d(vx, w1, w2) }
+        if d3 == 5usize { ret ed.skellam_d(vx, w1, w2) }
         ret ed.tpois_d(vx, w1, w2, w3)
     }
     let di = usize(x[0usize])

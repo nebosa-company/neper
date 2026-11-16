@@ -8,6 +8,7 @@ use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
+use e.algo.stat.gslfns as gsl
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
 
@@ -326,4 +327,10 @@ fn gpois_d(x: f64, shape: f64, scale: f64) -> f64 {
 fn tpois_d(x: f64, l: f64, a: f64, b: f64) -> f64 {
     if x <= a || x > b || x != math.floor[f64](x) { ret 0.0f64 }
     ret nm.dpois(x, l, false) / (nm.ppois(b, l, true, false) - nm.ppois(a, l, true, false))
+}
+
+// Skellam(mu1, mu2): exp(-(mu1 + mu2)) (mu1 / mu2)^(x / 2) I_|x|(2 sqrt(mu1 mu2))
+fn skellam_d(x: f64, m1: f64, m2: f64) -> f64 {
+    if x != math.floor[f64](x) { ret 0.0f64 }
+    ret math.exp[f64](0.0f64 - (m1 + m2)) * math.pow[f64](m1 / m2, x / 2.0f64) * gsl.bessel_inu(math.abs[f64](x), 2.0f64 * math.sqrt[f64](m1 * m2))
 }

@@ -3448,4 +3448,5 @@ D6576	798	pls: cppls
 D6577	631	pls: the jackknife
 D6578	985	pls: cppls with Y.add, and a stable canonical direction
 D6579	625	extraDistr: discrete and truncated families
-D6580	516	extraDistr: zero-inflated, gamma-Poisson and truncated Poisson masses
+D6580	517	extraDistr: zero-inflated, gamma-Poisson and truncated Poisson masses
+D6581	374	extraDistr: Skellam

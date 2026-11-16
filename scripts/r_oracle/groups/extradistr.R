@@ -41,4 +41,5 @@ for (rep in 1:3) {
     add2("d3", c(3, sh, sc, 0, xx), dgpois(xx, sh, scale = sc)); add2("d3", c(4, l, a, b, xx), dtpois(xx, l, a, b))
   }
 }
+for (rep in 1:4) { m1 <- runif(1, 0.5, 6); m2 <- runif(1, 0.5, 6); for (xx in c(-6, -2, 0, 1, 3, 7)) add2("d3", c(5, m1, m2, 0, xx), dskellam(xx, m1, m2)) }
 emit("extradistr", "extraDistr", list(cases))

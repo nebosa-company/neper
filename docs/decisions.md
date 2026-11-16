@@ -46654,3 +46654,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `zip_d`, `zib_d`, `zinb_d` mix the base mass with a point mass at 0 (`pi + (1 - pi) f(0)` at zero, `(1 - pi) f(x)` elsewhere), `gpois_d` is the negative binomial with `prob = 1/(1 + scale)`, and `tpois_d` renormalises the Poisson mass on `a < x <= b` by `P(X <= b) - P(X <= a)`.
 
 **Result.** `oracle_extradistr` agrees with extraDistr on 75 new masses on Windows (968 cases in all); Linux pending. L422 stays partial.
+
+## D6581 — extraDistr: Skellam
+
+**Decision.** `skellam_d` is `exp(-(m1 + m2)) (m1/m2)^(x/2) I_|x|(2 sqrt(m1 m2))` with the modified Bessel function of the first kind from `gslfns.bessel_inu`.
+
+**Result.** `oracle_extradistr` agrees with extraDistr on 24 Skellam masses (negative, zero and positive counts) on Windows (992 cases in all); Linux pending. L422 stays partial.
