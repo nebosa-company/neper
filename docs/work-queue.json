@@ -1879,10 +1879,10 @@
       "group": "CRAN parity",
       "order": 811,
       "title": "rms: regression modelling strategies",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 395). Large. Needs L305 and L311. Acceptance, equal to rms: lrm, orm, ols and cph with rcs, pol and strat terms, summary and anova, contrast, validate and calibrate under set.seed, predict, Predict and nomogram data, bootcov, robcov."
+      "evidence": "Partial (D6629). e.algo.stat.rmspkg equals rms on Windows: rcspline.eval restricted cubic spline basis with explicit knots (norm 2), ols (coefficients, standard errors, R2, sigma) and unpenalised binary lrm (coefficients, LR chi-square, C, Dxy, Nagelkerke R2, Brier) with a spline term plus a linear covariate (oracle_rms, 264 values; Linux pending). Open: datadist knot placement, penalised and ordinal lrm, cph and psm, validate and calibrate, anova, Predict, robust covariance, other bases (pol, lsp). Was: Open (CRAN rank 395). Large. Needs L305 and L311. Acceptance, equal to rms: lrm, orm, ols and cph with rcs, pol and strat terms, summary and anova, contrast, validate and calibrate under set.seed, predict, Predict and nomogram data, bootcov, robcov."
     },
     {
       "id": "L375",

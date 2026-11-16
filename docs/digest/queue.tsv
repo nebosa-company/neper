@@ -169,7 +169,7 @@ L351	library	0.15	680	survey: design-based inference	Partial (D6626).
 L352	library	0	306	ncdf4: NetCDF and HDF5 files	Open (CRAN rank 237).
 L371	library	0.15	866	coin: conditional and permutation tests	Partial (D6625).
 L373	library	0	279	bnlearn: Bayesian network learning	Open (CRAN rank 397).
-L374	library	0	249	rms: regression modelling strategies	Open (CRAN rank 395).
+L374	library	0.2	759	rms: regression modelling strategies	Partial (D6629).
 L375	library	0	219	partykit: conditional inference trees and MOB	Open (CRAN rank 386).
 L377	library	0	419	xgboost: gradient-boosted trees	Open (CRAN rank 306).
 L398	library	0	447	rugarch: the GARCH family	Open (CRAN rank 497).

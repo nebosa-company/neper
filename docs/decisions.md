@@ -46898,3 +46898,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `apepkg.nj` joins the pair minimising `(m - 2) d_ij - r_i - r_j`, gives the two new edges `d_ij/2 + (r_i - r_j)/(2(m-2))` and the remainder, updates distances by `(d_ik + d_jk - d_ij)/2`, and closes the last three nodes with the three-point formulae, producing the `2n - 3` edge lengths. They are returned sorted ascending, so the comparison with `ape::nj` is the sorted multiset (the topology is not exposed); non-additive input gives negative lengths in both.
 
 **Result.** `oracle_ape` agrees with ape on the total and rank-weighted sum on Windows (60 values, 4 to 30 taxa, euclidean and manhattan distances); Linux pending. L350 stays partial: topology, bionj, upgma, rooting, cophenetic distances, tree comparison.
+
+## D6629 — rms: spline basis, ols and lrm
+
+**Decision.** `rmspkg.rcs` builds the restricted cubic spline basis for given knots: x, then for j = 1 .. k-2 the cubic terms `(x - t_j)+^3 - (x - t_{k-1})+^3 (t_k - t_j)/(t_k - t_{k-1}) + (x - t_k)+^3 (t_{k-1} - t_j)/(t_k - t_{k-1})` divided by `(t_k - t_1)^2`. `ols` and the binary `lrm` take that design plus covariates; lrm is Newton to a step of 1e-13, with the C index as the concordant-pair share (ties one half), Dxy = 2(C - 0.5) and Nagelkerke R2 `(1 - exp(-LR/n)) / (1 - exp(2 LL0 / n))`.
+
+**Result.** `oracle_rms` agrees with rms on Windows (264 values, 60 to 200 observations, 3 to 5 knots); Linux pending. L374 stays partial: datadist knots, penalisation, ordinal and survival models, validation tools.
