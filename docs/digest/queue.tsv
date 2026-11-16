@@ -95,7 +95,7 @@ L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
 L346	library	0	284	mice: imputation parity	Open (CRAN rank 293).
 L360	library	0	374	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Open (CRAN ranks 337, 348, 393, 355;
 L361	library	0	272	segmented and strucchange: breakpoints and structural change	Open (CRAN ranks 338, 344).
-L362	library	0	247	fitdistrplus: fitting and comparing distributions	Open (CRAN rank 334).
+L362	library	0.15	493	fitdistrplus: fitting and comparing distributions	Partial (D6432).
 L363	library	0.3	613	DescTools: descriptive statistics and tests	Partial (D6429, D6430 table association measures, D6431 kappa, lambda, tau, OR, Q).
 L365	library	0	233	ks: multivariate kernel density estimation	Open (CRAN rank 331).
 L367	library	0.3	582	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).

@@ -3299,4 +3299,5 @@ D6427	777	lpSolve: e.math.opt.simplex against lp("max")
 D6428	688	clue and lpSolve: the assignment problem
 D6429	924	DescTools: Skew, Kurt, Gini and the simple location and spread measures
 D6430	914	DescTools: association measures of a contingency table
-D6431	890	DescTools: kappa, lambda, Goodman-Kruskal tau, odds ratio and Yule's Q
+D6431	891	DescTools: kappa, lambda, Goodman-Kruskal tau, odds ratio and Yule's Q
+D6432	924	fitdistrplus: closed-form fits and gofstat

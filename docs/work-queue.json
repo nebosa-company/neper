@@ -1065,10 +1065,10 @@
       "group": "CRAN parity",
       "order": 696,
       "title": "fitdistrplus: fitting and comparing distributions",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 334). Mid. Needs L306 and the e.math.dist families. Acceptance, equal to fitdistrplus: fitdist by mle, mme, qme and mge, fitdistcens, gofstat, bootdist and bootdistcens under set.seed, descdist, denscomp data, quantile and confint."
+      "evidence": "Partial (D6432). Closed-form norm, lnorm and exp fits with loglik, AIC, BIC, KS, CvM and AD equal fitdistrplus on Windows (oracle_fitdist; Linux pending). Open: iterative fits, other methods, standard errors, bootstrap, censoring, discrete. Was: Open (CRAN rank 334). Mid. Needs L306 and the e.math.dist families. Acceptance, equal to fitdistrplus: fitdist by mle, mme, qme and mge, fitdistcens, gofstat, bootdist and bootdistcens under set.seed, descdist, denscomp data, quantile and confint."
     },
     {
       "id": "L363",

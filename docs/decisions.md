@@ -45760,3 +45760,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.desctools` gains Cohen's kappa of a square table ((po - pe) / (1 - pe) from the diagonal and the margins), Goodman-Kruskal lambda (direction "row" uses the sum of the column maxima against the largest row total, "column" the converse, "symmetric" the pooled form), Goodman-Kruskal tau (direction "row" is sum p_ij^2 / p_.j less sum p_i.^2 over one minus the latter; "column" the transpose, which is the reverse of what the name suggests, found by comparison), the 2 by 2 odds ratio and Yule's Q (OR - 1) / (OR + 1). All equal DescTools to 1e-9 on twenty random tables. Not here: the confidence intervals and p values, Winsorize, Mode, the weighted kappa and the rest of the package.
 
 **Result.** `oracle_desctools` equals DescTools on 600 cases on Windows; Linux pending. L363 stays partial.
+
+## D6432 — fitdistrplus: closed-form fits and gofstat
+
+`e.algo.stat.fitdist` fits the normal, log-normal and exponential distributions by maximum likelihood in closed form (the scale with divisor n, the log-normal on the logs, the exponential rate n / sum) and reports the log-likelihood, AIC and BIC and gofstat's Kolmogorov-Smirnov, Cramer-von Mises (1 / (12 n) + sum (F - (2i - 1) / (2n))^2) and Anderson-Darling statistics of the fitted distribution. All agree with fitdist and gofstat to 1e-6 relative on 18 samples of 15 to 60 values (the package's maximum-likelihood step is closed form for these three, so the tolerance only absorbs its printing). Not here: the iterative fits, the other estimation methods, the standard errors (numerical Hessian), bootstrap, censoring and the discrete distributions.
+
+**Result.** `oracle_fitdist` agrees with fitdistrplus on 138 cases on Windows; Linux pending. L362 is partial.
