@@ -39,6 +39,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "cond_t0") || str.eq(c.name, "cond_t") || str.eq(c.name, "cond_tsum") {
+        let seed = i64(z[0usize])
+        let st = u8(z[1usize])
+        let r = usize(z[2usize])
+        let n = usize(z[3usize])
+        var g: rng.Rng = zero
+        rng.seed(&g, seed)
+        let (b, be) = bt.censboot_cond(a, &g, z[4usize..4usize + n], z[4usize + n..4usize + 2usize * n], st, r)
+        if be != ok { ret nan }
+        if str.eq(c.name, "cond_t0") { ret b.t0 }
+        if str.eq(c.name, "cond_t") { ret b.t[usize(z[4usize + 2usize * n])] }
+        var s = 0.0f64
+        var i = 0usize
+        while i < r {
+            s += b.t[i]
+            i += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "weird_t0") || str.eq(c.name, "weird_t") || str.eq(c.name, "weird_tsum") {
         let seed = i64(z[0usize])
         let st = u8(z[1usize])

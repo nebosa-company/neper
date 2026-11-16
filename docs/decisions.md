@@ -46324,3 +46324,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `boot.censboot_weird` follows cens.weird for one stratum: the Kaplan-Meier risk-set sizes and death counts at the distinct times, `rbinom(m, n.risk, n.event/n.risk)` per time (redrawn while there are no deaths), the drawn deaths plus the censored cases, then the statistic of the sorted times. rbinom is rdist's R-exact port, so the stream agrees after set.seed.
 
 **Result.** `oracle_boot3` agrees with boot on the new weird cases on Windows (1170 values in all); Linux pending. censboot model and cond need coxph and survfit fits and stay open; L321 at 0.95.
+
+## D6526 — boot: censboot cond
+
+**Decision.** `boot.censboot_cond` (one stratum, no Cox fit) follows cens.resamp: failure times drawn with probabilities `-diff(c(1, S_F))` from the Kaplan-Meier curve of (time, status), then for each failure the censoring time drawn among the censoring-KM times beyond its own time (a censored case keeps its time), the two matrices filled column-major in R's order through rdist's sample.int-with-prob. The KM must multiply as `s * ((n - d) / n)`: the form `1 - d/n` differs in the last bits, and the revsort order of near-tied probabilities then changes every draw.
+
+**Result.** `oracle_boot3` agrees with boot on the cond cases on Windows (1410 values in all); Linux pending. censboot model and cond with a coxph fit stay open; L321 at 0.95.

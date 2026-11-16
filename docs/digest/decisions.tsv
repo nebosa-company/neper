@@ -3389,4 +3389,9 @@ D6517	899	modeest: naive
 D6518	1059	isotone: activeSet with the LS solver
 D6519	525	isotone: activeSet with the L1 solver
 D6520	502	isotone: activeSet with the quantile solver
-D6521	611	pROC: coords at thresholds
+D6521	612	pROC: coords at thresholds
+D6522	510	pROC: coords best
+D6523	620	pROC: partial AUC
+D6524	648	modeest: vieu
+D6525	610	boot: censboot weird
+D6526	780	boot: censboot cond

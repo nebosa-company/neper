@@ -773,3 +773,157 @@ fn censboot_weird(a: *mem.Arena, g: *rng.Rng, time: []const f64, status: []const
     if ie != ok { ret (none, ie) }
     ret (Boot { t0: stat_of(a, kind, time), t: t, idx: idx, n: n, r: nrep }, ok)
 }
+
+// the Kaplan-Meier curve of (time, event): distinct times into ut, S(t) into sv; a final point (Inf, 0) is appended when S stays above 0; returns the number of points
+fn km_curve(time: []const f64, event: []const f64, ut: []f64, sv: []f64) -> usize {
+    let n = time.len
+    var m = 0usize
+    var i = 0usize
+    while i < n {
+        var seen = false
+        var j = 0usize
+        while j < m {
+            if ut[j] == time[i] { seen = true }
+            j += 1usize
+        }
+        if !seen {
+            ut[m] = time[i]
+            m += 1usize
+        }
+        i += 1usize
+    }
+    sort_up(ut[0usize..m])
+    var s = 1.0f64
+    var k = 0usize
+    while k < m {
+        var rk = 0.0f64
+        var d = 0.0f64
+        i = 0usize
+        while i < n {
+            if time[i] >= ut[k] { rk += 1.0f64 }
+            if time[i] == ut[k] && event[i] > 0.5f64 { d += 1.0f64 }
+            i += 1usize
+        }
+        s = s * ((rk - d) / rk)
+        sv[k] = s
+        k += 1usize
+    }
+    if sv[m - 1usize] > 0.0f64 {
+        ut[m] = 1.0f64 / 0.0f64
+        sv[m] = 0.0f64
+        m += 1usize
+    }
+    ret m
+}
+
+// censboot(sim = "cond", cox = NULL) with one stratum: failure times from the KM of (time, status), censoring times from the KM of the censoring distribution given the case's own time, as cens.resamp draws them
+fn censboot_cond(a: *mem.Arena, g: *rng.Rng, time: []const f64, status: []const f64, kind: u8, nrep: usize) -> (Boot, err) {
+    var none: Boot = zero
+    let n = time.len
+    let (cev, e0) = mem.alloc[f64](a, n)
+    let (fu, e1) = mem.alloc[f64](a, n + 1usize)
+    let (fs, e2) = mem.alloc[f64](a, n + 1usize)
+    let (gu, e3) = mem.alloc[f64](a, n + 1usize)
+    let (gs, e4) = mem.alloc[f64](a, n + 1usize)
+    let (pf, e5) = mem.alloc[f64](a, n + 1usize)
+    let (pg, e6) = mem.alloc[f64](a, n + 1usize)
+    let (y0, e7) = mem.alloc[f64](a, n * nrep)
+    let (c0, e8) = mem.alloc[f64](a, n * nrep)
+    let (buf, e9) = mem.alloc[f64](a, n)
+    let (t, e10) = mem.alloc[f64](a, nrep)
+    let (pri, e11) = mem.alloc[f64](a, n + 1usize)
+    let (ti, e12) = mem.alloc[f64](a, n + 1usize)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok { ret (none, e0) }
+    var i = 0usize
+    while i < n {
+        if status[i] > 0.5f64 { cev[i] = 0.0f64 } else { cev[i] = 1.0f64 }
+        i += 1usize
+    }
+    let mf = km_curve(time, status, fu, fs)
+    let mg = km_curve(time, cev, gu, gs)
+    i = 0usize
+    while i < mf {
+        var prev = 1.0f64
+        if i > 0usize { prev = fs[i - 1usize] }
+        pf[i] = prev - fs[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < mg {
+        var prev = 1.0f64
+        if i > 0usize { prev = gs[i - 1usize] }
+        pg[i] = prev - gs[i]
+        i += 1usize
+    }
+    // y0: matrix(bsample(time, n * R, prob), R, n), column-major
+    let (dy, dye) = rdist.sample_prob(a, g, mf, n * nrep, true, pf[0usize..mf])
+    if dye != ok { ret (none, dye) }
+    i = 0usize
+    while i < n * nrep {
+        y0[i] = fu[usize(dy[i]) - 1usize]
+        i += 1usize
+    }
+    // c0: per case, nrep draws among the censoring times beyond its own time
+    i = 0usize
+    while i < n {
+        if status[i] < 0.5f64 {
+            var r = 0usize
+            while r < nrep {
+                c0[r + nrep * i] = time[i]
+                r += 1usize
+            }
+        } else {
+            var cnt = 0usize
+            var q = 0usize
+            while q < mg {
+                if gu[q] > time[i] {
+                    ti[cnt] = gu[q]
+                    pri[cnt] = pg[q]
+                    cnt += 1usize
+                }
+                q += 1usize
+            }
+            if cnt == 1usize {
+                var r = 0usize
+                while r < nrep {
+                    c0[r + nrep * i] = ti[0usize]
+                    r += 1usize
+                }
+            } else {
+                let (dc, dce) = rdist.sample_prob(a, g, cnt, nrep, true, pri[0usize..cnt])
+                if dce != ok { ret (none, dce) }
+                var r = 0usize
+                while r < nrep {
+                    c0[r + nrep * i] = ti[usize(dc[r]) - 1usize]
+                    r += 1usize
+                }
+            }
+        }
+        i += 1usize
+    }
+    // both infinite: the largest failure time
+    var maxf = 0.0f64
+    i = 0usize
+    while i < n {
+        if status[i] > 0.5f64 && time[i] > maxf { maxf = time[i] }
+        i += 1usize
+    }
+    var r = 0usize
+    while r < nrep {
+        i = 0usize
+        while i < n {
+            var yy = y0[r + nrep * i]
+            let cc = c0[r + nrep * i]
+            let inf = 1.0f64 / 0.0f64
+            if yy == inf && cc == inf { yy = maxf }
+            if yy < cc { buf[i] = yy } else { buf[i] = cc }
+            i += 1usize
+        }
+        sort_up(buf)
+        t[r] = stat_of(a, kind, buf)
+        r += 1usize
+    }
+    let (idx, ie) = mem.alloc[i64](a, 1usize)
+    if ie != ok { ret (none, ie) }
+    ret (Boot { t0: stat_of(a, kind, time), t: t, idx: idx, n: n, r: nrep }, ok)
+}
