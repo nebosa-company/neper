@@ -23,4 +23,15 @@ for (rep in 1:6) {
     }
   }
 }
+#   fracdiff.sim: (3, seed, mu, n, d, p, q, n.start, ar[p], ma[q], pos) fn "sim" the element at pos
+for (rep in 1:12) {
+  n <- c(30, 60, 100)[(rep - 1) %% 3 + 1]; d <- c(-0.3, 0.2, 0.45, 0.1)[(rep - 1) %% 4 + 1]
+  p <- c(0, 1, 2)[(rep - 1) %% 3 + 1]; q <- c(0, 1, 2, 1)[(rep - 1) %% 4 + 1]
+  ar <- if (p) round(runif(p, -0.4, 0.4), 3) else NULL; ma <- if (q) round(runif(q, -0.6, 0.6), 3) else NULL
+  ns <- if (p) 40 else q; mu <- c(0, 5)[(rep %% 2) + 1]
+  set.seed(1000 + rep); s <- fracdiff.sim(n, ar = ar, ma = ma, d = d, mu = mu, n.start = ns)$series
+  a <- c(3, 1000 + rep, mu, n, d, p, q, ns, ar, ma)
+  for (i in c(1, 2, 3, n %/% 2, n - 1, n)) add("sim", c(a, i - 1), s[i])
+  add("simsum", c(a, 0), sum(s))
+}
 emit("fracdiff", "fracdiff", list(cases))

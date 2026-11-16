@@ -2,6 +2,7 @@
 // comes from `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R fracdiff`; the layout is at the top
 // of scripts/r_oracle/groups/fracdiff.R.
 
+use e.algo.rand.r as rng
 use e.algo.stat.fracdiff as fd
 use e.io
 use e.mem
@@ -13,6 +14,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let kind = u8(x[0usize])
     let n = usize(x[3usize])
+    if kind == 3u8 {
+        let p = usize(x[5usize])
+        let q = usize(x[6usize])
+        var g: rng.Rng = zero
+        rng.seed(&g, i64(x[1usize]))
+        let (s, e) = fd.fracdiff_sim(a, &g, n, x[8usize..8usize + p], x[8usize + p..8usize + p + q], x[4usize], x[2usize], usize(x[7usize]))
+        if e != ok { os.exit(6) }
+        if str.eq(c.name, "simsum") {
+            var t = 0.0f64
+            var i = 0usize
+            while i < s.len {
+                t += s[i]
+                i += 1usize
+            }
+            ret t
+        }
+        ret s[usize(x[x.len - 1usize])]
+    }
     let data = x[4usize..4usize + n]
     if kind == 0u8 {
         let (v, e) = fd.diffseries(a, data, x[1usize])

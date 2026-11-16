@@ -45142,3 +45142,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `Bin` now carries the per-observation cell ids (`cid`, the IDs = TRUE slot). `hex_tapply` groups a data vector by cell in cell order (sum, mean, length, min, max). `smooth` is `hsm.f` on the lattice padded by two cells each side (integer weights), `erode` is `herode.f` with R's cdfcut selection of the cells; both keep the Fortran's neighbour tables and its out-of-bounds zeroing.
 
 **Result.** `oracle_hexbin` equals hexbin on 3674 more cases on Windows; Linux pending. L385 is closed.
+
+## D6130 — fracdiff.sim
+
+**Context.** L388 had diffseries and the two periodogram estimators; fracdiff.sim was open.
+
+**Decision.** `fracdiff_sim` ports `fdsim.c`: the Durbin-Levinson recursion for the ARFIMA(0,d,0) series with its variance update, then the inverse ARMA filter, over innovations drawn the way R draws them (the n + q innovations first, because `length(innov)` forces them before `start.innov`, then the n.start start-up values). The gamma values come from nmath's gammafn where the package has SLATEC's dgamma. The burn-in n.start is an argument; R's default for an AR part needs the roots of the AR polynomial and is not computed here.
+
+**Result.** `oracle_fracdiff` equals fracdiff on the simulated series (elements and sums, with and without AR, MA and mean) on Windows; Linux pending. The Haslett-Raftery fit stays open on L388.
