@@ -119,4 +119,24 @@ for (sd in c(11, 2024)) {
   for (pp in list(c(10, 5, 30), c(4, 9, 25))) { set.seed(sd); rv_add("rv_gh", sd, pp, rghyper(rv_n, pp[1], pp[2], pp[3])) }
   set.seed(sd); rv_add("rv_kw", sd, c(0, 4, 40, 0.1), rKruskalWallis(rv_n, 4, 40, 0.1), 1e-8)
 }
+# the non-classic generalised hypergeometric varieties: "gv" args (what, x or p, a, k, N, field): what 0 d, 1 p (lower), 2 upper tail, 3 quantile, 4 moments (field 0 mean 1 median 2 mode 3 variance 4 third 5 fourth)
+set.seed(7)
+n_gv <- 0
+for (try_gv in 1:6000) {
+  if (n_gv >= 90) break
+  a <- sample(c(-6:8, seq(-5.5, 7.5, by = 1)), 1); k <- sample(c(-6:8, seq(-5.5, 7.5, by = 1)), 1); N <- sample(c(-4:25, seq(-3.5, 24.5, by = 1)), 1)
+  ty <- tryCatch(tghyper(a, k, N), error = function(e) "classic"); if (!is.character(ty) || grepl("classic|no type", ty)) next
+  xs <- 0:6; pv <- suppressWarnings(pghyper(xs, a, k, N)); dv <- suppressWarnings(dghyper(xs, a, k, N)); uv <- suppressWarnings(pghyper(xs, a, k, N, lower.tail = FALSE))
+  if (!all(is.finite(pv[1])) ) next
+  n_gv <- n_gv + 1
+  for (i in seq_along(xs)) {
+    if (is.finite(dv[i])) add("gv", c(0, xs[i], a, k, N, 0), dv[i], 1e-8)
+    if (is.finite(pv[i])) add("gv", c(1, xs[i], a, k, N, 0), pv[i], 1e-8)
+    if (is.finite(uv[i])) add("gv", c(2, xs[i], a, k, N, 0), uv[i], 1e-8)
+  }
+  p200 <- suppressWarnings(pghyper(200, a, k, N)); if (!is.finite(p200) || p200 < 0.995) next
+  for (pr in c(0.1, 0.5, 0.9)) { qv <- suppressWarnings(qghyper(pr, a, k, N)); if (is.finite(qv)) add("gv", c(3, pr, a, k, N, 0), qv, 1e-9) }
+  s <- tryCatch(suppressWarnings(sghyper(a, k, N)), error = function(e) NULL)
+  if (!is.null(s)) { vals <- c(s$Mean, s$Median, s$Mode, s$Variance, s$ThirdCentralMoment, s$FourthCentralMoment); for (f in 1:6) if (is.finite(vals[f])) add("gv", c(4, 0, a, k, N, f - 1), vals[f], 1e-7) }
+}
 emit("suppdists", "SuppDists", list(cases))

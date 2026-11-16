@@ -208,6 +208,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret xs[ri]
     }
+    if str.eq(nm, "gv") {
+        let gk = z[0usize]
+        let gx = z[1usize]
+        let ga = z[2usize]
+        let gm = z[3usize]
+        let gn = z[4usize]
+        let gt = sd.gh_type(ga, gm, gn)
+        if gt == 0i64 || gt == 9i64 { ret nan }
+        if gk == 0.0f64 { ret sd.gh_f(gx, ga, gm, gn, gt) }
+        if gk == 1.0f64 { ret sd.gh_p(gx, ga, gm, gn, gt) }
+        if gk == 2.0f64 { ret 1.0f64 - sd.gh_p(gx, ga, gm, gn, gt) }
+        if gk == 3.0f64 { ret sd.gh_x(gx, ga, gm, gn, gt) }
+        let gmo = sd.gh_moments(ga, gm, gn, gt)
+        let gf = usize(z[5usize])
+        if gf == 0usize { ret gmo.mean }
+        if gf == 1usize { ret gmo.median }
+        if gf == 2usize { ret gmo.mode }
+        if gf == 3usize { ret gmo.variance }
+        if gf == 4usize { ret gmo.third }
+        ret gmo.fourth
+    }
     if str.eq(nm, "gh_d") { ret sd.ghyper_d(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_p") { ret sd.ghyper_p(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_q") { ret sd.ghyper_q(z[3usize], z[0usize], z[1usize], z[2usize]) }

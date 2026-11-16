@@ -2125,3 +2125,245 @@ fn rv_corr(a: *mem.Arena, r: *rng.Rng, x: []f64, rho: f64, n: usize) -> err {
     }
     ret ok
 }
+
+// ---- the generalised hypergeometric varieties of Kemp and Kemp (SuppDists dghyper, pghyper, qghyper, sghyper beyond the classic type) ----
+
+// 0 classic, 1 IAi, 2 IAii, 3 IB, 4 IIA, 5 IIB, 6 IIIA, 7 IIIB, 8 IV, 9 none
+fn gh_type(a: f64, m: f64, n: f64) -> i64 {
+    let ia = a == math.floor[f64](a)
+    let im = m == math.floor[f64](m)
+    let in_ = n == math.floor[f64](n)
+    if 0.0f64 < a && 0.0f64 < n && 0.0f64 < m && ia && in_ && im { ret 0i64 }
+    if 0.0f64 < a && 0.0f64 < n && 0.0f64 < m && im && m - 1.0f64 < a && a < n - (m - 1.0f64) { ret 1i64 }
+    if 0.0f64 < a && 0.0f64 < n && 0.0f64 < m && ia && a - 1.0f64 < m && m < n - (a - 1.0f64) { ret 2i64 }
+    if 0.0f64 < a && 0.0f64 < n && 0.0f64 < m && !ia && !im && a + m - 1.0f64 < n && math.floor[f64](a) == math.floor[f64](m) { ret 3i64 }
+    if a < 0.0f64 && n < m + a - 1.0f64 && 0.0f64 < m && im { ret 4i64 }
+    if a < 0.0f64 && 0.0f64 - 1.0f64 < n && n < m + a - 1.0f64 && 0.0f64 < m && !im && math.floor[f64](m) == math.floor[f64](m + a - 1.0f64 - n) { ret 5i64 }
+    if 0.0f64 < a && n < m - 1.0f64 && m < 0.0f64 && ia { ret 6i64 }
+    if 0.0f64 < a && 0.0f64 - 1.0f64 < n && n < a + m - 1.0f64 && m < 0.0f64 && !ia && math.floor[f64](a) == math.floor[f64](a + m - 1.0f64 - n) { ret 7i64 }
+    if a < 0.0f64 && 0.0f64 - 1.0f64 < n && m < 0.0f64 { ret 8i64 }
+    ret 9i64
+}
+
+fn gh_check(k: f64, a: f64, m: f64, v: i64) -> bool {
+    if v == 0i64 { ret true }
+    if v == 1i64 { ret 0.0f64 <= k && k <= math.trunc[f64](m) }
+    if v == 2i64 { ret 0.0f64 <= k && k <= math.trunc[f64](a) }
+    if v == 4i64 { ret 0.0f64 <= k && k <= math.trunc[f64](m) }
+    if v == 6i64 { ret 0.0f64 <= k && k <= math.trunc[f64](a) }
+    if v == 9i64 { ret false }
+    ret 0.0f64 <= k
+}
+
+// the Gauss hypergeometric series at 1 as the package sums it (at most 100 terms)
+fn gh_gauss1(a: f64, b: f64, c: f64) -> f64 {
+    if c < 0.0f64 && math.floor[f64](c) == c { ret 0.0f64 / 0.0f64 }
+    var sum = 0.0f64
+    var term = 1.0f64
+    var j = 1i64
+    var go = true
+    while go {
+        let dj = f64(j)
+        let djm1 = dj - 1.0f64
+        sum += term
+        term *= ((a + djm1) * (b + djm1)) / (c + djm1) * (1.0f64 / dj)
+        j += 1i64
+        go = !(sum + term == sum || j > 100i64)
+    }
+    ret sum
+}
+
+fn gh_maxexp() -> f64 { ret 2.302585092994046f64 * 308.0f64 }
+
+// the probability of x for the varieties other than the classic
+fn gh_f(x: f64, a0: f64, n0: f64, nn: f64, v0: i64) -> f64 {
+    var a = a0
+    var n = n0
+    var v = v0
+    if v == 2i64 || v == 6i64 || v == 7i64 {
+        let t = a
+        a = n
+        n = t
+        if v == 2i64 { v = 1i64 }
+        if v == 6i64 { v = 4i64 }
+        if v == 7i64 { v = 5i64 }
+    }
+    var logp = 0.0f64
+    let b = nn - a
+    if v == 1i64 || v == 3i64 {
+        logp = pik_loggamma(a + 1.0f64) + pik_loggamma(b + 1.0f64) + pik_loggamma(n + 1.0f64) + pik_loggamma(nn - n + 1.0f64)
+        logp -= pik_loggamma(x + 1.0f64) + pik_loggamma(a - x + 1.0f64) + pik_loggamma(n - x + 1.0f64) + pik_loggamma(b - n + x + 1.0f64) + pik_loggamma(nn + 1.0f64)
+    } else if v == 4i64 {
+        logp = pik_loggamma(0.0f64 - a + x) + pik_loggamma(0.0f64 - b + n - x) + pik_loggamma(n + 1.0f64) + pik_loggamma(0.0f64 - nn)
+        logp -= pik_loggamma(x + 1.0f64) + pik_loggamma(0.0f64 - a) + pik_loggamma(n - x + 1.0f64) + pik_loggamma(0.0f64 - b) + pik_loggamma(0.0f64 - nn + n)
+    } else if v == 5i64 {
+        var p = 1.0f64 / gh_gauss1(0.0f64 - n, 0.0f64 - a, b - n + 1.0f64)
+        var tr = 1.0f64
+        let bn = b - n
+        var i = 0i64
+        while f64(i) < x {
+            let r = f64(i)
+            let rp = f64(i + 1i64)
+            tr *= ((r - a) * (r - n)) / (rp * (bn + rp))
+            i += 1i64
+        }
+        p *= tr
+        ret p
+    } else {
+        logp = pik_loggamma(0.0f64 - a + x) + pik_loggamma(b + 1.0f64) + pik_loggamma(0.0f64 - n + x) + pik_loggamma(nn - n + 1.0f64)
+        logp -= pik_loggamma(x + 1.0f64) + pik_loggamma(0.0f64 - a) + pik_loggamma(b - n + x + 1.0f64) + pik_loggamma(0.0f64 - n) + pik_loggamma(nn + 1.0f64)
+    }
+    if logp < 0.0f64 - gh_maxexp() { ret 0.0f64 }
+    ret math.exp[f64](logp)
+}
+
+// the distribution function P(X <= x)
+fn gh_p(x: f64, a0: f64, n0: f64, nn: f64, v0: i64) -> f64 {
+    var a = a0
+    var n = n0
+    var v = v0
+    var logp = 0.0f64
+    var p = 0.0f64
+    var b = 0.0f64
+    if v == 2i64 || v == 6i64 || v == 7i64 {
+        let t = a
+        a = n
+        n = t
+        if v == 2i64 { v = 1i64 }
+        if v == 6i64 { v = 4i64 }
+        if v == 7i64 { v = 5i64 }
+    }
+    if v == 1i64 {
+        if x == math.trunc[f64](n) { ret 1.0f64 }
+        b = nn - a
+        logp = pik_loggamma(b + 1.0f64) + pik_loggamma(nn - n + 1.0f64) - pik_loggamma(b - n + 1.0f64) - pik_loggamma(nn + 1.0f64)
+    } else if v == 4i64 {
+        if x == math.trunc[f64](n) { ret 1.0f64 }
+        b = nn - a
+        logp = pik_loggamma(0.0f64 - b + n) + pik_loggamma(0.0f64 - nn) - pik_loggamma(0.0f64 - b) - pik_loggamma(0.0f64 - nn + n)
+    } else if v == 5i64 {
+        b = nn - a
+        p = 1.0f64 / gh_gauss1(0.0f64 - n, 0.0f64 - a, b - n + 1.0f64)
+    } else {
+        b = nn - a
+        logp = pik_loggamma(b + 1.0f64) + pik_loggamma(nn - n + 1.0f64) - pik_loggamma(b - n + 1.0f64) - pik_loggamma(nn + 1.0f64)
+    }
+    var sum = 1.0f64
+    var tr = 1.0f64
+    let bn = b - n
+    var i = 0i64
+    while f64(i) < x {
+        let r = f64(i)
+        let rp = f64(i + 1i64)
+        tr *= ((r - a) * (r - n)) / (rp * (bn + rp))
+        sum += tr
+        i += 1i64
+    }
+    if v == 5i64 {
+        p *= sum
+        if p > 1.0f64 { ret 1.0f64 }
+        ret p
+    }
+    logp += math.log[f64](sum)
+    if logp < 0.0f64 - gh_maxexp() { ret 0.0f64 }
+    ret math.exp[f64](logp)
+}
+
+// the smallest x with p <= P(X <= x)
+fn gh_x(p: f64, a: f64, m: f64, nn: f64, v: i64) -> f64 {
+    let b = nn - a
+    let n = m
+    let m1 = (n * a) / nn
+    let m2 = (m1 * (b * (a + b - n))) / (nn * (nn - 1.0f64))
+    var xf = math.trunc[f64](0.5f64 + m1 + math.sqrt[f64](m2) * dist.qnorm(p, 0.0f64, 1.0f64, true, false))
+    if xf != xf || xf < 0.0f64 || xf > 2147483647.0f64 { xf = 0.0f64 }
+    var x = xf
+    var larger = p <= gh_p(x, a, m, nn, v)
+    while larger {
+        if x == 0.0f64 { ret x }
+        x -= 1.0f64
+        larger = p <= gh_p(x, a, m, nn, v)
+        if !larger { ret x + 1.0f64 }
+    }
+    while !larger {
+        x += 1.0f64
+        larger = p <= gh_p(x, a, m, nn, v)
+        if larger { ret x }
+    }
+    ret 0.0f64
+}
+
+// sghyper for the other varieties: the mean, median, mode, variance, third and fourth central moments (NaN for NA)
+fn gh_moments(a: f64, m: f64, nn: f64, v: i64) -> Mom {
+    var r: Mom = zero
+    let nan = 0.0f64 / 0.0f64
+    var n = 0.0f64
+    var big_a = 0.0f64
+    var b = 0.0f64
+    var t = 0.0f64
+    r.median = gh_x(0.5f64, a, m, nn, v)
+    if v == 5i64 || v == 7i64 {
+        big_a = math.min[f64](m, a)
+        n = math.max[f64](m, a)
+        b = nn - big_a
+        r.mode = math.trunc[f64](n) + 1.0f64
+        r.mean = nan
+        r.variance = nan
+        r.third = nan
+        r.fourth = nan
+        ret r
+    }
+    if v == 3i64 || v == 8i64 {
+        big_a = math.min[f64](m, a)
+        n = math.max[f64](m, a)
+        b = nn - big_a
+        t = big_a + b
+        var m1 = nan
+        if t > 0.0f64 {
+            m1 = (n * big_a) / t
+        }
+        r.mean = m1
+        r.mode = math.floor[f64](((n + 1.0f64) * (big_a + 1.0f64)) / (t + 2.0f64))
+        var m2 = nan
+        if t > 1.0f64 {
+            m2 = m1 * (b * (t - n)) / (t * (t - 1.0f64))
+        }
+        r.variance = m2
+        var m3 = nan
+        if t > 3.0f64 {
+            m3 = m2 * ((b - big_a) * (t - 2.0f64 * n)) / (t * (t - 2.0f64))
+        }
+        r.third = m3
+        if t > 4.0f64 {
+            r.fourth = (m2 / ((t - 2.0f64) * (t - 3.0f64))) * (t * (t + 1.0f64 - 6.0f64 * n) + 3.0f64 * big_a * b * (n - 2.0f64) + 6.0f64 * n * n + (3.0f64 * big_a * b * n * (6.0f64 - n)) / t - (18.0f64 * big_a * b * n * n) / (t * t))
+        } else {
+            r.fourth = nan
+        }
+        ret r
+    }
+    if v == 1i64 || v == 2i64 {
+        n = math.min[f64](m, a)
+        big_a = math.max[f64](m, a)
+    } else {
+        big_a = math.min[f64](m, a)
+        n = math.max[f64](m, a)
+    }
+    b = nn - big_a
+    t = big_a + b
+    var m1 = 0.0f64
+    var m2 = 0.0f64
+    if n > 1.0f64 {
+        m1 = (n * big_a) / t
+        r.mean = m1
+    }
+    r.mode = math.floor[f64](((n + 1.0f64) * (big_a + 1.0f64)) / (t + 2.0f64))
+    if n > 2.0f64 {
+        m2 = m1 * (b * (t - n)) / (t * (t - 1.0f64))
+        r.variance = m2
+    }
+    if n > 3.0f64 { r.third = m2 * ((b - big_a) * (t - 2.0f64 * n)) / (t * (t - 2.0f64)) }
+    if n > 4.0f64 {
+        r.fourth = (m2 / ((t - 2.0f64) * (t - 3.0f64))) * (t * (t + 1.0f64 - 6.0f64 * n) + 3.0f64 * big_a * b * (n - 2.0f64) + 6.0f64 * n * n + (3.0f64 * big_a * b * n * (6.0f64 - n)) / t - (18.0f64 * big_a * b * n * n) / (t * t))
+    }
+    ret r
+}
