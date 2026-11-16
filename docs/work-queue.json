@@ -845,10 +845,10 @@
       "group": "CRAN parity",
       "order": 686,
       "title": "nnet: single-hidden-layer networks and multinom",
-      "score": 0,
+      "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 258). Mid. Acceptance, equal to nnet under set.seed: nnet for regression, classification and softmax with decay, skip-layer and entropy, from the R RNG initial weights through the BFGS of optim; multinom and its summary, class.ind."
+      "evidence": "Partial (D6615). e.algo.stat.nnetpkg.multinom (no decay) equals nnet multinom fitted at reltol 1e-14: deviance and coefficients to 1e-5, by Newton on the same likelihood (oracle_nnet, 40 values; Linux pending). Open: weight decay, case weights, the hidden-layer network nnet(), predictions, BFGS path equality. Was: Open (CRAN rank 258). Mid. Acceptance, equal to nnet under set.seed: nnet for regression, classification and softmax with decay, skip-layer and entropy, from the R RNG initial weights through the BFGS of optim; multinom and its summary, class.ind."
     },
     {
       "id": "L337",

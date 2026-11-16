@@ -46814,3 +46814,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `afexpkg.rm_anova` takes subjects by rows (group index, then k responses) and gives the Type III tests of a within factor B and a between factor A with equal groups: sums of squares from the balanced decomposition, epsilons from the Helmert-contrast cross-products of the within-group residuals, Huynh-Feldt reported uncapped but used capped at 1 for its p, generalized eta squared with the subject and residual terms in every denominator. Mauchly's p copies car, whose omega term uses `3 * p` with p the number of response columns rather than the contrast rank, so only k of 4 or more shows the difference.
 
 **Result.** `oracle_afex` agrees with afex on Windows (240 values over within-only, two- and three-group designs); Linux pending. L427 stays partial: several factors, unequal groups, covariates, Type II.
+
+## D6615 — nnet: multinom by Newton
+
+**Decision.** `nnetpkg.multinom` fits the multinomial logit with class 0 as reference by Newton's method with the full Hessian, instead of nnet's BFGS; both maximise one concave likelihood, so the oracle fits R at reltol and abstol 1e-14 and compares the optimum, not the iteration path. No weight decay.
+
+**Result.** `oracle_nnet` agrees with `nnet::multinom` on deviance and coefficients at 1e-5 on Windows (40 values, 3 and 4 classes); Linux pending. L336 stays partial: decay, weights, the hidden-layer `nnet()`.
