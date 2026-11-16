@@ -9,6 +9,7 @@
 
 use e.algo.sort
 use e.algo.stat.mass as ms
+use e.algo.stat.parzen as pz
 use e.math
 use e.mem
 
@@ -176,8 +177,39 @@ fn bw_nrd0(a: *mem.Arena, x: []const f64) -> (f64, err) {
 
 // meanshift(x, kernel = "gaussian", bw = "nrd0", par = shorth(x)): the iterate and the iteration count
 fn meanshift(a: *mem.Arena, x: []const f64) -> (f64, usize, err) {
-    let (bw, be) = bw_nrd0(a, x)
-    if be != ok { ret (0.0f64, 0usize, be) }
+    let (r, it, e) = meanshift_g(a, x, 0usize, 0.0f64, 0usize)
+    ret (r, it, e)
+}
+
+// meanshift with bw "nrd0" (mode 0), "nrd" (mode 1) or the number bwv (mode 2), and a kernel id of parzen.kfun (0 gaussian, 1 uniform, 2 to 7 as there)
+fn meanshift_g(a: *mem.Arena, x: []const f64, mode: usize, bwv: f64, kernel: usize) -> (f64, usize, err) {
+    var bw = bwv
+    if mode == 0usize {
+        let (b0, be) = bw_nrd0(a, x)
+        if be != ok { ret (0.0f64, 0usize, be) }
+        bw = b0
+    } else if mode == 1usize {
+        let (y, ye) = sorted_copy(a, x)
+        if ye != ok { ret (0.0f64, 0usize, ye) }
+        let nn = f64(y.len)
+        var mm = 0.0f64
+        var q = 0usize
+        while q < y.len {
+            mm += y[q]
+            q += 1usize
+        }
+        mm = mm / nn
+        var sq = 0.0f64
+        q = 0usize
+        while q < y.len {
+            sq += (y[q] - mm) * (y[q] - mm)
+            q += 1usize
+        }
+        let sdv = math.sqrt[f64](sq / (nn - 1.0f64))
+        var hh = (ms.quant7(y, 0.75f64) - ms.quant7(y, 0.25f64)) / 1.34f64
+        if sdv < hh { hh = sdv }
+        bw = 1.06f64 * hh * math.pow[f64](nn, 0.0f64 - 0.2f64)
+    }
     let (p0, pe) = venter(a, x, 4u8, 0i64 - 1i64)
     if pe != ok { ret (0.0f64, 0usize, pe) }
     var par = p0
@@ -188,7 +220,8 @@ fn meanshift(a: *mem.Arena, x: []const f64) -> (f64, usize, err) {
         var i = 0usize
         while i < x.len {
             let z = (x[i] - par) / bw
-            let k = math.exp[f64](0.0f64 - z * z / 2.0f64)
+            var k = 0.0f64
+            if kernel == 0usize { k = math.exp[f64](0.0f64 - z * z / 2.0f64) } else { k = pz.kfun(kernel, z) }
             sk += k
             sxk += x[i] * k
             i += 1usize

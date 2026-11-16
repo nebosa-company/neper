@@ -46432,3 +46432,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `parzen_k` runs parzen with statip's other kernels as functions of `u = d / bw` (triangular, Epanechnikov, biweight with a = sqrt 7, cosine, optcosine and rectangular with their rescaled supports), on the same old-coordinate density and Brent maximiser; `d / bw` against each support uses R's `<=` or `<` as written in the kernel.
 
 **Result.** `oracle_parzen` agrees with modeest on 36 new values (six kernels) on Windows at 1e-4, the density being kinked or flat at its top so that optimize stops inside its tolerance; Linux pending. The other meanshift bandwidths stay open; L472 stays partial.
+
+## D6544 — modeest: meanshift bandwidths and kernels
+
+**Decision.** `meanshift_g` generalises meanshift to the nrd bandwidth (`1.06 min(sd, IQR/1.34) n^-0.2`), a given numeric bandwidth and the eight statip kernels (the Gaussian by its exponential, the rest by `parzen.kfun`, the uniform added there), keeping the shorth start, the relative-change stop at sqrt(eps) and the iteration count.
+
+**Result.** `oracle_modeest` agrees with modeest on 120 new values (iterate and iteration count, 60 samples) on Windows; Linux pending. The ucv, bcv and SJ rules (binned, optimised) stay open; L472 stays partial.

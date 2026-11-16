@@ -24,4 +24,12 @@ for (rep in 1:25) {
   bwl <- runif(1, 0.1, 0.6); l <- lientz(x, bwl); zz <- runif(4, min(x) - 0.5, max(x) + 0.5)
   for (z in zz) add(c(11, bwl, n, x, z), l(z))
 }
+# meanshift with other bandwidths and kernels: kinds 12 (iterate) and 13 (iterations); args (kind, 0, n, x..., mode 0 nrd0 1 nrd 2 numeric, bw, kernel id 0 gaussian 1 uniform 2 triangular 3 epanechnikov 4 biweight 5 cosine 6 optcosine 7 rectangular)
+kn2 <- c("gaussian", "uniform", "triangular", "epanechnikov", "biweight", "cosine", "optcosine", "rectangular")
+for (rep in 1:60) {
+  n <- sample(15:80, 1); x <- round(c(rnorm(n %/% 2, 1, 1), rnorm(n - n %/% 2, 4, 1.2)), 3); kid <- sample(0:7, 1); mode <- sample(0:2, 1); bw <- if (mode == 2) runif(1, 0.5, 1.5) else 0
+  r <- tryCatch(meanshift(x, bw = if (mode == 0) "nrd0" else if (mode == 1) "nrd" else bw, kernel = kn2[kid + 1]), error = function(e) NULL)
+  if (is.null(r) || !is.finite(r)) next
+  a <- c(12, 0, n, x, mode, bw, kid); add(a, as.numeric(r)); a[1] <- 13; add(a, attr(r, "iterations"))
+}
 emit("modeest", "modeest", list(cases))

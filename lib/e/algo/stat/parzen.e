@@ -337,6 +337,10 @@ fn vieu(a: *mem.Arena, x: []const f64, bw0: f64) -> f64 {
 fn kfun(kernel: usize, u: f64) -> f64 {
     let pi = 3.141592653589793238462643383279f64
     let ax = math.abs[f64](u)
+    if kernel == 1usize {
+        if ax <= 1.0f64 { ret 0.5f64 }
+        ret 0.0f64
+    }
     if kernel == 2usize {
         if ax <= 1.0f64 { ret 1.0f64 - ax }
         ret 0.0f64
