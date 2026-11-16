@@ -23,7 +23,7 @@
       "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6034). 135 discrete ggsci and ggthemes palettes as a generated table, with ggsci alpha, equal R on Windows (Linux pending). D6563: the Lab-space spline colour ramp of rgb_gsea, rgb_material and rgb_tw3 (all palettes, n 2 to 20, alpha 1 and 0.5) equals ggsci on 3276 colours (e.algo.stat.labramp; the raw colour tables come from the oracle). Open: the raw tables in the library, gradients, palettes that change with alpha, ggthemes palettes with arguments. Was: Open (CRAN ranks 220, 226). Small data item. Acceptance: every discrete and continuous palette of ggsci and the colour palettes of ggthemes equal to the R package, with alpha handling."
+      "evidence": "Partial (D6034). 135 discrete ggsci and ggthemes palettes as a generated table, with ggsci alpha, equal R on Windows (Linux pending). D6563: the Lab-space spline colour ramp of rgb_gsea, rgb_material and rgb_tw3 (all palettes, n 2 to 20, alpha 1 and 0.5) equals ggsci on 3276 colours (e.algo.stat.labramp; the raw colour tables come from the oracle). D6564: the raw tables are generated into the library (labramp_data.e, scripts/gen_palettes_ramp.R), so palette_colour gives any of the 42 continuous palettes by row. Open: gradients, palettes that change with alpha, ggthemes palettes with arguments. Was: Open (CRAN ranks 220, 226). Small data item. Acceptance: every discrete and continuous palette of ggsci and the colour palettes of ggthemes equal to the R package, with alpha handling."
     },
     {
       "id": "L357",

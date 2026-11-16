@@ -3431,4 +3431,5 @@ D6559	632	car: Anova for binomial and Poisson glms
 D6560	751	sandwich: kernHAC
 D6561	515	sandwich: kernHAC kernels
 D6562	585	lmtest: dwtest approximate p value
-D6563	876	ggsci: the Lab spline colour ramp
+D6563	877	ggsci: the Lab spline colour ramp
+D6564	566	ggsci: the raw tables of the continuous palettes

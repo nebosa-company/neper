@@ -17,6 +17,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let x = c.args
+        var got = 0.0f64
+        if c.name.len == 3usize {
+            got = f64(lr.palette_colour(a, usize(x[3usize]) - 1usize, usize(x[0usize]), usize(x[1usize]), x[2usize]))
+        } else {
         let m = usize(x[3usize])
         let (raw, re) = mem.alloc[u64](a, m)
         if re != ok { os.exit(4) }
@@ -25,7 +29,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             raw[i] = u64(x[4usize + i])
             i += 1usize
         }
-        let got = f64(lr.lab_ramp(a, raw, usize(x[0usize]), usize(x[1usize]), x[2usize]))
+        got = f64(lr.lab_ramp(a, raw, usize(x[0usize]), usize(x[1usize]), x[2usize]))
+        }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

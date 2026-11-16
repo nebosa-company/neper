@@ -46552,3 +46552,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `e.algo.stat.labramp.lab_ramp` is colorRamp(raw, space = "Lab", interpolate = "spline") as rgb_gsea, rgb_material and rgb_tw3 build their palettes: grDevices' sRGB to XYZ (the 17-digit matrix of the sRGB primaries, gamma at 0.04045) to Lab against the D65 white of `white.points`, the fmm spline of each channel at knots `i / (m - 1)` evaluated at `k / (n - 1)`, Lab back to sRGB rounded to 5 digits and clamped, and `rgb(maxColorValue = 255)`, which truncates the channels and the alpha (`alpha * 255` to an integer) as R's integer coercion does, not rounds.
 
 **Result.** `oracle_labramp` agrees with ggsci on 3276 colours (gsea, 19 material and 22 tw3 palettes; n 2, 5, 12, 20; alpha 1 and 0.5) on Windows; Linux pending. The raw colour tables are inputs to the oracle, not yet library data; L329 stays partial.
+
+## D6564 — ggsci: the raw tables of the continuous palettes
+
+**Decision.** `scripts/gen_palettes_ramp.R` writes `labramp_data.e` (gsea default, 19 material and 22 tw3 palettes, one `set:palette|#RRGGBB,...` row each, as palettes_data.e does for the discrete ones); `palette_colour(idx, n, k, alpha)` reads the row and ramps it with `lab_ramp`.
+
+**Result.** `oracle_labramp` agrees with ggsci on 3276 more colours chosen by table row on Windows (6552 cases in all); Linux pending. L329 stays partial: the ggthemes palettes with arguments and the gradient palettes.

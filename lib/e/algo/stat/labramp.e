@@ -3,6 +3,7 @@
 //
 // Not here: the raw colour tables of those palettes (the oracle passes them in) and pal_gradient.
 
+use e.algo.stat.labramp_data as data
 use e.algo.stat.splinepkg as sp
 use e.math
 use e.mem
@@ -157,4 +158,59 @@ fn lab_ramp(a: *mem.Arena, raw: []const u64, n: usize, k: usize, alpha: f64) -> 
     let b8 = u64(rgb[2usize] * 255.0f64)
     let a8 = u64(alpha * 255.0f64)
     ret r8 * 16777216u64 + g8 * 65536u64 + b8 * 256u64 + a8
+}
+
+fn hex_val(c: u8) -> u64 {
+    if c >= 97u8 { ret u64(c - 87u8) }
+    if c >= 65u8 { ret u64(c - 55u8) }
+    ret u64(c - 48u8)
+}
+
+// the number of palettes in the generated table
+fn row_count() -> usize {
+    let t = data.rows()
+    var c = 0usize
+    var i = 0usize
+    while i < t.len {
+        if t[i] == 10u8 { c += 1usize }
+        i += 1usize
+    }
+    ret c
+}
+
+// the raw colours of palette row idx (0-based; gsea:default, then material, then tw3 in ggsci order) into out, packed r * 65536 + g * 256 + b; returns how many
+fn raw_row(idx: usize, out: []u64) -> usize {
+    let t = data.rows()
+    var at = 0usize
+    var r = 0usize
+    while r < idx && at < t.len {
+        while at < t.len && t[at] != 10u8 { at += 1usize }
+        at += 1usize
+        r += 1usize
+    }
+    while at < t.len && t[at] != 124u8 { at += 1usize }
+    at += 1usize
+    var m = 0usize
+    while at < t.len && t[at] != 10u8 {
+        // "#RRGGBB" then a comma
+        var v = 0u64
+        var d = 1usize
+        while d <= 6usize {
+            v = v * 16u64 + hex_val(t[at + d])
+            d += 1usize
+        }
+        out[m] = v
+        m += 1usize
+        at += 7usize
+        if at < t.len && t[at] == 44u8 { at += 1usize }
+    }
+    ret m
+}
+
+// the k-th of n colours of palette row idx, as lab_ramp
+fn palette_colour(a: *mem.Arena, idx: usize, n: usize, k: usize, alpha: f64) -> u64 {
+    let (raw, e) = mem.alloc[u64](a, 32usize)
+    if e != ok { ret 0u64 }
+    let m = raw_row(idx, raw)
+    ret lab_ramp(a, raw[0usize..m], n, k, alpha)
 }
