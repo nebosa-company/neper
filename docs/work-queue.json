@@ -188,7 +188,7 @@
       "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6517 naive, D6516 parzen Gaussian, tsybakov, lientz, D6072): e.algo.stat.modeest has venter, shorth, hsm, grenander, meanshift and asselin, equal to modeest on 250 values on Windows (oracle_modeest); Linux pending. D6524: vieu (Gaussian, nrd0; modeest rejects a numeric bw there) equals R on 12 values. Open: the other parzen kernels, other meanshift bandwidths. Original: Open (CRAN rank 852). Small. Acceptance, equal to modeest: mlv with the naive, parzen, shorth, hsm, hrm, venter, grenander, lientz, meanshift, tsybakov, asselin and vieu methods."
+      "evidence": "Partly done (D6517 naive, D6516 parzen Gaussian, tsybakov, lientz, D6072): e.algo.stat.modeest has venter, shorth, hsm, grenander, meanshift and asselin, equal to modeest on 250 values on Windows (oracle_modeest); Linux pending. D6524: vieu (Gaussian, nrd0; modeest rejects a numeric bw there) equals R on 12 values. D6543: parzen with the triangular, Epanechnikov, biweight, cosine, optcosine and rectangular kernels equals modeest on 36 values at 1e-4. Open: other meanshift bandwidths. Original: Open (CRAN rank 852). Small. Acceptance, equal to modeest: mlv with the naive, parzen, shorth, hsm, hrm, venter, grenander, lientz, meanshift, tsybakov, asselin and vieu methods."
     },
     {
       "id": "L473",

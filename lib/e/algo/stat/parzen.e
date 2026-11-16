@@ -57,11 +57,13 @@ fn grid(x: []const f64, bw: f64, kernel: usize, xords: []f64, kords: []f64, scra
         let d = off * step
         if kernel == 0usize {
             kern[i] = math.exp[f64](0.0f64 - d * d / (2.0f64 * bw * bw)) / (bw * math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64))
-        } else {
+        } else if kernel == 1usize {
             // the uniform kernel 1 / 2 on |u| < 1, scaled by 1 / bw
             var kv = 0.0f64
             if d / bw < 1.0f64 { kv = 0.5f64 }
             kern[i] = kv / bw
+        } else {
+            kern[i] = kfun(kernel, d / bw) / bw
         }
         i += 1usize
     }
@@ -329,4 +331,69 @@ fn vieu(a: *mem.Arena, x: []const f64, bw0: f64) -> f64 {
         }
     }
     ret b
+}
+
+// statip's kernels as functions of u = d / bw: 2 triangular, 3 epanechnikov, 4 biweight, 5 cosine, 6 optcosine, 7 rectangular
+fn kfun(kernel: usize, u: f64) -> f64 {
+    let pi = 3.141592653589793238462643383279f64
+    let ax = math.abs[f64](u)
+    if kernel == 2usize {
+        if ax <= 1.0f64 { ret 1.0f64 - ax }
+        ret 0.0f64
+    }
+    if kernel == 3usize {
+        if ax <= 1.0f64 { ret 0.75f64 * (1.0f64 - u * u) }
+        ret 0.0f64
+    }
+    if kernel == 4usize {
+        let a = math.sqrt[f64](7.0f64)
+        if ax < a {
+            let t = 1.0f64 - (ax / a) * (ax / a)
+            ret 15.0f64 / 16.0f64 * t * t / a
+        }
+        ret 0.0f64
+    }
+    if kernel == 5usize {
+        let a = 1.0f64 / math.sqrt[f64](1.0f64 / 3.0f64 - 2.0f64 / (pi * pi))
+        if ax < a { ret (1.0f64 + math.cos[f64](pi * u / a)) / (2.0f64 * a) }
+        ret 0.0f64
+    }
+    if kernel == 6usize {
+        let a = 1.0f64 / math.sqrt[f64](1.0f64 - 8.0f64 / (pi * pi))
+        if ax < a { ret pi / 4.0f64 * math.cos[f64](pi * u / (2.0f64 * a)) / a }
+        ret 0.0f64
+    }
+    let a = math.sqrt[f64](3.0f64)
+    if ax < a { ret 0.5f64 / a }
+    ret 0.0f64
+}
+
+// parzen(x, bw, kernel): as parzen with the kernel id of kfun (0 gaussian, 1 uniform)
+fn parzen_k(a: *mem.Arena, x: []const f64, bw0: f64, kernel: usize) -> f64 {
+    let (s, e0) = mem.alloc[f64](a, x.len)
+    if e0 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < x.len {
+        s[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < s.len {
+        let t = s[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > t {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = t
+        i += 1usize
+    }
+    var bw = bw0
+    if bw <= 0.0f64 { bw = rd.bw_nrd0(x, s) }
+    let (xo, e1) = mem.alloc[f64](a, N)
+    let (ko, e2) = mem.alloc[f64](a, N)
+    let (sc, e3) = mem.alloc[f64](a, 4usize * N)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    grid(x, bw, kernel, xo, ko, sc)
+    ret fmin_max(xo, ko, s[0usize], s[x.len - 1usize], math.pow[f64](2.220446049250313e-16f64, 0.25f64))
 }

@@ -17,9 +17,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let x = c.args
-        let n = usize(x[1usize])
-        var got = pz.parzen(a, x[2usize..2usize + n], x[0usize])
-        if c.name.len == 4usize { got = pz.vieu(a, x[2usize..2usize + n], x[0usize]) } else if c.name.len == 5usize { got = pz.naive(a, x[2usize..2usize + n], x[0usize], usize(x[2usize + n])) }
+        var n = 0usize
+        if c.name.len != 2usize { n = usize(x[1usize]) }
+        var got = 0.0f64
+        if c.name.len != 2usize && c.name.len != 4usize && c.name.len != 5usize { got = pz.parzen(a, x[2usize..2usize + n], x[0usize]) }
+        if c.name.len == 2usize {
+            let kn = usize(x[0usize])
+            let nn = usize(x[2usize])
+            got = pz.parzen_k(a, x[3usize..3usize + nn], x[1usize], kn)
+        } else if c.name.len == 4usize { got = pz.vieu(a, x[2usize..2usize + n], x[0usize]) } else if c.name.len == 5usize { got = pz.naive(a, x[2usize..2usize + n], x[0usize], usize(x[2usize + n])) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

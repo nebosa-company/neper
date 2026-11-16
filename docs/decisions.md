@@ -46426,3 +46426,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** L321 is delivered: every boot function in its acceptance list that does not need the survival package equals boot on Windows (oracle_boot, oracle_boot2, oracle_boot3, oracle_tsboot, 2070 values in oracle_boot3 alone). The `coxph` fit that yields a censboot Cox object is the survival package's, tracked by its own queue item; censboot takes the linear predictors and baseline survival as inputs and agrees with R when R is given the same ones. jack.after.boot only plots.
 
 **Result.** L321 leaves the queue; Linux runs of the boot fixtures are batched with the others.
+
+## D6543 — modeest: parzen with the other statip kernels
+
+**Decision.** `parzen_k` runs parzen with statip's other kernels as functions of `u = d / bw` (triangular, Epanechnikov, biweight with a = sqrt 7, cosine, optcosine and rectangular with their rescaled supports), on the same old-coordinate density and Brent maximiser; `d / bw` against each support uses R's `<=` or `<` as written in the kernel.
+
+**Result.** `oracle_parzen` agrees with modeest on 36 new values (six kernels) on Windows at 1e-4, the density being kinked or flat at its top so that optimize stops inside its tolerance; Linux pending. The other meanshift bandwidths stay open; L472 stays partial.

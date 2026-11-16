@@ -21,4 +21,11 @@ for (rep in 1:25) {
   v <- tryCatch(if (bw == 0) vieu(x) else vieu(x, bw = bw), error = function(e) NULL); if (is.null(v)) next
   cases[[length(cases) + 1]] <- case("vieu", c(bw, length(x), x), v, rel = 1e-9, abs = 1e-9)
 }
+# other kernels: ("pk") args (kernel id 2 triangular 3 epanechnikov 4 biweight 5 cosine 6 optcosine 7 rectangular, bw, n, x...); compared at 1e-4 (the density is flat or kinked at its top and optimize stops within its tolerance)
+kn <- c("triangular", "epanechnikov", "biweight", "cosine", "optcosine", "rectangular")
+for (rep in 1:36) {
+  kid <- (rep %% 6) + 2; n <- sample(20:100, 1); x <- round(if (rep %% 3 == 0) c(rnorm(n %/% 2, 0, 1), rnorm(n - n %/% 2, 4, 1.3)) else rgamma(n, 3, 1), 3); bw <- runif(1, 0.4, 1.2)
+  v <- tryCatch(modeest::parzen(x, bw = bw, kernel = kn[kid - 1]), error = function(e) NULL); if (is.null(v)) next
+  cases[[length(cases) + 1]] <- case("pk", c(kid, bw, length(x), x), v, rel = 1e-4, abs = 1e-4)
+}
 emit("parzen", "modeest", list(cases))

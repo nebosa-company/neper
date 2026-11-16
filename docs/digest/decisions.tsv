@@ -3409,4 +3409,6 @@ D6537	895	pracma: polyroots
 D6538	608	DHARMa: spatial and temporal autocorrelation
 D6539	689	boot: censboot model
 D6540	680	boot: censboot cond with a Cox object, empinf
-D6541	699	boot: empinf reg and pos
+D6541	700	boot: empinf reg and pos
+D6542	610	L321 closed
+D6543	671	modeest: parzen with the other statip kernels
