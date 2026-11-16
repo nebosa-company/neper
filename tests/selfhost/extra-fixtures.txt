@@ -285,6 +285,7 @@ oracle_dharma
 oracle_pamcluster
 oracle_arm
 oracle_sm
+oracle_dbscanpkg
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -314,3 +315,4 @@ oracle_vars
 oracle_ksamples
 oracle_arm
 oracle_sm
+oracle_dbscanpkg

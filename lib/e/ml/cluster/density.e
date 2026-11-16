@@ -166,3 +166,70 @@ fn optics(x: []const f64, n: usize, d: usize, eps: f64, min_points: usize, order
     }
     ret ok
 }
+
+// kNNdist(x, k): the distance from every row to its k-th nearest other row, into out (n values); scratch holds n values
+fn knn_distance(x: []const f64, n: usize, d: usize, k: usize, out: []f64, scratch: []f64) {
+    var i = 0usize
+    while i < n {
+        var m = 0usize
+        var j = 0usize
+        while j < n {
+            if j != i {
+                let v = distance(x, d, i, j)
+                var q = m
+                while q > 0usize && scratch[q - 1usize] > v {
+                    scratch[q] = scratch[q - 1usize]
+                    q -= 1usize
+                }
+                scratch[q] = v
+                m += 1usize
+            }
+            j += 1usize
+        }
+        out[i] = scratch[k - 1usize]
+        i += 1usize
+    }
+}
+
+// dbscan::lof(x, minPts): the local outlier factor of every row into out (n values). kd holds n values, lrd n values, scratch n values.
+// The neighbourhood of a row is every other row within its (minPts - 1)-th neighbour distance, ties included.
+fn lof(x: []const f64, n: usize, d: usize, min_pts: usize, out: []f64, kd: []f64, lrd: []f64, scratch: []f64) {
+    knn_distance(x, n, d, min_pts - 1usize, kd, scratch)
+    var a = 0usize
+    while a < n {
+        var cnt = 0.0f64
+        var s = 0.0f64
+        var b = 0usize
+        while b < n {
+            if b != a {
+                let dab = distance(x, d, a, b)
+                if dab <= kd[a] {
+                    var m = kd[b]
+                    if dab > m { m = dab }
+                    s += m
+                    cnt += 1.0f64
+                }
+            }
+            b += 1usize
+        }
+        lrd[a] = 1.0f64 / (s / cnt)
+        a += 1usize
+    }
+    a = 0usize
+    while a < n {
+        var cnt = 0.0f64
+        var s = 0.0f64
+        var b = 0usize
+        while b < n {
+            if b != a && distance(x, d, a, b) <= kd[a] {
+                s += lrd[b]
+                cnt += 1.0f64
+            }
+            b += 1usize
+        }
+        var v = s / cnt / lrd[a]
+        if v != v { v = 1.0f64 }
+        out[a] = v
+        a += 1usize
+    }
+}

@@ -45898,3 +45898,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.sm` is new: `hnorm` (one variable, and per column of a two-variable data set), `density1` and `density2` (Gaussian product kernel) and `regression` (local constant and local linear at a point), on unbinned data.
 
 **Result.** `oracle_sm` equals sm on 260 cases on Windows at rel 1e-9, over 20 samples of 15 to 90 observations. hcv and h.select, bands and standard errors, sm.ancova, sm.survival and sm.options are open; sm bins above 100 observations, which is not covered; Linux pending. L505 is partial.
+
+## D6455 — dbscan: kNNdist and lof
+
+`e.ml.cluster.density` gains `knn_distance` (the k-th other-row distance of every row) and `lof` (local outlier factor with the package's neighbourhood: every row within the (minPts - 1)-th neighbour distance, ties included; reachability as the larger of the neighbour's k-distance and the pair distance; NaN scores become 1).
+
+**Result.** `oracle_dbscanpkg` equals dbscan on 260 cases on Windows at rel 1e-9, 20 data sets of 20 to 70 rows in 2 to 4 dimensions with one planted outlier; ties are not exercised. hdbscan, sNN, sNNclust, kNN and frNN objects, extractXi, extractDBSCAN and jpclust are open; Linux pending. L358 is partial.

@@ -27,7 +27,7 @@ L327	library	0.3	534	statmod: Tweedie and inverse Gaussian, Gauss quadrature	Par
 L328	library	0.25	706	caret evaluation and resampling	Partly done (D6087): e.algo.stat.carets has two-class confusionMatrix with all statistics and intervals, and postResample, equal to caret on 700 values on Windows (oracle_carets);
 L331	library	0.55	577	dendextend and hclust operations	Partial (D6162, D6163 fowlkes_mallows and cor_cophenetic).
 L332	library	0.5	537	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418 read.dbf common field types, D6420 read.octave scalars matrices strings).
-L358	library	0	270	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Open (CRAN rank 368).
+L358	library	0.2	444	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof equal dbscan on Windows;
 L359	library	0.75	506	pls: partial least squares regression	Partial (D6136).
 L379	library	0.5	536	gmp: arbitrary-precision numbers	Partial (D6161).
 L380	library	0	378	tm and tidytext: text mining	Open (CRAN ranks 400, 383).

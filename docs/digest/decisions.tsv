@@ -3322,4 +3322,5 @@ D6450	496	DescTools: ICC
 D6451	385	DescTools: KappaM, Fleiss and Conger
 D6452	766	kSamples: the Anderson-Darling k-sample statistic
 D6453	623	arm: logit, invlogit, se.coef and binned.resids
-D6454	572	sm: hnorm, sm.density and sm.regression
+D6454	573	sm: hnorm, sm.density and sm.regression
+D6455	674	dbscan: kNNdist and lof
