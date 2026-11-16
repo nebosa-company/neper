@@ -45094,3 +45094,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `solve_qp` is the dual method of Goldfarb and Idnani on explicit linear algebra: the most violated constraint (an equality off its right-hand side enters with the sign that makes it a violated inequality), the direction `z = H n` and the multiplier changes `r = N* n` over the signed active normals, the partial step to the first active inequality whose multiplier reaches zero, the full step that adds the constraint, and infeasibility when no step is finite. The optimum of a strictly convex quadratic programme is unique, so the weights are R's however the active set is found. `portfolio_optim` builds `portfolio.optim.default`'s constraint columns in R's order (the budget and mean constraints or the excess-return one, the non-negativity rows without shorts, the lower and upper reserves) over the sample covariance.
 
 **Result.** `oracle_tsutils` now holds 1107 values and equals tseries 0.10-63 including 355 portfolio weights (riskless and not, with and without shorts, with and without bounds) on Windows; the Linux run is pending (WSL). L325 is closed.
+
+## D6124 — CompQuadForm davies and farebrother
+
+**Context.** L356 left the CompQuadForm quadratic-form distributions open.
+
+**Decision.** `e.algo.stat.compqf` ports `qfc.cpp` as `davies` (the Qf state carries an abort flag standing in for the longjmp, so the count and lim limits stop the integration at the same points) and `ruben.cpp` as `farebrother`. Both return R's trace and ifault.
+
+**Result.** `oracle_compqf` equals CompQuadForm on 4059 values on Windows; Linux pending. Open on L356: imhof (R integrate) and liu (pnchisq).
