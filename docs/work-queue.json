@@ -26,17 +26,6 @@
       "evidence": "Open (CRAN rank 496). Small. Acceptance, equal to bridgesampling under set.seed: bridge_sampler with the normal and warp3 methods, the iterative scheme, bf, post_prob, error_measures."
     },
     {
-      "id": "L405",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 565,
-      "title": "yardstick and ModelMetrics: model performance metrics",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 553, 518). Small. Acceptance, equal to R: yardstick rmse, mae, rsq, rsq_trad, ccc, huber_loss, mape, mase, smape, iic, accuracy, kap, f_meas, mcc, bal_accuracy, j_index, roc_auc, pr_auc, gain_capture, lift_curve with the macro, micro and weighted averaging; ModelMetrics auc, logLoss, brier, gini, ce, mse, ppv, npv, kappa."
-    },
-    {
       "id": "L296",
       "category": "library",
       "group": "CRAN parity",
@@ -288,6 +277,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6045). friedman1, friedman2, friedman3, 2dnormals, circle, xor, twonorm and ringnorm equal mlbench 2.1-6 under set.seed on Windows (Linux pending). Open: cassini, hypercube, peak, shapes, simplex, smiley, spirals, threenorm, waveform. Was: Open (CRAN rank 547). Small. Acceptance, equal to mlbench under set.seed: mlbench.friedman1, friedman2, friedman3, 2dnormals, circle, cassini, hypercube, peak, ringnorm, shapes, simplex, smiley, spirals, threenorm, twonorm, waveform, xor."
+    },
+    {
+      "id": "L405",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 565,
+      "title": "yardstick and ModelMetrics: model performance metrics",
+      "score": 0.5,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6046). Numeric and binary-classification yardstick metrics (rmse, mae, rsq, rsq_trad, ccc, huber_loss, mape, smape, mase, accuracy, kap, f_meas, mcc, bal_accuracy, j_index, precision, recall, spec, roc_auc) and ModelMetrics auc, logLoss, brier, gini, ce, mse, ppv, npv, kappa equal R on Windows (Linux pending). Open: multiclass macro, micro and weighted averaging, pr_auc, gain_capture, lift_curve, iic. Was: Open (CRAN rank 553, 518). Small. Acceptance, equal to R: yardstick rmse, mae, rsq, rsq_trad, ccc, huber_loss, mape, mase, smape, iic, accuracy, kap, f_meas, mcc, bal_accuracy, j_index, roc_auc, pr_auc, gain_capture, lift_curve with the macro, micro and weighted averaging; ModelMetrics auc, logLoss, brier, gini, ce, mse, ppv, npv, kappa."
     },
     {
       "id": "L406",
