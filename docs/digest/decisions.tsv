@@ -3545,4 +3545,5 @@ D6682	844	fracdiff covariance, and the limit of reproducing R's uninitialised re
 D6683	717	dqrng ziggurat normal and exponential from Boost's tables
 D6684	880	dqrng pcg64, threefry, dqsample and streams; L392 closed
 D6685	828	bridge sampler warp3 and bounded parameters
-D6686	667	bridge sampler use_neff and error_measures; L391 closed
+D6686	668	bridge sampler use_neff and error_measures; L391 closed
+D6687	1030	optFederov ported from FederovOpt.c, with the tie limit named

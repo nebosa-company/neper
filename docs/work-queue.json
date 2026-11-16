@@ -9,10 +9,10 @@
       "group": "CRAN parity",
       "order": 567,
       "title": "AlgDesign: optimal experimental designs",
-      "score": 0.25,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6077): e.algo.stat.algdesign has gen.factorial and the eval.design measures from a model matrix, equal to AlgDesign on 200 values on Windows (oracle_algdesign); Linux pending. Open: optFederov, optBlock, optMonteCarlo, BIB search. Original: Open (CRAN rank 586). Small. Acceptance, equal to AlgDesign under set.seed: gen.factorial, optFederov with D, A and I criteria and its exchange moves, optBlock, optMonteCarlo, eval.design, and the balanced incomplete block search."
+      "evidence": "Partly done (D6077): e.algo.stat.algdesign has gen.factorial and the eval.design measures from a model matrix, equal to AlgDesign on 200 values on Windows (oracle_algdesign); Linux pending. D6687: algdesign_fed.fedorov, optFederov: the Fedorov exchange for D, A and I exact designs (random starts, nullification, rows, augment) and the approximate theory design, with R's Givens-rotation T, nullify, Permute on the R stream, equal to optFederov on D, A, I, Ge and the design rows over 24 + 24 candidate sets on Windows (oracle_algdesign); a case where two repeats tie on D to the last bit is excluded, since which one R keeps depends on libm rounding of log. Not tested: augment, nullify = 2, evaluateI, space. Open: optBlock, optMonteCarlo, the BIB search. Original: Open (CRAN rank 586). Small. Acceptance, equal to AlgDesign under set.seed: gen.factorial, optFederov with D, A and I criteria and its exchange moves, optBlock, optMonteCarlo, eval.design, and the balanced incomplete block search."
     },
     {
       "id": "L421",
