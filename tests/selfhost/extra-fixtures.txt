@@ -311,6 +311,7 @@ oracle_catoolspkg
 oracle_polynompkg
 oracle_metaforpkg
 oracle_escalcpkg
+oracle_metaforbias
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -366,3 +367,4 @@ oracle_catoolspkg
 oracle_polynompkg
 oracle_metaforpkg
 oracle_escalcpkg
+oracle_metaforbias

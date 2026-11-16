@@ -46150,3 +46150,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.escalcpkg` is new: `effect` gives yi and vi for MD, SMD (Hedges' g with the gamma-function small-sample factor J), ROM, RR, OR, RD, COR and ZCOR. A check against R found that metafor's ROM yi is not log(m1 / m2) but carries the small-sample bias term 0.5 (sd1^2 / (n1 m1^2) - sd2^2 / (n2 m2^2)); the variance is the plain delta-method one.
 
 **Result.** `oracle_escalcpkg` agrees with metafor on 640 cases on Windows at rel 1e-9, 40 random inputs per measure, with no zero cells. The zero-cell correction, the other measures and variance types are open; Linux pending. L364 stays partial.
+
+## D6497 — metafor: regtest, ranktest and fsn
+
+`e.algo.stat.metaforbias` is new, on a fixed-effect model: `regtest` (Egger: weighted least squares of the effects on their standard errors with weights 1 / v and a known variance, so the slope's z test, and the intercept with 95 per cent limits), `ranktest` (Kendall's tau between (y - ybar) / sqrt(v - 1 / sum w) and v, with the exact two-sided p-value from the distribution of the number of inversions, folded as cor.test does) and `fsn_rosenthal` (the ceiling of (sum z / qnorm(0.95))^2 - k). With tied variances R switches to a tie-corrected normal approximation, which is not ported and is excluded from the cases.
+
+**Result.** `oracle_metaforbias` agrees with metafor on 261 cases on Windows at rel 1e-8: 29 data sets of 8 to 30 studies, regtest's six outputs, ranktest's tau and p and the fail-safe N. Random-effects regtest, the other models and predictors, the other fsn types, trimfill, influence, leave1out and permutest are open; Linux pending. L364 stays partial.
