@@ -1,0 +1,78 @@
+// e.algo.stat.vars against vars. tests/oracle/vars.json comes from
+// `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R vars`; the layout is at the top of scripts/r_oracle/groups/vars.R.
+
+use e.algo.stat.vars as vr
+use e.io
+use e.mem
+use e.os
+use e.str
+use e.test.oracle as oracle
+
+fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let t0 = usize(x[0usize])
+    let k = usize(x[1usize])
+    let p = usize(x[2usize])
+    let lm = usize(x[3usize])
+    let y = x[4usize..4usize + t0 * k]
+    let nm = c.name
+    if str.eq(nm, "aic") { ret vr.var_select(a, y, t0, k, p, lm, 0usize) }
+    if str.eq(nm, "hq") { ret vr.var_select(a, y, t0, k, p, lm, 1usize) }
+    if str.eq(nm, "sc") { ret vr.var_select(a, y, t0, k, p, lm, 2usize) }
+    if str.eq(nm, "fpe") { ret vr.var_select(a, y, t0, k, p, lm, 3usize) }
+    let rows = t0 - p
+    let w = k * p + 1usize
+    let (coef, e1) = mem.alloc[f64](a, k * w)
+    if e1 != ok { os.exit(5) }
+    let (res, e2) = mem.alloc[f64](a, rows * k)
+    if e2 != ok { os.exit(6) }
+    if vr.var_fit(a, y, t0, k, p, p, coef, res) != ok { os.exit(7) }
+    var s = 0.0f64
+    if str.eq(nm, "coef") {
+        // Bcoef is K by (K p + 1), R's as.vector(t(B)) reads it row by row
+        var i = 0usize
+        while i < k * w {
+            s += coef[i] * f64(i + 1usize)
+            i += 1usize
+        }
+        ret s
+    }
+    let (sg, e3) = mem.alloc[f64](a, k * k)
+    if e3 != ok { os.exit(8) }
+    vr.sigma_u(res, rows, k, p, sg)
+    // as.vector(S) is column-major, S symmetric
+    var j = 0usize
+    while j < k {
+        var i = 0usize
+        while i < k {
+            s += sg[i * k + j] * f64(j * k + i + 1usize)
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret s
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let (golden, load_error) = oracle.load(a, "tests/oracle/vars.json")
+    if load_error != ok { os.exit(2) }
+    if golden.cases.len == 0usize { os.exit(3) }
+    var failures = 0usize
+    var at = 0usize
+    while at < golden.cases.len {
+        let start = mem.mark(a)
+        let c = &golden.cases[at]
+        let got = answer(a, c)
+        if !oracle.agrees(got, c) {
+            failures += 1usize
+            if failures <= 12usize {
+                let _ = io.print(oracle.describe(a, c, got))
+                let _ = io.print("\n")
+            }
+        }
+        mem.reset(a, start)
+        at += 1usize
+    }
+    if failures > 0usize { os.exit(1) }
+    ret ok
+}

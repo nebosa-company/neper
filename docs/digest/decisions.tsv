@@ -3303,4 +3303,5 @@ D6431	891	DescTools: kappa, lambda, Goodman-Kruskal tau, odds ratio and Yule's Q
 D6432	925	fitdistrplus: closed-form fits and gofstat
 D6433	957	fitdistrplus: gamma and Weibull maximum-likelihood fits
 D6434	1016	rpart: the anova regression tree
-D6435	1359	rpart: classification trees (gini) with cost-complexity pruning
+D6435	1360	rpart: classification trees (gini) with cost-complexity pruning
+D6436	955	vars: VAR estimation and lag selection
