@@ -46892,3 +46892,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `veganpkg` computes per-site Shannon, Simpson, inverse Simpson, Pielou, richness and bias-corrected Chao1, rarefied richness by log-gamma binomial ratios, and vegdist for nine methods. Two vegan rules differ from the textbook formula: Morisita is clipped at 0 (the formula goes negative for sparse rows) and Gower divides by the number of columns with a non-zero range, not by all columns. Binary Jaccard is `2B/(1+B)` with B the Bray-Curtis of presence.
 
 **Result.** `oracle_vegan` agrees with vegan on Windows (340 values, 4 to 10 sites, 5 to 14 species); Linux pending. L349 stays partial: ordination, ACE, Fisher alpha, adonis2, anosim, mantel, envfit.
+
+## D6628 — ape: neighbour joining edge lengths
+
+**Decision.** `apepkg.nj` joins the pair minimising `(m - 2) d_ij - r_i - r_j`, gives the two new edges `d_ij/2 + (r_i - r_j)/(2(m-2))` and the remainder, updates distances by `(d_ik + d_jk - d_ij)/2`, and closes the last three nodes with the three-point formulae, producing the `2n - 3` edge lengths. They are returned sorted ascending, so the comparison with `ape::nj` is the sorted multiset (the topology is not exposed); non-additive input gives negative lengths in both.
+
+**Result.** `oracle_ape` agrees with ape on the total and rank-weighted sum on Windows (60 values, 4 to 30 taxa, euclidean and manhattan distances); Linux pending. L350 stays partial: topology, bionj, upgma, rooting, cophenetic distances, tree comparison.

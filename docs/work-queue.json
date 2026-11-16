@@ -1824,10 +1824,10 @@
       "group": "CRAN parity",
       "order": 796,
       "title": "ape: phylogenetic trees",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 238). Large. e.ml.cluster has neighbor_joining. Acceptance, equal to ape: read.tree and write.tree, Nexus IO, nj, bionj, fastme, dist.dna (JC69, K80, F81, F84, TN93, raw, LogDet), cophenetic, dist.topo (RF, branch score), drop.tip, root, ace, rtree and rcoal under set.seed, mrca, node depth."
+      "evidence": "Partial (D6628). e.algo.stat.apepkg.nj (Saitou-Nei neighbour joining, 4 to 30 taxa) gives ape nj edge lengths, compared as the sorted multiset (total length and rank-weighted sum), on Windows (oracle_ape, 60 values; Linux pending). Open: tree topology and labels, bionj, upgma, rooting, cophenetic and patristic distances, tree comparison (RF), ancestral state reconstruction, PIC, read.tree. Was: Open (CRAN rank 238). Large. e.ml.cluster has neighbor_joining. Acceptance, equal to ape: read.tree and write.tree, Nexus IO, nj, bionj, fastme, dist.dna (JC69, K80, F81, F84, TN93, raw, LogDet), cophenetic, dist.topo (RF, branch score), drop.tip, root, ace, rtree and rcoal under set.seed, mrca, node depth."
     },
     {
       "id": "L351",
