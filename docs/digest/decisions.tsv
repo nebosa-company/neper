@@ -3536,4 +3536,5 @@ D6673	359	filter size comparisons test the product for overflow
 D6674	343	shell.linux parse_id cannot overflow
 D6675	554	pmvnorm_sigma takes a mean and a covariance matrix
 D6676	525	TVPACK trivariate in its own module
-D6677	712	Miwa orthant algorithm as one function over a work struct
+D6677	713	Miwa orthant algorithm as one function over a work struct
+D6678	507	Miwa refuses a singular correlation matrix; L301 closed

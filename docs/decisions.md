@@ -47176,3 +47176,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6677 — Miwa orthant algorithm as one function over a work struct
 
 **Decision.** `e.algo.stat.miwa.pmvnorm_miwa` ports `miwa.c` and `pmvnorm`'s Miwa pre-processing. The C statics become slices in a `Work` struct allocated once per call, and the per-cone scratch is reset after every orthant. The two-sided box sums subsets of lowered limits only up to size eight, because R's `R_miwa` has no larger case; a higher-dimensional box answers what R answers, not the exact inclusion-exclusion. An upper-only coordinate is flipped to lower-only with its correlations negated, as R does. `checkCorr`'s singular-matrix error is not reproduced. `oracle_miwa` equals R on 120 cases at 1e-8 on Windows; Linux pending.
+
+## D6678 — Miwa refuses a singular correlation matrix; L301 closed
+
+**Decision.** `pmvnorm_miwa` answers `Invalid` when a Cholesky factor of the reduced correlation matrix has a pivot at or under 1e-14, standing for R's `solve(corr)` failing its reciprocal-condition test under `checkCorr`. The edge differs from LAPACK's by a hair, so a matrix right at the tolerance can be classified the other way. L301 is closed: `pmvt`'s mean input is `mvtdst`'s `delta`, which `oracle_mvt` already checks against R.

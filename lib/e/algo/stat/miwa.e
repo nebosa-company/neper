@@ -3,7 +3,8 @@
 // `pmvnorm(..., algorithm = Miwa(steps))` on a correlation matrix: it reduces a pair of infinite limits, turns an upper-only
 // coordinate into a lower-only one by flipping its sign, answers a one-sided box by one orthant and a two-sided box by
 // the inclusion-exclusion over at most eight lowered limits (R's `R_miwa` stops at eight, so does this). Not here: the
-// `checkCorr` singularity test. The limits of a box shifted by a mean are the caller's to shift.
+// `checkCorr` singularity test is a Cholesky pivot test (`Invalid` for a matrix that is not numerically positive definite,
+// where R's `solve` stops on a reciprocal condition number under 2.2e-16). The limits of a box shifted by a mean are the caller's to shift.
 
 use e.algo.stat.mvt as mvt
 use e.math
@@ -428,6 +429,33 @@ fn subsets(a: *mem.Arena, wk: *Work, corr: []const f64, upper: []const f64, lowe
     ret s
 }
 
+// true when the correlation matrix has a Cholesky factor whose smallest pivot is not negligible
+fn positive_definite(a: *mem.Arena, n: usize, cr: []const f64) -> bool {
+    let (l, e) = mem.alloc[f64](a, n * n)
+    if e != ok { ret false }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j <= i {
+            var s = cr[i * n + j]
+            var k = 0usize
+            while k < j {
+                s = s - l[i * n + k] * l[j * n + k]
+                k += 1usize
+            }
+            if i == j {
+                if s <= 1.0e-14f64 { ret false }
+                l[i * n + i] = math.sqrt[f64](s)
+            } else {
+                l[i * n + j] = s / l[j * n + j]
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}
+
 // pmvnorm(lower, upper, corr = corr, algorithm = Miwa(steps)): a limit at or beyond +-1e300 is infinite; corr is n x n row-major
 fn pmvnorm_miwa(a: *mem.Arena, n0: usize, lower0: []const f64, upper0: []const f64, corr0: []const f64, steps: usize) -> (f64, err) {
     let nan = 0.0f64 / 0.0f64
@@ -464,6 +492,7 @@ fn pmvnorm_miwa(a: *mem.Arena, n0: usize, lower0: []const f64, upper0: []const f
         i += 1usize
     }
     if n == 1usize { ret (mvt.mvphi(up[0usize]) - mvt.mvphi(lo[0usize]), ok) }
+    if !positive_definite(a, n, cr) { ret (nan, mem.Invalid) }
     var low_only = true
     i = 0usize
     while i < n {

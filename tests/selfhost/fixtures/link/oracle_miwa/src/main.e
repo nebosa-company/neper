@@ -35,6 +35,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         at += 1usize
     }
+    // checkCorr: a singular correlation matrix is refused, as R's solve refuses it
+    var sing: [4]f64 = zero
+    sing[0usize] = 1.0f64
+    sing[1usize] = 1.0f64
+    sing[2usize] = 1.0f64
+    sing[3usize] = 1.0f64
+    let (_v, se) = miwa.pmvnorm_miwa(a, 2usize, sing[0usize..2usize], sing[0usize..2usize], sing[0usize..4usize], 128usize)
+    if se == ok { os.exit(4) }
     if failures > 0usize { os.exit(1) }
     ret ok
 }
