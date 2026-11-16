@@ -2,11 +2,11 @@
 // with the probability and information of each turning point under the null of a random series) and `stat_desc`
 // (the basic, descriptive and normality-moment statistics of a sample without missing values).
 //
-// Not here: the Shapiro-Wilk normality test of `stat.desc(norm = TRUE)`, decompose and the tsd family, regul,
-// trend.test, the turnogram and the other estimators.
+// Not here: regul, the turnogram and the other estimators.
 
 use e.algo.sort
 use e.algo.stat.ica as ica
+use e.algo.stat.test as tst
 use e.math
 use e.math.dist as dist
 use e.math.nmath_beta as nb
@@ -118,9 +118,9 @@ fn cmp_up(ctx: *u8, x: f64, y: f64) -> i32 {
     ret 0i32
 }
 
-type Desc = struct { nbr_null: f64, min: f64, max: f64, range: f64, sum: f64, median: f64, mean: f64, se_mean: f64, ci_mean: f64, variance: f64, std_dev: f64, coef_var: f64, skewness: f64, skew_2se: f64, kurtosis: f64, kurt_2se: f64 }
+type Desc = struct { nbr_null: f64, min: f64, max: f64, range: f64, sum: f64, median: f64, mean: f64, se_mean: f64, ci_mean: f64, variance: f64, std_dev: f64, coef_var: f64, skewness: f64, skew_2se: f64, kurtosis: f64, kurt_2se: f64, normtest_w: f64, normtest_p: f64 }
 
-// stat.desc(x, norm = TRUE, p) without the Shapiro-Wilk entries
+// stat.desc(x, norm = TRUE, p), with the Shapiro-Wilk entries (NaN outside 3 to 5000 values)
 fn stat_desc(a: *mem.Arena, x: []const f64, p: f64) -> (Desc, err) {
     var d: Desc = zero
     let n = x.len
@@ -168,6 +168,17 @@ fn stat_desc(a: *mem.Arena, x: []const f64, p: f64) -> (Desc, err) {
     d.skew_2se = d.skewness / (2.0f64 * se1)
     let se2 = math.sqrt[f64](24.0f64 * nf * ((nf - 1.0f64) * (nf - 1.0f64)) / (nf - 3.0f64) / (nf - 2.0f64) / (nf + 3.0f64) / (nf + 5.0f64))
     d.kurt_2se = d.kurtosis / (2.0f64 * se2)
+    d.normtest_w = 0.0f64 / 0.0f64
+    d.normtest_p = 0.0f64 / 0.0f64
+    if n >= 3usize && n <= 5000usize {
+        let (sc, e2) = mem.alloc[f64](a, n / 2usize + 1usize)
+        if e2 != ok { ret (d, e2) }
+        let (sw, e3) = tst.shapiro_wilk(s, sc)
+        if e3 == ok {
+            d.normtest_w = sw.statistic
+            d.normtest_p = sw.p_value
+        }
+    }
     ret (d, ok)
 }
 

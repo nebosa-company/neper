@@ -17,6 +17,7 @@ for (rep in 1:40) {
   s <- stat.desc(y, basic = TRUE, desc = TRUE, norm = TRUE, p = pl)
   nm <- c(nbr.null = "nbr.null", min = "min", max = "max", range = "range", sum = "sum", median = "median", mean = "mean", SE.mean = "SE.mean", CI.mean = "CI.mean", var = "var", std.dev = "std.dev", coef.var = "coef.var", skewness = "skewness", skew.2SE = "skew.2SE", kurtosis = "kurtosis", kurt.2SE = "kurt.2SE")
   for (k in names(nm)) add(paste0("d_", k), b, unname(if (k == "CI.mean") s[startsWith(names(s), "CI.mean")][1] else s[[nm[[k]]]]))
+  add("d_normtest.W", b, s[["normtest.W"]]); add("d_normtest.p", b, s[["normtest.p"]])
 }
 # decdiff (kind 2: args (2, 0, n, x, type, lag, order, ends, which, idx)) and decmedian (kind 3: (3, 0, n, x, type, order, times, ends, which, idx)); fn "dec"; ends 0 NAs 1 fill 2 drop (median has only 0 and 1); which 0 filtered 1 residuals; NA values are not emitted
 for (rep in 1:40) {

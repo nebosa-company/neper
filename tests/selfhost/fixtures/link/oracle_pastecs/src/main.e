@@ -74,6 +74,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "d_skewness") { ret d.skewness }
         if str.eq(nm, "d_skew.2SE") { ret d.skew_2se }
         if str.eq(nm, "d_kurtosis") { ret d.kurtosis }
+        if str.eq(nm, "d_normtest.W") { ret d.normtest_w }
+        if str.eq(nm, "d_normtest.p") { ret d.normtest_p }
         ret d.kurt_2se
     }
     let (t, e) = pc.turnpoints(a, x)
