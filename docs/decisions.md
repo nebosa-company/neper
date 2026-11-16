@@ -45556,3 +45556,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.gsdesign` gives the cumulative alpha spent at information fraction t (capped at 1) for sfHSD (Hwang-Shih-DeCani, linear at gamma = 0), sfPower, sfExponential, sfLogistic, sfNormal, sfCauchy and sfExtremeValue in their two-parameter (a, b) form, sfBetaDist, and the Lan-DeMets O'Brien-Fleming (with its generalised rho) and Pocock approximations; the (a, b) families spend the whole alpha at t = 1. Not here: the four-point parameterisations (they solve for a and b), sfPoints and sfStep, the boundary computation of gsDesign() and gsProbability, sample sizes and the non-binding futility bounds.
 
 **Result.** `oracle_gsdesign` equals gsDesign on 720 cases on Windows; Linux pending. L507 is partial.
+
+## D6190 — TSA: periodogram
+
+`e.algo.stat.tsa` gives TSA::periodogram: the mean is removed, the series is padded with zeros to the next length N whose prime factors are only 2, 3 and 5 (stats::nextn, as spec.pgram does), the value at frequency j / N for j = 1 .. floor(N / 2) is 2 |F_j|^2 / n for the original length n, and the entry whose frequency equals 0.5 is halved. The comparison is exact floating point: the package builds the frequencies as seq.int(1 / N, by = 1 / N), and for N = 12 the sixth is 0.5000000000000001, so the Nyquist value is not halved there but is for N = 36 and 54; the port builds the frequencies the same way. Not here: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax, the cumulative periodogram, eacf and the diagnostics.
+
+**Result.** `oracle_tsa` equals TSA on 20 cases on Windows; Linux pending. L452 is partial.
