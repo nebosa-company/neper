@@ -51,4 +51,39 @@ for (rep in 1:30) {
     for (j in 1:(n * k)) add("pj", c(a, k + p * k + j - 1), S[j], 1e-8, 1e-10)
   }
 }
+#   pg: (n, p, k, method, maxiter, splitcircle, zero.tol, X[n*p], m[p], what) what 0..k-1 sdev, k..k+p*k-1 loadings, then obj (k)
+for (rep in 1:30) {
+  p <- sample(2:4, 1); k <- sample(1:p, 1); n <- sample(c(15, 30, 50), 1)
+  X <- matrix(rnorm(n * p), n, p) %*% matrix(rnorm(p * p), p, p)
+  if (rep %% 3 == 0) X[1:2, ] <- X[1:2, ] * 8
+  m <- apply(X, 2, median)
+  for (me in 0:2) {
+    mx <- sample(c(3, 10), 1); sc <- sample(c(10, 25), 1)
+    r <- tryCatch(suppressWarnings(PCAgrid(X, k = k, method = c("sd", "mad", "qn")[me + 1], maxiter = mx, splitcircle = sc, center = m, scale = NULL)), error = function(e) NULL)
+    if (is.null(r)) next
+    a <- c(n, p, k, me, mx, sc, 1e-16, X, m)
+    for (j in 1:k) add("pg", c(a, j - 1), r$sdev[j], 1e-8, 1e-10)
+    L <- unclass(r$loadings)
+    for (j in 1:(p * k)) add("pg", c(a, k + j - 1), L[j], 1e-7, 1e-9)
+    for (j in 1:k) add("pg", c(a, k + p * k + j - 1), r$obj[j], 1e-8, 1e-10)
+  }
+}
+#   sg: (n, p, k, method, maxiter, splitcircle, zero.tol, norm.q, norm.s, lambda[k], X[n*p], m[p], what) as pg
+for (rep in 1:30) {
+  p <- sample(2:4, 1); k <- sample(1:p, 1); n <- sample(c(15, 30, 50), 1)
+  X <- matrix(rnorm(n * p), n, p) %*% matrix(rnorm(p * p), p, p)
+  m <- apply(X, 2, median)
+  for (me in 0:2) {
+    mx <- sample(c(3, 10), 1); sc <- sample(c(10, 25), 1)
+    lam <- round(runif(k, 0, 2), 2); if (rep %% 4 == 0) lam[1] <- 0
+    nq <- sample(c(1, 1, 0.7, 2), 1); ns <- sample(c(1, 1, 0.8, 2), 1)
+    r <- tryCatch(suppressWarnings(sPCAgrid(X, k = k, method = c("sd", "mad", "qn")[me + 1], lambda = lam, maxiter = mx, splitcircle = sc, center = m, scale = NULL, norm.q = nq, norm.s = ns)), error = function(e) NULL)
+    if (is.null(r)) next
+    a <- c(n, p, k, me, mx, sc, 1e-16, nq, ns, lam, X, m)
+    for (j in 1:k) add("sg", c(a, j - 1), r$sdev[j], 1e-8, 1e-10)
+    L <- unclass(r$loadings)
+    for (j in 1:(p * k)) add("sg", c(a, k + j - 1), L[j], 1e-7, 1e-9)
+    for (j in 1:k) add("sg", c(a, k + p * k + j - 1), r$obj[j], 1e-8, 1e-10)
+  }
+}
 emit("pcapp", "pcaPP", list(cases))

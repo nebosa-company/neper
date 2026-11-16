@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L357	library	0.8	584	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).
+L357	library	0.92	889	corpcor and pcaPP: shrinkage covariance and robust PCA	Partial (D6036).
 L388	library	0.6	402	fracdiff: fractional differencing and ARFIMA	Partial (D6039).
 L392	library	0.3	497	dqrng: random number generators	Partial (D6041).
 L391	library	0.45	500	bridgesampling: marginal likelihoods	Partial (D6047, D6146 bf and post_prob).

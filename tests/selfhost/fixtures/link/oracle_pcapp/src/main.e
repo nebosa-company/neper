@@ -36,6 +36,51 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if wi < k + pp * k { ret ld[wi - k] }
         ret zz[wi - k - pp * k]
     }
+    if str.eq(c.name, "pg") {
+        let pp = usize(z[1usize])
+        let k = usize(z[2usize])
+        let off = 7usize
+        let (yy, ey) = mem.alloc[f64](a, n * pp)
+        let (ld, el) = mem.alloc[f64](a, pp * pp)
+        let (sd, es) = mem.alloc[f64](a, pp)
+        let (ob, eo) = mem.alloc[f64](a, k)
+        if ey != ok || el != ok || es != ok || eo != ok { ret nan }
+        var q = 0usize
+        while q < n * pp {
+            yy[q] = z[off + q] - z[off + n * pp + q / n]
+            q += 1usize
+        }
+        let lm0 = z[0usize..0usize]
+        let e = pc.pca_grid(a, yy, n, pp, k, i64(z[3usize]), usize(z[4usize]), usize(z[5usize]), z[6usize], lm0, 1.0f64, 1.0f64, ld, sd, ob)
+        if e != ok { ret nan }
+        pc.pca_grid_finish(pp, k, ld, sd, ob)
+        let wi = usize(z[off + n * pp + pp])
+        if wi < k { ret sd[wi] }
+        if wi < k + pp * k { ret ld[wi - k] }
+        ret ob[wi - k - pp * k]
+    }
+    if str.eq(c.name, "sg") {
+        let pp = usize(z[1usize])
+        let k = usize(z[2usize])
+        let off = 9usize + k
+        let (yy, ey) = mem.alloc[f64](a, n * pp)
+        let (ld, el) = mem.alloc[f64](a, pp * pp)
+        let (sd, es) = mem.alloc[f64](a, pp)
+        let (ob, eo) = mem.alloc[f64](a, k)
+        if ey != ok || el != ok || es != ok || eo != ok { ret nan }
+        var q = 0usize
+        while q < n * pp {
+            yy[q] = z[off + q] - z[off + n * pp + q / n]
+            q += 1usize
+        }
+        let e = pc.pca_grid(a, yy, n, pp, k, i64(z[3usize]), usize(z[4usize]), usize(z[5usize]), z[6usize], z[9usize..9usize + k], z[7usize], z[8usize], ld, sd, ob)
+        if e != ok { ret nan }
+        pc.pca_grid_finish(pp, k, ld, sd, ob)
+        let wi = usize(z[off + n * pp + pp])
+        if wi < k { ret sd[wi] }
+        if wi < k + pp * k { ret ld[wi - k] }
+        ret ob[wi - k - pp * k]
+    }
     let p = usize(z[1usize])
     let x = z[5usize..5usize + n * p]
     let (med, e1) = mem.alloc[f64](a, p)

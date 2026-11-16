@@ -863,3 +863,394 @@ fn proj_finish(p: usize, nr: usize, k: usize, load: []f64, z: []f64, lam: []f64)
         i += 1usize
     }
 }
+
+// the scale estimate of v by `method`, with the arena handed back
+fn grid_scat(a: *mem.Arena, v: []const f64, method: i64) -> f64 {
+    let start = mem.mark(a)
+    let r = scale_method(a, v, method)
+    mem.reset(a, start)
+    ret r
+}
+
+// the sparseness penalty of sPCAgrid for the direction (cs, sn): minus lambda times (sum |cs * others + sn * this|^q)^s
+fn grid_pen(oth: []const f64, thi: []const f64, p: usize, cs: f64, sn: f64, q: f64, s: f64, zt: f64, lambda: f64) -> f64 {
+    if lambda == 0.0f64 { ret 0.0f64 }
+    var d = 0.0f64
+    var i = 0usize
+    while i < p {
+        var v = 0.0f64
+        if math.abs[f64](cs) <= zt { v = math.abs[f64](thi[i]) } else if math.abs[f64](sn) <= zt { v = math.abs[f64](oth[i]) } else { v = math.abs[f64](cs * oth[i] + sn * thi[i]) }
+        if q != 1.0f64 { v = math.pow[f64](v, q) }
+        d += v
+        i += 1usize
+    }
+    if s != 1.0f64 { d = math.pow[f64](d, s) }
+    ret 0.0f64 - d * lambda
+}
+
+fn norm2_of(v: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        s += v[i] * v[i]
+        i += 1usize
+    }
+    ret math.sqrt[f64](s)
+}
+
+// PCAgrid (CPCAGrid::Calc with kIni 0 and no dimension reduction) on the centred, scaled data x (n by p, column-major, n >= p):
+// `load` (p by p, column-major) and `sdev` (p) as C_PCAgrid returns them, and `obj` (k). R then cuts to k, signs and orders them.
+// A non-empty `lam` (k values) makes it sPCAgrid: the objective is the squared scale minus lambda * (sum |loading|^qn)^sn_ times the
+// overall scatter of the data (glo.scatter 0).
+fn pca_grid(a: *mem.Arena, x: []const f64, n: usize, p: usize, k: usize, method: i64, maxiter: usize, splitcircle: usize, zero_tol: f64, lam: []const f64, qn: f64, sn_: f64, load: []f64, sdev: []f64, obj: []f64) -> err {
+    let (ya, e1) = mem.alloc[f64](a, n * p)
+    let (yb, e2) = mem.alloc[f64](a, n * p)
+    let (afin, e3) = mem.alloc[f64](a, p)
+    let (best, e4) = mem.alloc[f64](a, p)
+    let (scl, e5) = mem.alloc[f64](a, p)
+    let (ord, e6) = mem.alloc[usize](a, p)
+    let (yopt, e7) = mem.alloc[f64](a, n)
+    let (pr, e8) = mem.alloc[f64](a, n)
+    let (tpp, e9) = mem.alloc[f64](a, p * p)
+    let (ps, e10) = mem.alloc[f64](a, p * p)
+    let (old, e11) = mem.alloc[f64](a, p * p)
+    let (oth, e12) = mem.alloc[f64](a, p)
+    let (thi, e13) = mem.alloc[f64](a, p)
+    if e12 != ok || e13 != ok { ret e12 }
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret e1 }
+    if k > p { ret mem.Invalid }
+    var y = ya
+    var yn = yb
+    var i = 0usize
+    while i < n * p {
+        y[i] = x[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < p * p {
+        load[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        load[i * p + i] = 1.0f64
+        sdev[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        obj[i] = 0.0f64
+        i += 1usize
+    }
+    let sqrt2 = math.sqrt[f64](2.0f64)
+    let pi = 3.141592653589793f64
+    var glo = 1.0f64
+    if lam.len > 0usize {
+        var tt = 0.0f64
+        var c0 = 0usize
+        while c0 < p {
+            let s0 = grid_scat(a, x[c0 * n..c0 * n + n], method)
+            tt += s0 * s0
+            c0 += 1usize
+        }
+        let g0 = math.sqrt[f64](tt / f64(p))
+        glo = g0 * g0
+    }
+    var ck = 0usize
+    while ck < k {
+        let ps_n = p - ck
+        if ps_n == 1usize {
+            sdev[ck] = grid_scat(a, y[0usize..n], method)
+            ck += 1usize
+            continue
+        }
+        var c = 0usize
+        while c < ps_n {
+            scl[c] = grid_scat(a, y[c * n..c * n + n], method)
+            ord[c] = c
+            c += 1usize
+        }
+        c = 1usize
+        while c < ps_n {
+            let o = ord[c]
+            var d = c
+            while d > 0usize && scl[ord[d - 1usize]] < scl[o] {
+                ord[d] = ord[d - 1usize]
+                d -= 1usize
+            }
+            ord[d] = o
+            c += 1usize
+        }
+        var cur_p = ord[0usize]
+        c = 0usize
+        while c < ps_n {
+            afin[c] = 0.0f64
+            c += 1usize
+        }
+        afin[cur_p] = 1.0f64
+        c = 0usize
+        while c < n {
+            yopt[c] = y[cur_p * n + c]
+            c += 1usize
+        }
+        var scat_best = 0.0f64
+        var obj_best = 0.0f64
+        var best_obj = 0.0f64
+        var cur_scat = 0.0f64
+        var it = 0usize
+        while it <= maxiter {
+            var cur_split = 1.0f64
+            var q = 0usize
+            while q < it {
+                cur_split = cur_split * 0.5f64
+                q += 1usize
+            }
+            var j = 0usize
+            while j < ps_n {
+                cur_p = ord[j]
+                let dl = afin[cur_p]
+                if math.abs[f64](dl) == 1.0f64 {
+                    j += 1usize
+                    continue
+                }
+                let cy = y[cur_p * n..cur_p * n + n]
+                if dl != 0.0f64 {
+                    let dcl = math.sqrt[f64](1.0f64 - dl * dl)
+                    c = 0usize
+                    while c < n {
+                        yopt[c] = (yopt[c] - cy[c] * dl) / dcl
+                        c += 1usize
+                    }
+                    c = 0usize
+                    while c < ps_n {
+                        afin[c] = afin[c] / dcl
+                        c += 1usize
+                    }
+                    afin[cur_p] = 0.0f64
+                }
+                var cur_lam = 0.0f64
+                if lam.len > 0usize { cur_lam = lam[ck] }
+                if cur_lam != 0.0f64 {
+                    var r0 = 0usize
+                    while r0 < p {
+                        var sm = 0.0f64
+                        var c1 = 0usize
+                        while c1 < ps_n {
+                            sm += load[(ck + c1) * p + r0] * afin[c1]
+                            c1 += 1usize
+                        }
+                        oth[r0] = sm
+                        thi[r0] = load[(ck + cur_p) * p + r0]
+                        r0 += 1usize
+                    }
+                }
+                var nl = dl
+                var ncl = 0.0f64
+                let asin_nl = math.asin[f64](nl)
+                var sm1 = 1.0f64
+                if splitcircle > 1usize { sm1 = f64(splitcircle - 1usize) }
+                let split_fact = pi * cur_split
+                best_obj = 0.0f64 - 1.0e308f64
+                var dir = 0usize
+                var dir_end = splitcircle
+                if cur_split == 1.0f64 { dir_end = splitcircle - 1usize }
+                if nl != 0.0f64 && math.abs[f64](nl) < 1.0e-6f64 {
+                    c = 0usize
+                    while c < n {
+                        pr[c] = yopt[c]
+                        c += 1usize
+                    }
+                    let sc = grid_scat(a, pr, method)
+                    let ob = sc * sc + grid_pen(oth, thi, p, 1.0f64, 0.0f64, qn, sn_, zero_tol, cur_lam) * glo
+                    if ob > best_obj {
+                        best_obj = ob
+                        cur_scat = sc
+                        nl = 0.0f64
+                        ncl = 1.0f64
+                    }
+                }
+                while dir < dir_end {
+                    let ang = (f64(dir) / sm1 - 0.5f64) * split_fact + asin_nl
+                    let cs = math.cos[f64](ang)
+                    let sn = math.sin[f64](ang)
+                    c = 0usize
+                    while c < n {
+                        pr[c] = yopt[c] * cs + cy[c] * sn
+                        c += 1usize
+                    }
+                    let sc = grid_scat(a, pr, method)
+                    let ob = sc * sc + grid_pen(oth, thi, p, cs, sn, qn, sn_, zero_tol, cur_lam) * glo
+                    if ob > best_obj {
+                        best_obj = ob
+                        cur_scat = sc
+                        nl = sn
+                        ncl = cs
+                    }
+                    dir += 1usize
+                }
+                c = 0usize
+                while c < n {
+                    yopt[c] = yopt[c] * ncl + cy[c] * nl
+                    c += 1usize
+                }
+                c = 0usize
+                while c < ps_n {
+                    afin[c] = afin[c] * ncl
+                    c += 1usize
+                }
+                afin[cur_p] = nl
+                j += 1usize
+            }
+            let nrm = norm2_of(afin[0usize..ps_n])
+            c = 0usize
+            while c < ps_n {
+                afin[c] = afin[c] / nrm
+                c += 1usize
+            }
+            if it == 0usize || obj_best <= best_obj {
+                obj_best = best_obj
+                c = 0usize
+                while c < ps_n {
+                    best[c] = afin[c]
+                    c += 1usize
+                }
+                scat_best = cur_scat
+            }
+            it += 1usize
+        }
+        sdev[ck] = scat_best
+        obj[ck] = obj_best
+        let ref0 = ord[0usize]
+        c = 0usize
+        while c < ps_n {
+            best[c] = 0.0f64 - best[c]
+            c += 1usize
+        }
+        best[ref0] = best[ref0] + 1.0f64
+        let nb = norm2_of(best[0usize..ps_n])
+        c = 0usize
+        while c < ps_n * ps_n {
+            tpp[c] = 0.0f64
+            c += 1usize
+        }
+        c = 0usize
+        while c < ps_n {
+            tpp[c * ps_n + c] = 1.0f64
+            c += 1usize
+        }
+        if nb > zero_tol {
+            c = 0usize
+            while c < ps_n {
+                best[c] = best[c] / (nb / sqrt2)
+                c += 1usize
+            }
+            var u = 0usize
+            while u < ps_n {
+                var v = 0usize
+                while v < ps_n {
+                    tpp[u * ps_n + v] = tpp[u * ps_n + v] - best[v] * best[u]
+                    v += 1usize
+                }
+                u += 1usize
+            }
+        }
+        c = 0usize
+        while c < ps_n {
+            var r = 0usize
+            while r < ps_n {
+                ps[c * ps_n + r] = tpp[ord[c] * ps_n + r]
+                r += 1usize
+            }
+            c += 1usize
+        }
+        c = 0usize
+        while c < ps_n {
+            var r = 0usize
+            while r < p {
+                old[c * p + r] = load[(ck + c) * p + r]
+                r += 1usize
+            }
+            c += 1usize
+        }
+        c = 0usize
+        while c < ps_n {
+            var r = 0usize
+            while r < p {
+                var s = 0.0f64
+                var t = 0usize
+                while t < ps_n {
+                    s += old[t * p + r] * ps[c * ps_n + t]
+                    t += 1usize
+                }
+                load[(ck + c) * p + r] = s
+                r += 1usize
+            }
+            c += 1usize
+        }
+        c = 0usize
+        while c + 1usize < ps_n {
+            var r = 0usize
+            while r < n {
+                var s = 0.0f64
+                var t = 0usize
+                while t < ps_n {
+                    s += y[t * n + r] * ps[(c + 1usize) * ps_n + t]
+                    t += 1usize
+                }
+                yn[c * n + r] = s
+                r += 1usize
+            }
+            c += 1usize
+        }
+        let sw = y
+        y = yn
+        yn = sw
+        ck += 1usize
+    }
+    ret ok
+}
+
+// R's PCAgrid post-processing on the first k components: .loadSgnU (the largest entry of each loading positive), then .orderPCs
+// (decreasing sdev, ties keep their order) applied to the loadings (p by k), sdev and obj together.
+fn pca_grid_finish(p: usize, k: usize, load: []f64, sdev: []f64, obj: []f64) {
+    var i = 0usize
+    while i < k {
+        var im = 0usize
+        var c = 1usize
+        while c < p {
+            if math.abs[f64](load[i * p + c]) > math.abs[f64](load[i * p + im]) { im = c }
+            c += 1usize
+        }
+        if load[i * p + im] < 0.0f64 {
+            c = 0usize
+            while c < p {
+                load[i * p + c] = 0.0f64 - load[i * p + c]
+                c += 1usize
+            }
+        }
+        i += 1usize
+    }
+    var pass = 0usize
+    while pass < k {
+        i = 0usize
+        while i + 1usize < k {
+            if sdev[i + 1usize] > sdev[i] {
+                let t = sdev[i]
+                sdev[i] = sdev[i + 1usize]
+                sdev[i + 1usize] = t
+                let o = obj[i]
+                obj[i] = obj[i + 1usize]
+                obj[i + 1usize] = o
+                var c = 0usize
+                while c < p {
+                    let u = load[i * p + c]
+                    load[i * p + c] = load[(i + 1usize) * p + c]
+                    load[(i + 1usize) * p + c] = u
+                    c += 1usize
+                }
+            }
+            i += 1usize
+        }
+        pass += 1usize
+    }
+}

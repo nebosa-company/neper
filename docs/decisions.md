@@ -47180,3 +47180,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6678 — Miwa refuses a singular correlation matrix; L301 closed
 
 **Decision.** `pmvnorm_miwa` answers `Invalid` when a Cholesky factor of the reduced correlation matrix has a pivot at or under 1e-14, standing for R's `solve(corr)` failing its reciprocal-condition test under `checkCorr`. The edge differs from LAPACK's by a hair, so a matrix right at the tolerance can be classified the other way. L301 is closed: `pmvt`'s mean input is `mvtdst`'s `delta`, which `oracle_mvt` already checks against R.
+
+## D6679 — PCAgrid and sPCAgrid as one function with an optional penalty
+
+**Decision.** `pcapp.pca_grid` ports `CPCAGrid::Calc` (grid search over angles, the loading removed and re-added, the Householder back-transform) and, when given lambda, `CsPCAGrid`'s penalty: the objective is the squared scale minus lambda times the sparseness norm times the overall scatter, with the fast paths of the C++ dropped since they compute the same sum. `pca_grid_finish` signs the loadings and orders components as R's `.loadSgnU` and `.orderPCs`. Tie order in the descending sort of scales is stable here; the C++ qsort's tie order is unknown and random data never ties. n < p (R's SVD reduction) and the centring are the caller's. `oracle_pcapp` pg and sg equal R on 1881 values on Windows; Linux pending.
