@@ -87,6 +87,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret v
     }
     if str.eq(nm, "pen") { ret pc.pennington(x, usize(z[3usize + n])) }
+    if str.eq(nm, "scr") {
+        let (sr, se) = pc.regul_screen(a, x, z[3usize + n..3usize + 2usize * n], z[3usize + 2usize * n], z[4usize + 2usize * n], z[5usize + 2usize * n], usize(z[6usize + 2usize * n]))
+        if se != ok { ret 0.0f64 / 0.0f64 }
+        let sq = usize(z[7usize + 2usize * n])
+        if sq == 0usize { ret sr.tol }
+        if sq == 1usize { ret sr.nx }
+        if sq == 2usize { ret sr.matched }
+        ret sr.exact
+    }
+    if str.eq(nm, "regtol") {
+        let b = 3usize + n
+        let no = usize(z[b + n + 1usize])
+        let (out, eo) = mem.alloc[f64](a, no)
+        if eo != ok { ret 0.0f64 / 0.0f64 }
+        let re = pc.regul_tol(a, x, z[b..b + n], z[b + n], no, z[b + n + 2usize], usize(z[b + n + 3usize]), usize(z[b + n + 4usize]), z[b + n + 5usize], z[b + n + 6usize], z[b + n + 7usize], usize(z[b + n + 8usize]), out)
+        if re != ok { ret 0.0f64 / 0.0f64 }
+        ret out[usize(z[b + n + 9usize])]
+    }
     if str.eq(nm, "regsp") {
         let b = 3usize + n
         let no = usize(z[b + n + 1usize])

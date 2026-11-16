@@ -1789,3 +1789,183 @@ fn regul_spline(a: *mem.Arena, x: []const f64, y: []const f64, xmin: f64, n: usi
     }
     ret ok
 }
+
+// ---- regul with a matching tolerance ----
+
+// R's round: halves go to the even integer
+fn round_even(x: f64) -> f64 {
+    let f = math.floor[f64](x)
+    let d = x - f
+    if d < 0.5f64 { ret f }
+    if d > 0.5f64 { ret f + 1.0f64 }
+    if math.floor[f64](f / 2.0f64) * 2.0f64 == f { ret f }
+    ret f + 1.0f64
+}
+
+// the first index of v in w (-1 when absent)
+fn match1(v: f64, w: []const f64) -> i64 {
+    var i = 0usize
+    while i < w.len {
+        if w[i] == v { ret i64(i) }
+        i += 1usize
+    }
+    ret 0i64 - 1i64
+}
+
+// pastecs::match.tol of the regular abscissas xo against the sorted table: tol_type 0 left, 1 both, 2 right, 3 none; pos receives the 0-based match or -1
+fn match_tol(a: *mem.Arena, xo: []const f64, table: []const f64, tol_type: usize, tol: f64, pos: []i64) -> err {
+    let n = xo.len
+    let nt = table.len
+    let (xr, e1) = mem.alloc[f64](a, n)
+    let (tr, e2) = mem.alloc[f64](a, nt)
+    let (tl, e3) = mem.alloc[f64](a, nt)
+    let (posl, e4) = mem.alloc[i64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var space = 0.0f64
+    var i = 1usize
+    while i < n {
+        space += xo[i] - xo[i - 1usize]
+        i += 1usize
+    }
+    space = space / f64(n - 1usize)
+    var t2 = 0.0f64
+    if tol != 0.0f64 {
+        t2 = math.abs[f64](tol)
+        if t2 > space { t2 = space } else { t2 = space / round_even(space / t2) }
+    }
+    var mn = xo[0usize]
+    i = 0usize
+    while i < n {
+        if xo[i] < mn { mn = xo[i] }
+        i += 1usize
+    }
+    if tol_type == 3usize || t2 == 0.0f64 {
+        i = 0usize
+        while i < n {
+            pos[i] = match1(xo[i], table)
+            i += 1usize
+        }
+        ret ok
+    }
+    i = 0usize
+    while i < n {
+        xr[i] = round_even((xo[i] - mn) / t2)
+        i += 1usize
+    }
+    i = 0usize
+    while i < nt {
+        tr[i] = math.floor[f64]((table[i] - mn) / t2)
+        tl[i] = math.ceil[f64]((table[i] - mn) / t2)
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        pos[i] = match1(xr[i], tr)
+        // the left match: the last table entry whose ceiling equals the rounded abscissa
+        var last = 0i64 - 1i64
+        var q = 0usize
+        while q < nt {
+            if tl[q] == xr[i] { last = i64(q) }
+            q += 1usize
+        }
+        posl[i] = last
+        i += 1usize
+    }
+    if tol_type == 2usize { ret ok }
+    if tol_type == 0usize {
+        i = 0usize
+        while i < n {
+            pos[i] = posl[i]
+            i += 1usize
+        }
+        ret ok
+    }
+    i = 0usize
+    while i < n {
+        var repl = pos[i] < 0i64
+        if !repl && posl[i] >= 0i64 {
+            repl = (xo[i] - table[usize(posl[i])]) < (table[usize(pos[i])] - xo[i])
+        }
+        if repl { pos[i] = posl[i] }
+        i += 1usize
+    }
+    ret ok
+}
+
+// regul with the matching tolerance: method 0 constant, 1 linear, 2 area, 3 spline; a regular abscissa matched to an observation takes it
+fn regul_tol(a: *mem.Arena, x: []const f64, y: []const f64, xmin: f64, n: usize, deltat: f64, method: usize, rule: usize, f: f64, window: f64, tol: f64, tol_type: usize, out: []f64) -> err {
+    var e = ok
+    if method < 3usize { e = regul(x, y, xmin, n, deltat, method, rule, f, window, out) } else { e = regul_spline(a, x, y, xmin, n, deltat, rule, out) }
+    if e != ok { ret e }
+    let (xo, e1) = mem.alloc[f64](a, n)
+    let (pos, e2) = mem.alloc[i64](a, n)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    let by = (f64(n - 1usize) * deltat) / f64(n - 1usize)
+    var i = 0usize
+    while i < n {
+        xo[i] = f64(i) * deltat + xmin
+        if method == 3usize { xo[i] = xmin + f64(i) * by }
+        i += 1usize
+    }
+    if method == 3usize && n > 1usize { xo[n - 1usize] = f64(n - 1usize) * deltat + xmin }
+    if method == 2usize {
+        // the area method shifts the abscissas to keep them positive and shifts back, which can move them by a rounding
+        var xlb = xmin - window / 2.0f64 - 1.0f64
+        if x[0usize] < xlb { xlb = x[0usize] }
+        if xlb <= 0.0f64 {
+            let shift = 0.0f64 - xlb + 1.0f64
+            i = 0usize
+            while i < n {
+                xo[i] = (xo[i] + shift) - shift
+                i += 1usize
+            }
+        }
+    }
+    let em = match_tol(a, xo, x, tol_type, tol, pos)
+    if em != ok { ret em }
+    i = 0usize
+    while i < n {
+        if pos[i] >= 0i64 { out[i] = y[usize(pos[i])] }
+        i += 1usize
+    }
+    ret ok
+}
+
+type Screen = struct { tol: f64, nx: f64, matched: f64, exact: f64 }
+
+// pastecs::regul.screen for one start and step: the adjusted tolerance, the number of regular abscissas, and the weight of the observations matched (any distance, and exactly)
+fn regul_screen(a: *mem.Arena, x: []const f64, weight: []const f64, xmin: f64, deltat: f64, tol: f64, tol_type: usize) -> (Screen, err) {
+    var r: Screen = zero
+    var tol2 = 0.0f64
+    if tol != 0.0f64 {
+        tol2 = math.abs[f64](tol)
+        if tol2 > deltat { tol2 = deltat } else { tol2 = deltat / round_even(deltat / tol2) }
+    }
+    let nxf = math.floor[f64]((x[x.len - 1usize] - xmin) / deltat) + 1.0f64
+    let nx = usize(nxf)
+    let (xo, e1) = mem.alloc[f64](a, nx)
+    let (pos, e2) = mem.alloc[i64](a, nx)
+    if e1 != ok || e2 != ok { ret (r, mem.Full) }
+    var i = 0usize
+    while i < nx {
+        xo[i] = f64(i) * deltat + xmin
+        i += 1usize
+    }
+    let em = match_tol(a, xo, x, tol_type, tol2, pos)
+    if em != ok { ret (r, em) }
+    var m = 0.0f64
+    var ex = 0.0f64
+    i = 0usize
+    while i < nx {
+        if pos[i] >= 0i64 {
+            m += weight[usize(pos[i])]
+            if xo[i] == x[usize(pos[i])] { ex += weight[usize(pos[i])] }
+        }
+        i += 1usize
+    }
+    r.tol = tol2
+    r.nx = nxf
+    r.matched = m
+    r.exact = ex
+    ret (r, ok)
+}

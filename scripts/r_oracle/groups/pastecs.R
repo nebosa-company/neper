@@ -125,4 +125,24 @@ for (rep in 1:40) {
   r <- suppressMessages(regul(x, y, xmin = xmin, n = no, deltat = dt, methods = "spline", rule = ru, tol = 0)); v <- r$y[[1]]
   for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("regsp", c(14, 0, nx, x, y, xmin, no, dt, ru, i - 1), v[i], rel = 1e-9, abs = 1e-10)
 }
+# regul with a matching tolerance (fn "regtol", args (15, 0, nx, x, y, xmin, n, deltat, method, rule, f, window, tol, tol.type, idx)): method 0 constant 1 linear 2 area 3 spline; tol.type 0 left 1 both 2 right 3 none
+tt <- c("left", "both", "right", "none")
+for (rep in 1:80) {
+  nx <- sample(8:30, 1); x <- sort(round(runif(nx, 0, 20), 2)); x <- unique(x); nx <- length(x); y <- round(rnorm(nx, 5, 2), 3)
+  xmin <- if (rep %% 3 == 0) round(min(x) - 1, 2) else min(x); no <- sample(6:40, 1); dt <- round((max(x) - min(x)) / (no - 1) * c(1, 0.8, 1.1)[rep %% 3 + 1], 4)
+  meth <- rep %% 4; ru <- sample(1:2, 1); f <- c(0, 0.5, 1)[sample(3, 1)]; win <- round(dt * c(1, 1.5, 2)[sample(3, 1)], 4)
+  tl <- round(dt * c(0.1, 0.25, 0.5, 0.8, 1.5)[sample(5, 1)], 4); ty <- sample(0:3, 1)
+  r <- tryCatch(suppressMessages(capture.output(rr <- regul(x, y, xmin = xmin, n = no, deltat = dt, methods = c("constant", "linear", "area", "spline")[meth + 1], rule = ru, f = f, window = win, tol = tl, tol.type = tt[ty + 1]))), error = function(e) NULL)
+  if (is.null(r)) next
+  v <- rr$y[[1]]
+  for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("regtol", c(15, 0, nx, x, y, xmin, no, dt, meth, ru, f, win, tl, ty, i - 1), v[i], rel = 1e-9, abs = 1e-10)
+}
+# regul.screen for one start and step (fn "scr", args (16, 0, nx, x, weight, xmin, deltat, tol, tol.type, field)): 0 tol, 1 nx, 2 match, 3 exact.match
+for (rep in 1:60) {
+  nx <- sample(10:40, 1); x <- sort(unique(round(runif(nx, 0, 20), 2))); nx <- length(x); w <- round(runif(nx, 0.5, 3), 2)
+  xmin <- if (rep %% 2 == 0) min(x) else round(min(x) - runif(1, 0, 1), 2); dt <- round(runif(1, 0.3, 2.5), 3); tl <- round(dt * c(0.1, 0.2, 0.5, 1.4)[sample(4, 1)], 4); ty <- sample(0:3, 1)
+  r <- tryCatch(regul.screen(x, weight = w, xmin = xmin, deltat = dt, tol = tl, tol.type = tt[ty + 1]), error = function(e) NULL); if (is.null(r)) next
+  out <- c(unname(r$tol), r$n[1, 1], r$nbr.match[1, 1], r$nbr.exact.match[1, 1])
+  for (k in 0:3) cases[[length(cases) + 1]] <- case("scr", c(16, 0, nx, x, w, xmin, dt, tl, ty, k), out[k + 1], rel = 1e-9, abs = 1e-10)
+}
 emit("pastecs", "pastecs", list(cases))
