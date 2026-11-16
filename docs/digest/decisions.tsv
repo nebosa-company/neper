@@ -3584,4 +3584,5 @@ D6721	1241	ashr: ash with a normal likelihood
 D6722	1122	polspline: logspline density, distribution and quantile
 D6723	1122	EnvStats: rosnerTest and the normal tolerance and prediction factors
 D6724	486	pastecs: the Shapiro-Wilk entries of stat.desc
-D6725	1080	pastecs: regul by constant, linear and area interpolation
+D6725	1081	pastecs: regul by constant, linear and area interpolation
+D6726	1043	pastecs: pgleissberg and pennington

@@ -833,3 +833,208 @@ fn regul(x: []const f64, y: []const f64, xmin: f64, n: usize, deltat: f64, metho
     }
     ret ok
 }
+
+// ---- pgleissberg and pennington ----
+
+// the distribution of the number of turning points of a random permutation of n values, P(K = k) for k = 0..n-2, by counting permutations over the rank of the last element, the sign of the last step and the turns so far
+fn gleissberg_pmf(a: *mem.Arena, n: usize, pmf: []f64) -> err {
+    var k = 0usize
+    while k < n - 1usize {
+        pmf[k] = 0.0f64
+        k += 1usize
+    }
+    if n == 3usize {
+        pmf[0usize] = 1.0f64 / 3.0f64
+        pmf[1usize] = 2.0f64 / 3.0f64
+        ret ok
+    }
+    let nt = n
+    let sz = (n + 2usize) * 2usize * nt
+    let (cur, e1) = mem.alloc[f64](a, sz)
+    let (nxt, e2) = mem.alloc[f64](a, sz)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var q = 0usize
+    while q < sz {
+        cur[q] = 0.0f64
+        q += 1usize
+    }
+    // index (j * 2 + s) * nt + t, j in 1..i
+    cur[(1usize * 2usize + 0usize) * nt] = 1.0f64
+    cur[(2usize * 2usize + 1usize) * nt] = 1.0f64
+    var i = 2usize
+    while i < n {
+        q = 0usize
+        while q < sz {
+            nxt[q] = 0.0f64
+            q += 1usize
+        }
+        var j = 1usize
+        while j <= i {
+            var s = 0usize
+            while s < 2usize {
+                var t = 0usize
+                while t < nt {
+                    let v = cur[(j * 2usize + s) * nt + t]
+                    if v != 0.0f64 {
+                        var jp = 1usize
+                        while jp <= i + 1usize {
+                            var sn = 0usize
+                            if jp > j { sn = 1usize }
+                            var tn = t
+                            if sn != s { tn += 1usize }
+                            nxt[(jp * 2usize + sn) * nt + tn] += v
+                            jp += 1usize
+                        }
+                    }
+                    t += 1usize
+                }
+                s += 1usize
+            }
+            j += 1usize
+        }
+        q = 0usize
+        while q < sz {
+            cur[q] = nxt[q]
+            q += 1usize
+        }
+        i += 1usize
+    }
+    var fact = 1.0f64
+    q = 2usize
+    while q <= n {
+        fact *= f64(q)
+        q += 1usize
+    }
+    var j = 1usize
+    while j <= n {
+        var s = 0usize
+        while s < 2usize {
+            var t = 0usize
+            while t + 1usize < n {
+                pmf[t] += cur[(j * 2usize + s) * nt + t] / fact
+                t += 1usize
+            }
+            s += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
+// pastecs::pgleissberg for one (n, k): the exact distribution below 50 observations, the normal approximation from 50
+fn pgleissberg(a: *mem.Arena, n: usize, k: f64, lower: bool, two_tailed: bool) -> (f64, err) {
+    let nf = f64(n)
+    if n < 3usize || k < 0.0f64 || k > nf - 2.0f64 { ret (0.0f64, ok) }
+    if n >= 50usize {
+        let mu = 2.0f64 / 3.0f64 * (nf - 2.0f64)
+        let sd = math.sqrt[f64]((16.0f64 * nf - 29.0f64) / 90.0f64)
+        let p = dist.pnorm(k, mu, sd, true, false)
+        if two_tailed {
+            var r = p
+            if r > 0.5f64 { r = 1.0f64 - r }
+            ret (2.0f64 * r, ok)
+        }
+        if lower { ret (p, ok) }
+        ret (1.0f64 - p, ok)
+    }
+    let (pmf, e) = mem.alloc[f64](a, n)
+    if e != ok { ret (0.0f64, e) }
+    let e2 = gleissberg_pmf(a, n, pmf)
+    if e2 != ok { ret (0.0f64, e2) }
+    // the package's table holds P(K <= c - 1) at the 1-based column c; its lower tail is the complement
+    if two_tailed {
+        let mu = 2.0f64 / 3.0f64 * (nf - 2.0f64)
+        let delta = math.abs[f64](mu - k)
+        let c1 = usize(math.floor[f64](mu - delta + 1.0f64))
+        let c2 = usize(math.floor[f64](mu + delta + 1.0f64))
+        var s1 = 0.0f64
+        var s2 = 0.0f64
+        var t = 0usize
+        while t < n - 1usize {
+            if t + 1usize <= c1 { s1 += pmf[t] }
+            if t + 1usize <= c2 { s2 += pmf[t] }
+            t += 1usize
+        }
+        ret (s1 + (1.0f64 - s2), ok)
+    }
+    let kk = usize(k)
+    var tab = 0.0f64
+    var t = 0usize
+    while t <= kk && t < n - 1usize {
+        tab += pmf[t]
+        t += 1usize
+    }
+    if lower { ret (1.0f64 - tab, ok) }
+    ret (tab, ok)
+}
+
+fn gmt(m: f64, t: f64) -> f64 {
+    if t == 0.0f64 { ret 1.0f64 }
+    var sum = 1.0f64 + t * (m - 1.0f64) / m
+    var it = 1.0f64
+    var del = 1.0f64
+    var go = true
+    while go {
+        it += 1.0f64
+        if !(del > 1.0e-4f64 && it < 20.0f64) {
+            go = false
+        } else {
+            let j = it
+            var st = (2.0f64 * j - 1.0f64) * math.log[f64](m - 1.0f64) + j * math.log[f64](t) - j * math.log[f64](m)
+            var q = 2.0f64
+            // sum(log(c(2:j - 1) * 2 - 1 + m)): the sequence (2:j) - 1 = 1..j-1 times 2, minus 1, plus m
+            var qq = 1.0f64
+            while qq <= j - 1.0f64 {
+                st -= math.log[f64](qq * 2.0f64 - 1.0f64 + m)
+                qq += 1.0f64
+            }
+            qq = 1.0f64
+            while qq <= j {
+                st -= math.log[f64](qq)
+                qq += 1.0f64
+            }
+            let sum2 = sum + math.exp[f64](st)
+            del = math.abs[f64]((sum - sum2) / sum)
+            sum = sum2
+            q += 0.0f64
+        }
+    }
+    ret sum
+}
+
+// pastecs::pennington for a sample with no missing values: calc 0 mean, 1 variance of the mean (the package's "var"), 2 mean.var; the Gmt series stops once its relative change is below 1e-4 or at 19 terms
+fn pennington(x: []const f64, calc: usize) -> f64 {
+    let n = f64(x.len)
+    var m = 0.0f64
+    var sl = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        if x[i] > 0.0f64 {
+            m += 1.0f64
+            sl += math.log[f64](x[i])
+        }
+        i += 1usize
+    }
+    if m == 0.0f64 { ret 0.0f64 }
+    let ml = sl / m
+    var vl = 0.0f64 / 0.0f64
+    if m > 1.0f64 {
+        var ss = 0.0f64
+        i = 0usize
+        while i < x.len {
+            if x[i] > 0.0f64 {
+                let d = math.log[f64](x[i]) - ml
+                ss += d * d
+            }
+            i += 1usize
+        }
+        vl = ss / (m - 1.0f64)
+    }
+    if m == 1.0f64 {
+        if calc == 0usize { ret math.exp[f64](ml) / n }
+        ret math.exp[f64](ml) * math.exp[f64](ml) / n
+    }
+    if calc == 0usize { ret m / n * math.exp[f64](ml) * gmt(m, vl / 2.0f64) }
+    if calc == 1usize { ret m / n * math.exp[f64](2.0f64 * ml) * (gmt(m, 2.0f64 * vl) - (m - 1.0f64) / (n - 1.0f64) * gmt(m, (m - 2.0f64) / (m - 1.0f64) * vl)) }
+    ret m / n * math.exp[f64](2.0f64 * ml) * (m / n * gmt(m, vl / 2.0f64) * gmt(m, vl / 2.0f64) - (m - 1.0f64) / (n - 1.0f64) * gmt(m, (m - 2.0f64) / (m - 1.0f64) * vl))
+}

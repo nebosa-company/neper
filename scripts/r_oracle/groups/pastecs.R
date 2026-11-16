@@ -67,4 +67,17 @@ for (rep in 1:60) {
   v <- r$y[[1]]
   for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("reg", c(6, 0, nx, x, y, xmin, no, dt, meth, ru, f, win, i - 1), v[i], rel = 1e-9, abs = 1e-10)
 }
+# pgleissberg (fn "pg", args (7, 0, 0, n, k, lower, two.tailed)) and pennington (fn "pen", args (8, 0, nx, x, calc): 0 mean, 1 var, 2 mean.var)
+for (n in c(3:49, 50, 60, 100, 250)) for (k in 0:(n - 2)) for (lt in 0:1) {
+  if (n > 60 && k %% 7 != 0) next
+  cases[[length(cases) + 1]] <- case("pg", c(7, 0, 0, n, k, lt, 0), pgleissberg(n, k, lower.tail = lt == 1), rel = 1e-9, abs = 1e-12)
+}
+for (n in c(4:49, 55, 100)) for (k in unique(c(0:(n - 2))[c(TRUE, FALSE, FALSE)])) {
+  v <- tryCatch(pgleissberg(n, k, two.tailed = TRUE), error = function(e) NA)
+  if (is.finite(v)) cases[[length(cases) + 1]] <- case("pg", c(7, 0, 0, n, k, 1, 1), v, rel = 1e-9, abs = 1e-12)
+}
+for (rep in 1:60) {
+  nx <- sample(2:40, 1); x <- ifelse(runif(nx) < c(0, 0.3, 0.6)[rep %% 3 + 1], 0, round(rlnorm(nx, 1, c(0.5, 1, 1.5)[sample(3, 1)]), 3))
+  for (ca in 0:2) { v <- pennington(x, calc = c("mean", "var", "mean.var")[ca + 1]); if (is.finite(v)) cases[[length(cases) + 1]] <- case("pen", c(8, 0, nx, x, ca), unname(v), rel = 1e-9, abs = 1e-12) }
+}
 emit("pastecs", "pastecs", list(cases))

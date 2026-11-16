@@ -21,6 +21,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "tt_s") { ret tt.s }
         ret tt.p
     }
+    if str.eq(nm, "pg") {
+        let (v, ge) = pc.pgleissberg(a, usize(z[3usize]), z[4usize], z[5usize] > 0.5f64, z[6usize] > 0.5f64)
+        if ge != ok { ret 0.0f64 / 0.0f64 }
+        ret v
+    }
+    if str.eq(nm, "pen") { ret pc.pennington(x, usize(z[3usize + n])) }
     if str.eq(nm, "reg") {
         let b = 3usize + n
         let no = usize(z[b + n + 1usize])
