@@ -379,3 +379,4 @@ oracle_timereg
 oracle_riskregression
 oracle_osqp
 oracle_polca
+oracle_geometry

@@ -1604,10 +1604,10 @@
       "group": "CRAN parity",
       "order": 776,
       "title": "geometry: Qhull in n dimensions",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 722). Mid to large. e.algo.geom and geom3 cover two and three dimensions only in part. Acceptance, equal to geometry: convhulln with volume and area, delaunayn, tsearch, tsearchn, inhulln, intersectn, surf.tri, dot, cart2bary, and the Voronoi vertices, in 2 to 6 dimensions."
+      "evidence": "Partial (D6645). e.algo.stat.geometrypkg equals geometry convhulln("FA") on Windows for points in the plane (monotone chain: edges, perimeter, area) and in space (supporting-plane test over point triples: triangle facets, surface area, volume) (oracle_geometry, 90 values; Linux pending). Open: higher dimensions, delaunayn and Voronoi, the other Qhull options, degenerate (coplanar) input, tsearch, inhulln, distmesh, intersections. Was: Open (CRAN rank 722). Mid to large. e.algo.geom and geom3 cover two and three dimensions only in part. Acceptance, equal to geometry: convhulln with volume and area, delaunayn, tsearch, tsearchn, inhulln, intersectn, surf.tri, dot, cart2bary, and the Voronoi vertices, in 2 to 6 dimensions."
     },
     {
       "id": "L463",
