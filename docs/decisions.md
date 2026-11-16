@@ -46186,3 +46186,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.dicedesign` gains `faure_prime` (the Faure sequence of prime^u - 1 points scaled by prime^u and divided by n + 1, as the default range does, with the same rounding) and `discrep_ese_l2star`. The package's discrepESE_LHS with criterion L2star mixes quantities: it starts from the L2star discrepancy, but each candidate returns a squared value (p plus the change in the squared discrepancy), the acceptance test compares that with the unsquared start, and after the first accepted swap dL2 holds a squared value that is squared again as p. The port reproduces that bookkeeping rather than correcting it, since equal to the package is the acceptance.
 
 **Result.** `oracle_dicedesign` equals DiceDesign on 226 cases on Windows, 10 of them new (8 seeded L2star searches, faureprimeDesign over dimensions 3 to 9 with u 1 and 2). Every item of L426's acceptance list is now covered, so L426 reaches score 1 and moves from docs/work-queue.json to docs/work-done.jsonl; Linux pending until WSL answers.
+
+## D6503 — minpack.lm: lmder with an analytic Jacobian
+
+`e.algo.stat.minpacklm` now has one core, `nls_lm_core`, with the numerical-Jacobian path (lmdif, which charges n function evaluations) and an analytic one (lmder, where the user's Jacobian of the residuals is taken at the clamped parameters and no evaluations are charged); `nls_lm` and the new `nls_lm_der` are thin entries over it, so the drc module that calls `nls_lm` is unchanged.
+
+**Result.** `oracle_minpacklm` agrees with minpack.lm on 340 values on Windows, 170 of them new: nls.lm with `jac` on 30 fits of the three model families (one with a bound), parameters, deviance, info code and iteration count, rel 1e-6. The diag option, hessian and the nlsLM model interface are open; Linux pending. L420 stays partial.

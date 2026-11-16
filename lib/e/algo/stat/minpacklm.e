@@ -393,7 +393,7 @@ fn lmpar(n: usize, ldr: usize, r: []f64, ipvt: []const usize, diag: []const f64,
 // nls.lm(par, lower, upper, fn) with the default control (ftol = ptol = sqrt(eps), gtol = 0, epsfcn = 0,
 // factor = 100, maxiter = 50, maxfev = 100 (n + 1)); x holds the start and receives the solution; fn writes the
 // m residuals
-fn nls_lm[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), user: *C, m: usize, n: usize, x: []f64, lower: []const f64, upper: []const f64, ftol: f64, ptol: f64, gtol: f64, maxfev: i64, maxiter: i64) -> (Fit, err) {
+fn nls_lm_core[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C, []const f64, []f64), analytic: bool, user: *C, m: usize, n: usize, x: []f64, lower: []const f64, upper: []const f64, ftol: f64, ptol: f64, gtol: f64, maxfev: i64, maxiter: i64) -> (Fit, err) {
     var fit: Fit = zero
     let (fvec, e1) = mem.alloc[f64](a, m)
     let (fjac, e2) = mem.alloc[f64](a, m * n)
@@ -421,8 +421,14 @@ fn nls_lm[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), user: *C, m: us
     var i = 0usize
     var outer = iflag >= 0i64
     while outer {
-        iflag = fdjac2[C](&o, m, n, x, fvec, fjac, 0.0f64, wa4)
-        nfev += i64(n)
+        if analytic {
+            // lmder: the user's Jacobian of the residuals at the clamped x, in the column-major layout fdjac2 fills; no function evaluations are charged
+            jac(user, x, fjac)
+            iflag = 2i64
+        } else {
+            iflag = fdjac2[C](&o, m, n, x, fvec, fjac, 0.0f64, wa4)
+            nfev += i64(n)
+        }
         if iflag < 0i64 { break }
         iflag = call[C](&o, x, fvec, 0i64)
         if iflag < 0i64 { break }
@@ -593,4 +599,16 @@ fn nls_lm[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), user: *C, m: us
     }
     fit.deviance = dev
     ret (fit, ok)
+}
+
+// nls.lm with the numerical Jacobian (lmdif)
+fn nls_lm[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), user: *C, m: usize, n: usize, x: []f64, lower: []const f64, upper: []const f64, ftol: f64, ptol: f64, gtol: f64, maxfev: i64, maxiter: i64) -> (Fit, err) {
+    let (fit, e) = nls_lm_core[C](a, f, f, false, user, m, n, x, lower, upper, ftol, ptol, gtol, maxfev, maxiter)
+    ret (fit, e)
+}
+
+// nls.lm with an analytic Jacobian (lmder): jac fills the m by n Jacobian of the residuals column by column (fjac[j * m + i] = d resid_i / d x_j)
+fn nls_lm_der[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C, []const f64, []f64), user: *C, m: usize, n: usize, x: []f64, lower: []const f64, upper: []const f64, ftol: f64, ptol: f64, gtol: f64, maxfev: i64, maxiter: i64) -> (Fit, err) {
+    let (fit, e) = nls_lm_core[C](a, f, jac, true, user, m, n, x, lower, upper, ftol, ptol, gtol, maxfev, maxiter)
+    ret (fit, e)
 }

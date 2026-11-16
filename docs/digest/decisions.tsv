@@ -3370,4 +3370,5 @@ D6498	757	metafor: leave1out
 D6499	703	metafor: the Knapp-Hartung test
 D6500	936	PerformanceAnalytics: Return.calculate, and L408 lands
 D6501	915	DiceDesign: the two enhanced stochastic evolutionary searches
-D6502	1088	DiceDesign: faureprimeDesign and the L2star search, and L426 lands
+D6502	1089	DiceDesign: faureprimeDesign and the L2star search, and L426 lands
+D6503	783	minpack.lm: lmder with an analytic Jacobian

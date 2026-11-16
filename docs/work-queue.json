@@ -97,10 +97,10 @@
       "group": "CRAN parity",
       "order": 568,
       "title": "minpack.lm: Levenberg-Marquardt least squares",
-      "score": 0.5,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6078): e.algo.stat.minpacklm.nls_lm is lmdif ported line for line with the package wrapper (bounds, iteration count, info codes), equal to nls.lm on 170 values on Windows including info and niter (oracle_minpacklm); Linux pending. Open: lmder with analytic Jacobian, diag option, hessian, nlsLM model interface. Original: Open (CRAN rank 620). Small. Acceptance, equal to minpack.lm: nls.lm with its MINPACK lmder and lmdif iterations, termination codes, covariance and nlsLM on the nls model interface including bounds."
+      "evidence": "Partly done (D6503 lmder with an analytic Jacobian, D6078): e.algo.stat.minpacklm.nls_lm is lmdif ported line for line with the package wrapper (bounds, iteration count, info codes), equal to nls.lm on 170 values on Windows including info and niter (oracle_minpacklm); Linux pending. Open: diag option, hessian, nlsLM model interface. Original: Open (CRAN rank 620). Small. Acceptance, equal to minpack.lm: nls.lm with its MINPACK lmder and lmdif iterations, termination codes, covariance and nlsLM on the nls model interface including bounds."
     },
     {
       "id": "L421",

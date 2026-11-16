@@ -7,6 +7,7 @@ use e.io
 use e.math
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 type Data = struct { id: usize, t: []const f64, y: []const f64 }
@@ -19,6 +20,33 @@ fn resid(d: *Data, p: []const f64, out: []f64) {
         if d.id == 1usize { v = p[0usize] * d.t[i] / (p[1usize] + d.t[i]) }
         if d.id == 2usize { v = p[0usize] / (1.0f64 + math.exp[f64](0.0f64 - (d.t[i] - p[1usize]) / p[2usize])) }
         out[i] = d.y[i] - v
+        i += 1usize
+    }
+}
+
+fn jac(d: *Data, p: []const f64, out: []f64) {
+    let m = d.t.len
+    var i = 0usize
+    while i < m {
+        let t = d.t[i]
+        if d.id == 0usize {
+            let e = math.exp[f64](0.0f64 - p[1usize] * t)
+            out[0usize * m + i] = 0.0f64 - e
+            out[1usize * m + i] = p[0usize] * t * e
+            out[2usize * m + i] = 0.0f64 - 1.0f64
+        }
+        if d.id == 1usize {
+            out[0usize * m + i] = 0.0f64 - t / (p[1usize] + t)
+            out[1usize * m + i] = p[0usize] * t / ((p[1usize] + t) * (p[1usize] + t))
+        }
+        if d.id == 2usize {
+            let s = (t - p[1usize]) / p[2usize]
+            let u = math.exp[f64](0.0f64 - s)
+            let den = 1.0f64 + u
+            out[0usize * m + i] = 0.0f64 - 1.0f64 / den
+            out[1usize * m + i] = p[0usize] * u / (p[2usize] * den * den)
+            out[2usize * m + i] = p[0usize] * u * s / (p[2usize] * den * den)
+        }
         i += 1usize
     }
 }
@@ -40,7 +68,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let hi = z[3usize + 2usize * n + 2usize * np..3usize + 2usize * n + 3usize * np]
     let q = usize(z[3usize + 2usize * n + 3usize * np])
     let sq = 1.4901161193847656e-8f64
-    let (fit, e) = ml.nls_lm[Data](a, resid, &d, n, np, x, lo, hi, sq, sq, 0.0f64, i64(100usize * (np + 1usize)), 50i64)
+    var fit: ml.Fit = zero
+    var e: err = ok
+    if str.eq(c.name, "lmder") {
+        let (f2, e2) = ml.nls_lm_der[Data](a, resid, jac, &d, n, np, x, lo, hi, sq, sq, 0.0f64, i64(100usize * (np + 1usize)), 50i64)
+        fit = f2
+        e = e2
+    } else {
+        let (f2, e2) = ml.nls_lm[Data](a, resid, &d, n, np, x, lo, hi, sq, sq, 0.0f64, i64(100usize * (np + 1usize)), 50i64)
+        fit = f2
+        e = e2
+    }
     if e != ok { ret 0.0f64 / 0.0f64 }
     if q < np { ret x[q] }
     if q == np { ret fit.deviance }
