@@ -46450,3 +46450,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `bw_sj` ports stats::bw.SJ for "sj-ste" and "sj-dpi" on the shared pair counts (now `pair_cnts`): the order 4 and 6 functionals `C_bw_phi4` and `C_bw_phi6`, a = 1.24 scale n^(-1/7), b = 1.23 scale n^(-1/9), TD = -phi6(b), the dpi plug-in, and for ste the root of `(c1 / phi4(alph2 h^(5/7)))^(1/5) - h` by R_zeroin2 over [0.1 hmax, hmax] widened by 1.2 per try; a sample too sparse for TD or alph2 returns NaN where R stops. meanshift takes them as modes 5 and 6.
 
 **Result.** `oracle_modeest` agrees with modeest on 33 new meanshift values with SJ bandwidths on Windows; Linux pending. L472's acceptance (mlv with every method) is covered except abc = TRUE, which modeest itself leaves unimplemented.
+
+## D6547 — L472 closed
+
+**Decision.** L472 is delivered: every estimator modeest can run (venter, shorth, hsm, grenander, meanshift, asselin, tsybakov, lientz, naive, parzen, vieu) equals modeest on Windows, with the kernels and bandwidth rules those functions accept. `hrm` is defunct in modeest itself and `abc = TRUE` is `.NotYetImplemented()` there, so neither can be matched.
+
+**Result.** L472 leaves the queue; Linux runs of oracle_modeest and oracle_parzen are batched with the others.
