@@ -1868,10 +1868,10 @@
       "group": "CRAN parity",
       "order": 810,
       "title": "bnlearn: Bayesian network learning",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 397). Large. Acceptance, equal to bnlearn: hc and tabu with the BIC, AIC, BDe, K2 and BGe scores, pc.stable, gs, iamb, fast.iamb, inter.iamb, mmpc, mmhc, h2pc, bn.fit with parameters, cpquery and cpdist under set.seed, arc.strength, boot.strength, ci.test, score."
+      "evidence": "Partial (D6630). e.algo.stat.bnlearnpkg equals bnlearn score for a given DAG on Windows: discrete loglik, aic, bic, bde and k2, and Gaussian loglik-g, aic-g and bic-g (oracle_bnlearn, 96 values; Linux pending). Open: structure learning (hc, tabu, pc, gs, mmhc), bds and the other Dirichlet scores, conditional Gaussian networks, parameter fitting, inference (cpquery), bn.boot. Was: Open (CRAN rank 397). Large. Acceptance, equal to bnlearn: hc and tabu with the BIC, AIC, BDe, K2 and BGe scores, pc.stable, gs, iamb, fast.iamb, inter.iamb, mmpc, mmhc, h2pc, bn.fit with parameters, cpquery and cpdist under set.seed, arc.strength, boot.strength, ci.test, score."
     },
     {
       "id": "L374",

@@ -46904,3 +46904,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `rmspkg.rcs` builds the restricted cubic spline basis for given knots: x, then for j = 1 .. k-2 the cubic terms `(x - t_j)+^3 - (x - t_{k-1})+^3 (t_k - t_j)/(t_k - t_{k-1}) + (x - t_k)+^3 (t_{k-1} - t_j)/(t_k - t_{k-1})` divided by `(t_k - t_1)^2`. `ols` and the binary `lrm` take that design plus covariates; lrm is Newton to a step of 1e-13, with the C index as the concordant-pair share (ties one half), Dxy = 2(C - 0.5) and Nagelkerke R2 `(1 - exp(-LR/n)) / (1 - exp(2 LL0 / n))`.
 
 **Result.** `oracle_rms` agrees with rms on Windows (264 values, 60 to 200 observations, 3 to 5 knots); Linux pending. L374 stays partial: datadist knots, penalisation, ordinal and survival models, validation tools.
+
+## D6630 — bnlearn: network scores of a given DAG
+
+**Decision.** `bnlearnpkg.discrete` counts each node by parent configuration and gives the log-likelihood `sum n_ijk log(n_ijk / n_ij)`, AIC (minus the parameter count `q (r - 1)` per node), BIC (minus `log(n)/2` times it), BDe with `alpha_ijk = iss / (r q)` and K2 with `alpha_ijk = 1`. `gaussian` regresses each node on its parents and scores `-n/2 log(2 pi s2) - RSS / (2 s2)` with `s2 = RSS / (n - q)`, the unbiased variance, not the maximum-likelihood RSS/n; the parameter count is parents plus intercept plus variance. With the ML variance the log-likelihood was off by 0.03 to 0.1.
+
+**Result.** `oracle_bnlearn` agrees with bnlearn on Windows (96 values, 3 to 6 nodes, 60 to 300 rows); Linux pending. L373 stays partial: structure learning, bds, conditional Gaussian, inference.
