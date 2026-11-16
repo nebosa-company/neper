@@ -234,3 +234,4 @@ oracle_leaps
 oracle_bigglm
 oracle_vcdeffect
 oracle_cmprsk
+oracle_crr
