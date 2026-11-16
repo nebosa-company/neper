@@ -304,3 +304,128 @@ fn roc_best(a: *mem.Arena, y: []const f64, x: []const f64, cost: f64, prev: f64,
     }
     ret (cnt, first, best)
 }
+
+// auc(r, partial.auc = c(hi, lo), partial.auc.focus, partial.auc.correct) on the curve of roc(): focus 0 specificity, 1 sensitivity; hi >= lo within [0, 1]; NaN where R gives NA
+fn partial_auc(a: *mem.Arena, y: []const f64, x: []const f64, hi: f64, lo: f64, focus: usize, correct: bool) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let higher = cases_higher(a, y, x)
+    let (u, e) = mem.alloc[f64](a, x.len)
+    if e != ok { ret nan }
+    var i = 0usize
+    while i < x.len {
+        u[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < u.len {
+        let t = u[i]
+        var j = i
+        while j > 0usize && u[j - 1usize] > t {
+            u[j] = u[j - 1usize]
+            j -= 1usize
+        }
+        u[j] = t
+        i += 1usize
+    }
+    var k = 0usize
+    i = 0usize
+    while i < u.len {
+        if i == 0usize || u[i] != u[i - 1usize] {
+            u[k] = u[i]
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let inf = 1.0f64 / 0.0f64
+    let np = k + 1usize
+    let (se, e1) = mem.alloc[f64](a, np)
+    if e1 != ok { ret nan }
+    let (sp, e2) = mem.alloc[f64](a, np)
+    if e2 != ok { ret nan }
+    var j = 0usize
+    while j <= k {
+        var t = inf
+        if j == 0usize { t = 0.0f64 - inf } else if j < k { t = (u[j - 1usize] + u[j]) / 2.0f64 }
+        let (s1, s2) = coords_at(y, x, higher, t)
+        // sort_roc: specificities ascending
+        var at = j
+        if !higher { at = k - j }
+        se[at] = s1
+        sp[at] = s2
+        j += 1usize
+    }
+    let (px, e3) = mem.alloc[f64](a, np)
+    if e3 != ok { ret nan }
+    let (py, e4) = mem.alloc[f64](a, np)
+    if e4 != ok { ret nan }
+    i = 0usize
+    while i < np {
+        if focus == 1usize {
+            px[i] = se[np - 1usize - i]
+            py[i] = sp[np - 1usize - i]
+        } else {
+            px[i] = sp[i]
+            py[i] = se[i]
+        }
+        i += 1usize
+    }
+    var auc = 0.0f64
+    var first = np
+    var last = 0usize
+    var cnt = 0usize
+    var has_hi = false
+    var has_lo = false
+    i = 0usize
+    while i < np {
+        if px[i] <= hi && px[i] >= lo {
+            if cnt == 0usize { first = i }
+            last = i
+            cnt += 1usize
+            if px[i] == hi { has_hi = true }
+            if px[i] == lo { has_lo = true }
+        }
+        i += 1usize
+    }
+    if cnt > 0usize {
+        i = first
+        while i < last {
+            auc += (py[i + 1usize] + py[i]) / 2.0f64 * (px[i + 1usize] - px[i])
+            i += 1usize
+        }
+    }
+    if cnt == 0usize {
+        var ih = 0usize
+        while ih < np && px[ih] < hi { ih += 1usize }
+        let il = ih - 1usize
+        let ph = (px[ih] - hi) / (px[ih] - px[il])
+        let pl = (lo - px[il]) / (px[ih] - px[il])
+        let yh = py[ih] + ph * (py[il] - py[ih])
+        let yl = py[il] - pl * (py[il] - py[ih])
+        auc = (yh + yl) / 2.0f64 * (hi - lo)
+    } else {
+        if !has_hi {
+            var io = 0usize
+            while io < np && px[io] < hi { io += 1usize }
+            let ii = io - 1usize
+            let pr = (hi - px[io]) / (px[ii] - px[io])
+            let yi = py[io] + pr * (py[ii] - py[io])
+            auc += (hi - px[ii]) * (py[ii] + yi) / 2.0f64
+        }
+        if !has_lo {
+            var io = 0usize
+            while io < np && !(px[io] > lo) { io += 1usize }
+            io -= 1usize
+            let ii = io + 1usize
+            let pr = (px[ii] - lo) / (px[ii] - px[io])
+            let yi = py[ii] + pr * (py[io] - py[ii])
+            auc += (px[ii] - lo) * (py[ii] + yi) / 2.0f64
+        }
+    }
+    if correct {
+        let mn = ((1.0f64 - hi) + (1.0f64 - lo)) * (hi - lo) / 2.0f64
+        let mx = hi - lo
+        if auc < mn { ret nan }
+        auc = (1.0f64 + (auc - mn) / (mx - mn)) / 2.0f64
+    }
+    ret auc
+}

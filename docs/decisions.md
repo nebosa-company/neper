@@ -46306,3 +46306,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `roc_best` evaluates pROC's `roc_utils_optim_crit` (youden `se + r sp`, closest.topleft `-((1-se)^2 + r (1-sp)^2)`, `r = (1-prev)/(cost*prev)`) over the curve and returns the number of thresholds tied at the maximum (exact equality, as R), the lowest of them and the maximum.
 
 **Result.** `oracle_proc` agrees with pROC on 120 more values on Windows; Linux pending. Partial and smoothed curves, bootstrap and other roc.test methods stay open; L324 stays partial.
+
+## D6523 — pROC: partial AUC
+
+**Decision.** `partial_auc` builds the roc() curve sorted by ascending specificity (sort_roc), swaps axes for sensitivity focus, and ports auc.roc line by line: trapezoids over the points inside [lo, hi], interpolated boundary pieces where hi or lo is not a point (exact `%in%` equality), the no-point-inside case, and the McClish correction `(1 + (auc - min)/(max - min))/2` with NaN below the diagonal.
+
+**Result.** `oracle_proc` agrees with pROC on 117 partial-AUC values on Windows; Linux pending. Smoothed curves, bootstrap and other roc.test methods stay open; L324 stays partial.

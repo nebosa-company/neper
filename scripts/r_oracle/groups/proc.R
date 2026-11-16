@@ -32,4 +32,12 @@ for (rep in 1:20) {
     a <- c(n, y, x1, x1, m, cost, prev); add("bcnt", a, nrow(cb)); add("bthr", a, cb$threshold[1]); r <- (1 - prev) / (cost * prev)
     add("bcrit", a, if (m == 0) max(cb$sensitivity + r * cb$specificity) else max(-((1 - cb$sensitivity)^2 + r * (1 - cb$specificity)^2))) }
 }
+# partial auc: ("pauc") args (n, y, x1, x2, hi, lo, focus 0 specificity 1 sensitivity, correct)
+for (rep in 1:30) {
+  n <- sample(20:80, 1); y <- rbinom(n, 1, 0.4); if (sum(y) < 3 || sum(y) > n - 3) next
+  s <- c(0.8, 1.5, -0.7, 0.3)[rep %% 4 + 1]; x1 <- round(rnorm(n) + s * y, if (rep %% 3 == 0) 1 else 4); r1 <- roc(y, x1, quiet = TRUE)
+  for (it in 1:4) { hi <- sample(c(1, 0.95, 0.9, 0.85), 1); lo <- sample(c(0.8, 0.75, 0.6, 0.5, 0.7), 1); foc <- sample(0:1, 1); cor <- sample(0:1, 1)
+    v <- suppressWarnings(tryCatch(as.numeric(auc(r1, partial.auc = c(hi, lo), partial.auc.focus = c("specificity", "sensitivity")[foc + 1], partial.auc.correct = cor == 1)), error = function(e) NA))
+    add("pauc", c(n, y, x1, x1, hi, lo, foc, cor), v) }
+}
 emit("proc", "pROC", list(cases))

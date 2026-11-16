@@ -28,6 +28,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "bthr") { ret bt }
         ret bq
     }
+    if str.eq(k, "pauc") { ret pr.partial_auc(a, y, x1, x[3usize * n + 1usize], x[3usize * n + 2usize], usize(x[3usize * n + 3usize]), x[3usize * n + 4usize] > 0.5f64) }
     if str.eq(k, "atsens") || str.eq(k, "atspec") {
         let (se, sc) = pr.coords_at(y, x1, pr.cases_higher(a, y, x1), x[1usize + 3usize * n])
         if str.eq(k, "atsens") { ret se }
