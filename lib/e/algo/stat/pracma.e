@@ -1349,3 +1349,90 @@ fn pinv_full(a: *mem.Arena, m: []const f64, rows: usize, cols: usize, out: []f64
     }
     ret true
 }
+
+// the singular values of the m by n row-major matrix (m >= n or not) by one-sided Jacobi rotations on a copy of its columns, in descending order into s (min(m, n) values);
+// work holds m * n + n values
+fn singular_values(a: []const f64, m: usize, n: usize, s: []f64, work: []f64) {
+    // work on the matrix with more rows than columns: transpose a wide input
+    var rows = m
+    var cols = n
+    var wide = false
+    if m < n {
+        rows = n
+        cols = m
+        wide = true
+    }
+    let u = work[0usize..rows * cols]
+    var i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < n {
+            if wide { u[j * cols + i] = a[i * n + j] } else { u[i * cols + j] = a[i * n + j] }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var sweep = 0usize
+    while sweep < 60usize {
+        var rotated = false
+        var p = 0usize
+        while p + 1usize < cols {
+            var q = p + 1usize
+            while q < cols {
+                var alpha = 0.0f64
+                var beta = 0.0f64
+                var gamma = 0.0f64
+                var r = 0usize
+                while r < rows {
+                    alpha += u[r * cols + p] * u[r * cols + p]
+                    beta += u[r * cols + q] * u[r * cols + q]
+                    gamma += u[r * cols + p] * u[r * cols + q]
+                    r += 1usize
+                }
+                if math.abs[f64](gamma) > 1.0e-15f64 * math.sqrt[f64](alpha * beta) && gamma != 0.0f64 {
+                    rotated = true
+                    let zeta = (beta - alpha) / (2.0f64 * gamma)
+                    var t = 1.0f64 / (math.abs[f64](zeta) + math.sqrt[f64](1.0f64 + zeta * zeta))
+                    if zeta < 0.0f64 { t = 0.0f64 - t }
+                    let c = 1.0f64 / math.sqrt[f64](1.0f64 + t * t)
+                    let sn = c * t
+                    r = 0usize
+                    while r < rows {
+                        let up = u[r * cols + p]
+                        let uq = u[r * cols + q]
+                        u[r * cols + p] = c * up - sn * uq
+                        u[r * cols + q] = sn * up + c * uq
+                        r += 1usize
+                    }
+                }
+                q += 1usize
+            }
+            p += 1usize
+        }
+        if !rotated { break }
+        sweep += 1usize
+    }
+    var c = 0usize
+    while c < cols {
+        var ss = 0.0f64
+        var r = 0usize
+        while r < rows {
+            ss += u[r * cols + c] * u[r * cols + c]
+            r += 1usize
+        }
+        s[c] = math.sqrt[f64](ss)
+        c += 1usize
+    }
+    // descending order
+    var a2 = 1usize
+    while a2 < cols {
+        let t = s[a2]
+        var b2 = a2
+        while b2 > 0usize && s[b2 - 1usize] < t {
+            s[b2] = s[b2 - 1usize]
+            b2 -= 1usize
+        }
+        s[b2] = t
+        a2 += 1usize
+    }
+}

@@ -108,4 +108,9 @@ for (rep in 1:25) {
   m <- sample(2:7, 1); n <- sample(2:7, 1); M <- matrix(round(rnorm(m * n), 3), m, n); P <- pinv(M)
   for (i in sample(n, min(2, n))) for (j in sample(m, min(2, m))) add("pinv", c(m, n, i - 1, j - 1, as.vector(t(M))), P[i, j])
 }
+for (rep in 1:30) {
+  m <- sample(2:8, 1); n <- sample(2:8, 1); M <- matrix(round(rnorm(m * n), 3), m, n); sv <- svd(M)$d
+  for (k in seq_along(sv)) add("sval", c(m, n, k - 1, as.vector(t(M))), sv[k])
+  if (m == n) add("cond", c(m, n, 0, as.vector(t(M))), cond(M))
+}
 emit("pracma", "pracma", list(cases))

@@ -220,6 +220,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if !pm.pinv_full(a, x[4usize..4usize + pm_r * pm_c], pm_r, pm_c, po) { os.exit(11) }
         ret po[usize(x[2usize]) * pm_r + usize(x[3usize])]
     }
+    if str.eq(k, "sval") || str.eq(k, "cond") {
+        let sm = usize(x[0usize])
+        let sn = usize(x[1usize])
+        var kk = sn
+        if sm < sn { kk = sm }
+        let (sv, se) = mem.alloc[f64](a, kk)
+        if se != ok { os.exit(12) }
+        let (sw, sw2) = mem.alloc[f64](a, sm * sn + sn)
+        if sw2 != ok { os.exit(13) }
+        pm.singular_values(x[3usize..3usize + sm * sn], sm, sn, sv, sw)
+        if str.eq(k, "cond") { ret sv[0usize] / sv[kk - 1usize] }
+        ret sv[usize(x[2usize])]
+    }
     if str.eq(k, "quadgk") { ret pm.quadgk(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "interp1") {
         let ni = usize(x[1usize])

@@ -3358,4 +3358,5 @@ D6486	818	pracma: fminsearch (Nelder-Mead)
 D6487	607	pracma: savgol
 D6488	923	stats::lowess
 D6489	712	stats::spline: fmm and natural
-D6490	760	pracma: kron and pinv for full-rank matrices
+D6490	761	pracma: kron and pinv for full-rank matrices
+D6491	673	pracma: singular values and cond

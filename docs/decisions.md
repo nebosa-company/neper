@@ -46114,3 +46114,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pracma` gains `kron` (the Kronecker product, row-major), `mat_inverse` (Gauss-Jordan with partial pivoting) and `pinv_full`, the Moore-Penrose inverse of a full-rank matrix as (A'A)^-1 A' for tall and A'(A A')^-1 for wide matrices. pracma's pinv goes through the SVD and also handles rank deficiency, which this does not: a rank-deficient matrix fails the inversion and is reported as such.
 
 **Result.** `oracle_pracma` equals pracma on 1323 cases on Windows at rel 1e-9, 237 of them new: 25 Kronecker products and 25 random 2-to-7 by 2-to-7 matrices, both orientations. null, orth, expm, cond, polyroots and the polynom and caTools functions are open; Linux pending. L333 stays partial.
+
+## D6491 — pracma: singular values and cond
+
+`e.algo.stat.pracma` gains `singular_values`, the singular values of any m by n matrix by one-sided Jacobi (Hestenes) rotations of the columns of the taller orientation until every pair is orthogonal to 1e-15, sorted descending; `cond` is the ratio of the largest to the smallest.
+
+**Result.** `oracle_pracma` equals pracma and R's LAPACK svd on 1438 cases on Windows at rel 1e-9, 115 of them new: every singular value of 30 random 2-to-8 by 2-to-8 matrices and cond of the square ones. The singular vectors, null, orth, rank, expm, polyroots and the polynom and caTools functions are open; Linux pending. L333 stays partial.
