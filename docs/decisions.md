@@ -46730,3 +46730,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** No code: `row` already differentiates the B-splines inside the M-spline scaling, and the I-spline derivative of order k is the M-spline derivative of order k - 1 (the first is the M-spline itself). The oracle now checks mSpline derivs 1 and 2 and iSpline derivs 1 and 2.
 
 **Result.** `oracle_splines2` agrees with splines2 on those 240 summaries on Windows (920 cases in all); Linux pending. L445 stays partial: periodic bases, naturalSpline with fewer than two internal knots, integrals, extrapolation and df-based knots.
+
+## D6591 — splines2: derivatives of M- and I-splines
+
+**Decision.** No new arithmetic: the M-spline derivative is the B-spline derivative with the M-spline normalisation (`row` kind 1 with `deriv`), and the d-th derivative of an I-spline is the (d - 1)-th derivative of the M-spline of the same degree, knots and intercept.
+
+**Result.** `oracle_splines2` agrees with splines2 on 240 derivative summaries (degrees 2 to 4) on Windows (1160 cases in all); Linux pending. L445 stays partial: natural splines with fewer than two knots and periodic bases.
