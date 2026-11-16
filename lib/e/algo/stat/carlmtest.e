@@ -1544,3 +1544,281 @@ fn glm_lr_masked(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usi
     let chi = devs - devb
     ret (chi, nm.pchisq(chi, f64(q), false, false))
 }
+
+// sandwich::kweights for the Quadratic Spectral kernel
+fn qs_weight(x: f64) -> f64 {
+    if math.abs[f64](x) < 0.001f64 {
+        let y = 6.0f64 * 3.141592653589793238462643383279f64 * 0.001f64 / 5.0f64
+        let q = 3.0f64 / (y * y) * (math.sin[f64](y) / y - math.cos[f64](y))
+        let cf = 1.0e6f64 * math.log[f64](q)
+        ret math.exp[f64](cf * x * x)
+    }
+    let y = 6.0f64 * 3.141592653589793238462643383279f64 * x / 5.0f64
+    ret 3.0f64 / (y * y) * (math.sin[f64](y) / y - math.cos[f64](y))
+}
+
+// sandwich::kernHAC(lm) with its defaults: the Quadratic Spectral kernel, bandwidth bwAndrews with the AR(1) approximation, VAR(1) prewhitening of the scores, adjust = TRUE (the intercept column carries weight 0 in the bandwidth); the diagonal of the covariance goes to out
+fn kern_hac_diag(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, out: []f64) -> err {
+    let (f0, e0) = ols(a, x, y, n, p)
+    if e0 != ok { ret e0 }
+    let k = p
+    let (u, e1) = mem.alloc[f64](a, n * k)
+    let (rs, e2) = mem.alloc[f64](a, n * k)
+    let (am, e3) = mem.alloc[f64](a, k * k)
+    let (sm, e4) = mem.alloc[f64](a, k * k)
+    let (si, e5) = mem.alloc[f64](a, k * k)
+    let (dm, e6) = mem.alloc[f64](a, k * k)
+    let (wt, e7) = mem.alloc[f64](a, k)
+    let (ut, e8) = mem.alloc[f64](a, k * k)
+    let (tmp, e9) = mem.alloc[f64](a, k * k)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
+    if e7 != ok { ret e7 }
+    if e8 != ok { ret e8 }
+    if e9 != ok { ret e9 }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < k {
+            u[i * k + c] = f0.resid[i] * x[i * p + c]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    // the intercept column (a constant column) gets weight 0 in the bandwidth
+    var c = 0usize
+    var anyw = false
+    while c < k {
+        wt[c] = 1.0f64
+        var constant = true
+        i = 1usize
+        while i < n {
+            if x[i * p + c] != x[c] { constant = false }
+            i += 1usize
+        }
+        if constant && c == 0usize { wt[c] = 0.0f64 }
+        if wt[c] > 0.5f64 { anyw = true }
+        c += 1usize
+    }
+    if !anyw {
+        c = 0usize
+        while c < k {
+            wt[c] = 1.0f64
+            c += 1usize
+        }
+    }
+    // VAR(1): A = (sum u_t u_{t-1}') (sum u_{t-1} u_{t-1}')^-1 over t = 2 .. n
+    var r = 0usize
+    while r < k {
+        c = 0usize
+        while c < k {
+            var s1 = 0.0f64
+            var s2 = 0.0f64
+            i = 1usize
+            while i < n {
+                s1 += u[i * k + r] * u[(i - 1usize) * k + c]
+                s2 += u[(i - 1usize) * k + r] * u[(i - 1usize) * k + c]
+                i += 1usize
+            }
+            tmp[r * k + c] = s1
+            sm[r * k + c] = s2
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let ie1 = inverse(a, sm, k, si)
+    if ie1 != ok { ret ie1 }
+    r = 0usize
+    while r < k {
+        c = 0usize
+        while c < k {
+            var s = 0.0f64
+            var q = 0usize
+            while q < k {
+                s += tmp[r * k + q] * si[q * k + c]
+                q += 1usize
+            }
+            am[r * k + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let ne = n - 1usize
+    i = 1usize
+    while i < n {
+        r = 0usize
+        while r < k {
+            var s = u[i * k + r]
+            var q = 0usize
+            while q < k {
+                s -= am[r * k + q] * u[(i - 1usize) * k + q]
+                q += 1usize
+            }
+            rs[(i - 1usize) * k + r] = s
+            r += 1usize
+        }
+        i += 1usize
+    }
+    // D = (I - A)^-1
+    r = 0usize
+    while r < k {
+        c = 0usize
+        while c < k {
+            var v = 0.0f64 - am[r * k + c]
+            if r == c { v += 1.0f64 }
+            tmp[r * k + c] = v
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let ie2 = inverse(a, tmp, k, dm)
+    if ie2 != ok { ret ie2 }
+    // the AR(1) approximation per column of the prewhitened scores
+    var denum = 0.0f64
+    var al2 = 0.0f64
+    c = 0usize
+    while c < k {
+        var mean = 0.0f64
+        i = 0usize
+        while i < ne {
+            mean += rs[i * k + c]
+            i += 1usize
+        }
+        mean = mean / f64(ne)
+        // regress z_t on [1, z_{t-1}] for t = 2 .. ne with z the demeaned column
+        var my = 0.0f64
+        var mx = 0.0f64
+        i = 1usize
+        while i < ne {
+            my += rs[i * k + c] - mean
+            mx += rs[(i - 1usize) * k + c] - mean
+            i += 1usize
+        }
+        let m1 = f64(ne - 1usize)
+        my = my / m1
+        mx = mx / m1
+        var sxy = 0.0f64
+        var sxx = 0.0f64
+        i = 1usize
+        while i < ne {
+            sxy += (rs[(i - 1usize) * k + c] - mean - mx) * (rs[i * k + c] - mean - my)
+            sxx += (rs[(i - 1usize) * k + c] - mean - mx) * (rs[(i - 1usize) * k + c] - mean - mx)
+            i += 1usize
+        }
+        let rho = sxy / sxx
+        let b0 = my - rho * mx
+        var ss = 0.0f64
+        i = 1usize
+        while i < ne {
+            let e = rs[i * k + c] - mean - b0 - rho * (rs[(i - 1usize) * k + c] - mean)
+            ss += e * e
+            i += 1usize
+        }
+        let sigma = math.sqrt[f64](ss / m1)
+        let q1 = 1.0f64 - rho
+        denum += wt[c] * math.pow[f64](sigma / q1, 4.0f64)
+        al2 += wt[c] * 4.0f64 * rho * rho * math.pow[f64](sigma, 4.0f64) / math.pow[f64](q1, 8.0f64)
+        c += 1usize
+    }
+    al2 = al2 / denum
+    let bw = 1.3221f64 * math.pow[f64](f64(ne) * al2, 0.2f64)
+    // weights 0 .. ne - 1 of j / bw, truncated after the last with |w| > 1e-7
+    var nw = 0usize
+    var j = 0usize
+    while j < ne {
+        if math.abs[f64](qs_weight(f64(j) / bw)) > 1.0e-7f64 { nw = j + 1usize }
+        j += 1usize
+    }
+    i = 0usize
+    while i < k * k {
+        ut[i] = 0.0f64
+        i += 1usize
+    }
+    j = 0usize
+    while j < nw {
+        let w = qs_weight(f64(j) / bw)
+        var t = j
+        while t < ne {
+            r = 0usize
+            while r < k {
+                c = 0usize
+                while c < k {
+                    let v = rs[t * k + r] * rs[(t - j) * k + c]
+                    if j == 0usize {
+                        ut[r * k + c] += v
+                    } else {
+                        ut[r * k + c] += w * v
+                        ut[c * k + r] += w * v
+                    }
+                    c += 1usize
+                }
+                r += 1usize
+            }
+            t += 1usize
+        }
+        j += 1usize
+    }
+    let adj = f64(n) / f64(n - k)
+    // D (adj ut) D' then (X'X)^-1 [.] (X'X)^-1
+    r = 0usize
+    while r < k {
+        c = 0usize
+        while c < k {
+            var s = 0.0f64
+            var q = 0usize
+            while q < k {
+                s += dm[r * k + q] * ut[q * k + c] * adj
+                q += 1usize
+            }
+            tmp[r * k + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    r = 0usize
+    while r < k {
+        c = 0usize
+        while c < k {
+            var s = 0.0f64
+            var q = 0usize
+            while q < k {
+                s += tmp[r * k + q] * dm[c * k + q]
+                q += 1usize
+            }
+            ut[r * k + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    r = 0usize
+    while r < k {
+        c = 0usize
+        while c < k {
+            var s = 0.0f64
+            var q = 0usize
+            while q < k {
+                s += f0.xtx_inv[r * k + q] * ut[q * k + c]
+                q += 1usize
+            }
+            tmp[r * k + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    r = 0usize
+    while r < k {
+        var s = 0.0f64
+        var q = 0usize
+        while q < k {
+            s += tmp[r * k + q] * f0.xtx_inv[q * k + r]
+            q += 1usize
+        }
+        out[r] = s
+        r += 1usize
+    }
+    ret ok
+}

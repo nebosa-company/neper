@@ -46528,3 +46528,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `glm_lr_masked` gives the likelihood-ratio chi-square of a glm Anova row: the deviance of the model on one column set minus that on a larger one (column sets chosen as for the lm masks), iterated by `bigglm` to convergence (tolerance 1e-14, 100 iterations), on q df. Known-dispersion families only; the design is passed to bigglm column-major.
 
 **Result.** `oracle_carlmtest` agrees with car (type II) and anova.glm (sequential) on 96 values (2200 cases in all) on Windows; Linux pending. L300 stays partial (kernHAC, the other bootstrap types, quasi families).
+
+## D6560 — sandwich: kernHAC
+
+**Decision.** `kern_hac_diag` ports kernHAC with its defaults: scores `x_i e_i`, VAR(1) prewhitening by least squares (`A = sum u_t u_{t-1}' (sum u_{t-1} u_{t-1}')^-1`, `D = (I - A)^-1`), the Andrews bandwidth from per-column AR(1) fits of the whitened scores (ar.ols with intercept; the intercept column has weight 0), `1.3221 (n alpha2)^(1/5)`, Quadratic Spectral weights (R's smoothed small-argument form) truncated at 1e-7, and `D (n/(n - k) Gamma) D'` in the sandwich.
+
+**Result.** `oracle_carlmtest` agrees with sandwich on 12 values (2212 cases in all) on Windows; Linux pending. L300 at 0.97: the other kernels and ARMA(1,1) approximation, the dwtest p value (pan) and the remaining bootstrap types stay open.

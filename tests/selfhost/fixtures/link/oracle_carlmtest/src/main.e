@@ -124,6 +124,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "gl_c") { ret gc }
         ret gp
     }
+    if str.eq(c.name, "khac") {
+        let (ko, ke) = mem.alloc[f64](a, p)
+        if ke != ok { ret 0.0f64 / 0.0f64 }
+        if cl.kern_hac_diag(a, des, y, n, p, ko) != ok { ret 0.0f64 / 0.0f64 }
+        var sk = 0.0f64
+        var q = 0usize
+        while q < p {
+            sk += ko[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret sk
+    }
     if str.eq(c.name, "bc") { ret cl.box_cox_ll(a, des, y, n, p, x[2usize + n + n * p]) }
     if str.eq(c.name, "pt_lambda") { ret cl.power_transform_lambda(a, des, y, n, p) }
     if str.eq(c.name, "an") || str.eq(c.name, "anp") {
