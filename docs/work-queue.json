@@ -988,10 +988,10 @@
       "group": "CRAN parity",
       "order": 689,
       "title": "robustbase: robust regression and scale",
-      "score": 0.1,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6192). Qn (to 1e-6), Sn and huberM agree with robustbase on Windows (oracle_robustbase; Linux pending). Open: mc, scaleTau2, covMcd, lmrob, ltsReg, adjOutlyingness. Was: Open (CRAN rank 285). Mid. Pairs with the MASS robust fits in L306. Acceptance, equal to robustbase: lmrob (MM and SMDM), covMcd (FastMCD), ltsReg, glmrob, nlrob, huberM, medcouple (mc), adjbox, Qn, Sn and scaleTau2, with seeded subsampling."
+      "evidence": "Partial (D6192, D6193 scaleTau2). Qn (to 1e-6), Sn and huberM agree with robustbase on Windows (oracle_robustbase; Linux pending). Open: mc, scaleTau2, covMcd, lmrob, ltsReg, adjOutlyingness. Was: Open (CRAN rank 285). Mid. Pairs with the MASS robust fits in L306. Acceptance, equal to robustbase: lmrob (MM and SMDM), covMcd (FastMCD), ltsReg, glmrob, nlrob, huberM, medcouple (mc), adjbox, Qn, Sn and scaleTau2, with seeded subsampling."
     },
     {
       "id": "L339",
@@ -1373,10 +1373,10 @@
       "group": "CRAN parity",
       "order": 740,
       "title": "mixtools: mixture models by EM",
-      "score": 0,
+      "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 884). Mid. Overlaps flexmix (L413). Acceptance, equal to mixtools under set.seed: normalmixEM, mvnormalmixEM, regmixEM, multmixEM, npEM, spEMsymloc, boot.se, and the label-switching helpers."
+      "evidence": "Partial (D6194). normalmixEM (univariate, given starting values) equals mixtools on Windows: loglik, iterations and estimates (oracle_mixtools; Linux pending). Open: random starts, constraints, regression and multivariate mixtures, bootstrap, semiparametric EM. Was: Open (CRAN rank 884). Mid. Overlaps flexmix (L413). Acceptance, equal to mixtools under set.seed: normalmixEM, mvnormalmixEM, regmixEM, multmixEM, npEM, spEMsymloc, boot.se, and the label-switching helpers."
     },
     {
       "id": "L487",

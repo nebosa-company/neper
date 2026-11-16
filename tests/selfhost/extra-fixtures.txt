@@ -294,3 +294,4 @@ oracle_gsdesign
 oracle_sampling
 oracle_pmcmr
 oracle_robustbase
+oracle_mixtools

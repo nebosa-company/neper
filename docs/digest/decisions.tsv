@@ -3271,4 +3271,6 @@ D6191	844	sampling: inclusion probabilities and the UP and SRS designs
 D6191	735	TSA: McLeod.Li.test
 D6192	915	PMCMRplus: the Kruskal-Wallis all-pairs post-hoc tests
 D6193	671	p.adjust: Holm, Hochberg, Hommel, Bonferroni, Benjamini-Hochberg and Benjamini-Yekutieli
-D6192	1102	robustbase: Qn, Sn and huberM
+D6192	1103	robustbase: Qn, Sn and huberM
+D6194	1038	mixtools: normalmixEM
+D6193	773	robustbase: scaleTau2

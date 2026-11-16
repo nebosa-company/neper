@@ -45592,3 +45592,15 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.robustbase` computes the Rousseeuw-Croux scale estimators from all pairwise differences: Qn is the constant 2.21914 times the k-th smallest |x_i - x_j| with k = choose(floor(n / 2) + 1, 2), with the package's small-sample table up to n = 12 and Qn.finite.c above; Sn is 1.1926 times the low median over i of the high median over j of |x_i - x_j|, with its factors for n <= 9 and n / (n - 0.9) for odd n. huberM is the Huber location (k = 1.5, tolerance 1e-6 of the scale) from the median start with the MAD (constant 1.4826) as scale, with the same iteration count. Sn and huberM equal robustbase to 1e-9; Qn agrees to 1e-6 relative, not 1e-9: in some samples (a few in every ten) the package's value deviates from the exact order statistic by up to 4e-8 relative, which looks like the compiled search's tolerance, so the oracle compares Qn at 1e-6. Not here: mc (the medcouple), scaleTau2, covMcd, lmrob and the rest.
 
 **Result.** `oracle_robustbase` agrees with robustbase on 150 cases on Windows (Qn at 1e-6); Linux pending. L338 is partial.
+
+## D6194 — mixtools: normalmixEM
+
+`e.algo.stat.mixtools` ports normalmixEM for a univariate normal mixture from given starting values: weights as the posterior means, component means as posterior-weighted means, then (found by comparison) the package's default constraints select its ECM variant, so the posteriors and the weights are refreshed at the new means before the standard deviations are taken from the posterior-weighted squared deviations from those new means, followed by the log-likelihood and the stopping rule (an increase of at most epsilon, or maxit). The log-likelihood, the iteration count and the estimates equal the package's on 14 simulated mixtures of 2 and 3 components, including runs of several hundred iterations. Not here: the random starting values, the constrained and fast variants, restarts for collapsing variances, the multivariate and regression mixtures, the bootstrap and the semiparametric EM.
+
+**Result.** `oracle_mixtools` equals mixtools on 50 cases on Windows; Linux pending. L486 is partial.
+
+## D6193 — robustbase: scaleTau2
+
+`e.algo.stat.robustbase` gains scale_tau2, the Yohai-Zamar tau scale with the package's defaults (c1 = 4.5, c2 = 3, one iteration from mu0 = median and sigma0 = the raw median absolute deviation, with the asymptotic consistency factor n E rho(c2 qnorm(3/4))): the location is the biweight-weighted mean with weights (1 - (|x - mu0| / (c1 sigma0))^2)^2 truncated at 0, and the scale is sigma0 sqrt(sum min(((x - mu) / sigma0)^2, c2^2) / (n E)). Both the location and the scale equal robustbase's to 1e-9. Not here: the finite-sample consistency, further iterations and the rest of the package (mc, covMcd, lmrob, ltsReg).
+
+**Result.** `oracle_robustbase` agrees with robustbase on 210 cases on Windows; Linux pending. L338 stays partial.
