@@ -69,6 +69,34 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(k, "decim") || str.eq(k, "unwrap") {
+        let ln = usize(x[2usize])
+        let xs = x[3usize..3usize + ln]
+        if str.eq(k, "unwrap") {
+            let (u, e) = mem.alloc[f64](a, ln)
+            if e != ok { os.exit(5) }
+            sp.unwrap(xs, u)
+            var q = 0usize
+            var tt = 0.0f64
+            while q < ln {
+                tt += u[q] * f64(q + 1usize)
+                q += 1usize
+            }
+            ret tt
+        }
+        let qd = usize(x[1usize])
+        let m = (ln + qd - 1usize) / qd
+        let (o, e) = mem.alloc[f64](a, m)
+        if e != ok { os.exit(5) }
+        if sp.decimate_iir(a, xs, qd, usize(x[0usize]), o) != ok { os.exit(6) }
+        var q = 0usize
+        var tt = 0.0f64
+        while q < m {
+            tt += o[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret tt
+    }
     if str.eq(k, "sg") {
         let wn = usize(x[1usize])
         let po = usize(x[2usize])

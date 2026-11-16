@@ -754,3 +754,39 @@ fn fir1_band(a: *mem.Arena, n: usize, w: []const f64, ty: usize, out: []f64) -> 
     }
     ret ok
 }
+
+// decimate(x, q, n) with the default IIR path: filtfilt of an order-n Chebyshev type I low-pass (0.05 dB, cut-off 0.8 / q), then every q-th sample; out holds ceil(len / q) values
+fn decimate_iir(a: *mem.Arena, x: []const f64, q: usize, n: usize, out: []f64) -> err {
+    let (b, e1) = mem.alloc[f64](a, n + 1usize)
+    if e1 != ok { ret e1 }
+    let (aa, e2) = mem.alloc[f64](a, n + 1usize)
+    if e2 != ok { ret e2 }
+    cheby1(n, 0.05f64, 0.8f64 / f64(q), false, b, aa)
+    let (y, e3) = mem.alloc[f64](a, x.len)
+    if e3 != ok { ret e3 }
+    let e4 = filtfilt(a, b, aa, x, y)
+    if e4 != ok { ret e4 }
+    var i = 0usize
+    var k = 0usize
+    while i < x.len {
+        out[k] = y[i]
+        k += 1usize
+        i += q
+    }
+    ret ok
+}
+
+// unwrap(x) with the default tolerance pi: add 2 pi whenever consecutive samples jump by more than pi
+fn unwrap(x: []const f64, out: []f64) {
+    var r = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        if i > 0usize {
+            let d = x[i - 1usize] - x[i]
+            if d > pi() { r += 2.0f64 * pi() }
+            if d < 0.0f64 - pi() { r -= 2.0f64 * pi() }
+        }
+        out[i] = x[i] + r
+        i += 1usize
+    }
+}

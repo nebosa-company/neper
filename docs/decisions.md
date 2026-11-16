@@ -45838,3 +45838,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.signalpkg` gains `fir1_band`: fir1 for low, high, stop and pass with the Hamming window and the package's centre-of-band renormalisation, built on `fir2`.
 
 **Result.** `oracle_signalpkg` equals signal on 374 cases on Windows, 24 of them fir1 across the four types; Linux pending. L340 stays partial.
+
+## D6445 — signal: decimate and unwrap
+
+`e.algo.stat.signalpkg` gains `decimate_iir` (filtfilt of the order-n Chebyshev type I low-pass at 0.05 dB and 0.8 / q, then every q-th sample) and `unwrap` (2 pi steps on jumps beyond pi).
+
+**Result.** `oracle_signalpkg` equals signal on 406 cases on Windows, 32 of them new; Linux pending. L340 stays partial.

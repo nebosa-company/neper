@@ -60,4 +60,11 @@ for (rep in 1:24) {
   b <- fir1(n, w, ty)
   add("fir1b", c(rep %% 4, n, length(w), w), sum(as.numeric(b) * seq_along(b)))
 }
+for (rep in 1:16) {
+  len <- sample(60:200, 1); x <- round(cumsum(rnorm(len)), 4); q <- sample(2:5, 1); n <- sample(c(4, 6, 8), 1)
+  d <- decimate(x, q, n)
+  add("decim", c(n, q, len, x), sum(d * seq_along(d)))
+  ph <- round(cumsum(rnorm(len, 0, 2.5)), 4); u <- unwrap(ph)
+  add("unwrap", c(0, 0, len, ph), sum(u * seq_len(len)))
+}
 emit("signalpkg", "signal", list(cases))
