@@ -31,7 +31,7 @@ for (rep in 1:12) {
   for (kn in 0:4) { kh <- tryCatch(kernHAC(m, kernel = c("Quadratic Spectral", "Truncated", "Bartlett", "Parzen", "Tukey-Hanning")[kn + 1]), error = function(e) NULL); if (!is.null(kh)) { dv <- diag(kh); add("khac", c(a, kn), sum(dv * seq_along(dv))) } }
   for (al in 0:2) add("dwa_p", c(a, al), dwtest(m, alternative = c("greater", "less", "two.sided")[al + 1], exact = FALSE)$p.value)
   for (al in 0:2) cases[[length(cases) + 1]] <- case("dwx_p", c(a, al), dwtest(m, alternative = c("greater", "less", "two.sided")[al + 1], exact = TRUE)$p.value, rel = 1e-5, abs = 5e-6)
-  for (ty in 1:4) { sd <- sample(1:1e6, 1); set.seed(sd); vb <- vcovBS(m, R = 40, type = c("jackknife", "fractional", "residual", "rademacher")[ty]); add("vbst", c(a, sd, 40, ty), sum(as.vector(t(vb)) * seq_len(length(vb)))) }
+  for (ty in 1:7) { sd <- sample(1:1e6, 1); set.seed(sd); vb <- vcovBS(m, R = 40, type = c("jackknife", "fractional", "residual", "rademacher", "mammen", "webb", "norm")[ty]); add("vbst", c(a, sd, 40, ty), sum(as.vector(t(vb)) * seq_len(length(vb)))) }
   for (ord in c(1, 2, 4)) { a2 <- c(a, ord); b1 <- bgtest(m, order = ord); b2 <- bgtest(m, order = ord, type = "F"); add("bg_c", a2, as.numeric(b1$statistic)); add("bg_cp", a2, b1$p.value); add("bg_f", a2, as.numeric(b2$statistic)); add("bg_fp", a2, b2$p.value) }
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
 }

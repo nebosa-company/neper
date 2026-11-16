@@ -3452,4 +3452,5 @@ D6580	517	extraDistr: zero-inflated, gamma-Poisson and truncated Poisson masses
 D6581	375	extraDistr: Skellam
 D6582	461	extraDistr: more densities
 D6583	825	lmtest: the exact dwtest p value
-D6584	777	sandwich: vcovBS types
+D6584	778	sandwich: vcovBS types
+D6585	546	sandwich: the other wild bootstraps

@@ -6,6 +6,7 @@
 
 use e.algo.linalg.decomp as decomp
 use e.algo.rand.r as rng
+use e.algo.rand.rdist as rdist
 use e.algo.stat.pracma as pm
 use e.algo.stat.bigglm as bgl
 use e.math
@@ -2137,13 +2138,47 @@ fn vcov_bs_type(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: u
                     i += 1usize
                 }
             } else {
-                let (dr, de) = rng.sample_int(a, g, 2i64, i64(n), true)
-                if de != ok { ret de }
-                while i < n {
-                    var sg = 0.0f64 - 1.0f64
-                    if dr[i] == 2i64 { sg = 1.0f64 }
-                    yb[i] = (y[i] - f0.resid[i]) + f0.resid[i] * sg
-                    i += 1usize
+                let sq5 = math.sqrt[f64](5.0f64)
+                if ty == 4usize || ty == 6usize {
+                    var nv = 2i64
+                    if ty == 6usize { nv = 6i64 }
+                    let (dr, de) = rng.sample_int(a, g, nv, i64(n), true)
+                    if de != ok { ret de }
+                    while i < n {
+                        var sg = 0.0f64
+                        if ty == 4usize {
+                            sg = 0.0f64 - 1.0f64
+                            if dr[i] == 2i64 { sg = 1.0f64 }
+                        } else {
+                            let ix = usize(dr[i])
+                            if ix == 1usize { sg = 0.0f64 - math.sqrt[f64](1.5f64) }
+                            if ix == 2usize { sg = 0.0f64 - 1.0f64 }
+                            if ix == 3usize { sg = 0.0f64 - math.sqrt[f64](0.5f64) }
+                            if ix == 4usize { sg = math.sqrt[f64](0.5f64) }
+                            if ix == 5usize { sg = 1.0f64 }
+                            if ix == 6usize { sg = math.sqrt[f64](1.5f64) }
+                        }
+                        yb[i] = (y[i] - f0.resid[i]) + f0.resid[i] * sg
+                        i += 1usize
+                    }
+                } else if ty == 5usize {
+                    let (pr2, pe2) = mem.alloc[f64](a, 2usize)
+                    if pe2 != ok { ret pe2 }
+                    pr2[0usize] = (sq5 + 1.0f64) / (2.0f64 * sq5)
+                    pr2[1usize] = (sq5 - 1.0f64) / (2.0f64 * sq5)
+                    let (dr, de) = rdist.sample_prob(a, g, 2usize, n, true, pr2)
+                    if de != ok { ret de }
+                    while i < n {
+                        var sg = 0.0f64 - (sq5 - 1.0f64) / 2.0f64
+                        if dr[i] == 2i64 { sg = (sq5 + 1.0f64) / 2.0f64 }
+                        yb[i] = (y[i] - f0.resid[i]) + f0.resid[i] * sg
+                        i += 1usize
+                    }
+                } else {
+                    while i < n {
+                        yb[i] = (y[i] - f0.resid[i]) + f0.resid[i] * rng.rnorm(g, 0.0f64, 1.0f64)
+                        i += 1usize
+                    }
                 }
             }
             let (ft, fe) = ols(a, x, yb, n, p)

@@ -46680,3 +46680,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision (exact dwtest).** Checking D6583 against R's own `integrate` on Imhof's integral showed the port equal to the integral to 10 digits where R's `pan` differed by up to 3e-6, so that oracle is compared at 1e-5.
 
 **Result.** `oracle_carlmtest` agrees with sandwich on 16 new vcovBS values at 1e-8 (2412 cases in all) on Windows; Linux pending. L300 stays at 0.98.
+
+## D6585 — sandwich: the other wild bootstraps
+
+**Decision.** `vcov_bs_type` also takes types 5 mammen (`sample(c(-(sqrt 5 - 1)/2, (sqrt 5 + 1)/2), n, TRUE, prob = ((sqrt 5 + 1, sqrt 5 - 1)) / (2 sqrt 5))`), 6 webb (six equally likely values `+-sqrt(1.5)`, `+-1`, `+-sqrt(0.5)` from `sample.int(6, n, TRUE)`) and 7 norm (`rnorm(n)`).
+
+**Result.** `oracle_carlmtest` agrees with sandwich on 12 more vcovBS values at 1e-8 on Windows (2424 cases in all); Linux pending. L300 stays at 0.98: kernHAC's ARMA(1,1) option and Anova for quasi families.
