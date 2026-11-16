@@ -143,7 +143,7 @@ L316	library	0.1	976	igraph: deterministic structure and community detection	Par
 L344	library	0	359	randomForest: Breiman forests equal to R	Open (CRAN rank 255;
 L345	library	0	324	FactoMineR and factoextra: multivariate exploration	Open (CRAN ranks 232, 277).
 L347	library	0	276	locfit: local regression and likelihood	Open (CRAN rank 259).
-L364	library	0.12	679	metafor: meta-analysis	Partial (D6495 rma.uni intercept-only with FE, DL, HE, HS, SJ exact and PM, ML, REML to the package's stopping tolerance equal metafor on Windows;
+L364	library	0.2	721	metafor: meta-analysis	Partial (D6496 escalc MD, SMD, ROM, RR, OR, RD, COR, ZCOR, D6495 rma.uni intercept-only with FE, DL, HE, HS, SJ exact and PM, ML, REML to the package's stopping tolerance equal metafor on Windows;
 L366	library	0	277	kernlab: kernel methods	Open (CRAN rank 312).
 L368	library	0	273	fixest: high-dimensional fixed-effects estimation	Open (CRAN rank 349).
 L369	library	0	366	plm and AER: panel data and applied econometrics	Open (CRAN ranks 392, 354).

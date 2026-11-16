@@ -46144,3 +46144,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.metaforpkg` is new: `tau2_of` (FE zero, DerSimonian-Laird, Hedges, Hunter-Schmidt, Sidik-Jonkman in closed form, the Paule-Mandel root of Q(tau2) = k - 1 by bisection, and the ML and REML maxima by golden-section search with a check of the boundary at zero) and `rma` (the pooled estimate with weights 1 / (v + tau2), its standard error, z, p, the 95 per cent limits, Q and its p-value, I2 and H2). For FE the package reports H2 = Q / (k - 1) and I2 = max(0, (Q - (k - 1)) / Q), not values from tau2.
 
 **Result.** `oracle_metaforpkg` agrees with metafor on 2640 cases on Windows: FE, DL, HE, HS and SJ at rel 1e-9, and PM, ML and REML at rel 1e-2 with abs 1e-2, because metafor's iteration stops at a small positive tau2 (up to about 0.008 here) when the likelihood is nearly flat at zero where the exact maximum is the boundary; 30 data sets of 5 to 25 studies. The Knapp-Hartung test, moderators, the other estimators, rma.mv, escalc, trimfill, regtest, ranktest, influence and permutest are open; Linux pending. L364 is partial.
+
+## D6496 — metafor: escalc effect sizes
+
+`e.algo.stat.escalcpkg` is new: `effect` gives yi and vi for MD, SMD (Hedges' g with the gamma-function small-sample factor J), ROM, RR, OR, RD, COR and ZCOR. A check against R found that metafor's ROM yi is not log(m1 / m2) but carries the small-sample bias term 0.5 (sd1^2 / (n1 m1^2) - sd2^2 / (n2 m2^2)); the variance is the plain delta-method one.
+
+**Result.** `oracle_escalcpkg` agrees with metafor on 640 cases on Windows at rel 1e-9, 40 random inputs per measure, with no zero cells. The zero-cell correction, the other measures and variance types are open; Linux pending. L364 stays partial.
