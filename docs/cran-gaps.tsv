@@ -947,7 +947,7 @@ did	911	staggered difference-in-differences, see L485	-	covered-by-other-item	-
 BBmisc	912	utilities	-	out-of-scope	-		
 gamm4	913	GAMs with lme4, see L353	-	covered-by-other-item	-		
 copula	914	copulas: elliptical and Archimedean families, fitting by MPL, IFM and inversion of tau, goodness of fit, empirical copulas, sampling	normalCopula, claytonCopula, fitCopula, gofCopula, rCopula	gap	-	~50k	L514
-seasonal	915	(not classified)	-	skip	-		
+seasonal	915	wraps the external X-13ARIMA-SEATS Fortran program (about 100k lines)	-	out-of-scope	-		
 ROI	916	optimization infrastructure, see L367	-	covered-by-other-item	-		
 av	917	ffmpeg video and audio bridge	-	out-of-scope	-		
 aws.signature	918	AWS signing, x.cloud.awssig	-	covered	x.cloud.awssig		
