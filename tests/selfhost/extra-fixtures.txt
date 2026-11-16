@@ -343,3 +343,4 @@ oracle_ksamples
 oracle_qmvnorm
 oracle_labramp
 oracle_coda
+oracle_posterior
