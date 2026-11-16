@@ -47132,3 +47132,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** Only the DOM shim's boot had a step limit; a page's own script could loop forever. Each task the web host starts (`run_script`, `lifecycle`, a `pump_self` turn covering jobs and timers, a mouse dispatch) now runs under a budget of 50 million interpreter steps, enforced by the existing `tick` and call checks through `step_limit`. `begin_task` returns the enclosing count and limit and `end_task` restores them, so a script that causes another script to run does not cancel the outer budget. The overrun is the interpreter's RangeError, reported like any uncaught script exception.
 
 **Result.** `web_script_budget` passes on Windows (the old code never returns from its first script); the other web fixtures are unchanged; Linux pending. L237 leaves the queue. The arena-limit check in `tick()` named in the review is a separate memory bound and stays unwritten.
+
+## D6669 — declared ceilings as generated metadata
+
+**Decision.** The library already says where it stops with `ponytail:` comments: a global lock, a quadratic scan, a missing encoding, each with its upgrade path. `scripts/ceilings.py` reads them from `lib/e` (a marker and the comment lines that continue it) and `render_progress.py` writes them into `docs/progress.html` grouped by module, so the page lists every declared ceiling and cannot drift from the source.
+
+**Result.** 405 markers in 187 modules are listed; `tests/test_ceilings.py` passes. L253 is at 0.6: the AV1 decoder still answers `Unsupported` when its coefficient pool runs out, and fixing that with a fixture needs an AV1 test stream, which is L232's question.

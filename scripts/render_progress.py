@@ -8,6 +8,7 @@ Compiler, tooling and library scores come from the active queue plus the
 completed ledger; module and UI/host scores come from their inventories.
 """
 import json, re, subprocess, datetime, html, sys
+from ceilings import declared_ceilings
 from pathlib import Path
 
 # `check_widget_plan` is a sibling, and this directory is not on sys.path when the
@@ -330,6 +331,24 @@ for line in WORK_DONE.read_text(encoding='utf-8').splitlines():
 if not CHARTS_ONLY:
     Path('docs/work-evidence.md').write_text('\n'.join(evidence_doc), encoding='utf-8', newline='\n')
 
+def ceilings_section():
+    modules = declared_ceilings()
+    total = sum(len(v) for v in modules.values())
+    rows = ''.join(
+        '<tr><td><code>{m}</code></td><td>{n}</td><td><ul>{items}</ul></td></tr>'.format(
+            m=html.escape(m), n=len(notes),
+            items=''.join('<li>' + html.escape(note) + '</li>' for note in notes))
+        for m, notes in modules.items()
+    )
+    return ('<section class="backlog" aria-label="Declared ceilings"><h2>Declared ceilings</h2>'
+            '<p>{total} limits across {count} modules are declared in source with a <code>ponytail:</code> marker, each with its '
+            'upgrade path. The table is generated from <code>lib/e</code> by <code>render_progress.py</code>.</p>'
+            '<details id="ceilings"><summary>{total} declared ceilings</summary>'
+            '<div class="table-scroll"><table><thead><tr><th scope="col">Module</th><th scope="col">Markers</th>'
+            '<th scope="col">Ceiling and upgrade path</th></tr></thead><tbody>{rows}</tbody></table></div></details>'
+            '</section>').format(total=total, count=len(modules), rows=rows)
+
+
 backlog = unfinished_details('Backlog', [
     (item['id'], item['title'] + ' (' + format(float(item['score']), '.0%') + ')',
      'See docs/charts.md for the engine, delivery evidence and previews.'
@@ -481,7 +500,7 @@ __BACKLOG__
 </body>
 </html>
 """
-page_html = page_html.replace('__CARDS__', cards).replace('__BACKLOG__', backlog_section).replace('__REV__', rev).replace('__DATE__', when)
+page_html = page_html.replace('__CARDS__', cards).replace('__BACKLOG__', backlog_section + ceilings_section()).replace('__REV__', rev).replace('__DATE__', when)
 progress_path.write_text(page_html, encoding='utf-8', newline='\n')
 print('wrote docs/progress.html')
 print('compiler %.2f  modules %.2f  ui-host %.2f  tooling %.2f  library %.2f' % (C, M, W, T, L))
