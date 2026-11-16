@@ -45460,3 +45460,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 agnes needs no new algorithm: its merge heights equal hclust's for the matching linkage (average, single, complete, weighted = mcquitty, ward = ward.D2), and the agglomerative coefficient is one minus the mean over observations of the height of their first merge relative to the final height. `e.algo.stat.hclust` gains agnes_ac; `oracle_hclust` checks the coefficient and the sorted heights against agnes on random data. Not here: agnes' own dendrogram order and merge-column order (they differ from hclust's, e.g. a cluster listed before a singleton), the flexible and gaverage methods, diana, mona, clara, fanny and daisy.
 
 **Result.** `oracle_hclust` equals R, dendextend and cluster on 380 cases on Windows; Linux pending. L335 stays partial.
+
+## D6178 — cluster: daisy Gower dissimilarity
+
+`e.algo.stat.pamcluster` gains daisy_gower for numeric (range-scaled absolute difference) and nominal (0 or 1) columns with missing values: the dissimilarity of two rows is the sum over the columns observed in both of the column's contribution divided by the number of such columns. It equals daisy(metric = "gower") on random mixed data with missing entries. Not here: ordinal and asymmetric-binary columns, column weights, the euclidean and manhattan metrics with standardisation, and the types argument.
+
+**Result.** `oracle_pamcluster` equals cluster on 90 cases on Windows; Linux pending. L335 stays partial.

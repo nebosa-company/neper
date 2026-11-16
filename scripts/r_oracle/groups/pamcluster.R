@@ -18,4 +18,14 @@ for (rep in 1:20) {
   add("build", a, as.numeric(p$objective[1])); add("swap", a, as.numeric(p$objective[2]))
   if (identical(as.integer(emu(as.matrix(dist(X)), k)), as.integer(sort(p$id.med)))) { add("med", a, sum(sort(p$id.med) * seq_along(p$id.med))); add("lab", a, sum(match(p$clustering, unique(p$clustering)) * seq_len(n))) }
 }
+for (rep in 1:12) {
+  n <- sample(6:20, 1); p <- sample(2:5, 1)
+  ty <- sample(0:1, p, replace = TRUE); if (all(ty == 1)) ty[1] <- 0
+  M <- matrix(0, n, p); for (j in 1:p) M[, j] <- if (ty[j] == 0) round(rnorm(n) * 3, 2) else sample(1:3, n, replace = TRUE)
+  miss <- sample(n * p, rpois(1, 3)); Mna <- M; Mna[miss] <- NA
+  df <- as.data.frame(Mna); for (j in which(ty == 1)) df[[j]] <- factor(df[[j]])
+  d <- as.matrix(daisy(df, metric = "gower"))
+  enc <- Mna; enc[is.na(enc)] <- -999999
+  add("daisy", c(n, p, 0, ty, as.vector(t(enc))), sum(as.vector(d[lower.tri(d)]) * seq_len(sum(lower.tri(d)))))
+}
 emit("pamcluster", "cluster", list(cases))

@@ -3249,4 +3249,5 @@ D6173	1023	DHARMa: PIT residuals, the KS statistic and the binomial outlier test
 D6174	809	DHARMa: the Kolmogorov-Smirnov p value as R's ks.test gives it
 D6175	844	DHARMa: testZeroInflation and testDispersion by simulation
 D6176	1077	cluster: pam (BUILD and SWAP)
-D6177	815	cluster: agnes heights and agglomerative coefficient
+D6177	816	cluster: agnes heights and agglomerative coefficient
+D6178	663	cluster: daisy Gower dissimilarity

@@ -9,7 +9,45 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
+fn daisy_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let (kind, e1) = mem.alloc[usize](a, p)
+    if e1 != ok { os.exit(5) }
+    var i = 0usize
+    while i < p {
+        kind[i] = usize(x[3usize + i])
+        i += 1usize
+    }
+    let (m, e2) = mem.alloc[f64](a, n * p)
+    if e2 != ok { os.exit(6) }
+    i = 0usize
+    while i < n * p {
+        m[i] = x[3usize + p + i]
+        if m[i] < 0.0f64 - 999000.0f64 { m[i] = 0.0f64 / 0.0f64 }
+        i += 1usize
+    }
+    let (d, e3) = mem.alloc[f64](a, n * n)
+    if e3 != ok { os.exit(7) }
+    if pc.daisy_gower(a, m, n, p, kind, d) != ok { os.exit(8) }
+    var s = 0.0f64
+    var pos = 1usize
+    var col = 0usize
+    while col < n {
+        var row = col + 1usize
+        while row < n {
+            s += d[row * n + col] * f64(pos)
+            pos += 1usize
+            row += 1usize
+        }
+        col += 1usize
+    }
+    ret s
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "daisy") { ret daisy_case(a, c) }
     let x = c.args
     let n = usize(x[0usize])
     let k = usize(x[1usize])

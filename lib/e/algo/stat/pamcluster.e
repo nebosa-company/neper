@@ -156,3 +156,54 @@ fn pam(a: *mem.Arena, d: []const f64, n: usize, k: usize, med: []usize, label: [
     }
     ret (PamResult { build: build_cost, swap: cost / f64(n) }, ok)
 }
+
+// daisy(metric = "gower") for numeric (type 0) and nominal (type 1) columns of an n by p row-major matrix; a value of NaN is missing.
+// out receives the n by n dissimilarity (NaN where no column is shared)
+fn daisy_gower(a: *mem.Arena, x: []const f64, n: usize, p: usize, kind: []const usize, out: []f64) -> err {
+    let (rng, e) = mem.alloc[f64](a, p)
+    if e != ok { ret e }
+    var c = 0usize
+    while c < p {
+        var lo = 1.0e300f64
+        var hi = 0.0f64 - 1.0e300f64
+        var i = 0usize
+        while i < n {
+            let v = x[i * p + c]
+            if v == v {
+                if v < lo { lo = v }
+                if v > hi { hi = v }
+            }
+            i += 1usize
+        }
+        rng[c] = hi - lo
+        c += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var num = 0.0f64
+            var den = 0.0f64
+            var cc = 0usize
+            while cc < p {
+                let u = x[i * p + cc]
+                let v = x[j * p + cc]
+                if u == u && v == v {
+                    den += 1.0f64
+                    if kind[cc] == 0usize {
+                        var dv = u - v
+                        if dv < 0.0f64 { dv = 0.0f64 - dv }
+                        if rng[cc] > 0.0f64 { num += dv / rng[cc] }
+                    } else {
+                        if u != v { num += 1.0f64 }
+                    }
+                }
+                cc += 1usize
+            }
+            if den == 0.0f64 { out[i * n + j] = 0.0f64 / 0.0f64 } else { out[i * n + j] = num / den }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
