@@ -196,10 +196,10 @@
       "group": "CRAN parity",
       "order": 590,
       "title": "modeest: mode estimation",
-      "score": 0.7,
+      "score": 0.75,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6516 parzen Gaussian, tsybakov, lientz, D6072): e.algo.stat.modeest has venter, shorth, hsm, grenander, meanshift and asselin, equal to modeest on 250 values on Windows (oracle_modeest); Linux pending. Open: naive, vieu, the other parzen kernels, other meanshift bandwidths. Original: Open (CRAN rank 852). Small. Acceptance, equal to modeest: mlv with the naive, parzen, shorth, hsm, hrm, venter, grenander, lientz, meanshift, tsybakov, asselin and vieu methods."
+      "evidence": "Partly done (D6517 naive, D6516 parzen Gaussian, tsybakov, lientz, D6072): e.algo.stat.modeest has venter, shorth, hsm, grenander, meanshift and asselin, equal to modeest on 250 values on Windows (oracle_modeest); Linux pending. Open: vieu, the other parzen kernels, other meanshift bandwidths. Original: Open (CRAN rank 852). Small. Acceptance, equal to modeest: mlv with the naive, parzen, shorth, hsm, hrm, venter, grenander, lientz, meanshift, tsybakov, asselin and vieu methods."
     },
     {
       "id": "L473",

@@ -10,7 +10,7 @@ use e.mem
 const N: usize = 512usize
 
 // the grid of the old-coordinate density: fills xords and kords (N values each); scratch holds 4 * N values
-fn grid(x: []const f64, bw: f64, xords: []f64, kords: []f64, scratch: []f64) {
+fn grid(x: []const f64, bw: f64, kernel: usize, xords: []f64, kords: []f64, scratch: []f64) {
     var lo = x[0usize]
     var hi = x[0usize]
     var i = 0usize
@@ -55,7 +55,14 @@ fn grid(x: []const f64, bw: f64, xords: []f64, kords: []f64, scratch: []f64) {
         var off = f64(i)
         if i > N { off = f64(n2 - i) }
         let d = off * step
-        kern[i] = math.exp[f64](0.0f64 - d * d / (2.0f64 * bw * bw)) / (bw * math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64))
+        if kernel == 0usize {
+            kern[i] = math.exp[f64](0.0f64 - d * d / (2.0f64 * bw * bw)) / (bw * math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64))
+        } else {
+            // the uniform kernel 1 / 2 on |u| < 1, scaled by 1 / bw
+            var kv = 0.0f64
+            if d / bw < 1.0f64 { kv = 0.5f64 }
+            kern[i] = kv / bw
+        }
         i += 1usize
     }
     var j = 0usize
@@ -192,6 +199,40 @@ fn parzen(a: *mem.Arena, x: []const f64, bw0: f64) -> f64 {
     if e2 != ok { ret 0.0f64 / 0.0f64 }
     let (sc, e3) = mem.alloc[f64](a, 4usize * N)
     if e3 != ok { ret 0.0f64 / 0.0f64 }
-    grid(x, bw, xo, ko, sc)
+    grid(x, bw, 0usize, xo, ko, sc)
     ret fmin_max(xo, ko, s[0usize], s[x.len - 1usize], math.pow[f64](2.220446049250313e-16f64, 0.25f64))
+}
+
+// naive(x, bw): the data points where the interpolated rectangular-kernel density (default bw 0.5) is largest; the number of such points and, through `which`, the first of them
+fn naive(a: *mem.Arena, x: []const f64, bw: f64, which: usize) -> f64 {
+    let (xo, e1) = mem.alloc[f64](a, N)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (ko, e2) = mem.alloc[f64](a, N)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    let (sc, e3) = mem.alloc[f64](a, 4usize * N)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    grid(x, bw, 1usize, xo, ko, sc)
+    var best = 0.0f64 - 1.0f64
+    var i = 0usize
+    while i < x.len {
+        let v = at(xo, ko, x[i])
+        if v > best { best = v }
+        i += 1usize
+    }
+    var cnt = 0.0f64
+    var first = 0.0f64
+    var have = false
+    i = 0usize
+    while i < x.len {
+        if at(xo, ko, x[i]) == best {
+            cnt += 1.0f64
+            if !have {
+                first = x[i]
+                have = true
+            }
+        }
+        i += 1usize
+    }
+    if which == 0usize { ret cnt }
+    ret first
 }
