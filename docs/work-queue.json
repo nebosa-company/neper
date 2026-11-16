@@ -1131,10 +1131,10 @@
       "group": "CRAN parity",
       "order": 669,
       "title": "quantreg: quantile regression inference and algorithms",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 131). Mid. One pinball-loss fit exists in e.ml.linear. Acceptance, equal to quantreg: rq with method br (Barrodale-Roberts simplex), fn and pfn (Frisch-Newton), lasso; summary.rq with se rank, iid, nid, ker and boot (seeded); anova.rq, rq with several taus, nlrq, rrq, rqss for the total-variation penalty, dynrq."
+      "evidence": "Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg); Linux pending. Open: summary.rq, anova.rq, several taus, lasso, nlrq, rrq, rqss, dynrq. Original: Open (CRAN rank 131). Mid. One pinball-loss fit exists in e.ml.linear. Acceptance, equal to quantreg: rq with method br (Barrodale-Roberts simplex), fn and pfn (Frisch-Newton), lasso; summary.rq with se rank, iid, nid, ker and boot (seeded); anova.rq, rq with several taus, nlrq, rrq, rqss for the total-variation penalty, dynrq."
     },
     {
       "id": "L309",
