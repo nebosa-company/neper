@@ -1381,3 +1381,115 @@ fn anova_masked(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usiz
     let fs = ((sums - sumb) / f64(q)) / s2
     ret (fs, p_f(fs, f64(q), f64(n - p)))
 }
+
+// the determinant of the m by m row-major matrix a (partial-pivot elimination on a copy)
+fn det_of(a: *mem.Arena, mt: []const f64, m: usize) -> f64 {
+    if m == 0usize { ret 1.0f64 }
+    let (w, e) = mem.alloc[f64](a, m * m)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < m * m {
+        w[i] = mt[i]
+        i += 1usize
+    }
+    var det = 1.0f64
+    var col = 0usize
+    while col < m {
+        var piv = col
+        var r = col + 1usize
+        while r < m {
+            if math.abs[f64](w[r * m + col]) > math.abs[f64](w[piv * m + col]) { piv = r }
+            r += 1usize
+        }
+        if w[piv * m + col] == 0.0f64 { ret 0.0f64 }
+        if piv != col {
+            var c = 0usize
+            while c < m {
+                let t = w[col * m + c]
+                w[col * m + c] = w[piv * m + c]
+                w[piv * m + c] = t
+                c += 1usize
+            }
+            det = 0.0f64 - det
+        }
+        det = det * w[col * m + col]
+        r = col + 1usize
+        while r < m {
+            let f = w[r * m + col] / w[col * m + col]
+            var c = col
+            while c < m {
+                w[r * m + c] -= f * w[col * m + c]
+                c += 1usize
+            }
+            r += 1usize
+        }
+        col += 1usize
+    }
+    ret det
+}
+
+// car::vif for a term spanning columns start .. start + q - 1 of the design (column 0 the intercept): the generalised VIF det(R_term) det(R_rest) / det(R) of the correlation matrix R of the other coefficients' covariance; its (1 / (2 q)) power as the second value
+fn gvif(a: *mem.Arena, x: []const f64, n: usize, p: usize, start: usize, q: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let m = p - 1usize
+    let (xtx, e1) = mem.alloc[f64](a, p * p)
+    let (inv, e2) = mem.alloc[f64](a, p * p)
+    let (rm, e3) = mem.alloc[f64](a, m * m)
+    let (rt, e4) = mem.alloc[f64](a, q * q)
+    let (rr, e5) = mem.alloc[f64](a, m * m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (nan, nan) }
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            var s = 0.0f64
+            var r = 0usize
+            while r < n {
+                s += x[r * p + i] * x[r * p + j]
+                r += 1usize
+            }
+            xtx[i * p + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if inverse(a, xtx, p, inv) != ok { ret (nan, nan) }
+    i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            rm[i * m + j] = inv[(i + 1usize) * p + j + 1usize] / math.sqrt[f64](inv[(i + 1usize) * p + i + 1usize] * inv[(j + 1usize) * p + j + 1usize])
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < q {
+        var j = 0usize
+        while j < q {
+            rt[i * q + j] = rm[(start - 1usize + i) * m + start - 1usize + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let mr = m - q
+    var ri = 0usize
+    i = 0usize
+    while i < m {
+        if i < start - 1usize || i >= start - 1usize + q {
+            var rj = 0usize
+            var j = 0usize
+            while j < m {
+                if j < start - 1usize || j >= start - 1usize + q {
+                    rr[ri * mr + rj] = rm[i * m + j]
+                    rj += 1usize
+                }
+                j += 1usize
+            }
+            ri += 1usize
+        }
+        i += 1usize
+    }
+    let g = det_of(a, rt, q) * det_of(a, rr[0usize..mr * mr], mr) / det_of(a, rm, m)
+    ret (g, math.pow[f64](g, 1.0f64 / (2.0f64 * f64(q))))
+}

@@ -68,4 +68,11 @@ for (rep in 1:20) {
     list(all1, mk(setdiff(seq_len(p), tf)), 3, an3$`F value`[2], an3$`Pr(>F)`[2], tf), list(all1, mk(setdiff(seq_len(p), tz)), 3, an3$`F value`[3], an3$`Pr(>F)`[3], tz), list(all1, mk(setdiff(seq_len(p), tfz)), 3, an3$`F value`[4], an3$`Pr(>F)`[4], tfz))
   for (s in specs) { q <- length(s[[6]]); if (s[[3]] == 1 && q == 0) next; add("am_f", c(a, s[[1]], s[[2]], q), s[[4]]); add("am_p", c(a, s[[1]], s[[2]], q), s[[5]]) }
 }
+# gvif: ("gvif" "gvif2") args (n, p, y, design, start, q) for a factor f (columns 1 .. nl - 1) and numeric z1, z2 (one column each)
+for (rep in 1:20) {
+  n <- sample(40:100, 1); nl <- sample(3:5, 1); f <- factor(sample(seq_len(nl), n, TRUE)); if (nlevels(f) < nl) next; z1 <- rnorm(n) + 0.5 * as.numeric(f); z2 <- 0.6 * z1 + rnorm(n); y <- as.numeric(f) * 0.4 + z1 * 0.7 + rnorm(n)
+  mm <- lm(y ~ f + z1 + z2); des <- model.matrix(mm); p <- ncol(des); a <- c(n, p, y, as.vector(t(des))); vv <- vif(mm)
+  starts <- c(1, nl, nl + 1); qs <- c(nl - 1, 1, 1)
+  for (t in 1:3) { add("gvif", c(a, starts[t], qs[t]), vv[t, 1]); add("gvif2", c(a, starts[t], qs[t]), vv[t, 3]) }
+}
 emit("carlmtest", "car", list(cases))
