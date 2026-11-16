@@ -46,7 +46,26 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     let (sandv, sdE) = mem.alloc[f64](a, p)
     if sdE != ok { ret nan }
-    let (fit, e) = bg.bigglm_sand(a, x, y, w, off, n, p, fam, 8usize, 1.0e-7f64, coef, se, sandv)
+    var fit: bg.Fit = zero
+    var e = ok
+    if c.name.len == 3usize && c.name[2usize] == 97u8 {
+        let (fa, ea) = bg.bigglm_alias(a, x, y, w, off, n, p, fam, 8usize, 1.0e-7f64, coef, se, sandv)
+        fit = fa
+        e = ea
+        if q == 2usize * p {
+            var na = 0.0f64
+            var ci = 0usize
+            while ci < p {
+                if coef[ci] != coef[ci] { na += 1.0f64 }
+                ci += 1usize
+            }
+            ret na
+        }
+    } else {
+        let (fb, eb) = bg.bigglm_sand(a, x, y, w, off, n, p, fam, 8usize, 1.0e-7f64, coef, se, sandv)
+        fit = fb
+        e = eb
+    }
     if e != ok { ret nan }
     if c.name.len == 3usize && c.name[2usize] == 115u8 { ret sandv[q] }
     if q < p { ret coef[q] }

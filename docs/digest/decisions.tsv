@@ -3440,4 +3440,5 @@ D6568	649	partitions: compositions
 D6569	563	partitions: blockparts
 D6570	610	biglm: offsets
 D6571	632	biglm: sandwich standard errors
-D6572	755	biglm: more families and links
+D6572	756	biglm: more families and links
+D6573	806	biglm: singular designs

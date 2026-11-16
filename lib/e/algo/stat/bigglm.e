@@ -287,3 +287,80 @@ fn bigglm_sand(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, of
 }
 
 error Singular
+
+// bigglm on a design that may have exactly collinear columns (x is n by p column-major, intercept included): a column that is a linear combination of the earlier ones (residual below 1e-10 of its own norm after Gram-Schmidt) is aliased as biglm's singcheck does: coef and se are NaN there (R's NA) and the fit is that of the remaining columns
+fn bigglm_alias(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, off: []const f64, n: usize, p: usize, fam: u8, maxit: usize, tol: f64, coef: []f64, se: []f64, sand: []f64) -> (Fit, err) {
+    var none: Fit = zero
+    let (q, e1) = mem.alloc[f64](a, n * p)
+    let (keep, e2) = mem.alloc[usize](a, p)
+    let (xr, e3) = mem.alloc[f64](a, n * p)
+    let (cr, e4) = mem.alloc[f64](a, p)
+    let (sr, e5) = mem.alloc[f64](a, p)
+    let (ar, e6) = mem.alloc[f64](a, p)
+    if e1 != ok { ret (none, e1) }
+    if e2 != ok { ret (none, e2) }
+    if e3 != ok { ret (none, e3) }
+    if e4 != ok { ret (none, e4) }
+    if e5 != ok { ret (none, e5) }
+    if e6 != ok { ret (none, e6) }
+    var kept = 0usize
+    var j = 0usize
+    while j < p {
+        var v = 0usize
+        var nrm0 = 0.0f64
+        while v < n {
+            q[kept * n + v] = x[j * n + v]
+            nrm0 += x[j * n + v] * x[j * n + v]
+            v += 1usize
+        }
+        var k = 0usize
+        while k < kept {
+            var d = 0.0f64
+            v = 0usize
+            while v < n {
+                d += q[kept * n + v] * q[k * n + v]
+                v += 1usize
+            }
+            v = 0usize
+            while v < n {
+                q[kept * n + v] -= d * q[k * n + v]
+                v += 1usize
+            }
+            k += 1usize
+        }
+        var nrm1 = 0.0f64
+        v = 0usize
+        while v < n {
+            nrm1 += q[kept * n + v] * q[kept * n + v]
+            v += 1usize
+        }
+        if nrm1 > 1.0e-10f64 * nrm0 {
+            let s = math.sqrt[f64](nrm1)
+            v = 0usize
+            while v < n {
+                q[kept * n + v] = q[kept * n + v] / s
+                xr[kept * n + v] = x[j * n + v]
+                v += 1usize
+            }
+            keep[kept] = j
+            kept += 1usize
+        }
+        j += 1usize
+    }
+    let (ft, fe) = bigglm_sand(a, xr[0usize..n * kept], y, w, off, n, kept, fam, maxit, tol, cr[0usize..kept], sr[0usize..kept], ar[0usize..kept])
+    j = 0usize
+    while j < p {
+        coef[j] = 0.0f64 / 0.0f64
+        se[j] = 0.0f64 / 0.0f64
+        sand[j] = 0.0f64 / 0.0f64
+        j += 1usize
+    }
+    j = 0usize
+    while j < kept {
+        coef[keep[j]] = cr[j]
+        se[keep[j]] = sr[j]
+        sand[keep[j]] = ar[j]
+        j += 1usize
+    }
+    ret (ft, fe)
+}

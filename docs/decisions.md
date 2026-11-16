@@ -46606,3 +46606,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `bigglm` takes family ids 3 to 7 beside the three it had: Gamma(inverse), Gamma(log), gaussian(log), binomial(probit) and binomial(cloglog), each with R's `linkinv`, `mu.eta` (clamped at eps where R clamps), variance and deviance residuals; the reported standard errors keep the estimated dispersion for the gaussian and Gamma families and dispersion 1 for binomial and Poisson. Gamma(inverse) starts at `eta = 0`, where `1/eta` is infinite, so biglm itself fails on it and the oracle has no cases.
 
 **Result.** `oracle_bigglm` agrees with biglm on 280 new values (four families, with weights) on Windows (910 cases in all); Linux pending. L423 stays partial: singular designs and further links.
+
+## D6573 — biglm: singular designs
+
+**Decision.** `bigglm_alias` finds the columns that are exact combinations of the earlier ones (Gram-Schmidt residual below 1e-10 of the column's own squared norm, which does not depend on the iteration weights), fits the remaining columns, and reports NaN, R's NA, for the aliased coefficient and standard errors, as biglm's singcheck and `coef.biglm` do; the residual degrees of freedom are `n - p + aliased` as in `vcov.biglm`.
+
+**Result.** `oracle_bigglm` agrees with biglm on 63 new values (a design whose last column is a combination of two others; gaussian, binomial, Poisson; the finite coefficients and errors and the count of NA) on Windows (973 cases in all); Linux pending. L423 at 0.9: the inverse.gaussian and quasi families and further links stay open.

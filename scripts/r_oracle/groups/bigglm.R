@@ -66,4 +66,20 @@ for (rep in 1:40) {
   a <- c(fam, n, p, X, y, w)
   for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("bgf", c(a, q - 1), out[q], rel = 1e-7, abs = 1e-9)
 }
+# singular designs: fn "bga" (fam 0 1 2, n, p (without the intercept), X, y, w, q) with the last column of X an exact combination of the others; only the finite coefficients and standard errors are asked
+for (rep in 1:18) {
+  fam <- rep %% 3; n <- sample(60:200, 1); p <- sample(2:3, 1)
+  X <- matrix(round(rnorm(n * p), 3), n, p); X[, p] <- X[, 1] * 2 - X[, 2] * 0.5 + 1
+  eta <- 0.2 + drop(X[, 1:(p - 1), drop = FALSE] %*% c(0.7, -0.5, 0.3)[seq_len(p - 1)])
+  y <- switch(fam + 1, round(eta + rnorm(n), 3), rbinom(n, 1, plogis(eta)), rpois(n, exp(eta * 0.6)))
+  w <- if (rep %% 2 == 0) round(runif(n, 0.5, 2), 2) else rep(1, n)
+  d <- data.frame(y = y, X); names(d) <- c("y", paste0("x", seq_len(p))); d$w <- w
+  f <- as.formula(paste("y ~", paste(paste0("x", seq_len(p)), collapse = " + ")))
+  fm <- list(gaussian(), binomial(), poisson())[[fam + 1]]
+  b <- tryCatch(suppressWarnings(bigglm(f, d, family = fm, weights = ~w, chunksize = 37, quiet = TRUE)), error = function(e) NULL)
+  if (is.null(b)) next
+  cf <- coef(b); se <- sqrt(diag(vcov(b))); a <- c(fam, n, p, X, y, w)
+  for (q in seq_along(cf)) if (is.finite(cf[q])) { cases[[length(cases) + 1]] <- case("bga", c(a, q - 1), cf[q], rel = 1e-8, abs = 1e-10); cases[[length(cases) + 1]] <- case("bga", c(a, length(cf) + q - 1), se[q], rel = 1e-8, abs = 1e-10) }
+  cases[[length(cases) + 1]] <- case("bga", c(a, 2 * length(cf)), sum(!is.finite(cf)), rel = 0, abs = 0)
+}
 emit("bigglm", "biglm", list(cases))
