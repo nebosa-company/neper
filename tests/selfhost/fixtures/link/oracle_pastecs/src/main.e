@@ -21,7 +21,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if ef != ok || er != ok { ret 0.0f64 / 0.0f64 }
         let which = usize(z[b + 4usize])
         let idx = usize(z[b + 5usize])
-        if z[0usize] == 2.0f64 {
+        if z[0usize] == 4.0f64 {
+            let nw = usize(z[b + 7usize])
+            let ae = pc.decaverage(a, x, u8(z[b]), usize(z[b + 1usize]), usize(z[b + 2usize]), u8(z[b + 3usize]), z[b + 8usize..b + 8usize + nw], usize(z[b + 6usize]), f, rs)
+            if ae != ok { ret 0.0f64 / 0.0f64 }
+        } else if z[0usize] == 2.0f64 {
             let (m, de) = pc.decdiff(a, x, u8(z[b]), usize(z[b + 1usize]), usize(z[b + 2usize]), u8(z[b + 3usize]), f, rs)
             if de != ok { ret 0.0f64 / 0.0f64 }
         } else {

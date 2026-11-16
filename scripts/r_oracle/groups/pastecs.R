@@ -29,4 +29,16 @@ for (rep in 1:40) {
   r <- decmedian(ts(x), type = tn, order = ord2, times = tm, ends = c("NAs", "fill")[en2 + 1])
   for (w in 0:1) { v <- as.vector(r$series[, w + 1]); for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("dec", c(3, 0, n, x, ty, ord2, tm, en2, w, i - 1), v[i], rel = 1e-9, abs = 1e-10) }
 }
+# decaverage (kind 4: args (4, 0, n, x, type, times, sides, ends, which, idx, freq, nw, weights[nw])); weights are given explicitly (the periodic and numeric-order forms are expanded here as the package does); ends 0 NAs 1 fill 2 circular 3 periodic
+for (rep in 1:60) {
+  f <- sample(c(4, 7, 12), 1); n <- sample((2 * f):(5 * f), 1); x <- round(cumsum(rnorm(n)) + 10 + 2 * sin(2 * pi * (1:n) / f), 2); ty <- rep %% 2
+  tn <- c("additive", "multiplicative")[ty + 1]; tm <- sample(1:2, 1); sd <- sample(1:2, 1); en <- sample(0:3, 1)
+  mode <- sample(1:3, 1)
+  if (mode == 1) { od <- sample(1:3, 1); wts <- rep(1, 2 * od + 1); ordarg <- od }
+  else if (mode == 2) { od <- f %/% 2; wts <- rep(1, 2 * od + 1); if (f == 2 * od) { wts[1] <- 0.5; wts[length(wts)] <- 0.5 }; ordarg <- "periodic" }
+  else { wts <- round(runif(sample(c(3, 5), 1), 0.5, 2), 2); ordarg <- 1 }
+  xs <- ts(x, frequency = f)
+  r <- suppressWarnings(if (mode == 3) decaverage(xs, type = tn, times = tm, sides = sd, ends = c("NAs", "fill", "circular", "periodic")[en + 1], weights = wts) else decaverage(xs, type = tn, order = ordarg, times = tm, sides = sd, ends = c("NAs", "fill", "circular", "periodic")[en + 1]))
+  for (w in 0:1) { v <- as.vector(r$series[, w + 1]); for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("dec", c(4, 0, n, x, ty, tm, sd, en, w, i - 1, f, length(wts), wts), v[i], rel = 1e-9, abs = 1e-10) }
+}
 emit("pastecs", "pastecs", list(cases))

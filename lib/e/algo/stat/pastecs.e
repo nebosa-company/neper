@@ -300,3 +300,161 @@ fn decmedian(a: *mem.Arena, x: []const f64, ty: u8, order: usize, times: usize, 
     }
     ret ok
 }
+
+// R's stats::filter convolution of z with the normalised weights wt (length k): out[i] = sum_j wt[j] z[i + o - j] with o = k %/% 2 for sides 2 and 0 for sides 1; NaN where an index falls outside the series (wrapped around when circular)
+fn conv_filter(z: []const f64, wt: []const f64, sides: usize, circular: bool, out: []f64) {
+    let n = z.len
+    let k = wt.len
+    var o = 0usize
+    if sides == 2usize { o = k / 2usize }
+    var i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var bad = false
+        var j = 0usize
+        while j < k {
+            let pos = i64(i) + i64(o) - i64(j)
+            if pos < 0i64 || pos >= i64(n) {
+                if circular {
+                    var q = pos % i64(n)
+                    if q < 0i64 { q += i64(n) }
+                    s += wt[j] * z[usize(q)]
+                } else {
+                    bad = true
+                }
+            } else {
+                s += wt[j] * z[usize(pos)]
+            }
+            j += 1usize
+        }
+        if bad { out[i] = 0.0f64 / 0.0f64 } else { out[i] = s }
+        i += 1usize
+    }
+}
+
+// pastecs::decaverage: `times` passes of a moving average with `weights` (the caller builds the periodic ones), sides 1 or 2, over a series padded as ends says (0 NAs, 1 fill with end means, 2 circular, 3 periodic with period `freq`); type 0 additive, 1 multiplicative
+fn decaverage(a: *mem.Arena, x: []const f64, ty: u8, times: usize, sides: usize, ends: u8, weights: []const f64, freq: usize, filt: []f64, resid: []f64) -> err {
+    let n = x.len
+    let k = weights.len
+    let order0 = k / 2usize
+    let (wt, e1) = mem.alloc[f64](a, k)
+    let (cur, e2) = mem.alloc[f64](a, n)
+    let (pad, e3) = mem.alloc[f64](a, n + 2usize * k + 2usize * freq + 4usize)
+    let (outp, e4) = mem.alloc[f64](a, n + 2usize * k + 2usize * freq + 4usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret e1 }
+    var sw = 0.0f64
+    var i = 0usize
+    while i < k {
+        sw += weights[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        wt[i] = weights[i] / sw
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        cur[i] = x[i]
+        i += 1usize
+    }
+    var t = 0usize
+    while t < times {
+        var plen = n
+        var cut0 = 0usize
+        var circ = false
+        if ends == 1u8 {
+            var od = order0
+            if sides == 2usize {
+                if od > n { od = n }
+                var s1 = 0.0f64
+                var s2 = 0.0f64
+                i = 0usize
+                while i < od {
+                    s1 += cur[i]
+                    s2 += cur[n - od + i]
+                    i += 1usize
+                }
+                i = 0usize
+                while i < od {
+                    pad[i] = s1 / f64(od)
+                    pad[od + n + i] = s2 / f64(od)
+                    i += 1usize
+                }
+                i = 0usize
+                while i < n {
+                    pad[od + i] = cur[i]
+                    i += 1usize
+                }
+                plen = n + 2usize * od
+                cut0 = od
+            } else {
+                if 2usize * od > n { od = n / 2usize }
+                var s1 = 0.0f64
+                i = 0usize
+                while i < 2usize * od {
+                    s1 += cur[i]
+                    i += 1usize
+                }
+                i = 0usize
+                while i < 2usize * od {
+                    pad[i] = s1 / f64(2usize * od)
+                    i += 1usize
+                }
+                i = 0usize
+                while i < n {
+                    pad[2usize * od + i] = cur[i]
+                    i += 1usize
+                }
+                plen = n + 2usize * od
+                cut0 = 2usize * od
+            }
+        } else if ends == 3u8 && n >= 2usize * freq {
+            var pos = freq / 2usize
+            if sides == 1usize { pos = (freq / 2usize) * 2usize }
+            let pos0 = freq - pos
+            i = 0usize
+            while i < pos {
+                pad[i] = cur[pos0 + i]
+                i += 1usize
+            }
+            i = 0usize
+            while i < n {
+                pad[pos + i] = cur[i]
+                i += 1usize
+            }
+            if sides == 2usize {
+                i = 0usize
+                while i < pos {
+                    pad[pos + n + i] = cur[i + n - freq]
+                    i += 1usize
+                }
+                plen = n + 2usize * pos
+            } else {
+                plen = n + pos
+            }
+            cut0 = pos
+        } else {
+            i = 0usize
+            while i < n {
+                pad[i] = cur[i]
+                i += 1usize
+            }
+            if ends == 2u8 { circ = true }
+        }
+        conv_filter(pad[0usize..plen], wt, sides, circ, outp[0usize..plen])
+        i = 0usize
+        while i < n {
+            cur[i] = outp[cut0 + i]
+            i += 1usize
+        }
+        t += 1usize
+    }
+    i = 0usize
+    while i < n {
+        filt[i] = cur[i]
+        if ty == 0u8 { resid[i] = x[i] - cur[i] } else { resid[i] = x[i] / cur[i] }
+        i += 1usize
+    }
+    ret ok
+}
