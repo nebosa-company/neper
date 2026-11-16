@@ -46510,3 +46510,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `vcov_bs` is vcovBS(lm, R, type = "xy") with the default one-observation clusters: each replicate draws `sample.int(n, n, TRUE)` rows (the cluster names `sample(names(cli))` are in numeric order, so the draw is the same), refits by least squares and the result is the sample covariance of the R coefficient vectors; the seed is set before the call, as `set.seed` does.
 
 **Result.** `oracle_carlmtest` agrees with sandwich on 16 values (R = 30 and 120) on Windows at 1e-8 (1456 cases in all); Linux pending. L300 at 0.9: Anova with interactions, vcovPL and the other bootstrap types stay open.
+
+## D6557 — sandwich: vcovPL; car: Anova with an interaction
+
+**Decision.** `vcov_pl_diag` is vcovPL with the Bartlett kernel and `aggregate = TRUE`: the scores summed over the observations sharing a time, the Newey-West meat of that series with lag `floor(nt^(1/4))` ("NW1987") or a given lag (bandwidth lag + 1), and `n/(n - k) (X'X)^-1 S (X'X)^-1` with n the original row count. `anova_masked` is the F of the model on one column set against another over the full model's residual mean square; the oracle builds the column sets that each Anova type compares for a factor, a numeric term and their interaction (type I sequential, type II without the terms containing the one tested, type III dropping the term's columns).
+
+**Result.** `oracle_carlmtest` agrees with R on 72 vcovPL values and 360 Anova values on Windows (1888 cases in all); Linux pending. L300 at 0.95: Anova for glm, gvif, kernHAC and the other bootstrap types stay open.

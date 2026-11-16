@@ -26,6 +26,8 @@ for (rep in 1:12) {
   for (kd in 0:4) { v <- switch(kd + 1, cooks.distance(m), rstandard(m), rstudent(m), dffits(m), hatvalues(m)); a5 <- c(a, kd); add("inf_s", a5, sum(v * seq_along(v))); add("inf_1", a5, v[1]) }
   if (k >= 2) { jt <- jtest(lm(y ~ v1, d), lm(as.formula(paste("y ~", paste0("v", 2:k, collapse = " + "))), d)); add("jt_t1", a, jt[1, 3]); add("jt_p1", a, jt[1, 4]); add("jt_t2", a, jt[2, 3]); add("jt_p2", a, jt[2, 4]) }
   for (R in c(30, 120)) { sd <- sample(1:1e6, 1); set.seed(sd); vb <- vcovBS(m, R = R); add("vbs", c(a, sd, R), sum(as.vector(t(vb)) * seq_len(length(vb)))) }
+  for (ng in c(5, 10)) { nid <- max(2, n %/% ng); tm <- rep(seq_len(ng), length.out = n); id <- rep(seq_len(nid), each = ceiling(n / nid))[seq_len(n)]
+    for (lg in c(-1, 1, 3)) { vp <- if (lg < 0) vcovPL(m, cluster = id, order.by = tm) else vcovPL(m, cluster = id, order.by = tm, lag = lg); dv <- diag(vp); add("vpl", c(a, lg, tm), sum(dv * seq_along(dv))) } }
   for (ord in c(1, 2, 4)) { a2 <- c(a, ord); b1 <- bgtest(m, order = ord); b2 <- bgtest(m, order = ord, type = "F"); add("bg_c", a2, as.numeric(b1$statistic)); add("bg_cp", a2, b1$p.value); add("bg_f", a2, as.numeric(b2$statistic)); add("bg_fp", a2, b2$p.value) }
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
 }
@@ -52,5 +54,18 @@ for (rep in 1:20) {
   des <- cbind(1, model.matrix(~ f)[, -1], z); p <- ncol(des); mm <- lm(y ~ f + z); a <- c(n, p, y, as.vector(t(des)))
   for (ty in 1:3) { an <- if (ty == 1) anova(mm) else Anova(mm, type = ty); jj <- if (ty == 3) 2:3 else 1:2; starts <- c(1, nl); qs <- c(nl - 1, 1)
     for (t in 1:2) { add("ab_f", c(a, starts[t], qs[t], ty), an$`F value`[jj[t]]); add("ab_p", c(a, starts[t], qs[t], ty), an$`Pr(>F)`[jj[t]]) } }
+}
+# Anova with a factor, a numeric term and their interaction: ("am_f" "am_p") args (n, p, y, design row-major, big mask[p], small mask[p], q); the masks pick the models each type compares
+for (rep in 1:20) {
+  n <- sample(40:100, 1); nl <- sample(2:4, 1); f <- factor(sample(seq_len(nl), n, TRUE)); if (nlevels(f) < nl) next; z <- rnorm(n); y <- as.numeric(f) * 0.4 + z * 0.7 + 0.5 * z * as.numeric(f) + rnorm(n)
+  mm <- lm(y ~ f * z); des <- model.matrix(mm); p <- ncol(des); a <- c(n, p, y, as.vector(t(des))); asg <- attr(des, "assign")
+  idx <- function(t) which(asg == t); all1 <- rep(1, p); mk <- function(cols) { v <- rep(0, p); v[cols] <- 1; v }
+  tf <- idx(1); tz <- idx(2); tfz <- idx(3); int0 <- idx(0)
+  an1 <- anova(mm); an2 <- Anova(mm, type = 2); an3 <- suppressWarnings(Anova(mm, type = 3))
+  specs <- list(
+    list(mk(c(int0, tf)), mk(int0), 1, an1$`F value`[1], an1$`Pr(>F)`[1], tf), list(mk(c(int0, tf, tz)), mk(c(int0, tf)), 1, an1$`F value`[2], an1$`Pr(>F)`[2], tz), list(all1, mk(c(int0, tf, tz)), 1, an1$`F value`[3], an1$`Pr(>F)`[3], tfz),
+    list(mk(c(int0, tf, tz)), mk(c(int0, tz)), 2, an2$`F value`[1], an2$`Pr(>F)`[1], tf), list(mk(c(int0, tf, tz)), mk(c(int0, tf)), 2, an2$`F value`[2], an2$`Pr(>F)`[2], tz), list(all1, mk(c(int0, tf, tz)), 2, an2$`F value`[3], an2$`Pr(>F)`[3], tfz),
+    list(all1, mk(setdiff(seq_len(p), tf)), 3, an3$`F value`[2], an3$`Pr(>F)`[2], tf), list(all1, mk(setdiff(seq_len(p), tz)), 3, an3$`F value`[3], an3$`Pr(>F)`[3], tz), list(all1, mk(setdiff(seq_len(p), tfz)), 3, an3$`F value`[4], an3$`Pr(>F)`[4], tfz))
+  for (s in specs) { q <- length(s[[6]]); if (s[[3]] == 1 && q == 0) next; add("am_f", c(a, s[[1]], s[[2]], q), s[[4]]); add("am_p", c(a, s[[1]], s[[2]], q), s[[5]]) }
 }
 emit("carlmtest", "car", list(cases))

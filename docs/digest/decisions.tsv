@@ -3424,4 +3424,5 @@ D6552	428	car: influence measures
 D6553	504	lmtest: jtest
 D6554	492	car: powerTransform lambda
 D6555	573	car: Anova for factor terms
-D6556	656	sandwich: vcovBS (pairs bootstrap)
+D6556	657	sandwich: vcovBS (pairs bootstrap)
+D6557	943	sandwich: vcovPL; car: Anova with an interaction

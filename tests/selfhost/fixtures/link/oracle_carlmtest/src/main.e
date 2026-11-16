@@ -94,6 +94,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret sv
     }
+    if str.eq(c.name, "vpl") {
+        let (po, pe) = mem.alloc[f64](a, p)
+        if pe != ok { ret 0.0f64 / 0.0f64 }
+        let tb = 3usize + n + n * p
+        if cl.vcov_pl_diag(a, des, y, n, p, x[tb..tb + n], i64(x[tb - 1usize]), po) != ok { ret 0.0f64 / 0.0f64 }
+        var sp = 0.0f64
+        var q = 0usize
+        while q < p {
+            sp += po[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret sp
+    }
+    if str.eq(c.name, "am_f") || str.eq(c.name, "am_p") {
+        let mb = 2usize + n + n * p
+        let (mf, mq) = cl.anova_masked(a, des, y, n, p, x[mb..mb + p], x[mb + p..mb + 2usize * p], usize(x[mb + 2usize * p]))
+        if str.eq(c.name, "am_f") { ret mf }
+        ret mq
+    }
     if str.eq(c.name, "bc") { ret cl.box_cox_ll(a, des, y, n, p, x[2usize + n + n * p]) }
     if str.eq(c.name, "pt_lambda") { ret cl.power_transform_lambda(a, des, y, n, p) }
     if str.eq(c.name, "an") || str.eq(c.name, "anp") {

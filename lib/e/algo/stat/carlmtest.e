@@ -1209,3 +1209,175 @@ fn vcov_bs(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize,
     }
     ret ok
 }
+
+// sandwich::vcovPL(lm, cluster, order.by, lag, aggregate = TRUE, adjust = TRUE) with the Bartlett kernel: the scores summed over the observations of each distinct time (lag < 0 means "NW1987", floor(nt^(1/4))), the Newey-West meat of the aggregated series, n / (n - k) times (X'X)^-1 S (X'X)^-1; the diagonal goes to out
+fn vcov_pl_diag(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, time: []const f64, lag0: i64, out: []f64) -> err {
+    let (f0, e1) = ols(a, x, y, n, p)
+    if e1 != ok { ret e1 }
+    let (ut, e2) = mem.alloc[f64](a, n)
+    let (ag, e3) = mem.alloc[f64](a, n * p)
+    let (s, e4) = mem.alloc[f64](a, p * p)
+    let (t1, e5) = mem.alloc[f64](a, p * p)
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    var nt = 0usize
+    var i = 0usize
+    while i < n {
+        var seen = false
+        var j = 0usize
+        while j < nt {
+            if ut[j] == time[i] { seen = true }
+            j += 1usize
+        }
+        if !seen {
+            ut[nt] = time[i]
+            nt += 1usize
+        }
+        i += 1usize
+    }
+    i = 1usize
+    while i < nt {
+        let v = ut[i]
+        var j = i
+        while j > 0usize && ut[j - 1usize] > v {
+            ut[j] = ut[j - 1usize]
+            j -= 1usize
+        }
+        ut[j] = v
+        i += 1usize
+    }
+    i = 0usize
+    while i < nt * p {
+        ag[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var g = 0usize
+        while ut[g] != time[i] { g += 1usize }
+        var c = 0usize
+        while c < p {
+            ag[g * p + c] += f0.resid[i] * x[i * p + c]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    var lag = 0usize
+    if lag0 >= 0i64 { lag = usize(lag0) }
+    if lag0 < 0i64 { lag = usize(math.floor[f64](math.pow[f64](f64(nt), 0.25f64))) }
+    i = 0usize
+    while i < p * p {
+        s[i] = 0.0f64
+        i += 1usize
+    }
+    var j = 0usize
+    while j <= lag && j < nt {
+        let w = 1.0f64 - f64(j) / f64(lag + 1usize)
+        var r = j
+        while r < nt {
+            var c1 = 0usize
+            while c1 < p {
+                var c2 = 0usize
+                while c2 < p {
+                    let v = ag[r * p + c1] * ag[(r - j) * p + c2]
+                    if j == 0usize {
+                        s[c1 * p + c2] += v
+                    } else {
+                        s[c1 * p + c2] += w * v
+                        s[c2 * p + c1] += w * v
+                    }
+                    c2 += 1usize
+                }
+                c1 += 1usize
+            }
+            r += 1usize
+        }
+        j += 1usize
+    }
+    // V = n / (n - k) (X'X)^-1 S (X'X)^-1
+    var c1 = 0usize
+    while c1 < p {
+        var c2 = 0usize
+        while c2 < p {
+            var v = 0.0f64
+            var q = 0usize
+            while q < p {
+                v += s[c1 * p + q] * f0.xtx_inv[q * p + c2]
+                q += 1usize
+            }
+            t1[c1 * p + c2] = v
+            c2 += 1usize
+        }
+        c1 += 1usize
+    }
+    c1 = 0usize
+    while c1 < p {
+        var v = 0.0f64
+        var q = 0usize
+        while q < p {
+            v += f0.xtx_inv[c1 * p + q] * t1[q * p + c1]
+            q += 1usize
+        }
+        out[c1] = v * f64(n) / f64(n - p)
+        c1 += 1usize
+    }
+    ret ok
+}
+
+// the F test of Anova's term rows when terms interact: the residual sum of squares of the model on the columns with big[c] > 0.5 against that on small[c] > 0.5 (q columns fewer), over the residual mean square of the full design; (F, p) on (q, n - p)
+fn anova_masked(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, big: []const f64, small: []const f64, q: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (f0, e0) = ols(a, x, y, n, p)
+    if e0 != ok { ret (nan, nan) }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f0.resid[i] * f0.resid[i]
+        i += 1usize
+    }
+    let s2 = rss / f64(n - p)
+    var sums = 0.0f64
+    var sumb = 0.0f64
+    var pass = 0usize
+    while pass < 2usize {
+        var m = 0usize
+        var c = 0usize
+        while c < p {
+            var keep = big[c] > 0.5f64
+            if pass == 1usize { keep = small[c] > 0.5f64 }
+            if keep { m += 1usize }
+            c += 1usize
+        }
+        let (xm, e1) = mem.alloc[f64](a, n * m)
+        if e1 != ok { ret (nan, nan) }
+        i = 0usize
+        while i < n {
+            var k = 0usize
+            c = 0usize
+            while c < p {
+                var keep = big[c] > 0.5f64
+                if pass == 1usize { keep = small[c] > 0.5f64 }
+                if keep {
+                    xm[i * m + k] = x[i * p + c]
+                    k += 1usize
+                }
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let (fm, e2) = ols(a, xm, y, n, m)
+        if e2 != ok { ret (nan, nan) }
+        var r = 0.0f64
+        i = 0usize
+        while i < n {
+            r += fm.resid[i] * fm.resid[i]
+            i += 1usize
+        }
+        if pass == 0usize { sumb = r } else { sums = r }
+        pass += 1usize
+    }
+    let fs = ((sums - sumb) / f64(q)) / s2
+    ret (fs, p_f(fs, f64(q), f64(n - p)))
+}
