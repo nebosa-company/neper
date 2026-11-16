@@ -1,6 +1,5 @@
 id	category	score	evidence_bytes	title	status
 L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
-L301	library	0.3	551	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
 L302	library	0	410	GPArotation: gradient projection rotations	Open (CRAN rank 196).
 L303	library	0	321	urca: unit-root and cointegration tests	Open (CRAN rank 136).
 L299	library	0	547	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Open (CRAN ranks 115, 116, 167, plus the interval summaries of ggdist 175).
@@ -26,6 +25,7 @@ L296	library	0.5	778	proxy and e1071 remainder: dist and simil registry, fuzzy c
 L295	library	0.9	324	classInt: classification intervals	Partial (D6020, D6021).
 L298	library	0.7	635	xts: period handling and time-indexed series	Partial (D6022).
 L297	library	0.6	683	colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation	Partial (D6024).
+L301	library	0.3	551	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
 L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
 L274	library	0	381	General linear mixed models (lme4)	Open.
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
