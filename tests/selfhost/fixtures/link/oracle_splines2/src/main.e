@@ -23,7 +23,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let width = nk + degree + 1usize
     let (t, e1) = mem.alloc[f64](a, nk + 2usize * (degree + 2usize))
     let (tmp, e2) = mem.alloc[f64](a, 2usize * width + 4usize)
-    let (out, e3) = mem.alloc[f64](a, width)
+    let (out, e3) = mem.alloc[f64](a, width + nk + 8usize)
     if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
     var k8 = 0u8
     var deriv = 0usize
@@ -35,7 +35,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var cnt = 0usize
     var i = 0usize
     while i < n {
-        let m = sp.row(t, tmp, knots, lo, hi, degree, icp, k8, deriv, xs[i], out)
+        var m = 0usize
+        if kind == 5usize {
+            let (tn, en1) = mem.alloc[f64](a, nk + 12usize)
+            let (tmpn, en2) = mem.alloc[f64](a, 2usize * (nk + 4usize) + 8usize)
+            let (outn, en3) = mem.alloc[f64](a, nk + 6usize)
+            if en1 != ok || en2 != ok || en3 != ok { ret 0.0f64 / 0.0f64 }
+            m = sp.nat_row(a, tn, tmpn, knots, lo, hi, icp, xs[i], outn)
+            var jn = 0usize
+            while jn < m {
+                out[jn] = outn[jn]
+                jn += 1usize
+            }
+        } else {
+            m = sp.row(t, tmp, knots, lo, hi, degree, icp, k8, deriv, xs[i], out)
+        }
         var j = 0usize
         while j < m {
             cnt += 1usize

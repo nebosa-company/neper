@@ -100,7 +100,7 @@
       "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2); Linux pending. Open: cSpline, naturalSpline, periodic bases, M and I derivatives, integrals, extrapolation, df knots, predict and update. Original: Open (CRAN rank 782). Small. Acceptance, equal to splines2: bSpline, mSpline, iSpline, cSpline, naturalSpline and periodic bases with knots, degree, derivatives, integrals, boundary conditions and the predict and update behaviour."
+      "evidence": "Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2); Linux pending. D6589: naturalSpline (cubic, at least two internal knots, with and without the intercept; the package's null-space basis, which is not splines::ns's) equals splines2 on 40 summaries. Open: cSpline, naturalSpline with fewer knots or other degrees, periodic bases, M and I derivatives, integrals, extrapolation, df knots, predict and update. Original: Open (CRAN rank 782). Small. Acceptance, equal to splines2: bSpline, mSpline, iSpline, cSpline, naturalSpline and periodic bases with knots, degree, derivatives, integrals, boundary conditions and the predict and update behaviour."
     },
     {
       "id": "L446",

@@ -46706,3 +46706,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `rocr.measure` gains kinds 14 rpp (`(tp + fp)/n`), 15 phi (the Matthews form, as `mat`) and 16 cost with `cost.fp = cost.fn = 1` (`(npos/n)(fn/npos) + (nneg/n)(fp/nneg)`), and `mxe` and `rmse` are the two scalar measures on predictions in (0, 1).
 
 **Result.** `oracle_rocr` agrees with ROCR on the new values on Windows (428 cases in all); Linux pending. L324 stays partial: rch, prbe, cal and ecost, smoothed curves and the bootstrap pROC methods.
+
+## D6589 — splines2: naturalSpline
+
+**Decision.** `nat_row` follows splines2, not splines::ns (the two differ by up to 0.65 in the basis values). The package multiplies the cubic B-spline row by a sparse null-space matrix H of the boundary second-derivative constraints: the left block `(B1 + B2 + B3)/3` and `t B2 + (1 - t) B3` with `t = c/(c - b)` from the second derivatives (a, b, c) of the first three splines at the lower boundary, the interior B-splines unchanged, and `s B[K-2] + (1 - s) B[K-1]` and `(B[K-3] + B[K-2] + B[K-1])/3` on the right with `s` from the last three at the upper boundary; the intercept-free basis drops the first column. The first attempt (ns's Householder QR null space) matched neither case.
+
+**Result.** `oracle_splines2` agrees with splines2 on 40 natural-spline summaries (two to four internal knots, both intercepts) on Windows (440 cases in all); Linux pending. With fewer than two internal knots the blocks overlap and the package's form is not ported; L445 stays partial (cSpline, periodic bases, the derivatives of M and I splines).

@@ -6,6 +6,7 @@
 // Not here: cSpline, the derivatives of the M- and I-splines, periodic and natural-cubic bases, extrapolation
 // beyond the boundary knots, df-based knot placement.
 
+use e.math
 use e.mem
 
 // b_{i,k}(x), or its d-th derivative, on the extended knot vector t (k is the order); 0 / 0 counts as 0
@@ -99,5 +100,38 @@ fn row(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize
         }
         c += 1usize
     }
+    ret o
+}
+
+// splines2::naturalSpline row at x (cubic, at least two internal knots): the cubic B-spline row times H, whose columns are the null space of the second derivatives at the boundary knots in the form the package uses: (B1 + B2 + B3) / 3 and t B2 + (1 - t) B3 on the left, the interior B-splines, and s B[K-2] + (1 - s) B[K-1] and the mean of the last three on the right, with t, s from the boundary second derivatives; the first column drops without the intercept
+fn nat_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, intercept: bool, x: f64, out: []f64) -> usize {
+    let kk = knots.len + 4usize
+    let (c0, e0) = mem.alloc[f64](a, kk)
+    let (c1, e1) = mem.alloc[f64](a, kk)
+    let (br, e2) = mem.alloc[f64](a, kk)
+    if e0 != ok || e1 != ok || e2 != ok { ret 0usize }
+    let g0 = row(t, tmp, knots, lo, hi, 3usize, true, 0u8, 2usize, lo, c0)
+    let g1 = row(t, tmp, knots, lo, hi, 3usize, true, 0u8, 2usize, hi, c1)
+    let gb = row(t, tmp, knots, lo, hi, 3usize, true, 0u8, 0usize, x, br)
+    let tl = c0[2usize] / (c0[2usize] - c0[1usize])
+    let sr = c1[kk - 2usize] / (c1[kk - 2usize] - c1[kk - 3usize])
+    var o = 0usize
+    var col0 = (br[0usize] + br[1usize] + br[2usize]) / 3.0f64
+    if intercept {
+        out[o] = col0
+        o += 1usize
+    }
+    out[o] = tl * br[1usize] + (1.0f64 - tl) * br[2usize]
+    o += 1usize
+    var i = 3usize
+    while i + 3usize < kk {
+        out[o] = br[i]
+        o += 1usize
+        i += 1usize
+    }
+    out[o] = sr * br[kk - 3usize] + (1.0f64 - sr) * br[kk - 2usize]
+    o += 1usize
+    out[o] = (br[kk - 3usize] + br[kk - 2usize] + br[kk - 1usize]) / 3.0f64
+    o += 1usize
     ret o
 }
