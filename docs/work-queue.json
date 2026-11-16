@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L388",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 557,
-      "title": "fracdiff: fractional differencing and ARFIMA",
-      "score": 0.85,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6039). diffseries, fdGPH and fdSperio equal fracdiff 1.5-4 on Windows (Linux pending). Plus (D6130) fracdiff.sim under set.seed equal R. D6681: fracdiff_fit.fracdf, the (p, d, q) Haslett-Raftery fit (Brent over d, lmder on the filtered residuals, coefficients carried between d), equals R on d, ar, ma, log.likelihood, fnormMin and sigma over 131 values on Windows (oracle_fracdiff_fit, 1e-6). Open: the Hessian, covariance and standard errors (fdhess.c). Was: Open (CRAN rank 411). Small. Acceptance, equal to fracdiff: fracdiff estimation of (p, d, q) by Haslett-Raftery approximate likelihood, diffseries, fdGPH, fdSperio and the simulated series under set.seed."
-    },
-    {
       "id": "L392",
       "category": "library",
       "group": "CRAN parity",

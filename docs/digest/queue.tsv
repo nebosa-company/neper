@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-L388	library	0.85	675	fracdiff: fractional differencing and ARFIMA	Partial (D6039).
 L392	library	0.3	497	dqrng: random number generators	Partial (D6041).
 L391	library	0.45	500	bridgesampling: marginal likelihoods	Partial (D6047, D6146 bf and post_prob).
 L410	library	0.25	485	AlgDesign: optimal experimental designs	Partly done (D6077): e.algo.stat.algdesign has gen.factorial and the eval.design measures from a model matrix, equal to AlgDesign on 200 values on Windows (oracle_algdesign);

@@ -4,6 +4,7 @@
 // sigma are R's. `ar`, `ma` and `fnormMin` are those of the LAST d evaluated, as the C code leaves them. Not here: the Hessian and
 // the covariance (fdhess.c), and the arima residuals R adds.
 
+use e.algo.linalg.decomp as decomp
 use e.algo.stat.minpacklm as ml
 use e.math
 use e.math.nmath as nm
@@ -27,9 +28,13 @@ type Fd = struct {
     vk: []f64,
     phi: []f64,
     a: []f64,
+    arena_: *mem.Arena,
+    kfjac: []f64,
+    kfvec: []f64,
+    kwa1: []f64,
 }
 
-type Fit1 = struct { d: f64, hood: f64, fnorm: f64, wnv: f64, info: i64 }
+type Fit1 = struct { d: f64, hood: f64, fnorm: f64, wnv: f64, info: i64, h: f64, cinfo: i64, hess: []f64, cov: []f64, cor: []f64, se: []f64 }
 
 fn max_f(a: f64, b: f64) -> f64 {
     if a > b { ret a }
@@ -252,6 +257,21 @@ fn pqopt(a: *mem.Arena, f: *Fd, x: []const f64, d: f64, qp: []f64, tol_f: f64, t
         if fe != ok { ret 1.7976931348623157e308f64 }
         let dev = fit.deviance
         let info = fit.info
+        var ci = 0usize
+        while ci < f.nm_ * f.pq {
+            f.kfjac[ci] = fit.fjac[ci]
+            ci += 1usize
+        }
+        ci = 0usize
+        while ci < f.nm_ {
+            f.kfvec[ci] = fit.fvec[ci]
+            ci += 1usize
+        }
+        ci = 0usize
+        while ci < f.pq {
+            f.kwa1[ci] = fit.wa1[ci]
+            ci += 1usize
+        }
         mem.reset(a, start)
         if info == 0i64 {
             f.wnv = 1.7976931348623157e308f64
@@ -265,7 +285,7 @@ fn pqopt(a: *mem.Arena, f: *Fd, x: []const f64, d: f64, qp: []f64, tol_f: f64, t
 }
 
 // fracdf: Brent's fmin over d in drange from dinit; qp (ma then ar, length p + q) is the start and receives the last fit
-fn fracdf(a: *mem.Arena, x: []const f64, m: usize, p: usize, q: usize, dtol0: f64, dmin: f64, dmax: f64, dinit: f64, qp: []f64) -> (Fit1, err) {
+fn fracdf(a: *mem.Arena, x: []const f64, m: usize, p: usize, q: usize, dtol0: f64, dmin: f64, dmax: f64, dinit: f64, h_in: f64, qp: []f64) -> (Fit1, err) {
     let n = x.len
     var res: Fit1 = zero
     var mm = m
@@ -309,6 +329,14 @@ fn fracdf(a: *mem.Arena, x: []const f64, m: usize, p: usize, q: usize, dtol0: f6
     f.vk = vk
     f.phi = phi
     f.a = aa
+    f.arena_ = a
+    let (kj, e7) = mem.alloc[f64](a, f.nm_ * f.pq + 1usize)
+    let (kv, e8) = mem.alloc[f64](a, f.nm_ + 1usize)
+    let (kw, e9) = mem.alloc[f64](a, f.pq + 1usize)
+    if e7 != ok || e8 != ok || e9 != ok { ret (res, e7) }
+    f.kfjac = kj
+    f.kfvec = kv
+    f.kwa1 = kw
     let cc = 0.38196601125011f64
     var lo = dmin
     var hi = dmax
@@ -399,5 +427,331 @@ fn fracdf(a: *mem.Arena, x: []const f64, m: usize, p: usize, q: usize, dtol0: f6
     res.fnorm = f.fnorm
     res.wnv = f.wnv
     res.info = 0i64
-    ret (res, ok)
+    let ce = fd_cov(a, &f, x, res.d, h_in, res.hood, qp, epspt5, &res)
+    ret (res, ce)
+}
+
+// hesspq: the analytic Hessian block over the ARMA coefficients (AR first, then MA, after the d row and column) into h (pq1 by pq1,
+// column-major), from the residuals `av`, the Jacobian `ajac` (nm by pq) and the stale `g` exactly as the C code reads them
+fn hesspq(f: *Fd, qp: []const f64, av: []const f64, ajac: []const f64, g: []f64, h: []f64) {
+    let n = f.n
+    let p = f.p
+    let q = f.q
+    let nmr = f.nm_
+    let pq1 = f.pq + 1usize
+    let fac = 1.0f64 / (f.wnv * f64(nmr - 1usize))
+    let (aij, ae) = mem.alloc[f64](f.arena_, nmr + 1usize)
+    if ae != ok { ret }
+    if q != 0usize && p != 0usize {
+        var k = 1usize
+        while k <= f.pq {
+            var s = 0.0f64
+            var r = 0usize
+            while r < nmr {
+                s += av[r] * ajac[(k - 1usize) * nmr + r]
+                r += 1usize
+            }
+            g[k - 1usize] = s
+            k += 1usize
+        }
+        var i = 1usize
+        while i <= p {
+            var u = g[q + i - 1usize]
+            var j = 1usize
+            while j <= q {
+                u = u * g[j - 1usize]
+                var kk = f.maxpq + 1usize
+                while kk <= n {
+                    let km = kk - f.maxpq
+                    var t = 0.0f64
+                    var l = 1usize
+                    while l < km && l <= q {
+                        t += qp[l - 1usize] * aij[km - l]
+                        l += 1usize
+                    }
+                    if km > j { aij[km] = ajac[(q + i - 1usize) * nmr + km - j - 1usize] + t } else { aij[km] = t }
+                    kk += 1usize
+                }
+                var s = 0.0f64
+                var tt = 0.0f64
+                var r = 0usize
+                while r < nmr {
+                    s += ajac[(q + i - 1usize) * nmr + r] * ajac[(j - 1usize) * nmr + r]
+                    tt += av[r] * aij[r + 1usize]
+                    r += 1usize
+                }
+                h[(p + j) * pq1 + i] = 0.0f64 - f64(n) * (s + tt - 2.0f64 * fac * u) * fac
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    if q != 0usize {
+        var i = 1usize
+        while i <= q {
+            var u = g[i - 1usize]
+            var j = i
+            while j <= q {
+                u = u * g[j - 1usize]
+                var kk = f.maxpq + 1usize
+                while kk <= n {
+                    let km = kk - f.maxpq
+                    var t = 0.0f64
+                    var l = 1usize
+                    while l < km && l <= q {
+                        t += qp[l - 1usize] * aij[km - l]
+                        l += 1usize
+                    }
+                    var s = 0.0f64
+                    if km > i { s += ajac[(j - 1usize) * nmr + km - i - 1usize] }
+                    if km > j { s += ajac[(i - 1usize) * nmr + km - j - 1usize] }
+                    aij[km] = s + t
+                    kk += 1usize
+                }
+                var s = 0.0f64
+                var tt = 0.0f64
+                var r = 0usize
+                while r < nmr {
+                    s += ajac[(i - 1usize) * nmr + r] * ajac[(j - 1usize) * nmr + r]
+                    tt += av[r] * aij[r + 1usize]
+                    r += 1usize
+                }
+                h[(p + j) * pq1 + p + i] = 0.0f64 - f64(n) * (s + tt - 2.0f64 * fac * u) * fac
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    if p != 0usize {
+        var i = 1usize
+        while i <= p {
+            var u = g[q + i - 1usize]
+            var j = i
+            while j <= p {
+                u = g[q + j - 1usize] * u
+                var s = 0.0f64
+                var r = 0usize
+                while r < nmr {
+                    s += ajac[(q + i - 1usize) * nmr + r] * ajac[(q + j - 1usize) * nmr + r]
+                    r += 1usize
+                }
+                h[j * pq1 + i] = 0.0f64 - f64(n) * (s - 2.0f64 * fac * u) * fac
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+}
+
+// the log likelihood at d and its gradient over (AR, MA) at the fixed coefficients qp, as hesdpq evaluates them
+fn hes_eval(f: *Fd, x: []const f64, d: f64, qp: []const f64, ajac: []f64, grad: []f64) -> f64 {
+    let slogvk = fdfilt(f, x, d)
+    if f.pq != 0usize {
+        fd_jac(f, qp, ajac)
+        var i = 0usize
+        while i < f.p {
+            var s = 0.0f64
+            var r = 0usize
+            while r < f.nm_ {
+                s += f.a[r] * ajac[(f.q + i) * f.nm_ + r]
+                r += 1usize
+            }
+            grad[i] = s
+            i += 1usize
+        }
+        var j = 0usize
+        while j < f.q {
+            var s = 0.0f64
+            var r = 0usize
+            while r < f.nm_ {
+                s += f.a[r] * ajac[j * f.nm_ + r]
+                r += 1usize
+            }
+            grad[f.p + j] = s
+            j += 1usize
+        }
+        var w = 0.0f64
+        var r = 0usize
+        while r < f.nm_ {
+            w += f.a[r] * f.a[r]
+            r += 1usize
+        }
+        i = 0usize
+        while i < f.pq {
+            grad[i] = grad[i] / w
+            i += 1usize
+        }
+        f.wnv = w / f64(f.nm_ - 1usize)
+    } else {
+        var s = 0.0f64
+        var k = 1usize
+        while k <= f.n {
+            s += f.y[k] * f.y[k]
+            k += 1usize
+        }
+        f.wnv = s / f64(f.nm_ - 1usize)
+    }
+    ret 0.0f64 - (f64(f.n) * (math.log[f64](f.wnv) + 2.8378f64) + slogvk) / 2.0f64
+}
+
+// fdcov after fdhpq: the covariance (minus the inverse of the Hessian by SVD), standard errors and correlations into res
+fn fd_cov(a: *mem.Arena, f: *Fd, x: []const f64, d: f64, h_in: f64, cllf: f64, qp: []const f64, epspt5: f64, res: *Fit1) -> err {
+    let pq1 = f.pq + 1usize
+    let (hess, e1) = mem.alloc[f64](a, pq1 * pq1)
+    let (hd, e2) = mem.alloc[f64](a, pq1)
+    let (ajac, e3) = mem.alloc[f64](a, f.nm_ * f.pq + 1usize)
+    let (g1, e4) = mem.alloc[f64](a, f.pq + 1usize)
+    let (g2, e5) = mem.alloc[f64](a, f.pq + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
+    var i = 0usize
+    while i < pq1 * pq1 {
+        hess[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < f.pq {
+        g1[i] = 0.0f64
+        g2[i] = 0.0f64
+        i += 1usize
+    }
+    if f.pq != 0usize {
+        let (kg, e6) = mem.alloc[f64](a, f.pq + 1usize)
+        if e6 != ok { ret e6 }
+        i = 0usize
+        while i < f.pq {
+            kg[i] = f.kwa1[i]
+            i += 1usize
+        }
+        let wnv0 = f.wnv
+        hesspq(f, qp, f.kfvec, f.kfjac, kg, hess)
+        f.wnv = wnv0
+    }
+    var hh = h_in
+    if hh <= 0.0f64 { hh = (math.abs[f64](cllf) + 1.0f64) * epspt5 }
+    if hh > 0.1f64 { hh = 0.1f64 }
+    var fa = 0.0f64
+    var fb = 0.0f64
+    if d - hh > 0.0f64 {
+        fa = hes_eval(f, x, d - hh, qp, ajac, g1)
+        if d + hh < 0.5f64 {
+            fb = hes_eval(f, x, d + hh, qp, ajac, g2)
+            hd[0usize] = (fa + fb - cllf * 2.0f64) / (hh * hh)
+        } else {
+            fb = hes_eval(f, x, d - hh * 2.0f64, qp, ajac, g2)
+            hd[0usize] = (cllf + fb - fa * 2.0f64) / (hh * 2.0f64 * hh)
+        }
+    } else {
+        fa = hes_eval(f, x, d + hh, qp, ajac, g1)
+        fb = hes_eval(f, x, d + hh * 2.0f64, qp, ajac, g1)
+        hd[0usize] = (cllf + fb - fa * 2.0f64) / (hh * 2.0f64 * hh)
+    }
+    i = 0usize
+    while i < f.pq {
+        hd[i + 1usize] = (g1[i] - g2[i]) * (f64(f.n) / (hh * 2.0f64))
+        i += 1usize
+    }
+    res.h = hh
+    i = 0usize
+    while i < pq1 {
+        hess[i * pq1] = hd[i]
+        i += 1usize
+    }
+    var cj = 0usize
+    while cj < pq1 {
+        var ri = cj + 1usize
+        while ri < pq1 {
+            hess[cj * pq1 + ri] = hess[ri * pq1 + cj]
+            ri += 1usize
+        }
+        cj += 1usize
+    }
+    let (cov, e7) = mem.alloc[f64](a, pq1 * pq1)
+    let (cor, e8) = mem.alloc[f64](a, pq1 * pq1)
+    let (se, e9) = mem.alloc[f64](a, pq1)
+    if e7 != ok || e8 != ok || e9 != ok { ret e7 }
+    i = 0usize
+    while i < pq1 * pq1 {
+        cov[i] = 0.0f64
+        cor[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < pq1 {
+        se[i] = 0.0f64
+        i += 1usize
+    }
+    res.hess = hess
+    res.cov = cov
+    res.cor = cor
+    res.se = se
+    res.cinfo = 0i64
+    let (sv, se2) = decomp.svd(a, hess, pq1, pq1)
+    if se2 != ok {
+        res.cinfo = 3i64
+        ret ok
+    }
+    var kcov = false
+    var k = 0usize
+    while k < pq1 {
+        let s = sv.d[k]
+        var r = 0usize
+        var bad = false
+        while r < pq1 {
+            if s < 1.0f64 && math.abs[f64](sv.u[r * pq1 + k]) > s * 1.7976931348623157e308f64 { bad = true }
+            r += 1usize
+        }
+        if bad {
+            kcov = true
+            break
+        }
+        let ss = 0.0f64 - 1.0f64 / s
+        var c2 = 0usize
+        while c2 < pq1 {
+            var r2 = 0usize
+            while r2 <= c2 {
+                cov[c2 * pq1 + r2] += ss * sv.u[k * pq1 + c2] * sv.v[k * pq1 + r2]
+                r2 += 1usize
+            }
+            c2 += 1usize
+        }
+        k += 1usize
+    }
+    cj = 0usize
+    while cj < pq1 {
+        var ri = cj + 1usize
+        while ri < pq1 {
+            cov[cj * pq1 + ri] = cov[ri * pq1 + cj]
+            ri += 1usize
+        }
+        cj += 1usize
+    }
+    var temp = 1.0f64
+    cj = 0usize
+    while cj < pq1 {
+        let dv = cov[cj * pq1 + cj]
+        if dv > 0.0f64 {
+            se[cj] = math.sqrt[f64](dv)
+        } else {
+            if dv < temp { temp = dv }
+            se[cj] = 0.0f64
+        }
+        cj += 1usize
+    }
+    var kcor = false
+    if temp == 1.0f64 {
+        cj = 0usize
+        while cj < pq1 {
+            var ri = 0usize
+            while ri < pq1 {
+                cor[cj * pq1 + ri] = cov[cj * pq1 + ri] / (se[ri] * se[cj])
+                ri += 1usize
+            }
+            cj += 1usize
+        }
+    } else {
+        kcor = true
+    }
+    if kcov { res.cinfo = 2i64 }
+    if kcor { res.cinfo = 3i64 }
+    ret ok
 }

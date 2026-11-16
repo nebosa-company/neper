@@ -10,7 +10,7 @@ use e.algo.stat.carlmtest as ols
 use e.math
 use e.mem
 
-type Fit = struct { info: i64, nfev: i64, niter: i64, deviance: f64, hess: []f64 }
+type Fit = struct { info: i64, nfev: i64, niter: i64, deviance: f64, hess: []f64, fjac: []f64, fvec: []f64, wa1: []f64 }
 
 fn rdwarf() -> f64 { ret 3.834e-20f64 }
 fn rgiant() -> f64 { ret 1.304e19f64 }
@@ -620,6 +620,9 @@ fn nls_lm_core[C: type](a: *mem.Arena, f: fn(*C, []const f64, []f64), jac: fn(*C
         fit.hess = hs
     }
     fit.deviance = dev
+    fit.fjac = fjac
+    fit.fvec = fvec
+    fit.wa1 = wa1
     ret (fit, ok)
 }
 

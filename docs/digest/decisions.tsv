@@ -3540,4 +3540,5 @@ D6677	713	Miwa orthant algorithm as one function over a work struct
 D6678	508	Miwa refuses a singular correlation matrix; L301 closed
 D6679	798	PCAgrid and sPCAgrid as one function with an optional penalty
 D6680	667	fast.svd values and the n < p PCAgrid reduction; L357 closed
-D6681	818	fracdiff fit over the existing MINPACK lmder
+D6681	819	fracdiff fit over the existing MINPACK lmder
+D6682	843	fracdiff covariance, and the limit of reproducing R's uninitialised reads; L388 closed
