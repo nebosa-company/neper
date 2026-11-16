@@ -45310,3 +45310,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.pracma` gains pchip (shape-preserving cubic Hermite, with the package's end-slope rule) and quadgk, the package's recursive 7/15-point Gauss-Kronrod with its fifteen-digit truncated nodes (the truncation matters at the stated tolerances, so the constants are kept as written). The integrand is chosen by an index over five fixed functions, since the module takes no closures. Not here: the other quadrature routines (quadl, romberg, integral), the root finders, interp1 beyond linear, spline, lowess, savgol, orthogonal polynomials and matrix functions.
 
 **Result.** `oracle_pracma` equals pracma on 284 cases on Windows; Linux pending. L333 stays partial.
+
+## D6153 — PerformanceAnalytics: return and risk measures of one series
+
+`e.algo.stat.perfanalytics` holds Return.annualized (geometric and arithmetic), maxDrawdown, DownsideDeviation (full, subset, potential), SortinoRatio, CalmarRatio, SharpeRatio (StdDev), and VaR (historical, Gaussian, Cornish-Fisher) and ES (historical, Gaussian) as positive losses. Found by comparison: the Gaussian and Cornish-Fisher forms scale by the population standard deviation, the historical ES averages the returns strictly below the quantile and falls back to the VaR when none is, and the Cornish-Fisher skewness and excess kurtosis are the moment estimators. Not here: the modified ES, portfolio and component forms, kernel, GPD, lognormal and Monte Carlo methods, CAPM, information, omega and tracking measures, Return.calculate and findDrawdowns.
+
+**Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 280 cases on Windows; Linux pending. L408 is partial.
