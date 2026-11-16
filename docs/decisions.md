@@ -46546,3 +46546,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `dw_approx` is dwtest(exact = FALSE): the mean and variance of d from `P = 2(n - 1) - tr(X'AX Q)` and `Q = 2(3n - 4) - 2 tr(AX'AX Q) + tr((X'AX Q)^2)` (AX the second-difference filter of X with its end rows), then the normal tail for "greater", "less" or "two.sided". The exact path (n below 100 by default) needs the eigenvalues of M A and Farebrother's `pan` routine and is not here.
 
 **Result.** `oracle_carlmtest` agrees with lmtest on 36 new values (2296 cases in all) on Windows; Linux pending. L300 stays partial.
+
+## D6563 — ggsci: the Lab spline colour ramp
+
+**Decision.** `e.algo.stat.labramp.lab_ramp` is colorRamp(raw, space = "Lab", interpolate = "spline") as rgb_gsea, rgb_material and rgb_tw3 build their palettes: grDevices' sRGB to XYZ (the 17-digit matrix of the sRGB primaries, gamma at 0.04045) to Lab against the D65 white of `white.points`, the fmm spline of each channel at knots `i / (m - 1)` evaluated at `k / (n - 1)`, Lab back to sRGB rounded to 5 digits and clamped, and `rgb(maxColorValue = 255)`, which truncates the channels and the alpha (`alpha * 255` to an integer) as R's integer coercion does, not rounds.
+
+**Result.** `oracle_labramp` agrees with ggsci on 3276 colours (gsea, 19 material and 22 tw3 palettes; n 2, 5, 12, 20; alpha 1 and 0.5) on Windows; Linux pending. The raw colour tables are inputs to the oracle, not yet library data; L329 stays partial.
