@@ -3,7 +3,6 @@ L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Parti
 L391	library	0	183	bridgesampling: marginal likelihoods	Open (CRAN rank 496).
 L392	library	0	259	dqrng: random number generators	Open (CRAN rank 461).
 L399	library	0	328	pwr: power analysis	Open (CRAN rank 558).
-L400	library	0	196	nnls: non-negative least squares	Open (CRAN rank 557).
 L402	library	0	220	ica: independent component analysis	Open (CRAN rank 548).
 L403	library	0	245	rngtools and doRNG: parallel random streams	Open (CRAN ranks 538, 576).
 L404	library	0	238	mlbench: benchmark data generators	Open (CRAN rank 547).

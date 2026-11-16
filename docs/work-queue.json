@@ -48,17 +48,6 @@
       "evidence": "Open (CRAN rank 558). Small. e.algo.stat.infer has power_t and power_z. Acceptance, equal to pwr: pwr.t.test, pwr.t2n.test, pwr.2p.test, pwr.2p2n.test, pwr.p.test, pwr.norm.test, pwr.anova.test, pwr.chisq.test, pwr.r.test and pwr.f2.test solving for any one of n, power, effect size and alpha, plus ES.h, ES.w1, ES.w2, cohen.ES."
     },
     {
-      "id": "L400",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 561,
-      "title": "nnls: non-negative least squares",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 557). Small. Acceptance, equal to nnls: the Lawson-Hanson active-set solution and residual norm, with the deviance and mode outputs, on ill-conditioned and rank-deficient problems."
-    },
-    {
       "id": "L402",
       "category": "library",
       "group": "CRAN parity",
