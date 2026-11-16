@@ -46844,3 +46844,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `vimpkg.knn_impute` fills the NaN entries of one column with the median (or mean) of the k nearest rows that have a value, by Gower distance: absolute difference over the column range, averaged over the other columns, ties broken by row order. Only complete distance columns are claimed: with missing values there, three plain rules (skip and average, count as 0, count as 1) each disagreed with VIM on 54 to 172 of 200 random frames, because `kNN` imputes the other variables first and reuses them in the distance.
 
 **Result.** `oracle_vim` agrees with VIM 7.3.1 on Windows (40 values, k 1 to 7, median and mean); Linux pending. L454 stays partial: missing distance columns, factors, hotdeck, irmi.
+
+## D6620 — plm: balanced-panel within, between and random effects
+
+**Decision.** `plmpkg.panel` gives, for rows ordered by individual with T periods each, the within estimator (individual-demeaned OLS, variance over `NT - N - K`), the between estimator (OLS on individual means with a constant) and the Swamy-Arora random-effects estimator: `sigma2_mu = max(0, RSS_between / (N - K - 1) - sigma2_e / T)`, `theta = 1 - sqrt(sigma2_e / (sigma2_e + T sigma2_mu))`, and OLS on the quasi-demeaned data. The random-effects standard errors use the residual variance of that transformed regression, `RSS / (NT - K - 1)`, not `sigma2_e`.
+
+**Result.** `oracle_plm` agrees with plm on Windows (192 values over 6 to 30 individuals, 3 to 8 periods, 1 to 3 regressors); Linux pending. L369 stays partial: unbalanced panels, other components, two-way effects, robust covariances, tests, AER.

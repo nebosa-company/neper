@@ -1516,10 +1516,10 @@
       "group": "CRAN parity",
       "order": 763,
       "title": "plm and AER: panel data and applied econometrics",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN ranks 392, 354). Mid to large. Acceptance, equal to R: plm within, between, random, first-difference and pooling models with Swamy-Arora, Wallace-Hussain, Amemiya and Nerlove variances; phtest, pFtest, plmtest, pbgtest, pdwtest, pgmm (difference and system GMM with Sargan and AR tests), vcovHC, vcovSCC; AER ivreg with diagnostics, tobit, dispersiontest."
+      "evidence": "Partial (D6620). e.algo.stat.plmpkg.panel (balanced panel: within, between and random-effects Swamy-Arora estimators with classical standard errors, sigma2 idiosyncratic and individual, theta) equals plm on Windows (oracle_plm, 192 values; Linux pending). Open: unbalanced panels, other variance-component methods, two-way effects, robust and clustered covariances, Hausman and other tests, IV (AER ivreg, plm instruments). Was: Open (CRAN ranks 392, 354). Mid to large. Acceptance, equal to R: plm within, between, random, first-difference and pooling models with Swamy-Arora, Wallace-Hussain, Amemiya and Nerlove variances; phtest, pFtest, plmtest, pbgtest, pdwtest, pgmm (difference and system GMM with Sargan and AR tests), vcovHC, vcovSCC; AER ivreg with diagnostics, tobit, dispersiontest."
     },
     {
       "id": "L372",

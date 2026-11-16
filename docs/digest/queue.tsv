@@ -136,7 +136,7 @@ L347	library	0	276	locfit: local regression and likelihood	Open (CRAN rank 259).
 L364	library	0.36	803	metafor: meta-analysis	Partial (D6499 Knapp-Hartung, D6498 leave1out, D6497 regtest, ranktest, fsn on a fixed-effect model, D6496 escalc MD, SMD, ROM, RR, OR, RD, COR, ZCOR, D6495 rma.uni intercept-only with FE, DL, HE, HS,
 L366	library	0	277	kernlab: kernel methods	Open (CRAN rank 312).
 L368	library	0	273	fixest: high-dimensional fixed-effects estimation	Open (CRAN rank 349).
-L369	library	0	366	plm and AER: panel data and applied econometrics	Open (CRAN ranks 392, 354).
+L369	library	0.15	795	plm and AER: panel data and applied econometrics	Partial (D6620).
 L372	library	0	259	spdep: spatial autocorrelation and spatial regression	Open (CRAN rank 336).
 L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
 L417	library	0.35	747	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
