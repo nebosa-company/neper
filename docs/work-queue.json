@@ -15,17 +15,6 @@
       "evidence": "Partial (D6000, D6009, D6010, D6015, D6019). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names (ten languages) and a time zone (every transition of the zones in e.tz.builtin); read_delim equals readr on rows shorter and longer than the header, under a one-column header and with a quote left open, on 15489 cases. Open: %Z naming a zone, and two unterminated-quote shapes that crash or confuse readr 2.2.0 (listed in D6016)."
     },
     {
-      "id": "L385",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 555,
-      "title": "hexbin: hexagonal binning",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 434). Small. Acceptance, equal to hexbin: hexbin counts and cell ids for any xbins, shape and range, hcell2xy, hexcoords, erode, hexTapply and the smoothing helpers."
-    },
-    {
       "id": "L388",
       "category": "library",
       "group": "CRAN parity",
@@ -299,6 +288,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6037). squarem (objective-free, methods 1 to 3) and fpiter equal SQUAREM 2026.1 with the same iterates and evaluation counts on Windows (Linux pending). Open: squarem1 and cyclem1 with objfn, cyclem2 (RRE, MPE). Was: Open (CRAN rank 437). Small. Acceptance, equal to SQUAREM: squarem with the three step-length schemes, cyclem1 and cyclem2, fpiter, with the same iterates, convergence flags and function-evaluation counts."
+    },
+    {
+      "id": "L385",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 555,
+      "title": "hexbin: hexagonal binning",
+      "score": 0.6,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6038). hexbin counts, cell ids, centres of mass and hcell2xy for any xbins, shape and range equal hexbin 1.28.6 on Windows (Linux pending). Open: hexcoords, erode, hexTapply, smoothing helpers. Was: Open (CRAN rank 434). Small. Acceptance, equal to hexbin: hexbin counts and cell ids for any xbins, shape and range, hcell2xy, hexcoords, erode, hexTapply and the smoothing helpers."
     },
     {
       "id": "L406",
