@@ -45346,3 +45346,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.betareg` fits the beta regression by Nelder-Mead restarts on (beta, log phi) from the package's starting values (least squares on logit(y), precision from the residual variance), and reports the coefficients, the precision and the log-likelihood. It agrees with R to the optimiser tolerance (coefficients and precision to 1e-3 relative, log-likelihood to 1e-6), not bit for bit. Not here: variable dispersion, other link functions, bias correction, the standard errors and the diagnostics.
 
 **Result.** `oracle_betareg` agrees with betareg on 53 cases on Windows; Linux pending. L451 is partial.
+
+## D6159 — dagitty: ancestors, d-separation and minimal adjustment sets
+
+`e.algo.stat.dagitty` works on a DAG of up to 20 nodes given as an adjacency matrix, with node sets as bit masks: ancestors and descendants, d-separation by the moralised ancestral graph, and the minimal adjustment sets for the total effect of one node on another by the generalized adjustment criterion (no node of Z among the descendants of the proper causal path nodes, and Z separating the two once the first edges of the proper causal paths are removed), enumerated over all subsets and filtered for minimality. Not here: direct effects, the canonical and exhaustive set types, instrumentalVariables, paths, equivalentDAGs, localTests and the mixed-graph forms.
+
+**Result.** `oracle_dagitty` equals dagitty on 280 cases (random DAGs of 4 to 8 nodes) on Windows; Linux pending. L478 is partial.

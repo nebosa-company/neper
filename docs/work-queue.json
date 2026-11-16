@@ -647,10 +647,10 @@
       "group": "CRAN parity",
       "order": 640,
       "title": "dagitty: causal graph reasoning",
-      "score": 0,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 845). Small to mid. Acceptance, equal to dagitty: dseparated, impliedConditionalIndependencies, adjustmentSets (minimal, canonical, exhaustive), instrumentalVariables, paths, ancestors, equivalentDAGs, localTests on data."
+      "evidence": "Partial (D6159). Ancestors, d-separation and minimal total-effect adjustment sets of DAGs equal dagitty on Windows (oracle_dagitty; Linux pending). Open: impliedConditionalIndependencies, canonical and exhaustive sets, instrumentalVariables, paths, equivalentDAGs, localTests. Was: Open (CRAN rank 845). Small to mid. Acceptance, equal to dagitty: dseparated, impliedConditionalIndependencies, adjustmentSets (minimal, canonical, exhaustive), instrumentalVariables, paths, ancestors, equivalentDAGs, localTests on data."
     },
     {
       "id": "L479",
