@@ -1212,3 +1212,140 @@ fn savgol(a: *mem.Arena, t: []const f64, fl: usize, forder: usize, dorder: usize
     }
     ret ok
 }
+
+// kron(A, B): the Kronecker product of the ra by ca matrix a and the rb by cb matrix b (row-major) into out ((ra rb) by (ca cb))
+fn kron(a: []const f64, ra: usize, ca: usize, b: []const f64, rb: usize, cb: usize, out: []f64) {
+    let oc = ca * cb
+    var i = 0usize
+    while i < ra {
+        var j = 0usize
+        while j < ca {
+            var k = 0usize
+            while k < rb {
+                var l = 0usize
+                while l < cb {
+                    out[(i * rb + k) * oc + j * cb + l] = a[i * ca + j] * b[k * cb + l]
+                    l += 1usize
+                }
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// the inverse of a p by p matrix by Gauss-Jordan with partial pivoting into out; scratch holds 2 p p values; false when singular
+fn mat_inverse(m: []const f64, p: usize, out: []f64, scratch: []f64) -> bool {
+    let w = 2usize * p
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            scratch[i * w + j] = m[i * p + j]
+            scratch[i * w + p + j] = 0.0f64
+            if i == j { scratch[i * w + p + j] = 1.0f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var col = 0usize
+    while col < p {
+        var piv = col
+        var r = col + 1usize
+        while r < p {
+            if math.abs[f64](scratch[r * w + col]) > math.abs[f64](scratch[piv * w + col]) { piv = r }
+            r += 1usize
+        }
+        if scratch[piv * w + col] == 0.0f64 { ret false }
+        if piv != col {
+            var k = 0usize
+            while k < w {
+                let t = scratch[col * w + k]
+                scratch[col * w + k] = scratch[piv * w + k]
+                scratch[piv * w + k] = t
+                k += 1usize
+            }
+        }
+        let d = scratch[col * w + col]
+        var k = 0usize
+        while k < w {
+            scratch[col * w + k] = scratch[col * w + k] / d
+            k += 1usize
+        }
+        r = 0usize
+        while r < p {
+            if r != col {
+                let f = scratch[r * w + col]
+                k = 0usize
+                while k < w {
+                    scratch[r * w + k] = scratch[r * w + k] - f * scratch[col * w + k]
+                    k += 1usize
+                }
+            }
+            r += 1usize
+        }
+        col += 1usize
+    }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            out[i * p + j] = scratch[i * w + p + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}
+
+// pinv(A) for a matrix of full rank (m by n, row-major) into out (n by m): (A'A)^-1 A' when m >= n, A' (A A')^-1 otherwise
+fn pinv_full(a: *mem.Arena, m: []const f64, rows: usize, cols: usize, out: []f64) -> bool {
+    var k = cols
+    if rows < cols { k = rows }
+    let (g, e1) = mem.alloc[f64](a, k * k)
+    if e1 != ok { ret false }
+    let (gi, e2) = mem.alloc[f64](a, k * k)
+    if e2 != ok { ret false }
+    let (sc, e3) = mem.alloc[f64](a, 2usize * k * k)
+    if e3 != ok { ret false }
+    var i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            var s = 0.0f64
+            var t = 0usize
+            if rows >= cols {
+                while t < rows {
+                    s += m[t * cols + i] * m[t * cols + j]
+                    t += 1usize
+                }
+            } else {
+                while t < cols {
+                    s += m[i * cols + t] * m[j * cols + t]
+                    t += 1usize
+                }
+            }
+            g[i * k + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if !mat_inverse(g, k, gi, sc) { ret false }
+    i = 0usize
+    while i < cols {
+        var j = 0usize
+        while j < rows {
+            var s = 0.0f64
+            var t = 0usize
+            while t < k {
+                if rows >= cols { s += gi[i * k + t] * m[j * cols + t] } else { s += m[t * cols + i] * gi[t * k + j] }
+                t += 1usize
+            }
+            out[i * rows + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}

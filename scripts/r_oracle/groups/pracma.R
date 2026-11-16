@@ -101,4 +101,11 @@ for (rep in 1:30) {
   s <- savgol(tt, fl, fo, dord)
   for (i in sample(n, 5)) add("savgol", c(fl, fo, dord, i - 1, n, tt), s[i])
 }
+for (rep in 1:25) {
+  ra <- sample(1:4, 1); ca <- sample(1:4, 1); rb <- sample(1:3, 1); cb <- sample(1:4, 1)
+  A <- matrix(round(rnorm(ra * ca), 3), ra, ca); B <- matrix(round(rnorm(rb * cb), 3), rb, cb); K <- kron(A, B)
+  for (i in sample(nrow(K), min(3, nrow(K)))) for (j in sample(ncol(K), min(2, ncol(K)))) add("kron", c(ra, ca, rb, cb, i - 1, j - 1, as.vector(t(A)), as.vector(t(B))), K[i, j])
+  m <- sample(2:7, 1); n <- sample(2:7, 1); M <- matrix(round(rnorm(m * n), 3), m, n); P <- pinv(M)
+  for (i in sample(n, min(2, n))) for (j in sample(m, min(2, m))) add("pinv", c(m, n, i - 1, j - 1, as.vector(t(M))), P[i, j])
+}
 emit("pracma", "pracma", list(cases))

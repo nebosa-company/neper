@@ -202,6 +202,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if pm.savgol(a, x[5usize..5usize + sn], usize(x[0usize]), usize(x[1usize]), usize(x[2usize]), so) != ok { os.exit(8) }
         ret so[usize(x[3usize])]
     }
+    if str.eq(k, "kron") {
+        let ra = usize(x[0usize])
+        let ca = usize(x[1usize])
+        let rb = usize(x[2usize])
+        let cb = usize(x[3usize])
+        let (ko, ke) = mem.alloc[f64](a, ra * rb * ca * cb)
+        if ke != ok { os.exit(9) }
+        pm.kron(x[6usize..6usize + ra * ca], ra, ca, x[6usize + ra * ca..6usize + ra * ca + rb * cb], rb, cb, ko)
+        ret ko[usize(x[4usize]) * ca * cb + usize(x[5usize])]
+    }
+    if str.eq(k, "pinv") {
+        let pm_r = usize(x[0usize])
+        let pm_c = usize(x[1usize])
+        let (po, pe) = mem.alloc[f64](a, pm_r * pm_c)
+        if pe != ok { os.exit(10) }
+        if !pm.pinv_full(a, x[4usize..4usize + pm_r * pm_c], pm_r, pm_c, po) { os.exit(11) }
+        ret po[usize(x[2usize]) * pm_r + usize(x[3usize])]
+    }
     if str.eq(k, "quadgk") { ret pm.quadgk(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "interp1") {
         let ni = usize(x[1usize])

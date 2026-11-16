@@ -3357,4 +3357,5 @@ D6485	949	stats::uniroot and rootSolve::uniroot.all
 D6486	818	pracma: fminsearch (Nelder-Mead)
 D6487	607	pracma: savgol
 D6488	923	stats::lowess
-D6489	711	stats::spline: fmm and natural
+D6489	712	stats::spline: fmm and natural
+D6490	760	pracma: kron and pinv for full-rank matrices

@@ -46108,3 +46108,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.splinepkg` is new: `fmm_spline` and `natural_spline` are R's C routines line for line (the n = 2 linear fallback, the Forsythe-Malcolm-Moler end conditions that fit a cubic through the first and last four points, the tridiagonal elimination and the conversion to b, c, d coefficients) and `spline_eval` evaluates inside the data range by binary search.
 
 **Result.** `oracle_splinepkg` agrees with stats::spline on 320 cases on Windows at rel 1e-9: both methods, 40 knot sets of 2 to 14 points, four interior evaluation points each. The periodic and monotone methods, extrapolation, ties in x and derivatives are open; Linux pending. L333 stays partial.
+
+## D6490 — pracma: kron and pinv for full-rank matrices
+
+`e.algo.stat.pracma` gains `kron` (the Kronecker product, row-major), `mat_inverse` (Gauss-Jordan with partial pivoting) and `pinv_full`, the Moore-Penrose inverse of a full-rank matrix as (A'A)^-1 A' for tall and A'(A A')^-1 for wide matrices. pracma's pinv goes through the SVD and also handles rank deficiency, which this does not: a rank-deficient matrix fails the inversion and is reported as such.
+
+**Result.** `oracle_pracma` equals pracma on 1323 cases on Windows at rel 1e-9, 237 of them new: 25 Kronecker products and 25 random 2-to-7 by 2-to-7 matrices, both orientations. null, orth, expm, cond, polyroots and the polynom and caTools functions are open; Linux pending. L333 stays partial.
