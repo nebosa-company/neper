@@ -58,4 +58,13 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("tt_s", a, unname(r$statistic), rel = 1e-9, abs = 1e-9)
   cases[[length(cases) + 1]] <- case("tt_p", a, r$p.value, rel = 1e-8, abs = 1e-12)
 }
+# regul (fn "reg", args (6, 0, nx, x, y[nx], xmin, n, deltat, method, rule, f, window, idx)): method 0 constant 1 linear 2 area
+for (rep in 1:60) {
+  nx <- sample(8:30, 1); x <- sort(round(runif(nx, 0, 20), 2)); x <- unique(x); nx <- length(x); y <- round(rnorm(nx, 5, 2), 3)
+  xmin <- if (rep %% 3 == 0) round(min(x) - 1, 2) else min(x); no <- sample(6:40, 1); dt <- round((max(x) - min(x)) / (no - 1) * c(1, 0.8, 1.1)[rep %% 3 + 1], 4)
+  meth <- rep %% 3; ru <- sample(1:2, 1); f <- c(0, 0.5, 1)[sample(3, 1)]; win <- round(dt * c(1, 1.5, 2)[sample(3, 1)], 4)
+  r <- suppressMessages(regul(x, y, xmin = xmin, n = no, deltat = dt, methods = c("constant", "linear", "area")[meth + 1], rule = ru, f = f, window = win, tol = 0))
+  v <- r$y[[1]]
+  for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("reg", c(6, 0, nx, x, y, xmin, no, dt, meth, ru, f, win, i - 1), v[i], rel = 1e-9, abs = 1e-10)
+}
 emit("pastecs", "pastecs", list(cases))

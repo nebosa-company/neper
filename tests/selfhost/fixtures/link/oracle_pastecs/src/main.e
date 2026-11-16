@@ -21,6 +21,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "tt_s") { ret tt.s }
         ret tt.p
     }
+    if str.eq(nm, "reg") {
+        let b = 3usize + n
+        let no = usize(z[b + n + 1usize])
+        let (out, eo) = mem.alloc[f64](a, no)
+        if eo != ok { ret 0.0f64 / 0.0f64 }
+        let re = pc.regul(x, z[b..b + n], z[b + n], no, z[b + n + 2usize], usize(z[b + n + 3usize]), usize(z[b + n + 4usize]), z[b + n + 5usize], z[b + n + 6usize], out)
+        if re != ok { ret 0.0f64 / 0.0f64 }
+        ret out[usize(z[b + n + 7usize])]
+    }
     if str.eq(nm, "dec") {
         let b = 3usize + n
         let (f, ef) = mem.alloc[f64](a, n + 8usize)

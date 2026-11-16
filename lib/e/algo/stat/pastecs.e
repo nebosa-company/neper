@@ -752,3 +752,84 @@ fn trend_test(a: *mem.Arena, x: []const f64) -> (TrendTest, err) {
     res.p = p
     ret (res, ok)
 }
+
+// ---- regul: regularisation of an irregular series (zero tolerance, no spline) ----
+
+// R's approx at v on the sorted unique abscissas x: method 0 constant (with f), 1 linear; rule 1 gives NaN outside the range, rule 2 the end values
+fn approx1(x: []const f64, y: []const f64, v: f64, method: usize, rule: usize, f: f64) -> f64 {
+    let n = x.len
+    if v < x[0usize] {
+        if rule == 1usize { ret 0.0f64 / 0.0f64 }
+        ret y[0usize]
+    }
+    if v > x[n - 1usize] {
+        if rule == 1usize { ret 0.0f64 / 0.0f64 }
+        ret y[n - 1usize]
+    }
+    var i = 0usize
+    var j = n - 1usize
+    while i + 1usize < j {
+        let ij = (i + j) / 2usize
+        if v < x[ij] { j = ij } else { i = ij }
+    }
+    if v == x[j] { ret y[j] }
+    if v == x[i] { ret y[i] }
+    if method == 1usize { ret y[i] + (y[j] - y[i]) * ((v - x[i]) / (x[j] - x[i])) }
+    var r = 0.0f64
+    if f != 1.0f64 { r += y[i] * (1.0f64 - f) }
+    if f != 0.0f64 { r += y[j] * f }
+    ret r
+}
+
+// pastecs::regul on one series with tol = 0 (x sorted ascending and distinct; an output abscissa equal to an observation takes that observation, and the area method's abscissa is the shifted and unshifted one, so it matches only when the shift leaves it exact): method 0 constant, 1 linear, 2 area; the n values at xmin + i deltat go to `out`
+fn regul(x: []const f64, y: []const f64, xmin: f64, n: usize, deltat: f64, method: usize, rule: usize, f: f64, window: f64, out: []f64) -> err {
+    let nx = x.len
+    var i = 0usize
+    if method < 2usize {
+        while i < n {
+            out[i] = approx1(x, y, f64(i) * deltat + xmin, method, rule, f)
+            i += 1usize
+        }
+    } else {
+        let halfwin = window / 2.0f64
+        let xmax = f64(n - 1usize) * deltat + xmin
+        var xlb = xmin - halfwin - 1.0f64
+        if x[0usize] < xlb { xlb = x[0usize] }
+        var xub = xmax + halfwin + 1.0f64
+        if x[nx - 1usize] > xub { xub = x[nx - 1usize] }
+        var shift = 0.0f64
+        if xlb <= 0.0f64 { shift = 0.0f64 - xlb + 1.0f64 }
+        i = 0usize
+        while i < n {
+            let xo = f64(i) * deltat + xmin + shift
+            let u1 = xo - halfwin
+            let u2 = u1 + window
+            var s = 0.0f64
+            var k = 0usize
+            while k < nx {
+                var a1 = xlb + shift
+                if k > 0usize { a1 = (x[k - 1usize] + shift + x[k] + shift) / 2.0f64 }
+                var a2 = xub + shift
+                if k + 1usize < nx { a2 = (x[k] + shift + x[k + 1usize] + shift) / 2.0f64 }
+                var lo = a1
+                if u1 > lo { lo = u1 }
+                var hi = a2
+                if u2 < hi { hi = u2 }
+                var w = hi - lo
+                if w < 0.0f64 { w = 0.0f64 }
+                s += y[k] * w
+                k += 1usize
+            }
+            out[i] = s / window
+            if rule == 1usize && (xo < x[0usize] + shift || xo > x[nx - 1usize] + shift) { out[i] = 0.0f64 / 0.0f64 }
+            let xr = xo - shift
+            var k2 = 0usize
+            while k2 < nx {
+                if x[k2] == xr { out[i] = y[k2] }
+                k2 += 1usize
+            }
+            i += 1usize
+        }
+    }
+    ret ok
+}
