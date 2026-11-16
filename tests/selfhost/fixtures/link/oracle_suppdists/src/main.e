@@ -36,6 +36,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "mf_d") { ret sd.fmaxfratio(z[2usize], mdf, mk) }
         ret sd.xmaxfratio(z[2usize], mdf, mk)
     }
+    if str.starts_with(nm, "fr_") {
+        let fr = i64(z[0usize])
+        let fn_ = i64(z[1usize])
+        let (fd, fe) = sd.friedman_exact(a, fr, fn_)
+        if fe != ok { ret nan }
+        if str.eq(nm, "fr_p") { ret sd.pfrie(&fd, z[2usize], fr, fn_) }
+        if str.eq(nm, "fr_u") { ret sd.qfrie(&fd, z[2usize], fr, fn_) }
+        if str.eq(nm, "fr_d") { ret sd.ffrie(&fd, z[2usize], fr, fn_) }
+        ret sd.xfrie(&fd, z[2usize], fr, fn_)
+    }
     if str.eq(nm, "gh_d") { ret sd.ghyper_d(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_p") { ret sd.ghyper_p(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_q") { ret sd.ghyper_q(z[3usize], z[0usize], z[1usize], z[2usize]) }

@@ -41,4 +41,12 @@ for (rep in 1:40) {
   add("mf_p", c(df, k, x), pmaxFratio(x, df, k), 1e-6); add("mf_u", c(df, k, x), pmaxFratio(x, df, k, lower.tail = FALSE), 1e-6)
   add("mf_d", c(df, k, x), dmaxFratio(x, df, k), 1e-6); add("mf_q", c(df, k, pr), qmaxFratio(pr, df, k), 1e-5)
 }
+# Friedman: "fr_p" "fr_u" "fr_d" args (r, N, x), "fr_q" args (r, N, p)
+fr_cases <- list(c(3, 4), c(3, 7), c(3, 12), c(4, 5), c(4, 9), c(5, 4), c(5, 7), c(6, 5), c(4, 20), c(3, 40))
+for (cs in fr_cases) for (rep in 1:5) {
+  r <- cs[1]; N <- cs[2]; mx <- N * (r - 1); x <- if (rep <= 3) round(runif(1, 0.2, mx * 0.8), 2) else (2 * sample(1:(N * r * (r + 1) %/% 12), 1)) * 12 / (N * r * (r + 1)); pr <- round(runif(1, 0.05, 0.95), 3)
+  v <- tryCatch(pFriedman(x, r, N), error = function(e) NA); if (is.na(v)) next
+  add("fr_p", c(r, N, x), v, 1e-8); add("fr_u", c(r, N, x), pFriedman(x, r, N, lower.tail = FALSE), 1e-8)
+  add("fr_d", c(r, N, x), dFriedman(x, r, N), 1e-8); add("fr_q", c(r, N, pr), qFriedman(pr, r, N), 1e-8)
+}
 emit("suppdists", "SuppDists", list(cases))

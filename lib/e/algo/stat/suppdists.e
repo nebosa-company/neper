@@ -624,3 +624,395 @@ fn xmaxfratio(p: f64, df: i64, n: i64) -> f64 {
     if x < 1.0f64 { x = 1.000001f64 }
     ret x
 }
+
+// ---- Friedman's chi-square for r treatments in n blocks: the exact Kendall-Babington Smith distribution where the package has it
+// (r = 3 with n <= 30, r = 4 with n <= 15, r = 5 with n <= 8), Walsh's beta approximation elsewhere ----
+
+type Fdist = struct { has: bool, s: []i64, q: []f64 }
+
+fn friedman_exact_ok(r: i64, n: i64) -> bool {
+    if r == 3i64 { ret n <= 30i64 }
+    if r == 4i64 { ret n <= 15i64 }
+    if r == 5i64 { ret n <= 8i64 }
+    ret false
+}
+
+// the permutations of the base ranks (r! rows of r values, row-major); the base is the centred ranks, doubled for even r
+fn friedman_perms(a: *mem.Arena, r: usize) -> ([]i64, usize, err) {
+    var np = 1usize
+    var i = 2usize
+    while i <= r {
+        np *= i
+        i += 1usize
+    }
+    let (out, e) = mem.alloc[i64](a, np * r)
+    if e != ok { ret (out, 0usize, e) }
+    var step = 1i64
+    var x0 = (1i64 - i64(r)) / 2i64
+    if r % 2usize == 0usize {
+        step = 2i64
+        x0 = 1i64 - i64(r)
+    }
+    var idx: [8]usize = zero
+    i = 0usize
+    while i < r {
+        idx[i] = i
+        i += 1usize
+    }
+    // Heap-style enumeration by lexicographic next permutation
+    var row = 0usize
+    var going = true
+    while going {
+        i = 0usize
+        while i < r {
+            out[row * r + i] = x0 + step * i64(idx[i])
+            i += 1usize
+        }
+        row += 1usize
+        var k = r - 1usize
+        var found = false
+        while k > 0usize && !found {
+            if idx[k - 1usize] < idx[k] { found = true } else { k -= 1usize }
+        }
+        if !found {
+            going = false
+        } else {
+            let pivot = k - 1usize
+            var l = r - 1usize
+            while idx[l] < idx[pivot] { l -= 1usize }
+            let t = idx[pivot]
+            idx[pivot] = idx[l]
+            idx[l] = t
+            var lo = k
+            var hi = r - 1usize
+            while lo < hi {
+                let u = idx[lo]
+                idx[lo] = idx[hi]
+                idx[hi] = u
+                lo += 1usize
+                hi -= 1usize
+            }
+        }
+    }
+    ret (out, np, ok)
+}
+
+// the exact distribution: states are the sorted column sums of centred ranks, frequencies are carried in doubles as the package does
+fn friedman_exact(a: *mem.Arena, r: i64, n: i64) -> (Fdist, err) {
+    var res: Fdist = zero
+    if !friedman_exact_ok(r, n) { ret (res, ok) }
+    let ru = usize(r)
+    let (perms, np, pe) = friedman_perms(a, ru)
+    if pe != ok { ret (res, pe) }
+    let cap = 400000usize
+    let (keys, e1) = mem.alloc[u64](a, cap * 2usize)
+    let (freq, e2) = mem.alloc[f64](a, cap * 2usize)
+    let (cur_key, e3) = mem.alloc[u64](a, cap)
+    let (cur_freq, e4) = mem.alloc[f64](a, cap)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (res, e1) }
+    var base: [8]i64 = zero
+    var i = 0usize
+    while i < ru {
+        base[i] = perms[i]
+        i += 1usize
+    }
+    // the first generation: the base itself (sorted ascending), frequency 1
+    var ncur = 1usize
+    var v: [8]i64 = zero
+    i = 0usize
+    while i < ru {
+        v[i] = base[i]
+        i += 1usize
+    }
+    cur_key[0usize] = pack_sorted(v[0usize..ru])
+    cur_freq[0usize] = 1.0f64
+    var gen = 1i64
+    while gen < n {
+        var q = 0usize
+        while q < cap * 2usize {
+            keys[q] = 0u64
+            freq[q] = 0.0f64
+            q += 1usize
+        }
+        var nxt = 0usize
+        var c = 0usize
+        while c < ncur {
+            unpack_sorted(cur_key[c], v[0usize..ru])
+            var p = 0usize
+            while p < np {
+                var w: [8]i64 = zero
+                i = 0usize
+                while i < ru {
+                    w[i] = v[i] + perms[p * ru + i]
+                    i += 1usize
+                }
+                // insertion sort of w
+                var s1 = 1usize
+                while s1 < ru {
+                    let t = w[s1]
+                    var s2 = s1
+                    while s2 > 0usize && w[s2 - 1usize] > t {
+                        w[s2] = w[s2 - 1usize]
+                        s2 -= 1usize
+                    }
+                    w[s2] = t
+                    s1 += 1usize
+                }
+                let kk = pack_sorted(w[0usize..ru]) + 1u64
+                var h = usize((kk *% 11400714819323198485u64) >> 40u64) % (cap * 2usize)
+                while keys[h] != 0u64 && keys[h] != kk { h = (h + 1usize) % (cap * 2usize) }
+                if keys[h] == 0u64 {
+                    keys[h] = kk
+                    nxt += 1usize
+                    if nxt >= cap { ret (res, mem.Invalid) }
+                }
+                freq[h] = freq[h] + cur_freq[c]
+                p += 1usize
+            }
+            c += 1usize
+        }
+        var m = 0usize
+        q = 0usize
+        while q < cap * 2usize {
+            if keys[q] != 0u64 {
+                cur_key[m] = keys[q] - 1u64
+                cur_freq[m] = freq[q]
+                m += 1usize
+            }
+            q += 1usize
+        }
+        ncur = m
+        gen += 1i64
+    }
+    // S per state, then by S ascending with the upper-tail sums
+    let (sv, e5) = mem.alloc[i64](a, ncur)
+    if e5 != ok { ret (res, e5) }
+    let (ord, e6) = mem.alloc[usize](a, ncur)
+    if e6 != ok { ret (res, e6) }
+    var c2 = 0usize
+    while c2 < ncur {
+        unpack_sorted(cur_key[c2], v[0usize..ru])
+        var s = 0i64
+        i = 0usize
+        while i < ru {
+            s += v[i] * v[i]
+            i += 1usize
+        }
+        sv[c2] = s
+        ord[c2] = c2
+        c2 += 1usize
+    }
+    // sort the states by S (insertion sort is too slow at 40k states: use a shell sort)
+    var gap = ncur / 2usize
+    while gap > 0usize {
+        var ii = gap
+        while ii < ncur {
+            let t = ord[ii]
+            var jj = ii
+            while jj >= gap && sv[ord[jj - gap]] > sv[t] {
+                ord[jj] = ord[jj - gap]
+                jj -= gap
+            }
+            ord[jj] = t
+            ii += 1usize
+        }
+        gap = gap / 2usize
+    }
+    let total = math.exp[f64](f64(n - 1i64) * pik_loggamma(f64(r + 1i64)))
+    let (qt, e7) = mem.alloc[f64](a, ncur)
+    if e7 != ok { ret (res, e7) }
+    var sum = 0.0f64
+    var t2 = ncur
+    while t2 > 0usize {
+        t2 -= 1usize
+        sum += cur_freq[ord[t2]] / total
+        qt[t2] = sum
+    }
+    // pool equal S: the first (lowest) entry of a group carries the cumulative from there up
+    let (ss, e8) = mem.alloc[i64](a, ncur)
+    let (qq, e9) = mem.alloc[f64](a, ncur)
+    if e8 != ok || e9 != ok { ret (res, e8) }
+    var j = 0usize
+    var cs = sv[ord[0usize]]
+    var cq = qt[0usize]
+    var ii2 = 1usize
+    while ii2 < ncur {
+        if cs != sv[ord[ii2]] {
+            ss[j] = cs
+            qq[j] = cq
+            cs = sv[ord[ii2]]
+            cq = qt[ii2]
+            j += 1usize
+        }
+        ii2 += 1usize
+    }
+    ss[j] = cs
+    qq[j] = cq
+    res.has = true
+    res.s = ss[0usize..j + 1usize]
+    res.q = qq[0usize..j + 1usize]
+    ret (res, ok)
+}
+
+fn pack_sorted(v: []const i64) -> u64 {
+    var k = 0u64
+    var i = 0usize
+    while i < v.len {
+        k = k * 256u64 + u64(v[i] + 128i64)
+        i += 1usize
+    }
+    ret k
+}
+
+fn unpack_sorted(k0: u64, v: []i64) {
+    var k = k0
+    var i = v.len
+    while i > 0usize {
+        i -= 1usize
+        v[i] = i64(k % 256u64) - 128i64
+        k = k / 256u64
+    }
+}
+
+fn friedman_find_s(ss: i64, max_s: i64, s: []const i64, ns: usize, lower: bool) -> usize {
+    let guess = f64(ss) / f64(max_s)
+    var k = usize(f64(ns - 1usize) * guess)
+    if k > ns - 1usize { k = ns - 1usize }
+    var larger = false
+    if lower { larger = s[k] > ss } else { larger = s[k] >= ss }
+    while larger {
+        if k == 0usize { ret k }
+        if !lower && ss == s[k] { ret k }
+        k -= 1usize
+        larger = s[k] > ss
+        if !larger {
+            if lower { ret k + 1usize }
+            ret k
+        }
+    }
+    while !larger {
+        if k == ns - 1usize { ret k }
+        k += 1usize
+        if lower { larger = s[k] > ss } else { larger = s[k] >= ss }
+        if larger {
+            if lower || s[k] == ss { ret k }
+            ret k - 1usize
+        }
+    }
+    ret 0usize
+}
+
+fn friedman_ss(x: f64, r: i64, n: i64) -> i64 {
+    var ss = i64(0.5f64 + x * f64(n * r * (r + 1i64)) / 12.0f64)
+    if r % 2i64 == 0i64 { ss = ss * 4i64 }
+    ret ss
+}
+
+fn friedman_m(r: i64, n: i64) -> f64 { ret f64(n * n * r * (r * r - 1i64)) / 12.0f64 }
+
+// the lower tail up to and including X
+fn pfrie(d: *const Fdist, x: f64, r: i64, n: i64) -> f64 {
+    if r < 3i64 || n < 2i64 { ret 0.0f64 / 0.0f64 }
+    let m = friedman_m(r, n)
+    var s = x * f64(n * r * (r + 1i64)) / 12.0f64
+    if s > m || s < 0.0f64 { ret 0.0f64 / 0.0f64 }
+    var is_ = i64(math.ceil[f64](s))
+    is_ = 2i64 * (is_ / 2i64)
+    s = f64(is_)
+    if s < 1.0f64 { s = 1.0f64 }
+    if friedman_exact_ok(r, n) && d.has {
+        let ss = friedman_ss(x, r, n)
+        let k = friedman_find_s(ss, d.s[d.s.len - 1usize], d.s, d.s.len, true)
+        ret 1.0f64 - d.q[k]
+    }
+    let w = (s - 1.0f64) / (m + 2.0f64)
+    let aa = f64(r - 1i64) - 2.0f64 / f64(n)
+    let bb = aa * f64(n - 1i64)
+    ret 1.0f64 - nb.pbeta(1.0f64 - w, bb / 2.0f64, aa / 2.0f64, true, false)
+}
+
+// the upper tail excluding X
+fn qfrie(d: *const Fdist, x: f64, r: i64, n: i64) -> f64 {
+    if r < 3i64 || n < 2i64 { ret 0.0f64 / 0.0f64 }
+    let m = friedman_m(r, n)
+    var s = x * f64(n * r * (r + 1i64)) / 12.0f64
+    if s > m || s < 0.0f64 { ret 0.0f64 / 0.0f64 }
+    var is_ = i64(math.floor[f64](s))
+    is_ = 2i64 * (is_ / 2i64)
+    s = f64(is_)
+    if s < 1.0f64 { s = 1.0f64 }
+    if friedman_exact_ok(r, n) && d.has {
+        let ss = friedman_ss(x, r, n)
+        let k = friedman_find_s(ss, d.s[d.s.len - 1usize], d.s, d.s.len, true)
+        ret d.q[k]
+    }
+    let w = (s - 1.0f64) / (m + 2.0f64)
+    let aa = f64(r - 1i64) - 2.0f64 / f64(n)
+    let bb = aa * f64(n - 1i64)
+    ret nb.pbeta(1.0f64 - w, bb / 2.0f64, aa / 2.0f64, true, false)
+}
+
+// the probability mass at X (exact) or the difference of the approximation's cdf
+fn ffrie(d: *const Fdist, x: f64, r: i64, n: i64) -> f64 {
+    if r < 3i64 || n < 2i64 { ret 0.0f64 / 0.0f64 }
+    let m = friedman_m(r, n)
+    var s = x * f64(n * r * (r + 1i64)) / 12.0f64
+    if s > m || s < 0.0f64 { ret 0.0f64 / 0.0f64 }
+    s = s - 2.0f64
+    var is_ = i64(math.floor[f64](s))
+    is_ = 2i64 * (is_ / 2i64)
+    s = f64(is_)
+    if s < 1.0f64 { s = 1.0f64 }
+    if friedman_exact_ok(r, n) && d.has {
+        let ss = friedman_ss(x, r, n)
+        let k = friedman_find_s(ss, d.s[d.s.len - 1usize], d.s, d.s.len, false)
+        var f = d.q[k]
+        if k < d.s.len - 1usize { f = f - d.q[k + 1usize] }
+        ret f
+    }
+    let w = (s - 1.0f64) / (m + 2.0f64)
+    let aa = f64(r - 1i64) - 2.0f64 / f64(n)
+    let bb = aa * f64(n - 1i64)
+    ret nb.pbeta(1.0f64 - w, bb / 2.0f64, aa / 2.0f64, true, false) - nb.pbeta(1.0f64 - w - 2.0f64 / (m + 2.0f64), bb / 2.0f64, aa / 2.0f64, true, false)
+}
+
+// the quantile: a step search on the distribution function from the beta approximation's guess
+fn xfrie(d: *const Fdist, p: f64, r: i64, n: i64) -> f64 {
+    if r < 3i64 || n < 2i64 { ret 0.0f64 / 0.0f64 }
+    let m = friedman_m(r, n)
+    let aa = f64(r - 1i64) - 2.0f64 / f64(n)
+    let bb = aa * f64(n - 1i64)
+    let w = 1.0f64 - nb.qbeta(1.0f64 - p, bb / 2.0f64, aa / 2.0f64, true, false)
+    var s = 1.0f64 + (m + 2.0f64) * w
+    var is_ = i64(math.ceil[f64](s))
+    if 0.0f64 > p || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    is_ = 2i64 * (is_ / 2i64)
+    s = f64(is_)
+    if s < 1.0f64 { s = 1.0f64 }
+    let step = 12.0f64 / f64(n * r * (r + 1i64))
+    let mx = m * step
+    var x = s * step
+    if x < 0.0f64 { x = 0.0f64 }
+    if x > mx { x = mx }
+    var larger = p <= pfrie(d, x, r, n)
+    while larger {
+        if x <= 0.0f64 { ret 0.0f64 }
+        x = x - step
+        if x < 0.0f64 {
+            larger = false
+        } else {
+            larger = p <= pfrie(d, x, r, n)
+        }
+        if !larger {
+            x = x + step
+            ret x
+        }
+    }
+    while !larger {
+        if x + step >= mx { ret mx }
+        x = x + step
+        larger = p <= pfrie(d, x, r, n)
+        if larger { ret x }
+    }
+    ret 0.0f64
+}
