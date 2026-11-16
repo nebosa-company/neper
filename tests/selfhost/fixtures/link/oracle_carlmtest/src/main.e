@@ -37,6 +37,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(c.name, "ncv") || str.eq(c.name, "ncvp") {
+        let (ns, np) = cl.ncv_test(a, des, y, n, p)
+        if c.name.len == 3usize { ret ns }
+        ret np
+    }
+    if str.eq(c.name, "lev") || str.eq(c.name, "levp") {
+        let (ls, lp) = cl.levene_test(a, x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], usize(x[2usize + 2usize * n]), usize(x[3usize + 2usize * n]))
+        if c.name.len == 3usize { ret ls }
+        ret lp
+    }
     if str.eq(c.name, "rain") || str.eq(c.name, "rainp") || str.eq(c.name, "harv") || str.eq(c.name, "harvp") {
         var rs = 0.0f64
         var rp = 0.0f64

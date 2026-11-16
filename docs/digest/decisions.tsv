@@ -3398,4 +3398,5 @@ D6526	781	boot: censboot cond
 D6527	880	mvtnorm: qmvnorm
 D6528	648	mvtnorm: qmvt
 D6529	609	lmtest: bgtest
-D6530	607	lmtest: raintest and harvtest
+D6530	608	lmtest: raintest and harvtest
+D6531	463	car: ncvTest and leveneTest

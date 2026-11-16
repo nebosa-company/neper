@@ -644,3 +644,123 @@ fn harv_test(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) 
     let harv = math.abs[f64](sum / math.sqrt[f64](f64(n - p))) / math.sqrt[f64](ss2 / f64(m - 1usize))
     ret (harv, 2.0f64 * nb.pt(harv, f64(n - p - 1usize), false, false))
 }
+
+// car::ncvTest (fitted values): the score statistic RegSS / 2 of the regression of e^2 / (RSS / n) on the fitted values, df 1; returns the statistic and its p value
+fn ncv_test(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (f0, e1) = ols(a, x, y, n, p)
+    if e1 != ok { ret (nan, nan) }
+    let (xe, e2) = mem.alloc[f64](a, n * 2usize)
+    let (u, e3) = mem.alloc[f64](a, n)
+    if e2 != ok || e3 != ok { ret (nan, nan) }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f0.resid[i] * f0.resid[i]
+        i += 1usize
+    }
+    let s2 = rss / f64(n)
+    var mean = 0.0f64
+    i = 0usize
+    while i < n {
+        u[i] = f0.resid[i] * f0.resid[i] / s2
+        xe[i * 2usize] = 1.0f64
+        xe[i * 2usize + 1usize] = y[i] - f0.resid[i]
+        mean += u[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    let (f1, e4) = ols(a, xe, u, n, 2usize)
+    if e4 != ok { ret (nan, nan) }
+    var tss = 0.0f64
+    var rss1 = 0.0f64
+    i = 0usize
+    while i < n {
+        tss += (u[i] - mean) * (u[i] - mean)
+        rss1 += f1.resid[i] * f1.resid[i]
+        i += 1usize
+    }
+    let chi = (tss - rss1) / 2.0f64
+    ret (chi, p_chisq(chi, 1.0f64))
+}
+
+// car::leveneTest(y, group, center): the one-way ANOVA F of |y - group centre| (center 0 median, 1 mean) over groups coded 0 .. ng - 1; returns F and its p value
+fn levene_test(a: *mem.Arena, y: []const f64, grp: []const f64, ng: usize, center: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let n = y.len
+    let (z, e1) = mem.alloc[f64](a, n)
+    let (tmp, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret (nan, nan) }
+    var g = 0usize
+    while g < ng {
+        var m = 0usize
+        var i = 0usize
+        while i < n {
+            if usize(grp[i]) == g {
+                tmp[m] = y[i]
+                m += 1usize
+            }
+            i += 1usize
+        }
+        var c = 0.0f64
+        if center == 1usize {
+            i = 0usize
+            while i < m {
+                c += tmp[i]
+                i += 1usize
+            }
+            c = c / f64(m)
+        } else {
+            i = 1usize
+            while i < m {
+                let t = tmp[i]
+                var j = i
+                while j > 0usize && tmp[j - 1usize] > t {
+                    tmp[j] = tmp[j - 1usize]
+                    j -= 1usize
+                }
+                tmp[j] = t
+                i += 1usize
+            }
+            if m % 2usize == 1usize { c = tmp[m / 2usize] } else { c = (tmp[m / 2usize - 1usize] + tmp[m / 2usize]) / 2.0f64 }
+        }
+        i = 0usize
+        while i < n {
+            if usize(grp[i]) == g { z[i] = math.abs[f64](y[i] - c) }
+            i += 1usize
+        }
+        g += 1usize
+    }
+    var grand = 0.0f64
+    var i = 0usize
+    while i < n {
+        grand += z[i]
+        i += 1usize
+    }
+    grand = grand / f64(n)
+    var ssb = 0.0f64
+    var ssw = 0.0f64
+    g = 0usize
+    while g < ng {
+        var m = 0.0f64
+        var s = 0.0f64
+        i = 0usize
+        while i < n {
+            if usize(grp[i]) == g {
+                m += 1.0f64
+                s += z[i]
+            }
+            i += 1usize
+        }
+        let gm = s / m
+        ssb += m * (gm - grand) * (gm - grand)
+        i = 0usize
+        while i < n {
+            if usize(grp[i]) == g { ssw += (z[i] - gm) * (z[i] - gm) }
+            i += 1usize
+        }
+        g += 1usize
+    }
+    let f = (ssb / f64(ng - 1usize)) / (ssw / f64(n - ng))
+    ret (f, p_f(f, f64(ng - 1usize), f64(n - ng)))
+}

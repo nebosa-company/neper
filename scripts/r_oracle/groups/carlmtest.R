@@ -14,6 +14,7 @@ for (rep in 1:12) {
   add("dw", a, as.numeric(dwtest(m)$statistic)); add("bp", a, as.numeric(bptest(m)$statistic))
   add("bpc", a, as.numeric(bptest(m, studentize = FALSE)$statistic)); add("reset", a, as.numeric(resettest(m)$statistic)); add("bpp", a, bptest(m)$p.value); g <- gqtest(m); add("gq", a, as.numeric(g$statistic)); add("gqp", a, g$p.value); add("resetp", a, resettest(m)$p.value)
   for (lg in c(2, 4)) for (ad in c(FALSE, TRUE)) { dv <- diag(NeweyWest(m, lag = lg, prewhite = FALSE, adjust = ad)); add("nw", c(a, lg, as.numeric(ad)), sum(dv * seq_along(dv))) }
+  nv <- ncvTest(m); add("ncv", a, nv$ChiSquare); add("ncvp", a, nv$p)
   rt <- raintest(m); add("rain", a, as.numeric(rt$statistic)); add("rainp", a, rt$p.value); ht <- harvtest(m); add("harv", a, as.numeric(ht$statistic)); add("harvp", a, ht$p.value)
   for (ord in c(1, 2, 4)) { a2 <- c(a, ord); b1 <- bgtest(m, order = ord); b2 <- bgtest(m, order = ord, type = "F"); add("bg_c", a2, as.numeric(b1$statistic)); add("bg_cp", a2, b1$p.value); add("bg_f", a2, as.numeric(b2$statistic)); add("bg_fp", a2, b2$p.value) }
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
@@ -23,5 +24,10 @@ for (rep in 1:10) {
   k <- sample(1:3, 1); X <- matrix(rnorm(n * k), n, k); y <- 1 + X %*% rep(0.5, k) + rnorm(n) + gi / 4
   d <- data.frame(y = as.vector(y), X); m <- lm(y ~ ., d); des <- cbind(1, X); a <- c(n, k + 1, as.vector(y), as.vector(t(des)))
   for (ty in c("HC0", "HC1")) for (ca in c(FALSE, TRUE)) { dv <- diag(vcovCL(m, cluster = g, type = ty, cadjust = ca)); add("cl", c(a, ng, as.numeric(ty == "HC1"), as.numeric(ca), gi), sum(dv * seq_along(dv))) }
+}
+for (rep in 1:15) {
+  n <- sample(20:70, 1); ng <- sample(2:4, 1); gr <- sample(0:(ng - 1), n, TRUE); ng <- length(unique(gr)); gr <- match(gr, sort(unique(gr))) - 1
+  y <- rnorm(n) * (1 + gr) + gr * 0.3; if (rep %% 3 == 0) y <- rexp(n)
+  for (ce in 0:1) { lt <- leveneTest(y, factor(gr), center = if (ce == 0) median else mean); add("lev", c(n, 1, y, gr, ng, ce), lt[1, "F value"]); add("levp", c(n, 1, y, gr, ng, ce), lt[1, "Pr(>F)"]) }
 }
 emit("carlmtest", "car", list(cases))
