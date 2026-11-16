@@ -55,6 +55,11 @@ fn param(c: *const oracle.Case) -> f64 {
         ret sr.dss_gamma(y, a, b)
     }
     if fam == 7usize { ret sr.crps_binom(y, a, b) }
+    if fam == 8usize && isc { ret sr.crps_pois(y, a) }
+    if fam == 9usize {
+        if isc { ret sr.crps_t(y, a, b, cc) }
+        ret sr.logs_t(y, a, b, cc)
+    }
     if isl { ret sr.logs_pois(y, a) }
     ret sr.dss_pois(y, a)
 }

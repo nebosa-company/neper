@@ -46210,3 +46210,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.minpacklm` gains `nls_summary`: sigma = sqrt(deviance / (m - n)) and the coefficient standard errors from sigma^2 (J'J)^-1 at the fitted parameters, which is what summary(nlsLM(...)) reports. With the analytic Jacobian, nls differentiates numerically, so the comparison is at rel 1e-4.
 
 **Result.** `oracle_minpacklm` agrees with minpack.lm and nlsLM on 840 values on Windows, 110 of them new (sigma and the standard errors of 30 fits). What nlsLM adds in R beyond that is formula and data-frame plumbing and weights, which a residual-function entry replaces; they are not ported, and the evidence line says so. L420 moves from docs/work-queue.json to docs/work-done.jsonl; Linux pending until WSL answers.
+
+## D6507 — scoringRules: crps_pois, crps_t and logs_t
+
+`e.algo.stat.scoringrules` gains `crps_pois` (the exponentially scaled modified Bessel I of order 0 and 1 at 2 lambda, from `e.algo.stat.gslfns`), `crps_t` (with the beta-function ratio of the package, scaled for location and scale) and `logs_t`.
+
+**Result.** `oracle_scoringrules` equals scoringRules on 601 cases on Windows at rel 1e-9, 75 of them new: 25 draws each of the Poisson CRPS, the t CRPS and the t log score. The negative binomial CRPS (it needs the Gauss hypergeometric function outside the unit disc), the truncated and censored families, the kernel CRPS and the weights are open; Linux pending. L475 stays partial.

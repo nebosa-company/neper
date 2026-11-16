@@ -44,4 +44,8 @@ for (rep in 1:5) {
   pr <- runif(5); pr <- pr / sum(pr)
   add("sample", S(6, 0, 3, pr, 5, 1), rps_probs(3, pr))
 }
+for (rep in 1:25) {
+  y <- round(abs(rnorm(1, 3, 3))); lam <- runif(1, 0.2, 25); df <- runif(1, 1.5, 12); loc <- rnorm(1); sc <- runif(1, 0.3, 3); yt <- rnorm(1, 0, 3)
+  add("crps", P(8, lam, y), crps_pois(y, lam)); add("crps", P(9, c(df, loc, sc), yt), crps_t(yt, df, loc, sc)); add("logs", P(9, c(df, loc, sc), yt), logs_t(yt, df, loc, sc))
+}
 emit("scoringrules", "scoringRules", list(cases))

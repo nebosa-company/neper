@@ -3,8 +3,9 @@
 // scores: the empirical CRPS, the energy score, the variogram score, the kernel-density log score, the empirical Dawid-Sebastiani score,
 // the quantile score and the ranked probability score.
 //
-// Not here: the Poisson, negative binomial, t, Student, truncated and censored families, the kernel CRPS and the weighted variants.
+// Also crps_pois (through the modified Bessel I of order 0 and 1), crps_t and logs_t. Not here: the negative binomial (it needs the Gauss hypergeometric function outside the unit disc), truncated and censored families, the kernel CRPS and the weighted variants.
 
+use e.algo.stat.gslfns as gs
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
@@ -332,3 +333,22 @@ fn rps_probs(y: usize, x: []const f64) -> f64 {
     }
     ret s
 }
+
+// crps_pois(y, lambda): (y - lambda)(2 F(y) - 1) + lambda (2 f(floor y) - exp(-2 lambda) (I0(2 lambda) + I1(2 lambda)))
+fn crps_pois(y: f64, lambda: f64) -> f64 {
+    let c1 = (y - lambda) * (2.0f64 * nm.ppois(y, lambda, true, false) - 1.0f64)
+    let es = math.exp[f64](0.0f64 - 2.0f64 * lambda)
+    let c2 = 2.0f64 * nm.dpois(math.floor[f64](y), lambda, false) - es * gs.bessel_inu(0.0f64, 2.0f64 * lambda) - es * gs.bessel_inu(1.0f64, 2.0f64 * lambda)
+    ret c1 + lambda * c2
+}
+
+// crps_t(y, df, location, scale) for df > 1
+fn crps_t(y0: f64, df: f64, loc: f64, scale: f64) -> f64 {
+    let y = (y0 - loc) / scale
+    let bfrac = math.exp[f64](nb.lbeta(0.5f64, df - 0.5f64) - 2.0f64 * nb.lbeta(0.5f64, 0.5f64 * df))
+    let c = y * (2.0f64 * nb.pt(y, df, true, false) - 1.0f64) + 2.0f64 / (df - 1.0f64) * (nb.dt(y, df, false) * (df + y * y) - math.sqrt[f64](df) * bfrac)
+    ret scale * c
+}
+
+// logs_t(y, df, location, scale)
+fn logs_t(y: f64, df: f64, loc: f64, scale: f64) -> f64 { ret 0.0f64 - nb.dt((y - loc) / scale, df, true) + math.log[f64](scale) }
