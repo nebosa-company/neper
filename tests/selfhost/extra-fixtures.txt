@@ -307,6 +307,7 @@ oracle_rootfind
 oracle_fminsearchpkg
 oracle_lowesspkg
 oracle_splinepkg
+oracle_catoolspkg
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -358,3 +359,4 @@ oracle_rootfind
 oracle_fminsearchpkg
 oracle_lowesspkg
 oracle_splinepkg
+oracle_catoolspkg

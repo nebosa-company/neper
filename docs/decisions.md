@@ -46120,3 +46120,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pracma` gains `singular_values`, the singular values of any m by n matrix by one-sided Jacobi (Hestenes) rotations of the columns of the taller orientation until every pair is orthogonal to 1e-15, sorted descending; `cond` is the ratio of the largest to the smallest.
 
 **Result.** `oracle_pracma` equals pracma and R's LAPACK svd on 1438 cases on Windows at rel 1e-9, 115 of them new: every singular value of 30 random 2-to-8 by 2-to-8 matrices and cond of the square ones. The singular vectors, null, orth, rank, expm, polyroots and the polynom and caTools functions are open; Linux pending. L333 stays partial.
+
+## D6492 — caTools: running-window statistics
+
+`e.algo.stat.catoolspkg` is new: `window_stat` computes the mean, minimum, maximum, standard deviation or type-7 quantile of the window around a position, clipped to the data at both ends, which is what runmean, runmin, runmax, runsd and runquantile return under their default end rules (the window shrinks instead of being padded or dropped). The exact-window definition reproduces the package's C running sums at rel 1e-9.
+
+**Result.** `oracle_catoolspkg` agrees with caTools on 750 cases on Windows at rel 1e-9: five statistics at five positions of each of 30 series of 12 to 60 values, windows 3 to 9. Even windows, the other end rules and alignments, runmad, colAUC and the rest of caTools are open; Linux pending. L333 stays partial.
