@@ -3102,4 +3102,5 @@ D6026	1685	GPArotation is the bb step over a polar factor, and decomp's SVD is c
 D6027	1313	urca ADF reads its regressors from embed(diff(y)), and the reported lags are the input
 D6028	1307	boot draws its index array by column and gets BCa influence values by regression
 D6029	1159	class knn follows VR_knn line by line, including its reservoir slip
-D6030	1456	permute shuffles block by block, and draws the plot flip before it knows the plots are free
+D6030	1457	permute shuffles block by block, and draws the plot flip before it knows the plots are free
+D6031	1180	KernSmooth density by direct convolution, tseries tests by their formulas
