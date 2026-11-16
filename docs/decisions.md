@@ -46012,3 +46012,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.bayestestr` is new, on a posterior sample: `hdi` (the narrowest window of ceiling(ci n) sorted draws, with the package's tie rule: the middle of a contiguous run, the rightmost of separated runs), `eti` (type-7 quantiles at (1 -+ ci) / 2), `p_direction` (the larger side's share of draws) and `rope_share` (the share inside a range).
 
 **Result.** `oracle_bayestestr` equals bayestestR on 180 cases on Windows at rel 1e-9, 30 samples of 100 to 600 draws, a third skewed gamma. The density-based point estimates, bayes factors, the other indices and the model-object interface are open; performance and parameters are not started; Linux pending. L339 is partial.
+
+## D6474 — performance: lm indices
+
+`e.algo.stat.performancepkg` is new: `lm_index` fits y on x by least squares and returns r2, adjusted r2, rmse (the root of the mean squared residual, not sigma), mae, mse, sigma, the Gaussian log-likelihood, aic, aicc (with k = p + 1 estimated parameters) and bic.
+
+**Result.** `oracle_performancepkg` equals performance on 250 cases on Windows at rel 1e-9, ten indices on each of 25 models of 20 to 120 rows and 2 to 5 columns. mae is compared with mean(abs(resid)), the quantity performance_mae returns when run on its own, because the function came back NaN inside the generator. Generalized, mixed and Bayesian models and the other indices are open; Linux pending. L339 stays partial.

@@ -295,6 +295,7 @@ oracle_gstatpkg
 oracle_fieldspkg
 oracle_gamlssdist
 oracle_bayestestr
+oracle_performancepkg
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -334,3 +335,4 @@ oracle_gstatpkg
 oracle_fieldspkg
 oracle_gamlssdist
 oracle_bayestestr
+oracle_performancepkg
