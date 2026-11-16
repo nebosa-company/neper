@@ -6,11 +6,66 @@ use e.algo.stat.leaps as lp
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "rs2") {
+        // (n, p, nvmax, nbest, force.in mask, force.out mask, X[n p], y[n], size k, position j, q)
+        let n = usize(z[0usize])
+        let p = usize(z[1usize])
+        let nvmax = usize(z[2usize])
+        let nbest = usize(z[3usize])
+        let fin = u32(z[4usize])
+        let fout = u32(z[5usize])
+        let x = z[6usize..6usize + n * p]
+        let y = z[6usize + n * p..6usize + n * p + n]
+        let k = usize(z[6usize + n * p + n])
+        let j = usize(z[7usize + n * p + n])
+        let q = usize(z[8usize + n * p + n])
+        let (masks, e1) = mem.alloc[u32](a, (nvmax + 1usize) * (nbest + 1usize))
+        let (rss, e2) = mem.alloc[f64](a, (nvmax + 1usize) * (nbest + 1usize))
+        if e1 != ok || e2 != ok { ret nan }
+        var slot = k * nbest + j
+        if nbest == 0usize {
+            // nbest = 0 stands for method = seqrep with nbest = 1
+            lp.seqrep(a, x, y, n, p, nvmax, fin, fout, masks, rss)
+            slot = k - 1usize
+        } else {
+            lp.best_subsets(a, x, y, n, p, nvmax, nbest, fin, fout, masks, rss)
+        }
+        let r = rss[slot]
+        if q == 0usize { ret f64(masks[slot]) }
+        if q == 1usize { ret r }
+        var mu = 0.0f64
+        var i = 0usize
+        while i < n {
+            mu += y[i]
+            i += 1usize
+        }
+        mu = mu / f64(n)
+        var nullrss = 0.0f64
+        i = 0usize
+        while i < n {
+            nullrss += (y[i] - mu) * (y[i] - mu)
+            i += 1usize
+        }
+        let allowed = u32((1usize << p) - 1usize) & ~fout
+        var pe = 0usize
+        i = 0usize
+        while i < p {
+            if (allowed >> u32(i)) & 1u32 == 1u32 { pe += 1usize }
+            i += 1usize
+        }
+        let full = lp.subset_rss(a, x, y, n, p, u32((1usize << p) - 1usize))
+        let (rsq, adj, cp, bic) = lp.summarise(n, pe, k, r, nullrss, full)
+        if q == 2usize { ret rsq }
+        if q == 3usize { ret adj }
+        if q == 4usize { ret cp }
+        ret bic
+    }
     let method = u8(z[0usize])
     let n = usize(z[1usize])
     let p = usize(z[2usize])

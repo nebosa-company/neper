@@ -18,4 +18,40 @@ for (rep in 1:30) {
     }
   }
 }
+# nbest > 1 with force.in and force.out (exhaustive): every row of summary(); k size incl. forced, j position within the size
+#   fn "rs2": (n, p, nvmax, nbest, force.in mask, force.out mask, X[n*p], y[n], k, j, q)  q 0 mask 1 rss 2 rsq 3 adjr2 4 cp 5 bic
+for (rep in 1:40) {
+  n <- sample(25:70, 1); p <- sample(4:8, 1)
+  X <- matrix(round(rnorm(n * p), 3), n, p); beta <- c(1, -0.8, 0, 0.5, 0, 0.3, 0, 0)[seq_len(p)]
+  y <- round(drop(X %*% beta) + rnorm(n), 3); nvmax <- sample(2:min(p, 6), 1); nbest <- sample(1:4, 1)
+  fin <- if (rep %% 2 == 0) sample(p, sample(0:1, 1)) else integer(0)
+  fout <- if (rep %% 3 == 0) sample(setdiff(seq_len(p), fin), 1) else integer(0)
+  r <- tryCatch(regsubsets(X, y, nbest = nbest, nvmax = nvmax, force.in = if (length(fin)) fin else NULL, force.out = if (length(fout)) fout else NULL), error = function(e) NULL)
+  if (is.null(r)) next
+  s <- summary(r); pos <- list()
+  for (row in seq_along(s$rss)) {
+    k <- as.integer(rownames(s$which)[row]); pos[[as.character(k)]] <- (if (is.null(pos[[as.character(k)]])) 0 else pos[[as.character(k)]]) + 1
+    wh <- s$which[row, -1]; mask <- sum(2^(utf8ToInt(paste(names(wh)[wh], collapse = "")) - 97))
+    vals <- c(mask, s$rss[row], s$rsq[row], s$adjr2[row], s$cp[row], s$bic[row])
+    for (q in 1:6) add("rs2", c(n, p, nvmax, nbest, sum(2^(fin - 1)), sum(2^(fout - 1)), X, y, k, pos[[as.character(k)]] - 1, q - 1), vals[q])
+  }
+}
+# method = "seqrep" (nbest = 1), with force.in and force.out; nbest 0 in the args stands for it
+for (rep in 1:60) {
+  n <- sample(25:70, 1); p <- sample(4:8, 1)
+  X <- matrix(round(rnorm(n * p), 3), n, p); beta <- c(1, -0.8, 0, 0.5, 0, 0.3, 0, 0)[seq_len(p)]
+  y <- round(drop(X %*% beta) + rnorm(n), 3)
+  fin <- if (rep %% 2 == 0) sample(p, sample(0:1, 1)) else integer(0)
+  fout <- if (rep %% 3 == 0) sample(setdiff(seq_len(p), fin), 1) else integer(0)
+  nvmax <- sample(2:p, 1)
+  r <- tryCatch(regsubsets(X, y, nvmax = nvmax, method = "seqrep", force.in = if (length(fin)) fin else NULL, force.out = if (length(fout)) fout else NULL), error = function(e) NULL)
+  if (is.null(r)) next
+  s <- summary(r)
+  for (row in seq_along(s$rss)) {
+    k <- as.integer(rownames(s$which)[row])
+    wh <- s$which[row, -1]; mask <- sum(2^(utf8ToInt(paste(names(wh)[wh], collapse = "")) - 97))
+    vals <- c(mask, s$rss[row], s$rsq[row], s$adjr2[row], s$cp[row], s$bic[row])
+    for (q in 1:6) add("rs2", c(n, p, nvmax, 0, sum(2^(fin - 1)), sum(2^(fout - 1)), X, y, k, 0, q - 1), vals[q])
+  }
+}
 emit("leaps", "leaps", list(cases))
