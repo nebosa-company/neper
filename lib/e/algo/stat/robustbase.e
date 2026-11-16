@@ -4,6 +4,7 @@
 // Not here: mc (the medcouple), covMcd, lmrob, scaleTau2, adjOutlyingness and the rest of the package.
 
 use e.math
+use e.math.dist as dist
 
 use e.mem
 
@@ -168,4 +169,51 @@ fn huber_m(a: *mem.Arena, x: []const f64, k: f64, tol: f64) -> (f64, f64, usize)
         }
     }
     ret (mu, sc, it)
+}
+
+fn erho(b: f64) -> f64 {
+    ret 2.0f64 * ((1.0f64 - b * b) * dist.pnorm(b, 0.0f64, 1.0f64, true, false) - b * dist.dnorm(b, 0.0f64, 1.0f64, false) + b * b) - 1.0f64
+}
+
+// scaleTau2(x, c1 = 4.5, c2 = 3, consistency = TRUE, iter = 1): the tau scale and (with mu_too) the location, from mu0 = median and sigma0 = the raw median absolute deviation
+fn scale_tau2(a: *mem.Arena, x: []const f64, c1: f64, c2: f64) -> (f64, f64) {
+    let n = x.len
+    let (s, e) = sort_copy(a, x)
+    if e != ok { ret (0.0f64 / 0.0f64, 0.0f64) }
+    let mu0 = median_sorted(s)
+    let (dev, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret (0.0f64 / 0.0f64, 0.0f64) }
+    var i = 0usize
+    while i < n {
+        dev[i] = math.abs[f64](x[i] - mu0)
+        i += 1usize
+    }
+    let (ds, e3) = sort_copy(a, dev)
+    if e3 != ok { ret (0.0f64 / 0.0f64, 0.0f64) }
+    let sig0 = median_sorted(ds)
+    if sig0 <= 0.0f64 { ret (mu0, 0.0f64) }
+    let nes2 = f64(n) * erho(c2 * dist.qnorm(0.75f64, 0.0f64, 1.0f64, true, false))
+    var sw = 0.0f64
+    var sxw = 0.0f64
+    i = 0usize
+    while i < n {
+        let u = dev[i] / (sig0 * c1)
+        var w = 1.0f64 - u * u
+        if w < 0.0f64 { w = 0.0f64 }
+        w = w * w
+        sw += w
+        sxw += x[i] * w
+        i += 1usize
+    }
+    let mu = sxw / sw
+    var rs = 0.0f64
+    i = 0usize
+    while i < n {
+        var r = (x[i] - mu) / sig0
+        r = r * r
+        if r > c2 * c2 { r = c2 * c2 }
+        rs += r
+        i += 1usize
+    }
+    ret (mu, sig0 * math.sqrt[f64](rs / nes2))
 }
