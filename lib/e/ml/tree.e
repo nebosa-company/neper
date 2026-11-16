@@ -122,36 +122,128 @@ fn partition(x: []const f64, d: usize, rows: []usize, count: usize, feature: usi
     ret left
 }
 
+// Sort `order[..count]` ascending by the value of `feature` (heapsort: in place, O(count log count), no recursion).
+fn sort_by_feature(x: []const f64, d: usize, feature: usize, order: []usize, count: usize) {
+    if count < 2usize { ret }
+    var start = count / 2usize
+    while start > 0usize {
+        start -= 1usize
+        sift_down(x, d, feature, order, start, count)
+    }
+    var end = count
+    while end > 1usize {
+        end -= 1usize
+        let t = order[0usize]
+        order[0usize] = order[end]
+        order[end] = t
+        sift_down(x, d, feature, order, 0usize, end)
+    }
+}
+
+fn sift_down(x: []const f64, d: usize, feature: usize, order: []usize, root0: usize, end: usize) {
+    var root = root0
+    while true {
+        var child = 2usize * root + 1usize
+        if child >= end { break }
+        if child + 1usize < end && x[order[child] * d + feature] < x[order[child + 1usize] * d + feature] { child += 1usize }
+        if x[order[root] * d + feature] >= x[order[child] * d + feature] { break }
+        let t = order[root]
+        order[root] = order[child]
+        order[child] = t
+        root = child
+    }
+}
+
 // The best split of `rows[..count]` over the features `features[..feature_count]`
 // (every value between two distinct sorted values is a candidate threshold):
 // the feature, threshold and impurity gain, `gain == 0` when nothing helps.
+// Each feature costs one sort and one sweep of running class counts (or running
+// sums for regression), so the whole search is O(feature_count * count * log count).
+// `bins.len >= 3 * classes`.
 fn best_split(x: []const f64, y: []const f64, d: usize, rows: []usize, count: usize, classes: usize, features: []const usize, feature_count: usize, bins: []usize, order: []usize) -> (usize, f64, f64) {
     let parent = impurity(x, y, rows, count, classes, bins)
     var best_feature = d
     var best_threshold = 0.0f64
     var best_gain = 0.0f64
+    // regression: centre on the node mean so the running sums stay small
+    var centre = 0.0f64
+    var total1 = 0.0f64
+    var total2 = 0.0f64
+    if classes == 0usize {
+        var i = 0usize
+        while i < count {
+            centre += y[rows[i]] / f64(count)
+            i += 1usize
+        }
+        i = 0usize
+        while i < count {
+            let v = y[rows[i]] - centre
+            total1 += v
+            total2 += v * v
+            i += 1usize
+        }
+    }
     var f = 0usize
     while f < feature_count {
         let feature = features[f]
-        // Sort the rows by this feature (insertion sort into `order`).
         var i = 0usize
         while i < count {
-            var k = i
-            while k > 0usize && x[order[k - 1usize] * d + feature] > x[rows[i] * d + feature] {
-                order[k] = order[k - 1usize]
-                k -= 1usize
-            }
-            order[k] = rows[i]
+            order[i] = rows[i]
             i += 1usize
+        }
+        sort_by_feature(x, d, feature, order, count)
+        var sum_left = 0.0f64
+        var sum_left2 = 0.0f64
+        var sq_left = 0.0f64
+        var sq_right = 0.0f64
+        if classes > 0usize {
+            var c = 0usize
+            while c < classes {
+                bins[c] = 0usize
+                bins[classes + c] = 0usize
+                c += 1usize
+            }
+            i = 0usize
+            while i < count {
+                bins[classes + usize(y[order[i]])] += 1usize
+                i += 1usize
+            }
+            c = 0usize
+            while c < classes {
+                sq_right += f64(bins[classes + c]) * f64(bins[classes + c])
+                c += 1usize
+            }
         }
         i = 1usize
         while i < count {
-            let a = x[order[i - 1usize] * d + feature]
+            // move order[i - 1] to the left side
+            let moved = order[i - 1usize]
+            if classes > 0usize {
+                let label = usize(y[moved])
+                sq_left += 2.0f64 * f64(bins[label]) + 1.0f64
+                bins[label] += 1usize
+                sq_right -= 2.0f64 * f64(bins[classes + label]) - 1.0f64
+                bins[classes + label] -= 1usize
+            } else {
+                let v = y[moved] - centre
+                sum_left += v
+                sum_left2 += v * v
+            }
+            let a = x[moved * d + feature]
             let b = x[order[i] * d + feature]
             if a < b {
                 let threshold = 0.5f64 * (a + b)
-                let left = impurity(x, y, order, i, classes, bins)
-                let right = impurity(x, y, order[i..], count - i, classes, bins)
+                let nl = f64(i)
+                let nr = f64(count - i)
+                var left = 0.0f64
+                var right = 0.0f64
+                if classes > 0usize {
+                    left = nl - sq_left / nl
+                    right = nr - sq_right / nr
+                } else {
+                    left = sum_left2 - sum_left * sum_left / nl
+                    right = (total2 - sum_left2) - (total1 - sum_left) * (total1 - sum_left) / nr
+                }
                 let gain = parent - left - right
                 if gain > best_gain + 1.0e-12f64 {
                     best_gain = gain
@@ -207,7 +299,7 @@ fn grow(t: *Tree, x: []const f64, y: []const f64, d: usize, rows: []usize, count
 fn grow_tree(a: *mem.Arena, x: []const f64, y: []const f64, d: usize, rows: []usize, count: usize, classes: usize, max_depth: usize, min_samples: usize, subset: usize, r: *rand.Pcg64) -> (Tree, err) {
     let (nodes, nodes_error) = mem.alloc[Node](a, 2usize * count + 1usize)
     if nodes_error != ok { ret (zero, nodes_error) }
-    let (bins, bins_error) = mem.alloc[usize](a, classes + 1usize)
+    let (bins, bins_error) = mem.alloc[usize](a, 3usize * classes + 1usize)
     if bins_error != ok { ret (zero, bins_error) }
     let (order, order_error) = mem.alloc[usize](a, count)
     if order_error != ok { ret (zero, order_error) }

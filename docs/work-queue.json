@@ -4866,17 +4866,6 @@
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: a script checks that every name docs/algos.md maps to resolves in lib/e, and passes; the seven rows name the algorithm that was delivered. Notes: docs/library-hardening-plan.md."
     },
     {
-      "id": "L250",
-      "category": "library",
-      "group": "Library",
-      "order": 459,
-      "title": "Numeric defects",
-      "score": 0.85,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Partial (D6657). The three verified defects are fixed, each with a regression that fails before: stat/test.e two-sided p values come from the lower tail at minus the magnitude (algo_stat_test: a t of about 3e4 and a Mann-Whitney z of about 9.5 give p above zero, exit 41 on the old code), search.e kth uses a three-way partition (algo_search: a 200000-key run of equal values takes 0.4 s, 37 s before, so the old code is caught by timing), and ml/cluster.e kmeans with zero iterations labels every point with its nearest centroid (ml_cluster, exit 1 before). D6658 fixed the formula-engine erf (now e.math.special.erf, double precision; algo_formula_math exits 83 on the old 1.5e-7 approximation) and the unguarded divisions (stat/test.e mean and sample_variance answer NaN for an empty or one-value sample; the old sample_variance trapped on an empty slice, algo_stat_test exit 134). Still open: ml/tree.e best_split insertion-sorts every feature at every node, but it also rescans the whole node for the impurity of every candidate threshold, so replacing the sort alone would not change the quadratic cost; fix both together with a single-pass class-count sweep. Was: Opened from the 2026-11-13 library review. Acceptance: one fixture per item that fails before the fix. Notes: docs/library-hardening-plan.md."
-    },
-    {
       "id": "L260",
       "category": "library",
       "group": "Library",

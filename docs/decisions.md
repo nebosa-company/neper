@@ -47078,3 +47078,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** The formula engine's `erf` delegates to `e.math.special.erf`; the Abramowitz and Stegun 7.1.26 form it replaced is good to 1.5e-7. `stat/test.e` `mean` and `sample_variance` answer NaN for an empty sample and for fewer than two values, where the old variance subtracted one from a zero length and trapped.
 
 **Result.** `algo_formula_math` and `algo_stat_test` pass on Windows and both fail on the old code; Linux pending. L250 moves to 0.85. The tree-building cost named by the reviewer is a pair of quadratic loops (the insertion sort and a per-threshold impurity rescan), so it is left for a change that removes both with a one-pass class-count sweep.
+
+## D6659 — ml.tree: split search by one sort and one sweep
+
+**Decision.** `best_split` copies the node's rows into `order`, heapsorts them by the feature (in place, no recursion, no extra buffer), and walks the sorted rows once: for classification it moves each row from the right to the left class counts and keeps the sums of squared counts incrementally (`left impurity = nl - sum(l_c^2)/nl`, the Gini times the count); for regression it keeps the sums of the node-centred targets and their squares on the left and takes the right from the totals. The scratch `bins` grows from `classes + 1` to `3 * classes + 1`. The choice of split is unchanged: a candidate must beat the best gain by 1e-12, which is larger than the rounding of the running sums, and the existing tree, forest and boosting goldens still hold.
+
+**Result.** `ml_tree` passes on Windows with a 60000-sample stump in 0.5 s (32 s with the old search); Linux pending. L250 leaves the queue.

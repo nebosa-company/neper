@@ -165,6 +165,27 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (_, forest_labels) = tree.random_forest(a, x2[..], bad_targets[..], 12usize, 2usize, 3usize, 5usize, 1usize, 4usize, 1usize, &r)
     if forest_labels != tree.Invalid { os.exit(5i32) }
 
+    // L250: finding a split costs a sort and one sweep, not a quadratic insertion sort and a rescan per threshold:
+    // a 60000-sample wide_tree on one feature is instant (about a minute with the old search)
+    let big = 60000usize
+    let (bx, bx_error) = mem.alloc[f64](a, big)
+    let (by, by_error) = mem.alloc[f64](a, big)
+    if bx_error != ok || by_error != ok { os.exit(6i32) }
+    var seed = 12345u64
+    var bi = 0usize
+    while bi < big {
+        seed = (seed * 1103515245u64 + 12345u64) % 2147483648u64
+        bx[bi] = f64(seed % 1000003u64) / 1000003.0f64
+        by[bi] = 0.0f64
+        if bx[bi] > 0.3f64 { by[bi] = 1.0f64 }
+        bi += 1usize
+    }
+    let (wide_tree, wide_tree_error) = tree.cart(a, bx[..], by[..], big, 1usize, 2usize, 1usize, 1usize)
+    if wide_tree_error != ok || tree.predict(&wide_tree, bx[..1usize]) != by[0usize] { os.exit(6i32) }
+    if !near(wide_tree.nodes[0usize].threshold, 0.3f64, 0.001f64) { os.exit(6i32) }
+    let (wide_regression, rwide_tree_error) = tree.cart(a, bx[..], by[..], big, 1usize, 0usize, 1usize, 1usize)
+    if rwide_tree_error != ok || !near(wide_regression.nodes[0usize].threshold, 0.3f64, 0.001f64) { os.exit(6i32) }
+
     try io.print("ml tree ok\n")
     ret ok
 }

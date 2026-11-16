@@ -3518,4 +3518,5 @@ D6654	986	e.fmt.macho: read-only Mach-O
 D6655	937	e.fmt.tiff: validate the zlib framing of Deflate strips
 D6656	808	formula engine: secrets and identities do not come from the seeded generator
 D6657	918	numeric defects: tails, selection and k-means with no iterations
-D6658	737	numeric defects: erf precision and empty-sample guards
+D6658	738	numeric defects: erf precision and empty-sample guards
+D6659	959	ml.tree: split search by one sort and one sweep
