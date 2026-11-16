@@ -47,4 +47,12 @@ for (rep in 1:30) {
   r <- tryCatch(suppressWarnings(multiclass.roc(cl, x, quiet = TRUE)), error = function(e) NULL); if (is.null(r)) next
   cases[[length(cases) + 1]] <- case("mcauc", c(k, n, cl, x), as.numeric(r$auc), rel = 1e-9, abs = 1e-12)
 }
+# roc.test unpaired delong: ("du_z" "du_p") args (n1, n2, y1[n1], x1[n1], y2[n2], x2[n2])
+for (rep in 1:25) {
+  n1 <- sample(20:70, 1); n2 <- sample(20:70, 1); y1 <- rbinom(n1, 1, 0.4); y2 <- rbinom(n2, 1, 0.5); if (sum(y1) < 3 || sum(y1) > n1 - 3 || sum(y2) < 3 || sum(y2) > n2 - 3) next
+  x1 <- round(rnorm(n1) + 0.9 * y1, 3); x2 <- round(rnorm(n2) + 0.5 * y2, 3)
+  rt <- suppressWarnings(roc.test(roc(y1, x1, quiet = TRUE), roc(y2, x2, quiet = TRUE), method = "delong", paired = FALSE))
+  a <- c(n1, n2, y1, x1, y2, x2)
+  cases[[length(cases) + 1]] <- case("du_z", a, as.numeric(rt$statistic), rel = 1e-9, abs = 1e-12); cases[[length(cases) + 1]] <- case("du_p", a, rt$p.value, rel = 1e-9, abs = 1e-12)
+}
 emit("proc", "pROC", list(cases))

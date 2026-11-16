@@ -10,6 +10,13 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "du_z") || str.eq(c.name, "du_p") {
+        let m1 = usize(x[0usize])
+        let m2 = usize(x[1usize])
+        let (dz, dp) = pr.delong_unpaired(a, x[2usize..2usize + m1], x[2usize + m1..2usize + 2usize * m1], x[2usize + 2usize * m1..2usize + 2usize * m1 + m2], x[2usize + 2usize * m1 + m2..2usize + 2usize * m1 + 2usize * m2])
+        if str.eq(c.name, "du_z") { ret dz }
+        ret dp
+    }
     if str.eq(c.name, "mcauc") {
         let kk = usize(x[0usize])
         let nn = usize(x[1usize])

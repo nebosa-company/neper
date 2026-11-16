@@ -3416,4 +3416,5 @@ D6544	608	modeest: meanshift bandwidths and kernels
 D6545	547	modeest: bw.ucv and bw.bcv
 D6546	745	modeest: bw.SJ
 D6547	496	L472 closed
-D6548	511	pROC: multiclass AUC
+D6548	512	pROC: multiclass AUC
+D6549	544	pROC: unpaired DeLong test

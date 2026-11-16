@@ -5,6 +5,7 @@
 
 use e.math
 use e.math.dist as dist
+use e.math.nmath_beta as nb
 use e.mem
 
 fn median_of(a: *mem.Arena, v: []const f64) -> f64 {
@@ -459,4 +460,13 @@ fn multiclass_auc(a: *mem.Arena, cls: []const f64, x: []const f64, k: usize) -> 
         i += 1usize
     }
     ret 2.0f64 * sum / (f64(k) * f64(k - 1usize))
+}
+
+// roc.test(r1, r2, method = "delong", paired = FALSE): the t statistic (auc1 - auc2) / sqrt(var1 + var2) of two curves from independent samples and its two-sided p value on the Welch degrees of freedom
+fn delong_unpaired(a: *mem.Arena, y1: []const f64, x1: []const f64, y2: []const f64, x2: []const f64) -> (f64, f64) {
+    let (a1, v1) = auc_var(a, y1, x1)
+    let (a2, v2) = auc_var(a, y2, x2)
+    let z = (a1 - a2) / math.sqrt[f64](v1 + v2)
+    let df = (v1 + v2) * (v1 + v2) / (v1 * v1 / f64(y1.len - 1usize) + v2 * v2 / f64(y2.len - 1usize))
+    ret (z, 2.0f64 * nb.pt(0.0f64 - math.abs[f64](z), df, true, false))
 }

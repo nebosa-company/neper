@@ -46462,3 +46462,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `multiclass_auc` is the Hand-Till mean of the pairwise AUCs of one predictor: for each pair of classes (lower level the controls) the AUC with the direction chosen by the group medians, summed and divided by `k (k - 1) / 2`.
 
 **Result.** `oracle_proc` agrees with pROC on 30 multiclass values (3 to 5 classes, both directions of association) on Windows; Linux pending. Smoothed curves, bootstrap CIs and the other roc.test methods stay open; L324 stays partial.
+
+## D6549 — pROC: unpaired DeLong test
+
+**Decision.** `delong_unpaired` is delong.unpaired.test: the statistic `(auc1 - auc2) / sqrt(SR + SS)` with the DeLong variances of the two independent samples, degrees of freedom `(SR + SS)^2 / (SR^2/(n1 - 1) + SS^2/(n2 - 1))` (n the sample sizes), and `2 pt(-|t|, df)`; it is a t test, not the normal one the paired test uses.
+
+**Result.** `oracle_proc` agrees with pROC on 50 new values on Windows; Linux pending. L324 stays partial (smoothed curves, bootstrap and venkatraman tests, ROCR measures).
