@@ -155,3 +155,58 @@ fn fir1(n: usize, w: f64, out: []f64) {
         i += 1usize
     }
 }
+
+// filtfilt(b, a, x): zero-phase filtering as the package does it, with 2 * max(length) zeros appended before the forward pass
+fn filtfilt(a: *mem.Arena, b: []const f64, aa: []const f64, x: []const f64, out: []f64) -> err {
+    var m = b.len
+    if aa.len > m { m = aa.len }
+    let total = x.len + 2usize * m
+    let (y, e1) = mem.alloc[f64](a, total)
+    if e1 != ok { ret e1 }
+    let (xp, e2) = mem.alloc[f64](a, total)
+    if e2 != ok { ret e2 }
+    let (r, e3) = mem.alloc[f64](a, total)
+    if e3 != ok { ret e3 }
+    let (z, e4) = mem.alloc[f64](a, total)
+    if e4 != ok { ret e4 }
+    var i = 0usize
+    while i < total {
+        if i < x.len { xp[i] = x[i] } else { xp[i] = 0.0f64 }
+        i += 1usize
+    }
+    filter(b, aa, xp, y)
+    i = 0usize
+    while i < total {
+        r[i] = y[total - 1usize - i]
+        i += 1usize
+    }
+    filter(b, aa, r, z)
+    i = 0usize
+    while i < x.len {
+        out[i] = z[total - 1usize - i]
+        i += 1usize
+    }
+    ret ok
+}
+
+// the frequency response at w radians per sample: (re, im) of B(e^{-jw}) / A(e^{-jw})
+fn freqz_at(b: []const f64, a: []const f64, w: f64) -> (f64, f64) {
+    var br = 0.0f64
+    var bi = 0.0f64
+    var i = 0usize
+    while i < b.len {
+        br += b[i] * math.cos[f64](w * f64(i))
+        bi -= b[i] * math.sin[f64](w * f64(i))
+        i += 1usize
+    }
+    var ar = 0.0f64
+    var ai = 0.0f64
+    i = 0usize
+    while i < a.len {
+        ar += a[i] * math.cos[f64](w * f64(i))
+        ai -= a[i] * math.sin[f64](w * f64(i))
+        i += 1usize
+    }
+    let den = ar * ar + ai * ai
+    ret ((br * ar + bi * ai) / den, (bi * ar - br * ai) / den)
+}

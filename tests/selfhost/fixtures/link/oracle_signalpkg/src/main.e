@@ -38,6 +38,33 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(k, "ff") {
+        let len = usize(x[3usize])
+        let (y, e3) = mem.alloc[f64](a, len)
+        if e3 != ok { os.exit(8) }
+        if sp.filtfilt(a, b, aa, x[4usize..4usize + len], y) != ok { os.exit(9) }
+        var q = 0usize
+        while q < len {
+            s += y[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret s
+    }
+    if str.eq(k, "fre") || str.eq(k, "fim") {
+        var fr: [5]f64 = zero
+        fr[0usize] = 0.1f64
+        fr[1usize] = 0.5f64
+        fr[2usize] = 1.2f64
+        fr[3usize] = 2.0f64
+        fr[4usize] = 3.0f64
+        var q = 0usize
+        while q < 5usize {
+            let (re, im) = sp.freqz_at(b, aa, fr[q])
+            if str.eq(k, "fre") { s += re * f64(q + 1usize) } else { s += im * f64(q + 1usize) }
+            q += 1usize
+        }
+        ret s
+    }
     let len = usize(x[3usize])
     let (y, e3) = mem.alloc[f64](a, len)
     if e3 != ok { os.exit(8) }

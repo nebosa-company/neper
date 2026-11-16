@@ -45490,3 +45490,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.perfanalytics` gains es_modified, the Cornish-Fisher expected shortfall in the operational form that ES() uses by default: the shortfall is minus the mean minus the population standard deviation times the smaller of -MES / alpha and the Cornish-Fisher quantile h, where MES = dnorm(h) (1 + h^3 s / 6 + (h^6 - 9 h^4 + 9 h^2 + 3) s^2 / 72 + (h^4 - 2 h^2 - 1) k / 24) with the moment skewness and excess kurtosis. The plain (non-operational) form differs and can go negative for skewed series at p = 0.99, which is what the first attempt showed. Not here: the non-operational form, the portfolio and component forms and the other methods.
 
 **Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 488 cases on Windows; Linux pending. L408 stays partial.
+
+## D6184 — signal: filtfilt and freqz
+
+`e.algo.stat.signalpkg` gains filtfilt as the package writes it (the signal followed by 2 * max(length(a), length(b)) zeros goes through the filter, is reversed, filtered again and reversed, and the first length(x) values are kept, so there is no edge reflection or initial-state matching) and freqz_at, the response B(e^{-jw}) / A(e^{-jw}) at chosen frequencies. Both equal signal's on Butterworth designs. Not here: freqz on the FFT grid with region "whole", grpdelay, the other designs and filters.
+
+**Result.** `oracle_signalpkg` equals signal on 150 cases on Windows; Linux pending. L340 stays partial.

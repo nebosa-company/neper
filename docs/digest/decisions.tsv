@@ -3254,4 +3254,5 @@ D6178	664	cluster: daisy Gower dissimilarity
 D6179	540	cluster: silhouette widths
 D6180	835	cluster: diana
 D6181	605	PerformanceAnalytics: Drawdowns and findDrawdowns
-D6182	837	PerformanceAnalytics: modified expected shortfall
+D6182	838	PerformanceAnalytics: modified expected shortfall
+D6184	649	signal: filtfilt and freqz

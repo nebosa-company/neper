@@ -13,4 +13,13 @@ for (rep in 1:30) {
   y <- as.numeric(signal::filter(bt, x))
   add("filt", c(hi, n, w, len, x), sum(y * seq_len(len)))
 }
+for (rep in 1:20) {
+  n <- sample(1:5, 1); w <- runif(1, 0.05, 0.9); hi <- rep %% 2
+  bt <- butter(n, w, if (hi == 1) "high" else "low")
+  len <- sample(10:40, 1); x <- round(rnorm(len), 4)
+  ff <- as.numeric(filtfilt(bt$b, bt$a, x))
+  add("ff", c(hi, n, w, len, x), sum(ff * seq_len(len)))
+  fr <- freqz(bt$b, bt$a, c(0.1, 0.5, 1.2, 2.0, 3.0))
+  add("fre", c(hi, n, w), sum(Re(fr$h) * 1:5)); add("fim", c(hi, n, w), sum(Im(fr$h) * 1:5))
+}
 emit("signalpkg", "signal", list(cases))
