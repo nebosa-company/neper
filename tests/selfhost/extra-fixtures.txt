@@ -236,3 +236,4 @@ oracle_vcdeffect
 oracle_cmprsk
 oracle_crr
 oracle_tsp
+oracle_matchclass

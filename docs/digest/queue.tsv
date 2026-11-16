@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L296	library	0.85	972	proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener	Partial (D6023).
+L296	library	0.95	1031	proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener	Partial (D6023).
 L297	library	0.6	683	colorspace: HCL palettes, contrast ratio, colour-vision-deficiency simulation	Partial (D6024).
 L301	library	0.4	672	mvtnorm: multivariate normal and t probabilities and quantiles	Partial (D6025).
 L302	library	0.8	910	GPArotation: gradient projection rotations	Partial (D6026).

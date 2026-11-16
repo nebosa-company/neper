@@ -45004,3 +45004,9 @@ No new geometry code: `oracle_sf` runs the planar part of `e.algo.geom` against 
 `parse_datetime_zone` reads `%Z` as readr does: the token up to the next space names an IANA zone and the time is local to it, the earlier instant when the clock repeats and NaN when it was skipped. The later of `%z` and `%Z` rules (a zone name read after an offset drops the offset; an offset read after the name keeps the offset), and the name `UTC` itself leaves an offset in force. A name outside the database, or a bare abbreviation like CDT, is an error in readr 2.2.0 (the oracle leaves those out) and NaN here.
 
 **Result.** `oracle_readr` equals readr on 22899 cases, 7410 of them `%Z` cases over the thirteen zones of `e.tz.builtin`, both locale zones UTC and Asia/Tokyo, offsets before and after, and every day of the March, October and November transitions, on Windows; the Linux run is pending (WSL). The two unterminated-quote shapes that crash or confuse readr 2.2.0 (D6016's list) cannot be matched to an answer readr does not give, so L290 is closed.
+
+## D6109 — e1071 matchClasses
+
+`e.algo.stat.matchclass.match_classes` ports `matchClasses` for the three methods: rowmax; greedy with its random restarts (`sample(rest, 1)` through R's unif_index, the first maximum among the columns still free, the last open row taking the last free column); exact over every permutation in the order of e1071's `permutations`, which falls back to greedy past `maxexact` open rows as the package does. A direct pair needs the row maximum to beat any other entry of its row plus any other of its column.
+
+**Result.** `oracle_matchclass` equals e1071 on 264 tables (2 to 8 classes, rectangular for rowmax, one to four restarts, `maxexact` 9 and 3) on Windows; the Linux run is pending (WSL). Open under L296: `cshell`, which needs R's `optim` conjugate-gradient method.
