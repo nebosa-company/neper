@@ -45730,3 +45730,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.carlmtest` gains vcov_cl_diag, the clustered covariance of vcovCL for HC0 and HC1: the meat is the sum over clusters of the outer product of the within-cluster summed scores, sandwiched between (X'X)^-1, with the cluster adjustment G / (G - 1) when cadjust is TRUE and the HC1 factor (n - 1) / (n - p) for type HC1 (the default type with cadjust, combining to G / (G - 1) (n - 1) / (n - p)). The diagonals equal sandwich's to 1e-8 on ten designs with 4 to 10 clusters. Not here: HC2 to HC4 for clusters, multiway clustering, bootstrap covariances, the other HAC variants and car's Anova.
 
 **Result.** `oracle_carlmtest` equals the packages on 256 cases on Windows; Linux pending. L300 stays partial.
+
+## D6427 — lpSolve: e.math.opt.simplex against lp("max")
+
+`e.math.opt.simplex` (two-phase dense simplex, Bland's rule) agrees with lpSolve::lp("max", ...) on thirty random linear programs of 2 to 5 variables and 3 to 7 rows with a mix of <= and >= constraints (the >= rows given to the simplex negated, which needs its phase one) and a bounding row: the optimal value and the solution equal to 1e-8. Infeasible programs are left out of the draw. The oracle fixture is new; no library change was needed. Not here: equality rows, integer and binary variables (lp's int.vec and binary.vec), the transportation and assignment solvers, sensitivity analysis and lpSolveAPI.
+
+**Result.** `oracle_lpsolve` agrees with lpSolve on 60 cases on Windows; Linux pending. L367 is partial.

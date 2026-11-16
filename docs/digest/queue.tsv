@@ -98,7 +98,7 @@ L361	library	0	272	segmented and strucchange: breakpoints and structural change	
 L362	library	0	247	fitdistrplus: fitting and comparing distributions	Open (CRAN rank 334).
 L363	library	0	355	DescTools: descriptive statistics and tests	Open (CRAN rank 320).
 L365	library	0	233	ks: multivariate kernel density estimation	Open (CRAN rank 331).
-L367	library	0	326	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Open (CRAN ranks 302, 396, 329).
+L367	library	0.2	556	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427).
 L370	library	0	268	fields and interp: spatial smoothing and interpolation	Open (CRAN ranks 367, 351).
 L376	library	0	240	gam: backfitting generalized additive models	Open (CRAN rank 388).
 L378	library	0	318	uwot and Rtsne: embeddings equal to R	Open (CRAN ranks 311, 315).
