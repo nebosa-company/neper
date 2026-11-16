@@ -36,7 +36,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             }
             tab = t[0usize..nt]
         }
-        ret pm.block_perms(n, tab, u8(x[1usize]), x[2usize] != 0.0f64, u8(x[3usize]), x[4usize] != 0.0f64, x[5usize] != 0.0f64)
+        ret pm.block_perms(n, tab, u8(x[1usize]), x[2usize] != 0.0f64, u8(x[3usize]), x[4usize] != 0.0f64, x[5usize] != 0.0f64, 1.0f64, 1.0f64)
     }
     var g: rr.Rng = zero
     rr.seed(&g, i64(x[0usize]))
@@ -55,7 +55,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var blocks: []const i64 = zero
     if x[7usize] != 0.0f64 { plots = pl }
     if x[8usize] != 0.0f64 { blocks = bl }
-    let d = pm.Design { plots: plots, blocks: blocks, plot_type: u8(x[2usize]), plot_mirror: x[3usize] != 0.0f64, within_type: u8(x[4usize]), within_mirror: x[5usize] != 0.0f64, constant: x[6usize] != 0.0f64 }
+    let d = pm.Design { plots: plots, blocks: blocks, plot_type: u8(x[2usize]), plot_mirror: x[3usize] != 0.0f64, within_type: u8(x[4usize]), within_mirror: x[5usize] != 0.0f64, constant: x[6usize] != 0.0f64, within_nrow: 0usize, within_ncol: 0usize, within_sym: false, plot_nrow: 0usize, plot_ncol: 0usize, plot_sym: false }
     let (r, e) = pm.shuffle(a, &g, n, &d)
     if e != ok { os.exit(6) }
     ret f64(r[usize(x[x.len - 1usize])])

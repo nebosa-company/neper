@@ -26,17 +26,6 @@
       "evidence": "Partial (D6028, D6079): balanced and parametric (normal) simulation equal boot on 936 more values on Windows (oracle_boot2). Earlier:  Ordinary bootstrap of mean, median, sd, var and boot.ci norm, basic, perc, bca equal boot 1.3.32 on Windows (Linux run pending). Plus (D6118) tsboot (fixed and geometric), stud, abc.ci, antithetic and censboot ordinary equal boot on 3234 values on Windows (oracle_tsboot, oracle_boot3). Open: censboot model, cond and weird (survival fits); jack.after.boot only plots. Was: Open (CRAN rank 296). Small. Acceptance, equal to boot under set.seed: boot (ordinary, parametric, balanced, antithetic), boot.ci norm, basic, stud, perc and bca, tsboot (block and stationary), censboot, jack.after.boot, empinf, abc.ci."
     },
     {
-      "id": "L323",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 536,
-      "title": "permute: restricted permutation designs",
-      "score": 0.65,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6030, D6081): allPerms for free, series and mirrored series, alone and within blocks, equals permute on 90 values on Windows (oracle_allperms). Earlier:  shuffle (free and series within, plots free or series, blocks, constant) and numPerms equal permute 0.10.0 on Windows (Linux run pending). Open: grid designs, plot restrictions in allPerms, shuffleSet, how() checks. Was: Open (CRAN rank 281). Small. Acceptance, equal to permute value for value under set.seed: how() with free, series, grid and plot and block restrictions and within and between strata, shuffle, shuffleSet, allPerms, nperms."
-    },
-    {
       "id": "L325",
       "category": "library",
       "group": "CRAN parity",

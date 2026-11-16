@@ -3,7 +3,9 @@
 // for the within-plot permutation, and `numperms`. The random stream is that of e.algo.rand.r in the
 // order doShuffle takes it (a flip is drawn before the plots are shuffled, even for free plots).
 //
-// Not here: grid designs, partitions, shuffleSet, allPerms and the validity checks of how().
+// Grid restrictions (type GRID, for the within and the plot level) follow shuffleGrid and gridFlip.
+//
+// Not here: partitions, shuffleSet, allPerms for grids and the validity checks of how().
 
 use e.algo.rand.r as rng
 use e.math
@@ -15,6 +17,7 @@ error UnequalPlots
 const FREE: u8 = 0u8
 const SERIES: u8 = 1u8
 const NONE: u8 = 2u8
+const GRID: u8 = 3u8
 
 // the design of one call
 type Design = struct {
@@ -25,6 +28,12 @@ type Design = struct {
     within_type: u8,
     within_mirror: bool,
     constant: bool,
+    within_nrow: usize,
+    within_ncol: usize,
+    within_sym: bool,
+    plot_nrow: usize,
+    plot_ncol: usize,
+    plot_sym: bool,
 }
 
 // sample.int(n, size, replace = FALSE), 1-based, as shuffleFree draws it
@@ -71,6 +80,73 @@ fn series_order(a: *mem.Arena, g: *rng.Rng, n: usize, mirror: bool, start0: i64,
     ret (out, ok)
 }
 
+// gridFlip(mirror, symmetric, flip): the two flips (row, column) as 0 or 1; given0 and given1 are -1 when flip is NULL
+fn grid_flip(a: *mem.Arena, g: *rng.Rng, mirror: bool, symmetric: bool, given0: i64, given1: i64) -> (i64, i64, err) {
+    if !mirror { ret (0i64, 0i64, ok) }
+    var f0 = given0
+    var f1 = given1
+    if given0 < 0i64 {
+        if rng.unif(g) < 0.5f64 { f0 = 1i64 } else { f0 = 0i64 }
+        if rng.unif(g) < 0.5f64 { f1 = 1i64 } else { f1 = 0i64 }
+    }
+    if symmetric && f0 == 1i64 && f1 == 1i64 {
+        let (w, e) = free_draw(a, g, 2usize, 1usize)
+        if e != ok { ret (0i64, 0i64, e) }
+        if w[0usize] == 1i64 { f0 = 0i64 } else { f1 = 0i64 }
+    }
+    ret (f0, f1, ok)
+}
+
+// shuffleGrid: the permutation of an nrow by ncol grid (toroidal shifts, optional reflections), 0-based; the starts are drawn when negative,
+// the flips are drawn (gridFlip) when flip0 is negative
+fn grid_perm(a: *mem.Arena, g: *rng.Rng, nrow: usize, ncol: usize, mirror: bool, symmetric: bool, start_row0: i64, start_col0: i64, flip0: i64, flip1: i64) -> ([]usize, err) {
+    var none: []usize = zero
+    var sr = start_row0
+    var sc = start_col0
+    if sr < 0i64 {
+        let (s, e) = free_draw(a, g, nrow, 1usize)
+        if e != ok { ret (none, e) }
+        sr = s[0usize]
+    }
+    if sc < 0i64 {
+        let (s, e) = free_draw(a, g, ncol, 1usize)
+        if e != ok { ret (none, e) }
+        sc = s[0usize]
+    }
+    let (f0, f1, fe) = grid_flip(a, g, mirror, symmetric, flip0, flip1)
+    if fe != ok { ret (none, fe) }
+    let (ir, e1) = mem.alloc[usize](a, nrow)
+    let (ic, e2) = mem.alloc[usize](a, ncol)
+    let (out, e3) = mem.alloc[usize](a, nrow * ncol)
+    if e1 != ok { ret (none, e1) }
+    if e2 != ok { ret (none, e2) }
+    if e3 != ok { ret (none, e3) }
+    var i = 0usize
+    while i < nrow {
+        var v = usize((sr + i64(i)) % i64(nrow))
+        if f0 == 1i64 { v = usize((sr + i64(nrow - 1usize - i)) % i64(nrow)) }
+        ir[i] = v
+        i += 1usize
+    }
+    i = 0usize
+    while i < ncol {
+        var v = usize((sc + i64(i)) % i64(ncol))
+        if f1 == 1i64 { v = usize((sc + i64(ncol - 1usize - i)) % i64(ncol)) }
+        ic[i] = v
+        i += 1usize
+    }
+    var c = 0usize
+    while c < ncol {
+        var r = 0usize
+        while r < nrow {
+            out[c * nrow + r] = ic[c] * nrow + ir[r]
+            r += 1usize
+        }
+        c += 1usize
+    }
+    ret (out, ok)
+}
+
 // one block: ind are the (0-based) observations of the block; answers ind[perm]
 fn do_shuffle(a: *mem.Arena, g: *rng.Rng, ind: []const usize, d: *const Design) -> ([]usize, err) {
     var none: []usize = zero
@@ -93,6 +169,14 @@ fn do_shuffle(a: *mem.Arena, g: *rng.Rng, ind: []const usize, d: *const Design) 
             }
         } else if d.within_type == SERIES {
             let (p, e) = series_order(a, g, n, d.within_mirror, 0i64 - 1i64, 0i64 - 1i64)
+            if e != ok { ret (none, e) }
+            i = 0usize
+            while i < n {
+                perm[i] = p[i]
+                i += 1usize
+            }
+        } else if d.within_type == GRID {
+            let (p, e) = grid_perm(a, g, d.within_nrow, d.within_ncol, d.within_mirror, d.within_sym, 0i64 - 1i64, 0i64 - 1i64, 0i64 - 1i64, 0i64 - 1i64)
             if e != ok { ret (none, e) }
             i = 0usize
             while i < n {
@@ -139,11 +223,29 @@ fn do_shuffle(a: *mem.Arena, g: *rng.Rng, ind: []const usize, d: *const Design) 
             i += 1usize
         }
         if d.plot_type != NONE {
-            let flip = rng.unif(g) < 0.5f64
+            var gf0 = 0i64 - 1i64
+            var gf1 = 0i64 - 1i64
+            var flip = false
+            if d.plot_type == GRID {
+                let (a0, a1, ge) = grid_flip(a, g, d.plot_mirror, d.plot_sym, 0i64 - 1i64, 0i64 - 1i64)
+                if ge != ok { ret (none, ge) }
+                gf0 = a0
+                gf1 = a1
+            } else {
+                flip = rng.unif(g) < 0.5f64
+            }
             // the permutation of the plot levels
             let (pl, ple) = mem.alloc[usize](a, nl)
             if ple != ok { ret (none, ple) }
-            if d.plot_type == FREE {
+            if d.plot_type == GRID {
+                let (p, e) = grid_perm(a, g, d.plot_nrow, d.plot_ncol, d.plot_mirror, d.plot_sym, 0i64 - 1i64, 0i64 - 1i64, gf0, gf1)
+                if e != ok { ret (none, e) }
+                i = 0usize
+                while i < nl {
+                    pl[i] = p[i]
+                    i += 1usize
+                }
+            } else if d.plot_type == FREE {
                 let (p, e) = free_draw(a, g, nl, nl)
                 if e != ok { ret (none, e) }
                 i = 0usize
@@ -237,8 +339,23 @@ fn do_shuffle(a: *mem.Arena, g: *rng.Rng, ind: []const usize, d: *const Design) 
             var same: []i64 = zero
             var start = 0i64 - 1i64
             var flip = 0i64 - 1i64
+            var sr = 0i64 - 1i64
+            var sc = 0i64 - 1i64
+            var gf0 = 0i64 - 1i64
+            var gf1 = 0i64 - 1i64
             if d.constant {
-                if d.within_type == FREE {
+                if d.within_type == GRID {
+                    let (s1, e1) = free_draw(a, g, d.within_nrow, 1usize)
+                    if e1 != ok { ret (none, e1) }
+                    sr = s1[0usize]
+                    let (s2, e2) = free_draw(a, g, d.within_ncol, 1usize)
+                    if e2 != ok { ret (none, e2) }
+                    sc = s2[0usize]
+                    let (b0, b1, be) = grid_flip(a, g, d.within_mirror, d.within_sym, 0i64 - 1i64, 0i64 - 1i64)
+                    if be != ok { ret (none, be) }
+                    gf0 = b0
+                    gf1 = b1
+                } else if d.within_type == FREE {
                     let (s, e) = free_draw(a, g, sizes[0usize], sizes[0usize])
                     if e != ok { ret (none, e) }
                     same = s
@@ -288,6 +405,14 @@ fn do_shuffle(a: *mem.Arena, g: *rng.Rng, ind: []const usize, d: *const Design) 
                                 sel[i] = usize(p[i]) - 1usize
                                 i += 1usize
                             }
+                        }
+                    } else if d.within_type == GRID {
+                        let (p, e) = grid_perm(a, g, d.within_nrow, d.within_ncol, d.within_mirror, d.within_sym, sr, sc, gf0, gf1)
+                        if e != ok { ret (none, e) }
+                        i = 0usize
+                        while i < ng {
+                            sel[i] = p[i]
+                            i += 1usize
                         }
                     } else {
                         let (p, e) = series_order(a, g, ng, d.within_mirror, start, flip)
@@ -421,22 +546,27 @@ fn factorial(n: usize) -> f64 {
 }
 
 // numPerms for one block of n observations with plot sizes `tab` (empty: no plots)
-fn block_perms(n: usize, tab: []const usize, plot_type: u8, plot_mirror: bool, within_type: u8, within_mirror: bool, constant: bool) -> f64 {
+// mw_grid and mp_grid are the orientation multipliers of the within and plot grids (norient with mirror true); ignored for other types
+fn block_perms(n: usize, tab: []const usize, plot_type: u8, plot_mirror: bool, within_type: u8, within_mirror: bool, constant: bool, mw_grid: f64, mp_grid: f64) -> f64 {
     var mult_wi = 1.0f64
     if within_type == SERIES {
         mult_wi = 2.0f64
         if n == 2usize { mult_wi = 1.0f64 }
+    } else if within_type == GRID {
+        mult_wi = mw_grid
     }
     var mult_p = 1.0f64
     if plot_type == SERIES {
         mult_p = 2.0f64
         if tab.len == 2usize { mult_p = 1.0f64 }
+    } else if plot_type == GRID {
+        mult_p = mp_grid
     }
     var num_p = 1.0f64
     if tab.len > 0usize {
         if plot_type == FREE {
             num_p = factorial(tab.len)
-        } else if plot_type == SERIES {
+        } else if plot_type == SERIES || plot_type == GRID {
             num_p = f64(tab.len)
             if plot_mirror { num_p = mult_p * f64(tab.len) }
         }

@@ -3191,4 +3191,5 @@ D6115	1172	GPArotation simplimax, bifactor, bi-geomin, Cureton-Mulaik, legacy an
 D6116	979	urca ur.pp, ur.ers and ur.za
 D6117	1298	urca ur.sp, ca.po and ca.jo close L303
 D6118	1413	boot: tsboot, studentized intervals, abc.ci, antithetic resampling, censboot ordinary
-D6119	1099	class SOM and LVQ, FNN get.knn and knn.reg close L322
+D6119	1100	class SOM and LVQ, FNN get.knn and knn.reg close L322
+D6120	1354	permute grid designs, shuffleSet, allPerms with plot restrictions and numPerms of grids close L323

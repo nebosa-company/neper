@@ -246,3 +246,6 @@ oracle_tsboot
 oracle_boot3
 oracle_fnn2
 oracle_classlvq
+oracle_permgrid
+oracle_permset
+oracle_permall
