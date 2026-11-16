@@ -146,6 +146,28 @@ fn weighted(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret sr.crps_mixnorm(x[0usize], x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n])
 }
 
+fn extra(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let kind = usize(x[0usize])
+    if str.eq(c.name, "ex") {
+        if kind == 0usize { ret sr.ints_quantiles(x[1usize], x[3usize], x[4usize], x[2usize]) }
+        if kind == 2usize { ret sr.ess_moments(x[1usize], x[2usize], x[3usize], x[4usize]) }
+        if kind == 3usize { ret sr.gradcrps(usize(x[2usize]), x[1usize], x[3usize], x[4usize], x[5usize], usize(x[6usize])) }
+        ret sr.hesscrps(usize(x[2usize]), x[1usize], x[3usize], x[4usize], x[5usize], usize(x[6usize]))
+    }
+    if kind == 1usize {
+        let n = usize(x[3usize])
+        ret sr.ints_sample(a, x[1usize], x[4usize..4usize + n], x[2usize])
+    }
+    if kind == 5usize {
+        let n = usize(x[3usize])
+        ret sr.clogs_sample(a, x[1usize], x[4usize..4usize + n], x[2usize], x[4usize + n], 0.0f64, x[5usize + n] > 0.5f64)
+    }
+    let d = usize(x[1usize])
+    let mm = usize(x[2usize])
+    ret sr.mmds_sample(x[4usize + d * mm..4usize + d * mm + d], x[4usize..4usize + d * mm], d)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/scoringrules.json")
     if load_error != ok { os.exit(2) }
@@ -155,7 +177,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while at < golden.cases.len {
         let c = &golden.cases[at]
         var got = 0.0f64
-        if str.eq(c.name, "sample") { got = sample(a, c) } else if str.eq(c.name, "crpsw") || str.eq(c.name, "crpskde") || str.eq(c.name, "crpsmix") || str.eq(c.name, "logsmix") || str.eq(c.name, "dssmix") { got = weighted(a, c) } else { got = param(c) }
+        if str.eq(c.name, "sample") { got = sample(a, c) } else if str.eq(c.name, "ex") || str.eq(c.name, "exs") { got = extra(a, c) } else if str.eq(c.name, "crpsw") || str.eq(c.name, "crpskde") || str.eq(c.name, "crpsmix") || str.eq(c.name, "logsmix") || str.eq(c.name, "dssmix") { got = weighted(a, c) } else { got = param(c) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

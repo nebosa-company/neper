@@ -113,4 +113,19 @@ for (rep in 1:25) {
   k <- sample(2:4, 1); mm <- rnorm(k); ss <- runif(k, 0.3, 2); ww <- runif(k, 0.1, 1)
   add("logsmix", c(yy, k, mm, ss, ww), logs_mixnorm(yy, matrix(mm, 1), matrix(ss, 1), matrix(ww, 1))); add("dssmix", c(yy, k, mm, ss, ww), dss_mixnorm(yy, matrix(mm, 1), matrix(ss, 1), matrix(ww, 1)))
 }
+for (rep in 1:25) {
+  yy <- rnorm(1, 0.3, 1.5); n <- sample(8:40, 1); dat <- round(rnorm(n, 0.3, 1.2), 4); tc <- runif(1, 0.3, 0.95); xl <- rnorm(1, -1); xu <- xl + runif(1, 0.5, 3)
+  add("ex", c(0, yy, tc, xl, xu, 0), ints_quantiles(yy, xl, xu, tc)); add("exs", c(1, yy, tc, n, dat), ints_sample(yy, dat, tc, show_messages = FALSE))
+  mn <- rnorm(1); vr <- runif(1, 0.5, 3); sk <- rnorm(1); add("ex", c(2, yy, mn, vr, sk, 0), ess_moments(yy, mn, vr, sk))
+  df <- runif(1, 1.5, 12); loc <- rnorm(1); sc <- runif(1, 0.5, 2.5)
+  for (fm in 0:2) {
+    gg <- switch(fm + 1, gradcrps_norm(yy, loc, sc), gradcrps_logis(yy, loc, sc), gradcrps_t(yy, df, loc, sc)); hh <- switch(fm + 1, hesscrps_norm(yy, loc, sc), hesscrps_logis(yy, loc, sc), hesscrps_t(yy, df, loc, sc))
+    add("ex", c(3, yy, fm, df, loc, sc, 0), gg[1, 1]); add("ex", c(3, yy, fm, df, loc, sc, 1), gg[1, 2])
+    for (pp in 0:2) add("ex", c(4, yy, fm, df, loc, sc, pp), hh[1, pp + 1])
+  }
+  lo <- rnorm(1, -1, 0.5); hi <- lo + runif(1, 1, 3); yc <- rnorm(1, 0.3, 1.5)
+  add("exs", c(5, yc, lo, n, dat, hi, 1), clogs_sample(yc, dat, lo, hi, cens = TRUE)); add("exs", c(5, yc, lo, n, dat, hi, 0), clogs_sample(yc, dat, lo, hi, cens = FALSE))
+  d <- sample(2:4, 1); m <- sample(4:12, 1); X <- matrix(rnorm(d * m), d, m); yv <- rnorm(d)
+  add("exs", c(6, d, m, 0, as.vector(X), yv), mmds_sample(yv, X))
+}
 emit("scoringrules", "scoringRules", list(cases))

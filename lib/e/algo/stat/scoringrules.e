@@ -936,3 +936,111 @@ fn dss_mixnorm(y: f64, m: []const f64, s: []const f64, w: []const f64) -> f64 {
     }
     ret dss_moments(y, mean, m2 - mean * mean)
 }
+
+fn qs_quantiles(y: f64, x: f64, alpha: f64) -> f64 {
+    var ind = 0.0f64
+    if y < x { ind = 1.0f64 }
+    ret (ind - alpha) * (x - y)
+}
+
+// ints_quantiles(y, x_lower, x_upper, target_coverage)
+fn ints_quantiles(y: f64, lo: f64, hi: f64, tc: f64) -> f64 {
+    ret (2.0f64 / (1.0f64 - tc)) * (qs_quantiles(y, lo, 0.5f64 * (1.0f64 - tc)) + qs_quantiles(y, hi, 0.5f64 * (1.0f64 + tc)))
+}
+
+// ints_sample(y, dat, target_coverage) with type 7 quantiles
+fn ints_sample(a: *mem.Arena, y: f64, dat: []const f64, tc: f64) -> f64 {
+    ret (2.0f64 / (1.0f64 - tc)) * (qs_sample(a, y, dat, 0.5f64 * (1.0f64 - tc)) + qs_sample(a, y, dat, 0.5f64 * (1.0f64 + tc)))
+}
+
+// ess_moments(y, mean, var, skew)
+fn ess_moments(y: f64, mean: f64, v: f64, skew: f64) -> f64 {
+    let e = mean - y
+    let t = v - e * e - e * math.sqrt[f64](v) * skew
+    ret t * t
+}
+
+// gradcrps_norm, gradcrps_logis and gradcrps_t at (y - location) / scale: part 0 dloc, 1 dscale; family 0 norm, 1 logis, 2 t (df)
+fn gradcrps(fam: usize, y0: f64, df: f64, loc: f64, scale: f64, part: usize) -> f64 {
+    let y = (y0 - loc) / scale
+    var term0 = 0.0f64
+    var term1 = 0.0f64
+    if fam == 0usize {
+        term0 = crps_norm(y, 0.0f64, 1.0f64)
+        term1 = 1.0f64 - 2.0f64 * pn(y)
+    } else if fam == 1usize {
+        term0 = crps_logis(y, 0.0f64, 1.0f64)
+        term1 = 1.0f64 - 2.0f64 * plogis_std(y)
+    } else {
+        term0 = crps_t(y, df, 0.0f64, 1.0f64)
+        term1 = 1.0f64 - 2.0f64 * nb.pt(y, df, true, false)
+    }
+    if part == 0usize { ret term1 }
+    ret term0 + y * term1
+}
+
+// hesscrps for the same families: part 0 d2loc, 1 d2scale, 2 dloc.dscale (and its mirror), each 2 f(z) times 1, z^2 or z, divided by scale
+fn hesscrps(fam: usize, y0: f64, df: f64, loc: f64, scale: f64, part: usize) -> f64 {
+    let z = (y0 - loc) / scale
+    var d = 0.0f64
+    if fam == 0usize { d = dist.dnorm(z, 0.0f64, 1.0f64, false) } else if fam == 1usize { d = math.exp[f64](0.0f64 - z) / ((1.0f64 + math.exp[f64](0.0f64 - z)) * (1.0f64 + math.exp[f64](0.0f64 - z))) } else { d = nb.dt(z, df, false) }
+    var t = d
+    if part == 1usize { t = d * z * z }
+    if part >= 2usize { t = d * z }
+    ret 2.0f64 * t / scale
+}
+
+// clogs_sample(y, dat, a, b, bw, cens): the log score of the kernel density for an observation censored (cens true) or truncated to (a, b)
+fn clogs_sample(arena: *mem.Arena, y: f64, dat: []const f64, a: f64, b: f64, bw0: f64, cens: bool) -> f64 {
+    var bw = bw0
+    if bw <= 0.0f64 { bw = bw_nrd(arena, dat) }
+    let n = dat.len
+    var pa = 0.0f64
+    var pb = 0.0f64
+    var dens = 0.0f64
+    var i = 0usize
+    while i < n {
+        pa += pn((a - dat[i]) / bw) / f64(n)
+        pb += pn((b - dat[i]) / bw) / f64(n)
+        dens += dist.dnorm((y - dat[i]) / bw, 0.0f64, 1.0f64, false) / bw / f64(n)
+        i += 1usize
+    }
+    let int_wf = pb - pa
+    var w_y = 0.0f64
+    if y > a && y < b { w_y = 1.0f64 }
+    let ls = 0.0f64 - math.log[f64](dens)
+    var score = w_y * ls + w_y * math.log[f64](int_wf)
+    if cens { score = score - w_y * math.log[f64](int_wf) - (1.0f64 - w_y) * math.log[f64](1.0f64 - int_wf) }
+    ret score
+}
+
+// mmds_sample(y, dat) with the Gaussian kernel exp(-||x - y||^2 / 2) and equal weights: 0.5 sum_ij w_i w_j k(x_i, x_j) - sum_i w_i k(y, x_i); dat is m points of dimension d, row-major
+fn mmds_sample(y: []const f64, dat: []const f64, d: usize) -> f64 {
+    let m = dat.len / d
+    let w = 1.0f64 / f64(m)
+    var xx = 0.0f64
+    var xy = 0.0f64
+    var i = 0usize
+    while i < m {
+        var q = 0.0f64
+        var k = 0usize
+        while k < d {
+            q += (y[k] - dat[i * d + k]) * (y[k] - dat[i * d + k])
+            k += 1usize
+        }
+        xy += w * math.exp[f64](0.0f64 - q / 2.0f64)
+        var j = 0usize
+        while j < m {
+            var r = 0.0f64
+            k = 0usize
+            while k < d {
+                r += (dat[i * d + k] - dat[j * d + k]) * (dat[i * d + k] - dat[j * d + k])
+                k += 1usize
+            }
+            xx += w * w * math.exp[f64](0.0f64 - r / 2.0f64)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret 0.5f64 * xx - xy
+}
