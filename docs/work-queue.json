@@ -2165,10 +2165,10 @@
       "group": "CRAN parity",
       "order": 790,
       "title": "forecast: exact ARIMA, ETS, auto.arima, Box-Cox",
-      "score": 0,
+      "score": 0.05,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 128). Large. e.algo.timeseries has holt_winters, stl and conditional-sum-of-squares ARMA. Acceptance, equal to forecast: Arima with exact Gardner Kalman likelihood and seasonal terms, auto.arima (stepwise and exhaustive, KPSS ndiffs, nsdiffs by OCSB and CH), ets for all 30 state-space models with AICc selection, tbats and bats, BoxCox and BoxCox.lambda (Guerrero and loglik), croston, thetaf, stlf, forecast intervals and fitted values; ndiffs needs L303."
+      "evidence": "Partly done (D6063): e.algo.stat.fcast has BoxCox, InvBoxCox and BoxCox.lambda by loglik, equal to forecast on 171 cases on Windows (oracle_fcast); Linux pending. Open: guerrero, Arima, auto.arima, ndiffs, ets, tbats, croston, thetaf, stlf, intervals. Original: Open (CRAN rank 128). Large. e.algo.timeseries has holt_winters, stl and conditional-sum-of-squares ARMA. Acceptance, equal to forecast: Arima with exact Gardner Kalman likelihood and seasonal terms, auto.arima (stepwise and exhaustive, KPSS ndiffs, nsdiffs by OCSB and CH), ets for all 30 state-space models with AICc selection, tbats and bats, BoxCox and BoxCox.lambda (Guerrero and loglik), croston, thetaf, stlf, forecast intervals and fitted values; ndiffs needs L303."
     },
     {
       "id": "L319",

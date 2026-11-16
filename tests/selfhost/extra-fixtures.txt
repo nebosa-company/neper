@@ -198,3 +198,4 @@ oracle_lubridate
 oracle_matrix
 oracle_igraph
 oracle_layout
+oracle_fcast
