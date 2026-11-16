@@ -5,7 +5,6 @@
 // Also first and last with period strings, merge by index and the to.period index labels. Not here: time zones other
 // than UTC, sub-second units, and indexAt = "firstof" (R builds it in the host local zone).
 
-// merge and join of two series (e.algo.stat.zoo merges by index).
 
 use e.math
 use e.mem
