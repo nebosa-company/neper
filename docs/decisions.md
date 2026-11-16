@@ -45826,3 +45826,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pracma` gains `interp1`: linear (approx), nearest (constant between knot midpoints, right-continuous) and the package's own spline, whose end slopes come from its tridiagonal solve rather than R's fmm or natural splines.
 
 **Result.** `oracle_pracma` equals pracma on 936 cases on Windows at rel 1e-8, 324 of them new, including both end knots; Linux pending. L333 stays partial.
+
+## D6443 — signal: fir2
+
+`e.algo.stat.signalpkg` gains `fir2` (frequency-sampling design with the package's ramp at repeated breakpoints, grid padding to a power of two, even and odd length branches by a direct inverse cosine sum, and the Hamming window) and `approx_ord` (approx with ordered ties).
+
+**Result.** `oracle_signalpkg` equals signal on 350 cases on Windows, 24 of them fir2 over even and odd n, three ramp widths and two grids; Linux pending. L340 stays partial.

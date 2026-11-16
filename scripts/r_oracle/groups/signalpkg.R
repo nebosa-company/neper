@@ -48,4 +48,10 @@ for (rep in 1:20) {
   bt <- butter(n, c(w1, w2), "pass")
   add("bpb", c(0, n, w1, w2), sum(bt$b * seq_along(bt$b))); add("bpa", c(0, n, w1, w2), sum(bt$a * seq_along(bt$a)))
 }
+for (rep in 1:24) {
+  n <- sample(c(8, 16, 21, 30, 31, 41), 1); gridn <- sample(c(256, 512), 1); rn <- c(0, 2, gridn / 20)[rep %% 3 + 1]
+  c1 <- sort(runif(2, 0.1, 0.9)); if (rep %% 2 == 0) { f <- c(0, c1[1], c1[1], c1[2], c1[2], 1); m <- c(0, 0, 1, 1, 0, 0) } else { f <- c(0, c1[1], c1[2], 1); m <- c(1, 1, 0.3, 0) }
+  b <- fir2(n, f, m, gridn, rn, hamming(n + 1))
+  add("fir2", c(n, gridn, rn, length(f), f, m), sum(as.numeric(b) * seq_along(b)))
+}
 emit("signalpkg", "signal", list(cases))

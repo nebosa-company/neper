@@ -550,3 +550,159 @@ fn bilin_im(sr: f64, si: f64) -> f64 {
     let di = 0.0f64 - si / 4.0f64
     ret (ni * dr - nr * di) / (dr * dr + di * di)
 }
+
+// approx(x, y, v, ties = "ordered") for sorted x that may repeat: the value at the last knot at or below v, linear to the next
+fn approx_ord(x: []const f64, y: []const f64, n: usize, v: f64) -> f64 {
+    if v >= x[n - 1usize] { ret y[n - 1usize] }
+    var i = 0usize
+    var j = 1usize
+    while j < n - 1usize {
+        if x[j] <= v { i = j }
+        j += 1usize
+    }
+    if v == x[i] { ret y[i] }
+    ret y[i] + (y[i + 1usize] - y[i]) * ((v - x[i]) / (x[i + 1usize] - x[i]))
+}
+
+// fir2(n, f, m, grid_n, ramp_n, hamming(n + 1)): frequency-sampling FIR design of n + 1 taps into out; f ascends from 0 to 1 with m the gains at those points
+fn fir2(a: *mem.Arena, n: usize, f: []const f64, m: []const f64, grid_n0: usize, ramp_n: f64, out: []f64) -> err {
+    let t = f.len
+    var grid_n = grid_n0
+    if 2usize * grid_n < n + 1usize {
+        var p2 = 1usize
+        while p2 < n + 1usize { p2 *= 2usize }
+        grid_n = p2
+    }
+    let gn = f64(grid_n)
+    let (fb, e1) = mem.alloc[f64](a, 3usize * t)
+    if e1 != ok { ret e1 }
+    let (mb, e2) = mem.alloc[f64](a, 3usize * t)
+    if e2 != ok { ret e2 }
+    var nf = 0usize
+    let (fx, e3) = mem.alloc[f64](a, 3usize * t)
+    if e3 != ok { ret e3 }
+    var i = 0usize
+    while i < t {
+        fx[i] = f[i]
+        i += 1usize
+    }
+    nf = t
+    if ramp_n > 0.0f64 {
+        var extra = 0usize
+        i = 0usize
+        while i + 1usize < t {
+            if f[i + 1usize] == f[i] {
+                fx[i] = f[i] - ramp_n / gn / 2.0f64
+                fx[i + 1usize] = f[i + 1usize] + ramp_n / gn / 2.0f64
+                fx[t + extra] = f[i]
+                extra += 1usize
+            }
+            i += 1usize
+        }
+        nf = t + extra
+        i = 0usize
+        while i < nf {
+            if fx[i] < 0.0f64 { fx[i] = 0.0f64 }
+            if fx[i] > 1.0f64 { fx[i] = 1.0f64 }
+            i += 1usize
+        }
+        // sort and unique
+        i = 1usize
+        while i < nf {
+            let tv = fx[i]
+            var q = i
+            while q > 0usize && fx[q - 1usize] > tv {
+                fx[q] = fx[q - 1usize]
+                q -= 1usize
+            }
+            fx[q] = tv
+            i += 1usize
+        }
+        var w = 0usize
+        i = 0usize
+        while i < nf {
+            if w == 0usize || fx[i] != fx[w - 1usize] {
+                fx[w] = fx[i]
+                w += 1usize
+            }
+            i += 1usize
+        }
+        nf = w
+        i = 0usize
+        while i < nf {
+            mb[i] = approx_ord(f, m, t, fx[i])
+            i += 1usize
+        }
+        i = 0usize
+        while i < nf {
+            fb[i] = fx[i]
+            i += 1usize
+        }
+    } else {
+        i = 0usize
+        while i < t {
+            fb[i] = f[i]
+            mb[i] = m[i]
+            i += 1usize
+        }
+    }
+    let (grid, e4) = mem.alloc[f64](a, grid_n + 1usize)
+    if e4 != ok { ret e4 }
+    i = 0usize
+    while i <= grid_n {
+        grid[i] = approx_ord(fb, mb, nf, f64(i) / gn)
+        i += 1usize
+    }
+    let odd = n % 2usize == 1usize
+    var big = 2usize * grid_n
+    if odd { big = 4usize * grid_n }
+    let (v, e5) = mem.alloc[f64](a, big)
+    if e5 != ok { ret e5 }
+    i = 0usize
+    while i < big {
+        v[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i <= grid_n {
+        v[i] = grid[i]
+        i += 1usize
+    }
+    // the mirrored tail grid[grid_n .. 2] closes the sequence
+    i = 0usize
+    while i + 1usize < grid_n {
+        v[big - 1usize - i] = grid[i + 1usize]
+        i += 1usize
+    }
+    let (bb, e6) = mem.alloc[f64](a, n + 1usize)
+    if e6 != ok { ret e6 }
+    var k = 0usize
+    while k <= n {
+        var idx = 0usize
+        if !odd {
+            let fl = (n + 1usize) / 2usize
+            let ce = n + 1usize - fl
+            if k < fl { idx = big - fl + k } else { idx = k - fl }
+            let _ = ce
+        } else {
+            let h2 = (n + 1usize) / 2usize
+            if k < h2 { idx = big - n + 2usize * k } else { idx = 2usize * (k - h2) + 1usize }
+        }
+        var s = 0.0f64
+        var j = 0usize
+        while j < big {
+            s += v[j] * math.cos[f64](2.0f64 * pi() * f64((j * idx) % big) / f64(big))
+            j += 1usize
+        }
+        s = s / f64(big)
+        if odd { s = 2.0f64 * s }
+        bb[k] = s
+        k += 1usize
+    }
+    k = 0usize
+    while k <= n {
+        out[k] = bb[k] * (0.54f64 - 0.46f64 * math.cos[f64](2.0f64 * pi() * f64(k) / f64(n)))
+        k += 1usize
+    }
+    ret ok
+}
