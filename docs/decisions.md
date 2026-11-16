@@ -45298,3 +45298,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.imputets` holds na_ma with simple, linear (1 / (1 + d)) and exponential (1 / 2^d) weights and na_mean's fill value for the mean, median, mode, geometric and harmonic options. The package's na_ma is compiled, so the rules were found by comparison: a gap is filled from the original observations only (earlier fills are not reused), and the window of k on each side widens by one until it holds at least two observed values. Not here: na_kalman, na_seadec, na_seasplit, na_random, statsNA and maxgap; na_locf and the interpolations live in e.algo.stat.zoo.
 
 **Result.** `oracle_imputets` equals imputeTS on 240 cases on Windows; Linux pending. L429 is partial.
+
+## D6151 — pracma: integration, polynomial fit, peaks and number-theory helpers
+
+`e.algo.stat.pracma` holds trapz, cumtrapz, polyval, polyfit (Householder QR least squares), findpeaks (the package's regular-expression scan done as run-length matching, with its threshold, height, stable decreasing sort, minimum distance and peak count options), rref (with the package's tolerance), the prime count, prime factor sum and count, extended gcd (sign follows the first argument), nchoosek and cross. Not here: quadrature, the root finders, interpolation (pchip, interp1, spline), lowess, savgol, orthogonal polynomials, the matrix functions and the polynom and caTools parts.
+
+**Result.** `oracle_pracma` equals pracma on 212 cases on Windows; Linux pending. L333 is partial.

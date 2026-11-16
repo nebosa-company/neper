@@ -268,3 +268,4 @@ oracle_geosphere
 oracle_sn
 oracle_dicedesign
 oracle_imputets
+oracle_pracma
