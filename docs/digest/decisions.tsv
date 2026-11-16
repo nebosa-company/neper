@@ -3453,4 +3453,5 @@ D6581	375	extraDistr: Skellam
 D6582	461	extraDistr: more densities
 D6583	825	lmtest: the exact dwtest p value
 D6584	778	sandwich: vcovBS types
-D6585	546	sandwich: the other wild bootstraps
+D6585	547	sandwich: the other wild bootstraps
+D6586	419	L300 closed

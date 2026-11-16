@@ -46686,3 +46686,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `vcov_bs_type` also takes types 5 mammen (`sample(c(-(sqrt 5 - 1)/2, (sqrt 5 + 1)/2), n, TRUE, prob = ((sqrt 5 + 1, sqrt 5 - 1)) / (2 sqrt 5))`), 6 webb (six equally likely values `+-sqrt(1.5)`, `+-1`, `+-sqrt(0.5)` from `sample.int(6, n, TRUE)`) and 7 norm (`rnorm(n)`).
 
 **Result.** `oracle_carlmtest` agrees with sandwich on 12 more vcovBS values at 1e-8 on Windows (2424 cases in all); Linux pending. L300 stays at 0.98: kernHAC's ARMA(1,1) option and Anova for quasi families.
+
+## D6586 — L300 closed
+
+**Decision.** L300 is delivered: the covariance estimators, the lmtest tests and the car tools of its acceptance list equal R on Windows, with the exceptions recorded in its done record (kernHAC's ARMA(1,1) approximation needs stats::arima, which is the ARIMA item's; Anova for quasi families).
+
+**Result.** L300 leaves the queue; the Linux run of oracle_carlmtest is batched with the others.
