@@ -350,10 +350,10 @@
       "group": "CRAN parity",
       "order": 583,
       "title": "SuppDists: Johnson, Kendall, Spearman and related distributions",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 711). Small. Acceptance, equal to SuppDists: d, p, q, r and moments for Johnson (all families and the fit), Kendall, Spearman, normal scores, maximum F-ratio, Pearson-type, inverse Gaussian and Friedman distributions."
+      "evidence": "Partly done (D6075): e.algo.stat.suppdists has inverse Gaussian, exact Kendall and Spearman for small N, and Johnson SN, SL, SB, SU d, p and q, equal to SuppDists on 428 values on Windows (oracle_suppdists); Linux pending. Open: large-N Edgeworth, off-support Spearman, Friedman, Kruskal-Wallis, normal scores, max F-ratio, Pearson, ghyper, moments, Johnson fit, r. Original: Open (CRAN rank 711). Small. Acceptance, equal to SuppDists: d, p, q, r and moments for Johnson (all families and the fit), Kendall, Spearman, normal scores, maximum F-ratio, Pearson-type, inverse Gaussian and Friedman distributions."
     },
     {
       "id": "L445",

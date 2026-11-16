@@ -30,7 +30,7 @@ L420	library	0	198	minpack.lm: Levenberg-Marquardt least squares	Open (CRAN rank
 L421	library	0.4	539	fdrtool: false discovery rate estimation	Partly done (D6068): e.algo.stat.fdrtool.fdrtool_pvalue (fndr cutoff, eta0, Grenander density, local fdr and q values for p values) equals fdrtool on 210 values on Windows (oracle_fdrtool);
 L423	library	0	215	biglm: bounded-memory linear and generalized linear models	Open (CRAN rank 672).
 L431	library	0	261	TSP: travelling-salesperson tools	Open (CRAN rank 631).
-L444	library	0	233	SuppDists: Johnson, Kendall, Spearman and related distributions	Open (CRAN rank 711).
+L444	library	0.3	609	SuppDists: Johnson, Kendall, Spearman and related distributions	Partly done (D6075): e.algo.stat.suppdists has inverse Gaussian, exact Kendall and Spearman for small N, and Johnson SN, SL, SB, SU d, p and q, equal to SuppDists on 428 values on Windows (oracle_supp
 L445	library	0.4	535	splines2: spline bases	Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2);
 L446	library	0	195	mixsqp: mixture proportions by SQP	Open (CRAN rank 760).
 L447	library	0.35	424	norm: EM and data augmentation for multivariate normal data	Partly done (D6074): e.algo.stat.normem has em.norm (path-exact) and loglik.norm, equal to norm on 355 values on Windows (oracle_norm);

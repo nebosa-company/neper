@@ -210,3 +210,4 @@ oracle_biasedurn
 oracle_modeest
 oracle_pastecs
 oracle_norm
+oracle_suppdists
