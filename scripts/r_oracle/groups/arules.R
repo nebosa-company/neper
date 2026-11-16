@@ -1,0 +1,21 @@
+# arules apriori on a transaction-by-item 0/1 matrix.
+#   args: (nt, nitems, supp, conf, maxlen, 0/1 matrix[nt*nitems] row-major)
+#   fn "nfreq" "sfreq" (frequent itemsets: count, sum of supports), "nrule" "srule" "sconf" "slift" (rules with at least two items)
+suppressMessages(library(arules))
+cases <- list()
+add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-11)
+set.seed(20261214)
+for (rep in 1:24) {
+  nt <- sample(40:150, 1); ni <- sample(5:12, 1); pr <- runif(ni, 0.15, 0.6)
+  m <- sapply(pr, function(p) as.numeric(runif(nt) < p)); m[m[, 1] == 1 & runif(nt) < 0.5, 2] <- 1
+  supp <- runif(1, 0.03, 0.2); conf <- runif(1, 0.1, 0.7); ml <- sample(2:5, 1)
+  tr <- as(m == 1, "transactions")
+  fi <- apriori(tr, parameter = list(supp = supp, target = "frequent itemsets", minlen = 1, maxlen = ml), control = list(verbose = FALSE))
+  ru <- apriori(tr, parameter = list(supp = supp, conf = conf, minlen = 2, maxlen = ml), control = list(verbose = FALSE))
+  a <- c(nt, ni, supp, conf, ml, as.vector(t(m)))
+  add("nfreq", a, length(fi)); add("sfreq", a, if (length(fi)) sum(quality(fi)$support) else 0)
+  add("nrule", a, length(ru))
+  q <- if (length(ru)) quality(ru) else data.frame(support = 0, confidence = 0, lift = 0)
+  add("srule", a, sum(q$support)); add("sconf", a, sum(q$confidence)); add("slift", a, sum(q$lift))
+}
+emit("arules", "arules", list(cases))

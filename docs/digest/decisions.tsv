@@ -3480,4 +3480,5 @@ D6616	661	ordinal: cumulative link models
 D6617	775	pscl: zero-inflated and hurdle Poisson
 D6618	650	tm and tidytext: weightings on a count matrix
 D6619	773	VIM: kNN imputation of one numeric variable
-D6620	879	plm: balanced-panel within, between and random effects
+D6620	880	plm: balanced-panel within, between and random effects
+D6621	721	arules: apriori by exhaustive counting

@@ -46850,3 +46850,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `plmpkg.panel` gives, for rows ordered by individual with T periods each, the within estimator (individual-demeaned OLS, variance over `NT - N - K`), the between estimator (OLS on individual means with a constant) and the Swamy-Arora random-effects estimator: `sigma2_mu = max(0, RSS_between / (N - K - 1) - sigma2_e / T)`, `theta = 1 - sqrt(sigma2_e / (sigma2_e + T sigma2_mu))`, and OLS on the quasi-demeaned data. The random-effects standard errors use the residual variance of that transformed regression, `RSS / (NT - K - 1)`, not `sigma2_e`.
 
 **Result.** `oracle_plm` agrees with plm on Windows (192 values over 6 to 30 individuals, 3 to 8 periods, 1 to 3 regressors); Linux pending. L369 stays partial: unbalanced panels, other components, two-way effects, robust covariances, tests, AER.
+
+## D6621 — arules: apriori by exhaustive counting
+
+**Decision.** `arulespkg.apriori` counts every item subset of up to 20 items over bit-mask transactions, keeps those with count at least `ceil(supp * n)` and size at most maxlen, and builds rules from each frequent itemset of two or more items with every proper non-empty subset as antecedent. The consequent is a single item: arules' Borgelt apriori mines one-item consequents, and allowing any consequent gave 121 rules where R gave 85.
+
+**Result.** `oracle_arules` agrees with arules on counts, supports, confidences and lifts on Windows (144 values); Linux pending. L462 stays partial: pruned search for many items, eclat, closed and maximal sets, other measures.

@@ -355,3 +355,4 @@ oracle_pscl
 oracle_tm
 oracle_vim
 oracle_plm
+oracle_arules

@@ -1241,10 +1241,10 @@
       "group": "CRAN parity",
       "order": 732,
       "title": "arules: association rule mining",
-      "score": 0,
+      "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 800). Mid. Acceptance, equal to arules: transactions and itemMatrix, apriori, eclat and FP-growth with support and confidence, closed and maximal itemsets, ruleInduction, interestMeasure for every measure, subset and redundant rule removal, itemFrequency."
+      "evidence": "Partial (D6621). e.algo.stat.arulespkg.apriori (frequent itemsets and single-consequent rules by exhaustive subset counting, up to 20 items, with support, confidence and lift) equals arules apriori on Windows (oracle_arules, 144 values; Linux pending). Open: candidate-pruning search for many items, eclat, closed and maximal itemsets, other interest measures, rule subsetting, sequences. Was: Open (CRAN rank 800). Mid. Acceptance, equal to arules: transactions and itemMatrix, apriori, eclat and FP-growth with support and confidence, closed and maximal itemsets, ruleInduction, interestMeasure for every measure, subset and redundant rule removal, itemFrequency."
     },
     {
       "id": "L465",
