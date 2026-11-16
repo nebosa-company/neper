@@ -330,3 +330,53 @@ fn periodic_row(t: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize, i
     }
     ret m
 }
+
+fn bern_choose(n: usize, k: usize) -> f64 {
+    var r = 1.0f64
+    var i = 1usize
+    while i <= k {
+        r = r * f64(n - k + i) / f64(i)
+        i += 1usize
+    }
+    ret r
+}
+
+// b_{i,n}(u) = C(n, i) u^i (1 - u)^(n - i); zero outside 0 <= i <= n
+fn bern_val(n: usize, i: i64, u: f64) -> f64 {
+    if i < 0i64 || usize(i) > n { ret 0.0f64 }
+    ret bern_choose(n, usize(i)) * math.pow[f64](u, f64(i)) * math.pow[f64](1.0f64 - u, f64(n) - f64(i))
+}
+
+// splines2::bernsteinPoly row at x on [lo, hi]: degree + 1 columns, the first dropped without the intercept; deriv is the derivative order (at most degree); answers the count
+fn bern_row(degree: usize, intercept: bool, lo: f64, hi: f64, deriv: usize, x: f64, out: []f64) -> usize {
+    let u = (x - lo) / (hi - lo)
+    var o = 0usize
+    var i = 0usize
+    while i <= degree {
+        if i > 0usize || intercept {
+            var v = 0.0f64
+            if deriv == 0usize {
+                v = bern_val(degree, i64(i), u)
+            } else if deriv <= degree {
+                var ff = 1.0f64
+                var q = 0usize
+                while q < deriv {
+                    ff = ff * f64(degree - q)
+                    q += 1usize
+                }
+                var j = 0usize
+                while j <= deriv {
+                    var sg = 1.0f64
+                    if (deriv - j) % 2usize == 1usize { sg = 0.0f64 - 1.0f64 }
+                    v += sg * bern_choose(deriv, j) * bern_val(degree - deriv, i64(i) - i64(j), u)
+                    j += 1usize
+                }
+                v = v * ff / math.pow[f64](hi - lo, f64(deriv))
+            }
+            out[o] = v
+            o += 1usize
+        }
+        i += 1usize
+    }
+    ret o
+}

@@ -78,4 +78,12 @@ for (rep in 1:30) {
   x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- if (nk > 0) sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)) else numeric(0); if (anyDuplicated(kn)) next
   m <- unclass(ibs(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi))); v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, 14, x, kn); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
 }
+# bernsteinPoly (kinds 15 values, 16 derivs 1, 17 derivs 2)
+for (rep in 1:30) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); degree <- sample(2:6, 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4)))
+  for (kind in 15:17) {
+    m <- unclass(bernsteinPoly(x, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = kind - 15)); v <- as.vector(t(m)); a <- c(n, 0, degree, icp, lo, hi, kind, x); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
+  }
+}
 emit("splines2", "splines2", list(cases))

@@ -47286,3 +47286,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6704 — splines2 ibs
 
 **Decision.** `ibs` (the integral of each B-spline from the left boundary knot) is the I-spline row of the next order with each column scaled by `(t[c + order + 1] - t[c + 1]) / order`, the knot span the B-spline integrates over; it is `row` kind 3 beside the I-spline kind 2, and the first column drops without the intercept as in the other bases. Linux pending.
+
+## D6705 — splines2 bernsteinPoly
+
+**Decision.** `bern_row` is the Bernstein basis of the given degree on the boundary interval, u = (x - lo) / (hi - lo), with the k-th derivative as `n!/(n-k)! (hi - lo)^-k` times the alternating binomial sum of the degree n - k basis; the first column drops without the intercept. Values, first and second derivatives equal bernsteinPoly; its integral option stays open. Linux pending.
