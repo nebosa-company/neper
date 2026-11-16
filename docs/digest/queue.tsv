@@ -168,7 +168,7 @@ L377	library	0.15	912	xgboost: gradient-boosted trees	Partial (D6632).
 L398	library	0	447	rugarch: the GARCH family	Open (CRAN rank 497).
 L441	library	0	300	msm and mstate: multi-state models	Open (CRAN ranks 642, 679).
 L442	library	0	264	phangorn: phylogenetic inference	Open (CRAN rank 666).
-L466	library	0	326	EnvStats: environmental statistics	Open (CRAN rank 708).
+L466	library	0.05	561	EnvStats: environmental statistics	D6723: e.algo.stat.envstats has rosnerTest, tolIntNormK (one-sided content, Wald-Wolfowitz, expectation) and predIntNormK (one future mean, Bonferroni), equal to EnvStats on 1852 values on Windows (or
 L495	library	0	260	mirt: item response theory	Open (CRAN rank 841).
 L496	library	0	277	fda: functional data analysis	Open (CRAN rank 838).
 L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
