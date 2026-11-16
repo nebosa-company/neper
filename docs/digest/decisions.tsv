@@ -3342,4 +3342,5 @@ D6470	588	gstat: universal and simple kriging
 D6471	697	gamlss.dist: six families' densities, GU and LO p and q
 D6472	663	gamlss.dist: seven more densities
 D6473	732	bayestestR: hdi, eti, p_direction and rope
-D6474	728	performance: lm indices
+D6474	729	performance: lm indices
+D6475	812	cubature: box integrals of fixed integrands

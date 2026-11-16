@@ -1,0 +1,34 @@
+// e.algo.stat.cubaturepkg against cubature. tests/oracle/cubaturepkg.json comes from
+// `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R cubaturepkg`; the layout is at the top of scripts/r_oracle/groups/cubaturepkg.R.
+
+use e.algo.stat.cubaturepkg as cb
+use e.io
+use e.mem
+use e.os
+use e.test.oracle as oracle
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let (golden, load_error) = oracle.load(a, "tests/oracle/cubaturepkg.json")
+    if load_error != ok { os.exit(2) }
+    if golden.cases.len == 0usize { os.exit(3) }
+    var failures = 0usize
+    var at = 0usize
+    while at < golden.cases.len {
+        let start = mem.mark(a)
+        let c = &golden.cases[at]
+        let x = c.args
+        let d = usize(x[1usize])
+        let got = cb.integral_box(a, usize(x[0usize]), d, x[2usize..2usize + d], x[2usize + d..2usize + 2usize * d], 4usize)
+        if !oracle.agrees(got, c) {
+            failures += 1usize
+            if failures <= 12usize {
+                let _ = io.print(oracle.describe(a, c, got))
+                let _ = io.print("\n")
+            }
+        }
+        mem.reset(a, start)
+        at += 1usize
+    }
+    if failures > 0usize { os.exit(1) }
+    ret ok
+}

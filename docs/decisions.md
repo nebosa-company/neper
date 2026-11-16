@@ -46018,3 +46018,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.performancepkg` is new: `lm_index` fits y on x by least squares and returns r2, adjusted r2, rmse (the root of the mean squared residual, not sigma), mae, mse, sigma, the Gaussian log-likelihood, aic, aicc (with k = p + 1 estimated parameters) and bic.
 
 **Result.** `oracle_performancepkg` equals performance on 250 cases on Windows at rel 1e-9, ten indices on each of 25 models of 20 to 120 rows and 2 to 5 columns. mae is compared with mean(abs(resid)), the quantity performance_mae returns when run on its own, because the function came back NaN inside the generator. Generalized, mixed and Bayesian models and the other indices are open; Linux pending. L339 stays partial.
+
+## D6475 — cubature: box integrals of fixed integrands
+
+`e.algo.stat.cubaturepkg` is new: `gauss_legendre` (Newton on the Legendre recurrence) and `integral_box`, a tensor 12-point Gauss-Legendre rule on a 4-per-dimension grid of sub-boxes, for four fixed smooth integrands in one to three dimensions. It reaches the value hcubature and pcubature reach to their tolerance; it is not their Genz-Malik and Clenshaw-Curtis recursion, so the error estimate and the adaptive subdivision are not covered.
+
+**Result.** `oracle_cubaturepkg` agrees with cubature on 24 cases on Windows at rel 1e-8 (the package stops at tol 1e-10), half from hcubature and half from pcubature. The adaptive algorithms, vector-valued and user integrands, infinite limits and the error estimates are open; Linux pending. L453 is partial.
