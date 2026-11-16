@@ -345,3 +345,18 @@ fn find_drawdowns(dd: []const f64, ret_v: []f64, from: []f64, trough: []f64, to:
     to[index] = f64(tt)
     ret index + 1usize
 }
+
+// the Cornish-Fisher (modified) expected shortfall as a positive loss (the operational form, as ES() uses by default)
+fn es_modified(r: []const f64, p: f64) -> f64 {
+    let alpha = 1.0f64 - p
+    let z = dist.qnorm(alpha, 0.0f64, 1.0f64, true, false)
+    let s = skew_moment(r)
+    let k = kurt_moment(r)
+    let h = z + (z * z - 1.0f64) * s / 6.0f64 + (z * z * z - 3.0f64 * z) * k / 24.0f64 - (2.0f64 * z * z * z - 5.0f64 * z) * s * s / 36.0f64
+    let h2 = h * h
+    let mes = dist.dnorm(h, 0.0f64, 1.0f64, false) * (1.0f64 + h2 * h * s / 6.0f64 + (h2 * h2 * h2 - 9.0f64 * h2 * h2 + 9.0f64 * h2 + 3.0f64) * s * s / 72.0f64 + (h2 * h2 - 2.0f64 * h2 - 1.0f64) * k / 24.0f64)
+    // operational = TRUE (the default of ES): the smaller of the Cornish-Fisher expectation and the quantile h bounds the shortfall
+    var q = 0.0f64 - mes / alpha
+    if h < q { q = h }
+    ret 0.0f64 - mean_of(r) - sd_pop(r) * q
+}

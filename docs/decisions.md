@@ -45484,3 +45484,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.perfanalytics` gains drawdowns (the running drawdown from the cumulative peak, geometric or additive) and find_drawdowns, a line-for-line port of findDrawdowns: the runs of the drawdown sign with their worst value, 1-based start, trough and end positions, so the lengths, peak-to-trough and recovery counts follow. Not here: sortDrawdowns, the table and chart helpers, modified ES and Return.calculate.
 
 **Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 460 cases on Windows; Linux pending. L408 stays partial.
+
+## D6182 — PerformanceAnalytics: modified expected shortfall
+
+`e.algo.stat.perfanalytics` gains es_modified, the Cornish-Fisher expected shortfall in the operational form that ES() uses by default: the shortfall is minus the mean minus the population standard deviation times the smaller of -MES / alpha and the Cornish-Fisher quantile h, where MES = dnorm(h) (1 + h^3 s / 6 + (h^6 - 9 h^4 + 9 h^2 + 3) s^2 / 72 + (h^4 - 2 h^2 - 1) k / 24) with the moment skewness and excess kurtosis. The plain (non-operational) form differs and can go negative for skewed series at p = 0.99, which is what the first attempt showed. Not here: the non-operational form, the portfolio and component forms and the other methods.
+
+**Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 488 cases on Windows; Linux pending. L408 stays partial.

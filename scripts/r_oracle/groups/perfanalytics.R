@@ -28,6 +28,7 @@ for (rep in 1:14) {
     add("var", a(p, 2), as.numeric(VaR(r, p = p, method = "modified", invert = FALSE)))
     add("es", a(p, 0), as.numeric(ES(r, p = p, method = "historical", invert = FALSE)))
     add("es", a(p, 1), as.numeric(ES(r, p = p, method = "gaussian", invert = FALSE)))
+    add("es", a(p, 2), as.numeric(ES(r, p = p, method = "modified", invert = FALSE)))
   }
 }
 for (rep in 1:10) {

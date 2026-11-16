@@ -58,6 +58,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "calmar") { ret pa.calmar(r, p1) }
     if str.eq(k, "sharpe") { ret pa.sharpe(r, p1) }
     if str.eq(k, "var") { ret pa.var_loss(a, r, p1, usize(p2)) }
+    if usize(p2) == 2usize { ret pa.es_modified(r, p1) }
     ret pa.es_loss(a, r, p1, usize(p2))
 }
 
