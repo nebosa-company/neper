@@ -382,3 +382,56 @@ fn mahalanobis(a: *mem.Arena, x: []const f64, y: []const f64, cov: []const f64) 
     }
     ret (math.sqrt[f64](q), ok)
 }
+
+// Gower distance of two rows over the columns both observed: the mean of |x - y| / range, the ranges taken per column
+// over the whole data (NaN is missing); `ranges[k]` is max - min of column k
+fn gower(x: []const f64, y: []const f64, ranges: []const f64) -> f64 {
+    var s = 0.0f64
+    var cnt = 0.0f64
+    var k = 0usize
+    while k < x.len {
+        if x[k] == x[k] && y[k] == y[k] {
+            s += abs_of(x[k] - y[k]) / ranges[k]
+            cnt += 1.0f64
+        }
+        k += 1usize
+    }
+    ret s / cnt
+}
+
+// Levenshtein distance as cba::sdists computes it for proxy: insertions and deletions cost 1 and a substitution
+// costs 2, so it is |a| + |b| - 2 * (the longest common subsequence)
+fn levenshtein(a: *mem.Arena, s: []const u8, t: []const u8) -> (f64, err) {
+    let n = s.len
+    let m = t.len
+    let (prev, e1) = mem.alloc[usize](a, m + 1usize)
+    let (cur, e2) = mem.alloc[usize](a, m + 1usize)
+    if e1 != ok || e2 != ok { ret (0.0f64, e1) }
+    var j = 0usize
+    while j <= m {
+        prev[j] = 0usize
+        j += 1usize
+    }
+    var i = 1usize
+    while i <= n {
+        cur[0usize] = 0usize
+        j = 1usize
+        while j <= m {
+            if s[i - 1usize] == t[j - 1usize] {
+                cur[j] = prev[j - 1usize] + 1usize
+            } else if prev[j] >= cur[j - 1usize] {
+                cur[j] = prev[j]
+            } else {
+                cur[j] = cur[j - 1usize]
+            }
+            j += 1usize
+        }
+        j = 0usize
+        while j <= m {
+            prev[j] = cur[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (f64(n + m) - 2.0f64 * f64(prev[m]), ok)
+}

@@ -20,10 +20,10 @@
       "group": "CRAN parity",
       "order": 545,
       "title": "proxy and e1071 remainder: dist and simil registry, fuzzy c-means, rwiener",
-      "score": 0.7,
+      "score": 0.85,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6023). 42 proxy measures (binary, cosine family, Minkowski family, Canberra, Wave, divergence, Kullback, Bray, Soergel, Podani, Chord, Geodesic, Whittaker, Hellinger, fJaccard), e1071 skewness and kurtosis types 1 to 3 and countpattern equal R on both hosts. Plus (D6048) the nominal family and Mahalanobis (given covariance). Open: Gower, Levenshtein, cshell, matchClasses. Also (D6092) rwiener and cmeans (euclidean, given centres) equal e1071 on 3453 values on Windows (oracle_cmeans). Was: Open (CRAN ranks 147, 152). Small to mid. Acceptance, each equal to R: proxy dist and simil for the registered measures (Jaccard, Dice, Kulczynski, Gower, Canberra, cosine, Minkowski, Mahalanobis, Hamming, Yule, Russel, Tanimoto, ...) with binary and numeric inputs; e1071 cmeans and cshell, skewness and kurtosis types 1 to 3, rwiener, bclust, countpattern, matchClasses. svm and naiveBayes exist."
+      "evidence": "Partial (D6023). 42 proxy measures (binary, cosine family, Minkowski family, Canberra, Wave, divergence, Kullback, Bray, Soergel, Podani, Chord, Geodesic, Whittaker, Hellinger, fJaccard), e1071 skewness and kurtosis types 1 to 3 and countpattern equal R on both hosts. Plus (D6048) the nominal family and Mahalanobis (given covariance). Open: cshell, matchClasses. Gower and Levenshtein (cba) equal proxy on 1082 values on Windows (D6093, oracle_proxy2). Also (D6092) rwiener and cmeans (euclidean, given centres) equal e1071 on 3453 values on Windows (oracle_cmeans). Was: Open (CRAN ranks 147, 152). Small to mid. Acceptance, each equal to R: proxy dist and simil for the registered measures (Jaccard, Dice, Kulczynski, Gower, Canberra, cosine, Minkowski, Mahalanobis, Hamming, Yule, Russel, Tanimoto, ...) with binary and numeric inputs; e1071 cmeans and cshell, skewness and kurtosis types 1 to 3, rwiener, bclust, countpattern, matchClasses. svm and naiveBayes exist."
     },
     {
       "id": "L297",

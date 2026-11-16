@@ -3164,4 +3164,5 @@ D6088	1385	classInt bclust: committee k-means on bootstrap resamples, then avera
 D6089	1251	xts first and last with period strings; merge by index
 D6090	958	xts to.period index labels; L298 closed
 D6091	1199	stats varimax and promax beside the GPA rotations
-D6092	1295	e1071 rwiener and cmeans
+D6092	1296	e1071 rwiener and cmeans
+D6093	923	proxy Gower and Levenshtein
