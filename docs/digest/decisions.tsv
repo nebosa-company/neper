@@ -3396,4 +3396,5 @@ D6524	648	modeest: vieu
 D6525	610	boot: censboot weird
 D6526	781	boot: censboot cond
 D6527	880	mvtnorm: qmvnorm
-D6528	647	mvtnorm: qmvt
+D6528	648	mvtnorm: qmvt
+D6529	608	lmtest: bgtest

@@ -37,6 +37,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(c.name, "bg_c") || str.eq(c.name, "bg_cp") || str.eq(c.name, "bg_f") || str.eq(c.name, "bg_fp") {
+        var bty = 0usize
+        if c.name[3usize] == 102u8 { bty = 1usize }
+        let (bs, bpv) = cl.bg_test(a, des, y, n, p, usize(x[2usize + n + n * p]), bty)
+        if str.eq(c.name, "bg_c") || str.eq(c.name, "bg_f") { ret bs }
+        ret bpv
+    }
     if str.eq(c.name, "nw") {
         let (dv0, e0) = mem.alloc[f64](a, p)
         if e0 != ok { os.exit(8) }

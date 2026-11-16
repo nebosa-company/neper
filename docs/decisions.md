@@ -46342,3 +46342,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `mvtq.qmvt` generalises qmvnorm: pmvt through mvtdst with the degrees of freedom, getInt with the central t margins (R passes ncp = 0, which takes pnt; the central pt differs below the interval's tolerance), and R's link choice, cauchit for df at most 7 and probit above. The glm uses pcauchy and dcauchy in the IRLS for the cauchit link, with R's `1/tanpi(p)` quantile and the `atan(1/x)` tail form of pcauchy.
 
 **Result.** `oracle_qmvnorm` agrees with mvtnorm on 60 more qmvt values (df 2 to 15, every tail) on Windows; Linux pending. TVPACK, Miwa, a mean and sigma input stay open; L301 stays partial.
+
+## D6529 — lmtest: bgtest
+
+**Decision.** `carlmtest.bg_test` runs the Breusch-Godfrey auxiliary regression of the residuals on X and the lagged residuals (the first lags filled with 0, as `fill = 0`); the Chisq statistic is `n sum(fitted^2) / sum(resid^2)` with df = order, the F statistic uses the residual sums of squares with `n - k - order` degrees of freedom.
+
+**Result.** `oracle_carlmtest` agrees with lmtest on 144 new values (orders 1, 2, 4; statistic and p value, both types) on Windows; Linux pending. Bootstrap covariances, the other lmtest tests and car's Anova stay open; L300 stays partial.

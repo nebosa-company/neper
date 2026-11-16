@@ -517,3 +517,46 @@ fn vcov_cl_diag(a: *mem.Arena, x: []const f64, n: usize, p: usize, f: *const Fit
     }
     ret ok
 }
+
+// lmtest::bgtest(order, fill = 0): type 0 Chisq (n sum(fitted^2) / sum(resid^2), df order) or 1 F; returns the statistic and its upper-tail p value
+fn bg_test(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, order: usize, ty: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (f0, e1) = ols(a, x, y, n, p)
+    if e1 != ok { ret (nan, nan) }
+    let w = p + order
+    let (xe, e2) = mem.alloc[f64](a, n * w)
+    if e2 != ok { ret (nan, nan) }
+    var i = 0usize
+    var rss0 = 0.0f64
+    while i < n {
+        var j = 0usize
+        while j < p {
+            xe[i * w + j] = x[i * p + j]
+            j += 1usize
+        }
+        var l = 1usize
+        while l <= order {
+            if i >= l { xe[i * w + p + l - 1usize] = f0.resid[i - l] } else { xe[i * w + p + l - 1usize] = 0.0f64 }
+            l += 1usize
+        }
+        rss0 += f0.resid[i] * f0.resid[i]
+        i += 1usize
+    }
+    let (f1, e3) = ols(a, xe, f0.resid, n, w)
+    if e3 != ok { ret (nan, nan) }
+    var rss1 = 0.0f64
+    var fit2 = 0.0f64
+    i = 0usize
+    while i < n {
+        rss1 += f1.resid[i] * f1.resid[i]
+        let fv = f0.resid[i] - f1.resid[i]
+        fit2 += fv * fv
+        i += 1usize
+    }
+    if ty == 0usize {
+        let bg = f64(n) * fit2 / rss0
+        ret (bg, p_chisq(bg, f64(order)))
+    }
+    let bg = ((rss0 - rss1) / f64(order)) / (rss1 / f64(n - p - order))
+    ret (bg, p_f(bg, f64(order), f64(n - p - order)))
+}
