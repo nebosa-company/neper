@@ -508,3 +508,145 @@ fn block_perms(n: usize, tab: []const usize, plot_type: u8, plot_mirror: bool, w
     }
     ret num_p * num_wi
 }
+
+// permute::allPerms, rows written row-major (rows of n entries, 1-based values), the observed ordering omitted.
+// kind 0 free (lexicographic), 1 series (cyclic shifts), 2 series with mirroring (shifts, then reversed shifts)
+// within each block; `sizes` are the contiguous block sizes (one block = the whole sample), the first block varying
+// slowest. Answers the number of rows.
+fn all_perms(a: *mem.Arena, sizes: []const usize, kind: u8, out: []i64) -> (usize, err) {
+    let nb = sizes.len
+    var n = 0usize
+    var b = 0usize
+    var maxsz = 0usize
+    while b < nb {
+        n += sizes[b]
+        if sizes[b] > maxsz { maxsz = sizes[b] }
+        b += 1usize
+    }
+    // the list of local permutations of each block, as the offsets into `lists`
+    let (cnt, e1) = mem.alloc[usize](a, nb)
+    let (cur, e2) = mem.alloc[usize](a, nb)
+    let (off, e3) = mem.alloc[usize](a, nb)
+    let (tmp, e4) = mem.alloc[usize](a, maxsz + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (0usize, e1) }
+    var total = 0usize
+    b = 0usize
+    while b < nb {
+        let m = sizes[b]
+        var c = 1usize
+        if kind == 0u8 {
+            var f = 2usize
+            while f <= m {
+                c *= f
+                f += 1usize
+            }
+        } else if kind == 1u8 || m <= 2usize { c = m } else { c = 2usize * m }
+        cnt[b] = c
+        off[b] = total
+        total += c * m
+        b += 1usize
+    }
+    let (lists, e5) = mem.alloc[i64](a, total)
+    if e5 != ok { ret (0usize, e5) }
+    b = 0usize
+    while b < nb {
+        let m = sizes[b]
+        var r = 0usize
+        if kind == 0u8 {
+            var i = 0usize
+            while i < m {
+                tmp[i] = i
+                i += 1usize
+            }
+            while true {
+                i = 0usize
+                while i < m {
+                    lists[off[b] + r * m + i] = i64(tmp[i]) + 1i64
+                    i += 1usize
+                }
+                r += 1usize
+                // next lexicographic permutation
+                var k = m
+                var found = false
+                while k >= 2usize {
+                    if tmp[k - 2usize] < tmp[k - 1usize] {
+                        found = true
+                        break
+                    }
+                    k -= 1usize
+                }
+                if !found { break }
+                var l = m - 1usize
+                while tmp[l] < tmp[k - 2usize] { l -= 1usize }
+                let t = tmp[k - 2usize]
+                tmp[k - 2usize] = tmp[l]
+                tmp[l] = t
+                var lo = k - 1usize
+                var hi = m - 1usize
+                while lo < hi {
+                    let u = tmp[lo]
+                    tmp[lo] = tmp[hi]
+                    tmp[hi] = u
+                    lo += 1usize
+                    hi -= 1usize
+                }
+            }
+        } else {
+            var s = 0usize
+            while s < m {
+                var i = 0usize
+                while i < m {
+                    lists[off[b] + r * m + i] = i64((i + s) % m) + 1i64
+                    i += 1usize
+                }
+                r += 1usize
+                s += 1usize
+            }
+            if kind == 2u8 && m > 2usize {
+                s = 0usize
+                while s < m {
+                    var i = 0usize
+                    while i < m {
+                        lists[off[b] + r * m + i] = i64((s + m - i % m) % m) + 1i64
+                        i += 1usize
+                    }
+                    r += 1usize
+                    s += 1usize
+                }
+            }
+        }
+        cur[b] = 0usize
+        b += 1usize
+    }
+    var rows = 0usize
+    var first = true
+    var go = true
+    while go {
+        if first {
+            first = false
+        } else {
+            var col = 0usize
+            b = 0usize
+            while b < nb {
+                var j = 0usize
+                while j < sizes[b] {
+                    out[rows * n + col + j] = lists[off[b] + cur[b] * sizes[b] + j] + i64(col)
+                    j += 1usize
+                }
+                col += sizes[b]
+                b += 1usize
+            }
+            rows += 1usize
+        }
+        // odometer: the last block varies fastest
+        var k = nb
+        var carry = true
+        while carry && k > 0usize {
+            k -= 1usize
+            cur[k] += 1usize
+            if cur[k] < cnt[k] { carry = false } else { cur[k] = 0usize }
+        }
+        if carry { go = false }
+    }
+    ret (rows, ok)
+}

@@ -9,7 +9,7 @@ L302	library	0.7	833	GPArotation: gradient projection rotations	Partial (D6026).
 L303	library	0.3	539	urca: unit-root and cointegration tests	Partial (D6027).
 L321	library	0.65	572	boot: bootstrap and permutation confidence intervals	Partial (D6028, D6079): balanced and parametric (normal) simulation equal boot on 936 more values on Windows (oracle_boot2).
 L322	library	0.5	578	class and FNN: knn variants, SOM, LVQ, entropy estimators	Partial (D6029, D6080): FNN entropy, KL.divergence and mutinfo equal FNN on 338 values on Windows (oracle_fnn).
-L323	library	0.5	450	permute: restricted permutation designs	Partial (D6030).
+L323	library	0.65	606	permute: restricted permutation designs	Partial (D6030, D6081): allPerms for free, series and mirrored series, alone and within blocks, equals permute on 90 values on Windows (oracle_allperms).
 L325	library	0.3	472	KernSmooth and tseries remainder	Partial (D6031).
 L326	library	0.6	404	quantmod and TTR: technical indicators	Partial (D6032).
 L329	library	0.6	445	ggsci and ggthemes palettes	Partial (D6034).
