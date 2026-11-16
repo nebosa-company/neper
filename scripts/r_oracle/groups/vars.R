@@ -27,4 +27,11 @@ for (rep in 1:15) {
   tot <- 0; pos <- 0; for (imp in names(io)) for (i in 0:h) for (j in seq_len(K)) { pos <- pos + 1; tot <- tot + io[[imp]][i + 1, j] * pos }
   add("oirf", a, tot)
 }
+for (rep in 1:16) {
+  K <- sample(2:3, 1); T0 <- sample(50:100, 1); p <- sample(1:3, 1); dt <- (rep - 1) %% 4
+  A <- matrix(runif(K * K, -0.3, 0.3), K, K); y <- matrix(0, T0, K); for (t in 2:T0) y[t, ] <- A %*% y[t - 1, ] + rnorm(K) + 0.02 * t; y <- round(y, 5); colnames(y) <- paste0("s", 1:K)
+  ty <- c("none", "const", "trend", "both")[dt + 1]
+  v <- VAR(y, p = p, type = ty); B <- Bcoef(v)
+  add("coefd", c(T0, K, p, dt, as.vector(t(y))), sum(as.vector(t(B)) * seq_len(length(B))))
+}
 emit("vars", "vars", list(cases))

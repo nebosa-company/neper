@@ -20,6 +20,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(nm, "hq") { ret vr.var_select(a, y, t0, k, p, lm, 1usize) }
     if str.eq(nm, "sc") { ret vr.var_select(a, y, t0, k, p, lm, 2usize) }
     if str.eq(nm, "fpe") { ret vr.var_select(a, y, t0, k, p, lm, 3usize) }
+    if str.eq(nm, "coefd") {
+        let nd = vr.det_count(lm)
+        let wd = k * p + nd
+        let (cd, h1) = mem.alloc[f64](a, k * wd)
+        if h1 != ok { os.exit(19) }
+        let (rd, h2) = mem.alloc[f64](a, (t0 - p) * k)
+        if h2 != ok { os.exit(20) }
+        if vr.var_fit_det(a, y, t0, k, p, lm, cd, rd) != ok { os.exit(21) }
+        var sd = 0.0f64
+        var qd = 0usize
+        while qd < k * wd {
+            sd += cd[qd] * f64(qd + 1usize)
+            qd += 1usize
+        }
+        ret sd
+    }
     if str.eq(nm, "fcst") || str.eq(nm, "irf") || str.eq(nm, "oirf") {
         let rows = t0 - p
         let w = k * p + 1usize

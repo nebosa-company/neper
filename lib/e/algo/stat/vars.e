@@ -286,3 +286,63 @@ fn var_oirf(phi: []const f64, p: []const f64, k: usize, h: usize, out: []f64) {
         s += 1usize
     }
 }
+
+// deterministic terms: 0 none, 1 const, 2 trend, 3 both; the trend is the 1-based observation index as in vars (p + 1 .. T)
+fn det_count(det: usize) -> usize {
+    if det == 0usize { ret 0usize }
+    if det == 3usize { ret 2usize }
+    ret 1usize
+}
+
+// var_fit with the deterministic terms `det` (columns after the lags: const then trend); coef is k rows of k p + det_count columns
+fn var_fit_det(a: *mem.Arena, y: []const f64, t0: usize, k: usize, p: usize, det: usize, coef: []f64, resid: []f64) -> err {
+    let rows = t0 - p
+    let nd = det_count(det)
+    let w = k * p + nd
+    let (x, e1) = mem.alloc[f64](a, rows * w)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < rows {
+        let t = p + i
+        var l = 0usize
+        while l < p {
+            var j = 0usize
+            while j < k {
+                x[i * w + l * k + j] = y[(t - 1usize - l) * k + j]
+                j += 1usize
+            }
+            l += 1usize
+        }
+        var c = k * p
+        if det == 1usize || det == 3usize {
+            x[i * w + c] = 1.0f64
+            c += 1usize
+        }
+        if det >= 2usize { x[i * w + c] = f64(t + 1usize) }
+        i += 1usize
+    }
+    let (yy, e2) = mem.alloc[f64](a, rows)
+    if e2 != ok { ret e2 }
+    var j = 0usize
+    while j < k {
+        i = 0usize
+        while i < rows {
+            yy[i] = y[(p + i) * k + j]
+            i += 1usize
+        }
+        let (f, e3) = ols.ols(a, x, yy, rows, w)
+        if e3 != ok { ret e3 }
+        var q = 0usize
+        while q < w {
+            coef[j * w + q] = f.beta[q]
+            q += 1usize
+        }
+        i = 0usize
+        while i < rows {
+            resid[i * k + j] = f.resid[i]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}

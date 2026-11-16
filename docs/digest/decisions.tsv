@@ -3306,4 +3306,5 @@ D6434	1016	rpart: the anova regression tree
 D6435	1360	rpart: classification trees (gini) with cost-complexity pruning
 D6436	956	vars: VAR estimation and lag selection
 D6437	422	vars: forecasts and impulse responses
-D6438	299	vars: orthogonalised impulse responses
+D6438	300	vars: orthogonalised impulse responses
+D6439	362	vars: deterministic term types

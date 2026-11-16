@@ -45802,3 +45802,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.vars` gains `var_chol` (lower Cholesky of summary()'s residual covariance) and `var_oirf` (Phi_s P), the irf(ortho = TRUE) responses.
 
 **Result.** `oracle_vars` equals vars on 165 cases on Windows; Linux pending. L433 stays partial.
+
+## D6439 — vars: deterministic term types
+
+`e.algo.stat.vars` gains `var_fit_det`: VAR with none, const, trend or both, the trend being the 1-based observation index (p + 1 .. T) as in vars, columns ordered lags, const, trend.
+
+**Result.** `oracle_vars` equals vars on 181 cases on Windows, 16 of them across the four types; Linux pending. L433 stays partial.
