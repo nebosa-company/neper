@@ -11,6 +11,20 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "sg") {
+        let wn = usize(x[1usize])
+        let po = usize(x[2usize])
+        let (o, e) = mem.alloc[f64](a, wn)
+        if e != ok { os.exit(5) }
+        if sp.sgolay_center(a, po, wn, o) != ok { os.exit(6) }
+        var q = 0usize
+        var tt = 0.0f64
+        while q < wn {
+            tt += o[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret tt
+    }
     let n = usize(x[1usize])
     let w = x[2usize]
     var s = 0.0f64

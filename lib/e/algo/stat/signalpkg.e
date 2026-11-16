@@ -210,3 +210,89 @@ fn freqz_at(b: []const f64, a: []const f64, w: f64) -> (f64, f64) {
     let den = ar * ar + ai * ai
     ret ((br * ar + bi * ai) / den, (bi * ar - br * ai) / den)
 }
+
+// the central row of sgolay(p, n): the weights of the Savitzky-Golay smoother of polynomial order p over a window of n (odd) points
+fn sgolay_center(a: *mem.Arena, p: usize, n: usize, out: []f64) -> err {
+    let q = p + 1usize
+    let half = (n - 1usize) / 2usize
+    let (g, e1) = mem.alloc[f64](a, q * q)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < q {
+        var j = 0usize
+        while j < q {
+            var s = 0.0f64
+            var k = 0usize
+            while k < n {
+                let t = f64(k) - f64(half)
+                s += math.pow[f64](t, f64(i + j))
+                k += 1usize
+            }
+            g[i * q + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // solve G c = e0 by Gauss-Jordan with partial pivoting
+    let (aug, e2) = mem.alloc[f64](a, q * (q + 1usize))
+    if e2 != ok { ret e2 }
+    i = 0usize
+    while i < q {
+        var j = 0usize
+        while j < q {
+            aug[i * (q + 1usize) + j] = g[i * q + j]
+            j += 1usize
+        }
+        aug[i * (q + 1usize) + q] = 0.0f64
+        i += 1usize
+    }
+    aug[q] = 1.0f64
+    var c = 0usize
+    while c < q {
+        var piv = c
+        var r = c + 1usize
+        while r < q {
+            if math.abs[f64](aug[r * (q + 1usize) + c]) > math.abs[f64](aug[piv * (q + 1usize) + c]) { piv = r }
+            r += 1usize
+        }
+        var j = 0usize
+        while j <= q {
+            let t = aug[c * (q + 1usize) + j]
+            aug[c * (q + 1usize) + j] = aug[piv * (q + 1usize) + j]
+            aug[piv * (q + 1usize) + j] = t
+            j += 1usize
+        }
+        let d = aug[c * (q + 1usize) + c]
+        j = 0usize
+        while j <= q {
+            aug[c * (q + 1usize) + j] = aug[c * (q + 1usize) + j] / d
+            j += 1usize
+        }
+        r = 0usize
+        while r < q {
+            if r != c {
+                let f = aug[r * (q + 1usize) + c]
+                j = 0usize
+                while j <= q {
+                    aug[r * (q + 1usize) + j] -= f * aug[c * (q + 1usize) + j]
+                    j += 1usize
+                }
+            }
+            r += 1usize
+        }
+        c += 1usize
+    }
+    var k = 0usize
+    while k < n {
+        let t = f64(k) - f64(half)
+        var s = 0.0f64
+        var j = 0usize
+        while j < q {
+            s += aug[j * (q + 1usize) + q] * math.pow[f64](t, f64(j))
+            j += 1usize
+        }
+        out[k] = s
+        k += 1usize
+    }
+    ret ok
+}

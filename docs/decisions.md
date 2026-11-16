@@ -45502,3 +45502,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.agricolae` computes the one-way group means, sizes, residual mean square and degrees of freedom, and for any pair of groups the difference of means, its p value and the confidence limits for LSD.test (unadjusted t), HSD.test (Tukey, studentised range at the pair's own harmonic-mean standard error) and scheffe.test, for balanced and unbalanced groups. The package rounds the printed p values to four decimals, so the oracle compares them to that granularity and the limits to full precision. Not here: SNK.test and duncan.test (their standard error for unbalanced groups was not the pairwise one and was not recovered, so they are left out rather than approximated), waller.test, the grouping letters, the non-parametric post-hoc tests, the design functions and AMMI.
 
 **Result.** `oracle_agricolae` equals agricolae on 168 cases on Windows; Linux pending. L396 is partial.
+
+## D6185 — signal: Savitzky-Golay smoothing weights
+
+`e.algo.stat.signalpkg` gains sgolay_center, the central row of sgolay(p, n): the weights of the polynomial smoother of order p over an odd window of n points, from the normal equations of the Vandermonde basis (the first row of the pseudo-inverse of the window's polynomial matrix). It equals signal's to 1e-8 for windows up to 21 and orders up to 5. Not here: the other rows (edge filters), derivatives, sgolayfilt's edge handling and the remaining designs.
+
+**Result.** `oracle_signalpkg` equals signal on 170 cases on Windows; Linux pending. L340 stays partial.

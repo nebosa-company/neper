@@ -22,4 +22,9 @@ for (rep in 1:20) {
   fr <- freqz(bt$b, bt$a, c(0.1, 0.5, 1.2, 2.0, 3.0))
   add("fre", c(hi, n, w), sum(Re(fr$h) * 1:5)); add("fim", c(hi, n, w), sum(Im(fr$h) * 1:5))
 }
+for (rep in 1:20) {
+  n <- sample(c(5, 7, 9, 11, 13, 15, 21), 1); p <- sample(1:min(5, n - 2), 1)
+  sg <- sgolay(p, n); ce <- sg[(n + 1) / 2, ]
+  add("sg", c(0, n, p), sum(ce * seq_along(ce)))
+}
 emit("signalpkg", "signal", list(cases))
