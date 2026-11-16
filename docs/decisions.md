@@ -46826,3 +46826,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `ordinalpkg.clm` maximises the cumulative-link likelihood `P(y <= j) = F(theta_j - x beta)` for logit, probit and cloglog by Newton's method with step halving, on the analytic gradient and Hessian built from the link's F, f and f'; thresholds start at the link of the observed cumulative proportions and coefficients at zero.
 
 **Result.** `oracle_ordinal` agrees with `ordinal::clm` on log-likelihood, thresholds and coefficients at 1e-6 on Windows (69 values, three to five classes); Linux pending. L393 stays partial: nominal and scale effects, other threshold structures and links, weights, clmm.
+
+## D6617 — pscl: zero-inflated and hurdle Poisson
+
+**Decision.** `psclpkg.zeroinfl` maximises the zero-inflated Poisson likelihood jointly in the count and zero coefficients by Newton with the analytic Hessian (cross block included), starting from the plain Poisson fit and zero zero-part coefficients; `hurdle` fits the zero-truncated Poisson count part on the positive rows and the logistic zero part on `y > 0` separately, each by the same Newton. Both are compared at the optimum, with R fitted at reltol 1e-14.
+
+**Result.** `oracle_pscl` agrees with `pscl::zeroinfl` and `pscl::hurdle` on log-likelihood and coefficients at 1e-4 on Windows (72 values); Linux pending. L412 stays partial: other count families and zero links, offsets, weights, standard errors, vuong.
