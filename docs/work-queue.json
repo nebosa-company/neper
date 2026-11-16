@@ -130,10 +130,10 @@
       "group": "CRAN parity",
       "order": 537,
       "title": "KernSmooth and tseries remainder",
-      "score": 0.3,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6031). KernSmooth bkde and dpik, tseries jarque.bera.test and runs.test equal R on Windows (Linux pending). Open: bkde2D, locpoly, dpill, bds.test, white.test, terasvirta.test, tsbootstrap, portfolio.optim. Was: Open (CRAN ranks 273, 241). Small. Acceptance, equal to R: KernSmooth bkde, bkde2D, locpoly, dpik, dpih, dpill; tseries jarque.bera.test, bds.test, runs.test, white.test, terasvirta.test, tsbootstrap, portfolio.optim. adf, kpss and pp come with L303."
+      "evidence": "Partial (D6031, D6082): KernSmooth locpoly (scalar bandwidth, normal kernel) equals R on 150 values on Windows (oracle_locpoly). Earlier:  KernSmooth bkde and dpik, tseries jarque.bera.test and runs.test equal R on Windows (Linux pending). Open: bkde2D, dpill, bds.test, white.test, terasvirta.test, tsbootstrap, portfolio.optim. Was: Open (CRAN ranks 273, 241). Small. Acceptance, equal to R: KernSmooth bkde, bkde2D, locpoly, dpik, dpih, dpill; tseries jarque.bera.test, bds.test, runs.test, white.test, terasvirta.test, tsbootstrap, portfolio.optim. adf, kpss and pp come with L303."
     },
     {
       "id": "L326",
