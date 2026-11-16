@@ -3187,4 +3187,5 @@ D6111	1131	colorspace lighten, darken, max_chroma, polar coordinates, APCA, rain
 D6112	1181	mvtnorm Genz-Bretz: pmvnorm and pmvt draw for draw
 D6113	1390	leaps: nbest above 1, force.in, force.out and seqrep
 D6114	501	leaps observation weights close L330
-D6115	1171	GPArotation simplimax, bifactor, bi-geomin, Cureton-Mulaik, legacy and Cayley close L302
+D6115	1172	GPArotation simplimax, bifactor, bi-geomin, Cureton-Mulaik, legacy and Cayley close L302
+D6116	978	urca ur.pp, ur.ers and ur.za

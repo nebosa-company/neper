@@ -240,3 +240,4 @@ oracle_matchclass
 oracle_cshell
 oracle_hclops
 oracle_mvt
+oracle_urca2
