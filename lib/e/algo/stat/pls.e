@@ -1297,6 +1297,12 @@ fn cppls(a: *mem.Arena, x0: []const f64, y0: []const f64, n: usize, p: usize, q:
 
 // cppls with the extra response columns ya (n by qa, row-major, centred like Y when centring) that enter the weights but not the canonical side or the coefficients (Y.add)
 fn cppls_add(a: *mem.Arena, x0: []const f64, y0: []const f64, ya0: []const f64, qa: usize, n: usize, p: usize, q: usize, ncomp: usize, doc: bool) -> (Pls, err) {
+    let (r1, e1) = cppls_gen(a, x0, y0, ya0, qa, n, p, q, ncomp, doc, false, 0.5f64, 0.5f64)
+    ret (r1, e1)
+}
+
+// cppls.fit with the power search of lower and upper (usepow; trunc.pow = FALSE)
+fn cppls_gen(a: *mem.Arena, x0: []const f64, y0: []const f64, ya0: []const f64, qa: usize, n: usize, p: usize, q: usize, ncomp: usize, doc: bool, usepow: bool, lower: f64, upper: f64) -> (Pls, err) {
     let qt = q + qa
     var none: Pls = zero
     let (xo, xm, e1) = centre(a, x0, n, p, doc)
@@ -1356,105 +1362,16 @@ fn cppls_add(a: *mem.Arena, x0: []const f64, y0: []const f64, ya0: []const f64, 
     if e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok { ret (none, e13) }
     var ac = 0usize
     while ac < ncomp {
+        if usepow {
+            let pw0 = pow_weight(a, x, n, p, yall, qt, y, q, lower, upper, wa)
+            if pw0 != ok { ret (none, pw0) }
+        } else {
         let (w0, e20) = tmm(a, x, yall, n, p, qt)
         if e20 != ok { ret (none, e20) }
         let (z, e21) = mm(a, x, w0, n, p, qt)
         if e21 != ok { ret (none, e21) }
-        // cancorr(Z, Yprim): column-pivoted Gram-Schmidt bases Qx of Z (Z[, piv] = Qx Rx) and Qy of Yprim with R's rank rule, the first left singular vector u of Qx'Qy, and a = Rx^-1 u
-        let (qx, e22) = mem.alloc[f64](a, n * qt)
-        let (rx, e23) = mem.alloc[f64](a, qt * qt)
-        let (kx, e24) = mem.alloc[usize](a, qt)
-        if e22 != ok { ret (none, e22) }
-        if e23 != ok { ret (none, e23) }
-        if e24 != ok { ret (none, e24) }
-        let (dx, pe1) = pgs(a, z, n, qt, qx, rx, kx)
-        if pe1 != ok { ret (none, pe1) }
-        let (qy, e25) = mem.alloc[f64](a, n * q)
-        let (ry, e25b) = mem.alloc[f64](a, q * q)
-        let (ky, e25c) = mem.alloc[usize](a, q)
-        if e25 != ok { ret (none, e25) }
-        if e25b != ok { ret (none, e25b) }
-        if e25c != ok { ret (none, e25c) }
-        let (dy, pe2) = pgs(a, y, n, q, qy, ry, ky)
-        if pe2 != ok { ret (none, pe2) }
-        // S = Qx' Qy (dx by dy) and S S' (dx by dx)
-        let (sm0, e26) = mem.alloc[f64](a, dx * dy)
-        let (ss0, e27) = mem.alloc[f64](a, dx * dx)
-        if e26 != ok { ret (none, e26) }
-        if e27 != ok { ret (none, e27) }
-        var r = 0usize
-        while r < dx {
-            var c = 0usize
-            while c < dy {
-                var sacc = 0.0f64
-                i = 0usize
-                while i < n {
-                    sacc += qx[i * qt + r] * qy[i * q + c]
-                    i += 1usize
-                }
-                sm0[r * dy + c] = sacc
-                c += 1usize
-            }
-            r += 1usize
-        }
-        r = 0usize
-        while r < dx {
-            var c = 0usize
-            while c < dx {
-                var sacc = 0.0f64
-                var l = 0usize
-                while l < dy {
-                    sacc += sm0[r * dy + l] * sm0[c * dy + l]
-                    l += 1usize
-                }
-                ss0[r * dx + c] = sacc
-                c += 1usize
-            }
-            r += 1usize
-        }
-        let (eg, ege) = decomp.eigen(a, ss0, dx)
-        if ege != ok { ret (none, ege) }
-        var best = 0usize
-        r = 1usize
-        while r < dx {
-            if eg.re[r] > eg.re[best] { best = r }
-            r += 1usize
-        }
-        var kk = 0usize
-        var bm = 0.0f64
-        r = 0usize
-        while r < dx {
-            let md = eg.vre[best * dx + r] * eg.vre[best * dx + r] + eg.vim[best * dx + r] * eg.vim[best * dx + r]
-            if md > bm {
-                bm = md
-                kk = r
-            }
-            r += 1usize
-        }
-        let pr = eg.vre[best * dx + kk] / math.sqrt[f64](bm)
-        let pim = eg.vim[best * dx + kk] / math.sqrt[f64](bm)
-        r = 0usize
-        while r < dx {
-            v2[r] = eg.vre[best * dx + r] * pr + eg.vim[best * dx + r] * pim
-            r += 1usize
-        }
-        // a = Rx^-1 u by back-substitution, placed at the kept columns of Z
-        r = 0usize
-        while r < qt {
-            v[r] = 0.0f64
-            r += 1usize
-        }
-        var ri2 = dx
-        while ri2 > 0usize {
-            ri2 -= 1usize
-            var sacc = v2[ri2]
-            var l = ri2 + 1usize
-            while l < dx {
-                sacc -= rx[ri2 * qt + kx[l]] * v[kx[l]]
-                l += 1usize
-            }
-            v[kx[ri2]] = sacc / rx[ri2 * qt + kx[ri2]]
-        }
+        let (rho0, ce0) = cancorr1(a, z, n, qt, y, q, v, v2)
+        if ce0 != ok { ret (none, ce0) }
         // a = Szz^-1 Szy Syy^-1 (Szy' ...) : the canonical vector of Z is Szz^-1 Szy u with u the Y-side eigenvector; v here is the Z-side eigenvector already
         i = 0usize
         while i < p {
@@ -1466,6 +1383,7 @@ fn cppls_add(a: *mem.Arena, x0: []const f64, y0: []const f64, ya0: []const f64, 
             }
             wa[i] = s
             i += 1usize
+        }
         }
         var nw = 0.0f64
         i = 0usize
@@ -1756,4 +1674,387 @@ fn pgs(a: *mem.Arena, zm: []const f64, n: usize, c: usize, qout: []f64, rfull: [
         j += 1usize
     }
     ret (d, ok)
+}
+
+// cancorr(z, y): the first canonical vector in the column space of z (n by qt) against y (n by q) by column-pivoted Gram-Schmidt (R rank rule) and the first left singular vector; v receives it (qt values), v2 is scratch; returns the first squared canonical correlation (clamped to [0, 1])
+fn cancorr1(a: *mem.Arena, z: []const f64, n: usize, qt: usize, y: []const f64, q: usize, v: []f64, v2: []f64) -> (f64, err) {
+    var i = 0usize
+        // cancorr(Z, Yprim): column-pivoted Gram-Schmidt bases Qx of Z (Z[, piv] = Qx Rx) and Qy of Yprim with R's rank rule, the first left singular vector u of Qx'Qy, and a = Rx^-1 u
+        let (qx, e22) = mem.alloc[f64](a, n * qt)
+        let (rx, e23) = mem.alloc[f64](a, qt * qt)
+        let (kx, e24) = mem.alloc[usize](a, qt)
+        if e22 != ok { ret (0.0f64, e22) }
+        if e23 != ok { ret (0.0f64, e23) }
+        if e24 != ok { ret (0.0f64, e24) }
+        let (dx, pe1) = pgs(a, z, n, qt, qx, rx, kx)
+        if pe1 != ok { ret (0.0f64, pe1) }
+        let (qy, e25) = mem.alloc[f64](a, n * q)
+        let (ry, e25b) = mem.alloc[f64](a, q * q)
+        let (ky, e25c) = mem.alloc[usize](a, q)
+        if e25 != ok { ret (0.0f64, e25) }
+        if e25b != ok { ret (0.0f64, e25b) }
+        if e25c != ok { ret (0.0f64, e25c) }
+        let (dy, pe2) = pgs(a, y, n, q, qy, ry, ky)
+        if pe2 != ok { ret (0.0f64, pe2) }
+        // S = Qx' Qy (dx by dy) and S S' (dx by dx)
+        let (sm0, e26) = mem.alloc[f64](a, dx * dy)
+        let (ss0, e27) = mem.alloc[f64](a, dx * dx)
+        if e26 != ok { ret (0.0f64, e26) }
+        if e27 != ok { ret (0.0f64, e27) }
+        var r = 0usize
+        while r < dx {
+            var c = 0usize
+            while c < dy {
+                var sacc = 0.0f64
+                i = 0usize
+                while i < n {
+                    sacc += qx[i * qt + r] * qy[i * q + c]
+                    i += 1usize
+                }
+                sm0[r * dy + c] = sacc
+                c += 1usize
+            }
+            r += 1usize
+        }
+        r = 0usize
+        while r < dx {
+            var c = 0usize
+            while c < dx {
+                var sacc = 0.0f64
+                var l = 0usize
+                while l < dy {
+                    sacc += sm0[r * dy + l] * sm0[c * dy + l]
+                    l += 1usize
+                }
+                ss0[r * dx + c] = sacc
+                c += 1usize
+            }
+            r += 1usize
+        }
+        let (eg, ege) = decomp.eigen(a, ss0, dx)
+        if ege != ok { ret (0.0f64, ege) }
+        var best = 0usize
+        r = 1usize
+        while r < dx {
+            if eg.re[r] > eg.re[best] { best = r }
+            r += 1usize
+        }
+        var kk = 0usize
+        var bm = 0.0f64
+        r = 0usize
+        while r < dx {
+            let md = eg.vre[best * dx + r] * eg.vre[best * dx + r] + eg.vim[best * dx + r] * eg.vim[best * dx + r]
+            if md > bm {
+                bm = md
+                kk = r
+            }
+            r += 1usize
+        }
+        let pr = eg.vre[best * dx + kk] / math.sqrt[f64](bm)
+        let pim = eg.vim[best * dx + kk] / math.sqrt[f64](bm)
+        r = 0usize
+        while r < dx {
+            v2[r] = eg.vre[best * dx + r] * pr + eg.vim[best * dx + r] * pim
+            r += 1usize
+        }
+        // a = Rx^-1 u by back-substitution, placed at the kept columns of Z
+        r = 0usize
+        while r < qt {
+            v[r] = 0.0f64
+            r += 1usize
+        }
+        var ri2 = dx
+        while ri2 > 0usize {
+            ri2 -= 1usize
+            var sacc = v2[ri2]
+            var l = ri2 + 1usize
+            while l < dx {
+                sacc -= rx[ri2 * qt + kx[l]] * v[kx[l]]
+                l += 1usize
+            }
+            v[kx[ri2]] = sacc / rx[ri2 * qt + kx[ri2]]
+        }
+    var rho = eg.re[best]
+    if rho > 1.0f64 { rho = 1.0f64 }
+    if rho < 0.0f64 { rho = 0.0f64 }
+    ret (rho, ok)
+}
+
+// the squared first canonical correlation of X W0(pw) against y for the weight matrix of power pw (scale sv, correlations cm, signs sg, p by qt); returns it with the number of columns of W0 (1 at pw = 0 or 1)
+fn pow_rho(a: *mem.Arena, x: []const f64, n: usize, p: usize, qt: usize, sg: []const f64, cm: []const f64, sv: []const f64, y: []const f64, q: usize, pw: f64, w0: []f64, v: []f64, v2: []f64) -> (f64, usize, err) {
+    var m = qt
+    var i = 0usize
+    if pw == 0.0f64 || pw == 1.0f64 {
+        m = 1usize
+        var mx = 0.0f64
+        i = 0usize
+        if pw == 0.0f64 {
+            while i < p {
+                if sv[i] > mx { mx = sv[i] }
+                i += 1usize
+            }
+            i = 0usize
+            while i < p {
+                w0[i] = 0.0f64
+                if sv[i] >= mx { w0[i] = sv[i] }
+                i += 1usize
+            }
+        } else {
+            while i < p * qt {
+                if cm[i] > mx { mx = cm[i] }
+                i += 1usize
+            }
+            i = 0usize
+            while i < p {
+                var s = 0.0f64
+                var c = 0usize
+                while c < qt {
+                    if cm[i * qt + c] >= mx { s += cm[i * qt + c] }
+                    c += 1usize
+                }
+                w0[i] = s
+                i += 1usize
+            }
+        }
+    } else {
+        i = 0usize
+        while i < p {
+            let sp = math.pow[f64](sv[i], (1.0f64 - pw) / pw)
+            var c = 0usize
+            while c < qt {
+                w0[i * qt + c] = sg[i * qt + c] * math.pow[f64](cm[i * qt + c], pw / (1.0f64 - pw)) * sp
+                c += 1usize
+            }
+            i += 1usize
+        }
+    }
+    let (w0s, e1) = mem.alloc[f64](a, p * m)
+    if e1 != ok { ret (0.0f64, m, e1) }
+    i = 0usize
+    while i < p * m {
+        w0s[i] = w0[i]
+        i += 1usize
+    }
+    let (z, e2) = mm(a, x, w0s, n, p, m)
+    if e2 != ok { ret (0.0f64, m, e2) }
+    let (rho, e3) = cancorr1(a, z, n, m, y, q, v, v2)
+    ret (rho, m, e3)
+}
+
+// the weight vector of cppls.fit's RcalP (trunc.pow = FALSE, no weights): CorrXY scales, the best power in [lower, upper] by R's optimize (tol 1e-4) compared with the two ends, then w = W0 a
+fn pow_weight(a: *mem.Arena, x: []const f64, n: usize, p: usize, yall: []const f64, qt: usize, y: []const f64, q: usize, lower: f64, upper: f64, wa: []f64) -> err {
+    let (sg, e1) = mem.alloc[f64](a, p * qt)
+    let (cm, e2) = mem.alloc[f64](a, p * qt)
+    let (sv, e3) = mem.alloc[f64](a, p)
+    let (w0, e4) = mem.alloc[f64](a, p * qt)
+    let (v, e5) = mem.alloc[f64](a, qt)
+    let (v2, e6) = mem.alloc[f64](a, qt)
+    let (xc, e7) = mem.alloc[f64](a, n * p)
+    let (yc, e8) = mem.alloc[f64](a, n * qt)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
+    if e7 != ok { ret e7 }
+    if e8 != ok { ret e8 }
+    let nf = f64(n)
+    var i = 0usize
+    var j = 0usize
+    while j < p {
+        var m = 0.0f64
+        i = 0usize
+        while i < n {
+            m += x[i * p + j]
+            i += 1usize
+        }
+        m = m / nf
+        i = 0usize
+        while i < n {
+            xc[i * p + j] = x[i * p + j] - m
+            i += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < qt {
+        var m = 0.0f64
+        i = 0usize
+        while i < n {
+            m += yall[i * qt + j]
+            i += 1usize
+        }
+        m = m / nf
+        i = 0usize
+        while i < n {
+            yc[i * qt + j] = yall[i * qt + j] - m
+            i += 1usize
+        }
+        j += 1usize
+    }
+    var mxs = 0.0f64
+    j = 0usize
+    while j < p {
+        var s2 = 0.0f64
+        i = 0usize
+        while i < n {
+            s2 += xc[i * p + j] * xc[i * p + j]
+            i += 1usize
+        }
+        let sd = math.sqrt[f64](s2 / nf)
+        var sdu = sd
+        if sd == 0.0f64 { sdu = 1.0f64 }
+        var c = 0usize
+        while c < qt {
+            var s3 = 0.0f64
+            var sy = 0.0f64
+            i = 0usize
+            while i < n {
+                s3 += xc[i * p + j] * yc[i * qt + c]
+                sy += yc[i * qt + c] * yc[i * qt + c]
+                i += 1usize
+            }
+            var cv = s3 / (nf * sdu * math.sqrt[f64](sy / nf))
+            if sd == 0.0f64 { cv = 0.0f64 }
+            var sgn = 0.0f64
+            if cv > 0.0f64 { sgn = 1.0f64 }
+            if cv < 0.0f64 { sgn = 0.0f64 - 1.0f64 }
+            sg[j * qt + c] = sgn
+            cm[j * qt + c] = math.abs[f64](cv)
+            c += 1usize
+        }
+        sv[j] = sd
+        if sd > mxs { mxs = sd }
+        j += 1usize
+    }
+    var mxc = 0.0f64
+    i = 0usize
+    while i < p * qt {
+        if cm[i] > mxc { mxc = cm[i] }
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        sv[i] = sv[i] / mxs
+        i += 1usize
+    }
+    i = 0usize
+    while i < p * qt {
+        cm[i] = cm[i] / mxc
+        i += 1usize
+    }
+    // f(p) = -rho2 at the lower end, R's optimize in between (when the ends differ) and the upper end; which.max(-ca) takes the first maximum
+    let (fl, ml, el) = pow_rho(a, x, n, p, qt, sg, cm, sv, y, q, lower, w0, v, v2)
+    if el != ok { ret el }
+    var best_p = lower
+    var best_r = fl
+    if lower != upper {
+        let c0 = (3.0f64 - math.sqrt[f64](5.0f64)) * 0.5f64
+        let eps = math.sqrt[f64](2.220446049250313e-16f64)
+        let tol = 1.0e-4f64
+        var aa = lower
+        var bb = upper
+        var vv = aa + c0 * (bb - aa)
+        var ww = vv
+        var xx = vv
+        var dd = 0.0f64
+        var ee = 0.0f64
+        let (r0, m0, e0) = pow_rho(a, x, n, p, qt, sg, cm, sv, y, q, xx, w0, v, v2)
+        if e0 != ok { ret e0 }
+        var fx = 0.0f64 - r0
+        var fv = fx
+        var fw = fx
+        let tol3 = tol / 3.0f64
+        var guard = 0usize
+        while guard < 1000usize {
+            guard += 1usize
+            let xm = (aa + bb) * 0.5f64
+            let tol1 = eps * math.abs[f64](xx) + tol3
+            let t2 = tol1 * 2.0f64
+            if math.abs[f64](xx - xm) <= t2 - (bb - aa) * 0.5f64 { break }
+            var pp = 0.0f64
+            var qq = 0.0f64
+            var rr = 0.0f64
+            if math.abs[f64](ee) > tol1 {
+                rr = (xx - ww) * (fx - fv)
+                qq = (xx - vv) * (fx - fw)
+                pp = (xx - vv) * qq - (xx - ww) * rr
+                qq = (qq - rr) * 2.0f64
+                if qq > 0.0f64 { pp = 0.0f64 - pp } else { qq = 0.0f64 - qq }
+                rr = ee
+                ee = dd
+            }
+            var u = 0.0f64
+            if math.abs[f64](pp) >= math.abs[f64](qq * 0.5f64 * rr) || pp <= qq * (aa - xx) || pp >= qq * (bb - xx) {
+                if xx < xm { ee = bb - xx } else { ee = aa - xx }
+                dd = c0 * ee
+            } else {
+                dd = pp / qq
+                u = xx + dd
+                if u - aa < t2 || bb - u < t2 {
+                    dd = tol1
+                    if xx >= xm { dd = 0.0f64 - dd }
+                }
+            }
+            if math.abs[f64](dd) >= tol1 {
+                u = xx + dd
+            } else if dd > 0.0f64 {
+                u = xx + tol1
+            } else {
+                u = xx - tol1
+            }
+            let (ru, mu2, eu) = pow_rho(a, x, n, p, qt, sg, cm, sv, y, q, u, w0, v, v2)
+            if eu != ok { ret eu }
+            let fu = 0.0f64 - ru
+            if fu <= fx {
+                if u < xx { bb = xx } else { aa = xx }
+                vv = ww
+                ww = xx
+                xx = u
+                fv = fw
+                fw = fx
+                fx = fu
+            } else {
+                if u < xx { aa = u } else { bb = u }
+                if fu <= fw || ww == xx {
+                    vv = ww
+                    fv = fw
+                    ww = u
+                    fw = fu
+                } else if fu <= fv || vv == xx || vv == ww {
+                    vv = u
+                    fv = fu
+                }
+            }
+        }
+        if 0.0f64 - fx > best_r {
+            best_p = xx
+            best_r = 0.0f64 - fx
+        }
+    }
+    let (ru2, mu3, eu3) = pow_rho(a, x, n, p, qt, sg, cm, sv, y, q, upper, w0, v, v2)
+    if eu3 != ok { ret eu3 }
+    if ru2 > best_r {
+        best_p = upper
+        best_r = ru2
+    }
+    let (rb, mb, eb) = pow_rho(a, x, n, p, qt, sg, cm, sv, y, q, best_p, w0, v, v2)
+    if eb != ok { ret eb }
+    i = 0usize
+    while i < p {
+        if mb == 1usize {
+            wa[i] = w0[i]
+        } else {
+            var s = 0.0f64
+            var c = 0usize
+            while c < qt {
+                s += w0[i * qt + c] * v[c]
+                c += 1usize
+            }
+            wa[i] = s
+        }
+        i += 1usize
+    }
+    ret ok
 }

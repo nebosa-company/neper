@@ -46692,3 +46692,11 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** L300 is delivered: the covariance estimators, the lmtest tests and the car tools of its acceptance list equal R on Windows, with the exceptions recorded in its done record (kernHAC's ARMA(1,1) approximation needs stats::arima, which is the ARIMA item's; Anova for quasi families).
 
 **Result.** L300 leaves the queue; the Linux run of oracle_carlmtest is batched with the others.
+
+## D6587 — pls: cppls powers, and a correction; L359 closed
+
+**Decision.** `cppls_gen` adds RcalP's power search to cppls: CorrXY scales (X and Y re-centred, `sdX`, the correlations, their signs), `S^((1-p)/p)` and `sign * C^(p/(1-p))` weights (the special cases p = 0 and p = 1), `-rho^2` minimised over `[lower, upper]` by R's optimize (Brent, tol 1e-4) and compared with the two ends, then `w = W0 a` at the best power; Z uses the uncentred X when centring is off, as R does.
+
+**Correction to D6576.** The plain-cppls cases of that record were never generated: `plsr(method = "cppls")` is not accepted by the package (the fit is `cppls()`), the generator's tryCatch skipped them, and the 288 values it quoted did not exist. They exist now (`cppls(Y ~ X, ...)`, with the squared norms of scores and loadings, Xvar, cross-validation and the jackknife) and pass; the Y.add and power cases were generated with `cppls.fit` and were real.
+
+**Result.** `oracle_pls` agrees with pls on 7532 cases on Windows; L359 leaves the queue (cppls with trunc.pow and weights are not ported); Linux pending.

@@ -34,12 +34,13 @@ for (rep in 1:8) {
   Y <- Z %*% matrix(rnorm(3 * q), 3, q) + matrix(rnorm(n * q, 0, 0.3), n, q)
   ncomp <- min(4, p)
   for (center in c(TRUE, FALSE)) {
-    fit <- tryCatch(suppressWarnings(plsr(Y ~ X, ncomp = ncomp, method = "cppls", center = center)), error = function(e) NULL)
+    fit <- tryCatch(suppressWarnings(cppls(Y ~ X, ncomp = ncomp, center = center)), error = function(e) NULL)
     if (is.null(fit)) next
     for (k in seq_len(ncomp)) {
       a <- c(5, n, p, q, ncomp, as.numeric(center), flat(X), flat(Y), k)
       B <- fit$coefficients[, , k]; sums("coef", a, flat(matrix(B, p, q)))
       sums("fit", a, flat(matrix(fit$fitted.values[, , k], n, q)))
+      add("tt", a, sum(fit$scores[, k]^2)); add("pp", a, sum(fit$loadings[, k]^2)); add("xvar", a, fit$Xvar[k])
     }
   }
 }
@@ -58,6 +59,22 @@ for (rep in 1:8) {
     }
   }
 }
+# cppls with the power search (method 7): args (7, n, p, q, ncomp, center, X, Y, lower, upper, k, what); fn "coef" "fit"
+for (rep in 1:8) {
+  n <- c(30, 40, 25, 50)[(rep - 1) %% 4 + 1]; p <- c(6, 8, 12, 5)[(rep - 1) %% 4 + 1]; q <- c(1, 2, 2, 3)[(rep - 1) %% 4 + 1]
+  Z <- matrix(rnorm(n * 3), n, 3); X <- Z %*% matrix(rnorm(3 * p), 3, p) + matrix(rnorm(n * p, 0, 0.3), n, p)
+  Y <- Z %*% matrix(rnorm(3 * q), 3, q) + matrix(rnorm(n * q, 0, 0.3), n, q)
+  ncomp <- min(3, p)
+  for (lu in list(c(0.2, 0.8), c(0.3, 0.3), c(0, 1), c(0.1, 0.9))) {
+    center <- rep %% 2 == 0
+    fit <- tryCatch(suppressWarnings(cppls.fit(X, Y, ncomp = ncomp, center = center, lower = lu[1], upper = lu[2])), error = function(e) NULL)
+    if (is.null(fit)) next
+    for (k in seq_len(ncomp)) {
+      a <- c(7, n, p, q, ncomp, as.numeric(center), flat(X), flat(Y), lu[1], lu[2], k)
+      sums("coef", a, flat(matrix(fit$coefficients[, , k], p, q))); sums("fit", a, flat(matrix(fit$fitted.values[, , k], n, q)))
+    }
+  }
+}
 #   method 4 is pcr (svdpc); cross-validation with the segments passed explicitly: fn "press" "adj" (args (m, n, p, q, ncomp, center, X, Y, nseg, segid[n], j, ac)), "press0" (j),
 #   "msep" and "r2" with (..., est 0 train 1 CV 2 adjCV (msep only), j, ac) where ac 0 is the intercept-only model
 for (rep in 1:8) {
@@ -65,7 +82,7 @@ for (rep in 1:8) {
   Z <- matrix(rnorm(n * 3), n, 3); X <- Z %*% matrix(rnorm(3 * p), 3, p) + matrix(rnorm(n * p, 0, 0.3), n, p)
   Y <- Z %*% matrix(rnorm(3 * q), 3, q) + matrix(rnorm(n * q, 0, 0.3), n, q)
   ncomp <- min(4, p)
-  fitm <- function(m, ...) if (m == 4) pcr(Y ~ X, ...) else plsr(Y ~ X, method = methods[m + 1], ...)
+  fitm <- function(m, ...) if (m == 4) pcr(Y ~ X, ...) else if (m == 5) cppls(Y ~ X, ...) else plsr(Y ~ X, method = methods[m + 1], ...)
   for (center in c(TRUE, FALSE)) {
     fit <- fitm(4, ncomp = ncomp, center = center)
     for (k in seq_len(ncomp)) {
@@ -75,7 +92,7 @@ for (rep in 1:8) {
     }
   }
   segs <- cvsegments(n, 5, type = "random"); segid <- integer(n); for (s in seq_along(segs)) segid[segs[[s]]] <- s - 1
-  for (m in c(0, 1, 2, 4)) {
+  for (m in c(0, 1, 2, 4, 5)) {
     fitj <- tryCatch(suppressWarnings(fitm(m, ncomp = ncomp, validation = "CV", segments = segs, jackknife = TRUE)), error = function(e) NULL)
     if (is.null(fitj)) next
     for (k in unique(c(2, ncomp))) {
@@ -83,7 +100,7 @@ for (rep in 1:8) {
       sums("jsd", a, flat(matrix(jt$sd, p, q))); sums("jt", a, flat(matrix(jt$tvalues, p, q)))
     }
   }
-  for (m in c(0, 1, 2, 4)) {
+  for (m in c(0, 1, 2, 4, 5)) {
     fit <- tryCatch(suppressWarnings(fitm(m, ncomp = ncomp, validation = "CV", segments = segs)), error = function(e) NULL)
     if (is.null(fit)) next
     nc <- fit$validation$ncomp

@@ -108,7 +108,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var fit: pl.Pls = zero
     var e = ok
     var tail2 = tail
-    if m == 6u8 {
+    if m == 7u8 {
+        let (ya7, ye7) = mem.alloc[f64](a, 1usize)
+        if ye7 != ok { os.exit(11) }
+        let (f8, e8) = pl.cppls_gen(a, xs, ys, ya7[0usize..0usize], 0usize, n, p, q, ncomp, centre, true, x[tail], x[tail + 1usize])
+        fit = f8
+        e = e8
+        tail2 = tail + 2usize
+    } else if m == 6u8 {
         let qa = usize(x[tail])
         let (f6, e6) = pl.cppls_add(a, xs, ys, x[tail + 1usize..tail + 1usize + n * qa], qa, n, p, q, ncomp, centre)
         fit = f6

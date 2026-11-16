@@ -268,17 +268,6 @@
       "evidence": "Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows; oracle_dbscanpkg; Linux pending). Open: hdbscan, sNNclust, extractXi, extractDBSCAN, jpclust. Was: Open (CRAN rank 368). Small to mid. e.ml.cluster.density has dbscan and optics. Acceptance, equal to dbscan: hdbscan with its condensed tree, membership probabilities and outlier scores, lof, sNN and sNNclust, kNN and frNN, kNNdist, extractXi and extractDBSCAN, jpclust."
     },
     {
-      "id": "L359",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 603,
-      "title": "pls: partial least squares regression",
-      "score": 0.93,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6136). plsr with kernelpls, widekernelpls, simpls and oscorespls, pcr, and cross-validation (PRESS, adjCV, MSEP, R2) over given segments equal pls on Windows (oracle_pls; Linux pending). D6576: cppls (default powers) coefficients and fitted values equal pls on 288 values. D6577: the jackknife (jack.test sd and t values of kernelpls, simpls, oscorespls and pcr over segments) equals pls on 384 values. D6578: cppls with Y.add, the canonical direction now from column-pivoted Gram-Schmidt and R's rank rule (equal to pls on 312 values). Open: cppls with lower or upper powers. Was: Open (CRAN rank 370). Small to mid. Verify the pls already in e.ml.linear first. Acceptance, equal to pls: plsr and pcr with kernelpls, widekernelpls, simpls and oscorespls, cppls, scores, loadings, coefficients, validation by CV and LOO with MSEP, RMSEP and R2, jackknife."
-    },
-    {
       "id": "L379",
       "category": "library",
       "group": "CRAN parity",
