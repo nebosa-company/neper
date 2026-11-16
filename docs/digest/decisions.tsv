@@ -3237,4 +3237,5 @@ D6161	928	gmp: big-integer operations checked against R
 D6162	811	hclust: the Lance-Williams agglomeration of R
 D6163	674	dendextend: Fowlkes-Mallows index and cophenetic correlation
 D6164	711	pracma: associated Legendre functions, Chebyshev coefficients and the Laguerre root iteration
-D6165	961	fpc: cluster.stats validity indexes
+D6165	962	fpc: cluster.stats validity indexes
+D6166	764	pROC: AUC, DeLong variance and interval, paired DeLong test

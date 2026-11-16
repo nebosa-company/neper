@@ -262,10 +262,10 @@
       "group": "CRAN parity",
       "order": 596,
       "title": "pROC and ROCR: ROC curves and threshold performance",
-      "score": 0,
+      "score": 0.35,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN ranks 217, 294). Small to mid. Acceptance, equal to R: pROC roc, auc, partial auc, ci.auc (DeLong and seeded bootstrap), roc.test (DeLong, bootstrap, venkatraman), coords, smooth, multiclass.roc; ROCR prediction and performance for tpr, fpr, prec, rec, lift, auc, cost, rch."
+      "evidence": "Partial (D6166). pROC auc, DeLong variance and interval and the paired DeLong test equal R on Windows (oracle_proc; Linux pending). Open: coords, partial and smoothed curves, bootstrap CIs, ROCR performance measures. Was: Open (CRAN ranks 217, 294). Small to mid. Acceptance, equal to R: pROC roc, auc, partial auc, ci.auc (DeLong and seeded bootstrap), roc.test (DeLong, bootstrap, venkatraman), coords, smooth, multiclass.roc; ROCR prediction and performance for tpr, fpr, prec, rec, lift, auc, cost, rch."
     },
     {
       "id": "L327",

@@ -45388,3 +45388,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.fpc` computes the cluster.stats indexes from a full distance matrix and a clustering with labels 1..k (no noise cluster): the average between and within distances, the maximum diameter, the minimum separation, the within-cluster sum of squares, the Calinski-Harabasz index, the average silhouette width (singleton clusters count 0), the Dunn and Dunn2 indices, the entropy, the Pearson gamma, G2 and G3, the widest gap (the longest minimum-spanning-tree edge inside a cluster, which is the largest single-linkage height), the separation index at sepprob 0.1, and against a second clustering the corrected Rand index and the variation of information. Not here: noise clusters, clusterboot, nselectboot, mergenormals, dbscan, cluster.varstats and the discriminant coordinates.
 
 **Result.** `oracle_fpc` equals fpc on 252 cases (18 indexes, 14 clusterings) on Windows; Linux pending. L468 is partial.
+
+## D6166 — pROC: AUC, DeLong variance and interval, paired DeLong test
+
+`e.algo.stat.proc` computes the area under the ROC curve (the direction chosen as direction = "auto", controls below cases when the control median is not above the case median), its DeLong variance from the placement values, the DeLong confidence interval (normal quantile, capped to [0, 1]) and the paired DeLong test of two predictors on the same cases (Z and the two-sided p value, each curve using its own direction as pROC does, which it warns about). Not here: smoothed and partial curves, bootstrap methods, coords, the other roc.test methods and the multi-class AUC. ROCR remains open.
+
+**Result.** `oracle_proc` equals pROC on 120 cases on Windows; Linux pending. L324 is partial.
