@@ -177,6 +177,36 @@ L464	library	0	255	gamlss.dist: GAMLSS distribution families	Open (CRAN rank 788
 L465	library	0	249	BayesFactor: Bayes factors with JZS priors	Open (CRAN rank 712).
 L466	library	0	326	EnvStats: environmental statistics	Open (CRAN rank 708).
 L467	library	0	280	hetGP: heteroskedastic Gaussian processes	Open (CRAN rank 784).
+L468	library	0	233	fpc: cluster validity and flexible clustering procedures	Open (CRAN rank 803).
+L469	library	0	226	pastecs: decomposition, turning points and descriptive statistics	Open (CRAN rank 823).
+L470	library	0	242	partitions: integer and set partitions	Open (CRAN rank 833).
+L471	library	0	191	BiasedUrn: noncentral hypergeometric distributions	Open (CRAN rank 851).
+L472	library	0	178	modeest: mode estimation	Open (CRAN rank 852).
+L473	library	0	184	isotone: isotonic regression	Open (CRAN rank 872).
+L474	library	0	237	kSamples: k-sample rank tests	Open (CRAN rank 844).
+L475	library	0	247	scoringRules: proper scoring rules	Open (CRAN rank 870).
+L476	library	0	218	irr: inter-rater reliability	Open (CRAN rank 867).
+L477	library	0	253	compositions: compositional data analysis	Open (CRAN rank 860).
+L478	library	0	237	dagitty: causal graph reasoning	Open (CRAN rank 845).
+L479	library	0	216	hdrcde: highest density regions	Open (CRAN rank 837).
+L480	library	0	199	aod: overdispersed binomial and count data	Open (CRAN rank 822).
+L481	library	0	202	klaR: classification helpers	Open (CRAN rank 846).
+L482	library	0	219	laeken: inequality and poverty indicators	Open (CRAN rank 888).
+L483	library	0	262	tsfeatures: time-series features	Open (CRAN rank 889).
+L484	library	0	249	LearnBayes: Bayesian computation helpers	Open (CRAN rank 891).
+L485	library	0	222	DRDID: difference-in-differences	Open (CRAN rank 893).
+L486	library	0	206	mixtools: mixture models by EM	Open (CRAN rank 884).
+L487	library	0	285	PMCMRplus: nonparametric post-hoc tests	Open (CRAN rank 821).
+L488	library	0	222	drc: dose-response models	Open (CRAN rank 813).
+L489	library	0	335	osqp and clarabel: quadratic and conic solvers	Open (CRAN ranks 815, 880;
+L490	library	0	249	timereg: Aalen additive and Cox-Aalen hazard models	Open (CRAN rank 853).
+L491	library	0	208	riskRegression: risk prediction scoring	Open (CRAN rank 850).
+L492	library	0	236	coxme: mixed-effects Cox models	Open (CRAN rank 900).
+L493	library	0	218	topicmodels: LDA and CTM	Open (CRAN rank 897).
+L494	library	0	261	bayesm: Bayesian econometrics	Open (CRAN rank 829).
+L495	library	0	260	mirt: item response theory	Open (CRAN rank 841).
+L496	library	0	277	fda: functional data analysis	Open (CRAN rank 838).
+L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU

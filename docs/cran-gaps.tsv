@@ -833,3 +833,103 @@ beepr	797	sounds	-	out-of-scope	-
 sn	798	skew-normal and skew-t distributions: d, p, q, r, moments and fits, multivariate versions	dsn, psn, qsn, rsn, selm, st.mple	gap	-	~10k	L449
 tableone	799	baseline tables	-	out-of-scope	-		
 arules	800	association rule mining: apriori, eclat, FP-growth, closed and maximal itemsets, interest measures, transactions	apriori, eclat, interestMeasure, itemFrequency	gap	-	~25k	L462
+shadowtext	801	plot text	-	out-of-scope	-		
+polycor	802	polychoric and polyserial correlations, see L312	-	covered-by-other-item	-		
+fpc	803	flexible procedures for clustering: cluster.stats validity indices, Calinski-Harabasz, mergenormals, dbscan, clusterboot, nselectboot	cluster.stats, calinhara, clusterboot, mergenormals	gap	-	~15k	L468
+spacefillr	804	Sobol, Halton and related sequences, see L426	-	covered-by-other-item	-		
+binom	805	binomial confidence intervals, see L363	-	covered-by-other-item	-		
+fresh	806	shiny themes	-	out-of-scope	-		
+CVXR	807	convex modelling language over the solvers of L489	-	covered-by-other-item	-		
+cobalt	808	covariate balance tables, see L436	-	covered-by-other-item	-		
+DiagrammeRsvg	809	diagram export	-	out-of-scope	-		
+ggpp	810	chart engine	-	out-of-scope	-		
+sets	811	set operations	-	out-of-scope	-		
+itertools	812	iteration helpers	-	out-of-scope	-		
+drc	813	dose-response models: drm with LL, W1, W2, Gompertz and Brain-Cousens families, ED and selectivity, model selection	drm, ED, mselect, compParm	gap	-	~15k	L488
+dfidx	814	indexed data for mlogit, see L456	-	covered-by-other-item	-		
+osqp	815	operator-splitting QP solver (ADMM) with warm starts and parameter updates	osqp, solve_osqp	partial	e.math.opt.convex	~8k	with clarabel (880); L489
+tree	816	classification trees, see L337	-	covered-by-other-item	-		
+openxlsx2	817	Excel files, e.fmt.xlsx	-	covered	e.fmt.xlsx		
+sparkline	818	htmlwidget	-	out-of-scope	-		
+openalexR	819	OpenAlex API client	-	out-of-scope	-		
+networkD3	820	htmlwidget	-	out-of-scope	-		
+PMCMRplus	821	post-hoc tests after Kruskal-Wallis, Friedman and ANOVA: Conover, Nemenyi, Dunn, Steel-Dwass, Dunnett, Games-Howell, Quade	kwAllPairsConoverTest, kwAllPairsNemenyiTest, frdAllPairsExactTest	partial	e.algo.stat.rstatix has Dunn and Games-Howell	~15k	L487
+aod	822	overdispersed binomial and count data: betabin, negbin, quasi-binomial, Wald tests, goodness of fit	betabin, negbin, wald.test, iccbin	gap	-	~4k	L480
+pastecs	823	time-series decomposition, turning points, regularization and descriptive statistics	decompose, turnpoints, regul, stat.desc	gap	-	~4k	L469
+lhs	824	Latin hypercube sampling, see L426	-	covered-by-other-item	-		
+wordcloud2	825	htmlwidget	-	out-of-scope	-		
+keyring	826	credential store	-	out-of-scope	-		
+origami	827	cross-validation framework	-	out-of-scope	-		
+tiff	828	TIFF images, e.fmt.tiff	-	covered	e.fmt.tiff		
+bayesm	829	Bayesian econometrics: hierarchical multinomial logit, multivariate probit, mixtures of normals, instrumental variables	rhierMnlRwMixture, rmnpGibbs, runireg, rnmixGibbs	gap	-	~15k	needs the R RNG streams; L494
+fmsb	830	plot and medical helpers	-	out-of-scope	-		
+brglm2	831	bias-reduced GLMs, see L424	-	covered-by-other-item	-		
+lm.beta	832	standardized coefficients, see L409	-	covered-by-other-item	-		
+partitions	833	integer partitions, restricted partitions, compositions and set partitions	parts, restricted_parts, compositions, setparts	partial	e.algo.combin	~4k	verify e.algo.combin first; L470
+gganimate	834	chart animation	-	out-of-scope	-		
+tictoc	835	timing helper	-	out-of-scope	-		
+gamlss	836	generalized additive models for location, scale and shape fitted by the RS and CG algorithms with smoothers	gamlss, lms, centiles, pb	gap	-	~30k	needs L464; L497
+hdrcde	837	highest density regions and conditional density estimation	hdr, cde, hdr.den	gap	-	~3k	L479
+fda	838	functional data analysis: B-spline and Fourier bases, smoothing, functional PCA, functional regression, registration	create.bspline.basis, smooth.basis, pca.fd, fRegress	gap	-	~35k	L496
+expint	839	exponential integrals, see L417	-	covered-by-other-item	-		
+ash	840	average shifted histograms, see L325	-	covered-by-other-item	-		
+mirt	841	item response theory: 1PL to 4PL, graded response, partial credit, multidimensional and mixed models, DIF, fit statistics	mirt, itemfit, personfit, multipleGroup	gap	-	~50k	L495
+lgr	842	logging, e.log	-	covered	e.log		
+rvg	843	vector graphics devices	-	out-of-scope	-		
+kSamples	844	k-sample Anderson-Darling, Conover, Steel and Steel-Dwass tests with exact and simulated p-values	ad.test, qn.test, contingency2xt	gap	-	~4k	L474
+dagitty	845	causal graphs: d-separation, adjustment sets, instrumental variables, identification, equivalence classes	dseparated, adjustmentSets, impliedConditionalIndependencies	gap	-	~6k	L478
+klaR	846	classification and visualization: NaiveBayes, rda, sknn, stepclass, kmodes, woe	NaiveBayes, rda, stepclass, kmodes, woe	partial	e.ml.bayes, e.ml.multivariate	~10k	L481
+splancs	847	spatial point pattern tools, see L384	-	covered-by-other-item	-		
+audio	848	audio files, e.fmt.wav	-	covered	e.fmt.wav		
+evd	849	extreme value distributions and fits, see L425	-	covered-by-other-item	-		
+riskRegression	850	prediction scoring for risk models: Score, Brier, AUC over time, competing-risk prediction with Fine-Gray and Cox	Score, predictRisk, FGR, CSC	gap	-	~15k	needs L311 and L419; L491
+BiasedUrn	851	biased urn distributions: Wallenius and Fisher noncentral hypergeometric	dWNCHypergeo, pFNCHypergeo, rWNCHypergeo	gap	-	~3k	L471
+modeest	852	mode estimation: half-sample, HSM, parzen, shorth, Venter and others	mlv, hsm, parzen, venter	gap	-	~2k	L472
+timereg	853	Aalen additive hazards, Cox-Aalen, proportional excess hazards, competing risks regression	aalen, cox.aalen, comp.risk	gap	-	~25k	needs L311; L490
+mosaic	854	teaching statistics	-	out-of-scope	-		
+optimParallel	855	parallel optim wrapper	-	out-of-scope	-		
+alabama	856	augmented Lagrangian, see L309	-	covered-by-other-item	-		
+phytools	857	phylogenetic comparative methods, extends L350	-	covered-by-other-item	-		
+rainbow	858	functional data depth and bagplots, see L496	-	covered-by-other-item	-		
+fastglm	859	fast GLM fitting, see L423	-	covered-by-other-item	-		
+compositions	860	compositional data: clr, ilr, alr, acomp and rcomp geometries, Aitchison distance, perturbation, tests	clr, ilr, alr, acomp, rcomp	gap	-	~12k	L477
+nonnest2	861	Vuong tests, see L412	-	covered-by-other-item	-		
+tinyplot	862	plot helpers	-	out-of-scope	-		
+tcltk2	863	Tk widgets	-	out-of-scope	-		
+qvcalc	864	quasi-variances, see L300	-	covered-by-other-item	-		
+latex2exp	865	plot labels	-	out-of-scope	-		
+shinydashboardPlus	866	shiny	-	out-of-scope	-		
+irr	867	inter-rater reliability: kappa variants, ICC, Krippendorff alpha, Kendall W, Cohen and Fleiss kappa, agreement	kappa2, kappam.fleiss, icc, kripp.alpha, kendall	gap	-	~3k	L476
+DistributionUtils	868	helpers for generalized hyperbolic, see L407	-	covered-by-other-item	-		
+OpenMx	869	structural equation models, see L354	-	covered-by-other-item	-		
+scoringRules	870	proper scoring rules: CRPS, log score, Dawid-Sebastiani, energy and variogram scores for parametric and sample forecasts	crps, logs, dss_norm, es_sample, vs_sample	gap	-	~8k	L475
+fGarch	871	GARCH models, see L398	-	covered-by-other-item	-		
+isotone	872	isotonic regression: PAVA, generalized PAVA, active set with weights and ordering constraints	gpava, activeSet, pava	gap	-	~2k	L473
+enrichwith	873	model object helpers	-	out-of-scope	-		
+pool	874	connection pools, e.db.pool	-	covered	e.db.pool		
+transformr	875	chart interpolation	-	out-of-scope	-		
+spatialreg	876	spatial regression, see L372	-	covered-by-other-item	-		
+fabletools	877	forecasting framework, see L318	-	covered-by-other-item	-		
+secretbase	878	hashing, e.crypto.hash	-	covered	e.crypto.hash		
+lars	879	least angle regression, see L310	-	covered-by-other-item	-		
+clarabel	880	conic interior-point solver, see L489	-	covered-by-other-item	-		
+WriteXLS	881	Excel writing over Perl	-	out-of-scope	-		
+RMariaDB	882	MariaDB driver, x.oracle.mysql	-	covered	x.oracle.mysql		
+bsicons	883	icons	-	out-of-scope	-		
+mixtools	884	mixture models by EM: normal, multivariate, regression, multinomial and nonparametric mixtures	normalmixEM, mvnormalmixEM, regmixEM, npEM	partial	e.ml.cluster has gmm_em	~15k	overlaps flexmix (L413); L486
+mlr3	885	machine learning framework	-	out-of-scope	-		
+clusterGeneration	886	random cluster and covariance generation, see L404	-	covered-by-other-item	-		
+timetk	887	time-series wrangling, see L298	-	covered-by-other-item	-		
+laeken	888	income inequality and poverty indicators: Gini, AROP, QSR, Theil, Atkinson, with variance estimation	gini, arpr, qsr, theil, weightedMedian	gap	-	~8k	L482
+tsfeatures	889	time-series features: acf, pacf, stl, entropy, lumpiness, stability, crossing points, Hurst, unitroot	tsfeatures, acf_features, stl_features, entropy	gap	-	~4k	L483
+ggformula	890	plot formulas	-	out-of-scope	-		
+LearnBayes	891	Bayesian computation: laplace, rejection and importance sampling, Gibbs for common models, bayes factors	laplace, gibbs, rejectsampling, mnormt.onesided	gap	-	~6k	L484
+targets	892	pipeline tooling	-	out-of-scope	-		
+DRDID	893	difference-in-differences estimators: doubly robust, inverse propensity and outcome regression, panel and repeated cross sections	drdid, ipwdid, ordid, reg_did_panel	gap	-	~4k	L485
+AzureStor	894	Azure storage client	-	out-of-scope	-		
+SimDesign	895	simulation framework	-	out-of-scope	-		
+Rglpk	896	GLPK interface, see L367	-	covered-by-other-item	-		
+topicmodels	897	topic models: latent Dirichlet allocation by VEM and Gibbs, correlated topic models	LDA, CTM, posterior, perplexity	gap	-	~10k	L493
+gee	898	generalized estimating equations, see L430	-	covered-by-other-item	-		
+exactextractr	899	raster-polygon statistics, see L285	-	covered-by-other-item	-		
+coxme	900	mixed-effects Cox models with random effects and frailty covariance structures	coxme, ranef, VarCorr	gap	-	~8k	needs L311; L492
