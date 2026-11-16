@@ -3147,4 +3147,5 @@ D6071	1639	BiasedUrn: the mass function over the support, Wallenius by tanh-sinh
 D6072	1506	modeest: the shortest-half estimators, the grid rule of seq, the 1:0 quirk
 D6073	1425	pastecs: turnpoints on collapsed runs, stat.desc with the 1/n moments
 D6074	1454	norm: EM on standardised columns, loglik without the constant
-D6075	1685	SuppDists: exact Kendall and Spearman by counting, inverse Gaussian and Johnson in closed form
+D6075	1686	SuppDists: exact Kendall and Spearman by counting, inverse Gaussian and Johnson in closed form
+D6076	1283	mixsqp: the optimum by accelerated EM, not the SQP iterations
