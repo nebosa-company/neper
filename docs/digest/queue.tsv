@@ -134,7 +134,7 @@ L344	library	0	359	randomForest: Breiman forests equal to R	Open (CRAN rank 255;
 L345	library	0.15	809	FactoMineR and factoextra: multivariate exploration	Partial (D6633).
 L347	library	0	276	locfit: local regression and likelihood	Open (CRAN rank 259).
 L364	library	0.36	803	metafor: meta-analysis	Partial (D6499 Knapp-Hartung, D6498 leave1out, D6497 regtest, ranktest, fsn on a fixed-effect model, D6496 escalc MD, SMD, ROM, RR, OR, RD, COR, ZCOR, D6495 rma.uni intercept-only with FE, DL, HE, HS,
-L366	library	0	277	kernlab: kernel methods	Open (CRAN rank 312).
+L366	library	0.15	734	kernlab: kernel methods	Partial (D6634).
 L368	library	0.2	684	fixest: high-dimensional fixed-effects estimation	Partial (D6623).
 L369	library	0.15	795	plm and AER: panel data and applied econometrics	Partial (D6620).
 L372	library	0.15	729	spdep: spatial autocorrelation and spatial regression	Partial (D6624).

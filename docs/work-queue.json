@@ -1494,10 +1494,10 @@
       "group": "CRAN parity",
       "order": 761,
       "title": "kernlab: kernel methods",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 312). Mid to large. e.ml.svm has smo and kernels. Acceptance, equal to kernlab: ksvm for C-svc, nu-svc, C-bsvc, spoc-svc, kbb-svc, one-svc, eps-svr, nu-svr and eps-bsvr with every kernel, probability outputs, kpca, kfa, specc, gausspr, rvm, ipop, kmmd, ranking."
+      "evidence": "Partial (D6634). e.algo.stat.kernlabpkg equals kernlab on Windows: kernelMatrix for rbfdot, polydot, vanilladot, tanhdot, laplacedot, anovadot and splinedot, and kpca (eigenvalues of the centred kernel matrix over n, pcv, rotated projections; signs compared as absolute values) (oracle_kernlab, 40 values; Linux pending). Open: besseldot and string kernels, ksvm and its solvers, rvm, gausspr, kkmeans, specc, kfa, ipop, kernel prediction on new data. Was: Open (CRAN rank 312). Mid to large. e.ml.svm has smo and kernels. Acceptance, equal to kernlab: ksvm for C-svc, nu-svc, C-bsvc, spoc-svc, kbb-svc, one-svc, eps-svr, nu-svr and eps-bsvr with every kernel, probability outputs, kpca, kfa, specc, gausspr, rvm, ipop, kmmd, ranking."
     },
     {
       "id": "L368",

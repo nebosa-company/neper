@@ -368,3 +368,4 @@ oracle_bnlearn
 oracle_multcomp
 oracle_xgboost
 oracle_factominer
+oracle_kernlab

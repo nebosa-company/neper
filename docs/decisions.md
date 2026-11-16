@@ -46928,3 +46928,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `factominepkg.pca` standardises columns with the divisor-n standard deviation, takes the Jacobi eigen decomposition of the correlation matrix, and reports variable coordinates `v sqrt(lambda)`, contributions `coord^2 / lambda * 100`, individual coordinates `Z v`, cos2 `coord^2 / ||z||^2` and contributions `coord^2 / (n lambda) * 100`. `ca` takes the SVD of `D_r^-1/2 (P - r c') D_c^-1/2`, eigenvalues as squared singular values, row coordinates `D_r^-1/2 U sigma`, contributions `r_i coord^2 / lambda * 100` and column cos2 against the chi-square distance. The SVD needs a tolerance of 1e-14; 1e-30 never converges and returns NaN.
 
 **Result.** `oracle_factominer` agrees with FactoMineR on Windows (120 values; signs compared as absolute values); Linux pending. L345 stays partial: supplementary elements, weights, MCA, MFA, FAMD, HCPC.
+
+## D6634 — kernlab: kernel matrices and kernel PCA
+
+**Decision.** `kernlabpkg.kernel` computes the rbf `exp(-sigma ||x-y||^2)`, polynomial `(scale <x,y> + offset)^degree`, linear, tanh, Laplace `exp(-sigma ||x-y||)`, ANOVA `(sum_k exp(-sigma (x_k - y_k)^2))^degree` and spline `prod_k (1 + xy + xy min - (x+y)/2 min^2 + min^3/3)` kernels. `kpca` centres the kernel matrix (`K - row means - column means + grand mean`), takes the Jacobi eigen decomposition, reports eigenvalues divided by n, `pcv` as eigenvectors over the square root of that scaled eigenvalue (so a factor `sqrt(n)` above the unit vectors over `sqrt(lambda)`) and projections as the centred matrix times `pcv`.
+
+**Result.** `oracle_kernlab` agrees with kernlab on Windows (40 values; kpca vectors as absolute values); Linux pending. L366 stays partial: Bessel and string kernels, ksvm, rvm, gausspr, kkmeans, specc.

@@ -3493,4 +3493,5 @@ D6629	762	rms: spline basis, ols and lrm
 D6630	840	bnlearn: network scores of a given DAG
 D6631	719	multcomp: linear hypotheses of an lm
 D6632	956	xgboost: exact greedy squared-error boosting
-D6633	891	FactoMineR: PCA and CA
+D6633	892	FactoMineR: PCA and CA
+D6634	885	kernlab: kernel matrices and kernel PCA
