@@ -548,10 +548,10 @@
       "group": "CRAN parity",
       "order": 630,
       "title": "sn: skew-normal and skew-t distributions",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 798). Small to mid. Acceptance, equal to sn under set.seed: dsn, psn, qsn, rsn, dst, pst, qst, rst, multivariate dmsn, dmst, rmsn, rmst, the moment and cumulant functions, and selm fits by MLE and MPLE."
+      "evidence": "Partial (D6148). dsn (with tau), psn via Owen T, qsn (tau = 0) and dst equal sn on Windows (oracle_sn; Linux pending). Open: psn bivariate engine, pst, qst, generators, multivariate, selm. Was: Open (CRAN rank 798). Small to mid. Acceptance, equal to sn under set.seed: dsn, psn, qsn, rsn, dst, pst, qst, rst, multivariate dmsn, dmst, rmsn, rmst, the moment and cumulant functions, and selm fits by MLE and MPLE."
     },
     {
       "id": "L450",

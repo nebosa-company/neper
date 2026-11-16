@@ -45280,3 +45280,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.geosphere` holds distHaversine, distVincentySphere, distCosine, distMeeus, distVincentyEllipsoid (NaN where R answers NA), bearingRhumb, distRhumb and destPointRhumb. The package's bearingRhumb has a quirk the port keeps: after shifting a positive longitude difference beyond pi it re-tests the sign, so a positive difference ends unchanged and only a negative one gains 2 pi (found by comparison). Not here: Karney's distGeo, bearing, destPoint, midPoint, areaPolygon, perimeter, centroid, gcIntermediate and geomean.
 
 **Result.** `oracle_geosphere` equals geosphere 1.6-8 on 540 cases on Windows; Linux pending. L401 is partial.
+
+## D6148 — sn: skew-normal density, distribution function, quantile and skew-t density
+
+`e.algo.stat.sn` holds dsn (with the extension parameter tau), psn through the package's Owen's T (the series for h up to 8, the closed approximation above, and the a > 1 reflection), qsn for tau = 0 by the Cornish-Fisher start from the closed-form skew-normal cumulants and Newton steps to 1e-8, and dst. The package picks the Owen engine only for a vector of more than three points with every z * alpha above -5 and tau = 0, so the oracle asks for psn only in that case. Not here: psn through the bivariate normal, pst, qst, the generators, the multivariate families, cumulants for tau != 0 and selm.
+
+**Result.** `oracle_sn` equals sn on 258 cases on Windows; Linux pending. L449 is partial.

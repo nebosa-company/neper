@@ -265,3 +265,4 @@ oracle_actuar
 oracle_extradistr
 oracle_scoringrules
 oracle_geosphere
+oracle_sn
