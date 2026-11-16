@@ -58,6 +58,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if c.name.len == 2usize { ret active(a, c) }
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if c.name.len == 4usize && c.name[0usize] == 114u8 {
+        let sv2 = u8(z[0usize])
+        let n2 = usize(z[3usize])
+        let k2 = usize(z[4usize])
+        let (o2, oe) = mem.alloc[f64](a, n2)
+        if oe != ok { ret nan }
+        if iso.gpava_rows(a, z[5usize..5usize + n2], z[5usize + n2..5usize + n2 + n2 * k2], z[5usize + n2 + n2 * k2..5usize + n2 + 2usize * n2 * k2], n2, k2, sv2, z[1usize], u8(z[2usize]), o2) != ok { ret nan }
+        let st2 = usize(z[5usize + n2 + 2usize * n2 * k2])
+        if st2 == 0usize { ret f64(n2) }
+        if st2 == 3usize { ret o2[0usize] }
+        if st2 == 4usize { ret o2[n2 - 1usize] }
+        var s2 = 0.0f64
+        var i2 = 0usize
+        while i2 < n2 {
+            if st2 == 1usize { s2 += o2[i2] } else { s2 += f64(i2 + 1usize) * o2[i2] }
+            i2 += 1usize
+        }
+        ret s2
+    }
     let sv = u8(z[0usize])
     let p = z[1usize]
     let ties = u8(z[2usize])

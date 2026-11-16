@@ -40,4 +40,18 @@ for (rep in 1:40) {
   a <- c(n, nrow(ed), y, w, ed[, 1], ed[, 2]); st <- c(r$fval, r$niter, sum(seq_along(r$x) * r$x), sum(seq_along(r$lambda) * r$lambda))
   for (j in 0:3) add("aq", c(a, j, aw, bw), st[j + 1])
 }
+# gpava with a matrix response (rows are repeated measurements): ("rows") args (solver 0 mean 1 median 2 fractile, p, ties, n, k, x[n], y row-major [n * k], w row-major [n * k], stat)
+for (rep in 1:40) {
+  n <- sample(5:25, 1); k <- sample(2:3, 1); x <- if (rep %% 2 == 0) sample(1:round(n * 0.6), n, TRUE) else sample(n); Y <- matrix(round(rnorm(n * k, 0, 1) + 0.08 * x, 3), n, k); W <- matrix(round(runif(n * k, 0.5, 3), 2), n, k)
+  for (sv in 0:2) for (tie in 0:2) {
+    if (length(unique(x)) == n && tie > 0) next
+    p <- c(0, 0.5, 0.25)[sv + 1]; if (sv == 2) p <- c(0.25, 0.75)[rep %% 2 + 1]
+    solver <- switch(sv + 1, weighted.mean, weighted.median, function(y, w) weighted.fractile(y, w, p))
+    r <- tryCatch(gpava(x, Y, W, solver = solver, ties = c("primary", "secondary", "tertiary")[tie + 1])$x, error = function(e) NULL)
+    if (is.null(r)) next
+    v <- as.numeric(r); a <- c(sv, p, tie, n, k, x, as.vector(t(Y)), as.vector(t(W)))
+    st <- c(length(v), sum(v), sum(seq_along(v) * v), v[1], v[length(v)])
+    for (j in 0:4) cases[[length(cases) + 1]] <- case("rows", c(a, j), st[j + 1], rel = 1e-10, abs = 1e-12)
+  }
+}
 emit("isotone", "isotone", list(cases))

@@ -92,12 +92,17 @@ fn solve_ab(a: *mem.Arena, y: []const f64, w: []const f64, kind: u8, p: f64, aw:
     }
     total = total + comp
     var low = 0.0f64
+    var lsum = 0.0f64
+    var lcomp = 0.0f64
     var k = 1usize
     while true {
         let up = total - low
         let df = aa * low - bb * up
         if df < 0.0f64 {
-            low += ws[k - 1usize]
+            let lt = lsum + ws[k - 1usize]
+            if math.abs[f64](lsum) >= math.abs[f64](ws[k - 1usize]) { lcomp += (lsum - lt) + ws[k - 1usize] } else { lcomp += (ws[k - 1usize] - lt) + lsum }
+            lsum = lt
+            low = lsum + lcomp
             k += 1usize
         } else if df == 0.0f64 {
             ret (ws[k - 1usize] * ys[k - 1usize] + ws[k - 2usize] * ys[k - 2usize]) / (ws[k - 1usize] + ws[k - 2usize])
@@ -607,5 +612,195 @@ fn active_set(a: *mem.Arena, y0: []const f64, w: []const f64, p1: []const usize,
     }
     out[n + m] = f
     out[n + m + 1usize] = f64(iter)
+    ret ok
+}
+
+// the pooled-adjacent-violators pass over rows of k replicates each (a gpava matrix or list response): fit[i] is the block value of row i; rows are already in their order, yv and wv hold the rows contiguously
+fn pava_rows(a: *mem.Arena, yv: []const f64, wv: []const f64, n: usize, k: usize, kind: u8, p: f64, fit: []f64) -> err {
+    let (st, e1) = mem.alloc[usize](a, n)
+    let (en, e2) = mem.alloc[usize](a, n)
+    let (vals, e3) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    var i = 0usize
+    while i < n {
+        st[i] = i
+        en[i] = i + 1usize
+        vals[i] = solve(a, yv[i * k..(i + 1usize) * k], wv[i * k..(i + 1usize) * k], kind, p)
+        i += 1usize
+    }
+    var nb = n
+    i = 0usize
+    while i + 1usize < nb {
+        if vals[i] > vals[i + 1usize] {
+            // merge block i with i + 1
+            en[i] = en[i + 1usize]
+            vals[i] = solve(a, yv[st[i] * k..en[i] * k], wv[st[i] * k..en[i] * k], kind, p)
+            var j = i + 1usize
+            while j + 1usize < nb {
+                st[j] = st[j + 1usize]
+                en[j] = en[j + 1usize]
+                vals[j] = vals[j + 1usize]
+                j += 1usize
+            }
+            nb -= 1usize
+            while i > 0usize && vals[i - 1usize] > vals[i] {
+                en[i - 1usize] = en[i]
+                vals[i - 1usize] = solve(a, yv[st[i - 1usize] * k..en[i - 1usize] * k], wv[st[i - 1usize] * k..en[i - 1usize] * k], kind, p)
+                var q = i
+                while q + 1usize < nb {
+                    st[q] = st[q + 1usize]
+                    en[q] = en[q + 1usize]
+                    vals[q] = vals[q + 1usize]
+                    q += 1usize
+                }
+                nb -= 1usize
+                i -= 1usize
+            }
+        } else {
+            i += 1usize
+        }
+    }
+    var b = 0usize
+    while b < nb {
+        var r = st[b]
+        while r < en[b] {
+            fit[r] = vals[b]
+            r += 1usize
+        }
+        b += 1usize
+    }
+    ret ok
+}
+
+// gpava(z = x, y = matrix, weights = matrix) with the weighted mean, median or fractile solver: rows are the repeated measurements at x; ties 0 primary, 1 secondary, 2 tertiary; out receives the fit in the input order
+fn gpava_rows(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usize, k: usize, kind: u8, p: f64, ties: u8, out: []f64) -> err {
+    let (ord, e1) = mem.alloc[usize](a, n)
+    let (key, e2) = mem.alloc[f64](a, n)
+    let (ys, e3) = mem.alloc[f64](a, n * k)
+    let (ws, e4) = mem.alloc[f64](a, n * k)
+    let (fit, e5) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    var i = 0usize
+    if ties == 0u8 {
+        i = 0usize
+        while i < n {
+            ord[i] = i
+            key[i] = solve(a, y[i * k..(i + 1usize) * k], w[i * k..(i + 1usize) * k], kind, p)
+            i += 1usize
+        }
+        // order(x, key): stable insertion sort
+        i = 1usize
+        while i < n {
+            let v = ord[i]
+            var j = i
+            while j > 0usize && (x[ord[j - 1usize]] > x[v] || (x[ord[j - 1usize]] == x[v] && key[ord[j - 1usize]] > key[v])) {
+                ord[j] = ord[j - 1usize]
+                j -= 1usize
+            }
+            ord[j] = v
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var c = 0usize
+            while c < k {
+                ys[i * k + c] = y[ord[i] * k + c]
+                ws[i * k + c] = w[ord[i] * k + c]
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let pe = pava_rows(a, ys, ws, n, k, kind, p, fit)
+        if pe != ok { ret pe }
+        i = 0usize
+        while i < n {
+            out[ord[i]] = fit[i]
+            i += 1usize
+        }
+        ret ok
+    }
+    // secondary and tertiary: aggregate the rows with equal x (means of the values, sums of the weights), order by x
+    let (ux, e6) = mem.alloc[f64](a, n)
+    if e6 != ok { ret e6 }
+    var ng = 0usize
+    i = 0usize
+    while i < n {
+        var seen = false
+        var j = 0usize
+        while j < ng {
+            if ux[j] == x[i] { seen = true }
+            j += 1usize
+        }
+        if !seen {
+            ux[ng] = x[i]
+            ng += 1usize
+        }
+        i += 1usize
+    }
+    i = 1usize
+    while i < ng {
+        let v = ux[i]
+        var j = i
+        while j > 0usize && ux[j - 1usize] > v {
+            ux[j] = ux[j - 1usize]
+            j -= 1usize
+        }
+        ux[j] = v
+        i += 1usize
+    }
+    let (ya, e7) = mem.alloc[f64](a, ng * k)
+    let (wa, e8) = mem.alloc[f64](a, ng * k)
+    let (fa, e9) = mem.alloc[f64](a, ng)
+    if e7 != ok { ret e7 }
+    if e8 != ok { ret e8 }
+    if e9 != ok { ret e9 }
+    var g = 0usize
+    while g < ng {
+        var cnt = 0.0f64
+        var c = 0usize
+        while c < k {
+            ya[g * k + c] = 0.0f64
+            wa[g * k + c] = 0.0f64
+            c += 1usize
+        }
+        i = 0usize
+        while i < n {
+            if x[i] == ux[g] {
+                cnt += 1.0f64
+                c = 0usize
+                while c < k {
+                    ya[g * k + c] += y[i * k + c]
+                    wa[g * k + c] += w[i * k + c]
+                    c += 1usize
+                }
+            }
+            i += 1usize
+        }
+        c = 0usize
+        while c < k {
+            ya[g * k + c] = ya[g * k + c] / cnt
+            c += 1usize
+        }
+        g += 1usize
+    }
+    let pe2 = pava_rows(a, ya, wa, ng, k, kind, p, fa)
+    if pe2 != ok { ret pe2 }
+    i = 0usize
+    while i < n {
+        g = 0usize
+        while ux[g] != x[i] { g += 1usize }
+        if ties == 1u8 {
+            out[i] = fa[g]
+        } else {
+            out[i] = solve(a, y[i * k..(i + 1usize) * k], w[i * k..(i + 1usize) * k], kind, p) + (fa[g] - solve(a, ya[g * k..(g + 1usize) * k], wa[g * k..(g + 1usize) * k], kind, p))
+        }
+        i += 1usize
+    }
     ret ok
 }

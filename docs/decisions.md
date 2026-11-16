@@ -46570,3 +46570,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `gradient_colour` is scales::pal_gradient_n for the ggthemes gradient palettes: the colours converted to Lab by farver's ColorSpace constants (D65 white 95.047, 100, 108.883, the 0.008856 and 7.787 cube-root rule), linearly interpolated at equal spacing as `approxfun` does, converted back and rounded to the nearest byte; the economist hues join the discrete table as `economist_seq_pal:hue=` rows. L329 is delivered: every ggsci palette (discrete and continuous) and every ggthemes colour palette equals R.
 
 **Result.** `oracle_labramp` agrees with ggthemes on 420 gradient colours (Tableau sequential and diverging, economist hues) and `oracle_palettes` on 2856 table cases on Windows; L329 leaves the queue, Linux runs batched.
+
+## D6567 — isotone: gpava with a matrix response
+
+**Decision.** `gpava_rows` handles a response matrix whose rows are replicates at one predictor value: the block value is the solver applied to all replicates of the block's rows pooled, primary ties order the rows by `(x, solver(row))`, secondary and tertiary ties aggregate the rows of equal x (column means, summed weights) before the pass. `pava_rows` merges adjacent violating blocks and re-solves the pooled slice, as gpava's `combine` does. The weighted median and fractile now add their running weights with a compensated sum: R's `cumsum` accumulates in long double, which decided the `df == 0` midpoint in three cases.
+
+**Result.** `oracle_isotone` agrees with isotone on 1160 matrix values (2 and 3 replicates, three solvers, three ties treatments) and still on the earlier ones on Windows (3408 cases in all); Linux pending. L473 at 0.8: list responses of unequal length, the optimiser-based activeSet solvers and pava stay open.
