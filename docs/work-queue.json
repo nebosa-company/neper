@@ -1032,10 +1032,10 @@
       "group": "CRAN parity",
       "order": 720,
       "title": "polspline: polynomial spline models",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 597). Mid. Acceptance, equal to polspline: polymars with its forward and backward steps, logspline density, quantile and distribution functions, hare hazard estimation, heft, lspec spectral estimation, oldlogspline."
+      "evidence": "D6722: e.algo.stat.logspline evaluates fitted logspline models (dlogspline, plogspline, qlogspline with bounds, polspline grid and Simpson-table quantile), equal to polspline 1.1.25 to 1e-6 on 1032 values on Windows (oracle_polspline); Linux pending. Open: logspline fitting (stepwise knots, AIC), oldlogspline, polymars forward and backward steps, hare, heft, lspec. Original: Open (CRAN rank 597). Mid. Acceptance, equal to polspline: polymars with its forward and backward steps, logspline density, quantile and distribution functions, hare hazard estimation, heft, lspec spectral estimation, oldlogspline."
     },
     {
       "id": "L432",

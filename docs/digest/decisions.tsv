@@ -3580,4 +3580,5 @@ D6717	1046	ggm: fitAncestralGraph
 D6718	793	ggm: induced graphs and topOrder
 D6719	847	ggm: fitConGraph with cliques and the dual fitCovGraph
 D6720	954	seriation: the permutation criteria
-D6721	1240	ashr: ash with a normal likelihood
+D6721	1241	ashr: ash with a normal likelihood
+D6722	1121	polspline: logspline density, distribution and quantile
