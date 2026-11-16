@@ -190,3 +190,4 @@ oracle_mass
 oracle_quantreg
 oracle_dfree
 oracle_auglag
+oracle_glmnet
