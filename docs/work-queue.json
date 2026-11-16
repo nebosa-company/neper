@@ -636,10 +636,10 @@
       "group": "CRAN parity",
       "order": 620,
       "title": "cmprsk: competing risks",
-      "score": 0.6,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6102, D6103): e.algo.stat.cmprsk cinc and crstm equal cuminc estimates, variances and the Gray test (oracle_cmprsk), and e.algo.stat.crr equals crr coefficients and log likelihoods incl. time-varying covariates and censoring groups, D6104 (oracle_crr), Windows. Open: crr variance and residuals, predict.crr, timepoints. Acceptance, equal to cmprsk: cuminc with its variance and Gray k-sample test, crr Fine-Gray regression with time-varying covariates, predict.crr, timepoints."
+      "evidence": "Partial (D6102, D6103): e.algo.stat.cmprsk cinc and crstm equal cuminc estimates, variances and the Gray test (oracle_cmprsk), and e.algo.stat.crr equals crr coefficients, log likelihoods and variance incl. time-varying covariates and censoring groups, D6104, D6105 (oracle_crr), Windows. Open: crr score residuals, predict.crr, timepoints. Acceptance, equal to cmprsk: cuminc with its variance and Gray k-sample test, crr Fine-Gray regression with time-varying covariates, predict.crr, timepoints."
     },
     {
       "id": "L422",

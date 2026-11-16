@@ -44980,3 +44980,9 @@ No new geometry code: `oracle_sf` runs the planar part of `e.algo.geom` against 
 `e.algo.stat.crr` ports `crrfsv`, `crrf` and `covt` of cmprsk line for line and `crr`'s Newton loop with step halving and the `max |s| * max(|b|, 1) < max(|lik|, 1) * gtol` stop. The censoring weights are the Kaplan-Meier of each censoring group evaluated just before each time; R reads them through `approx(rule = 2)`, which answers 0 for a time past the group's last time (times scaled by `1 - 100 eps` and `1 + 10 eps`), and the port reproduces that, since a pooled risk set at a failure time of another group depends on it.
 
 **Result.** `oracle_crr` equals cmprsk 2.2-12 on 74 values (coefficients, log likelihood and null log likelihood of the fits that converge, 1 to 3 covariates, one or two time-varying covariates with `log(1 + t)` and `t`, one or two censoring groups, tied times) on Windows; the Linux run is pending (WSL). Open under L419: the variance (`crrvv`), residuals (`crrsr`), `predict.crr`, `timepoints`.
+
+## D6105 — cmprsk crr variance
+
+`e.algo.stat.crr.crrvv` ports Gray's `crrvv` line for line (the information `v` and the score variance `v2`, with the censoring-process terms `qu`, `ss2` and the `icrsk` risk counts, including the loop that falls into the block when no later time follows) and `variance` forms `inv(v) v2 inv(v)` as `crr` does.
+
+**Result.** `oracle_crr` equals cmprsk's `crr(variance = TRUE)$var` too: 256 values in all (coefficients, log likelihoods and the variance matrices of the converging fits, with time-varying covariates, two censoring groups and tied times) on Windows; the Linux run is pending (WSL). Open under L419: score residuals (`crrsr`), `predict.crr`, `timepoints`.

@@ -67,7 +67,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if fe != ok { ret nan }
     if q < np { ret b[q] }
     if q == np { ret fit.loglik }
-    ret fit.loglik_null
+    if q == np + 1usize { ret fit.loglik_null }
+    let (info, e8) = mem.alloc[f64](a, np * np)
+    let (vr, e9) = mem.alloc[f64](a, np * np)
+    if e8 != ok || e9 != ok { ret nan }
+    if cr.variance(a, &d, b, np, info, vr) != ok { ret nan }
+    ret vr[q - np - 2usize]
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

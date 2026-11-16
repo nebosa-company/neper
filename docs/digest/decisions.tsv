@@ -3176,4 +3176,5 @@ D6100	1490	biglm bigglm: the stopping rule and the reported errors use different
 D6101	1602	vcd and effectsize point estimates
 D6102	801	cmprsk cuminc estimates and variances: Gray's cinc routine
 D6103	613	cmprsk Gray k-sample test
-D6104	967	cmprsk crr point estimates
+D6104	968	cmprsk crr point estimates
+D6105	702	cmprsk crr variance
