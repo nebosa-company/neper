@@ -46802,3 +46802,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `spectrapkg.svds` and `eigs_sym` take the k wanted triplets or pairs from the full Jacobi decompositions of `e.algo.linalg.matrix`; RSpectra's `eigs_sym` selects by `which` (LM by magnitude, LA, SA, SM by magnitude of smallest) and then lists the selected values in decreasing order, not in order of the selection key. Vectors are compared up to sign.
 
 **Result.** `oracle_spectra` agrees with RSpectra svds and eigs_sym and with irlba at 1e-6 on Windows (90 values); Linux pending. irlba fails to converge in R itself when its work space reaches the column count, so those cases use tall matrices. L334 stays partial: shift-invert, general and complex eigs, sparse input, svdr.
+
+## D6613 — strucchange: Fstats and breakpoints
+
+**Decision.** `strucpkg.fstats` computes the single-break statistic `(rss - rss12) / (rss12 / (n - 2k))` for a first segment of i rows, i = floor(0.15 n) .. n - floor(0.15 n); `breakpoints` is the Bai-Perron dynamic programme over a table of segment RSS with minimal segment length h = floor(0.15 n), reporting the last row of each segment but the last. Every coefficient shifts.
+
+**Result.** `oracle_strucchange` agrees with strucchange on the F statistics, their supremum, the m-break RSS and the break positions on Windows (80 values); Linux pending. L361 stays partial: segmented, efp, sctest, gefp, mefp.

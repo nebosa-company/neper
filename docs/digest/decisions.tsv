@@ -3472,4 +3472,5 @@ D6596	397	loo: loo_compare
 D6610	938	mcmc: metrop
 D6597	661	coda: raftery.diag
 D6611	471	randtoolbox: congruRand
-D6612	750	RSpectra and irlba: partial decompositions
+D6612	751	RSpectra and irlba: partial decompositions
+D6613	660	strucchange: Fstats and breakpoints
