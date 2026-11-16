@@ -75,4 +75,17 @@ for (rep in 1:20) {
   starts <- c(1, nl, nl + 1); qs <- c(nl - 1, 1, 1)
   for (t in 1:3) { add("gvif", c(a, starts[t], qs[t]), vv[t, 1]); add("gvif2", c(a, starts[t], qs[t]), vv[t, 3]) }
 }
+# Anova of a glm (binomial 1, poisson 2), LR tests, a factor and a numeric term: ("gl_c" "gl_p") args (n, p, y, design, family, big mask[p], small mask[p], q)
+for (rep in 1:24) {
+  fam <- 1 + rep %% 2; n <- sample(60:150, 1); nl <- sample(2:4, 1); f <- factor(sample(seq_len(nl), n, TRUE)); if (nlevels(f) < nl) next; z <- rnorm(n)
+  eta <- -0.3 + 0.5 * as.numeric(f) * 0.4 + 0.6 * z; y <- if (fam == 1) rbinom(n, 1, plogis(eta)) else rpois(n, exp(eta * 0.7))
+  mm <- if (fam == 1) glm(y ~ f + z, family = binomial) else glm(y ~ f + z, family = poisson); des <- model.matrix(mm); p <- ncol(des); a <- c(n, p, y, as.vector(t(des)), fam)
+  mk <- function(cols) { v <- rep(0, p); v[cols] <- 1; v }; tf <- which(attr(des, "assign") == 1); tz <- which(attr(des, "assign") == 2); i0 <- 1
+  an2 <- suppressMessages(Anova(mm, type = 2, test.statistic = "LR")); an1 <- anova(mm, test = "Chisq")
+
+  for (t in 1:2) { cc <- an2$`LR Chisq`[t]; pp <- an2$`Pr(>Chisq)`[t]; sm <- if (t == 1) mk(c(i0, tz)) else mk(c(i0, tf)); q <- if (t == 1) length(tf) else length(tz)
+    add("gl_c", c(a, mk(seq_len(p)), sm, q), cc); add("gl_p", c(a, mk(seq_len(p)), sm, q), pp) }
+  for (t in 1:2) { cc <- an1$Deviance[t + 1]; pp <- an1$`Pr(>Chi)`[t + 1]; big <- if (t == 1) mk(c(i0, tf)) else mk(seq_len(p)); sm <- if (t == 1) mk(i0) else mk(c(i0, tf)); q <- if (t == 1) length(tf) else length(tz)
+    add("gl_c", c(a, big, sm, q), cc); add("gl_p", c(a, big, sm, q), pp) }
+}
 emit("carlmtest", "car", list(cases))

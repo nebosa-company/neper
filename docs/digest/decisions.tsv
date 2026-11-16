@@ -3426,4 +3426,5 @@ D6554	492	car: powerTransform lambda
 D6555	573	car: Anova for factor terms
 D6556	657	sandwich: vcovBS (pairs bootstrap)
 D6557	944	sandwich: vcovPL; car: Anova with an interaction
-D6558	510	car: gvif
+D6558	511	car: gvif
+D6559	631	car: Anova for binomial and Poisson glms

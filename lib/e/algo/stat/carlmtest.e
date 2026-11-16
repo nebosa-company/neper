@@ -5,6 +5,7 @@
 // Breusch-Pagan), p values, Anova and the rest of car.
 
 use e.algo.rand.r as rng
+use e.algo.stat.bigglm as bgl
 use e.math
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
@@ -1492,4 +1493,54 @@ fn gvif(a: *mem.Arena, x: []const f64, n: usize, p: usize, start: usize, q: usiz
     }
     let g = det_of(a, rt, q) * det_of(a, rr[0usize..mr * mr], mr) / det_of(a, rm, m)
     ret (g, math.pow[f64](g, 1.0f64 / (2.0f64 * f64(q))))
+}
+
+// car::Anova / anova of a glm with a known dispersion (binomial 1, Poisson 2): the likelihood-ratio chi-square, the deviance of the model on the small column set minus that on the big one, on q df; the deviances are iterated to convergence
+fn glm_lr_masked(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, fam: u8, big: []const f64, small: []const f64, q: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (w, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret (nan, nan) }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    var devs = 0.0f64
+    var devb = 0.0f64
+    var pass = 0usize
+    while pass < 2usize {
+        var m = 0usize
+        var c = 0usize
+        while c < p {
+            var keep = big[c] > 0.5f64
+            if pass == 1usize { keep = small[c] > 0.5f64 }
+            if keep { m += 1usize }
+            c += 1usize
+        }
+        let (xm, e1) = mem.alloc[f64](a, n * m)
+        let (cf, e2) = mem.alloc[f64](a, m)
+        let (se, e3) = mem.alloc[f64](a, m)
+        if e1 != ok || e2 != ok || e3 != ok { ret (nan, nan) }
+        i = 0usize
+        while i < n {
+            var k = 0usize
+            c = 0usize
+            while c < p {
+                var keep = big[c] > 0.5f64
+                if pass == 1usize { keep = small[c] > 0.5f64 }
+                if keep {
+                    xm[k * n + i] = x[i * p + c]
+                    k += 1usize
+                }
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let (ft, fe) = bgl.bigglm(a, xm, y, w, n, m, fam, 100usize, 1.0e-14f64, cf, se)
+        if fe != ok { ret (nan, nan) }
+        if pass == 0usize { devb = ft.deviance } else { devs = ft.deviance }
+        pass += 1usize
+    }
+    let chi = devs - devb
+    ret (chi, nm.pchisq(chi, f64(q), false, false))
 }

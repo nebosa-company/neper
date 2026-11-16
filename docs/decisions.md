@@ -46522,3 +46522,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `gvif` is car::vif for a term of q columns: the correlation matrix R of the coefficient covariance `(X'X)^-1` without the intercept, `det(R_term) det(R_rest) / det(R)`, and its `1 / (2 q)` power (the GVIF^(1/(2 Df)) column).
 
 **Result.** `oracle_carlmtest` agrees with car on 120 new values (a 3 to 5 level factor and two correlated numeric terms) on Windows (2008 cases in all); Linux pending. L300 stays partial (Anova for glm, kernHAC with bwAndrews and prewhitening).
+
+## D6559 — car: Anova for binomial and Poisson glms
+
+**Decision.** `glm_lr_masked` gives the likelihood-ratio chi-square of a glm Anova row: the deviance of the model on one column set minus that on a larger one (column sets chosen as for the lm masks), iterated by `bigglm` to convergence (tolerance 1e-14, 100 iterations), on q df. Known-dispersion families only; the design is passed to bigglm column-major.
+
+**Result.** `oracle_carlmtest` agrees with car (type II) and anova.glm (sequential) on 96 values (2200 cases in all) on Windows; Linux pending. L300 stays partial (kernHAC, the other bootstrap types, quasi families).

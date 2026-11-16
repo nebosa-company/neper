@@ -118,6 +118,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "gvif") { ret g1 }
         ret g2
     }
+    if str.eq(c.name, "gl_c") || str.eq(c.name, "gl_p") {
+        let gb = 3usize + n + n * p
+        let (gc, gp) = cl.glm_lr_masked(a, des, y, n, p, u8(x[2usize + n + n * p]), x[gb..gb + p], x[gb + p..gb + 2usize * p], usize(x[gb + 2usize * p]))
+        if str.eq(c.name, "gl_c") { ret gc }
+        ret gp
+    }
     if str.eq(c.name, "bc") { ret cl.box_cox_ll(a, des, y, n, p, x[2usize + n + n * p]) }
     if str.eq(c.name, "pt_lambda") { ret cl.power_transform_lambda(a, des, y, n, p) }
     if str.eq(c.name, "an") || str.eq(c.name, "anp") {
