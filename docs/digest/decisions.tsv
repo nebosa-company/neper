@@ -3204,4 +3204,5 @@ D6128	912	SQUAREM with an objective, and the cycled schemes
 D6129	665	hexbin hexTapply, smooth.hexbin and erode.hexbin
 D6130	853	fracdiff.sim
 D6131	687	the remaining mlbench generators
-D6132	746	the non-central distributions and the rest of pwr
+D6132	747	the non-central distributions and the rest of pwr
+D6133	1082	yardstick multiclass averaging, pr_auc, gain_capture, lift_curve and iic

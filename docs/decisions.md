@@ -45166,3 +45166,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.math.nchisq` gains `pnt` (AS 243, with R's left-tail shortcut and the normal approximation for large df or ncp), `pnbeta2` (AS 226 with R84 and R95, x and 1 - x given apart) and `pnf` on top of it; R accumulates these in long double, this is f64. `e.algo.stat.pwr` adds the five designs with R's brackets for each unknown, the pwr.r.test solves, `cohen_es`, `es_w1` and `es_w2`.
 
 **Result.** `oracle_pwr` equals pwr on 2013 cases (non-central designs of every kind, each unknown solved) on Windows; Linux pending. L399 is closed.
+
+## D6133 — yardstick multiclass averaging, pr_auc, gain_capture, lift_curve and iic
+
+**Context.** L405 had the numeric and binary metrics.
+
+**Decision.** `multiclass` builds every class metric from the confusion matrix (rows the estimate, columns the truth, as yardstick's `conf_mat` is) and averages per class with `weighted.mean(out, w)`, with the class weights 1/k for macro, the truth counts for macro_weighted and summed numerators and denominators for micro; kap and mcc use the closed forms. `pr_auc` and `gain_capture` are the trapezoid areas of the precision-recall and gain curves (thresholds from the largest estimate, ties collapsed to the last occurrence, the origin point first); `one_vs_all` averages them, and roc_auc, over the classes. `lift_curve` is the percent found over the percent tested; `iic` is the correlation times the ratio of the smaller to the larger one-sided mean absolute error. roc_auc's default multiclass estimator hand_till is not ported.
+
+**Result.** `oracle_metrics` equals yardstick on 656 cases on Windows; Linux pending. L405 is closed.

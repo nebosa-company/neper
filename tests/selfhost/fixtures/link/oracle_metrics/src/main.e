@@ -11,11 +11,50 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "mc") || str.eq(c.name, "ova") {
+        let k = usize(x[0usize])
+        let m = usize(x[1usize])
+        let truth = x[2usize..2usize + m]
+        if str.eq(c.name, "ova") {
+            let probs = x[2usize + m..2usize + m + m * k]
+            ret mt.one_vs_all(a, truth, probs, k, u8(x[2usize + m + m * k]), u8(x[3usize + m + m * k]))
+        }
+        let est = x[2usize + m..2usize + 2usize * m]
+        let (conf, ce) = mem.alloc[f64](a, k * k)
+        if ce != ok { os.exit(5) }
+        var q = 0usize
+        while q < k * k {
+            conf[q] = 0.0f64
+            q += 1usize
+        }
+        q = 0usize
+        while q < m {
+            conf[usize(est[q]) * k + usize(truth[q])] += 1.0f64
+            q += 1usize
+        }
+        ret mt.multiclass(conf, k, u8(x[2usize + 2usize * m]), u8(x[3usize + 2usize * m]), x[4usize + 2usize * m])
+    }
     let n = usize(x[0usize])
     let t = x[1usize..1usize + n]
     let e = x[1usize + n..1usize + 2usize * n]
     let p1 = x[1usize + 2usize * n]
     let nm = c.name
+    if str.eq(nm, "iic") { ret mt.iic(t, e) }
+    if str.eq(nm, "prauc") { ret mt.pr_auc(a, t, e) }
+    if str.eq(nm, "gaincap") { ret mt.gain_capture(a, t, e) }
+    if str.eq(nm, "lift") {
+        let (lv, le) = mt.lift_curve(a, t, e)
+        if le != ok { os.exit(5) }
+        let j = u8(p1)
+        if j == 0u8 { ret f64(lv.len) }
+        var s = 0.0f64
+        var i = 0usize
+        while i < lv.len {
+            if j == 1u8 { s += lv[i] } else { s += f64(i + 1usize) * lv[i] }
+            i += 1usize
+        }
+        ret s
+    }
     if str.eq(nm, "rmse") { ret mt.rmse(t, e) }
     if str.eq(nm, "mae") { ret mt.mae(t, e) }
     if str.eq(nm, "mse") { ret mt.mse(t, e) }
