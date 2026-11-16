@@ -45490,3 +45490,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.perfanalytics` gains es_modified, the Cornish-Fisher expected shortfall in the operational form that ES() uses by default: the shortfall is minus the mean minus the population standard deviation times the smaller of -MES / alpha and the Cornish-Fisher quantile h, where MES = dnorm(h) (1 + h^3 s / 6 + (h^6 - 9 h^4 + 9 h^2 + 3) s^2 / 72 + (h^4 - 2 h^2 - 1) k / 24) with the moment skewness and excess kurtosis. The plain (non-operational) form differs and can go negative for skewed series at p = 0.99, which is what the first attempt showed. Not here: the non-operational form, the portfolio and component forms and the other methods.
 
 **Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 488 cases on Windows; Linux pending. L408 stays partial.
+
+## D6179 — cluster: silhouette widths
+
+`e.algo.stat.pamcluster` gains silhouette: for each observation the mean dissimilarity to its own cluster (without itself) and the smallest mean dissimilarity to another cluster give (b - a) / max(a, b), with 0 for a singleton cluster. It equals cluster::silhouette widths and their mean on random clusterings of 12 to 40 points. Not here: the summary object, clus.avg.widths printing, ordinal and asymmetric-binary daisy columns, diana, mona, clara, fanny and pam's exact swap order.
+
+**Result.** `oracle_pamcluster` equals cluster on 114 cases on Windows; Linux pending. L335 stays partial.
