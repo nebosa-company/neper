@@ -1026,7 +1026,9 @@ fn array_sort(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
 
 // --- flat / flatMap
 
-fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, mapper: js.Value, this_arg: js.Value, start: f64, known_len: f64) -> (f64, err) {
+fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, mapper: js.Value, this_arg: js.Value, start: f64, known_len: f64, level: u32) -> (f64, err) {
+    // `flat(Infinity)` recurses once per level of nesting, which the data chooses.
+    if level > 2000u32 { ret (0.0f64, js.throw_range(it, "array nesting too deep")) }
     var len = known_len
     if len < 0.0f64 {
         let (l2, le) = len_of(it, src)
@@ -1057,7 +1059,7 @@ fn flatten_into(it: *js.Interp, target_arr: *js.Obj, src: *js.Obj, depth: f64, m
                 flatten_v = isa
             }
             if flatten_v {
-                let (n2, ne2) = flatten_into(it, target_arr, js.as_object(v), depth - 1.0f64, js.undefv(), js.undefv(), n, -1.0f64)
+                let (n2, ne2) = flatten_into(it, target_arr, js.as_object(v), depth - 1.0f64, js.undefv(), js.undefv(), n, -1.0f64, level + 1u32)
                 if ne2 != ok { ret (0.0f64, ne2) }
                 n = n2
             } else {
@@ -1085,7 +1087,7 @@ fn array_flat(it: *js.Interp, this_val: js.Value, args: []const js.Value) -> (js
     if sle != ok { ret (js.undefv(), sle) }
     let (out, oute) = species_create(it, o, 0.0f64)
     if oute != ok { ret (js.undefv(), oute) }
-    let (n, fe) = flatten_into(it, out, o, depth, js.undefv(), js.undefv(), 0.0f64, src_len)
+    let (n, fe) = flatten_into(it, out, o, depth, js.undefv(), js.undefv(), 0.0f64, src_len, 0u32)
     if fe != ok { ret (js.undefv(), fe) }
     ret (js.obj_value(out), ok)
 }
@@ -1100,7 +1102,7 @@ fn array_flat_map(it: *js.Interp, this_val: js.Value, args: []const js.Value) ->
     if sle2 != ok { ret (js.undefv(), sle2) }
     let (out, oute) = species_create(it, o, 0.0f64)
     if oute != ok { ret (js.undefv(), oute) }
-    let (n, fe) = flatten_into(it, out, o, 1.0f64, cb, arg(args, 1usize), 0.0f64, src_len2)
+    let (n, fe) = flatten_into(it, out, o, 1.0f64, cb, arg(args, 1usize), 0.0f64, src_len2, 0u32)
     if fe != ok { ret (js.undefv(), fe) }
     ret (js.obj_value(out), ok)
 }

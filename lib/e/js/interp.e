@@ -145,7 +145,7 @@ type AgentHub = struct {
 type TemplateSite = struct { prog: *const ast.Program, node: u32, obj: *Obj }
 
 type Interp = struct {
-    a: *mem.Arena, protos: Protos, global: *Obj, global_env: *Env, thrown: Value, depth: u32, max_depth: u32,
+    a: *mem.Arena, protos: Protos, global: *Obj, global_env: *Env, thrown: Value, depth: u32, max_depth: u32, eval_depth: u32,
     next_symbol: u32, callee: *Obj, new_target: Value, has_new_target: bool, steps: u64, step_limit: u64,
     sym_iterator: *Sym, sym_has_instance: *Sym, sym_to_primitive: *Sym, sym_to_string_tag: *Sym, sym_species: *Sym,
     sym_async_iterator: *Sym, sym_is_concat_spreadable: *Sym, sym_unscopables: *Sym, sym_dispose: *Sym, sym_async_dispose: *Sym, sym_match: *Sym, sym_replace: *Sym,
@@ -4705,7 +4705,19 @@ fn tick(it: *Interp) -> err {
     ret ok
 }
 
+// How deeply the evaluator may recurse into one expression (a left-associative chain of a hundred thousand `+` is that deep in the
+// tree): past it a RangeError is thrown, not a stack overflow.
+const MAX_EVAL_DEPTH: u32 = 1200u32
+
 fn eval(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
+    if it.eval_depth >= MAX_EVAL_DEPTH { ret (undefv(), throw_range(it, "Maximum call stack size exceeded")) }
+    it.eval_depth += 1u32
+    let (v, e) = eval_node(it, f, id)
+    it.eval_depth -= 1u32
+    ret (v, e)
+}
+
+fn eval_node(it: *Interp, f: *Frame, id: u32) -> (Value, err) {
     let n = f.prog.nodes[usize(id)]
     let k = n.kind
     if k == ast.N_NUM { ret (num_value(n.num), ok) }

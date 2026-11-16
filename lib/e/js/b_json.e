@@ -475,6 +475,9 @@ fn ser(it: *js.Interp, st: *S, holder: *js.Obj, key: js.Key, value_in: js.Value,
         ret ("null", true, ok)
     case .Obj as o:
         if js.is_callable(value) { ret ("", false, ok) }
+        // Nesting limit: a structure deeper than this is refused instead of recursing until the stack ends (and the cycle check
+        // below walks the whole stack, so the limit also bounds its cost).
+        if st.stack.len >= 2000usize { ret ("", false, js.throw_range(it, "JSON nesting too deep")) }
         // Cycle check.
         var i = 0usize
         while i < st.stack.len {

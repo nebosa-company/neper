@@ -47114,3 +47114,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** A recursive grammar or a self-referencing schema hands the nesting depth to the input. `e.parse.comb.call` runs every combinator's inner parser one level deeper and, past 2048, abandons the parse with `cx.too_deep` and `cx.overflow` set, which the existing overflow checks already unwind; `e.fmt.avro` counts depth in the decoder around `skip` and `decode_resolved` (512, `TooDeep`). Both limits sit well inside a default stack and well above the nesting real documents reach.
 
 **Result.** `parse_comb` and `fmt_avro` pass on Windows with a 100000-level input that overflowed the stack before; Linux pending. L241 moves to 0.4: the JavaScript parser, interpreter, JSON and array builtins and `sort.quick` are open.
+
+## D6666 — recursion depth guards: the JavaScript engine
+
+**Decision.** The parser counts expression nesting in `parse_primary` (1500) and refuses a run of more than 1500 chained binary operators, whose left-leaning tree is as deep as the chain; the evaluator counts nested `eval` calls in their own counter (1200, a RangeError), separate from the JS call depth of 160, because the native stack of the test executable gave out between 2000 and 2400 evaluations; `JSON.stringify` refuses past 2000 levels of its object stack, which also bounds the quadratic cycle check; `Array.prototype.flat` counts its recursion (2000). Each limit throws a catchable error or a syntax error.
+
+**Result.** `js_depth_guards` passes on Windows and crashes (exit 127) on the old code; 69 other js, web and dom fixtures still pass; Linux pending. L241 is at 0.85, with `sort.quick` and the other unguarded parser shapes open.

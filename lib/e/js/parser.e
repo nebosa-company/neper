@@ -21,7 +21,7 @@ type Parser = struct {
     a: *mem.Arena, lx: lex.Lexer, tok: lex.Tok, prev_end: usize, prev_start: usize, prev_line: u32,
     nodes: list.List[ast.Node], kids: list.List[u32], strs: list.List[ast.TemplateStr], vars: list.List[u32],
     strict: bool, no_in: bool, in_function: bool, in_generator: bool, in_async: bool, uses_args: bool, blk: u32, module: bool, anon_default: bool, top_await: bool, sub_flag: bool,
-    message: str, line: u32, parens: list.List[u32]
+    message: str, line: u32, parens: list.List[u32], nesting: u32
 }
 
 fn fail(p: *Parser, message: str) -> err {
@@ -500,9 +500,13 @@ fn parse_binary(p: *Parser, min_prec: u8) -> (u32, err) {
     } else {
         left = try parse_unary(p)
     }
+    var folded = 0u32
     while true {
         let (op, prec, found) = binary_info(p)
         if !found || prec <= min_prec { break }
+        // a chain of operators of one precedence is a left-leaning tree as deep as it is long, and every pass over the tree recurses
+        folded += 1u32
+        if folded > MAX_NESTING { ret (ast.NONE, fail(p, "expression has too many chained operators")) }
         try adv(p)
         var right: u32 = ast.NONE
         if op == ast.O_EXP {
@@ -913,7 +917,19 @@ fn parse_array(p: *Parser) -> (u32, err) {
     ret (id, ok)
 }
 
+// How deeply expressions may nest in the source: past it the parse fails, so a hundred thousand open brackets are a syntax error
+// and not a stack overflow.
+const MAX_NESTING: u32 = 1500u32
+
 fn parse_primary(p: *Parser) -> (u32, err) {
+    if p.nesting >= MAX_NESTING { ret (ast.NONE, fail(p, "expression nested too deeply")) }
+    p.nesting += 1u32
+    let (id, e) = parse_primary_inner(p)
+    p.nesting -= 1u32
+    ret (id, e)
+}
+
+fn parse_primary_inner(p: *Parser) -> (u32, err) {
     if is_p(p, "@") {
         let (pdf, pdc) = try parse_decorators(p)
         if !is_k(p, "class") { ret (ast.NONE, fail(p, "decorators must precede a class")) }
