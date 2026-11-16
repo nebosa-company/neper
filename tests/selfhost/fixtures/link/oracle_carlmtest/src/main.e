@@ -37,6 +37,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(c.name, "rain") || str.eq(c.name, "rainp") || str.eq(c.name, "harv") || str.eq(c.name, "harvp") {
+        var rs = 0.0f64
+        var rp = 0.0f64
+        if c.name[0usize] == 114u8 {
+            let (s1, p1) = cl.rain_test(a, des, y, n, p)
+            rs = s1
+            rp = p1
+        } else {
+            let (s2, p2) = cl.harv_test(a, des, y, n, p)
+            rs = s2
+            rp = p2
+        }
+        if c.name.len == 4usize { ret rs }
+        ret rp
+    }
     if str.eq(c.name, "bg_c") || str.eq(c.name, "bg_cp") || str.eq(c.name, "bg_f") || str.eq(c.name, "bg_fp") {
         var bty = 0usize
         if c.name[3usize] == 102u8 { bty = 1usize }

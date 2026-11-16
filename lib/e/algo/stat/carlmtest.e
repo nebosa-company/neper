@@ -560,3 +560,87 @@ fn bg_test(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, or
     let bg = ((rss0 - rss1) / f64(order)) / (rss1 / f64(n - p - order))
     ret (bg, p_f(bg, f64(order), f64(n - p - order)))
 }
+
+// lmtest::raintest(fraction = 0.5, center = 0.5): the rainbow F statistic and its p value, the central subset rows from..to of the data in its given order
+fn rain_test(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let from = usize(math.ceil[f64](1.0f64 + f64(n - 1usize) * 0.25f64))
+    let n1 = n / 2usize
+    let (f0, e1) = ols(a, x, y, n, p)
+    if e1 != ok { ret (nan, nan) }
+    let (f1, e2) = ols(a, x[(from - 1usize) * p..(from - 1usize + n1) * p], y[from - 1usize..from - 1usize + n1], n1, p)
+    if e2 != ok { ret (nan, nan) }
+    var s0 = 0.0f64
+    var i = 0usize
+    while i < n {
+        s0 += f0.resid[i] * f0.resid[i]
+        i += 1usize
+    }
+    var s1 = 0.0f64
+    i = 0usize
+    while i < n1 {
+        s1 += f1.resid[i] * f1.resid[i]
+        i += 1usize
+    }
+    let rain = ((s0 - s1) / f64(n - n1)) / (s1 / f64(n1 - p))
+    ret (rain, p_f(rain, f64(n - n1), f64(n1 - p)))
+}
+
+// lmtest::harvtest: the Harvey-Collier statistic from the recursive residuals and its two-sided p value
+fn harv_test(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let m = n - p
+    let (w, e0) = mem.alloc[f64](a, m)
+    if e0 != ok { ret (nan, nan) }
+    var r = p
+    while r < n {
+        let start = mem.mark(a)
+        let (f, e1) = ols(a, x[0usize..r * p], y[0usize..r], r, p)
+        if e1 != ok { ret (nan, nan) }
+        var pr = 0.0f64
+        var q = 0.0f64
+        var i = 0usize
+        while i < p {
+            pr += x[r * p + i] * f.beta[i]
+            var j = 0usize
+            while j < p {
+                q += x[r * p + i] * f.xtx_inv[i * p + j] * x[r * p + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        w[r - p] = (y[r] - pr) / math.sqrt[f64](1.0f64 + q)
+        mem.reset(a, start)
+        r += 1usize
+    }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < m {
+        mean += w[i]
+        i += 1usize
+    }
+    mean = mean / f64(m)
+    var ss = 0.0f64
+    i = 0usize
+    while i < m {
+        ss += (w[i] - mean) * (w[i] - mean)
+        i += 1usize
+    }
+    let sigma = math.sqrt[f64](ss / f64(n - p - 1usize))
+    var sum = 0.0f64
+    var ss2 = 0.0f64
+    i = 0usize
+    while i < m {
+        sum += w[i] / sigma
+        i += 1usize
+    }
+    let mu = sum / f64(m)
+    i = 0usize
+    while i < m {
+        let d = w[i] / sigma - mu
+        ss2 += d * d
+        i += 1usize
+    }
+    let harv = math.abs[f64](sum / math.sqrt[f64](f64(n - p))) / math.sqrt[f64](ss2 / f64(m - 1usize))
+    ret (harv, 2.0f64 * nb.pt(harv, f64(n - p - 1usize), false, false))
+}

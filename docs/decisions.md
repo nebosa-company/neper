@@ -46348,3 +46348,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `carlmtest.bg_test` runs the Breusch-Godfrey auxiliary regression of the residuals on X and the lagged residuals (the first lags filled with 0, as `fill = 0`); the Chisq statistic is `n sum(fitted^2) / sum(resid^2)` with df = order, the F statistic uses the residual sums of squares with `n - k - order` degrees of freedom.
 
 **Result.** `oracle_carlmtest` agrees with lmtest on 144 new values (orders 1, 2, 4; statistic and p value, both types) on Windows; Linux pending. Bootstrap covariances, the other lmtest tests and car's Anova stay open; L300 stays partial.
+
+## D6530 — lmtest: raintest and harvtest
+
+**Decision.** `rain_test` is the rainbow F with R's default central half: `from = ceiling(quantile(1:n, 0.25))` (that is `ceiling(1 + (n - 1)/4)`), `floor(n/2)` rows, `((RSS - RSS_sub)/(n - n1)) / (RSS_sub/(n1 - k))`. `harv_test` takes the recursive residuals as `(y_r - x_r' b_{r-1}) / sqrt(1 + x_r' (X'X)^-1 x_r)` from direct fits on the first r rows (equal to R's updating recursion) and the Harvey-Collier statistic from them, p = 2 P(T > HC).
+
+**Result.** `oracle_carlmtest` agrees with lmtest on 48 new values on Windows; Linux pending. L300 stays partial.
