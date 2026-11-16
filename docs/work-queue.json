@@ -394,10 +394,10 @@
       "group": "CRAN parity",
       "order": 587,
       "title": "pastecs: decomposition, turning points and descriptive statistics",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 823). Small. Acceptance, equal to pastecs: decompose with the cycle and trend options, turnpoints with information and probabilities, regul and regul.screen, stat.desc and the first-differences and trend tests."
+      "evidence": "Partly done (D6073): e.algo.stat.pastecs has turnpoints with probabilities and information, and stat.desc with the moment entries, equal to pastecs on 1040 values on Windows (oracle_pastecs); Linux pending. Open: decompose and tsd, regul, trend.test, first-differences test, turnogram, Shapiro-Wilk entries. Original: Open (CRAN rank 823). Small. Acceptance, equal to pastecs: decompose with the cycle and trend options, turnpoints with information and probabilities, regul and regul.screen, stat.desc and the first-differences and trend tests."
     },
     {
       "id": "L470",
