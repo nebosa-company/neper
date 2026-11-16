@@ -46808,3 +46808,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `strucpkg.fstats` computes the single-break statistic `(rss - rss12) / (rss12 / (n - 2k))` for a first segment of i rows, i = floor(0.15 n) .. n - floor(0.15 n); `breakpoints` is the Bai-Perron dynamic programme over a table of segment RSS with minimal segment length h = floor(0.15 n), reporting the last row of each segment but the last. Every coefficient shifts.
 
 **Result.** `oracle_strucchange` agrees with strucchange on the F statistics, their supremum, the m-break RSS and the break positions on Windows (80 values); Linux pending. L361 stays partial: segmented, efp, sctest, gefp, mefp.
+
+## D6614 — afex: split-plot repeated-measures ANOVA
+
+**Decision.** `afexpkg.rm_anova` takes subjects by rows (group index, then k responses) and gives the Type III tests of a within factor B and a between factor A with equal groups: sums of squares from the balanced decomposition, epsilons from the Helmert-contrast cross-products of the within-group residuals, Huynh-Feldt reported uncapped but used capped at 1 for its p, generalized eta squared with the subject and residual terms in every denominator. Mauchly's p copies car, whose omega term uses `3 * p` with p the number of response columns rather than the contrast rank, so only k of 4 or more shows the difference.
+
+**Result.** `oracle_afex` agrees with afex on Windows (230 values over within-only, two- and three-group designs); Linux pending. L427 stays partial: several factors, unequal groups, covariates, Type II.

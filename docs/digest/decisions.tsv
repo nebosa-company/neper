@@ -3473,4 +3473,5 @@ D6610	938	mcmc: metrop
 D6597	661	coda: raftery.diag
 D6611	471	randtoolbox: congruRand
 D6612	751	RSpectra and irlba: partial decompositions
-D6613	660	strucchange: Fstats and breakpoints
+D6613	661	strucchange: Fstats and breakpoints
+D6614	882	afex: split-plot repeated-measures ANOVA
