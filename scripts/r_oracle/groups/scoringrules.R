@@ -128,4 +128,22 @@ for (rep in 1:25) {
   d <- sample(2:4, 1); m <- sample(4:12, 1); X <- matrix(rnorm(d * m), d, m); yv <- rnorm(d)
   add("exs", c(6, d, m, 0, as.vector(X), yv), mmds_sample(yv, X))
 }
+for (rep in 1:25) {
+  n <- sample(8:40, 1); dat <- round(rnorm(n, 0.3, 1.2), 4); yy <- rnorm(1, 0.3, 1.5); lo <- rnorm(1, -0.5, 0.5); hi <- lo + runif(1, 0.5, 3); mu <- rnorm(1); sg <- runif(1, 0.5, 2)
+  add("ow1", c(99, yy, lo, hi, mu, sg, n, dat), owcrps_sample(yy, dat, a = lo, b = hi, show_messages = FALSE)); add("tw1", c(99, yy, lo, hi, mu, sg, n, dat), twcrps_sample(yy, dat, a = lo, b = hi, show_messages = FALSE))
+  nm <- c("norm_cdf", "norm_surv", "norm_pdf", "logis_cdf", "logis_surv", "logis_pdf"); id <- sample(0:5, 1)
+  add("ow1", c(id, yy, lo, hi, mu, sg, n, dat), owcrps_sample(yy, dat, weight_func = get_weight_func(nm[id + 1], mu, sg), show_messages = FALSE))
+  add("tw1", c(id, yy, lo, hi, mu, sg, n, dat), twcrps_sample(yy, dat, chain_func = get_weight_func(nm[id + 1], mu, sg, weight = FALSE), show_messages = FALSE))
+  d <- sample(2:4, 1); m <- sample(6:20, 1); X <- matrix(rnorm(d * m, 0.2, 1.2), d, m); yv <- rnorm(d, 0.2, 1.2); lo <- -0.8; hi <- 1.5; pp <- runif(1, 0.3, 1)
+  for (tw in 0:1) {
+    add("mv", c(0, tw, d, m, lo, hi, pp, as.vector(X), yv), if (tw == 1) twes_sample(yv, X, lo, hi) else owes_sample(yv, X, lo, hi))
+    add("mv", c(1, tw, d, m, lo, hi, pp, as.vector(X), yv), if (tw == 1) twmmds_sample(yv, X, lo, hi) else owmmds_sample(yv, X, lo, hi))
+    add("mv", c(2, tw, d, m, lo, hi, pp, as.vector(X), yv), if (tw == 1) twvs_sample(yv, X, lo, hi, p = pp) else owvs_sample(yv, X, lo, hi, p = pp))
+  }
+}
+for (rep in 1:25) {
+  loc <- rnorm(1); sc <- runif(1, 0.5, 2.5); lo <- loc - sc * runif(1, 0.2, 2); hi <- loc + sc * runif(1, 0.2, 3); yin <- runif(1, lo, hi); df <- runif(1, 1.5, 12)
+  add("logs", c(34, loc, sc, 0, 0, yin + 0.3), logs_exp2(yin + 0.3, loc, sc))
+  add("logs", c(35, loc, sc, lo, hi, yin), logs_tlogis(yin, loc, sc, lo, hi)); add("logs", c(36, df, loc, sc, 0, yin, lo, hi), logs_tt(yin, df, loc, sc, lo, hi))
+}
 emit("scoringrules", "scoringRules", list(cases))

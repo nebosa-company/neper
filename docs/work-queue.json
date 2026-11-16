@@ -587,17 +587,6 @@
       "evidence": "Partial (D6165). cluster.stats validity indexes (no noise cluster) equal fpc on Windows (oracle_fpc; Linux pending). Open: noise clusters, clusterboot, nselectboot, mergenormals, dbscan, cluster.varstats, discrcoord and ncoord. Was: Open (CRAN rank 803). Small to mid. Acceptance, equal to fpc under set.seed: cluster.stats with every validity index, calinhara, clusterboot, nselectboot, mergenormals, dbscan, cluster.varstats, plotcluster data (discrcoord, ncoord)."
     },
     {
-      "id": "L475",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 637,
-      "title": "scoringRules: proper scoring rules",
-      "score": 0.94,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6145, D6507 crps_pois, crps_t, logs_t, D6508 crps_gtcnorm, tnorm, cnorm, D6509 crps_gtclogis, tlogis, clogis, D6510 crps_gtct, tt, ct, D6511 weighted and kernel crps_sample, crps_nbinom, D6512 mixnorm, gev, gpd, llapl, llogis, 2pexp, 2pnorm, expM, D6513 crps_beta, crps_hyper and the logs and dss of the wider families, D6514 ints, ess_moments, gradcrps and hesscrps for norm, logis and t, clogs_sample, mmds_sample). Closed-form crps, logs, dss of norm, logis, lapl, exp, unif, lnorm, gamma, binom, pois and the sample crps, dss, logs, es, vs, qs, rps equal scoringRules on Windows (oracle_scoringrules; Linux pending). Open: gradcrps and hesscrps of the truncated and censored families, the outcome- and threshold-weighted rules (ow and tw crps, es, mmds, vs). Was: Open (CRAN rank 870). Small to mid. Acceptance, equal to scoringRules: crps, logs, dss, qs, rps and es_sample, vs_sample, crps_sample for every parametric family it lists and for sample forecasts, with the kernel and the quantile-based estimators."
-    },
-    {
       "id": "L477",
       "category": "library",
       "group": "CRAN parity",

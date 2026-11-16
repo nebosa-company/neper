@@ -1044,3 +1044,243 @@ fn mmds_sample(y: []const f64, dat: []const f64, d: usize) -> f64 {
     }
     ret 0.5f64 * xx - xy
 }
+
+// get_weight_func(name, mu, sigma, weight): id 0 norm_cdf, 1 norm_surv, 2 norm_pdf, 3 logis_cdf, 4 logis_surv, 5 logis_pdf. weight_func is the weight, chain_func its chaining function
+fn weight_func(id: usize, mu: f64, sg: f64, x: f64) -> f64 {
+    if id == 0usize { ret dist.pnorm(x, mu, sg, true, false) }
+    if id == 1usize { ret 1.0f64 - dist.pnorm(x, mu, sg, true, false) }
+    if id == 2usize { ret dist.dnorm(x, mu, sg, false) }
+    if id == 3usize { ret plogis_std((x - mu) / sg) }
+    if id == 4usize { ret 1.0f64 - plogis_std((x - mu) / sg) }
+    let e = math.exp[f64](0.0f64 - (x - mu) / sg)
+    ret e / (sg * (1.0f64 + e) * (1.0f64 + e))
+}
+
+fn chain_func(id: usize, mu: f64, sg: f64, x: f64) -> f64 {
+    if id == 0usize { ret (x - mu) * dist.pnorm(x, mu, sg, true, false) + sg * sg * dist.dnorm(x, mu, sg, false) }
+    if id == 1usize { ret x - (x - mu) * dist.pnorm(x, mu, sg, true, false) - sg * sg * dist.dnorm(x, mu, sg, false) }
+    if id == 2usize { ret dist.pnorm(x, mu, sg, true, false) }
+    if id == 3usize { ret sg * math.log[f64](1.0f64 + math.exp[f64]((x - mu) / sg)) }
+    if id == 4usize { ret x - sg * math.log[f64](1.0f64 + math.exp[f64]((x - mu) / sg)) }
+    ret plogis_std((x - mu) / sg)
+}
+
+// owcrps_sample(y, dat, weight_func = id): the weighted-EDF CRPS with weights weight(dat), times weight(y); id 99 is the default indicator of (lo, hi)
+fn owcrps_sample(a: *mem.Arena, y: f64, dat: []const f64, lo: f64, hi: f64, id: usize, mu: f64, sg: f64) -> f64 {
+    let n = dat.len
+    let (w, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var wy = 0.0f64
+    if id == 99usize {
+        if y > lo && y < hi { wy = 1.0f64 }
+    } else {
+        wy = weight_func(id, mu, sg, y)
+    }
+    var i = 0usize
+    while i < n {
+        if id == 99usize {
+            w[i] = 0.0f64
+            if dat[i] > lo && dat[i] < hi { w[i] = 1.0f64 }
+        } else {
+            w[i] = weight_func(id, mu, sg, dat[i])
+        }
+        i += 1usize
+    }
+    ret crps_edf_w(a, y, dat, w) * wy
+}
+
+// twcrps_sample(y, dat, a, b, chain_func = id): the EDF CRPS of the chained values (clamped to [lo, hi] for the default id 99)
+fn twcrps_sample(a: *mem.Arena, y: f64, dat: []const f64, lo: f64, hi: f64, id: usize, mu: f64, sg: f64) -> f64 {
+    let n = dat.len
+    let (v, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var vy = 0.0f64
+    var i = 0usize
+    if id == 99usize {
+        vy = y
+        if vy < lo { vy = lo }
+        if vy > hi { vy = hi }
+        while i < n {
+            var t = dat[i]
+            if t < lo { t = lo }
+            if t > hi { t = hi }
+            v[i] = t
+            i += 1usize
+        }
+    } else {
+        vy = chain_func(id, mu, sg, y)
+        while i < n {
+            v[i] = chain_func(id, mu, sg, dat[i])
+            i += 1usize
+        }
+    }
+    ret crps_sample(vy, v)
+}
+
+// the weighted energy score sum_i w_i ||x_i - y|| - 0.5 sum sum w_i w_j ||x_i - x_j|| (weights summing to one)
+fn es_w(y: []const f64, dat: []const f64, w: []const f64) -> f64 {
+    let d = y.len
+    let m = w.len
+    var xy = 0.0f64
+    var xx = 0.0f64
+    var i = 0usize
+    while i < m {
+        var s = 0.0f64
+        var c = 0usize
+        while c < d {
+            s += (dat[i * d + c] - y[c]) * (dat[i * d + c] - y[c])
+            c += 1usize
+        }
+        xy += w[i] * math.sqrt[f64](s)
+        var j = 0usize
+        while j < m {
+            var t = 0.0f64
+            c = 0usize
+            while c < d {
+                t += (dat[i * d + c] - dat[j * d + c]) * (dat[i * d + c] - dat[j * d + c])
+                c += 1usize
+            }
+            xx += w[i] * w[j] * math.sqrt[f64](t)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret xy - 0.5f64 * xx
+}
+
+fn mmds_w(y: []const f64, dat: []const f64, w: []const f64) -> f64 {
+    let d = y.len
+    let m = w.len
+    var xx = 0.0f64
+    var xy = 0.0f64
+    var i = 0usize
+    while i < m {
+        var q = 0.0f64
+        var k = 0usize
+        while k < d {
+            q += (y[k] - dat[i * d + k]) * (y[k] - dat[i * d + k])
+            k += 1usize
+        }
+        xy += w[i] * math.exp[f64](0.0f64 - q / 2.0f64)
+        var j = 0usize
+        while j < m {
+            var r = 0.0f64
+            k = 0usize
+            while k < d {
+                r += (dat[i * d + k] - dat[j * d + k]) * (dat[i * d + k] - dat[j * d + k])
+                k += 1usize
+            }
+            xx += w[i] * w[j] * math.exp[f64](0.0f64 - r / 2.0f64)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret 0.5f64 * xx - xy
+}
+
+fn vs_w(y: []const f64, dat: []const f64, w: []const f64, p: f64) -> f64 {
+    let d = y.len
+    let m = w.len
+    var out = 0.0f64
+    var i = 0usize
+    while i < d {
+        var j = 0usize
+        while j < d {
+            var e = 0.0f64
+            var r = 0usize
+            while r < m {
+                e += w[r] * math.pow[f64](math.abs[f64](dat[r * d + i] - dat[r * d + j]), p)
+                r += 1usize
+            }
+            let o = math.pow[f64](math.abs[f64](y[i] - y[j]), p)
+            out += (o - e) * (o - e)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret out
+}
+
+// the outcome-weighted (tw false) and threshold-weighted (tw true) multivariate scores, kind 0 es, 1 mmds, 2 vs, with the default weight (every coordinate inside (lo, hi)) and chain (clamp to [lo, hi])
+fn mv_weighted(a: *mem.Arena, kind: usize, tw: bool, y: []const f64, dat: []const f64, lo: f64, hi: f64, p: f64) -> f64 {
+    let d = y.len
+    let m = dat.len / d
+    let (w, e1) = mem.alloc[f64](a, m)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (vy, e2) = mem.alloc[f64](a, d)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    let (vd, e3) = mem.alloc[f64](a, m * d)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    if tw {
+        while i < d {
+            var t = y[i]
+            if t < lo { t = lo }
+            if t > hi { t = hi }
+            vy[i] = t
+            i += 1usize
+        }
+        i = 0usize
+        while i < m * d {
+            var t = dat[i]
+            if t < lo { t = lo }
+            if t > hi { t = hi }
+            vd[i] = t
+            i += 1usize
+        }
+        i = 0usize
+        while i < m {
+            w[i] = 1.0f64 / f64(m)
+            i += 1usize
+        }
+        if kind == 0usize { ret es_w(vy, vd, w) }
+        if kind == 1usize { ret mmds_w(vy, vd, w) }
+        ret vs_w(vy, vd, w, p)
+    }
+    var wy = 1.0f64
+    i = 0usize
+    while i < d {
+        if !(y[i] > lo && y[i] < hi) { wy = 0.0f64 }
+        i += 1usize
+    }
+    var tot = 0.0f64
+    i = 0usize
+    while i < m {
+        var inside = 1.0f64
+        var k = 0usize
+        while k < d {
+            if !(dat[i * d + k] > lo && dat[i * d + k] < hi) { inside = 0.0f64 }
+            k += 1usize
+        }
+        w[i] = inside
+        tot += inside
+        i += 1usize
+    }
+    if tot == 0.0f64 { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i < m {
+        w[i] = w[i] / tot
+        i += 1usize
+    }
+    var s = 0.0f64
+    if kind == 0usize { s = es_w(y, dat, w) } else if kind == 1usize { s = mmds_w(y, dat, w) } else { s = vs_w(y, dat, w, p) }
+    ret s * wy
+}
+
+fn logs_exp2(y: f64, loc: f64, scale: f64) -> f64 { ret 0.0f64 - (0.0f64 - math.log[f64](scale) - (y - loc) / scale) }
+
+// logs_tlogis(y, location, scale, lower, upper): the log score of the logistic truncated to [lower, upper]
+fn logs_tlogis(y: f64, loc: f64, scale: f64, lower: f64, upper: f64) -> f64 {
+    let z = (y - loc) / scale
+    let e = math.exp[f64](0.0f64 - z)
+    let ld = math.log[f64](e / (scale * (1.0f64 + e) * (1.0f64 + e)))
+    let p = plogis_std((upper - loc) / scale) - plogis_std((lower - loc) / scale)
+    ret 0.0f64 - (ld - math.log[f64](p))
+}
+
+// logs_tt(y, df, location, scale, lower, upper): the log score of the t truncated to [lower, upper]
+fn logs_tt(y: f64, df: f64, loc: f64, scale: f64, lower: f64, upper: f64) -> f64 {
+    let ld = nb.dt((y - loc) / scale, df, true) - math.log[f64](scale)
+    let p = nb.pt((upper - loc) / scale, df, true, false) - nb.pt((lower - loc) / scale, df, true, false)
+    ret 0.0f64 - (ld - math.log[f64](p))
+}
