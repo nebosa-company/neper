@@ -3,13 +3,15 @@
 // round(n / 2) posterior draws fit the proposal (their mean and covariance), the rest enter the scheme, and
 // the proposal draws come from mvtnorm::rmvnorm (the eigen method) under the caller's stream.
 //
-// Not here: parameter transformations (bounds, simplex), warp3, repetitions, the effective-sample-size
-// variant of the error estimate (use_neff = FALSE only) and nearPD (the covariance must be positive definite).
+// And warp3 (bridge_warp3) and bounded real parameters (bridge_bounded: log, reflected log and probit transforms with their Jacobians).
+// Not here: simplex and circular parameters, repetitions, the effective-sample-size variant of the error estimate (use_neff = FALSE
+// only), error_measures and nearPD (the covariance must be positive definite).
 
 use e.algo.rand.r as rng
 use e.algo.sort
 use e.algo.stat.mvtnorm as mv
 use e.math
+use e.math.dist as dist
 use e.mem
 
 type Fit = struct { logml: f64, niter: i64, mcse: f64, converged: bool }
@@ -200,4 +202,216 @@ fn post_prob2(logml1: f64, logml2: f64, prior1: f64, prior2: f64) -> f64 {
     var m = a
     if b > m { m = b }
     ret math.exp[f64](a - m) / (math.exp[f64](a - m) + math.exp[f64](b - m))
+}
+
+// log(exp(a) + exp(b))
+fn logaddexp(a: f64, b: f64) -> f64 {
+    var m = a
+    if b > m { m = b }
+    if m == 0.0f64 - 1.0e308f64 * 10.0f64 { ret m }
+    ret m + math.log[f64](math.exp[f64](a - m) + math.exp[f64](b - m))
+}
+
+// the lower Cholesky factor of v (p by p, row-major) into l; false when v is not positive definite
+fn chol_lower(v: []const f64, p: usize, l: []f64) -> bool {
+    var i = 0usize
+    while i < p * p {
+        l[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j <= i {
+            var s = v[i * p + j]
+            var k = 0usize
+            while k < j {
+                s -= l[i * p + k] * l[j * p + k]
+                k += 1usize
+            }
+            if i == j {
+                if s <= 0.0f64 { ret false }
+                l[i * p + i] = math.sqrt[f64](s)
+            } else {
+                l[i * p + j] = s / l[j * p + j]
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}
+
+// bridge_sampler(samples, log_posterior, ..., method = "warp3", use_neff = FALSE): the posterior draws and the standard normal draws
+// are reflected about the fit mean and scaled by the Cholesky factor of the fit covariance, and the proposal is the standard normal
+fn bridge_warp3[Ctx: type](a: *mem.Arena, g: *rng.Rng, ctx: *Ctx, logpost: fn(*Ctx, []const f64) -> f64, samples: []const f64, n: usize, p: usize, maxiter: i64) -> (Fit, err) {
+    var none: Fit = zero
+    let nfit = round_half_even(f64(n) / 2.0f64)
+    let nit = n - nfit
+    let (m, e1) = mem.alloc[f64](a, p)
+    let (v, e2) = mem.alloc[f64](a, p * p)
+    let (l, e3) = mem.alloc[f64](a, p * p)
+    let (id, e4) = mem.alloc[f64](a, p * p)
+    let (zr, e5) = mem.alloc[f64](a, p)
+    let (tmp, e6) = mem.alloc[f64](a, p)
+    let (tmp2, e7) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret (none, e1) }
+    var j = 0usize
+    while j < p {
+        var s = 0.0f64
+        var i = 0usize
+        while i < nfit {
+            s += samples[i * p + j]
+            i += 1usize
+        }
+        m[j] = s / f64(nfit)
+        zr[j] = 0.0f64
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var k = 0usize
+        while k < p {
+            var s = 0.0f64
+            var i = 0usize
+            while i < nfit {
+                s += (samples[i * p + j] - m[j]) * (samples[i * p + k] - m[k])
+                i += 1usize
+            }
+            v[j * p + k] = s / f64(nfit - 1usize)
+            id[j * p + k] = 0.0f64
+            if j == k { id[j * p + k] = 1.0f64 }
+            k += 1usize
+        }
+        j += 1usize
+    }
+    if !chol_lower(v, p, l) { ret (none, mem.Invalid) }
+    var logdet = 0.0f64
+    j = 0usize
+    while j < p {
+        logdet += math.log[f64](l[j * p + j])
+        j += 1usize
+    }
+    let it = samples[nfit * p..n * p]
+    let (gen, ge) = mv.rmvnorm(a, g, nit, zr, id, p, 0u8)
+    if ge != ok { ret (none, ge) }
+    let (l1, e8) = mem.alloc[f64](a, nit)
+    let (l2, e9) = mem.alloc[f64](a, nit)
+    if e8 != ok || e9 != ok { ret (none, e8) }
+    let ln2pi = 1.8378770664093453f64
+    let c0 = 0.0f64 - math.log[f64](2.0f64) + logdet
+    var i = 0usize
+    while i < nit {
+        // q12: the standard normal log density of L^-1 (x - m)
+        var zz = 0.0f64
+        j = 0usize
+        while j < p {
+            var s = it[i * p + j] - m[j]
+            var k = 0usize
+            while k < j {
+                s -= l[j * p + k] * tmp[k]
+                k += 1usize
+            }
+            tmp[j] = s / l[j * p + j]
+            zz += tmp[j] * tmp[j]
+            j += 1usize
+        }
+        let q12 = 0.0f64 - 0.5f64 * (f64(p) * ln2pi + zz)
+        // q11: the posterior at x and at its reflection 2 m - x
+        j = 0usize
+        while j < p {
+            tmp[j] = it[i * p + j]
+            tmp2[j] = 2.0f64 * m[j] - it[i * p + j]
+            j += 1usize
+        }
+        let q11 = logaddexp(logpost(ctx, tmp), logpost(ctx, tmp2))
+        l1[i] = c0 + (q11 - q12)
+        // q22 and q21: the draw z, then the posterior at m - L z and m + L z
+        var gg = 0.0f64
+        j = 0usize
+        while j < p {
+            gg += gen[i * p + j] * gen[i * p + j]
+            var s = 0.0f64
+            var k = 0usize
+            while k <= j {
+                s += l[j * p + k] * gen[i * p + k]
+                k += 1usize
+            }
+            tmp[j] = m[j] - s
+            tmp2[j] = m[j] + s
+            j += 1usize
+        }
+        let q22 = 0.0f64 - 0.5f64 * (f64(p) * ln2pi + gg)
+        let q21 = logaddexp(logpost(ctx, tmp), logpost(ctx, tmp2))
+        l2[i] = c0 + (q21 - q22)
+        i += 1usize
+    }
+    let (fit, fe) = iterate(a, l1, l2, 0.5f64, 1.0e-10f64, maxiter)
+    ret (fit, fe)
+}
+
+// parameter bounds (.transform2Real, .invTransform2Real, .logJacobian for param_types "real"): lb < ub, either may be infinite
+type Tx[C: type] = struct { ctx: *C, f: fn(*C, []const f64) -> f64, lb: []const f64, ub: []const f64, buf: []f64 }
+
+fn is_inf(x: f64) -> bool { ret x > 1.0e300f64 || x < 0.0f64 - 1.0e300f64 }
+
+// the log posterior at a point on the unconstrained scale: the posterior at the back-transformed point plus the log Jacobian
+fn tx_logpost[C: type](t: *Tx[C], th: []const f64) -> f64 {
+    var jac = 0.0f64
+    var i = 0usize
+    while i < th.len {
+        let lo = t.lb[i]
+        let hi = t.ub[i]
+        if !is_inf(lo) && is_inf(hi) {
+            t.buf[i] = math.exp[f64](th[i]) + lo
+            jac += th[i]
+        } else if is_inf(lo) && !is_inf(hi) {
+            t.buf[i] = hi - math.exp[f64](th[i])
+            jac += th[i]
+        } else if !is_inf(lo) && !is_inf(hi) {
+            t.buf[i] = dist.pnorm(th[i], 0.0f64, 1.0f64, true, false) * (hi - lo) + lo
+            jac += math.log[f64](hi - lo) + dist.dnorm(th[i], 0.0f64, 1.0f64, true)
+        } else {
+            t.buf[i] = th[i]
+        }
+        i += 1usize
+    }
+    ret t.f(t.ctx, t.buf) + jac
+}
+
+// bridge_sampler(samples, log_posterior, lb =, ub =, method = "normal" or "warp3", use_neff = FALSE) for real parameters with bounds;
+// method 0 normal, 1 warp3
+fn bridge_bounded[C: type](a: *mem.Arena, g: *rng.Rng, ctx: *C, logpost: fn(*C, []const f64) -> f64, samples: []const f64, n: usize, p: usize, lb: []const f64, ub: []const f64, method: u8, maxiter: i64) -> (Fit, err) {
+    var none: Fit = zero
+    let (ts, e1) = mem.alloc[f64](a, n * p)
+    let (buf, e2) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok { ret (none, e1) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < p {
+            let x = samples[i * p + j]
+            let lo = lb[j]
+            let hi = ub[j]
+            if x < lo || x > hi { ret (none, mem.Invalid) }
+            if !is_inf(lo) && is_inf(hi) {
+                ts[i * p + j] = math.log[f64](x - lo)
+            } else if is_inf(lo) && !is_inf(hi) {
+                ts[i * p + j] = math.log[f64](hi - x)
+            } else if !is_inf(lo) && !is_inf(hi) {
+                ts[i * p + j] = dist.qnorm((x - lo) / (hi - lo), 0.0f64, 1.0f64, true, false)
+            } else {
+                ts[i * p + j] = x
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var tx = Tx[C] { ctx: ctx, f: logpost, lb: lb, ub: ub, buf: buf }
+    if method == 1u8 {
+        let (fw, ew) = bridge_warp3[Tx[C]](a, g, &tx, tx_logpost[C], ts, n, p, maxiter)
+        ret (fw, ew)
+    }
+    let (fn1, en1) = bridge_normal[Tx[C]](a, g, &tx, tx_logpost[C], ts, n, p, maxiter)
+    ret (fn1, en1)
 }

@@ -1,5 +1,5 @@
 id	category	score	evidence_bytes	title	status
-L391	library	0.45	500	bridgesampling: marginal likelihoods	Partial (D6047, D6146 bf and post_prob).
+L391	library	0.7	813	bridgesampling: marginal likelihoods	Partial (D6047, D6146 bf and post_prob).
 L410	library	0.25	485	AlgDesign: optimal experimental designs	Partly done (D6077): e.algo.stat.algdesign has gen.factorial and the eval.design measures from a model matrix, equal to AlgDesign on 200 values on Windows (oracle_algdesign);
 L421	library	0.4	539	fdrtool: false discovery rate estimation	Partly done (D6068): e.algo.stat.fdrtool.fdrtool_pvalue (fndr cutoff, eta0, Grenander density, local fdr and q values for p values) equals fdrtool on 210 values on Windows (oracle_fdrtool);
 L444	library	0.3	756	SuppDists: Johnson, Kendall, Spearman and related distributions	Partly done (D6075): e.algo.stat.suppdists has inverse Gaussian, exact Kendall and Spearman for small N, and Johnson SN, SL, SB, SU d, p and q, equal to SuppDists on 428 values on Windows (oracle_supp
