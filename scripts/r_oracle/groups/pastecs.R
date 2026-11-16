@@ -109,4 +109,13 @@ for (rep in 1:40) {
   out <- c(length(r$interval), r$interval, r$n, r$turns, r$info, r$level); if (cm) out <- c(out, r$turns.min, r$turns.max, r$info.min, r$info.max)
   for (k in seq_along(out)) if (is.finite(out[k])) cases[[length(cases) + 1]] <- case("tg", c(12, 0, n, x, 1, imax, 1, as.numeric(cm), as.numeric(tw), k - 1), out[k], rel = 1e-7, abs = 1e-9)
 }
+# deccensus (fn "cen", args (13, 0, n, x, period, q): test.s, amplitude, deseasoned, seasonal, trend, residuals)
+for (rep in 1:30) {
+  per <- c(4, 12, 6, 12)[rep %% 4 + 1]; nc <- sample(5:10, 1); n <- per * nc
+  x <- round(exp(0.02 * seq_len(n) + 0.3 * sin(2 * pi * seq_len(n) / per) + rnorm(n, 0, c(0.05, 0.2, 0.4)[rep %% 3 + 1])) * 10, 4)
+  r1 <- tryCatch(suppressWarnings(deccensus(ts(x, frequency = per), trend = FALSE)), error = function(e) NULL); r2 <- tryCatch(suppressWarnings(deccensus(ts(x, frequency = per), trend = TRUE)), error = function(e) NULL)
+  if (is.null(r1) || is.null(r2) || is.null(r1$amplitude) || !is.matrix(r1$series)) next
+  out <- c(r1$test.seasons, r1$amplitude, r1$series[, 1], r1$series[, 2], r2$series[, 1], r2$series[, 3])
+  for (k in seq_along(out)) if (is.finite(out[k])) cases[[length(cases) + 1]] <- case("cen", c(13, 0, n, x, per, k - 1), out[k], rel = 1e-9, abs = 1e-10)
+}
 emit("pastecs", "pastecs", list(cases))

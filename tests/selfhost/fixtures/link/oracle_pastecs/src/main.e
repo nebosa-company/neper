@@ -21,6 +21,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "tt_s") { ret tt.s }
         ret tt.p
     }
+    if str.eq(nm, "cen") {
+        let cp = usize(z[3usize + n])
+        let (cr, ce) = pc.deccensus(a, x, cp)
+        if ce != ok { ret 0.0f64 / 0.0f64 }
+        let cq = usize(z[4usize + n])
+        if cq < cp { ret cr.test_s[cq] }
+        if cq == cp { ret cr.amp }
+        let k = cq - cp - 1usize
+        if k < n { ret cr.ci[k] }
+        if k < 2usize * n { ret cr.seasonal[k - n] }
+        if k < 3usize * n { ret cr.trend[k - 2usize * n] }
+        ret cr.resid[k - 3usize * n]
+    }
     if str.eq(nm, "ab") {
         let aq = usize(z[3usize + n])
         let ap = usize(z[4usize + n])

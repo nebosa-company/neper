@@ -1383,3 +1383,371 @@ fn turnogram(a: *mem.Arena, x: []const f64, imin: f64, imax: f64, step: f64, com
     r.level = iv[best]
     ret (r, ok)
 }
+
+// ---- deccensus ----
+
+// the symmetric convolution filter w (odd length) of src: out[i] for the valid positions, NaN elsewhere
+fn conv_sym(src: []const f64, w: []const f64, out: []f64) {
+    let len = src.len
+    let nw = w.len
+    let half = nw / 2usize
+    var i = 0usize
+    while i < len {
+        if i < half || i + half >= len {
+            out[i] = 0.0f64 / 0.0f64
+        } else {
+            var s = 0.0f64
+            var k = 0usize
+            while k < nw {
+                s += w[k] * src[i - half + k]
+                k += 1usize
+            }
+            out[i] = s
+        }
+        i += 1usize
+    }
+}
+
+// smooths rows r0..r1 over the columns c0..c1 (inclusive) of the period-row column-major matrix src into out: each row is padded with nl copies of the mean of its first kl and of its last kt values, convolved with the symmetric filter w and the data positions kept
+fn smooth_rows(a: *mem.Arena, src: []const f64, out: []f64, period: usize, r0: usize, r1: usize, c0: usize, c1: usize, kl: usize, kt: usize, nl: usize, w: []const f64) -> err {
+    let len = c1 - c0 + 1usize
+    let (pad, e1) = mem.alloc[f64](a, len + 2usize * nl)
+    let (flt, e2) = mem.alloc[f64](a, len + 2usize * nl)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var r = r0
+    while r < r1 {
+        var lead = 0.0f64
+        var k = 0usize
+        while k < kl {
+            lead += src[r + (c0 + k) * period]
+            k += 1usize
+        }
+        lead = lead / f64(kl)
+        var trail = 0.0f64
+        k = 0usize
+        while k < kt {
+            trail += src[r + (c1 - k) * period]
+            k += 1usize
+        }
+        trail = trail / f64(kt)
+        k = 0usize
+        while k < nl {
+            pad[k] = lead
+            pad[nl + len + k] = trail
+            k += 1usize
+        }
+        k = 0usize
+        while k < len {
+            pad[nl + k] = src[r + (c0 + k) * period]
+            k += 1usize
+        }
+        conv_sym(pad, w, flt)
+        k = 0usize
+        while k < len {
+            out[r + (c0 + k) * period] = flt[nl + k]
+            k += 1usize
+        }
+        r += 1usize
+    }
+    ret ok
+}
+
+// the 15-term Henderson filter of the series padded by seven copies of the mean of its first and of its last four values
+fn henderson(a: *mem.Arena, ci: []const f64, out: []f64) -> err {
+    let n = ci.len
+    let (w, e1) = mem.alloc[f64](a, 15usize)
+    let (pad, e2) = mem.alloc[f64](a, n + 14usize)
+    let (flt, e3) = mem.alloc[f64](a, n + 14usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    w[0usize] = 0.0f64 - 3.0f64
+    w[1usize] = 0.0f64 - 6.0f64
+    w[2usize] = 0.0f64 - 5.0f64
+    w[3usize] = 3.0f64
+    w[4usize] = 21.0f64
+    w[5usize] = 46.0f64
+    w[6usize] = 67.0f64
+    w[7usize] = 74.0f64
+    w[8usize] = 67.0f64
+    w[9usize] = 46.0f64
+    w[10usize] = 21.0f64
+    w[11usize] = 3.0f64
+    w[12usize] = 0.0f64 - 5.0f64
+    w[13usize] = 0.0f64 - 6.0f64
+    w[14usize] = 0.0f64 - 3.0f64
+    var k = 0usize
+    while k < 15usize {
+        w[k] = w[k] / 320.0f64
+        k += 1usize
+    }
+    var m1 = (ci[0usize] + ci[1usize] + ci[2usize] + ci[3usize]) / 4.0f64
+    var m2 = (ci[n - 4usize] + ci[n - 3usize] + ci[n - 2usize] + ci[n - 1usize]) / 4.0f64
+    k = 0usize
+    while k < 7usize {
+        pad[k] = m1
+        pad[7usize + n + k] = m2
+        k += 1usize
+    }
+    k = 0usize
+    while k < n {
+        pad[7usize + k] = ci[k]
+        k += 1usize
+    }
+    conv_sym(pad, w, flt)
+    k = 0usize
+    while k < n {
+        out[k] = flt[7usize + k]
+        k += 1usize
+    }
+    ret ok
+}
+
+type Census = struct { test_s: []f64, amp: f64, ci: []f64, seasonal: []f64, trend: []f64, resid: []f64 }
+
+// pastecs::deccensus (multiplicative): x has n = nc * period values with period even; ci is the deseasoned series, seasonal the seasonal ratio, trend the cycle and resid the irregular ratio
+fn deccensus(a: *mem.Arena, x: []const f64, period: usize) -> (Census, err) {
+    var res: Census = zero
+    let n = x.len
+    let nc = n / period
+    let nr2 = period / 2usize
+    let (test_s, e0) = mem.alloc[f64](a, period)
+    let (f1, e1) = mem.alloc[f64](a, period + 1usize)
+    let (av, e2) = mem.alloc[f64](a, n)
+    let (b2, e3) = mem.alloc[f64](a, n)
+    let (s2, e4) = mem.alloc[f64](a, n)
+    let (rep, e5) = mem.alloc[f64](a, n)
+    let (xt, e6) = mem.alloc[bool](a, n)
+    let (s1, e7) = mem.alloc[f64](a, n)
+    let (ci1, e8) = mem.alloc[f64](a, n)
+    let (c1, e9) = mem.alloc[f64](a, n)
+    let (ci, e10) = mem.alloc[f64](a, n)
+    let (cc, e11) = mem.alloc[f64](a, n)
+    let (sv, e12) = mem.alloc[f64](a, n)
+    let (rs, e13) = mem.alloc[f64](a, n)
+    let (w5, e14) = mem.alloc[f64](a, 5usize)
+    let (w9, e15) = mem.alloc[f64](a, 5usize)
+    let (w7, e16) = mem.alloc[f64](a, 7usize)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok { ret (res, mem.Full) }
+    var i = 0usize
+    while i < 5usize {
+        w5[i] = 0.2f64
+        i += 1usize
+    }
+    w9[0usize] = 1.0f64 / 9.0f64
+    w9[1usize] = 2.0f64 / 9.0f64
+    w9[2usize] = 3.0f64 / 9.0f64
+    w9[3usize] = 2.0f64 / 9.0f64
+    w9[4usize] = 1.0f64 / 9.0f64
+    w7[0usize] = 1.0f64 / 16.0f64
+    w7[1usize] = 2.0f64 / 16.0f64
+    w7[2usize] = 3.0f64 / 16.0f64
+    w7[3usize] = 4.0f64 / 16.0f64
+    w7[4usize] = 3.0f64 / 16.0f64
+    w7[5usize] = 2.0f64 / 16.0f64
+    w7[6usize] = 1.0f64 / 16.0f64
+    var q = 0usize
+    while q < period {
+        var s = 0.0f64
+        var cnt = 0.0f64
+        i = q
+        while i < n {
+            if i >= 1usize && i + 1usize < n {
+                s += 200.0f64 * x[i] / (x[i - 1usize] + x[i + 1usize])
+                cnt += 1.0f64
+            }
+            i += period
+        }
+        test_s[q] = s / cnt
+        q += 1usize
+    }
+    i = 0usize
+    while i <= period {
+        f1[i] = 1.0f64 / f64(period)
+        if i == 0usize || i == period { f1[i] = 1.0f64 / f64(2usize * period) }
+        i += 1usize
+    }
+    conv_sym(x, f1, av)
+    i = 0usize
+    while i < n {
+        b2[i] = x[i] / av[i]
+        s2[i] = b2[i]
+        i += 1usize
+    }
+    let es1 = smooth_rows(a, b2, s2, period, 0usize, nr2, 1usize, nc - 1usize, 2usize, 2usize, 2usize, w5)
+    let es2 = smooth_rows(a, b2, s2, period, nr2, period, 0usize, nc - 2usize, 2usize, 2usize, 2usize, w5)
+    if es1 != ok || es2 != ok { ret (res, mem.Full) }
+    // first pass: extreme values of the seasonal-irregular ratios replaced
+    var r = 0usize
+    while r < period {
+        var ss = 0.0f64
+        var c = 0usize
+        while c < nc {
+            let dv = b2[r + c * period] - s2[r + c * period]
+            if dv == dv { ss += dv * dv }
+            c += 1usize
+        }
+        let sd = math.sqrt[f64](ss / f64(nc - 2usize))
+        c = 0usize
+        while c < nc {
+            let dv = b2[r + c * period] - s2[r + c * period]
+            xt[r + c * period] = dv == dv && math.abs[f64](dv) > 1.96f64 * sd
+            c += 1usize
+        }
+        r += 1usize
+    }
+    i = 0usize
+    while i < n {
+        rep[i] = b2[i]
+        i += 1usize
+    }
+    r = 0usize
+    while r < period {
+        var c = 1usize
+        while c + 1usize < nc {
+            rep[r + c * period] = (b2[r + (c - 1usize) * period] + b2[r + c * period] + b2[r + (c + 1usize) * period]) / 3.0f64
+            c += 1usize
+        }
+        r += 1usize
+    }
+    r = 0usize
+    while r < nr2 {
+        rep[r + period] = rep[r + 2usize * period]
+        rep[r + (nc - 1usize) * period] = rep[r + (nc - 2usize) * period]
+        r += 1usize
+    }
+    while r < period {
+        rep[r] = rep[r + period]
+        rep[r + (nc - 2usize) * period] = rep[r + (nc - 3usize) * period]
+        r += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if xt[i] { b2[i] = rep[i] }
+        i += 1usize
+    }
+    r = 0usize
+    while r < nr2 {
+        b2[r] = b2[r + period]
+        r += 1usize
+    }
+    while r < period {
+        b2[r + (nc - 1usize) * period] = b2[r + (nc - 2usize) * period]
+        r += 1usize
+    }
+    var c = 0usize
+    while c < nc {
+        var cs = 0.0f64
+        r = 0usize
+        while r < period {
+            cs += b2[r + c * period]
+            r += 1usize
+        }
+        r = 0usize
+        while r < period {
+            s1[r + c * period] = b2[r + c * period] * (f64(period) * 100.0f64) / cs
+            r += 1usize
+        }
+        c += 1usize
+    }
+    let es3 = smooth_rows(a, s1, s2, period, 0usize, period, 0usize, nc - 1usize, 2usize, 2usize, 2usize, w9)
+    if es3 != ok { ret (res, es3) }
+    i = 0usize
+    while i < n {
+        ci1[i] = x[i] / s2[i]
+        i += 1usize
+    }
+    let eh1 = henderson(a, ci1, c1)
+    if eh1 != ok { ret (res, eh1) }
+    var amp = 0.0f64
+    i = 0usize
+    while i + 1usize < n {
+        amp += math.abs[f64](ci1[i + 1usize] / c1[i + 1usize] * 100.0f64 - ci1[i] / c1[i] * 100.0f64)
+        i += 1usize
+    }
+    amp = amp / f64(n - 1usize)
+    // second pass on the series divided by the first trend
+    i = 0usize
+    while i < n {
+        b2[i] = x[i] / c1[i] * 100.0f64
+        i += 1usize
+    }
+    let es4 = smooth_rows(a, b2, s2, period, 0usize, period, 0usize, nc - 1usize, 2usize, 2usize, 2usize, w5)
+    if es4 != ok { ret (res, es4) }
+    r = 0usize
+    while r < period {
+        var ss = 0.0f64
+        c = 0usize
+        while c < nc {
+            let dv = b2[r + c * period] - s2[r + c * period]
+            ss += dv * dv
+            c += 1usize
+        }
+        let sd = math.sqrt[f64](ss / f64(nc - 2usize))
+        c = 0usize
+        while c < nc {
+            let dv = b2[r + c * period] - s2[r + c * period]
+            xt[r + c * period] = math.abs[f64](dv) > 1.96f64 * sd
+            c += 1usize
+        }
+        r += 1usize
+    }
+    i = 0usize
+    while i < n {
+        rep[i] = b2[i]
+        i += 1usize
+    }
+    r = 0usize
+    while r < period {
+        c = 1usize
+        while c + 1usize < nc {
+            rep[r + c * period] = (b2[r + (c - 1usize) * period] + b2[r + c * period] + b2[r + (c + 1usize) * period]) / 3.0f64
+            c += 1usize
+        }
+        rep[r] = rep[r + period]
+        rep[r + (nc - 1usize) * period] = rep[r + (nc - 2usize) * period]
+        r += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if xt[i] { b2[i] = rep[i] }
+        i += 1usize
+    }
+    c = 0usize
+    while c < nc {
+        var cs = 0.0f64
+        r = 0usize
+        while r < period {
+            cs += b2[r + c * period]
+            r += 1usize
+        }
+        r = 0usize
+        while r < period {
+            s1[r + c * period] = b2[r + c * period] * (f64(period) * 100.0f64) / cs
+            r += 1usize
+        }
+        c += 1usize
+    }
+    var es5 = ok
+    if amp > 2.0f64 { es5 = smooth_rows(a, s1, s2, period, 0usize, period, 0usize, nc - 1usize, 3usize, 3usize, 3usize, w7) } else { es5 = smooth_rows(a, s1, s2, period, 0usize, period, 0usize, nc - 1usize, 2usize, 2usize, 2usize, w9) }
+    if es5 != ok { ret (res, es5) }
+    i = 0usize
+    while i < n {
+        sv[i] = s2[i]
+        ci[i] = x[i] / sv[i] * 100.0f64
+        i += 1usize
+    }
+    let eh2 = henderson(a, ci, cc)
+    if eh2 != ok { ret (res, eh2) }
+    i = 0usize
+    while i < n {
+        rs[i] = ci[i] / cc[i] * 100.0f64 / 100.0f64
+        sv[i] = sv[i] / 100.0f64
+        i += 1usize
+    }
+    res.test_s = test_s
+    res.amp = amp
+    res.ci = ci
+    res.seasonal = sv
+    res.trend = cc
+    res.resid = rs
+    ret (res, ok)
+}
