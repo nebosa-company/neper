@@ -295,10 +295,10 @@
       "group": "CRAN parity",
       "order": 567,
       "title": "AlgDesign: optimal experimental designs",
-      "score": 0,
+      "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 586). Small. Acceptance, equal to AlgDesign under set.seed: gen.factorial, optFederov with D, A and I criteria and its exchange moves, optBlock, optMonteCarlo, eval.design, and the balanced incomplete block search."
+      "evidence": "Partly done (D6077): e.algo.stat.algdesign has gen.factorial and the eval.design measures from a model matrix, equal to AlgDesign on 200 values on Windows (oracle_algdesign); Linux pending. Open: optFederov, optBlock, optMonteCarlo, BIB search. Original: Open (CRAN rank 586). Small. Acceptance, equal to AlgDesign under set.seed: gen.factorial, optFederov with D, A and I criteria and its exchange moves, optBlock, optMonteCarlo, eval.design, and the balanced incomplete block search."
     },
     {
       "id": "L420",

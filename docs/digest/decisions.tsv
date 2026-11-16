@@ -3148,4 +3148,5 @@ D6072	1506	modeest: the shortest-half estimators, the grid rule of seq, the 1:0 
 D6073	1425	pastecs: turnpoints on collapsed runs, stat.desc with the 1/n moments
 D6074	1454	norm: EM on standardised columns, loglik without the constant
 D6075	1686	SuppDists: exact Kendall and Spearman by counting, inverse Gaussian and Johnson in closed form
-D6076	1283	mixsqp: the optimum by accelerated EM, not the SQP iterations
+D6076	1284	mixsqp: the optimum by accelerated EM, not the SQP iterations
+D6077	1260	AlgDesign: factorial grids and design evaluation from the model matrix
