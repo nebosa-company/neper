@@ -3105,4 +3105,5 @@ D6029	1159	class knn follows VR_knn line by line, including its reservoir slip
 D6030	1457	permute shuffles block by block, and draws the plot flip before it knows the plots are free
 D6031	1181	KernSmooth density by direct convolution, tseries tests by their formulas
 D6032	1218	TTR averages seed from the first n valid values, and RSI and ATR use Wilder's ratio
-D6033	1202	nortest and moments are formulas over the sorted sample, and the Dallal-Wilkinson p-value is kept as written
+D6033	1203	nortest and moments are formulas over the sorted sample, and the Dallal-Wilkinson p-value is kept as written
+D6034	1058	the ggsci and ggthemes palettes are a generated table, and ggsci truncates its alpha

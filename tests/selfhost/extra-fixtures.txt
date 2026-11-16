@@ -169,3 +169,4 @@ oracle_permute
 oracle_kstseries
 oracle_ttr
 oracle_nortest
+oracle_palettes
