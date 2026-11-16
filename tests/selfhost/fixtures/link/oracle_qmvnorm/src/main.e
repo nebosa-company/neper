@@ -12,6 +12,11 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, lat: *const mvt.Lat, c: *const oracle.Case) -> f64 {
     let z = c.args
     let n = usize(z[1usize])
+    if str.eq(c.name, "qt") || str.eq(c.name, "fqt") {
+        let (q2, f2) = mq.qmvt(a, lat, z[3usize], usize(z[2usize]), n, z[6usize..6usize + n * n], i64(z[0usize]), z[4usize], usize(z[5usize]), z[6usize + n * n])
+        if str.eq(c.name, "qt") { ret q2 }
+        ret f2
+    }
     let (q, fq) = mq.qmvnorm(a, lat, z[3usize], usize(z[2usize]), n, z[6usize..6usize + n * n], i64(z[0usize]), z[4usize], usize(z[5usize]))
     if str.eq(c.name, "q") { ret q }
     ret fq

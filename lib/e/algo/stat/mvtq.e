@@ -14,7 +14,32 @@ use e.mem
 type Fit = struct { b0: f64, b1: f64, c00: f64, c01: f64, c11: f64, disp: f64, df: f64 }
 
 // glm(y ~ x, weights, family = quasi("probit")) by R's IRLS (start mustart = y, epsilon 1e-8, 25 iterations)
-fn fitlr(x: []const f64, y: []const f64, w: []const f64) -> Fit {
+fn cdf_l(link: usize, z: f64) -> f64 {
+    if link == 1usize {
+        if math.abs[f64](z) > 1.0f64 {
+            let yy = math.atan[f64](1.0f64 / z) / 3.141592653589793238462643383279f64
+            if z > 0.0f64 { ret 1.0f64 - yy }
+            ret 0.0f64 - yy
+        }
+        ret 0.5f64 + math.atan[f64](z) / 3.141592653589793238462643383279f64
+    }
+    ret dist.pnorm(z, 0.0f64, 1.0f64, true, false)
+}
+
+fn quf_l(link: usize, p: f64) -> f64 {
+    if link == 1usize {
+        if p == 0.5f64 { ret 0.0f64 }
+        ret 0.0f64 - 1.0f64 / math.tan[f64](3.141592653589793238462643383279f64 * p)
+    }
+    ret dist.qnorm(p, 0.0f64, 1.0f64, true, false)
+}
+
+fn dens_l(link: usize, z: f64) -> f64 {
+    if link == 1usize { ret 1.0f64 / (3.141592653589793238462643383279f64 * (1.0f64 + z * z)) }
+    ret math.exp[f64](0.0f64 - z * z / 2.0f64) / math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64)
+}
+
+fn fitlr(x: []const f64, y: []const f64, w: []const f64, link: usize) -> Fit {
     let nan = 0.0f64 / 0.0f64
     var fit = Fit { b0: nan, b1: nan, c00: nan, c01: nan, c11: nan, disp: nan, df: 0.0f64 }
     // keep the points with positive weight
@@ -38,8 +63,8 @@ fn fitlr(x: []const f64, y: []const f64, w: []const f64) -> Fit {
     var devold = 0.0f64
     i = 0usize
     while i < n {
-        eta[i] = dist.qnorm(ys[i], 0.0f64, 1.0f64, true, false)
-        mu[i] = dist.pnorm(eta[i], 0.0f64, 1.0f64, true, false)
+        eta[i] = quf_l(link, ys[i])
+        mu[i] = cdf_l(link, eta[i])
         devold += ws[i] * (ys[i] - mu[i]) * (ys[i] - mu[i])
         i += 1usize
     }
@@ -56,7 +81,7 @@ fn fitlr(x: []const f64, y: []const f64, w: []const f64) -> Fit {
         var t1 = 0.0f64
         i = 0usize
         while i < n {
-            var me = math.exp[f64](0.0f64 - eta[i] * eta[i] / 2.0f64) / math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64)
+            var me = dens_l(link, eta[i])
             if me < 2.220446049250313e-16f64 { me = 2.220446049250313e-16f64 }
             let z = eta[i] + (ys[i] - mu[i]) / me
             let wt = ws[i] * me * me
@@ -78,7 +103,7 @@ fn fitlr(x: []const f64, y: []const f64, w: []const f64) -> Fit {
         i = 0usize
         while i < n {
             eta[i] = fit.b0 + fit.b1 * xs[i]
-            mu[i] = dist.pnorm(eta[i], 0.0f64, 1.0f64, true, false)
+            mu[i] = cdf_l(link, eta[i])
             dev += ws[i] * (ys[i] - mu[i]) * (ys[i] - mu[i])
             i += 1usize
         }
@@ -89,7 +114,7 @@ fn fitlr(x: []const f64, y: []const f64, w: []const f64) -> Fit {
     var ss = 0.0f64
     i = 0usize
     while i < n {
-        var me = math.exp[f64](0.0f64 - eta[i] * eta[i] / 2.0f64) / math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64)
+        var me = dens_l(link, eta[i])
         if me < 2.220446049250313e-16f64 { me = 2.220446049250313e-16f64 }
         let r = (ys[i] - mu[i]) / me
         ss += wi[i] * r * r
@@ -118,7 +143,7 @@ fn wgt(d: f64, small: bool) -> f64 {
     ret 0.0f64
 }
 
-type Ctx = struct { lat: *const mvt.Lat, seed: i64, n: usize, tail: usize, cor: []const f64, a: *mem.Arena }
+type Ctx = struct { lat: *const mvt.Lat, seed: i64, n: usize, tail: usize, cor: []const f64, a: *mem.Arena, df: f64 }
 
 // pfct(q): pmvnorm of the equicoordinate box for the tail, from the seed's stream; upper-tail returns 1 - P
 fn pfct(c: *const Ctx, q: f64) -> f64 {
@@ -148,7 +173,7 @@ fn pfct(c: *const Ctx, q: f64) -> f64 {
     }
     var g: rng.Rng = zero
     rng.seed(&g, c.seed)
-    let (res, re) = mvt.mvtdst(c.a, &g, c.lat, n, 0i64, lo, up, infin, c.cor, zd, 25000i64, 0.001f64, 0.0f64)
+    let (res, re) = mvt.mvtdst(c.a, &g, c.lat, n, i64(c.df), lo, up, infin, c.cor, zd, 25000i64, 0.001f64, 0.0f64)
     if re != ok { ret 0.0f64 / 0.0f64 }
     if c.tail == 1usize { ret 1.0f64 - res.value }
     ret res.value
@@ -163,9 +188,19 @@ fn sany(y: f64) -> f64 {
 }
 
 // the product-of-margins function of getInt for the tail minus p
-fn gi_f(tail: usize, n: usize, p: f64, x: f64) -> f64 {
+fn tq(df: f64, p: f64) -> f64 {
+    if df > 0.0f64 { ret nm.qt(p, df, true, false) }
+    ret dist.qnorm(p, 0.0f64, 1.0f64, true, false)
+}
+
+fn tcdf(df: f64, x: f64, lower: bool) -> f64 {
+    if df > 0.0f64 { ret nm.pt(x, df, lower, false) }
+    ret dist.pnorm(x, 0.0f64, 1.0f64, lower, false)
+}
+
+fn gi_f(tail: usize, n: usize, p: f64, df: f64, x: f64) -> f64 {
     var m = 0.0f64
-    if tail == 2usize { m = dist.pnorm(x, 0.0f64, 1.0f64, true, false) - dist.pnorm(0.0f64 - x, 0.0f64, 1.0f64, true, false) } else if tail == 1usize { m = dist.pnorm(x, 0.0f64, 1.0f64, false, false) } else { m = dist.pnorm(x, 0.0f64, 1.0f64, true, false) }
+    if tail == 2usize { m = tcdf(df, x, true) - tcdf(df, 0.0f64 - x, true) } else if tail == 1usize { m = tcdf(df, x, false) } else { m = tcdf(df, x, true) }
     var pr = 1.0f64
     var i = 0usize
     while i < n {
@@ -176,14 +211,14 @@ fn gi_f(tail: usize, n: usize, p: f64, x: f64) -> f64 {
 }
 
 // R_zeroin2 for gi_f on [ax, bx] at tolerance eps^0.25
-fn gi_root(tail: usize, n: usize, p: f64, ax: f64, bx: f64) -> f64 {
+fn gi_root(tail: usize, n: usize, p: f64, df: f64, ax: f64, bx: f64) -> f64 {
     let eps = 2.220446049250313e-16f64
     let tol = math.pow[f64](eps, 0.25f64)
     var a = ax
     var b = bx
     var c = a
-    var fa = gi_f(tail, n, p, a)
-    var fb = gi_f(tail, n, p, b)
+    var fa = gi_f(tail, n, p, df, a)
+    var fb = gi_f(tail, n, p, df, b)
     var fc = fa
     if fa == 0.0f64 { ret a }
     if fb == 0.0f64 { ret b }
@@ -226,7 +261,7 @@ fn gi_root(tail: usize, n: usize, p: f64, ax: f64, bx: f64) -> f64 {
         a = b
         fa = fb
         b += new_step
-        fb = gi_f(tail, n, p, b)
+        fb = gi_f(tail, n, p, df, b)
         if (fb > 0.0f64 && fc > 0.0f64) || (fb < 0.0f64 && fc < 0.0f64) {
             c = a
             fc = fa
@@ -237,6 +272,14 @@ fn gi_root(tail: usize, n: usize, p: f64, ax: f64, bx: f64) -> f64 {
 
 // qmvnorm(p, tail, corr, seed, ptol, maxiter): tail 0 lower, 1 upper, 2 both; returns the quantile and f.quantile (the fitted probability minus p)
 fn qmvnorm(a: *mem.Arena, lat: *const mvt.Lat, p0: f64, tail: usize, n: usize, corr: []const f64, seed: i64, ptol: f64, maxiter: usize) -> (f64, f64) {
+    let (q, fq) = qmvt(a, lat, p0, tail, n, corr, seed, ptol, maxiter, 0.0f64)
+    ret (q, fq)
+}
+
+// qmvt(df): df > 0 finite; the cauchit link for df <= 7, as R chooses
+fn qmvt(a: *mem.Arena, lat: *const mvt.Lat, p0: f64, tail: usize, n: usize, corr: []const f64, seed: i64, ptol: f64, maxiter: usize, df: f64) -> (f64, f64) {
+    var link = 0usize
+    if df > 0.0f64 && df <= 7.0f64 { link = 1usize }
     let nan = 0.0f64 / 0.0f64
     let (cl, e0) = mem.alloc[f64](a, n * (n - 1usize) / 2usize)
     if e0 != ok { ret (nan, nan) }
@@ -251,20 +294,20 @@ fn qmvnorm(a: *mem.Arena, lat: *const mvt.Lat, p0: f64, tail: usize, n: usize, c
         }
         i += 1usize
     }
-    let ctx = Ctx { lat: lat, seed: seed, n: n, tail: tail, cor: cl, a: a }
+    let ctx = Ctx { lat: lat, seed: seed, n: n, tail: tail, cor: cl, a: a, df: df }
     // getInt
     var ub = 0.0f64
     var ilo = 0.0f64 - 10.0f64
     var ihi = 10.0f64
     if tail == 2usize {
         ilo = 0.0f64
-        ub = dist.qnorm(1.0f64 - (1.0f64 - p0) / 2.0f64, 0.0f64, 1.0f64, true, false)
+        ub = tq(df, 1.0f64 - (1.0f64 - p0) / 2.0f64)
     } else if tail == 1usize {
-        ub = dist.qnorm(1.0f64 - p0, 0.0f64, 1.0f64, true, false)
+        ub = tq(df, 1.0f64 - p0)
     } else {
-        ub = dist.qnorm(p0, 0.0f64, 1.0f64, true, false)
+        ub = tq(df, p0)
     }
-    let lb = gi_root(tail, n, p0, ilo, ihi)
+    let lb = gi_root(tail, n, p0, df, ilo, ihi)
     var lo = lb
     var hi = ub
     if ub < lb {
@@ -292,13 +335,13 @@ fn qmvnorm(a: *mem.Arena, lat: *const mvt.Lat, p0: f64, tail: usize, n: usize, c
         y[i] = sany(pfct(&ctx, x[i]))
         i += 1usize
     }
-    let ttarg = dist.qnorm(p, 0.0f64, 1.0f64, true, false)
+    let ttarg = quf_l(link, p)
     i = 0usize
     while i < 4usize + maxiter {
         wv[i] = 1.0f64
         i += 1usize
     }
-    var fit = fitlr(x[0usize..3usize], y[0usize..3usize], wv[0usize..3usize])
+    var fit = fitlr(x[0usize..3usize], y[0usize..3usize], wv[0usize..3usize], link)
     // y holds probabilities; the glm is fitted to them directly, the link scale is the probit
     xest[0usize] = (ttarg - fit.b0) / fit.b1
     x[3usize] = math.max[f64](xest[0usize], minx)
@@ -319,7 +362,7 @@ fn qmvnorm(a: *mem.Arena, lat: *const mvt.Lat, p0: f64, tail: usize, n: usize, c
             wv[i] = wgt(d, small < 3usize)
             i += 1usize
         }
-        fit = fitlr(x[0usize..count], y[0usize..count], wv[0usize..count])
+        fit = fitlr(x[0usize..count], y[0usize..count], wv[0usize..count], link)
         let fe = pred(fit, xest[it - 1usize])
         let se = pred_se(fit, xest[it - 1usize])
         let crit = nm.qt(0.975f64, fit.df, true, false)
@@ -339,6 +382,6 @@ fn qmvnorm(a: *mem.Arena, lat: *const mvt.Lat, p0: f64, tail: usize, n: usize, c
         it += 1usize
     }
     if it > maxiter { it = maxiter }
-    let fq = dist.pnorm(pred(fit, xest[it - 1usize]), 0.0f64, 1.0f64, true, false)
+    let fq = cdf_l(link, pred(fit, xest[it - 1usize]))
     ret (xest[it - 1usize], fq - p)
 }

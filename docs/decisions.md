@@ -46336,3 +46336,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `e.algo.stat.mvtq.qmvnorm` ports the equicoordinate quantile search: getInt's start interval (uniroot of the product of margins minus p, widened by 0.2 max(diff, 0.1)), then get_quant_loclin's loop with a quasi probit glm (R's IRLS from mustart = y, deviance epsilon 1e-8, dispersion from the final working residuals), its distance weights (all 1 unless three points lie within 1 of the target), the stop rule from the glm standard errors with qt(0.975, df.residual), and the lower and upper confidence points as the next quantiles. pfct re-seeds before each pmvnorm, so every evaluation uses the same stream, as R's does.
 
 **Result.** `oracle_qmvnorm` agrees with mvtnorm on 80 values (quantile and f.quantile, n 3 to 5, every tail) on Windows; Linux pending. qmvt, a mean, sigma input and TVPACK/Miwa stay open; L301 stays partial.
+
+## D6528 — mvtnorm: qmvt
+
+**Decision.** `mvtq.qmvt` generalises qmvnorm: pmvt through mvtdst with the degrees of freedom, getInt with the central t margins (R passes ncp = 0, which takes pnt; the central pt differs below the interval's tolerance), and R's link choice, cauchit for df at most 7 and probit above. The glm uses pcauchy and dcauchy in the IRLS for the cauchit link, with R's `1/tanpi(p)` quantile and the `atan(1/x)` tail form of pcauchy.
+
+**Result.** `oracle_qmvnorm` agrees with mvtnorm on 60 more qmvt values (df 2 to 15, every tail) on Windows; Linux pending. TVPACK, Miwa, a mean and sigma input stay open; L301 stays partial.

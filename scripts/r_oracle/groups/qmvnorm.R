@@ -14,4 +14,13 @@ for (rep in 1:40) {
   a <- c(seed, n, tail, p, ptol, 500, as.vector(t(corr)))
   add("q", a, r$quantile); add("fq", a, r$f.quantile)
 }
+for (rep in 1:30) {
+  n <- sample(3:4, 1); corr <- rcorr(n); df <- sample(c(2, 3, 5, 7, 9, 15), 1)
+  tail <- sample(0:2, 1); p <- if (tail == 2) round(runif(1, 0.6, 0.99), 3) else round(runif(1, 0.05, 0.95), 3)
+  seed <- sample(1e6, 1); ptol <- 0.005
+  r <- tryCatch(qmvt(p, tail = c("lower.tail", "upper.tail", "both.tails")[tail + 1], df = df, corr = corr, seed = seed, ptol = ptol), error = function(e) NULL)
+  if (is.null(r) || !is.finite(r$quantile)) next
+  a <- c(seed, n, tail, p, ptol, 500, as.vector(t(corr)), df)
+  add("qt", a, r$quantile); add("fqt", a, r$f.quantile)
+}
 emit("qmvnorm", "mvtnorm", list(cases))
