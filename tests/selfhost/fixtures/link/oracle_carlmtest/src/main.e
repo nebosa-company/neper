@@ -1,6 +1,7 @@
 // e.algo.stat.carlmtest against car, lmtest and sandwich. tests/oracle/carlmtest.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R carlmtest`; the layout is at the top of scripts/r_oracle/groups/carlmtest.R.
 
+use e.algo.rand.r as rng
 use e.algo.stat.carlmtest as cl
 use e.io
 use e.mem
@@ -78,6 +79,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (af, ap) = cl.anova_block(a, des, y, n, p, usize(x[2usize + n + n * p]), usize(x[3usize + n + n * p]), usize(x[4usize + n + n * p]))
         if str.eq(c.name, "ab_f") { ret af }
         ret ap
+    }
+    if str.eq(c.name, "vbs") {
+        let (vo, ve) = mem.alloc[f64](a, p * p)
+        if ve != ok { ret 0.0f64 / 0.0f64 }
+        var bg: rng.Rng = zero
+        rng.seed(&bg, i64(x[2usize + n + n * p]))
+        if cl.vcov_bs(a, &bg, des, y, n, p, usize(x[3usize + n + n * p]), vo) != ok { ret 0.0f64 / 0.0f64 }
+        var sv = 0.0f64
+        var q = 0usize
+        while q < p * p {
+            sv += vo[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret sv
     }
     if str.eq(c.name, "bc") { ret cl.box_cox_ll(a, des, y, n, p, x[2usize + n + n * p]) }
     if str.eq(c.name, "pt_lambda") { ret cl.power_transform_lambda(a, des, y, n, p) }

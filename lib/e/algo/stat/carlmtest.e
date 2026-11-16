@@ -4,6 +4,7 @@
 // Not here: the other covariance families (HAC, clustered, bootstrap), the other lmtest tests (RESET, Harvey-Collier, Goldfeld-Quandt, the non-studentized
 // Breusch-Pagan), p values, Anova and the rest of car.
 
+use e.algo.rand.r as rng
 use e.math
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
@@ -1142,4 +1143,69 @@ fn anova_block(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize
     }
     let fs = ((rss_r - rss_big) / f64(q)) / s2
     ret (fs, p_f(fs, f64(q), f64(n - p)))
+}
+
+// sandwich::vcovBS(lm, R, type = "xy") with each observation its own cluster: the covariance of the coefficients of R pairs-bootstrap refits (rows drawn by sample.int(n, n, TRUE) per replicate), written row-major into out (p by p)
+fn vcov_bs(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, p: usize, nrep: usize, out: []f64) -> err {
+    let (cf, e1) = mem.alloc[f64](a, nrep * p)
+    let (xb, e2) = mem.alloc[f64](a, n * p)
+    let (yb, e3) = mem.alloc[f64](a, n)
+    let (mu, e4) = mem.alloc[f64](a, p)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    var r = 0usize
+    while r < nrep {
+        let start = mem.mark(a)
+        let (draw, de) = rng.sample_int(a, g, i64(n), i64(n), true)
+        if de != ok { ret de }
+        var i = 0usize
+        while i < n {
+            let k = usize(draw[i]) - 1usize
+            var c = 0usize
+            while c < p {
+                xb[i * p + c] = x[k * p + c]
+                c += 1usize
+            }
+            yb[i] = y[k]
+            i += 1usize
+        }
+        let (fit, fe) = ols(a, xb, yb, n, p)
+        if fe != ok { ret fe }
+        var c = 0usize
+        while c < p {
+            cf[r * p + c] = fit.beta[c]
+            c += 1usize
+        }
+        mem.reset(a, start)
+        r += 1usize
+    }
+    var c = 0usize
+    while c < p {
+        var s = 0.0f64
+        r = 0usize
+        while r < nrep {
+            s += cf[r * p + c]
+            r += 1usize
+        }
+        mu[c] = s / f64(nrep)
+        c += 1usize
+    }
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            var s = 0.0f64
+            r = 0usize
+            while r < nrep {
+                s += (cf[r * p + i] - mu[i]) * (cf[r * p + j] - mu[j])
+                r += 1usize
+            }
+            out[i * p + j] = s / f64(nrep - 1usize)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
 }

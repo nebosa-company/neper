@@ -46504,3 +46504,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `anova_block` gives the F test of a term that spans q design columns: type I adds it to the columns before it (the sequential `anova`), types II and III drop it from the full model (the same for main effects without interactions); F on (q, n - p).
 
 **Result.** `oracle_carlmtest` agrees with car on 240 new values (a 3 to 5 level factor and a numeric term, all three types) on Windows (1440 cases in all); Linux pending. L300 stays partial: interactions in Anova (where type II differs from III), vcovBS and vcovPL.
+
+## D6556 — sandwich: vcovBS (pairs bootstrap)
+
+**Decision.** `vcov_bs` is vcovBS(lm, R, type = "xy") with the default one-observation clusters: each replicate draws `sample.int(n, n, TRUE)` rows (the cluster names `sample(names(cli))` are in numeric order, so the draw is the same), refits by least squares and the result is the sample covariance of the R coefficient vectors; the seed is set before the call, as `set.seed` does.
+
+**Result.** `oracle_carlmtest` agrees with sandwich on 16 values (R = 30 and 120) on Windows at 1e-8 (1456 cases in all); Linux pending. L300 at 0.9: Anova with interactions, vcovPL and the other bootstrap types stay open.
