@@ -801,10 +801,10 @@
       "group": "CRAN parity",
       "order": 666,
       "title": "car, lmtest and sandwich: linear-model tests and robust covariance",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN ranks 111, 114, 155). Mid. Needs only e.ml.linear.ols. Acceptance, equal to R: car Anova type I, II and III (lm and glm), vif and gvif, durbinWatsonTest, leveneTest, ncvTest, boxCox, powerTransform, linearHypothesis, hccm, influence and cooks measures; lmtest bptest, dwtest, bgtest, resettest, coeftest, waldtest, lrtest, grangertest, gqtest, harvtest, raintest, jtest; sandwich vcovHC (HC0 to HC5), vcovHAC, NeweyWest, kernHAC, vcovCL (one and two way), vcovBS, vcovPL, bread, meat, estfun."
+      "evidence": "Partial (D6421). vcovHC HC0 to HC4, dwtest, studentized bptest and vif equal sandwich, lmtest and car on Windows (oracle_carlmtest; Linux pending). Open: HAC, cluster and bootstrap covariances, RESET, other lmtest tests, Anova, p values. Was: Open (CRAN ranks 111, 114, 155). Mid. Needs only e.ml.linear.ols. Acceptance, equal to R: car Anova type I, II and III (lm and glm), vif and gvif, durbinWatsonTest, leveneTest, ncvTest, boxCox, powerTransform, linearHypothesis, hccm, influence and cooks measures; lmtest bptest, dwtest, bgtest, resettest, coeftest, waldtest, lrtest, grangertest, gqtest, harvtest, raintest, jtest; sandwich vcovHC (HC0 to HC5), vcovHAC, NeweyWest, kernHAC, vcovCL (one and two way), vcovBS, vcovPL, bread, meat, estfun."
     },
     {
       "id": "L305",

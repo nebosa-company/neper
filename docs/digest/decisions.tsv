@@ -3288,4 +3288,5 @@ D6416	741	deSolve: the fixed-step methods against e.math.ode
 D6417	1042	foreign: read.arff for dense files
 D6418	970	foreign: read.dbf for the common field types
 D6419	949	R.matlab: level 5 MAT-file reader
-D6420	1072	foreign: read.octave for scalars, matrices and strings
+D6420	1073	foreign: read.octave for scalars, matrices and strings
+D6421	1087	car, lmtest and sandwich: HC covariances, Durbin-Watson, Breusch-Pagan and VIF

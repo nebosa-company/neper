@@ -1,0 +1,286 @@
+// R car, lmtest and sandwich for a linear model y = X b (X with the intercept column): the OLS fit with its hat values, the heteroskedasticity-consistent
+// covariances vcovHC of types HC0 to HC4, the Durbin-Watson statistic, the studentized Breusch-Pagan statistic, and the variance inflation factors.
+//
+// Not here: the other covariance families (HAC, clustered, bootstrap), the other lmtest tests (RESET, Harvey-Collier, Goldfeld-Quandt, the non-studentized
+// Breusch-Pagan), p values, Anova and the rest of car.
+
+use e.math
+use e.mem
+
+type Fit = struct { beta: []f64, resid: []f64, hat: []f64, xtx_inv: []f64 }
+
+// the inverse of a p by p matrix by Gauss-Jordan elimination with partial pivoting
+fn inverse(a: *mem.Arena, m: []const f64, p: usize, out: []f64) -> err {
+    let (w, e) = mem.alloc[f64](a, p * 2usize * p)
+    if e != ok { ret e }
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            w[i * 2usize * p + j] = m[i * p + j]
+            w[i * 2usize * p + p + j] = 0.0f64
+            j += 1usize
+        }
+        w[i * 2usize * p + p + i] = 1.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < p {
+        var piv = c
+        var k = c + 1usize
+        while k < p {
+            if math.abs[f64](w[k * 2usize * p + c]) > math.abs[f64](w[piv * 2usize * p + c]) { piv = k }
+            k += 1usize
+        }
+        var j = 0usize
+        while j < 2usize * p {
+            let t = w[c * 2usize * p + j]
+            w[c * 2usize * p + j] = w[piv * 2usize * p + j]
+            w[piv * 2usize * p + j] = t
+            j += 1usize
+        }
+        let d = w[c * 2usize * p + c]
+        j = 0usize
+        while j < 2usize * p {
+            w[c * 2usize * p + j] = w[c * 2usize * p + j] / d
+            j += 1usize
+        }
+        k = 0usize
+        while k < p {
+            if k != c {
+                let f = w[k * 2usize * p + c]
+                j = 0usize
+                while j < 2usize * p {
+                    w[k * 2usize * p + j] -= f * w[c * 2usize * p + j]
+                    j += 1usize
+                }
+            }
+            k += 1usize
+        }
+        c += 1usize
+    }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            out[i * p + j] = w[i * 2usize * p + p + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+fn ols(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> (Fit, err) {
+    var f: Fit = zero
+    let (xtx, e1) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret (f, e1) }
+    let (inv, e2) = mem.alloc[f64](a, p * p)
+    if e2 != ok { ret (f, e2) }
+    let (xty, e3) = mem.alloc[f64](a, p)
+    if e3 != ok { ret (f, e3) }
+    let (beta, e4) = mem.alloc[f64](a, p)
+    if e4 != ok { ret (f, e4) }
+    let (res, e5) = mem.alloc[f64](a, n)
+    if e5 != ok { ret (f, e5) }
+    let (hat, e6) = mem.alloc[f64](a, n)
+    if e6 != ok { ret (f, e6) }
+    var i = 0usize
+    while i < p * p {
+        xtx[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        xty[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < p {
+            xty[j] += x[i * p + j] * y[i]
+            var k = 0usize
+            while k < p {
+                xtx[j * p + k] += x[i * p + j] * x[i * p + k]
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let ie = inverse(a, xtx, p, inv)
+    if ie != ok { ret (f, ie) }
+    i = 0usize
+    while i < p {
+        var s = 0.0f64
+        var j = 0usize
+        while j < p {
+            s += inv[i * p + j] * xty[j]
+            j += 1usize
+        }
+        beta[i] = s
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var fit = 0.0f64
+        var h = 0.0f64
+        var j = 0usize
+        while j < p {
+            fit += x[i * p + j] * beta[j]
+            var k = 0usize
+            while k < p {
+                h += x[i * p + j] * inv[j * p + k] * x[i * p + k]
+                k += 1usize
+            }
+            j += 1usize
+        }
+        res[i] = y[i] - fit
+        hat[i] = h
+        i += 1usize
+    }
+    f.beta = beta
+    f.resid = res
+    f.hat = hat
+    f.xtx_inv = inv
+    ret (f, ok)
+}
+
+// the diagonal of vcovHC(type): ty 0 HC0, 1 HC1, 2 HC2, 3 HC3, 4 HC4; out has p entries
+fn vcov_hc_diag(a: *mem.Arena, x: []const f64, n: usize, p: usize, f: *const Fit, ty: usize, out: []f64) -> err {
+    let (meat, e1) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < p * p {
+        meat[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var w = f.resid[i] * f.resid[i]
+        let h = f.hat[i]
+        if ty == 2usize { w = w / (1.0f64 - h) }
+        if ty == 3usize { w = w / ((1.0f64 - h) * (1.0f64 - h)) }
+        if ty == 4usize {
+            var dl = f64(n) * h / f64(p)
+            if dl > 4.0f64 { dl = 4.0f64 }
+            w = w / math.pow[f64](1.0f64 - h, dl)
+        }
+        var j = 0usize
+        while j < p {
+            var k = 0usize
+            while k < p {
+                meat[j * p + k] += w * x[i * p + j] * x[i * p + k]
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var scale = 1.0f64
+    if ty == 1usize { scale = f64(n) / f64(n - p) }
+    // diag((X'X)^-1 meat (X'X)^-1)
+    let (tmp, e2) = mem.alloc[f64](a, p * p)
+    if e2 != ok { ret e2 }
+    var j = 0usize
+    while j < p {
+        var k = 0usize
+        while k < p {
+            var s = 0.0f64
+            var l = 0usize
+            while l < p {
+                s += f.xtx_inv[j * p + l] * meat[l * p + k]
+                l += 1usize
+            }
+            tmp[j * p + k] = s
+            k += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var s = 0.0f64
+        var k = 0usize
+        while k < p {
+            s += tmp[j * p + k] * f.xtx_inv[k * p + j]
+            k += 1usize
+        }
+        out[j] = s * scale
+        j += 1usize
+    }
+    ret ok
+}
+
+fn durbin_watson(res: []const f64) -> f64 {
+    var num = 0.0f64
+    var den = res[0usize] * res[0usize]
+    var i = 1usize
+    while i < res.len {
+        num += (res[i] - res[i - 1usize]) * (res[i] - res[i - 1usize])
+        den += res[i] * res[i]
+        i += 1usize
+    }
+    ret num / den
+}
+
+// the studentized Breusch-Pagan statistic n R^2 of the regression of the squared residuals on X
+fn bp_studentized(a: *mem.Arena, x: []const f64, n: usize, p: usize, res: []const f64) -> f64 {
+    let (e2, e) = mem.alloc[f64](a, n)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        e2[i] = res[i] * res[i]
+        mean += e2[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    let (aux, e3) = ols(a, x, e2, n, p)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    var tss = 0.0f64
+    var rss = 0.0f64
+    i = 0usize
+    while i < n {
+        tss += (e2[i] - mean) * (e2[i] - mean)
+        rss += aux.resid[i] * aux.resid[i]
+        i += 1usize
+    }
+    ret f64(n) * (1.0f64 - rss / tss)
+}
+
+// the variance inflation factor of column j (1 <= j < p, the intercept being column 0): 1 / (1 - R^2) of column j on the others
+fn vif(a: *mem.Arena, x: []const f64, n: usize, p: usize, j: usize) -> f64 {
+    let (xo, e1) = mem.alloc[f64](a, n * (p - 1usize))
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (yo, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    var mean = 0.0f64
+    while i < n {
+        var c = 0usize
+        var cc = 0usize
+        while c < p {
+            if c != j {
+                xo[i * (p - 1usize) + cc] = x[i * p + c]
+                cc += 1usize
+            }
+            c += 1usize
+        }
+        yo[i] = x[i * p + j]
+        mean += yo[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    let (f, e3) = ols(a, xo, yo, n, p - 1usize)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    var tss = 0.0f64
+    var rss = 0.0f64
+    i = 0usize
+    while i < n {
+        tss += (yo[i] - mean) * (yo[i] - mean)
+        rss += f.resid[i] * f.resid[i]
+        i += 1usize
+    }
+    ret tss / rss
+}
