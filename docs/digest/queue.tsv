@@ -478,7 +478,6 @@ L251	library	0	297	Platform parity is declared, not discovered	Opened from the 2
 L252	library	0	203	Disabled crypto: dead ML-DSA signer, DNSSEC RSASHA256 refused	Opened from the 2026-11-13 library review.
 L253	library	0	236	Declared ceilings become metadata	Opened from the 2026-11-13 library review.
 L254	library	0	229	Options that do nothing	Opened from the 2026-11-13 library review.
-L255	library	0	192	One helper, not thirty	Opened from the 2026-11-13 library review.
 L256	library	0	232	Generated blobs are assets	Opened from the 2026-11-13 library review.
 L262	library	0	200	Design-spec prose lives in one place	Opened from the 2026-11-13 library review.
 T096	tooling	0	164	A generated compiler map	Opened from the 2026-11-12 compiler review.

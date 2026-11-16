@@ -5273,17 +5273,6 @@
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: each option either changes the Windows-look frame hash in a fixture or is removed from the public struct; the unused parameter is gone. Notes: docs/library-hardening-plan.md."
     },
     {
-      "id": "L255",
-      "category": "library",
-      "group": "Library",
-      "order": 498,
-      "title": "One helper, not thirty",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "medium",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a script lists functions with identical normalised bodies across modules and its count only falls. Notes: docs/library-hardening-plan.md."
-    },
-    {
       "id": "L256",
       "category": "library",
       "group": "Library",

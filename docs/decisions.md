@@ -47090,3 +47090,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `push_sheet` took a depth of four and nothing else, so a sheet importing itself was fetched four times and a long import list had no limit. `collect_sheets` now builds an `Imports` record (URLs seen, imported sheets fetched, capped flag) for one pass; a URL already seen is skipped, a link-fetched sheet is marked before its own imports are read, the fetch count stops at 32 imported sheets, and a refused import sets `Page.imports_capped`. Dropping a repeated import changes the cascade only by omitting an identical later copy.
 
 **Result.** `web_page_imports` passes on Windows (new checks: 2 sheets for a doubled import, 33 plus the flag for forty); `web_page_csp` and `web_shell` unchanged; Linux pending. L242 leaves the queue.
+
+## D6661 — a ratchet on duplicated helpers
+
+**Decision.** The review found the same helper written dozens of times (hex digits, endian readers, byte equality, ASCII lower-casing). `scripts/check_duplicate_helpers.py` counts functions whose parameter list, return type and comment-free, whitespace-collapsed body are identical in at least two files, ignoring bodies under 60 characters, and records the group and copy counts in `docs/duplicate-helpers.json`. A rise fails `tests/test_duplicate_helpers.py`; a fall is recorded with `--update`, which never raises the record. Normalising names or types would find more near-duplicates but also false ones; the text-identical form has no false positives.
+
+**Result.** 367 groups and 557 redundant copies recorded, the test passes, and L255 leaves the queue as the measuring gate; removing the copies is the ongoing work it counts.
