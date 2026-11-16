@@ -309,6 +309,7 @@ oracle_lowesspkg
 oracle_splinepkg
 oracle_catoolspkg
 oracle_polynompkg
+oracle_metaforpkg
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -362,3 +363,4 @@ oracle_lowesspkg
 oracle_splinepkg
 oracle_catoolspkg
 oracle_polynompkg
+oracle_metaforpkg

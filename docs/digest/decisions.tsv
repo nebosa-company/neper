@@ -3362,4 +3362,5 @@ D6490	761	pracma: kron and pinv for full-rank matrices
 D6491	674	pracma: singular values and cond
 D6492	790	caTools: running-window statistics
 D6493	895	polynom and caTools colAUC
-D6494	910	pracma: null and orth as projectors
+D6494	911	pracma: null and orth as projectors
+D6495	1091	metafor: rma.uni intercept-only

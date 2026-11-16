@@ -1593,10 +1593,10 @@
       "group": "CRAN parity",
       "order": 760,
       "title": "metafor: meta-analysis",
-      "score": 0,
+      "score": 0.12,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 346). Mid to large. e.algo.stat.meta has fixed and DL pooling and meta-regression. Acceptance, equal to metafor: rma.uni with REML, ML, DL, HE, HS, SJ, PM, EB and GENQ estimators and the Knapp-Hartung test, rma.mv multilevel models, escalc for every measure, trimfill, regtest (Egger), ranktest (Begg), leave1out, influence, fsn, profile, confint, permutest."
+      "evidence": "Partial (D6495 rma.uni intercept-only with FE, DL, HE, HS, SJ exact and PM, ML, REML to the package's stopping tolerance equal metafor on Windows; oracle_metaforpkg; Linux pending). Open: Knapp-Hartung, moderators, other estimators, rma.mv, escalc, trimfill, regtest, ranktest, influence, permutest. Was: Open (CRAN rank 346). Mid to large. e.algo.stat.meta has fixed and DL pooling and meta-regression. Acceptance, equal to metafor: rma.uni with REML, ML, DL, HE, HS, SJ, PM, EB and GENQ estimators and the Knapp-Hartung test, rma.mv multilevel models, escalc for every measure, trimfill, regtest (Egger), ranktest (Begg), leave1out, influence, fsn, profile, confint, permutest."
     },
     {
       "id": "L366",
