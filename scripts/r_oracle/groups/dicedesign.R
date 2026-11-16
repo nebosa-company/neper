@@ -53,4 +53,18 @@ for (rep in 1:6) {
   n <- sample(6:25, 1); d <- sample(2:4, 1); X <- matrix(runif(n * d), n, d)
   add("mesh", c(n, d, 0, as.vector(t(X))), meshRatio(X))
 }
+for (rep in 1:8) {
+  n <- sample(6:12, 1); d <- sample(2:4, 1); sd <- sample(1:100000, 1); itn <- sample(1:2, 1)
+  L <- lhsDesign(n, d, seed = sd)$design
+  S <- maximinESE_LHS(L, it = itn, inner_it = 20, J = 5, p = 15, T0 = 0.005 * phiP(L, p = 50))
+  add("ese", c(n, d, sd, itn), sum(as.vector(t(S$design)) * seq_len(length(S$design))))
+  add("ese_phi", c(n, d, sd, itn), phiP(S$design, p = 15))
+}
+for (rep in 1:8) {
+  n <- sample(6:12, 1); d <- sample(2:4, 1); sd <- sample(1:100000, 1); itn <- sample(1:2, 1)
+  L <- lhsDesign(n, d, seed = sd)$design
+  S <- discrepESE_LHS(L, it = itn, inner_it = 20, J = 5, T0 = 0.005 * discrepancyCriteria(L, type = "C2")[[1]], criterion = "C2")
+  add("dese", c(n, d, sd, itn), sum(as.vector(t(S$design)) * seq_len(length(S$design))))
+  add("dese_c2", c(n, d, sd, itn), discrepancyCriteria(S$design, type = "C2")[[1]])
+}
 emit("dicedesign", "DiceDesign", list(cases))

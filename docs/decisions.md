@@ -46174,3 +46174,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.perfanalytics` gains `return_calculate` (discrete p_t / p_{t-1} - 1 and log ln(p_t / p_{t-1}) returns). With it every function the acceptance list names for L408 is covered: Return.calculate, Return.annualized, VaR (three methods), ES (including modified), SharpeRatio, SortinoRatio, maxDrawdown, findDrawdowns, CAPM.alpha and beta, InformationRatio, OmegaSharpeRatio, TrackingError and UpDownRatios. The queue entry's "Open:" list had not been trimmed as the earlier increments landed, so it overstated what remained; the other functions were already in the module and the oracle.
 
 **Result.** `oracle_perfanalytics` equals PerformanceAnalytics on 528 cases on Windows at rel 1e-9, 38 of them new for Return.calculate over 20 price series. L408 reaches score 1: it leaves docs/work-queue.json for docs/work-done.jsonl; Linux pending until WSL answers.
+
+## D6501 — DiceDesign: the two enhanced stochastic evolutionary searches
+
+`e.algo.stat.dicedesign` gains `maximin_ese` (maximinESE_LHS: J candidate swaps in column count mod d per step, each drawing two rows with trunc(runif(2, 0, n)) + 1; the best candidate is accepted if its phiP is within T runif(1) of the current; temperature raised or lowered by the package's acceptance-rate rules) and `discrep_ese_c2` (discrepESE_LHS with criterion C2, scored through the element-exchange update `c2_ep`). The random stream is the same R generator the annealing ports use, so seeded designs agree.
+
+**Result.** `oracle_dicedesign` agrees with DiceDesign on 216 cases on Windows, 16 of them new: 8 seeded designs of 6 to 12 points in 2 to 4 dimensions for each search, comparing the final design and its criterion. The L2star criterion of discrepESE_LHS and faureprimeDesign are open; Linux pending. L426 stays partial.

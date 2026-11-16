@@ -36,6 +36,33 @@ fn gen(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var g: rr.Rng = zero
     let (o, e) = mem.alloc[f64](a, n * d)
     if e != ok { os.exit(6) }
+    if str.eq(c.name, "dese") || str.eq(c.name, "dese_c2") {
+        rr.seed(&g, i64(x[2usize]))
+        if dd.lhs_from(a, &g, n, d, o) != ok { os.exit(11) }
+        let t0 = 0.005f64 * dd.c2_exact(o, n, d)
+        let fi = dd.discrep_ese_c2(a, &g, o, n, d, t0, 20usize, 5usize, usize(x[3usize]))
+        if str.eq(c.name, "dese_c2") { ret dd.c2_exact(o, n, d) }
+        var q = 0usize
+        while q < n * d {
+            total += o[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        let _ = fi
+        ret total
+    }
+    if str.eq(c.name, "ese") || str.eq(c.name, "ese_phi") {
+        rr.seed(&g, i64(x[2usize]))
+        if dd.lhs_from(a, &g, n, d, o) != ok { os.exit(10) }
+        let t0 = 0.005f64 * dd.phi_p(o, n, d, 50.0f64)
+        let fi = dd.maximin_ese(a, &g, o, n, d, t0, 20usize, 5usize, usize(x[3usize]), 15.0f64)
+        if str.eq(c.name, "ese_phi") { ret dd.phi_p(o, n, d, 15.0f64) }
+        var q = 0usize
+        while q < n * d {
+            total += o[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret total
+    }
     if str.eq(c.name, "sa") || str.eq(c.name, "sa_phi") {
         rr.seed(&g, i64(x[2usize]))
         if dd.lhs_from(a, &g, n, d, o) != ok { os.exit(9) }
@@ -94,7 +121,7 @@ fn gen(a: *mem.Arena, c: *const oracle.Case) -> f64 {
 }
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
-    if str.eq(c.name, "lhs") || str.eq(c.name, "fact") || str.eq(c.name, "faure") || str.eq(c.name, "sa") || str.eq(c.name, "sa_phi") || str.eq(c.name, "dsa") || str.eq(c.name, "dsa_c2") || str.eq(c.name, "dsa_it") || str.eq(c.name, "wsp") || str.eq(c.name, "wsp_n") { ret gen(a, c) }
+    if str.eq(c.name, "lhs") || str.eq(c.name, "fact") || str.eq(c.name, "faure") || str.eq(c.name, "sa") || str.eq(c.name, "sa_phi") || str.eq(c.name, "dsa") || str.eq(c.name, "dsa_c2") || str.eq(c.name, "dsa_it") || str.eq(c.name, "wsp") || str.eq(c.name, "wsp_n") || str.eq(c.name, "ese") || str.eq(c.name, "ese_phi") || str.eq(c.name, "dese") || str.eq(c.name, "dese_c2") { ret gen(a, c) }
     let x = c.args
     let n = usize(x[0usize])
     let d = usize(x[1usize])

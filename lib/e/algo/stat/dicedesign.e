@@ -668,3 +668,192 @@ fn mesh_ratio(x: []const f64, n: usize, d: usize) -> f64 {
     }
     ret math.sqrt[f64](dmax / dmn)
 }
+
+// maximinESE_LHS(design, T0, inner_it, J, it, p): the enhanced stochastic evolutionary search for a maximin Latin hypercube. m is the working design (n by d row-major) and receives
+// the best design found; the best phiP is returned. Each inner step draws J candidate swaps in column count %% d (two rows each, trunc(runif(2, 0, n)) + 1) and keeps the best
+// candidate if its phiP exceeds the current by no more than T * runif(1); T is then raised or lowered by the package's rules.
+fn maximin_ese(a: *mem.Arena, g: *rr.Rng, m: []f64, n: usize, d: usize, t0: f64, inner_it: usize, jj: usize, it: usize, p: f64) -> f64 {
+    let (cur, e1) = mem.alloc[f64](a, n * d)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (cand, e2) = mem.alloc[f64](a, n * d)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    let (bestd, e3) = mem.alloc[f64](a, n * d)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    let (bold, e4) = mem.alloc[f64](a, n * d)
+    if e4 != ok { ret 0.0f64 / 0.0f64 }
+    let (trial, e5) = mem.alloc[f64](a, n * d)
+    if e5 != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    while k < n * d {
+        cur[k] = m[k]
+        bestd[k] = m[k]
+        k += 1usize
+    }
+    var temp = t0
+    var fi = phi_p(cur, n, d, p)
+    var best = fi
+    var q = 0usize
+    while q < it {
+        let bold_val = best
+        k = 0usize
+        while k < n * d {
+            bold[k] = bestd[k]
+            k += 1usize
+        }
+        var ni = 0.0f64
+        var na = 0.0f64
+        var count = 0usize
+        while count <= inner_it {
+            count += 1usize
+            let col = count % d
+            var bv = 0.0f64
+            var have = false
+            var jx = 0usize
+            while jx < jj {
+                k = 0usize
+                while k < n * d {
+                    trial[k] = cur[k]
+                    k += 1usize
+                }
+                let r1 = usize(math.floor[f64](rr.runif(g, 0.0f64, f64(n))))
+                let r2 = usize(math.floor[f64](rr.runif(g, 0.0f64, f64(n))))
+                let x = trial[r1 * d + col]
+                trial[r1 * d + col] = trial[r2 * d + col]
+                trial[r2 * d + col] = x
+                let v = phi_p(trial, n, d, p)
+                if !have || v < bv {
+                    bv = v
+                    have = true
+                    k = 0usize
+                    while k < n * d {
+                        cand[k] = trial[k]
+                        k += 1usize
+                    }
+                }
+                jx += 1usize
+            }
+            let delta = bv - fi
+            if delta <= temp * rr.runif(g, 0.0f64, 1.0f64) {
+                k = 0usize
+                while k < n * d {
+                    cur[k] = cand[k]
+                    k += 1usize
+                }
+                fi = bv
+                na += 1.0f64
+                if bv <= best {
+                    k = 0usize
+                    while k < n * d {
+                        bestd[k] = cand[k]
+                        k += 1usize
+                    }
+                    best = bv
+                    ni += 1.0f64
+                }
+            }
+        }
+        let v1 = na / f64(inner_it)
+        let v2 = ni / f64(inner_it)
+        if best - bold_val < 0.0f64 {
+            if v1 >= 0.1f64 && v2 <= v1 {
+                temp = 0.8f64 * temp
+            } else if v1 >= 0.1f64 && v2 == v1 {
+                temp = temp
+            } else {
+                temp = temp / 0.8f64
+            }
+        } else {
+            if v1 <= 0.1f64 { temp = temp / 0.7f64 } else { temp = temp * 0.9f64 }
+        }
+        q += 1usize
+    }
+    k = 0usize
+    while k < n * d {
+        m[k] = bestd[k]
+        k += 1usize
+    }
+    ret best
+}
+
+// discrepESE_LHS(design, T0, inner_it, J, it, criterion = "C2"): the same enhanced stochastic evolutionary search as maximin_ese, on the centred L2 discrepancy through its
+// element-exchange update c2_ep; returns the best discrepancy and leaves the best design in m
+fn discrep_ese_c2(a: *mem.Arena, g: *rr.Rng, m: []f64, n: usize, d: usize, t0: f64, inner_it: usize, jj: usize, it: usize) -> f64 {
+    let (cur, e1) = mem.alloc[f64](a, n * d)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (bestd, e3) = mem.alloc[f64](a, n * d)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    while k < n * d {
+        cur[k] = m[k]
+        bestd[k] = m[k]
+        k += 1usize
+    }
+    var temp = t0
+    var fi = c2_exact(cur, n, d)
+    var best = fi
+    var q = 0usize
+    while q < it {
+        let bold_val = best
+        var ni = 0.0f64
+        var na = 0.0f64
+        var count = 0usize
+        while count <= inner_it {
+            count += 1usize
+            let col = count % d
+            var bv = 0.0f64
+            var br1 = 0usize
+            var br2 = 0usize
+            var have = false
+            var jx = 0usize
+            while jx < jj {
+                let r1 = usize(math.floor[f64](rr.runif(g, 0.0f64, f64(n))))
+                let r2 = usize(math.floor[f64](rr.runif(g, 0.0f64, f64(n))))
+                let v = math.sqrt[f64](c2_ep(cur, n, d, r1, r2, col, fi * fi))
+                if !have || v < bv {
+                    bv = v
+                    br1 = r1
+                    br2 = r2
+                    have = true
+                }
+                jx += 1usize
+            }
+            let delta = bv - fi
+            if delta <= temp * rr.runif(g, 0.0f64, 1.0f64) {
+                let x = cur[br1 * d + col]
+                cur[br1 * d + col] = cur[br2 * d + col]
+                cur[br2 * d + col] = x
+                fi = bv
+                na += 1.0f64
+                if bv <= best {
+                    k = 0usize
+                    while k < n * d {
+                        bestd[k] = cur[k]
+                        k += 1usize
+                    }
+                    best = bv
+                    ni += 1.0f64
+                }
+            }
+        }
+        let v1 = na / f64(inner_it)
+        let v2 = ni / f64(inner_it)
+        if best - bold_val < 0.0f64 {
+            if v1 >= 0.1f64 && v2 <= v1 {
+                temp = 0.8f64 * temp
+            } else if v1 >= 0.1f64 && v2 == v1 {
+                temp = temp
+            } else {
+                temp = temp / 0.8f64
+            }
+        } else {
+            if v1 <= 0.1f64 { temp = temp / 0.7f64 } else { temp = temp * 0.9f64 }
+        }
+        q += 1usize
+    }
+    k = 0usize
+    while k < n * d {
+        m[k] = bestd[k]
+        k += 1usize
+    }
+    ret best
+}
