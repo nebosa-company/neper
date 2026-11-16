@@ -284,3 +284,65 @@ fn vif(a: *mem.Arena, x: []const f64, n: usize, p: usize, j: usize) -> f64 {
     }
     ret tss / rss
 }
+
+// lmtest::bptest with the squared-residual scores f = e^2 / sigma2 - 1 regressed on X: studentized gives n ESS / sum(f^2), the classical form ESS / 2
+fn bp_test(a: *mem.Arena, x: []const f64, n: usize, p: usize, res: []const f64, student: bool) -> f64 {
+    let (f, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var s2 = 0.0f64
+    var i = 0usize
+    while i < n {
+        s2 += res[i] * res[i]
+        i += 1usize
+    }
+    s2 = s2 / f64(n)
+    i = 0usize
+    while i < n {
+        f[i] = res[i] * res[i] / s2 - 1.0f64
+        i += 1usize
+    }
+    let (aux, e2) = ols(a, x, f, n, p)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var ess = 0.0f64
+    var ff = 0.0f64
+    i = 0usize
+    while i < n {
+        let fit = f[i] - aux.resid[i]
+        ess += fit * fit
+        ff += f[i] * f[i]
+        i += 1usize
+    }
+    if student { ret f64(n) * ess / ff }
+    ret ess / 2.0f64
+}
+
+// resettest(power = 2:3, type = "fitted"): the F statistic of the added fitted^2 and fitted^3 terms
+fn reset_f(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> f64 {
+    let (f0, e1) = ols(a, x, y, n, p)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (xe, e2) = mem.alloc[f64](a, n * (p + 2usize))
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    var rss0 = 0.0f64
+    while i < n {
+        var j = 0usize
+        while j < p {
+            xe[i * (p + 2usize) + j] = x[i * p + j]
+            j += 1usize
+        }
+        let fit = y[i] - f0.resid[i]
+        xe[i * (p + 2usize) + p] = fit * fit
+        xe[i * (p + 2usize) + p + 1usize] = fit * fit * fit
+        rss0 += f0.resid[i] * f0.resid[i]
+        i += 1usize
+    }
+    let (f1, e3) = ols(a, xe, y, n, p + 2usize)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    var rss1 = 0.0f64
+    i = 0usize
+    while i < n {
+        rss1 += f1.resid[i] * f1.resid[i]
+        i += 1usize
+    }
+    ret ((rss0 - rss1) / 2.0f64) / (rss1 / f64(n - p - 2usize))
+}

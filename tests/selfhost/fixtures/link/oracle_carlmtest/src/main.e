@@ -19,6 +19,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let k = c.name
     if str.eq(k, "dw") { ret cl.durbin_watson(f.resid) }
     if str.eq(k, "bp") { ret cl.bp_studentized(a, des, n, p, f.resid) }
+    if str.eq(k, "bpc") { ret cl.bp_test(a, des, n, p, f.resid, false) }
+    if str.eq(k, "reset") { ret cl.reset_f(a, des, y, n, p) }
     var s = 0.0f64
     if str.eq(k, "vif") {
         var j = 1usize

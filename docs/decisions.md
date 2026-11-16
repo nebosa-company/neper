@@ -45700,3 +45700,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.carlmtest` fits a linear model by the normal equations (inverse by Gauss-Jordan with pivoting) with its hat values and reports sandwich's vcovHC diagonals for HC0 to HC4 (HC1 scaled by n / (n - p), HC2 and HC3 dividing the squared residuals by 1 - h and (1 - h)^2, HC4 by (1 - h)^delta with delta = min(4, n h / p)), lmtest's Durbin-Watson statistic, the studentized Breusch-Pagan statistic (n times the R^2 of the squared residuals regressed on the design) and car's variance inflation factors (1 / (1 - R^2) of each non-intercept column on the others). All equal the packages' to 1e-8 on twelve designs of 2 to 4 predictors with correlated columns and heteroskedastic errors. Not here: HAC, clustered and bootstrap covariances, the other lmtest tests (RESET, Harvey-Collier, Goldfeld-Quandt, the non-studentized Breusch-Pagan), p values, car's Anova and the rest of car.
 
 **Result.** `oracle_carlmtest` equals the packages on 96 cases on Windows; Linux pending. L300 is partial.
+
+## D6422 — lmtest: the classical Breusch-Pagan statistic and RESET
+
+`e.algo.stat.carlmtest` gains bp_test, lmtest's Breusch-Pagan statistic from the scores f = e^2 / sigma2 - 1 (sigma2 = sum e^2 / n) regressed on the design, giving n ESS / sum f^2 studentized and ESS / 2 in the classical form, and reset_f, resettest(power = 2:3, type = "fitted"): the F statistic of adding the squared and cubed fitted values, ((RSS0 - RSS1) / 2) / (RSS1 / (n - p - 2)). Both equal the package's to 1e-8. Not here: the p values, the other powers and types of RESET, Harvey-Collier, Goldfeld-Quandt, HAC and clustered covariances and car's Anova.
+
+**Result.** `oracle_carlmtest` equals the packages on 120 cases on Windows; Linux pending. L300 stays partial.
