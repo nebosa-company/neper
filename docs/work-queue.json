@@ -1747,10 +1747,10 @@
       "group": "CRAN parity",
       "order": 789,
       "title": "multcomp: general linear hypotheses",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 224; multcompView 240). Mid. Needs L301 and L313. Acceptance, equal to multcomp: glht for lm, glm and aov with mcp contrasts (Tukey, Dunnett, Sequen, Williams), summary with single-step, Shaffer, Westfall and free adjustments from the multivariate t, confint, cld and multcompView compact letters."
+      "evidence": "Partial (D6631). e.algo.stat.multcomppkg.glht (linear hypotheses of an lm: estimates, standard errors, t statistics, raw, Bonferroni and Holm p values) equals multcomp glht on Windows (oracle_multcomp, 144 values; Linux pending). Open: the single-step and free adjustments that integrate the multivariate t (Tukey, Dunnett, default single-step; needs pmvt and qmvt), Westfall, simultaneous confidence intervals, glm, mixed and survival models, mcp contrast builders. Was: Open (CRAN rank 224; multcompView 240). Mid. Needs L301 and L313. Acceptance, equal to multcomp: glht for lm, glm and aov with mcp contrasts (Tukey, Dunnett, Sequen, Williams), summary with single-step, Shaffer, Westfall and free adjustments from the multivariate t, confint, cld and multcompView compact letters."
     },
     {
       "id": "L318",

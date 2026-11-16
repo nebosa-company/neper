@@ -46910,3 +46910,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `bnlearnpkg.discrete` counts each node by parent configuration and gives the log-likelihood `sum n_ijk log(n_ijk / n_ij)`, AIC (minus the parameter count `q (r - 1)` per node), BIC (minus `log(n)/2` times it), BDe with `alpha_ijk = iss / (r q)` and K2 with `alpha_ijk = 1`. `gaussian` regresses each node on its parents and scores `-n/2 log(2 pi s2) - RSS / (2 s2)` with `s2 = RSS / (n - q)`, the unbiased variance, not the maximum-likelihood RSS/n; the parameter count is parents plus intercept plus variance. With the ML variance the log-likelihood was off by 0.03 to 0.1.
 
 **Result.** `oracle_bnlearn` agrees with bnlearn on Windows (96 values, 3 to 6 nodes, 60 to 300 rows); Linux pending. L373 stays partial: structure learning, bds, conditional Gaussian, inference.
+
+## D6631 — multcomp: linear hypotheses of an lm
+
+**Decision.** `multcomppkg.glht` fits the least-squares model and, for each row of the contrast matrix K, reports `K b`, `sqrt(s2 K (X'X)^-1 K')`, the t statistic and the two-sided p value on the residual degrees of freedom, with Bonferroni (`min(1, m p)`) and Holm (sorted `(m - rank) p`, running maximum, capped at 1) adjustments. The default single-step adjustment needs the multivariate t distribution, so it is left open.
+
+**Result.** `oracle_multcomp` agrees with multcomp on Windows (144 values, 2 to 5 contrasts, 3 to 5 coefficients); Linux pending. L341 stays partial: Tukey, Dunnett and the single-step family, Westfall, confidence intervals, other models.

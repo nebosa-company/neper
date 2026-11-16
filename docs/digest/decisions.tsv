@@ -3490,4 +3490,5 @@ D6626	701	survey: linearised estimates of a stratified cluster sample
 D6627	736	vegan: diversity, rarefaction and dissimilarities
 D6628	784	ape: neighbour joining edge lengths
 D6629	762	rms: spline basis, ols and lrm
-D6630	839	bnlearn: network scores of a given DAG
+D6630	840	bnlearn: network scores of a given DAG
+D6631	718	multcomp: linear hypotheses of an lm
