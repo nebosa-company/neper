@@ -3181,4 +3181,5 @@ D6105	703	cmprsk crr variance
 D6106	568	cmprsk residuals, baseline jumps, predict and timepoints close L419
 D6107	898	TSP: tours, insertion, 2-opt, ATSP reformulation, cut_tour
 D6108	1017	%Z names a zone in readr datetimes
-D6109	804	e1071 matchClasses
+D6109	805	e1071 matchClasses
+D6110	1205	e1071 cshell with given centres, and R's optim conjugate gradients
