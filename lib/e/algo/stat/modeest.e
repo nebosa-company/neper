@@ -192,6 +192,10 @@ fn meanshift_g(a: *mem.Arena, x: []const f64, mode: usize, bwv: f64, kernel: usi
         let (bcv, ce) = bw_cv(a, x, mode == 4usize)
         if ce != ok { ret (0.0f64, 0usize, ce) }
         bw = bcv
+    } else if mode == 5usize || mode == 6usize {
+        let (sj, se) = bw_sj(a, x, mode == 6usize)
+        if se != ok { ret (0.0f64, 0usize, se) }
+        bw = sj
     } else if mode == 1usize {
         let (y, ye) = sorted_copy(a, x)
         if ye != ok { ret (0.0f64, 0usize, ye) }
@@ -577,62 +581,8 @@ fn bw_cv(a: *mem.Arena, x: []const f64, bcv: bool) -> (f64, err) {
         cnt[i] = 0.0f64
         i += 1usize
     }
-    var d = 0.0f64
-    if n * 2usize > nb {
-        d = (xmax - xmin) * 1.01f64 / f64(nb)
-        let (xxx, e2) = mem.alloc[f64](a, nb)
-        let (xx, e3) = mem.alloc[f64](a, n)
-        if e2 != ok { ret (0.0f64, e2) }
-        if e3 != ok { ret (0.0f64, e3) }
-        var mn = 1.0e300f64
-        i = 0usize
-        while i < n {
-            var s = 0.0f64
-            if x[i] > 0.0f64 { s = 1.0f64 } else if x[i] < 0.0f64 { s = 0.0f64 - 1.0f64 }
-            xx[i] = math.trunc[f64](math.abs[f64](x[i]) / d) * s
-            if xx[i] < mn { mn = xx[i] }
-            i += 1usize
-        }
-        i = 0usize
-        while i < nb {
-            xxx[i] = 0.0f64
-            i += 1usize
-        }
-        i = 0usize
-        while i < n {
-            let k = usize(xx[i] - mn + 1.0f64) - 1usize
-            if k < nb { xxx[k] += 1.0f64 }
-            i += 1usize
-        }
-        var ii = 0usize
-        while ii < nb {
-            let w = xxx[ii]
-            cnt[0usize] += w * (w - 1.0f64)
-            var jj = 0usize
-            while jj < ii {
-                cnt[ii - jj] += w * xxx[jj]
-                jj += 1usize
-            }
-            ii += 1usize
-        }
-        cnt[0usize] = cnt[0usize] * 0.5f64
-    } else {
-        let rang = (xmax - xmin) * 1.01f64
-        d = rang / f64(nb)
-        i = 1usize
-        while i < n {
-            let ii = i64(x[i] / d)
-            var j = 0usize
-            while j < i {
-                let jj = i64(x[j] / d)
-                var df = ii - jj
-                if df < 0i64 { df = 0i64 - df }
-                cnt[usize(df)] += 1.0f64
-                j += 1usize
-            }
-            i += 1usize
-        }
-    }
+    let (d, de) = pair_cnts(a, x, nb, xmin, xmax, cnt)
+    if de != ok { ret (0.0f64, de) }
     // R's Brent_fmin of the criterion
     let c = (3.0f64 - math.sqrt[f64](5.0f64)) * 0.5f64
     let eps = math.sqrt[f64](2.220446049250313e-16f64)
@@ -708,4 +658,210 @@ fn bw_cv(a: *mem.Arena, x: []const f64, bcv: bool) -> (f64, err) {
         }
     }
     ret (xm0, ok)
+}
+
+// the pair counts of bw_pair_cnts into cnt (nb lags) and the bin width d: binned counts when 2 n > nb, bw_den otherwise
+fn pair_cnts(a: *mem.Arena, x: []const f64, nb: usize, xmin: f64, xmax: f64, cnt: []f64) -> (f64, err) {
+    let n = x.len
+    var i = 0usize
+    var d = 0.0f64
+    if n * 2usize > nb {
+        d = (xmax - xmin) * 1.01f64 / f64(nb)
+        let (xxx, e2) = mem.alloc[f64](a, nb)
+        let (xx, e3) = mem.alloc[f64](a, n)
+        if e2 != ok { ret (0.0f64, e2) }
+        if e3 != ok { ret (0.0f64, e3) }
+        var mn = 1.0e300f64
+        i = 0usize
+        while i < n {
+            var s = 0.0f64
+            if x[i] > 0.0f64 { s = 1.0f64 } else if x[i] < 0.0f64 { s = 0.0f64 - 1.0f64 }
+            xx[i] = math.trunc[f64](math.abs[f64](x[i]) / d) * s
+            if xx[i] < mn { mn = xx[i] }
+            i += 1usize
+        }
+        i = 0usize
+        while i < nb {
+            xxx[i] = 0.0f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            let k = usize(xx[i] - mn + 1.0f64) - 1usize
+            if k < nb { xxx[k] += 1.0f64 }
+            i += 1usize
+        }
+        var ii = 0usize
+        while ii < nb {
+            let w = xxx[ii]
+            cnt[0usize] += w * (w - 1.0f64)
+            var jj = 0usize
+            while jj < ii {
+                cnt[ii - jj] += w * xxx[jj]
+                jj += 1usize
+            }
+            ii += 1usize
+        }
+        cnt[0usize] = cnt[0usize] * 0.5f64
+    } else {
+        let rang = (xmax - xmin) * 1.01f64
+        d = rang / f64(nb)
+        i = 1usize
+        while i < n {
+            let ii = i64(x[i] / d)
+            var j = 0usize
+            while j < i {
+                let jj = i64(x[j] / d)
+                var df = ii - jj
+                if df < 0i64 { df = 0i64 - df }
+                cnt[usize(df)] += 1.0f64
+                j += 1usize
+            }
+            i += 1usize
+        }
+    }
+    ret (d, ok)
+}
+
+// C_bw_phi4 (order 4) and C_bw_phi6 (order 6) of stats::bw.SJ from the pair counts
+fn bw_phi(six: bool, n: f64, d: f64, cnt: []const f64, h: f64) -> f64 {
+    var sum = 0.0f64
+    var i = 0usize
+    while i < cnt.len {
+        var delta = f64(i) * d / h
+        delta = delta * delta
+        if delta >= 1000.0f64 { break }
+        var term = 0.0f64
+        if six {
+            term = math.exp[f64](0.0f64 - delta / 2.0f64) * (delta * delta * delta - 15.0f64 * delta * delta + 45.0f64 * delta - 15.0f64)
+        } else {
+            term = math.exp[f64](0.0f64 - delta / 2.0f64) * (delta * delta - 6.0f64 * delta + 3.0f64)
+        }
+        sum += term * cnt[i]
+        i += 1usize
+    }
+    let s2pi = math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64)
+    if six {
+        sum = 2.0f64 * sum - 15.0f64 * n
+        ret sum / (n * (n - 1.0f64) * math.pow[f64](h, 7.0f64) * s2pi)
+    }
+    sum = 2.0f64 * sum + n * 3.0f64
+    ret sum / (n * (n - 1.0f64) * math.pow[f64](h, 5.0f64) * s2pi)
+}
+
+fn sj_fsd(n: f64, d: f64, cnt: []const f64, c1: f64, alph2: f64, h: f64) -> f64 {
+    ret math.pow[f64](c1 / bw_phi(false, n, d, cnt, alph2 * math.pow[f64](h, 5.0f64 / 7.0f64)), 0.2f64) - h
+}
+
+// stats::bw.SJ(x, method = "ste" (dpi false) or "dpi"), nb = 1000: NaN where R stops with an error
+fn bw_sj(a: *mem.Arena, x: []const f64, dpi: bool) -> (f64, err) {
+    let nan = 0.0f64 / 0.0f64
+    let nb = 1000usize
+    let n = x.len
+    let nf = f64(n)
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += x[i]
+        i += 1usize
+    }
+    mean = mean / nf
+    var ss = 0.0f64
+    var xmin = x[0usize]
+    var xmax = x[0usize]
+    i = 0usize
+    while i < n {
+        ss += (x[i] - mean) * (x[i] - mean)
+        if x[i] < xmin { xmin = x[i] }
+        if x[i] > xmax { xmax = x[i] }
+        i += 1usize
+    }
+    let sdv = math.sqrt[f64](ss / (nf - 1.0f64))
+    let (y, ye) = sorted_copy(a, x)
+    if ye != ok { ret (nan, ye) }
+    let iqr = ms.quant7(y, 0.75f64) - ms.quant7(y, 0.25f64)
+    var scale = sdv
+    if iqr / 1.349f64 < scale { scale = iqr / 1.349f64 }
+    let (cnt, e1) = mem.alloc[f64](a, nb)
+    if e1 != ok { ret (nan, e1) }
+    i = 0usize
+    while i < nb {
+        cnt[i] = 0.0f64
+        i += 1usize
+    }
+    let (d, de) = pair_cnts(a, x, nb, xmin, xmax, cnt)
+    if de != ok { ret (nan, de) }
+    let aa = 1.24f64 * scale * math.pow[f64](nf, 0.0f64 - 1.0f64 / 7.0f64)
+    let bb = 1.23f64 * scale * math.pow[f64](nf, 0.0f64 - 1.0f64 / 9.0f64)
+    let pi = 3.141592653589793238462643383279f64
+    let c1 = 1.0f64 / (2.0f64 * math.sqrt[f64](pi) * nf)
+    let td = 0.0f64 - bw_phi(true, nf, d, cnt, bb)
+    if !(td > 0.0f64) || td > 1.0e300f64 { ret (nan, ok) }
+    if dpi { ret (math.pow[f64](c1 / bw_phi(false, nf, d, cnt, math.pow[f64](2.394f64 / (nf * td), 1.0f64 / 7.0f64)), 0.2f64), ok) }
+    var lower = 0.1f64 * 1.144f64 * scale * math.pow[f64](nf, 0.0f64 - 0.2f64)
+    var upper = 1.144f64 * scale * math.pow[f64](nf, 0.0f64 - 0.2f64)
+    let alph2 = 1.357f64 * math.pow[f64](bw_phi(false, nf, d, cnt, aa) / td, 1.0f64 / 7.0f64)
+    var itry = 1usize
+    while sj_fsd(nf, d, cnt, c1, alph2, lower) * sj_fsd(nf, d, cnt, c1, alph2, upper) > 0.0f64 {
+        if itry > 99usize { ret (nan, ok) }
+        if itry % 2usize == 1usize { upper = upper * 1.2f64 } else { lower = lower / 1.2f64 }
+        itry += 1usize
+    }
+    let tol = 0.1f64 * lower
+    // R_zeroin2 on [lower, upper]
+    let eps = 2.220446049250313e-16f64
+    var ax = lower
+    var bx = upper
+    var cx = ax
+    var fa = sj_fsd(nf, d, cnt, c1, alph2, ax)
+    var fb = sj_fsd(nf, d, cnt, c1, alph2, bx)
+    var fc = fa
+    if fa == 0.0f64 { ret (ax, ok) }
+    if fb == 0.0f64 { ret (bx, ok) }
+    var maxit = 1001i64
+    while maxit > 0i64 {
+        maxit -= 1i64
+        let prev_step = bx - ax
+        if math.abs[f64](fc) < math.abs[f64](fb) {
+            ax = bx
+            bx = cx
+            cx = ax
+            fa = fb
+            fb = fc
+            fc = fa
+        }
+        let tol_act = 2.0f64 * eps * math.abs[f64](bx) + tol / 2.0f64
+        var new_step = (cx - bx) / 2.0f64
+        if math.abs[f64](new_step) <= tol_act || fb == 0.0f64 { ret (bx, ok) }
+        if math.abs[f64](prev_step) >= tol_act && math.abs[f64](fa) > math.abs[f64](fb) {
+            let cb = cx - bx
+            var p = 0.0f64
+            var q = 0.0f64
+            if ax == cx {
+                let t1 = fb / fa
+                p = cb * t1
+                q = 1.0f64 - t1
+            } else {
+                q = fa / fc
+                let t1 = fb / fc
+                let t2 = fb / fa
+                p = t2 * (cb * q * (q - t1) - (bx - ax) * (t1 - 1.0f64))
+                q = (q - 1.0f64) * (t1 - 1.0f64) * (t2 - 1.0f64)
+            }
+            if p > 0.0f64 { q = 0.0f64 - q } else { p = 0.0f64 - p }
+            if p < (0.75f64 * cb * q - math.abs[f64](tol_act * q) / 2.0f64) && p < math.abs[f64](prev_step * q / 2.0f64) { new_step = p / q }
+        }
+        if math.abs[f64](new_step) < tol_act {
+            if new_step > 0.0f64 { new_step = tol_act } else { new_step = 0.0f64 - tol_act }
+        }
+        ax = bx
+        fa = fb
+        bx += new_step
+        fb = sj_fsd(nf, d, cnt, c1, alph2, bx)
+        if (fb > 0.0f64 && fc > 0.0f64) || (fb < 0.0f64 && fc < 0.0f64) {
+            cx = ax
+            fc = fa
+        }
+    }
+    ret (bx, ok)
 }

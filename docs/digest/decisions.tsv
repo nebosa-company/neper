@@ -3413,4 +3413,5 @@ D6541	700	boot: empinf reg and pos
 D6542	610	L321 closed
 D6543	672	modeest: parzen with the other statip kernels
 D6544	608	modeest: meanshift bandwidths and kernels
-D6545	546	modeest: bw.ucv and bw.bcv
+D6545	547	modeest: bw.ucv and bw.bcv
+D6546	744	modeest: bw.SJ

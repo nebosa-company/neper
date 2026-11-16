@@ -46444,3 +46444,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `bw_cv` ports stats::bw.ucv and bw.bcv: hmax = 1.144 sd n^(-1/5), the criterion of C_bw_ucv or C_bw_bcv from the pair counts (unbinned `bw_den` for n up to 500, the binned counts of `bw_pair_cnts` above), and R's Brent `optimize` over [0.1 hmax, hmax] with tol 0.1 lower. meanshift takes them as modes 3 and 4.
 
 **Result.** `oracle_modeest` agrees with modeest on the new ucv and bcv meanshift values (both count paths) on Windows; Linux pending. The SJ rules stay open; L472 stays partial.
+
+## D6546 — modeest: bw.SJ
+
+**Decision.** `bw_sj` ports stats::bw.SJ for "sj-ste" and "sj-dpi" on the shared pair counts (now `pair_cnts`): the order 4 and 6 functionals `C_bw_phi4` and `C_bw_phi6`, a = 1.24 scale n^(-1/7), b = 1.23 scale n^(-1/9), TD = -phi6(b), the dpi plug-in, and for ste the root of `(c1 / phi4(alph2 h^(5/7)))^(1/5) - h` by R_zeroin2 over [0.1 hmax, hmax] widened by 1.2 per try; a sample too sparse for TD or alph2 returns NaN where R stops. meanshift takes them as modes 5 and 6.
+
+**Result.** `oracle_modeest` agrees with modeest on 33 new meanshift values with SJ bandwidths on Windows; Linux pending. L472's acceptance (mlv with every method) is covered except abc = TRUE, which modeest itself leaves unimplemented.
