@@ -47006,3 +47006,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `qgraphpkg.centrality` turns each edge into a length `1 / |w|`, runs Floyd-Warshall with path counts (distances equal within 1e-9 relative count as ties), and reports betweenness as the sum over unordered pairs of the fraction of shortest paths through a node, closeness as `1 / (sum of distances to the others)`, strength as `sum |w|` and expected influence as `sum w`. `centrality_auto` halves the double-counted betweenness of `centrality()` for undirected graphs, which is the convention used.
 
 **Result.** `oracle_qgraph` agrees with qgraph on Windows (96 values over connected graphs of 4 to 12 nodes); Linux pending. L434 stays partial: directed graphs, clustering coefficients, glasso estimation, disconnected graphs.
+
+## D6647 — hetGP: homoskedastic GP with known hyperparameters
+
+**Decision.** `hetgppkg.homgp` builds `K = exp(-sum (x - x')^2 / theta) + (g + sqrt(eps)) I`, profiles the constant mean `beta0 = 1'K^-1 z / 1'K^-1 1` and variance `nu = (z - beta0)'K^-1 (z - beta0) / n`, and gives the log-likelihood `-n/2 log(2 pi) - n/2 log nu - 1/2 log|K| - n/2`. The prediction is `beta0 + k'K^-1 (z - beta0)`; its latent variance `nu (1 - k'K^-1 k + (1 - 1'K^-1 k)^2 / 1'K^-1 1)` excludes the nugget, which hetGP reports separately as `nu g`. Leaving out the `sqrt(eps)` jitter that hetGP puts on the diagonal gave differences near 1e-7 in the variance and the profiled mean on ill-conditioned designs.
+
+**Result.** `oracle_hetgp` agrees with hetGP `mleHomGP(..., known = list(theta, g))` and its `predict` on Windows (120 values, 8 to 40 points, 1 to 3 dimensions); Linux pending. L467 stays partial: hyperparameter optimisation, Matern kernels, heteroskedastic models, replicates.

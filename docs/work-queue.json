@@ -1637,10 +1637,10 @@
       "group": "CRAN parity",
       "order": 779,
       "title": "hetGP: heteroskedastic Gaussian processes",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 784). Mid to large. Pairs with the Gaussian process of kernlab in L366. Acceptance, equal to hetGP within the optimizer tolerance: mleHomGP, mleHetGP, predict with variance decomposition, update with new points, noise models, and the expected-improvement criteria."
+      "evidence": "Partial (D6647). e.algo.stat.hetgppkg.homgp (homoskedastic Gaussian-process regression, Gaussian kernel with per-dimension theta, known nugget g and the sqrt(eps) jitter hetGP adds, profiled constant mean and variance) equals hetGP mleHomGP with known hyperparameters on Windows: beta0, nu_hat, log-likelihood and the predictive mean, latent variance and nugget variance (oracle_hetgp, 120 values; Linux pending). Open: hyperparameter optimisation, Matern kernels, heteroskedastic models (mleHetGP), replicated designs, derivatives, sequential design criteria. Was: Open (CRAN rank 784). Mid to large. Pairs with the Gaussian process of kernlab in L366. Acceptance, equal to hetGP within the optimizer tolerance: mleHomGP, mleHetGP, predict with variance decomposition, update with new points, noise models, and the expected-improvement criteria."
     },
     {
       "id": "L494",

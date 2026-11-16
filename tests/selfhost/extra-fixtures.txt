@@ -381,3 +381,4 @@ oracle_osqp
 oracle_polca
 oracle_geometry
 oracle_qgraph
+oracle_hetgp

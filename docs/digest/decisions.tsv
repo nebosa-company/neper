@@ -3506,4 +3506,5 @@ D6642	853	riskRegression: IPCW Brier score and AUC
 D6643	733	osqp: ADMM quadratic programs
 D6644	820	poLCA: latent class EM
 D6645	820	geometry: convex hull in two and three dimensions
-D6646	795	qgraph: centrality of a weighted network
+D6646	796	qgraph: centrality of a weighted network
+D6647	970	hetGP: homoskedastic GP with known hyperparameters
