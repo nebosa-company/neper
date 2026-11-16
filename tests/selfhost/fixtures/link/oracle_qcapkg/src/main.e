@@ -6,6 +6,7 @@ use e.algo.stat.qcapkg as qc
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -18,6 +19,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let x = c.args
+        if str.eq(c.name, "pof") {
+            let pn = usize(x[2usize])
+            let pnv = usize(x[3usize])
+            let sl = usize(x[4usize])
+            let got2 = qc.pof(x[5usize + sl..5usize + sl + pn * pnv], x[5usize + sl + pn * pnv..5usize + sl + pn * pnv + pn], pn, pnv, x[5usize..5usize + sl], usize(x[0usize]), usize(x[1usize]))
+            if !oracle.agrees(got2, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, got2))
+                    let _ = io.print("\n")
+                }
+            }
+            at += 1usize
+            continue
+        }
         let n = usize(x[2usize])
         let non = usize(x[3usize])
         let ndc = usize(x[4usize])

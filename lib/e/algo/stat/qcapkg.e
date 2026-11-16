@@ -72,3 +72,62 @@ fn min_covers(a: *mem.Arena, minterms: []const u32, primes: []const lg.Implicant
     }
     ret (best, count, ok)
 }
+
+// the fuzzy membership of row r in a sum of products: `terms` is nterms, then for each term its literal count and, per literal, the column and 1 for a negation;
+// the product of literals is the minimum, the sum of terms the maximum
+fn expr_member(d: []const f64, nv: usize, r: usize, spec: []const f64) -> f64 {
+    let nterms = usize(spec[0usize])
+    var at = 1usize
+    var best = 0.0f64
+    var t = 0usize
+    while t < nterms {
+        let nl = usize(spec[at])
+        at += 1usize
+        var m = 1.0f64
+        var l = 0usize
+        while l < nl {
+            var v = d[r * nv + usize(spec[at])]
+            if spec[at + 1usize] == 1.0f64 { v = 1.0f64 - v }
+            if v < m { m = v }
+            at += 2usize
+            l += 1usize
+        }
+        if m > best { best = m }
+        t += 1usize
+    }
+    ret best
+}
+
+// pof() of the expression against the outcome column y: relation 0 sufficiency (which 0 inclS, 1 PRI, 2 covS), 1 necessity (0 inclN, 1 RoN, 2 covN)
+fn pof(d: []const f64, y: []const f64, n: usize, nv: usize, spec: []const f64, relation: usize, which: usize) -> f64 {
+    var sx = 0.0f64
+    var sy = 0.0f64
+    var smin = 0.0f64
+    var sminn = 0.0f64
+    var s1x = 0.0f64
+    var s1m = 0.0f64
+    var r = 0usize
+    while r < n {
+        let x = expr_member(d, nv, r, spec)
+        let yy = y[r]
+        var mn = x
+        if yy < mn { mn = yy }
+        var mm = mn
+        if 1.0f64 - yy < mm { mm = 1.0f64 - yy }
+        sx += x
+        sy += yy
+        smin += mn
+        sminn += mm
+        s1x += 1.0f64 - x
+        s1m += 1.0f64 - mn
+        r += 1usize
+    }
+    if relation == 0usize {
+        if which == 0usize { ret smin / sx }
+        if which == 1usize { ret (smin - sminn) / (sx - sminn) }
+        ret smin / sy
+    }
+    if which == 0usize { ret smin / sy }
+    if which == 1usize { ret s1x / s1m }
+    ret smin / sx
+}

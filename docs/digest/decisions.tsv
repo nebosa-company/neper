@@ -3349,4 +3349,5 @@ D6477	946	stats::density, Gaussian kernel
 D6478	1052	hdrcde: hdr on a sample with a given bandwidth
 D6479	957	gmm: linear two-step estimator, iid and MDS weighting
 D6480	854	gmm: HAC weighting with five kernels
-D6481	1037	QCA: the minimal models of minimize()
+D6481	1038	QCA: the minimal models of minimize()
+D6482	931	QCA: pof parameters of fit
