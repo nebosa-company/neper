@@ -43,4 +43,20 @@ for (rep in 1:20) {
   f <- tryCatch(fitCovGraph(A, S, n), error = function(e) NULL)
   if (!is.null(f)) { out <- c(rowm(f$Shat), f$dev, f$df, f$it); for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("cov", c(p, n, rowm(S), rowm(A), q - 1), out[q], rel = 1e-6, abs = 1e-8) }
 }
+# dSep ("dsep": args (p, A[p*p], nf, first, ns, second, nc, cond, 0) 1-based sets, answer 0/1) and marg.param ("mp": args (r, lev[r], types[r] as character codes, which 0 C 1 M 2 G, q) q 0 rows 1 cols 2 sum 3 weighted sum)
+for (rep in 1:150) {
+  p <- sample(4:8, 1); A <- matrix(0, p, p); for (i in 1:(p - 1)) for (j in (i + 1):p) A[i, j] <- rbinom(1, 1, 0.4)
+  perm <- sample(p); A <- A[order(perm), order(perm)]; dimnames(A) <- list(letters[1:p], letters[1:p])
+  nodes <- sample(p); nf <- sample(1:2, 1); ns <- sample(1:2, 1); nc <- sample(0:min(3, p - nf - ns), 1)
+  f <- nodes[1:nf]; s <- nodes[nf + 1:ns]; cnd <- if (nc > 0) nodes[nf + ns + 1:nc] else integer(0)
+  v <- dSep(A, letters[f], letters[s], if (nc > 0) letters[cnd] else c())
+  cases[[length(cases) + 1]] <- case("dsep", c(p, rowm(A), nf, f, ns, s, nc, cnd, 0), as.numeric(v), rel = 0, abs = 0)
+}
+for (rep in 1:30) {
+  r <- sample(2:3, 1); lev <- sample(2:3, r, TRUE); typ <- sample(c("l", "g", "c", "r"), r, TRUE)
+  mp <- marg.param(lev, typ)
+  for (w in 1:3) { M <- mp[[w]]; M <- as.matrix(M); v <- as.vector(t(M))
+    out <- c(nrow(M), ncol(M), sum(v), sum(seq_along(v) * v))
+    for (q in 1:4) cases[[length(cases) + 1]] <- case("mp", c(r, lev, utf8ToInt(paste(typ, collapse = "")), w - 1, q - 1), out[q], rel = 1e-9, abs = 1e-9) }
+}
 emit("ggm", "ggm", list(cases))

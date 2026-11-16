@@ -560,3 +560,347 @@ fn fitcovgraph(a: *mem.Arena, amat: []const f64, s: []const f64, p: usize, n: f6
     res.dev = dv
     ret (res, ok)
 }
+
+// ---- d-separation and the marginal log-linear parametrisation ----
+
+// dSep(amat, first, second, cond): are the sets `first` and `second` d-separated given `cond` in the DAG amat (amat[j, i] = 1 an arrow from j to i)? By the moral graph of the ancestors of the three sets: marry the parents of each node, drop the arrow directions, remove `cond` and look for a path from `first` to `second`
+fn dsep(a: *mem.Arena, amat: []const f64, p: usize, first: []const usize, second: []const usize, cond: []const usize) -> (bool, err) {
+    let (anc, e1) = mem.alloc[bool](a, p)
+    let (blocked, e2) = mem.alloc[bool](a, p)
+    let (adj, e3) = mem.alloc[bool](a, p * p)
+    let (seen, e4) = mem.alloc[bool](a, p)
+    let (queue, e5) = mem.alloc[usize](a, p)
+    let (tgt, e6) = mem.alloc[bool](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (false, e1) }
+    var i = 0usize
+    while i < p {
+        anc[i] = false
+        blocked[i] = false
+        seen[i] = false
+        tgt[i] = false
+        i += 1usize
+    }
+    i = 0usize
+    while i < p * p {
+        adj[i] = false
+        i += 1usize
+    }
+    i = 0usize
+    while i < first.len {
+        anc[first[i]] = true
+        i += 1usize
+    }
+    i = 0usize
+    while i < second.len {
+        anc[second[i]] = true
+        tgt[second[i]] = true
+        i += 1usize
+    }
+    i = 0usize
+    while i < cond.len {
+        anc[cond[i]] = true
+        blocked[cond[i]] = true
+        i += 1usize
+    }
+    // close the set under parents
+    var changed = true
+    while changed {
+        changed = false
+        var v = 0usize
+        while v < p {
+            if anc[v] {
+                var u = 0usize
+                while u < p {
+                    if amat[u * p + v] == 1.0f64 && !anc[u] {
+                        anc[u] = true
+                        changed = true
+                    }
+                    u += 1usize
+                }
+            }
+            v += 1usize
+        }
+    }
+    var v = 0usize
+    while v < p {
+        if anc[v] {
+            var u = 0usize
+            while u < p {
+                if anc[u] && amat[u * p + v] == 1.0f64 {
+                    adj[u * p + v] = true
+                    adj[v * p + u] = true
+                    var w = 0usize
+                    while w < p {
+                        if anc[w] && w != u && amat[w * p + v] == 1.0f64 {
+                            adj[u * p + w] = true
+                            adj[w * p + u] = true
+                        }
+                        w += 1usize
+                    }
+                }
+                u += 1usize
+            }
+        }
+        v += 1usize
+    }
+    var head = 0usize
+    var tail = 0usize
+    i = 0usize
+    while i < first.len {
+        if !blocked[first[i]] && !seen[first[i]] {
+            seen[first[i]] = true
+            queue[tail] = first[i]
+            tail += 1usize
+        }
+        i += 1usize
+    }
+    while head < tail {
+        let x = queue[head]
+        head += 1usize
+        if tgt[x] { ret (false, ok) }
+        var y = 0usize
+        while y < p {
+            if adj[x * p + y] && !blocked[y] && !seen[y] {
+                seen[y] = true
+                queue[tail] = y
+                tail += 1usize
+            }
+            y += 1usize
+        }
+    }
+    ret (true, ok)
+}
+
+type Mat = struct { rows: usize, cols: usize, d: []f64 }
+
+fn mat_new(a: *mem.Arena, r: usize, c: usize) -> (Mat, err) {
+    let (d, e) = mem.alloc[f64](a, r * c + 1usize)
+    var m = Mat { rows: r, cols: c, d: d }
+    if e != ok { ret (m, e) }
+    var i = 0usize
+    while i < r * c {
+        d[i] = 0.0f64
+        i += 1usize
+    }
+    ret (m, ok)
+}
+
+// x kron y
+fn mat_kron(a: *mem.Arena, x: Mat, y: Mat) -> (Mat, err) {
+    let (m, e) = mat_new(a, x.rows * y.rows, x.cols * y.cols)
+    if e != ok { ret (m, e) }
+    var i = 0usize
+    while i < x.rows {
+        var j = 0usize
+        while j < x.cols {
+            var k = 0usize
+            while k < y.rows {
+                var l = 0usize
+                while l < y.cols {
+                    m.d[(i * y.rows + k) * m.cols + j * y.cols + l] = x.d[i * x.cols + j] * y.d[k * y.cols + l]
+                    l += 1usize
+                }
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret (m, ok)
+}
+
+// a kind of rows-by-columns factor: 0 identity-like blocks; see marg_param
+type MargParam = struct { c: Mat, m: Mat, g: Mat }
+
+// marg.param(lev, type): the matrices C (contrasts), M (marginalisation, per the type l g c r of each variable's logit) and G (the design) of the marginal log-linear parametrisation of a table with the given numbers of levels; types are the bytes l, g, c, r
+fn marg_param(a: *mem.Arena, lev: []const usize, typ: []const u8) -> (MargParam, err) {
+    var res: MargParam = zero
+    let r = lev.len
+    let nsub = (1usize << r) - 1usize
+    // the subsets in expand.grid order (first variable fastest), stable by size, the empty set dropped
+    let (order, e0) = mem.alloc[usize](a, nsub + 1usize)
+    if e0 != ok { ret (res, e0) }
+    var cnt = 0usize
+    var size = 1usize
+    while size <= r {
+        var code = 1usize
+        while code <= nsub {
+            var bits = 0usize
+            var h = 0usize
+            while h < r {
+                if (code >> h) & 1usize == 1usize { bits += 1usize }
+                h += 1usize
+            }
+            if bits == size {
+                order[cnt] = code
+                cnt += 1usize
+            }
+            code += 1usize
+        }
+        size += 1usize
+    }
+    var cm: Mat = zero
+    var mm: Mat = zero
+    var gm: Mat = zero
+    var first = true
+    var q = 0usize
+    while q < nsub {
+        let code = order[q]
+        let (ci0, ea) = mat_new(a, 1usize, 1usize)
+        let (mi0, eb) = mat_new(a, 1usize, 1usize)
+        let (gi0, ec) = mat_new(a, 1usize, 1usize)
+        if ea != ok || eb != ok || ec != ok { ret (res, ea) }
+        ci0.d[0usize] = 1.0f64
+        mi0.d[0usize] = 1.0f64
+        gi0.d[0usize] = 1.0f64
+        var ci = ci0
+        var mi = mi0
+        var gi = gi0
+        var h = 0usize
+        while h < r {
+            let lh = lev[h] - 1usize
+            if (code >> h) & 1usize == 1usize {
+                // Ci <- cbind(-I, I) %x% Ci
+                let (f1, ef1) = mat_new(a, lh, 2usize * lh)
+                if ef1 != ok { ret (res, ef1) }
+                var d = 0usize
+                while d < lh {
+                    f1.d[d * 2usize * lh + d] = 0.0f64 - 1.0f64
+                    f1.d[d * 2usize * lh + lh + d] = 1.0f64
+                    d += 1usize
+                }
+                let (nc, enc) = mat_kron(a, f1, ci)
+                if enc != ok { ret (res, enc) }
+                ci = nc
+                // Mi factor by type, (2 lh) by (lh + 1): [[X, 0], [0, Y]] with X and Y identity or the lower triangle (or its transpose)
+                let (f2, ef2) = mat_new(a, 2usize * lh, lh + 1usize)
+                if ef2 != ok { ret (res, ef2) }
+                let t = typ[h]
+                var rr = 0usize
+                while rr < lh {
+                    var cc = 0usize
+                    while cc < lh {
+                        var tri = 0.0f64
+                        if cc <= rr { tri = 1.0f64 }
+                        var tri_t = 0.0f64
+                        if rr <= cc { tri_t = 1.0f64 }
+                        var id = 0.0f64
+                        if rr == cc { id = 1.0f64 }
+                        var top = id
+                        var bot = id
+                        if t == 103u8 {
+                            top = tri
+                            bot = tri_t
+                        } else if t == 99u8 {
+                            bot = tri_t
+                        } else if t == 114u8 {
+                            top = tri
+                        }
+                        f2.d[rr * (lh + 1usize) + cc] = top
+                        f2.d[(lh + rr) * (lh + 1usize) + 1usize + cc] = bot
+                        cc += 1usize
+                    }
+                    rr += 1usize
+                }
+                let (nm2, enm) = mat_kron(a, f2, mi)
+                if enm != ok { ret (res, enm) }
+                mi = nm2
+                // Gi factor: lower triangle (lev by lev) without its first column
+                let lv = lev[h]
+                let (f3, ef3) = mat_new(a, lv, lv - 1usize)
+                if ef3 != ok { ret (res, ef3) }
+                rr = 0usize
+                while rr < lv {
+                    var cc = 1usize
+                    while cc < lv {
+                        if cc <= rr { f3.d[rr * (lv - 1usize) + cc - 1usize] = 1.0f64 }
+                        cc += 1usize
+                    }
+                    rr += 1usize
+                }
+                let (ng, eng) = mat_kron(a, f3, gi)
+                if eng != ok { ret (res, eng) }
+                gi = ng
+            } else {
+                let lv = lev[h]
+                let (f2, ef2) = mat_new(a, 1usize, lv)
+                let (f3, ef3) = mat_new(a, lv, 1usize)
+                if ef2 != ok || ef3 != ok { ret (res, ef2) }
+                var d = 0usize
+                while d < lv {
+                    f2.d[d] = 1.0f64
+                    f3.d[d] = 1.0f64
+                    d += 1usize
+                }
+                let (nm2, enm) = mat_kron(a, f2, mi)
+                let (ng, eng) = mat_kron(a, f3, gi)
+                if enm != ok || eng != ok { ret (res, enm) }
+                mi = nm2
+                gi = ng
+            }
+            h += 1usize
+        }
+        if first {
+            cm = ci
+            mm = mi
+            gm = gi
+            first = false
+        } else {
+            // C <- blkdiag(C, Ci); M <- rbind(M, Mi); G <- cbind(G, Gi)
+            let (nc, e1) = mat_new(a, cm.rows + ci.rows, cm.cols + ci.cols)
+            let (nm3, e2) = mat_new(a, mm.rows + mi.rows, mm.cols)
+            let (ng, e3) = mat_new(a, gm.rows, gm.cols + gi.cols)
+            if e1 != ok || e2 != ok || e3 != ok { ret (res, e1) }
+            var i = 0usize
+            while i < cm.rows {
+                var j = 0usize
+                while j < cm.cols {
+                    nc.d[i * nc.cols + j] = cm.d[i * cm.cols + j]
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            i = 0usize
+            while i < ci.rows {
+                var j = 0usize
+                while j < ci.cols {
+                    nc.d[(cm.rows + i) * nc.cols + cm.cols + j] = ci.d[i * ci.cols + j]
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            i = 0usize
+            while i < mm.rows * mm.cols {
+                nm3.d[i] = mm.d[i]
+                i += 1usize
+            }
+            i = 0usize
+            while i < mi.rows * mi.cols {
+                nm3.d[mm.rows * mm.cols + i] = mi.d[i]
+                i += 1usize
+            }
+            i = 0usize
+            while i < gm.rows {
+                var j = 0usize
+                while j < gm.cols {
+                    ng.d[i * ng.cols + j] = gm.d[i * gm.cols + j]
+                    j += 1usize
+                }
+                j = 0usize
+                while j < gi.cols {
+                    ng.d[i * ng.cols + gm.cols + j] = gi.d[i * gi.cols + j]
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            cm = nc
+            mm = nm3
+            gm = ng
+        }
+        q += 1usize
+    }
+    res.c = cm
+    res.m = mm
+    res.g = gm
+    ret (res, ok)
+}

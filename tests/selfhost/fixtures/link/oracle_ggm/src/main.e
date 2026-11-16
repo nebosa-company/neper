@@ -20,7 +20,72 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if w == 1usize { ret df }
         ret pv
     }
+    if str.eq(nm, "mp") {
+        let r = usize(z[0usize])
+        let (lev, e1) = mem.alloc[usize](a, r)
+        let (ty, e2) = mem.alloc[u8](a, r)
+        if e1 != ok || e2 != ok { ret nan }
+        var i = 0usize
+        while i < r {
+            lev[i] = usize(z[1usize + i])
+            ty[i] = u8(z[1usize + r + i])
+            i += 1usize
+        }
+        let (mp, e3) = gg.marg_param(a, lev, ty)
+        if e3 != ok { ret nan }
+        let wh = usize(z[1usize + 2usize * r])
+        var m = mp.c
+        if wh == 1usize { m = mp.m }
+        if wh == 2usize { m = mp.g }
+        let qq = usize(z[2usize + 2usize * r])
+        if qq == 0usize { ret f64(m.rows) }
+        if qq == 1usize { ret f64(m.cols) }
+        var s = 0.0f64
+        var sw = 0.0f64
+        i = 0usize
+        while i < m.rows * m.cols {
+            s += m.d[i]
+            sw += f64(i + 1usize) * m.d[i]
+            i += 1usize
+        }
+        if qq == 2usize { ret s }
+        ret sw
+    }
     let p = usize(z[0usize])
+    if str.eq(nm, "dsep") {
+        let am2 = z[1usize..1usize + p * p]
+        var at = 1usize + p * p
+        let nf = usize(z[at])
+        let (fs, e1) = mem.alloc[usize](a, nf + 1usize)
+        if e1 != ok { ret nan }
+        var i = 0usize
+        while i < nf {
+            fs[i] = usize(z[at + 1usize + i]) - 1usize
+            i += 1usize
+        }
+        at = at + 1usize + nf
+        let ns = usize(z[at])
+        let (ss, e2) = mem.alloc[usize](a, ns + 1usize)
+        if e2 != ok { ret nan }
+        i = 0usize
+        while i < ns {
+            ss[i] = usize(z[at + 1usize + i]) - 1usize
+            i += 1usize
+        }
+        at = at + 1usize + ns
+        let nc = usize(z[at])
+        let (cs, e3) = mem.alloc[usize](a, nc + 1usize)
+        if e3 != ok { ret nan }
+        i = 0usize
+        while i < nc {
+            cs[i] = usize(z[at + 1usize + i]) - 1usize
+            i += 1usize
+        }
+        let (sep, e4) = gg.dsep(a, am2, p, fs[0usize..nf], ss[0usize..ns], cs[0usize..nc])
+        if e4 != ok { ret nan }
+        if sep { ret 1.0f64 }
+        ret 0.0f64
+    }
     if str.eq(nm, "pcor") {
         let nu = usize(z[1usize])
         let (u, e1) = mem.alloc[usize](a, nu)
