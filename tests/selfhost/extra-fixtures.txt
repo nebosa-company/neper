@@ -255,3 +255,4 @@ oracle_compqf
 oracle_pcapp
 oracle_irr
 oracle_pls
+oracle_wrs2

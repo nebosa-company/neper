@@ -45198,3 +45198,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.pls` ports `kernelpls.fit`, `simpls.fit`, `oscorespls.fit` and `widekernelpls.fit` (with the bidiagonal inverse of P'W for one response and the back-substitution for several), `svdpc.fit` for pcr (through the eigen decomposition of X'X) and `mvrCv` over given segments (PRESS, PRESS0 and the adjCV adjustment, ncomp lowered as the package lowers it); MSEP, RMSEP and R2 for the training, CV and adjCV estimates follow from them. Multi-response scores and loadings carry the solver's sign, so those are compared by their sign-free sums and the coefficients and fitted values exactly.
 
 **Result.** `oracle_pls` equals pls on 5040 cases on Windows; Linux pending. cppls and the jackknife stay open on L359.
+
+## D6137 — WRS2, the deterministic part
+
+**Context.** L503 asked for the WRS2 robust tests.
+
+**Decision.** `e.algo.stat.wrs2` ports the closed-form functions: Winsorized and trimmed location and scale, `pbos`, yuen and yuend with the explanatory-power effect size for equal trimmed sizes (its `area` is the package's adaptive Simpson with limit 10 and eps 1e-5, ported as is, since it is not the exact integral), t1way with its equal-n effect size, wincor, pbcor, the AKP d, pairwise lincon with the Hochberg adjustment, and med1way's statistic. Everything that bootstraps or simulates (yuenbt, pb2gen, unequal-n effect sizes, med1way's critical value, lincon's studentised-maximum critical values) and t2way are not here.
+
+**Result.** `oracle_wrs2` equals WRS2 on 1544 cases on Windows; Linux pending. L503 is partial.
