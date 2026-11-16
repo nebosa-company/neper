@@ -40,4 +40,11 @@ for (rep in 1:30) {
     v <- suppressWarnings(tryCatch(as.numeric(auc(r1, partial.auc = c(hi, lo), partial.auc.focus = c("specificity", "sensitivity")[foc + 1], partial.auc.correct = cor == 1)), error = function(e) NA))
     add("pauc", c(n, y, x1, x1, hi, lo, foc, cor), v) }
 }
+# multiclass.roc: ("mcauc") args (k, n, class codes 0..k-1 [n], x[n]) -> the multiclass AUC
+for (rep in 1:30) {
+  k <- sample(3:5, 1); n <- sample(30:100, 1); cl <- sample(0:(k - 1), n, TRUE); if (length(unique(cl)) < k) next
+  x <- round(rnorm(n) + 0.7 * cl * sample(c(1, -1), 1), if (rep %% 3 == 0) 1 else 4)
+  r <- tryCatch(suppressWarnings(multiclass.roc(cl, x, quiet = TRUE)), error = function(e) NULL); if (is.null(r)) next
+  cases[[length(cases) + 1]] <- case("mcauc", c(k, n, cl, x), as.numeric(r$auc), rel = 1e-9, abs = 1e-12)
+}
 emit("proc", "pROC", list(cases))

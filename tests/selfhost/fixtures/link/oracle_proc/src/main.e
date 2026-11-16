@@ -10,6 +10,11 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "mcauc") {
+        let kk = usize(x[0usize])
+        let nn = usize(x[1usize])
+        ret pr.multiclass_auc(a, x[2usize..2usize + nn], x[2usize + nn..2usize + 2usize * nn], kk)
+    }
     let n = usize(x[0usize])
     let y = x[1usize..1usize + n]
     let x1 = x[1usize + n..1usize + 2usize * n]

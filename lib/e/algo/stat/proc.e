@@ -429,3 +429,34 @@ fn partial_auc(a: *mem.Arena, y: []const f64, x: []const f64, hi: f64, lo: f64, 
     }
     ret auc
 }
+
+// multiclass.roc(response, predictor) on a single predictor: the mean of the pairwise AUCs (direction chosen per pair), classes coded 0 .. k - 1 in the response
+fn multiclass_auc(a: *mem.Arena, cls: []const f64, x: []const f64, k: usize) -> f64 {
+    let n = cls.len
+    let (ys, e1) = mem.alloc[f64](a, n)
+    let (xs, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var sum = 0.0f64
+    var i = 0usize
+    while i < k {
+        var j = i + 1usize
+        while j < k {
+            var m = 0usize
+            var q = 0usize
+            while q < n {
+                let c = usize(cls[q])
+                if c == i || c == j {
+                    xs[m] = x[q]
+                    if c == j { ys[m] = 1.0f64 } else { ys[m] = 0.0f64 }
+                    m += 1usize
+                }
+                q += 1usize
+            }
+            let (au, av) = auc_var(a, ys[0usize..m], xs[0usize..m])
+            sum += au
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret 2.0f64 * sum / (f64(k) * f64(k - 1usize))
+}

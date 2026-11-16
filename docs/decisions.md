@@ -46456,3 +46456,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** L472 is delivered: every estimator modeest can run (venter, shorth, hsm, grenander, meanshift, asselin, tsybakov, lientz, naive, parzen, vieu) equals modeest on Windows, with the kernels and bandwidth rules those functions accept. `hrm` is defunct in modeest itself and `abc = TRUE` is `.NotYetImplemented()` there, so neither can be matched.
 
 **Result.** L472 leaves the queue; Linux runs of oracle_modeest and oracle_parzen are batched with the others.
+
+## D6548 — pROC: multiclass AUC
+
+**Decision.** `multiclass_auc` is the Hand-Till mean of the pairwise AUCs of one predictor: for each pair of classes (lower level the controls) the AUC with the direction chosen by the group medians, summed and divided by `k (k - 1) / 2`.
+
+**Result.** `oracle_proc` agrees with pROC on 30 multiclass values (3 to 5 classes, both directions of association) on Windows; Linux pending. Smoothed curves, bootstrap CIs and the other roc.test methods stay open; L324 stays partial.
