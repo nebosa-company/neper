@@ -733,3 +733,103 @@ flexsurv	697	flexible parametric survival: Royston-Parmar splines, generalized g
 questionr	698	survey helpers	-	out-of-scope	-		
 gstat	699	geostatistics: sample and fitted variograms, ordinary, simple and universal kriging, simulation	variogram, fit.variogram, krige, gstat	gap	-	~25k	L437
 venn	700	Venn diagrams	-	out-of-scope	-		
+zeallot	701	multiple assignment for R	-	out-of-scope	-		
+learnr	702	interactive tutorials	-	out-of-scope	-		
+fastcluster	703	fast hierarchical clustering, see L331	-	covered-by-other-item	-		
+httpcode	704	HTTP status helpers	-	out-of-scope	-		
+leafgl	705	htmlwidget	-	out-of-scope	-		
+PRROC	706	precision-recall and ROC curves, see L324	-	covered-by-other-item	-		
+visdat	707	missing data plots	-	out-of-scope	-		
+EnvStats	708	environmental statistics: distribution fitting for censored data, tolerance and prediction intervals, outlier tests (Rosner, Dixon), trend tests, goodness of fit	eqnorm, tolIntNorm, rosnerTest, gofTest, kendallSeasonalTrendTest	gap	-	~60k	L466
+emdbook	709	book support functions	-	out-of-scope	-		
+betareg	710	beta regression with a mean and a precision submodel, bias-corrected and bias-reduced fits	betareg, predict, residuals, lrtest	gap	-	~4k	L451
+SuppDists	711	Johnson, Pearson-type, Kendall, Spearman, normal-scores, maximum F-ratio and inverse Gaussian distributions	dJohnson, pKendall, qSpearman, rinvGauss	gap	-	~4k	L444
+BayesFactor	712	Bayes factors with JZS priors for t tests, ANOVA, regression, contingency tables and correlations	ttestBF, anovaBF, lmBF, correlationBF, contingencyTableBF	gap	-	~15k	L465
+spatstat.linnet	713	point patterns on networks, see L384	-	covered-by-other-item	-		
+mi	714	multiple imputation, see L346	-	covered-by-other-item	-		
+leafsync	715	htmlwidget	-	out-of-scope	-		
+tidyterra	716	tidy wrapper over terra	-	out-of-scope	-		
+readstata13	717	Stata files, see L304	-	covered-by-other-item	-		
+spatstat.model	718	point process models, see L384	-	covered-by-other-item	-		
+ISOcodes	719	code tables	-	out-of-scope	-		
+ggh4x	720	chart engine	-	out-of-scope	-		
+linprog	721	linear programming, see L367	-	covered-by-other-item	-		
+geometry	722	Qhull in n dimensions: convex hulls, Delaunay triangulation, Voronoi, tsearch, inhulln, intersect, surface areas and volumes	convhulln, delaunayn, tsearch, inhulln, intersectn	partial	e.algo.geom, e.algo.geom3	~15k	L455
+mlogit	723	multinomial and nested logit discrete-choice models, mixed logit by simulation, panel data	mlogit, nests, rpar, dfidx	gap	-	~10k	L456
+naniar	724	missing data summaries and plots	-	out-of-scope	-		
+RUnit	725	R test framework	-	out-of-scope	-		
+quanteda	726	text analysis, see L380	-	covered-by-other-item	-		
+sem	727	structural equation models, see L354	-	covered-by-other-item	-		
+bench	728	timing, e.test.bench	-	covered	e.test.bench		
+paws.common	729	AWS client plumbing	-	out-of-scope	-		
+sjstats	730	statistical helpers for sjPlot	-	out-of-scope	-		
+waiter	731	shiny	-	out-of-scope	-		
+gsubfn	732	R string and function helpers	-	out-of-scope	-		
+paletteer	733	palette collection, see L329	-	covered-by-other-item	-		
+spacesXYZ	734	colour-space conversions, see L297	-	covered-by-other-item	-		
+TSA	735	time-series analysis: armasubsets, McLeod-Li, outlier detection (AO and IO), periodogram, arima with intervention terms	armasubsets, McLeod.Li.test, detectAO, periodogram	gap	-	~4k	L452
+formattable	736	table formatting	-	out-of-scope	-		
+optimx	737	optimizer front end, see L309	-	covered-by-other-item	-		
+rnaturalearthdata	738	map data	-	out-of-scope	-		
+party	739	conditional inference trees, see L375	-	covered-by-other-item	-		
+NMF	740	non-negative matrix factorization: Brunet, Lee, KL, ls-nmf, nsNMF, SNMF and offset algorithms with rank selection and consensus	nmf, nmfEstimateRank, consensus	partial	e.ml.reduce	~25k	verify what e.ml.reduce holds; L457
+ff	741	out-of-core vectors	-	out-of-scope	-		
+VennDiagram	742	Venn diagrams	-	out-of-scope	-		
+spacetime	743	spatio-temporal classes	-	out-of-scope	-		
+texreg	744	regression table rendering	-	out-of-scope	-		
+ppcor	745	partial correlations, see L312	-	covered-by-other-item	-		
+RcppNumerical	746	integration and optimization, see L333	-	covered-by-other-item	-		
+bigmemory	747	shared-memory matrices	-	out-of-scope	-		
+DEoptim	748	differential evolution, see L406	-	covered-by-other-item	-		
+tsibble	749	tidy time series, see L298	-	covered-by-other-item	-		
+geodata	750	geographic data download	-	out-of-scope	-		
+FSA	751	fisheries statistics	-	out-of-scope	-		
+RJSONIO	752	JSON, e.fmt.json	-	covered	e.fmt.json		
+cubature	753	adaptive multidimensional integration: hcubature, pcubature, cuhre, vegas, suave, divonne	cubintegrate, hcubature, pcubature	gap	e.math.mc has Monte Carlo integration	~8k	L453
+ggfittext	754	plot text fitting	-	out-of-scope	-		
+mediation	755	causal mediation analysis with simulation-based or bootstrap intervals and sensitivity analysis	mediate, medsens	gap	-	~4k	L450
+RODBC	756	ODBC driver, x.microsoft.odbc	-	covered	x.microsoft.odbc		
+norm	757	EM and data augmentation for multivariate normal data with missing values	em.norm, da.norm, imp.norm, ecm.norm	gap	-	~2k	L447
+downloader	758	file download	-	out-of-scope	-		
+highs	759	HiGHS LP and MIP solver, see L367	-	covered-by-other-item	-		
+mixsqp	760	mixture proportion estimation by sequential quadratic programming	mixsqp	gap	-	~2k	L446
+estimatr	761	robust standard errors, see L300	-	covered-by-other-item	-		
+zigg	762	ziggurat RNG header	-	out-of-scope	-		
+base64url	763	base64 encodings, e.fmt.encode	-	covered	e.fmt.encode		
+glasso	764	graphical lasso, see L434	-	covered-by-other-item	-		
+VIM	765	imputation and visualization of missing values: kNN, hot-deck, IRMI, regression and random-forest imputation, aggregation	kNN, hotdeck, irmi, regressionImp, aggr	gap	-	~12k	L454
+ggdendro	766	dendrogram plots	-	out-of-scope	-		
+prismatic	767	colour manipulation, see L297	-	covered-by-other-item	-		
+doFuture	768	parallel backend	-	out-of-scope	-		
+getPass	769	password prompt	-	out-of-scope	-		
+shades	770	colour manipulation, see L297	-	covered-by-other-item	-		
+gifski	771	GIF encoding, e.fmt.gif	-	covered	e.fmt.gif		
+sqldf	772	SQL over data frames, e.algo.sqlsource	-	covered	e.algo.sqlsource		
+epiR	773	epidemiology: risk and odds ratios with intervals, sample size, diagnostic accuracy, standardization, Mantel-Haenszel	epi.2by2, epi.tests, epi.conf, epi.sscohortc	gap	-	~40k	L460
+intervals	774	interval sets	-	out-of-scope	-		
+broom.helpers	775	tidy model helpers	-	out-of-scope	-		
+summarytools	776	summary tables	-	out-of-scope	-		
+dynamicTreeCut	777	dynamic tree cutting, see L331	-	covered-by-other-item	-		
+tweedie	778	Tweedie distributions, see L327	-	covered-by-other-item	-		
+jsonvalidate	779	JSON schema, e.fmt.json.schema	-	covered	e.fmt.json.schema		
+earth	780	multivariate adaptive regression splines (MARS) with pruning, GCV, interactions and GLM responses	earth, evimp, predict.earth	gap	-	~12k	L458
+actuar	781	actuarial science: loss distributions (Pareto, Burr, inverse families), aggregate claims by Panjer, ruin theory, credibility, grouped data	dburr, aggregateDist, ruin, cm, emm	gap	-	~30k	L463
+splines2	782	spline bases: M, I, C, B and natural cubic splines with derivatives and integrals	bSpline, mSpline, iSpline, cSpline, naturalSpline	gap	-	~3k	L445
+aplpack	783	stem-and-leaf and bagplot graphics	-	out-of-scope	-		
+hetGP	784	heteroskedastic Gaussian process regression with replicated and noisy data, Bayesian optimization helpers	mleHetGP, predict, crit_EI	gap	-	~12k	with kernlab gausspr (L366); L467
+sftime	785	spatio-temporal sf objects	-	out-of-scope	-		
+pbmcapply	786	parallel progress	-	out-of-scope	-		
+testit	787	R test helper	-	out-of-scope	-		
+gamlss.dist	788	about 100 distributions of the GAMLSS framework with d, p, q, r and fitting helpers	dBCT, dNBI, dZIP, dGA, dJSU	gap	-	~25k	with extraDistr (L422); L464
+mcmc	789	Metropolis, morphometric and tempering MCMC, initial sequence estimators of the asymptotic variance	metrop, morph.metrop, temper, initseq	partial	e.math.mcmc has metropolis_hastings	~3k	needs the R RNG streams; L448
+tidycensus	790	US Census data client	-	out-of-scope	-		
+stopwords	791	stopword lists	-	out-of-scope	-		
+diptest	792	Hartigan dip test of unimodality with the dip and its p-value by interpolation or simulation	dip.test, dip	gap	-	~1k	L443
+semPlot	793	SEM plots	-	out-of-scope	-		
+systemfit	794	systems of equations: OLS, WLS, SUR, 2SLS, 3SLS and GMM with cross-equation restrictions	systemfit, nlsystemfit	gap	-	~8k	L461
+energy	795	energy statistics: distance correlation and covariance, energy distance, DISCO, tests of normality and independence	dcor, dcov, edist, disco, mvnorm.etest	gap	-	~8k	L459
+trust	796	trust-region optimizer, see L309	-	covered-by-other-item	-		
+beepr	797	sounds	-	out-of-scope	-		
+sn	798	skew-normal and skew-t distributions: d, p, q, r, moments and fits, multivariate versions	dsn, psn, qsn, rsn, selm, st.mple	gap	-	~10k	L449
+tableone	799	baseline tables	-	out-of-scope	-		
+arules	800	association rule mining: apriori, eclat, FP-growth, closed and maximal itemsets, interest measures, transactions	apriori, eclat, interestMeasure, itemFrequency	gap	-	~25k	L462

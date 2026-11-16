@@ -152,6 +152,31 @@ L439	library	0	309	MCMCpack: Bayesian MCMC for common models	Open (CRAN rank 636
 L440	library	0	347	flexsurv and rstpm2: flexible parametric survival models	Open (CRAN ranks 697, 694).
 L441	library	0	300	msm and mstate: multi-state models	Open (CRAN ranks 642, 679).
 L442	library	0	264	phangorn: phylogenetic inference	Open (CRAN rank 666).
+L443	library	0	201	diptest: Hartigan dip test	Open (CRAN rank 792).
+L444	library	0	233	SuppDists: Johnson, Kendall, Spearman and related distributions	Open (CRAN rank 711).
+L445	library	0	230	splines2: spline bases	Open (CRAN rank 782).
+L446	library	0	195	mixsqp: mixture proportions by SQP	Open (CRAN rank 760).
+L447	library	0	184	norm: EM and data augmentation for multivariate normal data	Open (CRAN rank 757).
+L448	library	0	272	mcmc: Metropolis and tempering samplers	Open (CRAN rank 789).
+L449	library	0	218	sn: skew-normal and skew-t distributions	Open (CRAN rank 798).
+L450	library	0	289	mediation: causal mediation analysis	Open (CRAN rank 755).
+L451	library	0	245	betareg: beta regression	Open (CRAN rank 710).
+L452	library	0	223	TSA: time-series analysis toolkit	Open (CRAN rank 735).
+L453	library	0	246	cubature: adaptive multidimensional integration	Open (CRAN rank 753).
+L454	library	0	188	VIM: missing-value imputation	Open (CRAN rank 765).
+L455	library	0	290	geometry: Qhull in n dimensions	Open (CRAN rank 722).
+L456	library	0	287	mlogit: discrete-choice models	Open (CRAN rank 723).
+L457	library	0	281	NMF: non-negative matrix factorization	Open (CRAN rank 740).
+L458	library	0	227	earth: multivariate adaptive regression splines	Open (CRAN rank 780).
+L459	library	0	233	energy: energy statistics	Open (CRAN rank 795).
+L460	library	0	303	epiR: epidemiology	Open (CRAN rank 773).
+L461	library	0	216	systemfit: equation systems	Open (CRAN rank 794).
+L462	library	0	271	arules: association rule mining	Open (CRAN rank 800).
+L463	library	0	356	actuar: actuarial science	Open (CRAN rank 781).
+L464	library	0	255	gamlss.dist: GAMLSS distribution families	Open (CRAN rank 788).
+L465	library	0	249	BayesFactor: Bayes factors with JZS priors	Open (CRAN rank 712).
+L466	library	0	326	EnvStats: environmental statistics	Open (CRAN rank 708).
+L467	library	0	280	hetGP: heteroskedastic Gaussian processes	Open (CRAN rank 784).
 C287	library	0	933	e.gfx.cssvalue has no viewport-dynamic length unit, so min() over dvh does not resolve	Open.
 C104	compiler	0.75	4573	NeperOS stage 2: the kernel as an AVF guest on a Pixel (crosvm bring-up)	Opened by D2143 when C103 closed D2119 stage 1.
 C185	library	0.9	1111	macOS file and protocol associations, Finder-opened files and URLs (small bundles, application delegate)	Built and verified 2026-10-25 (D5217): shell.associate_file/associate_protocol write a bundle under ~/Library/Application Support/Neper/Associations (Info.plist with CFBundleDocumentTypes or CFBundleU
