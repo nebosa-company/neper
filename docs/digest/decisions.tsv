@@ -3557,4 +3557,5 @@ D6694	726	fdrtool helpers and the Student t null; L421 closed
 D6695	556	SuppDists Kruskal-Wallis and normal scores
 D6696	685	SuppDists maximum F ratio
 D6697	926	SuppDists Friedman without the stored tables
-D6698	1079	SuppDists moments
+D6698	1080	SuppDists moments
+D6699	686	SuppDists Kendall past N = 12

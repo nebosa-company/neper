@@ -80,6 +80,36 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if what == 4usize { ret mm.third }
         ret mm.fourth
     }
+    if str.starts_with(nm, "kp_") {
+        let kn = i64(z[0usize])
+        var kv = 0.0f64
+        var ke = ok
+        if str.eq(nm, "kp_p") {
+            let (r1, e1) = sd.pkendall_pkg(a, kn, z[1usize])
+            kv = r1
+            ke = e1
+        } else if str.eq(nm, "kp_u") {
+            let (r2, e2) = sd.qkendall_pkg(a, kn, z[1usize])
+            kv = r2
+            ke = e2
+        } else if str.eq(nm, "kp_d") {
+            let (r3, e3) = sd.fkendall_pkg(a, kn, z[1usize])
+            kv = r3
+            ke = e3
+        } else if str.eq(nm, "kp_q") {
+            let (r4, e4) = sd.xkendall_pkg(a, z[1usize], kn)
+            kv = r4
+            ke = e4
+        } else if z[1usize] == 0.0f64 {
+            kv = f64(4i64 * kn + 10i64) / f64(9i64 * kn * (kn - 1i64))
+        } else {
+            let (r5, e5) = sd.fourth_kendall(a, kn)
+            kv = r5
+            ke = e5
+        }
+        if ke != ok { ret nan }
+        ret kv
+    }
     if str.eq(nm, "gh_d") { ret sd.ghyper_d(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_p") { ret sd.ghyper_p(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_q") { ret sd.ghyper_q(z[3usize], z[0usize], z[1usize], z[2usize]) }

@@ -70,4 +70,12 @@ for (rep in 1:12) {
 for (cs in list(c(3, 4), c(3, 9), c(4, 5), c(5, 4), c(6, 5), c(4, 20))) { s <- sFriedman(cs[1], cs[2]); mom_add("mo_fr", c(cs[1], cs[2]), s, 1e-6) }
 for (r in c(3, 5, 8, 11)) { s <- sSpearman(r); mom_add("mo_sp", c(r), s, 1e-9) }
 for (rep in 1:10) { N <- sample(5:50, 1); rho <- round(runif(1, -0.9, 0.9), 2); s <- sPearson(N, rho); mom_add("mo_pc", c(rho, N), s, 1e-6) }
+# Kendall as the package answers (exact to N = 12, Edgeworth beyond): "kp_p" "kp_u" "kp_d" args (N, tau), "kp_q" args (N, p), "kp_m" args (N, what 0 var, 1 fourth)
+for (N in c(5, 8, 12, 13, 15, 20, 40)) {
+  for (tau in c(-0.6, -0.2, 0.05, 0.3, 0.7)) {
+    add("kp_p", c(N, tau), pKendall(tau, N), 1e-9); add("kp_u", c(N, tau), pKendall(tau, N, lower.tail = FALSE), 1e-9); add("kp_d", c(N, tau), dKendall(tau, N), 1e-9)
+  }
+  for (pr in c(0.05, 0.25, 0.5, 0.9)) add("kp_q", c(N, pr), qKendall(pr, N), 1e-9)
+  s <- sKendall(N); add("kp_m", c(N, 0), s$Variance, 1e-9); add("kp_m", c(N, 1), s$FourthCentralMoment, 1e-7)
+}
 emit("suppdists", "SuppDists", list(cases))

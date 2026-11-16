@@ -1337,3 +1337,147 @@ fn moments_pearson(rho: f64, nn: i64) -> Mom {
     m.variance = mm * om2 * (1.0f64 + 0.5f64 * mm * (14.0f64 + 11.0f64 * rho2) + 0.5f64 * m2 * (98.0f64 + 130.0f64 * rho2 + 75.0f64 * rho4))
     ret m
 }
+
+// ---- Kendall's tau as the package answers it: exact counts up to N = 12, the Edgeworth series beyond ----
+
+fn ken_edge_p(t: f64, n: f64, mean: f64) -> f64 {
+    let s = n * (n + 1.0f64) * (2.0f64 * n + 1.0f64) / 6.0f64
+    let f = ((n + 1.0f64) * 3.0f64 * n - 1.0f64) / 5.0f64
+    let g = (((n * n + 2.0f64) * n - 1.0f64) * 3.0f64 * n + 1.0f64) / 7.0f64
+    var sd = s - n
+    let l4 = 0.0f64 - 1.2f64 * (s * f - n) / (sd * sd)
+    let l6 = (48.0f64 / 7.0f64) * (s * g - n) / (sd * sd * sd)
+    sd = math.sqrt[f64](sd / 12.0f64)
+    let x = (t + 0.5f64 - mean) / sd
+    let z = 0.398942280401433f64 * math.exp[f64](0.0f64 - 0.5f64 * x * x)
+    let x2 = x * x
+    let phi3 = z * x * (3.0f64 - x2)
+    let phi5 = 0.0f64 - z * x * ((x2 - 10.0f64) * x2 + 15.0f64)
+    let phi7 = z * x * (((0.0f64 - x2 + 21.0f64) * x2 - 105.0f64) * x2 + 105.0f64)
+    var p = dist.pnorm(x, 0.0f64, 1.0f64, true, false)
+    p = p + ((35.0f64 * l4 * l4 * phi7 / 56.0f64 + l6 * phi5) / 30.0f64 + l4 * phi3) / 24.0f64
+    ret p
+}
+
+// the cumulative or point probability of T = k from the exact counts (n <= 12)
+fn ken_exact(a: *mem.Arena, n: usize, k: usize, density: bool) -> (f64, err) {
+    let (c, e) = mem.alloc[f64](a, n * (n - 1usize) / 2usize + 2usize)
+    if e != ok { ret (0.0f64, e) }
+    let len = mahonian(n, c)
+    var sum = 0.0f64
+    if density {
+        if k < len { sum = c[k] }
+    } else {
+        var i = 0usize
+        while i <= k && i < len {
+            sum += c[i]
+            i += 1usize
+        }
+    }
+    ret (math.exp[f64](math.log[f64](sum) - pik_loggamma(f64(n + 1usize))), ok)
+}
+
+// pkendall(n, tau): Pr(T <= tau)
+fn pkendall_pkg(a: *mem.Arena, ni: i64, tau: f64) -> (f64, err) {
+    let nan = 0.0f64 / 0.0f64
+    if tau > 1.0f64 || tau < 0.0f64 - 1.0f64 || ni < 2i64 { ret (nan, ok) }
+    let n = f64(ni)
+    let mm = n * (n - 1.0f64) / 2.0f64
+    let mean = mm / 2.0f64
+    let kf = 0.5f64 + (1.0f64 + tau) * mean
+    if kf < 0.0f64 { ret (0.0f64, ok) }
+    let k = math.floor[f64](kf)
+    if k > mm { ret (1.0f64, ok) }
+    if ni <= 12i64 {
+        let (xv, xe) = ken_exact(a, usize(ni), usize(k), false)
+        ret (xv, xe)
+    }
+    ret (ken_edge_p(k, n, mean), ok)
+}
+
+fn fkendall_pkg(a: *mem.Arena, ni: i64, tau: f64) -> (f64, err) {
+    let nan = 0.0f64 / 0.0f64
+    if tau > 1.0f64 || tau < 0.0f64 - 1.0f64 { ret (nan, ok) }
+    let n = f64(ni)
+    let mm = n * (n - 1.0f64) / 2.0f64
+    let mean = mm / 2.0f64
+    let kf = 0.5f64 + (1.0f64 + tau) * mean
+    if kf < 0.0f64 { ret (0.0f64, ok) }
+    var t = math.floor[f64](kf)
+    if t > mm { ret (0.0f64, ok) }
+    if ni <= 12i64 {
+        let (yv, ye) = ken_exact(a, usize(ni), usize(t), true)
+        ret (yv, ye)
+    }
+    let p1 = ken_edge_p(t, n, mean)
+    t = t - 1.0f64
+    var p0 = 0.0f64
+    if t >= 0.0f64 { p0 = ken_edge_p(t, n, mean) }
+    ret (p1 - p0, ok)
+}
+
+fn qkendall_pkg(a: *mem.Arena, ni: i64, tau: f64) -> (f64, err) {
+    if tau > 1.0f64 || tau < 0.0f64 - 1.0f64 || ni < 2i64 { ret (0.0f64 / 0.0f64, ok) }
+    let (p, e) = pkendall_pkg(a, ni, tau)
+    ret (1.0f64 - p, e)
+}
+
+// xkendall(p, n): the smallest tau with p <= Pr(T <= tau)
+fn xkendall_pkg(a: *mem.Arena, pr: f64, ni: i64) -> (f64, err) {
+    let nan = 0.0f64 / 0.0f64
+    if 0.0f64 >= pr || pr >= 1.0f64 || ni < 2i64 { ret (nan, ok) }
+    let n = f64(ni)
+    let mean = 0.25f64 * n * (n - 1.0f64)
+    var sd = n * (2.0f64 * n + 1.0f64) * (n + 1.0f64) / 6.0f64 - n
+    sd = math.sqrt[f64](sd / 12.0f64)
+    let kq = 0.5f64 + mean + sd * dist.qnorm(pr, 0.0f64, 1.0f64, true, false)
+    var k = i64(kq)
+    var tau = 4.0f64 * f64(k) / (n * (n - 1.0f64)) - 1.0f64
+    let (p0, e0) = pkendall_pkg(a, ni, tau)
+    if e0 != ok { ret (nan, e0) }
+    var larger = pr <= p0
+    while larger {
+        if k == 0i64 { ret (4.0f64 * f64(k) / (n * (n - 1.0f64)) - 1.0f64, ok) }
+        k -= 1i64
+        tau = 4.0f64 * f64(k) / (n * (n - 1.0f64)) - 1.0f64
+        let (p1, e1) = pkendall_pkg(a, ni, tau)
+        if e1 != ok { ret (nan, e1) }
+        larger = pr <= p1
+        if !larger {
+            k += 1i64
+            ret (4.0f64 * f64(k) / (n * (n - 1.0f64)) - 1.0f64, ok)
+        }
+    }
+    while !larger {
+        k += 1i64
+        tau = 4.0f64 * f64(k) / (n * (n - 1.0f64)) - 1.0f64
+        let (p2, e2) = pkendall_pkg(a, ni, tau)
+        if e2 != ok { ret (nan, e2) }
+        larger = pr <= p2
+        if larger { ret (4.0f64 * f64(k) / (n * (n - 1.0f64)) - 1.0f64, ok) }
+    }
+    ret (nan, ok)
+}
+
+// the fourth central moment: 128 equally spaced points between the 1% and 99% quantiles
+fn fourth_kendall(a: *mem.Arena, ni: i64) -> (f64, err) {
+    let nan = 0.0f64 / 0.0f64
+    if ni < 4i64 { ret (nan, ok) }
+    let (lo, e1) = xkendall_pkg(a, 0.01f64, ni)
+    let (hi, e2) = xkendall_pkg(a, 0.99f64, ni)
+    if e1 != ok || e2 != ok { ret (nan, e1) }
+    let delta = (hi - lo) / 127.0f64
+    var tau = lo
+    var m4 = 0.0f64
+    var sum = 0.0f64
+    var i = 0usize
+    while i < 128usize {
+        let (v, e) = fkendall_pkg(a, ni, tau)
+        if e != ok { ret (nan, e) }
+        m4 += v * tau * tau * tau * tau
+        sum += v
+        tau = tau + delta
+        i += 1usize
+    }
+    ret (m4 / sum, ok)
+}
