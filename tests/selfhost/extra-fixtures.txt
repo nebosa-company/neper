@@ -283,3 +283,5 @@ oracle_proc
 oracle_rocr
 oracle_dharma
 oracle_pamcluster
+oracle_arm
+oracle_signalpkg
