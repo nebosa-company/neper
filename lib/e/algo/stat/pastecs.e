@@ -1157,3 +1157,229 @@ fn escouf(a: *mem.Arena, x: []const f64, n: usize, p: usize, level: f64, vr: []u
     }
     ret (cnt, ok)
 }
+
+// ---- abund and turnogram ----
+
+type Abund = struct { vr: []usize, sort_: []f64, cumsum: []f64, plogind: []f64, pnonull: []f64 }
+
+// pastecs::abund on the q by p column-major abundance table: the variables sorted by f * percent of log individuals + (1 - f) * percent of zeros, with the cumulative difference of the scaled percentages
+fn abund(a: *mem.Arena, x: []const f64, q: usize, p: usize, f0: f64) -> (Abund, err) {
+    var r: Abund = zero
+    let (vr, e1) = mem.alloc[usize](a, p)
+    let (srt, e2) = mem.alloc[f64](a, p)
+    let (cs, e3) = mem.alloc[f64](a, p)
+    let (pli, e4) = mem.alloc[f64](a, p)
+    let (pnn, e5) = mem.alloc[f64](a, p)
+    let (nz, e6) = mem.alloc[f64](a, p)
+    let (ind, e7) = mem.alloc[f64](a, p)
+    let (key, e8) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret (r, mem.Full) }
+    var f = f0
+    if f <= 0.0f64 { f = 1.0e-5f64 }
+    if f >= 1.0f64 { f = 0.99999f64 }
+    var mx = 0.0f64 - 1.0f64 / 0.0f64
+    var j = 0usize
+    while j < p {
+        var nn = 0.0f64
+        var s = 0.0f64
+        var i = 0usize
+        while i < q {
+            if x[j * q + i] != 0.0f64 { nn += 1.0f64 }
+            s += x[j * q + i]
+            i += 1usize
+        }
+        nz[j] = 100.0f64 - nn / f64(q) * 100.0f64
+        var lg = math.log[f64](s)
+        if lg - lg != 0.0f64 { lg = 0.0f64 }
+        ind[j] = lg
+        if lg > mx { mx = lg }
+        pnn[j] = nn / f64(q) * 100.0f64
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        ind[j] = ind[j] / mx * 100.0f64
+        key[j] = f * ind[j] + (1.0f64 - f) * nz[j]
+        vr[j] = j
+        j += 1usize
+    }
+    // stable order by key
+    j = 1usize
+    while j < p {
+        var m = j
+        while m > 0usize && key[vr[m - 1usize]] > key[vr[m]] {
+            let t = vr[m - 1usize]
+            vr[m - 1usize] = vr[m]
+            vr[m] = t
+            m -= 1usize
+        }
+        j += 1usize
+    }
+    var pmin = 1.0e300f64
+    var pmax = 0.0f64 - 1.0e300f64
+    var nmin = 1.0e300f64
+    var nmax = 0.0f64 - 1.0e300f64
+    j = 0usize
+    while j < p {
+        srt[j] = key[vr[j]]
+        pli[j] = ind[vr[j]]
+        pnn[j] = pnn[j]
+        j += 1usize
+    }
+    // the percent of non-null values in the sorted order
+    let (pn2, e9) = mem.alloc[f64](a, p)
+    if e9 != ok { ret (r, mem.Full) }
+    j = 0usize
+    while j < p {
+        pn2[j] = pnn[vr[j]]
+        if pli[j] < pmin { pmin = pli[j] }
+        if pli[j] > pmax { pmax = pli[j] }
+        if pn2[j] < nmin { nmin = pn2[j] }
+        if pn2[j] > nmax { nmax = pn2[j] }
+        j += 1usize
+    }
+    var run = 0.0f64
+    var cmin = 1.0e300f64
+    var cmax = 0.0f64 - 1.0e300f64
+    j = 0usize
+    while j < p {
+        let pi = (pli[j] - pmin) / (pmax - pmin) * 100.0f64
+        let pn = (pn2[j] - nmin) / (nmax - nmin) * 100.0f64
+        run += pi - pn
+        cs[j] = run
+        if run < cmin { cmin = run }
+        if run > cmax { cmax = run }
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        cs[j] = (cs[j] - cmin) / (cmax - cmin) * 100.0f64
+        vr[j] = vr[j] + 1usize
+        j += 1usize
+    }
+    r.vr = vr
+    r.sort_ = srt
+    r.cumsum = cs
+    r.plogind = pli
+    r.pnonull = pn2
+    ret (r, ok)
+}
+
+type Turnogram = struct { m: usize, interval: []f64, n: []f64, turns: []f64, turns_min: []f64, turns_max: []f64, info: []f64, info_min: []f64, info_max: []f64, level: f64 }
+
+// the mean of the non-missing values of each column of the interval-by-k layout of x[from..] (padded with missing values), as `apply(series, 2, mean, na.rm = TRUE)`
+fn stripmeans(x: []const f64, from: usize, interval: usize, out: []f64) -> usize {
+    let len = x.len - from
+    let k = (len + interval - 1usize) / interval
+    var c = 0usize
+    while c < k {
+        var s = 0.0f64
+        var cnt = 0.0f64
+        var i = 0usize
+        while i < interval {
+            let idx = c * interval + i
+            if idx < len {
+                s += x[from + idx]
+                cnt += 1.0f64
+            }
+            i += 1usize
+        }
+        out[c] = s / cnt
+        c += 1usize
+    }
+    ret k
+}
+
+fn info_of(a: *mem.Arena, n: usize, turns: f64, two: bool) -> (f64, err) {
+    let (pg, e) = pgleissberg(a, n, turns, true, two)
+    if e != ok { ret (0.0f64, e) }
+    var inf = 0.0f64 - math.log2[f64](pg)
+    if two && turns > 2.0f64 * (f64(n) - 2.0f64) / 3.0f64 { inf = 0.0f64 - inf }
+    ret (inf, ok)
+}
+
+// pastecs::turnogram with FUN = mean: simple (complete = false) or complete, one- or two-tailed, for intervals imin to imax by step
+fn turnogram(a: *mem.Arena, x: []const f64, imin: f64, imax: f64, step: f64, complete: bool, two: bool) -> (Turnogram, err) {
+    var r: Turnogram = zero
+    var m = 0usize
+    var v = imin
+    while v <= imax + 1.0e-10f64 {
+        m += 1usize
+        v += step
+    }
+    let (iv, e1) = mem.alloc[f64](a, m)
+    let (nv, e2) = mem.alloc[f64](a, m)
+    let (tv, e3) = mem.alloc[f64](a, m)
+    let (tmn, e4) = mem.alloc[f64](a, m)
+    let (tmx, e5) = mem.alloc[f64](a, m)
+    let (inf, e6) = mem.alloc[f64](a, m)
+    let (imn, e7) = mem.alloc[f64](a, m)
+    let (imx, e8) = mem.alloc[f64](a, m)
+    let (buf, e9) = mem.alloc[f64](a, x.len + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret (r, mem.Full) }
+    var i = 0usize
+    while i < m {
+        let interval = usize(imin + step * f64(i))
+        iv[i] = f64(interval)
+        if !complete {
+            let k = stripmeans(x, 0usize, interval, buf)
+            let (tp, te) = turnpoints(a, buf[0usize..k])
+            if te != ok { ret (r, te) }
+            nv[i] = f64(k)
+            tv[i] = f64(tp.nturns)
+            let (iff, ie) = info_of(a, k, f64(tp.nturns), two)
+            if ie != ok { ret (r, ie) }
+            inf[i] = iff
+        } else {
+            var nmax = 0usize
+            var tsum = 0.0f64
+            var tlo = 1.0e300f64
+            var thi = 0.0f64 - 1.0e300f64
+            var isum = 0.0f64
+            var ilo = 1.0e300f64
+            var ihi = 0.0f64 - 1.0e300f64
+            var j = interval
+            while j >= 1usize {
+                let k = stripmeans(x, j - 1usize, interval, buf)
+                let (tp, te) = turnpoints(a, buf[0usize..k])
+                if te != ok { ret (r, te) }
+                let tn = f64(tp.nturns)
+                if k > nmax { nmax = k }
+                tsum += tn
+                if tn < tlo { tlo = tn }
+                if tn > thi { thi = tn }
+                let (iff, ie) = info_of(a, k, tn, two)
+                if ie != ok { ret (r, ie) }
+                isum += iff
+                if iff < ilo { ilo = iff }
+                if iff > ihi { ihi = iff }
+                j -= 1usize
+            }
+            nv[i] = f64(nmax)
+            tv[i] = tsum / f64(interval)
+            tmn[i] = tlo
+            tmx[i] = thi
+            inf[i] = isum / f64(interval)
+            imn[i] = ilo
+            imx[i] = ihi
+        }
+        i += 1usize
+    }
+    var best = 0usize
+    i = 1usize
+    while i < m {
+        if inf[i] > inf[best] { best = i }
+        i += 1usize
+    }
+    r.m = m
+    r.interval = iv
+    r.n = nv
+    r.turns = tv
+    r.turns_min = tmn
+    r.turns_max = tmx
+    r.info = inf
+    r.info_min = imn
+    r.info_max = imx
+    r.level = iv[best]
+    ret (r, ok)
+}

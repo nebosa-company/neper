@@ -3590,4 +3590,5 @@ D6727	966	mixsqp: argument validation
 D6728	607	SuppDists: rFriedman and rSpearman
 D6729	1335	norm: rngseed, imp.norm, da.norm and ninvwish
 D6730	1058	norm: mda.norm and the parameter getters
-D6731	596	pastecs: escouf and local.trend
+D6731	597	pastecs: escouf and local.trend
+D6732	1112	pastecs: abund and turnogram

@@ -21,6 +21,34 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "tt_s") { ret tt.s }
         ret tt.p
     }
+    if str.eq(nm, "ab") {
+        let aq = usize(z[3usize + n])
+        let ap = usize(z[4usize + n])
+        let (ar, ae) = pc.abund(a, x, aq, ap, z[1usize])
+        if ae != ok { ret 0.0f64 / 0.0f64 }
+        let ak = usize(z[5usize + n])
+        if ak < ap { ret f64(ar.vr[ak]) }
+        if ak < 2usize * ap { ret ar.sort_[ak - ap] }
+        if ak < 3usize * ap { ret ar.cumsum[ak - 2usize * ap] }
+        if ak < 4usize * ap { ret ar.plogind[ak - 3usize * ap] }
+        ret ar.pnonull[ak - 4usize * ap]
+    }
+    if str.eq(nm, "tg") {
+        let (tr, te) = pc.turnogram(a, x, z[3usize + n], z[4usize + n], z[5usize + n], z[6usize + n] > 0.5f64, z[7usize + n] > 0.5f64)
+        if te != ok { ret 0.0f64 / 0.0f64 }
+        let tq = usize(z[8usize + n])
+        let m = tr.m
+        if tq == 0usize { ret f64(m) }
+        if tq <= m { ret tr.interval[tq - 1usize] }
+        if tq <= 2usize * m { ret tr.n[tq - m - 1usize] }
+        if tq <= 3usize * m { ret tr.turns[tq - 2usize * m - 1usize] }
+        if tq <= 4usize * m { ret tr.info[tq - 3usize * m - 1usize] }
+        if tq == 4usize * m + 1usize { ret tr.level }
+        if tq <= 5usize * m + 1usize { ret tr.turns_min[tq - 4usize * m - 2usize] }
+        if tq <= 6usize * m + 1usize { ret tr.turns_max[tq - 5usize * m - 2usize] }
+        if tq <= 7usize * m + 1usize { ret tr.info_min[tq - 6usize * m - 2usize] }
+        ret tr.info_max[tq - 7usize * m - 2usize]
+    }
     if str.eq(nm, "lt") {
         let (lo, le) = mem.alloc[f64](a, n)
         if le != ok { ret 0.0f64 / 0.0f64 }

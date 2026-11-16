@@ -93,4 +93,20 @@ for (rep in 1:40) {
   out <- c(cnt, unname(r$vr), unname(r$RV))
   for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("esc", c(10, lv, n * p, as.vector(X), n, p, q - 1), out[q], rel = 1e-9, abs = 1e-10)
 }
+# abund (fn "ab", args (11, f, q*p, x column-major, q, p, k): vr, sort, cumsum, p.log.ind, p.nonull) and turnogram with FUN = mean
+# (fn "tg", args (12, 0, n, x, imin, imax, step, complete, two.tailed, k): m, interval, n, turns, info, level, then for complete turns.min, turns.max, info.min, info.max)
+for (rep in 1:30) {
+  q <- sample(8:40, 1); p <- sample(3:9, 1); X <- matrix(rpois(q * p, rep(c(0.2, 1, 5), length.out = p)), q, p); X[, 1] <- X[, 1] + 1
+  X <- X[, colSums(X) > 0, drop = FALSE]; p <- ncol(X); if (p < 3) next
+  f <- c(0.2, 0.5, 0.8, 0.05)[rep %% 4 + 1]; r <- abund(as.data.frame(X), f = f)
+  out <- c(unname(r$vr), unname(r$sort), unname(r$cumsum), unname(r$p.log.ind), unname(r$p.nonull))
+  for (k in seq_along(out)) if (is.finite(out[k])) cases[[length(cases) + 1]] <- case("ab", c(11, f, q * p, as.vector(X), q, p, k - 1), out[k], rel = 1e-9, abs = 1e-10)
+}
+for (rep in 1:40) {
+  n <- sample(60:200, 1); x <- round(cumsum(rnorm(n)) + 10 + 2 * sin(2 * pi * seq_len(n) / 12), 3)
+  imax <- sample(4:floor(n / 5), 1); cm <- rep %% 2 == 0; tw <- rep %% 4 < 2
+  r <- suppressWarnings(turnogram(ts(x), intervals = c(1, imax), complete = cm, two.tailed = tw, plotit = FALSE))
+  out <- c(length(r$interval), r$interval, r$n, r$turns, r$info, r$level); if (cm) out <- c(out, r$turns.min, r$turns.max, r$info.min, r$info.max)
+  for (k in seq_along(out)) if (is.finite(out[k])) cases[[length(cases) + 1]] <- case("tg", c(12, 0, n, x, 1, imax, 1, as.numeric(cm), as.numeric(tw), k - 1), out[k], rel = 1e-7, abs = 1e-9)
+}
 emit("pastecs", "pastecs", list(cases))
