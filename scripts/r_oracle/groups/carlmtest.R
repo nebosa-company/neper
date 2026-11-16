@@ -16,4 +16,10 @@ for (rep in 1:12) {
   for (lg in c(2, 4)) for (ad in c(FALSE, TRUE)) { dv <- diag(NeweyWest(m, lag = lg, prewhite = FALSE, adjust = ad)); add("nw", c(a, lg, as.numeric(ad)), sum(dv * seq_along(dv))) }
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
 }
+for (rep in 1:10) {
+  n <- sample(30:80, 1); ng <- sample(4:10, 1); g <- sample(seq_len(ng), n, replace = TRUE); ng <- length(unique(g)); gi <- match(g, sort(unique(g))) - 1
+  k <- sample(1:3, 1); X <- matrix(rnorm(n * k), n, k); y <- 1 + X %*% rep(0.5, k) + rnorm(n) + gi / 4
+  d <- data.frame(y = as.vector(y), X); m <- lm(y ~ ., d); des <- cbind(1, X); a <- c(n, k + 1, as.vector(y), as.vector(t(des)))
+  for (ty in c("HC0", "HC1")) for (ca in c(FALSE, TRUE)) { dv <- diag(vcovCL(m, cluster = g, type = ty, cadjust = ca)); add("cl", c(a, ng, as.numeric(ty == "HC1"), as.numeric(ca), gi), sum(dv * seq_along(dv))) }
+}
 emit("carlmtest", "car", list(cases))

@@ -15,6 +15,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let y = x[2usize..2usize + n]
     let des = x[2usize + n..2usize + n + n * p]
     let (f, e) = cl.ols(a, des, y, n, p)
+    if str.eq(c.name, "cl") {
+        let ng = usize(x[2usize + n + n * p])
+        let (cid, e5) = mem.alloc[usize](a, n)
+        if e5 != ok { os.exit(10) }
+        var q = 0usize
+        while q < n {
+            cid[q] = usize(x[5usize + n + n * p + q])
+            q += 1usize
+        }
+        let (dv1, e6) = mem.alloc[f64](a, p)
+        if e6 != ok { os.exit(11) }
+        var ty1 = 0usize
+        if x[3usize + n + n * p] > 0.5f64 { ty1 = 1usize }
+        if cl.vcov_cl_diag(a, des, n, p, &f, cid, ng, ty1, x[4usize + n + n * p] > 0.5f64, dv1) != ok { os.exit(12) }
+        var tt = 0.0f64
+        q = 0usize
+        while q < p {
+            tt += dv1[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret tt
+    }
     if str.eq(c.name, "nw") {
         let (dv0, e0) = mem.alloc[f64](a, p)
         if e0 != ok { os.exit(8) }

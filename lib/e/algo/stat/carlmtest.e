@@ -444,3 +444,76 @@ fn newey_west_diag(a: *mem.Arena, x: []const f64, n: usize, p: usize, f: *const 
     }
     ret ok
 }
+
+// vcovCL(m, cluster, type, cadjust): the clustered covariance diagonal, meat = sum over clusters of (sum of the scores)(sum of the scores)', with the HC1 factor
+// (n - 1) / (n - p) when ty is 1 (HC0 for 0) and the cluster factor G / (G - 1) when cadjust; the clusters are 0-based ids below ng
+fn vcov_cl_diag(a: *mem.Arena, x: []const f64, n: usize, p: usize, f: *const Fit, cl: []const usize, ng: usize, ty: usize, cadjust: bool, out: []f64) -> err {
+    let (sums, e1) = mem.alloc[f64](a, ng * p)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < ng * p {
+        sums[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < p {
+            sums[cl[i] * p + j] += x[i * p + j] * f.resid[i]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (meat, e2) = mem.alloc[f64](a, p * p)
+    if e2 != ok { ret e2 }
+    i = 0usize
+    while i < p * p {
+        meat[i] = 0.0f64
+        i += 1usize
+    }
+    var g = 0usize
+    while g < ng {
+        var j = 0usize
+        while j < p {
+            var k = 0usize
+            while k < p {
+                meat[j * p + k] += sums[g * p + j] * sums[g * p + k]
+                k += 1usize
+            }
+            j += 1usize
+        }
+        g += 1usize
+    }
+    var scale = 1.0f64
+    if cadjust { scale = f64(ng) / f64(ng - 1usize) }
+    if ty == 1usize { scale = scale * f64(n - 1usize) / f64(n - p) }
+    let (tmp, e3) = mem.alloc[f64](a, p * p)
+    if e3 != ok { ret e3 }
+    var j = 0usize
+    while j < p {
+        var k = 0usize
+        while k < p {
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                s += f.xtx_inv[j * p + q] * meat[q * p + k]
+                q += 1usize
+            }
+            tmp[j * p + k] = s
+            k += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var s = 0.0f64
+        var k = 0usize
+        while k < p {
+            s += tmp[j * p + k] * f.xtx_inv[k * p + j]
+            k += 1usize
+        }
+        out[j] = s * scale
+        j += 1usize
+    }
+    ret ok
+}

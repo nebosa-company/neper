@@ -45724,3 +45724,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.carlmtest` gains newey_west_diag, NeweyWest(m, lag, prewhite = FALSE, adjust) from the Bartlett kernel: the meat is the sum over lags l = 0 .. lag of (1 - l / (lag + 1)) (G_l + G_l') (G_0 once) with G_l = sum_t u_t u_{t-l}' for the scores u_t = x_t e_t, sandwiched between (X'X)^-1, and scaled by n / (n - p) when adjust is TRUE. The diagonals equal sandwich's to 1e-8 for lags 2 and 4 with and without the adjustment on twelve designs. Not here: prewhitening, the automatic lag selection, other kernels (Andrews, Parzen), clustered and bootstrap covariances, and the remaining tests.
 
 **Result.** `oracle_carlmtest` equals the packages on 216 cases on Windows; Linux pending. L300 stays partial.
+
+## D6426 — sandwich: vcovCL
+
+`e.algo.stat.carlmtest` gains vcov_cl_diag, the clustered covariance of vcovCL for HC0 and HC1: the meat is the sum over clusters of the outer product of the within-cluster summed scores, sandwiched between (X'X)^-1, with the cluster adjustment G / (G - 1) when cadjust is TRUE and the HC1 factor (n - 1) / (n - p) for type HC1 (the default type with cadjust, combining to G / (G - 1) (n - 1) / (n - p)). The diagonals equal sandwich's to 1e-8 on ten designs with 4 to 10 clusters. Not here: HC2 to HC4 for clusters, multiway clustering, bootstrap covariances, the other HAC variants and car's Anova.
+
+**Result.** `oracle_carlmtest` equals the packages on 256 cases on Windows; Linux pending. L300 stays partial.

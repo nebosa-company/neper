@@ -3293,4 +3293,5 @@ D6421	1088	car, lmtest and sandwich: HC covariances, Durbin-Watson, Breusch-Paga
 D6422	746	lmtest: the classical Breusch-Pagan statistic and RESET
 D6423	619	lmtest: the p values of bptest and resettest
 D6424	757	lmtest: Goldfeld-Quandt
-D6425	744	sandwich: NeweyWest
+D6425	745	sandwich: NeweyWest
+D6426	744	sandwich: vcovCL
