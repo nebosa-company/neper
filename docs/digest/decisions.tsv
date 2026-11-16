@@ -3121,4 +3121,5 @@ D6045	1159	mlbench fills its matrices by column, and a factor's codes are not it
 D6046	1302	ModelMetrics is not consistent about its cutoff, and its Gini is a rank ratio, not 2 AUC - 1
 D6047	1374	the bridge sampler reuses the mvtnorm port, and the proposal draws come after set.seed in R's order
 D6048	890	the nominal measures read a contingency table of the codes, and Mahalanobis takes its covariance as given
-D6049	1453	the dta reader follows the section tags and map, and the missing codes sit above the data range
+D6049	1454	the dta reader follows the section tags and map, and the missing codes sit above the data range
+D6050	939	the Hmisc closed forms follow the package, including the exact-limit shortcuts

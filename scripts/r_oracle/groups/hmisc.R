@@ -1,0 +1,19 @@
+# Hmisc: binconf (three methods), wtd.mean, wtd.var, somers2.
+#   binconf: (x, n, alpha, method 0 exact 1 wilson 2 asymptotic)  fn "bc_lo" "bc_hi"
+#   wtd: (n, x..., w...)  fn "wmean" "wvar"        somers2: (n, x..., y...)  fn "c" "dxy"
+suppressMessages(library(Hmisc))
+cases <- list()
+add <- function(fn, args, want) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-12)
+mth <- c("exact", "wilson", "asymptotic")
+for (n in c(5, 20, 100, 1000)) for (x in unique(c(0, 1, 2, n %/% 3, n %/% 2, n - 2, n - 1, n))) for (al in c(0.05, 0.01, 0.2)) for (m in 0:2) {
+  b <- binconf(x, n, alpha = al, method = mth[m + 1])
+  add("bc_lo", c(x, n, al, m), b[2]); add("bc_hi", c(x, n, al, m), b[3])
+}
+set.seed(20261115)
+for (rep in 1:10) {
+  n <- sample(8:40, 1); x <- round(rnorm(n), 3); w <- round(runif(n, 0.5, 3), 2)
+  add("wmean", c(n, x, w), wtd.mean(x, w)); add("wvar", c(n, x, w), wtd.var(x, w))
+  y <- rbinom(n, 1, 0.5); xs <- round(x + y * 0.8, 1)
+  if (length(unique(y)) == 2) { s <- somers2(xs, y); add("c", c(n, xs, y), s[["C"]]); add("dxy", c(n, xs, y), s[["Dxy"]]) }
+}
+emit("hmisc", "Hmisc", list(cases))

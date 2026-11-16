@@ -185,3 +185,4 @@ oracle_mlbench
 oracle_metrics
 oracle_bridgesampling
 oracle_haven
+oracle_hmisc
