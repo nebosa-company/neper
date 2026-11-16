@@ -476,3 +476,68 @@ fn crps_gtcl_unit(y0: f64, lower0: f64, upper0: f64, lmass0: f64, umass0: f64) -
 fn crps_gtclogis(y: f64, loc: f64, scale: f64, lower: f64, upper: f64, lmass: f64, umass: f64) -> f64 {
     ret scale * crps_gtcl_unit((y - loc) / scale, (lower - loc) / scale, (upper - loc) / scale, lmass, umass)
 }
+
+// crps_gtct(y, df, location, scale, lower, upper, lmass, umass) for df > 1 and scale > 0: the t analogue of crps_gtcnorm, through the t cdf and density and the incomplete beta function
+fn gt_term(x: f64, df: f64, inf: f64) -> f64 {
+    if x == inf || x == 0.0f64 - inf { ret 0.0f64 }
+    ret 0.0f64 - (df + x * x) / (df - 1.0f64) * nb.dt(x, df, false)
+}
+
+fn crps_gtct_unit(y0: f64, df: f64, lower0: f64, upper0: f64, lmass0: f64, umass0: f64) -> f64 {
+    var y = y0
+    var lower = lower0
+    var upper = upper0
+    var lmass = lmass0
+    var umass = umass0
+    if lower > 3.0f64 {
+        y = 0.0f64 - y
+        let nl = 0.0f64 - upper
+        let nu = 0.0f64 - lower
+        lower = nl
+        upper = nu
+        let tl = lmass
+        lmass = umass
+        umass = tl
+    }
+    let inf = 1.0f64 / 0.0f64
+    var out_l1 = 0.0f64
+    var out_l2 = 0.0f64
+    var out_l3 = 0.0f64
+    var out_u1 = 0.0f64
+    var out_u2 = 0.0f64
+    var out_u3 = 1.0f64
+    var p_l = 0.0f64
+    var p_u = 1.0f64
+    var z = y
+    if lower != 0.0f64 - inf || lmass != 0.0f64 {
+        p_l = nb.pt(lower, df, true, false)
+        let g_l = gt_term(lower, df, inf)
+        var pb_l = 0.0f64
+        if lower != 0.0f64 - inf { pb_l = nb.pbeta(df / (df + lower * lower), df - 0.5f64, 0.5f64, true, false) }
+        if lmass != 0.0f64 { out_l1 = lower * lmass * lmass }
+        out_l2 = 2.0f64 * g_l * lmass
+        if p_l <= 0.5f64 { out_l3 = 0.5f64 * pb_l } else { out_l3 = 0.5f64 * (2.0f64 - pb_l) }
+        if lower > z { z = lower }
+    }
+    if upper != inf || umass != 0.0f64 {
+        p_u = nb.pt(upper, df, true, false)
+        let g_u = gt_term(upper, df, inf)
+        var pb_u = 0.0f64
+        if upper != inf { pb_u = nb.pbeta(df / (df + upper * upper), df - 0.5f64, 0.5f64, true, false) }
+        if umass != 0.0f64 { out_u1 = upper * umass * umass }
+        out_u2 = 2.0f64 * g_u * umass
+        if p_u <= 0.5f64 { out_u3 = 0.5f64 * pb_u } else { out_u3 = 0.5f64 * (2.0f64 - pb_u) }
+        if upper < z { z = upper }
+    }
+    let a1 = p_u - p_l
+    let a2 = 1.0f64 - (umass + lmass)
+    let b = out_u3 - out_l3
+    let bfrac = 2.0f64 * math.sqrt[f64](df) / (df - 1.0f64) * math.exp[f64](nb.lbeta(0.5f64, df - 0.5f64) - 2.0f64 * nb.lbeta(0.5f64, 0.5f64 * df))
+    let g_z = gt_term(z, df, inf)
+    let out = out_u1 - out_l1 + (z * (2.0f64 * a2 * nb.pt(z, df, true, false) - (1.0f64 - 2.0f64 * lmass) * p_u - (1.0f64 - 2.0f64 * umass) * p_l) - (2.0f64 * g_z - out_u2 - out_l2 + a2 * b / a1 * bfrac) * a2) / a1
+    ret out + math.abs[f64](y - z)
+}
+
+fn crps_gtct(y: f64, df: f64, loc: f64, scale: f64, lower: f64, upper: f64, lmass: f64, umass: f64) -> f64 {
+    ret scale * crps_gtct_unit((y - loc) / scale, df, (lower - loc) / scale, (upper - loc) / scale, lmass, umass)
+}

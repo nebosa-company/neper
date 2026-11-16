@@ -46228,3 +46228,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.scoringrules` gains `crps_gtclogis` (and through it tlogis and clogis): the logistic analogue of D6508, with log(plogis(-x)) computed stably for either sign and the package's small-probability series (-p^2/2 - p^3/3) for the end terms when p_l or p_u is below 1e-8.
 
 **Result.** `oracle_scoringrules` equals scoringRules on 841 cases on Windows, 120 of them new: 30 draws each of gtclogis, tlogis, clogis and tlogis with the lower end above 3. The truncated and censored t, the negative binomial, the kernel CRPS and the weights are open; Linux pending. L475 stays partial.
+
+## D6510 — scoringRules: truncated and censored t CRPS
+
+`e.algo.stat.scoringrules` gains `crps_gtct` (with tt and ct as its zero-mass and tail-mass cases) for df > 1: the same arrangement as the normal and logistic versions, with the t cdf and density, G(x) = -(df + x^2) / (df - 1) dt(x), the incomplete beta pbeta(df / (df + x^2), df - 0.5, 0.5) folded about the median, and the package's beta-function ratio, with infinite ends taking zero for G and for the beta term.
+
+**Result.** `oracle_scoringrules` equals scoringRules on 931 cases on Windows, 90 of them new: 30 draws each of gtct, tt and ct with df 1.5 to 15. The negative binomial CRPS, the kernel CRPS and the weights are open; Linux pending. L475 stays partial.

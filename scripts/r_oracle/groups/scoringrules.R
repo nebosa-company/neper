@@ -64,4 +64,11 @@ for (rep in 1:30) {
   add("crps", c(15, loc, sc, lo, hi, yy, 0, 0), crps_clogis(yy, loc, sc, lo, hi))
   lh <- loc + sc * runif(1, 3.2, 5); add("crps", c(14, loc, sc, lh, lh + sc * 2, yy + lh - loc, 0, 0), crps_tlogis(yy + lh - loc, loc, sc, lh, lh + sc * 2))
 }
+for (rep in 1:30) {
+  df <- runif(1, 1.5, 15); loc <- rnorm(1); sc <- runif(1, 0.5, 2.5); lo <- loc + sc * runif(1, -2, 1.5); hi <- lo + sc * runif(1, 0.5, 4); yy <- rnorm(1, loc, 2 * sc)
+  lm <- runif(1, 0, 0.3); um <- runif(1, 0, 0.3)
+  add("crps", c(16, df, loc, sc, lo, hi, yy, lm, um), crps_gtct(yy, df, loc, sc, lo, hi, lm, um))
+  add("crps", c(17, df, loc, sc, lo, hi, yy, 0, 0), crps_tt(yy, df, loc, sc, lo, hi))
+  add("crps", c(18, df, loc, sc, lo, hi, yy, 0, 0), crps_ct(yy, df, loc, sc, lo, hi))
+}
 emit("scoringrules", "scoringRules", list(cases))

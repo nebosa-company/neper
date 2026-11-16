@@ -4,6 +4,7 @@
 use e.algo.stat.scoringrules as sr
 use e.io
 use e.mem
+use e.math.nmath_beta as nb
 use e.os
 use e.str
 use e.test.oracle as oracle
@@ -19,6 +20,16 @@ fn param(c: *const oracle.Case) -> f64 {
     let k = c.name
     let isc = str.eq(k, "crps")
     let isl = str.eq(k, "logs")
+    if fam >= 16usize {
+        // (fam, df, loc, scale, lower, upper, y, lmass, umass)
+        let dfv = x[1usize]
+        let lo2 = x[4usize]
+        let hi2 = x[5usize]
+        let yv = x[6usize]
+        if fam == 16usize { ret sr.crps_gtct(yv, dfv, x[2usize], x[3usize], lo2, hi2, x[7usize], x[8usize]) }
+        if fam == 17usize { ret sr.crps_gtct(yv, dfv, x[2usize], x[3usize], lo2, hi2, 0.0f64, 0.0f64) }
+        ret sr.crps_gtct(yv, dfv, x[2usize], x[3usize], lo2, hi2, nb.pt((lo2 - x[2usize]) / x[3usize], dfv, true, false), 1.0f64 - nb.pt((hi2 - x[2usize]) / x[3usize], dfv, true, false))
+    }
     if fam == 0usize {
         if isc { ret sr.crps_norm(y, a, b) }
         if isl { ret sr.logs_norm(y, a, b) }
