@@ -46790,3 +46790,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `raftery` follows raftery.diag for one series: the dichotomised draws `x <= quantile(x, q)`, the thinning k raised until the BIC of the second-order against the first-order Markov chain (the three-way transition counts) turns negative, the two-state chain's alpha and beta from the thinned series, then burn-in, total and the dependence factor `(M + N)/Nmin` rounded to 3 significant digits.
 
 **Result.** `oracle_coda` agrees with coda on 20 raftery values on Windows (240 cases in all); Linux pending. heidel.diag needs the Cramer-von Mises distribution function (pcramer) and is not ported; L299 stays at 0.55.
+
+## D6611 — randtoolbox: congruRand
+
+**Decision.** `quasi.congru_next` is the linear congruential step `x = (mult x + incr) mod m`, output `x / m`, on 64-bit state (the package refuses a multiplier not below the modulus); dimension d takes d consecutive outputs per row.
+
+**Result.** `oracle_randtoolbox` agrees with randtoolbox on the congruRand runs on Windows (112 cases in all); Linux pending. L501 stays partial: scrambled Sobol, WELL, SFMT, Knuth-TAOCP and qrng.

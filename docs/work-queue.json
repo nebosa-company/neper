@@ -639,7 +639,7 @@
       "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6160). randtoolbox halton, unscrambled sobol (eight dimensions, Bratley-Fox numbers) and torus equal R on Windows (oracle_randtoolbox; Linux pending). Open: scrambled sobol, WELL, SFMT, congruRand, Knuth-TAOCP, qrng. Was: Open (CRAN ranks 926, 963). Small to mid. Verify e.algo.rand.quasi first. Acceptance, equal to R value for value: randtoolbox sobol (with scrambling), halton, torus, WELL, SFMT, congruRand and the Knuth-TAOCP generators; qrng sobol, halton, ghalton and korobov."
+      "evidence": "Partial (D6160). randtoolbox halton, unscrambled sobol (eight dimensions, Bratley-Fox numbers) and torus equal R on Windows (oracle_randtoolbox; Linux pending). D6611: congruRand (any modulus, multiplier and increment, any dimension) equals randtoolbox on 17 runs. Open: scrambled sobol, WELL, SFMT, Knuth-TAOCP, qrng. Was: Open (CRAN ranks 926, 963). Small to mid. Verify e.algo.rand.quasi first. Acceptance, equal to R value for value: randtoolbox sobol (with scrambling), halton, torus, WELL, SFMT, congruRand and the Knuth-TAOCP generators; qrng sobol, halton, ghalton and korobov."
     },
     {
       "id": "L503",

@@ -168,3 +168,10 @@ fn prime(d: usize) -> u64 {
     if d == 14usize { ret 47u64 }
     ret 53u64
 }
+
+// randtoolbox::congruRand: x <- (mult * x + incr) mod modulus, returning x / modulus; the state is advanced in place
+fn congru_next(state: *u64, modulus: u64, mult: u64, incr: u64) -> f64 {
+    let x = (mult * *state + incr) % modulus
+    *state = x
+    ret f64(x) / f64(modulus)
+}

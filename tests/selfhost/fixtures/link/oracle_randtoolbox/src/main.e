@@ -9,6 +9,17 @@ use e.os
 use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
+    if c.name.len == 4usize {
+        var st = u64(c.args[0usize])
+        let cn = usize(c.args[4usize]) * usize(c.args[5usize])
+        var cs = 0.0f64
+        var ci = 0usize
+        while ci < cn {
+            cs += q.congru_next(&st, u64(c.args[1usize]), u64(c.args[2usize]), u64(c.args[3usize])) * f64(ci + 1usize)
+            ci += 1usize
+        }
+        ret cs
+    }
     let kind = usize(c.args[0usize])
     let n = usize(c.args[1usize])
     let d = usize(c.args[2usize])
