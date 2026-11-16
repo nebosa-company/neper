@@ -4,6 +4,7 @@
 
 use e.algo.rand.r as rr
 use e.algo.stat.algdesign as ad
+use e.algo.stat.algdesign_block as blk
 use e.algo.stat.algdesign_fed as fed
 use e.algo.stat.algdesign_mc as mc
 use e.io
@@ -65,6 +66,50 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             i += 1usize
         }
         ret s
+    }
+    if str.eq(c.name, "blk") {
+        var g: rr.Rng = zero
+        rr.seed(&g, i64(z[0usize]))
+        let nn = usize(z[1usize])
+        let kk = usize(z[2usize])
+        let nb = usize(z[3usize])
+        let (sz, es) = mem.alloc[usize](a, nb)
+        if es != ok { ret nan }
+        var nxb = 0usize
+        var i = 0usize
+        while i < nb {
+            sz[i] = usize(z[5usize + i])
+            nxb += sz[i]
+            i += 1usize
+        }
+        var dummy: [1]i64 = zero
+        let (res, be) = blk.block_optimize(a, &g, z[5usize + nb..5usize + nb + nn * kk], nn, kk, sz, dummy[0usize..0usize], false, i64(z[4usize]))
+        if be != ok || res.errcode == 13i64 { ret nan }
+        let what = usize(z[5usize + nb + nn * kk])
+        if what == 0usize { ret res.dd }
+        if what == 1usize {
+            ret math.floor[f64](res.diagonality * 1000.0f64 + 0.5f64) / 1000.0f64
+        }
+        // block by block, sorted within a block, 1-based
+        var pos = 0usize
+        var out = 0.0f64
+        i = 0usize
+        while i < nb {
+            var j = 1usize
+            while j < sz[i] {
+                let v = res.block_array[pos + j]
+                var q = j
+                while q > 0usize && res.block_array[pos + q - 1usize] > v {
+                    res.block_array[pos + q] = res.block_array[pos + q - 1usize]
+                    q -= 1usize
+                }
+                res.block_array[pos + q] = v
+                j += 1usize
+            }
+            pos += sz[i]
+            i += 1usize
+        }
+        ret f64(res.block_array[what - 2usize])
     }
     if str.eq(c.name, "mc") {
         var g: rr.Rng = zero

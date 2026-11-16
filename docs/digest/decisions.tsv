@@ -3547,4 +3547,5 @@ D6684	880	dqrng pcg64, threefry, dqsample and streams; L392 closed
 D6685	828	bridge sampler warp3 and bounded parameters
 D6686	668	bridge sampler use_neff and error_measures; L391 closed
 D6687	1031	optFederov ported from FederovOpt.c, with the tie limit named
-D6688	1018	optMonteCarlo over the Fedorov search
+D6688	1019	optMonteCarlo over the Fedorov search
+D6689	874	optBlock D criterion, which is the block design search

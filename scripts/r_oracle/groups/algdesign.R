@@ -72,4 +72,22 @@ for (rep in 1:36) {
   add("mc", c(a, 3), r$Ge, 7e-4); add("mc", c(a, 4), nrow(r$design), 1e-9)
   if (!appr) { dm <- as.matrix(r$design); for (j in seq_len(nrow(dm))) for (c2 in seq_len(nv)) add("mc", c(a, 4 + (j - 1) * nv + c2), dm[j, c2], 1e-9) }
 }
+#   optBlock (D criterion, within-block model): fn "blk", args (seed, N, k, nB, nRepeats, sizes[nB], X[N * k] row-major, what), what 0 D, 1 diagonality, 2 + j the j-th row of the design
+#   (block by block, sorted within a block); X is the model matrix without the intercept
+for (rep in 1:30) {
+  if (rep %% 3 == 0) { N <- sample(18:30, 1); X <- cbind(round(rnorm(N), 3), round(runif(N), 3)); df <- data.frame(u = X[, 1], w = X[, 2]); frml <- ~ u + w }
+  else { tt <- sample(4:6, 1); r <- sample(3:4, 1); N <- tt * r; trt <- factor(rep(1:tt, r)); df <- data.frame(trt = trt); frml <- ~ trt; X <- model.matrix(~ trt, df)[, -1, drop = FALSE] }
+  bs <- sample(c(2, 3, 4), 1); nB <- if (rep %% 2 == 0) N %/% bs else max(2, N %/% bs - 1); sizes <- rep(bs, nB)
+  if (sum(sizes) > N || bs * nB < ncol(X) + nB) next
+  nrep <- sample(3:5, 1); seed <- sample(1e6, 1); set.seed(seed)
+  r1 <- tryCatch(suppressWarnings(suppressMessages(optBlock(frml, df, sizes, nRepeats = nrep))), error = function(e) NULL)
+  if (is.null(r1)) next
+  tie <- FALSE
+  for (m in seq_len(nrep - 1)) { set.seed(seed); q <- tryCatch(suppressWarnings(suppressMessages(optBlock(frml, df, sizes, nRepeats = m))), error = function(e) NULL)
+    if (!is.null(q) && abs(q$D - r1$D) < 1e-12 && !identical(q$rows, r1$rows)) tie <- TRUE }
+  if (tie) next
+  a <- c(seed, nrow(X), ncol(X), nB, nrep, sizes, as.vector(t(X)))
+  add("blk", c(a, 0), r1$D, 1e-7); add("blk", c(a, 1), r1$diagonality, 7e-4)
+  for (j in seq_along(r1$rows)) add("blk", c(a, 1 + j), r1$rows[j], 1e-9)
+}
 emit("algdesign", "AlgDesign", list(cases))
