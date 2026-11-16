@@ -28,7 +28,9 @@ fn active(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let st = usize(z[2usize + 2usize * n + 2usize * m])
     let (out, e3) = mem.alloc[f64](a, n + m + 2usize)
     if e3 != ok { ret nan }
-    if iso.active_set(a, y, w, p1, p2, out) != ok { ret nan }
+    var kind = 0u8
+    if c.name[1usize] == 100u8 { kind = 1u8 }
+    if iso.active_set(a, y, w, p1, p2, kind, out) != ok { ret nan }
     if st == 0usize { ret out[n + m] }
     if st == 1usize { ret out[n + m + 1usize] }
     var s = 0.0f64

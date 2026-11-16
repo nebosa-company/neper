@@ -46282,3 +46282,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `e.algo.stat.isotone.active_set` ports R's activeSet for the least-squares solver from the zero start: each iteration solves the active-constraint problem (block weighted means from the connected components, as mkIndi/warshall give), takes the Lagrange multipliers from `qr.coef(t(A), gradient)`, and either drops the most negative multiplier or steps to the first violated constraint. R's QR is LINPACK dqrdc2 with tolerance 1e-7, so a constraint row dependent on earlier ones (a cycle in the active graph) gets an NA multiplier that `which.min` skips; the port reproduces that by Gram-Schmidt selection of independent columns and NaN for the rest, then solves the normal equations on the selected ones.
 
 **Result.** `oracle_isotone` agrees with isotone on the 180 new values (fval, niter, fitted x and multipliers over random partial orders of 4-9 nodes) plus the 1800 gpava values on Windows; Linux pending. Other solvers, matrix and list responses and pava stay open; L473 stays partial.
+
+## D6519 — isotone: activeSet with the L1 solver
+
+**Decision.** `active_set` takes a solver kind: 1 is R's dSolver, the block weighted median (the gpava median solver) with gradient `w * sign(y - z)` and `f = sum(w |z - y|)`; the multipliers come from the same dqrdc2-aliased least squares as the LS solver.
+
+**Result.** `oracle_isotone` agrees with isotone on 164 more values (fval, niter, x, multipliers) on Windows; Linux pending. L473 stays partial (Lp, quantile, asymmetric solvers, matrix and list responses, pava).

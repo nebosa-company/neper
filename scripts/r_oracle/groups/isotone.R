@@ -26,5 +26,9 @@ for (rep in 1:60) {
   if (is.null(r) || r$niter >= 100 || any(is.na(r$lambda)) || any(is.na(r$x))) next
   a <- c(n, nrow(ed), y, w, ed[, 1], ed[, 2]); st <- c(r$fval, r$niter, sum(seq_along(r$x) * r$x), sum(seq_along(r$lambda) * r$lambda))
   for (j in 0:3) add("as", c(a, j), st[j + 1])
+  r <- tryCatch(suppressWarnings(activeSet(ed, "L1", y = y, weights = w, check = FALSE)), error = function(e) NULL)
+  if (is.null(r) || r$niter >= 100 || any(is.na(r$lambda)) || any(is.na(r$x))) next
+  st <- c(r$fval, r$niter, sum(seq_along(r$x) * r$x), sum(seq_along(r$lambda) * r$lambda))
+  for (j in 0:3) add("ad", c(a, j), st[j + 1])
 }
 emit("isotone", "isotone", list(cases))

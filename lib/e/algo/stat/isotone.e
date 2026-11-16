@@ -236,7 +236,7 @@ fn gpava(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, kind: u8
 }
 
 // the LS solver of activeSet for the active rows ia (indices into the m constraints, each constraint a1 >= a2 in 0-based positions p1, p2): fills y, the multipliers lbd (one per active row) and returns f
-fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, p1: []const usize, p2: []const usize, ia: []const usize, y: []f64, lbd: []f64, gy: []f64) -> f64 {
+fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, p1: []const usize, p2: []const usize, ia: []const usize, y: []f64, lbd: []f64, gy: []f64, kind: u8) -> f64 {
     let n = z.len
     let na = ia.len
     var i = 0usize
@@ -304,8 +304,47 @@ fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, p1: []const usize, p2
     i = 0usize
     while i < n {
         y[i] = swz[lab[i]] / sw[lab[i]]
-        gy[i] = 2.0f64 * w[i] * (y[i] - z[i])
-        f += w[i] * (y[i] - z[i]) * (y[i] - z[i])
+        i += 1usize
+    }
+    if kind == 1u8 {
+        let (ty, e7) = mem.alloc[f64](a, n)
+        if e7 != ok { ret 0.0f64 / 0.0f64 }
+        let (tw, e8) = mem.alloc[f64](a, n)
+        if e8 != ok { ret 0.0f64 / 0.0f64 }
+        var root = 0usize
+        while root < n {
+            var cnt = 0usize
+            i = 0usize
+            while i < n {
+                if lab[i] == root {
+                    ty[cnt] = z[i]
+                    tw[cnt] = w[i]
+                    cnt += 1usize
+                }
+                i += 1usize
+            }
+            if cnt > 0usize {
+                let med = solve(a, ty[0usize..cnt], tw[0usize..cnt], 1u8, 0.0f64)
+                i = 0usize
+                while i < n {
+                    if lab[i] == root { y[i] = med }
+                    i += 1usize
+                }
+            }
+            root += 1usize
+        }
+    }
+    i = 0usize
+    while i < n {
+        if kind == 1u8 {
+            var sg = 0.0f64
+            if y[i] > z[i] { sg = 1.0f64 } else if y[i] < z[i] { sg = 0.0f64 - 1.0f64 }
+            gy[i] = w[i] * sg
+            f += w[i] * math.abs[f64](z[i] - y[i])
+        } else {
+            gy[i] = 2.0f64 * w[i] * (y[i] - z[i])
+            f += w[i] * (y[i] - z[i]) * (y[i] - z[i])
+        }
         i += 1usize
     }
     // t(A) lbd = gy by R's qr.coef (LINPACK dqrdc2, tolerance 1e-7): a column that is dependent on the earlier ones is aliased and its coefficient NA; the others solve the normal equations
@@ -421,7 +460,7 @@ fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, p1: []const usize, p2
 
 // activeSet(isomat, "LS", y, weights) from the zero start: out receives x (n), the multipliers per constraint (m, zero for inactive), then fval and niter;
 // the constraints are the 0-based pairs (p1[i] >= p2[i]) of R's isomat[i, 2] >= isomat[i, 1]
-fn active_set(a: *mem.Arena, y0: []const f64, w: []const f64, p1: []const usize, p2: []const usize, out: []f64) -> err {
+fn active_set(a: *mem.Arena, y0: []const f64, w: []const f64, p1: []const usize, p2: []const usize, kind: u8, out: []f64) -> err {
     let n = y0.len
     let m = p1.len
     let ups = 1.0e-12f64
@@ -457,7 +496,7 @@ fn active_set(a: *mem.Arena, y0: []const f64, w: []const f64, p1: []const usize,
     var f = 0.0f64
     while true {
         iter += 1usize
-        f = ls_solve(a, y0, w, p1, p2, iab[0usize..nia], y, lb, gy)
+        f = ls_solve(a, y0, w, p1, p2, iab[0usize..nia], y, lb, gy, kind)
         i = 0usize
         var my = big
         while i < m {
