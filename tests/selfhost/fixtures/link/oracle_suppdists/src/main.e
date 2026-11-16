@@ -41,9 +41,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let fn_ = i64(z[1usize])
         let (fd, fe) = sd.friedman_exact(a, fr, fn_)
         if fe != ok { ret nan }
-        if str.eq(nm, "fr_p") { ret sd.pfrie(&fd, z[2usize], fr, fn_) }
-        if str.eq(nm, "fr_u") { ret sd.qfrie(&fd, z[2usize], fr, fn_) }
-        if str.eq(nm, "fr_d") { ret sd.ffrie(&fd, z[2usize], fr, fn_) }
+        if str.eq(nm, "fr_p") { ret sd.pfrie(&fd, z[2usize], fr, fn_, false) }
+        if str.eq(nm, "fr_u") { ret sd.qfrie(&fd, z[2usize], fr, fn_, false) }
+        if str.eq(nm, "fr_d") { ret sd.ffrie(&fd, z[2usize], fr, fn_, false) }
         ret sd.xfrie(&fd, z[2usize], fr, fn_)
     }
     if str.starts_with(nm, "mo_") {
@@ -109,6 +109,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         if ke != ok { ret nan }
         ret kv
+    }
+    if str.starts_with(nm, "sq_") {
+        let sr = i64(z[0usize])
+        let (sdist, se) = sd.friedman_exact_rho(a, sr)
+        if se != ok { ret nan }
+        if str.eq(nm, "sq_p") { ret sd.pspearman_pkg(&sdist, z[1usize], sr) }
+        if str.eq(nm, "sq_u") { ret sd.qspearman_pkg(&sdist, z[1usize], sr) }
+        if str.eq(nm, "sq_d") { ret sd.fspearman_pkg(&sdist, z[1usize], sr) }
+        // the package's quantile search calls the Friedman cdf with the rho flag off and two blocks, which is exact only for r <= 5
+        let (qdist, qe) = sd.friedman_exact(a, sr, 2i64)
+        if qe != ok { ret nan }
+        ret sd.xspearman_pkg(&qdist, z[1usize], sr)
     }
     if str.eq(nm, "gh_d") { ret sd.ghyper_d(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.eq(nm, "gh_p") { ret sd.ghyper_p(z[3usize], z[0usize], z[1usize], z[2usize]) }

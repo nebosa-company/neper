@@ -902,8 +902,9 @@ fn friedman_find_s(ss: i64, max_s: i64, s: []const i64, ns: usize, lower: bool) 
     ret 0usize
 }
 
-fn friedman_ss(x: f64, r: i64, n: i64) -> i64 {
+fn friedman_ss(x: f64, r: i64, n: i64, rho: bool) -> i64 {
     var ss = i64(0.5f64 + x * f64(n * r * (r + 1i64)) / 12.0f64)
+    if rho { ss = i64(0.5f64 + (f64(r * (r * r - 1i64)) / 6.0f64) * (1.0f64 + x)) }
     if r % 2i64 == 0i64 { ss = ss * 4i64 }
     ret ss
 }
@@ -911,17 +912,20 @@ fn friedman_ss(x: f64, r: i64, n: i64) -> i64 {
 fn friedman_m(r: i64, n: i64) -> f64 { ret f64(n * n * r * (r * r - 1i64)) / 12.0f64 }
 
 // the lower tail up to and including X
-fn pfrie(d: *const Fdist, x: f64, r: i64, n: i64) -> f64 {
+fn pfrie(d: *const Fdist, x: f64, r: i64, n0: i64, rho: bool) -> f64 {
+    var n = n0
+    if rho { n = 2i64 }
     if r < 3i64 || n < 2i64 { ret 0.0f64 / 0.0f64 }
     let m = friedman_m(r, n)
     var s = x * f64(n * r * (r + 1i64)) / 12.0f64
+    if rho { s = (m / 2.0f64) * (1.0f64 + x) }
     if s > m || s < 0.0f64 { ret 0.0f64 / 0.0f64 }
     var is_ = i64(math.ceil[f64](s))
     is_ = 2i64 * (is_ / 2i64)
     s = f64(is_)
     if s < 1.0f64 { s = 1.0f64 }
-    if friedman_exact_ok(r, n) && d.has {
-        let ss = friedman_ss(x, r, n)
+    if d.has {
+        let ss = friedman_ss(x, r, n, rho)
         let k = friedman_find_s(ss, d.s[d.s.len - 1usize], d.s, d.s.len, true)
         ret 1.0f64 - d.q[k]
     }
@@ -932,17 +936,20 @@ fn pfrie(d: *const Fdist, x: f64, r: i64, n: i64) -> f64 {
 }
 
 // the upper tail excluding X
-fn qfrie(d: *const Fdist, x: f64, r: i64, n: i64) -> f64 {
+fn qfrie(d: *const Fdist, x: f64, r: i64, n0: i64, rho: bool) -> f64 {
+    var n = n0
+    if rho { n = 2i64 }
     if r < 3i64 || n < 2i64 { ret 0.0f64 / 0.0f64 }
     let m = friedman_m(r, n)
     var s = x * f64(n * r * (r + 1i64)) / 12.0f64
+    if rho { s = (m / 2.0f64) * (1.0f64 + x) }
     if s > m || s < 0.0f64 { ret 0.0f64 / 0.0f64 }
     var is_ = i64(math.floor[f64](s))
     is_ = 2i64 * (is_ / 2i64)
     s = f64(is_)
     if s < 1.0f64 { s = 1.0f64 }
-    if friedman_exact_ok(r, n) && d.has {
-        let ss = friedman_ss(x, r, n)
+    if d.has {
+        let ss = friedman_ss(x, r, n, rho)
         let k = friedman_find_s(ss, d.s[d.s.len - 1usize], d.s, d.s.len, true)
         ret d.q[k]
     }
@@ -953,18 +960,21 @@ fn qfrie(d: *const Fdist, x: f64, r: i64, n: i64) -> f64 {
 }
 
 // the probability mass at X (exact) or the difference of the approximation's cdf
-fn ffrie(d: *const Fdist, x: f64, r: i64, n: i64) -> f64 {
+fn ffrie(d: *const Fdist, x: f64, r: i64, n0: i64, rho: bool) -> f64 {
+    var n = n0
+    if rho { n = 2i64 }
     if r < 3i64 || n < 2i64 { ret 0.0f64 / 0.0f64 }
     let m = friedman_m(r, n)
     var s = x * f64(n * r * (r + 1i64)) / 12.0f64
+    if rho { s = (m / 2.0f64) * (1.0f64 + x) }
     if s > m || s < 0.0f64 { ret 0.0f64 / 0.0f64 }
     s = s - 2.0f64
     var is_ = i64(math.floor[f64](s))
     is_ = 2i64 * (is_ / 2i64)
     s = f64(is_)
     if s < 1.0f64 { s = 1.0f64 }
-    if friedman_exact_ok(r, n) && d.has {
-        let ss = friedman_ss(x, r, n)
+    if d.has {
+        let ss = friedman_ss(x, r, n, rho)
         let k = friedman_find_s(ss, d.s[d.s.len - 1usize], d.s, d.s.len, false)
         var f = d.q[k]
         if k < d.s.len - 1usize { f = f - d.q[k + 1usize] }
@@ -994,14 +1004,14 @@ fn xfrie(d: *const Fdist, p: f64, r: i64, n: i64) -> f64 {
     var x = s * step
     if x < 0.0f64 { x = 0.0f64 }
     if x > mx { x = mx }
-    var larger = p <= pfrie(d, x, r, n)
+    var larger = p <= pfrie(d, x, r, n, false)
     while larger {
         if x <= 0.0f64 { ret 0.0f64 }
         x = x - step
         if x < 0.0f64 {
             larger = false
         } else {
-            larger = p <= pfrie(d, x, r, n)
+            larger = p <= pfrie(d, x, r, n, false)
         }
         if !larger {
             x = x + step
@@ -1011,7 +1021,7 @@ fn xfrie(d: *const Fdist, p: f64, r: i64, n: i64) -> f64 {
     while !larger {
         if x + step >= mx { ret mx }
         x = x + step
-        larger = p <= pfrie(d, x, r, n)
+        larger = p <= pfrie(d, x, r, n, false)
         if larger { ret x }
     }
     ret 0.0f64
@@ -1235,7 +1245,7 @@ fn moments_friedman(d: *const Fdist, r: i64, n: i64) -> Mom {
         m.median = xfrie(d, 0.5f64, r, n)
     } else {
         let high = xfrie(d, 0.5f64, r, n)
-        let phigh = pfrie(d, high, r, n)
+        let phigh = pfrie(d, high, r, n, false)
         var low = high
         var same = true
         var plow = 0.0f64
@@ -1243,7 +1253,7 @@ fn moments_friedman(d: *const Fdist, r: i64, n: i64) -> Mom {
         if r % 2i64 == 0i64 { two_s = two_s * 4.0f64 }
         while same {
             low = low - two_s
-            plow = pfrie(d, low, r, n)
+            plow = pfrie(d, low, r, n, false)
             same = phigh == plow
         }
         let alpha = (phigh - 0.5f64) / (phigh - plow)
@@ -1257,7 +1267,7 @@ fn moments_friedman(d: *const Fdist, r: i64, n: i64) -> Mom {
     var x = 0.0f64
     var i = 0usize
     while i < 128usize {
-        let cur = ffrie(d, x, r, n)
+        let cur = ffrie(d, x, r, n, false)
         if mode_val < cur {
             mode_val = cur
             mode = x
@@ -1480,4 +1490,56 @@ fn fourth_kendall(a: *mem.Arena, ni: i64) -> (f64, err) {
         i += 1usize
     }
     ret (m4 / sum, ok)
+}
+
+// Spearman's rho is the Friedman statistic with two blocks, X = (r - 1)(1 + rho); its exact distribution (r < 12) comes from the
+// counts of the sum of squared rank differences: S = c^2 (r (r^2 - 1) / 3 - D2), with c = 2 for even r (the package doubles the ranks)
+fn friedman_exact_rho(a: *mem.Arena, r: i64) -> (Fdist, err) {
+    var res: Fdist = zero
+    if r < 3i64 || r > 11i64 { ret (res, ok) }
+    let ru = usize(r)
+    let smax = ru * (ru * ru - 1usize) / 3usize
+    let (counts, e1) = mem.alloc[f64](a, smax + 2usize)
+    if e1 != ok { ret (res, e1) }
+    let se = spearman_counts(a, ru, counts)
+    if se != ok { ret (res, se) }
+    let scale = f64(1i64)
+    var cc = 1i64
+    if r % 2i64 == 0i64 { cc = 2i64 }
+    let total = math.exp[f64](pik_loggamma(f64(r + 1i64)))
+    // ascending S is descending D2: q[S] = Pr(S' >= S) = Pr(D2' <= D2)
+    var nd = 0usize
+    var d2 = 0usize
+    while d2 <= smax {
+        if counts[d2] > 0.0f64 { nd += 1usize }
+        d2 += 1usize
+    }
+    let (ss, e2) = mem.alloc[i64](a, nd)
+    let (qq, e3) = mem.alloc[f64](a, nd)
+    if e2 != ok || e3 != ok { ret (res, e2) }
+    var cum = 0.0f64
+    var idx = nd
+    d2 = 0usize
+    while d2 <= smax {
+        if counts[d2] > 0.0f64 {
+            cum += counts[d2] / total
+            idx -= 1usize
+            ss[idx] = cc * cc * (i64(smax) - i64(d2))
+            qq[idx] = cum
+        }
+        d2 += 1usize
+    }
+    res.has = true
+    res.s = ss
+    res.q = qq
+    ret (res, ok)
+}
+
+// the Spearman functions through the Friedman ones
+fn pspearman_pkg(d: *const Fdist, rho: f64, r: i64) -> f64 { ret pfrie(d, rho, r, 2i64, true) }
+fn qspearman_pkg(d: *const Fdist, rho: f64, r: i64) -> f64 { ret qfrie(d, rho, r, 2i64, true) }
+fn fspearman_pkg(d: *const Fdist, rho: f64, r: i64) -> f64 { ret ffrie(d, rho, r, 2i64, true) }
+fn xspearman_pkg(d: *const Fdist, p: f64, r: i64) -> f64 {
+    let x = xfrie(d, p, r, 2i64)
+    ret x / f64(r - 1i64) - 1.0f64
 }

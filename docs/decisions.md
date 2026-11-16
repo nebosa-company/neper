@@ -47266,3 +47266,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6699 — SuppDists Kendall past N = 12
 
 **Decision.** `pkendall_pkg`, `fkendall_pkg`, `qkendall_pkg` and `xkendall_pkg` follow the package: T = k is read as `(int)(0.5 + (1 + tau) M / 2)` (a rounded count, not an inversion index as the earlier `pkendall` reads it), exact counts to N = 12 and above that the Edgeworth series with kurtosis terms l4 and l6 and the continuity correction 0.5. The quantile is the package's search from the normal guess one support point at a time; the fourth moment sums the density over 128 points between the 1% and 99% quantiles. The older `dkendall` and `pkendall`, which index the support differently, are kept for their own cases. Linux pending.
+
+## D6700 — SuppDists Spearman as a Friedman statistic
+
+**Decision.** The package computes Spearman's rho with its Friedman code: two blocks, `S = (M/2)(1 + rho)` with the rho flag on. `pfrie`, `qfrie` and `ffrie` take that flag so the rounding of S is the package's (computed from rho, not from the Friedman scale, which flips the rounding on some arguments), and `friedman_exact_rho` builds the exact distribution for r up to 11 from the counts of the sum of squared rank differences, `S = c^2 (r(r^2 - 1)/3 - D2)`. The quantile search calls the Friedman cdf with the flag off and n = 2, which is exact only for r up to 5 and Walsh's beta approximation otherwise; the port does the same, so qSpearman for r from 6 to 11 is the approximation-driven answer. Linux pending.

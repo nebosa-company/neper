@@ -78,4 +78,9 @@ for (N in c(5, 8, 12, 13, 15, 20, 40)) {
   for (pr in c(0.05, 0.25, 0.5, 0.9)) add("kp_q", c(N, pr), qKendall(pr, N), 1e-9)
   s <- sKendall(N); add("kp_m", c(N, 0), s$Variance, 1e-9); add("kp_m", c(N, 1), s$FourthCentralMoment, 1e-7)
 }
+# Spearman as the package answers (the exact Friedman distribution for 2 blocks to r = 11, Walsh's beta approximation beyond): "sq_p" "sq_u" "sq_d" args (r, rho), "sq_q" args (r, p)
+for (r in c(4, 5, 8, 11, 12, 15, 20)) {
+  for (rho in c(-0.7, -0.3, 0.05, 0.4, 0.8)) { add("sq_p", c(r, rho), pSpearman(rho, r), 1e-8); add("sq_u", c(r, rho), pSpearman(rho, r, lower.tail = FALSE), 1e-8); add("sq_d", c(r, rho), dSpearman(rho, r), 1e-8) }
+  for (pr in c(0.05, 0.3, 0.5, 0.95)) add("sq_q", c(r, pr), qSpearman(pr, r), 1e-8)
+}
 emit("suppdists", "SuppDists", list(cases))
