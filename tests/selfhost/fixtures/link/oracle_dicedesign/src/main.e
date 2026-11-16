@@ -101,6 +101,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let p = x[2usize]
     let des = x[3usize..3usize + n * d]
     let k = c.name
+    if str.eq(k, "mesh") { ret dd.mesh_ratio(des, n, d) }
     if str.eq(k, "C2") { ret dd.discrepancy(des, n, d, 0usize) }
     if str.eq(k, "L2") { ret dd.discrepancy(des, n, d, 1usize) }
     if str.eq(k, "L2star") { ret dd.discrepancy(des, n, d, 2usize) }

@@ -49,4 +49,8 @@ for (rep in 1:12) {
   x <- match(apply(w$design, 1, paste, collapse = ","), apply(L, 1, paste, collapse = ","))
   add("wsp_n", c(n, d, sd, dm), length(x)); add("wsp", c(n, d, sd, dm), sum(x * seq_along(x)))
 }
+for (rep in 1:6) {
+  n <- sample(6:25, 1); d <- sample(2:4, 1); X <- matrix(runif(n * d), n, d)
+  add("mesh", c(n, d, 0, as.vector(t(X))), meshRatio(X))
+}
 emit("dicedesign", "DiceDesign", list(cases))

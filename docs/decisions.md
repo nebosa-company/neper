@@ -45424,3 +45424,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.dicedesign` gains wsp (wspDesign with init "center"): the row nearest the centre is the base, rows closer than dmin to the base are removed together with the base, and the nearest remaining row becomes the next base, with the package's bookkeeping (the `points` count includes the removed rows and the loop ends when it reaches n; which.min answers the first minimum, row 1 when every distance is infinite). The selected row indices and their order equal the package's on random LHS designs of 8 to 30 points. Not here: init = "random", the GEOM_MORRIS profile, maximinESE_LHS, the other discrepSA_LHS criteria and meshRatio.
 
 **Result.** `oracle_dicedesign` equals DiceDesign on 178 cases on Windows; Linux pending. L426 stays partial.
+
+## D6172 — DiceDesign: meshRatio
+
+`e.algo.stat.dicedesign` gains mesh_ratio: the square root of the largest over the smallest squared nearest-neighbour distance, where, as in the package, only the first n - 1 points are examined as the base (each against all n). Not here: init = "random" for wspDesign, GEOM_MORRIS, maximinESE_LHS and the other discrepSA_LHS criteria.
+
+**Result.** `oracle_dicedesign` equals DiceDesign on 184 cases on Windows; Linux pending. L426 stays partial.

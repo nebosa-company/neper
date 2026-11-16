@@ -641,3 +641,30 @@ fn wsp(a: *mem.Arena, m: []const f64, n: usize, d: usize, dmin: f64, x: []usize)
     }
     ret cnt
 }
+
+// meshRatio: the largest over the smallest nearest-neighbour distance, taken over the first n - 1 points as the package does
+fn mesh_ratio(x: []const f64, n: usize, d: usize) -> f64 {
+    var dmax = 0.0f64 - 1.0e30f64
+    var dmn = 1.0e30f64
+    var i = 0usize
+    while i + 1usize < n {
+        var lo = 1.0e30f64
+        var k = 0usize
+        while k < n {
+            if k != i {
+                var s = 0.0f64
+                var j = 0usize
+                while j < d {
+                    s += (x[i * d + j] - x[k * d + j]) * (x[i * d + j] - x[k * d + j])
+                    j += 1usize
+                }
+                if s < lo { lo = s }
+            }
+            k += 1usize
+        }
+        if dmax < lo { dmax = lo }
+        if dmn > lo { dmn = lo }
+        i += 1usize
+    }
+    ret math.sqrt[f64](dmax / dmn)
+}
