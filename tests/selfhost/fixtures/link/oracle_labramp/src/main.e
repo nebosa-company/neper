@@ -18,7 +18,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let x = c.args
         var got = 0.0f64
-        if c.name.len == 3usize {
+        if c.name.len == 4usize && c.name[0usize] == 103u8 {
+            let gm = usize(x[1usize])
+            let (graw, gre) = mem.alloc[u64](a, gm)
+            if gre != ok { os.exit(4) }
+            var gi = 0usize
+            while gi < gm {
+                graw[gi] = u64(x[2usize + gi])
+                gi += 1usize
+            }
+            got = f64(lr.gradient_colour(a, graw, x[0usize]))
+        } else if c.name.len == 3usize {
             got = f64(lr.palette_colour(a, usize(x[3usize]) - 1usize, usize(x[0usize]), usize(x[1usize]), x[2usize]))
         } else {
         let m = usize(x[3usize])

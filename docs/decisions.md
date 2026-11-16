@@ -46564,3 +46564,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `scripts/gen_palettes.R` writes a table row for every valid value of the first argument of canva_pal, colorblind_pal, economist_pal, excel_new_pal, excel_pal, few_pal, hc_pal, numbers_pal, solarized_pal, stata_pal and wsj_pal (the value lists come from `ggthemes_data` and `canva_palettes`, or TRUE and FALSE for a logical), after the default rows so existing row numbers keep their place; the oracle walks the same lists.
 
 **Result.** `oracle_palettes` agrees with ggthemes and ggsci on 2793 cases (the table is 232 rows) on Windows; Linux pending. L329 stays partial: the ggthemes gradient palettes.
+
+## D6566 — ggthemes gradient palettes; L329 closed
+
+**Decision.** `gradient_colour` is scales::pal_gradient_n for the ggthemes gradient palettes: the colours converted to Lab by farver's ColorSpace constants (D65 white 95.047, 100, 108.883, the 0.008856 and 7.787 cube-root rule), linearly interpolated at equal spacing as `approxfun` does, converted back and rounded to the nearest byte; the economist hues join the discrete table as `economist_seq_pal:hue=` rows. L329 is delivered: every ggsci palette (discrete and continuous) and every ggthemes colour palette equals R.
+
+**Result.** `oracle_labramp` agrees with ggthemes on 420 gradient colours (Tableau sequential and diverging, economist hues) and `oracle_palettes` on 2856 table cases on Windows; L329 leaves the queue, Linux runs batched.

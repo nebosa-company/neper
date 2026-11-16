@@ -3433,4 +3433,5 @@ D6561	515	sandwich: kernHAC kernels
 D6562	585	lmtest: dwtest approximate p value
 D6563	877	ggsci: the Lab spline colour ramp
 D6564	567	ggsci: the raw tables of the continuous palettes
-D6565	663	ggthemes palettes with arguments
+D6565	664	ggthemes palettes with arguments
+D6566	800	ggthemes gradient palettes; L329 closed

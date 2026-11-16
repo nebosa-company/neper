@@ -16,4 +16,15 @@ for (s in sets) {
     for (k in seq_len(n)) { add(c(n, k - 1, al, length(raw), pk(raw)), pack(cc[k])); cases[[length(cases) + 1]] <- case("row", c(n, k - 1, al, ri), pack(cc[k]), rel = 0, abs = 0) }
   }
 }
+# ggthemes gradient palettes (scales::pal_gradient_n, Lab by farver): ("grad") args (x, m, raw colours packed r * 65536 + g * 256 + b [m]) -> the colour packed r * 65536 + g * 256 + b
+suppressMessages(library(ggthemes))
+tpal <- ggthemes::ggthemes_data[["tableau"]][["color-palettes"]]
+for (ty in c("ordered-sequential", "ordered-diverging")) for (nm in names(tpal[[ty]])) {
+  raw <- toupper(substr(tpal[[ty]][[nm]][["value"]], 1, 7)); pf <- tryCatch(tableau_gradient_pal(nm, ty), error = function(e) NULL); if (is.null(pf)) next
+  for (x in c(0, 0.07, 0.25, 0.5, 0.731, 0.99, 1)) { cc <- pf(x); v <- col2rgb(cc); cases[[length(cases) + 1]] <- case("grad", c(x, length(raw), pk(raw)), as.numeric(v[1, ]) * 65536 + v[2, ] * 256 + v[3, ], rel = 0, abs = 0) }
+}
+for (hue in names(ggthemes::ggthemes_data[["economist"]][["scales"]])) {
+  raw <- toupper(substr(ggthemes::ggthemes_data[["economist"]][["scales"]][[hue]][["value"]], 1, 7)); pf <- economist_gradient_pal(hue)
+  for (x in c(0, 0.07, 0.25, 0.5, 0.731, 0.99, 1)) { cc <- pf(x); v <- col2rgb(cc); cases[[length(cases) + 1]] <- case("grad", c(x, length(raw), pk(raw)), as.numeric(v[1, ]) * 65536 + v[2, ] * 256 + v[3, ], rel = 0, abs = 0) }
+}
 emit("labramp", "ggsci", list(cases))

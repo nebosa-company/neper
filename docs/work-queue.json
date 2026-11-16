@@ -15,17 +15,6 @@
       "evidence": "Partial (D6025). dmvnorm, dmvt, rmvnorm (eigen, svd, chol) and rmvt equal mvtnorm 1.4.2 on both hosts. Plus (D6112) pmvnorm and pmvt by Genz-Bretz draw for draw under a seed (oracle_mvt, Windows). D6527: qmvnorm (Genz-Bretz, equicoordinate, all three tails, correlation input) equals R on 80 values on Windows (oracle_qmvnorm). D6528: qmvt (probit link for df above 7, cauchit at or below 7) equals R on 60 more values. Open: the TVPACK trivariate, Miwa, a mean or sigma input. Two-dimensional pmvnorm (TVPACK) equals R on 200 cases on Windows (D6094, oracle_pmvnorm). Was: Open (CRAN rank 130). Mid. Acceptance: pmvnorm and pmvt for the Genz-Bretz (seeded QMC, equal to R at its stated abseps), Miwa and TVPACK algorithms, qmvnorm and qmvt for every tail and the equicoordinate form, dmvnorm, dmvt, rmvnorm (equal to R value for value under set.seed, chol, eigen and svd methods), rmvt, and the lower, upper and correlation inputs R accepts."
     },
     {
-      "id": "L329",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 549,
-      "title": "ggsci and ggthemes palettes",
-      "score": 0.85,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6034). 135 discrete ggsci and ggthemes palettes as a generated table, with ggsci alpha, equal R on Windows (Linux pending). D6563: the Lab-space spline colour ramp of rgb_gsea, rgb_material and rgb_tw3 (all palettes, n 2 to 20, alpha 1 and 0.5) equals ggsci on 3276 colours (e.algo.stat.labramp; the raw colour tables come from the oracle). D6564: the raw tables are generated into the library (labramp_data.e, scripts/gen_palettes_ramp.R), so palette_colour gives any of the 42 continuous palettes by row. D6565: the ggthemes palettes with arguments (canva, few, hc, numbers, wsj, solarized, stata, excel, colorblind and the others by every valid value; 89 more tables) equal ggthemes. Open: the ggthemes gradient palettes (economist, tableau seq and div), palettes that change with alpha, ggthemes palettes with arguments. Was: Open (CRAN ranks 220, 226). Small data item. Acceptance: every discrete and continuous palette of ggsci and the colour palettes of ggthemes equal to the R package, with alpha handling."
-    },
-    {
       "id": "L357",
       "category": "library",
       "group": "CRAN parity",

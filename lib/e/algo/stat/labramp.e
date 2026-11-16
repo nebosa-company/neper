@@ -214,3 +214,93 @@ fn palette_colour(a: *mem.Arena, idx: usize, n: usize, k: usize, alpha: f64) -> 
     let m = raw_row(idx, raw)
     ret lab_ramp(a, raw[0usize..m], n, k, alpha)
 }
+
+// farver's (ColorSpace library) sRGB to Lab and back, as scales::colour_ramp uses them
+fn fv_lab(r8: f64, g8: f64, b8: f64, lab: []f64) {
+    var r = r8 / 255.0f64
+    var g = g8 / 255.0f64
+    var b = b8 / 255.0f64
+    if r > 0.04045f64 { r = math.pow[f64]((r + 0.055f64) / 1.055f64, 2.4f64) } else { r = r / 12.92f64 }
+    if g > 0.04045f64 { g = math.pow[f64]((g + 0.055f64) / 1.055f64, 2.4f64) } else { g = g / 12.92f64 }
+    if b > 0.04045f64 { b = math.pow[f64]((b + 0.055f64) / 1.055f64, 2.4f64) } else { b = b / 12.92f64 }
+    r = r * 100.0f64
+    g = g * 100.0f64
+    b = b * 100.0f64
+    let x = (r * 0.4124564f64 + g * 0.3575761f64 + b * 0.1804375f64) / 95.047f64
+    let y = (r * 0.2126729f64 + g * 0.7151522f64 + b * 0.0721750f64) / 100.0f64
+    let z = (r * 0.0193339f64 + g * 0.1191920f64 + b * 0.9503041f64) / 108.883f64
+    var fx = 7.787f64 * x + 16.0f64 / 116.0f64
+    if x > 0.008856f64 { fx = math.pow[f64](x, 1.0f64 / 3.0f64) }
+    var fy = 7.787f64 * y + 16.0f64 / 116.0f64
+    if y > 0.008856f64 { fy = math.pow[f64](y, 1.0f64 / 3.0f64) }
+    var fz = 7.787f64 * z + 16.0f64 / 116.0f64
+    if z > 0.008856f64 { fz = math.pow[f64](z, 1.0f64 / 3.0f64) }
+    lab[0usize] = 116.0f64 * fy - 16.0f64
+    lab[1usize] = 500.0f64 * (fx - fy)
+    lab[2usize] = 200.0f64 * (fy - fz)
+}
+
+fn fv_srgb(l: f64, aa: f64, bb: f64, out: []f64) {
+    let y0 = (l + 16.0f64) / 116.0f64
+    let x0 = aa / 500.0f64 + y0
+    let z0 = y0 - bb / 200.0f64
+    let x3 = x0 * x0 * x0
+    let y3 = y0 * y0 * y0
+    let z3 = z0 * z0 * z0
+    var x = (x0 - 16.0f64 / 116.0f64) / 7.787f64
+    if x3 > 0.008856f64 { x = x3 }
+    var y = (y0 - 16.0f64 / 116.0f64) / 7.787f64
+    if y3 > 0.008856f64 { y = y3 }
+    var z = (z0 - 16.0f64 / 116.0f64) / 7.787f64
+    if z3 > 0.008856f64 { z = z3 }
+    x = x * 95.047f64 / 100.0f64
+    y = y * 100.0f64 / 100.0f64
+    z = z * 108.883f64 / 100.0f64
+    var r = x * 3.2404542f64 + y * (0.0f64 - 1.5371385f64) + z * (0.0f64 - 0.4985314f64)
+    var g = x * (0.0f64 - 0.9692660f64) + y * 1.8760108f64 + z * 0.0415560f64
+    var b = x * 0.0556434f64 + y * (0.0f64 - 0.2040259f64) + z * 1.0572252f64
+    if r > 0.0031308f64 { r = 1.055f64 * math.pow[f64](r, 1.0f64 / 2.4f64) - 0.055f64 } else { r = 12.92f64 * r }
+    if g > 0.0031308f64 { g = 1.055f64 * math.pow[f64](g, 1.0f64 / 2.4f64) - 0.055f64 } else { g = 12.92f64 * g }
+    if b > 0.0031308f64 { b = 1.055f64 * math.pow[f64](b, 1.0f64 / 2.4f64) - 0.055f64 } else { b = 12.92f64 * b }
+    out[0usize] = r * 255.0f64
+    out[1usize] = g * 255.0f64
+    out[2usize] = b * 255.0f64
+}
+
+fn clamp8(v: f64) -> u64 {
+    var x = v
+    if x < 0.0f64 { x = 0.0f64 }
+    if x > 255.0f64 { x = 255.0f64 }
+    ret u64(x + 0.5f64)
+}
+
+// scales::pal_gradient_n(colours)(x) for x in [0, 1]: linear interpolation of the colours in Lab at equal spacing, packed r * 65536 + g * 256 + b; 0 outside [0, 1] (NA)
+fn gradient_colour(a: *mem.Arena, raw: []const u64, x: f64) -> u64 {
+    let m = raw.len
+    if x < 0.0f64 || x > 1.0f64 { ret 0u64 }
+    let (lab, e1) = mem.alloc[f64](a, 3usize * m)
+    if e1 != ok { ret 0u64 }
+    var i = 0usize
+    while i < m {
+        let c = raw[i]
+        fv_lab(f64((c / 65536u64) % 256u64), f64((c / 256u64) % 256u64), f64(c % 256u64), lab[3usize * i..3usize * i + 3usize])
+        i += 1usize
+    }
+    // approxfun on x_in = seq(0, 1, length.out = m)
+    var seg = 0usize
+    while seg + 2usize < m && x > f64(seg + 1usize) / f64(m - 1usize) { seg += 1usize }
+    let x0 = f64(seg) / f64(m - 1usize)
+    let x1 = f64(seg + 1usize) / f64(m - 1usize)
+    let t = (x - x0) / (x1 - x0)
+    var o3: [3]f64 = zero
+    var ch = 0usize
+    while ch < 3usize {
+        let v0 = lab[3usize * seg + ch]
+        let v1 = lab[3usize * (seg + 1usize) + ch]
+        o3[ch] = v0 + (v1 - v0) * t
+        ch += 1usize
+    }
+    var rgb: [3]f64 = zero
+    fv_srgb(o3[0usize], o3[1usize], o3[2usize], rgb[0usize..3usize])
+    ret clamp8(rgb[0usize]) * 65536u64 + clamp8(rgb[1usize]) * 256u64 + clamp8(rgb[2usize])
+}

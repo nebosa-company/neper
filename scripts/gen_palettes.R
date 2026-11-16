@@ -25,9 +25,9 @@ for (fn in c("economist_pal", "colorblind_pal", "fivethirtyeight_pal", "few_pal"
   mx <- attr(pf, "max_n"); if (is.null(mx)) next
   add(paste0("ggthemes.", fn), pf(mx))
 }
-vfns <- c("canva_pal", "colorblind_pal", "economist_pal", "excel_new_pal", "excel_pal", "few_pal", "hc_pal", "numbers_pal", "solarized_pal", "stata_pal", "wsj_pal")
+vfns <- c("canva_pal", "colorblind_pal", "economist_pal", "economist_seq_pal", "excel_new_pal", "excel_pal", "few_pal", "hc_pal", "numbers_pal", "solarized_pal", "stata_pal", "wsj_pal")
 gd <- ggthemes::ggthemes_data
-vv <- list(canva_pal = names(ggthemes::canva_palettes), few_pal = names(gd$few$colors), hc_pal = names(gd$hc), numbers_pal = names(gd$numbers), wsj_pal = names(gd$wsj$palettes), solarized_pal = names(gd$solarized$palettes), stata_pal = names(gd$stata$colors$schemes), excel_new_pal = names(gd$excel$themes))
+vv <- list(canva_pal = names(ggthemes::canva_palettes), few_pal = names(gd$few$colors), hc_pal = names(gd$hc), numbers_pal = names(gd$numbers), wsj_pal = names(gd$wsj$palettes), solarized_pal = names(gd$solarized$palettes), stata_pal = names(gd$stata$colors$schemes), excel_new_pal = names(gd$excel$themes), economist_seq_pal = names(gd$economist$scales))
 for (fn in vfns) {
   f <- tryCatch(get(fn, asNamespace("ggthemes")), error = function(e) NULL); if (is.null(f)) next
   fm <- formals(f); if (length(fm) == 0) next
