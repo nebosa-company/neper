@@ -2187,10 +2187,10 @@
       "group": "CRAN parity",
       "order": 792,
       "title": "sf: simple-features geometry, predicates and spherical geometry",
-      "score": 0,
+      "score": 0.05,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 159; sp 180 is superseded). Large. e.algo.geom has convex clipping, ear-clip triangulation and simplification, e.algo.geo has S2 cells and haversine. Acceptance, equal to sf and GEOS: WKT, WKB and GeoJSON read and write for every geometry type, st_relate and the DE-9IM predicates, st_buffer with all end and join styles, st_union, st_intersection, st_difference, st_sym_difference on arbitrary polygons, st_make_valid, st_voronoi, st_delaunay_triangulation, st_convex_hull, st_simplify, spherical st_area, st_length and st_distance (s2 and geodesic); the CRS transform comes from L285."
+      "evidence": "Partly done (D6065): the planar convex hull, polygon area, point in polygon and Delaunay triangle count in e.algo.geom equal sf on 150 cases on Windows (oracle_sf); Linux pending. Open: WKT, WKB, GeoJSON, DE-9IM, buffer, union, intersection, difference, make_valid, voronoi, simplify, spherical measures. Original: Open (CRAN rank 159; sp 180 is superseded). Large. e.algo.geom has convex clipping, ear-clip triangulation and simplification, e.algo.geo has S2 cells and haversine. Acceptance, equal to sf and GEOS: WKT, WKB and GeoJSON read and write for every geometry type, st_relate and the DE-9IM predicates, st_buffer with all end and join styles, st_union, st_intersection, st_difference, st_sym_difference on arbitrary polygons, st_make_valid, st_voronoi, st_delaunay_triangulation, st_convex_hull, st_simplify, spherical st_area, st_length and st_distance (s2 and geodesic); the CRS transform comes from L285."
     },
     {
       "id": "L285",
