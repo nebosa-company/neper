@@ -290,17 +290,6 @@
       "evidence": "Partial (D6047). bridge_sampler with the normal proposal (real parameters, use_neff = FALSE) equals bridgesampling 1.2-1 on Windows: log marginal likelihood and iteration count (Linux pending). Open: warp3, bounded and simplex transformations, repetitions, error_measures, bf, post_prob. Was: Open (CRAN rank 496). Small. Acceptance, equal to bridgesampling under set.seed: bridge_sampler with the normal and warp3 methods, the iterative scheme, bf, post_prob, error_measures."
     },
     {
-      "id": "L406",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 566,
-      "title": "DEoptimR: differential evolution",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 517). Small. Verify e.math.opt.meta first. Acceptance, equal to DEoptimR under set.seed: JDEoptim with constraints (adaptive penalty), the jDE parameter control, the same population evolution and returned optimum, iterations and evaluation counts."
-    },
-    {
       "id": "L410",
       "category": "library",
       "group": "CRAN parity",

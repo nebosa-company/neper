@@ -202,3 +202,4 @@ oracle_fcast
 oracle_gls
 oracle_sf
 oracle_diptest
+oracle_deoptimr
