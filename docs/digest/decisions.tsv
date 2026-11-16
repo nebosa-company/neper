@@ -3281,4 +3281,5 @@ D6411	994	drc: the LL.4 dose-response fit
 D6411	513	pracma: conv, deconv and polyint
 D6412	816	Epi: twoby2
 D6412	690	pracma: newtonRaphson
-D6413	677	pracma: romberg
+D6413	678	pracma: romberg
+D6414	928	MuMIn: AICc, Akaike weights and the full model average

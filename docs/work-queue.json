@@ -504,10 +504,10 @@
       "group": "CRAN parity",
       "order": 626,
       "title": "MuMIn: model selection and averaging",
-      "score": 0,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 667). Small to mid. Acceptance, equal to MuMIn: AICc, QAIC, QIC, BIC, dredge over all subsets with marginality and constraints, model.sel, model.avg (full and conditional), Weights, importance, r.squaredGLMM."
+      "evidence": "Partial (D6414). AICc, Akaike weights and the full model average (estimates and Std. Error) equal MuMIn on Windows (oracle_mumin; Linux pending). Open: Adjusted SE, conditional average, QAIC, QIC, dredge, model.sel, importance, r.squaredGLMM. Was: Open (CRAN rank 667). Small to mid. Acceptance, equal to MuMIn: AICc, QAIC, QIC, BIC, dredge over all subsets with marginality and constraints, model.sel, model.avg (full and conditional), Weights, importance, r.squaredGLMM."
     },
     {
       "id": "L429",

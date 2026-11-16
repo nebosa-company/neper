@@ -45652,3 +45652,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pracma` gains romberg, the package's Romberg integration: the trapezoid sum on 2, 4, 8, ... panels, the Richardson table I[j, k] = (4^(k-1) I[j+1, k-1] - I[j, k-1]) / (4^(k-1) - 1), and the stop when |I[1, iter + 1] - I[2, iter]| falls to tol (1e-12) or maxit is reached, over the five fixed integrands of quadgk. Value and iteration count equal pracma's. The first attempt took the table row index one too high (R's j = 2 + iter - k is 1-based). Not here: quadl (the adaptive Lobatto rule), integral and the infinite-range forms.
 
 **Result.** `oracle_pracma` equals pracma on 562 cases on Windows; Linux pending. L333 stays partial.
+
+## D6414 — MuMIn: AICc, Akaike weights and the full model average
+
+`e.algo.stat.mumin` gives AICc (-2 logLik + 2k + 2k(k + 1) / (n - k - 1), k counting every estimated parameter, the residual variance included), the Akaike weights exp(-delta / 2) normalised, and the full model-averaged coefficient (a term missing from a model counting as 0 with standard error 0) with the package's "Std. Error" sqrt(sum w (se^2 + (b - bar)^2)). Estimates, standard errors, AICc values and weights equal MuMIn's on five nested and non-nested linear models. The "Adjusted SE" column is not reproduced: it is about 4 percent above the Std. Error here and is not the plain t-quantile rescaling of the per-model errors (tried). Not here: that column, the conditional average, QAIC and QIC, dredge, model.sel's tables, importance and r.squaredGLMM.
+
+**Result.** `oracle_mumin` equals MuMIn on 48 cases on Windows; Linux pending. L428 is partial.
