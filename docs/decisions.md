@@ -47224,3 +47224,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6689 — optBlock D criterion, which is the block design search
 
 **Decision.** `algdesign_block.block_optimize` ports `BlockOptimize` and its helpers for the D criterion without whole-block data: the within-block deviations rotated into T, `findDeltaBlock` over every row of every other block and the extra block of unused rows, `exchangeBlock` with its three Givens updates, and the random initial assignment that recycles rows with `NoDupPermuteB` when the blocks need more rows than the design has. The oracle is the model matrix (a dummy-coded treatment factor or numeric covariates, intercept removed) and the block sizes, so a balanced incomplete block search is the factor case with equal sizes. As for `optFederov`, a design is dropped from the oracle where two repeats tie on D to the last bit. Linux pending. Not ported: whole-block data, Dpc, Dp, OB and OBS.
+
+## D6690 — L410 closed at its acceptance list
+
+**Decision.** The acceptance list of L410 is gen.factorial, optFederov with D, A and I, optBlock, optMonteCarlo, eval.design and the block search, each with an oracle against AlgDesign on Windows. The R options beyond it (whole-block data, the Dpc, Dp, OB and OBS block criteria, `RandomStart = FALSE` and constraints in optMonteCarlo, augment, `nullify = 2` and `space` in optFederov) are recorded in the done record as not covered, not as done.
