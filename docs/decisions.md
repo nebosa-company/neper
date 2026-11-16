@@ -46886,3 +46886,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `surveypkg.estimates` builds, for each estimate, the linearised score per observation (`w (y - mean) / sum w` for the mean, `w y` for the total, `w (y - r x) / sum(w x)` for the ratio), totals it by PSU, and sums over strata `f n_h/(n_h-1) sum (t_hj - mean_h)^2` with `f = 1 - n_h / N_h` when the stratum's PSU population `N_h` is given and 1 otherwise.
 
 **Result.** `oracle_survey` agrees with survey on estimates and standard errors on Windows (144 values, 2 to 5 strata, with and without fpc); Linux pending. L351 stays partial: multistage designs, replicate weights, calibration, svyglm, quantiles, domains.
+
+## D6627 — vegan: diversity, rarefaction and dissimilarities
+
+**Decision.** `veganpkg` computes per-site Shannon, Simpson, inverse Simpson, Pielou, richness and bias-corrected Chao1, rarefied richness by log-gamma binomial ratios, and vegdist for nine methods. Two vegan rules differ from the textbook formula: Morisita is clipped at 0 (the formula goes negative for sparse rows) and Gower divides by the number of columns with a non-zero range, not by all columns. Binary Jaccard is `2B/(1+B)` with B the Bray-Curtis of presence.
+
+**Result.** `oracle_vegan` agrees with vegan on Windows (340 values, 4 to 10 sites, 5 to 14 species); Linux pending. L349 stays partial: ordination, ACE, Fisher alpha, adonis2, anosim, mantel, envfit.

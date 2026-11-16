@@ -1813,10 +1813,10 @@
       "group": "CRAN parity",
       "order": 795,
       "title": "vegan: community ecology",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 247). Large. Acceptance, equal to vegan: vegdist for every method, diversity, rarefy, estimateR, specaccum, cca, rda, capscale, decorana, metaMDS with its random starts under set.seed, procrustes, adonis2, anosim, mantel, envfit, betadisper, permutest."
+      "evidence": "Partial (D6627). e.algo.stat.veganpkg equals vegan on Windows: diversity (Shannon, Simpson, inverse Simpson), Pielou evenness, richness, rarefy, Chao1, and vegdist euclidean, manhattan, bray, kulczynski, canberra, gower, horn, morisita, jaccard (quantitative and binary) (oracle_vegan, 340 values; Linux pending). Open: ordination (metaMDS, rda, cca, decorana), ACE and the other estimators, Fisher alpha, adonis2, anosim, mantel, envfit, the remaining vegdist methods. Was: Open (CRAN rank 247). Large. Acceptance, equal to vegan: vegdist for every method, diversity, rarefy, estimateR, specaccum, cca, rda, capscale, decorana, metaMDS with its random starts under set.seed, procrustes, adonis2, anosim, mantel, envfit, betadisper, permutest."
     },
     {
       "id": "L350",

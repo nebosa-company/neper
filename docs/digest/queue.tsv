@@ -163,7 +163,7 @@ L319	library	0.08	803	nlme: gls, correlation structures and variance functions	P
 L320	library	0.05	917	sf: simple-features geometry, predicates and spherical geometry	Partly done (D6065): the planar convex hull, polygon area, point in polygon and Delaunay triangle count in e.algo.geom equal sf on 150 cases on Windows (oracle_sf);
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
 L348	library	0	308	mclust: Gaussian mixture model selection	Open (CRAN rank 280).
-L349	library	0	268	vegan: community ecology	Open (CRAN rank 247).
+L349	library	0.15	743	vegan: community ecology	Partial (D6627).
 L350	library	0	308	ape: phylogenetic trees	Open (CRAN rank 238).
 L351	library	0.15	680	survey: design-based inference	Partial (D6626).
 L352	library	0	306	ncdf4: NetCDF and HDF5 files	Open (CRAN rank 237).
