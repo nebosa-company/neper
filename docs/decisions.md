@@ -45850,3 +45850,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.desctools` gains `binom_ci`: the estimate and two-sided limits for wald, waldcc, wilson, wilsoncc, agresti-coull, jeffreys, modified wilson, modified jeffreys, clopper-pearson, arcsine and logit, on `qnorm`, `qbeta` and `qchisq` from e.math.
 
 **Result.** `oracle_desctools` equals DescTools on 1590 cases on Windows at rel 1e-9, 990 of them new, over 30 (x, n, level) draws including x = 1 and n - 1; Linux pending. Open on BinomCI: witting, pratt, midp, lik and blaker. L363 stays partial.
+
+## D6447 — DescTools: Winsorize, HodgesLehmann, MedianCI and Trim
+
+`e.algo.stat.desctools` gains `winsor_sum` (clamping at type-7 quantiles with R's rounding fuzz), `hodges_lehmann` (median of Walsh averages, or of pairwise differences with a second sample), `median_ci` (exact binomial order statistics and their achieved level) and `trim_sum` (what Trim keeps, in original order).
+
+**Result.** `oracle_desctools` equals DescTools on 1790 cases on Windows, 200 of them new, with distinct values so Trim's tie order is not exercised, and n >= 12 so MedianCI's k is at least 1; Linux pending. L363 stays partial.

@@ -478,3 +478,106 @@ fn binom_ci(x: f64, n: f64, conf: f64, method: usize, part: usize) -> f64 {
     if part == 1usize { ret lo }
     ret hi
 }
+
+// quantile(x, p) type 7 on sorted s, with R's rounding fuzz
+fn quant7(s: []const f64, p: f64) -> f64 {
+    let n = s.len
+    let fuzz = 4.0f64 * 2.220446049250313e-16f64
+    let idx = f64(n - 1usize) * p
+    let lo = math.floor[f64](idx + fuzz)
+    var h = idx - lo
+    if math.abs[f64](h) < fuzz { h = 0.0f64 }
+    let l = usize(lo)
+    if h == 0.0f64 || l + 1usize >= n { ret s[l] }
+    ret (1.0f64 - h) * s[l] + h * s[l + 1usize]
+}
+
+fn median_sorted(s: []const f64) -> f64 {
+    let n = s.len
+    if n % 2usize == 1usize { ret s[n / 2usize] }
+    ret (s[n / 2usize - 1usize] + s[n / 2usize]) / 2.0f64
+}
+
+// the position-weighted sum of Winsorize(x, quantile(x, c(plo, phi)))
+fn winsor_sum(a: *mem.Arena, x: []const f64, plo: f64, phi: f64) -> f64 {
+    let (s, e) = sorted_copy(a, x)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let lo = quant7(s, plo)
+    let hi = quant7(s, phi)
+    var t = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        var v = x[i]
+        if v < lo { v = lo }
+        if v > hi { v = hi }
+        t += v * f64(i + 1usize)
+        i += 1usize
+    }
+    ret t
+}
+
+// HodgesLehmann(x): the median of the Walsh averages (x_i + x_j) / 2, i <= j; with y, the median of the differences x_i - y_j (ny = 0 means one sample)
+fn hodges_lehmann(a: *mem.Arena, x: []const f64, y: []const f64) -> f64 {
+    let nx = x.len
+    let ny = y.len
+    var m = nx * (nx + 1usize) / 2usize
+    if ny > 0usize { m = nx * ny }
+    let (w, e) = mem.alloc[f64](a, m)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    var i = 0usize
+    while i < nx {
+        if ny == 0usize {
+            var j = i
+            while j < nx {
+                w[k] = (x[i] + x[j]) / 2.0f64
+                k += 1usize
+                j += 1usize
+            }
+        } else {
+            var j = 0usize
+            while j < ny {
+                w[k] = x[i] - y[j]
+                k += 1usize
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    let (s, e2) = sorted_copy(a, w)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    ret median_sorted(s)
+}
+
+// MedianCI(x, conf, method = "exact") two-sided: part 0 the median, 1 and 2 the order statistics at k and n - k + 1 with k = qbinom((1 - conf) / 2, n, 0.5); 3 the achieved confidence
+fn median_ci(a: *mem.Arena, x: []const f64, conf: f64, part: usize) -> f64 {
+    let (s, e) = sorted_copy(a, x)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let n = x.len
+    if part == 0usize { ret median_sorted(s) }
+    let k = nb.qbinom((1.0f64 - conf) / 2.0f64, f64(n), 0.5f64, true, false)
+    let ki = usize(k)
+    if part == 1usize { ret s[ki - 1usize] }
+    if part == 2usize { ret s[n - ki] }
+    ret 1.0f64 - 2.0f64 * nb.pbinom(k - 1.0f64, f64(n), 0.5f64, true, false)
+}
+
+// the position-weighted sum of Trim(x, trim) (what is kept, in original order); trim below 0.5 as a fraction
+fn trim_sum(a: *mem.Arena, x: []const f64, trim: f64) -> f64 {
+    let n = x.len
+    let (s, e) = sorted_copy(a, x)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let lo = usize(math.floor[f64](f64(n) * trim)) + 1usize
+    let hi = n + 1usize - lo
+    var t = 0.0f64
+    var q = 0usize
+    var i = 0usize
+    while i < n {
+        if x[i] >= s[lo - 1usize] && x[i] <= s[hi - 1usize] {
+            q += 1usize
+            t += x[i] * f64(q)
+        }
+        i += 1usize
+    }
+    ret t
+}

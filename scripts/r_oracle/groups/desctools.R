@@ -28,4 +28,11 @@ for (rep in 1:30) {
   n <- sample(c(8:30, 60, 120), 1); x <- sample(c(1:(n - 1), 1, n - 1), 1); cl <- sample(c(0.9, 0.95, 0.99), 1)
   for (m in seq_along(ms)) { r <- BinomCI(x, n, conf.level = cl, method = ms[m]); add("binomci", c(m - 1, x, n, cl, 0), r[1, 1]); add("binomci", c(m - 1, x, n, cl, 1), r[1, 2]); add("binomci", c(m - 1, x, n, cl, 2), r[1, 3]) }
 }
+for (rep in 1:25) {
+  n <- sample(12:40, 1); x <- round(rnorm(n, 3, 2), 5); y <- round(rnorm(sample(5:15, 1), 2, 2), 5); cl <- sample(c(0.9, 0.95, 0.99), 1); p1 <- runif(1, 0.01, 0.2); p2 <- runif(1, 0.8, 0.99); tr <- runif(1, 0.02, 0.4)
+  add("winsor", c(n, p1, p2, x), sum(Winsorize(x, quantile(x, c(p1, p2))) * seq_len(n)))
+  add("hl1", c(n, 0, 0, x), HodgesLehmann(x)); add("hl2", c(n, length(y), 0, x, y), HodgesLehmann(x, y))
+  mc <- MedianCI(x, conf.level = cl); add("medci", c(n, cl, 0, x), mc[1]); add("medci", c(n, cl, 1, x), mc[2]); add("medci", c(n, cl, 2, x), mc[3]); add("medci", c(n, cl, 3, x), attr(mc, "conf.level"))
+  tx <- as.numeric(Trim(x, tr)); add("trim", c(n, tr, 0, x), sum(tx * seq_along(tx)))
+}
 emit("desctools", "DescTools", list(cases))

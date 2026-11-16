@@ -3314,4 +3314,5 @@ D6442	450	pracma: interp1 linear, nearest and spline
 D6443	479	signal: fir2
 D6444	352	signal: fir1 band types
 D6445	355	signal: decimate and unwrap
-D6446	553	DescTools: BinomCI, eleven methods
+D6446	554	DescTools: BinomCI, eleven methods
+D6447	614	DescTools: Winsorize, HodgesLehmann, MedianCI and Trim

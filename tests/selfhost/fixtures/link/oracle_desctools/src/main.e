@@ -11,6 +11,14 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     if str.eq(c.name, "binomci") { ret dt.binom_ci(x[1usize], x[2usize], x[3usize], usize(x[0usize]), usize(x[4usize])) }
+    if str.eq(c.name, "winsor") { ret dt.winsor_sum(a, x[3usize..3usize + usize(x[0usize])], x[1usize], x[2usize]) }
+    if str.eq(c.name, "hl1") { ret dt.hodges_lehmann(a, x[3usize..3usize + usize(x[0usize])], x[0usize..0usize]) }
+    if str.eq(c.name, "hl2") {
+        let nx = usize(x[0usize])
+        ret dt.hodges_lehmann(a, x[3usize..3usize + nx], x[3usize + nx..3usize + nx + usize(x[1usize])])
+    }
+    if str.eq(c.name, "medci") { ret dt.median_ci(a, x[3usize..3usize + usize(x[0usize])], x[1usize], usize(x[2usize])) }
+    if str.eq(c.name, "trim") { ret dt.trim_sum(a, x[3usize..3usize + usize(x[0usize])], x[1usize]) }
     let n = usize(x[0usize])
     let v = x[1usize..1usize + n]
     let k = c.name
