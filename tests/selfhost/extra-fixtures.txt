@@ -175,3 +175,4 @@ oracle_pbivnorm
 oracle_corpcor
 oracle_squarem
 oracle_hexbin
+oracle_fracdiff

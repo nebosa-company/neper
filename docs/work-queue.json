@@ -15,17 +15,6 @@
       "evidence": "Partial (D6000, D6009, D6010, D6015, D6019). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names (ten languages) and a time zone (every transition of the zones in e.tz.builtin); read_delim equals readr on rows shorter and longer than the header, under a one-column header and with a quote left open, on 15489 cases. Open: %Z naming a zone, and two unterminated-quote shapes that crash or confuse readr 2.2.0 (listed in D6016)."
     },
     {
-      "id": "L388",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 557,
-      "title": "fracdiff: fractional differencing and ARFIMA",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 411). Small. Acceptance, equal to fracdiff: fracdiff estimation of (p, d, q) by Haslett-Raftery approximate likelihood, diffseries, fdGPH, fdSperio and the simulated series under set.seed."
-    },
-    {
       "id": "L391",
       "category": "library",
       "group": "CRAN parity",
@@ -299,6 +288,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6038). hexbin counts, cell ids, centres of mass and hcell2xy for any xbins, shape and range equal hexbin 1.28.6 on Windows (Linux pending). Open: hexcoords, erode, hexTapply, smoothing helpers. Was: Open (CRAN rank 434). Small. Acceptance, equal to hexbin: hexbin counts and cell ids for any xbins, shape and range, hcell2xy, hexcoords, erode, hexTapply and the smoothing helpers."
+    },
+    {
+      "id": "L388",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 557,
+      "title": "fracdiff: fractional differencing and ARFIMA",
+      "score": 0.4,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6039). diffseries, fdGPH and fdSperio equal fracdiff 1.5-4 on Windows (Linux pending). Open: fracdiff (p, d, q) Haslett-Raftery fit, fracdiff.sim under set.seed. Was: Open (CRAN rank 411). Small. Acceptance, equal to fracdiff: fracdiff estimation of (p, d, q) by Haslett-Raftery approximate likelihood, diffseries, fdGPH, fdSperio and the simulated series under set.seed."
     },
     {
       "id": "L406",

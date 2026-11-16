@@ -3110,4 +3110,5 @@ D6034	1059	the ggsci and ggthemes palettes are a generated table, and ggsci trun
 D6035	1322	truncnorm follows its C routines, and pbivnorm is MVBVU at the negated limits
 D6036	1216	corpcor shrinks toward the identity and the median, and the first lambda is a closed matrix expression
 D6037	1151	squarem2 keeps R's step-length bookkeeping, and the iterates match to the evaluation count
-D6038	1099	hexbin keeps the Fortran's single-precision constants
+D6038	1100	hexbin keeps the Fortran's single-precision constants
+D6039	1142	fracdiff's log-periodogram estimates are plain regressions, and diffseries is the direct sum
