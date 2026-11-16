@@ -159,3 +159,77 @@ fn var_select(a: *mem.Arena, y: []const f64, t0: usize, k: usize, p: usize, lag_
     let r = (tt + f64(p * k) + 1.0f64) / (tt - f64(p * k) - 1.0f64)
     ret math.pow[f64](r, f64(k)) * det
 }
+
+// the h-step point forecasts (rows h by k, row-major) of a fitted VAR from the last p observations of y (t0 by k)
+fn var_forecast(y: []const f64, t0: usize, k: usize, p: usize, coef: []const f64, h: usize, out: []f64, hist: []f64) {
+    let w = k * p + 1usize
+    // hist holds p + h rows: the last p observations then the forecasts
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < k {
+            hist[i * k + j] = y[(t0 - p + i) * k + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var s = 0usize
+    while s < h {
+        let row = p + s
+        var j = 0usize
+        while j < k {
+            var v = coef[j * w + k * p]
+            var l = 0usize
+            while l < p {
+                var c = 0usize
+                while c < k {
+                    v += coef[j * w + l * k + c] * hist[(row - 1usize - l) * k + c]
+                    c += 1usize
+                }
+                l += 1usize
+            }
+            hist[row * k + j] = v
+            out[s * k + j] = v
+            j += 1usize
+        }
+        s += 1usize
+    }
+}
+
+// the moving-average (impulse response) matrices Phi_0 .. Phi_h, each k by k row-major, in phi (h + 1 matrices): Phi_0 = I, Phi_s = sum_{j <= min(s, p)} A_j Phi_{s-j}
+fn var_phi(coef: []const f64, k: usize, p: usize, h: usize, phi: []f64) {
+    let w = k * p + 1usize
+    var i = 0usize
+    while i < k * k {
+        phi[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        phi[i * k + i] = 1.0f64
+        i += 1usize
+    }
+    var s = 1usize
+    while s <= h {
+        i = 0usize
+        while i < k {
+            var j = 0usize
+            while j < k {
+                var v = 0.0f64
+                var l = 1usize
+                while l <= p && l <= s {
+                    var m = 0usize
+                    while m < k {
+                        v += coef[i * w + (l - 1usize) * k + m] * phi[(s - l) * k * k + m * k + j]
+                        m += 1usize
+                    }
+                    l += 1usize
+                }
+                phi[s * k * k + i * k + j] = v
+                j += 1usize
+            }
+            i += 1usize
+        }
+        s += 1usize
+    }
+}

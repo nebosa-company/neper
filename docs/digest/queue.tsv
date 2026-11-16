@@ -111,7 +111,7 @@ L414	library	0	343	gbm: gradient boosting machines	Open (CRAN rank 561).
 L415	library	0	366	marginaleffects: predictions, slopes and comparisons	Open (CRAN ranks 541, 533, 577).
 L416	library	0	231	polspline: polynomial spline models	Open (CRAN rank 597).
 L432	library	0	223	seriation: ordering of objects	Open (CRAN rank 609).
-L433	library	0.3	556	vars: vector autoregression	Partial (D6436).
+L433	library	0.4	607	vars: vector autoregression	Partial (D6436, D6437 forecasts and non-orthogonal irf equal vars).
 L434	library	0	258	qgraph: network estimation	Open (CRAN rank 690).
 L436	library	0	298	MatchIt: matching for causal inference	Open (CRAN rank 656).
 L437	library	0	315	gstat: geostatistics	Open (CRAN rank 699).

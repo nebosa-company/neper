@@ -45790,3 +45790,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.vars` fits VAR(y, p, type = "const") by equation-wise least squares on the design (lag 1 of every series, lag 2, ..., constant), with summary()'s residual covariance crossprod(resid) / (T - K p - 1), and VARselect's criteria on the common sample that drops the first lag.max observations: with the maximum-likelihood covariance determinant D and n = p K^2 + K parameters, AIC = log D + 2 n / T, HQ = log D + 2 log(log T) n / T, SC = log D + log T n / T and FPE = ((T + K p + 1) / (T - K p - 1))^K D. Coefficients, residual covariance and the four criteria equal the package's to 1e-8 on twenty simulated 2 and 3-variable systems with 1 to 3 lags. Not here: the trend and both deterministic types, exogenous variables, restrictions, tests, impulse responses, forecasts and the causality tests.
 
 **Result.** `oracle_vars` equals vars on 120 cases on Windows; Linux pending. L433 is partial.
+
+## D6437 — vars: forecasts and impulse responses
+
+`e.algo.stat.vars` gains `var_forecast` (h-step point forecasts by recursing the fitted equations from the last p observations) and `var_phi` (the moving-average matrices Phi_0..Phi_h, Phi_s = sum A_j Phi_{s-j}), the non-orthogonal irf.
+
+**Result.** `oracle_vars` equals vars predict() and irf(ortho = FALSE) on 150 cases on Windows; Linux pending. L433 stays partial.

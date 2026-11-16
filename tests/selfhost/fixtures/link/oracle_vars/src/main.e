@@ -20,6 +20,49 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(nm, "hq") { ret vr.var_select(a, y, t0, k, p, lm, 1usize) }
     if str.eq(nm, "sc") { ret vr.var_select(a, y, t0, k, p, lm, 2usize) }
     if str.eq(nm, "fpe") { ret vr.var_select(a, y, t0, k, p, lm, 3usize) }
+    if str.eq(nm, "fcst") || str.eq(nm, "irf") {
+        let rows = t0 - p
+        let w = k * p + 1usize
+        let (cf, g1) = mem.alloc[f64](a, k * w)
+        if g1 != ok { os.exit(9) }
+        let (rs, g2) = mem.alloc[f64](a, rows * k)
+        if g2 != ok { os.exit(10) }
+        if vr.var_fit(a, y, t0, k, p, p, cf, rs) != ok { os.exit(11) }
+        var tot = 0.0f64
+        if str.eq(nm, "fcst") {
+            let (fo, g3) = mem.alloc[f64](a, 5usize * k)
+            if g3 != ok { os.exit(12) }
+            let (hh, g4) = mem.alloc[f64](a, (p + 5usize) * k)
+            if g4 != ok { os.exit(13) }
+            vr.var_forecast(y, t0, k, p, cf, 5usize, fo, hh)
+            var q = 0usize
+            while q < 5usize * k {
+                tot += fo[q] * f64(q + 1usize)
+                q += 1usize
+            }
+            ret tot
+        }
+        let (ph, g5) = mem.alloc[f64](a, 6usize * k * k)
+        if g5 != ok { os.exit(14) }
+        vr.var_phi(cf, k, p, 5usize, ph)
+        // R lists the responses to each impulse in turn: impulse j, then horizon, then the responding series
+        var pos = 0usize
+        var imp = 0usize
+        while imp < k {
+            var s = 0usize
+            while s <= 5usize {
+                var resp = 0usize
+                while resp < k {
+                    pos += 1usize
+                    tot += ph[s * k * k + resp * k + imp] * f64(pos)
+                    resp += 1usize
+                }
+                s += 1usize
+            }
+            imp += 1usize
+        }
+        ret tot
+    }
     let rows = t0 - p
     let w = k * p + 1usize
     let (coef, e1) = mem.alloc[f64](a, k * w)
