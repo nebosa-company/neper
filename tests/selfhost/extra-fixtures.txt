@@ -277,3 +277,4 @@ oracle_betareg
 oracle_dagitty
 oracle_randtoolbox
 oracle_gmp
+oracle_hclust

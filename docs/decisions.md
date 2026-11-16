@@ -45364,3 +45364,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.gmp` adds the gmp operations that e.algo.bignum lacked: lcm, the modular inverse, a Miller-Rabin primality test over the first twelve primes, next prime, binomial, factorial, Fibonacci and Lucas numbers, the digit count in a base and the residue modulo 10^9. The oracle passes the operands as base-10^6 chunks (an f64 holds a chunk exactly) and compares each result by its value modulo 10^9 and its decimal digit count, which together pin a large result without carrying it through f64. Covered against gmp: add, multiply, integer quotient and remainder, gcd, lcm, powm, inverse, isprime, nextprime, chooseZ, fibnum, lucnum, factorialZ. Not here: factorize of large numbers, the vectorised and matrix forms, bigq beyond e.algo.bignum.Rat and the random generators.
 
 **Result.** `oracle_gmp` equals gmp on 308 cases on Windows; Linux pending. L379 is partial.
+
+## D6162 — hclust: the Lance-Williams agglomeration of R
+
+`e.algo.stat.hclust` ports hclust.f (Murtagh's nearest-neighbour list with the Lance-Williams updates for ward.D, ward.D2 — squared dissimilarities, square-rooted heights — single, complete, average, mcquitty, median and centroid) and hcass2 (the merge matrix with negative singletons and the dendrogram order), plus cutree and cophenetic distances. Merge matrices, orders, heights, cutree labels and cophenetic distances equal R's on every linkage. Not here: the dendextend functions (cor_bakers_gamma, cor_cophenetic, entanglement, untangle, fowlkes_mallows, ladderize), as.dendrogram, cutree by height and members.
+
+**Result.** `oracle_hclust` equals R on 320 cases (eight linkages, 8 to 25 points) on Windows; Linux pending. L331 is partial.
