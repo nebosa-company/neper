@@ -8,6 +8,7 @@
 
 use e.math
 use e.math.dist as dist
+use e.math.nmath_beta as nb
 use e.mem
 
 fn pnorm(z: f64) -> f64 { ret dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
@@ -230,4 +231,13 @@ fn qjohnson(p: f64, gamma: f64, delta: f64, xi: f64, lambda: f64, kind: u8) -> f
     if kind == 1u8 { ret xi + math.exp[f64](w) }
     if kind == 2u8 { ret xi + lambda / (1.0f64 + math.exp[f64](0.0f64 - w)) }
     ret xi + lambda * (math.exp[f64](w) - math.exp[f64](0.0f64 - w)) / 2.0f64
+}
+
+// ghyper(a, k, N): the hypergeometric of k draws with a successes among N
+fn ghyper_d(x: f64, a: f64, k: f64, n: f64) -> f64 { ret nb.dhyper(x, a, n - a, k, false) }
+fn ghyper_p(x: f64, a: f64, k: f64, n: f64) -> f64 { ret nb.phyper(x, a, n - a, k, true, false) }
+fn ghyper_q(p: f64, a: f64, k: f64, n: f64) -> f64 {
+    var x = nb.qhyper(p, a, n - a, k, true, false)
+    if nb.phyper(x, a, n - a, k, true, false) <= p * (1.0f64 + 1.0e-12f64) { x += 1.0f64 }
+    ret x
 }

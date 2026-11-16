@@ -46754,3 +46754,15 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `periodic_row` builds the knot vector with `degree` wrapped knots on each side (`t[i] = u[i - degree]` extended by the period `hi - lo`), evaluates the `nk + 1 + degree` B-splines (or M-splines) at `x` with `x = hi` taken as `lo`, and folds function `f` onto column `(f - degree) mod (nk + 1)`; the offset was found by comparing every `nk` from 1 to 5 and degree from 1 to 4 against splines2 in R (it is `m - degree` mod `m`, a first guess of `+1` held only for one case). Without the intercept the first column drops. splines2 refuses degrees above `nk + 1`.
 
 **Result.** `oracle_splines2` agrees with splines2 on 120 periodic summaries (both kinds) on Windows (1280 cases in all); Linux pending. L445 stays partial: periodic I and C splines (their column counts differ) and natural splines with fewer than two knots.
+
+## D6593 — SuppDists: ghyper
+
+**Decision.** `ghyper_d` and `ghyper_p` are R's hypergeometric with `a` successes, `N - a` failures and `k` draws; `ghyper_q` moves qhyper's answer up one when the cdf there does not exceed p (within 1e-12), because SuppDists returns the first x with cdf strictly above p.
+
+**Result.** `oracle_suppdists` agrees with SuppDists on the new values on Windows (703 cases in all); Linux pending. L444 stays partial.
+
+## D6594 — posterior: rhat, ess_bulk, ess_tail, mcse_mean
+
+**Decision.** `e.algo.stat.posteriorpkg` follows posterior's draws pipeline for a chain-major draws matrix: split each chain in halves, rank-normalise with `qnorm((rank - 3/8) / (S + 1/4))` (average ranks over ties), the split Rhat `sqrt((B/W + n - 1)/n)` of the bulk and of the folded draws `|x - median|` (the larger), Geyer's initial-positive-sequence ESS with the paired-sum monotonisation and the `1/log10(ESS)` cap on tau, the tail ESS as the smaller of the 5% and 95% quantile-indicator ESS (`x <= quantile(x, p)`, type 7), and `mcse_mean = sd(x)/sqrt(ess_mean)`. The autocovariance is computed directly rather than by FFT (the same biased estimator).
+
+**Result.** `oracle_posterior` agrees with posterior on 120 values (1 to 5 chains, 60 to 400 draws, heavy-tailed and shifted chains) on Windows; Linux pending. L299 at 0.4: heidel, raftery, the multivariate PSRF, cramer.test, mcse_quantile and mcse_sd, loo and ggdist remain.

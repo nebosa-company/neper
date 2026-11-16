@@ -19,4 +19,7 @@ for (rep in 1:20) {
   a <- c(ty, g, de, xi, la)
   add("jo_d", c(a, x), dJohnson(x, pr)); add("jo_p", c(a, x), pJohnson(x, pr)); add("jo_q", c(a, p), qJohnson(p, pr), 1e-8)
 }
+# ghyper: "gh_d" "gh_p" "gh_q" args (a, k, N, x)
+for (rep in 1:10) { N <- sample(10:40, 1); a <- sample(2:(N - 2), 1); k <- sample(2:(N - 2), 1); for (xx in seq(max(0, k + a - N), min(a, k))) { add("gh_d", c(a, k, N, xx), dghyper(xx, a, k, N)); add("gh_p", c(a, k, N, xx), pghyper(xx, a, k, N)) }
+  for (pr in c(0.1, 0.5, 0.9)) add("gh_q", c(a, k, N, pr), qghyper(pr, a, k, N)) }
 emit("suppdists", "SuppDists", list(cases))

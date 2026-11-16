@@ -16,6 +16,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(nm, "ig_d") { ret sd.dinv_gauss(z[2usize], z[0usize], z[1usize]) }
     if str.eq(nm, "ig_p") { ret sd.pinv_gauss(z[2usize], z[0usize], z[1usize]) }
     if str.eq(nm, "ig_q") { ret sd.qinv_gauss(z[2usize], z[0usize], z[1usize]) }
+    if str.eq(nm, "gh_d") { ret sd.ghyper_d(z[3usize], z[0usize], z[1usize], z[2usize]) }
+    if str.eq(nm, "gh_p") { ret sd.ghyper_p(z[3usize], z[0usize], z[1usize], z[2usize]) }
+    if str.eq(nm, "gh_q") { ret sd.ghyper_q(z[3usize], z[0usize], z[1usize], z[2usize]) }
     if str.starts_with(nm, "ken_") || str.starts_with(nm, "sp_") {
         let n = usize(z[0usize])
         var v = 0.0f64

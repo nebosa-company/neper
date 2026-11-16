@@ -6,7 +6,7 @@ L392	library	0.3	497	dqrng: random number generators	Partial (D6041).
 L391	library	0.45	500	bridgesampling: marginal likelihoods	Partial (D6047, D6146 bf and post_prob).
 L410	library	0.25	485	AlgDesign: optimal experimental designs	Partly done (D6077): e.algo.stat.algdesign has gen.factorial and the eval.design measures from a model matrix, equal to AlgDesign on 200 values on Windows (oracle_algdesign);
 L421	library	0.4	539	fdrtool: false discovery rate estimation	Partly done (D6068): e.algo.stat.fdrtool.fdrtool_pvalue (fndr cutoff, eta0, Grenander density, local fdr and q values for p values) equals fdrtool on 210 values on Windows (oracle_fdrtool);
-L444	library	0.3	609	SuppDists: Johnson, Kendall, Spearman and related distributions	Partly done (D6075): e.algo.stat.suppdists has inverse Gaussian, exact Kendall and Spearman for small N, and Johnson SN, SL, SB, SU d, p and q, equal to SuppDists on 428 values on Windows (oracle_supp
+L444	library	0.3	756	SuppDists: Johnson, Kendall, Spearman and related distributions	Partly done (D6075): e.algo.stat.suppdists has inverse Gaussian, exact Kendall and Spearman for small N, and Johnson SN, SL, SB, SU d, p and q, equal to SuppDists on 428 values on Windows (oracle_supp
 L445	library	0.4	1336	splines2: spline bases	Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2);
 L446	library	0.4	474	mixsqp: mixture proportions by SQP	Partly done (D6076): e.algo.stat.mixsqp finds the mixsqp optimum (proportions and value) by SQUAREM-accelerated EM, equal on 156 values at 1e-5 on Windows (oracle_mixsqp);
 L447	library	0.35	424	norm: EM and data augmentation for multivariate normal data	Partly done (D6074): e.algo.stat.normem has em.norm (path-exact) and loglik.norm, equal to norm on 355 values on Windows (oracle_norm);
@@ -61,7 +61,7 @@ L503	library	0.35	508	WRS2: robust tests and ANOVA	Partial (D6137).
 L504	library	0.3	600	rcompanion: nonparametric and categorical helpers	Partial (D6141).
 L505	library	0.2	446	sm: nonparametric smoothing methods	Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows;
 L506	library	0	195	ggm: Gaussian graphical models	Open (CRAN rank 964).
-L299	library	0.25	895	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Partial (D6592): e.algo.stat.codapkg has acf, the Yule-Walker ar(aic = TRUE) of spectrum0.ar and effectiveSize for one chain, equal to coda on 120 values on Windows (oracle_coda;
+L299	library	0.4	1073	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Partial (D6592): e.algo.stat.codapkg has acf, the Yule-Walker ar(aic = TRUE) of spectrum0.ar and effectiveSize for one chain, equal to coda on 120 values on Windows (oracle_coda;
 L305	library	0.2	702	Hmisc: numerically defined core	Partial (D6050).
 L306	library	0.15	919	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, b
 L307	library	0.15	583	quantreg: quantile regression inference and algorithms	Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg);
