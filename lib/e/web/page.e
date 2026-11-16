@@ -62,7 +62,8 @@ type Page = struct {
     renderer: *scene.Renderer, has_renderer: bool, font_base: usize,
     view: *view.View,
     ctx: *js.Interp, scripted: bool, seen_version: u64, view_width: f32, view_height: f32, csp: csp.PolicySet,
-    box_map: []u32, box_rev: u64, has_box_map: bool
+    box_map: []u32, box_rev: u64, has_box_map: bool,
+    imports_capped: bool
 }
 
 // --- Content Security Policy.
@@ -290,8 +291,25 @@ fn imports_of(p: *Page, text: str) -> []const str {
     ret sheet.finish(&l).imports
 }
 
-// Appends a sheet and, before it, the sheets it imports (to a depth of four); `base` is the sheet's URL.
-fn push_sheet(p: *Page, out: *list.List[str], text_in: str, base: *const url.Url, depth: usize) {
+// What one pass over the page's sheets has fetched: the URLs already seen (a sheet is fetched once, so a sheet that imports
+// itself, or two sheets that import each other, stop at the first revisit), how many imported sheets were fetched, and
+// whether the total cap stopped any import.
+type Imports = struct { seen: list.List[str], fetched: usize, capped: bool }
+
+const MAX_IMPORTS: usize = 32usize
+
+fn seen_url(st: *Imports, abs: str) -> bool {
+    var i = 0usize
+    while i < st.seen.len {
+        if str.eq(st.seen.items[i], abs) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// Appends a sheet and, before it, the sheets it imports (to a depth of four and at most MAX_IMPORTS imported sheets per page, each
+// URL once); `base` is the sheet's URL. A cap that stops an import is recorded in `st.capped`, not dropped silently.
+fn push_sheet(p: *Page, out: *list.List[str], st: *Imports, text_in: str, base: *const url.Url, depth: usize) {
     let imports = imports_of(p, text_in)
     var i = 0usize
     while i < imports.len && depth < 4usize {
@@ -299,11 +317,18 @@ fn push_sheet(p: *Page, out: *list.List[str], text_in: str, base: *const url.Url
         i += 1usize
         if !good { continue }
         if !csp_url_ok(p, "style-src-elem", abs) { continue }
+        if seen_url(st, abs) { continue }
+        if st.fetched >= MAX_IMPORTS {
+            st.capped = true
+            continue
+        }
+        let marked = list.push[str](&st.seen, abs)
+        st.fetched += 1usize
         let (resp, fe) = fetch.fetch(p.client, get_request_as(abs, p.url, fetch.Credentials.SameOrigin, "stylesheet"))
         if fe != ok || resp.status >= 400u16 { continue }
         let (sub_base, be) = url.parse(p.pa, abs, zero, false)
         if be != ok { continue }
-        push_sheet(p, out, absolutize_css(p.pa, css_text(p.pa, &resp), &sub_base), &sub_base, depth + 1usize)
+        push_sheet(p, out, st, absolutize_css(p.pa, css_text(p.pa, &resp), &sub_base), &sub_base, depth + 1usize)
     }
     let pushed = list.push[str](out, text_in)
 }
@@ -313,6 +338,9 @@ fn collect_sheets(p: *Page) -> []const str {
     let (made, me) = list.init[str](p.pa, 16usize)
     if me != ok { ret zero }
     var out = made
+    let (seen_made, se) = list.init[str](p.pa, 16usize)
+    if se != ok { ret zero }
+    var st = Imports { seen: seen_made, fetched: 0usize, capped: false }
     let env = sheet.media_env(f64(p.view_width), f64(p.view_height))
     let d = &p.tree
     var cur = dom.next_in_tree(d, d.root, d.root)
@@ -324,7 +352,7 @@ fn collect_sheets(p: *Page) -> []const str {
                 let (nonce, has_nonce) = dom.get_attribute(d, cur, "nonce")
                 var inline_ok = true
                 if te == ok && !csp_inline_ok(p, "style-src-elem", nonce, text) { inline_ok = false }
-                if te == ok && inline_ok { push_sheet(p, &out, absolutize_css(p.pa, strip_cdata(p.pa, text), &p.base), &p.base, 0usize) }
+                if te == ok && inline_ok { push_sheet(p, &out, &st, absolutize_css(p.pa, strip_cdata(p.pa, text), &p.base), &p.base, 0usize) }
             }
         } else if dom.is_html_named(d, cur, "link") {
             let (rel, has_rel) = dom.get_attribute(d, cur, "rel")
@@ -336,13 +364,17 @@ fn collect_sheets(p: *Page) -> []const str {
                     let (resp, fe) = fetch.fetch(p.client, get_request_as(abs, p.url, fetch.Credentials.SameOrigin, "stylesheet"))
                     if fe == ok && resp.status < 400u16 {
                         let (sheet_base, be) = url.parse(p.pa, abs, zero, false)
-                        if be == ok { push_sheet(p, &out, absolutize_css(p.pa, css_text(p.pa, &resp), &sheet_base), &sheet_base, 0usize) }
+                        if be == ok {
+                            let marked = list.push[str](&st.seen, abs)
+                            push_sheet(p, &out, &st, absolutize_css(p.pa, css_text(p.pa, &resp), &sheet_base), &sheet_base, 0usize)
+                        }
                     }
                 }
             }
         }
         cur = dom.next_in_tree(d, d.root, cur)
     }
+    p.imports_capped = st.capped
     ret list.slice_const[str](&out)
 }
 

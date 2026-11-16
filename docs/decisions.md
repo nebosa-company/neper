@@ -47084,3 +47084,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `best_split` copies the node's rows into `order`, heapsorts them by the feature (in place, no recursion, no extra buffer), and walks the sorted rows once: for classification it moves each row from the right to the left class counts and keeps the sums of squared counts incrementally (`left impurity = nl - sum(l_c^2)/nl`, the Gini times the count); for regression it keeps the sums of the node-centred targets and their squares on the left and takes the right from the totals. The scratch `bins` grows from `classes + 1` to `3 * classes + 1`. The choice of split is unchanged: a candidate must beat the best gain by 1e-12, which is larger than the rounding of the running sums, and the existing tree, forest and boosting goldens still hold.
 
 **Result.** `ml_tree` passes on Windows with a 60000-sample stump in 0.5 s (32 s with the old search); Linux pending. L250 leaves the queue.
+
+## D6660 — page style sheets: each import once, a cap that says so
+
+**Decision.** `push_sheet` took a depth of four and nothing else, so a sheet importing itself was fetched four times and a long import list had no limit. `collect_sheets` now builds an `Imports` record (URLs seen, imported sheets fetched, capped flag) for one pass; a URL already seen is skipped, a link-fetched sheet is marked before its own imports are read, the fetch count stops at 32 imported sheets, and a refused import sets `Page.imports_capped`. Dropping a repeated import changes the cascade only by omitting an identical later copy.
+
+**Result.** `web_page_imports` passes on Windows (new checks: 2 sheets for a doubled import, 33 plus the flag for forty); `web_page_csp` and `web_shell` unchanged; Linux pending. L242 leaves the queue.

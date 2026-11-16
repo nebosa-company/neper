@@ -4822,17 +4822,6 @@
       "evidence": "Opened from the 2026-11-13 library review. Acceptance: a 100,000-deep input to each returns an error, not a stack overflow. Notes: docs/library-hardening-plan.md."
     },
     {
-      "id": "L242",
-      "category": "library",
-      "group": "Library",
-      "order": 455,
-      "title": "`@import` fan-out",
-      "score": 0,
-      "model": "sonnet",
-      "thinking": "low",
-      "evidence": "Opened from the 2026-11-13 library review. Acceptance: a sheet importing itself fetches once; a total cap is reported, not silent. Notes: docs/library-hardening-plan.md."
-    },
-    {
       "id": "L247",
       "category": "library",
       "group": "Library",
