@@ -966,10 +966,10 @@
       "group": "CRAN parity",
       "order": 687,
       "title": "rpart: CART trees",
-      "score": 0,
+      "score": 0.25,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 270). Mid. e.ml.tree has trees. Acceptance, equal to rpart: anova, class, poisson and exp methods, loss matrices and priors, surrogate and primary splits, usesurrogate, the cp table with xval folds under set.seed, prune, predict and the node numbering of the printed tree."
+      "evidence": "Partial (D6434). The anova regression tree on numeric predictors (leaf counts and fitted values) equals rpart on Windows (oracle_cart; Linux pending). Open: classification, Poisson and survival trees, surrogates, categorical predictors, cross-validation, pruning. Was: Open (CRAN rank 270). Mid. e.ml.tree has trees. Acceptance, equal to rpart: anova, class, poisson and exp methods, loss matrices and priors, surrogate and primary splits, usesurrogate, the cp table with xval folds under set.seed, prune, predict and the node numbering of the printed tree."
     },
     {
       "id": "L394",

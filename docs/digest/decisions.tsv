@@ -3301,4 +3301,5 @@ D6429	924	DescTools: Skew, Kurt, Gini and the simple location and spread measure
 D6430	914	DescTools: association measures of a contingency table
 D6431	891	DescTools: kappa, lambda, Goodman-Kruskal tau, odds ratio and Yule's Q
 D6432	925	fitdistrplus: closed-form fits and gofstat
-D6433	956	fitdistrplus: gamma and Weibull maximum-likelihood fits
+D6433	957	fitdistrplus: gamma and Weibull maximum-likelihood fits
+D6434	1015	rpart: the anova regression tree
