@@ -15,17 +15,6 @@
       "evidence": "Partial (D6000, D6009, D6010, D6015, D6019). guess_parser equals readr on 1566 columns; parse_date, parse_time and parse_datetime take a locale's names (ten languages) and a time zone (every transition of the zones in e.tz.builtin); read_delim equals readr on rows shorter and longer than the header, under a one-column header and with a quote left open, on 15489 cases. Open: %Z naming a zone, and two unterminated-quote shapes that crash or confuse readr 2.2.0 (listed in D6016)."
     },
     {
-      "id": "L326",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 548,
-      "title": "quantmod and TTR: technical indicators",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 215). Small. Acceptance, equal to TTR and quantmod: SMA, EMA, WMA, DEMA, ZLEMA, RSI, MACD, BBands, ATR, ADX, CCI, stoch, SAR, OBV, ROC, periodReturn, Delt; getSymbols and charting excluded."
-    },
-    {
       "id": "L329",
       "category": "library",
       "group": "CRAN parity",
@@ -310,6 +299,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6031). KernSmooth bkde and dpik, tseries jarque.bera.test and runs.test equal R on Windows (Linux pending). Open: bkde2D, locpoly, dpill, bds.test, white.test, terasvirta.test, tsbootstrap, portfolio.optim. Was: Open (CRAN ranks 273, 241). Small. Acceptance, equal to R: KernSmooth bkde, bkde2D, locpoly, dpik, dpih, dpill; tseries jarque.bera.test, bds.test, runs.test, white.test, terasvirta.test, tsbootstrap, portfolio.optim. adf, kpss and pp come with L303."
+    },
+    {
+      "id": "L326",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 548,
+      "title": "quantmod and TTR: technical indicators",
+      "score": 0.6,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Partial (D6032). SMA, EMA (Wilder, ratio), WMA, DEMA, RSI, MACD, BBands, ROC, OBV, TR and ATR equal TTR 0.24.4 on Windows (Linux pending). Open: ZLEMA, ADX, CCI, stoch, SAR, periodReturn, Delt. Was: Open (CRAN rank 215). Small. Acceptance, equal to TTR and quantmod: SMA, EMA, WMA, DEMA, ZLEMA, RSI, MACD, BBands, ATR, ADX, CCI, stoch, SAR, OBV, ROC, periodReturn, Delt; getSymbols and charting excluded."
     },
     {
       "id": "L406",

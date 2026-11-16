@@ -167,3 +167,4 @@ oracle_boot
 oracle_classknn
 oracle_permute
 oracle_kstseries
+oracle_ttr
