@@ -92,17 +92,6 @@
       "evidence": "Partial (D6043). icafast (symmetric update, logcosh, kur, exp) equals ica 1.0-3 on Windows through vafs, iterations, convergence and S M (Linux pending). Open: alg def, n < p, icaimax, icajade. Was: Open (CRAN rank 548). Small. Acceptance, equal to ica under set.seed: icafast, icaimax and icajade with their whitening, contrasts and convergence, the mixing and source matrices up to the permutation and sign R reports."
     },
     {
-      "id": "L404",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 564,
-      "title": "mlbench: benchmark data generators",
-      "score": 0.5,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6045). friedman1, friedman2, friedman3, 2dnormals, circle, xor, twonorm and ringnorm equal mlbench 2.1-6 under set.seed on Windows (Linux pending). Open: cassini, hypercube, peak, shapes, simplex, smiley, spirals, threenorm, waveform. Was: Open (CRAN rank 547). Small. Acceptance, equal to mlbench under set.seed: mlbench.friedman1, friedman2, friedman3, 2dnormals, circle, cassini, hypercube, peak, ringnorm, shapes, simplex, smiley, spirals, threenorm, twonorm, waveform, xor."
-    },
-    {
       "id": "L405",
       "category": "library",
       "group": "CRAN parity",

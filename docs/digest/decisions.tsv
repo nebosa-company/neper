@@ -3202,4 +3202,5 @@ D6126	835	pcaPP cor.fk and the geometric median
 D6127	1093	pcaPP PCAproj
 D6128	912	SQUAREM with an objective, and the cycled schemes
 D6129	665	hexbin hexTapply, smooth.hexbin and erode.hexbin
-D6130	852	fracdiff.sim
+D6130	853	fracdiff.sim
+D6131	686	the remaining mlbench generators

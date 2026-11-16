@@ -16,7 +16,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     rr.seed(&g, i64(x[1usize]))
     let kind = u8(x[0usize])
     let n = usize(x[2usize])
-    let d = usize(x[3usize])
+    var d = usize(x[3usize])
+    if kind == 14u8 { d = 0usize }
     var dt: ml.Data = zero
     var e = ok
     if kind == 0u8 { let (r, re) = ml.friedman1(a, &g, n, x[4usize])
@@ -38,6 +39,33 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         dt = r
         e = re }
     if kind == 7u8 { let (r, re) = ml.twonorm_ringnorm(a, &g, n, d, 1u8)
+        dt = r
+        e = re }
+    if kind == 8u8 { let (r, re) = ml.cassini(a, &g, n, x[3usize], x[4usize], x[5usize])
+        dt = r
+        e = re }
+    if kind == 9u8 { let (r, re) = ml.corners(a, &g, n, d, x[5usize], x[4usize], 0u8, true)
+        dt = r
+        e = re }
+    if kind == 10u8 { let (r, re) = ml.peak(a, &g, n, d)
+        dt = r
+        e = re }
+    if kind == 11u8 { let (r, re) = ml.shapes_smiley(a, &g, n, 0.0f64, 0.0f64, 0u8)
+        dt = r
+        e = re }
+    if kind == 12u8 || kind == 17u8 { let (r, re) = ml.corners(a, &g, n, d, x[5usize], x[4usize], 1u8, kind == 12u8)
+        dt = r
+        e = re }
+    if kind == 13u8 { let (r, re) = ml.shapes_smiley(a, &g, n, x[4usize], x[5usize], 1u8)
+        dt = r
+        e = re }
+    if kind == 14u8 { let (r, re) = ml.spirals(a, &g, n, x[3usize], x[4usize])
+        dt = r
+        e = re }
+    if kind == 15u8 { let (r, re) = ml.threenorm(a, &g, n, d)
+        dt = r
+        e = re }
+    if kind == 16u8 { let (r, re) = ml.waveform(a, &g, n)
         dt = r
         e = re }
     if e != ok { os.exit(6) }

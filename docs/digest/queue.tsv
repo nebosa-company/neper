@@ -7,7 +7,6 @@ L388	library	0.6	402	fracdiff: fractional differencing and ARFIMA	Partial (D6039
 L392	library	0.3	497	dqrng: random number generators	Partial (D6041).
 L399	library	0.4	644	pwr: power analysis	Partial (D6042).
 L402	library	0.4	419	ica: independent component analysis	Partial (D6043).
-L404	library	0.5	488	mlbench: benchmark data generators	Partial (D6045).
 L405	library	0.5	759	yardstick and ModelMetrics: model performance metrics	Partial (D6046).
 L391	library	0.35	476	bridgesampling: marginal likelihoods	Partial (D6047).
 L410	library	0.25	485	AlgDesign: optimal experimental designs	Partly done (D6077): e.algo.stat.algdesign has gen.factorial and the eval.design measures from a model matrix, equal to AlgDesign on 200 values on Windows (oracle_algdesign);

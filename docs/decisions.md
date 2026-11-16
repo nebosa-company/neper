@@ -45150,3 +45150,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `fracdiff_sim` ports `fdsim.c`: the Durbin-Levinson recursion for the ARFIMA(0,d,0) series with its variance update, then the inverse ARMA filter, over innovations drawn the way R draws them (the n + q innovations first, because `length(innov)` forces them before `start.innov`, then the n.start start-up values). The gamma values come from nmath's gammafn where the package has SLATEC's dgamma. The burn-in n.start is an argument; R's default for an AR part needs the roots of the AR polynomial and is not computed here.
 
 **Result.** `oracle_fracdiff` equals fracdiff on the simulated series (elements and sums, with and without AR, MA and mean) on Windows; Linux pending. The Haslett-Raftery fit stays open on L388.
+
+## D6131 — the remaining mlbench generators
+
+**Context.** L404 had eight of the seventeen generators.
+
+**Decision.** cassini, hypercube, peak, shapes, simplex, smiley, spirals, threenorm and waveform are drawn in the order R draws them: matrices column by column (so a two-column block draws its first column whole), `sample(1:n, n/2)` before the spiral and threenorm points, rejection loops one `runif(1, ...)` pair at a time, and the waveform's unif, unif, then 21 norm draws per row. `round` is R's half-to-even (`round_even`), which matters for n / 2^d and n / 4.
+
+**Result.** `oracle_mlbench` equals mlbench on all seventeen generators on Windows; Linux pending. L404 is closed.

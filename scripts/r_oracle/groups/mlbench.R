@@ -21,4 +21,22 @@ for (seed in c(1, 7, 2026)) {
     }
   }
 }
+#   kinds 8 cassini (relsize in slots 3-5), 9 hypercube (d, sd, side), 10 peak (d), 11 shapes, 12 simplex centred (d, sd, side), 13 smiley (sd1 sd2 in 4-5),
+#   14 spirals (cycles, sd in 3-4), 15 threenorm (d), 16 waveform, 17 simplex not centred
+cls <- function(r) as.numeric(as.character(r$classes))
+for (seed in c(3, 11)) for (n in c(40, 100, 160)) {
+  set.seed(seed); r <- mlbench.cassini(n); a <- c(8, seed, n, 2, 2, 1); sums("x", a, t(r$x)); sums("y", a, cls(r))
+  set.seed(seed); r <- mlbench.cassini(n, relsize = c(3, 1, 2)); a <- c(8, seed, n, 3, 1, 2); sums("x", a, t(r$x)); sums("y", a, cls(r))
+  for (d in c(2, 3)) {
+    set.seed(seed); r <- mlbench.hypercube(n, d, sd = 0.2, sides = rep(2, d)); a <- c(9, seed, n, d, 0.2, 2); sums("x", a, t(r$x)); sums("y", a, cls(r))
+    set.seed(seed); r <- mlbench.simplex(n, d, sides = 2, sd = 0.15); a <- c(12, seed, n, d, 0.15, 2); sums("x", a, t(r$x)); sums("y", a, cls(r))
+    set.seed(seed); r <- mlbench.simplex(n, d, sides = 1.5, sd = 0.1, center = FALSE); a <- c(17, seed, n, d, 0.1, 1.5); sums("x", a, t(r$x)); sums("y", a, cls(r))
+  }
+  for (d in c(5, 20)) { set.seed(seed); r <- mlbench.peak(n, d); a <- c(10, seed, n, d, 0, 0); sums("x", a, t(r$x)); sums("y", a, r$y) }
+  set.seed(seed); r <- mlbench.shapes(n); a <- c(11, seed, n, 0, 0, 0); sums("x", a, t(r$x)); sums("y", a, cls(r))
+  set.seed(seed); r <- mlbench.smiley(n, sd1 = 0.1, sd2 = 0.05); a <- c(13, seed, n, 0, 0.1, 0.05); sums("x", a, t(r$x)); sums("y", a, cls(r))
+  for (sd in c(0, 0.05)) { set.seed(seed); r <- mlbench.spirals(n, cycles = 1.5, sd = sd); a <- c(14, seed, n, 1.5, sd, 0); sums("x", a, t(r$x)); sums("y", a, cls(r)) }
+  for (d in c(5, 20, 7)) { set.seed(seed); r <- mlbench.threenorm(n, d); a <- c(15, seed, n, d, 0, 0); sums("x", a, t(r$x)); sums("y", a, cls(r)) }
+  set.seed(seed); r <- mlbench.waveform(n); a <- c(16, seed, n, 0, 0, 0); sums("x", a, t(r$x)); sums("y", a, cls(r))
+}
 emit("mlbench", "mlbench", list(cases))
