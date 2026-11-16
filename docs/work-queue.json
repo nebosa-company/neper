@@ -42,10 +42,10 @@
       "group": "CRAN parity",
       "order": 586,
       "title": "norm: EM and data augmentation for multivariate normal data",
-      "score": 0.35,
+      "score": 0.45,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6074): e.algo.stat.normem has em.norm (path-exact) and loglik.norm, equal to norm on 355 values on Windows (oracle_norm); Linux pending. Open: priors, ecm.norm, logpost.norm, da.norm, imp.norm, mda.norm and rngseed. Original: Open (CRAN rank 757). Small. Acceptance, equal to norm under set.seed: prelim.norm, em.norm, ecm.norm, da.norm, imp.norm, rngseed, loglik.norm, logpost.norm, and the parameter getters."
+      "evidence": "Partly done (D6074): e.algo.stat.normem has em.norm (path-exact) and loglik.norm, equal to norm on 355 values on Windows (oracle_norm); Linux pending. D6709: logpost.norm (with and without a prior) and mi.inference equal norm on 172 values. Open: priors in em.norm, ecm.norm, da.norm, imp.norm, mda.norm and rngseed. Original: Open (CRAN rank 757). Small. Acceptance, equal to norm under set.seed: prelim.norm, em.norm, ecm.norm, da.norm, imp.norm, rngseed, loglik.norm, logpost.norm, and the parameter getters."
     },
     {
       "id": "L469",

@@ -8,6 +8,7 @@
 
 use e.algo.stat.psych as ps
 use e.math
+use e.math.nmath_beta as nb
 use e.mem
 
 // one EM step in the standardised scale: from (mu, sg) to (nmu, nsg); n by p column-major z
@@ -291,3 +292,94 @@ fn loglik_norm(a: *mem.Arena, x: []const f64, n: usize, p: usize, mu: []const f6
 }
 
 error Singular
+
+// logpost.norm: loglik.norm plus the log of the normal-inverted-Wishart prior (tau, m, mu0, lambdainv) at the parameter, the prior being on the standardised scale as in the package (mu0 length p, lambdainv p by p row-major); without a prior the package passes tau = 0, m = -1 and a zero lambdainv, which is Jeffreys' prior -(p + 1) / 2 log|Sigma|
+fn logpost_norm(a: *mem.Arena, x: []const f64, n: usize, p: usize, mu: []const f64, sigma: []const f64, tau: f64, m: f64, mu0: []const f64, lambdainv: []const f64) -> (f64, err) {
+    let (ll, e0) = loglik_norm(a, x, n, p, mu, sigma)
+    if e0 != ok { ret (0.0f64, e0) }
+    let (ms, e1) = mem.alloc[f64](a, p)
+    let (ss, e2) = mem.alloc[f64](a, p * p)
+    let (sd, e3) = mem.alloc[f64](a, p)
+    let (inv, e4) = mem.alloc[f64](a, p * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (0.0f64, e1) }
+    var j = 0usize
+    while j < p {
+        var c = 0.0f64
+        var s = 0.0f64
+        var i = 0usize
+        while i < n {
+            if x[j * n + i] == x[j * n + i] {
+                c += 1.0f64
+                s += x[j * n + i]
+            }
+            i += 1usize
+        }
+        let xb = s / c
+        var v = 0.0f64
+        i = 0usize
+        while i < n {
+            if x[j * n + i] == x[j * n + i] { v += (x[j * n + i] - xb) * (x[j * n + i] - xb) }
+            i += 1usize
+        }
+        sd[j] = math.sqrt[f64](v / c)
+        ms[j] = (mu[j] - xb) / sd[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var l = 0usize
+        while l < p {
+            ss[j * p + l] = sigma[j * p + l] / (sd[j] * sd[l])
+            l += 1usize
+        }
+        j += 1usize
+    }
+    if !ps.invert(a, ss, p, inv) { ret (0.0f64, Singular) }
+    let logdet = ps.logdet(a, ss, p)
+    var trace = 0.0f64
+    j = 0usize
+    while j < p {
+        var l = 0usize
+        while l < p {
+            trace += inv[j * p + l] * (lambdainv[j * p + l] + tau * (ms[j] - mu0[j]) * (ms[l] - mu0[l]))
+            l += 1usize
+        }
+        j += 1usize
+    }
+    ret (ll - logdet * (m + f64(p) + 2.0f64) / 2.0f64 - trace / 2.0f64, ok)
+}
+
+// mi.inference for one quantity: the m estimates and standard errors; answers (est, std.err, df, signif, lower, upper, r, fminf) in `out` (8 values)
+fn mi_inference(est: []const f64, se: []const f64, confidence: f64, out: []f64) {
+    let m = f64(est.len)
+    var qbar = 0.0f64
+    var ubar = 0.0f64
+    var i = 0usize
+    while i < est.len {
+        qbar += est[i]
+        ubar += se[i] * se[i]
+        i += 1usize
+    }
+    qbar = qbar / m
+    ubar = ubar / m
+    var bm = 0.0f64
+    i = 0usize
+    while i < est.len {
+        bm += (est[i] - qbar) * (est[i] - qbar)
+        i += 1usize
+    }
+    bm = bm / (m - 1.0f64)
+    let tm = ubar + (1.0f64 + 1.0f64 / m) * bm
+    let rem = (1.0f64 + 1.0f64 / m) * bm / ubar
+    let nu = (m - 1.0f64) * (1.0f64 + 1.0f64 / rem) * (1.0f64 + 1.0f64 / rem)
+    let alpha = 1.0f64 - (1.0f64 - confidence) / 2.0f64
+    let q = nb.qt(alpha, nu, true, false)
+    out[0usize] = qbar
+    out[1usize] = math.sqrt[f64](tm)
+    out[2usize] = nu
+    out[3usize] = 2.0f64 * (1.0f64 - nb.pt(math.abs[f64](qbar / math.sqrt[f64](tm)), nu, true, false))
+    out[4usize] = qbar - q * math.sqrt[f64](tm)
+    out[5usize] = qbar + q * math.sqrt[f64](tm)
+    out[6usize] = rem
+    out[7usize] = (rem + 2.0f64 / (nu + 3.0f64)) / (rem + 1.0f64)
+}
