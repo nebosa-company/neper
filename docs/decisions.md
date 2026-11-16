@@ -46712,3 +46712,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `nat_row` follows splines2, not splines::ns (the two differ by up to 0.65 in the basis values). The package multiplies the cubic B-spline row by a sparse null-space matrix H of the boundary second-derivative constraints: the left block `(B1 + B2 + B3)/3` and `t B2 + (1 - t) B3` with `t = c/(c - b)` from the second derivatives (a, b, c) of the first three splines at the lower boundary, the interior B-splines unchanged, and `s B[K-2] + (1 - s) B[K-1]` and `(B[K-3] + B[K-2] + B[K-1])/3` on the right with `s` from the last three at the upper boundary; the intercept-free basis drops the first column. The first attempt (ns's Householder QR null space) matched neither case.
 
 **Result.** `oracle_splines2` agrees with splines2 on 40 natural-spline summaries (two to four internal knots, both intercepts) on Windows (440 cases in all); Linux pending. With fewer than two internal knots the blocks overlap and the package's form is not ported; L445 stays partial (cSpline, periodic bases, the derivatives of M and I splines).
+
+## D6590 — splines2: cSpline
+
+**Decision.** `crow` is cSpline as the integral of the I-spline over `[lo, x]` (checked in R: the degree-2 I-spline integrates to the package's 0.9 at the upper knot), computed by 4-point Gauss-Legendre on each knot interval, which is exact for these piecewise polynomials; `scale` divides every column by its value at the upper boundary; the first column drops without the intercept.
+
+**Result.** `oracle_splines2` agrees with splines2 on 60 cSpline cases of each scaling (560 cases in all) on Windows; Linux pending. L445 stays partial: naturalSpline with fewer than two knots, periodic bases, the derivatives of M and I splines.

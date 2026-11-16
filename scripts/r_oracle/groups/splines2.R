@@ -32,4 +32,20 @@ for (rep in 1:20) {
   m <- unclass(naturalSpline(x, knots = kn, intercept = icp == 1, Boundary.knots = c(lo, hi))); v <- as.vector(t(m)); a <- c(n, nk, 3, icp, lo, hi, 5, x, kn)
   add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
 }
+# cSpline (kinds 6 unscaled, 7 scaled)
+for (rep in 1:30) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); nk <- sample(0:3, 1); degree <- sample(1:4, 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- if (nk > 0) sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)) else numeric(0); if (anyDuplicated(kn)) next
+  for (kind in 6:7) {
+    m <- unclass(cSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), scale = kind == 7)); v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, kind, x, kn)
+    add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
+  }
+}
+# cSpline (kind 6 unscaled, kind 7 scaled)
+for (rep in 1:30) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); nk <- sample(0:3, 1); degree <- sample(1:4, 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- if (nk > 0) sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)) else numeric(0); if (anyDuplicated(kn)) next
+  for (kind in 6:7) { m <- unclass(cSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), scale = kind == 7)); v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, kind, x, kn)
+    add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v)) }
+}
 emit("splines2", "splines2", list(cases))

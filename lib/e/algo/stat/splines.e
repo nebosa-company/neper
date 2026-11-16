@@ -135,3 +135,144 @@ fn nat_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi:
     o += 1usize
     ret o
 }
+
+// splines2::cSpline row at x: the integral of the I-spline row over [lo, x], by 4-point Gauss-Legendre on each knot interval (exact: the I-splines are piecewise polynomials of degree <= degree); scale divides every column by its value at hi; the first column drops without the intercept. `work` needs width + 2 * width values
+fn crow(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize, intercept: bool, scale: bool, x: f64, out: []f64) -> usize {
+    let width = knots.len + degree + 1usize
+    let (acc, e1) = mem.alloc[f64](a, width)
+    let (iv, e2) = mem.alloc[f64](a, width)
+    let (top, e3) = mem.alloc[f64](a, width)
+    let (rv, e4) = mem.alloc[f64](a, width + 2usize)
+    if e4 != ok { ret 0usize }
+    if e1 != ok || e2 != ok || e3 != ok { ret 0usize }
+    var pass = 0usize
+    while pass < 2usize {
+        var xe = x
+        if pass == 1usize { xe = hi }
+        var c = 0usize
+        while c < width {
+            acc[c] = 0.0f64
+            c += 1usize
+        }
+        var a0 = lo
+        var seg = 0usize
+        while seg <= knots.len && a0 < xe {
+            var b0 = hi
+            if seg < knots.len { b0 = knots[seg] }
+            if b0 > xe { b0 = xe }
+            if b0 > a0 {
+                var q = 0usize
+                while q < 4usize {
+                    var nd = 0.0f64
+                    var wt = 0.0f64
+                    if q == 0usize {
+                        nd = 0.0f64 - 0.8611363115940526f64
+                        wt = 0.3478548451374538f64
+                    } else if q == 1usize {
+                        nd = 0.0f64 - 0.3399810435848563f64
+                        wt = 0.6521451548625461f64
+                    } else if q == 2usize {
+                        nd = 0.3399810435848563f64
+                        wt = 0.6521451548625461f64
+                    } else {
+                        nd = 0.8611363115940526f64
+                        wt = 0.3478548451374538f64
+                    }
+                    let u = 0.5f64 * ((b0 - a0) * nd + b0 + a0)
+                    let m = row(t, tmp, knots, lo, hi, degree, true, 2u8, 0usize, u, rv)
+                    c = 0usize
+                    while c < m {
+                        acc[c] += wt * rv[c] * (b0 - a0) / 2.0f64
+                        c += 1usize
+                    }
+                    q += 1usize
+                }
+            }
+            a0 = b0
+            seg += 1usize
+        }
+        if pass == 1usize {
+            c = 0usize
+            while c < width {
+                top[c] = acc[c]
+                c += 1usize
+            }
+        } else {
+            c = 0usize
+            while c < width {
+                iv[c] = acc[c]
+                c += 1usize
+            }
+        }
+        pass += 1usize
+    }
+    var o = 0usize
+    var c2 = 0usize
+    while c2 < width {
+        if c2 > 0usize || intercept {
+            var v = iv[c2]
+            if scale { v = v / top[c2] }
+            out[o] = v
+            o += 1usize
+        }
+        c2 += 1usize
+    }
+    ret o
+}
+
+// the unscaled C-spline columns at x (the integrals of the I-splines): C_c = sum over j' >= c + 2 of w_j' sum over m >= j' of B_{m, p+2}(x), w_j' = (t_{j'+p+1} - t_j') / (p + 1), p = degree + 1, on the knot vector with p + 2 boundary repeats; K = nk + degree + 1 values into cout
+fn cspline_raw(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize, x: f64, cout: []f64) {
+    let p = degree + 1usize
+    extend(t, knots, lo, hi, p + 2usize)
+    let kk = knots.len + degree + 1usize
+    // B_{m, p+2}(x) for every m with a non-empty index range of the extended vector
+    let nb = t.len - (p + 2usize)
+    var m = 0usize
+    while m < nb {
+        tmp[m] = bval(t, m, p + 2usize, x, 0usize, hi)
+        m += 1usize
+    }
+    // suffix sums S_j = sum_{m >= j} B_m
+    var j = nb
+    while j > 0usize {
+        j -= 1usize
+        var s = 0.0f64
+        var q = j
+        while q < nb {
+            s += tmp[q]
+            q += 1usize
+        }
+        tmp[nb + j] = s
+    }
+    var c = 0usize
+    while c < kk {
+        var s = 0.0f64
+        var jp = c + 2usize
+        while jp < nb {
+            let w = (t[jp + p + 1usize] - t[jp]) / f64(p + 1usize)
+            s += w * tmp[nb + jp]
+            jp += 1usize
+        }
+        cout[c] = s
+        c += 1usize
+    }
+}
+
+// splines2::cSpline row at x with scale = TRUE (each column divided by its value at the upper boundary knot) or FALSE; the first column drops without the intercept
+fn cspline_row(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize, intercept: bool, scale: bool, x: f64, cout: []f64, chi: []f64, out: []f64) -> usize {
+    let kk = knots.len + degree + 1usize
+    cspline_raw(t, tmp, knots, lo, hi, degree, x, cout)
+    if scale { cspline_raw(t, tmp, knots, lo, hi, degree, hi, chi) }
+    var o = 0usize
+    var c = 0usize
+    while c < kk {
+        if c > 0usize || intercept {
+            var v = cout[c]
+            if scale { v = v / chi[c] }
+            out[o] = v
+            o += 1usize
+        }
+        c += 1usize
+    }
+    ret o
+}

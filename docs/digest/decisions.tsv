@@ -3457,4 +3457,5 @@ D6585	547	sandwich: the other wild bootstraps
 D6586	420	L300 closed
 D6587	1095	pls: cppls powers, and a correction; L359 closed
 D6588	510	ROCR: rpp, phi, cost, mxe, rmse
-D6589	1077	splines2: naturalSpline
+D6589	1078	splines2: naturalSpline
+D6590	664	splines2: cSpline

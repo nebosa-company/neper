@@ -36,7 +36,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var i = 0usize
     while i < n {
         var m = 0usize
-        if kind == 5usize {
+        if kind >= 6usize {
+            let (tn2, ec1) = mem.alloc[f64](a, nk + 2usize * (degree + 2usize))
+            let (tmpn2, ec2) = mem.alloc[f64](a, 2usize * width + 4usize)
+            let (outn2, ec3) = mem.alloc[f64](a, width + 2usize)
+            if ec1 != ok || ec2 != ok || ec3 != ok { ret 0.0f64 / 0.0f64 }
+            m = sp.crow(a, tn2, tmpn2, knots, lo, hi, degree, icp, kind == 7usize, xs[i], outn2)
+            var jc = 0usize
+            while jc < m {
+                out[jc] = outn2[jc]
+                jc += 1usize
+            }
+        } else if kind == 5usize {
             let (tn, en1) = mem.alloc[f64](a, nk + 12usize)
             let (tmpn, en2) = mem.alloc[f64](a, 2usize * (nk + 4usize) + 8usize)
             let (outn, en3) = mem.alloc[f64](a, nk + 6usize)
