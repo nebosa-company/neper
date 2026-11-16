@@ -46856,3 +46856,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `arulespkg.apriori` counts every item subset of up to 20 items over bit-mask transactions, keeps those with count at least `ceil(supp * n)` and size at most maxlen, and builds rules from each frequent itemset of two or more items with every proper non-empty subset as antecedent. The consequent is a single item: arules' Borgelt apriori mines one-item consequents, and allowing any consequent gave 121 rules where R gave 85.
 
 **Result.** `oracle_arules` agrees with arules on counts, supports, confidences and lifts on Windows (144 values); Linux pending. L462 stays partial: pruned search for many items, eclat, closed and maximal sets, other measures.
+
+## D6622 — systemfit: SUR by feasible GLS
+
+**Decision.** `systemfitpkg.sur` runs OLS per equation, estimates the residual covariance (divisor `sqrt((n - k_i)(n - k_j))` for geomean, `n` for noDfCor), and repeats the generalized least squares pass on the stacked system the requested number of times, re-estimating the covariance from each pass's residuals; the reported covariance comes from the last pass. In R the divisor and the pass count are `systemfit.control` arguments: passed straight to `systemfit()` they are silently ignored, which first showed up as 4 of 24 cases disagreeing.
+
+**Result.** `oracle_systemfit` agrees with systemfit SUR on Windows (72 values); Linux pending. L461 stays partial: unequal observations, restrictions, 2SLS and 3SLS, other divisors.
