@@ -1436,3 +1436,122 @@ fn singular_values(a: []const f64, m: usize, n: usize, s: []f64, work: []f64) {
         a2 += 1usize
     }
 }
+
+// the thin SVD of a tall or square m by n matrix (m >= n) by one-sided Jacobi: u (m by n, columns scaled to unit length where the singular value is above 1e-300), s (n, unsorted)
+// and v (n by n); work holds m * n values
+fn svd_jacobi(a: []const f64, m: usize, n: usize, u: []f64, s: []f64, v: []f64) {
+    var i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < n {
+            u[i * n + j] = a[i * n + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            v[i * n + j] = 0.0f64
+            if i == j { v[i * n + j] = 1.0f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var sweep = 0usize
+    while sweep < 60usize {
+        var rotated = false
+        var p = 0usize
+        while p + 1usize < n {
+            var q = p + 1usize
+            while q < n {
+                var alpha = 0.0f64
+                var beta = 0.0f64
+                var gamma = 0.0f64
+                var r = 0usize
+                while r < m {
+                    alpha += u[r * n + p] * u[r * n + p]
+                    beta += u[r * n + q] * u[r * n + q]
+                    gamma += u[r * n + p] * u[r * n + q]
+                    r += 1usize
+                }
+                if gamma != 0.0f64 && math.abs[f64](gamma) > 1.0e-15f64 * math.sqrt[f64](alpha * beta) {
+                    rotated = true
+                    let zeta = (beta - alpha) / (2.0f64 * gamma)
+                    var t = 1.0f64 / (math.abs[f64](zeta) + math.sqrt[f64](1.0f64 + zeta * zeta))
+                    if zeta < 0.0f64 { t = 0.0f64 - t }
+                    let c = 1.0f64 / math.sqrt[f64](1.0f64 + t * t)
+                    let sn = c * t
+                    r = 0usize
+                    while r < m {
+                        let up = u[r * n + p]
+                        let uq = u[r * n + q]
+                        u[r * n + p] = c * up - sn * uq
+                        u[r * n + q] = sn * up + c * uq
+                        r += 1usize
+                    }
+                    r = 0usize
+                    while r < n {
+                        let vp = v[r * n + p]
+                        let vq = v[r * n + q]
+                        v[r * n + p] = c * vp - sn * vq
+                        v[r * n + q] = sn * vp + c * vq
+                        r += 1usize
+                    }
+                }
+                q += 1usize
+            }
+            p += 1usize
+        }
+        if !rotated { break }
+        sweep += 1usize
+    }
+    var c = 0usize
+    while c < n {
+        var ss = 0.0f64
+        var r = 0usize
+        while r < m {
+            ss += u[r * n + c] * u[r * n + c]
+            r += 1usize
+        }
+        s[c] = math.sqrt[f64](ss)
+        if s[c] > 1.0e-300f64 {
+            r = 0usize
+            while r < m {
+                u[r * n + c] = u[r * n + c] / s[c]
+                r += 1usize
+            }
+        }
+        c += 1usize
+    }
+}
+
+// the entry (i, j) of the projector onto orth(A) (the range of A, m by n tall) when `range` is true, or of the projector onto null(A) (n by n) when false; the rank is the
+// number of singular values above 1e-10 times the largest
+fn svd_projector(a: *mem.Arena, m: []const f64, rows: usize, cols: usize, range: bool, i: usize, j: usize) -> f64 {
+    let (u, e1) = mem.alloc[f64](a, rows * cols)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let (s, e2) = mem.alloc[f64](a, cols)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    let (v, e3) = mem.alloc[f64](a, cols * cols)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    svd_jacobi(m, rows, cols, u, s, v)
+    var smax = 0.0f64
+    var k = 0usize
+    while k < cols {
+        if s[k] > smax { smax = s[k] }
+        k += 1usize
+    }
+    var acc = 0.0f64
+    k = 0usize
+    while k < cols {
+        if s[k] > 1.0e-10f64 * smax {
+            if range { acc += u[i * cols + k] * u[j * cols + k] } else { acc += v[i * cols + k] * v[j * cols + k] }
+        }
+        k += 1usize
+    }
+    if range { ret acc }
+    if i == j { ret 1.0f64 - acc }
+    ret 0.0f64 - acc
+}

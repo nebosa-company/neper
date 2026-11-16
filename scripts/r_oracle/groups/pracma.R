@@ -113,4 +113,12 @@ for (rep in 1:30) {
   for (k in seq_along(sv)) add("sval", c(m, n, k - 1, as.vector(t(M))), sv[k])
   if (m == n) add("cond", c(m, n, 0, as.vector(t(M))), cond(M))
 }
+for (rep in 1:30) {
+  n <- sample(2:6, 1); m <- n + sample(0:3, 1); r <- sample(1:n, 1)
+  L <- matrix(round(rnorm(m * r), 2), m, r); R <- matrix(round(rnorm(r * n), 2), r, n); M <- L %*% R
+  nl <- null(M); N <- if (is.null(nl)) matrix(0, n, n) else nl %*% t(nl); PN <- N
+  oM <- orth(M); PO <- oM %*% t(oM)
+  for (i in sample(n, min(2, n))) for (j in sample(n, min(2, n))) add("nullproj", c(m, n, i - 1, j - 1, as.vector(t(M))), PN[i, j])
+  for (i in sample(m, min(2, m))) for (j in sample(m, min(2, m))) add("orthproj", c(m, n, i - 1, j - 1, as.vector(t(M))), PO[i, j])
+}
 emit("pracma", "pracma", list(cases))

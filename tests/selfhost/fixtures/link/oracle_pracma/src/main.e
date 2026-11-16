@@ -233,6 +233,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "cond") { ret sv[0usize] / sv[kk - 1usize] }
         ret sv[usize(x[2usize])]
     }
+    if str.eq(k, "nullproj") || str.eq(k, "orthproj") {
+        ret pm.svd_projector(a, x[4usize..4usize + usize(x[0usize]) * usize(x[1usize])], usize(x[0usize]), usize(x[1usize]), str.eq(k, "orthproj"), usize(x[2usize]), usize(x[3usize]))
+    }
     if str.eq(k, "quadgk") { ret pm.quadgk(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "interp1") {
         let ni = usize(x[1usize])

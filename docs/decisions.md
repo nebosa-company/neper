@@ -46132,3 +46132,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.polynompkg` is new: `predict` (Horner), `deriv`, `integral` (zero constant), `poly_calc` (the monic polynomial of given roots, ascending), `poly_orth` (the orthonormal polynomials under the unweighted discrete inner product, by the three-term recurrence with alpha = <x p, p> / <p, p> and beta = <p, p> / <prev, prev>, then normalised to a positive leading coefficient) and `col_auc` for two classes (ties half, taken as max(auc, 1 - auc) as colAUC reports).
 
 **Result.** `oracle_polynompkg` agrees with polynom and caTools on 830 cases on Windows at rel 1e-9, 30 random polynomials of 2 to 7 coefficients, orthogonal bases on 5 to 12 points to degree 4 and two-class AUCs over 10 to 40 observations. solve and the complex roots, the polynomial operators, more than two classes and the ROC plot are open; Linux pending. L333 stays partial.
+
+## D6494 — pracma: null and orth as projectors
+
+`e.algo.stat.pracma` gains `svd_jacobi` (the thin SVD of a tall or square matrix by one-sided Jacobi, accumulating the right rotations into V) and `svd_projector`, the entries of the projector onto orth(A) (U_r U_r') and onto null(A) (I - V_r V_r'), where the rank r counts singular values above 1e-10 of the largest. The projector, not the basis, is what is compared: a null or orth basis is only defined up to rotation and sign, so two correct implementations differ entry by entry, while the projector is unique.
+
+**Result.** `oracle_pracma` equals pracma on 1678 cases on Windows at rel 1e-9, 240 of them new, over 30 rank-deficient matrices built as products (rank 1 to n, up to 3 extra rows). Wide matrices, whose null space needs a completed basis, the singular vectors as such, expm, polyroots and integral are open; Linux pending. L333 stays partial.
