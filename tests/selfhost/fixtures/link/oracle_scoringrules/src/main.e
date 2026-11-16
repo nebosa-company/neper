@@ -20,6 +20,7 @@ fn param(c: *const oracle.Case) -> f64 {
     let k = c.name
     let isc = str.eq(k, "crps")
     let isl = str.eq(k, "logs")
+    if fam == 19usize { ret sr.crps_nbinom(y, a, b) }
     if fam >= 16usize {
         // (fam, df, loc, scale, lower, upper, y, lmass, umass)
         let dfv = x[1usize]
@@ -98,6 +99,13 @@ fn sample(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret sr.rps_probs(usize(y[0usize]), dat)
 }
 
+fn weighted(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[1usize])
+    if str.eq(c.name, "crpsw") { ret sr.crps_edf_w(a, x[0usize], x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n]) }
+    ret sr.crps_kde(a, x[0usize], x[2usize..2usize + n], x[2usize + n])
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/scoringrules.json")
     if load_error != ok { os.exit(2) }
@@ -107,7 +115,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while at < golden.cases.len {
         let c = &golden.cases[at]
         var got = 0.0f64
-        if str.eq(c.name, "sample") { got = sample(a, c) } else { got = param(c) }
+        if str.eq(c.name, "sample") { got = sample(a, c) } else if str.eq(c.name, "crpsw") || str.eq(c.name, "crpskde") { got = weighted(a, c) } else { got = param(c) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

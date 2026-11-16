@@ -541,3 +541,99 @@ fn crps_gtct_unit(y0: f64, df: f64, lower0: f64, upper0: f64, lmass0: f64, umass
 fn crps_gtct(y: f64, df: f64, loc: f64, scale: f64, lower: f64, upper: f64, lmass: f64, umass: f64) -> f64 {
     ret scale * crps_gtct_unit((y - loc) / scale, df, (lower - loc) / scale, (upper - loc) / scale, lmass, umass)
 }
+
+// crps_sample(y, dat, w = w): the weighted empirical-distribution CRPS, 2 / P sum w_i ((y < x_i) - a_i)(x_i - y) over the sorted sample with a_i = (cumsum(w)_i - w_i / 2) / P
+fn crps_edf_w(a: *mem.Arena, y: f64, dat: []const f64, w: []const f64) -> f64 {
+    let n = dat.len
+    let (idx, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        idx[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let t = idx[i]
+        var j = i
+        while j > 0usize && dat[idx[j - 1usize]] > dat[t] {
+            idx[j] = idx[j - 1usize]
+            j -= 1usize
+        }
+        idx[j] = t
+        i += 1usize
+    }
+    var total = 0.0f64
+    i = 0usize
+    while i < n {
+        total += w[i]
+        i += 1usize
+    }
+    var run = 0.0f64
+    var s = 0.0f64
+    i = 0usize
+    while i < n {
+        let k = idx[i]
+        run += w[k]
+        let ai = (run - 0.5f64 * w[k]) / total
+        var ind = 0.0f64
+        if y < dat[k] { ind = 1.0f64 }
+        s += w[k] * (ind - ai) * (dat[k] - y)
+        i += 1usize
+    }
+    ret 2.0f64 / total * s
+}
+
+// A(mu, s2) = mu (2 Phi(mu / s) - 1) + 2 s phi(mu / s)
+fn a_mix(mu: f64, s2: f64) -> f64 {
+    let s = math.sqrt[f64](s2)
+    ret mu * (2.0f64 * pn(mu / s) - 1.0f64) + 2.0f64 * s * dist.dnorm(mu / s, 0.0f64, 1.0f64, false)
+}
+
+// crps_sample(y, dat, method = "kde", bw): the CRPS of the Gaussian kernel density with bandwidth bw (bw.nrd when bw is not positive), as a normal mixture with equal weights
+fn crps_kde(a: *mem.Arena, y: f64, dat: []const f64, bw0: f64) -> f64 {
+    var bw = bw0
+    if bw <= 0.0f64 { bw = bw_nrd(a, dat) }
+    let n = dat.len
+    let wt = 1.0f64 / f64(n)
+    var s1 = 0.0f64
+    var i = 0usize
+    while i < n {
+        s1 += wt * a_mix(y - dat[i], bw * bw)
+        i += 1usize
+    }
+    var s2 = 0.0f64
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            s2 += wt * wt * a_mix(dat[i] - dat[j], 2.0f64 * bw * bw)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret s1 - 0.5f64 * s2
+}
+
+// 2F1(a, 0.5; 2; z) for z <= 0 by Pfaff's transformation (1 - z)^(-0.5) 2F1(2 - a, 0.5; 2; z / (z - 1)), whose argument lies in [0, 1)
+fn hypergeo_half_2(a: f64, z: f64) -> f64 {
+    let w = z / (z - 1.0f64)
+    var t = 1.0f64
+    var s = 1.0f64
+    var k = 0usize
+    while k < 200000usize {
+        t = t * (2.0f64 - a + f64(k)) * (0.5f64 + f64(k)) * w / ((2.0f64 + f64(k)) * f64(k + 1usize))
+        s += t
+        if math.abs[f64](t) < 1.0e-17f64 * math.abs[f64](s) && f64(k) > 2.0f64 - a { break }
+        k += 1usize
+    }
+    ret s / math.sqrt[f64](1.0f64 - z)
+}
+
+// crps_nbinom(y, size, prob)
+fn crps_nbinom(y: f64, size: f64, prob: f64) -> f64 {
+    let c1 = y * (2.0f64 * nb.pnbinom(y, size, prob, true, false) - 1.0f64)
+    let c2 = (1.0f64 - prob) / (prob * prob)
+    let c3 = prob * (2.0f64 * nb.pnbinom(y - 1.0f64, size + 1.0f64, prob, true, false) - 1.0f64) + hypergeo_half_2(size + 1.0f64, 0.0f64 - 4.0f64 * c2)
+    ret c1 - size * c2 * c3
+}

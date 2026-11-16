@@ -46234,3 +46234,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.scoringrules` gains `crps_gtct` (with tt and ct as its zero-mass and tail-mass cases) for df > 1: the same arrangement as the normal and logistic versions, with the t cdf and density, G(x) = -(df + x^2) / (df - 1) dt(x), the incomplete beta pbeta(df / (df + x^2), df - 0.5, 0.5) folded about the median, and the package's beta-function ratio, with infinite ends taking zero for G and for the beta term.
 
 **Result.** `oracle_scoringrules` equals scoringRules on 931 cases on Windows, 90 of them new: 30 draws each of gtct, tt and ct with df 1.5 to 15. The negative binomial CRPS, the kernel CRPS and the weights are open; Linux pending. L475 stays partial.
+
+## D6511 — scoringRules: weighted and kernel CRPS, and the negative binomial CRPS
+
+`e.algo.stat.scoringrules` gains `crps_edf_w` (the weighted empirical CRPS with a_i = (cumsum(w) - w / 2) / sum(w) over the sorted sample), `crps_kde` (the Gaussian kernel density CRPS as an equal-weight normal mixture, A(mu, s2) = mu (2 Phi(mu / s) - 1) + 2 s phi(mu / s), with bw.nrd as the default bandwidth) and `crps_nbinom` (the Gauss hypergeometric 2F1(a, 1/2; 2; z) at the negative argument -4 (1 - p) / p^2 reached by Pfaff's transformation, whose argument stays in [0, 1)).
+
+**Result.** `oracle_scoringrules` equals scoringRules on 1036 cases on Windows, 105 of them new: 25 weighted CRPS, 50 kernel CRPS (default and given bandwidth) and 30 negative binomial CRPS. Reading the package's export list showed the item's "every parametric family" is wider than what the queue entry listed: beta, gev, gpd, hyper, llapl, llogis, 2pexp, 2pnorm, mixnorm, expM and the log and Dawid-Sebastiani scores of several more are still to port. Linux pending. L475 stays partial.

@@ -592,10 +592,10 @@
       "group": "CRAN parity",
       "order": 637,
       "title": "scoringRules: proper scoring rules",
-      "score": 0.9,
+      "score": 0.75,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6145, D6507 crps_pois, crps_t, logs_t, D6508 crps_gtcnorm, tnorm, cnorm, D6509 crps_gtclogis, tlogis, clogis, D6510 crps_gtct, tt, ct). Closed-form crps, logs, dss of norm, logis, lapl, exp, unif, lnorm, gamma, binom, pois and the sample crps, dss, logs, es, vs, qs, rps equal scoringRules on Windows (oracle_scoringrules; Linux pending). Open: nbinom crps, kernel crps, weights. Was: Open (CRAN rank 870). Small to mid. Acceptance, equal to scoringRules: crps, logs, dss, qs, rps and es_sample, vs_sample, crps_sample for every parametric family it lists and for sample forecasts, with the kernel and the quantile-based estimators."
+      "evidence": "Partial (D6145, D6507 crps_pois, crps_t, logs_t, D6508 crps_gtcnorm, tnorm, cnorm, D6509 crps_gtclogis, tlogis, clogis, D6510 crps_gtct, tt, ct, D6511 weighted and kernel crps_sample, crps_nbinom). Closed-form crps, logs, dss of norm, logis, lapl, exp, unif, lnorm, gamma, binom, pois and the sample crps, dss, logs, es, vs, qs, rps equal scoringRules on Windows (oracle_scoringrules; Linux pending). Open: the families beta, gev, gpd, hyper, llapl, llogis, 2pexp, 2pnorm, mixnorm and expM, and the logs and dss of nbinom, t and the others. Was: Open (CRAN rank 870). Small to mid. Acceptance, equal to scoringRules: crps, logs, dss, qs, rps and es_sample, vs_sample, crps_sample for every parametric family it lists and for sample forecasts, with the kernel and the quantile-based estimators."
     },
     {
       "id": "L477",

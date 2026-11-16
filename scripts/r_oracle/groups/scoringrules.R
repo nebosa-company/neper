@@ -71,4 +71,14 @@ for (rep in 1:30) {
   add("crps", c(17, df, loc, sc, lo, hi, yy, 0, 0), crps_tt(yy, df, loc, sc, lo, hi))
   add("crps", c(18, df, loc, sc, lo, hi, yy, 0, 0), crps_ct(yy, df, loc, sc, lo, hi))
 }
+for (rep in 1:25) {
+  n <- sample(5:40, 1); dat <- round(rnorm(n, 0.3, 1.2), 4); yy <- rnorm(1, 0.3, 1.5); w <- round(runif(n, 0.1, 2), 3); bw <- runif(1, 0.2, 1)
+  add("crpsw", c(yy, n, dat, w), crps_sample(yy, dat, w = w, show_messages = FALSE))
+  add("crpskde", c(yy, n, dat, 0), crps_sample(yy, dat, method = "kde", show_messages = FALSE))
+  add("crpskde", c(yy, n, dat, bw), crps_sample(yy, dat, method = "kde", bw = bw, show_messages = FALSE))
+}
+for (rep in 1:30) {
+  sz <- runif(1, 0.5, 12); pr <- runif(1, 0.15, 0.9); yy <- sample(0:15, 1)
+  v <- tryCatch(crps_nbinom(yy, sz, pr), error = function(e) NA); if (is.finite(v)) add("crps", c(19, sz, pr, 0, 0, yy), v)
+}
 emit("scoringrules", "scoringRules", list(cases))
