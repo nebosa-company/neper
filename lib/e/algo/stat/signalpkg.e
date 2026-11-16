@@ -706,3 +706,51 @@ fn fir2(a: *mem.Arena, n: usize, f: []const f64, m: []const f64, grid_n0: usize,
     }
     ret ok
 }
+
+// fir1(n, w, type, scale = TRUE) with the Hamming window for type 0 low, 1 high, 2 stop, 3 pass (w holds one or two cut-offs); n is even whenever the top band passes
+fn fir1_band(a: *mem.Arena, n: usize, w: []const f64, ty: usize, out: []f64) -> err {
+    let bands = w.len + 1usize
+    let ft = ty == 0usize || ty == 2usize
+    let (f, e1) = mem.alloc[f64](a, 2usize * bands)
+    if e1 != ok { ret e1 }
+    let (m, e2) = mem.alloc[f64](a, 2usize * bands)
+    if e2 != ok { ret e2 }
+    f[0usize] = 0.0f64
+    f[2usize * bands - 1usize] = 1.0f64
+    var i = 0usize
+    while i + 1usize < bands {
+        f[2usize * i + 1usize] = w[i]
+        f[2usize * i + 2usize] = w[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < bands {
+        var mv = 0.0f64
+        if ft {
+            if (i + 1usize) % 2usize == 1usize { mv = 1.0f64 }
+        } else {
+            if (i + 1usize + 1usize) % 2usize == 1usize { mv = 1.0f64 }
+        }
+        m[2usize * i] = mv
+        m[2usize * i + 1usize] = mv
+        i += 1usize
+    }
+    if fir2(a, n, f, m, 512usize, 2.0f64, out) != ok { ret e1 }
+    var wo = 0.0f64
+    if m[0usize] == 1.0f64 { wo = (f[1usize] - f[0usize]) / 2.0f64 } else { wo = f[2usize] + (f[3usize] - f[2usize]) / 2.0f64 }
+    var re = 0.0f64
+    var im = 0.0f64
+    var k = 0usize
+    while k <= n {
+        re += out[k] * math.cos[f64](pi() * wo * f64(k))
+        im += out[k] * math.sin[f64](pi() * wo * f64(k))
+        k += 1usize
+    }
+    let r = 1.0f64 / math.sqrt[f64](re * re + im * im)
+    k = 0usize
+    while k <= n {
+        out[k] = out[k] * r
+        k += 1usize
+    }
+    ret ok
+}

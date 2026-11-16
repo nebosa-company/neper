@@ -54,4 +54,10 @@ for (rep in 1:24) {
   b <- fir2(n, f, m, gridn, rn, hamming(n + 1))
   add("fir2", c(n, gridn, rn, length(f), f, m), sum(as.numeric(b) * seq_along(b)))
 }
+for (rep in 1:24) {
+  ty <- c("low", "high", "stop", "pass")[rep %% 4 + 1]; n <- sample(c(10, 20, 30, 40), 1)
+  w <- if (ty %in% c("stop", "pass")) sort(runif(2, 0.1, 0.9)) else runif(1, 0.1, 0.9)
+  b <- fir1(n, w, ty)
+  add("fir1b", c(rep %% 4, n, length(w), w), sum(as.numeric(b) * seq_along(b)))
+}
 emit("signalpkg", "signal", list(cases))

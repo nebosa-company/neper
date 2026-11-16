@@ -45832,3 +45832,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.signalpkg` gains `fir2` (frequency-sampling design with the package's ramp at repeated breakpoints, grid padding to a power of two, even and odd length branches by a direct inverse cosine sum, and the Hamming window) and `approx_ord` (approx with ordered ties).
 
 **Result.** `oracle_signalpkg` equals signal on 350 cases on Windows, 24 of them fir2 over even and odd n, three ramp widths and two grids; Linux pending. L340 stays partial.
+
+## D6444 — signal: fir1 band types
+
+`e.algo.stat.signalpkg` gains `fir1_band`: fir1 for low, high, stop and pass with the Hamming window and the package's centre-of-band renormalisation, built on `fir2`.
+
+**Result.** `oracle_signalpkg` equals signal on 374 cases on Windows, 24 of them fir1 across the four types; Linux pending. L340 stays partial.

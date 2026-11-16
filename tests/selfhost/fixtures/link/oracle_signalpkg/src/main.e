@@ -55,6 +55,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret tt
     }
+    if str.eq(k, "fir1b") {
+        let n3 = usize(x[1usize])
+        let nw = usize(x[2usize])
+        let (o, e) = mem.alloc[f64](a, n3 + 1usize)
+        if e != ok { os.exit(5) }
+        if sp.fir1_band(a, n3, x[3usize..3usize + nw], usize(x[0usize]), o) != ok { os.exit(6) }
+        var q = 0usize
+        var tt = 0.0f64
+        while q <= n3 {
+            tt += o[q] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret tt
+    }
     if str.eq(k, "sg") {
         let wn = usize(x[1usize])
         let po = usize(x[2usize])
