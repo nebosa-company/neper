@@ -1813,10 +1813,10 @@
       "group": "CRAN parity",
       "order": 753,
       "title": "minqa and nloptr: derivative-free optimizers",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN ranks 120, 122). Mid to large; lme4 (L274) needs BOBYQA. Acceptance: Powell BOBYQA, NEWUOA, UOBYQA and NLopt COBYLA, Subplex, DIRECT and DIRECT-L, CRS2-LM, ISRES reach the R optimum within the per-function tolerance on a battery of standard test functions (Rosenbrock, Powell, Beale, Himmelblau, Rastrigin with bounds), and report the same convergence codes and evaluation counts for the deterministic ones (BOBYQA, NEWUOA, UOBYQA, COBYLA)."
+      "evidence": "Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree); Linux pending; it is not the Powell code, so counts and codes are open along with COBYLA, Subplex, DIRECT, CRS2-LM, ISRES. Original: Open (CRAN ranks 120, 122). Mid to large; lme4 (L274) needs BOBYQA. Acceptance: Powell BOBYQA, NEWUOA, UOBYQA and NLopt COBYLA, Subplex, DIRECT and DIRECT-L, CRS2-LM, ISRES reach the R optimum within the per-function tolerance on a battery of standard test functions (Rosenbrock, Powell, Beale, Himmelblau, Rastrigin with bounds), and report the same convergence codes and evaluation counts for the deterministic ones (BOBYQA, NEWUOA, UOBYQA, COBYLA)."
     },
     {
       "id": "L304",

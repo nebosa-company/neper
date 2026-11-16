@@ -44668,3 +44668,9 @@ Each generator draws in the order R builds its matrix: `matrix(runif(10 * n), nc
 `e.algo.stat.quantreg.rq` solves the quantile LP through its dual (`max y'a` subject to `X'a = (1-tau) X'1`, `0 <= a <= 1`) with a primal-dual path-following iteration started from the least-squares fit (`mu = 0.1 * gap / 2n`, 0.9995 of the step to the boundary, one `p` by `p` normal system per step), then takes the `p` observations with the smallest residuals and solves `X_B b = y_B` exactly, keeping the vertex when its loss is no worse. For data in general position that is the unique optimum Barrodale-Roberts returns, so coefficients agree to the bit-level noise of a `p` by `p` solve, not to a tolerance of the iteration.
 
 **Result.** `oracle_quantreg` equals quantreg `rq(method = "br")` on 235 coefficients (taus 0.1 to 0.9, p = 2 to 4) on Windows; the Linux run is pending (WSL). Open under L307: summary.rq (rank, iid, nid, ker, boot), anova.rq, several taus, lasso, nlrq, rrq, rqss, dynrq.
+
+## D6053 — box-constrained derivative-free minimiser: same optimum, not the BOBYQA code
+
+`e.algo.stat.dfree.minimize_box` runs `e.math.opt.nelder_mead` on the clamped objective plus a `1e3 * distance^2` penalty, restarting from the best point with a fresh simplex until a restart gains under `tol`, then clamps the answer. It reaches the optimum nloptr's `NLOPT_LN_BOBYQA` reports on smooth problems (Rosenbrock in 2 and 4 dimensions, also with an active bound, Beale, Himmelblau from three starts, Booth, a weighted bowl) but it is not Powell's trust-region code: evaluation counts and convergence codes do not match, and start-dependent multimodal cases (Rastrigin) are untested.
+
+**Result.** `oracle_dfree` equals nloptr 2.x BOBYQA on 39 values and coordinates (value abs 1e-7, coordinate abs 1e-3) on Windows; the Linux run is pending (WSL). Open under L308: the Powell ports (BOBYQA, NEWUOA, UOBYQA) with their counts, COBYLA, Subplex, DIRECT and DIRECT-L, CRS2-LM, ISRES.

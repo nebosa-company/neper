@@ -163,7 +163,7 @@ L511	library	0	263	QCA: qualitative comparative analysis	Open (CRAN rank 956).
 L512	library	0	251	poLCA: latent class analysis	Open (CRAN rank 998).
 L513	library	0	272	Epi: epidemiology tools	Open (CRAN rank 929).
 L310	library	0	484	glmnet: elastic-net path and families	Open (CRAN rank 182).
-L308	library	0	451	minqa and nloptr: derivative-free optimizers	Open (CRAN ranks 120, 122).
+L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);
 L304	library	0.2	782	haven: SAS, SPSS and Stata file formats	Partial (D6049).
 L315	library	0	448	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Open (CRAN ranks 163, 144).
 L316	library	0	542	igraph: deterministic structure and community detection	Open (CRAN rank 109).
