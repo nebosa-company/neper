@@ -26,17 +26,6 @@
       "evidence": "Open (CRAN ranks 220, 226). Small data item. Acceptance: every discrete and continuous palette of ggsci and the colour palettes of ggthemes equal to the R package, with alpha handling."
     },
     {
-      "id": "L355",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 552,
-      "title": "nortest and moments: normality tests and sample moments",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN ranks 305, 326). Small. Acceptance, equal to R: Lilliefors (lillie.test), Cramer-von Mises, Pearson chi-square and Shapiro-Francia tests with their p-values, moments skewness, kurtosis, moment and central moments, Jarque-Bera, Anscombe-Glynn, Bonett-Seier and D'Agostino tests."
-    },
-    {
       "id": "L356",
       "category": "library",
       "group": "CRAN parity",

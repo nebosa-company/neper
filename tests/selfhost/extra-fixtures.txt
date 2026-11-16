@@ -168,3 +168,4 @@ oracle_classknn
 oracle_permute
 oracle_kstseries
 oracle_ttr
+oracle_nortest

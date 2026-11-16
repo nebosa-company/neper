@@ -1,7 +1,6 @@
 id	category	score	evidence_bytes	title	status
 L290	library	0.95	481	readr locales, time zones and ragged read_delim rows	Partial (D6000, D6009, D6010, D6015, D6019).
 L329	library	0	184	ggsci and ggthemes palettes	Open (CRAN ranks 220, 226).
-L355	library	0	288	nortest and moments: normality tests and sample moments	Open (CRAN ranks 305, 326).
 L356	library	0	281	truncnorm, CompQuadForm and pbivnorm: three small distribution packages	Open (CRAN ranks 363, 379, 321).
 L357	library	0	209	corpcor and pcaPP: shrinkage covariance and robust PCA	Open (CRAN ranks 375, 366).
 L385	library	0	181	hexbin: hexagonal binning	Open (CRAN rank 434).
