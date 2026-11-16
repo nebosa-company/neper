@@ -411,17 +411,6 @@
       "evidence": "Open (CRAN rank 844). Small. Acceptance, equal to kSamples under set.seed: ad.test with the exact, simulated and asymptotic p-values, qn.test (Conover and Steel-Dwass variants), contingency2xt, and the distribution functions behind them."
     },
     {
-      "id": "L498",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 593,
-      "title": "Kendall: rank correlation and Mann-Kendall trend tests",
-      "score": 0,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Open (CRAN rank 920). Small. Acceptance, equal to Kendall: Kendall with the exact and normal-approximation p-values and tie handling, MannKendall with its variance correction, SeasonalMannKendall."
-    },
-    {
       "id": "L499",
       "category": "library",
       "group": "CRAN parity",

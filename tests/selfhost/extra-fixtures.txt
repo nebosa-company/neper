@@ -228,3 +228,4 @@ oracle_proxy2
 oracle_pmvnorm
 oracle_isotone
 oracle_hoslem
+oracle_kendall

@@ -36,7 +36,6 @@ L471	library	0.5	523	BiasedUrn: noncentral hypergeometric distributions	Partly d
 L472	library	0.5	463	modeest: mode estimation	Partly done (D6072): e.algo.stat.modeest has venter, shorth, hsm, grenander, meanshift and asselin, equal to modeest on 250 values on Windows (oracle_modeest);
 L473	library	0.5	488	isotone: isotonic regression	Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers;
 L474	library	0	237	kSamples: k-sample rank tests	Open (CRAN rank 844).
-L498	library	0	196	Kendall: rank correlation and Mann-Kendall trend tests	Open (CRAN rank 920).
 L499	library	0.4	412	ResourceSelection: Hosmer-Lemeshow and related tests	Partly done (D6096): e.algo.stat.hoslem (hoslem.test with observed and expected tables) equals ResourceSelection on 1128 values on Windows (oracle_hoslem);
 L500	library	0	212	ashr: adaptive shrinkage	Open (CRAN rank 977).
 L324	library	0	285	pROC and ROCR: ROC curves and threshold performance	Open (CRAN ranks 217, 294).
