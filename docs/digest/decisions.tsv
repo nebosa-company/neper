@@ -3154,4 +3154,5 @@ D6078	1595	minpack.lm: lmdif ported line for line, with the wrapper's iteration 
 D6079	1148	boot: balanced and parametric simulation, drawn the way the package draws them
 D6080	1390	FNN entropy estimators by brute-force search
 D6081	1150	permute allPerms: the enumeration orders
-D6082	1347	KernSmooth locpoly: linear binning, then one weighted least-squares fit per grid point
+D6082	1348	KernSmooth locpoly: linear binning, then one weighted least-squares fit per grid point
+D6083	1457	TTR: ZLEMA with a fractional lag, CCI, stochastic oscillator, ADX

@@ -247,3 +247,156 @@ fn atr(a: *mem.Arena, high: []const f64, low: []const f64, close: []const f64, n
     let (r, e2) = ema(a, t, n, true, 0.0f64)
     ret (r, e2)
 }
+
+// ZLEMA(x, n): the SMA of the first n values seeds it, then ratio * (2 x[i] - x[i - lag]) + (1 - ratio) previous
+// with ratio = 2 / (n + 1) and the fractional lag 1 / ratio taken between x[loc] and x[loc + 1]
+fn zlema(a: *mem.Arena, x: []const f64, n: usize) -> ([]f64, err) {
+    let (r, e) = filled(a, x.len)
+    if e != ok { ret (r, e) }
+    let first = first_valid(x)
+    let ratio = 2.0f64 / (f64(n) + 1.0f64)
+    var seed = 0.0f64
+    var i = first
+    while i < first + n {
+        seed += x[i] / f64(n)
+        i += 1usize
+    }
+    r[first + n - 1usize] = seed
+    let lag = 1.0f64 / ratio
+    let wt = lag - math.floor[f64](lag)
+    let w1 = 1.0f64 - wt
+    let r1 = 1.0f64 - ratio
+    i = first + n
+    while i < x.len {
+        let loc = usize(f64(i) - lag)
+        let value = 2.0f64 * x[i] - (w1 * x[loc] + wt * x[loc + 1usize])
+        r[i] = ratio * value + r1 * r[i - 1usize]
+        i += 1usize
+    }
+    ret (r, ok)
+}
+
+// CCI(HLC, n = 20, c = 0.015): (typical price - SMA) / (c * mean absolute deviation about the current SMA)
+fn cci(a: *mem.Arena, high: []const f64, low: []const f64, close: []const f64, n: usize, c: f64) -> ([]f64, err) {
+    let m = high.len
+    let (tp, e1) = mem.alloc[f64](a, m)
+    if e1 != ok { ret (tp, e1) }
+    var i = 0usize
+    while i < m {
+        tp[i] = (high[i] + low[i] + close[i]) / 3.0f64
+        i += 1usize
+    }
+    let (ma, e2) = sma(a, tp, n)
+    if e2 != ok { ret (ma, e2) }
+    let (r, e3) = filled(a, m)
+    if e3 != ok { ret (r, e3) }
+    i = n - 1usize
+    while i < m {
+        var s = 0.0f64
+        var j = 0usize
+        while j < n {
+            s += math.abs[f64](tp[i - j] - ma[i])
+            j += 1usize
+        }
+        r[i] = (tp[i] - ma[i]) / (c * (s / f64(n)))
+        i += 1usize
+    }
+    ret (r, ok)
+}
+
+// stoch(HLC, nFastK, nFastD, nSlowD, SMA, bounded = TRUE, smooth = 1): part 0 fastK, 1 fastD, 2 slowD
+fn stoch(a: *mem.Arena, high: []const f64, low: []const f64, close: []const f64, nk: usize, nfd: usize, nsd: usize, part: u8) -> ([]f64, err) {
+    let m = high.len
+    let (k, e1) = filled(a, m)
+    if e1 != ok { ret (k, e1) }
+    var i = nk - 1usize
+    while i < m {
+        var hm = high[i]
+        var lm = low[i]
+        var j = 1usize
+        while j < nk {
+            if high[i - j] > hm { hm = high[i - j] }
+            if low[i - j] < lm { lm = low[i - j] }
+            j += 1usize
+        }
+        let num = close[i] - lm
+        let den = hm - lm
+        var v = num / den
+        if !(v == v) || v > 1.7976931348623157e308f64 || v < 0.0f64 - 1.7976931348623157e308f64 { v = 0.5f64 }
+        k[i] = v
+        i += 1usize
+    }
+    if part == 0u8 { ret (k, ok) }
+    let (d, e2) = sma(a, k, nfd)
+    if e2 != ok { ret (d, e2) }
+    if part == 1u8 { ret (d, ok) }
+    let (sd, es) = sma(a, d, nsd)
+    ret (sd, es)
+}
+
+// wilderSum(x, n) with leading NAs skipped as the C routine does
+fn wilder_sum(a: *mem.Arena, x: []const f64, n: usize) -> ([]f64, err) {
+    let m = x.len
+    let (r, e) = filled(a, m)
+    if e != ok { ret (r, e) }
+    let first = first_valid(x)
+    var sum = 0.0f64
+    var i = first
+    while i < first + n - 1usize {
+        sum += x[i]
+        i += 1usize
+    }
+    let beg = first + n - 1usize
+    r[beg] = x[beg] + sum * f64(n - 1usize) / f64(n)
+    i = beg + 1usize
+    while i < m {
+        r[i] = x[i] + r[i - 1usize] * f64(n - 1usize) / f64(n)
+        i += 1usize
+    }
+    ret (r, ok)
+}
+
+// ADX(HLC, n = 14): part 0 DIp, 1 DIn, 2 DX, 3 ADX
+fn adx(a: *mem.Arena, high: []const f64, low: []const f64, close: []const f64, n: usize, part: u8) -> ([]f64, err) {
+    let m = high.len
+    let (dmp, e1) = filled(a, m)
+    let (dmn, e2) = filled(a, m)
+    if e1 != ok || e2 != ok { ret (dmp, e1) }
+    var i = 1usize
+    while i < m {
+        let dh = high[i] - high[i - 1usize]
+        let dl = 0.0f64 - (low[i] - low[i - 1usize])
+        var p = 0.0f64
+        var q = 0.0f64
+        if !(dh == dl || (dh < 0.0f64 && dl < 0.0f64)) {
+            if dh > dl { p = dh } else if dh < dl { q = dl }
+        }
+        dmp[i] = p
+        dmn[i] = q
+        i += 1usize
+    }
+    let (trv, e3) = tr(a, high, low, close)
+    if e3 != ok { ret (trv, e3) }
+    let (trs, e4) = wilder_sum(a, trv, n)
+    if e4 != ok { ret (trs, e4) }
+    let (sp, e5) = wilder_sum(a, dmp, n)
+    if e5 != ok { ret (sp, e5) }
+    let (sn, e6) = wilder_sum(a, dmn, n)
+    if e6 != ok { ret (sn, e6) }
+    let (dip, e7) = filled(a, m)
+    let (din, e8) = filled(a, m)
+    let (dx, e9) = filled(a, m)
+    if e7 != ok || e8 != ok || e9 != ok { ret (dip, e7) }
+    i = 0usize
+    while i < m {
+        dip[i] = 100.0f64 * sp[i] / trs[i]
+        din[i] = 100.0f64 * sn[i] / trs[i]
+        dx[i] = 100.0f64 * (math.abs[f64](dip[i] - din[i]) / (dip[i] + din[i]))
+        i += 1usize
+    }
+    if part == 0u8 { ret (dip, ok) }
+    if part == 1u8 { ret (din, ok) }
+    if part == 2u8 { ret (dx, ok) }
+    let (av, ae) = ema(a, dx, n, true, 0.0f64)
+    ret (av, ae)
+}

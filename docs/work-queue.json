@@ -141,10 +141,10 @@
       "group": "CRAN parity",
       "order": 548,
       "title": "quantmod and TTR: technical indicators",
-      "score": 0.6,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6032). SMA, EMA (Wilder, ratio), WMA, DEMA, RSI, MACD, BBands, ROC, OBV, TR and ATR equal TTR 0.24.4 on Windows (Linux pending). Open: ZLEMA, ADX, CCI, stoch, SAR, periodReturn, Delt. Was: Open (CRAN rank 215). Small. Acceptance, equal to TTR and quantmod: SMA, EMA, WMA, DEMA, ZLEMA, RSI, MACD, BBands, ATR, ADX, CCI, stoch, SAR, OBV, ROC, periodReturn, Delt; getSymbols and charting excluded."
+      "evidence": "Partial (D6032, D6083): ZLEMA, CCI, stoch and ADX equal TTR on Windows (oracle_ttr). Earlier:  SMA, EMA (Wilder, ratio), WMA, DEMA, RSI, MACD, BBands, ROC, OBV, TR and ATR equal TTR 0.24.4 on Windows (Linux pending). Open: SAR, periodReturn, Delt. Was: Open (CRAN rank 215). Small. Acceptance, equal to TTR and quantmod: SMA, EMA, WMA, DEMA, ZLEMA, RSI, MACD, BBands, ATR, ADX, CCI, stoch, SAR, OBV, ROC, periodReturn, Delt; getSymbols and charting excluded."
     },
     {
       "id": "L329",

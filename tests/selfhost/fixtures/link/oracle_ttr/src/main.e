@@ -53,6 +53,18 @@ fn series(a: *mem.Arena, x: []const f64, id: u8, n: usize, p2: f64, p3: f64, fla
     if id == 15u8 { let (r, re) = ttr.tr(a, px, y, z)
         out = r
         e = re }
+    if id == 16u8 { let (r, re) = ttr.zlema(a, px, n)
+        out = r
+        e = re }
+    if id == 17u8 { let (r, re) = ttr.cci(a, px, y, z, n, 0.015f64)
+        out = r
+        e = re }
+    if id >= 18u8 && id <= 20u8 { let (r, re) = ttr.stoch(a, px, y, z, n, usize(p2), usize(p3), id - 18u8)
+        out = r
+        e = re }
+    if id >= 21u8 && id <= 24u8 { let (r, re) = ttr.adx(a, px, y, z, n, id - 21u8)
+        out = r
+        e = re }
     if e != ok { os.exit(6) }
     ret out
 }
