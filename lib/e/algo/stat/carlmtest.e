@@ -2065,3 +2065,124 @@ fn dw_exact(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, a
     if 1.0f64 - pd < mn { mn = 1.0f64 - pd }
     ret (dw, 2.0f64 * mn)
 }
+
+// sandwich::vcovBS(lm, R, type) for one-observation clusters: type 1 "jackknife" (R = n), 2 "fractional" (exponential weights), 3 "residual", 4 "rademacher" wild; the draws follow the package's order
+fn vcov_bs_type(a: *mem.Arena, g: *rng.Rng, x: []const f64, y: []const f64, n: usize, p: usize, nrep0: usize, ty: usize, out: []f64) -> err {
+    var nrep = nrep0
+    if ty == 1usize { nrep = n }
+    let (f0, e0) = ols(a, x, y, n, p)
+    if e0 != ok { ret e0 }
+    let (cf, e1) = mem.alloc[f64](a, nrep * p)
+    let (yb, e2) = mem.alloc[f64](a, n)
+    let (xb, e3) = mem.alloc[f64](a, n * p)
+    let (wv, e4) = mem.alloc[f64](a, n)
+    let (mu, e5) = mem.alloc[f64](a, p)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    var r = 0usize
+    while r < nrep {
+        let start = mem.mark(a)
+        var beta: []f64 = f0.beta
+        if ty == 1usize {
+            var m = 0usize
+            var i = 0usize
+            while i < n {
+                if i != r {
+                    var c = 0usize
+                    while c < p {
+                        xb[m * p + c] = x[i * p + c]
+                        c += 1usize
+                    }
+                    yb[m] = y[i]
+                    m += 1usize
+                }
+                i += 1usize
+            }
+            let (ft, fe) = ols(a, xb[0usize..m * p], yb[0usize..m], m, p)
+            if fe != ok { ret fe }
+            beta = ft.beta
+        } else if ty == 2usize {
+            var mean = 0.0f64
+            var i = 0usize
+            while i < n {
+                wv[i] = rng.rexp(g, 1.0f64)
+                mean += wv[i]
+                i += 1usize
+            }
+            mean = mean / f64(n)
+            i = 0usize
+            while i < n {
+                let sw = math.sqrt[f64](wv[i] / mean)
+                var c = 0usize
+                while c < p {
+                    xb[i * p + c] = x[i * p + c] * sw
+                    c += 1usize
+                }
+                yb[i] = y[i] * sw
+                i += 1usize
+            }
+            let (ft, fe) = ols(a, xb, yb, n, p)
+            if fe != ok { ret fe }
+            beta = ft.beta
+        } else {
+            var i = 0usize
+            if ty == 3usize {
+                let (dr, de) = rng.sample_int(a, g, i64(n), i64(n), true)
+                if de != ok { ret de }
+                while i < n {
+                    yb[i] = (y[i] - f0.resid[i]) + f0.resid[usize(dr[i]) - 1usize]
+                    i += 1usize
+                }
+            } else {
+                let (dr, de) = rng.sample_int(a, g, 2i64, i64(n), true)
+                if de != ok { ret de }
+                while i < n {
+                    var sg = 0.0f64 - 1.0f64
+                    if dr[i] == 2i64 { sg = 1.0f64 }
+                    yb[i] = (y[i] - f0.resid[i]) + f0.resid[i] * sg
+                    i += 1usize
+                }
+            }
+            let (ft, fe) = ols(a, x, yb, n, p)
+            if fe != ok { ret fe }
+            beta = ft.beta
+        }
+        var c = 0usize
+        while c < p {
+            cf[r * p + c] = beta[c]
+            c += 1usize
+        }
+        mem.reset(a, start)
+        r += 1usize
+    }
+    var c = 0usize
+    while c < p {
+        var s = 0.0f64
+        r = 0usize
+        while r < nrep {
+            s += cf[r * p + c]
+            r += 1usize
+        }
+        mu[c] = s / f64(nrep)
+        c += 1usize
+    }
+    var i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            var s = 0.0f64
+            r = 0usize
+            while r < nrep {
+                s += (cf[r * p + i] - mu[i]) * (cf[r * p + j] - mu[j])
+                r += 1usize
+            }
+            if ty == 1usize { out[i * p + j] = s * f64(nrep - 1usize) / f64(nrep) } else { out[i * p + j] = s / f64(nrep - 1usize) }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}

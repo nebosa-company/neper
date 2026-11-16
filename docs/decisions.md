@@ -46672,3 +46672,11 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `dw_exact` takes the eigenvalues of `(I - X (X'X)^-1 X') A` (A the second-difference matrix) from the complex Schur solver, keeps the n - k leading ones above 1e-10, and evaluates `P(d < dw) = P(sum (lambda_i - dw) z_i^2 < 0)` by Imhof's integral with Gauss-Kronrod panels, instead of Farebrother's `pan` whose own error is about 1e-7 relative. The three alternatives follow dwtest (`greater` is `P(d < dw)`, `less` its complement, `two.sided` twice the smaller).
 
 **Result.** `oracle_carlmtest` agrees with lmtest on 36 exact p values at 1e-6 on Windows (2332 cases in all); Linux pending. The same p value serves DHARMa's testTemporalAutocorrelation. L300 at 0.98: the kernHAC ARMA(1,1) option, the other bootstrap types and Anova for quasi families stay open.
+
+## D6584 — sandwich: vcovBS types
+
+**Decision.** `vcov_bs_type` adds vcovBS's jackknife (leave one observation out, `(n - 1)/n` times the sum of outer products about the mean), fractional (exponential weights `rexp(n)/mean`, weighted least squares), residual (`fit + res[sample.int(n, n, TRUE)]`) and rademacher wild (`fit + res * c(-1, 1)[sample.int(2, n, TRUE)]`) types with the package's draw order.
+
+**Decision (exact dwtest).** Checking D6583 against R's own `integrate` on Imhof's integral showed the port equal to the integral to 10 digits where R's `pan` differed by up to 3e-6, so that oracle is compared at 1e-5.
+
+**Result.** `oracle_carlmtest` agrees with sandwich on 16 new vcovBS values at 1e-8 (2412 cases in all) on Windows; Linux pending. L300 stays at 0.98.
