@@ -25,7 +25,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var cols = 0usize
     var rows = n
     var ce = ok
-    if kind == 2usize {
+    if kind >= 5usize {
+        rows = m
+        let (cc, e) = pt.compositions(a, n, m, kind == 5usize, out)
+        cols = cc
+        ce = e
+    } else if kind == 2usize {
         let (cc, e) = pt.parts(a, n, out)
         cols = cc
         ce = e

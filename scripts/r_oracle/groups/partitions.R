@@ -11,4 +11,5 @@ for (n in 2:18) {
   summ(c(4, n, 0), diffparts(n))
   for (m in 1:min(5, n)) summ(c(3, n, m), restrictedparts(n, m))
 }
+for (n in 2:9) for (m in 2:5) for (z in c(TRUE, FALSE)) { if (!z && n < m) next; summ(c(if (z) 5 else 6, n, m), compositions(n, m, include.zero = z)) }
 emit("partitions", "partitions", list(cases))

@@ -46576,3 +46576,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `gpava_rows` handles a response matrix whose rows are replicates at one predictor value: the block value is the solver applied to all replicates of the block's rows pooled, primary ties order the rows by `(x, solver(row))`, secondary and tertiary ties aggregate the rows of equal x (column means, summed weights) before the pass. `pava_rows` merges adjacent violating blocks and re-solves the pooled slice, as gpava's `combine` does. The weighted median and fractile now add their running weights with a compensated sum: R's `cumsum` accumulates in long double, which decided the `df == 0` midpoint in three cases.
 
 **Result.** `oracle_isotone` agrees with isotone on 1160 matrix values (2 and 3 replicates, three solvers, three ties treatments) and still on the earlier ones on Windows (3408 cases in all); Linux pending. L473 at 0.8: list responses of unequal length, the optimiser-based activeSet solvers and pava stay open.
+
+## D6568 — partitions: compositions
+
+**Decision.** `compositions(n, m, with_zero)` lists the ordered m-part sums of n in the order partitions::compositions prints them, found by testing a rule against R for n 2 to 8 and m 2 to 5: ascending lexicographic on the coordinates `(x_m, x_{m-1}, ..., x_2)`, the first coordinate being the remainder; no-zero compositions keep every part at least 1.
+
+**Result.** `oracle_partitions` agrees with partitions on 168 new values (column count, sum, position-weighted sum) on Windows (597 cases in all); Linux pending. setparts and blockparts keep their Gray-code-like order and stay open; L470 stays partial.

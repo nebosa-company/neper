@@ -108,3 +108,38 @@ fn by_length(a: *mem.Arena, n: usize, m: usize, rows: usize, distinct: bool, out
     }
     ret (g.cols, ok)
 }
+
+type CGen = struct { out: []f64, m: usize, cols: usize, cur: []f64, lo: usize }
+
+// the compositions of rem into positions pos .. 0 (cur[pos] chosen from lo up, position 0 the remainder): the coordinate m - 1 is the slowest, as partitions::compositions orders its columns
+fn comp_walk(g: *CGen, pos: usize, rem: usize) {
+    if pos == 0usize {
+        if rem >= g.lo {
+            var j = 0usize
+            while j < g.m {
+                g.out[g.cols * g.m + j] = g.cur[j]
+                j += 1usize
+            }
+            g.out[g.cols * g.m] = f64(rem)
+            g.cols += 1usize
+        }
+        ret
+    }
+    var v = g.lo
+    while v <= rem {
+        g.cur[pos] = f64(v)
+        comp_walk(g, pos - 1usize, rem - v)
+        v += 1usize
+    }
+}
+
+// compositions(n, m, include.zero): every way to write n as an ordered sum of m parts (zero allowed or all parts at least 1), columns of m entries into out; returns the number of columns
+fn compositions(a: *mem.Arena, n: usize, m: usize, with_zero: bool, out: []f64) -> (usize, err) {
+    let (cur, e) = mem.alloc[f64](a, m + 1usize)
+    if e != ok { ret (0usize, e) }
+    var lo = 1usize
+    if with_zero { lo = 0usize }
+    var g = CGen { out: out, m: m, cols: 0usize, cur: cur, lo: lo }
+    comp_walk(&g, m - 1usize, n)
+    ret (g.cols, ok)
+}
