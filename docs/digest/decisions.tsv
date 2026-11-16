@@ -3116,4 +3116,5 @@ D6040	970	nnls is the Lawson-Hanson active set with QR least squares, and rank-d
 D6041	1050	dqrng uniforms are the top 53 bits of a splitmix-seeded xoroshiro or xoshiro stream
 D6042	1272	pwr solves with uniroot's own tolerance, so the roots match R only if the iteration does
 D6043	1063	icafast is compared through what the rotation cannot change
-D6044	1076	the L'Ecuyer-CMRG generator is seeded by the rejecting scramble, and its jumps are 3 x 3 matrix products
+D6044	1077	the L'Ecuyer-CMRG generator is seeded by the rejecting scramble, and its jumps are 3 x 3 matrix products
+D6045	1158	mlbench fills its matrices by column, and a factor's codes are not its labels
