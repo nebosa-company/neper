@@ -45246,3 +45246,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.tsfeatures` ports R's acf (denominator n) and the Durbin-Levinson pacf, acf_features and pacf_features (with the seasonal terms), crossing_points, flat_spots (cut's ten equal bins with the end breaks widened by a thousandth of the range), lumpiness and stability on the standardised series, max_level_shift and max_var_shift, firstmin_ac, firstzero_ac, ac_9, embed2_incircle, std1st_der, trev_num, walker_propcross, motiftwo_entro3 and zero_proportion. The features that fit models, sample or need Burg spectra are not here.
 
 **Result.** `oracle_tsfeatures` equals tsfeatures on 282 cases on Windows; Linux pending. L483 is partial.
+
+## D6143 — actuar loss distributions
+
+**Context.** L463 asked for actuar's loss distributions, moments and the actuarial tools.
+
+**Decision.** `e.algo.stat.actuar` has the transformed beta family (d, p, q, raw moment, limited expected value) with Burr, inverse Burr, Pareto, inverse Pareto, loglogistic, paralogistic, inverse paralogistic and generalised Pareto as parameter maps, the transformed gamma and inverse transformed gamma families (with inverse gamma, inverse Weibull and inverse exponential), and the single-parameter Pareto. R's `levinvpareto` integrates numerically with QUADPACK at tolerance eps^0.25, so it differs from the closed form by up to 3e-8 relative; those cases are compared at 1e-5. aggregateDist, ruin, cm, the other distributions and the generators are not here.
+
+**Result.** `oracle_actuar` equals actuar on 3123 cases on Windows; Linux pending. L463 is partial.

@@ -1725,10 +1725,10 @@
       "group": "CRAN parity",
       "order": 777,
       "title": "actuar: actuarial science",
-      "score": 0,
+      "score": 0.25,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open (CRAN rank 781). Mid to large. Acceptance, equal to actuar: d, p, q, r, moments and limited moments for the Pareto, Burr, inverse Burr, transformed gamma, loggamma, phase-type and other loss families, aggregateDist by recursive (Panjer), convolution, normal and simulation, discretize, ruin and Cramer-Lundberg, cm credibility, grouped data and ogive."
+      "evidence": "Partial (D6143). d, p, q, moments and limited moments of the transformed beta family (Burr, inverse Burr, Pareto, inverse Pareto, loglogistic, paralogistic, inverse paralogistic, generalised Pareto), transformed gamma and its inverse, and pareto1 equal actuar on Windows (oracle_actuar; Linux pending). Open: the other distributions, the generators, phase-type, aggregateDist, discretize, ruin, cm, grouped data and ogive. Was: Open (CRAN rank 781). Mid to large. Acceptance, equal to actuar: d, p, q, r, moments and limited moments for the Pareto, Burr, inverse Burr, transformed gamma, loggamma, phase-type and other loss families, aggregateDist by recursive (Panjer), convolution, normal and simulation, discretize, ruin and Cramer-Lundberg, cm credibility, grouped data and ogive."
     },
     {
       "id": "L464",
