@@ -45586,3 +45586,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.pmcmr` gains p_adjust, a port of R's p.adjust for the six step-up and step-down methods (Hommel by the package's recursion over the number of true nulls), which the post-hoc tests and most multiple-comparison work need. It equals stats::p.adjust on random p-vector of 2 to 25 values, ties included. Not here: the unadjusted-p placeholder "none" (the identity), the NA handling, and the other post-hoc test families of PMCMRplus.
 
 **Result.** `oracle_pmcmr` equals PMCMRplus and stats::p.adjust on 306 cases on Windows; Linux pending. L487 stays partial.
+
+## D6192 — robustbase: Qn, Sn and huberM
+
+`e.algo.stat.robustbase` computes the Rousseeuw-Croux scale estimators from all pairwise differences: Qn is the constant 2.21914 times the k-th smallest |x_i - x_j| with k = choose(floor(n / 2) + 1, 2), with the package's small-sample table up to n = 12 and Qn.finite.c above; Sn is 1.1926 times the low median over i of the high median over j of |x_i - x_j|, with its factors for n <= 9 and n / (n - 0.9) for odd n. huberM is the Huber location (k = 1.5, tolerance 1e-6 of the scale) from the median start with the MAD (constant 1.4826) as scale, with the same iteration count. Sn and huberM equal robustbase to 1e-9; Qn agrees to 1e-6 relative, not 1e-9: in some samples (a few in every ten) the package's value deviates from the exact order statistic by up to 4e-8 relative, which looks like the compiled search's tolerance, so the oracle compares Qn at 1e-6. Not here: mc (the medcouple), scaleTau2, covMcd, lmrob and the rest.
+
+**Result.** `oracle_robustbase` agrees with robustbase on 150 cases on Windows (Qn at 1e-6); Linux pending. L338 is partial.

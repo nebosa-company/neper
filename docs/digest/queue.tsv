@@ -88,7 +88,7 @@ L335	library	0.45	729	cluster: pam, clara, fanny, agnes, diana, mona, daisy	Part
 L336	library	0	247	nnet: single-hidden-layer networks and multinom	Open (CRAN rank 258).
 L337	library	0	288	rpart: CART trees	Open (CRAN rank 270).
 L394	library	0	193	ipred: bagging and error estimation	Open (CRAN rank 439).
-L338	library	0	241	robustbase: robust regression and scale	Open (CRAN rank 285).
+L338	library	0.1	421	robustbase: robust regression and scale	Partial (D6192).
 L339	library	0	435	bayestestR, performance and parameters: model summary indices	Open (CRAN ranks 254, 251, 272).
 L340	library	0.55	664	signal: filter design and spectral tools	Partial (D6183, D6184 filtfilt and freqz, D6185 sgolay central row, D6186 cheby1, D6187 cheby2, D6188 grpdelay, D6189 band-pass butter).
 L343	library	0	330	deSolve: solver parity	Open (CRAN rank 216).
