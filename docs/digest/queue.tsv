@@ -26,7 +26,7 @@ L404	library	0.5	488	mlbench: benchmark data generators	Partial (D6045).
 L405	library	0.5	759	yardstick and ModelMetrics: model performance metrics	Partial (D6046).
 L391	library	0.35	476	bridgesampling: marginal likelihoods	Partial (D6047).
 L410	library	0.25	485	AlgDesign: optimal experimental designs	Partly done (D6077): e.algo.stat.algdesign has gen.factorial and the eval.design measures from a model matrix, equal to AlgDesign on 200 values on Windows (oracle_algdesign);
-L420	library	0	198	minpack.lm: Levenberg-Marquardt least squares	Open (CRAN rank 620).
+L420	library	0.5	534	minpack.lm: Levenberg-Marquardt least squares	Partly done (D6078): e.algo.stat.minpacklm.nls_lm is lmdif ported line for line with the package wrapper (bounds, iteration count, info codes), equal to nls.lm on 170 values on Windows including info 
 L421	library	0.4	539	fdrtool: false discovery rate estimation	Partly done (D6068): e.algo.stat.fdrtool.fdrtool_pvalue (fndr cutoff, eta0, Grenander density, local fdr and q values for p values) equals fdrtool on 210 values on Windows (oracle_fdrtool);
 L423	library	0	215	biglm: bounded-memory linear and generalized linear models	Open (CRAN rank 672).
 L431	library	0	261	TSP: travelling-salesperson tools	Open (CRAN rank 631).

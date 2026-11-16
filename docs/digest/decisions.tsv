@@ -3149,4 +3149,5 @@ D6073	1425	pastecs: turnpoints on collapsed runs, stat.desc with the 1/n moments
 D6074	1454	norm: EM on standardised columns, loglik without the constant
 D6075	1686	SuppDists: exact Kendall and Spearman by counting, inverse Gaussian and Johnson in closed form
 D6076	1284	mixsqp: the optimum by accelerated EM, not the SQP iterations
-D6077	1260	AlgDesign: factorial grids and design evaluation from the model matrix
+D6077	1261	AlgDesign: factorial grids and design evaluation from the model matrix
+D6078	1594	minpack.lm: lmdif ported line for line, with the wrapper's iteration count
