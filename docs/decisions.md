@@ -46666,3 +46666,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `tbinom_d`, `nsbeta_d`, `ht_d`, `slash_d` and `sgomp_d` join extradistr.e. The package's slash density at `x = mu` is `1/(2 sqrt(2 pi))` without the division by sigma, which differs from the limit of the formula for sigma not 1; the port keeps the package's value.
 
 **Result.** `oracle_extradistr` agrees with extraDistr on 69 new values on Windows (1061 cases in all); Linux pending. L422 stays partial.
+
+## D6583 — lmtest: the exact dwtest p value
+
+**Decision.** `dw_exact` takes the eigenvalues of `(I - X (X'X)^-1 X') A` (A the second-difference matrix) from the complex Schur solver, keeps the n - k leading ones above 1e-10, and evaluates `P(d < dw) = P(sum (lambda_i - dw) z_i^2 < 0)` by Imhof's integral with Gauss-Kronrod panels, instead of Farebrother's `pan` whose own error is about 1e-7 relative. The three alternatives follow dwtest (`greater` is `P(d < dw)`, `less` its complement, `two.sided` twice the smaller).
+
+**Result.** `oracle_carlmtest` agrees with lmtest on 36 exact p values at 1e-6 on Windows (2332 cases in all); Linux pending. The same p value serves DHARMa's testTemporalAutocorrelation. L300 at 0.98: the kernHAC ARMA(1,1) option, the other bootstrap types and Anova for quasi families stay open.

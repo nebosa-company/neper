@@ -140,6 +140,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (dd, dp) = cl.dw_approx(a, des, y, n, p, usize(x[2usize + n + n * p]))
         ret dp
     }
+    if str.eq(c.name, "dwx_p") {
+        let (dd2, dp2) = cl.dw_exact(a, des, y, n, p, usize(x[2usize + n + n * p]))
+        ret dp2
+    }
     if str.eq(c.name, "bc") { ret cl.box_cox_ll(a, des, y, n, p, x[2usize + n + n * p]) }
     if str.eq(c.name, "pt_lambda") { ret cl.power_transform_lambda(a, des, y, n, p) }
     if str.eq(c.name, "an") || str.eq(c.name, "anp") {

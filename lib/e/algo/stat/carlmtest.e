@@ -4,7 +4,9 @@
 // Not here: the other covariance families (HAC, clustered, bootstrap), the other lmtest tests (RESET, Harvey-Collier, Goldfeld-Quandt, the non-studentized
 // Breusch-Pagan), p values, Anova and the rest of car.
 
+use e.algo.linalg.decomp as decomp
 use e.algo.rand.r as rng
+use e.algo.stat.pracma as pm
 use e.algo.stat.bigglm as bgl
 use e.math
 use e.math.dist as dist
@@ -1927,4 +1929,139 @@ fn dw_approx(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     if alt == 2usize { ret (dw, 2.0f64 * dist.pnorm(math.abs[f64](dw - dmean), 0.0f64, sd, false, false)) }
     if alt == 1usize { ret (dw, dist.pnorm(dw, dmean, sd, false, false)) }
     ret (dw, dist.pnorm(dw, dmean, sd, true, false))
+}
+
+// Imhof's P(sum w_i z_i^2 < 0) for independent standard normals z_i: 1/2 - (1/pi) integral_0^inf sin(theta(u)) / (u rho(u)) du, theta = 1/2 sum arctan(w_i u), rho = prod (1 + w_i^2 u^2)^(1/4)
+fn imhof_neg(w: []const f64) -> f64 {
+    var wmax = 0.0f64
+    var i = 0usize
+    while i < w.len {
+        if math.abs[f64](w[i]) > wmax { wmax = math.abs[f64](w[i]) }
+        i += 1usize
+    }
+    let s = 1.0f64 / wmax
+    var total = 0.0f64
+    var lo = 0.0f64
+    var width = 0.05f64 * s
+    var panel = 0usize
+    while panel < 400usize {
+        let hi = lo + width
+        var acc = 0.0f64
+        var k = 0usize
+        while k < 15usize {
+            let u = 0.5f64 * ((hi - lo) * pm.gk_node15(k) + hi + lo)
+            var th = 0.0f64
+            var lr = 0.0f64
+            i = 0usize
+            while i < w.len {
+                th += 0.5f64 * math.atan[f64](w[i] * u)
+                lr += 0.25f64 * math.log[f64](1.0f64 + w[i] * w[i] * u * u)
+                i += 1usize
+            }
+            var fv = 0.0f64
+            if u > 0.0f64 { fv = math.sin[f64](th) * math.exp[f64](0.0f64 - lr) / u }
+            acc += pm.gk_w15(k) * fv
+            k += 1usize
+        }
+        acc = acc * (hi - lo) / 2.0f64
+        total += acc
+        lo = hi
+        if panel >= 200usize { width = width * 1.3f64 }
+        if panel > 220usize && math.abs[f64](acc) < 1.0e-15f64 { break }
+        panel += 1usize
+    }
+    ret 0.5f64 - total / 3.141592653589793238462643383279f64
+}
+
+// lmtest::dwtest(exact = TRUE): the Durbin-Watson d and its exact p value from the eigenvalues of (I - X (X'X)^-1 X') A, A the second-difference matrix; alt 0 greater, 1 less, 2 two.sided
+fn dw_exact(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alt: usize) -> (f64, f64) {
+    let nan = 0.0f64 / 0.0f64
+    let (f0, e0) = ols(a, x, y, n, p)
+    if e0 != ok { ret (nan, nan) }
+    let dw = durbin_watson(f0.resid)
+    let (ma, e1) = mem.alloc[f64](a, n * n)
+    let (mp, e2) = mem.alloc[f64](a, n * n)
+    if e1 != ok || e2 != ok { ret (nan, nan) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var s = 0.0f64
+            var q1 = 0usize
+            while q1 < p {
+                var q2 = 0usize
+                while q2 < p {
+                    s += x[i * p + q1] * f0.xtx_inv[q1 * p + q2] * x[j * p + q2]
+                    q2 += 1usize
+                }
+                q1 += 1usize
+            }
+            var m0 = 0.0f64 - s
+            if i == j { m0 += 1.0f64 }
+            mp[i * n + j] = m0
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            // (M A)[i, j] = sum_l M[i, l] A[l, j] with A tridiagonal (1, 2 .. 2, 1 on the diagonal, -1 beside it)
+            var s = 0.0f64
+            var l = 0usize
+            while l < n {
+                var av = 0.0f64
+                if l == j {
+                    av = 2.0f64
+                    if l == 0usize || l == n - 1usize { av = 1.0f64 }
+                } else if l + 1usize == j || j + 1usize == l {
+                    av = 0.0f64 - 1.0f64
+                }
+                if av != 0.0f64 { s += mp[i * n + l] * av }
+                l += 1usize
+            }
+            ma[i * n + j] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (eg, ee) = decomp.eigen(a, ma, n)
+    if ee != ok { ret (nan, nan) }
+    // the n - p leading eigenvalues (by decreasing modulus as R's eigen orders them), real parts above 1e-10
+    let (ev, e3) = mem.alloc[f64](a, n)
+    if e3 != ok { ret (nan, nan) }
+    i = 0usize
+    while i < n {
+        ev[i] = eg.re[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let t = ev[i]
+        var j = i
+        while j > 0usize && math.abs[f64](ev[j - 1usize]) < math.abs[f64](t) {
+            ev[j] = ev[j - 1usize]
+            j -= 1usize
+        }
+        ev[j] = t
+        i += 1usize
+    }
+    let (w, e4) = mem.alloc[f64](a, n)
+    if e4 != ok { ret (nan, nan) }
+    var m = 0usize
+    i = 0usize
+    while i < n - p {
+        if ev[i] > 1.0e-10f64 {
+            w[m] = ev[i] - dw
+            m += 1usize
+        }
+        i += 1usize
+    }
+    let pd = imhof_neg(w[0usize..m])
+    if alt == 0usize { ret (dw, pd) }
+    if alt == 1usize { ret (dw, 1.0f64 - pd) }
+    var mn = pd
+    if 1.0f64 - pd < mn { mn = 1.0f64 - pd }
+    ret (dw, 2.0f64 * mn)
 }
