@@ -44974,3 +44974,9 @@ No new geometry code: `oracle_sf` runs the planar part of `e.algo.geom` against 
 `e.algo.stat.cmprsk.crstm` ports `crstm` and `crst` of cmprsk line for line (scores, packed lower-triangle variance, strata summed, the weight `(1 - F)^rho`) and answers the statistic `s' vs^-1 s`, or -1 for a singular variance as `cuminc` does.
 
 **Result.** `oracle_cmprsk` now also equals cuminc's Gray statistic on 120 cases (60 samples of 30 to 150 cases, 2 to 4 groups, one or two strata, rho 0, 0.5 and 1, both causes) on Windows; the Linux run is pending (WSL). Open under L419: `crr` Fine-Gray regression with time-varying covariates, `predict.crr`, `timepoints`.
+
+## D6104 — cmprsk crr point estimates
+
+`e.algo.stat.crr` ports `crrfsv`, `crrf` and `covt` of cmprsk line for line and `crr`'s Newton loop with step halving and the `max |s| * max(|b|, 1) < max(|lik|, 1) * gtol` stop. The censoring weights are the Kaplan-Meier of each censoring group evaluated just before each time; R reads them through `approx(rule = 2)`, which answers 0 for a time past the group's last time (times scaled by `1 - 100 eps` and `1 + 10 eps`), and the port reproduces that, since a pooled risk set at a failure time of another group depends on it.
+
+**Result.** `oracle_crr` equals cmprsk 2.2-12 on 74 values (coefficients, log likelihood and null log likelihood of the fits that converge, 1 to 3 covariates, one or two time-varying covariates with `log(1 + t)` and `t`, one or two censoring groups, tied times) on Windows; the Linux run is pending (WSL). Open under L419: the variance (`crrvv`), residuals (`crrsr`), `predict.crr`, `timepoints`.
