@@ -44992,3 +44992,9 @@ No new geometry code: `oracle_sf` runs the planar part of `e.algo.geom` against 
 `crrsr` (score residuals), `crrfit` (the baseline hazard jumps), `predict` (predict.crr for one covariate row, `1 - exp(-cumsum(exp(lp) jump))` with the time functions on the second block) and `timepoints` (Gray's `tpoi`, the step function read at times, NaN beyond the last corner) complete the package's surface that L419 listed.
 
 **Result.** `oracle_crr` is 404 values and `oracle_cmprsk` 1240 on Windows, all equal to cmprsk 2.2-12; the Linux run is pending (WSL). L419 is closed.
+
+## D6107 — TSP: tours, insertion, 2-opt, ATSP reformulation, cut_tour
+
+`e.algo.stat.tsp` ports the TSP package's constructions on a full distance matrix: `nn` and `repetitive_nn`, nearest, farthest, cheapest and arbitrary insertion with the package's choice among ties drawn from R's stream (`sample(x, 1)` only when more than one candidate, after the default `start = sample(n, 1)` the package's control list always draws), best-improvement `two_opt` from `sample(n)`, `tour_length`, `reformulate_ATSP_as_TSP` and the single-cut `cut_tour`. A dist object has no diagonal, so the reformulated matrix reads 0 there, not `infeasible`.
+
+**Result.** `oracle_tsp` equals TSP 1.3.0 on 720 values (40 point sets of 6 to 25 cities, every method, seeded draws included) on Windows; the Linux run is pending (WSL). The exact solvers (concorde, linkern) are external programs and stay out; L431 is closed.

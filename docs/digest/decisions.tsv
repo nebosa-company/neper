@@ -3178,4 +3178,5 @@ D6102	801	cmprsk cuminc estimates and variances: Gray's cinc routine
 D6103	613	cmprsk Gray k-sample test
 D6104	968	cmprsk crr point estimates
 D6105	703	cmprsk crr variance
-D6106	567	cmprsk residuals, baseline jumps, predict and timepoints close L419
+D6106	568	cmprsk residuals, baseline jumps, predict and timepoints close L419
+D6107	897	TSP: tours, insertion, 2-opt, ATSP reformulation, cut_tour
