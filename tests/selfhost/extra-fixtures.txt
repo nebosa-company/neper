@@ -273,3 +273,4 @@ oracle_perfanalytics
 oracle_ismev
 oracle_learnbayes
 oracle_logistf
+oracle_betareg

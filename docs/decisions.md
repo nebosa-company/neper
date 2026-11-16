@@ -45340,3 +45340,9 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 `e.algo.stat.logistf` fits Firth's penalized logistic regression by Newton steps with step halving on the penalized score (X'(y - p + h(0.5 - p))), and reports the coefficients, the penalized log-likelihood, the profile penalized-likelihood-ratio p value of each coefficient (refit with it fixed at zero) and the "null" log-likelihood. Found by comparison: the package's covariance is the inverse of X' diag(w (1 + h)) X (not the plain information inverse), and its null log-likelihood moves only the intercept while the penalty still uses the full design. Datasets for which R itself warns of fitted probabilities of 0 or 1 (separation) are left out of the oracle. Not here: the profile-likelihood confidence limits, FLIC and FLAC, weights, offsets, predict and the formula interface.
 
 **Result.** `oracle_logistf` agrees with logistf on 102 cases on Windows (coefficients and covariance to 1e-5, profile p values to 1e-4); Linux pending. L424 is partial.
+
+## D6158 — betareg: logit-link beta regression with constant precision
+
+`e.algo.stat.betareg` fits the beta regression by Nelder-Mead restarts on (beta, log phi) from the package's starting values (least squares on logit(y), precision from the residual variance), and reports the coefficients, the precision and the log-likelihood. It agrees with R to the optimiser tolerance (coefficients and precision to 1e-3 relative, log-likelihood to 1e-6), not bit for bit. Not here: variable dispersion, other link functions, bias correction, the standard errors and the diagnostics.
+
+**Result.** `oracle_betareg` agrees with betareg on 53 cases on Windows; Linux pending. L451 is partial.

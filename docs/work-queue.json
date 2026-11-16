@@ -570,10 +570,10 @@
       "group": "CRAN parity",
       "order": 632,
       "title": "betareg: beta regression",
-      "score": 0,
+      "score": 0.3,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 710). Small to mid. Acceptance, equal to betareg: betareg with logit, probit and cloglog mean links and a precision submodel, ML, bias-corrected and bias-reduced estimation, standard errors, predict types, residual types, lrtest."
+      "evidence": "Partial (D6158). Logit-link, constant-precision fits (coefficients, precision, log-likelihood) agree with betareg on Windows at optimiser tolerance (oracle_betareg; Linux pending). Open: variable dispersion, other links, bias correction, standard errors. Was: Open (CRAN rank 710). Small to mid. Acceptance, equal to betareg: betareg with logit, probit and cloglog mean links and a precision submodel, ML, bias-corrected and bias-reduced estimation, standard errors, predict types, residual types, lrtest."
     },
     {
       "id": "L452",

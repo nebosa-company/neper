@@ -50,7 +50,7 @@ L430	library	0	287	geepack: generalized estimating equations	Open (CRAN rank 644
 L448	library	0	272	mcmc: Metropolis and tempering samplers	Open (CRAN rank 789).
 L449	library	0.2	412	sn: skew-normal and skew-t distributions	Partial (D6148).
 L450	library	0	289	mediation: causal mediation analysis	Open (CRAN rank 755).
-L451	library	0	245	betareg: beta regression	Open (CRAN rank 710).
+L451	library	0.3	505	betareg: beta regression	Partial (D6158).
 L452	library	0	223	TSA: time-series analysis toolkit	Open (CRAN rank 735).
 L453	library	0	246	cubature: adaptive multidimensional integration	Open (CRAN rank 753).
 L454	library	0	188	VIM: missing-value imputation	Open (CRAN rank 765).
