@@ -3196,4 +3196,5 @@ D6120	1355	permute grid designs, shuffleSet, allPerms with plot restrictions and
 D6121	1341	KernSmooth dpill and bkde2D; rlbin keeps the right end point
 D6122	1122	tseries bds.test, tsbootstrap, terasvirta.test and white.test
 D6123	1118	solve.QP and portfolio.optim close L325
-D6124	535	CompQuadForm davies and farebrother
+D6124	536	CompQuadForm davies and farebrother
+D6125	916	QUADPACK dqagie and the non-central chi-squared

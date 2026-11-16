@@ -6,6 +6,8 @@
 
 use e.math
 use e.math.dist as dist
+use e.math.nchisq as nchi
+use e.math.quadpack as quad
 use e.mem
 
 fn pi_c() -> f64 { ret 3.14159265358979f64 }
@@ -573,4 +575,66 @@ fn farebrother(a: *mem.Arena, lambda: []const f64, mult: []const i64, delta: []c
     out.dnsty = dn
     out.ifault = ifault
     ret (out, ok)
+}
+
+// liu(q, lambda, h, delta): the Liu, Tang and Zhang four-moment approximation of P(Q > q), through a non-central chi-squared.
+fn liu(q: f64, lambda: []const f64, h: []const i64, delta: []const f64) -> f64 {
+    var c1 = 0.0f64
+    var c2 = 0.0f64
+    var c3 = 0.0f64
+    var c4 = 0.0f64
+    var i = 0usize
+    while i < lambda.len {
+        let l = lambda[i]
+        let hh = f64(h[i])
+        let d = delta[i]
+        c1 += l * hh + l * d
+        c2 += l * l * hh + 2.0f64 * l * l * d
+        c3 += l * l * l * hh + 3.0f64 * l * l * l * d
+        c4 += l * l * l * l * hh + 4.0f64 * l * l * l * l * d
+        i += 1usize
+    }
+    let s1 = c3 / math.pow[f64](c2, 1.5f64)
+    let s2 = c4 / (c2 * c2)
+    let tstar = (q - c1) / math.sqrt[f64](2.0f64 * c2)
+    var a = 0.0f64
+    var dl = 0.0f64
+    var l = 0.0f64
+    if s1 * s1 > s2 {
+        a = 1.0f64 / (s1 - math.sqrt[f64](s1 * s1 - s2))
+        dl = s1 * a * a * a - a * a
+        l = a * a - 2.0f64 * dl
+    } else {
+        a = 1.0f64 / s1
+        l = c2 * c2 * c2 / (c3 * c3)
+    }
+    ret nchi.pnchisq(tstar * math.sqrt[f64](2.0f64) * a + l + dl, l, dl, false, false)
+}
+
+type ImhCtx = struct { x: f64, lambda: []const f64, h: []const i64, delta: []const f64 }
+
+fn imhof_f(c: *ImhCtx, u: f64) -> f64 {
+    var th = 0.0f64
+    var rho = 1.0f64
+    var i = 0usize
+    while i < c.lambda.len {
+        let lu = c.lambda[i] * u
+        let lu2 = lu * lu
+        let hh = f64(c.h[i])
+        th += hh * math.atan[f64](lu) + c.delta[i] * lu / (1.0f64 + lu2)
+        rho = rho * math.pow[f64](1.0f64 + lu2, 0.25f64 * hh) * math.exp[f64](0.5f64 * c.delta[i] * lu2 / (1.0f64 + lu2))
+        i += 1usize
+    }
+    th = 0.5f64 * th - 0.5f64 * c.x * u
+    ret math.sin[f64](th) / (u * rho)
+}
+
+type ImhofRes = struct { qq: f64, abserr: f64, ier: i64 }
+
+// imhof(q, lambda, h, delta, epsabs, epsrel, limit): Imhof's integral for P(Q > q) through R's integrate over (0, Inf).
+fn imhof(a: *mem.Arena, q: f64, lambda: []const f64, h: []const i64, delta: []const f64, epsabs: f64, epsrel: f64, limit: usize) -> (ImhofRes, err) {
+    var c = ImhCtx { x: q, lambda: lambda, h: h, delta: delta }
+    let (r, e) = quad.qagi(a, &c, imhof_f, 0.0f64, 1i64, epsabs, epsrel, limit)
+    if e != ok { ret (ImhofRes { qq: 0.0f64, abserr: 0.0f64, ier: 0i64 }, e) }
+    ret (ImhofRes { qq: 0.5f64 + r.result / 3.141592653589793238462643383279f64, abserr: r.abserr, ier: r.ier }, ok)
 }

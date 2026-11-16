@@ -25,5 +25,20 @@ for (rep in 1:80) {
     a <- c(r, q, 100000, 1e-10, 1, lam, h, dl)
     add("fare", c(a, 0), r2$Qq); add("fare", c(a, 1), r2$dnsty); add("fare", c(a, 2), r2$ifault)
   }
+  if (all(lam > 0)) for (zq in c(-1, 0, 1, 3)) {
+    q <- round(mu + zq * sg, 3); if (q <= 0) next
+    add("liu", c(r, q, lam, h, dl), liu(q, lam, h, dl))
+  }
+  for (zq in c(-1, 0, 1, 2.5)) {
+    q <- round(mu + zq * sg, 3)
+    r3 <- tryCatch(suppressWarnings(imhof(q, lam, h, dl)), error = function(e) NULL)
+    if (is.null(r3)) next
+    a <- c(r, q, 1e-6, 1e-6, 10000, lam, h, dl)
+    add("imh", c(a, 0), r3$Qq); add("imh", c(a, 1), r3$abserr)
+  }
+}
+for (th in c(0, 0.5, 5, 30, 79, 80, 120, 500, 3000)) for (df in c(0.5, 1, 3, 10, 60, 400)) for (zq in c(-2.5, -1, 0, 1, 2.5, 6)) {
+  m <- df + th; x <- max(0.01, m + zq * sqrt(2 * (df + 2 * th)))
+  for (lt in c(TRUE, FALSE)) { w <- suppressWarnings(pchisq(x, df, th, lower.tail = lt)); add("pnc", c(x, df, th, if (lt) 1 else 0), w) }
 }
 emit("compqf", "CompQuadForm", list(cases))

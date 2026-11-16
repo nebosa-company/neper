@@ -37,17 +37,6 @@
       "evidence": "Partial (D6034). 135 discrete ggsci and ggthemes palettes as a generated table, with ggsci alpha, equal R on Windows (Linux pending). Open: continuous palettes (gsea, material, gradients), palettes that change with alpha, ggthemes palettes with arguments. Was: Open (CRAN ranks 220, 226). Small data item. Acceptance: every discrete and continuous palette of ggsci and the colour palettes of ggthemes equal to the R package, with alpha handling."
     },
     {
-      "id": "L356",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 553,
-      "title": "truncnorm, CompQuadForm and pbivnorm: three small distribution packages",
-      "score": 0.8,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6035). truncnorm d, p, q, r, e, v and pbivnorm equal R on Windows (Linux pending). Plus (D6124) CompQuadForm davies and farebrother equal R on 4059 values on Windows (oracle_compqf). Open: imhof (integrate), liu (pnchisq). Was: Open (CRAN ranks 363, 379, 321). Small. Acceptance, equal to R: dtruncnorm, ptruncnorm, qtruncnorm, rtruncnorm under set.seed, etruncnorm and vtruncnorm; Davies, Imhof, Farebrother, Liu and Ruben distribution of a quadratic form in normals; pbivnorm bivariate normal probabilities."
-    },
-    {
       "id": "L357",
       "category": "library",
       "group": "CRAN parity",

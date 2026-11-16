@@ -45102,3 +45102,11 @@ Three criteria join the table: simplimax (the `k` smallest squared loadings, tie
 **Decision.** `e.algo.stat.compqf` ports `qfc.cpp` as `davies` (the Qf state carries an abort flag standing in for the longjmp, so the count and lim limits stop the integration at the same points) and `ruben.cpp` as `farebrother`. Both return R's trace and ifault.
 
 **Result.** `oracle_compqf` equals CompQuadForm on 4059 values on Windows; Linux pending. Open on L356: imhof (R integrate) and liu (pnchisq).
+
+## D6125 — QUADPACK dqagie and the non-central chi-squared
+
+**Context.** CompQuadForm imhof runs R's `integrate` over (0, Inf), and liu calls `pchisq` with a non-centrality; neither existed.
+
+**Decision.** `e.math.quadpack` ports `rdqagie` with `rdqk15i`, `rdqelg` and `rdqpsrt` (1-based tables, the C gotos as phase flags) behind `qagi[Ctx]`, taking the integrand as `fn(*Ctx, f64) -> f64`; the second pass of the 15-point rule evaluates the integrand again instead of keeping the 14 values. `e.math.nchisq` ports `pnchisq` and `pnchisq_raw` (the Poisson mixture below ncp 80, AS 275 with R's underflow regimes above) in f64 where R uses long double. `imhof` and `liu` sit in `e.algo.stat.compqf`.
+
+**Result.** `oracle_compqf` equals CompQuadForm and pchisq(ncp) on 5543 values on Windows; Linux pending. L356 is closed. Traps met: an all-caps type name (`K15`) is a constant, so it cannot head a struct literal.
