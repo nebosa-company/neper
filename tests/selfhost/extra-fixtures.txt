@@ -284,6 +284,7 @@ oracle_rocr
 oracle_dharma
 oracle_pamcluster
 oracle_arm
+oracle_sm
 oracle_signalpkg
 oracle_agricolae
 oracle_epir
@@ -312,3 +313,4 @@ oracle_cart
 oracle_vars
 oracle_ksamples
 oracle_arm
+oracle_sm

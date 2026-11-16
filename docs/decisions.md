@@ -45892,3 +45892,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.arm` is new: `logit`, `invlogit`, `se_coef` for a linear model (sqrt of sigma^2 times the diagonal of the inverse cross-product) and `binned_resids`, the table behind binnedplot, including the tie branch that steps a break down to the next smaller distinct value or to minus infinity, and the unique() merge of equal breaks.
 
 **Result.** `oracle_arm` equals arm on 911 cases on Windows, 25 binned tables over 3 to 10 classes with and without tied x. sim, bayesglm, discrete, corrplot data and standardize are open; Linux pending. L409 is partial.
+
+## D6454 — sm: hnorm, sm.density and sm.regression
+
+`e.algo.stat.sm` is new: `hnorm` (one variable, and per column of a two-variable data set), `density1` and `density2` (Gaussian product kernel) and `regression` (local constant and local linear at a point), on unbinned data.
+
+**Result.** `oracle_sm` equals sm on 260 cases on Windows at rel 1e-9, over 20 samples of 15 to 90 observations. hcv and h.select, bands and standard errors, sm.ancova, sm.survival and sm.options are open; sm bins above 100 observations, which is not covered; Linux pending. L505 is partial.
