@@ -127,7 +127,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "khac") {
         let (ko, ke) = mem.alloc[f64](a, p)
         if ke != ok { ret 0.0f64 / 0.0f64 }
-        if cl.kern_hac_diag(a, des, y, n, p, ko) != ok { ret 0.0f64 / 0.0f64 }
+        if cl.kern_hac_diag(a, des, y, n, p, usize(x[2usize + n + n * p]), ko) != ok { ret 0.0f64 / 0.0f64 }
         var sk = 0.0f64
         var q = 0usize
         while q < p {

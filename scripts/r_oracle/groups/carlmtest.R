@@ -28,7 +28,7 @@ for (rep in 1:12) {
   for (R in c(30, 120)) { sd <- sample(1:1e6, 1); set.seed(sd); vb <- vcovBS(m, R = R); add("vbs", c(a, sd, R), sum(as.vector(t(vb)) * seq_len(length(vb)))) }
   for (ng in c(5, 10)) { nid <- max(2, n %/% ng); tm <- rep(seq_len(ng), length.out = n); id <- rep(seq_len(nid), each = ceiling(n / nid))[seq_len(n)]
     for (lg in c(-1, 1, 3)) { vp <- if (lg < 0) vcovPL(m, cluster = id, order.by = tm) else vcovPL(m, cluster = id, order.by = tm, lag = lg); dv <- diag(vp); add("vpl", c(a, lg, tm), sum(dv * seq_along(dv))) } }
-  kh <- tryCatch(kernHAC(m), error = function(e) NULL); if (!is.null(kh)) { dv <- diag(kh); add("khac", a, sum(dv * seq_along(dv))) }
+  for (kn in 0:4) { kh <- tryCatch(kernHAC(m, kernel = c("Quadratic Spectral", "Truncated", "Bartlett", "Parzen", "Tukey-Hanning")[kn + 1]), error = function(e) NULL); if (!is.null(kh)) { dv <- diag(kh); add("khac", c(a, kn), sum(dv * seq_along(dv))) } }
   for (ord in c(1, 2, 4)) { a2 <- c(a, ord); b1 <- bgtest(m, order = ord); b2 <- bgtest(m, order = ord, type = "F"); add("bg_c", a2, as.numeric(b1$statistic)); add("bg_cp", a2, b1$p.value); add("bg_f", a2, as.numeric(b2$statistic)); add("bg_fp", a2, b2$p.value) }
   if (k >= 2) { v <- vif(m); add("vif", a, sum(v * seq_along(v))) }
 }

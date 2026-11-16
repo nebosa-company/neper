@@ -46534,3 +46534,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `kern_hac_diag` ports kernHAC with its defaults: scores `x_i e_i`, VAR(1) prewhitening by least squares (`A = sum u_t u_{t-1}' (sum u_{t-1} u_{t-1}')^-1`, `D = (I - A)^-1`), the Andrews bandwidth from per-column AR(1) fits of the whitened scores (ar.ols with intercept; the intercept column has weight 0), `1.3221 (n alpha2)^(1/5)`, Quadratic Spectral weights (R's smoothed small-argument form) truncated at 1e-7, and `D (n/(n - k) Gamma) D'` in the sandwich.
 
 **Result.** `oracle_carlmtest` agrees with sandwich on 12 values (2212 cases in all) on Windows; Linux pending. L300 at 0.97: the other kernels and ARMA(1,1) approximation, the dwtest p value (pan) and the remaining bootstrap types stay open.
+
+## D6561 — sandwich: kernHAC kernels
+
+**Decision.** `kern_hac_diag` takes the kernel: Quadratic Spectral, Truncated (bandwidth 0.6611 (n alpha2)^(1/5)), Bartlett (1.1447 (n alpha1)^(1/3)), Parzen (2.6614) and Tukey-Hanning (1.7462), each with sandwich's `kweights` form; alpha1 joins alpha2 from the same AR(1) fits.
+
+**Result.** `oracle_carlmtest` agrees with sandwich on 48 new kernHAC values (2260 cases in all) on Windows; Linux pending. L300 stays partial (the ARMA(1,1) approximation, the dwtest p value).

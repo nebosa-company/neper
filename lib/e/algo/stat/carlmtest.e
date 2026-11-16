@@ -1558,7 +1558,7 @@ fn qs_weight(x: f64) -> f64 {
 }
 
 // sandwich::kernHAC(lm) with its defaults: the Quadratic Spectral kernel, bandwidth bwAndrews with the AR(1) approximation, VAR(1) prewhitening of the scores, adjust = TRUE (the intercept column carries weight 0 in the bandwidth); the diagonal of the covariance goes to out
-fn kern_hac_diag(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, out: []f64) -> err {
+fn kern_hac_diag(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, kernel: usize, out: []f64) -> err {
     let (f0, e0) = ols(a, x, y, n, p)
     if e0 != ok { ret e0 }
     let k = p
@@ -1680,6 +1680,7 @@ fn kern_hac_diag(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usi
     // the AR(1) approximation per column of the prewhitened scores
     var denum = 0.0f64
     var al2 = 0.0f64
+    var al1 = 0.0f64
     c = 0usize
     while c < k {
         var mean = 0.0f64
@@ -1722,15 +1723,21 @@ fn kern_hac_diag(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usi
         let q1 = 1.0f64 - rho
         denum += wt[c] * math.pow[f64](sigma / q1, 4.0f64)
         al2 += wt[c] * 4.0f64 * rho * rho * math.pow[f64](sigma, 4.0f64) / math.pow[f64](q1, 8.0f64)
+        al1 += wt[c] * 4.0f64 * rho * rho * math.pow[f64](sigma, 4.0f64) / (math.pow[f64](q1, 6.0f64) * (1.0f64 + rho) * (1.0f64 + rho))
         c += 1usize
     }
     al2 = al2 / denum
-    let bw = 1.3221f64 * math.pow[f64](f64(ne) * al2, 0.2f64)
+    al1 = al1 / denum
+    var bw = 1.3221f64 * math.pow[f64](f64(ne) * al2, 0.2f64)
+    if kernel == 1usize { bw = 0.6611f64 * math.pow[f64](f64(ne) * al2, 0.2f64) }
+    if kernel == 2usize { bw = 1.1447f64 * math.pow[f64](f64(ne) * al1, 1.0f64 / 3.0f64) }
+    if kernel == 3usize { bw = 2.6614f64 * math.pow[f64](f64(ne) * al2, 0.2f64) }
+    if kernel == 4usize { bw = 1.7462f64 * math.pow[f64](f64(ne) * al2, 0.2f64) }
     // weights 0 .. ne - 1 of j / bw, truncated after the last with |w| > 1e-7
     var nw = 0usize
     var j = 0usize
     while j < ne {
-        if math.abs[f64](qs_weight(f64(j) / bw)) > 1.0e-7f64 { nw = j + 1usize }
+        if math.abs[f64](hac_weight(kernel, f64(j) / bw)) > 1.0e-7f64 { nw = j + 1usize }
         j += 1usize
     }
     i = 0usize
@@ -1740,7 +1747,7 @@ fn kern_hac_diag(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usi
     }
     j = 0usize
     while j < nw {
-        let w = qs_weight(f64(j) / bw)
+        let w = hac_weight(kernel, f64(j) / bw)
         var t = j
         while t < ne {
             r = 0usize
@@ -1821,4 +1828,25 @@ fn kern_hac_diag(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usi
         r += 1usize
     }
     ret ok
+}
+
+// sandwich::kweights: kernel 0 Quadratic Spectral, 1 Truncated, 2 Bartlett, 3 Parzen, 4 Tukey-Hanning
+fn hac_weight(kernel: usize, x: f64) -> f64 {
+    let ax = math.abs[f64](x)
+    if kernel == 0usize { ret qs_weight(x) }
+    if kernel == 1usize {
+        if ax > 1.0f64 { ret 0.0f64 }
+        ret 1.0f64
+    }
+    if kernel == 2usize {
+        if ax > 1.0f64 { ret 0.0f64 }
+        ret 1.0f64 - ax
+    }
+    if kernel == 3usize {
+        if ax > 1.0f64 { ret 0.0f64 }
+        if ax < 0.5f64 { ret 1.0f64 - 6.0f64 * x * x + 6.0f64 * ax * ax * ax }
+        ret 2.0f64 * (1.0f64 - ax) * (1.0f64 - ax) * (1.0f64 - ax)
+    }
+    if ax > 1.0f64 { ret 0.0f64 }
+    ret (1.0f64 + math.cos[f64](3.141592653589793238462643383279f64 * x)) / 2.0f64
 }
