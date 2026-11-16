@@ -51,7 +51,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             q += 1usize
         }
         let lm0 = z[0usize..0usize]
-        let e = pc.pca_grid(a, yy, n, pp, k, i64(z[3usize]), usize(z[4usize]), usize(z[5usize]), z[6usize], lm0, 1.0f64, 1.0f64, ld, sd, ob)
+        var e = ok
+        if pp > n {
+            e = pc.pca_grid_hd(a, yy, n, pp, k, i64(z[3usize]), usize(z[4usize]), usize(z[5usize]), z[6usize], lm0, 1.0f64, 1.0f64, ld, sd, ob)
+        } else {
+            e = pc.pca_grid(a, yy, n, pp, k, i64(z[3usize]), usize(z[4usize]), usize(z[5usize]), z[6usize], lm0, 1.0f64, 1.0f64, ld, sd, ob)
+        }
         if e != ok { ret nan }
         pc.pca_grid_finish(pp, k, ld, sd, ob)
         let wi = usize(z[off + n * pp + pp])

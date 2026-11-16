@@ -31,6 +31,11 @@ fn values(a: *mem.Arena, c: *const oracle.Case, data: []const f64, n: usize, p: 
         if e != ok { os.exit(6) }
         ret v
     }
+    if str.eq(c.name, "fsvd") {
+        let (v, e) = cp.fast_svd_d(a, data, n, p, lam)
+        if e != ok { os.exit(6) }
+        ret v
+    }
     let (v, e) = cp.pseudoinverse(a, data, n, p)
     if e != ok { os.exit(6) }
     ret v

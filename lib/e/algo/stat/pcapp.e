@@ -5,6 +5,7 @@
 // And PCAproj (the eachobs search with the optional update, scale estimators sd, mad and qn). Not here: PCAgrid and sPCAgrid, the
 // lincomb and sphere candidate sets (they draw random directions) and the null-space completion R applies when the data collapse.
 
+use e.algo.linalg.decomp as decomp
 use e.math
 use e.mem
 
@@ -1253,4 +1254,71 @@ fn pca_grid_finish(p: usize, k: usize, load: []f64, sdev: []f64, obj: []f64) {
         }
         pass += 1usize
     }
+}
+
+// PCAgrid for n < p as R runs it: svd(t(x)) = U D V', the search on V D (n by n), and the loadings mapped back by U. `load` is p by k
+// (column-major), `sdev` has n entries, `obj` k; the first k components then go through pca_grid_finish(p, k, ...).
+fn pca_grid_hd(a: *mem.Arena, x: []const f64, n: usize, p: usize, k: usize, method: i64, maxiter: usize, splitcircle: usize, zero_tol: f64, lam: []const f64, qn: f64, sn_: f64, load: []f64, sdev: []f64, obj: []f64) -> err {
+    let (mt, e1) = mem.alloc[f64](a, n * p)
+    let (xr, e2) = mem.alloc[f64](a, n * n)
+    let (lr, e3) = mem.alloc[f64](a, n * n)
+    if e1 != ok || e2 != ok || e3 != ok { ret e1 }
+    var c = 0usize
+    while c < p {
+        var r = 0usize
+        while r < n {
+            mt[r * p + c] = x[c * n + r]
+            r += 1usize
+        }
+        c += 1usize
+    }
+    let (sv, se) = decomp.svd(a, mt, p, n)
+    if se != ok { ret se }
+    var ordv = sv.k
+    if ordv != n { ret mem.Invalid }
+    let (od, e4) = mem.alloc[usize](a, n)
+    if e4 != ok { ret e4 }
+    c = 0usize
+    while c < n {
+        od[c] = c
+        c += 1usize
+    }
+    c = 1usize
+    while c < n {
+        let o = od[c]
+        var d = c
+        while d > 0usize && sv.d[od[d - 1usize]] < sv.d[o] {
+            od[d] = od[d - 1usize]
+            d -= 1usize
+        }
+        od[d] = o
+        c += 1usize
+    }
+    c = 0usize
+    while c < n {
+        var r = 0usize
+        while r < n {
+            xr[c * n + r] = sv.v[od[c] * n + r] * sv.d[od[c]]
+            r += 1usize
+        }
+        c += 1usize
+    }
+    let e = pca_grid(a, xr, n, n, k, method, maxiter, splitcircle, zero_tol, lam, qn, sn_, lr, sdev, obj)
+    if e != ok { ret e }
+    c = 0usize
+    while c < k {
+        var r = 0usize
+        while r < p {
+            var s = 0.0f64
+            var t = 0usize
+            while t < n {
+                s += sv.u[od[t] * p + r] * lr[c * n + t]
+                t += 1usize
+            }
+            load[c * p + r] = s
+            r += 1usize
+        }
+        c += 1usize
+    }
+    ret ok
 }

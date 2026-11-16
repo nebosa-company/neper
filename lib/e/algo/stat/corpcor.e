@@ -318,6 +318,43 @@ fn pseudoinverse(a: *mem.Arena, x: []const f64, m: usize, n: usize) -> ([]f64, e
     ret (out, ok)
 }
 
+// fast.svd of an m x n row-major matrix: the singular values above `tol` (a negative tol is corpcor's default,
+// max(dim) * max(d) * eps), decreasing. R picks an SVD by shape (psmall, nsmall or plain) and all of them return
+// these values; the vectors, signed by LAPACK, are not returned.
+fn fast_svd_d(a: *mem.Arena, x: []const f64, m: usize, n: usize, tol: f64) -> ([]f64, err) {
+    var none: []f64 = zero
+    let (sv, e) = decomp.svd(a, x, n, m)
+    if e != ok { ret (none, e) }
+    var dmax = 0.0f64
+    var t = 0usize
+    while t < sv.k {
+        if sv.d[t] > dmax { dmax = sv.d[t] }
+        t += 1usize
+    }
+    var big = m
+    if n > big { big = n }
+    var lim = tol
+    if tol < 0.0f64 { lim = f64(big) * dmax * 2.220446049250313e-16f64 }
+    var cnt = 0usize
+    t = 0usize
+    while t < sv.k {
+        if sv.d[t] > lim { cnt += 1usize }
+        t += 1usize
+    }
+    let (out, oe) = mem.alloc[f64](a, cnt)
+    if oe != ok { ret (none, oe) }
+    cnt = 0usize
+    t = 0usize
+    while t < sv.k {
+        if sv.d[t] > lim {
+            out[cnt] = sv.d[t]
+            cnt += 1usize
+        }
+        t += 1usize
+    }
+    ret (out, ok)
+}
+
 // pcor.shrink: the partial correlations -cov2cor(pseudoinverse(cor.shrink(x))), p x p row-major
 fn pcor_shrink(a: *mem.Arena, x: []const f64, n: usize, p: usize, lam: f64) -> ([]f64, err) {
     var none: []f64 = zero

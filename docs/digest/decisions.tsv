@@ -3538,4 +3538,5 @@ D6675	554	pmvnorm_sigma takes a mean and a covariance matrix
 D6676	525	TVPACK trivariate in its own module
 D6677	713	Miwa orthant algorithm as one function over a work struct
 D6678	508	Miwa refuses a singular correlation matrix; L301 closed
-D6679	797	PCAgrid and sPCAgrid as one function with an optional penalty
+D6679	798	PCAgrid and sPCAgrid as one function with an optional penalty
+D6680	666	fast.svd values and the n < p PCAgrid reduction; L357 closed

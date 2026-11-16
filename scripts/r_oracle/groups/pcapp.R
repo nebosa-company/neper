@@ -68,6 +68,20 @@ for (rep in 1:30) {
     for (j in 1:k) add("pg", c(a, k + p * k + j - 1), r$obj[j], 1e-8, 1e-10)
   }
 }
+for (rep in 1:20) {  # n < p: the SVD reduction
+  n <- sample(4:7, 1); p <- n + sample(1:4, 1); k <- sample(1:min(n - 1, 3), 1)
+  X <- matrix(rnorm(n * p), n, p)
+  m <- rep(0, p)  # R centres the reduced data, and a length-p centre does not fit it: pass none
+  for (me in 0:2) {
+    r <- tryCatch(suppressWarnings(PCAgrid(X, k = k, method = c("sd", "mad", "qn")[me + 1], maxiter = 5, splitcircle = 25, center = NULL, scale = NULL)), error = function(e) NULL)
+    if (is.null(r)) next
+    a <- c(n, p, k, me, 5, 25, 1e-16, X, m)
+    for (j in 1:k) add("pg", c(a, j - 1), r$sdev[j], 1e-7, 1e-9)
+    L <- unclass(r$loadings)
+    for (j in 1:(p * k)) add("pg", c(a, k + j - 1), L[j], 1e-6, 1e-8)
+    for (j in 1:k) add("pg", c(a, k + p * k + j - 1), r$obj[j], 1e-7, 1e-9)
+  }
+}
 #   sg: (n, p, k, method, maxiter, splitcircle, zero.tol, norm.q, norm.s, lambda[k], X[n*p], m[p], what) as pg
 for (rep in 1:30) {
   p <- sample(2:4, 1); k <- sample(1:p, 1); n <- sample(c(15, 30, 50), 1)

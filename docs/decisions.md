@@ -47184,3 +47184,7 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 ## D6679 — PCAgrid and sPCAgrid as one function with an optional penalty
 
 **Decision.** `pcapp.pca_grid` ports `CPCAGrid::Calc` (grid search over angles, the loading removed and re-added, the Householder back-transform) and, when given lambda, `CsPCAGrid`'s penalty: the objective is the squared scale minus lambda times the sparseness norm times the overall scatter, with the fast paths of the C++ dropped since they compute the same sum. `pca_grid_finish` signs the loadings and orders components as R's `.loadSgnU` and `.orderPCs`. Tie order in the descending sort of scales is stable here; the C++ qsort's tie order is unknown and random data never ties. n < p (R's SVD reduction) and the centring are the caller's. `oracle_pcapp` pg and sg equal R on 1881 values on Windows; Linux pending.
+
+## D6680 — fast.svd values and the n < p PCAgrid reduction; L357 closed
+
+**Decision.** `fast_svd_d` returns the singular values above corpcor's default or a given tolerance; R's three SVD routes (psmall, nsmall, plain) return the same values, and the vectors depend on LAPACK's signs, so they are not returned. `pca_grid_hd` follows R for n < p: SVD of t(x), the search on V D, loadings mapped back by U. R centres the reduced data after the reduction, so a centre of the original length is not applied (R warns and skips it); the oracle passes no centre for those cases and the caller centres otherwise. Centring and scaling stay with the caller. L357 is closed.

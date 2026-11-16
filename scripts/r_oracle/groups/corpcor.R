@@ -22,7 +22,10 @@ for (rep in 1:10) {
   vec("pcor", a0, rowvec(pcor.shrink(m, verbose = FALSE)))
   vec("pcor", c(n, p, 0.3, 0, rowvec(m)), rowvec(pcor.shrink(m, lambda = 0.3, verbose = FALSE)))
   vec("pinv", c(n, p, 0, 0, rowvec(m)), rowvec(pseudoinverse(m)))
+  vec("fsvd", c(n, p, -1, 0, rowvec(m)), fast.svd(m)$d)
+  vec("fsvd", c(n, p, 1, 0, rowvec(m)), fast.svd(m, tol = 1)$d)
 }
 low <- round(matrix(rnorm(8 * 2), 8, 2) %*% matrix(rnorm(2 * 5), 2, 5), 4)
 vec("pinv", c(8, 5, 0, 0, rowvec(low)), rowvec(pseudoinverse(low)))
+vec("fsvd", c(8, 5, -1, 0, rowvec(low)), fast.svd(low)$d)
 emit("corpcor", "corpcor", list(cases))
