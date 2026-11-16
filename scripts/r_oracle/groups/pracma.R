@@ -127,4 +127,14 @@ for (rep in 1:25) {
   n <- sample(2:5, 1); A <- matrix(round(rnorm(n * n, 0, 0.8), 2), n, n); E <- expm(A)
   for (i in sample(n, min(2, n))) for (j in sample(n, min(2, n))) cases[[length(cases) + 1]] <- case("expm", c(n, i - 1, j - 1, as.vector(t(A))), E[i, j], rel = 1e-9, abs = 1e-9)
 }
+# polyroots: (n, p...) -> count of distinct roots, total multiplicity, sum(mult Re), sum(mult Im^2)
+set.seed(7)
+for (rep in 1:25) {
+  nr <- sample(1:3, 1); rts <- sample(c(-2, -1, 0.5, 1, 2, 3), nr + 1, TRUE); mu <- sample(1:3, length(rts), TRUE); p <- 1
+  for (i in seq_along(rts)) for (m in seq_len(mu[i])) p <- conv(p, c(1, -rts[i]))
+  if (rep %% 3 == 0) p <- conv(p, c(1, 0, 1))
+  p <- p * sample(c(1, 2, -3), 1); pr <- polyroots(p); a <- c(length(p), p)
+  cases[[length(cases) + 1]] <- case("pr_cnt", a, nrow(pr), rel = 1e-6, abs = 1e-6); cases[[length(cases) + 1]] <- case("pr_mult", a, sum(pr$mult), rel = 1e-6, abs = 1e-6)
+  cases[[length(cases) + 1]] <- case("pr_re", a, sum(pr$mult * Re(pr$root)), rel = 1e-6, abs = 1e-6); cases[[length(cases) + 1]] <- case("pr_im2", a, sum(pr$mult * Im(pr$root)^2), rel = 1e-6, abs = 1e-6)
+}
 emit("pracma", "pracma", list(cases))

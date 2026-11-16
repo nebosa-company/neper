@@ -46390,3 +46390,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `pracma.integral` is the default Kronrod method: `quadgk` at tolerance 1e-8 on each of the 8 pieces of `linspace(lo, hi, 9)`, summed.
 
 **Result.** `oracle_pracma` agrees with pracma on 12 integral values (five integrands) on Windows; Linux pending. L333 stays partial.
+
+## D6537 — pracma: polyroots
+
+**Decision.** `pracma.polyroots` repeats the package's Euclid-style gcd of p and p' (reversing p when |last/first| < 1, trimming at ztol 1e-8, stopping when the next remainder is below ntol 1e-4 of the last), divides out to a polynomial with simple roots, takes its roots with the Aberth iteration of `poly_roots`, and rounds `|v(z)/w(z)|` to the multiplicity; zero roots from trailing zeros come first. The oracle compares order-free summaries (count, total multiplicity, sum of mult times Re, sum of mult times Im squared) because the root order is the eigenvalue order of R's companion matrix. Test polynomials are built with exact integer `conv`: the FFT `convolve` leaves 1e-15 coefficients that make polyroots itself return nonsense.
+
+**Result.** `oracle_pracma` agrees with pracma on 100 polyroots summaries on Windows; Linux pending. L333 stays partial.

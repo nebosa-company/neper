@@ -243,6 +243,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "nullproj") || str.eq(k, "orthproj") {
         ret pm.svd_projector(a, x[4usize..4usize + usize(x[0usize]) * usize(x[1usize])], usize(x[0usize]), usize(x[1usize]), str.eq(k, "orthproj"), usize(x[2usize]), usize(x[3usize]))
     }
+    if str.eq(k, "pr_cnt") || str.eq(k, "pr_mult") || str.eq(k, "pr_re") || str.eq(k, "pr_im2") {
+        let m = usize(x[0usize])
+        let (rr, er) = mem.alloc[f64](a, m + 1usize)
+        let (ri, ei) = mem.alloc[f64](a, m + 1usize)
+        let (rm, em) = mem.alloc[f64](a, m + 1usize)
+        if er != ok || ei != ok || em != ok { os.exit(5) }
+        let nr = pm.polyroots(a, x[1usize..1usize + m], rr, ri, rm)
+        var sr = 0.0f64
+        var i = 0usize
+        while i < nr {
+            if str.eq(k, "pr_cnt") { sr += 1.0f64 }
+            if str.eq(k, "pr_mult") { sr += rm[i] }
+            if str.eq(k, "pr_re") { sr += rm[i] * rr[i] }
+            if str.eq(k, "pr_im2") { sr += rm[i] * ri[i] * ri[i] }
+            i += 1usize
+        }
+        ret sr
+    }
     if str.eq(k, "integral") { ret pm.integral(usize(x[0usize]), x[1usize], x[2usize]) }
     if str.eq(k, "quadgk") { ret pm.quadgk(usize(x[0usize]), x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "interp1") {

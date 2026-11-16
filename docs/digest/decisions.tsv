@@ -3404,4 +3404,5 @@ D6532	385	car: linearHypothesis
 D6533	546	car: Anova for numeric terms
 D6534	457	car: boxCox profile log-likelihood
 D6535	687	pracma: expm
-D6536	314	pracma: integral
+D6536	315	pracma: integral
+D6537	894	pracma: polyroots

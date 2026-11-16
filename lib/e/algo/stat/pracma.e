@@ -1720,3 +1720,206 @@ fn integral(id: usize, lo: f64, hi: f64) -> f64 {
     }
     ret q
 }
+
+// polynomial division of b by a (highest power first) as pracma's deconv: the quotient into q (len b - len a + 1); returns its length
+fn deconv_q(b0: []const f64, a: []const f64, q: []f64, scratch: []f64) -> usize {
+    var nb = b0.len
+    var i = 0usize
+    while i < nb {
+        scratch[i] = b0[i]
+        i += 1usize
+    }
+    if nb < a.len {
+        q[0usize] = 0.0f64
+        ret 1usize
+    }
+    var nq = 0usize
+    var off = 0usize
+    while nb >= a.len {
+        let d = scratch[off] / a[0usize]
+        i = 0usize
+        while i < a.len {
+            scratch[off + i] -= d * a[i]
+            i += 1usize
+        }
+        q[nq] = d
+        nq += 1usize
+        off += 1usize
+        nb -= 1usize
+    }
+    ret nq
+}
+
+// pracma::polyroots(p, ntol = 1e-4, ztol = 1e-8): the distinct roots (re, im) and their multiplicities; returns the count
+fn polyroots(a: *mem.Arena, p: []const f64, re: []f64, im: []f64, mult: []f64) -> usize {
+    let ntol = 1.0e-4f64
+    let ztol = 1.0e-8f64
+    var cnt = 0usize
+    var minp = p.len
+    var maxp = 0usize
+    var i = 0usize
+    while i < p.len {
+        if p[i] != 0.0f64 {
+            if i < minp { minp = i }
+            maxp = i
+        }
+        i += 1usize
+    }
+    if minp == p.len { ret 0usize }
+    let mz = p.len - 1usize - maxp
+    if mz > 0usize {
+        re[0usize] = 0.0f64
+        im[0usize] = 0.0f64
+        mult[0usize] = f64(mz)
+        cnt = 1usize
+    }
+    let n0 = maxp - minp + 1usize
+    if n0 < 2usize { ret cnt }
+    let (p0, e1) = mem.alloc[f64](a, n0)
+    let (q0, e2) = mem.alloc[f64](a, n0)
+    let (g1, e3) = mem.alloc[f64](a, 2usize * n0 + 2usize)
+    let (g2, e4) = mem.alloc[f64](a, 2usize * n0 + 2usize)
+    let (g3, e5) = mem.alloc[f64](a, 2usize * n0 + 2usize)
+    let (uq, e6) = mem.alloc[f64](a, n0)
+    let (vq, e7) = mem.alloc[f64](a, n0)
+    let (sc, e8) = mem.alloc[f64](a, n0)
+    let (w0, e9) = mem.alloc[f64](a, n0)
+    let (zr, e10) = mem.alloc[f64](a, n0)
+    let (zi, e11) = mem.alloc[f64](a, n0)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret cnt }
+    i = 0usize
+    while i < n0 {
+        p0[i] = p[minp + i]
+        i += 1usize
+    }
+    let s = math.abs[f64](p0[n0 - 1usize] / p0[0usize])
+    if s < 1.0f64 {
+        i = 0usize
+        while i < n0 {
+            sc[i] = p0[n0 - 1usize - i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < n0 {
+            p0[i] = sc[i]
+            i += 1usize
+        }
+    }
+    polyder(p0, q0[0usize..n0 - 1usize])
+    var l1 = n0
+    i = 0usize
+    while i < n0 {
+        g1[i] = p0[i] / p0[0usize]
+        i += 1usize
+    }
+    var l2 = n0 - 1usize
+    while l2 > 1usize && q0[l2 - 1usize] == 0.0f64 { l2 -= 1usize }
+    i = 0usize
+    while i < l2 {
+        g2[i] = q0[i] / q0[0usize]
+        i += 1usize
+    }
+    var k = 3usize
+    while k <= 2usize * n0 {
+        var l3 = l1
+        if l2 > l1 { l3 = l2 }
+        i = 0usize
+        while i < l3 {
+            var av = 0.0f64
+            var bv = 0.0f64
+            if i < l2 { av = g2[i] }
+            if i < l1 { bv = g1[i] }
+            g3[i] = av - bv
+            i += 1usize
+        }
+        var lo = l3
+        var hi = 0usize
+        i = 0usize
+        while i < l3 {
+            if math.abs[f64](g3[i]) > ztol {
+                if i < lo { lo = i }
+                hi = i
+            }
+            i += 1usize
+        }
+        var n3 = 1usize
+        var mx3 = 0.0f64
+        if lo == l3 {
+            g3[0usize] = 0.0f64
+        } else {
+            n3 = hi - lo + 1usize
+            i = 0usize
+            while i < n3 {
+                g3[i] = g3[lo + i]
+                i += 1usize
+            }
+        }
+        i = 0usize
+        while i < n3 {
+            if math.abs[f64](g3[i]) > mx3 { mx3 = math.abs[f64](g3[i]) }
+            i += 1usize
+        }
+        var mx2 = 0.0f64
+        i = 0usize
+        while i < l2 {
+            if math.abs[f64](g2[i]) > mx2 { mx2 = math.abs[f64](g2[i]) }
+            i += 1usize
+        }
+        if mx3 / mx2 < ntol { break }
+        if l1 >= l2 {
+            i = 0usize
+            while i < l2 {
+                g1[i] = g2[i]
+                i += 1usize
+            }
+            l1 = l2
+        }
+        i = 0usize
+        while i < n3 {
+            g2[i] = g3[i] / g3[0usize]
+            i += 1usize
+        }
+        l2 = n3
+        k += 1usize
+    }
+    let nu = deconv_q(p0, g1[0usize..l1], uq, sc)
+    let nv = deconv_q(q0[0usize..n0 - 1usize], g1[0usize..l1], vq, sc)
+    if nu < 2usize { ret cnt }
+    polyder(uq[0usize..nu], w0[0usize..nu - 1usize])
+    poly_roots(uq[0usize..nu], zr[0usize..nu - 1usize], zi[0usize..nu - 1usize])
+    i = 0usize
+    while i + 1usize < nu {
+        var vr = 0.0f64
+        var vi = 0.0f64
+        var j = 0usize
+        while j < nv {
+            let t = vr * zr[i] - vi * zi[i] + vq[j]
+            vi = vr * zi[i] + vi * zr[i]
+            vr = t
+            j += 1usize
+        }
+        var wr = 0.0f64
+        var wi = 0.0f64
+        j = 0usize
+        while j + 1usize < nu {
+            let t = wr * zr[i] - wi * zi[i] + w0[j]
+            wi = wr * zi[i] + wi * zr[i]
+            wr = t
+            j += 1usize
+        }
+        let mg = math.sqrt[f64]((vr * vr + vi * vi) / (wr * wr + wi * wi))
+        var rr = zr[i]
+        var ri = zi[i]
+        if s < 1.0f64 {
+            let dn = rr * rr + ri * ri
+            rr = rr / dn
+            ri = 0.0f64 - ri / dn
+        }
+        re[cnt] = rr
+        im[cnt] = ri
+        mult[cnt] = math.round[f64](mg)
+        cnt += 1usize
+        i += 1usize
+    }
+    ret cnt
+}
