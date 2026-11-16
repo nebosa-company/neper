@@ -3316,4 +3316,5 @@ D6444	352	signal: fir1 band types
 D6445	355	signal: decimate and unwrap
 D6446	554	DescTools: BinomCI, eleven methods
 D6447	615	DescTools: Winsorize, HodgesLehmann, MedianCI and Trim
-D6448	541	DescTools: Cochran-Armitage, Mantel-Haenszel odds ratio, Breslow-Day
+D6448	542	DescTools: Cochran-Armitage, Mantel-Haenszel odds ratio, Breslow-Day
+D6449	357	DescTools: PoissonCI and MultinomCI

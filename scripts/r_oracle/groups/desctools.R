@@ -43,4 +43,11 @@ for (rep in 1:20) {
   bd <- BreslowDayTest(arr); add("bdx", c(K, 0, 0, sv), bd$statistic); add("bdp", c(K, 0, 0, sv), bd$p.value)
   bt <- BreslowDayTest(arr, correct = TRUE); add("bdtx", c(K, 0, 0, sv), bt$statistic); add("bdtp", c(K, 0, 0, sv), bt$p.value)
 }
+pm <- c("exact", "score", "wald", "byar"); mm <- c("goodman", "wald", "waldcc", "wilson")
+for (rep in 1:25) {
+  x <- sample(c(1:40, 100), 1); tt <- sample(c(1, 2.5, 10), 1); cl <- sample(c(0.9, 0.95, 0.99), 1)
+  for (m in 1:4) { r <- PoissonCI(x, tt, conf.level = cl, method = pm[m]); for (pt in 0:2) add("poisci", c(m - 1, x, tt, cl, pt), r[1, pt + 1]) }
+  k <- sample(3:6, 1); cnt <- rpois(k, 15) + 2; i <- sample(k, 1)
+  for (m in 1:4) { r <- MultinomCI(cnt, conf.level = cl, method = mm[m]); for (pt in 0:2) add("multici", c(m - 1, i - 1, cl, pt, k, cnt), r[i, pt + 1]) }
+}
 emit("desctools", "DescTools", list(cases))

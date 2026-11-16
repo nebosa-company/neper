@@ -11,6 +11,8 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     if str.eq(c.name, "binomci") { ret dt.binom_ci(x[1usize], x[2usize], x[3usize], usize(x[0usize]), usize(x[4usize])) }
+    if str.eq(c.name, "poisci") { ret dt.poisson_ci(x[1usize], x[2usize], x[3usize], usize(x[0usize]), usize(x[4usize])) }
+    if str.eq(c.name, "multici") { ret dt.multinom_ci(x[5usize..5usize + usize(x[4usize])], usize(x[1usize]), x[2usize], usize(x[0usize]), usize(x[3usize])) }
     if str.eq(c.name, "catz") { ret dt.cochran_armitage(x[3usize..3usize + 2usize * usize(x[0usize])], usize(x[0usize]), 0usize) }
     if str.eq(c.name, "catp") { ret dt.cochran_armitage(x[3usize..3usize + 2usize * usize(x[0usize])], usize(x[0usize]), 1usize) }
     if str.eq(c.name, "mhor") { ret dt.mh_or(x[3usize..3usize + 4usize * usize(x[0usize])], usize(x[0usize])) }

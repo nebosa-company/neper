@@ -45862,3 +45862,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 `e.algo.stat.desctools` gains `cochran_armitage` (Z and two-sided p with scores 1 .. r), `mh_or` (the common odds ratio over 2 by 2 strata) and `breslow_day` (statistic and p-value, with or without Tarone's correction; the expected cell is the quadratic's root in (0, min(n1, m1)]).
 
 **Result.** `oracle_desctools` equals DescTools on 1930 cases on Windows, 140 of them new, over 20 draws of 3 to 6 rows and 2 to 5 strata; Linux pending. L363 stays partial.
+
+## D6449 — DescTools: PoissonCI and MultinomCI
+
+`e.algo.stat.desctools` gains `poisson_ci` (exact by gamma quantiles, score, wald, byar) and `multinom_ci` (goodman, wald, waldcc, wilson; sisonglaz, cplus1, qh and fs stay open).
+
+**Result.** `oracle_desctools` equals DescTools on 2530 cases on Windows, 600 of them new; Linux pending. L363 stays partial.

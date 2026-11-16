@@ -680,3 +680,70 @@ fn breslow_day(s: []const f64, k: usize, tarone: bool, part: usize) -> f64 {
     if part == 0usize { ret stat }
     ret nm.pchisq(stat, f64(k - 1usize), false, false)
 }
+
+// PoissonCI(x, n, conf, method) two-sided, method 0 exact, 1 score, 2 wald, 3 byar; part 0 the rate, 1 the lower limit, 2 the upper
+fn poisson_ci(x: f64, n: f64, conf: f64, method: usize, part: usize) -> f64 {
+    let alpha = 1.0f64 - conf
+    let z = dist.qnorm(1.0f64 - alpha / 2.0f64, 0.0f64, 1.0f64, true, false)
+    let lam = x / n
+    var lo = 0.0f64
+    var hi = 0.0f64
+    if method == 0usize {
+        if x > 0.0f64 { lo = nm.qgamma(alpha / 2.0f64, x, 1.0f64, true, false) / n }
+        hi = nm.qgamma(1.0f64 - alpha / 2.0f64, x + 1.0f64, 1.0f64, true, false) / n
+    } else if method == 1usize {
+        let t1 = (x + z * z / 2.0f64) / n
+        let t2 = z * math.pow[f64](n, 0.0f64 - 0.5f64) * math.sqrt[f64](x / n + z * z / (4.0f64 * n))
+        lo = t1 - t2
+        hi = t1 + t2
+    } else if method == 2usize {
+        let t = z * math.sqrt[f64](lam / n)
+        lo = lam - t
+        hi = lam + t
+    } else {
+        let xcc = x + 0.5f64
+        let zz = (z / 3.0f64) * math.sqrt[f64](1.0f64 / xcc)
+        let l1 = 1.0f64 - 1.0f64 / (9.0f64 * xcc) - zz
+        let u1 = 1.0f64 - 1.0f64 / (9.0f64 * xcc) + zz
+        lo = xcc * l1 * l1 * l1 / n
+        hi = xcc * u1 * u1 * u1 / n
+    }
+    if part == 0usize { ret lam }
+    if part == 1usize { ret lo }
+    ret hi
+}
+
+// MultinomCI(x, conf, method) for category i of counts x: method 0 goodman, 1 wald, 2 waldcc, 3 wilson; part 0 the share, 1 the lower limit, 2 the upper
+fn multinom_ci(x: []const f64, i: usize, conf: f64, method: usize, part: usize) -> f64 {
+    var n = 0.0f64
+    var j = 0usize
+    while j < x.len {
+        n += x[j]
+        j += 1usize
+    }
+    let k = f64(x.len)
+    let xi = x[i]
+    let p = xi / n
+    var lo = 0.0f64
+    var hi = 0.0f64
+    if method == 0usize {
+        let q = nm.qchisq(1.0f64 - (1.0f64 - conf) / k, 1.0f64, true, false)
+        let s = math.sqrt[f64](q * (q + 4.0f64 * xi * (n - xi) / n))
+        lo = (q + 2.0f64 * xi - s) / (2.0f64 * (n + q))
+        hi = (q + 2.0f64 * xi + s) / (2.0f64 * (n + q))
+    } else if method == 1usize || method == 2usize {
+        let q = nm.qchisq(conf, 1.0f64, true, false)
+        var t = math.sqrt[f64](q * p * (1.0f64 - p) / n)
+        if method == 2usize { t += 1.0f64 / (2.0f64 * n) }
+        lo = p - t
+        hi = p + t
+    } else {
+        let q = nm.qchisq(conf, 1.0f64, true, false)
+        let s = math.sqrt[f64](q * q + 4.0f64 * xi * q * (1.0f64 - p))
+        lo = (q + 2.0f64 * xi - s) / (2.0f64 * (q + n))
+        hi = (q + 2.0f64 * xi + s) / (2.0f64 * (q + n))
+    }
+    if part == 0usize { ret p }
+    if part == 1usize { ret max_f(0.0f64, lo) }
+    ret min_f(1.0f64, hi)
+}
