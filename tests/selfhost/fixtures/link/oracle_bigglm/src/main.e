@@ -18,7 +18,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x0 = z[3usize..3usize + n * p0]
     let y = z[3usize + n * p0..3usize + n * p0 + n]
     let w = z[3usize + n * p0 + n..3usize + n * p0 + 2usize * n]
-    let hasoff = c.name.len == 3usize
+    let hasoff = c.name.len == 3usize && c.name[2usize] == 111u8
     var qi = 3usize + n * p0 + 2usize * n
     if hasoff { qi += n }
     let q = usize(z[qi])
@@ -44,8 +44,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         x[n + i] = x0[i]
         i += 1usize
     }
-    let (fit, e) = bg.bigglm_off(a, x, y, w, off, n, p, fam, 8usize, 1.0e-7f64, coef, se)
+    let (sandv, sdE) = mem.alloc[f64](a, p)
+    if sdE != ok { ret nan }
+    let (fit, e) = bg.bigglm_sand(a, x, y, w, off, n, p, fam, 8usize, 1.0e-7f64, coef, se, sandv)
     if e != ok { ret nan }
+    if c.name.len == 3usize && c.name[2usize] == 115u8 { ret sandv[q] }
     if q < p { ret coef[q] }
     if q < 2usize * p { ret se[q - p] }
     if q == 2usize * p { ret f64(fit.iterations) }

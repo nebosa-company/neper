@@ -3438,4 +3438,5 @@ D6566	801	ggthemes gradient palettes; L329 closed
 D6567	995	isotone: gpava with a matrix response
 D6568	649	partitions: compositions
 D6569	563	partitions: blockparts
-D6570	609	biglm: offsets
+D6570	610	biglm: offsets
+D6571	631	biglm: sandwich standard errors

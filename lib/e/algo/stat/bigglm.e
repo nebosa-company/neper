@@ -71,6 +71,15 @@ fn bigglm(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usiz
 
 // bigglm with an offset: the linear predictor is x b + off, and z - off is what the weighted regression sees
 fn bigglm_off(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, off: []const f64, n: usize, p: usize, fam: u8, maxit: usize, tol: f64, coef: []f64, se: []f64) -> (Fit, err) {
+    let (sd, sde) = mem.alloc[f64](a, p)
+    if sde != ok { var none: Fit = zero
+        ret (none, sde) }
+    let (ft, fe) = bigglm_sand(a, x, y, w, off, n, p, fam, maxit, tol, coef, se, sd)
+    ret (ft, fe)
+}
+
+// bigglm_off that also returns the sandwich standard errors of the last pass in sand (vcov(sandwich = TRUE)): (X'WX)^-1 (sum ww^2 e^2 x x') (X'WX)^-1 with e the working residual of that pass at the final coefficients
+fn bigglm_sand(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, off: []const f64, n: usize, p: usize, fam: u8, maxit: usize, tol: f64, coef: []f64, se: []f64, sand: []f64) -> (Fit, err) {
     var fit: Fit = zero
     let (xtx, e1) = mem.alloc[f64](a, p * p)
     let (xtz, e2) = mem.alloc[f64](a, p)
@@ -169,6 +178,37 @@ fn bigglm_off(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, off
             se[j] = math.sqrt[f64](inv[j * p + j] * rep_disp)
             sec[j] = math.sqrt[f64](inv[j * p + j] * disp)
             j += 1usize
+        }
+        if have {
+            // sandwich: V = inv (sum ww^2 e^2 x x') inv, e = zz - x beta
+            var jj = 0usize
+            while jj < p {
+                var vjj = 0.0f64
+                var a1 = 0usize
+                while a1 < p {
+                    var b1 = 0usize
+                    while b1 < p {
+                        var m = 0.0f64
+                        i = 0usize
+                        while i < n {
+                            var fe = 0.0f64
+                            var q = 0usize
+                            while q < p {
+                                fe += x[q * n + i] * beta[q]
+                                q += 1usize
+                            }
+                            let e = zz[i] - fe
+                            m += ww[i] * ww[i] * e * e * x[a1 * n + i] * x[b1 * n + i]
+                            i += 1usize
+                        }
+                        vjj += inv[jj * p + a1] * m * inv[b1 * p + jj]
+                        b1 += 1usize
+                    }
+                    a1 += 1usize
+                }
+                sand[jj] = math.sqrt[f64](vjj)
+                jj += 1usize
+            }
         }
         fit.iterations = it
         fit.deviance = dev

@@ -46594,3 +46594,9 @@ agnes needs no new algorithm: its merge heights equal hclust's for the matching 
 **Decision.** `bigglm_off` carries an offset: the linear predictor is `x b + off` (the offset alone on the first pass, as `etafun` returns zeros plus `off`), the working response is `eta + (y - mu)/dmu` and the weighted regression sees `z - off`; `bigglm` is the zero-offset call.
 
 **Result.** `oracle_bigglm` agrees with biglm on 262 new offset values (coefficients, standard errors, iterations, convergence, deviance; gaussian, binomial, Poisson) on Windows (538 cases in all); Linux pending. L423 stays partial: the sandwich option, other families and links, singular designs.
+
+## D6571 — biglm: sandwich standard errors
+
+**Decision.** `bigglm_sand` returns the standard errors of vcov(sandwich = TRUE): in biglm only the last pass feeds the sandwich QR, with the working response `z - off` at the previous coefficients and the working weights `ww`, so the centre is `sum ww^2 e^2 x x'` with `e = z - off - x b` at the final coefficients and the bread is the last pass's `(X'WX)^-1`.
+
+**Result.** `oracle_bigglm` agrees with biglm on 92 sandwich values (gaussian, binomial, Poisson, with weights) on Windows (630 cases in all); Linux pending. L423 stays partial: other families and links, singular designs.
