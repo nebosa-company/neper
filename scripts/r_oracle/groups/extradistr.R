@@ -105,6 +105,13 @@ for (rep in 1:5) {
   for (xx in r:(r + 6)) { add2("nh", c(0, n, m, r, xx), dnhyper(xx, n, m, r)); add2("nh", c(1, n, m, r, xx), pnhyper(xx, n, m, r)) }
   for (pq in c(0.1, 0.4, 0.8)) { add2("nh", c(2, n, m, r, pq), qnhyper(pq, n, m, r)); add2("nh", c(3, lam, 0, 0, pq), qtlambda(pq, lam)) }
 }
+# fn "pb" (dist 0 prop 1 bhatt, kind 0 d 1 p 2 q, p1, p2, p3, v)
+for (rep in 1:4) {
+  size <- runif(1, 5, 30); mn <- runif(1, 0.2, 0.8); pri <- sample(c(0, 1, 2), 1); mu <- rnorm(1); sg <- runif(1, 0.5, 2); aa <- runif(1, 0.3, 2)
+  for (xx in c(0.1, 0.3, 0.55, 0.9)) { add2("pb", c(0, 0, size, mn, pri, xx), dprop(xx, size, mn, pri)); add2("pb", c(0, 1, size, mn, pri, xx), pprop(xx, size, mn, pri)) }
+  for (pq in c(0.1, 0.5, 0.9)) add2("pb", c(0, 2, size, mn, pri, pq), qprop(pq, size, mn, pri))
+  for (xx in mu + c(-4, -1, 0, 0.7, 3)) { add2("pb", c(1, 0, mu, sg, aa, xx), dbhatt(xx, mu, sg, aa)); add2("pb", c(1, 1, mu, sg, aa, xx), pbhatt(xx, mu, sg, aa)) }
+}
 # random draws: "rg" (family, seed, p1, p2, p3, index) the draw at position index (0-based) of five seeded draws; family 0 gumbel 1 frechet 2 power 3 lomax 4 pareto 5 rayleigh 6 kumar 7 gompertz 8 hnorm 9 hcauchy 10 laplace
 for (rep in 1:33) {
   sd <- sample(1:100000, 1); fam <- (rep - 1) %% 11; p1 <- runif(1, 0.5, 3); p2 <- runif(1, 0.5, 3); p3 <- runif(1, -1, 1)

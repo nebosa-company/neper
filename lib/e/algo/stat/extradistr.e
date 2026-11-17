@@ -666,3 +666,17 @@ fn nhyper_q(p: f64, n: f64, m: f64, r: f64) -> f64 {
     }
     ret k
 }
+
+// proportion distribution: the beta with shapes size mean + prior and size (1 - mean) + prior
+fn prop_d(x: f64, size: f64, mean: f64, prior: f64) -> f64 { ret nb.dbeta(x, size * mean + prior, size * (1.0f64 - mean) + prior, false) }
+fn prop_p(x: f64, size: f64, mean: f64, prior: f64) -> f64 { ret nb.pbeta(x, size * mean + prior, size * (1.0f64 - mean) + prior, true, false) }
+fn prop_q(p: f64, size: f64, mean: f64, prior: f64) -> f64 { ret nb.qbeta(p, size * mean + prior, size * (1.0f64 - mean) + prior, true, false) }
+
+// Bhattacharjee: the sum of a normal(mu, sigma) and a uniform(-a, a)
+fn bhatt_d(x: f64, mu: f64, s: f64, a: f64) -> f64 {
+    ret (pn((x - mu + a) / s) - pn((x - mu - a) / s)) / (2.0f64 * a)
+}
+fn bhatt_g(z: f64) -> f64 { ret z * pn(z) + dist.dnorm(z, 0.0f64, 1.0f64, false) }
+fn bhatt_p(x: f64, mu: f64, s: f64, a: f64) -> f64 {
+    ret s / (2.0f64 * a) * (bhatt_g((x - mu + a) / s) - bhatt_g((x - mu - a) / s))
+}

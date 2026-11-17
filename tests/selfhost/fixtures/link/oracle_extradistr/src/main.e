@@ -187,6 +187,17 @@ fn answer(c: *const oracle.Case) -> f64 {
         if kd == 2usize { ret ed.nhyper_q(x[4usize], x[1usize], x[2usize], x[3usize]) }
         ret ed.tlambda_q(x[4usize], x[1usize])
     }
+    if str.eq(c.name, "pb") {
+        // (dist 0 prop 1 bhatt, kind 0 d 1 p 2 q, p1, p2, p3, v)
+        let kd = usize(x[1usize])
+        if usize(x[0usize]) == 0usize {
+            if kd == 0usize { ret ed.prop_d(x[5usize], x[2usize], x[3usize], x[4usize]) }
+            if kd == 1usize { ret ed.prop_p(x[5usize], x[2usize], x[3usize], x[4usize]) }
+            ret ed.prop_q(x[5usize], x[2usize], x[3usize], x[4usize])
+        }
+        if kd == 0usize { ret ed.bhatt_d(x[5usize], x[2usize], x[3usize], x[4usize]) }
+        ret ed.bhatt_p(x[5usize], x[2usize], x[3usize], x[4usize])
+    }
     if str.eq(c.name, "d3") {
         let d3 = usize(x[0usize])
         let w1 = x[1usize]

@@ -48433,3 +48433,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6987 — extraDistr negative hypergeometric and Tukey lambda
 
 `nhyper_d/p/q(x, n, m, r)`: the draw that completes r successes drawing without replacement from m successes and n failures, P = C(x-1, r-1) C(n+m-x, m-r) / C(n+m, m); and `tlambda_q`, (p^l - (1-p)^l) / l with the logistic limit at 0. Equal to extraDistr on 5 parameter sets (oracle_extradistr). The proportion distribution (dprop), Bhattacharjee and the generators are not here. Linux pending.
+
+
+## D6988 — extraDistr proportion and Bhattacharjee
+
+`prop_d/p/q`: the beta with shapes size mean + prior and size (1 - mean) + prior; `bhatt_d/p`: the normal plus uniform(-a, a) convolution, density (Phi((x-mu+a)/s) - Phi((x-mu-a)/s)) / 2a and the cumulative function through G(z) = z Phi(z) + phi(z). Equal to extraDistr on 4 parameter sets (oracle_extradistr). The categorical, the generators of the families added since D6844 and the quantile of Bhattacharjee are not here. Linux pending.
