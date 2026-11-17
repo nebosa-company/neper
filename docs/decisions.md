@@ -48645,3 +48645,8 @@ The mice univariate methods and the chained-equations loop run through one engin
 ## D7103 — cluster: pam, clara, fanny, agnes, diana, mona, daisy, silhouette, clusGap; L335 closed
 
 Ports of the cluster 2.1.8.2 C and Fortran sources (downloaded from the CRAN Archive with the user approval): pam BUILD and SWAP in all pamonce variants, clara with its own and R generators, fanny, agnes and diana through the twins code, mona, daisy for every variable type with Gower, silhouette and clusGap with maxSE. Floating values equal R at 1e-9, integers exactly (seven fixtures). Every item of the L335 acceptance has an oracle case, so L335 moves to docs/work-done.jsonl. The older pamcluster module and its fixture are superseded by clusterpam but kept. Linux pending.
+
+
+## D7104 — lmom Fortran library and gld distribution functions, moments and fits; L387 closed
+
+Ports of the lmom 3.3 Fortran (downloaded from CRAN with the user approval) for fourteen distributions (lmr, qua, cdf, pel, samlmu), lmrq by quadrature, and the gld 2.6.8 distribution functions (the C root finder of dgl, rgl under set.seed), gld.moments, gld.lmoments and the Nelder-Mead based fits (starship, fit.fkml with its eight methods, fit.fkml.moments with constrOptim). Four fixtures equal R at 1e-8 to 1e-11 (1e-7 for the fits). Every item of the L387 acceptance has an oracle case, so L387 moves to docs/work-done.jsonl. lmrp, pelp, pelq, lmrd and evplot are outside the acceptance and not ported. Linux pending.
