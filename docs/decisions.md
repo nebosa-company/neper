@@ -48438,3 +48438,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6988 — extraDistr proportion and Bhattacharjee
 
 `prop_d/p/q`: the beta with shapes size mean + prior and size (1 - mean) + prior; `bhatt_d/p`: the normal plus uniform(-a, a) convolution, density (Phi((x-mu+a)/s) - Phi((x-mu-a)/s)) / 2a and the cumulative function through G(z) = z Phi(z) + phi(z). Equal to extraDistr on 4 parameter sets (oracle_extradistr). The categorical, the generators of the families added since D6844 and the quantile of Bhattacharjee are not here. Linux pending.
+
+
+## D6989 — extraDistr GEV and GPD generators
+
+`rgen` families 11 and 12: the GEV draws a standard exponential E and answers mu + sigma (E^-xi - 1) / xi (the Gumbel limit at xi = 0), the GPD draws u and answers the quantile at 1 - u. Equal to `rgev` and `rgpd` under set.seed on 12 settings of 5 draws (oracle_extradistr). Linux pending.

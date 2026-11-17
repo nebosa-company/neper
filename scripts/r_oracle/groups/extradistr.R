@@ -118,4 +118,8 @@ for (rep in 1:33) {
   set.seed(sd); v <- switch(fam + 1, rgumbel(5, p1, p2), rfrechet(5, p1, p3, p2), rpower(5, p1, p2), rlomax(5, p1, p2), rpareto(5, p1, p2), rrayleigh(5, p1), rkumar(5, p1, p2), rgompertz(5, p1, p2), rhnorm(5, p1), rhcauchy(5, p1), rlaplace(5, p1, p2))
   for (j in 1:5) if (is.finite(v[j])) cases[[length(cases) + 1]] <- case("rg", c(fam, sd, if (fam == 1) p1 else p1, if (fam == 1) p3 else p2, if (fam == 1) p2 else 0, j - 1), v[j], rel = 1e-10, abs = 1e-12)
 }
+# GEV (11) and GPD (12) draws: (family, seed, mu, sigma, xi, index)
+for (rep in 1:12) { sd <- sample(1:100000, 1); mu <- rnorm(1); sg <- runif(1, 0.5, 2); xi <- c(-0.4, 0.3, 0.6, -0.2)[rep %% 4 + 1]; fam <- 11 + rep %% 2
+  set.seed(sd); v <- if (fam == 11) rgev(5, mu, sg, xi) else rgpd(5, mu, sg, xi)
+  for (j in 1:5) if (is.finite(v[j])) cases[[length(cases) + 1]] <- case("rg", c(fam, sd, mu, sg, xi, j - 1), v[j], rel = 1e-10, abs = 1e-12) }
 emit("extradistr", "extraDistr", list(cases))

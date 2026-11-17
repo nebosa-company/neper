@@ -380,6 +380,12 @@ fn rgen(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64) -> f64 {
         if us > 0.5f64 { ret p1 + p2 * e }
         ret p1 - p2 * e
     }
+    if family == 11usize {
+        // GEV: the quantile at a standard exponential
+        let e = rng.exp_unit(r)
+        if p3 == 0.0f64 { ret p1 - p2 * math.log[f64](e) }
+        ret p1 + p2 * (math.pow[f64](e, 0.0f64 - p3) - 1.0f64) / p3
+    }
     let u = rng.unif(r)
     if family == 1usize { ret frechet_q(u, p1, p2, p3) }
     if family == 2usize { ret power_q(u, p1, p2) }
@@ -388,6 +394,7 @@ fn rgen(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64) -> f64 {
     if family == 5usize { ret rayleigh_q(1.0f64 - u, p1) }
     if family == 6usize { ret kumar_q(1.0f64 - u, p1, p2) }
     if family == 7usize { ret gompertz_q(1.0f64 - u, p1, p2) }
+    if family == 12usize { ret gpd_q(1.0f64 - u, p1, p2, p3) }
     ret p1 * math.abs[f64](math.tan[f64](pi() * u))
 }
 

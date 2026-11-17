@@ -3847,4 +3847,5 @@ D6984	513	extraDistr: GEV, GPD, discrete uniform, Bernoulli, discrete Weibull, l
 D6985	472	extraDistr: discrete normal and gamma, Huber, two-component mixtures
 D6986	389	extraDistr multivariate and bivariate densities
 D6987	463	extraDistr negative hypergeometric and Tukey lambda
-D6988	494	extraDistr proportion and Bhattacharjee
+D6988	496	extraDistr proportion and Bhattacharjee
+D6989	339	extraDistr GEV and GPD generators
