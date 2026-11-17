@@ -551,3 +551,40 @@ fn qresiduals(r: *rng.Rng, family: usize, y: []const f64, mu: []const f64, w: []
         i += 1usize
     }
 }
+
+// statmod::tweedie(var.power = p, link.power = lambda): the unit deviance 2 wt (y theta - kappa) with y1 = y + 0.1 [y = 0], theta = log(y1 / mu) for p = 1 or (y1^(1 - p) - mu^(1 - p)) / (1 - p),
+// kappa = log(y1 / mu) for p = 2 or (y^(2 - p) - mu^(2 - p)) / (2 - p); the variance mu^p; the power link mu^lambda (log for lambda = 0), its inverse and the derivative of the inverse
+fn tweedie_dev_resid(y: f64, mu: f64, wt: f64, p: f64) -> f64 {
+    var y1 = y
+    if y == 0.0f64 { y1 = y + 0.1f64 }
+    var theta = 0.0f64
+    if p == 1.0f64 { theta = math.log[f64](y1 / mu) } else { theta = (math.pow[f64](y1, 1.0f64 - p) - math.pow[f64](mu, 1.0f64 - p)) / (1.0f64 - p) }
+    var kappa = 0.0f64
+    if p == 2.0f64 { kappa = math.log[f64](y1 / mu) } else { kappa = (math.pow[f64](y, 2.0f64 - p) - math.pow[f64](mu, 2.0f64 - p)) / (2.0f64 - p) }
+    ret 2.0f64 * wt * (y * theta - kappa)
+}
+
+fn tweedie_variance(mu: f64, p: f64) -> f64 { ret math.pow[f64](mu, p) }
+
+fn tweedie_linkfun(mu: f64, lambda: f64) -> f64 {
+    if lambda == 0.0f64 { ret math.log[f64](mu) }
+    ret math.pow[f64](mu, lambda)
+}
+
+fn tweedie_linkinv(eta: f64, lambda: f64) -> f64 {
+    if lambda == 0.0f64 {
+        var v = math.exp[f64](eta)
+        if v < 2.220446049250313e-16f64 { v = 2.220446049250313e-16f64 }
+        ret v
+    }
+    ret math.pow[f64](eta, 1.0f64 / lambda)
+}
+
+fn tweedie_mu_eta(eta: f64, lambda: f64) -> f64 {
+    if lambda == 0.0f64 {
+        var v = math.exp[f64](eta)
+        if v < 2.220446049250313e-16f64 { v = 2.220446049250313e-16f64 }
+        ret v
+    }
+    ret (1.0f64 / lambda) * math.pow[f64](eta, 1.0f64 / lambda - 1.0f64)
+}

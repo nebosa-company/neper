@@ -13,6 +13,15 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "twd") {
+        // (which 0 dev.resids 1 variance 2 linkfun 3 linkinv 4 mu.eta, p, lambda, y, mu, wt)
+        let w = usize(z[0usize])
+        if w == 0usize { ret gq.tweedie_dev_resid(z[3usize], z[4usize], z[5usize], z[1usize]) }
+        if w == 1usize { ret gq.tweedie_variance(z[4usize], z[1usize]) }
+        if w == 2usize { ret gq.tweedie_linkfun(z[4usize], z[2usize]) }
+        if w == 3usize { ret gq.tweedie_linkinv(z[4usize], z[2usize]) }
+        ret gq.tweedie_mu_eta(z[4usize], z[2usize])
+    }
     if str.eq(c.name, "permp") { ret gq.permp(a, z[0usize], z[1usize], z[2usize], z[3usize], z[4usize], usize(z[5usize]), z[6usize] > 0.5f64) }
     if str.eq(c.name, "pftg") { ret gq.power_fisher_alt(a, z[0usize], z[1usize], z[2usize], z[3usize], z[4usize], usize(z[5usize]), i64(z[6usize]), 1usize) }
     if str.eq(c.name, "pftl") { ret gq.power_fisher_alt(a, z[0usize], z[1usize], z[2usize], z[3usize], z[4usize], usize(z[5usize]), i64(z[6usize]), 2usize) }

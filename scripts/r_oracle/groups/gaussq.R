@@ -61,4 +61,11 @@ for (rep in 1:30) {
   set.seed(sd); add("pftg", c(p1, p2, n1, n2, 0.05, ns, sd), power.fisher.test(p1, p2, n1, n2, alpha = 0.05, nsim = ns, alternative = "greater"))
   set.seed(sd); add("pftl", c(p1, p2, n1, n2, 0.05, ns, sd), power.fisher.test(p1, p2, n1, n2, alpha = 0.05, nsim = ns, alternative = "less"))
 }
+# the tweedie family object "twd": (which 0 dev.resids 1 variance 2 linkfun 3 linkinv 4 mu.eta, var.power, link.power, y, mu, wt)
+for (rep in 1:40) {
+  pw <- sample(c(0, 0.5, 1, 1.3, 1.5, 2, 2.4, 3), 1); lm <- sample(c(0, 0.5, 1, -1, 1 - pw), 1); if (lm == 0 && runif(1) < 0.3) lm <- 0
+  fam <- statmod::tweedie(var.power = pw, link.power = lm); y <- if (runif(1) < 0.2) 0 else rexp(1) * 3; mu <- runif(1, 0.3, 5); wt <- runif(1, 0.5, 2)
+  add("twd", c(0, pw, lm, y, mu, wt), fam$dev.resids(y, mu, wt)); add("twd", c(1, pw, lm, y, mu, wt), fam$variance(mu))
+  add("twd", c(2, pw, lm, y, mu, wt), fam$linkfun(mu)); add("twd", c(3, pw, lm, y, mu, wt), fam$linkinv(mu)); add("twd", c(4, pw, lm, y, mu, wt), fam$mu.eta(mu))
+}
 emit("gaussq", "statmod", list(cases))
