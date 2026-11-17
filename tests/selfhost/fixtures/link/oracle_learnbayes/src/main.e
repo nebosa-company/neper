@@ -31,6 +31,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
 
+    if str.eq(k, "lpost2") {
+        // (which, m, p, th[...], ...) which 0 logisticpost (th = b0, b1; x[m], n[m], y[m]) 1 weibullregpost (th = 2 + p; t[m], c[m], X[m p])
+        // 2 groupeddatapost (th = mu, lsig; f[m], lo[m], hi[m]) 3 logctablepost (th = 2; s1, f1, s2, f2) 4 transplantpost (th = 3; x[m], t[m], y[m], d[m])
+        let w = usize(x[0usize])
+        let m = usize(x[1usize])
+        let pp = usize(x[2usize])
+        var nth = 2usize
+        if w == 1usize { nth = 2usize + pp }
+        if w == 4usize { nth = 3usize }
+        let th = x[3usize..3usize + nth]
+        let d = x[3usize + nth..x.len]
+        if w == 0usize { ret lb.logisticpost(th[0usize], th[1usize], d[0usize..m], d[m..2usize * m], d[2usize * m..3usize * m]) }
+        if w == 1usize { ret lb.weibullregpost(th, d[0usize..m], d[m..2usize * m], d[2usize * m..2usize * m + m * pp], m, pp) }
+        if w == 2usize { ret lb.groupeddatapost(th[0usize], th[1usize], d[0usize..m], d[m..2usize * m], d[2usize * m..3usize * m]) }
+        if w == 3usize { ret lb.logctablepost(th[0usize], th[1usize], d[0usize], d[1usize], d[2usize], d[3usize]) }
+        ret lb.transplantpost(th, d[0usize..m], d[m..2usize * m], d[2usize * m..3usize * m], d[3usize * m..4usize * m])
+    }
+
     if str.eq(k, "lpost") {
         // (which, a, b, n, y[n], e or n[n]) which 0 normchi2post, 1 betabinexch0, 2 betabinexch, 3 poissgamexch, 4 lbinorm, 5 cauchyerrorpost
         let w = usize(x[0usize])

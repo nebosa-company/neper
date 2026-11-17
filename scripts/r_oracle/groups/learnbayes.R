@@ -63,4 +63,17 @@ for (rep in 1:15) {
   add("lpost", c(4, pt, 2, mm, vv[1, 1], vv[1, 2], vv[2, 2], 0), lbinorm(pt, list(m = mm, v = vv)))
   cl <- rnorm(1, 0, 0.5); add("lpost", c(5, th[1], cl, m, yy, rep(0, m)), cauchyerrorpost(c(th[1], cl), yy))
 }
+# more book posteriors "lpost2": (which, m, p, theta..., data...) 0 logisticpost 1 weibullregpost 2 groupeddatapost 3 logctablepost 4 transplantpost
+for (rep in 1:15) {
+  m <- sample(5:15, 1); xx <- round(rnorm(m), 2); nn <- sample(10:40, m, TRUE); yb <- sapply(nn, function(q) sample(0:q, 1)); b <- rnorm(2, 0, 0.5)
+  add("lpost2", c(0, m, 0, b, xx, nn, yb), logisticpost(b, cbind(xx, nn, yb)))
+  pp <- sample(1:3, 1); X <- matrix(round(rnorm(m * pp), 2), m, pp); tt <- round(rexp(m, 0.5) + 0.05, 3); cc <- rbinom(m, 1, 0.7); th <- c(rnorm(1, 0, 0.3), rnorm(1), rnorm(pp, 0, 0.5))
+  add("lpost2", c(1, m, pp, th, tt, cc, X), weibullregpost(th, cbind(tt, cc, X)))
+  lo <- sort(round(rnorm(m), 1)); hi <- lo + round(runif(m, 0.2, 1), 1); ff <- sample(1:30, m, TRUE); g <- c(rnorm(1), rnorm(1, 0, 0.4))
+  add("lpost2", c(2, m, 0, g, ff, lo, hi), groupeddatapost(g, list(int.lo = lo, int.hi = hi, f = ff)))
+  s1 <- sample(1:30, 1); f1 <- sample(1:30, 1); s2 <- sample(1:30, 1); f2 <- sample(1:30, 1); g2 <- rnorm(2)
+  add("lpost2", c(3, 4, 0, g2, s1, f1, s2, f2), logctablepost(g2, c(s1, f1, s2, f2)))
+  xs <- round(rexp(m, 0.2) + 0.1, 2); tr <- rbinom(m, 1, 0.5); ys <- round(rexp(m, 0.3) + 0.1, 2); dd <- rbinom(m, 1, 0.5); g3 <- rnorm(3, 0, 0.5)
+  add("lpost2", c(4, m, 0, g3, xs, tr, ys, dd), transplantpost(g3, cbind(xs, tr, ys, dd)))
+}
 emit("learnbayes", "LearnBayes", list(cases))

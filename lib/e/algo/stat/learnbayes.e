@@ -531,3 +531,77 @@ fn cauchyerrorpost(loc: f64, lscale: f64, y: []const f64) -> f64 {
     }
     ret v
 }
+
+// logisticpost(beta, data): the binomial logistic regression log likelihood, x the covariate, n the trials, y the successes
+fn logisticpost(b0: f64, b1: f64, x: []const f64, n: []const f64, y: []const f64) -> f64 {
+    var v = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        let lp = b0 + b1 * x[i]
+        let p = math.exp[f64](lp) / (1.0f64 + math.exp[f64](lp))
+        v += y[i] * math.log[f64](p) + (n[i] - y[i]) * math.log[f64](1.0f64 - p)
+        i += 1usize
+    }
+    ret v
+}
+
+// weibullregpost(theta = (log sigma, mu, beta...), data = (t, c, X)): the Weibull regression log likelihood with right censoring (c = 1 observed); x is m by p column-major
+fn weibullregpost(theta: []const f64, t: []const f64, cens: []const f64, x: []const f64, m: usize, p: usize) -> f64 {
+    let sigma = math.exp[f64](theta[0usize])
+    let mu = theta[1usize]
+    var v = 0.0f64
+    var i = 0usize
+    while i < m {
+        var xb = 0.0f64
+        var j = 0usize
+        while j < p {
+            xb += x[j * m + i] * theta[2usize + j]
+            j += 1usize
+        }
+        let z = (math.log[f64](t[i]) - mu - xb) / sigma
+        let f = 1.0f64 / sigma * math.exp[f64](z - math.exp[f64](z))
+        let s = math.exp[f64](0.0f64 - math.exp[f64](z))
+        v += cens[i] * math.log[f64](f) + (1.0f64 - cens[i]) * math.log[f64](s)
+        i += 1usize
+    }
+    ret v
+}
+
+// groupeddatapost(theta = (mu, log sigma), data): grouped normal data, f the counts and (lo, hi) the interval ends
+fn groupeddatapost(mu: f64, lsig: f64, f: []const f64, lo: []const f64, hi: []const f64) -> f64 {
+    let sigma = math.exp[f64](lsig)
+    var v = 0.0f64
+    var i = 0usize
+    while i < f.len {
+        v += f[i] * math.log[f64](dist.pnorm(hi[i], mu, sigma, true, false) - dist.pnorm(lo[i], mu, sigma, true, false))
+        i += 1usize
+    }
+    ret v
+}
+
+// logctablepost(theta, data = (s1, f1, s2, f2)): two binomials on the logit scale, theta = (the sum, the difference of the logits)
+fn logctablepost(t1: f64, t2: f64, s1: f64, f1: f64, s2: f64, f2: f64) -> f64 {
+    let l1 = (t1 + t2) / 2.0f64
+    let l2 = (t2 - t1) / 2.0f64
+    ret s1 * l1 - (s1 + f1) * math.log[f64](1.0f64 + math.exp[f64](l1)) + s2 * l2 - (s2 + f2) * math.log[f64](1.0f64 + math.exp[f64](l2))
+}
+
+// transplantpost(theta = (log tau, log lambda, log p), data = (x, t, y, d)): the Pareto survival model of the heart transplant example; t = 1 rows are the transplanted
+fn transplantpost(th: []const f64, x: []const f64, t: []const f64, y: []const f64, d: []const f64) -> f64 {
+    let tau = math.exp[f64](th[0usize])
+    let lambda = math.exp[f64](th[1usize])
+    let p = math.exp[f64](th[2usize])
+    var v = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        if t[i] == 0.0f64 {
+            if d[i] == 0.0f64 { v += p * math.log[f64](lambda) + math.log[f64](p) - (p + 1.0f64) * math.log[f64](lambda + x[i]) }
+            if d[i] == 1.0f64 { v += p * math.log[f64](lambda / (lambda + x[i])) }
+        } else {
+            if d[i] == 0.0f64 { v += p * math.log[f64](lambda) + math.log[f64](p * tau) - (p + 1.0f64) * math.log[f64](lambda + y[i] + tau * x[i]) }
+            if d[i] == 1.0f64 { v += p * math.log[f64](lambda / (lambda + y[i] + tau * x[i])) }
+        }
+        i += 1usize
+    }
+    ret v + th[0usize] + th[1usize] + th[2usize]
+}
