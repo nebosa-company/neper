@@ -11,6 +11,7 @@ use e.algo.stat.metaforfit as mf
 use e.algo.stat.metaformore as mm
 use e.algo.stat.metaformore2 as m2
 use e.algo.stat.metaforbias as mb
+use e.algo.stat.escalcmore as em
 
 // the number of option values before the model
 fn nopts(name: str, args: []const f64) -> usize {
@@ -25,6 +26,23 @@ fn nopts(name: str, args: []const f64) -> usize {
 }
 
 fn run(a: *mem.Arena, ws: *mr.Ws, name: str, args: []const f64, out: []f64, tmp: []f64) -> bool {
+    if str.eq(name, "escalc") {
+        // args = [measure, vtype, add, to, drop00, correct, k, ncol, data (k * ncol, row-major)]; out[2 i] = yi, out[2 i + 1] = vi
+        let ek = usize(args[6usize])
+        let ncol = usize(args[7usize])
+        let (yi, e1) = mem.alloc[f64](a, ek)
+        let (vi, e2) = mem.alloc[f64](a, ek)
+        let (sc, e3) = mem.alloc[f64](a, 6usize * ek)
+        if e1 != ok || e2 != ok || e3 != ok { ret false }
+        em.escalc(usize(args[0usize]), usize(args[1usize]), args[2usize], usize(args[3usize]), args[4usize] != 0.0f64, args[5usize] != 0.0f64, ek, ncol, args[8usize..8usize + ek * ncol], yi, vi, sc)
+        var q = 0usize
+        while q < ek {
+            out[2usize * q] = yi[q]
+            out[2usize * q + 1usize] = vi[q]
+            q += 1usize
+        }
+        ret true
+    }
     let off = nopts(name, args)
     var c = mf.default_ctl()
     c.method = usize(args[off])

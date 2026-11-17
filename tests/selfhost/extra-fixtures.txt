@@ -452,3 +452,4 @@ oracle_mclust20
 oracle_metaforrma
 oracle_metaforinf
 oracle_metaforsel
+oracle_escalcfull
