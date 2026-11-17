@@ -320,3 +320,87 @@ fn rcorr_pair(a: *mem.Arena, x: []const f64, y: []const f64, spearman: bool, out
     out[1usize] = 2.0f64 * (1.0f64 - nb.pt(t, f64(n - 2usize), true, false))
     ret ok
 }
+
+// cut2(x, g = g, onlycuts = TRUE): the lower limits of the groups and the maximum; x has no missing values; returns the count written to out
+fn cut2_cuts(a: *mem.Arena, x: []const f64, g: usize, out: []f64) -> usize {
+    let n = x.len
+    let (ones, e1) = mem.alloc[f64](a, n)
+    let (xx, e2) = mem.alloc[f64](a, n)
+    let (cn, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0usize }
+    var i = 0usize
+    while i < n {
+        ones[i] = 1.0f64
+        i += 1usize
+    }
+    let m = wtd_table(a, x, ones, xx, cn)
+    // cumulative counts
+    var cum = 0.0f64
+    i = 0usize
+    while i < m {
+        cum += cn[i]
+        cn[i] = cum
+        i += 1usize
+    }
+    let nnm = f64(n)
+    let (cuts, e4) = mem.alloc[f64](a, g)
+    if e4 != ok { ret 0usize }
+    var j = 0usize
+    while j < g {
+        let t = f64(j + 1usize) * (nnm / f64(g))
+        var v = xx[m - 1usize]
+        var k = 0usize
+        var hit = false
+        while k < m && !hit {
+            if cn[k] >= t {
+                v = xx[k]
+                hit = true
+            }
+            k += 1usize
+        }
+        cuts[j] = v
+        j += 1usize
+    }
+    cuts[g - 1usize] = xx[m - 1usize]
+    var lower = xx[0usize]
+    var upper = 1.0e45f64
+    var cnt = 0usize
+    j = 0usize
+    while j < g {
+        let cj = cuts[j]
+        if cj != upper {
+            upper = cj
+            out[cnt] = lower
+            cnt += 1usize
+            if j + 1usize == g {
+                lower = upper
+            } else {
+                var nx = upper
+                var found = false
+                var q = 0usize
+                while q < m {
+                    if xx[q] > upper && (!found || xx[q] < nx) {
+                        nx = xx[q]
+                        found = true
+                    }
+                    q += 1usize
+                }
+                lower = nx
+            }
+        }
+        j += 1usize
+    }
+    // unique(c(low, max(xx)))
+    var last = xx[m - 1usize]
+    var dup = false
+    i = 0usize
+    while i < cnt {
+        if out[i] == last { dup = true }
+        i += 1usize
+    }
+    if !dup {
+        out[cnt] = last
+        cnt += 1usize
+    }
+    ret cnt
+}

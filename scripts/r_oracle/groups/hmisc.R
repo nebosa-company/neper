@@ -30,4 +30,9 @@ for (rep in 1:40) {
   for (p in c(0.1, 0.5, 0.87)) add("hdq", c(n, p, x), hdquantile(x, p)[[1]])
   for (sp in 0:1) { r <- rcorr(x, y, type = c("pearson", "spearman")[sp + 1]); add("rc", c(n, sp, 0, x, y), r$r[1, 2]); add("rc", c(n, sp, 1, x, y), r$P[1, 2]) }
 }
+# cut2(x, g, onlycuts = TRUE): "cut" (n, g, index, x[n]); index -1 the number of cuts
+for (rep in 1:40) {
+  n <- sample(10:60, 1); x <- if (rep %% 2 == 0) round(rnorm(n), 1) else sample(1:5, n, TRUE) + 0; g <- sample(2:6, 1)
+  ct <- cut2(x, g = g, onlycuts = TRUE, m = 1); add("cut", c(n, g, -1, x), length(ct)); for (j in seq_along(ct)) add("cut", c(n, g, j - 1, x), ct[j])
+}
 emit("hmisc", "Hmisc", list(cases))

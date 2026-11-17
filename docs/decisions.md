@@ -47862,3 +47862,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6848 — Hmisc: hdquantile and rcorr for a pair
 
 **Decision.** `hmisc.hd_quantile(x, p)` is `hdquantile(x, p)`, the Harrell-Davis estimator (the order statistics weighted by the increments of the beta(p (n + 1), (1 - p) (n + 1)) cdf at i / n); `rcorr_pair(x, y, spearman)` is `rcorr` of two complete samples, the Pearson or mid-rank Spearman correlation with the two-sided P value 2 (1 - pt(|r| sqrt((n - 2) / (1 - r^2)), n - 2)). Equal to Hmisc on 40 samples, half with ties (oracle_hmisc, 2973 cases in all). Not here: missing values (pairwise deletion), the matrix form with n per pair, `rcorr.cens`, the standard errors of `hdquantile`. Linux pending.
+
+## D6849 — Hmisc: the cut points of cut2
+
+**Decision.** `hmisc.cut2_cuts(x, g)` is `cut2(x, g = g, onlycuts = TRUE)` for data without missing values: the value at the first cumulative count that reaches j n / g for each group j (the last group's limit the maximum), duplicate limits skipped, each group starting at the next distinct value above the previous limit, and the result the group lower limits and the maximum, without repeats. Equal to Hmisc on 40 samples, half of them with only five distinct values so that groups collapse (oracle_hmisc, 3185 cases in all). Not here: the factor labels, the `cuts` and `m` forms, missing values, `levels.mean`. Linux pending.

@@ -31,6 +31,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if hm.rcorr_pair(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[1usize] == 1.0f64, o) != ok { ret nan }
         ret o[usize(x[2usize])]
     }
+    if str.eq(c.name, "cut") {
+        let n = usize(x[0usize])
+        let (o, e) = mem.alloc[f64](a, usize(x[1usize]) + 2usize)
+        if e != ok { ret nan }
+        let cnt = hm.cut2_cuts(a, x[3usize..3usize + n], usize(x[1usize]), o)
+        if x[2usize] < 0.0f64 { ret f64(cnt) }
+        ret o[usize(x[2usize])]
+    }
     if str.eq(c.name, "wrk") {
         let n = usize(x[0usize])
         let (o, e) = mem.alloc[f64](a, n)
