@@ -3663,4 +3663,5 @@ D6800	1164	R's polyroot (cpoly)
 D6801	1162	statmod: dinvgauss, pinvgauss and rinvgauss
 D6802	1006	statmod: permp
 D6803	796	statmod: power.fisher.test
-D6804	876	sn: rsn and rst
+D6804	877	sn: rsn and rst
+D6805	691	dendextend: entanglement

@@ -437,3 +437,30 @@ fn agnes_ac(a: *mem.Arena, t: *const Tree, n: usize) -> f64 {
     }
     ret 1.0f64 - s / f64(n)
 }
+
+// dendextend::entanglement(h1, h2, L) for two hclust trees of the same objects: the leaves renumbered 1..n in the first tree's order, the sum over leaves of |position in the first - position in the second|^L, over the same sum for a tree against its mirror image
+fn entanglement(a: *mem.Arena, t1: *const Tree, t2: *const Tree, n: usize, l0: f64) -> f64 {
+    var l = l0
+    if l == 0.0f64 { l = 1.0e-50f64 }
+    let (p2, e) = mem.alloc[usize](a, n)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        p2[usize(t2.order[i]) - 1usize] = i + 1usize
+        i += 1usize
+    }
+    var s = 0.0f64
+    i = 0usize
+    while i < n {
+        let leaf = usize(t1.order[i]) - 1usize
+        s += math.pow[f64](math.abs[f64](f64(i + 1usize) - f64(p2[leaf])), l)
+        i += 1usize
+    }
+    var w = 0.0f64
+    i = 1usize
+    while i <= n {
+        w += math.pow[f64](math.abs[f64](f64(i) - f64(n + 1usize - i)), l)
+        i += 1usize
+    }
+    ret s / w
+}

@@ -27,6 +27,7 @@ for (rep in 1:10) {
   fm <- dendextend::FM_index_R(cutree(h1, k), cutree(h2, k))
   add("fm", a, as.numeric(fm)); add("fmE", a, attr(fm, "E_FM")); add("fmV", a, attr(fm, "V_FM"))
   add("corcoph", a, dendextend::cor_cophenetic(h1, h2))
+  Lx <- c(1, 1.5, 2, 0.5)[sample(4, 1)]; add("entang", c(a, Lx), dendextend::entanglement(h1, h2, L = Lx))
 }
 for (rep in 1:10) {
   n <- sample(8:25, 1); X <- matrix(round(rnorm(n * 2) * 3, 3), n, 2); mi <- sample(c(2, 3, 4, 5, 8), 1)
