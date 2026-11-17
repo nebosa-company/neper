@@ -5,6 +5,8 @@ use e.algo.stat.fminsearchpkg as fm
 use e.io
 use e.mem
 use e.os
+use e.str
+use e.algo.rand.r as rng
 use e.test.oracle as oracle
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -17,6 +19,33 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let x = c.args
+        if str.eq(c.name, "hj") {
+            // (id, what 0 xmin 1 fmin 2 count 3 iterations, k, bounded, seed, x0 (n), lower (n), upper (n))
+            let hid = usize(x[0usize])
+            let hn = fm.dim_of(hid)
+            let (hx, he1) = mem.alloc[f64](a, hn)
+            if he1 != ok { os.exit(5) }
+            var hrg: rng.Rng = zero
+            rng.seed(&hrg, i64(x[4usize]))
+            let bnd = x[3usize] == 1.0f64
+            let (hf, hc, hi, hee) = fm.hooke_jeeves(a, &hrg, hid, x[5usize..5usize + hn], 1.0e-8f64, 10000usize, bnd, x[5usize + hn..5usize + hn + hn], x[5usize + hn + hn..5usize + hn + hn + hn], hx)
+            if hee != ok { os.exit(7) }
+            var hg = 0.0f64
+            if usize(x[1usize]) == 0usize { hg = hx[usize(x[2usize])] }
+            if usize(x[1usize]) == 1usize { hg = hf }
+            if usize(x[1usize]) == 2usize { hg = f64(hc) }
+            if usize(x[1usize]) == 3usize { hg = f64(hi) }
+            if !oracle.agrees(hg, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, hg))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         let id = usize(x[0usize])
         let n = fm.dim_of(id)
         let (xmin, e1) = mem.alloc[f64](a, n)

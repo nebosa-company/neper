@@ -3866,4 +3866,5 @@ D7003	654	geepack GEE for the binomial and poisson families and AR(1)
 D7004	716	extraDistr truncated binomial, truncated Poisson and logarithmic series generators
 D7005	453	sn cp2dp for the skew-normal
 D7006	658	extraDistr generators through the R gamma, t, normal and beta generators
-D7007	357	extraDistr beta-prime generator
+D7007	359	extraDistr beta-prime generator
+D7008	628	pracma fminsearch Hooke-Jeeves

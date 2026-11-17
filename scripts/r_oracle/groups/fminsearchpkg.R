@@ -18,4 +18,15 @@ for (rep in 1:40) {
   add("nm", c(id, 2, 0, x0), r$count, 0, 0)
   add("nm", c(id, 3, 0, x0), r$info$restarts, 0, 0)
 }
+# Hooke-Jeeves "hj" (id, what 0 xmin 1 fmin 2 count 3 iterations, k, bounded, seed, x0, lower, upper): the coordinate order is sample.int under the seed
+set.seed(20262023)
+for (rep in 1:40) {
+  id <- (rep - 1) %% 5; x0 <- round(runif(nd[id + 1], -2, 2), 3); bd <- rep %% 2; sd <- sample(1:100000, 1)
+  lo <- rep(-3, nd[id + 1]); up <- rep(3, nd[id + 1])
+  set.seed(sd); r <- if (bd == 1) fminsearch(fs[[id + 1]], x0, method = "Hooke-Jeeves", lower = lo, upper = up) else fminsearch(fs[[id + 1]], x0, method = "Hooke-Jeeves")
+  for (k in seq_along(r$xmin)) add("hj", c(id, 0, k - 1, bd, sd, x0, lo, up), r$xmin[k], 1e-9, 1e-10)
+  add("hj", c(id, 1, 0, bd, sd, x0, lo, up), r$fmin, 1e-9, 1e-12)
+  add("hj", c(id, 2, 0, bd, sd, x0, lo, up), r$count, 0, 0)
+  add("hj", c(id, 3, 0, bd, sd, x0, lo, up), r$info$iterations, 0, 0)
+}
 emit("fminsearchpkg", "pracma", list(cases))

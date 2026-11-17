@@ -48533,3 +48533,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D7007 — extraDistr beta-prime generator
 
 `rgen6` family 6: sigma b / (1 - b) with b = rbeta(alpha, beta), equal to `rbetapr` under set.seed on 6 settings of 5 draws (oracle_extradistr). `rtriang` (at u = 0.168 gives 1.14 where the inverse CDF gives 0.71) and `rtnorm` do not follow the quantile function at u or 1 - u and are left open. Linux pending.
+
+
+## D7008 — pracma fminsearch Hooke-Jeeves
+
+`fminsearchpkg.hooke_jeeves` ports `.hj`/`.hjb`: nsteps = floor(log2(1/tol)) halvings of the step, `.hjsearch` with the pattern move and the retry from the base point, and `.hjexplore`/`.hjbexplore` visiting the coordinates in the order of sample.int(n, n) from the seeded generator (`rng.sample_int`), the bounded version skipping a trial point outside its bound. Equal to fminsearch(method = "Hooke-Jeeves") on 40 starts, half bounded, of the five test functions, including the minimiser, the minimum, the evaluation count and the iterations (oracle_fminsearchpkg). Linux pending.
