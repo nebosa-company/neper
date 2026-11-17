@@ -47802,3 +47802,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6833 — kSamples: exact qn.test p value
 
 **Decision.** `ksamples.qn_exact_p(x, sizes, test)` is the p value of `qn.test(method = "exact")` for the Kruskal-Wallis and van der Waerden scores: the share of the assignments of the pooled observations to the samples whose standardised statistic is at least the observed one, walked with the same enumeration as the exact `ad.test`. For the Kruskal-Wallis scores a plain comparison matches; the van der Waerden scores carry rounding noise, and the package counts tables within a small tolerance of the observed value, reproduced as 1e-7 on the standardised statistic. Equal to the package on 66 small samples per test, half of them with ties (oracle_ksamples, five digits). Not here: the simulated p value, the normal-scores test. Linux pending.
+
+## D6834 — caret: varImp for lm
+
+**Decision.** `carets.var_imp_lm` is `varImp(lm)` (unscaled): the absolute t value of each coefficient but the intercept, from `decomp.lm_fit` for the coefficients and residual sum of squares and the inverse Cholesky factor of X'X for the standard errors (sigma squared over n - p). Equal to caret on 25 designs of 1 to 5 predictors (oracle_carets). `varImp` rescaling to 0-100 and the glm, tree and forest methods are not here. Linux pending.

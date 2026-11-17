@@ -71,4 +71,10 @@ for (rep in 1:30) {
   d <- data.frame(v = y); pr <- suppressWarnings(preProcess(d, method = "YeoJohnson")); lam <- if (is.null(pr$yj)) NA else unname(pr$yj["v"]); add("yj", c(0, n, y), if (is.null(lam) || is.na(lam)) -99 else lam, 1e-9)
   add("yj", c(1, n, y), sum(seq_len(n) * predict(pr, d)$v), 1e-9)
 }
+# varImp(lm): "vi" (n, p, index, X[n p] column-major with the intercept first, y[n]); index 0 .. p - 2 the non-intercept coefficients
+for (rep in 1:25) {
+  n <- sample(15:80, 1); p <- sample(2:6, 1); X <- cbind(1, matrix(rnorm(n * (p - 1)), n, p - 1)); y <- as.vector(X %*% rnorm(p)) + rnorm(n)
+  d <- data.frame(y = y, X[, -1, drop = FALSE]); m <- lm(y ~ ., d); vi <- varImp(m)$Overall
+  for (j in seq_along(vi)) add("vi", c(n, p, j - 1, X, y), vi[j], 1e-9)
+}
 emit("carets", "caret", list(cases))

@@ -3692,4 +3692,5 @@ D6829	599	kSamples: ad.pval
 D6830	930	kSamples: qn.test (Kruskal-Wallis and van der Waerden), asymptotic
 D6831	960	kSamples: contingency2xt, asymptotic and exact
 D6832	783	kSamples: ad.test exact p value
-D6833	795	kSamples: exact qn.test p value
+D6833	796	kSamples: exact qn.test p value
+D6834	479	caret: varImp for lm

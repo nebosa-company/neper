@@ -11,6 +11,8 @@ use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.algo.rand.r as rng
 use e.mem
+use e.algo.linalg.decomp as decomp
+use e.algo.stat.bayesmpkg as bz
 use e.algo.stat.fdrtool as fd
 use e.algo.stat.mass as ms
 
@@ -620,4 +622,51 @@ fn yeo_johnson_lambda(a: *mem.Arena, dat: []const f64) -> f64 {
     let lam = fd.brent_min_tol[Yj](&ctx, yj_negll, 0.0f64 - 3.0f64, 3.0f64, 1.0e-4f64)
     if math.abs[f64](0.0f64 - 3.0f64 - lam) <= 0.001f64 || math.abs[f64](3.0f64 - lam) <= 0.001f64 { ret 0.0f64 / 0.0f64 }
     ret lam
+}
+
+// varImp(lm): the absolute t value of each coefficient but the intercept, for the n by p column-major design x (the intercept first) and the response y; out[0 .. p - 1] for columns 1 .. p
+fn var_imp_lm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, out: []f64) -> err {
+    let (f, fe) = decomp.lm_fit(a, x, n, p, y, 1.0e-7f64)
+    if fe != ok { ret fe }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f.residuals[i] * f.residuals[i]
+        i += 1usize
+    }
+    let s2 = rss / f64(n - p)
+    let (xtx, e1) = mem.alloc[f64](a, p * p)
+    let (u, e2) = mem.alloc[f64](a, p * p)
+    let (ui, e3) = mem.alloc[f64](a, p * p)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var c = 0usize
+    while c < p {
+        var c2 = 0usize
+        while c2 < p {
+            var sv = 0.0f64
+            i = 0usize
+            while i < n {
+                sv += x[c * n + i] * x[c2 * n + i]
+                i += 1usize
+            }
+            xtx[c2 * p + c] = sv
+            c2 += 1usize
+        }
+        c += 1usize
+    }
+    if !bz.chol_upper(xtx, p, u) { ret mem.Full }
+    bz.inv_upper(u, p, ui)
+    c = 1usize
+    while c < p {
+        // (X'X)^-1 [c, c] = sum over r of ui[r, c]^2
+        var d = 0.0f64
+        var r = 0usize
+        while r < p {
+            d += ui[r * p + c] * ui[r * p + c]
+            r += 1usize
+        }
+        out[c - 1usize] = math.abs[f64](f.coef[c] / math.sqrt[f64](s2 * d))
+        c += 1usize
+    }
+    ret ok
 }
