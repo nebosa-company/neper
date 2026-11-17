@@ -21,6 +21,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if s[i] < 0.0f64 - 999000.0f64 { s[i] = 0.0f64 / 0.0f64 }
         i += 1usize
     }
+    if str.eq(c.name, "locf") {
+        let (lr, le) = it.na_locf_ts(a, s, kind >= 10usize, kind % 10usize)
+        if le != ok { os.exit(7) }
+        ret lr[k]
+    }
+    if str.eq(c.name, "interp") {
+        let (ir, ie) = it.na_interpolation(a, s, kind)
+        if ie != ok { os.exit(7) }
+        ret ir[k]
+    }
     if str.eq(c.name, "mean") { ret it.na_mean_value(a, s, kind) }
     let (r, e2) = it.na_ma(a, s, k, kind)
     if e2 != ok { os.exit(6) }

@@ -1,10 +1,13 @@
 // R imputeTS: na_ma (simple, linear and exponential weights), na_mean (mean, median, mode, geometric, harmonic), na_replace.
 // A missing value is NaN. na_locf and the interpolations are in e.algo.stat.zoo.
 //
-// Not here: na_kalman, na_seadec, na_seasplit, na_random, statsNA, the maxgap option.
+// na_locf (option locf or nocb, na_remaining rev, keep or mean) and na_interpolation (linear, spline) wrap the zoo functions.
+//
+// Not here: na_kalman, na_seadec, na_seasplit, na_random, statsNA, the maxgap option, na_interpolation stine.
 
 use e.math
 use e.mem
+use e.algo.stat.zoo as zoo
 
 fn is_nan(x: f64) -> bool { ret x != x }
 
@@ -135,4 +138,85 @@ fn na_mean_value(a: *mem.Arena, x: []const f64, option: usize) -> f64 {
         i += 1usize
     }
     ret 1.0f64 / (t / nf)
+}
+
+fn any_nan(x: []const f64) -> bool {
+    var i = 0usize
+    while i < x.len {
+        if is_nan(x[i]) { ret true }
+        i += 1usize
+    }
+    ret false
+}
+
+// na_locf(x, option = "locf" or "nocb", na_remaining = "rev" (0), "keep" (1) or "mean" (2))
+fn na_locf_ts(a: *mem.Arena, x: []const f64, nocb: bool, remaining: usize) -> ([]f64, err) {
+    let (r1, e1) = zoo.na_locf(a, x, nocb, 0i64 - 1i64, false)
+    if e1 != ok { ret (r1, e1) }
+    if !any_nan(r1[0usize..x.len]) || remaining == 1usize { ret (r1[0usize..x.len], ok) }
+    if remaining == 0usize {
+        let (r2, e2) = zoo.na_locf(a, r1[0usize..x.len], !nocb, 0i64 - 1i64, false)
+        ret (r2[0usize..x.len], e2)
+    }
+    let m = na_mean_value(a, r1[0usize..x.len], 0usize)
+    var i = 0usize
+    while i < x.len {
+        if is_nan(r1[i]) { r1[i] = m }
+        i += 1usize
+    }
+    ret (r1[0usize..x.len], ok)
+}
+
+// na_interpolation(x, option = "linear" (0) or "spline" (1)): the missing values interpolated over the index 1 .. n, constant (linear) or polynomial (spline, fmm) beyond the observed range
+fn na_interpolation(a: *mem.Arena, x: []const f64, option: usize) -> ([]f64, err) {
+    let n = x.len
+    let (idx, e) = mem.alloc[f64](a, n)
+    if e != ok { ret (idx, e) }
+    var i = 0usize
+    while i < n {
+        idx[i] = f64(i + 1usize)
+        i += 1usize
+    }
+    if option == 0usize {
+        let (r, e2) = zoo.na_approx(a, idx, x, 2i64, 0i64 - 1i64, false)
+        ret (r[0usize..n], e2)
+    }
+    // spline(indx, x[indx], n = n): the fmm spline of the observed points evaluated at n equally spaced points between the first and last observed index,
+    // whose k-th value then fills the k-th position when it is missing (the package indexes the output by position)
+    var m = 0usize
+    i = 0usize
+    while i < n {
+        if !is_nan(x[i]) { m += 1usize }
+        i += 1usize
+    }
+    let (xs, e4) = mem.alloc[f64](a, m)
+    let (ys, e5) = mem.alloc[f64](a, m)
+    let (bb, e6) = mem.alloc[f64](a, m)
+    let (cc, e7) = mem.alloc[f64](a, m)
+    let (dd, e8) = mem.alloc[f64](a, m)
+    let (out, e9) = mem.alloc[f64](a, n)
+    if e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret (out, mem.Full) }
+    var q = 0usize
+    i = 0usize
+    while i < n {
+        if !is_nan(x[i]) {
+            xs[q] = f64(i + 1usize)
+            ys[q] = x[i]
+            q += 1usize
+        }
+        i += 1usize
+    }
+    zoo.spline_coef(0u8, m, xs, ys, bb, cc, dd)
+    let lo = xs[0usize]
+    let hi = xs[m - 1usize]
+    var cur = zoo.Cursor{ i: 0usize }
+    let by = (hi - lo) / f64(n - 1usize)
+    i = 0usize
+    while i < n {
+        var u = lo + f64(i) * by
+        if i + 1usize == n { u = hi }
+        if is_nan(x[i]) { out[i] = zoo.spline_at(0u8, m, xs, ys, bb, cc, dd, u, &cur) } else { out[i] = x[i] }
+        i += 1usize
+    }
+    ret (out, ok)
 }
