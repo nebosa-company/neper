@@ -9,8 +9,35 @@ use e.algo.rand.r as rng
 use e.str
 use e.test.oracle as oracle
 
-fn answer(c: *const oracle.Case) -> f64 {
+fn answer(a0: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "rg7") {
+        // (family, seed, p1, p2, p3, index)
+        var rg7: rng.Rng = zero
+        rng.seed(&rg7, i64(x[1usize]))
+        var v7 = 0.0f64
+        var q7 = 0usize
+        while q7 <= usize(x[5usize]) {
+            v7 = ed.rgen7(&rg7, usize(x[0usize]), x[2usize], x[3usize], x[4usize])
+            q7 += 1usize
+        }
+        ret v7
+    }
+    if str.eq(c.name, "rv") {
+        // (family, seed, k, draw, column, par...): the column of the draw-th vector draw
+        var rgv: rng.Rng = zero
+        rng.seed(&rgv, i64(x[1usize]))
+        let kv = usize(x[2usize])
+        let (buf, be) = mem.alloc[f64](a0, kv + 2usize)
+        if be != ok { ret 0.0f64 - 12345.0f64 }
+        var dv = 0usize
+        while dv <= usize(x[3usize]) {
+            let re = ed.rvec(a0, &rgv, usize(x[0usize]), kv, x[5usize..x.len], dv, buf)
+            if re != ok { ret 0.0f64 - 12346.0f64 }
+            dv += 1usize
+        }
+        ret buf[usize(x[4usize])]
+    }
     if str.eq(c.name, "rg6") {
         // (family, seed, p1, p2, p3, p4, index)
         var rg6: rng.Rng = zero
@@ -343,7 +370,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var at = 0usize
     while at < golden.cases.len {
         let c = &golden.cases[at]
-        let got = answer(c)
+        let got = answer(a, c)
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
