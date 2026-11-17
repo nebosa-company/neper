@@ -3859,4 +3859,5 @@ D6996	562	Rmpfr directed rounding for the arithmetic
 D6997	437	Rmpfr string conversion
 D6998	393	Rmpfr decimal string parsing
 D6999	565	Rmpfr directed rounding of the transcendental functions
-D7000	590	Rmpfr closed: besselY, other-base parsing, zeta below 1
+D7000	592	Rmpfr closed: besselY, other-base parsing, zeta below 1
+D7001	477	imputeTS na_interpolation stine

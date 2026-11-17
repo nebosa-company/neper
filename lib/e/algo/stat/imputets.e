@@ -182,6 +182,10 @@ fn na_interpolation(a: *mem.Arena, x: []const f64, option: usize) -> ([]f64, err
         let (r, e2) = zoo.na_approx(a, idx, x, 2i64, 0i64 - 1i64, false)
         ret (r[0usize..n], e2)
     }
+    if option == 2usize {
+        let (st, es) = na_stine(a, x)
+        ret (st, es)
+    }
     // spline(indx, x[indx], n = n): the fmm spline of the observed points evaluated at n equally spaced points between the first and last observed index,
     // whose k-th value then fills the k-th position when it is missing (the package indexes the output by position)
     var m = 0usize
@@ -285,4 +289,104 @@ fn na_replace(a: *mem.Arena, x: []const f64, fill: f64) -> ([]f64, err) {
         i += 1usize
     }
     ret (r, ok)
+}
+
+// stinepack::stinterp(indx, x[indx], 1:n) with the default scaled Stineman slopes, the positions outside the observed range then filled by na_locf(na_remaining = "rev")
+fn na_stine(a: *mem.Arena, x: []const f64) -> ([]f64, err) {
+    let n = x.len
+    var m = 0usize
+    var i = 0usize
+    while i < n {
+        if !is_nan(x[i]) { m += 1usize }
+        i += 1usize
+    }
+    let (xs, e1) = mem.alloc[f64](a, m)
+    let (ys, e2) = mem.alloc[f64](a, m)
+    let (yp, e3) = mem.alloc[f64](a, m)
+    let (out, e4) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (out, mem.Full) }
+    var q = 0usize
+    i = 0usize
+    while i < n {
+        if !is_nan(x[i]) {
+            xs[q] = f64(i + 1usize)
+            ys[q] = x[i]
+            q += 1usize
+        }
+        i += 1usize
+    }
+    if m < 2usize { ret (out, mem.Full) }
+    // scaled Stineman slopes
+    let sx = xs[m - 1usize] - xs[0usize]
+    var mn = ys[0usize]
+    var mx = ys[0usize]
+    i = 1usize
+    while i < m {
+        if ys[i] < mn { mn = ys[i] }
+        if ys[i] > mx { mx = ys[i] }
+        i += 1usize
+    }
+    var sy = mx - mn
+    if sy <= 0.0f64 { sy = 1.0f64 }
+    if m == 2usize {
+        let sl = (ys[1usize] - ys[0usize]) / (xs[1usize] - xs[0usize])
+        yp[0usize] = sl
+        yp[1usize] = sl
+    } else {
+        let m1 = m - 1usize
+        i = 1usize
+        while i < m1 {
+            let dxm = (xs[i] - xs[i - 1usize]) / sx
+            let dym = (ys[i] - ys[i - 1usize]) / sy
+            let dxp = (xs[i + 1usize] - xs[i]) / sx
+            let dyp = (ys[i + 1usize] - ys[i]) / sy
+            let d2p = dxp * dxp + dyp * dyp
+            let d2m = dxm * dxm + dym * dym
+            yp[i] = ((dym * d2p + dyp * d2m) / (dxm * d2p + dxp * d2m)) * sy / sx
+            i += 1usize
+        }
+        // the end slopes on the scaled data, then unscaled
+        let s0 = ((ys[1usize] - ys[0usize]) / sy) / ((xs[1usize] - xs[0usize]) / sx)
+        let p1 = yp[1usize] * sx / sy
+        if (s0 >= 0.0f64 && s0 >= p1) || (s0 <= 0.0f64 && s0 <= p1) { yp[0usize] = (2.0f64 * s0 - p1) * sy / sx } else { yp[0usize] = (s0 + math.abs[f64](s0) * (s0 - p1) / (math.abs[f64](s0) + math.abs[f64](s0 - p1))) * sy / sx }
+        let sn = ((ys[m1] - ys[m1 - 1usize]) / sy) / ((xs[m1] - xs[m1 - 1usize]) / sx)
+        let pm = yp[m1 - 1usize] * sx / sy
+        if (sn >= 0.0f64 && sn >= pm) || (sn <= 0.0f64 && sn <= pm) { yp[m1] = (2.0f64 * sn - pm) * sy / sx } else { yp[m1] = (sn + math.abs[f64](sn) * (sn - pm) / (math.abs[f64](sn) + math.abs[f64](sn - pm))) * sy / sx }
+    }
+    i = 0usize
+    while i < n {
+        let u = f64(i + 1usize)
+        if !is_nan(x[i]) {
+            out[i] = x[i]
+        } else if u < xs[0usize] || u > xs[m - 1usize] {
+            out[i] = 0.0f64 / 0.0f64
+        } else {
+            var j = 0usize
+            while j + 2usize < m && xs[j + 1usize] <= u { j += 1usize }
+            let dx = xs[j + 1usize] - xs[j]
+            let sl = (ys[j + 1usize] - ys[j]) / dx
+            let d1 = u - xs[j]
+            let d2 = u - xs[j + 1usize]
+            let y0 = ys[j] + sl * d1
+            let o1 = (yp[j] - sl) * d1
+            let o2 = (yp[j + 1usize] - sl) * d2
+            let pr = o1 * o2
+            var yo = y0
+            if pr > 0.0f64 { yo = y0 + pr / (o1 + o2) }
+            if pr < 0.0f64 { yo = y0 + pr * (d1 + d2) / (o1 - o2) / dx }
+            out[i] = yo
+        }
+        i += 1usize
+    }
+    // na_locf(na_remaining = "rev"): leading gaps take the first value, trailing gaps the last
+    let first = ys[0usize]
+    let last = ys[m - 1usize]
+    i = 0usize
+    while i < n {
+        if is_nan(out[i]) {
+            if f64(i + 1usize) < xs[0usize] { out[i] = first } else { out[i] = last }
+        }
+        i += 1usize
+    }
+    ret (out, ok)
 }

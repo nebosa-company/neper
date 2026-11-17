@@ -27,7 +27,7 @@ for (rep in 1:30) {
   n <- sample(12:30, 1); x <- round(runif(n, 1, 10), 1); na <- sample(n, sample(2:6, 1)); if (rep %% 3 == 0) na <- c(na, 1); if (rep %% 4 == 0) na <- c(na, n)
   x[na] <- NA; if (sum(!is.na(x)) < 4) next
   for (nc in c(FALSE, TRUE)) for (rm in 0:2) { r <- suppressWarnings(na_locf(x, option = if (nc) "nocb" else "locf", na_remaining = c("rev", "keep", "mean")[rm + 1])); for (k in seq_len(n)) add("locf", c(rm + if (nc) 10 else 0, k - 1, n, enc(x)), r[k]) }
-  for (op in 0:1) { r <- suppressWarnings(na_interpolation(x, option = c("linear", "spline")[op + 1])); for (k in seq_len(n)) add("interp", c(op, k - 1, n, enc(x)), r[k]) }
+  for (op in 0:2) { r <- suppressWarnings(na_interpolation(x, option = c("linear", "spline", "stine")[op + 1])); for (k in seq_len(n)) add("interp", c(op, k - 1, n, enc(x)), r[k]) }
 }
 # maxgap with na_locf (0 locf, 1 nocb, na_remaining keep) and na_interpolation (2 linear, 3 spline): "maxgap" (option, index, n, series..., maxgap)
 for (rep in 1:30) {
