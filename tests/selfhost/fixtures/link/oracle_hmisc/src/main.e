@@ -39,6 +39,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if x[2usize] < 0.0f64 { ret f64(cnt) }
         ret o[usize(x[2usize])]
     }
+    if str.eq(c.name, "axt") {
+        let n = usize(x[0usize])
+        ret hm.approx_extrap(x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[1usize])
+    }
+    if str.eq(c.name, "rcc") {
+        let n = usize(x[0usize])
+        let (o, e) = mem.alloc[f64](a, 7usize)
+        if e != ok { ret nan }
+        hm.rcorr_cens(x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n], o)
+        ret o[usize(x[1usize])]
+    }
     if str.eq(c.name, "wrk") {
         let n = usize(x[0usize])
         let (o, e) = mem.alloc[f64](a, n)

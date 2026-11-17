@@ -526,10 +526,10 @@
       "group": "CRAN parity",
       "order": 667,
       "title": "Hmisc: numerically defined core",
-      "score": 0.4,
+      "score": 0.45,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6050). binconf (exact, Wilson, asymptotic), wtd.mean, wtd.var and somers2 equal Hmisc 5.3-0 on Windows (Linux pending). D6847: wtd.table, wtd.quantile, wtd.rank and rcspline.eval (given knots) equal Hmisc. D6848: hdquantile and rcorr for a complete pair equal Hmisc. D6849: the cut points of cut2 (g groups) equal Hmisc. Open: rcorr.cens, cut2 labels, rcspline.eval knot placement and restate, approxExtrap, describe, varclus, redun, smean.cl.boot, smedian.hilow. Was: Open (CRAN rank 184). Mid. Acceptance, equal to Hmisc: rcorr (Pearson and Spearman with n and P), rcorr.cens and somers2 (c-index, Dxy), binconf (Wilson, exact, asymptotic), hdquantile, wtd.mean, wtd.var, wtd.quantile, wtd.rank, wtd.table, cut2 (g, m, cuts), rcspline.eval and rcspline.restate, approxExtrap, describe summaries, varclus, redun, smean.cl.boot and smedian.hilow under set.seed."
+      "evidence": "Partial (D6050). binconf (exact, Wilson, asymptotic), wtd.mean, wtd.var and somers2 equal Hmisc 5.3-0 on Windows (Linux pending). D6847: wtd.table, wtd.quantile, wtd.rank and rcspline.eval (given knots) equal Hmisc. D6848: hdquantile and rcorr for a complete pair equal Hmisc. D6849: the cut points of cut2 (g groups) equal Hmisc. D6850: approxExtrap and rcorr.cens (C, Dxy, counts) equal Hmisc. Open: the rcorr.cens S.D., cut2 labels, rcspline.eval knot placement and restate, approxExtrap, describe, varclus, redun, smean.cl.boot, smedian.hilow. Was: Open (CRAN rank 184). Mid. Acceptance, equal to Hmisc: rcorr (Pearson and Spearman with n and P), rcorr.cens and somers2 (c-index, Dxy), binconf (Wilson, exact, asymptotic), hdquantile, wtd.mean, wtd.var, wtd.quantile, wtd.rank, wtd.table, cut2 (g, m, cuts), rcspline.eval and rcspline.restate, approxExtrap, describe summaries, varclus, redun, smean.cl.boot and smedian.hilow under set.seed."
     },
     {
       "id": "L306",

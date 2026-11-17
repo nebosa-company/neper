@@ -404,3 +404,52 @@ fn cut2_cuts(a: *mem.Arena, x: []const f64, g: usize, out: []f64) -> usize {
     }
     ret cnt
 }
+
+// approxExtrap(x, y, xout): linear interpolation of the sorted distinct x, extended beyond the range by the line through the two end points; x is ascending and distinct
+fn approx_extrap(x: []const f64, y: []const f64, xo: f64) -> f64 {
+    let n = x.len
+    if xo < x[0usize] { ret (y[1usize] - y[0usize]) / (x[1usize] - x[0usize]) * (xo - x[0usize]) + y[0usize] }
+    if xo > x[n - 1usize] { ret (y[n - 1usize] - y[n - 2usize]) / (x[n - 1usize] - x[n - 2usize]) * (xo - x[n - 2usize]) + y[n - 2usize] }
+    var i = 0usize
+    while i + 1usize < n && x[i + 1usize] < xo { i += 1usize }
+    if xo == x[i] { ret y[i] }
+    if i + 1usize < n && xo == x[i + 1usize] { ret y[i + 1usize] }
+    ret y[i] + (y[i + 1usize] - y[i]) * (xo - x[i]) / (x[i + 1usize] - x[i])
+}
+
+// rcorr.cens(x, Surv(time, event)): out = (C index, Dxy, n, uncensored, relevant pairs, concordant, uncertain), the pair counts as the package reports them (each pair counted twice, a tie in x as half)
+fn rcorr_cens(x: []const f64, time: []const f64, event: []const f64, out: []f64) {
+    let n = x.len
+    var rel = 0.0f64
+    var conc = 0.0f64
+    var tied = 0.0f64
+    var unc = 0.0f64
+    var tiec = 0.0f64
+    var nu = 0.0f64
+    var i = 0usize
+    while i < n {
+        if event[i] == 1.0f64 { nu += 1.0f64 }
+        var j = 0usize
+        while j < n {
+            if j != i && (time[i] < time[j] || (time[i] == time[j] && event[i] == 1.0f64 && event[j] == 0.0f64)) {
+                if event[i] == 1.0f64 {
+                    rel += 1.0f64
+                    if x[i] < x[j] { conc += 1.0f64 } else if x[i] == x[j] { tied += 1.0f64 }
+                } else if time[i] < time[j] {
+                    unc += 1.0f64
+                }
+            }
+            if j != i && time[i] == time[j] && event[i] == 0.0f64 && event[j] == 0.0f64 { tiec += 1.0f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let c = (conc + 0.5f64 * tied) / rel
+    out[0usize] = c
+    out[1usize] = 2.0f64 * (c - 0.5f64)
+    out[2usize] = f64(n)
+    out[3usize] = nu
+    out[4usize] = 2.0f64 * rel
+    out[5usize] = 2.0f64 * conc + tied
+    out[6usize] = 2.0f64 * unc + tiec
+}

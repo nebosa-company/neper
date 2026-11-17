@@ -35,4 +35,12 @@ for (rep in 1:40) {
   n <- sample(10:60, 1); x <- if (rep %% 2 == 0) round(rnorm(n), 1) else sample(1:5, n, TRUE) + 0; g <- sample(2:6, 1)
   ct <- cut2(x, g = g, onlycuts = TRUE, m = 1); add("cut", c(n, g, -1, x), length(ct)); for (j in seq_along(ct)) add("cut", c(n, g, j - 1, x), ct[j])
 }
+# approxExtrap "axt" (n, xout, x[n] ascending distinct, y[n]); rcorr.cens "rcc" (n, index 0 C 1 Dxy 2 n 3 uncensored 4 relevant 5 concordant 6 uncertain, x, time, event)
+suppressMessages(library(survival))
+for (rep in 1:40) {
+  n <- sample(5:12, 1); xs <- sort(runif(n, -1, 1)); ys <- rnorm(n); xo <- c(runif(3, min(xs) - 1, max(xs) + 1), xs[2], (xs[1] + xs[2]) / 2)
+  r <- approxExtrap(xs, ys, xout = xo)$y; for (j in seq_along(xo)) add("axt", c(n, xo[j], xs, ys), r[j])
+  m <- sample(10:40, 1); tt <- round(rexp(m), 2); ee <- rbinom(m, 1, 0.7); xx <- round(runif(m), 1); if (sum(ee) < 2) next
+  rc <- rcorr.cens(xx, Surv(tt, ee)); for (j in 0:6) add("rcc", c(m, j, xx, tt, ee), unname(rc[c(1, 2, 4, 6, 7, 8, 9)[j + 1]]))
+}
 emit("hmisc", "Hmisc", list(cases))
