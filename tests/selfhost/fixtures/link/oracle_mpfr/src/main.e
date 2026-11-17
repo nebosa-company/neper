@@ -33,8 +33,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (t, e) = mp.div(a, x, y, prec)
         r = t
         er = e
-    } else {
+    } else if op == 4usize {
         let (t, e) = mp.sqrt(a, x, prec)
+        r = t
+        er = e
+    } else if op == 5usize {
+        let (t, e) = mp.exp(a, x, prec)
+        r = t
+        er = e
+    } else {
+        let (t, e) = mp.log(a, x, prec)
         r = t
         er = e
     }

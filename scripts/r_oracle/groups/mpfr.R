@@ -16,4 +16,14 @@ for (rep in 1:200) {
     cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
     cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0) }
 }
+# exp (op 5, |x| below 40) and log (op 6, x > 0) correctly rounded
+for (rep in 1:120) {
+  op <- sample(5:6, 1); prec <- sample(c(53, 80, 100, 128, 200), 1); m1 <- sample(1:(2^50), 1)
+  e1 <- if (op == 5) sample(-60:-45, 1) else sample(-80:40, 1); if (op == 5 && runif(1) < 0.5) m1 <- -m1
+  x <- mpfr(m1, prec) * 2^e1; if (op == 5 && abs(asNumeric(x)) > 40) next
+  z <- if (op == 5) exp(x) else log(x); if (z == 0 || !is.finite(z)) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(op, prec, m1, e1, 1, 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))

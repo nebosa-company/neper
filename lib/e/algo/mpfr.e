@@ -1,8 +1,8 @@
 // Rmpfr / MPFR style binary floating point of a chosen precision on the big integers of e.algo.bignum: a value is m * 2^e with m a signed integer of at most `prec` bits, and every operation is the exact result rounded to nearest, ties to even.
 //
-// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
+// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
 //
-// Not here: exp, log, the trigonometric and hyperbolic functions, gamma, zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
+// Not here: pow, the trigonometric and hyperbolic functions, gamma, zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
 
 use e.algo.bignum as bn
 use e.math
@@ -229,4 +229,161 @@ fn to_pair(a: *mem.Arena, x: Mp) -> (f64, f64) {
     let (d, e2) = sub(a, x, r, bn.int_bits(x.m) + 64usize)
     if e2 != ok { ret (hi, 0.0f64) }
     ret (hi, to_f64(a, d))
+}
+
+fn scale2(x: Mp, k: i64) -> Mp {
+    if x.m.sign == bn.Sign.Zero { ret x }
+    ret Mp{ m: x.m, e: x.e + k }
+}
+
+fn mag_exp(x: Mp) -> i64 { ret x.e + i64(bn.int_bits(x.m)) }
+
+// ln 2 = 2 atanh(1/3) = 2 sum (1/3)^(2k+1) / (2k+1), to w bits
+fn ln2(a: *mem.Arena, w: usize) -> (Mp, err) {
+    let (one, e1) = from_parts(a, 1i64, 0i64, w)
+    let (three, e2) = from_parts(a, 3i64, 0i64, w)
+    if e1 != ok || e2 != ok { ret (zero, mem.Full) }
+    let (z, e3) = div(a, one, three, w)
+    if e3 != ok { ret (zero, e3) }
+    let (z2, e4) = mul(a, z, z, w)
+    if e4 != ok { ret (zero, e4) }
+    var p = z
+    var sum = z
+    var k = 1i64
+    var go = true
+    while go {
+        let (p2, e5) = mul(a, p, z2, w)
+        if e5 != ok { ret (zero, e5) }
+        p = p2
+        let (d, e6) = from_parts(a, 2i64 * k + 1i64, 0i64, w)
+        if e6 != ok { ret (zero, e6) }
+        let (t, e7) = div(a, p, d, w)
+        if e7 != ok { ret (zero, e7) }
+        let (s2, e8) = add(a, sum, t, w)
+        if e8 != ok { ret (zero, e8) }
+        sum = s2
+        if mag_exp(t) < mag_exp(sum) - i64(w) - 5i64 { go = false }
+        k += 1i64
+    }
+    ret (scale2(sum, 1i64), ok)
+}
+
+// exp(x) to prec bits: x = k ln 2 + r, exp(r / 2^16) by its Taylor series and squared 16 times, then times 2^k; computed with 128 guard bits
+fn exp(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
+    if x.m.sign == bn.Sign.Zero {
+        let (o1, oe) = from_parts(a, 1i64, 0i64, prec)
+        ret (o1, oe)
+    }
+    let w = prec + 128usize
+    let (l2, e1) = ln2(a, w + 64usize)
+    if e1 != ok { ret (zero, e1) }
+    let xf = to_f64(a, x)
+    let kf = math.floor[f64](xf / 0.6931471805599453f64 + 0.5f64)
+    let k = i64(kf)
+    let (kk, e2) = from_parts(a, k, 0i64, w + 64usize)
+    if e2 != ok { ret (zero, e2) }
+    let (kl, e3) = mul(a, kk, l2, w + 64usize)
+    if e3 != ok { ret (zero, e3) }
+    let (r, e4) = sub(a, x, kl, w)
+    if e4 != ok { ret (zero, e4) }
+    let r2 = scale2(r, 0i64 - 16i64)
+    let (one, e5) = from_parts(a, 1i64, 0i64, w)
+    if e5 != ok { ret (zero, e5) }
+    var sum = one
+    var term = one
+    var i = 1i64
+    var go = r2.m.sign != bn.Sign.Zero
+    while go {
+        let (t1, e6) = mul(a, term, r2, w)
+        if e6 != ok { ret (zero, e6) }
+        let (d, e7) = from_parts(a, i, 0i64, w)
+        if e7 != ok { ret (zero, e7) }
+        let (t2, e8) = div(a, t1, d, w)
+        if e8 != ok { ret (zero, e8) }
+        term = t2
+        let (s2, e9) = add(a, sum, term, w)
+        if e9 != ok { ret (zero, e9) }
+        sum = s2
+        if term.m.sign == bn.Sign.Zero || mag_exp(term) < 0i64 - i64(w) - 8i64 { go = false }
+        i += 1i64
+    }
+    var q = 0usize
+    while q < 16usize {
+        let (s3, e10) = mul(a, sum, sum, w)
+        if e10 != ok { ret (zero, e10) }
+        sum = s3
+        q += 1usize
+    }
+    let sc = scale2(sum, k)
+    let (rt_, re_) = round_to(a, sc.m, sc.e, prec)
+    ret (rt_, re_)
+}
+
+// log(x) for x > 0 to prec bits: x = f 2^k with f in [0.75, 1.5), ln f = 2 atanh((f - 1) / (f + 1)) by its series, plus k ln 2; computed with 128 guard bits
+fn log(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
+    if x.m.sign != bn.Sign.Positive { ret (zero, bn.Invalid) }
+    let w = prec + 128usize
+    let bits = i64(bn.int_bits(x.m))
+    // x = m 2^e with m in [2^(bits-1), 2^bits): f = m / 2^bits in [0.5, 1), moved to [0.75, 1.5) by doubling when below 0.75
+    var f = Mp{ m: x.m, e: 0i64 - bits }
+    var k = x.e + bits
+    // compare 4 m with 3 2^bits
+    let (m4, e0) = shl(a, x.m, 2usize)
+    let (t3, e00) = pow2(a, usize(bits))
+    if e0 != ok || e00 != ok { ret (zero, mem.Full) }
+    let (three, e01) = bn.int_from_i64(a, 3i64)
+    if e01 != ok { ret (zero, e01) }
+    let (t3b, e02) = bn.int_mul(a, t3, three)
+    if e02 != ok { ret (zero, e02) }
+    if bn.int_cmp(m4, t3b) < 0i32 {
+        f = scale2(f, 1i64)
+        k -= 1i64
+    }
+    let (one, e1) = from_parts(a, 1i64, 0i64, w)
+    if e1 != ok { ret (zero, e1) }
+    let (fm, e2) = sub(a, f, one, w + 64usize)
+    let (fp, e3) = add(a, f, one, w + 64usize)
+    if e2 != ok || e3 != ok { ret (zero, e2) }
+    var lnf = f
+    if fm.m.sign == bn.Sign.Zero {
+        lnf = fm
+    } else {
+        let (z, e4) = div(a, fm, fp, w)
+        if e4 != ok { ret (zero, e4) }
+        let (z2, e5) = mul(a, z, z, w)
+        if e5 != ok { ret (zero, e5) }
+        var p = z
+        var sum = z
+        var j = 1i64
+        var go = true
+        while go {
+            let (p2, e6) = mul(a, p, z2, w)
+            if e6 != ok { ret (zero, e6) }
+            p = p2
+            let (d, e7) = from_parts(a, 2i64 * j + 1i64, 0i64, w)
+            if e7 != ok { ret (zero, e7) }
+            let (t, e8) = div(a, p, d, w)
+            if e8 != ok { ret (zero, e8) }
+            let (s2, e9) = add(a, sum, t, w)
+            if e9 != ok { ret (zero, e9) }
+            sum = s2
+            if t.m.sign == bn.Sign.Zero || mag_exp(t) < mag_exp(sum) - i64(w) - 5i64 { go = false }
+            j += 1i64
+        }
+        lnf = scale2(sum, 1i64)
+    }
+    var total = lnf
+    if k != 0i64 {
+        let (l2, e10) = ln2(a, w + 64usize)
+        if e10 != ok { ret (zero, e10) }
+        let (kk, e11) = from_parts(a, k, 0i64, w + 64usize)
+        if e11 != ok { ret (zero, e11) }
+        let (kl, e12) = mul(a, kk, l2, w + 64usize)
+        if e12 != ok { ret (zero, e12) }
+        let (s4, e13) = add(a, kl, lnf, w + 64usize)
+        if e13 != ok { ret (zero, e13) }
+        total = s4
+    }
+    let (rt_, re_) = round_to(a, total.m, total.e, prec)
+    ret (rt_, re_)
 }
