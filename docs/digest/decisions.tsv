@@ -3742,4 +3742,5 @@ D6879	943	glmnet: the automatic lambda sequence
 D6880	645	glmnet: observation weights
 D6881	492	glmnet: gaussian offsets
 D6882	623	glmnet: coefficient bounds
-D6883	873	glmnet: the binomial family
+D6883	874	glmnet: the binomial family
+D6884	545	glmnet: the poisson family

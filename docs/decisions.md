@@ -48002,3 +48002,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6883 — glmnet: the binomial family
 
 **Decision.** `glmnet.binomial` minimises the elastic-net penalised negative log-likelihood divided by n (y in {0, 1}) by proximal Newton: an outer reweighted step (weights p(1 - p) / n, working response eta + (y - p) / (p (1 - p)), probabilities clipped at 1e-9) and an inner cyclic coordinate descent with the intercept unpenalised. Unlike the gaussian family y is not rescaled, so the ridge part is `lambda (1 - alpha)` unscaled; standardisation (divisor n), penalty-factor rescaling and the answer on the original scale are as in `gaussian`. Equal to glmnet at thresh 1e-14 on 12 data sets over alpha, standardize and penalty factors, three lambdas each (oracle_glmnet, 1126 cases in all). Not here: the early stop, poisson, multinomial, mgaussian, cox, weights and offsets for binomial, `cv.glmnet`, `predict`. Linux pending.
+
+## D6884 — glmnet: the poisson family
+
+**Decision.** `glmnet.poisson` shares the proximal Newton of the binomial path (now `glm_path` with a family code): log link, weights mu / n, working response eta + (y - mu) / mu, intercept started at log(mean y). Equal to glmnet at thresh 1e-14 on 12 count data sets over alpha, standardize and penalty factors, three lambdas each (oracle_glmnet, 1315 cases in all). Not here: the early stop, multinomial, mgaussian, cox, weights and offsets for the glm families, `cv.glmnet`, `predict`. Linux pending.
