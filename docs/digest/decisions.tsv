@@ -3829,4 +3829,5 @@ D6966	459	L473 closed, the isotone remainder split to L520
 D6967	686	Hmisc: the S.D. of rcorr.cens
 D6968	533	Hmisc: smean.cl.boot
 D6969	961	lmerTest: the joint contest F test
-D6970	875	fda: fRegress with a scalar response
+D6970	876	fda: fRegress with a scalar response
+D6971	727	Hmisc: redun with linear terms

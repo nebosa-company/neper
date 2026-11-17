@@ -9,6 +9,7 @@
 
 use e.algo.rand.r as rng
 use e.math
+use e.algo.linalg.decomp as dc
 use e.algo.stat.hclust as hc
 use e.math.dist as dist
 use e.math.nmath_beta as nb
@@ -708,4 +709,85 @@ fn smean_cl_boot(a: *mem.Arena, r: *rng.Rng, x: []const f64, conf: f64, nboot: u
     out[1usize] = q7(z, (1.0f64 - conf) / 2.0f64)
     out[2usize] = q7(z, (1.0f64 + conf) / 2.0f64)
     ret ok
+}
+
+// redun(~ ., data, r2, nk = 0): the redundancy analysis with linear terms. Each pass regresses every remaining variable on all the other remaining ones (lm with an intercept), removes the variable with the largest R^2 when it reaches r2, and repeats on the rest;
+// order receives the removed columns (0-based) and rsq their R^2 at removal; x is n by p column-major; answers the number removed
+fn redun_linear(a: *mem.Arena, x: []const f64, n: usize, p: usize, r2: f64, order: []usize, rsq: []f64) -> usize {
+    let (alive, e1) = mem.alloc[bool](a, p)
+    let (dm, e2) = mem.alloc[f64](a, n * p)
+    if e1 != ok || e2 != ok { ret 0usize }
+    var j = 0usize
+    while j < p {
+        alive[j] = true
+        j += 1usize
+    }
+    var removed = 0usize
+    var go = true
+    while go {
+        var best = p
+        var bestr = 0.0f64
+        var left = 0usize
+        j = 0usize
+        while j < p {
+            if alive[j] { left += 1usize }
+            j += 1usize
+        }
+        if left < 2usize { break }
+        j = 0usize
+        while j < p {
+            if alive[j] {
+                let mark = mem.mark(a)
+                var cols = 1usize
+                var i = 0usize
+                while i < n {
+                    dm[i] = 1.0f64
+                    i += 1usize
+                }
+                var k = 0usize
+                while k < p {
+                    if alive[k] && k != j {
+                        i = 0usize
+                        while i < n {
+                            dm[cols * n + i] = x[k * n + i]
+                            i += 1usize
+                        }
+                        cols += 1usize
+                    }
+                    k += 1usize
+                }
+                let (f, fe) = dc.lm_fit(a, dm[0usize..cols * n], n, cols, x[j * n..j * n + n], 1.0e-7f64)
+                if fe == ok {
+                    var ym = 0.0f64
+                    i = 0usize
+                    while i < n {
+                        ym += x[j * n + i]
+                        i += 1usize
+                    }
+                    ym = ym / f64(n)
+                    var tss = 0.0f64
+                    var rss = 0.0f64
+                    i = 0usize
+                    while i < n {
+                        tss += (x[j * n + i] - ym) * (x[j * n + i] - ym)
+                        rss += f.residuals[i] * f.residuals[i]
+                        i += 1usize
+                    }
+                    let rr = 1.0f64 - rss / tss
+                    if best == p || rr > bestr {
+                        best = j
+                        bestr = rr
+                    }
+                }
+                mem.reset(a, mark)
+            }
+            j += 1usize
+        }
+        if best == p || bestr < r2 { break }
+        alive[best] = false
+        order[removed] = best
+        rsq[removed] = bestr
+        removed += 1usize
+    }
+    ret removed
 }

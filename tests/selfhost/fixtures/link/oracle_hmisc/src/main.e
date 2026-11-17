@@ -54,6 +54,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if hm.smean_cl_boot(a, &rr, x[5usize..5usize + n], x[2usize], usize(x[1usize]), o) != ok { ret nan }
         ret o[usize(x[3usize])]
     }
+    if str.eq(c.name, "red") {
+        // (n, p, r2, k, which (0 column removed at step k, 1 its R^2, 2 the number removed), X[n p])
+        let n = usize(x[0usize])
+        let p = usize(x[1usize])
+        let (od, e1) = mem.alloc[usize](a, p)
+        let (rs, e2) = mem.alloc[f64](a, p)
+        if e1 != ok || e2 != ok { ret nan }
+        let cnt = hm.redun_linear(a, x[5usize..5usize + n * p], n, p, x[2usize], od, rs)
+        let k = usize(x[3usize])
+        if x[4usize] == 2.0f64 { ret f64(cnt) }
+        if k >= cnt { ret nan }
+        if x[4usize] == 0.0f64 { ret f64(od[k]) }
+        ret rs[k]
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])

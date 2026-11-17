@@ -68,4 +68,13 @@ for (rep in 1:30) { n <- sample(5:80, 1); x <- if (rep %% 2) rnorm(n) else round
 # smean.cl.boot "scb": (seed, B, conf, which 0 mean 1 lower 2 upper, n, x[n])
 for (rep in 1:10) { n <- sample(5:40, 1); x <- rnorm(n, 3, 2); sd <- sample(1:100000, 1); B <- sample(c(100, 300, 1000), 1); cf <- sample(c(0.9, 0.95), 1)
   set.seed(sd); r <- smean.cl.boot(x, conf.int = cf, B = B); for (w in 0:2) cases[[length(cases) + 1]] <- case("scb", c(sd, B, cf, w, n, x), unname(r[w + 1]), rel = 1e-10, abs = 1e-12) }
+# redun linear "red": (n, p, r2, k, which 0 column removed at step k 1 its R^2 2 number removed, X[n p])
+for (rep in 1:12) {
+  n <- sample(40:100, 1); p <- sample(4:7, 1); X <- matrix(rnorm(n * p), n, p); X[, 2] <- X[, 1] + rnorm(n, 0, runif(1, 0.1, 0.5)); X[, 4] <- X[, 2] + X[, 3] + rnorm(n, 0, runif(1, 0.1, 0.4))
+  D <- as.data.frame(X); names(D) <- paste0("v", 1:p); r2 <- sample(c(0.7, 0.8, 0.9), 1)
+  rd <- redun(as.formula(paste("~", paste(names(D), collapse = " + "))), data = D, r2 = r2, nk = 0); out <- rd$Out; rq <- rd$rsquared
+  cases[[length(cases) + 1]] <- case("red", c(n, p, r2, 0, 2, X), length(out), rel = 0, abs = 0.5)
+  for (k in seq_along(out)) { cases[[length(cases) + 1]] <- case("red", c(n, p, r2, k - 1, 0, X), match(out[k], names(D)) - 1, rel = 0, abs = 0.5)
+    cases[[length(cases) + 1]] <- case("red", c(n, p, r2, k - 1, 1, X), unname(rq[k]), rel = 1e-8, abs = 1e-10) }
+}
 emit("hmisc", "Hmisc", list(cases))
