@@ -57,4 +57,13 @@ for (rep in 1:30) {
   if (any(!is.finite(v))) next
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 10 * dn + me, 0, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
 }
+# ls-nmf (method 6) with unit weights: the R-level Euclidean updates under the stationary stop, count within 300
+for (rep in 1:20) {
+  n <- sample(6:16, 1); p <- sample(5:10, 1); r <- sample(2:3, 1); sd <- sample(1:100000, 1)
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = "ls-nmf", seed = sd, weight = 1)), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 6, sd, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 300 else 1e-8)
+}
 emit("nmf", "NMF", list(cases))
