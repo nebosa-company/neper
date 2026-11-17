@@ -710,26 +710,7 @@ fn prop_power(n1: f64, p1: f64, n2: f64, p2: f64, alpha: f64, two_sample: bool, 
         if alt == 2usize { ret hi }
         ret lo + hi
     }
-    var power = 0.0f64
-    var tru = 0.0f64
-    if alt == 1usize {
-        var qc = nb.qbinom(ta, n, p0, true, false)
-        if nb.pbinom(qc, n, p0, true, false) > ta { qc = math.max[f64](qc - 1.0f64, 0.0f64) }
-        power = nb.pbinom(qc, n, p1, true, false)
-        tru = nb.pbinom(qc, n, p0, true, false)
-    } else if alt == 2usize {
-        var qc = nb.qbinom(1.0f64 - ta, n, p0, true, false)
-        if 1.0f64 - nb.pbinom(qc, n, p0, true, false) > ta { qc = math.min[f64](qc + 1.0f64, n) }
-        power = 1.0f64 - nb.pbinom(qc, n, p1, true, false)
-        tru = 1.0f64 - nb.pbinom(qc, n, p0, true, false)
-    } else {
-        var ql = nb.qbinom(ta, n, p0, true, false)
-        if nb.pbinom(ql, n, p0, true, false) > ta { ql = math.max[f64](ql - 1.0f64, 0.0f64) }
-        var qu = nb.qbinom(1.0f64 - ta, n, p0, true, false)
-        if 1.0f64 - nb.pbinom(qu, n, p0, true, false) > ta { qu = math.min[f64](qu + 1.0f64, n) }
-        power = nb.pbinom(ql, n, p1, true, false) + 1.0f64 - nb.pbinom(qu, n, p1, true, false)
-        tru = nb.pbinom(ql, n, p0, true, false) + 1.0f64 - nb.pbinom(qu, n, p0, true, false)
-    }
+    let (power, tru) = prop_exact(n, p1, p0, ta, alt)
     if tru > alpha { ret 0.0f64 / 0.0f64 }
     ret power
 }
@@ -849,6 +830,44 @@ fn ci_binom_n(hw: f64, p1: f64, p2: f64, conf: f64, two_sample: bool, method: us
             h = ci_binom_hw(n, x1, n, 0.0f64, conf, false, method, correct)
         }
         if h - hw <= tol_hw && ok1 { ret n }
+        n += 1.0f64
+    }
+    ret 0.0f64 / 0.0f64
+}
+
+// the exact binomial power and attained level of the one-sample test (ta the one-sided level, alt as in prop_power), by the package's critical values
+fn prop_exact(n: f64, p1: f64, p0: f64, ta: f64, alt: usize) -> (f64, f64) {
+    var power = 0.0f64
+    var tru = 0.0f64
+    if alt == 1usize {
+        var qc = nb.qbinom(ta, n, p0, true, false)
+        if nb.pbinom(qc, n, p0, true, false) > ta { qc = math.max[f64](qc - 1.0f64, 0.0f64) }
+        power = nb.pbinom(qc, n, p1, true, false)
+        tru = nb.pbinom(qc, n, p0, true, false)
+    } else if alt == 2usize {
+        var qc = nb.qbinom(1.0f64 - ta, n, p0, true, false)
+        if 1.0f64 - nb.pbinom(qc, n, p0, true, false) > ta { qc = math.min[f64](qc + 1.0f64, n) }
+        power = 1.0f64 - nb.pbinom(qc, n, p1, true, false)
+        tru = 1.0f64 - nb.pbinom(qc, n, p0, true, false)
+    } else {
+        var ql = nb.qbinom(ta, n, p0, true, false)
+        if nb.pbinom(ql, n, p0, true, false) > ta { ql = math.max[f64](ql - 1.0f64, 0.0f64) }
+        var qu = nb.qbinom(1.0f64 - ta, n, p0, true, false)
+        if 1.0f64 - nb.pbinom(qu, n, p0, true, false) > ta { qu = math.min[f64](qu + 1.0f64, n) }
+        power = nb.pbinom(ql, n, p1, true, false) + 1.0f64 - nb.pbinom(qu, n, p1, true, false)
+        tru = nb.pbinom(ql, n, p0, true, false) + 1.0f64 - nb.pbinom(qu, n, p0, true, false)
+    }
+    ret (power, tru)
+}
+
+// EnvStats::propTestN with approx = FALSE (one sample): the first n from n_min with the exact power at least `power` and the attained level within tol_alpha of alpha (the package bounds a scan by uniroot, which does not change the first such n); NaN when none by n_max
+fn prop_n_exact(p1: f64, p0: f64, alpha: f64, power: f64, alt: usize, n_min: f64, n_max: f64, tol_alpha: f64) -> f64 {
+    var ta = alpha
+    if alt == 0usize { ta = alpha / 2.0f64 }
+    var n = n_min
+    while n <= n_max {
+        let (pw, tru) = prop_exact(n, p1, p0, ta, alt)
+        if tru <= alpha && pw >= power && math.abs[f64](tru - alpha) <= tol_alpha { ret n }
         n += 1.0f64
     }
     ret 0.0f64 / 0.0f64

@@ -47518,3 +47518,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6762 — EnvStats: ciBinomN
 
 **Decision.** `ci_binom_n` is `ciBinomN`: the package finds a root of the half-width gap with `uniroot` only to bound a scan, then takes the first n from the minimum whose half width is within `tol.half.width` of the request and whose proportions, rounded to counts (`binom_count`: the nearer of floor and ceiling of n p, a tie to the one nearer 0.5), are within `tol.p.hat` of the given ones. Because that first n does not depend on the bound, the port scans upward from the minimum and skips the root finding; the second sample is `round(ratio n)`. Equal to EnvStats on 120 sizes over the four methods, one and two samples and ratios 1 to 3 (oracle_envstats, 4314 cases in all). Linux pending.
+
+## D6763 — EnvStats: exact one-sample propTestN
+
+**Decision.** `prop_n_exact` is `propTestN` with `approx = FALSE`: the first n from the minimum whose exact binomial power (`prop_exact`, the critical values of `propTestPower` split out of `prop_power`) reaches the request and whose attained level is within `tol.alpha` (a tenth of alpha) of alpha. The package finds that n through `uniroot` bounding a scan, which cannot change the first n that passes, so the port scans upward. A level above alpha makes the package's power NA, which fails the test, as here. Equal to EnvStats on 28 sizes over the three alternatives (oracle_envstats, 4342 cases in all). Linux pending.

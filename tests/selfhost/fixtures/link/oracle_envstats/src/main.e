@@ -22,6 +22,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "ptn") { ret es.prop_n(z[0usize], z[1usize], z[2usize], z[3usize], z[4usize] > 0.5f64, usize(z[5usize]), z[6usize], z[7usize] > 0.5f64, usize(z[8usize])) }
     if str.eq(c.name, "cibh") { ret es.ci_binom_hw(z[0usize], z[1usize], z[2usize], z[3usize], z[4usize], z[5usize] > 0.5f64, usize(z[6usize]), z[7usize] > 0.5f64) }
     if str.eq(c.name, "cibn") { ret es.ci_binom_n(z[0usize], z[1usize], z[2usize], z[3usize], z[4usize] > 0.5f64, usize(z[5usize]), z[6usize], z[7usize] > 0.5f64, 2.0f64, 3000.0f64, 5.0e-4f64, 5.0e-4f64) }
+    if str.eq(c.name, "ptx") { ret es.prop_n_exact(z[0usize], z[1usize], z[2usize], z[3usize], usize(z[4usize]), 2.0f64, 3000.0f64, 0.1f64 * z[2usize]) }
     if str.eq(c.name, "gof") {
         let gn = usize(z[0usize])
         let (go, ge) = mem.alloc[f64](a, 3usize)

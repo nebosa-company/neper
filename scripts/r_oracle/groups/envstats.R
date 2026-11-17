@@ -102,6 +102,15 @@ for (rep in 1:120) {
   if (is.null(r)) next
   cases[[length(cases) + 1]] <- case("cibn", c(hwv, p1, p2, cl, as.numeric(ts_), me, ra, as.numeric(cr)), if (ts_) r$n1 else r$n, rel = 0, abs = 0)
 }
+# propTestN exact, one sample ("ptx": (p1, p0, alpha, power, alt)): n
+for (rep in 1:40) {
+  al <- sample(0:2, 1); p0 <- round(runif(1, 0.2, 0.8), 2); p1 <- round(min(0.95, max(0.05, p0 + c(-0.2, 0.2)[sample(2, 1)])), 2)
+  if ((al == 2 && p1 <= p0) || (al == 1 && p1 >= p0)) next
+  a <- c(0.05, 0.1)[sample(2, 1)]; pw <- c(0.8, 0.9)[sample(2, 1)]
+  r <- tryCatch(suppressWarnings(propTestN(p1, p0, alpha = a, power = pw, sample.type = "one.sample", alternative = alts_t[al + 1], approx = FALSE, return.exact.list = FALSE, n.max = 3000)), error = function(e) NULL)
+  if (is.null(r)) next
+  cases[[length(cases) + 1]] <- case("ptx", c(p1, p0, a, pw, al), as.numeric(r), rel = 0, abs = 0)
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
