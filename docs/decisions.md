@@ -48368,3 +48368,8 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6974 — Hmisc spearman2 for a factor predictor
 
 `spearman2_factor(g, ng, y)`: p = levels - 1 and rho2 the between-group share of the y rank variance, with F and adjusted rho2 as in D6973. Equal to `Hmisc::spearman2` on a factor of 3 to 6 levels on 20 settings (oracle_hmisc). The minlev level combining and the p-value are not here. Linux pending.
+
+
+## D6975 — Hmisc bpower and bsamsize
+
+`bpower(p1, p2, n1, n2, alpha)` (two-sided power of a two-proportion comparison) and `bsamsize(p1, p2, fraction, alpha, power)` (the two group sizes), the closed forms of `Hmisc::bpower` and `Hmisc::bsamsize`. The odds-ratio and percent-reduction ways of giving p2 are a one-line caller conversion and are not here. Equal to R on 40 settings (oracle_hmisc). Linux pending.

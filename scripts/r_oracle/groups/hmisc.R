@@ -83,4 +83,8 @@ for (rep in 1:20) { n <- sample(8:80, 1); x <- if (rep %% 2) rnorm(n) else round
 # spearman2 factor "sp2f": (n, ng, which, g[n] 0-based, y[n])
 for (rep in 1:20) { ng <- sample(3:6, 1); n <- sample(ng * 4:ng * 12, 1); g <- c(0:(ng - 1), sample(0:(ng - 1), n - ng, TRUE)); y <- round(rnorm(n) + g * 0.3, 1 + rep %% 2)
   r <- spearman2(factor(g), y); for (w in 0:2) cases[[length(cases) + 1]] <- case("sp2f", c(n, ng, w, g, y), unname(r[c(1, 2, 7)[w + 1]]), rel = 1e-8, abs = 1e-10) }
+# bpower "bpw" (p1, p2, n1, n2, alpha) and bsamsize "bss" (p1, p2, fraction, alpha, power, which 0 n1 1 n2)
+for (rep in 1:40) { p1 <- runif(1, 0.05, 0.6); p2 <- min(0.95, p1 + runif(1, 0.05, 0.3)); n1 <- sample(30:300, 1); n2 <- sample(30:300, 1); al <- sample(c(0.01, 0.05, 0.1), 1); fr <- runif(1, 0.3, 0.7); pw <- sample(c(0.8, 0.9), 1)
+  cases[[length(cases) + 1]] <- case("bpw", c(p1, p2, n1, n2, al), unname(bpower(p1, p2, n1 = n1, n2 = n2, alpha = al)), rel = 1e-10, abs = 1e-12)
+  b <- bsamsize(p1, p2, fr, al, pw); for (w in 0:1) cases[[length(cases) + 1]] <- case("bss", c(p1, p2, fr, al, pw, w), unname(b[w + 1]), rel = 1e-10, abs = 1e-12) }
 emit("hmisc", "Hmisc", list(cases))

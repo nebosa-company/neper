@@ -89,6 +89,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if hm.spearman2_factor(a, gg, usize(x[1usize]), x[3usize + n..3usize + n + n], o3[0usize..3usize]) != ok { ret nan }
         ret o3[usize(x[2usize])]
     }
+    if str.eq(c.name, "bpw") {
+        // (p1, p2, n1, n2, alpha)
+        ret hm.bpower(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize])
+    }
+    if str.eq(c.name, "bss") {
+        // (p1, p2, fraction, alpha, power, which)
+        let (n1, n2) = hm.bsamsize(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize])
+        if x[5usize] == 0.0f64 { ret n1 }
+        ret n2
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])

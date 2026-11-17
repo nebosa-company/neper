@@ -905,3 +905,24 @@ fn spearman2_factor(a: *mem.Arena, g: []const usize, ng: usize, y: []const f64, 
     out[2usize] = 1.0f64 - (1.0f64 - r2) * (f64(n) - 1.0f64) / df2
     ret ok
 }
+
+// bpower(p1, p2, n1 =, n2 =, alpha): the power of the two-sided comparison of two proportions
+fn bpower(p1: f64, p2: f64, n1: f64, n2: f64, alpha: f64) -> f64 {
+    let z = qn(1.0f64 - alpha / 2.0f64)
+    let pm = (n1 * p1 + n2 * p2) / (n1 + n2)
+    let ds = z * math.sqrt[f64]((1.0f64 / n1 + 1.0f64 / n2) * pm * (1.0f64 - pm))
+    let ex = math.abs[f64](p1 - p2)
+    let sd = math.sqrt[f64](p1 * (1.0f64 - p1) / n1 + p2 * (1.0f64 - p2) / n2)
+    ret 1.0f64 - dist.pnorm((ds - ex) / sd, 0.0f64, 1.0f64, true, false) + dist.pnorm((0.0f64 - ds - ex) / sd, 0.0f64, 1.0f64, true, false)
+}
+
+// bsamsize(p1, p2, fraction, alpha, power): (n1, n2)
+fn bsamsize(p1: f64, p2: f64, fraction: f64, alpha: f64, power: f64) -> (f64, f64) {
+    let za = qn(1.0f64 - alpha / 2.0f64)
+    let zb = qn(power)
+    let ratio = (1.0f64 - fraction) / fraction
+    let p = fraction * p1 + (1.0f64 - fraction) * p2
+    let t = za * math.sqrt[f64]((ratio + 1.0f64) * p * (1.0f64 - p)) + zb * math.sqrt[f64](ratio * p1 * (1.0f64 - p1) + p2 * (1.0f64 - p2))
+    let n1 = t * t / ratio / ((p1 - p2) * (p1 - p2))
+    ret (n1, ratio * n1)
+}
