@@ -47926,3 +47926,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6864 — MASS: kde2d
 
 **Decision.** `mass.kde2d(x, y, h1, h2, n1, n2, lims)` is `kde2d`: the bivariate product normal kernel estimate on the n1 by n2 grid seq(lims) with the bandwidths divided by four (the given pair, or `bandwidth.nrd` of each variable when they are not positive), z[i + n1 j] = sum of the two normal densities of the scaled differences over (n h1 h2). Equal to MASS on 20 data sets with default and given bandwidths, every grid cell (oracle_mass, 1345 cases in all). Not here: `lqs`, `cov.rob`, the other `rlm` psi functions, `bw.ucv`/`bcv`/`SJ`, `isoMDS`, `sammon`, `mvrnorm`, `stepAIC`. Linux pending.
+
+## D6865 — MASS: rlm with the bisquare and Hampel psi functions
+
+**Decision.** `mass.rlm_psi(x, n, p, y, psi, k)` is `rlm` with the weight function chosen: 0 Huber (min(1, k / |u|)), 1 Tukey bisquare ((1 - min(1, |u| / c)^2)^2 with c = 4.685) and 2 Hampel (1 up to a = 2, a / |u| to b = 4, a (c - |u|) / (|u| (c - b)) to c = 8, then 0, |u| floored at 1e-10); `rlm_huber` is its Huber case. The same least-squares start, MAD scale and convergence rule apply. Equal to MASS on 30 contaminated regressions for each psi, coefficient by coefficient and in scale and iteration count (oracle_mass, 1725 cases in all). Not here: the MM method, `scale.est = "Huber"`, weights, `init = "lts"`, `lqs`, `cov.rob`. Linux pending.

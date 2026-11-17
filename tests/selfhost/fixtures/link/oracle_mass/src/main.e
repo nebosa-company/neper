@@ -40,8 +40,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (rc, re1) = mem.alloc[f64](a, rp)
         let (ro, re2) = mem.alloc[f64](a, 3usize)
         if re1 != ok || re2 != ok { ret 0.0f64 / 0.0f64 }
-        if ms.rlm_huber(a, x[3usize + rn..3usize + rn + rn * rp], rn, rp, x[3usize..3usize + rn], 1.345f64, rc, ro) != ok { ret 0.0f64 / 0.0f64 }
-        let w = usize(x[2usize])
+        let psi = usize(x[2usize] / 100.0f64)
+        var kk = 1.345f64
+        if psi == 1usize { kk = 4.685f64 }
+        if ms.rlm_psi(a, x[3usize + rn..3usize + rn + rn * rp], rn, rp, x[3usize..3usize + rn], psi, kk, rc, ro) != ok { ret 0.0f64 / 0.0f64 }
+        let w = usize(x[2usize]) % 100usize
         if w < rp { ret rc[w] }
         ret ro[w - rp]
     }

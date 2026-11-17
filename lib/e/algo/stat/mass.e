@@ -308,7 +308,10 @@ fn ginv(a: *mem.Arena, x: []const f64, m: usize, n: usize) -> ([]f64, err) {
 
 // rlm(y ~ x, psi = psi.huber, k = k, scale.est = "MAD", init = "ls"): iteratively reweighted least squares on the n by p column-major design x; the scale is median(|resid|) / 0.6745 each iteration, the weights min(1, k / |resid / scale|),
 // stopping when the relative change of the residuals is at most 1e-4 (at most 20 steps); coef receives the coefficients, out = (scale, iterations, converged)
-fn rlm_huber(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, k: f64, coef: []f64, out: []f64) -> err {
+fn rlm_huber(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, k: f64, coef: []f64, out: []f64) -> err { ret rlm_psi(a, x, n, p, y, 0usize, k, coef, out) }
+
+// the same for the psi function chosen: 0 Huber (tuning k), 1 Tukey bisquare (tuning c), 2 Hampel (a = 2, b = 4, c = 8)
+fn rlm_psi(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, psi: usize, k: f64, coef: []f64, out: []f64) -> err {
     let (xw, e1) = mem.alloc[f64](a, n * p)
     let (yw, e2) = mem.alloc[f64](a, n)
     let (res, e3) = mem.alloc[f64](a, n)
@@ -352,7 +355,17 @@ fn rlm_huber(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
             while i < n {
                 let u = math.abs[f64](res[i] / scale)
                 var w = 1.0f64
-                if u > k { w = k / u }
+                if psi == 0usize {
+                    if u > k { w = k / u }
+                } else if psi == 1usize {
+                    var r = u / k
+                    if r > 1.0f64 { r = 1.0f64 }
+                    w = (1.0f64 - r * r) * (1.0f64 - r * r)
+                } else {
+                    var uu = u
+                    if uu < 1.0e-10f64 { uu = 1.0e-10f64 }
+                    if uu <= 2.0f64 { w = 1.0f64 } else if uu <= 4.0f64 { w = 2.0f64 / uu } else if uu <= 8.0f64 { w = 2.0f64 * (8.0f64 - uu) / (uu * 4.0f64) } else { w = 0.0f64 }
+                }
                 let sw = math.sqrt[f64](w)
                 yw[i] = y[i] * sw
                 j = 0usize

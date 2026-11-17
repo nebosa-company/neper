@@ -34,6 +34,8 @@ for (rep in 1:30) {
   n <- sample(15:60, 1); p <- sample(2:4, 1); X <- cbind(1, matrix(rnorm(n * (p - 1)), n, p - 1)); y <- as.vector(X %*% rnorm(p)) + rnorm(n) + ifelse(runif(n) < 0.1, rnorm(n, 0, 6), 0)
   d <- data.frame(y = y, X[, -1, drop = FALSE]); fit <- rlm(y ~ ., d); st <- c(coef(fit), fit$s, length(fit$conv), as.numeric(fit$converged))
   for (j in seq_along(st)) add("rlm", c(n, p, j - 1, y, X), st[j])
+  for (ps in 1:2) { f2 <- tryCatch(suppressWarnings(rlm(y ~ ., d, psi = if (ps == 1) psi.bisquare else psi.hampel)), error = function(e) NULL); if (is.null(f2)) next
+    st2 <- c(coef(f2), f2$s, length(f2$conv), as.numeric(f2$converged)); for (j in seq_along(st2)) add("rlm", c(n, p, 100 * ps + j - 1, y, X), st2[j]) }
 }
 # kde2d: "kde2d" (n, n1, n2, h1, h2 (0 = default), lims[4], index (column-major z cell), x[n], y[n])
 for (rep in 1:20) {
