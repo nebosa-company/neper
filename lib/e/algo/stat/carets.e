@@ -408,3 +408,96 @@ fn pre_process_range(x: []const f64, n: usize, p: usize, lo: f64, hi: f64, out: 
         c += 1usize
     }
 }
+
+// confusionMatrix of a k-class table (rows the prediction, columns the reference; x[col * k + row]): out[0..7] are Accuracy, Kappa, AccuracyLower, AccuracyUpper, AccuracyNull, AccuracyPValue, McnemarPValue (Bowker's test),
+// then for each class eleven values: Sensitivity, Specificity, Pos Pred Value, Neg Pred Value, Precision, Recall, F1, Prevalence, Detection Rate, Detection Prevalence, Balanced Accuracy
+fn confusion_multi(x: []const f64, k: usize, out: []f64) {
+    var n = 0.0f64
+    var diag = 0.0f64
+    var i = 0usize
+    while i < k * k {
+        n += x[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        diag += x[i * k + i]
+        i += 1usize
+    }
+    var pe = 0.0f64
+    var big = 0.0f64
+    i = 0usize
+    while i < k {
+        var rs = 0.0f64
+        var cs = 0.0f64
+        var j = 0usize
+        while j < k {
+            rs += x[j * k + i]
+            cs += x[i * k + j]
+            j += 1usize
+        }
+        pe += rs * cs / (n * n)
+        if cs > big { big = cs }
+        i += 1usize
+    }
+    let po = diag / n
+    out[0usize] = po
+    out[1usize] = (po - pe) / (1.0f64 - pe)
+    if diag == 0.0f64 { out[2usize] = 0.0f64 } else { out[2usize] = nb.qbeta(0.025f64, diag, n - diag + 1.0f64, true, false) }
+    if diag == n { out[3usize] = 1.0f64 } else { out[3usize] = nb.qbeta(0.975f64, diag + 1.0f64, n - diag, true, false) }
+    out[4usize] = big / n
+    out[5usize] = nb.pbinom(diag - 1.0f64, n, big / n, false, false)
+    var st = 0.0f64
+    i = 0usize
+    while i < k {
+        var j = i + 1usize
+        while j < k {
+            let u = x[j * k + i]
+            let l = x[i * k + j]
+            st += (u - l) * (u - l) / (u + l)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    out[6usize] = nm.pchisq(st, f64(k * (k - 1usize) / 2usize), false, false)
+    var c = 0usize
+    while c < k {
+        let tp = x[c * k + c]
+        var rowp = 0.0f64
+        var colp = 0.0f64
+        var tn = 0.0f64
+        var negref = 0.0f64
+        i = 0usize
+        while i < k {
+            rowp += x[i * k + c]
+            colp += x[c * k + i]
+            if i != c {
+                var j = 0usize
+                while j < k {
+                    if j != c { tn += x[j * k + i] }
+                    j += 1usize
+                }
+            }
+            i += 1usize
+        }
+        negref = n - colp
+        let sens = tp / colp
+        let spec = tn / negref
+        let ppv = tp / rowp
+        let rest = n - rowp
+        let npv = tn / rest
+        let o = 7usize + c * 11usize
+        out[o] = sens
+        out[o + 1usize] = spec
+        out[o + 2usize] = ppv
+        out[o + 3usize] = npv
+        out[o + 4usize] = ppv
+        out[o + 5usize] = sens
+        out[o + 6usize] = 2.0f64 * ppv * sens / (ppv + sens)
+        out[o + 7usize] = colp / n
+        out[o + 8usize] = tp / n
+        out[o + 9usize] = rowp / n
+        out[o + 10usize] = (sens + spec) / 2.0f64
+        c += 1usize
+    }
+}

@@ -3673,4 +3673,5 @@ D6810	698	ResourceSelection: wrsi and CAIC
 D6811	705	statmod: qinvgauss
 D6812	972	caret: createResample, createFolds, groupKFold, createTimeSlices
 D6813	724	caret: createDataPartition
-D6814	700	caret: preProcess center, scale and range
+D6814	701	caret: preProcess center, scale and range
+D6815	924	caret: multi-class confusionMatrix

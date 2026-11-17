@@ -89,6 +89,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "cmk") {
+        let k = usize(z[1usize])
+        let (o, e) = mem.alloc[f64](a, 7usize + 11usize * k)
+        if e != ok { ret nan }
+        ct.confusion_multi(z[2usize..2usize + k * k], k, o)
+        ret o[usize(z[0usize])]
+    }
     if str.eq(c.name, "ts") {
         let (o, e) = mem.alloc[i64](a, 400usize)
         if e != ok { ret nan }

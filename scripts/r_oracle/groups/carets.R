@@ -51,4 +51,12 @@ for (rep in 1:25) {
     add("pp", c(mode, lo, hi, n, p, X), sum(outer(seq_len(n), seq_len(p), "*") * Y), 1e-10)
   }
 }
+# multi-class confusionMatrix: "cmk" (id, k, table column-major rows = prediction) id 0..6 overall, 7 + 11 * class + j the byClass columns
+for (rep in 1:25) {
+  k <- sample(3:5, 1); n <- sample(60:300, 1); ref <- sample(k, n, TRUE, prob = runif(k)); pr <- ifelse(runif(n) < 0.45, ref, sample(k, n, TRUE))
+  tb <- table(Prediction = factor(pr, 1:k), Reference = factor(ref, 1:k)); if (any(tb == 0) || any(colSums(tb) == 0) || any(rowSums(tb) == 0)) next
+  cm <- confusionMatrix(tb); ov <- as.numeric(cm$overall); bc <- as.numeric(t(cm$byClass))
+  for (j in 1:7) add("cmk", c(j - 1, k, tb), ov[j], 1e-8)
+  for (j in seq_along(bc)) add("cmk", c(7 + j - 1, k, tb), bc[j], 1e-8)
+}
 emit("carets", "caret", list(cases))
