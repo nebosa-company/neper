@@ -63,4 +63,20 @@ for (rep in 1:30) {
   st <- statsNA(x, print_only = FALSE); v <- c(st$length_series, st$number_NAs, st$number_na_gaps, st$average_size_na_gaps, as.numeric(sub("%", "", st$percentage_NAs)) , st$longest_na_gap, st$most_frequent_na_gap, st$most_weighty_na_gap)
   for (w in 0:7) if (w != 4) add("stats", c(w, 0, n, enc(x)), v[w + 1])
 }
+# na_kalman with a user state-space model "kal" (smooth 1 or 0, index, n, series..., p, nit, h, T, Z, V, a, P, Pn; matrices row-major)
+encmod <- function(mod, nit) c(length(mod$a), nit, mod$h, as.vector(t(mod$T)), mod$Z, as.vector(t(mod$V)), mod$a, as.vector(t(mod$P)), as.vector(t(mod$Pn)))
+for (rep in 1:40) {
+  p <- sample(1:3, 1); n <- sample(12:30, 1)
+  Tm <- matrix(round(runif(p * p, -0.7, 0.7), 2), p, p); if (p > 1) Tm <- Tm + diag(0.3, p)
+  Lm <- matrix(round(runif(p * p, -1, 1), 2), p, p); Vm <- Lm %*% t(Lm) + diag(0.05, p)
+  P0 <- crossprod(matrix(round(runif(p * p, -1, 1), 2), p, p)) + diag(0.2, p); Pn0 <- P0 * 1.5
+  mod <- list(T = Tm, Z = round(runif(p, 0.3, 1.5), 2), h = round(runif(1, 0.1, 1), 2), V = Vm, a = round(runif(p, -1, 1), 2), P = P0, Pn = Pn0)
+  x <- round(cumsum(rnorm(n)) + 5, 2); na <- sample(n, sample(2:6, 1)); if (rep %% 4 == 0) na <- c(na, 1, n); x[na] <- NA
+  nit <- c(-1, 0, 2)[rep %% 3 + 1]
+  for (sm in c(TRUE, FALSE)) {
+    r <- tryCatch(na_kalman(x, model = mod, smooth = sm, nit = nit), error = function(e) NULL)
+    if (is.null(r)) next
+    for (k in seq_len(n)) add("kal", c(as.numeric(sm), k - 1, n, enc(x), encmod(mod, nit)), r[k])
+  }
+}
 emit("imputets", "imputeTS", list(cases))

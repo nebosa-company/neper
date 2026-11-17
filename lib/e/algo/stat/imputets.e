@@ -10,6 +10,7 @@ use e.mem
 use e.algo.stat.zoo as zoo
 use e.algo.stat.stlpkg as stl
 use e.algo.rand.r as rng
+use e.algo.stat.kalman as kal
 
 fn is_nan(x: f64) -> bool { ret x != x }
 
@@ -574,4 +575,43 @@ fn stats_na(a: *mem.Arena, x: []const f64, out: []f64) -> err {
     out[6usize] = f64(common)
     out[7usize] = f64(wcommon)
     ret ok
+}
+
+// na_kalman for a state-space model: smooth = KalmanSmooth, otherwise the filtered states of KalmanRun; a missing value
+// becomes the state estimate times Z. The model is not changed.
+fn na_kalman_model(a: *mem.Arena, x: []const f64, m: *const kal.SsModel, smooth: bool, nit: i64) -> ([]f64, err) {
+    let n = x.len
+    let p = m.p
+    let (o, e) = mem.alloc[f64](a, n)
+    if e != ok { ret (o, e) }
+    var erg: []f64 = zero
+    if smooth {
+        let (sm, se) = kal.kalman_smooth(a, m, x, nit)
+        if se != ok { ret (o, se) }
+        erg = sm
+    } else {
+        let (mc, ce) = kal.ss_copy(a, m)
+        if ce != ok { ret (o, ce) }
+        var mw = mc
+        let (st, ste) = mem.alloc[f64](a, n * p)
+        if ste != ok { ret (o, ste) }
+        let (q1, q2, q3, fe) = kal.kalman_filter(a, &mw, x, nit, st, zero)
+        if fe != ok { ret (o, fe) }
+        erg = st
+    }
+    var i = 0usize
+    while i < n {
+        o[i] = x[i]
+        if is_nan(x[i]) {
+            var s = 0.0f64
+            var j = 0usize
+            while j < p {
+                s += erg[i * p + j] * m.zv[j]
+                j += 1usize
+            }
+            o[i] = s
+        }
+        i += 1usize
+    }
+    ret (o, ok)
 }
