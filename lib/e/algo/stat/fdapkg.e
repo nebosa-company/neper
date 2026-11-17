@@ -566,3 +566,81 @@ fn eval_fd_bspline(a: *mem.Arena, norder: usize, breaks: []const f64, coefs: []c
     }
     ret s
 }
+
+// fRegress(y, list(const, xfd), list(const, fdPar(basis, 2, lambda))) for a scalar response and one functional covariate whose curves and coefficient function share a B-spline basis: Z = [1, x_i' J] with J the numerical inprod matrix of the basis,
+// the penalised normal equations (Z' Z + diag(0, lambda R)) c = Z' y with R the second-derivative penalty; out receives the intercept then the nbasis coefficients of the regression function (xcoefs is nbasis by nobs, column-major)
+fn fregress_scalar(a: *mem.Arena, norder: usize, breaks: []const f64, xcoefs: []const f64, nobs: usize, y: []const f64, lambda: f64, out: []f64) -> err {
+    let nb = breaks.len + norder - 2usize
+    let np = nb + 1usize
+    let (jm, e1) = mem.alloc[f64](a, nb * nb)
+    let (rm, e2) = mem.alloc[f64](a, nb * nb)
+    let (z, e3) = mem.alloc[f64](a, nobs * np)
+    let (lhs, e4) = mem.alloc[f64](a, np * np)
+    let (rhs, e5) = mem.alloc[f64](a, np)
+    let (u, e6) = mem.alloc[f64](a, np * np)
+    let (iu, e7) = mem.alloc[f64](a, np * np)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret mem.Full }
+    var e = inprod_romberg(a, norder, breaks, jm)
+    if e != ok { ret e }
+    e = penalty_matrix(a, norder, breaks, 2usize, rm)
+    if e != ok { ret e }
+    var i = 0usize
+    while i < nobs {
+        z[i] = 1.0f64
+        var k = 0usize
+        while k < nb {
+            var s = 0.0f64
+            var j = 0usize
+            while j < nb {
+                s += xcoefs[i * nb + j] * jm[k * nb + j]
+                j += 1usize
+            }
+            z[(k + 1usize) * nobs + i] = s
+            k += 1usize
+        }
+        i += 1usize
+    }
+    var p1 = 0usize
+    while p1 < np {
+        var p2 = 0usize
+        while p2 < np {
+            var s = 0.0f64
+            i = 0usize
+            while i < nobs {
+                s += z[p1 * nobs + i] * z[p2 * nobs + i]
+                i += 1usize
+            }
+            if p1 > 0usize && p2 > 0usize { s += lambda * rm[(p2 - 1usize) * nb + (p1 - 1usize)] }
+            lhs[p2 * np + p1] = s
+            p2 += 1usize
+        }
+        var sy = 0.0f64
+        i = 0usize
+        while i < nobs {
+            sy += z[p1 * nobs + i] * y[i]
+            i += 1usize
+        }
+        rhs[p1] = sy
+        p1 += 1usize
+    }
+    if !bz.chol_upper(lhs, np, u) { ret mem.Full }
+    bz.inv_upper(u, np, iu)
+    p1 = 0usize
+    while p1 < np {
+        var s = 0.0f64
+        var p2 = 0usize
+        while p2 < np {
+            var inv = 0.0f64
+            var q = 0usize
+            while q < np {
+                inv += iu[q * np + p1] * iu[q * np + p2]
+                q += 1usize
+            }
+            s += inv * rhs[p2]
+            p2 += 1usize
+        }
+        out[p1] = s
+        p1 += 1usize
+    }
+    ret ok
+}

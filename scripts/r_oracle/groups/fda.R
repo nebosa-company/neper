@@ -44,4 +44,12 @@ for (rep in 1:25) {
   nbr <- sample(3:8, 1); br <- sort(c(0, 1, runif(nbr - 2))); no <- sample(3:6, 1); basis <- create.bspline.basis(c(0, 1), norder = no, breaks = br); cf <- rnorm(basis$nbasis); fdo <- fd(cf, basis); nd <- min(sample(0:2, 1), no - 1)
   for (x in c(runif(4), 1)) cases[[length(cases) + 1]] <- case("e", c(no, length(br), nd, x, br, cf), as.numeric(eval.fd(x, fdo, nd)), rel = 1e-9, abs = 1e-10)
 }
+# fRegress with a scalar response and one functional covariate "r": (norder, nb, N, lambda, index, breaks, xcoefs, y)
+for (rep in 1:10) {
+  nbr <- sample(3:6, 1); br <- sort(c(0, 1, runif(nbr - 2))); no <- sample(4:5, 1); basis <- create.bspline.basis(c(0, 1), norder = no, breaks = br); nbs <- basis$nbasis
+  N <- sample(20:50, 1); xc <- matrix(rnorm(nbs * N), nbs, N); y <- rnorm(N); lam <- 10^sample(-4:0, 1)
+  fr <- fRegress(y, list(const = rep(1, N), x = fd(xc, basis)), list(const = fdPar(create.constant.basis(c(0, 1))), x = fdPar(basis, 2, lam)))
+  cf <- c(as.vector(fr$betaestlist[[1]]$fd$coefs), as.vector(fr$betaestlist[[2]]$fd$coefs))
+  for (q in seq_along(cf)) cases[[length(cases) + 1]] <- case("r", c(no, length(br), N, lam, q - 1, br, xc, y), cf[q], rel = 1e-6, abs = 1e-9)
+}
 emit("fda", "fda", list(cases))

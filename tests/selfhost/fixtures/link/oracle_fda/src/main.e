@@ -19,6 +19,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     let norder = usize(z[0usize])
     let nb = usize(z[1usize])
+    if c.name[0usize] == 114u8 {
+        // r (fRegress, scalar response): (norder, nb, N, lambda, index, breaks[nb], xcoefs[nbasis N], y[N]); index 0 the intercept, k the k-th coefficient of the regression function
+        let nbas = nb + norder - 2usize
+        let nobs = usize(z[2usize])
+        let (ro, re) = mem.alloc[f64](a, nbas + 1usize)
+        if re != ok { ret nan }
+        if fa.fregress_scalar(a, norder, z[5usize..5usize + nb], z[5usize + nb..5usize + nb + nbas * nobs], nobs, z[5usize + nb + nbas * nobs..5usize + nb + nbas * nobs + nobs], z[3usize], ro) != ok { ret nan }
+        ret ro[usize(z[4usize])]
+    }
     if c.name[0usize] == 101u8 {
         // e (eval.fd): (norder, nb, deriv, x, breaks[nb], coefs[nbasis])
         ret fa.eval_fd_bspline(a, norder, z[4usize..4usize + nb], z[4usize + nb..4usize + nb + nb + norder - 2usize], z[3usize], usize(z[2usize]))
