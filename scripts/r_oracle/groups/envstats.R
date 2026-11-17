@@ -94,6 +94,14 @@ for (rep in 1:200) {
   v <- tryCatch(suppressWarnings(if (ts_) ciBinomHalfWidth(n1, x1 / n1, n2 = n2, p2.hat = x2 / n2, conf.level = cl, sample.type = "two.sample", ci.method = mnames[me + 1], correct = cr)$half.width else ciBinomHalfWidth(n1, x1 / n1, conf.level = cl, sample.type = "one.sample", ci.method = mnames[me + 1], correct = cr)$half.width), error = function(e) NA)
   if (is.finite(v)) cases[[length(cases) + 1]] <- case("cibh", c(n1, x1, n2, x2, cl, as.numeric(ts_), me, as.numeric(cr)), v, rel = 1e-8, abs = 1e-11)
 }
+# ciBinomN ("cibn": (half.width, p1, p2, conf.level, two.sample, method, ratio, correct)): the first sample's size
+for (rep in 1:120) {
+  ts_ <- rep %% 2 == 0; me <- sample(0:3, 1); if (ts_ && me == 1) me <- 0; cr <- rep %% 3 != 0
+  p1 <- round(runif(1, 0.25, 0.75), 2); p2 <- round(runif(1, 0.2, 0.7), 2); hwv <- c(0.05, 0.08, 0.12)[sample(3, 1)]; cl <- c(0.9, 0.95)[sample(2, 1)]; ra <- if (ts_) sample(1:3, 1) else 1
+  r <- tryCatch(suppressWarnings(if (ts_) ciBinomN(hwv, p1, p2.hat = p2, conf.level = cl, sample.type = "two.sample", ratio = ra, ci.method = mnames[me + 1], correct = cr, n.or.n1.max = 3000) else ciBinomN(hwv, p1, conf.level = cl, sample.type = "one.sample", ci.method = mnames[me + 1], correct = cr, n.or.n1.max = 3000)), error = function(e) NULL)
+  if (is.null(r)) next
+  cases[[length(cases) + 1]] <- case("cibn", c(hwv, p1, p2, cl, as.numeric(ts_), me, ra, as.numeric(cr)), if (ts_) r$n1 else r$n, rel = 0, abs = 0)
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]

@@ -819,3 +819,37 @@ fn ci_binom_hw(n1: f64, x1: f64, n2: f64, x2: f64, conf: f64, two_sample: bool, 
     if correct { cf = 0.5f64 * (1.0f64 / n1 + 1.0f64 / n2) }
     ret z * math.sqrt[f64](p1 * (1.0f64 - p1) / n1 + p2 * (1.0f64 - p2) / n2) + cf
 }
+
+// EnvStats' rounding of a proportion to a count of n: the nearer of floor and ceiling of n p, a tie going to the one nearer 0.5
+fn binom_count(n: f64, p: f64) -> f64 {
+    let hi = math.ceil[f64](n * p) / n
+    let lo = math.floor[f64](n * p) / n
+    if hi == lo { ret math.round[f64](n * p) }
+    let dh = hi - p
+    let dl = p - lo
+    var high = dh < dl
+    if math.abs[f64](dh - dl) <= 2.220446049250313e-16f64 { high = math.abs[f64](hi - 0.5f64) <= math.abs[f64](lo - 0.5f64) }
+    if high { ret math.round[f64](n * hi) }
+    ret math.round[f64](n * lo)
+}
+
+// EnvStats::ciBinomN (the first sample's size): the smallest n from n_min on whose half width is within tol_hw of the request and whose rounded proportions are within tol_p of the given ones, NaN when none up to n_max
+fn ci_binom_n(hw: f64, p1: f64, p2: f64, conf: f64, two_sample: bool, method: usize, ratio: f64, correct: bool, n_min: f64, n_max: f64, tol_hw: f64, tol_p: f64) -> f64 {
+    var n = n_min
+    while n <= n_max {
+        let x1 = binom_count(n, p1)
+        var h = 0.0f64
+        var ok1 = math.abs[f64](p1 - x1 / n) <= tol_p
+        if two_sample {
+            let m2 = math.round[f64](n * ratio)
+            let x2 = binom_count(m2, p2)
+            ok1 = ok1 && math.abs[f64](p2 - x2 / m2) <= tol_p
+            h = ci_binom_hw(n, x1, m2, x2, conf, true, method, correct)
+        } else {
+            h = ci_binom_hw(n, x1, n, 0.0f64, conf, false, method, correct)
+        }
+        if h - hw <= tol_hw && ok1 { ret n }
+        n += 1.0f64
+    }
+    ret 0.0f64 / 0.0f64
+}

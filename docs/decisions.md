@@ -47514,3 +47514,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6761 — EnvStats: ciBinomHalfWidth
 
 **Decision.** `ci_binom_hw` is `ciBinomHalfWidth` for one sample (score: `prop.test`'s Wilson interval with the continuity correction `min(0.5, |x - n/2|)`, exact: Clopper-Pearson from `qbeta`, adjusted Wald: the Wald interval on `x + z^2/2` of `n + z^2` clipped to [0, 1], Wald: the direct `z s + 0.5/n`) and for two samples (score: `prop.test`'s difference interval clipped to [-1, 1], adjusted Wald with `z^2/4` added to each count, Wald with the correction `0.5 (1/n1 + 1/n2)`). The proportion is given as the count the package rounds it to. Equal to EnvStats on 200 half widths (oracle_envstats, 4194 cases in all). Not here: `ciBinomN`. Linux pending.
+
+## D6762 — EnvStats: ciBinomN
+
+**Decision.** `ci_binom_n` is `ciBinomN`: the package finds a root of the half-width gap with `uniroot` only to bound a scan, then takes the first n from the minimum whose half width is within `tol.half.width` of the request and whose proportions, rounded to counts (`binom_count`: the nearer of floor and ceiling of n p, a tie to the one nearer 0.5), are within `tol.p.hat` of the given ones. Because that first n does not depend on the bound, the port scans upward from the minimum and skips the root finding; the second sample is `round(ratio n)`. Equal to EnvStats on 120 sizes over the four methods, one and two samples and ratios 1 to 3 (oracle_envstats, 4314 cases in all). Linux pending.
