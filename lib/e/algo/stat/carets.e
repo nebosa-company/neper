@@ -733,3 +733,10 @@ fn pre_process_pca(a: *mem.Arena, x: []const f64, n: usize, p: usize, thresh: f6
     }
     ret k
 }
+
+// confusionMatrix(prevalence = prev): the predictive values re-derived from the sensitivity and specificity at the given prevalence (Bayes' rule); the other statistics, the precision and the F1 keep their observed values. out = (ppv, npv, prevalence)
+fn with_prevalence(sens: f64, spec: f64, prev: f64, out: []f64) {
+    out[0usize] = sens * prev / (sens * prev + (1.0f64 - spec) * (1.0f64 - prev))
+    out[1usize] = spec * (1.0f64 - prev) / ((1.0f64 - sens) * prev + spec * (1.0f64 - prev))
+    out[2usize] = prev
+}

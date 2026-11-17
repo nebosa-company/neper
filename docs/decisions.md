@@ -48314,3 +48314,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6961 — L327 closed, the tweedie package's high powers split to L518
 
 **Decision.** L327 asked for statmod plus the tweedie package's density, distribution, quantile and generator functions, which belong to two packages. Everything statmod contains is equal to R, and the tweedie functions are equal for 1 < power < 2 (the compound Poisson-gamma family) with the saddlepoint density for every power. The Fourier-inversion series for powers above 2 is a separate piece of work with its own tolerances, so it becomes L518 and L327 leaves the queue. Linux pending.
+
+## D6962 — caret: the prevalence argument
+
+**Decision.** `carets.with_prevalence` re-derives the predictive values of `confusionMatrix(prevalence = prev)` from the sensitivity and specificity by Bayes' rule, PPV = sens prev / (sens prev + (1 - spec)(1 - prev)) and NPV = spec (1 - prev) / ((1 - sens) prev + spec (1 - prev)); the reported prevalence is the argument, while the precision, F1 and detection rate keep their observed values. Equal to caret on 30 random two-class tables and prevalences (PPV, NPV, prevalence, F1 and detection rate; oracle_carets, 2247 cases in all). Linux pending.

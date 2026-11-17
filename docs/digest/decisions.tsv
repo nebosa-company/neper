@@ -3820,4 +3820,5 @@ D6957	816	statmod: the Tweedie family object
 D6958	891	tweedie: density and distribution function for 1 < p < 2
 D6959	698	tweedie: rtweedie for 1 < p < 2
 D6960	952	tweedie: qtweedie and the saddlepoint density
-D6961	567	L327 closed, the tweedie package's high powers split to L518
+D6961	568	L327 closed, the tweedie package's high powers split to L518
+D6962	597	caret: the prevalence argument

@@ -14,6 +14,13 @@ for (rep in 1:40) {
             b[["Sensitivity"]], b[["Specificity"]], b[["Pos Pred Value"]], b[["Neg Pred Value"]], b[["F1"]], b[["Prevalence"]], b[["Detection Rate"]], b[["Detection Prevalence"]], b[["Balanced Accuracy"]])
   for (k in seq_along(vals)) add("cm", c(k - 1, tp, fp, fn, tn), vals[k], if (k == 6) 1e-6 else 1e-8)
 }
+# the prevalence argument "cmv": (which 0 ppv 1 npv 2 prevalence 3 f1 4 detection rate, TP, FP, FN, TN, prevalence)
+for (rep in 1:30) {
+  tp <- sample(5:150, 1); fp <- sample(1:80, 1); fn <- sample(1:80, 1); tn <- sample(5:150, 1); pv <- runif(1, 0.05, 0.6)
+  tb <- matrix(c(tp, fn, fp, tn), 2, dimnames = list(Prediction = c("a", "b"), Reference = c("a", "b"))); cm <- confusionMatrix(as.table(tb), prevalence = pv); b <- cm$byClass
+  vals <- c(b[["Pos Pred Value"]], b[["Neg Pred Value"]], b[["Prevalence"]], b[["F1"]], b[["Detection Rate"]])
+  for (k in 1:5) add("cmv", c(k - 1, tp, fp, fn, tn, pv), vals[k], 1e-8)
+}
 for (rep in 1:20) {
   n <- sample(5:60, 1); obs <- rnorm(n, 5, 2); pred <- obs + rnorm(n, 0.2, 1)
   r <- postResample(pred, obs)

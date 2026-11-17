@@ -49,6 +49,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "cmv") {
+        // (which 0 ppv 1 npv 2 prevalence 3 f1 4 detection rate, TP, FP, FN, TN, prevalence)
+        let tp = z[1usize]
+        let fp = z[2usize]
+        let fnn = z[3usize]
+        let tn = z[4usize]
+        let (po, pe) = mem.alloc[f64](a, 3usize)
+        if pe != ok { ret nan }
+        ct.with_prevalence(tp / (tp + fnn), tn / (fp + tn), z[5usize], po)
+        let w = usize(z[0usize])
+        if w < 3usize { ret po[w] }
+        let cc = ct.confusion2(tp, fp, fnn, tn, 0.95f64)
+        if w == 3usize { ret cc.f1 }
+        ret cc.detection_rate
+    }
     if str.eq(c.name, "mf") {
         // createMultiFolds(factor(y), k, times): (seed, k, n, times, class codes 1..), the fold assignments of the repetitions drawn one after another, answered as sum over reps of rep * sum(position * fold)
         var r: rng.Rng = zero
