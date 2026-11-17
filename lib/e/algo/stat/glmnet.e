@@ -616,6 +616,107 @@ fn cv_binomial(a: *mem.Arena, measure: usize, x: []const f64, y: []const f64, n:
     ret ok
 }
 
+// cv.glmnet for the poisson family with user fold ids; measure 0 deviance 2 (y log y - y - (y eta - exp(eta))), 2 mse and 3 mae on the response scale exp(eta)
+fn cv_poisson(a: *mem.Arena, measure: usize, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, cvm: []f64, cvsd: []f64) -> err {
+    let nl = lambdas.len
+    let (xt, e1) = mem.alloc[f64](a, n * p)
+    let (yt, e2) = mem.alloc[f64](a, n)
+    let (coef, e3) = mem.alloc[f64](a, nl * (p + 1usize))
+    let (cvf, e4) = mem.alloc[f64](a, nl * nfolds)
+    let (nfv, e5) = mem.alloc[f64](a, nfolds)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
+    var f = 0usize
+    while f < nfolds {
+        var m = 0usize
+        var i = 0usize
+        while i < n {
+            if foldid[i] != f {
+                var j = 0usize
+                while j < p {
+                    xt[j * n + m] = x[j * n + i]
+                    j += 1usize
+                }
+                yt[m] = y[i]
+                m += 1usize
+            }
+            i += 1usize
+        }
+        // column-major with leading dimension m: repack
+        var j = 0usize
+        while j < p {
+            var q = 0usize
+            while q < m {
+                xt[j * m + q] = xt[j * n + q]
+                q += 1usize
+            }
+            j += 1usize
+        }
+        let none: []const f64 = zero
+        let mark = mem.mark(a)
+        let ge = glm_path(a, 1usize, xt[0usize..m * p], yt[0usize..m], none, none, m, p, alpha, standardize, vf, lambdas, coef)
+        if ge != ok { ret ge }
+        var cnt = 0.0f64
+        var k = 0usize
+        while k < nl {
+            cvf[k * nfolds + f] = 0.0f64
+            k += 1usize
+        }
+        i = 0usize
+        while i < n {
+            if foldid[i] == f {
+                cnt += 1.0f64
+                k = 0usize
+                while k < nl {
+                    var pr = coef[k * (p + 1usize)]
+                    j = 0usize
+                    while j < p {
+                        pr += x[j * n + i] * coef[k * (p + 1usize) + 1usize + j]
+                        j += 1usize
+                    }
+                    let mu = math.exp[f64](pr)
+                    if measure == 0usize {
+                        var devy = 0.0f64
+                        if y[i] > 0.0f64 { devy = y[i] * math.log[f64](y[i]) - y[i] }
+                        cvf[k * nfolds + f] += 2.0f64 * (devy - (y[i] * pr - mu))
+                    }
+                    if measure == 2usize { cvf[k * nfolds + f] += (y[i] - mu) * (y[i] - mu) }
+                    if measure == 3usize { cvf[k * nfolds + f] += math.abs[f64](y[i] - mu) }
+                    k += 1usize
+                }
+            }
+            i += 1usize
+        }
+        nfv[f] = cnt
+        k = 0usize
+        while k < nl {
+            cvf[k * nfolds + f] = cvf[k * nfolds + f] / cnt
+            k += 1usize
+        }
+        mem.reset(a, mark)
+        f += 1usize
+    }
+    var k = 0usize
+    while k < nl {
+        var mn = 0.0f64
+        f = 0usize
+        while f < nfolds {
+            mn += nfv[f] * cvf[k * nfolds + f]
+            f += 1usize
+        }
+        mn = mn / f64(n)
+        var vr = 0.0f64
+        f = 0usize
+        while f < nfolds {
+            vr += nfv[f] * (cvf[k * nfolds + f] - mn) * (cvf[k * nfolds + f] - mn)
+            f += 1usize
+        }
+        cvm[k] = mn
+        cvsd[k] = math.sqrt[f64](vr / f64(n) / f64(nfolds - 1usize))
+        k += 1usize
+    }
+    ret ok
+}
+
 // lambda.min (the largest lambda whose cvm equals the smallest) and lambda.1se (the largest lambda whose cvm is within one cvsd of that smallest) of cv.glmnet; out = (lambda.min, lambda.1se)
 fn cv_select(lambdas: []const f64, cvm: []const f64, cvsd: []const f64, out: []f64) {
     var best = cvm[0usize]
