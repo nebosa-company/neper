@@ -1188,3 +1188,1068 @@ fn entropy(a: *mem.Arena, x0: []const f64) -> f64 {
     }
     ret math.min[f64](1.0f64, h)
 }
+
+// ---- tseries::garch: Gay's SUMSL (ACM TOMS 611, dsumsl.f of tseries) quasi-Newton with the double-dogleg trust region and the BFGS secant update of the Cholesky factor, used by garch() with its analytical gradient. The reverse-communication driver is flattened into direct calls; v and iv are the 1-based work arrays (element 0 unused). Messages (ditsum) and the parameter checks (dparck) are left out: the defaults of ddeflt/dvdflt are always in range here.
+
+const SV_DGNORM: usize = 1usize
+const SV_DSTNRM: usize = 2usize
+const SV_DST0: usize = 3usize
+const SV_GTSTEP: usize = 4usize
+const SV_STPPAR: usize = 5usize
+const SV_NREDUC: usize = 6usize
+const SV_PREDUC: usize = 7usize
+const SV_RADIUS: usize = 8usize
+const SV_F: usize = 10usize
+const SV_FDIF: usize = 11usize
+const SV_FLSTGD: usize = 12usize
+const SV_F0: usize = 13usize
+const SV_GTSLST: usize = 14usize
+const SV_PLSTGD: usize = 15usize
+const SV_RADFAC: usize = 16usize
+const SV_RELDX: usize = 17usize
+const SV_DSTSAV: usize = 18usize
+const SV_DECFAC: usize = 22usize
+const SV_INCFAC: usize = 23usize
+const SV_RDFCMN: usize = 24usize
+const SV_RDFCMX: usize = 25usize
+const SV_TUNER1: usize = 26usize
+const SV_TUNER2: usize = 27usize
+const SV_TUNER3: usize = 28usize
+const SV_TUNER4: usize = 29usize
+const SV_TUNER5: usize = 30usize
+const SV_AFCTOL: usize = 31usize
+const SV_RFCTOL: usize = 32usize
+const SV_XCTOL: usize = 33usize
+const SV_XFTOL: usize = 34usize
+const SV_LMAX0: usize = 35usize
+const SV_LMAXS: usize = 36usize
+const SV_SCTOL: usize = 37usize
+const SV_BIAS: usize = 43usize
+const SV_GTHG: usize = 44usize
+const SV_GRDFAC: usize = 45usize
+const SV_NWTFAC: usize = 46usize
+
+const SI_TOOBIG: usize = 2usize
+const SI_MODEL: usize = 5usize
+const SI_NFCALL: usize = 6usize
+const SI_NFGCAL: usize = 7usize
+const SI_RADINC: usize = 8usize
+const SI_RESTOR: usize = 9usize
+const SI_STAGE: usize = 10usize
+const SI_STGLIM: usize = 11usize
+const SI_SWITCH: usize = 12usize
+const SI_XIRC: usize = 13usize
+const SI_IRC: usize = 29usize
+const SI_MLSTGD: usize = 32usize
+
+fn dot_of(n: usize, x: []const f64, y: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        s += x[i] * y[i]
+        i += 1usize
+    }
+    ret s
+}
+
+fn nrm2_of(n: usize, x: []const f64) -> f64 { ret math.sqrt[f64](dot_of(n, x, x)) }
+
+// dlitvm: x = L^-T y, L packed by rows
+fn sl_itvm(n: usize, x: []f64, l: []const f64, y: []const f64) {
+    var i = 0usize
+    while i < n {
+        x[i] = y[i]
+        i += 1usize
+    }
+    var i0 = n * (n + 1usize) / 2usize
+    var ii = 1usize
+    var go = true
+    while go && ii <= n {
+        let i1 = n + 1usize - ii
+        let xi = x[i1 - 1usize] / l[i0 - 1usize]
+        x[i1 - 1usize] = xi
+        if i1 <= 1usize {
+            go = false
+        } else {
+            i0 -= i1
+            if xi == 0.0f64 {
+                go = false
+            } else {
+                var j = 1usize
+                while j < i1 {
+                    x[j - 1usize] -= xi * l[i0 + j - 1usize]
+                    j += 1usize
+                }
+            }
+        }
+        ii += 1usize
+    }
+}
+
+// dlivmu: x = L^-1 y
+fn sl_ivmu(n: usize, x: []f64, l: []const f64, y: []const f64) {
+    var k = 1usize
+    while k <= n && y[k - 1usize] == 0.0f64 {
+        x[k - 1usize] = 0.0f64
+        k += 1usize
+    }
+    if k <= n {
+        var j = k * (k + 1usize) / 2usize
+        x[k - 1usize] = y[k - 1usize] / l[j - 1usize]
+        var i = k + 1usize
+        while i <= n {
+            var t = 0.0f64
+            var q = 0usize
+            while q < i - 1usize {
+                t += l[j + q] * x[q]
+                q += 1usize
+            }
+            j += i
+            x[i - 1usize] = (y[i - 1usize] - t) / l[j - 1usize]
+            i += 1usize
+        }
+    }
+}
+
+// dltvmu: x = L^T y
+fn sl_tvmu(n: usize, x: []f64, l: []const f64, y: []const f64) {
+    var i0 = 0usize
+    var i = 1usize
+    while i <= n {
+        let yi = y[i - 1usize]
+        x[i - 1usize] = 0.0f64
+        var j = 1usize
+        while j <= i {
+            x[j - 1usize] += yi * l[i0 + j - 1usize]
+            j += 1usize
+        }
+        i0 += i
+        i += 1usize
+    }
+}
+
+// dlvmul: x = L y
+fn sl_vmul(n: usize, x: []f64, l: []const f64, y: []const f64) {
+    var i0 = n * (n + 1usize) / 2usize
+    var ii = 1usize
+    while ii <= n {
+        let i1 = n + 1usize - ii
+        i0 -= i1
+        var t = 0.0f64
+        var j = 1usize
+        while j <= i1 {
+            t += l[i0 + j - 1usize] * y[j - 1usize]
+            j += 1usize
+        }
+        x[i1 - 1usize] = t
+        ii += 1usize
+    }
+}
+
+// dwzbfg: the vectors w and z of the BFGS update of the factor
+fn sl_wzbfg(n: usize, l: []const f64, s: []const f64, w: []f64, y: []const f64, z: []f64) {
+    sl_tvmu(n, w, l, s)
+    let shs = dot_of(n, w, w)
+    let ys = dot_of(n, y, s)
+    var cy = 0.0f64
+    var cs = 0.0f64
+    if ys >= 0.1f64 * shs {
+        cy = 1.0f64 / (math.sqrt[f64](ys) * math.sqrt[f64](shs))
+        cs = 1.0f64 / shs
+    } else {
+        let theta = (1.0f64 - 0.1f64) * shs / (shs - ys)
+        let epsrt = math.sqrt[f64](0.1f64)
+        cy = theta / (shs * epsrt)
+        cs = (1.0f64 + (theta - 1.0f64) / epsrt) / shs
+    }
+    sl_ivmu(n, z, l, y)
+    var i = 0usize
+    while i < n {
+        z[i] = cy * z[i] - cs * w[i]
+        i += 1usize
+    }
+}
+
+// dlupdt: lplus = the Cholesky factor of L(I + w z^T)(I + z w^T)L^T, in place when lplus is l
+fn sl_updt(beta: []f64, gamma: []f64, l: []const f64, lambda: []f64, lplus: []f64, n: usize, w: []f64, z: []f64) {
+    var nu = 1.0f64
+    var eta = 0.0f64
+    if n > 1usize {
+        let nm1 = n - 1usize
+        var s = 0.0f64
+        var i = 1usize
+        while i <= nm1 {
+            let j = n - i
+            s += w[j] * w[j]
+            lambda[j - 1usize] = s
+            i += 1usize
+        }
+        var j = 1usize
+        while j <= nm1 {
+            let wj = w[j - 1usize]
+            let a = nu * z[j - 1usize] - eta * wj
+            let theta = 1.0f64 + a * wj
+            s = a * lambda[j - 1usize]
+            var lj = math.sqrt[f64](theta * theta + a * s)
+            if theta > 0.0f64 { lj = 0.0f64 - lj }
+            lambda[j - 1usize] = lj
+            let b = theta * wj + s
+            gamma[j - 1usize] = b * nu / lj
+            beta[j - 1usize] = (a - b * eta) / lj
+            nu = (0.0f64 - nu) / lj
+            eta = (0.0f64 - (eta + (a * a) / (theta - lj))) / lj
+            j += 1usize
+        }
+    }
+    lambda[n - 1usize] = 1.0f64 + (nu * z[n - 1usize] - eta * w[n - 1usize]) * w[n - 1usize]
+    var jj = n * (n + 1usize) / 2usize
+    var k = 1usize
+    while k <= n {
+        let j = n + 1usize - k
+        let lj = lambda[j - 1usize]
+        let ljj = l[jj - 1usize]
+        lplus[jj - 1usize] = lj * ljj
+        let wj = w[j - 1usize]
+        w[j - 1usize] = ljj * wj
+        let zj = z[j - 1usize]
+        z[j - 1usize] = ljj * zj
+        if k != 1usize {
+            let bj = beta[j - 1usize]
+            let gj = gamma[j - 1usize]
+            var ij = jj + j
+            var i = j + 1usize
+            while i <= n {
+                let lij = l[ij - 1usize]
+                lplus[ij - 1usize] = lj * lij + bj * w[i - 1usize] + gj * z[i - 1usize]
+                w[i - 1usize] = w[i - 1usize] + lij * wj
+                z[i - 1usize] = z[i - 1usize] + lij * zj
+                ij += i
+                i += 1usize
+            }
+        }
+        jj -= j
+        k += 1usize
+    }
+}
+
+// ddbdog: the double-dogleg step (sets the step and the model quantities in v)
+fn sl_dbdog(n: usize, dig: []const f64, g: []const f64, nwtstp: []const f64, step: []f64, v: []f64) {
+    let nwtnrm = v[SV_DST0]
+    var rlambd = 1.0f64
+    if nwtnrm > 0.0f64 { rlambd = v[SV_RADIUS] / nwtnrm }
+    let gnorm = v[SV_DGNORM]
+    var i = 0usize
+    while i < n {
+        step[i] = g[i] / gnorm
+        i += 1usize
+    }
+    let ghinvg = dot_of(n, step, nwtstp)
+    v[SV_NREDUC] = 0.5f64 * ghinvg * gnorm
+    v[SV_GRDFAC] = 0.0f64
+    v[SV_NWTFAC] = 0.0f64
+    if rlambd >= 1.0f64 {
+        v[SV_STPPAR] = 0.0f64
+        v[SV_DSTNRM] = nwtnrm
+        v[SV_GTSTEP] = (0.0f64 - ghinvg) * gnorm
+        v[SV_PREDUC] = v[SV_NREDUC]
+        v[SV_NWTFAC] = 0.0f64 - 1.0f64
+        i = 0usize
+        while i < n {
+            step[i] = 0.0f64 - nwtstp[i]
+            i += 1usize
+        }
+    } else {
+        v[SV_DSTNRM] = v[SV_RADIUS]
+        let cfact = (gnorm / v[SV_GTHG]) * (gnorm / v[SV_GTHG])
+        let cnorm = gnorm * cfact
+        let relax = 1.0f64 - v[SV_BIAS] * (1.0f64 - cnorm / ghinvg)
+        if rlambd >= relax {
+            v[SV_STPPAR] = 1.0f64 - (rlambd - relax) / (1.0f64 - relax)
+            let t = 0.0f64 - rlambd
+            v[SV_GTSTEP] = t * ghinvg * gnorm
+            v[SV_PREDUC] = rlambd * (1.0f64 - 0.5f64 * rlambd) * ghinvg * gnorm
+            v[SV_NWTFAC] = t
+            i = 0usize
+            while i < n {
+                step[i] = t * nwtstp[i]
+                i += 1usize
+            }
+        } else {
+            if cnorm >= v[SV_RADIUS] {
+                let t = (0.0f64 - v[SV_RADIUS]) / gnorm
+                v[SV_GRDFAC] = t
+                v[SV_STPPAR] = 1.0f64 + cnorm / v[SV_RADIUS]
+                v[SV_GTSTEP] = (0.0f64 - v[SV_RADIUS]) * gnorm
+                v[SV_PREDUC] = v[SV_RADIUS] * (gnorm - 0.5f64 * v[SV_RADIUS] * ((v[SV_GTHG] / gnorm) * (v[SV_GTHG] / gnorm)))
+                i = 0usize
+                while i < n {
+                    step[i] = t * dig[i]
+                    i += 1usize
+                }
+            } else {
+                let ctrnwt = cfact * relax * ghinvg / gnorm
+                var t1 = ctrnwt - cfact * cfact
+                var t2 = (v[SV_RADIUS] / gnorm) * (v[SV_RADIUS] / gnorm) - cfact * cfact
+                let femnsq = (relax * nwtnrm / gnorm) * (relax * nwtnrm / gnorm) - ctrnwt - t1
+                let t = t2 / (t1 + math.sqrt[f64](t1 * t1 + femnsq * t2))
+                t1 = (t - 1.0f64) * cfact
+                v[SV_GRDFAC] = t1
+                t2 = (0.0f64 - t) * relax
+                v[SV_NWTFAC] = t2
+                v[SV_STPPAR] = 2.0f64 - t
+                v[SV_GTSTEP] = gnorm * (t1 * gnorm + t2 * ghinvg)
+                v[SV_PREDUC] = (0.0f64 - (t1 * gnorm)) * ((t2 + 1.0f64) * gnorm) - (t2 * gnorm) * (1.0f64 + 0.5f64 * t2) * ghinvg - 0.5f64 * ((v[SV_GTHG] * t1) * (v[SV_GTHG] * t1))
+                i = 0usize
+                while i < n {
+                    step[i] = t1 * dig[i] + t2 * nwtstp[i]
+                    i += 1usize
+                }
+            }
+        }
+    }
+}
+
+fn sl_relst(p: usize, x: []const f64, x0: []const f64) -> f64 {
+    var emax = 0.0f64
+    var xmax = 0.0f64
+    var i = 0usize
+    while i < p {
+        var t = math.abs[f64](x[i] - x0[i])
+        if emax < t { emax = t }
+        t = math.abs[f64](x[i]) + math.abs[f64](x0[i])
+        if xmax < t { xmax = t }
+        i += 1usize
+    }
+    if xmax > 0.0f64 { ret emax / xmax }
+    ret 0.0f64
+}
+
+fn sl_copy(n: usize, to: []f64, from: []const f64) {
+    var i = 0usize
+    while i < n {
+        to[i] = from[i]
+        i += 1usize
+    }
+}
+
+// dassst: assess the trial step (the returned code is iv[SI_IRC]); labels of the Fortran are the lbl values
+fn sl_assst(iv: []i64, p: usize, step: []f64, stlstg: []f64, v: []f64, x: []f64, x0: []f64) {
+    var nfc = iv[SI_NFCALL]
+    iv[SI_SWITCH] = 0i64
+    iv[SI_RESTOR] = 0i64
+    var rfac1 = 1.0f64
+    var goodx = true
+    var i = iv[SI_IRC]
+    var reldx1 = 0.0f64
+    var emax = 0.0f64
+    var emaxs = 0.0f64
+    var lbl = 0usize
+    if i == 1i64 { lbl = 20usize }
+    if i == 2i64 { lbl = 30usize }
+    if i == 3i64 || i == 4i64 { lbl = 10usize }
+    if i == 5i64 { lbl = 40usize }
+    if i == 6i64 { lbl = 280usize }
+    if i >= 7i64 && i <= 11i64 { lbl = 220usize }
+    if i == 12i64 { lbl = 170usize }
+    if lbl == 0usize {
+        iv[SI_IRC] = 13i64
+        lbl = 999usize
+    }
+    while lbl != 999usize {
+        if lbl == 10usize {
+            iv[SI_STAGE] = 1i64
+            iv[SI_RADINC] = 0i64
+            v[SV_FLSTGD] = v[SV_F0]
+            if iv[SI_TOOBIG] == 0i64 {
+                lbl = 90usize
+            } else {
+                iv[SI_STAGE] = -1i64
+                iv[SI_XIRC] = i
+                lbl = 60usize
+            }
+        } else if lbl == 20usize {
+            if iv[SI_MODEL] != iv[SI_MLSTGD] {
+                lbl = 30usize
+            } else {
+                iv[SI_STAGE] = iv[SI_STGLIM]
+                iv[SI_RADINC] = -1i64
+                lbl = 90usize
+            }
+        } else if lbl == 30usize {
+            iv[SI_STAGE] = iv[SI_STAGE] + 1i64
+            lbl = 40usize
+        } else if lbl == 40usize {
+            if iv[SI_STAGE] > 0i64 {
+                lbl = 50usize
+            } else {
+                if iv[SI_TOOBIG] != 0i64 {
+                    lbl = 60usize
+                } else {
+                    iv[SI_STAGE] = 0i64 - iv[SI_STAGE]
+                    i = iv[SI_XIRC]
+                    lbl = 50usize
+                    if i == 1i64 { lbl = 20usize }
+                    if i == 2i64 { lbl = 30usize }
+                    if i == 3i64 || i == 4i64 { lbl = 90usize }
+                    if i == 5i64 { lbl = 70usize }
+                }
+            }
+        } else if lbl == 50usize {
+            if iv[SI_TOOBIG] == 0i64 {
+                lbl = 70usize
+            } else {
+                if iv[SI_RADINC] > 0i64 {
+                    lbl = 80usize
+                } else {
+                    iv[SI_STAGE] = 0i64 - iv[SI_STAGE]
+                    iv[SI_XIRC] = iv[SI_IRC]
+                    lbl = 60usize
+                }
+            }
+        } else if lbl == 60usize {
+            v[SV_RADFAC] = v[SV_DECFAC]
+            iv[SI_RADINC] = iv[SI_RADINC] - 1i64
+            iv[SI_IRC] = 5i64
+            lbl = 999usize
+        } else if lbl == 70usize {
+            if v[SV_F] < v[SV_FLSTGD] {
+                lbl = 90usize
+            } else {
+                if iv[SI_MODEL] != iv[SI_MLSTGD] {
+                    iv[SI_MODEL] = iv[SI_MLSTGD]
+                    iv[SI_SWITCH] = 1i64
+                }
+                lbl = 80usize
+            }
+        } else if lbl == 80usize {
+            if v[SV_FLSTGD] < v[SV_F0] {
+                iv[SI_RESTOR] = 1i64
+                v[SV_F] = v[SV_FLSTGD]
+                v[SV_PREDUC] = v[SV_PLSTGD]
+                v[SV_GTSTEP] = v[SV_GTSLST]
+                if iv[SI_SWITCH] == 0i64 { rfac1 = v[SV_DSTNRM] / v[SV_DSTSAV] }
+                v[SV_DSTNRM] = v[SV_DSTSAV]
+                nfc = iv[SI_NFGCAL]
+                goodx = false
+            }
+            lbl = 90usize
+        } else if lbl == 90usize {
+            reldx1 = sl_relst(p, x, x0)
+            if !goodx {
+                var q = 0usize
+                while q < p {
+                    step[q] = stlstg[q]
+                    x[q] = x0[q] + stlstg[q]
+                    q += 1usize
+                }
+            }
+            lbl = 110usize
+        } else if lbl == 110usize {
+            v[SV_FDIF] = v[SV_F0] - v[SV_F]
+            if v[SV_FDIF] > v[SV_TUNER2] * v[SV_PREDUC] {
+                lbl = 140usize
+            } else {
+                v[SV_RELDX] = reldx1
+                if v[SV_F] < v[SV_F0] {
+                    iv[SI_NFGCAL] = nfc
+                } else {
+                    iv[SI_MLSTGD] = iv[SI_MODEL]
+                    v[SV_FLSTGD] = v[SV_F]
+                    v[SV_F] = v[SV_F0]
+                    sl_copy(p, x, x0)
+                    iv[SI_RESTOR] = 1i64
+                }
+                iv[SI_IRC] = 1i64
+                if iv[SI_STAGE] >= iv[SI_STGLIM] {
+                    iv[SI_IRC] = 5i64
+                    iv[SI_RADINC] = iv[SI_RADINC] - 1i64
+                }
+                lbl = 160usize
+            }
+        } else if lbl == 140usize {
+            iv[SI_NFGCAL] = nfc
+            rfac1 = 1.0f64
+            if goodx { v[SV_RELDX] = reldx1 }
+            v[SV_DSTSAV] = v[SV_DSTNRM]
+            if v[SV_FDIF] > v[SV_PREDUC] * v[SV_TUNER1] {
+                lbl = 190usize
+            } else {
+                if iv[SI_STAGE] < iv[SI_STGLIM] { iv[SI_IRC] = 2i64 } else { iv[SI_IRC] = 4i64 }
+                lbl = 160usize
+            }
+        } else if lbl == 160usize {
+            iv[SI_XIRC] = iv[SI_IRC]
+            emax = v[SV_GTSTEP] + v[SV_FDIF]
+            v[SV_RADFAC] = 0.5f64 * rfac1
+            if emax < v[SV_GTSTEP] { v[SV_RADFAC] = rfac1 * math.max[f64](v[SV_RDFCMN], 0.5f64 * v[SV_GTSTEP] / emax) }
+            lbl = 170usize
+        } else if lbl == 170usize {
+            if v[SV_RELDX] <= v[SV_XFTOL] {
+                iv[SI_IRC] = 12i64
+                lbl = 240usize
+            } else {
+                iv[SI_IRC] = iv[SI_XIRC]
+                if v[SV_F] < v[SV_F0] { lbl = 200usize } else { lbl = 230usize }
+            }
+        } else if lbl == 190usize {
+            if v[SV_FDIF] < (0.0f64 - v[SV_TUNER3]) * v[SV_GTSTEP] || iv[SI_RADINC] < 0i64 || iv[SI_RESTOR] == 1i64 {
+                lbl = 210usize
+            } else {
+                v[SV_RADFAC] = v[SV_RDFCMX]
+                let gts = v[SV_GTSTEP]
+                if v[SV_FDIF] < (0.5f64 / v[SV_RADFAC] - 1.0f64) * gts { v[SV_RADFAC] = math.max[f64](v[SV_INCFAC], 0.5f64 * gts / (gts + v[SV_FDIF])) }
+                iv[SI_IRC] = 4i64
+                if v[SV_STPPAR] == 0.0f64 {
+                    lbl = 230usize
+                } else {
+                    iv[SI_IRC] = 5i64
+                    iv[SI_RADINC] = iv[SI_RADINC] + 1i64
+                    lbl = 200usize
+                }
+            }
+        } else if lbl == 200usize {
+            v[SV_FLSTGD] = v[SV_F]
+            iv[SI_MLSTGD] = iv[SI_MODEL]
+            sl_copy(p, stlstg, step)
+            v[SV_DSTSAV] = v[SV_DSTNRM]
+            iv[SI_NFGCAL] = nfc
+            v[SV_PLSTGD] = v[SV_PREDUC]
+            v[SV_GTSLST] = v[SV_GTSTEP]
+            lbl = 230usize
+        } else if lbl == 210usize {
+            v[SV_RADFAC] = 1.0f64
+            iv[SI_IRC] = 3i64
+            lbl = 230usize
+        } else if lbl == 220usize {
+            iv[SI_IRC] = iv[SI_XIRC]
+            if v[SV_DSTSAV] < 0.0f64 { iv[SI_IRC] = 12i64 }
+            lbl = 240usize
+        } else if lbl == 230usize {
+            iv[SI_XIRC] = iv[SI_IRC]
+            lbl = 240usize
+        } else if lbl == 240usize {
+            if math.abs[f64](v[SV_F]) < v[SV_AFCTOL] { iv[SI_IRC] = 10i64 }
+            if 0.5f64 * v[SV_FDIF] > v[SV_PREDUC] {
+                lbl = 999usize
+            } else {
+                emax = v[SV_RFCTOL] * math.abs[f64](v[SV_F0])
+                emaxs = v[SV_SCTOL] * math.abs[f64](v[SV_F0])
+                if v[SV_DSTNRM] > v[SV_LMAXS] && v[SV_PREDUC] <= emaxs { iv[SI_IRC] = 11i64 }
+                if v[SV_DST0] >= 0.0f64 {
+                    var k = 0i64
+                    if (v[SV_NREDUC] > 0.0f64 && v[SV_NREDUC] <= emax) || (v[SV_NREDUC] == 0.0f64 && v[SV_PREDUC] == 0.0f64) { k = 2i64 }
+                    if v[SV_STPPAR] == 0.0f64 && v[SV_RELDX] <= v[SV_XCTOL] && goodx { k = k + 1i64 }
+                    if k > 0i64 { iv[SI_IRC] = k + 6i64 }
+                }
+                lbl = 250usize
+            }
+        } else if lbl == 250usize {
+            if iv[SI_IRC] > 5i64 && iv[SI_IRC] != 12i64 {
+                lbl = 999usize
+            } else {
+                if v[SV_DSTNRM] > v[SV_LMAXS] {
+                    lbl = 260usize
+                } else {
+                    if v[SV_PREDUC] >= emaxs {
+                        lbl = 999usize
+                    } else {
+                        if v[SV_DST0] <= 0.0f64 {
+                            lbl = 270usize
+                        } else {
+                            if 0.5f64 * v[SV_DST0] <= v[SV_LMAXS] { lbl = 999usize } else { lbl = 270usize }
+                        }
+                    }
+                }
+            }
+        } else if lbl == 260usize {
+            if 0.5f64 * v[SV_DSTNRM] <= v[SV_LMAXS] {
+                lbl = 999usize
+            } else {
+                let xmax = v[SV_LMAXS] / v[SV_DSTNRM]
+                if xmax * (2.0f64 - xmax) * v[SV_PREDUC] >= emaxs { lbl = 999usize } else { lbl = 270usize }
+            }
+        } else if lbl == 270usize {
+            if v[SV_NREDUC] < 0.0f64 {
+                lbl = 290usize
+            } else {
+                v[SV_GTSLST] = v[SV_GTSTEP]
+                v[SV_DSTSAV] = v[SV_DSTNRM]
+                if iv[SI_IRC] == 12i64 { v[SV_DSTSAV] = 0.0f64 - v[SV_DSTSAV] }
+                v[SV_PLSTGD] = v[SV_PREDUC]
+                iv[SI_IRC] = 6i64
+                sl_copy(p, stlstg, step)
+                lbl = 999usize
+            }
+        } else if lbl == 280usize {
+            v[SV_GTSTEP] = v[SV_GTSLST]
+            v[SV_DSTNRM] = math.abs[f64](v[SV_DSTSAV])
+            sl_copy(p, step, stlstg)
+            iv[SI_IRC] = iv[SI_XIRC]
+            if v[SV_DSTSAV] <= 0.0f64 { iv[SI_IRC] = 12i64 }
+            v[SV_NREDUC] = 0.0f64 - v[SV_PREDUC]
+            v[SV_PREDUC] = v[SV_PLSTGD]
+            lbl = 290usize
+        } else {
+            // 290
+            if (0.0f64 - v[SV_NREDUC]) <= v[SV_RFCTOL] * math.abs[f64](v[SV_F0]) { iv[SI_IRC] = 11i64 }
+            lbl = 999usize
+        }
+    }
+}
+
+type GarchCtx = struct { y: []const f64, h: []f64, dh: []f64, n: usize, p: usize, q: usize }
+
+fn garch_nll(c: *GarchCtx, par: []const f64) -> f64 {
+    let pq = c.p + c.q + 1usize
+    var maxpq = c.p
+    if c.q > maxpq { maxpq = c.q }
+    var valid = par[0usize] > 0.0f64
+    var i = 1usize
+    while i < pq {
+        if par[i] < 0.0f64 { valid = false }
+        i += 1usize
+    }
+    if !valid { ret 1.0e10f64 }
+    var sum = 0.0f64
+    i = maxpq
+    while i < c.n {
+        var temp = par[0usize]
+        var j = 1usize
+        while j <= c.q {
+            temp += par[j] * (c.y[i - j] * c.y[i - j])
+            j += 1usize
+        }
+        j = 1usize
+        while j <= c.p {
+            temp += par[c.q + j] * c.h[i - j]
+            j += 1usize
+        }
+        sum += math.log[f64](temp) + (c.y[i] * c.y[i]) / temp
+        c.h[i] = temp
+        i += 1usize
+    }
+    ret 0.5f64 * sum
+}
+
+fn garch_grad(c: *GarchCtx, par: []const f64, dp: []f64) {
+    let pq = c.p + c.q + 1usize
+    var maxpq = c.p
+    if c.q > maxpq { maxpq = c.q }
+    var k = 0usize
+    while k < pq {
+        dp[k] = 0.0f64
+        k += 1usize
+    }
+    var i = maxpq
+    while i < c.n {
+        var temp1 = par[0usize]
+        var j = 1usize
+        while j <= c.q {
+            temp1 += par[j] * (c.y[i - j] * c.y[i - j])
+            j += 1usize
+        }
+        j = 1usize
+        while j <= c.p {
+            temp1 += par[c.q + j] * c.h[i - j]
+            j += 1usize
+        }
+        c.h[i] = temp1
+        let temp2 = 0.5f64 * (1.0f64 - (c.y[i] * c.y[i]) / temp1) / temp1
+        var temp3 = 1.0f64
+        j = 1usize
+        while j <= c.p {
+            temp3 += par[c.q + j] * c.dh[pq * (i - j)]
+            j += 1usize
+        }
+        c.dh[pq * i] = temp3
+        dp[0usize] += temp2 * temp3
+        k = 1usize
+        while k <= c.q {
+            temp3 = c.y[i - k] * c.y[i - k]
+            j = 1usize
+            while j <= c.p {
+                temp3 += par[c.q + j] * c.dh[pq * (i - j) + k]
+                j += 1usize
+            }
+            c.dh[pq * i + k] = temp3
+            dp[k] += temp2 * temp3
+            k += 1usize
+        }
+        k = 1usize
+        while k <= c.p {
+            temp3 = c.h[i - k]
+            j = 1usize
+            while j <= c.p {
+                temp3 += par[c.q + j] * c.dh[pq * (i - j) + c.q + k]
+                j += 1usize
+            }
+            c.dh[pq * i + c.q + k] = temp3
+            dp[c.q + k] += temp2 * temp3
+            k += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// the SUMSL iteration (dsumit) for a GARCH(p, q) likelihood: par is the start and the answer. Constants are the ddeflt/dvdflt defaults of algorithm 2 with the tseries overrides afctol, rfctol, xctol, xftol and the call limits 2 * maxiter and maxiter.
+fn sumsl_garch(a: *mem.Arena, c: *GarchCtx, par: []f64, maxiter: usize, afctol: f64, rfctol: f64, xctol: f64, xftol: f64) -> err {
+    let n = c.p + c.q + 1usize
+    let nn1o2 = n * (n + 1usize) / 2usize
+    let (v, e1) = mem.alloc[f64](a, 80usize + nn1o2 + 8usize * n)
+    let (iv, e2) = mem.alloc[i64](a, 64usize)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    var i = 0usize
+    while i < 80usize + nn1o2 + 8usize * n {
+        v[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < 64usize {
+        iv[i] = 0i64
+        i += 1usize
+    }
+    v[SV_DECFAC] = 0.5f64
+    v[SV_INCFAC] = 2.0f64
+    v[SV_LMAX0] = 1.0f64
+    v[SV_LMAXS] = 1.0f64
+    v[SV_RDFCMN] = 0.1f64
+    v[SV_RDFCMX] = 4.0f64
+    v[SV_SCTOL] = 1.0e-10f64
+    v[SV_TUNER1] = 0.1f64
+    v[SV_TUNER2] = 1.0e-4f64
+    v[SV_TUNER3] = 0.75f64
+    v[SV_TUNER4] = 0.5f64
+    v[SV_TUNER5] = 0.75f64
+    v[SV_BIAS] = 0.8f64
+    v[SV_AFCTOL] = afctol
+    v[SV_RFCTOL] = rfctol
+    v[SV_XCTOL] = xctol
+    v[SV_XFTOL] = xftol
+    let mxfcal = i64(2usize * maxiter)
+    let mxiter = i64(maxiter)
+    // storage in v: the factor L, then x0, step, stlstg, g0, nwtstp, dg, g
+    let lo = 72usize
+    let x0o = lo + nn1o2
+    let stepo = x0o + n
+    let stlo = stepo + n
+    let g0o = stlo + n
+    let nwo = g0o + n
+    let dgo = nwo + n
+    let go_ = dgo + n
+    let d = 1.0f64
+    // initial factor: the identity
+    var k = 0usize
+    i = 1usize
+    while i <= n {
+        k += i
+        v[lo + k - 1usize] = d
+        i += 1usize
+    }
+    iv[SI_NFCALL] = 1i64
+    iv[SI_NFGCAL] = 1i64
+    iv[SI_MODEL] = 1i64
+    iv[SI_STGLIM] = 1i64
+    var niter = 0i64
+    var nfcall = 1i64
+    var cnvcod = 0i64
+    var finished = false
+    // the first function value and gradient
+    v[SV_F] = garch_nll(c, par)
+    garch_grad(c, par, v[go_..go_ + n])
+    i = 0usize
+    while i < n {
+        v[dgo + i] = v[go_ + i] / d
+        i += 1usize
+    }
+    v[SV_DGNORM] = nrm2_of(n, v[dgo..dgo + n])
+    v[SV_RADFAC] = v[SV_LMAX0]
+    v[SV_DSTNRM] = 1.0f64
+    var lbl = 80usize
+    var kagqt = 0i64
+    while !finished {
+        if lbl == 80usize {
+            if niter >= mxiter { finished = true } else { lbl = 90usize }
+        } else if lbl == 90usize {
+            niter += 1i64
+            v[SV_RADIUS] = v[SV_RADFAC] * v[SV_DSTNRM]
+            sl_copy(n, v[x0o..x0o + n], par)
+            sl_copy(n, v[g0o..g0o + n], v[go_..go_ + n])
+            v[SV_F0] = v[SV_F]
+            iv[SI_IRC] = 4i64
+            kagqt = 0i64 - 1i64
+            lbl = 120usize
+        } else if lbl == 100usize {
+            lbl = 120usize
+        } else if lbl == 120usize {
+            if nfcall >= mxfcal {
+                if v[SV_F] >= v[SV_F0] {
+                    finished = true
+                } else {
+                    cnvcod = 9i64
+                    lbl = 210usize
+                }
+            } else {
+                lbl = 140usize
+            }
+        } else if lbl == 140usize {
+            if kagqt < 0i64 {
+                sl_ivmu(n, v[nwo..nwo + n], v[lo..lo + nn1o2], v[go_..go_ + n])
+                sl_itvm(n, v[nwo..nwo + n], v[lo..lo + nn1o2], v[nwo..nwo + n])
+                i = 0usize
+                while i < n {
+                    v[stepo + i] = v[nwo + i] * d
+                    i += 1usize
+                }
+                v[SV_DST0] = nrm2_of(n, v[stepo..stepo + n])
+                i = 0usize
+                while i < n {
+                    v[dgo + i] = v[dgo + i] / d
+                    i += 1usize
+                }
+                sl_tvmu(n, v[stepo..stepo + n], v[lo..lo + nn1o2], v[dgo..dgo + n])
+                v[SV_GTHG] = nrm2_of(n, v[stepo..stepo + n])
+                kagqt = 0i64
+            }
+            sl_dbdog(n, v[dgo..dgo + n], v[go_..go_ + n], v[nwo..nwo + n], v[stepo..stepo + n], v)
+            if iv[SI_IRC] == 6i64 {
+                lbl = 160usize
+            } else {
+                i = 0usize
+                while i < n {
+                    par[i] = v[stepo + i] + v[x0o + i]
+                    i += 1usize
+                }
+                nfcall += 1i64
+                iv[SI_NFCALL] = nfcall
+                iv[SI_TOOBIG] = 0i64
+                v[SV_F] = garch_nll(c, par)
+                lbl = 160usize
+            }
+        } else if lbl == 160usize {
+            iv[SI_NFCALL] = nfcall
+            sl_assst(iv, n, v[stepo..stepo + n], v[stlo..stlo + n], v, par, v[x0o..x0o + n])
+            let kk = iv[SI_IRC]
+            if kk == 1i64 || kk == 5i64 {
+                v[SV_RADIUS] = v[SV_RADFAC] * v[SV_DSTNRM]
+                lbl = 100usize
+            } else if kk == 6i64 {
+                v[SV_RADIUS] = v[SV_LMAX0]
+                lbl = 140usize
+            } else if kk >= 2i64 && kk <= 4i64 {
+                lbl = 200usize
+            } else if kk >= 7i64 && kk <= 12i64 {
+                cnvcod = kk - 4i64
+                if v[SV_F] >= v[SV_F0] {
+                    finished = true
+                } else {
+                    if iv[SI_XIRC] == 14i64 {
+                        finished = true
+                    } else {
+                        iv[SI_XIRC] = 14i64
+                        lbl = 200usize
+                    }
+                }
+            } else {
+                finished = true
+            }
+        } else if lbl == 200usize {
+            if iv[SI_IRC] == 3i64 {
+                sl_tvmu(n, v[stlo..stlo + n], v[lo..lo + nn1o2], v[stepo..stepo + n])
+                sl_vmul(n, v[stlo..stlo + n], v[lo..lo + nn1o2], v[stlo..stlo + n])
+            }
+            lbl = 210usize
+        } else {
+            // 210: the gradient at the accepted point, then the secant update (label 220) and the next iteration
+            garch_grad(c, par, v[go_..go_ + n])
+            i = 0usize
+            while i < n {
+                v[dgo + i] = v[go_ + i] / d
+                i += 1usize
+            }
+            v[SV_DGNORM] = nrm2_of(n, v[dgo..dgo + n])
+            if cnvcod != 0i64 {
+                finished = true
+            } else {
+                i = 0usize
+                while i < n {
+                    v[g0o + i] = (0.0f64 - 1.0f64) * v[g0o + i] + v[go_ + i]
+                    i += 1usize
+                }
+                var radfac_set = false
+                if iv[SI_IRC] == 3i64 {
+                    i = 0usize
+                    while i < n {
+                        v[stlo + i] = (0.0f64 - 1.0f64) * v[g0o + i] + v[stlo + i]
+                        v[stlo + i] = v[stlo + i] / d
+                        i += 1usize
+                    }
+                    if nrm2_of(n, v[stlo..stlo + n]) <= v[SV_DGNORM] * v[SV_TUNER4] {
+                        radfac_set = true
+                    } else {
+                        if dot_of(n, v[go_..go_ + n], v[stepo..stepo + n]) < v[SV_GTSTEP] * v[SV_TUNER5] { radfac_set = true }
+                    }
+                }
+                if radfac_set { v[SV_RADFAC] = v[SV_INCFAC] }
+                sl_wzbfg(n, v[lo..lo + nn1o2], v[stepo..stepo + n], v[nwo..nwo + n], v[g0o..g0o + n], v[x0o..x0o + n])
+                sl_updt(v[stlo..stlo + n], v[stepo..stepo + n], v[lo..lo + nn1o2], v[g0o..g0o + n], v[lo..lo + nn1o2], n, v[nwo..nwo + n], v[x0o..x0o + n])
+                lbl = 80usize
+            }
+        }
+    }
+    ret ok
+}
+
+// ar(x)$resid with the Yule-Walker AIC order: out gets x minus its mean minus the AR fit, NaN for the first `order` values; returns the order
+fn yw_resid(a: *mem.Arena, x: []const f64, out: []f64) -> usize {
+    let n = x.len
+    var omax = usize(math.floor[f64](10.0f64 * math.log10[f64](f64(n))))
+    if omax > n - 1usize { omax = n - 1usize }
+    let (r, e1) = acf_cov(a, x, omax)
+    let (tab, e2) = mem.alloc[f64](a, (omax + 1usize) * (omax + 1usize))
+    let (vv, e3) = mem.alloc[f64](a, omax + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0usize }
+    vv[0usize] = r[0usize]
+    var p = 1usize
+    while p <= omax {
+        var s = r[p]
+        var j = 1usize
+        while j < p {
+            s -= tab[(p - 1usize) * (omax + 1usize) + j] * r[p - j]
+            j += 1usize
+        }
+        let k = s / vv[p - 1usize]
+        tab[p * (omax + 1usize) + p] = k
+        j = 1usize
+        while j < p {
+            tab[p * (omax + 1usize) + j] = tab[(p - 1usize) * (omax + 1usize) + j] - k * tab[(p - 1usize) * (omax + 1usize) + p - j]
+            j += 1usize
+        }
+        vv[p] = vv[p - 1usize] * (1.0f64 - k * k)
+        p += 1usize
+    }
+    var order = 0usize
+    var best = f64(n) * math.log[f64](vv[0usize])
+    p = 1usize
+    while p <= omax {
+        let aic = f64(n) * math.log[f64](vv[p]) + 2.0f64 * f64(p)
+        if aic < best {
+            best = aic
+            order = p
+        }
+        p += 1usize
+    }
+    let mu = mean_of(x)
+    var t = 0usize
+    while t < n {
+        if t < order {
+            out[t] = nan()
+        } else {
+            var s = x[t] - mu
+            var j = 1usize
+            while j <= order {
+                s -= tab[order * (omax + 1usize) + j] * (x[t - j] - mu)
+                j += 1usize
+            }
+            out[t] = s
+        }
+        t += 1usize
+    }
+    ret order
+}
+
+fn lb12(a: *mem.Arena, w: []const f64) -> f64 {
+    let (sq, e) = mem.alloc[f64](a, w.len)
+    if e != ok { ret nan() }
+    var i = 0usize
+    while i < w.len {
+        sq[i] = w[i] * w[i]
+        i += 1usize
+    }
+    let (r, e2) = acf(a, sq, 12usize)
+    if e2 != ok { ret nan() }
+    var s = 0.0f64
+    i = 1usize
+    while i <= 12usize {
+        s += r[i] * r[i]
+        i += 1usize
+    }
+    ret s
+}
+
+// tsfeatures::heterogeneity(x): out = [arch_acf, garch_acf, arch_r2, garch_r2] from the Yule-Walker residuals and a tseries::garch(1, 1) fit
+fn heterogeneity(a: *mem.Arena, x: []const f64, out: []f64) -> err {
+    let n = x.len
+    out[0usize] = nan()
+    out[1usize] = nan()
+    out[2usize] = nan()
+    out[3usize] = nan()
+    let (res, e0) = mem.alloc[f64](a, n)
+    if e0 != ok { ret e0 }
+    let order = yw_resid(a, x, res)
+    let w = res[order..n]
+    let m = w.len
+    out[2usize] = arch_stat(a, w, 12usize, true)
+    out[0usize] = lb12(a, w)
+    let (h, e1) = mem.alloc[f64](a, m)
+    let (dh, e2) = mem.alloc[f64](a, m * 3usize)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    var c = GarchCtx{ y: w, h: h, dh: dh, n: m, p: 1usize, q: 1usize }
+    var vs = 0.0f64
+    var i = 0usize
+    while i < m {
+        vs += w[i] * w[i]
+        i += 1usize
+    }
+    vs = vs / f64(m)
+    h[0usize] = vs
+    dh[0usize] = 1.0f64
+    dh[1usize] = 0.0f64
+    dh[2usize] = 0.0f64
+    var par: [3]f64 = zero
+    par[0usize] = var_of(w) * (1.0f64 - 0.05f64 * 2.0f64)
+    par[1usize] = 0.05f64
+    par[2usize] = 0.05f64
+    let e3 = sumsl_garch(a, &c, par[0usize..3usize], 200usize, 1.0e-20f64, 1.0e-10f64, 1.4901161193847656e-08f64, 2.220446049250313e-14f64)
+    if e3 != ok { ret e3 }
+    let (hp, e4) = mem.alloc[f64](a, m)
+    if e4 != ok { ret e4 }
+    hp[0usize] = par[0usize] / (1.0f64 - par[1usize] - par[2usize])
+    i = 1usize
+    while i < m {
+        hp[i] = par[0usize] + par[1usize] * (w[i - 1usize] * w[i - 1usize]) + par[2usize] * hp[i - 1usize]
+        i += 1usize
+    }
+    let (z, e5) = mem.alloc[f64](a, m)
+    if e5 != ok { ret e5 }
+    i = 0usize
+    while i < m {
+        z[i] = w[i] / math.sqrt[f64](hp[i])
+        i += 1usize
+    }
+    let zz = z[1usize..m]
+    out[3usize] = arch_stat(a, zz, 12usize, true)
+    out[1usize] = lb12(a, zz)
+    ret ok
+}
+
+// acf(x, type = "covariance", lag.max)$acf: the autocovariances with denominator n
+fn acf_cov(a: *mem.Arena, x: []const f64, lag_max: usize) -> ([]f64, err) {
+    let (r, e) = acf(a, x, lag_max)
+    if e != ok { ret (r, e) }
+    let m = mean_of(x)
+    var c0 = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        c0 += (x[i] - m) * (x[i] - m)
+        i += 1usize
+    }
+    c0 = c0 / f64(x.len)
+    i = 0usize
+    while i <= lag_max {
+        r[i] = r[i] * c0
+        i += 1usize
+    }
+    ret (r, ok)
+}

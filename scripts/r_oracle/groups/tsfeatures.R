@@ -26,6 +26,7 @@ for (rep in 1:10) {
   sf <- suppressWarnings(stl_features(x)); sf <- unname(c(sf[c("nperiods", "seasonal_period", "trend", "spike", "linearity", "curvature", "e_acf1", "e_acf10")], if (length(sf) > 8) sf[9:11] else c(NA, NA, NA)))
   for (j in seq_along(sf)) add("stl", a(j - 1), sf[j])
   hp <- suppressWarnings(holt_parameters(x0)); add("holt", a(0), hp[[1]]); add("holt", a(1), hp[[2]])
+  ht <- suppressWarnings(tsfeatures:::heterogeneity(x)); for (j in seq_along(ht)) add("hetero", a(j - 1), ht[[j]])
   hu <- hurst(x0)[[1]]; add("hurst", a(0), hu)
   ar_ <- arch_stat(x0); if (is.finite(ar_)) add("arch", a(0), ar_[[1]])
 }
