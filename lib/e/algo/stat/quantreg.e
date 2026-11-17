@@ -9,7 +9,9 @@
 
 use e.algo.linalg.decomp as decomp
 use e.math
+use e.math.dist as dist
 use e.mem
+use e.algo.stat.bayesmpkg as bz
 
 // x is n by p column-major
 fn loss(x: []const f64, y: []const f64, n: usize, p: usize, b: []const f64, tau: f64) -> f64 {
@@ -293,3 +295,110 @@ fn rq(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, tau: f6
     }
     ret (b, ok)
 }
+
+// bandwidth.rq(p, n, hs = TRUE, alpha = 0.05)
+fn bandwidth_rq(p: f64, n: f64, hs: bool) -> f64 {
+    let x0 = dist_qn(p)
+    let f0 = math.exp[f64](0.0f64 - x0 * x0 / 2.0f64) * 0.3989422804014327f64
+    if hs { ret math.pow[f64](n, 0.0f64 - 1.0f64 / 3.0f64) * math.pow[f64](dist_qn(0.975f64), 2.0f64 / 3.0f64) * math.pow[f64]((1.5f64 * f0 * f0) / (2.0f64 * x0 * x0 + 1.0f64), 1.0f64 / 3.0f64) }
+    ret math.pow[f64](n, 0.0f64 - 0.2f64) * math.pow[f64]((4.5f64 * f0 * f0 * f0 * f0) / ((2.0f64 * x0 * x0 + 1.0f64) * (2.0f64 * x0 * x0 + 1.0f64)), 0.2f64)
+}
+
+// summary.rq(se = "nid") standard errors: the Hall-Sheather bandwidth (halved while tau +- h leaves (0, 1)), the local density f = max(0, 2 h / (x (b(tau + h) - b(tau - h)) - eps)) and the sandwich tau (1 - tau) D^-1 X'X D^-1 with D = X' diag(f) X
+fn rq_se_nid(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, tau: f64, se: []f64) -> err {
+    var h = bandwidth_rq(tau, f64(n), true)
+    while tau - h < 0.0f64 || tau + h > 1.0f64 { h = h / 2.0f64 }
+    let (bhi, e1) = rq(a, x, y, n, p, tau + h)
+    if e1 != ok { ret e1 }
+    let (blo, e2) = rq(a, x, y, n, p, tau - h)
+    if e2 != ok { ret e2 }
+    let (f, e3) = mem.alloc[f64](a, n)
+    let (dm, e4) = mem.alloc[f64](a, p * p)
+    let (xx, e5) = mem.alloc[f64](a, p * p)
+    let (u, e6) = mem.alloc[f64](a, p * p)
+    let (ui, e7) = mem.alloc[f64](a, p * p)
+    let (di, e8) = mem.alloc[f64](a, p * p)
+    let (tmp, e9) = mem.alloc[f64](a, p * p)
+    if e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret mem.Full }
+    let eps = 1.4901161193847656e-8f64
+    var i = 0usize
+    while i < n {
+        var dy = 0.0f64
+        var j = 0usize
+        while j < p {
+            dy += x[j * n + i] * (bhi[j] - blo[j])
+            j += 1usize
+        }
+        var fv = 2.0f64 * h / (dy - eps)
+        if !(fv > 0.0f64) { fv = 0.0f64 }
+        f[i] = fv
+        i += 1usize
+    }
+    var c = 0usize
+    while c < p {
+        var c2 = 0usize
+        while c2 < p {
+            var sd = 0.0f64
+            var sx = 0.0f64
+            i = 0usize
+            while i < n {
+                sd += x[c * n + i] * f[i] * x[c2 * n + i]
+                sx += x[c * n + i] * x[c2 * n + i]
+                i += 1usize
+            }
+            dm[c2 * p + c] = sd
+            xx[c2 * p + c] = sx
+            c2 += 1usize
+        }
+        c += 1usize
+    }
+    if !bz.chol_upper(dm, p, u) { ret mem.Full }
+    bz.inv_upper(u, p, ui)
+    // D^-1 = Ui Ui'
+    c = 0usize
+    while c < p {
+        var c2 = 0usize
+        while c2 < p {
+            var sv = 0.0f64
+            var q = 0usize
+            while q < p {
+                sv += ui[q * p + c] * ui[q * p + c2]
+                q += 1usize
+            }
+            di[c2 * p + c] = sv
+            c2 += 1usize
+        }
+        c += 1usize
+    }
+    // tmp = XX D^-1
+    c = 0usize
+    while c < p {
+        var c2 = 0usize
+        while c2 < p {
+            var sv = 0.0f64
+            var q = 0usize
+            while q < p {
+                sv += xx[q * p + c] * di[c2 * p + q]
+                q += 1usize
+            }
+            tmp[c2 * p + c] = sv
+            c2 += 1usize
+        }
+        c += 1usize
+    }
+    c = 0usize
+    while c < p {
+        // diag of D^-1 tmp
+        var sv = 0.0f64
+        var q = 0usize
+        while q < p {
+            sv += di[q * p + c] * tmp[c * p + q]
+            q += 1usize
+        }
+        se[c] = math.sqrt[f64](tau * (1.0f64 - tau) * sv)
+        c += 1usize
+    }
+    ret ok
+}
+
+fn dist_qn(p: f64) -> f64 { ret dist.qnorm(p, 0.0f64, 1.0f64, true, false) }

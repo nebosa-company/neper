@@ -25,6 +25,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         d[n + k] = x[4usize + n + k]
         k += 1usize
     }
+    if x[3usize] >= 100.0f64 {
+        let (se, see) = mem.alloc[f64](a, p)
+        if see != ok { ret 0.0f64 / 0.0f64 }
+        if qr.rq_se_nid(a, d, y, n, p, x[2usize], se) != ok { ret 0.0f64 / 0.0f64 }
+        ret se[usize(x[3usize]) - 100usize]
+    }
     let (b, be) = qr.rq(a, d, y, n, p, x[2usize])
     if be != ok { ret 0.0f64 / 0.0f64 }
     ret b[usize(x[3usize])]
