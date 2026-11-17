@@ -16,4 +16,9 @@ for (rep in 1:12) {
   for (k in c(1, 3, 6, 8)) for (j in 0:p) cases[[length(cases) + 1]] <-
     case("coef", c(n, p, alpha, std, length(lam), lam, vf, y, X, k - 1, j), cf[j + 1, k], rel = 1e-5, abs = 1e-6)
 }
+# the automatic lambda sequence: "lpath" (n, p, alpha, std, k, vf[p], y[n], X[n p]) the k-th lambda (0-based) of glmnet(...)$lambda
+for (rep in 1:20) {
+  n <- sample(30:80, 1); p <- sample(3:8, 1); X <- matrix(rnorm(n * p), n); y <- X[, 1] * 2 + rnorm(n); al <- sample(c(0.2, 0.5, 0.7, 1), 1); std <- rep %% 2; vf <- if (rep %% 3 == 0) runif(p, 0.5, 2) else rep(1, p)
+  f <- glmnet(X, y, alpha = al, standardize = as.logical(std), penalty.factor = vf); for (k in c(0, 1, 5, 10, min(length(f$lambda) - 1, 20))) cases[[length(cases) + 1]] <- case("lpath", c(n, p, al, std, k, vf, y, X), f$lambda[k + 1], rel = 1e-9, abs = 1e-12)
+}
 emit("glmnet", "glmnet", list(cases))

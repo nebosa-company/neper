@@ -10,6 +10,15 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if c.name[0usize] == 108u8 {
+        // lpath: (n, p, alpha, std, k, vf[p], y[n], X[n p])
+        let ln = usize(x[0usize])
+        let lp = usize(x[1usize])
+        let (lo, le) = mem.alloc[f64](a, 100usize)
+        if le != ok { ret 0.0f64 / 0.0f64 }
+        if gl.lambda_path(a, x[5usize + lp + ln..5usize + lp + ln + ln * lp], x[5usize + lp..5usize + lp + ln], ln, lp, x[2usize], x[3usize] != 0.0f64, x[5usize..5usize + lp], 100usize, lo) != ok { ret 0.0f64 / 0.0f64 }
+        ret lo[usize(x[4usize])]
+    }
     let n = usize(x[0usize])
     let p = usize(x[1usize])
     let nl = usize(x[4usize])

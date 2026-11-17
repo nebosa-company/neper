@@ -1219,10 +1219,10 @@
       "group": "CRAN parity",
       "order": 752,
       "title": "glmnet: elastic-net path and families",
-      "score": 0.12,
+      "score": 0.2,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partly done (D6055): e.algo.stat.glmnet.gaussian equals glmnet at a user lambda sequence (alpha 0..1, standardize, penalty.factor) on Windows (oracle_glmnet); Linux pending. Open: lambda path, other families, weights, offsets, bounds, cv.glmnet, relax, predict. Original: Open (CRAN rank 182). Mid to large. e.ml.linear has single-lambda lasso and elastic_net. Acceptance, coefficients equal to glmnet at its default thresh for the same lambda sequence: the lambda path (automatic lambda.max, nlambda, lambda.min.ratio), families gaussian, binomial, poisson, multinomial, mgaussian and cox, standardize, intercept, penalty.factor, bounds, weights and offsets, alpha from 0 to 1; cv.glmnet with seeded folds, lambda.min and lambda.1se; relax; predict types."
+      "evidence": "Partly done (D6055): e.algo.stat.glmnet.gaussian equals glmnet at a user lambda sequence (alpha 0..1, standardize, penalty.factor) on Windows (oracle_glmnet); Linux pending. D6879: the automatic lambda sequence equals glmnet. Open: the early stop of the path, other families, weights, offsets, bounds, cv.glmnet, relax, predict. Original: Open (CRAN rank 182). Mid to large. e.ml.linear has single-lambda lasso and elastic_net. Acceptance, coefficients equal to glmnet at its default thresh for the same lambda sequence: the lambda path (automatic lambda.max, nlambda, lambda.min.ratio), families gaussian, binomial, poisson, multinomial, mgaussian and cox, standardize, intercept, penalty.factor, bounds, weights and offsets, alpha from 0 to 1; cv.glmnet with seeded folds, lambda.min and lambda.1se; relax; predict types."
     },
     {
       "id": "L308",

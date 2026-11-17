@@ -132,3 +132,59 @@ fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, a
     }
     ret ok
 }
+
+// glmnet's automatic lambda sequence (gaussian): lambda_max = max over j of |x_j' (y - ybar)| / (n max(alpha, 0.001) vf_j) with the columns centred and (when standardize) scaled to unit variance (divisor n)
+// and the penalty factors rescaled to sum to p, then nlambda values equally spaced on the log scale down to lambda_max times 1e-4 (1e-2 when n < p); returns the sequence in out
+fn lambda_path(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, nlambda: usize, out: []f64) -> err {
+    let nf = f64(n)
+    var ybar = 0.0f64
+    var i = 0usize
+    while i < n {
+        ybar += y[i]
+        i += 1usize
+    }
+    ybar = ybar / nf
+    var vsum = 0.0f64
+    var j = 0usize
+    while j < p {
+        vsum += vf[j]
+        j += 1usize
+    }
+    var lmax = 0.0f64
+    j = 0usize
+    while j < p {
+        var mj = 0.0f64
+        i = 0usize
+        while i < n {
+            mj += x[j * n + i]
+            i += 1usize
+        }
+        mj = mj / nf
+        var ss = 0.0f64
+        var sxy = 0.0f64
+        i = 0usize
+        while i < n {
+            ss += (x[j * n + i] - mj) * (x[j * n + i] - mj)
+            sxy += (x[j * n + i] - mj) * (y[i] - ybar)
+            i += 1usize
+        }
+        var g = sxy / nf
+        if standardize { g = g / math.sqrt[f64](ss / nf) }
+        let vj = vf[j] * f64(p) / vsum
+        if vj > 0.0f64 {
+            var al = alpha
+            if al < 0.001f64 { al = 0.001f64 }
+            let v = math.abs[f64](g) / (al * vj)
+            if v > lmax { lmax = v }
+        }
+        j += 1usize
+    }
+    var ratio = 1.0e-4f64
+    if n < p { ratio = 1.0e-2f64 }
+    var k = 0usize
+    while k < nlambda {
+        out[k] = lmax * math.pow[f64](ratio, f64(k) / f64(nlambda - 1usize))
+        k += 1usize
+    }
+    ret ok
+}
