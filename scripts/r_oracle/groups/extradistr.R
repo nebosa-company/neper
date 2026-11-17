@@ -72,6 +72,17 @@ for (rep in 1:4) {
     s1 <- 1 + rep / 2; s2 <- 2 + rep / 3; add2("k4", c(1, s1, s2, -1, 2.5, xx), qnsbeta(xx, s1, s2, -1, 2.5)); add2("k4", c(2, 1 + rep, 1.3, 0, 0, xx), qht(xx, 1 + rep, 1.3))
   }
 }
+# fn "m4" (dist, p1, p2, p3, kind 0 d 1 p 2 q, v): 0 gev 1 gpd 2 dunif 3 bern 4 dweibull 5 lst 6 invchisq
+for (rep in 1:5) {
+  mu <- rnorm(1); sg <- runif(1, 0.5, 2); xi <- c(-0.3, 0.2, 0, 0.5, -0.1)[rep]
+  for (xx in mu + sg * c(-1.5, -0.5, 0.2, 1, 3)) { add2("m4", c(0, mu, sg, xi, 0, xx), dgev(xx, mu, sg, xi)); add2("m4", c(0, mu, sg, xi, 1, xx), pgev(xx, mu, sg, xi)); add2("m4", c(1, mu, sg, xi, 0, xx), dgpd(xx, mu, sg, xi)); add2("m4", c(1, mu, sg, xi, 1, xx), pgpd(xx, mu, sg, xi)) }
+  for (pq in c(0.1, 0.5, 0.9)) { add2("m4", c(0, mu, sg, xi, 2, pq), qgev(pq, mu, sg, xi)); add2("m4", c(1, mu, sg, xi, 2, pq), qgpd(pq, mu, sg, xi)); add2("m4", c(5, 1 + rep, mu, sg, 2, pq), qlst(pq, 1 + rep, mu, sg)); add2("m4", c(6, 2 + rep, 0.5 + rep / 4, 0, 2, pq), qinvchisq(pq, 2 + rep, 0.5 + rep / 4)) }
+  lo <- sample(-3:2, 1); hi <- lo + sample(3:9, 1); q <- runif(1, 0.3, 0.9); be <- runif(1, 0.5, 2); nu <- 1 + rep
+  for (xx in c(lo - 1, lo, lo + 1.0, hi, hi + 1, 0, 1, 2, 3)) { add2("m4", c(2, lo, hi, 0, 0, xx), ddunif(xx, lo, hi)); add2("m4", c(2, lo, hi, 0, 1, xx), pdunif(xx, lo, hi)); add2("m4", c(3, q, 0, 0, 0, xx), dbern(xx, q))
+    add2("m4", c(4, q, be, 0, 0, xx), ddweibull(xx, q, be)); add2("m4", c(4, q, be, 0, 1, xx), pdweibull(xx, q, be)) }
+  for (xx in c(-2, -0.5, 0.3, 1.7, 4)) { add2("m4", c(5, nu, mu, sg, 0, xx), dlst(xx, nu, mu, sg)); add2("m4", c(5, nu, mu, sg, 1, xx), plst(xx, nu, mu, sg)) }
+  for (xx in c(0.2, 0.7, 1.5, 4)) { add2("m4", c(6, nu, 0.5 + rep / 4, 0, 0, xx), dinvchisq(xx, nu, 0.5 + rep / 4)); add2("m4", c(6, nu, 0.5 + rep / 4, 0, 1, xx), pinvchisq(xx, nu, 0.5 + rep / 4)) }
+}
 # random draws: "rg" (family, seed, p1, p2, p3, index) the draw at position index (0-based) of five seeded draws; family 0 gumbel 1 frechet 2 power 3 lomax 4 pareto 5 rayleigh 6 kumar 7 gompertz 8 hnorm 9 hcauchy 10 laplace
 for (rep in 1:33) {
   sd <- sample(1:100000, 1); fam <- (rep - 1) %% 11; p1 <- runif(1, 0.5, 3); p2 <- runif(1, 0.5, 3); p3 <- runif(1, -1, 1)

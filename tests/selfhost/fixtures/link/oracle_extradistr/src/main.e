@@ -102,6 +102,42 @@ fn answer(c: *const oracle.Case) -> f64 {
         if d4 == 1usize { ret ed.nsbeta_q(qv, q1, q2, q3, q4) }
         ret ed.ht_q(qv, q1, q2)
     }
+    if str.eq(c.name, "m4") {
+        // (dist, p1, p2, p3, kind 0 d 1 p 2 q, v): 0 gev 1 gpd 2 dunif 3 bern 4 dweibull 5 lst 6 invchisq
+        let d5 = usize(x[0usize])
+        let r1 = x[1usize]
+        let r2 = x[2usize]
+        let r3 = x[3usize]
+        let kd = usize(x[4usize])
+        let rv = x[5usize]
+        if d5 == 0usize {
+            if kd == 0usize { ret ed.gev_d(rv, r1, r2, r3) }
+            if kd == 1usize { ret ed.gev_p(rv, r1, r2, r3) }
+            ret ed.gev_q(rv, r1, r2, r3)
+        }
+        if d5 == 1usize {
+            if kd == 0usize { ret ed.gpd_d(rv, r1, r2, r3) }
+            if kd == 1usize { ret ed.gpd_p(rv, r1, r2, r3) }
+            ret ed.gpd_q(rv, r1, r2, r3)
+        }
+        if d5 == 2usize {
+            if kd == 0usize { ret ed.dunif_d(rv, r1, r2) }
+            ret ed.dunif_p(rv, r1, r2)
+        }
+        if d5 == 3usize { ret ed.bern_d(rv, r1) }
+        if d5 == 4usize {
+            if kd == 0usize { ret ed.dweib_d(rv, r1, r2) }
+            ret ed.dweib_p(rv, r1, r2)
+        }
+        if d5 == 5usize {
+            if kd == 0usize { ret ed.lst_d(rv, r1, r2, r3) }
+            if kd == 1usize { ret ed.lst_p(rv, r1, r2, r3) }
+            ret ed.lst_q(rv, r1, r2, r3)
+        }
+        if kd == 0usize { ret ed.invchisq_d(rv, r1, r2) }
+        if kd == 1usize { ret ed.invchisq_p(rv, r1, r2) }
+        ret ed.invchisq_q(rv, r1, r2)
+    }
     if str.eq(c.name, "d3") {
         let d3 = usize(x[0usize])
         let w1 = x[1usize]

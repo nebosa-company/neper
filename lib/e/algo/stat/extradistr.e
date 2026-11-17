@@ -456,3 +456,76 @@ fn tbinom_q(p: f64, n: f64, pr: f64, a: f64, b: f64) -> f64 {
 }
 fn nsbeta_q(p: f64, s1: f64, s2: f64, lo: f64, hi: f64) -> f64 { ret lo + (hi - lo) * nb.qbeta(p, s1, s2, true, false) }
 fn ht_q(p: f64, nu: f64, s: f64) -> f64 { ret s * nb.qt((p + 1.0f64) / 2.0f64, nu, true, false) }
+
+// generalized extreme value(mu, sigma, xi)
+fn gev_t(x: f64, mu: f64, s: f64, xi: f64) -> f64 {
+    let z = (x - mu) / s
+    if xi == 0.0f64 { ret math.exp[f64](0.0f64 - z) }
+    ret math.pow[f64](1.0f64 + xi * z, 0.0f64 - 1.0f64 / xi)
+}
+fn gev_in(x: f64, mu: f64, s: f64, xi: f64) -> bool { ret xi == 0.0f64 || 1.0f64 + xi * (x - mu) / s > 0.0f64 }
+fn gev_d(x: f64, mu: f64, s: f64, xi: f64) -> f64 {
+    if !gev_in(x, mu, s, xi) { ret 0.0f64 }
+    let t = gev_t(x, mu, s, xi)
+    ret math.pow[f64](t, xi + 1.0f64) * math.exp[f64](0.0f64 - t) / s
+}
+fn gev_p(x: f64, mu: f64, s: f64, xi: f64) -> f64 {
+    if !gev_in(x, mu, s, xi) { if xi > 0.0f64 { ret 0.0f64 } else { ret 1.0f64 } }
+    ret math.exp[f64](0.0f64 - gev_t(x, mu, s, xi))
+}
+fn gev_q(p: f64, mu: f64, s: f64, xi: f64) -> f64 {
+    let l = 0.0f64 - math.log[f64](p)
+    if xi == 0.0f64 { ret mu - s * math.log[f64](l) }
+    ret mu + s * (math.pow[f64](l, 0.0f64 - xi) - 1.0f64) / xi
+}
+
+// generalized Pareto(mu, sigma, xi)
+fn gpd_d(x: f64, mu: f64, s: f64, xi: f64) -> f64 {
+    let z = (x - mu) / s
+    if z < 0.0f64 || (xi < 0.0f64 && z > 0.0f64 - 1.0f64 / xi) { ret 0.0f64 }
+    if xi == 0.0f64 { ret math.exp[f64](0.0f64 - z) / s }
+    ret math.pow[f64](1.0f64 + xi * z, 0.0f64 - 1.0f64 / xi - 1.0f64) / s
+}
+fn gpd_p(x: f64, mu: f64, s: f64, xi: f64) -> f64 {
+    let z = (x - mu) / s
+    if z < 0.0f64 { ret 0.0f64 }
+    if xi < 0.0f64 && z > 0.0f64 - 1.0f64 / xi { ret 1.0f64 }
+    if xi == 0.0f64 { ret 1.0f64 - math.exp[f64](0.0f64 - z) }
+    ret 1.0f64 - math.pow[f64](1.0f64 + xi * z, 0.0f64 - 1.0f64 / xi)
+}
+fn gpd_q(p: f64, mu: f64, s: f64, xi: f64) -> f64 {
+    if xi == 0.0f64 { ret mu - s * math.log[f64](1.0f64 - p) }
+    ret mu + s * (math.pow[f64](1.0f64 - p, 0.0f64 - xi) - 1.0f64) / xi
+}
+
+// discrete uniform on min .. max, Bernoulli(prob), discrete Weibull(q, beta)
+fn dunif_d(x: f64, lo: f64, hi: f64) -> f64 {
+    if x < lo || x > hi || x != math.floor[f64](x) { ret 0.0f64 }
+    ret 1.0f64 / (hi - lo + 1.0f64)
+}
+fn dunif_p(x: f64, lo: f64, hi: f64) -> f64 {
+    if x < lo { ret 0.0f64 }
+    if x >= hi { ret 1.0f64 }
+    ret (math.floor[f64](x) - lo + 1.0f64) / (hi - lo + 1.0f64)
+}
+fn bern_d(x: f64, pr: f64) -> f64 {
+    if x == 0.0f64 { ret 1.0f64 - pr }
+    if x == 1.0f64 { ret pr }
+    ret 0.0f64
+}
+fn dweib_d(x: f64, q: f64, be: f64) -> f64 {
+    if x < 0.0f64 || x != math.floor[f64](x) { ret 0.0f64 }
+    ret math.pow[f64](q, math.pow[f64](x, be)) - math.pow[f64](q, math.pow[f64](x + 1.0f64, be))
+}
+fn dweib_p(x: f64, q: f64, be: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret 1.0f64 - math.pow[f64](q, math.pow[f64](math.floor[f64](x) + 1.0f64, be))
+}
+
+// location-scale t(df, mu, sigma) and inverse chi-squared(nu, tau) through the inverse gamma
+fn lst_d(x: f64, nu: f64, mu: f64, s: f64) -> f64 { ret nb.dt((x - mu) / s, nu, false) / s }
+fn lst_p(x: f64, nu: f64, mu: f64, s: f64) -> f64 { ret nb.pt((x - mu) / s, nu, true, false) }
+fn lst_q(p: f64, nu: f64, mu: f64, s: f64) -> f64 { ret mu + s * nb.qt(p, nu, true, false) }
+fn invchisq_d(x: f64, nu: f64, tau: f64) -> f64 { ret invgamma_d(x, nu / 2.0f64, nu * tau / 2.0f64) }
+fn invchisq_p(x: f64, nu: f64, tau: f64) -> f64 { ret invgamma_p(x, nu / 2.0f64, nu * tau / 2.0f64) }
+fn invchisq_q(p: f64, nu: f64, tau: f64) -> f64 { ret invgamma_q(p, nu / 2.0f64, nu * tau / 2.0f64) }

@@ -48413,3 +48413,8 @@ Whitehead proportional-odds power (`popower`: power, efficiency, approximate sta
 ## D6983 — extraDistr quantiles of the discrete and truncated families
 
 `zip_q`, `zib_q`, `zinb_q`, `tpois_q`, `tbinom_q`, `nsbeta_q` and `ht_q`: the zero-inflated ones answer 0 up to the zero mass and invert the base above it; the truncated ones invert the base on the rescaled slice. Equal to extraDistr on 4 parameter sets x 5 probabilities (oracle_extradistr). The package has no gamma-Poisson quantile, so none is written. Linux pending.
+
+
+## D6984 — extraDistr: GEV, GPD, discrete uniform, Bernoulli, discrete Weibull, location-scale t, inverse chi-squared
+
+Seven more families from the package, with the xi = 0 limits of the GEV and GPD and the support edges (GEV and GPD with xi < 0 end at a finite point). The inverse chi-squared is the inverse gamma with shape nu / 2 and scale nu tau / 2. Equal to extraDistr on 5 parameter sets each (oracle_extradistr). The generators of these families and the Bernoulli p and q are not here. Linux pending.
