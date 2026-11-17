@@ -22,4 +22,6 @@ sp <- function(a, M) { M <- as.matrix(M); v <- as.vector(M); add("zpc", a, ncol(
 for (n in 1:7) sp(c(0, n), setparts(n))
 set.seed(12)
 for (rep in 1:40) { m <- sample(2:4, 1); f <- sample(1:4, m, TRUE); if (sum(f) > 9) next; sp(c(m, f), setparts(f)) }
+# the counts past 2^53 and the 2^64 wrap of the package's C recurrence: "bigp"/"bigq" args (n)
+for (n in c(70, 100, 150, 200, 300, 400, 401, 450, 500, 700, 1000, 1500, 2000)) { add("bgp", c(n), as.numeric(P(n))); add("bgq", c(n), as.numeric(Q(n))) }
 emit("partitions", "partitions", list(cases))

@@ -11,6 +11,11 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if c.name.len == 3usize && c.name[0usize] == 98u8 && c.name[1usize] == 103u8 {
+        let (bv, bve) = pt.count_wrap(a, usize(x[0usize]), c.name[2usize] == 113u8)
+        if bve != ok { ret 0.0f64 / 0.0f64 }
+        ret bv
+    }
     if c.name.len == 3usize && c.name[0usize] == 98u8 {
         let bm = usize(x[0usize])
         let (bo, be) = mem.alloc[f64](a, 400000usize)

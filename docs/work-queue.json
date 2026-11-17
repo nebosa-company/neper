@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L470",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 588,
-      "title": "partitions: integer and set partitions",
-      "score": 0.8,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6070): e.algo.parts has P, Q, parts, restrictedparts and diffparts in the package order, equal to partitions on 423 values on Windows (oracle_partitions); Linux pending. D6568: compositions(n, m, include.zero) (columns ordered with the last coordinate slowest) equals partitions on 168 values. D6569: blockparts(f, n) (the last coordinate slowest, the first the remainder) equals partitions on 180 values. D6789: setparts(x) for block sizes and setparts(n) (the C++ search order; counts, sum and position-weighted sum equal on n = 1 to 7 and 40 shapes). Open: big counts. Original: Open (CRAN rank 833). Small. Verify e.algo.combin first. Acceptance, equal to partitions: parts, restricted_parts, diffparts, distinct_parts, compositions, setparts, P, Q and blockparts in the order R prints them, with the counts for large n."
-    },
-    {
       "id": "L471",
       "category": "library",
       "group": "CRAN parity",

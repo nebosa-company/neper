@@ -1,5 +1,4 @@
 id	category	score	evidence_bytes	title	status
-L470	library	0.8	838	partitions: integer and set partitions	Partly done (D6070): e.algo.parts has P, Q, parts, restrictedparts and diffparts in the package order, equal to partitions on 423 values on Windows (oracle_partitions);
 L471	library	0.5	523	BiasedUrn: noncentral hypergeometric distributions	Partly done (D6071): e.algo.stat.biasedurn has Fisher and Wallenius noncentral hypergeometric d, p, q, mean and var, Fisher mode and odds, equal to BiasedUrn on 472 values on Windows (oracle_biasedurn
 L473	library	0.8	1148	isotone: isotonic regression	Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers;
 L474	library	0.2	409	kSamples: k-sample rank tests	Partial (D6452 ad.test AD and T.AD statistics, both versions, equal kSamples on Windows;

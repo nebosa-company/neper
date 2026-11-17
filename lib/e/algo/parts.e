@@ -348,3 +348,51 @@ fn setparts_n(a: *mem.Arena, n: usize, out: []f64) -> (usize, err) {
     }
     ret (total, ok)
 }
+
+// ---- P(n) and Q(n) as the package computes them: Euler's pentagonal recurrence in unsigned 64-bit arithmetic, which wraps for n past about 400 ----
+
+fn wadd(x: u64, y: u64) -> u64 {
+    let m = 4294967295u64
+    let lo = (x & m) + (y & m)
+    let carry = lo >> 32u64
+    let hi = ((x >> 32u64) + (y >> 32u64) + carry) & m
+    ret (hi << 32u64) | (lo & m)
+}
+
+fn wneg(y: u64) -> u64 { ret wadd(y ^ 18446744073709551615u64, 1u64) }
+
+// the counts of partitions (distinct false) or of distinct-part partitions (distinct true) of n by the package's C recurrence, modulo 2^64, as a double
+fn count_wrap(a: *mem.Arena, n: usize, distinct: bool) -> (f64, err) {
+    if n < 2usize { ret (1.0f64, ok) }
+    let (pp, e) = mem.alloc[u64](a, n + 1usize)
+    if e != ok { ret (0.0f64, e) }
+    pp[0usize] = 1u64
+    pp[1usize] = 1u64
+    var i = 2usize
+    while i <= n {
+        pp[i] = 0u64
+        var pass = 0usize
+        while pass < 2usize {
+            var plus = true
+            var f = 5usize
+            var r = 2usize
+            if pass == 1usize {
+                f = 4usize
+                r = 1usize
+            }
+            while i >= r {
+                if plus { pp[i] = wadd(pp[i], pp[i - r]) } else { pp[i] = wadd(pp[i], wneg(pp[i - r])) }
+                if distinct && i == r * 2usize {
+                    // qq[i] -= s: subtract 1 on a plus term, add 1 on a minus term
+                    if plus { pp[i] = wadd(pp[i], wneg(1u64)) } else { pp[i] = wadd(pp[i], 1u64) }
+                }
+                r += f
+                f += 3usize
+                plus = !plus
+            }
+            pass += 1usize
+        }
+        i += 1usize
+    }
+    ret (f64(pp[n]), ok)
+}
