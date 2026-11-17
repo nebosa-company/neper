@@ -109,6 +109,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         hm.ballocation(x[0usize], x[1usize], x[2usize], x[3usize], o4[0usize..4usize])
         ret o4[usize(x[4usize])]
     }
+    if str.eq(c.name, "cpw") {
+        // (tref, n, mc, r, accrual, tmin, noncomp.c, noncomp.i, alpha)
+        ret hm.cpower(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], x[7usize], x[8usize])
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])

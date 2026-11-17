@@ -91,4 +91,7 @@ for (rep in 1:40) { p1 <- runif(1, 0.05, 0.6); p2 <- min(0.95, p1 + runif(1, 0.0
 for (rep in 1:30) { pic <- runif(1, 0.05, 0.5); pit <- pic + runif(1, 0.1, 0.4); al <- sample(c(0.025, 0.05), 1); be <- sample(c(0.8, 0.9), 1); rho <- runif(1, 0.3, 0.7); n <- sample(50:400, 1)
   cases[[length(cases) + 1]] <- case("ssb", c(al, be, pit, pic, rho), samplesize.bin(al, be, pit, pic, rho), rel = 0, abs = 0.5)
   b <- ballocation(pic, pit, n, al); for (w in 0:3) cases[[length(cases) + 1]] <- case("bal", c(pic, pit, n, al, w), unname(b[w + 1]), rel = 1e-10, abs = 1e-12) }
+# cpower "cpw" (tref, n, mc, r, accrual, tmin, noncomp.c, noncomp.i, alpha)
+for (rep in 1:30) { tr <- sample(3:5, 1); n <- sample(500:3000, 1); mc <- runif(1, 0.1, 0.5); r <- sample(c(15, 25, 35), 1); ac <- sample(c(0, 1.5, 2.5), 1); tm <- sample(c(1, 2, 3), 1); nc <- sample(c(0, 5), 1); ni <- sample(c(0, 10), 1); al <- sample(c(0.05, 0.01), 1)
+  cases[[length(cases) + 1]] <- case("cpw", c(tr, n, mc, r, ac, tm, nc, ni, al), unname(cpower(tr, n, mc, r, ac, tm, nc, ni, al, pr = FALSE)), rel = 1e-10, abs = 1e-12) }
 emit("hmisc", "Hmisc", list(cases))

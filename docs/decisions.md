@@ -48378,3 +48378,8 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6976 — Hmisc samplesize.bin and ballocation
 
 `samplesize_bin(alpha, beta, pit, pic, rho)` (arcsine sample size, `round(n + 0.5)`) and `ballocation(p1, p2, n, alpha)` (three minimum-variance fractions plus the maximum-power fraction over the 1000-point grid, ties to the one nearest one half, as Hmisc does). Equal to R on 30 settings (oracle_hmisc). Linux pending.
+
+
+## D6977 — Hmisc cpower
+
+`cpower(tref, n, mc, r, accrual, tmin, noncomp_c, noncomp_i, alpha)`: the Lachin-Foulkes logrank power with equal arms, including the non-compliance shrinkage of the log hazard ratio. Equal to `Hmisc::cpower` on 30 settings (oracle_hmisc). Unequal nc/ni arms are not here. Linux pending.

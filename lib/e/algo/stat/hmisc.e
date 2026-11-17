@@ -956,3 +956,24 @@ fn ballocation(p1: f64, p2: f64, n: f64, alpha: f64, out: []f64) {
     }
     out[3usize] = bf
 }
+
+// cpower(tref, n, mc, r, accrual, tmin, noncomp.c, noncomp.i, alpha): the Cox/logrank power of Lachin and Foulkes as Hmisc computes it, equal group sizes n / 2; mc is the control mortality at tref and r the percent reduction
+fn cpower(tref: f64, n: f64, mc: f64, r: f64, accrual: f64, tmin: f64, ncc: f64, nci: f64, alpha: f64) -> f64 {
+    let mi = (1.0f64 - r / 100.0f64) * mc
+    let lamc = 0.0f64 - math.log[f64](1.0f64 - mc) / tref
+    let lami = 0.0f64 - math.log[f64](1.0f64 - mi) / tref
+    let tmax = tmin + accrual
+    var pc = 1.0f64 - math.exp[f64](0.0f64 - lamc * tmin)
+    var pi = 1.0f64 - math.exp[f64](0.0f64 - lami * tmin)
+    if accrual != 0.0f64 {
+        pc = 1.0f64 - 1.0f64 / accrual / lamc * (math.exp[f64](0.0f64 - tmin * lamc) - math.exp[f64](0.0f64 - tmax * lamc))
+        pi = 1.0f64 - 1.0f64 / accrual / lami * (math.exp[f64](0.0f64 - tmin * lami) - math.exp[f64](0.0f64 - tmax * lami))
+    }
+    let ec = pc * n / 2.0f64
+    let ei = pi * n / 2.0f64
+    var delta = math.log[f64](lami / lamc)
+    if ncc + nci > 0.0f64 { delta = delta * (1.0f64 - (ncc + nci) / 100.0f64) }
+    let sd = math.sqrt[f64](1.0f64 / ec + 1.0f64 / ei)
+    let z = 0.0f64 - qn(alpha / 2.0f64)
+    ret 1.0f64 - (dist.pnorm(z - math.abs[f64](delta) / sd, 0.0f64, 1.0f64, true, false) - dist.pnorm(0.0f64 - z - math.abs[f64](delta) / sd, 0.0f64, 1.0f64, true, false))
+}
