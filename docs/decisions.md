@@ -48078,3 +48078,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6902 — MuMIn: Adjusted SE of the conditional average
 
 **Decision.** `mumin.average_conditional_adj` is the "Adjusted SE" of `coefmat.subset`: the weights renormalised over the models that contain the term, each model's variance inflated by (qt(0.975, df) / qnorm(0.975))^2 with its residual degrees of freedom, sqrt(sum w (se^2 z + (b - bar)^2)). Equal to the Adjusted SE column of `summary(model.avg)$coefmat.subset` on the 12 data sets of the oracle, summed over the four coefficients with position weights (oracle_mumin, 168 cases in all). Linux pending.
+
+## D6903 — lmom: pelpe3
+
+**Decision.** `lmom.pel` kind 6 gives the Pearson type III parameters (mu, sigma, gamma) from (l1, l2, t3) by Hosking's rational approximations of the shape (alpha from |t3|, one fit below t3 = 1/3 and another above), sigma = sqrt(pi) l2 sqrt(alpha) Gamma(alpha) / Gamma(alpha + 1/2) and gamma = 2 / sqrt(alpha) with the sign of t3, a normal fit when |t3| is below 1e-6. Agrees with `pelpe3` to 1e-6 relative on 40 L-moment triples (oracle_lmom, 1059 cases in all), not to the 1e-9 of the other fits: the shape differs in the ninth digit, so the package's constants differ slightly from the ones used here and the exact source is not available. Linux pending.

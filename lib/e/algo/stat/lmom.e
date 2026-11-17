@@ -141,9 +141,11 @@ fn cdf(kind: u8, x: f64, xi: f64, alpha: f64, k: f64) -> f64 {
     ret math.exp[f64](0.0f64 - math.exp[f64](0.0f64 - y))
 }
 
-// pel(dist, lmom = (l1, l2, t3)): out = (xi, alpha, k)
+// pel(dist, lmom = (l1, l2, t3)): out = (xi, alpha, k); kind 6 is the Pearson type III, out = (mu, sigma, gamma)
 fn pel(kind: u8, l1: f64, l2: f64, t3: f64, out: []f64) {
-    if kind == 0u8 {
+    if kind == 6u8 {
+        pel_pe3(l1, l2, t3, out)
+    } else if kind == 0u8 {
         out[1usize] = 2.0f64 * l2
         out[0usize] = l1 - out[1usize]
         out[2usize] = 0.0f64
@@ -167,4 +169,28 @@ fn pel(kind: u8, l1: f64, l2: f64, t3: f64, out: []f64) {
         out[1usize] = l2 * math.sqrt[f64](pi())
         out[2usize] = 0.0f64
     }
+}
+
+// pelpe3: Hosking's rational approximations for the Pearson type III shape from |t3|, then scale and location from l2 and l1; out = (mu, sigma, gamma)
+fn pel_pe3(l1: f64, l2: f64, t3: f64, out: []f64) {
+    var at3 = math.abs[f64](t3)
+    out[0usize] = l1
+    if at3 <= 1.0e-6f64 {
+        out[1usize] = l2 * math.sqrt[f64](pi())
+        out[2usize] = 0.0f64
+        ret
+    }
+    var alpha = 0.0f64
+    if at3 >= 1.0f64 / 3.0f64 {
+        let t = 1.0f64 - at3
+        alpha = t * (0.36067f64 + t * (0.0f64 - 0.59567f64 + t * 0.25361f64)) / (1.0f64 + t * (0.0f64 - 2.78861f64 + t * (2.56096f64 + t * (0.0f64 - 0.77045f64))))
+    } else {
+        let t = 3.0f64 * pi() * at3 * at3
+        alpha = (1.0f64 + 0.2906f64 * t) / (t * (1.0f64 + t * (0.1882f64 + t * 0.0442f64)))
+    }
+    let rtalph = math.sqrt[f64](alpha)
+    let beta = math.sqrt[f64](pi()) * l2 * math.exp[f64](nm.lgammafn(alpha) - nm.lgammafn(alpha + 0.5f64))
+    out[1usize] = beta * rtalph
+    out[2usize] = 2.0f64 / rtalph
+    if t3 < 0.0f64 { out[2usize] = 0.0f64 - out[2usize] }
 }

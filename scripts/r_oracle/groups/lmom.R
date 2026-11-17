@@ -21,4 +21,7 @@ for (kind in 0:5) for (rep in 1:8) {
   if (kind <= 4) { pp <- get(paste0("pel", nm[kind + 1]))(lm[1:(if (kind <= 1 || kind == 4) 2 else 3)]); full <- c(pp, rep(0, 3 - length(pp)))
     for (q in 1:3) add("pel", c(kind, lm[1], lm[2], lm[3], q - 1), full[q]) }
 }
+# Pearson III parameters from L-moments: kind 6, (kind, l1, l2, t3, q) q 0..2 = (mu, sigma, gamma)
+for (rep in 1:40) { l1 <- rnorm(1); l2 <- runif(1, 0.2, 3); t3 <- c(runif(1, -0.6, 0.6), runif(1, 0.34, 0.9) * c(1, -1)[rep %% 2 + 1])[rep %% 3 %/% 2 + 1]
+  pp <- pelpe3(c(l1, l2, t3)); for (q in 1:3) cases[[length(cases) + 1]] <- case("pel", c(6, l1, l2, t3, q - 1), pp[q], rel = 1e-6, abs = 1e-9) }
 emit("lmom", "lmom", list(cases))
