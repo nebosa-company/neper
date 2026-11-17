@@ -377,7 +377,6 @@ oracle_mlogit
 oracle_flexsurv
 oracle_timereg
 oracle_riskregression
-oracle_osqp
 oracle_polca
 oracle_geometry
 oracle_qgraph
@@ -411,3 +410,4 @@ oracle_hoslem_rsf
 oracle_laeken_ext
 oracle_rcompanion_ext
 oracle_compositions_ext
+oracle_loo4

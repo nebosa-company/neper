@@ -1,24 +1,21 @@
-# cramer (the Cramer two-sample test, source tarball cramer_0.9-4 from CRAN, its one Rcpp function replaced by the same loop in R; set CRAMER_SRC to R/cramer.R).
-#   args: (m, n, d, kernel 0 phiCramer 1 phiBahr 2 phiLog 3 phiFracA 4 phiFracB, replicates, seed, x then y rows)
-#   "cr_stat" statistic; "cr_op" / "cr_oc" p.value / crit.value of sim = "ordinary" after set.seed(seed); "cr_pp" / "cr_pc" the same for "permutation"; "cr_ep" / "cr_ec" sim = "eigenvalue"
-suppressMessages(library(boot))
-calculateLookupMatrix <- function(length, daten, lookup) { for (i in 2:length) for (j in 1:(i - 1)) { v <- sum((daten[i, ] - daten[j, ])^2); lookup[i, j] <- v; lookup[j, i] <- v }; lookup }
-assign("calculateLookupMatrix", calculateLookupMatrix, envir = globalenv())
-src <- Sys.getenv("CRAMER_SRC", "D:/Temp/claude/src/cramer/cramer/R/cramer.R")
-exprs <- parse(src); for (e in exprs) if (!(is.call(e) && identical(e[[1]], as.name("require")))) eval(e, globalenv())
+# cramer (coda's cramer.test of the acceptance list): the Cramer two-sample statistic, the ordinary and permutation bootstrap critical values and p-values under set.seed, and the eigenvalue method.
+# The package is not in the default library: its CRAN source (0.9-4) is installed with the compiled lookup-matrix routine replaced by the same sums in R; put that library first in R_ORACLE_LIB.
+#   args (d, m, n, X[m * d] row-major, Y[n * d], kernel (0 Cramer, 1 Bahr, 2 Log, 3 FracA, 4 FracB), conf.level, replicates, seed)
+#   fn "cr_stat" "cr_boot_crit" "cr_boot_p" "cr_perm_crit" "cr_perm_p" "cr_ev_crit" "cr_ev_p"
+suppressMessages(library(cramer))
 cases <- list()
 add <- function(fn, args, want, rel = 1e-9) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = 1e-12)
 kn <- c("phiCramer", "phiBahr", "phiLog", "phiFracA", "phiFracB")
-set.seed(20261501)
-for (rep in 1:25) {
-  m <- sample(5:12, 1); n <- sample(5:12, 1); d <- sample(1:2, 1); ki <- sample(0:4, 1); R <- 200
-  x <- matrix(rnorm(m * d), m); y <- matrix(rnorm(n * d, 0.4 * (rep %% 3), 1 + 0.3 * (rep %% 2)), n); seed <- sample(1:100000, 1)
-  a <- c(m, n, d, ki, R, seed, as.vector(t(x)), as.vector(t(y))); xx <- if (d == 1) as.vector(x) else x; yy <- if (d == 1) as.vector(y) else y
-  add("cr_stat", a, cramer.test(xx, yy, just.statistic = TRUE, kernel = kn[ki + 1])$statistic)
-  if (rep <= 12) {
-    set.seed(seed); r1 <- cramer.test(xx, yy, replicates = R, sim = "ordinary", kernel = kn[ki + 1]); add("cr_op", a, r1$p.value); add("cr_oc", a, r1$crit.value)
-    set.seed(seed); r2 <- cramer.test(xx, yy, replicates = R, sim = "permutation", kernel = kn[ki + 1]); add("cr_pp", a, r2$p.value); add("cr_pc", a, r2$crit.value)
-  }
-  r3 <- suppressWarnings(cramer.test(xx, yy, sim = "eigenvalue", kernel = kn[ki + 1])); add("cr_ep", a, r3$p.value, 1e-7); add("cr_ec", a, r3$crit.value, 1e-7)
+set.seed(20261230)
+for (rep in 1:20) {
+  d <- sample(1:3, 1); m <- sample(8:25, 1); n <- sample(8:25, 1)
+  X <- matrix(rnorm(m * d), m, d); Y <- matrix(rnorm(n * d, 0.3 * (rep %% 3), 1 + 0.4 * (rep %% 2)), n, d)
+  k <- sample(0:4, 1); conf <- sample(c(0.9, 0.95), 1); R <- sample(c(100, 200, 400), 1); seed <- sample(1:1e6, 1)
+  a <- c(d, m, n, as.vector(t(X)), as.vector(t(Y)), k, conf, R, seed)
+  xx <- if (d == 1) as.vector(X) else X; yy <- if (d == 1) as.vector(Y) else Y
+  st <- cramer.test(xx, yy, just.statistic = TRUE, kernel = kn[k + 1])$statistic; add("cr_stat", a, st)
+  set.seed(seed); b <- suppressWarnings(cramer.test(xx, yy, conf.level = conf, replicates = R, sim = "ordinary", kernel = kn[k + 1])); add("cr_boot_crit", a, b$crit.value); add("cr_boot_p", a, b$p.value)
+  set.seed(seed); b <- suppressWarnings(cramer.test(xx, yy, conf.level = conf, replicates = R, sim = "permutation", kernel = kn[k + 1])); add("cr_perm_crit", a, b$crit.value); add("cr_perm_p", a, b$p.value)
+  e <- suppressWarnings(cramer.test(xx, yy, conf.level = conf, sim = "eigenvalue", kernel = kn[k + 1])); add("cr_ev_crit", a, e$crit.value, 1e-7); add("cr_ev_p", a, e$p.value, 1e-7)
 }
-emit("cramer", c("boot"), list(cases))
+emit("cramer", "cramer", list(cases))
