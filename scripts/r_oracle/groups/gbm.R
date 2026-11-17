@@ -1,6 +1,7 @@
 # gbm: boosted trees, the whole fit compared with R's. The fixture rebuilds each data set from its seed with the same draws (rnorm, runif, rexp) and fits it, so a case carries
 # only the configuration.
 #   args: (data_seed, dist, n, p, ntrees, shrinkage, depth, minobs, bag, train.fraction, fit_seed, par, wflag, mono, cv, na, more, out, a, b, c)
+#   mono: 0 none, 1 var.monotone c(1, -1, 0...), 2 offset 0.3 * V2
 #   dist: 0 gaussian 1 bernoulli 2 poisson 3 adaboost 4 laplace 5 quantile(par = alpha) 6 huberized 7 tdist(par = df) 8 coxph 9 multinomial 10 pairwise conc 11 ndcg 12 map 13 mrr
 #   out:  1 fit[a] (class c) 2 train.error[a] 3 valid.error[a] 4 oobag.improve[a] 5 relative.influence var a over b trees 6 initF 7 predict(link) row a, b trees, class c
 #         8 predict(response) 9 sum(train.error) 10 sum(valid.error) 11 sum(oobag.improve) 12 cv.error[a] 13 cv.fitted[a] 14 gbm.perf (a = 1 test, 2 cv, 3 OOB)
@@ -46,6 +47,10 @@ run_gbm <- function(g) {
   args <- list(formula = fo, distribution = dist, data = df, n.trees = g$nt, shrinkage = g$sh, interaction.depth = g$d, n.minobsinnode = g$mo, bag.fraction = g$bag, train.fraction = g$tf, cv.folds = g$cv, n.cores = 1, keep.data = TRUE, verbose = FALSE)
   if (g$wflag == 1) args$weights <- dat$w
   if (g$mono == 1) args$var.monotone <- c(1, -1, rep(0, g$p - 2))
+  if (g$mono == 2) {
+    args$data$ofs <- 0.3 * dat$X[, 2]
+    args$formula <- as.formula(paste(if (g$dist == 8) "Surv(tm, st)" else "y", "~", paste0("V", 1:g$p, collapse = " + "), "+ offset(ofs)"))
+  }
   set.seed(g$fseed)
   f <- suppressWarnings(suppressMessages(do.call(gbm, args)))
   if (g$more > 0) f <- suppressWarnings(suppressMessages(gbm.more(f, n.new.trees = g$more)))

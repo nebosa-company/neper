@@ -14,7 +14,7 @@ error BadInput
 
 type Input = struct {
     dist: usize, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, bag: f64, trainfrac: f64,
-    par: f64, maxrank: usize, cv: usize, ncores1: bool, stratify: bool, ntrain: usize, ngroups: usize,
+    par: f64, maxrank: usize, cv: usize, ncores1: bool, stratify: bool, ntrain: usize, ngroups: usize, off: []const f64,
     x: []const f64, y: []const f64, status: []const f64, w: []const f64, group: []const f64, mono: []const f64
 }
 
@@ -24,7 +24,7 @@ type Fitted = struct {
 }
 
 // the response and weights of an already ordered training set, boosted: gbm.fit
-fn fit_rows(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, x: []const f64, y: []const f64, status: []const f64, wraw: []const f64, n: usize, ntrain: usize) -> (Fitted, err) {
+fn fit_rows(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, x: []const f64, y: []const f64, status: []const f64, wraw: []const f64, oraw: []const f64, n: usize, ntrain: usize) -> (Fitted, err) {
     var bad = 0usize
     var fd: Fitted = zero
     if f64(ntrain) * cf.bag <= 2.0f64 * f64(cf.minobs) + 1.0f64 { ret (fd, BadInput) }
@@ -127,6 +127,29 @@ fn fit_rows(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, x: []const f64, y: []
     }
     var yy = ys
     var ww = ws
+    var oo: []f64 = zero
+    var anyoff = false
+    if oraw.len == n {
+        i = 0usize
+        while i < n {
+            if oraw[i] != 0.0f64 { anyoff = true }
+            i += 1usize
+        }
+    }
+    if anyoff {
+        let nrep = cls_count(cf, y, n)
+        oo = gb.af(a, n * nrep, &bad)
+        if bad != 0usize { ret (fd, gb.NoMemory) }
+        var kq = 0usize
+        while kq < nrep {
+            i = 0usize
+            while i < n {
+                oo[kq * n + i] = oraw[perm[i]]
+                i += 1usize
+            }
+            kq += 1usize
+        }
+    }
     if cf.dist == 9usize {
         yy = gb.af(a, n * nclass, &bad)
         ww = gb.af(a, n * nclass, &bad)
@@ -159,7 +182,7 @@ fn fit_rows(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, x: []const f64, y: []
     if cf.dist == 5usize { alpha = cf.par }
     if cf.dist == 7usize { nu = cf.par }
     let sp = gb.Spec{ dist: cf.dist, n: n, p: cf.p, ntrain: ntrain, nclass: nclass, ntrees: cf.ntrees, shrinkage: cf.shrinkage, depth: cf.depth, minobs: cf.minobs, bag: cf.bag,
-        alpha: alpha, nu: nu, maxrank: cf.maxrank, ngroups: 0usize, x: xs, y: yy, w: ww, misc: ms, mono: mono }
+        alpha: alpha, nu: nu, maxrank: cf.maxrank, ngroups: 0usize, x: xs, y: yy, w: ww, misc: ms, mono: mono, off: oo }
     let (m, fe) = gb.fit(a, &sp, rg, fd.fit)
     if fe != ok { ret (fd, fe) }
     fd.sp = sp
@@ -286,6 +309,7 @@ fn gbm_core(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
         let ys = gb.af(a, ntrain, &bad)
         let ss = gb.af(a, ntrain, &bad)
         let wsub = gb.af(a, ntrain, &bad)
+        let osub = gb.af(a, ntrain, &bad)
         let xp = gb.af(a, ntrain * cf.p, &bad)
         let pr = gb.af(a, ntrain * ncls, &bad)
         if bad != 0usize { ret (zero_fit(), gb.NoMemory) }
@@ -340,10 +364,13 @@ fn gbm_core(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
                 ys[i] = cf.y[ord[i]]
                 if cf.status.len == n { ss[i] = cf.status[ord[i]] }
                 if cf.w.len == n { wsub[i] = cf.w[ord[i]] }
+                if cf.off.len == n { osub[i] = cf.off[ord[i]] }
                 i += 1usize
             }
             var ws2: []f64 = zero
             if cf.w.len == n { ws2 = wsub }
+            var os2: []f64 = zero
+            if cf.off.len == n { os2 = osub }
             var ss2: []f64 = zero
             if cf.status.len == n { ss2 = ss }
             let seed = i64(seeds[k])
@@ -351,12 +378,12 @@ fn gbm_core(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
             var fdk: Fitted = zero
             if cf.ncores1 {
                 rng.seed(rg, seed)
-                let (r1, e1) = fit_rows(a, rg, cf, xs, ys, ss2, ws2, ntrain, nin)
+                let (r1, e1) = fit_rows(a, rg, cf, xs, ys, ss2, ws2, os2, ntrain, nin)
                 fdk = r1
                 fe = e1
             } else {
                 rng.seed(&other, seed)
-                let (r1, e1) = fit_rows(a, &other, cf, xs, ys, ss2, ws2, ntrain, nin)
+                let (r1, e1) = fit_rows(a, &other, cf, xs, ys, ss2, ws2, os2, ntrain, nin)
                 fdk = r1
                 fe = e1
             }
@@ -411,7 +438,7 @@ fn gbm_core(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
             }
         }
     }
-    let (fd, fe) = fit_rows(a, rg, cf, cf.x, cf.y, cf.status, cf.w, n, ntrain)
+    let (fd, fe) = fit_rows(a, rg, cf, cf.x, cf.y, cf.status, cf.w, cf.off, n, ntrain)
     if fe != ok { ret (fd, fe) }
     var out = fd
     out.cv_error = cverr
@@ -761,12 +788,14 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
     gb.msort(key1, ord, tmp, n)
     gb.msort(key2, ord, tmp, n)
     var hw = gb.af(a, n, &bad)
+    var ho = gb.af(a, n, &bad)
     if bad != 0usize { ret (zero_fit(), gb.NoMemory) }
     i = 0usize
     while i < n {
         y2[i] = cf.y[ord[i]]
         g2[i] = rowcode[ord[i]]
         if haw { hw[i] = w2[ord[i]] }
+        if cf.off.len == n { ho[i] = cf.off[ord[i]] }
         var j = 0usize
         while j < cf.p {
             x2[j * n + i] = cf.x[j * n + ord[i]]
@@ -783,6 +812,7 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
         i += 1usize
     }
     var cf2 = *cf
+    if cf.off.len == n { cf2.off = ho }
     cf2.x = x2
     cf2.y = y2
     cf2.status = g2
@@ -858,4 +888,16 @@ fn best_iter_oob(a: *mem.Arena, f: *const Fitted) -> usize {
         i += 1usize
     }
     ret best
+}
+
+// the number of response columns of the data: the classes of a multinomial response, else one
+fn cls_count(cf: *const Input, y: []const f64, n: usize) -> usize {
+    if cf.dist != 9usize { ret 1usize }
+    var k = 0usize
+    var i = 0usize
+    while i < n {
+        if usize(y[i]) + 1usize > k { k = usize(y[i]) + 1usize }
+        i += 1usize
+    }
+    ret k
 }

@@ -19,7 +19,7 @@ type Spec = struct {
     dist: usize, n: usize, p: usize, ntrain: usize, nclass: usize,
     ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, bag: f64,
     alpha: f64, nu: f64, maxrank: usize, ngroups: usize,
-    x: []const f64, y: []const f64, w: []const f64, misc: []const f64, mono: []const f64
+    x: []const f64, y: []const f64, w: []const f64, misc: []const f64, mono: []const f64, off: []const f64
 }
 
 // the fitted trees in the layout of R's object$trees: tree (t, k) occupies stride = 3 depth + 1 slots from (t nclass + k) stride
@@ -45,7 +45,7 @@ type Ctx = struct {
     prob: []f64, stepprob: []f64, arr: []f64, w2: []f64, num: []f64, den: []f64, mx: []f64, mn: []f64,
     idx: []usize, tmp: []usize, stk: []usize, stp: []usize, sts: []usize, ids: []usize, scr: []f64,
     hm: []f64, k2n: []usize, n2k: []usize,
-    rg: *rng.Rng, hess: []f64, rscore: []f64, ritem: []usize, rrank: []usize, rkpos: []usize, rankw: []f64, cutoff: usize
+    off: []f64, hasoff: bool, rg: *rng.Rng, hess: []f64, rscore: []f64, ritem: []usize, rrank: []usize, rkpos: []usize, rankw: []f64, cutoff: usize
 }
 
 fn nan_value() -> f64 { ret 0.0f64 / 0.0f64 }
@@ -585,13 +585,32 @@ fn dist_initf(c: *Ctx) -> f64 {
     var t = 0.0f64
     if d == 0usize {
         while i < nt {
-            s += c.sp.w[i] * c.sp.y[i]
+            s += c.sp.w[i] * (c.sp.y[i] - c.off[i])
             t += c.sp.w[i]
             i += 1usize
         }
         ret s / t
     }
     if d == 1usize {
+        if c.hasoff {
+            // Newton's method for the constant that balances the offset fit
+            var f0 = 0.0f64
+            var step = 1.0f64
+            while absf(step) > 0.0001f64 {
+                var num = 0.0f64
+                var den = 0.0f64
+                i = 0usize
+                while i < nt {
+                    let pr = 1.0f64 / (1.0f64 + expf(0.0f64 - (c.off[i] + f0)))
+                    num += c.sp.w[i] * (c.sp.y[i] - pr)
+                    den += c.sp.w[i] * pr * (1.0f64 - pr)
+                    i += 1usize
+                }
+                step = num / den
+                f0 += step
+            }
+            ret f0
+        }
         while i < nt {
             s += c.sp.w[i] * c.sp.y[i]
             t += c.sp.w[i]
@@ -602,7 +621,7 @@ fn dist_initf(c: *Ctx) -> f64 {
     if d == 2usize {
         while i < nt {
             s += c.sp.w[i] * c.sp.y[i]
-            t += c.sp.w[i]
+            t += c.sp.w[i] * expf(c.off[i])
             i += 1usize
         }
         ret logf(s / t)
@@ -610,9 +629,17 @@ fn dist_initf(c: *Ctx) -> f64 {
     if d == 3usize || d == 6usize {
         while i < nt {
             if c.sp.y[i] == 1.0f64 {
-                s += c.sp.w[i]
+                if d == 3usize {
+                    s += c.sp.w[i] * expf(0.0f64 - c.off[i])
+                } else {
+                    s += c.sp.w[i]
+                }
             } else {
-                t += c.sp.w[i]
+                if d == 3usize {
+                    t += c.sp.w[i] * expf(c.off[i])
+                } else {
+                    t += c.sp.w[i]
+                }
             }
             i += 1usize
         }
@@ -622,7 +649,7 @@ fn dist_initf(c: *Ctx) -> f64 {
     if d == 4usize || d == 5usize || d == 7usize {
         i = 0usize
         while i < nt {
-            c.arr[i] = c.sp.y[i]
+            c.arr[i] = c.sp.y[i] - c.off[i]
             i += 1usize
         }
         if d == 4usize { ret lm_median(c, c.arr, c.sp.w, nt) }
@@ -645,7 +672,7 @@ fn dist_response(c: *Ctx, off: usize) {
         var risk = 0.0f64
         while i < nt {
             if c.inbag[i] != 0u8 {
-                risk += c.sp.w[i] * expf(c.f[i])
+                risk += c.sp.w[i] * expf(c.f[i] + c.off[i])
                 c.scr[i] = risk
             }
             i += 1usize
@@ -656,15 +683,20 @@ fn dist_response(c: *Ctx, off: usize) {
             i -= 1usize
             if c.inbag[i] != 0u8 {
                 if c.sp.misc[i] == 1.0f64 { tot += c.sp.w[i] / c.scr[i] }
-                c.z[i] = c.sp.misc[i] - expf(c.f[i]) * tot
+                c.z[i] = c.sp.misc[i] - expf(c.f[i] + c.off[i]) * tot
             }
         }
         ret
     }
     while i < nt {
         let j = off + i
-        let y = c.sp.y[j]
-        let f = c.f[j]
+        var y = c.sp.y[j]
+        var f = c.f[j]
+        if d == 0usize || d == 4usize || d == 7usize {
+            y = y - c.off[j]
+        } else {
+            f = f + c.off[j]
+        }
         if d == 0usize {
             c.z[j] = y - f
         } else if d == 1usize {
@@ -723,14 +755,14 @@ fn dist_dev(c: *Ctx, off: usize, len: usize) -> f64 {
             var cs = 0.0f64
             var kk = 0usize
             while kk < nc {
-                cs += expf(c.f[ii + kk * mr])
+                cs += expf(c.f[ii + kk * mr] + c.off[ii + kk * mr])
                 kk += 1usize
             }
             if !(cs > 0.0f64) { cs = 1.0e-8f64 }
             kk = 0usize
             while kk < nc {
                 let ix = ii + kk * mr
-                if c.sp.y[ix] == 1.0f64 { dl += (0.0f64 - c.sp.w[ix]) * (c.f[ix] - logf(cs)) }
+                if c.sp.y[ix] == 1.0f64 { dl += (0.0f64 - c.sp.w[ix]) * (c.f[ix] + c.off[ix] - logf(cs)) }
                 kk += 1usize
             }
             dw += c.sp.w[ii]
@@ -741,7 +773,7 @@ fn dist_dev(c: *Ctx, off: usize, len: usize) -> f64 {
     if d == 8usize {
         var tr = 0.0f64
         while i < off + len {
-            let f = c.f[i]
+            let f = c.f[i] + c.off[i]
             tr += c.sp.w[i] * expf(f)
             if c.sp.misc[i] == 1.0f64 {
                 dl += c.sp.w[i] * (f - logf(tr))
@@ -752,8 +784,13 @@ fn dist_dev(c: *Ctx, off: usize, len: usize) -> f64 {
         ret (0.0f64 - 2.0f64) * dl / dw
     }
     while i < off + len {
-        let y = c.sp.y[i]
-        let f = c.f[i]
+        var y = c.sp.y[i]
+        var f = c.f[i]
+        if d == 0usize || d == 4usize || d == 7usize {
+            y = y - c.off[i]
+        } else {
+            f = f + c.off[i]
+        }
         let w = c.sp.w[i]
         if d == 0usize {
             dl += w * (y - f) * (y - f)
@@ -808,7 +845,7 @@ fn dist_bagimp(c: *Ctx, dstep: f64) -> f64 {
             var kk = 0usize
             while kk < nc {
                 let ix = ii + kk * mr
-                var df = c.f[ix]
+                var df = c.f[ix] + c.off[ix]
                 if kk == nc - 1usize { df += dstep * c.fadj[ix] }
                 c.stepprob[ix] = c.sp.w[ix] * expf(df)
                 cs += c.sp.w[ix] * expf(df)
@@ -842,7 +879,7 @@ fn dist_bagimp(c: *Ctx, dstep: f64) -> f64 {
         var dden = 0.0f64
         while i < nt {
             if c.inbag[i] == 0u8 {
-                let f = c.f[i]
+                let f = c.f[i] + c.off[i]
                 dnum += c.sp.w[i] * expf(f + dstep * c.fadj[i])
                 dden += c.sp.w[i] * expf(f)
                 if c.sp.misc[i] == 1.0f64 {
@@ -857,7 +894,7 @@ fn dist_bagimp(c: *Ctx, dstep: f64) -> f64 {
     while i < nt {
         if c.inbag[i] == 0u8 {
             let y = c.sp.y[i]
-            let f = c.f[i]
+            let f = c.f[i] + c.off[i]
             let w = c.sp.w[i]
             let fa = c.fadj[i]
             if d == 0usize {
@@ -1022,7 +1059,7 @@ fn dist_fitconst(c: *Ctx, zoff: usize) {
                 i = 0usize
                 while i < nt {
                     if c.inbag[i] != 0u8 && c.assign[i] == k {
-                        c.arr[m] = c.sp.y[i] - c.f[i]
+                        c.arr[m] = c.sp.y[i] - c.off[i] - c.f[i]
                         c.w2[m] = c.sp.w[i]
                         m += 1usize
                     }
@@ -1080,7 +1117,7 @@ fn dist_fitconst(c: *Ctx, zoff: usize) {
         let a = c.assign[i]
         let y = c.sp.y[i]
         let w = c.sp.w[i]
-        let f = c.f[i]
+        let f = c.f[i] + c.off[i]
         if c.inbag[i] != 0u8 {
             if d == 1usize {
                 c.num[a] += w * c.z[i]
@@ -1107,8 +1144,8 @@ fn dist_fitconst(c: *Ctx, zoff: usize) {
             }
         }
         if d == 2usize {
-            if f > c.mx[a] { c.mx[a] = f }
-            if f < c.mn[a] { c.mn[a] = f }
+            if c.f[i] > c.mx[a] { c.mx[a] = c.f[i] }
+            if c.f[i] < c.mn[a] { c.mn[a] = c.f[i] }
         }
         i += 1usize
     }
@@ -1173,7 +1210,7 @@ fn fitconst_cox(c: *Ctx) {
     i = 0usize
     while i < nt {
         if c.inbag[i] != 0u8 && c.nd_n[c.term[c.assign[i]]] >= c.sp.minobs {
-            let f = c.f[i]
+            let f = c.f[i] + c.off[i]
             c.num[c.n2k[c.assign[i]]] += c.sp.w[i] * expf(f)
             risk += c.sp.w[i] * expf(f)
             if c.sp.misc[i] == 1.0f64 {
@@ -1229,8 +1266,8 @@ fn update_params(c: *Ctx) {
         var kk = 0usize
         while kk < nc {
             let ix = ii + kk * mr
-            c.prob[ix] = c.sp.w[ix] * expf(c.f[ix])
-            cs += c.sp.w[ix] * expf(c.f[ix])
+            c.prob[ix] = c.sp.w[ix] * expf(c.f[ix] + c.off[ix])
+            cs += c.sp.w[ix] * expf(c.f[ix] + c.off[ix])
             kk += 1usize
         }
         if !(cs > 0.0f64) { cs = 1.0e-8f64 }
@@ -1400,13 +1437,21 @@ fn fit(a: *mem.Arena, sp: *const Spec, rg: *rng.Rng, fold: []const f64) -> (Mode
         prob: af(a, pwork, &bad), stepprob: af(a, pwork, &bad), arr: af(a, n, &bad), w2: af(a, n, &bad), num: af(a, nterm + 1usize, &bad), den: af(a, nterm + 1usize, &bad), mx: af(a, nterm + 1usize, &bad), mn: af(a, nterm + 1usize, &bad),
         idx: au(a, n, &bad), tmp: au(a, n, &bad), stk: au(a, stride + 3usize, &bad), stp: au(a, stride + 3usize, &bad), sts: au(a, stride + 3usize, &bad), ids: au(a, nterm + 1usize, &bad), scr: af(a, n, &bad),
         hm: af(a, nterm * nterm + 1usize, &bad), k2n: au(a, nterm + 1usize, &bad), n2k: au(a, nterm + 1usize, &bad),
-        rg: rg, hess: af(a, n, &bad), rscore: af(a, n, &bad), ritem: au(a, n, &bad), rrank: au(a, n, &bad), rkpos: au(a, n + 1usize, &bad), rankw: af(a, n + 2usize, &bad), cutoff: 0usize }
+        off: af(a, n * nc, &bad), hasoff: false, rg: rg, hess: af(a, n, &bad), rscore: af(a, n, &bad), ritem: au(a, n, &bad), rrank: au(a, n, &bad), rkpos: au(a, n + 1usize, &bad), rankw: af(a, n + 2usize, &bad), cutoff: 0usize }
     let tot = s.ntrees * nc
     var m = Model{ nclass: nc, ntrees: s.ntrees, depth: dp, p: s.p, stride: stride, initf: 0.0f64, f: c.f, train_err: af(a, s.ntrees, &bad), valid_err: af(a, s.ntrees, &bad), oobag: af(a, s.ntrees, &bad),
         nnodes: au(a, tot, &bad), tvar: ai(a, tot * stride, &bad), tcode: af(a, tot * stride, &bad), tleft: ai(a, tot * stride, &bad), tright: ai(a, tot * stride, &bad), tmiss: ai(a, tot * stride, &bad), terr: af(a, tot * stride, &bad), twt: af(a, tot * stride, &bad), tpred: af(a, tot * stride, &bad) }
     var res = af(a, 3usize, &bad)
     if bad != 0usize || dp < 1usize { ret (m, NoMemory) }
     c.totinbag = usize(s.bag * f64(nt))
+    if s.off.len == n * nc {
+        var oi = 0usize
+        while oi < n * nc {
+            c.off[oi] = s.off[oi]
+            if s.off[oi] != 0.0f64 { c.hasoff = true }
+            oi += 1usize
+        }
+    }
     if s.dist >= 10usize {
         var maxitems = 0usize
         var start = 0usize
@@ -1613,7 +1658,7 @@ fn pw_end(c: *Ctx, start: usize, limit: usize) -> usize {
 fn rk_setscores(c: *Ctx, at: usize, m: usize) {
     var i = 0usize
     while i < m {
-        c.rscore[i] = c.f[at + i] + 1.0e-10f64 * (rng.unif(c.rg) - 0.5f64)
+        c.rscore[i] = c.f[at + i] + c.off[at + i] + 1.0e-10f64 * (rng.unif(c.rg) - 0.5f64)
         i += 1usize
     }
 }
@@ -1882,7 +1927,7 @@ fn pw_lambdas(c: *Ctx, at: usize, m: usize) {
             let sc = absf(pw_swapcost(c, at, m, i, j))
             if sc > 0.0f64 {
                 pairs += 1usize
-                let rho = 1.0f64 / (1.0f64 + expf(c.f[at + i] - c.f[at + j]))
+                let rho = 1.0f64 / (1.0f64 + expf((c.f[at + i] + c.off[at + i]) - (c.f[at + j] + c.off[at + j])))
                 let lam = sc * rho
                 c.z[at + i] += lam
                 c.z[at + j] -= lam

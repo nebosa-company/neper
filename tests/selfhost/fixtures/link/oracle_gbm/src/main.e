@@ -1,4 +1,4 @@
-// e.algo.stat.gbmr (over gbmfit) against gbm. tests/oracle/gbm.json comes from `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R gbm`; the case layout is at the top of
+// e.algo.stat.gbmr (over gbmfit) against gbm. tests/oracle/gbm.json and gbm2.json come from `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R gbm`; the case layout is at the top of
 // scripts/r_oracle/groups/gbm.R. Every data set is rebuilt here from its seed with the same R generator draws, fitted once, and then every case of that configuration reads one number off the fit.
 
 use e.algo.rand.r as rng
@@ -240,8 +240,8 @@ fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, dx: []const f64, 
     ret nan
 }
 
-fn main(a: *mem.Arena, args: []str) -> err {
-    let (golden, load_error) = oracle.load(a, "tests/oracle/gbm.json")
+fn run_file(a: *mem.Arena, path: str) -> usize {
+    let (golden, load_error) = oracle.load(a, path)
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
@@ -304,8 +304,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
             var ww: []f64 = zero
             if z[12usize] == 1.0f64 { ww = dat.w }
             var gpv: []f64 = zero
+            var offv: []f64 = zero
+            if z[13usize] == 2.0f64 {
+                offv = gb.af(a, n, &bad)
+                var oi = 0usize
+                while oi < n {
+                    offv[oi] = 0.3f64 * dat.x[n + oi]
+                    oi += 1usize
+                }
+            }
             if dist >= 10usize { gpv = dat.g }
-            let inp = gr.Input{ dist: dist, n: n, p: p, ntrees: usize(z[4usize]), shrinkage: z[5usize], depth: usize(z[6usize]), minobs: usize(z[7usize]), bag: z[8usize], trainfrac: z[9usize], par: z[11usize], maxrank: maxrank, cv: usize(z[14usize]), ncores1: true, stratify: false, ntrain: 0usize, ngroups: 0usize,
+            let inp = gr.Input{ dist: dist, n: n, p: p, ntrees: usize(z[4usize]), shrinkage: z[5usize], depth: usize(z[6usize]), minobs: usize(z[7usize]), bag: z[8usize], trainfrac: z[9usize], par: z[11usize], maxrank: maxrank, cv: usize(z[14usize]), ncores1: true, stratify: false, ntrain: 0usize, ngroups: 0usize, off: offv,
                 x: dat.x, y: dat.y, status: st, w: ww, group: gpv, mono: mono }
             rng.seed(&rg, i64(z[10usize]))
             var (f, fe) = gr.gbm(a, &rg, &inp)
@@ -349,6 +358,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         mem.reset(a, start)
         at += 1usize
     }
+    ret failures
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let base = mem.mark(a)
+    var failures = run_file(a, "tests/oracle/gbm.json")
+    mem.reset(a, base)
+    failures += run_file(a, "tests/oracle/gbm2.json")
     if failures > 0usize { os.exit(1) }
     ret ok
 }
