@@ -92,6 +92,8 @@ for (rep in 1:12) {
   cv <- suppressWarnings(cv.glmnet(X, y, alpha = alpha, standardize = std, lambda = lam, foldid = fid, thresh = 1e-14, grouped = TRUE))
   for (k in c(1, 4, 8)) { cases[[length(cases) + 1]] <- case("cv", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, fid - 1, nf, k - 1, 0), cv$cvm[k], rel = 1e-6, abs = 1e-8)
     cases[[length(cases) + 1]] <- case("cv", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, fid - 1, nf, k - 1, 1), cv$cvsd[k], rel = 1e-5, abs = 1e-8) }
+  cases[[length(cases) + 1]] <- case("cv", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, fid - 1, nf, 0, 2), cv$lambda.min, rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("cv", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, fid - 1, nf, 0, 3), cv$lambda.1se, rel = 1e-9, abs = 1e-12)
 }
 # the automatic lambda sequence: "lpath" (n, p, alpha, std, k, vf[p], y[n], X[n p]) the k-th lambda (0-based) of glmnet(...)$lambda
 for (rep in 1:20) {

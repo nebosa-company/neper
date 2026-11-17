@@ -48014,3 +48014,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6886 — glmnet: cv.glmnet with given folds (gaussian)
 
 **Decision.** `glmnet.cv_gaussian` refits the gaussian path on each fold's complement over the given lambda sequence and answers, per lambda, `cvm` (the mean squared prediction error over all observations, the fold errors weighted by fold size) and `cvsd` (sqrt of the size-weighted variance of the fold errors about `cvm`, over n and nfolds - 1), as `cv.glmnet(foldid = ...)` does. Equal to glmnet on 12 data sets over alpha, standardize and 3 to 7 folds, three lambdas each, both outputs (oracle_glmnet, 1636 cases in all). Not here: random fold assignment (R's `sample`), other loss types, other families, lambda.min and lambda.1se selection, the early stop, multinomial, mgaussian, cox, `predict`. Linux pending.
+
+## D6887 — glmnet: lambda.min and lambda.1se
+
+**Decision.** `glmnet.cv_select` picks lambda.min (the largest lambda whose cvm equals the smallest cvm) and lambda.1se (the largest lambda whose cvm is at most the smallest cvm plus the cvsd at lambda.min), as `cv.glmnet` does. Equal to glmnet on the 12 cross-validation data sets of D6886, both values (oracle_glmnet, 1660 cases in all). Linux pending.

@@ -465,3 +465,32 @@ fn cv_gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize
     }
     ret ok
 }
+
+// lambda.min (the largest lambda whose cvm equals the smallest) and lambda.1se (the largest lambda whose cvm is within one cvsd of that smallest) of cv.glmnet; out = (lambda.min, lambda.1se)
+fn cv_select(lambdas: []const f64, cvm: []const f64, cvsd: []const f64, out: []f64) {
+    var best = cvm[0usize]
+    var at = 0usize
+    var k = 1usize
+    while k < lambdas.len {
+        if cvm[k] < best { best = cvm[k] }
+        k += 1usize
+    }
+    var lmin = 0.0f64 - 1.0e300f64
+    k = 0usize
+    while k < lambdas.len {
+        if cvm[k] <= best && lambdas[k] > lmin {
+            lmin = lambdas[k]
+            at = k
+        }
+        k += 1usize
+    }
+    let lim = best + cvsd[at]
+    var l1 = 0.0f64 - 1.0e300f64
+    k = 0usize
+    while k < lambdas.len {
+        if cvm[k] <= lim && lambdas[k] > l1 { l1 = lambdas[k] }
+        k += 1usize
+    }
+    out[0usize] = lmin
+    out[1usize] = l1
+}
