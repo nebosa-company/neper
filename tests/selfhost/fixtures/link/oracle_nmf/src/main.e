@@ -19,7 +19,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (h3, g2) = mem.alloc[f64](a, rk * p)
         let (o3, g3) = mem.alloc[f64](a, 2usize)
         if g1 != ok || g2 != ok || g3 != ok { ret nan }
-        let se = nf.snmf_fit(a, z[6usize..6usize + n * p], n, p, rk, usize(z[3usize]), i64(z[4usize]), 20000usize, 0.0f64 - 1.0f64, 0.01f64, 0.0f64, 10.0f64, 1.0e-4f64, w3, h3, o3)
+        var sp0 = 0.0f64 - 1.0f64
+        var sp1 = 0.01f64
+        var sp2 = 0.0f64
+        var sp3 = 10.0f64
+        var sp4 = 1.0e-4f64
+        if z.len >= 12usize + n * p {
+            sp0 = z[8usize + n * p]
+            sp1 = z[7usize + n * p]
+            sp2 = z[9usize + n * p]
+            sp3 = z[10usize + n * p]
+            sp4 = z[11usize + n * p]
+        }
+        let se = nf.snmf_fit(a, z[6usize..6usize + n * p], n, p, rk, usize(z[3usize]), i64(z[4usize]), 20000usize, sp0, sp1, sp2, sp3, sp4, w3, h3, o3)
         if se != ok { ret nan }
         let sx = usize(z[6usize + n * p])
         if sx == 0usize { ret o3[0usize] }

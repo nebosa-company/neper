@@ -1384,6 +1384,8 @@ fn snmf_fit(a: *mem.Arena, a0: []const f64, m0: usize, n0: usize, k: usize, vers
     let (gm, e4) = mem.alloc[f64](a, k * k)
     let (bv, e5) = mem.alloc[f64](a, k)
     let (xv, e6) = mem.alloc[f64](a, k)
+    let (tmpk, e12) = mem.alloc[f64](a, k)
+    if e12 != ok { ret mem.Full }
     let (idw, e8) = mem.alloc[usize](a, m)
     let (idh, e9) = mem.alloc[usize](a, n)
     let (iwo, e10) = mem.alloc[usize](a, m)
@@ -1394,6 +1396,11 @@ fn snmf_fit(a: *mem.Arena, a0: []const f64, m0: usize, n0: usize, k: usize, vers
         q = 0usize
         while q < m * k {
             w[q] = rng.unif(&r)
+            q += 1usize
+        }
+        q = 0usize
+        while q < k * n0 {
+            let _u = rng.unif(&r)
             q += 1usize
         }
     } else {
@@ -1414,12 +1421,12 @@ fn snmf_fit(a: *mem.Arena, a0: []const f64, m0: usize, n0: usize, k: usize, vers
     normalise_cols(w, m, k)
     i = 0usize
     while i < m {
-        iwo[i] = 0usize
+        iwo[i] = 1000000usize
         i += 1usize
     }
     j = 0usize
     while j < n {
-        iho[j] = 0usize
+        iho[j] = 1000000usize
         j += 1usize
     }
     var inc = 0.0f64
@@ -1484,12 +1491,12 @@ fn snmf_fit(a: *mem.Arena, a0: []const f64, m0: usize, n0: usize, k: usize, vers
             if nrestart >= 10usize { done = true } else {
                 i = 0usize
                 while i < m {
-                    iwo[i] = 0usize
+                    iwo[i] = 1000000usize
                     i += 1usize
                 }
                 j = 0usize
                 while j < n {
-                    iho[j] = 0usize
+                    iho[j] = 1000000usize
                     j += 1usize
                 }
                 inc = 0.0f64
@@ -1543,24 +1550,17 @@ fn snmf_fit(a: *mem.Arena, a0: []const f64, m0: usize, n0: usize, k: usize, vers
             if it % 5usize == 0usize || !have1 {
                 i = 0usize
                 while i < m {
-                    var best = 0usize
-                    kx = 1usize
+                    kx = 0usize
                     while kx < k {
-                        if w[kx * m + i] > w[best * m + i] { best = kx }
+                        tmpk[kx] = w[kx * m + i]
                         kx += 1usize
                     }
-                    idw[i] = best
+                    idw[i] = max_col_pick(&r, tmpk)
                     i += 1usize
                 }
                 j = 0usize
                 while j < n {
-                    var best = 0usize
-                    kx = 1usize
-                    while kx < k {
-                        if h[j * k + kx] > h[j * k + best] { best = kx }
-                        kx += 1usize
-                    }
-                    idh[j] = best
+                    idh[j] = max_col_pick(&r, h[j * k..j * k + k])
                     j += 1usize
                 }
                 var chw = 0.0f64
@@ -1734,4 +1734,34 @@ fn csum(x: []const f64) -> f64 {
         q += 1usize
     }
     ret s + c
+}
+
+// R's max.col(ties.method = "random") for one row: entries within 1e-5 of the row's largest absolute value of the running maximum count as ties, and each tie draws a uniform
+// (ntie * unif < 1 takes the newcomer), the generator being touched only when a tie occurs
+fn max_col_pick(r: *rng.Rng, v: []const f64) -> usize {
+    var large = 0.0f64
+    var c = 0usize
+    while c < v.len {
+        let x = math.abs[f64](v[c])
+        if x > large { large = x }
+        c += 1usize
+    }
+    let tol = 1.0e-5f64 * large
+    var a = v[0usize]
+    var m = 0usize
+    var ntie = 1.0f64
+    c = 1usize
+    while c < v.len {
+        let b = v[c]
+        if b > a + tol {
+            a = b
+            m = c
+            ntie = 1.0f64
+        } else if b >= a - tol {
+            ntie += 1.0f64
+            if ntie * rng.unif(r) < 1.0f64 { m = c }
+        }
+        c += 1usize
+    }
+    ret m
 }

@@ -3643,4 +3643,5 @@ D6780	902	NMF: silhouette of the consensus and of the coefficients
 D6781	1103	NMF: the rest of summary()
 D6782	898	NMF: nmfEstimateRank is the per-rank fit
 D6783	1318	NMF: snmf/r and snmf/l
-D6784	1084	NMF: pe-nmf and the nndsvd random densify
+D6784	1085	NMF: pe-nmf and the nndsvd random densify
+D6785	1385	NMF: snmf settings and R's max.col ties

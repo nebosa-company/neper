@@ -131,4 +131,14 @@ for (rep in 1:16) {
   if (any(!is.finite(v))) next
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 30 + me, sd, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
 }
+# snmf settings: beta, eta, bi_conv, eps_conv (trailing args after idx: beta, eta, wminchange, iconv, eps_conv)
+for (rep in 1:20) {
+  n <- sample(8:14, 1); p <- sample(6:10, 1); r <- sample(2:3, 1); ver <- rep %% 2; sd <- sample(1:100000, 1)
+  be <- c(0.001, 0.05, 0.2)[sample(3, 1)]; et <- c(-1, 0.5, 2)[sample(3, 1)]; wm <- c(0, 1)[sample(2, 1)]; ic <- c(5, 10, 20)[sample(3, 1)]; ep <- c(1e-3, 1e-4, 1e-5)[sample(3, 1)]
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = if (ver == 0) "snmf/r" else "snmf/l", seed = sd, beta = be, eta = et, bi_conv = c(wm, ic), eps_conv = ep)), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("snm", c(n, p, r, ver, sd, 0.5, as.vector(x), q - 1, be, et, wm, ic, ep), v[q], rel = if (q == 1) 0 else 1e-4, abs = if (q == 1) 10 else 1e-6)
+}
 emit("nmf", "NMF", list(cases))
