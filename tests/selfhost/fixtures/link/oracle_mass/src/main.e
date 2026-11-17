@@ -27,6 +27,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret s
     }
     if str.eq(c.name, "bwucv") { ret bs.bw_cv(a, x[1usize..1usize + usize(x[0usize])], 0u8) }
+    if str.eq(c.name, "bwsj") { ret bs.bw_sj(a, x[1usize..1usize + usize(x[0usize])]) }
     if str.eq(c.name, "bwbcv") { ret bs.bw_cv(a, x[1usize..1usize + usize(x[0usize])], 1u8) }
     if str.eq(c.name, "kde2d") {
         let kn = usize(x[0usize])
