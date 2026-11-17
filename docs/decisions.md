@@ -48488,3 +48488,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6998 — Rmpfr decimal string parsing
 
 `mpfr.from_decimal(nn, k, prec, mode)`: N * 10^k as an exact integer (k >= 0) or the exact quotient N / 10^-k through `div_m`, so every rounding mode comes out as MPFR parses it. Equal to `mpfr("N e k", prec, rnd.mode)` on 80 strings of up to 18 digits (oracle_mpfr). Sign, the decimal point and the exponent syntax are caller work. Linux pending.
+
+
+## D6999 — Rmpfr directed rounding of the transcendental functions
+
+`mpfr.reround(r, prec, mode)` re-rounds a result computed at prec + 64 bits in a directed mode. It is wrong only when the true value lies within 2^-(prec + 64) relative of a rounding boundary, and none of these functions reaches a boundary exactly (the exact cases, exp 0 and log 1, come out exact at the wider precision). Equal to `roundMpfr(f(x), prec, rnd.mode)` for exp, log, sin, cos, tan, atan and pow on 140 cases (oracle_mpfr); the other functions use the same wrapper. Linux pending.

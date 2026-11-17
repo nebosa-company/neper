@@ -11,6 +11,49 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if usize(z[0usize]) == 97usize {
+        // directed rounding of a transcendental function: (97, prec, m1, e1, m2, e2, mode, fn 0 exp 1 log 2 sin 3 cos 4 tan 5 atan 6 pow, which)
+        let tp = usize(z[1usize])
+        let wp = tp + 64usize
+        let (tx, t1) = mp.from_parts(a, i64(z[2usize]), i64(z[3usize]), wp)
+        let (ty, t2) = mp.from_parts(a, i64(z[4usize]), i64(z[5usize]), wp)
+        if t1 != ok || t2 != ok { ret nan }
+        let tf = usize(z[7usize])
+        var tr: mp.Mp = zero
+        var te = ok
+        if tf == 0usize {
+            let (t, e) = mp.exp(a, tx, wp)
+            tr = t
+            te = e
+        } else if tf == 1usize {
+            let (t, e) = mp.log(a, tx, wp)
+            tr = t
+            te = e
+        } else if tf == 2usize || tf == 3usize {
+            let (sn, cs, e) = mp.sin_cos(a, tx, wp)
+            tr = sn
+            if tf == 3usize { tr = cs }
+            te = e
+        } else if tf == 4usize {
+            let (t, e) = mp.tan(a, tx, wp)
+            tr = t
+            te = e
+        } else if tf == 5usize {
+            let (t, e) = mp.atan(a, tx, wp)
+            tr = t
+            te = e
+        } else {
+            let (t, e) = mp.pow(a, tx, ty, wp)
+            tr = t
+            te = e
+        }
+        if te != ok { ret nan }
+        let (tq, tqe) = mp.reround(a, tr, tp, usize(z[6usize]))
+        if tqe != ok { ret nan }
+        let (thi, tlo) = mp.to_pair(a, tq)
+        if z[8usize] == 0.0f64 { ret thi }
+        ret tlo
+    }
     if usize(z[0usize]) == 98usize {
         // mpfr("N e k"): (98, prec, N high part, N low part of 12 digits, k, mode, which 0 hi 1 lo); N = high * 10^12 + low
         let fprec = usize(z[1usize])

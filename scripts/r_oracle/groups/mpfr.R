@@ -133,4 +133,16 @@ for (rep in 1:80) {
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
 }
+# directed rounding of exp, log, sin, cos, tan, atan, pow (97, prec, m1, e1, m2, e2, mode, fn 0..6, which)
+for (rep in 1:140) {
+  prec <- sample(c(53, 80, 128), 1); md <- sample(0:4, 1); fn <- sample(0:6, 1); m1 <- sample(1:(2^50), 1); m2 <- sample(1:(2^50), 1); e1 <- sample(-60:-48, 1); e2 <- sample(-52:-48, 1)
+  if (fn != 1 && fn != 6 && runif(1) < 0.5) m1 <- -m1
+  x <- mpfr(m1, 3000) * 2^e1; y <- mpfr(m2, 3000) * 2^e2
+  if (fn == 1) { e1 <- sample(-20:20, 1); x <- mpfr(m1, 3000) * 2^e1 }
+  zz <- switch(fn + 1, exp(x), log(x), sin(x), cos(x), tan(x), atan(x), x^y)
+  z <- roundMpfr(zz, prec, rnd.mode = c("N", "Z", "U", "D", "A")[md + 1]); if (!is.finite(z) || z == 0) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(97, prec, m1, e1, m2, e2, md, fn)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))

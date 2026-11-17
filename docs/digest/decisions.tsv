@@ -3857,4 +3857,5 @@ D6994	457	polynom solve
 D6995	371	pracma null basis
 D6996	562	Rmpfr directed rounding for the arithmetic
 D6997	437	Rmpfr string conversion
-D6998	391	Rmpfr decimal string parsing
+D6998	393	Rmpfr decimal string parsing
+D6999	563	Rmpfr directed rounding of the transcendental functions

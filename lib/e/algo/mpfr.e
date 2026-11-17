@@ -1268,3 +1268,9 @@ fn from_decimal(a: *mem.Arena, nn: bn.Int, k: i64, prec: usize, mode: usize) -> 
     let (rt_, re_) = div_m(a, Mp{ m: nn, e: 0i64 }, Mp{ m: pk, e: 0i64 }, prec, mode)
     ret (rt_, re_)
 }
+
+// the directed rounding of a transcendental result: r computed at prec + 64 bits (to nearest), rounded again to prec bits in the mode; wrong only when the true value lies within 2^-(prec + 64) relative of a rounding boundary, which none of these functions reach exactly
+fn reround(a: *mem.Arena, r: Mp, prec: usize, mode: usize) -> (Mp, err) {
+    let (rt_, re_) = round_to_m(a, r.m, r.e, prec, mode)
+    ret (rt_, re_)
+}
