@@ -1396,3 +1396,61 @@ fn kendall_seasonal_sc(a: *mem.Arena, y: []const f64, season: []const f64, year:
     out[10usize] = vtot
     ret ok
 }
+
+// ---- gofGroupTest: a normality test per group, the group p-values combined by the Wilk-Shapiro test of uniformity ----
+
+// y has n values, grp their group ids (the groups taken in increasing id order, as split does); test as in gof_test; method 0 normal scores (sum of qnorm(p) over sqrt(G), p = pnorm of it), 1 chi-square scores
+// (-2 sum log p against chi-square with 2 G degrees of freedom, upper tail); out[0] the group statistic, out[1] its p-value, out[2] the number of groups
+fn gof_group(a: *mem.Arena, y: []const f64, grp: []const f64, test: usize, method: usize, out: []f64) -> err {
+    let n = y.len
+    let (ids, e1) = mem.alloc[f64](a, n)
+    let (sub, e2) = mem.alloc[f64](a, n)
+    let (go, e3) = mem.alloc[f64](a, 3usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var ng = 0usize
+    var i = 0usize
+    while i < n {
+        var seen = false
+        var j = 0usize
+        while j < ng {
+            if ids[j] == grp[i] { seen = true }
+            j += 1usize
+        }
+        if !seen {
+            ids[ng] = grp[i]
+            ng += 1usize
+        }
+        i += 1usize
+    }
+    sort_f(ids[0usize..ng])
+    var sumq = 0.0f64
+    var sumc = 0.0f64
+    var g = 0usize
+    while g < ng {
+        var m = 0usize
+        i = 0usize
+        while i < n {
+            if grp[i] == ids[g] {
+                sub[m] = y[i]
+                m += 1usize
+            }
+            i += 1usize
+        }
+        let ge = gof_test(a, sub[0usize..m], test, false, 0usize, go)
+        if ge != ok { ret ge }
+        sumq += dist.qnorm(go[1usize], 0.0f64, 1.0f64, true, false)
+        sumc += 0.0f64 - 2.0f64 * math.log[f64](go[1usize])
+        g += 1usize
+    }
+    let gf = f64(ng)
+    if method == 0usize {
+        let st = sumq / math.sqrt[f64](gf)
+        out[0usize] = st
+        out[1usize] = dist.pnorm(st, 0.0f64, 1.0f64, true, false)
+    } else {
+        out[0usize] = sumc
+        out[1usize] = nm.pchisq(sumc, 2.0f64 * gf, false, false)
+    }
+    out[2usize] = gf
+    ret ok
+}

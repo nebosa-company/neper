@@ -3645,4 +3645,5 @@ D6782	898	NMF: nmfEstimateRank is the per-rank fit
 D6783	1318	NMF: snmf/r and snmf/l
 D6784	1085	NMF: pe-nmf and the nndsvd random densify
 D6785	1386	NMF: snmf settings and R's max.col ties
-D6786	807	NMF: ls-nmf sample weights
+D6786	808	NMF: ls-nmf sample weights
+D6787	994	EnvStats: gofGroupTest

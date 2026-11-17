@@ -58,6 +58,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if gr != ok { ret nan }
         ret go[usize(z[3usize + gn])]
     }
+    if str.eq(c.name, "ggt") {
+        let gn = usize(z[0usize])
+        let (go2, ge2) = mem.alloc[f64](a, 3usize)
+        if ge2 != ok { ret nan }
+        let gr2 = es.gof_group(a, z[1usize..1usize + gn], z[1usize + gn..1usize + 2usize * gn], usize(z[1usize + 2usize * gn]), usize(z[2usize + 2usize * gn]), go2)
+        if gr2 != ok { ret nan }
+        ret go2[usize(z[3usize + 2usize * gn])]
+    }
     if str.eq(c.name, "kst") {
         let sn = usize(z[0usize])
         let (so, se) = mem.alloc[f64](a, 13usize)

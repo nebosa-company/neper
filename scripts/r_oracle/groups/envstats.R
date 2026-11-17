@@ -196,6 +196,14 @@ for (rep in 1:120) {
   if (is.null(r)) next
   for (f in 0:1) { v <- c(unname(r$statistic), r$p.value)[f + 1]; if (is.finite(v)) cases[[length(cases) + 1]] <- case("gcb", c(n, y, tcodes[[te]], kd, f), v, rel = 1e-6, abs = 1e-8) }
 }
+# gofGroupTest ("ggt": (n, y, group, test (0 sw 1 sf 2 ad 3 cvm), method (0 normal scores 1 chi-square scores), field (0 statistic 1 p.value)))
+for (rep in 1:40) {
+  ng <- sample(2:6, 1); sz <- sample(8:30, ng, replace = TRUE); y <- unlist(lapply(seq_len(ng), function(g) round(rnorm(sz[g], g, 1 + 0.3 * (g %% 3)), 4))); grp <- rep(seq_len(ng), sz)
+  te <- c("sw", "sf", "ad", "cvm")[sample(4, 1)]; mt <- sample(0:1, 1)
+  r <- tryCatch(suppressWarnings(gofGroupTest(y, grp, test = te, ws.method = if (mt == 0) "normal scores" else "chi-square scores")), error = function(e) NULL)
+  if (is.null(r)) next
+  for (f in 0:1) { v <- c(unname(r$statistic), unname(r$p.value[length(r$p.value)]))[f + 1]; cases[[length(cases) + 1]] <- case("ggt", c(length(y), y, grp, c(sw = 0, sf = 1, ad = 2, cvm = 3)[[te]], mt, f), v, rel = 1e-4, abs = 1e-8) }
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
