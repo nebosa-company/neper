@@ -1,0 +1,1359 @@
+// R BiasedUrn, the random variates: rFNCHypergeo and rWNCHypergeo under set.seed, draw for draw.
+//
+// The package's samplers are Agner Fog's StochasticLib classes over R's uniform generator. The variate is one of:
+// the table method (one uniform per variate, taken when the call asks for enough variates that building the table
+// pays: nran above 4 and half the table length below nran), or, per variate, Fisher's chop-down inversion
+// (n < 30, N < 1024, odds in 1e-5 .. 1e5) or ratio of uniforms, and Wallenius' urn simulation (n < 30), table
+// (n N < 10000), chop-down from the mean (variance < 4) or ratio of uniforms; odds 1 is the hypergeometric
+// (inversion from the mode, or ratio of uniforms past N 680 / n 70). Each is reproduced with the same constants and
+// the same order of uniforms, so equal seeds give equal integers. Wallenius' ratio of uniforms decides each candidate with the
+// package's Bernoulli test on the Laplace expansion, whose normals come from R's norm_rand (two uniforms each).
+
+use e.algo.rand.r as rng
+use e.algo.stat.biasedurn as bu
+use e.algo.stat.biasedurn_mv as mv
+use e.math
+use e.math.dist as dist
+use e.math.special as special
+use e.mem
+
+// per-call state of the sampler object: the generator, and the Wallenius object's expansion point r
+type Sto = struct { rg: *rng.Rng, r: f64 }
+
+// the package routes StochasticLib1::Normal through R's norm_rand(): two uniforms, no cached second value
+fn sto_normal(st: *Sto, sd: f64) -> f64 { ret rng.norm(st.rg) * sd }
+
+fn lnpk(k: f64, l: f64, m: f64, n: f64) -> f64 { ret mv.lnfac(k) + mv.lnfac(m - k) + mv.lnfac(n - k) + mv.lnfac(l + k) }
+
+// ---- Hypergeometric(n, m, N), StochasticLib1 ----
+
+fn hyp_inversion(rg: *rng.Rng, n: f64, m: f64, nn: f64) -> f64 {
+    let l = nn - m - n
+    let mp = m + 1.0f64
+    let np = n + 1.0f64
+    let p = mp / (nn + 2.0f64)
+    let modef = np * p
+    var hmode = math.floor[f64](modef)
+    var hmp = hmode + 1.0f64
+    if hmode == modef && p == 0.5f64 {
+        hmp = hmode
+        hmode = hmode - 1.0f64
+    }
+    let fm = math.exp[f64](mv.lnfac(nn - m) - mv.lnfac(l + hmode) - mv.lnfac(n - hmode) + mv.lnfac(m) - mv.lnfac(m - hmode) - mv.lnfac(hmode) - mv.lnfac(nn) + mv.lnfac(nn - n) + mv.lnfac(n))
+    var bound = math.floor[f64](modef + 11.0f64 * math.sqrt[f64](modef * (1.0f64 - p) * (1.0f64 - n / nn) + 1.0f64))
+    if bound > n { bound = n }
+    while true {
+        var u = rng.unif(rg)
+        u -= fm
+        if u <= 0.0f64 { ret hmode }
+        var c = fm
+        var d = fm
+        var k1 = hmp - 1.0f64
+        var k2 = hmode + 1.0f64
+        var i = 1.0f64
+        while i <= hmode {
+            var divisor = (np - k1) * (mp - k1)
+            u *= divisor
+            d *= divisor
+            c *= k1 * (l + k1)
+            u -= c
+            if u <= 0.0f64 { ret hmp - i - 1.0f64 }
+            divisor = k2 * (l + k2)
+            u *= divisor
+            c *= divisor
+            d *= (np - k2) * (mp - k2)
+            u -= d
+            if u <= 0.0f64 { ret hmode + i }
+            k1 -= 1.0f64
+            k2 += 1.0f64
+            i += 1.0f64
+        }
+        k2 = hmp + hmode
+        i = k2
+        while i <= bound {
+            let divisor = k2 * (l + k2)
+            u *= divisor
+            d *= (np - k2) * (mp - k2)
+            u -= d
+            if u <= 0.0f64 { ret i }
+            i += 1.0f64
+            k2 += 1.0f64
+        }
+    }
+    ret 0.0f64
+}
+
+fn hyp_rou(rg: *rng.Rng, n: f64, m: f64, nn: f64) -> f64 {
+    let l = nn - m - n
+    let rnn = 1.0f64 / (nn * (nn + 2.0f64))
+    let my = n * m * rnn * (nn + 2.0f64)
+    let hmode = math.floor[f64]((n + 1.0f64) * (m + 1.0f64) * rnn * nn)
+    let v = n * m * (nn - m) * (nn - n) / (nn * nn * (nn - 1.0f64))
+    let h = math.sqrt[f64](2.943035529371538573f64 * (v + 0.5f64)) + 0.8989161620588987408f64
+    let a = my + 0.5f64
+    let g = lnpk(hmode, l, m, n)
+    var bound = math.floor[f64](a + 4.0f64 * h)
+    if bound > n { bound = n }
+    var k = 0.0f64
+    while true {
+        let u = rng.unif(rg)
+        if u == 0.0f64 { continue }
+        let x = a + h * (rng.unif(rg) - 0.5f64) / u
+        if x < 0.0f64 || x > 2.0e9f64 { continue }
+        k = math.floor[f64](x)
+        if k > bound { continue }
+        let lf = g - lnpk(k, l, m, n)
+        if u * (4.0f64 - u) - 3.0f64 <= lf { break }
+        if u * (u - lf) > 1.0f64 { continue }
+        if 2.0f64 * math.log[f64](u) <= lf { break }
+    }
+    ret k
+}
+
+fn hypergeometric(rg: *rng.Rng, n0: f64, m0: f64, nn: f64) -> f64 {
+    var n = n0
+    var m = m0
+    var fak = 1.0f64
+    var addd = 0.0f64
+    let half = math.floor[f64](nn / 2.0f64)
+    if m > half {
+        m = nn - m
+        fak = 0.0f64 - 1.0f64
+        addd = n
+    }
+    if n > half {
+        n = nn - n
+        addd += fak * m
+        fak = 0.0f64 - fak
+    }
+    if n > m {
+        let t = n
+        n = m
+        m = t
+    }
+    if n == 0.0f64 { ret addd }
+    var x = 0.0f64
+    if nn > 680.0f64 || n > 70.0f64 { x = hyp_rou(rg, n, m, nn) } else { x = hyp_inversion(rg, n, m, nn) }
+    ret x * fak + addd
+}
+
+// ---- Fisher's noncentral hypergeometric, StochasticLib3 ----
+
+fn fnc_inversion(rg: *rng.Rng, n: f64, m: f64, nn: f64, odds: f64) -> f64 {
+    let l = nn - m - n
+    var f0 = 1.0e-100f64
+    var sum = f0
+    var f = f0
+    var scale = 1.0f64
+    var a1 = m
+    var a2 = n
+    var b1 = 1.0f64
+    var b2 = l + 1.0f64
+    var x = 1.0f64
+    while x <= n {
+        let f1 = a1 * a2 * odds
+        let f2 = b1 * b2
+        a1 -= 1.0f64
+        a2 -= 1.0f64
+        b1 += 1.0f64
+        b2 += 1.0f64
+        f *= f1
+        sum *= f2
+        scale *= f2
+        sum += f
+        x += 1.0f64
+    }
+    f0 *= scale
+    let fscale = sum
+    var u = rng.unif(rg) * fscale
+    f = f0
+    x = 0.0f64
+    a1 = m
+    a2 = n
+    b1 = 0.0f64
+    b2 = l
+    while true {
+        u -= f
+        if u <= 0.0f64 { break }
+        x += 1.0f64
+        b1 += 1.0f64
+        b2 += 1.0f64
+        f *= a1 * a2 * odds
+        u *= b1 * b2
+        a1 -= 1.0f64
+        a2 -= 1.0f64
+        if x >= n { break }
+    }
+    ret x
+}
+
+fn fnc_rou(rg: *rng.Rng, n: f64, m: f64, nn: f64, odds: f64) -> f64 {
+    let l = nn - m - n
+    let mu = mv.fnc_mean(n, m, nn, odds)
+    let v = mv.approx_var(mu, m, n, nn)
+    let a = mu + 0.5f64
+    let h = 1.028f64 + 1.717f64 * math.sqrt[f64](v + 0.5f64) + 0.032f64 * math.abs[f64](math.log[f64](odds))
+    var bound = math.floor[f64](mu + 4.0f64 * h)
+    if bound > n { bound = n }
+    var hmode = math.floor[f64](mu)
+    let g1 = (m - hmode) * (n - hmode) * odds
+    let g2 = (hmode + 1.0f64) * (l + hmode + 1.0f64)
+    if g1 > g2 && hmode < n { hmode += 1.0f64 }
+    let lnodds = math.log[f64](odds)
+    let lfm = hmode * lnodds - lnpk(hmode, l, m, n)
+    var k = 0.0f64
+    while true {
+        let u = rng.unif(rg)
+        if u == 0.0f64 { continue }
+        let x = a + h * (rng.unif(rg) - 0.5f64) / u
+        if x < 0.0f64 || x > 2.0e9f64 { continue }
+        k = math.floor[f64](x)
+        if k > bound { continue }
+        let lf = k * lnodds - lnpk(k, l, m, n) - lfm
+        if u * (4.0f64 - u) - 3.0f64 <= lf { break }
+        if u * (u - lf) > 1.0f64 { continue }
+        if 2.0f64 * math.log[f64](u) <= lf { break }
+    }
+    ret k
+}
+
+fn fnc_draw(rg: *rng.Rng, n0: f64, m0: f64, nn: f64, odds0: f64) -> f64 {
+    var n = n0
+    var m = m0
+    var odds = odds0
+    if odds == 0.0f64 { ret 0.0f64 }
+    if odds == 1.0f64 { ret hypergeometric(rg, n, m, nn) }
+    var fak = 1.0f64
+    var addd = 0.0f64
+    let half = math.floor[f64](nn / 2.0f64)
+    if m > half {
+        m = nn - m
+        fak = 0.0f64 - 1.0f64
+        addd = n
+    }
+    if n > half {
+        n = nn - n
+        addd += fak * m
+        fak = 0.0f64 - fak
+    }
+    if n > m {
+        let t = n
+        n = m
+        m = t
+    }
+    if n == 0.0f64 || odds == 0.0f64 { ret addd }
+    if fak < 0.0f64 { odds = 1.0f64 / odds }
+    var x = 0.0f64
+    if n < 30.0f64 && nn < 1024.0f64 && odds > 1.0e-5f64 && odds < 1.0e5f64 { x = fnc_inversion(rg, n, m, nn, odds) } else { x = fnc_rou(rg, n, m, nn, odds) }
+    ret x * fak + addd
+}
+
+// ---- Wallenius' noncentral hypergeometric, StochasticLib3 ----
+
+// CWalleniusNCHypergeometric::mean
+fn wnc_mean(n: f64, m: f64, nn: f64, omega: f64) -> f64 {
+    let xmin = math.max[f64](0.0f64, m + n - nn)
+    let xmax = math.min[f64](n, m)
+    if omega == 1.0f64 { ret m * n / nn }
+    if omega == 0.0f64 { ret 0.0f64 }
+    if xmin == xmax { ret xmin }
+    let a = (m + n) * omega + (nn - m - n)
+    var b = a * a - 4.0f64 * omega * (omega - 1.0f64) * m * n
+    if b > 0.0f64 { b = math.sqrt[f64](b) } else { b = 0.0f64 }
+    var mean = (a - b) / (2.0f64 * (omega - 1.0f64))
+    if mean < xmin { mean = xmin }
+    if mean > xmax { mean = xmax }
+    let m1r = 1.0f64 / m
+    let m2r = 1.0f64 / (nn - m)
+    var iter = 0i64
+    while true {
+        let mean1 = mean
+        var g = 0.0f64
+        var gd = 0.0f64
+        if omega > 1.0f64 {
+            let e1 = 1.0f64 - (n - mean) * m2r
+            var e2 = 0.0f64
+            if e1 >= 1.0e-14f64 { e2 = math.pow[f64](e1, omega - 1.0f64) }
+            g = e2 * e1 + (mean - m) * m1r
+            gd = e2 * omega * m2r + m1r
+        } else {
+            let omr = 1.0f64 / omega
+            let e1 = 1.0f64 - mean * m1r
+            var e2 = 0.0f64
+            if e1 >= 1.0e-14f64 { e2 = math.pow[f64](e1, omr - 1.0f64) }
+            g = 1.0f64 - (n - mean) * m2r - e2 * e1
+            gd = e2 * omr * m1r + m2r
+        }
+        mean -= g / gd
+        if mean < xmin { mean = xmin }
+        if mean > xmax { mean = xmax }
+        iter += 1i64
+        if math.abs[f64](mean1 - mean) <= 2.0e-6f64 { break }
+        if iter > 40i64 { break }
+    }
+    ret mean
+}
+
+fn wnc_prob(x: f64, n: f64, m: f64, nn: f64, omega: f64) -> f64 { ret bu.wallenius_term(x, m, nn - m, n, omega) }
+
+fn wnc_urn(rg: *rng.Rng, n0: f64, m0: f64, nn: f64, odds: f64) -> f64 {
+    var n = n0
+    var m = m0
+    var x = 0.0f64
+    var m2 = nn - m
+    var mw1 = m * odds
+    var mw2 = m2
+    while true {
+        let u = rng.unif(rg)
+        if u * (mw1 + mw2) < mw1 {
+            x += 1.0f64
+            m -= 1.0f64
+            if m == 0.0f64 { break }
+            mw1 = m * odds
+        } else {
+            m2 -= 1.0f64
+            if m2 == 0.0f64 {
+                x += n - 1.0f64
+                break
+            }
+            mw2 = m2
+        }
+        n -= 1.0f64
+        if n <= 0.0f64 { break }
+    }
+    ret x
+}
+
+fn wnc_inversion(rg: *rng.Rng, n: f64, m: f64, nn: f64, odds: f64, acc: f64) -> f64 {
+    var accura = acc * 0.01f64
+    if accura > 1.0e-7f64 { accura = 1.0e-7f64 }
+    let x1s = math.floor[f64](wnc_mean(n, m, nn, odds))
+    let xmin = math.max[f64](0.0f64, m + n - nn)
+    let xmax = math.min[f64](n, m)
+    while true {
+        var x1 = x1s
+        var x2 = x1s + 1.0f64
+        var down = true
+        var up = true
+        var u = rng.unif(rg)
+        while down || up {
+            if down {
+                if x1 < xmin {
+                    down = false
+                } else {
+                    let f = wnc_prob(x1, n, m, nn, odds)
+                    u -= f
+                    if u <= 0.0f64 { ret x1 }
+                    x1 -= 1.0f64
+                    if f < accura { down = false }
+                }
+            }
+            if up {
+                if x2 > xmax {
+                    up = false
+                } else {
+                    let f = wnc_prob(x2, n, m, nn, odds)
+                    u -= f
+                    if u <= 0.0f64 { ret x2 }
+                    x2 += 1.0f64
+                    if f < accura { up = false }
+                }
+            }
+        }
+    }
+    ret 0.0f64
+}
+
+// the 512-entry table of one call: probabilities from the support with the tails under the cutoff dropped
+fn wnc_table(rg: *rng.Rng, a: *mem.Arena, n: f64, m: f64, nn: f64, odds: f64, acc: f64) -> f64 {
+    let lo = math.max[f64](0.0f64, m + n - nn)
+    let hi = math.min[f64](n, m)
+    let (tab, e) = mem.alloc[f64](a, usize(hi - lo) + 2usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var cutoff = 0.01f64 * acc
+    if cutoff <= 0.0f64 || cutoff > 0.1f64 { cutoff = 0.01f64 * acc }
+    var x1 = lo
+    var x2 = hi
+    var k = 0usize
+    while lo + f64(k) <= hi {
+        tab[k] = wnc_prob(lo + f64(k), n, m, nn, odds)
+        k += 1usize
+    }
+    while x1 < hi && tab[usize(x1 - lo)] < cutoff { x1 += 1.0f64 }
+    while x2 > lo && tab[usize(x2 - lo)] < cutoff { x2 -= 1.0f64 }
+    if x2 - x1 + 1.0f64 > 512.0f64 { ret 0.0f64 / 0.0f64 }
+    while true {
+        var u = rng.unif(rg)
+        var x = x1
+        while x <= x2 {
+            u -= tab[usize(x - lo)]
+            if u < 0.0f64 { ret x }
+            x += 1.0f64
+        }
+    }
+    ret 0.0f64
+}
+
+fn wnc_draw(st: *Sto, a: *mem.Arena, n: f64, m: f64, nn: f64, odds: f64, acc: f64) -> f64 {
+    let rg = st.rg
+    if n >= nn || m >= nn || n <= 0.0f64 || m <= 0.0f64 || odds <= 0.0f64 {
+        if n == 0.0f64 || m == 0.0f64 { ret 0.0f64 }
+        if m == nn { ret n }
+        if n == nn { ret m }
+        ret 0.0f64
+    }
+    if odds == 1.0f64 { ret hypergeometric(rg, n, m, nn) }
+    if n < 30.0f64 { ret wnc_urn(rg, n, m, nn, odds) }
+    if n * nn < 10000.0f64 { ret wnc_table(rg, a, n, m, nn, odds, acc) }
+    let mean = wnc_mean(n, m, nn, odds)
+    let v = mv.approx_var(mean, m, n, nn)
+    if v < 4.0f64 { ret wnc_inversion(rg, n, m, nn, odds, acc) }
+    ret wnc_rou(st, n, m, nn, odds, acc, mean)
+}
+
+// ---- the R entry points: nran variates, a table when nran is large enough ----
+
+// ---- Wallenius ratio of uniforms (n N >= 10000, variance >= 4): the Bernoulli step of CWalleniusNCHypergeometric::BernouilliH ----
+
+fn pow2_1(q: f64) -> f64 {
+    let qq = q * 0.693147180559945309417f64
+    if math.abs[f64](qq) > 0.1f64 { ret 1.0f64 - math.exp[f64](qq) }
+    ret 0.0f64 - dist.expm1(qq)
+}
+
+fn log1mx(x: f64, x1: f64) -> f64 {
+    if math.abs[f64](x) > 0.03f64 { ret math.log[f64](x1) }
+    ret dist.log1p(0.0f64 - x)
+}
+
+fn log1pow(q: f64, x: f64) -> f64 {
+    let y = math.exp[f64](q)
+    if y > 0.1f64 { ret x * math.log[f64](1.0f64 - y) }
+    ret x * dist.log1p(0.0f64 - y)
+}
+
+// findpars: r by Newton from the object's last r, then rd, the peak width w and E; updates st.r
+type Pars = struct { rd: f64, w: f64, e: f64 }
+
+fn wnc_findpars(st: *Sto, x: f64, n: f64, m: f64, nn: f64, omega: f64) -> Pars {
+    var oo0 = omega
+    var oo1 = 1.0f64
+    if omega > 1.0f64 {
+        oo0 = 1.0f64
+        oo1 = 1.0f64 / omega
+    }
+    let xx1 = n - x
+    var dd = oo0 * (m - x) + oo1 * (nn - m - xx1)
+    let d1 = 1.0f64 / dd
+    let ee = (oo0 * m + oo1 * (nn - m)) * d1
+    var rr = st.r
+    if rr <= d1 { rr = 1.2f64 * d1 }
+    var lastr = rr
+    var j = 0i64
+    while true {
+        lastr = rr
+        let rrc = 1.0f64 / rr
+        var z = dd - rrc
+        var zd = rrc * rrc
+        var i = 0usize
+        while i < 2usize {
+            var o = oo0
+            var xi = x
+            if i == 1usize {
+                o = oo1
+                xi = xx1
+            }
+            let rt = rr * o
+            if rt < 100.0f64 {
+                let r2 = math.exp[f64](rt * 0.693147180559945309417f64)
+                let r21 = pow2_1(rt)
+                let a = o / r21
+                let b = xi * a
+                z += b
+                zd += b * a * 0.693147180559945309417f64 * r2
+            }
+            i += 1usize
+        }
+        rr -= z / zd
+        if rr <= d1 { rr = lastr * 0.125f64 + d1 * 0.875f64 }
+        j += 1i64
+        if math.abs[f64](rr - lastr) <= rr * 1.0e-6f64 { break }
+        if j >= 70i64 { break }
+    }
+    if omega > 1.0f64 {
+        dd = dd * omega
+        rr = rr * oo1
+    }
+    st.r = rr
+    let rd = rr * dd
+    let ro = rr * omega
+    var k1 = 0.0f64
+    if ro < 300.0f64 {
+        k1 = 0.0f64 - 1.0f64 / pow2_1(ro)
+        k1 = omega * omega * (k1 + k1 * k1)
+    }
+    var k2 = 0.0f64
+    if rr < 300.0f64 {
+        k2 = 0.0f64 - 1.0f64 / pow2_1(rr)
+        k2 = k2 + k2 * k2
+    }
+    let phi2d = 0.0f64 - 4.0f64 * rr * rr * (x * k1 + (n - x) * k2)
+    ret Pars{ rd: rd, w: 1.0f64 / math.sqrt[f64](0.0f64 - phi2d), e: ee }
+}
+
+// the Bernoulli trial with probability f(x) / h, the uniform rh in [0, h) supplied by the caller
+fn wnc_bernoulli(st: *Sto, x: f64, h: f64, rh: f64, n: f64, m: f64, nn: f64, omega: f64) -> bool {
+    let bico = bu.lchoose(m, x) + bu.lchoose(nn - m, n - x)
+    let ps = wnc_findpars(st, x, n, m, nn, omega)
+    let rr = st.r
+    var kk = 1.0f64
+    if ps.e > 0.0f64 {
+        let lg = math.log[f64](ps.e)
+        kk = 1.0f64 + 0.0271f64 * lg * math.sqrt[f64](lg)
+    }
+    kk = kk * ps.w
+    let rdm1 = ps.rd - 1.0f64
+    var phideri0 = 0.0f64 - 0.693147180559945309417f64 * rdm1
+    var i = 0usize
+    while i < 2usize {
+        var omi = omega
+        var xi = x
+        if i == 1usize {
+            omi = 1.0f64
+            xi = n - x
+        }
+        let romeg = rr * omi
+        var qi = 0.0f64
+        var qi1 = 1.0f64
+        if !(romeg > 40.0f64) {
+            qi1 = pow2_1(0.0f64 - romeg)
+            qi = 1.0f64 - qi1
+        }
+        phideri0 += xi * log1mx(qi, qi1)
+        i += 1usize
+    }
+    let erfk = special.erf(0.3535533905932737622f64 / kk)
+    let f0 = ps.rd * math.exp[f64](phideri0 + bico)
+    let g = f0 * 2.506628274631000454f64 * kk * erfk
+    if g <= h {
+        var ts = 0.0f64
+        while true {
+            ts = sto_normal(st, kk)
+            if !(math.abs[f64](ts) >= 0.5f64) { break }
+        }
+        ts += 0.5f64
+        var fts = 0.0f64
+        var j = 0usize
+        while j < 2usize {
+            let lg = math.log[f64](ts)
+            let rl = rr * lg
+            fts += math.exp[f64](log1pow(rl * omega, x) + log1pow(rl, n - x) + rdm1 * lg + bico)
+            ts = 1.0f64 - ts
+            j += 1usize
+        }
+        fts = fts * 0.5f64
+        let t2 = (ts - 0.5f64) / kk
+        let rgts = math.exp[f64](0.0f64 - (phideri0 + bico - 0.5f64 * t2 * t2))
+        ret rh < g * fts * rgts
+    }
+    ret rh < wnc_prob(x, n, m, nn, omega)
+}
+
+fn wnc_rou(st: *Sto, n: f64, m: f64, nn: f64, odds: f64, acc: f64, mean: f64) -> f64 {
+    let xmin = math.max[f64](0.0f64, m + n - nn)
+    let xmax = math.min[f64](n, m)
+    st.r = 1.0f64
+    var hmode = math.floor[f64](mean)
+    var f2 = 0.0f64
+    if odds < 1.0f64 {
+        if hmode < xmax { hmode += 1.0f64 }
+        var xl = xmin
+        if odds > 0.294f64 && nn <= 10000000.0f64 { xl = hmode - 1.0f64 }
+        var xi = hmode
+        while xi >= xl {
+            let f = wnc_prob(xi, n, m, nn, odds)
+            if f <= f2 { break }
+            hmode = xi
+            f2 = f
+            xi -= 1.0f64
+        }
+    } else {
+        if hmode < xmin { hmode += 1.0f64 }
+        var xu = xmax
+        if odds < 3.4f64 && nn <= 10000000.0f64 { xu = hmode + 1.0f64 }
+        var xi = hmode
+        while xi <= xu {
+            let f = wnc_prob(xi, n, m, nn, odds)
+            if f <= f2 { break }
+            hmode = xi
+            f2 = f
+            xi += 1.0f64
+        }
+    }
+    let k = f2
+    let rs = 0.3989422804014326857f64 / k
+    let variance = rs * rs
+    let a = mean + 0.5f64
+    let s123 = 0.40f64 + 0.8579f64 * math.sqrt[f64](variance + 0.5f64) + 0.4f64 * math.abs[f64](mean - hmode)
+    var s4 = 0.0f64
+    var r1 = math.min[f64](xmax - mean - s123, mean - s123 - xmin)
+    if (odds > 5.0f64 || odds < 0.2f64) && r1 >= 0.0f64 - 0.5f64 && r1 <= 8.0f64 {
+        if r1 < 1.0f64 { r1 = 1.0f64 }
+        s4 = 0.029f64 * math.pow[f64](nn, 0.23f64) / (r1 * r1)
+    }
+    let h = 2.0f64 * (s123 + s4)
+    let bound1 = math.max[f64](xmin, math.trunc[f64](mean - 4.0f64 * h))
+    let bound2 = math.min[f64](xmax, math.trunc[f64](mean + 4.0f64 * h))
+    while true {
+        let u = rng.unif(st.rg)
+        if u == 0.0f64 { continue }
+        let v = rng.unif(st.rg)
+        let x = a + h * (v - 0.5f64) / u
+        if x < 0.0f64 || x > 2.0e9f64 { continue }
+        let xi = math.trunc[f64](x)
+        if xi < bound1 || xi > bound2 { continue }
+        let s2 = h * 0.5f64 * h * 0.5f64
+        let xma2 = (xi - (a - 0.5f64)) * (xi - (a - 0.5f64))
+        var hx = 1.0f64
+        if !(s2 >= xma2) { hx = s2 / xma2 }
+        if wnc_bernoulli(st, xi, hx * k * 1.01f64, u * u * k * 1.01f64, n, m, nn, odds) { ret xi }
+    }
+    ret 0.0f64
+}
+
+fn num_sd(acc: f64) -> f64 {
+    let fract = [10]f64{ 2.699796e-03f64, 4.652582e-04f64, 6.334248e-05f64, 6.795346e-06f64, 5.733031e-07f64, 3.797912e-08f64, 1.973175e-09f64, 8.032001e-11f64, 2.559625e-12f64, 6.381783e-14f64 }
+    var i = 0usize
+    while i < 10usize {
+        if acc >= fract[i] { ret f64(i) + 6.0f64 }
+        i += 1usize
+    }
+    ret 16.0f64
+}
+
+fn sane_prec(prec: f64) -> f64 {
+    if !(prec == prec) || prec < 0.0f64 || prec > 1.0f64 { ret 1.0e-7f64 }
+    ret prec
+}
+
+// the length MakeTable(buffer, 0, ...) reports for Fisher's distribution
+fn fnc_buflen(m1: f64, m2: f64, n: f64, odds: f64, prec: f64) -> f64 {
+    let nn = m1 + m2
+    let x1 = math.max[f64](0.0f64, n + m1 - nn)
+    let x2 = math.min[f64](n, m1)
+    if x1 == x2 || odds <= 0.0f64 { ret 1.0f64 }
+    let len = x2 - x1 + 1.0f64
+    if len > 200.0f64 {
+        let mu = mv.fnc_mean(n, m1, nn, odds)
+        let i = math.floor[f64](num_sd(prec) * math.sqrt[f64](mv.approx_var(mu, m1, n, nn)) + 0.5f64)
+        if i < len { ret i }
+    }
+    ret len
+}
+
+fn wnc_buflen(m1: f64, m2: f64, n: f64, odds: f64, prec: f64) -> f64 {
+    let nn = m1 + m2
+    if n == 0.0f64 || m1 == 0.0f64 || n == nn || m1 == nn || odds <= 0.0f64 { ret 1.0f64 }
+    let need = math.min[f64](math.min[f64](nn - m1, m1), n)
+    let area = n * need
+    var use_table = area < 5000.0f64
+    if area < 10000.0f64 && nn > 1000.0f64 * n { use_table = true }
+    var i1 = need + 2.0f64
+    if !use_table && i1 > 200.0f64 {
+        let mu = wnc_mean(n, m1, nn, odds)
+        let i2 = math.floor[f64](num_sd(prec) * math.sqrt[f64](mv.approx_var(mu, m1, n, nn)) + 0.5f64)
+        if i1 > i2 { i1 = i2 }
+    }
+    ret i1
+}
+
+// the table of Fisher's distribution the way CFishersNCHypergeometric::MakeTable lays it out in `len` entries; returns x of the first entry in xfirst and the entry count
+type Tab = struct { first: f64, count: usize }
+
+fn fnc_make_table(tab: []f64, len: usize, m: f64, nn: f64, n: f64, odds: f64, cutoff: f64) -> Tab {
+    let l = n + m - nn
+    let x1 = math.max[f64](l, 0.0f64)
+    let x2 = math.min[f64](n, m)
+    if x1 == x2 || odds <= 0.0f64 {
+        tab[0usize] = 1.0f64
+        ret Tab{ first: x1, count: 1usize }
+    }
+    let md = bu.mode_fisher(m, nn - m, n, odds)
+    let half = len / 2usize
+    var i0 = 0usize
+    let a0 = usize(md - x1)
+    if a0 <= half {
+        i0 = a0
+    } else if usize(x2 - md) <= half {
+        let t = i64(len) - i64(x2 - md) - 1i64
+        if t > 0i64 { i0 = usize(t) }
+    } else {
+        i0 = half
+    }
+    var i1 = 0usize
+    let d1 = i64(i0) - i64(md - x1)
+    if d1 > 0i64 { i1 = usize(d1) }
+    var i2 = len - 1usize
+    let e2 = usize(i64(i0) + i64(x2 - md))
+    if e2 < i2 { i2 = e2 }
+    tab[i0] = 1.0f64
+    var f = 1.0f64
+    var x = md
+    var i = i0
+    while i > i1 {
+        i -= 1usize
+        f *= x * (x - l) / ((m - x + 1.0f64) * (n - x + 1.0f64) * odds)
+        x -= 1.0f64
+        tab[i] = f
+        if f < cutoff {
+            i1 = i
+            break
+        }
+    }
+    var j = 0usize
+    if i1 > 0usize {
+        while i1 + j <= i2 && j <= i0 - i1 {
+            tab[j] = tab[i1 + j]
+            j += 1usize
+        }
+        i0 -= i1
+        i2 -= i1
+        i1 = 0usize
+    }
+    f = 1.0f64
+    x = md
+    i = i0
+    while i < i2 {
+        i += 1usize
+        f *= (m - x) * (n - x) * odds / ((x + 1.0f64) * (x + 1.0f64 - l))
+        x += 1.0f64
+        tab[i] = f
+        if f < cutoff {
+            i2 = i
+            break
+        }
+    }
+    ret Tab{ first: md - f64(i0), count: i2 + 1usize }
+}
+
+// rFNCHypergeo(nran, m1, m2, n, odds, precision) into out[0..nran]
+fn r_fisher(rg: *rng.Rng, a: *mem.Arena, nran: usize, m1: f64, m2: f64, n: f64, odds: f64, prec0: f64, out: []f64) {
+    let prec = sane_prec(prec0)
+    let nn = m1 + m2
+    var k = 0usize
+    if nran > 4usize {
+        let blen = fnc_buflen(m1, m2, n, odds, prec)
+        let bl = usize(blen)
+        if bl / 2usize < nran {
+            var len = bl
+            if len == 0usize { len = 1usize }
+            let (tab, e) = mem.alloc[f64](a, len + 1usize)
+            if e != ok { ret }
+            let t = fnc_make_table(tab, len, m1, nn, n, odds, prec * 0.001f64)
+            var s = 0.0f64
+            var q = 0usize
+            while q < t.count {
+                s += tab[q]
+                tab[q] = s
+                q += 1usize
+            }
+            let last = t.first + f64(t.count - 1usize)
+            while k < nran {
+                let u = rng.unif(rg) * s
+                q = 0usize
+                while q + 1usize < t.count && !(u < tab[q]) { q += 1usize }
+                var x = t.first + f64(q)
+                if x > last { x = last }
+                out[k] = x
+                k += 1usize
+            }
+            ret
+        }
+    }
+    while k < nran {
+        out[k] = fnc_draw(rg, n, m1, nn, odds)
+        k += 1usize
+    }
+}
+
+// rWNCHypergeo(nran, m1, m2, n, odds, precision) into out[0..nran]
+fn r_wall(rg: *rng.Rng, a: *mem.Arena, nran: usize, m1: f64, m2: f64, n: f64, odds: f64, prec0: f64, out: []f64) {
+    let prec = sane_prec(prec0)
+    let nn = m1 + m2
+    var st = Sto{ rg: rg, r: 1.0f64 }
+    var k = 0usize
+    if nran > 4usize {
+        let blen = wnc_buflen(m1, m2, n, odds, prec)
+        let bl = usize(blen)
+        if bl / 2usize < nran {
+            let lo = math.max[f64](0.0f64, n + m1 - nn)
+            let hi = math.min[f64](n, m1)
+            var size = bl
+            if size == 0usize { size = 1usize }
+            let (buf, e) = mem.alloc[f64](a, size + 1usize)
+            if e != ok { ret }
+            var cnt = 1usize
+            var firstx = lo
+            if lo == hi || odds <= 0.0f64 {
+                buf[0usize] = 1.0f64
+            } else {
+                // MakeTable, one value at a time from floor(mean): the left tail keeps its first value under the cutoff, a full table loses its right end
+                let cutoff = prec * 0.001f64
+                let mean = math.floor[f64](wnc_mean(n, m1, nn, odds))
+                var xl = mean + 1.0f64
+                var il = size
+                while xl > lo {
+                    xl -= 1.0f64
+                    il -= 1usize
+                    let y = wnc_prob(xl, n, m1, nn, odds)
+                    buf[il] = y
+                    if y < cutoff || il == 0usize { break }
+                }
+                let nl = size - il
+                var z = 0usize
+                while z < nl {
+                    buf[z] = buf[il + z]
+                    z += 1usize
+                }
+                var i2 = nl - 1usize
+                var xr = mean
+                while xr < hi {
+                    if i2 == size - 1usize { break }
+                    xr += 1.0f64
+                    i2 += 1usize
+                    let y = wnc_prob(xr, n, m1, nn, odds)
+                    buf[i2] = y
+                    if y < cutoff { break }
+                }
+                firstx = xl
+                cnt = i2 + 1usize
+            }
+            var s = 0.0f64
+            var q = 0usize
+            while q < cnt {
+                s += buf[q]
+                buf[q] = s
+                q += 1usize
+            }
+            let lastx = firstx + f64(cnt - 1usize)
+            while k < nran {
+                let u = rng.unif(rg) * s
+                q = 0usize
+                while q + 1usize < cnt && !(u < buf[q]) { q += 1usize }
+                var x = firstx + f64(q)
+                if x > lastx { x = lastx }
+                out[k] = x
+                k += 1usize
+            }
+            ret
+        }
+    }
+    while k < nran {
+        out[k] = wnc_draw(&st, a, n, m1, nn, odds, prec)
+        k += 1usize
+    }
+}
+
+// ---- the multivariate samplers: rMFNCHypergeo and rMWNCHypergeo, StochasticLib3::MultiFishersNCHyp / MultiWalleniusNCHyp ----
+
+// selection sort of order[0..cnt) so the largest key comes first, the first of equals winning; keys of colours with a zero count are zero when `zero_empty`
+fn sort_desc(order: []usize, cnt: usize, key: []const f64, src: []const f64, zero_empty: bool) {
+    var i = 0usize
+    while i + 1usize < cnt {
+        let c = order[i]
+        var k = i
+        var w = key[c]
+        if zero_empty && src[c] == 0.0f64 { w = 0.0f64 }
+        var j = i + 1usize
+        while j < cnt {
+            let c2 = order[j]
+            var ok2 = true
+            if zero_empty && src[c2] == 0.0f64 { ok2 = false }
+            if key[c2] > w && ok2 {
+                w = key[c2]
+                k = j
+            }
+            j += 1usize
+        }
+        let t = order[i]
+        order[i] = order[k]
+        order[k] = t
+        i += 1usize
+    }
+}
+
+// the unsort at the end of both samplers
+fn multi_unsort(st: *Sto, dest: []f64, source: []const f64, order1: []const usize, order2: []const usize, colors: usize, osource: []f64, osample: []f64) {
+    var i = 0usize
+    while i < colors {
+        let c1 = order1[i]
+        let c2 = order2[i]
+        if source[c1] == osource[c2] {
+            dest[c1] = osample[c2]
+        } else {
+            let x = hypergeometric(st.rg, osample[c2], source[c1], osource[c2])
+            dest[c1] = x
+            osample[c2] -= x
+            osource[c2] -= source[c1]
+        }
+        i += 1usize
+    }
+}
+
+// the split of the colours into a heavy and a light group, shared by both samplers: the index b where the weights fall under their geometric mean
+fn split_point(oweights: []const f64, colors2: usize) -> usize {
+    var a = 0usize
+    var b = colors2 - 1usize
+    let w = math.sqrt[f64](oweights[0usize] * oweights[colors2 - 1usize])
+    while true {
+        let c = (a + b) / 2usize
+        if oweights[c] > w { a = c } else { b = c }
+        if !(b > a + 1usize) { break }
+    }
+    ret b
+}
+
+fn multi_fisher(st: *Sto, a: *mem.Arena, dest: []f64, source: []const f64, weights: []const f64, n0: f64, prec: f64) {
+    let total = source.len
+    var colors = total
+    var n = n0
+    var i = 0usize
+    if colors == 0usize { ret }
+    if n == 0.0f64 {
+        while i < total {
+            dest[i] = 0.0f64
+            i += 1usize
+        }
+        ret
+    }
+    let (order1, e1) = mem.alloc[usize](a, total)
+    let (order2, e2) = mem.alloc[usize](a, total)
+    let (order3, e3) = mem.alloc[usize](a, total)
+    let (osource, e4) = mem.alloc[f64](a, total)
+    let (oweights, e5) = mem.alloc[f64](a, total)
+    let (osample, e6) = mem.alloc[f64](a, total)
+    let (vr, e7) = mem.alloc[f64](a, total)
+    let (mu, e8) = mem.alloc[f64](a, total)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret }
+    var msum = 0.0f64
+    while i < total {
+        order1[i] = i
+        order3[i] = i
+        if weights[i] != 0.0f64 { msum += source[i] }
+        i += 1usize
+    }
+    sort_desc(order1, colors, weights, source, true)
+    while colors > 0usize {
+        let c = order1[colors - 1usize]
+        if weights[c] == 0.0f64 || source[c] == 0.0f64 {
+            dest[c] = 0.0f64
+            colors -= 1usize
+        } else {
+            break
+        }
+    }
+    if n >= msum {
+        i = 0usize
+        while i < colors {
+            dest[order1[i]] = source[order1[i]]
+            i += 1usize
+        }
+        ret
+    }
+    var invert = false
+    if n > math.floor[f64](msum / 2.0f64) {
+        var lo = 0usize
+        var hi = colors - 1usize
+        while lo < hi {
+            let t = order1[lo]
+            order1[lo] = order1[hi]
+            order1[hi] = t
+            lo += 1usize
+            hi -= 1usize
+        }
+        n = msum - n
+        invert = true
+    }
+    var c2 = 0usize
+    var w = 0.0f64
+    var x = 0.0f64
+    i = 0usize
+    while i < colors {
+        let c = order1[i]
+        if i == 0usize || weights[c] != w {
+            if i > 0usize { c2 += 1usize }
+            x = source[c]
+            if invert { w = 1.0f64 / weights[c] } else { w = weights[c] }
+            oweights[c2] = w
+        } else {
+            x += source[c]
+        }
+        osource[c2] = x
+        order2[i] = c2
+        osample[c2] = 0.0f64
+        i += 1usize
+    }
+    let colors2 = c2 + 1usize
+    if colors2 == 1usize { osample[0usize] = n }
+    if colors2 == 2usize {
+        osample[0usize] = fnc_draw(st.rg, n, osource[0usize], msum, oweights[0usize] / oweights[1usize])
+        osample[1usize] = n - osample[0usize]
+    }
+    if colors2 > 2usize {
+        let b0 = split_point(oweights, colors2)
+        var m1 = 0.0f64
+        var w1 = 0.0f64
+        var m2 = 0.0f64
+        var w2 = 0.0f64
+        i = 0usize
+        while i < b0 {
+            m1 += osource[i]
+            w1 += osource[i] * oweights[i]
+            i += 1usize
+        }
+        while i < colors2 {
+            m2 += osource[i]
+            w2 += osource[i] * oweights[i]
+            i += 1usize
+        }
+        w1 = w1 / m1
+        w2 = w2 / m2
+        let n1 = fnc_draw(st.rg, n, m1, m1 + m2, w1 / w2)
+        let n2 = n - n1
+        var n0c = n1
+        var lo = 0usize
+        var hi = b0
+        var k = 0usize
+        while k < 2usize {
+            i = lo
+            while i + 1usize < hi {
+                let m = osource[i]
+                let wi = oweights[i]
+                var ms = 0.0f64
+                var ws = 0.0f64
+                var j = i + 1usize
+                while j < hi {
+                    ms += osource[j]
+                    ws += osource[j] * oweights[j]
+                    j += 1usize
+                }
+                let wl = oweights[hi - 1usize]
+                var xx = 0.0f64
+                if wi == wl {
+                    xx = hypergeometric(st.rg, n0c, m, ms + m)
+                } else if ws == 0.0f64 {
+                    xx = n0c
+                } else {
+                    xx = fnc_draw(st.rg, n0c, m, ms + m, wi * ms / ws)
+                }
+                osample[i] += xx
+                n0c -= xx
+                i += 1usize
+            }
+            osample[hi - 1usize] += n0c
+            lo = hi
+            hi = colors2
+            n0c = n2
+            k += 1usize
+        }
+        // the colours with the largest variance are scanned first
+        var nu = 0.0f64
+        i = 0usize
+        while i < colors2 {
+            nu += osource[i]
+            i += 1usize
+        }
+        mv.mfnc_mean1(osource[0usize..colors2], oweights[0usize..colors2], n, mu[0usize..colors2])
+        i = 0usize
+        while i < colors2 {
+            vr[i] = mv.approx_var(mu[i], osource[i], n, nu)
+            i += 1usize
+        }
+        sort_desc(order3, colors2, vr, vr, false)
+        var ngibbs = 4usize
+        if prec < 1.0e-6f64 { ngibbs = 6usize }
+        if colors2 > 5usize { ngibbs += 1usize }
+        var g = 0usize
+        while g < ngibbs {
+            i = 0usize
+            while i < colors2 {
+                let ca = order3[i]
+                let cb = order3[(i + 1usize) % colors2]
+                let nn1 = osample[ca] + osample[cb]
+                let xg = fnc_draw(st.rg, nn1, osource[ca], osource[ca] + osource[cb], oweights[ca] / oweights[cb])
+                osample[ca] = xg
+                osample[cb] = nn1 - xg
+                i += 1usize
+            }
+            g += 1usize
+        }
+    }
+    if invert {
+        i = 0usize
+        while i < colors2 {
+            osample[i] = osource[i] - osample[i]
+            i += 1usize
+        }
+    }
+    multi_unsort(st, dest, source, order1, order2, colors, osource, osample)
+}
+
+fn multi_wall(st: *Sto, a: *mem.Arena, dest: []f64, source: []const f64, weights: []const f64, n: f64, prec: f64) {
+    let total = source.len
+    var colors = total
+    var i = 0usize
+    if colors == 0usize { ret }
+    if n == 0.0f64 {
+        while i < total {
+            dest[i] = 0.0f64
+            i += 1usize
+        }
+        ret
+    }
+    let (order1, e1) = mem.alloc[usize](a, total)
+    let (order2, e2) = mem.alloc[usize](a, total)
+    let (order3, e3) = mem.alloc[usize](a, total)
+    let (osource, e4) = mem.alloc[f64](a, total)
+    let (oweights, e5) = mem.alloc[f64](a, total)
+    let (osample, e6) = mem.alloc[f64](a, total)
+    let (urn, e7) = mem.alloc[f64](a, total)
+    let (wcum, e8) = mem.alloc[f64](a, total)
+    let (vr, e9) = mem.alloc[f64](a, total)
+    let (mu, e10) = mem.alloc[f64](a, total)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret }
+    var nt = 0.0f64
+    while i < total {
+        order1[i] = i
+        order3[i] = i
+        if weights[i] != 0.0f64 { nt += source[i] }
+        i += 1usize
+    }
+    sort_desc(order1, colors, weights, source, true)
+    while colors > 0usize {
+        let c = order1[colors - 1usize]
+        if weights[c] == 0.0f64 || source[c] == 0.0f64 {
+            dest[c] = 0.0f64
+            colors -= 1usize
+        } else {
+            break
+        }
+    }
+    if n >= nt {
+        i = 0usize
+        while i < colors {
+            dest[order1[i]] = source[order1[i]]
+            i += 1usize
+        }
+        ret
+    }
+    var c2 = 0usize
+    var w = 0.0f64
+    var x = 0.0f64
+    i = 0usize
+    while i < colors {
+        let c = order1[i]
+        if i == 0usize || weights[c] != w {
+            if i > 0usize { c2 += 1usize }
+            x = source[c]
+            w = weights[c]
+            oweights[c2] = w
+        } else {
+            x += source[c]
+        }
+        urn[c2] = x
+        osource[c2] = x
+        order2[i] = c2
+        osample[c2] = 0.0f64
+        i += 1usize
+    }
+    var colors2 = c2 + 1usize
+    if colors2 == 1usize { osample[0usize] = n }
+    if colors2 == 2usize {
+        let x2 = wnc_draw(st, a, n, osource[0usize], nt, oweights[0usize] / oweights[1usize], prec)
+        osample[0usize] = x2
+        osample[1usize] = n - x2
+    }
+    if colors2 > 2usize && n < 5000.0f64 * f64(colors2) {
+        var run = 0.0f64
+        i = 0usize
+        while i < colors2 {
+            run += urn[i] * oweights[i]
+            wcum[i] = run
+            i += 1usize
+        }
+        var j = colors2 - 1usize
+        var nn = n
+        while true {
+            let p = rng.unif(st.rg) * wcum[colors2 - 1usize]
+            i = 0usize
+            while i < j {
+                if p < wcum[i] { break }
+                i += 1usize
+            }
+            osample[i] += 1.0f64
+            urn[i] -= 1.0f64
+            nn -= 1.0f64
+            if urn[i] == 0.0f64 {
+                if i != j {
+                    let t1 = osource[i]
+                    osource[i] = osource[j]
+                    osource[j] = t1
+                    let t2 = urn[i]
+                    urn[i] = urn[j]
+                    urn[j] = t2
+                    let t3 = osample[i]
+                    osample[i] = osample[j]
+                    osample[j] = t3
+                    let t4 = oweights[i]
+                    oweights[i] = oweights[j]
+                    oweights[j] = t4
+                    var q = 0usize
+                    while q < colors {
+                        if order2[q] == i { order2[q] = j } else if order2[q] == j { order2[q] = i }
+                        q += 1usize
+                    }
+                }
+                colors2 -= 1usize
+                j = colors2 - 1usize
+                if colors2 == 2usize && nn > 50.0f64 {
+                    let xr = wnc_draw(st, a, nn, urn[0usize], urn[0usize] + urn[1usize], oweights[0usize] / oweights[1usize], prec)
+                    osample[0usize] += xr
+                    osample[1usize] += nn - xr
+                    break
+                }
+                if colors2 == 1usize {
+                    osample[0usize] += nn
+                    break
+                }
+                i = 0usize
+            }
+            var ws = 0.0f64
+            if i > 0usize { ws = wcum[i - 1usize] }
+            var q = i
+            while q < colors2 {
+                ws += urn[q] * oweights[q]
+                wcum[q] = ws
+                q += 1usize
+            }
+            if !(nn > 0.0f64) { break }
+        }
+    }
+    if colors2 > 2usize && !(n < 5000.0f64 * f64(colors2)) {
+        let b0 = split_point(oweights, colors2)
+        var m1 = 0.0f64
+        var w1 = 0.0f64
+        var m2 = 0.0f64
+        var w2 = 0.0f64
+        i = 0usize
+        while i < b0 {
+            m1 += urn[i]
+            w1 += urn[i] * oweights[i]
+            i += 1usize
+        }
+        while i < colors2 {
+            m2 += urn[i]
+            w2 += urn[i] * oweights[i]
+            i += 1usize
+        }
+        w1 = w1 / m1
+        w2 = w2 / m2
+        let n1 = wnc_draw(st, a, n, m1, m1 + m2, w1 / w2, prec)
+        let n2 = n - n1
+        var lo = 0usize
+        var hi = b0
+        var ng = n1
+        var k = 0usize
+        while k < 2usize {
+            i = lo
+            while i + 1usize < hi {
+                let m = urn[i]
+                let wi = oweights[i]
+                var ms = 0.0f64
+                var ws = 0.0f64
+                var j = i + 1usize
+                while j < hi {
+                    ms += urn[j]
+                    ws += urn[j] * oweights[j]
+                    j += 1usize
+                }
+                var xx = ng
+                if ws != 0.0f64 { xx = wnc_draw(st, a, ng, m, ms + m, wi * ms / ws, prec) }
+                osample[i] = xx
+                ng -= xx
+                i += 1usize
+            }
+            osample[hi - 1usize] = ng
+            lo = hi
+            hi = colors2
+            ng = n2
+            k += 1usize
+        }
+        mv.mwnc_mean(osource[0usize..colors2], oweights[0usize..colors2], n, nt, mu[0usize..colors2])
+        i = 0usize
+        while i < colors2 {
+            vr[i] = mv.approx_var(mu[i], osource[i], n, nt)
+            i += 1usize
+        }
+        sort_desc(order3, colors2, vr, vr, false)
+        var nh = 4usize
+        if prec < 1.0e-6f64 { nh = 6usize }
+        if colors2 > 5usize { nh += 1usize }
+        var f0 = 0.0f64 - 1.0f64
+        var h = 0usize
+        while h < nh {
+            i = 0usize
+            while i < colors2 {
+                let ca = order3[i]
+                let cb = order3[(i + 1usize) % colors2]
+                let wr = oweights[ca] / oweights[cb]
+                let n1b = osample[ca] + osample[cb]
+                let x0 = osample[ca]
+                let xn = wnc_draw(st, a, n1b, osource[ca], osource[ca] + osource[cb], wr, prec)
+                if xn != x0 {
+                    if f0 < 0.0f64 { f0 = bu.mwall_prob(osample[0usize..colors2], osource[0usize..colors2], oweights[0usize..colors2]) }
+                    var g0 = wnc_prob(x0, n1b, osource[ca], osource[ca] + osource[cb], wr)
+                    var g1 = wnc_prob(xn, n1b, osource[ca], osource[ca] + osource[cb], wr)
+                    osample[ca] = xn
+                    osample[cb] = n1b - xn
+                    let f1 = bu.mwall_prob(osample[0usize..colors2], osource[0usize..colors2], oweights[0usize..colors2])
+                    g0 = f1 * g0
+                    g1 = f0 * g1
+                    var accept = g0 >= g1
+                    if !accept { accept = g0 > g1 * rng.unif(st.rg) }
+                    if accept {
+                        f0 = 0.0f64 - 1.0f64
+                    } else {
+                        osample[ca] = x0
+                        osample[cb] = n1b - x0
+                    }
+                }
+                i += 1usize
+            }
+            h += 1usize
+        }
+    }
+    multi_unsort(st, dest, source, order1, order2, colors, osource, osample)
+}
+
+// rMFNCHypergeo / rMWNCHypergeo: nran variates of colours each, variate v in out[v * colors .. (v + 1) * colors]
+fn r_multi_fisher(rg: *rng.Rng, a: *mem.Arena, nran: usize, m: []const f64, odds: []const f64, n: f64, prec0: f64, out: []f64) {
+    let prec = sane_prec(prec0)
+    var st = Sto{ rg: rg, r: 1.0f64 }
+    let cc = m.len
+    var v = 0usize
+    while v < nran {
+        multi_fisher(&st, a, out[v * cc..(v + 1usize) * cc], m, odds, n, prec)
+        v += 1usize
+    }
+}
+
+fn r_multi_wall(rg: *rng.Rng, a: *mem.Arena, nran: usize, m: []const f64, odds: []const f64, n: f64, prec0: f64, out: []f64) {
+    let prec = sane_prec(prec0)
+    var st = Sto{ rg: rg, r: 1.0f64 }
+    let cc = m.len
+    var v = 0usize
+    while v < nran {
+        multi_wall(&st, a, out[v * cc..(v + 1usize) * cc], m, odds, n, prec)
+        v += 1usize
+    }
+}

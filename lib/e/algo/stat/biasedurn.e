@@ -4,8 +4,9 @@
 // same binomial product times `int_0^1 (1 - t^(w/D))^x (1 - t^(1/D))^(n-x) dt` with
 // `D = w (m1 - x) + (m2 - n + x)`, integrated by tanh-sinh quadrature after the substitution `t = u^D`.
 //
-// Not here: the multivariate variants, random variates, the stochastic odds estimation, the `precision`
-// argument (the quadrature is fixed and accurate to about 1e-12).
+// The multivariate moments, odds and ball-count estimators are in biasedurn_mv.e, the univariate moments at a given precision in
+// biasedurn_uni.e and the random variates in biasedurn_rand.e. Not here: the `precision` argument of the mass function itself
+// (the quadrature is refined to about 1e-14, where the package stops at the precision asked, 1e-7 by default).
 
 use e.math
 use e.math.dist as dist
@@ -54,21 +55,21 @@ fn fisher_pmf(m1: f64, m2: f64, n: f64, w: f64, pmf: []f64) -> usize {
     ret cnt
 }
 
-// integrand of Wallenius in u = t^(1/D): (1 - u^w)^x (1 - u)^(n-x) D u^(D-1), at u with log u = lu and 1 - u = omu
-fn wall_integrand(x: f64, n: f64, w: f64, d: f64, lu: f64, omu: f64) -> f64 {
-    var v = d * math.exp[f64]((d - 1.0f64) * lu)
-    if x > 0.0f64 { v = v * math.pow[f64](0.0f64 - dist.expm1(w * lu), x) }
-    if n - x > 0.0f64 { v = v * math.pow[f64](omu, n - x) }
-    ret v
+// integrand of Wallenius in u = t^(1/D), as a log: lc + ln D + (D - 1) ln u + x ln(1 - u^w) + (n - x) ln(1 - u), at u with log u = lu and 1 - u = omu
+fn wall_integrand(x: f64, n: f64, w: f64, d: f64, lu: f64, omu: f64, lc: f64) -> f64 {
+    var lv = lc + math.log[f64](d) + (d - 1.0f64) * lu
+    if x > 0.0f64 { lv += x * math.log[f64](0.0f64 - dist.expm1(w * lu)) }
+    if n - x > 0.0f64 { lv += (n - x) * math.log[f64](omu) }
+    ret math.exp[f64](lv)
 }
 
-fn wallenius_term(x: f64, m1: f64, m2: f64, n: f64, w: f64) -> f64 {
-    let d = w * (m1 - x) + (m2 - n + x)
+// tanh-sinh sum at node spacing h
+fn wallenius_sum(x: f64, n: f64, w: f64, d: f64, lc: f64, h: f64) -> f64 {
     let pi = 3.141592653589793f64
-    let h = 1.0f64 / 32.0f64
     var s = 0.0f64
-    var j = 0i64 - 160i64
-    while j <= 160i64 {
+    let jmax = i64(5.0f64 / h)
+    var j = 0i64 - jmax
+    while j <= jmax {
         let t = f64(j) * h
         let ex = math.exp[f64](t)
         let sh = (ex - 1.0f64 / ex) / 2.0f64
@@ -93,10 +94,28 @@ fn wallenius_term(x: f64, m1: f64, m2: f64, n: f64, w: f64) -> f64 {
         let e2 = math.exp[f64](a)
         let cha = (e2 + 1.0f64 / e2) / 2.0f64
         let wt = pi / 4.0f64 * ch / (cha * cha)
-        if wt > 1.0e-300f64 && u > 0.0f64 { s += wt * wall_integrand(x, n, w, d, lu, omu) }
+        if wt > 1.0e-300f64 && u > 0.0f64 && omu > 0.0f64 { s += wt * wall_integrand(x, n, w, d, lu, omu, lc) }
         j += 1i64
     }
-    ret s * h * math.exp[f64](lchoose(m1, x) + lchoose(m2, n - x))
+    ret s * h
+}
+
+// the node spacing is halved from 1/32 until two successive sums agree, so a peaked integrand (large n) is resolved
+fn wallenius_term(x: f64, m1: f64, m2: f64, n: f64, w: f64) -> f64 {
+    let d = w * (m1 - x) + (m2 - n + x)
+    let lc = lchoose(m1, x) + lchoose(m2, n - x)
+    var h = 1.0f64 / 32.0f64
+    var prev = wallenius_sum(x, n, w, d, lc, h)
+    var lvl = 0usize
+    while lvl < 4usize {
+        h = h / 2.0f64
+        let cur = wallenius_sum(x, n, w, d, lc, h)
+        let dd = math.abs[f64](cur - prev)
+        prev = cur
+        if dd <= 1.0e-14f64 * cur || cur == 0.0f64 { break }
+        lvl += 1usize
+    }
+    ret prev
 }
 
 fn wallenius_pmf(m1: f64, m2: f64, n: f64, w: f64, pmf: []f64) -> usize {
@@ -286,4 +305,72 @@ fn mv_value(a: *mem.Arena, kind: usize, m: []const f64, odds: []const f64, n: f6
     let mean = g.s1[idx] / g.s0
     if what == 1usize { ret mean }
     ret g.s2[idx] / g.s0 - mean * mean
+}
+
+// ---- Wallenius' multivariate probability by the same tanh-sinh sum, in logs and refined until it settles (large counts) ----
+
+fn mwall_sum(x: []const f64, w: []const f64, d: f64, lc: f64, h: f64) -> f64 {
+    let pi = 3.141592653589793f64
+    let c = x.len
+    var s = 0.0f64
+    let jmax = i64(5.0f64 / h)
+    var j = 0i64 - jmax
+    while j <= jmax {
+        let t = f64(j) * h
+        let ex = math.exp[f64](t)
+        let sh = (ex - 1.0f64 / ex) / 2.0f64
+        let ch = (ex + 1.0f64 / ex) / 2.0f64
+        let a = pi / 2.0f64 * sh
+        var omu = 0.0f64
+        var lu = 0.0f64
+        if a >= 0.0f64 {
+            let e = math.exp[f64](0.0f64 - 2.0f64 * a)
+            omu = e / (1.0f64 + e)
+            lu = 0.0f64 - dist.log1p(e)
+        } else {
+            let e = math.exp[f64](2.0f64 * a)
+            omu = 1.0f64 / (1.0f64 + e)
+            lu = 2.0f64 * a - dist.log1p(e)
+        }
+        let e2 = math.exp[f64](a)
+        let cha = (e2 + 1.0f64 / e2) / 2.0f64
+        let wt = pi / 4.0f64 * ch / (cha * cha)
+        if wt > 1.0e-300f64 && omu > 0.0f64 {
+            var lv = lc + math.log[f64](d) + (d - 1.0f64) * lu
+            var i = 0usize
+            while i < c {
+                if x[i] > 0.0f64 {
+                    if w[i] == 1.0f64 { lv += x[i] * math.log[f64](omu) } else { lv += x[i] * math.log[f64](0.0f64 - dist.expm1(w[i] * lu)) }
+                }
+                i += 1usize
+            }
+            s += wt * math.exp[f64](lv)
+        }
+        j += 1i64
+    }
+    ret s * h
+}
+
+fn mwall_prob(x: []const f64, m: []const f64, w: []const f64) -> f64 {
+    let c = x.len
+    var d = 0.0f64
+    var lc = 0.0f64
+    var i = 0usize
+    while i < c {
+        d += w[i] * (m[i] - x[i])
+        lc += lchoose(m[i], x[i])
+        i += 1usize
+    }
+    var h = 1.0f64 / 32.0f64
+    var prev = mwall_sum(x, w, d, lc, h)
+    var lvl = 0usize
+    while lvl < 4usize {
+        h = h / 2.0f64
+        let cur = mwall_sum(x, w, d, lc, h)
+        let dd = math.abs[f64](cur - prev)
+        prev = cur
+        if dd <= 1.0e-14f64 * cur || cur == 0.0f64 { break }
+        lvl += 1usize
+    }
+    ret prev
 }

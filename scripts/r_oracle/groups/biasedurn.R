@@ -18,7 +18,7 @@ for (rep in 1:40) {
   mu <- runif(1, lo + 0.1, hi - 0.1); addc(13, a(13, mu), oddsWNCHypergeo(mu, m1, m2, n), 1e-9)
   if (x > lo && x < hi) addc(11, a(11, x), oddsFNCHypergeo(x, m1, m2, n), 1e-6)
 }
-# the multivariate mass functions ("mv": (kind 0 Fisher 1 Wallenius, what 0 d, idx, n, c, m[c], odds[c], xq[c])); the multivariate means and variances of the package are approximations (they differ from the exact sums by up to 0.04) and are not compared
+# the multivariate mass functions ("mv": (kind 0 Fisher 1 Wallenius, what 0 d, idx, n, c, m[c], odds[c], xq[c])); the multivariate means and variances, the variates and the estimators are in the groups biasedurn_mv and biasedurn_rand
 for (rep in 1:30) {
   cc <- sample(3:4, 1); m <- sample(2:7, cc, TRUE); n <- sample(2:min(10, sum(m) - 1), 1); od <- round(runif(cc, 0.3, 4), 2)
   xq <- as.numeric(rmultinom(1, n, m / sum(m))); while (any(xq > m)) xq <- as.numeric(rmultinom(1, n, m / sum(m)))
