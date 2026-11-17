@@ -9,10 +9,10 @@
       "group": "CRAN parity",
       "order": 589,
       "title": "BiasedUrn: noncentral hypergeometric distributions",
-      "score": 0.65,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6071): e.algo.stat.biasedurn has Fisher and Wallenius noncentral hypergeometric d, p, q, mean and var, Fisher mode and odds, equal to BiasedUrn on 472 values on Windows (oracle_biasedurn); Linux pending. D6791: modeWNCHypergeo and the multivariate Fisher and Wallenius mass functions equal BiasedUrn (572 values in all). Open: the multivariate means and variances (the package approximates them), random variates under set.seed, the odds estimates. Original: Open (CRAN rank 851). Small. Acceptance, equal to BiasedUrn: d, p, q, r and moments for Wallenius and Fisher noncentral hypergeometric, multivariate variants, odds estimation, under set.seed."
+      "evidence": "Partly done (D6071): e.algo.stat.biasedurn has Fisher and Wallenius noncentral hypergeometric d, p, q, mean and var, Fisher mode and odds, equal to BiasedUrn on 472 values on Windows (oracle_biasedurn); Linux pending. D6791: modeWNCHypergeo and the multivariate Fisher and Wallenius mass functions equal BiasedUrn (572 values in all). D6808: oddsWNCHypergeo equals the package (611 values in all). Open: the multivariate means and variances (the package approximates them), random variates under set.seed. Original: Open (CRAN rank 851). Small. Acceptance, equal to BiasedUrn: d, p, q, r and moments for Wallenius and Fisher noncentral hypergeometric, multivariate variants, odds estimation, under set.seed."
     },
     {
       "id": "L473",

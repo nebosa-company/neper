@@ -166,6 +166,9 @@ fn summarise(pmf: []const f64, cnt: usize, lo: f64, kind: u8, arg: f64) -> f64 {
 // 2 by 2 table, `x (m2 - n + x) / ((m1 - x) (n - x))`
 fn odds_fisher(x: f64, m1: f64, m2: f64, n: f64) -> f64 { ret x * (m2 - n + x) / ((m1 - x) * (n - x)) }
 
+// oddsWNCHypergeo(mu, m1, m2, n): the odds that make mu the Wallenius expectation, log(1 - mu / m1) / log(1 - (n - mu) / m2)
+fn odds_wall(mu: f64, m1: f64, m2: f64, n: f64) -> f64 { ret math.log[f64](1.0f64 - mu / m1) / math.log[f64](1.0f64 - (n - mu) / m2) }
+
 // modeFNCHypergeo: floor(2 C / (B + sqrt(B^2 - 4 A C))) with A = w - 1, B = (m1 + n + 2) w + m2 - n,
 // C = (m1 + 1)(n + 1) w, and floor((m1 + 1)(n + 1) / (m1 + m2 + 2)) at w = 1
 fn mode_fisher(m1: f64, m2: f64, n: f64, w: f64) -> f64 {

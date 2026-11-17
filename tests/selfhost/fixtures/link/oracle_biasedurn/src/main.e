@@ -28,6 +28,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if kind == 11usize {
         ret bu.odds_fisher(arg, m1, m2, n)
     }
+    if kind == 13usize { ret bu.odds_wall(arg, m1, m2, n) }
     if kind == 5usize { ret bu.mode_fisher(m1, m2, n, w) }
     var cnt = 0usize
     if kind <= 5usize { cnt = bu.fisher_pmf(m1, m2, n, w, pmf) } else { cnt = bu.wallenius_pmf(m1, m2, n, w, pmf) }

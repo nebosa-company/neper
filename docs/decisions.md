@@ -47698,3 +47698,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6807 — hclust: cutree by height, and the nearest-neighbour fix for centroid and median
 
 **Decision.** `hclust.cutree_h(t, n, h)` is `cutree(hc, h = h)`: the number of merges with height at or below h is subtracted from n and the result is cut by k; equal to R on the oracle draws (oracle_hclust, 459 cases in all, a `cuth` case for every dendrogram whose heights do not invert). The merge loop now carries R's nearest-neighbour repair from `hclust.f`: when the merged cluster's new dissimilarity to an earlier cluster k is below k's recorded nearest-neighbour distance, k's neighbour becomes the merged cluster. Without it a non-monotone linkage (centroid, median) can lose the true nearest pair, and the new draws gave a different merge order for centroid at 22 and 24 points. Not here: `untangle`, `ladderize`, `as.dendrogram` objects. Linux pending.
+
+## D6808 — BiasedUrn: Wallenius odds estimate
+
+**Decision.** `biasedurn.odds_wall(mu, m1, m2, n)` is `oddsWNCHypergeo`: the odds at which mu is the Wallenius expectation, log(1 - mu / m1) / log(1 - (n - mu) / m2), equal to the package on 40 draws (oracle_biasedurn, 611 cases in all). The `precision` argument has no effect on it. Not here: the multivariate means and variances (the package approximates them), random variates under set.seed. Linux pending.
