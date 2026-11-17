@@ -82,6 +82,11 @@ fn min_of(v: []const f64, m: usize) -> f64 {
 
 // the E step for the covariances sigma: fills z with the memberships and returns the log likelihood (NaN when a covariance is not positive definite)
 fn estep_gen(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, mu: []const f64, sigma: []const f64, pro: []const f64, z: []f64) -> f64 {
+    ret estep_vinv(a, x, n, p, g, mu, sigma, pro, 0.0f64, z)
+}
+
+// estep_gen with the noise column g of z (n by g + 1, pro has g + 1 entries) when vinv is positive
+fn estep_vinv(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, mu: []const f64, sigma: []const f64, pro: []const f64, vinv: f64, z: []f64) -> f64 {
     let start = mem.mark(a)
     let (lall, e1) = mem.alloc[f64](a, g * p * p)
     let (ld, e2) = mem.alloc[f64](a, g)
@@ -130,18 +135,25 @@ fn estep_gen(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, mu: []
             if lz > tmax { tmax = lz }
             k += 1usize
         }
+        var gz = g
+        if vinv > 0.0f64 {
+            gz = g + 1usize
+            let ln = math.log[f64](vinv) + math.log[f64](pro[g])
+            z[g * n + i] = ln
+            if ln > tmax { tmax = ln }
+        }
         var sum = 0.0f64
         k = 0usize
-        while k < g {
+        while k < gz {
             var e = 0.0f64
-            if pro[k] != 0.0f64 { e = math.exp[f64](z[k * n + i] - tmax) }
+            if k == g || pro[k] != 0.0f64 { e = math.exp[f64](z[k * n + i] - tmax) }
             z[k * n + i] = e
             sum += e
             k += 1usize
         }
         hood += math.log[f64](sum) + tmax
         k = 0usize
-        while k < g {
+        while k < gz {
             z[k * n + i] = z[k * n + i] / sum
             k += 1usize
         }
@@ -216,6 +228,11 @@ fn scatter(x: []const f64, z: []const f64, n: usize, p: usize, g: usize, sumz: [
 // z is replaced by the final memberships; pro (g), mu (p by g), sigma (g stacked p by p) hold the fit. info: 0 iterations, 1 final error, 2 the largest inner iteration count, 3 the last inner error.
 // Returns the log likelihood, NaN when the fit breaks down.
 fn me_gen(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, tol_out: f64, tol_in: f64, itmax_out: usize, itmax_in: usize, eps: f64, m_only: bool, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
+    ret me_gen_v(a, model, eqpro, x, z, n, p, g, tol_out, tol_in, itmax_out, itmax_in, eps, m_only, pro, mu, sigma, info, 0.0f64)
+}
+
+// me_gen with the noise column g of z (n by g + 1, pro has g + 1 entries) when vinv is positive
+fn me_gen_v(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, tol_out: f64, tol_in: f64, itmax_out: usize, itmax_in: usize, eps: f64, m_only: bool, pro: []f64, mu: []f64, sigma: []f64, info: []f64, vinv: f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let (sumz, e1) = mem.alloc[f64](a, g)
     let (u, e2) = mem.alloc[f64](a, g * p * p)
@@ -779,7 +796,16 @@ fn me_gen(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n:
             info[0usize] = 1.0f64
             ret 0.0f64
         }
-        hood = estep_gen(a, x, n, p, g, mu, sigma, pro, z)
+        if vinv > 0.0f64 {
+            var sn = 0.0f64
+            var i3 = 0usize
+            while i3 < n {
+                sn += z[g * n + i3]
+                i3 += 1usize
+            }
+            pro[g] = sn / nn
+        }
+        hood = estep_vinv(a, x, n, p, g, mu, sigma, pro, vinv, z)
         if hood != hood { ret nan }
         errv = math.abs[f64](hood - hold) / (1.0f64 + math.abs[f64](hood))
         hold = hood

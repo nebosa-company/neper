@@ -445,3 +445,5 @@ oracle_lmomq
 oracle_drdid_full
 oracle_mclust17
 oracle_mclust18
+oracle_mclust19
+oracle_mclust20
