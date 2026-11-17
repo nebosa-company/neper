@@ -14,7 +14,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let p = usize(z[1usize])
     let (f, e) = mem.alloc[f64](a, n)
     if e != ok { ret nan }
-    if gb.gaussian(a, z[8usize + n..8usize + n + n * p], z[8usize..8usize + n], n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f) != ok { ret nan }
+    let xm = z[8usize + n..8usize + n + n * p]
+    let y = z[8usize..8usize + n]
+    var ge = ok
+    if c.name[0usize] == 98u8 {
+        ge = gb.bernoulli(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
+    } else if c.name[0usize] == 112u8 {
+        ge = gb.poisson(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
+    } else {
+        ge = gb.gaussian(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
+    }
+    if ge != ok { ret nan }
     ret f[usize(z[6usize])]
 }
 

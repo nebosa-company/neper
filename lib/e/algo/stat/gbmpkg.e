@@ -1,8 +1,9 @@
-// R gbm, the gaussian loss with no subsampling (bag.fraction = 1, train.fraction = 1): gradient boosting of regression trees grown best-first to `depth` splits, each leaf predicting the mean residual,
+// R gbm, the gaussian, bernoulli and poisson losses with no subsampling (bag.fraction = 1, train.fraction = 1): gradient boosting of regression trees grown best-first to `depth` splits, each leaf predicting the mean residual,
 // the fit moved by `shrinkage` times it. The answer is the fit at the training rows.
 //
-// Not here: the other distributions, bagging (needs the R generator), train.fraction, weights, missing values, factors, relative.influence, predict on new data.
+// Not here: the other distributions (laplace, quantile, adaboost, huberized, coxph, pairwise, multinomial), bagging (needs the R generator), train.fraction, weights, missing values, factors, relative.influence, predict on new data.
 
+use e.math
 use e.mem
 
 // the best split of the rows in leaf l: writes (variable, position in that variable's order, improvement) to out; improvement 0 when no split leaves minobs rows on each side
@@ -53,14 +54,15 @@ fn best_split(x: []const f64, r: []const f64, order: []const usize, leafof: []co
 }
 
 // x is n by p column-major; fitted receives the boosted fit at the training rows after ntrees trees
-fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
+fn boost(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
     let (order, e1) = mem.alloc[usize](a, n * p)
     let (r, e2) = mem.alloc[f64](a, n)
     let (leafof, e3) = mem.alloc[usize](a, n)
     let (cand, e4) = mem.alloc[f64](a, 3usize)
     let (lsum, e5) = mem.alloc[f64](a, depth + 1usize)
     let (lcnt, e6) = mem.alloc[f64](a, depth + 1usize)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret e1 }
+    let (lden, e7) = mem.alloc[f64](a, depth + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret e1 }
     var j = 0usize
     while j < p {
         var i = 0usize
@@ -88,6 +90,8 @@ fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, n
         i += 1usize
     }
     m = m / f64(n)
+    if loss == 1usize { m = math.log[f64](m / (1.0f64 - m)) }
+    if loss == 2usize { m = math.log[f64](m) }
     i = 0usize
     while i < n {
         fitted[i] = m
@@ -98,6 +102,8 @@ fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, n
         i = 0usize
         while i < n {
             r[i] = y[i] - fitted[i]
+            if loss == 1usize { r[i] = y[i] - 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - fitted[i])) }
+            if loss == 2usize { r[i] = y[i] - math.exp[f64](fitted[i]) }
             leafof[i] = 0usize
             i += 1usize
         }
@@ -133,20 +139,47 @@ fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, n
         while l < nleaf {
             lsum[l] = 0.0f64
             lcnt[l] = 0.0f64
+            lden[l] = 0.0f64
             l += 1usize
         }
         i = 0usize
         while i < n {
-            lsum[leafof[i]] += r[i]
             lcnt[leafof[i]] += 1.0f64
+            if loss == 0usize {
+                lsum[leafof[i]] += r[i]
+            } else if loss == 1usize {
+                let pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - fitted[i]))
+                lsum[leafof[i]] += r[i]
+                lden[leafof[i]] += pr * (1.0f64 - pr)
+            } else {
+                lsum[leafof[i]] += y[i]
+                lden[leafof[i]] += math.exp[f64](fitted[i])
+            }
             i += 1usize
         }
         i = 0usize
         while i < n {
-            fitted[i] += shrinkage * lsum[leafof[i]] / lcnt[leafof[i]]
+            let lf = leafof[i]
+            if loss == 0usize { fitted[i] += shrinkage * lsum[lf] / lcnt[lf] }
+            if loss == 1usize { fitted[i] += shrinkage * lsum[lf] / lden[lf] }
+            if loss == 2usize { fitted[i] += shrinkage * math.log[f64](lsum[lf] / lden[lf]) }
             i += 1usize
         }
         t += 1usize
     }
     ret ok
+}
+
+fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
+    ret boost(a, 0usize, x, y, n, p, ntrees, shrinkage, depth, minobs, fitted)
+}
+
+// distribution "bernoulli" (y in {0, 1}; fitted is on the log-odds scale): the tree fits y - p, each leaf moves by the Newton step sum(y - p) / sum(p (1 - p))
+fn bernoulli(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
+    ret boost(a, 1usize, x, y, n, p, ntrees, shrinkage, depth, minobs, fitted)
+}
+
+// distribution "poisson" (fitted is on the log scale): the tree fits y - exp(F), each leaf moves by log(sum y / sum exp(F))
+fn poisson(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
+    ret boost(a, 2usize, x, y, n, p, ntrees, shrinkage, depth, minobs, fitted)
 }
