@@ -432,3 +432,27 @@ fn sgomp_p(x: f64, b: f64, eta: f64) -> f64 {
     let e = math.exp[f64](0.0f64 - b * x)
     ret (1.0f64 - e) * math.exp[f64](0.0f64 - eta * e)
 }
+
+// quantile functions: the zero-inflated ones answer 0 up to the mass at zero and invert the base distribution above it; the truncated ones invert the base on the rescaled slice
+fn zip_q(p: f64, l: f64, pi0: f64) -> f64 {
+    if p <= pi0 { ret 0.0f64 }
+    ret nm.qpois((p - pi0) / (1.0f64 - pi0), l, true, false)
+}
+fn zib_q(p: f64, n: f64, pr: f64, pi0: f64) -> f64 {
+    if p <= pi0 { ret 0.0f64 }
+    ret nb.qbinom((p - pi0) / (1.0f64 - pi0), n, pr, true, false)
+}
+fn zinb_q(p: f64, n: f64, pr: f64, pi0: f64) -> f64 {
+    if p <= pi0 { ret 0.0f64 }
+    ret nb.qnbinom((p - pi0) / (1.0f64 - pi0), n, pr, true, false)
+}
+fn tpois_q(p: f64, l: f64, a: f64, b: f64) -> f64 {
+    let pa = nm.ppois(a, l, true, false)
+    ret nm.qpois(pa + p * (nm.ppois(b, l, true, false) - pa), l, true, false)
+}
+fn tbinom_q(p: f64, n: f64, pr: f64, a: f64, b: f64) -> f64 {
+    let pa = nb.pbinom(a, n, pr, true, false)
+    ret nb.qbinom(pa + p * (nb.pbinom(b, n, pr, true, false) - pa), n, pr, true, false)
+}
+fn nsbeta_q(p: f64, s1: f64, s2: f64, lo: f64, hi: f64) -> f64 { ret lo + (hi - lo) * nb.qbeta(p, s1, s2, true, false) }
+fn ht_q(p: f64, nu: f64, s: f64) -> f64 { ret s * nb.qt((p + 1.0f64) / 2.0f64, nu, true, false) }

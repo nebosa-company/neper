@@ -48408,3 +48408,8 @@ Whitehead proportional-odds power (`popower`: power, efficiency, approximate sta
 ## D6982 — extraDistr cumulative functions of the discrete and truncated families
 
 `zip_p`, `zib_p`, `zinb_p`, `gpois_p`, `tpois_p`, `tbinom_p`, `nsbeta_p`, `ht_p` and `sgomp_p`, built on the base cumulative functions, equal `extraDistr` p functions on 4 parameter sets each (oracle_extradistr). Slash and Skellam cumulative functions and every quantile of these families are not here. Linux pending.
+
+
+## D6983 — extraDistr quantiles of the discrete and truncated families
+
+`zip_q`, `zib_q`, `zinb_q`, `tpois_q`, `tbinom_q`, `nsbeta_q` and `ht_q`: the zero-inflated ones answer 0 up to the zero mass and invert the base above it; the truncated ones invert the base on the rescaled slice. Equal to extraDistr on 4 parameter sets x 5 probabilities (oracle_extradistr). The package has no gamma-Poisson quantile, so none is written. Linux pending.

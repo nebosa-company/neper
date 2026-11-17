@@ -3841,4 +3841,5 @@ D6978	335	Hmisc ciapower
 D6979	308	Hmisc popower and posamsize
 D6980	326	Hmisc hoeffd
 D6981	488	Hmisc rcspline.restate
-D6982	403	extraDistr cumulative functions of the discrete and truncated families
+D6982	405	extraDistr cumulative functions of the discrete and truncated families
+D6983	445	extraDistr quantiles of the discrete and truncated families

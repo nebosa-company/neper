@@ -62,6 +62,16 @@ for (rep in 1:4) {
   nu <- runif(1, 1, 8); sg <- runif(1, 0.5, 2); for (xx in c(-1, 0.5, 2, 5)) add2("c4", c(2, nu, sg, 0, 0, xx), pht(xx, nu, sg))
   bb <- runif(1, 0.3, 2); et <- runif(1, 0.2, 3); for (xx in c(-1, 0.3, 1, 3)) add2("c4", c(3, bb, et, 0, 0, xx), psgomp(xx, bb, et))
 }
+# quantile functions: fn "k3" as "c3" and "k4" 0 tbinom 1 nsbeta 2 ht
+for (rep in 1:4) {
+  l <- runif(1, 0.5, 5); pz <- runif(1, 0.05, 0.6); n <- sample(8:20, 1); pr <- runif(1, 0.2, 0.8); sh <- runif(1, 1, 5); sc <- runif(1, 0.3, 2); a <- sample(0:2, 1); b <- sample(8:15, 1)
+  for (xx in c(0.05, 0.2, 0.45, 0.7, 0.95)) {
+    add2("k3", c(0, l, pz, 0, xx), qzip(xx, l, pz)); add2("k3", c(1, n, pr, pz, xx), qzib(xx, n, pr, pz)); add2("k3", c(2, n, pr, pz, xx), qzinb(xx, n, pr, pz))
+    add2("k3", c(4, l, a, b, xx), qtpois(xx, l, a, b))
+    add2("k4", c(0, n, pr, a, b, xx), qtbinom(xx, n, pr, a, b))
+    s1 <- 1 + rep / 2; s2 <- 2 + rep / 3; add2("k4", c(1, s1, s2, -1, 2.5, xx), qnsbeta(xx, s1, s2, -1, 2.5)); add2("k4", c(2, 1 + rep, 1.3, 0, 0, xx), qht(xx, 1 + rep, 1.3))
+  }
+}
 # random draws: "rg" (family, seed, p1, p2, p3, index) the draw at position index (0-based) of five seeded draws; family 0 gumbel 1 frechet 2 power 3 lomax 4 pareto 5 rayleigh 6 kumar 7 gompertz 8 hnorm 9 hcauchy 10 laplace
 for (rep in 1:33) {
   sd <- sample(1:100000, 1); fam <- (rep - 1) %% 11; p1 <- runif(1, 0.5, 3); p2 <- runif(1, 0.5, 3); p3 <- runif(1, -1, 1)
