@@ -64,6 +64,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret bt[usize(x[7usize])]
     }
 
+    if str.eq(k, "sir") {
+        // (seed, index, m, n, df, 0, mean[2], var[4], x[m], nn[m], y[m]): element index of the resampled n by 2 matrix
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let m = usize(x[2usize])
+        let ns = usize(x[3usize])
+        var lc = LgCtx{ x: x[12usize..12usize + m], n: x[12usize + m..12usize + 2usize * m], y: x[12usize + 2usize * m..12usize + 3usize * m] }
+        let (so, se) = mem.alloc[f64](a, ns * 2usize)
+        if se != ok { ret 0.0f64 / 0.0f64 }
+        if lb.sir[LgCtx](a, &rr, &lc, lg_logf, x[6usize..8usize], x[8usize..12usize], x[4usize], ns, so) != ok { ret 0.0f64 / 0.0f64 }
+        ret so[usize(x[1usize])]
+    }
     if str.eq(k, "rej") || str.eq(k, "imp2") {
         // (seed, which, m, n, df, dmax or hidx, mean[2], var[4], x[m], nn[m], y[m]) rej: the number kept (which 0) or the sum of the kept first-coordinate values (1); imp2: est (0) or se (1)
         var rr: rng.Rng = zero

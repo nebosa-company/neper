@@ -932,3 +932,72 @@ fn blinreg(a: *mem.Arena, r: *rng.Rng, y: []const f64, x: []const f64, n: usize,
     }
     ret ok
 }
+
+// sir(logf, tpar, n): sampling importance resampling, the proposal draws weighted by exp(lf - lg - max), n indices drawn with replacement the way R's sample does for fewer than 200 values (the weights sorted into decreasing order,
+// a cumulative sum searched with one uniform per draw); out is the resampled n by d matrix, column-major
+fn sir[Ctx: type](a: *mem.Arena, r: *rng.Rng, ctx: *Ctx, logf: fn(*Ctx, []const f64) -> f64, mean: []const f64, vr: []const f64, df: f64, n: usize, out: []f64) -> err {
+    let d = mean.len
+    let (theta, e1) = mem.alloc[f64](a, n * d)
+    let (lf, e2) = mem.alloc[f64](a, n)
+    let (lg, e3) = mem.alloc[f64](a, n)
+    let (pr, e4) = mem.alloc[f64](a, n)
+    let (perm, e5) = mem.alloc[usize](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    let e = proposal_draws[Ctx](a, r, ctx, logf, mean, vr, df, n, theta, lf, lg)
+    if e != ok { ret e }
+    var md = lf[0usize] - lg[0usize]
+    var i = 1usize
+    while i < n {
+        if lf[i] - lg[i] > md { md = lf[i] - lg[i] }
+        i += 1usize
+    }
+    var sw = 0.0f64
+    i = 0usize
+    while i < n {
+        pr[i] = math.exp[f64](lf[i] - lg[i] - md)
+        sw += pr[i]
+        perm[i] = i
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        pr[i] = pr[i] / sw
+        i += 1usize
+    }
+    // decreasing order of the probabilities, an insertion sort carrying the indices
+    i = 1usize
+    while i < n {
+        let kp = pr[i]
+        let ki = perm[i]
+        var j = i
+        while j > 0usize && pr[j - 1usize] < kp {
+            pr[j] = pr[j - 1usize]
+            perm[j] = perm[j - 1usize]
+            j -= 1usize
+        }
+        pr[j] = kp
+        perm[j] = ki
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        pr[i] += pr[i - 1usize]
+        i += 1usize
+    }
+    var q = 0usize
+    while q < n {
+        let ru = rng.unif(r)
+        var j = 0usize
+        while j < n - 1usize {
+            if ru <= pr[j] { break }
+            j += 1usize
+        }
+        var c = 0usize
+        while c < d {
+            out[c * n + q] = theta[c * n + perm[j]]
+            c += 1usize
+        }
+        q += 1usize
+    }
+    ret ok
+}

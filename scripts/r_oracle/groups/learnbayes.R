@@ -85,6 +85,7 @@ for (rep in 1:10) {
   set.seed(sd); rs <- rejectsampling(logisticpost, tp, dmax, ns, dat)
   add("rej", c(sd, 0, m, ns, 4, dmax, mu, vv, xx, nn, yb), if (is.matrix(rs)) nrow(rs) else length(rs))
   if (is.matrix(rs) && nrow(rs) > 0) add("rej", c(sd, 1, m, ns, 4, dmax, mu, vv, xx, nn, yb), sum(rs[, 1]))
+  set.seed(sd); sr <- sir(logisticpost, tp, 150, dat); for (q in c(1, 40, 150, 151, 190, 300)) add("sir", c(sd, q - 1, m, 150, 4, 0, mu, vv, xx, nn, yb), as.vector(sr)[q], 1e-10)
   set.seed(sd); im <- impsampling(logisticpost, tp, function(th) th[2], ns, dat)
   add("imp2", c(sd, 0, m, ns, 4, 1, mu, vv, xx, nn, yb), im$est); add("imp2", c(sd, 1, m, ns, 4, 1, mu, vv, xx, nn, yb), im$se)
 }
