@@ -3760,4 +3760,5 @@ D6897	664	bayesm: mnlHess and numEff
 D6898	919	bayesm: mixDen and momMix
 D6899	968	glmnet: the mgaussian family
 D6900	700	bayesm: createX
-D6901	760	MuMIn: Adjusted SE
+D6901	761	MuMIn: Adjusted SE
+D6902	564	MuMIn: Adjusted SE of the conditional average

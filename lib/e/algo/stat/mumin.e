@@ -109,3 +109,30 @@ fn average_full_adj(est: []const f64, se: []const f64, df: []const f64, w: []con
     }
     ret (bar, math.sqrt[f64](v), math.sqrt[f64](va))
 }
+
+// the conditional average's "Adjusted SE": the same inflation over only the models that contain the term (present[i]), weights renormalised over them
+fn average_conditional_adj(est: []const f64, se: []const f64, df: []const f64, w: []const f64, present: []const bool) -> f64 {
+    var sw = 0.0f64
+    var i = 0usize
+    while i < est.len {
+        if present[i] { sw += w[i] }
+        i += 1usize
+    }
+    var bar = 0.0f64
+    i = 0usize
+    while i < est.len {
+        if present[i] { bar += w[i] / sw * est[i] }
+        i += 1usize
+    }
+    let zq = dist.qnorm(0.975f64, 0.0f64, 1.0f64, true, false)
+    var va = 0.0f64
+    i = 0usize
+    while i < est.len {
+        if present[i] {
+            let t = nb.qt(0.975f64, df[i], true, false) / zq
+            va += w[i] / sw * (se[i] * se[i] * t * t + (est[i] - bar) * (est[i] - bar))
+        }
+        i += 1usize
+    }
+    ret math.sqrt[f64](va)
+}

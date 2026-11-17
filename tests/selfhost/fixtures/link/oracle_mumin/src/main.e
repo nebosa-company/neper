@@ -74,6 +74,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(k, "case") {
+        let (dfc, e7) = mem.alloc[f64](a, m)
+        let (prc, e8) = mem.alloc[bool](a, m)
+        if e7 != ok || e8 != ok { os.exit(11) }
+        var jj = 0usize
+        while jj < p {
+            var q = 0usize
+            var at2 = 3usize
+            while q < m {
+                prc[q] = est[jj * m + q] != 0.0f64
+                dfc[q] = n - (x[at2] - 1.0f64)
+                at2 += 2usize + 2usize * p
+                q += 1usize
+            }
+            s += mm.average_conditional_adj(est[jj * m..jj * m + m], se[jj * m..jj * m + m], dfc, w, prc) * f64(jj + 1usize)
+            jj += 1usize
+        }
+        ret s
+    }
     if str.eq(k, "cest") || str.eq(k, "cse") || str.eq(k, "imp") {
         let (pres, e5) = mem.alloc[bool](a, m)
         if e5 != ok { os.exit(9) }

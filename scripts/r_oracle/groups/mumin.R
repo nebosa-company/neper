@@ -30,6 +30,7 @@ for (rep in 1:12) {
   per <- unlist(lapply(seq_along(mods), function(i) c(length(coef(mods[[i]])) + 1, as.numeric(logLik(mods[[i]])), as.vector(rbind(th[, i], se[, i])))))
   a <- c(n, length(mods), length(nm), per)
   add("cest", a, sum(cs[nm, 1] * seq_along(nm))); add("cse", a, sum(cs[nm, 2] * seq_along(nm)))
+  add("case", a, sum(cs[nm, 3] * seq_along(nm)))
   add("imp", a, sum(as.numeric(im[nm[-1]]) * seq_along(nm[-1])))
 }
 # QAIC and QAICc of a Poisson glm: "qaic" (loglik, k, n, chat, corrected)

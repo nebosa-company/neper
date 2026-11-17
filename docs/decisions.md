@@ -48074,3 +48074,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6901 — MuMIn: Adjusted SE
 
 **Decision.** `mumin.average_full_adj` adds the "Adjusted SE" of `par.avg` to the full model average: each model's variance is multiplied by (qt(0.975, df) / qnorm(0.975))^2 with df its residual degrees of freedom (n minus its coefficient count), a model that lacks the term counting df as infinite (factor 1, estimate and standard error 0), then sqrt(sum w (se^2 z + (b - bar)^2)). Equal to the `Adjusted SE` column of `summary(model.avg)$coefmat.full` on the 12 data sets of the existing oracle, summed over the four coefficients with position weights (oracle_mumin, 156 cases in all). Not here: the adjusted SE of the conditional average (the same formula over the models that contain the term), QIC, dredge. Linux pending.
+
+## D6902 — MuMIn: Adjusted SE of the conditional average
+
+**Decision.** `mumin.average_conditional_adj` is the "Adjusted SE" of `coefmat.subset`: the weights renormalised over the models that contain the term, each model's variance inflated by (qt(0.975, df) / qnorm(0.975))^2 with its residual degrees of freedom, sqrt(sum w (se^2 z + (b - bar)^2)). Equal to the Adjusted SE column of `summary(model.avg)$coefmat.subset` on the 12 data sets of the oracle, summed over the four coefficients with position weights (oracle_mumin, 168 cases in all). Linux pending.
