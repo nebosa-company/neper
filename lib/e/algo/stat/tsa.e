@@ -6,6 +6,7 @@
 
 use e.math
 use e.math.nmath as nm
+use e.algo.linalg.decomp as decomp
 use e.mem
 
 // the smallest N >= n whose prime factors are only 2, 3 and 5
@@ -109,6 +110,116 @@ fn mcleod_li(a: *mem.Arena, x: []const f64, gof: usize, out: []f64) -> err {
         let stat = f64(n) * (f64(n) + 2.0f64) * s
         out[lag - 1usize] = 1.0f64 - nm.pchisq(stat, f64(lag), true, false)
         lag += 1usize
+    }
+    ret ok
+}
+
+// eacf(z, ar.max, ma.max)$eacf: the extended sample autocorrelations (ar.max + 1 rows, ma.max + 1 columns, row-major in out) from the iterated ARMA coefficient recursions of Tsay and Tiao,
+// the AR(i) coefficients being the least-squares fits without intercept
+fn eacf(a: *mem.Arena, z0: []const f64, armax: usize, mamax: usize, out: []f64) -> err {
+    let n = z0.len
+    let nar = armax
+    let nma = mamax + 1usize
+    let nrow = nar + nma + 1usize
+    var ncol = nrow - 1usize
+    let ncol0 = ncol
+    let (z, e1) = mem.alloc[f64](a, n)
+    let (m1, e2) = mem.alloc[f64](a, nrow * ncol0)
+    let (m2, e3) = mem.alloc[f64](a, nrow * ncol0)
+    let (acfz, e4) = mem.alloc[f64](a, nar + nma + 4usize)
+    let (temp, e5) = mem.alloc[f64](a, n)
+    let (ta, e6) = mem.alloc[f64](a, nar + nma + 4usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret mem.Full }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += z0[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    i = 0usize
+    while i < n {
+        z[i] = z0[i] - mean
+        i += 1usize
+    }
+    i = 0usize
+    while i < nrow * ncol0 {
+        m1[i] = 0.0f64
+        m2[i] = 0.0f64
+        i += 1usize
+    }
+    acf_upto(z, nar + nma + 2usize, acfz)
+    // ar.ols(z, order.max = i, aic = FALSE, demean = FALSE, intercept = FALSE)$ar for i = 1 .. ncol0
+    var ord = 1usize
+    while ord <= ncol0 {
+        let rows = n - ord
+        let (xd, ex) = mem.alloc[f64](a, rows * ord)
+        let (yd, ey) = mem.alloc[f64](a, rows)
+        if ex != ok || ey != ok { ret mem.Full }
+        var t = 0usize
+        while t < rows {
+            yd[t] = z[ord + t]
+            var j = 1usize
+            while j <= ord {
+                xd[(j - 1usize) * rows + t] = z[ord + t - j]
+                j += 1usize
+            }
+            t += 1usize
+        }
+        let (f, fe) = decomp.lm_fit(a, xd, rows, ord, yd, 1.0e-7f64)
+        if fe != ok { ret fe }
+        var j = 0usize
+        while j < ord {
+            m1[(ord - 1usize) * nrow + j] = f.coef[j]
+            j += 1usize
+        }
+        ord += 1usize
+    }
+    var it = 1usize
+    while it <= nma {
+        // reupm(m1, nrow, ncol): ncol - 1 columns
+        var k = 0usize
+        while k + 1usize < ncol {
+            let i1 = k + 1usize
+            var r = 0usize
+            while r < nrow {
+                var work = 0.0f64 - 1.0f64
+                if r > 0usize { work = m1[k * nrow + r - 1usize] }
+                m2[k * nrow + r] = m1[i1 * nrow + r] - work * m1[i1 * nrow + i1] / m1[k * nrow + k]
+                r += 1usize
+            }
+            m2[k * nrow + i1] = 0.0f64
+            k += 1usize
+        }
+        ncol = ncol - 1usize
+        // ceascf: the lag-it autocorrelation of z and of its residuals after each of the AR(i) filters
+        if it <= mamax + 1usize && it - 1usize <= mamax {
+            out[it - 1usize] = acfz[it]
+        }
+        var arow = 1usize
+        while arow <= nar {
+            var tt = arow
+            while tt < n {
+                var v = z[tt]
+                var j = 1usize
+                while j <= arow {
+                    v -= m2[(arow - 1usize) * nrow + (j - 1usize)] * z[tt - j]
+                    j += 1usize
+                }
+                temp[tt - arow] = v
+                tt += 1usize
+            }
+            acf_upto(temp[0usize..n - arow], it, ta)
+            if it - 1usize <= mamax { out[arow * (mamax + 1usize) + it - 1usize] = ta[it] }
+            arow += 1usize
+        }
+        // m1 = m2
+        i = 0usize
+        while i < nrow * ncol0 {
+            m1[i] = m2[i]
+            i += 1usize
+        }
+        it += 1usize
     }
     ret ok
 }

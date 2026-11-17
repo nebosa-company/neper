@@ -26,6 +26,16 @@ fn mcl_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "mcl") { ret mcl_case(a, c) }
+    if str.eq(c.name, "eacf") {
+        let ex = c.args
+        let en = usize(ex[0usize])
+        let ar = usize(ex[1usize])
+        let ma = usize(ex[2usize])
+        let (eo, ee) = mem.alloc[f64](a, (ar + 1usize) * (ma + 1usize))
+        if ee != ok { ret 0.0f64 / 0.0f64 }
+        if ts.eacf(a, ex[4usize..4usize + en], ar, ma, eo) != ok { ret 0.0f64 / 0.0f64 }
+        ret eo[usize(ex[3usize])]
+    }
     let x = c.args
     let n = usize(x[0usize])
     let (o, e) = mem.alloc[f64](a, ts.nextn(n) / 2usize + 1usize)

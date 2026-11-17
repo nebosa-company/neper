@@ -47946,3 +47946,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6869 — imputeTS: the maxgap option
 
 **Decision.** `imputets.apply_maxgap(x, filled, maxgap)` is the `maxgap` argument of `na_locf` and `na_interpolation`: after the fill, every run of missing values in the original series longer than `maxgap` is put back to missing in the result (a negative value standing for infinity). Equal to imputeTS on 30 series with `locf`, `nocb`, linear and spline fills, every position (oracle_imputets, 7739 cases in all). Not here: `na_interpolation(option = "stine")`, `na_kalman`, `na_seadec`, `na_seasplit`, `na_random`, `statsNA`. Linux pending.
+
+## D6870 — TSA: eacf
+
+**Decision.** `tsa.eacf(z, ar.max, ma.max)` is the `eacf` matrix of the extended sample autocorrelation function: the AR(i) coefficient columns from no-intercept least-squares fits of the centred series for i up to ar.max + ma.max + 1, the Tsay and Tiao recursion that turns each column set into the next (the lagged column shifted down with -1 inserted, scaled by the diagonal ratio, the new diagonal entry zeroed), and for each MA lag k and AR order i the lag-k autocorrelation of the series filtered by the i-th column. Equal to TSA on 20 simulated ARMA(1, 1) series of 80 to 200 points, every cell (oracle_tsa, 802 cases in all). Not here: the o and x symbol table, `armasubsets`, `detectAO`, `detectIO`, `arimax`, the cumulative periodogram and BIC table. Linux pending.

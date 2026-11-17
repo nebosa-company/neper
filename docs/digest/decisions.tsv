@@ -3728,4 +3728,5 @@ D6865	720	MASS: rlm with the bisquare and Hampel psi functions
 D6866	834	quantreg: the nid standard errors of summary.rq
 D6867	695	quantreg: the ker standard errors, and the shared sandwich
 D6868	1065	imputeTS: na_locf and na_interpolation
-D6869	586	imputeTS: the maxgap option
+D6869	587	imputeTS: the maxgap option
+D6870	800	TSA: eacf
