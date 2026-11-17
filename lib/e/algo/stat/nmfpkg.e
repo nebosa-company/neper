@@ -9,14 +9,25 @@
 // seeds, several runs and the rank survey.
 
 use e.algo.linalg.decomp as decomp
+use e.algo.rand.lecuyer as lc
 use e.algo.rand.r as rng
 use e.math
 use e.mem
 
 // v is n by p column-major, w n by r, h r by p; method 0 brunet (Kullback-Leibler), 1 lee (Frobenius); out[0] receives the iteration count
-fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, theta: f64, init: usize, w: []f64, h: []f64, out: []f64) -> err {
+fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, theta: f64, init: usize, stream: i64, w: []f64, h: []f64, out: []f64) -> err {
     var r: rng.Rng = zero
     rng.seed(&r, seed)
+    var ly: lc.State = zero
+    let use_ly = stream >= 0i64
+    if use_ly {
+        ly = lc.rngseq_start(rng.unif(&r))
+        var sj = 0i64
+        while sj < stream {
+            ly = lc.jump(ly, 0u8)
+            sj += 1i64
+        }
+    }
     var q = 0usize
     if init == 0usize {
         var mx = v[0usize]
@@ -27,12 +38,12 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
         }
         q = 0usize
         while q < n * rk {
-            w[q] = rng.unif(&r) * mx
+            w[q] = nm_unif(use_ly, &r, &ly) * mx
             q += 1usize
         }
         q = 0usize
         while q < rk * p {
-            h[q] = rng.unif(&r) * mx
+            h[q] = nm_unif(use_ly, &r, &ly) * mx
             q += 1usize
         }
     } else {
@@ -87,7 +98,7 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
     q = 0usize
     while q < n {
         off[q] = 0.0f64
-        if method == 5usize { off[q] = rng.unif(&r) * wmax }
+        if method == 5usize { off[q] = nm_unif(use_ly, &r, &ly) * wmax }
         q += 1usize
     }
     var inc = 0usize
@@ -674,6 +685,48 @@ fn nndsvd(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, init: us
         if h[q] < 1.0e-10f64 { h[q] = 0.0f64 }
         if h[q] == 0.0f64 && init == 2usize { h[q] = avg }
         q += 1usize
+    }
+    ret ok
+}
+
+fn nm_unif(use_ly: bool, r: *rng.Rng, st: *lc.State) -> f64 {
+    if use_ly { ret lc.unif(st) }
+    ret rng.unif(r)
+}
+
+// nmf(x, rank, method, seed, nrun = nrun): the runs take the streams of rngtools::RNGseq(nrun, seed) (each run's random start drawn from its L'Ecuyer-CMRG stream), and the fit with the
+// smallest residual is kept (the first of equals); methods 0 to 3. out[0] iterations of the kept run, out[1] its 1-based index, out[2] its residual
+fn nmf_runs(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, nrun: usize, w: []f64, h: []f64, out: []f64) -> err {
+    let (w1, e1) = mem.alloc[f64](a, n * rk)
+    let (h1, e2) = mem.alloc[f64](a, rk * p)
+    let (wh, e3) = mem.alloc[f64](a, n * p)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var kind = 1usize
+    if method % 2usize == 0usize { kind = 0usize }
+    var best = 1.0f64 / 0.0f64
+    var k = 0usize
+    while k < nrun {
+        var o1: [4]f64 = zero
+        let fe = nmf_fit(a, v, n, p, rk, method, seed, maxiter, 0.5f64, 0usize, i64(k), w1, h1, o1[0usize..4usize])
+        if fe != ok { ret fe }
+        let rs = nmf_objective(v, w1, h1, n, p, rk, kind, wh)
+        if rs < best {
+            best = rs
+            var q = 0usize
+            while q < n * rk {
+                w[q] = w1[q]
+                q += 1usize
+            }
+            q = 0usize
+            while q < rk * p {
+                h[q] = h1[q]
+                q += 1usize
+            }
+            out[0usize] = o1[0usize]
+            out[1usize] = f64(k + 1usize)
+            out[2usize] = rs
+        }
+        k += 1usize
     }
     ret ok
 }

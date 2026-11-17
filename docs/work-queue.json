@@ -1032,10 +1032,10 @@
       "group": "CRAN parity",
       "order": 727,
       "title": "NMF: non-negative matrix factorization",
-      "score": 0.45,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "D6773: e.algo.stat.nmfpkg equals NMF 0.28 for nmf with brunet, lee, KL, Frobenius (stationary stop, count within 300), nsNMF, offset and ls-nmf (unit weights) and the integer random seed and nndsvd (none and average) (iteration count, W and H, the connectivity stop) on 40 random matrices (oracle_nmf, 2634 values); Linux pending. Open: ls-nmf weights, snmf/l, snmf/r and pe-nmf algorithms, the nndsvd random densify and the ica seed, several runs, nmfEstimateRank with cophenetic and silhouette measures, consensus matrices. Original: Open (CRAN rank 740). Mid. Verify e.ml.reduce first. Acceptance, equal to NMF under set.seed: nmf with brunet, lee, KL, ls-nmf, nsNMF, offset, SNMF/L and SNMF/R algorithms and seeds (random, nndsvd, ica), nmfEstimateRank with cophenetic and silhouette measures, consensus matrices."
+      "evidence": "D6773: e.algo.stat.nmfpkg equals NMF 0.28 for nmf with brunet, lee, KL, Frobenius (stationary stop, count within 300), nsNMF, offset and ls-nmf (unit weights) and the integer random seed nndsvd (none and average) and several runs (nmr, the RNGseq streams) (iteration count, W and H, the connectivity stop) on 40 random matrices (oracle_nmf, 2634 values); Linux pending. Open: ls-nmf weights, snmf/l, snmf/r and pe-nmf algorithms, the nndsvd random densify and the ica seed, nmfEstimateRank with cophenetic and silhouette measures, consensus matrices. Original: Open (CRAN rank 740). Mid. Verify e.ml.reduce first. Acceptance, equal to NMF under set.seed: nmf with brunet, lee, KL, ls-nmf, nsNMF, offset, SNMF/L and SNMF/R algorithms and seeds (random, nndsvd, ica), nmfEstimateRank with cophenetic and silhouette measures, consensus matrices."
     },
     {
       "id": "L458",

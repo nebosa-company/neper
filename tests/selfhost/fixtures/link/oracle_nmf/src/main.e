@@ -5,6 +5,7 @@ use e.algo.stat.nmfpkg as nf
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
@@ -13,11 +14,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(z[0usize])
     let p = usize(z[1usize])
     let rk = usize(z[2usize])
+    if str.eq(c.name, "nmr") {
+        let (w2, f1) = mem.alloc[f64](a, n * rk)
+        let (h2, f2) = mem.alloc[f64](a, rk * p)
+        let (o2, f3) = mem.alloc[f64](a, 4usize)
+        if f1 != ok || f2 != ok || f3 != ok { ret nan }
+        let re = nf.nmf_runs(a, z[6usize..6usize + n * p], n, p, rk, usize(z[3usize]), i64(z[4usize]), 2000usize, usize(z[5usize]), w2, h2, o2)
+        if re != ok { ret nan }
+        let ix = usize(z[6usize + n * p])
+        if ix == 0usize { ret o2[0usize] }
+        if ix <= n * rk { ret w2[ix - 1usize] }
+        ret h2[ix - 1usize - n * rk]
+    }
     let (w, e1) = mem.alloc[f64](a, n * rk)
     let (h, e2) = mem.alloc[f64](a, rk * p)
     let (out, e3) = mem.alloc[f64](a, 2usize)
     if e1 != ok || e2 != ok || e3 != ok { ret nan }
-    let fe = nf.nmf_fit(a, z[6usize..6usize + n * p], n, p, rk, usize(z[3usize]) % 10usize, i64(z[4usize]), 2000usize, z[5usize], usize(z[3usize]) / 10usize, w, h, out)
+    let fe = nf.nmf_fit(a, z[6usize..6usize + n * p], n, p, rk, usize(z[3usize]) % 10usize, i64(z[4usize]), 2000usize, z[5usize], usize(z[3usize]) / 10usize, 0i64 - 1i64, w, h, out)
     if fe != ok { ret nan }
     let idx = usize(z[6usize + n * p])
     if idx == 0usize { ret out[0usize] }
