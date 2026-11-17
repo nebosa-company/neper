@@ -54,10 +54,13 @@ fn quant7(s: []const f64, p: f64) -> f64 {
 
 // density(x, bw, n = nout)$y at the nout evenly spaced points from min - 3 bw to max + 3 bw into out; sorted is x sorted ascending; scratch holds 5 * grid_for(nout) values
 fn density_gauss(x: []const f64, sorted: []const f64, bw: f64, nout: usize, out: []f64, scratch: []f64) {
+    density_range(x, bw, nout, sorted[0usize] - 3.0f64 * bw, sorted[sorted.len - 1usize] + 3.0f64 * bw, out, scratch)
+}
+
+// density(x, bw = bw, n = nout, from = from, to = to)$y at the nout evenly spaced points from .. to into out; scratch as density_gauss
+fn density_range(x: []const f64, bw: f64, nout: usize, from: f64, to: f64, out: []f64, scratch: []f64) {
     let n = grid_for(nout)
     let n2 = 2usize * n
-    let from = sorted[0usize] - 3.0f64 * bw
-    let to = sorted[sorted.len - 1usize] + 3.0f64 * bw
     let lo = from - 4.0f64 * bw
     let up = to + 4.0f64 * bw
     let y = scratch[0usize..n2]
