@@ -48282,3 +48282,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6953 — bayesm: rmixture
 
 **Decision.** `bayesmpkg.rmixture` draws from a normal mixture as bayesm's C++ does, found by testing candidate orders against the package: first one uniform per observation for the component (the first whose cumulative probability exceeds it), then d normals per observation, x = mu_k + z %*% inverse(rooti_k) with rooti the upper-triangular inverse Cholesky root (so the inverse is the Cholesky factor). Interleaving the uniforms and normals, or R's `sample`, gave other streams. Equal to bayesm under set.seed on 15 random mixtures (2 to 4 components, 1 to 3 dimensions, 5 to 15 draws): up to four draws and every component label each (oracle_bayesm, 9589 cases in all). Not here: rmvst, rmultireg's other callers, rnmixGibbs and the hierarchical samplers that call this. Linux pending.
+
+## D6954 — bayesm: rmvst
+
+**Decision.** `bayesmpkg.rmvst` draws one multivariate t as bayesm does: the d standard normals first, then one chi-square(nu), x = mu + t(root) z / sqrt(chisq / nu) with root the upper Cholesky factor of the scale (found by testing the two possible orders against the package: chi-square first gave another stream). Equal to bayesm under set.seed on 25 draws of dimension 1 to 4 and 3 to 15 degrees of freedom, every coordinate (oracle_bayesm, 10314 cases in all). Linux pending.

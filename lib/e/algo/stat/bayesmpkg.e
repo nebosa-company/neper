@@ -1004,3 +1004,28 @@ fn rmixture(a: *mem.Arena, r: *rng.Rng, n: usize, pvec: []const f64, mus: []cons
     }
     ret ok
 }
+
+// rmvst(nu, mu, root): one multivariate t draw, d standard normals first and then one chi-square(nu), x = mu + t(root) z / sqrt(chisq / nu) with root the upper Cholesky factor of the scale matrix (column-major d by d)
+fn rmvst(r: *rng.Rng, nu: f64, mu: []const f64, root: []const f64, out: []f64) {
+    let d = mu.len
+    var zs = 0.0f64
+    var j = 0usize
+    while j < d {
+        out[j] = rng.norm(r)
+        j += 1usize
+    }
+    let w = rd.rchisq(r, nu)
+    let sc = 1.0f64 / math.sqrt[f64](w / nu)
+    // t(root) z: component c = sum_{q <= c} root[c * d + q] z[q]; z lives in out, so go from the last component down
+    var c = d
+    while c > 0usize {
+        c -= 1usize
+        var s = 0.0f64
+        var q = 0usize
+        while q <= c {
+            s += root[c * d + q] * out[q]
+            q += 1usize
+        }
+        out[c] = mu[c] + s * sc
+    }
+}

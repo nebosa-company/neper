@@ -28,6 +28,8 @@ for (rep in 1:25) {
   sdd <- sample(1:100000, 1); nr <- sample(5:15, 1); set.seed(sdd); rm1 <- rmixture(nr, pvv, cps)
   for (q in unique(pmin(c(1, nr, nr + 2, nr * dd), nr * dd))) add("rmx", c(sdd, nr, gg, dd, q - 1, pvv, mm2, rtv), as.vector(rm1$x)[q], 1e-9)
   for (q in 1:nr) add("rmx", c(sdd, nr, gg, dd, nr * dd + q - 1, pvv, mm2, rtv), as.numeric(rm1$z[q]), 0)
+  dv <- sample(1:4, 1); Sv <- rspd(dv); rtv2 <- chol(Sv); muv <- rnorm(dv); nuv <- sample(3:15, 1); sdv <- sample(1:100000, 1); set.seed(sdv); tv <- as.vector(rmvst(nuv, muv, rtv2))
+  for (q in seq_len(dv)) add("rmv", c(sdv, dv, nuv, q - 1, muv, rtv2), tv[q], 1e-10)
   nn <- sample(40:300, 1); xs <- as.numeric(arima.sim(list(ar = 0.6), nn)); mm <- sample(2:15, 1); ne <- numEff(xs, mm)
   add("ne", c(nn, mm, 0, xs), ne$stderr); add("ne", c(nn, mm, 1, xs), ne$f)
   sd <- sample(1:100000, 1); m <- sample(2:6, 1); al <- runif(m, 0.3, 4); set.seed(sd); d <- rdirichlet(al); for (j in 1:m) add("dir", c(sd, m, al, j - 1), d[j], 1e-12)

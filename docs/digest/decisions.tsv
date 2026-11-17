@@ -3812,4 +3812,5 @@ D6949	1040	gbm: predict on new data
 D6950	632	gbm: predict on new data for the other losses
 D6951	468	gbm: predict with fewer trees
 D6952	714	glmnet: coefficient interpolation
-D6953	821	bayesm: rmixture
+D6953	822	bayesm: rmixture
+D6954	509	bayesm: rmvst

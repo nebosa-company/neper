@@ -89,6 +89,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if ix < n * d { ret o[ix] }
         ret f64(lb[ix - n * d])
     }
+    if str.eq(c.name, "rmv") {
+        // (seed, d, nu, index, mu[d], root[d d])
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(z[0usize]))
+        let d = usize(z[1usize])
+        let (o, oe) = mem.alloc[f64](a, d)
+        if oe != ok { ret 0.0f64 / 0.0f64 }
+        bz.rmvst(&rr, z[2usize], z[4usize..4usize + d], z[4usize + d..4usize + d + d * d], o)
+        ret o[usize(z[3usize])]
+    }
     if str.eq(c.name, "cm") {
         let k = usize(z[1usize])
         let i = usize(z[2usize])
