@@ -81,7 +81,7 @@ L395	library	0	259	RcppAnnoy: approximate nearest neighbours	Open (CRAN rank 463
 L396	library	0.25	574	agricolae: experimental designs and post-hoc tests	Partial (D6185).
 L412	library	0.3	606	pscl: zero-inflated and hurdle count models	Partial (D6617).
 L413	library	0	265	flexmix: finite mixture regression	Open (CRAN rank 568).
-L414	library	0.35	1010	gbm: gradient boosting machines	Partial (D6893 to D6896, D6920, D6921 relative.influence for gaussian, bernoulli and poisson): e.algo.stat.gbmpkg.gaussian, bernoulli, poisson, adaboost and laplace, the losses without subsampling (be
+L414	library	0.4	1038	gbm: gradient boosting machines	Partial (D6893 to D6896, D6920, D6921 relative.influence for gaussian, bernoulli and poisson, D6949 predict on new data for the gaussian loss): e.algo.stat.gbmpkg.gaussian, bernoulli, poisson, adaboos
 L415	library	0.3	900	marginaleffects: predictions, slopes and comparisons	Partial (D6942, D6943): e.algo.stat.margeff.glm_avg, avg_slopes, avg_predictions and the avg_comparisons of a 0 / 1 variable for gaussian, logistic and Poisson (identity, logit, log link) glms from th
 L416	library	0.15	609	polspline: polynomial spline models	D6722: e.algo.stat.logspline evaluates fitted logspline models (dlogspline, plogspline, qlogspline with bounds, polspline grid and Simpson-table quantile), equal to polspline 1.1.25 to 1e-6 on 1032 va
 L432	library	0.7	1049	seriation: ordering of objects	D6720: e.algo.stat.seriationcrit has the permutation criteria (path length, lazy path length, least squares, inertia, AR events and deviations, gradient raw and weighted, BAR, RGAR, ME, Moore and Neum

@@ -12,6 +12,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let n = usize(z[0usize])
     let p = usize(z[1usize])
+    if c.name[0usize] == 100u8 {
+        // prd: (n, p, ntrees, shrinkage, depth, minobs, row, nnew, y[n], X[n p], Xnew[nnew p]) the prediction of a recorded gaussian model at a new row
+        let nt = usize(z[2usize])
+        let dp = usize(z[4usize])
+        let nnew = usize(z[7usize])
+        let (fi, ei) = mem.alloc[f64](a, n)
+        let (rc, er) = mem.alloc[f64](a, nt * (4usize * dp + 2usize) + 1usize)
+        let (po, ep) = mem.alloc[f64](a, nnew)
+        if ei != ok || er != ok || ep != ok { ret nan }
+        if gb.gaussian_model(a, z[8usize + n..8usize + n + n * p], z[8usize..8usize + n], n, p, nt, z[3usize], dp, usize(z[5usize]), fi, rc) != ok { ret nan }
+        gb.predict_model(rc, nt, dp, z[8usize + n + n * p..8usize + n + n * p + nnew * p], nnew, po)
+        ret po[usize(z[6usize])]
+    }
     if c.name[0usize] == 105u8 {
         let (fi, ei) = mem.alloc[f64](a, n)
         let (inf, ef) = mem.alloc[f64](a, p)
