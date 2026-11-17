@@ -2,9 +2,11 @@
 // (Liang-Zeger moment estimates of the scale and the correlation) and the robust sandwich covariance.
 //
 // gee_fit is the general engine (geese/geeglm: any cluster sizes, gaussian, binomial, poisson and Gamma with their links, independence, exchangeable, AR(1), unstructured and fixed
-// working correlations, robust, naive, one-step (also approximate) and fully iterated jackknife covariances); gee_qic and gee_wald_seq are QIC and anova.geeglm; ordgee_fit is ordgee with independence.
+// working correlations, robust, naive, one-step (also approximate) and fully iterated jackknife covariances); gee_qic and gee_wald_seq are QIC and anova.geeglm; ordgee_fit is ordgee with independence and ordgee_gee with the exchangeable and unstructured odds ratios (a port of geepack ordgee.cc).
 //
-// Not here: the covariances of the scale and correlation parameters (vgamma, valpha), ordgee with exchangeable or unstructured odds ratios, a scale model (zsca), weights, offsets, bootstrap.
+// gee_vab gives the covariances of the scale and correlation parameters (vgamma, valpha).
+//
+// Not here: a scale model (zsca), weights, offsets, bootstrap.
 
 use e.algo.stat.carlmtest as ols
 use e.math
@@ -1390,6 +1392,940 @@ fn ordgee_fit(a: *mem.Arena, ycat: []const f64, x: []const f64, sz: []const f64,
     while u2 < pp {
         out[p + 2usize * pp + u2] = sc * jm[u2]
         u2 += 1usize
+    }
+    ret ok
+}
+
+// the covariances of the scale and the correlation parameters as geese computes them, from the influence of the joint estimating equations in (beta, gamma, alpha);
+// out: vgamma (1), then for the exchangeable, AR(1) and unstructured structures the robust covariance of alpha (q by q) and its naive covariance (q by q)
+fn gee_vab(a: *mem.Arena, y: []const f64, x: []const f64, sz: []const f64, k: usize, p: usize, fam: usize, link: usize, corstr: usize, zc: []const f64, beta: []const f64, alpha: []const f64, phi: f64, out: []f64) -> err {
+    let maxm = gee_maxsize(sz, k)
+    var q = 0usize
+    if corstr >= 1usize && corstr <= 3usize { q = gee_nalpha(corstr, maxm) }
+    let pp = p * p
+    let nt = p + 1usize + q
+    let (aa, e1) = mem.alloc[f64](a, pp)
+    let (bb, e2) = mem.alloc[f64](a, p)
+    let (dm, e3) = mem.alloc[f64](a, q * p + 1usize)
+    let (ee, e4) = mem.alloc[f64](a, q + 1usize)
+    let (ff, e5) = mem.alloc[f64](a, q * q + 1usize)
+    let (us, e6) = mem.alloc[f64](a, k * nt)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret mem.Full }
+    var cc = 0.0f64
+    var z0 = 0usize
+    while z0 < pp {
+        aa[z0] = 0.0f64
+        z0 += 1usize
+    }
+    z0 = 0usize
+    while z0 < p {
+        bb[z0] = 0.0f64
+        z0 += 1usize
+    }
+    z0 = 0usize
+    while z0 < q * p {
+        dm[z0] = 0.0f64
+        z0 += 1usize
+    }
+    z0 = 0usize
+    while z0 < q {
+        ee[z0] = 0.0f64
+        z0 += 1usize
+    }
+    z0 = 0usize
+    while z0 < q * q {
+        ff[z0] = 0.0f64
+        z0 += 1usize
+    }
+    var o = 0usize
+    var cl = 0usize
+    while cl < k {
+        let m = usize(sz[cl])
+        let mk = mem.mark(a)
+        let (mu, f1) = mem.alloc[f64](a, m)
+        let (dmu, f2) = mem.alloc[f64](a, m)
+        let (sd, f3) = mem.alloc[f64](a, m)
+        let (pr, f4) = mem.alloc[f64](a, m)
+        let (dd, f5) = mem.alloc[f64](a, m * p)
+        let (r, f6) = mem.alloc[f64](a, m * m)
+        let (ri, f7) = mem.alloc[f64](a, m * m)
+        let (bar, f8) = mem.alloc[f64](a, p)
+        if f1 != ok || f2 != ok || f3 != ok || f4 != ok || f5 != ok || f6 != ok || f7 != ok || f8 != ok { ret mem.Full }
+        gee_means2(x[o * p..(o + m) * p], m, p, beta, fam, link, mu, dmu, sd)
+        var s = 0usize
+        while s < m {
+            pr[s] = (y[o + s] - mu[s]) / sd[s]
+            var u = 0usize
+            while u < p {
+                dd[s * p + u] = dmu[s] / sd[s] * x[(o + s) * p + u]
+                u += 1usize
+            }
+            s += 1usize
+        }
+        gee_cluster_r(r, m, maxm, corstr, alpha, zc)
+        if ols.inverse(a, r, m, ri) != ok { ret mem.Full }
+        // beta: A and U1 with V = phi R
+        var u = 0usize
+        while u < p {
+            var u1 = 0.0f64
+            s = 0usize
+            while s < m {
+                var t = 0usize
+                while t < m {
+                    let w = ri[s * m + t] / phi
+                    u1 += dd[s * p + u] * w * pr[t]
+                    var v = 0usize
+                    while v < p {
+                        aa[u * p + v] += dd[s * p + u] * w * dd[t * p + v]
+                        v += 1usize
+                    }
+                    t += 1usize
+                }
+                s += 1usize
+            }
+            us[cl * nt + u] = u1
+            u += 1usize
+        }
+        // gamma: C, B and U2
+        var u2 = 0.0f64
+        s = 0usize
+        while s < m {
+            let vs = sd[s] * sd[s]
+            var vmu = 0.0f64
+            if fam == 1usize { vmu = 1.0f64 - 2.0f64 * mu[s] }
+            if fam == 2usize { vmu = 1.0f64 }
+            if fam == 3usize { vmu = 2.0f64 * mu[s] }
+            let f = 0.0f64 - 2.0f64 * pr[s] / sd[s] - pr[s] * pr[s] / vs * vmu
+            u = 0usize
+            while u < p {
+                bb[u] += 0.0f64 - 1.0f64 / (2.0f64 * phi) * f * dd[s * p + u]
+                u += 1usize
+            }
+            u2 += (pr[s] * pr[s] - phi) / (2.0f64 * phi)
+            cc += 1.0f64 / (2.0f64 * phi)
+            s += 1usize
+        }
+        us[cl * nt + p] = u2
+        // alpha
+        if q > 0usize && m > 1usize {
+            var uq = 0usize
+            while uq < q {
+                us[cl * nt + p + 1usize + uq] = 0.0f64
+                uq += 1usize
+            }
+            s = 0usize
+            while s < m {
+                var t = s + 1usize
+                while t < m {
+                    var idx = 0usize
+                    if corstr == 3usize { idx = s * (maxm - 1usize) - s * (s + 1usize) / 2usize + t - 1usize }
+                    var e = 1.0f64
+                    if corstr == 2usize {
+                        let lag = f64(t - s)
+                        if lag != 1.0f64 { e = lag * math.pow[f64](alpha[0usize], lag - 1.0f64) }
+                    }
+                    let z = pr[s] * pr[t] / phi
+                    let rho = r[s * m + t]
+                    ff[idx * q + idx] += e * e
+                    us[cl * nt + p + 1usize + idx] += e * (z - rho)
+                    ee[idx] += e * z / phi
+                    var vs1 = 0.0f64
+                    var vs2 = 0.0f64
+                    var vm1 = 0.0f64
+                    var vm2 = 0.0f64
+                    if fam == 1usize {
+                        vm1 = 1.0f64 - 2.0f64 * mu[s]
+                        vm2 = 1.0f64 - 2.0f64 * mu[t]
+                    }
+                    if fam == 2usize {
+                        vm1 = 1.0f64
+                        vm2 = 1.0f64
+                    }
+                    if fam == 3usize {
+                        vm1 = 2.0f64 * mu[s]
+                        vm2 = 2.0f64 * mu[t]
+                    }
+                    vs1 = vm1 / sd[s]
+                    vs2 = vm2 / sd[t]
+                    u = 0usize
+                    while u < p {
+                        let foo = vs1 * dd[s * p + u] + vs2 * dd[t * p + u]
+                        let bv = 0.0f64 - pr[s] * dd[s * p + u] - pr[t] * dd[t * p + u] - 0.5f64 * pr[s] * pr[t] * foo
+                        dm[idx * p + u] += 0.0f64 - e * bv / phi
+                        u += 1usize
+                    }
+                    t += 1usize
+                }
+                s += 1usize
+            }
+        }
+        mem.reset(a, mk)
+        o += m
+        cl += 1usize
+    }
+    // the block inverse of the joint Hessian (beta, gamma, alpha)
+    let (ai, g1) = mem.alloc[f64](a, pp)
+    let (bi, g2) = mem.alloc[f64](a, p)
+    let (fi, g3) = mem.alloc[f64](a, q * q + 1usize)
+    let (ei, g4) = mem.alloc[f64](a, q + 1usize)
+    let (di, g5) = mem.alloc[f64](a, q * p + 1usize)
+    if g1 != ok || g2 != ok || g3 != ok || g4 != ok || g5 != ok { ret mem.Full }
+    if ols.inverse(a, aa, p, ai) != ok { ret mem.Full }
+    let ci = 1.0f64 / cc
+    var u = 0usize
+    while u < p {
+        var sacc = 0.0f64
+        var v = 0usize
+        while v < p {
+            sacc += bb[v] * ai[v * p + u]
+            v += 1usize
+        }
+        bi[u] = 0.0f64 - ci * sacc
+        u += 1usize
+    }
+    if q > 0usize {
+        if ols.inverse(a, ff, q, fi) != ok { ret mem.Full }
+        u = 0usize
+        while u < q {
+            var sacc = 0.0f64
+            var v = 0usize
+            while v < q {
+                sacc += fi[u * q + v] * ee[v]
+                v += 1usize
+            }
+            ei[u] = 0.0f64 - sacc * ci
+            u += 1usize
+        }
+        u = 0usize
+        while u < q {
+            var v = 0usize
+            while v < p {
+                var sacc = 0.0f64
+                var w = 0usize
+                while w < q {
+                    var sd2 = 0.0f64
+                    var x2 = 0usize
+                    while x2 < p {
+                        sd2 += dm[w * p + x2] * ai[x2 * p + v]
+                        x2 += 1usize
+                    }
+                    sacc += fi[u * q + w] * (sd2 + ee[w] * bi[v])
+                    w += 1usize
+                }
+                di[u * p + v] = 0.0f64 - sacc
+                v += 1usize
+            }
+            u += 1usize
+        }
+    }
+    // the sums of the outer products of the influences
+    var vg = 0.0f64
+    var z1 = 0usize
+    while z1 < q * q {
+        out[1usize + z1] = 0.0f64
+        z1 += 1usize
+    }
+    cl = 0usize
+    while cl < k {
+        var ig = 0.0f64
+        var w = 0usize
+        while w < p {
+            ig += bi[w] * us[cl * nt + w]
+            w += 1usize
+        }
+        ig += ci * us[cl * nt + p]
+        vg += ig * ig
+        var u3 = 0usize
+        while u3 < q {
+            var ia = 0.0f64
+            var w3 = 0usize
+            while w3 < p {
+                ia += di[u3 * p + w3] * us[cl * nt + w3]
+                w3 += 1usize
+            }
+            ia += ei[u3] * us[cl * nt + p]
+            w3 = 0usize
+            while w3 < q {
+                ia += fi[u3 * q + w3] * us[cl * nt + p + 1usize + w3]
+                w3 += 1usize
+            }
+            ff[u3] = ia
+            u3 += 1usize
+        }
+        u3 = 0usize
+        while u3 < q {
+            var v3 = 0usize
+            while v3 < q {
+                out[1usize + u3 * q + v3] += ff[u3] * ff[v3]
+                v3 += 1usize
+            }
+            u3 += 1usize
+        }
+        cl += 1usize
+    }
+    out[0usize] = vg
+    z1 = 0usize
+    while z1 < q * q {
+        out[1usize + q * q + z1] = fi[z1]
+        z1 += 1usize
+    }
+    ret ok
+}
+
+// ---- ordgee with the exchangeable (corstr 1) and unstructured (corstr 3) log odds-ratio structures, a port of geepack's ordgee.cc ----
+
+fn ogs_odds2p11(psi: f64, m1: f64, m2: f64) -> f64 {
+    if math.abs[f64](psi - 1.0f64) < 0.001f64 { ret m1 * m2 }
+    let e1 = 1.0f64 + (m1 + m2) * (psi - 1.0f64)
+    let s = math.sqrt[f64](e1 * e1 + 4.0f64 * psi * (1.0f64 - psi) * m1 * m2)
+    ret 0.5f64 / (psi - 1.0f64) * (e1 - s)
+}
+
+// derivative of the joint probability with respect to the odds ratio
+fn ogs_p11_odds(psi: f64, m1: f64, m2: f64) -> f64 {
+    if math.abs[f64](psi - 1.0f64) < 0.001f64 { ret m1 * m2 * (0.0f64 - (m1 + m2) + m1 * m2 + 1.0f64) }
+    let ex1 = psi - 1.0f64
+    let ex2 = 0.5f64 / ex1
+    let ex3 = m1 + m2
+    let ex5 = 1.0f64 + ex3 * ex1
+    let ex7 = 4.0f64 * psi
+    let ex8 = 1.0f64 - psi
+    let ex9 = ex7 * ex8
+    let ex10 = ex9 * m1
+    let ex12 = ex5 * ex5 + ex10 * m2
+    let ex14 = ex5 - math.sqrt[f64](ex12)
+    let ex23 = 1.0f64 / math.sqrt[f64](ex12)
+    ret ex2 * (ex3 - 0.5f64 * ((2.0f64 * (ex3 * ex5) + (4.0f64 * ex8 - ex7) * m1 * m2) * ex23)) - 0.5f64 / (ex1 * ex1) * ex14
+}
+
+// derivatives of the joint probability with respect to the two margins
+fn ogs_p11_mu(psi: f64, m1: f64, m2: f64) -> (f64, f64) {
+    if math.abs[f64](psi - 1.0f64) < 0.001f64 { ret (m2, m1) }
+    let ex1 = psi - 1.0f64
+    let ex2 = 0.5f64 / ex1
+    let ex3 = m1 + m2
+    let ex5 = 1.0f64 + ex3 * ex1
+    let ex7 = 4.0f64 * psi
+    let ex8 = 1.0f64 - psi
+    let ex9 = ex7 * ex8
+    let ex10 = ex9 * m1
+    let ex12 = ex5 * ex5 + ex10 * m2
+    let ex23 = 1.0f64 / math.sqrt[f64](ex12)
+    let ex33 = 2.0f64 * (ex1 * ex5)
+    ret (ex2 * (ex1 - 0.5f64 * ((ex33 + ex9 * m2) * ex23)), ex2 * (ex1 - 0.5f64 * ((ex33 + ex10) * ex23)))
+}
+
+fn ogs_min(i: usize, j: usize) -> usize {
+    if i < j { ret i }
+    ret j
+}
+
+// the working blocks of one cluster of m observations, each with c cumulative categories: means, link derivatives, residuals, the derivative matrix (mc by p) and the covariance (mc by mc)
+fn ogs_build(ycat: []const f64, x: []const f64, o: usize, m: usize, c: usize, p: usize, px: usize, link: usize, corstr: usize, maxm: usize, beta: []const f64, alpha: []const f64, mu: []f64, pr: []f64, dd: []f64, vm: []f64) {
+    let mc = m * c
+    var s = 0usize
+    while s < m {
+        var j = 0usize
+        while j < c {
+            var eta = beta[j]
+            var u = 0usize
+            while u < px {
+                eta += x[(o + s) * px + u] * beta[c + u]
+                u += 1usize
+            }
+            let (m1, d1) = gee_link(link, eta)
+            let r = s * c + j
+            mu[r] = m1
+            var yj = 0.0f64
+            if ycat[o + s] > f64(j + 1usize) { yj = 1.0f64 }
+            pr[r] = yj - m1
+            u = 0usize
+            while u < p {
+                var dv = 0.0f64
+                if u == j { dv = d1 }
+                if u >= c { dv = d1 * x[(o + s) * px + u - c] }
+                dd[r * p + u] = dv
+                u += 1usize
+            }
+            j += 1usize
+        }
+        s += 1usize
+    }
+    var q = 0usize
+    while q < mc * mc {
+        vm[q] = 0.0f64
+        q += 1usize
+    }
+    s = 0usize
+    while s < m {
+        var i = 0usize
+        while i < c {
+            var j = 0usize
+            while j < c {
+                vm[(s * c + i) * mc + s * c + j] = mu[s * c + ogs_min(i, j)] - mu[s * c + i] * mu[s * c + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        var t = s + 1usize
+        while t < m {
+            var idx = 0usize
+            if corstr == 3usize { idx = s * (maxm - 1usize) - s * (s + 1usize) / 2usize + t - 1usize }
+            let psi = math.exp[f64](alpha[idx])
+            i = 0usize
+            while i < c {
+                var j = 0usize
+                while j < c {
+                    let v = ogs_odds2p11(psi, mu[s * c + i], mu[t * c + j]) - mu[s * c + i] * mu[t * c + j]
+                    vm[(s * c + i) * mc + t * c + j] = v
+                    vm[(t * c + i) * mc + s * c + j] = v
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            t += 1usize
+        }
+        s += 1usize
+    }
+}
+
+// the pairwise moment equation of two observations: u2 = products of the residuals minus the joint covariance, d2 = its derivative in the log odds ratio, v2 = its working covariance
+fn ogs_pair(a: *mem.Arena, pr1: []const f64, pr2: []const f64, mu1: []const f64, mu2: []const f64, psi: f64, c: usize, u2: []f64, d2: []f64, v2: []f64) -> err {
+    let cc = c * c
+    let (p11, e1) = mem.alloc[f64](a, cc)
+    let (sg, e2) = mem.alloc[f64](a, cc)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < c {
+        var j = 0usize
+        while j < c {
+            let k = i * c + j
+            p11[k] = ogs_odds2p11(psi, mu1[i], mu2[j])
+            sg[k] = p11[k] - mu1[i] * mu2[j]
+            u2[k] = pr1[i] * pr2[j] - sg[k]
+            d2[k] = ogs_p11_odds(psi, mu1[i], mu2[j]) * psi
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var c1 = 0usize
+    while c1 < c {
+        var c3 = c1
+        while c3 < c {
+            let c13 = ogs_min(c1, c3)
+            var c2 = 0usize
+            while c2 < c {
+                var c4 = c2
+                while c4 < c {
+                    let c24 = ogs_min(c2, c4)
+                    let v = p11[c13 * c + c24] - p11[c13 * c + c2] * mu2[c4] - p11[c13 * c + c4] * mu2[c2] + mu1[c13] * mu2[c2] * mu2[c4] - p11[c1 * c + c24] * mu1[c3] + p11[c1 * c + c2] * mu1[c3] * mu2[c4] + p11[c1 * c + c4] * mu1[c3] * mu2[c2] - 3.0f64 * mu1[c1] * mu1[c3] * mu2[c2] * mu2[c4] - p11[c3 * c + c24] * mu1[c1] + p11[c3 * c + c2] * mu1[c1] * mu2[c4] + p11[c3 * c + c4] * mu1[c1] * mu2[c2] + mu1[c1] * mu1[c3] * mu2[c24]
+                    v2[(c1 * c + c2) * cc + c3 * c + c4] = v
+                    v2[(c1 * c + c4) * cc + c3 * c + c2] = v
+                    v2[(c3 * c + c2) * cc + c1 * c + c4] = v
+                    v2[(c3 * c + c4) * cc + c1 * c + c2] = v
+                    c4 += 1usize
+                }
+                c2 += 1usize
+            }
+            c3 += 1usize
+        }
+        c1 += 1usize
+    }
+    i = 0usize
+    while i < cc {
+        var j = 0usize
+        while j < cc {
+            v2[i * cc + j] -= sg[i] * sg[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// ordgee with the exchangeable (corstr 1) or unstructured (corstr 3) odds-ratio working structure: the beta and alpha steps alternate as in geepack until the largest change is at most 1e-4 (25 iterations at most)
+// out: beta (p = nlev - 1 + px), robust and naive covariances (p by p each), alpha (q), robust and naive covariances of alpha (q by q each)
+fn ordgee_gee(a: *mem.Arena, ycat: []const f64, x: []const f64, sz: []const f64, k: usize, px: usize, nlev: usize, link: usize, corstr: usize, out: []f64) -> err {
+    let c = nlev - 1usize
+    let p = c + px
+    let pp = p * p
+    let maxm = gee_maxsize(sz, k)
+    var q = 1usize
+    if corstr == 3usize { q = maxm * (maxm - 1usize) / 2usize }
+    let (beta, e1) = mem.alloc[f64](a, p)
+    let (alpha, e2) = mem.alloc[f64](a, q)
+    let (h, e3) = mem.alloc[f64](a, pp)
+    let (hi, e4) = mem.alloc[f64](a, pp)
+    let (g, e5) = mem.alloc[f64](a, p)
+    let (hq, e6) = mem.alloc[f64](a, q * q)
+    let (hqi, e7) = mem.alloc[f64](a, q * q)
+    let (gq, e8) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    var n = 0usize
+    var cl = 0usize
+    while cl < k {
+        n += usize(sz[cl])
+        cl += 1usize
+    }
+    // the start: the stacked binary regression of geepack's glm.fit
+    var j = 0usize
+    while j < p {
+        beta[j] = 0.0f64
+        j += 1usize
+    }
+    j = 0usize
+    while j < c {
+        var cntj = 0.0f64
+        var i0 = 0usize
+        while i0 < n {
+            if ycat[i0] > f64(j + 1usize) { cntj += 1.0f64 }
+            i0 += 1usize
+        }
+        beta[j] = gee_linkfun(link, (cntj + 0.5f64) / (f64(n) + 1.0f64))
+        j += 1usize
+    }
+    var it0 = 0usize
+    while it0 < 100usize {
+        var u = 0usize
+        while u < p {
+            g[u] = 0.0f64
+            var v = 0usize
+            while v < p {
+                h[u * p + v] = 0.0f64
+                v += 1usize
+            }
+            u += 1usize
+        }
+        var o = 0usize
+        while o < n {
+            j = 0usize
+            while j < c {
+                var eta = beta[j]
+                u = 0usize
+                while u < px {
+                    eta += x[o * px + u] * beta[c + u]
+                    u += 1usize
+                }
+                let (m1, d1) = gee_link(link, eta)
+                var yj = 0.0f64
+                if ycat[o] > f64(j + 1usize) { yj = 1.0f64 }
+                let w = d1 * d1 / (m1 * (1.0f64 - m1))
+                let sc0 = d1 * (yj - m1) / (m1 * (1.0f64 - m1))
+                u = 0usize
+                while u < p {
+                    var xu = 0.0f64
+                    if u == j { xu = 1.0f64 }
+                    if u >= c { xu = x[o * px + u - c] }
+                    g[u] += sc0 * xu
+                    var v = 0usize
+                    while v < p {
+                        var xv = 0.0f64
+                        if v == j { xv = 1.0f64 }
+                        if v >= c { xv = x[o * px + v - c] }
+                        h[u * p + v] += w * xu * xv
+                        v += 1usize
+                    }
+                    u += 1usize
+                }
+                j += 1usize
+            }
+            o += 1usize
+        }
+        if ols.inverse(a, h, p, hi) != ok { ret mem.Full }
+        var ch0 = 0.0f64
+        u = 0usize
+        while u < p {
+            var st = 0.0f64
+            var v = 0usize
+            while v < p {
+                st += hi[u * p + v] * g[v]
+                v += 1usize
+            }
+            if math.abs[f64](st) > ch0 { ch0 = math.abs[f64](st) }
+            beta[u] += st
+            u += 1usize
+        }
+        it0 += 1usize
+        if ch0 < 1.0e-13f64 { break }
+    }
+    j = 0usize
+    while j < q {
+        alpha[j] = 0.0f64
+        j += 1usize
+    }
+    var iter = 0usize
+    while iter < 25usize {
+        // the beta step
+        var u = 0usize
+        while u < p {
+            g[u] = 0.0f64
+            var v = 0usize
+            while v < p {
+                h[u * p + v] = 0.0f64
+                v += 1usize
+            }
+            u += 1usize
+        }
+        var o = 0usize
+        cl = 0usize
+        while cl < k {
+            let m = usize(sz[cl])
+            let mc = m * c
+            let mk = mem.mark(a)
+            let (mu, f1) = mem.alloc[f64](a, mc)
+            let (pr, f2) = mem.alloc[f64](a, mc)
+            let (dd, f3) = mem.alloc[f64](a, mc * p)
+            let (vm, f4) = mem.alloc[f64](a, mc * mc)
+            let (vi, f5) = mem.alloc[f64](a, mc * mc)
+            if f1 != ok || f2 != ok || f3 != ok || f4 != ok || f5 != ok { ret mem.Full }
+            ogs_build(ycat, x, o, m, c, p, px, link, corstr, maxm, beta, alpha, mu, pr, dd, vm)
+            if ols.inverse(a, vm, mc, vi) != ok { ret mem.Full }
+            var r = 0usize
+            while r < mc {
+                var t2 = 0usize
+                while t2 < mc {
+                    let w = vi[r * mc + t2]
+                    u = 0usize
+                    while u < p {
+                        g[u] += dd[r * p + u] * w * pr[t2]
+                        var v = 0usize
+                        while v < p {
+                            h[u * p + v] += dd[r * p + u] * w * dd[t2 * p + v]
+                            v += 1usize
+                        }
+                        u += 1usize
+                    }
+                    t2 += 1usize
+                }
+                r += 1usize
+            }
+            mem.reset(a, mk)
+            o += m
+            cl += 1usize
+        }
+        if ols.inverse(a, h, p, hi) != ok { ret mem.Full }
+        var change = 0.0f64
+        u = 0usize
+        while u < p {
+            var st = 0.0f64
+            var v = 0usize
+            while v < p {
+                st += hi[u * p + v] * g[v]
+                v += 1usize
+            }
+            if math.abs[f64](st) > change { change = math.abs[f64](st) }
+            beta[u] += st
+            u += 1usize
+        }
+        // the alpha step at the new beta
+        var z1 = 0usize
+        while z1 < q * q {
+            hq[z1] = 0.0f64
+            z1 += 1usize
+        }
+        z1 = 0usize
+        while z1 < q {
+            gq[z1] = 0.0f64
+            z1 += 1usize
+        }
+        o = 0usize
+        cl = 0usize
+        while cl < k {
+            let m = usize(sz[cl])
+            let mc = m * c
+            if m > 1usize {
+                let mk = mem.mark(a)
+                let (mu, f1) = mem.alloc[f64](a, mc)
+                let (pr, f2) = mem.alloc[f64](a, mc)
+                let (dd, f3) = mem.alloc[f64](a, mc * p)
+                let (vm, f4) = mem.alloc[f64](a, mc * mc)
+                let (u2, f5) = mem.alloc[f64](a, c * c)
+                let (d2, f6) = mem.alloc[f64](a, c * c)
+                let (v2, f7) = mem.alloc[f64](a, c * c * c * c)
+                let (v2i, f8) = mem.alloc[f64](a, c * c * c * c)
+                if f1 != ok || f2 != ok || f3 != ok || f4 != ok || f5 != ok || f6 != ok || f7 != ok || f8 != ok { ret mem.Full }
+                ogs_build(ycat, x, o, m, c, p, px, link, corstr, maxm, beta, alpha, mu, pr, dd, vm)
+                var s = 0usize
+                while s < m {
+                    var t = s + 1usize
+                    while t < m {
+                        var idx = 0usize
+                        if corstr == 3usize { idx = s * (maxm - 1usize) - s * (s + 1usize) / 2usize + t - 1usize }
+                        let mk2 = mem.mark(a)
+                        if ogs_pair(a, pr[s * c..s * c + c], pr[t * c..t * c + c], mu[s * c..s * c + c], mu[t * c..t * c + c], math.exp[f64](alpha[idx]), c, u2, d2, v2) != ok { ret mem.Full }
+                        if ols.inverse(a, v2, c * c, v2i) != ok { ret mem.Full }
+                        var r = 0usize
+                        while r < c * c {
+                            var t2 = 0usize
+                            while t2 < c * c {
+                                hq[idx * q + idx] += d2[r] * v2i[r * c * c + t2] * d2[t2]
+                                gq[idx] += d2[r] * v2i[r * c * c + t2] * u2[t2]
+                                t2 += 1usize
+                            }
+                            r += 1usize
+                        }
+                        mem.reset(a, mk2)
+                        t += 1usize
+                    }
+                    s += 1usize
+                }
+                mem.reset(a, mk)
+            }
+            o += m
+            cl += 1usize
+        }
+        if ols.inverse(a, hq, q, hqi) != ok { ret mem.Full }
+        u = 0usize
+        while u < q {
+            var st = 0.0f64
+            var v = 0usize
+            while v < q {
+                st += hqi[u * q + v] * gq[v]
+                v += 1usize
+            }
+            if math.abs[f64](st) > change { change = math.abs[f64](st) }
+            alpha[u] += st
+            u += 1usize
+        }
+        iter += 1usize
+        if change <= 1.0e-4f64 { break }
+    }
+    // the covariances: blocks A (beta), D (alpha by beta), F (alpha) and the per-cluster scores
+    let (us1, g1) = mem.alloc[f64](a, k * p)
+    let (us3, g2) = mem.alloc[f64](a, k * q)
+    let (dm, g3) = mem.alloc[f64](a, q * p)
+    let (ai, g4) = mem.alloc[f64](a, pp)
+    let (fi, g5) = mem.alloc[f64](a, q * q)
+    let (di, g6) = mem.alloc[f64](a, q * p)
+    if g1 != ok || g2 != ok || g3 != ok || g4 != ok || g5 != ok || g6 != ok { ret mem.Full }
+    var z2 = 0usize
+    while z2 < pp {
+        h[z2] = 0.0f64
+        z2 += 1usize
+    }
+    z2 = 0usize
+    while z2 < q * q {
+        hq[z2] = 0.0f64
+        z2 += 1usize
+    }
+    z2 = 0usize
+    while z2 < q * p {
+        dm[z2] = 0.0f64
+        z2 += 1usize
+    }
+    var o2 = 0usize
+    cl = 0usize
+    while cl < k {
+        let m = usize(sz[cl])
+        let mc = m * c
+        let mk = mem.mark(a)
+        let (mu, f1) = mem.alloc[f64](a, mc)
+        let (pr, f2) = mem.alloc[f64](a, mc)
+        let (dd, f3) = mem.alloc[f64](a, mc * p)
+        let (vm, f4) = mem.alloc[f64](a, mc * mc)
+        let (vi, f5) = mem.alloc[f64](a, mc * mc)
+        let (u2, f6) = mem.alloc[f64](a, c * c)
+        let (d2, f7) = mem.alloc[f64](a, c * c)
+        let (v2, f8) = mem.alloc[f64](a, c * c * c * c)
+        let (v2i, f9) = mem.alloc[f64](a, c * c * c * c)
+        let (wv, f10) = mem.alloc[f64](a, c * c)
+        if f1 != ok || f2 != ok || f3 != ok || f4 != ok || f5 != ok || f6 != ok || f7 != ok || f8 != ok || f9 != ok || f10 != ok { ret mem.Full }
+        ogs_build(ycat, x, o2, m, c, p, px, link, corstr, maxm, beta, alpha, mu, pr, dd, vm)
+        if ols.inverse(a, vm, mc, vi) != ok { ret mem.Full }
+        var u = 0usize
+        while u < p {
+            us1[cl * p + u] = 0.0f64
+            u += 1usize
+        }
+        u = 0usize
+        while u < q {
+            us3[cl * q + u] = 0.0f64
+            u += 1usize
+        }
+        var r = 0usize
+        while r < mc {
+            var t2 = 0usize
+            while t2 < mc {
+                let w = vi[r * mc + t2]
+                u = 0usize
+                while u < p {
+                    us1[cl * p + u] += dd[r * p + u] * w * pr[t2]
+                    var v = 0usize
+                    while v < p {
+                        h[u * p + v] += dd[r * p + u] * w * dd[t2 * p + v]
+                        v += 1usize
+                    }
+                    u += 1usize
+                }
+                t2 += 1usize
+            }
+            r += 1usize
+        }
+        var s = 0usize
+        while s < m {
+            var t = s + 1usize
+            while t < m {
+                var idx = 0usize
+                if corstr == 3usize { idx = s * (maxm - 1usize) - s * (s + 1usize) / 2usize + t - 1usize }
+                let psi = math.exp[f64](alpha[idx])
+                let mk2 = mem.mark(a)
+                if ogs_pair(a, pr[s * c..s * c + c], pr[t * c..t * c + c], mu[s * c..s * c + c], mu[t * c..t * c + c], psi, c, u2, d2, v2) != ok { ret mem.Full }
+                if ols.inverse(a, v2, c * c, v2i) != ok { ret mem.Full }
+                r = 0usize
+                while r < c * c {
+                    var sw = 0.0f64
+                    var sv = 0.0f64
+                    var t2 = 0usize
+                    while t2 < c * c {
+                        sw += v2i[r * c * c + t2] * d2[t2]
+                        t2 += 1usize
+                    }
+                    wv[r] = sw
+                    sv += 0.0f64
+                    r += 1usize
+                }
+                r = 0usize
+                while r < c * c {
+                    hq[idx * q + idx] += d2[r] * wv[r]
+                    us3[cl * q + idx] += wv[r] * u2[r]
+                    // row r of the derivative of the pair equation in beta
+                    let i1 = r / c
+                    let j1 = r - i1 * c
+                    let (gm1, gm2) = ogs_p11_mu(math.exp[f64](alpha[0usize]), mu[s * c + i1], mu[t * c + j1])
+                    let ga = gm1 - mu[t * c + j1]
+                    let gb = gm2 - mu[s * c + i1]
+                    u = 0usize
+                    while u < p {
+                        let ub = (0.0f64 - pr[t * c + j1] - ga) * dd[(s * c + i1) * p + u] + (0.0f64 - pr[s * c + i1] - gb) * dd[(t * c + j1) * p + u]
+                        dm[idx * p + u] += wv[r] * (0.0f64 - ub)
+                        u += 1usize
+                    }
+                    r += 1usize
+                }
+                mem.reset(a, mk2)
+                t += 1usize
+            }
+            s += 1usize
+        }
+        mem.reset(a, mk)
+        o2 += m
+        cl += 1usize
+    }
+    if ols.inverse(a, h, p, ai) != ok { ret mem.Full }
+    if ols.inverse(a, hq, q, fi) != ok { ret mem.Full }
+    // di = - fi dm ai
+    var u3 = 0usize
+    while u3 < q {
+        var v3 = 0usize
+        while v3 < p {
+            var sacc = 0.0f64
+            var w3 = 0usize
+            while w3 < q {
+                var x3 = 0usize
+                while x3 < p {
+                    sacc += fi[u3 * q + w3] * dm[w3 * p + x3] * ai[x3 * p + v3]
+                    x3 += 1usize
+                }
+                w3 += 1usize
+            }
+            di[u3 * p + v3] = 0.0f64 - sacc
+            v3 += 1usize
+        }
+        u3 += 1usize
+    }
+    let qq = q * q
+    let (vb, g7) = mem.alloc[f64](a, pp)
+    let (va, g8) = mem.alloc[f64](a, qq)
+    let (mid, g9) = mem.alloc[f64](a, pp)
+    if g7 != ok || g8 != ok || g9 != ok { ret mem.Full }
+    var z3 = 0usize
+    while z3 < pp {
+        mid[z3] = 0.0f64
+        z3 += 1usize
+    }
+    z3 = 0usize
+    while z3 < qq {
+        va[z3] = 0.0f64
+        z3 += 1usize
+    }
+    cl = 0usize
+    while cl < k {
+        var u = 0usize
+        while u < p {
+            var v = 0usize
+            while v < p {
+                mid[u * p + v] += us1[cl * p + u] * us1[cl * p + v]
+                v += 1usize
+            }
+            u += 1usize
+        }
+        u = 0usize
+        while u < q {
+            var ia = 0.0f64
+            var w = 0usize
+            while w < p {
+                ia += di[u * p + w] * us1[cl * p + w]
+                w += 1usize
+            }
+            w = 0usize
+            while w < q {
+                ia += fi[u * q + w] * us3[cl * q + w]
+                w += 1usize
+            }
+            gq[u] = ia
+            u += 1usize
+        }
+        u = 0usize
+        while u < q {
+            var v = 0usize
+            while v < q {
+                va[u * q + v] += gq[u] * gq[v]
+                v += 1usize
+            }
+            u += 1usize
+        }
+        cl += 1usize
+    }
+    var su = 0usize
+    while su < p {
+        var sv2 = 0usize
+        while sv2 < p {
+            var sacc2 = 0.0f64
+            var sq = 0usize
+            while sq < p {
+                var sw = 0usize
+                while sw < p {
+                    sacc2 += ai[su * p + sq] * mid[sq * p + sw] * ai[sv2 * p + sw]
+                    sw += 1usize
+                }
+                sq += 1usize
+            }
+            vb[su * p + sv2] = sacc2
+            sv2 += 1usize
+        }
+        su += 1usize
+    }
+    var w4 = 0usize
+    while w4 < p {
+        out[w4] = beta[w4]
+        w4 += 1usize
+    }
+    w4 = 0usize
+    while w4 < pp {
+        out[p + w4] = vb[w4]
+        out[p + pp + w4] = ai[w4]
+        w4 += 1usize
+    }
+    w4 = 0usize
+    while w4 < q {
+        out[p + 2usize * pp + w4] = alpha[w4]
+        w4 += 1usize
+    }
+    w4 = 0usize
+    while w4 < qq {
+        out[p + 2usize * pp + q + w4] = va[w4]
+        out[p + 2usize * pp + q + qq + w4] = fi[w4]
+        w4 += 1usize
     }
     ret ok
 }

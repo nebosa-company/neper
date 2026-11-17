@@ -72,6 +72,10 @@ for (ci in seq_along(gx_configs)) {
   }
   add2(5, 0, g$gamma[[1]], 1e-3, 1e-6)
   for (q in seq_along(g$alpha)) add2(6, q - 1, g$alpha[[q]], 1e-3, 3e-5)
+  # "gv" (what 0 vgamma 1 valpha 2 naive valpha, index, then the gx arguments)
+  add3 <- function(w, i, want, rl, ab) cases[[length(cases) + 1]] <<- case("gv", c(w, i, a), want, rel = rl, abs = ab)
+  add3(0, 0, g$vgamma[[1]], 3e-3, 1e-6)
+  if (cs %in% 1:3) { qn <- length(g$alpha); for (u in 1:qn) for (v in 1:qn) { add3(1, (u - 1) * qn + v - 1, g$valpha[u, v], 4e-3, 1e-6); add3(2, (u - 1) * qn + v - 1, g$valpha.naiv[u, v], 3e-3, 1e-6) } }
 }
 # "gw" (what 0 df 1 X2 2 p of the sequential Wald table, 3 Wald 4 p of a coefficient, 5 its Wald with the one-step jackknife, 6 with the fully iterated jackknife; index, fam, link, corstr, k, p, maxm, nvars, sizes, y, X, zc, assign)
 # "gq" (QIC 0 QIC 1 QICu 2 quasi 3 CIC 4 params 5 QICC, fam, link, corstr, k, p, maxm, sizes, y, X, zc)
@@ -143,5 +147,30 @@ for (ci in 1:8) {
     cases[[length(cases) + 1]] <- case("go", c(1, (u - 1) * p + v - 1, a), g$vbeta[u, v], rel = 1e-3, abs = 1e-6)
     cases[[length(cases) + 1]] <- case("go", c(2, (u - 1) * p + v - 1, a), g$vbeta.naiv[u, v], rel = 1e-3, abs = 1e-6)
   }
+}
+# "gp" ordgee with the exchangeable or unstructured odds ratios (what 0 beta 1 robust 2 naive 3 alpha 4 robust of alpha 5 naive of alpha, index, corstr 1 exch 3 unstructured, link, k, px, nlev, sizes, y, x row-major)
+set.seed(20262304)
+for (ci in 1:10) {
+  cs <- if (ci %% 2 == 1) 1 else 3; lnk <- (ci - 1) %% 3 + 1; nlev <- 3 + (ci %% 3 == 0); px <- 1 + (ci %% 4 == 0)
+  g <- NULL
+  for (tries in 1:8) {
+    k <- sample(40:60, 1); sz <- sample(2:4, k, replace = TRUE); N <- sum(sz); id <- rep(1:k, sz)
+    xx <- matrix(round(rnorm(N * px), 3), N, px); re <- rep(rnorm(k, 0, 0.6), sz)
+    lat <- as.vector(xx %*% c(0.6, -0.4)[1:px]) + re + (if (lnk == 1) rlogis(N) else if (lnk == 2) rnorm(N) else -log(-log(runif(N))))
+    yv <- cut(lat, c(-Inf, c(-0.8, 0.4, 1.3)[1:(nlev - 1)], Inf), labels = 1:nlev, ordered_result = TRUE)
+    if (length(unique(yv)) < nlev) next
+    d <- data.frame(y = yv, id = id); for (j in 1:px) d[[paste0("x", j)]] <- xx[, j]
+    f <- as.formula(paste("y ~", paste(paste0("x", 1:px), collapse = " + ")))
+    g <- tryCatch(ordgee(f, id = id, data = d, corstr = c("independence", "exchangeable", "unstructured")[if (cs == 1) 2 else 3], mean.link = c("logit", "probit", "cloglog")[lnk]), error = function(e) NULL, warning = function(w) NULL)
+    if (!is.null(g) && g$error == 0 && max(abs(g$beta)) < 20 && all(is.finite(g$valpha))) break
+    g <- NULL
+  }
+  if (is.null(g)) next
+  p <- length(g$beta); q <- length(g$alpha); a <- c(cs, lnk, k, px, nlev, sz, as.integer(yv), as.vector(t(xx)))
+  ad <- function(w, i, want, rl, ab) cases[[length(cases) + 1]] <<- case("gp", c(w, i, a), want, rel = rl, abs = ab)
+  for (j in 1:p) ad(0, j - 1, unname(g$beta)[j], 1e-5, 1e-7)
+  for (u in 1:p) for (v in 1:p) { ad(1, (u - 1) * p + v - 1, g$vbeta[u, v], 1e-5, 1e-8); ad(2, (u - 1) * p + v - 1, g$vbeta.naiv[u, v], 1e-5, 1e-8) }
+  for (j in 1:q) ad(3, j - 1, unname(g$alpha)[j], 1e-5, 1e-7)
+  for (u in 1:q) for (v in 1:q) { ad(4, (u - 1) * q + v - 1, g$valpha[u, v], 1e-5, 1e-8); ad(5, (u - 1) * q + v - 1, g$valpha.naiv[u, v], 1e-5, 1e-8) }
 }
 emit("geepackpkg", "geepack", list(cases))

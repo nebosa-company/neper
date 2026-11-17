@@ -83,6 +83,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "gv") {
+            // (what, index, fam, link, corstr, dofij, k, p, maxm, sizes (k), y, x row-major, zc)
+            let vk = usize(x[6usize])
+            let vp = usize(x[7usize])
+            let vm = usize(x[8usize])
+            var vn = 0usize
+            var vc = 0usize
+            while vc < vk {
+                vn += usize(x[9usize + vc])
+                vc += 1usize
+            }
+            let vy = 9usize + vk
+            let vx = vy + vn
+            let vz = vx + vn * vp
+            let vq = vm * (vm - 1usize) / 2usize + 1usize
+            let (vo, ve1) = mem.alloc[f64](a, gp.gee_out_len(vp, vm, usize(x[4usize])) + vq)
+            let (vv, ve2) = mem.alloc[f64](a, 1usize + 2usize * vq * vq)
+            if ve1 != ok || ve2 != ok { os.exit(5) }
+            let (vphi, ve3) = gp.gee_fit(a, x[vy..vx], x[vx..vz], x[9usize..vy], vk, vp, usize(x[2usize]), usize(x[3usize]), usize(x[4usize]), x[vz..vz + vm * vm], false, vo)
+            if ve3 != ok { os.exit(7) }
+            if gp.gee_vab(a, x[vy..vx], x[vx..vz], x[9usize..vy], vk, vp, usize(x[2usize]), usize(x[3usize]), usize(x[4usize]), x[vz..vz + vm * vm], vo[0usize..vp], vo[vp + 4usize * vp * vp..vp + 4usize * vp * vp + vq], vphi, vv) != ok { os.exit(8) }
+            var vg = 0.0f64
+            var vqn = 1usize
+            if usize(x[4usize]) == 3usize { vqn = vm * (vm - 1usize) / 2usize }
+            if usize(x[0usize]) == 0usize { vg = vv[0usize] }
+            if usize(x[0usize]) == 1usize { vg = vv[1usize + usize(x[1usize])] }
+            if usize(x[0usize]) == 2usize { vg = vv[1usize + vqn * vqn + usize(x[1usize])] }
+            if !oracle.agrees(vg, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, vg))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "go") {
             // (what, index, link, k, px, nlev, sizes (k), y, x row-major)
             let ok_ = usize(x[3usize])
@@ -107,6 +145,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 failures += 1usize
                 if failures <= 12usize {
                     let _ = io.print(oracle.describe(a, c, og))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
+        if str.eq(c.name, "gp") {
+            // (what, index, corstr, link, k, px, nlev, sizes (k), y, x row-major)
+            let pk = usize(x[4usize])
+            let ppx = usize(x[5usize])
+            let pnl = usize(x[6usize])
+            var pn = 0usize
+            var pc = 0usize
+            while pc < pk {
+                pn += usize(x[7usize + pc])
+                pc += 1usize
+            }
+            let py = 7usize + pk
+            let pxs = py + pn
+            let pp0 = pnl - 1usize + ppx
+            let pm = gp.gee_maxsize(x[7usize..py], pk)
+            var pq = 1usize
+            if usize(x[2usize]) == 3usize { pq = pm * (pm - 1usize) / 2usize }
+            let (po, pe1) = mem.alloc[f64](a, pp0 + 2usize * pp0 * pp0 + pq + 2usize * pq * pq)
+            if pe1 != ok { os.exit(5) }
+            if gp.ordgee_gee(a, x[py..pxs], x[pxs..pxs + pn * ppx], x[7usize..py], pk, ppx, pnl, usize(x[3usize]), usize(x[2usize]), po) != ok { os.exit(7) }
+            let pw = usize(x[0usize])
+            let pi = usize(x[1usize])
+            var pg = 0.0f64
+            if pw == 0usize { pg = po[pi] }
+            if pw == 1usize || pw == 2usize { pg = po[pp0 + (pw - 1usize) * pp0 * pp0 + pi] }
+            if pw == 3usize { pg = po[pp0 + 2usize * pp0 * pp0 + pi] }
+            if pw == 4usize || pw == 5usize { pg = po[pp0 + 2usize * pp0 * pp0 + pq + (pw - 4usize) * pq * pq + pi] }
+            if !oracle.agrees(pg, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, pg))
                     let _ = io.print("\n")
                 }
             }
