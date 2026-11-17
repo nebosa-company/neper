@@ -79,19 +79,26 @@ for (rep in 1:40) {
     for (k in seq_len(n)) add("kal", c(as.numeric(sm), k - 1, n, enc(x), encmod(mod, nit)), r[k])
   }
 }
-# na_kalman with model = "StructTS" "sts" (smooth 1 or 0, index, n, series..., type 0 level 1 trend 2 BSM, frequency); a plain vector is a trend model, a ts of frequency > 1 a BSM
+# na_kalman with model = "StructTS" "sts" (smooth 1 or 0, index, n, series..., type 0 level 1 trend 2 BSM, frequency, maxgap or -1); a plain vector is a trend model, a ts of frequency > 1 a BSM
 for (rep in 1:45) {
   kind <- (rep - 1) %% 3; nf <- if (kind == 2) sample(3:6, 1) else 1; n <- if (kind == 2) nf * sample(4:6, 1) else sample(15:40, 1)
   tt <- seq_len(n); x <- round(10 + cumsum(rnorm(n, 0, 0.4)) + (if (kind == 1) 0.1 * tt else 0) + (if (kind == 2) 1.5 * sin(2 * pi * tt / nf) else 0) + rnorm(n, 0, 0.3), 2)
   na <- sample(seq(2, n), sample(2:5, 1)); if (rep %% 7 == 0) na <- c(na, 1); x[na] <- NA
   if (sum(!is.na(x)) < 5) next
+  mg <- c(Inf, 1, 2)[rep %% 3 + 1]
   for (sm in c(TRUE, FALSE)) {
     xin <- if (kind == 2) ts(x, frequency = nf) else x
-    r <- tryCatch(suppressWarnings(na_kalman(xin, model = "StructTS", smooth = sm, type = c("level", "trend", "BSM")[kind + 1])), error = function(e) NULL)
+    r <- tryCatch(suppressWarnings(na_kalman(xin, model = "StructTS", smooth = sm, type = c("level", "trend", "BSM")[kind + 1], maxgap = mg)), error = function(e) NULL)
     if (is.null(r)) next
     r <- as.numeric(r)
-    for (k in seq_len(n)) add("sts", c(as.numeric(sm), k - 1, n, enc(x), kind, nf), r[k], rel = 1e-6)
+    for (k in seq_len(n)) add("sts", c(as.numeric(sm), k - 1, n, enc(x), kind, nf, if (is.finite(mg)) mg else -1), r[k], rel = 1e-6)
   }
+}
+# StructTS shortcut: a series with two distinct values (a constant one with gaps) is linearly interpolated
+for (rep in 1:4) {
+  n <- 10 + rep; x <- rep(c(3, 7)[rep %% 2 + 1], n); x[sample(2:(n - 1), 3)] <- NA
+  r <- as.numeric(na_kalman(x, model = "StructTS"))
+  for (k in seq_len(n)) add("sts", c(1, k - 1, n, enc(x), 0, 1, -1), r[k], rel = 1e-6)
 }
 # stats::arima "arima" (p, d, q, kind 0 none 1 intercept 2 drift, method 0 CSS-ML 1 ML 2 CSS, quantity, n, series...): quantity 0 aic, 1 loglik, 2 sigma2, 10+i coef i, 30+i model a[i], 50+i diag P[i]
 for (rep in 1:60) {

@@ -3,7 +3,8 @@
 //
 // na_locf (option locf or nocb, na_remaining rev, keep or mean) and na_interpolation (linear, spline) wrap the zoo functions.
 //
-// Not here: na_kalman, na_seadec, na_seasplit, statsNA, the maxgap option, na_interpolation stine.
+// na_kalman: a user model (na_kalman_model), StructTS (level, trend, BSM) and auto.arima of a non-seasonal series; a seasonal series (period > 1)
+// under auto.arima is Unsupported. `maxgap` puts runs of missing values longer than it back to missing (negative: no limit).
 
 use e.math
 use e.mem
@@ -15,6 +16,7 @@ use e.algo.stat.structts as sts
 use e.algo.stat.autoarima as aa
 
 error TooFewData
+error Unsupported
 
 fn is_nan(x: f64) -> bool { ret x != x }
 
@@ -583,7 +585,7 @@ fn stats_na(a: *mem.Arena, x: []const f64, out: []f64) -> err {
 
 // na_kalman for a state-space model: smooth = KalmanSmooth, otherwise the filtered states of KalmanRun; a missing value
 // becomes the state estimate times Z. The model is not changed.
-fn na_kalman_model(a: *mem.Arena, x: []const f64, orig: []const f64, m: *const kal.SsModel, smooth: bool, nit: i64) -> ([]f64, err) {
+fn na_kalman_model(a: *mem.Arena, x: []const f64, orig: []const f64, m: *const kal.SsModel, smooth: bool, nit: i64, maxgap: i64) -> ([]f64, err) {
     let n = x.len
     let p = m.p
     let (o, e) = mem.alloc[f64](a, n)
@@ -617,6 +619,7 @@ fn na_kalman_model(a: *mem.Arena, x: []const f64, orig: []const f64, m: *const k
         }
         i += 1usize
     }
+    apply_maxgap(orig, o, maxgap)
     ret (o, ok)
 }
 
@@ -639,7 +642,7 @@ fn distinct_count(x: []const f64) -> usize {
 
 // na_kalman(x, model = "StructTS", smooth, type = kind (0 level, 1 trend, 2 BSM), frequency nf): at least three observed values are needed; a series with two distinct values is
 // linearly interpolated, as imputeTS does; a missing first value is replaced by the first observed one for the fit and the smoothing
-fn na_kalman_structts(a: *mem.Arena, x: []const f64, kind: usize, nf: usize, smooth: bool) -> ([]f64, err) {
+fn na_kalman_structts(a: *mem.Arena, x: []const f64, kind: usize, nf: usize, smooth: bool, maxgap: i64) -> ([]f64, err) {
     let n = x.len
     var nobs = 0usize
     var first = 0usize
@@ -674,13 +677,13 @@ fn na_kalman_structts(a: *mem.Arena, x: []const f64, kind: usize, nf: usize, smo
     if is_nan(data[0usize]) { data[0usize] = x[first] }
     let (model, me) = sts.struct_ts_model(a, data, kind, nf)
     if me != ok { ret (data, me) }
-    let (r2, e2) = na_kalman_model(a, data, x, &model, smooth, 0i64 - 1i64)
+    let (r2, e2) = na_kalman_model(a, data, x, &model, smooth, 0i64 - 1i64, maxgap)
     ret (r2, e2)
 }
 
 // na_kalman(x, model = "auto.arima", smooth): the series is smoothed (or filtered) under the state-space model of forecast::auto.arima(x)
 // (imputeTS hands the fitted model, whose state is the final filtered one, to KalmanSmooth with nit = -1)
-fn na_kalman_autoarima(a: *mem.Arena, x: []const f64, smooth: bool) -> ([]f64, err) {
+fn na_kalman_autoarima(a: *mem.Arena, x: []const f64, period: usize, smooth: bool, maxgap: i64) -> ([]f64, err) {
     let n = x.len
     var nobs = 0usize
     var i = 0usize
@@ -697,8 +700,9 @@ fn na_kalman_autoarima(a: *mem.Arena, x: []const f64, smooth: bool) -> ([]f64, e
     }
     if nobs == n { ret (data, ok) }
     if nobs < 3usize { ret (data, TooFewData) }
+    if period > 1usize { ret (data, Unsupported) }
     let (model, me) = aa.auto_arima_model(a, x)
     if me != ok { ret (data, me) }
-    let (r2, e2) = na_kalman_model(a, x, x, &model, smooth, 0i64 - 1i64)
+    let (r2, e2) = na_kalman_model(a, x, x, &model, smooth, 0i64 - 1i64, maxgap)
     ret (r2, e2)
 }

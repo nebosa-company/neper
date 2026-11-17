@@ -96,13 +96,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             q += 1usize
         }
         let mdl = kal.SsModel{ p: pp, tm: tm, zv: zv, h: h, vm: vm, av: av, pm: pm, pn: pn }
-        let (kr, ke) = it.na_kalman_model(a, s, s, &mdl, kind == 1usize, nit)
+        let (kr, ke) = it.na_kalman_model(a, s, s, &mdl, kind == 1usize, nit, 0i64 - 1i64)
         if ke != ok { os.exit(7) }
         ret kr[k]
     }
     if str.eq(c.name, "sts") {
-        // args (smooth, index, n, series..., type, frequency)
-        let (sr, se) = it.na_kalman_structts(a, s, usize(x[3usize + n]), usize(x[4usize + n]), kind == 1usize)
+        // args (smooth, index, n, series..., type, frequency, maxgap or -1)
+        let (sr, se) = it.na_kalman_structts(a, s, usize(x[3usize + n]), usize(x[4usize + n]), kind == 1usize, i64(x[5usize + n]))
         if se != ok { os.exit(7) }
         ret sr[k]
     }
@@ -129,7 +129,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     if str.eq(c.name, "aa") {
         // args (smooth, index, n, series...)
-        let (ar2, ae) = it.na_kalman_autoarima(a, s, kind == 1usize)
+        let (ar2, ae) = it.na_kalman_autoarima(a, s, 1usize, kind == 1usize, 0i64 - 1i64)
         if ae != ok { ret 0.0f64 / 0.0f64 }
         var wsum = 0.0f64
         var wi = 0usize
