@@ -161,6 +161,27 @@ if (want_("ggau")) { set.seed(20261304)
       cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 1, length(f0$lambda), 0, 0.5); cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 0, ck(f0$lambda), 1e-9, 1e-12) }
   } }
 
+if (want_("gmg")) { set.seed(20261305)
+  for (v in 1:6) {
+    .v <- v
+    d <- mk("mgaussian", 70, 5, K = if (v == 5) 3 else 2); p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2)[(v %% 3) + 1], std = v != 4)
+    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3) { o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }
+    if (v == 4) { o$excl <- c(2, 3); o$vf <- round(runif(p, 0.3, 2), 2) }; if (v == 6) { o$w <- round(runif(d$n, 0.3, 3), 2); o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }
+    addfit(d, o, rel = 1e-6, abs = 1e-6, thresh7 = TRUE, nm = "gfit")
+    if (v != 4) { f0 <- suppressWarnings(do.call(glmnet, gargs(d, o)))
+      cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 1, length(f0$lambda), 0, 0.5); cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 0, ck(f0$lambda), 1e-9, 1e-12) }
+  } }
+
+if (want_("grelax")) { set.seed(20261306)
+  for (fam in c("gaussian", "binomial", "poisson", "cox", "multinomial", "mgaussian")) for (v in 1:3) {
+    .v <- v
+    d <- mk(fam, 80, 5); p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2)[v], std = v != 3)
+    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3 && fam %in% c("binomial", "poisson", "cox")) o$off <- round(rnorm(d$n, 0, 0.3), 2)
+    if (v == 3 && fam %in% c("multinomial", "mgaussian")) o$grouped <- fam == "multinomial"
+    o$relax <- c(0, 0.5, 0)[v]
+    addfit(d, o, rel = 1e-6, abs = 1e-6, thresh7 = TRUE, nm = "gfit")
+  } }
+
 # ---- fit: mgaussian ---------------------------------------------------------------------------------------------------------------------------------------------------------
 if (want_("mgauss")) { set.seed(20261203)
   for (v in 1:6) {

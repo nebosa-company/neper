@@ -178,9 +178,21 @@ fn fit_rows(a: *mem.Arena, gf: bool, fam: usize, relaxf: bool, gamma: f64, efron
     } else if fam == 4usize {
         fe = gl.multinomial(a, xs, lab, wts, off, lz, uz, n, nkp, nc, alpha, std, grouped, vs, lamc, sm, nodv)
     }
-    if fam == 5usize { fe = gl.mgaussian_b(a, xs, ya, wts, lz, uz, n, nkp, nc, alpha, std, vs, lamc, sm) }
+    if fam == 5usize && gf {
+        let (dvg, eg1) = mem.alloc[f64](a, nl)
+        let (alg, eg2) = mem.alloc[f64](a, nl)
+        if eg1 != ok || eg2 != ok { ret eg1 }
+        let nfit = gl.glm_mgaussian(a, xs, ya, wts, lz, uz, n, nkp, nc, alpha, std, false, vs, lamc, 100usize, 1.0e-7f64, sm, dvg, alg)
+        if nfit != nl { ret eg1 }
+    } else if fam == 5usize {
+        fe = gl.mgaussian_b(a, xs, ya, wts, lz, uz, n, nkp, nc, alpha, std, vs, lamc, sm)
+    }
     if fe != ok { ret fe }
-    if relaxf {
+    if relaxf && gf {
+        let re = gl.relax_path_f(a, fam, xs, ya, stat, start, strata, efron, wts, off, lz, uz, n, nkp, nc, alpha, std, grouped, sm, nl, rc)
+        if re != ok { ret re }
+        gl.relax_blend(sm[0usize..nl * ncs * (nkp + 1usize)], rc[0usize..nl * ncs * (nkp + 1usize)], gamma, sm[0usize..nl * ncs * (nkp + 1usize)])
+    } else if relaxf {
         var re = ok
         if fam <= 3usize { re = gl.relax_path(a, fam, xs, ya[0usize..n], stat, wts, off, n, nkp, sm, nl, rc) }
         if fam == 4usize { re = gl.relax_multi(a, 4usize, xs, lab, none, wts, off, n, nkp, nc, sm, nl, rc) }
@@ -253,6 +265,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if e1 != ok { ret nan() }
             if fit_rows(a, gf, fam, relaxf, gamma, efron, grouped, nc, xm, ya, stat, strata, start, wts, off, lo, up, excl, n, p, alpha, std, lam, vf, out) != ok { ret nan() }
             ret checksum(out)
+        }
+        if str.eq(c.name, "glam") && fam == 5usize {
+            let (cg, eb) = mem.alloc[f64](a, 100usize * nc * (p + 1usize))
+            let (dg, ec) = mem.alloc[f64](a, 100usize)
+            let (alg, ed) = mem.alloc[f64](a, 100usize)
+            if eb != ok || ec != ok || ed != ok { ret nan() }
+            let noln: []const f64 = zero
+            let nfit = gl.glm_mgaussian(a, xm, ya, wts, lo, up, n, p, nc, alpha, std, false, vf, noln, 100usize, 1.0e-7f64, cg, dg, alg)
+            if usize(x[qo]) == 1usize { ret f64(nfit) }
+            ret checksum(alg[0usize..nfit])
         }
         if str.eq(c.name, "glam") && fam == 2usize {
             let (ye2, ea) = mem.alloc[f64](a, n)
