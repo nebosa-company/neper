@@ -47890,3 +47890,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6855 — tsfeatures: unitroot_kpss
 
 **Decision.** `tsfeatures.unitroot_kpss(x)` is `unitroot_kpss(x)` (urca `ur.kpss` with type "mu" and the short lag): the sum of squared partial sums of the centred series over n^2 times the long-run variance sum e^2 / n + (2 / n) sum over j up to l of (1 - j / (l + 1)) times the lag-j autocovariance sum, with l = trunc(4 (n / 100)^(1/4)). Equal to tsfeatures on the oracle series (oracle_tsfeatures). Not here: `unitroot_pp`, the `lags` and `type` arguments, `stl_features`, `entropy`, `hurst`, `heterogeneity`, the Holt-Winters parameters. Linux pending.
+
+## D6856 — tsfeatures: unitroot_pp
+
+**Decision.** `tsfeatures.unitroot_pp(x)` is `unitroot_pp(x)` (urca `ur.pp`, Z-alpha, constant model, short lag): the regression of x[t] on x[t - 1] with an intercept over n = length - 1 observations, s the residual sum of squares over n, sig = s + (2 / n) times the Bartlett-weighted lagged residual products over l = trunc(4 (n / 100)^(1/4)) lags (n here being the regression sample), and the statistic n (alpha - 1) - 0.5 (sig - s) / myybar where myybar is the sum of squares of the dependent series about its mean over n^2. Equal to tsfeatures on the oracle series (oracle_tsfeatures). Not here: the Z-tau type, the trend model, the `lags` argument. Linux pending.

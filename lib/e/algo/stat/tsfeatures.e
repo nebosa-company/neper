@@ -477,3 +477,59 @@ fn unitroot_kpss(x: []const f64) -> f64 {
     }
     ret tot / (nn * nn * s2)
 }
+
+// unitroot_pp(x): urca ur.pp with the Z-alpha statistic, the constant model and the short lag: the regression of x[t] on x[t - 1] with an intercept (n = length - 1 observations), the residual variance s and its Bartlett long-run
+// estimate sig over l = trunc(4 (n / 100)^(1/4)) lags, and n (alpha - 1) - 0.5 (sig - s) / ((1 / n^2) sum (y - mean y)^2) with y the dependent series
+fn unitroot_pp(a: *mem.Arena, x: []const f64) -> f64 {
+    let total = x.len
+    let n = total - 1usize
+    let nn = f64(n)
+    let (res, e) = mem.alloc[f64](a, n)
+    if e != ok { ret nan() }
+    var my = 0.0f64
+    var ml = 0.0f64
+    var i = 0usize
+    while i < n {
+        my += x[i + 1usize]
+        ml += x[i]
+        i += 1usize
+    }
+    my = my / nn
+    ml = ml / nn
+    var sxy = 0.0f64
+    var sxx = 0.0f64
+    var syy = 0.0f64
+    i = 0usize
+    while i < n {
+        sxy += (x[i] - ml) * (x[i + 1usize] - my)
+        sxx += (x[i] - ml) * (x[i] - ml)
+        syy += (x[i + 1usize] - my) * (x[i + 1usize] - my)
+        i += 1usize
+    }
+    let alpha = sxy / sxx
+    let icpt = my - alpha * ml
+    var s = 0.0f64
+    i = 0usize
+    while i < n {
+        res[i] = x[i + 1usize] - icpt - alpha * x[i]
+        s += res[i] * res[i]
+        i += 1usize
+    }
+    s = s / nn
+    let l = usize(math.floor[f64](4.0f64 * math.pow[f64](nn / 100.0f64, 0.25f64)))
+    var sig = s
+    var j = 1usize
+    while j <= l {
+        var cp = 0.0f64
+        var t = j
+        while t < n {
+            cp += res[t] * res[t - j]
+            t += 1usize
+        }
+        sig += 2.0f64 / nn * (1.0f64 - f64(j) / (f64(l) + 1.0f64)) * cp
+        j += 1usize
+    }
+    let lambda = 0.5f64 * (sig - s)
+    let myybar = syy / (nn * nn)
+    ret nn * (alpha - 1.0f64) - lambda / myybar
+}

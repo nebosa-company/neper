@@ -21,5 +21,6 @@ for (rep in 1:10) {
   add("embed1", a(0), suppressWarnings(embed2_incircle(x0, boundary = 1))); add("embed2", a(0), suppressWarnings(embed2_incircle(x0, boundary = 2)))
   add("ac9", a(0), ac_9(x0))
   add("kpss", a(0), unitroot_kpss(x0))
+  add("pp", a(0), unitroot_pp(x0))
 }
 emit("tsfeatures", "tsfeatures", list(cases))

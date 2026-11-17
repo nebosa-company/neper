@@ -44,6 +44,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(nm, "trev") { ret tf.trev_num(s) }
     if str.eq(nm, "walker") { ret tf.walker_propcross(s) }
     if str.eq(nm, "motif") { ret tf.motiftwo_entro3(s) }
+    if str.eq(nm, "pp") { ret tf.unitroot_pp(a, s) }
     if str.eq(nm, "kpss") { ret tf.unitroot_kpss(s) }
     if str.eq(nm, "zeroprop") {
         let (rd, re) = mem.alloc[f64](a, n)
