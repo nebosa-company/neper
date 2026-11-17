@@ -327,13 +327,17 @@ fn gaussian_influence(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p
     ret influence(a, 0usize, x, y, n, p, ntrees, shrinkage, depth, minobs, fitted, inf)
 }
 
-// gaussian boosting that records the trees: rec has ntrees * (4 depth + 2) + 1 values, per tree the number of splits, then (leaf, variable, threshold midpoint) for each split and the step of every leaf, and the starting value last
-fn gaussian_model(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64, rec: []f64) -> err {
+// boosting with the loss code (0 gaussian, 1 bernoulli, 2 poisson, 3 adaboost, 4 laplace) that records the trees: rec has ntrees * (4 depth + 2) + 1 values, per tree the number of splits, then (leaf, variable, threshold midpoint) for each split and the step of every leaf, and the starting value last
+fn model(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64, rec: []f64) -> err {
     var noinf: []f64 = zero
-    ret boost(a, 0usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted, noinf, rec)
+    ret boost(a, loss, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted, noinf, rec)
 }
 
-// predict.gbm for a recorded gaussian model at nn new rows (nn by p, column-major): the starting value plus the step of the leaf each row reaches in every tree
+fn gaussian_model(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64, rec: []f64) -> err {
+    ret model(a, 0usize, x, y, n, p, ntrees, shrinkage, depth, minobs, fitted, rec)
+}
+
+// predict.gbm (on the link scale) for a recorded model at nn new rows (nn by p, column-major): the starting value plus the step of the leaf each row reaches in every tree
 fn predict_model(rec: []const f64, ntrees: usize, depth: usize, xnew: []const f64, nn: usize, out: []f64) {
     let blk = 4usize * depth + 2usize
     var r = 0usize

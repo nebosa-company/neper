@@ -57,4 +57,15 @@ for (rep in 1:10) {
   nn <- 12; Xn <- matrix(round(rnorm(nn * p), 3), nn, p); dn <- data.frame(Xn); names(dn) <- paste0("V", 1:p); pn <- predict(f, dn, n.trees = nt)
   for (i in c(1, 5, 12)) cases[[length(cases) + 1]] <- case("dpr", c(n, p, nt, sh, d, mo, i - 1, nn, y, X, Xn), pn[i], rel = 1e-8, abs = 1e-10)
 }
+# predict on new data for the other losses "dpb" bernoulli, "dpp" poisson, "dpa" adaboost, "dpl" laplace (link scale)
+set.seed(20261206)
+for (fam in c("bernoulli", "poisson", "adaboost", "laplace")) for (rep in 1:6) {
+  n <- sample(80:150, 1); p <- sample(2:3, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
+  y <- switch(fam, bernoulli = rbinom(n, 1, plogis(1.5 * X[, 1] - X[, 2])), poisson = rpois(n, exp(0.3 + 0.6 * X[, 1])), adaboost = rbinom(n, 1, plogis(1.5 * X[, 1] - X[, 2])), laplace = round(X[, 1] * 2 + rexp(n), 4))
+  d <- sample(1:3, 1); sh <- c(0.1, 0.05, 0.2)[rep %% 3 + 1]; nt <- c(10, 30)[rep %% 2 + 1]; mo <- c(10, 5)[rep %% 2 + 1]
+  df <- data.frame(y = y, X); names(df) <- c("y", paste0("V", 1:p))
+  f <- gbm(y ~ ., data = df, distribution = fam, n.trees = nt, shrinkage = sh, interaction.depth = d, n.minobsinnode = mo, bag.fraction = 1, train.fraction = 1, keep.data = TRUE, verbose = FALSE)
+  nn <- 12; Xn <- matrix(round(rnorm(nn * p), 3), nn, p); dn <- data.frame(Xn); names(dn) <- paste0("V", 1:p); pn <- predict(f, dn, n.trees = nt)
+  for (i in c(1, 6, 12)) cases[[length(cases) + 1]] <- case(paste0("dp", substr(fam, 1, 1)), c(n, p, nt, sh, d, mo, i - 1, nn, y, X, Xn), pn[i], rel = 1e-7, abs = 1e-9)
+}
 emit("gbm", "gbm", list(cases))
