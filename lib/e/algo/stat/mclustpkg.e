@@ -677,3 +677,31 @@ fn class_error(a: *mem.Arena, cl: []const usize, tr: []const usize, bad: []usize
     }
     ret f64(cnt) / f64(n)
 }
+
+// mclust::dmvnorm(x, mean, sigma, log): the multivariate normal density at one point of length d, sigma d by d column-major; log = true answers the log density
+fn dmvnorm(a: *mem.Arena, x: []const f64, mean: []const f64, sigma: []const f64, lg: bool) -> f64 {
+    let d = x.len
+    let (l, e1) = mem.alloc[f64](a, d * d)
+    let (z, e2) = mem.alloc[f64](a, d)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    if !chol_lower(sigma, d, l) { ret 0.0f64 / 0.0f64 }
+    // solve L z = x - mean by forward substitution
+    var q = 0.0f64
+    var logdet = 0.0f64
+    var i = 0usize
+    while i < d {
+        var s = x[i] - mean[i]
+        var j = 0usize
+        while j < i {
+            s -= l[j * d + i] * z[j]
+            j += 1usize
+        }
+        z[i] = s / l[i * d + i]
+        q += z[i] * z[i]
+        logdet += 2.0f64 * math.log[f64](l[i * d + i])
+        i += 1usize
+    }
+    let ld = 0.0f64 - 0.5f64 * (f64(d) * 1.8378770664093453f64 + logdet + q)
+    if lg { ret ld }
+    ret math.exp[f64](ld)
+}

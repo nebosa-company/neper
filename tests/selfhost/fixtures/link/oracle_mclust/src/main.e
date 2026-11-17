@@ -11,6 +11,11 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "dmv") {
+        // (d, log, x[d], mean[d], sigma[d d])
+        let d = usize(z[0usize])
+        ret mc.dmvnorm(a, z[2usize..2usize + d], z[2usize + d..2usize + 2usize * d], z[2usize + 2usize * d..2usize + 2usize * d + d * d], z[1usize] != 0.0f64)
+    }
     if str.eq(c.name, "npar") { ret mc.n_mclust_params(mc.model_name(usize(z[0usize])), z[1usize], z[2usize], z[3usize] != 0.0f64, z[4usize] != 0.0f64) }
     if str.eq(c.name, "bic") { ret mc.bic(mc.model_name(usize(z[0usize])), z[1usize], z[2usize], z[3usize], z[4usize], z[5usize] != 0.0f64, z[6usize] != 0.0f64) }
     if str.eq(c.name, "ari") {

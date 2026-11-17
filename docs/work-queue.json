@@ -1626,10 +1626,10 @@
       "group": "CRAN parity",
       "order": 794,
       "title": "mclust: Gaussian mixture model selection",
-      "score": 0.5,
+      "score": 0.52,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D6823: e.algo.stat.mclustpkg has nVarParams, nMclustParams, bic, adjustedRandIndex and map equal to mclust; oracle_mclust; Linux pending). D6824: the EM iterations of me() for EII, VII, EEI, VVI, EEE and VVV equal mclust (loglik, iteration count, parameters). D6825: equalPro for five of the six (not VVI). D6826: EVI. D6827: EVV and EEV. D6875: mclustBIC from the hc(EII) partitions equals mclust. D6876: Mclust model selection (BIC, G, model, loglik, classification) equals mclust. D6877: classError (without ties) equals mclust. D6836: hc for EII equals mclust. Open: VEI, VEV, EVE, VEE, VVE, hc for the other models, hc initialisation, mclustBIC and Mclust, classError, density and simulation. Was: Open (CRAN rank 280). Large. e.ml.cluster has gmm_em. Acceptance, equal to mclust: all 14 covariance structures, EM with hierarchical-agglomeration initialization, mclustBIC and ICL, Mclust, predict, densityMclust, MclustDA, MclustDR, mclustBootstrapLRT under set.seed, uncertainty and classification tables."
+      "evidence": "Partial (D6823: e.algo.stat.mclustpkg has nVarParams, nMclustParams, bic, adjustedRandIndex and map equal to mclust; oracle_mclust; Linux pending). D6824: the EM iterations of me() for EII, VII, EEI, VVI, EEE and VVV equal mclust (loglik, iteration count, parameters). D6825: equalPro for five of the six (not VVI). D6826: EVI. D6827: EVV and EEV. D6875: mclustBIC from the hc(EII) partitions equals mclust. D6876: Mclust model selection (BIC, G, model, loglik, classification) equals mclust. D6877: classError (without ties) equals mclust. D6836: hc for EII equals mclust. D6947: dmvnorm (density and log density) equals mclust. Open: VEI, VEV, EVE, VEE, VVE, hc for the other models, hc initialisation, mclustBIC and Mclust, classError, density and simulation. Was: Open (CRAN rank 280). Large. e.ml.cluster has gmm_em. Acceptance, equal to mclust: all 14 covariance structures, EM with hierarchical-agglomeration initialization, mclustBIC and ICL, Mclust, predict, densityMclust, MclustDA, MclustDR, mclustBootstrapLRT under set.seed, uncertainty and classification tables."
     },
     {
       "id": "L349",

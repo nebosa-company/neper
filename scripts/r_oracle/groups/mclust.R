@@ -59,4 +59,7 @@ for (rep in 1:60) {
   ce <- classError(cl, tr); fl <- as.numeric(seq_len(n) %in% ce$misclassified)
   add("cerr", c(n, -1, cl - 1, tr - 1), ce$errorRate, 1e-12); for (i in seq_len(n)) add("cerr", c(n, i - 1, cl - 1, tr - 1), fl[i], 0)
 }
+# dmvnorm "dmv": (d, log, x, mean, sigma)
+for (rep in 1:30) { d <- sample(1:5, 1); S <- crossprod(matrix(rnorm(d * d), d)) + diag(d) * 0.3; x <- rnorm(d); mu <- rnorm(d); lg <- rep %% 2
+  v <- dmvnorm(matrix(x, 1), mu, S, log = as.logical(lg)); cases[[length(cases) + 1]] <- case("dmv", c(d, lg, x, mu, S), as.numeric(v), rel = 1e-10, abs = 1e-12) }
 emit("mclust", "mclust", list(cases))

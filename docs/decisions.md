@@ -48254,3 +48254,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6946 — lmerTest: ranova
 
 **Decision.** `lmerpkg.lmer_ranova` gives the `ranova` table of the one-intercept REML fit: the full model's criterion (the REML deviance at lme4's theta and sigma), the reduced model's -2 logLik from `logLik(lm, REML = TRUE)` (N (log(2 pi RSS / N) + 1) + log det(X' X) with N = n - p; the `lm` method has no p log(2 pi) term, found against the package), the likelihood-ratio statistic and its chi-square p value on one degree of freedom (no boundary mixture, as lmerTest prints it). Equal to `ranova(model)` on the REML data sets of D6917 (the criteria to 1e-8, LRT 1e-4, p 1e-3; oracle_lmer, 576 cases in all). Not here: ML fits (ranova refits), several random terms, `step`, `difflsmeans`. Linux pending.
+
+## D6947 — mclust: dmvnorm
+
+**Decision.** `mclustpkg.dmvnorm` is mclust's multivariate normal density at a point, density or log density, through the lower Cholesky factor of the covariance already used by the EM code (forward substitution for the quadratic form, twice the log diagonal for the determinant). Equal to `mclust::dmvnorm` on 30 random covariances of 1 to 5 dimensions, both scales (oracle_mclust, 6264 cases in all). Linux pending.
