@@ -431,3 +431,7 @@ oracle_clustermona
 oracle_clusterdaisy
 oracle_clustergap
 oracle_clusterpkg
+oracle_lmomfull
+oracle_gldfull
+oracle_gldfit
+oracle_lmomq
