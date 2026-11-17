@@ -415,3 +415,4 @@ oracle_compositions_miss
 oracle_clusterpam
 oracle_clusterclara
 oracle_clustertwins
+oracle_clusterfanny
