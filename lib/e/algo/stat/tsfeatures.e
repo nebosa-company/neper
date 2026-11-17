@@ -11,6 +11,7 @@ use e.math.scale
 use e.mem
 use e.algo.stat.fracdiff_fit as fdf
 use e.algo.linalg.decomp as decomp
+use e.algo.stat.stlpkg as stlp
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
@@ -632,6 +633,306 @@ fn histogram_mode(a: *mem.Arena, x: []const f64, num_bins: usize) -> f64 {
         b += 1usize
     }
     ret (br[best] + br[best + 1usize]) / 2.0f64
+}
+
+fn at1(v: []const f64, k: i64) -> f64 { ret v[usize(k - 1i64)] }
+
+// ppr.f smooth (non-periodic): the running-lines smoother of span `span` over x sorted, weights w; acvr gets the absolute cross-validated residuals when cv
+fn smooth_run(n: usize, x: []const f64, y: []const f64, w: []const f64, span: f64, cv: bool, vsmlsq: f64, smo: []f64, acvr: []f64) {
+    var xm = 0.0f64
+    var ym = 0.0f64
+    var vr = 0.0f64
+    var cvar = 0.0f64
+    var fbw = 0.0f64
+    let ni = i64(n)
+    var ibw = i64(0.5f64 * span * f64(n) + 0.5f64)
+    if ibw < 2i64 { ibw = 2i64 }
+    var it = 2i64 * ibw + 1i64
+    if it > ni { it = ni }
+    var i = 1i64
+    while i <= it {
+        let xti = at1(x, i)
+        let wt = at1(w, i)
+        let fbo = fbw
+        fbw = fbw + wt
+        if fbw > 0.0f64 { xm = (fbo * xm + wt * xti) / fbw }
+        if fbw > 0.0f64 { ym = (fbo * ym + wt * at1(y, i)) / fbw }
+        var tmp = 0.0f64
+        if fbo > 0.0f64 { tmp = fbw * wt * (xti - xm) / fbo }
+        vr = vr + tmp * (xti - xm)
+        cvar = cvar + tmp * (at1(y, i) - ym)
+        i += 1i64
+    }
+    var j = 1i64
+    while j <= ni {
+        let out = j - ibw - 1i64
+        let inn = j + ibw
+        if out >= 1i64 && inn <= ni {
+            let xto = at1(x, out)
+            let xti = at1(x, inn)
+            var wt = at1(w, out)
+            var fbo = fbw
+            fbw = fbw - wt
+            var tmp = 0.0f64
+            if fbw > 0.0f64 { tmp = fbo * wt * (xto - xm) / fbw }
+            vr = vr - tmp * (xto - xm)
+            cvar = cvar - tmp * (at1(y, out) - ym)
+            if fbw > 0.0f64 { xm = (fbo * xm - wt * xto) / fbw }
+            if fbw > 0.0f64 { ym = (fbo * ym - wt * at1(y, out)) / fbw }
+            wt = at1(w, inn)
+            fbo = fbw
+            fbw = fbw + wt
+            if fbw > 0.0f64 { xm = (fbo * xm + wt * xti) / fbw }
+            if fbw > 0.0f64 { ym = (fbo * ym + wt * at1(y, inn)) / fbw }
+            tmp = 0.0f64
+            if fbo > 0.0f64 { tmp = fbw * wt * (xti - xm) / fbo }
+            vr = vr + tmp * (xti - xm)
+            cvar = cvar + tmp * (at1(y, inn) - ym)
+        }
+        var a = 0.0f64
+        if vr > vsmlsq { a = cvar / vr }
+        let xj = at1(x, j)
+        smo[usize(j - 1i64)] = a * (xj - xm) + ym
+        if cv {
+            var h = 0.0f64
+            if fbw > 0.0f64 { h = 1.0f64 / fbw }
+            if vr > vsmlsq { h = h + (xj - xm) * (xj - xm) / vr }
+            acvr[usize(j - 1i64)] = 0.0f64
+            a = 1.0f64 - at1(w, j) * h
+            if a > 0.0f64 {
+                acvr[usize(j - 1i64)] = math.abs[f64](at1(y, j) - smo[usize(j - 1i64)]) / a
+            } else {
+                if j > 1i64 { acvr[usize(j - 1i64)] = acvr[usize(j - 2i64)] }
+            }
+        }
+        j += 1i64
+    }
+    // ties in x: the fitted values become the weighted mean over the tie
+    j = 1i64
+    while j <= ni {
+        let j0 = j
+        var sy = at1(smo, j) * at1(w, j)
+        var fb = at1(w, j)
+        while j < ni && at1(x, j + 1i64) <= at1(x, j) {
+            j += 1i64
+            sy = sy + at1(w, j) * at1(smo, j)
+            fb = fb + at1(w, j)
+        }
+        if j > j0 {
+            var m = 0.0f64
+            if fb > 0.0f64 { m = sy / fb }
+            var q = j0
+            while q <= j {
+                smo[usize(q - 1i64)] = m
+                q += 1i64
+            }
+        }
+        j += 1i64
+    }
+}
+
+// stats::supsmu(x, y) with the defaults (span = "cv", bass = 0, unit weights) for x strictly increasing: Friedman's super smoother, the three spans 0.05 / 0.2 / 0.5 chosen by cross-validation
+fn supsmu(a: *mem.Arena, x: []const f64, y: []const f64, smo: []f64) -> err {
+    let n = x.len
+    let (sc, e1) = mem.alloc[f64](a, 7usize * n)
+    let (w, e2) = mem.alloc[f64](a, n)
+    let (h, e3) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    var lo = n / 4usize
+    var hi = 3usize * lo
+    var spread = x[hi - 1usize] - x[lo - 1usize]
+    while spread <= 0.0f64 {
+        if hi < n { hi += 1usize }
+        if lo > 1usize { lo -= 1usize }
+        spread = x[hi - 1usize] - x[lo - 1usize]
+    }
+    let vsmlsq = (0.001f64 * spread) * (0.001f64 * spread)
+    var sp: [3]f64 = zero
+    sp[0usize] = 0.05f64
+    sp[1usize] = 0.2f64
+    sp[2usize] = 0.5f64
+    // columns of sc, each n long: 0..5 smooths and their cross-validated residual smooths, 6 the span selected
+    var k = 0usize
+    while k < 3usize {
+        smooth_run(n, x, y, w, sp[k], true, vsmlsq, sc[(2usize * k) * n..(2usize * k + 1usize) * n], sc[6usize * n..7usize * n])
+        smooth_run(n, x, sc[6usize * n..7usize * n], w, sp[1usize], false, vsmlsq, sc[(2usize * k + 1usize) * n..(2usize * k + 2usize) * n], h)
+        k += 1usize
+    }
+    var j = 0usize
+    while j < n {
+        var resmin = 1.0e20f64
+        k = 0usize
+        while k < 3usize {
+            if sc[(2usize * k + 1usize) * n + j] < resmin {
+                resmin = sc[(2usize * k + 1usize) * n + j]
+                sc[6usize * n + j] = sp[k]
+            }
+            k += 1usize
+        }
+        j += 1usize
+    }
+    smooth_run(n, x, sc[6usize * n..7usize * n], w, sp[1usize], false, vsmlsq, sc[n..2usize * n], h)
+    j = 0usize
+    while j < n {
+        if sc[n + j] <= sp[0usize] { sc[n + j] = sp[0usize] }
+        if sc[n + j] >= sp[2usize] { sc[n + j] = sp[2usize] }
+        var f = sc[n + j] - sp[1usize]
+        if f >= 0.0f64 {
+            f = f / (sp[2usize] - sp[1usize])
+            sc[3usize * n + j] = (1.0f64 - f) * sc[2usize * n + j] + f * sc[4usize * n + j]
+        } else {
+            f = (0.0f64 - f) / (sp[1usize] - sp[0usize])
+            sc[3usize * n + j] = (1.0f64 - f) * sc[2usize * n + j] + f * sc[j]
+        }
+        j += 1usize
+    }
+    smooth_run(n, x, sc[3usize * n..4usize * n], w, sp[0usize], false, vsmlsq, smo, h)
+    ret ok
+}
+
+fn clamp01(v: f64) -> f64 { ret math.max[f64](0.0f64, math.min[f64](1.0f64, v)) }
+
+// stl_features(x) for a series of frequency m: out = [nperiods, seasonal_period, trend, spike, linearity, curvature, e_acf1, e_acf10, seasonal_strength, peak, trough]
+// (the last three NaN without a seasonal component). With m > 1 and more than two periods forecast::mstl runs stl(s.window = 11); otherwise the trend is supsmu(1..n, x).
+fn stl_features(a: *mem.Arena, x: []const f64, m: usize, out: []f64) -> err {
+    let n = x.len
+    var i = 0usize
+    while i < 11usize {
+        out[i] = nan()
+        i += 1usize
+    }
+    let (trend0, e1) = mem.alloc[f64](a, n)
+    let (rem, e2) = mem.alloc[f64](a, n)
+    let (seas, e3) = mem.alloc[f64](a, n)
+    let (des, e4) = mem.alloc[f64](a, n)
+    let (rw, e5) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    let seasonal = m > 1usize && n > 2usize * m
+    if seasonal {
+        let e = stlp.stl(a, x, m, false, 11.0f64, 0i64, 0.0f64, 1i64, 0.0f64, 1i64, 0usize, 0usize, 0usize, false, seas, trend0, rw)
+        if e != ok { ret e }
+    } else {
+        let (t, e6) = mem.alloc[f64](a, n)
+        if e6 != ok { ret e6 }
+        i = 0usize
+        while i < n {
+            t[i] = f64(i + 1usize)
+            seas[i] = 0.0f64
+            i += 1usize
+        }
+        let e = supsmu(a, t, x, trend0)
+        if e != ok { ret e }
+    }
+    i = 0usize
+    while i < n {
+        rem[i] = x[i] - trend0[i] - seas[i]
+        des[i] = x[i] - seas[i]
+        i += 1usize
+    }
+    if m > 1usize { out[0usize] = 1.0f64 } else { out[0usize] = 0.0f64 }
+    out[1usize] = f64(m)
+    let varx = var_of(x)
+    let vare = var_of(rem)
+    let vards = var_of(des)
+    var tr = 0.0f64
+    if varx < 2.220446049250313e-16f64 { tr = 0.0f64 } else {
+        if vards / varx < 1.0e-10f64 { tr = 0.0f64 } else { tr = clamp01(1.0f64 - vare / vards) }
+    }
+    out[2usize] = tr
+    let mr = mean_of(rem)
+    let (vl, e7) = mem.alloc[f64](a, n)
+    if e7 != ok { ret e7 }
+    i = 0usize
+    while i < n {
+        vl[i] = (vare * f64(n - 1usize) - (rem[i] - mr) * (rem[i] - mr)) / f64(n - 2usize)
+        i += 1usize
+    }
+    out[3usize] = var_of(vl)
+    // the linear and quadratic coefficients of lm(trend ~ poly(1..n, 2)): the trend projected on the orthonormal polynomials
+    let (q1, e8) = mem.alloc[f64](a, n)
+    let (q2, e9) = mem.alloc[f64](a, n)
+    if e8 != ok { ret e8 }
+    if e9 != ok { ret e9 }
+    let tm = f64(n + 1usize) / 2.0f64
+    var s1 = 0.0f64
+    i = 0usize
+    while i < n {
+        q1[i] = f64(i + 1usize) - tm
+        s1 += q1[i] * q1[i]
+        i += 1usize
+    }
+    s1 = math.sqrt[f64](s1)
+    var mt2 = 0.0f64
+    i = 0usize
+    while i < n {
+        q1[i] = q1[i] / s1
+        mt2 += (f64(i + 1usize) - tm) * (f64(i + 1usize) - tm)
+        i += 1usize
+    }
+    mt2 = mt2 / f64(n)
+    var dq = 0.0f64
+    i = 0usize
+    while i < n {
+        dq += (f64(i + 1usize) - tm) * (f64(i + 1usize) - tm) * q1[i]
+        i += 1usize
+    }
+    var s2 = 0.0f64
+    i = 0usize
+    while i < n {
+        q2[i] = (f64(i + 1usize) - tm) * (f64(i + 1usize) - tm) - mt2 - dq * q1[i]
+        s2 += q2[i] * q2[i]
+        i += 1usize
+    }
+    s2 = math.sqrt[f64](s2)
+    var c1 = 0.0f64
+    var c2 = 0.0f64
+    i = 0usize
+    while i < n {
+        c1 += trend0[i] * q1[i]
+        c2 += trend0[i] * (q2[i] / s2)
+        i += 1usize
+    }
+    out[4usize] = c1
+    out[5usize] = c2
+    var me = 1usize
+    if seasonal { me = m }
+    var af: [7]f64 = zero
+    let e = acf_features(a, rem, me, af[0usize..7usize])
+    if e != ok { ret e }
+    out[6usize] = af[0usize]
+    out[7usize] = af[1usize]
+    if seasonal {
+        let (rs, e10) = mem.alloc[f64](a, n)
+        if e10 != ok { ret e10 }
+        var pk = 0usize
+        var th = 0usize
+        i = 0usize
+        while i < n {
+            rs[i] = rem[i] + seas[i]
+            if seas[i] > seas[pk] { pk = i }
+            if seas[i] < seas[th] { th = i }
+            i += 1usize
+        }
+        out[8usize] = clamp01(1.0f64 - vare / var_of(rs))
+        var p1 = (pk + 1usize) % m
+        if p1 == 0usize { p1 = m }
+        var p2 = (th + 1usize) % m
+        if p2 == 0usize { p2 = m }
+        out[9usize] = f64(p1)
+        out[10usize] = f64(p2)
+    }
+    ret ok
 }
 
 // stats:::C_Burg: Burg's recursion on the demeaned series up to order pmax; coefs is the pmax x pmax column-major table whose row p-1 holds the order-p coefficients, var1 the recursion variances (what ar.burg uses)

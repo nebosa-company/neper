@@ -23,6 +23,8 @@ for (rep in 1:10) {
   add("kpss", a(0), unitroot_kpss(x0))
   add("pp", a(0), unitroot_pp(x0))
   add("entropy", a(0), entropy(x0)[[1]])
+  sf <- suppressWarnings(stl_features(x)); sf <- unname(c(sf[c("nperiods", "seasonal_period", "trend", "spike", "linearity", "curvature", "e_acf1", "e_acf10")], if (length(sf) > 8) sf[9:11] else c(NA, NA, NA)))
+  for (j in seq_along(sf)) add("stl", a(j - 1), sf[j])
   hu <- hurst(x0)[[1]]; add("hurst", a(0), hu)
   ar_ <- arch_stat(x0); if (is.finite(ar_)) add("arch", a(0), ar_[[1]])
 }
