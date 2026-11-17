@@ -62,7 +62,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "mardia") { ret sn.mst_mardia(x[0usize], x[1usize], x[2usize], usize(x[3usize])) }
     if str.eq(k, "zeta") { ret sn.zeta(usize(x[0usize]), x[1usize]) }
     if str.eq(k, "cumn") { ret sn.sn_cumulant(x[0usize], x[1usize], x[2usize], x[3usize], usize(x[4usize])) }
-    if str.eq(k, "dmsn") || str.eq(k, "dmst") || str.eq(k, "rmsn") || str.eq(k, "rmst") || str.eq(k, "dmsc") || str.eq(k, "rmsc") || str.eq(k, "pmsn") || str.eq(k, "pmst") {
+    if str.eq(k, "dmsn") || str.eq(k, "dmst") || str.eq(k, "rmsn") || str.eq(k, "rmst") || str.eq(k, "dmsc") || str.eq(k, "rmsc") || str.eq(k, "pmsn") || str.eq(k, "pmst") || str.eq(k, "pmsc") {
         let d = usize(x[0usize])
         let (xi, e1) = mem.alloc[f64](a, d)
         let (om, e2) = mem.alloc[f64](a, d * d)
@@ -83,6 +83,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         if str.eq(k, "dmsn") { ret sn.dmsn(a, pt, xi, om, al, x[1usize], false) }
         if str.eq(k, "dmst") { ret sn.dmst(a, pt, xi, om, al, x[1usize], false) }
+        if str.eq(k, "pmsc") { ret sn.pmsc(a, pt, xi, om, al) }
         if str.eq(k, "pmsn") { ret sn.pmsn_mv(a, pt, xi, om, al, x[1usize]) }
         if str.eq(k, "pmst") { ret sn.pmst_mv(a, pt, xi, om, al, x[1usize]) }
         if str.eq(k, "dmsc") { ret sn.dmsc(a, pt, xi, om, al, false) }

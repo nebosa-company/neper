@@ -97,7 +97,8 @@ for (rep in 1:16) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; 
     zs <- if (m == 5) c(-60, -35, 28, 70) else c(-4, -0.7, 0.4, 2.2, 6)
     for (z in zs) { x <- xi + om * z; v <- tryCatch(pst(x, xi, om, al, nu, method = m), error = function(e) NA); add(paste0("pstm", m), c(xi, om, al, nu, x), v, rel = 1e-5, abs = 1e-9) } } }
 # pmsn and pmst for d >= 2 (mnormt's own error is about 1e-6, so these are compared at 1e-4)
-for (rep in 1:20) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); tau <- c(0, 0.6, -1)[sample(3, 1)]; nu <- c(3, 6, 4.5, 7.5)[sample(4, 1)]
+for (rep in 1:24) { d <- c(2, 3, 4)[rep %% 3 + 1]; p <- mvcase(d); tau <- c(0, 0.6, -1)[sample(3, 1)]; nu <- c(3, 6, 4.5, 7.5)[sample(4, 1)]
+  if (d < 4) add("pmsc", mvpack(d, 1, 0, 0, 0, p), pmsc(p$x, p$xi, p$Om, p$al), rel = 1e-3, abs = 3e-6)
   add("pmsn", mvpack(d, tau, 0, 0, 0, p), pmsn(p$x, p$xi, p$Om, p$al, tau), rel = 1e-4, abs = 3e-6)
-  add("pmst", mvpack(d, nu, 0, 0, 0, p), suppressWarnings(pmst(p$x, p$xi, p$Om, p$al, nu)), rel = 1e-3, abs = 3e-6) }
+  if (d < 4) add("pmst", mvpack(d, nu, 0, 0, 0, p), suppressWarnings(pmst(p$x, p$xi, p$Om, p$al, nu)), rel = 1e-3, abs = 3e-6) }
 emit("sn", "sn", list(cases))

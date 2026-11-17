@@ -1901,6 +1901,9 @@ fn mv_cp2dp_st(a: *mem.Arena, mean: []const f64, sig: []const f64, g1: []const f
     ret true
 }
 
+// pmsc is pmst at nu = 1
+fn pmsc(a: *mem.Arena, x: []const f64, xi: []const f64, omg: []const f64, alpha: []const f64) -> f64 { ret pmst_mv(a, x, xi, omg, alpha, 1.0f64) }
+
 // dsc: the skew-Cauchy density
 fn dsc(x: f64, xi: f64, omega: f64, alpha: f64) -> f64 {
     let z = (x - xi) / omega
