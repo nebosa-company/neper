@@ -10,25 +10,25 @@ use e.math
 use e.mem
 
 // b_{i,k}(x), or its d-th derivative, on the extended knot vector t (k is the order); 0 / 0 counts as 0
-fn bval(t: []const f64, i: usize, k: usize, x: f64, d: usize, hi: f64) -> f64 {
+fn bval(t: []const f64, i: usize, k: usize, x: f64, d: usize, lo: f64, hi: f64) -> f64 {
     if k == 1usize {
         if d > 0usize { ret 0.0f64 }
         let l = t[i]
         let r = t[i + 1usize]
-        if r > l && ((x >= l && x < r) || (x == hi && r == hi)) { ret 1.0f64 }
+        if r > l && ((x >= l && x < r) || (x >= hi && r == hi) || (x < lo && l == lo)) { ret 1.0f64 }
         ret 0.0f64
     }
     let d1 = t[i + k - 1usize] - t[i]
     let d2 = t[i + k] - t[i + 1usize]
     if d > 0usize {
         var s = 0.0f64
-        if d1 > 0.0f64 { s += bval(t, i, k - 1usize, x, d - 1usize, hi) / d1 }
-        if d2 > 0.0f64 { s -= bval(t, i + 1usize, k - 1usize, x, d - 1usize, hi) / d2 }
+        if d1 > 0.0f64 { s += bval(t, i, k - 1usize, x, d - 1usize, lo, hi) / d1 }
+        if d2 > 0.0f64 { s -= bval(t, i + 1usize, k - 1usize, x, d - 1usize, lo, hi) / d2 }
         ret f64(k - 1usize) * s
     }
     var v = 0.0f64
-    if d1 > 0.0f64 { v += (x - t[i]) / d1 * bval(t, i, k - 1usize, x, 0usize, hi) }
-    if d2 > 0.0f64 { v += (t[i + k] - x) / d2 * bval(t, i + 1usize, k - 1usize, x, 0usize, hi) }
+    if d1 > 0.0f64 { v += (x - t[i]) / d1 * bval(t, i, k - 1usize, x, 0usize, lo, hi) }
+    if d2 > 0.0f64 { v += (t[i + k] - x) / d2 * bval(t, i + 1usize, k - 1usize, x, 0usize, lo, hi) }
     ret v
 }
 
@@ -60,7 +60,7 @@ fn row(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize
         extend(t, knots, lo, hi, order + 1usize)
         var j = 0usize
         while j < n + 1usize {
-            tmp[j] = bval(t, j, order + 1usize, x, 0usize, hi)
+            tmp[j] = bval(t, j, order + 1usize, x, 0usize, lo, hi)
             j += 1usize
         }
         var c = 0usize
@@ -90,7 +90,7 @@ fn row(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize
     var o = 0usize
     var c = 0usize
     while c < n {
-        var v = bval(t, c, order, x, deriv, hi)
+        var v = bval(t, c, order, x, deriv, lo, hi)
         if kind == 1u8 {
             let w = t[c + order] - t[c]
             if w > 0.0f64 { v = v * f64(order) / w } else { v = 0.0f64 }
@@ -230,7 +230,7 @@ fn cspline_raw(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degre
     let nb = t.len - (p + 2usize)
     var m = 0usize
     while m < nb {
-        tmp[m] = bval(t, m, p + 2usize, x, 0usize, hi)
+        tmp[m] = bval(t, m, p + 2usize, x, 0usize, lo, hi)
         m += 1usize
     }
     // suffix sums S_j = sum_{m >= j} B_m
@@ -312,7 +312,7 @@ fn periodic_row(t: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize, i
     let nf = nk + 1usize + degree
     var f = 0usize
     while f < nf {
-        var v = bval(t, f, order, xm, deriv, hi + per + 1.0f64)
+        var v = bval(t, f, order, xm, deriv, 0.0f64 - 1.0e300f64, hi + per + 1.0f64)
         if kind == 1u8 {
             let w = t[f + order] - t[f]
             if w > 0.0f64 { v = v * f64(order) / w } else { v = 0.0f64 }
@@ -469,4 +469,42 @@ fn nsk_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi:
         cidx += 1usize
     }
     ret o
+}
+
+// the internal knots splines2 and splines::bs place when `df` is given instead of knots: df - degree - 1 + (1 - intercept) of them at the equally spaced probabilities of the sorted x inside the boundary, as R's quantile of type 7; `xs` is sorted in place, the knots go to out, their count is answered
+fn df_knots(xs: []f64, lo: f64, hi: f64, df: usize, degree: usize, intercept: bool, out: []f64) -> usize {
+    var nin = 0usize
+    var i = 0usize
+    while i < xs.len {
+        if xs[i] >= lo && xs[i] <= hi {
+            xs[nin] = xs[i]
+            nin += 1usize
+        }
+        i += 1usize
+    }
+    i = 1usize
+    while i < nin {
+        let t = xs[i]
+        var j = i
+        while j > 0usize && xs[j - 1usize] > t {
+            xs[j] = xs[j - 1usize]
+            j -= 1usize
+        }
+        xs[j] = t
+        i += 1usize
+    }
+    var nik = df + 1usize - (degree + 1usize)
+    if intercept { nik = df - (degree + 1usize) }
+    var q = 0usize
+    while q < nik {
+        let p = f64(q + 1usize) / f64(nik + 1usize)
+        let h = f64(nin - 1usize) * p
+        let fl = math.floor[f64](h)
+        let k = usize(fl)
+        var v = xs[k]
+        if k + 1usize < nin && h > fl { v = xs[k] + (h - fl) * (xs[k + 1usize] - xs[k]) }
+        out[q] = v
+        q += 1usize
+    }
+    ret nik
 }

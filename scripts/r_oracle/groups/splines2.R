@@ -92,4 +92,22 @@ for (rep in 1:30) {
   x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)); if (anyDuplicated(kn)) next
   m <- unclass(nsk(x, knots = kn, intercept = icp == 1, Boundary.knots = c(lo, hi))); v <- as.vector(t(m)); a <- c(n, nk, 3, icp, lo, hi, 18, x, kn); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
 }
+# df instead of knots (kind + 100, the df in the knot-count slot): bSpline (0), mSpline (1), iSpline (2)
+for (rep in 1:40) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(8:30, 1); degree <- sample(1:4, 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); df <- degree + sample(1:4, 1) + icp
+  for (kind in 0:2) {
+    m <- tryCatch(unclass(switch(kind + 1, bSpline(x, df = df, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi)), mSpline(x, df = df, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi)), iSpline(x, df = df, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi)))), error = function(e) NULL); if (is.null(m)) next
+    v <- as.vector(t(m)); a <- c(n, df, degree, icp, lo, hi, kind + 100, x); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
+  }
+}
+# x beyond the boundary knots: bSpline (0), mSpline (1), iSpline (2), derivs 1 of bSpline (3)
+for (rep in 1:40) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(8:25, 1); degree <- sample(1:4, 1); icp <- rbinom(1, 1, 0.5); nk <- sample(0:3, 1)
+  x <- sort(round(runif(n, lo - 1, hi + 1), 4)); kn <- if (nk > 0) sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)) else numeric(0); if (anyDuplicated(kn)) next
+  for (kind in c(0, 1, 2, 3)) {
+    m <- tryCatch(suppressWarnings(unclass(switch(kind + 1, bSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi)), mSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi)), iSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi)), bSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = 1)))), error = function(e) NULL); if (is.null(m)) next
+    v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, kind, x, kn); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
+  }
+}
 emit("splines2", "splines2", list(cases))

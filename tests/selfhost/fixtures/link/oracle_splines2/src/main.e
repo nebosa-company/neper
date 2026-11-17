@@ -12,14 +12,33 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let n = usize(z[0usize])
-    let nk = usize(z[1usize])
+    let nk0 = usize(z[1usize])
     let degree = usize(z[2usize])
     let icp = z[3usize] != 0.0f64
     let lo = z[4usize]
     let hi = z[5usize]
-    let kind = usize(z[6usize])
+    let kraw = usize(z[6usize])
+    let kind = kraw % 100usize
     let xs = z[7usize..7usize + n]
-    let knots = z[7usize + n..7usize + n + nk]
+    let (kbuf, ek) = mem.alloc[f64](a, nk0 + n + 4usize)
+    let (xsort, ex) = mem.alloc[f64](a, n)
+    if ek != ok || ex != ok { ret 0.0f64 / 0.0f64 }
+    var nk = nk0
+    if kraw >= 100usize {
+        var q0 = 0usize
+        while q0 < n {
+            xsort[q0] = xs[q0]
+            q0 += 1usize
+        }
+        nk = sp.df_knots(xsort, lo, hi, nk0, degree, icp, kbuf)
+    } else {
+        var q1 = 0usize
+        while q1 < nk0 {
+            kbuf[q1] = z[7usize + n + q1]
+            q1 += 1usize
+        }
+    }
+    let knots = kbuf[0usize..nk]
     let width = nk + degree + 1usize
     let (t, e1) = mem.alloc[f64](a, nk + 2usize * (degree + 2usize))
     let (tmp, e2) = mem.alloc[f64](a, 2usize * width + 4usize)
