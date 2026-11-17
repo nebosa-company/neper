@@ -68,6 +68,11 @@ fn default_prior(x: []const f64, n: usize, p: usize, g: usize, model: usize, pmu
 
 // the M step with the prior (shrk, pmu, pscale, pdof) from z: pro (g), mu (p by g), sigma (g stacked p by p)
 fn mstep_prior(a: *mem.Arena, model: usize, x: []const f64, z: []const f64, n: usize, p: usize, g: usize, shrk: f64, pmu: []const f64, pscale: []const f64, pdof: f64, pro: []f64, mu: []f64, sigma: []f64) -> err {
+    ret mstep_prior_x(a, false, model, x, z, n, p, g, shrk, pmu, pscale, pdof, pro, mu, sigma)
+}
+
+// as_me: the EM step of mclust (meeiip), whose EII scatter is about the unshrunk mean; the standalone M step (mseiip) shrinks the mean first
+fn mstep_prior_x(a: *mem.Arena, as_me: bool, model: usize, x: []const f64, z: []const f64, n: usize, p: usize, g: usize, shrk: f64, pmu: []const f64, pscale: []const f64, pdof: f64, pro: []f64, mu: []f64, sigma: []f64) -> err {
     if p2.handles(model) { ret p2.mstep_prior2(a, model, x, z, n, p, g, shrk, pmu, pscale, pdof, pro, mu, sigma) }
     let (sumz, e1) = mem.alloc[f64](a, g)
     let (u, e2) = mem.alloc[f64](a, g * p * p)
@@ -135,6 +140,14 @@ fn mstep_prior(a: *mem.Arena, model: usize, x: []const f64, z: []const f64, n: u
                 let d2 = mu[k * p + j] - pmu[j]
                 tr += ck * d2 * d2
                 j += 1usize
+            }
+            if as_me {
+                tr = 0.0f64
+                var j2 = 0usize
+                while j2 < p {
+                    tr += u[k * p * p + j2 * p + j2]
+                    j2 += 1usize
+                }
             }
             eii += tr
         }
@@ -208,7 +221,7 @@ fn me_prior(a: *mem.Arena, model: usize, x: []const f64, z: []f64, n: usize, p: 
     while true {
         iter += 1usize
         let it0 = mem.mark(a)
-        if mstep_prior(a, model, x, z, n, p, g, shrk, pmu, pscale, pdof, pro, mu, sigma) != ok { ret 0.0f64 / 0.0f64 }
+        if mstep_prior_x(a, true, model, x, z, n, p, g, shrk, pmu, pscale, pdof, pro, mu, sigma) != ok { ret 0.0f64 / 0.0f64 }
         let hood = em.estep_gen(a, x, n, p, g, mu, sigma, pro, z)
         mem.reset(a, it0)
         if hood != hood { ret hood }
