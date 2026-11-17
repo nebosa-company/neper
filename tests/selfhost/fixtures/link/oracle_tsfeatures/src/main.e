@@ -45,6 +45,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(nm, "trev") { ret tf.trev_num(s) }
     if str.eq(nm, "walker") { ret tf.walker_propcross(s) }
     if str.eq(nm, "motif") { ret tf.motiftwo_entro3(s) }
+    if str.eq(nm, "entropy") { ret tf.entropy(a, s) }
     if str.eq(nm, "pp") { ret tf.unitroot_pp(a, s) }
     if str.eq(nm, "hurst") { ret tf.hurst(a, s) }
     if str.eq(nm, "arch") { ret tf.arch_stat(a, s, 12usize, true) }

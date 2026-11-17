@@ -633,3 +633,127 @@ fn histogram_mode(a: *mem.Arena, x: []const f64, num_bins: usize) -> f64 {
     }
     ret (br[best] + br[best + 1usize]) / 2.0f64
 }
+
+// stats:::C_Burg: Burg's recursion on the demeaned series up to order pmax; coefs is the pmax x pmax column-major table whose row p-1 holds the order-p coefficients, var1 the recursion variances (what ar.burg uses)
+fn burg(a: *mem.Arena, x: []const f64, pmax: usize, coefs: []f64, var1: []f64) -> err {
+    let n = x.len
+    let (u, e1) = mem.alloc[f64](a, n)
+    let (v, e2) = mem.alloc[f64](a, n)
+    let (u0, e3) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    var i = 0usize
+    while i < pmax * pmax {
+        coefs[i] = 0.0f64
+        i += 1usize
+    }
+    var sum = 0.0f64
+    var t = 0usize
+    while t < n {
+        u[t] = x[n - 1usize - t]
+        v[t] = x[n - 1usize - t]
+        sum += x[t] * x[t]
+        t += 1usize
+    }
+    var1[0usize] = sum / f64(n)
+    var p = 1usize
+    while p <= pmax {
+        sum = 0.0f64
+        var d = 0.0f64
+        t = p
+        while t < n {
+            sum += v[t] * u[t - 1usize]
+            d += v[t] * v[t] + u[t - 1usize] * u[t - 1usize]
+            t += 1usize
+        }
+        let phii = 2.0f64 * sum / d
+        coefs[pmax * (p - 1usize) + (p - 1usize)] = phii
+        var j = 1usize
+        while j < p {
+            coefs[p - 1usize + pmax * (j - 1usize)] = coefs[p - 2usize + pmax * (j - 1usize)] - phii * coefs[p - 2usize + pmax * (p - j - 1usize)]
+            j += 1usize
+        }
+        t = 0usize
+        while t < n {
+            u0[t] = u[t]
+            t += 1usize
+        }
+        t = p
+        while t < n {
+            u[t] = u0[t - 1usize] - phii * v[t]
+            v[t] = v[t] - phii * u0[t - 1usize]
+            t += 1usize
+        }
+        var1[p] = var1[p - 1usize] * (1.0f64 - phii * phii)
+        p += 1usize
+    }
+    ret ok
+}
+
+// the AR spectrum fx of entropy(): spec.ar(method = "burg", n.freq = ceiling(n / 2 + 1)) mirrored; order picked by AIC
+fn entropy(a: *mem.Arena, x0: []const f64) -> f64 {
+    let n = x0.len
+    var omax = usize(math.floor[f64](10.0f64 * math.log10[f64](f64(n))))
+    if omax > n - 1usize { omax = n - 1usize }
+    let mu = mean_of(x0)
+    let (x, e0) = mem.alloc[f64](a, n)
+    let (coefs, e1) = mem.alloc[f64](a, omax * omax)
+    let (var1, e2) = mem.alloc[f64](a, omax + 1usize)
+    if e0 != ok || e1 != ok || e2 != ok { ret nan() }
+    var i = 0usize
+    while i < n {
+        x[i] = x0[i] - mu
+        i += 1usize
+    }
+    if burg(a, x, omax, coefs, var1) != ok { ret nan() }
+    var order = 0usize
+    var best = f64(n) * math.log[f64](var1[0usize])
+    var p = 1usize
+    while p <= omax {
+        let aic = f64(n) * math.log[f64](var1[p]) + 2.0f64 * f64(p)
+        if aic < best {
+            best = aic
+            order = p
+        }
+        p += 1usize
+    }
+    let nf = usize(math.ceil[f64](f64(n) / 2.0f64 + 1.0f64))
+    let (spec, e3) = mem.alloc[f64](a, nf)
+    if e3 != ok { ret nan() }
+    let two_pi = 6.283185307179586f64
+    i = 0usize
+    while i < nf {
+        let fr = 0.5f64 * f64(i) / f64(nf - 1usize)
+        var cs = 0.0f64
+        var sn = 0.0f64
+        var k = 1usize
+        while k <= order {
+            let c = coefs[(order - 1usize) + omax * (k - 1usize)]
+            cs += math.cos[f64](two_pi * fr * f64(k)) * c
+            sn += math.sin[f64](two_pi * fr * f64(k)) * c
+            k += 1usize
+        }
+        spec[i] = var1[order] / ((1.0f64 - cs) * (1.0f64 - cs) + sn * sn)
+        i += 1usize
+    }
+    let len = 2usize * nf - 1usize
+    var tot = 0.0f64
+    i = 0usize
+    while i < len {
+        var s = 0.0f64
+        if i < nf - 1usize { s = spec[nf - 1usize - i] } else { s = spec[i - (nf - 1usize)] }
+        tot += s / f64(n)
+        i += 1usize
+    }
+    var h = 0.0f64
+    i = 0usize
+    while i < len {
+        var s = 0.0f64
+        if i < nf - 1usize { s = spec[nf - 1usize - i] } else { s = spec[i - (nf - 1usize)] }
+        let fx = 0.999f64 * (s / f64(n) / tot) + 0.001f64 / f64(len)
+        h -= fx * (math.log[f64](fx) / math.log[f64](f64(n)))
+        i += 1usize
+    }
+    ret math.min[f64](1.0f64, h)
+}
