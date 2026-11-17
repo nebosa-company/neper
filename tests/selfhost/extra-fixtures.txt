@@ -391,3 +391,4 @@ oracle_dharma2
 oracle_biasedurn_mv
 oracle_biasedurn_rand
 oracle_seriation
+oracle_lapack_exact
