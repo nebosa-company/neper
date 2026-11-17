@@ -3864,4 +3864,5 @@ D7001	479	imputeTS na_interpolation stine
 D7002	651	imputeTS na_seadec, na_seasplit and statsNA
 D7003	654	geepack GEE for the binomial and poisson families and AR(1)
 D7004	716	extraDistr truncated binomial, truncated Poisson and logarithmic series generators
-D7005	451	sn cp2dp for the skew-normal
+D7005	453	sn cp2dp for the skew-normal
+D7006	656	extraDistr generators through the R gamma, t, normal and beta generators

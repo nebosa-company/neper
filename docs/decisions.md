@@ -48523,3 +48523,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D7005 — sn cp2dp for the skew-normal
 
 `cp2dp_sn(mean, sd, skewness, which)`: with c = 2 skew / (4 - pi) and g = cbrt(c), mu_z = g / sqrt(1 + g^2), delta = mu_z / sqrt(2/pi), omega = sd / sqrt(1 - mu_z^2), xi = mean - omega mu_z, alpha = delta / sqrt(1 - delta^2); NaN beyond the skewness limit 0.99527. Equal to `cp2dp(c(mean, sd, skew), "SN")` on 30 settings (oracle_sn). The skew-t inverse needs a numeric solve and is not here. Linux pending.
+
+
+## D7006 — extraDistr generators through the R gamma, t, normal and beta generators
+
+`rgen6`: inverse gamma 1 / rgamma(alpha, rate beta); inverse chi-squared 1 / rgamma(nu/2, rate nu tau / 2); location-scale t mu + sigma rt; half-t |sigma rt|; fatigue mu + beta (h + sqrt(h^2 + 1))^2 with h = alpha z / 2 for one normal z; non-standard beta min + (max - min) rbeta. Found by trying each package generator against the composition of base R generators. Equal to extraDistr on 36 settings of 5 draws (oracle_extradistr). The beta-prime, triangular, truncated normal, Maxwell, discrete Laplace and zero-inflated generators are not reproduced. Linux pending.
