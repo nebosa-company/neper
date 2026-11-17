@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R mumin_dredge`; the argument layout is at the top of scripts/r_oracle/groups/mumin_dredge.R.
 
 use e.algo.stat.mumin_dredge as md
+use e.algo.stat.lmerpkg as lm4
 use e.algo.stat.mumin_fit as mf
 use e.io
 use e.mem
@@ -260,6 +261,40 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "z_sx") { ret ws(sc[0usize..1usize]) }
         if str.eq(k, "z_cz") { ret ws(ce[1usize..2usize]) }
         ret ws(sc[1usize..2usize])
+    }
+    if str.eq(k, "lmer_r2m") || str.eq(k, "lmer_r2c") {
+        let n = usize(x[0usize])
+        let p = usize(x[1usize])
+        let ng = usize(x[2usize])
+        let (gi, ge) = mem.alloc[usize](a, n + 1usize)
+        if ge != ok { os.exit(30) }
+        var i = 0usize
+        while i < n {
+            gi[i] = usize(x[3usize + n * p + i])
+            i += 1usize
+        }
+        let beta = al(a, p)
+        let ranef = al(a, ng)
+        let out = al(a, 8usize)
+        let xm = x[3usize..3usize + n * p]
+        if lm4.lmer_ri(a, xm, x[3usize + n * p + n..3usize + n * p + 2usize * n], gi[0usize..n], n, p, ng, true, beta, ranef, out) != ok { os.exit(31) }
+        let fit = al(a, n)
+        i = 0usize
+        while i < n {
+            var s = 0.0f64
+            var j = 0usize
+            while j < p {
+                s += xm[j * n + i] * beta[j]
+                j += 1usize
+            }
+            fit[i] = s
+            i += 1usize
+        }
+        let v = mf.sample_var_of(fit)
+        let rr = al(a, 2usize)
+        let _ = mf.r2glmm(0u8, 0u8, v, out[3usize] * out[3usize], out[2usize] * out[2usize], 0.0f64, 0.0f64, 1.0f64, 1.0f64, rr)
+        if str.eq(k, "lmer_r2m") { ret rr[0usize] }
+        ret rr[1usize]
     }
     if str.eq(k, "qic") || str.eq(k, "qicu") {
         let p = usize(x[0usize])

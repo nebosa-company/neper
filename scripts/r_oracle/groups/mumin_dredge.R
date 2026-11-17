@@ -161,4 +161,14 @@ for (rep in 1:12) {
     add("qic", a, q[1]); add("qicu", a, q[2])
   }
 }
+# r.squaredGLMM of a random-intercept lmer (REML): args (n, p, ng, X[n p], group codes 0-based[n], y[n]); lme4's optimiser is the limit (tolerance 1e-3)
+suppressMessages(library(lme4))
+for (rep in 1:8) {
+  ng <- sample(6:12, 1); per <- sample(4:8, ng, TRUE); n <- sum(per); g <- rep(seq_len(ng) - 1, per); p <- sample(2:3, 1)
+  X <- cbind(1, matrix(rnorm(n * (p - 1)), n, p - 1)); b <- rnorm(ng, 0, runif(1, 0.5, 1.5)); y <- as.vector(X %*% rnorm(p)) + b[g + 1] + rnorm(n)
+  d <- data.frame(y = y, g = factor(g)); for (j in seq_len(p - 1)) d[[paste0("x", j)]] <- X[, j + 1]
+  m <- suppressWarnings(suppressMessages(lmer(as.formula(paste("y ~", paste0("x", seq_len(p - 1), collapse = " + "), "+ (1 | g)")), d)))
+  r2 <- r.squaredGLMM(m); a <- c(n, p, ng, as.vector(X), g, y)
+  for (w in c("lmer_r2m", "lmer_r2c")) cases[[length(cases) + 1]] <- case(w, a, if (w == "lmer_r2m") r2[1, 1] else r2[1, 2], rel = 1e-3, abs = 1e-5)
+}
 flush("mumin_dredge3")
