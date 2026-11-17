@@ -170,7 +170,7 @@ fn cov_of(x: []const f64, y: []const f64) -> f64 {
 // gelman.diag(chains, confidence, autoburnin = TRUE) for one variable: chains is nchain by niter row-major, niter even; the first half is dropped; returns the point estimate and upper bound of the potential scale reduction factor
 fn gelman_psrf(a: *mem.Arena, chains: []const f64, nchain: usize, niter0: usize, confidence: f64) -> (f64, f64) {
     let nan = 0.0f64 / 0.0f64
-    let half = niter0 / 2usize
+    let half = niter0 - niter0 / 2usize
     let niter = niter0 - half
     let (s2, e1) = mem.alloc[f64](a, nchain)
     let (xb, e2) = mem.alloc[f64](a, nchain)
