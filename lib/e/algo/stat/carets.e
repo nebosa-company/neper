@@ -11,6 +11,7 @@ use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.algo.rand.r as rng
 use e.mem
+use e.algo.stat.fdrtool as fd
 use e.algo.stat.mass as ms
 
 type Conf = struct { accuracy: f64, kappa: f64, lower: f64, upper: f64, nir: f64, pvalue: f64, mcnemar: f64, sens: f64, spec: f64, ppv: f64, npv: f64, f1: f64, prevalence: f64, detection_rate: f64, detection_prevalence: f64, balanced: f64 }
@@ -355,6 +356,21 @@ fn pp_mean(v: []const f64) -> f64 {
     ret m + (t + comp) / n
 }
 
+fn pp_var(v: []const f64) -> f64 {
+    let m = pp_mean(v)
+    var t = 0.0f64
+    var comp = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        let d = (v[i] - m) * (v[i] - m)
+        let u = t + d
+        if math.abs[f64](t) >= math.abs[f64](d) { comp += (t - u) + d } else { comp += (d - u) + t }
+        t = u
+        i += 1usize
+    }
+    ret (t + comp) / f64(v.len - 1usize)
+}
+
 fn pp_sd(v: []const f64) -> f64 {
     let m = pp_mean(v)
     var t = 0.0f64
@@ -548,4 +564,60 @@ fn box_cox_apply(x: f64, lambda: f64) -> f64 {
     if lambda < 0.2f64 && lambda > 0.0f64 - 0.2f64 { ret math.log[f64](x) }
     if lambda < 1.2f64 && lambda > 0.8f64 { ret x }
     ret (math.pow[f64](x, lambda) - 1.0f64) / lambda
+}
+
+// ---- preProcess YeoJohnson: recipes::estimate_yj as caret calls it (optimize of the profile log likelihood over (-3, 3), tol 1e-4, at least three distinct values) and the transform ----
+
+fn yj_value(x: f64, lambda: f64) -> f64 {
+    if x >= 0.0f64 {
+        if math.abs[f64](lambda) < 0.001f64 { ret math.log[f64](x + 1.0f64) }
+        ret (math.pow[f64](x + 1.0f64, lambda) - 1.0f64) / lambda
+    }
+    if math.abs[f64](lambda - 2.0f64) < 0.001f64 { ret 0.0f64 - math.log[f64](0.0f64 - x + 1.0f64) }
+    ret 0.0f64 - (math.pow[f64](0.0f64 - x + 1.0f64, 2.0f64 - lambda) - 1.0f64) / (2.0f64 - lambda)
+}
+
+type Yj = struct { dat: []const f64, tmp: []f64, cst: f64 }
+
+fn yj_negll(c: *Yj, lam: f64) -> f64 {
+    let n = c.dat.len
+    var i = 0usize
+    while i < n {
+        c.tmp[i] = yj_value(c.dat[i], lam)
+        i += 1usize
+    }
+    let vt = pp_var(c.tmp[0usize..n]) * f64(n - 1usize) / f64(n)
+    ret 0.0f64 - (0.0f64 - 0.5f64 * f64(n) * math.log[f64](vt) + (lam - 1.0f64) * c.cst)
+}
+
+// the lambda recipes::estimate_yj finds for the sample dat, NaN when it has fewer than three distinct values or lands within 0.001 of a limit
+fn yeo_johnson_lambda(a: *mem.Arena, dat: []const f64) -> f64 {
+    let n = dat.len
+    var uniq = 0usize
+    var i = 0usize
+    while i < n {
+        var seen = false
+        var j = 0usize
+        while j < i {
+            if dat[j] == dat[i] { seen = true }
+            j += 1usize
+        }
+        if !seen { uniq += 1usize }
+        i += 1usize
+    }
+    if uniq < 3usize { ret 0.0f64 / 0.0f64 }
+    let (tmp, e) = mem.alloc[f64](a, n)
+    let (cs, e2) = mem.alloc[f64](a, n)
+    if e != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i < n {
+        var sg = 0.0f64
+        if dat[i] > 0.0f64 { sg = 1.0f64 } else if dat[i] < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+        cs[i] = sg * math.log[f64](math.abs[f64](dat[i]) + 1.0f64)
+        i += 1usize
+    }
+    var ctx = Yj{ dat: dat, tmp: tmp, cst: pp_sum(cs) }
+    let lam = fd.brent_min_tol[Yj](&ctx, yj_negll, 0.0f64 - 3.0f64, 3.0f64, 1.0e-4f64)
+    if math.abs[f64](0.0f64 - 3.0f64 - lam) <= 0.001f64 || math.abs[f64](3.0f64 - lam) <= 0.001f64 { ret 0.0f64 / 0.0f64 }
+    ret lam
 }

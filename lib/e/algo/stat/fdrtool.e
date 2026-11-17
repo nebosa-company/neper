@@ -354,8 +354,12 @@ fn stat_iqr(stat: u8, p: f64) -> f64 {
 
 // R's optimize() (Brent_fmin) of f over (lo, hi), tol = eps^0.25
 fn brent_min[C: type](ctx: *C, f: fn(*C, f64) -> f64, lo: f64, hi: f64) -> f64 {
+    ret brent_min_tol[C](ctx, f, lo, hi, math.sqrt[f64](math.sqrt[f64](2.220446049250313e-16f64)))
+}
+
+// the same with the tolerance given (optimize(tol = ))
+fn brent_min_tol[C: type](ctx: *C, f: fn(*C, f64) -> f64, lo: f64, hi: f64, tol: f64) -> f64 {
     let c = (3.0f64 - math.sqrt[f64](5.0f64)) * 0.5f64
-    let tol = math.sqrt[f64](math.sqrt[f64](2.220446049250313e-16f64))
     let eps = math.sqrt[f64](2.220446049250313e-16f64)
     var a = lo
     var b = hi

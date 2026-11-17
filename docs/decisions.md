@@ -47754,3 +47754,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6821 — statmod: one-sided power.fisher.test
 
 **Decision.** `gaussq.power_fisher_alt(..., alt)` is `power.fisher.test` with `alternative` "greater" (the upper hypergeometric tail of the first cell, `phyper(y1 - 1, n1, n2, y1 + y2, lower = FALSE)`) or "less" (`phyper(y1, ...)`), after the same two vectors of binomial draws; `power_fisher_test` is its two-sided case. Equal to statmod on 30 draws of each (oracle_gaussq). Not here: Tweedie and default (deviance) residuals. Linux pending.
+
+## D6822 — caret: preProcess YeoJohnson
+
+**Decision.** `carets.yeo_johnson_lambda` is the lambda caret's `preProcess(method = "YeoJohnson")` takes from `recipes::estimate_yj(limits = c(-3, 3), num_unique = 3)`: the maximiser of the profile log likelihood -n/2 log(var(y_t)(n - 1)/n) + (lambda - 1) sum(sign(y) log(|y| + 1)) by R's Brent `optimize` with tol 1e-4 (`fdrtool.brent_min_tol`, the existing Brent port with the tolerance made a parameter), NaN for fewer than three distinct values or a maximiser within 0.001 of a limit; `yj_value` is the transform (the shifted power or log on each side of zero, with the 0.001 band around lambda 0 and 2). Equal to caret on 30 draws including a three-value sample (oracle_carets). Not here: pca, knnImpute, ica, near-zero-variance filters. Linux pending.

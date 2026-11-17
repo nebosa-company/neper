@@ -3680,4 +3680,5 @@ D6817	816	bayesm: densities and the first samplers
 D6818	760	bayesm: rmultireg and runireg
 D6819	585	bayesm: runiregGibbs
 D6820	823	statmod: qresiduals
-D6821	494	statmod: one-sided power.fisher.test
+D6821	495	statmod: one-sided power.fisher.test
+D6822	802	caret: preProcess YeoJohnson

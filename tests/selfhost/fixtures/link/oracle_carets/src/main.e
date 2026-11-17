@@ -112,6 +112,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "yj") {
+        let n = usize(z[1usize])
+        let ys = z[2usize..2usize + n]
+        let lam = ct.yeo_johnson_lambda(a, ys)
+        if z[0usize] == 0.0f64 {
+            if lam != lam { ret 0.0f64 - 99.0f64 }
+            ret lam
+        }
+        var s = 0.0f64
+        var q = 0usize
+        while q < n {
+            var v = ys[q]
+            if lam == lam { v = ct.yj_value(ys[q], lam) }
+            s += f64(q + 1usize) * v
+            q += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "ts") {
         let (o, e) = mem.alloc[i64](a, 400usize)
         if e != ok { ret nan }

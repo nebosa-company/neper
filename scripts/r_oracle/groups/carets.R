@@ -65,4 +65,10 @@ for (rep in 1:30) {
   bt <- BoxCoxTrans(y); lam <- if (is.na(bt$lambda)) -99 else bt$lambda; add("bc", c(0, n, y), lam, 1e-12)
   add("bc", c(1, n, y), sum(seq_len(n) * predict(bt, y)), 1e-10)
 }
+# YeoJohnson: "yj" (id, n, y[n]) id 0 lambda (-99 for NA) 1 sum(position * transformed)
+for (rep in 1:30) {
+  n <- sample(8:60, 1); y <- switch(rep %% 4 + 1, rnorm(n, 1, 2), rexp(n) - 0.5, rgamma(n, 2) - 1, rt(n, 3) * 2); if (rep == 30) y <- rep(1:3, length.out = n)
+  d <- data.frame(v = y); pr <- suppressWarnings(preProcess(d, method = "YeoJohnson")); lam <- if (is.null(pr$yj)) NA else unname(pr$yj["v"]); add("yj", c(0, n, y), if (is.null(lam) || is.na(lam)) -99 else lam, 1e-9)
+  add("yj", c(1, n, y), sum(seq_len(n) * predict(pr, d)$v), 1e-9)
+}
 emit("carets", "caret", list(cases))
