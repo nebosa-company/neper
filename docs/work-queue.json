@@ -48,17 +48,6 @@
       "evidence": "Partly done (D6096): e.algo.stat.hoslem (hoslem.test with observed and expected tables) equals ResourceSelection on 1128 values on Windows (oracle_hoslem); Linux pending. D6810: wrsi and CAIC equal the package (1950 values in all). Open: rsf, rspf, mep, kdepairs, simulateUsedAvail. Original: Open (CRAN rank 981). Small. Acceptance, equal to ResourceSelection under set.seed: hoslem.test with its g groups and expected tables, kfold, and the resource-selection function fits."
     },
     {
-      "id": "L327",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 597,
-      "title": "statmod: Tweedie and inverse Gaussian, Gauss quadrature",
-      "score": 0.99,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6086): e.algo.stat.gaussq has gauss.quad (six kinds) and gauss.quad.prob (six distributions), equal to statmod on 1536 values on Windows (oracle_gaussq); Linux pending. D6801: dinvgauss, pinvgauss (lower, upper, log) and seeded rinvgauss equal statmod on 365 values. D6802: permp (exact and approximate) equals statmod on 30 values. Note: dtweedie, ptweedie, qtweedie and rtweedie are tweedie-package functions, not statmod ones. D6803: power.fisher.test (two-sided, seeded) equals statmod on 30 values. D6811: qinvgauss equals statmod on 240 values. D6820: qresiduals (binomial, Poisson, gamma, inverse Gaussian, negative binomial) equals statmod given fitted values. D6821: the one-sided power.fisher.test equals statmod. D6957: the statmod tweedie family object (unit deviance, variance, power link, its inverse and derivative) equals statmod. D6958 to D6960: dtweedie, ptweedie, the seeded rtweedie and qtweedie for 1 < power < 2, and the saddlepoint density for any power, equal the tweedie package. Open: the series for powers above 2 (Fourier inversion) and at or below 1, powers outside (1, 2), which are tweedie-package and not statmod functions.  Original: Open (CRAN rank 218). Small to mid. Acceptance, equal to statmod: dtweedie, ptweedie, qtweedie, rtweedie (series and saddlepoint), dinvgauss, pinvgauss, qinvgauss, rinvgauss, gauss.quad and gauss.quad.prob for every kind, qresiduals, power.fisher.test."
-    },
-    {
       "id": "L328",
       "category": "library",
       "group": "CRAN parity",
@@ -5238,6 +5227,17 @@
       "model": "opus",
       "thinking": "xhigh",
       "evidence": "DEFERRED to the back of the backlog by the user: ask the user whether it is still relevant before starting it. Open; largest gap (about 42k lines upstream). Needs L264. Acceptance: variables, nesting, mixins, functions, extend, maps, control directives, imports and the built-in function library compile to the same CSS as sass::sass for the libsass spec suite subset, in nested, expanded and compressed output styles."
+    },
+    {
+      "id": "L518",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 830,
+      "title": "tweedie: powers above 2 and the series beyond statmod",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Split from L327, which met its statmod acceptance (D6086, D6801-D6803, D6811, D6820, D6821, D6957) and the tweedie package for 1 < power < 2 (D6958-D6960). Acceptance, equal to tweedie: dtweedie, ptweedie, qtweedie and rtweedie for power above 2 (Fourier inversion, stable distributions), power 1 and 2 edge cases, the series and inversion methods with their tolerances."
     }
   ]
 }
