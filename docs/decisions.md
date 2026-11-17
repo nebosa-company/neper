@@ -48453,3 +48453,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6991 — sn skew-t cumulants
 
 `st_cumulant(xi, omega, alpha, nu, k)` for k = 1 to 4 from the package formulas (s_k = 1/(1 - k/nu), b(nu) = sqrt(nu/pi) Gamma((nu-1)/2)/Gamma(nu/2)), the skew-normal at nu = Inf, NaN where the moment does not exist and the infinite values at nu = 3 and 4. Equal to `st.cumulants` on 20 settings (oracle_sn). The cp/dp conversions built on them, pst and qst are not here. Linux pending.
+
+
+## D6992 — sn dp2cp
+
+`dp2cp(xi, omega, alpha, nu, which)`: the proper centred parametrisation from the cumulants of D6991 (mean, sd, k3 / k2^1.5, k4 / k2^2). Equal to `dp2cp(..., "ST")` and `dp2cp(..., "SN")` on 20 settings (oracle_sn). The inverse `cp2dp` and the multivariate and ESN families are not here. Linux pending.

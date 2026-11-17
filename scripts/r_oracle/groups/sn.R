@@ -26,4 +26,7 @@ for (rep in 1:20) {
 # st.cumulants "cum" (xi, omega, alpha, nu, k)
 for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, -0.5, 0, 1, 4)[sample(5, 1)]; nu <- c(5.5, 7, 12, 40, Inf)[(rep - 1) %% 5 + 1]
   cm <- st.cumulants(xi, om, al, nu); for (k in 1:4) add("cum", c(xi, om, al, nu, k), unname(cm[k])) }
+# dp2cp proper "cp" (xi, omega, alpha, nu, which 0 mean 1 sd 2 skewness 3 kurtosis)
+for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, -0.5, 1, 4)[sample(4, 1)]; nu <- c(5.5, 7, 12, 40, Inf)[(rep - 1) %% 5 + 1]
+  cp <- if (is.finite(nu)) dp2cp(c(xi, om, al, nu), "ST") else dp2cp(c(xi, om, al), "SN"); for (w in seq_along(cp)) add("cp", c(xi, om, al, nu, w - 1), unname(cp[w])) }
 emit("sn", "sn", list(cases))

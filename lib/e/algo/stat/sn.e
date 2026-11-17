@@ -191,3 +191,12 @@ fn st_cumulant(xi: f64, omega: f64, alpha: f64, nu: f64, k: usize) -> f64 {
     let c2 = s2 - mu * mu
     ret omega * omega * omega * omega * ((3.0f64 * s2 * s4 - 4.0f64 * mu * mu * (3.0f64 - delta * delta) * s3 + 6.0f64 * mu * mu * s2 - 3.0f64 * mu * mu * mu * mu) - 3.0f64 * c2 * c2)
 }
+
+// dp2cp(c(xi, omega, alpha, nu)) of the proper type: which 0 the mean, 1 the standard deviation, 2 the skewness, 3 the excess kurtosis (NaN where the moment is missing); nu = Inf for the skew-normal
+fn dp2cp(xi: f64, omega: f64, alpha: f64, nu: f64, which: usize) -> f64 {
+    let k2 = st_cumulant(xi, omega, alpha, nu, 2usize)
+    if which == 0usize { ret st_cumulant(xi, omega, alpha, nu, 1usize) }
+    if which == 1usize { ret math.sqrt[f64](k2) }
+    if which == 2usize { ret st_cumulant(xi, omega, alpha, nu, 3usize) / (k2 * math.sqrt[f64](k2)) }
+    ret st_cumulant(xi, omega, alpha, nu, 4usize) / (k2 * k2)
+}
