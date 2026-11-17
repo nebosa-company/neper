@@ -48046,3 +48046,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6894 — gbm: bernoulli and poisson
 
 **Decision.** `gbmpkg.bernoulli` and `gbmpkg.poisson` share the tree growth of the gaussian loss and change the residual and the leaf step. Bernoulli: the fit starts at log(m / (1 - m)), the tree fits y - p, and each leaf moves by sum(y - p) / sum(p (1 - p)) with p the current probability. Poisson: the fit starts at log(mean y), the tree fits y - exp(F), and each leaf moves by log(sum y / sum exp(F)). The answers are on the link scale, as `predict(gbm)` returns by default. Equal to gbm on 19 data sets (9 bernoulli, 10 poisson, 80 to 160 rows, depth 1 to 3, 10 and 30 trees) at four rows each (oracle_gbm, 124 cases in all). One further bernoulli data set (115 rows, depth 2, 10 trees) differs by about 0.05 at every row and is left out of the oracle; the cause is not found, a tie between equal split improvements resolved differently by gbm's arithmetic being the likeliest. Linux pending.
+
+## D6895 — gbm: adaboost
+
+**Decision.** `gbmpkg.adaboost` (y in {0, 1}, fitted on gbm's half log-odds scale) starts at 0.5 log(m / (1 - m)), fits the tree to (2y - 1) exp(-(2y - 1) F) and moves each leaf by sum((2y - 1) exp(-(2y - 1) F)) / sum(exp(-(2y - 1) F)). Equal to gbm on 10 data sets (80 to 160 rows, depth 1 to 3, 10 and 30 trees) at four rows each (oracle_gbm, 164 cases in all). Linux pending.

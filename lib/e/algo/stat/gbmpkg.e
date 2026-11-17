@@ -92,6 +92,7 @@ fn boost(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p
     m = m / f64(n)
     if loss == 1usize { m = math.log[f64](m / (1.0f64 - m)) }
     if loss == 2usize { m = math.log[f64](m) }
+    if loss == 3usize { m = 0.5f64 * math.log[f64](m / (1.0f64 - m)) }
     i = 0usize
     while i < n {
         fitted[i] = m
@@ -104,6 +105,7 @@ fn boost(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p
             r[i] = y[i] - fitted[i]
             if loss == 1usize { r[i] = y[i] - 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - fitted[i])) }
             if loss == 2usize { r[i] = y[i] - math.exp[f64](fitted[i]) }
+            if loss == 3usize { r[i] = (2.0f64 * y[i] - 1.0f64) * math.exp[f64](0.0f64 - (2.0f64 * y[i] - 1.0f64) * fitted[i]) }
             leafof[i] = 0usize
             i += 1usize
         }
@@ -151,6 +153,10 @@ fn boost(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p
                 let pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - fitted[i]))
                 lsum[leafof[i]] += r[i]
                 lden[leafof[i]] += pr * (1.0f64 - pr)
+            } else if loss == 3usize {
+                let ex = math.exp[f64](0.0f64 - (2.0f64 * y[i] - 1.0f64) * fitted[i])
+                lsum[leafof[i]] += (2.0f64 * y[i] - 1.0f64) * ex
+                lden[leafof[i]] += ex
             } else {
                 lsum[leafof[i]] += y[i]
                 lden[leafof[i]] += math.exp[f64](fitted[i])
@@ -161,7 +167,7 @@ fn boost(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p
         while i < n {
             let lf = leafof[i]
             if loss == 0usize { fitted[i] += shrinkage * lsum[lf] / lcnt[lf] }
-            if loss == 1usize { fitted[i] += shrinkage * lsum[lf] / lden[lf] }
+            if loss == 1usize || loss == 3usize { fitted[i] += shrinkage * lsum[lf] / lden[lf] }
             if loss == 2usize { fitted[i] += shrinkage * math.log[f64](lsum[lf] / lden[lf]) }
             i += 1usize
         }
@@ -182,4 +188,9 @@ fn bernoulli(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
 // distribution "poisson" (fitted is on the log scale): the tree fits y - exp(F), each leaf moves by log(sum y / sum exp(F))
 fn poisson(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
     ret boost(a, 2usize, x, y, n, p, ntrees, shrinkage, depth, minobs, fitted)
+}
+
+// distribution "adaboost" (y in {0, 1}; fitted is the half log-odds scale): the tree fits (2y - 1) exp(-(2y - 1) F), each leaf moves by sum((2y - 1) exp(-(2y - 1) F)) / sum(exp(-(2y - 1) F)), the start is half the log odds
+fn adaboost(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
+    ret boost(a, 3usize, x, y, n, p, ntrees, shrinkage, depth, minobs, fitted)
 }
