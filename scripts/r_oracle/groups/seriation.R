@@ -50,4 +50,10 @@ for (rep in 1:40) {
   n <- sample(5:20, 1); X <- matrix(rnorm(n * 2), n, 2); d <- dist(X); Dm <- as.matrix(d); o <- as.integer(get_order(seriate(d, "VAT")))
   for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("vt", c(n, rowm(Dm), i - 1), o[i], rel = 0, abs = 0)
 }
+# seriate(d, "GW_single" / "GW_average" / "GW_ward"): "gm" (n, hclust method code 2 single 4 average 8 ward.D2, D row-major, idx)
+for (rep in 1:45) {
+  n <- sample(5:25, 1); x <- matrix(round(runif(n * 3), 3), n, 3); d <- dist(x); Dm <- as.matrix(d); mi <- (rep - 1) %% 3 + 1
+  o <- as.integer(get_order(seriate(d, method = c("GW_single", "GW_average", "GW_ward")[mi]))); code <- c(2, 4, 8)[mi]
+  for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("gm", c(n, code, rowm(Dm), i - 1), o[i], rel = 0, abs = 0)
+}
 emit("seriation", "seriation", list(cases))

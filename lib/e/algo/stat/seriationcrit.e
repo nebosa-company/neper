@@ -261,8 +261,11 @@ fn stress(x: []const f64, nc0: usize, ro: []const usize, co: []const usize, neum
 
 // seriate(d, method = "GW"): gclus::reorder.hclust of the complete-linkage tree (seriation's default linkage) (Gruvaeus and Wainer): the end points of every subtree are chosen to be closest to
 // the neighbouring subtree and the merges flipped to match, the order read off from the flipped tree; d is the n by n full dissimilarity matrix, out receives the 0-based order
-fn gw_order(a: *mem.Arena, d: []const f64, n: usize, out: []usize) -> err {
-    let (tree, te) = hc.hclust(a, d, n, 3usize)
+fn gw_order(a: *mem.Arena, d: []const f64, n: usize, out: []usize) -> err { ret gw_order_m(a, d, n, 3usize, out) }
+
+// the same for the hclust linkage method code given (1 ward.D, 2 single, 3 complete, 4 average, 8 ward.D2)
+fn gw_order_m(a: *mem.Arena, d: []const f64, n: usize, method: usize, out: []usize) -> err {
+    let (tree, te) = hc.hclust(a, d, n, method)
     if te != ok { ret te }
     let nm = n - 1usize
     let (ml, e1) = mem.alloc[i32](a, nm)

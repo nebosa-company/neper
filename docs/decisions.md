@@ -47830,3 +47830,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6840 — seriation: the VAT order
 
 **Decision.** `seriationcrit.vat_order` is `seriate(d, "VAT")`: the start is the row of the first largest dissimilarity scanning the matrix column by column (the larger index of the first maximal pair), and each step appends the unvisited object with the smallest dissimilarity to the visited set, the lowest index on ties (Prim's order over the dissimilarity matrix). Equal to seriation on 40 random data sets of 5 to 20 points (oracle_seriation, every order entry). Not here: iVAT (the path-distance transform of the input), OLO, Spectral, MDS, TSP. Linux pending.
+
+## D6841 — seriation: GW with the single, average and Ward linkages
+
+**Decision.** `seriationcrit.gw_order_m(d, n, method)` is `seriate(d, "GW_single")`, `"GW_average"` and `"GW_ward"` (the complete-linkage `gw_order` is its default): the same endpoint-flipping reorder of the `hclust` tree for the given linkage code (single 2, average 4, Ward 8 which is `ward.D2`). Equal to seriation on 15 random data sets for each linkage, every order entry (oracle_seriation). Not here: OLO, Spectral, MDS, TSP and the searches. Linux pending.
