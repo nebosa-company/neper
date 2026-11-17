@@ -29,4 +29,11 @@ for (rep in 1:12) {
   set.seed(sd); r <- rinvgauss(n, mu, dispersion = phi)
   for (k in seq_len(n)) add("igr", c(n, mu, phi, sd, k - 1), r[k])
 }
+# permp: args (x, nperm, n1, n2, total.nperm or 0, method 0 auto 1 exact 2 approximate, twosided)
+for (rep in 1:80) {
+  n1 <- sample(3:9, 1); n2 <- if (rep %% 3 == 0) n1 else sample(3:9, 1); nperm <- sample(c(50, 200, 1000, 5000), 1); x <- sample(0:min(nperm, 40), 1)
+  me <- sample(0:2, 1); ts <- rep %% 2 == 0; tot <- if (rep %% 5 == 0) sample(c(300, 5000, 20000), 1) else 0
+  v <- tryCatch(permp(x, nperm, n1, n2, total.nperm = if (tot > 0) tot else NULL, method = c("auto", "exact", "approximate")[me + 1], twosided = ts), error = function(e) NA)
+  add("permp", c(x, nperm, n1, n2, tot, me, as.numeric(ts)), v)
+}
 emit("gaussq", "statmod", list(cases))

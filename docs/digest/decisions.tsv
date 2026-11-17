@@ -3660,4 +3660,5 @@ D6797	951	pROC: roc.test by Venkatraman's permutation test (paired)
 D6798	1637	pROC: the unpaired roc.test methods
 D6799	931	pracma: pinv of any rank and the other interp1 methods
 D6800	1164	R's polyroot (cpoly)
-D6801	1161	statmod: dinvgauss, pinvgauss and rinvgauss
+D6801	1162	statmod: dinvgauss, pinvgauss and rinvgauss
+D6802	1005	statmod: permp

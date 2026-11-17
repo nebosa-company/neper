@@ -10,6 +10,7 @@ use e.algo.rand.r as rng
 use e.math
 use e.math.dist as mdist
 use e.math.nmath as nm
+use e.math.nmath_beta as nb
 use e.mem
 
 fn sign_of(a: f64, b: f64) -> f64 {
@@ -340,4 +341,57 @@ fn rinvgauss(a: *mem.Arena, n: usize, mean: f64, disp: f64, seed: i64, out: []f6
         i += 1usize
     }
     ret ok
+}
+
+// ---- statmod::permp: the permutation p-value that counts the observed permutation (Phipson and Smyth 2010) ----
+
+// choose(n, k) for integers, as R computes it: the running product for k under 30 (rounded), else the rounded exponential of the log
+fn choose_r(n: f64, k0: f64) -> f64 {
+    var k = k0
+    if k > n - k { k = n - k }
+    if k < 0.5f64 { ret 1.0f64 }
+    if k < 30.0f64 {
+        var r = n
+        var j = 2.0f64
+        while j <= k {
+            r = r * ((n - j + 1.0f64) / j)
+            j += 1.0f64
+        }
+        ret math.round[f64](r)
+    }
+    ret math.round[f64](math.exp[f64](nm.lgammafn(n + 1.0f64) - nm.lgammafn(k + 1.0f64) - nm.lgammafn(n - k + 1.0f64)))
+}
+
+// permp(x, nperm, n1, n2, total.nperm, method, twosided) for one x: method 0 auto (exact up to 10000 possible permutations), 1 exact, 2 approximate; total0 <= 0 means NULL
+fn permp(a: *mem.Arena, x: f64, nperm: f64, n1: f64, n2: f64, total0: f64, method0: usize, twosided: bool) -> f64 {
+    var total = total0
+    if total <= 0.0f64 {
+        total = choose_r(n1 + n2, n1)
+        if n1 == n2 && twosided { total = total / 2.0f64 }
+    }
+    var method = method0
+    if method == 0usize {
+        if total > 10000.0f64 { method = 2usize } else { method = 1usize }
+    }
+    if method == 1usize {
+        var s = 0.0f64
+        var i = 1.0f64
+        while i <= total {
+            s += nb.pbinom(x, nperm, i / total, true, false)
+            i += 1.0f64
+        }
+        ret s / total
+    }
+    let (nodes, e1) = mem.alloc[f64](a, 128usize)
+    let (w, e2) = mem.alloc[f64](a, 128usize)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    if !gauss_quad_prob(a, 128usize, 0u8, 0.0f64, 0.5f64 / total, 0.0f64, 1.0f64, 1.0f64, 1.0f64, nodes, w) { ret 0.0f64 / 0.0f64 }
+    var cs = 0.0f64
+    var k = 0usize
+    while k < 128usize {
+        cs += w[k] * nb.pbinom(x, nperm, nodes[k], true, false)
+        k += 1usize
+    }
+    let integral = 0.5f64 / total * cs
+    ret (x + 1.0f64) / (nperm + 1.0f64) - integral
 }
