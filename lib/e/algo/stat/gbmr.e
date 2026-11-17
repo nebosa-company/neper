@@ -8,22 +8,23 @@ use e.math
 use e.mem
 use e.algo.rand.r as rng
 use e.algo.stat.gbmfit as gb
+use e.algo.stat.loessfit as lsm
 
 error BadInput
 
 type Input = struct {
     dist: usize, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, bag: f64, trainfrac: f64,
-    par: f64, maxrank: usize, cv: usize, ncores1: bool, stratify: bool, ntrain: usize, ngroups: usize,
+    par: f64, maxrank: usize, cv: usize, ncores1: bool, stratify: bool, ntrain: usize, ngroups: usize, off: []const f64, vclass: []const usize,
     x: []const f64, y: []const f64, status: []const f64, w: []const f64, group: []const f64, mono: []const f64
 }
 
 type Fitted = struct {
     sp: gb.Spec, m: gb.Model, n: usize, nclass: usize, ntrain: usize, dist: usize, trainfrac: f64,
-    fit: []f64, perm: []usize, cv_error: []f64, cv_fitted: []f64, has_cv: bool, lo: []f64, hi: []f64
+    fit: []f64, perm: []usize, cv_error: []f64, cv_fitted: []f64, has_cv: bool, lo: []f64, hi: []f64, bag: f64
 }
 
 // the response and weights of an already ordered training set, boosted: gbm.fit
-fn fit_rows(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, x: []const f64, y: []const f64, status: []const f64, wraw: []const f64, n: usize, ntrain: usize) -> (Fitted, err) {
+fn fit_rows(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, x: []const f64, y: []const f64, status: []const f64, wraw: []const f64, oraw: []const f64, n: usize, ntrain: usize) -> (Fitted, err) {
     var bad = 0usize
     var fd: Fitted = zero
     if f64(ntrain) * cf.bag <= 2.0f64 * f64(cf.minobs) + 1.0f64 { ret (fd, BadInput) }
@@ -126,6 +127,29 @@ fn fit_rows(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, x: []const f64, y: []
     }
     var yy = ys
     var ww = ws
+    var oo: []f64 = zero
+    var anyoff = false
+    if oraw.len == n {
+        i = 0usize
+        while i < n {
+            if oraw[i] != 0.0f64 { anyoff = true }
+            i += 1usize
+        }
+    }
+    if anyoff {
+        let nrep = cls_count(cf, y, n)
+        oo = gb.af(a, n * nrep, &bad)
+        if bad != 0usize { ret (fd, gb.NoMemory) }
+        var kq = 0usize
+        while kq < nrep {
+            i = 0usize
+            while i < n {
+                oo[kq * n + i] = oraw[perm[i]]
+                i += 1usize
+            }
+            kq += 1usize
+        }
+    }
     if cf.dist == 9usize {
         yy = gb.af(a, n * nclass, &bad)
         ww = gb.af(a, n * nclass, &bad)
@@ -158,7 +182,7 @@ fn fit_rows(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, x: []const f64, y: []
     if cf.dist == 5usize { alpha = cf.par }
     if cf.dist == 7usize { nu = cf.par }
     let sp = gb.Spec{ dist: cf.dist, n: n, p: cf.p, ntrain: ntrain, nclass: nclass, ntrees: cf.ntrees, shrinkage: cf.shrinkage, depth: cf.depth, minobs: cf.minobs, bag: cf.bag,
-        alpha: alpha, nu: nu, maxrank: cf.maxrank, ngroups: 0usize, x: xs, y: yy, w: ww, misc: ms, mono: mono }
+        alpha: alpha, nu: nu, maxrank: cf.maxrank, ngroups: 0usize, x: xs, y: yy, w: ww, misc: ms, mono: mono, off: oo, vclass: cf.vclass, catold: 0usize }
     let (m, fe) = gb.fit(a, &sp, rg, fd.fit)
     if fe != ok { ret (fd, fe) }
     fd.sp = sp
@@ -285,6 +309,7 @@ fn gbm_core(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
         let ys = gb.af(a, ntrain, &bad)
         let ss = gb.af(a, ntrain, &bad)
         let wsub = gb.af(a, ntrain, &bad)
+        let osub = gb.af(a, ntrain, &bad)
         let xp = gb.af(a, ntrain * cf.p, &bad)
         let pr = gb.af(a, ntrain * ncls, &bad)
         if bad != 0usize { ret (zero_fit(), gb.NoMemory) }
@@ -339,10 +364,13 @@ fn gbm_core(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
                 ys[i] = cf.y[ord[i]]
                 if cf.status.len == n { ss[i] = cf.status[ord[i]] }
                 if cf.w.len == n { wsub[i] = cf.w[ord[i]] }
+                if cf.off.len == n { osub[i] = cf.off[ord[i]] }
                 i += 1usize
             }
             var ws2: []f64 = zero
             if cf.w.len == n { ws2 = wsub }
+            var os2: []f64 = zero
+            if cf.off.len == n { os2 = osub }
             var ss2: []f64 = zero
             if cf.status.len == n { ss2 = ss }
             let seed = i64(seeds[k])
@@ -350,12 +378,12 @@ fn gbm_core(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
             var fdk: Fitted = zero
             if cf.ncores1 {
                 rng.seed(rg, seed)
-                let (r1, e1) = fit_rows(a, rg, cf, xs, ys, ss2, ws2, ntrain, nin)
+                let (r1, e1) = fit_rows(a, rg, cf, xs, ys, ss2, ws2, os2, ntrain, nin)
                 fdk = r1
                 fe = e1
             } else {
                 rng.seed(&other, seed)
-                let (r1, e1) = fit_rows(a, &other, cf, xs, ys, ss2, ws2, ntrain, nin)
+                let (r1, e1) = fit_rows(a, &other, cf, xs, ys, ss2, ws2, os2, ntrain, nin)
                 fdk = r1
                 fe = e1
             }
@@ -410,12 +438,13 @@ fn gbm_core(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
             }
         }
     }
-    let (fd, fe) = fit_rows(a, rg, cf, cf.x, cf.y, cf.status, cf.w, n, ntrain)
+    let (fd, fe) = fit_rows(a, rg, cf, cf.x, cf.y, cf.status, cf.w, cf.off, n, ntrain)
     if fe != ok { ret (fd, fe) }
     var out = fd
     out.cv_error = cverr
     out.cv_fitted = cvfit
     out.has_cv = has
+    out.bag = cf.bag
     out.lo = gb.af(a, cf.p, &bad)
     out.hi = gb.af(a, cf.p, &bad)
     if bad != 0usize { ret (out, gb.NoMemory) }
@@ -527,6 +556,7 @@ fn relative_influence(a: *mem.Arena, f: *const Fitted, use_trees: usize, out: []
 fn more(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, nnew: usize) -> (Fitted, err) {
     var sp2 = f.sp
     sp2.ntrees = nnew
+    sp2.catold = f.m.ncs
     if f.dist == 9usize {
         // gbm.more finds each row's class with max.col(), which draws one uniform for every tie it meets: a one-hot row of class k ties k - 1 zeros before it reaches its one
         var r = 0usize
@@ -614,6 +644,20 @@ fn more(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, nnew: usize) -> (Fitted, 
         i += 1usize
     }
     m.f = m2.f
+    let ncs2 = f.m.ncs + m2.ncs
+    m.cs = gb.ai(a, ncs2 * f.m.maxk + 1usize, &bad)
+    if bad != 0usize { ret (zero_fit(), gb.NoMemory) }
+    var ci = 0usize
+    while ci < f.m.ncs * f.m.maxk {
+        m.cs[ci] = f.m.cs[ci]
+        ci += 1usize
+    }
+    ci = 0usize
+    while ci < m2.ncs * f.m.maxk {
+        m.cs[f.m.ncs * f.m.maxk + ci] = m2.cs[ci]
+        ci += 1usize
+    }
+    m.ncs = ncs2
     var out = *f
     out.m = m
     out.sp = sp2
@@ -639,42 +683,55 @@ fn more(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, nnew: usize) -> (Fitted, 
 // first varying fastest, and the fit at those rows with the other variables averaged out; out holds res^nv rows by nclass
 fn plot_grid(a: *mem.Arena, f: *const Fitted, vars: []const usize, nv: usize, res: usize, use_trees: usize, out: []f64) -> err {
     var bad = 0usize
-    var rows = 1usize
+    var rows = plot_rows(f, vars, nv, res)
     var q = 0usize
+    var maxres = res
     while q < nv {
-        rows = rows * res
+        if f.m.vclass[vars[q]] > maxres { maxres = f.m.vclass[vars[q]] }
         q += 1usize
     }
     let gx = gb.af(a, rows * nv, &bad)
-    let lev = gb.af(a, res, &bad)
+    let lev = gb.af(a, maxres, &bad)
     let scr = gb.af(a, 2usize * f.m.stride + 4usize, &bad)
     if bad != 0usize { ret gb.NoMemory }
     q = 0usize
     while q < nv {
-        let from = f.lo[vars[q]]
-        let to = f.hi[vars[q]]
-        lev[0usize] = from
-        lev[res - 1usize] = to
-        let n1 = f64(res - 1usize)
-        let del = to - from
-        var k = 1usize
-        while k + 1usize < res {
-            if from == to {
-                lev[k] = from
-            } else {
-                lev[k] = from + f64(k) * (del / n1)
+        var rq = res
+        if f.m.vclass[vars[q]] > 0usize {
+            rq = f.m.vclass[vars[q]]
+            var k0 = 0usize
+            while k0 < rq {
+                lev[k0] = f64(k0)
+                k0 += 1usize
             }
-            k += 1usize
+        } else {
+            let from = f.lo[vars[q]]
+            let to = f.hi[vars[q]]
+            lev[0usize] = from
+            lev[res - 1usize] = to
+            let n1 = f64(res - 1usize)
+            let del = to - from
+            var k = 1usize
+            while k + 1usize < res {
+                if from == to {
+                    lev[k] = from
+                } else {
+                    lev[k] = from + f64(k) * (del / n1)
+                }
+                k += 1usize
+            }
         }
         var stepdiv = 1usize
         var qq = 0usize
         while qq < q {
-            stepdiv = stepdiv * res
+            var rr = res
+            if f.m.vclass[vars[qq]] > 0usize { rr = f.m.vclass[vars[qq]] }
+            stepdiv = stepdiv * rr
             qq += 1usize
         }
         var r = 0usize
         while r < rows {
-            gx[q * rows + r] = lev[(r / stepdiv) % res]
+            gx[q * rows + r] = lev[(r / stepdiv) % rq]
             r += 1usize
         }
         q += 1usize
@@ -759,12 +816,14 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
     gb.msort(key1, ord, tmp, n)
     gb.msort(key2, ord, tmp, n)
     var hw = gb.af(a, n, &bad)
+    var ho = gb.af(a, n, &bad)
     if bad != 0usize { ret (zero_fit(), gb.NoMemory) }
     i = 0usize
     while i < n {
         y2[i] = cf.y[ord[i]]
         g2[i] = rowcode[ord[i]]
         if haw { hw[i] = w2[ord[i]] }
+        if cf.off.len == n { ho[i] = cf.off[ord[i]] }
         var j = 0usize
         while j < cf.p {
             x2[j * n + i] = cf.x[j * n + ord[i]]
@@ -781,6 +840,7 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
         i += 1usize
     }
     var cf2 = *cf
+    if cf.off.len == n { cf2.off = ho }
     cf2.x = x2
     cf2.y = y2
     cf2.status = g2
@@ -825,4 +885,313 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
         out.cv_fitted = cvo
     }
     ret (out, ok)
+}
+
+// gbm.perf(method = "OOB"): the tree count where the cumulative out-of-bag improvement, smoothed by loess(oobag.improve ~ 1:n.trees, enp.target = min(max(4, n / 10), 50)), peaks
+fn best_iter_oob(a: *mem.Arena, f: *const Fitted) -> usize {
+    let nt = f.m.ntrees
+    var bad = 0usize
+    let xs = gb.af(a, nt, &bad)
+    let fit = gb.af(a, nt, &bad)
+    if bad != 0usize { ret 0usize }
+    var i = 0usize
+    while i < nt {
+        xs[i] = f64(i + 1usize)
+        i += 1usize
+    }
+    var enp = f64(nt) / 10.0f64
+    if enp < 4.0f64 { enp = 4.0f64 }
+    if enp > 50.0f64 { enp = 50.0f64 }
+    if lsm.loess_fitted(a, xs, f.m.oobag, nt, lsm.span_for_enp(enp, 2usize), 2usize, fit) != ok { ret 0usize }
+    var best = 0usize
+    var bv = 0.0f64
+    var cum = 0.0f64
+    i = 0usize
+    while i < nt {
+        cum += fit[i]
+        if i == 0usize || cum > bv {
+            bv = cum
+            best = i + 1usize
+        }
+        i += 1usize
+    }
+    ret best
+}
+
+// the number of response columns of the data: the classes of a multinomial response, else one
+fn cls_count(cf: *const Input, y: []const f64, n: usize) -> usize {
+    if cf.dist != 9usize { ret 1usize }
+    var k = 0usize
+    var i = 0usize
+    while i < n {
+        if usize(y[i]) + 1usize > k { k = usize(y[i]) + 1usize }
+        i += 1usize
+    }
+    ret k
+}
+
+// the rows of the plot.gbm grid: res points for a numeric variable, the levels for a factor
+fn plot_rows(f: *const Fitted, vars: []const usize, nv: usize, res: usize) -> usize {
+    var rows = 1usize
+    var q = 0usize
+    while q < nv {
+        if f.m.vclass[vars[q]] > 0usize {
+            rows = rows * f.m.vclass[vars[q]]
+        } else {
+            rows = rows * res
+        }
+        q += 1usize
+    }
+    ret rows
+}
+
+// weighted.mean(x, w) = sum(x w) / sum(w), R's sums in long double
+fn wmean(x: []const f64, w: []const f64, m: usize, tmp: []f64) -> f64 {
+    var i = 0usize
+    while i < m {
+        tmp[i] = x[i] * w[i]
+        i += 1usize
+    }
+    ret gb.rsum(tmp, m) / gb.rsum(w, m)
+}
+
+// interact.gbm(f, data, i.var, n.trees): Friedman's H statistic of the variables vars (the subsets of them each give a partial dependence over the distinct rows of data, centred by the row
+// counts); one value per class lands in out
+fn interact(a: *mem.Arena, f: *const Fitted, xd: []const f64, n: usize, vars: []const usize, nv: usize, use_trees: usize, out: []f64) -> err {
+    var bad = 0usize
+    let nc = f.nclass
+    let nm = (1usize << nv) - 1usize
+    // per subset (mask m, 1-based): its distinct rows
+    let zs = gb.af(a, nm * n * nv, &bad)
+    let cnt = gb.af(a, nm * n, &bad)
+    let fv = gb.af(a, nm * n * nc, &bad)
+    let nu = gb.au(a, nm + 1usize, &bad)
+    let which = gb.au(a, nv, &bad)
+    let first = gb.au(a, n, &bad)
+    let tmp = gb.af(a, n, &bad)
+    let scr = gb.af(a, 2usize * f.m.stride + 4usize, &bad)
+    let po = gb.af(a, n * nc, &bad)
+    if bad != 0usize { ret gb.NoMemory }
+    var m = 1usize
+    while m <= nm {
+        var ns = 0usize
+        var b = 0usize
+        while b < nv {
+            if (m >> b) & 1usize == 1usize {
+                which[ns] = vars[b]
+                ns += 1usize
+            }
+            b += 1usize
+        }
+        // the distinct rows over these variables, in order of first appearance
+        var u = 0usize
+        var i = 0usize
+        while i < n {
+            var found = u
+            var q = 0usize
+            while q < u {
+                var same = true
+                var c = 0usize
+                while c < ns {
+                    if xd[which[c] * n + i] != xd[which[c] * n + first[q]] { same = false }
+                    c += 1usize
+                }
+                if same {
+                    found = q
+                    break
+                }
+                q += 1usize
+            }
+            if found == u {
+                first[u] = i
+                cnt[(m - 1usize) * n + u] = 1.0f64
+                u += 1usize
+            } else {
+                cnt[(m - 1usize) * n + found] += 1.0f64
+            }
+            i += 1usize
+        }
+        nu[m] = u
+        var c = 0usize
+        while c < ns {
+            var r = 0usize
+            while r < u {
+                zs[((m - 1usize) * nv + c) * n + r] = xd[which[c] * n + first[r]]
+                r += 1usize
+            }
+            c += 1usize
+        }
+        // the grid for this subset is u rows by ns columns
+        let gx = gb.af(a, u * ns + 1usize, &bad)
+        if bad != 0usize { ret gb.NoMemory }
+        c = 0usize
+        while c < ns {
+            var r = 0usize
+            while r < u {
+                gx[c * u + r] = zs[((m - 1usize) * nv + c) * n + r]
+                r += 1usize
+            }
+            c += 1usize
+        }
+        gb.plot_values(&f.m, ns, which, gx, u, use_trees, po, scr)
+        var k = 0usize
+        while k < nc {
+            let mu = wmean(po[k * u..k * u + u], cnt[(m - 1usize) * n..(m - 1usize) * n + u], u, tmp)
+            var r = 0usize
+            while r < u {
+                fv[((m - 1usize) * nc + k) * n + r] = po[k * u + r] - mu
+                r += 1usize
+            }
+            k += 1usize
+        }
+        m += 1usize
+    }
+    // H from the full set, the lower-order partial dependences subtracted with alternating signs
+    let ul = nu[nm]
+    let hh = gb.af(a, n, &bad)
+    let sq = gb.af(a, n, &bad)
+    if bad != 0usize { ret gb.NoMemory }
+    var k = 0usize
+    while k < nc {
+        var r = 0usize
+        while r < ul {
+            hh[r] = fv[((nm - 1usize) * nc + k) * n + r]
+            r += 1usize
+        }
+        var j = 1usize
+        while j < nm {
+            // the bits of j name the variables of the subset; sign +1 when the subset size has the parity of nv
+            var sz = 0usize
+            var b = 0usize
+            var cols = gb.au(a, nv, &bad)
+            while b < nv {
+                if (j >> b) & 1usize == 1usize {
+                    cols[sz] = b
+                    sz += 1usize
+                }
+                b += 1usize
+            }
+            var sign = 1.0f64
+            if sz % 2usize != nv % 2usize { sign = 0.0f64 - 1.0f64 }
+            r = 0usize
+            while r < ul {
+                // the row of subset j matching the full row r on the subset's variables
+                var q = 0usize
+                var hit = 0usize
+                while q < nu[j] {
+                    var same = true
+                    var c = 0usize
+                    while c < sz {
+                        if zs[((j - 1usize) * nv + c) * n + q] != zs[((nm - 1usize) * nv + cols[c]) * n + r] { same = false }
+                        c += 1usize
+                    }
+                    if same {
+                        hit = q
+                        break
+                    }
+                    q += 1usize
+                }
+                hh[r] += sign * fv[((j - 1usize) * nc + k) * n + hit]
+                r += 1usize
+            }
+            j += 1usize
+        }
+        var top = 0.0f64
+        var btm = 0.0f64
+        r = 0usize
+        while r < ul {
+            sq[r] = hh[r] * hh[r]
+            r += 1usize
+        }
+        top = wmean(sq, cnt[(nm - 1usize) * n..(nm - 1usize) * n + ul], ul, tmp)
+        r = 0usize
+        while r < ul {
+            let v = fv[((nm - 1usize) * nc + k) * n + r]
+            sq[r] = v * v
+            r += 1usize
+        }
+        btm = wmean(sq, cnt[(nm - 1usize) * n..(nm - 1usize) * n + ul], ul, tmp)
+        var hv = top / btm
+        if hv > 1.0f64 {
+            hv = 0.0f64 / 0.0f64
+        }
+        out[k] = math.sqrt[f64](hv)
+        k += 1usize
+    }
+    ret ok
+}
+
+// permutation.test.gbm(f, n.trees) for the gaussian, bernoulli, poisson, adaboost and laplace losses: each variable the trees use is shuffled in turn (one sample() of the rows shared by
+// all) and the rise in the loss over the training deviance recorded
+fn permutation_test(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, use_trees: usize, out: []f64) -> err {
+    var bad = 0usize
+    let n = f.n
+    let p = f.sp.p
+    let xs = gb.af(a, n * p, &bad)
+    let pred = gb.af(a, n, &bad)
+    let tmp = gb.af(a, n, &bad)
+    if bad != 0usize { ret gb.NoMemory }
+    var i = 0usize
+    while i < n * p {
+        xs[i] = f.sp.x[i]
+        i += 1usize
+    }
+    let (jj, je) = rng.sample_int(a, rg, i64(n), i64(n), false)
+    if je != ok { ret je }
+    var v = 0usize
+    while v < p {
+        out[v] = 0.0f64
+        v += 1usize
+    }
+    v = 0usize
+    while v < p {
+        var used = false
+        var t = 0usize
+        while t < use_trees * f.nclass {
+            var q = 0usize
+            while q < f.m.nnodes[t] {
+                if f.m.tvar[t * f.m.stride + q] == i64(v) { used = true }
+                q += 1usize
+            }
+            t += 1usize
+        }
+        if used {
+            i = 0usize
+            while i < n {
+                xs[v * n + i] = f.sp.x[v * n + usize(jj[i]) - 1usize]
+                i += 1usize
+            }
+            gb.predict_link(&f.m, xs, n, use_trees, pred)
+            let d = f.dist
+            i = 0usize
+            while i < n {
+                var fx = pred[i]
+                if f.sp.off.len == n { fx = f.sp.off[i] + fx }
+                let y = f.sp.y[i]
+                if d == 0usize {
+                    tmp[i] = (y - fx) * (y - fx)
+                } else if d == 1usize {
+                    tmp[i] = y * fx - gb.logf(1.0f64 + gb.expf(fx))
+                } else if d == 2usize {
+                    tmp[i] = y * fx - gb.expf(fx)
+                } else if d == 3usize {
+                    tmp[i] = gb.expf(0.0f64 - (2.0f64 * y - 1.0f64) * fx)
+                } else {
+                    tmp[i] = math.abs[f64](y - fx)
+                }
+                i += 1usize
+            }
+            let wm = wmean(tmp, f.sp.w, n, pred)
+            var loss = wm
+            if d == 1usize || d == 2usize { loss = (0.0f64 - 2.0f64) * wm }
+            out[v] = loss - f.m.train_err[use_trees - 1usize]
+            i = 0usize
+            while i < n {
+                xs[v * n + i] = f.sp.x[v * n + i]
+                i += 1usize
+            }
+        }
+        v += 1usize
+    }
+    ret ok
 }
