@@ -1017,3 +1017,27 @@ fn aov_n(mu: []const f64, sigma: f64, alpha: f64, power: f64, n_max: f64) -> f64
     }
     ret 0.0f64 / 0.0f64
 }
+
+// ---- ciNparConfLevel and ciNparN: the confidence level of a nonparametric interval for a quantile ----
+
+// ci_type 0 two-sided, 1 lower, 2 upper; lcl is the lower rank, nu the n + 1 - upper rank (the package's n.plus.one.minus.ucl.rank)
+fn ci_npar_conf(n: f64, p: f64, lcl: f64, nu: f64, ci_type: usize) -> f64 {
+    let ucl = (n + 1.0f64) - nu
+    if ci_type == 1usize { ret 1.0f64 - nb.pbinom(lcl - 1.0f64, n, p, true, false) }
+    if ci_type == 2usize { ret nb.pbinom(ucl - 1.0f64, n, p, true, false) }
+    ret nb.pbinom(ucl - 1.0f64, n, p, true, false) - nb.pbinom(lcl - 1.0f64, n, p, true, false)
+}
+
+// ciNparN: the package minimises the squared gap over a real n from `start`, rounds up and steps back one when n - 1 already reaches the level, which is the smallest whole n from the start reaching it
+fn ci_npar_n(p: f64, lcl: f64, nu: f64, ci_type: usize, conf: f64, n_max: f64) -> f64 {
+    var start = 2.0f64
+    if ci_type == 0usize { start = math.max[f64](2.0f64, lcl + nu) }
+    var n = start
+    while n <= n_max {
+        if ci_type != 0usize || lcl < (n + 1.0f64) - nu {
+            if ci_npar_conf(n, p, lcl, nu, ci_type) >= conf { ret n }
+        }
+        n += 1.0f64
+    }
+    ret 0.0f64 / 0.0f64
+}

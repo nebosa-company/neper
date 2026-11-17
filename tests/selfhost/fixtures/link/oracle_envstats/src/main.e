@@ -36,6 +36,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let g = usize(z[3usize])
         ret es.aov_n(z[4usize..4usize + g], z[0usize], z[1usize], z[2usize], 5000.0f64)
     }
+    if str.eq(c.name, "cnc") { ret es.ci_npar_conf(z[0usize], z[1usize], z[2usize], z[3usize], usize(z[4usize])) }
+    if str.eq(c.name, "cnn") { ret es.ci_npar_n(z[0usize], z[1usize], z[2usize], usize(z[3usize]), z[4usize], 5000.0f64) }
     if str.eq(c.name, "gof") {
         let gn = usize(z[0usize])
         let (go, ge) = mem.alloc[f64](a, 3usize)

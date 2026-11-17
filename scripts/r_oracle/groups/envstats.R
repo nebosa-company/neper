@@ -151,6 +151,18 @@ for (rep in 1:600) {
   r <- tryCatch(suppressWarnings(aovN(mu, sg, a, pw)), error = function(e) NA)
   if (is.finite(r)) cases[[length(cases) + 1]] <- case("aon", c(sg, a, pw, g, mu), r, rel = 0, abs = 0)
 }
+# ciNparConfLevel ("cnc": (n, p, lcl.rank, n.plus.one.minus.ucl.rank, type 0 two.sided 1 lower 2 upper)) and ciNparN ("cnn": (p, lcl.rank, nu, type, conf.level))
+tn <- c("two.sided", "lower", "upper")
+for (rep in 1:150) {
+  ty <- sample(0:2, 1); p <- c(0.1, 0.25, 0.5, 0.75, 0.9)[sample(5, 1)]; lr <- sample(1:3, 1); nu <- sample(1:3, 1)
+  if (ty == 1) nu <- 0; if (ty == 2) lr <- 0
+  n <- sample(10:120, 1)
+  v <- tryCatch(ciNparConfLevel(n, p, lcl.rank = lr, n.plus.one.minus.ucl.rank = nu, ci.type = tn[ty + 1]), error = function(e) NA)
+  if (is.finite(v)) cases[[length(cases) + 1]] <- case("cnc", c(n, p, lr, nu, ty), v, rel = 1e-9, abs = 1e-12)
+  cl <- c(0.8, 0.9, 0.95)[sample(3, 1)]
+  r <- tryCatch(suppressWarnings(ciNparN(p, lcl.rank = lr, n.plus.one.minus.ucl.rank = nu, ci.type = tn[ty + 1], conf.level = cl)), error = function(e) NA)
+  if (is.finite(r)) cases[[length(cases) + 1]] <- case("cnn", c(p, lr, nu, ty, cl), r, rel = 0, abs = 0)
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
