@@ -17,6 +17,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "du_z") { ret dz }
         ret dp
     }
+    if str.eq(c.name, "uve") || str.eq(c.name, "uvp") || str.eq(c.name, "ubd") || str.eq(c.name, "ubp") {
+        // args (n1, n2, y1, x1, y2, x2, boot.n, seed, stratified)
+        let m1 = usize(x[0usize])
+        let m2 = usize(x[1usize])
+        let b0 = 2usize + 2usize * m1 + 2usize * m2
+        let (uo, uoe) = mem.alloc[f64](a, 2usize)
+        if uoe != ok { ret 0.0f64 / 0.0f64 }
+        var ue = ok
+        if c.name[0usize] == 117u8 && c.name[1usize] == 118u8 {
+            ue = pr.roc_test_venkatraman_unpaired(a, x[2usize..2usize + m1], x[2usize + m1..2usize + 2usize * m1], x[2usize + 2usize * m1..2usize + 2usize * m1 + m2], x[2usize + 2usize * m1 + m2..b0], usize(x[b0]), i64(x[b0 + 1usize]), uo)
+        } else {
+            ue = pr.roc_test_boot_unpaired(a, x[2usize..2usize + m1], x[2usize + m1..2usize + 2usize * m1], x[2usize + 2usize * m1..2usize + 2usize * m1 + m2], x[2usize + 2usize * m1 + m2..b0], usize(x[b0]), i64(x[b0 + 1usize]), x[b0 + 2usize] > 0.5f64, uo)
+        }
+        if ue != ok { ret 0.0f64 / 0.0f64 }
+        if c.name[2usize] == 101u8 || c.name[2usize] == 100u8 { ret uo[0usize] }
+        ret uo[1usize]
+    }
     if str.eq(c.name, "mcauc") {
         let kk = usize(x[0usize])
         let nn = usize(x[1usize])

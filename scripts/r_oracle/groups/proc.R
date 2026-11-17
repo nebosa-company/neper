@@ -91,4 +91,16 @@ for (rep in 1:20) {
   if (is.null(rt)) next
   add("vne", a, as.numeric(rt$statistic)); add("vnp", a, rt$p.value)
 }
+# the unpaired roc.test methods: Venkatraman ("uve" E, "uvp" p) and bootstrap ("ubd" D, "ubp" p) args (n1, n2, y1, x1, y2, x2, boot.n, seed, stratified)
+for (rep in 1:16) {
+  n1 <- sample(25:45, 1); n2 <- sample(25:45, 1); y1 <- rbinom(n1, 1, 0.4); y2 <- rbinom(n2, 1, 0.4)
+  if (sum(y1) < 4 || sum(y1) > n1 - 4 || sum(y2) < 4 || sum(y2) > n2 - 4) next
+  x1 <- round(rnorm(n1) + 1.1 * y1, 4); x2 <- round(rnorm(n2) + 0.7 * y2, 4)
+  r1 <- roc(y1, x1, quiet = TRUE); r2 <- roc(y2, x2, quiet = TRUE); sd <- sample(1:100000, 1)
+  a <- c(n1, n2, y1, x1, y2, x2, 200, sd, as.numeric(rep %% 2 == 0))
+  set.seed(sd); rt <- tryCatch(suppressWarnings(roc.test(r1, r2, method = "venkatraman", boot.n = 200, paired = FALSE, progress = "none")), error = function(e) NULL)
+  if (!is.null(rt)) { add("uve", a, as.numeric(rt$statistic)); add("uvp", a, rt$p.value) }
+  set.seed(sd); rb <- tryCatch(suppressWarnings(roc.test(r1, r2, method = "bootstrap", boot.n = 200, boot.stratified = rep %% 2 == 0, paired = FALSE, progress = "none")), error = function(e) NULL)
+  if (!is.null(rb)) { add("ubd", a, as.numeric(rb$statistic)); add("ubp", a, rb$p.value) }
+}
 emit("proc", "pROC", list(cases))

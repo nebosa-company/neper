@@ -882,3 +882,402 @@ fn roc_test_venkatraman(a: *mem.Arena, y: []const f64, x1: []const f64, x2: []co
     out[1usize] = ge / f64(boot_n)
     ret ok
 }
+
+// ---- the unpaired roc.test methods: bootstrap and Venkatraman ----
+
+// R's approxfun(x, y) (linear, rule 1, ties = mean) evaluated at v: NaN outside the range of x
+fn approx_eval(a: *mem.Arena, xs: []const f64, ys: []const f64, v: f64) -> f64 {
+    let n = xs.len
+    // the knots: x sorted ascending with the y of equal x averaged
+    let (kx, e1) = mem.alloc[f64](a, n)
+    let (ky, e2) = mem.alloc[f64](a, n)
+    let (ord, e3) = mem.alloc[usize](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        ord[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let key = ord[i]
+        var j = i
+        while j > 0usize && xs[ord[j - 1usize]] > xs[key] {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = key
+        i += 1usize
+    }
+    var m = 0usize
+    i = 0usize
+    while i < n {
+        var j = i
+        var s = 0.0f64
+        while j < n && xs[ord[j]] == xs[ord[i]] {
+            s += ys[ord[j]]
+            j += 1usize
+        }
+        kx[m] = xs[ord[i]]
+        ky[m] = s / f64(j - i)
+        m += 1usize
+        i = j
+    }
+    if m < 2usize { ret 0.0f64 / 0.0f64 }
+    if v < kx[0usize] || v > kx[m - 1usize] { ret 0.0f64 / 0.0f64 }
+    var lo = 0usize
+    var hi = m - 1usize
+    while lo + 1usize < hi {
+        let mid = (lo + hi) / 2usize
+        if v < kx[mid] { hi = mid } else { lo = mid }
+    }
+    if v == kx[hi] { ret ky[hi] }
+    if v == kx[lo] { ret ky[lo] }
+    ret ky[lo] + (ky[hi] - ky[lo]) * ((v - kx[lo]) / (kx[hi] - kx[lo]))
+}
+
+// venkatraman.unpaired.stat: R and S the rank vectors of the two samples (y1, y2 their responses), mp the pooled case share (the package's, with length(D1) twice in the denominator)
+fn venkatraman_unpaired_stat(a: *mem.Arena, y1: []const f64, y2: []const f64, r: []const f64, s: []const f64, mp: f64) -> f64 {
+    let n = y1.len
+    let m = y2.len
+    let (rp, e1) = mem.alloc[f64](a, n)
+    let (re, e2) = mem.alloc[f64](a, n)
+    let (sp, e3) = mem.alloc[f64](a, m)
+    let (se, e4) = mem.alloc[f64](a, m)
+    let (xs, e5) = mem.alloc[f64](a, n + m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret 0.0f64 / 0.0f64 }
+    var nc1 = 0.0f64
+    var nn1 = 0.0f64
+    var i = 0usize
+    while i < n {
+        if y1[i] > 0.5f64 { nc1 += 1.0f64 } else { nn1 += 1.0f64 }
+        i += 1usize
+    }
+    var nc2 = 0.0f64
+    var nn2 = 0.0f64
+    i = 0usize
+    while i < m {
+        if y2[i] > 0.5f64 { nc2 += 1.0f64 } else { nn2 += 1.0f64 }
+        i += 1usize
+    }
+    var x = 1usize
+    while x <= n {
+        var cs = 0.0f64
+        var ct = 0.0f64
+        i = 0usize
+        while i < n {
+            if r[i] <= f64(x) {
+                if y1[i] > 0.5f64 { cs += 1.0f64 } else { ct += 1.0f64 }
+            }
+            i += 1usize
+        }
+        let fx = cs / nc1
+        let gx = ct / nn1
+        rp[x - 1usize] = mp * fx + (1.0f64 - mp) * gx
+        re[x - 1usize] = mp * fx + (1.0f64 - mp) * (1.0f64 - gx)
+        x += 1usize
+    }
+    x = 1usize
+    while x <= m {
+        var cs = 0.0f64
+        var ct = 0.0f64
+        i = 0usize
+        while i < m {
+            if s[i] <= f64(x) {
+                if y2[i] > 0.5f64 { cs += 1.0f64 } else { ct += 1.0f64 }
+            }
+            i += 1usize
+        }
+        let fx = cs / nc2
+        let gx = ct / nn2
+        sp[x - 1usize] = mp * fx + (1.0f64 - mp) * gx
+        se[x - 1usize] = mp * fx + (1.0f64 - mp) * (1.0f64 - gx)
+        x += 1usize
+    }
+    i = 0usize
+    while i < n {
+        xs[i] = rp[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        xs[n + i] = sp[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n + m {
+        let key = xs[i]
+        var j = i
+        while j > 0usize && xs[j - 1usize] > key {
+            xs[j] = xs[j - 1usize]
+            j -= 1usize
+        }
+        xs[j] = key
+        i += 1usize
+    }
+    var total = 0.0f64
+    var comp = 0.0f64
+    var prev = math.abs[f64](approx_eval(a, rp, re, xs[0usize]) - approx_eval(a, sp, se, xs[0usize]))
+    i = 1usize
+    while i < n + m {
+        let cur = math.abs[f64](approx_eval(a, rp, re, xs[i]) - approx_eval(a, sp, se, xs[i]))
+        let term = ((cur + prev) * (xs[i] - xs[i - 1usize])) / 2.0f64
+        if term == term {
+            // R's sum() accumulates in long double; a compensated sum stands in for it
+            let tt = total + term
+            if math.abs[f64](total) >= math.abs[f64](term) { comp += (total - tt) + term } else { comp += (term - tt) + total }
+            total = tt
+        }
+        prev = cur
+        i += 1usize
+    }
+    ret total + comp
+}
+
+// roc.test(r1, r2, method = "venkatraman", paired = FALSE, boot.n) after set.seed: the two samples (y1, x1) and (y2, x2); each permutation adds runif noise to the two rank vectors (n1 then n2 draws), pools the controls and, separately, the cases,
+// permutes each pool with `sample`, deals them back in place, and re-ranks; out receives E and p = mean(E_perm >= E)
+fn roc_test_venkatraman_unpaired(a: *mem.Arena, y1: []const f64, x1: []const f64, y2: []const f64, x2: []const f64, boot_n: usize, seed: i64, out: []f64) -> err {
+    let n = y1.len
+    let m = y2.len
+    let (r, e1) = mem.alloc[f64](a, n)
+    let (s, e2) = mem.alloc[f64](a, m)
+    let (r2, e3) = mem.alloc[f64](a, n)
+    let (s2, e4) = mem.alloc[f64](a, m)
+    let (rr, e5) = mem.alloc[f64](a, n)
+    let (ss, e6) = mem.alloc[f64](a, m)
+    let (pool, e7) = mem.alloc[f64](a, n + m)
+    let (perm, e8) = mem.alloc[f64](a, n + m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    rank_first(x1, r)
+    rank_first(x2, s)
+    var cases_total = 0.0f64
+    var i = 0usize
+    while i < n {
+        if y1[i] > 0.5f64 { cases_total += 1.0f64 }
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        if y2[i] > 0.5f64 { cases_total += 1.0f64 }
+        i += 1usize
+    }
+    let mp = cases_total / f64(n + n)
+    let e = venkatraman_unpaired_stat(a, y1, y2, r, s, mp)
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    var ge = 0.0f64
+    var b = 0usize
+    while b < boot_n {
+        i = 0usize
+        while i < n {
+            r2[i] = r[i] + rng.unif(&rg) - 0.5f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < m {
+            s2[i] = s[i] + rng.unif(&rg) - 0.5f64
+            i += 1usize
+        }
+        var cls = 0usize
+        while cls < 2usize {
+            // the pool of this class: sample 1's values in order, then sample 2's
+            var np = 0usize
+            i = 0usize
+            while i < n {
+                if (y1[i] > 0.5f64) == (cls == 1usize) {
+                    pool[np] = r2[i]
+                    np += 1usize
+                }
+                i += 1usize
+            }
+            let n1c = np
+            i = 0usize
+            while i < m {
+                if (y2[i] > 0.5f64) == (cls == 1usize) {
+                    pool[np] = s2[i]
+                    np += 1usize
+                }
+                i += 1usize
+            }
+            let (ix, fe) = rng.sample_int(a, &rg, i64(np), i64(np), false)
+            if fe != ok { ret fe }
+            i = 0usize
+            while i < np {
+                perm[i] = pool[usize(ix[i]) - 1usize]
+                i += 1usize
+            }
+            var k1 = 0usize
+            i = 0usize
+            while i < n {
+                if (y1[i] > 0.5f64) == (cls == 1usize) {
+                    r2[i] = perm[k1]
+                    k1 += 1usize
+                }
+                i += 1usize
+            }
+            var k2 = n1c
+            i = 0usize
+            while i < m {
+                if (y2[i] > 0.5f64) == (cls == 1usize) {
+                    s2[i] = perm[k2]
+                    k2 += 1usize
+                }
+                i += 1usize
+            }
+            cls += 1usize
+        }
+        rank_first(r2, rr)
+        rank_first(s2, ss)
+        if venkatraman_unpaired_stat(a, y1, y2, rr, ss, mp) >= e { ge += 1.0f64 }
+        b += 1usize
+    }
+    out[0usize] = e
+    out[1usize] = ge / f64(boot_n)
+    ret ok
+}
+
+// roc.test(r1, r2, method = "bootstrap", paired = FALSE) for the AUC difference after set.seed: per replicate the first curve's controls and cases, then the second's, are resampled (stratified) or each whole sample is
+// (otherwise); D = (auc1 - auc2) / sd(differences), p = 2 pnorm(-|D|)
+fn roc_test_boot_unpaired(a: *mem.Arena, y1: []const f64, x1: []const f64, y2: []const f64, x2: []const f64, boot_n: usize, seed: i64, stratified: bool, out: []f64) -> err {
+    let (nc1, nn1) = counts(y1)
+    let (nc2, nn2) = counts(y2)
+    let n1 = y1.len
+    let n2 = y2.len
+    let h1 = cases_higher(a, y1, x1)
+    let h2 = cases_higher(a, y2, x2)
+    let (cs1, e1) = mem.alloc[f64](a, nc1)
+    let (ct1, e2) = mem.alloc[f64](a, nn1)
+    let (cs2, e3) = mem.alloc[f64](a, nc2)
+    let (ct2, e4) = mem.alloc[f64](a, nn2)
+    let (a1c, e5) = mem.alloc[f64](a, n1)
+    let (a1t, e6) = mem.alloc[f64](a, n1)
+    let (a2c, e7) = mem.alloc[f64](a, n2)
+    let (a2t, e8) = mem.alloc[f64](a, n2)
+    let (diffs, e9) = mem.alloc[f64](a, boot_n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret mem.Full }
+    var p = 0usize
+    var q = 0usize
+    var i = 0usize
+    while i < n1 {
+        if y1[i] > 0.5f64 {
+            cs1[p] = x1[i]
+            p += 1usize
+        } else {
+            ct1[q] = x1[i]
+            q += 1usize
+        }
+        i += 1usize
+    }
+    p = 0usize
+    q = 0usize
+    i = 0usize
+    while i < n2 {
+        if y2[i] > 0.5f64 {
+            cs2[p] = x2[i]
+            p += 1usize
+        } else {
+            ct2[q] = x2[i]
+            q += 1usize
+        }
+        i += 1usize
+    }
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    var nv = 0usize
+    var b = 0usize
+    while b < boot_n {
+        var m1c = 0usize
+        var m1t = 0usize
+        var m2c = 0usize
+        var m2t = 0usize
+        if stratified {
+            let (ic1, f1) = rng.sample_int(a, &rg, i64(nn1), i64(nn1), true)
+            if f1 != ok { ret f1 }
+            let (is1, f2) = rng.sample_int(a, &rg, i64(nc1), i64(nc1), true)
+            if f2 != ok { ret f2 }
+            let (ic2, f3) = rng.sample_int(a, &rg, i64(nn2), i64(nn2), true)
+            if f3 != ok { ret f3 }
+            let (is2, f4) = rng.sample_int(a, &rg, i64(nc2), i64(nc2), true)
+            if f4 != ok { ret f4 }
+            i = 0usize
+            while i < nn1 {
+                a1t[i] = ct1[usize(ic1[i]) - 1usize]
+                i += 1usize
+            }
+            i = 0usize
+            while i < nc1 {
+                a1c[i] = cs1[usize(is1[i]) - 1usize]
+                i += 1usize
+            }
+            i = 0usize
+            while i < nn2 {
+                a2t[i] = ct2[usize(ic2[i]) - 1usize]
+                i += 1usize
+            }
+            i = 0usize
+            while i < nc2 {
+                a2c[i] = cs2[usize(is2[i]) - 1usize]
+                i += 1usize
+            }
+            m1c = nc1
+            m1t = nn1
+            m2c = nc2
+            m2t = nn2
+        } else {
+            let (ix1, f5) = rng.sample_int(a, &rg, i64(n1), i64(n1), true)
+            if f5 != ok { ret f5 }
+            let (ix2, f6) = rng.sample_int(a, &rg, i64(n2), i64(n2), true)
+            if f6 != ok { ret f6 }
+            i = 0usize
+            while i < n1 {
+                let k = usize(ix1[i]) - 1usize
+                if y1[k] > 0.5f64 {
+                    a1c[m1c] = x1[k]
+                    m1c += 1usize
+                } else {
+                    a1t[m1t] = x1[k]
+                    m1t += 1usize
+                }
+                i += 1usize
+            }
+            i = 0usize
+            while i < n2 {
+                let k = usize(ix2[i]) - 1usize
+                if y2[k] > 0.5f64 {
+                    a2c[m2c] = x2[k]
+                    m2c += 1usize
+                } else {
+                    a2t[m2t] = x2[k]
+                    m2t += 1usize
+                }
+                i += 1usize
+            }
+        }
+        if m1c > 0usize && m1t > 0usize && m2c > 0usize && m2t > 0usize {
+            diffs[nv] = auc_pairs(a1c[0usize..m1c], a1t[0usize..m1t], h1) - auc_pairs(a2c[0usize..m2c], a2t[0usize..m2t], h2)
+            nv += 1usize
+        }
+        b += 1usize
+    }
+    var mean = 0.0f64
+    i = 0usize
+    while i < nv {
+        mean += diffs[i]
+        i += 1usize
+    }
+    mean = mean / f64(nv)
+    var ssq = 0.0f64
+    i = 0usize
+    while i < nv {
+        ssq += (diffs[i] - mean) * (diffs[i] - mean)
+        i += 1usize
+    }
+    let sd = math.sqrt[f64](ssq / f64(nv - 1usize))
+    let auc1 = auc_pairs(cs1, ct1, h1)
+    let auc2 = auc_pairs(cs2, ct2, h2)
+    var d = (auc1 - auc2) / sd
+    if d != d && sd == 0.0f64 && auc1 == auc2 { d = 0.0f64 }
+    out[0usize] = d
+    out[1usize] = 2.0f64 * dist.pnorm(0.0f64 - math.abs[f64](d), 0.0f64, 1.0f64, true, false)
+    ret ok
+}
