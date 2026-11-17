@@ -50,4 +50,12 @@ for (rep in 1:40) {
     add("qn", c(tt, 0, k, n, unlist(lst)), r[[1]]); add("qn", c(tt, 1, k, n, unlist(lst)), r[[2]])
   }
 }
+# contingency2xt: "ct" (part 0 statistic 1 asymptotic p 2 exact p, t, Avec[t], Bvec[t])
+for (rep in 1:40) {
+  tn <- sample(2:5, 1); A <- sample(0:6, tn, TRUE); B <- sample(1:6, tn, TRUE)
+  r <- contingency2xt(A, B, method = "asymptotic")$KW.cont
+  add("ct", c(0, tn, A, B), r[[1]]); add("ct", c(1, tn, A, B), r[[2]])
+  re <- contingency2xt(A, B, method = "exact")$KW.cont
+  if (length(re) == 3) add("ct", c(2, tn, A, B), re[[3]])
+}
 emit("ksamples", "kSamples", list(cases))

@@ -941,3 +941,76 @@ fn qn_test(a: *mem.Arena, x: []const f64, sizes: []const usize, test: usize, par
     if part == 0usize { ret stat }
     ret 1.0f64 - nm.pchisq(stat, f64(k - 1usize), true, false)
 }
+
+// ---- contingency2xt: the Kruskal-Wallis type statistic of a 2 by t table of counts (rows Avec and Bvec) ----
+
+// the observed statistic (N (N - 1) / (m n)) (sum A_i^2 / d_i - m^2 / N) and its chi-square p value on t - 1 degrees of freedom; part 0 the statistic, 1 the asymptotic p value
+fn contingency2xt(avec: []const f64, bvec: []const f64, part: usize) -> f64 {
+    var m = 0.0f64
+    var n = 0.0f64
+    var s = 0.0f64
+    var i = 0usize
+    while i < avec.len {
+        m += avec[i]
+        n += bvec[i]
+        i += 1usize
+    }
+    let nn = m + n
+    i = 0usize
+    while i < avec.len {
+        s += avec[i] * avec[i] / (avec[i] + bvec[i])
+        i += 1usize
+    }
+    let kw = nn * (nn - 1.0f64) / (m * n) * (s - m * m / nn)
+    if part == 0usize { ret kw }
+    ret 1.0f64 - nm.pchisq(kw, f64(avec.len - 1usize), true, false)
+}
+
+type C2Ctx = struct { d: []const f64, t: usize, m: f64, nn: f64, lc: f64, obs: f64, pval: f64, cur: []f64 }
+
+fn lchoose_f(n: f64, k: f64) -> f64 { ret nm.lgammafn(n + 1.0f64) - nm.lgammafn(k + 1.0f64) - nm.lgammafn(n - k + 1.0f64) }
+
+fn c2_walk(c: *C2Ctx, pos: usize, rem: f64) {
+    if pos + 1usize == c.t {
+        if rem > c.d[pos] { ret }
+        c.cur[pos] = rem
+        var s = 0.0f64
+        var lp = 0.0f64 - c.lc
+        var i = 0usize
+        while i < c.t {
+            s += c.cur[i] * c.cur[i] / c.d[i]
+            lp += lchoose_f(c.d[i], c.cur[i])
+            i += 1usize
+        }
+        if s >= c.obs { c.pval += math.exp[f64](lp) }
+        ret
+    }
+    var v = 0.0f64
+    while v <= c.d[pos] && v <= rem {
+        c.cur[pos] = v
+        c2_walk(c, pos + 1usize, rem - v)
+        v += 1.0f64
+    }
+}
+
+// the exact p value: the multivariate hypergeometric probability of the first-row vectors whose sum A_i^2 / d_i is at least the observed
+fn contingency2xt_exact(a: *mem.Arena, avec: []const f64, bvec: []const f64) -> f64 {
+    let t = avec.len
+    let (d, e1) = mem.alloc[f64](a, t)
+    let (cur, e2) = mem.alloc[f64](a, t)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var m = 0.0f64
+    var nn = 0.0f64
+    var obs = 0.0f64
+    var i = 0usize
+    while i < t {
+        d[i] = avec[i] + bvec[i]
+        m += avec[i]
+        nn += d[i]
+        obs += avec[i] * avec[i] / d[i]
+        i += 1usize
+    }
+    var ctx = C2Ctx{ d: d, t: t, m: m, nn: nn, lc: lchoose_f(nn, m), obs: obs, pval: 0.0f64, cur: cur }
+    c2_walk(&ctx, 0usize, m)
+    ret ctx.pval
+}

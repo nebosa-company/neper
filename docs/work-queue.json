@@ -31,10 +31,10 @@
       "group": "CRAN parity",
       "order": 592,
       "title": "kSamples: k-sample rank tests",
-      "score": 0.5,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6452 ad.test AD and T.AD statistics, both versions, equal kSamples on Windows; oracle_ksamples; Linux pending). D6828 (smooth.spline at a given spar, e.algo.stat.smspline) and D6829: ad.pval, the asymptotic p value of both versions, equals kSamples (80 draws). D6830: qn.test (KW and vdW, asymptotic) equals kSamples (160 values). Open: the exact and simulated p-values, qn.test normal scores, contingency2xt. Was: Open (CRAN rank 844). Small. Acceptance, equal to kSamples under set.seed: ad.test with the exact, simulated and asymptotic p-values, qn.test (Conover and Steel-Dwass variants), contingency2xt, and the distribution functions behind them."
+      "evidence": "Partial (D6452 ad.test AD and T.AD statistics, both versions, equal kSamples on Windows; oracle_ksamples; Linux pending). D6828 (smooth.spline at a given spar, e.algo.stat.smspline) and D6829: ad.pval, the asymptotic p value of both versions, equals kSamples (80 draws). D6830: qn.test (KW and vdW, asymptotic) equals kSamples (160 values). D6831: contingency2xt (asymptotic and exact) equals kSamples. Open: the exact and simulated p-values of ad.test and qn.test, qn.test normal scores, the simulated contingency2xt. Was: Open (CRAN rank 844). Small. Acceptance, equal to kSamples under set.seed: ad.test with the exact, simulated and asymptotic p-values, qn.test (Conover and Steel-Dwass variants), contingency2xt, and the distribution functions behind them."
     },
     {
       "id": "L499",

@@ -9,6 +9,11 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if c.name[0usize] == 99u8 {
+        let tc = usize(x[1usize])
+        if x[0usize] == 2.0f64 { ret ks.contingency2xt_exact(a, x[2usize..2usize + tc], x[2usize + tc..2usize + 2usize * tc]) }
+        ret ks.contingency2xt(x[2usize..2usize + tc], x[2usize + tc..2usize + 2usize * tc], usize(x[0usize]))
+    }
     if c.name[0usize] == 113u8 {
         let kq = usize(x[2usize])
         let (szq, eq) = mem.alloc[usize](a, kq)
