@@ -2,17 +2,31 @@
 // randomisation), the Kolmogorov-Smirnov statistic of the residuals against the uniform, and the exact binomial outlier test (testOutliers,
 // type = "binomial", margin "both", two-sided).
 //
-// Not here: the traditional method and rotation, testDispersion, testZeroInflation, testTemporalAutocorrelation, refitted residuals and
-// the bootstrap outlier test.
+// Also here: the traditional method with integer jitter and the rotation of recalculateResiduals, the simulate() draws of lm, glm
+// (gaussian, poisson, binomial, Gamma) and conditional lmer and glmer in R's stream order, the bootstrap outlier test, recalculateResiduals,
+// the exact Durbin-Watson p value, the one-sided KS tests, the Pearson chi-square dispersion test and testCategorical.
+//
+// Not here: refit = TRUE residuals and testQuantiles (qgam).
 
 use e.algo.rand.r as rr
+use e.algo.rand.rdist as rd
 use e.math
+use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.math.dist as dist
 use e.mem
 
+error Unsupported
+
 // sims is n by nsim row-major; out receives the n scaled residuals
 fn pit(a: *mem.Arena, sims: []const f64, obs: []const f64, nsim: usize, seed: i64, out: []f64) -> err {
+    var g: rr.Rng = zero
+    rr.seed(&g, seed)
+    ret pit_g(a, &g, sims, obs, nsim, out)
+}
+
+// the same, drawing the tie randomisation from the caller's stream
+fn pit_g(a: *mem.Arena, g: *rr.Rng, sims: []const f64, obs: []const f64, nsim: usize, out: []f64) -> err {
     let n = obs.len
     let (lo, e1) = mem.alloc[f64](a, n)
     if e1 != ok { ret e1 }
@@ -42,11 +56,9 @@ fn pit(a: *mem.Arena, sims: []const f64, obs: []const f64, nsim: usize, seed: i6
         }
         ret ok
     }
-    var g: rr.Rng = zero
-    rr.seed(&g, seed)
     i = 0usize
     while i < n {
-        let u = rr.runif(&g, lo[i], hi[i])
+        let u = rr.runif(g, lo[i], hi[i])
         if lo[i] != hi[i] { out[i] = u } else { out[i] = lo[i] }
         i += 1usize
     }
@@ -61,18 +73,39 @@ fn sorted(a: *mem.Arena, v: []const f64) -> ([]f64, err) {
         s[i] = v[i]
         i += 1usize
     }
-    i = 1usize
-    while i < s.len {
-        let t = s[i]
-        var j = i
-        while j > 0usize && s[j - 1usize] > t {
-            s[j] = s[j - 1usize]
-            j -= 1usize
-        }
-        s[j] = t
-        i += 1usize
-    }
+    sort_f64(s)
     ret (s, ok)
+}
+
+fn sift_down(v: []f64, root0: usize, last: usize) {
+    var root = root0
+    while true {
+        var child = 2usize * root + 1usize
+        if child >= last { break }
+        if child + 1usize < last && v[child] < v[child + 1usize] { child += 1usize }
+        if v[root] >= v[child] { break }
+        let t = v[root]
+        v[root] = v[child]
+        v[child] = t
+        root = child
+    }
+}
+
+fn sort_f64(v: []f64) {
+    let n = v.len
+    var start = n / 2usize
+    while start > 0usize {
+        start -= 1usize
+        sift_down(v, start, n)
+    }
+    var last = n
+    while last > 1usize {
+        last -= 1usize
+        let t = v[0usize]
+        v[0usize] = v[last]
+        v[last] = t
+        sift_down(v, 0usize, last)
+    }
 }
 
 // the two-sided Kolmogorov-Smirnov statistic against the uniform distribution on [0, 1]
@@ -389,6 +422,13 @@ fn test_generic(a: *mem.Arena, sims: []const f64, obs: []const f64, fitted: []co
 
 // testSpatialAutocorrelation: ape::Moran.I of the scaled residuals with inverse-distance weights (zero diagonal), row-standardised; returns the observed I, its standard deviation and the two-sided p value
 fn moran_i(a: *mem.Arena, r: []const f64, xs: []const f64, ys: []const f64) -> (f64, f64, f64) {
+    var none: []const f64 = zero
+    let (o, s, p) = moran_full(a, r, xs, ys, none, 0usize)
+    ret (o, s, p)
+}
+
+// alt 0 two.sided, 1 greater, 2 less; dm is an n by n distance matrix that replaces the coordinates when it is given
+fn moran_full(a: *mem.Arena, r: []const f64, xs: []const f64, ys: []const f64, dm: []const f64, alt: usize) -> (f64, f64, f64) {
     let nan = 0.0f64 / 0.0f64
     let n = r.len
     let (w, e1) = mem.alloc[f64](a, n * n)
@@ -399,7 +439,13 @@ fn moran_i(a: *mem.Arena, r: []const f64, xs: []const f64, ys: []const f64) -> (
         var j = 0usize
         while j < n {
             var v = 0.0f64
-            if i != j { v = 1.0f64 / math.sqrt[f64]((xs[i] - xs[j]) * (xs[i] - xs[j]) + (ys[i] - ys[j]) * (ys[i] - ys[j])) }
+            if i != j {
+                if dm.len == n * n {
+                    v = 1.0f64 / dm[i * n + j]
+                } else {
+                    v = 1.0f64 / math.sqrt[f64]((xs[i] - xs[j]) * (xs[i] - xs[j]) + (ys[i] - ys[j]) * (ys[i] - ys[j]))
+                }
+            }
             w[i * n + j] = v
             rs += v
             j += 1usize
@@ -453,7 +499,11 @@ fn moran_i(a: *mem.Arena, r: []const f64, xs: []const f64, ys: []const f64) -> (
     let k = (v4 / nf) / ((v2 / nf) * (v2 / nf))
     let sdi = math.sqrt[f64]((nf * ((nf * nf - 3.0f64 * nf + 3.0f64) * s1 - nf * s2 + 3.0f64 * ssq) - k * (nf * (nf - 1.0f64) * s1 - 2.0f64 * nf * s2 + 6.0f64 * ssq)) / ((nf - 1.0f64) * (nf - 2.0f64) * (nf - 3.0f64) * ssq) - 1.0f64 / ((nf - 1.0f64) * (nf - 1.0f64)))
     var pv = dist.pnorm(obs, ei, sdi, true, false)
-    if obs <= ei { pv = 2.0f64 * pv } else { pv = 2.0f64 * (1.0f64 - pv) }
+    if alt == 1usize {
+        pv = 1.0f64 - pv
+    } else if alt == 0usize {
+        if obs <= ei { pv = 2.0f64 * pv } else { pv = 2.0f64 * (1.0f64 - pv) }
+    }
     ret (obs, sdi, pv)
 }
 
@@ -498,4 +548,890 @@ fn dw_time(a: *mem.Arena, r: []const f64, time: []const f64) -> f64 {
         i += 1usize
     }
     ret num / den
+}
+
+// ---- rotation and the traditional method (getQuantile) ----
+
+// l = the lower Cholesky factor of the n by n row-major sigma; false when sigma is not positive definite
+fn chol_lower(sigma: []const f64, l: []f64, n: usize) -> bool {
+    var i = 0usize
+    while i < n * n {
+        l[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j <= i {
+            var s = sigma[i * n + j]
+            var k = 0usize
+            while k < j {
+                s -= l[i * n + k] * l[j * n + k]
+                k += 1usize
+            }
+            if i == j {
+                if !(s > 0.0f64) { ret false }
+                l[i * n + i] = math.sqrt[f64](s)
+            } else {
+                l[i * n + j] = s / l[j * n + j]
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}
+
+// forwardsolve(L, obs) and forwardsolve(L, sims) for L = t(chol(sigma)); an empty sigma means cov(t(sims)) ("estimated")
+fn rotate(a: *mem.Arena, sims: []const f64, obs: []const f64, nsim: usize, sigma: []const f64, rs: []f64, ro: []f64) -> err {
+    let n = obs.len
+    let (cv, e1) = mem.alloc[f64](a, n * n)
+    if e1 != ok { ret e1 }
+    let (l, e2) = mem.alloc[f64](a, n * n)
+    if e2 != ok { ret e2 }
+    var i = 0usize
+    if sigma.len == n * n {
+        while i < n * n {
+            cv[i] = sigma[i]
+            i += 1usize
+        }
+    } else {
+        let (mu, e3) = mem.alloc[f64](a, n)
+        if e3 != ok { ret e3 }
+        while i < n {
+            var m = 0.0f64
+            var j = 0usize
+            while j < nsim {
+                m += sims[i * nsim + j]
+                j += 1usize
+            }
+            mu[i] = m / f64(nsim)
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var k = 0usize
+            while k < n {
+                var s = 0.0f64
+                var j = 0usize
+                while j < nsim {
+                    s += (sims[i * nsim + j] - mu[i]) * (sims[k * nsim + j] - mu[k])
+                    j += 1usize
+                }
+                cv[i * n + k] = s / (f64(nsim) - 1.0f64)
+                k += 1usize
+            }
+            i += 1usize
+        }
+    }
+    if !chol_lower(cv, l, n) { ret Unsupported }
+    i = 0usize
+    while i < n {
+        var s = obs[i]
+        var k = 0usize
+        while k < i {
+            s -= l[i * n + k] * ro[k]
+            k += 1usize
+        }
+        ro[i] = s / l[i * n + i]
+        i += 1usize
+    }
+    var j = 0usize
+    while j < nsim {
+        i = 0usize
+        while i < n {
+            var s = sims[i * nsim + j]
+            var k = 0usize
+            while k < i {
+                s -= l[i * n + k] * rs[k * nsim + j]
+                k += 1usize
+            }
+            rs[i * nsim + j] = s / l[i * n + i]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
+// DHARMa.ecdf evaluated at v: ux the unique sorted values, uy their cumulative counts over (m + 1); R's approx with yleft = 0, yright = 1
+fn ecdf_eval(ux: []const f64, uy: []const f64, u: usize, v: f64) -> f64 {
+    if v < ux[0usize] { ret 0.0f64 }
+    if v > ux[u - 1usize] { ret 1.0f64 }
+    var i = 0usize
+    var j = u - 1usize
+    while i + 1usize < j {
+        let ij = (i + j) / 2usize
+        if v < ux[ij] { j = ij } else { i = ij }
+    }
+    if v == ux[j] { ret uy[j] }
+    if v == ux[i] { ret uy[i] }
+    ret uy[i] + (uy[j] - uy[i]) * ((v - ux[i]) / (ux[j] - ux[i]))
+}
+
+// method = "traditional": per observation the ecdf of the simulations, jittered by runif(-0.5, 0.5) for an integer response; a continuous
+// response whose simulations hold duplicated whole numbers is switched to integer, as getQuantile does
+fn trad_g(a: *mem.Arena, g: *rr.Rng, sims: []const f64, obs: []const f64, nsim: usize, integer0: bool, out: []f64) -> err {
+    let n = obs.len
+    var integer = integer0
+    if !integer {
+        let (all, e0) = sorted(a, sims[0usize..n * nsim])
+        if e0 != ok { ret e0 }
+        var dup = false
+        var whole = true
+        var i = 1usize
+        while i < all.len {
+            if all[i] == all[i - 1usize] {
+                dup = true
+                if all[i] - math.floor[f64](all[i]) != 0.0f64 { whole = false }
+            }
+            i += 1usize
+        }
+        if dup && whole { integer = true }
+    }
+    let (row, e1) = mem.alloc[f64](a, nsim)
+    if e1 != ok { ret e1 }
+    let (ux, e2) = mem.alloc[f64](a, nsim)
+    if e2 != ok { ret e2 }
+    let (uy, e3) = mem.alloc[f64](a, nsim)
+    if e3 != ok { ret e3 }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < nsim {
+            row[j] = sims[i * nsim + j]
+            if integer { row[j] = row[j] + rr.runif(g, 0.0f64 - 0.5f64, 0.5f64) }
+            j += 1usize
+        }
+        sort_f64(row)
+        var u = 0usize
+        j = 0usize
+        while j < nsim {
+            var k = j
+            while k + 1usize < nsim && row[k + 1usize] == row[j] { k += 1usize }
+            ux[u] = row[j]
+            uy[u] = f64(k + 1usize) / f64(nsim + 1usize)
+            u += 1usize
+            j = k + 1usize
+        }
+        var v = obs[i]
+        if integer { v = v + rr.runif(g, 0.0f64 - 0.5f64, 0.5f64) }
+        out[i] = ecdf_eval(ux, uy, u, v)
+        i += 1usize
+    }
+    ret ok
+}
+
+// getQuantile: method 0 PIT, 1 traditional; rot 0 none, 1 estimated, 2 the matrix sigma (PIT only)
+fn quantile_g(a: *mem.Arena, g: *rr.Rng, sims: []const f64, obs: []const f64, nsim: usize, method: usize, integer: bool, rot: usize, sigma: []const f64, out: []f64) -> err {
+    if method == 1usize {
+        if rot != 0usize { ret Unsupported }
+        ret trad_g(a, g, sims, obs, nsim, integer, out)
+    }
+    if rot == 0usize { ret pit_g(a, g, sims, obs, nsim, out) }
+    let n = obs.len
+    let (rs, e1) = mem.alloc[f64](a, n * nsim)
+    if e1 != ok { ret e1 }
+    let (ro, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret e2 }
+    var sg: []const f64 = zero
+    if rot == 2usize { sg = sigma }
+    let er = rotate(a, sims, obs, nsim, sg, rs, ro)
+    if er != ok { ret er }
+    ret pit_g(a, g, rs, ro, nsim, out)
+}
+
+// ---- simulate() of lm, glm and conditional merMod models; out is n by nsim row-major, R draws it column by column ----
+
+// gaussian with one standard deviation (lmer: sigma)
+fn sim_gaussian_sd(g: *rr.Rng, mu: []const f64, sd: f64, nsim: usize, out: []f64) {
+    let n = mu.len
+    var j = 0usize
+    while j < nsim {
+        var i = 0usize
+        while i < n {
+            out[i * nsim + j] = mu[i] + rr.rnorm(g, 0.0f64, sd)
+            i += 1usize
+        }
+        j += 1usize
+    }
+}
+
+// lm and gaussian glm: sd = sqrt(deviance / df / weight); an empty wts means unweighted
+fn sim_gaussian_lm(g: *rr.Rng, mu: []const f64, dev: f64, df: f64, wts: []const f64, nsim: usize, out: []f64) {
+    let n = mu.len
+    let vars = dev / df
+    var j = 0usize
+    while j < nsim {
+        var i = 0usize
+        while i < n {
+            var v = vars
+            if wts.len == n { v = vars / wts[i] }
+            out[i * nsim + j] = mu[i] + rr.rnorm(g, 0.0f64, math.sqrt[f64](v))
+            i += 1usize
+        }
+        j += 1usize
+    }
+}
+
+fn sim_poisson(g: *rr.Rng, mu: []const f64, nsim: usize, out: []f64) {
+    let n = mu.len
+    var j = 0usize
+    while j < nsim {
+        var i = 0usize
+        while i < n {
+            out[i * nsim + j] = rd.rpois(g, mu[i])
+            i += 1usize
+        }
+        j += 1usize
+    }
+}
+
+// mode 0: rbinom(size = wts, prob) / wts times wts again, as DHARMa does for a weighted model; mode 1: the counts
+fn sim_binomial(g: *rr.Rng, mu: []const f64, wts: []const f64, nsim: usize, mode: usize, out: []f64) {
+    let n = mu.len
+    var j = 0usize
+    while j < nsim {
+        var i = 0usize
+        while i < n {
+            var w = 1.0f64
+            if wts.len == n { w = wts[i] }
+            let k = rd.rbinom(g, w, mu[i])
+            if mode == 0usize { out[i * nsim + j] = (k / w) * w } else { out[i * nsim + j] = k }
+            i += 1usize
+        }
+        j += 1usize
+    }
+}
+
+// rgamma(shape, rate = shape / fitted); shape is the per observation vector MASS::gamma.shape()$alpha * weights
+fn sim_gamma(g: *rr.Rng, mu: []const f64, shape: []const f64, nsim: usize, out: []f64) {
+    let n = mu.len
+    var j = 0usize
+    while j < nsim {
+        var i = 0usize
+        while i < n {
+            out[i * nsim + j] = rd.rgamma(g, shape[i], 1.0f64 / (shape[i] / mu[i]))
+            i += 1usize
+        }
+        j += 1usize
+    }
+}
+
+fn digamma_pos(x: f64) -> f64 {
+    var result = 0.0f64
+    var t = x
+    while t < 10.0f64 {
+        result -= 1.0f64 / t
+        t += 1.0f64
+    }
+    let r = 1.0f64 / (t * t)
+    result += math.log[f64](t) - 0.5f64 / t
+    result -= r * (1.0f64 / 12.0f64 - r * (1.0f64 / 120.0f64 - r * (1.0f64 / 252.0f64 - r * (1.0f64 / 240.0f64 - r * (1.0f64 / 132.0f64 - r * 691.0f64 / 32760.0f64)))))
+    ret result
+}
+
+fn trigamma_pos(x: f64) -> f64 {
+    var result = 0.0f64
+    var t = x
+    while t < 10.0f64 {
+        result += 1.0f64 / (t * t)
+        t += 1.0f64
+    }
+    let r = 1.0f64 / (t * t)
+    result += 1.0f64 / t + 0.5f64 * r
+    result += r / t * (1.0f64 / 6.0f64 - r * (1.0f64 / 30.0f64 - r * (1.0f64 / 42.0f64 - r * (1.0f64 / 30.0f64 - r * (5.0f64 / 66.0f64 - r * 691.0f64 / 2730.0f64)))))
+    ret result
+}
+
+// MASS::gamma.shape.glm: alpha from the response y, the fitted mu, the prior weights w, the deviance and the residual df
+fn gamma_shape(y: []const f64, mu: []const f64, w: []const f64, dev: f64, df: f64) -> f64 {
+    let n = y.len
+    let dbar = dev / df
+    var alpha = (6.0f64 + 2.0f64 * dbar) / (dbar * (6.0f64 + dbar))
+    let epsmax = 0.0001220703125f64
+    var eps = 1.0f64
+    var itr = 0i64
+    while true {
+        if !(math.abs[f64](eps) > epsmax) { break }
+        itr += 1i64
+        if itr > 10i64 { break }
+        var sc = 0.0f64
+        var inf = 0.0f64
+        var i = 0usize
+        while i < n {
+            var yz = y[i]
+            if y[i] == 0.0f64 { yz = y[i] + 1.0f64 }
+            let fixed = 0.0f64 - y[i] / mu[i] - math.log[f64](mu[i]) + math.log[f64](w[i]) + 1.0f64 + math.log[f64](yz)
+            sc += w[i] * (fixed + math.log[f64](alpha) - digamma_pos(w[i] * alpha))
+            inf += w[i] * (w[i] * trigamma_pos(w[i] * alpha) - 1.0f64 / alpha)
+            i += 1usize
+        }
+        eps = sc / inf
+        alpha += eps
+    }
+    ret alpha
+}
+
+// ---- tests on the scaled residuals ----
+
+// the outlier count of testOutliers(type = "binomial"): margin 0 both, 1 upper, 2 lower
+fn outlier_count_m(r: []const f64, nsim: usize, margin: usize) -> usize {
+    let eps = 1.0f64 / f64(nsim + 1usize)
+    var c = 0usize
+    var i = 0usize
+    while i < r.len {
+        if margin != 1usize && r[i] < eps { c += 1usize }
+        if margin != 2usize && r[i] > 1.0f64 - eps { c += 1usize }
+        i += 1usize
+    }
+    ret c
+}
+
+// binom.test(x, n, p, alternative): alt 0 two.sided, 1 greater, 2 less
+fn binom_test_alt(x: usize, n: usize, p: f64, alt: usize) -> f64 {
+    if alt == 1usize {
+        if x == 0usize { ret 1.0f64 }
+        ret nb.pbinom(f64(x) - 1.0f64, f64(n), p, false, false)
+    }
+    if alt == 2usize { ret nb.pbinom(f64(x), f64(n), p, true, false) }
+    ret binom_test_p(x, n, p)
+}
+
+// testOutliers(type = "binomial"): (outliers, p value)
+fn outlier_binomial(r: []const f64, nsim: usize, margin: usize, alt: usize) -> (usize, f64) {
+    let c = outlier_count_m(r, nsim, margin)
+    var p0 = 1.0f64 / f64(nsim + 1usize)
+    if margin == 0usize { p0 = p0 * 2.0f64 }
+    ret (c, binom_test_alt(c, r.len, p0, alt))
+}
+
+fn outlier_freq(r: []const f64, margin: usize) -> f64 {
+    var z = 0.0f64
+    var o = 0.0f64
+    var i = 0usize
+    while i < r.len {
+        if r[i] == 0.0f64 { z += 1.0f64 }
+        if r[i] == 1.0f64 { o += 1.0f64 }
+        i += 1usize
+    }
+    let n = f64(r.len)
+    if margin == 1usize { ret o / n }
+    if margin == 2usize { ret z / n }
+    ret z / n + o / n
+}
+
+// testOutliers(type = "bootstrap"): sr the scaled residuals of the object, sims its simulated response; res receives
+// (statistic, p value, conf.int low, conf.int high, mean bootstrap frequency). g must be seeded as R was just before the call.
+fn outlier_boot(a: *mem.Arena, g: *rr.Rng, sims: []const f64, sr: []const f64, nsim: usize, nboot0: usize, method: usize, integer: bool, margin: usize, alt: usize, res: []f64) -> err {
+    let n = sr.len
+    var nboot = nboot0
+    if nboot > nsim { nboot = nsim }
+    let observed = outlier_freq(sr, margin)
+    let (freq, e1) = mem.alloc[f64](a, nboot)
+    if e1 != ok { ret e1 }
+    var sg: []const f64 = zero
+    var b = 1usize
+    while b <= nboot {
+        let start = mem.mark(a)
+        let (pick, e2) = rr.sample_int(a, g, i64(nsim) - 1i64, i64(nsim), true)
+        if e2 != ok { ret e2 }
+        let (ss, e3) = mem.alloc[f64](a, n * nsim)
+        if e3 != ok { ret e3 }
+        let (ob, e4) = mem.alloc[f64](a, n)
+        if e4 != ok { ret e4 }
+        let (qr, e5) = mem.alloc[f64](a, n)
+        if e5 != ok { ret e5 }
+        var c = 0usize
+        while c < nsim {
+            var idx = usize(pick[c])
+            if idx >= b { idx += 1usize }
+            var i = 0usize
+            while i < n {
+                ss[i * nsim + c] = sims[i * nsim + idx - 1usize]
+                i += 1usize
+            }
+            c += 1usize
+        }
+        var i = 0usize
+        while i < n {
+            ob[i] = sims[i * nsim + b - 1usize]
+            i += 1usize
+        }
+        let eq = quantile_g(a, g, ss, ob, nsim, method, integer, 0usize, sg, qr)
+        if eq != ok { ret eq }
+        var f = 0.0f64
+        let ones = outlier_freq(qr, 1usize)
+        let zeros = outlier_freq(qr, 2usize)
+        if margin == 0usize { f = ones + zeros }
+        if margin == 1usize { f = ones }
+        if margin == 2usize { f = zeros }
+        mem.reset(a, start)
+        freq[b - 1usize] = f
+        b += 1usize
+    }
+    res[0usize] = observed * f64(n)
+    res[1usize] = get_p(freq, observed, alt)
+    let (so, e6) = sorted(a, freq)
+    if e6 != ok { ret e6 }
+    var m = 0.0f64
+    var k = 0usize
+    while k < nboot {
+        m += freq[k]
+        k += 1usize
+    }
+    res[4usize] = m / f64(nboot)
+    k = 0usize
+    while k < 2usize {
+        var pr = 0.025f64
+        if k == 1usize { pr = 0.975f64 }
+        let index = 1.0f64 + f64(nboot - 1usize) * pr
+        let lo = math.floor[f64](index)
+        let hi = math.ceil[f64](index)
+        let h = index - lo
+        var q = so[usize(lo) - 1usize]
+        if index > lo && so[usize(hi) - 1usize] != q { q = (1.0f64 - h) * q + h * so[usize(hi) - 1usize] }
+        res[2usize + k] = q
+        k += 1usize
+    }
+    ret ok
+}
+
+// ---- recalculateResiduals ----
+
+// agg 0 sum, 1 mean, 2 max, 3 min of the selected rows of group gval; v is read at v[row * step + offset]
+fn aggregate_group(agg: usize, v: []const f64, step: usize, offset: usize, idx: []const usize, gv: []const f64, gval: f64) -> f64 {
+    var acc = 0.0f64
+    var cnt = 0usize
+    var k = 0usize
+    while k < idx.len {
+        if gv[k] == gval {
+            let x = v[idx[k] * step + offset]
+            if cnt == 0usize {
+                acc = x
+            } else if agg == 2usize {
+                if x > acc { acc = x }
+            } else if agg == 3usize {
+                if x < acc { acc = x }
+            } else {
+                acc += x
+            }
+            cnt += 1usize
+        }
+        k += 1usize
+    }
+    if agg == 1usize { acc = acc / f64(cnt) }
+    ret acc
+}
+
+// recalculateResiduals(group, sel, aggregateBy, seed, method, rotation): an empty group means one group per observation, an empty sel
+// means every row; the groups come out in ascending order of their value. Answers the number of groups; sr, aobs, afit and asims
+// (groups by nsim, row-major) hold the new residuals, observed and fitted responses and simulations.
+fn recalc(a: *mem.Arena, sims: []const f64, obs: []const f64, fitted: []const f64, nsim: usize, group: []const f64, sel: []const f64, agg: usize, seed: i64, method: usize, integer: bool, rot: usize, sigma: []const f64, sr: []f64, aobs: []f64, afit: []f64, asims: []f64) -> (usize, err) {
+    let n = obs.len
+    let (idx, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { ret (0usize, e1) }
+    let (gv, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret (0usize, e2) }
+    var m = 0usize
+    var i = 0usize
+    while i < n {
+        if sel.len != n || sel[i] != 0.0f64 {
+            idx[m] = i
+            if group.len == n { gv[m] = group[i] } else { gv[m] = f64(i) }
+            m += 1usize
+        }
+        i += 1usize
+    }
+    let (ug, e3) = mem.alloc[f64](a, m)
+    if e3 != ok { ret (0usize, e3) }
+    i = 0usize
+    while i < m {
+        ug[i] = gv[i]
+        i += 1usize
+    }
+    sort_f64(ug)
+    var ng = 0usize
+    i = 0usize
+    while i < m {
+        if i == 0usize || ug[i] != ug[i - 1usize] {
+            ug[ng] = ug[i]
+            ng += 1usize
+        }
+        i += 1usize
+    }
+    let sub = idx[0usize..m]
+    let gvs = gv[0usize..m]
+    var k = 0usize
+    while k < ng {
+        aobs[k] = aggregate_group(agg, obs, 1usize, 0usize, sub, gvs, ug[k])
+        afit[k] = aggregate_group(agg, fitted, 1usize, 0usize, sub, gvs, ug[k])
+        var j = 0usize
+        while j < nsim {
+            asims[k * nsim + j] = aggregate_group(agg, sims, nsim, j, sub, gvs, ug[k])
+            j += 1usize
+        }
+        k += 1usize
+    }
+    var g: rr.Rng = zero
+    rr.seed(&g, seed)
+    let eq = quantile_g(a, &g, asims[0usize..ng * nsim], aobs[0usize..ng], nsim, method, integer, rot, sigma, sr[0usize..ng])
+    if eq != ok { ret (0usize, eq) }
+    ret (ng, ok)
+}
+
+// ---- Durbin-Watson p value (lmtest::dwtest on scaledResiduals ~ 1, order.by = time) ----
+
+fn gauss_legendre16(x: []f64, w: []f64) {
+    let pi = 3.141592653589793238462643383279f64
+    var i = 0usize
+    while i < 8usize {
+        var z = math.cos[f64](pi * (f64(i) + 0.75f64) / 16.5f64)
+        var pp = 1.0f64
+        var it = 0usize
+        while it < 100usize {
+            var p1 = 1.0f64
+            var p2 = 0.0f64
+            var j = 1usize
+            while j <= 16usize {
+                let p3 = p2
+                p2 = p1
+                p1 = ((2.0f64 * f64(j) - 1.0f64) * z * p2 - (f64(j) - 1.0f64) * p3) / f64(j)
+                j += 1usize
+            }
+            pp = 16.0f64 * (z * p1 - p2) / (z * z - 1.0f64)
+            let z1 = z
+            z = z1 - p1 / pp
+            if math.abs[f64](z - z1) < 1.0e-16f64 { break }
+            it += 1usize
+        }
+        x[i] = 0.0f64 - z
+        x[15usize - i] = z
+        w[i] = 2.0f64 / ((1.0f64 - z * z) * pp * pp)
+        w[15usize - i] = w[i]
+        i += 1usize
+    }
+}
+
+fn imhof_f(lam: []const f64, u: f64) -> f64 {
+    var th = 0.0f64
+    var lr = 0.0f64
+    var i = 0usize
+    while i < lam.len {
+        let t = lam[i] * u
+        th += math.atan[f64](t)
+        lr += math.log[f64](1.0f64 + t * t)
+        i += 1usize
+    }
+    if u < 1.0e-12f64 {
+        var s = 0.0f64
+        i = 0usize
+        while i < lam.len {
+            s += lam[i]
+            i += 1usize
+        }
+        ret 0.5f64 * s
+    }
+    ret math.sin[f64](0.5f64 * th) / (u * math.exp[f64](0.25f64 * lr))
+}
+
+fn imhof_panel(lam: []const f64, lo: f64, hi: f64, gx: []const f64, gw: []const f64) -> f64 {
+    let half = 0.5f64 * (hi - lo)
+    let mid = 0.5f64 * (hi + lo)
+    var s = 0.0f64
+    var i = 0usize
+    while i < 16usize {
+        s += gw[i] * imhof_f(lam, mid + half * gx[i])
+        i += 1usize
+    }
+    ret s * half
+}
+
+fn imhof_rho(lam: []const f64, u: f64) -> f64 {
+    var lr = 0.0f64
+    var i = 0usize
+    while i < lam.len {
+        let t = lam[i] * u
+        lr += math.log[f64](1.0f64 + t * t)
+        i += 1usize
+    }
+    ret math.exp[f64](0.25f64 * lr)
+}
+
+// the integral of the Imhof integrand on (0, infinity): equal panels on [0, 1], then s panels per octave until 1 / rho is below 1e-16
+fn imhof_integral(lam: []const f64, s: usize, gx: []const f64, gw: []const f64) -> f64 {
+    var total = 0.0f64
+    let np = 8usize * s
+    var p = 0usize
+    while p < np {
+        total += imhof_panel(lam, f64(p) / f64(np), f64(p + 1usize) / f64(np), gx, gw)
+        p += 1usize
+    }
+    var lo = 1.0f64
+    var oct = 0usize
+    while oct < 300usize {
+        let hi = 2.0f64 * lo
+        p = 0usize
+        while p < s {
+            total += imhof_panel(lam, lo + (hi - lo) * f64(p) / f64(s), lo + (hi - lo) * f64(p + 1usize) / f64(s), gx, gw)
+            p += 1usize
+        }
+        if 1.0f64 / imhof_rho(lam, hi) < 1.0e-16f64 { break }
+        lo = hi
+        oct += 1usize
+    }
+    ret total
+}
+
+// P(DW < dw) for the n residuals of an intercept-only model: the eigenvalues of the Durbin-Watson matrix are 2 - 2 cos(pi j / n), j = 1..n-1
+fn dw_cdf(a: *mem.Arena, dw: f64, n: usize) -> f64 {
+    let pi = 3.141592653589793238462643383279f64
+    let (lam, e1) = mem.alloc[f64](a, n - 1usize)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var j = 1usize
+    while j < n {
+        lam[j - 1usize] = 2.0f64 - 2.0f64 * math.cos[f64](pi * f64(j) / f64(n)) - dw
+        j += 1usize
+    }
+    let (gx, e2) = mem.alloc[f64](a, 16usize)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    let (gw, e3) = mem.alloc[f64](a, 16usize)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    gauss_legendre16(gx, gw)
+    let total = imhof_integral(lam, 12usize, gx, gw)
+    ret 0.5f64 - total / pi
+}
+
+// the p value of dwtest: the exact one (Imhof) below 100 observations, the normal approximation otherwise; alt 0 two.sided, 1 greater, 2 less
+fn dw_pvalue(a: *mem.Arena, dw: f64, n: usize, alt: usize) -> f64 {
+    if n < 3usize { ret 1.0f64 }
+    if n < 100usize {
+        let pd = dw_cdf(a, dw, n)
+        var p = pd
+        if alt == 0usize {
+            var q = 1.0f64 - pd
+            if pd < q { q = pd }
+            p = 2.0f64 * q
+        }
+        if alt == 2usize { p = 1.0f64 - pd }
+        if p >= 0.0f64 && p <= 1.0f64 { ret p }
+    }
+    if n < 5usize { ret 1.0f64 }
+    let nf = f64(n)
+    let pp = 2.0f64 * (nf - 1.0f64)
+    let qq = 2.0f64 * (3.0f64 * nf - 4.0f64)
+    let dmean = pp / (nf - 1.0f64)
+    let dvar = 2.0f64 / ((nf - 1.0f64) * (nf - 1.0f64 + 2.0f64)) * (qq - pp * dmean)
+    let sd = math.sqrt[f64](dvar)
+    if alt == 0usize { ret 2.0f64 * dist.pnorm(math.abs[f64](dw - dmean), 0.0f64, sd, false, false) }
+    if alt == 2usize { ret dist.pnorm(dw, dmean, sd, false, false) }
+    ret dist.pnorm(dw, dmean, sd, true, false)
+}
+
+// ---- ks.test with an alternative, the Pearson dispersion test, testGeneric and testCategorical ----
+
+// alt 0 two.sided (D), 1 greater (D+), 2 less (D-)
+fn ks_stat_alt(a: *mem.Arena, r: []const f64, alt: usize) -> f64 {
+    if alt == 0usize { ret ks_uniform(a, r) }
+    let (s, e) = sorted(a, r)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let n = f64(s.len)
+    var d = 0.0f64 - 1.0f64
+    var i = 0usize
+    while i < s.len {
+        var x = 0.0f64
+        if alt == 1usize { x = 1.0f64 / n - (s[i] - f64(i) / n) } else { x = s[i] - f64(i) / n }
+        if x > d { d = x }
+        i += 1usize
+    }
+    ret d
+}
+
+fn ks_pvalue_alt(a: *mem.Arena, r: []const f64, alt: usize) -> f64 {
+    if alt == 0usize { ret ks_pvalue(a, r) }
+    let n = r.len
+    let q = ks_stat_alt(a, r, alt)
+    var p = 0.0f64
+    if n < 100usize && !has_ties(a, r) {
+        let nf = f64(n)
+        var j = 0usize
+        let jmax = usize(math.floor[f64](nf * (1.0f64 - q)))
+        var sum = 0.0f64
+        while j <= jmax {
+            var lc = 0.0f64
+            var i = 1usize
+            while i <= j {
+                lc += math.log[f64](f64(n - j + i) / f64(i))
+                i += 1usize
+            }
+            let b = 1.0f64 - q - f64(j) / nf
+            if b > 0.0f64 { sum += math.exp[f64](lc + (nf - f64(j)) * math.log[f64](b) + (f64(j) - 1.0f64) * math.log[f64](q + f64(j) / nf)) }
+            j += 1usize
+        }
+        p = q * sum
+    } else {
+        p = math.exp[f64](0.0f64 - 2.0f64 * f64(n) * q * q)
+    }
+    if p > 1.0f64 { p = 1.0f64 }
+    if p < 0.0f64 { p = 0.0f64 }
+    ret p
+}
+
+// testDispersion(type = "PearsonChisq"): (sum(rp^2) / rdf, p value); alt 0 two.sided, 1 greater, 2 less
+fn pearson_chisq(rp: []const f64, rdf: f64, alt: usize) -> (f64, f64) {
+    var s = 0.0f64
+    var i = 0usize
+    while i < rp.len {
+        s += rp[i] * rp[i]
+        i += 1usize
+    }
+    var p = 0.0f64
+    if alt == 1usize {
+        p = nm.pchisq(s, rdf, false, false)
+    } else if alt == 2usize {
+        p = nm.pchisq(s, rdf, true, false)
+    } else {
+        let lo = nm.pchisq(s, rdf, true, false)
+        let up = nm.pchisq(s, rdf, false, false)
+        var q = lo
+        if up < q { q = up }
+        p = q * 2.0f64
+        if p > 1.0f64 { p = 1.0f64 }
+    }
+    ret (s / rdf, p)
+}
+
+// testGeneric over summaries already computed: sim holds the summary of every simulation; answers (observed / mean(sim), p)
+fn generic_test(sim: []const f64, observed: f64, alt: usize) -> (f64, f64) {
+    var ms = 0.0f64
+    var i = 0usize
+    while i < sim.len {
+        ms += sim[i]
+        i += 1usize
+    }
+    ms = ms / f64(sim.len)
+    ret (observed / ms, get_p(sim, observed, alt))
+}
+
+fn median_of(a: *mem.Arena, v: []const f64) -> f64 {
+    let (s, e) = sorted(a, v)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let n = s.len
+    if n % 2usize == 1usize { ret s[n / 2usize] }
+    ret (s[n / 2usize - 1usize] + s[n / 2usize]) / 2.0f64
+}
+
+// testCategorical: the KS uniformity p value of every level of grp (ascending), its Holm adjustment, and Levene's F and p
+// (anova of |r - level median| on the level). p and padj need one slot per level; answers the number of levels.
+fn test_categorical(a: *mem.Arena, r: []const f64, grp: []const f64, p: []f64, padj: []f64, lev: []f64) -> (usize, err) {
+    let n = r.len
+    let (ug, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret (0usize, e1) }
+    var i = 0usize
+    while i < n {
+        ug[i] = grp[i]
+        i += 1usize
+    }
+    sort_f64(ug)
+    var ng = 0usize
+    i = 0usize
+    while i < n {
+        if i == 0usize || ug[i] != ug[i - 1usize] {
+            ug[ng] = ug[i]
+            ng += 1usize
+        }
+        i += 1usize
+    }
+    let (sub, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret (0usize, e2) }
+    let (z, e3) = mem.alloc[f64](a, n)
+    if e3 != ok { ret (0usize, e3) }
+    let (zm, e4) = mem.alloc[f64](a, ng)
+    if e4 != ok { ret (0usize, e4) }
+    var k = 0usize
+    while k < ng {
+        var m = 0usize
+        i = 0usize
+        while i < n {
+            if grp[i] == ug[k] {
+                sub[m] = r[i]
+                m += 1usize
+            }
+            i += 1usize
+        }
+        p[k] = ks_pvalue(a, sub[0usize..m])
+        let med = median_of(a, sub[0usize..m])
+        var zs = 0.0f64
+        i = 0usize
+        while i < n {
+            if grp[i] == ug[k] {
+                z[i] = math.abs[f64](r[i] - med)
+                zs += z[i]
+            }
+            i += 1usize
+        }
+        zm[k] = zs / f64(m)
+        k += 1usize
+    }
+    // Holm: ascending order statistics, multiplier ng - rank, running maximum, capped at 1
+    let (ord, e5) = mem.alloc[usize](a, ng)
+    if e5 != ok { ret (0usize, e5) }
+    k = 0usize
+    while k < ng {
+        ord[k] = k
+        k += 1usize
+    }
+    k = 1usize
+    while k < ng {
+        let v = ord[k]
+        var j = k
+        while j > 0usize && p[ord[j - 1usize]] > p[v] {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = v
+        k += 1usize
+    }
+    var run = 0.0f64
+    k = 0usize
+    while k < ng {
+        var v = f64(ng - k) * p[ord[k]]
+        if v > 1.0f64 { v = 1.0f64 }
+        if v > run { run = v }
+        padj[ord[k]] = run
+        k += 1usize
+    }
+    lev[0usize] = 0.0f64 / 0.0f64
+    lev[1usize] = 0.0f64 / 0.0f64
+    if ng > 1usize {
+        var gm = 0.0f64
+        i = 0usize
+        while i < n {
+            gm += z[i]
+            i += 1usize
+        }
+        gm = gm / f64(n)
+        var ssb = 0.0f64
+        var ssw = 0.0f64
+        k = 0usize
+        while k < ng {
+            var cnt = 0.0f64
+            i = 0usize
+            while i < n {
+                if grp[i] == ug[k] {
+                    cnt += 1.0f64
+                    ssw += (z[i] - zm[k]) * (z[i] - zm[k])
+                }
+                i += 1usize
+            }
+            ssb += cnt * (zm[k] - gm) * (zm[k] - gm)
+            k += 1usize
+        }
+        let d1 = f64(ng) - 1.0f64
+        let d2 = f64(n) - f64(ng)
+        let f = (ssb / d1) / (ssw / d2)
+        lev[0usize] = f
+        lev[1usize] = nb.pf(f, d1, d2, false, false)
+    }
+    ret (ng, ok)
 }
