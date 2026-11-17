@@ -31,6 +31,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let n = usize(z[2usize])
         ret bz.llmnl(z[3usize..3usize + k], z[3usize + k..3usize + k + n], z[3usize + k + n..3usize + k + n + n * p * k], k, p)
     }
+    if str.eq(c.name, "mh") {
+        let k = usize(z[0usize])
+        let p = usize(z[1usize])
+        let n = usize(z[2usize])
+        let (o, oe) = mem.alloc[f64](a, k * k)
+        if oe != ok { ret 0.0f64 / 0.0f64 }
+        if bz.mnl_hess(a, z[4usize..4usize + k], z[4usize + k + n..4usize + k + n + n * p * k], k, p, n, o) != ok { ret 0.0f64 / 0.0f64 }
+        ret o[usize(z[3usize])]
+    }
+    if str.eq(c.name, "ne") {
+        let nn = usize(z[0usize])
+        let (o, oe) = mem.alloc[f64](a, 2usize)
+        if oe != ok { ret 0.0f64 / 0.0f64 }
+        bz.num_eff(z[3usize..3usize + nn], usize(z[1usize]), o)
+        ret o[usize(z[2usize])]
+    }
     if str.eq(c.name, "cm") {
         let k = usize(z[1usize])
         let i = usize(z[2usize])

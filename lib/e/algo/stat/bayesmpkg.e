@@ -762,3 +762,91 @@ fn runireg_gibbs(a: *mem.Arena, r: *rng.Rng, y: []const f64, x: []const f64, bet
     }
     ret ok
 }
+
+// mnlHess(beta, y, X): the k by k information matrix of the multinomial logit, the sum over observations of X_i' (diag(p_i) - p_i p_i') X_i, column-major in out (y is not used by the formula)
+fn mnl_hess(a: *mem.Arena, beta: []const f64, x: []const f64, k: usize, p: usize, n: usize, out: []f64) -> err {
+    let (pr, e) = mem.alloc[f64](a, p)
+    if e != ok { ret e }
+    var q = 0usize
+    while q < k * k {
+        out[q] = 0.0f64
+        q += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var denom = 0.0f64
+        var j = 0usize
+        while j < p {
+            var s = 0.0f64
+            var c = 0usize
+            while c < k {
+                s += x[c * n * p + i * p + j] * beta[c]
+                c += 1usize
+            }
+            pr[j] = math.exp[f64](s)
+            denom += pr[j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < p {
+            pr[j] = pr[j] / denom
+            j += 1usize
+        }
+        var c1 = 0usize
+        while c1 < k {
+            var c2 = 0usize
+            while c2 < k {
+                var s = 0.0f64
+                var j1 = 0usize
+                while j1 < p {
+                    var j2 = 0usize
+                    while j2 < p {
+                        var am = 0.0f64 - pr[j1] * pr[j2]
+                        if j1 == j2 { am += pr[j1] }
+                        s += x[c1 * n * p + i * p + j1] * am * x[c2 * n * p + i * p + j2]
+                        j2 += 1usize
+                    }
+                    j1 += 1usize
+                }
+                out[c2 * k + c1] += s
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// numEff(x, m): the standard error of the mean allowing for autocorrelation, sqrt(var(x) f / n) with f = 1 + 2 sum_{l = 1..m} ((m + 1 - l) / (m + 1)) acf(l); out = (stderr, f)
+fn num_eff(x: []const f64, m: usize, out: []f64) {
+    let n = x.len
+    let nf = f64(n)
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += x[i]
+        i += 1usize
+    }
+    mean = mean / nf
+    var c0 = 0.0f64
+    i = 0usize
+    while i < n {
+        c0 += (x[i] - mean) * (x[i] - mean)
+        i += 1usize
+    }
+    var f = 1.0f64
+    var l = 1usize
+    while l <= m {
+        var cl = 0.0f64
+        i = 0usize
+        while i + l < n {
+            cl += (x[i] - mean) * (x[i + l] - mean)
+            i += 1usize
+        }
+        f += 2.0f64 * f64(m + 1usize - l) / f64(m + 1usize) * (cl / c0)
+        l += 1usize
+    }
+    out[0usize] = math.sqrt[f64](c0 / (nf - 1.0f64) * f / nf)
+    out[1usize] = f
+}

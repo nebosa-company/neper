@@ -1472,10 +1472,10 @@
       "group": "CRAN parity",
       "order": 780,
       "title": "bayesm: Bayesian econometrics",
-      "score": 0.25,
+      "score": 0.27,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D6817: e.algo.stat.bayesmpkg has lndMvn, lndMvst, lndIWishart, lndIChisq, llmnl, condMom, rdirichlet, rtrun, rwishart and breg equal to bayesm under set.seed on 1484 values; oracle_bayesm; Linux pending). D6818: rmultireg and runireg equal bayesm. D6819: runiregGibbs equals bayesm. Open: rnmixGibbs, rmnpGibbs, rmvpGibbs, rivGibbs, rhierLinearModel, rhierMnlRwMixture, rscaleUsage. Was: Open (CRAN rank 829). Mid to large. Needs the R RNG streams. Acceptance, equal to bayesm value for value under set.seed: rhierMnlRwMixture, rmnpGibbs, rmvpGibbs, runireg, runiregGibbs, rivGibbs, rnmixGibbs, rhierLinearModel, rscaleUsage and the helper samplers."
+      "evidence": "Partial (D6817: e.algo.stat.bayesmpkg has lndMvn, lndMvst, lndIWishart, lndIChisq, llmnl, condMom, rdirichlet, rtrun, rwishart and breg equal to bayesm under set.seed on 1484 values; oracle_bayesm; Linux pending). D6818: rmultireg and runireg equal bayesm. D6819: runiregGibbs equals bayesm. D6897: mnlHess and numEff equal bayesm. Open: rnmixGibbs, rmnpGibbs, rmvpGibbs, rivGibbs, rhierLinearModel, rhierMnlRwMixture, rscaleUsage. Was: Open (CRAN rank 829). Mid to large. Needs the R RNG streams. Acceptance, equal to bayesm value for value under set.seed: rhierMnlRwMixture, rmnpGibbs, rmvpGibbs, runireg, runiregGibbs, rivGibbs, rnmixGibbs, rhierLinearModel, rscaleUsage and the helper samplers."
     },
     {
       "id": "L514",

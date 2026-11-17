@@ -132,7 +132,7 @@ L455	library	0.1	742	geometry: Qhull in n dimensions	Partial (D6645).
 L463	library	0.25	784	actuar: actuarial science	Partial (D6143).
 L464	library	0.16	483	gamlss.dist: GAMLSS distribution families	Partial (D6471 GU, LO, GA, IG, BCCG, PE, D6472 WEI, LOGNO, NBI, ZIP, JSU, SHASH, BCT densities, LO p and q, GU q equal gamlss.dist on Windows;
 L467	library	0.1	846	hetGP: heteroskedastic Gaussian processes	Partial (D6647).
-L494	library	0.25	658	bayesm: Bayesian econometrics	Partial (D6817: e.algo.stat.bayesmpkg has lndMvn, lndMvst, lndIWishart, lndIChisq, llmnl, condMom, rdirichlet, rtrun, rwishart and breg equal to bayesm under set.seed on 1484 values;
+L494	library	0.27	698	bayesm: Bayesian econometrics	Partial (D6817: e.algo.stat.bayesmpkg has lndMvn, lndMvst, lndIWishart, lndIChisq, llmnl, condMom, rdirichlet, rtrun, rwishart and breg equal to bayesm under set.seed on 1484 values;
 L514	library	0.1	641	copula: dependence models	Partial (D6637).
 L311	library	0.1	930	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	Partly done (D6056): e.algo.stat.cox.coxph (Breslow and Efron, one stratum) equals survival on 152 values on Windows (oracle_coxph);
 L490	library	0.15	657	timereg: Aalen additive and Cox-Aalen hazard models	Partial (D6641).

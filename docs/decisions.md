@@ -48054,3 +48054,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6896 — gbm: laplace
 
 **Decision.** `gbmpkg.laplace` starts at the median of y, fits the tree to the sign of y - F and moves each leaf by the median of its residuals, the median being the first value whose cumulative count reaches half the total, with the mean of that value and the next when the count reaches half exactly. Equal to gbm on 10 data sets (80 to 160 rows, depth 1 to 3, 10 and 30 trees) at four rows each (oracle_gbm, 204 cases in all). The `quantile` loss was tried with the same quantile rule and with two variants of the tie rule and does not match gbm (the cases whose cutoff is an integer move, the rest still differ in the sixth to second digit); it is not included. Linux pending.
+
+## D6897 — bayesm: mnlHess and numEff
+
+**Decision.** `bayesmpkg.mnl_hess` is bayesm's `mnlHess`: the sum over observations of X_i' (diag(p_i) - p_i p_i') X_i with p_i the multinomial logit probabilities (the sign is positive, an information matrix). `num_eff` is `numEff`: f = 1 + 2 sum over lags l up to m of ((m + 1 - l) / (m + 1)) acf(l) and the standard error sqrt(var(x) f / n), acf with R's denominator n and the mean removed. Equal to bayesm on the 25 data sets of the existing oracle (mnlHess at every element of the k by k matrix, numEff for series of 40 to 300 values with 2 to 15 lags, both outputs; oracle_bayesm, 2433 cases in all). Linux pending.
