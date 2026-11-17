@@ -420,7 +420,7 @@ fn summarise(a: *mem.Arena, x: []const f64, nchain: usize, n: usize, out: []f64)
 }
 
 // one tail of posterior:::ps_tail on x in place (tail 1 = right, 2 = left): the Pareto k, NaN where no fit was made
-fn ps_tail(a: *mem.Arena, x: []f64, ndt: usize, left: bool) -> (f64, err) {
+fn ps_tail(a: *mem.Arena, x: []f64, ndt: usize, left: bool, smooth: bool) -> (f64, err) {
     let nan = 0.0f64 / 0.0f64
     let s = x.len
     let (y, e0) = mem.alloc[f64](a, s)
@@ -459,7 +459,7 @@ fn ps_tail(a: *mem.Arena, x: []f64, ndt: usize, left: bool) -> (f64, err) {
     }
     let (k, sg, ge) = lp.gpdfit(a, ex)
     if ge != ok { ret (nan, ge) }
-    if k == k && k - k == 0.0f64 && sg > 0.0f64 {
+    if smooth && k == k && k - k == 0.0f64 && sg > 0.0f64 {
         i = 0usize
         while i < ndt {
             let p = (f64(i + 1usize) - 0.5f64) / f64(ndt)
@@ -480,6 +480,12 @@ fn ps_tail(a: *mem.Arena, x: []f64, ndt: usize, left: bool) -> (f64, err) {
 
 // pareto_smooth(x, tail, r_eff, return_k, extra_diags) of one vector (tail 0 both, 1 right, 2 left; r_eff <= 0 for the default ess_tail(x) / S): the smoothed draws into out and (khat, min_ss, khat_threshold, convergence_rate); NaN khat where no fit was made
 fn pareto_smooth(a: *mem.Arena, x: []const f64, tail: usize, r_eff0: f64, out: []f64) -> (f64, f64, f64, f64, err) {
+    let (k, mn, th, rt, e) = pareto_smooth_nt(a, x, tail, r_eff0, 0usize, true, out)
+    ret (k, mn, th, rt, e)
+}
+
+// the same with ndraws_tail given (0 for the default)
+fn pareto_smooth_nt(a: *mem.Arena, x: []const f64, tail: usize, r_eff0: f64, ndt_in: usize, smooth: bool, out: []f64) -> (f64, f64, f64, f64, err) {
     let nan = 0.0f64 / 0.0f64
     let s = x.len
     let sf = f64(s)
@@ -488,24 +494,34 @@ fn pareto_smooth(a: *mem.Arena, x: []const f64, tail: usize, r_eff0: f64, out: [
         out[i] = x[i]
         i += 1usize
     }
+    var lo = x[0usize]
+    var hi = x[0usize]
+    i = 0usize
+    while i < s {
+        if x[i] < lo { lo = x[i] }
+        if x[i] > hi { hi = x[i] }
+        i += 1usize
+    }
+    if math.abs[f64](hi - lo) < 2.220446049250313e-16f64 { ret (nan, nan, nan, nan, ok) }
     var r_eff = r_eff0
     if !(r_eff > 0.0f64) { r_eff = ess_tail(a, x, 1usize, s) / sf }
     var ndt0 = math.floor[f64](sf / 5.0f64)
     if sf * r_eff > 225.0f64 { ndt0 = math.floor[f64](3.0f64 * math.sqrt[f64](sf / r_eff)) }
     var ndt = usize(ndt0)
+    if ndt_in > 0usize { ndt = ndt_in }
     if ndt < 5usize { ndt = 5usize }
     if ndt >= s { ret (nan, nan, nan, nan, ok) }
     if tail == 0usize && f64(ndt) > sf / 2.0f64 { ndt = usize(math.floor[f64](sf / 2.0f64)) }
     var k = nan
     if tail == 0usize {
-        let (k1, e1) = ps_tail(a, out, ndt, true)
+        let (k1, e1) = ps_tail(a, out, ndt, true, smooth)
         if e1 != ok { ret (nan, nan, nan, nan, e1) }
-        let (k2, e2) = ps_tail(a, out, ndt, false)
+        let (k2, e2) = ps_tail(a, out, ndt, false, smooth)
         if e2 != ok { ret (nan, nan, nan, nan, e2) }
         k = k2
         if k1 == k1 && (k2 != k2 || k1 > k2) { k = k1 }
     } else {
-        let (k1, e1) = ps_tail(a, out, ndt, tail == 2usize)
+        let (k1, e1) = ps_tail(a, out, ndt, tail == 2usize, smooth)
         if e1 != ok { ret (nan, nan, nan, nan, e1) }
         k = k1
     }

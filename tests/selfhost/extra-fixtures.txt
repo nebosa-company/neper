@@ -404,3 +404,4 @@ oracle_vars_vec
 oracle_coda2
 oracle_coda3
 oracle_posterior2
+oracle_loo2

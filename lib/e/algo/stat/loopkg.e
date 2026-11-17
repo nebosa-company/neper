@@ -71,9 +71,15 @@ fn gpdfit(a: *mem.Arena, x: []const f64) -> (f64, f64, err) {
 
 // loo's do_psis_i for one observation (r_eff = 1): the smoothed log weights into lw (S values, not normalised) and the Pareto k
 fn psis_i(a: *mem.Arena, lr: []const f64, lw: []f64) -> (f64, err) {
+    let (k, e) = psis_i_r(a, lr, lw, 1.0f64)
+    ret (k, e)
+}
+
+// the same with the relative efficiency r_eff of the observation: the tail holds ceiling(min(0.2 S, 3 sqrt(S / r_eff))) draws
+fn psis_i_r(a: *mem.Arena, lr: []const f64, lw: []f64, r_eff: f64) -> (f64, err) {
     let s = lr.len
     let sf = f64(s)
-    var tail_len = usize(math.ceil[f64](math.min[f64](0.2f64 * sf, 3.0f64 * math.sqrt[f64](sf))))
+    var tail_len = usize(math.ceil[f64](math.min[f64](0.2f64 * sf, 3.0f64 * math.sqrt[f64](sf / r_eff))))
     let (ord, e1) = mem.alloc[usize](a, s)
     let (srt, e2) = mem.alloc[f64](a, s)
     if e1 != ok { ret (nan(), e1) }
