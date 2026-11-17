@@ -407,3 +407,7 @@ oracle_posterior2
 oracle_loo2
 oracle_ggdist
 oracle_cramer
+oracle_hoslem_rsf
+oracle_laeken_ext
+oracle_rcompanion_ext
+oracle_compositions_ext
