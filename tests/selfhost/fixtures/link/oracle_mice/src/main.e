@@ -21,6 +21,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         mc.pool_scalar(z[2usize..2usize + pm], z[2usize + pm..2usize + 2usize * pm], z[1usize], 1.0f64, po)
         ret po[usize(z[2usize + 2usize * pm])]
     }
+    if str.eq(c.name, "imp2") {
+        let n2 = usize(z[0usize])
+        let p2 = usize(z[1usize])
+        let nv = usize(z[6usize + n2 * p2 + p2 * p2])
+        let (imp2, e2) = mem.alloc[f64](a, n2 * p2 * usize(z[2usize]) + 4usize)
+        if e2 != ok { ret nan }
+        let b = 6usize + n2 * p2
+        let me2 = mc.mice_norm(a, z[6usize..b], n2, p2, usize(z[2usize]), usize(z[3usize]), usize(z[4usize]), i64(z[5usize]), imp2, z[b..b + p2 * p2], z[b + p2 * p2 + 1usize..b + p2 * p2 + 1usize + nv])
+        if me2 != ok { ret nan }
+        ret imp2[usize(z[b + p2 * p2 + 1usize + nv])]
+    }
     let n = usize(z[0usize])
     let p = usize(z[1usize])
     let m = usize(z[2usize])
@@ -31,7 +42,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let idx = usize(z[6usize + n * p])
     let (imp, e) = mem.alloc[f64](a, n * p * m + 4usize)
     if e != ok { ret nan }
-    let me = mc.mice_norm(a, data, n, p, m, maxit, method, seed, imp)
+    let me = mc.mice_norm(a, data, n, p, m, maxit, method, seed, imp, z[0usize..0usize], z[0usize..0usize])
     if me != ok { ret nan }
     ret imp[idx]
 }

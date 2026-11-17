@@ -47498,3 +47498,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6757 — mice: logreg.boot
 
 **Decision.** `logreg.boot` (method 6, first column; other incomplete columns norm.nob) is `mice.impute.logreg.boot`: the observed rows are replaced by `sample(n1, n1, replace = TRUE)` of themselves (design rows and y together), the logit is fitted by glm.fit's iteratively reweighted steps on the resample with no augmentation rows, the fitted coefficients are used as they are (no coefficient draw), and one uniform per missing row is compared with the fitted probability. It shares `logreg_draw` with `logreg` through a `boot` flag. Equal to mice 3.19 on the 20 more data sets added (oracle_mice, 2992 cases in all). Linux pending.
+
+## D6758 — mice: predictor matrix and visit sequence
+
+**Decision.** `mice_norm` takes the predictor matrix (row j lists the columns that predict column j; empty means all other columns) and the visit sequence (a permutation of the columns; empty means 1..p). The sequence orders both the initial draws (`initialize.imp` samples column by column in that order, so the random stream differs) and each sweep's chained regressions; the matrix restricts the predictors before `remove.lindep`. Equal to mice 3.19 on 40 random matrices and permutations over 4 or 5 columns (oracle_mice, 3840 cases in all). A visit sequence that leaves an incomplete column out is not covered. Linux pending.

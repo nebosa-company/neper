@@ -70,7 +70,7 @@ fn spd_inverse(a: []const f64, q: usize, inv: []f64, l: []f64) -> bool {
 }
 
 // mice(data, m, maxit, method = "norm.nob" (0), "norm" (1) or "norm.predict" (2), seed): data is n by p column-major with NaN for missing; imp receives, for each column with missing values in order and each imputation, the imputed values of its missing rows in row order (imp must hold sum of nmis * m values)
-fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, maxit: usize, method: usize, seed: i64, imp: []f64) -> err {
+fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, maxit: usize, method: usize, seed: i64, imp: []f64, pred: []const f64, visit: []const f64) -> err {
     var r: rng.Rng = zero
     rng.seed(&r, seed)
     let (data, e0) = mem.alloc[f64](a, n * p)
@@ -103,8 +103,12 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
     }
     if imp.len < tot { ret mem.Full }
     // the initial draws: sample the observed values with replacement
-    j = 0usize
-    while j < p {
+    var v0 = 0usize
+    var nv0 = p
+    if visit.len > 0usize { nv0 = visit.len }
+    while v0 < nv0 {
+        j = v0
+        if visit.len > 0usize { j = usize(visit[v0]) }
         if nmis[j] > 0usize {
             var no = 0usize
             var i = 0usize
@@ -127,7 +131,7 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                 im += 1usize
             }
         }
-        j += 1usize
+        v0 += 1usize
     }
     var k = 0usize
     while k < maxit {
@@ -149,8 +153,12 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                 }
                 j += 1usize
             }
-            j = 0usize
-            while j < p {
+            var vi = 0usize
+            var nv = p
+            if visit.len > 0usize { nv = visit.len }
+            while vi < nv {
+                j = vi
+                if visit.len > 0usize { j = usize(visit[vi]) }
                 if nmis[j] > 0usize {
                     var mj = method
                     if (method == 4usize || method == 6usize) && j > 0usize { mj = 0usize }
@@ -177,7 +185,7 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                     var jk = 0usize
                     while jk < p {
                         keepf[jk] = false
-                        if jk != j && ykeep {
+                        if jk != j && ykeep && (pred.len == 0usize || pred[j * p + jk] != 0.0f64) {
                             var xm = 0.0f64
                             i = 0usize
                             while i < n {
@@ -498,7 +506,7 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                     }
                     }
                 }
-                j += 1usize
+                vi += 1usize
             }
             im += 1usize
         }

@@ -771,7 +771,7 @@
       "score": 0.55,
       "model": "opus",
       "thinking": "high",
-      "evidence": "D6752: e.algo.stat.micepkg equals mice 3.19 after set.seed for norm.nob, norm, norm.predict, pmm, norm.boot, logreg and logreg.boot (initial draws, the chained regressions, remove.lindep) on 1834 imputed values (oracle_mice); Linux pending. Also pool.scalar. Open: polyreg, polr, cart, passive imputation, the visit sequence and predictor matrix, Rubin pooling against R. Open (CRAN rank 293). Mid. e.algo.stat.causal has mice and mice_pool; verify equality to R first. Acceptance, imputed values equal to mice under set.seed for pmm, norm, norm.nob, norm.boot, logreg, polyreg, polr, cart and passive imputation, with the visit sequence and Rubin pooling."
+      "evidence": "D6752: e.algo.stat.micepkg equals mice 3.19 after set.seed for norm.nob, norm, norm.predict, pmm, norm.boot, logreg and logreg.boot (initial draws, the chained regressions, remove.lindep) on 1834 imputed values (oracle_mice); Linux pending. Also pool.scalar, a predictor matrix and a visit sequence (a permutation). Open: polyreg, polr, cart, passive imputation, partial visit sequences, Rubin pooling against R. Open (CRAN rank 293). Mid. e.algo.stat.causal has mice and mice_pool; verify equality to R first. Acceptance, imputed values equal to mice under set.seed for pmm, norm, norm.nob, norm.boot, logreg, polyreg, polr, cart and passive imputation, with the visit sequence and Rubin pooling."
     },
     {
       "id": "L360",

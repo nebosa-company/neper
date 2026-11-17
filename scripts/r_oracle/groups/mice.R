@@ -39,4 +39,19 @@ for (rep in 1:60) {
   r <- pool.scalar(qs, us, n = nn, k = 1); vals <- c(r$qbar, r$ubar, r$b, r$t, r$df, r$r, r$fmi)
   for (f in 0:6) cases[[length(cases) + 1]] <- case("pool", c(m, nn, qs, us, f), vals[f + 1], rel = 1e-9, abs = 1e-10)
 }
+# predictor matrix and visit sequence (norm.nob, method 0): args (n, p, m, maxit, 0, seed, data, pred[p*p] row j = target j, nv, visit[nv] 0-based, idx)
+for (rep in 1:40) {
+  n <- sample(25:60, 1); p <- sample(4:5, 1); m <- sample(1:2, 1); maxit <- sample(1:3, 1)
+  X <- matrix(round(rnorm(n * p), 4), n, p); for (j in 2:p) X[, j] <- round(X[, j] + 0.5 * X[, j - 1], 4)
+  for (j in sample(p, 3)) X[sample(n, sample(3:6, 1)), j] <- NA
+  df <- as.data.frame(X); pm <- matrix(rbinom(p * p, 1, 0.7), p, p); diag(pm) <- 0
+  for (j in 1:p) if (sum(pm[j, ]) == 0) pm[j, setdiff(1:p, j)[1]] <- 1
+  vs <- sample(p)
+  seed <- sample(1:100000, 1)
+  imp <- tryCatch(suppressWarnings(mice(df, m = m, maxit = maxit, method = "norm.nob", predictorMatrix = pm, visitSequence = vs, seed = seed, printFlag = FALSE)), error = function(e) NULL)
+  if (is.null(imp) || !is.null(imp$loggedEvents)) next
+  flat <- unlist(lapply(seq_len(p), function(j) if (!is.null(imp$imp[[j]]) && nrow(imp$imp[[j]]) > 0) as.vector(as.matrix(imp$imp[[j]])) else NULL))
+  xa <- ifelse(is.na(X), NaN, X)
+  for (q in seq_along(flat)) cases[[length(cases) + 1]] <- case("imp2", c(n, p, m, maxit, 0, seed, as.vector(xa), as.vector(t(pm)), length(vs), vs - 1, q - 1), flat[q], rel = 1e-6, abs = 1e-8)
+}
 emit("mice", "mice", list(cases))
