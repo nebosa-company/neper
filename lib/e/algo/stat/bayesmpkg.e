@@ -919,3 +919,39 @@ fn mix_den(a: *mem.Arena, x: f64, prob: []const f64, mus: []const f64, rootis: [
     }
     ret s
 }
+
+// createX(p, na, nd, Xa, Xd, INT = TRUE, DIFF = FALSE, base): the stacked design of a multinomial logit, n p rows by (nd + 1) (p - 1) + na columns, column-major. Xa is n by p na (column a * p + r holds attribute a of alternative r), Xd is n by nd;
+// the intercept and demographics enter as Xd1 (x) Imod with the base alternative's row of Imod zero, the attributes as the row-major unrolling of each n by p block of Xa
+fn create_x(xa: []const f64, xd: []const f64, n: usize, p: usize, na: usize, nd: usize, base: usize, out: []f64) {
+    let rows = n * p
+    let cols = (nd + 1usize) * (p - 1usize) + na
+    var q = 0usize
+    while q < rows * cols {
+        out[q] = 0.0f64
+        q += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var r = 0usize
+        while r < p {
+            if r + 1usize != base {
+                var c = r
+                if r + 1usize > base { c = r - 1usize }
+                var d = 0usize
+                while d <= nd {
+                    var v = 1.0f64
+                    if d > 0usize { v = xd[(d - 1usize) * n + i] }
+                    out[(d * (p - 1usize) + c) * rows + i * p + r] = v
+                    d += 1usize
+                }
+            }
+            var a = 0usize
+            while a < na {
+                out[((nd + 1usize) * (p - 1usize) + a) * rows + i * p + r] = xa[(a * p + r) * n + i]
+                a += 1usize
+            }
+            r += 1usize
+        }
+        i += 1usize
+    }
+}

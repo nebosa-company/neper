@@ -20,6 +20,9 @@ for (rep in 1:25) {
   mo <- momMix(matrix(pv, 1), list(comps)); sg <- mo$sigma; mm <- mo$mu
   for (q in 1:kk) add("mm", c(nc, kk, q - 1, 0, pv, mus, rts), mm[q]); for (q in seq_len(kk * kk)) add("mm", c(nc, kk, kk + q - 1, 0, pv, mus, rts), as.vector(sg)[q])
   xg <- matrix(rnorm(3 * kk), 3, kk); dn <- mixDen(xg, pv, comps); for (d in 1:kk) for (r in 1:3) add("md", c(nc, kk, d - 1, xg[r, d], pv, mus, rts), dn[r, d])
+  cp <- sample(3:5, 1); cn <- sample(3:8, 1); cna <- sample(1:3, 1); cnd <- sample(1:3, 1); cb <- sample(1:cp, 1)
+  Xa <- matrix(round(rnorm(cn * cp * cna), 3), cn, cp * cna); Xd <- matrix(round(rnorm(cn * cnd), 3), cn, cnd)
+  XX <- createX(cp, cna, cnd, Xa, Xd, base = cb); for (q in seq_along(as.vector(XX))) add("cx", c(cn, cp, cna, cnd, cb, q - 1, Xa, Xd), as.vector(XX)[q])
   nn <- sample(40:300, 1); xs <- as.numeric(arima.sim(list(ar = 0.6), nn)); mm <- sample(2:15, 1); ne <- numEff(xs, mm)
   add("ne", c(nn, mm, 0, xs), ne$stderr); add("ne", c(nn, mm, 1, xs), ne$f)
   sd <- sample(1:100000, 1); m <- sample(2:6, 1); al <- runif(m, 0.3, 4); set.seed(sd); d <- rdirichlet(al); for (j in 1:m) add("dir", c(sd, m, al, j - 1), d[j], 1e-12)

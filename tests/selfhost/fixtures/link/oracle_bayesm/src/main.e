@@ -63,6 +63,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if q < k { ret mo[q] }
         ret so[q - k]
     }
+    if str.eq(c.name, "cx") {
+        // (n, p, na, nd, base, q, Xa[n p na], Xd[n nd])
+        let n = usize(z[0usize])
+        let p = usize(z[1usize])
+        let na = usize(z[2usize])
+        let nd = usize(z[3usize])
+        let (o, oe) = mem.alloc[f64](a, n * p * ((nd + 1usize) * (p - 1usize) + na))
+        if oe != ok { ret 0.0f64 / 0.0f64 }
+        bz.create_x(z[6usize..6usize + n * p * na], z[6usize + n * p * na..6usize + n * p * na + n * nd], n, p, na, nd, usize(z[4usize]), o)
+        ret o[usize(z[5usize])]
+    }
     if str.eq(c.name, "cm") {
         let k = usize(z[1usize])
         let i = usize(z[2usize])
