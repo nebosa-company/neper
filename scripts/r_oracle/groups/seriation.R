@@ -15,6 +15,7 @@ for (rep in 1:60) {
     criterion(d, ord, "Path_length"), criterion(d, ord, "Lazy_path_length"), criterion(d, ord, "Least_squares"), criterion(d, ord, "Inertia"),
     criterion(d, ord, "AR_events"), criterion(d, ord, "AR_deviations"), criterion(d, ord, "Gradient_raw"), criterion(d, ord, "Gradient_weighted"))
   for (code in 1:8) cases[[length(cases) + 1]] <- case("dc", c(n, rowm(Dm), o, code, 0), as.numeric(vals[[code]]), rel = 1e-9, abs = 1e-10)
+  cases[[length(cases) + 1]] <- case("dc", c(n, rowm(Dm), o, 14, 0), as.numeric(suppressWarnings(criterion(d, ord, "MDS_stress"))), rel = 1e-9, abs = 1e-10)
   cases[[length(cases) + 1]] <- case("dc", c(n, rowm(Dm), o, 12, 0), as.numeric(criterion(d, ord, "2SUM")), rel = 1e-9, abs = 1e-10)
   cases[[length(cases) + 1]] <- case("dc", c(n, rowm(Dm), o, 13, 0), as.numeric(criterion(d, ord, "Rho")), rel = 1e-9, abs = 1e-10)
   b <- sample(1:(n - 1), 1); cases[[length(cases) + 1]] <- case("dc", c(n, rowm(Dm), o, 9, b), as.numeric(criterion(d, ord, "BAR", b = b)), rel = 1e-9, abs = 1e-10)

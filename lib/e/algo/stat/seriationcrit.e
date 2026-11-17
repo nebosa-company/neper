@@ -455,3 +455,97 @@ fn rho(a: *mem.Arena, d: []const f64, n: usize, o: []const usize) -> f64 {
     }
     ret math.abs[f64](hc.spearman_vec(a, x, y))
 }
+
+// MDS_stress(d, order): the one-dimensional unfolding of the order (the package uniscale: t_i = (r_i - sum r / n) / n with r_i = sum_j delta_ij sign(rank_i - rank_j), delta the dissimilarities
+// scaled to unit mean square; the ranks themselves when t does not keep the order), then sqrt(sum (d - d_emb)^2 / sum d_emb^2) over the pairs with both distance sets scaled to unit mean square
+fn mds_stress(a: *mem.Arena, d: []const f64, n: usize, o: []const usize) -> f64 {
+    let m = n * (n - 1usize) / 2usize
+    let (rank, e1) = mem.alloc[f64](a, n)
+    let (t, e2) = mem.alloc[f64](a, n)
+    let (r, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    while k < n {
+        rank[o[k]] = f64(k + 1usize)
+        k += 1usize
+    }
+    // the squared sum over the pair vector (each pair once) for the scaling
+    var ss = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < i {
+            ss += d[i * n + j] * d[i * n + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let scale = math.sqrt[f64](f64(m)) / math.sqrt[f64](ss)
+    var tot = 0.0f64
+    i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var j = 0usize
+        while j < n {
+            if j != i {
+                var sg = 0.0f64
+                if rank[i] > rank[j] { sg = 1.0f64 } else if rank[i] < rank[j] { sg = 0.0f64 - 1.0f64 }
+                s += d[i * n + j] * scale * sg
+            }
+            j += 1usize
+        }
+        r[i] = s
+        tot += s
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        t[i] = r[i] / f64(n) - tot / (f64(n) * f64(n))
+        i += 1usize
+    }
+    // does t keep the order of the ranks
+    var same = true
+    i = 0usize
+    while i < n {
+        var j = i + 1usize
+        while j < n {
+            if (rank[i] < rank[j]) != (t[i] < t[j]) { same = false }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if !same {
+        i = 0usize
+        while i < n {
+            t[i] = rank[i]
+            i += 1usize
+        }
+    }
+    var se = 0.0f64
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < i {
+            let de = math.abs[f64](t[i] - t[j])
+            se += de * de
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let escale = math.sqrt[f64](f64(m)) / math.sqrt[f64](se)
+    var num = 0.0f64
+    var den = 0.0f64
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < i {
+            let de = math.abs[f64](t[i] - t[j]) * escale
+            let dn = d[i * n + j] * scale
+            num += (dn - de) * (dn - de)
+            den += de * de
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret math.sqrt[f64](num / den)
+}

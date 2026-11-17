@@ -3697,4 +3697,5 @@ D6834	480	caret: varImp for lm
 D6835	750	caret: preProcess pca
 D6836	656	mclust: hc with the EII model
 D6837	853	ipred: sbrier at one time and kfoldcv
-D6838	731	seriation: the 2SUM and Rho criteria
+D6838	732	seriation: the 2SUM and Rho criteria
+D6839	762	seriation: the MDS_stress criterion

@@ -67,6 +67,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if code == 6usize { ret sc.anti_robinson(d, n, o, 2usize) }
     if code == 7usize { ret sc.gradient(d, n, o, 1usize) }
     if code == 8usize { ret sc.gradient(d, n, o, 2usize) }
+    if code == 14usize { ret sc.mds_stress(a, d, n, o) }
     if code == 12usize { ret sc.two_sum(d, n, o) }
     if code == 13usize { ret sc.rho(a, d, n, o) }
     if code == 9usize { ret sc.bar(d, n, o, param) }
