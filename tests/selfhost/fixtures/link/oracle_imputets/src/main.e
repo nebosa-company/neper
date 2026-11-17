@@ -123,13 +123,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if qn == 0usize { ret fit.aic }
         if qn == 1usize { ret 0.0f64 - 0.5f64 * fit.value }
         if qn == 2usize { ret fit.sigma2 }
-        if qn >= 50usize { ret fit.model.pm[(qn - 50usize) * fit.model.p + (qn - 50usize)] }
-        if qn >= 30usize { ret fit.model.av[qn - 30usize] }
+        if qn >= 200usize { ret fit.model.pm[(qn - 200usize) * fit.model.p + (qn - 200usize)] }
+        if qn >= 100usize { ret fit.model.av[qn - 100usize] }
         ret fit.coef[qn - 10usize]
     }
-    if str.eq(c.name, "aa") {
-        // args (smooth, index, n, series...)
-        let (ar2, ae) = it.na_kalman_autoarima(a, s, 1usize, kind == 1usize, 0i64 - 1i64)
+    if str.eq(c.name, "aa") || str.eq(c.name, "aas") {
+        // args (smooth, index, n, series..., [frequency])
+        var per = 1usize
+        if str.eq(c.name, "aas") { per = usize(x[3usize + n]) }
+        let (ar2, ae) = it.na_kalman_autoarima(a, s, per, kind == 1usize, 0i64 - 1i64)
         if ae != ok { ret 0.0f64 / 0.0f64 }
         var wsum = 0.0f64
         var wi = 0usize
@@ -138,6 +140,43 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             wi += 1usize
         }
         ret wsum
+    }
+    if str.eq(c.name, "sarima") {
+        // args (p, d, q, P, D, Q, m, kind, method, quantity, n, series...)
+        let nn = usize(x[10usize])
+        let (xs, xe) = mem.alloc[f64](a, nn)
+        if xe != ok { os.exit(5) }
+        var t0 = 0usize
+        while t0 < nn {
+            xs[t0] = x[11usize + t0]
+            if xs[t0] < 0.0f64 - 999000.0f64 { xs[t0] = 0.0f64 / 0.0f64 }
+            t0 += 1usize
+        }
+        let fit = af.arima_fit_s(a, xs, usize(x[0usize]), usize(x[1usize]), usize(x[2usize]), usize(x[3usize]), usize(x[4usize]), usize(x[5usize]), usize(x[6usize]), usize(x[7usize]), 0.0f64 / 0.0f64, usize(x[8usize]))
+        if !fit.good { ret 0.0f64 / 0.0f64 }
+        let qn = usize(x[9usize])
+        if qn == 0usize { ret fit.aic }
+        if qn == 1usize { ret 0.0f64 - 0.5f64 * fit.value }
+        if qn == 2usize { ret fit.sigma2 }
+        var wsum2 = 0.0f64
+        var wj = 0usize
+        if qn == 300usize {
+            while wj < fit.model.p {
+                wsum2 += fit.model.av[wj] * f64(wj + 1usize)
+                wj += 1usize
+            }
+        } else if qn == 301usize {
+            while wj < fit.model.p {
+                wsum2 += fit.model.pm[wj * fit.model.p + wj] * f64(wj + 1usize)
+                wj += 1usize
+            }
+        } else {
+            while wj < fit.nfree {
+                wsum2 += fit.coef[wj] * f64(wj + 1usize)
+                wj += 1usize
+            }
+        }
+        ret wsum2
     }
     if str.eq(c.name, "stats") {
         // args (which 0..7, 0, n, series...)

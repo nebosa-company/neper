@@ -3,8 +3,8 @@
 //
 // na_locf (option locf or nocb, na_remaining rev, keep or mean) and na_interpolation (linear, spline) wrap the zoo functions.
 //
-// na_kalman: a user model (na_kalman_model), StructTS (level, trend, BSM) and auto.arima of a non-seasonal series; a seasonal series (period > 1)
-// under auto.arima is Unsupported. `maxgap` puts runs of missing values longer than it back to missing (negative: no limit).
+// na_kalman: a user model (na_kalman_model), StructTS (level, trend, BSM) and auto.arima of a series of any frequency; a seasonal series (period > 1)
+// under auto.arima is searched with seasonal terms. `maxgap` puts runs of missing values longer than it back to missing (negative: no limit).
 
 use e.math
 use e.mem
@@ -16,7 +16,6 @@ use e.algo.stat.structts as sts
 use e.algo.stat.autoarima as aa
 
 error TooFewData
-error Unsupported
 
 fn is_nan(x: f64) -> bool { ret x != x }
 
@@ -700,8 +699,7 @@ fn na_kalman_autoarima(a: *mem.Arena, x: []const f64, period: usize, smooth: boo
     }
     if nobs == n { ret (data, ok) }
     if nobs < 3usize { ret (data, TooFewData) }
-    if period > 1usize { ret (data, Unsupported) }
-    let (model, me) = aa.auto_arima_model(a, x)
+    let (model, me) = aa.auto_arima_model(a, x, period)
     if me != ok { ret (data, me) }
     let (r2, e2) = na_kalman_model(a, x, x, &model, smooth, 0i64 - 1i64, maxgap)
     ret (r2, e2)
