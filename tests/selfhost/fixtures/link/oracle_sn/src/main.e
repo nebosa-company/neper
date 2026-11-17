@@ -29,6 +29,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let al = x[2usize]
     let t = x[3usize]
     let v = x[4usize]
+    if str.eq(k, "pst") { ret sn.pst(a, v, xi, om, al, t) }
     if str.eq(k, "dsn") { ret sn.dsn(v, xi, om, al, t) }
     if str.eq(k, "psn") { ret sn.psn_owen(v, xi, om, al) }
     if str.eq(k, "qsn") { ret sn.qsn(v, xi, om, al) }

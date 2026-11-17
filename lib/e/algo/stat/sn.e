@@ -1,7 +1,7 @@
 // R sn: the skew-normal and skew-t. dsn (with the extension parameter tau), psn by Owen's T (the package's series, including its
 // high-h approximation), qsn by the Cornish-Fisher start and Newton steps (tau = 0), and dst.
 //
-// Not here: psn through the bivariate normal engine (tau != 0, or a point with z * alpha <= -5 in a short vector), pst, qst, the
+// Not here: psn through the bivariate normal engine (tau != 0, or a point with z * alpha <= -5 in a short vector), qst, the
 // random generators, the multivariate families, the cumulants for tau != 0 and selm.
 
 use e.math
@@ -10,6 +10,7 @@ use e.math.nmath_beta as nb
 use e.math.nmath as nm
 use e.algo.rand.r as rng
 use e.algo.rand.rdist as rd
+use e.math.quadpack as quad
 use e.mem
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
@@ -215,4 +216,104 @@ fn cp2dp_sn(mean: f64, sd: f64, skew: f64, which: usize) -> f64 {
     if which == 1usize { ret omega }
     if which == 0usize { ret mean - omega * muz }
     ret delta / math.sqrt[f64](1.0f64 - delta * delta)
+}
+
+// ---- pst (method 0) ----
+
+type PstCtx = struct { alpha: f64, nu: f64, z: f64 }
+
+// composite 15-point Gauss-Kronrod of f over (lo, hi) in 64 panels; the integrands here are smooth
+fn gk_int(c: *PstCtx, f: fn(*PstCtx, f64) -> f64, lo: f64, hi: f64) -> f64 {
+    let np = 64usize
+    let w = (hi - lo) / f64(np)
+    var tot = 0.0f64
+    var p = 0usize
+    while p < np {
+        let mid = lo + w * (f64(p) + 0.5f64)
+        let hw = w / 2.0f64
+        var s = quad.wgk15(7usize) * f(c, mid)
+        var j = 0usize
+        while j < 7usize {
+            let d = hw * quad.xgk15(j)
+            s += quad.wgk15(j) * (f(c, mid - d) + f(c, mid + d))
+            j += 1usize
+        }
+        tot += s * hw
+        p += 1usize
+    }
+    ret tot
+}
+
+fn dst_std(c: *PstCtx, x: f64) -> f64 { ret dst(x, 0.0f64, 1.0f64, c.alpha, c.nu) }
+
+fn fp_chisq(c: *PstCtx, v: f64) -> f64 {
+    ret psn_owen(math.sqrt[f64](v) * c.z, 0.0f64, 1.0f64, c.alpha) * nm.dchisq(v * c.nu, c.nu, false) * c.nu
+}
+
+// pst_int: the integer-nu closed form by recursion
+fn pst_int(z: f64, alpha: f64, nu: f64) -> f64 {
+    if nu == 1.0f64 { ret math.atan[f64](z) / pi() + math.acos[f64](alpha / math.sqrt[f64]((1.0f64 + alpha * alpha) * (1.0f64 + z * z))) / pi() }
+    if nu == 2.0f64 {
+        let s = math.sqrt[f64](2.0f64 + z * z)
+        ret 0.5f64 - math.atan[f64](alpha) / pi() + (0.5f64 + math.atan[f64](z * alpha / s) / pi()) * z / s
+    }
+    let a = pst_int(math.sqrt[f64]((nu - 2.0f64) / nu) * z, alpha, nu - 2.0f64)
+    let b = pst_int(math.sqrt[f64](nu - 1.0f64) * alpha * z / math.sqrt[f64](nu + z * z), 0.0f64, nu - 1.0f64)
+    let k = nm.lgammafn((nu - 1.0f64) / 2.0f64) + (nu / 2.0f64 - 1.0f64) * math.log[f64](nu) - 0.5f64 * math.log[f64](pi()) - nm.lgammafn(nu / 2.0f64) - 0.5f64 * (nu - 1.0f64) * math.log[f64](nu + z * z)
+    ret a + b * z * math.exp[f64](k)
+}
+
+// st_tails (threshold 20): the log tail probability beyond |x|, on the side x is on
+fn st_tails_lp(x: f64, alpha: f64, nu: f64) -> f64 {
+    if alpha < 0.0f64 { ret st_tails_lp(0.0f64 - x, 0.0f64 - alpha, nu) }
+    var s = 0.0f64 - 1.0f64
+    if x > 0.0f64 { s = 1.0f64 }
+    let lc = math.log[f64](2.0f64) + nm.lgammafn((nu + 1.0f64) / 2.0f64) + (nu / 2.0f64) * math.log[f64](nu) + nb.pt(s * alpha * math.sqrt[f64](nu + 1.0f64), nu + 1.0f64, true, true) - nm.lgammafn(nu / 2.0f64) - 0.5f64 * math.log[f64](pi())
+    ret lc - math.log[f64](nu) - nu * math.log[f64](math.abs[f64](x))
+}
+
+// pst(x, xi, omega, alpha, nu) lower tail, method 0, one point
+fn pst(a: *mem.Arena, x: f64, xi: f64, omega: f64, alpha: f64, nu: f64) -> f64 {
+    if nu > 1.0e300f64 { ret psn_owen(x, xi, omega, alpha) }
+    let z = (x - xi) / omega
+    if nu == 1.0f64 {
+        let dl = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
+        ret math.atan[f64](z) / pi() + math.acos[f64](dl / math.sqrt[f64](1.0f64 + z * z)) / pi()
+    }
+    if alpha == 0.0f64 { ret nb.pt(z, nu, true, false) }
+    if math.abs[f64](alpha) > 1.0e300f64 {
+        var z0 = z
+        if alpha * z < 0.0f64 { z0 = 0.0f64 }
+        let p = nb.pf(z0 * z0, 1.0f64, nu, true, false)
+        if alpha < 0.0f64 { ret 1.0f64 - p }
+        ret p
+    }
+    let intnu = nu == math.floor[f64](nu + 0.5f64)
+    if intnu && nu <= 6.0f64 { ret pst_int(z, alpha, nu) }
+    if math.abs[f64](z) > 30.0f64 + 1.0f64 / math.sqrt[f64](nu) {
+        let lp = st_tails_lp(z, alpha, nu)
+        if z < 0.0f64 { ret math.exp[f64](lp) }
+        ret 1.0f64 - math.exp[f64](lp)
+    }
+    var c = PstCtx { alpha: alpha, nu: nu, z: z }
+    var p = 0.0f64
+    if z < 10.0f64 + 50.0f64 / nu {
+        let dl = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
+        var lo = 0.0f64
+        var hi = z
+        var sg = 1.0f64
+        if z < 0.0f64 {
+            lo = z
+            hi = 0.0f64
+            sg = 0.0f64 - 1.0f64
+        }
+        p = math.acos[f64](dl) / pi() + sg * gk_int(&c, dst_std, lo, hi)
+    } else {
+        let (r, e) = quad.qagi(a, &c, fp_chisq, 0.0f64, 1i64, 1.220703125e-4f64, 1.220703125e-4f64, 100usize)
+        if e != ok { ret 0.0f64 / 0.0f64 }
+        p = r.result
+    }
+    if p < 0.0f64 { p = 0.0f64 }
+    if p > 1.0f64 { p = 1.0f64 }
+    ret p
 }

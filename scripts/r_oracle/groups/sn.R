@@ -32,4 +32,10 @@ for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; 
 # cp2dp "SN" "cp2" (mean, sd, skewness, which 0 xi 1 omega 2 alpha)
 for (rep in 1:30) { mn <- round(rnorm(1), 2); sdv <- runif(1, 0.5, 3); sk <- runif(1, -0.95, 0.95)
   dp <- cp2dp(c(mn, sdv, sk), "SN"); if (is.null(dp)) next; for (w in 1:3) add("cp2", c(mn, sdv, sk, w - 1), unname(dp[w])) }
+# pst (xi, omega, alpha, nu, x), one point per call as the package's scalar path runs it
+for (rep in 1:40) {
+  xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-4, -1, 0, 0.8, 3, 9)[sample(6, 1)]
+  nu <- c(1, 2, 3, 5, 6, 9, 15, 2.5, 7.5, 30.5, 400)[(rep - 1) %% 11 + 1]
+  for (z in c(-40, -12, -3, -0.5, 0.3, 1.5, 4, 11, 45)) { x <- xi + om * z; add("pst", c(xi, om, al, nu, x), pst(x, xi, om, al, nu), rel = 1e-6) }
+}
 emit("sn", "sn", list(cases))
