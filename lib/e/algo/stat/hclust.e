@@ -464,3 +464,81 @@ fn entanglement(a: *mem.Arena, t1: *const Tree, t2: *const Tree, n: usize, l0: f
     }
     ret s / w
 }
+
+// the largest number of clusters k at which objects p and q are still together in the cutree of the tree: n minus the 1-based merge step that first joins them (heights are taken to be distinct)
+fn lowest_common_branch(a: *mem.Arena, t: *const Tree, n: usize, p: usize, q: usize) -> f64 {
+    let h = cophenetic(a, t, n, p, q)
+    var s = 0usize
+    while s < n - 1usize && t.height[s] != h { s += 1usize }
+    ret f64(n - (s + 1usize))
+}
+
+// the Spearman correlation of two vectors (ranks with ties averaged, then Pearson's r)
+fn spearman_vec(a: *mem.Arena, x: []const f64, y: []const f64) -> f64 {
+    let m = x.len
+    let (rx, e1) = mem.alloc[f64](a, m)
+    let (ry, e2) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < m {
+        var lx = 0.0f64
+        var ex = 0.0f64
+        var ly = 0.0f64
+        var ey = 0.0f64
+        var j = 0usize
+        while j < m {
+            if x[j] < x[i] { lx += 1.0f64 }
+            if x[j] == x[i] { ex += 1.0f64 }
+            if y[j] < y[i] { ly += 1.0f64 }
+            if y[j] == y[i] { ey += 1.0f64 }
+            j += 1usize
+        }
+        rx[i] = lx + (ex + 1.0f64) / 2.0f64
+        ry[i] = ly + (ey + 1.0f64) / 2.0f64
+        i += 1usize
+    }
+    var mx = 0.0f64
+    var my = 0.0f64
+    i = 0usize
+    while i < m {
+        mx += rx[i]
+        my += ry[i]
+        i += 1usize
+    }
+    mx = mx / f64(m)
+    my = my / f64(m)
+    var sxy = 0.0f64
+    var sxx = 0.0f64
+    var syy = 0.0f64
+    i = 0usize
+    while i < m {
+        sxy += (rx[i] - mx) * (ry[i] - my)
+        sxx += (rx[i] - mx) * (rx[i] - mx)
+        syy += (ry[i] - my) * (ry[i] - my)
+        i += 1usize
+    }
+    ret sxy / math.sqrt[f64](sxx * syy)
+}
+
+// dendextend::cor_bakers_gamma(h1, h2): the Spearman correlation, over all pairs of objects, of the lowest common branch (the number of clusters at which a pair last stays together) in the two trees; 1 when it is undefined
+fn cor_bakers_gamma(a: *mem.Arena, t1: *const Tree, t2: *const Tree, n: usize) -> f64 {
+    let np = n * (n - 1usize) / 2usize
+    let (u, e1) = mem.alloc[f64](a, np)
+    let (v, e2) = mem.alloc[f64](a, np)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    var i = 0usize
+    while i + 1usize < n {
+        var j = i + 1usize
+        while j < n {
+            u[k] = lowest_common_branch(a, t1, n, i, j)
+            v[k] = lowest_common_branch(a, t2, n, i, j)
+            k += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let r = spearman_vec(a, u, v)
+    if r != r { ret 1.0f64 }
+    ret r
+}

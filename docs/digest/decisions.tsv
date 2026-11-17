@@ -3664,4 +3664,5 @@ D6801	1162	statmod: dinvgauss, pinvgauss and rinvgauss
 D6802	1006	statmod: permp
 D6803	796	statmod: power.fisher.test
 D6804	877	sn: rsn and rst
-D6805	691	dendextend: entanglement
+D6805	692	dendextend: entanglement
+D6806	1077	dendextend: cor_bakers_gamma

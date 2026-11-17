@@ -36,6 +36,7 @@ fn pair(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (t2, e2) = hc.hclust(a, d, n, usize(x[1usize]))
     if e2 != ok { os.exit(7) }
     if str.eq(c.name, "corcoph") { ret hc.cor_cophenetic(a, &t1, &t2, n) }
+    if str.eq(c.name, "bakers") { ret hc.cor_bakers_gamma(a, &t1, &t2, n) }
     if str.eq(c.name, "entang") { ret hc.entanglement(a, &t1, &t2, n, x[4usize + 2usize * n]) }
     let (l1, e3) = mem.alloc[usize](a, n)
     if e3 != ok { os.exit(8) }
@@ -51,7 +52,7 @@ fn pair(a: *mem.Arena, c: *const oracle.Case) -> f64 {
 }
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
-    if str.eq(c.name, "fm") || str.eq(c.name, "fmE") || str.eq(c.name, "fmV") || str.eq(c.name, "corcoph") || str.eq(c.name, "entang") { ret pair(a, c) }
+    if str.eq(c.name, "fm") || str.eq(c.name, "fmE") || str.eq(c.name, "fmV") || str.eq(c.name, "corcoph") || str.eq(c.name, "entang") || str.eq(c.name, "bakers") { ret pair(a, c) }
     let x = c.args
     let method = usize(x[0usize])
     let n = usize(x[1usize])
