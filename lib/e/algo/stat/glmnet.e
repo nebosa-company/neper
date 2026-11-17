@@ -3295,3 +3295,759 @@ fn cv_select_relax(lambdas: []const f64, gammas: []const f64, cvm: []const f64, 
     out[0usize] = lmin
     out[1usize] = gmin
 }
+
+// glmnet's own re-centring of one variable's coefficients over the classes (its function elc): the shift that minimises the elastic-net penalty of the vector a (a median for the lasso, the mean for the ridge, the exact minimiser in between), clamped into the bounds cl0 .. cl1 of the shift;
+// is is a scratch of the same length
+fn glm_elc(parm: f64, cl0: f64, cl1: f64, a: []const f64, n: usize, is: []usize) -> f64 {
+    var am = 0.0f64
+    var i = 0usize
+    while i < n {
+        am += a[i]
+        i += 1usize
+    }
+    am = am / f64(n)
+    var out = am
+    if parm != 0.0f64 && n != 2usize {
+        i = 0usize
+        while i < n {
+            is[i] = i
+            i += 1usize
+        }
+        i = 1usize
+        while i < n {
+            let v = is[i]
+            var k = i
+            while k > 0usize && a[is[k - 1usize]] > a[v] {
+                is[k] = is[k - 1usize]
+                k -= 1usize
+            }
+            is[k] = v
+            i += 1usize
+        }
+        if a[is[0usize]] == a[is[n - 1usize]] {
+            out = a[0usize]
+        } else {
+            var ad = 0.0f64
+            if n % 2usize == 1usize { ad = a[is[n / 2usize]] } else { ad = 0.5f64 * (a[is[n / 2usize]] + a[is[n / 2usize - 1usize]]) }
+            if parm == 1.0f64 {
+                out = ad
+            } else {
+                var b1 = am
+                var b2 = ad
+                if ad < am {
+                    b1 = ad
+                    b2 = am
+                }
+                var k2 = 1usize
+                while a[is[k2 - 1usize]] <= b1 { k2 += 1usize }
+                let k1 = k2 - 1usize
+                while a[is[k2 - 1usize]] < b2 { k2 += 1usize }
+                let r = parm / ((1.0f64 - parm) * f64(n))
+                var found = 0usize
+                var sm = f64(n) - 2.0f64 * f64(k1 - 1usize)
+                var s = 0.0f64
+                var k = k1
+                while k < k2 {
+                    sm -= 2.0f64
+                    s = r * sm + am
+                    if s > a[is[k - 1usize]] && s <= a[is[k]] {
+                        found = k
+                        break
+                    }
+                    k += 1usize
+                }
+                if found > 0usize {
+                    out = s
+                } else {
+                    let r2 = 2.0f64 * r
+                    var s1 = a[is[k1 - 1usize]]
+                    let am2 = 2.0f64 * am
+                    var sa = 0.0f64
+                    i = 0usize
+                    while i < n {
+                        sa += math.abs[f64](a[i] - s1)
+                        i += 1usize
+                    }
+                    var cri = r2 * sa + s1 * (s1 - am2)
+                    out = s1
+                    k = k1 + 1usize
+                    while k < k2 + 1usize {
+                        s = a[is[k - 1usize]]
+                        if s != s1 {
+                            sa = 0.0f64
+                            i = 0usize
+                            while i < n {
+                                sa += math.abs[f64](a[i] - s)
+                                i += 1usize
+                            }
+                            let cc = r2 * sa + s * (s - am2)
+                            if cc < cri {
+                                cri = cc
+                                out = s
+                            }
+                            s1 = s
+                        }
+                        k += 1usize
+                    }
+                }
+            }
+        }
+    }
+    // out = max(max(a - cl1), min(min(a - cl0), out))
+    var mxa = a[0usize] - cl1
+    var mna = a[0usize] - cl0
+    i = 1usize
+    while i < n {
+        if a[i] - cl1 > mxa { mxa = a[i] - cl1 }
+        if a[i] - cl0 < mna { mna = a[i] - cl0 }
+        i += 1usize
+    }
+    var o2 = out
+    if mna < o2 { o2 = mna }
+    if mxa > o2 { o2 = mxa }
+    ret o2
+}
+
+// glmnet's multinomial (ungrouped) path, ported from glmnetpp: the strong set, the active set, the working-response passes with glmnet's own convergence test (the largest weighted squared coefficient change below thresh times the null deviance), the clamped class probabilities, its re-centring after each IRLS step
+// and its stopping rules. lambdas empty means the automatic sequence of nlambda values (the first computed from the gradient, the rest by the ratio, stopping early as glmnet does); otherwise the lambdas are fitted in turn. Returns how many lambdas were fitted (lmu); coef (nlambda rows of nc blocks of the intercept and p slopes, on the
+// original scale, intercepts not yet centred over the classes) and dev (glmnet's dev.ratio) and alm (the lambdas, the first an extrapolation as R reports it) are filled for those
+fn glm_multinomial(a: *mem.Arena, x: []const f64, lab: []const usize, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, nc: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, nlambda: usize, thresh: f64, coef: []f64, dev: []f64, alm: []f64) -> usize {
+    let (xs, e1) = mem.alloc[f64](a, n * p)
+    let (sc, e2) = mem.alloc[f64](a, p)
+    let (mx, e3) = mem.alloc[f64](a, p)
+    let (pf, e4) = mem.alloc[f64](a, p)
+    let (b, e5) = mem.alloc[f64](a, p * nc)
+    let (bs, e6) = mem.alloc[f64](a, p * nc)
+    let (b0, e7) = mem.alloc[f64](a, nc)
+    let (q, e8) = mem.alloc[f64](a, n * nc)
+    let (sxp, e9) = mem.alloc[f64](a, n)
+    let (w, e10) = mem.alloc[f64](a, n)
+    let (r, e11) = mem.alloc[f64](a, n)
+    let (v, e12) = mem.alloc[f64](a, n)
+    let (xv, e13) = mem.alloc[f64](a, p * nc)
+    let (ga, e14) = mem.alloc[f64](a, p)
+    let (strong, e15) = mem.alloc[usize](a, p)
+    let (act, e16) = mem.alloc[usize](a, p)
+    let (ia, e17) = mem.alloc[usize](a, p)
+    let (g, e18) = mem.alloc[f64](a, n * nc)
+    let (di, e19) = mem.alloc[f64](a, n)
+    let (rowb, e20) = mem.alloc[f64](a, nc)
+    let (isc, e21) = mem.alloc[usize](a, nc)
+    let (bs0, e22) = mem.alloc[f64](a, nc)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok || e20 != ok || e21 != ok || e22 != ok { ret 0usize }
+    let pmin = 1.0e-9f64
+    let pfm = (1.0f64 + pmin) * pmin
+    let pfx = (1.0f64 - pmin) * (1.0f64 - pmin)
+    let vmin = (1.0f64 + pmin) * pmin * (1.0f64 - pmin)
+    let emin = pmin / (1.0f64 - pmin)
+    let emax = 1.0f64 / emin
+    let exmx = 250.0f64
+    var qs = 0.0f64
+    var i = 0usize
+    while i < n {
+        if wt.len == n { w[i] = wt[i] } else { w[i] = 1.0f64 }
+        qs += w[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        w[i] = w[i] / qs
+        i += 1usize
+    }
+    var vs = 0.0f64
+    var j = 0usize
+    while j < p {
+        vs += vf[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var m = 0.0f64
+        i = 0usize
+        while i < n {
+            m += w[i] * x[j * n + i]
+            i += 1usize
+        }
+        var s = 1.0f64
+        if standardize {
+            var vv = 0.0f64
+            i = 0usize
+            while i < n {
+                vv += w[i] * (x[j * n + i] - m) * (x[j * n + i] - m)
+                i += 1usize
+            }
+            s = math.sqrt[f64](vv)
+        }
+        sc[j] = s
+        mx[j] = m
+        i = 0usize
+        while i < n {
+            xs[j * n + i] = (x[j * n + i] - m) / s
+            i += 1usize
+        }
+        pf[j] = vf[j] * f64(p) / vs
+        strong[j] = 0usize
+        act[j] = 0usize
+        var c = 0usize
+        while c < nc {
+            b[c * p + j] = 0.0f64
+            bs[c * p + j] = 0.0f64
+            c += 1usize
+        }
+        j += 1usize
+    }
+    // the offsets, centred over the classes; the intercepts
+    var hasoff = false
+    var c = 0usize
+    while c < nc {
+        i = 0usize
+        while i < n {
+            g[c * n + i] = 0.0f64
+            if off.len == n * nc {
+                g[c * n + i] = off[c * n + i]
+                hasoff = true
+            }
+            i += 1usize
+        }
+        c += 1usize
+    }
+    var dev1 = 0.0f64
+    c = 0usize
+    while c < nc {
+        var q0 = 0.0f64
+        i = 0usize
+        while i < n {
+            if lab[i] == c { q0 += w[i] }
+            i += 1usize
+        }
+        b0[c] = math.log[f64](q0)
+        dev1 -= q0 * b0[c]
+        c += 1usize
+    }
+    i = 0usize
+    while i < n {
+        sxp[i] = 0.0f64
+        i += 1usize
+    }
+    if !hasoff {
+        var mb = 0.0f64
+        c = 0usize
+        while c < nc {
+            mb += b0[c]
+            c += 1usize
+        }
+        mb = mb / f64(nc)
+        c = 0usize
+        while c < nc {
+            b0[c] -= mb
+            i = 0usize
+            while i < n {
+                q[c * n + i] = math.exp[f64](b0[c])
+                sxp[i] += q[c * n + i]
+                i += 1usize
+            }
+            c += 1usize
+        }
+    } else {
+        i = 0usize
+        while i < n {
+            var rs = 0.0f64
+            c = 0usize
+            while c < nc {
+                rs += g[c * n + i]
+                c += 1usize
+            }
+            c = 0usize
+            while c < nc {
+                g[c * n + i] -= rs / f64(nc)
+                c += 1usize
+            }
+            i += 1usize
+        }
+        // glmnet's own Newton start for the intercepts, to a tolerance of 1e-7
+        let (ee, e23) = mem.alloc[f64](a, n * nc)
+        let (ss, e24) = mem.alloc[f64](a, n)
+        if e23 != ok || e24 != ok { ret 0usize }
+        c = 0usize
+        while c < nc {
+            b0[c] = 0.0f64
+            c += 1usize
+        }
+        i = 0usize
+        while i < n {
+            ss[i] = 0.0f64
+            c = 0usize
+            while c < nc {
+                ee[c * n + i] = math.exp[f64](g[c * n + i])
+                ss[i] += ee[c * n + i]
+                c += 1usize
+            }
+            i += 1usize
+        }
+        var dm = 1.0f64
+        while dm >= 1.0e-7f64 {
+            dm = 0.0f64
+            c = 0usize
+            while c < nc {
+                var t = 0.0f64
+                var u = 0.0f64
+                i = 0usize
+                while i < n {
+                    let pik = ee[c * n + i] / ss[i]
+                    var yy = 0.0f64
+                    if lab[i] == c { yy = 1.0f64 }
+                    t += w[i] * (yy - pik)
+                    u += w[i] * pik * (1.0f64 - pik)
+                    i += 1usize
+                }
+                let d = t / u
+                b0[c] += d
+                let ed = math.exp[f64](d)
+                if math.abs[f64](d) > dm { dm = math.abs[f64](d) }
+                i = 0usize
+                while i < n {
+                    let z = ee[c * n + i]
+                    ee[c * n + i] = z * ed
+                    ss[i] += 0.0f64 - z + ee[c * n + i]
+                    i += 1usize
+                }
+                c += 1usize
+            }
+        }
+        var mb = 0.0f64
+        c = 0usize
+        while c < nc {
+            mb += b0[c]
+            c += 1usize
+        }
+        c = 0usize
+        while c < nc {
+            b0[c] -= mb / f64(nc)
+            c += 1usize
+        }
+        dev1 = 0.0f64
+        c = 0usize
+        while c < nc {
+            i = 0usize
+            while i < n {
+                q[c * n + i] = b0[c] + g[c * n + i]
+                if lab[i] == c { dev1 -= w[i] * q[c * n + i] }
+                q[c * n + i] = math.exp[f64](q[c * n + i])
+                sxp[i] += q[c * n + i]
+                i += 1usize
+            }
+            c += 1usize
+        }
+        i = 0usize
+        while i < n {
+            dev1 += w[i] * math.log[f64](sxp[i])
+            i += 1usize
+        }
+    }
+    // the saturated term is zero for a one-hot response, so dev0 = dev1
+    let dev0 = dev1
+    let thr = thresh * dev0
+    // the null gradient
+    j = 0usize
+    while j < p {
+        ga[j] = 0.0f64
+        j += 1usize
+    }
+    c = 0usize
+    while c < nc {
+        i = 0usize
+        while i < n {
+            var yy = 0.0f64
+            if lab[i] == c { yy = 1.0f64 }
+            r[i] = w[i] * (yy - q[c * n + i] / sxp[i])
+            i += 1usize
+        }
+        j = 0usize
+        while j < p {
+            var gj = 0.0f64
+            i = 0usize
+            while i < n {
+                gj += r[i] * xs[j * n + i]
+                i += 1usize
+            }
+            if math.abs[f64](gj) > ga[j] { ga[j] = math.abs[f64](gj) }
+            j += 1usize
+        }
+        c += 1usize
+    }
+    var nin = 0usize
+    var nlp = 0usize
+    var alf = 1.0f64
+    var nl = lambdas.len
+    var auto = false
+    if nl == 0usize {
+        auto = true
+        nl = nlambda
+        var flmin = 1.0e-4f64
+        if n < p { flmin = 1.0e-2f64 }
+        alf = math.pow[f64](flmin, 1.0f64 / (f64(nl) - 1.0f64))
+    }
+    var lmda = 0.0f64
+    var lmu = 0usize
+    var m = 0usize
+    while m < nl {
+        var alm0 = lmda
+        var al = alm0
+        if !auto { al = lambdas[m] } else if m > 1usize { al = al * alf } else if m == 0usize { al = 9.9e35f64 } else {
+            alm0 = 0.0f64
+            j = 0usize
+            while j < p {
+                if pf[j] > 0.0f64 && ga[j] / pf[j] > alm0 { alm0 = ga[j] / pf[j] }
+                j += 1usize
+            }
+            var bt = alpha
+            if bt < 1.0e-3f64 { bt = 1.0e-3f64 }
+            alm0 = alm0 / bt
+            al = alm0 * alf
+        }
+        lmda = al
+        let dem = al * (1.0f64 - alpha)
+        let ab = al * alpha
+        // the strong set
+        let tlam = alpha * (2.0f64 * al - alm0)
+        j = 0usize
+        while j < p {
+            if strong[j] == 0usize && ga[j] > tlam * pf[j] { strong[j] = 1usize }
+            j += 1usize
+        }
+        var ig = false
+        var maxit_hit = false
+        var rounds = 0usize
+        while rounds < 5000usize {
+            rounds += 1usize
+            var ix = false
+            c = 0usize
+            while c < nc {
+                // setup_wls
+                j = 0usize
+                while j < p {
+                    bs[c * p + j] = b[c * p + j]
+                    j += 1usize
+                }
+                bs0[c] = b0[c]
+                var xmz = 0.0f64
+                i = 0usize
+                while i < n {
+                    var pic = q[c * n + i] / sxp[i]
+                    if pic < pfm {
+                        pic = 0.0f64
+                        v[i] = 0.0f64
+                    } else if pic > pfx {
+                        pic = 1.0f64
+                        v[i] = 0.0f64
+                    } else {
+                        v[i] = w[i] * pic * (1.0f64 - pic)
+                        xmz += v[i]
+                    }
+                    var yy = 0.0f64
+                    if lab[i] == c { yy = 1.0f64 }
+                    r[i] = w[i] * (yy - pic)
+                    i += 1usize
+                }
+                if xmz > vmin {
+                ig = true
+                j = 0usize
+                while j < p {
+                    if strong[j] == 1usize {
+                        var s2 = 0.0f64
+                        i = 0usize
+                        while i < n {
+                            s2 += v[i] * xs[j * n + i] * xs[j * n + i]
+                            i += 1usize
+                        }
+                        xv[c * p + j] = s2
+                    }
+                    j += 1usize
+                }
+                // wls: a full pass over the strong set, then partial passes over the active set until converged, repeated
+                var wdone = false
+                while !wdone {
+                    var phase = 0usize
+                    while true {
+                        nlp += 1usize
+                        var dlx = 0.0f64
+                        var jj = 0usize
+                        var cnt = p
+                        if phase == 1usize { cnt = nin }
+                        while jj < cnt {
+                            var k = jj
+                            if phase == 1usize { k = ia[jj] }
+                            if phase == 1usize || strong[k] == 1usize {
+                                var gk = 0.0f64
+                                i = 0usize
+                                while i < n {
+                                    gk += r[i] * xs[k * n + i]
+                                    i += 1usize
+                                }
+                                let old = b[c * p + k]
+                                let u = gk + old * xv[c * p + k]
+                                let vv = math.abs[f64](u) - pf[k] * ab
+                                var nb = 0.0f64
+                                if vv > 0.0f64 {
+                                    var sg = vv
+                                    if u < 0.0f64 { sg = 0.0f64 - vv }
+                                    nb = sg / (xv[c * p + k] + pf[k] * dem)
+                                    if lo.len == p {
+                                        if nb > up[k] * sc[k] { nb = up[k] * sc[k] }
+                                        if nb < lo[k] * sc[k] { nb = lo[k] * sc[k] }
+                                    }
+                                }
+                                if nb != old {
+                                    if act[k] == 0usize {
+                                        act[k] = 1usize
+                                        ia[nin] = k
+                                        nin += 1usize
+                                    }
+                                    let d = nb - old
+                                    b[c * p + k] = nb
+                                    if xv[c * p + k] * d * d > dlx { dlx = xv[c * p + k] * d * d }
+                                    i = 0usize
+                                    while i < n {
+                                        r[i] -= d * v[i] * xs[k * n + i]
+                                        i += 1usize
+                                    }
+                                }
+                            }
+                            jj += 1usize
+                        }
+                        var rsum = 0.0f64
+                        i = 0usize
+                        while i < n {
+                            rsum += r[i]
+                            i += 1usize
+                        }
+                        let d0 = rsum / xmz
+                        if d0 != 0.0f64 {
+                            b0[c] += d0
+                            if xmz * d0 * d0 > dlx { dlx = xmz * d0 * d0 }
+                            i = 0usize
+                            while i < n {
+                                r[i] -= d0 * v[i]
+                                i += 1usize
+                            }
+                        }
+                        if dlx < thr {
+                            if phase == 0usize { wdone = true }
+                            break
+                        }
+                        if nlp > 100000usize {
+                            maxit_hit = true
+                            wdone = true
+                            break
+                        }
+                        phase = 1usize
+                    }
+                }
+                if maxit_hit { break }
+                // update_irls_class
+                if !ix {
+                    let d = bs0[c] - b0[c]
+                    var cv = xmz * d * d > thr
+                    var t = 0usize
+                    while !cv && t < nin {
+                        let k = ia[t]
+                        let dd = b[c * p + k] - bs[c * p + k]
+                        if xv[c * p + k] * dd * dd > thr { cv = true }
+                        t += 1usize
+                    }
+                    ix = cv
+                }
+                i = 0usize
+                while i < n {
+                    di[i] = b0[c] + g[c * n + i]
+                    i += 1usize
+                }
+                var t2 = 0usize
+                while t2 < nin {
+                    let k = ia[t2]
+                    i = 0usize
+                    while i < n {
+                        di[i] += b[c * p + k] * xs[k * n + i]
+                        i += 1usize
+                    }
+                    t2 += 1usize
+                }
+                i = 0usize
+                while i < n {
+                    var dv = di[i]
+                    if dv < 0.0f64 - exmx { dv = 0.0f64 - exmx }
+                    if dv > exmx { dv = exmx }
+                    sxp[i] -= q[c * n + i]
+                    var qq = math.exp[f64](dv)
+                    if qq < emin * sxp[i] { qq = emin * sxp[i] }
+                    if qq > emax * sxp[i] { qq = emax * sxp[i] }
+                    q[c * n + i] = qq
+                    sxp[i] += qq
+                    i += 1usize
+                }
+                }
+                c += 1usize
+            }
+            if maxit_hit { break }
+            // update_irls: centre the intercepts, re-centre each active variable over the classes
+            var s = 0.0f64
+            c = 0usize
+            while c < nc {
+                s -= b0[c]
+                c += 1usize
+            }
+            s = s / f64(nc)
+            c = 0usize
+            while c < nc {
+                b0[c] += s
+                c += 1usize
+            }
+            i = 0usize
+            while i < n {
+                di[i] = s
+                i += 1usize
+            }
+            var l = 0usize
+            while l < nin {
+                let k = ia[l]
+                c = 0usize
+                while c < nc {
+                    rowb[c] = b[c * p + k]
+                    c += 1usize
+                }
+                var sh = 0.0f64
+                if pf[k] <= 0.0f64 {
+                    c = 0usize
+                    while c < nc {
+                        sh += rowb[c]
+                        c += 1usize
+                    }
+                    sh = sh / f64(nc)
+                } else {
+                    var c0 = 0.0f64 - 9.9e35f64
+                    var c1 = 9.9e35f64
+                    if lo.len == p {
+                        c0 = lo[k] * sc[k]
+                        c1 = up[k] * sc[k]
+                    }
+                    sh = glm_elc(alpha, c0, c1, rowb, nc, isc)
+                }
+                c = 0usize
+                while c < nc {
+                    b[c * p + k] -= sh
+                    c += 1usize
+                }
+                i = 0usize
+                while i < n {
+                    di[i] -= sh * xs[k * n + i]
+                    i += 1usize
+                }
+                l += 1usize
+            }
+            i = 0usize
+            while i < n {
+                di[i] = math.exp[f64](di[i])
+                sxp[i] = sxp[i] * di[i]
+                c = 0usize
+                while c < nc {
+                    q[c * n + i] = q[c * n + i] * di[i]
+                    c += 1usize
+                }
+                i += 1usize
+            }
+            if !ig { break }
+            if !ix {
+                // the strong rule on the variables outside the strong set
+                j = 0usize
+                while j < p {
+                    if strong[j] == 0usize { ga[j] = 0.0f64 }
+                    j += 1usize
+                }
+                c = 0usize
+                while c < nc {
+                    i = 0usize
+                    while i < n {
+                        var yy = 0.0f64
+                        if lab[i] == c { yy = 1.0f64 }
+                        r[i] = w[i] * (yy - q[c * n + i] / sxp[i])
+                        i += 1usize
+                    }
+                    j = 0usize
+                    while j < p {
+                        if strong[j] == 0usize {
+                            var gj = 0.0f64
+                            i = 0usize
+                            while i < n {
+                                gj += r[i] * xs[j * n + i]
+                                i += 1usize
+                            }
+                            if math.abs[f64](gj) > ga[j] { ga[j] = math.abs[f64](gj) }
+                        }
+                        j += 1usize
+                    }
+                    c += 1usize
+                }
+                var upd = false
+                j = 0usize
+                while j < p {
+                    if strong[j] == 0usize && ga[j] > ab * pf[j] {
+                        strong[j] = 1usize
+                        upd = true
+                    }
+                    j += 1usize
+                }
+                ix = upd
+                if !ix { break }
+            }
+        }
+        // store the point
+        var devi = 0.0f64
+        c = 0usize
+        while c < nc {
+            i = 0usize
+            while i < n {
+                if lab[i] == c { devi -= w[i] * math.log[f64](q[c * n + i] / sxp[i]) }
+                i += 1usize
+            }
+            c += 1usize
+        }
+        dev[m] = (dev1 - devi) / dev0
+        alm[m] = al
+        c = 0usize
+        while c < nc {
+            var a0 = b0[c]
+            j = 0usize
+            while j < p {
+                coef[(m * nc + c) * (p + 1usize) + 1usize + j] = b[c * p + j] / sc[j]
+                a0 -= b[c * p + j] / sc[j] * mx[j]
+                j += 1usize
+            }
+            coef[(m * nc + c) * (p + 1usize)] = a0
+            c += 1usize
+        }
+        lmu = m + 1usize
+        var me = 0usize
+        j = 0usize
+        while j < p {
+            var any = false
+            c = 0usize
+            while c < nc {
+                if act[j] == 1usize && b[c * p + j] != 0.0f64 { any = true }
+                c += 1usize
+            }
+            if any { me += 1usize }
+            j += 1usize
+        }
+        if maxit_hit { break }
+        if lmu >= 5usize && auto {
+            var prev = 0.0f64
+            if m > 0usize { prev = dev[m - 1usize] }
+            if dev[m] - prev < 1.0e-5f64 || dev[m] > 0.999f64 { break }
+        }
+        if !ig { break }
+        m += 1usize
+    }
+    // R reports the first automatic lambda as an extrapolation of the next two
+    if auto && lmu >= 3usize { alm[0usize] = math.exp[f64](2.0f64 * math.log[f64](alm[1usize]) - math.log[f64](alm[2usize])) }
+    ret lmu
+}

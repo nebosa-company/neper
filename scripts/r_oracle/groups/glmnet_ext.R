@@ -59,12 +59,12 @@ cvec <- function(f, d, lam, gamma = NA) {
 }
 pickl <- function(a0, d) { f0 <- suppressWarnings(do.call(glmnet, a0)); L <- length(f0$lambda); list(L = L, lam = f0$lambda[unique(round(seq(2, L, length.out = 6)))], f0 = f0) }
 # one coefficient case: the fit at thresh 1e-14 (or the default thresh when thresh7) over six lambdas of the default path
-addfit <- function(d, o, rel = 1e-5, abs = 1e-5, thresh7 = FALSE) {
+addfit <- function(d, o, rel = 1e-5, abs = 1e-5, thresh7 = FALSE, nm = "fit") {
   a0 <- gargs(d, o); pl <- pickl(a0, d); lam <- pl$lam
   a1 <- a0; a1$lambda <- lam; if (!thresh7) a1$thresh <- 1e-14; if (!is.na(o$relax)) a1$relax <- TRUE
   f <- suppressWarnings(do.call(glmnet, a1))
   if (nzchar(Sys.getenv("GLM_DEBUG")) && isTRUE(o$relax == 0)) message("R relaxed k=3: ", paste(signif(cvec(f, d, lam, 0), 5), collapse = " "))
-  cases[[length(cases) + 1]] <<- mkcase("fit", d, o, lam, 0, ck(cvec(f, d, lam, o$relax)), rel, abs)
+  cases[[length(cases) + 1]] <<- mkcase(nm, d, o, lam, 0, ck(cvec(f, d, lam, o$relax)), rel, abs)
 }
 
 # ---- fit: Cox -------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -111,6 +111,18 @@ if (want_("mult")) { set.seed(20261202)
     cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f1$lambda), 0, 0.5)   # at thresh 1e-14 the length is exact
     if (!length(o$w)) cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f0$lambda), 0, 1.5)    # at the default thresh glmnet's own noise can move it by one (by several with weights: skipped)
     }
+  } }
+
+# ---- glmnet's own multinomial algorithm (ported from its C++ source) at the DEFAULT thresh: coefficients over six lambdas, and the automatic path's lambdas and length --------------------
+if (want_("gmn")) { set.seed(20261301)
+  for (v in 1:9) {
+    .v <- v
+    d <- mk("multinomial", 70, 4, K = if (v == 8) 4 else 3); p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2)[(v %% 3) + 1], std = v != 4)
+    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3) o$off <- round(rnorm(d$n * d$K, 0, 0.3), 2); if (v == 4) { o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }
+    if (v == 5) o$excl <- c(1, 3); if (v == 1) o$vf <- round(runif(p, 0.3, 2), 2); if (v == 7) o$w <- round(runif(d$n, 0.3, 3), 2)
+    addfit(d, o, rel = 1e-6, abs = 1e-6, thresh7 = TRUE, nm = "gfit")
+    if (v != 5) { f0 <- suppressWarnings(do.call(glmnet, gargs(d, o)))
+      cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 1, length(f0$lambda), 0, 0.5); cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 0, ck(f0$lambda), 1e-9, 1e-12) }
   } }
 
 # ---- fit: mgaussian ---------------------------------------------------------------------------------------------------------------------------------------------------------

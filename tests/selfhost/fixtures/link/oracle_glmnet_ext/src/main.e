@@ -57,7 +57,7 @@ fn brief(a: *mem.Arena, c: *const oracle.Case, got: f64) -> str {
 
 // The coefficients of one fit as gl.* reports them for every lambda: nl rows of (nc blocks of the intercept and p slopes), on all p variables (excluded ones zero). fam 0 binomial, 1 poisson, 2 gaussian, 3 Cox, 4 multinomial, 5 mgaussian; ya the response (the time for Cox, the labels for
 // the multinomial, the n by nc matrix for mgaussian), stat the Cox status, strata and start the Cox extras (empty for none), excl a 0/1 mask over the variables (empty for none). relax answers the gamma blend of the relaxed refits.
-fn fit_rows(a: *mem.Arena, fam: usize, relaxf: bool, gamma: f64, efron: bool, grouped: bool, nc: usize, xm: []const f64, ya: []const f64, stat: []const f64, strata: []const f64, start: []const f64, wts: []const f64, off: []const f64, lo: []const f64, up: []const f64, excl: []const f64, n: usize, p: usize, alpha: f64, std: bool, lam: []const f64, vf: []const f64, out: []f64) -> err {
+fn fit_rows(a: *mem.Arena, gf: bool, fam: usize, relaxf: bool, gamma: f64, efron: bool, grouped: bool, nc: usize, xm: []const f64, ya: []const f64, stat: []const f64, strata: []const f64, start: []const f64, wts: []const f64, off: []const f64, lo: []const f64, up: []const f64, excl: []const f64, n: usize, p: usize, alpha: f64, std: bool, lam: []const f64, vf: []const f64, out: []f64) -> err {
     let nl = lam.len
     var ncs = 1usize
     if fam == 4usize || fam == 5usize { ncs = nc }
@@ -129,7 +129,31 @@ fn fit_rows(a: *mem.Arena, fam: usize, relaxf: bool, gamma: f64, efron: bool, gr
             k += 1usize
         }
     }
-    if fam == 4usize { fe = gl.multinomial(a, xs, lab, wts, off, lz, uz, n, nkp, nc, alpha, std, grouped, vs, lamc, sm, nodv) }
+    if fam == 4usize && gf && !grouped {
+        let (dvg, eg1) = mem.alloc[f64](a, nl)
+        let (alg, eg2) = mem.alloc[f64](a, nl)
+        if eg1 != ok || eg2 != ok { ret eg1 }
+        let nfit = gl.glm_multinomial(a, xs, lab, wts, off, lz, uz, n, nkp, nc, alpha, std, vs, lamc, 100usize, 1.0e-7f64, sm, dvg, alg)
+        if nfit != nl { ret eg1 }
+        // R centres the intercepts over the classes
+        var kg = 0usize
+        while kg < nl {
+            var mi = 0.0f64
+            var cg = 0usize
+            while cg < nc {
+                mi += sm[(kg * nc + cg) * (nkp + 1usize)]
+                cg += 1usize
+            }
+            cg = 0usize
+            while cg < nc {
+                sm[(kg * nc + cg) * (nkp + 1usize)] -= mi / f64(nc)
+                cg += 1usize
+            }
+            kg += 1usize
+        }
+    } else if fam == 4usize {
+        fe = gl.multinomial(a, xs, lab, wts, off, lz, uz, n, nkp, nc, alpha, std, grouped, vs, lamc, sm, nodv)
+    }
     if fam == 5usize { fe = gl.mgaussian_b(a, xs, ya, wts, lz, uz, n, nkp, nc, alpha, std, vs, lamc, sm) }
     if fe != ok { ret fe }
     if relaxf {
@@ -157,7 +181,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let lam = x[8usize..8usize + nl]
     let vf = x[8usize + nl..8usize + nl + p]
     let d0 = 8usize + nl + p
-    let isfit = str.eq(c.name, "fit") || str.eq(c.name, "lam") || str.eq(c.name, "cv")
+    let gf = str.eq(c.name, "gfit") || str.eq(c.name, "glam")
+    let isfit = str.eq(c.name, "fit") || str.eq(c.name, "lam") || str.eq(c.name, "cv") || gf
     if isfit {
         // data = (fam, relax, gamma, efron, grouped, nc, hasExcl, hasStrata, hasStart), the response (Cox: time, status, strata when hasStrata, start when hasStart; mgaussian: n by nc), exclude[p] when hasExcl
         let fam = usize(x[d0])
@@ -199,11 +224,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         var ncs = 1usize
         if fam == 4usize || fam == 5usize { ncs = nc }
         let mt = ya[0usize..n]
-        if str.eq(c.name, "fit") {
+        if str.eq(c.name, "fit") || str.eq(c.name, "gfit") {
             let (out, e1) = mem.alloc[f64](a, nl * ncs * (p + 1usize))
             if e1 != ok { ret nan() }
-            if fit_rows(a, fam, relaxf, gamma, efron, grouped, nc, xm, ya, stat, strata, start, wts, off, lo, up, excl, n, p, alpha, std, lam, vf, out) != ok { ret nan() }
+            if fit_rows(a, gf, fam, relaxf, gamma, efron, grouped, nc, xm, ya, stat, strata, start, wts, off, lo, up, excl, n, p, alpha, std, lam, vf, out) != ok { ret nan() }
             ret checksum(out)
+        }
+        if str.eq(c.name, "glam") && fam == 4usize && !grouped {
+            // glam: glmnet's own multinomial path (the ported algorithm at the default thresh): query 0 the checksum of its lambdas, 1 their number
+            let (lab2, ea) = mem.alloc[usize](a, n)
+            let (cg, eb) = mem.alloc[f64](a, 100usize * nc * (p + 1usize))
+            let (dg, ec) = mem.alloc[f64](a, 100usize)
+            let (alg, ed) = mem.alloc[f64](a, 100usize)
+            if ea != ok || eb != ok || ec != ok || ed != ok { ret nan() }
+            var ii = 0usize
+            while ii < n {
+                lab2[ii] = usize(ya[ii])
+                ii += 1usize
+            }
+            let noln: []const f64 = zero
+            let nfit = gl.glm_multinomial(a, xm, lab2, wts, off, lo, up, n, p, nc, alpha, std, vf, noln, 100usize, 1.0e-7f64, cg, dg, alg)
+            if usize(x[qo]) == 1usize { ret f64(nfit) }
+            ret checksum(alg[0usize..nfit])
         }
         // lam: the automatic sequence (query 0: its checksum, 1: its length), cv: see below; excluded variables are dropped and the sequence divided by exclude_scale
         let (xk, e0a) = mem.alloc[f64](a, n * p)
