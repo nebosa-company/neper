@@ -47774,3 +47774,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6826 — mclust: the EVI model in me()
 
 **Decision.** `mclustpkg.me_em` model 6 is EVI (equal volume, varying shape, diagonal): each group covariance is its weighted scatter diagonal divided by the geometric mean of that diagonal, times lambda, the sum over groups of those geometric means over n. Equal to mclust on 8 starts with free and 8 with equal proportions (oracle_mclust, log likelihood, iterations, parameters, memberships). Not here: VEI (an inner iteration), the orientation models EVE, VEE, VVE, EEV, VEV, EVV (they need the eigen decomposition of each scatter), `hc`, `mclustBIC`, `Mclust`. Linux pending.
+
+## D6827 — mclust: the EVV and EEV models in me()
+
+**Decision.** `mclustpkg.me_em` models 7 and 8: EVV (equal volume, free shape and orientation: each weighted scatter divided by its determinant root, times the pooled determinant roots over n, the determinant from the Cholesky factor) and EEV (equal volume and shape, free orientation: each group covariance D_k diag(pooled eigenvalues / n) D_k' from the eigen decomposition of its scatter, the eigenvalues paired by rank across groups, through `ica.eigen_sym`). Equal to mclust on 8 starts each with free proportions and 8 for EEV with equal proportions (oracle_mclust). EVV with equal proportions is not matched (as VVI, D6825) and is left out. Not here: VEI, VEV, EVE, VEE, VVE (inner iterations), `hc`, `mclustBIC`, `Mclust`. Linux pending.

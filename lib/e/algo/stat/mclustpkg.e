@@ -4,6 +4,7 @@
 
 use e.math
 use e.mem
+use e.algo.stat.ica as ica
 use e.str
 
 // the model names in the order of the package table
@@ -139,7 +140,7 @@ fn map(z: []const f64, n: usize, k: usize, out: []usize) {
 
 // ---- me(data, modelName, z): the EM iterations of mclust from a given membership matrix, for the models EII (and E), VII (and V), EEI, VVI, EEE and VVV ----
 
-// model code: 0 EII, 1 VII, 2 EEI, 3 VVI, 4 EEE, 5 VVV, 6 EVI
+// model code: 0 EII, 1 VII, 2 EEI, 3 VVI, 4 EEE, 5 VVV, 6 EVI, 7 EVV, 8 EEV
 fn chol_lower(s: []const f64, p: usize, l: []f64) -> bool {
     var j = 0usize
     while j < p {
@@ -281,6 +282,54 @@ fn me_em(a: *mem.Arena, model: usize, equal_pro: bool, x: []const f64, z: []f64,
                             }
                             v = tr / nn
                         }
+                    } else if model == 7usize {
+                        // EVV: W_k over its determinant root, times the pooled determinant roots over n
+                        var lam = 0.0f64
+                        var kk = 0usize
+                        while kk < g {
+                            if !chol_lower(w[kk * p * p..kk * p * p + p * p], p, l) { ret 0.0f64 / 0.0f64 }
+                            var lg = 0.0f64
+                            var q = 0usize
+                            while q < p {
+                                lg += 2.0f64 * math.log[f64](l[q * p + q])
+                                q += 1usize
+                            }
+                            lam += math.exp[f64](lg / pp)
+                            kk += 1usize
+                        }
+                        if !chol_lower(w[k * p * p..k * p * p + p * p], p, l) { ret 0.0f64 / 0.0f64 }
+                        var lgk = 0.0f64
+                        var q2 = 0usize
+                        while q2 < p {
+                            lgk += 2.0f64 * math.log[f64](l[q2 * p + q2])
+                            q2 += 1usize
+                        }
+                        v = w[k * p * p + j2 * p + j] / math.exp[f64](lgk / pp) * (lam / nn)
+                    } else if model == 8usize {
+                        // EEV: D_k diag(pooled eigenvalues / n) D_k' with D_k the eigenvectors of W_k
+                        var pooled = 0.0f64
+                        var kk = 0usize
+                        while kk < g {
+                            let (ev, vecs, ee) = ica.eigen_sym(a, w[kk * p * p..kk * p * p + p * p], p)
+                            if ee != ok { ret 0.0f64 / 0.0f64 }
+                            if kk == k {
+                                var q = 0usize
+                                while q < p {
+                                    var sumev = 0.0f64
+                                    var k3 = 0usize
+                                    while k3 < g {
+                                        let (ev3, vecs3, ee3) = ica.eigen_sym(a, w[k3 * p * p..k3 * p * p + p * p], p)
+                                        if ee3 != ok { ret 0.0f64 / 0.0f64 }
+                                        sumev += ev3[q]
+                                        k3 += 1usize
+                                    }
+                                    pooled += vecs[j * p + q] * (sumev / nn) * vecs[j2 * p + q]
+                                    q += 1usize
+                                }
+                            }
+                            kk += 1usize
+                        }
+                        v = pooled
                     } else if model == 6usize {
                         // EVI: lambda B_k with |B_k| = 1: diag(W_k) over its geometric mean, lambda the pooled geometric means over n
                         if j == j2 {
