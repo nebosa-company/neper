@@ -34,4 +34,43 @@ for (rep in 1:24) {
   cases[[length(cases) + 1]] <- case("geg", c(2, 0, a), g$geese$gamma[[1]], rel = 1e-3, abs = 1e-6)
   if (cs > 0) cases[[length(cases) + 1]] <- case("geg", c(3, 0, a), g$geese$alpha[[1]], rel = 1e-3, abs = 3e-5)
 }
+# gee_fit "gx": (what 0 beta 1 vbeta 2 vnaive 3 vj1s 4 vfij 5 phi 6 alpha, index, fam 0 gaussian 1 binomial 2 poisson 3 Gamma, link 0 identity 1 logit 2 probit 3 cloglog 4 log 5 inverse,
+#   corstr 0 indep 1 exch 2 ar1 3 unstructured 4 fixed, dofij, k, p, maxm, sizes (k), y, X row-major, zc (maxm by maxm table))
+famobj <- function(f, l) switch(f + 1, gaussian("identity"), binomial(c("logit", "probit", "cloglog")[l]), poisson("log"), Gamma(if (l == 5) "inverse" else "log"))
+gx_configs <- list(c(0, 0, 0), c(0, 0, 1), c(0, 0, 2), c(0, 0, 3), c(0, 0, 4), c(1, 1, 1), c(1, 2, 2), c(1, 3, 0), c(1, 1, 3), c(2, 4, 1), c(2, 4, 3), c(2, 4, 4), c(3, 4, 1), c(3, 5, 2))
+set.seed(20262301)
+for (ci in seq_along(gx_configs)) {
+  cf <- gx_configs[[ci]]; fam <- cf[1]; lnk <- cf[2]; cs <- cf[3]
+  g <- NULL
+  for (tries in 1:6) {
+    k <- sample(26:40, 1); sz <- sample(2:5, k, replace = TRUE); p <- sample(2:3, 1); N <- sum(sz); id <- rep(1:k, sz); maxm <- max(sz)
+    X <- cbind(1, matrix(round(runif(N * (p - 1), -1, 1), 3), N, p - 1))
+    re <- rep(rnorm(k, 0, 0.4), sz)
+    eta <- if (fam == 3 && lnk == 5) 1.4 + 0.3 * X[, 2] + 0.1 * re else 0.3 + 0.4 * X[, 2] + (if (p == 3) -0.3 * X[, 3] else 0) + re
+    fobj <- famobj(fam, lnk)
+    mu <- fobj$linkinv(eta)
+    y <- switch(fam + 1, round(eta + rnorm(N), 4), rbinom(N, 1, mu), rpois(N, mu), round(rgamma(N, shape = 4, scale = mu / 4), 4))
+    zc <- outer(1:maxm, 1:maxm, function(s, t) 0.5^abs(s - t))
+    zcv <- unlist(lapply(sz, function(m) if (m > 1) unlist(lapply(1:(m - 1), function(s) zc[s, (s + 1):m])) else NULL))
+    d <- data.frame(y = y, id = id); for (j in 2:p) d[[paste0("x", j)]] <- X[, j]
+    f <- as.formula(paste("y ~", paste(paste0("x", 2:p), collapse = " + ")))
+    corn <- c("independence", "exchangeable", "ar1", "unstructured", "fixed")[cs + 1]
+    g <- tryCatch(geese(f, id = id, data = d, family = fobj, corstr = corn, zcor = if (cs == 4) matrix(zcv, ncol = 1) else NULL, control = geese.control(j1s = TRUE, fij = TRUE)), error = function(e) NULL, warning = function(w) NULL)
+    if (!is.null(g) && all(is.finite(g$beta)) && g$error == 0) break
+    g <- NULL
+  }
+  if (is.null(g)) next
+  dofij <- if (ci %% 2 == 0) 1 else 0
+  a <- c(fam, lnk, cs, dofij, k, p, maxm, sz, y, as.vector(t(X)), as.vector(t(zc)))
+  add2 <- function(what, idx, want, rl, ab) cases[[length(cases) + 1]] <<- case("gx", c(what, idx, a), want, rel = rl, abs = ab)
+  for (j in 1:p) add2(0, j - 1, unname(g$beta)[j], 1e-4, 2e-5)
+  for (u in 1:p) for (v in 1:p) {
+    add2(1, (u - 1) * p + v - 1, g$vbeta[u, v], 1e-3, 1e-6)
+    add2(2, (u - 1) * p + v - 1, g$vbeta.naiv[u, v], 1e-3, 1e-6)
+    add2(3, (u - 1) * p + v - 1, g$vbeta.j1s[u, v], 2e-3, 1e-6)
+    if (dofij == 1) add2(4, (u - 1) * p + v - 1, g$vbeta.fij[u, v], 3e-3, 1e-6)
+  }
+  add2(5, 0, g$gamma[[1]], 1e-3, 1e-6)
+  for (q in seq_along(g$alpha)) add2(6, q - 1, g$alpha[[q]], 1e-3, 3e-5)
+}
 emit("geepackpkg", "geepack", list(cases))

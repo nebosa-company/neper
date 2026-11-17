@@ -45,6 +45,43 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "gx") {
+            // (what, index, fam, link, corstr, dofij, k, p, maxm, sizes (k), y, x row-major, zc (maxm by maxm))
+            let xk = usize(x[6usize])
+            let xp = usize(x[7usize])
+            let xm = usize(x[8usize])
+            var xn = 0usize
+            var xc = 0usize
+            while xc < xk {
+                xn += usize(x[9usize + xc])
+                xc += 1usize
+            }
+            let ybase = 9usize + xk
+            let xbase = ybase + xn
+            let zbase = xbase + xn * xp
+            let (xo, xe1) = mem.alloc[f64](a, gp.gee_out_len(xp, xm, usize(x[4usize])))
+            if xe1 != ok { os.exit(5) }
+            let (xphi, xe2) = gp.gee_fit(a, x[ybase..xbase], x[xbase..zbase], x[9usize..ybase], xk, xp, usize(x[2usize]), usize(x[3usize]), usize(x[4usize]), x[zbase..zbase + xm * xm], x[5usize] == 1.0f64, xo)
+            if xe2 != ok { os.exit(7) }
+            var xg = 0.0f64
+            let xw = usize(x[0usize])
+            let xi = usize(x[1usize])
+            let xpp = xp * xp
+            if xw == 0usize { xg = xo[xi] }
+            if xw >= 1usize && xw <= 4usize { xg = xo[xp + (xw - 1usize) * xpp + xi] }
+            if xw == 5usize { xg = xphi }
+            if xw == 6usize { xg = xo[xp + 4usize * xpp + xi] }
+            if !oracle.agrees(xg, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, xg))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         let k = usize(x[3usize])
         let m = usize(x[4usize])
         let p = usize(x[5usize])
