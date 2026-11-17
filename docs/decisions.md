@@ -48166,3 +48166,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6924 — glmnet: binomial cross-validation loss types
 
 **Decision.** `glmnet.cv_binomial` takes the loss: deviance (0), misclassification (1: a held-out 0 with fitted probability above 0.5, or a 1 at or below it), mse (2) and mae (3), the last two counted over both outcomes as `cv.lognet` does (twice the plain squared and absolute error). Equal to `cv.glmnet(type.measure = ...)` for all four on the 10 data sets of D6923, both `cvm` and `cvsd` (oracle_glmnet, 2327 cases in all). Not here: auc, the poisson losses. Linux pending.
+
+## D6925 — glmnet: binomial cross-validation by AUC
+
+**Decision.** `glmnet.cv_binomial` measure 4 is the area under the ROC curve of each held-out fold's fitted probabilities (clipped to [1e-5, 1 - 1e-5] as for the other losses, ties counting half), averaged over folds by size with `cvsd` as before. Equal to `cv.glmnet(type.measure = "auc")` on the 10 data sets of D6923, both outputs, three lambdas each (oracle_glmnet, 2387 cases in all). Not here: the Poisson losses. Linux pending.

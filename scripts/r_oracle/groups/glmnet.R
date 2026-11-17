@@ -120,7 +120,7 @@ for (rep in 1:10) {
   alpha <- c(1, 0.5, 0.2, 0.9)[(rep %% 4) + 1]; std <- rep %% 3 != 0; nf <- sample(3:6, 1); fid <- sample(rep(1:nf, length.out = n))
   xs <- if (std) scale(X) * sqrt(n / (n - 1)) else scale(X, scale = FALSE)
   lmax <- max(abs(crossprod(xs, y - mean(y)))) / n / max(alpha, 1e-3); lam <- exp(seq(log(lmax), log(lmax * 0.05), length.out = 6))
-  for (ms in 0:3) { tm <- c("deviance", "class", "mse", "mae")[ms + 1]
+  for (ms in 0:4) { tm <- c("deviance", "class", "mse", "mae", "auc")[ms + 1]
   cv <- suppressWarnings(cv.glmnet(X, y, family = "binomial", alpha = alpha, standardize = std, lambda = lam, foldid = fid, thresh = 1e-14, type.measure = tm))
   for (k in c(1, 3, 6)) { cases[[length(cases) + 1]] <- case("cvb", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, fid - 1, nf, k - 1, 0, ms), cv$cvm[k], rel = 1e-6, abs = 1e-8)
     cases[[length(cases) + 1]] <- case("cvb", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, fid - 1, nf, k - 1, 1, ms), cv$cvsd[k], rel = 1e-5, abs = 1e-8) } }

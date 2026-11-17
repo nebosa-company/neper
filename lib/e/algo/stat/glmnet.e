@@ -539,6 +539,52 @@ fn cv_binomial(a: *mem.Arena, measure: usize, x: []const f64, y: []const f64, n:
             }
             i += 1usize
         }
+        if measure == 4usize {
+            // the area under the ROC curve of the fold's fitted probabilities (ties counting half), stored times the fold size so the division below returns it
+            k = 0usize
+            while k < nl {
+                var wins = 0.0f64
+                var n1 = 0.0f64
+                var n0 = 0.0f64
+                var i1 = 0usize
+                while i1 < n {
+                    if foldid[i1] == f && y[i1] == 1.0f64 {
+                        n1 += 1.0f64
+                        var p1 = coef[k * (p + 1usize)]
+                        j = 0usize
+                        while j < p {
+                            p1 += x[j * n + i1] * coef[k * (p + 1usize) + 1usize + j]
+                            j += 1usize
+                        }
+                        var i0 = 0usize
+                        while i0 < n {
+                            if foldid[i0] == f && y[i0] == 0.0f64 {
+                                var p0 = coef[k * (p + 1usize)]
+                                j = 0usize
+                                while j < p {
+                                    p0 += x[j * n + i0] * coef[k * (p + 1usize) + 1usize + j]
+                                    j += 1usize
+                                }
+                                var q1 = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - p1))
+                                var q0 = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - p0))
+                                if q1 < 1.0e-5f64 { q1 = 1.0e-5f64 }
+                                if q1 > 1.0f64 - 1.0e-5f64 { q1 = 1.0f64 - 1.0e-5f64 }
+                                if q0 < 1.0e-5f64 { q0 = 1.0e-5f64 }
+                                if q0 > 1.0f64 - 1.0e-5f64 { q0 = 1.0f64 - 1.0e-5f64 }
+                                if q1 > q0 { wins += 1.0f64 }
+                                if q1 == q0 { wins += 0.5f64 }
+                            }
+                            i0 += 1usize
+                        }
+                    } else if foldid[i1] == f {
+                        n0 += 1.0f64
+                    }
+                    i1 += 1usize
+                }
+                cvf[k * nfolds + f] = wins / (n1 * n0) * cnt
+                k += 1usize
+            }
+        }
         nfv[f] = cnt
         k = 0usize
         while k < nl {

@@ -3783,4 +3783,5 @@ D6920	648	gbm: relative influence
 D6921	425	gbm: relative influence for the other losses
 D6922	682	Hmisc: varclus
 D6923	831	glmnet: cv.glmnet for the binomial family
-D6924	537	glmnet: binomial cross-validation loss types
+D6924	538	glmnet: binomial cross-validation loss types
+D6925	490	glmnet: binomial cross-validation by AUC
