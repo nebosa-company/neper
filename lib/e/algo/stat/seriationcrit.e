@@ -611,3 +611,153 @@ fn vat_order(d: []const f64, n: usize, out: []usize) {
         done += 1usize
     }
 }
+
+type OloCtx = struct { n: usize, d: []const f64, mm: []f64, inn: []bool, ca: []usize, cb: []usize, out: []usize, tmp: []usize }
+
+fn olo_best(c: *const OloCtx, v: usize, u: usize, w: usize, bm: *usize, bk: *usize) {
+    let n = c.n
+    let na = c.ca[v]
+    let nb2 = c.cb[v]
+    var best = 1.0e300f64
+    var m = 0usize
+    while m < n {
+        if c.inn[na * n + m] {
+            let c1 = c.mm[na * n * n + u * n + m]
+            if c1 < 1.0e299f64 {
+                var k = 0usize
+                while k < n {
+                    if c.inn[nb2 * n + k] {
+                        let c2 = c.mm[nb2 * n * n + k * n + w]
+                        if c2 < 1.0e299f64 {
+                            let cost = c1 + c.d[m * n + k] + c2
+                            if cost < best {
+                                best = cost
+                                *bm = m
+                                *bk = k
+                            }
+                        }
+                    }
+                    k += 1usize
+                }
+            }
+        }
+        m += 1usize
+    }
+}
+
+// the a-first ordering of node v with u (in the first child) leftmost and w (in the second) rightmost, written to out from pos; returns the next position
+fn olo_emit(c: *OloCtx, v: usize, u: usize, w: usize, pos: usize, dest: []usize) -> usize {
+    let n = c.n
+    if v < n {
+        dest[pos] = u
+        ret pos + 1usize
+    }
+    if c.inn[c.cb[v] * n + u] {
+        // u lies in the second child: build the mirror ordering (w first) and reverse it in place
+        let endp = olo_emit(c, v, w, u, pos, dest)
+        var lo = pos
+        var hi = endp - 1usize
+        while lo < hi {
+            let t = dest[lo]
+            dest[lo] = dest[hi]
+            dest[hi] = t
+            lo += 1usize
+            hi -= 1usize
+        }
+        ret endp
+    }
+    var m = 0usize
+    var k = 0usize
+    olo_best(c, v, u, w, &m, &k)
+    let p1 = olo_emit(c, c.ca[v], u, m, pos, dest)
+    ret olo_emit(c, c.cb[v], k, w, p1, dest)
+}
+
+// the optimal leaf ordering (Bar-Joseph, Gifford and Jaakkola) of the hclust tree of the given linkage code, minimising the summed dissimilarity of adjacent leaves; out receives the 0-based order
+fn olo_order(a: *mem.Arena, d: []const f64, n: usize, method: usize, out: []usize) -> err {
+    let (tree, te) = hc.hclust(a, d, n, method)
+    if te != ok { ret te }
+    let nm = n - 1usize
+    let nodes = n + nm
+    let (mm, e1) = mem.alloc[f64](a, nodes * n * n)
+    let (inn, e2) = mem.alloc[bool](a, nodes * n)
+    let (ca, e3) = mem.alloc[usize](a, nodes)
+    let (cb, e4) = mem.alloc[usize](a, nodes)
+    let (tmp, e5) = mem.alloc[usize](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    var i = 0usize
+    while i < nodes * n * n {
+        mm[i] = 1.0e300f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < nodes * n {
+        inn[i] = false
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        inn[i * n + i] = true
+        mm[i * n * n + i * n + i] = 0.0f64
+        i += 1usize
+    }
+    var ctx = OloCtx{ n: n, d: d, mm: mm, inn: inn, ca: ca, cb: cb, out: out, tmp: tmp }
+    var s = 0usize
+    while s < nm {
+        var na = 0usize
+        var nb2 = 0usize
+        if tree.merge_a[s] < 0i32 { na = usize(0i32 - tree.merge_a[s]) - 1usize } else { na = n + usize(tree.merge_a[s]) - 1usize }
+        if tree.merge_b[s] < 0i32 { nb2 = usize(0i32 - tree.merge_b[s]) - 1usize } else { nb2 = n + usize(tree.merge_b[s]) - 1usize }
+        let v = n + s
+        ca[v] = na
+        cb[v] = nb2
+        var u = 0usize
+        while u < n {
+            if inn[na * n + u] || inn[nb2 * n + u] { inn[v * n + u] = true }
+            u += 1usize
+        }
+        u = 0usize
+        while u < n {
+            if inn[na * n + u] {
+                var w = 0usize
+                while w < n {
+                    if inn[nb2 * n + w] {
+                        var bm = 0usize
+                        var bk = 0usize
+                        olo_best(&ctx, v, u, w, &bm, &bk)
+                        let cost = mm[na * n * n + u * n + bm] + d[bm * n + bk] + mm[nb2 * n * n + bk * n + w]
+                        mm[v * n * n + u * n + w] = cost
+                        mm[v * n * n + w * n + u] = cost
+                    }
+                    w += 1usize
+                }
+            }
+            u += 1usize
+        }
+        s += 1usize
+    }
+    let root = n + nm - 1usize
+    var bu = 0usize
+    var bw = 0usize
+    var best = 1.0e300f64
+    var u = 0usize
+    while u < n {
+        if inn[ca[root] * n + u] {
+            var w = 0usize
+            while w < n {
+                if inn[cb[root] * n + w] {
+                    if mm[root * n * n + u * n + w] < best {
+                        best = mm[root * n * n + u * n + w]
+                        bu = u
+                        bw = w
+                    }
+                }
+                w += 1usize
+            }
+        }
+        u += 1usize
+    }
+    let end = olo_emit(&ctx, root, bu, bw, 0usize, out)
+    if end != n { ret mem.Full }
+    ret ok
+}

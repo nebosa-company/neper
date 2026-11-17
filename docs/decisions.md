@@ -47834,3 +47834,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6841 — seriation: GW with the single, average and Ward linkages
 
 **Decision.** `seriationcrit.gw_order_m(d, n, method)` is `seriate(d, "GW_single")`, `"GW_average"` and `"GW_ward"` (the complete-linkage `gw_order` is its default): the same endpoint-flipping reorder of the `hclust` tree for the given linkage code (single 2, average 4, Ward 8 which is `ward.D2`). Equal to seriation on 15 random data sets for each linkage, every order entry (oracle_seriation). Not here: OLO, Spectral, MDS, TSP and the searches. Linux pending.
+
+## D6842 — seriation: OLO
+
+**Decision.** `seriationcrit.olo_order(d, n, method)` is `seriate(d, "OLO")` and its single, average and Ward variants: the Bar-Joseph, Gifford and Jaakkola optimal leaf ordering of the `hclust` tree, minimising the summed dissimilarity of adjacent leaves. Each node keeps the best cost M(v, u, w) for every pair of a leftmost leaf u in its first child and a rightmost leaf w in the second (the mirror entry is the same cost), found by minimising M(a, u, m) + d(m, k) + M(b, k, w) over the inner pair (m, k), and the ordering is read back from the best root pair, a second-child leftmost being the reversed mirror ordering; the first strict minimum in ascending leaf index decides ties. Equal to seriation on 48 random data sets of 5 to 20 points over four linkages, every order entry including the orientation (oracle_seriation). Not here: Spectral, MDS, TSP and the searches. Linux pending.

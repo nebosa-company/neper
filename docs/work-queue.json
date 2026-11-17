@@ -944,10 +944,10 @@
       "group": "CRAN parity",
       "order": 721,
       "title": "seriation: ordering of objects",
-      "score": 0.65,
+      "score": 0.7,
       "model": "opus",
       "thinking": "high",
-      "evidence": "D6720: e.algo.stat.seriationcrit has the permutation criteria (path length, lazy path length, least squares, inertia, AR events and deviations, gradient raw and weighted, BAR, RGAR, ME, Moore and Neumann stress), equal to seriation 1.6.0 on 780 values on Windows (oracle_seriation); Linux pending. D6750: the HC family (hclust leaf order, four linkages) equals seriation on 2368 order entries. D6788: GW (gclus reorder of the complete-linkage tree) equals seriation on 40 draws. D6841: GW_single, GW_average and GW_ward equal seriation. D6838: the 2SUM and Rho criteria equal seriation. Open: Spectral and MDS (LAPACK eigenvector signs), OLO (ties by the generator), TSP and the searches (needs L431) (D6840: VAT equals seriation), permute and get_order. D6839: MDS_stress equals seriation. Original: Open (CRAN rank 609). Mid. Needs L431. Acceptance, equal to seriation: seriate with TSP, GW, OLO, HC, spectral, MDS, ARSA, BEA and QAP methods, criterion (path length, Moore stress, Lazy plot, gradient), permute, get_order."
+      "evidence": "D6720: e.algo.stat.seriationcrit has the permutation criteria (path length, lazy path length, least squares, inertia, AR events and deviations, gradient raw and weighted, BAR, RGAR, ME, Moore and Neumann stress), equal to seriation 1.6.0 on 780 values on Windows (oracle_seriation); Linux pending. D6750: the HC family (hclust leaf order, four linkages) equals seriation on 2368 order entries. D6788: GW (gclus reorder of the complete-linkage tree) equals seriation on 40 draws. D6841: GW_single, GW_average and GW_ward equal seriation. D6838: the 2SUM and Rho criteria equal seriation. Open: Spectral and MDS (LAPACK eigenvector signs), TSP and the searches (needs L431) (D6842: OLO and its linkage variants equal seriation) (D6840: VAT equals seriation), permute and get_order. D6839: MDS_stress equals seriation. Original: Open (CRAN rank 609). Mid. Needs L431. Acceptance, equal to seriation: seriate with TSP, GW, OLO, HC, spectral, MDS, ARSA, BEA and QAP methods, criterion (path length, Moore stress, Lazy plot, gradient), permute, get_order."
     },
     {
       "id": "L433",

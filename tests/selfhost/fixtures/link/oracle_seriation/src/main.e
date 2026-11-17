@@ -26,6 +26,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if sc.gw_order_m(a, z[2usize..2usize + mn * mn], mn, usize(z[1usize]), mo) != ok { ret nan }
         ret f64(mo[usize(z[2usize + mn * mn])] + 1usize)
     }
+    if str.eq(c.name, "ol") {
+        let on = usize(z[0usize])
+        let (oo, oe) = mem.alloc[usize](a, on)
+        if oe != ok { ret nan }
+        if sc.olo_order(a, z[2usize..2usize + on * on], on, usize(z[1usize]), oo) != ok { ret nan }
+        ret f64(oo[usize(z[2usize + on * on])] + 1usize)
+    }
     if str.eq(c.name, "vt") {
         let vn = usize(z[0usize])
         let (vo, ve) = mem.alloc[usize](a, vn)
