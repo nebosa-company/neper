@@ -48,17 +48,6 @@
       "evidence": "Partly done (D6096): e.algo.stat.hoslem (hoslem.test with observed and expected tables) equals ResourceSelection on 1128 values on Windows (oracle_hoslem); Linux pending. D6810: wrsi and CAIC equal the package (1950 values in all). Open: rsf, rspf, mep, kdepairs, simulateUsedAvail. Original: Open (CRAN rank 981). Small. Acceptance, equal to ResourceSelection under set.seed: hoslem.test with its g groups and expected tables, kfold, and the resource-selection function fits."
     },
     {
-      "id": "L328",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 598,
-      "title": "caret evaluation and resampling",
-      "score": 0.95,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6087); D6916: createMultiFolds (repeated createFolds draws) equals caret: e.algo.stat.carets has two-class confusionMatrix with all statistics and intervals, and postResample, equal to caret on 700 values on Windows (oracle_carets); Linux pending. D6812: createResample, createFolds (factor y), groupKFold and createTimeSlices equal caret (25 draws each). D6813: createDataPartition (factor and numeric y) equals caret. D6815: multi-class confusionMatrix equals caret (466 values). D6964: varImp of a binomial glm (the absolute z values, from glm.fit's iterations) equals caret. D6963: preProcess knnImpute (the scaled, imputed values) equals caret. D6962: the prevalence argument of confusionMatrix equals caret. Open: numeric-y folds (caret orders the cut intervals by their label strings, locale dependent), ica, varImp beyond lm (D6834, pca D6835 equal caret). Original: Open (CRAN rank 235). Small to mid. train() is a wrapper and stays out. Acceptance, equal to caret under set.seed: createDataPartition, createFolds, createMultiFolds, createResample, createTimeSlices, groupKFold, confusionMatrix with every statistic and interval, sensitivity, specificity, postResample, preProcess (center, scale, range, YeoJohnson, BoxCox, pca, knnImpute), varImp for linear models."
-    },
-    {
       "id": "L331",
       "category": "library",
       "group": "CRAN parity",
@@ -5238,6 +5227,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Open. Split from L327, which met its statmod acceptance (D6086, D6801-D6803, D6811, D6820, D6821, D6957) and the tweedie package for 1 < power < 2 (D6958-D6960). Acceptance, equal to tweedie: dtweedie, ptweedie, qtweedie and rtweedie for power above 2 (Fourier inversion, stable distributions), power 1 and 2 edge cases, the series and inversion methods with their tolerances."
+    },
+    {
+      "id": "L519",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 831,
+      "title": "caret remainder: numeric-response folds, ica and varImp for other models",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Split from L328, which met its acceptance list (D6087, D6812-D6816, D6822, D6834, D6835, D6962-D6964). Acceptance, equal to caret: createFolds and createMultiFolds for a numeric response (the quantile cuts ordered by their label strings, locale dependent), preProcess method ica (fastICA with its seeded start), varImp for glm families beyond binomial and for tree and neural models."
     }
   ]
 }

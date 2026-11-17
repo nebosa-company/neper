@@ -48326,3 +48326,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6964 — caret: varImp of a binomial glm
 
 **Decision.** `carets.var_imp_logit` is `varImp(glm(family = binomial))`: the absolute z value of each coefficient but the intercept. It reproduces glm.fit's iteratively reweighted least squares (start mu = (y + 0.5) / 2, working response and weights from the current linear predictor, stop when the relative change of the deviance falls below 1e-8) and takes the covariance from the weights of the last iteration, which is what `summary.glm` reports; a fully converged Fisher-scoring fit differed from caret by 1e-5 to 1e-4 relative, the size of that last step. Equal to caret on 12 simulated logistic data sets of 60 to 150 observations and 2 to 4 covariates, every coefficient to 1e-6 (oracle_carets, 2374 cases in all). Not here: varImp for other glm families and for tree, neural and other models. Linux pending.
+
+## D6965 — L328 closed, the caret remainder split to L519
+
+**Decision.** L328's acceptance list (the resampling indices, confusionMatrix with every statistic, postResample, preProcess for center, scale, range, YeoJohnson, BoxCox, pca and knnImpute, varImp for linear models) is equal to caret. What is left (numeric-response folds, whose interval order depends on the locale collation of label strings; ica through fastICA with a seeded start; varImp for tree and neural models) goes to L519 and L328 leaves the queue. Linux pending.
