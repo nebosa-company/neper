@@ -3790,4 +3790,5 @@ D6927	775	fda: the B-spline basis
 D6928	879	fda: roughness penalty and smooth.basis
 D6929	575	fda: the Fourier basis
 D6930	654	fda: smooth.basis weights, df, SSE and GCV
-D6931	1216	fda: numerical inprod and pca.fd
+D6931	1217	fda: numerical inprod and pca.fd
+D6932	1159	Rmpfr: correctly rounded arithmetic
