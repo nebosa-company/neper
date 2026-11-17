@@ -34,6 +34,59 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         mc.map(z[2usize..2usize + n * k], n, k, o)
         ret f64(o[usize(z[2usize + n * k])])
     }
+    if str.eq(c.name, "me") {
+        let mc2 = usize(z[0usize])
+        let n = usize(z[1usize])
+        let p = usize(z[2usize])
+        let g = usize(z[3usize])
+        let id = usize(z[4usize])
+        let (zz, e1) = mem.alloc[f64](a, n * g)
+        let (pro, e2) = mem.alloc[f64](a, g)
+        let (mu, e3) = mem.alloc[f64](a, g * p)
+        let (sg, e4) = mem.alloc[f64](a, g * p * p)
+        let (inf, e5) = mem.alloc[f64](a, 2usize)
+        if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret nan }
+        var q = 0usize
+        while q < n * g {
+            zz[q] = z[5usize + n * p + q]
+            q += 1usize
+        }
+        let ll = mc.me_em(a, mc2, z[5usize..5usize + n * p], zz, n, p, g, pro, mu, sg, inf)
+        if id == 0usize { ret ll }
+        if id == 1usize { ret inf[0usize] }
+        var s = 0.0f64
+        if id == 2usize {
+            q = 0usize
+            while q < g {
+                s += f64(q + 1usize) * pro[q]
+                q += 1usize
+            }
+        } else if id == 3usize {
+            // R stores the means as a p by G matrix
+            var k = 0usize
+            while k < g {
+                var j = 0usize
+                while j < p {
+                    s += f64(k * p + j + 1usize) * mu[j * g + k]
+                    j += 1usize
+                }
+                k += 1usize
+            }
+        } else if id == 4usize {
+            q = 0usize
+            while q < g * p * p {
+                s += f64(q + 1usize) * sg[q]
+                q += 1usize
+            }
+        } else {
+            q = 0usize
+            while q < n * g {
+                s += f64(q + 1usize) * zz[q]
+                q += 1usize
+            }
+        }
+        ret s
+    }
     ret nan
 }
 

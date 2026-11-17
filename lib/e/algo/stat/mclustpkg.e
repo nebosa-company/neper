@@ -136,3 +136,219 @@ fn map(z: []const f64, n: usize, k: usize, out: []usize) {
         i += 1usize
     }
 }
+
+// ---- me(data, modelName, z): the EM iterations of mclust from a given membership matrix, for the models EII (and E), VII (and V), EEI, VVI, EEE and VVV ----
+
+// model code: 0 EII, 1 VII, 2 EEI, 3 VVI, 4 EEE, 5 VVV
+fn chol_lower(s: []const f64, p: usize, l: []f64) -> bool {
+    var j = 0usize
+    while j < p {
+        var i = 0usize
+        while i < p {
+            l[j * p + i] = 0.0f64
+            i += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var d = s[j * p + j]
+        var t = 0usize
+        while t < j {
+            d -= l[t * p + j] * l[t * p + j]
+            t += 1usize
+        }
+        if d <= 0.0f64 { ret false }
+        let dj = math.sqrt[f64](d)
+        l[j * p + j] = dj
+        var i = j + 1usize
+        while i < p {
+            var v = s[j * p + i]
+            t = 0usize
+            while t < j {
+                v -= l[t * p + i] * l[t * p + j]
+                t += 1usize
+            }
+            l[j * p + i] = v / dj
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret true
+}
+
+// EM from the memberships z (n by g, column-major) for the data x (n by p), equal proportions off; on return z, pro (g), mu (g by p, column-major) and sigma (g matrices p by p, column-major, stacked) hold the fit,
+// info[0] the iterations and info[1] the final error; returns the log likelihood
+fn me_em(a: *mem.Arena, model: usize, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
+    let (sz, e1) = mem.alloc[f64](a, g)
+    let (w, e2) = mem.alloc[f64](a, g * p * p)
+    let (l, e3) = mem.alloc[f64](a, p * p)
+    let (ld, e4) = mem.alloc[f64](a, g)
+    let (dens, e5) = mem.alloc[f64](a, g)
+    let (dv, e6) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret 0.0f64 / 0.0f64 }
+    let tol = 1.0e-5f64
+    var lk = 1.0e300f64
+    var rel_err = 1.0e300f64
+    var it = 0usize
+    var hood = 0.0f64
+    let nn = f64(n)
+    let pp = f64(p)
+    while rel_err > tol {
+        it += 1usize
+        var k = 0usize
+        while k < g {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += z[k * n + i]
+                i += 1usize
+            }
+            sz[k] = s
+            pro[k] = s / nn
+            var j = 0usize
+            while j < p {
+                var m = 0.0f64
+                i = 0usize
+                while i < n {
+                    m += z[k * n + i] * x[j * n + i]
+                    i += 1usize
+                }
+                mu[j * g + k] = m / s
+                j += 1usize
+            }
+            k += 1usize
+        }
+        k = 0usize
+        while k < g {
+            var j = 0usize
+            while j < p {
+                var j2 = 0usize
+                while j2 < p {
+                    var s = 0.0f64
+                    var i = 0usize
+                    while i < n {
+                        s += z[k * n + i] * (x[j * n + i] - mu[j * g + k]) * (x[j2 * n + i] - mu[j2 * g + k])
+                        i += 1usize
+                    }
+                    w[k * p * p + j2 * p + j] = s
+                    j2 += 1usize
+                }
+                j += 1usize
+            }
+            k += 1usize
+        }
+        // the covariance of each group by model
+        k = 0usize
+        while k < g {
+            var j = 0usize
+            while j < p {
+                var j2 = 0usize
+                while j2 < p {
+                    var v = 0.0f64
+                    if model == 0usize {
+                        if j == j2 {
+                            var tr = 0.0f64
+                            var kk = 0usize
+                            while kk < g {
+                                var q = 0usize
+                                while q < p {
+                                    tr += w[kk * p * p + q * p + q]
+                                    q += 1usize
+                                }
+                                kk += 1usize
+                            }
+                            v = tr / (nn * pp)
+                        }
+                    } else if model == 1usize {
+                        if j == j2 {
+                            var tr = 0.0f64
+                            var q = 0usize
+                            while q < p {
+                                tr += w[k * p * p + q * p + q]
+                                q += 1usize
+                            }
+                            v = tr / (sz[k] * pp)
+                        }
+                    } else if model == 2usize {
+                        if j == j2 {
+                            var tr = 0.0f64
+                            var kk = 0usize
+                            while kk < g {
+                                tr += w[kk * p * p + j * p + j]
+                                kk += 1usize
+                            }
+                            v = tr / nn
+                        }
+                    } else if model == 3usize {
+                        if j == j2 { v = w[k * p * p + j * p + j] / sz[k] }
+                    } else if model == 4usize {
+                        var tr = 0.0f64
+                        var kk = 0usize
+                        while kk < g {
+                            tr += w[kk * p * p + j2 * p + j]
+                            kk += 1usize
+                        }
+                        v = tr / nn
+                    } else {
+                        v = w[k * p * p + j2 * p + j] / sz[k]
+                    }
+                    sigma[k * p * p + j2 * p + j] = v
+                    j2 += 1usize
+                }
+                j += 1usize
+            }
+            k += 1usize
+        }
+        // the E step
+        k = 0usize
+        while k < g {
+            if !chol_lower(sigma[k * p * p..k * p * p + p * p], p, l) { ret 0.0f64 / 0.0f64 }
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                s += math.log[f64](l[q * p + q])
+                q += 1usize
+            }
+            ld[k] = s
+            k += 1usize
+        }
+        hood = 0.0f64
+        var i = 0usize
+        while i < n {
+            var den = 0.0f64
+            k = 0usize
+            while k < g {
+                if !chol_lower(sigma[k * p * p..k * p * p + p * p], p, l) { ret 0.0f64 / 0.0f64 }
+                var q = 0usize
+                var maha = 0.0f64
+                while q < p {
+                    var v = x[q * n + i] - mu[q * g + k]
+                    var t = 0usize
+                    while t < q {
+                        v -= l[t * p + q] * dv[t]
+                        t += 1usize
+                    }
+                    dv[q] = v / l[q * p + q]
+                    maha += dv[q] * dv[q]
+                    q += 1usize
+                }
+                dens[k] = pro[k] * math.exp[f64](0.0f64 - 0.5f64 * maha - ld[k]) / math.pow[f64](2.0f64 * 3.141592653589793f64, pp / 2.0f64)
+                den += dens[k]
+                k += 1usize
+            }
+            k = 0usize
+            while k < g {
+                z[k * n + i] = dens[k] / den
+                k += 1usize
+            }
+            hood += math.log[f64](den)
+            i += 1usize
+        }
+        rel_err = math.abs[f64](lk - hood) / (1.0f64 + math.abs[f64](hood))
+        lk = hood
+    }
+    info[0usize] = f64(it)
+    info[1usize] = rel_err
+    ret hood
+}

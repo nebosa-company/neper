@@ -1626,10 +1626,10 @@
       "group": "CRAN parity",
       "order": 794,
       "title": "mclust: Gaussian mixture model selection",
-      "score": 0.05,
+      "score": 0.2,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D6823: e.algo.stat.mclustpkg has nVarParams, nMclustParams, bic, adjustedRandIndex and map equal to mclust; oracle_mclust; Linux pending). Open: the EM fits for the fourteen models, hc initialisation, mclustBIC and Mclust, classError, density and simulation. Was: Open (CRAN rank 280). Large. e.ml.cluster has gmm_em. Acceptance, equal to mclust: all 14 covariance structures, EM with hierarchical-agglomeration initialization, mclustBIC and ICL, Mclust, predict, densityMclust, MclustDA, MclustDR, mclustBootstrapLRT under set.seed, uncertainty and classification tables."
+      "evidence": "Partial (D6823: e.algo.stat.mclustpkg has nVarParams, nMclustParams, bic, adjustedRandIndex and map equal to mclust; oracle_mclust; Linux pending). D6824: the EM iterations of me() for EII, VII, EEI, VVI, EEE and VVV equal mclust (loglik, iteration count, parameters). Open: the other eight covariance models, hc initialisation, mclustBIC and Mclust, classError, density and simulation. Was: Open (CRAN rank 280). Large. e.ml.cluster has gmm_em. Acceptance, equal to mclust: all 14 covariance structures, EM with hierarchical-agglomeration initialization, mclustBIC and ICL, Mclust, predict, densityMclust, MclustDA, MclustDR, mclustBootstrapLRT under set.seed, uncertainty and classification tables."
     },
     {
       "id": "L349",
