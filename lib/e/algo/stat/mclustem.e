@@ -461,6 +461,7 @@ fn me_gen(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n:
             while k < g {
                 let (vals, vecs, ee) = ica.eigen_sym(a, u[k * p * p..k * p * p + p * p], p)
                 if ee != ok { ret nan }
+                if !mp.chol_lower(u[k * p * p..k * p * p + p * p], p, t1) { ret nan }
                 if min_of(vals, p) <= 0.0f64 { ret nan }
                 k += 1usize
             }

@@ -4,7 +4,7 @@
 # 200 + j the weighted sum of the finite ICL values of column j (mclustICL), 100 sum(i * classification), 101 sum(i * uncertainty), 102 sum(q * z), 103 sum(q * pro), 104 sum(q * mean), 105 sum(q * sigma)
 suppressMessages(library(mclust))
 cases <- list()
-set.seed(20261222)
+set.seed(20261221)
 tbl <- c("E", "V", "EII", "VII", "EEI", "VEI", "EVI", "VVI", "EEE", "EVE", "VEE", "VVE", "EEV", "VEV", "EVV", "VVV")
 add <- function(args, id, want, rel = 1e-6, abs = 1e-9) cases[[length(cases) + 1]] <<- case("mfit", c(id, args), want, rel = rel, abs = abs)
 one <- function(n, p, gmin, gmax, kind) {
