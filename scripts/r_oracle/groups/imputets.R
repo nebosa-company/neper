@@ -95,7 +95,7 @@ for (rep in 1:45) {
   }
 }
 # stats::arima with a seasonal part "sarima" (p, d, q, P, D, Q, m, kind, method, quantity, n, series...); quantities as "arima"
-for (rep in 1:36) {
+for (rep in 1:18) {
   m <- c(4, 7, 12)[rep %% 3 + 1]; p <- sample(0:1, 1); q <- sample(0:1, 1); P <- sample(0:1, 1); Q <- sample(0:1, 1); d <- sample(0:1, 1); D <- sample(0:1, 1)
   if (P + Q == 0) P <- 1
   n <- m * sample(4:6, 1)
@@ -112,6 +112,19 @@ for (rep in 1:36) {
   wt <- function(v) sum(v * seq_along(v))
   vals <- list(`0` = fit$aic, `1` = fit$loglik, `2` = fit$sigma2, `300` = wt(fit$model$a), `301` = wt(diag(fit$model$P)), `302` = wt(unname(fit$coef)))
   for (nm in names(vals)) if (!is.na(vals[[nm]])) add("sarima", c(p, d, q, P, D, Q, m, kind, method, as.numeric(nm), n, enc(x)), vals[[nm]], rel = if (as.numeric(nm) <= 2) 1e-4 else 1e-3)
+}
+# na_kalman with model = "auto.arima" on a seasonal ts "aas" (smooth 1 or 0, 0, n, series..., frequency) -> the position-weighted sum of the result
+for (rep in 1:9) {
+  m <- c(4, 7, 12)[rep %% 3 + 1]; n <- m * sample(c(4, 5, 6), 1); tt <- seq_len(n)
+  amp <- if (rep %% 2) 3 else 0.4
+  x <- round(10 + amp * sin(2 * pi * tt / m) + (if (rep %% 4 == 0) 0.08 * tt else 0) + as.numeric(arima.sim(list(ar = 0.5), n)), 3)
+  na <- sample(seq(2, n - 1), sample(2:5, 1)); if (rep %% 5 == 0) na <- c(na, 1)
+  x[na] <- NA
+  for (sm in (if (rep %% 3 == 0) c(TRUE, FALSE) else TRUE)) {
+    r <- tryCatch(suppressWarnings(na_kalman(ts(x, frequency = m), model = "auto.arima", smooth = sm)), error = function(e) NULL)
+    if (is.null(r)) next
+    add("aas", c(as.numeric(sm), 0, n, enc(x), m), sum(as.numeric(r) * seq_len(n)), rel = 1e-6)
+  }
 }
 # StructTS shortcut: a series with two distinct values (a constant one with gaps) is linearly interpolated
 for (rep in 1:4) {

@@ -127,9 +127,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if qn >= 100usize { ret fit.model.av[qn - 100usize] }
         ret fit.coef[qn - 10usize]
     }
-    if str.eq(c.name, "aa") {
-        // args (smooth, index, n, series...)
-        let (ar2, ae) = it.na_kalman_autoarima(a, s, 1usize, kind == 1usize, 0i64 - 1i64)
+    if str.eq(c.name, "aa") || str.eq(c.name, "aas") {
+        // args (smooth, index, n, series..., [frequency])
+        var per = 1usize
+        if str.eq(c.name, "aas") { per = usize(x[3usize + n]) }
+        let (ar2, ae) = it.na_kalman_autoarima(a, s, per, kind == 1usize, 0i64 - 1i64)
         if ae != ok { ret 0.0f64 / 0.0f64 }
         var wsum = 0.0f64
         var wi = 0usize
