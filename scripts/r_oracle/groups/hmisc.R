@@ -43,4 +43,12 @@ for (rep in 1:40) {
   m <- sample(10:40, 1); tt <- round(rexp(m), 2); ee <- rbinom(m, 1, 0.7); xx <- round(runif(m), 1); if (sum(ee) < 2) next
   rc <- rcorr.cens(xx, Surv(tt, ee)); for (j in 0:6) add("rcc", c(m, j, xx, tt, ee), unname(rc[c(1, 2, 4, 6, 7, 8, 9)[j + 1]]))
 }
+# smean.cl.normal "scn", smean.sdl "ssd", smedian.hilow "smh": (n, conf or mult, j, x[n])
+for (rep in 1:25) {
+  n <- sample(5:80, 1); x <- if (rep %% 2) rnorm(n, 3, 2) else round(rexp(n), 1); cf <- sample(c(0.8, 0.9, 0.95, 0.99), 1); ml <- sample(c(1, 2, 3), 1)
+  a1 <- smean.cl.normal(x, conf.int = cf); a2 <- smean.sdl(x, mult = ml); a3 <- smedian.hilow(x, conf.int = cf)
+  for (j in 1:3) { cases[[length(cases) + 1]] <- case("scn", c(n, cf, j - 1, x), a1[[j]], rel = 1e-10, abs = 1e-12)
+    cases[[length(cases) + 1]] <- case("ssd", c(n, ml, j - 1, x), a2[[j]], rel = 1e-10, abs = 1e-12)
+    cases[[length(cases) + 1]] <- case("smh", c(n, cf, j - 1, x), a3[[j]], rel = 1e-10, abs = 1e-12) }
+}
 emit("hmisc", "Hmisc", list(cases))

@@ -3750,4 +3750,5 @@ D6887	404	glmnet: lambda.min and lambda.1se
 D6888	573	tsfeatures: histogram_mode
 D6889	701	glmnet: the early stop of the gaussian path
 D6890	779	bw.ucv and bw.bcv
-D6891	701	bw.SJ
+D6891	702	bw.SJ
+D6892	594	Hmisc: smean.cl.normal, smean.sdl, smedian.hilow

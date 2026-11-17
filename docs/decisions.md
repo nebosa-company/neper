@@ -48034,3 +48034,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6891 — bw.SJ
 
 **Decision.** `bwsel.bw_sj` is stats' `bw.SJ` (method "ste") for n up to 500: pilot bandwidths a = 1.24 s n^(-1/7) and b = 1.23 s n^(-1/9) with s = min(sd, IQR / 1.349), the fourth and sixth derivative functionals from the pair counts (terms with scaled squared distance below 1000), alpha2 = 1.357 (SDh(a) / TDh(b))^(1/7), and the root of `(c1 / SDh(alpha2 h^(5/7)))^(1/5) - h` over [0.1 hmax, hmax] (widened by 1.2 alternately at each end while the signs agree) by R's zeroin with tolerance 0.1 lower, taken from e.algo.stat.pwr. Equal to R on the 20 samples of D6890 (oracle_mass, 1785 cases in all). Not here: the binned counting above n = 500 and method "dpi". Linux pending.
+
+## D6892 — Hmisc: smean.cl.normal, smean.sdl, smedian.hilow
+
+**Decision.** `hmisc.smean_cl_normal` (mean and the t interval on n - 1 degrees of freedom), `smean_sdl` (mean plus or minus mult standard deviations) and `smedian_hilow` (the median and the (1 -/+ conf) / 2 type-7 quantiles) answer the three Hmisc summary functions that ggplot's `stat_summary` uses. Equal to Hmisc on 25 samples (normal and rounded exponential, 5 to 80 values) with confidence levels 0.8 to 0.99 and multipliers 1 to 3 (oracle_hmisc, 3890 cases in all). Not here: `smean.cl.boot` (bootstrap RNG). Linux pending.

@@ -453,3 +453,75 @@ fn rcorr_cens(x: []const f64, time: []const f64, event: []const f64, out: []f64)
     out[5usize] = 2.0f64 * conc + tied
     out[6usize] = 2.0f64 * unc + tiec
 }
+
+fn mean_sd(x: []const f64) -> (f64, f64) {
+    let n = f64(x.len)
+    var m = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        m += x[i]
+        i += 1usize
+    }
+    m = m / n
+    var v = 0.0f64
+    i = 0usize
+    while i < x.len {
+        v += (x[i] - m) * (x[i] - m)
+        i += 1usize
+    }
+    ret (m, math.sqrt[f64](v / (n - 1.0f64)))
+}
+
+// smean.cl.normal(x, conf.int): out = (mean, lower, upper) with the t quantile on n - 1 degrees of freedom
+fn smean_cl_normal(x: []const f64, conf: f64, out: []f64) {
+    let (m, s) = mean_sd(x)
+    let n = f64(x.len)
+    let t = nb.qt((1.0f64 + conf) / 2.0f64, n - 1.0f64, true, false)
+    out[0usize] = m
+    out[1usize] = m - t * s / math.sqrt[f64](n)
+    out[2usize] = m + t * s / math.sqrt[f64](n)
+}
+
+// smean.sdl(x, mult): out = (mean, mean - mult sd, mean + mult sd)
+fn smean_sdl(x: []const f64, mult: f64, out: []f64) {
+    let (m, s) = mean_sd(x)
+    out[0usize] = m
+    out[1usize] = m - mult * s
+    out[2usize] = m + mult * s
+}
+
+// smedian.hilow(x, conf.int): out = (median, the (1 - conf) / 2 quantile, the (1 + conf) / 2 quantile), type 7
+fn smedian_hilow(a: *mem.Arena, x: []const f64, conf: f64, out: []f64) -> err {
+    let n = x.len
+    let (s, e) = mem.alloc[f64](a, n)
+    if e != ok { ret e }
+    var i = 0usize
+    while i < n {
+        s[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let key = s[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > key {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = key
+        i += 1usize
+    }
+    out[0usize] = q7(s, 0.5f64)
+    out[1usize] = q7(s, (1.0f64 - conf) / 2.0f64)
+    out[2usize] = q7(s, (1.0f64 + conf) / 2.0f64)
+    ret ok
+}
+
+fn q7(s: []const f64, p: f64) -> f64 {
+    let h = (f64(s.len) - 1.0f64) * p
+    let lo = math.floor[f64](h)
+    let hi = math.ceil[f64](h)
+    let q = s[usize(lo)]
+    if hi > lo { ret q + (h - lo) * (s[usize(hi)] - q) }
+    ret q
+}

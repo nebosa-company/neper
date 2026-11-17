@@ -20,6 +20,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if hm.wtd_quantile(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[3usize + 2usize * n..3usize + 2usize * n + k], o) != ok { ret nan }
         ret o[usize(x[2usize])]
     }
+    if str.eq(c.name, "scn") || str.eq(c.name, "ssd") || str.eq(c.name, "smh") {
+        let n = usize(x[0usize])
+        let (o, e) = mem.alloc[f64](a, 3usize)
+        if e != ok { ret nan }
+        if str.eq(c.name, "scn") { hm.smean_cl_normal(x[3usize..3usize + n], x[1usize], o) }
+        if str.eq(c.name, "ssd") { hm.smean_sdl(x[3usize..3usize + n], x[1usize], o) }
+        if str.eq(c.name, "smh") && hm.smedian_hilow(a, x[3usize..3usize + n], x[1usize], o) != ok { ret nan }
+        ret o[usize(x[2usize])]
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])
