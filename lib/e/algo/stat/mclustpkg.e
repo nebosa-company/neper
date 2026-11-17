@@ -214,6 +214,10 @@ fn me_em_x(a: *mem.Arena, model: usize, equal_pro: bool, m_only: bool, x: []cons
             sz[k] = s
             pro[k] = s / nn
             if equal_pro { pro[k] = 1.0f64 / f64(g) }
+            // mevvi leaves the raw column sum in pro and scales it by 1/G; meevv divides the means by n/G
+            if equal_pro && model == 3usize { pro[k] = s / f64(g) }
+            var smu = s
+            if equal_pro && model == 7usize { smu = nn / f64(g) }
             var j = 0usize
             while j < p {
                 var m = 0.0f64
@@ -222,7 +226,7 @@ fn me_em_x(a: *mem.Arena, model: usize, equal_pro: bool, m_only: bool, x: []cons
                     m += z[k * n + i] * x[j * n + i]
                     i += 1usize
                 }
-                mu[j * g + k] = m / s
+                mu[j * g + k] = m / smu
                 j += 1usize
             }
             k += 1usize

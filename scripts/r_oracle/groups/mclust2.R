@@ -21,4 +21,6 @@ fit <- function(mi, eqp, n, p, G, tol_note = NULL) {
 }
 for (mi in c(5, 9, 10, 11, 13)) for (eqp in c(FALSE, TRUE)) for (rep in 1:5) fit(mi, eqp, sample(40:70, 1), sample(2:3, 1), sample(2:3, 1))
 for (mi in c(0, 1)) for (eqp in c(FALSE, TRUE)) for (rep in 1:4) fit(mi, eqp, sample(30:80, 1), 1, sample(2:4, 1))
+for (mi in c(7, 14)) for (eqp in c(FALSE, TRUE)) for (rep in 1:5) fit(mi, eqp, sample(40:70, 1), sample(2:3, 1), sample(2:3, 1))
+for (mi in c(3, 6, 12)) for (rep in 1:2) fit(mi, TRUE, sample(40:70, 1), sample(2:3, 1), sample(2:3, 1))
 emit("mclust2", "mclust", list(cases))
