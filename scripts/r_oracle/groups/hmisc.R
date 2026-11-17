@@ -101,4 +101,7 @@ for (rep in 1:30) { tr <- sample(3:5, 1); n1 <- sample(500:3000, 1); n2 <- sampl
 for (rep in 1:30) { k <- sample(3:6, 1); pr <- runif(k); pr <- pr / sum(pr); orr <- runif(1, 1.3, 3); n1 <- sample(40:300, 1); n2 <- sample(40:300, 1); al <- sample(c(0.05, 0.01), 1); fr <- runif(1, 0.3, 0.7); pw <- sample(c(0.8, 0.9), 1)
   r <- popower(pr, orr, n1 = n1, n2 = n2, alpha = al); v <- c(r$power, r$eff, r$approx.se); for (w in 0:2) cases[[length(cases) + 1]] <- case("pop", c(k, orr, n1, n2, al, w, pr), v[w + 1], rel = 1e-10, abs = 1e-12)
   r <- posamsize(pr, orr, fr, al, pw); v <- c(r$n, r$eff); for (w in 0:1) cases[[length(cases) + 1]] <- case("pos", c(k, orr, fr, al, pw, pr, w), v[w + 1], rel = 1e-10, abs = 1e-12) }
+# hoeffd "hoe" (n, x[n], y[n]), continuous and with ties
+for (rep in 1:30) { n <- sample(10:80, 1); x <- rnorm(n); y <- x * runif(1, -1, 1) + rnorm(n); if (rep %% 2 == 0) { x <- round(x, 1); y <- round(y, 1) }
+  cases[[length(cases) + 1]] <- case("hoe", c(n, x, y), hoeffd(cbind(x, y))$D[1, 2], rel = 1e-9, abs = 1e-12) }
 emit("hmisc", "Hmisc", list(cases))

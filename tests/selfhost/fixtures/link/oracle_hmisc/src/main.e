@@ -131,6 +131,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if x[5usize + k] == 0.0f64 { ret nn }
         ret ef
     }
+    if str.eq(c.name, "hoe") {
+        // (n, x[n], y[n])
+        let n = usize(x[0usize])
+        ret hm.hoeffd(x[1usize..1usize + n], x[1usize + n..1usize + n + n])
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])

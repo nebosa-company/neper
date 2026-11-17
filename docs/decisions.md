@@ -48393,3 +48393,8 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6979 — Hmisc popower and posamsize
 
 Whitehead proportional-odds power (`popower`: power, efficiency, approximate standard error) and sample size (`posamsize`: n, efficiency) from the marginal cell probabilities. Equal to `Hmisc::popower` and `posamsize` on 30 settings (oracle_hmisc). Linux pending.
+
+
+## D6980 — Hmisc hoeffd
+
+`hoeffd(x, y)`: Hoeffding D from mid-ranks R, S and the bivariate rank Q (strictly below in both, 1/2 for a tie in one, 1/4 for a tie in both). Equal to `Hmisc::hoeffd` D on 30 samples, half of them rounded to create ties (oracle_hmisc). The P value (asymptotic table) is not here. Linux pending.

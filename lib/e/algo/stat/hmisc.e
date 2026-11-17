@@ -1032,3 +1032,34 @@ fn posamsize(p: []const f64, oratio: f64, fraction: f64, alpha: f64, power: f64)
     let n = 3.0f64 * (aa + 1.0f64) * (aa + 1.0f64) * zz * zz / aa / (lo * lo) / ps
     ret (n, ps / (1.0f64 - 1.0f64 / n / n))
 }
+
+// hoeffd(x, y): Hoeffding D (Hmisc, D[1, 2]) with mid-ranks and the Hollander-Wolfe bivariate rank Q with its tie weights
+fn hoeffd(x: []const f64, y: []const f64) -> f64 {
+    let n = x.len
+    let nf = f64(n)
+    var d1 = 0.0f64
+    var d2 = 0.0f64
+    var d3 = 0.0f64
+    var i = 0usize
+    while i < n {
+        var q = 1.0f64
+        var j = 0usize
+        while j < n {
+            if j != i {
+                let lx = x[j] < x[i]
+                let ey = y[j] == y[i]
+                let ly = y[j] < y[i]
+                let ex = x[j] == x[i]
+                if lx && ly { q += 1.0f64 } else if ex && ey { q += 0.25f64 } else if ex && ly { q += 0.5f64 } else if lx && ey { q += 0.5f64 }
+            }
+            j += 1usize
+        }
+        let r = rank_avg(x, i)
+        let s = rank_avg(y, i)
+        d1 += (q - 1.0f64) * (q - 2.0f64)
+        d2 += (r - 1.0f64) * (r - 2.0f64) * (s - 1.0f64) * (s - 2.0f64)
+        d3 += (r - 2.0f64) * (s - 2.0f64) * (q - 1.0f64)
+        i += 1usize
+    }
+    ret 30.0f64 * ((nf - 2.0f64) * (nf - 3.0f64) * d1 + d2 - 2.0f64 * (nf - 2.0f64) * d3) / (nf * (nf - 1.0f64) * (nf - 2.0f64) * (nf - 3.0f64) * (nf - 4.0f64))
+}
