@@ -412,3 +412,5 @@ oracle_rcompanion_ext
 oracle_compositions_ext
 oracle_loo4
 oracle_compositions_miss
+oracle_micefit
+oracle_micefull
