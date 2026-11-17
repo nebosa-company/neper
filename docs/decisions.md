@@ -48102,3 +48102,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6908 — LearnBayes: sir
 
 **Decision.** `learnbayes.sir` is sampling importance resampling: the proposal draws and weights of `impsampling`, then n indices drawn with replacement the way R's `sample(n, n, replace = TRUE, prob)` does for fewer than 200 values (probabilities sorted into decreasing order carrying the indices, a cumulative sum, one uniform per draw searched linearly). Equal to LearnBayes under set.seed on the 10 logistic posteriors of D6906 with 150 draws, six elements of the resampled matrix each (oracle_learnbayes, 3990 cases in all). Not here: 200 or more draws (R switches to Walker's alias method) and the order of tied weights, which R's `revsort` fixes and the insertion sort here only matches when no two weights are equal. Linux pending.
+
+## D6909 — LearnBayes: gibbs
+
+**Decision.** `learnbayes.gibbs` is the package's Metropolis-within-Gibbs sampler: for every sweep and coordinate a candidate th1[j] = th0[j] + rnorm(1) scale[j], then one uniform compared with exp(f1 - f0), the chain and per-coordinate acceptance rates kept; the target is a function passed in. Equal to LearnBayes under set.seed on the 10 logistic posteriors of D6906, 60 sweeps from the origin, six chain elements and both acceptance rates each (oracle_learnbayes, 4070 cases in all). Not here: laplace (needs R's optim), hiergibbs, ordergibbs. Linux pending.

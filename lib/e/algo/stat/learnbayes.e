@@ -1001,3 +1001,45 @@ fn sir[Ctx: type](a: *mem.Arena, r: *rng.Rng, ctx: *Ctx, logf: fn(*Ctx, []const 
     }
     ret ok
 }
+
+// gibbs(logpost, start, m, scale): Metropolis steps one coordinate at a time, a normal(0, scale[j]) increment (one rnorm) then one uniform per coordinate and sweep; par is m by p column-major, accept the acceptance rate of each coordinate
+fn gibbs[Ctx: type](a: *mem.Arena, r: *rng.Rng, ctx: *Ctx, logf: fn(*Ctx, []const f64) -> f64, start: []const f64, m: usize, scale: []const f64, par: []f64, accept: []f64) -> err {
+    let p = start.len
+    let (th0, e1) = mem.alloc[f64](a, p)
+    let (th1, e2) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var j = 0usize
+    while j < p {
+        th0[j] = start[j]
+        accept[j] = 0.0f64
+        j += 1usize
+    }
+    var f0 = logf(ctx, th0)
+    var i = 0usize
+    while i < m {
+        j = 0usize
+        while j < p {
+            var q = 0usize
+            while q < p {
+                th1[q] = th0[q]
+                q += 1usize
+            }
+            th1[j] = th0[j] + rng.norm(r) * scale[j]
+            let f1 = logf(ctx, th1)
+            if rng.unif(r) < math.exp[f64](f1 - f0) {
+                th0[j] = th1[j]
+                f0 = f1
+                accept[j] += 1.0f64
+            }
+            par[j * m + i] = th0[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    j = 0usize
+    while j < p {
+        accept[j] = accept[j] / f64(m)
+        j += 1usize
+    }
+    ret ok
+}

@@ -76,6 +76,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if lb.sir[LgCtx](a, &rr, &lc, lg_logf, x[6usize..8usize], x[8usize..12usize], x[4usize], ns, so) != ok { ret 0.0f64 / 0.0f64 }
         ret so[usize(x[1usize])]
     }
+    if str.eq(k, "gib") {
+        // (seed, index, m, n, scale1, scale2, start[2], x[m], nn[m], y[m]): index < n * 2 the chain element (column-major, n sweeps), index >= n * 2 the acceptance rate of coordinate index - 2 n
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let m = usize(x[2usize])
+        let ns = usize(x[3usize])
+        var lc = LgCtx{ x: x[8usize..8usize + m], n: x[8usize + m..8usize + 2usize * m], y: x[8usize + 2usize * m..8usize + 3usize * m] }
+        let (go, ge) = mem.alloc[f64](a, ns * 2usize)
+        let (ga, gae) = mem.alloc[f64](a, 2usize)
+        if ge != ok || gae != ok { ret 0.0f64 / 0.0f64 }
+        let sc = x[4usize..6usize]
+        if lb.gibbs[LgCtx](a, &rr, &lc, lg_logf, x[6usize..8usize], ns, sc, go, ga) != ok { ret 0.0f64 / 0.0f64 }
+        let ix = usize(x[1usize])
+        if ix < ns * 2usize { ret go[ix] }
+        ret ga[ix - ns * 2usize]
+    }
     if str.eq(k, "rej") || str.eq(k, "imp2") {
         // (seed, which, m, n, df, dmax or hidx, mean[2], var[4], x[m], nn[m], y[m]) rej: the number kept (which 0) or the sum of the kept first-coordinate values (1); imp2: est (0) or se (1)
         var rr: rng.Rng = zero
