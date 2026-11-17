@@ -15,4 +15,12 @@ for (rep in 1:12) {
   nu <- c(2.5, 4, 7, 15)[(rep - 1) %% 4 + 1]
   for (x in xs) add("dst", c(xi, om, al, nu, x), dst(x, xi, om, al, nu))
 }
+# rsn (tau = 0 and tau != 0) and rst after set.seed: args (xi, omega, alpha, tau or nu, n, seed, index)
+for (rep in 1:20) {
+  xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, -0.5, 0, 1, 4)[sample(5, 1)]; n <- sample(5:25, 1); sd <- sample(1:100000, 1)
+  tau <- if (rep %% 3 == 0) c(-0.5, 0.7, 1.5)[sample(3, 1)] else 0
+  set.seed(sd); r <- as.numeric(rsn(n, xi, om, al, tau)); for (k in seq_len(n)) add("rsn", c(xi, om, al, tau, n, sd, k - 1), r[k])
+  nu <- c(3, 7.5, 30, Inf)[sample(4, 1)]
+  set.seed(sd); r2 <- as.numeric(rst(n, xi, om, al, nu)); for (k in seq_len(n)) add("rst", c(xi, om, al, nu, n, sd, k - 1), r2[k])
+}
 emit("sn", "sn", list(cases))

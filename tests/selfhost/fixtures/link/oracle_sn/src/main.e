@@ -8,9 +8,19 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
-fn answer(c: *const oracle.Case) -> f64 {
+fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "rsn") || str.eq(k, "rst") {
+        // args (xi, omega, alpha, tau or nu, n, seed, index)
+        let rn = usize(x[4usize])
+        let (ro, roe) = mem.alloc[f64](a, rn)
+        if roe != ok { ret 0.0f64 / 0.0f64 }
+        var re = ok
+        if str.eq(k, "rsn") { re = sn.rsn(a, rn, x[0usize], x[1usize], x[2usize], x[3usize], i64(x[5usize]), ro) } else { re = sn.rst(a, rn, x[0usize], x[1usize], x[2usize], x[3usize], i64(x[5usize]), ro) }
+        if re != ok { ret 0.0f64 / 0.0f64 }
+        ret ro[usize(x[6usize])]
+    }
     let xi = x[0usize]
     let om = x[1usize]
     let al = x[2usize]
@@ -30,7 +40,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var at = 0usize
     while at < golden.cases.len {
         let c = &golden.cases[at]
-        let got = answer(c)
+        let got = answer(a, c)
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

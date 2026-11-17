@@ -7,6 +7,9 @@
 use e.math
 use e.math.dist as dist
 use e.math.nmath_beta as nb
+use e.algo.rand.r as rng
+use e.algo.rand.rdist as rd
+use e.mem
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
 
@@ -94,4 +97,65 @@ fn dst(x: f64, xi: f64, omega: f64, alpha: f64, nu: f64) -> f64 {
     let pdf = nb.dt(z, nu, false)
     let cdf = nb.pt(alpha * z * math.sqrt[f64]((nu + 1.0f64) / (z * z + nu)), nu + 1.0f64, true, false)
     ret 2.0f64 * pdf * cdf / omega
+}
+
+// ---- rsn and rst after set.seed ----
+
+// rsn(n, xi, omega, alpha, tau): for tau = 0 the 2 n normals in pairs (|first|, second); otherwise n uniforms on (pnorm(-tau), 1) first, then n normals; out receives n values
+fn rsn(a: *mem.Arena, n: usize, xi: f64, omega: f64, alpha: f64, tau: f64, seed: i64, out: []f64) -> err {
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    let delta = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
+    ret rsn_draw(a, &rg, n, xi, omega, delta, tau, out)
+}
+
+fn rsn_draw(a: *mem.Arena, rg: *rng.Rng, n: usize, xi: f64, omega: f64, delta: f64, tau: f64, out: []f64) -> err {
+    let sq = math.sqrt[f64](1.0f64 - delta * delta)
+    if tau == 0.0f64 {
+        var j = 0usize
+        while j < n {
+            let u0 = rng.norm(rg)
+            let u1 = rng.norm(rg)
+            out[j] = xi + omega * (delta * math.abs[f64](u0) + sq * u1)
+            j += 1usize
+        }
+        ret ok
+    }
+    let (tn, e) = mem.alloc[f64](a, n)
+    if e != ok { ret e }
+    let lo = pn(0.0f64 - tau)
+    var j = 0usize
+    while j < n {
+        let u = lo + (1.0f64 - lo) * rng.unif(rg)
+        tn[j] = dist.qnorm(u, 0.0f64, 1.0f64, true, false)
+        j += 1usize
+    }
+    j = 0usize
+    while j < n {
+        out[j] = xi + omega * (delta * tn[j] + sq * rng.norm(rg))
+        j += 1usize
+    }
+    ret ok
+}
+
+// rst(n, xi, omega, alpha, nu): the skew-normal sample (xi = 0) divided by the root of a chi-square variate over its degrees of freedom, then shifted; nu = Inf leaves it normal
+fn rst(a: *mem.Arena, n: usize, xi: f64, omega: f64, alpha: f64, nu: f64, seed: i64, out: []f64) -> err {
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    let delta = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
+    let e = rsn_draw(a, &rg, n, 0.0f64, omega, delta, 0.0f64, out)
+    if e != ok { ret e }
+    var j = 0usize
+    if nu < 1.0e308f64 {
+        while j < n {
+            out[j] = out[j] / math.sqrt[f64](rd.rchisq(&rg, nu) / nu) + xi
+            j += 1usize
+        }
+    } else {
+        while j < n {
+            out[j] = out[j] + xi
+            j += 1usize
+        }
+    }
+    ret ok
 }
