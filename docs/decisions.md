@@ -47770,3 +47770,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6825 — mclust: equal proportions in me()
 
 **Decision.** `mclustpkg.me_em` takes `equal_pro`: the proportions are held at 1/G in the M step, as `emControl(equalPro = TRUE)` does. Equal to mclust on 8 starts for each of EII, VII, EEI, EEE and VVV (oracle_mclust, log likelihood, iterations, parameters and memberships). The VVI model with equal proportions is not matched: the package result is far from what the textbook M step reaches (log likelihood -110 against -310 from the same start), so those cases are left out. Linux pending.
+
+## D6826 — mclust: the EVI model in me()
+
+**Decision.** `mclustpkg.me_em` model 6 is EVI (equal volume, varying shape, diagonal): each group covariance is its weighted scatter diagonal divided by the geometric mean of that diagonal, times lambda, the sum over groups of those geometric means over n. Equal to mclust on 8 starts with free and 8 with equal proportions (oracle_mclust, log likelihood, iterations, parameters, memberships). Not here: VEI (an inner iteration), the orientation models EVE, VEE, VVE, EEV, VEV, EVV (they need the eigen decomposition of each scatter), `hc`, `mclustBIC`, `Mclust`. Linux pending.

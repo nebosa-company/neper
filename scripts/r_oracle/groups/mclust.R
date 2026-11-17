@@ -18,11 +18,11 @@ for (rep in 1:20) {
   n <- sample(5:40, 1); k <- sample(2:5, 1); z <- matrix(runif(n * k), n, k); z <- z / rowSums(z); z[sample(n, 1), 1:2] <- 0.5; mp <- map(z, warn = FALSE)
   for (i in seq_len(n)) add("map", c(n, k, z, i - 1), mp[i])
 }
-# me(data, model, z): "me" (model code + 10 when equalPro, n, p, G, id, x[n p] column-major, z[n G] column-major); model code 0 EII 1 VII 2 EEI 3 VVI 4 EEE 5 VVV;
+# me(data, model, z): "me" (model code + 10 when equalPro, n, p, G, id, x[n p] column-major, z[n G] column-major); model code 0 EII 1 VII 2 EEI 3 VVI 4 EEE 5 VVV 6 EVI;
 # id 0 loglik 1 iterations 2 sum(pos * pro) 3 sum(pos * mean) 4 sum(pos * sigma) 5 sum(pos * z)
-mnames <- c("EII", "VII", "EEI", "VVI", "EEE", "VVV")
-for (rep in 1:96) {
-  mc <- (rep - 1) %% 6; eqp <- rep > 48; n <- sample(30:90, 1); p <- sample(2:3, 1); G <- sample(2:3, 1)
+mnames <- c("EII", "VII", "EEI", "VVI", "EEE", "VVV", "EVI")
+for (rep in 1:112) {
+  mc <- (rep - 1) %% 7; eqp <- rep > 56; n <- sample(30:90, 1); p <- sample(2:3, 1); G <- sample(2:3, 1)
   cl <- sample(G, n, TRUE); x <- matrix(rnorm(n * p), n, p) * rep(runif(p, 0.5, 1.5), each = n) + 2.5 * (cl - 1)
   z0 <- unmap(cl); k <- sample(n, max(4, n %/% 8)); z0[k, ] <- matrix(1 / G, length(k), G)
   if (eqp && mc == 3) next  # mevvi with equal proportions does not follow the textbook M step (not matched)

@@ -139,7 +139,7 @@ fn map(z: []const f64, n: usize, k: usize, out: []usize) {
 
 // ---- me(data, modelName, z): the EM iterations of mclust from a given membership matrix, for the models EII (and E), VII (and V), EEI, VVI, EEE and VVV ----
 
-// model code: 0 EII, 1 VII, 2 EEI, 3 VVI, 4 EEE, 5 VVV
+// model code: 0 EII, 1 VII, 2 EEI, 3 VVI, 4 EEE, 5 VVV, 6 EVI
 fn chol_lower(s: []const f64, p: usize, l: []f64) -> bool {
     var j = 0usize
     while j < p {
@@ -280,6 +280,29 @@ fn me_em(a: *mem.Arena, model: usize, equal_pro: bool, x: []const f64, z: []f64,
                                 kk += 1usize
                             }
                             v = tr / nn
+                        }
+                    } else if model == 6usize {
+                        // EVI: lambda B_k with |B_k| = 1: diag(W_k) over its geometric mean, lambda the pooled geometric means over n
+                        if j == j2 {
+                            var lam = 0.0f64
+                            var kk = 0usize
+                            while kk < g {
+                                var lg = 0.0f64
+                                var q = 0usize
+                                while q < p {
+                                    lg += math.log[f64](w[kk * p * p + q * p + q])
+                                    q += 1usize
+                                }
+                                lam += math.exp[f64](lg / pp)
+                                kk += 1usize
+                            }
+                            var lgk = 0.0f64
+                            var q2 = 0usize
+                            while q2 < p {
+                                lgk += math.log[f64](w[k * p * p + q2 * p + q2])
+                                q2 += 1usize
+                            }
+                            v = w[k * p * p + j * p + j] / math.exp[f64](lgk / pp) * (lam / nn)
                         }
                     } else if model == 3usize {
                         if j == j2 { v = w[k * p * p + j * p + j] / sz[k] }
