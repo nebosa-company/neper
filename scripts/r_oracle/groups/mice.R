@@ -2,9 +2,9 @@
 suppressMessages(library(mice))
 cases <- list()
 set.seed(20261116)
-meths <- c("norm.nob", "norm", "norm.predict", "pmm", "norm.boot")
-for (rep in 1:100) {
-  n <- sample(20:60, 1); p <- sample(3:5, 1); m <- sample(1:3, 1); maxit <- sample(1:4, 1); me <- (rep - 1) %% 5
+meths <- c("norm.nob", "norm", "norm.predict", "pmm", "norm.boot", "mean", "sample")
+for (rep in 1:140) {
+  n <- sample(20:60, 1); p <- sample(3:5, 1); m <- sample(1:3, 1); maxit <- sample(1:4, 1); me <- (rep - 1) %% 7
   B <- matrix(rnorm(p * p), p, p); X <- round(matrix(rnorm(n * p), n, p) %*% B + 5 * rep(1, n) %o% runif(p, 1, 3), 4)
   nmc <- sample(1:min(2, p), 1); cols <- sample(p, nmc)
   for (j in cols) X[sample(n, sample(2:max(3, n %/% 5), 1)), j] <- NA
@@ -13,7 +13,7 @@ for (rep in 1:100) {
   if (is.null(imp) || !is.null(imp$loggedEvents)) next
   flat <- unlist(lapply(seq_len(p), function(j) if (!is.null(imp$imp[[j]]) && nrow(imp$imp[[j]]) > 0) as.vector(as.matrix(imp$imp[[j]])) else NULL))
   xa <- ifelse(is.na(X), NaN, X)
-  for (q in seq_along(flat)) cases[[length(cases) + 1]] <- case("imp", c(n, p, m, maxit, c(0, 1, 2, 3, 5)[me + 1], seed, as.vector(xa), q - 1), flat[q], rel = 1e-6, abs = 1e-8)
+  for (q in seq_along(flat)) cases[[length(cases) + 1]] <- case("imp", c(n, p, m, maxit, c(0, 1, 2, 3, 5, 7, 8)[me + 1], seed, as.vector(xa), q - 1), flat[q], rel = 1e-6, abs = 1e-8)
 }
 # logreg (method 4): binary 0/1 factor columns with incomplete cases, continuous predictors
 for (rep in 1:60) {

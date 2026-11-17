@@ -162,6 +162,42 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                 if nmis[j] > 0usize {
                     var mj = method
                     if (method == 4usize || method == 6usize) && j > 0usize { mj = 0usize }
+                    if method == 7usize || method == 8usize {
+                        // mice.impute.mean (the observed mean) and mice.impute.sample (a draw with replacement of the observed values)
+                        let (yo, eyo) = mem.alloc[f64](a, n)
+                        if eyo != ok { ret eyo }
+                        var no = 0usize
+                        var sm = 0.0f64
+                        var i0 = 0usize
+                        while i0 < n {
+                            if data0[j * n + i0] == data0[j * n + i0] {
+                                yo[no] = data0[j * n + i0]
+                                sm += yo[no]
+                                no += 1usize
+                            }
+                            i0 += 1usize
+                        }
+                        var sidx: []i64 = zero
+                        if method == 8usize {
+                            let (ix, eix) = rng.sample_int(a, &r, i64(no), i64(nmis[j]), true)
+                            if eix != ok { ret eix }
+                            sidx = ix
+                        }
+                        var q0 = 0usize
+                        i0 = 0usize
+                        while i0 < n {
+                            if data0[j * n + i0] != data0[j * n + i0] {
+                                var f0 = sm / f64(no)
+                                if method == 8usize { f0 = yo[usize(sidx[q0]) - 1usize] }
+                                imp[off[j] + im * nmis[j] + q0] = f0
+                                data[j * n + i0] = f0
+                                q0 += 1usize
+                            }
+                            i0 += 1usize
+                        }
+                        vi += 1usize
+                        continue
+                    }
                     // remove.lindep: a predictor stays when its variance among the observed rows exceeds 1e-4 and its correlation with y is below 0.99
                     var nobs0 = 0usize
                     var ym = 0.0f64
@@ -735,7 +771,7 @@ fn logreg_draw(a: *mem.Arena, r: *rng.Rng, x: []const f64, cd: usize, n: usize, 
     q = 0usize
     while q < no {
         let k = ro[q]
-        let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[q]))
+        let mu = logit_inv(eta[q])
         devold += bin_dev(ya[k], mu, wa[k])
         q += 1usize
     }
@@ -756,9 +792,9 @@ fn logreg_draw(a: *mem.Arena, r: *rng.Rng, x: []const f64, cd: usize, n: usize, 
         q = 0usize
         while q < no {
             let k = ro[q]
-            let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[q]))
-            let me = mu * (1.0f64 - mu)
-            let wq = wa[k] * me
+            let mu = logit_inv(eta[q])
+            let me = logit_mu_eta(eta[q])
+            let wq = wa[k] * me * me / (mu * (1.0f64 - mu))
             let z = eta[q] + (ya[k] - mu) / me
             s1 = 0usize
             while s1 < cd {
@@ -801,7 +837,7 @@ fn logreg_draw(a: *mem.Arena, r: *rng.Rng, x: []const f64, cd: usize, n: usize, 
                 s1 += 1usize
             }
             eta[q] = e
-            let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e))
+            let mu = logit_inv(e)
             dev += bin_dev(ya[k], mu, wa[k])
             q += 1usize
         }
@@ -919,4 +955,23 @@ fn pool_scalar(q: []const f64, u: []const f64, n: f64, k: f64, out: []f64) {
     out[4usize] = df
     out[5usize] = r
     out[6usize] = (r + 2.0f64 / (df + 3.0f64)) / (r + 1.0f64)
+}
+
+// R's logit family: the linear predictor is clamped at +-30 (linkinv at DBL_EPSILON and its reciprocal, mu.eta at DBL_EPSILON)
+fn logit_inv(eta: f64) -> f64 {
+    var tmp = 0.0f64
+    if eta < 0.0f64 - 30.0f64 {
+        tmp = 2.220446049250313e-16f64
+    } else if eta > 30.0f64 {
+        tmp = 1.0f64 / 2.220446049250313e-16f64
+    } else {
+        tmp = math.exp[f64](eta)
+    }
+    ret tmp / (1.0f64 + tmp)
+}
+
+fn logit_mu_eta(eta: f64) -> f64 {
+    if eta > 30.0f64 || eta < 0.0f64 - 30.0f64 { ret 2.220446049250313e-16f64 }
+    let e = math.exp[f64](eta)
+    ret e / ((1.0f64 + e) * (1.0f64 + e))
 }

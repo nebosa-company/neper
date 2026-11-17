@@ -3617,4 +3617,5 @@ D6754	1226	mice: logistic regression imputation
 D6755	497	mice: pool.scalar
 D6756	520	mice: norm.boot
 D6757	668	mice: logreg.boot
-D6758	687	mice: predictor matrix and visit sequence
+D6758	688	mice: predictor matrix and visit sequence
+D6759	760	mice: mean and sample methods, logit clamps

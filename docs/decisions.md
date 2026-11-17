@@ -47502,3 +47502,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6758 — mice: predictor matrix and visit sequence
 
 **Decision.** `mice_norm` takes the predictor matrix (row j lists the columns that predict column j; empty means all other columns) and the visit sequence (a permutation of the columns; empty means 1..p). The sequence orders both the initial draws (`initialize.imp` samples column by column in that order, so the random stream differs) and each sweep's chained regressions; the matrix restricts the predictors before `remove.lindep`. Equal to mice 3.19 on 40 random matrices and permutations over 4 or 5 columns (oracle_mice, 3840 cases in all). A visit sequence that leaves an incomplete column out is not covered. Linux pending.
+
+## D6759 — mice: mean and sample methods, logit clamps
+
+**Decision.** `mean` (method 7) is `mice.impute.mean`, the observed mean for every missing value, and `sample` (method 8) is `mice.impute.sample`, a draw with replacement of the observed values; neither reads the predictors, so both run before `remove.lindep`. The logit fit now uses R's family exactly: the linear predictor is clamped at plus and minus 30 (`linkinv` at DBL_EPSILON and its reciprocal, `mu.eta` at DBL_EPSILON) and the working weight is `w mu.eta^2 / (mu (1 - mu))`. The clamp matters for a bootstrap resample that separates the classes, where `logreg.boot` imputed the wrong class before. Equal to mice 3.19 on 265 more imputed values (oracle_mice, 4105 cases in all). Linux pending.
