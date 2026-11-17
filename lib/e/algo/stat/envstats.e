@@ -953,3 +953,67 @@ fn lt_n(slope: f64, alpha: f64, power: f64, alt: usize, approx: bool, n_max: f64
     }
     ret 0.0f64 / 0.0f64
 }
+
+// ---- aovPower and aovN: the one-way analysis of variance with equal or unequal group sizes ----
+
+// EnvStats::aovPower: groups of sizes n[g] with means mu[g] and a common sigma
+fn aov_power(n: []const f64, mu: []const f64, sigma: f64, alpha: f64) -> f64 {
+    let g = n.len
+    var tot = 0.0f64
+    var sm = 0.0f64
+    var i = 0usize
+    while i < g {
+        tot += n[i]
+        sm += n[i] * mu[i]
+        i += 1usize
+    }
+    let mbar = sm / tot
+    var ss = 0.0f64
+    i = 0usize
+    while i < g {
+        ss += n[i] * (mu[i] - mbar) * (mu[i] - mbar)
+        i += 1usize
+    }
+    let df1 = f64(g) - 1.0f64
+    let df2 = tot - f64(g)
+    ret 1.0f64 - nc.pnf(nb.qf(1.0f64 - alpha, df1, df2, true, false), df1, df2, ss / (sigma * sigma), true, false)
+}
+
+// EnvStats::aovPower with the group counts of the means (ncp from `nc_n` per group) and the degrees of freedom of `df_n` per group, the split the package's aovN has when it roots over a real n
+fn aov_power_split(nc_n: f64, df_n: f64, mu: []const f64, sigma: f64, alpha: f64) -> f64 {
+    let g = f64(mu.len)
+    var sm = 0.0f64
+    var i = 0usize
+    while i < mu.len {
+        sm += mu[i]
+        i += 1usize
+    }
+    let mbar = sm / g
+    var ss = 0.0f64
+    i = 0usize
+    while i < mu.len {
+        ss += nc_n * (mu[i] - mbar) * (mu[i] - mbar)
+        i += 1usize
+    }
+    let df1 = g - 1.0f64
+    let df2 = g * df_n - g
+    ret 1.0f64 - nc.pnf(nb.qf(1.0f64 - alpha, df1, df2, true, false), df1, df2, ss / (sigma * sigma), true, false)
+}
+
+// EnvStats::aovN: the package roots power - aovPower over a real n, where the group counts are truncated (so the power is a step function of n that rises at each whole n).
+// uniroot ends on the side of the jump with the smaller |gap|; rounding up then gives the first whole n reaching the power when that is the left side, and one more when it is the right.
+fn aov_n(mu: []const f64, sigma: f64, alpha: f64, power: f64, n_max: f64) -> f64 {
+    var n = 2.0f64
+    if aov_power_split(2.0f64, 2.0f64, mu, sigma, alpha) >= power { ret 2.0f64 }
+    n = 3.0f64
+    while n <= n_max {
+        let fr = aov_power_split(n, n, mu, sigma, alpha)
+        if fr >= power {
+            let fl = aov_power_split(n - 1.0f64, n, mu, sigma, alpha)
+            if math.abs[f64](power - fl) < math.abs[f64](fr - power) { ret n }
+            ret n + 1.0f64
+        }
+        n += 1.0f64
+    }
+    ret 0.0f64 / 0.0f64
+}

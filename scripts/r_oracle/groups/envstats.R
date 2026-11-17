@@ -141,6 +141,16 @@ for (rep in 1:120) {
   r <- tryCatch(suppressWarnings(linearTrendTestN(sl, alpha = a, power = pw, alternative = alts_t[al + 1], approx = ap)), error = function(e) NA)
   if (is.finite(r)) cases[[length(cases) + 1]] <- case("ltn", c(sl, a, pw, al, as.numeric(ap)), r, rel = 0, abs = 0)
 }
+# aovPower ("aop": (sigma, alpha, g, n[g], mu[g])) and aovN ("aon": (sigma, alpha, power, g, mu[g]))
+for (rep in 1:100) {
+  g <- sample(2:5, 1); mu <- round(rnorm(g, 0, 0.8), 2); if (length(unique(mu)) < 2) next
+  sg <- c(0.5, 1, 2)[sample(3, 1)]; a <- c(0.01, 0.05, 0.1)[sample(3, 1)]; nv <- sample(3:40, g, replace = TRUE)
+  v <- tryCatch(aovPower(nv, mu, sg, a), error = function(e) NA)
+  if (is.finite(v)) cases[[length(cases) + 1]] <- case("aop", c(sg, a, g, nv, mu), v, rel = 1e-7, abs = 1e-10)
+  pw <- c(0.8, 0.9, 0.95)[sample(3, 1)]
+  r <- tryCatch(suppressWarnings(aovN(mu, sg, a, pw)), error = function(e) NA)
+  if (is.finite(r)) cases[[length(cases) + 1]] <- case("aon", c(sg, a, pw, g, mu), r, rel = 0, abs = 0)
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
