@@ -93,4 +93,22 @@ for (rep in 1:45) {
     for (k in seq_len(n)) add("sts", c(as.numeric(sm), k - 1, n, enc(x), kind, nf), r[k], rel = 1e-6)
   }
 }
+# stats::arima "arima" (p, d, q, kind 0 none 1 intercept 2 drift, method 0 CSS-ML 1 ML 2 CSS, quantity, n, series...): quantity 0 aic, 1 loglik, 2 sigma2, 10+i coef i, 30+i model a[i], 50+i diag P[i]
+for (rep in 1:60) {
+  p <- sample(0:2, 1); d <- sample(0:1, 1); q <- sample(0:2, 1); n <- sample(25:60, 1)
+  ar <- if (p) c(0.5, -0.2)[1:p] else NULL; ma <- if (q) c(0.4, 0.2)[1:q] else NULL
+  x <- round(arima.sim(list(order = c(p, 0, q), ar = ar, ma = ma), n) + 5, 3); if (d == 1) x <- round(cumsum(x - 5) + 5, 3)
+  kind <- if (d == 0) sample(0:1, 1) else sample(c(0, 2), 1)
+  method <- (rep - 1) %% 3
+  if (rep %% 2 == 0) { x[sample(2:n, 3)] <- NA; method <- 1 }
+  if (rep %% 10 == 0) x[1:2] <- NA
+  xr <- if (kind == 2) seq_along(x) else NULL
+  fit <- tryCatch(suppressWarnings(stats::arima(x, order = c(p, d, q), include.mean = (kind == 1), xreg = xr, method = c("CSS-ML", "ML", "CSS")[method + 1])), error = function(e) NULL)
+  if (is.null(fit)) next
+  if (rep %% 10 == 0) next
+  vals <- list(`0` = fit$aic, `1` = fit$loglik, `2` = fit$sigma2)
+  for (i in seq_along(fit$coef)) vals[[as.character(10 + i - 1)]] <- unname(fit$coef[i])
+  for (i in seq_along(fit$model$a)) { vals[[as.character(30 + i - 1)]] <- fit$model$a[i]; vals[[as.character(50 + i - 1)]] <- fit$model$P[i, i] }
+  for (nm in names(vals)) if (!is.na(vals[[nm]])) add("arima", c(p, d, q, kind, method, as.numeric(nm), n, enc(x)), vals[[nm]], rel = if (as.numeric(nm) <= 2) 1e-6 else 1e-4)
+}
 emit("imputets", "imputeTS", list(cases))

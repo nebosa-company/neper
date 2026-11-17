@@ -598,7 +598,7 @@ fn na_kalman_model(a: *mem.Arena, x: []const f64, orig: []const f64, m: *const k
         var mw = mc
         let (st, ste) = mem.alloc[f64](a, n * p)
         if ste != ok { ret (o, ste) }
-        let (q1, q2, q3, fe) = kal.kalman_filter(a, &mw, x, nit, st, zero)
+        let (q1, q2, q3, fe) = kal.kalman_filter(a, &mw, x, nit, st, zero, 1.0e300f64)
         if fe != ok { ret (o, fe) }
         erg = st
     }

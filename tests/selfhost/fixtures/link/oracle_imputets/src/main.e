@@ -4,6 +4,7 @@
 use e.algo.stat.imputets as it
 use e.algo.rand.r as rng
 use e.algo.stat.kalman as kal
+use e.algo.stat.arimafit as af
 use e.io
 use e.mem
 use e.os
@@ -104,6 +105,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (sr, se) = it.na_kalman_structts(a, s, usize(x[3usize + n]), usize(x[4usize + n]), kind == 1usize)
         if se != ok { os.exit(7) }
         ret sr[k]
+    }
+    if str.eq(c.name, "arima") {
+        // args (p, d, q, kind, method, quantity, n, series...)
+        let nn = usize(x[6usize])
+        let (xs, xe) = mem.alloc[f64](a, nn)
+        if xe != ok { os.exit(5) }
+        var t0 = 0usize
+        while t0 < nn {
+            xs[t0] = x[7usize + t0]
+            if xs[t0] < 0.0f64 - 999000.0f64 { xs[t0] = 0.0f64 / 0.0f64 }
+            t0 += 1usize
+        }
+        let fit = af.arima_fit(a, xs, usize(x[0usize]), usize(x[1usize]), usize(x[2usize]), usize(x[3usize]), 0.0f64 / 0.0f64, usize(x[4usize]))
+        if !fit.good { ret 0.0f64 / 0.0f64 }
+        let qn = usize(x[5usize])
+        if qn == 0usize { ret fit.aic }
+        if qn == 1usize { ret 0.0f64 - 0.5f64 * fit.value }
+        if qn == 2usize { ret fit.sigma2 }
+        if qn >= 50usize { ret fit.model.pm[(qn - 50usize) * fit.model.p + (qn - 50usize)] }
+        if qn >= 30usize { ret fit.model.av[qn - 30usize] }
+        ret fit.coef[qn - 10usize]
     }
     if str.eq(c.name, "stats") {
         // args (which 0..7, 0, n, series...)

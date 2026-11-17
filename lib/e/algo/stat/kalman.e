@@ -90,9 +90,9 @@ fn ss_predict(m: *SsModel, anew: []f64, mm: []f64, l: usize, nit: i64) {
     }
 }
 
-// KalmanLike: returns (sum of squared standardised innovations, sum of log gains, count of observations). `states`
+// KalmanLike (cut = 1e300) or ARIMA_Like (cut = 1e4: a gain at or above it, a diffuse start, is left out of the sums): returns (sum of squared standardised innovations, sum of log gains, count of observations). `states`
 // (n x p, filtered) and `resid` (n, standardised) are filled when not empty. The model is changed in place.
-fn kalman_filter(ar: *mem.Arena, m: *SsModel, y: []const f64, nit: i64, states: []f64, resid: []f64) -> (f64, f64, usize, err) {
+fn kalman_filter(ar: *mem.Arena, m: *SsModel, y: []const f64, nit: i64, states: []f64, resid: []f64, cut: f64) -> (f64, f64, usize, err) {
     let p = m.p
     let n = y.len
     let (anew, e1) = mem.alloc[f64](ar, p)
@@ -106,7 +106,6 @@ fn kalman_filter(ar: *mem.Arena, m: *SsModel, y: []const f64, nit: i64, states: 
     while l < n {
         ss_predict(m, anew, mm, l, nit)
         if !k_is_nan(y[l]) {
-            nu += 1usize
             var r0 = y[l]
             var i = 0usize
             while i < p {
@@ -126,9 +125,14 @@ fn kalman_filter(ar: *mem.Arena, m: *SsModel, y: []const f64, nit: i64, states: 
                 gain += m.zv[i] * s
                 i += 1usize
             }
-            ssq += r0 * r0 / gain
-            if resid.len > 0usize { resid[l] = r0 / math.sqrt[f64](gain) }
-            sumlog += math.log[f64](gain)
+            if gain < cut {
+                nu += 1usize
+                ssq += r0 * r0 / gain
+                sumlog += math.log[f64](gain)
+                if resid.len > 0usize { resid[l] = r0 / math.sqrt[f64](gain) }
+            } else {
+                if resid.len > 0usize { resid[l] = k_nan() }
+            }
             i = 0usize
             while i < p {
                 m.av[i] = anew[i] + mv[i] * r0 / gain

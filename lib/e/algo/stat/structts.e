@@ -33,7 +33,7 @@ fn sts_f(c: *StsCtx, par: []const f64) -> f64 {
         i += 1usize
     }
     m.h = par[c.np] * c.vx
-    let (ssq, sumlog, nu, e2) = kal.kalman_filter(c.ar, &m, c.y, 0i64 - 1i64, zero, zero)
+    let (ssq, sumlog, nu, e2) = kal.kalman_filter(c.ar, &m, c.y, 0i64 - 1i64, zero, zero, 1.0e300f64)
     mem.reset(c.ar, st)
     if e2 != ok { ret 0.0f64 / 0.0f64 }
     ret 0.5f64 * (ssq / f64(nu) + sumlog / f64(nu))
