@@ -26,4 +26,15 @@ for (rep in 1:10) {
   for (kd in 14:16) { v <- performance(p, meas2[kd - 13])@y.values[[1]]; ok <- is.finite(v); add("meas", c(kd, n, pred, lab), sum(v[ok] * seq_along(v)[ok])); add("cnt", c(kd, n, pred, lab), sum(ok)) }
   if (all(pred > 0 & pred < 1)) { add("mxe", c(90, n, pred, lab), performance(p, "mxe")@y.values[[1]]); add("rmse", c(91, n, pred, lab), performance(p, "rmse")@y.values[[1]]) }
 }
+# calibration error ("calc" count, "cale" position-weighted sum of the errors, "calm" of the median cutoffs; args (0, n, pred, labels, window)) and the precision/recall break-even point ("pbec" count, "pbes" position-weighted sum of the cutoffs, "pbev" of the values; args (0, n, pred, labels))
+for (rep in 1:20) {
+  n <- sample(20:70, 1); lab <- rbinom(n, 1, 0.45); if (sum(lab) < 3 || sum(lab) > n - 3) next
+  pred <- round(plogis(rnorm(n) + 0.9 * lab), if (rep %% 3 == 0) 2 else 4); p <- prediction(pred, lab)
+  win <- sample(3:min(15, n), 1)
+  cl <- performance(p, "cal", window.size = win)
+  add("calc", c(0, n, pred, lab, win), length(cl@y.values[[1]])); add("cale", c(0, n, pred, lab, win), sum(cl@y.values[[1]] * seq_along(cl@y.values[[1]])))
+  add("calm", c(0, n, pred, lab, win), sum(cl@x.values[[1]] * seq_along(cl@x.values[[1]])))
+  pb <- tryCatch(performance(p, "prbe"), error = function(e) NULL)
+  if (!is.null(pb)) { al <- pb@x.values[[1]]; vv <- pb@y.values[[1]]; add("pbec", c(0, n, pred, lab), length(al)); add("pbes", c(0, n, pred, lab), sum(al * seq_along(al))); add("pbev", c(0, n, pred, lab), sum(vv * seq_along(vv))) }
+}
 emit("rocr", "ROCR", list(cases))

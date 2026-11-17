@@ -3650,4 +3650,5 @@ D6787	995	EnvStats: gofGroupTest
 D6788	909	seriation: GW
 D6789	1088	partitions: setparts
 D6790	872	partitions: the counts as the package computes them
-D6791	1232	BiasedUrn: Wallenius mode and the multivariate mass functions
+D6791	1233	BiasedUrn: Wallenius mode and the multivariate mass functions
+D6792	1075	ROCR: calibration error and the precision/recall break-even point

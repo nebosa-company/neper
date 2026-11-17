@@ -17,6 +17,35 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if kind == 99usize { ret rc.auc(a, pred, lab) }
     if kind == 90usize { ret rc.mxe(pred, lab) }
     if kind == 91usize { ret rc.rmse(pred, lab) }
+    if str.eq(c.name, "calc") || str.eq(c.name, "cale") || str.eq(c.name, "calm") {
+        let w = usize(x[2usize + 2usize * n])
+        let (md, ce1) = mem.alloc[f64](a, n)
+        let (er, ce2) = mem.alloc[f64](a, n)
+        if ce1 != ok || ce2 != ok { ret 0.0f64 / 0.0f64 }
+        let k = rc.calibration(a, pred, lab, w, md, er)
+        if str.eq(c.name, "calc") { ret f64(k) }
+        var cs = 0.0f64
+        var ci = 0usize
+        while ci < k {
+            if str.eq(c.name, "cale") { cs += er[ci] * f64(ci + 1usize) } else { cs += md[ci] * f64(ci + 1usize) }
+            ci += 1usize
+        }
+        ret cs
+    }
+    if str.eq(c.name, "pbec") || str.eq(c.name, "pbes") || str.eq(c.name, "pbev") {
+        let (pc, pe1) = mem.alloc[f64](a, n + 2usize)
+        let (pv, pe2) = mem.alloc[f64](a, n + 2usize)
+        if pe1 != ok || pe2 != ok { ret 0.0f64 / 0.0f64 }
+        let k = rc.prbe(a, pred, lab, pc, pv)
+        if str.eq(c.name, "pbec") { ret f64(k) }
+        var ps = 0.0f64
+        var pi = 0usize
+        while pi < k {
+            if str.eq(c.name, "pbes") { ps += pc[pi] * f64(pi + 1usize) } else { ps += pv[pi] * f64(pi + 1usize) }
+            pi += 1usize
+        }
+        ret ps
+    }
     let m = rc.cutoff_count(a, pred)
     let (out, e) = mem.alloc[f64](a, m)
     if e != ok { os.exit(5) }
