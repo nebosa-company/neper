@@ -418,3 +418,40 @@ fn gw_order(a: *mem.Arena, d: []const f64, n: usize, out: []usize) -> err {
     }
     ret ok
 }
+
+// 2SUM: sum over all i, j of (i - j)^2 / (1 + d(o[i], o[j]))
+fn two_sum(d: []const f64, n: usize, o: []const usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            let dd = f64(i) - f64(j)
+            s += dd * dd / (1.0f64 + d[o[i] * n + o[j]])
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret s
+}
+
+// Rho: the absolute Spearman rank correlation (ties averaged) between the dissimilarities of the permuted objects and their distances |i - j| in the order, over the pairs in dist order
+fn rho(a: *mem.Arena, d: []const f64, n: usize, o: []const usize) -> f64 {
+    let m = n * (n - 1usize) / 2usize
+    let (x, e1) = mem.alloc[f64](a, m)
+    let (y, e2) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    var j = 0usize
+    while j + 1usize < n {
+        var i = j + 1usize
+        while i < n {
+            x[k] = d[o[i] * n + o[j]]
+            y[k] = f64(i - j)
+            k += 1usize
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret math.abs[f64](hc.spearman_vec(a, x, y))
+}
