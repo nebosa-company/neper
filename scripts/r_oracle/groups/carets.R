@@ -34,4 +34,12 @@ for (rep in 1:25) {
   st <- c(length(ts$train), sum(sapply(ts$train, `[`, 1)), sum(sapply(ts$train, function(z) z[length(z)])), sum(sapply(ts$test, `[`, 1)), sum(sapply(ts$test, function(z) z[length(z)])))
   for (j in 0:4) add("ts", c(nn, iw, hz, as.numeric(fx), sk, j), st[j + 1], 1e-12)
 }
+# createDataPartition: "dp" (seed, p, groups, numeric 0/1, n, y[n]) as sum(position * selected); a factor y is given as codes 1.., a numeric y as its values
+for (rep in 1:25) {
+  sd <- sample(1:100000, 1); n <- sample(12:80, 1); pp <- sample(c(0.3, 0.5, 0.75, 0.8), 1); gg <- sample(2:6, 1)
+  yc <- sample(1:sample(2:4, 1), n, TRUE); set.seed(sd); sel <- createDataPartition(factor(yc), times = 1, p = pp, list = FALSE)[, 1]
+  mk <- numeric(n); mk[sel] <- 1; add("dp", c(sd, pp, gg, 0, n, yc), sum(seq_len(n) * mk), 1e-12)
+  yn <- round(rnorm(n), 2); set.seed(sd); sel <- createDataPartition(yn, times = 1, p = pp, list = FALSE, groups = gg)[, 1]
+  mk <- numeric(n); mk[sel] <- 1; add("dp", c(sd, pp, gg, 1, n, yn), sum(seq_len(n) * mk), 1e-12)
+}
 emit("carets", "caret", list(cases))

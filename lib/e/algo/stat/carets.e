@@ -208,3 +208,116 @@ fn create_time_slices(n: usize, initial: usize, horizon: usize, fixed: bool, ski
     }
     ret cnt
 }
+
+// createDataPartition(y, times = 1, p, groups): a stratified draw of ceiling(p n_g) of the n_g observations of each stratum (a class, or for a numeric y the quantile bin of
+// cut(y, unique(quantile(y, seq(0, 1, length.out = groups))), include.lowest = TRUE)); `cls` holds the class codes in level order when `numeric` is false, else the values;
+// mask[i] is 1 when observation i is selected
+fn create_data_partition(a: *mem.Arena, r: *rng.Rng, y: []const f64, numeric: bool, p: f64, groups0: usize, mask: []i64) -> err {
+    let n = y.len
+    var groups = groups0
+    if groups < 2usize { groups = 2usize }
+    let (code, e0) = mem.alloc[i64](a, n)
+    if e0 != ok { ret e0 }
+    var i = 0usize
+    var m = 0i64
+    if numeric {
+        let (xs, e1) = mem.alloc[f64](a, n)
+        let (br, e2) = mem.alloc[f64](a, groups)
+        if e1 != ok || e2 != ok { ret mem.Full }
+        i = 0usize
+        while i < n {
+            xs[i] = y[i]
+            i += 1usize
+        }
+        i = 1usize
+        while i < n {
+            let key = xs[i]
+            var j = i
+            while j > 0usize && xs[j - 1usize] > key {
+                xs[j] = xs[j - 1usize]
+                j -= 1usize
+            }
+            xs[j] = key
+            i += 1usize
+        }
+        var nbr = 0usize
+        let by = 1.0f64 / f64(groups - 1usize)
+        var q = 0usize
+        while q < groups {
+            var pr = f64(q) * by
+            if q == groups - 1usize { pr = 1.0f64 }
+            let index = 1.0f64 + f64(n - 1usize) * pr
+            let lo = math.floor[f64](index)
+            let hi = math.ceil[f64](index)
+            var v = xs[usize(lo) - 1usize]
+            let xh = xs[usize(hi) - 1usize]
+            if index > lo && xh != v {
+                let h = index - lo
+                v = (1.0f64 - h) * v + h * xh
+            }
+            if nbr == 0usize || v != br[nbr - 1usize] {
+                br[nbr] = v
+                nbr += 1usize
+            }
+            q += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var b = 0usize
+            while b + 2usize < nbr && y[i] > br[b + 1usize] { b += 1usize }
+            code[i] = i64(b)
+            i += 1usize
+        }
+        m = i64(nbr)
+    } else {
+        i = 0usize
+        while i < n {
+            code[i] = i64(y[i])
+            if code[i] + 1i64 > m { m = code[i] + 1i64 }
+            i += 1usize
+        }
+    }
+    i = 0usize
+    while i < n {
+        mask[i] = 0i64
+        i += 1usize
+    }
+    var c = 0i64
+    while c < m {
+        var cnt = 0usize
+        i = 0usize
+        while i < n {
+            if code[i] == c { cnt += 1usize }
+            i += 1usize
+        }
+        if cnt == 1usize {
+            i = 0usize
+            while i < n {
+                if code[i] == c { mask[i] = 1i64 }
+                i += 1usize
+            }
+        } else if cnt > 1usize {
+            let num = usize(math.ceil[f64](f64(cnt) * p))
+            let (sp, e3) = rng.sample_int(a, r, i64(cnt), i64(num), false)
+            if e3 != ok { ret e3 }
+            let (pos, e4) = mem.alloc[usize](a, cnt)
+            if e4 != ok { ret e4 }
+            var at = 0usize
+            i = 0usize
+            while i < n {
+                if code[i] == c {
+                    pos[at] = i
+                    at += 1usize
+                }
+                i += 1usize
+            }
+            var t = 0usize
+            while t < num {
+                mask[pos[usize(sp[t] - 1i64)]] = 1i64
+                t += 1usize
+            }
+        }
+        c += 1i64
+    }
+    ret ok
+}

@@ -48,6 +48,31 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "dp") {
+        var r: rng.Rng = zero
+        rng.seed(&r, i64(z[0usize]))
+        let n = usize(z[4usize])
+        let (mk, e) = mem.alloc[f64](a, n)
+        let (mi, e2) = mem.alloc[i64](a, n)
+        if e != ok || e2 != ok { ret nan }
+        var yy = z[5usize..5usize + n]
+        if z[3usize] == 0.0f64 {
+            var q = 0usize
+            while q < n {
+                mk[q] = yy[q] - 1.0f64
+                q += 1usize
+            }
+            yy = mk[0usize..n]
+        }
+        if ct.create_data_partition(a, &r, yy, z[3usize] != 0.0f64, z[1usize], usize(z[2usize]), mi) != ok { ret nan }
+        var s = 0.0f64
+        var q2 = 0usize
+        while q2 < n {
+            s += f64(q2 + 1usize) * f64(mi[q2])
+            q2 += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "ts") {
         let (o, e) = mem.alloc[i64](a, 400usize)
         if e != ok { ret nan }
