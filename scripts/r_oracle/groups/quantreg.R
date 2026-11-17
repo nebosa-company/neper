@@ -12,6 +12,8 @@ for (rep in 1:14) {
     for (j in seq_len(p)) cases[[length(cases) + 1]] <- case("rq", c(n, p, tau, j - 1, y, X), f[j], rel = 1e-6, abs = 1e-8)
     if (tau %in% c(0.25, 0.5, 0.75)) { sm <- tryCatch(suppressWarnings(summary(rq(y ~ X, tau = tau, method = "br"), se = "nid")$coefficients[, 2]), error = function(e) NULL)
       if (!is.null(sm)) for (j in seq_len(p)) cases[[length(cases) + 1]] <- case("rq", c(n, p, tau, 100 + j - 1, y, X), sm[j], rel = 1e-5, abs = 1e-8) }
+    if (tau %in% c(0.25, 0.5, 0.75)) { sk <- tryCatch(suppressWarnings(summary(rq(y ~ X, tau = tau, method = "br"), se = "ker")$coefficients[, 2]), error = function(e) NULL)
+      if (!is.null(sk)) for (j in seq_len(p)) cases[[length(cases) + 1]] <- case("rq", c(n, p, tau, 200 + j - 1, y, X), sk[j], rel = 1e-5, abs = 1e-8) }
   }
 }
 emit("quantreg", "quantreg", list(cases))

@@ -3725,4 +3725,5 @@ D6862	732	geosphere: spherical destination, great-circle points and geomean
 D6863	741	MASS: rlm with the Huber psi
 D6864	628	MASS: kde2d
 D6865	720	MASS: rlm with the bisquare and Hampel psi functions
-D6866	833	quantreg: the nid standard errors of summary.rq
+D6866	834	quantreg: the nid standard errors of summary.rq
+D6867	694	quantreg: the ker standard errors, and the shared sandwich

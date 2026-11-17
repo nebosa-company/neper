@@ -313,13 +313,7 @@ fn rq_se_nid(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     let (blo, e2) = rq(a, x, y, n, p, tau - h)
     if e2 != ok { ret e2 }
     let (f, e3) = mem.alloc[f64](a, n)
-    let (dm, e4) = mem.alloc[f64](a, p * p)
-    let (xx, e5) = mem.alloc[f64](a, p * p)
-    let (u, e6) = mem.alloc[f64](a, p * p)
-    let (ui, e7) = mem.alloc[f64](a, p * p)
-    let (di, e8) = mem.alloc[f64](a, p * p)
-    let (tmp, e9) = mem.alloc[f64](a, p * p)
-    if e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret mem.Full }
+    if e3 != ok { ret mem.Full }
     let eps = 1.4901161193847656e-8f64
     var i = 0usize
     while i < n {
@@ -334,6 +328,19 @@ fn rq_se_nid(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
         f[i] = fv
         i += 1usize
     }
+    ret rq_sandwich(a, x, f, n, p, tau, se)
+}
+
+// the sandwich tau (1 - tau) D^-1 X'X D^-1 with D = X' diag(f) X: the square roots of its diagonal
+fn rq_sandwich(a: *mem.Arena, x: []const f64, f: []const f64, n: usize, p: usize, tau: f64, se: []f64) -> err {
+    let (dm, e4) = mem.alloc[f64](a, p * p)
+    let (xx, e5) = mem.alloc[f64](a, p * p)
+    let (u, e6) = mem.alloc[f64](a, p * p)
+    let (ui, e7) = mem.alloc[f64](a, p * p)
+    let (di, e8) = mem.alloc[f64](a, p * p)
+    let (tmp, e9) = mem.alloc[f64](a, p * p)
+    if e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret mem.Full }
+    var i = 0usize
     var c = 0usize
     while c < p {
         var c2 = 0usize
@@ -402,3 +409,68 @@ fn rq_se_nid(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
 }
 
 fn dist_qn(p: f64) -> f64 { ret dist.qnorm(p, 0.0f64, 1.0f64, true, false) }
+
+// summary.rq(se = "ker"): the Gaussian kernel density of the residuals with the bandwidth (qnorm(tau + h) - qnorm(tau - h)) min(sd, IQR / 1.34), then the same sandwich
+fn rq_se_ker(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, tau: f64, coef: []const f64, se: []f64) -> err {
+    var h = bandwidth_rq(tau, f64(n), true)
+    while tau - h < 0.0f64 || tau + h > 1.0f64 { h = h / 2.0f64 }
+    let (u, e1) = mem.alloc[f64](a, n)
+    let (srt, e2) = mem.alloc[f64](a, n)
+    let (f, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var i = 0usize
+    var m = 0.0f64
+    while i < n {
+        var fit = 0.0f64
+        var j = 0usize
+        while j < p {
+            fit += x[j * n + i] * coef[j]
+            j += 1usize
+        }
+        u[i] = y[i] - fit
+        srt[i] = u[i]
+        m += u[i]
+        i += 1usize
+    }
+    m = m / f64(n)
+    var ss = 0.0f64
+    i = 0usize
+    while i < n {
+        ss += (u[i] - m) * (u[i] - m)
+        i += 1usize
+    }
+    let sd = math.sqrt[f64](ss / f64(n - 1usize))
+    i = 1usize
+    while i < n {
+        let key = srt[i]
+        var j = i
+        while j > 0usize && srt[j - 1usize] > key {
+            srt[j] = srt[j - 1usize]
+            j -= 1usize
+        }
+        srt[j] = key
+        i += 1usize
+    }
+    let q1 = quant7(srt, 0.25f64)
+    let q3 = quant7(srt, 0.75f64)
+    var sc = sd
+    if (q3 - q1) / 1.34f64 < sc { sc = (q3 - q1) / 1.34f64 }
+    let hh = (dist_qn(tau + h) - dist_qn(tau - h)) * sc
+    i = 0usize
+    while i < n {
+        let z = u[i] / hh
+        f[i] = 0.3989422804014327f64 * math.exp[f64](0.0f64 - 0.5f64 * z * z) / hh
+        i += 1usize
+    }
+    ret rq_sandwich(a, x, f, n, p, tau, se)
+}
+
+// quantile type 7 of a sorted sample
+fn quant7(s: []const f64, p: f64) -> f64 {
+    let n = s.len
+    let h = f64(n - 1usize) * p
+    let lo = usize(math.floor[f64](h))
+    let fr = h - math.floor[f64](h)
+    if lo + 1usize >= n { ret s[n - 1usize] }
+    ret s[lo] + fr * (s[lo + 1usize] - s[lo])
+}
