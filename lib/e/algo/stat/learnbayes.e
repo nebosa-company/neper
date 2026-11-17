@@ -459,3 +459,75 @@ fn poisson_gamma_mix(probs: []const f64, ga: []const f64, gb: []const f64, y: []
         i += 1usize
     }
 }
+
+// ---- the log posteriors LearnBayes ships for its book examples ----
+
+// normchi2post(theta = (mu, sig2), data): the normal likelihood with the prior 1 / sig2
+fn normchi2post(mu: f64, sig2: f64, y: []const f64) -> f64 {
+    var z = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        z += 0.0f64 - (y[i] - mu) * (y[i] - mu) / 2.0f64 / sig2 - math.log[f64](sig2) / 2.0f64
+        i += 1usize
+    }
+    ret z - math.log[f64](sig2)
+}
+
+fn bbx_sum(eta: f64, k: f64, y: []const f64, n: []const f64) -> f64 {
+    var v = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        v += lbeta2f(k * eta + y[i], k * (1.0f64 - eta) + n[i] - y[i]) - lbeta2f(k * eta, k * (1.0f64 - eta))
+        i += 1usize
+    }
+    ret v
+}
+
+fn lbeta2f(a: f64, b: f64) -> f64 { ret nb.lbeta(a, b) }
+
+// betabinexch0(theta = (eta, K), data): the beta-binomial exchangeable model on the probability scale with the prior 1 / (eta (1 - eta) (1 + K)^2)
+fn betabinexch0(eta: f64, k: f64, y: []const f64, n: []const f64) -> f64 {
+    ret bbx_sum(eta, k, y, n) - 2.0f64 * math.log[f64](1.0f64 + k) - math.log[f64](eta) - math.log[f64](1.0f64 - eta)
+}
+
+// betabinexch(theta = (logit eta, log K), data)
+fn betabinexch(t1: f64, t2: f64, y: []const f64, n: []const f64) -> f64 {
+    let eta = math.exp[f64](t1) / (1.0f64 + math.exp[f64](t1))
+    let k = math.exp[f64](t2)
+    ret bbx_sum(eta, k, y, n) + t2 - 2.0f64 * math.log[f64](1.0f64 + math.exp[f64](t2))
+}
+
+// poissgamexch(theta = (log alpha, log mu), datapar): the Poisson-gamma exchangeable model, e the exposures, y the counts, z0 the prior constant
+fn poissgamexch(t1: f64, t2: f64, e: []const f64, y: []const f64, z0: f64) -> f64 {
+    let alpha = math.exp[f64](t1)
+    let mu = math.exp[f64](t2)
+    let beta = alpha / mu
+    var v = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        v += nm.lgammafn(alpha + y[i]) - (y[i] + alpha) * math.log[f64](e[i] + beta) + alpha * math.log[f64](beta) - nm.lgammafn(alpha)
+        i += 1usize
+    }
+    ret v + math.log[f64](alpha) - 2.0f64 * math.log[f64](alpha + z0)
+}
+
+// lbinorm(xy, list(m, v)): the bivariate normal kernel
+fn lbinorm(x: f64, y: f64, m1: f64, m2: f64, v11: f64, v12: f64, v22: f64) -> f64 {
+    let zx = (x - m1) / math.sqrt[f64](v11)
+    let zy = (y - m2) / math.sqrt[f64](v22)
+    let r = v12 / math.sqrt[f64](v11 * v22)
+    ret 0.0f64 - 0.5f64 / (1.0f64 - r * r) * (zx * zx - 2.0f64 * r * zx * zy + zy * zy)
+}
+
+// cauchyerrorpost(theta = (location, log scale), data): the Cauchy-error likelihood
+fn cauchyerrorpost(loc: f64, lscale: f64, y: []const f64) -> f64 {
+    let s = math.exp[f64](lscale)
+    var v = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        let z = (y[i] - loc) / s
+        v += math.log[f64](1.0f64 / (3.141592653589793f64 * (1.0f64 + z * z)) / s)
+        i += 1usize
+    }
+    ret v
+}

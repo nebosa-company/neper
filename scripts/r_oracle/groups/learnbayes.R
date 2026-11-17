@@ -52,4 +52,15 @@ for (rep in 1:20) {
   gp <- cbind(runif(nn, 1, 6), runif(nn, 0.5, 4)); dn <- sample(2:5, 1); y <- rpois(dn, 3); t <- runif(dn, 0.5, 2); r3 <- poisson.gamma.mix(pr, gp, list(y = y, t = t))
   for (j in 1:nn) { add("mixp", c(nn, 0, j - 1, dn, 0, pr, gp[, 1], gp[, 2], y, t), r3$probs[j], 1e-10); add("mixp", c(nn, 1, j - 1, dn, 0, pr, gp[, 1], gp[, 2], y, t), r3$gammapar[j, 1], 1e-10); add("mixp", c(nn, 2, j - 1, dn, 0, pr, gp[, 1], gp[, 2], y, t), r3$gammapar[j, 2], 1e-10) }
 }
+# the book log posteriors "lpost": (which, a, b, m, y[m], v2[m], z0) which 0 normchi2post 1 betabinexch0 2 betabinexch 3 poissgamexch 4 lbinorm (a, b the point; then m1, m2, v11, v12, v22 from slot 4) 5 cauchyerrorpost
+for (rep in 1:15) {
+  m <- sample(4:12, 1); yy <- rnorm(m, 1, 2); nn <- sample(10:40, m, TRUE); yb <- sapply(nn, function(q) sample(0:q, 1)); ee <- round(runif(m, 1, 20), 2); yp <- rpois(m, 3 * ee / 10); z0 <- runif(1, 0.5, 3)
+  th <- c(rnorm(1), runif(1, 0.5, 2)); add("lpost", c(0, th, m, yy, rep(0, m)), normchi2post(th, yy))
+  eta <- runif(1, 0.1, 0.9); K <- runif(1, 0.5, 20); add("lpost", c(1, eta, K, m, yb, nn), betabinexch0(c(eta, K), cbind(yb, nn)))
+  t1 <- rnorm(1); t2 <- rnorm(1); add("lpost", c(2, t1, t2, m, yb, nn), betabinexch(c(t1, t2), cbind(yb, nn)))
+  add("lpost", c(3, t1, t2, m, yp, ee, z0), poissgamexch(c(t1, t2), list(data = cbind(ee, yp), z0 = z0)))
+  mm <- rnorm(2); vv <- crossprod(matrix(rnorm(4), 2)) + diag(2) * 0.5; pt <- rnorm(2)
+  add("lpost", c(4, pt, 2, mm, vv[1, 1], vv[1, 2], vv[2, 2], 0), lbinorm(pt, list(m = mm, v = vv)))
+  cl <- rnorm(1, 0, 0.5); add("lpost", c(5, th[1], cl, m, yy, rep(0, m)), cauchyerrorpost(c(th[1], cl), yy))
+}
 emit("learnbayes", "LearnBayes", list(cases))

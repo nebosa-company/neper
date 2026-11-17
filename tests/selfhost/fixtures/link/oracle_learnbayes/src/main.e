@@ -30,6 +30,20 @@ fn e_floor(v: f64) -> f64 {
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+
+    if str.eq(k, "lpost") {
+        // (which, a, b, n, y[n], e or n[n]) which 0 normchi2post, 1 betabinexch0, 2 betabinexch, 3 poissgamexch, 4 lbinorm, 5 cauchyerrorpost
+        let w = usize(x[0usize])
+        let m = usize(x[3usize])
+        let y = x[4usize..4usize + m]
+        let v2 = x[4usize + m..4usize + 2usize * m]
+        if w == 0usize { ret lb.normchi2post(x[1usize], x[2usize], y) }
+        if w == 1usize { ret lb.betabinexch0(x[1usize], x[2usize], y, v2) }
+        if w == 2usize { ret lb.betabinexch(x[1usize], x[2usize], y, v2) }
+        if w == 3usize { ret lb.poissgamexch(x[1usize], x[2usize], v2, y, x[4usize + 2usize * m]) }
+        if w == 4usize { ret lb.lbinorm(x[1usize], x[2usize], x[4usize], x[5usize], x[6usize], x[7usize], x[8usize]) }
+        ret lb.cauchyerrorpost(x[1usize], x[2usize], y)
+    }
     if str.eq(k, "rwm") || str.eq(k, "ind") {
         // args (seed, kind, pb, m, scale, index (-1 acceptance), par[4], [mu[pb] for ind], var[pb^2], start[pb])
         var r: rng.Rng = zero

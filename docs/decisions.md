@@ -48082,3 +48082,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6903 — lmom: pelpe3
 
 **Decision.** `lmom.pel` kind 6 gives the Pearson type III parameters (mu, sigma, gamma) from (l1, l2, t3) by Hosking's rational approximations of the shape (alpha from |t3|, one fit below t3 = 1/3 and another above), sigma = sqrt(pi) l2 sqrt(alpha) Gamma(alpha) / Gamma(alpha + 1/2) and gamma = 2 / sqrt(alpha) with the sign of t3, a normal fit when |t3| is below 1e-6. Agrees with `pelpe3` to 1e-6 relative on 40 L-moment triples (oracle_lmom, 1059 cases in all), not to the 1e-9 of the other fits: the shape differs in the ninth digit, so the package's constants differ slightly from the ones used here and the exact source is not available. Linux pending.
+
+## D6904 — LearnBayes: the book log posteriors
+
+**Decision.** `learnbayes` gains the log posteriors the package ships for its book examples: `normchi2post` (normal likelihood, prior 1 / sigma^2), `betabinexch0` and `betabinexch` (the beta-binomial exchangeable model on the probability scale and on the logit-log scale), `poissgamexch` (the Poisson-gamma exchangeable model with exposures and the prior constant z0), `lbinorm` (the bivariate normal kernel) and `cauchyerrorpost` (Cauchy errors with a log scale). Equal to LearnBayes on 15 random parameter points and data sets each (4 to 12 observations; oracle_learnbayes, 3671 cases in all). Not here: laplace, rejectsampling, importance sampling, the Gibbs helpers, logisticpost, weibullregpost, groupeddatapost. Linux pending.
