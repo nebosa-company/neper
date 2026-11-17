@@ -177,6 +177,16 @@ for (rep in 1:150) {
   r <- tryCatch(suppressWarnings(predIntNparN(k = k, m = m, lpl.rank = lr, n.plus.one.minus.upl.rank = nu, pi.type = tn[ty + 1], conf.level = cl)), error = function(e) NA)
   if (is.finite(r)) cases[[length(cases) + 1]] <- case("pnn", c(k, m, lr, nu, cl, ty), r, rel = 0, abs = 0)
 }
+# gofTest exponential and gamma ("gcb": (n, y, test (0 sw 1 sf 2 ad 3 cvm 6 ppcc), kind (0 exp 1 gamma), field (0 statistic 1 p.value)))
+tcodes <- c(sw = 0, sf = 1, ad = 2, cvm = 3, ppcc = 6)
+for (rep in 1:120) {
+  kd <- rep %% 2; n <- sample(12:80, 1); y <- if (kd == 0) rexp(n, c(0.5, 1, 3)[sample(3, 1)]) else rgamma(n, c(0.7, 1.5, 3, 8)[sample(4, 1)], c(0.5, 2)[sample(2, 1)])
+  y <- round(y, 5); if (any(y <= 0)) next
+  te <- names(tcodes)[sample(5, 1)]
+  r <- tryCatch(suppressWarnings(gofTest(y, test = te, distribution = if (kd == 0) "exp" else "gamma")), error = function(e) NULL)
+  if (is.null(r)) next
+  for (f in 0:1) { v <- c(unname(r$statistic), r$p.value)[f + 1]; if (is.finite(v)) cases[[length(cases) + 1]] <- case("gcb", c(n, y, tcodes[[te]], kd, f), v, rel = 1e-6, abs = 1e-8) }
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]

@@ -1113,3 +1113,76 @@ fn pred_npar_n(k: f64, m: f64, lpl: f64, nu: f64, pi_type: usize, conf: f64, n_m
     if pn_gap(&ctx, root) > 0.0f64 { ret math.trunc[f64](root) }
     ret math.trunc[f64](root) + 1.0f64
 }
+
+// ---- gofTest for the exponential and gamma distributions: Chen and Balakrishnan (1995) ----
+
+fn digamma_x(x0: f64) -> f64 {
+    var x = x0
+    var r = 0.0f64
+    while x < 12.0f64 {
+        r -= 1.0f64 / x
+        x += 1.0f64
+    }
+    let f = 1.0f64 / (x * x)
+    ret r + math.log[f64](x) - 0.5f64 / x - f * (1.0f64 / 12.0f64 - f * (1.0f64 / 120.0f64 - f * (1.0f64 / 252.0f64 - f * (1.0f64 / 240.0f64 - f * (1.0f64 / 132.0f64)))))
+}
+
+fn trigamma_x(x0: f64) -> f64 {
+    var x = x0
+    var r = 0.0f64
+    while x < 12.0f64 {
+        r += 1.0f64 / (x * x)
+        x += 1.0f64
+    }
+    let f = 1.0f64 / (x * x)
+    ret r + 1.0f64 / x + 0.5f64 * f + f / x * (1.0f64 / 6.0f64 - f * (1.0f64 / 30.0f64 - f * (1.0f64 / 42.0f64 - f * (1.0f64 / 30.0f64 - f * (5.0f64 / 66.0f64)))))
+}
+
+// the gamma maximum likelihood shape: the root of log s - digamma(s) = log(mean) - mean(log y), by Newton from the moment start
+fn gamma_mle_shape(y: []const f64) -> f64 {
+    let n = f64(y.len)
+    var sm = 0.0f64
+    var sl = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        sm += y[i]
+        sl += math.log[f64](y[i])
+        i += 1usize
+    }
+    let c = math.log[f64](sm / n) - sl / n
+    var s = (3.0f64 - c + math.sqrt[f64]((c - 3.0f64) * (c - 3.0f64) + 24.0f64 * c)) / (12.0f64 * c)
+    var it = 0usize
+    while it < 100usize {
+        let g = math.log[f64](s) - digamma_x(s) - c
+        let d = 1.0f64 / s - trigamma_x(s)
+        let step = g / d
+        s -= step
+        if s <= 0.0f64 { s = 1.0e-8f64 }
+        if math.abs[f64](step) < 1.0e-14f64 * s { it = 100usize } else { it += 1usize }
+    }
+    ret s
+}
+
+// gofTest(distribution = "exp" or "gamma", test = sw, sf, ad, cvm or ppcc): the data go through qnorm of the fitted distribution function (the exponential rate 1 / mean, the gamma maximum
+// likelihood fit) and the normal test of that is the answer; kind 0 exponential, 1 gamma; test as in gof_test
+fn gof_test_cb(a: *mem.Arena, y: []const f64, test: usize, kind: usize, out: []f64) -> err {
+    let n = y.len
+    let (z, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret mem.Full }
+    var sm = 0.0f64
+    var i = 0usize
+    while i < n {
+        sm += y[i]
+        i += 1usize
+    }
+    let mean = sm / f64(n)
+    var shape = 1.0f64
+    if kind == 1usize { shape = gamma_mle_shape(y) }
+    let scale = mean / shape
+    i = 0usize
+    while i < n {
+        z[i] = dist.qnorm(nm.pgamma(y[i], shape, scale, true, false), 0.0f64, 1.0f64, true, false)
+        i += 1usize
+    }
+    ret gof_test(a, z, test, false, 0usize, out)
+}
