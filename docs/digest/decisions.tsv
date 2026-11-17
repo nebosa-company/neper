@@ -3681,4 +3681,5 @@ D6818	760	bayesm: rmultireg and runireg
 D6819	585	bayesm: runiregGibbs
 D6820	823	statmod: qresiduals
 D6821	495	statmod: one-sided power.fisher.test
-D6822	802	caret: preProcess YeoJohnson
+D6822	803	caret: preProcess YeoJohnson
+D6823	733	mclust: parameter counts, BIC, adjustedRandIndex and map
