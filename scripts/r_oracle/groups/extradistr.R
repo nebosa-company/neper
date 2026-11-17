@@ -137,4 +137,48 @@ for (rep in 1:42) { sd <- sample(1:100000, 1); fam <- (rep - 1) %% 7; a1 <- runi
   set.seed(sd); v <- switch(fam + 1, rinvgamma(5, a1, b1), rinvchisq(5, a1, b1), rlst(5, a1, m1, s1), rht(5, a1, s1), rfatigue(5, a1 / 3, b1, m1), rnsbeta(5, a1, b1, lo, hi), rbetapr(5, a1, b1, s1))
   pp <- switch(fam + 1, c(a1, b1, 0, 0), c(a1, b1, 0, 0), c(a1, m1, s1, 0), c(a1, s1, 0, 0), c(a1 / 3, b1, m1, 0), c(a1, b1, lo, hi), c(a1, b1, s1, 0))
   for (j in 1:5) cases[[length(cases) + 1]] <- case("rg6", c(fam, sd, pp, j - 1), v[j], rel = 1e-9, abs = 1e-12) }
+# truncated normal draws through Robert's samplers: "rg6" family 7 (mean, sd, min, max, index); an infinite bound is passed as 1e308
+wins <- list(c(-1, 1), c(-0.5, 2), c(-2, 3), c(-Inf, Inf), c(-Inf, 0.5), c(-1, Inf), c(0, Inf), c(0, 0.8), c(0, 3), c(0.3, 1.1), c(0.3, 3), c(1, 1.5), c(1, 3), c(2, 2.1), c(2, Inf), c(3, Inf), c(3, 3.5),
+  c(-1.5, -0.9), c(-1.5, -0.2), c(-3, -2.9), c(-3, -1), c(-2, -0.05), c(-Inf, -1), c(-Inf, -2.5), c(-2, 0), c(-1, 0), c(-4, 0), c(-Inf, 0), c(-0.6, -0.3), c(5, 5.2), c(5, 8), c(8, Inf), c(-9, -8.99), c(-6, -5), c(-0.01, 0.01), c(0.5, 0.9), c(1.5, 2.2), c(-2.3, -1.9), c(-0.7, -0.02), c(-0.2, 2.2), c(-Inf, 3))
+for (w in wins) { sd <- sample(1:100000, 1); mu <- rnorm(1); sg <- runif(1, 0.5, 2); lo <- mu + sg * w[1]; hi <- mu + sg * w[2]
+  if (w[1] == -Inf) lo <- -Inf; if (w[2] == Inf) hi <- Inf
+  set.seed(sd); v <- rtnorm(5, mu, sg, lo, hi)
+  for (j in 1:5) cases[[length(cases) + 1]] <- case("rg6", c(7, sd, mu, sg, if (is.finite(lo)) lo else -1e308, if (is.finite(hi)) hi else 1e308, j - 1), v[j], rel = 1e-9, abs = 1e-12) }
+# "e6" (family, kind 1 p 2 q, p1..p5, v): 0 bern 1 dunif q 2 dweibull q 3 slash p 4 huber q 5 mixnorm p 6 mixpois p; "ec" (kind 0 d 1 p 2 q, k, v, prob[k]) categorical
+for (rep in 1:4) {
+  pr <- runif(1, 0.2, 0.8); lo <- sample(-3:2, 1); hi <- lo + sample(3:9, 1); q <- runif(1, 0.4, 0.9); be <- runif(1, 0.6, 2); mu <- rnorm(1); sg <- runif(1, 0.5, 2); ep <- runif(1, 0.7, 2)
+  m2 <- rnorm(1, 2); s2 <- runif(1, 0.4, 1.5); l1 <- runif(1, 0.5, 3); l2 <- runif(1, 3, 8); a1 <- runif(1, 0.2, 0.8); k <- sample(2:6, 1); pc <- runif(k); pc <- pc / sum(pc) * runif(1, 1, 3)
+  for (xx in c(-1, 0, 0.5, 1, 2)) add2("e6", c(0, 1, pr, 0, 0, 0, 0, xx), pbern(xx, pr))
+  for (pp in c(0.1, 0.3, 0.5, 0.7, 0.9, 1 - pr, 0.999)) { add2("e6", c(0, 2, pr, 0, 0, 0, 0, pp), qbern(pp, pr)); add2("e6", c(1, 2, lo, hi, 0, 0, 0, pp), qdunif(pp, lo, hi)); add2("e6", c(2, 2, q, be, 0, 0, 0, pp), qdweibull(pp, q, be))
+    add2("e6", c(4, 2, mu, sg, ep, 0, 0, pp), qhuber(pp, mu, sg, ep)); add2("ec", c(2, k, pp, pc), qcat(pp, pc)) }
+  for (pp in c(0.002, 0.02, 0.04, 0.96, 0.99)) add2("e6", c(4, 2, mu, sg, ep, 0, 0, pp), qhuber(pp, mu, sg, ep))
+  for (xx in mu + c(-3, -0.5, 0, 0.4, 2.5)) { add2("e6", c(3, 1, mu, sg, 0, 0, 0, xx), pslash(xx, mu, sg)); add2("e6", c(5, 1, mu, sg, m2, s2, a1, xx), pmixnorm(xx, c(mu, m2), c(sg, s2), c(a1, 1 - a1))) }
+  for (xx in c(-1, 0, 1, 2.5, 5, 9)) add2("e6", c(6, 1, l1, l2, 0, 0, a1, xx), pmixpois(xx, c(l1, l2), c(a1, 1 - a1)))
+  for (xx in c(0, 1, 2, k, k + 1, 1.5)) { add2("ec", c(0, k, xx, pc), dcat(xx, pc)); add2("ec", c(1, k, xx, pc), pcat(xx, pc)) }
+}
+# scalar generators over several base draws: "rg7" (family, seed, p1, p2, p3, index); 0 triang 1 dlaplace 2 zip 3 zib 4 zinb 5 wald 6 bbinom 7 bnbinom 8 gpois 9 skellam 10 slash 11 prop 12 sign 13 sgomp 14 bhatt 15 huber 16 dnorm 17 dgamma 18 nhyper
+for (rep in 1:76) { sd <- sample(1:100000, 1); fam <- (rep - 1) %% 19
+  l <- runif(1, 0.5, 5); pz <- runif(1, 0.05, 0.6); n <- sample(5:20, 1); pr <- runif(1, 0.2, 0.8); a1 <- runif(1, 0.5, 3); b1 <- runif(1, 0.5, 3); mu <- rnorm(1); sg <- runif(1, 0.5, 2); ep <- runif(1, 0.7, 2)
+  lo <- runif(1, -1, 0); hi <- lo + runif(1, 1, 4); md <- lo + (hi - lo) * runif(1, 0.1, 0.9); nh <- sample(5:15, 1); mh <- sample(3:10, 1); rh <- sample(1:mh, 1)
+  pp <- switch(fam + 1, c(lo, hi, md), c(mu, pr, 0), c(l, pz, 0), c(n, pr, pz), c(n, pr, pz), c(a1, b1, 0), c(n, a1, b1), c(n, a1, b1), c(a1, b1, 0), c(l, a1, 0), c(mu, sg, 0), c(n, pr, ep), c(0, 0, 0), c(pr, b1, 0), c(mu, sg, a1), c(mu, sg, ep), c(mu * 5, sg * 3, 0), c(a1 * 2, b1, 0), c(nh, mh, rh))
+  set.seed(sd)
+  v <- switch(fam + 1, rtriang(5, lo, hi, md), rdlaplace(5, mu, pr), rzip(5, l, pz), rzib(5, n, pr, pz), rzinb(5, n, pr, pz), rwald(5, a1, b1), rbbinom(5, n, a1, b1), rbnbinom(5, n, a1, b1), rgpois(5, a1, scale = b1), rskellam(5, l, a1), rslash(5, mu, sg), rprop(5, n, pr, ep), rsign(5), rsgomp(5, pr, b1), rbhatt(5, mu, sg, a1), rhuber(5, mu, sg, ep), rdnorm(5, mu * 5, sg * 3), rdgamma(5, a1 * 2, scale = b1), rnhyper(5, nh, mh, rh))
+  for (j in 1:5) cases[[length(cases) + 1]] <- case("rg7", c(fam, sd, pp, j - 1), v[j], rel = 1e-10, abs = 1e-12) }
+# vector generators: "rv" (family, seed, k, draw, column, par...); 0 dirichlet 1 mnom 2 dirmnom 3 mvhyper 4 bvnorm 5 mixnorm 6 mixpois 7 cat 8 catlp 9 cat over a matrix
+addv <- function(fam, sd, k, m, par) { m <- as.matrix(m); for (i in 1:nrow(m)) for (j in 1:ncol(m)) cases[[length(cases) + 1]] <<- case("rv", c(fam, sd, k, i - 1, j - 1, par), as.numeric(m[i, j]), rel = 1e-10, abs = 1e-12) }
+for (rep in 1:33) { sd <- sample(1:100000, 1); fam <- (rep - 1) %% 11; k <- sample(2:5, 1); size <- sample(3:12, 1)
+  al <- runif(k, 0.5, 4); pr <- runif(k); pr <- pr / sum(pr); nn <- sample(2:6, k, TRUE); kk <- sample(1:sum(nn), 1); mu <- rnorm(k); sg <- runif(k, 0.5, 2); lam <- runif(k, 0.5, 8)
+  mat <- matrix(runif(2 * k), 2, k); mat <- mat / rowSums(mat); bv <- c(rnorm(2), runif(2, 0.5, 2), runif(1, -0.8, 0.8))
+  set.seed(sd)
+  if (fam == 0) addv(0, sd, k, rdirichlet(3, al), al)
+  if (fam == 1) addv(1, sd, k, rmnom(3, size, pr), c(size, pr))
+  if (fam == 2) addv(2, sd, k, rdirmnom(3, size, al), c(size, al))
+  if (fam == 3) addv(3, sd, k, rmvhyper(3, nn, kk), c(kk, nn))
+  if (fam == 4) addv(4, sd, 2, rbvnorm(3, bv[1], bv[2], bv[3], bv[4], bv[5]), bv)
+  if (fam == 5) addv(5, sd, k, matrix(rmixnorm(4, mu, sg, pr), ncol = 1), c(mu, sg, pr))
+  if (fam == 6) addv(6, sd, k, matrix(rmixpois(4, lam, pr), ncol = 1), c(lam, pr))
+  if (fam == 7) addv(7, sd, k, matrix(rcat(4, pr), ncol = 1), pr)
+  if (fam == 8) addv(8, sd, k, matrix(rcatlp(4, log(pr)), ncol = 1), log(pr))
+  if (fam == 9) addv(9, sd, k, matrix(rcat(5, mat), ncol = 1), c(2, as.vector(t(mat))))
+  if (fam == 10) addv(10, sd, 2, rbvpois(4, lam[1], lam[2], lam[1] / 2), c(lam[1], lam[2], lam[1] / 2)) }
 emit("extradistr", "extraDistr", list(cases))

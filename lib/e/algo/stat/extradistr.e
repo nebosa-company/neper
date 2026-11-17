@@ -11,6 +11,7 @@ use e.math.nmath_beta as nb
 use e.algo.stat.gslfns as gsl
 use e.algo.rand.r as rng
 use e.algo.rand.rdist as rd
+use e.mem
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
 
@@ -727,9 +728,339 @@ fn rgen6(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64, p4: f64) -> f64 
         let w = h + math.sqrt[f64](h * h + 1.0f64)
         ret p3 + p2 * w * w
     }
+    if family == 7usize { ret rtnorm(r, p1, p2, p3, p4) }
     if family == 6usize {
         let bt = rd.rbeta(r, p1, p2)
         ret p3 * bt / (1.0f64 - bt)
     }
     ret p3 + (p4 - p3) * rd.rbeta(r, p1, p2)
+}
+
+// Huber's least-favourable quantile: the exponential tails and the normal centre inverted piece by piece
+fn huber_zleft(p: f64, k: f64) -> f64 {
+    ret (math.log[f64](p * k / huber_c(k)) - k * k / 2.0f64) / k
+}
+fn huber_q(p: f64, mu: f64, s: f64, k: f64) -> f64 {
+    let c = huber_c(k)
+    let tail = math.exp[f64](0.0f64 - k * k / 2.0f64) / k
+    if p < c * tail { ret mu + s * huber_zleft(p, k) }
+    if p > 1.0f64 - c * tail { ret mu - s * huber_zleft(1.0f64 - p, k) }
+    ret mu + s * qn(pn(0.0f64 - k) + (p / c - tail) / math.sqrt[f64](2.0f64 * pi()))
+}
+
+// draws of the scalar families that go through two or more base generators or a quantile of the package, after set.seed:
+// 0 triangular (a, b, c), 1 discrete Laplace (location, scale), 2 zero-inflated Poisson (lambda, pi), 3 zero-inflated binomial (size, prob, pi), 4 zero-inflated negative binomial (size, prob, pi),
+// 5 Wald (mu, lambda), 6 beta-binomial (size, alpha, beta), 7 beta-negative-binomial (size, alpha, beta), 8 gamma-Poisson (shape, scale), 9 Skellam (mu1, mu2), 10 slash (mu, sigma),
+// 11 proportion (size, mean, prior), 12 sign, 13 shifted Gompertz (b, eta), 14 Bhattacharjee (mu, sigma, a), 15 Huber (mu, sigma, epsilon), 16 discrete normal (mean, sd),
+// 17 discrete gamma (shape, scale), 18 negative hypergeometric (n, m, r)
+fn rgen7(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64) -> f64 {
+    if family == 0usize {
+        let u1 = rng.unif(r)
+        let u2 = rng.unif(r)
+        var lo = u1
+        var hi = u2
+        if u2 < u1 {
+            lo = u2
+            hi = u1
+        }
+        let m = (p3 - p1) / (p2 - p1)
+        ret p1 + (p2 - p1) * ((1.0f64 - m) * lo + m * hi)
+    }
+    if family == 1usize {
+        let g1 = rd.rgeom(r, 1.0f64 - p2)
+        let g2 = rd.rgeom(r, 1.0f64 - p2)
+        ret p1 + g1 - g2
+    }
+    if family >= 2usize && family <= 4usize {
+        let u = rng.unif(r)
+        var zi = p2
+        if family != 2usize { zi = p3 }
+        if u < zi { ret 0.0f64 }
+        if family == 2usize { ret rd.rpois(r, p1) }
+        if family == 3usize { ret rd.rbinom(r, p1, p2) }
+        ret rd.rnbinom(r, p1, p2)
+    }
+    if family == 5usize {
+        let z = rng.unif(r)
+        let nu = rng.norm(r)
+        let y = nu * nu
+        let x = p1 + p1 * p1 * y / (2.0f64 * p2) - p1 / (2.0f64 * p2) * math.sqrt[f64](4.0f64 * p1 * p2 * y + p1 * p1 * y * y)
+        if z <= p1 / (p1 + x) { ret x }
+        ret p1 * p1 / x
+    }
+    if family == 6usize {
+        let q = rd.rbeta(r, p2, p3)
+        ret rd.rbinom(r, p1, q)
+    }
+    if family == 7usize {
+        let q = rd.rbeta(r, p2, p3)
+        ret rd.rnbinom(r, p1, q)
+    }
+    if family == 8usize { ret rd.rpois(r, rd.rgamma(r, p1, p2)) }
+    if family == 9usize {
+        let a1 = rd.rpois(r, p1)
+        let a2 = rd.rpois(r, p2)
+        ret a1 - a2
+    }
+    if family == 10usize {
+        let z = rng.norm(r)
+        let u = rng.unif(r)
+        ret p1 + p2 * z / u
+    }
+    if family == 11usize { ret rd.rbeta(r, p1 * p2 + p3, p1 * (1.0f64 - p2) + p3) }
+    if family == 12usize {
+        let u = rng.unif(r)
+        if u < 0.5f64 { ret 0.0f64 - 1.0f64 }
+        ret 1.0f64
+    }
+    if family == 13usize {
+        let e1 = rng.exp_unit(r)
+        let e2 = rng.exp_unit(r)
+        let y = (math.log[f64](p2) - math.log[f64](e1)) / p1
+        let x = e2 / p1
+        if y > x { ret y }
+        ret x
+    }
+    if family == 14usize {
+        let u = rng.unif(r)
+        let z = rng.norm(r)
+        ret p1 + p2 * z + p3 * (2.0f64 * u - 1.0f64)
+    }
+    if family == 15usize { ret huber_q(rng.unif(r), p1, p2, p3) }
+    if family == 16usize { ret math.floor[f64](rng.rnorm(r, p1, p2)) }
+    if family == 17usize { ret math.floor[f64](rd.rgamma(r, p1, p2)) }
+    ret nhyper_q(rng.unif(r), p1, p2, p3)
+}
+
+// vector draws after set.seed, into out (draw is the 0-based number of this draw): 0 Dirichlet (alpha[k]) k values, 1 multinomial (size, prob[k]) k counts, 2 Dirichlet-multinomial (size, alpha[k]) k counts,
+// 3 multivariate hypergeometric (draws, n[k]) k counts, 4 bivariate normal (mean1, mean2, sd1, sd2, cor) 2 values, 5 normal mixture (mean[k], sd[k], weight[k]), 6 Poisson mixture (lambda[k], weight[k]),
+// 7 categorical (prob[k], 1-based, through sample.int), 8 categorical on log-probabilities (logprob[k]), 9 categorical on a matrix of probabilities whose rows take turns (rows, prob[rows * k] row by row)
+fn rvec(a: *mem.Arena, r: *rng.Rng, family: usize, k: usize, par: []const f64, draw: usize, out: []f64) -> err {
+    var j = 0usize
+    if family == 0usize || family == 2usize {
+        var off = 0usize
+        if family == 2usize { off = 1usize }
+        var tot = 0.0f64
+        while j < k {
+            out[j] = rd.rgamma(r, par[off + j], 1.0f64)
+            tot += out[j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < k {
+            out[j] = out[j] / tot
+            j += 1usize
+        }
+        if family == 0usize { ret ok }
+        let (cnt, ce) = rd.rmultinom(a, r, i64(par[0usize]), out[0usize..k])
+        if ce != ok { ret ce }
+        j = 0usize
+        while j < k {
+            out[j] = f64(cnt[j])
+            j += 1usize
+        }
+        ret ok
+    }
+    if family == 1usize {
+        let (cnt, ce) = rd.rmultinom(a, r, i64(par[0usize]), par[1usize..1usize + k])
+        if ce != ok { ret ce }
+        while j < k {
+            out[j] = f64(cnt[j])
+            j += 1usize
+        }
+        ret ok
+    }
+    if family == 3usize {
+        var left = par[0usize]
+        var rest = 0.0f64
+        while j < k {
+            rest += par[1usize + j]
+            j += 1usize
+        }
+        j = 0usize
+        while j + 1usize < k {
+            rest -= par[1usize + j]
+            let x = rd.rhyper(r, par[1usize + j], rest, left)
+            out[j] = x
+            left -= x
+            j += 1usize
+        }
+        out[k - 1usize] = left
+        ret ok
+    }
+    if family == 4usize {
+        let z1 = rng.norm(r)
+        let z2 = rng.norm(r)
+        out[0usize] = par[0usize] + par[2usize] * z1
+        out[1usize] = par[1usize] + par[3usize] * (par[4usize] * z1 + math.sqrt[f64](1.0f64 - par[4usize] * par[4usize]) * z2)
+        ret ok
+    }
+    if family == 5usize || family == 6usize {
+        let u = rng.unif(r)
+        var wat = 2usize * k
+        if family == 6usize { wat = k }
+        var c = 0usize
+        var cum = par[wat]
+        while c + 1usize < k && !(u < cum) {
+            c += 1usize
+            cum += par[wat + c]
+        }
+        if family == 5usize {
+            out[0usize] = rng.rnorm(r, par[c], par[k + c])
+        } else {
+            out[0usize] = rd.rpois(r, par[c])
+        }
+        ret ok
+    }
+    if family == 10usize {
+        let z1 = rd.rpois(r, par[0usize])
+        let z2 = rd.rpois(r, par[1usize])
+        let z3 = rd.rpois(r, par[2usize])
+        out[0usize] = z1 + z3
+        out[1usize] = z2 + z3
+        ret ok
+    }
+    if family == 7usize {
+        let (cat, ce) = rd.sample_prob(a, r, k, 1usize, true, par[0usize..k])
+        if ce != ok { ret ce }
+        out[0usize] = f64(cat[0usize])
+        ret ok
+    }
+    if family == 8usize {
+        var best = 0.0f64
+        var at = 0usize
+        while j < k {
+            let v = par[j] - math.log[f64](rng.exp_unit(r))
+            if j == 0usize || v > best {
+                best = v
+                at = j
+            }
+            j += 1usize
+        }
+        out[0usize] = f64(at + 1usize)
+        ret ok
+    }
+    let u = rng.unif(r)
+    let row = 1usize + (draw % usize(par[0usize])) * k
+    var cum = par[row]
+    var c = 0usize
+    while c + 1usize < k && !(u < cum) {
+        c += 1usize
+        cum += par[row + c]
+    }
+    out[0usize] = f64(c + 1usize)
+    ret ok
+}
+
+// the distribution and quantile functions that were left: Bernoulli, discrete uniform and discrete Weibull quantiles, slash and the two mixtures, and the categorical
+fn bern_p(x: f64, pr: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x < 1.0f64 { ret 1.0f64 - pr }
+    ret 1.0f64
+}
+fn bern_q(p: f64, pr: f64) -> f64 {
+    if p <= 1.0f64 - pr { ret 0.0f64 }
+    ret 1.0f64
+}
+fn dunif_q(p: f64, lo: f64, hi: f64) -> f64 {
+    if p == 0.0f64 { ret lo }
+    ret lo + math.ceil[f64](p * (hi - lo + 1.0f64)) - 1.0f64
+}
+fn dweib_q(p: f64, q: f64, be: f64) -> f64 {
+    ret math.ceil[f64](math.pow[f64](math.log[f64](1.0f64 - p) / math.log[f64](q), 1.0f64 / be)) - 1.0f64
+}
+fn slash_p(x: f64, mu: f64, s: f64) -> f64 {
+    let z = (x - mu) / s
+    if z == 0.0f64 { ret 0.5f64 }
+    ret pn(z) - (dist.dnorm(0.0f64, 0.0f64, 1.0f64, false) - dist.dnorm(z, 0.0f64, 1.0f64, false)) / z
+}
+fn mixnorm2_p(x: f64, m1: f64, s1: f64, m2: f64, s2: f64, a1: f64) -> f64 {
+    ret a1 * dist.pnorm(x, m1, s1, true, false) + (1.0f64 - a1) * dist.pnorm(x, m2, s2, true, false)
+}
+fn mixpois2_p(x: f64, l1: f64, l2: f64, a1: f64) -> f64 {
+    ret a1 * nm.ppois(x, l1, true, false) + (1.0f64 - a1) * nm.ppois(x, l2, true, false)
+}
+fn cat_sum(prob: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < prob.len {
+        s += prob[i]
+        i += 1usize
+    }
+    ret s
+}
+fn cat_d(x: f64, prob: []const f64) -> f64 {
+    if x < 1.0f64 || x > f64(prob.len) || x != math.floor[f64](x) { ret 0.0f64 }
+    ret prob[usize(x) - 1usize] / cat_sum(prob)
+}
+fn cat_p(x: f64, prob: []const f64) -> f64 {
+    if x < 1.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var i = 0usize
+    while i < prob.len && f64(i + 1usize) <= x {
+        s += prob[i]
+        i += 1usize
+    }
+    ret s / cat_sum(prob)
+}
+fn cat_q(p: f64, prob: []const f64) -> f64 {
+    let tot = cat_sum(prob)
+    var s = 0.0f64
+    var i = 0usize
+    while i + 1usize < prob.len {
+        s += prob[i]
+        if s / tot >= p { ret f64(i + 1usize) }
+        i += 1usize
+    }
+    ret f64(prob.len)
+}
+
+// truncated normal draws, on the standard scale, the way the package draws them: Robert's rejection samplers. A window with zero inside is one rnorm per try when wider than sqrt(2 pi) and a uniform proposal below that;
+// a window on the right of zero picks the uniform proposal when its width is within a bound of its lower end and a translated exponential beyond, and one on the left does the same on the mirror image, with the package's own bounds
+fn tnorm_unif(r: *rng.Rng, a: f64, b: f64, refx: f64) -> f64 {
+    while true {
+        let x = a + (b - a) * rng.unif(r)
+        let u = rng.unif(r)
+        if u <= math.exp[f64]((refx * refx - x * x) / 2.0f64) { ret x }
+    }
+    ret 0.0f64
+}
+fn tnorm_exp(r: *rng.Rng, a: f64, b: f64) -> f64 {
+    let al = (a + math.sqrt[f64](a * a + 4.0f64)) / 2.0f64
+    while true {
+        let z = a + rng.exp_unit(r) / al
+        let u = rng.unif(r)
+        if z <= b && u <= math.exp[f64](0.0f64 - (z - al) * (z - al) / 2.0f64) { ret z }
+    }
+    ret 0.0f64
+}
+fn tnorm_std(r: *rng.Rng, a: f64, b: f64) -> f64 {
+    let se = 1.6487212707001281468f64
+    if a < 0.0f64 && b > 0.0f64 {
+        if b - a <= math.sqrt[f64](2.0f64 * pi()) { ret tnorm_unif(r, a, b, 0.0f64) }
+        while true {
+            let z = rng.norm(r)
+            if z >= a && z <= b { ret z }
+        }
+    }
+    if a >= 0.0f64 {
+        if a == 0.0f64 && b - b != 0.0f64 { ret math.abs[f64](rng.norm(r)) }
+        let sq = math.sqrt[f64](a * a + 4.0f64)
+        let t = 2.0f64 * se / (a + sq) * math.exp[f64](a * (2.0f64 - sq) / 4.0f64)
+        if b <= a + t { ret tnorm_unif(r, a, b, a) }
+        ret tnorm_exp(r, a, b)
+    }
+    let ap = 0.0f64 - b
+    let sqn = math.sqrt[f64](ap * ap + 4.0f64)
+    let tn = 2.0f64 * se / (ap + sqn) * math.exp[f64](0.0f64 - ap * (2.0f64 + sqn) / 4.0f64)
+    if 0.0f64 - a <= ap + tn { ret tnorm_unif(r, a, b, b) }
+    ret 0.0f64 - tnorm_exp(r, ap, 0.0f64 - a)
+}
+// the truncated normal (mean, sd, min, max): a bound at or beyond 1e300 stands for infinity
+fn rtnorm(r: *rng.Rng, mu: f64, s: f64, lo: f64, hi: f64) -> f64 {
+    var a = (lo - mu) / s
+    var b = (hi - mu) / s
+    if lo <= 0.0f64 - 1.0e300f64 { a = 0.0f64 - 1.0f64 / 0.0f64 }
+    if hi >= 1.0e300f64 { b = 1.0f64 / 0.0f64 }
+    ret mu + s * tnorm_std(r, a, b)
 }
