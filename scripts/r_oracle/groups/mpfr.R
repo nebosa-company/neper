@@ -145,4 +145,32 @@ for (rep in 1:140) {
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
 }
+# besselY of integer order 0 .. 3 for 0.1 < x < 12 (96, prec, m1, e1, order, 0, which)
+for (rep in 1:40) {
+  prec <- sample(c(53, 80, 128), 1); m1 <- sample(1:(2^50), 1); e1 <- sample(-52:-46, 1); nn <- sample(0:3, 1)
+  x <- mpfr(m1, prec) * 2^e1; xv <- asNumeric(x); if (xv < 0.1 || xv > 12) next
+  z <- yn(nn, x); if (!is.finite(z) || z == 0) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(96, prec, m1, e1, nn, 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
+# zeta (26) for real s in (-6, 1) apart from the pole
+for (rep in 1:40) {
+  prec <- sample(c(53, 80), 1); m1 <- sample(1:(2^50), 1); e1 <- sample(-49:-46, 1); if (runif(1) < 0.5) m1 <- -m1
+  x <- mpfr(m1, prec) * 2^e1; xv <- asNumeric(x); if (xv < -6 || xv > 0.95) next
+  z <- zeta(x); if (!is.finite(z) || z == 0) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(26, prec, m1, e1, 1, 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
+# mpfr("N@k", base = b) in the bases 2, 8, 16, 36 (95, prec, N, k, base, mode, which)
+for (rep in 1:60) {
+  prec <- sample(c(53, 80, 128), 1); nv <- sample(1:(2^40), 1); k <- sample(-30:20, 1); base <- sample(c(2, 8, 16, 36), 1); md <- sample(0:4, 1)
+  digs <- c(0:9, letters)[1:36]; v <- nv; sdig <- character(0); while (v > 0) { sdig <- c(digs[(v %% base) + 1], sdig); v <- v %/% base }
+  txt <- paste0(paste(sdig, collapse = ""), "@", k)
+  z <- mpfr(txt, prec, base = base, rnd.mode = c("N", "Z", "U", "D", "A")[md + 1]); if (!is.finite(z) || z == 0) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(95, prec, nv, k, base, md)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))

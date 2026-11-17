@@ -1253,24 +1253,161 @@ fn get_str(a: *mem.Arena, x: Mp, base: usize, n: usize, digs: []u8) -> (i64, err
     ret (0i64, mem.Full)
 }
 
-// mpfr("N e k") at prec bits to nearest (mode 0) or the directed modes of round_to_m: the decimal integer N (non-negative) times 10^k, k of either sign, exactly rounded
-fn from_decimal(a: *mem.Arena, nn: bn.Int, k: i64, prec: usize, mode: usize) -> (Mp, err) {
+// mpfr("N@k", base = b) at prec bits to nearest (mode 0) or the directed modes of round_to_m: the integer N (non-negative) times base^k, k of either sign, exactly rounded
+fn from_digits(a: *mem.Arena, nn: bn.Int, base: usize, k: i64, prec: usize, mode: usize) -> (Mp, err) {
     if k >= 0i64 {
-        let (pk, ep) = int_pow(a, 10usize, usize(k))
+        let (pk, ep) = int_pow(a, base, usize(k))
         if ep != ok { ret (zero, ep) }
         let (v, ev) = bn.int_mul(a, nn, pk)
         if ev != ok { ret (zero, ev) }
         let (rt_, re_) = round_to_m(a, v, 0i64, prec, mode)
         ret (rt_, re_)
     }
-    let (pk, ep) = int_pow(a, 10usize, usize(0i64 - k))
+    let (pk, ep) = int_pow(a, base, usize(0i64 - k))
     if ep != ok { ret (zero, ep) }
     let (rt_, re_) = div_m(a, Mp{ m: nn, e: 0i64 }, Mp{ m: pk, e: 0i64 }, prec, mode)
+    ret (rt_, re_)
+}
+
+fn from_decimal(a: *mem.Arena, nn: bn.Int, k: i64, prec: usize, mode: usize) -> (Mp, err) {
+    let (rt_, re_) = from_digits(a, nn, 10usize, k, prec, mode)
     ret (rt_, re_)
 }
 
 // the directed rounding of a transcendental result: r computed at prec + 64 bits (to nearest), rounded again to prec bits in the mode; wrong only when the true value lies within 2^-(prec + 64) relative of a rounding boundary, which none of these functions reach exactly
 fn reround(a: *mem.Arena, r: Mp, prec: usize, mode: usize) -> (Mp, err) {
     let (rt_, re_) = round_to_m(a, r.m, r.e, prec, mode)
+    ret (rt_, re_)
+}
+
+// besselY(x, n) for x > 0 and an integer order n >= 0 (A&S 9.1.11): -(x/2)^-n / pi sum_{k < n} (n-k-1)!/k! (x^2/4)^k + 2/pi ln(x/2) J_n(x) - (x/2)^n / pi sum_k (H_k + H_{n+k} - 2 gamma) (-x^2/4)^k / (k! (n+k)!), with guard bits for the cancellation
+fn bessel_y(a: *mem.Arena, x: Mp, n: usize, prec: usize) -> (Mp, err) {
+    if x.m.sign != bn.Sign.Positive { ret (zero, bn.DivideByZero) }
+    let xf = to_f64(a, x)
+    let extra = usize(xf * xf * 0.75f64) + 16usize
+    let me = mag_exp(x)
+    var small = 0usize
+    if me < 0i64 { small = usize(0i64 - me) * (n + 2usize) }
+    let w = prec + 160usize + extra + small
+    let h = scale2(x, 0i64 - 1i64)
+    let (h2, e1) = mul(a, h, h, w)
+    let (p, e2) = pi(a, w)
+    let (g, e3) = const_euler(a, w)
+    let (one, e4) = from_parts(a, 1i64, 0i64, w)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (zero, mem.Full) }
+    // h^n and its reciprocal
+    var hn = one
+    var i = 0usize
+    while i < n {
+        let (t, et) = mul(a, hn, h, w)
+        if et != ok { ret (zero, et) }
+        hn = t
+        i += 1usize
+    }
+    // the finite sum
+    var s1 = Mp{ m: bn.int_zero(a), e: 0i64 }
+    if n > 0usize {
+        var fact = one
+        i = 1usize
+        while i < n {
+            let (fi, ef) = from_parts(a, i64(i), 0i64, w)
+            let (t, et) = mul(a, fact, fi, w)
+            if ef != ok || et != ok { ret (zero, mem.Full) }
+            fact = t
+            i += 1usize
+        }
+        var term = fact
+        var k = 0usize
+        while k < n {
+            let (t2, e5) = add(a, s1, term, w)
+            if e5 != ok { ret (zero, e5) }
+            s1 = t2
+            if k + 1usize < n {
+                let (dk, ed) = from_parts(a, i64((n - k - 1usize) * (k + 1usize)), 0i64, w)
+                if ed != ok { ret (zero, ed) }
+                let (t3, e6) = mul(a, term, h2, w)
+                if e6 != ok { ret (zero, e6) }
+                let (t4, e7) = div(a, t3, dk, w)
+                if e7 != ok { ret (zero, e7) }
+                term = t4
+            }
+            k += 1usize
+        }
+    }
+    let (pa, e8) = mul(a, p, hn, w)
+    if e8 != ok { ret (zero, e8) }
+    let (ta, e9) = div(a, s1, pa, w)
+    if e9 != ok { ret (zero, e9) }
+    let ta2 = neg(a, ta)
+    // 2/pi ln(h) J_n
+    let (jn_, e10) = bessel_j(a, x, n, w)
+    let (lh, e11) = log(a, h, w)
+    if e10 != ok || e11 != ok { ret (zero, mem.Full) }
+    let (b1, e12) = mul(a, jn_, lh, w)
+    if e12 != ok { ret (zero, e12) }
+    let (b2, e13) = div(a, scale2(b1, 1i64), p, w)
+    if e13 != ok { ret (zero, e13) }
+    // the series: u_0 = 1 / n!, H_0 = 0, H_n
+    var nf = one
+    var hh_n = Mp{ m: bn.int_zero(a), e: 0i64 }
+    i = 1usize
+    while i <= n {
+        let (fi, ef) = from_parts(a, i64(i), 0i64, w)
+        let (t, et) = mul(a, nf, fi, w)
+        let (ri, er) = div(a, one, fi, w)
+        let (hs, es) = add(a, hh_n, ri, w)
+        if ef != ok || et != ok || er != ok || es != ok { ret (zero, mem.Full) }
+        nf = t
+        hh_n = hs
+        i += 1usize
+    }
+    let (u0, e14) = div(a, one, nf, w)
+    if e14 != ok { ret (zero, e14) }
+    var u = u0
+    var hk = Mp{ m: bn.int_zero(a), e: 0i64 }
+    var hnk = hh_n
+    var sum = Mp{ m: bn.int_zero(a), e: 0i64 }
+    var kk = 0usize
+    var go = true
+    while go {
+        let (hsum, e15) = add(a, hk, hnk, w)
+        if e15 != ok { ret (zero, e15) }
+        let (c, e16) = sub(a, hsum, scale2(g, 1i64), w)
+        if e16 != ok { ret (zero, e16) }
+        let (t, e17) = mul(a, c, u, w)
+        if e17 != ok { ret (zero, e17) }
+        let (s2, e18) = add(a, sum, t, w)
+        if e18 != ok { ret (zero, e18) }
+        sum = s2
+        // next u, H_{k+1}, H_{n+k+1}
+        let (dk, ed2) = from_parts(a, i64((kk + 1usize) * (n + kk + 1usize)), 0i64, w)
+        if ed2 != ok { ret (zero, ed2) }
+        let (u1, e19) = mul(a, u, h2, w)
+        let (u2, e20) = div(a, u1, dk, w)
+        if e19 != ok || e20 != ok { ret (zero, mem.Full) }
+        u = neg(a, u2)
+        let (rk, ek) = from_parts(a, i64(kk + 1usize), 0i64, w)
+        let (rnk, enk) = from_parts(a, i64(n + kk + 1usize), 0i64, w)
+        if ek != ok || enk != ok { ret (zero, mem.Full) }
+        let (ik, ek2) = div(a, one, rk, w)
+        let (ink, enk2) = div(a, one, rnk, w)
+        if ek2 != ok || enk2 != ok { ret (zero, mem.Full) }
+        let (hk2, ek3) = add(a, hk, ik, w)
+        let (hn2, enk3) = add(a, hnk, ink, w)
+        if ek3 != ok || enk3 != ok { ret (zero, mem.Full) }
+        hk = hk2
+        hnk = hn2
+        kk += 1usize
+        if u.m.sign == bn.Sign.Zero || (mag_exp(u) < mag_exp(sum) - i64(w) - 40i64 && kk > 2usize) { go = false }
+    }
+    let (cc1, e21) = mul(a, hn, sum, w)
+    if e21 != ok { ret (zero, e21) }
+    let (cc2, e22) = div(a, cc1, p, w)
+    if e22 != ok { ret (zero, e22) }
+    let (r1, e23) = add(a, ta2, b2, w)
+    if e23 != ok { ret (zero, e23) }
+    let (r2, e24) = sub(a, r1, cc2, w)
+    if e24 != ok { ret (zero, e24) }
+    let (rt_, re_) = round_to(a, r2.m, r2.e, prec)
     ret (rt_, re_)
 }

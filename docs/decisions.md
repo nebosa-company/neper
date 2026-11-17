@@ -48493,3 +48493,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6999 — Rmpfr directed rounding of the transcendental functions
 
 `mpfr.reround(r, prec, mode)` re-rounds a result computed at prec + 64 bits in a directed mode. It is wrong only when the true value lies within 2^-(prec + 64) relative of a rounding boundary, and none of these functions reaches a boundary exactly (the exact cases, exp 0 and log 1, come out exact at the wider precision). Equal to `roundMpfr(f(x), prec, rnd.mode)` for exp, log, sin, cos, tan, atan and pow on 140 cases (oracle_mpfr); the other functions use the same wrapper. Linux pending.
+
+
+## D7000 — Rmpfr closed: besselY, other-base parsing, zeta below 1
+
+`bessel_y(x, n)` for an integer order (A&S 9.1.11 with the Euler constant and harmonic numbers), `from_digits(N, base, k, ...)` for strings in any base (decimal parsing is the base 10 case), and the existing Borwein zeta already agrees for real s in (-6, 1). With D6996 to D6999 every item of the L418 acceptance list has an oracle case in oracle_mpfr (3933 values), so L418 moves to docs/work-done.jsonl. Not claimed: Inf and NaN values and non-integer Bessel orders, which the acceptance does not list. Linux pending.

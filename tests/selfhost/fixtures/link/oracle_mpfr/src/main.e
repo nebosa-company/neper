@@ -11,6 +11,28 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if usize(z[0usize]) == 95usize {
+        // mpfr("N@k", base): (95, prec, N, k, base, mode, which 0 hi 1 lo); N below 2^50
+        let gp = usize(z[1usize])
+        let (gn, g1) = bn.int_from_i64(a, i64(z[2usize]))
+        if g1 != ok { ret nan }
+        let (gr, g2) = mp.from_digits(a, gn, usize(z[4usize]), i64(z[3usize]), gp, usize(z[5usize]))
+        if g2 != ok { ret nan }
+        let (ghi, glo) = mp.to_pair(a, gr)
+        if z[6usize] == 0.0f64 { ret ghi }
+        ret glo
+    }
+    if usize(z[0usize]) == 96usize {
+        // besselY of integer order: (96, prec, m1, e1, order, 0, which)
+        let yp = usize(z[1usize])
+        let (yx, y1) = mp.from_parts(a, i64(z[2usize]), i64(z[3usize]), yp)
+        if y1 != ok { ret nan }
+        let (yr, y2) = mp.bessel_y(a, yx, usize(z[4usize]), yp)
+        if y2 != ok { ret nan }
+        let (yhi, ylo) = mp.to_pair(a, yr)
+        if z[6usize] == 0.0f64 { ret yhi }
+        ret ylo
+    }
     if usize(z[0usize]) == 97usize {
         // directed rounding of a transcendental function: (97, prec, m1, e1, m2, e2, mode, fn 0 exp 1 log 2 sin 3 cos 4 tan 5 atan 6 pow, which)
         let tp = usize(z[1usize])
