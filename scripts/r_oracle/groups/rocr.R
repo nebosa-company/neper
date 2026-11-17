@@ -37,4 +37,13 @@ for (rep in 1:20) {
   pb <- tryCatch(performance(p, "prbe"), error = function(e) NULL)
   if (!is.null(pb)) { al <- pb@x.values[[1]]; vv <- pb@y.values[[1]]; add("pbec", c(0, n, pred, lab), length(al)); add("pbes", c(0, n, pred, lab), sum(al * seq_along(al))); add("pbev", c(0, n, pred, lab), sum(vv * seq_along(vv))) }
 }
+# rch ("rchc" count, "rchx"/"rchy" position-weighted sums of the hull x and y) and ecost ("ecc" count, "ecx"/"ecy"): args (0, n, pred, labels)
+for (rep in 1:25) {
+  n <- sample(12:50, 1); lab <- rbinom(n, 1, 0.45); if (sum(lab) < 2 || sum(lab) > n - 2) next
+  pred <- round(rnorm(n) + 1.1 * lab, if (rep %% 3 == 0) 1 else 3); p <- prediction(pred, lab)
+  h <- tryCatch(performance(p, "rch"), error = function(e) NULL)
+  if (!is.null(h)) { hx <- h@x.values[[1]]; hy <- h@y.values[[1]]; add("rchc", c(0, n, pred, lab), length(hx)); add("rchx", c(0, n, pred, lab), sum(hx * seq_along(hx))); add("rchy", c(0, n, pred, lab), sum(hy * seq_along(hy))) }
+  e <- tryCatch(performance(p, "ecost"), error = function(e) NULL)
+  if (!is.null(e)) { ex <- e@x.values[[1]]; ey <- e@y.values[[1]]; add("ecc", c(0, n, pred, lab), length(ex)); add("ecx", c(0, n, pred, lab), sum(ex * seq_along(ex))); add("ecy", c(0, n, pred, lab), sum(ey * seq_along(ey))) }
+}
 emit("rocr", "ROCR", list(cases))

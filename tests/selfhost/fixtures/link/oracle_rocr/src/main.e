@@ -46,6 +46,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret ps
     }
+    if c.name.len == 4usize && (c.name[0usize] == 114u8 || c.name[0usize] == 101u8) && c.name[1usize] == 99u8 && c.name[2usize] == 104u8 || c.name.len == 3usize && c.name[0usize] == 101u8 && c.name[1usize] == 99u8 {
+        let (hx, h1) = mem.alloc[f64](a, 2usize * n + 8usize)
+        let (hy, h2) = mem.alloc[f64](a, 2usize * n + 8usize)
+        if h1 != ok || h2 != ok { ret 0.0f64 / 0.0f64 }
+        var hk = 0usize
+        if c.name[0usize] == 114u8 { hk = rc.rocconvexhull(a, pred, lab, hx, hy) } else { hk = rc.expected_cost(a, pred, lab, hx, hy) }
+        let last = c.name[c.name.len - 1usize]
+        if last == 99u8 { ret f64(hk) }
+        var hs = 0.0f64
+        var hi = 0usize
+        while hi < hk {
+            if last == 120u8 { hs += hx[hi] * f64(hi + 1usize) } else { hs += hy[hi] * f64(hi + 1usize) }
+            hi += 1usize
+        }
+        ret hs
+    }
     let m = rc.cutoff_count(a, pred)
     let (out, e) = mem.alloc[f64](a, m)
     if e != ok { os.exit(5) }
