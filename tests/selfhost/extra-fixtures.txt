@@ -423,3 +423,10 @@ oracle_mclust6
 oracle_mclust7
 oracle_mclust8
 oracle_mclust9
+oracle_clusterpam
+oracle_clusterclara
+oracle_clustertwins
+oracle_clusterfanny
+oracle_clustermona
+oracle_clusterdaisy
+oracle_clustergap
