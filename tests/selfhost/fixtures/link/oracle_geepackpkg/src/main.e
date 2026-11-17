@@ -114,6 +114,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "gp") {
+            // (what, index, corstr, link, k, px, nlev, sizes (k), y, x row-major)
+            let pk = usize(x[4usize])
+            let ppx = usize(x[5usize])
+            let pnl = usize(x[6usize])
+            var pn = 0usize
+            var pc = 0usize
+            while pc < pk {
+                pn += usize(x[7usize + pc])
+                pc += 1usize
+            }
+            let py = 7usize + pk
+            let pxs = py + pn
+            let pp0 = pnl - 1usize + ppx
+            let pm = gp.gee_maxsize(x[7usize..py], pk)
+            var pq = 1usize
+            if usize(x[2usize]) == 3usize { pq = pm * (pm - 1usize) / 2usize }
+            let (po, pe1) = mem.alloc[f64](a, pp0 + 2usize * pp0 * pp0 + pq + 2usize * pq * pq)
+            if pe1 != ok { os.exit(5) }
+            if gp.ordgee_gee(a, x[py..pxs], x[pxs..pxs + pn * ppx], x[7usize..py], pk, ppx, pnl, usize(x[3usize]), usize(x[2usize]), po) != ok { os.exit(7) }
+            let pw = usize(x[0usize])
+            let pi = usize(x[1usize])
+            var pg = 0.0f64
+            if pw == 0usize { pg = po[pi] }
+            if pw == 1usize || pw == 2usize { pg = po[pp0 + (pw - 1usize) * pp0 * pp0 + pi] }
+            if pw == 3usize { pg = po[pp0 + 2usize * pp0 * pp0 + pi] }
+            if pw == 4usize || pw == 5usize { pg = po[pp0 + 2usize * pp0 * pp0 + pq + (pw - 4usize) * pq * pq + pi] }
+            if !oracle.agrees(pg, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, pg))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "gq") {
             // (what, fam, link, corstr, k, p, maxm, sizes (k), y, x row-major, zc)
             let qk = usize(x[4usize])
