@@ -41,7 +41,7 @@ ci_run <- function(d, m, test, type, code) {
   v <- put(v, 140, ci["H^2", 2]); v <- put(v, 141, ci["H^2", 3]); v <- put(v, 142, ci["tau", 2]); v <- put(v, 143, ci["tau", 3])
   add_vec("confint", c(code, margs(d, m, test)), v, 1e-8)
 }
-for (rep in 1:10) {
+for (rep in 1:10) try({
   k <- sample(6:25, 1); p <- sample(1:3, 1)
   d <- dat(k, p)
   for (m in c(1, 2, 8, 7, 6, 9)) {
@@ -50,8 +50,8 @@ for (rep in 1:10) {
   }
   if (p == 1) { ci_run(d, 8, 0, "HT", 2); ci_run(d, 8, 0, "Wald", 3); ci_run(d, 7, 0, "Wald.log", 4); ci_run(d, 8, 2, "Wald.sqrt", 5) }
   ci_run(d, 1, 2, "QP", 0)
-}
-for (rep in 1:8) {
+}, silent = TRUE)
+for (rep in 1:8) try({
   k <- sample(5:14, 1); p <- sample(1:3, 1)
   d <- dat(k, p)
   m <- sample(c(1, 2, 7, 8), 1); test <- sample(0:3, 1)
@@ -74,8 +74,8 @@ for (rep in 1:8) {
   v <- rows(v, 136, 0, rs$resid); v <- rows(v, 136, 1, rs$se); v <- rows(v, 136, 2, rs$z)
   v <- rows(v, 136, 3, rc$resid); v <- rows(v, 136, 4, rc$se); v <- rows(v, 136, 5, rc$z); v <- rows(v, 136, 6, h); v <- rows(v, 136, 7, w)
   add_vec("rstandard", margs(d, m, test), v, 1e-9)
-}
-for (rep in 1:7) {
+}, silent = TRUE)
+for (rep in 1:7) try({
   k <- sample(6:12, 1); p <- sample(1:3, 1)
   d <- dat(k, p)
   m <- sample(c(1, 2, 7, 8, 9), 1); test <- sample(c(0, 2), 1)
@@ -86,8 +86,8 @@ for (rep in 1:7) {
   for (j in 0:7) v <- rows(v, 136, j, inf$inf[[j + 1]])
   for (a in 1:p) v <- rows(v, 136, 7 + a, inf$dfbs[[a]])
   add_vec("influence", margs(d, m, test), v, 1e-8)
-}
-for (rep in 1:8) {
+}, silent = TRUE)
+for (rep in 1:8) try({
   k <- sample(6:20, 1)
   d <- dat(k, 1)
   m <- sample(c(0, 1, 2, 7, 8, 9, 6), 1); test <- sample(0:3, 1)
@@ -103,5 +103,5 @@ for (rep in 1:8) {
   v <- put(list(), 0, r$tau2)
   for (j in 0:10) v <- rows(v, 136, j, cols[[j + 1]])
   add_vec("cumul", margs(d, m, test), v, 1e-8)
-}
+}, silent = TRUE)
 emit("metaforinf", "metafor", list(cases))

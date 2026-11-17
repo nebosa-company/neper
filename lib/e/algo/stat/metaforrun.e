@@ -9,16 +9,23 @@ use e.mem
 use e.algo.stat.metaforrma as mr
 use e.algo.stat.metaforfit as mf
 use e.algo.stat.metaformore as mm
+use e.algo.stat.metaformore2 as m2
+use e.algo.stat.metaforbias as mb
 
 // the number of option values before the model
-fn nopts(name: str) -> usize {
+fn nopts(name: str, args: []const f64) -> usize {
     if str.eq(name, "confint") { ret 1usize }
     if str.eq(name, "predict") { ret 3usize }
+    if str.eq(name, "permutest") { ret 3usize }
+    if str.eq(name, "regtest") { ret 2usize }
+    if str.eq(name, "trimfill") { ret 2usize }
+    if str.eq(name, "fsn") { ret 3usize }
+    if str.eq(name, "profile") { ret 1usize + usize(args[0usize]) }
     ret 0usize
 }
 
 fn run(a: *mem.Arena, ws: *mr.Ws, name: str, args: []const f64, out: []f64, tmp: []f64) -> bool {
-    let off = nopts(name)
+    let off = nopts(name, args)
     var c = mf.default_ctl()
     c.method = usize(args[off])
     c.test = usize(args[off + 1usize])
@@ -62,5 +69,19 @@ fn run(a: *mem.Arena, ws: *mr.Ws, name: str, args: []const f64, out: []f64, tmp:
     }
     if str.eq(name, "leave1out") { mm.leave1out(&m) }
     if str.eq(name, "cumul") { mm.cumul(&m) }
+    if str.eq(name, "permutest") { m2.permutest(&m, args[0usize] != 0.0f64, args[1usize], i64(args[2usize])) }
+    if str.eq(name, "regtest") { m2.regtest(&m, usize(args[0usize]), usize(args[1usize]), args[extra..extra + k]) }
+    if str.eq(name, "trimfill") { m2.trimfill(&m, usize(args[0usize]), i64(args[1usize])) }
+    if str.eq(name, "fsn") { m2.fsn(y, v, k, usize(args[0usize]), args[1usize], args[2usize], out) }
+    if str.eq(name, "profile") { m2.profile(&m, args[1usize..1usize + usize(args[0usize])]) }
+    if str.eq(name, "ranktest") {
+        let mm2 = k * (k - 1usize) / 2usize + 1usize
+        let (counts, ce) = mem.alloc[f64](a, mm2)
+        let (next, ne) = mem.alloc[f64](a, mm2)
+        if ce == ok && ne == ok {
+            out[mm.X0] = mb.ranktest(y, v, 0usize, counts, next)
+            out[mm.X0 + 1usize] = mb.ranktest(y, v, 1usize, counts, next)
+        }
+    }
     ret true
 }
