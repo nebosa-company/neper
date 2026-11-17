@@ -962,3 +962,92 @@ fn nmf_silhouette_coef(a: *mem.Arena, h: []const f64, rk: usize, p: usize) -> f6
     }
     ret silhouette_avg(a, d, cl, p)
 }
+
+// Hoyer's sparseness of each column of an nr by nc column-major matrix, averaged (summary()$sparseness.basis for W, sparseness.coef for H)
+fn nmf_sparseness(m: []const f64, nr: usize, nc: usize) -> f64 {
+    var tot = 0.0f64
+    var j = 0usize
+    while j < nc {
+        var l1 = 0.0f64
+        var l2 = 0.0f64
+        var i = 0usize
+        while i < nr {
+            let x = m[j * nr + i]
+            l1 += math.abs[f64](x)
+            l2 += x * x
+            i += 1usize
+        }
+        let sq = math.sqrt[f64](f64(nr))
+        tot += (sq - l1 / math.sqrt[f64](l2)) / (sq - 1.0f64)
+        j += 1usize
+    }
+    ret tot / f64(nc)
+}
+
+// rss(x, fit) and evar(x, fit) = 1 - rss / sum(x^2) of the fit W H
+fn nmf_rss_evar(a: *mem.Arena, v: []const f64, w: []const f64, h: []const f64, n: usize, p: usize, rk: usize, which: usize) -> f64 {
+    let (wh, e1) = mem.alloc[f64](a, n * p)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    matmul(w, h, wh, n, rk, p)
+    var rss = 0.0f64
+    var ss = 0.0f64
+    var q = 0usize
+    while q < n * p {
+        let d = v[q] - wh[q]
+        rss += d * d
+        ss += v[q] * v[q]
+        q += 1usize
+    }
+    if which == 0usize { ret rss }
+    ret 1.0f64 - rss / ss
+}
+
+// summary()$silhouette.basis: the features (rows of W) clustered by their largest entry, dissimilarity 1 - cor of the rows of W
+fn nmf_silhouette_basis(a: *mem.Arena, w: []const f64, n: usize, rk: usize) -> f64 {
+    let (d, e1) = mem.alloc[f64](a, n * n)
+    let (cl, e2) = mem.alloc[usize](a, n)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        var best = 0usize
+        var k = 1usize
+        while k < rk {
+            if w[k * n + i] > w[best * n + i] { best = k }
+            k += 1usize
+        }
+        cl[i] = best
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var i2 = 0usize
+        while i2 < n {
+            var m1 = 0.0f64
+            var m2 = 0.0f64
+            var k = 0usize
+            while k < rk {
+                m1 += w[k * n + i]
+                m2 += w[k * n + i2]
+                k += 1usize
+            }
+            m1 = m1 / f64(rk)
+            m2 = m2 / f64(rk)
+            var sxy = 0.0f64
+            var sxx = 0.0f64
+            var syy = 0.0f64
+            k = 0usize
+            while k < rk {
+                let x = w[k * n + i] - m1
+                let y = w[k * n + i2] - m2
+                sxy += x * y
+                sxx += x * x
+                syy += y * y
+                k += 1usize
+            }
+            d[i2 * n + i] = 1.0f64 - sxy / math.sqrt[f64](sxx * syy)
+            i2 += 1usize
+        }
+        i += 1usize
+    }
+    ret silhouette_avg(a, d, cl, n)
+}

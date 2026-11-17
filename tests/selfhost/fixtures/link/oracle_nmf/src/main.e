@@ -28,6 +28,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if ix == 1usize { ret nf.nmf_dispersion(cs2) }
             if ix == p * p + 2usize { ret nf.nmf_silhouette_consensus(a, cs2, p, rk) }
             if ix == p * p + 3usize { ret nf.nmf_silhouette_coef(a, h2, rk, p) }
+            if ix == p * p + 4usize { ret nf.nmf_silhouette_basis(a, w2, n, rk) }
+            if ix == p * p + 5usize { ret nf.nmf_sparseness(w2, n, rk) }
+            if ix == p * p + 6usize { ret nf.nmf_sparseness(h2, rk, p) }
+            if ix == p * p + 7usize { ret nf.nmf_rss_evar(a, z[6usize..6usize + n * p], w2, h2, n, p, rk, 0usize) }
+            if ix == p * p + 8usize { ret nf.nmf_rss_evar(a, z[6usize..6usize + n * p], w2, h2, n, p, rk, 1usize) }
             ret cs2[ix - 2usize]
         }
         if ix == 0usize { ret o2[0usize] }

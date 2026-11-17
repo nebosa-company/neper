@@ -83,7 +83,7 @@ for (rep in 1:20) {
   if (is.null(res)) next
   cp <- tryCatch(cophcor(res), error = function(e) NA)
   sm <- tryCatch(summary(res), error = function(e) NULL)
-  v <- c(cp, dispersion(res), as.vector(consensus(res)), if (is.null(sm)) c(NA, NA) else c(sm[["silhouette.consensus"]], sm[["silhouette.coef"]]))
+  v <- c(cp, dispersion(res), as.vector(consensus(res)), if (is.null(sm)) rep(NA, 7) else c(sm[["silhouette.consensus"]], sm[["silhouette.coef"]], sm[["silhouette.basis"]], sm[["sparseness.basis"]], sm[["sparseness.coef"]], rss(res, x), evar(res, x)))
   for (q in seq_along(v)) if (is.finite(v[q])) cases[[length(cases) + 1]] <- case("nmc", c(n, p, r, me, sd, nr, as.vector(x), q - 1), v[q], rel = 1e-8, abs = 1e-10)
 }
 emit("nmf", "NMF", list(cases))
