@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L499",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 594,
-      "title": "ResourceSelection: Hosmer-Lemeshow and related tests",
-      "score": 0.5,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6096): e.algo.stat.hoslem (hoslem.test with observed and expected tables) equals ResourceSelection on 1128 values on Windows (oracle_hoslem); Linux pending. D6810: wrsi and CAIC equal the package (1950 values in all). Open: rsf, rspf, mep, kdepairs, simulateUsedAvail. Original: Open (CRAN rank 981). Small. Acceptance, equal to ResourceSelection under set.seed: hoslem.test with its g groups and expected tables, kfold, and the resource-selection function fits."
-    },
-    {
       "id": "L332",
       "category": "library",
       "group": "CRAN parity",
@@ -251,10 +240,10 @@
       "group": "CRAN parity",
       "order": 639,
       "title": "compositions: compositional data analysis",
-      "score": 0.5,
+      "score": 0.65,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6140). clo, clr, alr, ilr and inverses, Aitchison norm and distance, perturbation, powering, mean, clr variance and the variation matrix equal compositions on Windows (oracle_compositions; Linux pending). Open: balances, zeros and missing values, the normality tests in the simplex. Was: Open (CRAN rank 860). Small to mid. Acceptance, equal to compositions: acomp and rcomp objects, clr, ilr, alr and their inverses, the Aitchison distance and norm, perturbation and powering, mean, variance and balances, tests of normality in the simplex."
+      "evidence": "Partial (D6140). clo, clr, alr, ilr and inverses, Aitchison norm and distance, perturbation, powering, mean, clr variance and the variation matrix equal compositions on Windows (oracle_compositions; Linux pending). Open: balances, zeros and missing values, the normality tests in the simplex. Was: Open (CRAN rank 860). Small to mid. Acceptance, equal to compositions: acomp and rcomp objects, clr, ilr, alr and their inverses, the Aitchison distance and norm, perturbation and powering, mean, variance and balances, tests of normality in the simplex. D7100: rcomp cdt, norm, minus, mean, var, dist, idt; ilr bases from a signary matrix and the balanced ilrBase; zeroreplace with given limits; Gauss.test; acompNormalGOF.test (energy test) equal compositions (oracle_compositions_ext). Open: NA values, robust MCD estimates, optimal and principal-balance bases, balanceBase from a formula, the other exports."
     },
     {
       "id": "L478",
@@ -301,17 +290,6 @@
       "evidence": "Partial (D6195). Gaussian NaiveBayes fit and predict equal klaR on Windows (oracle_klar; Linux pending). Open: kernel and factor predictors, rda, woe, stepclass, greedy.wilks. Was: Open (CRAN rank 846). Small to mid. Acceptance, equal to klaR: NaiveBayes with kernel densities, rda with its parameter search, sknn, stepclass with the greedy search, kmodes, woe and the partimat data."
     },
     {
-      "id": "L482",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 644,
-      "title": "laeken: inequality and poverty indicators",
-      "score": 0.5,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6139). Weighted quantile, median and mean, incQuintile, gini, qsr, arpt, arpr and rmpg equal laeken on Windows (oracle_laeken; Linux pending). Open: the bootstrap and linearisation variances under set.seed, the Pareto tail fits and gpg. Was: Open (CRAN rank 888). Small to mid. Acceptance, equal to laeken: gini, qsr, rmpg, arpr, arpt, atkinson, theil and the weighted quantile and median, with the bootstrap and linearization variance estimates under set.seed."
-    },
-    {
       "id": "L485",
       "category": "library",
       "group": "CRAN parity",
@@ -343,17 +321,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6137). The deterministic functions of WRS2 (winvar, winmean, winse, trimse, pbos, yuen, yuend, t1way, wincor, pbcor, akp.effect, lincon pairwise with Hochberg, med1way statistic) equal R on Windows (oracle_wrs2; Linux pending). Open: the bootstrap and simulated functions, t2way, ancova, mcp2atm. Was: Open (CRAN rank 985). Small to mid. Acceptance, equal to WRS2 under set.seed: yuen and yuenbt, t1way and lincon, t2way, med1way, pb2gen, mcp2atm, robust ANCOVA ancova, and the robust effect sizes."
-    },
-    {
-      "id": "L504",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 661,
-      "title": "rcompanion: nonparametric and categorical helpers",
-      "score": 0.5,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6141). epsilonSquared, freemanTheta, cliffDelta, vda, cramerV (bias-corrected too) and cohenW equal rcompanion on Windows (oracle_rcompanion; Linux pending). D6851: scheirerRayHare (type II, tie corrected) equals rcompanion. D6852: the global p of nominalSymmetryTest equals rcompanion. D6853: the pairwise tests of nominalSymmetryTest equal rcompanion. Open: pairwiseMedianTest, pairwiseNominalIndependence, groupwiseMean and the bootstrap intervals. Was: Open (CRAN rank 904). Small to mid. Builds on the rstatix module. Acceptance, equal to rcompanion under set.seed: epsilonSquared, freemanTheta, cliffDelta, scheirerRayHare, pairwiseMedianTest, nominalSymmetryTest, pairwiseNominalIndependence, groupwiseMean with bootstrap intervals, cramerV."
     },
     {
       "id": "L505",

@@ -48625,3 +48625,8 @@ NMF: a port of fastICA (parallel, logcosh, alpha 1, maxit 200, tol 1e-4) whose w
 ## D7026 — coda, posterior, loo, cramer and ggdist; L299 closed
 
 Done in two agent runs on one branch and merged: heidel.diag with pcramer, the multivariate Gelman psrf and mpsrf, multivariate autocorr and crosscorr, batchSE, summary.mcmc and gelman.transform; the posterior diagnostics (rhat variants, ess_sd, ess_quantile, mcse_sd, mcse_quantile, z_scale, summarise_draws, pareto_smooth, pareto_khat); loo with per-observation relative efficiency, waic, loo_compare, E_loo, pseudobma and stacking weights (constrOptim over the R BFGS); cramer.test and ggdist qi, hdci, hdi and Mode. Every function of the L299 acceptance has an oracle case, so L299 moves to docs/work-done.jsonl. Stacking weights are compared at rel 1e-6, abs 1e-8 because one boundary weight differs by 3e-10. Linux pending.
+
+
+## D7100 — ResourceSelection, laeken and rcompanion closed; compositions advanced
+
+An agent batch merged: rsf, rspf, simulateUsedAvail and the mep and kdepairs numbers (L499), the bootstrap variances, calibWeights, gpg and the Pareto tail estimators (L482), pairwiseMedianTest, pairwiseNominalIndependence and groupwiseMean with bootstrap intervals (L504), and the rcomp, ilr basis, zeroreplace, Gauss.test and energy normality test pieces of L477. L499, L482 and L504 cover every item of their acceptance that exists in the installed packages (kfold, atkinson, theil and a linearisation variance do not exist in ResourceSelection 0.3.6 and laeken 0.5.3) and move to docs/work-done.jsonl; L477 stays open at 0.65 (NA values, robust estimates, optimal bases and the other exports are missing). Linux pending.

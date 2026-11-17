@@ -3885,4 +3885,5 @@ D7022	1066	exact LAPACK dsyevr and dgesdd; L432 and L333 closed
 D7023	794	signal: filter design, windows, FIR design, filtering and spectral tools; L340 closed
 D7024	940	vars: VAR estimation, lag selection, SVAR, SVEC, vec2var, irf, fevd, tests and stability; L433 closed
 D7025	958	NMF ica seed through fastICA; glmnet through the package C++ algorithms; L457 and L310 closed
-D7026	797	coda, posterior, loo, cramer and ggdist; L299 closed
+D7026	799	coda, posterior, loo, cramer and ggdist; L299 closed
+D7100	810	ResourceSelection, laeken and rcompanion closed; compositions advanced
