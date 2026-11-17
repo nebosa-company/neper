@@ -3802,4 +3802,5 @@ D6939	714	Rmpfr: zeta
 D6940	613	Rmpfr: besselJ
 D6941	411	Rmpfr: Euler's constant
 D6942	1060	marginaleffects: average slopes and predictions of a logistic regression
-D6943	895	marginaleffects: links and comparisons
+D6943	896	marginaleffects: links and comparisons
+D6944	697	Hmisc: GiniMd and the Info of describe

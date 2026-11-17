@@ -41,6 +41,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if x[2usize] == 2.0f64 { ret f64(t.merge_a[ix]) }
         ret f64(t.merge_b[ix])
     }
+    if str.eq(c.name, "gmd") { ret hm.gini_md(a, x[1usize..1usize + usize(x[0usize])]) }
+    if str.eq(c.name, "info") { ret hm.describe_info(a, x[1usize..1usize + usize(x[0usize])]) }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])

@@ -61,4 +61,8 @@ for (rep in 1:15) {
     cases[[length(cases) + 1]] <- case("vc", c(n, k, 3, q - 1, sp, rep %% 3, mc, x), h$merge[q, 2], rel = 0, abs = 0.5) }
   for (q in seq_len(k)) cases[[length(cases) + 1]] <- case("vc", c(n, k, 1, q - 1, sp, rep %% 3, mc, x), h$order[q], rel = 0, abs = 0.5)
 }
+# GiniMd "gmd" and the Info of describe "info": (n, x[n])
+for (rep in 1:30) { n <- sample(5:80, 1); x <- if (rep %% 2) rnorm(n) else round(rnorm(n), 1); tb <- table(x)
+  cases[[length(cases) + 1]] <- case("gmd", c(n, x), GiniMd(x), rel = 1e-10, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("info", c(n, x), 1 - sum(tb^3 - tb) / (n^3 - n), rel = 1e-10, abs = 1e-12) }
 emit("hmisc", "Hmisc", list(cases))

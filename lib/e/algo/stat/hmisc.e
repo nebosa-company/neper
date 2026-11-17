@@ -551,3 +551,67 @@ fn varclus(a: *mem.Arena, x: []const f64, n: usize, k: usize, spearman: bool, tr
     let (t, e3) = hc.hclust(a, d, k, method)
     ret (t, e3)
 }
+
+// GiniMd(x): Gini's mean difference, the mean absolute difference of two distinct observations, 2 / (n (n - 1)) sum (2 i - n - 1) x_(i) over the sorted values
+fn gini_md(a: *mem.Arena, x: []const f64) -> f64 {
+    let n = x.len
+    let (s, e) = mem.alloc[f64](a, n)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        s[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let key = s[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > key {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = key
+        i += 1usize
+    }
+    var t = 0.0f64
+    i = 0usize
+    while i < n {
+        t += s[i] * (2.0f64 * f64(i + 1usize) - f64(n) - 1.0f64)
+        i += 1usize
+    }
+    ret t * 2.0f64 / (f64(n) * (f64(n) - 1.0f64))
+}
+
+// the Info of describe(): 1 - sum(f^3 - f) / (n^3 - n) over the frequencies f of the distinct values, the share of the information a continuous variable would carry
+fn describe_info(a: *mem.Arena, x: []const f64) -> f64 {
+    let n = x.len
+    let (s, e) = mem.alloc[f64](a, n)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        s[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let key = s[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > key {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = key
+        i += 1usize
+    }
+    var tot = 0.0f64
+    i = 0usize
+    while i < n {
+        var j = i
+        while j + 1usize < n && s[j + 1usize] == s[i] { j += 1usize }
+        let f = f64(j - i + 1usize)
+        tot += f * f * f - f
+        i = j + 1usize
+    }
+    let nf = f64(n)
+    ret 1.0f64 - tot / (nf * nf * nf - nf)
+}

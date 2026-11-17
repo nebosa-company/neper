@@ -46,7 +46,7 @@ L503	library	0.35	508	WRS2: robust tests and ANOVA	Partial (D6137).
 L504	library	0.5	758	rcompanion: nonparametric and categorical helpers	Partial (D6141).
 L505	library	0.3	499	sm: nonparametric smoothing methods	Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows;
 L299	library	0.55	1345	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Partial (D6592): e.algo.stat.codapkg has acf, the Yule-Walker ar(aic = TRUE) of spectrum0.ar and effectiveSize for one chain, equal to coda on 120 values on Windows (oracle_coda;
-L305	library	0.5	1088	Hmisc: numerically defined core	Partial (D6050).
+L305	library	0.52	1140	Hmisc: numerically defined core	Partial (D6050).
 L306	library	0.42	1348	MASS remainder: robust fits, fitdistr, boxcox, density and scaling	Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, b
 L307	library	0.25	658	quantreg: quantile regression inference and algorithms	Partly done (D6052): e.algo.stat.quantreg.rq (dual interior point plus exact vertex) equals rq(method br) on 235 coefficients on Windows (oracle_quantreg);
 L309	library	0.1	702	nloptr: gradient-based and constrained optimizers	Partly done (D6054): e.algo.stat.dfree.auglag (augmented Lagrangian over the box minimiser, no gradients) equals nloptr on HS071 and two more constrained problems on Windows (oracle_auglag);
