@@ -3782,4 +3782,5 @@ D6919	730	lmerTest: contest1D
 D6920	648	gbm: relative influence
 D6921	425	gbm: relative influence for the other losses
 D6922	682	Hmisc: varclus
-D6923	830	glmnet: cv.glmnet for the binomial family
+D6923	831	glmnet: cv.glmnet for the binomial family
+D6924	537	glmnet: binomial cross-validation loss types

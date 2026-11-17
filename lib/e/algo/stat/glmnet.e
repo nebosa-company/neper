@@ -466,9 +466,9 @@ fn cv_gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize
     ret ok
 }
 
-// cv.glmnet for the binomial family (y in {0, 1}) with user fold ids and the deviance loss: the fitted probabilities clipped to [1e-5, 1 - 1e-5], the per-observation deviance 2 (-y log p - (1 - y) log(1 - p)),
+// cv.glmnet for the binomial family (y in {0, 1}) with user fold ids; measure 0 deviance, 1 misclassification, 2 mse, 3 mae (the last two counted over both outcomes, so twice the plain error as cv.glmnet reports them). The deviance loss: the fitted probabilities clipped to [1e-5, 1 - 1e-5], the per-observation deviance 2 (-y log p - (1 - y) log(1 - p)),
 // averaged within each fold and then over folds by size, cvsd as in `cv_gaussian`
-fn cv_binomial(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, cvm: []f64, cvsd: []f64) -> err {
+fn cv_binomial(a: *mem.Arena, measure: usize, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, cvm: []f64, cvsd: []f64) -> err {
     let nl = lambdas.len
     let (xt, e1) = mem.alloc[f64](a, n * p)
     let (yt, e2) = mem.alloc[f64](a, n)
@@ -527,7 +527,13 @@ fn cv_binomial(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize
                     var pp = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - pr))
                     if pp < 1.0e-5f64 { pp = 1.0e-5f64 }
                     if pp > 1.0f64 - 1.0e-5f64 { pp = 1.0f64 - 1.0e-5f64 }
-                    cvf[k * nfolds + f] += 2.0f64 * (0.0f64 - y[i] * math.log[f64](pp) - (1.0f64 - y[i]) * math.log[f64](1.0f64 - pp))
+                    if measure == 0usize { cvf[k * nfolds + f] += 2.0f64 * (0.0f64 - y[i] * math.log[f64](pp) - (1.0f64 - y[i]) * math.log[f64](1.0f64 - pp)) }
+                    if measure == 1usize {
+                        if y[i] == 0.0f64 && pp > 0.5f64 { cvf[k * nfolds + f] += 1.0f64 }
+                        if y[i] == 1.0f64 && pp <= 0.5f64 { cvf[k * nfolds + f] += 1.0f64 }
+                    }
+                    if measure == 2usize { cvf[k * nfolds + f] += 2.0f64 * (y[i] - pp) * (y[i] - pp) }
+                    if measure == 3usize { cvf[k * nfolds + f] += 2.0f64 * math.abs[f64](y[i] - pp) }
                     k += 1usize
                 }
             }

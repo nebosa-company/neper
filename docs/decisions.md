@@ -48162,3 +48162,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6923 — glmnet: cv.glmnet for the binomial family
 
 **Decision.** `glmnet.cv_binomial` is the cross-validation of D6886 with the binomial fit and the deviance loss: each fold's complement is refitted over the full-data lambda sequence, the held-out probabilities are clipped to [1e-5, 1 - 1e-5] and the per-observation deviance 2 (-y log p - (1 - y) log(1 - p)) is averaged within folds, then over folds by size, with `cvsd` as for the gaussian family; `cv_select` serves both. Equal to `cv.glmnet(family = "binomial", type.measure = "deviance", foldid)` on 10 data sets (80 to 160 observations, 3 to 6 folds, alpha and standardize varying), three lambdas each, both outputs (oracle_glmnet, 2147 cases in all). Not here: the other loss types (class, auc, mse, mae), the poisson family's deviance, random folds. Linux pending.
+
+## D6924 — glmnet: binomial cross-validation loss types
+
+**Decision.** `glmnet.cv_binomial` takes the loss: deviance (0), misclassification (1: a held-out 0 with fitted probability above 0.5, or a 1 at or below it), mse (2) and mae (3), the last two counted over both outcomes as `cv.lognet` does (twice the plain squared and absolute error). Equal to `cv.glmnet(type.measure = ...)` for all four on the 10 data sets of D6923, both `cvm` and `cvsd` (oracle_glmnet, 2327 cases in all). Not here: auc, the poisson losses. Linux pending.
