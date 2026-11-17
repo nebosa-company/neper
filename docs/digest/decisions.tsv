@@ -3764,4 +3764,5 @@ D6901	761	MuMIn: Adjusted SE
 D6902	565	MuMIn: Adjusted SE of the conditional average
 D6903	688	lmom: pelpe3
 D6904	784	LearnBayes: the book log posteriors
-D6905	752	LearnBayes: five more book log posteriors
+D6905	753	LearnBayes: five more book log posteriors
+D6906	927	LearnBayes: rmt, dmt, rejectsampling, impsampling

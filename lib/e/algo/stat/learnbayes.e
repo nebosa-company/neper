@@ -605,3 +605,147 @@ fn transplantpost(th: []const f64, x: []const f64, t: []const f64, y: []const f6
     }
     ret v + th[0usize] + th[1usize] + th[2usize]
 }
+
+// rmt(n, mean, S, df): n draws of a multivariate t, the n chi-square draws first (df finite), then the n d normal draws of rmnorm; out is n by d column-major
+fn rmt(a: *mem.Arena, r: *rng.Rng, n: usize, mean: []const f64, vr: []const f64, df: f64, out: []f64) -> err {
+    let d = mean.len
+    let (xc, e1) = mem.alloc[f64](a, n)
+    let (zero_mean, e2) = mem.alloc[f64](a, d)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        xc[i] = rd.rchisq(r, df) / df
+        i += 1usize
+    }
+    i = 0usize
+    while i < d {
+        zero_mean[i] = 0.0f64
+        i += 1usize
+    }
+    let e = rmnorm(a, r, n, zero_mean, vr, out)
+    if e != ok { ret e }
+    var c = 0usize
+    while c < d {
+        i = 0usize
+        while i < n {
+            out[c * n + i] = mean[c] + out[c * n + i] / math.sqrt[f64](xc[i])
+            i += 1usize
+        }
+        c += 1usize
+    }
+    ret ok
+}
+
+// the log density of a multivariate t at one point x (length d): lgamma((df + d) / 2) - (d log(pi df) + log det S) / 2 - lgamma(df / 2) - (df + d) / 2 log(1 + Q / df)
+fn dmt_log(a: *mem.Arena, x: []const f64, mean: []const f64, vr: []const f64, df: f64) -> f64 {
+    let d = mean.len
+    let (u, e1) = mem.alloc[f64](a, d * d)
+    let (iu, e2) = mem.alloc[f64](a, d * d)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    if !bz.chol_upper(vr, d, u) { ret 0.0f64 / 0.0f64 }
+    bz.inv_upper(u, d, iu)
+    var q = 0.0f64
+    var c = 0usize
+    while c < d {
+        var s = 0.0f64
+        var j = 0usize
+        while j <= c {
+            s += iu[c * d + j] * (x[j] - mean[j])
+            j += 1usize
+        }
+        q += s * s
+        c += 1usize
+    }
+    var logdet = 0.0f64
+    c = 0usize
+    while c < d {
+        logdet += 2.0f64 * math.log[f64](u[c * d + c])
+        c += 1usize
+    }
+    let fd = f64(d)
+    ret nm.lgammafn((df + fd) / 2.0f64) - 0.5f64 * (fd * math.log[f64](3.141592653589793f64 * df) + logdet) - nm.lgammafn(df / 2.0f64) - 0.5f64 * (df + fd) * math.log[f64](1.0f64 + q / df)
+}
+
+// the draws and log densities shared by rejectsampling and impsampling: theta (n by d), lf the target log density at each row, lg the proposal's
+fn proposal_draws[Ctx: type](a: *mem.Arena, r: *rng.Rng, ctx: *Ctx, logf: fn(*Ctx, []const f64) -> f64, mean: []const f64, vr: []const f64, df: f64, n: usize, theta: []f64, lf: []f64, lg: []f64) -> err {
+    let d = mean.len
+    let e = rmt(a, r, n, mean, vr, df, theta)
+    if e != ok { ret e }
+    let (row, e2) = mem.alloc[f64](a, d)
+    if e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < d {
+            row[c] = theta[c * n + i]
+            c += 1usize
+        }
+        lf[i] = logf(ctx, row)
+        lg[i] = dmt_log(a, row, mean, vr, df)
+        i += 1usize
+    }
+    ret ok
+}
+
+// rejectsampling(logf, tpar, dmax, n): keeps the proposal draws whose uniform falls below exp(lf - lg - dmax); returns how many, the kept rows (n by d column-major, compacted to the front of keep with leading dimension n) in keep
+fn rejectsampling[Ctx: type](a: *mem.Arena, r: *rng.Rng, ctx: *Ctx, logf: fn(*Ctx, []const f64) -> f64, mean: []const f64, vr: []const f64, df: f64, dmax: f64, n: usize, keep: []f64) -> usize {
+    let d = mean.len
+    let (theta, e1) = mem.alloc[f64](a, n * d)
+    let (lf, e2) = mem.alloc[f64](a, n)
+    let (lg, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0usize }
+    if proposal_draws[Ctx](a, r, ctx, logf, mean, vr, df, n, theta, lf, lg) != ok { ret 0usize }
+    var m = 0usize
+    var i = 0usize
+    while i < n {
+        let prob = math.exp[f64](lf[i] - lg[i] - dmax)
+        if rng.unif(r) < prob {
+            var c = 0usize
+            while c < d {
+                keep[c * n + m] = theta[c * n + i]
+                c += 1usize
+            }
+            m += 1usize
+        }
+        i += 1usize
+    }
+    ret m
+}
+
+// impsampling(logf, tpar, h, n): the importance-sampling estimate of the posterior mean of the h-th coordinate (hidx, 0-based) and its standard error; out = (est, se)
+fn impsampling[Ctx: type](a: *mem.Arena, r: *rng.Rng, ctx: *Ctx, logf: fn(*Ctx, []const f64) -> f64, mean: []const f64, vr: []const f64, df: f64, n: usize, hidx: usize, out: []f64) -> err {
+    let d = mean.len
+    let (theta, e1) = mem.alloc[f64](a, n * d)
+    let (lf, e2) = mem.alloc[f64](a, n)
+    let (lg, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    let e = proposal_draws[Ctx](a, r, ctx, logf, mean, vr, df, n, theta, lf, lg)
+    if e != ok { ret e }
+    var md = lf[0usize] - lg[0usize]
+    var i = 1usize
+    while i < n {
+        if lf[i] - lg[i] > md { md = lf[i] - lg[i] }
+        i += 1usize
+    }
+    var sw = 0.0f64
+    var swh = 0.0f64
+    i = 0usize
+    while i < n {
+        let wt = math.exp[f64](lf[i] - lg[i] - md)
+        sw += wt
+        swh += wt * theta[hidx * n + i]
+        i += 1usize
+    }
+    let est = swh / sw
+    var v = 0.0f64
+    i = 0usize
+    while i < n {
+        let wt = math.exp[f64](lf[i] - lg[i] - md)
+        let hh = theta[hidx * n + i] - est
+        v += hh * hh * wt * wt
+        i += 1usize
+    }
+    out[0usize] = est
+    out[1usize] = math.sqrt[f64](v) / sw
+    ret ok
+}

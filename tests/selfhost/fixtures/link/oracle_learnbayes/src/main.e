@@ -27,9 +27,43 @@ fn e_floor(v: f64) -> f64 {
     ret f64(i)
 }
 
+
+type LgCtx = struct { x: []const f64, n: []const f64, y: []const f64 }
+
+fn lg_logf(c: *LgCtx, th: []const f64) -> f64 { ret lb.logisticpost(th[0usize], th[1usize], c.x, c.n, c.y) }
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+
+    if str.eq(k, "rej") || str.eq(k, "imp2") {
+        // (seed, which, m, n, df, dmax or hidx, mean[2], var[4], x[m], nn[m], y[m]) rej: the number kept (which 0) or the sum of the kept first-coordinate values (1); imp2: est (0) or se (1)
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let w = usize(x[1usize])
+        let m = usize(x[2usize])
+        let ns = usize(x[3usize])
+        let mean = x[6usize..8usize]
+        let vr = x[8usize..12usize]
+        var lc = LgCtx{ x: x[12usize..12usize + m], n: x[12usize + m..12usize + 2usize * m], y: x[12usize + 2usize * m..12usize + 3usize * m] }
+        if str.eq(k, "rej") {
+            let (keep, ke) = mem.alloc[f64](a, ns * 2usize)
+            if ke != ok { ret 0.0f64 / 0.0f64 }
+            let cnt = lb.rejectsampling[LgCtx](a, &rr, &lc, lg_logf, mean, vr, x[4usize], x[5usize], ns, keep)
+            if w == 0usize { ret f64(cnt) }
+            var sm = 0.0f64
+            var q = 0usize
+            while q < cnt {
+                sm += keep[q]
+                q += 1usize
+            }
+            ret sm
+        }
+        let (o2, oe) = mem.alloc[f64](a, 2usize)
+        if oe != ok { ret 0.0f64 / 0.0f64 }
+        if lb.impsampling[LgCtx](a, &rr, &lc, lg_logf, mean, vr, x[4usize], ns, usize(x[5usize]), o2) != ok { ret 0.0f64 / 0.0f64 }
+        ret o2[w]
+    }
 
     if str.eq(k, "lpost2") {
         // (which, m, p, th[...], ...) which 0 logisticpost (th = b0, b1; x[m], n[m], y[m]) 1 weibullregpost (th = 2 + p; t[m], c[m], X[m p])

@@ -76,4 +76,16 @@ for (rep in 1:15) {
   xs <- round(rexp(m, 0.2) + 0.1, 2); tr <- rbinom(m, 1, 0.5); ys <- round(rexp(m, 0.3) + 0.1, 2); dd <- rbinom(m, 1, 0.5); g3 <- rnorm(3, 0, 0.5)
   add("lpost2", c(4, m, 0, g3, xs, tr, ys, dd), transplantpost(g3, cbind(xs, tr, ys, dd)))
 }
+# rejectsampling "rej" and impsampling "imp2" on the logistic posterior with a t proposal
+for (rep in 1:10) {
+  m <- sample(6:14, 1); xx <- round(rnorm(m), 2); nn <- sample(10:40, m, TRUE); yb <- sapply(nn, function(q) sample(0:q, 1)); dat <- cbind(xx, nn, yb)
+  fit <- optim(c(0, 0), logisticpost, control = list(fnscale = -1), hessian = TRUE, data = dat); mu <- fit$par; vv <- -solve(fit$hessian) * 1.5
+  tp <- list(m = mu, var = vv, df = 4); sd <- sample(1:100000, 1); ns <- 200
+  dmax <- max(sapply(1:50, function(i) { th <- mu + rnorm(2, 0, 0.3); logisticpost(th, dat) - dmt(th, mu, vv, 4, log = TRUE) })) + 0.5
+  set.seed(sd); rs <- rejectsampling(logisticpost, tp, dmax, ns, dat)
+  add("rej", c(sd, 0, m, ns, 4, dmax, mu, vv, xx, nn, yb), if (is.matrix(rs)) nrow(rs) else length(rs))
+  if (is.matrix(rs) && nrow(rs) > 0) add("rej", c(sd, 1, m, ns, 4, dmax, mu, vv, xx, nn, yb), sum(rs[, 1]))
+  set.seed(sd); im <- impsampling(logisticpost, tp, function(th) th[2], ns, dat)
+  add("imp2", c(sd, 0, m, ns, 4, 1, mu, vv, xx, nn, yb), im$est); add("imp2", c(sd, 1, m, ns, 4, 1, mu, vv, xx, nn, yb), im$se)
+}
 emit("learnbayes", "LearnBayes", list(cases))
