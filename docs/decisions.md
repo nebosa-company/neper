@@ -48528,3 +48528,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D7006 — extraDistr generators through the R gamma, t, normal and beta generators
 
 `rgen6`: inverse gamma 1 / rgamma(alpha, rate beta); inverse chi-squared 1 / rgamma(nu/2, rate nu tau / 2); location-scale t mu + sigma rt; half-t |sigma rt|; fatigue mu + beta (h + sqrt(h^2 + 1))^2 with h = alpha z / 2 for one normal z; non-standard beta min + (max - min) rbeta. Found by trying each package generator against the composition of base R generators. Equal to extraDistr on 36 settings of 5 draws (oracle_extradistr). The beta-prime, triangular, truncated normal, Maxwell, discrete Laplace and zero-inflated generators are not reproduced. Linux pending.
+
+
+## D7007 — extraDistr beta-prime generator
+
+`rgen6` family 6: sigma b / (1 - b) with b = rbeta(alpha, beta), equal to `rbetapr` under set.seed on 6 settings of 5 draws (oracle_extradistr). `rtriang` (at u = 0.168 gives 1.14 where the inverse CDF gives 0.71) and `rtnorm` do not follow the quantile function at u or 1 - u and are left open. Linux pending.

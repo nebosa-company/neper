@@ -715,7 +715,7 @@ fn rgen4(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64, p4: f64) -> f64 
     ret lgser_q(u, p1)
 }
 
-// draws that go through the generators of R: 0 inverse gamma (alpha, beta), 1 inverse chi-squared (nu, tau), 2 location-scale t (nu, mu, sigma), 3 half-t (nu, sigma), 4 fatigue (alpha, beta, mu), 5 non-standard beta (s1, s2, min, max; p4 is read as max)
+// draws that go through the generators of R: 0 inverse gamma (alpha, beta), 1 inverse chi-squared (nu, tau), 2 location-scale t (nu, mu, sigma), 3 half-t (nu, sigma), 4 fatigue (alpha, beta, mu), 5 non-standard beta (s1, s2, min, max; p4 is read as max), 6 beta-prime (alpha, beta, sigma)
 fn rgen6(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64, p4: f64) -> f64 {
     if family == 0usize { ret 1.0f64 / rd.rgamma(r, p1, 1.0f64 / p2) }
     if family == 1usize { ret 1.0f64 / rd.rgamma(r, p1 / 2.0f64, 2.0f64 / (p1 * p2)) }
@@ -726,6 +726,10 @@ fn rgen6(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64, p4: f64) -> f64 
         let h = p1 * z / 2.0f64
         let w = h + math.sqrt[f64](h * h + 1.0f64)
         ret p3 + p2 * w * w
+    }
+    if family == 6usize {
+        let bt = rd.rbeta(r, p1, p2)
+        ret p3 * bt / (1.0f64 - bt)
     }
     ret p3 + (p4 - p3) * rd.rbeta(r, p1, p2)
 }

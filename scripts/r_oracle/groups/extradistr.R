@@ -133,8 +133,8 @@ for (rep in 1:30) { sd <- sample(1:100000, 1); fam <- (rep - 1) %% 3; n <- sampl
   set.seed(sd); v <- switch(fam + 1, rtbinom(5, n, pr, a, b), rtpois(5, l, a, bb), rlgser(5, th)); pp <- switch(fam + 1, c(n, pr, a, b), c(l, a, bb, 0), c(th, 0, 0, 0))
   for (j in 1:5) cases[[length(cases) + 1]] <- case("rg4", c(fam, sd, pp, j - 1), v[j], rel = 0, abs = 0) }
 # generators through R's gamma, t, normal and beta: "rg6" (family 0 invgamma 1 invchisq 2 lst 3 ht 4 fatigue 5 nsbeta, seed, p1..p4, index)
-for (rep in 1:36) { sd <- sample(1:100000, 1); fam <- (rep - 1) %% 6; a1 <- runif(1, 1.5, 6); b1 <- runif(1, 0.5, 3); m1 <- rnorm(1); s1 <- runif(1, 0.5, 2); lo <- runif(1, -2, 0); hi <- lo + runif(1, 1, 3)
-  set.seed(sd); v <- switch(fam + 1, rinvgamma(5, a1, b1), rinvchisq(5, a1, b1), rlst(5, a1, m1, s1), rht(5, a1, s1), rfatigue(5, a1 / 3, b1, m1), rnsbeta(5, a1, b1, lo, hi))
-  pp <- switch(fam + 1, c(a1, b1, 0, 0), c(a1, b1, 0, 0), c(a1, m1, s1, 0), c(a1, s1, 0, 0), c(a1 / 3, b1, m1, 0), c(a1, b1, lo, hi))
+for (rep in 1:42) { sd <- sample(1:100000, 1); fam <- (rep - 1) %% 7; a1 <- runif(1, 1.5, 6); b1 <- runif(1, 0.5, 3); m1 <- rnorm(1); s1 <- runif(1, 0.5, 2); lo <- runif(1, -2, 0); hi <- lo + runif(1, 1, 3)
+  set.seed(sd); v <- switch(fam + 1, rinvgamma(5, a1, b1), rinvchisq(5, a1, b1), rlst(5, a1, m1, s1), rht(5, a1, s1), rfatigue(5, a1 / 3, b1, m1), rnsbeta(5, a1, b1, lo, hi), rbetapr(5, a1, b1, s1))
+  pp <- switch(fam + 1, c(a1, b1, 0, 0), c(a1, b1, 0, 0), c(a1, m1, s1, 0), c(a1, s1, 0, 0), c(a1 / 3, b1, m1, 0), c(a1, b1, lo, hi), c(a1, b1, s1, 0))
   for (j in 1:5) cases[[length(cases) + 1]] <- case("rg6", c(fam, sd, pp, j - 1), v[j], rel = 1e-9, abs = 1e-12) }
 emit("extradistr", "extraDistr", list(cases))
