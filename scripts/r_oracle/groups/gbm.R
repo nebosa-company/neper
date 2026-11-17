@@ -1,7 +1,7 @@
 # gbm: boosted trees, the whole fit compared with R's. The fixture rebuilds each data set from its seed with the same draws (rnorm, runif, rexp) and fits it, so a case carries
 # only the configuration.
 #   args: (data_seed, dist, n, p, ntrees, shrinkage, depth, minobs, bag, train.fraction, fit_seed, par, wflag, mono, cv, na, more, out, a, b, c)
-#   mono: 0 none, 1 var.monotone c(1, -1, 0...), 2 offset 0.3 * V2
+#   mono: 0 none, 1 var.monotone c(1, -1, 0...), 2 offset 0.3 * V2, 3 V1 a factor of six bands
 #   dist: 0 gaussian 1 bernoulli 2 poisson 3 adaboost 4 laplace 5 quantile(par = alpha) 6 huberized 7 tdist(par = df) 8 coxph 9 multinomial 10 pairwise conc 11 ndcg 12 map 13 mrr
 #   out:  1 fit[a] (class c) 2 train.error[a] 3 valid.error[a] 4 oobag.improve[a] 5 relative.influence var a over b trees 6 initF 7 predict(link) row a, b trees, class c
 #         8 predict(response) 9 sum(train.error) 10 sum(valid.error) 11 sum(oobag.improve) 12 cv.error[a] 13 cv.fitted[a] 14 gbm.perf (a = 1 test, 2 cv, 3 OOB)
@@ -43,6 +43,8 @@ run_gbm <- function(g) {
   fo <- y ~ .
   if (g$dist >= 10) { df$grp <- sprintf("g%02d", dat$grp); fo <- as.formula(paste("y ~", paste0("V", 1:g$p, collapse = " + "))) }
   if (g$dist == 8) { df$st <- dat$st; names(df)[1] <- "tm"; fo <- Surv(tm, st) ~ . }
+  catf <- function(v) factor(letters[pmin(5, pmax(0, floor((v + 2.4) / 0.8))) + 1])
+  if (g$mono == 3) df$V1 <- catf(dat$X[, 1])
   dist <- switch(as.character(g$dist), "0" = "gaussian", "1" = "bernoulli", "2" = "poisson", "3" = "adaboost", "4" = "laplace", "5" = list(name = "quantile", alpha = g$par), "6" = "huberized", "7" = list(name = "tdist", df = g$par), "8" = "coxph", "9" = "multinomial", { d <- list(name = "pairwise", metric = c("conc", "ndcg", "map", "mrr")[g$dist - 9], group = "grp"); if (g$par > 0) d$max.rank <- g$par; d })
   args <- list(formula = fo, distribution = dist, data = df, n.trees = g$nt, shrinkage = g$sh, interaction.depth = g$d, n.minobsinnode = g$mo, bag.fraction = g$bag, train.fraction = g$tf, cv.folds = g$cv, n.cores = 1, keep.data = TRUE, verbose = FALSE)
   if (g$wflag == 1) args$weights <- dat$w
@@ -59,6 +61,7 @@ run_gbm <- function(g) {
   Xn <- matrix(r3(rnorm(nn * g$p)), nn, g$p)
   if (g$na == 1) Xn[matrix(runif(nn * g$p) < 0.15, nn, g$p)] <- NA
   dn <- data.frame(Xn); names(dn) <- paste0("V", 1:g$p)
+  if (g$mono == 3) dn$V1 <- catf(Xn[, 1])
   list(f = f, dn = dn, df = df)
 }
 gcases <- function(g, outs, rel = 1e-9, abs = 1e-12) {

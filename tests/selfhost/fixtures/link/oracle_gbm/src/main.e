@@ -12,13 +12,13 @@ use e.test.oracle as oracle
 
 fn r3(x: f64, d: f64) -> f64 { ret math.floor[f64](x * d + 0.5f64) / d }
 
-type Data = struct { x: []f64, y: []f64, st: []f64, w: []f64, g: []f64 }
+type Data = struct { x: []f64, y: []f64, st: []f64, w: []f64, g: []f64, map: []f64, vc: usize }
 
-fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool, na: bool) -> (Data, err) {
+fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool, na: bool, catv: bool) -> (Data, err) {
     var rg: rng.Rng = zero
     rng.seed(&rg, seed)
     var bad = 0usize
-    var d = Data{ x: gb.af(a, n * p, &bad), y: gb.af(a, n, &bad), st: gb.af(a, n, &bad), w: gb.af(a, n, &bad), g: gb.af(a, n, &bad) }
+    var d = Data{ x: gb.af(a, n * p, &bad), y: gb.af(a, n, &bad), st: gb.af(a, n, &bad), w: gb.af(a, n, &bad), g: gb.af(a, n, &bad), map: gb.af(a, 6usize, &bad), vc: 0usize }
     if bad != 0usize { ret (d, gb.NoMemory) }
     var i = 0usize
     while i < n * p {
@@ -138,7 +138,40 @@ fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool, 
             i += 1usize
         }
     }
+    if catv {
+        // the first predictor becomes a factor: six bands of x, the bands present numbered in order (as.numeric(factor(x)) - 1)
+        var present: [6]bool = zero
+        i = 0usize
+        while i < n {
+            present[usize(catcode(d.x[i]))] = true
+            i += 1usize
+        }
+        var k = 0usize
+        var dense = 0usize
+        while k < 6usize {
+            if present[k] {
+                d.map[k] = f64(dense)
+                dense += 1usize
+            } else {
+                d.map[k] = 0.0f64 / 0.0f64
+            }
+            k += 1usize
+        }
+        d.vc = dense
+        i = 0usize
+        while i < n {
+            d.x[i] = d.map[usize(catcode(d.x[i]))]
+            i += 1usize
+        }
+    }
     ret (d, ok)
+}
+
+fn catcode(x: f64) -> f64 {
+    var v = math.floor[f64]((x + 2.4f64) / 0.8f64)
+    if v < 0.0f64 { v = 0.0f64 }
+    if v > 5.0f64 { v = 5.0f64 }
+    ret v
 }
 
 fn same_config(x: []const f64, y: []const f64) -> bool {
@@ -217,9 +250,7 @@ fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, dx: []const f64, 
         var res = 20usize
         if nv == 2usize { res = 7usize }
         if nv == 3usize { res = 4usize }
-        var rows = res
-        if nv == 2usize { rows = 49usize }
-        if nv == 3usize { rows = 64usize }
+        let rows = gr.plot_rows(f, vars[0usize..nv], nv, res)
         let (po, e) = mem.alloc[f64](a, rows * f.nclass)
         if e != ok { ret nan }
         if gr.plot_grid(a, f, vars[0usize..nv], nv, res, ib, po) != ok { ret nan }
@@ -273,7 +304,7 @@ fn run_file(a: *mem.Arena, path: str) -> usize {
             let n = usize(z[2usize])
             let p = usize(z[3usize])
             let dist = usize(z[1usize])
-            let (dat, de) = make(a, i64(z[0usize]), dist, n, p, z[12usize] == 1.0f64, z[15usize] == 1.0f64)
+            let (dat, de) = make(a, i64(z[0usize]), dist, n, p, z[12usize] == 1.0f64, z[15usize] == 1.0f64, z[13usize] == 3.0f64)
             var mono: []f64 = zero
             var bad = 0usize
             if z[13usize] == 1.0f64 {
@@ -290,6 +321,13 @@ fn run_file(a: *mem.Arena, path: str) -> usize {
                 dn[i] = r3(rng.norm(&rg), 1000.0f64)
                 i += 1usize
             }
+            if z[13usize] == 3.0f64 {
+                i = 0usize
+                while i < 12usize {
+                    dn[i] = dat.map[usize(catcode(dn[i]))]
+                    i += 1usize
+                }
+            }
             if z[15usize] == 1.0f64 {
                 i = 0usize
                 while i < 12usize * p {
@@ -304,6 +342,18 @@ fn run_file(a: *mem.Arena, path: str) -> usize {
             var ww: []f64 = zero
             if z[12usize] == 1.0f64 { ww = dat.w }
             var gpv: []f64 = zero
+            var vcl: []usize = zero
+            if z[13usize] == 3.0f64 {
+                let (vv, ve) = mem.alloc[usize](a, p)
+                if ve != ok { os.exit(4) }
+                var vi = 0usize
+                while vi < p {
+                    vv[vi] = 0usize
+                    vi += 1usize
+                }
+                vv[0usize] = dat.vc
+                vcl = vv
+            }
             var offv: []f64 = zero
             if z[13usize] == 2.0f64 {
                 offv = gb.af(a, n, &bad)
@@ -314,7 +364,7 @@ fn run_file(a: *mem.Arena, path: str) -> usize {
                 }
             }
             if dist >= 10usize { gpv = dat.g }
-            let inp = gr.Input{ dist: dist, n: n, p: p, ntrees: usize(z[4usize]), shrinkage: z[5usize], depth: usize(z[6usize]), minobs: usize(z[7usize]), bag: z[8usize], trainfrac: z[9usize], par: z[11usize], maxrank: maxrank, cv: usize(z[14usize]), ncores1: true, stratify: false, ntrain: 0usize, ngroups: 0usize, off: offv,
+            let inp = gr.Input{ dist: dist, n: n, p: p, ntrees: usize(z[4usize]), shrinkage: z[5usize], depth: usize(z[6usize]), minobs: usize(z[7usize]), bag: z[8usize], trainfrac: z[9usize], par: z[11usize], maxrank: maxrank, cv: usize(z[14usize]), ncores1: true, stratify: false, ntrain: 0usize, ngroups: 0usize, off: offv, vclass: vcl,
                 x: dat.x, y: dat.y, status: st, w: ww, group: gpv, mono: mono }
             rng.seed(&rg, i64(z[10usize]))
             var (f, fe) = gr.gbm(a, &rg, &inp)

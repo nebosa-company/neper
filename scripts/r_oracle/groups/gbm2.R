@@ -36,4 +36,16 @@ for (k in 1:60) {
   if (dd >= 10) nn <- 150
   G(gcfg(600 + k, dd, n = nn, nt = 40, d = sample(1:3, 1), mo = sample(c(3, 5, 8), 1), bag = sample(c(0.5, 0.65, 0.8), 1), sh = sample(c(0.05, 0.1, 0.3), 1), par = if (dd == 5) 0.4 else if (dd == 7) 3 else 0, p = sample(3:4, 1), fseed = k), if (dd == 9) stdm(40, nrow = nn, nodes = 4) else sm(40, nn))
 }
+cat("factors
+")
+fp <- function() list(list(30, 0, 20, 1), list(30, 3, 20, 1), list(30, 4, 20, 1), list(30, 2, 20, 12), list(30, 9, 20, 12), list(30, 20, 20, 21), list(30, 33, 20, 21), list(30, 4, 20, 123), list(30, 40, 20, 123), list(30, 60, 20, 123))
+for (dd in c(0, 1, 2, 3, 4, 5, 6, 7, 8)) {
+  pr <- if (dd == 7) 4 else if (dd == 5) 0.6 else 0
+  G(gcfg(700 + dd, dd, mono = 3, par = pr, nt = 30, fseed = 2 + dd, d = 2 + dd %% 2), c(std(30), fp()))
+  G(gcfg(710 + dd, dd, mono = 3, par = pr, nt = 25, bag = 1, tf = 0.8, wflag = 1, d = 3, fseed = 3), std(25, tf = 0.8, bag = 1))
+}
+G(gcfg(720, 9, n = 150, mono = 3, nt = 20), stdm(20, nrow = 150))
+G(gcfg(721, 11, n = 150, mono = 3, nt = 25, mo = 3, bag = 0.6), std(25, nrow = 150, bag = 0.6))
+G(gcfg(722, 0, mono = 3, nt = 20, more = 10, cv = 3, fseed = 5), c(std(30), cvo(20)))
+G(gcfg(723, 1, mono = 3, nt = 30, mo = 2, d = 4, n = 300, bag = 0.7), std(30, nrow = 300))
 emit("gbm2", c("gbm", "survival"), cases)

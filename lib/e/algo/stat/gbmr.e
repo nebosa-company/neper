@@ -14,7 +14,7 @@ error BadInput
 
 type Input = struct {
     dist: usize, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, bag: f64, trainfrac: f64,
-    par: f64, maxrank: usize, cv: usize, ncores1: bool, stratify: bool, ntrain: usize, ngroups: usize, off: []const f64,
+    par: f64, maxrank: usize, cv: usize, ncores1: bool, stratify: bool, ntrain: usize, ngroups: usize, off: []const f64, vclass: []const usize,
     x: []const f64, y: []const f64, status: []const f64, w: []const f64, group: []const f64, mono: []const f64
 }
 
@@ -182,7 +182,7 @@ fn fit_rows(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, x: []const f64, y: []
     if cf.dist == 5usize { alpha = cf.par }
     if cf.dist == 7usize { nu = cf.par }
     let sp = gb.Spec{ dist: cf.dist, n: n, p: cf.p, ntrain: ntrain, nclass: nclass, ntrees: cf.ntrees, shrinkage: cf.shrinkage, depth: cf.depth, minobs: cf.minobs, bag: cf.bag,
-        alpha: alpha, nu: nu, maxrank: cf.maxrank, ngroups: 0usize, x: xs, y: yy, w: ww, misc: ms, mono: mono, off: oo }
+        alpha: alpha, nu: nu, maxrank: cf.maxrank, ngroups: 0usize, x: xs, y: yy, w: ww, misc: ms, mono: mono, off: oo, vclass: cf.vclass, catold: 0usize }
     let (m, fe) = gb.fit(a, &sp, rg, fd.fit)
     if fe != ok { ret (fd, fe) }
     fd.sp = sp
@@ -556,6 +556,7 @@ fn relative_influence(a: *mem.Arena, f: *const Fitted, use_trees: usize, out: []
 fn more(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, nnew: usize) -> (Fitted, err) {
     var sp2 = f.sp
     sp2.ntrees = nnew
+    sp2.catold = f.m.ncs
     if f.dist == 9usize {
         // gbm.more finds each row's class with max.col(), which draws one uniform for every tie it meets: a one-hot row of class k ties k - 1 zeros before it reaches its one
         var r = 0usize
@@ -643,6 +644,20 @@ fn more(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, nnew: usize) -> (Fitted, 
         i += 1usize
     }
     m.f = m2.f
+    let ncs2 = f.m.ncs + m2.ncs
+    m.cs = gb.ai(a, ncs2 * f.m.maxk + 1usize, &bad)
+    if bad != 0usize { ret (zero_fit(), gb.NoMemory) }
+    var ci = 0usize
+    while ci < f.m.ncs * f.m.maxk {
+        m.cs[ci] = f.m.cs[ci]
+        ci += 1usize
+    }
+    ci = 0usize
+    while ci < m2.ncs * f.m.maxk {
+        m.cs[f.m.ncs * f.m.maxk + ci] = m2.cs[ci]
+        ci += 1usize
+    }
+    m.ncs = ncs2
     var out = *f
     out.m = m
     out.sp = sp2
@@ -668,42 +683,55 @@ fn more(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, nnew: usize) -> (Fitted, 
 // first varying fastest, and the fit at those rows with the other variables averaged out; out holds res^nv rows by nclass
 fn plot_grid(a: *mem.Arena, f: *const Fitted, vars: []const usize, nv: usize, res: usize, use_trees: usize, out: []f64) -> err {
     var bad = 0usize
-    var rows = 1usize
+    var rows = plot_rows(f, vars, nv, res)
     var q = 0usize
+    var maxres = res
     while q < nv {
-        rows = rows * res
+        if f.m.vclass[vars[q]] > maxres { maxres = f.m.vclass[vars[q]] }
         q += 1usize
     }
     let gx = gb.af(a, rows * nv, &bad)
-    let lev = gb.af(a, res, &bad)
+    let lev = gb.af(a, maxres, &bad)
     let scr = gb.af(a, 2usize * f.m.stride + 4usize, &bad)
     if bad != 0usize { ret gb.NoMemory }
     q = 0usize
     while q < nv {
-        let from = f.lo[vars[q]]
-        let to = f.hi[vars[q]]
-        lev[0usize] = from
-        lev[res - 1usize] = to
-        let n1 = f64(res - 1usize)
-        let del = to - from
-        var k = 1usize
-        while k + 1usize < res {
-            if from == to {
-                lev[k] = from
-            } else {
-                lev[k] = from + f64(k) * (del / n1)
+        var rq = res
+        if f.m.vclass[vars[q]] > 0usize {
+            rq = f.m.vclass[vars[q]]
+            var k0 = 0usize
+            while k0 < rq {
+                lev[k0] = f64(k0)
+                k0 += 1usize
             }
-            k += 1usize
+        } else {
+            let from = f.lo[vars[q]]
+            let to = f.hi[vars[q]]
+            lev[0usize] = from
+            lev[res - 1usize] = to
+            let n1 = f64(res - 1usize)
+            let del = to - from
+            var k = 1usize
+            while k + 1usize < res {
+                if from == to {
+                    lev[k] = from
+                } else {
+                    lev[k] = from + f64(k) * (del / n1)
+                }
+                k += 1usize
+            }
         }
         var stepdiv = 1usize
         var qq = 0usize
         while qq < q {
-            stepdiv = stepdiv * res
+            var rr = res
+            if f.m.vclass[vars[qq]] > 0usize { rr = f.m.vclass[vars[qq]] }
+            stepdiv = stepdiv * rr
             qq += 1usize
         }
         var r = 0usize
         while r < rows {
-            gx[q * rows + r] = lev[(r / stepdiv) % res]
+            gx[q * rows + r] = lev[(r / stepdiv) % rq]
             r += 1usize
         }
         q += 1usize
@@ -900,4 +928,19 @@ fn cls_count(cf: *const Input, y: []const f64, n: usize) -> usize {
         i += 1usize
     }
     ret k
+}
+
+// the rows of the plot.gbm grid: res points for a numeric variable, the levels for a factor
+fn plot_rows(f: *const Fitted, vars: []const usize, nv: usize, res: usize) -> usize {
+    var rows = 1usize
+    var q = 0usize
+    while q < nv {
+        if f.m.vclass[vars[q]] > 0usize {
+            rows = rows * f.m.vclass[vars[q]]
+        } else {
+            rows = rows * res
+        }
+        q += 1usize
+    }
+    ret rows
 }

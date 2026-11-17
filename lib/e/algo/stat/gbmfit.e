@@ -19,14 +19,15 @@ type Spec = struct {
     dist: usize, n: usize, p: usize, ntrain: usize, nclass: usize,
     ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, bag: f64,
     alpha: f64, nu: f64, maxrank: usize, ngroups: usize,
-    x: []const f64, y: []const f64, w: []const f64, misc: []const f64, mono: []const f64, off: []const f64
+    x: []const f64, y: []const f64, w: []const f64, misc: []const f64, mono: []const f64, off: []const f64, vclass: []const usize, catold: usize
 }
 
 // the fitted trees in the layout of R's object$trees: tree (t, k) occupies stride = 3 depth + 1 slots from (t nclass + k) stride
 type Model = struct {
     nclass: usize, ntrees: usize, depth: usize, p: usize, stride: usize,
     initf: f64, f: []f64, train_err: []f64, valid_err: []f64, oobag: []f64,
-    nnodes: []usize, tvar: []i64, tcode: []f64, tleft: []i64, tright: []i64, tmiss: []i64, terr: []f64, twt: []f64, tpred: []f64
+    nnodes: []usize, tvar: []i64, tcode: []f64, tleft: []i64, tright: []i64, tmiss: []i64, terr: []f64, twt: []f64, tpred: []f64,
+    maxk: usize, ncs: usize, cs: []i64, vclass: []usize
 }
 
 type NS = struct {
@@ -34,7 +35,7 @@ type NS = struct {
     best_var: usize, best_val: f64, best_imp: f64,
     bl_sumz: f64, bl_w: f64, bl_n: usize, br_sumz: f64, br_w: f64, br_n: usize, bm_sumz: f64, bm_w: f64, bm_n: usize,
     cm_sumz: f64, cm_w: f64, cm_n: usize, cl_sumz: f64, cl_w: f64, cl_n: usize, cr_sumz: f64, cr_w: f64, cr_n: usize,
-    cur_imp: f64, cur_var: usize, cur_val: f64, last_x: f64, node: usize
+    cur_imp: f64, cur_var: usize, cur_val: f64, last_x: f64, node: usize, best_classes: usize, cur_classes: usize
 }
 
 type Ctx = struct {
@@ -45,6 +46,7 @@ type Ctx = struct {
     prob: []f64, stepprob: []f64, arr: []f64, w2: []f64, num: []f64, den: []f64, mx: []f64, mn: []f64,
     idx: []usize, tmp: []usize, stk: []usize, stp: []usize, sts: []usize, ids: []usize, scr: []f64,
     hm: []f64, k2n: []usize, n2k: []usize,
+    maxk: usize, gsum: []f64, gw: []f64, gmean: []f64, gn: []usize, curcat: []usize, bestcat: []usize, nd_ncat: []usize, nd_cats: []usize,
     off: []f64, hasoff: bool, rg: *rng.Rng, hess: []f64, rscore: []f64, ritem: []usize, rrank: []usize, rkpos: []usize, rankw: []f64, cutoff: usize
 }
 
@@ -361,11 +363,23 @@ fn ns_set(c: *Ctx, k: usize, sumz: f64, w: f64, nn: usize, node: usize) {
     c.ns[k].cur_val = 0.0f64 - 1.0f64 / 0.0f64
     c.ns[k].split = false
     c.ns[k].node = node
+    c.ns[k].best_classes = 0usize
+    c.ns[k].cur_classes = 0usize
 }
 
 fn ns_reset(c: *Ctx, k: usize, iv: usize) {
     if c.ns[k].split { ret }
     c.ns[k].cur_var = iv
+    var cls = 0usize
+    if c.sp.vclass.len > iv { cls = c.sp.vclass[iv] }
+    c.ns[k].cur_classes = cls
+    var gi = 0usize
+    while gi < cls {
+        c.gsum[k * c.maxk + gi] = 0.0f64
+        c.gw[k * c.maxk + gi] = 0.0f64
+        c.gn[k * c.maxk + gi] = 0usize
+        gi += 1usize
+    }
     c.ns[k].cl_sumz = 0.0f64
     c.ns[k].cl_w = 0.0f64
     c.ns[k].cl_n = 0usize
@@ -395,6 +409,13 @@ fn ns_incorporate(c: *Ctx, k: usize, x: f64, z: f64, w: f64, mono: f64) {
     }
         ret
     }
+    if c.ns[k].cur_classes > 0usize {
+        let cat = usize(x)
+        c.gsum[k * c.maxk + cat] += wz
+        c.gw[k * c.maxk + cat] += w
+        c.gn[k * c.maxk + cat] += 1usize
+        ret
+    }
     c.ns[k].cur_val = 0.5f64 * (c.ns[k].last_x + x)
     var ok_split = false
     if c.ns[k].last_x != x && c.ns[k].cl_n >= c.sp.minobs && c.ns[k].cr_n >= c.sp.minobs {
@@ -409,6 +430,7 @@ fn ns_incorporate(c: *Ctx, k: usize, x: f64, z: f64, w: f64, mono: f64) {
         if c.ns[k].cur_imp > c.ns[k].best_imp {
             c.ns[k].best_var = c.ns[k].cur_var
             c.ns[k].best_val = c.ns[k].cur_val
+            c.ns[k].best_classes = 0usize
             c.ns[k].bl_sumz = c.ns[k].cl_sumz
             c.ns[k].bl_w = c.ns[k].cl_w
             c.ns[k].bl_n = c.ns[k].cl_n
@@ -445,6 +467,86 @@ fn ns_wrapup(c: *Ctx, k: usize) {
     }
 }
 
+// R's rsort_with_index: Shell sort of x[0..m] ascending, the index carried along (not stable)
+fn rsort_index(x: []f64, idx: []usize, m: usize) {
+    var h = 1usize
+    while h <= m / 9usize { h = 3usize * h + 1usize }
+    while h > 0usize {
+        var i = h
+        while i < m {
+            let v = x[i]
+            let iv = idx[i]
+            var j = i
+            while j >= h && x[j - h] > v {
+                x[j] = x[j - h]
+                idx[j] = idx[j - h]
+                j -= h
+            }
+            x[j] = v
+            idx[j] = iv
+            i += 1usize
+        }
+        h = h / 3usize
+    }
+}
+
+fn wsub(a: usize, b: usize) -> usize {
+    if a >= b { ret a - b }
+    ret UMAX - (b - a) + 1usize
+}
+
+// node_search.cpp EvaluateCategoricalSplit: the categories ordered by their mean working response, every cut of that order tried
+fn ns_eval_cat(c: *Ctx, k: usize) {
+    if c.ns[k].split { ret }
+    let cls = c.ns[k].cur_classes
+    let b = k * c.maxk
+    var fin = 0usize
+    var i = 0usize
+    while i < cls {
+        c.curcat[b + i] = i
+        if c.gw[b + i] != 0.0f64 {
+            c.gmean[b + i] = c.gsum[b + i] / c.gw[b + i]
+            fin += 1usize
+        } else {
+            c.gmean[b + i] = 1.0f64 / 0.0f64
+        }
+        i += 1usize
+    }
+    rsort_index(c.gmean[b..b + cls], c.curcat[b..b + cls], cls)
+    i = 0usize
+    while fin > 1usize && i < fin - 1usize {
+        c.ns[k].cur_val = f64(i)
+        let g = c.curcat[b + i]
+        c.ns[k].cl_sumz += c.gsum[b + g]
+        c.ns[k].cl_w += c.gw[b + g]
+        c.ns[k].cl_n += c.gn[b + g]
+        c.ns[k].cr_sumz -= c.gsum[b + g]
+        c.ns[k].cr_w -= c.gw[b + g]
+        c.ns[k].cr_n = wsub(c.ns[k].cr_n, c.gn[b + g])
+        c.ns[k].cur_imp = improvement(c.ns[k].cl_w, c.ns[k].cr_w, c.ns[k].cm_w, c.ns[k].cl_sumz, c.ns[k].cr_sumz, c.ns[k].cm_sumz)
+        if c.ns[k].cl_n >= c.sp.minobs && c.ns[k].cr_n >= c.sp.minobs && c.ns[k].cur_imp > c.ns[k].best_imp {
+            c.ns[k].best_val = c.ns[k].cur_val
+            if c.ns[k].best_var != c.ns[k].cur_var {
+                c.ns[k].best_var = c.ns[k].cur_var
+                c.ns[k].best_classes = cls
+                var j = 0usize
+                while j < cls {
+                    c.bestcat[b + j] = c.curcat[b + j]
+                    j += 1usize
+                }
+            }
+            c.ns[k].bl_sumz = c.ns[k].cl_sumz
+            c.ns[k].bl_w = c.ns[k].cl_w
+            c.ns[k].bl_n = c.ns[k].cl_n
+            c.ns[k].br_sumz = c.ns[k].cr_sumz
+            c.ns[k].br_w = c.ns[k].cr_w
+            c.ns[k].br_n = c.ns[k].cr_n
+            c.ns[k].best_imp = c.ns[k].cur_imp
+        }
+        i += 1usize
+    }
+}
+
 fn new_node(c: *Ctx, pred: f64, w: f64, nn: usize) -> usize {
     let k = c.nnode
     c.nnode += 1usize
@@ -458,6 +560,7 @@ fn new_node(c: *Ctx, pred: f64, w: f64, nn: usize) -> usize {
     c.nd_left[k] = UMAX
     c.nd_right[k] = UMAX
     c.nd_miss[k] = UMAX
+    c.nd_ncat[k] = 0usize
     ret k
 }
 
@@ -482,6 +585,7 @@ fn get_best_split(c: *Ctx, zoff: usize) {
         }
         k = 0usize
         while k < c.nterm {
+            if c.sp.vclass.len > iv && c.sp.vclass[iv] > 0usize { ns_eval_cat(c, k) }
             ns_wrapup(c, k)
             k += 1usize
         }
@@ -533,6 +637,14 @@ fn grow(c: *Ctx, zoff: usize) {
         c.nd_var[sn] = c.ns[ib].best_var
         c.nd_split[sn] = c.ns[ib].best_val
         c.nd_imp[sn] = c.ns[ib].best_imp
+        if c.ns[ib].best_classes > 0usize {
+            c.nd_ncat[sn] = usize(c.ns[ib].best_val) + 1usize
+            var ci = 0usize
+            while ci < c.nd_ncat[sn] {
+                c.nd_cats[sn * c.maxk + ci] = c.bestcat[ib * c.maxk + ci]
+                ci += 1usize
+            }
+        }
         c.nd_left[sn] = lft
         c.nd_right[sn] = rgt
         c.nd_miss[sn] = mis
@@ -548,6 +660,14 @@ fn grow(c: *Ctx, zoff: usize) {
                 let xv = c.sp.x[sv * n + i]
                 if xv != xv {
                     c.assign[i] = c.nterm - 1usize
+                } else if c.nd_ncat[sn] > 0usize {
+                    var inleft = false
+                    var ci = 0usize
+                    while ci < c.nd_ncat[sn] {
+                        if c.nd_cats[sn * c.maxk + ci] == usize(xv) { inleft = true }
+                        ci += 1usize
+                    }
+                    if !inleft { c.assign[i] = c.nterm - 2usize }
                 } else if !(xv < sval) {
                     c.assign[i] = c.nterm - 2usize
                 }
@@ -1328,6 +1448,21 @@ fn transfer(c: *Ctx, m: *Model, ti: usize, shrink: f64) {
         } else {
             m.tvar[at] = i64(c.nd_var[nd])
             m.tcode[at] = c.nd_split[nd]
+            if c.nd_ncat[nd] > 0usize {
+                m.tcode[at] = f64(m.ncs + c.sp.catold)
+                let lv = c.sp.vclass[c.nd_var[nd]]
+                var li = 0usize
+                while li < lv {
+                    m.cs[m.ncs * m.maxk + li] = 1i64
+                    li += 1usize
+                }
+                li = 0usize
+                while li < c.nd_ncat[nd] {
+                    m.cs[m.ncs * m.maxk + c.nd_cats[nd * c.maxk + li]] = 0i64 - 1i64
+                    li += 1usize
+                }
+                m.ncs += 1usize
+            }
             m.terr[at] = c.nd_imp[nd]
             m.twt[at] = c.nd_w[nd]
             m.tpred[at] = shrink * c.nd_pred[nd]
@@ -1356,6 +1491,18 @@ fn tree_value(c: *Ctx, i: usize) -> f64 {
         let xv = c.sp.x[c.nd_var[nd] * c.sp.n + i]
         if xv != xv {
             nd = c.nd_miss[nd]
+        } else if c.nd_ncat[nd] > 0usize {
+            var inleft = false
+            var ci = 0usize
+            while ci < c.nd_ncat[nd] {
+                if c.nd_cats[nd * c.maxk + ci] == usize(xv) { inleft = true }
+                ci += 1usize
+            }
+            if inleft {
+                nd = c.nd_left[nd]
+            } else {
+                nd = c.nd_right[nd]
+            }
         } else if xv < c.nd_split[nd] {
             nd = c.nd_left[nd]
         } else {
@@ -1423,6 +1570,12 @@ fn fit(a: *mem.Arena, sp: *const Spec, rg: *rng.Rng, fold: []const f64) -> (Mode
     let nc = s.nclass
     let dp = s.depth
     let stride = 3usize * dp + 1usize
+    var maxk = 1usize
+    var vq = 0usize
+    while vq < s.vclass.len {
+        if s.vclass[vq] > maxk { maxk = s.vclass[vq] }
+        vq += 1usize
+    }
     let nterm = 2usize * dp + 1usize
     var bad = 0usize
     var pwork = 1usize
@@ -1437,11 +1590,18 @@ fn fit(a: *mem.Arena, sp: *const Spec, rg: *rng.Rng, fold: []const f64) -> (Mode
         prob: af(a, pwork, &bad), stepprob: af(a, pwork, &bad), arr: af(a, n, &bad), w2: af(a, n, &bad), num: af(a, nterm + 1usize, &bad), den: af(a, nterm + 1usize, &bad), mx: af(a, nterm + 1usize, &bad), mn: af(a, nterm + 1usize, &bad),
         idx: au(a, n, &bad), tmp: au(a, n, &bad), stk: au(a, stride + 3usize, &bad), stp: au(a, stride + 3usize, &bad), sts: au(a, stride + 3usize, &bad), ids: au(a, nterm + 1usize, &bad), scr: af(a, n, &bad),
         hm: af(a, nterm * nterm + 1usize, &bad), k2n: au(a, nterm + 1usize, &bad), n2k: au(a, nterm + 1usize, &bad),
+        maxk: maxk, gsum: af(a, nterm * maxk, &bad), gw: af(a, nterm * maxk, &bad), gmean: af(a, nterm * maxk, &bad), gn: au(a, nterm * maxk, &bad), curcat: au(a, nterm * maxk, &bad), bestcat: au(a, nterm * maxk, &bad), nd_ncat: au(a, stride, &bad), nd_cats: au(a, stride * maxk, &bad),
         off: af(a, n * nc, &bad), hasoff: false, rg: rg, hess: af(a, n, &bad), rscore: af(a, n, &bad), ritem: au(a, n, &bad), rrank: au(a, n, &bad), rkpos: au(a, n + 1usize, &bad), rankw: af(a, n + 2usize, &bad), cutoff: 0usize }
     let tot = s.ntrees * nc
     var m = Model{ nclass: nc, ntrees: s.ntrees, depth: dp, p: s.p, stride: stride, initf: 0.0f64, f: c.f, train_err: af(a, s.ntrees, &bad), valid_err: af(a, s.ntrees, &bad), oobag: af(a, s.ntrees, &bad),
-        nnodes: au(a, tot, &bad), tvar: ai(a, tot * stride, &bad), tcode: af(a, tot * stride, &bad), tleft: ai(a, tot * stride, &bad), tright: ai(a, tot * stride, &bad), tmiss: ai(a, tot * stride, &bad), terr: af(a, tot * stride, &bad), twt: af(a, tot * stride, &bad), tpred: af(a, tot * stride, &bad) }
+        nnodes: au(a, tot, &bad), tvar: ai(a, tot * stride, &bad), tcode: af(a, tot * stride, &bad), tleft: ai(a, tot * stride, &bad), tright: ai(a, tot * stride, &bad), tmiss: ai(a, tot * stride, &bad), terr: af(a, tot * stride, &bad), twt: af(a, tot * stride, &bad), tpred: af(a, tot * stride, &bad),
+        maxk: maxk, ncs: 0usize, cs: ai(a, (tot * dp + 1usize) * maxk, &bad), vclass: au(a, s.p, &bad) }
     var res = af(a, 3usize, &bad)
+    var vi = 0usize
+    while vi < s.vclass.len && vi < s.p {
+        m.vclass[vi] = s.vclass[vi]
+        vi += 1usize
+    }
     if bad != 0usize || dp < 1usize { ret (m, NoMemory) }
     c.totinbag = usize(s.bag * f64(nt))
     if s.off.len == n * nc {
@@ -1538,6 +1698,15 @@ fn predict_link(m: *const Model, xnew: []const f64, nn: usize, use_trees: usize,
                     let xv = xnew[usize(m.tvar[base + nd]) * nn + r]
                     if xv != xv {
                         nd = usize(m.tmiss[base + nd])
+                    } else if m.vclass[usize(m.tvar[base + nd])] > 0usize {
+                        let ind = m.cs[usize(m.tcode[base + nd]) * m.maxk + usize(xv)]
+                        if ind == 0i64 - 1i64 {
+                            nd = usize(m.tleft[base + nd])
+                        } else if ind == 1i64 {
+                            nd = usize(m.tright[base + nd])
+                        } else {
+                            nd = usize(m.tmiss[base + nd])
+                        }
                     } else if xv < m.tcode[base + nd] {
                         nd = usize(m.tleft[base + nd])
                     } else {
@@ -1618,6 +1787,15 @@ fn plot_values(m: *const Model, nv: usize, which: []const usize, x: []const f64,
                             let xv = x[pv * rows + r]
                             if xv != xv {
                                 scr[cnt] = f64(m.tmiss[base + nd])
+                            } else if m.vclass[usize(m.tvar[base + nd])] > 0usize {
+                                let ind = m.cs[usize(m.tcode[base + nd]) * m.maxk + usize(xv)]
+                                if ind == 0i64 - 1i64 {
+                                    scr[cnt] = f64(m.tleft[base + nd])
+                                } else if ind == 1i64 {
+                                    scr[cnt] = f64(m.tright[base + nd])
+                                } else {
+                                    scr[cnt] = f64(m.tmiss[base + nd])
+                                }
                             } else if xv < m.tcode[base + nd] {
                                 scr[cnt] = f64(m.tleft[base + nd])
                             } else {
