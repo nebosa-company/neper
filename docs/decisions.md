@@ -47846,3 +47846,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6844 — extraDistr: the Laplace generator
 
 **Decision.** `extradistr.rgen` family 10 is `rlaplace(n, mu, sigma)`: per value one standard exponential draw followed by one uniform for the sign (mu + sigma e when it exceeds one half, mu - sigma e otherwise). Equal to extraDistr under set.seed on 3 seeded runs of five draws (oracle_extradistr, 1226 cases in all). The triangular generator is not reproduced: its draws do not follow the quantile function at one uniform for either orientation, and the pattern was not recovered. Linux pending.
+
+## D6845 — gld: qgl, dqgl and rgl
+
+**Decision.** `e.algo.stat.gldpkg` has the quantile function `qgl` of the generalised lambda distribution in the FKML parameterisation (with the logarithmic limits when lambda3 or lambda4 is zero, NaN outside [0, 1]) and in the Ramberg-Schmeiser one, the density at the quantile `dqgl` (lambda2 over the sum of the two tail terms, the RS form weighted by lambda3 and lambda4), and `rgl`, the quantile function at one uniform per value. Equal to gld on 600 values from 40 parameter sets (oracle_gld, `rgl` under set.seed). Not here: `pgl` and `dgl` (numerical inversion of the quantile function), the FM5, GPD and VSK parameterisations, the fits, the moments and L-moments. Linux pending.

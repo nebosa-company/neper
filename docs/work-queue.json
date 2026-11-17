@@ -130,10 +130,10 @@
       "group": "CRAN parity",
       "order": 606,
       "title": "lmom and gld: L-moments and the generalized lambda distribution",
-      "score": 0.3,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6098): e.algo.stat.lmom has samlmu, and lmr and qua for exp, gum, glo, gpa, nor, gev and pel for the five closed forms, equal to lmom on 651 values on Windows (oracle_lmom); Linux pending. Open: GEV fit, Pearson III, lognormal, Wakeby, kappa, trimmed, cdf functions, gld. Original: Open (CRAN ranks 480, 485). Small to mid. Acceptance, equal to R: lmom samlmu, lmr and quantile functions and parameter estimation for GLO, GEV, GPD, Pearson III, Wakeby, kappa and the rest; gld dgl, pgl, qgl, rgl under set.seed, and the FKML, moment and starship fits."
+      "evidence": "Partly done (D6098): e.algo.stat.lmom has samlmu, and lmr and qua for exp, gum, glo, gpa, nor, gev and pel for the five closed forms, equal to lmom on 651 values on Windows (oracle_lmom); Linux pending. D6845: e.algo.stat.gldpkg has qgl and dqgl for the fkml and rs parameterisations and rgl under set.seed, equal to gld. Open: GEV fit, Pearson III, lognormal, Wakeby, kappa, trimmed, cdf functions, pgl and dgl, the gld fits. Original: Open (CRAN ranks 480, 485). Small to mid. Acceptance, equal to R: lmom samlmu, lmr and quantile functions and parameter estimation for GLO, GEV, GPD, Pearson III, Wakeby, kappa and the rest; gld dgl, pgl, qgl, rgl under set.seed, and the FKML, moment and starship fits."
     },
     {
       "id": "L389",
