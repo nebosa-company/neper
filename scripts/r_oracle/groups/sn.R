@@ -51,4 +51,20 @@ for (rep in 1:40) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; 
 # psn scalar calls (bivariate normal engine) with tau: (xi, omega, alpha, tau, x)
 for (rep in 1:40) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-8, -3, -0.5, 0.3, 1, 5, 20)[sample(7, 1)]; tau <- c(0, 0.7, -0.5, 1.8, -2)[sample(5, 1)]
   for (z in c(-6, -2.5, -0.4, 0.2, 1, 2.8, 6)) { x <- xi + om * z; add("psnb", c(xi, om, al, tau, x), psn(x, xi, om, al, tau), rel = 1e-8) } }
+# zeta (k, x) and the extended skew-normal cumulants "cumn" (xi, omega, alpha, tau, k)
+for (k in 0:4) for (x in c(-60, -9, -2, -0.3, 0, 0.8, 2.5, 7)) add("zeta", c(k, x), zeta(k, x), rel = 1e-9)
+for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, -0.5, 1, 4)[sample(4, 1)]; tau <- c(0, 0.7, -1.2, 2.5)[sample(4, 1)]
+  cm <- sn.cumulants(xi, om, al, tau); for (k in 1:4) add("cumn", c(xi, om, al, tau, k), unname(cm[k]), rel = 1e-9) }
+# multivariate: args (d, extra, n, seed, index, xi(d), Omega(d*d), alpha(d), x(d)); extra is tau for dmsn/rmsn, nu for dmst/rmst
+mvcase <- function(d) { A <- matrix(round(rnorm(d * d), 2), d, d); Om <- round(crossprod(A) + diag(0.5, d), 4); Om <- (Om + t(Om)) / 2
+  list(xi = round(rnorm(d), 2), Om = Om, al = round(runif(d, -3, 3), 2), x = round(rnorm(d), 2)) }
+mvpack <- function(d, ex, n, sd, idx, p) c(d, ex, n, sd, idx, p$xi, as.numeric(t(p$Om)), p$al, p$x)
+for (rep in 1:30) { d <- c(1, 2, 3, 4)[(rep - 1) %% 4 + 1]; p <- mvcase(d)
+  tau <- c(0, 0.6, -1)[sample(3, 1)]; nu <- c(2.5, 5, 9, 40)[sample(4, 1)]
+  add("dmsn", mvpack(d, tau, 0, 0, 0, p), dmsn(p$x, p$xi, p$Om, p$al, tau), rel = 1e-9)
+  add("dmst", mvpack(d, nu, 0, 0, 0, p), dmst(p$x, p$xi, p$Om, p$al, nu), rel = 1e-9)
+  n <- sample(3:8, 1); sd <- sample(1:100000, 1)
+  set.seed(sd); r <- as.numeric(t(matrix(rmsn(n, p$xi, p$Om, p$al, tau), n, d))); for (k in seq_len(n * d)) add("rmsn", mvpack(d, tau, n, sd, k - 1, p), r[k], rel = 1e-9)
+  nu2 <- c(3, 7.5, 30, Inf)[sample(4, 1)]
+  set.seed(sd); r <- as.numeric(t(matrix(rmst(n, p$xi, p$Om, p$al, nu2), n, d))); for (k in seq_len(n * d)) add("rmst", mvpack(d, nu2, n, sd, k - 1, p), r[k], rel = 1e-9) }
 emit("sn", "sn", list(cases))

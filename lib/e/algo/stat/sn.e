@@ -335,6 +335,292 @@ fn pst(a: *mem.Arena, x: f64, xi: f64, omega: f64, alpha: f64, nu: f64) -> f64 {
     ret p
 }
 
+// ---- zeta and the cumulants of the extended skew-normal ----
+
+fn zeta(k: usize, x: f64) -> f64 {
+    let inf = 1.0f64 / 0.0f64
+    if x < 0.0f64 - 1.0e300f64 {
+        if k == 0usize { ret inf }
+        if k == 1usize { ret inf }
+        if k == 2usize { ret 0.0f64 - 1.0f64 }
+        ret 0.0f64
+    }
+    if x > 1.0e300f64 {
+        if k == 0usize { ret inf }
+        if k == 1usize { ret 0.0f64 }
+        ret 0.0f64
+    }
+    if k == 0usize { ret dist.pnorm(x, 0.0f64, 1.0f64, true, true) + math.log[f64](2.0f64) }
+    if k == 1usize {
+        if x > 0.0f64 - 50.0f64 { ret math.exp[f64](dist.dnorm(x, 0.0f64, 1.0f64, true) - dist.pnorm(x, 0.0f64, 1.0f64, true, true)) }
+        let x2 = x * x
+        ret 0.0f64 - x / (1.0f64 - 1.0f64 / (x2 + 2.0f64) + 1.0f64 / ((x2 + 2.0f64) * (x2 + 4.0f64)) - 5.0f64 / ((x2 + 2.0f64) * (x2 + 4.0f64) * (x2 + 6.0f64)) + 9.0f64 / ((x2 + 2.0f64) * (x2 + 4.0f64) * (x2 + 6.0f64) * (x2 + 8.0f64)) - 129.0f64 / ((x2 + 2.0f64) * (x2 + 4.0f64) * (x2 + 6.0f64) * (x2 + 8.0f64) * (x2 + 10.0f64)))
+    }
+    let z1 = zeta(1usize, x)
+    if k == 2usize { ret 0.0f64 - z1 * (x + z1) }
+    let z2 = zeta(2usize, x)
+    if k == 3usize { ret 0.0f64 - z2 * (x + z1) - z1 * (1.0f64 + z2) }
+    let z3 = zeta(3usize, x)
+    ret 0.0f64 - z3 * (x + 2.0f64 * z1) - 2.0f64 * z2 * (1.0f64 + z2)
+}
+
+// sn.cumulants(xi, omega, alpha, tau): the k-th cumulant, k = 1 to 4, of the extended skew-normal
+fn sn_cumulant(xi: f64, omega: f64, alpha: f64, tau: f64, k: usize) -> f64 {
+    if tau == 0.0f64 { ret st_cumulant(xi, omega, alpha, 1.0f64 / 0.0f64, k) }
+    let delta = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
+    var kap = zeta(k, tau) * math.pow[f64](delta, f64(k))
+    if k == 2usize { kap += 1.0f64 }
+    kap = kap * math.pow[f64](omega, f64(k))
+    if k == 1usize { kap += xi }
+    ret kap
+}
+
+// ---- the multivariate families (small dimension, row-major matrices) ----
+
+// the lower Cholesky factor l of the symmetrised a; false when it is not positive definite
+fn chol_lower(l: []f64, a: []const f64, d: usize) -> bool {
+    var i = 0usize
+    while i < d {
+        var j = 0usize
+        while j < d {
+            l[i * d + j] = 0.0f64
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < d {
+        var j = 0usize
+        while j <= i {
+            var s = (a[i * d + j] + a[j * d + i]) / 2.0f64
+            var k = 0usize
+            while k < j {
+                s -= l[i * d + k] * l[j * d + k]
+                k += 1usize
+            }
+            if i == j {
+                if s <= 0.0f64 { ret false }
+                l[i * d + i] = math.sqrt[f64](s)
+            } else {
+                l[i * d + j] = s / l[j * d + j]
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret true
+}
+
+// x' Omega^-1 x from the factor l by forward substitution
+fn chol_quad(l: []const f64, x: []const f64, d: usize, w: []f64) -> f64 {
+    var q = 0.0f64
+    var i = 0usize
+    while i < d {
+        var s = x[i]
+        var k = 0usize
+        while k < i {
+            s -= l[i * d + k] * w[k]
+            k += 1usize
+        }
+        w[i] = s / l[i * d + i]
+        q += w[i] * w[i]
+        i += 1usize
+    }
+    ret q
+}
+
+// delta of delta.etc(alpha, Omega) into delta; returns alpha' Ocor alpha
+fn mv_delta(alpha: []const f64, omg: []const f64, d: usize, delta: []f64) -> f64 {
+    var aq = 0.0f64
+    var i = 0usize
+    while i < d {
+        var s = 0.0f64
+        var j = 0usize
+        while j < d {
+            s += omg[i * d + j] / math.sqrt[f64](omg[i * d + i] * omg[j * d + j]) * alpha[j]
+            j += 1usize
+        }
+        delta[i] = s
+        aq += alpha[i] * s
+        i += 1usize
+    }
+    i = 0usize
+    while i < d {
+        delta[i] = delta[i] / math.sqrt[f64](1.0f64 + aq)
+        i += 1usize
+    }
+    ret aq
+}
+
+// dmsn at one point x (length d); lg for the log density
+fn dmsn(a: *mem.Arena, x: []const f64, xi: []const f64, omg: []const f64, alpha: []const f64, tau: f64, lg: bool) -> f64 {
+    let d = alpha.len
+    let (l, e1) = mem.alloc[f64](a, d * d)
+    let (w, e2) = mem.alloc[f64](a, d)
+    let (xc, e3) = mem.alloc[f64](a, d)
+    let (dl, e4) = mem.alloc[f64](a, d)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 / 0.0f64 }
+    if !chol_lower(l, omg, d) { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    var logdet = 0.0f64
+    var lin = 0.0f64
+    while i < d {
+        xc[i] = x[i] - xi[i]
+        logdet += 2.0f64 * math.log[f64](l[i * d + i])
+        lin += xc[i] / math.sqrt[f64](omg[i * d + i]) * alpha[i]
+        i += 1usize
+    }
+    let q = chol_quad(l, xc, d, w)
+    var logc = math.log[f64](2.0f64)
+    var a0 = 0.0f64
+    if tau != 0.0f64 {
+        logc = 0.0f64 - dist.pnorm(tau, 0.0f64, 1.0f64, true, true)
+        let aq = mv_delta(alpha, omg, d, dl)
+        a0 = tau * math.sqrt[f64](1.0f64 + aq)
+    }
+    let lp = logc - 0.5f64 * q + dist.pnorm(a0 + lin, 0.0f64, 1.0f64, true, true) - 0.5f64 * (f64(d) * math.log[f64](2.0f64 * pi()) + logdet)
+    if lg { ret lp }
+    ret math.exp[f64](lp)
+}
+
+// dmst at one point
+fn dmst(a: *mem.Arena, x: []const f64, xi: []const f64, omg: []const f64, alpha: []const f64, nu: f64, lg: bool) -> f64 {
+    if nu > 1.0e300f64 { ret dmsn(a, x, xi, omg, alpha, 0.0f64, lg) }
+    let d = alpha.len
+    let (l, e1) = mem.alloc[f64](a, d * d)
+    let (w, e2) = mem.alloc[f64](a, d)
+    let (xc, e3) = mem.alloc[f64](a, d)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    if !chol_lower(l, omg, d) { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    var logdet = 0.0f64
+    var lin = 0.0f64
+    while i < d {
+        xc[i] = x[i] - xi[i]
+        logdet += 2.0f64 * math.log[f64](l[i * d + i])
+        lin += xc[i] / math.sqrt[f64](omg[i * d + i]) * alpha[i]
+        i += 1usize
+    }
+    let q = chol_quad(l, xc, d, w)
+    let fd = f64(d)
+    var logc = 0.0f64
+    var log1q = 0.0f64
+    if nu < 10000.0f64 {
+        logc = nm.lgammafn((nu + fd) / 2.0f64) - nm.lgammafn(nu / 2.0f64) - 0.5f64 * fd * math.log[f64](nu)
+        log1q = math.log[f64](1.0f64 + q / nu)
+    } else {
+        logc = 0.0f64 - 0.5f64 * fd * math.log[f64](2.0f64) + dist.log1p((fd / 2.0f64) * (fd / 2.0f64 - 1.0f64) / nu)
+        log1q = dist.log1p(q / nu)
+    }
+    let ldm = logc - 0.5f64 * (fd * math.log[f64](pi()) + logdet + (nu + fd) * log1q)
+    let lpt = nb.pt(lin * math.sqrt[f64]((nu + fd) / (q + nu)), nu + fd, true, true)
+    let lp = math.log[f64](2.0f64) + ldm + lpt
+    if lg { ret lp }
+    ret math.exp[f64](lp)
+}
+
+// rmsn(n, xi, Omega, alpha, tau) after set.seed(seed): out is n x d row-major
+fn rmsn(a: *mem.Arena, n: usize, xi: []const f64, omg: []const f64, alpha: []const f64, tau: f64, seed: i64, out: []f64) -> err {
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    ret rmsn_draw(a, &rg, n, xi, omg, alpha, tau, out)
+}
+
+fn rmsn_draw(a: *mem.Arena, rg: *rng.Rng, n: usize, xi: []const f64, omg: []const f64, alpha: []const f64, tau: f64, out: []f64) -> err {
+    let d = alpha.len
+    if d == 1usize {
+        let dl1 = alpha[0usize] / math.sqrt[f64](1.0f64 + alpha[0usize] * alpha[0usize])
+        let om1 = math.sqrt[f64](omg[0usize])
+        ret rsn_draw(a, rg, n, xi[0usize], om1, dl1, tau, out)
+    }
+    let (dl, e1) = mem.alloc[f64](a, d)
+    let (psi, e2) = mem.alloc[f64](a, d * d)
+    let (l, e3) = mem.alloc[f64](a, d * d)
+    let (zz, e4) = mem.alloc[f64](a, n * d)
+    let (tn, e5) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
+    let aq = mv_delta(alpha, omg, d, dl)
+    var i = 0usize
+    while i < d {
+        var j = 0usize
+        while j < d {
+            let oc = omg[i * d + j] / math.sqrt[f64](omg[i * d + i] * omg[j * d + j])
+            psi[i * d + j] = (oc - dl[i] * dl[j]) / math.sqrt[f64]((1.0f64 - dl[i] * dl[i]) * (1.0f64 - dl[j] * dl[j]))
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if !chol_lower(l, psi, d) { ret e1 }
+    var k = 0usize
+    while k < d {
+        i = 0usize
+        while i < n {
+            zz[i * d + k] = rng.norm(rg)
+            i += 1usize
+        }
+        k += 1usize
+    }
+    i = 0usize
+    if tau == 0.0f64 {
+        while i < n {
+            tn[i] = math.abs[f64](rng.norm(rg))
+            i += 1usize
+        }
+    } else {
+        let lo = pn(0.0f64 - tau)
+        while i < n {
+            tn[i] = dist.qnorm(lo + (1.0f64 - lo) * rng.unif(rg), 0.0f64, 1.0f64, true, false)
+            i += 1usize
+        }
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < d {
+            var y = 0.0f64
+            k = 0usize
+            while k <= j {
+                y += zz[i * d + k] * l[j * d + k]
+                k += 1usize
+            }
+            let z = dl[j] * tn[i] + math.sqrt[f64](1.0f64 - dl[j] * dl[j]) * y
+            out[i * d + j] = xi[j] + math.sqrt[f64](omg[j * d + j]) * z
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// rmst(n, xi, Omega, alpha, nu): d = 1 is rst; otherwise rmsn at xi = 0 divided by sqrt of chi-square over nu, then shifted
+fn rmst(a: *mem.Arena, n: usize, xi: []const f64, omg: []const f64, alpha: []const f64, nu: f64, seed: i64, out: []f64) -> err {
+    let d = alpha.len
+    if d == 1usize { ret rst(a, n, xi[0usize], math.sqrt[f64](omg[0usize]), alpha[0usize], nu, seed, out) }
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    let (z0, e1) = mem.alloc[f64](a, d)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < d {
+        z0[i] = 0.0f64
+        i += 1usize
+    }
+    let e = rmsn_draw(a, &rg, n, z0, omg, alpha, 0.0f64, out)
+    if e != ok { ret e }
+    i = 0usize
+    while i < n {
+        var v = 1.0f64
+        if nu < 1.0e300f64 { v = rd.rchisq(&rg, nu) / nu }
+        var j = 0usize
+        while j < d {
+            out[i * d + j] = xi[j] + out[i * d + j] / math.sqrt[f64](v)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
 // qsc: the skew-Cauchy quantile
 fn qsc(p: f64, xi: f64, omega: f64, alpha: f64) -> f64 {
     if p <= 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
