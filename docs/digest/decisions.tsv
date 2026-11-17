@@ -3678,4 +3678,5 @@ D6815	925	caret: multi-class confusionMatrix
 D6816	605	caret: BoxCoxTrans
 D6817	816	bayesm: densities and the first samplers
 D6818	760	bayesm: rmultireg and runireg
-D6819	584	bayesm: runiregGibbs
+D6819	585	bayesm: runiregGibbs
+D6820	822	statmod: qresiduals

@@ -30,6 +30,17 @@ for (rep in 1:80) {
   add("igq", c(pr, mu, phi), qinvgauss(pr, mu, dispersion = phi)); add("igqu", c(pr, mu, phi), qinvgauss(pr, mu, dispersion = phi, lower.tail = FALSE))
   add("igql", c(log(pr), mu, phi), qinvgauss(log(pr), mu, dispersion = phi, log.p = TRUE))
 }
+# qresiduals: "qres" (seed, family, n, disp, y[n], mu[n], w[n], position + 1 as a sum weight) answered as sum(position * residual); family 0 binomial 1 Poisson 2 gamma 3 inverse Gaussian 4 negative binomial (disp = theta)
+for (rep in 1:30) {
+  fam <- rep %% 5; n <- sample(6:40, 1); sd <- sample(1:100000, 1); w <- rep(1, n); disp <- 1; mu <- runif(n, 0.5, 6)
+  if (fam == 0) { w <- sample(2:12, n, TRUE); mu <- runif(n, 0.1, 0.9); y <- rbinom(n, w, mu) / w; obj <- list(family = list(family = "binomial"), y = y, fitted.values = mu, prior.weights = w) }
+  if (fam == 1) { y <- rpois(n, mu); obj <- list(family = list(family = "poisson"), y = y, fitted.values = mu) }
+  if (fam == 2) { disp <- runif(1, 0.2, 1.5); y <- rgamma(n, 1 / disp, scale = mu * disp); obj <- list(family = list(family = "Gamma"), y = y, fitted.values = mu, df.residual = n - 2, prior.weights = w) }
+  if (fam == 3) { disp <- runif(1, 0.2, 1.5); y <- rinvgauss(n, mu, dispersion = disp); obj <- list(family = list(family = "inverse.gaussian"), y = y, fitted.values = mu, df.residual = n - 2, prior.weights = w) }
+  if (fam == 4) { disp <- sample(c(1, 2.5, 6), 1); y <- rnbinom(n, size = disp, mu = mu); obj <- list(family = list(family = "Negative Binomial(2)"), y = y, fitted.values = mu, theta = disp) }
+  set.seed(sd); q <- qresiduals(obj, dispersion = if (fam %in% 2:3) disp else NULL)
+  add("qres", c(sd, fam, n, disp, y, mu, w, 0), sum(seq_len(n) * q))
+}
 for (rep in 1:12) {
   n <- sample(5:30, 1); mu <- c(0.5, 1, 3)[sample(3, 1)]; phi <- c(0.1, 1, 6)[sample(3, 1)]; sd <- sample(1:100000, 1)
   set.seed(sd); r <- rinvgauss(n, mu, dispersion = phi)

@@ -496,3 +496,46 @@ fn invgauss_step(x: f64, p: f64, logp: f64, phi: f64, lower: bool) -> f64 {
     }
     ret dp / dinvgauss(x, 1.0f64, phi, false)
 }
+
+// ---- qresiduals (Dunn and Smyth) of statmod for the fitted values mu of a glm: the randomised ones draw runif(min = a, max = b) in observation order ----
+
+// family 0 binomial (y the proportions, w the prior weights n), 1 Poisson, 2 gamma (dispersion given), 3 inverse Gaussian (dispersion given), 4 negative binomial (theta in disp)
+fn qresiduals(r: *rng.Rng, family: usize, y: []const f64, mu: []const f64, w: []const f64, disp: f64, out: []f64) {
+    let n = y.len
+    var i = 0usize
+    while i < n {
+        if family == 0usize {
+            let cnt = w[i] * y[i]
+            let lo = nb.pbinom(cnt - 1.0f64, w[i], mu[i], true, false)
+            let hi = nb.pbinom(cnt, w[i], mu[i], true, false)
+            let u = lo + (hi - lo) * rng.unif(r)
+            out[i] = mdist.qnorm(u, 0.0f64, 1.0f64, true, false)
+        } else if family == 1usize {
+            let lo = nm.ppois(y[i] - 1.0f64, mu[i], true, false)
+            let hi = nm.ppois(y[i], mu[i], true, false)
+            let u = lo + (hi - lo) * rng.unif(r)
+            out[i] = mdist.qnorm(u, 0.0f64, 1.0f64, true, false)
+        } else if family == 2usize {
+            let lp = nm.pgamma(w[i] * y[i] / mu[i] / disp, w[i] / disp, 1.0f64, true, true)
+            out[i] = mdist.qnorm(lp, 0.0f64, 1.0f64, true, true)
+        } else if family == 3usize {
+            if y[i] > mu[i] {
+                out[i] = mdist.qnorm(pinvgauss(y[i], mu[i], disp, false, true), 0.0f64, 1.0f64, false, true)
+            } else if y[i] < mu[i] {
+                out[i] = mdist.qnorm(pinvgauss(y[i], mu[i], disp, true, true), 0.0f64, 1.0f64, true, true)
+            } else {
+                out[i] = y[i]
+            }
+        } else {
+            let p = disp / (mu[i] + disp)
+            var lo = 0.0f64
+            var yy = y[i]
+            if yy < 1.0f64 { yy = 1.0f64 }
+            if y[i] > 0.0f64 { lo = nb.pbeta(p, disp, yy, true, false) }
+            let hi = nb.pbeta(p, disp, y[i] + 1.0f64, true, false)
+            let u = lo + (hi - lo) * rng.unif(r)
+            out[i] = mdist.qnorm(u, 0.0f64, 1.0f64, true, false)
+        }
+        i += 1usize
+    }
+}

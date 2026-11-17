@@ -47746,3 +47746,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6819 — bayesm: runiregGibbs
 
 **Decision.** `bayesmpkg.runireg_gibbs` is `runiregGibbs(Data, Prior, Mcmc)` with keep 1 from a given starting sigma squared: each sweep draws beta from N(IR IR' (X'y / s + A betabar), IR IR') with IR the inverse Cholesky factor of X'X / s + A and k normals, then sigma squared = (nu ssq + RSS) / chi-square(nu + n). Equal to bayesm under set.seed on 12 runs of five sweeps (oracle_bayesm). Not here: `rnmixGibbs`, `rmnpGibbs`, `rmvpGibbs`, `rivGibbs`, `rhierLinearModel`, `rhierMnlRwMixture`, `rscaleUsage`, thinning (keep above 1). Linux pending.
+
+## D6820 — statmod: qresiduals
+
+**Decision.** `gaussq.qresiduals(r, family, y, mu, w, disp, out)` is the Dunn and Smyth quantile residual of `qresiduals(glm.obj)` given the fitted values: binomial (counts n y against pbinom, randomised between the cdf at y - 1 and y), Poisson (the same with ppois), gamma (qnorm of the log gamma cdf, no randomisation), inverse Gaussian (the log cdf from the lower or upper tail on either side of the mean, through `pinvgauss`) and negative binomial (pbeta bounds, randomised); the randomised families draw `runif(min = a, max = b)` in observation order. The dispersion is an argument, not estimated from a fit. Equal to statmod on 30 draws (six per family; oracle_gaussq), as a position-weighted sum. Not here: Tweedie, the default (deviance) residual, fitting the glm. Linux pending.

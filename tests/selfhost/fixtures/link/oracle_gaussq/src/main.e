@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R gaussq`; the layout is at the top of
 // scripts/r_oracle/groups/gaussq.R.
 
+use e.algo.rand.r as rng
 use e.algo.stat.gaussq as gq
 use e.io
 use e.mem
@@ -18,6 +19,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "igdl") { ret gq.dinvgauss(z[0usize], z[1usize], z[2usize], true) }
     if str.eq(c.name, "igp") { ret gq.pinvgauss(z[0usize], z[1usize], z[2usize], true, false) }
     if str.eq(c.name, "igpu") { ret gq.pinvgauss(z[0usize], z[1usize], z[2usize], false, false) }
+    if str.eq(c.name, "qres") {
+        let n = usize(z[2usize])
+        let (o, e) = mem.alloc[f64](a, n)
+        if e != ok { ret 0.0f64 / 0.0f64 }
+        var rg: rng.Rng = zero
+        rng.seed(&rg, i64(z[0usize]))
+        gq.qresiduals(&rg, usize(z[1usize]), z[4usize..4usize + n], z[4usize + n..4usize + 2usize * n], z[4usize + 2usize * n..4usize + 3usize * n], z[3usize], o)
+        var s = 0.0f64
+        var q = 0usize
+        while q < n {
+            s += f64(q + 1usize) * o[q]
+            q += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "igq") { ret gq.qinvgauss(z[0usize], z[1usize], z[2usize], true, false) }
     if str.eq(c.name, "igqu") { ret gq.qinvgauss(z[0usize], z[1usize], z[2usize], false, false) }
     if str.eq(c.name, "igql") { ret gq.qinvgauss(z[0usize], z[1usize], z[2usize], true, true) }
