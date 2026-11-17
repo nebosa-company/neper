@@ -23,13 +23,20 @@ gen <- function(n, ns, type) {
 mkd <- function(o, ...) quiet(createDHARMa(o$sims, o$y, fittedPredictedResponse = o$mu, integerResponse = o$int, seed = o$sd, ...))
 HO <- function(o) HH(o$n, o$ns, o$sd, o$y, o$sims)
 
-# ---- dwtest p value, exact (n < 100) and normal approximation; lmtest Pan routine itself drifts from the exact value past n of about 60 ----
+# ---- dwtest p value, exact (n < 100) and normal approximation ----
 for (n in c(4, 8, 20, 45, 60, 100, 140)) {
-  o <- gen(n, 20, "norm"); r <- mkd(o); tm <- sample(n)
+  o <- gen(n, 12, "norm"); r <- mkd(o); tm <- sample(n)
   for (al in 0:2) {
     d <- quiet(testTemporalAutocorrelation(r, time = tm, alternative = ALT[al + 1], plot = FALSE))
     add("dw_pD", c(HO(o), tm, al), d$p.value, rel = 1e-8)
   }
+}
+
+# Pan's routine run on the closed-form eigenvalues (R amplifies the 1e-15 difference to its own LAPACK eigenvalues into 1e-8 to 1e-4 past n of about 45)
+for (n in c(5, 12, 30, 45, 60, 70, 80, 90, 99)) for (rep in 1:2) {
+  dw <- runif(1, 0.5, 3.5)
+  evc <- 2 - 2 * cos(pi * (n - 1):1 / n)
+  add("pan_cl", c(n, dw), .Fortran("pan", as.double(c(dw, evc)), as.integer(n - 1), as.double(0), as.integer(15), x = double(1), PACKAGE = "lmtest")$x, rel = if (n <= 70) 1e-9 else 1e-6)
 }
 
 # ---- fitted models ----
@@ -93,7 +100,7 @@ for (rep in 1:3) {
 
 # ---- traditional and rotated residuals from given simulations ----
 for (rep in 1:8) {
-  type <- c("norm", "round", "pois")[rep %% 3 + 1]; n <- sample(15:40, 1); ns <- sample(c(40, 80), 1)
+  type <- c("norm", "round", "pois")[rep %% 3 + 1]; n <- sample(15:40, 1); ns <- sample(c(30, 60), 1)
   o <- gen(n, ns, type)
   for (meth in c("PIT", "traditional")) for (int in unique(c(o$int, TRUE))) {
     o2 <- o; o2$int <- int
@@ -110,7 +117,7 @@ for (rep in 1:8) {
 
 # ---- outliers: binomial margins and alternatives, bootstrap ----
 for (rep in 1:4) {
-  type <- c("norm", "pois", "round")[rep %% 3 + 1]; n <- sample(30:50, 1); ns <- sample(c(50, 100), 1)
+  type <- c("norm", "pois", "round")[rep %% 3 + 1]; n <- sample(30:50, 1); ns <- sample(c(40, 60), 1)
   o <- gen(n, ns, type); o$y[sample(n, 3)] <- max(o$sims) + 5; o$y[sample(n, 2)] <- min(o$sims) - 5
   r <- mkd(o)
   for (mg in 0:2) for (al in unique(c((mg + rep) %% 3, 0))) {
@@ -129,7 +136,7 @@ for (rep in 1:4) {
 
 # ---- recalculateResiduals ----
 for (rep in 1:12) {
-  type <- c("norm", "pois", "round")[rep %% 3 + 1]; n <- sample(24:40, 1); ns <- 100
+  type <- c("norm", "pois", "round")[rep %% 3 + 1]; n <- sample(24:40, 1); ns <- 60
   o <- gen(n, ns, type); r <- mkd(o)
   ng0 <- sample(4:10, 1); grp <- sample(1:ng0, n, TRUE) * 3; sel <- rep(TRUE, n)
   if (rep %% 2 == 0) sel <- runif(n) < 0.75
@@ -160,7 +167,7 @@ for (rep in 1:2) {
 
 # ---- one-sided KS (testUniformity), n < 100 exact and n >= 100 asymptotic ----
 for (n in c(12, 30, 60, 99, 100, 150)) for (al in 1:2) {
-  o <- gen(n, 20, c("norm", "round")[al]); r <- mkd(o)
+  o <- gen(n, 12, c("norm", "round")[al]); r <- mkd(o)
   u <- quiet(testUniformity(r, alternative = c("two.sided", "greater", "less")[al + 1], plot = FALSE))
   add("ksalt_stat", c(HO(o), al), as.numeric(u$statistic)); add("ksalt_p", c(HO(o), al), u$p.value)
 }
@@ -177,7 +184,7 @@ for (rep in 1:5) {
 
 # ---- testCategorical and testGeneric ----
 for (rep in 1:3) {
-  type <- c("norm", "pois", "round")[rep %% 3 + 1]; n <- sample(40:60, 1); o <- gen(n, 40, type); r <- mkd(o)
+  type <- c("norm", "pois", "round")[rep %% 3 + 1]; n <- sample(40:60, 1); o <- gen(n, 25, type); r <- mkd(o)
   k <- sample(2:5, 1); cat <- sample(1:k, n, TRUE) * 2
   tc <- quiet(testCategorical(r, cat, plot = FALSE))
   a <- c(HO(o), cat)
@@ -192,7 +199,7 @@ for (rep in 1:3) {
 
 # ---- Moran alternatives and a distance matrix ----
 for (rep in 1:3) {
-  n <- sample(20:40, 1); o <- gen(n, 40, "norm"); r <- mkd(o)
+  n <- sample(20:40, 1); o <- gen(n, 20, "norm"); r <- mkd(o)
   xs <- round(runif(n, 0, 10), 4); ys <- round(runif(n, 0, 10), 4); D <- as.matrix(dist(cbind(xs, ys)))
   for (al in 0:2) {
     mi <- quiet(testSpatialAutocorrelation(r, x = xs, y = ys, alternative = ALT[al + 1], plot = FALSE))

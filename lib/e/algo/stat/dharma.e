@@ -1082,127 +1082,134 @@ fn recalc(a: *mem.Arena, sims: []const f64, obs: []const f64, fitted: []const f6
 
 // ---- Durbin-Watson p value (lmtest::dwtest on scaledResiduals ~ 1, order.by = time) ----
 
-fn gauss_legendre16(x: []f64, w: []f64) {
-    let pi = 3.141592653589793238462643383279f64
-    var i = 0usize
-    while i < 8usize {
-        var z = math.cos[f64](pi * (f64(i) + 0.75f64) / 16.5f64)
-        var pp = 1.0f64
-        var it = 0usize
-        while it < 100usize {
-            var p1 = 1.0f64
-            var p2 = 0.0f64
-            var j = 1usize
-            while j <= 16usize {
-                let p3 = p2
-                p2 = p1
-                p1 = ((2.0f64 * f64(j) - 1.0f64) * z * p2 - (f64(j) - 1.0f64) * p3) / f64(j)
-                j += 1usize
+// Fortran DO trip count: the number of values of l = from, from + step, ... not past to
+fn do_trips(from: i64, to: i64, step: i64) -> i64 {
+    let t = (to - from + step) / step
+    if t < 0i64 { ret 0i64 }
+    ret t
+}
+
+// lmtest src/pan.f (Farebrother AS 153, as amended by Cummins): P(sum a_i u_i^2 < x * sum u_i^2 + c); aa[0] = x, aa[1..m] the
+// eigenvalues in either order, n the number of series terms (dwtest iterations)
+fn pan(aa: []const f64, m: i64, c: f64, n: i64) -> f64 {
+    let x = aa[0usize]
+    var h = 0i64
+    var k = 0i64
+    var last = 0i64
+    if aa[1usize] > aa[usize(m)] {
+        h = m
+        k = 0i64 - 1i64
+        last = 1i64
+    } else {
+        h = 1i64
+        k = 1i64
+        last = m
+    }
+    var nu = h
+    var found = false
+    var t = 0i64
+    let trips = do_trips(h, last, k)
+    while t < trips {
+        nu = h + t * k
+        if aa[usize(nu)] >= x {
+            found = true
+            break
+        }
+        t += 1i64
+    }
+    if !found {
+        nu = h + trips * k
+        if c >= 0.0f64 { ret 1.0f64 }
+    }
+    if nu == h && c <= 0.0f64 { ret 0.0f64 }
+    if k == 1i64 { nu = nu - 1i64 }
+    h = m - nu
+    var y = 0.0f64
+    if c == 0.0f64 { y = f64(h - nu) } else { y = c * (aa[1usize] - aa[usize(m)]) }
+    var d = 0i64
+    var j1 = 0i64
+    var j2 = 0i64
+    var j3 = 0i64
+    var j4 = 0i64
+    if y >= 0.0f64 {
+        d = 2i64
+        h = nu
+        k = 0i64 - k
+        j1 = 0i64
+        j2 = 2i64
+        j3 = 3i64
+        j4 = 1i64
+    } else {
+        d = 0i64 - 2i64
+        nu = nu + 1i64
+        j1 = m - 2i64
+        j2 = m - 1i64
+        j3 = m + 1i64
+        j4 = m
+    }
+    let pin = 2.0f64 * math.atan[f64](1.0f64) / f64(n)
+    var sum = 0.5f64 * f64(k + 1i64)
+    var sgn = f64(k) / f64(n)
+    let n2 = n + n - 1i64
+    var l1 = h - 2i64 * (h / 2i64)
+    while l1 >= 0i64 {
+        let t2 = do_trips(j2, nu, d)
+        var q = 0i64
+        while q < t2 {
+            let l2 = j2 + q * d
+            var sum1 = aa[usize(j4)]
+            var prod = aa[usize(l2)]
+            let u = 0.5f64 * (sum1 + prod)
+            let v = 0.5f64 * (sum1 - prod)
+            sum1 = 0.0f64
+            var i = 1i64
+            while i <= n2 {
+                let yy = u - v * math.cos[f64](f64(i) * pin)
+                let num = yy - x
+                prod = math.exp[f64](0.0f64 - c / num)
+                var kk = 1i64
+                while kk <= j1 {
+                    prod = prod * num / (yy - aa[usize(kk)])
+                    kk += 1i64
+                }
+                kk = j3
+                while kk <= m {
+                    prod = prod * num / (yy - aa[usize(kk)])
+                    kk += 1i64
+                }
+                sum1 = sum1 + math.sqrt[f64](math.abs[f64](prod))
+                i += 2i64
             }
-            pp = 16.0f64 * (z * p1 - p2) / (z * z - 1.0f64)
-            let z1 = z
-            z = z1 - p1 / pp
-            if math.abs[f64](z - z1) < 1.0e-16f64 { break }
-            it += 1usize
+            sgn = 0.0f64 - sgn
+            sum = sum + sgn * sum1
+            j1 = j1 + d
+            j3 = j3 + d
+            j4 = j4 + d
+            q += 1i64
         }
-        x[i] = 0.0f64 - z
-        x[15usize - i] = z
-        w[i] = 2.0f64 / ((1.0f64 - z * z) * pp * pp)
-        w[15usize - i] = w[i]
-        i += 1usize
+        if d == 2i64 { j3 = j3 - 1i64 } else { j1 = j1 + 1i64 }
+        j2 = 0i64
+        nu = 0i64
+        l1 -= 1i64
     }
+    ret sum
 }
 
-fn imhof_f(lam: []const f64, u: f64) -> f64 {
-    var th = 0.0f64
-    var lr = 0.0f64
-    var i = 0usize
-    while i < lam.len {
-        let t = lam[i] * u
-        th += math.atan[f64](t)
-        lr += math.log[f64](1.0f64 + t * t)
-        i += 1usize
-    }
-    if u < 1.0e-12f64 {
-        var s = 0.0f64
-        i = 0usize
-        while i < lam.len {
-            s += lam[i]
-            i += 1usize
-        }
-        ret 0.5f64 * s
-    }
-    ret math.sin[f64](0.5f64 * th) / (u * math.exp[f64](0.25f64 * lr))
-}
-
-fn imhof_panel(lam: []const f64, lo: f64, hi: f64, gx: []const f64, gw: []const f64) -> f64 {
-    let half = 0.5f64 * (hi - lo)
-    let mid = 0.5f64 * (hi + lo)
-    var s = 0.0f64
-    var i = 0usize
-    while i < 16usize {
-        s += gw[i] * imhof_f(lam, mid + half * gx[i])
-        i += 1usize
-    }
-    ret s * half
-}
-
-fn imhof_rho(lam: []const f64, u: f64) -> f64 {
-    var lr = 0.0f64
-    var i = 0usize
-    while i < lam.len {
-        let t = lam[i] * u
-        lr += math.log[f64](1.0f64 + t * t)
-        i += 1usize
-    }
-    ret math.exp[f64](0.25f64 * lr)
-}
-
-// the integral of the Imhof integrand on (0, infinity): equal panels on [0, 1], then s panels per octave until 1 / rho is below 1e-16
-fn imhof_integral(lam: []const f64, s: usize, gx: []const f64, gw: []const f64) -> f64 {
-    var total = 0.0f64
-    let np = 8usize * s
-    var p = 0usize
-    while p < np {
-        total += imhof_panel(lam, f64(p) / f64(np), f64(p + 1usize) / f64(np), gx, gw)
-        p += 1usize
-    }
-    var lo = 1.0f64
-    var oct = 0usize
-    while oct < 300usize {
-        let hi = 2.0f64 * lo
-        p = 0usize
-        while p < s {
-            total += imhof_panel(lam, lo + (hi - lo) * f64(p) / f64(s), lo + (hi - lo) * f64(p + 1usize) / f64(s), gx, gw)
-            p += 1usize
-        }
-        if 1.0f64 / imhof_rho(lam, hi) < 1.0e-16f64 { break }
-        lo = hi
-        oct += 1usize
-    }
-    ret total
-}
-
-// P(DW < dw) for the n residuals of an intercept-only model: the eigenvalues of the Durbin-Watson matrix are 2 - 2 cos(pi j / n), j = 1..n-1
+// P(DW < dw) for n residuals of an intercept-only model: pan over the eigenvalues 2 - 2 cos(pi j / n), j = n-1 down to 1 (the order eigen() gives)
 fn dw_cdf(a: *mem.Arena, dw: f64, n: usize) -> f64 {
     let pi = 3.141592653589793238462643383279f64
-    let (lam, e1) = mem.alloc[f64](a, n - 1usize)
+    let (lam, e1) = mem.alloc[f64](a, n)
     if e1 != ok { ret 0.0f64 / 0.0f64 }
+    lam[0usize] = dw
     var j = 1usize
     while j < n {
-        lam[j - 1usize] = 2.0f64 - 2.0f64 * math.cos[f64](pi * f64(j) / f64(n)) - dw
+        lam[j] = 2.0f64 - 2.0f64 * math.cos[f64](pi * f64(n - j) / f64(n))
         j += 1usize
     }
-    let (gx, e2) = mem.alloc[f64](a, 16usize)
-    if e2 != ok { ret 0.0f64 / 0.0f64 }
-    let (gw, e3) = mem.alloc[f64](a, 16usize)
-    if e3 != ok { ret 0.0f64 / 0.0f64 }
-    gauss_legendre16(gx, gw)
-    let total = imhof_integral(lam, 12usize, gx, gw)
-    ret 0.5f64 - total / pi
+    ret pan(lam, i64(n) - 1i64, 0.0f64, 15i64)
 }
 
-// the p value of dwtest: the exact one (Imhof) below 100 observations, the normal approximation otherwise; alt 0 two.sided, 1 greater, 2 less
+// the p value of dwtest: the exact one (Pan) below 100 observations, the normal approximation otherwise; alt 0 two.sided, 1 greater, 2 less
 fn dw_pvalue(a: *mem.Arena, dw: f64, n: usize, alt: usize) -> f64 {
     if n < 3usize { ret 1.0f64 }
     if n < 100usize {

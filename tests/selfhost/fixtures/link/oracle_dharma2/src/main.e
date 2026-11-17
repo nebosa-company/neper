@@ -137,6 +137,7 @@ fn recalc_case(a: *mem.Arena, k: str, x: []const f64) -> f64 {
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if is_name(k, "pan_cl") { ret dh.dw_cdf(a, x[1usize], usize(x[0usize])) }
     if is_name(k, "sim") || is_name(k, "sr") || str.starts_with(k, "mboot_") { ret model_case(a, k, x) }
     if str.starts_with(k, "rc_") { ret recalc_case(a, k, x) }
     if is_name(k, "pc_ratio") || is_name(k, "pc_p") {
