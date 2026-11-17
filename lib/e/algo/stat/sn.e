@@ -272,6 +272,21 @@ fn st_tails_lp(x: f64, alpha: f64, nu: f64) -> f64 {
     ret lc - math.log[f64](nu) - nu * math.log[f64](math.abs[f64](x))
 }
 
+// pst method 2: the mass of the half below zero plus the integral of the density from zero
+fn pst_dst(z: f64, alpha: f64, nu: f64) -> f64 {
+    var c = PstCtx { alpha: alpha, nu: nu, z: z }
+    let dl = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
+    var lo = 0.0f64
+    var hi = z
+    var sg = 1.0f64
+    if z < 0.0f64 {
+        lo = z
+        hi = 0.0f64
+        sg = 0.0f64 - 1.0f64
+    }
+    ret math.acos[f64](dl) / pi() + sg * gk_int(&c, dst_std, lo, hi)
+}
+
 // pst(x, xi, omega, alpha, nu) lower tail, method 0, one point
 fn pst(a: *mem.Arena, x: f64, xi: f64, omega: f64, alpha: f64, nu: f64) -> f64 {
     if nu > 1.0e300f64 { ret psn_owen(x, xi, omega, alpha) }
@@ -298,16 +313,7 @@ fn pst(a: *mem.Arena, x: f64, xi: f64, omega: f64, alpha: f64, nu: f64) -> f64 {
     var c = PstCtx { alpha: alpha, nu: nu, z: z }
     var p = 0.0f64
     if z < 10.0f64 + 50.0f64 / nu {
-        let dl = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
-        var lo = 0.0f64
-        var hi = z
-        var sg = 1.0f64
-        if z < 0.0f64 {
-            lo = z
-            hi = 0.0f64
-            sg = 0.0f64 - 1.0f64
-        }
-        p = math.acos[f64](dl) / pi() + sg * gk_int(&c, dst_std, lo, hi)
+        p = pst_dst(z, alpha, nu)
     } else {
         let (r, e) = quad.qagi(a, &c, fp_chisq, 0.0f64, 1i64, 1.220703125e-4f64, 1.220703125e-4f64, 100usize)
         if e != ok { ret 0.0f64 / 0.0f64 }
@@ -316,4 +322,74 @@ fn pst(a: *mem.Arena, x: f64, xi: f64, omega: f64, alpha: f64, nu: f64) -> f64 {
     if p < 0.0f64 { p = 0.0f64 }
     if p > 1.0f64 { p = 1.0f64 }
     ret p
+}
+
+// qsc: the skew-Cauchy quantile
+fn qsc(p: f64, xi: f64, omega: f64, alpha: f64) -> f64 {
+    if p <= 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let u = (p - 0.5f64) * pi()
+    let dl = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
+    ret xi + omega * (dl / math.cos[f64](u) + math.tan[f64](u))
+}
+
+// qst(p, xi, omega, alpha, nu), method 0, tol 1e-8: the package's bracket (qst_bounds) then alternating bisection and regula falsi
+fn qst(a: *mem.Arena, p0: f64, xi: f64, omega: f64, alpha: f64, nu: f64) -> f64 {
+    let inf = 1.0f64 / 0.0f64
+    if nu > 10000.0f64 { ret qsn(p0, xi, omega, alpha) }
+    if nu == 1.0f64 { ret qsc(p0, xi, omega, alpha) }
+    if alpha > 1.0e300f64 { ret xi + omega * math.sqrt[f64](nb.qf(p0, 1.0f64, nu, true, false)) }
+    if alpha < 0.0f64 - 1.0e300f64 { ret xi - omega * math.sqrt[f64](nb.qf(1.0f64 - p0, 1.0f64, nu, true, false)) }
+    var p = p0
+    if alpha < 0.0f64 { p = 1.0f64 - p0 }
+    var sgn = 1.0f64
+    if alpha < 0.0f64 { sgn = 0.0f64 - 1.0f64 }
+    let aa = math.abs[f64](alpha)
+    if p == 0.0f64 { ret xi + omega * sgn * (0.0f64 - inf) }
+    if p == 1.0f64 { ret xi + omega * sgn * inf }
+    var xa = nb.qt(p, nu, true, false)
+    var xb = xa
+    if alpha != 0.0f64 {
+        let lower = xa
+        let upper = math.sqrt[f64](nb.qf(p, 1.0f64, nu, true, false))
+        xa = lower
+        xb = upper
+        if upper - lower > 5.0f64 {
+            var step = 5.0f64
+            var m = 0.0f64
+            var go = true
+            while go {
+                xa = upper - step
+                if pst_dst(xa, aa, nu) < p { go = false } else {
+                    step = step * math.pow[f64](2.0f64, 2.0f64 / (m + 2.0f64))
+                    m += 1.0f64
+                }
+            }
+        }
+    }
+    var fa = pst(a, xa, 0.0f64, 1.0f64, aa, nu) - p
+    var fb = pst(a, xb, 0.0f64, 1.0f64, aa, nu) - p
+    var rf = false
+    var xc = 0.0f64
+    var it = 0i32
+    var go = true
+    while go && it < 500i32 {
+        if rf { xc = xb - fb * (xb - xa) / (fb - fa) } else { xc = (xb + xa) / 2.0f64 }
+        let fc = pst(a, xc, 0.0f64, 1.0f64, aa, nu) - p
+        if fc > 0.0f64 {
+            xb = xc
+            fb = fc
+        } else {
+            xa = xc
+            fa = fc
+        }
+        let bad = (xc - xa) * (xc - xb)
+        if bad > 0.0f64 || bad != bad { ret 0.0f64 / 0.0f64 }
+        if math.abs[f64](fc) < 1.0e-8f64 { go = false }
+        rf = !rf
+        it += 1i32
+    }
+    var sg2 = 1.0f64
+    if alpha < 0.0f64 { sg2 = 0.0f64 - 1.0f64 }
+    ret xi + omega * sg2 * xc
 }

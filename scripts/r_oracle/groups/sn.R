@@ -38,4 +38,10 @@ for (rep in 1:40) {
   nu <- c(1, 2, 3, 5, 6, 9, 15, 2.5, 7.5, 30.5, 400)[(rep - 1) %% 11 + 1]
   for (z in c(-40, -12, -3, -0.5, 0.3, 1.5, 4, 11, 45)) { x <- xi + om * z; add("pst", c(xi, om, al, nu, x), pst(x, xi, om, al, nu), rel = 1e-6) }
 }
+# qst (xi, omega, alpha, nu, p)
+for (rep in 1:30) {
+  xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-4, -1, 0, 0.8, 3, 9)[sample(6, 1)]
+  nu <- c(1, 2, 3, 5, 9, 2.5, 7.5, 30.5)[(rep - 1) %% 8 + 1]
+  for (pr in c(0.001, 0.05, 0.3, 0.5, 0.75, 0.95, 0.999)) add("qst", c(xi, om, al, nu, pr), qst(pr, xi, om, al, nu), rel = 1e-5)
+}
 emit("sn", "sn", list(cases))
