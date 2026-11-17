@@ -111,4 +111,14 @@ for (rep in 1:8) {
   for (q in c(1, 25, NN * m)) add("hg", c(sd, m, NN, 1, q - 1, yy, nn, x1, x2), as.vector(hgr$mu)[q], 1e-8)
   for (q in c(1, 10, 20)) add("hg", c(sd, m, NN, 2, q - 1, yy, nn, x1, x2), hgr$var[q], 1e-8)
 }
+# ordergibbs "og", bradley.terry.post "btp", howardprior "how"
+for (rep in 1:6) {
+  yy <- sample(2:6, 40, TRUE) / 2 + round(rnorm(40, 0, 0.3), 2); nn <- sample(20:300, 40, TRUE); sd <- sample(1:100000, 1); m <- 15
+  set.seed(sd); og <- ordergibbs(cbind(yy, nn), m); for (q in c(1, 8, 40, 41, 100, 300, 600)) add("og", c(sd, m, q - 1, yy, nn), as.vector(og)[q], 1e-8)
+}
+for (rep in 1:15) {
+  nt <- sample(3:6, 1); ng <- sample(4:12, 1); ii <- sample(nt, ng, TRUE); jj <- sapply(ii, function(i) sample(setdiff(1:nt, i), 1)); wi <- sample(0:8, ng, TRUE); wj <- sample(0:8, ng, TRUE); th <- c(rnorm(nt), rnorm(1, 0, 0.5))
+  add("btp", c(nt, ng, th, ii, jj, wi, wj), bradley.terry.post(th, cbind(ii, jj, wi, wj)))
+  pp <- runif(2, 0.1, 0.9); par <- c(runif(4, 0.5, 3), runif(1, 0.5, 2)); add("how", c(pp, par), howardprior(pp, par))
+}
 emit("learnbayes", "LearnBayes", list(cases))

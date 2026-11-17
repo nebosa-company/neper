@@ -108,6 +108,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if x[3usize] == 1.0f64 { ret mo[ix] }
         ret vo[ix]
     }
+    if str.eq(k, "og") {
+        // (seed, m, index, y[40], n[40])
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let m = usize(x[1usize])
+        let (oo, oe) = mem.alloc[f64](a, m * 40usize)
+        if oe != ok { ret 0.0f64 / 0.0f64 }
+        if lb.ordergibbs(a, &rr, x[3usize..43usize], x[43usize..83usize], m, oo) != ok { ret 0.0f64 / 0.0f64 }
+        ret oo[usize(x[2usize])]
+    }
+    if str.eq(k, "btp") {
+        // (nteam, ngames, theta[nteam + 1], i[ng], j[ng], wi[ng], wj[ng])
+        let nt = usize(x[0usize])
+        let ng = usize(x[1usize])
+        let th = x[2usize..3usize + nt]
+        let b0 = 3usize + nt
+        ret lb.bradley_terry_post(th, x[b0..b0 + ng], x[b0 + ng..b0 + 2usize * ng], x[b0 + 2usize * ng..b0 + 3usize * ng], x[b0 + 3usize * ng..b0 + 4usize * ng])
+    }
+    if str.eq(k, "how") { ret lb.howardprior(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize]) }
     if str.eq(k, "rej") || str.eq(k, "imp2") {
         // (seed, which, m, n, df, dmax or hidx, mean[2], var[4], x[m], nn[m], y[m]) rej: the number kept (which 0) or the sum of the kept first-coordinate values (1); imp2: est (0) or se (1)
         var rr: rng.Rng = zero

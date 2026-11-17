@@ -1214,3 +1214,140 @@ fn hiergibbs(a: *mem.Arena, r: *rng.Rng, y: []const f64, n: []const f64, x1: []c
     }
     ret ok
 }
+
+// ordergibbs(data = (y, n), m): the order-restricted Gibbs sampler of the package's 8 by 5 example, truncated normal draws by inversion (one uniform each) in the fixed starting means of the package; out is m by 40 column-major,
+// the 8 by 5 matrix of means unrolled column by column
+fn ordergibbs(a: *mem.Arena, r: *rng.Rng, y: []const f64, n: []const f64, m: usize, out: []f64) -> err {
+    let ii = 8usize
+    let jj = 5usize
+    let w = jj + 2usize
+    let (mu, e1) = mem.alloc[f64](a, (ii + 2usize) * w)
+    let (yy, e2) = mem.alloc[f64](a, ii * jj)
+    let (nn, e3) = mem.alloc[f64](a, ii * jj)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    let inf = 1.0f64 / 0.0f64
+    var i = 0usize
+    while i < ii + 2usize {
+        var j = 0usize
+        while j < w {
+            mu[i * w + j] = inf
+            if i == 0usize || j == 0usize { mu[i * w + j] = 0.0f64 - inf }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // the package's starting means, rows from the lowest group up (m8 .. m1) as the rbind lists them
+    let (init, e4) = mem.alloc[f64](a, 40usize)
+    if e4 != ok { ret mem.Full }
+    init[0usize] = 1.59f64
+    init[1usize] = 1.59f64
+    init[2usize] = 1.59f64
+    init[3usize] = 1.67f64
+    init[4usize] = 1.88f64
+    init[5usize] = 1.85f64
+    init[6usize] = 1.85f64
+    init[7usize] = 1.85f64
+    init[8usize] = 1.88f64
+    init[9usize] = 1.88f64
+    init[10usize] = 1.85f64
+    init[11usize] = 1.85f64
+    init[12usize] = 1.85f64
+    init[13usize] = 2.1f64
+    init[14usize] = 2.1f64
+    init[15usize] = 2.04f64
+    init[16usize] = 2.11f64
+    init[17usize] = 2.11f64
+    init[18usize] = 2.33f64
+    init[19usize] = 2.33f64
+    init[20usize] = 2.31f64
+    init[21usize] = 2.33f64
+    init[22usize] = 2.33f64
+    init[23usize] = 2.33f64
+    init[24usize] = 2.33f64
+    init[25usize] = 2.37f64
+    init[26usize] = 2.47f64
+    init[27usize] = 2.64f64
+    init[28usize] = 2.66f64
+    init[29usize] = 2.66f64
+    init[30usize] = 2.37f64
+    init[31usize] = 2.63f64
+    init[32usize] = 2.74f64
+    init[33usize] = 2.76f64
+    init[34usize] = 2.91f64
+    init[35usize] = 2.64f64
+    init[36usize] = 3.02f64
+    init[37usize] = 3.02f64
+    init[38usize] = 3.07f64
+    init[39usize] = 3.34f64
+    i = 0usize
+    while i < ii {
+        var j = 0usize
+        while j < jj {
+            mu[(i + 1usize) * w + j + 1usize] = init[i * jj + j]
+            // y and n are t(array(., c(J, I))) with the rows reversed
+            yy[i * jj + j] = y[(ii - 1usize - i) * jj + j]
+            nn[i * jj + j] = n[(ii - 1usize - i) * jj + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let s = 0.65f64
+    var k = 0usize
+    while k < m {
+        i = 1usize
+        while i <= ii {
+            var j = 1usize
+            while j <= jj {
+                var lo = mu[(i - 1usize) * w + j]
+                if mu[i * w + j - 1usize] > lo { lo = mu[i * w + j - 1usize] }
+                var hi = mu[(i + 1usize) * w + j]
+                if mu[i * w + j + 1usize] < hi { hi = mu[i * w + j + 1usize] }
+                let mean = yy[(i - 1usize) * jj + j - 1usize]
+                let sd = s / math.sqrt[f64](nn[(i - 1usize) * jj + j - 1usize])
+                let p1 = dist.pnorm(lo, mean, sd, true, false)
+                let p2 = dist.pnorm(hi, mean, sd, true, false)
+                let u = rng.unif(r)
+                mu[i * w + j] = mean + sd * dist.qnorm(u * (p2 - p1) + p1, 0.0f64, 1.0f64, true, false)
+                j += 1usize
+            }
+            i += 1usize
+        }
+        var c = 0usize
+        while c < jj {
+            var rr = 0usize
+            while rr < ii {
+                out[(c * ii + rr) * m + k] = mu[(rr + 1usize) * w + c + 1usize]
+                rr += 1usize
+            }
+            c += 1usize
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+// bradley.terry.post(theta, data): theta holds the abilities and then log sigma; data rows (i, j, wins of i, wins of j), 1-based indices
+fn bradley_terry_post(theta: []const f64, di: []const f64, dj: []const f64, wi: []const f64, wj: []const f64) -> f64 {
+    let mm = theta.len
+    let sigma = math.exp[f64](theta[mm - 1usize])
+    var v = 0.0f64
+    var k = 0usize
+    while k < di.len {
+        let d = theta[usize(di[k]) - 1usize] - theta[usize(dj[k]) - 1usize]
+        let p = math.exp[f64](d) / (1.0f64 + math.exp[f64](d))
+        v += wi[k] * math.log[f64](p) + wj[k] * math.log[f64](1.0f64 - p)
+        k += 1usize
+    }
+    k = 0usize
+    while k + 1usize < mm {
+        v += dist.dnorm(theta[k], 0.0f64, sigma, true)
+        k += 1usize
+    }
+    ret v
+}
+
+// howardprior(xy, par = (alpha, beta, gamma, delta, sigma)): the log prior of two dependent proportions
+fn howardprior(p1: f64, p2: f64, alpha: f64, beta: f64, gam: f64, delta: f64, sigma: f64) -> f64 {
+    let u = math.log[f64](p1 / (1.0f64 - p1) * (1.0f64 - p2) / p2) / sigma
+    ret 0.0f64 - 0.5f64 * u * u + (alpha - 1.0f64) * math.log[f64](p1) + (beta - 1.0f64) * math.log[f64](1.0f64 - p1) + (gam - 1.0f64) * math.log[f64](p2) + (delta - 1.0f64) * math.log[f64](1.0f64 - p2)
+}

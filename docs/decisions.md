@@ -48110,3 +48110,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6910 — LearnBayes: hiergibbs
 
 **Decision.** `learnbayes.hiergibbs` is the package's hierarchical regression Gibbs sampler for the (y, n, x1, x2) data of its example, with the fixed prior constants (b1, bvar, s = 0.02, v = 16, start variance 0.006): per sweep beta = t(chol(pvar)) z + pmean from three normals, the variance (sum of squares / 2 + s / 2) / rgamma(1, (N + v) / 2), then the N means from N normals. Equal to LearnBayes under set.seed on 8 simulated data sets of 6 to 14 groups, 20 sweeps, six beta elements, three mu elements and three variances each (oracle_learnbayes, 4166 cases in all). Not here: laplace, ordergibbs. Linux pending.
+
+## D6911 — LearnBayes: ordergibbs, bradley.terry.post, howardprior
+
+**Decision.** `learnbayes.ordergibbs` is the package's order-restricted sampler of its 8 by 5 example (the starting means of the package, truncated normal draws by inversion, one uniform per cell, cells visited row by row), `bradley_terry_post` the Bradley-Terry log posterior (abilities then log sigma, normal prior on the abilities) and `howardprior` the log prior of two dependent proportions. Equal to LearnBayes under set.seed on 6 random data sets for ordergibbs (15 sweeps, seven elements each) and on 15 random designs each for the other two (oracle_learnbayes, 4219 cases in all). Not here: laplace (needs R's optim). Linux pending.
