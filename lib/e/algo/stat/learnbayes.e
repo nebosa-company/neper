@@ -10,6 +10,7 @@ use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
 use e.algo.rand.r as rng
+use e.algo.rand.rdist as rd
 use e.algo.stat.bayesmpkg as bz
 
 fn pbetap(a: f64, b: f64, n: f64, s: f64) -> f64 {
@@ -305,3 +306,79 @@ fn indepmetrop(a: *mem.Arena, r: *rng.Rng, kind: usize, par: []const f64, mu: []
     }
     ret acc / f64(m)
 }
+
+// rigamma(n, a, b): 1 / rgamma(shape a, rate b), one value per call
+fn rigamma(r: *rng.Rng, a: f64, b: f64) -> f64 { ret 1.0f64 / rd.rgamma(r, a, 1.0f64 / b) }
+
+// rmnorm(n, mean, varcov): the n by d matrix of z %*% chol(varcov) + mean with z filled column by column from rnorm(n d); out is n by d column-major
+fn rmnorm(a: *mem.Arena, r: *rng.Rng, n: usize, mean: []const f64, vr: []const f64, out: []f64) -> err {
+    let d = mean.len
+    let (u, e1) = mem.alloc[f64](a, d * d)
+    let (z, e2) = mem.alloc[f64](a, n * d)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    if !bz.chol_upper(vr, d, u) { ret mem.Full }
+    var i = 0usize
+    while i < n * d {
+        z[i] = rng.norm(r)
+        i += 1usize
+    }
+    var c = 0usize
+    while c < d {
+        i = 0usize
+        while i < n {
+            var s = 0.0f64
+            var j = 0usize
+            while j <= c {
+                s += z[j * n + i] * u[c * d + j]
+                j += 1usize
+            }
+            out[c * n + i] = mean[c] + s
+            i += 1usize
+        }
+        c += 1usize
+    }
+    ret ok
+}
+
+// pdisc(p, prior, data = (s, f)): the posterior of a discrete prior on the proportions p given s successes and f failures
+fn pdisc(p: []const f64, prior: []const f64, s: f64, f: f64, post: []f64) {
+    let n = p.len
+    var mx = 0.0f64 - 1.0e300f64
+    var i = 0usize
+    while i < n {
+        var p1 = p[i]
+        if p[i] == 0.0f64 { p1 = 0.5f64 }
+        if p[i] == 1.0f64 { p1 = 0.5f64 }
+        var like = s * math.log[f64](p1) + f * math.log[f64](1.0f64 - p1)
+        var edge = 0.0f64
+        if p[i] > 0.0f64 && p[i] < 1.0f64 { edge = 1.0f64 }
+        var pen = 0.0f64
+        if p[i] == 0.0f64 && s > 0.0f64 { pen = 1.0f64 }
+        if p[i] == 1.0f64 && f > 0.0f64 { pen = 1.0f64 }
+        like = like * edge - 999.0f64 * pen
+        post[i] = like
+        if like > mx { mx = like }
+        i += 1usize
+    }
+    var tot = 0.0f64
+    i = 0usize
+    while i < n {
+        post[i] = math.exp[f64](post[i] - mx) * prior[i]
+        tot += post[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        post[i] = post[i] / tot
+        i += 1usize
+    }
+}
+
+// pbetat(p0, prob, ab, data): the Bayes factor against the point null p0 under a beta(a, b) alternative and the posterior probability of the null
+fn pbetat(p0: f64, prob: f64, a: f64, b: f64, s: f64, f: f64) -> (f64, f64) {
+    let lbf = s * math.log[f64](p0) + f * math.log[f64](1.0f64 - p0) + lbeta2(a, b) - lbeta2(a + s, b + f)
+    let bf = math.exp[f64](lbf)
+    ret (bf, prob * bf / (prob * bf + 1.0f64 - prob))
+}
+
+fn lbeta2(a: f64, b: f64) -> f64 { ret nm.lgammafn(a) + nm.lgammafn(b) - nm.lgammafn(a + b) }

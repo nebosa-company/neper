@@ -49,6 +49,41 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if x[5usize] < 0.0f64 { ret acc }
         ret o[usize(x[5usize])]
     }
+    if str.eq(k, "rigamma") {
+        var r: rng.Rng = zero
+        rng.seed(&r, i64(x[0usize]))
+        var v = 0.0f64
+        var q = 0usize
+        while q <= usize(x[3usize]) {
+            v = lb.rigamma(&r, x[1usize], x[2usize])
+            q += 1usize
+        }
+        ret v
+    }
+    if str.eq(k, "rmnorm") {
+        // (seed, n, d, index, mean[d], varcov[d d])
+        var r: rng.Rng = zero
+        rng.seed(&r, i64(x[0usize]))
+        let rn = usize(x[1usize])
+        let rd2 = usize(x[2usize])
+        let (o, oe) = mem.alloc[f64](a, rn * rd2)
+        if oe != ok { os.exit(5) }
+        if lb.rmnorm(a, &r, rn, x[4usize..4usize + rd2], x[4usize + rd2..4usize + rd2 + rd2 * rd2], o) != ok { os.exit(6) }
+        ret o[usize(x[3usize])]
+    }
+    if str.eq(k, "pdisc") {
+        // (n, s, f, index, p[n], prior[n])
+        let pn = usize(x[0usize])
+        let (o, oe) = mem.alloc[f64](a, pn)
+        if oe != ok { os.exit(5) }
+        lb.pdisc(x[4usize..4usize + pn], x[4usize + pn..4usize + 2usize * pn], x[1usize], x[2usize], o)
+        ret o[usize(x[3usize])]
+    }
+    if str.eq(k, "pbetat") {
+        let (bf, po) = lb.pbetat(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize])
+        if x[6usize] < 0.5f64 { ret bf }
+        ret po
+    }
     if str.eq(k, "pbetap") { ret lb.pbetap(x[0usize], x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "discint") {
         let n = usize(x[1usize])

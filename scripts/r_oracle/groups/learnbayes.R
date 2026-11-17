@@ -33,4 +33,13 @@ for (rep in 1:20) {
   mu <- rnorm(2); set.seed(sd); r2 <- indepmetrop(lp, list(mu = mu, var = vv), st, m, c(parv, kd))
   for (idx in c(-1, 0:(m * pb - 1))) add("ind", c(sd, kd, pb, m, sc, idx, parv, mu, as.vector(vv), st), if (idx < 0) r2$accept else as.vector(r2$par)[idx + 1], 1e-9)
 }
+# rigamma "rigamma" (seed, a, b, index); rmnorm "rmnorm" (seed, n, d, index, mean, varcov); pdisc "pdisc" (n, s, f, index, p, prior); pbetat "pbetat" (p0, prob, a, b, s, f, 0 bf / 1 post)
+for (rep in 1:20) {
+  sd <- sample(1:100000, 1); a_ <- runif(1, 1, 6); b_ <- runif(1, 0.5, 4); set.seed(sd); v <- rigamma(5, a_, b_); for (j in 1:5) add("rigamma", c(sd, a_, b_, j - 1), v[j], 1e-10)
+  d <- sample(2:3, 1); nn <- sample(2:5, 1); mu <- rnorm(d); vc <- crossprod(matrix(rnorm(d * d), d)) + diag(d); set.seed(sd); y <- rmnorm(nn, mu, vc)
+  for (j in seq_len(nn * d)) add("rmnorm", c(sd, nn, d, j - 1, mu, as.vector(vc)), as.vector(y)[j], 1e-10)
+  np <- sample(5:15, 1); pp <- c(0, sort(runif(np - 2)), 1); pr <- runif(np); pr <- pr / sum(pr); ss <- sample(0:9, 1); ff <- sample(0:9, 1)
+  po <- pdisc(pp, pr, c(ss, ff)); for (j in seq_len(np)) add("pdisc", c(np, ss, ff, j - 1, pp, pr), po[j], 1e-10)
+  p0 <- runif(1, 0.1, 0.9); pb <- runif(1, 0.2, 0.8); ab <- runif(2, 0.5, 5); bt <- pbetat(p0, pb, ab, c(ss, ff)); add("pbetat", c(p0, pb, ab, ss, ff, 0), bt$bf, 1e-10); add("pbetat", c(p0, pb, ab, ss, ff, 1), bt$post, 1e-10)
+}
 emit("learnbayes", "LearnBayes", list(cases))
