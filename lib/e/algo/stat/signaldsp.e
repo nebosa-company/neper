@@ -1313,3 +1313,1355 @@ fn levinson(acf: []const f64, p: usize, aa: []f64, rf: []f64) -> f64 {
     }
     ret v
 }
+
+fn nan_value() -> f64 { ret 0.0f64 / 0.0f64 }
+
+// ---- remez: the Parks-McClellan C routine ----
+
+fn remez_calc_parms(r: usize, ext: []const usize, grid: []const f64, d: []const f64, w: []const f64, ad: []f64, x: []f64, y: []f64) {
+    var i = 0usize
+    while i <= r {
+        x[i] = math.cos[f64](6.2831853071795865f64 * grid[ext[i]])
+        i += 1usize
+    }
+    let ld = (r - 1usize) / 15usize + 1usize
+    i = 0usize
+    while i <= r {
+        var denom = 1.0f64
+        let xi = x[i]
+        var j = 0usize
+        while j < ld {
+            var k = j
+            while k <= r {
+                if k != i { denom *= 2.0f64 * (xi - x[k]) }
+                k += ld
+            }
+            j += 1usize
+        }
+        if math.abs[f64](denom) < 0.00001f64 { denom = 0.00001f64 }
+        ad[i] = 1.0f64 / denom
+        i += 1usize
+    }
+    var numer = 0.0f64
+    var denom2 = 0.0f64
+    var sign = 1.0f64
+    i = 0usize
+    while i <= r {
+        numer += ad[i] * d[ext[i]]
+        denom2 += sign * ad[i] / w[ext[i]]
+        sign = 0.0f64 - sign
+        i += 1usize
+    }
+    let delta = numer / denom2
+    sign = 1.0f64
+    i = 0usize
+    while i <= r {
+        y[i] = d[ext[i]] - sign * delta / w[ext[i]]
+        sign = 0.0f64 - sign
+        i += 1usize
+    }
+}
+
+fn remez_compute_a(freq: f64, r: usize, ad: []const f64, x: []const f64, y: []const f64) -> f64 {
+    var denom = 0.0f64
+    var numer = 0.0f64
+    let xc = math.cos[f64](6.2831853071795865f64 * freq)
+    var i = 0usize
+    while i <= r {
+        var c = xc - x[i]
+        if math.abs[f64](c) < 1.0e-7f64 {
+            numer = y[i]
+            denom = 1.0f64
+            break
+        }
+        c = ad[i] / c
+        denom += c
+        numer += c * y[i]
+        i += 1usize
+    }
+    ret numer / denom
+}
+
+// the extremal search; 0 on success, 2 for too few extremals, 3 for too many
+fn remez_search(r: usize, ext: []usize, gridsize: usize, e: []const f64, found: []usize) -> usize {
+    var k = 0usize
+    if (e[0usize] > 0.0f64 && e[0usize] > e[1usize]) || (e[0usize] < 0.0f64 && e[0usize] < e[1usize]) {
+        found[k] = 0usize
+        k += 1usize
+    }
+    var i = 1usize
+    while i + 1usize < gridsize {
+        if (e[i] >= e[i - 1usize] && e[i] > e[i + 1usize] && e[i] > 0.0f64) || (e[i] <= e[i - 1usize] && e[i] < e[i + 1usize] && e[i] < 0.0f64) {
+            if k >= 2usize * r { ret 3usize }
+            found[k] = i
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let j = gridsize - 1usize
+    if (e[j] > 0.0f64 && e[j] > e[j - 1usize]) || (e[j] < 0.0f64 && e[j] < e[j - 1usize]) {
+        if k >= 2usize * r { ret 3usize }
+        found[k] = j
+        k += 1usize
+    }
+    if k < r + 1usize { ret 2usize }
+    var extra = k - (r + 1usize)
+    while extra > 0usize {
+        var up = false
+        if e[found[0usize]] > 0.0f64 { up = true }
+        var l = 0usize
+        var alt = true
+        var jj = 1usize
+        while jj < k {
+            if math.abs[f64](e[found[jj]]) < math.abs[f64](e[found[l]]) { l = jj }
+            if up && e[found[jj]] < 0.0f64 {
+                up = false
+            } else if !up && e[found[jj]] > 0.0f64 {
+                up = true
+            } else {
+                alt = false
+                break
+            }
+            jj += 1usize
+        }
+        if alt && extra == 1usize {
+            if math.abs[f64](e[found[k - 1usize]]) < math.abs[f64](e[found[0usize]]) { l = k - 1usize } else { l = 0usize }
+        }
+        jj = l
+        while jj + 1usize < k {
+            found[jj] = found[jj + 1usize]
+            jj += 1usize
+        }
+        k -= 1usize
+        extra -= 1usize
+    }
+    i = 0usize
+    while i <= r {
+        ext[i] = found[i]
+        i += 1usize
+    }
+    ret 0usize
+}
+
+// remez(n, f, a, w, ftype, density): n + 1 coefficients into out; ftype 1 bandpass, 2 differentiator, 3 hilbert; f and amp hold two entries per band, wt one
+fn remez(arena: *mem.Arena, n: usize, f: []const f64, amp: []const f64, wt: []const f64, ftype: usize, density: usize, out: []f64) -> err {
+    if n < 4usize || f.len % 2usize == 1usize || amp.len != f.len || wt.len * 2usize != f.len || density < 16usize { ret BadSpec }
+    let numtaps = n + 1usize
+    let numband = f.len / 2usize
+    var symmetry = 1usize
+    if ftype != 1usize { symmetry = 0usize }
+    var r = numtaps / 2usize
+    if numtaps % 2usize == 1usize && symmetry == 1usize { r += 1usize }
+    var bands: [CAP]f64 = zero
+    var i = 0usize
+    while i < f.len {
+        bands[i] = f[i] / 2.0f64
+        i += 1usize
+    }
+    var gridsize = 0usize
+    i = 0usize
+    while i < numband {
+        gridsize += usize(2.0f64 * f64(r) * f64(density) * (bands[2usize * i + 1usize] - bands[2usize * i]) + 0.5f64)
+        i += 1usize
+    }
+    if symmetry == 0usize { gridsize -= 1usize }
+    let room = gridsize + 4usize * numband + 8usize
+    let (grid, e1) = mem.alloc[f64](arena, room)
+    let (dd, e2) = mem.alloc[f64](arena, room)
+    let (ww, e3) = mem.alloc[f64](arena, room)
+    let (ee, e4) = mem.alloc[f64](arena, room)
+    let (ext, e5) = mem.alloc[usize](arena, r + 2usize)
+    let (taps, e6) = mem.alloc[f64](arena, numtaps + 2usize)
+    let (xs, e7) = mem.alloc[f64](arena, r + 2usize)
+    let (ys, e8) = mem.alloc[f64](arena, r + 2usize)
+    let (ad, e9) = mem.alloc[f64](arena, r + 2usize)
+    let (found, e10) = mem.alloc[usize](arena, 2usize * r + 2usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret mem.Exhausted }
+    i = 0usize
+    while i < room {
+        grid[i] = 0.0f64
+        dd[i] = 0.0f64
+        ww[i] = 1.0f64
+        ee[i] = 0.0f64
+        i += 1usize
+    }
+    // CreateDenseGrid
+    let delf = 0.5f64 / (f64(density) * f64(r))
+    var grid0 = bands[0usize]
+    if symmetry == 0usize && delf > bands[0usize] { grid0 = delf }
+    var j = 0usize
+    var band = 0usize
+    while band < numband {
+        var lowf = bands[2usize * band]
+        if band == 0usize { lowf = grid0 }
+        let highf = bands[2usize * band + 1usize]
+        let k = usize((highf - lowf) / delf + 0.5f64)
+        var q = 0usize
+        while q < k {
+            if j >= room { break }
+            dd[j] = amp[2usize * band] + f64(q) * (amp[2usize * band + 1usize] - amp[2usize * band]) / (f64(k) - 1.0f64)
+            ww[j] = wt[band]
+            grid[j] = lowf
+            lowf += delf
+            j += 1usize
+            q += 1usize
+        }
+        if j > 0usize { grid[j - 1usize] = highf }
+        band += 1usize
+    }
+    if symmetry == 0usize && grid[gridsize - 1usize] > (0.5f64 - delf) && numtaps % 2usize == 1usize {
+        grid[gridsize - 1usize] = 0.5f64 - delf
+    }
+    i = 0usize
+    while i <= r {
+        ext[i] = i * (gridsize - 1usize) / r
+        i += 1usize
+    }
+    if ftype == 2usize {
+        i = 0usize
+        while i < gridsize {
+            if dd[i] > 0.0001f64 { ww[i] = ww[i] / grid[i] }
+            i += 1usize
+        }
+    }
+    let pi_c = 3.1415926535897932f64
+    let pi2_c = 6.2831853071795865f64
+    if symmetry == 1usize {
+        if numtaps % 2usize == 0usize {
+            i = 0usize
+            while i < gridsize {
+                let c = math.cos[f64](pi_c * grid[i])
+                dd[i] = dd[i] / c
+                ww[i] = ww[i] * c
+                i += 1usize
+            }
+        }
+    } else if numtaps % 2usize == 1usize {
+        i = 0usize
+        while i < gridsize {
+            let c = math.sin[f64](pi2_c * grid[i])
+            dd[i] = dd[i] / c
+            ww[i] = ww[i] * c
+            i += 1usize
+        }
+    } else {
+        i = 0usize
+        while i < gridsize {
+            let c = math.sin[f64](pi_c * grid[i])
+            dd[i] = dd[i] / c
+            ww[i] = ww[i] * c
+            i += 1usize
+        }
+    }
+    var iter = 0usize
+    while iter < 40usize {
+        remez_calc_parms(r, ext, grid, dd, ww, ad, xs, ys)
+        i = 0usize
+        while i < gridsize {
+            let av = remez_compute_a(grid[i], r, ad, xs, ys)
+            ee[i] = ww[i] * (dd[i] - av)
+            i += 1usize
+        }
+        let code = remez_search(r, ext, gridsize, ee, found)
+        if code != 0usize { ret BadSpec }
+        // isDone
+        var mn = math.abs[f64](ee[ext[0usize]])
+        var mx = mn
+        i = 1usize
+        while i <= r {
+            let cur = math.abs[f64](ee[ext[i]])
+            if cur < mn { mn = cur }
+            if cur > mx { mx = cur }
+            i += 1usize
+        }
+        if (mx - mn) / mx < 0.0001f64 { break }
+        iter += 1usize
+    }
+    remez_calc_parms(r, ext, grid, dd, ww, ad, xs, ys)
+    i = 0usize
+    while i <= numtaps / 2usize {
+        var c = 1.0f64
+        if symmetry == 1usize {
+            if numtaps % 2usize == 0usize { c = math.cos[f64](pi_c * f64(i) / f64(numtaps)) }
+        } else if numtaps % 2usize == 1usize {
+            c = math.sin[f64](pi2_c * f64(i) / f64(numtaps))
+        } else {
+            c = math.sin[f64](pi_c * f64(i) / f64(numtaps))
+        }
+        taps[i] = remez_compute_a(f64(i) / f64(numtaps), r, ad, xs, ys) * c
+        i += 1usize
+    }
+    // FreqSample
+    let nn = numtaps
+    let mm = (f64(nn) - 1.0f64) / 2.0f64
+    let mi = usize(mm)
+    var idx = 0usize
+    while idx < nn {
+        var val = 0.0f64
+        let xv = pi2_c * (f64(idx) - mm) / f64(nn)
+        if symmetry == 1usize {
+            val = taps[0usize]
+            var kk = 1usize
+            var top = nn / 2usize - 1usize
+            if nn % 2usize == 1usize { top = mi }
+            while kk <= top {
+                val += 2.0f64 * taps[kk] * math.cos[f64](xv * f64(kk))
+                kk += 1usize
+            }
+        } else {
+            var top = nn / 2usize - 1usize
+            if nn % 2usize == 1usize {
+                top = mi
+            } else {
+                val = taps[nn / 2usize] * math.sin[f64](pi_c * (f64(idx) - mm))
+            }
+            var kk = 1usize
+            while kk <= top {
+                val += 2.0f64 * taps[kk] * math.sin[f64](xv * f64(kk))
+                kk += 1usize
+            }
+        }
+        out[idx] = val / f64(nn)
+        idx += 1usize
+    }
+    ret ok
+}
+
+// ---- fir2 and fir1 with any window ----
+
+// fir2(n, f, m, grid_n, ramp_n, window): n + 1 taps into out
+fn fir2(a: *mem.Arena, n: usize, f: []const f64, m: []const f64, grid_n0: usize, ramp_n: f64, win: []const f64, out: []f64) -> err {
+    let t = f.len
+    var grid_n = grid_n0
+    if 2usize * grid_n < n + 1usize {
+        var p2 = 1usize
+        while p2 < n + 1usize { p2 *= 2usize }
+        grid_n = p2
+    }
+    let gn = f64(grid_n)
+    let (fb, e1) = mem.alloc[f64](a, 3usize * t)
+    if e1 != ok { ret e1 }
+    let (mb, e2) = mem.alloc[f64](a, 3usize * t)
+    if e2 != ok { ret e2 }
+    let (fx, e3) = mem.alloc[f64](a, 3usize * t)
+    if e3 != ok { ret e3 }
+    var nf = t
+    var i = 0usize
+    while i < t {
+        fx[i] = f[i]
+        i += 1usize
+    }
+    if ramp_n > 0.0f64 {
+        var extra = 0usize
+        i = 0usize
+        while i + 1usize < t {
+            if f[i + 1usize] == f[i] {
+                fx[i] = f[i] - ramp_n / gn / 2.0f64
+                fx[i + 1usize] = f[i + 1usize] + ramp_n / gn / 2.0f64
+                fx[t + extra] = f[i]
+                extra += 1usize
+            }
+            i += 1usize
+        }
+        nf = t + extra
+        i = 0usize
+        while i < nf {
+            if fx[i] < 0.0f64 { fx[i] = 0.0f64 }
+            if fx[i] > 1.0f64 { fx[i] = 1.0f64 }
+            i += 1usize
+        }
+        i = 1usize
+        while i < nf {
+            let tv = fx[i]
+            var q = i
+            while q > 0usize && fx[q - 1usize] > tv {
+                fx[q] = fx[q - 1usize]
+                q -= 1usize
+            }
+            fx[q] = tv
+            i += 1usize
+        }
+        var w = 0usize
+        i = 0usize
+        while i < nf {
+            if w == 0usize || fx[i] != fx[w - 1usize] {
+                fx[w] = fx[i]
+                w += 1usize
+            }
+            i += 1usize
+        }
+        nf = w
+        i = 0usize
+        while i < nf {
+            mb[i] = sg.approx_ord(f, m, t, fx[i])
+            fb[i] = fx[i]
+            i += 1usize
+        }
+    } else {
+        i = 0usize
+        while i < t {
+            fb[i] = f[i]
+            mb[i] = m[i]
+            i += 1usize
+        }
+    }
+    let (grid, e4) = mem.alloc[f64](a, grid_n + 1usize)
+    if e4 != ok { ret e4 }
+    i = 0usize
+    while i <= grid_n {
+        grid[i] = sg.approx_ord(fb, mb, nf, f64(i) / gn)
+        i += 1usize
+    }
+    let odd = n % 2usize == 1usize
+    var big = 2usize * grid_n
+    if odd { big = 4usize * grid_n }
+    let (v, e5) = mem.alloc[f64](a, big)
+    if e5 != ok { ret e5 }
+    i = 0usize
+    while i < big {
+        v[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i <= grid_n {
+        v[i] = grid[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i + 1usize < grid_n {
+        v[big - 1usize - i] = grid[i + 1usize]
+        i += 1usize
+    }
+    var k = 0usize
+    while k <= n {
+        var idx = 0usize
+        if !odd {
+            let fl = (n + 1usize) / 2usize
+            if k < fl { idx = big - fl + k } else { idx = k - fl }
+        } else {
+            let h2 = (n + 1usize) / 2usize
+            if k < h2 { idx = big - n + 2usize * k } else { idx = 2usize * (k - h2) + 1usize }
+        }
+        var s = 0.0f64
+        var j = 0usize
+        while j < big {
+            s += v[j] * math.cos[f64](2.0f64 * pi_value() * f64((j * idx) % big) / f64(big))
+            j += 1usize
+        }
+        s = s / f64(big)
+        if odd { s = 2.0f64 * s }
+        out[k] = s * win[k]
+        k += 1usize
+    }
+    ret ok
+}
+
+// interp1(x, y, xi, method): linear 0, nearest 1, pchip 2, cubic 3, spline 4; NaN outside the range of x
+fn lookup_count(x: []const f64, lo: usize, hi: usize, v: f64) -> usize {
+    // the number of x[lo..hi] that are <= v
+    var c = 0usize
+    var i = lo
+    while i < hi {
+        if x[i] <= v { c += 1usize }
+        i += 1usize
+    }
+    ret c
+}
+
+fn pchst(arg1: f64, arg2: f64) -> f64 {
+    if arg1 == 0.0f64 || arg2 == 0.0f64 { ret 0.0f64 }
+    var s1 = 1.0f64
+    if arg1 < 0.0f64 { s1 = -1.0f64 }
+    var s2 = 1.0f64
+    if arg2 < 0.0f64 { s2 = -1.0f64 }
+    ret s1 * s2
+}
+
+// SLATEC DPCHIM: the monotone piecewise cubic Hermite derivatives
+fn pchim(n: usize, x: []const f64, f: []const f64, d: []f64) -> err {
+    if n < 2usize { ret BadSpec }
+    var i = 1usize
+    while i < n {
+        if x[i] <= x[i - 1usize] { ret BadSpec }
+        i += 1usize
+    }
+    let nless1 = n - 1usize
+    var h1 = x[1usize] - x[0usize]
+    var del1 = (f[1usize] - f[0usize]) / h1
+    var dsave = del1
+    if nless1 <= 1usize {
+        d[0usize] = del1
+        d[n - 1usize] = del1
+        ret ok
+    }
+    var h2 = x[2usize] - x[1usize]
+    var del2 = (f[2usize] - f[1usize]) / h2
+    var hsum = h1 + h2
+    var w1 = (h1 + hsum) / hsum
+    var w2 = 0.0f64 - h1 / hsum
+    d[0usize] = w1 * del1 + w2 * del2
+    if pchst(d[0usize], del1) <= 0.0f64 {
+        d[0usize] = 0.0f64
+    } else if pchst(del1, del2) < 0.0f64 {
+        let dmax = 3.0f64 * del1
+        if math.abs[f64](d[0usize]) > math.abs[f64](dmax) { d[0usize] = dmax }
+    }
+    i = 2usize
+    while i <= nless1 {
+        if i != 2usize {
+            h1 = h2
+            h2 = x[i] - x[i - 1usize]
+            hsum = h1 + h2
+            del1 = del2
+            del2 = (f[i] - f[i - 1usize]) / h2
+        }
+        d[i - 1usize] = 0.0f64
+        let zz = pchst(del1, del2)
+        if zz < 0.0f64 {
+            dsave = del2
+        } else if zz > 0.0f64 {
+            let hsumt3 = hsum + hsum + hsum
+            w1 = (hsum + h1) / hsumt3
+            w2 = (hsum + h2) / hsumt3
+            var dmax = math.abs[f64](del1)
+            if math.abs[f64](del2) > dmax { dmax = math.abs[f64](del2) }
+            var dmin = math.abs[f64](del1)
+            if math.abs[f64](del2) < dmin { dmin = math.abs[f64](del2) }
+            let drat1 = del1 / dmax
+            let drat2 = del2 / dmax
+            d[i - 1usize] = dmin / (w1 * drat1 + w2 * drat2)
+        } else {
+            if del2 != 0.0f64 { dsave = del2 }
+        }
+        i += 1usize
+    }
+    w1 = 0.0f64 - h2 / hsum
+    w2 = (h2 + hsum) / hsum
+    d[n - 1usize] = w1 * del1 + w2 * del2
+    if pchst(d[n - 1usize], del2) <= 0.0f64 {
+        d[n - 1usize] = 0.0f64
+    } else if pchst(del1, del2) < 0.0f64 {
+        let dmax = 3.0f64 * del2
+        if math.abs[f64](d[n - 1usize]) > math.abs[f64](dmax) { d[n - 1usize] = dmax }
+    }
+    let _ = dsave
+    ret ok
+}
+
+// pchip(x, y, xi) for increasing x with at least 3 points
+fn pchip(a: *mem.Arena, x: []const f64, y: []const f64, xi: []const f64, out: []f64) -> err {
+    let n = x.len
+    let (b, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    let e2 = pchim(n, x, y, b)
+    if e2 != ok { ret e2 }
+    var q = 0usize
+    while q < xi.len {
+        let idx = lookup_count(x, 1usize, n - 1usize, xi[q])
+        let h = x[idx + 1usize] - x[idx]
+        let dy = y[idx + 1usize] - y[idx]
+        let c = (0.0f64 - (b[idx + 1usize] + 2.0f64 * b[idx])) / h + 3.0f64 * dy / (h * h)
+        let d = (b[idx] + b[idx + 1usize]) / (h * h) - 2.0f64 * dy / math.pow[f64](h, 3.0f64)
+        let dx = xi[q] - x[idx]
+        var yi = d
+        yi = yi * dx + c
+        yi = yi * dx + b[idx]
+        yi = yi * dx + y[idx]
+        out[q] = yi
+        q += 1usize
+    }
+    ret ok
+}
+
+fn interp1(a: *mem.Arena, x: []const f64, y: []const f64, xi: []const f64, method: usize, out: []f64) -> err {
+    let nx = x.len
+    var lo = x[0usize]
+    var hi = x[0usize]
+    var i = 0usize
+    while i < nx {
+        if x[i] < lo { lo = x[i] }
+        if x[i] > hi { hi = x[i] }
+        i += 1usize
+    }
+    var q = 0usize
+    while q < xi.len {
+        out[q] = nan_value()
+        q += 1usize
+    }
+    // the points inside the range, in order
+    let (pos, e0) = mem.alloc[usize](a, xi.len + 1usize)
+    if e0 != ok { ret e0 }
+    var cnt = 0usize
+    q = 0usize
+    while q < xi.len {
+        if xi[q] >= lo && xi[q] <= hi {
+            pos[cnt] = q
+            cnt += 1usize
+        }
+        q += 1usize
+    }
+    if cnt == 0usize { ret ok }
+    let (sub, e1) = mem.alloc[f64](a, cnt)
+    let (res, e2) = mem.alloc[f64](a, cnt)
+    if e1 != ok || e2 != ok { ret mem.Exhausted }
+    q = 0usize
+    while q < cnt {
+        sub[q] = xi[pos[q]]
+        q += 1usize
+    }
+    if method == 0usize {
+        if nx < 2usize || y.len < 2usize { ret BadSpec }
+        q = 0usize
+        while q < cnt {
+            var idx = 0usize
+            if nx > 2usize { idx = lookup_count(x, 1usize, nx - 1usize, sub[q]) }
+            let dxv = x[idx + 1usize] - x[idx]
+            let s = (sub[q] - x[idx]) / dxv
+            res[q] = s * (y[idx + 1usize] - y[idx]) + y[idx]
+            q += 1usize
+        }
+    } else if method == 1usize {
+        q = 0usize
+        while q < cnt {
+            // knots c(x[1], x + c(diff(x) / 2, 0)) with values c(y[1], y)
+            let v = sub[q]
+            let nk = nx + 1usize
+            var lo_i = 0usize
+            var hi_i = nk - 1usize
+            while lo_i + 1usize < hi_i {
+                let mid = (lo_i + hi_i) / 2usize
+                var kv = 0.0f64
+                if mid == 0usize { kv = x[0usize] } else if mid < nx { kv = x[mid - 1usize] + (x[mid] - x[mid - 1usize]) / 2.0f64 } else { kv = x[nx - 1usize] }
+                if v < kv { hi_i = mid } else { lo_i = mid }
+            }
+            var khi = 0.0f64
+            if hi_i == 0usize { khi = x[0usize] } else if hi_i < nx { khi = x[hi_i - 1usize] + (x[hi_i] - x[hi_i - 1usize]) / 2.0f64 } else { khi = x[nx - 1usize] }
+            var klo = 0.0f64
+            if lo_i == 0usize { klo = x[0usize] } else if lo_i < nx { klo = x[lo_i - 1usize] + (x[lo_i] - x[lo_i - 1usize]) / 2.0f64 } else { klo = x[nx - 1usize] }
+            var yhi = y[0usize]
+            if hi_i >= 1usize { yhi = y[hi_i - 1usize] }
+            var ylo = y[0usize]
+            if lo_i >= 1usize { ylo = y[lo_i - 1usize] }
+            if v == khi { res[q] = yhi } else if v == klo { res[q] = ylo } else { res[q] = yhi }
+            q += 1usize
+        }
+    } else if method == 2usize {
+        let e3 = pchip(a, x, y, sub[0usize..cnt], res)
+        if e3 != ok { ret e3 }
+    } else if method == 3usize {
+        if nx < 4usize || y.len < 4usize { ret BadSpec }
+        let m3 = nx - 3usize
+        let (ca, e3) = mem.alloc[f64](a, m3)
+        let (cb, e4) = mem.alloc[f64](a, m3)
+        let (cc, e5) = mem.alloc[f64](a, m3)
+        let (cd, e6) = mem.alloc[f64](a, m3)
+        let (d1, e7) = mem.alloc[f64](a, nx)
+        let (d2, e8) = mem.alloc[f64](a, nx)
+        let (d3, e9) = mem.alloc[f64](a, nx)
+        if e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret mem.Exhausted }
+        i = 0usize
+        while i + 1usize < nx {
+            d1[i] = y[i + 1usize] - y[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i + 2usize < nx {
+            d2[i] = d1[i + 1usize] - d1[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i + 3usize < nx {
+            d3[i] = d2[i + 1usize] - d2[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < m3 {
+            let dxi = x[i + 1usize] - x[i]
+            let dx2 = x[i + 1usize] * x[i + 1usize] - x[i] * x[i]
+            let dx3 = math.pow[f64](x[i + 1usize], 3.0f64) - math.pow[f64](x[i], 3.0f64)
+            ca[i] = d3[i] / math.pow[f64](dxi, 3.0f64) / 6.0f64
+            cb[i] = (d2[i] / (dxi * dxi) - 6.0f64 * ca[i] * x[i + 1usize]) / 2.0f64
+            cc[i] = (d1[i] - ca[i] * dx3 - cb[i] * dx2) / dxi
+            cd[i] = y[i] - ((ca[i] * x[i] + cb[i]) * x[i] + cc[i]) * x[i]
+            i += 1usize
+        }
+        q = 0usize
+        while q < cnt {
+            let idx = lookup_count(x, 2usize, nx - 2usize, sub[q])
+            res[q] = ((ca[idx] * sub[q] + cb[idx]) * sub[q] + cc[idx]) * sub[q] + cd[idx]
+            q += 1usize
+        }
+    } else {
+        let (sb, e3) = mem.alloc[f64](a, nx)
+        let (sc, e4) = mem.alloc[f64](a, nx)
+        let (sd2, e5) = mem.alloc[f64](a, nx)
+        if e3 != ok || e4 != ok || e5 != ok { ret mem.Exhausted }
+        spl.fmm_spline(nx, x, y, sb, sc, sd2)
+        q = 0usize
+        while q < cnt {
+            res[q] = spl.spline_eval(nx, x, y, sb, sc, sd2, sub[q])
+            q += 1usize
+        }
+    }
+    q = 0usize
+    while q < cnt {
+        out[pos[q]] = res[q]
+        q += 1usize
+    }
+    ret ok
+}
+
+// fir1(n, w, type, window, scale): type 0 low, 1 high, 2 stop, 3 pass, 4 DC-0, 5 DC-1; a window of n + 1 points (resampled when n is raised); returns the number of taps (n + 1, or n + 2 when n was odd for a type that passes at Nyquist); out needs n + 2 entries
+fn fir1(a: *mem.Arena, n0: usize, w: []const f64, ty: usize, win0: []const f64, scale: bool, out: []f64) -> (usize, err) {
+    var n = n0
+    let bands = w.len + 1usize
+    let ft = ty == 0usize || ty == 2usize || ty == 5usize
+    let (f, e1) = mem.alloc[f64](a, 2usize * bands)
+    let (m, e2) = mem.alloc[f64](a, 2usize * bands)
+    if e1 != ok || e2 != ok { ret (0usize, mem.Exhausted) }
+    var i = 0usize
+    while i < 2usize * bands {
+        f[i] = 0.0f64
+        m[i] = 0.0f64
+        i += 1usize
+    }
+    f[2usize * bands - 1usize] = 1.0f64
+    i = 0usize
+    while i + 1usize < bands {
+        f[2usize * i + 1usize] = w[i]
+        f[2usize * i + 2usize] = w[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < bands {
+        var mv = 0.0f64
+        if ft {
+            if (i + 1usize) % 2usize == 1usize { mv = 1.0f64 }
+        } else if (i + 2usize) % 2usize == 1usize { mv = 1.0f64 }
+        m[2usize * i] = mv
+        m[2usize * i + 1usize] = mv
+        i += 1usize
+    }
+    var win = win0
+    if n % 2usize == 1usize && m[2usize * bands - 1usize] == 1.0f64 {
+        n += 1usize
+        let mm = win0.len
+        let (nw, e3) = mem.alloc[f64](a, mm + 1usize)
+        if e3 != ok { ret (0usize, e3) }
+        if mm == 1usize {
+            nw[0usize] = win0[0usize]
+            nw[1usize] = win0[0usize]
+        } else {
+            let (xo, e4) = mem.alloc[f64](a, mm)
+            let (xn, e5) = mem.alloc[f64](a, mm + 1usize)
+            if e4 != ok || e5 != ok { ret (0usize, mem.Exhausted) }
+            i = 0usize
+            while i < mm {
+                xo[i] = f64(i) / f64(mm - 1usize)
+                i += 1usize
+            }
+            i = 0usize
+            while i <= mm {
+                xn[i] = f64(i) / f64(mm)
+                i += 1usize
+            }
+            var meth = 4usize
+            if mm < 4usize { meth = 0usize }
+            let e6 = interp1(a, xo, win0, xn, meth, nw)
+            if e6 != ok { ret (0usize, e6) }
+        }
+        win = nw
+    }
+    let e7 = fir2(a, n, f, m, 512usize, 2.0f64, win, out)
+    if e7 != ok { ret (0usize, e7) }
+    if scale {
+        var wo = 0.0f64
+        if m[0usize] == 1.0f64 { wo = (f[1usize] - f[0usize]) / 2.0f64 } else { wo = f[2usize] + (f[3usize] - f[2usize]) / 2.0f64 }
+        let (vr, vi) = polyval_at(out[0usize..n + 1usize], math.cos[f64](pi_value() * wo), 0.0f64 - math.sin[f64](pi_value() * wo))
+        let renorm = 1.0f64 / math.sqrt[f64](vr * vr + vi * vi)
+        i = 0usize
+        while i <= n {
+            out[i] = renorm * out[i]
+            i += 1usize
+        }
+    }
+    ret (n + 1usize, ok)
+}
+
+// the helper that applies the window kind to fir1: kind as in window()
+fn fir1_kind(a: *mem.Arena, n: usize, w: []const f64, ty: usize, kind: usize, par: f64, out: []f64) -> (usize, err) {
+    let (win, e1) = mem.alloc[f64](a, n + 1usize)
+    if e1 != ok { ret (0usize, e1) }
+    let e2 = window(a, kind, n + 1usize, par, win)
+    if e2 != ok { ret (0usize, e2) }
+    let (len, e3) = fir1(a, n, w, ty, win, true, out)
+    ret (len, e3)
+}
+
+// decimate(x, q, n, ftype): ftype 0 iir (filtfilt of a Chebyshev type I of order n, 0.05 dB, cut-off 0.8 / q), 1 fir (fir1(n, 1 / q) through fftfilt); out holds ceiling(len / q) entries
+fn decimate(a: *mem.Arena, x: []const f64, q: usize, n: usize, ftype: usize, out: []f64) -> err {
+    let (y, e1) = mem.alloc[f64](a, x.len)
+    if e1 != ok { ret e1 }
+    if ftype == 1usize {
+        let (b, e2) = mem.alloc[f64](a, n + 2usize)
+        if e2 != ok { ret e2 }
+        var cut: [1]f64 = zero
+        cut[0usize] = 1.0f64 / f64(q)
+        let (len, e3) = fir1_kind(a, n, cut[0usize..1usize], 0usize, 0usize, 0.0f64, b)
+        if e3 != ok { ret e3 }
+        fftfilt(b[0usize..len], x, y)
+    } else {
+        let (b, e2) = mem.alloc[f64](a, n + 1usize)
+        let (aa, e3) = mem.alloc[f64](a, n + 1usize)
+        if e2 != ok || e3 != ok { ret mem.Exhausted }
+        var cut: [1]f64 = zero
+        cut[0usize] = 0.8f64 / f64(q)
+        let e4 = design(1usize, n, 0.05f64, 0.0f64, cut[0usize..1usize], 0usize, true, b, aa)
+        if e4 != ok { ret e4 }
+        let e5 = sg.filtfilt(a, b, aa, x, y)
+        if e5 != ok { ret e5 }
+    }
+    var i = 0usize
+    var k = 0usize
+    while i < x.len {
+        out[k] = y[i]
+        k += 1usize
+        i += q
+    }
+    ret ok
+}
+
+// the length of resample(x, p, q, d)
+fn resample_length(len: usize, p: usize, q: usize) -> usize {
+    let r = f64(p) / f64(q)
+    let by = 1.0f64 / r
+    let to = f64(len) + 1.0f64 - by
+    let del = to - 1.0f64
+    var mx = to
+    if 1.0f64 > mx { mx = 1.0f64 }
+    if math.abs[f64](del) / mx < 100.0f64 * 2.220446049250313e-16f64 { ret 1usize }
+    ret usize(math.floor[f64](del / by + 1.0e-10f64)) + 1usize
+}
+
+// resample(x, p, q, d)
+fn resample(a: *mem.Arena, x: []const f64, p: usize, q: usize, d: usize, out: []f64) -> err {
+    let r = f64(p) / f64(q)
+    var src = x
+    if r < 1.0f64 {
+        let (b, e1) = mem.alloc[f64](a, 2usize * d + 3usize)
+        if e1 != ok { ret e1 }
+        var cut: [1]f64 = zero
+        cut[0usize] = r
+        let (len, e2) = fir1_kind(a, 2usize * d + 1usize, cut[0usize..1usize], 0usize, 0usize, 0.0f64, b)
+        if e2 != ok { ret e2 }
+        let (y, e3) = mem.alloc[f64](a, x.len)
+        if e3 != ok { ret e3 }
+        fftfilt(b[0usize..len], x, y)
+        src = y
+    }
+    let cnt = resample_length(x.len, p, q)
+    let by = 1.0f64 / r
+    let to = f64(x.len) + 1.0f64 - by
+    let (padded, e4) = mem.alloc[f64](a, x.len + 2usize * d)
+    if e4 != ok { ret e4 }
+    var i = 0usize
+    while i < padded.len {
+        padded[i] = 0.0f64
+        if i >= d && i < d + x.len { padded[i] = src[i - d] }
+        i += 1usize
+    }
+    var k = 0usize
+    while k < cnt {
+        var tv = 1.0f64 + f64(k) * by
+        if cnt > 1usize && tv > to { tv = to }
+        let idx = math.trunc[f64](tv)
+        let frac = tv - idx
+        var s = 0.0f64
+        var j = 0usize
+        while j <= 2usize * d {
+            let ii = f64(j) - f64(d)
+            let wv = sinc_value(frac - ii) * (0.5f64 + 0.5f64 * math.cos[f64](pi_value() * (frac - ii) / (f64(d) + 0.5f64)))
+            let at = usize(idx + ii + f64(d)) - 1usize
+            s += padded[at] * wv
+            j += 1usize
+        }
+        out[k] = s
+        k += 1usize
+    }
+    ret ok
+}
+
+// interp(x, q, n, Wc): the interpolated signal of x.len * q samples
+fn interp(a: *mem.Arena, x: []const f64, q: usize, n: usize, wc: f64, out: []f64) -> err {
+    let total = x.len * q + q * n + 1usize
+    let (y, e1) = mem.alloc[f64](a, total)
+    let (z, e2) = mem.alloc[f64](a, total)
+    let (b, e3) = mem.alloc[f64](a, 2usize * q * n + 3usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Exhausted }
+    var i = 0usize
+    while i < total {
+        y[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < x.len {
+        y[i * q] = x[i]
+        i += 1usize
+    }
+    var cut: [1]f64 = zero
+    cut[0usize] = wc / f64(q)
+    let (len, e4) = fir1_kind(a, 2usize * q * n + 1usize, cut[0usize..1usize], 0usize, 0usize, 0.0f64, b)
+    if e4 != ok { ret e4 }
+    fftfilt(b[0usize..len], y, z)
+    i = 0usize
+    while i < x.len * q {
+        out[i] = f64(q) * z[i + q * n + 1usize]
+        i += 1usize
+    }
+    ret ok
+}
+
+// sgolay(p, n, m, ts): the n x n filter matrix, row by row, into fm
+fn sgolay(a: *mem.Arena, p: usize, n: usize, m: usize, ts: f64, fm: []f64) -> err {
+    if n % 2usize != 1usize || p >= n { ret BadSpec }
+    let q = p + 1usize
+    let k = n / 2usize
+    let (cq, e1) = mem.alloc[f64](a, n * q)
+    let (rr, e2) = mem.alloc[f64](a, q * q)
+    let (yy, e3) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Exhausted }
+    var row = 0usize
+    while row <= k {
+        // Ce[i, j] = (i + 1 - (row + 1))^j orthogonalised column by column
+        var j = 0usize
+        while j < q {
+            var i = 0usize
+            while i < n {
+                let tt = f64(i) - f64(row)
+                var v = 1.0f64
+                if j == 1usize { v = tt } else if j == 2usize { v = tt * tt } else if j > 2usize { v = math.pow[f64](tt, f64(j)) }
+                cq[i * q + j] = v
+                i += 1usize
+            }
+            j += 1usize
+        }
+        var c = 0usize
+        while c < q * q {
+            rr[c] = 0.0f64
+            c += 1usize
+        }
+        j = 0usize
+        while j < q {
+            var pass = 0usize
+            while pass < 2usize {
+                var l = 0usize
+                while l < j {
+                    var dot = 0.0f64
+                    var i = 0usize
+                    while i < n {
+                        dot += cq[i * q + l] * cq[i * q + j]
+                        i += 1usize
+                    }
+                    i = 0usize
+                    while i < n {
+                        cq[i * q + j] = cq[i * q + j] - dot * cq[i * q + l]
+                        i += 1usize
+                    }
+                    rr[l * q + j] += dot
+                    l += 1usize
+                }
+                pass += 1usize
+            }
+            var nrm = 0.0f64
+            var i = 0usize
+            while i < n {
+                nrm += cq[i * q + j] * cq[i * q + j]
+                i += 1usize
+            }
+            nrm = math.sqrt[f64](nrm)
+            rr[j * q + j] = nrm
+            i = 0usize
+            while i < n {
+                cq[i * q + j] = cq[i * q + j] / nrm
+                i += 1usize
+            }
+            j += 1usize
+        }
+        // R^T y = e_m
+        j = 0usize
+        while j < q {
+            var s = 0.0f64
+            if j == m { s = 1.0f64 }
+            var l = 0usize
+            while l < j {
+                s -= rr[l * q + j] * yy[l]
+                l += 1usize
+            }
+            yy[j] = s / rr[j * q + j]
+            j += 1usize
+        }
+        var i = 0usize
+        while i < n {
+            var s = 0.0f64
+            j = 0usize
+            while j < q {
+                s += yy[j] * cq[i * q + j]
+                j += 1usize
+            }
+            fm[row * n + i] = s
+            i += 1usize
+        }
+        row += 1usize
+    }
+    var sgn = 1.0f64
+    if m % 2usize == 1usize { sgn = -1.0f64 }
+    var jj = 1usize
+    while jj <= k {
+        var c = 0usize
+        while c < n {
+            fm[(k + jj) * n + c] = sgn * fm[(k - jj) * n + (n - 1usize - c)]
+            c += 1usize
+        }
+        jj += 1usize
+    }
+    if m > 0usize {
+        var fact = 1.0f64
+        var t = 1usize
+        while t <= m {
+            fact = fact * f64(t)
+            t += 1usize
+        }
+        let scale = math.pow[f64](ts, f64(m))
+        var c = 0usize
+        while c < n * n {
+            fm[c] = fm[c] * fact / scale
+            c += 1usize
+        }
+    }
+    ret ok
+}
+
+// sgolayfilt(x, p, n, m, ts)
+fn sgolayfilt(a: *mem.Arena, x: []const f64, p: usize, n: usize, m: usize, ts: f64, out: []f64) -> err {
+    let len = x.len
+    let (fm, e1) = mem.alloc[f64](a, n * n)
+    if e1 != ok { ret e1 }
+    let e2 = sgolay(a, p, n, m, ts, fm)
+    if e2 != ok { ret e2 }
+    let k = n / 2usize
+    var i = 0usize
+    while i < k {
+        var s = 0.0f64
+        var j = 0usize
+        while j < n {
+            s += fm[i * n + j] * x[j]
+            j += 1usize
+        }
+        out[i] = s
+        i += 1usize
+    }
+    // z = filter(F[k + 1, n:1], 1, x), kept from n to len
+    i = n - 1usize
+    while i < len {
+        var s = 0.0f64
+        var j = 0usize
+        while j < n && j <= i {
+            s += fm[k * n + (n - 1usize - j)] * x[i - j]
+            j += 1usize
+        }
+        out[i - k] = s
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        var s = 0.0f64
+        var j = 0usize
+        while j < n {
+            s += fm[(k + 1usize + i) * n + j] * x[len - n + j]
+            j += 1usize
+        }
+        out[len - k + i] = s
+        i += 1usize
+    }
+    ret ok
+}
+
+// ---- order estimators ----
+
+// buttord(Wp, Ws, Rp, Rs): returns (n, type) with wc holding the cut-off(s); type 0 low, 1 high, 2 stop, 3 pass
+fn buttord(wp0: []const f64, ws0: []const f64, rp: f64, rs: f64, wc: []f64) -> (usize, usize) {
+    let tt = 2.0f64
+    let cnt = wp0.len
+    var wp: [2]f64 = zero
+    var ws: [2]f64 = zero
+    var st: [2]bool = zero
+    var i = 0usize
+    var any_stop = false
+    while i < cnt {
+        wp[i] = wp0[i]
+        ws[i] = ws0[i]
+        if wp[i] > ws[i] {
+            st[i] = true
+            any_stop = true
+            wp[i] = 1.0f64 - wp[i]
+            ws[i] = 1.0f64 - ws[i]
+        }
+        i += 1usize
+    }
+    var ty = 0usize
+    if cnt == 2usize {
+        ty = 3usize
+        if any_stop { ty = 2usize }
+    } else if any_stop {
+        ty = 1usize
+    }
+    let qs = math.log[f64](math.pow[f64](10.0f64, rs / 10.0f64) - 1.0f64)
+    let qp = math.log[f64](math.pow[f64](10.0f64, rp / 10.0f64) - 1.0f64)
+    var mx = -1.0e300f64
+    i = 0usize
+    while i < cnt {
+        let wsw = (2.0f64 / tt) * math.tan[f64](pi_value() * ws[i] / tt)
+        let wpw = (2.0f64 / tt) * math.tan[f64](pi_value() * wp[i] / tt)
+        ws[i] = wsw
+        wp[i] = wpw
+        let v = 0.5f64 * (qs - qp) / math.log[f64](wsw / wpw)
+        if v > mx { mx = v }
+        i += 1usize
+    }
+    let n = math.ceil[f64](mx / f64(cnt))
+    i = 0usize
+    while i < cnt {
+        var c = math.exp[f64](math.log[f64](wp[i]) - qp / 2.0f64 / n)
+        c = math.atan[f64](tt / 2.0f64 * c) * tt / pi_value()
+        if st[i] { c = 1.0f64 - c }
+        wc[i] = c
+        i += 1usize
+    }
+    ret (usize(n), ty)
+}
+
+// cheb1ord(Wp, Ws, Rp, Rs): (n, type)
+fn cheb1ord(wp0: []const f64, ws0: []const f64, rp: f64, rs: f64) -> (usize, usize) {
+    let tt = 2.0f64
+    let cnt = wp0.len
+    var wp: [2]f64 = zero
+    var ws: [2]f64 = zero
+    var i = 0usize
+    while i < cnt {
+        ws[i] = (2.0f64 / tt) * math.tan[f64](pi_value() * ws0[i] / tt)
+        wp[i] = (2.0f64 / tt) * math.tan[f64](pi_value() * wp0[i] / tt)
+        i += 1usize
+    }
+    var wa = 0.0f64
+    var ty = 0usize
+    if wp[0usize] < ws[0usize] {
+        wa = ws[0usize] / wp[0usize]
+        ty = 0usize
+    } else if cnt == 1usize {
+        ty = 1usize
+        wa = wp[0usize] / ws[0usize]
+    } else {
+        ty = 3usize
+        var best = 1.0e300f64
+        i = 0usize
+        while i < cnt {
+            let v = math.abs[f64]((ws[i] * ws[i] - wp[0usize] * wp[1usize]) / (ws[i] * (wp[0usize] - wp[1usize])))
+            if v < best { best = v }
+            i += 1usize
+        }
+        wa = best
+    }
+    wa = math.abs[f64](wa)
+    let stop_atten = math.pow[f64](10.0f64, math.abs[f64](rs) / 10.0f64)
+    let pass_atten = math.pow[f64](10.0f64, math.abs[f64](rp) / 10.0f64)
+    let z = math.sqrt[f64]((stop_atten - 1.0f64) / (pass_atten - 1.0f64))
+    let acz = math.log[f64](z + math.sqrt[f64](z * z - 1.0f64))
+    let acw = math.log[f64](wa + math.sqrt[f64](wa * wa - 1.0f64))
+    ret (usize(math.ceil[f64](acz / acw)), ty)
+}
+
+// ellipord(Wp, Ws, Rp, Rs): (n, type)
+fn ellipord(wp0: []const f64, ws0: []const f64, rp: f64, rs: f64) -> (f64, usize) {
+    let tt = 2.0f64
+    var wpw: [2]f64 = zero
+    var wsw: [2]f64 = zero
+    var i = 0usize
+    while i < wp0.len {
+        wpw[i] = math.tan[f64](pi_value() * wp0[i] / tt)
+        i += 1usize
+    }
+    i = 0usize
+    while i < ws0.len {
+        wsw[i] = math.tan[f64](pi_value() * ws0[i] / tt)
+        i += 1usize
+    }
+    var ty = 0usize
+    var wpv = 1.0f64
+    var wsv = 1.0f64
+    if wp0.len == 2usize && ws0.len == 2usize {
+        ty = 3usize
+        let w02 = wpw[0usize] * wpw[1usize]
+        let w3 = w02 / wsw[1usize]
+        let w4 = w02 / wsw[0usize]
+        if w3 > wsw[0usize] {
+            wsv = (wsw[1usize] - w3) / (wpw[1usize] - wpw[0usize])
+        } else if w4 < wsw[1usize] {
+            wsv = (w4 - wsw[0usize]) / (wpw[1usize] - wpw[0usize])
+        } else {
+            wsv = (wsw[1usize] - wsw[0usize]) / (wpw[1usize] - wpw[0usize])
+        }
+    } else if wp0.len == 2usize {
+        ty = 3usize
+        let w02 = wpw[0usize] * wpw[1usize]
+        if wsw[0usize] > wpw[1usize] {
+            let w3 = w02 / wsw[0usize]
+            wsv = (wsw[0usize] - w3) / (wpw[1usize] - wpw[0usize])
+        } else {
+            let w4 = w02 / wsw[0usize]
+            wsv = (w4 - wsw[0usize]) / (wpw[1usize] - wpw[0usize])
+        }
+    } else {
+        if wpw[0usize] < wsw[0usize] { ty = 0usize } else { ty = 1usize }
+        wpv = wpw[0usize]
+        wsv = wsw[0usize]
+    }
+    let k = wpv / wsv
+    let k1 = math.sqrt[f64](1.0f64 - k * k)
+    let q0 = 0.5f64 * ((1.0f64 - math.sqrt[f64](k1)) / (1.0f64 + math.sqrt[f64](k1)))
+    let q = q0 + 2.0f64 * math.pow[f64](q0, 5.0f64) + 15.0f64 * math.pow[f64](q0, 9.0f64) + 150.0f64 * math.pow[f64](q0, 13.0f64)
+    let dd = (math.pow[f64](10.0f64, 0.1f64 * rs) - 1.0f64) / (math.pow[f64](10.0f64, 0.1f64 * rp) - 1.0f64)
+    ret (math.ceil[f64](math.log10[f64](16.0f64 * dd) / math.log10[f64](1.0f64 / q)), ty)
+}
+
+// kaiserord(f, m, dev, Fs): returns (n, type, beta); w gets the cut-off(s)
+fn kaiserord(f: []const f64, m: []const f64, dev: f64, fs: f64, w: []f64) -> (usize, usize, f64) {
+    let nw = f.len / 2usize
+    var i = 0usize
+    while i < nw {
+        w[i] = (f[2usize * i] + f[2usize * i + 1usize]) / fs
+        i += 1usize
+    }
+    var ty = 0usize
+    if nw == 1usize {
+        if m[0usize] > m[1usize] { ty = 0usize } else { ty = 1usize }
+    } else if nw == 2usize {
+        if m[0usize] > m[1usize] { ty = 2usize } else { ty = 3usize }
+    } else if m[0usize] > m[1usize] {
+        ty = 5usize
+    } else {
+        ty = 4usize
+    }
+    let att = -20.0f64 * math.log10[f64](dev)
+    var beta = 0.0f64
+    if att > 50.0f64 {
+        beta = 0.1102f64 * (att - 8.7f64)
+    } else if att >= 21.0f64 {
+        beta = 0.5842f64 * math.pow[f64](att - 21.0f64, 0.4f64) + 0.07886f64 * (att - 21.0f64)
+    }
+    var mind = 1.0e300f64
+    i = 0usize
+    while i < nw {
+        let v = f[2usize * i + 1usize] - f[2usize * i]
+        if v < mind { mind = v }
+        i += 1usize
+    }
+    let dw = 2.0f64 * pi_value() * mind / fs
+    var n = math.ceil[f64]((att - 8.0f64) / (2.285f64 * dw))
+    if n < 1.0f64 { n = 1.0f64 }
+    var nu = usize(n)
+    if (m[0usize] > m[1usize]) == (nw % 2usize == 0usize) && nu % 2usize == 1usize { nu += 1usize }
+    ret (nu, ty, beta)
+}
+
+// chirp(t, f0, t1, f1, form, phase): form 0 linear, 1 quadratic, 2 logarithmic
+fn chirp(t: []const f64, f0: f64, t1: f64, f1: f64, form: usize, phase0: f64, out: []f64) {
+    let phase = 2.0f64 * pi_value() * phase0 / 360.0f64
+    var i = 0usize
+    while i < t.len {
+        let tv = t[i]
+        if form == 0usize {
+            let aa = pi_value() * (f1 - f0) / t1
+            let bb = 2.0f64 * pi_value() * f0
+            out[i] = math.cos[f64](aa * (tv * tv) + bb * tv + phase)
+        } else if form == 1usize {
+            let aa = (2.0f64 / 3.0f64 * pi_value() * (f1 - f0) / t1 / t1)
+            let bb = 2.0f64 * pi_value() * f0
+            out[i] = math.cos[f64](aa * math.pow[f64](tv, 3.0f64) + bb * tv + phase)
+        } else {
+            let aa = 2.0f64 * pi_value() * t1 / math.log[f64](f1 - f0)
+            let bb = 2.0f64 * pi_value() * f0
+            let xx = math.pow[f64](f1 - f0, 1.0f64 / t1)
+            out[i] = math.cos[f64](aa * math.pow[f64](xx, tv) + bb * tv + phase)
+        }
+        i += 1usize
+    }
+}
+
+// spencer(x): the 15-point Spencer filter, NaN at the seven samples at each end
+fn spencer(x: []const f64, out: []f64) {
+    var c: [15]f64 = zero
+    c[0usize] = -3.0f64
+    c[1usize] = -6.0f64
+    c[2usize] = -5.0f64
+    c[3usize] = 3.0f64
+    c[4usize] = 21.0f64
+    c[5usize] = 46.0f64
+    c[6usize] = 67.0f64
+    c[7usize] = 74.0f64
+    c[8usize] = 67.0f64
+    c[9usize] = 46.0f64
+    c[10usize] = 21.0f64
+    c[11usize] = 3.0f64
+    c[12usize] = -5.0f64
+    c[13usize] = -6.0f64
+    c[14usize] = -3.0f64
+    var i = 0usize
+    while i < 15usize {
+        c[i] = c[i] / 320.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < x.len {
+        out[i] = nan_value()
+        if i >= 14usize {
+            var s = 0.0f64
+            var j = 0usize
+            while j < 15usize {
+                s += c[j] * x[i - j]
+                j += 1usize
+            }
+            out[i - 7usize] = s
+        }
+        i += 1usize
+    }
+}
+
+// roots(x): polyroot(rev(x)) for the polynomial x, highest power first; returns the degree
+fn roots(a: *mem.Arena, x: []const f64, re: []f64, im: []f64) -> i64 {
+    let (rev, e1) = mem.alloc[f64](a, x.len)
+    if e1 != ok { ret 0i64 - 1i64 }
+    var i = 0usize
+    while i < x.len {
+        rev[i] = x[x.len - 1usize - i]
+        i += 1usize
+    }
+    ret pk.polyroot_c(a, rev, re, im)
+}
+
+// as.Arma(Zpg): b = Re(gain * poly(zero)), a = Re(poly(pole)); b has nz + 1 entries, aa np + 1
+fn zpg_to_arma(zr: []const f64, zi: []const f64, pre: []const f64, pim: []const f64, gain: f64, b: []f64, aa: []f64) {
+    var cr: [CAP]f64 = zero
+    var ci: [CAP]f64 = zero
+    poly_roots_cx(zr, zi, zr.len, cr[0usize..CAP], ci[0usize..CAP])
+    var i = 0usize
+    while i <= zr.len {
+        b[i] = gain * cr[i]
+        i += 1usize
+    }
+    poly_roots_cx(pre, pim, pre.len, cr[0usize..CAP], ci[0usize..CAP])
+    i = 0usize
+    while i <= pre.len {
+        aa[i] = cr[i]
+        i += 1usize
+    }
+}

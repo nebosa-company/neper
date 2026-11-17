@@ -157,6 +157,193 @@ fn answer_two(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         sd.fftfilt(x[2usize..2usize + nb], x[2usize + nb..2usize + nb + len], o)
         ret wsum(o)
     }
+    ret answer_three(a, c)
+}
+
+fn zero_nan(v: []f64) {
+    var i = 0usize
+    while i < v.len {
+        if v[i] != v[i] { v[i] = 0.0f64 }
+        i += 1usize
+    }
+}
+
+fn answer_three(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let k = c.name
+    if str.eq(k, "rmz") {
+        let n = usize(x[0usize])
+        let nf = usize(x[3usize])
+        let o = alloc_f(a, n + 1usize)
+        if sd.remez(a, n, x[4usize..4usize + 2usize * nf], x[4usize + 2usize * nf..4usize + 4usize * nf], x[4usize + 4usize * nf..4usize + 5usize * nf], usize(x[1usize]), usize(x[2usize]), o) != ok { os.exit(7) }
+        ret wsum(o)
+    }
+    if str.eq(k, "f1") || str.eq(k, "f1n") {
+        let n = usize(x[0usize])
+        let nw = usize(x[5usize])
+        let win = alloc_f(a, n + 1usize)
+        if sd.window(a, usize(x[2usize]), n + 1usize, x[3usize], win) != ok { os.exit(7) }
+        let o = alloc_f(a, n + 2usize)
+        let (len, e) = sd.fir1(a, n, x[6usize..6usize + nw], usize(x[1usize]), win, x[4usize] > 0.5f64, o)
+        if e != ok { os.exit(8) }
+        if str.eq(k, "f1n") { ret f64(len) }
+        ret wsum(o[0usize..len])
+    }
+    if str.eq(k, "f2") {
+        let n = usize(x[0usize])
+        let nf = usize(x[5usize])
+        let win = alloc_f(a, n + 1usize)
+        if sd.window(a, usize(x[3usize]), n + 1usize, x[4usize], win) != ok { os.exit(7) }
+        let o = alloc_f(a, n + 1usize)
+        if sd.fir2(a, n, x[6usize..6usize + nf], x[6usize + nf..6usize + 2usize * nf], usize(x[1usize]), x[2usize], win, o) != ok { os.exit(8) }
+        ret wsum(o)
+    }
+    if str.eq(k, "rs") || str.eq(k, "rsn") {
+        let p = usize(x[0usize])
+        let q = usize(x[1usize])
+        let d = usize(x[2usize])
+        let len = usize(x[3usize])
+        let cnt = sd.resample_length(len, p, q)
+        if str.eq(k, "rsn") { ret f64(cnt) }
+        let o = alloc_f(a, cnt)
+        if sd.resample(a, x[4usize..4usize + len], p, q, d, o) != ok { os.exit(8) }
+        ret wsum(o)
+    }
+    if str.eq(k, "dcm") {
+        let q = usize(x[1usize])
+        let len = usize(x[3usize])
+        let o = alloc_f(a, (len + q - 1usize) / q)
+        if sd.decimate(a, x[4usize..4usize + len], q, usize(x[2usize]), usize(x[0usize]), o) != ok { os.exit(8) }
+        ret wsum(o)
+    }
+    if str.eq(k, "ipo") {
+        let q = usize(x[0usize])
+        let len = usize(x[3usize])
+        let o = alloc_f(a, len * q)
+        if sd.interp(a, x[4usize..4usize + len], q, usize(x[1usize]), x[2usize], o) != ok { os.exit(8) }
+        ret wsum(o)
+    }
+    if str.eq(k, "i1") {
+        let nx = usize(x[1usize])
+        let nxi = usize(x[2usize])
+        let o = alloc_f(a, nxi)
+        if sd.interp1(a, x[3usize..3usize + nx], x[3usize + nx..3usize + 2usize * nx], x[3usize + 2usize * nx..3usize + 2usize * nx + nxi], usize(x[0usize]), o) != ok { os.exit(8) }
+        zero_nan(o)
+        ret wsum(o)
+    }
+    if str.eq(k, "sgm") {
+        let n = usize(x[1usize])
+        let o = alloc_f(a, n * n)
+        if sd.sgolay(a, usize(x[0usize]), n, usize(x[2usize]), x[3usize], o) != ok { os.exit(8) }
+        ret wsum(o)
+    }
+    if str.eq(k, "sfl") || str.eq(k, "sfd") {
+        var p = 3usize
+        var n = 5usize
+        var m = 0usize
+        var ts = 1.0f64
+        var len = usize(x[0usize])
+        var at = 1usize
+        if str.eq(k, "sfl") {
+            p = usize(x[0usize])
+            n = usize(x[1usize])
+            m = usize(x[2usize])
+            ts = x[3usize]
+            len = usize(x[4usize])
+            at = 5usize
+        }
+        let o = alloc_f(a, len)
+        if sd.sgolayfilt(a, x[at..at + len], p, n, m, ts, o) != ok { os.exit(8) }
+        ret wsum(o)
+    }
+    if str.eq(k, "bon") || str.eq(k, "boc") || str.eq(k, "bot") || str.eq(k, "con") || str.eq(k, "cot") || str.eq(k, "eon") || str.eq(k, "eot") {
+        let nw = usize(x[0usize])
+        let wp = x[1usize..1usize + nw]
+        let ws = x[1usize + nw..1usize + 2usize * nw]
+        let rp = x[1usize + 2usize * nw]
+        let rs = x[2usize + 2usize * nw]
+        let wc = alloc_f(a, 2usize)
+        var n = 0usize
+        var ty = 0usize
+        if str.eq(k, "bon") || str.eq(k, "boc") || str.eq(k, "bot") {
+            let (n1, t1) = sd.buttord(wp, ws, rp, rs, wc)
+            n = n1
+            ty = t1
+            if str.eq(k, "boc") { ret wsum(wc[0usize..nw]) }
+        } else if str.eq(k, "con") || str.eq(k, "cot") {
+            let (n2, t2) = sd.cheb1ord(wp, ws, rp, rs)
+            n = n2
+            ty = t2
+        } else {
+            let (n3, t3) = sd.ellipord(wp, ws, rp, rs)
+            ty = t3
+            if str.eq(k, "eon") { ret n3 }
+        }
+        if str.eq(k, "bot") || str.eq(k, "cot") || str.eq(k, "eot") { ret f64(ty) }
+        ret f64(n)
+    }
+    if str.eq(k, "kon") || str.eq(k, "kob") || str.eq(k, "kow") || str.eq(k, "kot") {
+        let nf = usize(x[1usize])
+        let nm = nf / 2usize + 1usize
+        let w = alloc_f(a, 4usize)
+        let (n, ty, beta) = sd.kaiserord(x[2usize..2usize + nf], x[2usize + nf..2usize + nf + nm], x[2usize + nf + nm], x[0usize], w)
+        if str.eq(k, "kon") { ret f64(n) }
+        if str.eq(k, "kob") { ret beta }
+        if str.eq(k, "kot") { ret f64(ty) }
+        ret wsum(w[0usize..nf / 2usize])
+    }
+    if str.eq(k, "chp") {
+        let len = usize(x[5usize])
+        let o = alloc_f(a, len)
+        sd.chirp(x[6usize..6usize + len], x[1usize], x[2usize], x[3usize], usize(x[0usize]), x[4usize], o)
+        ret wsum(o)
+    }
+    if str.eq(k, "spc") {
+        let len = usize(x[0usize])
+        let o = alloc_f(a, len)
+        sd.spencer(x[1usize..1usize + len], o)
+        zero_nan(o)
+        ret wsum(o)
+    }
+    if str.eq(k, "rtr") || str.eq(k, "rti") {
+        let nc = usize(x[0usize])
+        let re = alloc_f(a, nc)
+        let im = alloc_f(a, nc)
+        let deg = sd.roots(a, x[1usize..1usize + nc], re, im)
+        if deg < 0i64 { os.exit(8) }
+        if str.eq(k, "rtr") { ret wsum(re[0usize..usize(deg)]) }
+        ret wsum(im[0usize..usize(deg)])
+    }
+    if str.eq(k, "zb") || str.eq(k, "za") {
+        let nz = usize(x[0usize])
+        let np = usize(x[1usize])
+        let g = x[2usize]
+        let zr = alloc_f(a, 2usize * nz)
+        let zi = alloc_f(a, 2usize * nz)
+        let pr = alloc_f(a, 2usize * np)
+        let pim = alloc_f(a, 2usize * np)
+        var i = 0usize
+        while i < nz {
+            zr[i] = x[3usize + i]
+            zr[nz + i] = x[3usize + i]
+            zi[i] = x[3usize + nz + i]
+            zi[nz + i] = 0.0f64 - x[3usize + nz + i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < np {
+            pr[i] = x[3usize + 2usize * nz + i]
+            pr[np + i] = x[3usize + 2usize * nz + i]
+            pim[i] = x[3usize + 2usize * nz + np + i]
+            pim[np + i] = 0.0f64 - x[3usize + 2usize * nz + np + i]
+            i += 1usize
+        }
+        let b = alloc_f(a, 2usize * nz + 1usize)
+        let aa = alloc_f(a, 2usize * np + 1usize)
+        sd.zpg_to_arma(zr, zi, pr, pim, g, b, aa)
+        if str.eq(k, "zb") { ret wsum(b) }
+        ret wsum(aa)
+    }
     os.exit(9)
     ret 0.0f64
 }

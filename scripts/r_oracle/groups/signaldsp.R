@@ -85,4 +85,123 @@ for (rep in 1:30) {
   c1 <- as.numeric(conv(b, x)); add("cnv", c(nb, len, b, x), wsum(c1))
   ff <- as.numeric(fftfilt(b, x)); add("fft", c(nb, len, b, x), wsum(ff))
 }
+
+# remez: args (n, ftype 1 bandpass 2 differentiator 3 hilbert, density, nf, f..., a..., w...)
+set.seed(20270103)
+nrem <- 0
+for (rep in 1:60) {
+  ft <- c("bandpass", "differentiator", "hilbert")[(rep - 1) %% 3 + 1]; n <- sample(c(10:40), 1); dens <- sample(c(16, 20, 32), 1)
+  if (ft == "bandpass") {
+    nb <- sample(1:2, 1)
+    f <- sort(c(0, runif(2 * nb - 2, 0.05, 0.9), 1)); a <- rep(c(1, 0), length.out = length(f) / 2)[rep(1:(length(f) / 2), each = 2)]; w <- round(runif(length(f) / 2, 0.5, 3), 2)
+  } else { f <- c(0, runif(1, 0.8, 0.98)); a <- if (ft == "differentiator") c(0, f[2] / 2) else c(1, 1); w <- 1 }
+  # the C routine overruns its grid when the band rounding disagrees with its size prediction; keep only the cases where they agree
+  nt <- n + 1; rr <- nt %/% 2; if (nt %% 2 == 1 && ft == "bandpass") rr <- rr + 1
+  bd <- f / 2; pred <- sum(trunc(2 * rr * dens * (bd[seq(2, length(bd), 2)] - bd[seq(1, length(bd), 2)]) + 0.5)) - (ft != "bandpass")
+  delf <- 0.5 / (dens * rr); g0 <- if (ft != "bandpass" && delf > bd[1]) delf else bd[1]; act <- 0
+  for (bb in seq_len(length(bd) / 2)) { lo <- if (bb == 1) g0 else bd[2 * bb - 1]; act <- act + trunc((bd[2 * bb] - lo) / delf + 0.5) }
+  if (act != pred) next
+  b <- try(remez(n, f, a, w, ft, dens), silent = TRUE)
+  if (inherits(b, "try-error")) next
+  nrem <- nrem + 1
+  add("rmz", c(n, which(c("bandpass", "differentiator", "hilbert") == ft), dens, length(f) / 2, f, a, w), wsum(b), rel = 1e-8, abs = 1e-9)
+}
+cat("remez cases:", nrem, "\n")
+
+# fir1 with a window: args (n, ty, kind, par, scale, nw, w...); fn "f1" the taps, "f1n" their number
+kinds <- c(0, 1, 2, 6, 7, 8, 9)
+for (rep in 1:60) {
+  ty <- (rep - 1) %% 6; tys6 <- c("low", "high", "stop", "pass", "DC-0", "DC-1")[ty + 1]
+  n <- sample(c(10, 11, 20, 21, 30, 31), 1); kind <- sample(kinds, 1); par <- switch(match(kind, kinds), 0, 0, 0, runif(1, 1, 8), runif(1, 40, 90), runif(1, 1, 3), 0)
+  nw <- if (ty %in% c(2, 3)) 2 else if (ty >= 4) sample(1:3, 1) else 1
+  w <- sort(runif(nw, 0.1, 0.9)); sc <- sample(c(0, 1), 1)
+  win <- switch(match(kind, kinds), hamming(n + 1), hanning(n + 1), blackman(n + 1), kaiser(n + 1, par), chebwin(n + 1, par), gausswin(n + 1, par), flattopwin(n + 1))
+  b <- suppressWarnings(fir1(n, w, tys6, window = win, scale = sc == 1))
+  add("f1", c(n, ty, kind, par, sc, nw, w), wsum(b)); add("f1n", c(n, ty, kind, par, sc, nw, w), length(b))
+}
+
+# fir2 with a window: args (n, grid_n, ramp_n, kind, par, nf, f..., m...)
+for (rep in 1:30) {
+  n <- sample(c(8, 15, 16, 21, 30, 41), 1); gridn <- sample(c(256, 512), 1); rn <- c(0, 2, gridn / 20)[rep %% 3 + 1]; kind <- sample(c(0, 1, 2, 6), 1); par <- if (kind == 6) runif(1, 1, 8) else 0
+  c1 <- sort(runif(2, 0.1, 0.9)); f <- c(0, c1[1], c1[1], c1[2], 1); m <- c(1, 1, 0.2, 0.2, 0.6)
+  win <- switch(match(kind, c(0, 1, 2, 6)), hamming(n + 1), hanning(n + 1), blackman(n + 1), kaiser(n + 1, par))
+  b <- fir2(n, f, m, gridn, rn, win)
+  add("f2", c(n, gridn, rn, kind, par, length(f), f, m), wsum(as.numeric(b)))
+}
+
+# resample, decimate, interp: args (p, q, d, len, x...) ; (ftype, q, n, len, x...) ; (q, n, Wc, len, x...)
+for (rep in 1:30) {
+  len <- sample(30:80, 1); x <- round(cumsum(rnorm(len)), 3); p <- sample(1:5, 1); q <- sample(1:5, 1); d <- sample(c(3, 5, 7), 1)
+  y <- resample(x, p, q, d)
+  add("rs", c(p, q, d, len, x), wsum(y)); add("rsn", c(p, q, d, len, x), length(y))
+}
+for (rep in 1:30) {
+  len <- sample(80:200, 1); x <- round(cumsum(rnorm(len)), 3); q <- sample(2:5, 1); ft <- rep %% 2
+  n <- if (ft == 1) sample(c(10, 20, 30), 1) else sample(c(4, 6, 8), 1)
+  y <- decimate(x, q, n, if (ft == 1) "fir" else "iir")
+  add("dcm", c(ft, q, n, len, x), wsum(y))
+}
+for (rep in 1:15) {
+  len <- sample(10:40, 1); x <- round(rnorm(len), 3); q <- sample(2:4, 1); n <- sample(2:5, 1); wc <- sample(c(0.5, 0.8, 1), 1)
+  y <- interp(x, q, n, wc)
+  add("ipo", c(q, n, wc, len, x), wsum(y))
+}
+
+# interp1: args (method 0 linear 1 nearest 2 pchip 3 cubic 4 spline, nx, nxi, x..., y..., xi...); NA counts as 0
+for (rep in 1:50) {
+  method <- (rep - 1) %% 5; nx <- sample(5:15, 1); x <- cumsum(runif(nx, 0.3, 2)); y <- round(rnorm(nx), 3)
+  nxi <- sample(5:25, 1); xi <- runif(nxi, min(x) - 0.5, max(x) + 0.5); xi[1] <- x[2]; xi[2] <- max(x); xi[3] <- min(x)
+  r <- interp1(x, y, xi, c("linear", "nearest", "pchip", "cubic", "spline")[method + 1])
+  r[is.na(r)] <- 0
+  add("i1", c(method, nx, nxi, x, y, xi), wsum(r), rel = 1e-9, abs = 1e-10)
+}
+
+# sgolay: args (p, n, m, ts); "sgm" the matrix by rows, "sfl" filter: args (p, n, m, ts, len, x...)
+for (rep in 1:30) {
+  n <- sample(c(5, 7, 9, 11, 13, 15), 1); p <- sample(1:min(4, n - 2), 1); m <- sample(0:min(2, p), 1); ts <- sample(c(1, 0.5, 2), 1)
+  F <- unclass(sgolay(p, n, m, ts))
+  add("sgm", c(p, n, m, ts), wsum(t(F)), rel = 1e-8, abs = 1e-9)
+  len <- sample(30:60, 1); x <- round(rnorm(len), 3)
+  add("sfl", c(p, n, m, ts, len, x), wsum(sgolayfilt(x, p, n, m, ts)), rel = 1e-8, abs = 1e-9)
+}
+for (rep in 1:10) { len <- sample(30:60, 1); x <- round(rnorm(len), 3); add("sfd", c(len, x), wsum(sgolayfilt(x))) }
+
+# order estimators: args (nw, wp..., ws..., rp, rs); fn "bo*" buttord, "co*" cheb1ord, "eo*" ellipord
+tyc <- function(s) match(s, c("low", "high", "stop", "pass")) - 1
+for (rep in 1:30) {
+  two <- rep %% 3 == 0; high <- rep %% 2 == 0
+  if (two) { w1 <- runif(1, 0.3, 0.5); w2 <- w1 + runif(1, 0.1, 0.2); wp <- c(w1, w2); ws <- c(w1 - runif(1, 0.1, 0.25), w2 + runif(1, 0.05, 0.2)) }
+  else { wp <- runif(1, 0.3, 0.6); ws <- if (high) wp - runif(1, 0.1, 0.25) else wp + runif(1, 0.1, 0.3) }
+  rp <- runif(1, 0.5, 3); rs <- runif(1, 20, 60)
+  ar <- c(length(wp), wp, ws, rp, rs)
+  b <- suppressWarnings(buttord(wp, ws, rp, rs)); add("bon", ar, b$n); add("boc", ar, wsum(b$Wc)); add("bot", ar, tyc(b$type))
+  cc <- try(cheb1ord(wp, ws, rp, rs), silent = TRUE)
+  if (!inherits(cc, "try-error")) { add("con", ar, cc$n); add("cot", ar, tyc(cc$type)) }
+  ee <- try(ellipord(wp, ws, rp, rs), silent = TRUE)
+  if (!inherits(ee, "try-error")) { add("eon", ar, ee$n); add("eot", ar, tyc(ee$type)) }
+}
+for (rep in 1:20) {
+  kind <- rep %% 4; dev <- runif(1, 0.001, 0.1); fs <- sample(c(2, 8000), 1)
+  if (kind == 0) { f <- c(0.2, 0.3) * fs / 2; m <- c(1, 0) } else if (kind == 1) { f <- c(0.2, 0.3) * fs / 2; m <- c(0, 1) }
+  else if (kind == 2) { f <- c(0.1, 0.2, 0.4, 0.5) * fs / 2; m <- c(0, 1, 0) } else { f <- c(0.1, 0.2, 0.4, 0.5) * fs / 2; m <- c(1, 0, 1) }
+  k <- kaiserord(f, m, dev, fs)
+  add("kon", c(fs, length(f), f, m, dev), k$n); add("kob", c(fs, length(f), f, m, dev), k$beta)
+  add("kow", c(fs, length(f), f, m, dev), wsum(k$Wc)); add("kot", c(fs, length(f), f, m, dev), match(k$type, c("low", "high", "stop", "pass", "DC-0", "DC-1")) - 1)
+}
+
+# chirp, spencer, roots, Zpg to Arma
+for (rep in 1:15) {
+  form <- (rep - 1) %% 3; len <- sample(10:50, 1); tt <- seq(0, 1, length.out = len); f0 <- runif(1, 0, 20); f1 <- f0 + runif(1, 5, 60); ph <- runif(1, 0, 90)
+  add("chp", c(form, f0, 1, f1, ph, len, tt), wsum(chirp(tt, f0, 1, f1, c("linear", "quadratic", "logarithmic")[form + 1], ph)))
+  len <- sample(20:60, 1); x <- round(rnorm(len), 3); s <- spencer(x); s[is.na(s)] <- 0
+  add("spc", c(len, x), wsum(s))
+  d <- sample(2:8, 1); cf <- round(rnorm(d + 1), 3); cf[1] <- cf[1] + 2
+  r <- roots(cf)
+  add("rtr", c(d + 1, cf), wsum(Re(r))); add("rti", c(d + 1, cf), wsum(Im(r)))
+  nz <- sample(0:3, 1); npp <- sample(1:4, 1)
+  zr <- round(runif(nz, -0.9, 0.9), 3); zi <- round(runif(nz, 0.1, 0.9), 3); pr <- round(runif(npp, -0.9, 0.9), 3); pim <- round(runif(npp, 0.1, 0.9), 3); g <- runif(1, 0.5, 2)
+  z <- c(complex(real = zr, imaginary = zi), complex(real = zr, imaginary = -zi)); p <- c(complex(real = pr, imaginary = pim), complex(real = pr, imaginary = -pim))
+  ar <- as.Arma(Zpg(zero = z, pole = p, gain = g))
+  add("zb", c(nz, npp, g, zr, zi, pr, pim), wsum(ar$b)); add("za", c(nz, npp, g, zr, zi, pr, pim), wsum(ar$a))
+}
 emit("signaldsp", "signal", list(cases))
