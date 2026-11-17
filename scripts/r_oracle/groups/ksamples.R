@@ -65,6 +65,7 @@ for (rep in 1:40) {
   if (exp(lgamma(sum(n) + 1) - sum(lgamma(n + 1))) > 3000) next
   r <- do.call(ad.test, c(lst, list(method = "exact", Nsim = 10000)))$ad
   if (ncol(r) < 4) next
+  for (tt in 0:1) { rq <- do.call(qn.test, c(lst, list(test = c("KW", "vdW")[tt + 1], method = "exact", Nsim = 10000)))$qn; if (length(rq) == 3) cases[[length(cases) + 1]] <- case("ex", c(10 + tt, k, n, unlist(lst)), rq[[3]], rel = 2e-5, abs = 1e-6) }
   for (v in 1:2) cases[[length(cases) + 1]] <- case("ex", c(v, k, n, unlist(lst)), r[v, 4], rel = 2e-5, abs = 1e-6)
 }
 emit("ksamples", "kSamples", list(cases))

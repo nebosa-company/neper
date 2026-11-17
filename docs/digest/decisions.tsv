@@ -3691,4 +3691,5 @@ D6828	912	smooth.spline with a given spar
 D6829	599	kSamples: ad.pval
 D6830	930	kSamples: qn.test (Kruskal-Wallis and van der Waerden), asymptotic
 D6831	960	kSamples: contingency2xt, asymptotic and exact
-D6832	782	kSamples: ad.test exact p value
+D6832	783	kSamples: ad.test exact p value
+D6833	795	kSamples: exact qn.test p value

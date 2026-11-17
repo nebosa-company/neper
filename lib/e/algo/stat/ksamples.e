@@ -1017,7 +1017,7 @@ fn contingency2xt_exact(a: *mem.Arena, avec: []const f64, bvec: []const f64) -> 
 
 // ---- ad.test exact p value: every assignment of the pooled observations to the samples ----
 
-type AdxCtx = struct { x: []const f64, sizes: []const usize, version: usize, n: usize, k: usize, left: []usize, grp: []usize, xp: []f64, obs: f64, tol: f64, hit: f64, total: f64, arena: *mem.Arena }
+type AdxCtx = struct { qn: usize, x: []const f64, sizes: []const usize, version: usize, n: usize, k: usize, left: []usize, grp: []usize, xp: []f64, obs: f64, tol: f64, hit: f64, total: f64, arena: *mem.Arena }
 
 fn adx_walk(c: *AdxCtx, pos: usize) {
     if pos == c.n {
@@ -1038,7 +1038,8 @@ fn adx_walk(c: *AdxCtx, pos: usize) {
             g += 1usize
         }
         let start = mem.mark(c.arena)
-        let st = ad_test(c.arena, c.xp, c.sizes, c.version, 0usize)
+        var st = 0.0f64
+        if c.qn == 0usize { st = ad_test(c.arena, c.xp, c.sizes, c.version, 0usize) } else { st = qn_test(c.arena, c.xp, c.sizes, c.qn - 1usize, 0usize) }
         mem.reset(c.arena, start)
         c.total += 1.0f64
         if st >= c.obs - c.tol { c.hit += 1.0f64 }
@@ -1070,7 +1071,26 @@ fn ad_exact_p(a: *mem.Arena, x: []const f64, sizes: []const usize, version: usiz
         g += 1usize
     }
     let obs = ad_test(a, x, sizes, version, 0usize)
-    var ctx = AdxCtx{ x: x, sizes: sizes, version: version, n: n, k: k, left: left, grp: grp, xp: xp, obs: obs, tol: tol, hit: 0.0f64, total: 0.0f64, arena: a }
+    var ctx = AdxCtx{ qn: 0usize, x: x, sizes: sizes, version: version, n: n, k: k, left: left, grp: grp, xp: xp, obs: obs, tol: tol, hit: 0.0f64, total: 0.0f64, arena: a }
+    adx_walk(&ctx, 0usize)
+    ret ctx.hit / ctx.total
+}
+
+// qn.test(method = "exact") p value for test 0 (KW) or 1 (vdW): the share of the assignments of the pooled observations to the samples whose statistic is at least the observed
+fn qn_exact_p(a: *mem.Arena, x: []const f64, sizes: []const usize, test: usize) -> f64 {
+    let n = x.len
+    let k = sizes.len
+    let (left, e1) = mem.alloc[usize](a, k)
+    let (grp, e2) = mem.alloc[usize](a, n)
+    let (xp, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var g = 0usize
+    while g < k {
+        left[g] = sizes[g]
+        g += 1usize
+    }
+    let obs = qn_test(a, x, sizes, test, 0usize)
+    var ctx = AdxCtx{ qn: test + 1usize, x: x, sizes: sizes, version: 0usize, n: n, k: k, left: left, grp: grp, xp: xp, obs: obs, tol: 1.0e-7f64, hit: 0.0f64, total: 0.0f64, arena: a }
     adx_walk(&ctx, 0usize)
     ret ctx.hit / ctx.total
 }

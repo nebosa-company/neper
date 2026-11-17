@@ -20,6 +20,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             tote += sze[ie]
             ie += 1usize
         }
+        if x[0usize] >= 10.0f64 { ret ks.qn_exact_p(a, x[2usize + ke..2usize + ke + tote], sze, usize(x[0usize]) - 10usize) }
         ret ks.ad_exact_p(a, x[2usize + ke..2usize + ke + tote], sze, usize(x[0usize]), 0.0f64)
     }
     if c.name[0usize] == 99u8 {
