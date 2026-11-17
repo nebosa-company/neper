@@ -202,17 +202,6 @@
       "evidence": "Partial (D6610). e.algo.stat.mcmcpkg.metrop (batch means, per-batch acceptance, final state; three fixed log densities) equals mcmc 0.9-8 under set.seed on Windows (oracle_mcmc, 90 values; Linux pending). Open: user densities, outfun, morph, temper, initseq. Was: Open (CRAN rank 789). Small to mid. e.math.mcmc has metropolis_hastings. Acceptance, equal to mcmc value for value under set.seed: metrop with its batching and scaling, morph and morph.metrop, temper with parallel and serial tempering, initseq and olbm variance estimates."
     },
     {
-      "id": "L449",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 630,
-      "title": "sn: skew-normal and skew-t distributions",
-      "score": 0.4,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6148). dsn (with tau), psn via Owen T, qsn (tau = 0) and dst equal sn on Windows (oracle_sn; Linux pending). D6804: rsn (tau of 0 and not) and rst after set.seed equal sn on 40 samples. Open: psn bivariate engine, pst, qst, multivariate, selm. Was: Open (CRAN rank 798). Small to mid. Acceptance, equal to sn under set.seed: dsn, psn, qsn, rsn, dst, pst, qst, rst, multivariate dmsn, dmst, rmsn, rmst, the moment and cumulant functions, and selm fits by MLE and MPLE. D6991: st_cumulant (the first four cumulants of the skew-t and, at nu = Inf, the skew-normal) equals sn::st.cumulants (oracle_sn, 958 cases). D6992: dp2cp of the proper type for the skew-normal and skew-t (mean, sd, skewness, excess kurtosis) equals sn::dp2cp (oracle_sn, 1034 cases). D7005: cp2dp for the skew-normal (closed form from the skewness) equals sn::cp2dp on 30 settings (oracle_sn, 1124 cases). Open: cp2dp for the skew-t, pst, qst, the multivariate families, selm."
-    },
-    {
       "id": "L450",
       "category": "library",
       "group": "CRAN parity",
