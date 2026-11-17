@@ -65,6 +65,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if kind == 8usize { deriv = 1usize }
     if kind == 9usize { deriv = 2usize }
     if kind == 11usize { deriv = 1usize }
+    if kind == 40usize { deriv = 3usize }
+    if kind == 41usize {
+        k8 = 1u8
+        deriv = 3usize
+    }
+    if kind == 42usize {
+        k8 = 1u8
+        deriv = 2usize
+    }
     if kind == 30usize || kind == 32usize { deriv = 1usize }
     if kind == 31usize || kind == 33usize { deriv = 2usize }
     var s = 0.0f64
@@ -91,6 +100,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             }
         } else if kind >= 15usize && kind <= 17usize {
             m = sp.bern_row(degree, icp, lo, hi, kind - 15usize, xs[i], out)
+        } else if kind == 19usize {
+            m = sp.bern_row(degree, icp, lo, hi, 100usize, xs[i], out)
         } else if kind == 6usize || kind == 7usize {
             let (tn2, ec1) = mem.alloc[f64](a, nk + 2usize * (degree + 2usize))
             let (tmpn2, ec2) = mem.alloc[f64](a, 2usize * width + 4usize)

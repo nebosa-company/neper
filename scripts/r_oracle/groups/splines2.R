@@ -132,4 +132,20 @@ for (rep in 1:40) {
     v <- as.vector(t(m)); a <- c(n, nk, 3, icp, lo, hi, kind, x, kn); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
   }
 }
+# bernsteinPoly integral (kind 19)
+for (rep in 1:40) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); degree <- sample(2:7, 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4)))
+  m <- tryCatch(unclass(bernsteinPoly(x, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), integral = TRUE)), error = function(e) NULL); if (is.null(m)) next
+  v <- as.vector(t(m)); a <- c(n, 0, degree, icp, lo, hi, 19, x); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
+}
+# third derivatives: bSpline (kind 40), mSpline (41) and iSpline (42, the mSpline second derivative)
+for (rep in 1:40) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); nk <- sample(0:3, 1); degree <- sample(3:5, 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- if (nk > 0) sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)) else numeric(0); if (anyDuplicated(kn)) next
+  for (kind in 40:42) {
+    m <- tryCatch(suppressWarnings(unclass(switch(kind - 39, bSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = 3), mSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = 3), iSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = 3)))), error = function(e) NULL); if (is.null(m)) next
+    v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, kind, x, kn); cases[[length(cases) + 1]] <- case("sum", a, sum(v), rel = 1e-9, abs = 1e-8); cases[[length(cases) + 1]] <- case("w", a, sum(seq_along(v) * v), rel = 1e-9, abs = 1e-8)
+  }
+}
 emit("splines2", "splines2", list(cases))

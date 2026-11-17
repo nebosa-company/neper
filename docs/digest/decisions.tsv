@@ -3603,4 +3603,5 @@ D6740	1025	EnvStats: gofTest for the normal and lognormal distributions
 D6741	1425	ggm: the ancestral graph constructions RG, SG, AG, Max, MRG, MSG and MAG
 D6742	1745	pastecs: the periodic spline of regul and decloess through R's stl
 D6743	1086	splines2: knots from df and x beyond the boundary
-D6744	883	splines2: periodic iSpline and cSpline, mSpline integrals, natural and nsk derivatives
+D6744	884	splines2: periodic iSpline and cSpline, mSpline integrals, natural and nsk derivatives
+D6745	742	splines2: Bernstein integrals and third derivatives

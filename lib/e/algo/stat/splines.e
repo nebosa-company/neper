@@ -355,7 +355,14 @@ fn bern_row(degree: usize, intercept: bool, lo: f64, hi: f64, deriv: usize, x: f
     while i <= degree {
         if i > 0usize || intercept {
             var v = 0.0f64
-            if deriv == 0usize {
+            if deriv == 100usize {
+                var j2 = i + 1usize
+                while j2 <= degree + 1usize {
+                    v += bern_val(degree + 1usize, i64(j2), u)
+                    j2 += 1usize
+                }
+                v = v * (hi - lo) / f64(degree + 1usize)
+            } else if deriv == 0usize {
                 v = bern_val(degree, i64(i), u)
             } else if deriv <= degree {
                 var ff = 1.0f64
