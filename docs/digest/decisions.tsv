@@ -3867,4 +3867,7 @@ D7004	716	extraDistr truncated binomial, truncated Poisson and logarithmic serie
 D7005	453	sn cp2dp for the skew-normal
 D7006	658	extraDistr generators through the R gamma, t, normal and beta generators
 D7007	359	extraDistr beta-prime generator
-D7008	628	pracma fminsearch Hooke-Jeeves
+D7008	630	pracma fminsearch Hooke-Jeeves
+D7009	787	Hmisc rcspline.eval default knots, describe, cut2 codes
+D7010	727	Hmisc redun with splines, categories and the adjusted R2
+D7011	260	L305 closed

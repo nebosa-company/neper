@@ -48538,3 +48538,16 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D7008 — pracma fminsearch Hooke-Jeeves
 
 `fminsearchpkg.hooke_jeeves` ports `.hj`/`.hjb`: nsteps = floor(log2(1/tol)) halvings of the step, `.hjsearch` with the pattern move and the retry from the base point, and `.hjexplore`/`.hjbexplore` visiting the coordinates in the order of sample.int(n, n) from the seeded generator (`rng.sample_int`), the bounded version skipping a trial point outside its bound. Equal to fminsearch(method = "Hooke-Jeeves") on 40 starts, half bounded, of the five test functions, including the minimiser, the minimum, the evaluation count and the iterations (oracle_fminsearchpkg). Linux pending.
+
+
+## D7009 — Hmisc rcspline.eval default knots, describe, cut2 codes
+
+`rcspline_knots`: the default knot placement of rcspline.eval (tail quantiles at outer = 0.1, 0.05 or 0.025, the fifth smallest and largest values for samples under 100, the fractied end-point rule, the alternate algorithm for few distinct values) on 90 samples (498 values). `describe_numeric`: n, missing, distinct, Info, Mean, pMedian (median of the Walsh averages i <= j, what Hmisc Fortran hlqest returns), Gmd, the seven quantiles, five lowest and highest distinct values on 40 samples (960 values). `cut2_codes` and `cut2_codes_cuts`: the interval codes of cut2 for g, m (g = floor(n / m)) and given cuts with the minmax end cuts and the half-minimum-gap shift. All equal Hmisc (oracle_hmisc). Linux pending.
+
+## D7010 — Hmisc redun with splines, categories and the adjusted R2
+
+`redun_general`: each continuous variable with at least three distinct values and nk > 0 expands to x plus the restricted cubic spline basis (default knots), each factor to its level indicators but the first; R2 of a variable is the squared first canonical correlation (R qr with tolerance 1e-7, largest singular value of Qx'Qy) of the other terms in, with the target reduced to its linear column when tlinear; ordinary or adjusted ((1 - R2)(n - 1) / (n - dof - 1), dof = predictors + target columns - 1); the loop and the r2later stop rule of the package. Equal to redun on 40 data sets, half with a factor and some with ties (oracle_hmisc, 188 values).
+
+## D7011 — L305 closed
+
+Every item of the L305 acceptance list has an oracle case in oracle_hmisc (11236 values), so L305 moves to docs/work-done.jsonl. describe of factor and character vectors and the printed output are outside the acceptance and not done.

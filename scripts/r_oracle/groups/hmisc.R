@@ -107,4 +107,46 @@ for (rep in 1:30) { n <- sample(10:80, 1); x <- rnorm(n); y <- x * runif(1, -1, 
 # rcspline.restate "rsr" (k, norm, integral, which, knots[k], coef[k - 1])
 for (rep in 1:30) { k <- sample(3:6, 1); kn <- sort(round(runif(k, -3, 4), 2)); if (any(diff(kn) < 0.1)) next; cf <- round(rnorm(k - 1), 3); nm <- sample(0:2, 1); ig <- sample(0:1, 1)
   r <- as.numeric(rcspline.restate(kn, cf, type = c("ordinary", "integral")[ig + 1], norm = nm)); for (w in seq_along(r)) cases[[length(cases) + 1]] <- case("rsr", c(k, nm, ig, w - 1, kn, cf), r[w], rel = 1e-9, abs = 1e-12) }
+# rcspline.eval default knots "knots" (n, nk, fractied, index or -1 for the count, x[n]): continuous samples, rounded ones with ties, and ones with a point mass at an end
+set.seed(20262221)
+for (rep in 1:90) {
+  n <- sample(c(12, 25, 60, 150), 1); nk <- sample(3:7, 1); fr <- sample(c(0.05, 0.1, 0.02), 1)
+  x <- switch(rep %% 3 + 1, rnorm(n), round(rnorm(n), 1), { v <- rnorm(n); v[sample(n, floor(n * 0.25))] <- 0; round(v, 2) })
+  kn <- tryCatch(suppressWarnings(rcspline.eval(x, nk = nk, knots.only = TRUE, fractied = fr)), error = function(e) NULL)
+  if (is.null(kn)) next
+  add("knots", c(n, nk, fr, -1, x), length(kn)); for (j in seq_along(kn)) add("knots", c(n, nk, fr, j - 1, x), unname(kn[j]))
+}
+# describe (numeric) "desc" (n, index into n, missing, distinct, Info, Mean, pMedian, Gmd, 7 quantiles, 5 lowest, 5 highest; x with -999999 for NA): 12 or more distinct values so the quantiles are listed
+for (rep in 1:40) {
+  n <- sample(15:80, 1); x <- if (rep %% 2) round(rnorm(n), 2) else round(rnorm(n, 5, 3), 1); xm <- x; if (rep %% 3 == 0) xm[sample(n, 3)] <- NA
+  nn <- sum(!is.na(xm)); xv <- xm[!is.na(xm)]; tb <- table(xv); info <- 1 - sum(tb^3 - tb) / (nn^3 - nn)
+  w <- outer(xv, xv, "+") / 2; pm <- median(w[lower.tri(w, diag = TRUE)]); ux <- sort(unique(xv)); k <- length(ux)
+  v <- c(nn, n - nn, k, info, mean(xv), pm, GiniMd(xv), quantile(xv, c(0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95)), ux[1:5], ux[(k - 4):k])
+  enc <- ifelse(is.na(xm), -999999, xm)
+  for (j in seq_along(v)) add("desc", c(n, j - 1, enc), unname(v[j]))
+}
+# cut2 codes: "c2g" (n, g or m, mode 0 g 1 m, index, x[n]) and "c2c" (n, ncut, index, cuts, x[n])
+set.seed(20262301)
+for (rep in 1:40) {
+  n <- sample(20:90, 1); x <- if (rep %% 2) round(rnorm(n), 1) else round(runif(n, 0, 10)); md <- rep %% 2
+  g <- sample(2:6, 1); mm <- sample(c(5, 8, 12), 1)
+  cd <- if (md == 0) as.integer(cut2(x, g = g)) else as.integer(cut2(x, m = mm))
+  for (j in seq_len(n)) add("c2g", c(n, if (md == 0) g else mm, md, j - 1, x), cd[j])
+  ct <- sort(round(runif(sample(2:4, 1), -1, 1), 1)); ct <- unique(ct); if (length(ct) < 2) next
+  cc <- as.integer(cut2(x, cuts = ct)); for (j in seq_len(n)) add("c2c", c(n, length(ct), j - 1, ct, x), cc[j])
+}
+# redun with splines and categories "rdg" (n, p, nk, tlinear, r2, adjusted, which 0 count 1 order 2 rsq, k, kinds, data column-major)
+set.seed(20262401)
+for (rep in 1:40) {
+  n <- sample(60:150, 1); p <- sample(4:6, 1); X <- matrix(rnorm(n * p), n, p); X[, 2] <- X[, 1]^2 + rnorm(n, 0, runif(1, 0.05, 0.4)); X[, 4] <- X[, 2] + X[, 3] + rnorm(n, 0, runif(1, 0.1, 0.4))
+  D <- as.data.frame(round(X, 3)); names(D) <- paste0("v", 1:p); kinds <- rep(0, p)
+  if (rep %% 2 == 0) { D[[p]] <- factor(sample(letters[1:3], n, TRUE)); kinds[p] <- 1 }
+  if (rep %% 4 == 0 && p >= 5 && kinds[5] == 0) { D[[5]] <- round(D[[5]]); D[[5]][1] <- 0 }
+  nk <- sample(c(3, 4, 5), 1); tl <- sample(c(TRUE, FALSE), 1); r2 <- sample(c(0.6, 0.75, 0.9), 1); ty <- sample(c("ordinary", "adjusted"), 1)
+  rd <- tryCatch(suppressWarnings(redun(as.formula(paste("~", paste(names(D), collapse = " + "))), data = D, r2 = r2, nk = nk, tlinear = tl, type = ty)), error = function(e) NULL)
+  if (is.null(rd)) next
+  dat <- as.vector(sapply(D, as.numeric)); out <- rd$Out; rq <- rd$rsquared; a <- c(n, p, nk, as.numeric(tl), r2, as.numeric(ty == "adjusted"))
+  add("rdg", c(a, 0, 0, kinds, dat), length(out))
+  for (k in seq_along(out)) { add("rdg", c(a, 1, k - 1, kinds, dat), match(out[k], names(D)) - 1); add("rdg", c(a, 2, k - 1, kinds, dat), unname(rq[k])) }
+}
 emit("hmisc", "Hmisc", list(cases))

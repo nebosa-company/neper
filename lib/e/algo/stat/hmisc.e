@@ -325,12 +325,12 @@ fn rcorr_pair(a: *mem.Arena, x: []const f64, y: []const f64, spearman: bool, out
 }
 
 // cut2(x, g = g, onlycuts = TRUE): the lower limits of the groups and the maximum; x has no missing values; returns the count written to out
-fn cut2_cuts(a: *mem.Arena, x: []const f64, g: usize, out: []f64) -> usize {
+fn cut2_cuts_n(a: *mem.Arena, x: []const f64, g: usize, out: []f64) -> (usize, usize) {
     let n = x.len
     let (ones, e1) = mem.alloc[f64](a, n)
     let (xx, e2) = mem.alloc[f64](a, n)
     let (cn, e3) = mem.alloc[f64](a, n)
-    if e1 != ok || e2 != ok || e3 != ok { ret 0usize }
+    if e1 != ok || e2 != ok || e3 != ok { ret (0usize, 0usize) }
     var i = 0usize
     while i < n {
         ones[i] = 1.0f64
@@ -347,7 +347,7 @@ fn cut2_cuts(a: *mem.Arena, x: []const f64, g: usize, out: []f64) -> usize {
     }
     let nnm = f64(n)
     let (cuts, e4) = mem.alloc[f64](a, g)
-    if e4 != ok { ret 0usize }
+    if e4 != ok { ret (0usize, 0usize) }
     var j = 0usize
     while j < g {
         let t = f64(j + 1usize) * (nnm / f64(g))
@@ -393,6 +393,7 @@ fn cut2_cuts(a: *mem.Arena, x: []const f64, g: usize, out: []f64) -> usize {
         }
         j += 1usize
     }
+    let nlow = cnt
     // unique(c(low, max(xx)))
     var last = xx[m - 1usize]
     var dup = false
@@ -405,6 +406,11 @@ fn cut2_cuts(a: *mem.Arena, x: []const f64, g: usize, out: []f64) -> usize {
         out[cnt] = last
         cnt += 1usize
     }
+    ret (cnt, nlow)
+}
+
+fn cut2_cuts(a: *mem.Arena, x: []const f64, g: usize, out: []f64) -> usize {
+    let (cnt, nlow) = cut2_cuts_n(a, x, g, out)
     ret cnt
 }
 
@@ -1096,4 +1102,685 @@ fn rcspline_restate(knots: []const f64, coef: []const f64, norm: usize, integral
             i += 1usize
         }
     }
+}
+
+// a sorted copy by insertion (ascending)
+fn sorted_of(a: *mem.Arena, x: []const f64) -> ([]f64, err) {
+    let n = x.len
+    let (s, e) = mem.alloc[f64](a, n + 1usize)
+    if e != ok { ret (s, e) }
+    var i = 0usize
+    while i < n {
+        s[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let key = s[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > key {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = key
+        i += 1usize
+    }
+    ret (s[0usize..n], ok)
+}
+
+// the quantiles of a sorted sample at p = from + k (to - from) / (len - 1), k = 0 .. len - 1, into out
+fn seq_quantiles(s: []const f64, from: f64, to: f64, len: usize, out: []f64) {
+    var k = 0usize
+    while k < len {
+        var p = from
+        if len > 1usize { p = from + f64(k) * (to - from) / f64(len - 1usize) }
+        out[k] = q7(s, p)
+        k += 1usize
+    }
+}
+
+// the number of distinct values among the first n of v
+fn count_unique(v: []const f64, n: usize) -> usize {
+    var c = 0usize
+    var i = 0usize
+    while i < n {
+        var seen = false
+        var j = 0usize
+        while j < i {
+            if v[j] == v[i] { seen = true }
+            j += 1usize
+        }
+        if !seen { c += 1usize }
+        i += 1usize
+    }
+    ret c
+}
+
+// rcspline.eval(x, nk = nk, knots.only = TRUE, fractied = fractied): the default knots of Hmisc (the tail quantiles with the first and fifth smallest and largest values, ties at the ends and the alternate algorithm
+// for a sample with few distinct values) into out; returns the number of knots, or 0 when R stops
+fn rcspline_knots(a: *mem.Arena, x: []const f64, nk: usize, fractied: f64, out: []f64) -> usize {
+    let n0 = x.len
+    if n0 < 6usize || nk < 3usize { ret 0usize }
+    let (xs, e1) = sorted_of(a, x)
+    if e1 != ok { ret 0usize }
+    // the distinct values and their counts
+    let (xu, e2) = mem.alloc[f64](a, n0)
+    let (cn, e3) = mem.alloc[f64](a, n0)
+    if e2 != ok || e3 != ok { ret 0usize }
+    var nxu = 0usize
+    var i = 0usize
+    while i < n0 {
+        if nxu > 0usize && xu[nxu - 1usize] == xs[i] {
+            cn[nxu - 1usize] += 1.0f64
+        } else {
+            xu[nxu] = xs[i]
+            cn[nxu] = 1.0f64
+            nxu += 1usize
+        }
+        i += 1usize
+    }
+    if nxu < nk + 3usize {
+        // (nxu - 2) <= nk: the interior distinct values
+        var c = 0usize
+        i = 1usize
+        while i + 1usize < nxu {
+            out[c] = xu[i]
+            c += 1usize
+            i += 1usize
+        }
+        if c < 3usize { ret 0usize }
+        ret c
+    }
+    var outer = 0.05f64
+    if nk <= 3usize { outer = 0.1f64 }
+    if nk > 6usize { outer = 0.025f64 }
+    var lo = 0usize
+    var hi = n0
+    var nke = nk
+    var have_first = false
+    var have_last = false
+    var firstknot = 0.0f64
+    var lastknot = 0.0f64
+    let nn = f64(n0)
+    if fractied > 0.0f64 && fractied < 1.0f64 {
+        var mx = 0.0f64
+        i = 1usize
+        while i + 1usize < nxu {
+            if cn[i] / nn > mx { mx = cn[i] / nn }
+            i += 1usize
+        }
+        if mx < fractied {
+            if cn[0usize] / nn >= fractied {
+                firstknot = xu[1usize]
+                have_first = true
+                while lo < hi && xs[lo] <= firstknot { lo += 1usize }
+                nke -= 1usize
+            }
+            if cn[nxu - 1usize] / nn >= fractied {
+                lastknot = xu[nxu - 2usize]
+                have_last = true
+                while hi > lo && xs[hi - 1usize] >= lastknot { hi -= 1usize }
+                nke -= 1usize
+            }
+        }
+    }
+    let xr = xs[lo..hi]
+    let (knots, e4) = mem.alloc[f64](a, 2usize * nk + 4usize)
+    if e4 != ok { ret 0usize }
+    var nkn = 0usize
+    if nke == 1usize {
+        knots[0usize] = q7(xr, 0.5f64)
+        nkn = 1usize
+    } else {
+        if nxu <= nke {
+            i = 0usize
+            while i < nxu {
+                knots[i] = xu[i]
+                i += 1usize
+            }
+            nkn = nxu
+        } else {
+            if nke == 2usize { seq_quantiles(xr, 0.5f64, 1.0f64 - outer, nke, knots) } else { seq_quantiles(xr, outer, 1.0f64 - outer, nke, knots) }
+            nkn = nke
+            var need = nke
+            if need > 3usize { need = 3usize }
+            if count_unique(knots, nkn) < need {
+                seq_quantiles(xr, outer, 1.0f64 - outer, 2usize * nke, knots)
+                nkn = 2usize * nke
+                if have_first && count_unique(knots, nkn) < 3usize {
+                    var midval = q7(xr, 0.5f64)
+                    if have_first && have_last { midval = (firstknot + lastknot) / 2.0f64 }
+                    knots[0usize] = firstknot
+                    knots[1usize] = midval
+                    if have_last { knots[2usize] = lastknot } else { knots[2usize] = q7(xr, 1.0f64 - outer) }
+                    nkn = 3usize
+                    // sort the three
+                    var s1 = 0usize
+                    while s1 < 3usize {
+                        var s2 = s1 + 1usize
+                        while s2 < 3usize {
+                            if knots[s2] < knots[s1] {
+                                let tt = knots[s1]
+                                knots[s1] = knots[s2]
+                                knots[s2] = tt
+                            }
+                            s2 += 1usize
+                        }
+                        s1 += 1usize
+                    }
+                }
+                if count_unique(knots, nkn) < 3usize { ret 0usize }
+            }
+        }
+        if xr.len < 100usize {
+            if !have_first { knots[0usize] = xr[4usize] }
+            if !have_last { knots[nke - 1usize] = xr[xr.len - 5usize] }
+        }
+    }
+    // c(firstknot, knots, lastknot), sorted and unique
+    var all_n = 0usize
+    let (all, e5) = mem.alloc[f64](a, nkn + 2usize)
+    if e5 != ok { ret 0usize }
+    if have_first {
+        all[all_n] = firstknot
+        all_n += 1usize
+    }
+    i = 0usize
+    while i < nkn {
+        all[all_n] = knots[i]
+        all_n += 1usize
+        i += 1usize
+    }
+    if have_last {
+        all[all_n] = lastknot
+        all_n += 1usize
+    }
+    let (sa, e6) = sorted_of(a, all[0usize..all_n])
+    if e6 != ok { ret 0usize }
+    var c = 0usize
+    i = 0usize
+    while i < all_n {
+        if c == 0usize || out[c - 1usize] != sa[i] {
+            out[c] = sa[i]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    if c < 3usize { ret 0usize }
+    ret c
+}
+
+// the pseudo-median (Hodges-Lehmann estimate) of x: the median of the Walsh averages (x_i + x_j) / 2, i <= j
+fn pmedian(a: *mem.Arena, x: []const f64) -> f64 {
+    let n = x.len
+    if n == 0usize { ret 0.0f64 / 0.0f64 }
+    if n == 1usize { ret x[0usize] }
+    let cnt = n * (n + 1usize) / 2usize
+    let (w, e1) = mem.alloc[f64](a, cnt)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var c = 0usize
+    var i = 0usize
+    while i < n {
+        var j = i
+        while j < n {
+            w[c] = (x[i] + x[j]) / 2.0f64
+            c += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (s, e2) = sorted_of(a, w[0usize..cnt])
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    ret q7(s, 0.5f64)
+}
+
+// describe(x) of a numeric vector: out = (n, missing, distinct, Info, Mean, pMedian, Gmd, then the .05 .10 .25 .50 .75 .90 .95 quantiles, the five lowest and the five highest distinct values (L1 .. L5, H5 .. H1)); missing values are NaN
+fn describe_numeric(a: *mem.Arena, x: []const f64, out: []f64) -> err {
+    let (v, e1) = mem.alloc[f64](a, x.len + 1usize)
+    if e1 != ok { ret e1 }
+    var n = 0usize
+    var i = 0usize
+    while i < x.len {
+        if x[i] == x[i] {
+            v[n] = x[i]
+            n += 1usize
+        }
+        i += 1usize
+    }
+    let (s, e2) = sorted_of(a, v[0usize..n])
+    if e2 != ok { ret e2 }
+    var distinct = 0usize
+    let (u, e3) = mem.alloc[f64](a, n + 1usize)
+    if e3 != ok { ret e3 }
+    i = 0usize
+    while i < n {
+        if distinct == 0usize || u[distinct - 1usize] != s[i] {
+            u[distinct] = s[i]
+            distinct += 1usize
+        }
+        i += 1usize
+    }
+    var sum = 0.0f64
+    i = 0usize
+    while i < n {
+        sum += s[i]
+        i += 1usize
+    }
+    out[0usize] = f64(n)
+    out[1usize] = f64(x.len - n)
+    out[2usize] = f64(distinct)
+    out[3usize] = describe_info(a, v[0usize..n])
+    out[4usize] = sum / f64(n)
+    out[5usize] = pmedian(a, s)
+    out[6usize] = gini_md(a, s)
+    out[7usize] = q7(s, 0.05f64)
+    out[8usize] = q7(s, 0.1f64)
+    out[9usize] = q7(s, 0.25f64)
+    out[10usize] = q7(s, 0.5f64)
+    out[11usize] = q7(s, 0.75f64)
+    out[12usize] = q7(s, 0.9f64)
+    out[13usize] = q7(s, 0.95f64)
+    i = 0usize
+    while i < 10usize {
+        out[14usize + i] = 0.0f64 / 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < 5usize && i < distinct {
+        out[14usize + i] = u[i]
+        out[23usize - i] = u[distinct - 1usize - i]
+        i += 1usize
+    }
+    ret ok
+}
+
+// the smallest gap between the sorted distinct values of x and the extra values, over two
+fn min_dif_half(a: *mem.Arena, x: []const f64, extra: []const f64) -> f64 {
+    let (v, e1) = mem.alloc[f64](a, x.len + extra.len + 1usize)
+    if e1 != ok { ret 0.0f64 }
+    var n = 0usize
+    var i = 0usize
+    while i < x.len {
+        if x[i] == x[i] {
+            v[n] = x[i]
+            n += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < extra.len {
+        v[n] = extra[i]
+        n += 1usize
+        i += 1usize
+    }
+    let (sv, e2) = sorted_of(a, v[0usize..n])
+    if e2 != ok { ret 0.0f64 }
+    var md = 1.0e300f64
+    i = 1usize
+    while i < n {
+        let d = sv[i] - sv[i - 1usize]
+        if d > 0.0f64 && d < md { md = d }
+        i += 1usize
+    }
+    ret md / 2.0f64
+}
+
+// cut2(x, g = g) codes (1-based interval of every x; the same as m = floor(n / g)): the largest i whose lower end low_i satisfies x >= low_i - min.dif
+fn cut2_codes(a: *mem.Arena, x: []const f64, g: usize, out: []f64) -> err {
+    let (lows, e1) = mem.alloc[f64](a, g + 2usize)
+    if e1 != ok { ret e1 }
+    let (cnt, nlow) = cut2_cuts_n(a, x, g, lows)
+    let md = min_dif_half(a, x, lows[0usize..0usize])
+    var k = 0usize
+    while k < x.len {
+        var code = 0.0f64
+        var i = 0usize
+        while i < nlow {
+            if x[k] >= lows[i] - md { code = f64(i + 1usize) }
+            i += 1usize
+        }
+        out[k] = code
+        k += 1usize
+    }
+    ret ok
+}
+
+// cut2(x, cuts = cuts) codes with minmax = TRUE: cut(x, c(cuts - min.dif, last cut)) so the interval i holds k2_i < x <= k2_(i+1)
+fn cut2_codes_cuts(a: *mem.Arena, x: []const f64, cuts: []const f64, out: []f64) -> err {
+    var mn = 1.0e300f64
+    var mx = 0.0f64 - 1.0e300f64
+    var i = 0usize
+    while i < x.len {
+        if x[i] == x[i] {
+            if x[i] < mn { mn = x[i] }
+            if x[i] > mx { mx = x[i] }
+        }
+        i += 1usize
+    }
+    let (k, e1) = mem.alloc[f64](a, cuts.len + 3usize)
+    if e1 != ok { ret e1 }
+    var l = 0usize
+    if mn < cuts[0usize] {
+        k[l] = mn
+        l += 1usize
+    }
+    i = 0usize
+    while i < cuts.len {
+        k[l] = cuts[i]
+        l += 1usize
+        i += 1usize
+    }
+    if mx > cuts[cuts.len - 1usize] {
+        k[l] = mx
+        l += 1usize
+    }
+    let md = min_dif_half(a, x, cuts)
+    i = 0usize
+    while i + 1usize < l {
+        k[i] = k[i] - md
+        i += 1usize
+    }
+    var q = 0usize
+    while q < x.len {
+        var code = 0.0f64
+        i = 0usize
+        while i + 1usize < l {
+            if k[i] < x[q] { code = f64(i + 1usize) }
+            i += 1usize
+        }
+        out[q] = code
+        q += 1usize
+    }
+    ret ok
+}
+
+// the first canonical correlation of the column-major blocks x (n by kx) and y (n by ky), as stats::cancor computes it: the columns centred, an R qr of each with tolerance 1e-7, and the largest singular
+// value of Qx' Qy over the ranks of the two blocks
+fn cancor_first(a: *mem.Arena, xs: []const f64, kx: usize, ys: []const f64, ky: usize, n: usize) -> f64 {
+    let (xc, e1) = mem.alloc[f64](a, n * kx + 1usize)
+    let (yc, e2) = mem.alloc[f64](a, n * ky + 1usize)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var j = 0usize
+    while j < kx {
+        var m = 0.0f64
+        var i = 0usize
+        while i < n {
+            m += xs[j * n + i]
+            i += 1usize
+        }
+        m = m / f64(n)
+        i = 0usize
+        while i < n {
+            xc[j * n + i] = xs[j * n + i] - m
+            i += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < ky {
+        var m = 0.0f64
+        var i = 0usize
+        while i < n {
+            m += ys[j * n + i]
+            i += 1usize
+        }
+        m = m / f64(n)
+        i = 0usize
+        while i < n {
+            yc[j * n + i] = ys[j * n + i] - m
+            i += 1usize
+        }
+        j += 1usize
+    }
+    let (fx, ex) = dc.qr(a, xc[0usize..n * kx], n, kx, 1.0e-7f64)
+    let (fy, ey) = dc.qr(a, yc[0usize..n * ky], n, ky, 1.0e-7f64)
+    if ex != ok || ey != ok { ret 0.0f64 / 0.0f64 }
+    let dx = fx.rank
+    let dy = fy.rank
+    if dx == 0usize || dy == 0usize { ret 0.0f64 }
+    let (qx, e3) = mem.alloc[f64](a, n * dx)
+    let (qy, e4) = mem.alloc[f64](a, n * dy)
+    let (mm, e5) = mem.alloc[f64](a, dx * dy)
+    if e3 != ok || e4 != ok || e5 != ok { ret 0.0f64 / 0.0f64 }
+    j = 0usize
+    while j < dx {
+        let col = qx[j * n..(j + 1usize) * n]
+        var i = 0usize
+        while i < n {
+            col[i] = 0.0f64
+            i += 1usize
+        }
+        col[j] = 1.0f64
+        dc.qr_qy(&fx, col)
+        j += 1usize
+    }
+    j = 0usize
+    while j < dy {
+        let col = qy[j * n..(j + 1usize) * n]
+        var i = 0usize
+        while i < n {
+            col[i] = 0.0f64
+            i += 1usize
+        }
+        col[j] = 1.0f64
+        dc.qr_qy(&fy, col)
+        j += 1usize
+    }
+    var p = 0usize
+    while p < dx {
+        var q = 0usize
+        while q < dy {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += qx[p * n + i] * qy[q * n + i]
+                i += 1usize
+            }
+            mm[q * dx + p] = s
+            q += 1usize
+        }
+        p += 1usize
+    }
+    let (sv, es) = dc.svd(a, mm, dx, dy)
+    if es != ok { ret 0.0f64 / 0.0f64 }
+    var best = 0.0f64
+    var t = 0usize
+    while t < sv.d.len {
+        if sv.d[t] > best { best = sv.d[t] }
+        t += 1usize
+    }
+    ret best
+}
+
+// redun(~ x1 + ... + xp, nk, tlinear, r2, type) for numeric and categorical variables: data is column-major n by p, kind 0 numeric and 1 categorical (integer codes); a numeric variable with at least three distinct values and nk > 0
+// is expanded to the restricted cubic spline basis with the default knots (inclx), a categorical one to its level indicators (all but the first); the loop is the package one including the r2later check;
+// order receives the removed variables (0-based) and rsq their R^2; returns the number removed, or -1 when a spline expansion cannot be made
+fn redun_general(a: *mem.Arena, data: []const f64, kind: []const usize, n: usize, p: usize, nk: usize, tlinear: bool, r2: f64, adjusted: bool, order: []usize, rsq: []f64) -> i64 {
+    let (st, e1) = mem.alloc[usize](a, p)
+    let (en, e2) = mem.alloc[usize](a, p)
+    let (vt, e3) = mem.alloc[usize](a, p)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0i64 - 1i64 }
+    // widths: 1 for linear, the basis size for a spline, levels - 1 for a categorical variable
+    var total = 0usize
+    var v = 0usize
+    let (kn, e4) = mem.alloc[f64](a, 2usize * nk + 12usize)
+    if e4 != ok { ret 0i64 - 1i64 }
+    let (wd, e5) = mem.alloc[usize](a, p)
+    if e5 != ok { ret 0i64 - 1i64 }
+    while v < p {
+        let col = data[v * n..(v + 1usize) * n]
+        if kind[v] == 1usize {
+            var mx = 0usize
+            var i = 0usize
+            while i < n {
+                if usize(col[i]) > mx { mx = usize(col[i]) }
+                i += 1usize
+            }
+            vt[v] = 2usize
+            wd[v] = mx - 1usize
+        } else {
+            let nu = count_unique(col, n)
+            if nk == 0usize || nu < 3usize {
+                vt[v] = 0usize
+                wd[v] = 1usize
+            } else {
+                let c = rcspline_knots(a, col, nk, 0.05f64, kn)
+                if c == 0usize { ret 0i64 - 1i64 }
+                vt[v] = 1usize
+                wd[v] = c - 1usize
+            }
+        }
+        st[v] = total
+        total += wd[v]
+        en[v] = total
+        v += 1usize
+    }
+    let (xm, e6) = mem.alloc[f64](a, n * total + 1usize)
+    if e6 != ok { ret 0i64 - 1i64 }
+    v = 0usize
+    while v < p {
+        let col = data[v * n..(v + 1usize) * n]
+        let base = st[v]
+        if vt[v] == 0usize {
+            var i = 0usize
+            while i < n {
+                xm[base * n + i] = col[i]
+                i += 1usize
+            }
+        } else if vt[v] == 2usize {
+            var j = 0usize
+            while j < wd[v] {
+                var i = 0usize
+                while i < n {
+                    xm[(base + j) * n + i] = 0.0f64
+                    if usize(col[i]) == j + 2usize { xm[(base + j) * n + i] = 1.0f64 }
+                    i += 1usize
+                }
+                j += 1usize
+            }
+        } else {
+            let c = rcspline_knots(a, col, nk, 0.05f64, kn)
+            var i = 0usize
+            while i < n {
+                xm[base * n + i] = col[i]
+                i += 1usize
+            }
+            let (bs, eb) = mem.alloc[f64](a, n * (c - 2usize) + 1usize)
+            if eb != ok { ret 0i64 - 1i64 }
+            rcspline_eval(col, kn[0usize..c], 2usize, bs)
+            var j = 0usize
+            while j + 2usize < c {
+                i = 0usize
+                while i < n {
+                    xm[(base + 1usize + j) * n + i] = bs[j * n + i]
+                    i += 1usize
+                }
+                j += 1usize
+            }
+        }
+        v += 1usize
+    }
+    let (inn, e7) = mem.alloc[bool](a, p)
+    let (outv, e8) = mem.alloc[bool](a, p)
+    let (rs, e9) = mem.alloc[f64](a, p)
+    let (lat, e10) = mem.alloc[f64](a, p)
+    if e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret 0i64 - 1i64 }
+    v = 0usize
+    while v < p {
+        inn[v] = true
+        outv[v] = false
+        v += 1usize
+    }
+    var removed = 0usize
+    var step = 0usize
+    while step < p {
+        var left = 0usize
+        v = 0usize
+        while v < p {
+            if inn[v] { left += 1usize }
+            v += 1usize
+        }
+        if left < 2usize { break }
+        var best = p
+        var bestr = 0.0f64
+        v = 0usize
+        while v < p {
+            if inn[v] {
+                let mark = mem.mark(a)
+                let rr = redun_fcan(a, xm, n, st, en, vt, inn, v, v, tlinear, adjusted, p)
+                mem.reset(a, mark)
+                rs[v] = rr
+                if best == p || rr > bestr {
+                    best = v
+                    bestr = rr
+                }
+            }
+            v += 1usize
+        }
+        if bestr < r2 { break }
+        // the variables already removed must stay predictable once this one goes too
+        var stop = false
+        v = 0usize
+        while v < p {
+            if outv[v] {
+                inn[best] = false
+                let mark = mem.mark(a)
+                let rr = redun_fcan(a, xm, n, st, en, vt, inn, v, v, tlinear, adjusted, p)
+                mem.reset(a, mark)
+                inn[best] = true
+                lat[v] = rr
+                if rr < r2 { stop = true }
+            }
+            v += 1usize
+        }
+        if stop { break }
+        order[removed] = best
+        rsq[removed] = bestr
+        removed += 1usize
+        inn[best] = false
+        outv[best] = true
+        step += 1usize
+    }
+    ret i64(removed)
+}
+
+// the R^2 of variable iy on the variables still in inn other than iy (the target iy itself when skip == iy is left out of the predictors)
+fn redun_fcan(a: *mem.Arena, xm: []const f64, n: usize, st: []const usize, en: []const usize, vt: []const usize, inn: []const bool, iy: usize, skip: usize, tlinear: bool, adjusted: bool, p: usize) -> f64 {
+    var kx = 0usize
+    var v = 0usize
+    while v < p {
+        if inn[v] && v != skip { kx += en[v] - st[v] }
+        v += 1usize
+    }
+    if kx == 0usize { ret 0.0f64 }
+    let (xs, e1) = mem.alloc[f64](a, n * kx)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var c = 0usize
+    v = 0usize
+    while v < p {
+        if inn[v] && v != skip {
+            var j = st[v]
+            while j < en[v] {
+                var i = 0usize
+                while i < n {
+                    xs[c * n + i] = xm[j * n + i]
+                    i += 1usize
+                }
+                c += 1usize
+                j += 1usize
+            }
+        }
+        v += 1usize
+    }
+    var ky = en[iy] - st[iy]
+    if tlinear && vt[iy] == 1usize { ky = 1usize }
+    let ys = xm[st[iy] * n..(st[iy] + ky) * n]
+    let cor = cancor_first(a, xs, kx, ys, ky, n)
+    var r2v = cor * cor
+    if adjusted {
+        let dof = f64(kx + ky) - 1.0f64
+        r2v = 1.0f64 - (1.0f64 - r2v) * (f64(n) - 1.0f64) / (f64(n) - dof - 1.0f64)
+        if r2v < 0.0f64 { r2v = 0.0f64 }
+    }
+    ret r2v
 }

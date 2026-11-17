@@ -162,6 +162,73 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if x[2usize] < 0.0f64 { ret f64(cnt) }
         ret o[usize(x[2usize])]
     }
+    if str.eq(c.name, "knots") {
+        // (n, nk, fractied, index or -1 for the count, x[n])
+        let n = usize(x[0usize])
+        let (o, e) = mem.alloc[f64](a, 2usize * usize(x[1usize]) + 8usize)
+        if e != ok { ret nan }
+        let cnt = hm.rcspline_knots(a, x[4usize..4usize + n], usize(x[1usize]), x[2usize], o)
+        if x[3usize] < 0.0f64 { ret f64(cnt) }
+        if usize(x[3usize]) >= cnt { ret nan }
+        ret o[usize(x[3usize])]
+    }
+    if str.eq(c.name, "desc") {
+        // (n, index 0..23, x[n] with -999999 for a missing value)
+        let n = usize(x[0usize])
+        let (dv, de) = mem.alloc[f64](a, n)
+        let (dout, de2) = mem.alloc[f64](a, 24usize)
+        if de != ok || de2 != ok { ret nan }
+        var di = 0usize
+        while di < n {
+            dv[di] = x[2usize + di]
+            if dv[di] < 0.0f64 - 999000.0f64 { dv[di] = nan }
+            di += 1usize
+        }
+        if hm.describe_numeric(a, dv, dout) != ok { ret nan }
+        ret dout[usize(x[1usize])]
+    }
+    if str.eq(c.name, "c2g") {
+        // (n, g or m, mode 0 g 1 m, index, x[n])
+        let n = usize(x[0usize])
+        let (co, ce) = mem.alloc[f64](a, n)
+        if ce != ok { ret nan }
+        var gg = usize(x[1usize])
+        if x[2usize] == 1.0f64 {
+            gg = n / usize(x[1usize])
+            if gg < 1usize { gg = 1usize }
+        }
+        if hm.cut2_codes(a, x[4usize..4usize + n], gg, co) != ok { ret nan }
+        ret co[usize(x[3usize])]
+    }
+    if str.eq(c.name, "c2c") {
+        // (n, ncut, index, cuts[ncut], x[n])
+        let n = usize(x[0usize])
+        let nc = usize(x[1usize])
+        let (co, ce) = mem.alloc[f64](a, n)
+        if ce != ok { ret nan }
+        if hm.cut2_codes_cuts(a, x[3usize + nc..3usize + nc + n], x[3usize..3usize + nc], co) != ok { ret nan }
+        ret co[usize(x[2usize])]
+    }
+    if str.eq(c.name, "rdg") {
+        // (n, p, nk, tlinear, r2, adjusted, which 0 count 1 order 2 rsq, k, kinds[p], data (n by p, column-major))
+        let n = usize(x[0usize])
+        let p = usize(x[1usize])
+        let (od, e1) = mem.alloc[usize](a, p)
+        let (rs, e2) = mem.alloc[f64](a, p)
+        let (kd, e3) = mem.alloc[usize](a, p)
+        if e1 != ok || e2 != ok || e3 != ok { ret nan }
+        var ki = 0usize
+        while ki < p {
+            kd[ki] = usize(x[8usize + ki])
+            ki += 1usize
+        }
+        let cnt = hm.redun_general(a, x[8usize + p..8usize + p + n * p], kd, n, p, usize(x[2usize]), x[3usize] == 1.0f64, x[4usize], x[5usize] == 1.0f64, od, rs)
+        if cnt < 0i64 { ret nan }
+        if x[6usize] == 0.0f64 { ret f64(cnt) }
+        if usize(x[7usize]) >= usize(cnt) { ret nan }
+        if x[6usize] == 1.0f64 { ret f64(od[usize(x[7usize])]) }
+        ret rs[usize(x[7usize])]
+    }
     if str.eq(c.name, "axt") {
         let n = usize(x[0usize])
         ret hm.approx_extrap(x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[1usize])
