@@ -48508,3 +48508,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D7002 — imputeTS na_seadec, na_seasplit and statsNA
 
 `na_seadec`: linear interpolation, the robust stl of D-stl (s.window 11, s.degree 0, t.degree 1) of the filled series, the base algorithm (interpolation, locf rev or mean) on the seasonally adjusted series with the original gaps, the seasonal part added back at the gaps only. `na_seasplit`: the base algorithm on each cycle position alone. `stats_na`: the package loop for the gap counts, with ties going to the larger size. Equal to imputeTS on 20 series each for the first two and 30 for the third (oracle_imputets). na_kalman needs StructTS and auto.arima and stays open. Linux pending.
+
+
+## D7003 — geepack GEE for the binomial and poisson families and AR(1)
+
+`geeglm_glm`: Fisher scoring of the GEE with D_i, the family variance and R(alpha)^-1, started from the independence fit, the scale as the mean squared Pearson residual and the correlation from the Pearson residual pairs: exchangeable as the mean cross product over phi, AR(1) as the root of the least-squares score over every lagged product (the all-lag fit geepack uses, found by bisection; the lag-1 average alone is wrong). Equal to geeglm on 24 fits (oracle_geepackpkg); geepack stops at 1e-5 so the estimates are compared at 1e-4 relative or 2e-5 absolute. Linux pending.
