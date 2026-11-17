@@ -29,4 +29,10 @@ for (rep in 1:30) {
   n <- sample(2:5, 1); M <- matrix(sample(1:15, n * n, TRUE), n); r <- suppressWarnings(nominalSymmetryTest(M))
   v <- if (n == 2) r$Global.test.for.symmetry$p.value else r$Global.test.for.symmetry$p.value; add("nsym", c(n, as.vector(t(M))), v)
 }
+# nominalSymmetryTest pairwise: "nsp" (n, index, table row-major) index >= 0 the adjusted p of pair index, index < 0 the raw p of pair -index - 1
+for (rep in 1:30) {
+  n <- sample(3:5, 1); M <- matrix(sample(0:12, n * n, TRUE), n); r <- suppressWarnings(nominalSymmetryTest(M))$Pairwise.symmetry.tests
+  pv <- suppressWarnings(as.numeric(r$p.value)); pa <- suppressWarnings(as.numeric(r$p.adjust))
+  for (j in seq_along(pv)) { add("nsp", c(n, -(j), as.vector(t(M))), pv[j]); add("nsp", c(n, j - 1, as.vector(t(M))), pa[j]) }
+}
 emit("rcompanion", "rcompanion", list(cases))

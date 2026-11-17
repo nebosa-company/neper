@@ -376,3 +376,64 @@ fn nominal_symmetry_p(x: []const f64, n: usize) -> f64 {
     let df = f64(n * (n - 1usize) / 2usize)
     ret signif(1.0f64 - nm.pchisq(st, df, true, false), 3i64)
 }
+
+// nominalSymmetryTest(x)$Pairwise.symmetry.tests for n > 2: for each pair i < j (row-major order) the McNemar p value of the off-diagonal pair (corrected unless the cells are equal, NaN when both are zero) to three digits,
+// then the Benjamini-Hochberg ("fdr") adjustment over the non-missing values, to three digits; p and adj hold n (n - 1) / 2 values
+fn nominal_symmetry_pairs(a: *mem.Arena, x: []const f64, n: usize, p: []f64, adj: []f64) -> err {
+    let m = n * (n - 1usize) / 2usize
+    var k = 0usize
+    var i = 0usize
+    while i + 1usize < n {
+        var j = i + 1usize
+        while j < n {
+            let u = x[i * n + j]
+            let l = x[j * n + i]
+            if u + l > 0.0f64 {
+                var d = math.abs[f64](u - l)
+                if u != l { d = d - 1.0f64 }
+                p[k] = signif(1.0f64 - nm.pchisq(d * d / (u + l), 1.0f64, true, false), 3i64)
+            } else {
+                p[k] = nan()
+            }
+            k += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // BH over the non-missing p values
+    let (ord, e1) = mem.alloc[usize](a, m)
+    if e1 != ok { ret e1 }
+    var cnt = 0usize
+    k = 0usize
+    while k < m {
+        adj[k] = nan()
+        if p[k] == p[k] {
+            ord[cnt] = k
+            cnt += 1usize
+        }
+        k += 1usize
+    }
+    // ascending order of p among the valid ones (insertion sort)
+    i = 1usize
+    while i < cnt {
+        let key = ord[i]
+        var j = i
+        while j > 0usize && p[ord[j - 1usize]] > p[key] {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = key
+        i += 1usize
+    }
+    var run = 1.0f64
+    var r = cnt
+    while r > 0usize {
+        let idx = ord[r - 1usize]
+        var v = f64(cnt) / f64(r) * p[idx]
+        if v < run { run = v } else { v = run }
+        if v > 1.0f64 { v = 1.0f64 }
+        adj[idx] = signif(v, 3i64)
+        r -= 1usize
+    }
+    ret ok
+}

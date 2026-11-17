@@ -43,7 +43,7 @@ L484	library	0.25	506	LearnBayes: Bayesian computation helpers	Partial (D6156).
 L485	library	0.45	475	DRDID: difference-in-differences	Partial (D6464 reg_did_panel, D6465 drdid_panel, D6466 ipw_did_panel and std_ipw_did_panel, D6467 reg_did_rc ATT and se equal DRDID on Windows;
 L501	library	0.2	585	randtoolbox and qrng: quasi-random generators	Partial (D6160).
 L503	library	0.35	508	WRS2: robust tests and ANOVA	Partial (D6137).
-L504	library	0.45	734	rcompanion: nonparametric and categorical helpers	Partial (D6141).
+L504	library	0.5	758	rcompanion: nonparametric and categorical helpers	Partial (D6141).
 L505	library	0.2	446	sm: nonparametric smoothing methods	Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows;
 L299	library	0.55	1345	coda, posterior and loo: MCMC diagnostics and PSIS-LOO	Partial (D6592): e.algo.stat.codapkg has acf, the Yule-Walker ar(aic = TRUE) of spectrum0.ar and effectiveSize for one chain, equal to coda on 120 values on Windows (oracle_coda;
 L305	library	0.45	945	Hmisc: numerically defined core	Partial (D6050).

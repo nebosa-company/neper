@@ -47878,3 +47878,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6852 — rcompanion: the global test of nominalSymmetryTest
 
 **Decision.** `rcompanion.nominal_symmetry_p(x, n)` is the global p value of `nominalSymmetryTest` to three significant digits: Bowker's symmetry chi-square sum (x_ij - x_ji)^2 / (x_ij + x_ji) over the pairs for a table larger than 2 by 2, and for 2 by 2 the McNemar statistic with the continuity correction applied only when the two off-diagonal cells differ (R's `mcnemar.test` skips it when they are equal, giving p = 1). Equal to rcompanion on 30 square tables of 2 to 5 categories (oracle_rcompanion). Not here: the pairwise p values and their adjustment, `exact = TRUE`. Linux pending.
+
+## D6853 — rcompanion: the pairwise tests of nominalSymmetryTest
+
+**Decision.** `rcompanion.nominal_symmetry_pairs(x, n)` gives `nominalSymmetryTest(x)$Pairwise.symmetry.tests` for a table larger than 2 by 2: for each pair i < j in row order the McNemar p value of the two off-diagonal cells (corrected unless they are equal, missing when both are zero) to three significant digits, then the Benjamini-Hochberg adjustment (the default `fdr`) of those rounded values over the non-missing ones, again to three digits. Equal to rcompanion on 30 tables of 3 to 5 categories (oracle_rcompanion, raw and adjusted p of every pair, 672 cases in all). Not here: `exact = TRUE`, other adjustment methods, `pairwiseNominalIndependence`, `pairwiseMedianTest`. Linux pending.

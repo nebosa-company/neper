@@ -11,6 +11,16 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let nm = c.name
+    if str.eq(nm, "nsp") {
+        let n = usize(x[0usize])
+        let m = n * (n - 1usize) / 2usize
+        let (pp, e1) = mem.alloc[f64](a, m)
+        let (aj, e2) = mem.alloc[f64](a, m)
+        if e1 != ok || e2 != ok { os.exit(5) }
+        if rc.nominal_symmetry_pairs(a, x[2usize..2usize + n * n], n, pp, aj) != ok { ret 0.0f64 / 0.0f64 }
+        if x[1usize] < 0.0f64 { ret pp[usize(0.0f64 - x[1usize] - 1.0f64)] }
+        ret aj[usize(x[1usize])]
+    }
     if str.eq(nm, "nsym") {
         let n = usize(x[0usize])
         ret rc.nominal_symmetry_p(x[1usize..1usize + n * n], n)
