@@ -182,6 +182,11 @@ fn chol_lower(s: []const f64, p: usize, l: []f64) -> bool {
 // EM from the memberships z (n by g, column-major) for the data x (n by p), equal proportions off; on return z, pro (g), mu (g by p, column-major) and sigma (g matrices p by p, column-major, stacked) hold the fit,
 // info[0] the iterations and info[1] the final error; returns the log likelihood
 fn me_em(a: *mem.Arena, model: usize, equal_pro: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
+    ret me_em_x(a, model, equal_pro, false, x, z, n, p, g, pro, mu, sigma, info)
+}
+
+// me_em, or with m_only just the M step of mstep(data, modelName, z): the parameters from z, no E step, returns 0
+fn me_em_x(a: *mem.Arena, model: usize, equal_pro: bool, m_only: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
     let (sz, e1) = mem.alloc[f64](a, g)
     let (w, e2) = mem.alloc[f64](a, g * p * p)
     let (l, e3) = mem.alloc[f64](a, p * p)
@@ -373,6 +378,10 @@ fn me_em(a: *mem.Arena, model: usize, equal_pro: bool, x: []const f64, z: []f64,
                 j += 1usize
             }
             k += 1usize
+        }
+        if m_only {
+            info[0usize] = 1.0f64
+            ret 0.0f64
         }
         // the E step
         k = 0usize

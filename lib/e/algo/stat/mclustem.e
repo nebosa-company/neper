@@ -187,7 +187,7 @@ fn scatter(x: []const f64, z: []const f64, n: usize, p: usize, g: usize, sumz: [
 // me(data, modelName, z) for VEI (5), VEV (13), EVE (9), VEE (10) and VVE (11), codes from the package table; no noise component and no prior.
 // z is replaced by the final memberships; pro (g), mu (p by g), sigma (g stacked p by p) hold the fit. info: 0 iterations, 1 final error, 2 the largest inner iteration count, 3 the last inner error.
 // Returns the log likelihood, NaN when the fit breaks down.
-fn me_gen(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, tol_out: f64, tol_in: f64, itmax_out: usize, itmax_in: usize, eps: f64, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
+fn me_gen(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, tol_out: f64, tol_in: f64, itmax_out: usize, itmax_in: usize, eps: f64, m_only: bool, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let (sumz, e1) = mem.alloc[f64](a, g)
     let (u, e2) = mem.alloc[f64](a, g * p * p)
@@ -738,6 +738,10 @@ fn me_gen(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n:
             }
         }
         if inner > inmax { inmax = inner }
+        if m_only {
+            info[0usize] = 1.0f64
+            ret 0.0f64
+        }
         hood = estep_gen(a, x, n, p, g, mu, sigma, pro, z)
         if hood != hood { ret nan }
         errv = math.abs[f64](hood - hold) / (1.0f64 + math.abs[f64](hood))
@@ -766,7 +770,7 @@ fn me_any(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n:
     let tol_in = math.sqrt[f64](2.220446049250313e-16f64)
     let imax = 2147483647usize
     if model == 5usize || model == 9usize || model == 10usize || model == 11usize || model == 13usize {
-        ret me_gen(a, model, eqpro, x, z, n, p, g, 1.0e-5f64, tol_in, imax, imax, 2.220446049250313e-16f64, pro, mu, sigma, info)
+        ret me_gen(a, model, eqpro, x, z, n, p, g, 1.0e-5f64, tol_in, imax, imax, 2.220446049250313e-16f64, false, pro, mu, sigma, info)
     }
     var code = 0usize
     if model == 3usize || model == 1usize { code = 1usize }
@@ -780,6 +784,37 @@ fn me_any(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n:
     let (mg, e1) = mem.alloc[f64](a, g * p)
     if e1 != ok { ret 0.0f64 / 0.0f64 }
     let h = mp.me_em(a, code, eqpro, x, z, n, p, g, pro, mg, sigma, info)
+    var k = 0usize
+    while k < g {
+        var j = 0usize
+        while j < p {
+            mu[k * p + j] = mg[j * g + k]
+            j += 1usize
+        }
+        k += 1usize
+    }
+    ret h
+}
+
+// mstep(data, modelName, z) for any model index: the parameters from z with the default inner tolerance, no equal proportions
+fn mstep_any(a: *mem.Arena, model: usize, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
+    let tol_in = math.sqrt[f64](2.220446049250313e-16f64)
+    let imax = 2147483647usize
+    if model == 5usize || model == 9usize || model == 10usize || model == 11usize || model == 13usize {
+        ret me_gen(a, model, false, x, z, n, p, g, 1.0e-5f64, tol_in, imax, imax, 2.220446049250313e-16f64, true, pro, mu, sigma, info)
+    }
+    var code = 0usize
+    if model == 3usize || model == 1usize { code = 1usize }
+    if model == 4usize { code = 2usize }
+    if model == 7usize { code = 3usize }
+    if model == 8usize { code = 4usize }
+    if model == 15usize { code = 5usize }
+    if model == 6usize { code = 6usize }
+    if model == 14usize { code = 7usize }
+    if model == 12usize { code = 8usize }
+    let (mg, e1) = mem.alloc[f64](a, g * p)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let h = mp.me_em_x(a, code, false, true, x, z, n, p, g, pro, mg, sigma, info)
     var k = 0usize
     while k < g {
         var j = 0usize
