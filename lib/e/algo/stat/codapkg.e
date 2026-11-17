@@ -2,6 +2,7 @@
 //
 // Not here: the multiple-chain diagnostics (gelman.diag, geweke.diag, heidel.diag, raftery.diag), HPDinterval and cramer.test.
 
+use e.algo.stat.gslfns as gs
 use e.algo.stat.mass as ms
 use e.math
 use e.math.dist as dist
@@ -171,7 +172,7 @@ fn cov_of(x: []const f64, y: []const f64) -> f64 {
 fn gelman_psrf(a: *mem.Arena, chains: []const f64, nchain: usize, niter0: usize, confidence: f64) -> (f64, f64) {
     let nan = 0.0f64 / 0.0f64
     let half = niter0 - niter0 / 2usize
-    let niter = niter0 - half
+    let niter = niter0 / 2usize
     let (s2, e1) = mem.alloc[f64](a, nchain)
     let (xb, e2) = mem.alloc[f64](a, nchain)
     let (xb2, e3) = mem.alloc[f64](a, nchain)
@@ -346,4 +347,318 @@ fn raftery(a: *mem.Arena, x: []const f64, q: f64, r: f64, s: f64, eps: f64) -> (
     // signif(iratio, 3)
     let mag = math.pow[f64](10.0f64, 2.0f64 - math.floor[f64](math.log10[f64](math.abs[f64](iratio))))
     ret (nburn, nkeep + nburn, nmin, math.round[f64](iratio * mag) / mag, ok)
+}
+
+// spectrum0.ar(x): (spec, order); a series that is a straight line in time has spec 0 and order 0
+fn spec0(a: *mem.Arena, x: []const f64) -> (f64, usize, err) {
+    let n = x.len
+    let zm = (f64(n) + 1.0f64) / 2.0f64
+    let xm = mean_of(x)
+    var sxz = 0.0f64
+    var szz = 0.0f64
+    var i = 0usize
+    while i < n {
+        let dz = f64(i + 1usize) - zm
+        sxz += dz * (x[i] - xm)
+        szz += dz * dz
+        i += 1usize
+    }
+    let slope = sxz / szz
+    var rss = 0.0f64
+    i = 0usize
+    while i < n {
+        let r = x[i] - xm - slope * (f64(i + 1usize) - zm)
+        rss += r * r
+        i += 1usize
+    }
+    if math.sqrt[f64](rss / f64(n - 2usize)) < 1.5e-8f64 { ret (0.0f64, 0usize, ok) }
+    let (ord, sm, vp, e) = ar_yw(a, x)
+    if e != ok { ret (0.0f64, 0usize, e) }
+    ret (vp / ((1.0f64 - sm) * (1.0f64 - sm)), ord, ok)
+}
+
+// coda:::pcramer(q): the limiting Cramer-von Mises distribution, four terms of the Bessel K_1/4 series
+fn pcramer(q: f64) -> f64 {
+    let pi = 3.141592653589793238462643383279f64
+    let sp = math.sqrt[f64](pi)
+    var g1: [4]f64 = zero
+    var g2: [4]f64 = zero
+    g1[0usize] = sp
+    g1[1usize] = sp / 2.0f64
+    g1[2usize] = 3.0f64 * sp / 4.0f64
+    g1[3usize] = 15.0f64 * sp / 8.0f64
+    g2[0usize] = 1.0f64
+    g2[1usize] = 1.0f64
+    g2[2usize] = 2.0f64
+    g2[3usize] = 6.0f64
+    var s = 0.0f64
+    var k = 0usize
+    while k < 4usize {
+        let m = 4.0f64 * f64(k) + 1.0f64
+        let z = g1[k] * math.sqrt[f64](m) / (g2[k] * math.pow[f64](pi, 1.5f64) * math.sqrt[f64](q))
+        let u = m * m / (16.0f64 * q)
+        if !(u > 11.512925464970229f64) { s += z * math.exp[f64](0.0f64 - u) * gs.bessel_knu(0.25f64, u) }
+        k += 1usize
+    }
+    ret s
+}
+
+// window() start on a unit-thin series: the first time at or after s (within ts.eps), at least cur
+fn win_start(s: f64, cur: usize) -> usize {
+    var t = usize(math.ceil[f64](s))
+    let r = math.round[f64](s)
+    if math.abs[f64](r - s) <= s * 1.0e-5f64 { t = usize(r) }
+    if t < cur { t = cur }
+    ret t
+}
+
+// heidel.diag(x, eps, pvalue) for one series into out: stest, start, pvalue, htest, mean, halfwidth (NaN where R gives NA)
+fn heidel(a: *mem.Arena, x: []const f64, eps: f64, pv: f64, out: []f64) -> err {
+    let nan = 0.0f64 / 0.0f64
+    let n = x.len
+    let nf = f64(n)
+    let t0 = win_start(nf / 2.0f64, 1usize)
+    let (s0, o0, e0) = spec0(a, x[t0 - 1usize..n])
+    if e0 != ok { ret e0 }
+    let by = nf / 10.0f64
+    let nn = usize(math.floor[f64]((nf / 2.0f64 - 1.0f64) / by + 1.0e-10f64))
+    var cur = 1usize
+    var conv = false
+    var iv = nan
+    var k = 0usize
+    while k <= nn {
+        var s = 1.0f64 + f64(k) * by
+        if s > nf / 2.0f64 { s = nf / 2.0f64 }
+        cur = win_start(s, cur)
+        let y = x[cur - 1usize..n]
+        let m = y.len
+        let yb = mean_of(y)
+        var cs = 0.0f64
+        var tot = 0.0f64
+        var i = 0usize
+        while i < m {
+            cs += y[i]
+            let b = cs - yb * f64(i + 1usize)
+            tot += b * b / (f64(m) * s0)
+            i += 1usize
+        }
+        iv = tot / f64(m)
+        conv = false
+        if iv == iv && pcramer(iv) < 1.0f64 - pv { conv = true }
+        if conv { break }
+        k += 1usize
+    }
+    let y = x[cur - 1usize..n]
+    let (sci, oc, ec) = spec0(a, y)
+    if ec != ok { ret ec }
+    let yb = mean_of(y)
+    let hw = 1.96f64 * math.sqrt[f64](sci / f64(y.len))
+    var passed = 0.0f64
+    if math.abs[f64](hw / yb) <= eps { passed = 1.0f64 }
+    out[0usize] = 0.0f64
+    if conv { out[0usize] = 1.0f64 }
+    out[2usize] = 1.0f64 - pcramer(iv)
+    if !conv || iv != iv || hw != hw {
+        out[1usize] = nan
+        out[3usize] = nan
+        out[4usize] = nan
+        out[5usize] = nan
+    } else {
+        out[1usize] = f64(cur)
+        out[3usize] = passed
+        out[4usize] = yb
+        out[5usize] = hw
+    }
+    ret ok
+}
+
+// the largest eigenvalue of the symmetric p by p matrix m (cyclic Jacobi; m is destroyed)
+fn jacobi_max(m: []f64, p: usize) -> f64 {
+    var sweep = 0usize
+    while sweep < 100usize {
+        var off = 0.0f64
+        var i = 0usize
+        while i < p {
+            var j = i + 1usize
+            while j < p {
+                off += m[i * p + j] * m[i * p + j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        if off < 1.0e-300f64 { break }
+        i = 0usize
+        while i < p {
+            var j = i + 1usize
+            while j < p {
+                let apq = m[i * p + j]
+                if apq != 0.0f64 {
+                    let th = (m[j * p + j] - m[i * p + i]) / (2.0f64 * apq)
+                    var t = 1.0f64 / (math.abs[f64](th) + math.sqrt[f64](th * th + 1.0f64))
+                    if th < 0.0f64 { t = 0.0f64 - t }
+                    let cs = 1.0f64 / math.sqrt[f64](t * t + 1.0f64)
+                    let sn = t * cs
+                    var k = 0usize
+                    while k < p {
+                        let akp = m[k * p + i]
+                        let akq = m[k * p + j]
+                        m[k * p + i] = cs * akp - sn * akq
+                        m[k * p + j] = sn * akp + cs * akq
+                        k += 1usize
+                    }
+                    k = 0usize
+                    while k < p {
+                        let apk = m[i * p + k]
+                        let aqk = m[j * p + k]
+                        m[i * p + k] = cs * apk - sn * aqk
+                        m[j * p + k] = sn * apk + cs * aqk
+                        k += 1usize
+                    }
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        sweep += 1usize
+    }
+    var mx = m[0usize]
+    var i2 = 1usize
+    while i2 < p {
+        if m[i2 * p + i2] > mx { mx = m[i2 * p + i2] }
+        i2 += 1usize
+    }
+    ret mx
+}
+
+// solve L X = rhs for lower-triangular L (p by p) with p columns, into x
+fn lsolve(lm: []const f64, rhs: []const f64, x: []f64, p: usize) {
+    var j = 0usize
+    while j < p {
+        var r = 0usize
+        while r < p {
+            var s = rhs[r * p + j]
+            var k = 0usize
+            while k < r {
+                s -= lm[r * p + k] * x[k * p + j]
+                k += 1usize
+            }
+            x[r * p + j] = s / lm[r * p + r]
+            r += 1usize
+        }
+        j += 1usize
+    }
+}
+
+// gelman.diag multivariate psrf of nchain chains of niter0 draws of nvar variables (chain-major, each chain niter0 rows of nvar), the first half dropped (R keeps floor(niter0 / 2)): sqrt((1 - 1/N) + (1 + 1/p) emax / N)
+fn gelman_mpsrf(a: *mem.Arena, d: []const f64, nchain: usize, niter0: usize, nvar: usize) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let drop = niter0 - niter0 / 2usize
+    let niter = niter0 - drop
+    let p = nvar
+    let (w, e1) = mem.alloc[f64](a, p * p)
+    let (xb, e2) = mem.alloc[f64](a, p * nchain)
+    let (col, e3) = mem.alloc[f64](a, niter * p)
+    let (bm, e4) = mem.alloc[f64](a, p * p)
+    let (lm, e5) = mem.alloc[f64](a, p * p)
+    let (mm, e6) = mem.alloc[f64](a, p * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret nan }
+    var i = 0usize
+    while i < p * p {
+        w[i] = 0.0f64
+        lm[i] = 0.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < nchain {
+        var u = 0usize
+        while u < p {
+            var r = 0usize
+            while r < niter {
+                col[u * niter + r] = d[c * niter0 * p + (drop + r) * p + u]
+                r += 1usize
+            }
+            xb[u * nchain + c] = mean_of(col[u * niter..(u + 1usize) * niter])
+            u += 1usize
+        }
+        u = 0usize
+        while u < p {
+            var v = 0usize
+            while v < p {
+                w[u * p + v] += cov_of(col[u * niter..(u + 1usize) * niter], col[v * niter..(v + 1usize) * niter]) / f64(nchain)
+                v += 1usize
+            }
+            u += 1usize
+        }
+        c += 1usize
+    }
+    var u = 0usize
+    while u < p {
+        var v = 0usize
+        while v < p {
+            bm[u * p + v] = f64(niter) * cov_of(xb[u * nchain..(u + 1usize) * nchain], xb[v * nchain..(v + 1usize) * nchain])
+            v += 1usize
+        }
+        u += 1usize
+    }
+    var r = 0usize
+    while r < p {
+        var q = 0usize
+        while q <= r {
+            var s = w[r * p + q]
+            var k = 0usize
+            while k < q {
+                s -= lm[r * p + k] * lm[q * p + k]
+                k += 1usize
+            }
+            if r == q { lm[r * p + q] = math.sqrt[f64](s) } else { lm[r * p + q] = s / lm[q * p + q] }
+            q += 1usize
+        }
+        r += 1usize
+    }
+    lsolve(lm, bm, mm, p)
+    r = 0usize
+    while r < p {
+        var q = 0usize
+        while q < p {
+            bm[r * p + q] = mm[q * p + r]
+            q += 1usize
+        }
+        r += 1usize
+    }
+    lsolve(lm, bm, mm, p)
+    let emax = jacobi_max(mm, p)
+    let nn = f64(niter)
+    ret math.sqrt[f64]((1.0f64 - 1.0f64 / nn) + (1.0f64 + 1.0f64 / f64(p)) * emax / nn)
+}
+
+// cor(x)[u, v] of an n by nvar row-major matrix
+fn crosscorr(x: []const f64, n: usize, nvar: usize, u: usize, v: usize) -> f64 {
+    ret acf_cross(x, n, nvar, u, v, 0usize)
+}
+
+// acf(x)$acf[lag + 1, u, v] of a multivariate series (n by nvar row-major): sum_t (x_u[t + lag] - m_u)(x_v[t] - m_v) / n over sqrt(c_uu(0) c_vv(0)) (the n cancels)
+fn acf_cross(x: []const f64, n: usize, nvar: usize, u: usize, v: usize, lag: usize) -> f64 {
+    var a1 = 0.0f64
+    var b1 = 0.0f64
+    var i = 0usize
+    while i < n {
+        a1 += x[i * nvar + u]
+        b1 += x[i * nvar + v]
+        i += 1usize
+    }
+    a1 = a1 / f64(n)
+    b1 = b1 / f64(n)
+    var s = 0.0f64
+    var su = 0.0f64
+    var sv = 0.0f64
+    i = 0usize
+    while i < n {
+        let du = x[i * nvar + u] - a1
+        let dv = x[i * nvar + v] - b1
+        su += du * du
+        sv += dv * dv
+        if i + lag < n { s += (x[(i + lag) * nvar + u] - a1) * dv }
+        i += 1usize
+    }
+    ret s / math.sqrt[f64](su * sv)
 }
