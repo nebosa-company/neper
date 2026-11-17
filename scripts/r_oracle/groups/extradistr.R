@@ -139,7 +139,7 @@ for (rep in 1:42) { sd <- sample(1:100000, 1); fam <- (rep - 1) %% 7; a1 <- runi
   for (j in 1:5) cases[[length(cases) + 1]] <- case("rg6", c(fam, sd, pp, j - 1), v[j], rel = 1e-9, abs = 1e-12) }
 # truncated normal draws through Robert's samplers: "rg6" family 7 (mean, sd, min, max, index); an infinite bound is passed as 1e308
 wins <- list(c(-1, 1), c(-0.5, 2), c(-2, 3), c(-Inf, Inf), c(-Inf, 0.5), c(-1, Inf), c(0, Inf), c(0, 0.8), c(0, 3), c(0.3, 1.1), c(0.3, 3), c(1, 1.5), c(1, 3), c(2, 2.1), c(2, Inf), c(3, Inf), c(3, 3.5),
-  c(-1.5, -0.9), c(-1.5, -0.2), c(-3, -2.9), c(-3, -1), c(-2, -0.05), c(-Inf, -1), c(-Inf, -2.5), c(-2, 0), c(-1, 0), c(-4, 0), c(-Inf, 0), c(-0.6, -0.3))
+  c(-1.5, -0.9), c(-1.5, -0.2), c(-3, -2.9), c(-3, -1), c(-2, -0.05), c(-Inf, -1), c(-Inf, -2.5), c(-2, 0), c(-1, 0), c(-4, 0), c(-Inf, 0), c(-0.6, -0.3), c(5, 5.2), c(5, 8), c(8, Inf), c(-9, -8.99), c(-6, -5), c(-0.01, 0.01), c(0.5, 0.9), c(1.5, 2.2), c(-2.3, -1.9), c(-0.7, -0.02), c(-0.2, 2.2), c(-Inf, 3))
 for (w in wins) { sd <- sample(1:100000, 1); mu <- rnorm(1); sg <- runif(1, 0.5, 2); lo <- mu + sg * w[1]; hi <- mu + sg * w[2]
   if (w[1] == -Inf) lo <- -Inf; if (w[2] == Inf) hi <- Inf
   set.seed(sd); v <- rtnorm(5, mu, sg, lo, hi)
