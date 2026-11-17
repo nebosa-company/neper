@@ -395,3 +395,4 @@ oracle_ksamples_sim
 oracle_ksamples_steel
 oracle_ksamples_ci
 oracle_lapack_exact
+oracle_signaldsp
