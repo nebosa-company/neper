@@ -6,7 +6,9 @@
 // Not here: the seriation methods themselves (TSP, GW, OLO, ARSA and the rest), the QAP-based 2SUM and the
 // rank-correlation criteria.
 
+use e.algo.stat.hclust as hc
 use e.math
+use e.mem
 
 // the sum of the dissimilarities of consecutive objects (an open path)
 fn path_length(d: []const f64, n: usize, o: []const usize) -> f64 {
@@ -255,4 +257,164 @@ fn stress(x: []const f64, nc0: usize, ro: []const usize, co: []const usize, neum
         j += 1usize
     }
     ret 2.0f64 * z
+}
+
+// seriate(d, method = "GW"): gclus::reorder.hclust of the complete-linkage tree (seriation's default linkage) (Gruvaeus and Wainer): the end points of every subtree are chosen to be closest to
+// the neighbouring subtree and the merges flipped to match, the order read off from the flipped tree; d is the n by n full dissimilarity matrix, out receives the 0-based order
+fn gw_order(a: *mem.Arena, d: []const f64, n: usize, out: []usize) -> err {
+    let (tree, te) = hc.hclust(a, d, n, 3usize)
+    if te != ok { ret te }
+    let nm = n - 1usize
+    let (ml, e1) = mem.alloc[i32](a, nm)
+    let (mr, e2) = mem.alloc[i32](a, nm)
+    let (ep, e3) = mem.alloc[usize](a, nm * 2usize)
+    let (dir, e4) = mem.alloc[i32](a, nm * 2usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var i = 0usize
+    while i < nm {
+        ml[i] = tree.merge_a[i]
+        mr[i] = tree.merge_b[i]
+        dir[i * 2usize] = 1i32
+        dir[i * 2usize + 1usize] = 1i32
+        i += 1usize
+    }
+    // endpoints (0-based leaves) and flip directions bottom-up
+    i = 0usize
+    while i < nm {
+        let j = ml[i]
+        let k = mr[i]
+        if j < 0i32 && k < 0i32 {
+            ep[i * 2usize] = usize(0i32 - j) - 1usize
+            ep[i * 2usize + 1usize] = usize(0i32 - k) - 1usize
+        } else if j < 0i32 {
+            let jl = usize(0i32 - j) - 1usize
+            ep[i * 2usize] = jl
+            let e1v = ep[(usize(k) - 1usize) * 2usize]
+            let e2v = ep[(usize(k) - 1usize) * 2usize + 1usize]
+            if d[jl * n + e1v] < d[jl * n + e2v] {
+                ep[i * 2usize + 1usize] = e2v
+            } else {
+                ep[i * 2usize + 1usize] = e1v
+                dir[i * 2usize + 1usize] = 0i32 - 1i32
+            }
+        } else if k < 0i32 {
+            let kl = usize(0i32 - k) - 1usize
+            ep[i * 2usize + 1usize] = kl
+            let e1v = ep[(usize(j) - 1usize) * 2usize]
+            let e2v = ep[(usize(j) - 1usize) * 2usize + 1usize]
+            if d[kl * n + e1v] < d[kl * n + e2v] {
+                ep[i * 2usize] = e2v
+                dir[i * 2usize] = 0i32 - 1i32
+            } else {
+                ep[i * 2usize] = e1v
+            }
+        } else {
+            let ek1 = ep[(usize(k) - 1usize) * 2usize]
+            let ek2 = ep[(usize(k) - 1usize) * 2usize + 1usize]
+            let ej1 = ep[(usize(j) - 1usize) * 2usize]
+            let ej2 = ep[(usize(j) - 1usize) * 2usize + 1usize]
+            let d11 = d[ej1 * n + ek1]
+            let d12 = d[ej1 * n + ek2]
+            let d21 = d[ej2 * n + ek1]
+            let d22 = d[ej2 * n + ek2]
+            var dmin = d11
+            if d12 < dmin { dmin = d12 }
+            if d21 < dmin { dmin = d21 }
+            if d22 < dmin { dmin = d22 }
+            if dmin == d21 {
+                ep[i * 2usize] = ej1
+                ep[i * 2usize + 1usize] = ek2
+            } else if dmin == d11 {
+                ep[i * 2usize] = ej2
+                ep[i * 2usize + 1usize] = ek2
+                dir[i * 2usize] = 0i32 - 1i32
+            } else if dmin == d12 {
+                ep[i * 2usize] = ej2
+                ep[i * 2usize + 1usize] = ek1
+                dir[i * 2usize] = 0i32 - 1i32
+                dir[i * 2usize + 1usize] = 0i32 - 1i32
+            } else {
+                ep[i * 2usize] = ej1
+                ep[i * 2usize + 1usize] = ek1
+                dir[i * 2usize + 1usize] = 0i32 - 1i32
+            }
+        }
+        i += 1usize
+    }
+    // propagate the flips top-down
+    var ii = nm
+    while ii > 1usize {
+        ii -= 1usize
+        let row = ii
+        if dir[row * 2usize] == 0i32 - 1i32 {
+            let m = ml[row]
+            if m > 0i32 {
+                let mi = usize(m) - 1usize
+                let m1 = ml[mi]
+                ml[mi] = mr[mi]
+                mr[mi] = m1
+                if dir[mi * 2usize] == dir[mi * 2usize + 1usize] {
+                    dir[mi * 2usize] = 0i32 - dir[mi * 2usize]
+                    dir[mi * 2usize + 1usize] = 0i32 - dir[mi * 2usize + 1usize]
+                }
+            }
+        }
+        if dir[row * 2usize + 1usize] == 0i32 - 1i32 {
+            let m = mr[row]
+            if m > 0i32 {
+                let mi = usize(m) - 1usize
+                let m1 = ml[mi]
+                ml[mi] = mr[mi]
+                mr[mi] = m1
+                if dir[mi * 2usize] == dir[mi * 2usize + 1usize] {
+                    dir[mi * 2usize] = 0i32 - dir[mi * 2usize]
+                    dir[mi * 2usize + 1usize] = 0i32 - dir[mi * 2usize + 1usize]
+                }
+            }
+        }
+    }
+    // the leaf order of the flipped tree: every merge's leaves are its left subtree's then its right subtree's
+    let (buf, e5) = mem.alloc[usize](a, n * nm)
+    let (st, e6) = mem.alloc[usize](a, nm)
+    let (ln, e7) = mem.alloc[usize](a, nm)
+    if e5 != ok || e6 != ok || e7 != ok { ret mem.Full }
+    var used = 0usize
+    i = 0usize
+    while i < nm {
+        st[i] = used
+        let j = ml[i]
+        let k = mr[i]
+        if j < 0i32 {
+            buf[used] = usize(0i32 - j) - 1usize
+            used += 1usize
+        } else {
+            let sj = st[usize(j) - 1usize]
+            var q = 0usize
+            while q < ln[usize(j) - 1usize] {
+                buf[used] = buf[sj + q]
+                used += 1usize
+                q += 1usize
+            }
+        }
+        if k < 0i32 {
+            buf[used] = usize(0i32 - k) - 1usize
+            used += 1usize
+        } else {
+            let sk = st[usize(k) - 1usize]
+            var q = 0usize
+            while q < ln[usize(k) - 1usize] {
+                buf[used] = buf[sk + q]
+                used += 1usize
+                q += 1usize
+            }
+        }
+        ln[i] = used - st[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        out[i] = buf[st[nm - 1usize] + i]
+        i += 1usize
+    }
+    ret ok
 }

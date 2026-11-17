@@ -3646,4 +3646,5 @@ D6783	1318	NMF: snmf/r and snmf/l
 D6784	1085	NMF: pe-nmf and the nndsvd random densify
 D6785	1386	NMF: snmf settings and R's max.col ties
 D6786	808	NMF: ls-nmf sample weights
-D6787	994	EnvStats: gofGroupTest
+D6787	995	EnvStats: gofGroupTest
+D6788	908	seriation: GW

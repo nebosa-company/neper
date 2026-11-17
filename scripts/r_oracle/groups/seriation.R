@@ -36,4 +36,10 @@ for (rep in 1:40) {
     for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("hc", c(n, rowm(Dm), as.numeric(mc[2]), i - 1), o[i], rel = 0, abs = 0)
   }
 }
+# seriate(d, method = "GW") ("gw": (n, D row-major, idx)), the order entry (1-based)
+for (rep in 1:40) {
+  n <- sample(5:25, 1); x <- matrix(round(runif(n * 3), 3), n, 3); d <- dist(x); Dm <- as.matrix(d)
+  o <- as.integer(get_order(seriate(d, method = "GW")))
+  for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("gw", c(n, rowm(Dm), i - 1), o[i], rel = 0, abs = 0)
+}
 emit("seriation", "seriation", list(cases))

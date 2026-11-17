@@ -966,10 +966,10 @@
       "group": "CRAN parity",
       "order": 721,
       "title": "seriation: ordering of objects",
-      "score": 0.4,
+      "score": 0.45,
       "model": "opus",
       "thinking": "high",
-      "evidence": "D6720: e.algo.stat.seriationcrit has the permutation criteria (path length, lazy path length, least squares, inertia, AR events and deviations, gradient raw and weighted, BAR, RGAR, ME, Moore and Neumann stress), equal to seriation 1.6.0 on 780 values on Windows (oracle_seriation); Linux pending. D6750: the HC family (hclust leaf order, four linkages) equals seriation on 2368 order entries. Open: Spectral and MDS (LAPACK eigenvector signs), GW, OLO, VAT, TSP and the searches (needs L431), 2SUM and the rank-correlation criteria, permute and get_order. Original: Open (CRAN rank 609). Mid. Needs L431. Acceptance, equal to seriation: seriate with TSP, GW, OLO, HC, spectral, MDS, ARSA, BEA and QAP methods, criterion (path length, Moore stress, Lazy plot, gradient), permute, get_order."
+      "evidence": "D6720: e.algo.stat.seriationcrit has the permutation criteria (path length, lazy path length, least squares, inertia, AR events and deviations, gradient raw and weighted, BAR, RGAR, ME, Moore and Neumann stress), equal to seriation 1.6.0 on 780 values on Windows (oracle_seriation); Linux pending. D6750: the HC family (hclust leaf order, four linkages) equals seriation on 2368 order entries. D6788: GW (gclus reorder of the complete-linkage tree) equals seriation on 40 draws. Open: Spectral and MDS (LAPACK eigenvector signs), OLO (ties by the generator), VAT, TSP and the searches (needs L431), 2SUM and the rank-correlation criteria, permute and get_order. Original: Open (CRAN rank 609). Mid. Needs L431. Acceptance, equal to seriation: seriate with TSP, GW, OLO, HC, spectral, MDS, ARSA, BEA and QAP methods, criterion (path length, Moore stress, Lazy plot, gradient), permute, get_order."
     },
     {
       "id": "L433",
