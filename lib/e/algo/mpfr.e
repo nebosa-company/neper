@@ -1,6 +1,6 @@
 // Rmpfr / MPFR style binary floating point of a chosen precision on the big integers of e.algo.bignum: a value is m * 2^e with m a signed integer of at most `prec` bits, and every operation is the exact result rounded to nearest, ties to even.
 //
-// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, lgamma, gamma, erf, zeta (real s > 1), besselJ of integer order, pi, log 2 and Catalan constants, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
+// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, lgamma, gamma, erf, zeta (real s > 1), besselJ of integer order, pi, log 2, Catalan and Euler constants, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
 //
 // Not here: zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
 
@@ -1079,5 +1079,52 @@ fn bessel_j(a: *mem.Arena, x: Mp, n: usize, prec: usize) -> (Mp, err) {
         k += 1i64
     }
     let (rt_, re_) = round_to(a, sum.m, sum.e, prec)
+    ret (rt_, re_)
+}
+
+// Euler's constant by the Brent-McCann formula gamma = A(n) / B(n) - log n with B = sum (n^k / k!)^2, A = sum (n^k / k!)^2 H_k, H_k the harmonic numbers; the error is below exp(-4 n), so n = 0.18 w + 8 terms are enough
+fn const_euler(a: *mem.Arena, prec: usize) -> (Mp, err) {
+    let w = prec + 96usize
+    let n = (w * 18usize) / 100usize + 8usize
+    let (nm, e1) = from_parts(a, i64(n), 0i64, w)
+    let (one, e2) = from_parts(a, 1i64, 0i64, w)
+    if e1 != ok || e2 != ok { ret (zero, mem.Full) }
+    var term = one
+    var h = Mp{ m: bn.int_zero(a), e: 0i64 }
+    var b = one
+    var aa = Mp{ m: bn.int_zero(a), e: 0i64 }
+    var k = 1i64
+    while k <= i64(4 * n) + 8i64 {
+        // term_k = term_{k - 1} * n / k, squared into the sums
+        let (t1, e3) = mul(a, term, nm, w + 32usize)
+        let (kk, e4) = from_parts(a, k, 0i64, w + 32usize)
+        if e3 != ok || e4 != ok { ret (zero, mem.Full) }
+        let (t2, e5) = div(a, t1, kk, w + 32usize)
+        if e5 != ok { ret (zero, e5) }
+        term = t2
+        let (sq, e6) = mul(a, term, term, w + 32usize)
+        if e6 != ok { ret (zero, e6) }
+        let (inv, e7) = div(a, one, kk, w + 32usize)
+        if e7 != ok { ret (zero, e7) }
+        let (h2, e8) = add(a, h, inv, w + 32usize)
+        if e8 != ok { ret (zero, e8) }
+        h = h2
+        let (b2, e9) = add(a, b, sq, w + 32usize)
+        if e9 != ok { ret (zero, e9) }
+        b = b2
+        let (sh, e10) = mul(a, sq, h, w + 32usize)
+        if e10 != ok { ret (zero, e10) }
+        let (a2, e11) = add(a, aa, sh, w + 32usize)
+        if e11 != ok { ret (zero, e11) }
+        aa = a2
+        k += 1i64
+    }
+    let (q, e12) = div(a, aa, b, w)
+    if e12 != ok { ret (zero, e12) }
+    let (ln, e13) = log(a, nm, w)
+    if e13 != ok { ret (zero, e13) }
+    let (r, e14) = sub(a, q, ln, w)
+    if e14 != ok { ret (zero, e14) }
+    let (rt_, re_) = round_to(a, r.m, r.e, prec)
     ret (rt_, re_)
 }

@@ -48230,3 +48230,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6940 — Rmpfr: besselJ
 
 **Decision.** `mpfr.bessel_j(x, n)` for an integer order n >= 0 sums (-1)^k (x / 2)^(2k + n) / (k! (k + n)!), starting from (x / 2)^n / n! and multiplying by -(x / 2)^2 / (k (k + n)), with 128 guard bits plus about 0.75 x^2 bits for the cancellation and the leading zeros of x times the order. Equal to Rmpfr's `jn(n, x)` through the pair-of-doubles comparison on 72 random cases (orders 0 to 3, |x| below 12, precisions 53 to 128) (oracle_mpfr, 1774 cases in all). Not here: the Bessel functions of the second kind, non-integer orders, the modified Bessel functions. Linux pending.
+
+## D6941 — Rmpfr: Euler's constant
+
+**Decision.** `mpfr.const_euler` is the Brent-McCann formula gamma = A(n) / B(n) - log n with B = sum (n^k / k!)^2 and A = sum (n^k / k!)^2 H_k over 4n + 8 terms and n = 0.18 w + 8 (the error is below exp(-4 n)). Equal to `Const("gamma", prec)` at precisions 53, 64, 100, 128 and 200 through the pair-of-doubles comparison (oracle_mpfr, 1784 cases in all). Linux pending.

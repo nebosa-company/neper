@@ -98,4 +98,7 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
 }
+# Euler's constant (28)
+for (prec in c(53, 64, 100, 128, 200)) { z <- Const("gamma", prec); hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(28, prec, 1, 0, 1, 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0); cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0) }
 emit("mpfr", "Rmpfr", list(cases))
