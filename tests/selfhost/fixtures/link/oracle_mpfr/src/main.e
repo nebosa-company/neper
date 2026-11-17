@@ -41,8 +41,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (t, e) = mp.exp(a, x, prec)
         r = t
         er = e
-    } else {
+    } else if op == 6usize {
         let (t, e) = mp.log(a, x, prec)
+        r = t
+        er = e
+    } else if op == 7usize || op == 8usize {
+        let (sn, cs, e) = mp.sin_cos(a, x, prec)
+        r = sn
+        if op == 8usize { r = cs }
+        er = e
+    } else if op == 9usize {
+        let (t, e) = mp.pow(a, x, y, prec)
+        r = t
+        er = e
+    } else {
+        let (t, e) = mp.pi(a, prec)
         r = t
         er = e
     }

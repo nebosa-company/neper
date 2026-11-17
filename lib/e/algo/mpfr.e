@@ -1,8 +1,8 @@
 // Rmpfr / MPFR style binary floating point of a chosen precision on the big integers of e.algo.bignum: a value is m * 2^e with m a signed integer of at most `prec` bits, and every operation is the exact result rounded to nearest, ties to even.
 //
-// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
+// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, pi, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
 //
-// Not here: pow, the trigonometric and hyperbolic functions, gamma, zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
+// Not here: tan, the inverse and hyperbolic functions, gamma, zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
 
 use e.algo.bignum as bn
 use e.math
@@ -385,5 +385,143 @@ fn log(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
         total = s4
     }
     let (rt_, re_) = round_to(a, total.m, total.e, prec)
+    ret (rt_, re_)
+}
+
+// atan(1/n) = sum (-1)^k / ((2k + 1) n^(2k + 1)) for an integer n > 1, to w bits
+fn atan_inv(a: *mem.Arena, n: i64, w: usize) -> (Mp, err) {
+    let (one, e1) = from_parts(a, 1i64, 0i64, w)
+    let (nn, e2) = from_parts(a, n, 0i64, w)
+    if e1 != ok || e2 != ok { ret (zero, mem.Full) }
+    let (z, e3) = div(a, one, nn, w)
+    if e3 != ok { ret (zero, e3) }
+    let (z2, e4) = mul(a, z, z, w)
+    if e4 != ok { ret (zero, e4) }
+    var p = z
+    var sum = z
+    var k = 1i64
+    var go = true
+    while go {
+        let (p2, e5) = mul(a, p, z2, w)
+        if e5 != ok { ret (zero, e5) }
+        p = p2
+        let (d, e6) = from_parts(a, 2i64 * k + 1i64, 0i64, w)
+        if e6 != ok { ret (zero, e6) }
+        let (t, e7) = div(a, p, d, w)
+        if e7 != ok { ret (zero, e7) }
+        var s2 = sum
+        var e8 = ok
+        if k % 2i64 == 1i64 {
+            let (sa, ea) = sub(a, sum, t, w)
+            s2 = sa
+            e8 = ea
+        } else {
+            let (sa, ea) = add(a, sum, t, w)
+            s2 = sa
+            e8 = ea
+        }
+        if e8 != ok { ret (zero, e8) }
+        sum = s2
+        if mag_exp(t) < mag_exp(sum) - i64(w) - 5i64 { go = false }
+        k += 1i64
+    }
+    ret (sum, ok)
+}
+
+// pi = 16 atan(1/5) - 4 atan(1/239) (Machin), to w bits
+fn pi(a: *mem.Arena, w: usize) -> (Mp, err) {
+    let (a5, e1) = atan_inv(a, 5i64, w + 8usize)
+    let (a239, e2) = atan_inv(a, 239i64, w + 8usize)
+    if e1 != ok || e2 != ok { ret (zero, mem.Full) }
+    let (d, e3) = sub(a, scale2(a5, 4i64), scale2(a239, 2i64), w + 8usize)
+    if e3 != ok { ret (zero, e3) }
+    let (rt_, re_) = round_to(a, d.m, d.e, w)
+    ret (rt_, re_)
+}
+
+// (sin x, cos x) to prec bits for moderate x: x = k pi / 2 + r with |r| <= pi / 4, the Taylor series of sin r and cos r, the quadrant from k mod 4; 160 guard bits plus the size of k
+fn sin_cos(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, Mp, err) {
+    var w = prec + 160usize
+    let xf = to_f64(a, x)
+    let kf = math.floor[f64](xf / 1.5707963267948966f64 + 0.5f64)
+    let k = i64(kf)
+    var kb = 0usize
+    var ak = k
+    if ak < 0i64 { ak = 0i64 - ak }
+    while ak > 0i64 {
+        kb += 1usize
+        ak = ak / 2i64
+    }
+    w += kb
+    let (p, e1) = pi(a, w + 64usize)
+    if e1 != ok { ret (zero, zero, e1) }
+    let hp = scale2(p, 0i64 - 1i64)
+    let (kk, e2) = from_parts(a, k, 0i64, w + 64usize)
+    if e2 != ok { ret (zero, zero, e2) }
+    let (kp, e3) = mul(a, kk, hp, w + 64usize)
+    if e3 != ok { ret (zero, zero, e3) }
+    let (r, e4) = sub(a, x, kp, w)
+    if e4 != ok { ret (zero, zero, e4) }
+    let (r2, e5) = mul(a, r, r, w)
+    if e5 != ok { ret (zero, zero, e5) }
+    let (one, e6) = from_parts(a, 1i64, 0i64, w)
+    if e6 != ok { ret (zero, zero, e6) }
+    // sin r = r - r^3 / 3! + ..., cos r = 1 - r^2 / 2! + ...
+    var s = r
+    var c = one
+    var ts = r
+    var tc = one
+    var i = 1i64
+    var go = true
+    while go {
+        let (tc1, e7) = mul(a, tc, r2, w)
+        let (d1, e8) = from_parts(a, (2i64 * i - 1i64) * (2i64 * i), 0i64, w)
+        if e7 != ok || e8 != ok { ret (zero, zero, mem.Full) }
+        let (tc2, e9) = div(a, tc1, d1, w)
+        if e9 != ok { ret (zero, zero, e9) }
+        tc = neg(a, tc2)
+        let (c2, e10) = add(a, c, tc, w)
+        if e10 != ok { ret (zero, zero, e10) }
+        c = c2
+        let (ts1, e11) = mul(a, ts, r2, w)
+        let (d2, e12) = from_parts(a, (2i64 * i) * (2i64 * i + 1i64), 0i64, w)
+        if e11 != ok || e12 != ok { ret (zero, zero, mem.Full) }
+        let (ts2, e13) = div(a, ts1, d2, w)
+        if e13 != ok { ret (zero, zero, e13) }
+        ts = neg(a, ts2)
+        let (s2, e14) = add(a, s, ts, w)
+        if e14 != ok { ret (zero, zero, e14) }
+        s = s2
+        if (tc.m.sign == bn.Sign.Zero || mag_exp(tc) < 0i64 - i64(w) - 8i64) && (ts.m.sign == bn.Sign.Zero || mag_exp(ts) < 0i64 - i64(w) - 8i64) { go = false }
+        i += 1i64
+    }
+    var q = k % 4i64
+    if q < 0i64 { q += 4i64 }
+    var sn = s
+    var cs = c
+    if q == 1i64 {
+        sn = c
+        cs = neg(a, s)
+    } else if q == 2i64 {
+        sn = neg(a, s)
+        cs = neg(a, c)
+    } else if q == 3i64 {
+        sn = neg(a, c)
+        cs = s
+    }
+    let (sr, e15) = round_to(a, sn.m, sn.e, prec)
+    let (cr, e16) = round_to(a, cs.m, cs.e, prec)
+    if e15 != ok || e16 != ok { ret (zero, zero, e15) }
+    ret (sr, cr, ok)
+}
+
+// x^y for x > 0 as exp(y log x), the logarithm and the product carried with 192 guard bits and the size of the exponent
+fn pow(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
+    let w = prec + 192usize
+    let (l, e1) = log(a, x, w)
+    if e1 != ok { ret (zero, e1) }
+    let (t, e2) = mul(a, y, l, w)
+    if e2 != ok { ret (zero, e2) }
+    let (rt_, re_) = exp(a, t, prec)
     ret (rt_, re_)
 }

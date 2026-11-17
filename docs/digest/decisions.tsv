@@ -3792,4 +3792,5 @@ D6929	575	fda: the Fourier basis
 D6930	654	fda: smooth.basis weights, df, SSE and GCV
 D6931	1217	fda: numerical inprod and pca.fd
 D6932	1160	Rmpfr: correctly rounded arithmetic
-D6933	832	Rmpfr: exp and log
+D6933	833	Rmpfr: exp and log
+D6934	813	Rmpfr: pi, sin, cos and pow

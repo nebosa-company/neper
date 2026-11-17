@@ -26,4 +26,17 @@ for (rep in 1:120) {
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
 }
+# sin (7), cos (8) for |x| below 100, pow (9) for x > 0 and moderate y, pi (10)
+for (rep in 1:150) {
+  op <- sample(7:10, 1); prec <- sample(c(53, 80, 100, 128, 200), 1); m1 <- sample(1:(2^50), 1); e1 <- sample(-49:-44, 1)
+  m2 <- sample(1:(2^50), 1); e2 <- sample(-52:-46, 1)
+  if (op %in% c(7, 8) && runif(1) < 0.5) m1 <- -m1
+  if (op == 9) { e1 <- sample(-52:-48, 1) }
+  x <- mpfr(m1, prec) * 2^e1; y <- mpfr(m2, prec) * 2^e2
+  z <- switch(op - 6, sin(x), cos(x), x^y, Const("pi", prec))
+  if (!is.finite(z) || z == 0) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(op, prec, m1, e1, m2, e2)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))
