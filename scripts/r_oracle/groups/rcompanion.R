@@ -24,4 +24,9 @@ for (rep in 1:30) {
   d <- data.frame(y = y, x1 = factor(g1), x2 = factor(g2)); z <- tryCatch(scheirerRayHare(y ~ x1 + x2, data = d, verbose = FALSE), error = function(e) NULL); if (is.null(z)) next
   vals <- c(z[1:3, 3], z[1:3, 4]); for (j in 0:5) add("srh", c(n, l1, l2, g1 - 1, g2 - 1, y, j), vals[j + 1])
 }
+# nominalSymmetryTest global p: "nsym" (n, table row-major)
+for (rep in 1:30) {
+  n <- sample(2:5, 1); M <- matrix(sample(1:15, n * n, TRUE), n); r <- suppressWarnings(nominalSymmetryTest(M))
+  v <- if (n == 2) r$Global.test.for.symmetry$p.value else r$Global.test.for.symmetry$p.value; add("nsym", c(n, as.vector(t(M))), v)
+}
 emit("rcompanion", "rcompanion", list(cases))

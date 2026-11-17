@@ -352,3 +352,27 @@ fn sumsq_range(v: []const f64, lo: usize, hi: usize) -> f64 {
     }
     ret s
 }
+
+// nominalSymmetryTest(x)$Global.test.for.symmetry: the McNemar test of a 2 by 2 table (continuity corrected) or Bowker's symmetry test of a square table, the p value to three significant digits; x is n by n row-major
+fn nominal_symmetry_p(x: []const f64, n: usize) -> f64 {
+    var st = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = i + 1usize
+        while j < n {
+            let u = x[i * n + j]
+            let l = x[j * n + i]
+            if n == 2usize {
+                var d = math.abs[f64](u - l)
+                if u != l { d = d - 1.0f64 }
+                st += d * d / (u + l)
+            } else {
+                st += (u - l) * (u - l) / (u + l)
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let df = f64(n * (n - 1usize) / 2usize)
+    ret signif(1.0f64 - nm.pchisq(st, df, true, false), 3i64)
+}

@@ -11,6 +11,10 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let nm = c.name
+    if str.eq(nm, "nsym") {
+        let n = usize(x[0usize])
+        ret rc.nominal_symmetry_p(x[1usize..1usize + n * n], n)
+    }
     if str.eq(nm, "srh") {
         let n = usize(x[0usize])
         let l1 = usize(x[1usize])

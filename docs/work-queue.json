@@ -493,10 +493,10 @@
       "group": "CRAN parity",
       "order": 661,
       "title": "rcompanion: nonparametric and categorical helpers",
-      "score": 0.4,
+      "score": 0.45,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6141). epsilonSquared, freemanTheta, cliffDelta, vda, cramerV (bias-corrected too) and cohenW equal rcompanion on Windows (oracle_rcompanion; Linux pending). D6851: scheirerRayHare (type II, tie corrected) equals rcompanion. Open: pairwiseMedianTest, nominalSymmetryTest, pairwiseNominalIndependence, groupwiseMean and the bootstrap intervals. Was: Open (CRAN rank 904). Small to mid. Builds on the rstatix module. Acceptance, equal to rcompanion under set.seed: epsilonSquared, freemanTheta, cliffDelta, scheirerRayHare, pairwiseMedianTest, nominalSymmetryTest, pairwiseNominalIndependence, groupwiseMean with bootstrap intervals, cramerV."
+      "evidence": "Partial (D6141). epsilonSquared, freemanTheta, cliffDelta, vda, cramerV (bias-corrected too) and cohenW equal rcompanion on Windows (oracle_rcompanion; Linux pending). D6851: scheirerRayHare (type II, tie corrected) equals rcompanion. D6852: the global p of nominalSymmetryTest equals rcompanion. Open: pairwiseMedianTest, the pairwise parts of nominalSymmetryTest, pairwiseNominalIndependence, groupwiseMean and the bootstrap intervals. Was: Open (CRAN rank 904). Small to mid. Builds on the rstatix module. Acceptance, equal to rcompanion under set.seed: epsilonSquared, freemanTheta, cliffDelta, scheirerRayHare, pairwiseMedianTest, nominalSymmetryTest, pairwiseNominalIndependence, groupwiseMean with bootstrap intervals, cramerV."
     },
     {
       "id": "L505",
