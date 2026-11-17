@@ -3818,4 +3818,5 @@ D6955	509	LearnBayes: normpostpred
 D6956	1008	LearnBayes: the two-sided Bayes factor, pdiscp and bfindep; L484 closed
 D6957	816	statmod: the Tweedie family object
 D6958	891	tweedie: density and distribution function for 1 < p < 2
-D6959	697	tweedie: rtweedie for 1 < p < 2
+D6959	698	tweedie: rtweedie for 1 < p < 2
+D6960	951	tweedie: qtweedie and the saddlepoint density

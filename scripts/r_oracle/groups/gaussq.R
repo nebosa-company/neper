@@ -76,4 +76,10 @@ for (rep in 1:40) { pw <- runif(1, 1.1, 1.9); mu <- runif(1, 0.5, 6); ph <- runi
 # rtweedie for 1 < power < 2 under set.seed: "twr" (seed, n, power, mu, phi, index)
 for (rep in 1:15) { pw <- runif(1, 1.1, 1.9); mu <- runif(1, 0.5, 6); ph <- runif(1, 0.3, 3); sd <- sample(1:100000, 1); nn <- sample(5:15, 1); set.seed(sd); rt <- rtweedie(nn, power = pw, mu = mu, phi = ph)
   for (q in c(1, nn %/% 2, nn)) cases[[length(cases) + 1]] <- case("twr", c(sd, nn, pw, mu, ph, q - 1), rt[q], rel = 1e-10, abs = 1e-12) }
+# qtweedie for 1 < power < 2: "twq" (prob, power, mu, phi)
+for (rep in 1:30) { pw <- runif(1, 1.1, 1.9); mu <- runif(1, 0.5, 6); ph <- runif(1, 0.3, 3); pr <- runif(1, 0.02, 0.98)
+  cases[[length(cases) + 1]] <- case("twq", c(pr, pw, mu, ph), qtweedie(pr, power = pw, mu = mu, phi = ph), rel = 1e-8, abs = 1e-10) }
+# dtweedie_saddle: "tws" (y, power, mu, phi), powers on both sides of 2 and the atom at 0
+for (rep in 1:40) { pw <- c(runif(1, 1.1, 1.9), runif(1, 2.2, 3.5))[rep %% 2 + 1]; mu <- runif(1, 0.5, 6); ph <- runif(1, 0.3, 3); y <- if (rep %% 7 == 0 && pw < 2) 0 else rexp(1) * mu + 0.05
+  cases[[length(cases) + 1]] <- case("tws", c(y, pw, mu, ph), dtweedie_saddle(y, power = pw, mu = mu, phi = ph), rel = 1e-10, abs = 1e-12) }
 emit("gaussq", "statmod", list(cases))

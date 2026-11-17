@@ -24,6 +24,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if gq.rtweedie_pg(&rr, nn, z[2usize], z[3usize], z[4usize], o) != ok { ret nan }
         ret o[usize(z[5usize])]
     }
+    if str.eq(c.name, "twq") { ret gq.qtweedie_pg(z[0usize], z[1usize], z[2usize], z[3usize]) }
+    if str.eq(c.name, "tws") { ret gq.tweedie_saddle(z[0usize], z[1usize], z[2usize], z[3usize]) }
     if str.eq(c.name, "twd") {
         // (which 0 dev.resids 1 variance 2 linkfun 3 linkinv 4 mu.eta, p, lambda, y, mu, wt)
         let w = usize(z[0usize])

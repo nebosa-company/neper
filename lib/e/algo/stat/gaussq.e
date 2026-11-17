@@ -8,6 +8,7 @@
 
 use e.algo.rand.r as rng
 use e.algo.rand.rdist as rd
+use e.algo.stat.pwr as pw
 use e.algo.stat.test as tst
 use e.math
 use e.math.dist as mdist
@@ -632,4 +633,50 @@ fn rtweedie_pg(r: *rng.Rng, n: usize, p: f64, mu: f64, phi: f64, out: []f64) -> 
         i += 1usize
     }
     ret ok
+}
+
+type TwQ = struct { prob: f64, p: f64, mu: f64, phi: f64 }
+
+fn twq_obj(c: *TwQ, q: f64) -> f64 { ret tweedie_pg(q, c.p, c.mu, c.phi, 1usize) - c.prob }
+
+// tweedie::qtweedie for 1 < p < 2 and 0 < prob < 1: zero when prob does not exceed the atom at 0; otherwise a start from the Poisson and gamma quantiles, the bracket widened by halving (when the start is above the root) or by 1.5 (q + 2)
+// (when below), and R's uniroot of ptweedie - prob on it with tolerance 1e-12
+fn qtweedie_pg(prob: f64, p: f64, mu: f64, phi: f64) -> f64 {
+    let step = tweedie_pg(0.0f64, p, mu, phi, 0usize)
+    if prob <= step { ret 0.0f64 }
+    let qp = nm.qpois(prob, mu / phi, true, false)
+    let qg = nm.qgamma(prob, 1.0f64 / phi, phi * mu, true, false)
+    let start = (qg - phi * qp) * p + (2.0f64 * phi * qp - qg)
+    var c = TwQ{ prob: prob, p: p, mu: mu, phi: phi }
+    let pt = twq_obj(&c, start)
+    if pt == 0.0f64 { ret start }
+    var s2 = start
+    var go = true
+    if pt > 0.0f64 {
+        while go {
+            s2 = 0.5f64 * s2
+            if twq_obj(&c, s2) < 0.0f64 { go = false }
+        }
+    } else {
+        while go {
+            s2 = 1.5f64 * (s2 + 2.0f64)
+            if twq_obj(&c, s2) > 0.0f64 { go = false }
+        }
+    }
+    var lo = start
+    var hi = s2
+    if s2 < start {
+        lo = s2
+        hi = start
+    }
+    ret pw.zeroin[TwQ](&c, twq_obj, lo, hi, 1.0e-12f64, 1000i64)
+}
+
+// tweedie::dtweedie_saddle (eps = 1 / 6): the saddlepoint density (2 pi phi v)^(-1/2) exp(-d(y, mu) / (2 phi)) with the unit deviance d and v = (y + eps)^p for p < 2 (Nelder's correction) or y^p for p > 2; the exact atom exp(-lambda) at y = 0 when p < 2
+fn tweedie_saddle(y: f64, p: f64, mu: f64, phi: f64) -> f64 {
+    if y == 0.0f64 { ret math.exp[f64](0.0f64 - math.pow[f64](mu, 2.0f64 - p) / (phi * (2.0f64 - p))) }
+    let d = 2.0f64 * (math.pow[f64](y, 2.0f64 - p) / ((1.0f64 - p) * (2.0f64 - p)) - y * math.pow[f64](mu, 1.0f64 - p) / (1.0f64 - p) + math.pow[f64](mu, 2.0f64 - p) / (2.0f64 - p))
+    var v = math.pow[f64](y, p)
+    if p < 2.0f64 { v = math.pow[f64](y + 1.0f64 / 6.0f64, p) }
+    ret math.exp[f64](0.0f64 - d / (2.0f64 * phi)) / math.sqrt[f64](2.0f64 * 3.141592653589793f64 * phi * v)
 }
