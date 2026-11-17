@@ -14,7 +14,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let p = usize(z[1usize])
     let (o, e) = mem.alloc[f64](a, 2usize)
     if e != ok { ret nan }
-    mf.logit_avg(a, z[4usize + p + p * p..4usize + p + p * p + n * p], z[4usize..4usize + p], z[4usize + p..4usize + p + p * p], n, p, usize(z[2usize]), o)
+    // args: (n, p, j, which, link, kind, beta[p], vcov[p p], X[n p])
+    let b0 = 6usize
+    mf.glm_avg(a, usize(z[4usize]), usize(z[5usize]), z[b0 + p + p * p..b0 + p + p * p + n * p], z[b0..b0 + p], z[b0 + p..b0 + p + p * p], n, p, usize(z[2usize]), o)
     ret o[usize(z[3usize])]
 }
 

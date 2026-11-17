@@ -3801,4 +3801,5 @@ D6938	714	Rmpfr: erf, log 2 and Catalan's constant
 D6939	714	Rmpfr: zeta
 D6940	613	Rmpfr: besselJ
 D6941	411	Rmpfr: Euler's constant
-D6942	1059	marginaleffects: average slopes and predictions of a logistic regression
+D6942	1060	marginaleffects: average slopes and predictions of a logistic regression
+D6943	895	marginaleffects: links and comparisons
