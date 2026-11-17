@@ -71,4 +71,14 @@ for (rep in 1:25) {
   a <- c(n, y, x1, x1)
   add("smi", a, unname(coef(sm$model)[1])); add("sms", a, unname(coef(sm$model)[2])); add("sma", a, as.numeric(auc(sm)))
 }
+# roc.test by bootstrap, paired: ("btd" the statistic D, "btp" the p value) args (n, y, x1, x2, boot.n, seed, stratified)
+for (rep in 1:20) {
+  n <- sample(25:60, 1); y <- rbinom(n, 1, 0.4); if (sum(y) < 4 || sum(y) > n - 4) next
+  s <- c(0.8, 1.5, 0.5, 1.1)[rep %% 4 + 1]; x1 <- round(rnorm(n) + s * y, if (rep %% 3 == 0) 1 else 4); x2 <- round(rnorm(n) + 0.5 * y + 0.3 * x1, 4)
+  r1 <- roc(y, x1, quiet = TRUE); r2 <- roc(y, x2, quiet = TRUE); st <- rep %% 2 == 0; bn <- 300; sd <- sample(1:100000, 1)
+  a <- c(n, y, x1, x2, bn, sd, as.numeric(st))
+  set.seed(sd); rt <- tryCatch(suppressWarnings(roc.test(r1, r2, method = "bootstrap", boot.n = bn, boot.stratified = st, paired = TRUE, progress = "none")), error = function(e) NULL)
+  if (is.null(rt)) next
+  add("btd", a, as.numeric(rt$statistic)); add("btp", a, rt$p.value)
+}
 emit("proc", "pROC", list(cases))

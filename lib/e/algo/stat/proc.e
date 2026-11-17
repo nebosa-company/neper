@@ -678,3 +678,110 @@ fn smooth_binormal(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, out:
     out[2usize] = auc
     ret ok
 }
+
+// ---- roc.test by bootstrap (method "bootstrap", the AUC difference, paired curves) ----
+
+// D = (auc1 - auc2) / sd(the replicates' differences) for the two predictors x1 and x2 of the same response y, after set.seed(seed); both resample with the same indices (stratified: the controls then the cases;
+// otherwise the whole sample), directions are the originals', replicates missing a class are dropped; out receives D and the two-sided p value 2 pnorm(-|D|)
+fn roc_test_boot(a: *mem.Arena, y: []const f64, x1: []const f64, x2: []const f64, boot_n: usize, seed: i64, stratified: bool, out: []f64) -> err {
+    let n = y.len
+    let (nc, nn) = counts(y)
+    let h1 = cases_higher(a, y, x1)
+    let h2 = cases_higher(a, y, x2)
+    let (cs1, e1) = mem.alloc[f64](a, nc)
+    let (ct1, e2) = mem.alloc[f64](a, nn)
+    let (cs2, e3) = mem.alloc[f64](a, nc)
+    let (ct2, e4) = mem.alloc[f64](a, nn)
+    let (r1c, e5) = mem.alloc[f64](a, n)
+    let (r1t, e6) = mem.alloc[f64](a, n)
+    let (r2c, e7) = mem.alloc[f64](a, n)
+    let (r2t, e8) = mem.alloc[f64](a, n)
+    let (diffs, e9) = mem.alloc[f64](a, boot_n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret mem.Full }
+    var p = 0usize
+    var q = 0usize
+    var i = 0usize
+    while i < n {
+        if y[i] > 0.5f64 {
+            cs1[p] = x1[i]
+            cs2[p] = x2[i]
+            p += 1usize
+        } else {
+            ct1[q] = x1[i]
+            ct2[q] = x2[i]
+            q += 1usize
+        }
+        i += 1usize
+    }
+    var r: rng.Rng = zero
+    rng.seed(&r, seed)
+    var nv = 0usize
+    var b = 0usize
+    while b < boot_n {
+        var mc = 0usize
+        var mt = 0usize
+        if stratified {
+            let (ic, f1) = rng.sample_int(a, &r, i64(nn), i64(nn), true)
+            if f1 != ok { ret f1 }
+            let (is, f2) = rng.sample_int(a, &r, i64(nc), i64(nc), true)
+            if f2 != ok { ret f2 }
+            i = 0usize
+            while i < nn {
+                r1t[i] = ct1[usize(ic[i]) - 1usize]
+                r2t[i] = ct2[usize(ic[i]) - 1usize]
+                i += 1usize
+            }
+            i = 0usize
+            while i < nc {
+                r1c[i] = cs1[usize(is[i]) - 1usize]
+                r2c[i] = cs2[usize(is[i]) - 1usize]
+                i += 1usize
+            }
+            mc = nc
+            mt = nn
+        } else {
+            let (ix, f3) = rng.sample_int(a, &r, i64(n), i64(n), true)
+            if f3 != ok { ret f3 }
+            i = 0usize
+            while i < n {
+                let k = usize(ix[i]) - 1usize
+                if y[k] > 0.5f64 {
+                    r1c[mc] = x1[k]
+                    r2c[mc] = x2[k]
+                    mc += 1usize
+                } else {
+                    r1t[mt] = x1[k]
+                    r2t[mt] = x2[k]
+                    mt += 1usize
+                }
+                i += 1usize
+            }
+        }
+        if mc > 0usize && mt > 0usize {
+            diffs[nv] = auc_pairs(r1c[0usize..mc], r1t[0usize..mt], h1) - auc_pairs(r2c[0usize..mc], r2t[0usize..mt], h2)
+            nv += 1usize
+        }
+        b += 1usize
+    }
+    var mean = 0.0f64
+    i = 0usize
+    while i < nv {
+        mean += diffs[i]
+        i += 1usize
+    }
+    mean = mean / f64(nv)
+    var ss = 0.0f64
+    i = 0usize
+    while i < nv {
+        ss += (diffs[i] - mean) * (diffs[i] - mean)
+        i += 1usize
+    }
+    let sd = math.sqrt[f64](ss / f64(nv - 1usize))
+    let auc1 = auc_pairs(cs1, ct1, h1)
+    let auc2 = auc_pairs(cs2, ct2, h2)
+    var d = (auc1 - auc2) / sd
+    if d != d && sd == 0.0f64 && auc1 == auc2 { d = 0.0f64 }
+    out[0usize] = d
+    out[1usize] = 2.0f64 * dist.pnorm(0.0f64 - math.abs[f64](d), 0.0f64, 1.0f64, true, false)
+    ret ok
+}

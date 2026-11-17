@@ -37,6 +37,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "bcm") { ret bo[1usize] }
         ret bo[2usize]
     }
+    if str.eq(k, "btd") || str.eq(k, "btp") {
+        let (bo2, bo2e) = mem.alloc[f64](a, 2usize)
+        if bo2e != ok { ret 0.0f64 / 0.0f64 }
+        if pr.roc_test_boot(a, y, x1, x2, usize(x[3usize * n + 1usize]), i64(x[3usize * n + 2usize]), x[3usize * n + 3usize] > 0.5f64, bo2) != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(k, "btd") { ret bo2[0usize] }
+        ret bo2[1usize]
+    }
     if str.eq(k, "smi") || str.eq(k, "sms") || str.eq(k, "sma") {
         let (so, soe) = mem.alloc[f64](a, 3usize)
         if soe != ok { ret 0.0f64 / 0.0f64 }
