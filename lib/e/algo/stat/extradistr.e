@@ -529,3 +529,47 @@ fn lst_q(p: f64, nu: f64, mu: f64, s: f64) -> f64 { ret mu + s * nb.qt(p, nu, tr
 fn invchisq_d(x: f64, nu: f64, tau: f64) -> f64 { ret invgamma_d(x, nu / 2.0f64, nu * tau / 2.0f64) }
 fn invchisq_p(x: f64, nu: f64, tau: f64) -> f64 { ret invgamma_p(x, nu / 2.0f64, nu * tau / 2.0f64) }
 fn invchisq_q(p: f64, nu: f64, tau: f64) -> f64 { ret invgamma_q(p, nu / 2.0f64, nu * tau / 2.0f64) }
+
+// discrete normal and discrete gamma: the mass of [x, x + 1) under the base distribution, on x = 0, 1, 2 ...
+fn ddnorm_d(x: f64, m: f64, s: f64) -> f64 {
+    if x < 0.0f64 || x != math.floor[f64](x) { ret 0.0f64 }
+    ret dist.pnorm(x + 1.0f64, m, s, true, false) - dist.pnorm(x, m, s, true, false)
+}
+fn ddnorm_p(x: f64, m: f64, s: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret dist.pnorm(math.floor[f64](x) + 1.0f64, m, s, true, false)
+}
+fn ddgamma_d(x: f64, sh: f64, sc: f64) -> f64 {
+    if x < 0.0f64 || x != math.floor[f64](x) { ret 0.0f64 }
+    ret nm.pgamma(x + 1.0f64, sh, sc, true, false) - nm.pgamma(x, sh, sc, true, false)
+}
+fn ddgamma_p(x: f64, sh: f64, sc: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret nm.pgamma(math.floor[f64](x) + 1.0f64, sh, sc, true, false)
+}
+
+// Huber's least-favourable density(mu, sigma, epsilon): normal in the centre, exponential tails beyond epsilon
+fn huber_c(k: f64) -> f64 {
+    ret 1.0f64 / (math.sqrt[f64](2.0f64 * pi()) * (2.0f64 * pn(k) - 1.0f64) + 2.0f64 * math.exp[f64](0.0f64 - k * k / 2.0f64) / k)
+}
+fn huber_d(x: f64, mu: f64, s: f64, k: f64) -> f64 {
+    let z = math.abs[f64]((x - mu) / s)
+    if z <= k { ret huber_c(k) * math.exp[f64](0.0f64 - z * z / 2.0f64) / s }
+    ret huber_c(k) * math.exp[f64](0.0f64 - k * z + k * k / 2.0f64) / s
+}
+fn huber_p(x: f64, mu: f64, s: f64, k: f64) -> f64 {
+    let z = (x - mu) / s
+    let c = huber_c(k)
+    let tail = math.exp[f64](0.0f64 - k * k / 2.0f64) / k
+    if z < 0.0f64 - k { ret c * math.exp[f64](k * z + k * k / 2.0f64) / k }
+    if z <= k { ret c * (tail + math.sqrt[f64](2.0f64 * pi()) * (pn(z) - pn(0.0f64 - k))) }
+    ret 1.0f64 - c * math.exp[f64](0.0f64 - k * z + k * k / 2.0f64) / k
+}
+
+// two-component mixtures: normal(m1, s1; m2, s2; weight a1 of the first) and Poisson(l1, l2; a1)
+fn mixnorm2_d(x: f64, m1: f64, s1: f64, m2: f64, s2: f64, a1: f64) -> f64 {
+    ret a1 * dist.dnorm(x, m1, s1, false) + (1.0f64 - a1) * dist.dnorm(x, m2, s2, false)
+}
+fn mixpois2_d(x: f64, l1: f64, l2: f64, a1: f64) -> f64 {
+    ret a1 * nm.dpois(x, l1, false) + (1.0f64 - a1) * nm.dpois(x, l2, false)
+}

@@ -48418,3 +48418,8 @@ Whitehead proportional-odds power (`popower`: power, efficiency, approximate sta
 ## D6984 — extraDistr: GEV, GPD, discrete uniform, Bernoulli, discrete Weibull, location-scale t, inverse chi-squared
 
 Seven more families from the package, with the xi = 0 limits of the GEV and GPD and the support edges (GEV and GPD with xi < 0 end at a finite point). The inverse chi-squared is the inverse gamma with shape nu / 2 and scale nu tau / 2. Equal to extraDistr on 5 parameter sets each (oracle_extradistr). The generators of these families and the Bernoulli p and q are not here. Linux pending.
+
+
+## D6985 — extraDistr: discrete normal and gamma, Huber, two-component mixtures
+
+`ddnorm`, `ddgamma` (mass of [x, x + 1) on x = 0, 1, ...), `huber` (normalising constant from the centre and the two exponential tails, closed-form cumulative function) and two-component `mixnorm` and `mixpois` densities. Equal to extraDistr on 4 parameter sets (oracle_extradistr). Mixtures of more than two components, and the quantiles of these families, are not here. Linux pending.

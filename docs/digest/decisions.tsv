@@ -3843,4 +3843,5 @@ D6980	326	Hmisc hoeffd
 D6981	488	Hmisc rcspline.restate
 D6982	405	extraDistr cumulative functions of the discrete and truncated families
 D6983	447	extraDistr quantiles of the discrete and truncated families
-D6984	511	extraDistr: GEV, GPD, discrete uniform, Bernoulli, discrete Weibull, location-scale t, inverse chi-squared
+D6984	513	extraDistr: GEV, GPD, discrete uniform, Bernoulli, discrete Weibull, location-scale t, inverse chi-squared
+D6985	470	extraDistr: discrete normal and gamma, Huber, two-component mixtures

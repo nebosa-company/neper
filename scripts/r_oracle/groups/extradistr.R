@@ -83,6 +83,13 @@ for (rep in 1:5) {
   for (xx in c(-2, -0.5, 0.3, 1.7, 4)) { add2("m4", c(5, nu, mu, sg, 0, xx), dlst(xx, nu, mu, sg)); add2("m4", c(5, nu, mu, sg, 1, xx), plst(xx, nu, mu, sg)) }
   for (xx in c(0.2, 0.7, 1.5, 4)) { add2("m4", c(6, nu, 0.5 + rep / 4, 0, 0, xx), dinvchisq(xx, nu, 0.5 + rep / 4)); add2("m4", c(6, nu, 0.5 + rep / 4, 0, 1, xx), pinvchisq(xx, nu, 0.5 + rep / 4)) }
 }
+# fn "m6" (dist, kind 0 d 1 p, p1..p4, a1, v): 0 ddnorm 1 ddgamma 2 huber 3 mixnorm 4 mixpois
+for (rep in 1:4) {
+  mu <- rnorm(1); sg <- runif(1, 0.6, 2); ep <- runif(1, 0.7, 2); sh <- runif(1, 1, 4); rt <- runif(1, 0.5, 2); a1 <- runif(1, 0.2, 0.8); m2 <- rnorm(1, 2); s2 <- runif(1, 0.4, 1.5); l1 <- runif(1, 0.5, 3); l2 <- runif(1, 3, 8)
+  for (xx in c(0, 1, 2, 3, 6)) { add2("m6", c(0, 0, mu, sg, 0, 0, 0, xx), ddnorm(xx, mu, sg)); add2("m6", c(0, 1, mu, sg, 0, 0, 0, xx), pdnorm(xx, mu, sg)); add2("m6", c(1, 0, sh, 1 / rt, 0, 0, 0, xx), ddgamma(xx, sh, rt)); add2("m6", c(1, 1, sh, 1 / rt, 0, 0, 0, xx), pdgamma(xx, sh, rt))
+    add2("m6", c(4, 0, l1, l2, 0, 0, a1, xx), dmixpois(xx, c(l1, l2), c(a1, 1 - a1))) }
+  for (xx in mu + sg * c(-4, -1.7, -0.5, 0.3, 1.2, 3.5)) { add2("m6", c(2, 0, mu, sg, ep, 0, 0, xx), dhuber(xx, mu, sg, ep)); add2("m6", c(2, 1, mu, sg, ep, 0, 0, xx), phuber(xx, mu, sg, ep)); add2("m6", c(3, 0, mu, sg, m2, s2, a1, xx), dmixnorm(xx, c(mu, m2), c(sg, s2), c(a1, 1 - a1))) }
+}
 # random draws: "rg" (family, seed, p1, p2, p3, index) the draw at position index (0-based) of five seeded draws; family 0 gumbel 1 frechet 2 power 3 lomax 4 pareto 5 rayleigh 6 kumar 7 gompertz 8 hnorm 9 hcauchy 10 laplace
 for (rep in 1:33) {
   sd <- sample(1:100000, 1); fam <- (rep - 1) %% 11; p1 <- runif(1, 0.5, 3); p2 <- runif(1, 0.5, 3); p3 <- runif(1, -1, 1)

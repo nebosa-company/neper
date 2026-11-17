@@ -138,6 +138,31 @@ fn answer(c: *const oracle.Case) -> f64 {
         if kd == 1usize { ret ed.invchisq_p(rv, r1, r2) }
         ret ed.invchisq_q(rv, r1, r2)
     }
+    if str.eq(c.name, "m6") {
+        // (dist, kind 0 d 1 p, p1..p4, a1, v): 0 ddnorm 1 ddgamma 2 huber 3 mixnorm 4 mixpois
+        let d6 = usize(x[0usize])
+        let kd = usize(x[1usize])
+        let r1 = x[2usize]
+        let r2 = x[3usize]
+        let r3 = x[4usize]
+        let r4 = x[5usize]
+        let r5 = x[6usize]
+        let rv = x[7usize]
+        if d6 == 0usize {
+            if kd == 0usize { ret ed.ddnorm_d(rv, r1, r2) }
+            ret ed.ddnorm_p(rv, r1, r2)
+        }
+        if d6 == 1usize {
+            if kd == 0usize { ret ed.ddgamma_d(rv, r1, r2) }
+            ret ed.ddgamma_p(rv, r1, r2)
+        }
+        if d6 == 2usize {
+            if kd == 0usize { ret ed.huber_d(rv, r1, r2, r3) }
+            ret ed.huber_p(rv, r1, r2, r3)
+        }
+        if d6 == 3usize { ret ed.mixnorm2_d(rv, r1, r2, r3, r4, r5) }
+        ret ed.mixpois2_d(rv, r1, r2, r5)
+    }
     if str.eq(c.name, "d3") {
         let d3 = usize(x[0usize])
         let w1 = x[1usize]
