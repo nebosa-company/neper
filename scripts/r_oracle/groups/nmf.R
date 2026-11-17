@@ -86,4 +86,21 @@ for (rep in 1:20) {
   v <- c(cp, dispersion(res), as.vector(consensus(res)), if (is.null(sm)) rep(NA, 7) else c(sm[["silhouette.consensus"]], sm[["silhouette.coef"]], sm[["silhouette.basis"]], sm[["sparseness.basis"]], sm[["sparseness.coef"]], rss(res, x), evar(res, x)))
   for (q in seq_along(v)) if (is.finite(v[q])) cases[[length(cases) + 1]] <- case("nmc", c(n, p, r, me, sd, nr, as.vector(x), q - 1), v[q], rel = 1e-8, abs = 1e-10)
 }
+# nmfEstimateRank: the measures table is the same fit at each rank with the seed reused ("nmc" cases from its rows)
+for (rep in 1:10) {
+  n <- sample(8:14, 1); p <- sample(6:9, 1); me <- rep %% 2; sd <- sample(1:100000, 1); nr <- sample(3:4, 1)
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  er <- tryCatch(suppressWarnings(nmfEstimateRank(x, 2:3, method = if (me == 0) "brunet" else "lee", nrun = nr, seed = sd, .pbackend = NA)), error = function(e) NULL)
+  if (is.null(er)) next
+  for (k in 1:2) {
+    m <- er$measures[k, ]; r <- m$rank
+    v <- list(`0` = m$cophenetic, `1` = m$dispersion, `2` = NA)
+    cs <- c(m$cophenetic, m$dispersion)
+    for (nm in c("0", "1")) if (is.finite(v[[nm]])) cases[[length(cases) + 1]] <- case("nmc", c(n, p, r, me, sd, nr, as.vector(x), as.numeric(nm)), v[[nm]], rel = 1e-8, abs = 1e-10)
+    cases[[length(cases) + 1]] <- case("nmc", c(n, p, r, me, sd, nr, as.vector(x), p * p + 2), m$silhouette.consensus, rel = 1e-8, abs = 1e-10)
+    cases[[length(cases) + 1]] <- case("nmc", c(n, p, r, me, sd, nr, as.vector(x), p * p + 3), m$silhouette.coef, rel = 1e-8, abs = 1e-10)
+    cases[[length(cases) + 1]] <- case("nmc", c(n, p, r, me, sd, nr, as.vector(x), p * p + 7), m$rss, rel = 1e-8, abs = 1e-10)
+    cases[[length(cases) + 1]] <- case("nmc", c(n, p, r, me, sd, nr, as.vector(x), p * p + 8), m$evar, rel = 1e-8, abs = 1e-10)
+  }
+}
 emit("nmf", "NMF", list(cases))

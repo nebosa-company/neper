@@ -3640,4 +3640,5 @@ D6777	921	NMF: ls-nmf
 D6778	916	NMF: several runs
 D6779	884	NMF: consensus matrix, cophenetic correlation and dispersion
 D6780	902	NMF: silhouette of the consensus and of the coefficients
-D6781	1102	NMF: the rest of summary()
+D6781	1103	NMF: the rest of summary()
+D6782	897	NMF: nmfEstimateRank is the per-rank fit
