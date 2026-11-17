@@ -12,6 +12,7 @@ use e.algo.rand.r as rng
 use e.algo.rand.rdist as rd
 use e.math.quadpack as quad
 use e.math.root as root
+use e.algo.stat.pbivnorm as bv
 use e.mem
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
@@ -59,6 +60,15 @@ fn t_owen(h: f64, a: f64) -> f64 {
     if aa == 0.0f64 { ret 0.0f64 }
     if aa <= 1.0f64 { ret sg * t_int(ah, aa) }
     ret sg * (0.5f64 * pn(ah) + pn(aa * ah) * (0.5f64 - pn(ah)) - t_int(aa * ah, 1.0f64 / aa))
+}
+
+// psn through the bivariate normal engine (the package's scalar default, and any tau): P(Z <= z, T <= tau) at correlation -delta, over pnorm(tau)
+fn psn_biv(x: f64, xi: f64, omega: f64, alpha: f64, tau: f64) -> f64 {
+    let z = (x - xi) / omega
+    let p = bv.pbivnorm(z, tau, 0.0f64 - alpha / math.sqrt[f64](1.0f64 + alpha * alpha)) / pn(tau)
+    if p < 0.0f64 { ret 0.0f64 }
+    if p > 1.0f64 { ret 1.0f64 }
+    ret p
 }
 
 // psn with engine = "T.Owen" (tau = 0)

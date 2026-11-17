@@ -48,4 +48,7 @@ for (rep in 1:30) {
 for (rep in 1:40) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, -0.5, 1, 4, 25)[sample(5, 1)]; nu <- c(4.5, 5.5, 7, 12, 40)[sample(5, 1)]
   cp <- dp2cp(c(xi, om, al, nu), "ST"); dp <- tryCatch(cp2dp(cp, "ST"), error = function(e) NULL); if (is.null(dp)) next
   for (w in 1:4) add("cp2st", c(cp[1], cp[2], cp[3], cp[4], w - 1), unname(dp[w]), rel = 1e-6) }
+# psn scalar calls (bivariate normal engine) with tau: (xi, omega, alpha, tau, x)
+for (rep in 1:40) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-8, -3, -0.5, 0.3, 1, 5, 20)[sample(7, 1)]; tau <- c(0, 0.7, -0.5, 1.8, -2)[sample(5, 1)]
+  for (z in c(-6, -2.5, -0.4, 0.2, 1, 2.8, 6)) { x <- xi + om * z; add("psnb", c(xi, om, al, tau, x), psn(x, xi, om, al, tau), rel = 1e-8) } }
 emit("sn", "sn", list(cases))
