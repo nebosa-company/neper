@@ -22,6 +22,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
+    if dr.kind_drdid(true, true) != 4u8 || dr.kind_drdid(false, false) != 13u8 || dr.kind_ipwdid(false, true) != 12u8 || dr.kind_ipwdid(true, false) != 1u8 || dr.kind_ordid(false) != 10u8 { failures += 1usize }
     var at = 0usize
     while at < golden.cases.len {
         let start = mem.mark(a)

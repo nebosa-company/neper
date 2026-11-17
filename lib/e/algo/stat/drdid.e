@@ -6,7 +6,7 @@
 // variants fit the inverse-probability-tilting score with trust::trust.
 //
 // Not here: the secondary nlm fit pscore.cal falls back on when trust does not verify (the result is NaN then), the range-repair paths of the IPT loss for
-// weights outside [1e-50, 1e50], zero sampling weights, and the formula / data frame front ends drdid, ipwdid and ordid (they only dispatch to these).
+// weights outside [1e-50, 1e50], zero sampling weights, and the formula / data frame preprocessing of drdid, ipwdid and ordid (kind_drdid, kind_ipwdid and kind_ordid give the kind they dispatch to).
 
 use e.algo.rand.r as rng
 use e.algo.rand.rdist as rdist
@@ -1550,4 +1550,30 @@ fn one(a: *mem.Arena, kind: u8, y: []const f64, post: []const f64, d: []const f6
     let r = did(a, &g, kind, 0u8, 0usize, y, post, d, x, ones, n, p, 0.995f64)
     if part == 0usize { ret r.att }
     ret r.se
+}
+
+// drdid(panel, estMethod): the doubly robust kind, imp for the improved estimators
+fn kind_drdid(panel: bool, imp: bool) -> u8 {
+    if panel {
+        if imp { ret 4u8 }
+        ret 3u8
+    }
+    if imp { ret 15u8 }
+    ret 13u8
+}
+
+// ipwdid(panel, normalized)
+fn kind_ipwdid(panel: bool, normalized: bool) -> u8 {
+    if panel {
+        if normalized { ret 2u8 }
+        ret 1u8
+    }
+    if normalized { ret 12u8 }
+    ret 11u8
+}
+
+// ordid(panel)
+fn kind_ordid(panel: bool) -> u8 {
+    if panel { ret 0u8 }
+    ret 10u8
 }
