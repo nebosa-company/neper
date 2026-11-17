@@ -1425,3 +1425,31 @@ fn laplace[Ctx: type](a: *mem.Arena, ctx: *Ctx, logf: fn(*Ctx, []const f64) -> f
     let (fv, nc, fail) = nm_opt.nmmin[Ctx](a, ctx, logf, start, 0.0f64 - 1.0e308f64, 1.4901161193847656e-08f64, 1.0f64, 0.5f64, 2.0f64, 500usize, 0.0f64 - 1.0f64, mode_out)
     ret laplace_at[Ctx](a, ctx, logf, mode_out, var_out)
 }
+
+// normpostpred(parameters, sample.size, f): for every posterior draw j a sample of sample_size normals with that draw's mean and variance (one rnorm per value, draws in order) summarised by f, 0 min, 1 max, 2 mean, 3 median-free sd; out has one value per draw
+fn normpostpred(r: *rng.Rng, mu: []const f64, sigma2: []const f64, sample_size: usize, kind: usize, out: []f64) {
+    var j = 0usize
+    while j < mu.len {
+        let sd = math.sqrt[f64](sigma2[j])
+        var mn = 0.0f64
+        var mx = 0.0f64
+        var sum = 0.0f64
+        var sq = 0.0f64
+        var i = 0usize
+        while i < sample_size {
+            let v = mu[j] + sd * rng.norm(r)
+            if i == 0usize || v < mn { mn = v }
+            if i == 0usize || v > mx { mx = v }
+            sum += v
+            sq += v * v
+            i += 1usize
+        }
+        let n = f64(sample_size)
+        var res = mn
+        if kind == 1usize { res = mx }
+        if kind == 2usize { res = sum / n }
+        if kind == 3usize { res = math.sqrt[f64]((sq - sum * sum / n) / (n - 1.0f64)) }
+        out[j] = res
+        j += 1usize
+    }
+}

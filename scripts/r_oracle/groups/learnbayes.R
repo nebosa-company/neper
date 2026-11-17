@@ -88,6 +88,9 @@ for (rep in 1:10) {
   lp <- laplace(logisticpost, c(0, 0), dat); for (q in 1:4) add("lap", c(q - 1, m, lp$mode, xx, nn, yb), as.vector(lp$var)[q], 1e-7); add("lap", c(4, m, lp$mode, xx, nn, yb), lp$int, 1e-8)
   st <- rnorm(2, 0, 0.5); lq <- laplace(logisticpost, st, dat)
   for (q in 1:2) add("lapf", c(q - 1, m, st, xx, nn, yb), lq$mode[q], 1e-9); for (q in 1:4) add("lapf", c(1 + q, m, st, xx, nn, yb), as.vector(lq$var)[q], 1e-9); add("lapf", c(6, m, st, xx, nn, yb), lq$int, 1e-9)
+  mv <- sample(3:8, 1); mus <- rnorm(mv); s2s <- runif(mv, 0.5, 3); ss <- sample(5:20, 1)
+  for (kd in 0:2) { fnn <- list(min, max, mean)[[kd + 1]]; set.seed(sd); np <- normpostpred(list(mu = mus, sigma2 = s2s), ss, fnn)
+    for (q in c(1, mv)) add("npp", c(sd, mv, ss, kd, q - 1, mus, s2s), np[q], 1e-10) }
   set.seed(sd); gb <- gibbs(logisticpost, c(0, 0), 60, c(0.5, 0.4), dat); for (q in c(1, 30, 60, 61, 90, 120)) add("gib", c(sd, q - 1, m, 60, 0.5, 0.4, 0, 0, xx, nn, yb), as.vector(gb$par)[q], 1e-10)
   add("gib", c(sd, 120, m, 60, 0.5, 0.4, 0, 0, xx, nn, yb), gb$accept[1], 1e-10); add("gib", c(sd, 121, m, 60, 0.5, 0.4, 0, 0, xx, nn, yb), gb$accept[2], 1e-10)
   set.seed(sd); sr <- sir(logisticpost, tp, 150, dat); for (q in c(1, 40, 150, 151, 190, 300)) add("sir", c(sd, q - 1, m, 150, 4, 0, mu, vv, xx, nn, yb), as.vector(sr)[q], 1e-10)

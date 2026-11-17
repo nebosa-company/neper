@@ -48286,3 +48286,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6954 — bayesm: rmvst
 
 **Decision.** `bayesmpkg.rmvst` draws one multivariate t as bayesm does: the d standard normals first, then one chi-square(nu), x = mu + t(root) z / sqrt(chisq / nu) with root the upper Cholesky factor of the scale (found by testing the two possible orders against the package: chi-square first gave another stream). Equal to bayesm under set.seed on 25 draws of dimension 1 to 4 and 3 to 15 degrees of freedom, every coordinate (oracle_bayesm, 10314 cases in all). Linux pending.
+
+## D6955 — LearnBayes: normpostpred
+
+**Decision.** `learnbayes.normpostpred` is the posterior predictive check: for each posterior draw a sample of sample.size normals with that draw's mean and variance (the normals drawn draw by draw, one `rnorm` each), summarised by min, max or mean (the statistic `f`). Equal to LearnBayes under set.seed on 10 settings (3 to 8 draws, samples of 5 to 20), the first and last statistic each for the three summaries (oracle_learnbayes, 4399 cases in all). Linux pending.

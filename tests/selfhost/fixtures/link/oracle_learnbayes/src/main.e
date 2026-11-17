@@ -151,6 +151,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if w < 6usize { ret vo[w - 2usize] }
         ret it
     }
+    if str.eq(k, "npp") {
+        // (seed, m, size, kind, index, mu[m], sigma2[m])
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let m = usize(x[1usize])
+        let (o, oe) = mem.alloc[f64](a, m)
+        if oe != ok { ret 0.0f64 / 0.0f64 }
+        lb.normpostpred(&rr, x[5usize..5usize + m], x[5usize + m..5usize + 2usize * m], usize(x[2usize]), usize(x[3usize]), o)
+        ret o[usize(x[4usize])]
+    }
     if str.eq(k, "rej") || str.eq(k, "imp2") {
         // (seed, which, m, n, df, dmax or hidx, mean[2], var[4], x[m], nn[m], y[m]) rej: the number kept (which 0) or the sum of the kept first-coordinate values (1); imp2: est (0) or se (1)
         var rr: rng.Rng = zero
