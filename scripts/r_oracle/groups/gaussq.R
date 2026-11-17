@@ -68,4 +68,9 @@ for (rep in 1:40) {
   add("twd", c(0, pw, lm, y, mu, wt), fam$dev.resids(y, mu, wt)); add("twd", c(1, pw, lm, y, mu, wt), fam$variance(mu))
   add("twd", c(2, pw, lm, y, mu, wt), fam$linkfun(mu)); add("twd", c(3, pw, lm, y, mu, wt), fam$linkinv(mu)); add("twd", c(4, pw, lm, y, mu, wt), fam$mu.eta(mu))
 }
+# tweedie dtweedie (kind 0) and ptweedie (kind 1) for 1 < power < 2: "twpg" (kind, y, power, mu, phi)
+suppressMessages(library(tweedie))
+for (rep in 1:40) { pw <- runif(1, 1.1, 1.9); mu <- runif(1, 0.5, 6); ph <- runif(1, 0.3, 3); y <- if (runif(1) < 0.15) 0 else rexp(1) * mu
+  cases[[length(cases) + 1]] <- case("twpg", c(0, y, pw, mu, ph), dtweedie(y, power = pw, mu = mu, phi = ph), rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("twpg", c(1, y, pw, mu, ph), ptweedie(y, power = pw, mu = mu, phi = ph), rel = 1e-6, abs = 1e-10) }
 emit("gaussq", "statmod", list(cases))

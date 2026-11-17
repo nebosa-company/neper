@@ -588,3 +588,29 @@ fn tweedie_mu_eta(eta: f64, lambda: f64) -> f64 {
     }
     ret (1.0f64 / lambda) * math.pow[f64](eta, 1.0f64 / lambda - 1.0f64)
 }
+
+// tweedie::dtweedie for 1 < p < 2 (the compound Poisson-gamma form): with lambda = mu^(2 - p) / (phi (2 - p)), a = (2 - p) / (p - 1) and tau = phi (p - 1) mu^(p - 1), the density is
+// sum_j Poisson(j; lambda) Gamma(y; j a, scale tau) for y > 0 and exp(-lambda) at 0; kind 0 the density, 1 the distribution function (the atom at 0 plus the gamma distribution functions)
+fn tweedie_pg(y: f64, p: f64, mu: f64, phi: f64, kind: usize) -> f64 {
+    let lam = math.pow[f64](mu, 2.0f64 - p) / (phi * (2.0f64 - p))
+    let a = (2.0f64 - p) / (p - 1.0f64)
+    let tau = phi * (p - 1.0f64) * math.pow[f64](mu, p - 1.0f64)
+    if y == 0.0f64 { ret math.exp[f64](0.0f64 - lam) }
+    var lo = 1.0f64
+    let lj = lam - 40.0f64 * math.sqrt[f64](lam) - 10.0f64
+    if lj > lo { lo = math.floor[f64](lj) }
+    let hj = lam + 40.0f64 * math.sqrt[f64](lam) + 40.0f64
+    var s = 0.0f64
+    var j = lo
+    while j <= hj {
+        let lw = 0.0f64 - lam + j * math.log[f64](lam) - nm.lgammafn(j + 1.0f64)
+        if kind == 0usize {
+            s += math.exp[f64](lw + nm.dgamma(y, j * a, tau, true))
+        } else {
+            s += math.exp[f64](lw) * nm.pgamma(y, j * a, tau, true, false)
+        }
+        j += 1.0f64
+    }
+    if kind == 1usize { s += math.exp[f64](0.0f64 - lam) }
+    ret s
+}
