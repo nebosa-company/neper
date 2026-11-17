@@ -75,4 +75,14 @@ for (rep in 1:20) {
   v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmr", c(n, p, r, me, sd, nr, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
 }
+# consensus over the runs ("nmc": the same arguments as nmr; idx 0 the cophenetic correlation, 1 the dispersion, then the consensus matrix column by column)
+for (rep in 1:20) {
+  n <- sample(8:16, 1); p <- sample(6:10, 1); r <- sample(2:4, 1); me <- rep %% 2; sd <- sample(1:100000, 1); nr <- sample(3:6, 1)
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = if (me == 0) "brunet" else "lee", nrun = nr, seed = sd, .pbackend = NA)), error = function(e) NULL)
+  if (is.null(res)) next
+  cp <- tryCatch(cophcor(res), error = function(e) NA)
+  v <- c(cp, dispersion(res), as.vector(consensus(res)))
+  for (q in seq_along(v)) if (is.finite(v[q])) cases[[length(cases) + 1]] <- case("nmc", c(n, p, r, me, sd, nr, as.vector(x), q - 1), v[q], rel = 1e-8, abs = 1e-10)
+}
 emit("nmf", "NMF", list(cases))

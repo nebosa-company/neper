@@ -14,14 +14,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(z[0usize])
     let p = usize(z[1usize])
     let rk = usize(z[2usize])
-    if str.eq(c.name, "nmr") {
+    if str.eq(c.name, "nmr") || str.eq(c.name, "nmc") {
         let (w2, f1) = mem.alloc[f64](a, n * rk)
         let (h2, f2) = mem.alloc[f64](a, rk * p)
         let (o2, f3) = mem.alloc[f64](a, 4usize)
-        if f1 != ok || f2 != ok || f3 != ok { ret nan }
-        let re = nf.nmf_runs(a, z[6usize..6usize + n * p], n, p, rk, usize(z[3usize]), i64(z[4usize]), 2000usize, usize(z[5usize]), w2, h2, o2)
+        let (cs2, f4) = mem.alloc[f64](a, p * p)
+        if f1 != ok || f2 != ok || f3 != ok || f4 != ok { ret nan }
+        let re = nf.nmf_runs(a, z[6usize..6usize + n * p], n, p, rk, usize(z[3usize]), i64(z[4usize]), 2000usize, usize(z[5usize]), w2, h2, cs2, o2)
         if re != ok { ret nan }
         let ix = usize(z[6usize + n * p])
+        if str.eq(c.name, "nmc") {
+            if ix == 0usize { ret nf.nmf_cophcor(a, cs2, p) }
+            if ix == 1usize { ret nf.nmf_dispersion(cs2) }
+            ret cs2[ix - 2usize]
+        }
         if ix == 0usize { ret o2[0usize] }
         if ix <= n * rk { ret w2[ix - 1usize] }
         ret h2[ix - 1usize - n * rk]

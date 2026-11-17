@@ -3637,4 +3637,5 @@ D6774	1096	NMF: KL and Frobenius with the stationary stop
 D6775	942	NMF: nsNMF and offset
 D6776	1030	NMF: the nndsvd seed
 D6777	921	NMF: ls-nmf
-D6778	915	NMF: several runs
+D6778	916	NMF: several runs
+D6779	883	NMF: consensus matrix, cophenetic correlation and dispersion

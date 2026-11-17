@@ -11,6 +11,7 @@
 use e.algo.linalg.decomp as decomp
 use e.algo.rand.lecuyer as lc
 use e.algo.rand.r as rng
+use e.algo.stat.hclust as hc
 use e.math
 use e.mem
 
@@ -696,13 +697,20 @@ fn nm_unif(use_ly: bool, r: *rng.Rng, st: *lc.State) -> f64 {
 
 // nmf(x, rank, method, seed, nrun = nrun): the runs take the streams of rngtools::RNGseq(nrun, seed) (each run's random start drawn from its L'Ecuyer-CMRG stream), and the fit with the
 // smallest residual is kept (the first of equals); methods 0 to 3. out[0] iterations of the kept run, out[1] its 1-based index, out[2] its residual
-fn nmf_runs(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, nrun: usize, w: []f64, h: []f64, out: []f64) -> err {
+fn nmf_runs(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, nrun: usize, w: []f64, h: []f64, cons: []f64, out: []f64) -> err {
     let (w1, e1) = mem.alloc[f64](a, n * rk)
     let (h1, e2) = mem.alloc[f64](a, rk * p)
     let (wh, e3) = mem.alloc[f64](a, n * p)
     if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
     var kind = 1usize
     if method % 2usize == 0usize { kind = 0usize }
+    let (idx, e4) = mem.alloc[usize](a, p)
+    if e4 != ok { ret mem.Full }
+    var qc = 0usize
+    while qc < p * p {
+        cons[qc] = 0.0f64
+        qc += 1usize
+    }
     var best = 1.0f64 / 0.0f64
     var k = 0usize
     while k < nrun {
@@ -710,6 +718,26 @@ fn nmf_runs(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method
         let fe = nmf_fit(a, v, n, p, rk, method, seed, maxiter, 0.5f64, 0usize, i64(k), w1, h1, o1[0usize..4usize])
         if fe != ok { ret fe }
         let rs = nmf_objective(v, w1, h1, n, p, rk, kind, wh)
+        var jj = 0usize
+        while jj < p {
+            var bi = 0usize
+            var kk = 1usize
+            while kk < rk {
+                if h1[jj * rk + kk] > h1[jj * rk + bi] { bi = kk }
+                kk += 1usize
+            }
+            idx[jj] = bi
+            jj += 1usize
+        }
+        jj = 0usize
+        while jj < p {
+            var j2 = 0usize
+            while j2 < p {
+                if idx[jj] == idx[j2] { cons[j2 * p + jj] += 1.0f64 }
+                j2 += 1usize
+            }
+            jj += 1usize
+        }
         if rs < best {
             best = rs
             var q = 0usize
@@ -728,5 +756,67 @@ fn nmf_runs(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method
         }
         k += 1usize
     }
+    qc = 0usize
+    while qc < p * p {
+        cons[qc] = cons[qc] / f64(nrun)
+        qc += 1usize
+    }
     ret ok
+}
+
+// cophcor of a consensus matrix: the correlation of the cophenetic distances of the average-linkage tree of 1 - C with those dissimilarities (the lower triangle, column by column, as `dist` stores it)
+fn nmf_cophcor(a: *mem.Arena, cons: []const f64, p: usize) -> f64 {
+    let (d, e1) = mem.alloc[f64](a, p * p)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var q = 0usize
+    while q < p * p {
+        d[q] = 1.0f64 - cons[q]
+        q += 1usize
+    }
+    let (tr, e2) = hc.hclust(a, d, p, 4usize)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var cnt = 0.0f64
+    var sx = 0.0f64
+    var sy = 0.0f64
+    var j = 0usize
+    while j < p {
+        var i = j + 1usize
+        while i < p {
+            sx += d[i * p + j]
+            sy += hc.cophenetic(a, &tr, p, i, j)
+            cnt += 1.0f64
+            i += 1usize
+        }
+        j += 1usize
+    }
+    let mx = sx / cnt
+    let my = sy / cnt
+    var sxy = 0.0f64
+    var sxx = 0.0f64
+    var syy = 0.0f64
+    j = 0usize
+    while j < p {
+        var i = j + 1usize
+        while i < p {
+            let dx = d[i * p + j] - mx
+            let dy = hc.cophenetic(a, &tr, p, i, j) - my
+            sxy += dx * dy
+            sxx += dx * dx
+            syy += dy * dy
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret sxy / math.sqrt[f64](sxx * syy)
+}
+
+// dispersion of a consensus matrix: the mean of 4 (C - 1/2)^2 over all its entries
+fn nmf_dispersion(cons: []const f64) -> f64 {
+    var s = 0.0f64
+    var q = 0usize
+    while q < cons.len {
+        s += 4.0f64 * (cons[q] - 0.5f64) * (cons[q] - 0.5f64)
+        q += 1usize
+    }
+    ret s / f64(cons.len)
 }
