@@ -5,11 +5,23 @@ use e.algo.stat.extradistr as ed
 use e.io
 use e.mem
 use e.os
+use e.algo.rand.r as rng
 use e.str
 use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "rg") {
+        var rg: rng.Rng = zero
+        rng.seed(&rg, i64(x[1usize]))
+        var v = 0.0f64
+        var q = 0usize
+        while q <= usize(x[5usize]) {
+            v = ed.rgen(&rg, usize(x[0usize]), x[2usize], x[3usize], x[4usize])
+            q += 1usize
+        }
+        ret v
+    }
     if str.eq(c.name, "d2") || str.eq(c.name, "p2") || str.eq(c.name, "q2") {
         let d2 = usize(x[0usize])
         let u1 = x[1usize]

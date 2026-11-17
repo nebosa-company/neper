@@ -50,4 +50,10 @@ for (rep in 1:3) {
   mu <- rnorm(1); for (xx in c(mu - 3, mu - 0.2, mu, mu + 1, mu + 4)) add2("d4", c(3, mu, sg, 0, 0, xx), dslash(xx, mu, sg))
   bb <- runif(1, 0.3, 2); et <- runif(1, 0.2, 3); for (xx in c(0, 0.3, 1, 3)) add2("d4", c(4, bb, et, 0, 0, xx), dsgomp(xx, bb, et))
 }
+# random draws: "rg" (family, seed, p1, p2, p3, index) the draw at position index (0-based) of five seeded draws; family 0 gumbel 1 frechet 2 power 3 lomax 4 pareto 5 rayleigh 6 kumar 7 gompertz 8 hnorm 9 hcauchy
+for (rep in 1:30) {
+  sd <- sample(1:100000, 1); fam <- (rep - 1) %% 10; p1 <- runif(1, 0.5, 3); p2 <- runif(1, 0.5, 3); p3 <- runif(1, -1, 1)
+  set.seed(sd); v <- switch(fam + 1, rgumbel(5, p1, p2), rfrechet(5, p1, p3, p2), rpower(5, p1, p2), rlomax(5, p1, p2), rpareto(5, p1, p2), rrayleigh(5, p1), rkumar(5, p1, p2), rgompertz(5, p1, p2), rhnorm(5, p1), rhcauchy(5, p1))
+  for (j in 1:5) if (is.finite(v[j])) cases[[length(cases) + 1]] <- case("rg", c(fam, sd, if (fam == 1) p1 else p1, if (fam == 1) p3 else p2, if (fam == 1) p2 else 0, j - 1), v[j], rel = 1e-10, abs = 1e-12)
+}
 emit("extradistr", "extraDistr", list(cases))

@@ -9,6 +9,7 @@ use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.algo.stat.gslfns as gsl
+use e.algo.rand.r as rng
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
 
@@ -365,4 +366,20 @@ fn sgomp_d(x: f64, b: f64, eta: f64) -> f64 {
     if x < 0.0f64 { ret 0.0f64 }
     let e = math.exp[f64](0.0f64 - b * x)
     ret b * e * math.exp[f64](0.0f64 - eta * e) * (1.0f64 + eta * (1.0f64 - e))
+}
+
+// random draws after set.seed (the generator `rng` seeded by the caller): family 0 Gumbel (mu, s), 1 Frechet (l, mu, s), 2 power (a, b), 3 Lomax (l, k), 4 Pareto (a, b), 5 Rayleigh (s), 6 Kumaraswamy (a, b), 7 Gompertz (a, b), 8 half-normal (s), 9 half-Cauchy (s);
+// each draws one uniform (one standard exponential for the Gumbel, one normal for the half-normal), inverted through the quantile function of the package at u or 1 - u as the package does
+fn rgen(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64) -> f64 {
+    if family == 0usize { ret p1 - p2 * math.log[f64](rng.exp_unit(r)) }
+    if family == 8usize { ret p1 * math.abs[f64](rng.norm(r)) }
+    let u = rng.unif(r)
+    if family == 1usize { ret frechet_q(u, p1, p2, p3) }
+    if family == 2usize { ret power_q(u, p1, p2) }
+    if family == 3usize { ret lomax_q(1.0f64 - u, p1, p2) }
+    if family == 4usize { ret pareto_q(1.0f64 - u, p1, p2) }
+    if family == 5usize { ret rayleigh_q(1.0f64 - u, p1) }
+    if family == 6usize { ret kumar_q(1.0f64 - u, p1, p2) }
+    if family == 7usize { ret gompertz_q(1.0f64 - u, p1, p2) }
+    ret p1 * math.abs[f64](math.tan[f64](pi() * u))
 }
