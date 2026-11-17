@@ -48234,3 +48234,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6941 — Rmpfr: Euler's constant
 
 **Decision.** `mpfr.const_euler` is the Brent-McCann formula gamma = A(n) / B(n) - log n with B = sum (n^k / k!)^2 and A = sum (n^k / k!)^2 H_k over 4n + 8 terms and n = 0.18 w + 8 (the error is below exp(-4 n)). Equal to `Const("gamma", prec)` at precisions 53, 64, 100, 128 and 200 through the pair-of-doubles comparison (oracle_mpfr, 1784 cases in all). Linux pending.
+
+## D6942 — marginaleffects: average slopes and predictions of a logistic regression
+
+**Decision.** `e.algo.stat.margeff.logit_avg` takes a logistic fit's coefficients and covariance matrix and the design matrix (intercept column included) and answers `avg_predictions` (the mean fitted probability, Jacobian mean of p (1 - p) x) and `avg_slopes` for column j (the mean of beta_j p (1 - p), Jacobian mean of [delta_jk p (1 - p) + beta_j p (1 - p) (1 - 2 p) x_k]), with the delta-method standard error sqrt(J V J'). marginaleffects differentiates numerically, so its estimates differ from the analytic ones by about 1e-9 relative and its standard errors a little more; the oracle tolerance is 1e-5. Equal to `avg_slopes` and `avg_predictions` on 12 simulated data sets of 60 to 200 observations and 2 or 3 covariates, every term, estimate and standard error (oracle_margeff, 76 cases). First increment of L415, which had not been started. Not here: other families and links, factors and comparisons, predictions on a grid, conditional effects. Linux pending.
