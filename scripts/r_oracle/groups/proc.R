@@ -55,4 +55,12 @@ for (rep in 1:25) {
   a <- c(n1, n2, y1, x1, y2, x2)
   cases[[length(cases) + 1]] <- case("du_z", a, as.numeric(rt$statistic), rel = 1e-9, abs = 1e-12); cases[[length(cases) + 1]] <- case("du_p", a, rt$p.value, rel = 1e-9, abs = 1e-12)
 }
+# ci.auc by bootstrap after set.seed: ("bcl" "bcm" "bch" the 2.5%, 50%, 97.5% quantiles) args (n, y, x1, x2, boot.n, seed, stratified)
+for (rep in 1:20) {
+  n <- sample(20:60, 1); y <- rbinom(n, 1, 0.4); if (sum(y) < 3 || sum(y) > n - 3) next
+  s <- c(0.8, 1.5, -0.7, 0.3)[rep %% 4 + 1]; x1 <- round(rnorm(n) + s * y, if (rep %% 3 == 0) 1 else 4); r1 <- roc(y, x1, quiet = TRUE)
+  st <- rep %% 2 == 0; bn <- 300; sd <- sample(1:100000, 1); a <- c(n, y, x1, x1, bn, sd, as.numeric(st))
+  set.seed(sd); ci <- ci.auc(r1, method = "bootstrap", boot.n = bn, boot.stratified = st)
+  add("bcl", a, ci[1]); add("bcm", a, ci[2]); add("bch", a, ci[3])
+}
 emit("proc", "pROC", list(cases))

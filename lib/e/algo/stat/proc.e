@@ -3,6 +3,7 @@
 //
 // Not here: smoothing, partial AUC, bootstrap methods, coords, the other roc.test methods and the multi-class AUC.
 
+use e.algo.rand.r as rng
 use e.math
 use e.math.dist as dist
 use e.math.nmath_beta as nb
@@ -469,4 +470,127 @@ fn delong_unpaired(a: *mem.Arena, y1: []const f64, x1: []const f64, y2: []const 
     let z = (a1 - a2) / math.sqrt[f64](v1 + v2)
     let df = (v1 + v2) * (v1 + v2) / (v1 * v1 / f64(y1.len - 1usize) + v2 * v2 / f64(y2.len - 1usize))
     ret (z, 2.0f64 * nb.pt(0.0f64 - math.abs[f64](z), df, true, false))
+}
+
+// ---- ci.auc by bootstrap ----
+
+// the area under the curve of a resample (controls, cases) when cases tend to be higher (direction "<") or lower: the share of case-control pairs ordered the right way, ties half
+fn auc_pairs(cs: []const f64, ct: []const f64, higher: bool) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < cs.len {
+        var j = 0usize
+        while j < ct.len {
+            var a = cs[i]
+            var b = ct[j]
+            if !higher {
+                a = ct[j]
+                b = cs[i]
+            }
+            if a > b { s += 1.0f64 } else if a == b { s += 0.5f64 }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret s / f64(cs.len * ct.len)
+}
+
+// R's quantile(x, p) type 7 of a sorted vector
+fn quantile7(s: []const f64, p: f64) -> f64 {
+    let h = f64(s.len - 1usize) * p
+    let lo = math.floor[f64](h)
+    let hi = math.ceil[f64](h)
+    var q = s[usize(lo)]
+    if h > lo { q += (h - lo) * (s[usize(hi)] - s[usize(lo)]) }
+    ret q
+}
+
+// ci.auc(roc, method = "bootstrap", boot.n, boot.stratified) after set.seed(seed): per replicate (stratified) the controls then the cases are resampled with replacement (`sample(x, replace = TRUE)`), (non-stratified) the
+// observations; the direction is the original's; out receives the 2.5%, 50% and 97.5% quantiles (the level's tails)
+fn ci_auc_boot(a: *mem.Arena, y: []const f64, x: []const f64, boot_n: usize, seed: i64, level: f64, stratified: bool, out: []f64) -> err {
+    let (nc, nn) = counts(y)
+    let higher = cases_higher(a, y, x)
+    let n = y.len
+    let (cs, e1) = mem.alloc[f64](a, nc)
+    let (ct, e2) = mem.alloc[f64](a, nn)
+    let (rc, e3) = mem.alloc[f64](a, nc + nn)
+    let (rt, e4) = mem.alloc[f64](a, nc + nn)
+    let (aucs, e5) = mem.alloc[f64](a, boot_n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    var p = 0usize
+    var q = 0usize
+    var i = 0usize
+    while i < n {
+        if y[i] > 0.5f64 {
+            cs[p] = x[i]
+            p += 1usize
+        } else {
+            ct[q] = x[i]
+            q += 1usize
+        }
+        i += 1usize
+    }
+    var r: rng.Rng = zero
+    rng.seed(&r, seed)
+    var nv = 0usize
+    var b = 0usize
+    while b < boot_n {
+        var mc = 0usize
+        var mt = 0usize
+        if stratified {
+            let (ic, f1) = rng.sample_int(a, &r, i64(nn), i64(nn), true)
+            if f1 != ok { ret f1 }
+            let (is, f2) = rng.sample_int(a, &r, i64(nc), i64(nc), true)
+            if f2 != ok { ret f2 }
+            i = 0usize
+            while i < nn {
+                rt[i] = ct[usize(ic[i]) - 1usize]
+                i += 1usize
+            }
+            i = 0usize
+            while i < nc {
+                rc[i] = cs[usize(is[i]) - 1usize]
+                i += 1usize
+            }
+            mc = nc
+            mt = nn
+        } else {
+            let (ix, f3) = rng.sample_int(a, &r, i64(n), i64(n), true)
+            if f3 != ok { ret f3 }
+            i = 0usize
+            while i < n {
+                let k = usize(ix[i]) - 1usize
+                if y[k] > 0.5f64 {
+                    rc[mc] = x[k]
+                    mc += 1usize
+                } else {
+                    rt[mt] = x[k]
+                    mt += 1usize
+                }
+                i += 1usize
+            }
+        }
+        if mc > 0usize && mt > 0usize {
+            aucs[nv] = auc_pairs(rc[0usize..mc], rt[0usize..mt], higher)
+            nv += 1usize
+        }
+        b += 1usize
+    }
+    // sort the replicates
+    i = 1usize
+    while i < nv {
+        let key = aucs[i]
+        var j = i
+        while j > 0usize && aucs[j - 1usize] > key {
+            aucs[j] = aucs[j - 1usize]
+            j -= 1usize
+        }
+        aucs[j] = key
+        i += 1usize
+    }
+    let tail = (1.0f64 - level) / 2.0f64
+    out[0usize] = quantile7(aucs[0usize..nv], tail)
+    out[1usize] = quantile7(aucs[0usize..nv], 0.5f64)
+    out[2usize] = quantile7(aucs[0usize..nv], 1.0f64 - tail)
+    ret ok
 }

@@ -27,6 +27,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x1 = x[1usize + n..1usize + 2usize * n]
     let x2 = x[1usize + 2usize * n..1usize + 3usize * n]
     let k = c.name
+    if str.eq(k, "bcl") || str.eq(k, "bcm") || str.eq(k, "bch") {
+        // args (n, y, x1, x2, boot.n, seed, stratified)
+        let (bo, boe) = mem.alloc[f64](a, 3usize)
+        if boe != ok { ret 0.0f64 / 0.0f64 }
+        let be = pr.ci_auc_boot(a, y, x1, usize(x[3usize * n + 1usize]), i64(x[3usize * n + 2usize]), 0.95f64, x[3usize * n + 3usize] > 0.5f64, bo)
+        if be != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(k, "bcl") { ret bo[0usize] }
+        if str.eq(k, "bcm") { ret bo[1usize] }
+        ret bo[2usize]
+    }
     if str.eq(k, "ncoord") || str.eq(k, "ssens") || str.eq(k, "sspec") || str.eq(k, "sthr") {
         let (cn, ss, sp, st) = pr.roc_sums(a, y, x1)
         if str.eq(k, "ncoord") { ret cn }
