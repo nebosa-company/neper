@@ -3756,4 +3756,5 @@ D6893	939	gbm: gaussian boosting without subsampling
 D6894	939	gbm: bernoulli and poisson
 D6895	408	gbm: adaboost
 D6896	709	gbm: laplace
-D6897	663	bayesm: mnlHess and numEff
+D6897	664	bayesm: mnlHess and numEff
+D6898	918	bayesm: mixDen and momMix

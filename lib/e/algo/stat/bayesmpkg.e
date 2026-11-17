@@ -850,3 +850,72 @@ fn num_eff(x: []const f64, m: usize, out: []f64) {
     out[0usize] = math.sqrt[f64](c0 / (nf - 1.0f64) * f / nf)
     out[1usize] = f
 }
+
+// the mixture moments of bayesm's momMix for one draw: nc components with means mus (nc by k, column-major) and the upper-triangular rooti matrices rootis (k by k each, stacked); the covariance of a component is t(root) root with root = backsolve(rooti, I).
+// mu_out receives the mixture mean, sigma_out (k by k) its covariance sum_i p_i Sigma_i + p_i (mu_i - mu)(mu_i - mu)'
+fn mix_mom(a: *mem.Arena, prob: []const f64, mus: []const f64, rootis: []const f64, nc: usize, k: usize, mu_out: []f64, sigma_out: []f64) -> err {
+    let (root, e) = mem.alloc[f64](a, k * k)
+    if e != ok { ret e }
+    var j = 0usize
+    while j < k {
+        mu_out[j] = 0.0f64
+        j += 1usize
+    }
+    var i = 0usize
+    while i < nc {
+        j = 0usize
+        while j < k {
+            mu_out[j] += prob[i] * mus[j * nc + i]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var q = 0usize
+    while q < k * k {
+        sigma_out[q] = 0.0f64
+        q += 1usize
+    }
+    i = 0usize
+    while i < nc {
+        inv_upper(rootis[i * k * k..(i + 1usize) * k * k], k, root)
+        var c1 = 0usize
+        while c1 < k {
+            var c2 = 0usize
+            while c2 < k {
+                var s = 0.0f64
+                var r = 0usize
+                while r < k {
+                    s += root[c1 * k + r] * root[c2 * k + r]
+                    r += 1usize
+                }
+                let d1 = mus[c1 * nc + i] - mu_out[c1]
+                let d2 = mus[c2 * nc + i] - mu_out[c2]
+                sigma_out[c2 * k + c1] += prob[i] * s + prob[i] * d1 * d2
+                c2 += 1usize
+            }
+            c1 += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// mixDen for one margin: the density at x of margin `dim` (0-based) of the mixture, sum_j p_j dnorm(x, mu_j[dim], sd_j[dim]) with sd_j[dim] the root of the dim-th diagonal of t(root_j) root_j
+fn mix_den(a: *mem.Arena, x: f64, prob: []const f64, mus: []const f64, rootis: []const f64, nc: usize, k: usize, dim: usize) -> f64 {
+    let (root, e) = mem.alloc[f64](a, k * k)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var s = 0.0f64
+    var i = 0usize
+    while i < nc {
+        inv_upper(rootis[i * k * k..(i + 1usize) * k * k], k, root)
+        var v = 0.0f64
+        var r = 0usize
+        while r < k {
+            v += root[dim * k + r] * root[dim * k + r]
+            r += 1usize
+        }
+        s += prob[i] * mdist.dnorm(x, mus[dim * nc + i], math.sqrt[f64](v), false)
+        i += 1usize
+    }
+    ret s
+}

@@ -15,6 +15,11 @@ for (rep in 1:25) {
   p <- sample(2:4, 1); kb <- sample(1:3, 1); n <- sample(5:30, 1); y <- sample(p, n, TRUE); X <- matrix(rnorm(n * p * kb), n * p, kb); beta <- rnorm(kb)
   add("mn", c(kb, p, n, beta, y, X), llmnl(beta, y, X))
   H <- mnlHess(beta, y, X); for (q in seq_len(kb * kb)) add("mh", c(kb, p, n, q - 1, beta, y, X), as.vector(H)[q])
+  nc <- sample(1:4, 1); kk <- sample(2:4, 1); pv <- runif(nc); pv <- pv / sum(pv); mus <- matrix(rnorm(nc * kk), nc, kk)
+  comps <- lapply(1:nc, function(i) list(mus[i, ], backsolve(chol(rspd(kk)), diag(kk)))); rts <- unlist(lapply(comps, function(cc) as.vector(cc[[2]])))
+  mo <- momMix(matrix(pv, 1), list(comps)); sg <- mo$sigma; mm <- mo$mu
+  for (q in 1:kk) add("mm", c(nc, kk, q - 1, 0, pv, mus, rts), mm[q]); for (q in seq_len(kk * kk)) add("mm", c(nc, kk, kk + q - 1, 0, pv, mus, rts), as.vector(sg)[q])
+  xg <- matrix(rnorm(3 * kk), 3, kk); dn <- mixDen(xg, pv, comps); for (d in 1:kk) for (r in 1:3) add("md", c(nc, kk, d - 1, xg[r, d], pv, mus, rts), dn[r, d])
   nn <- sample(40:300, 1); xs <- as.numeric(arima.sim(list(ar = 0.6), nn)); mm <- sample(2:15, 1); ne <- numEff(xs, mm)
   add("ne", c(nn, mm, 0, xs), ne$stderr); add("ne", c(nn, mm, 1, xs), ne$f)
   sd <- sample(1:100000, 1); m <- sample(2:6, 1); al <- runif(m, 0.3, 4); set.seed(sd); d <- rdirichlet(al); for (j in 1:m) add("dir", c(sd, m, al, j - 1), d[j], 1e-12)

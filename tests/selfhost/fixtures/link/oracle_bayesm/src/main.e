@@ -47,6 +47,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         bz.num_eff(z[3usize..3usize + nn], usize(z[1usize]), o)
         ret o[usize(z[2usize])]
     }
+    if str.eq(c.name, "mm") || str.eq(c.name, "md") {
+        // (nc, k, q, x, prob[nc], mus[nc k], rootis[nc k k])
+        let nc = usize(z[0usize])
+        let k = usize(z[1usize])
+        let pr = z[4usize..4usize + nc]
+        let mus = z[4usize + nc..4usize + nc + nc * k]
+        let rts = z[4usize + nc + nc * k..4usize + nc + nc * k + nc * k * k]
+        if str.eq(c.name, "md") { ret bz.mix_den(a, z[3usize], pr, mus, rts, nc, k, usize(z[2usize])) }
+        let (mo, e1) = mem.alloc[f64](a, k)
+        let (so, e2) = mem.alloc[f64](a, k * k)
+        if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+        if bz.mix_mom(a, pr, mus, rts, nc, k, mo, so) != ok { ret 0.0f64 / 0.0f64 }
+        let q = usize(z[2usize])
+        if q < k { ret mo[q] }
+        ret so[q - k]
+    }
     if str.eq(c.name, "cm") {
         let k = usize(z[1usize])
         let i = usize(z[2usize])
