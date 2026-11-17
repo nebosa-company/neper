@@ -95,6 +95,13 @@ for (rep in 1:12) {
   cases[[length(cases) + 1]] <- case("cv", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, fid - 1, nf, 0, 2), cv$lambda.min, rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("cv", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, fid - 1, nf, 0, 3), cv$lambda.1se, rel = 1e-9, abs = 1e-12)
 }
+# the length of the path: "nlam" (the lpath layout) = length(glmnet(...)$lambda)
+for (rep in 1:40) {
+  n <- sample(c(30, 60, 120, 300), 1); p <- sample(3:12, 1); X <- matrix(rnorm(n * p), n); sg <- c(0.3, 1, 3)[rep %% 3 + 1]; y <- drop(X[, 1:min(3, p)] %*% c(2, -1, 1)[1:min(3, p)]) + rnorm(n) * sg
+  al <- sample(c(0.2, 0.5, 1), 1); std <- rep %% 2; vf <- rep(1, p)
+  f <- suppressWarnings(glmnet(X, y, alpha = al, standardize = as.logical(std)))
+  cases[[length(cases) + 1]] <- case("nlam", c(n, p, al, std, 0, vf, y, X), length(f$lambda), rel = 0, abs = 0.5)
+}
 # the automatic lambda sequence: "lpath" (n, p, alpha, std, k, vf[p], y[n], X[n p]) the k-th lambda (0-based) of glmnet(...)$lambda
 for (rep in 1:20) {
   n <- sample(30:80, 1); p <- sample(3:8, 1); X <- matrix(rnorm(n * p), n); y <- X[, 1] * 2 + rnorm(n); al <- sample(c(0.2, 0.5, 0.7, 1), 1); std <- rep %% 2; vf <- if (rep %% 3 == 0) runif(p, 0.5, 2) else rep(1, p)

@@ -48022,3 +48022,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6888 — tsfeatures: histogram_mode
 
 **Decision.** `tsfeatures.histogram_mode` is the centre of the fullest bin of `hist(x, breaks = numBins)`: breaks are `pretty(range(x), numBins)` (e.math.scale.pretty), bins right-closed with the lowest including its lower end, the breaks carrying hist's fuzz of 1e-7 times the median bin width, and the first fullest bin winning a tie. Equal to tsfeatures on 30 series of 30 to 200 values, half rounded to one decimal so ties on break points occur, with 5, 10, 15 and 20 bins (oracle_tsfeatures, 352 cases in all). Linux pending.
+
+## D6889 — glmnet: the early stop of the gaussian path
+
+**Decision.** `glmnet.path_len` fits the automatic lambda sequence and answers how many lambdas glmnet reports: from the fifth on the path stops (that lambda included) once the fraction of variance explained gains less than 1e-5 of itself over the previous lambda, or exceeds 0.999; the default dfmax of p + 1 never binds. Equal to the `length(glmnet(...)$lambda)` of 40 data sets over n, p, alpha, standardize and noise level, every one of them stopping early (59 to 76 of 100 values; oracle_glmnet, 1700 cases in all). Not here: the early stop for the other families (deviance-based), multinomial, mgaussian, cox, `predict`. Linux pending.

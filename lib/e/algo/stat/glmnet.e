@@ -494,3 +494,50 @@ fn cv_select(lambdas: []const f64, cvm: []const f64, cvsd: []const f64, out: []f
     out[0usize] = lmin
     out[1usize] = l1
 }
+
+// how many of the nlambda automatic lambdas glmnet (gaussian) reports: after the fifth, the path stops once the fraction of variance explained gains less than 1e-5 of itself, or passes 0.999 (the default dfmax of p + 1 never binds)
+fn path_len(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, nlambda: usize) -> usize {
+    let (lam, e1) = mem.alloc[f64](a, nlambda)
+    let (coef, e2) = mem.alloc[f64](a, nlambda * (p + 1usize))
+    if e1 != ok || e2 != ok { ret 0usize }
+    if lambda_path(a, x, y, n, p, alpha, standardize, vf, nlambda, lam) != ok { ret 0usize }
+    let none: []const f64 = zero
+    if gaussian(a, x, y, none, none, none, n, p, alpha, standardize, vf, lam, coef) != ok { ret 0usize }
+    var ybar = 0.0f64
+    var i = 0usize
+    while i < n {
+        ybar += y[i]
+        i += 1usize
+    }
+    ybar = ybar / f64(n)
+    var sst = 0.0f64
+    i = 0usize
+    while i < n {
+        sst += (y[i] - ybar) * (y[i] - ybar)
+        i += 1usize
+    }
+    var prev = 0.0f64
+    var k = 0usize
+    while k < nlambda {
+        var sse = 0.0f64
+        i = 0usize
+        while i < n {
+            var f = coef[k * (p + 1usize)]
+            var j = 0usize
+            while j < p {
+                f += x[j * n + i] * coef[k * (p + 1usize) + 1usize + j]
+                j += 1usize
+            }
+            sse += (y[i] - f) * (y[i] - f)
+            i += 1usize
+        }
+        let rsq = 1.0f64 - sse / sst
+        if k + 1usize >= 5usize {
+            if rsq - prev < 1.0e-5f64 * rsq { ret k + 1usize }
+            if rsq > 0.999f64 { ret k + 1usize }
+        }
+        prev = rsq
+        k += 1usize
+    }
+    ret nlambda
+}

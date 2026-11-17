@@ -10,6 +10,12 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if c.name[0usize] == 110u8 {
+        // nlam: the lpath layout, the answer is the number of lambdas glmnet reports
+        let ln = usize(x[0usize])
+        let lp = usize(x[1usize])
+        ret f64(gl.path_len(a, x[5usize + lp + ln..5usize + lp + ln + ln * lp], x[5usize + lp..5usize + lp + ln], ln, lp, x[2usize], x[3usize] != 0.0f64, x[5usize..5usize + lp], 100usize))
+    }
     if c.name[0usize] == 108u8 {
         // lpath: (n, p, alpha, std, k, vf[p], y[n], X[n p])
         let ln = usize(x[0usize])
