@@ -38,4 +38,30 @@ for (rep in 1:30) {
   if (fdr) { cols <- c("NegativeProb", "PositiveProb", "lfsr", "svalue", "lfdr", "qvalue", "PosteriorMean", "PosteriorSD")
   for (ci in seq_along(cols)) for (i in sample(n, 8)) add(1 + ci, i - 1, res[[cols[ci]]][i]) }
 }
+# halfnormal mixtures (kind 5, mixSQP): the same outputs; g$sd is the component sd
+for (rep in 1:20) {
+  n <- sample(40:200, 1); sdv <- round(runif(n, 0.3, 1.5), 3)
+  true <- ifelse(runif(n) < 0.6, 0, rnorm(n, 0, 2)); bh <- round(true + rnorm(n) * sdv, 4)
+  fdr <- rep %% 3 != 0; nw <- if (fdr) c(10, 5, 3)[sample(3, 1)] else 1
+  fit <- tryCatch(suppressWarnings(if (fdr) ash(bh, sdv, mixcompdist = "halfnormal", method = "fdr", nullweight = nw) else ash(bh, sdv, mixcompdist = "halfnormal", method = "shrink")), error = function(e) NULL); if (is.null(fit)) next
+  res <- fit$result
+  base <- c(n, 5, as.numeric(fdr), as.numeric(fdr), nw, 0, sqrt(2), bh, sdv)
+  add <- function(f, i, v) cases[[length(cases) + 1]] <<- case("ash", c(base, f, i), as.numeric(v), rel = 1e-4, abs = 1e-5)
+  add(0, 0, fit$loglik); add(1, 0, fit$logLR)
+  cols <- c("NegativeProb", "PositiveProb", "lfsr", "svalue", "lfdr", "qvalue", "PosteriorMean", "PosteriorSD")
+  for (ci in seq_along(cols)) for (i in sample(n, 8)) add(1 + ci, i - 1, res[[cols[ci]]][i])
+}
+# mode estimation (mode = NaN in the mode slot): uniform, halfuniform and normal mixtures with the pointmass prior; loglik, lfsr and PosteriorMean
+for (rep in 1:20) {
+  n <- sample(60:200, 1); sdv <- round(runif(n, 0.3, 1.5), 3)
+  true <- ifelse(runif(n) < 0.5, 0.8, rnorm(n, 0.8, 2)); bh <- round(true + rnorm(n) * sdv, 4)
+  kind <- c(0, 1, 2)[rep %% 3 + 1]; nw <- c(10, 5)[sample(2, 1)]
+  fit <- tryCatch(suppressWarnings(ash(bh, sdv, mixcompdist = kinds[kind + 1], mode = "estimate", method = "fdr", nullweight = nw)), error = function(e) NULL); if (is.null(fit)) next
+  res <- fit$result
+  base <- c(n, kind, 1, 1, nw, NaN, sqrt(2), bh, sdv)
+  add <- function(f, i, v) cases[[length(cases) + 1]] <<- case("ash", c(base, f, i), as.numeric(v), rel = 1e-3, abs = 1e-4)
+  add(0, 0, fit$loglik)
+  cols <- c("NegativeProb", "PositiveProb", "lfsr", "svalue", "lfdr", "qvalue", "PosteriorMean", "PosteriorSD")
+  for (ci in c(3, 7)) for (i in sample(n, 6)) add(1 + ci, i - 1, res[[cols[ci]]][i])
+}
 emit("ashr", "ashr", list(cases))

@@ -17,7 +17,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let s = z[7usize + n..7usize + 2usize * n]
     let f = usize(z[7usize + 2usize * n])
     let i = usize(z[8usize + 2usize * n])
-    let (r, e) = ashr.ash(a, x, s, kind, z[2usize] > 0.5f64, z[3usize] > 0.5f64, z[4usize], z[5usize], z[6usize], optm)
+    var mode = z[5usize]
+    if mode != mode { mode = ashr.ash_estmode(a, x, s, kind, z[2usize] > 0.5f64, z[3usize] > 0.5f64, z[4usize], z[6usize], optm) }
+    let (r, e) = ashr.ash(a, x, s, kind, z[2usize] > 0.5f64, z[3usize] > 0.5f64, z[4usize], mode, z[6usize], optm)
     if e != ok { ret nan }
     if f == 0usize { ret r.loglik }
     if f == 1usize { ret r.loglr }

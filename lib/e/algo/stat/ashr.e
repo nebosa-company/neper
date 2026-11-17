@@ -202,7 +202,7 @@ fn ash(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool
     }
     var kk = k0
     var half = false
-    if kind == 1i64 {
+    if kind == 1i64 || kind == 5i64 {
         half = true
         if pointmass { kk = 2usize * k0 - 1usize } else { kk = 2usize * k0 }
     }
@@ -225,6 +225,9 @@ fn ash(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool
         } else if kind == 4i64 {
             lo[j] = mode - sd0[j]
             hi[j] = mode
+        } else if kind == 5i64 {
+            lo[j] = 0.0f64 - 1.0f64 / 0.0f64
+            hi[j] = mode
         } else if half {
             lo[j] = mode - sd0[j]
             hi[j] = mode
@@ -238,6 +241,7 @@ fn ash(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool
             if !(pointmass && j == 0usize) {
                 lo[m] = mode
                 hi[m] = mode + sd0[j]
+                if kind == 5i64 { hi[m] = 1.0f64 / 0.0f64 }
                 prior[m] = prior[j]
                 sdv[m] = sd0[j]
                 m += 1usize
@@ -246,6 +250,7 @@ fn ash(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool
         }
     }
     let norm = kind == 2i64
+    let tn = kind == 5i64
     var g: Ash = zero
     g.lo = lo
     g.hi = hi
@@ -257,7 +262,7 @@ fn ash(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool
     while j < kk {
         i = 0usize
         while i < n {
-            ll[j * n + i] = lcd(&g, norm, mode, sdv, x[i], s[i], j)
+            if tn { ll[j * n + i] = lcd_t(&g, sdv, x[i], s[i], j) } else { ll[j * n + i] = lcd(&g, norm, mode, sdv, x[i], s[i], j) }
             i += 1usize
         }
         j += 1usize
@@ -519,9 +524,25 @@ fn ash(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool
         j = 0usize
         while j < kp {
             let wj = pr[j] / tot
-            let (cd, cm, c2) = comp_post(norm, mode, sdv[0usize..kp], lo[j], hi[j], x[i], s[i], j)
+            var cd = 0.0f64
+            var cm = 0.0f64
+            var c2 = 0.0f64
+            if tn {
+                let qq = (i + j * n) % kp
+                let (u1, u2, u3) = comp_post_t(sdv[0usize..kp], lo[j], hi[j], lo[qq], hi[qq], x[i], s[i], j)
+                cd = u1
+                cm = u2
+                c2 = u3
+            } else {
+                let (u1, u2, u3) = comp_post(norm, mode, sdv[0usize..kp], lo[j], hi[j], x[i], s[i], j)
+                cd = u1
+                cm = u2
+                c2 = u3
+            }
             var onz = false
-            if norm {
+            if tn {
+                onz = sdv[j] == 0.0f64
+            } else if norm {
                 onz = mode == 0.0f64 && sdv[j] == 0.0f64
             } else {
                 onz = (lo[j] + hi[j]) / 2.0f64 == 0.0f64 && (hi[j] - lo[j]) / math.sqrt[f64](12.0f64) == 0.0f64
@@ -705,4 +726,193 @@ fn em_fit(a: *mem.Arena, lik: []f64, prior: []const f64, pi0: []const f64, n: us
         j += 1usize
     }
     ret ok
+}
+
+// ---- halfnormal mixtures (truncated normal components at mode 0) ----
+
+fn pnorm1(x: f64) -> f64 { ret dist.pnorm(x, 0.0f64, 1.0f64, true, false) }
+
+fn pnorm_sd(x: f64, mu: f64, sd: f64) -> f64 {
+    if sd == 0.0f64 {
+        if x < mu { ret 0.0f64 }
+        ret 1.0f64
+    }
+    ret dist.pnorm(x, mu, sd, true, false)
+}
+
+// ashr's my_etruncnorm(a, b, mean, sd) for the truncated normal on (a, b)
+fn etr_gen(a: f64, b: f64, mean: f64, sd: f64) -> f64 {
+    if sd == 0.0f64 {
+        if b <= mean { ret b }
+        if a >= mean { ret a }
+        ret mean
+    }
+    ret mean + sd * etrunc((a - mean) / sd, (b - mean) / sd)
+}
+
+// my_vtruncnorm(a, b, mean, sd): the variance of the truncated normal
+fn vtr_gen(a: f64, b: f64, mean: f64, sd: f64) -> f64 {
+    let alpha = (a - mean) / sd
+    let beta = (b - mean) / sd
+    var sr = e2trunc(alpha, beta) - etrunc(alpha, beta) * etrunc(alpha, beta)
+    var sm = math.abs[f64](alpha)
+    if math.abs[f64](beta) < sm { sm = math.abs[f64](beta) }
+    if !isinf(sm) && sm == sm && sm > 30.0f64 {
+        sr = min2(1.0f64 / (sm * sm), (beta - alpha) * (beta - alpha) / 12.0f64)
+    }
+    if sr != sr { sr = 0.0f64 }
+    ret sd * sd * sr
+}
+
+// log of the density of x (standard error s) under the truncated-normal component j (mean 0, sd sdv[j], support (lo, hi))
+fn lcd_t(g: *const Ash, sdv: []const f64, x: f64, s: f64, j: usize) -> f64 {
+    let sd = sdv[j]
+    let aa = g.lo[j]
+    let bb = g.hi[j]
+    let varm = sd * sd + s * s
+    let denx = ldn(x / math.sqrt[f64](varm)) - math.log[f64](math.sqrt[f64](varm))
+    if sd == 0.0f64 { ret denx }
+    let aA = math.sqrt[f64](1.0f64 / (sd * sd) + 1.0f64 / (s * s))
+    let bB = 1.0f64 / math.sqrt[f64](varm)
+    let cC = sd / s
+    let dD = pnorm1(bb / sd) - pnorm1(aa / sd)
+    let left = pnorm1(aA * bb - bB * cC * x)
+    let right = pnorm1(aA * aa - bB * cC * x)
+    ret math.log[f64](left - right) + denx - math.log[f64](dD)
+}
+
+// posterior pieces of the truncated-normal component j: the cdf at 0, the mean and the second moment
+// (the posterior sd of ashr takes the support limits of the cell, which its code recycles over the n by k matrix down the columns, so the limits of component (i + j n) mod k are passed as va and vb)
+fn comp_post_t(sdv: []const f64, aa: f64, bb: f64, va: f64, vb: f64, x: f64, s: f64, j: usize) -> (f64, f64, f64) {
+    let sd = sdv[j]
+    var cd = 1.0f64
+    let s2 = s * s
+    let xx = 1.0f64 / (s2 / (sd * sd) + 1.0f64)
+    let yy = 1.0f64 / (1.0f64 / s2 + 1.0f64 / (sd * sd))
+    let mu = xx * x
+    let sy = math.sqrt[f64](yy)
+    if aa > 0.0f64 { cd = 0.0f64 }
+    if aa <= 0.0f64 && bb >= 0.0f64 {
+        let pna = pnorm_sd(aa, mu, sy)
+        let pnc = pnorm_sd(0.0f64, mu, sy)
+        let pnb = pnorm_sd(bb, mu, sy)
+        cd = (pnc - pna) / (pnb - pna)
+        if bb == 0.0f64 { cd = 1.0f64 }
+    }
+    if aa == bb {
+        cd = 0.0f64
+        if aa <= 0.0f64 { cd = 1.0f64 }
+    }
+    if cd != cd { cd = 0.0f64 }
+    let aq = 1.0f64 / (sd * sd / s2 + 1.0f64)
+    let bq = 1.0f64 / (1.0f64 / (sd * sd) + 1.0f64 / s2)
+    let m1 = (1.0f64 - aq) * x
+    let sb = math.sqrt[f64](bq)
+    let pm = etr_gen(aa, bb, m1, sb)
+    var psd2 = 0.0f64
+    if sb > 0.0f64 { psd2 = vtr_gen(va, vb, m1, sb) }
+    if sd == 0.0f64 { psd2 = 0.0f64 }
+    ret (cd, pm, psd2 + pm * pm)
+}
+
+// ---- mode estimation (ash.estmode: R optimize over the mode of the negative log-likelihood) ----
+
+// R's optimize() (Brent_fmin) of f over (lo, hi) with tolerance tol
+fn brent_tol[C: type](ctx: *C, f: fn(*C, f64) -> f64, lo: f64, hi: f64, tol: f64) -> f64 {
+    let c = (3.0f64 - math.sqrt[f64](5.0f64)) * 0.5f64
+    let eps = math.sqrt[f64](2.220446049250313e-16f64)
+    var a = lo
+    var b = hi
+    var v = a + c * (b - a)
+    var w = v
+    var x = v
+    var d = 0.0f64
+    var e = 0.0f64
+    var fx = f(ctx, x)
+    var fv = fx
+    var fw = fx
+    let tol3 = tol / 3.0f64
+    var going = true
+    while going {
+        let xm = (a + b) * 0.5f64
+        let tol1 = eps * math.abs[f64](x) + tol3
+        let t2 = tol1 * 2.0f64
+        if math.abs[f64](x - xm) <= t2 - (b - a) * 0.5f64 { break }
+        var p = 0.0f64
+        var q = 0.0f64
+        var r = 0.0f64
+        if math.abs[f64](e) > tol1 {
+            r = (x - w) * (fx - fv)
+            q = (x - v) * (fx - fw)
+            p = (x - v) * q - (x - w) * r
+            q = (q - r) * 2.0f64
+            if q > 0.0f64 { p = 0.0f64 - p } else { q = 0.0f64 - q }
+            r = e
+            e = d
+        }
+        var u = 0.0f64
+        if math.abs[f64](p) >= math.abs[f64](q * 0.5f64 * r) || p <= q * (a - x) || p >= q * (b - x) {
+            if x < xm { e = b - x } else { e = a - x }
+            d = c * e
+        } else {
+            d = p / q
+            u = x + d
+            if u - a < t2 || b - u < t2 {
+                d = tol1
+                if x >= xm { d = 0.0f64 - d }
+            }
+        }
+        if math.abs[f64](d) >= tol1 {
+            u = x + d
+        } else if d > 0.0f64 {
+            u = x + tol1
+        } else {
+            u = x - tol1
+        }
+        let fu = f(ctx, u)
+        if fu <= fx {
+            if u < x { b = x } else { a = x }
+            v = w
+            w = x
+            x = u
+            fv = fw
+            fw = fx
+            fx = fu
+        } else {
+            if u < x { a = u } else { b = u }
+            if fu <= fw || w == x {
+                v = w
+                fv = fw
+                w = u
+                fw = fu
+            } else if fu <= fv || v == x || v == w {
+                v = u
+                fv = fu
+            }
+        }
+    }
+    ret x
+}
+
+type EstCtx = struct { a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool, nullbiased: bool, nullweight: f64, mult: f64, optm: usize }
+
+fn est_obj(c: *EstCtx, m: f64) -> f64 {
+    let (r, e) = ash(c.a, c.x, c.s, c.kind, c.pointmass, c.nullbiased, c.nullweight, m, c.mult, c.optm)
+    if e != ok { ret 1.0e300f64 }
+    ret 0.0f64 - r.loglik
+}
+
+// the mode ash(mode = "estimate") settles on: the minimiser over (min betahat, max betahat) with tolerance |range| eps^(1/4)
+fn ash_estmode(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool, nullbiased: bool, nullweight: f64, mult: f64, optm: usize) -> f64 {
+    var lo = x[0usize]
+    var hi = x[0usize]
+    var i = 1usize
+    while i < x.len {
+        if x[i] < lo { lo = x[i] }
+        if x[i] > hi { hi = x[i] }
+        i += 1usize
+    }
+    var ctx = EstCtx { a: a, x: x, s: s, kind: kind, pointmass: pointmass, nullbiased: nullbiased, nullweight: nullweight, mult: mult, optm: optm }
+    let tol = math.abs[f64](hi - lo) * math.sqrt[f64](math.sqrt[f64](2.220446049250313e-16f64))
+    ret brent_tol[EstCtx](&ctx, est_obj, lo, hi, tol)
 }
