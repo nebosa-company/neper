@@ -48130,3 +48130,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6915 — MASS fitdistr: negative binomial
 
 **Decision.** `fitdist.fitdistr2` kind 4 fits the negative binomial (size, mu) through the same BFGS: the start is size = m^2 / (v - m) when the variance exceeds the mean (100 otherwise) and mu = m, the log likelihood is `dnbinom` with the mean parametrisation. Equal to MASS on the 12 count samples (40 to 150 values, overdispersed) of the oracle: both estimates, both standard errors and the log likelihood to 1e-6 (oracle_mass, 2085 cases in all). Linux pending.
+
+## D6916 — caret: createMultiFolds
+
+**Decision.** `createMultiFolds(y, k, times)` is `createFolds(y, k, returnTrain = TRUE)` repeated `times` times on one generator, so the fold assignment of repetition t is the next `create_folds` draw; no new library code is needed. Pinned by 25 samples of 10 to 70 observations, 1 to 4 classes, 2 to 6 folds and 1 to 4 repetitions, each repetition's fold vector rebuilt from the training index lists and answered as the position-weighted sum, equal to caret under set.seed (oracle_carets, 2050 cases in all). Linux pending.

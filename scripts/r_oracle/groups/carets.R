@@ -26,6 +26,9 @@ for (rep in 1:25) {
   set.seed(sd); v <- createResample(seq_len(n), times = 1)[[1]]; add("rs", c(sd, n), sum(seq_along(v) * v), 1e-12)
   k <- sample(2:6, 1); nc <- sample(1:4, 1); n2 <- sample(10:70, 1); y <- sample(1:nc, n2, TRUE)
   set.seed(sd); f <- createFolds(factor(y), k = k, list = FALSE); add("cf", c(sd, k, n2, y), sum(seq_along(f) * f), 1e-12)
+  tm <- sample(1:4, 1); set.seed(sd); mf <- createMultiFolds(factor(y), k = k, times = tm)
+  tot <- 0; for (t in 1:tm) { ft <- integer(n2); for (j in 1:k) ft[-mf[[(t - 1) * k + j]]] <- j; tot <- tot + t * sum(seq_along(ft) * ft) }
+  add("mf", c(sd, k, n2, tm, y), tot, 1e-12)
   m <- sample(3:12, 1); g <- sample(1:m, 25, TRUE); g <- match(g, unique(g)); mm <- max(g); kk <- sample(2:mm, 1)
   set.seed(sd); gf <- groupKFold(g, k = kk); tf <- integer(length(g)); for (i in seq_along(gf)) tf[setdiff(seq_along(g), gf[[i]])] <- i
   set.seed(sd); ff <- sample(kk, size = mm, replace = TRUE); add("gk", c(sd, kk, mm, length(g), g), sum(seq_along(g) * ff[g]), 1e-12)

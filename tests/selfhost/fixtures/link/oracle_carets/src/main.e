@@ -49,6 +49,33 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "mf") {
+        // createMultiFolds(factor(y), k, times): (seed, k, n, times, class codes 1..), the fold assignments of the repetitions drawn one after another, answered as sum over reps of rep * sum(position * fold)
+        var r: rng.Rng = zero
+        rng.seed(&r, i64(z[0usize]))
+        let n = usize(z[2usize])
+        let times = usize(z[3usize])
+        let (v, e) = mem.alloc[i64](a, n)
+        let (cl, e2) = mem.alloc[i64](a, n)
+        if e != ok || e2 != ok { ret nan }
+        var q = 0usize
+        while q < n {
+            cl[q] = i64(z[4usize + q]) - 1i64
+            q += 1usize
+        }
+        var s = 0.0f64
+        var t = 0usize
+        while t < times {
+            if ct.create_folds(a, &r, cl, usize(z[1usize]), v) != ok { ret nan }
+            var q2 = 0usize
+            while q2 < n {
+                s += f64(t + 1usize) * f64(q2 + 1usize) * f64(v[q2])
+                q2 += 1usize
+            }
+            t += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "dp") {
         var r: rng.Rng = zero
         rng.seed(&r, i64(z[0usize]))
