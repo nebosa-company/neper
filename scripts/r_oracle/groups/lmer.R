@@ -16,6 +16,8 @@ for (rep in 1:24) {
   for (j in seq_len(p)) add("lmer", a(3 + j), fe[[j]], 1e-4)
   for (k in seq_len(ng)) add("lmer", a(3 + p + k), re[k], 1e-3)
   if (th > 0.05) { m2 <- suppressWarnings(suppressMessages(lmerTest::lmer(f, d, REML = reml))); sm <- coef(summary(m2)); th2 <- getME(m2, "theta")[[1]]; sg2 <- sigma(m2)
-    for (j in seq_len(p)) add("lmer", c(n, p, ng, as.numeric(reml), 1000 + j - 1, as.vector(X), g, y, th2, sg2), sm[j, "df"], 1e-4) }
+    for (j in seq_len(p)) { add("lmer", c(n, p, ng, as.numeric(reml), 1000 + j - 1, as.vector(X), g, y, th2, sg2), sm[j, "df"], 1e-4)
+      add("lmer", c(n, p, ng, as.numeric(reml), 2000 + j - 1, as.vector(X), g, y, th2, sg2), sm[j, "t value"], 1e-4)
+      add("lmer", c(n, p, ng, as.numeric(reml), 3000 + j - 1, as.vector(X), g, y, th2, sg2), sm[j, "Pr(>|t|)"], 1e-3) } }
 }
 emit("lmer", "lme4", list(cases))

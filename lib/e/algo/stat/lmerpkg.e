@@ -243,8 +243,8 @@ fn lmm_vj(c: *Lmm, theta: f64, sigma: f64, j: usize) -> f64 {
 }
 
 // lmerTest's Satterthwaite degrees of freedom of each fixed effect at the given (theta, sigma): df_j = 2 v_j^2 / (g_j' A g_j) with v_j the variance of the estimate, g_j its gradient in (theta, sigma) and A = 2 H^-1 the asymptotic covariance from the Hessian H of the deviance,
-// both by central differences (theta, sigma as lme4 reports them); df receives p values
-fn lmer_satt(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: usize, p: usize, ng: usize, reml: bool, theta: f64, sigma: f64, df: []f64) -> err {
+// both by central differences (theta, sigma as lme4 reports them); df receives p values, est the fixed effects and se their standard errors at theta (the t statistic is est / se, its p value 2 pt(-|t|, df))
+fn lmer_satt(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: usize, p: usize, ng: usize, reml: bool, theta: f64, sigma: f64, df: []f64, est: []f64, se: []f64) -> err {
     let (cnt, e1) = mem.alloc[f64](a, ng)
     let (w, e2) = mem.alloc[f64](a, ng)
     let (xtvx, e3) = mem.alloc[f64](a, p * p)
@@ -285,9 +285,16 @@ fn lmer_satt(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n:
     let a11 = 2.0f64 * h22 / det
     let a22 = 2.0f64 * h11 / det
     let a12 = 0.0f64 - 2.0f64 * h12 / det
+    let _ = lmm_profile(&c, theta)
     var j = 0usize
     while j < p {
+        est[j] = c.beta[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
         let v = lmm_vj(&c, theta, sigma, j)
+        se[j] = math.sqrt[f64](v)
         let gt = (lmm_vj(&c, theta + ht, sigma, j) - lmm_vj(&c, theta - ht, sigma, j)) / (2.0f64 * ht)
         let gs = (lmm_vj(&c, theta, sigma + hs, j) - lmm_vj(&c, theta, sigma - hs, j)) / (2.0f64 * hs)
         df[j] = 2.0f64 * v * v / (gt * gt * a11 + 2.0f64 * gt * gs * a12 + gs * gs * a22)
