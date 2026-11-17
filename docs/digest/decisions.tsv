@@ -3874,4 +3874,5 @@ D7011	262	L305 closed
 D7012	782	tsfeatures entropy, stl_features, holt_parameters, heterogeneity
 D7013	183	L483 closed
 D7014	1188	extraDistr: the remaining generators and d, p, q functions, L422 closed
-D7015	1141	geepack general GEE engine, jackknives, QIC, Wald tests, ordgee; L430 closed
+D7015	1143	geepack general GEE engine, jackknives, QIC, Wald tests, ordgee; L430 closed
+D7016	935	BiasedUrn multivariate moments, estimators and random variates; L471 closed
