@@ -118,4 +118,30 @@ for (ci in seq_along(gw_configs)) {
   qq <- tryCatch(QIC(g), error = function(e) NULL)
   if (!is.null(qq)) for (w in 0:5) cases[[length(cases) + 1]] <- case("gq", c(w, fam, lnk, cs, k, p, maxm, sz, y, as.vector(t(X)), as.vector(t(zc))), unname(qq[w + 1]), rel = 2e-3, abs = 1e-5)
 }
+# "go" ordgee with independence (what 0 beta 1 robust 2 naive 3 one-step jackknife, index, link 1 logit 2 probit 3 cloglog, k, px, nlev, sizes, y levels 1..nlev, x row-major)
+set.seed(20262303)
+for (ci in 1:8) {
+  lnk <- (ci - 1) %% 3 + 1; nlev <- 3 + (ci %% 2); px <- 1 + (ci %% 3 == 0)
+  g <- NULL
+  for (tries in 1:6) {
+    k <- sample(30:45, 1); sz <- sample(2:4, k, replace = TRUE); N <- sum(sz); id <- rep(1:k, sz)
+    xx <- matrix(round(rnorm(N * px), 3), N, px); re <- rep(rnorm(k, 0, 0.6), sz)
+    lat <- as.vector(xx %*% c(0.6, -0.4)[1:px]) + re + (if (lnk == 1) rlogis(N) else if (lnk == 2) rnorm(N) else -log(-log(runif(N))))
+    cuts <- c(-0.8, 0.4, 1.3)[1:(nlev - 1)]
+    yv <- cut(lat, c(-Inf, cuts, Inf), labels = 1:nlev, ordered_result = TRUE)
+    if (length(unique(yv)) < nlev) next
+    d <- data.frame(y = yv, id = id); for (j in 1:px) d[[paste0("x", j)]] <- xx[, j]
+    f <- as.formula(paste("y ~", paste(paste0("x", 1:px), collapse = " + ")))
+    g <- tryCatch(ordgee(f, id = id, data = d, corstr = "independence", mean.link = c("logit", "probit", "cloglog")[lnk], control = geese.control(j1s = TRUE)), error = function(e) NULL, warning = function(w) NULL)
+    if (!is.null(g) && g$error == 0 && max(abs(g$beta)) < 20) break
+    g <- NULL
+  }
+  if (is.null(g)) next
+  p <- length(g$beta); a <- c(lnk, k, px, nlev, sz, as.integer(yv), as.vector(t(xx)))
+  for (j in 1:p) cases[[length(cases) + 1]] <- case("go", c(0, j - 1, a), unname(g$beta)[j], rel = 1e-4, abs = 2e-5)
+  for (u in 1:p) for (v in 1:p) {
+    cases[[length(cases) + 1]] <- case("go", c(1, (u - 1) * p + v - 1, a), g$vbeta[u, v], rel = 1e-3, abs = 1e-6)
+    cases[[length(cases) + 1]] <- case("go", c(2, (u - 1) * p + v - 1, a), g$vbeta.naiv[u, v], rel = 1e-3, abs = 1e-6)
+  }
+}
 emit("geepackpkg", "geepack", list(cases))

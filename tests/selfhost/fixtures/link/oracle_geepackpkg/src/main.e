@@ -83,6 +83,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
             at += 1usize
             continue
         }
+        if str.eq(c.name, "go") {
+            // (what, index, link, k, px, nlev, sizes (k), y, x row-major)
+            let ok_ = usize(x[3usize])
+            let opx = usize(x[4usize])
+            let onl = usize(x[5usize])
+            var on = 0usize
+            var oc = 0usize
+            while oc < ok_ {
+                on += usize(x[6usize + oc])
+                oc += 1usize
+            }
+            let oy = 6usize + ok_
+            let ox = oy + on
+            let op = onl - 1usize + opx
+            let (oo, oe1) = mem.alloc[f64](a, op + 3usize * op * op)
+            if oe1 != ok { os.exit(5) }
+            if gp.ordgee_fit(a, x[oy..ox], x[ox..ox + on * opx], x[6usize..oy], ok_, opx, onl, usize(x[2usize]), oo) != ok { os.exit(7) }
+            var og = 0.0f64
+            if usize(x[0usize]) == 0usize { og = oo[usize(x[1usize])] }
+            if usize(x[0usize]) > 0usize { og = oo[op + (usize(x[0usize]) - 1usize) * op * op + usize(x[1usize])] }
+            if !oracle.agrees(og, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, og))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "gq") {
             // (what, fam, link, corstr, k, p, maxm, sizes (k), y, x row-major, zc)
             let qk = usize(x[4usize])

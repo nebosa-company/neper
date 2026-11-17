@@ -1145,3 +1145,248 @@ fn gee_wald_seq(a: *mem.Arena, y: []const f64, x: []const f64, sz: []const f64, 
     }
     ret ok
 }
+
+// ordgee with the independence working correlation: the cumulative indicators I(y > j), j = 1..nlev-1, of every observation follow the multinomial covariance
+// V_jl = P(y > max(j, l)) - P(y > j) P(y > l); intercepts for the categories then the px covariates (no intercept column); link 1 logit, 2 probit, 3 cloglog
+// out: beta (p = nlev - 1 + px), robust, naive and one-step jackknife covariances (p by p each)
+fn ordgee_fit(a: *mem.Arena, ycat: []const f64, x: []const f64, sz: []const f64, k: usize, px: usize, nlev: usize, link: usize, out: []f64) -> err {
+    let nc = nlev - 1usize
+    let p = nc + px
+    let pp = p * p
+    var n = 0usize
+    var c = 0usize
+    while c < k {
+        n += usize(sz[c])
+        c += 1usize
+    }
+    let (beta, e1) = mem.alloc[f64](a, p)
+    let (h, e2) = mem.alloc[f64](a, pp)
+    let (hi, e3) = mem.alloc[f64](a, pp)
+    let (g, e4) = mem.alloc[f64](a, p)
+    let (mid, e5) = mem.alloc[f64](a, pp)
+    let (hs, e6) = mem.alloc[f64](a, k * pp)
+    let (us, e7) = mem.alloc[f64](a, k * p)
+    let (mu, e8) = mem.alloc[f64](a, nc)
+    let (dm, e9) = mem.alloc[f64](a, nc)
+    let (vm, e10) = mem.alloc[f64](a, nc * nc)
+    let (vi, e11) = mem.alloc[f64](a, nc * nc)
+    let (dd, e12) = mem.alloc[f64](a, nc * p)
+    let (tmp, e13) = mem.alloc[f64](a, nc * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok { ret mem.Full }
+    // start: the intercepts at the marginal link of P(y > j), slopes zero
+    var j = 0usize
+    while j < p {
+        beta[j] = 0.0f64
+        j += 1usize
+    }
+    j = 0usize
+    while j < nc {
+        var cntj = 0.0f64
+        var i0 = 0usize
+        while i0 < n {
+            if ycat[i0] > f64(j + 1usize) { cntj += 1.0f64 }
+            i0 += 1usize
+        }
+        let pj = (cntj + 0.5f64) / (f64(n) + 1.0f64)
+        beta[j] = gee_linkfun(link, pj)
+        j += 1usize
+    }
+    var iter = 0usize
+    var last = 0.0f64
+    while iter < 200usize {
+        // blocks at beta
+        var u = 0usize
+        while u < p {
+            g[u] = 0.0f64
+            var v = 0usize
+            while v < p {
+                h[u * p + v] = 0.0f64
+                mid[u * p + v] = 0.0f64
+                v += 1usize
+            }
+            u += 1usize
+        }
+        var o = 0usize
+        c = 0usize
+        while c < k {
+            u = 0usize
+            while u < p {
+                us[c * p + u] = 0.0f64
+                var v = 0usize
+                while v < p {
+                    hs[c * pp + u * p + v] = 0.0f64
+                    v += 1usize
+                }
+                u += 1usize
+            }
+            var s = 0usize
+            while s < usize(sz[c]) {
+                let mk = mem.mark(a)
+                j = 0usize
+                while j < nc {
+                    var eta = beta[j]
+                    u = 0usize
+                    while u < px {
+                        eta += x[o * px + u] * beta[nc + u]
+                        u += 1usize
+                    }
+                    let (m1, d1) = gee_link(link, eta)
+                    mu[j] = m1
+                    dm[j] = d1
+                    j += 1usize
+                }
+                j = 0usize
+                while j < nc {
+                    var l = 0usize
+                    while l < nc {
+                        var mx = j
+                        if l < j { mx = l }
+                        vm[j * nc + l] = mu[mx] - mu[j] * mu[l]
+                        l += 1usize
+                    }
+                    j += 1usize
+                }
+                if ols.inverse(a, vm, nc, vi) != ok { ret mem.Full }
+                j = 0usize
+                while j < nc {
+                    u = 0usize
+                    while u < p {
+                        var dv = 0.0f64
+                        if u == j { dv = dm[j] }
+                        if u >= nc { dv = dm[j] * x[o * px + u - nc] }
+                        dd[j * p + u] = dv
+                        u += 1usize
+                    }
+                    j += 1usize
+                }
+                // tmp = Vi dd
+                j = 0usize
+                while j < nc {
+                    u = 0usize
+                    while u < p {
+                        var sv = 0.0f64
+                        var l = 0usize
+                        while l < nc {
+                            sv += vi[j * nc + l] * dd[l * p + u]
+                            l += 1usize
+                        }
+                        tmp[j * p + u] = sv
+                        u += 1usize
+                    }
+                    j += 1usize
+                }
+                j = 0usize
+                while j < nc {
+                    var yj = 0.0f64
+                    if ycat[o] > f64(j + 1usize) { yj = 1.0f64 }
+                    let rj = yj - mu[j]
+                    u = 0usize
+                    while u < p {
+                        us[c * p + u] += tmp[j * p + u] * rj
+                        var v = 0usize
+                        while v < p {
+                            hs[c * pp + u * p + v] += dd[j * p + u] * tmp[j * p + v]
+                            v += 1usize
+                        }
+                        u += 1usize
+                    }
+                    j += 1usize
+                }
+                mem.reset(a, mk)
+                o += 1usize
+                s += 1usize
+            }
+            u = 0usize
+            while u < p {
+                g[u] += us[c * p + u]
+                var v = 0usize
+                while v < p {
+                    h[u * p + v] += hs[c * pp + u * p + v]
+                    mid[u * p + v] += us[c * p + u] * us[c * p + v]
+                    v += 1usize
+                }
+                u += 1usize
+            }
+            c += 1usize
+        }
+        if ols.inverse(a, h, p, hi) != ok { ret mem.Full }
+        var change = 0.0f64
+        u = 0usize
+        while u < p {
+            var step = 0.0f64
+            var v = 0usize
+            while v < p {
+                step += hi[u * p + v] * g[v]
+                v += 1usize
+            }
+            if math.abs[f64](step) > change { change = math.abs[f64](step) }
+            beta[u] += step
+            u += 1usize
+        }
+        last = change
+        iter += 1usize
+        if change < 1.0e-12f64 { break }
+    }
+    var u2 = 0usize
+    while u2 < p {
+        out[u2] = beta[u2]
+        u2 += 1usize
+    }
+    gee_sandwich(hi, mid, p, out[p..p + pp])
+    u2 = 0usize
+    while u2 < pp {
+        out[p + pp + u2] = hi[u2]
+        u2 += 1usize
+    }
+    let kk = f64(k)
+    let sc = (kk - f64(p)) / kk
+    let (hl, e14) = mem.alloc[f64](a, pp)
+    let (hli, e15) = mem.alloc[f64](a, pp)
+    let (jm, e16) = mem.alloc[f64](a, pp)
+    if e14 != ok || e15 != ok || e16 != ok { ret mem.Full }
+    u2 = 0usize
+    while u2 < pp {
+        jm[u2] = 0.0f64
+        u2 += 1usize
+    }
+    c = 0usize
+    while c < k {
+        u2 = 0usize
+        while u2 < pp {
+            hl[u2] = h[u2] - hs[c * pp + u2]
+            u2 += 1usize
+        }
+        let mk = mem.mark(a)
+        if ols.inverse(a, hl, p, hli) != ok { ret mem.Full }
+        let (dl, e17) = mem.alloc[f64](a, p)
+        if e17 != ok { ret mem.Full }
+        u2 = 0usize
+        while u2 < p {
+            var s0 = 0.0f64
+            var v = 0usize
+            while v < p {
+                s0 += hli[u2 * p + v] * us[c * p + v]
+                v += 1usize
+            }
+            dl[u2] = s0
+            u2 += 1usize
+        }
+        u2 = 0usize
+        while u2 < p {
+            var v = 0usize
+            while v < p {
+                jm[u2 * p + v] += dl[u2] * dl[v]
+                v += 1usize
+            }
+            u2 += 1usize
+        }
+        mem.reset(a, mk)
+        c += 1usize
+    }
+    u2 = 0usize
+    while u2 < pp {
+        out[p + 2usize * pp + u2] = sc * jm[u2]
+        u2 += 1usize
+    }
+    ret ok
+}
