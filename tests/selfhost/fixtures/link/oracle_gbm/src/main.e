@@ -19,6 +19,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     var ge = ok
     if c.name[0usize] == 98u8 {
         ge = gb.bernoulli(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
+    } else if c.name[0usize] == 108u8 {
+        ge = gb.laplace(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
     } else if c.name[0usize] == 97u8 {
         ge = gb.adaboost(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
     } else if c.name[0usize] == 112u8 {

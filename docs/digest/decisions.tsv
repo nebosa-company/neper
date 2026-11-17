@@ -3754,4 +3754,5 @@ D6891	702	bw.SJ
 D6892	595	Hmisc: smean.cl.normal, smean.sdl, smedian.hilow
 D6893	939	gbm: gaussian boosting without subsampling
 D6894	939	gbm: bernoulli and poisson
-D6895	407	gbm: adaboost
+D6895	408	gbm: adaboost
+D6896	708	gbm: laplace

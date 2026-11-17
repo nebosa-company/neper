@@ -31,4 +31,15 @@ for (rep in 1:10) {
   pr <- predict(f, df, n.trees = nt)
   for (i in c(1, 7, 20, n)) cases[[length(cases) + 1]] <- case("ada", c(n, p, nt, sh, d, mo, i - 1, 0, y, X), pr[i], rel = 1e-7, abs = 1e-9)
 }
+# laplace "lap": the same layout, continuous y
+for (fam in c("laplace")) for (rep in 1:10) {
+  n <- sample(80:160, 1); p <- sample(2:4, 1); X <- matrix(round(rnorm(n * p), 3), n, p); y <- round(X[, 1] * 2 + rexp(n), 4)
+  al <- c(0.5, 0.2, 0.8)[rep %% 3 + 1]
+  d <- sample(1:3, 1); sh <- c(0.1, 0.05, 0.2)[rep %% 3 + 1]; nt <- c(10, 30)[rep %% 2 + 1]; mo <- c(10, 5)[rep %% 2 + 1]
+  df <- data.frame(y = y, X); names(df) <- c("y", paste0("V", 1:p))
+  f <- if (fam == "laplace") gbm(y ~ ., data = df, distribution = "laplace", n.trees = nt, shrinkage = sh, interaction.depth = d, n.minobsinnode = mo, bag.fraction = 1, train.fraction = 1, keep.data = TRUE, verbose = FALSE)
+       else gbm(y ~ ., data = df, distribution = list(name = "quantile", alpha = al), n.trees = nt, shrinkage = sh, interaction.depth = d, n.minobsinnode = mo, bag.fraction = 1, train.fraction = 1, keep.data = TRUE, verbose = FALSE)
+  pr <- predict(f, df, n.trees = nt)
+  for (i in c(1, 7, 20, n)) cases[[length(cases) + 1]] <- case(if (fam == "laplace") "lap" else "qnt", c(n, p, nt, sh, d, mo, i - 1, al, y, X), pr[i], rel = 1e-7, abs = 1e-9)
+}
 emit("gbm", "gbm", list(cases))

@@ -48050,3 +48050,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6895 — gbm: adaboost
 
 **Decision.** `gbmpkg.adaboost` (y in {0, 1}, fitted on gbm's half log-odds scale) starts at 0.5 log(m / (1 - m)), fits the tree to (2y - 1) exp(-(2y - 1) F) and moves each leaf by sum((2y - 1) exp(-(2y - 1) F)) / sum(exp(-(2y - 1) F)). Equal to gbm on 10 data sets (80 to 160 rows, depth 1 to 3, 10 and 30 trees) at four rows each (oracle_gbm, 164 cases in all). Linux pending.
+
+## D6896 — gbm: laplace
+
+**Decision.** `gbmpkg.laplace` starts at the median of y, fits the tree to the sign of y - F and moves each leaf by the median of its residuals, the median being the first value whose cumulative count reaches half the total, with the mean of that value and the next when the count reaches half exactly. Equal to gbm on 10 data sets (80 to 160 rows, depth 1 to 3, 10 and 30 trees) at four rows each (oracle_gbm, 204 cases in all). The `quantile` loss was tried with the same quantile rule and with two variants of the tie rule and does not match gbm (the cases whose cutoff is an integer move, the rest still differ in the sixth to second digit); it is not included. Linux pending.
