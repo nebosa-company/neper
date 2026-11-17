@@ -179,6 +179,7 @@ fn hc_term(model: usize, l: f64, p: usize, tr: f64, s: []const f64, alpha: f64, 
     ret l * inner
 }
 
+// hc(data, modelName = "VII" (0), use = "VARS") on z (VVV is the statement-for-statement port in mclusthcv: its QR storage makes the criterion differ from the textbook one, so model 1 here is not R)
 // hc(data, modelName = "VII" (0) or "VVV" (1), use = "VARS") on z (n by p) with the singleton partition: out holds the merges as 2 (n - 1) one-based observation numbers,
 // each cluster named by its smallest member and the smaller name first. alpha_mult and beta are the alpha and beta arguments of hc.
 fn hc_run(a: *mem.Arena, z: []const f64, n: usize, p: usize, model: usize, alpha_mult: f64, beta: f64, out: []usize) -> err {

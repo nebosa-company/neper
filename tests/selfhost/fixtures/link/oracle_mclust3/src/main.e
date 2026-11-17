@@ -3,6 +3,7 @@
 
 use e.algo.stat.mclusthc as hc
 use e.algo.stat.mclusthcv as hv
+use e.algo.stat.mclustpkg as mp
 use e.io
 use e.mem
 use e.os
@@ -12,6 +13,28 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "hc1") {
+        // (model 0 E 1 V, n, id, x[n]): hc of one variable is the VII criterion with p = 1 (V) or Ward (E)
+        let m1 = usize(z[0usize])
+        let n1 = usize(z[1usize])
+        let (pr, pe) = mem.alloc[usize](a, 2usize * n1)
+        if pe != ok { ret nan }
+        if m1 == 0usize {
+            if mp.hc_eii(a, z[3usize..3usize + n1], n1, 1usize, pr) != ok { ret nan }
+        } else {
+            if hc.hc_run(a, z[3usize..3usize + n1], n1, 1usize, 0usize, 1.0f64, 1.0f64, pr) != ok { ret nan }
+        }
+        if z[2usize] < 0.0f64 {
+            var s1 = 0.0f64
+            var q1 = 0usize
+            while q1 < 2usize * (n1 - 1usize) {
+                s1 += f64(q1 + 1usize) * f64(pr[q1])
+                q1 += 1usize
+            }
+            ret s1
+        }
+        ret 1000.0f64 * f64(pr[0usize]) + f64(pr[1usize])
+    }
     let model = usize(z[0usize])
     let uz = usize(z[1usize])
     let n = usize(z[2usize])
