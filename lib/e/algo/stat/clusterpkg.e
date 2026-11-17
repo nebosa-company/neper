@@ -1147,6 +1147,30 @@ fn pam(a: *mem.Arena, dys: []const f64, n: usize, kk: usize, given: []const usiz
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------------
+// pam(x, k, medoids = "random", nstart): the swap phase from nstart random medoid sets drawn with sample.int (seed rg first), keeping the first of the
+// best objectives -- the whole of pam(variant = "faster") and of any variant given a numeric nstart
+fn pam_starts(a: *mem.Arena, dys: []const f64, n: usize, kk: usize, pamonce: usize, nstart: usize, rg: *rng.Rng, all_stats: bool) -> (PamFit, err) {
+    var best: PamFit = zero
+    let (given, e0) = zu(a, kk)
+    if e0 != ok { ret (best, e0) }
+    var it = 1usize
+    while it <= nstart {
+        let (draw, e1) = rng.sample_int(a, rg, i64(n), i64(kk), false)
+        if e1 != ok { ret (best, e1) }
+        var q = 0usize
+        while q < kk {
+            given[q] = usize(draw[q])
+            q += 1usize
+        }
+        let (fit, e2) = pam(a, dys, n, kk, given, true, true, pamonce, all_stats)
+        if e2 != ok { ret (best, e2) }
+        if it == 1usize || fit.obj_swap < best.obj_swap { best = fit }
+        it += 1usize
+    }
+    ret (best, ok)
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
 // R sums in 80-bit long double, so its means are (nearly always) the correctly rounded sum / count; two-sum accumulation reproduces that
 
 // (hi, lo) + v with the rounding error of the sum kept in lo

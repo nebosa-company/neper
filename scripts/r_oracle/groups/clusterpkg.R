@@ -38,6 +38,17 @@ for (rep in 1:70) {
     add("pam_ttsil", a, res$silinfo$avg.width)
   }
 }
+# ---- pam with random starts: medoids = "random" and nstart draws under set.seed
+#   pamn_*  args: (n, p, k, pamonce, nstart, seed, x column-major n by p)
+for (rep in 1:30) {
+  n <- sample(8:30, 1); p <- sample(1:3, 1); k <- sample(2:min(5, n - 1), 1); po <- sample(0:6, 1); ns <- sample(1:5, 1)
+  X <- matrix(round(rnorm(n * p) * 3, 1), n, p) + matrix(rep(sample(0:3, n, replace = TRUE) * 3, p), n, p)
+  seed <- sample(1:100000, 1)
+  set.seed(seed)
+  res <- pam(X, k, variant = VARS[po + 1], nstart = ns, keep.diss = FALSE, keep.data = FALSE)
+  a <- c(n, p, k, po, ns, seed, as.vector(X))
+  add("pamn_swap", a, res$objective[2]); add("pamn_med", a, cs(res$id.med)); add("pamn_clu", a, cs(res$clustering))
+}
 # ---- clara: its own generator and R's, large and small samples, NA, jaccard, pamLike, correct.d
 #   clara_*  args: (n, p, k, samples, sampsize, metric 1 2 3, rngR, seed, pamLike, correct.d, stand, x column-major)
 for (rep in 1:48) {

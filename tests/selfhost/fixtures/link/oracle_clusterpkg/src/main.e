@@ -1,6 +1,7 @@
-// e.algo.stat.clusterpkg (pam, clara, daisy, silhouette) and e.algo.stat.clustertree (agnes, diana, mona) against cluster 2.1.8.2. tests/oracle/clusterpkg.json
-// and clustertree.json come from `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R clusterpkg clustertree`; the argument layout of each case is at the top
-// of scripts/r_oracle/groups/clusterpkg.R and clustertree.R. Every answer is one number, mostly a position-weighted checksum of a result vector.
+// The R package cluster 2.1.8.2 ported whole: e.algo.stat.clusterpkg (pam in every variant, clara, daisy, silhouette), clustertree (agnes, diana, mona,
+// coefficients), clusterfuzzy (fanny) and clusterhull (ellipsoidhull, clusGap, maxSE) against tests/oracle/cluster{pkg,tree,fuzzy,hull}.json, which come
+// from `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R clusterpkg clustertree clusterfuzzy clusterhull`. The argument layout of each case is at the
+// top of its group file. Every answer is one number, mostly a position-weighted checksum of a result vector.
 
 use e.algo.rand.r as rng
 use e.algo.stat.clusterfuzzy as fz
@@ -434,7 +435,82 @@ fn gap_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret f64(hl.max_se(fit.tab[2usize * kmax..3usize * kmax], fit.tab[3usize * kmax..4usize * kmax], which, 1.0f64))
 }
 
+// a dist object as input: args (n, kind, k or method, x(n by 2 column-major)); kind 0..5 pam variants, 6 agnes, 7 diana
+fn dist_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let kind = usize(x[1usize])
+    let k = usize(x[2usize])
+    let (d, e1) = mem.alloc[f64](a, n * n)
+    if e1 != ok { os.exit(5) }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            let dx = x[3usize + i] - x[3usize + j]
+            let dy = x[3usize + n + i] - x[3usize + n + j]
+            d[i * n + j] = math.sqrt[f64](dx * dx + dy * dy)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (dys, e2) = mem.alloc[f64](a, n * (n - 1usize) / 2usize + 1usize)
+    if e2 != ok { os.exit(5) }
+    cp.pack_full(d, n, dys)
+    let w = c.name
+    if kind <= 5usize {
+        let (given, e3) = mem.alloc[usize](a, k)
+        if e3 != ok { os.exit(5) }
+        let (fit, e4) = cp.pam(a, dys, n, k, given, false, true, kind, true)
+        if e4 != ok { os.exit(5) }
+        if str.eq(w, "dist_pammed") { ret sum_u(fit.med) }
+        if str.eq(w, "dist_pamobj") { ret fit.obj_swap }
+        if str.eq(w, "dist_pamclu") { ret sum_u(fit.clu) }
+        ret fit.ttsil
+    }
+    var fit2: ct.TwinsFit = zero
+    if kind == 6usize {
+        let (alpha, e5) = mem.alloc[f64](a, 4usize)
+        if e5 != ok { os.exit(5) }
+        let (f1, e6) = ct.agnes(a, dys, n, k, alpha)
+        if e6 != ok { os.exit(5) }
+        fit2 = f1
+        if str.eq(w, "dist_agnesh") { ret sum_f(fit2.height) }
+        ret fit2.coef
+    }
+    let (f2, e7) = ct.diana(a, dys, n)
+    if e7 != ok { os.exit(5) }
+    if str.eq(w, "dist_dianah") { ret sum_f(f2.height) }
+    ret f2.coef
+}
+
+// pam with random starts: args (n, p, k, pamonce, nstart, seed, x column-major)
+fn pamn_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let k = usize(x[2usize])
+    let data = take_matrix(a, x, 6usize, n * p)
+    let (jtmd, e1) = mem.alloc[i64](a, p)
+    if e1 != ok { os.exit(5) }
+    let (valmd, e2) = mem.alloc[f64](a, p)
+    if e2 != ok { os.exit(5) }
+    let _ = cp.na_prepare(data, n, p, jtmd, valmd)
+    let (dys, e3) = mem.alloc[f64](a, n * (n - 1usize) / 2usize + 1usize)
+    if e3 != ok { os.exit(5) }
+    if cp.dysta(data, n, p, dys, 1usize, jtmd, valmd) != 0usize { os.exit(6) }
+    var rg: rng.Rng = zero
+    rng.seed(&rg, i64(x[5usize]))
+    let (fit, e4) = cp.pam_starts(a, dys, n, k, usize(x[3usize]), usize(x[4usize]), &rg, true)
+    if e4 != ok { os.exit(7) }
+    if str.eq(c.name, "pamn_swap") { ret fit.obj_swap }
+    if str.eq(c.name, "pamn_med") { ret sum_u(fit.med) }
+    ret sum_u(fit.clu)
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.starts_with(c.name, "pamn_") { ret pamn_case(a, c) }
+    if str.starts_with(c.name, "dist_") { ret dist_case(a, c) }
     if str.starts_with(c.name, "hull_") { ret hull_case(a, c) }
     if str.starts_with(c.name, "gap_") { ret gap_case(a, c) }
     if str.starts_with(c.name, "fanny_") { ret fanny_case(a, c) }

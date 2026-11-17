@@ -50,4 +50,22 @@ for (rep in 1:60) {
   add("mona_order", a, cs(mo$order)); add("mona_variable", a, cs(as.integer(ifelse(mo$variable == "NULL", 0, mo$variable))))
   add("mona_step", a, cs(mo$step)); add("mona_data", a, cs(as.vector(mo$data)))
 }
+# ---- a dist object as the input (diss = TRUE): pam, agnes, diana
+#   dist_*  args: (n, kind 0 pam original .. 5 pam f_5, 6 agnes, 7 diana, k or method, x(n by 2 column-major))
+for (rep in 1:40) {
+  n <- sample(6:25, 1); X <- matrix(round(rnorm(n * 2) * 3, 2), n, 2); d <- dist(X)
+  kind <- (rep %% 8)
+  if (kind <= 5) {
+    k <- sample(2:min(5, n - 1), 1); res <- pam(d, k, variant = c("original", "o_1", "o_2", "f_3", "f_4", "f_5")[kind + 1])
+    a <- c(n, kind, k, as.vector(X))
+    add("dist_pammed", a, cs(res$id.med)); add("dist_pamobj", a, res$objective[2]); add("dist_pamclu", a, cs(res$clustering))
+    add("dist_pamsil", a, res$silinfo$avg.width)
+  } else if (kind == 6) {
+    m <- sample(1:5, 1); ag <- agnes(d, method = METH[m]); a <- c(n, kind, m, as.vector(X))
+    add("dist_agnesh", a, cs(ag$height)); add("dist_agnesac", a, ag$ac)
+  } else {
+    dv <- diana(d); a <- c(n, kind, 0, as.vector(X))
+    add("dist_dianah", a, cs(dv$height)); add("dist_dianadc", a, dv$dc)
+  }
+}
 emit("clustertree", "cluster", list(cases))
