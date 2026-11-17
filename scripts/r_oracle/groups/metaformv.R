@@ -1,16 +1,17 @@
 # metaformv: metafor rma.mv (lib/e/algo/stat/metaformv.e).
-#   A case is fn "rmamv" with args = [reml, test (0 z, 1 t), optimizer (0 Nelder-Mead, 1 BFGS, 2 the default nlminb, answered by a tight BFGS), k, p, ns (random intercepts), gk (structure of an
+#   A case is fn "rmamv" with args = [reml, test (0 z, 1 t), optimizer (0 Nelder-Mead, 1 BFGS, 2 the default nlminb, e.algo.stat.nlminb), k, p, ns (random intercepts), gk (structure of an
 #   inner | outer term: 0 none 1 CS 2 HCS 3 DIAG 4 ID 5 AR 6 HAR), nin (inner levels), vmode (0 vi, 1 full V), yi (k), X (k * p, row-major), V (k or k * k), ids (ns * k), inner (k), outer (k)].
 #   Its want is sigma2[1] (or tau2[1]); the cases after it, fn "o", are values of the result vector at an index: 0.. sigma2, 8.. tau2, 16 rho, 24 beta, 32 se, 40 zval, 48 pval, 56 ci.lb, 64 ci.ub,
-#   72 vb (row-major p x p), 136 QE, 137 QEp, 138 QM, 139 QMp, 140 and 141 the log-likelihood (ML and REML). Nelder-Mead and BFGS are R's optim and are compared to 1e-7; the default
-#   optimizer (nlminb) is not ported and its cases are compared to 1e-4, which is the optimizer's own tolerance.
+#   72 vb (row-major p x p), 136 QE, 137 QEp, 138 QM, 139 QMp, 140 and 141 the log-likelihood (ML and REML). Nelder-Mead and BFGS are R's optim and are compared to 1e-7; the default optimizer (nlminb, e.algo.stat.nlminb) to 1e-9, or to 1e-7 where the estimates are weakly identified
+#   (R's own two fits of the data and of the data times 1 + 1e-13 differ by more than 3e-10): the port makes R's evaluations one for one, which 143 (objective evaluations, R's count less the
+#   two the final port.c call and rma.mv add) pins exactly, but the objective is not bit for bit R's (LAPACK against Neper's factorisations) and a flat objective turns that into 1e-8.
 suppressMessages(library(metafor))
 cases <- list()
 put <- function(v, i, x) { v[[as.character(i)]] <- if (is.null(x) || length(x) == 0) NA_real_ else as.numeric(x)[1]; v }
 add_vec <- function(args, vals, rel, abs) {
   idx <- as.integer(names(vals))
   cases[[length(cases) + 1]] <<- case("rmamv", args, vals[[1]], rel = rel, abs = abs)
-  if (length(vals) > 1) for (j in 2:length(vals)) cases[[length(cases) + 1]] <<- case("o", idx[j], vals[[j]], rel = rel, abs = abs)
+  if (length(vals) > 1) for (j in 2:length(vals)) cases[[length(cases) + 1]] <<- case("o", idx[j], vals[[j]], rel = if (idx[j] == 143) 0 else rel, abs = if (idx[j] == 143) 0 else abs)
 }
 set.seed(20263131)
 gen <- function(nstudy, ncl) {
@@ -37,8 +38,19 @@ one <- function(d, reml, test, optim_code, ns_terms, struct, mods, vfull = FALSE
   if (gk > 0) args$struct <- struct
   args$control <- list(optimizer = c("Nelder-Mead", "BFGS", "nlminb")[optim_code + 1])
   if (optim_code == 2) args$control <- list()
+  assign("nllc", 0, globalenv())
+  if (optim_code == 2) suppressMessages(trace(".ll.rma.mv", tracer = quote(assign("nllc", get("nllc", globalenv()) + 1, globalenv())), print = FALSE, where = asNamespace("metafor")))
   r <- tryCatch(suppressWarnings(do.call(rma.mv, args)), error = function(e) NULL)
+  if (optim_code == 2) suppressMessages(untrace(".ll.rma.mv", where = asNamespace("metafor")))
   if (is.null(r)) return(invisible())
+  nll <- get("nllc", globalenv()) - 2
+  weak <- FALSE
+  if (optim_code == 2) {
+    args2 <- args; args2$yi <- args$yi * (1 + 1e-13)
+    r2 <- tryCatch(suppressWarnings(do.call(rma.mv, args2)), error = function(e) NULL)
+    pick <- function(z) c(z$sigma2, z$tau2, z$rho, z$beta)
+    if (is.null(r2)) weak <- TRUE else weak <- !isTRUE(all(abs(pick(r) - pick(r2)) <= 3e-10 * pmax(abs(pick(r)), 1e-3)))
+  }
   X <- if (mods) cbind(1, d$x) else matrix(1, k, 1)
   p <- ncol(X)
   ids <- unlist(lapply(ns_terms, function(t) as.numeric(factor(d[[t]]))))
@@ -55,10 +67,10 @@ one <- function(d, reml, test, optim_code, ns_terms, struct, mods, vfull = FALSE
   for (j in 1:p) { v <- put(v, 24 + j - 1, r$beta[j]); v <- put(v, 32 + j - 1, r$se[j]); v <- put(v, 40 + j - 1, r$zval[j]); v <- put(v, 48 + j - 1, r$pval[j]); v <- put(v, 56 + j - 1, r$ci.lb[j]); v <- put(v, 64 + j - 1, r$ci.ub[j])
     for (b in 1:p) v <- put(v, 72 + (j - 1) * p + b - 1, r$vb[j, b]) }
   v <- put(v, 136, r$QE); v <- put(v, 137, r$QEp); v <- put(v, 138, r$QM); v <- put(v, 139, r$QMp)
-  v <- put(v, 140, r$fit.stats["ll", "ML"]); v <- put(v, 141, r$fit.stats["ll", "REML"])
+  v <- put(v, 140, r$fit.stats["ll", "ML"]); v <- put(v, 141, r$fit.stats["ll", "REML"]); if (optim_code == 2) v <- put(v, 143, nll)
   v <- v[order(as.integer(names(v)))]
-  rel <- if (optim_code == 2) 1e-4 else 1e-7
-  add_vec(a, v, rel, if (optim_code == 2) 1e-5 else 1e-8)
+  rel <- if (optim_code == 2) (if (weak) 1e-7 else 1e-9) else 1e-7
+  add_vec(a, v, rel, if (optim_code == 2) rel else 1e-8)
 }
 for (rep in 1:3) try({
   d <- gen(sample(10:14, 1), 3)
@@ -67,8 +79,8 @@ for (rep in 1:3) try({
     one(d, TRUE, 0, oc, "study", "none", TRUE)
     one(d, FALSE, 1, oc, c("study", "esid"), "none", TRUE)
     one(d, TRUE, 0, oc, character(0), "CS", TRUE)
-    if (oc != 2) one(d, TRUE, 0, oc, "study", "CS", FALSE)
-    if (oc != 2) one(d, TRUE, 0, oc, "study", "HCS", TRUE)
+    one(d, TRUE, 0, oc, "study", "CS", FALSE)
+    one(d, TRUE, 0, oc, "study", "HCS", TRUE)
     one(d, TRUE, 0, oc, character(0), "DIAG", FALSE)
     one(d, FALSE, 0, oc, character(0), "ID", FALSE)
     one(d, TRUE, 0, oc, character(0), "AR", FALSE)
