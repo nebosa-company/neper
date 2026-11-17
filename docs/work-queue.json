@@ -763,17 +763,6 @@
       "evidence": "D6722: e.algo.stat.logspline evaluates fitted logspline models (dlogspline, plogspline, qlogspline with bounds, polspline grid and Simpson-table quantile), equal to polspline 1.1.25 to 1e-6 on 1032 values on Windows (oracle_polspline); Linux pending. Open: logspline fitting (stepwise knots, AIC), oldlogspline, polymars forward and backward steps, hare, heft, lspec. Original: Open (CRAN rank 597). Mid. Acceptance, equal to polspline: polymars with its forward and backward steps, logspline density, quantile and distribution functions, hare hazard estimation, heft, lspec spectral estimation, oldlogspline."
     },
     {
-      "id": "L433",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 722,
-      "title": "vars: vector autoregression",
-      "score": 0.55,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6436, D6437 forecasts and non-orthogonal irf, D6438 orthogonal irf, D6439 trend types, D6440 fevd equal vars). VAR(type const) coefficients, residual covariance and VARselect AIC, HQ, SC and FPE equal vars on Windows (oracle_vars; Linux pending). Open: trend types, exogenous, restrictions, tests, IRF, forecasts, causality. Was: Open (CRAN rank 606). Mid. e.algo.timeseries has var_fit and var_forecast. Needs L303 for the VECM part. Acceptance, equal to vars: VAR with trend, constant and seasonal terms, VARselect, SVAR and SVEC, vec2var, irf with bootstrap bands under set.seed, fevd, causality, serial.test, arch.test, normality.test, stability."
-    },
-    {
       "id": "L434",
       "category": "library",
       "group": "CRAN parity",

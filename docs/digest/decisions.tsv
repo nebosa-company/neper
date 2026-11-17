@@ -3882,4 +3882,5 @@ D7019	1235	sn: pst, qst, skew-Cauchy, multivariate functions and selm; L449 clos
 D7020	1056	DHARMa simulation, tests and pan.f; L411 closed
 D7021	775	kSamples simulated and exact p-values, Steel, jt and confidence bounds; L474 closed
 D7022	1066	exact LAPACK dsyevr and dgesdd; L432 and L333 closed
-D7023	792	signal: filter design, windows, FIR design, filtering and spectral tools; L340 closed
+D7023	794	signal: filter design, windows, FIR design, filtering and spectral tools; L340 closed
+D7024	938	vars: VAR estimation, lag selection, SVAR, SVEC, vec2var, irf, fevd, tests and stability; L433 closed
