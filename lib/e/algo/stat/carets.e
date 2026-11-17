@@ -11,6 +11,7 @@ use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.algo.rand.r as rng
 use e.mem
+use e.algo.stat.ica as ica
 use e.algo.linalg.decomp as decomp
 use e.algo.stat.bayesmpkg as bz
 use e.algo.stat.fdrtool as fd
@@ -669,4 +670,66 @@ fn var_imp_lm(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64,
         c += 1usize
     }
     ret ok
+}
+
+// preProcess(method = "pca", thresh): the columns of x (n by p, column-major) standardised and projected on the leading principal components of their correlation matrix, the number of components
+// being the first whose cumulative variance share reaches thresh (at least two, all of them when none does); sdev (p values) and scores (n by k, column-major, each column up to sign) are filled and k returned
+fn pre_process_pca(a: *mem.Arena, x: []const f64, n: usize, p: usize, thresh: f64, sdev: []f64, scores: []f64) -> usize {
+    let (z, e1) = mem.alloc[f64](a, n * p)
+    let (cm, e2) = mem.alloc[f64](a, p * p)
+    if e1 != ok || e2 != ok { ret 0usize }
+    pre_process_cs(x, n, p, true, true, z)
+    var c = 0usize
+    while c < p {
+        var c2 = 0usize
+        while c2 < p {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += z[c * n + i] * z[c2 * n + i]
+                i += 1usize
+            }
+            cm[c2 * p + c] = s / f64(n - 1usize)
+            c2 += 1usize
+        }
+        c += 1usize
+    }
+    let (ev, vecs, ee) = ica.eigen_sym(a, cm, p)
+    if ee != ok { ret 0usize }
+    var tot = 0.0f64
+    c = 0usize
+    while c < p {
+        sdev[c] = math.sqrt[f64](ev[c])
+        tot += ev[c]
+        c += 1usize
+    }
+    var k = p
+    var cum = 0.0f64
+    var found = false
+    c = 0usize
+    while c < p && !found {
+        cum += ev[c] / tot
+        if cum >= thresh {
+            k = c + 1usize
+            found = true
+        }
+        c += 1usize
+    }
+    if found && k < 2usize { k = 2usize }
+    c = 0usize
+    while c < k {
+        var i = 0usize
+        while i < n {
+            var s = 0.0f64
+            var j = 0usize
+            while j < p {
+                s += z[j * n + i] * vecs[j * p + c]
+                j += 1usize
+            }
+            scores[c * n + i] = s
+            i += 1usize
+        }
+        c += 1usize
+    }
+    ret k
 }

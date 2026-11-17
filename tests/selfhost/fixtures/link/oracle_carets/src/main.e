@@ -5,6 +5,7 @@
 use e.algo.stat.carets as ct
 use e.io
 use e.mem
+use e.math
 use e.algo.rand.r as rng
 use e.os
 use e.str
@@ -137,6 +138,25 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if e != ok { ret nan }
         if ct.var_imp_lm(a, z[3usize..3usize + n * p], n, p, z[3usize + n * p..3usize + n * p + n], o) != ok { ret nan }
         ret o[usize(z[2usize])]
+    }
+    if str.eq(c.name, "pca") {
+        let n = usize(z[2usize])
+        let p = usize(z[3usize])
+        let (sd, e1) = mem.alloc[f64](a, p)
+        let (sc, e2) = mem.alloc[f64](a, n * p)
+        if e1 != ok || e2 != ok { ret nan }
+        let k = ct.pre_process_pca(a, z[4usize..4usize + n * p], n, p, z[0usize], sd, sc)
+        let id = usize(z[1usize])
+        if id == 0usize { ret f64(k) }
+        if id <= p { ret sd[id - 1usize] }
+        let j = id - p - 1usize
+        var s = 0.0f64
+        var q = 0usize
+        while q < n {
+            s += math.abs[f64](sc[j * n + q])
+            q += 1usize
+        }
+        ret s
     }
     if str.eq(c.name, "ts") {
         let (o, e) = mem.alloc[i64](a, 400usize)

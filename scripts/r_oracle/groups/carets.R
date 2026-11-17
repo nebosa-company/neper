@@ -77,4 +77,10 @@ for (rep in 1:25) {
   d <- data.frame(y = y, X[, -1, drop = FALSE]); m <- lm(y ~ ., d); vi <- varImp(m)$Overall
   for (j in seq_along(vi)) add("vi", c(n, p, j - 1, X, y), vi[j], 1e-9)
 }
+# preProcess pca: "pca" (thresh, id, n, p, X[n p]) id 0 numComp, 1..p sdev, p + 1 + j sum of |scores| of component j (up to sign)
+for (rep in 1:25) {
+  n <- sample(15:60, 1); p <- sample(3:6, 1); B <- matrix(rnorm(p * p), p); X <- matrix(rnorm(n * p), n, p) %*% B; th <- sample(c(0.8, 0.9, 0.95, 0.99), 1)
+  d <- as.data.frame(X); pr <- preProcess(d, method = "pca", thresh = th); sc <- as.matrix(predict(pr, d)); k <- ncol(sc); sdv <- prcomp(d, scale. = TRUE)$sdev
+  add("pca", c(th, 0, n, p, X), k, 1e-12); for (j in 1:p) add("pca", c(th, j, n, p, X), sdv[j], 1e-9); for (j in 1:k) add("pca", c(th, p + j, n, p, X), sum(abs(sc[, j])), 1e-8)
+}
 emit("carets", "caret", list(cases))

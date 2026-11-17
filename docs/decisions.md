@@ -47806,3 +47806,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6834 — caret: varImp for lm
 
 **Decision.** `carets.var_imp_lm` is `varImp(lm)` (unscaled): the absolute t value of each coefficient but the intercept, from `decomp.lm_fit` for the coefficients and residual sum of squares and the inverse Cholesky factor of X'X for the standard errors (sigma squared over n - p). Equal to caret on 25 designs of 1 to 5 predictors (oracle_carets). `varImp` rescaling to 0-100 and the glm, tree and forest methods are not here. Linux pending.
+
+## D6835 — caret: preProcess pca
+
+**Decision.** `carets.pre_process_pca` is `preProcess(method = "pca", thresh)` then `predict`: the columns standardised, the eigen decomposition of their correlation matrix (`ica.eigen_sym`, values descending), the component count the first whose cumulative variance share reaches thresh but never fewer than two (all components when none reaches it), and the scores the standardised data times the leading eigenvectors. Eigenvector signs are arbitrary in LAPACK, so the oracle compares the count, every standard deviation (to 1e-9) and the sum of absolute scores of each component (to 1e-8), not the signed scores. Equal to caret on 25 matrices (oracle_carets). Not here: pcaComp, knnImpute, ica. Linux pending.
