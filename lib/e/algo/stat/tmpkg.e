@@ -72,7 +72,7 @@ fn bind_tf_idf(a: *mem.Arena, m: []const f64, nd: usize, nt: usize, out: []f64) 
 }
 
 // weightSMART: tf 0 n, 1 l, 2 a, 3 b, 4 L; idf 0 n, 1 t, 2 p; norm 0 n, 1 c. The norm is taken from the tf weights before the idf is applied, and idf p is one scalar for all terms (max(0, log2((D - df) / df)) over every term), as in tm.
-fn smart(a: *mem.Arena, m: []const f64, nd: usize, nt: usize, tfk: usize, idfk: usize, normk: usize, out: []f64) -> err {
+fn smart(a: *mem.Arena, m: []const f64, nd: usize, nt: usize, tfk: usize, idfk: usize, normk: usize, p1: f64, p2: f64, lens: []const f64, out: []f64) -> err {
     let (df, e1) = mem.alloc[f64](a, nt)
     let (w, e2) = mem.alloc[f64](a, nd * nt)
     if e1 != ok { ret e1 }
@@ -119,7 +119,7 @@ fn smart(a: *mem.Arena, m: []const f64, nd: usize, nt: usize, tfk: usize, idfk: 
     i = 0usize
     while i < nd {
         var nrm = 1.0f64
-        if normk == 1usize {
+        if normk == 1usize || normk == 2usize {
             var s = 0.0f64
             j = 0usize
             while j < nt {
@@ -127,6 +127,18 @@ fn smart(a: *mem.Arena, m: []const f64, nd: usize, nt: usize, tfk: usize, idfk: 
                 j += 1usize
             }
             nrm = math.sqrt[f64](s)
+            // "u": the pivoted unique normalisation slope * ||w|| + (1 - slope) pivot
+            if normk == 2usize { nrm = p2 * nrm + (1.0f64 - p2) * p1 }
+        }
+        if normk == 3usize {
+            // "b": the character length of the document to the power alpha
+            var cl = 0.0f64
+            j = 0usize
+            while j < nt {
+                cl += lens[j] * m[i * nt + j]
+                j += 1usize
+            }
+            nrm = math.pow[f64](cl, p1)
         }
         j = 0usize
         while j < nt {
@@ -246,7 +258,7 @@ fn find_assocs(a: *mem.Arena, m: []const f64, nd: usize, nt: usize, term: usize,
             var r = sxy / math.sqrt[f64](st * sj)
             if r != r { r = 0.0f64 }
             cs[j] = math.floor[f64](r * 100.0f64 + 0.5f64) / 100.0f64
-            if r >= corlimit {
+            if cs[j] >= corlimit {
                 idx[cnt] = j
                 val[cnt] = cs[j]
                 cnt += 1usize

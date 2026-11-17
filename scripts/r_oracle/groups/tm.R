@@ -23,6 +23,16 @@ for (rep in 1:24) {
   tf <- sample(0:4, 1); idk <- sample(0:2, 1); nk <- sample(0:1, 1)
   w <- suppressWarnings(weightSMART(dtm, paste0(tfl[tf + 1], idl[idk + 1], nl[nk + 1])))
   add("smart", c(nd, nt, tf, idk, nk, as.vector(t(m))), ws(as.matrix(w)))
+  # SMART normalisations u (pivoted unique) and b (byte size): args (nd, nt, tf, idf, norm 2 u 3 b, pivot or alpha, slope, term lengths[nt], counts)
+  {
+    nm_ <- vapply(sample(2:9, nt, TRUE), function(k) paste(sample(letters, k, TRUE), collapse = ""), ""); nm_ <- make.unique(nm_); mq <- m; colnames(mq) <- nm_
+    dtq <- as.DocumentTermMatrix(as.simple_triplet_matrix(mq), weighting = weightTf); tf2 <- sample(0:4, 1); id2 <- sample(0:2, 1)
+    piv <- runif(1, 1, 3); slp <- runif(1, 0.1, 0.9); al <- runif(1, 0.5, 1.2); ln <- nchar(nm_)
+    wu <- suppressWarnings(weightSMART(dtq, paste0(tfl[tf2 + 1], idl[id2 + 1], "u"), control = list(pivot = piv, slope = slp)))
+    add("smartx", c(nd, nt, tf2, id2, 2, piv, slp, ln, as.vector(t(m))), ws(as.matrix(wu)))
+    wb <- suppressWarnings(weightSMART(dtq, paste0(tfl[tf2 + 1], idl[id2 + 1], "b"), control = list(alpha = al)))
+    add("smartx", c(nd, nt, tf2, id2, 3, al, 0, ln, as.vector(t(m))), ws(as.matrix(wb)))
+  }
   sp <- runif(1, 0.3, 0.9)
   keep <- as.numeric(seq_len(nt) %in% match(Terms(removeSparseTerms(dtm, sp)), Terms(dtm)))
   add("sparse", c(nd, nt, sp, 0, 0, as.vector(t(m))), sum(keep * seq_len(nt)))

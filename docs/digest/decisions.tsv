@@ -3719,4 +3719,5 @@ D6856	708	tsfeatures: unitroot_pp
 D6857	511	tsfeatures: hurst
 D6858	550	tsfeatures: arch_stat
 D6859	624	ismev: the closed-form helpers
-D6860	681	tm: findFreqTerms and findAssocs
+D6860	682	tm: findFreqTerms and findAssocs
+D6861	859	tm: the SMART u and b normalisations, and the rounding of findAssocs

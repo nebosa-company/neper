@@ -45,7 +45,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "tfidf_norm") { r = tm.tfidf(a, m, nd, nt, true, out) }
     if str.eq(c.name, "tfidf_raw") { r = tm.tfidf(a, m, nd, nt, false, out) }
     if str.eq(c.name, "tidy") { r = tm.bind_tf_idf(a, m, nd, nt, out) }
-    if str.eq(c.name, "smart") { r = tm.smart(a, m, nd, nt, usize(z[2usize]), usize(z[3usize]), usize(z[4usize]), out) }
+    if str.eq(c.name, "smart") { r = tm.smart(a, m, nd, nt, usize(z[2usize]), usize(z[3usize]), usize(z[4usize]), 0.0f64, 0.0f64, m, out) }
+    if str.eq(c.name, "smartx") {
+        // args (nd, nt, tf, idf, norm, pivot or alpha, slope, term lengths[nt], counts)
+        let lens = z[7usize..7usize + nt]
+        let mx = z[7usize + nt..7usize + nt + nd * nt]
+        r = tm.smart(a, mx, nd, nt, usize(z[2usize]), usize(z[3usize]), usize(z[4usize]), z[5usize], z[6usize], lens, out)
+    }
     if str.eq(c.name, "cosine") { tm.cosine(m, nd, nt, out) }
     if r != ok { ret nan }
     var s = 0.0f64
