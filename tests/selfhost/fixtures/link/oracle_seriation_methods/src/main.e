@@ -5,6 +5,7 @@
 
 use e.algo.rand.r as rng
 use e.algo.stat.seriationeig as se
+use e.algo.stat.seriationqap as sq
 use e.algo.stat.seriationsa as ss
 use e.algo.stat.seriationtsp as st
 use e.io
@@ -142,6 +143,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case, t: *Tally) -> f64 {
         if r != ok { ret nan }
         let eq = same(o, z, at, n)
         if eq { ret 1.0f64 }
+        ret 0.0f64
+    }
+    if code == 14usize {
+        var rg: rng.Rng = zero
+        rng.seed(&rg, i64(z[at + n]))
+        r = sq.qap_order(a, &rg, d, n, usize(z[at + n + 1usize]), usize(z[at + n + 2usize]), usize(z[at + n + 3usize]), o)
+        if r != ok { ret nan }
+        if same(o, z, at, n) { ret 1.0f64 }
         ret 0.0f64
     }
     if code >= 9usize && code <= 13usize {

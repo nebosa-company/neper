@@ -76,4 +76,20 @@ for (rep in 1:20) {
   cases[[length(cases) + 1]] <- case("q", c(nr, nc, rowm(X), ro, co), sum(Q * w2), rel = 1e-12, abs = 1e-12)
   v <- runif(n); cases[[length(cases) + 1]] <- case("v", c(n, v, o), sum(permute(v, ser_permutation_vector(o)) * (1:n)), rel = 1e-12, abs = 1e-12)
 }
+# QAP (set.seed(seed)): (14, n, D, order, seed, kind 1 LS 2 2SUM 3 BAR 4 Inertia, method 0 SA 1 RoTS, rep)
+qn <- c("QAP_LS", "QAP_2SUM", "QAP_BAR", "QAP_Inertia")
+for (rep in 1:80) {
+  n <- sample(4:16, 1); x <- matrix(runif(n * 3), n, 3); d <- dist(x)
+  kd <- (rep - 1) %% 4 + 1; me <- if (rep > 56) 1 else 0; rp <- if (rep %% 5 == 0) 3 else 1
+  seed <- sample(1:100000, 1); set.seed(seed)
+  ctl <- list(); if (me == 1) ctl$method <- "RoTS"; if (rp > 1) ctl$rep <- rp
+  o <- as.integer(get_order(seriate(d, qn[kd], control = ctl)))
+  cases[[length(cases) + 1]] <- mk(14, n, d, o, c(seed, kd, me, rp))
+}
+# TSP on dissimilarities with exact ties (integer-rounded points), default method: (8, n, D, order, seed, rep)
+for (rep in 1:60) {
+  n <- sample(5:25, 1); x <- matrix(runif(n * 2), n, 2); d <- dist(round(x * 5))
+  seed <- sample(1:100000, 1); set.seed(seed)
+  cases[[length(cases) + 1]] <- mk(8, n, d, as.integer(get_order(seriate(d, "TSP"))), c(seed, 1))
+}
 emit("seriation_methods", "seriation", list(cases))
