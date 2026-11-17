@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R seriation`; the layout is at the top of
 // scripts/r_oracle/groups/seriation.R.
 
+use e.algo.stat.hclust as hc
 use e.algo.stat.seriationcrit as sc
 use e.io
 use e.mem
@@ -12,6 +13,12 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "hc") {
+        let hn = usize(z[0usize])
+        let (tree, he) = hc.hclust(a, z[1usize..1usize + hn * hn], hn, usize(z[1usize + hn * hn]))
+        if he != ok { ret nan }
+        ret f64(tree.order[usize(z[2usize + hn * hn])])
+    }
     if str.eq(c.name, "mc") {
         let nr = usize(z[0usize])
         let nc = usize(z[1usize])

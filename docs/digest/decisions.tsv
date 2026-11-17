@@ -3608,4 +3608,5 @@ D6745	743	splines2: Bernstein integrals and third derivatives
 D6746	931	splines2: extrapolation of naturalSpline, nsk and cSpline beyond the boundary
 D6747	1545	splines2: nsk trim, df for the natural splines, fewer than two knots and periodic integrals
 D6748	1057	ashr: the EM fit
-D6749	1574	ashr: halfnormal mixtures and mode estimation
+D6749	1575	ashr: halfnormal mixtures and mode estimation
+D6750	829	seriation: the HC family of seriate

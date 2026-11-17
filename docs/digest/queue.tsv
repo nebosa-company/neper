@@ -86,7 +86,7 @@ L413	library	0	265	flexmix: finite mixture regression	Open (CRAN rank 568).
 L414	library	0	343	gbm: gradient boosting machines	Open (CRAN rank 561).
 L415	library	0	366	marginaleffects: predictions, slopes and comparisons	Open (CRAN ranks 541, 533, 577).
 L416	library	0.15	609	polspline: polynomial spline models	D6722: e.algo.stat.logspline evaluates fitted logspline models (dlogspline, plogspline, qlogspline with bounds, polspline grid and Simpson-table quantile), equal to polspline 1.1.25 to 1e-6 on 1032 va
-L432	library	0.3	654	seriation: ordering of objects	D6720: e.algo.stat.seriationcrit has the permutation criteria (path length, lazy path length, least squares, inertia, AR events and deviations, gradient raw and weighted, BAR, RGAR, ME, Moore and Neum
+L432	library	0.4	790	seriation: ordering of objects	D6720: e.algo.stat.seriationcrit has the permutation criteria (path length, lazy path length, least squares, inertia, AR events and deviations, gradient raw and weighted, BAR, RGAR, ME, Moore and Neum
 L433	library	0.55	660	vars: vector autoregression	Partial (D6436, D6437 forecasts and non-orthogonal irf, D6438 orthogonal irf, D6439 trend types, D6440 fevd equal vars).
 L434	library	0.1	735	qgraph: network estimation	Partial (D6646).
 L436	library	0.1	756	MatchIt: matching for causal inference	Partial (D6638).

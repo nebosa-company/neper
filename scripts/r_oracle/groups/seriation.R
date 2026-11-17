@@ -28,4 +28,12 @@ for (rep in 1:40) {
     cases[[length(cases) + 1]] <- case("mc", c(nr, nc, rowm(X), ro, co, code), as.numeric(v), rel = 1e-9, abs = 1e-10)
   }
 }
+# the HC family of seriate (the order of hclust): "hc" args (n, D row-major, hclust method code 3 complete 2 single 4 average 8 ward.D2, idx), value the order entry (1-based)
+for (rep in 1:40) {
+  n <- sample(5:25, 1); x <- matrix(round(runif(n * 3), 3), n, 3); d <- dist(x); Dm <- as.matrix(d)
+  for (mc in list(c("HC", 3), c("HC_single", 2), c("HC_average", 4), c("HC_ward", 8))) {
+    o <- as.integer(get_order(seriate(d, method = mc[1])))
+    for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("hc", c(n, rowm(Dm), as.numeric(mc[2]), i - 1), o[i], rel = 0, abs = 0)
+  }
+}
 emit("seriation", "seriation", list(cases))
