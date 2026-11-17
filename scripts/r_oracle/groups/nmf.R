@@ -141,4 +141,14 @@ for (rep in 1:20) {
   v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("snm", c(n, p, r, ver, sd, 0.5, as.vector(x), q - 1, be, et, wm, ic, ep), v[q], rel = if (q == 1) 0 else 1e-4, abs = if (q == 1) 10 else 1e-6)
 }
+# ls-nmf with a weight vector of length 1 or p (recycled down the columns as R does): trailing args after idx: beta 0, then the weights
+for (rep in 1:16) {
+  n <- sample(6:14, 1); p <- sample(5:10, 1); r <- sample(2:3, 1); sd <- sample(1:100000, 1)
+  wl <- if (rep %% 2 == 0) 1 else p; wv <- round(runif(wl, 0.5, 2), 3)
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = "ls-nmf", seed = sd, weight = wv)), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 6, sd, 0.5, as.vector(x), q - 1, 0, wv), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 300 else 1e-8)
+}
 emit("nmf", "NMF", list(cases))

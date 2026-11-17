@@ -16,7 +16,7 @@ use e.math
 use e.mem
 
 // v is n by p column-major, w n by r, h r by p; method 0 brunet (Kullback-Leibler), 1 lee (Frobenius); out[0] receives the iteration count
-fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, theta: f64, beta: f64, init: usize, stream: i64, w: []f64, h: []f64, out: []f64) -> err {
+fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, theta: f64, beta: f64, init: usize, stream: i64, wt: []const f64, w: []f64, h: []f64, out: []f64) -> err {
     var r: rng.Rng = zero
     rng.seed(&r, seed)
     var ly: lc.State = zero
@@ -112,7 +112,7 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
     if method == 7usize { okind = 3usize }
     if method == 2usize || method == 3usize || method == 6usize || method == 7usize {
         var c0 = 0.0f64
-        if okind == 3usize { c0 = beta * csum(h) } else { c0 = nmf_objective(v, w, h, n, p, rk, okind, wh) }
+        if okind == 3usize { c0 = beta * csum(h) } else { c0 = nmf_objective(v, w, h, n, p, rk, okind, wh, wt) }
         sn = 1usize
         smax = c0
         smin = c0
@@ -290,7 +290,22 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
             }
         } else if method == 6usize {
             // ls-nmf with unit weights: the package's R-level Euclidean updates, each term clamped at 1e-9, no rescaling, H from W'(WH) and W from (WH) H' with WH refreshed in between
+            let (wx, ew1) = mem.alloc[f64](a, n * p)
+            let (whw, ew2) = mem.alloc[f64](a, n * p)
+            if ew1 != ok || ew2 != ok { ret mem.Full }
+            q = 0usize
+            while q < n * p {
+                wx[q] = v[q]
+                if wt.len > 0usize { wx[q] = v[q] * wt[q % wt.len] }
+                q += 1usize
+            }
             matmul(w, h, wh, n, rk, p)
+            q = 0usize
+            while q < n * p {
+                whw[q] = wh[q]
+                if wt.len > 0usize { whw[q] = wh[q] * wt[q % wt.len] }
+                q += 1usize
+            }
             var j = 0usize
             while j < p {
                 var k = 0usize
@@ -299,8 +314,8 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
                     var den = 0.0f64
                     var i = 0usize
                     while i < n {
-                        num += w[k * n + i] * v[j * n + i]
-                        den += w[k * n + i] * wh[j * n + i]
+                        num += w[k * n + i] * wx[j * n + i]
+                        den += w[k * n + i] * whw[j * n + i]
                         i += 1usize
                     }
                     var tv = h[j * rk + k] * num
@@ -316,6 +331,12 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
                 q += 1usize
             }
             matmul(w, h, wh, n, rk, p)
+            q = 0usize
+            while q < n * p {
+                whw[q] = wh[q]
+                if wt.len > 0usize { whw[q] = wh[q] * wt[q % wt.len] }
+                q += 1usize
+            }
             var k2 = 0usize
             while k2 < rk {
                 var i = 0usize
@@ -324,8 +345,8 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
                     var den = 0.0f64
                     j = 0usize
                     while j < p {
-                        num += v[j * n + i] * h[j * rk + k2]
-                        den += wh[j * n + i] * h[j * rk + k2]
+                        num += wx[j * n + i] * h[j * rk + k2]
+                        den += whw[j * n + i] * h[j * rk + k2]
                         j += 1usize
                     }
                     var tv = w[k2 * n + i] * num
@@ -600,7 +621,7 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
         if method == 2usize || method == 3usize || method == 6usize || method == 7usize {
             if sn != 0usize || it % 50usize == 0usize {
                 var cv = 0.0f64
-                if okind == 3usize { cv = beta * csum(h) } else { cv = nmf_objective(v, w, h, n, p, rk, okind, wh) }
+                if okind == 3usize { cv = beta * csum(h) } else { cv = nmf_objective(v, w, h, n, p, rk, okind, wh, wt) }
                 if cv != cv {
                     done = true
                 } else {
@@ -643,7 +664,7 @@ fn matmul(a: []const f64, b: []const f64, c: []f64, n: usize, k: usize, p: usize
 }
 
 // the fit measure of nmf as the package's C code sums it (rows then columns, both descending): kind 0 the Kullback-Leibler divergence (a zero entry of v adds the fit), kind 1 half the squared Frobenius distance
-fn nmf_objective(v: []const f64, w: []const f64, h: []const f64, n: usize, p: usize, rk: usize, kind: usize, wh: []f64) -> f64 {
+fn nmf_objective(v: []const f64, w: []const f64, h: []const f64, n: usize, p: usize, rk: usize, kind: usize, wh: []f64, wt: []const f64) -> f64 {
     matmul(w, h, wh, n, rk, p)
     if kind == 2usize {
         // sum(((x - fit) * weight)^2) / 2 as R evaluates it: a long-double running sum over the entries in storage order, stood in for by a compensated sum
@@ -651,7 +672,8 @@ fn nmf_objective(v: []const f64, w: []const f64, h: []const f64, n: usize, p: us
         var c2 = 0.0f64
         var q = 0usize
         while q < n * p {
-            let d = v[q] - wh[q]
+            var d = v[q] - wh[q]
+            if wt.len > 0usize { d = d * wt[q % wt.len] }
             let term = d * d
             let tt = s2 + term
             if math.abs[f64](s2) >= math.abs[f64](term) { c2 += (s2 - tt) + term } else { c2 += (term - tt) + s2 }
@@ -821,9 +843,9 @@ fn nmf_runs(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method
     var k = 0usize
     while k < nrun {
         var o1: [4]f64 = zero
-        let fe = nmf_fit(a, v, n, p, rk, method, seed, maxiter, 0.5f64, 0.0f64, 0usize, i64(k), w1, h1, o1[0usize..4usize])
+        let fe = nmf_fit(a, v, n, p, rk, method, seed, maxiter, 0.5f64, 0.0f64, 0usize, i64(k), v[0usize..0usize], w1, h1, o1[0usize..4usize])
         if fe != ok { ret fe }
-        let rs = nmf_objective(v, w1, h1, n, p, rk, kind, wh)
+        let rs = nmf_objective(v, w1, h1, n, p, rk, kind, wh, v[0usize..0usize])
         var jj = 0usize
         while jj < p {
             var bi = 0usize
