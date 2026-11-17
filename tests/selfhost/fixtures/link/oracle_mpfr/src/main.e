@@ -90,8 +90,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (t, e) = mp.const_log2(a, prec)
         r = t
         er = e
-    } else {
+    } else if op == 25usize {
         let (t, e) = mp.const_catalan(a, prec)
+        r = t
+        er = e
+    } else {
+        let (t, e) = mp.zeta(a, x, prec)
         r = t
         er = e
     }

@@ -1,6 +1,6 @@
 // Rmpfr / MPFR style binary floating point of a chosen precision on the big integers of e.algo.bignum: a value is m * 2^e with m a signed integer of at most `prec` bits, and every operation is the exact result rounded to nearest, ties to even.
 //
-// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, lgamma, gamma, erf, pi, log 2 and Catalan constants, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
+// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, lgamma, gamma, erf, zeta (real s > 1), pi, log 2 and Catalan constants, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
 //
 // Not here: zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
 
@@ -937,6 +937,95 @@ fn erf(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
     let (q, e10) = div(a, sum, sp, w)
     if e10 != ok { ret (zero, e10) }
     let r = scale2(q, 1i64)
+    let (rt_, re_) = round_to(a, r.m, r.e, prec)
+    ret (rt_, re_)
+}
+
+fn int_mp(a: *mem.Arena, v: bn.Int, w: usize) -> (Mp, err) {
+    let (rt_, re_) = round_to(a, v, 0i64, w)
+    ret (rt_, re_)
+}
+
+// zeta(s) for real s > 1 by Borwein's algorithm: n = 0.4 w + 4 terms, d_k = sum_{i <= k} t_i with t_0 = 1 and t_{i+1} = t_i 4 (n + i)(n - i) / ((2i + 1)(2i + 2)) exact integers,
+// zeta = -1 / (d_n (1 - 2^(1 - s))) sum_{k < n} (-1)^k (d_k - d_n) (k + 1)^(-s)
+fn zeta(a: *mem.Arena, s: Mp, prec: usize) -> (Mp, err) {
+    let w = prec + 96usize
+    let n = (w * 4usize) / 10usize + 4usize
+    let (d, e0) = mem.alloc[bn.Int](a, n + 1usize)
+    if e0 != ok { ret (zero, e0) }
+    let (t0, e1) = bn.int_from_i64(a, 1i64)
+    if e1 != ok { ret (zero, e1) }
+    var t = t0
+    var acc = t0
+    d[0usize] = acc
+    var i = 0usize
+    while i < n {
+        let (f, e2) = bn.int_from_i64(a, 4i64 * (i64(n) + i64(i)) * (i64(n) - i64(i)))
+        let (g, e3) = bn.int_from_i64(a, (2i64 * i64(i) + 1i64) * (2i64 * i64(i) + 2i64))
+        if e2 != ok || e3 != ok { ret (zero, mem.Full) }
+        let (tf, e4) = bn.int_mul(a, t, f)
+        if e4 != ok { ret (zero, e4) }
+        let (tq, tr, e5) = bn.int_divmod(a, tf, g)
+        if e5 != ok { ret (zero, e5) }
+        t = tq
+        let (ac2, e6) = bn.int_add(a, acc, t)
+        if e6 != ok { ret (zero, e6) }
+        acc = ac2
+        d[i + 1usize] = acc
+        i += 1usize
+    }
+    let dn = d[n]
+    let (one, e7) = from_parts(a, 1i64, 0i64, w)
+    let (l2, e8) = ln2(a, w + 32usize)
+    if e7 != ok || e8 != ok { ret (zero, mem.Full) }
+    let (oms, e9) = sub(a, one, s, w)
+    if e9 != ok { ret (zero, e9) }
+    let (lt, e10) = mul(a, oms, l2, w)
+    if e10 != ok { ret (zero, e10) }
+    let (p2, e11) = exp(a, lt, w)
+    if e11 != ok { ret (zero, e11) }
+    let (den1, e12) = sub(a, one, p2, w)
+    if e12 != ok { ret (zero, e12) }
+    var sum = scale2(one, 0i64 - 4000i64)
+    sum = Mp{ m: bn.int_zero(a), e: 0i64 }
+    var k = 0usize
+    while k < n {
+        let (diff, e13) = bn.int_sub(a, d[k], dn)
+        if e13 != ok { ret (zero, e13) }
+        let (dm, e14) = int_mp(a, diff, w + 64usize)
+        if e14 != ok { ret (zero, e14) }
+        let (kp, e15) = from_parts(a, i64(k) + 1i64, 0i64, w)
+        if e15 != ok { ret (zero, e15) }
+        let (lk, e16) = log(a, kp, w)
+        if e16 != ok { ret (zero, e16) }
+        let (sl, e17) = mul(a, s, lk, w)
+        if e17 != ok { ret (zero, e17) }
+        let (pw, e18) = exp(a, neg(a, sl), w)
+        if e18 != ok { ret (zero, e18) }
+        let (term, e19) = mul(a, dm, pw, w + 64usize)
+        if e19 != ok { ret (zero, e19) }
+        var s2 = sum
+        var e20 = ok
+        if k % 2usize == 0usize {
+            let (sa, ea) = add(a, sum, term, w + 64usize)
+            s2 = sa
+            e20 = ea
+        } else {
+            let (sa, ea) = sub(a, sum, term, w + 64usize)
+            s2 = sa
+            e20 = ea
+        }
+        if e20 != ok { ret (zero, e20) }
+        sum = s2
+        k += 1usize
+    }
+    let (dnm, e21) = int_mp(a, dn, w + 64usize)
+    if e21 != ok { ret (zero, e21) }
+    let (dd, e22) = mul(a, dnm, den1, w + 64usize)
+    if e22 != ok { ret (zero, e22) }
+    let (q, e23) = div(a, sum, dd, w)
+    if e23 != ok { ret (zero, e23) }
+    let r = neg(a, q)
     let (rt_, re_) = round_to(a, r.m, r.e, prec)
     ret (rt_, re_)
 }

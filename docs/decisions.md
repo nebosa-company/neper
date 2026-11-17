@@ -48222,3 +48222,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6938 — Rmpfr: erf, log 2 and Catalan's constant
 
 **Decision.** `mpfr.erf` sums 2 / sqrt(pi) sum (-1)^n x^(2n + 1) / (n! (2n + 1)) with guard bits for the cancellation (1.45 x^2 bits plus the leading zeros of x); `const_log2` is the ln 2 series of D6933 rounded to the precision; `const_catalan` is pi / 8 log(2 + sqrt 3) + 3 / 8 sum 1 / ((2n + 1)^2 C(2n, n)) with the central binomial reciprocal kept as a running product. Equal to Rmpfr through the pair-of-doubles comparison on 60 random cases (erf for |x| below 6, the two constants; precisions 53 to 200) (oracle_mpfr, 1682 cases in all, about 36 s). Not here: zeta, Bessel, Euler's constant, erfc for large x without cancellation guard. Linux pending.
+
+## D6939 — Rmpfr: zeta
+
+**Decision.** `mpfr.zeta` (real s > 1) is Borwein's algorithm: with n = 0.4 w + 4 terms, d_k the partial sums of the exact integers t_0 = 1, t_{i+1} = t_i 4 (n + i)(n - i) / ((2i + 1)(2i + 2)), zeta(s) = -1 / (d_n (1 - 2^(1 - s))) sum over k below n of (-1)^k (d_k - d_n) (k + 1)^(-s), the powers by exp(-s log(k + 1)). Equal to Rmpfr through the pair-of-doubles comparison on the real arguments of the oracle in (1.05, 12) at 53 and 80 bits (oracle_mpfr, 1702 cases in all, about 70 s: the fixture is now the slowest of the oracle group, so its zeta and gamma cases are kept few). Not here: arguments at or below 1, complex arguments, Bessel functions, Euler's constant. Linux pending.

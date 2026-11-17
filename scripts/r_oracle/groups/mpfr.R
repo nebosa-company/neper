@@ -81,4 +81,12 @@ for (rep in 1:60) {
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
 }
+# zeta (26) for real s in (1.05, 12)
+for (rep in 1:14) {
+  prec <- sample(c(53, 80), 1); m1 <- sample(1:(2^50), 1); e1 <- sample(-49:-46, 1)
+  x <- mpfr(m1, prec) * 2^e1; xv <- asNumeric(x); if (xv < 1.05 || xv > 12) next
+  z <- zeta(x); hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(26, prec, m1, e1, 1, 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))
