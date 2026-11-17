@@ -82,6 +82,11 @@ for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; 
 for (rep in 1:8) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); n <- sample(3:6, 1); sd <- sample(1:100000, 1)
   add("dmsc", mvpack(d, 1, 0, 0, 0, p), dmsc(p$x, p$xi, p$Om, p$al), rel = 1e-9)
   set.seed(sd); r <- as.numeric(t(matrix(rmsc(n, p$xi, p$Om, p$al), n, d))); for (k in seq_len(n * d)) add("rmsc", mvpack(d, 1, n, sd, k - 1, p), r[k], rel = 1e-9) }
+# multivariate skew-t cp2dp: "mvcp" kind 3 (3, d, gamma2M, index, mean(d), var.cov(d*d), gamma1(d)); the output is (xi, Omega, alpha, nu)
+for (rep in 1:10) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); nu <- c(6, 9, 15)[sample(3, 1)]
+  cp <- dp2cp(list(xi = p$xi, Omega = p$Om, alpha = p$al, nu = nu), "ST"); dp <- tryCatch(cp2dp(cp, "ST"), error = function(e) NULL, warning = function(w) NULL); if (is.null(dp)) next
+  flat <- c(dp$xi, as.numeric(t(dp$Omega)), dp$alpha, dp$nu)
+  for (k in seq_along(flat)) add("mvcp", c(3, d, cp$gamma2M, k - 1, cp$mean, as.numeric(t(cp$var.cov)), cp$gamma1), flat[k], rel = 1e-4, abs = 1e-6) }
 # sn.cumulants beyond the fourth ("cumk": xi, omega, alpha, 0, k), mst.mardia ("mardia": delta.sq, nu, d, which, 0), pst methods 1 to 5 ("pstm1".."pstm5": xi, omega, alpha, nu, x)
 for (rep in 1:10) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, 0.5, 2, 6)[sample(4, 1)]; cm <- sn.cumulants(xi, om, al, n = 10)
   for (k in 1:10) add("cumk", c(xi, om, al, 0, k), unname(cm[k]), rel = 1e-9) }
@@ -92,7 +97,8 @@ for (rep in 1:16) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; 
     zs <- if (m == 5) c(-60, -35, 28, 70) else c(-4, -0.7, 0.4, 2.2, 6)
     for (z in zs) { x <- xi + om * z; v <- tryCatch(pst(x, xi, om, al, nu, method = m), error = function(e) NA); add(paste0("pstm", m), c(xi, om, al, nu, x), v, rel = 1e-5, abs = 1e-9) } } }
 # pmsn and pmst for d >= 2 (mnormt's own error is about 1e-6, so these are compared at 1e-4)
-for (rep in 1:20) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); tau <- c(0, 0.6, -1)[sample(3, 1)]; nu <- c(3, 6, 4.5, 7.5)[sample(4, 1)]
+for (rep in 1:24) { d <- c(2, 3, 4)[rep %% 3 + 1]; p <- mvcase(d); tau <- c(0, 0.6, -1)[sample(3, 1)]; nu <- c(3, 6, 4.5, 7.5)[sample(4, 1)]
+  if (d < 4) add("pmsc", mvpack(d, 1, 0, 0, 0, p), pmsc(p$x, p$xi, p$Om, p$al), rel = 1e-3, abs = 3e-6)
   add("pmsn", mvpack(d, tau, 0, 0, 0, p), pmsn(p$x, p$xi, p$Om, p$al, tau), rel = 1e-4, abs = 3e-6)
-  add("pmst", mvpack(d, nu, 0, 0, 0, p), suppressWarnings(pmst(p$x, p$xi, p$Om, p$al, nu)), rel = 1e-3, abs = 3e-6) }
+  if (d < 4) add("pmst", mvpack(d, nu, 0, 0, 0, p), suppressWarnings(pmst(p$x, p$xi, p$Om, p$al, nu)), rel = 1e-3, abs = 3e-6) }
 emit("sn", "sn", list(cases))

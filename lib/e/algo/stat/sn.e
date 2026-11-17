@@ -640,15 +640,22 @@ fn qpen_a2(a2: f64, nu: f64) -> f64 {
     ret c1 * math.log[f64](1.0f64 + c2 * a2)
 }
 
-type FitCtx = struct { y: []const f64, x: []const f64, w: []const f64, n: usize, p: usize, st: bool, pen: bool }
+type FitCtx = struct { y: []const f64, x: []const f64, w: []const f64, n: usize, p: usize, st: bool, pen: bool, symm: bool, fnu: f64 }
 
 // minus the (penalised) log-likelihood at th = (beta (p), log omega, alpha [, log nu])
 fn fit_obj(c: *FitCtx, th: []const f64) -> f64 {
     let p = c.p
     let omega = math.exp[f64](th[p])
-    let alpha = th[p + 1usize]
+    var alpha = 0.0f64
+    var at = p + 1usize
+    if !c.symm {
+        alpha = th[p + 1usize]
+        at = p + 2usize
+    }
     var nu = 1.0f64 / 0.0f64
-    if c.st { nu = math.exp[f64](th[p + 2usize]) }
+    if c.st {
+        if c.fnu > 0.0f64 { nu = c.fnu } else { nu = math.exp[f64](th[at]) }
+    }
     var ll = 0.0f64
     var i = 0usize
     while i < c.n {
@@ -668,7 +675,7 @@ fn fit_obj(c: *FitCtx, th: []const f64) -> f64 {
         ll += c.w[i] * l1
         i += 1usize
     }
-    if c.pen { ll -= qpenalty(alpha, nu) }
+    if c.pen && !c.symm { ll -= qpenalty(alpha, nu) }
     ret 0.0f64 - ll
 }
 
@@ -848,8 +855,15 @@ fn fit_newton[Ctx: type](a: *mem.Arena, c: *Ctx, f: fn(*Ctx, []const f64) -> f64
 // selm(y ~ x, family SN or ST) by method MLE or MPLE (the Qpenalty penalty), one response; x is n x p row-major with a leading column of ones.
 // out receives (beta (p), omega, alpha [, nu]); the return value is the (penalised) log-likelihood at the maximum
 fn selm_fit(a: *mem.Arena, y: []const f64, x: []const f64, w: []const f64, p: usize, st: bool, pen: bool, out: []f64) -> f64 {
+    let (se, e0) = mem.alloc[f64](a, p + 4usize)
+    if e0 != ok { ret 0.0f64 / 0.0f64 }
+    ret selm_fit2(a, y, x, w, p, st, pen, false, 0.0f64 - 1.0f64, out, se)
+}
+
+// the same with the family options: symm fixes alpha at 0, fnu > 0 fixes nu; out is the full dp (beta, omega, alpha, nu), se the standard errors of the free parameters in dp order
+fn selm_fit2(a: *mem.Arena, y: []const f64, x: []const f64, w: []const f64, p: usize, st: bool, pen: bool, symm: bool, fnu: f64, out: []f64, se: []f64) -> f64 {
     let n = y.len
-    var c = FitCtx { y: y, x: x, w: w, n: n, p: p, st: false, pen: pen }
+    var c = FitCtx { y: y, x: x, w: w, n: n, p: p, st: false, pen: pen && !symm, symm: false, fnu: 0.0f64 - 1.0f64 }
     var m = p + 2usize
     let (th, e1) = mem.alloc[f64](a, p + 3usize)
     let (xtx, e2) = mem.alloc[f64](a, p * p)
@@ -910,25 +924,129 @@ fn selm_fit(a: *mem.Arena, y: []const f64, x: []const f64, w: []const f64, p: us
     th[p] = math.log[f64](cp2dp_sn(xty[0usize], sd, g1, 1usize))
     th[p + 1usize] = cp2dp_sn(xty[0usize], sd, g1, 2usize)
     var ths = th[0usize..m]
-    let e = fit_newton(a, &c, fit_obj, ths)
-    if e != ok { ret 0.0f64 / 0.0f64 }
-    if st {
-        c.st = true
-        m = p + 3usize
-        th[p + 2usize] = math.log[f64](8.0f64)
-        ths = th[0usize..m]
-        let e5 = fit_newton(a, &c, fit_obj, ths)
-        if e5 != ok { ret 0.0f64 / 0.0f64 }
+    if symm {
+        th[p + 1usize] = 0.0f64
+        th[p] = math.log[f64](sd)
+    } else {
+        let e = fit_newton(a, &c, fit_obj, ths)
+        if e != ok { ret 0.0f64 / 0.0f64 }
+        if st {
+            c.st = true
+            m = p + 3usize
+            th[p + 2usize] = math.log[f64](8.0f64)
+            ths = th[0usize..m]
+            let e5 = fit_newton(a, &c, fit_obj, ths)
+            if e5 != ok { ret 0.0f64 / 0.0f64 }
+        }
     }
+    // the reduced vector: beta, log omega, [alpha], [log nu]
+    let (r, e6) = mem.alloc[f64](a, p + 3usize)
+    if e6 != ok { ret 0.0f64 / 0.0f64 }
     j = 0usize
-    while j < p {
-        out[j] = th[j]
+    while j < p + 1usize {
+        r[j] = th[j]
         j += 1usize
     }
-    out[p] = math.exp[f64](th[p])
-    out[p + 1usize] = th[p + 1usize]
-    if st { out[p + 2usize] = math.exp[f64](th[p + 2usize]) }
-    ret 0.0f64 - fit_obj(&c, ths)
+    var nr = p + 1usize
+    if !symm {
+        r[nr] = th[p + 1usize]
+        nr += 1usize
+    }
+    var nuat = 0usize
+    if st && fnu <= 0.0f64 {
+        if symm { r[nr] = math.log[f64](8.0f64) } else { r[nr] = th[p + 2usize] }
+        nuat = nr
+        nr += 1usize
+    }
+    c.st = st
+    c.symm = symm
+    c.fnu = fnu
+    if symm || (st && fnu > 0.0f64) {
+        let e7 = fit_newton(a, &c, fit_obj, r[0usize..nr])
+        if e7 != ok { ret 0.0f64 / 0.0f64 }
+    }
+    let rs = r[0usize..nr]
+    j = 0usize
+    while j < p {
+        out[j] = r[j]
+        j += 1usize
+    }
+    out[p] = math.exp[f64](r[p])
+    var at = p + 1usize
+    var alp = 0.0f64
+    if !symm {
+        alp = r[p + 1usize]
+        at = p + 2usize
+    }
+    out[p + 1usize] = alp
+    if st {
+        if fnu > 0.0f64 { out[p + 2usize] = fnu } else { out[p + 2usize] = math.exp[f64](r[nuat]) }
+    }
+    // standard errors: the inverse of the observed information in dp coordinates
+    let (dpv, e8) = mem.alloc[f64](a, nr)
+    let (hm, e9) = mem.alloc[f64](a, nr * nr)
+    let (g1v, e10) = mem.alloc[f64](a, nr)
+    let (g2v, e11) = mem.alloc[f64](a, nr)
+    let (bf, e12) = mem.alloc[f64](a, nr)
+    if e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok { ret 0.0f64 / 0.0f64 }
+    j = 0usize
+    while j < nr {
+        dpv[j] = r[j]
+        j += 1usize
+    }
+    dpv[p] = math.exp[f64](r[p])
+    if st && fnu <= 0.0f64 { dpv[nuat] = math.exp[f64](r[nuat]) }
+    var dc = DpCtx { c: &c, buf: bf, p: p, nuat: nuat, freenu: st && fnu <= 0.0f64 }
+    var q = 0usize
+    while q < nr {
+        let h = 1.0e-4f64 * (1.0f64 + math.abs[f64](dpv[q]))
+        let t0 = dpv[q]
+        dpv[q] = t0 + h
+        fit_grad(&dc, dp_obj, dpv, g1v)
+        dpv[q] = t0 - h
+        fit_grad(&dc, dp_obj, dpv, g2v)
+        dpv[q] = t0
+        var u = 0usize
+        while u < nr {
+            hm[u * nr + q] = (g1v[u] - g2v[u]) / (2.0f64 * h)
+            u += 1usize
+        }
+        q += 1usize
+    }
+    q = 0usize
+    while q < nr {
+        var u = 0usize
+        while u < nr {
+            bf[u] = 0.0f64
+            u += 1usize
+        }
+        bf[q] = 1.0f64
+        // solve H x = e_q on a symmetrised copy
+        let (hc, e13) = mem.alloc[f64](a, nr * nr)
+        if e13 != ok { ret 0.0f64 / 0.0f64 }
+        u = 0usize
+        while u < nr * nr {
+            hc[u] = (hm[u] + hm[(u % nr) * nr + u / nr]) / 2.0f64
+            u += 1usize
+        }
+        if !gauss_solve(hc, bf, nr) { se[q] = 0.0f64 / 0.0f64 } else { se[q] = math.sqrt[f64](bf[q]) }
+        q += 1usize
+    }
+    ret 0.0f64 - fit_obj(&c, rs)
+}
+
+type DpCtx = struct { c: *FitCtx, buf: []f64, p: usize, nuat: usize, freenu: bool }
+
+// fit_obj at a point given in dp coordinates (omega and nu on their own scale)
+fn dp_obj(d: *DpCtx, th: []const f64) -> f64 {
+    var i = 0usize
+    while i < th.len {
+        d.buf[i] = th[i]
+        i += 1usize
+    }
+    d.buf[d.p] = math.log[f64](th[d.p])
+    if d.freenu { d.buf[d.nuat] = math.log[f64](th[d.nuat]) }
+    ret fit_obj(d.c, d.buf)
 }
 
 // ---- selm for a matrix response (msn.mle, msn.mple, mst.mple) ----
@@ -1678,6 +1796,113 @@ fn pst_method(a: *mem.Arena, x: f64, xi: f64, omega: f64, alpha: f64, nu: f64, m
     buf[3usize] = alpha
     ret pmst_mv(a, buf[0usize..1usize], buf[1usize..2usize], buf[2usize..3usize], buf[3usize..4usize], nu)
 }
+
+// ---- cp2dp for the multivariate skew-t ----
+
+type McCtx = struct { sig: []const f64, g1: []const f64, g2: f64, d: usize, ob: []f64, l: []f64, w: []f64, dl: []f64, om: []f64, mz: []f64 }
+
+// mst.cp2dp's criterion at par = (log(nu - 4), alpha_1 .. alpha_d); returns the standardised pieces through the context
+fn mc_pieces(c: *McCtx, par: []const f64) -> f64 {
+    let d = c.d
+    let nu = math.exp[f64](par[0usize]) + 4.0f64
+    var i = 0usize
+    while i < d {
+        c.dl[i] = par[1usize + i] / math.sqrt[f64](1.0f64 + par[1usize + i] * par[1usize + i])
+        c.mz[i] = c.dl[i] * b_nu(nu)
+        c.om[i] = math.sqrt[f64](c.sig[i * d + i] / (nu / (nu - 2.0f64) - c.mz[i] * c.mz[i]))
+        i += 1usize
+    }
+    i = 0usize
+    while i < d {
+        var j = 0usize
+        while j < d {
+            c.ob[i * d + j] = (c.sig[i * d + j] / (c.om[i] * c.om[j]) + c.mz[i] * c.mz[j]) * (nu - 2.0f64) / nu
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if !chol_lower(c.l, c.ob, d) { ret 0.0f64 - 1.0f64 }
+    // delta' Obar^-1 delta = |L^-1 delta|^2
+    ret chol_quad(c.l, c.dl, d, c.w)
+}
+
+fn mc_obj(c: *McCtx, par: []const f64) -> f64 {
+    let d = c.d
+    let nu = math.exp[f64](par[0usize]) + 4.0f64
+    let dsq = mc_pieces(c, par)
+    if dsq < 0.0f64 || dsq >= 1.0f64 { ret 1.0e10f64 * (1.0f64 + math.abs[f64](dsq)) }
+    var l1 = 0.0f64
+    var i = 0usize
+    while i < d {
+        let r = st_gamma(c.dl[i], nu, 1usize) - c.g1[i]
+        l1 += r * r
+        i += 1usize
+    }
+    let r2 = mst_mardia(dsq, nu, f64(d), 1usize) - c.g2
+    ret l1 + r2 * r2
+}
+
+// cp2dp(list(mean, var.cov, gamma1, gamma2M), "ST") for the multivariate skew-t: out is xi (d), Omega (d x d), alpha (d), nu; false when no solution is found
+fn mv_cp2dp_st(a: *mem.Arena, mean: []const f64, sig: []const f64, g1: []const f64, g2: f64, out: []f64) -> bool {
+    let d = g1.len
+    let (par, e0) = mem.alloc[f64](a, d + 1usize)
+    let (ob, e1) = mem.alloc[f64](a, d * d)
+    let (l, e2) = mem.alloc[f64](a, d * d)
+    let (w, e3) = mem.alloc[f64](a, d)
+    let (dl, e4) = mem.alloc[f64](a, d)
+    let (om, e5) = mem.alloc[f64](a, d)
+    let (mz, e6) = mem.alloc[f64](a, d)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret false }
+    var numin = 1.0e300f64
+    var i = 0usize
+    while i < d {
+        if math.abs[f64](g1[i]) >= 4.0f64 { ret false }
+        let nj = cp2dp_st(0.0f64, 1.0f64, g1[i], g2, 3usize)
+        let aj = cp2dp_st(0.0f64, 1.0f64, g1[i], g2, 2usize)
+        if nj != nj || aj != aj { ret false }
+        if nj < numin { numin = nj }
+        par[1usize + i] = aj
+        i += 1usize
+    }
+    par[0usize] = math.log[f64](numin - 4.0f64)
+    var c = McCtx { sig: sig, g1: g1, g2: g2, d: d, ob: ob, l: l, w: w, dl: dl, om: om, mz: mz }
+    let e = fit_newton(a, &c, mc_obj, par)
+    if e != ok { ret false }
+    let nu = math.exp[f64](par[0usize]) + 4.0f64
+    let dsq = mc_pieces(&c, par)
+    if dsq < 0.0f64 || dsq >= 1.0f64 { ret false }
+    if mc_obj(&c, par) > 1.0e-10f64 { ret false }
+    // alpha = Obar^-1 delta / sqrt(1 - delta.sq): solve L L' x = delta
+    let (x, e7) = mem.alloc[f64](a, d)
+    if e7 != ok { ret false }
+    i = d
+    while i > 0usize {
+        i -= 1usize
+        var s = w[i]
+        var k = i + 1usize
+        while k < d {
+            s -= l[k * d + i] * x[k]
+            k += 1usize
+        }
+        x[i] = s / l[i * d + i]
+    }
+    i = 0usize
+    while i < d {
+        out[i] = mean[i] - om[i] * mz[i]
+        out[d + d * d + i] = x[i] / math.sqrt[f64](1.0f64 - dsq)
+        var j = 0usize
+        while j < d {
+            out[d + i * d + j] = om[i] * ob[i * d + j] * om[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    out[d + d * d + d] = nu
+    ret true
+}
+
+// pmsc is pmst at nu = 1
+fn pmsc(a: *mem.Arena, x: []const f64, xi: []const f64, omg: []const f64, alpha: []const f64) -> f64 { ret pmst_mv(a, x, xi, omg, alpha, 1.0f64) }
 
 // dsc: the skew-Cauchy density
 fn dsc(x: f64, xi: f64, omega: f64, alpha: f64) -> f64 {

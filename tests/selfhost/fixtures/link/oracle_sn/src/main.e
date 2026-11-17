@@ -35,7 +35,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (v1, e1) = mem.alloc[f64](a, d)
         let (mt, e2) = mem.alloc[f64](a, d * d)
         let (v2, e3) = mem.alloc[f64](a, d)
-        let (o, e4) = mem.alloc[f64](a, d + d * d + d)
+        let (o, e4) = mem.alloc[f64](a, d + d * d + d + 1usize)
         if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 / 0.0f64 }
         var i = 0usize
         while i < d {
@@ -48,7 +48,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             mt[i] = x[4usize + d + i]
             i += 1usize
         }
-        if kind == 2usize {
+        if kind == 3usize {
+            if !sn.mv_cp2dp_st(a, v1, mt, v2, x[2usize], o) { ret 0.0f64 / 0.0f64 }
+        } else if kind == 2usize {
             if !sn.mv_cp2dp_sn(a, v1, mt, v2, o) { ret 0.0f64 / 0.0f64 }
         } else {
             let e = sn.mv_dp2cp(a, kind == 1usize, v1, mt, v2, x[2usize], o)
@@ -60,7 +62,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "mardia") { ret sn.mst_mardia(x[0usize], x[1usize], x[2usize], usize(x[3usize])) }
     if str.eq(k, "zeta") { ret sn.zeta(usize(x[0usize]), x[1usize]) }
     if str.eq(k, "cumn") { ret sn.sn_cumulant(x[0usize], x[1usize], x[2usize], x[3usize], usize(x[4usize])) }
-    if str.eq(k, "dmsn") || str.eq(k, "dmst") || str.eq(k, "rmsn") || str.eq(k, "rmst") || str.eq(k, "dmsc") || str.eq(k, "rmsc") || str.eq(k, "pmsn") || str.eq(k, "pmst") {
+    if str.eq(k, "dmsn") || str.eq(k, "dmst") || str.eq(k, "rmsn") || str.eq(k, "rmst") || str.eq(k, "dmsc") || str.eq(k, "rmsc") || str.eq(k, "pmsn") || str.eq(k, "pmst") || str.eq(k, "pmsc") {
         let d = usize(x[0usize])
         let (xi, e1) = mem.alloc[f64](a, d)
         let (om, e2) = mem.alloc[f64](a, d * d)
@@ -81,6 +83,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         if str.eq(k, "dmsn") { ret sn.dmsn(a, pt, xi, om, al, x[1usize], false) }
         if str.eq(k, "dmst") { ret sn.dmst(a, pt, xi, om, al, x[1usize], false) }
+        if str.eq(k, "pmsc") { ret sn.pmsc(a, pt, xi, om, al) }
         if str.eq(k, "pmsn") { ret sn.pmsn_mv(a, pt, xi, om, al, x[1usize]) }
         if str.eq(k, "pmst") { ret sn.pmst_mv(a, pt, xi, om, al, x[1usize]) }
         if str.eq(k, "dmsc") { ret sn.dmsc(a, pt, xi, om, al, false) }
