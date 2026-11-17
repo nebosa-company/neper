@@ -14,6 +14,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(z[0usize])
     let p = usize(z[1usize])
     let rk = usize(z[2usize])
+    if str.eq(c.name, "snm") {
+        let (w3, g1) = mem.alloc[f64](a, n * rk)
+        let (h3, g2) = mem.alloc[f64](a, rk * p)
+        let (o3, g3) = mem.alloc[f64](a, 2usize)
+        if g1 != ok || g2 != ok || g3 != ok { ret nan }
+        let se = nf.snmf_fit(a, z[6usize..6usize + n * p], n, p, rk, usize(z[3usize]), i64(z[4usize]), 20000usize, 0.0f64 - 1.0f64, 0.01f64, 0.0f64, 10.0f64, 1.0e-4f64, w3, h3, o3)
+        if se != ok { ret nan }
+        let sx = usize(z[6usize + n * p])
+        if sx == 0usize { ret o3[0usize] }
+        if sx <= n * rk { ret w3[sx - 1usize] }
+        ret h3[sx - 1usize - n * rk]
+    }
     if str.eq(c.name, "nmr") || str.eq(c.name, "nmc") {
         let (w2, f1) = mem.alloc[f64](a, n * rk)
         let (h2, f2) = mem.alloc[f64](a, rk * p)

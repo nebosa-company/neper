@@ -1051,3 +1051,567 @@ fn nmf_silhouette_basis(a: *mem.Arena, w: []const f64, n: usize, rk: usize) -> f
     }
     ret silhouette_avg(a, d, cl, n)
 }
+
+// ---- snmf/r and snmf/l: sparse NMF of Kim and Park by alternating non-negativity-constrained least squares ----
+
+// solve s x = b for the k_p variables `vars` of the k by k matrix g (the normal equations restricted to the passive set), by LU with partial pivoting; x receives the solution at those positions
+fn nnls_solve_sub(a: *mem.Arena, g: []const f64, b: []const f64, vars: []const bool, k: usize, x: []f64) -> err {
+    var np = 0usize
+    var i = 0usize
+    while i < k {
+        if vars[i] { np += 1usize }
+        i += 1usize
+    }
+    let (m, e1) = mem.alloc[f64](a, np * np)
+    let (rhs, e2) = mem.alloc[f64](a, np)
+    let (ix, e3) = mem.alloc[usize](a, np)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var q = 0usize
+    i = 0usize
+    while i < k {
+        if vars[i] {
+            ix[q] = i
+            q += 1usize
+        }
+        i += 1usize
+    }
+    var r = 0usize
+    while r < np {
+        rhs[r] = b[ix[r]]
+        var c = 0usize
+        while c < np {
+            m[r * np + c] = g[ix[r] * k + ix[c]]
+            c += 1usize
+        }
+        r += 1usize
+    }
+    var col = 0usize
+    while col < np {
+        var piv = col
+        var rr = col + 1usize
+        while rr < np {
+            if math.abs[f64](m[rr * np + col]) > math.abs[f64](m[piv * np + col]) { piv = rr }
+            rr += 1usize
+        }
+        if piv != col {
+            var cc = 0usize
+            while cc < np {
+                let t = m[col * np + cc]
+                m[col * np + cc] = m[piv * np + cc]
+                m[piv * np + cc] = t
+                cc += 1usize
+            }
+            let tv = rhs[col]
+            rhs[col] = rhs[piv]
+            rhs[piv] = tv
+        }
+        rr = col + 1usize
+        while rr < np {
+            let f = m[rr * np + col] / m[col * np + col]
+            var cc = col
+            while cc < np {
+                m[rr * np + cc] -= f * m[col * np + cc]
+                cc += 1usize
+            }
+            rhs[rr] -= f * rhs[col]
+            rr += 1usize
+        }
+        col += 1usize
+    }
+    var bi = np
+    while bi > 0usize {
+        let ri = bi - 1usize
+        var s = rhs[ri]
+        var cc = ri + 1usize
+        while cc < np {
+            s -= m[ri * np + cc] * rhs[cc]
+            cc += 1usize
+        }
+        rhs[ri] = s / m[ri * np + ri]
+        bi -= 1usize
+    }
+    i = 0usize
+    while i < k {
+        x[i] = 0.0f64
+        i += 1usize
+    }
+    r = 0usize
+    while r < np {
+        x[ix[r]] = rhs[r]
+        r += 1usize
+    }
+    ret ok
+}
+
+// Van Benthem and Keenan's fast combinatorial NNLS for one right-hand side given the normal equations g = C'C (k by k) and b = C'a, as the package's .fcnnls does for each column (eps 0, plain solves)
+fn fcnnls_col(a: *mem.Arena, g: []const f64, b: []const f64, k: usize, kk: []f64) -> err {
+    let (pset, e1) = mem.alloc[bool](a, k)
+    let (dd, e2) = mem.alloc[f64](a, k)
+    let (wv, e3) = mem.alloc[f64](a, k)
+    let (all, e4) = mem.alloc[bool](a, k)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var i = 0usize
+    while i < k {
+        all[i] = true
+        i += 1usize
+    }
+    var se = nnls_solve_sub(a, g, b, all, k, kk)
+    if se != ok { ret se }
+    var npass = 0usize
+    i = 0usize
+    while i < k {
+        pset[i] = kk[i] > 0.0f64
+        if !pset[i] { kk[i] = 0.0f64 } else { npass += 1usize }
+        dd[i] = kk[i]
+        i += 1usize
+    }
+    if npass == k { ret ok }
+    var outer = 0usize
+    while outer < 100000usize {
+        outer += 1usize
+        se = nnls_solve_sub(a, g, b, pset, k, kk)
+        if se != ok { ret se }
+        var iter = 0usize
+        var neg = false
+        i = 0usize
+        while i < k {
+            if kk[i] < 0.0f64 { neg = true }
+            i += 1usize
+        }
+        while neg && iter < 3usize * k {
+            iter += 1usize
+            var amin = 1.0f64 / 0.0f64
+            var amix = k
+            i = 0usize
+            while i < k {
+                if pset[i] && kk[i] < 0.0f64 {
+                    let al = dd[i] / (dd[i] - kk[i])
+                    if al < amin {
+                        amin = al
+                        amix = i
+                    }
+                }
+                i += 1usize
+            }
+            if amix == k { neg = false } else {
+                i = 0usize
+                while i < k {
+                    dd[i] = dd[i] - amin * (dd[i] - kk[i])
+                    i += 1usize
+                }
+                dd[amix] = 0.0f64
+                pset[amix] = false
+                se = nnls_solve_sub(a, g, b, pset, k, kk)
+                if se != ok { ret se }
+                neg = false
+                i = 0usize
+                while i < k {
+                    if kk[i] < 0.0f64 { neg = true }
+                    i += 1usize
+                }
+            }
+        }
+        // optimality: the gradient on the active variables
+        var worst = 0.0f64
+        var wix = k
+        i = 0usize
+        while i < k {
+            var s = b[i]
+            var j = 0usize
+            while j < k {
+                s -= g[j * k + i] * kk[j]
+                j += 1usize
+            }
+            wv[i] = s
+            if !pset[i] && s > worst {
+                worst = s
+                wix = i
+            }
+            i += 1usize
+        }
+        if wix == k { ret ok }
+        pset[wix] = true
+        i = 0usize
+        while i < k {
+            dd[i] = kk[i]
+            i += 1usize
+        }
+    }
+    ret ok
+}
+
+// nmf(x, rank, method = "snmf/r" or "snmf/l", seed = <integer>): W (the transposed H for snmf/l) starts from the random seed, columns normalised, then alternating NNLS fits of H against [W; sqrt(beta)]
+// and of W against [H'; eta I] with the convergence tests every 5 iterations (the clusters of the rows of W and columns of H unchanged for `iconv` checks and the KKT residual under eps_conv of its first value).
+// version 0 is snmf/r, 1 snmf/l; a0 is m0 by n0 column-major; wout is m0 by k, hout k by n0; out[0] the iterations
+fn snmf_fit(a: *mem.Arena, a0: []const f64, m0: usize, n0: usize, k: usize, version: usize, seed: i64, maxiter: usize, eta_in: f64, beta: f64, wminchange: f64, iconv: f64, eps_conv: f64, wout: []f64, hout: []f64, out: []f64) -> err {
+    var m = m0
+    var n = n0
+    if version == 1usize {
+        m = n0
+        n = m0
+    }
+    let (av, e1) = mem.alloc[f64](a, m * n)
+    if e1 != ok { ret mem.Full }
+    var i = 0usize
+    var j = 0usize
+    while j < n {
+        i = 0usize
+        while i < m {
+            if version == 1usize { av[j * m + i] = a0[i * m0 + j] } else { av[j * m + i] = a0[j * m0 + i] }
+            i += 1usize
+        }
+        j += 1usize
+    }
+    var r: rng.Rng = zero
+    rng.seed(&r, seed)
+    var maxa = av[0usize]
+    var q = 1usize
+    while q < m * n {
+        if av[q] > maxa { maxa = av[q] }
+        q += 1usize
+    }
+    var eta = eta_in
+    if eta < 0.0f64 { eta = maxa }
+    let eta2 = eta * eta
+    let (w, e2) = mem.alloc[f64](a, m * k)
+    let (h, e3) = mem.alloc[f64](a, k * n)
+    let (gm, e4) = mem.alloc[f64](a, k * k)
+    let (bv, e5) = mem.alloc[f64](a, k)
+    let (xv, e6) = mem.alloc[f64](a, k)
+    let (idw, e8) = mem.alloc[usize](a, m)
+    let (idh, e9) = mem.alloc[usize](a, n)
+    let (iwo, e10) = mem.alloc[usize](a, m)
+    let (iho, e11) = mem.alloc[usize](a, n)
+    if e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret mem.Full }
+    // the random start: the W draws, or for snmf/l the coefficient matrix drawn after a basis matrix of the original shape
+    if version == 0usize {
+        q = 0usize
+        while q < m * k {
+            w[q] = rng.unif(&r)
+            q += 1usize
+        }
+    } else {
+        q = 0usize
+        while q < m0 * k {
+            let _u = rng.unif(&r)
+            q += 1usize
+        }
+        q = 0usize
+        while q < k * n0 {
+            let u = rng.unif(&r)
+            let ll = q % k
+            let ii = q / k
+            w[ll * m + ii] = u
+            q += 1usize
+        }
+    }
+    normalise_cols(w, m, k)
+    i = 0usize
+    while i < m {
+        iwo[i] = 0usize
+        i += 1usize
+    }
+    j = 0usize
+    while j < n {
+        iho[j] = 0usize
+        j += 1usize
+    }
+    var inc = 0.0f64
+    var erravg1 = 0.0f64
+    var have1 = false
+    var nrestart = 0usize
+    var it = 0usize
+    var done = false
+    while it < maxiter && !done {
+        it += 1usize
+        var kx = 0usize
+        while kx < k {
+            var l = 0usize
+            while l < k {
+                var s = beta
+                i = 0usize
+                while i < m {
+                    s += w[kx * m + i] * w[l * m + i]
+                    i += 1usize
+                }
+                gm[l * k + kx] = s
+                l += 1usize
+            }
+            kx += 1usize
+        }
+        j = 0usize
+        while j < n {
+            kx = 0usize
+            while kx < k {
+                var s = 0.0f64
+                i = 0usize
+                while i < m {
+                    s += w[kx * m + i] * av[j * m + i]
+                    i += 1usize
+                }
+                bv[kx] = s
+                kx += 1usize
+            }
+            let fe = fcnnls_col(a, gm, bv, k, xv)
+            if fe != ok { ret fe }
+            kx = 0usize
+            while kx < k {
+                h[j * k + kx] = xv[kx]
+                kx += 1usize
+            }
+            j += 1usize
+        }
+        var zero_row = false
+        kx = 0usize
+        while kx < k {
+            var s = 0.0f64
+            j = 0usize
+            while j < n {
+                s += h[j * k + kx]
+                j += 1usize
+            }
+            if s == 0.0f64 { zero_row = true }
+            kx += 1usize
+        }
+        if zero_row {
+            nrestart += 1usize
+            if nrestart >= 10usize { done = true } else {
+                i = 0usize
+                while i < m {
+                    iwo[i] = 0usize
+                    i += 1usize
+                }
+                j = 0usize
+                while j < n {
+                    iho[j] = 0usize
+                    j += 1usize
+                }
+                inc = 0.0f64
+                have1 = false
+                q = 0usize
+                while q < m * k {
+                    w[q] = rng.unif(&r)
+                    q += 1usize
+                }
+                normalise_cols(w, m, k)
+            }
+        } else {
+            kx = 0usize
+            while kx < k {
+                var l = 0usize
+                while l < k {
+                    var s = 0.0f64
+                    j = 0usize
+                    while j < n {
+                        s += h[j * k + kx] * h[j * k + l]
+                        j += 1usize
+                    }
+                    if kx == l { s += eta2 }
+                    gm[l * k + kx] = s
+                    l += 1usize
+                }
+                kx += 1usize
+            }
+            i = 0usize
+            while i < m {
+                kx = 0usize
+                while kx < k {
+                    var s = 0.0f64
+                    j = 0usize
+                    while j < n {
+                        s += h[j * k + kx] * av[j * m + i]
+                        j += 1usize
+                    }
+                    bv[kx] = s
+                    kx += 1usize
+                }
+                let fe = fcnnls_col(a, gm, bv, k, xv)
+                if fe != ok { ret fe }
+                kx = 0usize
+                while kx < k {
+                    w[kx * m + i] = xv[kx]
+                    kx += 1usize
+                }
+                i += 1usize
+            }
+            if it % 5usize == 0usize || !have1 {
+                i = 0usize
+                while i < m {
+                    var best = 0usize
+                    kx = 1usize
+                    while kx < k {
+                        if w[kx * m + i] > w[best * m + i] { best = kx }
+                        kx += 1usize
+                    }
+                    idw[i] = best
+                    i += 1usize
+                }
+                j = 0usize
+                while j < n {
+                    var best = 0usize
+                    kx = 1usize
+                    while kx < k {
+                        if h[j * k + kx] > h[j * k + best] { best = kx }
+                        kx += 1usize
+                    }
+                    idh[j] = best
+                    j += 1usize
+                }
+                var chw = 0.0f64
+                i = 0usize
+                while i < m {
+                    if idw[i] != iwo[i] { chw += 1.0f64 }
+                    i += 1usize
+                }
+                var chh = 0.0f64
+                j = 0usize
+                while j < n {
+                    if idh[j] != iho[j] { chh += 1.0f64 }
+                    j += 1usize
+                }
+                if chw <= wminchange && chh == 0.0f64 { inc += 1.0f64 } else { inc = 0.0f64 }
+                var conv = 0.0f64
+                var cnum = 0.0f64
+                kx = 0usize
+                while kx < k {
+                    j = 0usize
+                    while j < n {
+                        var s = 0.0f64
+                        var l = 0usize
+                        while l < k {
+                            var wtw = 0.0f64
+                            i = 0usize
+                            while i < m {
+                                wtw += w[kx * m + i] * w[l * m + i]
+                                i += 1usize
+                            }
+                            s += wtw * h[j * k + l]
+                            l += 1usize
+                        }
+                        var wta = 0.0f64
+                        i = 0usize
+                        while i < m {
+                            wta += w[kx * m + i] * av[j * m + i]
+                            i += 1usize
+                        }
+                        var hs = 0.0f64
+                        var l2 = 0usize
+                        while l2 < k {
+                            hs += h[j * k + l2]
+                            l2 += 1usize
+                        }
+                        var rv = s - wta + beta * hs
+                        let hv = h[j * k + kx]
+                        if hv < rv { rv = hv }
+                        conv += math.abs[f64](rv)
+                        if math.abs[f64](rv) > 0.0f64 { cnum += 1.0f64 }
+                        j += 1usize
+                    }
+                    kx += 1usize
+                }
+                i = 0usize
+                while i < m {
+                    kx = 0usize
+                    while kx < k {
+                        var s = 0.0f64
+                        var l = 0usize
+                        while l < k {
+                            var hh = 0.0f64
+                            j = 0usize
+                            while j < n {
+                                hh += h[j * k + l] * h[j * k + kx]
+                                j += 1usize
+                            }
+                            s += w[l * m + i] * hh
+                            l += 1usize
+                        }
+                        var ah = 0.0f64
+                        j = 0usize
+                        while j < n {
+                            ah += av[j * m + i] * h[j * k + kx]
+                            j += 1usize
+                        }
+                        var rv = s - ah + eta2 * w[kx * m + i]
+                        let wv2 = w[kx * m + i]
+                        if wv2 < rv { rv = wv2 }
+                        conv += math.abs[f64](rv)
+                        if math.abs[f64](rv) > 0.0f64 { cnum += 1.0f64 }
+                        kx += 1usize
+                    }
+                    i += 1usize
+                }
+                let erravg = conv / cnum
+                if !have1 {
+                    erravg1 = erravg
+                    have1 = true
+                }
+                if inc >= iconv && erravg <= eps_conv * erravg1 { done = true }
+                if !done {
+                    i = 0usize
+                    while i < m {
+                        iwo[i] = idw[i]
+                        i += 1usize
+                    }
+                    j = 0usize
+                    while j < n {
+                        iho[j] = idh[j]
+                        j += 1usize
+                    }
+                }
+            }
+        }
+    }
+    // the factors in the original orientation: snmf/l has basis t(H) (m0 by k) and coefficients t(W) (k by n0)
+    if version == 0usize {
+        q = 0usize
+        while q < m * k {
+            wout[q] = w[q]
+            q += 1usize
+        }
+        q = 0usize
+        while q < k * n {
+            hout[q] = h[q]
+            q += 1usize
+        }
+    } else {
+        var c2 = 0usize
+        while c2 < k {
+            i = 0usize
+            while i < m0 {
+                wout[c2 * m0 + i] = h[i * k + c2]
+                i += 1usize
+            }
+            c2 += 1usize
+        }
+        j = 0usize
+        while j < n0 {
+            c2 = 0usize
+            while c2 < k {
+                hout[j * k + c2] = w[c2 * m + j]
+                c2 += 1usize
+            }
+            j += 1usize
+        }
+    }
+    out[0usize] = f64(it)
+    ret ok
+}
+
+fn normalise_cols(w: []f64, m: usize, k: usize) {
+    var c = 0usize
+    while c < k {
+        var s = 0.0f64
+        var i = 0usize
+        while i < m {
+            s += w[c * m + i] * w[c * m + i]
+            i += 1usize
+        }
+        s = math.sqrt[f64](s)
+        i = 0usize
+        while i < m {
+            w[c * m + i] = w[c * m + i] / s
+            i += 1usize
+        }
+        c += 1usize
+    }
+}

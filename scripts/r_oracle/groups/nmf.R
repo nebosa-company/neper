@@ -103,4 +103,13 @@ for (rep in 1:10) {
     cases[[length(cases) + 1]] <- case("nmc", c(n, p, r, me, sd, nr, as.vector(x), p * p + 8), m$evar, rel = 1e-8, abs = 1e-10)
   }
 }
+# snmf/r (version 0) and snmf/l (version 1) with the defaults eta = -1, beta = 0.01: args (n, p, r, version, seed, 0.5, x, idx), idx 0 the iterations
+for (rep in 1:20) {
+  n <- sample(8:16, 1); p <- sample(6:12, 1); r <- sample(2:3, 1); ver <- rep %% 2; sd <- sample(1:100000, 1)
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = if (ver == 0) "snmf/r" else "snmf/l", seed = sd)), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("snm", c(n, p, r, ver, sd, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
+}
 emit("nmf", "NMF", list(cases))
