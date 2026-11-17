@@ -50,6 +50,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if e != ok { os.exit(6) }
         ret out[j]
     }
+    if str.eq(nm, "holt") {
+        let (ha, hb) = tf.holt_parameters(a, s)
+        if j == 0usize { ret ha }
+        ret hb
+    }
     if str.eq(nm, "entropy") { ret tf.entropy(a, s) }
     if str.eq(nm, "pp") { ret tf.unitroot_pp(a, s) }
     if str.eq(nm, "hurst") { ret tf.hurst(a, s) }

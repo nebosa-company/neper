@@ -12,6 +12,7 @@ use e.mem
 use e.algo.stat.fracdiff_fit as fdf
 use e.algo.linalg.decomp as decomp
 use e.algo.stat.stlpkg as stlp
+use e.algo.stat.rnm as rnm
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
@@ -633,6 +634,135 @@ fn histogram_mode(a: *mem.Arena, x: []const f64, num_bins: usize) -> f64 {
         b += 1usize
     }
     ret (br[best] + br[best + 1usize]) / 2.0f64
+}
+
+type EtsCtx = struct { y: []const f64, damped: bool }
+
+// forecast's etscalc for ETS(A,A,N): the one-step errors and the likelihood term n * log(sum e^2); NaN when the sum is 0
+fn ets_aan(c: *EtsCtx, alpha: f64, beta: f64, phi: f64, l0: f64, b0: f64, e: []f64) -> f64 {
+    let n = c.y.len
+    var l = l0
+    var b = b0
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        let q = l + phi * b
+        e[i] = c.y[i] - q
+        let nl = q + alpha * (c.y[i] - q)
+        b = phi * b + (beta / alpha) * (nl - q)
+        l = nl
+        s += e[i] * e[i]
+        i += 1usize
+    }
+    ret f64(n) * math.log[f64](s)
+}
+
+// the check.param of forecast with bounds "both": usual limits then the admissible region
+fn ets_param_ok(alpha: f64, beta: f64, phi: f64) -> bool {
+    if alpha < 0.0001f64 || alpha > 0.9999f64 { ret false }
+    if beta < 0.0001f64 || beta > alpha || beta > 0.9999f64 { ret false }
+    if phi < 0.8f64 || phi > 0.98f64 { ret false }
+    if phi < 0.0f64 || phi > 1.00000001f64 { ret false }
+    if alpha < 1.0f64 - 1.0f64 / phi || alpha > 1.0f64 + 1.0f64 / phi { ret false }
+    if beta < alpha * (phi - 1.0f64) || beta > (1.0f64 + phi) * (2.0f64 - alpha) { ret false }
+    ret true
+}
+
+fn ets_obj(c: *EtsCtx, par: []const f64) -> f64 {
+    var phi = 1.0f64
+    var k = 2usize
+    if c.damped {
+        phi = par[2usize]
+        k = 3usize
+    }
+    // the usual limits on phi apply only when it is estimated; the undamped phi of 1 is outside them but is not tested
+    var ok_ = true
+    if c.damped {
+        ok_ = ets_param_ok(par[0usize], par[1usize], phi)
+    } else {
+        ok_ = par[0usize] >= 0.0001f64 && par[0usize] <= 0.9999f64 && par[1usize] >= 0.0001f64 && par[1usize] <= par[0usize] && par[1usize] <= 0.9999f64
+        if ok_ { ok_ = par[1usize] >= 0.0f64 * par[0usize] && par[1usize] <= 2.0f64 * (2.0f64 - par[0usize]) && par[0usize] <= 2.0f64 }
+    }
+    if !ok_ { ret 1.0e35f64 }
+    var buf: [1024]f64 = zero
+    if c.y.len > 1024usize { ret 1.0e35f64 }
+    let v = ets_aan(c, par[0usize], par[1usize], phi, par[k], par[k + 1usize], buf[0usize..c.y.len])
+    if v != v { ret 1.0e35f64 }
+    if math.abs[f64](v + 99999.0f64) < 1.0e-7f64 { ret 1.0e35f64 }
+    ret v
+}
+
+// tsfeatures::holt_parameters(x): (alpha, beta) of the better aicc of forecast::ets(x, "AAN") fitted damped and undamped
+fn holt_parameters(a: *mem.Arena, y: []const f64) -> (f64, f64) {
+    let n = y.len
+    var best = 1.0e300f64
+    var ba = nan()
+    var bb = nan()
+    var pass = 0usize
+    while pass < 2usize {
+        let damped = pass == 0usize
+        var c = EtsCtx{ y: y, damped: damped }
+        // initstate: the least-squares line over the first min(10, n) points
+        var maxn = 10usize
+        if n < maxn { maxn = n }
+        var sx = 0.0f64
+        var sy = 0.0f64
+        var i = 0usize
+        while i < maxn {
+            sx += f64(i + 1usize)
+            sy += y[i]
+            i += 1usize
+        }
+        let mx = sx / f64(maxn)
+        let my = sy / f64(maxn)
+        var sxy = 0.0f64
+        var sxx = 0.0f64
+        i = 0usize
+        while i < maxn {
+            sxy += (f64(i + 1usize) - mx) * (y[i] - my)
+            sxx += (f64(i + 1usize) - mx) * (f64(i + 1usize) - mx)
+            i += 1usize
+        }
+        var b0 = sxy / sxx
+        var l0 = my - b0 * mx
+        if math.abs[f64](l0 + b0) < 1.0e-8f64 {
+            l0 = l0 * 1.001f64
+            b0 = b0 * 0.999f64
+        }
+        var np = 4usize
+        if damped { np = 5usize }
+        if np >= n - 1usize { ret (nan(), nan()) }
+        let alpha0 = 0.0001f64 + 0.2f64 * 0.9998f64
+        var ub = 0.9999f64
+        if alpha0 < ub { ub = alpha0 }
+        let beta0 = 0.0001f64 + 0.1f64 * (ub - 0.0001f64)
+        var start: [5]f64 = zero
+        start[0usize] = alpha0
+        start[1usize] = beta0
+        var k = 2usize
+        if damped {
+            start[2usize] = 0.8f64 + 0.99f64 * 0.18f64
+            k = 3usize
+        }
+        start[k] = l0
+        start[k + 1usize] = b0
+        var fit: [5]f64 = zero
+        let (fv, cnt, fail) = rnm.nmmin[EtsCtx](a, &c, ets_obj, start[0usize..np], 0.0f64 - 1.0e308f64, 1.4901161193847656e-08f64, 1.0f64, 0.5f64, 2.0f64, 2000usize, 1.0f64, fit[0usize..np])
+        var phi = 1.0f64
+        if damped { phi = fit[2usize] }
+        var buf: [1024]f64 = zero
+        let lik = ets_aan(&c, fit[0usize], fit[1usize], phi, fit[k], fit[k + 1usize], buf[0usize..n])
+        let npp = f64(np + 1usize)
+        let aic = lik + 2.0f64 * npp
+        let aicc = aic + 2.0f64 * npp * (npp + 1.0f64) / (f64(n) - npp - 1.0f64)
+        if aicc < best {
+            best = aicc
+            ba = fit[0usize]
+            bb = fit[1usize]
+        }
+        pass += 1usize
+    }
+    ret (ba, bb)
 }
 
 fn at1(v: []const f64, k: i64) -> f64 { ret v[usize(k - 1i64)] }
