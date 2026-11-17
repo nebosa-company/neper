@@ -551,9 +551,64 @@ fn draw_boot(a: *mem.Arena, r: *rng.Rng, x: []const f64, trim: f64, nrep: usize,
     ret trimmed_mean(x, trim, tmp, tmp2)
 }
 
-// bca.ci: the adjusted percentile interval; the acceleration comes from the regression empirical influence values of boot::empinf; lo and hi in out
-fn bca_ci(a: *mem.Arena, t: []const f64, t0: f64, idx: []const usize, n: usize, conf: f64, out: []f64) -> err {
+// the BCa interval with the jackknife influence values (boot uses them when there are fewer replicates than observations)
+fn bca_jack(a: *mem.Arena, y: []const f64, trim: f64, t: []const f64, t0: f64, n: usize, conf: f64, out: []f64) -> err {
     let nrep = t.len
+    let (l, e1) = mem.alloc[f64](a, n)
+    let (yj, e2) = mem.alloc[f64](a, n)
+    let (tmp, e3) = mem.alloc[f64](a, n)
+    let (tmp2, e4) = mem.alloc[f64](a, n)
+    let (ts, e5) = mem.alloc[f64](a, nrep)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
+    var q = 0usize
+    while q < n {
+        var m = 0usize
+        var c = 0usize
+        while c < n {
+            if c != q {
+                yj[m] = y[c]
+                m += 1usize
+            }
+            c += 1usize
+        }
+        l[q] = f64(n - 1usize) * (t0 - trimmed_mean(yj[0usize..m], trim, tmp, tmp2))
+        q += 1usize
+    }
+    var s2 = 0.0f64
+    var s3 = 0.0f64
+    q = 0usize
+    while q < n {
+        s2 += l[q] * l[q]
+        s3 += l[q] * l[q] * l[q]
+        q += 1usize
+    }
+    let acc = s3 / (6.0f64 * math.pow[f64](s2, 1.5f64))
+    var below = 0.0f64
+    q = 0usize
+    while q < nrep {
+        ts[q] = t[q]
+        if t[q] < t0 { below += 1.0f64 }
+        q += 1usize
+    }
+    let w = dist.qnorm(below / f64(nrep), 0.0f64, 1.0f64, true, false)
+    var ctx = 0u8
+    sort.in_place_by[f64, u8](ts, &ctx, cmp_up)
+    var k = 0usize
+    while k < 2usize {
+        var al = (1.0f64 - conf) / 2.0f64
+        if k == 1usize { al = (1.0f64 + conf) / 2.0f64 }
+        let za = dist.qnorm(al, 0.0f64, 1.0f64, true, false)
+        let adj = dist.pnorm(w + (w + za) / (1.0f64 - acc * (w + za)), 0.0f64, 1.0f64, true, false)
+        out[k] = lx.norm_inter_one(ts, adj)
+        k += 1usize
+    }
+    ret ok
+}
+
+// bca.ci: the adjusted percentile interval; the acceleration comes from the regression empirical influence values of boot::empinf; lo and hi in out
+fn bca_ci(a: *mem.Arena, y: []const f64, trim: f64, t: []const f64, t0: f64, idx: []const usize, n: usize, conf: f64, out: []f64) -> err {
+    let nrep = t.len
+    if nrep < n { ret bca_jack(a, y, trim, t, t0, n, conf, out) }
     // the frequency regression: columns 2..n of the frequency matrix over n
     let p = n - 1usize
     let (xm, e1) = mem.alloc[f64](a, nrep * (p + 1usize))
@@ -650,7 +705,7 @@ fn boot_stat(a: *mem.Arena, r: *rng.Rng, x: []const f64, trim: f64, nrep: usize,
         lx.boot_ci(a, t, t0, conf, 0usize, ci)
         ret ci[kind - 5usize]
     }
-    if bca_ci(a, t, t0, idx, x.len, conf, ci) != ok { ret nan() }
+    if bca_ci(a, x, trim, t, t0, idx, x.len, conf, ci) != ok { ret nan() }
     ret ci[kind - 7usize]
 }
 

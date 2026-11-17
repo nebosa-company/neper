@@ -592,6 +592,7 @@ fn stat_vec(a: *mem.Arena, sp: Spec, inc: []const f64, w: []const f64, male: []c
 }
 
 fn norm_inter_one(ts: []const f64, alpha: f64) -> f64 {
+    if alpha != alpha || alpha < 0.0f64 { ret nan() }
     let rr = ts.len
     let rk = f64(rr + 1usize) * alpha
     let k = usize(math.trunc[f64](rk))
