@@ -1,260 +1,216 @@
-# glmnet beyond the first group: cox, multinomial, and the cv, relax and predict pieces.
-# Common head of every case (the fixture parses it): (n, p, alpha, std, nl, hw, hb, ho, lambda[nl], vf[p]) then the family data,
-# X[n p] column-major, w[n * hw], lower[p * hb], upper[p * hb], offset[n * ho * (cols)], and the query.
+# glmnet beyond the gaussian first group: cox (Breslow, Efron, strata, start-stop), multinomial, mgaussian, relax, exclude, bounds, cv.glmnet with weights, offsets
+# and relax, automatic lambda sequences, predict types and glmnet at its default thresh. Most cases answer a checksum (the sum over every coefficient, or over a range of
+# cvm, of weight(i) times its value, weight(i) = 1 + ((7 i) mod 13) / 13 for the 0-based position i) so that one case checks a whole fit.
+# Common head of every case (the fixture parses it): (n, p, alpha, std, nl, hw, hb, ho, lambda[nl], vf[p]); for "fit", "lam" and "cv" then
+# (fam, relax, gamma, efron, grouped, nc, hasExcl, hasStrata, hasStart), the response, exclude[p] when hasExcl, X[n p] column-major, w[n * hw], lower[p * hb], upper[p * hb], offset[n * ho * nc] and the query.
+# fam: 0 binomial, 1 poisson, 2 gaussian, 3 cox, 4 multinomial, 5 mgaussian. The response is y[n] (cox: time, status, strata, start; multinomial: class 0-based; mgaussian: the n by nc matrix).
 suppressMessages({library(glmnet); library(survival)})
+# numbers are written with the fewest digits that read back to the same double, which keeps this golden small (the shared num() always writes 17)
+.oldnum <- get("num", envir = globalenv())
+assign("num", function(x) { if (is.na(x) || is.infinite(x)) return(.oldnum(x)); s15 <- sprintf("%.15g", x); if (as.numeric(s15) == x) s15 else sprintf("%.17g", x) }, envir = globalenv())
 cases <- list()
-head_ <- function(n, p, al, std, lam, hw, hb, ho, vf) c(n, p, al, std, length(lam), hw, hb, ho, lam, vf)
-cq <- function(fn, hd, dat, X, w, lo, up, off, qy, want, rel = 1e-5, abs = 1e-6) case(fn, c(hd, dat, X, w, lo, up, off, qy), want, rel = rel, abs = abs)
-brk <- function() "breslow"
-
 only <- Sys.getenv("GLM_ONLY")
 want_ <- function(s) !nzchar(only) || s %in% strsplit(only, ",")[[1]]
-# cox: data = (time[n], status[n]); query = (k, j); coefficient j (0-based, no intercept) at lambda k
-set.seed(20261117)
-for (rep in if (want_("cox")) 1:14 else integer(0)) {
-  n <- sample(50:110, 1); p <- sample(3:6, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
-  tm <- round(rexp(n, exp(0.5 * X[, 1] - 0.5 * X[, 2])), 1) + 0.1; st <- rbinom(n, 1, 0.8)
-  alpha <- c(1, 0.5, 0.2, 0.9, 0)[(rep %% 5) + 1]; std <- rep %% 3 != 0
-  vf <- if (rep %% 4 == 0) round(runif(p, 0.3, 2), 2) else rep(1, p)
-  hw <- as.integer(rep %% 5 == 1); w <- if (hw) round(runif(n, 0.3, 3), 2) else numeric(0)
-  ho <- as.integer(rep %% 5 == 2); off <- if (ho) round(rnorm(n, 0, 0.4), 2) else numeric(0)
-  hb <- as.integer(rep %% 5 == 3); lo <- if (hb) round(-runif(p, 0, 1), 2) else numeric(0); up <- if (hb) round(runif(p, 0, 1), 2) else numeric(0)
-  y <- Surv(tm, st)
-  a0 <- list(x = X, y = y, family = "cox", alpha = alpha, standardize = std, penalty.factor = vf, cox.ties = "breslow")
-  if (hw) a0$weights <- w; if (ho) a0$offset <- off; if (hb) { a0$lower.limits <- lo; a0$upper.limits <- up }
-  f0 <- suppressWarnings(do.call(glmnet, a0)); L <- length(f0$lambda)
-  lam <- f0$lambda[unique(round(seq(1, L, length.out = 7)))]
-  a1 <- a0; a1$lambda <- lam; a1$thresh <- 1e-14
-  f <- suppressWarnings(do.call(glmnet, a1)); cf <- as.matrix(coef(f))
-  hd <- head_(n, p, alpha, std, lam, hw, hb, ho, vf)
-  for (k in c(2, 4, length(lam))) for (j in 1:p) cases[[length(cases) + 1]] <- cq("cox", hd, c(tm, st), X, w, lo, up, off, c(k - 1, j), cf[j, k])
-  # the automatic path and its length
-  cases[[length(cases) + 1]] <- cq("coxlen", hd, c(tm, st), X, w, lo, up, off, 0, L, rel = 0, abs = 0.5)
-  for (k in c(1, 2, 7, L)) cases[[length(cases) + 1]] <- cq("coxlam", hd, c(tm, st), X, w, lo, up, off, k - 1, f0$lambda[k], rel = 1e-9, abs = 1e-12)
-}
+wfun <- function(i) 1 + ((i * 7) %% 13) / 13
+ck <- function(v) sum(wfun(seq_along(v) - 1) * v)
+head_ <- function(n, p, al, std, lam, hw, hb, ho, vf) c(n, p, al, std, length(lam), hw, hb, ho, lam, vf)
+famcode <- c(binomial = 0, poisson = 1, gaussian = 2, cox = 3, multinomial = 4, mgaussian = 5)
 
-# multinomial: data = (class[n] 0-based, K, grouped); the offset (when ho) is the n by K matrix column-major; query = (k, c, j): class c's coefficient j (0 the intercept) at lambda k
-set.seed(20261118)
-for (rep in if (want_("mult") || want_("multlen")) 1:16 else integer(0)) {
-  n <- sample(90:160, 1); p <- sample(3:5, 1); K <- sample(3:4, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
-  B <- matrix(round(rnorm(p * K), 1), p, K); eta <- X %*% B * 0.8; pr <- exp(eta) / rowSums(exp(eta))
-  cl <- apply(pr, 1, function(r) sample(K, 1, prob = r)); while (min(tabulate(cl, K)) < 10) cl <- sample(K, n, TRUE)
-  alpha <- c(1, 0.5, 0.2, 0.9, 0)[(rep %% 5) + 1]; std <- rep %% 3 != 0; grouped <- rep %% 4 == 3
-  vf <- if (rep %% 4 == 0) round(runif(p, 0.3, 2), 2) else rep(1, p)
-  hw <- as.integer(rep %% 5 == 1); w <- if (hw) round(runif(n, 0.3, 3), 2) else numeric(0)
-  ho <- as.integer(rep %% 5 == 2 && !grouped); off <- if (ho) matrix(round(rnorm(n * K, 0, 0.3), 2), n, K) else matrix(0, 0, 0)
-  hb <- as.integer(rep %% 5 == 3 && !grouped); lo <- if (hb) round(-runif(p, 0, 1), 2) else numeric(0); up <- if (hb) round(runif(p, 0, 1), 2) else numeric(0)
-  a0 <- list(x = X, y = factor(cl), family = "multinomial", alpha = alpha, standardize = std, penalty.factor = vf, type.multinomial = if (grouped) "grouped" else "ungrouped")
-  if (hw) a0$weights <- w; if (ho) a0$offset <- off; if (hb) { a0$lower.limits <- lo; a0$upper.limits <- up }
-  f0 <- suppressWarnings(do.call(glmnet, a0)); L <- length(f0$lambda)
-  lam <- f0$lambda[unique(round(seq(2, L, length.out = 6)))]
-  a1 <- a0; a1$lambda <- lam; a1$thresh <- 1e-14
-  f <- suppressWarnings(do.call(glmnet, a1)); cf <- coef(f)
-  hd <- head_(n, p, alpha, std, lam, hw, hb, ho, vf)
-  if (want_("mult")) for (k in c(2, length(lam))) for (c in unique(c(1, K))) for (j in 0:p) cases[[length(cases) + 1]] <- cq("mult", hd, c(cl - 1, K, grouped), X, w, lo, up, off, c(k - 1, c - 1, j), as.matrix(cf[[c]])[j + 1, k], rel = 1e-5, abs = 1e-6)
-  hd0 <- head_(n, p, alpha, std, numeric(0), hw, hb, ho, vf)
-  if (nzchar(Sys.getenv("GLM_DEBUG"))) message("mult rep ", rep, " n ", n, " alpha ", alpha, " hw ", hw, " ho ", ho, " hb ", hb, " grouped ", grouped, " L ", L)
-  if (!grouped && want_("multlen")) cases[[length(cases) + 1]] <- cq("multlen", hd0, c(cl - 1, K, grouped), X, w, lo, up, off, 0, L, rel = 0, abs = 1.5)  # glmnet stops at thresh 1e-7, so a step whose gain is within its noise of the 1e-5 limit can fall either side: one lambda
-  if (want_("multlen")) for (k in c(1, 2, 5, L)) cases[[length(cases) + 1]] <- cq("multlam", hd0, c(cl - 1, K, grouped), X, w, lo, up, off, k - 1, f0$lambda[k], rel = 1e-9, abs = 1e-12)
-}
-
-# binomial and poisson: data = (y[n]); the automatic path (binlam / poislam, query = k) and its length (binlen / poislen)
-set.seed(20261119)
-for (fam in c("binomial", "poisson")) for (rep in 1:12) {
-  if (!want_("glm")) break
-  n <- sample(60:150, 1); p <- sample(3:6, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
-  y <- if (fam == "binomial") rbinom(n, 1, plogis(1.2 * X[, 1] - 0.8 * X[, 2])) else rpois(n, exp(0.5 + 0.5 * X[, 1] - 0.4 * X[, 2]))
-  alpha <- c(1, 0.5, 0.2, 0.9, 0.05)[(rep %% 5) + 1]; std <- rep %% 3 != 0
-  vf <- if (rep %% 4 == 0) round(runif(p, 0.3, 2), 2) else rep(1, p)
-  hw <- as.integer(rep %% 5 == 1); w <- if (hw) round(runif(n, 0.3, 3), 2) else numeric(0)
-  ho <- as.integer(rep %% 5 == 2); off <- if (ho) round(rnorm(n, 0, 0.4), 2) else numeric(0)
-  a0 <- list(x = X, y = y, family = fam, alpha = alpha, standardize = std, penalty.factor = vf)
-  if (hw) a0$weights <- w; if (ho) a0$offset <- off
-  f0 <- suppressWarnings(do.call(glmnet, a0)); L <- length(f0$lambda)
-  hd0 <- head_(n, p, alpha, std, numeric(0), hw, 0, ho, vf); nm <- if (fam == "binomial") "bin" else "pois"
-  cases[[length(cases) + 1]] <- cq(paste0(nm, "len"), hd0, y, X, w, numeric(0), numeric(0), off, 0, L, rel = 0, abs = 0.5)
-  for (k in c(1, 2, 5, L)) cases[[length(cases) + 1]] <- cq(paste0(nm, "lam"), hd0, y, X, w, numeric(0), numeric(0), off, k - 1, f0$lambda[k], rel = 1e-9, abs = 1e-12)
-}
-
-# cv.glmnet with the default lambda (every fold finds its own automatic sequence and is read at the full fit's lambdas by interpolation): data = (y[n], foldid[n] 0-based, nfolds, measure)
-set.seed(20261120)
-for (fam in c("gaussian", "binomial", "poisson")) for (rep in 1:10) {
-  if (!want_("cvauto")) break
-  n <- sample(70:140, 1); p <- sample(3:6, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
-  y <- switch(fam, gaussian = round(X[, 1] * 2 - X[, 2] + rnorm(n), 3), binomial = rbinom(n, 1, plogis(1.2 * X[, 1] - 0.8 * X[, 2])), poisson = rpois(n, exp(0.5 + 0.5 * X[, 1] - 0.4 * X[, 2])))
-  alpha <- c(1, 0.5, 0.2, 0.9, 0.05)[(rep %% 5) + 1]; std <- rep %% 3 != 0; nf <- sample(3:7, 1); fid <- sample(rep(1:nf, length.out = n))
-  vf <- if (rep %% 4 == 0) round(runif(p, 0.3, 2), 2) else rep(1, p)
-  ms <- if (fam == "gaussian") 0 else sample(if (fam == "binomial") c(0, 1, 2, 3) else c(0, 2, 3), 1)
-  tm <- if (fam == "gaussian") "deviance" else c("deviance", "class", "mse", "mae")[ms + 1]
-  cv <- suppressWarnings(cv.glmnet(X, y, family = fam, alpha = alpha, standardize = std, penalty.factor = vf, foldid = fid, type.measure = tm)); L <- length(cv$lambda)
-  nm <- c(gaussian = "cvgA", binomial = "cvbA", poisson = "cvpA")[[fam]]; hd0 <- head_(n, p, alpha, std, numeric(0), 0, 0, 0, vf)
-  dat <- c(y, fid - 1, nf, ms)
-  cases[[length(cases) + 1]] <- cq(nm, hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(0, 4), L, rel = 0, abs = 0.5)
-  for (k in unique(c(1, L %/% 2, L))) {
-    cases[[length(cases) + 1]] <- cq(nm, hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(k - 1, 0), cv$cvm[k], rel = 1e-4, abs = 1e-7)
-    cases[[length(cases) + 1]] <- cq(nm, hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(k - 1, 1), cv$cvsd[k], rel = 1e-3, abs = 1e-7)
+# a data set for a family: X, the response block, and what the glmnet call needs
+mk <- function(fam, n, p, K = 3, ties = FALSE, strata = FALSE, start = FALSE) {
+  X <- matrix(round(rnorm(n * p), 3), n, p); d <- list(fam = fam, n = n, p = p, X = X, K = K)
+  if (fam == "gaussian") d$y <- round(X[, 1] * 2 - X[, 3] + rnorm(n), 3)
+  if (fam == "binomial") d$y <- rbinom(n, 1, plogis(1.2 * X[, 1] - 0.8 * X[, 3]))
+  if (fam == "poisson") d$y <- rpois(n, exp(0.5 + 0.5 * X[, 1] - 0.4 * X[, 3]))
+  if (fam == "cox") {
+    d$time <- round(rexp(n, exp(0.5 * X[, 1] - 0.5 * X[, 3])), if (ties) 1 else 2) + (if (ties) 0.1 else 0.01); d$status <- rbinom(n, 1, 0.8)
+    d$strata <- if (strata) sample(1:2, n, TRUE) else numeric(0); d$start <- if (start) round(runif(n, 0, 0.8) * d$time, 2) else numeric(0)
+    if (start) d$start <- pmin(d$start, d$time - 0.01)
   }
-  cases[[length(cases) + 1]] <- cq(nm, hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(0, 2), cv$lambda.min, rel = 1e-9, abs = 1e-12)
-  cases[[length(cases) + 1]] <- cq(nm, hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(0, 3), cv$lambda.1se, rel = 1e-9, abs = 1e-12)
+  if (fam == "multinomial") { B <- matrix(round(rnorm(p * K), 1), p, K); pr <- exp(X %*% B * 0.8); pr <- pr / rowSums(pr); d$cl <- apply(pr, 1, function(r) sample(K, 1, prob = r)); while (min(tabulate(d$cl, K)) < 8) d$cl <- sample(K, n, TRUE) }
+  if (fam == "mgaussian") d$Y <- round(X[, 1:2] %*% matrix(rnorm(2 * K), 2, K) + matrix(rnorm(n * K), n, K), 3)
+  d
 }
-
-# cv.glmnet for the multinomial family: data = (class[n] 0-based, K, grouped, foldid[n] 0-based, nfolds, measure, auto); measure 0 deviance 1 class 2 mse 3 mae. Sections "cvmult" (ungrouped) and "cvmultg" (grouped, the slow one)
-set.seed(20261121)
-for (rep in 1:8) {
-  n <- sample(90:150, 1); p <- sample(3:5, 1); K <- sample(3:4, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
-  B <- matrix(round(rnorm(p * K), 1), p, K); eta <- X %*% B * 0.8; pr <- exp(eta) / rowSums(exp(eta))
-  cl <- apply(pr, 1, function(r) sample(K, 1, prob = r)); while (min(tabulate(cl, K)) < 12) cl <- sample(K, n, TRUE)
-  alpha <- c(1, 0.5, 0.2, 0.9)[(rep %% 4) + 1]; std <- rep %% 3 != 0; grouped <- rep %% 4 == 3; nf <- sample(3:5, 1); fid <- sample(rep(1:nf, length.out = n))
-  vf <- rep(1, p); ms <- (rep - 1) %% 4; tm <- c("deviance", "class", "mse", "mae")[ms + 1]; tmu <- if (grouped) "grouped" else "ungrouped"
-  if (!want_(if (grouped) "cvmultg" else "cvmult")) next
-  for (au in c(0, 1)) {
-    a0 <- list(x = X, y = factor(cl), family = "multinomial", alpha = alpha, standardize = std, foldid = fid, type.measure = tm, type.multinomial = tmu)
-    if (!au) { f0 <- suppressWarnings(glmnet(X, factor(cl), family = "multinomial", alpha = alpha, standardize = std, type.multinomial = tmu)); lam <- f0$lambda[unique(round(seq(2, length(f0$lambda), length.out = 6)))]; a0$lambda <- lam; a0$thresh <- 1e-14 } else lam <- numeric(0)
-    cv <- suppressWarnings(do.call(cv.glmnet, a0)); L <- length(cv$lambda)
-    hd0 <- head_(n, p, alpha, std, lam, 0, 0, 0, vf); dat <- c(cl - 1, K, grouped, fid - 1, nf, ms, au)
-    qq <- function(k, w, want, rel, abs) cases[[length(cases) + 1]] <<- cq("cvmult", hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(k, w), want, rel = rel, abs = abs)
-    # with its default lambda, glmnet's thresh leaves the near-null first fits with class probabilities that differ in the last places, and the misclassification count (a step function) follows: the class measure is compared from the middle of the path on, within four observations; the last lambda is taken one short of the end so that a path length one off (see multlen) cannot leave the index out of range
-    mid <- L %/% 2
-    if (au) {
-      qq(0, 4, L, 0, 1.5)
-      if (ms == 1) { qq(mid - 1, 0, cv$cvm[mid], 0, 4 / n); qq(mid - 1, 1, cv$cvsd[mid], 0, 0.05) }
-      else { qq(mid - 1, 0, cv$cvm[mid], 5e-4, 1e-6); qq(mid - 1, 1, cv$cvsd[mid], 5e-3, 1e-6); qq(L - 2, 0, cv$cvm[L - 1], 5e-4, 1e-6) }
-    } else {
-      if (ms != 1) qq(0, 0, cv$cvm[1], 1e-5, 1e-6)  # the class measure at the near-null first lambda turns on classes whose fitted probabilities differ by less than the fit can tell
-      qq(mid - 1, 0, cv$cvm[mid], 1e-5, 1e-6); qq(mid - 1, 1, cv$cvsd[mid], 1e-4, 1e-6)
-      qq(0, 2, cv$lambda.min, 1e-9, 1e-12); qq(0, 3, cv$lambda.1se, 1e-9, 1e-12)
-    }
-  }
+respblock <- function(d) switch(d$fam, cox = c(d$time, d$status, d$strata, d$start), multinomial = d$cl - 1, mgaussian = as.vector(d$Y), d$y)
+# the glmnet call's arguments for a data set and options o (alpha, std, vf, w, off, lo, up, excl, efron, grouped)
+gargs <- function(d, o) {
+  y <- switch(d$fam, cox = { s <- if (length(d$start)) Surv(d$start, d$time, d$status) else Surv(d$time, d$status); if (length(d$strata)) stratifySurv(s, d$strata) else s },
+              multinomial = factor(d$cl), mgaussian = d$Y, d$y)
+  a0 <- list(x = d$X, y = y, family = d$fam, alpha = o$alpha, standardize = o$std, penalty.factor = o$vf)
+  if (length(o$w)) a0$weights <- o$w; if (length(o$off)) a0$offset <- if (d$fam == "multinomial") matrix(o$off, d$n, d$K) else o$off
+  if (length(o$lo)) { a0$lower.limits <- o$lo; a0$upper.limits <- o$up }; if (length(o$excl)) a0$exclude <- o$excl
+  if (d$fam == "cox") a0$cox.ties <- if (isTRUE(o$efron)) "efron" else "breslow"
+  if (d$fam == "multinomial") a0$type.multinomial <- if (isTRUE(o$grouped)) "grouped" else "ungrouped"
+  a0
 }
-
-# cv.glmnet for the Cox family: data = (time[n], status[n], foldid[n] 0-based, nfolds, measure 0 deviance 1 C, auto)
-set.seed(20261122)
-for (rep in if (want_("cvcox")) 1:8 else integer(0)) {
-  n <- sample(80:140, 1); p <- sample(3:5, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
-  tm <- round(rexp(n, exp(0.5 * X[, 1] - 0.5 * X[, 2])), 2) + 0.01; st <- rbinom(n, 1, 0.8)
-  alpha <- c(1, 0.5, 0.2, 0.9)[(rep %% 4) + 1]; std <- rep %% 3 != 0; nf <- sample(3:5, 1); fid <- sample(rep(1:nf, length.out = n)); vf <- rep(1, p)
-  ms <- (rep - 1) %% 2; tmn <- c("deviance", "C")[ms + 1]
-  for (au in c(0, 1)) {
-    a0 <- list(x = X, y = Surv(tm, st), family = "cox", alpha = alpha, standardize = std, foldid = fid, type.measure = tmn, cox.ties = "breslow")
-    if (!au) { f0 <- suppressWarnings(glmnet(X, Surv(tm, st), family = "cox", alpha = alpha, standardize = std, cox.ties = "breslow")); lam <- f0$lambda[unique(round(seq(2, length(f0$lambda), length.out = 6)))]; a0$lambda <- lam; a0$thresh <- 1e-14 } else lam <- numeric(0)
-    cv <- suppressWarnings(do.call(cv.glmnet, a0)); L <- length(cv$lambda)
-    hd0 <- head_(n, p, alpha, std, lam, 0, 0, 0, vf); dat <- c(tm, st, fid - 1, nf, ms, au)
-    if (au) cases[[length(cases) + 1]] <- cq("cvcox", hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(0, 4), L, rel = 0, abs = 0.5)
-    # the C-index ranks the linear predictors, and glmnet's thresh of 1e-7 leaves near-null coefficient vectors (the first lambdas) with a direction error that reorders them: with its default lambda only the middle and last lambdas are compared, at the looser tolerance
-    for (k in if (au && ms == 1) unique(c(L %/% 2, L - 1)) else if (au) unique(c(1, L %/% 2, L - 1)) else unique(c(1, L %/% 2, L))) {
-      cases[[length(cases) + 1]] <- cq("cvcox", hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(k - 1, 0), cv$cvm[k], rel = if (au && ms == 1) 5e-3 else if (au) 1e-4 else 1e-5, abs = 1e-6)
-      cases[[length(cases) + 1]] <- cq("cvcox", hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(k - 1, 1), cv$cvsd[k], rel = if (au && ms == 1) 0.15 else if (au) 2e-3 else 1e-4, abs = if (au && ms == 1) 5e-3 else 1e-6)
-    }
-    if (!au) {
-      cases[[length(cases) + 1]] <- cq("cvcox", hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(0, 2), cv$lambda.min, rel = 1e-9, abs = 1e-12)
-      cases[[length(cases) + 1]] <- cq("cvcox", hd0, dat, X, numeric(0), numeric(0), numeric(0), numeric(0), c(0, 3), cv$lambda.1se, rel = 1e-9, abs = 1e-12)
-    }
-  }
+defopt <- function(d, ...) { o <- list(alpha = 1, std = TRUE, vf = rep(1, d$p), w = numeric(0), off = numeric(0), lo = numeric(0), up = numeric(0), excl = integer(0), efron = FALSE, grouped = FALSE, relax = NA); mo <- list(...); o[names(mo)] <- mo; o }
+hdrv <- function(d, o) c(famcode[[d$fam]], !is.na(o$relax), if (is.na(o$relax)) 0 else o$relax, isTRUE(o$efron), isTRUE(o$grouped), if (d$fam == "multinomial") d$K else if (d$fam == "mgaussian") ncol(d$Y) else 1, length(o$excl) > 0, length(d$strata) > 0, length(d$start) > 0)
+exclmask <- function(d, o) if (length(o$excl)) as.numeric(seq_len(d$p) %in% o$excl) else numeric(0)
+mkcase <- function(nm, d, o, lam, qy, want, rel, abs) {
+  hd <- head_(d$n, d$p, o$alpha, o$std, lam, length(o$w) > 0, length(o$lo) > 0, length(o$off) > 0, o$vf)
+  r <- case(nm, c(hd, hdrv(d, o), respblock(d), exclmask(d, o), d$X, o$w, o$lo, o$up, o$off, qy), want, rel = rel, abs = abs); r$tag <- .v; r
 }
-
-# exclude (gaussian "excg", binomial "excb"): data = (y[n], exclude[p] 0/1); query = (k, j); and the box constraints for binomial "binb" / poisson "poisb" (lower and upper in the bounds slots)
-set.seed(20261123)
-for (fam in c("gaussian", "binomial", "poisson")) for (rep in if (want_("exclude")) 1:8 else integer(0)) {
-  n <- sample(60:120, 1); p <- sample(4:7, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
-  y <- switch(fam, gaussian = round(X[, 1] * 2 - X[, 3] + rnorm(n), 3), binomial = rbinom(n, 1, plogis(1.2 * X[, 1] - 0.8 * X[, 3])), poisson = rpois(n, exp(0.5 + 0.5 * X[, 1] - 0.4 * X[, 3])))
-  alpha <- c(1, 0.5, 0.2, 0.9)[(rep %% 4) + 1]; std <- rep %% 3 != 0; vf <- if (rep %% 2 == 0) round(runif(p, 0.3, 2), 2) else rep(1, p)
-  if (fam != "poisson") {
-    ex <- sort(sample(2:p, sample(1:2, 1))); exv <- as.numeric(1:p %in% ex)
-    f0 <- suppressWarnings(glmnet(X, y, family = fam, alpha = alpha, standardize = std, penalty.factor = vf, exclude = ex)); lam <- f0$lambda[unique(round(seq(2, length(f0$lambda), length.out = 5)))]
-    f <- suppressWarnings(glmnet(X, y, family = fam, alpha = alpha, standardize = std, penalty.factor = vf, exclude = ex, lambda = lam, thresh = 1e-14)); cf <- as.matrix(coef(f))
-    hd <- head_(n, p, alpha, std, lam, 0, 0, 0, vf)
-    for (k in c(2, length(lam))) for (j in 0:p) cases[[length(cases) + 1]] <- cq(if (fam == "gaussian") "excg" else "excb", hd, c(y, exv), X, numeric(0), numeric(0), numeric(0), numeric(0), c(k - 1, j), cf[j + 1, k])
-  }
-  if (fam != "gaussian") {
-    lo <- round(-runif(p, 0, 1), 2); up <- round(runif(p, 0, 1), 2)
-    f0 <- suppressWarnings(glmnet(X, y, family = fam, alpha = alpha, standardize = std, penalty.factor = vf, lower.limits = lo, upper.limits = up)); lam <- f0$lambda[unique(round(seq(2, length(f0$lambda), length.out = 5)))]
-    f <- suppressWarnings(glmnet(X, y, family = fam, alpha = alpha, standardize = std, penalty.factor = vf, lower.limits = lo, upper.limits = up, lambda = lam, thresh = 1e-14)); cf <- as.matrix(coef(f))
-    hd <- head_(n, p, alpha, std, lam, 0, 1, 0, vf)
-    for (k in c(2, length(lam))) for (j in 0:p) cases[[length(cases) + 1]] <- cq(if (fam == "binomial") "binb" else "poisb", hd, y, X, numeric(0), lo, up, numeric(0), c(k - 1, j), cf[j + 1, k])
-  }
+.v <- 0
+# the coefficient vector of a fit (or its relaxed blend) in the fixture's order: lambda, class, then intercept and slopes
+cvec <- function(f, d, lam, gamma = NA) {
+  cf <- if (is.na(gamma)) coef(f) else coef(f, s = lam, gamma = gamma)
+  if (d$fam %in% c("multinomial", "mgaussian")) return(unlist(lapply(seq_along(lam), function(k) unlist(lapply(cf, function(z) as.numeric(as.matrix(z)[, k]))))))
+  m <- as.matrix(cf); if (d$fam == "cox") m <- rbind(0, m); as.numeric(m)
 }
-
-# relax = TRUE: "rlxg" gaussian, "rlxb" binomial, "rlxp" poisson, "rlxc" Cox; data = y[n] (Cox: time, status); query = (k, j, gamma): coef(fit, s = lambda_k, gamma) row j (0 the intercept)
-set.seed(20261124)
-for (fam in c("gaussian", "binomial", "poisson", "cox")) for (rep in if (want_("relax")) 1:3 else integer(0)) {
-  n <- sample(70:130, 1); p <- sample(4:7, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
-  y <- switch(fam, gaussian = round(X[, 1] * 2 - X[, 3] + rnorm(n), 3), binomial = rbinom(n, 1, plogis(1.2 * X[, 1] - 0.8 * X[, 3])), poisson = rpois(n, exp(0.5 + 0.5 * X[, 1] - 0.4 * X[, 3])), cox = NA)
-  if (fam == "cox") { tm <- round(rexp(n, exp(0.5 * X[, 1] - 0.5 * X[, 3])), 2) + 0.01; st <- rbinom(n, 1, 0.8); y <- Surv(tm, st) }
-  alpha <- c(1, 0.5, 0.9)[(rep %% 3) + 1]; std <- rep %% 2 == 0; vf <- rep(1, p)
-  hw <- as.integer(rep %% 3 == 1 && fam != "poisson"); w <- if (hw) round(runif(n, 0.3, 3), 2) else numeric(0)
-  ho <- as.integer(rep %% 3 == 2 && fam %in% c("binomial", "poisson", "cox")); off <- if (ho) round(rnorm(n, 0, 0.3), 2) else numeric(0)
-  a0 <- list(x = X, y = y, family = fam, alpha = alpha, standardize = std)
-  if (fam == "cox") a0$cox.ties <- "breslow"
-  if (hw) a0$weights <- w; if (ho) a0$offset <- off
-  f0 <- suppressWarnings(do.call(glmnet, a0)); lam <- f0$lambda[unique(round(seq(3, length(f0$lambda), length.out = 6)))]
-  a1 <- a0; a1$lambda <- lam; a1$relax <- TRUE; a1$thresh <- 1e-14
+pickl <- function(a0, d) { f0 <- suppressWarnings(do.call(glmnet, a0)); L <- length(f0$lambda); list(L = L, lam = f0$lambda[unique(round(seq(2, L, length.out = 6)))], f0 = f0) }
+# one coefficient case: the fit at thresh 1e-14 (or the default thresh when thresh7) over six lambdas of the default path
+addfit <- function(d, o, rel = 1e-5, abs = 1e-5, thresh7 = FALSE) {
+  a0 <- gargs(d, o); pl <- pickl(a0, d); lam <- pl$lam
+  a1 <- a0; a1$lambda <- lam; if (!thresh7) a1$thresh <- 1e-14; if (!is.na(o$relax)) a1$relax <- TRUE
   f <- suppressWarnings(do.call(glmnet, a1))
-  hd <- head_(n, p, alpha, std, lam, hw, 0, ho, vf); nm <- c(gaussian = "rlxg", binomial = "rlxb", poisson = "rlxp", cox = "rlxc")[[fam]]
-  dat <- if (fam == "cox") c(tm, st) else y
-  for (k in c(2, length(lam))) for (g in c(0, 0.5)) { cf <- as.numeric(as.matrix(coef(f, s = lam[k], gamma = g))); if (fam == "cox") cf <- c(0, cf)
-    for (j in 0:p) cases[[length(cases) + 1]] <- cq(nm, hd, dat, X, w, numeric(0), numeric(0), off, c(k - 1, j, g), cf[j + 1], rel = 1e-5, abs = 1e-6) }
+  if (nzchar(Sys.getenv("GLM_DEBUG")) && isTRUE(o$relax == 0)) message("R relaxed k=3: ", paste(signif(cvec(f, d, lam, 0), 5), collapse = " "))
+  cases[[length(cases) + 1]] <<- mkcase("fit", d, o, lam, 0, ck(cvec(f, d, lam, o$relax)), rel, abs)
 }
 
-# predict types, from the coefficients R reports at one lambda: "prd" data = (family, type, nc, rows[nc (p + 1)]); newx (n rows) then the offset; query = (observation, class)
-set.seed(20261125)
-for (fam in c("gaussian", "binomial", "poisson", "cox", "multinomial")) for (rep in if (want_("predict")) 1:2 else integer(0)) {
-  n <- 100; p <- 5; X <- matrix(round(rnorm(n * p), 3), n, p); m <- 5; NX <- matrix(round(rnorm(m * p), 3), m, p)
-  K <- 3
-  y <- switch(fam, gaussian = round(X[, 1] * 2 - X[, 3] + rnorm(n), 3), binomial = rbinom(n, 1, plogis(1.2 * X[, 1] - 0.8 * X[, 3])), poisson = rpois(n, exp(0.5 + 0.5 * X[, 1] - 0.4 * X[, 3])), cox = NA, multinomial = factor(sample(K, n, TRUE, prob = plogis(c(0, X[1, 1], 1)))))
-  if (fam == "cox") { tm <- round(rexp(n, exp(0.5 * X[, 1])), 2) + 0.01; y <- Surv(tm, rbinom(n, 1, 0.8)) }
-  if (fam == "multinomial") { cl <- apply(exp(X[, 1:3] %*% matrix(c(1, 0, -1, 0, 1, 0, -1, 0, 1), 3, 3)), 1, function(r) sample(3, 1, prob = r)); y <- factor(cl) }
-  ho <- rep == 2 && fam %in% c("gaussian", "binomial", "poisson"); off <- round(rnorm(n, 0, 0.3), 2); noff <- round(rnorm(m, 0, 0.3), 2)
-  a0 <- list(x = X, y = y, family = fam, alpha = 0.7); if (fam == "cox") a0$cox.ties <- "breslow"; if (ho) a0$offset <- off
-  f <- suppressWarnings(do.call(glmnet, a0)); s <- f$lambda[10]
-  hd <- head_(m, p, 0.7, 1, numeric(0), 0, 0, as.integer(ho), rep(1, p))
-  fm <- c(gaussian = 2, binomial = 0, poisson = 1, cox = 3, multinomial = 4)[[fam]]
-  cfl <- coef(f, s = s)
-  rows <- if (fam == "multinomial") unlist(lapply(cfl, function(z) as.numeric(as.matrix(z)))) else { v <- as.numeric(as.matrix(cfl)); if (fam == "cox") c(0, v) else v }
-  nc <- if (fam == "multinomial") K else 1
-  pr <- function(type) if (ho) predict(f, NX, s = s, type = type, newoffset = noff) else predict(f, NX, s = s, type = type)
-  types <- c("link", "response", "class")
-  for (kd in 0:2) {
-    if (kd == 2 && !(fam %in% c("binomial", "multinomial"))) next
-    if (kd == 1 && fam == "cox") next
-    v <- pr(types[kd + 1])
-    if (fam == "multinomial" && kd < 2) v <- array(v, c(m, K)) else v <- as.vector(v)
-    for (i in 1:m) { if (fam == "multinomial" && kd < 2) { for (cc in 1:K) cases[[length(cases) + 1]] <- cq("prd", hd, c(fm, kd, nc, rows), NX, numeric(0), numeric(0), numeric(0), if (ho) noff else numeric(0), c(i - 1, cc - 1), v[i, cc], rel = 1e-9, abs = 1e-12) }
-      else cases[[length(cases) + 1]] <- cq("prd", hd, c(fm, kd, nc, rows), NX, numeric(0), numeric(0), numeric(0), if (ho) noff else numeric(0), c(i - 1, 0), if (kd == 2) as.numeric(v[i]) else v[i], rel = 1e-9, abs = 1e-12) }
-  }
-  nz <- predict(f, NX, s = s, type = "nonzero"); nzl <- if (fam == "multinomial") lapply(nz, function(z) z[[1]]) else list(nz[[1]])
-  for (cc in seq_along(nzl)) { idx <- as.numeric(nzl[[cc]])
-    cases[[length(cases) + 1]] <- cq("prd", hd, c(fm, 3, nc, rows), NX, numeric(0), numeric(0), numeric(0), if (ho) noff else numeric(0), c(0, cc - 1), length(idx), rel = 0, abs = 0.5)
-    for (q in seq_along(idx)) cases[[length(cases) + 1]] <- cq("prd", hd, c(fm, 4, nc, rows), NX, numeric(0), numeric(0), numeric(0), if (ho) noff else numeric(0), c(q - 1, cc - 1), idx[q], rel = 0, abs = 0.5) }
-}
+# ---- fit: Cox -------------------------------------------------------------------------------------------------------------------------------------------------------------
+if (want_("cox")) { set.seed(20261201)
+  for (v in 1:12) {
+    .v <- v
+    d <- mk("cox", 50, 4, ties = v %in% c(5, 6, 7, 8), strata = v %in% c(7, 10), start = v %in% c(8, 11)); p <- d$p
+    o <- defopt(d, alpha = c(1, 0.5, 0.2)[(v %% 3) + 1], std = v != 4)
+    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3) o$off <- round(rnorm(d$n, 0, 0.4), 2); if (v == 4) { o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }
+    if (v == 9) o$excl <- c(2, 4); if (v == 12) o$relax <- 0.5
+    if (v %in% c(5, 6, 7, 8)) o$efron <- TRUE
+    if (v == 6) o$w <- round(runif(d$n, 0.3, 3), 2)
+    if (v == 1) o$vf <- round(runif(p, 0.3, 2), 2)
+    addfit(d, o)
+    # the automatic path: its checksum and length
+    a0 <- gargs(d, o); f0 <- suppressWarnings(do.call(glmnet, a0))
+    if (nzchar(Sys.getenv("GLM_DEBUG"))) { dv <- f0$dev.ratio; L <- length(dv); a2 <- a0; a2$thresh <- 1e-14; f2 <- suppressWarnings(do.call(glmnet, a2)); L2 <- length(f2$lambda); message("cox v ", v, " L ", L, " L(1e-14) ", L2, " rule at L-3..L: ", paste(signif((dv[(L-3):L] - dv[(L-7):(L-4)])/dv[(L-3):L], 4), collapse = " ")) }
+    cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 0, ck(f0$lambda), 1e-9, 1e-12); cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f0$lambda), 0, 0.5)
+  } }
 
-# nlambda and lambda.min.ratio (gaussian): "lseq" data = y[n]; query = (k, nlambda, ratio)
-set.seed(20261126)
-for (rep in if (want_("lseq")) 1:12 else integer(0)) {
-  n <- sample(50:100, 1); p <- sample(3:7, 1); X <- matrix(round(rnorm(n * p), 3), n, p); y <- round(X[, 1] * 2 - X[, 3] + rnorm(n), 3)
-  alpha <- c(1, 0.5, 0.2, 0.9)[(rep %% 4) + 1]; std <- rep %% 3 != 0; nl <- sample(c(10, 20, 50, 100), 1); ratio <- sample(c(0.5, 0.1, 0.01, 0.001), 1)
-  f <- suppressWarnings(glmnet(X, y, alpha = alpha, standardize = std, nlambda = nl, lambda.min.ratio = ratio)); L <- length(f$lambda)
-  hd <- head_(n, p, alpha, std, numeric(0), 0, 0, 0, rep(1, p))
-  for (k in unique(c(1, 2, L %/% 2, L))) cases[[length(cases) + 1]] <- cq("lseq", hd, y, X, numeric(0), numeric(0), numeric(0), numeric(0), c(k - 1, nl, ratio), f$lambda[k], rel = 1e-9, abs = 1e-12)
-}
-
-# glmnet at its default thresh (1e-7) over a user lambda sequence, against the exact solutions this port answers: gaussian "cfg", binomial "cfb", poisson "cfp" (data = y; query = (k, j)), Cox "cox" and multinomial "mult" in their layouts. glmnet stops each lambda once the objective gains less than thresh of the null deviance, which leaves its coefficients a few 1e-5 from the minimiser; these cases fix that gap
-set.seed(20261127)
-for (rep in if (want_("thresh7")) 1:3 else integer(0)) {
-  n <- sample(80:140, 1); p <- sample(4:6, 1); X <- matrix(round(rnorm(n * p), 3), n, p); alpha <- c(1, 0.5, 0.2)[(rep %% 3) + 1]; std <- TRUE; vf <- rep(1, p)
-  for (fam in c("gaussian", "binomial", "poisson", "cox", "multinomial")) {
-    K <- 3
-    y <- switch(fam, gaussian = round(X[, 1] * 2 - X[, 3] + rnorm(n), 3), binomial = rbinom(n, 1, plogis(1.2 * X[, 1] - 0.8 * X[, 3])), poisson = rpois(n, exp(0.5 + 0.5 * X[, 1] - 0.4 * X[, 3])), cox = NA, multinomial = NA)
-    if (fam == "cox") { tm <- round(rexp(n, exp(0.5 * X[, 1] - 0.5 * X[, 3])), 2) + 0.01; st <- rbinom(n, 1, 0.8); y <- Surv(tm, st) }
-    if (fam == "multinomial") { cl <- apply(exp(X[, 1:3] %*% matrix(c(1, 0, -1, 0, 1, 0, -1, 0, 1), 3, 3)), 1, function(r) sample(3, 1, prob = r)); y <- factor(cl) }
-    a0 <- list(x = X, y = y, family = fam, alpha = alpha, standardize = std); if (fam == "cox") a0$cox.ties <- "breslow"
-    f0 <- suppressWarnings(do.call(glmnet, a0)); lam <- f0$lambda[unique(round(seq(3, length(f0$lambda), length.out = 5)))]
-    a1 <- a0; a1$lambda <- lam; f <- suppressWarnings(do.call(glmnet, a1)); hd <- head_(n, p, alpha, std, lam, 0, 0, 0, vf)
-    for (k in c(2, length(lam))) {
-      if (fam %in% c("gaussian", "binomial", "poisson")) { cf <- as.matrix(coef(f)); for (j in 0:p) cases[[length(cases) + 1]] <- cq(c(gaussian = "cfg", binomial = "cfb", poisson = "cfp")[[fam]], hd, y, X, numeric(0), numeric(0), numeric(0), numeric(0), c(k - 1, j), cf[j + 1, k], rel = 1e-3, abs = 1e-4) }
-      if (fam == "cox") { cf <- as.matrix(coef(f)); for (j in 1:p) cases[[length(cases) + 1]] <- cq("cox", hd, c(tm, st), X, numeric(0), numeric(0), numeric(0), numeric(0), c(k - 1, j), cf[j, k], rel = 1e-3, abs = 1e-4) }
-      if (fam == "multinomial") { cf <- coef(f); for (cc in c(1, 3)) for (j in 0:p) cases[[length(cases) + 1]] <- cq("mult", hd, c(cl - 1, K, 0), X, numeric(0), numeric(0), numeric(0), numeric(0), c(k - 1, cc - 1, j), as.matrix(cf[[cc]])[j + 1, k], rel = 1e-2, abs = 5e-4) }
+# ---- fit: multinomial -------------------------------------------------------------------------------------------------------------------------------------------------------
+if (want_("mult")) { set.seed(20261202)
+  for (v in 1:11) {
+    .v <- v
+    d <- mk("multinomial", 70, 4, K = if (v == 8) 4 else 3)
+    okm <- TRUE
+    if (v >= 10) for (try_ in 1:300) {   # relaxed multinomial: keep a data set only when glmnet's own relaxed fit sits at the lasso limit (median class at zero), see below
+      o <- defopt(d, alpha = c(1, 0.5, 0.2)[(v %% 3) + 1], std = v != 4); a1 <- gargs(d, o); pl <- pickl(a1, d); a1$lambda <- pl$lam; a1$thresh <- 1e-14; a1$relax <- TRUE; f <- suppressWarnings(do.call(glmnet, a1))
+      okm <- all(sapply(seq_along(pl$lam), function(k) { b <- sapply(f$relaxed$beta, function(z) as.matrix(z)[, k]); act <- rowSums(abs(b)) > 0; !any(act) || max(abs(apply(b[act, , drop = FALSE], 1, median))) < 1e-6 }))
+      if (okm) break; d <- mk("multinomial", 70, 4, K = 3)
     }
-  }
-}
+    if (!okm) next
+    p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2)[(v %% 3) + 1], std = v != 4, grouped = v %in% c(5, 9))
+    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3) o$off <- round(rnorm(d$n * d$K, 0, 0.3), 2); if (v == 4) { o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }
+    if (v == 6) o$excl <- c(1, 3); if (v == 7) o$grouped <- FALSE; if (v == 1) o$vf <- round(runif(p, 0.3, 2), 2)
+    if (v == 8) { o$alpha <- 0.5 }
+    if (v == 5) o$w <- round(runif(d$n, 0.3, 3), 2)
+    # relaxed multinomial fits: the answer of glmnet is flat along one added vector per variable and it settles on the lasso limit (the median class at zero) on most data sets but not all, so only these two are compared
+    if (v == 10) { o$relax <- 0; o$grouped <- FALSE }; if (v == 11) { o$relax <- 0.5; o$grouped <- FALSE }
+    addfit(d, o, rel = 1e-4, abs = 1e-4)
+    a0 <- gargs(d, o); f0 <- suppressWarnings(do.call(glmnet, a0)); a1 <- a0; a1$thresh <- 1e-14; f1 <- suppressWarnings(do.call(glmnet, a1))
+    if (!(isTRUE(o$grouped) && length(o$w))) {
+    cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 0, ck(f1$lambda), 1e-9, 1e-12)
+    cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f1$lambda), 0, 0.5)   # at thresh 1e-14 the length is exact
+    if (!length(o$w)) cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f0$lambda), 0, 1.5)    # at the default thresh glmnet's own noise can move it by one (by several with weights: skipped)
+    }
+  } }
 
+# ---- fit: mgaussian ---------------------------------------------------------------------------------------------------------------------------------------------------------
+if (want_("mgauss")) { set.seed(20261203)
+  for (v in 1:6) {
+    d <- mk("mgaussian", 60, 4, K = if (v == 5) 3 else 2); p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2)[(v %% 3) + 1], std = v != 4)
+    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3) { o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }; if (v == 4) o$excl <- c(2, 3)
+    if (v == 5) o$relax <- 0.5; if (v == 6) o$vf <- round(runif(p, 0.3, 2), 2)
+    addfit(d, o, rel = 1e-4, abs = 1e-4)
+  } }
+
+# ---- fit: gaussian, binomial, poisson with bounds, exclude and relax -----------------------------------------------------------------------------------------------------
+if (want_("glm")) { set.seed(20261204)
+  for (fam in c("gaussian", "binomial", "poisson")) for (v in 1:5) {
+    d <- mk(fam, 60, 5); p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2, 0.9, 1)[v], std = v != 3)
+    if (v == 1) { o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }; if (v == 2) o$excl <- c(2, 5); if (v == 3) { o$relax <- 0; if (fam == "gaussian") o$w <- round(runif(d$n, 0.3, 3), 2) }
+    if (v == 4) { o$relax <- 0.5; o$off <- round(rnorm(d$n, 0, 0.3), 2) }; if (v == 5) { o$vf <- round(runif(p, 0.3, 2), 2); o$excl <- c(1, 3); o$w <- round(runif(d$n, 0.3, 3), 2) }
+    addfit(d, o)
+    a0 <- gargs(d, o); f0 <- suppressWarnings(do.call(glmnet, a0)); a2 <- a0; a2$thresh <- 1e-14; f2 <- suppressWarnings(do.call(glmnet, a2))
+    if (v %in% c(3, 4)) { cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 0, ck(f2$lambda), 1e-9, 1e-12); cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f2$lambda), 0, 0.5)
+      cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f0$lambda), 0, 1.5) }   # at the default thresh glmnet's own noise can move the length by one
+  } }
+
+# ---- the default thresh: glmnet stops a lambda once the objective gains less than 1e-7 of the null deviance, which leaves its coefficients near 1e-4 from the minimiser --------------
+if (want_("thresh7")) { set.seed(20261205)
+  for (fam in c("gaussian", "binomial", "poisson", "cox", "multinomial", "mgaussian")) for (v in 1:2) {
+    d <- mk(fam, 70, 5); o <- defopt(d, alpha = c(1, 0.4)[v]); addfit(d, o, rel = 2e-3, abs = 2e-3, thresh7 = TRUE)
+  } }
+
+# ---- cv.glmnet: weights, offsets, relax, the default lambda --------------------------------------------------------------------------------------------------------------------
+# data of "cv": hdr, response, X, ..., query = (which, kfrom, nfolds, measure, auto, foldid[n] 0-based, gamma index); which 0 mean cvm, 1 mean cvsd over k = kfrom .. (the end; less the last lambda when auto), 2 lambda.min, 3 lambda.1se, 4 length, 5 gamma.min, 6 relaxed lambda.min
+addcv <- function(d, o, ms, au, relax = FALSE, nf = 4) {
+  a0 <- gargs(d, o); n <- d$n; fid <- sample(rep(1:nf, length.out = n)); fam <- d$fam
+  tmn <- if (fam == "cox") c("deviance", "C")[ms + 1] else if (fam == "gaussian") c("deviance", "class", "mse", "mae")[ms + 1] else c("deviance", "class", "mse", "mae", "auc")[ms + 1]
+  if (fam == "gaussian") tmn <- c("mse", "mse", "mse", "mae")[ms + 1]
+  if (fam == "cox" && ms == 0) tmn <- "deviance"
+  cargs <- c(a0, list(foldid = fid, type.measure = tmn, relax = relax))
+  if (!au) { pl <- pickl(a0, d); cargs$lambda <- pl$lam; cargs$control <- list(thresh = 1e-14); lam <- pl$lam } else lam <- numeric(0)
+  cv <- suppressWarnings(do.call(cv.glmnet, cargs)); L <- length(cv$lambda); kfrom <- if (au) max(1, L %/% 3) else 1
+  if (au && (ms == 1 || (fam == "binomial" && ms == 4))) kfrom <- max(1, L %/% 2)
+  kend <- if (au) L - 1 else L; ks <- kfrom:kend
+  wm <- function(v) sum(wfun(ks - 1) * v[ks]) / sum(wfun(ks - 1))
+  hd <- o; hd$relax <- if (relax) 0 else NA
+  noisy <- au && (ms == 1 || (fam == "binomial" && ms == 4)); tol <- function(a, b) if (au) a else b
+  q <- function(w, k, want, rel, abs, gi = 4) cases[[length(cases) + 1]] <<- mkcase("cv", d, hd, lam, c(w, k - 1, nf, ms, au, fid - 1, gi), want, rel, abs)
+  cm <- if (relax) cv$relaxed$statlist[["g:0.5"]]$cvm else cv$cvm; cs <- if (relax) cv$relaxed$statlist[["g:0.5"]]$cvsd else cv$cvsd
+  gi <- if (relax) 2 else 4
+  if (au) q(4, 1, L, 0, 1.5)
+  # glmnet does not pass its thresh on to the refits of relax = TRUE, so a relaxed cross-validation carries its default-thresh noise
+  q(0, kfrom, wm(cm), if (noisy) 0 else if (relax) 5e-4 else tol(if (fam == "multinomial") 3e-3 else 5e-4, 1e-4), if (noisy) 0.04 else 1e-6, gi); q(1, kfrom, wm(cs), if (noisy) 0 else if (relax) 2e-2 else tol(2e-2, 1e-3), if (noisy) 0.05 else 1e-6, gi)
+  if (!au) { q(2, 1, cv$lambda.min, 1e-9, 1e-12); q(3, 1, cv$lambda.1se, 1e-9, 1e-12) }
+  if (relax && !au) { q(5, 1, cv$relaxed$gamma.min, 0, 1e-9); q(6, 1, cv$relaxed$lambda.min, 1e-9, 1e-12) }
+}
+if (want_("cv")) { set.seed(20261206)
+  for (fam in c("gaussian", "binomial", "poisson", "cox")) for (v in 1:4) {
+    d <- mk(fam, 60, 4); p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2, 0.9)[v], std = v != 3)
+    ms <- if (fam == "gaussian") c(0, 2, 3, 0)[v] else if (fam == "binomial") c(0, 1, 4, 2)[v] else if (fam == "poisson") c(0, 2, 3, 0)[v] else c(0, 1, 0, 1)[v]
+    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3 && fam != "gaussian") o$off <- round(rnorm(d$n, 0, 0.3), 2); if (v == 3 && fam == "gaussian") o$off <- round(rnorm(d$n, 0, 0.3), 2)
+    if (v == 4) { o$w <- round(runif(d$n, 0.3, 3), 2); o$off <- round(rnorm(d$n, 0, 0.3), 2) }
+    if (fam == "binomial" && ms == 4) o$w <- numeric(0)
+    addcv(d, o, ms, au = FALSE)
+    addcv(d, o, ms, au = TRUE)
+    if (v %in% c(1, 4)) addcv(d, o, if (fam == "binomial") 0 else ms, au = FALSE, relax = TRUE)
+  } }
+if (want_("cvm")) { set.seed(20261207)
+  for (v in 1:5) {
+    d <- mk("multinomial", 70, 4); p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2, 0.9, 1)[v], std = v != 3, grouped = v == 5)
+    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 4) o$off <- round(rnorm(d$n * 3, 0, 0.3), 2)
+    ms <- c(0, 1, 2, 3, 0)[v]
+    addcv(d, o, ms, au = FALSE); if (v != 5) addcv(d, o, ms, au = TRUE)
+    if (v == 1) addcv(d, o, 0, au = FALSE, relax = TRUE)
+  } }
+
+# ---- nlambda and lambda.min.ratio (gaussian): "lseq" data = y[n], X; query = (nlambda, ratio, the number of lambdas R reports) ---------------------------------------------------
+if (want_("lseq")) { set.seed(20261208)
+  for (rep in 1:6) {
+    n <- sample(50:80, 1); p <- sample(3:6, 1); X <- matrix(round(rnorm(n * p), 3), n, p); y <- round(X[, 1] * 2 - X[, 3] + rnorm(n), 3)
+    alpha <- c(1, 0.5, 0.2)[(rep %% 3) + 1]; std <- rep %% 2 == 0; nl <- sample(c(10, 20, 50, 100), 1); ratio <- sample(c(0.5, 0.1, 0.01, 0.001), 1)
+    f <- suppressWarnings(glmnet(X, y, alpha = alpha, standardize = std, nlambda = nl, lambda.min.ratio = ratio))
+    cases[[length(cases) + 1]] <- case("lseq", c(head_(n, p, alpha, std, numeric(0), 0, 0, 0, rep(1, p)), y, X, nl, ratio, length(f$lambda)), ck(f$lambda), rel = 1e-9, abs = 1e-12)
+  } }
+
+# ---- predict types, from the coefficients R reports at one lambda: "prd" data = (family, nc, rows[nc (p + 1)]), newx, offset, query = type -------------------------------------
+if (want_("predict")) { set.seed(20261209)
+  for (fam in c("gaussian", "binomial", "poisson", "cox", "multinomial")) for (rep in 1:2) {
+    d <- mk(fam, 80, 4); m <- 6; NX <- matrix(round(rnorm(m * d$p), 3), m, d$p); K <- 3
+    ho <- rep == 2 && fam %in% c("gaussian", "binomial", "poisson"); off <- round(rnorm(80, 0, 0.3), 2); noff <- round(rnorm(m, 0, 0.3), 2)
+    o <- defopt(d, alpha = 0.7); if (ho) o$off <- off
+    f <- suppressWarnings(do.call(glmnet, gargs(d, o))); s <- f$lambda[10]
+    cfl <- coef(f, s = s); rows <- if (fam == "multinomial") unlist(lapply(cfl, function(z) as.numeric(as.matrix(z)))) else { v <- as.numeric(as.matrix(cfl)); if (fam == "cox") c(0, v) else v }
+    nc <- if (fam == "multinomial") K else 1
+    pr <- function(type) if (ho) predict(f, NX, s = s, type = type, newoffset = noff) else predict(f, NX, s = s, type = type)
+    for (kd in 0:3) {
+      if ((kd == 2 && !(fam %in% c("binomial", "multinomial"))) || (kd == 1 && fam == "cox")) next
+      if (kd == 3) { nz <- predict(f, NX, s = s, type = "nonzero"); nzl <- if (fam == "multinomial") lapply(nz, function(z) z[[1]]) else list(nz[[1]]); v <- unlist(lapply(nzl, function(z) c(length(z), as.numeric(z)))) }
+      else { v <- pr(c("link", "response", "class")[kd + 1]); v <- if (kd == 2) as.numeric(v) else as.numeric(v) }
+      cases[[length(cases) + 1]] <- case("prd", c(head_(m, d$p, 0.7, 1, numeric(0), 0, 0, ho, rep(1, d$p)), famcode[[fam]], nc, rows, NX, if (ho) noff else numeric(0), kd), ck(v), rel = 1e-9, abs = 1e-12)
+    }
+  } }
+
+if (nzchar(Sys.getenv("GLM_V"))) cases <- Filter(function(z) identical(as.character(z$tag), Sys.getenv("GLM_V")), cases)
 emit("glmnet_ext", "glmnet", list(cases))
+assign("num", .oldnum, envir = globalenv())
