@@ -48334,3 +48334,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6966 — L473 closed, the isotone remainder split to L520
 
 **Decision.** L473's acceptance list (gpava with weights and the ties treatments, the Lp and quantile solvers, activeSet on general partial orders, pava) is equal to isotone on the oracle. The list-response form of gpava, the Chebyshev and Poisson activeSet solvers (the Poisson one needs a starting point) and user-supplied solver functions go to L520 and L473 leaves the queue. Linux pending.
+
+## D6967 — Hmisc: the S.D. of rcorr.cens
+
+**Decision.** `hmisc.rcorr_cens_sd` answers the S.D. that `rcorr.cens` reports, found by regressing the package's value on candidate forms until sd^2 M^2 / sum (r - D m)^2 was exactly 4 on every sample tried: for each relevant pair (an event i with a later time, or an event tied with a censored time) both members get the sign of x_j - x_i added to r and one added to m, D = sum r / sum m (Dxy) and M = sum m (the "Relevant Pairs"), so S.D. = 2 sqrt(sum (r_i - D m_i)^2) / M, with tied x values contributing zero to r but one to m. Equal to Hmisc on the censored-data samples of the oracle (oracle_hmisc, 4289 cases in all). Linux pending.

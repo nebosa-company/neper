@@ -41,7 +41,7 @@ for (rep in 1:40) {
   n <- sample(5:12, 1); xs <- sort(runif(n, -1, 1)); ys <- rnorm(n); xo <- c(runif(3, min(xs) - 1, max(xs) + 1), xs[2], (xs[1] + xs[2]) / 2)
   r <- approxExtrap(xs, ys, xout = xo)$y; for (j in seq_along(xo)) add("axt", c(n, xo[j], xs, ys), r[j])
   m <- sample(10:40, 1); tt <- round(rexp(m), 2); ee <- rbinom(m, 1, 0.7); xx <- round(runif(m), 1); if (sum(ee) < 2) next
-  rc <- rcorr.cens(xx, Surv(tt, ee)); for (j in 0:6) add("rcc", c(m, j, xx, tt, ee), unname(rc[c(1, 2, 4, 6, 7, 8, 9)[j + 1]]))
+  rc <- rcorr.cens(xx, Surv(tt, ee)); for (j in 0:6) add("rcc", c(m, j, xx, tt, ee), unname(rc[c(1, 2, 4, 6, 7, 8, 9)[j + 1]])); add("rcc", c(m, 7, xx, tt, ee), unname(rc[["S.D."]]))
 }
 # smean.cl.normal "scn", smean.sdl "ssd", smedian.hilow "smh": (n, conf or mult, j, x[n])
 for (rep in 1:25) {

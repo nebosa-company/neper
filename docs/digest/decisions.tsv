@@ -3825,4 +3825,5 @@ D6962	598	caret: the prevalence argument
 D6963	759	caret: knnImpute
 D6964	865	caret: varImp of a binomial glm
 D6965	537	L328 closed, the caret remainder split to L519
-D6966	458	L473 closed, the isotone remainder split to L520
+D6966	459	L473 closed, the isotone remainder split to L520
+D6967	685	Hmisc: the S.D. of rcorr.cens

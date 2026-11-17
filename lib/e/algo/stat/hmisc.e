@@ -615,3 +615,52 @@ fn describe_info(a: *mem.Arena, x: []const f64) -> f64 {
     let nf = f64(n)
     ret 1.0f64 - tot / (nf * nf * nf - nf)
 }
+
+// the S.D. of rcorr.cens: 2 sqrt(sum_i (r_i - D m_i)^2) / M, where for every relevant pair (an event i with a later time, or an event tied with a censored one) both members get the sign of x_j - x_i added to r and one added to m, D = sum r / sum m is Dxy and M = sum m the "Relevant Pairs"
+// (the form was found against the package: sd^2 M^2 / sum (r - D m)^2 is exactly 4)
+fn rcorr_cens_sd(a: *mem.Arena, x: []const f64, time: []const f64, event: []const f64) -> f64 {
+    let n = x.len
+    let (r, e1) = mem.alloc[f64](a, n)
+    let (m, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        r[i] = 0.0f64
+        m[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if event[i] == 1.0f64 {
+            var j = 0usize
+            while j < n {
+                if j != i && (time[i] < time[j] || (time[i] == time[j] && event[j] == 0.0f64)) {
+                    var s = 0.0f64
+                    if x[i] < x[j] { s = 1.0f64 } else if x[i] > x[j] { s = 0.0f64 - 1.0f64 }
+                    r[i] += s
+                    r[j] += s
+                    m[i] += 1.0f64
+                    m[j] += 1.0f64
+                }
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    var sr = 0.0f64
+    var sm = 0.0f64
+    i = 0usize
+    while i < n {
+        sr += r[i]
+        sm += m[i]
+        i += 1usize
+    }
+    let d = sr / sm
+    var ss = 0.0f64
+    i = 0usize
+    while i < n {
+        ss += (r[i] - d * m[i]) * (r[i] - d * m[i])
+        i += 1usize
+    }
+    ret 2.0f64 * math.sqrt[f64](ss) / sm
+}

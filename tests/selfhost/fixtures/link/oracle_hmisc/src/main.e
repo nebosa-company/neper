@@ -70,6 +70,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let n = usize(x[0usize])
         let (o, e) = mem.alloc[f64](a, 7usize)
         if e != ok { ret nan }
+        if usize(x[1usize]) == 7usize { ret hm.rcorr_cens_sd(a, x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n]) }
         hm.rcorr_cens(x[2usize..2usize + n], x[2usize + n..2usize + 2usize * n], x[2usize + 2usize * n..2usize + 3usize * n], o)
         ret o[usize(x[1usize])]
     }
