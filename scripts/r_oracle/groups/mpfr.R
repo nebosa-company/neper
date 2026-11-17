@@ -62,4 +62,14 @@ for (rep in 1:150) {
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
 }
+# lgamma (21) and gamma (22) for x in (0.3, 25), away from the zeros of lgamma
+for (rep in 1:14) {
+  op <- sample(21:22, 1); prec <- sample(c(53, 80, 100, 128), 1); e1 <- sample(-48:-46, 1); m1 <- sample(1:(2^50), 1)
+  x <- mpfr(m1, prec) * 2^e1; xv <- asNumeric(x); if (xv < 0.3 || xv > 25) next
+  if (op == 21 && abs(xv - 1) < 0.05 || abs(xv - 2) < 0.05) next
+  z <- if (op == 21) lgamma(x) else gamma(x); if (!is.finite(z) || z == 0) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(op, prec, m1, e1, 1, 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))

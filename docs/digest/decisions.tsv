@@ -3795,4 +3795,5 @@ D6932	1160	Rmpfr: correctly rounded arithmetic
 D6933	833	Rmpfr: exp and log
 D6934	814	Rmpfr: pi, sin, cos and pow
 D6935	758	Rmpfr: tan, sinh, cosh, tanh, atan
-D6936	664	Rmpfr: the inverse functions
+D6936	665	Rmpfr: the inverse functions
+D6937	828	Rmpfr: lgamma and gamma

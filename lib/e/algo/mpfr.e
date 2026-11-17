@@ -1,8 +1,8 @@
 // Rmpfr / MPFR style binary floating point of a chosen precision on the big integers of e.algo.bignum: a value is m * 2^e with m a signed integer of at most `prec` bits, and every operation is the exact result rounded to nearest, ties to even.
 //
-// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, pi, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
+// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, lgamma, gamma, pi, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
 //
-// Not here: gamma, zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
+// Not here: zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
 
 use e.algo.bignum as bn
 use e.math
@@ -707,5 +707,133 @@ fn inverse(a: *mem.Arena, kind: usize, x: Mp, prec: usize) -> (Mp, err) {
     }
     if er != ok { ret (zero, er) }
     let (rt_, re_) = round_to(a, res.m, res.e, prec)
+    ret (rt_, re_)
+}
+
+// the Bernoulli numbers B_0 .. B_nmax as exact rationals (Akiyama-Tanigawa), index j holding B_j with B_1 = +1/2
+fn bernoulli(a: *mem.Arena, nmax: usize) -> ([]bn.Rat, err) {
+    let (res, e0) = mem.alloc[bn.Rat](a, nmax + 1usize)
+    let (arr, e1) = mem.alloc[bn.Rat](a, nmax + 1usize)
+    if e0 != ok || e1 != ok { ret (res, mem.Full) }
+    let (one, e2) = bn.int_from_i64(a, 1i64)
+    if e2 != ok { ret (res, e2) }
+    var j = 0usize
+    while j <= nmax {
+        var i = j
+        let (d, e3) = bn.int_from_i64(a, i64(j) + 1i64)
+        if e3 != ok { ret (res, e3) }
+        let (q, e4) = bn.rat_make(a, one, d)
+        if e4 != ok { ret (res, e4) }
+        arr[j] = q
+        // the row below: A[m - 1] = m (A[m - 1] - A[m]) for m = j down to 1
+        while i > 0usize {
+            let (df, e5) = bn.rat_sub(a, arr[i - 1usize], arr[i])
+            if e5 != ok { ret (res, e5) }
+            let (mi, e6) = bn.int_from_i64(a, i64(i))
+            if e6 != ok { ret (res, e6) }
+            let (mr, e7) = bn.rat_make(a, mi, one)
+            if e7 != ok { ret (res, e7) }
+            let (pr, e8) = bn.rat_mul(a, mr, df)
+            if e8 != ok { ret (res, e8) }
+            arr[i - 1usize] = pr
+            i -= 1usize
+        }
+        res[j] = arr[0usize]
+        j += 1usize
+    }
+    ret (res, ok)
+}
+
+fn rat_to_mp(a: *mem.Arena, r: bn.Rat, w: usize) -> (Mp, err) {
+    let (nm, e1) = round_to(a, r.num, 0i64, w + 64usize)
+    let (dm, e2) = round_to(a, r.den, 0i64, w + 64usize)
+    if e1 != ok || e2 != ok { ret (zero, e1) }
+    let (q, e3) = div(a, nm, dm, w)
+    ret (q, e3)
+}
+
+// lgamma(x) for x > 0 to prec bits: lgamma(x + n) by Stirling's series with exact Bernoulli numbers, minus log(x (x + 1) .. (x + n - 1)), n chosen so x + n exceeds the working precision
+fn lgamma(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
+    let w = prec + 160usize
+    let xf = to_f64(a, x)
+    var n = 0i64
+    if xf < f64(w) { n = i64(f64(w) - xf) + 1i64 }
+    let (nn, e0) = from_parts(a, n, 0i64, w + 64usize)
+    if e0 != ok { ret (zero, e0) }
+    let (z, e1) = add(a, x, nn, w + 64usize)
+    if e1 != ok { ret (zero, e1) }
+    // the product x (x + 1) .. (x + n - 1)
+    let (one, e2) = from_parts(a, 1i64, 0i64, w + 64usize)
+    if e2 != ok { ret (zero, e2) }
+    var prod = one
+    var i = 0i64
+    while i < n {
+        let (ii, e3) = from_parts(a, i, 0i64, w + 64usize)
+        let (xi, e4) = add(a, x, ii, w + 64usize)
+        if e3 != ok || e4 != ok { ret (zero, mem.Full) }
+        let (p2, e5) = mul(a, prod, xi, w + 64usize)
+        if e5 != ok { ret (zero, e5) }
+        prod = p2
+        i += 1i64
+    }
+    let (lnp, e6) = log(a, prod, w)
+    if e6 != ok { ret (zero, e6) }
+    let (lz, e7) = log(a, z, w)
+    if e7 != ok { ret (zero, e7) }
+    let (half, e8) = from_parts(a, 1i64, 0i64 - 1i64, w)
+    if e8 != ok { ret (zero, e8) }
+    let (zh, e9) = sub(a, z, half, w)
+    if e9 != ok { ret (zero, e9) }
+    let (t1, e10) = mul(a, zh, lz, w)
+    if e10 != ok { ret (zero, e10) }
+    let (t2, e11) = sub(a, t1, z, w)
+    if e11 != ok { ret (zero, e11) }
+    let (p, e12) = pi(a, w)
+    if e12 != ok { ret (zero, e12) }
+    let (l2p, e13) = log(a, scale2(p, 1i64), w)
+    if e13 != ok { ret (zero, e13) }
+    let (t3, e14) = add(a, t2, scale2(l2p, 0i64 - 1i64), w)
+    if e14 != ok { ret (zero, e14) }
+    // the correction series sum B_2k / (2k (2k - 1) z^(2k - 1))
+    var kmax = w / 8usize + 10usize
+    let (bs, e15) = bernoulli(a, 2usize * kmax)
+    if e15 != ok { ret (zero, e15) }
+    let (zi, e16) = div(a, one, z, w)
+    if e16 != ok { ret (zero, e16) }
+    let (zi2, e17) = mul(a, zi, zi, w)
+    if e17 != ok { ret (zero, e17) }
+    var zp = zi
+    var sum = t3
+    var k = 1usize
+    var go = true
+    while go && k <= kmax {
+        let (bm, e18) = rat_to_mp(a, bs[2usize * k], w)
+        if e18 != ok { ret (zero, e18) }
+        let (d, e19) = from_parts(a, i64(2usize * k) * (i64(2usize * k) - 1i64), 0i64, w)
+        if e19 != ok { ret (zero, e19) }
+        let (b1, e20) = mul(a, bm, zp, w)
+        if e20 != ok { ret (zero, e20) }
+        let (term, e21) = div(a, b1, d, w)
+        if e21 != ok { ret (zero, e21) }
+        let (s2, e22) = add(a, sum, term, w)
+        if e22 != ok { ret (zero, e22) }
+        sum = s2
+        if term.m.sign == bn.Sign.Zero || mag_exp(term) < 0i64 - i64(w) - 8i64 { go = false }
+        let (zp2, e23) = mul(a, zp, zi2, w)
+        if e23 != ok { ret (zero, e23) }
+        zp = zp2
+        k += 1usize
+    }
+    let (res, e24) = sub(a, sum, lnp, w)
+    if e24 != ok { ret (zero, e24) }
+    let (rt_, re_) = round_to(a, res.m, res.e, prec)
+    ret (rt_, re_)
+}
+
+// gamma(x) for x > 0 as exp(lgamma(x)) with the logarithm carried at prec + 64 + the size of the exponent
+fn gamma(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
+    let (lg, e1) = lgamma(a, x, prec + 96usize)
+    if e1 != ok { ret (zero, e1) }
+    let (rt_, re_) = exp(a, lg, prec)
     ret (rt_, re_)
 }
