@@ -3610,4 +3610,5 @@ D6747	1545	splines2: nsk trim, df for the natural splines, fewer than two knots 
 D6748	1057	ashr: the EM fit
 D6749	1575	ashr: halfnormal mixtures and mode estimation
 D6750	830	seriation: the HC family of seriate
-D6751	899	EnvStats: t test power and sample size, normal mean interval widths
+D6751	900	EnvStats: t test power and sample size, normal mean interval widths
+D6752	1714	mice: the chained-equations sampler for the normal linear methods

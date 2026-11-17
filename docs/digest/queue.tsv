@@ -68,7 +68,7 @@ L338	library	0.2	461	robustbase: robust regression and scale	Partial (D6192, D64
 L339	library	0.16	634	bayestestR, performance and parameters: model summary indices	Partial (D6473 bayestestR hdi, eti, p_direction, rope, D6474 performance lm indices equal R on Windows;
 L340	library	0.55	723	signal: filter design and spectral tools	Partial (D6183, D6184 filtfilt and freqz, D6400 sgolay central row, D6401 cheby1, D6402 cheby2, D6403 grpdelay, D6404 band-pass butter, D6443 fir2, D6444 fir1 band types, D6445 decimate, unwrap).
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
-L346	library	0	284	mice: imputation parity	Open (CRAN rank 293).
+L346	library	0.25	640	mice: imputation parity	D6752: e.algo.stat.micepkg equals mice 3.19 after set.seed for norm.nob, norm and norm.predict on numeric data (initial draws, the chained regressions, remove.lindep) on 856 imputed values (oracle_mic
 L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6485 uniroot and uniroot.all with R's iterates, D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree 
 L361	library	0.2	646	segmented and strucchange: breakpoints and structural change	Partial (D6613).
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
