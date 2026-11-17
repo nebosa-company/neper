@@ -49,4 +49,17 @@ for (rep in 1:150) {
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
 }
+# asin (16), acos (17), asinh (18), acosh (19), atanh (20)
+for (rep in 1:150) {
+  op <- sample(16:20, 1); prec <- sample(c(53, 80, 100, 128, 200), 1); m1 <- sample(1:(2^50), 1); e1 <- sample(-62:-51, 1)
+  if (op %in% c(16, 17, 18, 20) && runif(1) < 0.5) m1 <- -m1
+  if (op == 19) { m1 <- 2^50 + sample(1:(2^50), 1); e1 <- -50 }
+  x <- mpfr(m1, prec) * 2^e1
+  if (op %in% c(16, 17, 20) && abs(asNumeric(x)) >= 0.9) next
+  z <- switch(op - 15, asin(x), acos(x), asinh(x), acosh(x), atanh(x)); if (!is.finite(z) || z == 0) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000))
+  a <- c(op, prec, m1, e1, 1, 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))

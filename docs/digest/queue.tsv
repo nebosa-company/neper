@@ -124,7 +124,7 @@ L369	library	0.15	795	plm and AER: panel data and applied econometrics	Partial (
 L372	library	0.15	729	spdep: spatial autocorrelation and spatial regression	Partial (D6624).
 L397	library	0	328	hunspell: spell checking	Open (CRAN rank 464).
 L417	library	0.35	747	gsl: special functions of the GNU Scientific Library	Partial (D6458 Bessel K, I and J, Lambert W0 and W-1, Hurwitz and Riemann zeta, D6459 E1, Ei, Dawson, Clausen, D6460 Airy, elliptic F, E, K, E complete, RF, RD, D6461 0F1, 1F1, 2F1, Legendre P, FD0, d
-L418	library	0.55	908	Rmpfr: arbitrary-precision floating point	Partial (D6932): e.algo.mpfr on the big integers of e.algo.bignum, correctly rounded (to nearest, ties to even) + - * / and sqrt at a chosen precision, equal to Rmpfr on Windows (oracle_mpfr: 200 oper
+L418	library	0.62	908	Rmpfr: arbitrary-precision floating point	Partial (D6932): e.algo.mpfr on the big integers of e.algo.bignum, correctly rounded (to nearest, ties to even) + - * / and sqrt at a chosen precision, equal to Rmpfr on Windows (oracle_mpfr: 200 oper
 L435	library	0.15	840	sna: social network analysis	Partial (D6636).
 L438	library	0	281	gss: smoothing spline ANOVA	Open (CRAN rank 634).
 L439	library	0.05	714	MCMCpack: Bayesian MCMC for common models	Partial (D6648).

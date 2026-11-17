@@ -48210,3 +48210,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6935 — Rmpfr: tan, sinh, cosh, tanh, atan
 
 **Decision.** `mpfr.tan` is the quotient of the guarded sine and cosine; `hyper` builds sinh, cosh and tanh from `exp` at the working precision plus twice the number of leading zero bits of x (the cancellation of sinh and tanh near 0); `atan` halves the argument four times by y / (1 + sqrt(1 + y^2)), sums the arctangent series and scales by 16. Equal to Rmpfr through the pair-of-doubles comparison on 150 operations (|x| below 2, including very small arguments; hyperbolic functions for |x| below 20; precisions 53 to 200) (oracle_mpfr, 1240 cases in all). Not here: asin, acos, asinh, acosh, atanh, atan for large arguments (needs the reflection through pi / 2), gamma, zeta, erf, Bessel. Linux pending.
+
+## D6936 — Rmpfr: the inverse functions
+
+**Decision.** `mpfr.inverse` gives asin (atan(x / sqrt(1 - x^2))), acos (pi / 2 - asin), asinh (log(|x| + sqrt(x^2 + 1)) with the sign of x), acosh (log(x + sqrt(x^2 - 1))) and atanh (log((1 + x) / (1 - x)) / 2), each with 160 guard bits plus twice the leading zero bits of x for the cancellation near 0. Equal to Rmpfr through the pair-of-doubles comparison on 150 operations (asin, acos and atanh for |x| below 0.9 down to 2^-62, asinh both signs, acosh on (1, 2]; precisions 53 to 200) (oracle_mpfr, 1540 cases in all). Not here: gamma, zeta, erf, Bessel, the other constants, the other rounding modes. Linux pending.

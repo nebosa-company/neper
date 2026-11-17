@@ -66,8 +66,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (t, e) = mp.hyper(a, op - 12usize, x, prec)
         r = t
         er = e
-    } else {
+    } else if op == 15usize {
         let (t, e) = mp.atan(a, x, prec)
+        r = t
+        er = e
+    } else {
+        let (t, e) = mp.inverse(a, op - 16usize, x, prec)
         r = t
         er = e
     }

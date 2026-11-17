@@ -1,8 +1,8 @@
 // Rmpfr / MPFR style binary floating point of a chosen precision on the big integers of e.algo.bignum: a value is m * 2^e with m a signed integer of at most `prec` bits, and every operation is the exact result rounded to nearest, ties to even.
 //
-// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, pi, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
+// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, pi, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
 //
-// Not here: the other inverse trigonometric and hyperbolic functions, gamma, zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
+// Not here: gamma, zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
 
 use e.algo.bignum as bn
 use e.math
@@ -630,5 +630,82 @@ fn atan(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
     }
     let r = scale2(sum, 4i64)
     let (rt_, re_) = round_to(a, r.m, r.e, prec)
+    ret (rt_, re_)
+}
+
+// kind 0 asin, 1 acos, 2 asinh, 3 acosh, 4 atanh: the logarithmic and arctangent identities with guard bits for the cancellation near 0 (and near 1 for acos); |x| < 1 for asin, acos and atanh, x > 1 for acosh
+fn inverse(a: *mem.Arena, kind: usize, x: Mp, prec: usize) -> (Mp, err) {
+    if x.m.sign == bn.Sign.Zero {
+        if kind == 1usize {
+            let (p, e0) = pi(a, prec + 8usize)
+            if e0 != ok { ret (zero, e0) }
+            let (rt0, re0) = round_to(a, p.m, p.e - 1i64, prec)
+            ret (rt0, re0)
+        }
+        ret (x, ok)
+    }
+    var extra = 0usize
+    let me = mag_exp(x)
+    if me < 0i64 { extra = usize(0i64 - me) }
+    let w = prec + 160usize + 2usize * extra
+    let (one, e1) = from_parts(a, 1i64, 0i64, w)
+    if e1 != ok { ret (zero, e1) }
+    let (x2, e2) = mul(a, x, x, w)
+    if e2 != ok { ret (zero, e2) }
+    var res = x
+    var er = ok
+    if kind == 0usize || kind == 1usize {
+        let (d, e3) = sub(a, one, x2, w)
+        if e3 != ok { ret (zero, e3) }
+        let (sq, e4) = sqrt(a, d, w)
+        if e4 != ok { ret (zero, e4) }
+        let (t, e5) = div(a, x, sq, w)
+        if e5 != ok { ret (zero, e5) }
+        let (at, e6) = atan(a, t, w)
+        if e6 != ok { ret (zero, e6) }
+        res = at
+        if kind == 1usize {
+            let (p, e7) = pi(a, w)
+            if e7 != ok { ret (zero, e7) }
+            let (c, e8) = sub(a, scale2(p, 0i64 - 1i64), at, w)
+            res = c
+            er = e8
+        }
+    } else if kind == 2usize || kind == 3usize {
+        var inner = x2
+        var e9 = ok
+        if kind == 2usize {
+            let (s, ea) = add(a, x2, one, w)
+            inner = s
+            e9 = ea
+        } else {
+            let (s, ea) = sub(a, x2, one, w)
+            inner = s
+            e9 = ea
+        }
+        if e9 != ok { ret (zero, e9) }
+        let (sq, e10) = sqrt(a, inner, w)
+        if e10 != ok { ret (zero, e10) }
+        // asinh for negative x by oddness: use |x|
+        var ax = x
+        if x.m.sign == bn.Sign.Negative { ax = neg(a, x) }
+        let (s2, e11) = add(a, ax, sq, w)
+        if e11 != ok { ret (zero, e11) }
+        let (lg, e12) = log(a, s2, w)
+        if e12 != ok { ret (zero, e12) }
+        res = lg
+        if kind == 2usize && x.m.sign == bn.Sign.Negative { res = neg(a, lg) }
+    } else {
+        let (n1, e13) = add(a, one, x, w)
+        let (d1, e14) = sub(a, one, x, w)
+        if e13 != ok || e14 != ok { ret (zero, e13) }
+        let (q, e15) = div(a, n1, d1, w)
+        if e15 != ok { ret (zero, e15) }
+        let (lg, e16) = log(a, q, w)
+        if e16 != ok { ret (zero, e16) }
+        res = scale2(lg, 0i64 - 1i64)
+    }
+    if er != ok { ret (zero, er) }
+    let (rt_, re_) = round_to(a, res.m, res.e, prec)
     ret (rt_, re_)
 }
