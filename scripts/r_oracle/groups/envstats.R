@@ -131,6 +131,16 @@ for (rep in 1:100) {
   r <- tryCatch(suppressWarnings(predIntNormTestPower(n, n.mean = nm, k = 1, delta.over.sigma = dos, pi.type = if (up) "upper" else "lower", conf.level = cl)), error = function(e) NA)
   if (is.finite(r)) cases[[length(cases) + 1]] <- case("pip", c(n, nm, dos, cl, as.numeric(up)), r, rel = 1e-6, abs = 1e-9)
 }
+# linearTrendTestPower ("ltp": (n, slope.over.sigma, alpha, alt, approx)) and linearTrendTestN ("ltn": (slope.over.sigma, alpha, power, alt, approx))
+for (rep in 1:120) {
+  al <- sample(0:2, 1); ap <- rep %% 4 == 0; n <- sample(4:80, 1); a <- c(0.01, 0.05, 0.1)[sample(3, 1)]
+  sl <- c(0.05, 0.1, 0.2, 0.5)[sample(4, 1)] * if (al == 1) -1 else if (al == 2) 1 else sample(c(-1, 1), 1)
+  v <- tryCatch(linearTrendTestPower(n, slope.over.sigma = sl, alpha = a, alternative = alts_t[al + 1], approx = ap), error = function(e) NA)
+  if (is.finite(v)) cases[[length(cases) + 1]] <- case("ltp", c(n, sl, a, al, as.numeric(ap)), v, rel = 1e-7, abs = 1e-10)
+  pw <- c(0.8, 0.9, 0.95)[sample(3, 1)]
+  r <- tryCatch(suppressWarnings(linearTrendTestN(sl, alpha = a, power = pw, alternative = alts_t[al + 1], approx = ap)), error = function(e) NA)
+  if (is.finite(r)) cases[[length(cases) + 1]] <- case("ltn", c(sl, a, pw, al, as.numeric(ap)), r, rel = 0, abs = 0)
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]

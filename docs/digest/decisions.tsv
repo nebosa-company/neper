@@ -3625,4 +3625,5 @@ D6762	730	EnvStats: ciBinomN
 D6763	675	EnvStats: exact one-sample propTestN
 D6764	596	EnvStats: predIntNormN
 D6765	445	EnvStats: tolIntNormN
-D6766	876	EnvStats: predIntNormTestPower for one future mean
+D6766	877	EnvStats: predIntNormTestPower for one future mean
+D6767	687	EnvStats: linearTrendTestPower and linearTrendTestN

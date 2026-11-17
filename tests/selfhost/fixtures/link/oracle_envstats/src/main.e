@@ -26,6 +26,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "pin") { ret es.pi_norm_n(z[0usize], z[1usize], z[2usize], z[3usize], z[4usize], 5000.0f64) }
     if str.eq(c.name, "tin") { ret es.tol_int_norm_n(z[0usize], z[1usize], z[2usize], z[3usize], z[4usize] > 0.5f64, 5000.0f64) }
     if str.eq(c.name, "pip") { ret es.pi_norm_power(z[0usize], z[1usize], z[2usize], z[3usize], z[4usize] > 0.5f64) }
+    if str.eq(c.name, "ltp") { ret es.lt_power_n(z[0usize], z[1usize], z[2usize], usize(z[3usize]), z[4usize] > 0.5f64) }
+    if str.eq(c.name, "ltn") { ret es.lt_n(z[0usize], z[1usize], z[2usize], usize(z[3usize]), z[4usize] > 0.5f64, 5000.0f64) }
     if str.eq(c.name, "gof") {
         let gn = usize(z[0usize])
         let (go, ge) = mem.alloc[f64](a, 3usize)

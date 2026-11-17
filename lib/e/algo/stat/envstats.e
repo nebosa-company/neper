@@ -923,3 +923,33 @@ fn pi_norm_power(n: f64, n_mean: f64, dos: f64, conf: f64, upper: bool) -> f64 {
     if upper { ret nc.pnt(dum * kf, n - 1.0f64, ncp, false, false) }
     ret nc.pnt(0.0f64 - dum * kf, n - 1.0f64, ncp, false, false)
 }
+
+// ---- linearTrendTestPower and linearTrendTestN ----
+
+// EnvStats::linearTrendTestPower for the sampling times 1..n (sxx = (n - 1) var(x) = n (n^2 - 1) / 12 unless given); alt 0 two-sided, 1 less, 2 greater
+fn lt_power(n: f64, sxx: f64, slope: f64, alpha: f64, alt: usize, approx: bool) -> f64 {
+    let df = n - 2.0f64
+    let ncp = math.sqrt[f64](sxx) * slope
+    if approx {
+        if alt == 1usize { ret nb.pt(nb.qt(alpha, df, true, false) - ncp, df, true, false) }
+        if alt == 2usize { ret 1.0f64 - nb.pt(nb.qt(1.0f64 - alpha, df, true, false) - ncp, df, true, false) }
+        ret nb.pt(nb.qt(alpha / 2.0f64, df, true, false) - ncp, df, true, false) + 1.0f64 - nb.pt(nb.qt(1.0f64 - alpha / 2.0f64, df, true, false) - ncp, df, true, false)
+    }
+    if alt == 1usize { ret nc.pnt(nb.qt(alpha, df, true, false), df, ncp, true, false) }
+    if alt == 2usize { ret 1.0f64 - nc.pnt(nb.qt(1.0f64 - alpha, df, true, false), df, ncp, true, false) }
+    ret 1.0f64 - nc.pnf(nb.qf(1.0f64 - alpha, 1.0f64, df, true, false), 1.0f64, df, ncp * ncp, true, false)
+}
+
+fn lt_power_n(n: f64, slope: f64, alpha: f64, alt: usize, approx: bool) -> f64 {
+    ret lt_power(n, n * (n * n - 1.0f64) / 12.0f64, slope, alpha, alt, approx)
+}
+
+// EnvStats::linearTrendTestN: the first whole n from 3 whose power reaches the request (the package roots a step function of n and rounds up), NaN beyond n_max
+fn lt_n(slope: f64, alpha: f64, power: f64, alt: usize, approx: bool, n_max: f64) -> f64 {
+    var n = 3.0f64
+    while n <= n_max {
+        if lt_power_n(n, slope, alpha, alt, approx) >= power { ret n }
+        n += 1.0f64
+    }
+    ret 0.0f64 / 0.0f64
+}
