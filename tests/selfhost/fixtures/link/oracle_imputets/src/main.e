@@ -26,6 +26,31 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if le != ok { os.exit(7) }
         ret lr[k]
     }
+    if str.eq(c.name, "maxgap") {
+        // args (option 0 locf 1 nocb 2 linear 3 spline, index, n, series..., maxgap at the end)
+        let mg = i64(x[3usize + n])
+        var r2: []f64 = zero
+        var e5 = ok
+        if kind <= 1usize {
+            let (q, qe) = it.na_locf_ts(a, s, kind == 1usize, 1usize)
+            r2 = q
+            e5 = qe
+        } else {
+            let (q, qe) = it.na_interpolation(a, s, kind - 2usize)
+            r2 = q
+            e5 = qe
+        }
+        if e5 != ok { os.exit(7) }
+        let (fl, fe) = mem.alloc[f64](a, n)
+        if fe != ok { os.exit(7) }
+        var t = 0usize
+        while t < n {
+            fl[t] = r2[t]
+            t += 1usize
+        }
+        it.apply_maxgap(s, fl, mg)
+        ret fl[k]
+    }
     if str.eq(c.name, "interp") {
         let (ir, ie) = it.na_interpolation(a, s, kind)
         if ie != ok { os.exit(7) }

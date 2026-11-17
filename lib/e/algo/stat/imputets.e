@@ -220,3 +220,26 @@ fn na_interpolation(a: *mem.Arena, x: []const f64, option: usize) -> ([]f64, err
     }
     ret (out, ok)
 }
+
+// maxgap: runs of missing values longer than maxgap in the original series are put back to missing in the filled one (maxgap < 0 means no limit)
+fn apply_maxgap(x: []const f64, filled: []f64, maxgap: i64) {
+    if maxgap < 0i64 { ret }
+    let n = x.len
+    var i = 0usize
+    while i < n {
+        if is_nan(x[i]) {
+            var j = i
+            while j < n && is_nan(x[j]) { j += 1usize }
+            if i64(j - i) > maxgap {
+                var k = i
+                while k < j {
+                    filled[k] = 0.0f64 / 0.0f64
+                    k += 1usize
+                }
+            }
+            i = j
+        } else {
+            i += 1usize
+        }
+    }
+}
