@@ -48518,3 +48518,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D7004 — extraDistr truncated binomial, truncated Poisson and logarithmic series generators
 
 `rgen4` draws one uniform and inverts it through `tbinom_q`, `tpois_q` and the new `lgser_q` (the smallest x whose cumulative mass reaches p). Found by comparing each package generator with its own quantile function at u and 1 - u under the same seed; the continuous families beta-prime, fatigue, triangular, truncated normal, inverse gamma, inverse chi-squared, location-scale t, half-t and non-standard beta match neither, and the discrete Laplace, Maxwell, zero-inflated Poisson and shifted Gompertz generators were not reproduced. Equal to extraDistr on 30 settings of 5 draws (oracle_extradistr). Linux pending.
+
+
+## D7005 — sn cp2dp for the skew-normal
+
+`cp2dp_sn(mean, sd, skewness, which)`: with c = 2 skew / (4 - pi) and g = cbrt(c), mu_z = g / sqrt(1 + g^2), delta = mu_z / sqrt(2/pi), omega = sd / sqrt(1 - mu_z^2), xi = mean - omega mu_z, alpha = delta / sqrt(1 - delta^2); NaN beyond the skewness limit 0.99527. Equal to `cp2dp(c(mean, sd, skew), "SN")` on 30 settings (oracle_sn). The skew-t inverse needs a numeric solve and is not here. Linux pending.

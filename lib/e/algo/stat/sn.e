@@ -200,3 +200,19 @@ fn dp2cp(xi: f64, omega: f64, alpha: f64, nu: f64, which: usize) -> f64 {
     if which == 2usize { ret st_cumulant(xi, omega, alpha, nu, 3usize) / (k2 * math.sqrt[f64](k2)) }
     ret st_cumulant(xi, omega, alpha, nu, 4usize) / (k2 * k2)
 }
+
+// cp2dp(c(mean, sd, skewness), "SN"): which 0 xi, 1 omega, 2 alpha; NaN when |skewness| is beyond the skew-normal limit
+fn cp2dp_sn(mean: f64, sd: f64, skew: f64, which: usize) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let lim = 0.9952717464311565f64
+    if math.abs[f64](skew) >= lim { ret nan }
+    let c = 2.0f64 * skew / (4.0f64 - pi())
+    var g = math.pow[f64](math.abs[f64](c), 1.0f64 / 3.0f64)
+    if c < 0.0f64 { g = 0.0f64 - g }
+    let muz = g / math.sqrt[f64](1.0f64 + g * g)
+    let delta = muz / math.sqrt[f64](2.0f64 / pi())
+    let omega = sd / math.sqrt[f64](1.0f64 - muz * muz)
+    if which == 1usize { ret omega }
+    if which == 0usize { ret mean - omega * muz }
+    ret delta / math.sqrt[f64](1.0f64 - delta * delta)
+}

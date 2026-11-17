@@ -29,4 +29,7 @@ for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; 
 # dp2cp proper "cp" (xi, omega, alpha, nu, which 0 mean 1 sd 2 skewness 3 kurtosis)
 for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, -0.5, 1, 4)[sample(4, 1)]; nu <- c(5.5, 7, 12, 40, Inf)[(rep - 1) %% 5 + 1]
   cp <- if (is.finite(nu)) dp2cp(c(xi, om, al, nu), "ST") else dp2cp(c(xi, om, al), "SN"); for (w in seq_along(cp)) add("cp", c(xi, om, al, nu, w - 1), unname(cp[w])) }
+# cp2dp "SN" "cp2" (mean, sd, skewness, which 0 xi 1 omega 2 alpha)
+for (rep in 1:30) { mn <- round(rnorm(1), 2); sdv <- runif(1, 0.5, 3); sk <- runif(1, -0.95, 0.95)
+  dp <- cp2dp(c(mn, sdv, sk), "SN"); if (is.null(dp)) next; for (w in 1:3) add("cp2", c(mn, sdv, sk, w - 1), unname(dp[w])) }
 emit("sn", "sn", list(cases))
