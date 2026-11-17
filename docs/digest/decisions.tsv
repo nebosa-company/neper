@@ -3624,4 +3624,5 @@ D6761	700	EnvStats: ciBinomHalfWidth
 D6762	730	EnvStats: ciBinomN
 D6763	675	EnvStats: exact one-sample propTestN
 D6764	596	EnvStats: predIntNormN
-D6765	444	EnvStats: tolIntNormN
+D6765	445	EnvStats: tolIntNormN
+D6766	876	EnvStats: predIntNormTestPower for one future mean

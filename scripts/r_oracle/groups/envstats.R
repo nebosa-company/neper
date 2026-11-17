@@ -125,6 +125,12 @@ for (rep in 1:80) {
   r <- tryCatch(suppressWarnings(tolIntNormN(hwv, sigma.hat = sg, coverage = cv, cov.type = if (ex) "expectation" else "content", conf.level = cl)), error = function(e) NA)
   if (is.finite(r)) cases[[length(cases) + 1]] <- case("tin", c(hwv, sg, cv, cl, as.numeric(ex)), r, rel = 0, abs = 0)
 }
+# predIntNormTestPower k = 1 ("pip": (n, n.mean, delta.over.sigma, conf.level, upper))
+for (rep in 1:100) {
+  up <- rep %% 2 == 0; n <- sample(3:60, 1); nm <- sample(1:5, 1); dos <- c(0, 0.5, 1, 2, 3, -1)[sample(6, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
+  r <- tryCatch(suppressWarnings(predIntNormTestPower(n, n.mean = nm, k = 1, delta.over.sigma = dos, pi.type = if (up) "upper" else "lower", conf.level = cl)), error = function(e) NA)
+  if (is.finite(r)) cases[[length(cases) + 1]] <- case("pip", c(n, nm, dos, cl, as.numeric(up)), r, rel = 1e-6, abs = 1e-9)
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]

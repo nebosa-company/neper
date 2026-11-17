@@ -907,3 +907,19 @@ fn tol_int_norm_n(hw: f64, sigma: f64, coverage: f64, conf: f64, expectation: bo
     }
     ret math.ceil[f64](0.5f64 * (lo + hi))
 }
+
+// EnvStats::predIntNormTestPower for one future mean (k = 1, the exact factor). With n_mean = 1 the package answers through tTestPower (a two-sample test against one observation);
+// otherwise it takes the upper tail of the non-central t at the factor for either limit, which the port repeats
+fn pi_norm_power(n: f64, n_mean: f64, dos: f64, conf: f64, upper: bool) -> f64 {
+    if dos == 0.0f64 { ret 1.0f64 - conf }
+    if n_mean == 1.0f64 {
+        var alt = 1usize
+        if upper { alt = 2usize }
+        ret tt_power(n, 1.0f64, dos, 1.0f64 - conf, true, alt, false)
+    }
+    let kf = pred_k(n, n_mean, 1.0f64, false, conf)
+    let dum = math.sqrt[f64]((n_mean * n) / (n_mean + n))
+    let ncp = dum * dos
+    if upper { ret nc.pnt(dum * kf, n - 1.0f64, ncp, false, false) }
+    ret nc.pnt(0.0f64 - dum * kf, n - 1.0f64, ncp, false, false)
+}

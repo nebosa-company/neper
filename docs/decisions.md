@@ -47530,3 +47530,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6765 — EnvStats: tolIntNormN
 
 **Decision.** `tol_int_norm_n` is `tolIntNormN` with the only method the package allows, Wald-Wolfowitz: for the expectation type it is `predIntNormN` at the coverage, for the content type the root of the gap between the requested half width and `tol_k` (kind 1) times sigma on (2, n.max), rounded up, 2 when n = 2 suffices. Equal to EnvStats on 75 sizes (oracle_envstats, 4479 cases in all). Linux pending.
+
+## D6766 — EnvStats: predIntNormTestPower for one future mean
+
+**Decision.** `pi_norm_power` is `predIntNormTestPower` for k = 1: zero shift gives `1 - conf`; with one future observation the package answers through `tTestPower` (two-sample against one observation, `greater` for the upper limit and `less` for the lower), and with a future mean of more than one it takes the upper tail of the non-central t at `dum K` (`dum = sqrt(n_mean n / (n_mean + n))`) for the upper limit and at `-dum K` for the lower, also as an upper tail, which the port repeats because the package does. Equal to EnvStats on 100 values (oracle_envstats, 4579 cases in all) at relative 1e-6 with 1e-9 absolute: in the far tails (1e-6 and below) the non-central t of the port and the package differ by up to 5e-10. Not here: k above 1, which needs the exact simultaneous probability. Linux pending.
