@@ -54,7 +54,7 @@ L314	library	0.15	1107	lubridate and timeDate: date-time parsing, periods, busin
 L317	library	0.08	687	igraph: random graph generators and layouts	Partly done (D6062): e.algo.graph.layout has layout_in_circle (with order), as_star, on_grid and on_sphere, equal to igraph on 580 summaries on Windows (oracle_layout);
 L275	library	0	387	Unicode collation, transliteration and encoding detection (stringi)	Open.
 L274	library	0.1	688	General linear mixed models (lme4)	Partial (D6878: e.algo.stat.lmerpkg has lmer with one random intercept, REML and ML, equal to lme4 on deviance, sigma, sigma_b, fixed effects and conditional modes at optimiser tolerance;
-L342	library	0.3	786	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Partial (D6917): e.algo.stat.lmerpkg.lmer_satt, lmerTest's Satterthwaite degrees of freedom of every fixed effect for the one-random-intercept model (REML or ML, at lme4's theta and sigma), equals lme
+L342	library	0.35	883	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Partial (D6917): e.algo.stat.lmerpkg.lmer_satt, lmerTest's Satterthwaite degrees of freedom of every fixed effect for the one-random-intercept model (REML or ML, at lme4's theta and sigma), equals lme
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L333	library	0.83	1890	pracma and polynom: numerical analysis toolbox	Partial (D6151, D6152 pchip and quadgk, D6164 legendre, chebPoly, laguerre, D6410 roots, D6411 conv, deconv, polyint, D6412 newtonRaphson, D6413 romberg, D6441 quadl, fzero, D6442 interp1, D6494 null 
 L334	library	0.3	665	RSpectra and irlba: partial eigen and singular value decompositions	Partial (D6612).

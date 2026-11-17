@@ -27,6 +27,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         g[i] = usize(z[5usize + n * p + i])
         i += 1usize
     }
+    if which >= 5000usize {
+        // ranova: which = 5000 + k (0 reduced criterion, 1 full criterion, 2 LRT, 3 p value), theta and sigma follow the data
+        let th = z[5usize + n * p + 2usize * n]
+        let sg = z[5usize + n * p + 2usize * n + 1usize]
+        let (ro, rae) = mem.alloc[f64](a, 4usize)
+        if rae != ok { ret nan }
+        if lm.lmer_ranova(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, th, sg, ro) != ok { ret nan }
+        ret ro[which - 5000usize]
+    }
     if which >= 4000usize {
         // contest1D: which = 4000 + k (k 0..4 the output), the contrast L[p] follows theta and sigma
         let th = z[5usize + n * p + 2usize * n]

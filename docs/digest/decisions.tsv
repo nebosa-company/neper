@@ -3804,4 +3804,5 @@ D6941	411	Rmpfr: Euler's constant
 D6942	1060	marginaleffects: average slopes and predictions of a logistic regression
 D6943	896	marginaleffects: links and comparisons
 D6944	698	Hmisc: GiniMd and the Info of describe
-D6945	716	fda: eval.fd
+D6945	717	fda: eval.fd
+D6946	739	lmerTest: ranova

@@ -48250,3 +48250,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6945 — fda: eval.fd
 
 **Decision.** `fdapkg.eval_fd_bspline` is `eval.fd(x, fd(coefs, basis), Lfdobj = deriv)` for a B-spline basis, the coefficient-weighted sum of the basis derivatives of D6927. fda answers zero for a derivative of order norder - 1 or more at the right end point of the range (the closed end of the last piece), which the basis evaluation now reproduces; the check found it on order-3 splines at x = 1 with the second derivative. Equal to fda on 25 random curves (3 to 8 breaks, orders 3 to 6, derivatives 0 to 2), four interior points and the right end point each (oracle_fda, 2110 cases in all). Not here: fd objects as a type, `deriv.fd` to a new basis, `mean.fd`, `sd.fd`. Linux pending.
+
+## D6946 — lmerTest: ranova
+
+**Decision.** `lmerpkg.lmer_ranova` gives the `ranova` table of the one-intercept REML fit: the full model's criterion (the REML deviance at lme4's theta and sigma), the reduced model's -2 logLik from `logLik(lm, REML = TRUE)` (N (log(2 pi RSS / N) + 1) + log det(X' X) with N = n - p; the `lm` method has no p log(2 pi) term, found against the package), the likelihood-ratio statistic and its chi-square p value on one degree of freedom (no boundary mixture, as lmerTest prints it). Equal to `ranova(model)` on the REML data sets of D6917 (the criteria to 1e-8, LRT 1e-4, p 1e-3; oracle_lmer, 576 cases in all). Not here: ML fits (ranova refits), several random terms, `step`, `difflsmeans`. Linux pending.

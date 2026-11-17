@@ -8,6 +8,7 @@
 use e.algo.stat.bayesmpkg as bz
 use e.algo.stat.fdrtool as fd
 use e.math
+use e.math.nmath as nmx
 use e.math.nmath_beta as nb
 use e.mem
 
@@ -380,5 +381,48 @@ fn lmer_contest(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize,
     out[2usize] = df
     out[3usize] = est / se
     out[4usize] = 2.0f64 * nb.pt(0.0f64 - math.abs[f64](est / se), df, true, false)
+    ret ok
+}
+
+// lmerTest ranova for the one-intercept model: the REML criterion of the reduced model lm(y ~ X), -2 logLik with logLik.lm(REML = TRUE) = N (log(2 pi RSS / N) + 1) + log det(X' X), N = n - p,
+// the full model's criterion at (theta, sigma) as lme4 reports them, and the likelihood-ratio test on one degree of freedom; out = (reduced criterion, full criterion, LRT, p value)
+fn lmer_ranova(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: usize, p: usize, ng: usize, theta: f64, sigma: f64, out: []f64) -> err {
+    let (cnt, e1) = mem.alloc[f64](a, ng)
+    let (w, e2) = mem.alloc[f64](a, ng)
+    let (xtvx, e3) = mem.alloc[f64](a, p * p)
+    let (xtvy, e4) = mem.alloc[f64](a, p)
+    let (u, e5) = mem.alloc[f64](a, p * p)
+    let (uinv, e6) = mem.alloc[f64](a, p * p)
+    let (tv, e7) = mem.alloc[f64](a, p)
+    let (beta, e8) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    var k = 0usize
+    while k < ng {
+        cnt[k] = 0.0f64
+        k += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        cnt[g[i]] += 1.0f64
+        i += 1usize
+    }
+    var c = Lmm{ n: n, p: p, ng: ng, reml: true, x: x, y: y, g: g, cnt: cnt, w: w, xtvx: xtvx, xtvy: xtvy, beta: beta, u: u, uinv: uinv, tv: tv, r2: 0.0f64, logdet: 0.0f64 }
+    let full = lmm_dev2(&c, theta, sigma)
+    // the reduced model: theta = 0 makes V = I, so the profiled quantities are those of ordinary least squares
+    let _ = lmm_profile(&c, 0.0f64)
+    var ldx = 0.0f64
+    var j = 0usize
+    while j < p {
+        ldx += 2.0f64 * math.log[f64](c.u[j * p + j])
+        j += 1usize
+    }
+    let nn = f64(n - p)
+    let two_pi = 6.283185307179586f64
+    let red = nn * (math.log[f64](two_pi * c.r2 / nn) + 1.0f64) + ldx
+    let lrt = red - full
+    out[0usize] = red
+    out[1usize] = full
+    out[2usize] = lrt
+    out[3usize] = nmx.pchisq(lrt, 1.0f64, false, false)
     ret ok
 }
