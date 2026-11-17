@@ -72,4 +72,13 @@ for (rep in 1:14) {
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
 }
+# erf (23, |x| below 6), log 2 (24), Catalan (25)
+for (rep in 1:60) {
+  op <- sample(23:25, 1); prec <- sample(c(53, 80, 100, 128, 200), 1); m1 <- sample(1:(2^50), 1); e1 <- sample(-56:-46, 1); if (runif(1) < 0.5) m1 <- -m1
+  x <- mpfr(m1, prec) * 2^e1; if (op == 23 && abs(asNumeric(x)) > 6) next
+  z <- switch(op - 22, erf(x), Const("log2", prec), Const("catalan", prec)); if (!is.finite(z) || z == 0) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(op, prec, m1, e1, 1, 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))

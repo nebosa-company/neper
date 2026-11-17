@@ -78,8 +78,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (t, e) = mp.lgamma(a, x, prec)
         r = t
         er = e
-    } else {
+    } else if op == 22usize {
         let (t, e) = mp.gamma(a, x, prec)
+        r = t
+        er = e
+    } else if op == 23usize {
+        let (t, e) = mp.erf(a, x, prec)
+        r = t
+        er = e
+    } else if op == 24usize {
+        let (t, e) = mp.const_log2(a, prec)
+        r = t
+        er = e
+    } else {
+        let (t, e) = mp.const_catalan(a, prec)
         r = t
         er = e
     }

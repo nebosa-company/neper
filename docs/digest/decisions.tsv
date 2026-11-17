@@ -3796,4 +3796,5 @@ D6933	833	Rmpfr: exp and log
 D6934	814	Rmpfr: pi, sin, cos and pow
 D6935	758	Rmpfr: tan, sinh, cosh, tanh, atan
 D6936	665	Rmpfr: the inverse functions
-D6937	828	Rmpfr: lgamma and gamma
+D6937	829	Rmpfr: lgamma and gamma
+D6938	713	Rmpfr: erf, log 2 and Catalan's constant

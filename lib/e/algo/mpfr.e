@@ -1,6 +1,6 @@
 // Rmpfr / MPFR style binary floating point of a chosen precision on the big integers of e.algo.bignum: a value is m * 2^e with m a signed integer of at most `prec` bits, and every operation is the exact result rounded to nearest, ties to even.
 //
-// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, lgamma, gamma, pi, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
+// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, lgamma, gamma, erf, pi, log 2 and Catalan constants, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
 //
 // Not here: zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
 
@@ -835,5 +835,108 @@ fn gamma(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
     let (lg, e1) = lgamma(a, x, prec + 96usize)
     if e1 != ok { ret (zero, e1) }
     let (rt_, re_) = exp(a, lg, prec)
+    ret (rt_, re_)
+}
+
+// log 2 to prec bits
+fn const_log2(a: *mem.Arena, prec: usize) -> (Mp, err) {
+    let (l, e1) = ln2(a, prec + 64usize)
+    if e1 != ok { ret (zero, e1) }
+    let (rt_, re_) = round_to(a, l.m, l.e, prec)
+    ret (rt_, re_)
+}
+
+// Catalan's constant G = pi / 8 log(2 + sqrt 3) + 3 / 8 sum_{n >= 0} 1 / ((2n + 1)^2 binomial(2n, n)), to prec bits
+fn const_catalan(a: *mem.Arena, prec: usize) -> (Mp, err) {
+    let w = prec + 96usize
+    let (p, e1) = pi(a, w)
+    let (two, e2) = from_parts(a, 2i64, 0i64, w)
+    let (three, e3) = from_parts(a, 3i64, 0i64, w)
+    if e1 != ok || e2 != ok || e3 != ok { ret (zero, mem.Full) }
+    let (s3, e4) = sqrt(a, three, w)
+    if e4 != ok { ret (zero, e4) }
+    let (t, e5) = add(a, two, s3, w)
+    if e5 != ok { ret (zero, e5) }
+    let (lg, e6) = log(a, t, w)
+    if e6 != ok { ret (zero, e6) }
+    let (pl, e7) = mul(a, p, lg, w)
+    if e7 != ok { ret (zero, e7) }
+    let first = scale2(pl, 0i64 - 3i64)
+    // the series: term_n = 1 / ((2n + 1)^2 C(2n, n)), C(2n + 2, n + 1) = C(2n, n) 2 (2n + 1) / (n + 1) kept as a running reciprocal
+    let (one, e8) = from_parts(a, 1i64, 0i64, w)
+    if e8 != ok { ret (zero, e8) }
+    var rc = one
+    var sum = one
+    var n = 1i64
+    var go = true
+    while go {
+        // 1 / C(2n, n) = 1 / C(2n - 2, n - 1) * n / (2 (2n - 1))
+        let (num, e9) = from_parts(a, n, 0i64, w)
+        let (den, e10) = from_parts(a, 2i64 * (2i64 * n - 1i64), 0i64, w)
+        if e9 != ok || e10 != ok { ret (zero, mem.Full) }
+        let (r1, e11) = mul(a, rc, num, w)
+        if e11 != ok { ret (zero, e11) }
+        let (r2, e12) = div(a, r1, den, w)
+        if e12 != ok { ret (zero, e12) }
+        rc = r2
+        let (sq, e13) = from_parts(a, (2i64 * n + 1i64) * (2i64 * n + 1i64), 0i64, w)
+        if e13 != ok { ret (zero, e13) }
+        let (tn, e14) = div(a, rc, sq, w)
+        if e14 != ok { ret (zero, e14) }
+        let (s2, e15) = add(a, sum, tn, w)
+        if e15 != ok { ret (zero, e15) }
+        sum = s2
+        if mag_exp(tn) < 0i64 - i64(w) - 8i64 { go = false }
+        n += 1i64
+    }
+    // 3 / 8 sum = (3 sum) / 8
+    let (s3x, e16) = mul(a, three, sum, w)
+    if e16 != ok { ret (zero, e16) }
+    let (tot, e17) = add(a, first, scale2(s3x, 0i64 - 3i64), w)
+    if e17 != ok { ret (zero, e17) }
+    let (rt_, re_) = round_to(a, tot.m, tot.e, prec)
+    ret (rt_, re_)
+}
+
+// erf x = 2 / sqrt(pi) sum (-1)^n x^(2n + 1) / (n! (2n + 1)) for moderate |x|, with guard bits for the cancellation (about x^2 / ln 2 bits)
+fn erf(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
+    if x.m.sign == bn.Sign.Zero { ret (x, ok) }
+    let xf = to_f64(a, x)
+    let extra = usize(xf * xf * 1.45f64) + 8usize
+    let me = mag_exp(x)
+    var small = 0usize
+    if me < 0i64 { small = usize(0i64 - me) }
+    let w = prec + 128usize + extra + small
+    let (x2, e1) = mul(a, x, x, w)
+    if e1 != ok { ret (zero, e1) }
+    var term = x
+    var sum = x
+    var n = 1i64
+    var go = true
+    while go {
+        let (t1, e2) = mul(a, term, x2, w)
+        let (d, e3) = from_parts(a, n, 0i64, w)
+        if e2 != ok || e3 != ok { ret (zero, mem.Full) }
+        let (t2, e4) = div(a, t1, d, w)
+        if e4 != ok { ret (zero, e4) }
+        term = neg(a, t2)
+        let (dd, e5) = from_parts(a, 2i64 * n + 1i64, 0i64, w)
+        if e5 != ok { ret (zero, e5) }
+        let (ct, e6) = div(a, term, dd, w)
+        if e6 != ok { ret (zero, e6) }
+        let (s2, e7) = add(a, sum, ct, w)
+        if e7 != ok { ret (zero, e7) }
+        sum = s2
+        if mag_exp(ct) < mag_exp(sum) - i64(w) - 5i64 && n > 2i64 { go = false }
+        n += 1i64
+    }
+    let (p, e8) = pi(a, w)
+    if e8 != ok { ret (zero, e8) }
+    let (sp, e9) = sqrt(a, p, w)
+    if e9 != ok { ret (zero, e9) }
+    let (q, e10) = div(a, sum, sp, w)
+    if e10 != ok { ret (zero, e10) }
+    let r = scale2(q, 1i64)
+    let (rt_, re_) = round_to(a, r.m, r.e, prec)
     ret (rt_, re_)
 }
