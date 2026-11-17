@@ -12,6 +12,7 @@ use e.algo.stat.stlpkg as stl
 use e.algo.rand.r as rng
 use e.algo.stat.kalman as kal
 use e.algo.stat.structts as sts
+use e.algo.stat.autoarima as aa
 
 error TooFewData
 
@@ -674,5 +675,30 @@ fn na_kalman_structts(a: *mem.Arena, x: []const f64, kind: usize, nf: usize, smo
     let (model, me) = sts.struct_ts_model(a, data, kind, nf)
     if me != ok { ret (data, me) }
     let (r2, e2) = na_kalman_model(a, data, x, &model, smooth, 0i64 - 1i64)
+    ret (r2, e2)
+}
+
+// na_kalman(x, model = "auto.arima", smooth): the series is smoothed (or filtered) under the state-space model of forecast::auto.arima(x)
+// (imputeTS hands the fitted model, whose state is the final filtered one, to KalmanSmooth with nit = -1)
+fn na_kalman_autoarima(a: *mem.Arena, x: []const f64, smooth: bool) -> ([]f64, err) {
+    let n = x.len
+    var nobs = 0usize
+    var i = 0usize
+    while i < n {
+        if !is_nan(x[i]) { nobs += 1usize }
+        i += 1usize
+    }
+    let (data, e) = mem.alloc[f64](a, n)
+    if e != ok { ret (data, e) }
+    i = 0usize
+    while i < n {
+        data[i] = x[i]
+        i += 1usize
+    }
+    if nobs == n { ret (data, ok) }
+    if nobs < 3usize { ret (data, TooFewData) }
+    let (model, me) = aa.auto_arima_model(a, x)
+    if me != ok { ret (data, me) }
+    let (r2, e2) = na_kalman_model(a, x, x, &model, smooth, 0i64 - 1i64)
     ret (r2, e2)
 }

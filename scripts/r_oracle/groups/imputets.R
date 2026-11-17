@@ -111,4 +111,18 @@ for (rep in 1:60) {
   for (i in seq_along(fit$model$a)) { vals[[as.character(30 + i - 1)]] <- fit$model$a[i]; vals[[as.character(50 + i - 1)]] <- fit$model$P[i, i] }
   for (nm in names(vals)) if (!is.na(vals[[nm]])) add("arima", c(p, d, q, kind, method, as.numeric(nm), n, enc(x)), vals[[nm]], rel = if (as.numeric(nm) <= 2) 1e-6 else 1e-4)
 }
+# na_kalman with model = "auto.arima" "aa" (smooth 1 or 0, 0, n, series...) -> the position-weighted sum of the result
+suppressMessages(library(forecast))
+for (rep in 1:40) {
+  n <- if (rep %% 20 == 0) 170 else sample(15:60, 1); kind <- rep %% 4
+  e <- arima.sim(list(ar = if (kind == 0) 0.6 else NULL, ma = if (kind == 1) 0.5 else NULL), n)
+  x <- round(switch(kind + 1, 10 + e, 10 + e, 10 + cumsum(rnorm(n, 0.2, 0.5)), 5 + 0.05 * seq_len(n) + e), 3)
+  na <- sample(seq(2, n - 1), sample(2:min(8, n %/% 5), 1)); if (rep %% 7 == 0) na <- c(na, 1, 2); if (rep %% 9 == 0) na <- c(na, n)
+  x[na] <- NA
+  for (sm in c(TRUE, FALSE)) {
+    r <- tryCatch(suppressWarnings(na_kalman(x, model = "auto.arima", smooth = sm)), error = function(e) NULL)
+    if (is.null(r)) next
+    add("aa", c(as.numeric(sm), 0, n, enc(x)), sum(r * seq_len(n)), rel = 1e-6)
+  }
+}
 emit("imputets", "imputeTS", list(cases))
