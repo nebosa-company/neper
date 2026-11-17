@@ -35,4 +35,11 @@ for (rep in 1:30) {
   d <- data.frame(y = y, X[, -1, drop = FALSE]); fit <- rlm(y ~ ., d); st <- c(coef(fit), fit$s, length(fit$conv), as.numeric(fit$converged))
   for (j in seq_along(st)) add("rlm", c(n, p, j - 1, y, X), st[j])
 }
+# kde2d: "kde2d" (n, n1, n2, h1, h2 (0 = default), lims[4], index (column-major z cell), x[n], y[n])
+for (rep in 1:20) {
+  n <- sample(10:40, 1); xx <- rnorm(n); yy <- 0.5 * xx + rnorm(n); n1 <- sample(3:8, 1); n2 <- sample(3:8, 1); lm_ <- c(range(xx) + c(-0.5, 0.5), range(yy) + c(-0.5, 0.5))
+  useh <- rep %% 2 == 0; h <- if (useh) c(runif(1, 0.3, 1.5), runif(1, 0.3, 1.5)) else c(0, 0)
+  k <- if (useh) kde2d(xx, yy, h = h, n = c(n1, n2), lims = lm_) else kde2d(xx, yy, n = c(n1, n2), lims = lm_)
+  for (idx in seq_len(n1 * n2)) add("kde2d", c(n, n1, n2, h, lm_, idx - 1, xx, yy), as.vector(k$z)[idx])
+}
 emit("mass", "MASS", list(cases))

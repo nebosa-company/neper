@@ -25,6 +25,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "kde2d") {
+        let kn = usize(x[0usize])
+        let n1 = usize(x[1usize])
+        let n2 = usize(x[2usize])
+        let (zz, ze) = mem.alloc[f64](a, n1 * n2)
+        if ze != ok { ret 0.0f64 / 0.0f64 }
+        if ms.kde2d(a, x[10usize..10usize + kn], x[10usize + kn..10usize + 2usize * kn], x[3usize], x[4usize], n1, n2, x[5usize..9usize], zz) != ok { ret 0.0f64 / 0.0f64 }
+        ret zz[usize(x[9usize])]
+    }
     if str.eq(c.name, "rlm") {
         let rn = usize(x[0usize])
         let rp = usize(x[1usize])

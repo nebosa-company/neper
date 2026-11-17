@@ -398,3 +398,50 @@ fn rlm_huber(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
     if done { out[2usize] = 1.0f64 } else { out[2usize] = 0.0f64 }
     ret ok
 }
+
+// kde2d(x, y, h, n, lims): the bivariate normal kernel density estimate on the n1 by n2 grid (z[i + n1 j] at (gx[i], gy[j])), the bandwidths h / 4 with h the given pair or bandwidth.nrd of each variable; lims = (x lo, x hi, y lo, y hi)
+fn kde2d(a: *mem.Arena, x: []const f64, y: []const f64, h1: f64, h2: f64, n1: usize, n2: usize, lims: []const f64, z: []f64) -> err {
+    let nx = x.len
+    var hx = h1
+    var hy = h2
+    if hx <= 0.0f64 { hx = bandwidth_nrd(a, x) }
+    if hy <= 0.0f64 { hy = bandwidth_nrd(a, y) }
+    hx = hx / 4.0f64
+    hy = hy / 4.0f64
+    let (gx, e1) = mem.alloc[f64](a, n1)
+    let (gy, e2) = mem.alloc[f64](a, n2)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    let bx = (lims[1usize] - lims[0usize]) / f64(n1 - 1usize)
+    let by = (lims[3usize] - lims[2usize]) / f64(n2 - 1usize)
+    var i = 0usize
+    while i < n1 {
+        gx[i] = lims[0usize] + f64(i) * bx
+        i += 1usize
+    }
+    gx[n1 - 1usize] = lims[1usize]
+    i = 0usize
+    while i < n2 {
+        gy[i] = lims[2usize] + f64(i) * by
+        i += 1usize
+    }
+    gy[n2 - 1usize] = lims[3usize]
+    let c = 0.3989422804014327f64
+    var gi = 0usize
+    while gi < n1 {
+        var gj = 0usize
+        while gj < n2 {
+            var s = 0.0f64
+            var k = 0usize
+            while k < nx {
+                let ax = (gx[gi] - x[k]) / hx
+                let ay = (gy[gj] - y[k]) / hy
+                s += c * math.exp[f64](0.0f64 - 0.5f64 * ax * ax) * c * math.exp[f64](0.0f64 - 0.5f64 * ay * ay)
+                k += 1usize
+            }
+            z[gi + n1 * gj] = s / (f64(nx) * hx * hy)
+            gj += 1usize
+        }
+        gi += 1usize
+    }
+    ret ok
+}
