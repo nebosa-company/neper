@@ -3729,4 +3729,5 @@ D6866	834	quantreg: the nid standard errors of summary.rq
 D6867	695	quantreg: the ker standard errors, and the shared sandwich
 D6868	1065	imputeTS: na_locf and na_interpolation
 D6869	587	imputeTS: the maxgap option
-D6870	800	TSA: eacf
+D6870	801	TSA: eacf
+D6871	903	LearnBayes: rwmetrop and indepmetrop

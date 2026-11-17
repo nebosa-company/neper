@@ -9,6 +9,8 @@ use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
+use e.algo.rand.r as rng
+use e.algo.stat.bayesmpkg as bz
 
 fn pbetap(a: f64, b: f64, n: f64, s: f64) -> f64 {
     let lcon = nm.lgammafn(n + 1.0f64) - nm.lgammafn(s + 1.0f64) - nm.lgammafn(n - s + 1.0f64)
@@ -152,4 +154,154 @@ fn bfexch(theta: f64, k: f64, y: []const f64, n: []const f64) -> f64 {
         i += 1usize
     }
     ret s + math.log[f64](eta * (1.0f64 - eta)) - nb.lbeta(sy + 1.0f64, sn + 1.0f64)
+}
+
+// ---- the random-walk and independence Metropolis samplers of LearnBayes, drawing with R's streams ----
+
+// the fixed log posteriors the oracle uses: 0 independent normals (m_i, s_i), 1 a banana-shaped density
+fn logpost_fixed(kind: usize, par: []const f64, th: []const f64) -> f64 {
+    if kind == 0usize {
+        var s = 0.0f64
+        var i = 0usize
+        while i < th.len {
+            let z = (th[i] - par[2usize * i]) / par[2usize * i + 1usize]
+            s -= 0.5f64 * z * z
+            i += 1usize
+        }
+        ret s
+    }
+    let u = th[1usize] - par[0usize] * th[0usize] * th[0usize]
+    ret 0.0f64 - 0.5f64 * (th[0usize] * th[0usize] / 4.0f64 + u * u)
+}
+
+// rwmetrop(logpost, list(var, scale), start, m): out is m by pb column-major, returns the acceptance rate; the candidate adds scale * t(chol(var)) z with z standard normal, one uniform per step
+fn rwmetrop(a: *mem.Arena, r: *rng.Rng, kind: usize, par: []const f64, vr: []const f64, scale: f64, start: []const f64, m: usize, out: []f64) -> f64 {
+    let pb = start.len
+    let (u, e1) = mem.alloc[f64](a, pb * pb)
+    let (b, e2) = mem.alloc[f64](a, pb)
+    let (bc, e3) = mem.alloc[f64](a, pb)
+    let (z, e4) = mem.alloc[f64](a, pb)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 / 0.0f64 }
+    if !bz.chol_upper(vr, pb, u) { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < pb {
+        b[i] = start[i]
+        i += 1usize
+    }
+    var lb = logpost_fixed(kind, par, b)
+    var acc = 0.0f64
+    var it = 0usize
+    while it < m {
+        i = 0usize
+        while i < pb {
+            z[i] = rng.norm(r)
+            i += 1usize
+        }
+        i = 0usize
+        while i < pb {
+            // (t(a) z)_i = sum_j a[j, i] z[j]
+            var sv = 0.0f64
+            var j = 0usize
+            while j <= i {
+                sv += u[i * pb + j] * z[j]
+                j += 1usize
+            }
+            bc[i] = b[i] + scale * sv
+            i += 1usize
+        }
+        let lbc = logpost_fixed(kind, par, bc)
+        let prob = math.exp[f64](lbc - lb)
+        if prob == prob {
+            if rng.unif(r) < prob {
+                lb = lbc
+                i = 0usize
+                while i < pb {
+                    b[i] = bc[i]
+                    i += 1usize
+                }
+                acc += 1.0f64
+            }
+        }
+        i = 0usize
+        while i < pb {
+            out[i * m + it] = b[i]
+            i += 1usize
+        }
+        it += 1usize
+    }
+    ret acc / f64(m)
+}
+
+// indepmetrop(logpost, list(mu, var), start, m): the independence sampler with a normal proposal
+fn indepmetrop(a: *mem.Arena, r: *rng.Rng, kind: usize, par: []const f64, mu: []const f64, vr: []const f64, start: []const f64, m: usize, out: []f64) -> f64 {
+    let pb = start.len
+    let (u, e1) = mem.alloc[f64](a, pb * pb)
+    let (ui, e2) = mem.alloc[f64](a, pb * pb)
+    let (th0, e3) = mem.alloc[f64](a, pb)
+    let (th1, e4) = mem.alloc[f64](a, pb)
+    let (z, e5) = mem.alloc[f64](a, pb)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret 0.0f64 / 0.0f64 }
+    if !bz.chol_upper(vr, pb, u) { ret 0.0f64 / 0.0f64 }
+    bz.inv_upper(u, pb, ui)
+    var i = 0usize
+    while i < pb {
+        th0[i] = start[i]
+        i += 1usize
+    }
+    var f0 = logpost_fixed(kind, par, th0)
+    var acc = 0.0f64
+    var it = 0usize
+    while it < m {
+        i = 0usize
+        while i < pb {
+            z[i] = rng.norm(r)
+            i += 1usize
+        }
+        i = 0usize
+        while i < pb {
+            var sv = 0.0f64
+            var j = 0usize
+            while j <= i {
+                sv += u[i * pb + j] * z[j]
+                j += 1usize
+            }
+            th1[i] = mu[i] + sv
+            i += 1usize
+        }
+        let f1 = logpost_fixed(kind, par, th1)
+        // log N kernels: -0.5 (x - mu)' V^-1 (x - mu) = -0.5 |Ui' (x - mu)|^2
+        var q0 = 0.0f64
+        var q1 = 0.0f64
+        var c = 0usize
+        while c < pb {
+            var s0 = 0.0f64
+            var s1 = 0.0f64
+            var j = 0usize
+            while j <= c {
+                s0 += ui[c * pb + j] * (th0[j] - mu[j])
+                s1 += ui[c * pb + j] * (th1[j] - mu[j])
+                j += 1usize
+            }
+            q0 += s0 * s0
+            q1 += s1 * s1
+            c += 1usize
+        }
+        let rr = math.exp[f64](0.0f64 - 0.5f64 * q0 + 0.5f64 * q1 + f1 - f0)
+        if rng.unif(r) < rr {
+            i = 0usize
+            while i < pb {
+                th0[i] = th1[i]
+                i += 1usize
+            }
+            f0 = f1
+            acc += 1.0f64
+        }
+        i = 0usize
+        while i < pb {
+            out[i * m + it] = th0[i]
+            i += 1usize
+        }
+        it += 1usize
+    }
+    ret acc / f64(m)
 }

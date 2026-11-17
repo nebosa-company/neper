@@ -22,4 +22,15 @@ for (rep in 1:20) {
   th <- runif(1, -2, 2); K <- runif(1, 0.5, 20)
   add("bfexch", c(th, K, g, yy, nnn), bfexch(th, list(data = cbind(yy, nnn), K = K)))
 }
+# rwmetrop "rwm" and indepmetrop "ind": (seed, kind 0 normals 1 banana, pb, m, scale, index (-1 acceptance rate), par[4], [mu[pb]], var[pb^2] column-major, start[pb])
+lp <- function(th, par) { th <- as.vector(th); if (par[5] == 0) -0.5 * sum(((th - par[c(1, 3)]) / par[c(2, 4)])^2) else { u <- th[2] - par[1] * th[1]^2; -0.5 * (th[1]^2 / 4 + u^2) } }
+for (rep in 1:20) {
+  kd <- rep %% 2; pb <- 2; m <- sample(15:40, 1); vv <- matrix(c(1, 0.3, 0.3, 1.5), 2) * runif(1, 0.5, 2); sc <- runif(1, 0.5, 2); st <- rnorm(2); sd <- sample(1:100000, 1)
+  par <- if (kd == 0) c(0.2, 1.3, -0.4, 0.8) else c(0.3, 0, 0, 0); pp <- c(par[1:4], 0); if (kd == 1) pp[5] <- 1
+  parv <- if (kd == 0) c(0.2, 1.3, -0.4, 0.8) else c(0.3, 0, 0, 0)
+  set.seed(sd); r1 <- rwmetrop(lp, list(var = vv, scale = sc), st, m, c(parv, kd)); 
+  for (idx in c(-1, 0:(m * pb - 1))) add("rwm", c(sd, kd, pb, m, sc, idx, parv, as.vector(vv), st), if (idx < 0) r1$accept else as.vector(r1$par)[idx + 1], 1e-9)
+  mu <- rnorm(2); set.seed(sd); r2 <- indepmetrop(lp, list(mu = mu, var = vv), st, m, c(parv, kd))
+  for (idx in c(-1, 0:(m * pb - 1))) add("ind", c(sd, kd, pb, m, sc, idx, parv, mu, as.vector(vv), st), if (idx < 0) r2$accept else as.vector(r2$par)[idx + 1], 1e-9)
+}
 emit("learnbayes", "LearnBayes", list(cases))

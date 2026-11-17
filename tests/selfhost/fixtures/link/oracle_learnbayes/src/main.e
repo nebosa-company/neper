@@ -6,6 +6,7 @@ use e.io
 use e.mem
 use e.os
 use e.str
+use e.algo.rand.r as rng
 use e.test.oracle as oracle
 
 fn rnd2(v: f64) -> f64 {
@@ -29,6 +30,25 @@ fn e_floor(v: f64) -> f64 {
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "rwm") || str.eq(k, "ind") {
+        // args (seed, kind, pb, m, scale, index (-1 acceptance), par[4], [mu[pb] for ind], var[pb^2], start[pb])
+        var r: rng.Rng = zero
+        rng.seed(&r, i64(x[0usize]))
+        let kd = usize(x[1usize])
+        let pb = usize(x[2usize])
+        let m = usize(x[3usize])
+        let par = x[6usize..10usize]
+        let (o, oe) = mem.alloc[f64](a, m * pb)
+        if oe != ok { os.exit(5) }
+        var acc = 0.0f64
+        if str.eq(k, "rwm") {
+            acc = lb.rwmetrop(a, &r, kd, par, x[10usize..10usize + pb * pb], x[4usize], x[10usize + pb * pb..10usize + pb * pb + pb], m, o)
+        } else {
+            acc = lb.indepmetrop(a, &r, kd, par, x[10usize..10usize + pb], x[10usize + pb..10usize + pb + pb * pb], x[10usize + pb + pb * pb..10usize + pb + pb * pb + pb], m, o)
+        }
+        if x[5usize] < 0.0f64 { ret acc }
+        ret o[usize(x[5usize])]
+    }
     if str.eq(k, "pbetap") { ret lb.pbetap(x[0usize], x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "discint") {
         let n = usize(x[1usize])
