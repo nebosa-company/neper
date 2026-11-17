@@ -15,6 +15,8 @@ for (rep in 1:8) for (mi in 1:8) {
   add("height", a, sum(h$height * seq_along(h$height)))
   add("merge", a, sum(as.vector(t(h$merge)) * seq_len(length(h$merge))))
   add("order", a, sum(h$order * seq_along(h$order)))
+  dr <- order.dendrogram(ladderize(as.dendrogram(h), right = TRUE)); dl <- order.dendrogram(ladderize(as.dendrogram(h), right = FALSE))
+  add("ladr", a, sum(dr * seq_along(dr))); add("ladl", a, sum(dl * seq_along(dl)))
   add("cut", a, sum(cutree(h, k = k) * seq_len(n)))
   if (!is.unsorted(h$height)) { hh <- sort(h$height); hq <- (hh[-1] + hh[-length(hh)]) / 2; hc0 <- sample(hq, 1); add("cuth", c(a, hc0), sum(cutree(h, h = hc0) * seq_len(n))) }
   cp <- as.vector(cophenetic(h))

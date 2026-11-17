@@ -101,6 +101,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(kind, "ladr") || str.eq(kind, "ladl") {
+        // ladderize(as.dendrogram(h), right): the leaf order, answered as sum of leaf * (position + 1)
+        let (lo, le) = mem.alloc[usize](a, n)
+        if le != ok { os.exit(8) }
+        if hc.ladderize_order(a, &t, n, str.eq(kind, "ladr"), lo) != ok { os.exit(9) }
+        i = 0usize
+        while i < n {
+            s += f64(lo[i]) * f64(i + 1usize)
+            i += 1usize
+        }
+        ret s
+    }
     if str.eq(kind, "order") {
         i = 0usize
         while i < n {

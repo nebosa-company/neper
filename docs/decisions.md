@@ -48258,3 +48258,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6947 — mclust: dmvnorm
 
 **Decision.** `mclustpkg.dmvnorm` is mclust's multivariate normal density at a point, density or log density, through the lower Cholesky factor of the covariance already used by the EM code (forward substitution for the quadratic form, twice the log diagonal for the determinant). Equal to `mclust::dmvnorm` on 30 random covariances of 1 to 5 dimensions, both scales (oracle_mclust, 6264 cases in all). Linux pending.
+
+## D6948 — dendextend: ladderize
+
+**Decision.** `hclust.ladderize_order` is the leaf order of `order.dendrogram(ladderize(as.dendrogram(hc), right))`: every node visits its larger subtree first, a tie keeping the order of the merge matrix, and `right = FALSE` is the whole order reversed (both found by testing the rule against 200 random dendrograms in R: putting the larger branch on the right instead failed all 200, as did a per-node smaller-first rule for `right = FALSE`). Equal to dendextend on the 64 draws of the hclust oracle (eight linkages, 8 to 25 points), both directions (oracle_hclust, 587 cases in all). Not here: untangle, as.dendrogram objects with heights and labels. Linux pending.

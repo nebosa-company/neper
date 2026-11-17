@@ -3806,4 +3806,5 @@ D6943	896	marginaleffects: links and comparisons
 D6944	698	Hmisc: GiniMd and the Info of describe
 D6945	717	fda: eval.fd
 D6946	740	lmerTest: ranova
-D6947	448	mclust: dmvnorm
+D6947	449	mclust: dmvnorm
+D6948	705	dendextend: ladderize

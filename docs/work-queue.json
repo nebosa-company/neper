@@ -75,10 +75,10 @@
       "group": "CRAN parity",
       "order": 600,
       "title": "dendextend and hclust operations",
-      "score": 0.7,
+      "score": 0.75,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6162, D6163 fowlkes_mallows and cor_cophenetic). hclust (all eight linkages: merge, order, heights), cutree by k and cophenetic equal R on Windows (oracle_hclust; Linux pending). D6805: entanglement equals dendextend on 10 draws. D6806: cor_bakers_gamma equals dendextend on 10 draws (labelled objects). D6807: cutree by h and the centroid/median nearest-neighbour repair equal R (459 cases). Open: as.dendrogram, untangle, ladderize. Was: Open (CRAN rank 297). Small to mid. e.ml.cluster has agglomerative. Acceptance, equal to R: hclust ordering and merge for every linkage including ward.D, ward.D2 and centroid, cutree by k and h, cophenetic, as.dendrogram order, dendextend cor_bakers_gamma, cor_cophenetic, entanglement, untangle, fowlkes_mallows and ladderize."
+      "evidence": "Partial (D6162, D6163 fowlkes_mallows and cor_cophenetic). hclust (all eight linkages: merge, order, heights), cutree by k and cophenetic equal R on Windows (oracle_hclust; Linux pending). D6805: entanglement equals dendextend on 10 draws. D6806: cor_bakers_gamma equals dendextend on 10 draws (labelled objects). D6807: cutree by h and the centroid/median nearest-neighbour repair equal R (459 cases). D6948: ladderize (leaf order, both directions) equals dendextend. Open: as.dendrogram objects, untangle. Was: Open (CRAN rank 297). Small to mid. e.ml.cluster has agglomerative. Acceptance, equal to R: hclust ordering and merge for every linkage including ward.D, ward.D2 and centroid, cutree by k and h, cophenetic, as.dendrogram order, dendextend cor_bakers_gamma, cor_cophenetic, entanglement, untangle, fowlkes_mallows and ladderize."
     },
     {
       "id": "L332",

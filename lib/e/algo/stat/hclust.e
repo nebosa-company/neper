@@ -558,3 +558,62 @@ fn cutree_h(a: *mem.Arena, t: *const Tree, n: usize, h: f64, out: []usize) -> er
     }
     ret cutree(a, t, n, n - below, out)
 }
+
+// dendextend::ladderize(as.dendrogram(hclust), right): the leaf order after every node puts its larger subtree first, ties keeping the order of the merge matrix (right = true); right = false is that order reversed. out receives n leaf numbers (1-based)
+fn ladderize_order(a: *mem.Arena, t: *const Tree, n: usize, right: bool, out: []usize) -> err {
+    let (sz, e1) = mem.alloc[usize](a, n)
+    let (stack, e2) = mem.alloc[i32](a, 2usize * n + 2usize)
+    if e1 != ok || e2 != ok { ret e1 }
+    var k = 0usize
+    while k + 1usize < n {
+        var sa = 1usize
+        var sb = 1usize
+        if t.merge_a[k] > 0i32 { sa = sz[usize(t.merge_a[k]) - 1usize] }
+        if t.merge_b[k] > 0i32 { sb = sz[usize(t.merge_b[k]) - 1usize] }
+        sz[k] = sa + sb
+        k += 1usize
+    }
+    var sp = 0usize
+    stack[0usize] = i32(n - 1usize)
+    sp = 1usize
+    var cnt = 0usize
+    while sp > 0usize {
+        sp -= 1usize
+        let node = stack[sp]
+        if node < 0i32 {
+            out[cnt] = usize(0i32 - node)
+            cnt += 1usize
+        } else {
+            let row = usize(node) - 1usize
+            var ca = t.merge_a[row]
+            var cb = t.merge_b[row]
+            var sa = 1usize
+            var sb = 1usize
+            if ca > 0i32 { sa = sz[usize(ca) - 1usize] }
+            if cb > 0i32 { sb = sz[usize(cb) - 1usize] }
+            let swap = sa < sb
+            if swap {
+                let tmp = ca
+                ca = cb
+                cb = tmp
+            }
+            // the first child is visited first, so it goes on the stack last
+            stack[sp] = cb
+            sp += 1usize
+            stack[sp] = ca
+            sp += 1usize
+        }
+    }
+    if !right {
+        var lo = 0usize
+        var hi = n - 1usize
+        while lo < hi {
+            let tmp = out[lo]
+            out[lo] = out[hi]
+            out[hi] = tmp
+            lo += 1usize
+            hi -= 1usize
+        }
+    }
+    ret ok
+}
