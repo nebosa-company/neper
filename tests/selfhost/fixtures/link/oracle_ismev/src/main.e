@@ -5,10 +5,23 @@ use e.algo.stat.ismev as im
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "h") {
+        let id = usize(x[0usize])
+        if id == 0usize { ret im.gevq(x[1usize], x[2usize], x[3usize], x[4usize]) }
+        if id == 1usize { ret im.gevf(x[1usize], x[2usize], x[3usize], x[4usize]) }
+        if id == 2usize { ret im.gev_dens(x[1usize], x[2usize], x[3usize], x[4usize]) }
+        if id == 3usize { ret im.gpdq(x[1usize], x[2usize], x[3usize], x[4usize]) }
+        if id == 4usize { ret im.gpdf(x[1usize], x[2usize], x[3usize], x[4usize]) }
+        if id == 5usize { ret im.gpd_dens(x[1usize], x[2usize], x[3usize], x[4usize]) }
+        if id == 6usize { ret im.gpdq2(x[1usize], x[2usize], x[3usize], x[4usize], x[5usize]) }
+        if id == 7usize { ret im.gev_rl_gradient(x[1usize], x[2usize], x[3usize], usize(x[4usize])) }
+        ret im.gpd_rl_gradient(x[1usize], x[2usize], x[3usize], x[4usize], usize(x[5usize]))
+    }
     let kind = usize(x[0usize])
     let which = usize(x[1usize])
     let u = x[2usize]

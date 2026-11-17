@@ -256,3 +256,57 @@ fn fit(a: *mem.Arena, x: []const f64, kind: usize, u: f64) -> (Fit, err) {
     if e5 != ok { ret (zero, e5) }
     ret (Fit { par: par, se: se, nllh: res.value }, ok)
 }
+
+// ---- the closed-form helpers ismev exports: the GEV quantile, distribution function and density, the GPD quantile, distribution function and density, the return-level gradients ----
+
+// gevq(a = (mu, sigma, xi), p): mu + sigma ((-log(1 - p))^-xi - 1) / xi, the Gumbel quantile at xi = 0
+fn gevq(mu: f64, sg: f64, xi: f64, p: f64) -> f64 {
+    if xi != 0.0f64 { ret mu + sg * (math.pow[f64](0.0f64 - math.log[f64](1.0f64 - p), 0.0f64 - xi) - 1.0f64) / xi }
+    ret mu - sg * math.log[f64](0.0f64 - math.log[f64](1.0f64 - p))
+}
+
+fn gevf(mu: f64, sg: f64, xi: f64, z: f64) -> f64 {
+    if xi != 0.0f64 { ret math.exp[f64](0.0f64 - math.pow[f64](1.0f64 + xi * (z - mu) / sg, 0.0f64 - 1.0f64 / xi)) }
+    ret math.exp[f64](0.0f64 - math.exp[f64](0.0f64 - (z - mu) / sg))
+}
+
+fn gev_dens(mu: f64, sg: f64, xi: f64, z: f64) -> f64 {
+    if xi != 0.0f64 {
+        let t = 1.0f64 + xi * (z - mu) / sg
+        ret math.exp[f64](0.0f64 - math.pow[f64](t, 0.0f64 - 1.0f64 / xi)) * math.pow[f64](t, 0.0f64 - 1.0f64 / xi - 1.0f64) / sg
+    }
+    let y = (z - mu) / sg
+    ret math.exp[f64](0.0f64 - y) * math.exp[f64](0.0f64 - math.exp[f64](0.0f64 - y)) / sg
+}
+
+// gpdq(a = (sigma, xi), u, p): u + sigma (p^-xi - 1) / xi; gpdf and gpd.dens likewise
+fn gpdq(sg: f64, xi: f64, u: f64, p: f64) -> f64 { ret u + sg * (math.pow[f64](p, 0.0f64 - xi) - 1.0f64) / xi }
+
+fn gpdf(sg: f64, xi: f64, u: f64, z: f64) -> f64 { ret 1.0f64 - math.pow[f64](1.0f64 + xi * (z - u) / sg, 0.0f64 - 1.0f64 / xi) }
+
+fn gpd_dens(sg: f64, xi: f64, u: f64, z: f64) -> f64 { ret math.pow[f64](1.0f64 + xi * (z - u) / sg, 0.0f64 - 1.0f64 / xi - 1.0f64) / sg }
+
+// gpdq2(a, u, la, m): the m-observation return level u + sigma ((m la)^xi - 1) / xi
+fn gpdq2(sg: f64, xi: f64, u: f64, la: f64, m: f64) -> f64 { ret u + sg * (math.pow[f64](m * la, xi) - 1.0f64) / xi }
+
+// gev.rl.gradient(a, p)[k]: the gradient of the GEV return level with respect to (mu, sigma, xi)
+fn gev_rl_gradient(sg: f64, xi: f64, p: f64, k: usize) -> f64 {
+    if k == 0usize { ret 1.0f64 }
+    let yp = 0.0f64 - math.log[f64](1.0f64 - p)
+    let ypx = math.pow[f64](yp, 0.0f64 - xi)
+    if k == 1usize { ret 0.0f64 - (1.0f64 - ypx) / xi }
+    ret sg / (xi * xi) * (1.0f64 - ypx) - sg / xi * ypx * math.log[f64](yp)
+}
+
+// gpd.rl.gradient(a = (la, sigma, xi), m)[k]
+fn gpd_rl_gradient(la: f64, sg: f64, xi: f64, m: f64, k: usize) -> f64 {
+    if xi == 0.0f64 {
+        if k == 0usize { ret sg / la }
+        if k == 1usize { ret math.log[f64](m * la) }
+        ret 0.0f64
+    }
+    let t = math.pow[f64](m * la, xi)
+    if k == 0usize { ret sg * math.pow[f64](m, xi) * math.pow[f64](la, xi - 1.0f64) }
+    if k == 1usize { ret (t - 1.0f64) / xi }
+    ret 0.0f64 - sg / (xi * xi) * (t - 1.0f64) + sg / xi * t * math.log[f64](m * la)
+}

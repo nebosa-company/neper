@@ -3717,4 +3717,5 @@ D6854	440	MuMIn: QAIC and QAICc
 D6855	599	tsfeatures: unitroot_kpss
 D6856	708	tsfeatures: unitroot_pp
 D6857	511	tsfeatures: hurst
-D6858	549	tsfeatures: arch_stat
+D6858	550	tsfeatures: arch_stat
+D6859	623	ismev: the closed-form helpers

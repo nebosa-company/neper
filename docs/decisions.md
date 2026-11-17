@@ -47902,3 +47902,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6858 — tsfeatures: arch_stat
 
 **Decision.** `tsfeatures.arch_stat(x, lags, demean)` is `arch_stat`: the squared demeaned series regressed (with an intercept, by `decomp.lm_fit`) on its first `lags` lagged squares, and the ordinary R squared (1 when the squares are constant, NaN when the series has at most lags + 1 points). Equal to tsfeatures on 10 oracle series at 12 lags (oracle_tsfeatures). Not here: the rest of `heterogeneity` (the AR whitening, the GARCH fit and its standardised residuals), `entropy`, `stl_features`. Linux pending.
+
+## D6859 — ismev: the closed-form helpers
+
+**Decision.** `ismev.gevq`, `gevf`, `gev_dens` (with the Gumbel limit at xi = 0), `gpdq`, `gpdf`, `gpd_dens`, `gpdq2` (the m-observation return level through the exceedance rate), `gev_rl_gradient` and `gpd_rl_gradient` (the gradients of the return levels, the xi = 0 form of the second included) are the helper functions ismev exports, in the package's parameterisations. Equal to ismev on 30 parameter draws, at machine tolerance (oracle_ismev, 493 cases in all). Not here: covariates and links, `pp.fit`, `rlarg.fit`, the profile likelihoods, the diagnostics. Linux pending.
