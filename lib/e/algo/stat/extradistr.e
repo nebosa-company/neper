@@ -395,6 +395,13 @@ fn rgen(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64) -> f64 {
     if family == 6usize { ret kumar_q(1.0f64 - u, p1, p2) }
     if family == 7usize { ret gompertz_q(1.0f64 - u, p1, p2) }
     if family == 12usize { ret gpd_q(1.0f64 - u, p1, p2, p3) }
+    if family == 13usize { ret p1 + math.ceil[f64](u * (p2 - p1 + 1.0f64)) - 1.0f64 }
+    if family == 14usize {
+        if u < p1 { ret 1.0f64 }
+        ret 0.0f64
+    }
+    if family == 15usize { ret math.ceil[f64](math.pow[f64](math.log[f64](u) / math.log[f64](p1), 1.0f64 / p2)) - 1.0f64 }
+    if family == 16usize { ret tlambda_q(u, p1) }
     ret p1 * math.abs[f64](math.tan[f64](pi() * u))
 }
 

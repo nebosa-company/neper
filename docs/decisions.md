@@ -48443,3 +48443,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6989 — extraDistr GEV and GPD generators
 
 `rgen` families 11 and 12: the GEV draws a standard exponential E and answers mu + sigma (E^-xi - 1) / xi (the Gumbel limit at xi = 0), the GPD draws u and answers the quantile at 1 - u. Equal to `rgev` and `rgpd` under set.seed on 12 settings of 5 draws (oracle_extradistr). Linux pending.
+
+
+## D6990 — extraDistr discrete uniform, Bernoulli, discrete Weibull and Tukey lambda generators
+
+`rgen` families 13 to 16: one uniform each; the discrete uniform is min + ceil(u (max - min + 1)) - 1, the Bernoulli is 1 when u < prob, the discrete Weibull ceil((log u / log q)^(1/beta)) - 1, the Tukey lambda its quantile at u. Equal to extraDistr under set.seed on 30 settings of 5 draws (oracle_extradistr). Trap in the oracle script: set.seed must come after the random parameters are drawn, or the R stream is not the one the fixture seeds. The Bhattacharjee generator is not normal plus uniform in sequence and is not here. Linux pending.

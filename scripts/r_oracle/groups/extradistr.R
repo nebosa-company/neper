@@ -122,4 +122,10 @@ for (rep in 1:33) {
 for (rep in 1:12) { sd <- sample(1:100000, 1); mu <- rnorm(1); sg <- runif(1, 0.5, 2); xi <- c(-0.4, 0.3, 0.6, -0.2)[rep %% 4 + 1]; fam <- 11 + rep %% 2
   set.seed(sd); v <- if (fam == 11) rgev(5, mu, sg, xi) else rgpd(5, mu, sg, xi)
   for (j in 1:5) if (is.finite(v[j])) cases[[length(cases) + 1]] <- case("rg", c(fam, sd, mu, sg, xi, j - 1), v[j], rel = 1e-10, abs = 1e-12) }
+# discrete uniform (13), Bernoulli (14), discrete Weibull (15) and Tukey lambda (16) draws: (family, seed, p1, p2, p3, index)
+for (rep in 1:30) { sd <- sample(1:100000, 1); fam <- 13 + (rep - 1) %% 4
+  lo <- sample(-3:3, 1); hi <- lo + sample(3:9, 1); pr <- runif(1, 0.2, 0.8); q <- runif(1, 0.4, 0.9); be <- runif(1, 0.6, 2); lam <- runif(1, -0.5, 1.5); mu <- rnorm(1); sg <- runif(1, 0.5, 2); aa <- runif(1, 0.3, 2)
+  set.seed(sd); v <- switch(fam - 12, rdunif(5, lo, hi), rbern(5, pr), rdweibull(5, q, be), rtlambda(5, lam))
+  pp <- switch(fam - 12, c(lo, hi, 0), c(pr, 0, 0), c(q, be, 0), c(lam, 0, 0))
+  for (j in 1:5) if (is.finite(v[j])) cases[[length(cases) + 1]] <- case("rg", c(fam, sd, pp, j - 1), v[j], rel = 1e-10, abs = 1e-12) }
 emit("extradistr", "extraDistr", list(cases))
