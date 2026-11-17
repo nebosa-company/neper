@@ -424,3 +424,75 @@ fn power_fisher_test(a: *mem.Arena, p1: f64, p2: f64, n1: f64, n2: f64, alpha: f
     }
     ret hit / f64(nsim)
 }
+
+// qinvgauss(p, mean, dispersion, lower.tail, log.p) of statmod: the start from the mode or a tail approximation, then the package's Newton steps on the log scale until the step is under 1e-14 relative
+fn qinvgauss(p0: f64, mean: f64, disp: f64, lower: bool, lg: bool) -> f64 {
+    var logp = p0
+    if !lg {
+        if p0 < 0.0f64 || p0 > 1.0f64 { ret 0.0f64 / 0.0f64 }
+        logp = math.log[f64](p0)
+    }
+    let p = math.exp[f64](logp)
+    let inf = 1.0f64 / 0.0f64
+    var left = logp == 0.0f64 - inf
+    var right = logp == 0.0f64
+    if !lower {
+        left = logp == 0.0f64
+        right = logp == 0.0f64 - inf
+    }
+    if left { ret 0.0f64 }
+    if right { ret inf }
+    let phi = disp * mean
+    if phi < 1.0e-8f64 { ret nm.qgamma(logp, 1.0f64 / phi, phi * mean, lower, true) }
+    let kappa = 1.5f64 * phi
+    var x = math.sqrt[f64](1.0f64 + kappa * kappa) - kappa
+    if kappa > 1000.0f64 {
+        let k1 = 1.0f64 / 2.0f64 / kappa
+        x = k1 * (1.0f64 - k1 * k1)
+    }
+    var smallleft = logp < 0.0f64 - 11.51f64
+    var smallright = logp > 0.0f64 - 1.0e-5f64
+    if !lower {
+        smallleft = logp > 0.0f64 - 1.0e-5f64
+        smallright = logp < 0.0f64 - 11.51f64
+    }
+    if smallleft {
+        let qn = mdist.qnorm(logp, 0.0f64, 1.0f64, lower, true)
+        x = 1.0f64 / phi / (qn * qn)
+    }
+    if smallright {
+        let alpha = 1.0f64 / phi
+        let qg = nm.qgamma(logp, alpha, 1.0f64 / alpha, lower, true)
+        if qg > x { x = qg }
+    }
+    var dx = invgauss_step(x, p, logp, phi, lower)
+    if dx != dx { dx = 0.0f64 }
+    var sdx = 0.0f64
+    if dx > 0.0f64 { sdx = 1.0f64 } else if dx < 0.0f64 { sdx = 0.0f64 - 1.0f64 }
+    if lower { x = x + dx } else { x = x - dx }
+    var more = math.abs[f64](dx) > 1.0e-14f64
+    var iter = 0usize
+    while more {
+        iter += 1usize
+        if iter > 200usize { break }
+        dx = invgauss_step(x, p, logp, phi, lower)
+        if dx != dx || dx * sdx < 0.0f64 { dx = 0.0f64 }
+        if lower { x = x + dx } else { x = x - dx }
+        var den = x
+        if den < 1.0f64 { den = 1.0f64 }
+        more = math.abs[f64](dx) / den > 1.0e-14f64
+    }
+    ret x * mean
+}
+
+fn invgauss_step(x: f64, p: f64, logp: f64, phi: f64, lower: bool) -> f64 {
+    let logf = pinvgauss(x, 1.0f64, phi, lower, true)
+    let dlogp = logp - logf
+    var dp = 0.0f64
+    if math.abs[f64](dlogp) < 1.0e-5f64 {
+        dp = math.exp[f64](logp + mdist.log1p(0.0f64 - dlogp / 2.0f64)) * dlogp
+    } else {
+        dp = p - math.exp[f64](logf)
+    }
+    ret dp / dinvgauss(x, 1.0f64, phi, false)
+}

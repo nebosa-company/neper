@@ -24,6 +24,12 @@ for (rep in 1:60) {
   add("igd", c(x, mu, phi), dinvgauss(x, mu, dispersion = phi)); add("igdl", c(x, mu, phi), dinvgauss(x, mu, dispersion = phi, log = TRUE))
   add("igp", c(x, mu, phi), pinvgauss(x, mu, dispersion = phi)); add("igpu", c(x, mu, phi), pinvgauss(x, mu, dispersion = phi, lower.tail = FALSE)); add("igpl", c(x, mu, phi), pinvgauss(x, mu, dispersion = phi, log.p = TRUE))
 }
+# qinvgauss: "igq" lower, "igqu" upper tail, "igql" log p lower; args (p, mean, dispersion)
+for (rep in 1:80) {
+  mu <- c(0.3, 1, 2.5, 8)[sample(4, 1)]; phi <- c(0.05, 0.4, 1, 3, 12)[sample(5, 1)]; pr <- c(1e-8, 1e-4, 0.01, 0.2, 0.5, 0.8, 0.99, 0.9999, 1 - 1e-8)[sample(9, 1)]
+  add("igq", c(pr, mu, phi), qinvgauss(pr, mu, dispersion = phi)); add("igqu", c(pr, mu, phi), qinvgauss(pr, mu, dispersion = phi, lower.tail = FALSE))
+  add("igql", c(log(pr), mu, phi), qinvgauss(log(pr), mu, dispersion = phi, log.p = TRUE))
+}
 for (rep in 1:12) {
   n <- sample(5:30, 1); mu <- c(0.5, 1, 3)[sample(3, 1)]; phi <- c(0.1, 1, 6)[sample(3, 1)]; sd <- sample(1:100000, 1)
   set.seed(sd); r <- rinvgauss(n, mu, dispersion = phi)

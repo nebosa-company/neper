@@ -47710,3 +47710,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6810 — ResourceSelection: wrsi and CAIC
 
 **Decision.** `hoslem.wrsi` is `ResourceSelection::wrsi(y, x)`: for each column of x the available and used proportions (column sums rounded as R's long-double sums are, the used table being x times the indicator y > 0), WRSI, its log, the bounded rWRSI (exp(2 log W) - 1) / (1 + exp(2 log W)), Pw, and the used and available totals; `hoslem.caic` is `CAIC(model, alpha = a)`, a AIC + (1 - a) BIC from the log likelihood, parameter count and n. Equal to the package on 30 draws of each (oracle_hoslem, 1950 cases in all). `sindex` is `wrsi`'s rWRSI per response column. Not here: `rsf`, `rspf`, `mep`, `kdepairs`, `simulateUsedAvail`. Linux pending.
+
+## D6811 — statmod: qinvgauss
+
+**Decision.** `gaussq.qinvgauss(p, mean, dispersion, lower, log.p)` is statmod's quantile of the inverse Gaussian for finite positive mean and dispersion: the start from the mode (or a normal or gamma tail approximation at log p below -11.51 or above -1e-5), then the package's Newton steps on the log scale with its damping (a step against the first step's sign is dropped) until the relative step is under 1e-14, reusing `pinvgauss` and `dinvgauss`; a coefficient of variation squared under 1e-8 goes to the gamma quantile. Equal to statmod on 80 draws of each of lower, upper and log scale (oracle_gaussq). Not here: vector recycling, an infinite mean. Linux pending.

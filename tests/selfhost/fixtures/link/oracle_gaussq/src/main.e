@@ -18,6 +18,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "igdl") { ret gq.dinvgauss(z[0usize], z[1usize], z[2usize], true) }
     if str.eq(c.name, "igp") { ret gq.pinvgauss(z[0usize], z[1usize], z[2usize], true, false) }
     if str.eq(c.name, "igpu") { ret gq.pinvgauss(z[0usize], z[1usize], z[2usize], false, false) }
+    if str.eq(c.name, "igq") { ret gq.qinvgauss(z[0usize], z[1usize], z[2usize], true, false) }
+    if str.eq(c.name, "igqu") { ret gq.qinvgauss(z[0usize], z[1usize], z[2usize], false, false) }
+    if str.eq(c.name, "igql") { ret gq.qinvgauss(z[0usize], z[1usize], z[2usize], true, true) }
     if str.eq(c.name, "igpl") { ret gq.pinvgauss(z[0usize], z[1usize], z[2usize], true, true) }
     if str.eq(c.name, "igr") {
         // args (n, mean, dispersion, seed, index)
