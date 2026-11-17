@@ -151,4 +151,18 @@ for (rep in 1:16) {
   v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 6, sd, 0.5, as.vector(x), q - 1, 0, wv), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 300 else 1e-8)
 }
+# the ica seed (init 4, method code 40 plus the method): fastICA(x, rank, method = "C") with w.init drawn from rnorm under rng = seed
+# a start for which the FastICA iteration never reaches its tolerance wanders chaotically (a 1e-12 change in w.init changes the sources), so no two libms agree on it: those draws are skipped
+for (rep in 1:24) {
+  n <- sample(6:14, 1); p <- sample(5:10, 1); r <- sample(2:4, 1); me <- rep %% 2; sd <- sample(1:100000, 1)
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  set.seed(sd); wi <- matrix(rnorm(r^2), r, r)
+  f1 <- fastICA::fastICA(x, r, method = "C", w.init = wi); f2 <- fastICA::fastICA(x, r, method = "C", w.init = wi + 1e-12)
+  if (max(abs(f1$S - f2$S)) > 1e-6) next
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = if (me == 0) "brunet" else "lee", seed = "ica", rng = sd)), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  if (any(!is.finite(v))) next
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 40 + me, sd, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
+}
 emit("nmf", "NMF", list(cases))

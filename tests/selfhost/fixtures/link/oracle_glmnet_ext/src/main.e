@@ -57,7 +57,7 @@ fn brief(a: *mem.Arena, c: *const oracle.Case, got: f64) -> str {
 
 // The coefficients of one fit as gl.* reports them for every lambda: nl rows of (nc blocks of the intercept and p slopes), on all p variables (excluded ones zero). fam 0 binomial, 1 poisson, 2 gaussian, 3 Cox, 4 multinomial, 5 mgaussian; ya the response (the time for Cox, the labels for
 // the multinomial, the n by nc matrix for mgaussian), stat the Cox status, strata and start the Cox extras (empty for none), excl a 0/1 mask over the variables (empty for none). relax answers the gamma blend of the relaxed refits.
-fn fit_rows(a: *mem.Arena, fam: usize, relaxf: bool, gamma: f64, efron: bool, grouped: bool, nc: usize, xm: []const f64, ya: []const f64, stat: []const f64, strata: []const f64, start: []const f64, wts: []const f64, off: []const f64, lo: []const f64, up: []const f64, excl: []const f64, n: usize, p: usize, alpha: f64, std: bool, lam: []const f64, vf: []const f64, out: []f64) -> err {
+fn fit_rows(a: *mem.Arena, gf: bool, fam: usize, relaxf: bool, gamma: f64, efron: bool, grouped: bool, nc: usize, xm: []const f64, ya: []const f64, stat: []const f64, strata: []const f64, start: []const f64, wts: []const f64, off: []const f64, lo: []const f64, up: []const f64, excl: []const f64, n: usize, p: usize, alpha: f64, std: bool, lam: []const f64, vf: []const f64, out: []f64) -> err {
     let nl = lam.len
     var ncs = 1usize
     if fam == 4usize || fam == 5usize { ncs = nc }
@@ -113,11 +113,35 @@ fn fit_rows(a: *mem.Arena, fam: usize, relaxf: bool, gamma: f64, efron: bool, gr
             if off.len == n { ye[i] = ya[i] - off[i] }
             i += 1usize
         }
-        fe = gl.gaussian(a, xs, ye, wts, lz, uz, n, nkp, alpha, std, vs, lamc, sm)
+        if gf {
+            let (dvg, eg1) = mem.alloc[f64](a, nl)
+            let (alg, eg2) = mem.alloc[f64](a, nl)
+            if eg1 != ok || eg2 != ok { ret eg1 }
+            let nfit = gl.glm_gaussian(a, xs, ye, wts, lz, uz, n, nkp, alpha, std, vs, lamc, 100usize, 1.0e-7f64, sm, dvg, alg)
+            if nfit != nl { ret eg1 }
+        } else {
+            fe = gl.gaussian(a, xs, ye, wts, lz, uz, n, nkp, alpha, std, vs, lamc, sm)
+        }
     }
-    if fam == 0usize || fam == 1usize { fe = gl.glm_path_dev(a, fam, xs, ya[0usize..n], wts, off, lz, uz, n, nkp, alpha, std, vs, lamc, sm, nodv) }
+    if (fam == 0usize || fam == 1usize) && gf {
+        let (dvg, eg1) = mem.alloc[f64](a, nl)
+        let (alg, eg2) = mem.alloc[f64](a, nl)
+        if eg1 != ok || eg2 != ok { ret eg1 }
+        let nfit = gl.glm_binpois(a, fam, xs, ya[0usize..n], wts, off, lz, uz, n, nkp, alpha, std, vs, lamc, 100usize, 1.0e-7f64, sm, dvg, alg)
+        if nfit != nl { ret eg1 }
+    } else if fam == 0usize || fam == 1usize {
+        fe = gl.glm_path_dev(a, fam, xs, ya[0usize..n], wts, off, lz, uz, n, nkp, alpha, std, vs, lamc, sm, nodv)
+    }
     if fam == 3usize {
-        fe = gl.cox_ext(a, xs, ya[0usize..n], start, strata, efron, stat, wts, off, lz, uz, n, nkp, alpha, std, vs, lamc, cx, nodv)
+        if gf {
+            let (dvg, eg1) = mem.alloc[f64](a, nl)
+            let (alg, eg2) = mem.alloc[f64](a, nl)
+            if eg1 != ok || eg2 != ok { ret eg1 }
+            let nfit = gl.glm_cox(a, xs, ya[0usize..n], start, strata, efron, stat, wts, off, lz, uz, n, nkp, alpha, std, vs, lamc, 100usize, 1.0e-7f64, cx, dvg, alg)
+            if nfit != nl { ret eg1 }
+        } else {
+            fe = gl.cox_ext(a, xs, ya[0usize..n], start, strata, efron, stat, wts, off, lz, uz, n, nkp, alpha, std, vs, lamc, cx, nodv)
+        }
         k = 0usize
         while k < nl {
             sm[k * (nkp + 1usize)] = 0.0f64
@@ -129,10 +153,46 @@ fn fit_rows(a: *mem.Arena, fam: usize, relaxf: bool, gamma: f64, efron: bool, gr
             k += 1usize
         }
     }
-    if fam == 4usize { fe = gl.multinomial(a, xs, lab, wts, off, lz, uz, n, nkp, nc, alpha, std, grouped, vs, lamc, sm, nodv) }
-    if fam == 5usize { fe = gl.mgaussian_b(a, xs, ya, wts, lz, uz, n, nkp, nc, alpha, std, vs, lamc, sm) }
+    if fam == 4usize && gf {
+        let (dvg, eg1) = mem.alloc[f64](a, nl)
+        let (alg, eg2) = mem.alloc[f64](a, nl)
+        if eg1 != ok || eg2 != ok { ret eg1 }
+        let nfit = gl.glm_multinomial(a, xs, lab, wts, off, lz, uz, n, nkp, nc, alpha, std, grouped, vs, lamc, 100usize, 1.0e-7f64, sm, dvg, alg)
+        if nfit != nl { ret eg1 }
+        // R centres the intercepts over the classes
+        var kg = 0usize
+        while kg < nl {
+            var mi = 0.0f64
+            var cg = 0usize
+            while cg < nc {
+                mi += sm[(kg * nc + cg) * (nkp + 1usize)]
+                cg += 1usize
+            }
+            cg = 0usize
+            while cg < nc {
+                sm[(kg * nc + cg) * (nkp + 1usize)] -= mi / f64(nc)
+                cg += 1usize
+            }
+            kg += 1usize
+        }
+    } else if fam == 4usize {
+        fe = gl.multinomial(a, xs, lab, wts, off, lz, uz, n, nkp, nc, alpha, std, grouped, vs, lamc, sm, nodv)
+    }
+    if fam == 5usize && gf {
+        let (dvg, eg1) = mem.alloc[f64](a, nl)
+        let (alg, eg2) = mem.alloc[f64](a, nl)
+        if eg1 != ok || eg2 != ok { ret eg1 }
+        let nfit = gl.glm_mgaussian(a, xs, ya, wts, lz, uz, n, nkp, nc, alpha, std, false, vs, lamc, 100usize, 1.0e-7f64, sm, dvg, alg)
+        if nfit != nl { ret eg1 }
+    } else if fam == 5usize {
+        fe = gl.mgaussian_b(a, xs, ya, wts, lz, uz, n, nkp, nc, alpha, std, vs, lamc, sm)
+    }
     if fe != ok { ret fe }
-    if relaxf {
+    if relaxf && gf {
+        let re = gl.relax_path_f(a, fam, xs, ya, stat, start, strata, efron, wts, off, lz, uz, n, nkp, nc, alpha, std, grouped, sm, nl, rc)
+        if re != ok { ret re }
+        gl.relax_blend(sm[0usize..nl * ncs * (nkp + 1usize)], rc[0usize..nl * ncs * (nkp + 1usize)], gamma, sm[0usize..nl * ncs * (nkp + 1usize)])
+    } else if relaxf {
         var re = ok
         if fam <= 3usize { re = gl.relax_path(a, fam, xs, ya[0usize..n], stat, wts, off, n, nkp, sm, nl, rc) }
         if fam == 4usize { re = gl.relax_multi(a, 4usize, xs, lab, none, wts, off, n, nkp, nc, sm, nl, rc) }
@@ -157,7 +217,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let lam = x[8usize..8usize + nl]
     let vf = x[8usize + nl..8usize + nl + p]
     let d0 = 8usize + nl + p
-    let isfit = str.eq(c.name, "fit") || str.eq(c.name, "lam") || str.eq(c.name, "cv")
+    let gf = str.eq(c.name, "gfit") || str.eq(c.name, "glam")
+    let gcv = str.eq(c.name, "gcv")
+    let isfit = str.eq(c.name, "fit") || str.eq(c.name, "lam") || str.eq(c.name, "cv") || gf || gcv
     if isfit {
         // data = (fam, relax, gamma, efron, grouped, nc, hasExcl, hasStrata, hasStart), the response (Cox: time, status, strata when hasStrata, start when hasStart; mgaussian: n by nc), exclude[p] when hasExcl
         let fam = usize(x[d0])
@@ -199,11 +261,147 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         var ncs = 1usize
         if fam == 4usize || fam == 5usize { ncs = nc }
         let mt = ya[0usize..n]
-        if str.eq(c.name, "fit") {
+        if str.eq(c.name, "fit") || str.eq(c.name, "gfit") {
             let (out, e1) = mem.alloc[f64](a, nl * ncs * (p + 1usize))
             if e1 != ok { ret nan() }
-            if fit_rows(a, fam, relaxf, gamma, efron, grouped, nc, xm, ya, stat, strata, start, wts, off, lo, up, excl, n, p, alpha, std, lam, vf, out) != ok { ret nan() }
+            if fit_rows(a, gf, fam, relaxf, gamma, efron, grouped, nc, xm, ya, stat, strata, start, wts, off, lo, up, excl, n, p, alpha, std, lam, vf, out) != ok { ret nan() }
             ret checksum(out)
+        }
+        if gcv {
+            // gcv: cv.glmnet by the ported algorithms; query = (which, kfrom, nfolds, measure, auto, foldid[n], gamma index): which 0 the weighted mean cvm over k = kfrom .. (the end, less the last lambda when auto), 1 cvsd, 2 lambda.min, 3 lambda.1se, 4 the number of lambdas, 5 gamma.min, 6 the relaxed lambda.min
+            let which = usize(x[qo])
+            let kfrom = usize(x[qo + 1usize])
+            let nfo = usize(x[qo + 2usize])
+            let ms = usize(x[qo + 3usize])
+            let au = x[qo + 4usize] != 0.0f64
+            let (fid, e5) = mem.alloc[usize](a, n)
+            let (gm, e6) = mem.alloc[f64](a, 5usize)
+            let (lmo, e7) = mem.alloc[f64](a, 100usize)
+            let (cm, e8) = mem.alloc[f64](a, 500usize)
+            let (cs, e9) = mem.alloc[f64](a, 500usize)
+            if e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret nan() }
+            var q = 0usize
+            while q < n {
+                fid[q] = usize(x[qo + 5usize + q])
+                q += 1usize
+            }
+            var ng = 1usize
+            gm[0usize] = 1.0f64
+            if relaxf {
+                ng = 5usize
+                gm[0usize] = 0.0f64
+                gm[1usize] = 0.25f64
+                gm[2usize] = 0.5f64
+                gm[3usize] = 0.75f64
+                gm[4usize] = 1.0f64
+            }
+            let noln: []const f64 = zero
+            var lin: []const f64 = lam
+            if au { lin = noln }
+            var mcode = ms
+            if fam == 3usize && ms == 1usize { mcode = 5usize }
+            let nl2 = gl.cv_f(a, fam, mcode, xm, ya, stat, start, strata, efron, false, wts, off, n, p, nc, alpha, std, grouped, vf, lin, fid, nfo, relaxf, gm[0usize..ng], lmo, cm, cs)
+            if nl2 == 0usize { ret nan() }
+            if which == 4usize { ret f64(nl2) }
+            let lamv = lmo[0usize..nl2]
+            var lamu: []const f64 = lam
+            if au { lamu = lamv }
+            var gsel = ng - 1usize
+            if relaxf && which <= 1usize { gsel = usize(x[qo + 5usize + n]) }
+            let maxi = (fam == 3usize && ms == 1usize) || (fam == 0usize && ms == 4usize)
+            if which >= 2usize {
+                let (sel, e10) = mem.alloc[f64](a, 2usize)
+                if e10 != ok { ret nan() }
+                if relaxf && which == 5usize {
+                    gl.cv_select_relax(lamu, gm[0usize..ng], cm[0usize..ng * nl2], maxi, sel)
+                    ret sel[1usize]
+                }
+                if relaxf && which == 6usize {
+                    gl.cv_select_relax(lamu, gm[0usize..ng], cm[0usize..ng * nl2], maxi, sel)
+                    ret sel[0usize]
+                }
+                if maxi { gl.cv_select_max(lamu, cm[gsel * nl2..(gsel + 1usize) * nl2], cs[gsel * nl2..(gsel + 1usize) * nl2], sel) } else { gl.cv_select(lamu, cm[gsel * nl2..(gsel + 1usize) * nl2], cs[gsel * nl2..(gsel + 1usize) * nl2], sel) }
+                if which == 3usize { ret sel[1usize] }
+                ret sel[0usize]
+            }
+            var kend = nl2
+            if au { kend = nl2 - 1usize }
+            if kfrom >= kend { ret nan() }
+            var sw = 0.0f64
+            var sv = 0.0f64
+            var kk = kfrom
+            while kk < kend {
+                var v = cm[gsel * nl2 + kk]
+                if which == 1usize { v = cs[gsel * nl2 + kk] }
+                sw += weight(kk)
+                sv += weight(kk) * v
+                kk += 1usize
+            }
+            ret sv / sw
+        }
+        if str.eq(c.name, "glam") && fam == 5usize {
+            let (cg, eb) = mem.alloc[f64](a, 100usize * nc * (p + 1usize))
+            let (dg, ec) = mem.alloc[f64](a, 100usize)
+            let (alg, ed) = mem.alloc[f64](a, 100usize)
+            if eb != ok || ec != ok || ed != ok { ret nan() }
+            let noln: []const f64 = zero
+            let nfit = gl.glm_mgaussian(a, xm, ya, wts, lo, up, n, p, nc, alpha, std, false, vf, noln, 100usize, 1.0e-7f64, cg, dg, alg)
+            if usize(x[qo]) == 1usize { ret f64(nfit) }
+            ret checksum(alg[0usize..nfit])
+        }
+        if str.eq(c.name, "glam") && fam == 2usize {
+            let (ye2, ea) = mem.alloc[f64](a, n)
+            let (cg, eb) = mem.alloc[f64](a, 100usize * (p + 1usize))
+            let (dg, ec) = mem.alloc[f64](a, 100usize)
+            let (alg, ed) = mem.alloc[f64](a, 100usize)
+            if ea != ok || eb != ok || ec != ok || ed != ok { ret nan() }
+            var ii = 0usize
+            while ii < n {
+                ye2[ii] = ya[ii]
+                if off.len == n { ye2[ii] = ya[ii] - off[ii] }
+                ii += 1usize
+            }
+            let noln: []const f64 = zero
+            let nfit = gl.glm_gaussian(a, xm, ye2, wts, lo, up, n, p, alpha, std, vf, noln, 100usize, 1.0e-7f64, cg, dg, alg)
+            if usize(x[qo]) == 1usize { ret f64(nfit) }
+            ret checksum(alg[0usize..nfit])
+        }
+        if str.eq(c.name, "glam") && fam == 3usize {
+            let (cg, eb) = mem.alloc[f64](a, 100usize * p)
+            let (dg, ec) = mem.alloc[f64](a, 100usize)
+            let (alg, ed) = mem.alloc[f64](a, 100usize)
+            if eb != ok || ec != ok || ed != ok { ret nan() }
+            let noln: []const f64 = zero
+            let nfit = gl.glm_cox(a, xm, mt, start, strata, efron, stat, wts, off, lo, up, n, p, alpha, std, vf, noln, 100usize, 1.0e-7f64, cg, dg, alg)
+            if usize(x[qo]) == 1usize { ret f64(nfit) }
+            ret checksum(alg[0usize..nfit])
+        }
+        if str.eq(c.name, "glam") && (fam == 0usize || fam == 1usize) {
+            let (cg, eb) = mem.alloc[f64](a, 100usize * (p + 1usize))
+            let (dg, ec) = mem.alloc[f64](a, 100usize)
+            let (alg, ed) = mem.alloc[f64](a, 100usize)
+            if eb != ok || ec != ok || ed != ok { ret nan() }
+            let noln: []const f64 = zero
+            let nfit = gl.glm_binpois(a, fam, xm, ya[0usize..n], wts, off, lo, up, n, p, alpha, std, vf, noln, 100usize, 1.0e-7f64, cg, dg, alg)
+            if usize(x[qo]) == 1usize { ret f64(nfit) }
+            ret checksum(alg[0usize..nfit])
+        }
+        if str.eq(c.name, "glam") && fam == 4usize {
+            // glam: glmnet's own multinomial path (the ported algorithm at the default thresh): query 0 the checksum of its lambdas, 1 their number
+            let (lab2, ea) = mem.alloc[usize](a, n)
+            let (cg, eb) = mem.alloc[f64](a, 100usize * nc * (p + 1usize))
+            let (dg, ec) = mem.alloc[f64](a, 100usize)
+            let (alg, ed) = mem.alloc[f64](a, 100usize)
+            if ea != ok || eb != ok || ec != ok || ed != ok { ret nan() }
+            var ii = 0usize
+            while ii < n {
+                lab2[ii] = usize(ya[ii])
+                ii += 1usize
+            }
+            let noln: []const f64 = zero
+            let nfit = gl.glm_multinomial(a, xm, lab2, wts, off, lo, up, n, p, nc, alpha, std, grouped, vf, noln, 100usize, 1.0e-7f64, cg, dg, alg)
+            if usize(x[qo]) == 1usize { ret f64(nfit) }
+            ret checksum(alg[0usize..nfit])
         }
         // lam: the automatic sequence (query 0: its checksum, 1: its length), cv: see below; excluded variables are dropped and the sequence divided by exclude_scale
         let (xk, e0a) = mem.alloc[f64](a, n * p)
