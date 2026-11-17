@@ -3,7 +3,8 @@
 //
 // Also here: the "Adjusted SE" of the full average.
 //
-// Not here: the conditional average's adjusted SE, QAIC and QIC, dredge, model.sel's tables, importance and r.squaredGLMM.
+// Over summaries only (log likelihood, coefficients, standard errors). The fits, dredge, model.sel, model.avg on a table, QIC, BIC, Cp, std.coef,
+// r.squaredGLMM and stdize are in mumin_fit and mumin_dredge.
 
 use e.math
 use e.math.dist as dist
