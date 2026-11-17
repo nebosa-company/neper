@@ -32,4 +32,9 @@ for (rep in 1:144) {
           sum(seq_along(o$parameters$variance$sigma) * as.vector(o$parameters$variance$sigma)), sum(seq_along(o$z) * as.vector(o$z)))
   for (j in 0:5) add("me", c(mc + 10 * eqp, n, p, G, j, x, z0), st[j + 1], if (j == 1) 1e-12 else 1e-7)
 }
+# hc(data, "EII"): "hc" (n, p, index, X[n p]) index 0 .. 2 (n - 1) - 1 into the merge pairs, column by column
+for (rep in 1:25) {
+  n <- sample(6:40, 1); p <- sample(2:4, 1); X <- matrix(rnorm(n * p), n, p); h <- unclass(hc(X, modelName = "EII"))[1:2, ]
+  v <- as.vector(h); for (q in seq_along(v)) add("hc", c(n, p, q - 1, X), v[q], 0)
+}
 emit("mclust", "mclust", list(cases))

@@ -47810,3 +47810,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6835 — caret: preProcess pca
 
 **Decision.** `carets.pre_process_pca` is `preProcess(method = "pca", thresh)` then `predict`: the columns standardised, the eigen decomposition of their correlation matrix (`ica.eigen_sym`, values descending), the component count the first whose cumulative variance share reaches thresh but never fewer than two (all components when none reaches it), and the scores the standardised data times the leading eigenvectors. Eigenvector signs are arbitrary in LAPACK, so the oracle compares the count, every standard deviation (to 1e-9) and the sum of absolute scores of each component (to 1e-8), not the signed scores. Equal to caret on 25 matrices (oracle_carets). Not here: pcaComp, knnImpute, ica. Linux pending.
+
+## D6836 — mclust: hc with the EII model
+
+**Decision.** `mclustpkg.hc_eii` is `hc(data, modelName = "EII")`: the model-based agglomeration with the spherical equal-volume criterion is Ward's method on the Euclidean distances, so it reuses the `hclust` port (ward.D2) and returns mclust's merge matrix, each cluster named by its smallest observation number and the smaller name first in each pair. Equal to mclust on 25 random data sets of 2 to 4 variables (oracle_mclust, every merge pair). Not here: the other eight-hierarchy criteria (VVV and the rest, which have their own merge criteria), `hclass`, one-variable data, tied distances. Linux pending.

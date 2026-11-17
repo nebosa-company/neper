@@ -3694,4 +3694,5 @@ D6831	960	kSamples: contingency2xt, asymptotic and exact
 D6832	783	kSamples: ad.test exact p value
 D6833	796	kSamples: exact qn.test p value
 D6834	480	caret: varImp for lm
-D6835	749	caret: preProcess pca
+D6835	750	caret: preProcess pca
+D6836	655	mclust: hc with the EII model

@@ -5,6 +5,7 @@
 use e.math
 use e.mem
 use e.algo.stat.ica as ica
+use e.algo.stat.hclust as hcl
 use e.str
 
 // the model names in the order of the package table
@@ -424,4 +425,48 @@ fn me_em(a: *mem.Arena, model: usize, equal_pro: bool, x: []const f64, z: []f64,
     info[0usize] = f64(it)
     info[1usize] = rel_err
     ret hood
+}
+
+// hc(data, modelName = "EII"): the agglomeration that merges the pair giving the smallest increase in the pooled within-cluster sum of squares, which is Ward's method on the Euclidean distances;
+// out holds the merged pairs as 2 (n - 1) one-based observation numbers, each cluster named by its smallest member and the smaller name first
+fn hc_eii(a: *mem.Arena, x: []const f64, n: usize, p: usize, out: []usize) -> err {
+    let (d, e1) = mem.alloc[f64](a, n * n)
+    let (mn, e2) = mem.alloc[usize](a, n)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                let df = x[q * n + i] - x[q * n + j]
+                s += df * df
+                q += 1usize
+            }
+            d[i * n + j] = math.sqrt[f64](s)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (t, he) = hcl.hclust(a, d, n, 8usize)
+    if he != ok { ret he }
+    var st = 0usize
+    while st + 1usize < n {
+        var la = 0usize
+        var lb = 0usize
+        if t.merge_a[st] < 0i32 { la = usize(0i32 - t.merge_a[st]) } else { la = mn[usize(t.merge_a[st]) - 1usize] }
+        if t.merge_b[st] < 0i32 { lb = usize(0i32 - t.merge_b[st]) } else { lb = mn[usize(t.merge_b[st]) - 1usize] }
+        var lo = la
+        var hi = lb
+        if lb < la {
+            lo = lb
+            hi = la
+        }
+        out[2usize * st] = lo
+        out[2usize * st + 1usize] = hi
+        mn[st] = lo
+        st += 1usize
+    }
+    ret ok
 }

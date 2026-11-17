@@ -34,6 +34,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         mc.map(z[2usize..2usize + n * k], n, k, o)
         ret f64(o[usize(z[2usize + n * k])])
     }
+    if str.eq(c.name, "hc") {
+        let n = usize(z[0usize])
+        let p = usize(z[1usize])
+        let (o, e) = mem.alloc[usize](a, 2usize * n)
+        if e != ok { ret nan }
+        if mc.hc_eii(a, z[3usize..3usize + n * p], n, p, o) != ok { ret nan }
+        ret f64(o[usize(z[2usize])])
+    }
     if str.eq(c.name, "me") {
         let mc2 = usize(z[0usize])
         let n = usize(z[1usize])
