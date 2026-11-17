@@ -55,4 +55,8 @@ for (rep in 1:12) { n <- sample(30:150, 1)
     x <- switch(kind + 1, rgamma(n, runif(1, 1, 5), runif(1, 0.5, 3)), rweibull(n, runif(1, 1, 3), runif(1, 1, 4)), rlogis(n, rnorm(1), runif(1, 0.5, 2)), rcauchy(n, rnorm(1), runif(1, 0.5, 2)))
     f <- suppressWarnings(try(fitdistr(x, c("gamma", "weibull", "logistic", "cauchy")[kind + 1]), silent = TRUE)); if (inherits(f, "try-error")) next
     vals <- c(f$estimate, f$sd, f$loglik); for (w in 0:4) cases[[length(cases) + 1]] <- case("fdist", c(kind, n, w, x), vals[w + 1], rel = 1e-7, abs = 1e-9) } }
+for (rep in 1:12) { n <- sample(40:150, 1); x <- rnbinom(n, size = runif(1, 1, 6), mu = runif(1, 2, 10))
+  if (var(x) <= mean(x)) next
+  f <- suppressWarnings(try(fitdistr(x, "negative binomial"), silent = TRUE)); if (inherits(f, "try-error")) next
+  vals <- c(f$estimate, f$sd, f$loglik); for (w in 0:4) cases[[length(cases) + 1]] <- case("fdist", c(4, n, w, x), vals[w + 1], rel = 1e-6, abs = 1e-8) }
 emit("mass", "MASS", list(cases))

@@ -1,4 +1,4 @@
-// R MASS fitdistr for the families fitted by optim: gamma and Weibull and the logistic and Cauchy (two parameters each, so optim's BFGS with its central-difference gradient, step 1e-3, and `optimHess` for the standard errors).
+// R MASS fitdistr for the families fitted by optim: gamma, Weibull, logistic, Cauchy and negative binomial (two parameters each, so optim's BFGS with its central-difference gradient, step 1e-3, and `optimHess` for the standard errors).
 // Starting values, the gamma parscale and the Hessian follow MASS. out = (est1, est2, sd1, sd2, loglik).
 //
 // Not here: the one-parameter families (Nelder-Mead), the t and negative binomial, and `lower` / `upper` bounds (L-BFGS-B).
@@ -7,6 +7,7 @@ use e.algo.stat.rbfgs as bf
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
+use e.math.nmath_beta as nb
 use e.mem
 
 type FdCtx = struct { x: []const f64, kind: usize, ps1: f64, ps2: f64 }
@@ -20,6 +21,7 @@ fn fd_nll(c: *FdCtx, p1: f64, p2: f64) -> f64 {
         if c.kind == 1usize { s += dist.dweibull(c.x[i], p1, p2, true) }
         if c.kind == 2usize { s += dist.dlogis(c.x[i], p1, p2, true) }
         if c.kind == 3usize { s += dist.dcauchy(c.x[i], p1, p2, true) }
+        if c.kind == 4usize { s += nb.dnbinom_mu(c.x[i], p1, p2, true) }
         i += 1usize
     }
     ret 0.0f64 - s
@@ -44,7 +46,7 @@ fn q7(s: []const f64, p: f64) -> f64 {
     ret q
 }
 
-// kind 0 gamma (shape, rate), 1 Weibull (shape, scale), 2 logistic (location, scale), 3 Cauchy (location, scale)
+// kind 0 gamma (shape, rate), 1 Weibull (shape, scale), 2 logistic (location, scale), 3 Cauchy (location, scale), 4 negative binomial (size, mu)
 fn fitdistr2(a: *mem.Arena, x: []const f64, kind: usize, out: []f64) -> err {
     let n = x.len
     let nf = f64(n)
@@ -101,6 +103,10 @@ fn fitdistr2(a: *mem.Arena, x: []const f64, kind: usize, out: []f64) -> err {
         vl = vl / (nf - 1.0f64)
         s1 = 1.2f64 / math.sqrt[f64](vl)
         s2 = math.exp[f64](ml + 0.572f64 / s1)
+    } else if kind == 4usize {
+        s1 = 100.0f64
+        if v > m { s1 = m * m / (v - m) }
+        s2 = m
     } else {
         s1 = q7(sorted, 0.5f64)
         s2 = (q7(sorted, 0.75f64) - q7(sorted, 0.25f64)) / 2.0f64

@@ -3773,4 +3773,5 @@ D6910	656	LearnBayes: hiergibbs
 D6911	713	LearnBayes: ordergibbs, bradley.terry.post, howardprior
 D6912	690	LearnBayes: laplace at a given mode
 D6913	1036	R's Nelder-Mead and LearnBayes laplace
-D6914	1045	MASS fitdistr by BFGS, and a generic vmmin
+D6914	1046	MASS fitdistr by BFGS, and a generic vmmin
+D6915	513	MASS fitdistr: negative binomial
