@@ -48174,3 +48174,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6926 — glmnet: Poisson cross-validation
 
 **Decision.** `glmnet.cv_poisson` refits the Poisson path on each fold's complement and scores the held-out rows by the deviance 2 (y log y - y - (y eta - exp(eta))) (the y log y - y term zero at y = 0), by mse and mae on the response scale exp(eta), folds averaged by size with `cvsd` as before. Equal to `cv.glmnet(family = "poisson", type.measure = ...)` for the three losses on 10 count data sets (80 to 160 observations, 3 to 6 folds), three lambdas each, both outputs (oracle_glmnet, 2567 cases in all). Linux pending.
+
+## D6927 — fda: the B-spline basis
+
+**Decision.** `e.algo.stat.fdapkg.eval_bspline` is the basis `create.bspline.basis(rangeval, norder, breaks)` evaluated by `eval.basis(x, basis, Lfdobj = deriv)`: order `norder` B-splines on the breaks with the end points repeated, nbasis = breaks + norder - 2, built on the splines2 recurrences of `e.algo.stat.splines` (the same functions, an interior-knot vector and boundary repeated `norder` times). Equal to fda on 25 random break sets (3 to 9 breaks, orders 2 to 6, derivatives 0 to 2), five points each (the interior knot point included), every basis function (oracle_fda, 940 cases). First increment of L496, which had not been started. Not here: the roughness penalty and smooth.basis, other bases, fd objects. Linux pending.
