@@ -90,6 +90,15 @@ for (rep in 1:4) {
     add2("m6", c(4, 0, l1, l2, 0, 0, a1, xx), dmixpois(xx, c(l1, l2), c(a1, 1 - a1))) }
   for (xx in mu + sg * c(-4, -1.7, -0.5, 0.3, 1.2, 3.5)) { add2("m6", c(2, 0, mu, sg, ep, 0, 0, xx), dhuber(xx, mu, sg, ep)); add2("m6", c(2, 1, mu, sg, ep, 0, 0, xx), phuber(xx, mu, sg, ep)); add2("m6", c(3, 0, mu, sg, m2, s2, a1, xx), dmixnorm(xx, c(mu, m2), c(sg, s2), c(a1, 1 - a1))) }
 }
+# fn "mv" (dist, k, size, x[k], par[k]) and "bv" (dist, v1..v7)
+for (rep in 1:6) {
+  k <- sample(2:5, 1); al <- runif(k, 0.5, 4); xd <- rgamma(k, al); xd <- xd / sum(xd); pr <- runif(k); pr <- pr / sum(pr); size <- sample(3:12, 1); xm <- as.numeric(rmultinom(1, size, pr)); nn <- sample(2:6, k, TRUE); kk <- sample(1:sum(nn), 1)
+  xh <- as.numeric(rmvhyper(1, nn, kk))
+  add2("mv", c(0, k, 0, xd, al), ddirichlet(xd, al)); add2("mv", c(1, k, size, xm, pr), dmnom(xm, size, pr)); add2("mv", c(2, k, size, xm, al), ddirmnom(xm, size, al)); add2("mv", c(3, k, kk, xh, nn), dmvhyper(xh, nn, kk))
+  m1 <- rnorm(1); m2 <- rnorm(1); s1 <- runif(1, 0.5, 2); s2 <- runif(1, 0.5, 2); r <- runif(1, -0.8, 0.8); xx <- rnorm(1); yy <- rnorm(1)
+  add2("bv", c(0, xx, yy, m1, m2, s1, s2, r), dbvnorm(xx, yy, m1, m2, s1, s2, r))
+  a <- runif(1, 0.3, 2); b <- runif(1, 0.3, 2); cc <- runif(1, 0.2, 1.5); for (ij in list(c(0, 0), c(1, 2), c(3, 1), c(4, 5))) add2("bv", c(1, ij, a, b, cc, 0, 0), dbvpois(ij[1], ij[2], a, b, cc))
+}
 # random draws: "rg" (family, seed, p1, p2, p3, index) the draw at position index (0-based) of five seeded draws; family 0 gumbel 1 frechet 2 power 3 lomax 4 pareto 5 rayleigh 6 kumar 7 gompertz 8 hnorm 9 hcauchy 10 laplace
 for (rep in 1:33) {
   sd <- sample(1:100000, 1); fam <- (rep - 1) %% 11; p1 <- runif(1, 0.5, 3); p2 <- runif(1, 0.5, 3); p3 <- runif(1, -1, 1)

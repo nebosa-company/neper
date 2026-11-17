@@ -48423,3 +48423,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6985 — extraDistr: discrete normal and gamma, Huber, two-component mixtures
 
 `ddnorm`, `ddgamma` (mass of [x, x + 1) on x = 0, 1, ...), `huber` (normalising constant from the centre and the two exponential tails, closed-form cumulative function) and two-component `mixnorm` and `mixpois` densities. Equal to extraDistr on 4 parameter sets (oracle_extradistr). Mixtures of more than two components, and the quantiles of these families, are not here. Linux pending.
+
+
+## D6986 — extraDistr multivariate and bivariate densities
+
+`dirichlet_d`, `mnom_d`, `dirmnom_d`, `mvhyper_d` over one observation slice, `bvnorm_d` and `bvpois_d` (Holgate: independent parts a and b, shared part c). Equal to extraDistr on 6 parameter sets (oracle_extradistr). The multivariate generators, the negative hypergeometric and the Tukey lambda are not here. Linux pending.

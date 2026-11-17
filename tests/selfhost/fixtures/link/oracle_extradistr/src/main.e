@@ -163,6 +163,22 @@ fn answer(c: *const oracle.Case) -> f64 {
         if d6 == 3usize { ret ed.mixnorm2_d(rv, r1, r2, r3, r4, r5) }
         ret ed.mixpois2_d(rv, r1, r2, r5)
     }
+    if str.eq(c.name, "mv") {
+        // (dist, k, size, x[k], par[k]): 0 dirichlet(par = alpha) 1 mnom(prob) 2 dirmnom(alpha) 3 mvhyper(n, size = k draws)
+        let d7 = usize(x[0usize])
+        let k = usize(x[1usize])
+        let xs = x[3usize..3usize + k]
+        let ps = x[3usize + k..3usize + k + k]
+        if d7 == 0usize { ret ed.dirichlet_d(xs, ps) }
+        if d7 == 1usize { ret ed.mnom_d(xs, x[2usize], ps) }
+        if d7 == 2usize { ret ed.dirmnom_d(xs, x[2usize], ps) }
+        ret ed.mvhyper_d(xs, ps, x[2usize])
+    }
+    if str.eq(c.name, "bv") {
+        // (dist, v1..v7): 0 bvnorm(x, y, m1, m2, s1, s2, r) 1 bvpois(x, y, a, b, c)
+        if usize(x[0usize]) == 0usize { ret ed.bvnorm_d(x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], x[7usize]) }
+        ret ed.bvpois_d(x[1usize], x[2usize], x[3usize], x[4usize], x[5usize])
+    }
     if str.eq(c.name, "d3") {
         let d3 = usize(x[0usize])
         let w1 = x[1usize]

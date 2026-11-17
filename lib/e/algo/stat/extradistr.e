@@ -573,3 +573,67 @@ fn mixnorm2_d(x: f64, m1: f64, s1: f64, m2: f64, s2: f64, a1: f64) -> f64 {
 fn mixpois2_d(x: f64, l1: f64, l2: f64, a1: f64) -> f64 {
     ret a1 * nm.dpois(x, l1, false) + (1.0f64 - a1) * nm.dpois(x, l2, false)
 }
+
+// multivariate masses and densities over one observation (slices of equal length): Dirichlet, multinomial(size, prob), Dirichlet-multinomial(size, alpha), multivariate hypergeometric(n, k)
+fn lfact(n: f64) -> f64 { ret nm.lgammafn(n + 1.0f64) }
+fn lchoose(n: f64, k: f64) -> f64 { ret lfact(n) - lfact(k) - lfact(n - k) }
+fn dirichlet_d(x: []const f64, al: []const f64) -> f64 {
+    var s = 0.0f64
+    var l = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        if x[i] <= 0.0f64 { ret 0.0f64 }
+        s += al[i]
+        l += (al[i] - 1.0f64) * math.log[f64](x[i]) - nm.lgammafn(al[i])
+        i += 1usize
+    }
+    ret math.exp[f64](l + nm.lgammafn(s))
+}
+fn mnom_d(x: []const f64, size: f64, pr: []const f64) -> f64 {
+    var l = lfact(size)
+    var i = 0usize
+    while i < x.len {
+        l += x[i] * math.log[f64](pr[i]) - lfact(x[i])
+        i += 1usize
+    }
+    ret math.exp[f64](l)
+}
+fn dirmnom_d(x: []const f64, size: f64, al: []const f64) -> f64 {
+    var a0 = 0.0f64
+    var l = lfact(size)
+    var i = 0usize
+    while i < x.len {
+        a0 += al[i]
+        l += nm.lgammafn(x[i] + al[i]) - lfact(x[i]) - nm.lgammafn(al[i])
+        i += 1usize
+    }
+    ret math.exp[f64](l + nm.lgammafn(a0) - nm.lgammafn(size + a0))
+}
+fn mvhyper_d(x: []const f64, n: []const f64, k: f64) -> f64 {
+    var l = 0.0f64
+    var tot = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        l += lchoose(n[i], x[i])
+        tot += n[i]
+        i += 1usize
+    }
+    ret math.exp[f64](l - lchoose(tot, k))
+}
+
+// standard parametrisation of the bivariate normal and the bivariate Poisson of Holgate (a and b the independent parts, c the shared one)
+fn bvnorm_d(x: f64, y: f64, m1: f64, m2: f64, s1: f64, s2: f64, r: f64) -> f64 {
+    let u = (x - m1) / s1
+    let v = (y - m2) / s2
+    ret math.exp[f64](0.0f64 - (u * u - 2.0f64 * r * u * v + v * v) / (2.0f64 * (1.0f64 - r * r))) / (2.0f64 * pi() * s1 * s2 * math.sqrt[f64](1.0f64 - r * r))
+}
+fn bvpois_d(x: f64, y: f64, a: f64, b: f64, c: f64) -> f64 {
+    if x < 0.0f64 || y < 0.0f64 || x != math.floor[f64](x) || y != math.floor[f64](y) { ret 0.0f64 }
+    var s = 0.0f64
+    var k = 0.0f64
+    while k <= x && k <= y {
+        s += math.exp[f64]((x - k) * math.log[f64](a) + (y - k) * math.log[f64](b) + k * math.log[f64](c) - lfact(x - k) - lfact(y - k) - lfact(k))
+        k += 1.0f64
+    }
+    ret math.exp[f64](0.0f64 - (a + b + c)) * s
+}
