@@ -937,3 +937,25 @@ fn mgaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     }
     ret ok
 }
+
+// coef(fit, s) for an s that need not be on the path, glmnet's linear interpolation: with the lambdas rescaled to (lambda_1 - lambda) / (lambda_1 - lambda_nl), s lands between two neighbours (approx on the index) and the coefficients are mixed with the fraction
+// (s_frac - rescaled_right) / (rescaled_left - rescaled_right); coef holds nl rows of the intercept and p slopes (as `gaussian` fills it); out receives the p + 1 interpolated values
+fn coef_interp(lambdas: []const f64, coef: []const f64, p: usize, s: f64, out: []f64) {
+    let nl = lambdas.len
+    let l1 = lambdas[0usize]
+    let ln = lambdas[nl - 1usize]
+    var sf = (l1 - s) / (l1 - ln)
+    if sf < 0.0f64 { sf = 0.0f64 }
+    if sf > 1.0f64 { sf = 1.0f64 }
+    // the rescaled lambdas increase from 0 to 1; find the interval holding sf
+    var r = 1usize
+    while r < nl - 1usize && (l1 - lambdas[r]) / (l1 - ln) < sf { r += 1usize }
+    let lo = (l1 - lambdas[r - 1usize]) / (l1 - ln)
+    let hi = (l1 - lambdas[r]) / (l1 - ln)
+    let frac = (sf - hi) / (lo - hi)
+    var j = 0usize
+    while j <= p {
+        out[j] = frac * coef[(r - 1usize) * (p + 1usize) + j] + (1.0f64 - frac) * coef[r * (p + 1usize) + j]
+        j += 1usize
+    }
+}

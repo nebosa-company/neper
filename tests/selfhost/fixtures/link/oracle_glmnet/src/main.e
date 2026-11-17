@@ -10,6 +10,20 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if c.name[0usize] == 105u8 {
+        // i (coef interpolation): (n, p, alpha, std, nl, lambda[nl], vf[p], y[n], X[n p], s, j)
+        let ln = usize(x[0usize])
+        let lp = usize(x[1usize])
+        let lnl = usize(x[4usize])
+        let (ic, ice) = mem.alloc[f64](a, lnl * (lp + 1usize))
+        let (ico, ioe) = mem.alloc[f64](a, lp + 1usize)
+        if ice != ok || ioe != ok { ret 0.0f64 / 0.0f64 }
+        let none: []const f64 = zero
+        let b0 = 5usize + lnl + lp
+        if gl.gaussian(a, x[b0 + ln..b0 + ln + ln * lp], x[b0..b0 + ln], none, none, none, ln, lp, x[2usize], x[3usize] != 0.0f64, x[5usize + lnl..5usize + lnl + lp], x[5usize..5usize + lnl], ic) != ok { ret 0.0f64 / 0.0f64 }
+        gl.coef_interp(x[5usize..5usize + lnl], ic, lp, x[b0 + ln + ln * lp], ico)
+        ret ico[usize(x[b0 + ln + ln * lp + 1usize])]
+    }
     if c.name[0usize] == 110u8 {
         // nlam: the lpath layout, the answer is the number of lambdas glmnet reports
         let ln = usize(x[0usize])

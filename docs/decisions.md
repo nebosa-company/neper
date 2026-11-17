@@ -48274,3 +48274,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6951 — gbm: predict with fewer trees
 
 **Decision.** `predict_model` takes the number of trees to use, summing the starting value and the steps of the first `use_trees` recorded trees, as `predict(n.trees = k)` does. Equal to gbm with a third of the fitted trees on the 10 gaussian data sets of D6949, two of twelve new rows each (oracle_gbm, 462 cases in all). Not here: a vector of tree counts in one call (a loop over this), type = "response". Linux pending.
+
+## D6952 — glmnet: coefficient interpolation
+
+**Decision.** `glmnet.coef_interp` answers `coef(fit, s)` for an s that is not on the fitted path as glmnet does: the lambdas rescaled to (lambda_1 - lambda) / (lambda_1 - lambda_nl), s located between two neighbours on that scale and the coefficients mixed with the linear fraction (s_frac - right) / (left - right). Equal to glmnet at thresh 1e-14 on 12 gaussian fits (eight-value lambda sequences, alpha and standardize varying) at three off-path values of s each, every coefficient (oracle_glmnet, 2774 cases in all). Not here: `exact = TRUE` (a refit), the other families (the same interpolation over their coefficient matrices), predict types. Linux pending.
