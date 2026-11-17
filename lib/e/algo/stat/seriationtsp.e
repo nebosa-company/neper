@@ -3,10 +3,7 @@
 // BEA_TSP: cheapest insertion on max(c) - c of the row and column inner products). The insertion heuristics follow
 // TSP 1.3.0's R code draw for draw (sample(), ties by sample), so under the same set.seed they give R's tour.
 //
-// The 2-opt refinement is TSP::tsp_two_opt, compiled C (R_two_opt) whose source is not on disk; two_opt below
-// reproduces it from its answers (2000 random continuous cases and 300 with the dummy city, all equal). On
-// dissimilarities with many exact ties the sums round differently from the C code and a tie can fall the other
-// way (about 5 percent of cases built from integer-rounded points).
+// The 2-opt refinement is a port of TSP 1.3.0 two_opt.c, and insertion_cost is insertion_cost.c.
 //
 // Dissimilarities are a full symmetric n by n row-major matrix; orders are 0-based.
 
@@ -206,48 +203,57 @@ fn arbitrary_tour(a: *mem.Arena, r: *rng.Rng, x: []const f64, m: usize, out: []u
     ret ok
 }
 
-// TSP's R_two_opt, found by comparing against the compiled routine: best improvement over every pair of edges (first
-// pair in row order on ties), the reversal of the inner segment; the pair that would drop the closing edge (the last
-// city, then the first) counts only the new edges a-c and b-first and the dropped a-b, never the old closing edge.
+// TSP 1.3.0 two_opt.c: best improvement over reversals of t[i..j] (i from 1, the first city fixed), the gain of
+// each accumulated exactly as the C code adds and subtracts it, only gains above 1e-7 count, the first best on ties.
 fn two_opt(x: []const f64, m: usize, t: []usize) {
-    if m < 4usize { ret }
-    var more = true
-    var guard = 0usize
-    while more && guard < 100000usize {
-        more = false
-        guard += 1usize
-        var best = 0.0f64
-        var bi = 0usize
-        var bj = 0usize
-        var i = 0usize
-        while i + 2usize < m {
-            var j = i + 2usize
-            while j < m {
-                var g = 0.0f64
-                if j + 1usize < m {
-                    g = x[t[i] * m + t[i + 1usize]] + x[t[j] * m + t[j + 1usize]] - x[t[i] * m + t[j]] - x[t[i + 1usize] * m + t[j + 1usize]]
-                } else {
-                    g = x[t[i] * m + t[i + 1usize]] - x[t[i] * m + t[j]] - x[t[i + 1usize] * m + t[0usize]]
-                }
-                if g > best {
-                    best = g
-                    bi = i
-                    bj = j
-                    more = true
+    if m < 3usize { ret }
+    let n = m
+    var swaps = 1usize
+    while swaps > 0usize {
+        swaps = 0usize
+        var swap1 = 0usize
+        var swap2 = 0usize
+        var imp_best = 0.0f64
+        var i = 1usize
+        while i + 1usize < n {
+            var imp = 0.0f64
+            imp += x[t[i - 1usize] * n + t[i]]
+            imp += x[t[i] * n + t[i + 1usize]]
+            var j = i + 1usize
+            while j + 1usize < n {
+                imp += x[t[j] * n + t[j + 1usize]]
+                imp -= x[t[j] * n + t[j - 1usize]]
+                let tmp = imp - x[t[i - 1usize] * n + t[j]] - x[t[i] * n + t[j + 1usize]]
+                if tmp > 1.0e-7f64 {
+                    swaps += 1usize
+                    if tmp > imp_best {
+                        imp_best = tmp
+                        swap1 = i
+                        swap2 = j
+                    }
                 }
                 j += 1usize
             }
+            j = n - 1usize
+            imp -= x[t[j] * n + t[j - 1usize]]
+            let tmp2 = imp - x[t[i - 1usize] * n + t[j]] - x[t[i] * n + t[0usize]]
+            if tmp2 > 1.0e-7f64 {
+                swaps += 1usize
+                if tmp2 > imp_best {
+                    imp_best = tmp2
+                    swap1 = i
+                    swap2 = j
+                }
+            }
             i += 1usize
         }
-        if more {
-            var lo = bi + 1usize
-            var hi = bj
-            while lo < hi {
-                let tmp = t[lo]
-                t[lo] = t[hi]
-                t[hi] = tmp
-                lo += 1usize
-                hi -= 1usize
+        if swaps > 0usize {
+            var q = 0usize
+            while q < (swap2 - swap1 + 1usize) / 2usize {
+                let tt = t[swap1 + q]
+                t[swap1 + q] = t[swap2 - q]
+                t[swap2 - q] = tt
+                q += 1usize
             }
         }
     }
