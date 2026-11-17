@@ -3633,4 +3633,5 @@ D6770	1150	EnvStats: nonparametric tolerance and prediction interval levels and 
 D6771	924	EnvStats: gofTest for the exponential and gamma distributions
 D6772	1057	EnvStats: kendallSeasonalTrendTest modified for serial correlation
 D6773	1468	NMF: brunet and lee
-D6774	1095	NMF: KL and Frobenius with the stationary stop
+D6774	1096	NMF: KL and Frobenius with the stationary stop
+D6775	941	NMF: nsNMF and offset

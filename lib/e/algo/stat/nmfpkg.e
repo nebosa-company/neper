@@ -1,4 +1,4 @@
-// R NMF: non-negative matrix factorisation by the multiplicative updates of Lee and Seung, value for value with
+// R NMF: non-negative matrix factorisation by the multiplicative updates of Lee and Seung (and the nsNMF smoothing of Pascual-Montano), value for value with
 // nmf(x, rank, method = "brunet" or "lee", seed = <integer>) after the package's own set.seed: the "random" seed
 // method (W then H as uniform draws scaled by max(x), column by column), the update rules, the clamp of brunet at
 // the machine epsilon every 10th iteration, the unit column sums of W for lee, and the "connectivity" stopping rule
@@ -13,7 +13,7 @@ use e.math
 use e.mem
 
 // v is n by p column-major, w n by r, h r by p; method 0 brunet (Kullback-Leibler), 1 lee (Frobenius); out[0] receives the iteration count
-fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, w: []f64, h: []f64, out: []f64) -> err {
+fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, theta: f64, w: []f64, h: []f64, out: []f64) -> err {
     var r: rng.Rng = zero
     rng.seed(&r, seed)
     var mx = v[0usize]
@@ -40,7 +40,24 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
     let (old, e6) = mem.alloc[f64](a, p * p)
     let (cur, e7) = mem.alloc[f64](a, p * p)
     let (idx, e8) = mem.alloc[usize](a, p)
+    let (off, e12) = mem.alloc[f64](a, n)
+    let (rsh, e13) = mem.alloc[f64](a, rk)
+    if e12 != ok || e13 != ok { ret mem.Full }
+    let (sm, e9) = mem.alloc[f64](a, rk * rk)
+    let (ws, e10) = mem.alloc[f64](a, n * rk)
+    let (sh, e11) = mem.alloc[f64](a, rk * p)
+    if e9 != ok || e10 != ok || e11 != ok { ret mem.Full }
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    q = 0usize
+    while q < rk * rk {
+        sm[q] = theta / f64(rk)
+        q += 1usize
+    }
+    q = 0usize
+    while q < rk {
+        sm[q * rk + q] += 1.0f64 - theta
+        q += 1usize
+    }
     q = 0usize
     while q < p * p {
         old[q] = 0.0f64
@@ -48,11 +65,29 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
     }
     let eps = 2.220446049250313e-16f64
     let eps9 = 1.0e-9f64
+    // the offset model seeds a random offset after W and H: uniform on (0, max(W, H))
+    var wmax = 0.0f64
+    q = 0usize
+    while q < n * rk {
+        if w[q] > wmax { wmax = w[q] }
+        q += 1usize
+    }
+    q = 0usize
+    while q < rk * p {
+        if h[q] > wmax { wmax = h[q] }
+        q += 1usize
+    }
+    q = 0usize
+    while q < n {
+        off[q] = 0.0f64
+        if method == 5usize { off[q] = rng.unif(&r) * wmax }
+        q += 1usize
+    }
     var inc = 0usize
     var sn = 0usize
     var smax = 0.0f64 - 1.0f64 / 0.0f64
     var smin = 1.0f64 / 0.0f64
-    if method >= 2usize {
+    if method == 2usize || method == 3usize {
         let c0 = nmf_objective(v, w, h, n, p, rk, method % 2usize, wh)
         sn = 1usize
         smax = c0
@@ -61,7 +96,85 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
     var it = 1usize
     var done = false
     while it <= maxiter && !done {
-        if method % 2usize == 0usize {
+        if method == 4usize {
+            // nsNMF: H from the smoothed basis W S, then W against S H, columns of W rescaled
+            matmul(w, sm, ws, n, rk, rk)
+            matmul(ws, h, wh, n, rk, p)
+            var k = 0usize
+            while k < rk {
+                var s = 0.0f64
+                var i = 0usize
+                while i < n {
+                    s += ws[k * n + i]
+                    i += 1usize
+                }
+                cs[k] = s
+                k += 1usize
+            }
+            var j = 0usize
+            while j < p {
+                k = 0usize
+                while k < rk {
+                    var s = 0.0f64
+                    var i = 0usize
+                    while i < n {
+                        s += ws[k * n + i] * (v[j * n + i] / wh[j * n + i])
+                        i += 1usize
+                    }
+                    t1[j * rk + k] = h[j * rk + k] * s / cs[k]
+                    k += 1usize
+                }
+                j += 1usize
+            }
+            q = 0usize
+            while q < rk * p {
+                h[q] = t1[q]
+                q += 1usize
+            }
+            matmul(sm, h, sh, rk, rk, p)
+            matmul(w, sh, wh, n, rk, p)
+            k = 0usize
+            while k < rk {
+                var s = 0.0f64
+                j = 0usize
+                while j < p {
+                    s += sh[j * rk + k]
+                    j += 1usize
+                }
+                cs[k] = s
+                k += 1usize
+            }
+            k = 0usize
+            while k < rk {
+                var i = 0usize
+                while i < n {
+                    var s = 0.0f64
+                    j = 0usize
+                    while j < p {
+                        s += (v[j * n + i] / wh[j * n + i]) * sh[j * rk + k]
+                        j += 1usize
+                    }
+                    t2[k * n + i] = w[k * n + i] * s / cs[k]
+                    i += 1usize
+                }
+                k += 1usize
+            }
+            k = 0usize
+            while k < rk {
+                var s = 0.0f64
+                var i = 0usize
+                while i < n {
+                    s += t2[k * n + i]
+                    i += 1usize
+                }
+                i = 0usize
+                while i < n {
+                    w[k * n + i] = t2[k * n + i] / s
+                    i += 1usize
+                }
+                k += 1usize
+            }
+        } else if method % 2usize == 0usize {
             matmul(w, h, wh, n, rk, p)
             // h[k, j] *= sum_i w[i, k] v[i, j] / wh[i, j] / colSums(w)[k]
             var k = 0usize
@@ -172,6 +285,15 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
                         l -= 1usize
                         den += g[l * rk + k] * h[j * rk + l]
                     }
+                    if method == 5usize {
+                        var ad = 0.0f64
+                        var u2 = n
+                        while u2 > 0usize {
+                            u2 -= 1usize
+                            ad += w[k * n + u2] * off[u2]
+                        }
+                        den += ad
+                    }
                     var tv = h[j * rk + k] * num
                     if !(tv > eps9) { tv = eps9 }
                     t1[j * rk + k] = tv / (den + eps9)
@@ -184,7 +306,18 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
                 h[q] = t1[q]
                 q += 1usize
             }
-            // W = max(W (v h'), eps) / (W (h h') + eps) row by row, then unit column sums
+            // W = max(W (v h'), eps) / (W (h h') + eps) row by row, then unit column sums (none for the offset model, whose denominator adds off * rowSums(H))
+            k = 0usize
+            while k < rk {
+                var s = 0.0f64
+                var u3 = p
+                while u3 > 0usize {
+                    u3 -= 1usize
+                    s += h[u3 * rk + k]
+                }
+                rsh[k] = s
+                k += 1usize
+            }
             k = 0usize
             while k < rk {
                 var l = 0usize
@@ -216,6 +349,7 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
                         l -= 1usize
                         den += w[l * n + i] * g[k * rk + l]
                     }
+                    if method == 5usize { den += off[i] * rsh[k] }
                     var tv = w[k * n + i] * num
                     if tv < eps9 { tv = eps9 }
                     t2[k * n + i] = tv / (den + eps9)
@@ -225,11 +359,14 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
             }
             k = 0usize
             while k < rk {
-                var s = 0.0f64
-                i = 0usize
-                while i < n {
-                    s += t2[k * n + i]
-                    i += 1usize
+                var s = 1.0f64
+                if method != 5usize {
+                    s = 0.0f64
+                    i = 0usize
+                    while i < n {
+                        s += t2[k * n + i]
+                        i += 1usize
+                    }
                 }
                 i = 0usize
                 while i < n {
@@ -238,8 +375,26 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
                 }
                 k += 1usize
             }
+            if method == 5usize {
+                matmul(w, h, wh, n, rk, p)
+                i = 0usize
+                while i < n {
+                    var rv = 0.0f64
+                    var rf = 0.0f64
+                    j = 0usize
+                    while j < p {
+                        rv += v[j * n + i]
+                        rf += wh[j * n + i] + off[i]
+                        j += 1usize
+                    }
+                    var rvm = rv
+                    if rvm < eps9 { rvm = eps9 }
+                    off[i] = off[i] * rvm / (rf + eps9)
+                    i += 1usize
+                }
+            }
         }
-        if method < 2usize && it % 10usize == 0usize {
+        if (method < 2usize || method >= 4usize) && it % 10usize == 0usize {
             var j = 0usize
             while j < p {
                 var best = 0usize
@@ -276,7 +431,7 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
             }
             if inc > 40usize { done = true }
         }
-        if method >= 2usize {
+        if method == 2usize || method == 3usize {
             if sn != 0usize || it % 50usize == 0usize {
                 let cv = nmf_objective(v, w, h, n, p, rk, method % 2usize, wh)
                 if cv != cv {

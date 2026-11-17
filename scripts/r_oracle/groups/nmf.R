@@ -1,4 +1,4 @@
-# NMF: brunet (method 0) and lee (method 1) after nmf(x, rank, method, seed = integer); args (n, p, r, method, seed, x[n*p] column-major, idx) where idx 0 is the iteration count, then W (n*r) then H (r*p) in column-major order
+# NMF (theta 0.5 unless a nsNMF case says otherwise): brunet (method 0) and lee (method 1) after nmf(x, rank, method, seed = integer); args (n, p, r, method, seed, x[n*p] column-major, idx) where idx 0 is the iteration count, then W (n*r) then H (r*p) in column-major order
 suppressMessages(library(NMF))
 cases <- list()
 set.seed(20261117)
@@ -18,7 +18,7 @@ for (rep in 1:40) {
   }
   v <- c(NA, as.vector(basis(res)), as.vector(coef(res)))
   v[1] <- iters
-  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, me, sd, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else if (me == 0) 1e-6 else 1e-8, abs = if (q == 1) 0 else if (me == 0) 1e-8 else 1e-10)
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, me, sd, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else if (me == 0) 1e-6 else 1e-8, abs = if (q == 1) 0 else if (me == 0) 1e-8 else 1e-10)
 }
 # KL (method 2) and Frobenius (method 3): the same updates under the "stationary" stopping rule; the iteration count is the fit's own niter
 for (rep in 1:24) {
@@ -27,6 +27,24 @@ for (rep in 1:24) {
   res <- tryCatch(suppressWarnings(nmf(x, r, method = if (me == 2) "KL" else "Frobenius", seed = sd)), error = function(e) NULL)
   if (is.null(res)) next
   v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
-  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, me, sd, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 300 else 1e-8)
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, me, sd, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 300 else 1e-8)
+}
+# nsNMF (method 4): the smoothing theta
+for (rep in 1:20) {
+  n <- sample(6:16, 1); p <- sample(5:10, 1); r <- sample(2:4, 1); sd <- sample(1:100000, 1); th <- c(0.2, 0.5, 0.8)[sample(3, 1)]
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = "nsNMF", seed = sd, theta = th)), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 4, sd, th, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
+}
+# offset (method 5): a feature-specific baseline, seeded at random after W and H
+for (rep in 1:20) {
+  n <- sample(6:16, 1); p <- sample(5:10, 1); r <- sample(2:4, 1); sd <- sample(1:100000, 1)
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = "offset", seed = sd)), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 5, sd, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
 }
 emit("nmf", "NMF", list(cases))
