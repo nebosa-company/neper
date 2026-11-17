@@ -1,7 +1,7 @@
 // e.algo.stat.seriationeig against seriation: the eigenvector methods. tests/oracle/seriation_methods.json comes
 // from `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R seriation_methods`; the layout is at the top of
-// scripts/r_oracle/groups/seriation_methods.R. A spectral or MDS order is compared up to reversal (LAPACK's
-// eigenvector sign); the share of orders that also have R's orientation is printed.
+// scripts/r_oracle/groups/seriation_methods.R. A spectral or MDS order must equal R's, orientation included:
+// e.algo.linalg.lapack_syevr reproduces the signs LAPACK's dsyevr gives R's eigenvectors.
 
 use e.algo.rand.r as rng
 use e.algo.stat.seriationeig as se
@@ -18,17 +18,16 @@ type Tally = struct { exact: usize, total: usize, tsp_exact: usize, tsp_total: u
 
 fn same_or_reversed(o: []const usize, z: []const f64, at: usize, n: usize, t: *Tally) -> f64 {
     var fwd = true
-    var rev = true
     var i = 0usize
     while i < n {
-        let want = usize(z[at + i]) - 1usize
-        if o[i] != want { fwd = false }
-        if o[n - 1usize - i] != want { rev = false }
+        if o[i] != usize(z[at + i]) - 1usize { fwd = false }
         i += 1usize
     }
     t.total += 1usize
-    if fwd { t.exact += 1usize }
-    if fwd || rev { ret 1.0f64 }
+    if fwd {
+        t.exact += 1usize
+        ret 1.0f64
+    }
     ret 0.0f64
 }
 
@@ -169,6 +168,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case, t: *Tally) -> f64 {
     ret same_or_reversed(o, z, at, n, t)
 }
 
+// "m(code, n)" of a failing case; the full argument list is the matrix and is too long to print
+fn describe_short(a: *mem.Arena, c: *const oracle.Case) -> str {
+    let (initial, be) = str.builder(a, 60usize)
+    if be != ok { ret c.name }
+    var b = initial
+    let _ = str.push(&b, c.name)
+    let _ = str.push(&b, "(code ")
+    let _ = str.push_i64(&b, i64(c.args[0usize]))
+    let _ = str.push(&b, ", n ")
+    let _ = str.push_i64(&b, i64(c.args[1usize]))
+    let _ = str.push(&b, ")")
+    ret str.done(&b)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/seriation_methods.json")
     if load_error != ok { os.exit(2) }
@@ -181,8 +194,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let got = answer(a, c, &tally)
         if !oracle.agrees(got, c) {
             failures += 1usize
-            if failures <= 12usize {
-                let _ = io.print(oracle.describe(a, c, got))
+            if failures <= 40usize {
+                let _ = io.print(describe_short(a, c))
                 let _ = io.print("\n")
             }
         }

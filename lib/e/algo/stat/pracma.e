@@ -4,6 +4,7 @@
 
 use e.math
 use e.algo.linalg.decomp as decomp
+use e.algo.linalg.lapack_gesdd as lapack
 use e.mem
 
 fn eps() -> f64 { ret 2.220446049250313e-16f64 }
@@ -2414,4 +2415,43 @@ fn null_basis(a: *mem.Arena, m: []const f64, rows: usize, cols: usize, out: []f6
         c += 1usize
     }
     ret k
+}
+
+// pracma::orth(M): the left singular vectors of svd(M) (LAPACK dgesdd, signs as R's) whose singular value exceeds
+// max(dim(M)) * max(s) * .Machine$double.eps. M is rows by cols row-major; out gets rows by r row-major (rows * min(rows, cols)
+// entries are room enough) and r comes back; zero when M has no such value (R's own answer there is an error).
+fn orth(a: *mem.Arena, m: []const f64, rows: usize, cols: usize, out: []f64) -> (usize, err) {
+    var k = rows
+    if cols < rows { k = cols }
+    let (xc, e1) = mem.alloc[f64](a, rows * cols)
+    let (s, e2) = mem.alloc[f64](a, k)
+    let (u, e3) = mem.alloc[f64](a, rows * k)
+    let (vt, e4) = mem.alloc[f64](a, k * cols)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (0usize, mem.Full) }
+    var i = 0usize
+    while i < rows {
+        var j = 0usize
+        while j < cols {
+            xc[i + j * rows] = m[i * cols + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let er = lapack.svd_all(a, xc, rows, cols, s, u, vt)
+    if er != ok { ret (0usize, er) }
+    var dim = rows
+    if cols > rows { dim = cols }
+    let tol = f64(dim) * s[0usize] * 2.220446049250313e-16f64
+    var r = 0usize
+    while r < k && s[r] > tol { r += 1usize }
+    i = 0usize
+    while i < rows {
+        var c = 0usize
+        while c < r {
+            out[i * r + c] = u[i + c * rows]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    ret (r, ok)
 }

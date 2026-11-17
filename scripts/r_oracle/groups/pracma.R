@@ -1,4 +1,4 @@
-# pracma: trapz, cumtrapz, polyval, polyfit, findpeaks, rref, primes, factors, gcd, nchoosek, cross.
+# pracma: trapz, cumtrapz, polyval, polyfit, findpeaks, rref, primes, factors, gcd, nchoosek, cross, orth.
 #   args vary by fn:
 #   "trapz" "cumtrapz" (cumulative values weighted by position): (n, x..., y...)
 #   "polyfit" (deg, n, x..., y...) -> coefficient index k = c(0..) in the first slot after: args (deg, k, n, x..., y...)   "polyval": (x, coefficients...)
@@ -150,5 +150,16 @@ for (rep in 1:60) {
   dg <- sample(2:9, 1); co <- round(rnorm(dg + 1), 3); if (rep %% 5 == 0) co[sample(dg, 1)] <- 0; if (co[dg + 1] == 0) co[dg + 1] <- 1
   rt <- tryCatch(polyroot(co), error = function(e) NULL); if (is.null(rt)) next
   for (k in seq_along(rt)) { add("prre", c(length(co), k - 1, co), Re(rt[k]), rel = 1e-8); cases[[length(cases) + 1]] <- case("prim", c(length(co), k - 1, co), Im(rt[k]), rel = 1e-8, abs = 1e-9) }
+}
+# orth, signs included (U of svd, LAPACK dgesdd): "orthr" (nr, nc, A row-major) -> the rank r; "orth" same args -> sum of U[i, k] * ((7 i + 3 k) %% 5 + 1) over the r columns (i, k 0-based)
+set.seed(20261207)
+for (rep in 1:16) {
+  nr <- sample(2:6, 1); nc <- sample(2:6, 1); M <- matrix(round(rnorm(nr * nc), 3), nr, nc)
+  if (rep %% 3 == 0 && nc > 2) M[, nc] <- M[, 1] + M[, 2]
+  if (rep %% 4 == 1) M <- matrix(sample(-3:3, nr * nc, TRUE), nr, nc)
+  U <- tryCatch(orth(M), error = function(e) NULL); if (is.null(U)) next
+  r <- ncol(U); ws <- 0
+  for (i in 1:nr) for (k in 1:r) ws <- ws + U[i, k] * (((i - 1) * 7 + (k - 1) * 3) %% 5 + 1)
+  add("orthr", c(nr, nc, as.vector(t(M))), r); add("orth", c(nr, nc, as.vector(t(M))), ws)
 }
 emit("pracma", "pracma", list(cases))

@@ -394,3 +394,4 @@ oracle_seriation
 oracle_ksamples_sim
 oracle_ksamples_steel
 oracle_ksamples_ci
+oracle_lapack_exact

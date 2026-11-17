@@ -68,6 +68,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret t
     }
+    if str.eq(k, "orth") || str.eq(k, "orthr") {
+        let nr = usize(x[0usize])
+        let nc = usize(x[1usize])
+        var mn = nr
+        if nc < nr { mn = nc }
+        let (o, e) = mem.alloc[f64](a, nr * mn)
+        if e != ok { os.exit(5) }
+        let (r, oe) = pm.orth(a, x[2usize..2usize + nr * nc], nr, nc, o)
+        if oe != ok { os.exit(5) }
+        if str.eq(k, "orthr") { ret f64(r) }
+        var t = 0.0f64
+        var i = 0usize
+        while i < nr {
+            var col = 0usize
+            while col < r {
+                t += o[i * r + col] * f64((i * 7usize + col * 3usize) % 5usize + 1usize)
+                col += 1usize
+            }
+            i += 1usize
+        }
+        ret t
+    }
     if str.eq(k, "primes") { ret f64(pm.primes_count(u64(x[0usize]))) }
     if str.eq(k, "fsum") || str.eq(k, "fcnt") {
         let (s, n) = pm.factors(u64(x[0usize]))
