@@ -21,6 +21,33 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if re != ok { ret 0.0f64 / 0.0f64 }
         ret ro[usize(x[6usize])]
     }
+    if str.eq(k, "mvcp") {
+        let kind = usize(x[0usize])
+        let d = usize(x[1usize])
+        let (v1, e1) = mem.alloc[f64](a, d)
+        let (mt, e2) = mem.alloc[f64](a, d * d)
+        let (v2, e3) = mem.alloc[f64](a, d)
+        let (o, e4) = mem.alloc[f64](a, d + d * d + d)
+        if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 / 0.0f64 }
+        var i = 0usize
+        while i < d {
+            v1[i] = x[4usize + i]
+            v2[i] = x[4usize + d + d * d + i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < d * d {
+            mt[i] = x[4usize + d + i]
+            i += 1usize
+        }
+        if kind == 2usize {
+            if !sn.mv_cp2dp_sn(a, v1, mt, v2, o) { ret 0.0f64 / 0.0f64 }
+        } else {
+            let e = sn.mv_dp2cp(a, kind == 1usize, v1, mt, v2, x[2usize], o)
+            if e != ok { ret 0.0f64 / 0.0f64 }
+        }
+        ret o[usize(x[3usize])]
+    }
     if str.eq(k, "selm") {
         let fam = x[0usize]
         let pen = x[1usize]

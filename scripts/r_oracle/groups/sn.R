@@ -86,4 +86,12 @@ selm_case <- function(fam, pen, n, p, sd) {
   add("selm", c(fam, pen, n, p, k, y, as.numeric(t(X))), ll, rel = 1e-6)
 }
 for (rep in 1:6) for (fam in 0:1) for (pen in 0:1) selm_case(fam, pen, 300, c(1, 2)[(rep %% 2) + 1], 7000 + rep * 10 + fam * 2 + pen)
+# multivariate centred parameters "mvcp": args (kind 0 dp2cp SN / 1 dp2cp ST / 2 cp2dp SN, d, extra (tau or nu), index, v1(d), mat(d*d), v2(d)); the output is the flattened list
+# (mean, var.cov, gamma1) for kinds 0 and 1, (xi, Omega, alpha) for kind 2
+for (rep in 1:36) { d <- c(2, 3, 4)[(rep - 1) %% 3 + 1]; p <- mvcase(d); kind <- (rep - 1) %/% 3 %% 3
+  if (kind == 0) { tau <- c(0, 0.6, -1)[sample(3, 1)]; cp <- dp2cp(list(xi = p$xi, Omega = p$Om, alpha = p$al, tau = tau), "SN"); flat <- c(cp$mean, as.numeric(t(cp$var.cov)), cp$gamma1); ex <- tau }
+  if (kind == 1) { nu <- c(5.5, 8, 30)[sample(3, 1)]; cp <- dp2cp(list(xi = p$xi, Omega = p$Om, alpha = p$al, nu = nu), "ST"); flat <- c(cp$mean, as.numeric(t(cp$var.cov)), cp$gamma1); ex <- nu }
+  if (kind == 2) { cp <- dp2cp(list(xi = p$xi, Omega = p$Om, alpha = p$al), "SN"); dp <- cp2dp(list(mean = cp$mean, var.cov = cp$var.cov, gamma1 = cp$gamma1), "SN"); if (is.null(dp)) next
+    flat <- c(dp$xi, as.numeric(t(dp$Omega)), dp$alpha); ex <- 0; p <- list(xi = cp$mean, Om = cp$var.cov, al = cp$gamma1) }
+  for (k in seq_along(flat)) add("mvcp", c(kind, d, ex, k - 1, p$xi, as.numeric(t(p$Om)), p$al), flat[k], rel = 1e-8) }
 emit("sn", "sn", list(cases))

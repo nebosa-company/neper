@@ -927,6 +927,128 @@ fn selm_fit(a: *mem.Arena, y: []const f64, x: []const f64, w: []const f64, p: us
     ret 0.0f64 - fit_obj(&c, ths)
 }
 
+// ---- multivariate centred parameters ----
+
+// dp2cp for the multivariate skew-normal (extension tau) and skew-t (nu < Inf, proper): out is mean (d), var.cov (d x d row-major), gamma1 (d)
+fn mv_dp2cp(a: *mem.Arena, st: bool, xi: []const f64, omg: []const f64, alpha: []const f64, ex: f64, out: []f64) -> err {
+    let d = alpha.len
+    let (dl, e1) = mem.alloc[f64](a, d)
+    if e1 != ok { ret e1 }
+    let aq = mv_delta(alpha, omg, d, dl)
+    var z2 = 0.0f64
+    var bz = 0.0f64
+    if st {
+        bz = b_nu(ex)
+    } else {
+        z2 = zeta(2usize, ex)
+        bz = zeta(1usize, ex)
+    }
+    var i = 0usize
+    while i < d {
+        let oi = math.sqrt[f64](omg[i * d + i])
+        var mui = bz * dl[i] * oi
+        out[i] = xi[i] + mui
+        var j = 0usize
+        while j < d {
+            let oj = math.sqrt[f64](omg[j * d + j])
+            var cv = 0.0f64
+            if st { cv = omg[i * d + j] * ex / (ex - 2.0f64) - bz * dl[i] * oi * bz * dl[j] * oj } else { cv = omg[i * d + j] + z2 * oi * dl[i] * oj * dl[j] }
+            out[d + i * d + j] = cv
+            j += 1usize
+        }
+        if st {
+            out[d + d * d + i] = st_gamma(dl[i], ex, 1usize)
+        } else {
+            let sdz = math.sqrt[f64](1.0f64 + z2 * dl[i] * dl[i])
+            let r = dl[i] / sdz
+            out[d + d * d + i] = zeta(3usize, ex) * r * r * r
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// cp2dp for the multivariate skew-normal: out is xi (d), Omega (d x d), alpha (d); false when the centred parameters are not admissible
+fn mv_cp2dp_sn(a: *mem.Arena, mean: []const f64, sig: []const f64, g1: []const f64, out: []f64) -> bool {
+    let d = g1.len
+    let mx = 0.5f64 * (4.0f64 - pi()) * math.pow[f64](2.0f64 / (pi() - 2.0f64), 1.5f64)
+    let bb = math.sqrt[f64](2.0f64 / pi())
+    let (dl, e1) = mem.alloc[f64](a, d)
+    let (om, e2) = mem.alloc[f64](a, d)
+    let (mz, e3) = mem.alloc[f64](a, d)
+    let (ob, e4) = mem.alloc[f64](a, d * d)
+    let (l, e5) = mem.alloc[f64](a, d * d)
+    let (w, e6) = mem.alloc[f64](a, d)
+    let (x, e7) = mem.alloc[f64](a, d)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret false }
+    var i = 0usize
+    while i < d {
+        if math.abs[f64](g1[i]) >= mx { ret false }
+        var cr = math.pow[f64](2.0f64 * math.abs[f64](g1[i]) / (4.0f64 - pi()), 1.0f64 / 3.0f64)
+        if g1[i] < 0.0f64 { cr = 0.0f64 - cr }
+        dl[i] = cr / (bb * math.sqrt[f64](1.0f64 + cr * cr))
+        mz[i] = bb * dl[i]
+        om[i] = math.sqrt[f64](sig[i * d + i] / (1.0f64 - mz[i] * mz[i]))
+        i += 1usize
+    }
+    i = 0usize
+    while i < d {
+        var j = 0usize
+        while j < d {
+            out[d + i * d + j] = sig[i * d + j] + mz[i] * om[i] * mz[j] * om[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < d {
+        var j = 0usize
+        while j < d {
+            ob[i * d + j] = out[d + i * d + j] / math.sqrt[f64](out[d + i * d + i] * out[d + j * d + j])
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if !chol_lower(l, ob, d) { ret false }
+    // solve Obar x = delta through the factor: l l' x = delta
+    i = 0usize
+    while i < d {
+        var s = dl[i]
+        var k = 0usize
+        while k < i {
+            s -= l[i * d + k] * w[k]
+            k += 1usize
+        }
+        w[i] = s / l[i * d + i]
+        i += 1usize
+    }
+    i = d
+    while i > 0usize {
+        i -= 1usize
+        var s = w[i]
+        var k = i + 1usize
+        while k < d {
+            s -= l[k * d + i] * x[k]
+            k += 1usize
+        }
+        x[i] = s / l[i * d + i]
+    }
+    var dsq = 0.0f64
+    i = 0usize
+    while i < d {
+        dsq += dl[i] * x[i]
+        i += 1usize
+    }
+    if dsq >= 1.0f64 { ret false }
+    i = 0usize
+    while i < d {
+        out[i] = mean[i] - om[i] * mz[i]
+        out[d + d * d + i] = x[i] / math.sqrt[f64](1.0f64 - dsq)
+        i += 1usize
+    }
+    ret true
+}
+
 // qsc: the skew-Cauchy quantile
 fn qsc(p: f64, xi: f64, omega: f64, alpha: f64) -> f64 {
     if p <= 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
