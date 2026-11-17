@@ -637,3 +637,32 @@ fn bvpois_d(x: f64, y: f64, a: f64, b: f64, c: f64) -> f64 {
     }
     ret math.exp[f64](0.0f64 - (a + b + c)) * s
 }
+
+// Tukey lambda quantile and the negative hypergeometric: the draw x that completes r successes when drawing without replacement from m successes and n failures
+fn tlambda_q(p: f64, l: f64) -> f64 {
+    if l == 0.0f64 { ret math.log[f64](p / (1.0f64 - p)) }
+    ret (math.pow[f64](p, l) - math.pow[f64](1.0f64 - p, l)) / l
+}
+fn nhyper_d(x: f64, n: f64, m: f64, r: f64) -> f64 {
+    if x < r || x > n + m - (m - r) || x != math.floor[f64](x) { ret 0.0f64 }
+    ret math.exp[f64](lchoose(x - 1.0f64, r - 1.0f64) + lchoose(n + m - x, m - r) - lchoose(n + m, m))
+}
+fn nhyper_p(x: f64, n: f64, m: f64, r: f64) -> f64 {
+    var s = 0.0f64
+    var k = r
+    while k <= math.floor[f64](x) {
+        s += nhyper_d(k, n, m, r)
+        k += 1.0f64
+    }
+    if s > 1.0f64 { ret 1.0f64 }
+    ret s
+}
+fn nhyper_q(p: f64, n: f64, m: f64, r: f64) -> f64 {
+    var k = r
+    var s = nhyper_d(k, n, m, r)
+    while s < p * (1.0f64 - 1.0e-14f64) && k < n + m {
+        k += 1.0f64
+        s += nhyper_d(k, n, m, r)
+    }
+    ret k
+}

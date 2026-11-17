@@ -179,6 +179,14 @@ fn answer(c: *const oracle.Case) -> f64 {
         if usize(x[0usize]) == 0usize { ret ed.bvnorm_d(x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], x[7usize]) }
         ret ed.bvpois_d(x[1usize], x[2usize], x[3usize], x[4usize], x[5usize])
     }
+    if str.eq(c.name, "nh") {
+        // (kind 0 d 1 p 2 q 3 tlambda q, n, m, r, v)
+        let kd = usize(x[0usize])
+        if kd == 0usize { ret ed.nhyper_d(x[4usize], x[1usize], x[2usize], x[3usize]) }
+        if kd == 1usize { ret ed.nhyper_p(x[4usize], x[1usize], x[2usize], x[3usize]) }
+        if kd == 2usize { ret ed.nhyper_q(x[4usize], x[1usize], x[2usize], x[3usize]) }
+        ret ed.tlambda_q(x[4usize], x[1usize])
+    }
     if str.eq(c.name, "d3") {
         let d3 = usize(x[0usize])
         let w1 = x[1usize]

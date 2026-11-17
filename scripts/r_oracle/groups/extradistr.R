@@ -99,6 +99,12 @@ for (rep in 1:6) {
   add2("bv", c(0, xx, yy, m1, m2, s1, s2, r), dbvnorm(xx, yy, m1, m2, s1, s2, r))
   a <- runif(1, 0.3, 2); b <- runif(1, 0.3, 2); cc <- runif(1, 0.2, 1.5); for (ij in list(c(0, 0), c(1, 2), c(3, 1), c(4, 5))) add2("bv", c(1, ij, a, b, cc, 0, 0), dbvpois(ij[1], ij[2], a, b, cc))
 }
+# fn "nh" (kind 0 d 1 p 2 q 3 tlambda q, n, m, r, v)
+for (rep in 1:5) {
+  n <- sample(5:15, 1); m <- sample(3:10, 1); r <- sample(1:m, 1); lam <- c(-0.4, 0.3, 1.2, 0.8, 2)[rep]
+  for (xx in r:(r + 6)) { add2("nh", c(0, n, m, r, xx), dnhyper(xx, n, m, r)); add2("nh", c(1, n, m, r, xx), pnhyper(xx, n, m, r)) }
+  for (pq in c(0.1, 0.4, 0.8)) { add2("nh", c(2, n, m, r, pq), qnhyper(pq, n, m, r)); add2("nh", c(3, lam, 0, 0, pq), qtlambda(pq, lam)) }
+}
 # random draws: "rg" (family, seed, p1, p2, p3, index) the draw at position index (0-based) of five seeded draws; family 0 gumbel 1 frechet 2 power 3 lomax 4 pareto 5 rayleigh 6 kumar 7 gompertz 8 hnorm 9 hcauchy 10 laplace
 for (rep in 1:33) {
   sd <- sample(1:100000, 1); fam <- (rep - 1) %% 11; p1 <- runif(1, 0.5, 3); p2 <- runif(1, 0.5, 3); p3 <- runif(1, -1, 1)

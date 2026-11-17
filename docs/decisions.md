@@ -48428,3 +48428,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6986 — extraDistr multivariate and bivariate densities
 
 `dirichlet_d`, `mnom_d`, `dirmnom_d`, `mvhyper_d` over one observation slice, `bvnorm_d` and `bvpois_d` (Holgate: independent parts a and b, shared part c). Equal to extraDistr on 6 parameter sets (oracle_extradistr). The multivariate generators, the negative hypergeometric and the Tukey lambda are not here. Linux pending.
+
+
+## D6987 — extraDistr negative hypergeometric and Tukey lambda
+
+`nhyper_d/p/q(x, n, m, r)`: the draw that completes r successes drawing without replacement from m successes and n failures, P = C(x-1, r-1) C(n+m-x, m-r) / C(n+m, m); and `tlambda_q`, (p^l - (1-p)^l) / l with the logistic limit at 0. Equal to extraDistr on 5 parameter sets (oracle_extradistr). The proportion distribution (dprop), Bhattacharjee and the generators are not here. Linux pending.
