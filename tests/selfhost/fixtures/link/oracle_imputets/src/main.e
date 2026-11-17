@@ -95,9 +95,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             q += 1usize
         }
         let mdl = kal.SsModel{ p: pp, tm: tm, zv: zv, h: h, vm: vm, av: av, pm: pm, pn: pn }
-        let (kr, ke) = it.na_kalman_model(a, s, &mdl, kind == 1usize, nit)
+        let (kr, ke) = it.na_kalman_model(a, s, s, &mdl, kind == 1usize, nit)
         if ke != ok { os.exit(7) }
         ret kr[k]
+    }
+    if str.eq(c.name, "sts") {
+        // args (smooth, index, n, series..., type, frequency)
+        let (sr, se) = it.na_kalman_structts(a, s, usize(x[3usize + n]), usize(x[4usize + n]), kind == 1usize)
+        if se != ok { os.exit(7) }
+        ret sr[k]
     }
     if str.eq(c.name, "stats") {
         // args (which 0..7, 0, n, series...)

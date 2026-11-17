@@ -11,6 +11,9 @@ use e.algo.stat.zoo as zoo
 use e.algo.stat.stlpkg as stl
 use e.algo.rand.r as rng
 use e.algo.stat.kalman as kal
+use e.algo.stat.structts as sts
+
+error TooFewData
 
 fn is_nan(x: f64) -> bool { ret x != x }
 
@@ -579,7 +582,7 @@ fn stats_na(a: *mem.Arena, x: []const f64, out: []f64) -> err {
 
 // na_kalman for a state-space model: smooth = KalmanSmooth, otherwise the filtered states of KalmanRun; a missing value
 // becomes the state estimate times Z. The model is not changed.
-fn na_kalman_model(a: *mem.Arena, x: []const f64, m: *const kal.SsModel, smooth: bool, nit: i64) -> ([]f64, err) {
+fn na_kalman_model(a: *mem.Arena, x: []const f64, orig: []const f64, m: *const kal.SsModel, smooth: bool, nit: i64) -> ([]f64, err) {
     let n = x.len
     let p = m.p
     let (o, e) = mem.alloc[f64](a, n)
@@ -601,8 +604,8 @@ fn na_kalman_model(a: *mem.Arena, x: []const f64, m: *const kal.SsModel, smooth:
     }
     var i = 0usize
     while i < n {
-        o[i] = x[i]
-        if is_nan(x[i]) {
+        o[i] = orig[i]
+        if is_nan(orig[i]) {
             var s = 0.0f64
             var j = 0usize
             while j < p {
@@ -614,4 +617,62 @@ fn na_kalman_model(a: *mem.Arena, x: []const f64, m: *const kal.SsModel, smooth:
         i += 1usize
     }
     ret (o, ok)
+}
+
+// the number of distinct values of x, a missing value counting as one (R's length(unique(x)))
+fn distinct_count(x: []const f64) -> usize {
+    var cnt = 0usize
+    var i = 0usize
+    while i < x.len {
+        var seen = false
+        var j = 0usize
+        while j < i && !seen {
+            if x[j] == x[i] || (is_nan(x[j]) && is_nan(x[i])) { seen = true }
+            j += 1usize
+        }
+        if !seen { cnt += 1usize }
+        i += 1usize
+    }
+    ret cnt
+}
+
+// na_kalman(x, model = "StructTS", smooth, type = kind (0 level, 1 trend, 2 BSM), frequency nf): at least three observed values are needed; a series with two distinct values is
+// linearly interpolated, as imputeTS does; a missing first value is replaced by the first observed one for the fit and the smoothing
+fn na_kalman_structts(a: *mem.Arena, x: []const f64, kind: usize, nf: usize, smooth: bool) -> ([]f64, err) {
+    let n = x.len
+    var nobs = 0usize
+    var first = 0usize
+    var seen = false
+    var i = 0usize
+    while i < n {
+        if !is_nan(x[i]) {
+            nobs += 1usize
+            if !seen {
+                first = i
+                seen = true
+            }
+        }
+        i += 1usize
+    }
+    if nobs == n {
+        let (r0, e0) = na_interpolation(a, x, 0usize)
+        ret (r0, e0)
+    }
+    if distinct_count(x) == 2usize {
+        let (r1, e1) = na_interpolation(a, x, 0usize)
+        ret (r1, e1)
+    }
+    let (data, e) = mem.alloc[f64](a, n)
+    if e != ok { ret (data, e) }
+    i = 0usize
+    while i < n {
+        data[i] = x[i]
+        i += 1usize
+    }
+    if nobs < 3usize { ret (data, TooFewData) }
+    if is_nan(data[0usize]) { data[0usize] = x[first] }
+    let (model, me) = sts.struct_ts_model(a, data, kind, nf)
+    if me != ok { ret (data, me) }
+    let (r2, e2) = na_kalman_model(a, data, x, &model, smooth, 0i64 - 1i64)
+    ret (r2, e2)
 }
