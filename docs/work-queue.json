@@ -911,10 +911,10 @@
       "group": "CRAN parity",
       "order": 718,
       "title": "gbm: gradient boosting machines",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 561). Mid. Verify the boosting in e.ml.tree first. Acceptance, equal to gbm under set.seed: gaussian, bernoulli, poisson, adaboost, laplace, quantile, huberized, coxph, pairwise and multinomial losses with bag.fraction through the R RNG, shrinkage, interaction.depth, cross-validation, gbm.perf, relative.influence and predict."
+      "evidence": "Partial (D6893): e.algo.stat.gbmpkg.gaussian, the gaussian loss without subsampling (best-first trees to interaction.depth, n.minobsinnode, shrinkage), equals the training-row fit of gbm on Windows (oracle_gbm; Linux pending). Open: the other losses, bagging through the R RNG, train.fraction, weights, predict on new data, relative.influence, gbm.perf, cross-validation. Was: Open (CRAN rank 561). Mid. Verify the boosting in e.ml.tree first. Acceptance, equal to gbm under set.seed: gaussian, bernoulli, poisson, adaboost, laplace, quantile, huberized, coxph, pairwise and multinomial losses with bag.fraction through the R RNG, shrinkage, interaction.depth, cross-validation, gbm.perf, relative.influence and predict."
     },
     {
       "id": "L415",

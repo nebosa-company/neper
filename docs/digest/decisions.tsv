@@ -3751,4 +3751,5 @@ D6888	573	tsfeatures: histogram_mode
 D6889	701	glmnet: the early stop of the gaussian path
 D6890	779	bw.ucv and bw.bcv
 D6891	702	bw.SJ
-D6892	594	Hmisc: smean.cl.normal, smean.sdl, smedian.hilow
+D6892	595	Hmisc: smean.cl.normal, smean.sdl, smedian.hilow
+D6893	938	gbm: gaussian boosting without subsampling
