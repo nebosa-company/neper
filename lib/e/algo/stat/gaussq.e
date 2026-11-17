@@ -400,6 +400,11 @@ fn permp(a: *mem.Arena, x: f64, nperm: f64, n1: f64, n2: f64, total0: f64, metho
 
 // statmod::power.fisher.test (two-sided) after set.seed: nsim binomial counts for each group (all of the first group's, then the second's), Fisher's exact test on each 2 by 2 table, the share of p values under alpha
 fn power_fisher_test(a: *mem.Arena, p1: f64, p2: f64, n1: f64, n2: f64, alpha: f64, nsim: usize, seed: i64) -> f64 {
+    ret power_fisher_alt(a, p1, p2, n1, n2, alpha, nsim, seed, 0usize)
+}
+
+// the same with alternative = "two.sided" (0), "greater" (1) or "less" (2): the one-sided p values are the hypergeometric tails of the first cell
+fn power_fisher_alt(a: *mem.Arena, p1: f64, p2: f64, n1: f64, n2: f64, alpha: f64, nsim: usize, seed: i64, alt: usize) -> f64 {
     let (y1, e1) = mem.alloc[f64](a, nsim)
     let (y2, e2) = mem.alloc[f64](a, nsim)
     if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
@@ -418,8 +423,15 @@ fn power_fisher_test(a: *mem.Arena, p1: f64, p2: f64, n1: f64, n2: f64, alpha: f
     var hit = 0.0f64
     i = 0usize
     while i < nsim {
-        let r = tst.fisher_exact(u64(y1[i]), u64(n1 - y1[i]), u64(y2[i]), u64(n2 - y2[i]))
-        if r.p_value < alpha { hit += 1.0f64 }
+        var pv = 0.0f64
+        if alt == 0usize {
+            pv = tst.fisher_exact(u64(y1[i]), u64(n1 - y1[i]), u64(y2[i]), u64(n2 - y2[i])).p_value
+        } else if alt == 1usize {
+            pv = nb.phyper(y1[i] - 1.0f64, n1, n2, y1[i] + y2[i], false, false)
+        } else {
+            pv = nb.phyper(y1[i], n1, n2, y1[i] + y2[i], true, false)
+        }
+        if pv < alpha { hit += 1.0f64 }
         i += 1usize
     }
     ret hit / f64(nsim)

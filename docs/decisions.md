@@ -47750,3 +47750,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6820 — statmod: qresiduals
 
 **Decision.** `gaussq.qresiduals(r, family, y, mu, w, disp, out)` is the Dunn and Smyth quantile residual of `qresiduals(glm.obj)` given the fitted values: binomial (counts n y against pbinom, randomised between the cdf at y - 1 and y), Poisson (the same with ppois), gamma (qnorm of the log gamma cdf, no randomisation), inverse Gaussian (the log cdf from the lower or upper tail on either side of the mean, through `pinvgauss`) and negative binomial (pbeta bounds, randomised); the randomised families draw `runif(min = a, max = b)` in observation order. The dispersion is an argument, not estimated from a fit. Equal to statmod on 30 draws (six per family; oracle_gaussq), as a position-weighted sum. Not here: Tweedie, the default (deviance) residual, fitting the glm. Linux pending.
+
+## D6821 — statmod: one-sided power.fisher.test
+
+**Decision.** `gaussq.power_fisher_alt(..., alt)` is `power.fisher.test` with `alternative` "greater" (the upper hypergeometric tail of the first cell, `phyper(y1 - 1, n1, n2, y1 + y2, lower = FALSE)`) or "less" (`phyper(y1, ...)`), after the same two vectors of binomial draws; `power_fisher_test` is its two-sided case. Equal to statmod on 30 draws of each (oracle_gaussq). Not here: Tweedie and default (deviance) residuals. Linux pending.

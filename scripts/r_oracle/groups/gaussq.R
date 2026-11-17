@@ -58,5 +58,7 @@ for (rep in 1:30) {
   p1 <- round(runif(1, 0.1, 0.5), 2); p2 <- round(p1 + runif(1, 0.1, 0.4), 2); n1 <- sample(c(10, 20, 40, 80), 1); n2 <- sample(c(10, 20, 40, 80), 1); sd <- sample(1:100000, 1); ns <- sample(c(50, 100, 200), 1)
   set.seed(sd); v <- power.fisher.test(p1, p2, n1, n2, alpha = 0.05, nsim = ns)
   add("pft", c(p1, p2, n1, n2, 0.05, ns, sd), v)
+  set.seed(sd); add("pftg", c(p1, p2, n1, n2, 0.05, ns, sd), power.fisher.test(p1, p2, n1, n2, alpha = 0.05, nsim = ns, alternative = "greater"))
+  set.seed(sd); add("pftl", c(p1, p2, n1, n2, 0.05, ns, sd), power.fisher.test(p1, p2, n1, n2, alpha = 0.05, nsim = ns, alternative = "less"))
 }
 emit("gaussq", "statmod", list(cases))
