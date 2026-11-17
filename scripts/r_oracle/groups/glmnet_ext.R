@@ -115,11 +115,13 @@ if (want_("mult")) { set.seed(20261202)
 
 # ---- glmnet's own multinomial algorithm (ported from its C++ source) at the DEFAULT thresh: coefficients over six lambdas, and the automatic path's lambdas and length --------------------
 if (want_("gmn")) { set.seed(20261301)
-  for (v in 1:9) {
+  for (v in 1:10) {
     .v <- v
     d <- mk("multinomial", 70, 4, K = if (v == 8) 4 else 3); p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2)[(v %% 3) + 1], std = v != 4)
     if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3) o$off <- round(rnorm(d$n * d$K, 0, 0.3), 2); if (v == 4) { o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }
     if (v == 5) o$excl <- c(1, 3); if (v == 1) o$vf <- round(runif(p, 0.3, 2), 2); if (v == 7) o$w <- round(runif(d$n, 0.3, 3), 2)
+    if (v >= 6) o$grouped <- TRUE
+    if (v == 9) { o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }
     addfit(d, o, rel = 1e-6, abs = 1e-6, thresh7 = TRUE, nm = "gfit")
     if (v != 5) { f0 <- suppressWarnings(do.call(glmnet, gargs(d, o)))
       cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 1, length(f0$lambda), 0, 0.5); cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 0, ck(f0$lambda), 1e-9, 1e-12) }
