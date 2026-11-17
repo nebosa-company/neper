@@ -1,7 +1,8 @@
 // R rpart 4.1.27 (CART trees) from the C sources: methods anova, poisson, class (gini and information) and exp (survival rescaled to a Poisson
 // problem), unordered factor predictors (codes 1 .. ncat, the gray-code subset search), missing predictors (NaN) with competing and surrogate splits,
 // case weights, variable costs, class priors and loss matrices, the complexity table with its cross-validation under R's `sample` folds, prune,
-// predict (the pred_rpart walk), variable importance and rpart.control.
+// predict (the pred_rpart walk), variable importance, rpart.control, the node labels, and rpart's insert_split slip (a full list of two that takes a new
+// best keeps only that split, so maxcompete = 1 trees show fewer competitors).
 //
 // Observations carry 0-based numbers; a node owns the segment idx[lo..hi] of one permutation that is split in place (left, right, stays). Splits are
 // found per predictor on a stable sort of the node's rows, which differs from rpart's quicksort only in the order equal predictors are summed.
@@ -13,6 +14,7 @@
 use e.algo.rand.r as rng
 use e.math
 use e.mem
+use e.str
 
 error BadSpec
 
@@ -1556,6 +1558,7 @@ fn rp_branch(t: *Fit, node: usize, o: usize) -> usize {
     ret t.pl.rc[node]
 }
 
+// an observation that cannot descend (a missing value with no surrogate to use) leaves the rest of xtemp as the previous observation left it, as rpart does
 fn rp_rundown(t: *Fit, o: usize, cp: []const f64, xtemp: []f64) {
     var node = 0usize
     var otree = 0usize
@@ -1563,13 +1566,7 @@ fn rp_rundown(t: *Fit, o: usize, cp: []const f64, xtemp: []f64) {
     while i < t.ncp {
         while cp[i] < t.pl.cplx[node] {
             let nx = rp_branch(t, node, o)
-            if nx == NONE {
-                if t.usesur < 2usize {
-                    // a missing value: the rest of the list keeps xtemp as the last observation left it, and rpart writes one past the end
-                    ret
-                }
-                ret
-            }
+            if nx == NONE { ret }
             node = nx
             otree = nx
         }
@@ -2477,15 +2474,8 @@ fn rp_prune(a: *mem.Arena, v0: *const View, cp: f64) -> (View, err) {
     while r < nf {
         newleaf[r] = false
         if !keep[r] && tossed[r] {
+            // a tossed row whose parent is not tossed becomes a leaf; one under a tossed parent goes
             let par = v0.id[r] / 2i64
-            var pk = false
-            q = 0usize
-            while q < nf {
-                if v0.id[q] == par && keep[q] { pk = true }
-                q += 1usize
-            }
-            if par == 0i64 { pk = false }
-            // a parent that is itself not kept (tossed or a removed descendant) means this row is removed too
             var parent_removed = false
             q = 0usize
             while q < nf {
@@ -2493,7 +2483,6 @@ fn rp_prune(a: *mem.Arena, v0: *const View, cp: f64) -> (View, err) {
                 q += 1usize
             }
             if !parent_removed { newleaf[r] = true }
-            let _ = pk
         }
         if keep[r] || newleaf[r] { nk += 1usize }
         r += 1usize
@@ -2756,4 +2745,148 @@ fn rp_predict_row(v: *const View, xn: []const f64, nn: usize, i: usize) -> usize
         if !moved { ret npos }
     }
     ret NONE
+}
+
+// ---- labels.rpart: sprintf("%.<digits>g"), then the node labels of a view
+
+fn rp_pow10(k: i64) -> f64 {
+    var r = 1.0f64
+    var i = 0i64
+    if k >= 0i64 {
+        while i < k {
+            r = r * 10.0f64
+            i += 1i64
+        }
+        ret r
+    }
+    while i > k {
+        r = r / 10.0f64
+        i -= 1i64
+    }
+    ret r
+}
+
+fn rp_fmt_g(b: *str.Builder, x: f64, digits: usize) -> err {
+    if x == 0.0f64 { ret str.push(b, "0") }
+    var neg = false
+    var ax = x
+    if ax < 0.0f64 {
+        neg = true
+        ax = 0.0f64 - ax
+    }
+    let pd = i64(digits)
+    var e10 = i64(math.floor[f64](math.log10[f64](ax)))
+    var m = math.floor[f64](ax / rp_pow10(e10 - pd + 1i64) + 0.5f64)
+    if m >= rp_pow10(pd) {
+        e10 += 1i64
+        m = math.floor[f64](ax / rp_pow10(e10 - pd + 1i64) + 0.5f64)
+    }
+    if m < rp_pow10(pd - 1i64) {
+        e10 -= 1i64
+        m = math.floor[f64](ax / rp_pow10(e10 - pd + 1i64) + 0.5f64)
+    }
+    var ds: [24]u8 = zero
+    var q = 0usize
+    var rest = m
+    while q < digits {
+        let d = rest - math.floor[f64](rest / 10.0f64) * 10.0f64
+        ds[digits - 1usize - q] = 48u8 + u8(usize(d))
+        rest = math.floor[f64](rest / 10.0f64)
+        q += 1usize
+    }
+    var last = digits
+    while last > 1usize && ds[last - 1usize] == 48u8 { last -= 1usize }
+    if neg { let _ = str.push_byte(b, 45u8) }
+    if e10 >= pd || e10 < 0i64 - 4i64 {
+        let _ = str.push_byte(b, ds[0usize])
+        if last > 1usize {
+            let _ = str.push_byte(b, 46u8)
+            q = 1usize
+            while q < last {
+                let _ = str.push_byte(b, ds[q])
+                q += 1usize
+            }
+        }
+        let _ = str.push_byte(b, 101u8)
+        var ex = e10
+        if ex < 0i64 {
+            let _ = str.push_byte(b, 45u8)
+            ex = 0i64 - ex
+        } else {
+            let _ = str.push_byte(b, 43u8)
+        }
+        if ex < 10i64 { let _ = str.push_byte(b, 48u8) }
+        ret str.push_usize(b, usize(ex))
+    }
+    if e10 >= 0i64 {
+        let ip = usize(e10) + 1usize
+        q = 0usize
+        while q < ip {
+            if q < digits { let _ = str.push_byte(b, ds[q]) } else { let _ = str.push_byte(b, 48u8) }
+            q += 1usize
+        }
+        if last > ip {
+            let _ = str.push_byte(b, 46u8)
+            q = ip
+            while q < last {
+                let _ = str.push_byte(b, ds[q])
+                q += 1usize
+            }
+        }
+        ret ok
+    }
+    let _ = str.push(b, "0.")
+    var z = 0i64 - e10 - 1i64
+    while z > 0i64 {
+        let _ = str.push_byte(b, 48u8)
+        z -= 1i64
+    }
+    q = 0usize
+    while q < last {
+        let _ = str.push_byte(b, ds[q])
+        q += 1usize
+    }
+    ret ok
+}
+
+fn rp_level_letter(j: usize) -> u8 {
+    if j < 26usize { ret 97u8 + u8(j) }
+    ret 65u8 + u8(j - 26usize)
+}
+
+// "root", then each other row's label (variable, comparison, cut or levels) joined by "|"; the variables are named x1, x2, ... and the levels a, b, ...
+fn rp_labels(a: *mem.Arena, v: *const View, digits: usize) -> (str, err) {
+    let (ib, eb) = str.builder(a, 64usize + v.nfr * 48usize)
+    if eb != ok { ret ("", eb) }
+    var b = ib
+    let _ = str.push(&b, "root")
+    var r = 1usize
+    while r < v.nfr {
+        let _ = str.push(&b, "|")
+        let pr = rp_find_row(v, v.id[r] / 2i64)
+        let s0 = v.fidx[pr] - 1usize
+        let _ = str.push(&b, "x")
+        let _ = str.push_usize(&b, v.sp_var[s0])
+        let isleft = v.id[r] % 2i64 == 0i64
+        let nc = v.sp_ncat[s0]
+        if nc < 2i64 {
+            // direction -1: x < cut goes left
+            var lt = isleft
+            if nc > 0i64 { lt = !isleft }
+            if lt { let _ = str.push(&b, "< ") } else { let _ = str.push(&b, ">=") }
+            let _ = rp_fmt_g(&b, v.sp_index[s0], digits)
+        } else {
+            let _ = str.push(&b, "=")
+            let row = usize(v.sp_index[s0]) - 1usize
+            var want = 1i64
+            if isleft { want = 0i64 - 1i64 }
+            var q = 0usize
+            while q < usize(nc) {
+                if v.cs[row * v.maxcat + q] == want { let _ = str.push_byte(&b, rp_level_letter(q)) }
+                q += 1usize
+            }
+        }
+        r += 1usize
+    }
+    ret (str.done(&b), ok)
 }

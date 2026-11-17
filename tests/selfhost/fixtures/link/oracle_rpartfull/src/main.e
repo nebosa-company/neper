@@ -68,9 +68,19 @@ fn build(a: *mem.Arena, x: []const f64, t: *rf.Fit, v: *rf.View) -> err {
     let xm = x[at..at + n * p]
     var xg: []usize = zero
     let nx = usize(ctl.xval)
-    if nx > 1usize {
+    if nx > 1usize && x[16usize] >= 0.0f64 {
         let (g, eg) = rf.rp_xgroups(a, i64(x[16usize]), n, nx)
         if eg != ok { ret eg }
+        xg = g
+    } else if nx > 1usize {
+        // explicit folds follow the predictors
+        let (g, eg) = mem.alloc[usize](a, n)
+        if eg != ok { ret eg }
+        var q = 0usize
+        while q < n {
+            g[q] = usize(x[at + n * p + q])
+            q += 1usize
+        }
         xg = g
     }
     let (fit, ef) = rf.rp_fit(a, xm, n, p, ncat, y, ny, wt, cost, method, kc, parms, ctl, xg)
@@ -243,6 +253,27 @@ fn run_dataset(a: *mem.Arena, golden: *const oracle.Golden, start: usize, failur
         if what == 0usize { break }
         let qm = mem.mark(a)
         var got = 0.0f64
+        if what == 100usize {
+            var lv = v
+            let cpl = c.args[1usize]
+            if cpl > 0.0f64 {
+                let (vp, ep) = rf.rp_prune(a, &v, cpl)
+                if ep != ok { os.exit(6) }
+                lv = vp
+            }
+            let (text, el) = rf.rp_labels(a, &lv, 4usize)
+            if el != ok { os.exit(7) }
+            if !oracle.agrees_text(text, c) {
+                *failures += 1usize
+                if *failures <= 12usize { let _ = io.print(text) }
+                if *failures <= 12usize { let _ = io.print("\n") }
+                if *failures <= 12usize { let _ = io.print(c.text) }
+                if *failures <= 12usize { let _ = io.print("\n") }
+            }
+            mem.reset(a, qm)
+            at += 1usize
+            continue
+        }
         if what == 80usize {
             got = control_check(c)
         } else {
@@ -293,6 +324,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var failures = 0usize
     failures += run(a, "tests/oracle/rpartfull_a.json")
     failures += run(a, "tests/oracle/rpartfull_b.json")
+    failures += run(a, "tests/oracle/rpartfull_c.json")
+    failures += run(a, "tests/oracle/rpartfull_d.json")
     if failures > 0usize { os.exit(1) }
     ret ok
 }

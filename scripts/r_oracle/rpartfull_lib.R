@@ -41,8 +41,8 @@ rp_cases <- function(y, X, wt = NULL, cost = NULL, method = NULL, parms = NULL, 
     if (!is.null(parms)) pv <- c(if (is.null(parms$shrink)) NaN else parms$shrink, if (is.null(parms$method)) NaN else pmatch(parms$method, c("deviance", "sqrt")))
   } else ymat <- as.numeric(y)
   head <- c(0, n, p, mi, ny, k, length(pv), cs$minsplit, cs$minbucket, cs$cp, cs$maxcompete, cs$maxsurrogate, cs$usesurrogate, cs$surrogatestyle, cs$maxdepth,
-            if (length(cs$xval) == 1) cs$xval else 0, seed)
-  cases <- list(case("rp", c(head, pv, ncat, cost, wt, ymat, as.vector(xm)), nrow(fit$frame), rel = rel, abs = abs))
+            if (length(cs$xval) == 1) cs$xval else length(unique(cs$xval)), if (length(cs$xval) == 1) seed else -1)
+  cases <- list(case("rp", c(head, pv, ncat, cost, wt, ymat, as.vector(xm), if (length(cs$xval) > 1) cs$xval), nrow(fit$frame), rel = rel, abs = abs))
   isclass <- fit$method == "class"
   nd <- NULL
   if (!is.null(newX)) {
@@ -69,6 +69,7 @@ rp_cases <- function(y, X, wt = NULL, cost = NULL, method = NULL, parms = NULL, 
     add(40, ck(f$where))
     vi <- f$variable.importance
     add(50, length(vi)); add(51, if (is.null(vi)) 0 else ck(vi)); add(52, if (is.null(vi)) 0 else ck(match(names(vi), vn)))
+    cases[[length(cases) + 1]] <- case("rt", c(100, pc), paste(labels(f), collapse = "|"))
     add(70, fr$dev[1] / fr$n[1])
     used <- unique(as.character(fr$var[fr$var != "<leaf>"]))
     add(71, length(used) * 1000 + sum(match(used, vn)))
