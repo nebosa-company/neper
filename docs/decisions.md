@@ -48630,3 +48630,28 @@ Done in two agent runs on one branch and merged: heidel.diag with pcramer, the m
 ## D7100 — ResourceSelection, laeken and rcompanion closed; compositions advanced
 
 An agent batch merged: rsf, rspf, simulateUsedAvail and the mep and kdepairs numbers (L499), the bootstrap variances, calibWeights, gpg and the Pareto tail estimators (L482), pairwiseMedianTest, pairwiseNominalIndependence and groupwiseMean with bootstrap intervals (L504), and the rcomp, ilr basis, zeroreplace, Gauss.test and energy normality test pieces of L477. L499, L482 and L504 cover every item of their acceptance that exists in the installed packages (kfold, atkinson, theil and a linearisation variance do not exist in ResourceSelection 0.3.6 and laeken 0.5.3) and move to docs/work-done.jsonl; L477 stays open at 0.65 (NA values, robust estimates, optimal bases and the other exports are missing). Linux pending.
+
+
+## D7101 — mice engine, rpart port, weighted multinom and polr
+
+Merged from a worktree: `rpartfit.e` (rpart tree growth incl. the complexity undo; mice cart uses minbucket 5, minsplit 15 and the default xval = 10 which takes one sample(nobs) draw), `micemodels.e` (nnet multinom with weights and MASS::polr by the R BFGS with nnet abstol), and `micefull.e` (the chained-equations engine). polyreg draws its uniforms before the fit and polr after. Equal to mice 3.19 on the oracle; pooling against R is the remaining piece of L346. Linux pending.
+
+
+## D7102 — mice engine, pooling and fixtures; L346 closed
+
+The mice univariate methods and the chained-equations loop run through one engine (`micefull`) over the shared numerics of `micepkg`, with the rpart and nnet/polr ports of D7101 behind cart, polyreg and polr; Rubin pooling over lm fits (Rubin and Reiter, Barnard-Rubin df, pool.r.squared, pool.scalar) equals pool() at 1e-9 (oracle_micepool). Every item of the L346 acceptance (imputed values under set.seed for pmm, norm, norm.nob, norm.boot, logreg, polyreg, polr, cart and passive imputation, with the visit sequence and Rubin pooling) has an oracle case, so L346 moves to docs/work-done.jsonl. nnet 7.3-20 and rpart 4.1.27 sources were downloaded with the user approval. Linux pending.
+
+
+## D7103 — cluster: pam, clara, fanny, agnes, diana, mona, daisy, silhouette, clusGap; L335 closed
+
+Ports of the cluster 2.1.8.2 C and Fortran sources (downloaded from the CRAN Archive with the user approval): pam BUILD and SWAP in all pamonce variants, clara with its own and R generators, fanny, agnes and diana through the twins code, mona, daisy for every variable type with Gower, silhouette and clusGap with maxSE. Floating values equal R at 1e-9, integers exactly (seven fixtures). Every item of the L335 acceptance has an oracle case, so L335 moves to docs/work-done.jsonl. The older pamcluster module and its fixture are superseded by clusterpam but kept. Linux pending.
+
+
+## D7104 — lmom Fortran library and gld distribution functions, moments and fits; L387 closed
+
+Ports of the lmom 3.3 Fortran (downloaded from CRAN with the user approval) for fourteen distributions (lmr, qua, cdf, pel, samlmu), lmrq by quadrature, and the gld 2.6.8 distribution functions (the C root finder of dgl, rgl under set.seed), gld.moments, gld.lmoments and the Nelder-Mead based fits (starship, fit.fkml with its eight methods, fit.fkml.moments with constrOptim). Four fixtures equal R at 1e-8 to 1e-11 (1e-7 for the fits). Every item of the L387 acceptance has an oracle case, so L387 moves to docs/work-done.jsonl. lmrp, pelp, pelq, lmrd and evplot are outside the acceptance and not ported. Linux pending.
+
+
+## D7105 — DRDID general did entry point, bootstraps, fastglm and trust; L485 closed
+
+DRDID rewritten around one `did` entry point for the panel and repeated cross-section estimators, with the multiplier and weighted bootstraps in R draw order, the fastglm logistic fit reproduced step for step (fastglm 0.1.4 source downloaded with the user approval) and trust::trust for the improved estimators through the exact eigen port. Equal to R at 1e-11 on 98 cases, so L485 moves to docs/work-done.jsonl. The nlm fallback, the IPT range-repair paths and the data-frame preprocessing are not ported. Linux pending.

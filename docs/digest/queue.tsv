@@ -3,7 +3,6 @@ L332	library	0.5	537	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D
 L358	library	0.2	452	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;
 L379	library	0.5	536	gmp: arbitrary-precision numbers	Partial (D6161).
 L380	library	0.35	828	tm and tidytext: text mining	Partial (D6618).
-L387	library	0.47	908	lmom and gld: L-moments and the generalized lambda distribution	Partly done (D6098): e.algo.stat.lmom has samlmu, and lmr and qua for exp, gum, glo, gpa, nor, gev and pel for the five closed forms, equal to lmom on 651 values on Windows (oracle_lmom);
 L389	library	0.35	788	vcd and effectsize: categorical association and effect sizes	Partly done (D6101): e.algo.stat.vcdeffect has assocstats, Kappa with weights and errors, cohens_d, hedges_g, glass_delta, rank_biserial, cliffs_delta and one-way eta, omega, epsilon squared, equal to
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
 L401	library	0.4	694	geosphere: geodesic and spherical computations	Partial (D6147).
@@ -25,7 +24,6 @@ L478	library	0.4	519	dagitty: causal graph reasoning	Partial (D6159).
 L479	library	0.25	481	hdrcde: highest density regions	Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows;
 L480	library	0.1	416	aod: overdispersed binomial and count data	Partial (D6463 varbin non-bootstrap rows and iccbin method C equal aod on Windows;
 L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
-L485	library	0.45	475	DRDID: difference-in-differences	Partial (D6464 reg_did_panel, D6465 drdid_panel, D6466 ipw_did_panel and std_ipw_did_panel, D6467 reg_did_rc ATT and se equal DRDID on Windows;
 L501	library	0.2	585	randtoolbox and qrng: quasi-random generators	Partial (D6160).
 L503	library	0.35	508	WRS2: robust tests and ANOVA	Partial (D6137).
 L505	library	0.3	499	sm: nonparametric smoothing methods	Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows;
@@ -39,14 +37,12 @@ L274	library	0.1	688	General linear mixed models (lme4)	Partial (D6878: e.algo.s
 L342	library	0.42	1013	lmerTest: Satterthwaite and Kenward-Roger tests for mixed models	Partial (D6917): e.algo.stat.lmerpkg.lmer_satt, lmerTest's Satterthwaite degrees of freedom of every fixed effect for the one-random-intercept model (REML or ML, at lme4's theta and sigma), equals lme
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L334	library	0.3	665	RSpectra and irlba: partial eigen and singular value decompositions	Partial (D6612).
-L335	library	0.45	729	cluster: pam, clara, fanny, agnes, diana, mona, daisy	Partial (D6176, D6177 agnes heights and ac, D6178 daisy gower numeric and nominal, D6179 silhouette, D6180 diana heights and dc).
 L336	library	0.25	563	nnet: single-hidden-layer networks and multinom	Partial (D6615).
 L337	library	0.4	634	rpart: CART trees	Partial (D6434, D6435 classification trees with cost-complexity pruning, 29 of 30 data sets).
 L394	library	0.05	448	ipred: bagging and error estimation	Partial (D6837: e.algo.stat.ipredpkg has sbrier at one time with numeric predictions and kfoldcv equal to ipred;
 L338	library	0.2	461	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
 L339	library	0.16	634	bayestestR, performance and parameters: model summary indices	Partial (D6473 bayestestR hdi, eti, p_direction, rope, D6474 performance lm indices equal R on Windows;
 L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
-L346	library	0.55	711	mice: imputation parity	D6752: e.algo.stat.micepkg equals mice 3.19 after set.seed for norm.nob, norm, norm.predict, pmm, norm.boot, logreg and logreg.boot (initial draws, the chained regressions, remove.lindep) on 1834 impu
 L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6485 uniroot and uniroot.all with R's iterates, D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree 
 L361	library	0.2	646	segmented and strucchange: breakpoints and structural change	Partial (D6613).
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).

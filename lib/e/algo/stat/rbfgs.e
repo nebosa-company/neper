@@ -6,6 +6,11 @@ use e.math
 use e.mem
 
 fn vmmin[Ctx: type](a: *mem.Arena, c: *Ctx, fn_: fn(*Ctx, []const f64) -> f64, gr: fn(*Ctx, []const f64, []f64), b: []f64, reltol: f64, maxit: usize) -> f64 {
+    ret vmmin_abs[Ctx](a, c, fn_, gr, b, reltol, maxit, -1.0f64 / 0.0f64)
+}
+
+// as vmmin with optim's abstol: the search stops once the value is at or below it (nnet passes 1e-4)
+fn vmmin_abs[Ctx: type](a: *mem.Arena, c: *Ctx, fn_: fn(*Ctx, []const f64) -> f64, gr: fn(*Ctx, []const f64, []f64), b: []f64, reltol: f64, maxit: usize, abstol: f64) -> f64 {
     let n = b.len
     let (g, e1) = mem.alloc[f64](a, n)
     let (t, e2) = mem.alloc[f64](a, n)
@@ -78,7 +83,7 @@ fn vmmin[Ctx: type](a: *mem.Arena, c: *Ctx, fn_: fn(*Ctx, []const f64) -> f64, g
                 }
                 again = !(count == n || accpoint)
             }
-            let enough = math.abs[f64](f - fmin) > reltol * (math.abs[f64](fmin) + reltol)
+            let enough = f > abstol && math.abs[f64](f - fmin) > reltol * (math.abs[f64](fmin) + reltol)
             if !enough {
                 count = n
                 fmin = f
