@@ -430,3 +430,4 @@ oracle_clusterfanny
 oracle_clustermona
 oracle_clusterdaisy
 oracle_clustergap
+oracle_clusterpkg
