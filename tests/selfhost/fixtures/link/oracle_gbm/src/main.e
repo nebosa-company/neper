@@ -184,7 +184,7 @@ fn same_config(x: []const f64, y: []const f64) -> bool {
 }
 
 // the number a case asks for, read off the fit f and the new rows dn (12 by p)
-fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, dx: []const f64, z: []const f64) -> f64 {
+fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, dx: []const f64, pv: []const f64, z: []const f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let code = usize(z[17usize])
     let ia = usize(z[18usize])
@@ -231,6 +231,24 @@ fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, dx: []const f64, 
         gr.predict(f, dn, nn, nt, po)
         if code == 8usize { gr.to_response(f.dist, f.nclass, nn, po) }
         ret po[ia + ic * nn]
+    }
+    if code == 41usize { ret pv[ia] }
+    if code == 40usize {
+        var vs: [3]usize = zero
+        var nvv = 2usize
+        if ic < 100usize {
+            vs[0usize] = ic / 10usize - 1usize
+            vs[1usize] = ic % 10usize - 1usize
+        } else {
+            nvv = 3usize
+            vs[0usize] = ic / 100usize - 1usize
+            vs[1usize] = (ic / 10usize) % 10usize - 1usize
+            vs[2usize] = ic % 10usize - 1usize
+        }
+        let (ho, he) = mem.alloc[f64](a, f.nclass)
+        if he != ok { ret nan }
+        if gr.interact(a, f, dx, n, vs[0usize..nvv], nvv, ib, ho) != ok { ret nan }
+        ret ho[ia]
     }
     if code == 30usize || code == 31usize {
         var vars: [3]usize = zero
@@ -287,6 +305,7 @@ fn run_file(a: *mem.Arena, path: str) -> usize {
     var fd: gr.Fitted = zero
     var dn: []f64 = zero
     var dxs: []f64 = zero
+    var permv: []f64 = zero
     while at < golden.cases.len {
         let c = &golden.cases[at]
         let z = c.args
@@ -384,6 +403,8 @@ fn run_file(a: *mem.Arena, path: str) -> usize {
             }
             fd = f
             dxs = dat.x
+            permv = gb.af(a, p, &bad)
+            if dist <= 4usize { let _ = gr.permutation_test(a, &rg, &fd, fd.m.ntrees, permv) }
             have = true
         }
         if !have {
@@ -392,7 +413,7 @@ fn run_file(a: *mem.Arena, path: str) -> usize {
             continue
         }
         let start = mem.mark(a)
-        let got = output(a, &fd, dn, dxs, z)
+        let got = output(a, &fd, dn, dxs, permv, z)
         if !oracle.agrees(got, c) {
             failures += 1usize
             if z[0usize] != last_bad {

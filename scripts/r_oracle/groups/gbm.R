@@ -5,6 +5,7 @@
 #   dist: 0 gaussian 1 bernoulli 2 poisson 3 adaboost 4 laplace 5 quantile(par = alpha) 6 huberized 7 tdist(par = df) 8 coxph 9 multinomial 10 pairwise conc 11 ndcg 12 map 13 mrr
 #   out:  1 fit[a] (class c) 2 train.error[a] 3 valid.error[a] 4 oobag.improve[a] 5 relative.influence var a over b trees 6 initF 7 predict(link) row a, b trees, class c
 #         8 predict(response) 9 sum(train.error) 10 sum(valid.error) 11 sum(oobag.improve) 12 cv.error[a] 13 cv.fitted[a] 14 gbm.perf (a = 1 test, 2 cv, 3 OOB)
+#         40 interact.gbm(f, data, i.var = digits of c, n.trees = b)[class a]; 41 permutation.test.gbm(f, all trees)[var a] (the losses gaussian to laplace, 0..4)
 #         17 predict(f, the training data, n.trees = b) at data row a
 #         15 relative.influence var a at the default tree count 16 predict row a at the default tree count
 #         30 plot.gbm(i.var = vars of c, n.trees = b, return.grid)$y[a], 7 per variable for two, 4 for three, 20 for one; 31 the same on the response scale
@@ -56,13 +57,14 @@ run_gbm <- function(g) {
   set.seed(g$fseed)
   f <- suppressWarnings(suppressMessages(do.call(gbm, args)))
   if (g$more > 0) f <- suppressWarnings(suppressMessages(gbm.more(f, n.new.trees = g$more)))
+  pt <- if (g$dist %in% 0:4 && g$mono != 2) suppressWarnings(permutation.test.gbm(f, n.trees = f$n.trees)) else NULL
   nn <- 12
   set.seed(g$seed + 1000003)
   Xn <- matrix(r3(rnorm(nn * g$p)), nn, g$p)
   if (g$na == 1) Xn[matrix(runif(nn * g$p) < 0.15, nn, g$p)] <- NA
   dn <- data.frame(Xn); names(dn) <- paste0("V", 1:g$p)
   if (g$mono == 3) dn$V1 <- catf(Xn[, 1])
-  list(f = f, dn = dn, df = df)
+  list(f = f, dn = dn, df = df, pt = pt)
 }
 gcases <- function(g, outs, rel = 1e-9, abs = 1e-12) {
   r <- run_gbm(g)
@@ -89,6 +91,8 @@ gcases <- function(g, outs, rel = 1e-9, abs = 1e-12) {
         res <- c(20, 7, 4)[length(iv)]
         gr <- suppressWarnings(plot(f, i.var = iv, n.trees = b, continuous.resolution = res, return.grid = TRUE, type = if (code == 31) "response" else "link"))
         gr$y[a + 1] },
+      "40" = { iv <- if (cc < 100) c(cc %/% 10, cc %% 10) else c(cc %/% 100, (cc %/% 10) %% 10, cc %% 10); as.numeric(suppressWarnings(interact.gbm(f, r$df, i.var = iv, n.trees = b))[a + 1]) },
+      "41" = if (is.null(r$pt)) NULL else as.numeric(r$pt[a + 1]),
       "15" = as.numeric(suppressMessages(relative.influence(f))[a + 1]),
       "16" = { pr <- suppressMessages(suppressWarnings(predict(f, r$dn))); pr[a + 1] },
       { fld <- code - 20; tr <- pretty.gbm.tree(f, b); if (a >= nrow(tr)) NULL else as.numeric(tr[[fld + 1]][a + 1]) })

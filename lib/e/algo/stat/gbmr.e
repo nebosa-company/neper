@@ -944,3 +944,254 @@ fn plot_rows(f: *const Fitted, vars: []const usize, nv: usize, res: usize) -> us
     }
     ret rows
 }
+
+// weighted.mean(x, w) = sum(x w) / sum(w), R's sums in long double
+fn wmean(x: []const f64, w: []const f64, m: usize, tmp: []f64) -> f64 {
+    var i = 0usize
+    while i < m {
+        tmp[i] = x[i] * w[i]
+        i += 1usize
+    }
+    ret gb.rsum(tmp, m) / gb.rsum(w, m)
+}
+
+// interact.gbm(f, data, i.var, n.trees): Friedman's H statistic of the variables vars (the subsets of them each give a partial dependence over the distinct rows of data, centred by the row
+// counts); one value per class lands in out
+fn interact(a: *mem.Arena, f: *const Fitted, xd: []const f64, n: usize, vars: []const usize, nv: usize, use_trees: usize, out: []f64) -> err {
+    var bad = 0usize
+    let nc = f.nclass
+    let nm = (1usize << nv) - 1usize
+    // per subset (mask m, 1-based): its distinct rows
+    let zs = gb.af(a, nm * n * nv, &bad)
+    let cnt = gb.af(a, nm * n, &bad)
+    let fv = gb.af(a, nm * n * nc, &bad)
+    let nu = gb.au(a, nm + 1usize, &bad)
+    let which = gb.au(a, nv, &bad)
+    let first = gb.au(a, n, &bad)
+    let tmp = gb.af(a, n, &bad)
+    let scr = gb.af(a, 2usize * f.m.stride + 4usize, &bad)
+    let po = gb.af(a, n * nc, &bad)
+    if bad != 0usize { ret gb.NoMemory }
+    var m = 1usize
+    while m <= nm {
+        var ns = 0usize
+        var b = 0usize
+        while b < nv {
+            if (m >> b) & 1usize == 1usize {
+                which[ns] = vars[b]
+                ns += 1usize
+            }
+            b += 1usize
+        }
+        // the distinct rows over these variables, in order of first appearance
+        var u = 0usize
+        var i = 0usize
+        while i < n {
+            var found = u
+            var q = 0usize
+            while q < u {
+                var same = true
+                var c = 0usize
+                while c < ns {
+                    if xd[which[c] * n + i] != xd[which[c] * n + first[q]] { same = false }
+                    c += 1usize
+                }
+                if same {
+                    found = q
+                    break
+                }
+                q += 1usize
+            }
+            if found == u {
+                first[u] = i
+                cnt[(m - 1usize) * n + u] = 1.0f64
+                u += 1usize
+            } else {
+                cnt[(m - 1usize) * n + found] += 1.0f64
+            }
+            i += 1usize
+        }
+        nu[m] = u
+        var c = 0usize
+        while c < ns {
+            var r = 0usize
+            while r < u {
+                zs[((m - 1usize) * nv + c) * n + r] = xd[which[c] * n + first[r]]
+                r += 1usize
+            }
+            c += 1usize
+        }
+        // the grid for this subset is u rows by ns columns
+        let gx = gb.af(a, u * ns + 1usize, &bad)
+        if bad != 0usize { ret gb.NoMemory }
+        c = 0usize
+        while c < ns {
+            var r = 0usize
+            while r < u {
+                gx[c * u + r] = zs[((m - 1usize) * nv + c) * n + r]
+                r += 1usize
+            }
+            c += 1usize
+        }
+        gb.plot_values(&f.m, ns, which, gx, u, use_trees, po, scr)
+        var k = 0usize
+        while k < nc {
+            let mu = wmean(po[k * u..k * u + u], cnt[(m - 1usize) * n..(m - 1usize) * n + u], u, tmp)
+            var r = 0usize
+            while r < u {
+                fv[((m - 1usize) * nc + k) * n + r] = po[k * u + r] - mu
+                r += 1usize
+            }
+            k += 1usize
+        }
+        m += 1usize
+    }
+    // H from the full set, the lower-order partial dependences subtracted with alternating signs
+    let ul = nu[nm]
+    let hh = gb.af(a, n, &bad)
+    let sq = gb.af(a, n, &bad)
+    if bad != 0usize { ret gb.NoMemory }
+    var k = 0usize
+    while k < nc {
+        var r = 0usize
+        while r < ul {
+            hh[r] = fv[((nm - 1usize) * nc + k) * n + r]
+            r += 1usize
+        }
+        var j = 1usize
+        while j < nm {
+            // the bits of j name the variables of the subset; sign +1 when the subset size has the parity of nv
+            var sz = 0usize
+            var b = 0usize
+            var cols = gb.au(a, nv, &bad)
+            while b < nv {
+                if (j >> b) & 1usize == 1usize {
+                    cols[sz] = b
+                    sz += 1usize
+                }
+                b += 1usize
+            }
+            var sign = 1.0f64
+            if sz % 2usize != nv % 2usize { sign = 0.0f64 - 1.0f64 }
+            r = 0usize
+            while r < ul {
+                // the row of subset j matching the full row r on the subset's variables
+                var q = 0usize
+                var hit = 0usize
+                while q < nu[j] {
+                    var same = true
+                    var c = 0usize
+                    while c < sz {
+                        if zs[((j - 1usize) * nv + c) * n + q] != zs[((nm - 1usize) * nv + cols[c]) * n + r] { same = false }
+                        c += 1usize
+                    }
+                    if same {
+                        hit = q
+                        break
+                    }
+                    q += 1usize
+                }
+                hh[r] += sign * fv[((j - 1usize) * nc + k) * n + hit]
+                r += 1usize
+            }
+            j += 1usize
+        }
+        var top = 0.0f64
+        var btm = 0.0f64
+        r = 0usize
+        while r < ul {
+            sq[r] = hh[r] * hh[r]
+            r += 1usize
+        }
+        top = wmean(sq, cnt[(nm - 1usize) * n..(nm - 1usize) * n + ul], ul, tmp)
+        r = 0usize
+        while r < ul {
+            let v = fv[((nm - 1usize) * nc + k) * n + r]
+            sq[r] = v * v
+            r += 1usize
+        }
+        btm = wmean(sq, cnt[(nm - 1usize) * n..(nm - 1usize) * n + ul], ul, tmp)
+        var hv = top / btm
+        if hv > 1.0f64 {
+            hv = 0.0f64 / 0.0f64
+        }
+        out[k] = math.sqrt[f64](hv)
+        k += 1usize
+    }
+    ret ok
+}
+
+// permutation.test.gbm(f, n.trees) for the gaussian, bernoulli, poisson, adaboost and laplace losses: each variable the trees use is shuffled in turn (one sample() of the rows shared by
+// all) and the rise in the loss over the training deviance recorded
+fn permutation_test(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, use_trees: usize, out: []f64) -> err {
+    var bad = 0usize
+    let n = f.n
+    let p = f.sp.p
+    let xs = gb.af(a, n * p, &bad)
+    let pred = gb.af(a, n, &bad)
+    let tmp = gb.af(a, n, &bad)
+    if bad != 0usize { ret gb.NoMemory }
+    var i = 0usize
+    while i < n * p {
+        xs[i] = f.sp.x[i]
+        i += 1usize
+    }
+    let (jj, je) = rng.sample_int(a, rg, i64(n), i64(n), false)
+    if je != ok { ret je }
+    var v = 0usize
+    while v < p {
+        out[v] = 0.0f64
+        v += 1usize
+    }
+    v = 0usize
+    while v < p {
+        var used = false
+        var t = 0usize
+        while t < use_trees * f.nclass {
+            var q = 0usize
+            while q < f.m.nnodes[t] {
+                if f.m.tvar[t * f.m.stride + q] == i64(v) { used = true }
+                q += 1usize
+            }
+            t += 1usize
+        }
+        if used {
+            i = 0usize
+            while i < n {
+                xs[v * n + i] = f.sp.x[v * n + usize(jj[i]) - 1usize]
+                i += 1usize
+            }
+            gb.predict_link(&f.m, xs, n, use_trees, pred)
+            let d = f.dist
+            i = 0usize
+            while i < n {
+                var fx = pred[i]
+                if f.sp.off.len == n { fx = f.sp.off[i] + fx }
+                let y = f.sp.y[i]
+                if d == 0usize {
+                    tmp[i] = (y - fx) * (y - fx)
+                } else if d == 1usize {
+                    tmp[i] = y * fx - gb.logf(1.0f64 + gb.expf(fx))
+                } else if d == 2usize {
+                    tmp[i] = y * fx - gb.expf(fx)
+                } else if d == 3usize {
+                    tmp[i] = gb.expf(0.0f64 - (2.0f64 * y - 1.0f64) * fx)
+                } else {
+                    tmp[i] = math.abs[f64](y - fx)
+                }
+                i += 1usize
+            }
+            let wm = wmean(tmp, f.sp.w, n, pred)
+            var loss = wm
+            if d == 1usize || d == 2usize { loss = (0.0f64 - 2.0f64) * wm }
+            out[v] = loss - f.m.train_err[use_trees - 1usize]
+            i = 0usize
+            while i < n {
+                xs[v * n + i] = f.sp.x[v * n + i]
+                i += 1usize
+            }
+        }
+        v += 1usize
+    }
+    ret ok
+}
