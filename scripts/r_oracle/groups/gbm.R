@@ -23,6 +23,8 @@ for (fam in c("bernoulli", "poisson")) for (rep in 1:10) {
   pr <- predict(f, df, n.trees = nt)
   if (fam == "bernoulli" && n == 115) next  # one data set differs, probably a tie between equal splits
   for (i in c(1, 7, 20, n)) cases[[length(cases) + 1]] <- case(if (fam == "bernoulli") "bern" else "pois", c(n, p, nt, sh, d, mo, i - 1, 0, y, X), pr[i], rel = 1e-7, abs = 1e-9)
+  ri <- relative.influence(f, n.trees = nt); ri <- 100 * ri / sum(ri)
+  for (j in seq_len(p)) cases[[length(cases) + 1]] <- case("inf", c(n, p, nt, sh, d, mo, j - 1, if (fam == "bernoulli") 1 else 2, y, X), as.numeric(ri[paste0("V", j)]), rel = 1e-6, abs = 1e-8)
 }
 # adaboost "ada": the same layout
 for (rep in 1:10) {

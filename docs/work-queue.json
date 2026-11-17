@@ -911,10 +911,10 @@
       "group": "CRAN parity",
       "order": 718,
       "title": "gbm: gradient boosting machines",
-      "score": 0.33,
+      "score": 0.35,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6893 to D6896, D6920 relative.influence for gaussian): e.algo.stat.gbmpkg.gaussian, bernoulli, poisson, adaboost and laplace, the losses without subsampling (best-first trees to interaction.depth, n.minobsinnode, shrinkage), equals the training-row fit of gbm on Windows (oracle_gbm; Linux pending). Open: the other losses (quantile, whose leaf quantile rule differs from the median's and is not found, huberized, coxph, pairwise, multinomial), one bernoulli data set that differs (a tie between equal splits, probably), bagging through the R RNG, train.fraction, weights, predict on new data, gbm.perf, cross-validation. Was: Open (CRAN rank 561). Mid. Verify the boosting in e.ml.tree first. Acceptance, equal to gbm under set.seed: gaussian, bernoulli, poisson, adaboost, laplace, quantile, huberized, coxph, pairwise and multinomial losses with bag.fraction through the R RNG, shrinkage, interaction.depth, cross-validation, gbm.perf, relative.influence and predict."
+      "evidence": "Partial (D6893 to D6896, D6920, D6921 relative.influence for gaussian, bernoulli and poisson): e.algo.stat.gbmpkg.gaussian, bernoulli, poisson, adaboost and laplace, the losses without subsampling (best-first trees to interaction.depth, n.minobsinnode, shrinkage), equals the training-row fit of gbm on Windows (oracle_gbm; Linux pending). Open: the other losses (quantile, whose leaf quantile rule differs from the median's and is not found, huberized, coxph, pairwise, multinomial), one bernoulli data set that differs (a tie between equal splits, probably), bagging through the R RNG, train.fraction, weights, predict on new data, gbm.perf, cross-validation. Was: Open (CRAN rank 561). Mid. Verify the boosting in e.ml.tree first. Acceptance, equal to gbm under set.seed: gaussian, bernoulli, poisson, adaboost, laplace, quantile, huberized, coxph, pairwise and multinomial losses with bag.fraction through the R RNG, shrinkage, interaction.depth, cross-validation, gbm.perf, relative.influence and predict."
     },
     {
       "id": "L415",

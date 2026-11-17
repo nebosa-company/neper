@@ -48150,3 +48150,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6920 — gbm: relative influence
 
 **Decision.** `gbmpkg.gaussian_influence` returns, besides the fit, the relative influence of every variable: the split improvement n_l n_r / (n_l + n_r) (mean_l - mean_r)^2 summed over every split on the variable in all trees, scaled to sum to 100, as `relative.influence` (with the `summary.gbm` normalisation) reports it. Equal to gbm on the 12 gaussian data sets of D6893, every variable, 1e-6 relative (oracle_gbm, 241 cases in all). Not here: the permutation-based importance (`permutation.test.gbm`) and the other losses' influence, which use the same accumulation and need only a test. Linux pending.
+
+## D6921 — gbm: relative influence for the other losses
+
+**Decision.** `gbmpkg.influence` takes the loss code, so the relative influence of D6920 (split improvement of the working response summed over all trees, scaled to 100) is answered for the bernoulli and poisson losses as well. Equal to `relative.influence` on the 19 data sets of D6894, every variable, 1e-6 relative (oracle_gbm, 300 cases in all). Linux pending.

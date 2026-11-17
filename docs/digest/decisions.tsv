@@ -3779,4 +3779,5 @@ D6916	564	caret: createMultiFolds
 D6917	1053	lmerTest: Satterthwaite degrees of freedom
 D6918	501	lmerTest: t statistics and p values
 D6919	730	lmerTest: contest1D
-D6920	647	gbm: relative influence
+D6920	648	gbm: relative influence
+D6921	424	gbm: relative influence for the other losses

@@ -269,14 +269,14 @@ fn laplace(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, nt
 }
 
 
-// gaussian boosting that also answers the relative influence of every variable: the summed split improvement over all trees, scaled to sum to 100 (summary.gbm), in inf
-fn gaussian_influence(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64, inf: []f64) -> err {
+// boosting with the loss code (0 gaussian, 1 bernoulli, 2 poisson, 3 adaboost, 4 laplace) that also answers the relative influence of every variable: the summed split improvement over all trees, scaled to sum to 100 (summary.gbm), in inf
+fn influence(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64, inf: []f64) -> err {
     var j = 0usize
     while j < p {
         inf[j] = 0.0f64
         j += 1usize
     }
-    let e = boost(a, 0usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted, inf)
+    let e = boost(a, loss, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted, inf)
     if e != ok { ret e }
     var tot = 0.0f64
     j = 0usize
@@ -290,4 +290,8 @@ fn gaussian_influence(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p
         j += 1usize
     }
     ret ok
+}
+
+fn gaussian_influence(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64, inf: []f64) -> err {
+    ret influence(a, 0usize, x, y, n, p, ntrees, shrinkage, depth, minobs, fitted, inf)
 }
