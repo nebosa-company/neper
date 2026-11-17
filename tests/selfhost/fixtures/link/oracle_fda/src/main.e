@@ -19,6 +19,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     let norder = usize(z[0usize])
     let nb = usize(z[1usize])
+    if c.name[0usize] == 101u8 {
+        // e (eval.fd): (norder, nb, deriv, x, breaks[nb], coefs[nbasis])
+        ret fa.eval_fd_bspline(a, norder, z[4usize..4usize + nb], z[4usize + nb..4usize + nb + nb + norder - 2usize], z[3usize], usize(z[2usize]))
+    }
     if c.name[0usize] == 113u8 {
         // q (pca.fd): (norder, nb, nrep, index, which (0 value, 1 varprop), breaks[nb], coefs[nbasis nrep])
         let nbas = nb + norder - 2usize

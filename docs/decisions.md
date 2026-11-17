@@ -48246,3 +48246,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6944 — Hmisc: GiniMd and the Info of describe
 
 **Decision.** `hmisc.gini_md` is Gini's mean difference, 2 / (n (n - 1)) sum (2 i - n - 1) x_(i) over the sorted sample (what `GiniMd` returns), and `describe_info` the Info statistic of `describe` (1 - sum(f^3 - f) / (n^3 - n) over the tie frequencies f). Equal to `GiniMd` (1e-10) and to the same Info expression on the table of the sample, 30 samples of 5 to 80 values, half rounded to one decimal so ties occur (oracle_hmisc, 4249 cases in all). `describe` reports Info only to three digits, so the formula, not the printed value, is the reference. Not here: the pseudo-median, the rest of describe, redun, rcspline.restate. Linux pending.
+
+## D6945 — fda: eval.fd
+
+**Decision.** `fdapkg.eval_fd_bspline` is `eval.fd(x, fd(coefs, basis), Lfdobj = deriv)` for a B-spline basis, the coefficient-weighted sum of the basis derivatives of D6927. fda answers zero for a derivative of order norder - 1 or more at the right end point of the range (the closed end of the last piece), which the basis evaluation now reproduces; the check found it on order-3 splines at x = 1 with the second derivative. Equal to fda on 25 random curves (3 to 8 breaks, orders 3 to 6, derivatives 0 to 2), four interior points and the right end point each (oracle_fda, 2110 cases in all). Not here: fd objects as a type, `deriv.fd` to a new basis, `mean.fd`, `sd.fd`. Linux pending.

@@ -17,6 +17,14 @@ fn eval_bspline(a: *mem.Arena, norder: usize, breaks: []const f64, x: f64, deriv
     let (o, e3) = mem.alloc[f64](a, nint + norder + 2usize)
     if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
     let cnt = sp.row(t, tmp, breaks[1usize..breaks.len - 1usize], breaks[0usize], breaks[breaks.len - 1usize], degree, true, 0u8, deriv, x, o)
+    // fda answers zero for the highest derivative at the right end point
+    if x == breaks[breaks.len - 1usize] && deriv >= norder - 1usize {
+        var z0 = 0usize
+        while z0 < cnt {
+            o[z0] = 0.0f64
+            z0 += 1usize
+        }
+    }
     var i = 0usize
     while i < cnt {
         out[i] = o[i]
@@ -542,4 +550,19 @@ fn pca_fd_values(a: *mem.Arena, gram: []const f64, jmat: []const f64, coefs: []c
         i += 1usize
     }
     ret ok
+}
+
+// eval.fd(x, fd(coefs, basis), Lfdobj = deriv) for a B-spline basis: the derivative of order deriv of the curve sum c_j phi_j at x
+fn eval_fd_bspline(a: *mem.Arena, norder: usize, breaks: []const f64, coefs: []const f64, x: f64, deriv: usize) -> f64 {
+    let nb = breaks.len + norder - 2usize
+    let (v, e) = mem.alloc[f64](a, nb + norder)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    if eval_bspline(a, norder, breaks, x, deriv, v) != ok { ret 0.0f64 / 0.0f64 }
+    var s = 0.0f64
+    var j = 0usize
+    while j < nb {
+        s += coefs[j] * v[j]
+        j += 1usize
+    }
+    ret s
 }

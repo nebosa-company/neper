@@ -39,4 +39,9 @@ for (rep in 1:12) {
   for (k in 1:3) { cases[[length(cases) + 1]] <- case("q", c(no, length(br), nrp, k - 1, 0, br, cf), pc$values[k], rel = 1e-6, abs = 1e-10)
     cases[[length(cases) + 1]] <- case("q", c(no, length(br), nrp, k - 1, 1, br, cf), pc$varprop[k], rel = 1e-6, abs = 1e-10) }
 }
+# eval.fd of a B-spline curve and its derivatives "e": (norder, nb, deriv, x, breaks, coefs)
+for (rep in 1:25) {
+  nbr <- sample(3:8, 1); br <- sort(c(0, 1, runif(nbr - 2))); no <- sample(3:6, 1); basis <- create.bspline.basis(c(0, 1), norder = no, breaks = br); cf <- rnorm(basis$nbasis); fdo <- fd(cf, basis); nd <- min(sample(0:2, 1), no - 1)
+  for (x in c(runif(4), 1)) cases[[length(cases) + 1]] <- case("e", c(no, length(br), nd, x, br, cf), as.numeric(eval.fd(x, fdo, nd)), rel = 1e-9, abs = 1e-10)
+}
 emit("fda", "fda", list(cases))
