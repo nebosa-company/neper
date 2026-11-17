@@ -14,6 +14,15 @@ for (rep in 1:40) {
             b[["Sensitivity"]], b[["Specificity"]], b[["Pos Pred Value"]], b[["Neg Pred Value"]], b[["F1"]], b[["Prevalence"]], b[["Detection Rate"]], b[["Detection Prevalence"]], b[["Balanced Accuracy"]])
   for (k in seq_along(vals)) add("cm", c(k - 1, tp, fp, fn, tn), vals[k], if (k == 6) 1e-6 else 1e-8)
 }
+# knnImpute "knn": (n, p, k, index, X[n p] column-major with -999999 for a missing value), answered as the scaled and imputed value
+suppressMessages(library(RANN))
+for (rep in 1:12) {
+  n <- sample(25:60, 1); p <- sample(3:5, 1); X <- matrix(round(rnorm(n * p) * rep(c(1, 2, 0.5, 3, 1.5)[1:p], each = n), 3), n, p); colnames(X) <- paste0("v", 1:p)
+  miss <- sample(seq_len(n * p), sample(3:8, 1)); X[miss] <- NA; k <- sample(2:6, 1)
+  if (any(rowSums(is.na(X)) == p)) next
+  pp <- preProcess(X, method = "knnImpute", k = k); out <- predict(pp, X); Xa <- X; Xa[is.na(Xa)] <- -999999
+  for (q in c(miss, sample(seq_len(n * p), 6))) cases[[length(cases) + 1]] <- case("knn", c(n, p, k, q - 1, Xa), out[q], rel = 1e-9, abs = 1e-10)
+}
 # the prevalence argument "cmv": (which 0 ppv 1 npv 2 prevalence 3 f1 4 detection rate, TP, FP, FN, TN, prevalence)
 for (rep in 1:30) {
   tp <- sample(5:150, 1); fp <- sample(1:80, 1); fn <- sample(1:80, 1); tn <- sample(5:150, 1); pv <- runif(1, 0.05, 0.6)

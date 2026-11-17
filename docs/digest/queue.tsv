@@ -3,7 +3,7 @@ L471	library	0.7	707	BiasedUrn: noncentral hypergeometric distributions	Partly d
 L473	library	0.9	1246	isotone: isotonic regression	Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers;
 L474	library	0.7	842	kSamples: k-sample rank tests	Partial (D6452 ad.test AD and T.AD statistics, both versions, equal kSamples on Windows;
 L499	library	0.5	476	ResourceSelection: Hosmer-Lemeshow and related tests	Partly done (D6096): e.algo.stat.hoslem (hoslem.test with observed and expected tables) equals ResourceSelection on 1128 values on Windows (oracle_hoslem);
-L328	library	0.87	1132	caret evaluation and resampling	Partly done (D6087);
+L328	library	0.92	1192	caret evaluation and resampling	Partly done (D6087);
 L331	library	0.75	840	dendextend and hclust operations	Partial (D6162, D6163 fowlkes_mallows and cor_cophenetic).
 L332	library	0.5	537	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (D6417, D6418 read.dbf common field types, D6420 read.octave scalars matrices strings).
 L358	library	0.2	452	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;

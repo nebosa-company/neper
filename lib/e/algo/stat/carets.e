@@ -740,3 +740,100 @@ fn with_prevalence(sens: f64, spec: f64, prev: f64, out: []f64) {
     out[1usize] = spec * (1.0f64 - prev) / ((1.0f64 - sens) * prev + spec * (1.0f64 - prev))
     out[2usize] = prev
 }
+
+// caret preProcess(method = "knnImpute", k) then predict: the columns are centred and scaled with the mean and sd of their observed values (NaN marks a missing value); a row with missing values takes, for each missing column, the mean over its k
+// nearest complete rows (Euclidean distance on the columns the row has, ties by row order) of that column in the scaled data; out is the n by p scaled and imputed matrix, column-major
+fn knn_impute(a: *mem.Arena, x: []const f64, n: usize, p: usize, k: usize, out: []f64) -> err {
+    let (mu, e1) = mem.alloc[f64](a, p)
+    let (sd, e2) = mem.alloc[f64](a, p)
+    let (cc, e3) = mem.alloc[bool](a, n)
+    let (dd, e4) = mem.alloc[f64](a, n)
+    let (ix, e5) = mem.alloc[usize](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    var j = 0usize
+    while j < p {
+        var s = 0.0f64
+        var c = 0.0f64
+        var i = 0usize
+        while i < n {
+            if x[j * n + i] == x[j * n + i] {
+                s += x[j * n + i]
+                c += 1.0f64
+            }
+            i += 1usize
+        }
+        mu[j] = s / c
+        var v = 0.0f64
+        i = 0usize
+        while i < n {
+            if x[j * n + i] == x[j * n + i] { v += (x[j * n + i] - mu[j]) * (x[j * n + i] - mu[j]) }
+            i += 1usize
+        }
+        sd[j] = math.sqrt[f64](v / (c - 1.0f64))
+        j += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var full = true
+        j = 0usize
+        while j < p {
+            out[j * n + i] = (x[j * n + i] - mu[j]) / sd[j]
+            if x[j * n + i] != x[j * n + i] { full = false }
+            j += 1usize
+        }
+        cc[i] = full
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        if !cc[i] {
+            var q = 0usize
+            while q < n {
+                dd[q] = 1.0e300f64
+                ix[q] = q
+                if cc[q] {
+                    var s = 0.0f64
+                    j = 0usize
+                    while j < p {
+                        if x[j * n + i] == x[j * n + i] {
+                            let d = out[j * n + q] - out[j * n + i]
+                            s += d * d
+                        }
+                        j += 1usize
+                    }
+                    dd[q] = s
+                }
+                q += 1usize
+            }
+            // the k smallest distances, a stable selection by (distance, row)
+            var t = 0usize
+            while t < k {
+                var best = n
+                q = 0usize
+                while q < n {
+                    if dd[q] < 1.0e299f64 && (best == n || dd[q] < dd[best]) { best = q }
+                    q += 1usize
+                }
+                if best == n { break }
+                ix[t] = best
+                dd[best] = 1.0e300f64
+                t += 1usize
+            }
+            j = 0usize
+            while j < p {
+                if x[j * n + i] != x[j * n + i] {
+                    var s = 0.0f64
+                    var u = 0usize
+                    while u < t {
+                        s += out[j * n + ix[u]]
+                        u += 1usize
+                    }
+                    out[j * n + i] = s / f64(t)
+                }
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    ret ok
+}

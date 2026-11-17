@@ -64,6 +64,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if w == 3usize { ret cc.f1 }
         ret cc.detection_rate
     }
+    if str.eq(c.name, "knn") {
+        // (n, p, k, index, X[n p] with -999999 for a missing value)
+        let n = usize(z[0usize])
+        let p = usize(z[1usize])
+        let (xs, e1) = mem.alloc[f64](a, n * p)
+        let (o, e2) = mem.alloc[f64](a, n * p)
+        if e1 != ok || e2 != ok { ret nan }
+        var q = 0usize
+        while q < n * p {
+            xs[q] = z[4usize + q]
+            if xs[q] < -999998.0f64 { xs[q] = nan }
+            q += 1usize
+        }
+        if ct.knn_impute(a, xs, n, p, usize(z[2usize]), o) != ok { ret nan }
+        ret o[usize(z[3usize])]
+    }
     if str.eq(c.name, "mf") {
         // createMultiFolds(factor(y), k, times): (seed, k, n, times, class codes 1..), the fold assignments of the repetitions drawn one after another, answered as sum over reps of rep * sum(position * fold)
         var r: rng.Rng = zero

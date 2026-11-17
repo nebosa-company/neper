@@ -48318,3 +48318,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6962 — caret: the prevalence argument
 
 **Decision.** `carets.with_prevalence` re-derives the predictive values of `confusionMatrix(prevalence = prev)` from the sensitivity and specificity by Bayes' rule, PPV = sens prev / (sens prev + (1 - spec)(1 - prev)) and NPV = spec (1 - prev) / ((1 - sens) prev + spec (1 - prev)); the reported prevalence is the argument, while the precision, F1 and detection rate keep their observed values. Equal to caret on 30 random two-class tables and prevalences (PPV, NPV, prevalence, F1 and detection rate; oracle_carets, 2247 cases in all). Linux pending.
+
+## D6963 — caret: knnImpute
+
+**Decision.** `carets.knn_impute` is `preProcess(method = "knnImpute", k)` followed by `predict`: every column is centred and scaled with the mean and sd of its observed values; a row with missing values takes, for each missing column, the mean in the scaled data over its k nearest complete rows, nearness measured by Euclidean distance on the columns that row has (RANN::nn2), ties by row order; the output stays on the scaled scale. Equal to caret on 12 random matrices of 25 to 60 rows and 3 to 5 columns with 3 to 8 missing values, k 2 to 6, every imputed value and six others (oracle_carets, 2531 cases in all). Not here: rows with no observed column (caret stops), the bagImpute and medianImpute methods. Linux pending.
