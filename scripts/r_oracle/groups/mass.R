@@ -49,4 +49,10 @@ for (rep in 1:20) { n <- sample(c(30, 60, 150, 400), 1); x <- if (rep %% 2) rnor
   u <- suppressWarnings(bw.ucv(x)); b <- suppressWarnings(bw.bcv(x))
   cases[[length(cases) + 1]] <- case("bwucv", c(n, x), u, rel = 1e-9, abs = 1e-12); cases[[length(cases) + 1]] <- case("bwbcv", c(n, x), b, rel = 1e-9, abs = 1e-12)
   sj <- bw.SJ(x); cases[[length(cases) + 1]] <- case("bwsj", c(n, x), sj, rel = 1e-9, abs = 1e-12) }
+# fitdistr for the optim families: "fdist" (kind 0 gamma, 1 weibull, 2 logistic, 3 cauchy; n; which 0 est1 1 est2 2 sd1 3 sd2 4 loglik; x[n])
+for (rep in 1:12) { n <- sample(30:150, 1)
+  for (kind in 0:3) {
+    x <- switch(kind + 1, rgamma(n, runif(1, 1, 5), runif(1, 0.5, 3)), rweibull(n, runif(1, 1, 3), runif(1, 1, 4)), rlogis(n, rnorm(1), runif(1, 0.5, 2)), rcauchy(n, rnorm(1), runif(1, 0.5, 2)))
+    f <- suppressWarnings(try(fitdistr(x, c("gamma", "weibull", "logistic", "cauchy")[kind + 1]), silent = TRUE)); if (inherits(f, "try-error")) next
+    vals <- c(f$estimate, f$sd, f$loglik); for (w in 0:4) cases[[length(cases) + 1]] <- case("fdist", c(kind, n, w, x), vals[w + 1], rel = 1e-7, abs = 1e-9) } }
 emit("mass", "MASS", list(cases))

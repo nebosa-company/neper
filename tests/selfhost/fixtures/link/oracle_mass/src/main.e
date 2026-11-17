@@ -3,6 +3,7 @@
 // the layout is at the top of scripts/r_oracle/groups/mass.R.
 
 use e.algo.stat.bwsel as bs
+use e.algo.stat.fitdist as fdi
 use e.algo.stat.mass as ms
 use e.io
 use e.mem
@@ -25,6 +26,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             i += 1usize
         }
         ret s
+    }
+    if str.eq(c.name, "fdist") {
+        // (kind, n, which 0..4, x[n])
+        let (fo, fe) = mem.alloc[f64](a, 5usize)
+        if fe != ok { ret 0.0f64 / 0.0f64 }
+        if fdi.fitdistr2(a, x[3usize..3usize + usize(x[1usize])], usize(x[0usize]), fo) != ok { ret 0.0f64 / 0.0f64 }
+        ret fo[usize(x[2usize])]
     }
     if str.eq(c.name, "bwucv") { ret bs.bw_cv(a, x[1usize..1usize + usize(x[0usize])], 0u8) }
     if str.eq(c.name, "bwsj") { ret bs.bw_sj(a, x[1usize..1usize + usize(x[0usize])]) }
