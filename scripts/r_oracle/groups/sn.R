@@ -82,4 +82,8 @@ for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; 
 for (rep in 1:8) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); n <- sample(3:6, 1); sd <- sample(1:100000, 1)
   add("dmsc", mvpack(d, 1, 0, 0, 0, p), dmsc(p$x, p$xi, p$Om, p$al), rel = 1e-9)
   set.seed(sd); r <- as.numeric(t(matrix(rmsc(n, p$xi, p$Om, p$al), n, d))); for (k in seq_len(n * d)) add("rmsc", mvpack(d, 1, n, sd, k - 1, p), r[k], rel = 1e-9) }
+# pmsn and pmst for d >= 2 (mnormt's own error is about 1e-6, so these are compared at 1e-4)
+for (rep in 1:20) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); tau <- c(0, 0.6, -1)[sample(3, 1)]; nu <- c(3, 6, 4.5, 7.5)[sample(4, 1)]
+  add("pmsn", mvpack(d, tau, 0, 0, 0, p), pmsn(p$x, p$xi, p$Om, p$al, tau), rel = 1e-4, abs = 3e-6)
+  add("pmst", mvpack(d, nu, 0, 0, 0, p), suppressWarnings(pmst(p$x, p$xi, p$Om, p$al, nu)), rel = 1e-3, abs = 3e-6) }
 emit("sn", "sn", list(cases))

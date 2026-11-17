@@ -13,6 +13,7 @@ use e.algo.rand.rdist as rd
 use e.math.quadpack as quad
 use e.math.root as root
 use e.algo.stat.pbivnorm as bv
+use e.algo.stat.mvt as mvt
 use e.mem
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
@@ -1414,6 +1415,168 @@ fn mv_cp2dp_sn(a: *mem.Arena, mean: []const f64, sig: []const f64, g1: []const f
         i += 1usize
     }
     ret true
+}
+
+// ---- pmsn and pmst for d >= 2 ----
+
+// the (d + 1) x (d + 1) correlation matrix Obig = [1, -delta'; -delta, Ocor] into big (row-major)
+fn mv_big(omg: []const f64, alpha: []const f64, d: usize, big: []f64, delta: []f64) {
+    let _ = mv_delta(alpha, omg, d, delta)
+    let m = d + 1usize
+    big[0usize] = 1.0f64
+    var i = 0usize
+    while i < d {
+        big[1usize + i] = 0.0f64 - delta[i]
+        big[(1usize + i) * m] = 0.0f64 - delta[i]
+        var j = 0usize
+        while j < d {
+            big[(1usize + i) * m + 1usize + j] = omg[i * d + j] / math.sqrt[f64](omg[i * d + i] * omg[j * d + j])
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// pmsn(x, xi, Omega, alpha, tau): Miwa's algorithm for the (d + 1)-variate normal probability, over pnorm(tau); d = 1 is psn_biv
+fn pmsn_mv(a: *mem.Arena, x: []const f64, xi: []const f64, omg: []const f64, alpha: []const f64, tau: f64) -> f64 { ret pmsn_eps(a, x, xi, omg, alpha, tau, 1.0e-7f64, 200000i64) }
+
+fn pmsn_eps(a: *mem.Arena, x: []const f64, xi: []const f64, omg: []const f64, alpha: []const f64, tau: f64, eps: f64, maxpts: i64) -> f64 {
+    let d = alpha.len
+    if d == 1usize { ret psn_biv(x[0usize], xi[0usize], math.sqrt[f64](omg[0usize]), alpha[0usize], tau) }
+    let m = d + 1usize
+    let (big, e1) = mem.alloc[f64](a, m * m)
+    let (dl, e2) = mem.alloc[f64](a, d)
+    let (lo, e3) = mem.alloc[f64](a, m)
+    let (up, e4) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 / 0.0f64 }
+    mv_big(omg, alpha, d, big, dl)
+    lo[0usize] = 0.0f64 - 1.0e301f64
+    up[0usize] = tau
+    var i = 0usize
+    while i < d {
+        lo[1usize + i] = 0.0f64 - 1.0e301f64
+        up[1usize + i] = (x[i] - xi[i]) / math.sqrt[f64](omg[i * d + i])
+        i += 1usize
+    }
+    // Genz-Bretz with a tight tolerance: Miwa's algorithm at 512 steps is only good to about 2e-3 here
+    let (infin, e5) = mem.alloc[i64](a, m)
+    let (zd, e6) = mem.alloc[f64](a, m)
+    let (cl, e7) = mem.alloc[f64](a, m * (m - 1usize) / 2usize)
+    if e5 != ok || e6 != ok || e7 != ok { ret 0.0f64 / 0.0f64 }
+    var k = 0usize
+    i = 0usize
+    while i < m {
+        infin[i] = 0i64
+        zd[i] = 0.0f64
+        i += 1usize
+    }
+    i = 1usize
+    while i < m {
+        var j = 0usize
+        while j < i {
+            cl[k] = big[j * m + i]
+            k += 1usize
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var lat: mvt.Lat = zero
+    mvt.load_lattice(&lat)
+    var g: rng.Rng = zero
+    rng.seed(&g, 12345i64)
+    let (res, re) = mvt.mvtdst(a, &g, &lat, m, 0i64, lo, up, infin, cl, zd, maxpts, eps, 0.0f64)
+    if re != ok { ret 0.0f64 / 0.0f64 }
+    ret res.value / pn(tau)
+}
+
+type PmCtx = struct { a: *mem.Arena, z: []const f64, zv: []const f64, ocor: []const f64, alpha: []const f64, nu: f64, zs: []f64 }
+
+fn pmst_fp(c: *PmCtx, v: f64) -> f64 {
+    let mk = mem.mark(c.a)
+    let d = c.alpha.len
+    var i = 0usize
+    while i < d {
+        c.zs[i] = math.sqrt[f64](v) * c.z[i]
+        i += 1usize
+    }
+    let p = pmsn_eps(c.a, c.zs, c.zv, c.ocor, c.alpha, 0.0f64, 1.0e-6f64, 20000i64)
+    mem.reset(c.a, mk)
+    ret nm.dchisq(v * c.nu, c.nu, false) * c.nu * p
+}
+
+// pmst(x, xi, Omega, alpha, nu): integer nu through the multivariate t probability (Genz-Bretz, seeded), otherwise the chi-square mixture of pmsn
+fn pmst_mv(a: *mem.Arena, x: []const f64, xi: []const f64, omg: []const f64, alpha: []const f64, nu: f64) -> f64 {
+    let d = alpha.len
+    if nu > 1.0e300f64 { ret pmsn_mv(a, x, xi, omg, alpha, 0.0f64) }
+    let m = d + 1usize
+    let (big, e1) = mem.alloc[f64](a, m * m)
+    let (dl, e2) = mem.alloc[f64](a, d)
+    let (z, e3) = mem.alloc[f64](a, d)
+    let (zs, e4) = mem.alloc[f64](a, d)
+    let (zr, e5) = mem.alloc[f64](a, d)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret 0.0f64 / 0.0f64 }
+    mv_big(omg, alpha, d, big, dl)
+    var i = 0usize
+    var ocor = big[0usize..m * m]
+    while i < d {
+        z[i] = (x[i] - xi[i]) / math.sqrt[f64](omg[i * d + i])
+        zr[i] = 0.0f64
+        i += 1usize
+    }
+    if nu == math.floor[f64](nu + 0.5f64) {
+        let (lo, e6) = mem.alloc[f64](a, m)
+        let (up, e7) = mem.alloc[f64](a, m)
+        let (infin, e8) = mem.alloc[i64](a, m)
+        let (zd, e9) = mem.alloc[f64](a, m)
+        let (cl, e10) = mem.alloc[f64](a, m * (m - 1usize) / 2usize)
+        if e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret 0.0f64 / 0.0f64 }
+        up[0usize] = 0.0f64
+        lo[0usize] = 0.0f64
+        infin[0usize] = 0i64
+        zd[0usize] = 0.0f64
+        i = 0usize
+        while i < d {
+            up[1usize + i] = z[i]
+            lo[1usize + i] = 0.0f64
+            infin[1usize + i] = 0i64
+            zd[1usize + i] = 0.0f64
+            i += 1usize
+        }
+        var k = 0usize
+        i = 1usize
+        while i < m {
+            var j = 0usize
+            while j < i {
+                cl[k] = big[j * m + i]
+                k += 1usize
+                j += 1usize
+            }
+            i += 1usize
+        }
+        var lat: mvt.Lat = zero
+        mvt.load_lattice(&lat)
+        var g: rng.Rng = zero
+        rng.seed(&g, 12345i64)
+        let (res, re) = mvt.mvtdst(a, &g, &lat, m, i64(nu), lo, up, infin, cl, zd, 400000i64, 1.0e-7f64, 0.0f64)
+        if re != ok { ret 0.0f64 / 0.0f64 }
+        ret 2.0f64 * res.value
+    }
+    // the correlation block of Obig, rows 1..d
+    let (oc, e11) = mem.alloc[f64](a, d * d)
+    if e11 != ok { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i < d {
+        var j = 0usize
+        while j < d {
+            oc[i * d + j] = ocor[(1usize + i) * m + 1usize + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var c = PmCtx { a: a, z: z, zv: zr, ocor: oc, alpha: alpha, nu: nu, zs: zs }
+    let (r, e) = quad.qagi(a, &c, pmst_fp, 0.0f64, 1i64, 1.220703125e-4f64, 1.220703125e-4f64, 100usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result
 }
 
 // dsc: the skew-Cauchy density
