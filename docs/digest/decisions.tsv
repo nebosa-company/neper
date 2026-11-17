@@ -3638,4 +3638,5 @@ D6775	942	NMF: nsNMF and offset
 D6776	1030	NMF: the nndsvd seed
 D6777	921	NMF: ls-nmf
 D6778	916	NMF: several runs
-D6779	883	NMF: consensus matrix, cophenetic correlation and dispersion
+D6779	884	NMF: consensus matrix, cophenetic correlation and dispersion
+D6780	901	NMF: silhouette of the consensus and of the coefficients

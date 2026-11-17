@@ -820,3 +820,145 @@ fn nmf_dispersion(cons: []const f64) -> f64 {
     }
     ret s / f64(cons.len)
 }
+
+// the average silhouette width of a clustering `cl` (labels 0..) of p points under the dissimilarity d (p by p): the mean of (b - a) / max(a, b), a the mean distance to the other members of
+// the point's cluster, b the least mean distance to another cluster, 0 for a singleton, as cluster::silhouette
+fn silhouette_avg(a: *mem.Arena, d: []const f64, cl: []const usize, p: usize) -> f64 {
+    var kmax = 0usize
+    var i = 0usize
+    while i < p {
+        if cl[i] + 1usize > kmax { kmax = cl[i] + 1usize }
+        i += 1usize
+    }
+    let (cnt, e1) = mem.alloc[f64](a, kmax)
+    let (sm, e2) = mem.alloc[f64](a, kmax)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var z0 = 0usize
+    while z0 < kmax {
+        cnt[z0] = 0.0f64
+        z0 += 1usize
+    }
+    i = 0usize
+    while i < p {
+        cnt[cl[i]] += 1.0f64
+        i += 1usize
+    }
+    var used = 0usize
+    var c = 0usize
+    while c < kmax {
+        if cnt[c] > 0.0f64 { used += 1usize }
+        c += 1usize
+    }
+    if used < 2usize { ret 0.0f64 / 0.0f64 }
+    var tot = 0.0f64
+    i = 0usize
+    while i < p {
+        c = 0usize
+        while c < kmax {
+            sm[c] = 0.0f64
+            c += 1usize
+        }
+        var j = 0usize
+        while j < p {
+            if j != i { sm[cl[j]] += d[j * p + i] }
+            j += 1usize
+        }
+        var si = 0.0f64
+        if cnt[cl[i]] > 1.0f64 {
+            let av = sm[cl[i]] / (cnt[cl[i]] - 1.0f64)
+            var bv = 1.0f64 / 0.0f64
+            c = 0usize
+            while c < kmax {
+                if c != cl[i] && cnt[c] > 0.0f64 {
+                    let m = sm[c] / cnt[c]
+                    if m < bv { bv = m }
+                }
+                c += 1usize
+            }
+            var mx = av
+            if bv > mx { mx = bv }
+            si = (bv - av) / mx
+        }
+        tot += si
+        i += 1usize
+    }
+    ret tot / f64(p)
+}
+
+// summary()$silhouette.consensus: the clusters are the average-linkage tree of 1 - C cut into rk groups, the dissimilarity 1 - C
+fn nmf_silhouette_consensus(a: *mem.Arena, cons: []const f64, p: usize, rk: usize) -> f64 {
+    let (d, e1) = mem.alloc[f64](a, p * p)
+    let (cl, e2) = mem.alloc[usize](a, p)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var q = 0usize
+    while q < p * p {
+        d[q] = 1.0f64 - cons[q]
+        q += 1usize
+    }
+    let (tr, e3) = hc.hclust(a, d, p, 4usize)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    let ce = hc.cutree(a, &tr, p, rk, cl)
+    if ce != ok { ret 0.0f64 / 0.0f64 }
+    var mn = cl[0usize]
+    q = 1usize
+    while q < p {
+        if cl[q] < mn { mn = cl[q] }
+        q += 1usize
+    }
+    q = 0usize
+    while q < p {
+        cl[q] -= mn
+        q += 1usize
+    }
+    ret silhouette_avg(a, d, cl, p)
+}
+
+// summary()$silhouette.coef: the samples are clustered by the row of the largest entry of their column of H, the dissimilarity 1 - cor of the columns of H
+fn nmf_silhouette_coef(a: *mem.Arena, h: []const f64, rk: usize, p: usize) -> f64 {
+    let (d, e1) = mem.alloc[f64](a, p * p)
+    let (cl, e2) = mem.alloc[usize](a, p)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var j = 0usize
+    while j < p {
+        var best = 0usize
+        var k = 1usize
+        while k < rk {
+            if h[j * rk + k] > h[j * rk + best] { best = k }
+            k += 1usize
+        }
+        cl[j] = best
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var j2 = 0usize
+        while j2 < p {
+            var mj = 0.0f64
+            var m2 = 0.0f64
+            var k = 0usize
+            while k < rk {
+                mj += h[j * rk + k]
+                m2 += h[j2 * rk + k]
+                k += 1usize
+            }
+            mj = mj / f64(rk)
+            m2 = m2 / f64(rk)
+            var sxy = 0.0f64
+            var sxx = 0.0f64
+            var syy = 0.0f64
+            k = 0usize
+            while k < rk {
+                let x = h[j * rk + k] - mj
+                let y = h[j2 * rk + k] - m2
+                sxy += x * y
+                sxx += x * x
+                syy += y * y
+                k += 1usize
+            }
+            d[j2 * p + j] = 1.0f64 - sxy / math.sqrt[f64](sxx * syy)
+            j2 += 1usize
+        }
+        j += 1usize
+    }
+    ret silhouette_avg(a, d, cl, p)
+}

@@ -82,7 +82,8 @@ for (rep in 1:20) {
   res <- tryCatch(suppressWarnings(nmf(x, r, method = if (me == 0) "brunet" else "lee", nrun = nr, seed = sd, .pbackend = NA)), error = function(e) NULL)
   if (is.null(res)) next
   cp <- tryCatch(cophcor(res), error = function(e) NA)
-  v <- c(cp, dispersion(res), as.vector(consensus(res)))
+  sm <- tryCatch(summary(res), error = function(e) NULL)
+  v <- c(cp, dispersion(res), as.vector(consensus(res)), if (is.null(sm)) c(NA, NA) else c(sm[["silhouette.consensus"]], sm[["silhouette.coef"]]))
   for (q in seq_along(v)) if (is.finite(v[q])) cases[[length(cases) + 1]] <- case("nmc", c(n, p, r, me, sd, nr, as.vector(x), q - 1), v[q], rel = 1e-8, abs = 1e-10)
 }
 emit("nmf", "NMF", list(cases))

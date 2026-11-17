@@ -26,6 +26,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "nmc") {
             if ix == 0usize { ret nf.nmf_cophcor(a, cs2, p) }
             if ix == 1usize { ret nf.nmf_dispersion(cs2) }
+            if ix == p * p + 2usize { ret nf.nmf_silhouette_consensus(a, cs2, p, rk) }
+            if ix == p * p + 3usize { ret nf.nmf_silhouette_coef(a, h2, rk, p) }
             ret cs2[ix - 2usize]
         }
         if ix == 0usize { ret o2[0usize] }
