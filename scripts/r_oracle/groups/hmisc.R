@@ -51,4 +51,14 @@ for (rep in 1:25) {
     cases[[length(cases) + 1]] <- case("ssd", c(n, ml, j - 1, x), a2[[j]], rel = 1e-10, abs = 1e-12)
     cases[[length(cases) + 1]] <- case("smh", c(n, cf, j - 1, x), a3[[j]], rel = 1e-10, abs = 1e-12) }
 }
+# varclus "vc": (n, k, which 0 height 1 order 2 merge a 3 merge b, index, spearman, trans 0 square 1 abs 2 none, method (hclust codes 2 single 3 complete 4 average), x[n k])
+for (rep in 1:15) {
+  n <- sample(20:60, 1); k <- sample(4:8, 1); Z <- matrix(rnorm(n * 3), n, 3); x <- sapply(1:k, function(j) Z[, (j %% 3) + 1] * runif(1, 0.5, 1.5) + rnorm(n, 0, runif(1, 0.3, 1.5)))
+  sp <- rep %% 2; tr <- c("square", "abs", "none")[rep %% 3 + 1]; me <- c("single", "complete", "average")[rep %% 3 + 1]; mc <- c(2, 3, 4)[rep %% 3 + 1]
+  v <- varclus(x, similarity = if (sp) "spearman" else "pearson", trans = tr, method = me); h <- v$hclust
+  for (q in seq_len(k - 1)) { cases[[length(cases) + 1]] <- case("vc", c(n, k, 0, q - 1, sp, rep %% 3, mc, x), h$height[q], rel = 1e-9, abs = 1e-11)
+    cases[[length(cases) + 1]] <- case("vc", c(n, k, 2, q - 1, sp, rep %% 3, mc, x), h$merge[q, 1], rel = 0, abs = 0.5)
+    cases[[length(cases) + 1]] <- case("vc", c(n, k, 3, q - 1, sp, rep %% 3, mc, x), h$merge[q, 2], rel = 0, abs = 0.5) }
+  for (q in seq_len(k)) cases[[length(cases) + 1]] <- case("vc", c(n, k, 1, q - 1, sp, rep %% 3, mc, x), h$order[q], rel = 0, abs = 0.5)
+}
 emit("hmisc", "Hmisc", list(cases))

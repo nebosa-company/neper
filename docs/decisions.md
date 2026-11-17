@@ -48154,3 +48154,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6921 — gbm: relative influence for the other losses
 
 **Decision.** `gbmpkg.influence` takes the loss code, so the relative influence of D6920 (split improvement of the working response summed over all trees, scaled to 100) is answered for the bernoulli and poisson losses as well. Equal to `relative.influence` on the 19 data sets of D6894, every variable, 1e-6 relative (oracle_gbm, 300 cases in all). Linux pending.
+
+## D6922 — Hmisc: varclus
+
+**Decision.** `hmisc.varclus` is `varclus` on a data matrix: the pairwise correlations of `rcorr` (Spearman on mid-ranks or Pearson), transformed by squaring, absolute value or nothing, and the variables clustered by `hclust` (D6807's port, any linkage) on one minus that similarity; the tree answers R's merge, heights and order. Equal to `varclus(x, similarity, trans, method)$hclust` on 15 simulated data sets of 4 to 8 variables built on three latent factors, with single, complete and average linkage: every height, merge entry and order position (oracle_hmisc, 4189 cases in all). Not here: the hoeffding and bothpos similarities. Linux pending.

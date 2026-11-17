@@ -8,6 +8,7 @@
 // redun and the bootstrap summaries.
 
 use e.math
+use e.algo.stat.hclust as hc
 use e.math.dist as dist
 use e.math.nmath_beta as nb
 use e.mem
@@ -524,4 +525,29 @@ fn q7(s: []const f64, p: f64) -> f64 {
     let q = s[usize(lo)]
     if hi > lo { ret q + (h - lo) * (s[usize(hi)] - q) }
     ret q
+}
+
+// varclus(x, similarity = "spearman" or "pearson", trans, method): the variables of the n by k column-major x clustered by hclust on 1 - similarity, the similarity the squared (trans 0), absolute (1) or raw (2) correlation; tree receives R's merge, heights and order
+fn varclus(a: *mem.Arena, x: []const f64, n: usize, k: usize, spearman: bool, trans: usize, method: usize) -> (hc.Tree, err) {
+    let (d, e1) = mem.alloc[f64](a, k * k)
+    let (o2, e2) = mem.alloc[f64](a, 2usize)
+    if e1 != ok || e2 != ok { ret (zero, e1) }
+    var i = 0usize
+    while i < k {
+        d[i * k + i] = 0.0f64
+        var j = i + 1usize
+        while j < k {
+            let e = rcorr_pair(a, x[i * n..i * n + n], x[j * n..j * n + n], spearman, o2)
+            if e != ok { ret (zero, e) }
+            var s = o2[0usize]
+            if trans == 0usize { s = s * s }
+            if trans == 1usize { s = math.abs[f64](s) }
+            d[i * k + j] = 1.0f64 - s
+            d[j * k + i] = 1.0f64 - s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (t, e3) = hc.hclust(a, d, k, method)
+    ret (t, e3)
 }

@@ -29,6 +29,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(c.name, "smh") && hm.smedian_hilow(a, x[3usize..3usize + n], x[1usize], o) != ok { ret nan }
         ret o[usize(x[2usize])]
     }
+    if str.eq(c.name, "vc") {
+        // (n, k, which (0 height, 1 order, 2 merge a, 3 merge b), index, spearman, trans, method, x[n k])
+        let n = usize(x[0usize])
+        let k = usize(x[1usize])
+        let (t, e) = hm.varclus(a, x[7usize..7usize + n * k], n, k, x[4usize] != 0.0f64, usize(x[5usize]), usize(x[6usize]))
+        if e != ok { ret nan }
+        let ix = usize(x[3usize])
+        if x[2usize] == 0.0f64 { ret t.height[ix] }
+        if x[2usize] == 1.0f64 { ret f64(t.order[ix]) }
+        if x[2usize] == 2.0f64 { ret f64(t.merge_a[ix]) }
+        ret f64(t.merge_b[ix])
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])
