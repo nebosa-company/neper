@@ -82,6 +82,15 @@ for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; 
 for (rep in 1:8) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); n <- sample(3:6, 1); sd <- sample(1:100000, 1)
   add("dmsc", mvpack(d, 1, 0, 0, 0, p), dmsc(p$x, p$xi, p$Om, p$al), rel = 1e-9)
   set.seed(sd); r <- as.numeric(t(matrix(rmsc(n, p$xi, p$Om, p$al), n, d))); for (k in seq_len(n * d)) add("rmsc", mvpack(d, 1, n, sd, k - 1, p), r[k], rel = 1e-9) }
+# sn.cumulants beyond the fourth ("cumk": xi, omega, alpha, 0, k), mst.mardia ("mardia": delta.sq, nu, d, which, 0), pst methods 1 to 5 ("pstm1".."pstm5": xi, omega, alpha, nu, x)
+for (rep in 1:10) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, 0.5, 2, 6)[sample(4, 1)]; cm <- sn.cumulants(xi, om, al, n = 10)
+  for (k in 1:10) add("cumk", c(xi, om, al, 0, k), unname(cm[k]), rel = 1e-9) }
+for (rep in 1:12) { dsq <- c(0.2, 0.5, 0.8)[sample(3, 1)]; nu <- c(4.5, 6, 9, 30)[sample(4, 1)]; d <- c(1, 2, 4)[sample(3, 1)]
+  mm <- sn:::mst.mardia(dsq, nu, d); add("mardia", c(dsq, nu, d, 0, 0), mm[1], rel = 1e-9); add("mardia", c(dsq, nu, d, 1, 0), mm[2], rel = 1e-9) }
+for (rep in 1:16) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, 0.8, 2.5, 6)[sample(4, 1)]
+  for (m in 1:5) { nu <- if (m %in% c(1, 4)) c(2, 3, 5, 9)[sample(4, 1)] else c(2.5, 4, 7.5, 12)[sample(4, 1)]
+    zs <- if (m == 5) c(-60, -35, 28, 70) else c(-4, -0.7, 0.4, 2.2, 6)
+    for (z in zs) { x <- xi + om * z; v <- tryCatch(pst(x, xi, om, al, nu, method = m), error = function(e) NA); add(paste0("pstm", m), c(xi, om, al, nu, x), v, rel = 1e-5, abs = 1e-9) } } }
 # pmsn and pmst for d >= 2 (mnormt's own error is about 1e-6, so these are compared at 1e-4)
 for (rep in 1:20) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); tau <- c(0, 0.6, -1)[sample(3, 1)]; nu <- c(3, 6, 4.5, 7.5)[sample(4, 1)]
   add("pmsn", mvpack(d, tau, 0, 0, 0, p), pmsn(p$x, p$xi, p$Om, p$al, tau), rel = 1e-4, abs = 3e-6)

@@ -56,6 +56,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret o[usize(x[3usize])]
     }
+    if str.eq(k, "cumk") { ret sn.sn_cumulant_k(a, x[0usize], x[1usize], x[2usize], usize(x[4usize])) }
+    if str.eq(k, "mardia") { ret sn.mst_mardia(x[0usize], x[1usize], x[2usize], usize(x[3usize])) }
     if str.eq(k, "zeta") { ret sn.zeta(usize(x[0usize]), x[1usize]) }
     if str.eq(k, "cumn") { ret sn.sn_cumulant(x[0usize], x[1usize], x[2usize], x[3usize], usize(x[4usize])) }
     if str.eq(k, "dmsn") || str.eq(k, "dmst") || str.eq(k, "rmsn") || str.eq(k, "rmst") || str.eq(k, "dmsc") || str.eq(k, "rmsc") || str.eq(k, "pmsn") || str.eq(k, "pmst") {
@@ -101,6 +103,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let v = x[4usize]
     if str.eq(k, "psnb") { ret sn.psn_biv(v, xi, om, al, t) }
     if str.eq(k, "qst") { ret sn.qst(a, v, xi, om, al, t) }
+    if str.eq(k, "pstm1") { ret sn.pst_method(a, v, xi, om, al, t, 1usize) }
+    if str.eq(k, "pstm2") { ret sn.pst_method(a, v, xi, om, al, t, 2usize) }
+    if str.eq(k, "pstm3") { ret sn.pst_method(a, v, xi, om, al, t, 3usize) }
+    if str.eq(k, "pstm4") { ret sn.pst_method(a, v, xi, om, al, t, 4usize) }
+    if str.eq(k, "pstm5") { ret sn.pst_method(a, v, xi, om, al, t, 5usize) }
     if str.eq(k, "pst") { ret sn.pst(a, v, xi, om, al, t) }
     if str.eq(k, "dsn") { ret sn.dsn(v, xi, om, al, t) }
     if str.eq(k, "psn") { ret sn.psn_owen(v, xi, om, al) }

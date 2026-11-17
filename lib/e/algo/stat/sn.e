@@ -1579,6 +1579,106 @@ fn pmst_mv(a: *mem.Arena, x: []const f64, xi: []const f64, omg: []const f64, alp
     ret r.result
 }
 
+// sn.cumulants(xi, omega, alpha, n = 20)[k] for tau = 0, any k up to 20: the half-normal cumulant series of the package
+fn sn_cumulant_k(a: *mem.Arena, xi: f64, omega: f64, alpha: f64, k: usize) -> f64 {
+    let delta = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
+    // a[1..=k]: odd places hold (-1)^m sqrt(2/pi) / (m! 2^m (2m + 1)), even places zero
+    let (av, ea) = mem.alloc[f64](a, k + 2usize)
+    let (cf, ec) = mem.alloc[f64](a, k + 2usize)
+    if ea != ok || ec != ok { ret 0.0f64 / 0.0f64 }
+    var z0 = 0usize
+    while z0 < k + 2usize {
+        av[z0] = 0.0f64
+        cf[z0] = 0.0f64
+        z0 += 1usize
+    }
+    var m = 0usize
+    var fact = 1.0f64
+    var p2 = 1.0f64
+    while 2usize * m + 1usize <= k {
+        if m > 0usize {
+            fact = fact * f64(m)
+            p2 = p2 * 2.0f64
+        }
+        var sg = 1.0f64
+        if m % 2usize == 1usize { sg = 0.0f64 - 1.0f64 }
+        av[2usize * m + 1usize] = sg * math.sqrt[f64](2.0f64 / pi()) / (fact * p2 * (2.0f64 * f64(m) + 1.0f64))
+        m += 1usize
+    }
+    cf[1usize] = av[1usize]
+    var j = 2usize
+    while j <= k {
+        var s = 0.0f64
+        var i = 1usize
+        while i < j {
+            s += f64(i) * cf[i] * av[j - i] / f64(j)
+            i += 1usize
+        }
+        cf[j] = av[j] - s
+        j += 1usize
+    }
+    var kf = 1.0f64
+    j = 2usize
+    while j <= k {
+        kf = kf * f64(j)
+        j += 1usize
+    }
+    var kap = cf[k] * kf * math.pow[f64](delta, f64(k))
+    if k == 2usize { kap += 1.0f64 }
+    kap = kap * math.pow[f64](omega, f64(k))
+    if k == 1usize { kap += xi }
+    ret kap
+}
+
+// mst.mardia(delta.sq, nu, d): which 0 gamma1M, 1 gamma2M of the multivariate skew-t (nu > 3 required, Inf where a moment is missing)
+fn mst_mardia(dsq: f64, nu: f64, d: f64, which: usize) -> f64 {
+    let inf = 1.0f64 / 0.0f64
+    let al = math.sqrt[f64](dsq / (1.0f64 - dsq))
+    let mu = st_cumulant(0.0f64, 1.0f64, al, nu, 1usize)
+    let c2 = st_cumulant(0.0f64, 1.0f64, al, nu, 2usize)
+    let sg = math.sqrt[f64](c2)
+    let g1 = st_cumulant(0.0f64, 1.0f64, al, nu, 3usize) / (sg * sg * sg)
+    let g2 = st_cumulant(0.0f64, 1.0f64, al, nu, 4usize) / (sg * sg * sg * sg)
+    if which == 0usize {
+        if nu > 3.0f64 { ret g1 * g1 + 3.0f64 * (d - 1.0f64) * mu * mu / ((nu - 3.0f64) * sg * sg) }
+        ret inf
+    }
+    if nu > 4.0f64 {
+        let r1 = 1.0f64 / (1.0f64 - 4.0f64 / nu) - 2.0f64 / (nu - 4.0f64)
+        let r2 = 1.0f64 / (1.0f64 - 4.0f64 / nu)
+        let r3 = 1.0f64 / (1.0f64 - 3.0f64 / nu) - 1.0f64 / (nu - 3.0f64)
+        ret g2 + 3.0f64 + (d * d - 1.0f64) * r1 + 2.0f64 * (d - 1.0f64) * (r2 - mu * mu * r3) / (sg * sg) - d * (d + 2.0f64)
+    }
+    ret inf
+}
+
+// pst with an explicit method: 0 default, 2 the density integral from zero, 3 the chi-square mixture, 4 the integer-nu closed form (any nu), 5 the tail formula; method 1 is the multivariate t probability
+fn pst_method(a: *mem.Arena, x: f64, xi: f64, omega: f64, alpha: f64, nu: f64, method: usize) -> f64 {
+    if method == 0usize { ret pst(a, x, xi, omega, alpha, nu) }
+    let z = (x - xi) / omega
+    if method == 2usize { ret pst_dst(z, alpha, nu) }
+    if method == 4usize { ret pst_int(z, alpha, nu) }
+    if method == 5usize {
+        let lp = st_tails_lp(z, alpha, nu)
+        if z < 0.0f64 { ret math.exp[f64](lp) }
+        ret 1.0f64 - math.exp[f64](lp)
+    }
+    if method == 3usize {
+        var c = PstCtx { alpha: alpha, nu: nu, z: z }
+        let (r, e) = quad.qagi(a, &c, fp_chisq, 0.0f64, 1i64, 1.220703125e-4f64, 1.220703125e-4f64, 100usize)
+        if e != ok { ret 0.0f64 / 0.0f64 }
+        ret r.result
+    }
+    // method 1: two times the bivariate t probability at correlation -delta
+    let (buf, eb) = mem.alloc[f64](a, 4usize)
+    if eb != ok { ret 0.0f64 / 0.0f64 }
+    buf[0usize] = x
+    buf[1usize] = xi
+    buf[2usize] = omega * omega
+    buf[3usize] = alpha
+    ret pmst_mv(a, buf[0usize..1usize], buf[1usize..2usize], buf[2usize..3usize], buf[3usize..4usize], nu)
+}
+
 // dsc: the skew-Cauchy density
 fn dsc(x: f64, xi: f64, omega: f64, alpha: f64) -> f64 {
     let z = (x - xi) / omega
