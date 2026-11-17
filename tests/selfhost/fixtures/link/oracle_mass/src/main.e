@@ -25,6 +25,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "rlm") {
+        let rn = usize(x[0usize])
+        let rp = usize(x[1usize])
+        let (rc, re1) = mem.alloc[f64](a, rp)
+        let (ro, re2) = mem.alloc[f64](a, 3usize)
+        if re1 != ok || re2 != ok { ret 0.0f64 / 0.0f64 }
+        if ms.rlm_huber(a, x[3usize + rn..3usize + rn + rn * rp], rn, rp, x[3usize..3usize + rn], 1.345f64, rc, ro) != ok { ret 0.0f64 / 0.0f64 }
+        let w = usize(x[2usize])
+        if w < rp { ret rc[w] }
+        ret ro[w - rp]
+    }
     let n = usize(x[0usize])
     let y = x[1usize..1usize + n]
     if str.eq(c.name, "mad") { ret ms.mad(a, y) }

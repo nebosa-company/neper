@@ -47918,3 +47918,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6862 — geosphere: spherical destination, great-circle points and geomean
 
 **Decision.** `geosphere.dest_point_sphere` is `destPoint(p, b, d, r = r)` (the spherical destination, longitude wrapped to [-180, 180)), `gc_intermediate` is the k-th of the n points of `gcIntermediate` (spherical linear interpolation along the great circle through the cosine angular distance), and `geomean` is `geomean(xy, w)` (the weighted circular means of longitude, shifted by 180 degrees, and of latitude). Equal to geosphere on 30 random cases of each (oracle_geosphere, 908 cases in all). Not here: the ellipsoidal `destPoint`, `bearing` and `midPoint` (Karney's geodesic), `distGeo`, `areaPolygon`, `perimeter`, `centroid`. Linux pending.
+
+## D6863 — MASS: rlm with the Huber psi
+
+**Decision.** `mass.rlm_huber(x, n, p, y, k)` is `rlm(y ~ x, psi = psi.huber, k2 = k, scale.est = "MAD", init = "ls")`: the least-squares start, then up to 20 iterations of the scale median(|resid|) / 0.6745, the weights min(1, k / |resid / scale|) and a weighted least-squares refit, stopping when the relative change of the residual vector is at most 1e-4; the coefficients, the final scale, the iteration count and the convergence flag are returned. Equal to MASS on 30 contaminated regressions of 1 to 3 predictors, coefficient by coefficient (oracle_mass, 680 cases in all). Not here: the bisquare and Hampel psi, the MM method, `scale.est = "Huber"`, weights, `init = "lts"`. Linux pending.

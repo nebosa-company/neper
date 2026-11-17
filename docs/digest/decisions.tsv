@@ -3721,4 +3721,5 @@ D6858	550	tsfeatures: arch_stat
 D6859	624	ismev: the closed-form helpers
 D6860	682	tm: findFreqTerms and findAssocs
 D6861	860	tm: the SMART u and b normalisations, and the rounding of findAssocs
-D6862	731	geosphere: spherical destination, great-circle points and geomean
+D6862	732	geosphere: spherical destination, great-circle points and geomean
+D6863	740	MASS: rlm with the Huber psi

@@ -537,10 +537,10 @@
       "group": "CRAN parity",
       "order": 668,
       "title": "MASS remainder: robust fits, fitdistr, boxcox, density and scaling",
-      "score": 0.15,
+      "score": 0.2,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, bandwidth.nrd and ginv, equal to MASS 7.3-65 on 490 cases on Windows (oracle_mass); Linux pending. Still open: rlm, lqs, cov.rob, the optimised fitdistr families, kde2d, bw.ucv/bcv/SJ, isoMDS, sammon, mvrnorm, stepAIC, gamma.shape, negative.binomial. Original text: Open (CRAN rank 173). Mid.glm.nb, polr, lda and qda exist as e.algo.stat.regression and e.ml.multivariate. Acceptance, equal to MASS: rlm (Huber, Hampel, bisquare, MM), lqs (lts, lms, S), cov.rob (MCD, MVE), fitdistr for the families it supports with standard errors, boxcox, kde2d with bandwidth.nrd, bw.ucv, bw.bcv and bw.SJ, isoMDS, sammon, mvrnorm under set.seed, ginv, stepAIC (both directions), huber, hubers, gamma.shape, negative.binomial family."
+      "evidence": "Partly done (D6051): e.algo.stat.mass has mad, huber, hubers, fitdistr for normal, exponential, Poisson, geometric and log-normal (estimates, standard errors, log-likelihood), boxcox log-likelihood, bandwidth.nrd and ginv, equal to MASS 7.3-65 on 490 cases on Windows (oracle_mass); Linux pending. D6863: rlm with the Huber psi equals MASS. Still open: the other rlm psi functions, lqs, cov.rob, the optimised fitdistr families, kde2d, bw.ucv/bcv/SJ, isoMDS, sammon, mvrnorm, stepAIC, gamma.shape, negative.binomial. Original text: Open (CRAN rank 173). Mid.glm.nb, polr, lda and qda exist as e.algo.stat.regression and e.ml.multivariate. Acceptance, equal to MASS: rlm (Huber, Hampel, bisquare, MM), lqs (lts, lms, S), cov.rob (MCD, MVE), fitdistr for the families it supports with standard errors, boxcox, kde2d with bandwidth.nrd, bw.ucv, bw.bcv and bw.SJ, isoMDS, sammon, mvrnorm under set.seed, ginv, stepAIC (both directions), huber, hubers, gamma.shape, negative.binomial family."
     },
     {
       "id": "L307",

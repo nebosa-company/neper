@@ -305,3 +305,96 @@ fn ginv(a: *mem.Arena, x: []const f64, m: usize, n: usize) -> ([]f64, err) {
     }
     ret (out, ok)
 }
+
+// rlm(y ~ x, psi = psi.huber, k = k, scale.est = "MAD", init = "ls"): iteratively reweighted least squares on the n by p column-major design x; the scale is median(|resid|) / 0.6745 each iteration, the weights min(1, k / |resid / scale|),
+// stopping when the relative change of the residuals is at most 1e-4 (at most 20 steps); coef receives the coefficients, out = (scale, iterations, converged)
+fn rlm_huber(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, k: f64, coef: []f64, out: []f64) -> err {
+    let (xw, e1) = mem.alloc[f64](a, n * p)
+    let (yw, e2) = mem.alloc[f64](a, n)
+    let (res, e3) = mem.alloc[f64](a, n)
+    let (old, e4) = mem.alloc[f64](a, n)
+    let (ab, e5) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    let (f0, fe0) = decomp.lm_fit(a, x, n, p, y, 1.0e-7f64)
+    if fe0 != ok { ret fe0 }
+    var j = 0usize
+    while j < p {
+        coef[j] = f0.coef[j]
+        j += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var f = 0.0f64
+        j = 0usize
+        while j < p {
+            f += x[j * n + i] * coef[j]
+            j += 1usize
+        }
+        res[i] = y[i] - f
+        i += 1usize
+    }
+    var scale = 0.0f64
+    var done = false
+    var it = 0usize
+    while it < 20usize && !done {
+        it += 1usize
+        i = 0usize
+        while i < n {
+            old[i] = res[i]
+            ab[i] = math.abs[f64](res[i])
+            i += 1usize
+        }
+        scale = median_of(a, ab) / 0.6745f64
+        if scale == 0.0f64 {
+            done = true
+        } else {
+            i = 0usize
+            while i < n {
+                let u = math.abs[f64](res[i] / scale)
+                var w = 1.0f64
+                if u > k { w = k / u }
+                let sw = math.sqrt[f64](w)
+                yw[i] = y[i] * sw
+                j = 0usize
+                while j < p {
+                    xw[j * n + i] = x[j * n + i] * sw
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            let (f1, fe1) = decomp.lm_fit(a, xw, n, p, yw, 1.0e-7f64)
+            if fe1 != ok { ret fe1 }
+            j = 0usize
+            while j < p {
+                coef[j] = f1.coef[j]
+                j += 1usize
+            }
+            i = 0usize
+            while i < n {
+                var f = 0.0f64
+                j = 0usize
+                while j < p {
+                    f += x[j * n + i] * coef[j]
+                    j += 1usize
+                }
+                res[i] = y[i] - f
+                i += 1usize
+            }
+            var dn = 0.0f64
+            var so = 0.0f64
+            i = 0usize
+            while i < n {
+                dn += (old[i] - res[i]) * (old[i] - res[i])
+                so += old[i] * old[i]
+                i += 1usize
+            }
+            var den = so
+            if den < 1.0e-20f64 { den = 1.0e-20f64 }
+            if math.sqrt[f64](dn / den) <= 1.0e-4f64 { done = true }
+        }
+    }
+    out[0usize] = scale
+    out[1usize] = f64(it)
+    if done { out[2usize] = 1.0f64 } else { out[2usize] = 0.0f64 }
+    ret ok
+}

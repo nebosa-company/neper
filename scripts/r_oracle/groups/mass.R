@@ -29,4 +29,10 @@ for (rep in 1:30) {
   g <- as.vector(ginv(X)); w <- seq_along(g)
   add("ginv_sum", c(m, n, X), sum(g)); add("ginv_w", c(m, n, X), sum(w * g)); add("ginv_len", c(m, n, X), length(g))
 }
+# rlm(y ~ X, Huber, MAD): "rlm" (n, p, which, y[n], X[n p] column-major with the intercept first) which 0 .. p - 1 coef, p scale, p + 1 iterations, p + 2 converged
+for (rep in 1:30) {
+  n <- sample(15:60, 1); p <- sample(2:4, 1); X <- cbind(1, matrix(rnorm(n * (p - 1)), n, p - 1)); y <- as.vector(X %*% rnorm(p)) + rnorm(n) + ifelse(runif(n) < 0.1, rnorm(n, 0, 6), 0)
+  d <- data.frame(y = y, X[, -1, drop = FALSE]); fit <- rlm(y ~ ., d); st <- c(coef(fit), fit$s, length(fit$conv), as.numeric(fit$converged))
+  for (j in seq_along(st)) add("rlm", c(n, p, j - 1, y, X), st[j])
+}
 emit("mass", "MASS", list(cases))
