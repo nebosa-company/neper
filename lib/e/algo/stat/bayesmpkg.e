@@ -1,0 +1,399 @@
+// R bayesm: the log densities and the samplers that draw with R's own streams, equal to the package under set.seed.
+//
+// lndMvn, lndMvst, lndIWishart, lndIChisq, llmnl, condMom; rdirichlet, rtrun, rwishart, breg.
+// Matrices are column-major as R passes them.
+//
+// Not here: the Gibbs samplers (runiregGibbs, rmultireg, rhierMnlRwMixture and the rest), mixture helpers, llmnp, ghkvec.
+
+use e.algo.rand.r as rng
+use e.algo.rand.rdist as rd
+use e.math
+use e.math.dist as mdist
+use e.math.nmath as nm
+use e.mem
+
+fn ln_2pi() -> f64 { ret 1.8378770664093453f64 }
+
+// the upper Cholesky factor U (A = U'U) of the k by k column-major A into u (strictly lower part zero); false when A is not positive definite
+fn chol_upper(a: []const f64, k: usize, u: []f64) -> bool {
+    var j = 0usize
+    while j < k {
+        var i = 0usize
+        while i < k {
+            u[j * k + i] = 0.0f64
+            i += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < k {
+        var s = a[j * k + j]
+        var t = 0usize
+        while t < j {
+            s -= u[j * k + t] * u[j * k + t]
+            t += 1usize
+        }
+        if s <= 0.0f64 { ret false }
+        let d = math.sqrt[f64](s)
+        u[j * k + j] = d
+        var c = j + 1usize
+        while c < k {
+            var v = a[c * k + j]
+            t = 0usize
+            while t < j {
+                v -= u[j * k + t] * u[c * k + t]
+                t += 1usize
+            }
+            u[c * k + j] = v / d
+            c += 1usize
+        }
+        j += 1usize
+    }
+    ret true
+}
+
+// the inverse of the upper-triangular u (k by k column-major) into inv
+fn inv_upper(u: []const f64, k: usize, inv: []f64) {
+    var c = 0usize
+    while c < k {
+        var r = k
+        while r > 0usize {
+            r -= 1usize
+            var s = 0.0f64
+            if r == c { s = 1.0f64 }
+            var t = r + 1usize
+            while t < k {
+                s -= u[t * k + r] * inv[c * k + t]
+                t += 1usize
+            }
+            inv[c * k + r] = s / u[r * k + r]
+        }
+        c += 1usize
+    }
+}
+
+// the sum of the logs of the diagonal
+fn log_diag(m: []const f64, k: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < k {
+        s += math.log[f64](m[i * k + i])
+        i += 1usize
+    }
+    ret s
+}
+
+// z = t(rooti) (x - mu) for the upper-triangular rooti
+fn rooti_z(x: []const f64, mu: []const f64, rooti: []const f64, k: usize, z: []f64) -> f64 {
+    var ss = 0.0f64
+    var i = 0usize
+    while i < k {
+        var s = 0.0f64
+        var t = 0usize
+        while t <= i {
+            s += rooti[i * k + t] * (x[t] - mu[t])
+            t += 1usize
+        }
+        z[i] = s
+        ss += s * s
+        i += 1usize
+    }
+    ret ss
+}
+
+// lndMvn(x, mu, rooti)
+fn lnd_mvn(a: *mem.Arena, x: []const f64, mu: []const f64, rooti: []const f64, k: usize) -> f64 {
+    let (z, e) = mem.alloc[f64](a, k)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let ss = rooti_z(x, mu, rooti, k, z)
+    ret 0.0f64 - f64(k) / 2.0f64 * ln_2pi() + log_diag(rooti, k) - 0.5f64 * ss
+}
+
+// lndMvst(x, nu, mu, rooti, NORMC)
+fn lnd_mvst(a: *mem.Arena, x: []const f64, nu: f64, mu: []const f64, rooti: []const f64, k: usize, normc: bool) -> f64 {
+    let (z, e) = mem.alloc[f64](a, k)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let ss = rooti_z(x, mu, rooti, k, z)
+    let kk = f64(k)
+    var d = 0.0f64 - (nu + kk) / 2.0f64 * math.log[f64](nu + ss) + log_diag(rooti, k)
+    if normc { d += nu / 2.0f64 * math.log[f64](nu) + nm.lgammafn((nu + kk) / 2.0f64) - nm.lgammafn(nu / 2.0f64) - kk / 2.0f64 * math.log[f64](3.141592653589793f64) }
+    ret d
+}
+
+fn log_mv_gamma(av: f64, k: usize) -> f64 {
+    var s = f64(k) * (f64(k) - 1.0f64) / 4.0f64 * math.log[f64](3.141592653589793f64)
+    var i = 0usize
+    while i < k {
+        s += nm.lgammafn(av - f64(i) / 2.0f64)
+        i += 1usize
+    }
+    ret s
+}
+
+fn log_det_chol(u: []const f64, k: usize) -> f64 { ret 2.0f64 * log_diag(u, k) }
+
+// lndIWishart(nu, V, IW): the log density of the inverse Wishart matrix IW with scale V
+fn lnd_iwishart(a: *mem.Arena, nu: f64, v: []const f64, iw: []const f64, k: usize) -> f64 {
+    let (uv, e1) = mem.alloc[f64](a, k * k)
+    let (ui, e2) = mem.alloc[f64](a, k * k)
+    let (rinv, e3) = mem.alloc[f64](a, k * k)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    if !chol_upper(v, k, uv) || !chol_upper(iw, k, ui) { ret 0.0f64 / 0.0f64 }
+    inv_upper(ui, k, rinv)
+    // tr(V IW^-1) = sum of squares of (chol(V) rinv)
+    var tr = 0.0f64
+    var c = 0usize
+    while c < k {
+        var r = 0usize
+        while r < k {
+            var s = 0.0f64
+            var t = 0usize
+            while t < k {
+                s += uv[t * k + r] * rinv[c * k + t]
+                t += 1usize
+            }
+            tr += s * s
+            r += 1usize
+        }
+        c += 1usize
+    }
+    let kk = f64(k)
+    ret nu / 2.0f64 * log_det_chol(uv, k) - nu * kk / 2.0f64 * 0.6931471805599453f64 - log_mv_gamma(nu / 2.0f64, k) - (nu + kk + 1.0f64) / 2.0f64 * log_det_chol(ui, k) - 0.5f64 * tr
+}
+
+// lndIChisq(nu, ssq, x)
+fn lnd_ichisq(nu: f64, ssq: f64, x: f64) -> f64 {
+    ret nu / 2.0f64 * math.log[f64](nu * ssq / 2.0f64) - nm.lgammafn(nu / 2.0f64) - (nu / 2.0f64 + 1.0f64) * math.log[f64](x) - nu * ssq / (2.0f64 * x)
+}
+
+// llmnl(beta, y, X): the multinomial logit log likelihood, X stacked n blocks of p rows by k columns (column-major, n p rows), y the 1-based choices
+fn llmnl(beta: []const f64, y: []const f64, x: []const f64, k: usize, p: usize) -> f64 {
+    let n = y.len
+    var ll = 0.0f64
+    var i = 0usize
+    while i < n {
+        var denom = 0.0f64
+        var num = 0.0f64
+        var j = 0usize
+        while j < p {
+            var s = 0.0f64
+            var c = 0usize
+            while c < k {
+                s += x[c * n * p + i * p + j] * beta[c]
+                c += 1usize
+            }
+            let e = math.exp[f64](s)
+            denom += e
+            if usize(y[i]) == j + 1usize { num = s }
+            j += 1usize
+        }
+        ll += num - math.log[f64](denom)
+        i += 1usize
+    }
+    ret ll
+}
+
+// condMom(x, mu, sigi, i): the conditional mean and variance of x[i] (0-based) given the rest under the precision sigi
+fn cond_mom(x: []const f64, mu: []const f64, sigi: []const f64, k: usize, i: usize) -> (f64, f64) {
+    var s = 0.0f64
+    var j = 0usize
+    while j < k {
+        if j != i { s += sigi[j * k + i] * (x[j] - mu[j]) }
+        j += 1usize
+    }
+    ret (mu[i] - s / sigi[i * k + i], 1.0f64 / sigi[i * k + i])
+}
+
+// rdirichlet(alpha): independent gammas normalised
+fn rdirichlet(r: *rng.Rng, alpha: []const f64, out: []f64) {
+    var s = 0.0f64
+    var i = 0usize
+    while i < alpha.len {
+        out[i] = rd.rgamma(r, alpha[i], 1.0f64)
+        s += out[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < alpha.len {
+        out[i] = out[i] / s
+        i += 1usize
+    }
+}
+
+// rtrun(mu, sigma, a, b): the inverse-cdf draw of a normal truncated to (a, b)
+fn rtrun(r: *rng.Rng, mu: f64, sigma: f64, lo: f64, hi: f64) -> f64 {
+    let fa = mdist.pnorm((lo - mu) / sigma, 0.0f64, 1.0f64, true, false)
+    let fb = mdist.pnorm((hi - mu) / sigma, 0.0f64, 1.0f64, true, false)
+    let u = rng.unif(r)
+    ret mu + sigma * mdist.qnorm(u * (fb - fa) + fa, 0.0f64, 1.0f64, true, false)
+}
+
+// rwishart(nu, V): W (out_w), its inverse (out_iw), the upper factor C with W = C'C (out_c) and its inverse (out_ci), all k by k column-major
+fn rwishart(a: *mem.Arena, r: *rng.Rng, nu: f64, v: []const f64, k: usize, out_w: []f64, out_iw: []f64, out_c: []f64, out_ci: []f64) -> err {
+    let (t, e1) = mem.alloc[f64](a, k * k)
+    let (cv, e2) = mem.alloc[f64](a, k * k)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    if !chol_upper(v, k, cv) { ret mem.Full }
+    var i = 0usize
+    while i < k * k {
+        t[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        t[i * k + i] = math.sqrt[f64](rd.rchisq(r, nu - f64(i)))
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        var j = i + 1usize
+        while j < k {
+            t[j * k + i] = rng.norm(r)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // C = T chol(V)
+    var c = 0usize
+    while c < k {
+        var rr = 0usize
+        while rr < k {
+            var s = 0.0f64
+            var q = 0usize
+            while q < k {
+                s += t[q * k + rr] * cv[c * k + q]
+                q += 1usize
+            }
+            out_c[c * k + rr] = s
+            rr += 1usize
+        }
+        c += 1usize
+    }
+    inv_upper(out_c, k, out_ci)
+    c = 0usize
+    while c < k {
+        var rr = 0usize
+        while rr < k {
+            var s = 0.0f64
+            var s2 = 0.0f64
+            var q = 0usize
+            while q < k {
+                s += out_c[rr * k + q] * out_c[c * k + q]
+                s2 += out_ci[q * k + rr] * out_ci[q * k + c]
+                q += 1usize
+            }
+            out_w[c * k + rr] = s
+            out_iw[c * k + rr] = s2
+            rr += 1usize
+        }
+        c += 1usize
+    }
+    ret ok
+}
+
+// breg(y, X, betabar, A): one draw of the regression coefficients under the normal prior (X is n by k column-major, A k by k)
+fn breg(a: *mem.Arena, r: *rng.Rng, y: []const f64, x: []const f64, betabar: []const f64, am: []const f64, k: usize, out: []f64) -> err {
+    let n = y.len
+    let (ra, e1) = mem.alloc[f64](a, k * k)
+    let (w, e2) = mem.alloc[f64](a, (n + k) * k)
+    let (z, e3) = mem.alloc[f64](a, n + k)
+    let (wtw, e4) = mem.alloc[f64](a, k * k)
+    let (u, e5) = mem.alloc[f64](a, k * k)
+    let (ir, e6) = mem.alloc[f64](a, k * k)
+    let (wz, e7) = mem.alloc[f64](a, k)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret mem.Full }
+    if !chol_upper(am, k, ra) { ret mem.Full }
+    var i = 0usize
+    var c = 0usize
+    while c < k {
+        i = 0usize
+        while i < n {
+            w[c * (n + k) + i] = x[c * n + i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < k {
+            w[c * (n + k) + n + i] = ra[c * k + i]
+            i += 1usize
+        }
+        c += 1usize
+    }
+    i = 0usize
+    while i < n {
+        z[i] = y[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            s += ra[j * k + i] * betabar[j]
+            j += 1usize
+        }
+        z[n + i] = s
+        i += 1usize
+    }
+    c = 0usize
+    while c < k {
+        var c2 = 0usize
+        while c2 < k {
+            var s = 0.0f64
+            i = 0usize
+            while i < n + k {
+                s += w[c * (n + k) + i] * w[c2 * (n + k) + i]
+                i += 1usize
+            }
+            wtw[c2 * k + c] = s
+            c2 += 1usize
+        }
+        var s2 = 0.0f64
+        i = 0usize
+        while i < n + k {
+            s2 += w[c * (n + k) + i] * z[i]
+            i += 1usize
+        }
+        wz[c] = s2
+        c += 1usize
+    }
+    if !chol_upper(wtw, k, u) { ret mem.Full }
+    inv_upper(u, k, ir)
+    // IR t(IR) (t(W) z) + IR rnorm(k)
+    let (tmp, e8) = mem.alloc[f64](a, k)
+    let (nz, e9) = mem.alloc[f64](a, k)
+    if e8 != ok || e9 != ok { ret mem.Full }
+    i = 0usize
+    while i < k {
+        nz[i] = rng.norm(r)
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            s += ir[i * k + j] * wz[j]
+            j += 1usize
+        }
+        tmp[i] = s
+        i += 1usize
+    }
+    i = 0usize
+    while i < k {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            s += ir[j * k + i] * tmp[j]
+            j += 1usize
+        }
+        var s2 = 0.0f64
+        j = 0usize
+        while j < k {
+            s2 += ir[j * k + i] * nz[j]
+            j += 1usize
+        }
+        out[i] = s + s2
+        i += 1usize
+    }
+    ret ok
+}

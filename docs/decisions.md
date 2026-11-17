@@ -47734,3 +47734,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6816 — caret: BoxCoxTrans
 
 **Decision.** `carets.box_cox_lambda` is the lambda of `BoxCoxTrans(y)`: the first maximiser of `MASS::boxcox(y ~ 1)` over the grid seq(-2, 2, 1/10) (reusing `mass.boxcox_loglik`), NaN for a response with a non-positive value or fewer than three distinct values; `box_cox_apply` is `predict`: the log within 0.2 of lambda 0, the identity within 0.2 of 1, else (x^lambda - 1) / lambda, and x unchanged for a NaN lambda. Equal to caret on 30 draws (oracle_carets), one of them with a negative value. Not here: the `x` covariates, YeoJohnson, pca, knnImpute. Linux pending.
+
+## D6817 — bayesm: densities and the first samplers
+
+**Decision.** `e.algo.stat.bayesmpkg` ports the package's log densities `lndMvn`, `lndMvst` (with and without `NORMC`), `lndIWishart`, `lndIChisq`, `llmnl` and `condMom`, and the samplers `rdirichlet` (independent gammas, normalised), `rtrun` (the inverse-cdf truncated normal), `rwishart` (the chi-square diagonal first, then the upper triangle row by row, C = T chol(V), W = C'C, with the inverse factors) and `breg` (the stacked-prior least squares with `IR t(IR) W'z + IR rnorm(k)`), drawing with R's streams. Equal to bayesm on 1484 values over 25 draws of each (oracle_bayesm). Not here: the Gibbs samplers (`runiregGibbs`, `rmultireg`, `rnmixGibbs`, `rhierMnlRwMixture`, `rmnpGibbs` and the rest), the mixture helpers, `llmnp`, `ghkvec`. Linux pending.
