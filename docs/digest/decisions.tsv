@@ -3778,4 +3778,5 @@ D6915	514	MASS fitdistr: negative binomial
 D6916	564	caret: createMultiFolds
 D6917	1053	lmerTest: Satterthwaite degrees of freedom
 D6918	501	lmerTest: t statistics and p values
-D6919	729	lmerTest: contest1D
+D6919	730	lmerTest: contest1D
+D6920	647	gbm: relative influence

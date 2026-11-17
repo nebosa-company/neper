@@ -12,6 +12,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let n = usize(z[0usize])
     let p = usize(z[1usize])
+    if c.name[0usize] == 105u8 {
+        let (fi, ei) = mem.alloc[f64](a, n)
+        let (inf, ef) = mem.alloc[f64](a, p)
+        if ei != ok || ef != ok { ret nan }
+        if gb.gaussian_influence(a, z[8usize + n..8usize + n + n * p], z[8usize..8usize + n], n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), fi, inf) != ok { ret nan }
+        ret inf[usize(z[6usize])]
+    }
     let (f, e) = mem.alloc[f64](a, n)
     if e != ok { ret nan }
     let xm = z[8usize + n..8usize + n + n * p]

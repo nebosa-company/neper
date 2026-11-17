@@ -75,7 +75,7 @@ fn best_split(x: []const f64, r: []const f64, order: []const usize, leafof: []co
 }
 
 // x is n by p column-major; fitted receives the boosted fit at the training rows after ntrees trees
-fn boost(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, alpha: f64, fitted: []f64) -> err {
+fn boost(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, alpha: f64, fitted: []f64, inf: []f64) -> err {
     let (order, e1) = mem.alloc[usize](a, n * p)
     let (r, e2) = mem.alloc[f64](a, n)
     let (leafof, e3) = mem.alloc[usize](a, n)
@@ -171,6 +171,7 @@ fn boost(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p
                 l += 1usize
             }
             if bimp <= 0.0f64 { break }
+            if inf.len == p { inf[bv] += bimp }
             let thr = x[bv * n + order[bv * n + bq]]
             i = 0usize
             while i < n {
@@ -239,26 +240,54 @@ fn boost(a: *mem.Arena, loss: usize, x: []const f64, y: []const f64, n: usize, p
 }
 
 fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
-    ret boost(a, 0usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted)
+    var noinf: []f64 = zero
+    ret boost(a, 0usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted, noinf)
 }
 
 // distribution "bernoulli" (y in {0, 1}; fitted is on the log-odds scale): the tree fits y - p, each leaf moves by the Newton step sum(y - p) / sum(p (1 - p))
 fn bernoulli(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
-    ret boost(a, 1usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted)
+    var noinf: []f64 = zero
+    ret boost(a, 1usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted, noinf)
 }
 
 // distribution "poisson" (fitted is on the log scale): the tree fits y - exp(F), each leaf moves by log(sum y / sum exp(F))
 fn poisson(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
-    ret boost(a, 2usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted)
+    var noinf: []f64 = zero
+    ret boost(a, 2usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted, noinf)
 }
 
 // distribution "adaboost" (y in {0, 1}; fitted is the half log-odds scale): the tree fits (2y - 1) exp(-(2y - 1) F), each leaf moves by sum((2y - 1) exp(-(2y - 1) F)) / sum(exp(-(2y - 1) F)), the start is half the log odds
 fn adaboost(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
-    ret boost(a, 3usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted)
+    var noinf: []f64 = zero
+    ret boost(a, 3usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted, noinf)
 }
 
 // distribution "laplace": the tree fits the sign of y - F, each leaf moves by the median of its residuals, the start is the median of y
 fn laplace(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64) -> err {
-    ret boost(a, 4usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted)
+    var noinf: []f64 = zero
+    ret boost(a, 4usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted, noinf)
 }
 
+
+// gaussian boosting that also answers the relative influence of every variable: the summed split improvement over all trees, scaled to sum to 100 (summary.gbm), in inf
+fn gaussian_influence(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, fitted: []f64, inf: []f64) -> err {
+    var j = 0usize
+    while j < p {
+        inf[j] = 0.0f64
+        j += 1usize
+    }
+    let e = boost(a, 0usize, x, y, n, p, ntrees, shrinkage, depth, minobs, 0.5f64, fitted, inf)
+    if e != ok { ret e }
+    var tot = 0.0f64
+    j = 0usize
+    while j < p {
+        tot += inf[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        inf[j] = inf[j] / tot * 100.0f64
+        j += 1usize
+    }
+    ret ok
+}

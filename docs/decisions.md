@@ -48146,3 +48146,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6919 — lmerTest: contest1D
 
 **Decision.** `lmerpkg.lmer_contest` is lmerTest's `contest1D` for a contrast vector L: the estimate L' beta, the variance sigma^2 |Ui' L|^2 (Ui the inverse Cholesky factor of X' V^-1 X), the Satterthwaite degrees of freedom with the gradient of that variance in (theta, sigma) and A = 2 H^-1, then t and its two-sided p value. Equal to `contest(model, L, joint = FALSE)` on the data sets of D6917 with a random contrast each: the estimate to 1e-6, the standard error, df and t to 1e-4, the p value to 1e-3 (oracle_lmer, 540 cases in all). Not here: the joint F test over several rows (needs the multi-row Satterthwaite F), anova tables, Kenward-Roger, ranova, step, difflsmeans. Linux pending.
+
+## D6920 — gbm: relative influence
+
+**Decision.** `gbmpkg.gaussian_influence` returns, besides the fit, the relative influence of every variable: the split improvement n_l n_r / (n_l + n_r) (mean_l - mean_r)^2 summed over every split on the variable in all trees, scaled to sum to 100, as `relative.influence` (with the `summary.gbm` normalisation) reports it. Equal to gbm on the 12 gaussian data sets of D6893, every variable, 1e-6 relative (oracle_gbm, 241 cases in all). Not here: the permutation-based importance (`permutation.test.gbm`) and the other losses' influence, which use the same accumulation and need only a test. Linux pending.

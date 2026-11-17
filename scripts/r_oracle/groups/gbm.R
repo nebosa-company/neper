@@ -10,6 +10,8 @@ for (rep in 1:12) {
   f <- gbm(y ~ ., data = df, distribution = "gaussian", n.trees = nt, shrinkage = sh, interaction.depth = d, n.minobsinnode = mo, bag.fraction = 1, train.fraction = 1, keep.data = TRUE, verbose = FALSE)
   pr <- predict(f, df, n.trees = nt)
   for (i in c(1, 7, 20, n)) cases[[length(cases) + 1]] <- case("fit", c(n, p, nt, sh, d, mo, i - 1, 0, y, X), pr[i], rel = 1e-8, abs = 1e-10)
+  ri <- relative.influence(f, n.trees = nt); ri <- 100 * ri / sum(ri)
+  for (j in seq_len(p)) cases[[length(cases) + 1]] <- case("inf", c(n, p, nt, sh, d, mo, j - 1, 0, y, X), as.numeric(ri[paste0("V", j)]), rel = 1e-6, abs = 1e-8)
 }
 # bernoulli "bern" and poisson "pois": the same layout, the answer on the link scale
 for (fam in c("bernoulli", "poisson")) for (rep in 1:10) {
