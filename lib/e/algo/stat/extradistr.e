@@ -728,6 +728,7 @@ fn rgen6(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64, p4: f64) -> f64 
         let w = h + math.sqrt[f64](h * h + 1.0f64)
         ret p3 + p2 * w * w
     }
+    if family == 7usize { ret rtnorm(r, p1, p2, p3, p4) }
     if family == 6usize {
         let bt = rd.rbeta(r, p1, p2)
         ret p3 * bt / (1.0f64 - bt)
@@ -911,6 +912,14 @@ fn rvec(a: *mem.Arena, r: *rng.Rng, family: usize, k: usize, par: []const f64, d
         }
         ret ok
     }
+    if family == 10usize {
+        let z1 = rd.rpois(r, par[0usize])
+        let z2 = rd.rpois(r, par[1usize])
+        let z3 = rd.rpois(r, par[2usize])
+        out[0usize] = z1 + z3
+        out[1usize] = z2 + z3
+        ret ok
+    }
     if family == 7usize {
         let (cat, ce) = rd.sample_prob(a, r, k, 1usize, true, par[0usize..k])
         if ce != ok { ret ce }
@@ -1004,4 +1013,54 @@ fn cat_q(p: f64, prob: []const f64) -> f64 {
         i += 1usize
     }
     ret f64(prob.len)
+}
+
+// truncated normal draws, on the standard scale, the way the package draws them: Robert's rejection samplers. A window with zero inside is one rnorm per try when wider than sqrt(2 pi) and a uniform proposal below that;
+// a window on the right of zero picks the uniform proposal when its width is within a bound of its lower end and a translated exponential beyond, and one on the left does the same on the mirror image, with the package's own bounds
+fn tnorm_unif(r: *rng.Rng, a: f64, b: f64, refx: f64) -> f64 {
+    while true {
+        let x = a + (b - a) * rng.unif(r)
+        let u = rng.unif(r)
+        if u <= math.exp[f64]((refx * refx - x * x) / 2.0f64) { ret x }
+    }
+    ret 0.0f64
+}
+fn tnorm_exp(r: *rng.Rng, a: f64, b: f64) -> f64 {
+    let al = (a + math.sqrt[f64](a * a + 4.0f64)) / 2.0f64
+    while true {
+        let z = a + rng.exp_unit(r) / al
+        let u = rng.unif(r)
+        if z <= b && u <= math.exp[f64](0.0f64 - (z - al) * (z - al) / 2.0f64) { ret z }
+    }
+    ret 0.0f64
+}
+fn tnorm_std(r: *rng.Rng, a: f64, b: f64) -> f64 {
+    let se = 1.6487212707001281468f64
+    if a < 0.0f64 && b > 0.0f64 {
+        if b - a <= math.sqrt[f64](2.0f64 * pi()) { ret tnorm_unif(r, a, b, 0.0f64) }
+        while true {
+            let z = rng.norm(r)
+            if z >= a && z <= b { ret z }
+        }
+    }
+    if a >= 0.0f64 {
+        if a == 0.0f64 && b - b != 0.0f64 { ret math.abs[f64](rng.norm(r)) }
+        let sq = math.sqrt[f64](a * a + 4.0f64)
+        let t = 2.0f64 * se / (a + sq) * math.exp[f64](a * (2.0f64 - sq) / 4.0f64)
+        if b <= a + t { ret tnorm_unif(r, a, b, a) }
+        ret tnorm_exp(r, a, b)
+    }
+    let ap = 0.0f64 - b
+    let sqn = math.sqrt[f64](ap * ap + 4.0f64)
+    let tn = 2.0f64 * se / (ap + sqn) * math.exp[f64](0.0f64 - ap * (2.0f64 + sqn) / 4.0f64)
+    if 0.0f64 - a <= ap + tn { ret tnorm_unif(r, a, b, b) }
+    ret 0.0f64 - tnorm_exp(r, ap, 0.0f64 - a)
+}
+// the truncated normal (mean, sd, min, max): a bound at or beyond 1e300 stands for infinity
+fn rtnorm(r: *rng.Rng, mu: f64, s: f64, lo: f64, hi: f64) -> f64 {
+    var a = (lo - mu) / s
+    var b = (hi - mu) / s
+    if lo <= 0.0f64 - 1.0e300f64 { a = 0.0f64 - 1.0f64 / 0.0f64 }
+    if hi >= 1.0e300f64 { b = 1.0f64 / 0.0f64 }
+    ret mu + s * tnorm_std(r, a, b)
 }
