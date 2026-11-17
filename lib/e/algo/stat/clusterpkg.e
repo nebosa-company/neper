@@ -1145,3 +1145,1246 @@ fn pam(a: *mem.Arena, dys: []const f64, n: usize, kk: usize, given: []const usiz
     }
     ret (fit, ok)
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// R sums in 80-bit long double, so its means are (nearly always) the correctly rounded sum / count; two-sum accumulation reproduces that
+
+// (hi, lo) + v with the rounding error of the sum kept in lo
+fn two_sum_add(hi: f64, lo: f64, v: f64) -> (f64, f64) {
+    let t = hi + v
+    let bb = t - hi
+    let rounding = (hi - (t - bb)) + (v - bb)
+    ret (t, lo + rounding)
+}
+
+// (hi + lo) / cnt correctly rounded: the remainder of the first quotient is formed with an exact product
+fn div_count(hi: f64, lo: f64, cnt: usize) -> f64 {
+    let c = f64(cnt)
+    let q1 = hi / c
+    let split = 134217729.0f64 * q1
+    let qh = split - (split - q1)
+    let ql = q1 - qh
+    let p = q1 * c
+    let pe = ((qh * c - p) + ql * c)
+    let r = ((hi - p) - pe) + lo
+    ret q1 + r / c
+}
+
+// colMeans(x, na.rm = TRUE) of column j, of |x| when use_abs
+fn col_mean(x: []const f64, n: usize, j: usize, use_abs: bool) -> f64 {
+    var hi = 0.0f64
+    var lo = 0.0f64
+    var cnt = 0usize
+    var i = 0usize
+    while i < n {
+        var v = x[i + j * n]
+        if v == v {
+            if use_abs { v = math.abs[f64](v) }
+            let (h2, l2) = two_sum_add(hi, lo, v)
+            hi = h2
+            lo = l2
+            cnt += 1usize
+        }
+        i += 1usize
+    }
+    ret div_count(hi, lo, cnt)
+}
+
+// meanabsdev(x[, j]) = mean(abs(y - mean(y, na.rm = TRUE)), na.rm = TRUE)
+fn mean_abs_dev(x: []const f64, n: usize, j: usize) -> f64 {
+    let mu = col_mean(x, n, j, false)
+    var hi = 0.0f64
+    var lo = 0.0f64
+    var cnt = 0usize
+    var i = 0usize
+    while i < n {
+        let v = x[i + j * n]
+        if v == v {
+            let (h2, l2) = two_sum_add(hi, lo, math.abs[f64](v - mu))
+            hi = h2
+            lo = l2
+            cnt += 1usize
+        }
+        i += 1usize
+    }
+    ret div_count(hi, lo, cnt)
+}
+
+// stand = TRUE: scale(x, scale = apply(x, 2, meanabsdev)) in place, NaN skipped
+fn stand_data(x: []f64, n: usize, p: usize) {
+    var j = 0usize
+    while j < p {
+        let mu = col_mean(x, n, j, false)
+        let sd = mean_abs_dev(x, n, j)
+        var i = 0usize
+        while i < n {
+            let v = x[i + j * n]
+            if v == v { x[i + j * n] = (v - mu) / sd }
+            i += 1usize
+        }
+        j += 1usize
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// silhouette (sildist): d is n by n (ismat) or the dist vector (column-wise lower triangle); clustering holds 1..k. si and neighbour (1-based) per observation
+fn sildist(a: *mem.Arena, d: []const f64, n: usize, clustering: []const usize, k: usize, ismat: bool, si: []f64, neighbor: []usize) -> err {
+    let (dic, e1) = zf(a, n * k)
+    if e1 != ok { ret e1 }
+    let (counts, e2) = zu(a, k)
+    if e2 != ok { ret e2 }
+    var l = 0usize
+    var i = 0usize
+    while i < n {
+        let ci = clustering[i] - 1usize
+        counts[ci] += 1usize
+        if ismat { l = n * i + i + 1usize }
+        var j = i + 1usize
+        while j < n {
+            let cj = clustering[j] - 1usize
+            dic[k * i + cj] += d[l]
+            dic[k * j + ci] += d[l]
+            j += 1usize
+            l += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        let ki = k * i
+        let ci = clustering[i] - 1usize
+        var compute_si = true
+        var j = 0usize
+        while j < k {
+            if j == ci {
+                if counts[j] == 1usize { compute_si = false } else { dic[ki + j] /= f64(counts[j] - 1usize) }
+            } else {
+                dic[ki + j] /= f64(counts[j])
+            }
+            j += 1usize
+        }
+        let ai = dic[ki + ci]
+        var bi = dic[ki]
+        neighbor[i] = 1usize
+        if ci == 0usize {
+            bi = dic[ki + 1usize]
+            neighbor[i] = 2usize
+        }
+        j = 1usize
+        while j < k {
+            if j != ci {
+                if bi > dic[ki + j] {
+                    bi = dic[ki + j]
+                    neighbor[i] = j + 1usize
+                }
+            }
+            j += 1usize
+        }
+        si[i] = 0.0f64
+        if compute_si && bi != ai {
+            var m = ai
+            if bi > m { m = bi }
+            si[i] = (bi - ai) / m
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// daisy
+
+// the C kernel: x is n by p column-major, valmd the code for NA, jtmd[j] < 0 when column j has NA; vtype 1..6 (A, S, N, O, I, T); jdat 1 is mixed (gower) and
+// 2 all interval; ndyst 0 mixed, 1 euclidean, 2 manhattan. disv is the packed lower triangle by rows, 0-based, with -1 for NA
+fn cldaisy(nn: usize, jpp: usize, x: []const f64, valmd: []const f64, weights: []const f64, jtmd: []const i64, jdat: usize, vtype: []const usize,
+           ndyst: usize, hasna: bool, disv: []f64) {
+    var nlk = 0usize
+    if jdat == 1usize {
+        var l = 1usize
+        while l < nn {
+            var k = 0usize
+            while k < l {
+                var ppa = 0.0f64
+                var dlk = 0.0f64
+                var j = 0usize
+                while j < jpp {
+                    let xl = x[l + j * nn]
+                    let xk = x[k + j * nn]
+                    if vtype[j] >= 3usize {
+                        var skip = false
+                        if hasna {
+                            if jtmd[j] < 0i64 {
+                                if xl == valmd[j] || xk == valmd[j] { skip = true }
+                            }
+                        }
+                        if !skip {
+                            ppa += weights[j]
+                            if vtype[j] == 3usize {
+                                if xl != xk { dlk += weights[j] }
+                            } else {
+                                dlk += weights[j] * math.abs[f64](xl - xk)
+                            }
+                        }
+                    } else {
+                        var skip = false
+                        if (xl != 0.0f64 && xl != 1.0f64) || (xk != 0.0f64 && xk != 1.0f64) { skip = true }
+                        if !skip {
+                            if vtype[j] == 2usize || xl != 0.0f64 || xk != 0.0f64 { ppa += weights[j] }
+                            if xl != xk { dlk += weights[j] }
+                        }
+                    }
+                    j += 1usize
+                }
+                if ppa == 0.0f64 { disv[nlk] = 0.0f64 - 1.0f64 } else { disv[nlk] = dlk / ppa }
+                nlk += 1usize
+                k += 1usize
+            }
+            l += 1usize
+        }
+    } else {
+        let pp = f64(jpp)
+        var l = 1usize
+        while l < nn {
+            var k = 0usize
+            while k < l {
+                var clk = 0.0f64
+                var npres = 0usize
+                var j = 0usize
+                while j < jpp {
+                    var skip = false
+                    if hasna {
+                        if jtmd[j] < 0i64 {
+                            if x[l + j * nn] == valmd[j] || x[k + j * nn] == valmd[j] { skip = true }
+                        }
+                    }
+                    if !skip {
+                        npres += 1usize
+                        let dv = x[l + j * nn] - x[k + j * nn]
+                        if ndyst == 1usize { clk += dv * dv } else { clk += math.abs[f64](dv) }
+                    }
+                    j += 1usize
+                }
+                let rpres = f64(npres)
+                if npres == 0usize {
+                    disv[nlk] = 0.0f64 - 1.0f64
+                } else {
+                    if ndyst == 1usize { disv[nlk] = math.sqrt[f64](clk * (pp / rpres)) } else { disv[nlk] = clk * (pp / rpres) }
+                }
+                nlk += 1usize
+                k += 1usize
+            }
+            l += 1usize
+        }
+    }
+}
+
+// cluster::daisy: x is n by p column-major with NaN for NA (factors and ordered factors already as their integer codes, logicals as 0/1); types[j] is
+// 1 A, 2 S, 3 N, 4 O, 5 I, 6 T (the values are replaced by their dense ranks, as.ordered), 7 an interval column log10-transformed (type = list(logratio));
+// metric 1 euclidean, 2 manhattan, 3 gower (a mixed set is gower whatever metric asks). out is the n by n symmetric matrix, row-major, NaN where no pair is shared.
+// x is modified (standardised, rank-coded, scaled)
+fn daisy(a: *mem.Arena, x: []f64, n: usize, p: usize, types: []const usize, weights: []const f64, metric: usize, stand: bool, out: []f64) -> err {
+    let (vt, e1) = zu(a, p)
+    if e1 != ok { ret e1 }
+    let (col, e0) = zf(a, n)
+    if e0 != ok { ret e0 }
+    var j = 0usize
+    var all_i = true
+    while j < p {
+        vt[j] = types[j]
+        if vt[j] == 6usize {
+            var i = 0usize
+            while i < n {
+                col[i] = x[i + j * n]
+                i += 1usize
+            }
+            i = 0usize
+            while i < n {
+                let v = col[i]
+                if v == v {
+                    // the rank among the distinct values: count each smaller value once
+                    var below = 0usize
+                    var i2 = 0usize
+                    while i2 < n {
+                        let w = col[i2]
+                        if w == w && w < v {
+                            var seen = false
+                            var i3 = 0usize
+                            while i3 < i2 {
+                                if col[i3] == w { seen = true }
+                                i3 += 1usize
+                            }
+                            if !seen { below += 1usize }
+                        }
+                        i2 += 1usize
+                    }
+                    x[i + j * n] = f64(below + 1usize)
+                }
+                i += 1usize
+            }
+        }
+        if vt[j] == 7usize {
+            var i = 0usize
+            while i < n {
+                let v = x[i + j * n]
+                if v == v { x[i + j * n] = math.log10[f64](v) }
+                i += 1usize
+            }
+            vt[j] = 5usize
+        }
+        if vt[j] != 5usize { all_i = false }
+        j += 1usize
+    }
+    var jdat = 1usize
+    var ndyst = 0usize
+    if all_i && metric != 3usize {
+        if stand {
+            j = 0usize
+            while j < p {
+                let mu = col_mean(x, n, j, false)
+                var i = 0usize
+                while i < n {
+                    let v = x[i + j * n]
+                    if v == v { x[i + j * n] = v - mu }
+                    i += 1usize
+                }
+                var sx = col_mean(x, n, j, true)
+                if sx == 0.0f64 { sx = 1.0f64 }
+                i = 0usize
+                while i < n {
+                    let v = x[i + j * n]
+                    if v == v { x[i + j * n] = v / sx }
+                    i += 1usize
+                }
+                j += 1usize
+            }
+        }
+        jdat = 2usize
+        ndyst = 1usize
+        if metric == 2usize { ndyst = 2usize }
+    } else {
+        j = 0usize
+        while j < p {
+            var lo = 1.0e300f64
+            var hi = 0.0f64 - 1.0e300f64
+            var i = 0usize
+            while i < n {
+                let v = x[i + j * n]
+                if v == v {
+                    if v < lo { lo = v }
+                    if v > hi { hi = v }
+                }
+                i += 1usize
+            }
+            var sx = hi - lo
+            if sx == 0.0f64 { sx = 1.0f64 }
+            i = 0usize
+            while i < n {
+                let v = x[i + j * n]
+                if v == v { x[i + j * n] = (v - lo) / sx }
+                i += 1usize
+            }
+            j += 1usize
+        }
+    }
+    let (jtmd, e3) = zi(a, p)
+    if e3 != ok { ret e3 }
+    let (valmd, e4) = zf(a, p)
+    if e4 != ok { ret e4 }
+    let mdata = na_prepare(x, n, p, jtmd, valmd)
+    let (disv, e5) = zf(a, n * (n - 1usize) / 2usize + 1usize)
+    if e5 != ok { ret e5 }
+    cldaisy(n, p, x, valmd, weights, jtmd, jdat, vt, ndyst, mdata, disv)
+    var nlk = 0usize
+    var l = 1usize
+    while l < n {
+        var k = 0usize
+        while k < l {
+            var v = disv[nlk]
+            if v == 0.0f64 - 1.0f64 { v = 0.0f64 / 0.0f64 }
+            out[l * n + k] = v
+            out[k * n + l] = v
+            nlk += 1usize
+            k += 1usize
+        }
+        out[l * n + l] = 0.0f64
+        l += 1usize
+    }
+    out[0usize] = 0.0f64
+    ret ok
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// clara
+
+type ClaraGen = struct { nrun: i64, use_r: bool }
+
+type ClaraFit = struct {
+    clu: []usize, med: []usize, sample: []usize, obj: f64, size: []usize, maxdis: []f64, avdis: []f64, ratdis: []f64,
+    silinf: []f64, avsil: []f64, ttsil: f64, has_sil: bool, dys: []f64, jstop: usize
+}
+
+// clara's own generator, machine independent with period 2^16
+fn randm(g: *ClaraGen) -> f64 {
+    g.nrun = (g.nrun * 5761i64 + 999i64) & 65535i64
+    ret f64(g.nrun) / 65536.0f64
+}
+
+// k = 1 + (int)(n * unif), from R's generator or randm
+fn clara_draw(g: *ClaraGen, rg: *rng.Rng, n: usize) -> usize {
+    var u = 0.0f64
+    if g.use_r { u = rng.unif(rg) } else { u = randm(g) }
+    var k = 1usize + usize(f64(n) * u)
+    if k > n { k = n }
+    ret k
+}
+
+// the dissimilarities of the sample nsel[0..nsam) (1-based observation numbers) into dys; false when some pair shares no variable
+fn dysta2(nsam: usize, jpp: usize, nsel: []const usize, x: []const f64, n: usize, dys: []f64, diss_kind: usize, jtmd: []const i64, valmd: []const f64, has_na: bool) -> bool {
+    var nlk = 0usize
+    var toomany = false
+    dys[0usize] = 0.0f64
+    var l = 1usize
+    while l < nsam {
+        let lsel = nsel[l]
+        var k = 0usize
+        while k < l {
+            let ksel = nsel[k]
+            nlk += 1usize
+            var npres = 0usize
+            var n_ones = 0usize
+            var clk = 0.0f64
+            var j = 0usize
+            var lj = lsel - 1usize
+            var kj = ksel - 1usize
+            while j < jpp {
+                var skip = false
+                if has_na && jtmd[j] < 0i64 {
+                    if x[lj] == valmd[j] || x[kj] == valmd[j] { skip = true }
+                }
+                if !skip {
+                    npres += 1usize
+                    if diss_kind == 1usize {
+                        clk += (x[lj] - x[kj]) * (x[lj] - x[kj])
+                    } else {
+                        if diss_kind == 3usize {
+                            if x[lj] > 0.9f64 && x[kj] > 0.9f64 {
+                                clk += 1.0f64
+                                n_ones += 1usize
+                            } else {
+                                if x[lj] > 0.9f64 || x[kj] > 0.9f64 { n_ones += 1usize }
+                            }
+                        } else {
+                            clk += math.abs[f64](x[lj] - x[kj])
+                        }
+                    }
+                }
+                j += 1usize
+                lj += n
+                kj += n
+            }
+            if npres == 0usize {
+                toomany = true
+                dys[nlk] = 0.0f64 - 1.0f64
+            } else {
+                let d1 = clk * (f64(jpp) / f64(npres))
+                if diss_kind == 1usize {
+                    dys[nlk] = math.sqrt[f64](d1)
+                } else {
+                    if diss_kind == 3usize { dys[nlk] = 1.0f64 - clk / f64(n_ones) } else { dys[nlk] = d1 }
+                }
+            }
+            k += 1usize
+        }
+        l += 1usize
+    }
+    ret !toomany
+}
+
+// bswap2: BUILD and the SWAP loop on a sample; returns the sky of the C code through sky[0]
+fn bswap2(kk: usize, n: usize, s0: f64, dys: []const f64, pam_like: bool, sky: []f64, nrepr: []usize, dysma: []f64, dysmb: []f64, beter: []f64) {
+    let s = s0 * 1.1f64 + 1.0f64
+    var i = 1usize
+    var j = 1usize
+    var ij = 0usize
+    var hbest = 1usize
+    var nbest = 1usize
+    while i <= n {
+        nrepr[i] = 0usize
+        dysma[i] = s
+        i += 1usize
+    }
+    var k = 0usize
+    while k < kk {
+        var nmax = 1usize
+        var ammax = 0.0f64
+        i = 1usize
+        while i <= n {
+            if nrepr[i] == 0usize {
+                beter[i] = 0.0f64
+                j = 1usize
+                while j <= n {
+                    let cmd = dysma[j] - dys[ind2(i, j)]
+                    if cmd > 0.0f64 { beter[i] += cmd }
+                    j += 1usize
+                }
+                if ammax <= beter[i] {
+                    ammax = beter[i]
+                    nmax = i
+                }
+            }
+            i += 1usize
+        }
+        nrepr[nmax] = 1usize
+        j = 1usize
+        while j <= n {
+            ij = ind2(nmax, j)
+            if dysma[j] > dys[ij] { dysma[j] = dys[ij] }
+            j += 1usize
+        }
+        k += 1usize
+    }
+    sky[0usize] = 0.0f64
+    j = 1usize
+    while j <= n {
+        sky[0usize] += dysma[j]
+        j += 1usize
+    }
+    if kk == 1usize { ret }
+    while true {
+        j = 1usize
+        while j <= n {
+            dysma[j] = s
+            dysmb[j] = s
+            i = 1usize
+            while i <= n {
+                if nrepr[i] != 0usize {
+                    ij = ind2(i, j)
+                    if dysma[j] > dys[ij] {
+                        dysmb[j] = dysma[j]
+                        dysma[j] = dys[ij]
+                    } else {
+                        if dysmb[j] > dys[ij] { dysmb[j] = dys[ij] }
+                    }
+                }
+                i += 1usize
+            }
+            j += 1usize
+        }
+        var dzsky = 1.0f64
+        var h = 1usize
+        while h <= n {
+            if nrepr[h] == 0usize {
+                i = 1usize
+                while i <= n {
+                    if nrepr[i] != 0usize {
+                        var dz = 0.0f64
+                        j = 1usize
+                        while j <= n {
+                            let ij2 = ind2(i, j)
+                            let hj = ind2(h, j)
+                            if dys[ij2] == dysma[j] {
+                                var small = 0.0f64
+                                if pam_like {
+                                    small = dysmb[j]
+                                    if dysmb[j] > dys[hj] { small = dys[hj] }
+                                } else {
+                                    small = dysmb[j]
+                                    if dysmb[j] > dys[ij2] { small = dys[hj] }
+                                }
+                                dz += (0.0f64 - dysma[j] + small)
+                            } else {
+                                if dys[hj] < dysma[j] { dz += (0.0f64 - dysma[j] + dys[hj]) }
+                            }
+                            j += 1usize
+                        }
+                        if dzsky > dz {
+                            dzsky = dz
+                            hbest = h
+                            nbest = i
+                        }
+                    }
+                    i += 1usize
+                }
+            }
+            h += 1usize
+        }
+        if dzsky < 0.0f64 {
+            nrepr[hbest] = 1usize
+            nrepr[nbest] = 0usize
+            sky[0usize] += dzsky
+        } else {
+            break
+        }
+    }
+}
+
+// selec: assign every object of the data set to the nearest sample medoid; false (nafs) when an object cannot be assigned.
+// nr, ns, np, ttd, radus, ratt are kk + 1 long (1-based); zb[0] the criterion
+fn selec(a: *mem.Arena, kk: usize, n: usize, jpp: usize, diss_kind: usize, zb: []f64, nsam: usize, has_na: bool, jtmd: []const i64, valmd: []const f64,
+         nrepr: []const usize, nsel: []const usize, dys: []const f64, x: []const f64, nr: []usize, ttd: []f64, radus: []f64, ratt: []f64, correct_d: bool) -> (bool, err) {
+    let (ns, e1) = zu(a, kk + 1usize)
+    if e1 != ok { ret (false, e1) }
+    let (np, e2) = zu(a, kk + 1usize)
+    if e2 != ok { ret (false, e2) }
+    let (nrnew, e3) = zu(a, kk + 1usize)
+    if e3 != ok { ret (false, e3) }
+    let (nsnew, e4) = zu(a, kk + 1usize)
+    if e4 != ok { ret (false, e4) }
+    let (npnew, e5) = zu(a, kk + 1usize)
+    if e5 != ok { ret (false, e5) }
+    let (newv, e6) = zu(a, kk + 1usize)
+    if e6 != ok { ret (false, e6) }
+    let (ttnew, e7) = zf(a, kk + 1usize)
+    if e7 != ok { ret (false, e7) }
+    let (rdnew, e8) = zf(a, kk + 1usize)
+    if e8 != ok { ret (false, e8) }
+    var jk = 0usize
+    var j = 1usize
+    while j <= nsam {
+        if nrepr[j] != 0usize {
+            jk += 1usize
+            nr[jk] = nsel[j - 1usize]
+            ns[jk] = 0usize
+            ttd[jk] = 0.0f64
+            radus[jk] = 0.0f64 - 1.0f64
+            np[jk] = j
+        }
+        j += 1usize
+    }
+    let pp = f64(jpp)
+    zb[0usize] = 0.0f64
+    var newf = 0usize
+    var i = 1usize
+    while i <= n {
+        var jkabc = 1usize
+        var dsum = 0.0f64
+        var dnull = 0.0f64 - 9.0f64
+        if !has_na {
+            jk = 1usize
+            while jk <= kk {
+                dsum = 0.0f64
+                let nr_k = nr[jk]
+                var skip_jk = false
+                if nr_k != i {
+                    var n_ones = 0usize
+                    var tra = 0.0f64
+                    var jp = 0usize
+                    while jp < jpp {
+                        let na = (nr_k - 1usize) + jp * n
+                        let nb = (i - 1usize) + jp * n
+                        if diss_kind == 3usize {
+                            if x[na] > 0.9f64 && x[nb] > 0.9f64 {
+                                tra += 1.0f64
+                                n_ones += 1usize
+                            } else {
+                                if x[na] > 0.9f64 || x[nb] > 0.9f64 { n_ones += 1usize }
+                            }
+                        } else {
+                            tra = math.abs[f64](x[na] - x[nb])
+                            if diss_kind == 1usize { tra *= tra }
+                            dsum += tra
+                        }
+                        jp += 1usize
+                    }
+                    if diss_kind == 3usize { dsum = 1.0f64 - tra / f64(n_ones) }
+                    if jk != 1usize && dsum >= dnull { skip_jk = true }
+                }
+                if !skip_jk {
+                    dnull = dsum
+                    jkabc = jk
+                }
+                jk += 1usize
+            }
+        } else {
+            var first = true
+            jk = 1usize
+            while jk <= kk {
+                dsum = 0.0f64
+                let nr_k = nr[jk]
+                var skip_jk = false
+                if nr_k != i {
+                    var nobs = 0usize
+                    var n_ones = 0usize
+                    var tra = 0.0f64
+                    var jp = 0usize
+                    while jp < jpp {
+                        let na = (nr_k - 1usize) + jp * n
+                        let nb = (i - 1usize) + jp * n
+                        var skip_jp = false
+                        if jtmd[jp] < 0i64 {
+                            if x[na] == valmd[jp] || x[nb] == valmd[jp] { skip_jp = true }
+                        }
+                        if !skip_jp {
+                            nobs += 1usize
+                            if diss_kind == 3usize {
+                                if x[na] > 0.9f64 && x[nb] > 0.9f64 {
+                                    tra += 1.0f64
+                                    n_ones += 1usize
+                                } else {
+                                    if x[na] > 0.9f64 || x[nb] > 0.9f64 { n_ones += 1usize }
+                                }
+                            } else {
+                                tra = math.abs[f64](x[na] - x[nb])
+                                if diss_kind == 1usize { tra *= tra }
+                                dsum += tra
+                            }
+                        }
+                        jp += 1usize
+                    }
+                    if nobs == 0usize {
+                        skip_jk = true
+                    } else {
+                        if diss_kind == 3usize { dsum = 1.0f64 - tra / f64(n_ones) }
+                        if correct_d { dsum *= (pp / f64(nobs)) } else { dsum *= (f64(nobs) / pp) }
+                    }
+                }
+                if !skip_jk {
+                    if first {
+                        first = false
+                        dnull = dsum
+                        jkabc = jk
+                    } else {
+                        if dnull > dsum {
+                            dnull = dsum
+                            jkabc = jk
+                        }
+                    }
+                }
+                jk += 1usize
+            }
+            if first { ret (true, ok) }
+        }
+        if diss_kind == 1usize { dnull = math.sqrt[f64](dnull) }
+        zb[0usize] += dnull
+        ttd[jkabc] += dnull
+        if radus[jkabc] < dnull { radus[jkabc] = dnull }
+        ns[jkabc] += 1usize
+        if newf < kk {
+            var seen = false
+            if newf != 0usize {
+                var jnew = 1usize
+                while jnew <= newf {
+                    if jkabc == newv[jnew] { seen = true }
+                    jnew += 1usize
+                }
+            }
+            if !seen {
+                newf += 1usize
+                newv[newf] = jkabc
+            }
+        }
+        i += 1usize
+    }
+    j = 1usize
+    while j <= kk {
+        let nj = newv[j]
+        nrnew[j] = nr[nj]
+        nsnew[j] = ns[nj]
+        npnew[j] = np[nj]
+        ttnew[j] = ttd[nj]
+        rdnew[j] = radus[nj]
+        j += 1usize
+    }
+    j = 1usize
+    while j <= kk {
+        nr[j] = nrnew[j]
+        ns[j] = nsnew[j]
+        np[j] = npnew[j]
+        ttd[j] = ttnew[j] / f64(ns[j])
+        radus[j] = rdnew[j]
+        j += 1usize
+    }
+    if kk > 1usize {
+        var ka = 1usize
+        while ka <= kk {
+            var first = true
+            let npa = np[ka]
+            var kb = 1usize
+            while kb <= kk {
+                if kb != ka {
+                    let npb = np[kb]
+                    let npab = ind2(npa, npb)
+                    var skip_kb = false
+                    if first { first = false } else {
+                        if dys[npab] >= ratt[ka] { skip_kb = true }
+                    }
+                    if !skip_kb {
+                        ratt[ka] = dys[npab]
+                        if ratt[ka] == 0.0f64 { ratt[ka] = 0.0f64 - 1.0f64 }
+                    }
+                }
+                kb += 1usize
+            }
+            if ratt[ka] > 0.0f64 - 0.5f64 { ratt[ka] = radus[ka] / ratt[ka] }
+            ka += 1usize
+        }
+    }
+    ret (false, ok)
+}
+
+// resul: every object takes the nearest medoid of nrx (1-based observation numbers); clu[0..n) are the labels 1..kk, mtt the sizes
+fn resul(kk: usize, n: usize, jpp: usize, diss_kind: usize, has_na: bool, jtmd: []const i64, valmd: []const f64, x: []const f64, nrx: []const usize,
+         clu: []usize, mtt: []usize, correct_d: bool) {
+    var i = 0usize
+    while i < n {
+        var is_med = false
+        var jk = 0usize
+        while jk < kk {
+            if nrx[jk] == i + 1usize { is_med = true }
+            jk += 1usize
+        }
+        if !is_med {
+            var jksky = 0usize
+            var dnull = 0.0f64 - 9.0f64
+            jk = 0usize
+            while jk < kk {
+                var dsum = 0.0f64
+                let nrjk = nrx[jk] - 1usize
+                if !has_na {
+                    var j = 0usize
+                    while j < jpp {
+                        var tra = math.abs[f64](x[nrjk + j * n] - x[i + j * n])
+                        if diss_kind == 1usize { tra *= tra }
+                        dsum += tra
+                        j += 1usize
+                    }
+                    if diss_kind == 1usize { dsum = math.sqrt[f64](dsum) }
+                } else {
+                    let pp = f64(jpp)
+                    var nobs = 0usize
+                    var j = 0usize
+                    while j < jpp {
+                        let na = nrjk + j * n
+                        let nb = i + j * n
+                        var skip = false
+                        if jtmd[j] < 0i64 {
+                            if x[na] == valmd[j] || x[nb] == valmd[j] { skip = true }
+                        }
+                        if !skip {
+                            nobs += 1usize
+                            var tra = math.abs[f64](x[na] - x[nb])
+                            if diss_kind == 1usize { tra *= tra }
+                            dsum += tra
+                        }
+                        j += 1usize
+                    }
+                    if diss_kind == 1usize { dsum = math.sqrt[f64](dsum) }
+                    if correct_d { dsum *= (pp / f64(nobs)) } else { dsum *= (f64(nobs) / pp) }
+                }
+                if jk == 0usize || dnull > dsum {
+                    dnull = dsum
+                    jksky = jk
+                }
+                jk += 1usize
+            }
+            clu[i] = jksky + 1usize
+        }
+        i += 1usize
+    }
+    var jk = 0usize
+    while jk < kk {
+        clu[nrx[jk] - 1usize] = jk + 1usize
+        jk += 1usize
+    }
+    var ka = 0usize
+    while ka < kk {
+        mtt[ka] = 0usize
+        i = 0usize
+        while i < n {
+            if clu[i] == ka + 1usize { mtt[ka] += 1usize }
+            i += 1usize
+        }
+        ka += 1usize
+    }
+}
+
+// black: silhouette of the best sample; sylinf is nsam by 4 column-major, avsyl[1..kk]; returns the overall average
+fn black(a: *mem.Arena, kk: usize, nsam: usize, nbest: []const usize, dys: []const f64, s: f64, clu: []const usize, avsyl: []f64, sylinf: []f64) -> (f64, err) {
+    let (ncluv, e1) = zu(a, nsam + 1usize)
+    if e1 != ok { ret (0.0f64, e1) }
+    let (nelem, e2) = zu(a, nsam + 1usize)
+    if e2 != ok { ret (0.0f64, e2) }
+    let (nsend, e3) = zu(a, nsam + 1usize)
+    if e3 != ok { ret (0.0f64, e3) }
+    let (negbr, e4) = zi(a, nsam + 1usize)
+    if e4 != ok { ret (0.0f64, e4) }
+    let (syl, e5) = zf(a, nsam + 1usize)
+    if e5 != ok { ret (0.0f64, e5) }
+    let (srank, e6) = zf(a, nsam + 1usize)
+    if e6 != ok { ret (0.0f64, e6) }
+    var l = 1usize
+    while l <= nsam {
+        ncluv[l] = clu[nbest[l - 1usize] - 1usize]
+        l += 1usize
+    }
+    var nsylr = 0usize
+    var ttsyl = 0.0f64
+    var numcl = 1usize
+    while numcl <= kk {
+        var ntt = 0usize
+        var j = 1usize
+        while j <= nsam {
+            if ncluv[j] == numcl {
+                ntt += 1usize
+                nelem[ntt] = j
+            }
+            j += 1usize
+        }
+        j = 1usize
+        while j <= ntt {
+            let nj = nelem[j]
+            var dysb = s * 1.1f64 + 1.0f64
+            negbr[j] = 0i64 - 1i64
+            var nclu = 1usize
+            while nclu <= kk {
+                if nclu != numcl {
+                    var nbb = 0usize
+                    var db = 0.0f64
+                    l = 1usize
+                    while l <= nsam {
+                        if ncluv[l] == nclu {
+                            nbb += 1usize
+                            db += dys[ind2(nj, l)]
+                        }
+                        l += 1usize
+                    }
+                    db /= f64(nbb)
+                    if db < dysb {
+                        dysb = db
+                        negbr[j] = i64(nclu)
+                    }
+                }
+                nclu += 1usize
+            }
+            if ntt == 1usize {
+                syl[j] = 0.0f64
+            } else {
+                var dysa = 0.0f64
+                l = 1usize
+                while l <= ntt {
+                    let nl = nelem[l]
+                    dysa += dys[ind2(nj, nl)]
+                    l += 1usize
+                }
+                dysa /= f64(ntt - 1usize)
+                if dysa <= 0.0f64 {
+                    if dysb > 0.0f64 { syl[j] = 1.0f64 } else { syl[j] = 0.0f64 }
+                } else {
+                    if dysb > 0.0f64 {
+                        if dysb > dysa {
+                            syl[j] = 1.0f64 - dysa / dysb
+                        } else {
+                            if dysb < dysa { syl[j] = dysb / dysa - 1.0f64 } else { syl[j] = 0.0f64 }
+                        }
+                        if syl[j] < 0.0f64 - 1.0f64 {
+                            syl[j] = 0.0f64 - 1.0f64
+                        } else {
+                            if syl[j] > 1.0f64 { syl[j] = 1.0f64 }
+                        }
+                    } else {
+                        syl[j] = 0.0f64 - 1.0f64
+                    }
+                }
+            }
+            j += 1usize
+        }
+        avsyl[numcl] = 0.0f64
+        j = 1usize
+        while j <= ntt {
+            var lang = 1usize
+            var symax = 0.0f64 - 2.0f64
+            l = 1usize
+            while l <= ntt {
+                if syl[l] > symax {
+                    symax = syl[l]
+                    lang = l
+                }
+                l += 1usize
+            }
+            nsend[j] = lang
+            srank[j] = syl[lang]
+            avsyl[numcl] += srank[j]
+            syl[lang] = 0.0f64 - 3.0f64
+            j += 1usize
+        }
+        ttsyl += avsyl[numcl]
+        avsyl[numcl] /= f64(ntt)
+        if ntt >= 2usize {
+            l = 1usize
+            while l <= ntt {
+                let lplac = nsend[l]
+                sylinf[nsylr] = f64(numcl)
+                sylinf[nsam + nsylr] = f64(negbr[lplac])
+                sylinf[2usize * nsam + nsylr] = srank[l]
+                sylinf[3usize * nsam + nsylr] = f64(nbest[nelem[lplac] - 1usize])
+                nsylr += 1usize
+                l += 1usize
+            }
+        } else {
+            sylinf[nsylr] = f64(numcl)
+            sylinf[nsam + nsylr] = f64(negbr[1usize])
+            sylinf[2usize * nsam + nsylr] = 0.0f64
+            sylinf[3usize * nsam + nsylr] = f64(nbest[nelem[1usize] - 1usize])
+            nsylr += 1usize
+        }
+        numcl += 1usize
+    }
+    ret (ttsyl / f64(nsam), ok)
+}
+
+// cluster::clara. x is n by jpp column-major (NA already coded with valmd, see na_prepare); diss_kind 1 euclidean, 2 manhattan, 3 jaccard; with rng_r the draws
+// come from rg (seed it first, as set.seed does), otherwise from clara's own generator. jstop is 0 on success, 1 when every sample had an unusable pair,
+// 2 when every sample left an object unassigned
+fn clara(a: *mem.Arena, x: []const f64, n: usize, jpp: usize, kk: usize, nran: usize, nsam: usize, has_na: bool, valmd: []const f64, jtmd: []const i64,
+         diss_kind: usize, rng_r: bool, rg: *rng.Rng, pam_like: bool, correct_d: bool) -> (ClaraFit, err) {
+    var fit: ClaraFit = zero
+    if kk < 1usize || kk + 1usize > n || nsam < 2usize || nsam < kk + 1usize || nsam > n || nran < 1usize { ret (fit, BadArgument) }
+    var g: ClaraGen = zero
+    g.nrun = 0i64
+    g.use_r = rng_r
+    let (dys, e1) = zf(a, nsam * (nsam - 1usize) / 2usize + 1usize)
+    if e1 != ok { ret (fit, e1) }
+    let (nrepr, e2) = zu(a, nsam + 1usize)
+    if e2 != ok { ret (fit, e2) }
+    let (nsel, e3) = zu(a, nsam + 1usize)
+    if e3 != ok { ret (fit, e3) }
+    let (nbest, e4) = zu(a, nsam)
+    if e4 != ok { ret (fit, e4) }
+    let (nr, e5) = zu(a, kk + 1usize)
+    if e5 != ok { ret (fit, e5) }
+    let (nrx, e6) = zu(a, kk)
+    if e6 != ok { ret (fit, e6) }
+    let (radus, e7) = zf(a, kk + 1usize)
+    if e7 != ok { ret (fit, e7) }
+    let (ttd, e8) = zf(a, kk + 1usize)
+    if e8 != ok { ret (fit, e8) }
+    let (ratt, e9) = zf(a, kk + 1usize)
+    if e9 != ok { ret (fit, e9) }
+    let (ttbes, e10) = zf(a, kk)
+    if e10 != ok { ret (fit, e10) }
+    let (rdbes, e11) = zf(a, kk)
+    if e11 != ok { ret (fit, e11) }
+    let (rabes, e12) = zf(a, kk)
+    if e12 != ok { ret (fit, e12) }
+    let (dysma, e13) = zf(a, nsam + 1usize)
+    if e13 != ok { ret (fit, e13) }
+    let (dysmb, e14) = zf(a, nsam + 1usize)
+    if e14 != ok { ret (fit, e14) }
+    let (beter, e15) = zf(a, nsam + 1usize)
+    if e15 != ok { ret (fit, e15) }
+    let (sky, e16) = zf(a, 1usize)
+    if e16 != ok { ret (fit, e16) }
+    let (zbv, e17) = zf(a, 1usize)
+    if e17 != ok { ret (fit, e17) }
+    let rnn = f64(n)
+    var zba = 0.0f64 - 1.0f64
+    var sx = 0.0f64 - 1.0f64
+    let n_dys = nsam * (nsam - 1usize) / 2usize
+    let nsamb = nsam * 2usize
+    let full_sample = n == nsam
+    let lrg_sam = n < nsamb
+    var n_sam = nsam
+    if lrg_sam { n_sam = n - nsam }
+    var kall = false
+    var nunfs = 0usize
+    var jran = 1usize
+    while jran <= nran {
+        if !full_sample {
+            var ntt = 0usize
+            var skip_loop = false
+            if kall && nunfs + 1usize != jran && !lrg_sam {
+                var jk = 0usize
+                while jk < kk {
+                    nsel[jk] = nrx[jk]
+                    jk += 1usize
+                }
+                jk = 0usize
+                while jk + 1usize < kk {
+                    var nsm = nsel[jk]
+                    var jsm = jk
+                    var jkk = jk + 1usize
+                    while jkk < kk {
+                        if nsm > nsel[jkk] {
+                            nsm = nsel[jkk]
+                            jsm = jkk
+                        }
+                        jkk += 1usize
+                    }
+                    nsel[jsm] = nsel[jk]
+                    nsel[jk] = nsm
+                    jk += 1usize
+                }
+                ntt = kk
+            } else {
+                var rand_k = 0usize
+                while true {
+                    rand_k = clara_draw(&g, rg, n)
+                    var clash = false
+                    if kall {
+                        var jk = 0usize
+                        while jk < kk {
+                            if rand_k == nrx[jk] { clash = true }
+                            jk += 1usize
+                        }
+                    }
+                    if !clash { break }
+                }
+                nsel[ntt] = rand_k
+                ntt += 1usize
+                if ntt == n_sam { skip_loop = true }
+            }
+            if !skip_loop {
+                while true {
+                    var rand_k = clara_draw(&g, rg, n)
+                    var redraw = false
+                    if kall && lrg_sam {
+                        var jk = 0usize
+                        while jk < kk {
+                            if rand_k == nrx[jk] { redraw = true }
+                            jk += 1usize
+                        }
+                    }
+                    if !redraw {
+                        var placed = false
+                        var ka = 0usize
+                        while ka < ntt && !placed && !redraw {
+                            if nsel[ka] >= rand_k {
+                                if nsel[ka] == rand_k {
+                                    redraw = true
+                                } else {
+                                    var na = ntt
+                                    while na > ka {
+                                        nsel[na] = nsel[na - 1usize]
+                                        na -= 1usize
+                                    }
+                                    nsel[ka] = rand_k
+                                    placed = true
+                                }
+                            }
+                            ka += 1usize
+                        }
+                        if !redraw {
+                            if !placed { nsel[ntt] = rand_k }
+                            ntt += 1usize
+                            if ntt >= n_sam { break }
+                        }
+                    }
+                }
+            }
+            if lrg_sam {
+                var jk = 0usize
+                var js = 0usize
+                var j = 1usize
+                while j <= n {
+                    if jk < n_sam && nsel[jk] == j {
+                        jk += 1usize
+                    } else {
+                        nrepr[js] = j
+                        js += 1usize
+                    }
+                    j += 1usize
+                }
+                j = 0usize
+                while j < nsam {
+                    nsel[j] = nrepr[j]
+                    j += 1usize
+                }
+            }
+        } else {
+            var j = 0usize
+            while j < nsam {
+                nsel[j] = j + 1usize
+                j += 1usize
+            }
+        }
+        let fine = dysta2(nsam, jpp, nsel, x, n, dys, diss_kind, jtmd, valmd, has_na)
+        if !fine {
+            nunfs += 1usize
+            jran += 1usize
+            continue
+        }
+        var s = 0.0f64
+        var l = 1usize
+        while l <= n_dys {
+            if s < dys[l] { s = dys[l] }
+            l += 1usize
+        }
+        bswap2(kk, nsam, s, dys, pam_like, sky, nrepr, dysma, dysmb, beter)
+        let (nafs, e18) = selec(a, kk, n, jpp, diss_kind, zbv, nsam, has_na, jtmd, valmd, nrepr, nsel, dys, x, nr, ttd, radus, ratt, correct_d)
+        if e18 != ok { ret (fit, e18) }
+        let zb = zbv[0usize]
+        if nafs {
+            nunfs += 1usize
+        } else {
+            if !kall || zba > zb {
+                kall = true
+                zba = zb
+                var jk = 0usize
+                while jk < kk {
+                    ttbes[jk] = ttd[jk + 1usize]
+                    rdbes[jk] = radus[jk + 1usize]
+                    rabes[jk] = ratt[jk + 1usize]
+                    nrx[jk] = nr[jk + 1usize]
+                    jk += 1usize
+                }
+                var js = 0usize
+                while js < nsam {
+                    nbest[js] = nsel[js]
+                    js += 1usize
+                }
+                sx = s
+            }
+        }
+        if full_sample { break }
+        jran += 1usize
+    }
+    fit.obj = zba / rnn
+    if nunfs >= nran {
+        fit.jstop = 1usize
+        ret (fit, ok)
+    }
+    if !kall {
+        fit.jstop = 2usize
+        ret (fit, ok)
+    }
+    let fine2 = dysta2(nsam, jpp, nbest, x, n, dys, diss_kind, jtmd, valmd, has_na)
+    if !fine2 { ret (fit, BadArgument) }
+    var jz = 0usize
+    while jz < kk {
+        if nrx[jz] == 0usize { ret (fit, BadArgument) }
+        jz += 1usize
+    }
+    let (clu, e19) = zu(a, n)
+    if e19 != ok { ret (fit, e19) }
+    let (mtt, e20) = zu(a, kk)
+    if e20 != ok { ret (fit, e20) }
+    resul(kk, n, jpp, diss_kind, has_na, jtmd, valmd, x, nrx, clu, mtt, correct_d)
+    fit.clu = clu
+    fit.med = nrx
+    fit.sample = nbest
+    fit.size = mtt
+    fit.maxdis = rdbes
+    fit.avdis = ttbes
+    fit.ratdis = rabes
+    fit.dys = dys
+    if kk > 1usize {
+        let (sylinf, e21) = zf(a, nsam * 4usize)
+        if e21 != ok { ret (fit, e21) }
+        let (av2, e22) = zf(a, kk + 1usize)
+        if e22 != ok { ret (fit, e22) }
+        let (tt, e23) = black(a, kk, nsam, nbest, dys, sx, clu, av2, sylinf)
+        if e23 != ok { ret (fit, e23) }
+        let (avs, e24) = zf(a, kk)
+        if e24 != ok { ret (fit, e24) }
+        var i = 0usize
+        while i < kk {
+            avs[i] = av2[i + 1usize]
+            i += 1usize
+        }
+        fit.silinf = sylinf
+        fit.avsil = avs
+        fit.ttsil = tt
+        fit.has_sil = true
+    }
+    ret (fit, ok)
+}

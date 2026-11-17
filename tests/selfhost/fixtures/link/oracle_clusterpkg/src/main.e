@@ -10,6 +10,14 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
+fn say(a: *mem.Arena, v: f64) -> err {
+    let (initial, builder_error) = str.builder(a, 40usize)
+    if builder_error != ok { ret builder_error }
+    var b = initial
+    let _ = str.push_f64(&b, v)
+    ret io.print(str.done(&b))
+}
+
 fn sum_u(v: []const usize) -> f64 {
     var s = 0.0f64
     var i = 0usize
@@ -98,8 +106,51 @@ fn pam_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret 0.0f64
 }
 
+fn clara_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let k = usize(x[2usize])
+    let samples = usize(x[3usize])
+    let sampsize = usize(x[4usize])
+    let metric = usize(x[5usize])
+    let rng_r = x[6usize] != 0.0f64
+    let seed = i64(x[7usize])
+    let pam_like = x[8usize] != 0.0f64
+    let correct = x[9usize] != 0.0f64
+    let stand = x[10usize] != 0.0f64
+    let data = take_matrix(a, x, 11usize, n * p)
+    if stand { cp.stand_data(data, n, p) }
+    let (jtmd, e1) = mem.alloc[i64](a, p)
+    if e1 != ok { os.exit(5) }
+    let (valmd, e2) = mem.alloc[f64](a, p)
+    if e2 != ok { os.exit(5) }
+    let has_na = cp.na_prepare(data, n, p, jtmd, valmd)
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    let (fit, e3) = cp.clara(a, data, n, p, k, samples, sampsize, has_na, valmd, jtmd, metric, rng_r, &rg, pam_like, correct)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    if fit.jstop != 0usize { os.exit(7) }
+    let w = c.name
+    if str.eq(w, "clara_obj") { ret fit.obj }
+    if str.eq(w, "clara_clu") { ret sum_u(fit.clu) }
+    if str.eq(w, "clara_med") { ret sum_u(fit.med) }
+    if str.eq(w, "clara_sample") { ret sum_u(fit.sample) }
+    if str.eq(w, "clara_size") { ret sum_u(fit.size) }
+    if str.eq(w, "clara_maxdis") { ret sum_f(fit.maxdis) }
+    if str.eq(w, "clara_avdis") { ret sum_f(fit.avdis) }
+    if str.eq(w, "clara_ratdis") { ret sum_f(fit.ratdis) }
+    if str.eq(w, "clara_ttsil") { ret fit.ttsil }
+    if str.eq(w, "clara_avsil") { ret sum_f(fit.avsil) }
+    if str.eq(w, "clara_sil") { ret sum_f(fit.silinf[2usize * sampsize..3usize * sampsize]) }
+    if str.eq(w, "clara_silnb") { ret sum_f(fit.silinf[sampsize..2usize * sampsize]) }
+    os.exit(9)
+    ret 0.0f64
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.starts_with(c.name, "pam_") { ret pam_case(a, c) }
+    if str.starts_with(c.name, "clara_") { ret clara_case(a, c) }
     os.exit(4)
     ret 0.0f64
 }
@@ -109,6 +160,12 @@ fn report(a: *mem.Arena, c: *const oracle.Case, got: f64) {
     if builder_error != ok { ret }
     var b = initial
     let _ = str.push(&b, c.name)
+    var h = 0usize
+    while h < c.args.len && h < 11usize {
+        let _ = str.push(&b, " ")
+        let _ = str.push_f64(&b, c.args[h])
+        h += 1usize
+    }
     let _ = str.push(&b, ": got ")
     let _ = str.push_f64(&b, got)
     let _ = str.push(&b, ", R says ")

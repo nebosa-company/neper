@@ -38,5 +38,27 @@ for (rep in 1:70) {
     add("pam_ttsil", a, res$silinfo$avg.width)
   }
 }
+# ---- clara: its own generator and R's, large and small samples, NA, jaccard, pamLike, correct.d
+#   clara_*  args: (n, p, k, samples, sampsize, metric 1 2 3, rngR, seed, pamLike, correct.d, stand, x column-major)
+for (rep in 1:48) {
+  n <- sample(c(30:60, 80, 120, 200), 1); p <- sample(1:3, 1); k <- sample(2:5, 1)
+  metric <- c("euclidean", "manhattan", "jaccard")[if (rep %% 8 == 0) 3 else sample(1:2, 1)]
+  samples <- sample(2:8, 1); sampsize <- sample(c(min(n, 40 + 2 * k), k + 1 + sample(0:20, 1), n), 1); sampsize <- min(sampsize, n)
+  if (sampsize < k + 1) sampsize <- k + 1
+  X <- if (metric == "jaccard") matrix(sample(0:1, n * p, replace = TRUE), n, p)
+       else matrix(round(rnorm(n * p) * 3, 2), n, p) + matrix(rep(sample(0:3, n, replace = TRUE) * 4, p), n, p)
+  if (rep %% 6 == 0 && metric != "jaccard") X[sample(n * p, max(2, n %/% 8))] <- NA
+  rngR <- rep %% 2 == 0; seed <- sample(1:100000, 1); pamLike <- rep %% 3 == 0; correct <- rep %% 4 != 1; stand <- rep %% 5 == 0 && metric != "jaccard"
+  res <- try({ if (rngR) set.seed(seed)
+    clara(X, k, metric = metric, stand = stand, samples = samples, sampsize = sampsize, rngR = rngR, pamLike = pamLike, correct.d = correct, keep.data = FALSE) }, silent = TRUE)
+  if (inherits(res, "try-error")) next
+  if (any(res$i.med == 0) || anyNA(res$diss) || anyNA(res$objective)) next  # NaN dissimilarities (jaccard) make the C code read before an array
+  a <- c(n, p, k, samples, sampsize, match(metric, c("euclidean", "manhattan", "jaccard")), rngR, seed, pamLike, correct, stand, enc(X))
+  add("clara_obj", a, res$objective); add("clara_clu", a, cs(res$clustering)); add("clara_med", a, cs(res$i.med)); add("clara_sample", a, cs(res$sample))
+  add("clara_size", a, cs(res$clusinfo[, "size"])); add("clara_maxdis", a, cs(res$clusinfo[, "max_diss"]))
+  add("clara_avdis", a, cs(res$clusinfo[, "av_diss"])); add("clara_ratdis", a, cs(res$clusinfo[, "isolation"]))
+  add("clara_sil", a, cs(res$silinfo$widths[, "sil_width"])); add("clara_silnb", a, cs(res$silinfo$widths[, "neighbor"]))
+  add("clara_avsil", a, cs(res$silinfo$clus.avg.widths)); add("clara_ttsil", a, res$silinfo$avg.width)
+}
 set.seed(20261118)
 emit("clusterpkg", "cluster", list(cases))
