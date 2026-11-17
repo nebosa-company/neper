@@ -20,6 +20,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if hm.wtd_quantile(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[3usize + 2usize * n..3usize + 2usize * n + k], o) != ok { ret nan }
         ret o[usize(x[2usize])]
     }
+    if str.eq(c.name, "hdq") {
+        let n = usize(x[0usize])
+        ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])
+    }
+    if str.eq(c.name, "rc") {
+        let n = usize(x[0usize])
+        let (o, e) = mem.alloc[f64](a, 2usize)
+        if e != ok { ret nan }
+        if hm.rcorr_pair(a, x[3usize..3usize + n], x[3usize + n..3usize + 2usize * n], x[1usize] == 1.0f64, o) != ok { ret nan }
+        ret o[usize(x[2usize])]
+    }
     if str.eq(c.name, "wrk") {
         let n = usize(x[0usize])
         let (o, e) = mem.alloc[f64](a, n)

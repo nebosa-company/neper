@@ -242,3 +242,81 @@ fn rcspline_eval(x: []const f64, knots: []const f64, norm: usize, out: []f64) {
         j += 1usize
     }
 }
+
+// hdquantile(x, probs): the Harrell-Davis estimator, the order statistics weighted by the beta(p (n + 1), (1 - p) (n + 1)) probability of each rank interval
+fn hd_quantile(a: *mem.Arena, x: []const f64, p: f64) -> f64 {
+    let n = x.len
+    let (s, e) = mem.alloc[f64](a, n)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        s[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let key = s[i]
+        var j = i
+        while j > 0usize && s[j - 1usize] > key {
+            s[j] = s[j - 1usize]
+            j -= 1usize
+        }
+        s[j] = key
+        i += 1usize
+    }
+    let m = f64(n) + 1.0f64
+    var total = 0.0f64
+    var prev = 0.0f64
+    i = 1usize
+    while i <= n {
+        let cur = nb.pbeta(f64(i) / f64(n), p * m, (1.0f64 - p) * m, true, false)
+        total += (cur - prev) * s[i - 1usize]
+        prev = cur
+        i += 1usize
+    }
+    ret total
+}
+
+// rcorr(x, y): the correlation (Pearson, or Spearman on mid-ranks when spearman) of two complete samples and its two-sided P value from the t distribution on n - 2 degrees of freedom; out = (r, P)
+fn rcorr_pair(a: *mem.Arena, x: []const f64, y: []const f64, spearman: bool, out: []f64) -> err {
+    let n = x.len
+    let (rx, e1) = mem.alloc[f64](a, n)
+    let (ry, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        if spearman {
+            rx[i] = rank_avg(x, i)
+            ry[i] = rank_avg(y, i)
+        } else {
+            rx[i] = x[i]
+            ry[i] = y[i]
+        }
+        i += 1usize
+    }
+    var mx = 0.0f64
+    var my = 0.0f64
+    i = 0usize
+    while i < n {
+        mx += rx[i]
+        my += ry[i]
+        i += 1usize
+    }
+    mx = mx / f64(n)
+    my = my / f64(n)
+    var sxy = 0.0f64
+    var sxx = 0.0f64
+    var syy = 0.0f64
+    i = 0usize
+    while i < n {
+        sxy += (rx[i] - mx) * (ry[i] - my)
+        sxx += (rx[i] - mx) * (rx[i] - mx)
+        syy += (ry[i] - my) * (ry[i] - my)
+        i += 1usize
+    }
+    let r = sxy / math.sqrt[f64](sxx * syy)
+    out[0usize] = r
+    let t = math.abs[f64](r) * math.sqrt[f64](f64(n - 2usize) / (1.0f64 - r * r))
+    out[1usize] = 2.0f64 * (1.0f64 - nb.pt(t, f64(n - 2usize), true, false))
+    ret ok
+}

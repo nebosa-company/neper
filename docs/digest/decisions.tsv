@@ -3706,4 +3706,5 @@ D6843	735	extraDistr: random draws of ten families
 D6844	547	extraDistr: the Laplace generator
 D6845	726	gld: qgl, dqgl and rgl
 D6846	656	lmom: the distribution functions
-D6847	1063	Hmisc: weighted quantiles, ranks and tables, and the restricted cubic spline basis
+D6847	1064	Hmisc: weighted quantiles, ranks and tables, and the restricted cubic spline basis
+D6848	660	Hmisc: hdquantile and rcorr for a pair

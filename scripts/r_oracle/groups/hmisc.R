@@ -24,4 +24,10 @@ for (rep in 1:30) {
   nk <- sample(3:6, 1); kn <- sort(sample(x, nk)); if (length(unique(kn)) < nk) next; nm <- sample(0:2, 1)
   B <- rcspline.eval(x, knots = kn, norm = nm); for (j in seq_along(as.vector(B))) add("rcs", c(n, nk, nm, j - 1, x, kn), as.vector(B)[j])
 }
+# hdquantile "hdq" (n, p, x[n]); rcorr "rc" (n, spearman, index 0 r 1 P, x[n], y[n])
+for (rep in 1:40) {
+  n <- sample(5:40, 1); x <- rnorm(n); y <- 0.4 * x + rnorm(n); if (rep %% 2 == 0) { x <- round(x, 1); y <- round(y, 1) }
+  for (p in c(0.1, 0.5, 0.87)) add("hdq", c(n, p, x), hdquantile(x, p)[[1]])
+  for (sp in 0:1) { r <- rcorr(x, y, type = c("pearson", "spearman")[sp + 1]); add("rc", c(n, sp, 0, x, y), r$r[1, 2]); add("rc", c(n, sp, 1, x, y), r$P[1, 2]) }
+}
 emit("hmisc", "Hmisc", list(cases))
