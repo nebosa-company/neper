@@ -4,6 +4,7 @@
 
 use e.algo.rand.r as rng
 use e.algo.stat.clusterfuzzy as fz
+use e.algo.stat.clusterhull as hl
 use e.algo.stat.clusterpkg as cp
 use e.algo.stat.clustertree as ct
 use e.algo.stat.hclust as hc
@@ -386,7 +387,56 @@ fn fanny_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret 0.0f64
 }
 
+// ellipsoidhull: args (n, p, tol, maxit, x column-major)
+fn hull_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let (fit, e1) = hl.ellipsoidhull(a, x[4usize..], n, p, x[2usize], usize(x[3usize]))
+    if e1 != ok { os.exit(5) }
+    let w = c.name
+    if str.eq(w, "hull_loc") { ret sum_f(fit.loc) }
+    if str.eq(w, "hull_cov") { ret sum_f(fit.cov) }
+    if str.eq(w, "hull_d2") { ret fit.d2 }
+    if str.eq(w, "hull_eps") { ret fit.eps }
+    if str.eq(w, "hull_it") { ret f64(fit.it) }
+    if str.eq(w, "hull_conv") {
+        if fit.conv { ret 1.0f64 }
+        ret 0.0f64
+    }
+    let (lv, e2) = hl.log_volume(a, fit.cov, fit.d2, p)
+    if e2 != ok { os.exit(5) }
+    ret lv
+}
+
+// clusGap with pam: args (n, p, K.max, B, d.power, pca, seed, x column-major)
+fn gap_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let kmax = usize(x[2usize])
+    var rg: rng.Rng = zero
+    rng.seed(&rg, i64(x[6usize]))
+    let (fit, e1) = hl.clus_gap(a, x[7usize..], n, p, kmax, usize(x[3usize]), x[4usize], x[5usize] != 0.0f64, &rg)
+    if e1 != ok { os.exit(5) }
+    let w = c.name
+    if str.eq(w, "gap_logw") { ret sum_f(fit.tab[0usize..kmax]) }
+    if str.eq(w, "gap_elogw") { ret sum_f(fit.tab[kmax..2usize * kmax]) }
+    if str.eq(w, "gap_gap") { ret sum_f(fit.tab[2usize * kmax..3usize * kmax]) }
+    if str.eq(w, "gap_se") { ret sum_f(fit.tab[3usize * kmax..4usize * kmax]) }
+    var which = 0usize
+    if str.eq(w, "gap_maxse1") { which = 1usize }
+    if str.eq(w, "gap_maxse2") { which = 2usize }
+    if str.eq(w, "gap_maxse3") { which = 3usize }
+    if str.eq(w, "gap_maxse4") { which = 4usize }
+    if str.eq(w, "gap_maxse5") { which = 5usize }
+    if which == 0usize { os.exit(9) }
+    ret f64(hl.max_se(fit.tab[2usize * kmax..3usize * kmax], fit.tab[3usize * kmax..4usize * kmax], which, 1.0f64))
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.starts_with(c.name, "hull_") { ret hull_case(a, c) }
+    if str.starts_with(c.name, "gap_") { ret gap_case(a, c) }
     if str.starts_with(c.name, "fanny_") { ret fanny_case(a, c) }
     if str.starts_with(c.name, "agnes_") || str.starts_with(c.name, "diana_") { ret twins_case(a, c) }
     if str.starts_with(c.name, "mona_") { ret mona_case(a, c) }
@@ -441,6 +491,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var failures = run(a, "tests/oracle/clusterpkg.json")
     failures += run(a, "tests/oracle/clustertree.json")
     failures += run(a, "tests/oracle/clusterfuzzy.json")
+    failures += run(a, "tests/oracle/clusterhull.json")
     if failures > 0usize { os.exit(1) }
     ret ok
 }
