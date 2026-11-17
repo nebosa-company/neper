@@ -35,7 +35,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (v1, e1) = mem.alloc[f64](a, d)
         let (mt, e2) = mem.alloc[f64](a, d * d)
         let (v2, e3) = mem.alloc[f64](a, d)
-        let (o, e4) = mem.alloc[f64](a, d + d * d + d)
+        let (o, e4) = mem.alloc[f64](a, d + d * d + d + 1usize)
         if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 / 0.0f64 }
         var i = 0usize
         while i < d {
@@ -48,7 +48,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             mt[i] = x[4usize + d + i]
             i += 1usize
         }
-        if kind == 2usize {
+        if kind == 3usize {
+            if !sn.mv_cp2dp_st(a, v1, mt, v2, x[2usize], o) { ret 0.0f64 / 0.0f64 }
+        } else if kind == 2usize {
             if !sn.mv_cp2dp_sn(a, v1, mt, v2, o) { ret 0.0f64 / 0.0f64 }
         } else {
             let e = sn.mv_dp2cp(a, kind == 1usize, v1, mt, v2, x[2usize], o)

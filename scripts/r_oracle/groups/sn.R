@@ -82,6 +82,11 @@ for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; 
 for (rep in 1:8) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); n <- sample(3:6, 1); sd <- sample(1:100000, 1)
   add("dmsc", mvpack(d, 1, 0, 0, 0, p), dmsc(p$x, p$xi, p$Om, p$al), rel = 1e-9)
   set.seed(sd); r <- as.numeric(t(matrix(rmsc(n, p$xi, p$Om, p$al), n, d))); for (k in seq_len(n * d)) add("rmsc", mvpack(d, 1, n, sd, k - 1, p), r[k], rel = 1e-9) }
+# multivariate skew-t cp2dp: "mvcp" kind 3 (3, d, gamma2M, index, mean(d), var.cov(d*d), gamma1(d)); the output is (xi, Omega, alpha, nu)
+for (rep in 1:10) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); nu <- c(6, 9, 15)[sample(3, 1)]
+  cp <- dp2cp(list(xi = p$xi, Omega = p$Om, alpha = p$al, nu = nu), "ST"); dp <- tryCatch(cp2dp(cp, "ST"), error = function(e) NULL, warning = function(w) NULL); if (is.null(dp)) next
+  flat <- c(dp$xi, as.numeric(t(dp$Omega)), dp$alpha, dp$nu)
+  for (k in seq_along(flat)) add("mvcp", c(3, d, cp$gamma2M, k - 1, cp$mean, as.numeric(t(cp$var.cov)), cp$gamma1), flat[k], rel = 1e-4, abs = 1e-6) }
 # sn.cumulants beyond the fourth ("cumk": xi, omega, alpha, 0, k), mst.mardia ("mardia": delta.sq, nu, d, which, 0), pst methods 1 to 5 ("pstm1".."pstm5": xi, omega, alpha, nu, x)
 for (rep in 1:10) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, 0.5, 2, 6)[sample(4, 1)]; cm <- sn.cumulants(xi, om, al, n = 10)
   for (k in 1:10) add("cumk", c(xi, om, al, 0, k), unname(cm[k]), rel = 1e-9) }
