@@ -35,7 +35,6 @@ L479	library	0.25	481	hdrcde: highest density regions	Partial (D6478 hdr on a sa
 L480	library	0.1	416	aod: overdispersed binomial and count data	Partial (D6463 varbin non-bootstrap rows and iccbin method C equal aod on Windows;
 L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
 L482	library	0.5	471	laeken: inequality and poverty indicators	Partial (D6139).
-L483	library	0.62	878	tsfeatures: time-series features	Partial (D6142).
 L485	library	0.45	475	DRDID: difference-in-differences	Partial (D6464 reg_did_panel, D6465 drdid_panel, D6466 ipw_did_panel and std_ipw_did_panel, D6467 reg_did_rc ATT and se equal DRDID on Windows;
 L501	library	0.2	585	randtoolbox and qrng: quasi-random generators	Partial (D6160).
 L503	library	0.35	508	WRS2: robust tests and ANOVA	Partial (D6137).

@@ -48551,3 +48551,12 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D7011 — L305 closed
 
 Every item of the L305 acceptance list has an oracle case in oracle_hmisc (11236 values), so L305 moves to docs/work-done.jsonl. describe of factor and character vectors and the printed output are outside the acceptance and not done.
+
+
+## D7012 — tsfeatures entropy, stl_features, holt_parameters, heterogeneity
+
+Four ports done in a worktree and merged: `entropy` (Burg AR fit with AIC order, the AR spectrum on the grid and the prior-weighted entropy), `stl_features` (seasonal case through the stl port, the non-seasonal case through a port of R's supsmu with cross-validated span, and the short-series case), `holt_parameters` (ets AAN, damped and undamped, the lower aicc, by the R Nelder-Mead with the ets start values and admissibility), `heterogeneity` (Yule-Walker ar residuals, arch_stat, the Ljung-Box statistic and tseries::garch(1,1) through a port of the SUMSL optimiser). Equal to tsfeatures on 20 series (oracle_tsfeatures); garch_acf and garch_r2 at 1e-6 relative, the rest at 1e-9. Linux pending.
+
+## D7013 — L483 closed
+
+Every feature of the L483 acceptance list has an oracle case, so L483 moves to docs/work-done.jsonl. hw_parameters is outside the acceptance and not done.

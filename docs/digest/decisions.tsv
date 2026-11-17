@@ -3870,4 +3870,6 @@ D7007	359	extraDistr beta-prime generator
 D7008	630	pracma fminsearch Hooke-Jeeves
 D7009	787	Hmisc rcspline.eval default knots, describe, cut2 codes
 D7010	727	Hmisc redun with splines, categories and the adjusted R2
-D7011	260	L305 closed
+D7011	262	L305 closed
+D7012	782	tsfeatures entropy, stl_features, holt_parameters, heterogeneity
+D7013	181	L483 closed
