@@ -1,7 +1,7 @@
 # mclust, fourth part: Mclust over a grid of G and covariance models (hc(VVV, SVD) initialisation, qclass for one variable).
 # "mfit" (id, n, p, gmin, gmax, nm, model indices[nm], X[n p] column-major); ids: 0 bic, 1 G, 2 model index, 3 loglik, 4 icl, 5 df,
 # 10 + j the weighted sum of the finite BIC values of column j, 40 + j the weighted sum of its NA pattern (weights are the row numbers),
-# 100 sum(i * classification), 101 sum(i * uncertainty), 102 sum(q * z), 103 sum(q * pro), 104 sum(q * mean), 105 sum(q * sigma)
+# 200 + j the weighted sum of the finite ICL values of column j (mclustICL), 100 sum(i * classification), 101 sum(i * uncertainty), 102 sum(q * z), 103 sum(q * pro), 104 sum(q * mean), 105 sum(q * sigma)
 suppressMessages(library(mclust))
 cases <- list()
 set.seed(20261202)
@@ -19,6 +19,8 @@ one <- function(n, p, gmin, gmax, kind) {
   Gn <- m$G; sg <- m$parameters$variance$sigma; if (m$modelName == "E") sg <- rep(sg, Gn)
   add(args, 0, m$bic); add(args, 1, Gn); add(args, 2, match(sub(",.*", "", names(pickBIC(m$BIC, 1))), tbl) - 1); add(args, 3, m$loglik); add(args, 4, m$icl); add(args, 5, m$df)
   for (j in seq_along(mm)) { b <- B[, j]; add(args, 10 + j - 1, sum(seq_along(b) * ifelse(is.na(b), 0, b))); add(args, 40 + j - 1, sum(seq_along(b) * is.na(b)), rel = 0, abs = 0) }
+  I <- unclass(mclustICL(X, G = gmin:gmax, modelNames = mm, verbose = FALSE))[, mm, drop = FALSE]
+  for (j in seq_along(mm)) { b <- I[, j]; add(args, 200 + j - 1, sum(seq_along(b) * ifelse(is.na(b), 0, b))) }
   add(args, 100, sum(seq_len(n) * m$classification), rel = 0, abs = 0); add(args, 101, sum(seq_len(n) * m$uncertainty), 1e-6, 1e-9)
   add(args, 102, sum(seq_along(m$z) * as.vector(m$z))); add(args, 103, sum(seq_along(m$parameters$pro) * m$parameters$pro))
   add(args, 104, sum(seq_along(m$parameters$mean) * as.vector(m$parameters$mean))); add(args, 105, sum(seq_along(sg) * as.vector(sg)))

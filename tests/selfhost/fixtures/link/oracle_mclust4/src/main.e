@@ -48,6 +48,17 @@ fn pick(res: []const f64, z: []const f64) -> f64 {
         }
         ret s
     }
+    if id >= 200usize && id < 230usize {
+        let j = id - 200usize
+        let off_icl = off_sg + gmax * p * p
+        q = 0usize
+        while q < ng {
+            let b = res[off_icl + j * ng + q]
+            if b == b { s += f64(q + 1usize) * b }
+            q += 1usize
+        }
+        ret s
+    }
     if id >= 40usize && id < 70usize {
         let j = id - 40usize
         q = 0usize

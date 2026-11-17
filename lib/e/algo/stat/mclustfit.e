@@ -346,6 +346,74 @@ fn mclust_bic(a: *mem.Arena, x: []const f64, n: usize, p: usize, gmin: usize, gm
     ret ok
 }
 
+// the final fit of the chosen (G, model) the way summary(mclustBIC) does it: G = 1 from mvn, otherwise me from the hierarchy partition and the extra M step when the proportions
+// differ from the column means of z. Fills z (n by g), pro, mu and sg and returns the log likelihood (NaN on failure)
+fn final_fit(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, mod: usize, pairs: []const usize, z: []f64, pro: []f64, mu: []f64, sg: []f64) -> f64 {
+    let (inf, e6) = mem.alloc[f64](a, 4usize)
+    if e6 != ok { ret nan() }
+    var ll = 0.0f64
+    var q = 0usize
+    if g == 1usize {
+        ll = mvn_fit(a, mod, x, n, p, mu, sg)
+        pro[0usize] = 1.0f64
+        q = 0usize
+        while q < n {
+            z[q] = 1.0f64
+            q += 1usize
+        }
+    } else {
+        let se = start_z(a, x, n, p, g, pairs, z)
+        if se != ok { ret nan() }
+        ll = em.me_any(a, mod, false, x, z, n, p, g, pro, mu, sg, inf)
+        if ll != ll { ret nan() }
+        // the extra M step when the proportions differ from the column means of z
+        var dsum = 0.0f64
+        var k = 0usize
+        while k < g {
+            var cm = 0.0f64
+            var i = 0usize
+            while i < n {
+                cm += z[k * n + i]
+                i += 1usize
+            }
+            cm = cm / f64(n)
+            dsum += (pro[k] - cm) * (pro[k] - cm)
+            k += 1usize
+        }
+        // mstep of VEE, EVE, VVE and VEV reports return code 2 in mclust, so its parameters are never taken
+        let rc_ok = mod != 9usize && mod != 10usize && mod != 11usize && mod != 13usize
+        if rc_ok && dsum > math.sqrt[f64](2.220446049250313e-16f64) {
+            let (z2, e7) = mem.alloc[f64](a, n * g)
+            let (pro2, e8) = mem.alloc[f64](a, g)
+            let (mu2, e9) = mem.alloc[f64](a, g * p)
+            let (sg2, e10) = mem.alloc[f64](a, g * p * p)
+            if e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret nan() }
+            q = 0usize
+            while q < n * g {
+                z2[q] = z[q]
+                q += 1usize
+            }
+            let _ = em.mstep_any(a, mod, x, z2, n, p, g, pro2, mu2, sg2, inf)
+            q = 0usize
+            while q < g {
+                pro[q] = pro2[q]
+                q += 1usize
+            }
+            q = 0usize
+            while q < g * p {
+                mu[q] = mu2[q]
+                q += 1usize
+            }
+            q = 0usize
+            while q < g * p * p {
+                sg[q] = sg2[q]
+                q += 1usize
+            }
+        }
+    }
+    ret ll
+}
+
 // Mclust(data, G = gmin:gmax, modelNames = models) without a prior or noise. res: 0 bic of the chosen fit, 1 G, 2 model index, 3 loglik, 4 icl, 5 df, then the BIC matrix (ng by nm),
 // then the classification (n, 1-based), the uncertainty (n), the memberships z (n by gmax, the first G columns used), pro (gmax), mean (p by gmax) and covariances (gmax stacked p by p).
 fn mclust_run(a: *mem.Arena, x: []const f64, n: usize, p: usize, gmin: usize, gmax: usize, models: []const usize, res: []f64) -> err {
@@ -402,70 +470,13 @@ fn mclust_run(a: *mem.Arena, x: []const f64, n: usize, p: usize, gmin: usize, gm
     let (sg, e5) = mem.alloc[f64](a, g * p * p)
     let (inf, e6) = mem.alloc[f64](a, 4usize)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret mem.Full }
-    var ll = 0.0f64
     var q = 0usize
-    if g == 1usize {
-        ll = mvn_fit(a, mod, x, n, p, mu, sg)
-        pro[0usize] = 1.0f64
-        q = 0usize
-        while q < n {
-            z[q] = 1.0f64
-            q += 1usize
-        }
-    } else {
-        if p > 1usize {
-            let pe = default_pairs(a, x, n, p, pairs)
-            if pe != ok { ret pe }
-        }
-        let se = start_z(a, x, n, p, g, pairs, z)
-        if se != ok { ret se }
-        ll = em.me_any(a, mod, false, x, z, n, p, g, pro, mu, sg, inf)
-        if ll != ll { ret mem.Full }
-        // the extra M step when the proportions differ from the column means of z
-        var dsum = 0.0f64
-        var k = 0usize
-        while k < g {
-            var cm = 0.0f64
-            var i = 0usize
-            while i < n {
-                cm += z[k * n + i]
-                i += 1usize
-            }
-            cm = cm / f64(n)
-            dsum += (pro[k] - cm) * (pro[k] - cm)
-            k += 1usize
-        }
-        // mstep of VEE, EVE, VVE and VEV reports return code 2 in mclust, so its parameters are never taken
-        let rc_ok = mod != 9usize && mod != 10usize && mod != 11usize && mod != 13usize
-        if rc_ok && dsum > math.sqrt[f64](2.220446049250313e-16f64) {
-            let (z2, e7) = mem.alloc[f64](a, n * g)
-            let (pro2, e8) = mem.alloc[f64](a, g)
-            let (mu2, e9) = mem.alloc[f64](a, g * p)
-            let (sg2, e10) = mem.alloc[f64](a, g * p * p)
-            if e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret mem.Full }
-            q = 0usize
-            while q < n * g {
-                z2[q] = z[q]
-                q += 1usize
-            }
-            let _ = em.mstep_any(a, mod, x, z2, n, p, g, pro2, mu2, sg2, inf)
-            q = 0usize
-            while q < g {
-                pro[q] = pro2[q]
-                q += 1usize
-            }
-            q = 0usize
-            while q < g * p {
-                mu[q] = mu2[q]
-                q += 1usize
-            }
-            q = 0usize
-            while q < g * p * p {
-                sg[q] = sg2[q]
-                q += 1usize
-            }
-        }
+    if p > 1usize && g > 1usize {
+        let pe = default_pairs(a, x, n, p, pairs)
+        if pe != ok { ret pe }
     }
+    let ll = final_fit(a, x, n, p, g, mod, pairs, z, pro, mu, sg)
+    if ll != ll { ret mem.Full }
     let nparams = mp.n_mclust_params(mp.model_name(mod), f64(p), f64(g), false, false)
     let bicv = mp.bic(mp.model_name(mod), ll, f64(n), f64(p), f64(g), false, false)
     // classification, uncertainty and ICL
@@ -519,7 +530,8 @@ fn mclust_run(a: *mem.Arena, x: []const f64, n: usize, p: usize, gmin: usize, gm
         res[off_sg + q] = sg[q]
         q += 1usize
     }
-    ret ok
+    let off_icl = off_sg + gmax * p * p
+    ret mclust_icl(a, x, n, p, gmin, gmax, models, bicm, res[off_icl..off_icl + ng * nm])
 }
 
 // predict.Mclust / estep / dens for newdata x (n by p) under the parameters pro (g), mu (p by g) and sigma (g stacked p by p):
@@ -576,5 +588,53 @@ fn predict_run(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, pro:
         i += 1usize
     }
     res[off_ll] = hood
+    ret ok
+}
+
+// mclustICL(data, G = gmin:gmax, modelNames = models): the ICL matrix (rows G, columns the models, column-major; NaN where the BIC is NaN)
+fn mclust_icl(a: *mem.Arena, x: []const f64, n: usize, p: usize, gmin: usize, gmax: usize, models: []const usize, bicm: []const f64, icl: []f64) -> err {
+    let ng = gmax - gmin + 1usize
+    let nm = models.len
+    let (pairs, e1) = mem.alloc[usize](a, 2usize * n)
+    let (z, e2) = mem.alloc[f64](a, n * gmax)
+    let (pro, e3) = mem.alloc[f64](a, gmax)
+    let (mu, e4) = mem.alloc[f64](a, gmax * p)
+    let (sg, e5) = mem.alloc[f64](a, gmax * p * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    if p > 1usize && gmax > 1usize {
+        let pe = default_pairs(a, x, n, p, pairs)
+        if pe != ok { ret pe }
+    }
+    var gi = 0usize
+    while gi < ng {
+        var mi = 0usize
+        while mi < nm {
+            icl[mi * ng + gi] = nan()
+            if bicm[mi * ng + gi] == bicm[mi * ng + gi] {
+                let g = gmin + gi
+                let start = mem.mark(a)
+                let ll = final_fit(a, x, n, p, g, models[mi], pairs, z[0usize..n * g], pro, mu, sg)
+                if ll == ll {
+                    let b = mp.bic(mp.model_name(models[mi]), ll, f64(n), f64(p), f64(g), false, false)
+                    var cp = 0.0f64
+                    var i = 0usize
+                    while i < n {
+                        var best = 0usize
+                        var k = 1usize
+                        while k < g {
+                            if z[k * n + i] > z[best * n + i] { best = k }
+                            k += 1usize
+                        }
+                        if z[best * n + i] > 0.0f64 { cp += math.log[f64](z[best * n + i]) }
+                        i += 1usize
+                    }
+                    icl[mi * ng + gi] = b + 2.0f64 * cp
+                }
+                mem.reset(a, start)
+            }
+            mi += 1usize
+        }
+        gi += 1usize
+    }
     ret ok
 }
