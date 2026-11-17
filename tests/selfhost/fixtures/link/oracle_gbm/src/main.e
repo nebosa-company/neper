@@ -1,68 +1,166 @@
-// e.algo.stat.gbmpkg against gbm. tests/oracle/gbm.json comes from
-// `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R gbm`; the layout is at the top of scripts/r_oracle/groups/gbm.R.
+// e.algo.stat.gbmr (over gbmfit) against gbm. tests/oracle/gbm.json comes from `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R gbm`; the case layout is at the top of
+// scripts/r_oracle/groups/gbm.R. Every data set is rebuilt here from its seed with the same R generator draws, fitted once, and then every case of that configuration reads one number off the fit.
 
-use e.algo.stat.gbmpkg as gb
+use e.algo.rand.r as rng
+use e.algo.stat.gbmfit as gb
+use e.algo.stat.gbmr as gr
 use e.io
+use e.math
 use e.mem
 use e.os
 use e.test.oracle as oracle
 
-fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
-    let z = c.args
-    let nan = 0.0f64 / 0.0f64
-    let n = usize(z[0usize])
-    let p = usize(z[1usize])
-    if c.name[0usize] == 100u8 {
-        // prd: (n, p, ntrees, shrinkage, depth, minobs, row, nnew, y[n], X[n p], Xnew[nnew p]) the prediction of a recorded gaussian model at a new row
-        let nt = usize(z[2usize])
-        let dp = usize(z[4usize])
-        let nnew = usize(z[7usize])
-        var lossc = 0usize
-        if c.name[2usize] == 98u8 { lossc = 1usize }
-        if c.name[2usize] == 112u8 { lossc = 2usize }
-        if c.name[2usize] == 97u8 { lossc = 3usize }
-        if c.name[2usize] == 108u8 { lossc = 4usize }
-        let (fi, ei) = mem.alloc[f64](a, n)
-        let (rc, er) = mem.alloc[f64](a, nt * (4usize * dp + 2usize) + 1usize)
-        let (po, ep) = mem.alloc[f64](a, nnew)
-        if ei != ok || er != ok || ep != ok { ret nan }
-        if gb.model(a, lossc, z[8usize + n..8usize + n + n * p], z[8usize..8usize + n], n, p, nt, z[3usize], dp, usize(z[5usize]), fi, rc) != ok { ret nan }
-        gb.predict_model(rc, nt, dp, nt, z[8usize + n + n * p..8usize + n + n * p + nnew * p], nnew, po)
-        let (po2, ep2) = mem.alloc[f64](a, nnew)
-        if ep2 != ok { ret nan }
-        // the same model read with the first third of the trees (slot 8 + n + n p + nnew p holds that count when present)
-        if c.name.len > 3usize {
-            let kk = usize(z[8usize + n + n * p + nnew * p])
-            gb.predict_model(rc, nt, dp, kk, z[8usize + n + n * p..8usize + n + n * p + nnew * p], nnew, po2)
-            ret po2[usize(z[6usize])]
+fn r3(x: f64, d: f64) -> f64 { ret math.floor[f64](x * d + 0.5f64) / d }
+
+type Data = struct { x: []f64, y: []f64, st: []f64, w: []f64 }
+
+fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool) -> (Data, err) {
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    var bad = 0usize
+    var d = Data{ x: gb.af(a, n * p, &bad), y: gb.af(a, n, &bad), st: gb.af(a, n, &bad), w: gb.af(a, n, &bad) }
+    if bad != 0usize { ret (d, gb.NoMemory) }
+    var i = 0usize
+    while i < n * p {
+        d.x[i] = r3(rng.norm(&rg), 1000.0f64)
+        i += 1usize
+    }
+    i = 0usize
+    if dist == 0usize {
+        while i < n {
+            d.y[i] = r3(math.sin[f64](2.0f64 * d.x[i]) + d.x[n + i] * d.x[n + i] * 0.5f64 + rng.rnorm(&rg, 0.0f64, 0.3f64), 1000.0f64)
+            i += 1usize
         }
-        ret po[usize(z[6usize])]
+    } else if dist == 1usize || dist == 3usize || dist == 6usize {
+        while i < n {
+            let lin = 1.5f64 * d.x[i] - d.x[n + i]
+            let u = rng.unif(&rg)
+            if u < 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - lin)) {
+                d.y[i] = 1.0f64
+            } else {
+                d.y[i] = 0.0f64
+            }
+            i += 1usize
+        }
+    } else if dist == 2usize {
+        while i < n {
+            d.y[i] = math.floor[f64](rng.unif(&rg) * 3.0f64 * math.exp[f64](0.6f64 * d.x[i]))
+            i += 1usize
+        }
+    } else if dist == 4usize || dist == 5usize {
+        while i < n {
+            d.y[i] = r3(2.0f64 * d.x[i] + rng.rexp(&rg, 1.0f64), 10000.0f64)
+            i += 1usize
+        }
+    } else if dist == 7usize {
+        while i < n {
+            d.y[i] = r3(math.sin[f64](2.0f64 * d.x[i]) + d.x[n + i] * d.x[n + i] * 0.5f64 + rng.rnorm(&rg, 0.0f64, 0.3f64), 1000.0f64)
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            if rng.unif(&rg) < 0.1f64 { d.y[i] += 4.0f64 }
+            i += 1usize
+        }
+    } else if dist == 8usize {
+        while i < n {
+            d.y[i] = r3(rng.rexp(&rg, 1.0f64) / math.exp[f64](0.7f64 * d.x[i]), 1000.0f64) + 0.001f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            if rng.unif(&rg) < 0.8f64 {
+                d.st[i] = 1.0f64
+            } else {
+                d.st[i] = 0.0f64
+            }
+            i += 1usize
+        }
+    } else if dist == 9usize {
+        while i < n {
+            let u = d.x[i] + rng.norm(&rg) * 0.7f64
+            if u < 0.0f64 - 0.5f64 {
+                d.y[i] = 0.0f64
+            } else if u < 0.5f64 {
+                d.y[i] = 1.0f64
+            } else {
+                d.y[i] = 2.0f64
+            }
+            i += 1usize
+        }
     }
-    if c.name[0usize] == 105u8 {
-        let (fi, ei) = mem.alloc[f64](a, n)
-        let (inf, ef) = mem.alloc[f64](a, p)
-        if ei != ok || ef != ok { ret nan }
-        if gb.influence(a, usize(z[7usize]), z[8usize + n..8usize + n + n * p], z[8usize..8usize + n], n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), fi, inf) != ok { ret nan }
-        ret inf[usize(z[6usize])]
+    if wflag {
+        i = 0usize
+        while i < n {
+            d.w[i] = 0.5f64 * (1.0f64 + math.floor[f64](4.0f64 * rng.unif(&rg)))
+            i += 1usize
+        }
     }
-    let (f, e) = mem.alloc[f64](a, n)
-    if e != ok { ret nan }
-    let xm = z[8usize + n..8usize + n + n * p]
-    let y = z[8usize..8usize + n]
-    var ge = ok
-    if c.name[0usize] == 98u8 {
-        ge = gb.bernoulli(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
-    } else if c.name[0usize] == 108u8 {
-        ge = gb.laplace(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
-    } else if c.name[0usize] == 97u8 {
-        ge = gb.adaboost(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
-    } else if c.name[0usize] == 112u8 {
-        ge = gb.poisson(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
-    } else {
-        ge = gb.gaussian(a, xm, y, n, p, usize(z[2usize]), z[3usize], usize(z[4usize]), usize(z[5usize]), f)
+    ret (d, ok)
+}
+
+fn same_config(x: []const f64, y: []const f64) -> bool {
+    var i = 0usize
+    while i < 15usize {
+        if x[i] != y[i] { ret false }
+        i += 1usize
     }
-    if ge != ok { ret nan }
-    ret f[usize(z[6usize])]
+    ret true
+}
+
+// the number a case asks for, read off the fit f and the new rows dn (12 by p)
+fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, z: []const f64) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let code = usize(z[15usize])
+    let ia = usize(z[16usize])
+    let ib = usize(z[17usize])
+    let ic = usize(z[18usize])
+    let p = usize(z[3usize])
+    let n = usize(z[2usize])
+    let nn = 12usize
+    if code == 1usize { ret f.fit[ia + ic * n] }
+    if code == 2usize { ret f.m.train_err[ia] }
+    if code == 3usize { ret f.m.valid_err[ia] }
+    if code == 4usize { ret f.m.oobag[ia] }
+    if code == 6usize { ret f.m.initf }
+    if code == 9usize { ret gb.rsum(f.m.train_err, f.m.ntrees) }
+    if code == 10usize { ret gb.rsum(f.m.valid_err, f.m.ntrees) }
+    if code == 11usize { ret gb.rsum(f.m.oobag, f.m.ntrees) }
+    if code == 12usize { ret f.cv_error[ia] }
+    if code == 13usize { ret f.cv_fitted[ia] }
+    if code == 14usize {
+        if ia == 1usize { ret f64(gr.best_iter_test(f)) }
+        ret f64(gr.best_iter_cv(f))
+    }
+    if code == 5usize || code == 15usize {
+        let (inf, e) = mem.alloc[f64](a, p)
+        if e != ok { ret nan }
+        var nt = ib
+        if code == 15usize { nt = gr.default_trees(f) }
+        if gr.relative_influence(a, f, nt, inf) != ok { ret nan }
+        ret inf[ia]
+    }
+    if code == 7usize || code == 8usize || code == 16usize {
+        let (po, e) = mem.alloc[f64](a, nn * f.nclass)
+        if e != ok { ret nan }
+        var nt = ib
+        if code == 16usize { nt = gr.default_trees(f) }
+        gr.predict(f, dn, nn, nt, po)
+        if code == 8usize { gr.to_response(f.dist, f.nclass, nn, po) }
+        ret po[ia + ic * nn]
+    }
+    if code >= 20usize && code <= 27usize {
+        let at = (ib - 1usize) * f.m.stride + ia
+        if code == 20usize { ret f64(f.m.tvar[at]) }
+        if code == 21usize { ret f.m.tcode[at] }
+        if code == 22usize { ret f64(f.m.tleft[at]) }
+        if code == 23usize { ret f64(f.m.tright[at]) }
+        if code == 24usize { ret f64(f.m.tmiss[at]) }
+        if code == 25usize { ret f.m.terr[at] }
+        if code == 26usize { ret f.m.twt[at] }
+        ret f.m.tpred[at]
+    }
+    ret nan
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -70,11 +168,76 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
+    var errors = 0usize
     var at = 0usize
+    let (key, key_error) = mem.alloc[f64](a, 15usize)
+    if key_error != ok { os.exit(5) }
+    let base = mem.mark(a)
+    var have = false
+    var fd: gr.Fitted = zero
+    var dn: []f64 = zero
     while at < golden.cases.len {
-        let start = mem.mark(a)
         let c = &golden.cases[at]
-        let got = answer(a, c)
+        let z = c.args
+        var fresh = !have
+        if have {
+            var q = 0usize
+            while q < 15usize {
+                if key[q] != z[q] { fresh = true }
+                q += 1usize
+            }
+        }
+        if fresh {
+            have = false
+            mem.reset(a, base)
+            let n = usize(z[2usize])
+            let p = usize(z[3usize])
+            let dist = usize(z[1usize])
+            let (dat, de) = make(a, i64(z[0usize]), dist, n, p, z[12usize] == 1.0f64)
+            var mono: []f64 = zero
+            var bad = 0usize
+            if z[13usize] == 1.0f64 {
+                mono = gb.af(a, p, &bad)
+                mono[0usize] = 1.0f64
+                mono[1usize] = 0.0f64 - 1.0f64
+            }
+            dn = gb.af(a, 12usize * p, &bad)
+            if de != ok || bad != 0usize { os.exit(4) }
+            var rg: rng.Rng = zero
+            rng.seed(&rg, i64(z[0usize]) + 1000003i64)
+            var i = 0usize
+            while i < 12usize * p {
+                dn[i] = r3(rng.norm(&rg), 1000.0f64)
+                i += 1usize
+            }
+            var st: []f64 = zero
+            if dist == 8usize { st = dat.st }
+            var ww: []f64 = zero
+            if z[12usize] == 1.0f64 { ww = dat.w }
+            var grp: []f64 = zero
+            let inp = gr.Input{ dist: dist, n: n, p: p, ntrees: usize(z[4usize]), shrinkage: z[5usize], depth: usize(z[6usize]), minobs: usize(z[7usize]), bag: z[8usize], trainfrac: z[9usize], par: z[11usize], maxrank: 0usize, cv: usize(z[14usize]), ncores1: true, stratify: false,
+                x: dat.x, y: dat.y, status: st, w: ww, group: grp, mono: mono }
+            rng.seed(&rg, i64(z[10usize]))
+            let (f, fe) = gr.gbm(a, &rg, &inp)
+            q_copy(key, z)
+            if fe != ok {
+                errors += 1usize
+                if errors <= 3usize {
+                    let _ = io.print("gbm fit failed\n")
+                }
+                at += 1usize
+                continue
+            }
+            fd = f
+            have = true
+        }
+        if !have {
+            failures += 1usize
+            at += 1usize
+            continue
+        }
+        let start = mem.mark(a)
+        let got = output(a, &fd, dn, z)
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
@@ -87,4 +250,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if failures > 0usize { os.exit(1) }
     ret ok
+}
+
+fn q_copy(k: []f64, z: []const f64) {
+    var q = 0usize
+    while q < 15usize {
+        k[q] = z[q]
+        q += 1usize
+    }
 }
