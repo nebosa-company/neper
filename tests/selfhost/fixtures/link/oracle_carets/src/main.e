@@ -5,12 +5,63 @@
 use e.algo.stat.carets as ct
 use e.io
 use e.mem
+use e.algo.rand.r as rng
 use e.os
 use e.str
 use e.test.oracle as oracle
 
-fn answer(c: *const oracle.Case) -> f64 {
+fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "rs") || str.eq(c.name, "cf") || str.eq(c.name, "gk") {
+        var r: rng.Rng = zero
+        rng.seed(&r, i64(z[0usize]))
+        var n = 0usize
+        if str.eq(c.name, "rs") { n = usize(z[1usize]) } else if str.eq(c.name, "cf") { n = usize(z[2usize]) } else { n = usize(z[3usize]) }
+        let (v, e) = mem.alloc[i64](a, n)
+        if e != ok { ret nan }
+        if str.eq(c.name, "rs") {
+            if ct.create_resample(a, &r, n, v) != ok { ret nan }
+        } else {
+            let (cl, e2) = mem.alloc[i64](a, n)
+            if e2 != ok { ret nan }
+            var q = 0usize
+            if str.eq(c.name, "cf") {
+                while q < n {
+                    cl[q] = i64(z[3usize + q]) - 1i64
+                    q += 1usize
+                }
+                if ct.create_folds(a, &r, cl, usize(z[1usize]), v) != ok { ret nan }
+            } else {
+                while q < n {
+                    cl[q] = i64(z[4usize + q]) - 1i64
+                    q += 1usize
+                }
+                if ct.group_kfold(a, &r, cl, usize(z[2usize]), usize(z[1usize]), v) != ok { ret nan }
+            }
+        }
+        var s = 0.0f64
+        var q2 = 0usize
+        while q2 < n {
+            s += f64(q2 + 1usize) * f64(v[q2])
+            q2 += 1usize
+        }
+        ret s
+    }
+    if str.eq(c.name, "ts") {
+        let (o, e) = mem.alloc[i64](a, 400usize)
+        if e != ok { ret nan }
+        let cnt = ct.create_time_slices(usize(z[0usize]), usize(z[1usize]), usize(z[2usize]), z[3usize] != 0.0f64, usize(z[4usize]), o)
+        let id = usize(z[5usize])
+        if id == 0usize { ret f64(cnt) }
+        var s = 0.0f64
+        var q = 0usize
+        while q < cnt {
+            s += f64(o[4usize * q + id - 1usize])
+            q += 1usize
+        }
+        ret s
+    }
     let id = usize(z[0usize])
     if str.eq(c.name, "pr") {
         let n = usize(z[1usize])
@@ -45,8 +96,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var failures = 0usize
     var at = 0usize
     while at < golden.cases.len {
+        let start = mem.mark(a)
         let c = &golden.cases[at]
-        let got = answer(c)
+        let got = answer(a, c)
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
@@ -54,6 +106,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let _ = io.print("\n")
             }
         }
+        mem.reset(a, start)
         at += 1usize
     }
     if failures > 0usize { os.exit(1) }

@@ -19,4 +19,19 @@ for (rep in 1:20) {
   r <- postResample(pred, obs)
   for (k in 1:3) add("pr", c(k - 1, n, pred, obs), r[[k]])
 }
+# resampling indices (RNG): "rs" createResample (seed, n); "cf" createFolds(list = FALSE) (seed, k, n, class codes 1..); "gk" groupKFold (seed, k, m, n, group codes 1..m by first appearance), each answered as sum(position * value);
+# "ts" createTimeSlices (n, initialWindow, horizon, fixedWindow, skip, id) id 0 slices 1 sum of training starts 2 training stops 3 test starts 4 test stops
+for (rep in 1:25) {
+  sd <- sample(1:100000, 1); n <- sample(5:80, 1)
+  set.seed(sd); v <- createResample(seq_len(n), times = 1)[[1]]; add("rs", c(sd, n), sum(seq_along(v) * v), 1e-12)
+  k <- sample(2:6, 1); nc <- sample(1:4, 1); n2 <- sample(10:70, 1); y <- sample(1:nc, n2, TRUE)
+  set.seed(sd); f <- createFolds(factor(y), k = k, list = FALSE); add("cf", c(sd, k, n2, y), sum(seq_along(f) * f), 1e-12)
+  m <- sample(3:12, 1); g <- sample(1:m, 25, TRUE); g <- match(g, unique(g)); mm <- max(g); kk <- sample(2:mm, 1)
+  set.seed(sd); gf <- groupKFold(g, k = kk); tf <- integer(length(g)); for (i in seq_along(gf)) tf[setdiff(seq_along(g), gf[[i]])] <- i
+  set.seed(sd); ff <- sample(kk, size = mm, replace = TRUE); add("gk", c(sd, kk, mm, length(g), g), sum(seq_along(g) * ff[g]), 1e-12)
+  nn <- sample(12:60, 1); iw <- sample(3:8, 1); hz <- sample(1:4, 1); fx <- sample(c(TRUE, FALSE), 1); sk <- sample(0:3, 1)
+  ts <- createTimeSlices(seq_len(nn), iw, hz, fx, sk)
+  st <- c(length(ts$train), sum(sapply(ts$train, `[`, 1)), sum(sapply(ts$train, function(z) z[length(z)])), sum(sapply(ts$test, `[`, 1)), sum(sapply(ts$test, function(z) z[length(z)])))
+  for (j in 0:4) add("ts", c(nn, iw, hz, as.numeric(fx), sk, j), st[j + 1], 1e-12)
+}
 emit("carets", "caret", list(cases))

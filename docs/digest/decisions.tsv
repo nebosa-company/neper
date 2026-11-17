@@ -3670,4 +3670,5 @@ D6807	860	hclust: cutree by height, and the nearest-neighbour fix for centroid a
 D6808	461	BiasedUrn: Wallenius odds estimate
 D6809	1232	isotone: the optim(BFGS) activeSet solvers
 D6810	698	ResourceSelection: wrsi and CAIC
-D6811	704	statmod: qinvgauss
+D6811	705	statmod: qinvgauss
+D6812	971	caret: createResample, createFolds, groupKFold, createTimeSlices
