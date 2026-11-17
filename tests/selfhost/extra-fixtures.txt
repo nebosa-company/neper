@@ -401,3 +401,4 @@ oracle_vars_chk
 oracle_vars_stab
 oracle_vars_svar
 oracle_vars_vec
+oracle_mclust2
