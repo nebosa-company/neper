@@ -12,6 +12,8 @@ fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
     let n = usize(x[0usize])
+    if str.eq(k, "hcvd") { ret sm.hcv(x[1usize..1usize + n], x[1usize..1usize + n], false) }
+    if str.eq(k, "hcvr") { ret sm.hcv(x[1usize..1usize + n], x[1usize + n..1usize + 2usize * n], true) }
     if str.eq(k, "hn1") { ret sm.hnorm(x[1usize..1usize + n], 1usize) }
     if str.eq(k, "hn2") { ret sm.hnorm(x[1usize..1usize + n], 2usize) }
     if str.eq(k, "dens1") { ret sm.density1(x[3usize..3usize + n], x[1usize], x[2usize]) }

@@ -15,4 +15,10 @@ for (rep in 1:20) {
   xs <- sort(runif(n, 0, 10)); ys <- round(sin(xs) + rnorm(n, 0, 0.3), 4); hr <- runif(1, 0.5, 1.5); pr <- runif(3, 1, 9)
   for (po in 0:1) { r <- sm.regression(xs, ys, h = hr, eval.points = pr, poly.index = po, display = "none")$estimate; for (j in 1:3) add("reg", c(n, hr, pr[j], po, xs, ys), r[j]) }
 }
+# hcv: "hcvd" (n, x[n]) density, "hcvr" (n, x[n], y[n]) regression; cases where R reports the grid boundary are skipped
+for (rep in 1:40) {
+  n <- sample(30:80, 1); x <- if (rep %% 2 == 0) rnorm(n) else c(rnorm(n %/% 2), rnorm(n - n %/% 2, 3, 0.6)); y <- sin(x) + rnorm(n, 0, 0.3)
+  h1 <- tryCatch(suppressMessages(capture.output(r <- hcv(x))) , error = function(e) NULL); if (!is.null(h1) && is.numeric(r)) add("hcvd", c(n, x), r)
+  h2 <- tryCatch(suppressMessages(capture.output(r2 <- hcv(x, y))), error = function(e) NULL); if (!is.null(h2) && is.numeric(r2)) add("hcvr", c(n, x, y), r2)
+}
 emit("sm", "sm", list(cases))
