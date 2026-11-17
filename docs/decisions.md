@@ -47742,3 +47742,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6818 — bayesm: rmultireg and runireg
 
 **Decision.** `bayesmpkg.rmultireg` is `rmultireg(Y, X, Bbar, A, nu, V)`: the prior stacked under the data, Btilde = IR IR' W'z, the residual cross-product S, then an inverse Wishart draw of Sigma through `rwishart(nu + n, (V + S)^-1)` (its CI factor kept), k m standard normals, and B = Btilde + IR draw t(CI). `runireg` is the iid sampler `runireg(Data, Prior, Mcmc)` with keep 1: per draw a chi-square with nu + n degrees of freedom first (sigma squared = (nu ssq + s) / chisq), then k normals. Equal to bayesm under set.seed on 12 draws of each (oracle_bayesm). Not here: `runiregGibbs`, `rnmixGibbs`, `rmnpGibbs`, `rmvpGibbs`, `rivGibbs`, `rhierLinearModel`, `rhierMnlRwMixture`, `rscaleUsage`. Linux pending.
+
+## D6819 — bayesm: runiregGibbs
+
+**Decision.** `bayesmpkg.runireg_gibbs` is `runiregGibbs(Data, Prior, Mcmc)` with keep 1 from a given starting sigma squared: each sweep draws beta from N(IR IR' (X'y / s + A betabar), IR IR') with IR the inverse Cholesky factor of X'X / s + A and k normals, then sigma squared = (nu ssq + RSS) / chi-square(nu + n). Equal to bayesm under set.seed on 12 runs of five sweeps (oracle_bayesm). Not here: `rnmixGibbs`, `rmnpGibbs`, `rmvpGibbs`, `rivGibbs`, `rhierLinearModel`, `rhierMnlRwMixture`, `rscaleUsage`, thinning (keep above 1). Linux pending.

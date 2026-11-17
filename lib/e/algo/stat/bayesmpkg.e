@@ -649,3 +649,116 @@ fn runireg(a: *mem.Arena, r: *rng.Rng, y: []const f64, x: []const f64, betabar: 
     }
     ret ok
 }
+
+// runiregGibbs(Data, Prior, Mcmc) with keep = 1: nr Gibbs sweeps from sigma squared = sigmasq0, each drawing beta given sigma squared (k normals) and then sigma squared given beta (one chi-square); outb is nr by k column-major
+fn runireg_gibbs(a: *mem.Arena, r: *rng.Rng, y: []const f64, x: []const f64, betabar: []const f64, am: []const f64, nu: f64, ssq: f64, sigmasq0: f64, n: usize, k: usize, nr: usize, outb: []f64, outs: []f64) -> err {
+    let (xpx, e1) = mem.alloc[f64](a, k * k)
+    let (xpy, e2) = mem.alloc[f64](a, k)
+    let (mx, e3) = mem.alloc[f64](a, k * k)
+    let (u, e4) = mem.alloc[f64](a, k * k)
+    let (ir, e5) = mem.alloc[f64](a, k * k)
+    let (rhs, e6) = mem.alloc[f64](a, k)
+    let (t1, e7) = mem.alloc[f64](a, k)
+    let (nz, e8) = mem.alloc[f64](a, k)
+    let (beta, e9) = mem.alloc[f64](a, k)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret mem.Full }
+    var c = 0usize
+    var i = 0usize
+    while c < k {
+        var c2 = 0usize
+        while c2 < k {
+            var sv = 0.0f64
+            i = 0usize
+            while i < n {
+                sv += x[c * n + i] * x[c2 * n + i]
+                i += 1usize
+            }
+            xpx[c2 * k + c] = sv
+            c2 += 1usize
+        }
+        var sy = 0.0f64
+        i = 0usize
+        while i < n {
+            sy += x[c * n + i] * y[i]
+            i += 1usize
+        }
+        xpy[c] = sy
+        c += 1usize
+    }
+    var sg = sigmasq0
+    var it = 0usize
+    while it < nr {
+        c = 0usize
+        while c < k {
+            var rr = 0usize
+            while rr < k {
+                mx[c * k + rr] = xpx[c * k + rr] / sg + am[c * k + rr]
+                rr += 1usize
+            }
+            c += 1usize
+        }
+        if !chol_upper(mx, k, u) { ret mem.Full }
+        inv_upper(u, k, ir)
+        i = 0usize
+        while i < k {
+            var sv = xpy[i] / sg
+            var j = 0usize
+            while j < k {
+                sv += am[j * k + i] * betabar[j]
+                j += 1usize
+            }
+            rhs[i] = sv
+            i += 1usize
+        }
+        i = 0usize
+        while i < k {
+            var sv = 0.0f64
+            var j = 0usize
+            while j < k {
+                sv += ir[i * k + j] * rhs[j]
+                j += 1usize
+            }
+            t1[i] = sv
+            i += 1usize
+        }
+        i = 0usize
+        while i < k {
+            nz[i] = rng.norm(r)
+            i += 1usize
+        }
+        i = 0usize
+        while i < k {
+            var sv = 0.0f64
+            var sn = 0.0f64
+            var j = 0usize
+            while j < k {
+                sv += ir[j * k + i] * t1[j]
+                sn += ir[j * k + i] * nz[j]
+                j += 1usize
+            }
+            beta[i] = sv + sn
+            i += 1usize
+        }
+        var ss = 0.0f64
+        i = 0usize
+        while i < n {
+            var f = 0.0f64
+            var j = 0usize
+            while j < k {
+                f += x[j * n + i] * beta[j]
+                j += 1usize
+            }
+            ss += (y[i] - f) * (y[i] - f)
+            i += 1usize
+        }
+        sg = (nu * ssq + ss) / rd.rchisq(r, nu + f64(n))
+        i = 0usize
+        while i < k {
+            outb[i * nr + it] = beta[i]
+            i += 1usize
+        }
+        outs[it] = sg
+        it += 1usize
+    }
+    ret ok
+}

@@ -34,4 +34,13 @@ for (rep in 1:12) {
   for (q in seq_along(bd)) add("ureg", c(sd, n, k, nr, nu1, ssq, y1, X, bb, A, q - 1), bd[q], 1e-8)
   for (q in seq_along(sg)) add("ureg", c(sd, n, k, nr, nu1, ssq, y1, X, bb, A, nr * k + q - 1), sg[q], 1e-8)
 }
+# "gibbs" (seed, n, k, R, nu, ssq, sigmasq0, y, X, betabar, A, id): runiregGibbs, id as "ureg"
+for (rep in 1:12) {
+  sd <- sample(1:100000, 1); n <- sample(15:50, 1); k <- sample(1:3, 1); X <- matrix(rnorm(n * k), n, k); y1 <- as.vector(X %*% rnorm(k) + rnorm(n)); A <- rspd(k) * 0.1; bb <- rnorm(k)
+  nr <- 5; nu1 <- sample(3:9, 1); ssq <- var(y1); s0 <- runif(1, 0.5, 3)
+  set.seed(sd); o3 <- runiregGibbs(Data = list(y = y1, X = X), Prior = list(betabar = bb, A = A, nu = nu1, ssq = ssq), Mcmc = list(R = nr, keep = 1, nprint = 0, sigmasq = s0))
+  bd <- as.vector(o3$betadraw); sg <- as.vector(o3$sigmasqdraw)
+  for (q in seq_along(bd)) add("gibbs", c(sd, n, k, nr, nu1, ssq, s0, y1, X, bb, A, q - 1), bd[q], 1e-8)
+  for (q in seq_along(sg)) add("gibbs", c(sd, n, k, nr, nu1, ssq, s0, y1, X, bb, A, nr * k + q - 1), sg[q], 1e-8)
+}
 emit("bayesm", "bayesm", list(cases))
