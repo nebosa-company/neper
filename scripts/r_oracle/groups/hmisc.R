@@ -97,4 +97,8 @@ for (rep in 1:30) { tr <- sample(3:5, 1); n <- sample(500:3000, 1); mc <- runif(
 # ciapower "cia" (tref, n1, n2, m1c, m2c, r1, r2, accrual, tmin, alpha)
 for (rep in 1:30) { tr <- sample(3:5, 1); n1 <- sample(500:3000, 1); n2 <- sample(500:3000, 1); m1 <- runif(1, 0.1, 0.5); m2 <- runif(1, 0.1, 0.5); r1 <- sample(c(10, 25, 40), 1); r2 <- sample(c(5, 15, 30), 1); ac <- sample(c(1.5, 2.5), 1); tm <- sample(c(1, 2, 3), 1); al <- sample(c(0.05, 0.01), 1)
   cases[[length(cases) + 1]] <- case("cia", c(tr, n1, n2, m1, m2, r1, r2, ac, tm, al), unname(ciapower(tr, n1, n2, m1, m2, r1, r2, ac, tm, al, pr = FALSE)), rel = 1e-10, abs = 1e-12) }
+# popower "pop" (k, odds, n1, n2, alpha, which 0 power 1 eff 2 se, p[k]) and posamsize "pos" (k, odds, fraction, alpha, power, p[k], which 0 n 1 eff)
+for (rep in 1:30) { k <- sample(3:6, 1); pr <- runif(k); pr <- pr / sum(pr); orr <- runif(1, 1.3, 3); n1 <- sample(40:300, 1); n2 <- sample(40:300, 1); al <- sample(c(0.05, 0.01), 1); fr <- runif(1, 0.3, 0.7); pw <- sample(c(0.8, 0.9), 1)
+  r <- popower(pr, orr, n1 = n1, n2 = n2, alpha = al); v <- c(r$power, r$eff, r$approx.se); for (w in 0:2) cases[[length(cases) + 1]] <- case("pop", c(k, orr, n1, n2, al, w, pr), v[w + 1], rel = 1e-10, abs = 1e-12)
+  r <- posamsize(pr, orr, fr, al, pw); v <- c(r$n, r$eff); for (w in 0:1) cases[[length(cases) + 1]] <- case("pos", c(k, orr, fr, al, pw, pr, w), v[w + 1], rel = 1e-10, abs = 1e-12) }
 emit("hmisc", "Hmisc", list(cases))

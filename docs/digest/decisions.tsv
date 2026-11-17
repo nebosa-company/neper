@@ -3837,4 +3837,5 @@ D6974	355	Hmisc spearman2 for a factor predictor
 D6975	415	Hmisc bpower and bsamsize
 D6976	373	Hmisc samplesize.bin and ballocation
 D6977	317	Hmisc cpower
-D6978	333	Hmisc ciapower
+D6978	335	Hmisc ciapower
+D6979	306	Hmisc popower and posamsize

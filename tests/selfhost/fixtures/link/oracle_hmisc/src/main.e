@@ -117,6 +117,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         // (tref, n1, n2, m1c, m2c, r1, r2, accrual, tmin, alpha)
         ret hm.ciapower(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], x[7usize], x[8usize], x[9usize])
     }
+    if str.eq(c.name, "pop") {
+        // (k, odds, n1, n2, alpha, which 0..2, p[k])
+        let k = usize(x[0usize])
+        var o3: [3]f64 = zero
+        hm.popower(x[6usize..6usize + k], x[1usize], x[2usize], x[3usize], x[4usize], o3[0usize..3usize])
+        ret o3[usize(x[5usize])]
+    }
+    if str.eq(c.name, "pos") {
+        // (k, odds, fraction, alpha, power, which 0 n 1 eff, p[k])
+        let k = usize(x[0usize])
+        let (nn, ef) = hm.posamsize(x[5usize..5usize + k], x[1usize], x[2usize], x[3usize], x[4usize])
+        if x[5usize + k] == 0.0f64 { ret nn }
+        ret ef
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])

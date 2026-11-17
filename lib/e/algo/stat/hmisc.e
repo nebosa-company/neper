@@ -1000,3 +1000,35 @@ fn ciapower(tref: f64, n1: f64, n2: f64, m1c: f64, m2c: f64, r1: f64, r2: f64, a
     let z = 0.0f64 - qn(alpha / 2.0f64)
     ret 1.0f64 - (dist.pnorm(z - math.abs[f64](delta) / sd, 0.0f64, 1.0f64, true, false) - dist.pnorm(0.0f64 - z - math.abs[f64](delta) / sd, 0.0f64, 1.0f64, true, false))
 }
+
+// popower(p, odds.ratio, n1, n2, alpha): out = (power, eff, approx.se) of the proportional-odds (Whitehead) comparison, p the marginal cell probabilities summing to one
+fn popower(p: []const f64, oratio: f64, n1: f64, n2: f64, alpha: f64, out: []f64) {
+    let n = n1 + n2
+    var s3 = 0.0f64
+    var i = 0usize
+    while i < p.len {
+        s3 += p[i] * p[i] * p[i]
+        i += 1usize
+    }
+    let ps = 1.0f64 - s3
+    let v = n1 * n2 * n / 3.0f64 / ((n + 1.0f64) * (n + 1.0f64)) * ps
+    out[0usize] = dist.pnorm(math.abs[f64](math.log[f64](oratio)) * math.sqrt[f64](v) - qn(1.0f64 - alpha / 2.0f64), 0.0f64, 1.0f64, true, false)
+    out[1usize] = ps / (1.0f64 - 1.0f64 / n / n)
+    out[2usize] = 1.0f64 / math.sqrt[f64](v)
+}
+
+// posamsize(p, odds.ratio, fraction, alpha, power): (n, eff)
+fn posamsize(p: []const f64, oratio: f64, fraction: f64, alpha: f64, power: f64) -> (f64, f64) {
+    var s3 = 0.0f64
+    var i = 0usize
+    while i < p.len {
+        s3 += p[i] * p[i] * p[i]
+        i += 1usize
+    }
+    let ps = 1.0f64 - s3
+    let aa = (1.0f64 - fraction) / fraction
+    let lo = math.log[f64](oratio)
+    let zz = qn(1.0f64 - alpha / 2.0f64) + qn(power)
+    let n = 3.0f64 * (aa + 1.0f64) * (aa + 1.0f64) * zz * zz / aa / (lo * lo) / ps
+    ret (n, ps / (1.0f64 - 1.0f64 / n / n))
+}
