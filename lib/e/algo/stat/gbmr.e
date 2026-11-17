@@ -13,7 +13,7 @@ error BadInput
 
 type Input = struct {
     dist: usize, n: usize, p: usize, ntrees: usize, shrinkage: f64, depth: usize, minobs: usize, bag: f64, trainfrac: f64,
-    par: f64, maxrank: usize, cv: usize, ncores1: bool, stratify: bool,
+    par: f64, maxrank: usize, cv: usize, ncores1: bool, stratify: bool, ntrain: usize, ngroups: usize,
     x: []const f64, y: []const f64, status: []const f64, w: []const f64, group: []const f64, mono: []const f64
 }
 
@@ -31,7 +31,12 @@ fn fit_rows(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, x: []const f64, y: []
     let w0 = gb.af(a, n, &bad)
     var i = 0usize
     var sw = 0.0f64
-    if wraw.len == n {
+    if wraw.len == n && cf.dist >= 10usize {
+        while i < n {
+            w0[i] = wraw[i]
+            i += 1usize
+        }
+    } else if wraw.len == n {
         sw = gb.rsum(wraw, n)
         while i < n {
             w0[i] = wraw[i] * f64(n) / sw
@@ -192,6 +197,17 @@ fn msort_range(key: []const f64, idx: []usize, tmp: []usize, lo: usize, hi: usiz
 // getCVgroup: the fold of every training row, drawn with sample(rep(1:folds, length = n))
 fn cv_groups(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, y: []const f64, ntrain: usize, group: []usize) -> err {
     let folds = cf.cv
+    if cf.dist >= 10usize {
+        // pairwise: the groups, not the rows, are dealt to the folds
+        let (pg, pge) = rng.sample_int(a, rg, i64(cf.ngroups), i64(cf.ngroups), false)
+        if pge != ok { ret pge }
+        var i = 0usize
+        while i < ntrain {
+            group[i] = (usize(pg[usize(cf.status[i]) - 1usize]) - 1usize) % folds + 1usize
+            i += 1usize
+        }
+        ret ok
+    }
     if cf.dist == 9usize || (cf.dist == 1usize && cf.stratify) {
         // stratified: within every class sample(rep(1:folds, length = class size))
         var kmax = 0usize
@@ -238,10 +254,11 @@ fn cv_groups(a: *mem.Arena, rg: *rng.Rng, cf: *const Input, y: []const f64, ntra
 }
 
 // gbm(): train.fraction and cross-validation around fit_rows. With n.cores = 1 every fold reseeds the one generator (so the final fit continues from the last fold's stream); otherwise the folds run on their own generators
-fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
+fn gbm_core(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
     let n = cf.n
     var bad = 0usize
-    let ntrain = usize(math.floor[f64](cf.trainfrac * f64(n)))
+    var ntrain = usize(math.floor[f64](cf.trainfrac * f64(n)))
+    if cf.ntrain > 0usize { ntrain = cf.ntrain }
     var cvfit: []f64 = zero
     var cverr: []f64 = zero
     var has = false
@@ -433,21 +450,21 @@ fn predict(f: *const Fitted, xnew: []const f64, nn: usize, use_trees: usize, out
 // predict.gbm(type = "response"): the link-scale values passed through the loss's inverse link (class probabilities for multinomial, row by row)
 fn to_response(dist: usize, nclass: usize, nn: usize, out: []f64) {
     var i = 0usize
-    if dist == 1usize {
+    if dist == 1usize || dist >= 10usize {
         while i < nn * nclass {
-            out[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - out[i]))
+            out[i] = 1.0f64 / (1.0f64 + gb.cr_exp(0.0f64 - out[i]))
             i += 1usize
         }
     }
     if dist == 2usize {
         while i < nn * nclass {
-            out[i] = math.exp[f64](out[i])
+            out[i] = gb.cr_exp(out[i])
             i += 1usize
         }
     }
     if dist == 3usize {
         while i < nn * nclass {
-            out[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - 2.0f64 * out[i]))
+            out[i] = 1.0f64 / (1.0f64 + gb.cr_exp(0.0f64 - 2.0f64 * out[i]))
             i += 1usize
         }
     }
@@ -457,7 +474,7 @@ fn to_response(dist: usize, nclass: usize, nn: usize, out: []f64) {
             var s = 0.0f64
             var k = 0usize
             while k < nclass {
-                out[k * nn + r] = math.exp[f64](out[k * nn + r])
+                out[k * nn + r] = gb.cr_exp(out[k * nn + r])
                 s += out[k * nn + r]
                 k += 1usize
             }
@@ -607,7 +624,7 @@ fn more(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, nnew: usize) -> (Fitted, 
         fo[i] = m.f[i]
         i += 1usize
     }
-    if f.dist == 8usize {
+    if f.dist == 8usize || f.dist >= 10usize {
         i = 0usize
         while i < f.n {
             fo[f.perm[i]] = m.f[i]
@@ -664,4 +681,148 @@ fn plot_grid(a: *mem.Arena, f: *const Fitted, vars: []const usize, nv: usize, re
     }
     gb.plot_values(&f.m, nv, vars, gx, rows, use_trees, out, scr)
     ret ok
+}
+
+// R's round(): halves go to the even neighbour
+fn round_even(x: f64) -> f64 {
+    let f = math.floor[f64](x)
+    let d = x - f
+    if d < 0.5f64 { ret f }
+    if d > 0.5f64 { ret f + 1.0f64 }
+    if f / 2.0f64 == math.floor[f64](f / 2.0f64) { ret f }
+    ret f + 1.0f64
+}
+
+// gbm(): for the pairwise losses the group labels (cf.group, ids 1..G in the order of their sorted names) get a random order of their own (sample() of the groups), the rows are sorted by group
+// and decreasing label, and train.fraction counts groups; everything else is gbm_core
+fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
+    if cf.dist < 10usize {
+        let (f0, e0) = gbm_core(a, rg, cf)
+        ret (f0, e0)
+    }
+    let n = cf.n
+    var bad = 0usize
+    var ng = 0usize
+    var i = 0usize
+    while i < n {
+        if usize(cf.group[i]) > ng { ng = usize(cf.group[i]) }
+        i += 1usize
+    }
+    let code = gb.af(a, ng, &bad)
+    let key1 = gb.af(a, n, &bad)
+    let key2 = gb.af(a, n, &bad)
+    let rowcode = gb.af(a, n, &bad)
+    let ord = gb.au(a, n, &bad)
+    let tmp = gb.au(a, n, &bad)
+    let x2 = gb.af(a, n * cf.p, &bad)
+    let y2 = gb.af(a, n, &bad)
+    let w2 = gb.af(a, n, &bad)
+    let g2 = gb.af(a, n, &bad)
+    let gmin = gb.af(a, ng, &bad)
+    if bad != 0usize { ret (zero_fit(), gb.NoMemory) }
+    var haw = false
+    if cf.w.len == n {
+        haw = true
+        var g = 0usize
+        while g < ng {
+            gmin[g] = 1.0f64 / 0.0f64
+            g += 1usize
+        }
+        i = 0usize
+        while i < n {
+            let g2i = usize(cf.group[i]) - 1usize
+            if cf.w[i] < gmin[g2i] { gmin[g2i] = cf.w[i] }
+            i += 1usize
+        }
+        let sw = gb.rsum(gmin, ng)
+        i = 0usize
+        while i < n {
+            w2[i] = cf.w[i] * f64(ng) / sw
+            i += 1usize
+        }
+    }
+    let (pm, pe) = rng.sample_int(a, rg, i64(ng), i64(ng), false)
+    if pe != ok { ret (zero_fit(), pe) }
+    var q = 0usize
+    while q < ng {
+        code[usize(pm[q]) - 1usize] = f64(q + 1usize)
+        q += 1usize
+    }
+    i = 0usize
+    while i < n {
+        ord[i] = i
+        key1[i] = 0.0f64 - cf.y[i]
+        rowcode[i] = code[usize(cf.group[i]) - 1usize]
+        key2[i] = rowcode[i]
+        i += 1usize
+    }
+    gb.msort(key1, ord, tmp, n)
+    gb.msort(key2, ord, tmp, n)
+    var hw = gb.af(a, n, &bad)
+    if bad != 0usize { ret (zero_fit(), gb.NoMemory) }
+    i = 0usize
+    while i < n {
+        y2[i] = cf.y[ord[i]]
+        g2[i] = rowcode[ord[i]]
+        if haw { hw[i] = w2[ord[i]] }
+        var j = 0usize
+        while j < cf.p {
+            x2[j * n + i] = cf.x[j * n + ord[i]]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var ngt = round_even(cf.trainfrac * f64(ng))
+    if ngt < 1.0f64 { ngt = 1.0f64 }
+    var ntr = 0usize
+    i = 0usize
+    while i < n {
+        if g2[i] <= ngt { ntr = i + 1usize }
+        i += 1usize
+    }
+    var cf2 = *cf
+    cf2.x = x2
+    cf2.y = y2
+    cf2.status = g2
+    cf2.ntrain = ntr
+    cf2.ngroups = ng
+    var none: []f64 = zero
+    if haw {
+        cf2.w = hw
+    } else {
+        cf2.w = none
+    }
+    let (fd, fe) = gbm_core(a, rg, &cf2)
+    if fe != ok { ret (fd, fe) }
+    var out = fd
+    let fo = gb.af(a, n, &bad)
+    let cvo = gb.af(a, ntr, &bad)
+    let kk = gb.af(a, ntr, &bad)
+    let ix = gb.au(a, ntr, &bad)
+    let tm2 = gb.au(a, ntr, &bad)
+    if bad != 0usize { ret (out, gb.NoMemory) }
+    i = 0usize
+    while i < n {
+        fo[ord[i]] = fd.m.f[i]
+        i += 1usize
+    }
+    out.fit = fo
+    out.perm = ord
+    if fd.has_cv {
+        // the cross-validated fits come back in the order of the original rows of the training groups
+        i = 0usize
+        while i < ntr {
+            ix[i] = i
+            kk[i] = f64(ord[i])
+            i += 1usize
+        }
+        gb.msort(kk, ix, tm2, ntr)
+        i = 0usize
+        while i < ntr {
+            cvo[i] = fd.cv_fitted[ix[i]]
+            i += 1usize
+        }
+        out.cv_fitted = cvo
+    }
+    ret (out, ok)
 }

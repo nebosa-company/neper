@@ -12,13 +12,13 @@ use e.test.oracle as oracle
 
 fn r3(x: f64, d: f64) -> f64 { ret math.floor[f64](x * d + 0.5f64) / d }
 
-type Data = struct { x: []f64, y: []f64, st: []f64, w: []f64 }
+type Data = struct { x: []f64, y: []f64, st: []f64, w: []f64, g: []f64 }
 
 fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool, na: bool) -> (Data, err) {
     var rg: rng.Rng = zero
     rng.seed(&rg, seed)
     var bad = 0usize
-    var d = Data{ x: gb.af(a, n * p, &bad), y: gb.af(a, n, &bad), st: gb.af(a, n, &bad), w: gb.af(a, n, &bad) }
+    var d = Data{ x: gb.af(a, n * p, &bad), y: gb.af(a, n, &bad), st: gb.af(a, n, &bad), w: gb.af(a, n, &bad), g: gb.af(a, n, &bad) }
     if bad != 0usize { ret (d, gb.NoMemory) }
     var i = 0usize
     while i < n * p {
@@ -35,7 +35,7 @@ fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool, 
         while i < n {
             let lin = 1.5f64 * d.x[i] - d.x[n + i]
             let u = rng.unif(&rg)
-            if u < 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - lin)) {
+            if u < 1.0f64 / (1.0f64 + gb.cr_exp(0.0f64 - lin)) {
                 d.y[i] = 1.0f64
             } else {
                 d.y[i] = 0.0f64
@@ -44,7 +44,7 @@ fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool, 
         }
     } else if dist == 2usize {
         while i < n {
-            d.y[i] = math.floor[f64](rng.unif(&rg) * 3.0f64 * math.exp[f64](0.6f64 * d.x[i]))
+            d.y[i] = math.floor[f64](rng.unif(&rg) * 3.0f64 * gb.cr_exp(0.6f64 * d.x[i]))
             i += 1usize
         }
     } else if dist == 4usize || dist == 5usize {
@@ -64,7 +64,7 @@ fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool, 
         }
     } else if dist == 8usize {
         while i < n {
-            d.y[i] = r3(rng.rexp(&rg, 1.0f64) / math.exp[f64](0.7f64 * d.x[i]), 1000.0f64) + 0.001f64
+            d.y[i] = r3(rng.rexp(&rg, 1.0f64) / gb.cr_exp(0.7f64 * d.x[i]), 1000.0f64) + 0.001f64
             i += 1usize
         }
         i = 0usize
@@ -89,7 +89,42 @@ fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool, 
             i += 1usize
         }
     }
-    if wflag {
+    if dist >= 10usize {
+        i = 0usize
+        while i < n {
+            d.g[i] = math.floor[f64](rng.unif(&rg) * 12.0f64) + 1.0f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            let lat = 1.2f64 * d.x[i] + rng.norm(&rg) * 0.8f64
+            if dist <= 11usize {
+                var v = math.floor[f64](lat + 1.0f64)
+                if v < 0.0f64 { v = 0.0f64 }
+                if v > 3.0f64 { v = 3.0f64 }
+                d.y[i] = v
+            } else if lat > 0.6f64 {
+                d.y[i] = 1.0f64
+            } else {
+                d.y[i] = 0.0f64
+            }
+            i += 1usize
+        }
+    }
+    if wflag && dist >= 10usize {
+        let (wg, wge) = mem.alloc[f64](a, 12usize)
+        if wge != ok { ret (d, wge) }
+        var k = 0usize
+        while k < 12usize {
+            wg[k] = 0.5f64 * (1.0f64 + math.floor[f64](4.0f64 * rng.unif(&rg)))
+            k += 1usize
+        }
+        i = 0usize
+        while i < n {
+            d.w[i] = wg[usize(d.g[i]) - 1usize]
+            i += 1usize
+        }
+    } else if wflag {
         i = 0usize
         while i < n {
             d.w[i] = 0.5f64 * (1.0f64 + math.floor[f64](4.0f64 * rng.unif(&rg)))
@@ -116,7 +151,7 @@ fn same_config(x: []const f64, y: []const f64) -> bool {
 }
 
 // the number a case asks for, read off the fit f and the new rows dn (12 by p)
-fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, z: []const f64) -> f64 {
+fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, dx: []const f64, z: []const f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
     let code = usize(z[17usize])
     let ia = usize(z[18usize])
@@ -130,6 +165,13 @@ fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, z: []const f64) -
     if code == 3usize { ret f.m.valid_err[ia] }
     if code == 4usize { ret f.m.oobag[ia] }
     if code == 6usize { ret f.m.initf }
+    if code == 17usize {
+        // predict(f, the training data, n.trees = b) at data row a
+        let (po, e) = mem.alloc[f64](a, n * f.nclass)
+        if e != ok { ret nan }
+        gr.predict(f, dx, n, ib, po)
+        ret po[ia + ic * n]
+    }
     if code == 9usize { ret gb.rsum(f.m.train_err, f.m.ntrees) }
     if code == 10usize { ret gb.rsum(f.m.valid_err, f.m.ntrees) }
     if code == 11usize { ret gb.rsum(f.m.oobag, f.m.ntrees) }
@@ -212,6 +254,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var have = false
     var fd: gr.Fitted = zero
     var dn: []f64 = zero
+    var dxs: []f64 = zero
     while at < golden.cases.len {
         let c = &golden.cases[at]
         let z = c.args
@@ -255,11 +298,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             var st: []f64 = zero
             if dist == 8usize { st = dat.st }
+            var maxrank = 0usize
+            if dist >= 10usize { maxrank = usize(z[11usize]) }
             var ww: []f64 = zero
             if z[12usize] == 1.0f64 { ww = dat.w }
-            var grp: []f64 = zero
-            let inp = gr.Input{ dist: dist, n: n, p: p, ntrees: usize(z[4usize]), shrinkage: z[5usize], depth: usize(z[6usize]), minobs: usize(z[7usize]), bag: z[8usize], trainfrac: z[9usize], par: z[11usize], maxrank: 0usize, cv: usize(z[14usize]), ncores1: true, stratify: false,
-                x: dat.x, y: dat.y, status: st, w: ww, group: grp, mono: mono }
+            var gpv: []f64 = zero
+            if dist >= 10usize { gpv = dat.g }
+            let inp = gr.Input{ dist: dist, n: n, p: p, ntrees: usize(z[4usize]), shrinkage: z[5usize], depth: usize(z[6usize]), minobs: usize(z[7usize]), bag: z[8usize], trainfrac: z[9usize], par: z[11usize], maxrank: maxrank, cv: usize(z[14usize]), ncores1: true, stratify: false, ntrain: 0usize, ngroups: 0usize,
+                x: dat.x, y: dat.y, status: st, w: ww, group: gpv, mono: mono }
             rng.seed(&rg, i64(z[10usize]))
             var (f, fe) = gr.gbm(a, &rg, &inp)
             if fe == ok && z[16usize] > 0.0f64 {
@@ -277,6 +323,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 continue
             }
             fd = f
+            dxs = dat.x
             have = true
         }
         if !have {
@@ -285,11 +332,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             continue
         }
         let start = mem.mark(a)
-        let got = output(a, &fd, dn, z)
+        let got = output(a, &fd, dn, dxs, z)
         if !oracle.agrees(got, c) {
             failures += 1usize
-            if z[0usize] != last_bad && shown < 14usize {
+            if z[0usize] != last_bad {
                 last_bad = z[0usize]
+                shown = 0usize
+            }
+            if shown < 8usize {
                 shown += 1usize
                 let _ = io.print(oracle.describe(a, c, got))
                 let _ = io.print("\n")

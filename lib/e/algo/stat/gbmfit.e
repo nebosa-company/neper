@@ -44,7 +44,8 @@ type Ctx = struct {
     nnode: usize, nterm: usize, totinbag: usize, ibest: usize, bestimp: f64,
     prob: []f64, stepprob: []f64, arr: []f64, w2: []f64, num: []f64, den: []f64, mx: []f64, mn: []f64,
     idx: []usize, tmp: []usize, stk: []usize, stp: []usize, sts: []usize, ids: []usize, scr: []f64,
-    hm: []f64, k2n: []usize, n2k: []usize
+    hm: []f64, k2n: []usize, n2k: []usize,
+    rg: *rng.Rng, hess: []f64, rscore: []f64, ritem: []usize, rrank: []usize, rkpos: []usize, rankw: []f64, cutoff: usize
 }
 
 fn nan_value() -> f64 { ret 0.0f64 / 0.0f64 }
@@ -387,7 +388,11 @@ fn ns_incorporate(c: *Ctx, k: usize, x: f64, z: f64, w: f64, mono: f64) {
         c.ns[k].cm_n += 1usize
         c.ns[k].cr_sumz -= wz
         c.ns[k].cr_w -= w
+        if c.ns[k].cr_n == 0usize {
+        c.ns[k].cr_n = UMAX
+    } else {
         c.ns[k].cr_n -= 1usize
+    }
         ret
     }
     c.ns[k].cur_val = 0.5f64 * (c.ns[k].last_x + x)
@@ -418,7 +423,11 @@ fn ns_incorporate(c: *Ctx, k: usize, x: f64, z: f64, w: f64, mono: f64) {
     c.ns[k].cl_n += 1usize
     c.ns[k].cr_sumz -= wz
     c.ns[k].cr_w -= w
-    c.ns[k].cr_n -= 1usize
+    if c.ns[k].cr_n == 0usize {
+        c.ns[k].cr_n = UMAX
+    } else {
+        c.ns[k].cr_n -= 1usize
+    }
     c.ns[k].last_x = x
 }
 
@@ -563,8 +572,8 @@ fn grow(c: *Ctx, zoff: usize) {
 
 // the distributions ---------------------------------------------------------------------------------------------------------------------------------------
 
-fn expf(x: f64) -> f64 { ret math.exp[f64](x) }
-fn logf(x: f64) -> f64 { ret math.log[f64](x) }
+fn expf(x: f64) -> f64 { ret cr_exp(x) }
+fn logf(x: f64) -> f64 { ret cr_log(x) }
 fn absf(x: f64) -> f64 { ret math.abs[f64](x) }
 
 // InitF: the constant the boosting starts from
@@ -628,6 +637,10 @@ fn dist_response(c: *Ctx, off: usize) {
     let nt = c.sp.ntrain
     let d = c.sp.dist
     var i = 0usize
+    if d >= 10usize {
+        pw_response(c)
+        ret
+    }
     if d == 8usize {
         var risk = 0.0f64
         while i < nt {
@@ -695,6 +708,7 @@ fn dist_response(c: *Ctx, off: usize) {
 // Deviance over len rows from index off
 fn dist_dev(c: *Ctx, off: usize, len: usize) -> f64 {
     let d = c.sp.dist
+    if d >= 10usize { ret pw_dev(c, off, len) }
     var dl = 0.0f64
     var dw = 0.0f64
     var i = off
@@ -780,6 +794,7 @@ fn dist_dev(c: *Ctx, off: usize, len: usize) -> f64 {
 // BagImprovement: the drop in loss over the rows left out of the bag when the tree is added with step dstep (fadj holds the unscaled leaf values)
 fn dist_bagimp(c: *Ctx, dstep: f64) -> f64 {
     let d = c.sp.dist
+    if d >= 10usize { ret pw_bagimp(c, dstep) }
     let nt = c.sp.ntrain
     var ret_v = 0.0f64
     var dw = 0.0f64
@@ -994,6 +1009,10 @@ fn dist_fitconst(c: *Ctx, zoff: usize) {
     var i = 0usize
     var k = 0usize
     if d == 0usize { ret }
+    if d >= 10usize {
+        pw_fitconst(c)
+        ret
+    }
     if d == 4usize || d == 5usize || d == 7usize {
         k = 0usize
         while k < nterm {
@@ -1317,7 +1336,9 @@ fn iterate(c: *Ctx, rg: *rng.Rng, m: *Model, ti: usize, shrink: f64, k: usize, r
     res[0usize] = 0.0f64
     res[1usize] = 0.0f64
     res[2usize] = 0.0f64
-    if k == 0usize {
+    if k == 0usize && c.sp.dist >= 10usize {
+        pw_sample(c, rg)
+    } else if k == 0usize {
         var bagged = 0usize
         var i = 0usize
         while i < nt {
@@ -1378,13 +1399,39 @@ fn fit(a: *mem.Arena, sp: *const Spec, rg: *rng.Rng, fold: []const f64) -> (Mode
         nnode: 0usize, nterm: 0usize, totinbag: 0usize, ibest: 0usize, bestimp: 0.0f64,
         prob: af(a, pwork, &bad), stepprob: af(a, pwork, &bad), arr: af(a, n, &bad), w2: af(a, n, &bad), num: af(a, nterm + 1usize, &bad), den: af(a, nterm + 1usize, &bad), mx: af(a, nterm + 1usize, &bad), mn: af(a, nterm + 1usize, &bad),
         idx: au(a, n, &bad), tmp: au(a, n, &bad), stk: au(a, stride + 3usize, &bad), stp: au(a, stride + 3usize, &bad), sts: au(a, stride + 3usize, &bad), ids: au(a, nterm + 1usize, &bad), scr: af(a, n, &bad),
-        hm: af(a, nterm * nterm + 1usize, &bad), k2n: au(a, nterm + 1usize, &bad), n2k: au(a, nterm + 1usize, &bad) }
+        hm: af(a, nterm * nterm + 1usize, &bad), k2n: au(a, nterm + 1usize, &bad), n2k: au(a, nterm + 1usize, &bad),
+        rg: rg, hess: af(a, n, &bad), rscore: af(a, n, &bad), ritem: au(a, n, &bad), rrank: au(a, n, &bad), rkpos: au(a, n + 1usize, &bad), rankw: af(a, n + 2usize, &bad), cutoff: 0usize }
     let tot = s.ntrees * nc
     var m = Model{ nclass: nc, ntrees: s.ntrees, depth: dp, p: s.p, stride: stride, initf: 0.0f64, f: c.f, train_err: af(a, s.ntrees, &bad), valid_err: af(a, s.ntrees, &bad), oobag: af(a, s.ntrees, &bad),
         nnodes: au(a, tot, &bad), tvar: ai(a, tot * stride, &bad), tcode: af(a, tot * stride, &bad), tleft: ai(a, tot * stride, &bad), tright: ai(a, tot * stride, &bad), tmiss: ai(a, tot * stride, &bad), terr: af(a, tot * stride, &bad), twt: af(a, tot * stride, &bad), tpred: af(a, tot * stride, &bad) }
     var res = af(a, 3usize, &bad)
     if bad != 0usize || dp < 1usize { ret (m, NoMemory) }
     c.totinbag = usize(s.bag * f64(nt))
+    if s.dist >= 10usize {
+        var maxitems = 0usize
+        var start = 0usize
+        while start < n {
+            let e = pw_end(&c, start, n)
+            if e - start > maxitems { maxitems = e - start }
+            start = e
+        }
+        c.cutoff = maxitems
+        if s.maxrank > 0usize { c.cutoff = s.maxrank }
+        var top = maxitems
+        if c.cutoff < top { top = c.cutoff }
+        var r = 1usize
+        while r <= top {
+            c.rankw[r] = logf(2.0f64) / logf(f64(r + 1usize))
+            r += 1usize
+        }
+        var ng = 0usize
+        start = 0usize
+        while start < nt {
+            ng += 1usize
+            start = pw_end(&c, start, nt)
+        }
+        c.sp.ngroups = ng
+    }
     var j = 0usize
     while j < s.p {
         var q = 0usize
@@ -1551,4 +1598,527 @@ fn plot_values(m: *const Model, nv: usize, which: []const usize, x: []const f64,
         }
         t += 1usize
     }
+}
+
+// pairwise (LambdaMART, pairwise.cpp) ----------------------------------------------------------------------------------------------------------------------
+// dist 10 conc, 11 ndcg, 12 map, 13 mrr; the rows are grouped (spec.misc holds the group code, contiguous) with non-increasing labels inside a group
+
+fn pw_end(c: *Ctx, start: usize, limit: usize) -> usize {
+    var e = start + 1usize
+    while e < limit && c.sp.misc[e] == c.sp.misc[start] { e += 1usize }
+    ret e
+}
+
+// CRanker::SetGroupScores and Rank over the m scores f[at..at + m], a little noise breaking ties: rank of item i (1-based) lands in rrank[i], item of rank r in ritem[r - 1]
+fn rk_setscores(c: *Ctx, at: usize, m: usize) {
+    var i = 0usize
+    while i < m {
+        c.rscore[i] = c.f[at + i] + 1.0e-10f64 * (rng.unif(c.rg) - 0.5f64)
+        i += 1usize
+    }
+}
+
+fn rk_rank(c: *Ctx, m: usize) {
+    var i = 0usize
+    while i < m {
+        let key = i
+        var j = i
+        while j > 0usize && c.rscore[c.ritem[j - 1usize]] < c.rscore[key] {
+            c.ritem[j] = c.ritem[j - 1usize]
+            j -= 1usize
+        }
+        c.ritem[j] = key
+        i += 1usize
+    }
+    i = 0usize
+    while i < m {
+        c.rrank[c.ritem[i]] = i + 1usize
+        i += 1usize
+    }
+}
+
+fn pw_anypairs(c: *Ctx, at: usize, m: usize) -> bool {
+    ret m >= 2usize && c.sp.y[at] > 0.0f64 && c.sp.y[at + m - 1usize] != c.sp.y[at]
+}
+
+fn pw_paircount(c: *Ctx, at: usize, m: usize) -> f64 {
+    if !pw_anypairs(c, at, m) { ret 0.0f64 }
+    var cur = c.sp.y[at]
+    var lend = 0usize
+    var pairs = 0usize
+    var j = 1usize
+    while j < m {
+        if c.sp.y[at + j] != cur {
+            lend = j
+            cur = c.sp.y[at + j]
+        }
+        pairs += lend
+        j += 1usize
+    }
+    ret f64(pairs)
+}
+
+fn pw_maxmeasure(c: *Ctx, at: usize, m: usize) -> f64 {
+    if c.sp.dist == 10usize { ret pw_paircount(c, at, m) }
+    if c.sp.dist == 11usize {
+        if !pw_anypairs(c, at, m) { ret 0.0f64 }
+        var score = 0.0f64
+        var i = 0usize
+        while i < m && c.sp.y[at + i] > 0.0f64 {
+            score += c.sp.y[at + i] * c.rankw[i + 1usize]
+            i += 1usize
+        }
+        ret score
+    }
+    if pw_anypairs(c, at, m) { ret 1.0f64 }
+    ret 0.0f64
+}
+
+fn pw_toprankpos(c: *Ctx, at: usize, m: usize, top: *usize, npos: *usize) {
+    *top = m + 1usize
+    var p = 0usize
+    while p < m {
+        if c.sp.y[at + p] <= 0.0f64 {
+            *npos = p
+            ret
+        }
+        if c.rrank[p] < *top { *top = c.rrank[p] }
+        p += 1usize
+    }
+    *npos = p
+}
+
+// the ranks of the positive items, sorted ascending, in rkpos[0..npos]
+fn pw_sortrankpos(c: *Ctx, at: usize, m: usize) -> usize {
+    var p = 0usize
+    while p < m {
+        if c.sp.y[at + p] <= 0.0f64 { break }
+        c.rkpos[p] = c.rrank[p]
+        p += 1usize
+    }
+    var i = 1usize
+    while i < p {
+        let key = c.rkpos[i]
+        var j = i
+        while j > 0usize && c.rkpos[j - 1usize] > key {
+            c.rkpos[j] = c.rkpos[j - 1usize]
+            j -= 1usize
+        }
+        c.rkpos[j] = key
+        i += 1usize
+    }
+    ret p
+}
+
+fn pw_measure(c: *Ctx, at: usize, m: usize) -> f64 {
+    let d = c.sp.dist
+    if d == 10usize {
+        var cur = c.sp.y[at]
+        var lend = 0usize
+        var good = 0usize
+        var j = 1usize
+        while j < m {
+            if c.sp.y[at + j] != cur {
+                lend = j
+                cur = c.sp.y[at + j]
+            }
+            var i = 0usize
+            while i < lend {
+                if c.rrank[i] < c.rrank[j] { good += 1usize }
+                i += 1usize
+            }
+            j += 1usize
+        }
+        ret f64(good)
+    }
+    if d == 11usize {
+        var score = 0.0f64
+        var i = 0usize
+        while i < m {
+            score += c.sp.y[at + i] * c.rankw[c.rrank[i]]
+            i += 1usize
+        }
+        ret score
+    }
+    if d == 13usize {
+        var top = 0usize
+        var npos = 0usize
+        pw_toprankpos(c, at, m, &top, &npos)
+        var nitems = m
+        if c.cutoff < nitems { nitems = c.cutoff }
+        if top >= nitems + 1usize { ret 0.0f64 }
+        ret 1.0f64 / f64(top)
+    }
+    let npos = pw_sortrankpos(c, at, m)
+    if npos == 0usize { ret 0.0f64 }
+    var prec = 0.0f64
+    var j = 0usize
+    while j < npos {
+        prec += f64(j + 1usize) / f64(c.rkpos[j])
+        j += 1usize
+    }
+    ret prec / f64(npos)
+}
+
+// the first index of rkpos[0..npos] holding a value greater than v
+fn pw_upper(c: *Ctx, npos: usize, v: usize) -> usize {
+    var i = 0usize
+    while i < npos && c.rkpos[i] <= v { i += 1usize }
+    ret i
+}
+
+fn pw_swapcost(c: *Ctx, at: usize, m: usize, ib: usize, iw: usize) -> f64 {
+    let d = c.sp.dist
+    if d == 11usize {
+        ret (c.rankw[c.rrank[ib]] - c.rankw[c.rrank[iw]]) * (c.sp.y[at + ib] - c.sp.y[at + iw])
+    }
+    if d == 10usize {
+        let rb = c.rrank[ib]
+        let rw = c.rrank[iw]
+        var upper = 0usize
+        var lower = 0usize
+        var yu = 0.0f64
+        var yl = 0.0f64
+        var diff = 0i64
+        if rb > rw {
+            upper = rw
+            lower = rb
+            yu = c.sp.y[at + iw]
+            yl = c.sp.y[at + ib]
+            diff = 1i64
+        } else {
+            upper = rb
+            lower = rw
+            yu = c.sp.y[at + ib]
+            yl = c.sp.y[at + iw]
+            diff = 0i64 - 1i64
+        }
+        var r = upper + 1usize
+        while r < lower {
+            let yi = c.sp.y[at + c.ritem[r - 1usize]]
+            var ds = yi - yl
+            if ds != 0.0f64 {
+                if ds < 0.0f64 {
+                    diff += 1i64
+                } else {
+                    diff -= 1i64
+                }
+            }
+            ds = yi - yu
+            if ds != 0.0f64 {
+                if ds < 0.0f64 {
+                    diff -= 1i64
+                } else {
+                    diff += 1i64
+                }
+            }
+            r += 1usize
+        }
+        ret f64(diff)
+    }
+    if d == 13usize {
+        var top = 0usize
+        var npos = 0usize
+        pw_toprankpos(c, at, m, &top, &npos)
+        if top >= m + 1usize || npos >= m { ret 0.0f64 }
+        let rp = c.rrank[ib]
+        let rn = c.rrank[iw]
+        var cur = 0.0f64
+        if !(top > c.cutoff) { cur = 1.0f64 / f64(top) }
+        var mneg = 0.0f64
+        if !(rn > c.cutoff) { mneg = 1.0f64 / f64(rn) }
+        if rn < top || rp == top { ret mneg - cur }
+        ret 0.0f64
+    }
+    let npos = pw_sortrankpos(c, at, m)
+    if npos == 0usize { ret 0.0f64 }
+    let irp = c.rrank[ib]
+    let irn = c.rrank[iw]
+    let nnb = pw_upper(c, npos, irp)
+    let nan2 = pw_upper(c, npos, irn)
+    var low = 0i64
+    var high = 0i64
+    let before = f64(nnb) / f64(irp)
+    var sign = 0.0f64
+    var after = 0.0f64
+    if irn > irp {
+        sign = 0.0f64 - 1.0f64
+        low = i64(nnb)
+        high = i64(nan2) - 1i64
+        after = f64(nan2) / f64(irn)
+    } else {
+        sign = 1.0f64
+        low = i64(nan2)
+        high = i64(nnb) - 2i64
+        after = f64(nan2 + 1usize) / f64(irn)
+    }
+    var dd = after - before
+    var j = low
+    while j <= high {
+        dd += sign / f64(c.rkpos[usize(j)])
+        j += 1i64
+    }
+    ret dd / f64(npos)
+}
+
+// ComputeLambdas for the group of m items at row index at
+fn pw_lambdas(c: *Ctx, at: usize, m: usize) {
+    if c.sp.w[at] <= 0.0f64 { ret }
+    let dmax = pw_maxmeasure(c, at, m)
+    if dmax <= 0.0f64 { ret }
+    rk_setscores(c, at, m)
+    rk_rank(c, m)
+    var cur = c.sp.y[at]
+    var lstart = 0usize
+    var pairs = 0usize
+    var j = 1usize
+    while j < m {
+        if c.sp.y[at + j] != cur {
+            lstart = j
+            cur = c.sp.y[at + j]
+        }
+        var i = 0usize
+        while i < lstart {
+            let sc = absf(pw_swapcost(c, at, m, i, j))
+            if sc > 0.0f64 {
+                pairs += 1usize
+                let rho = 1.0f64 / (1.0f64 + expf(c.f[at + i] - c.f[at + j]))
+                let lam = sc * rho
+                c.z[at + i] += lam
+                c.z[at + j] -= lam
+                let der = lam * (1.0f64 - rho)
+                c.hess[at + i] += der
+                c.hess[at + j] += der
+            }
+            i += 1usize
+        }
+        j += 1usize
+    }
+    if pairs > 0usize {
+        let qn = 1.0f64 / (dmax * f64(pairs))
+        j = 0usize
+        while j < m {
+            c.z[at + j] *= qn
+            c.hess[at + j] *= qn
+            j += 1usize
+        }
+    }
+}
+
+fn pw_response(c: *Ctx) {
+    let nt = c.sp.ntrain
+    var start = 0usize
+    while start < nt {
+        let e = pw_end(c, start, nt)
+        var i = start
+        while i < e {
+            c.z[i] = 0.0f64
+            c.hess[i] = 0.0f64
+            i += 1usize
+        }
+        if c.inbag[start] != 0u8 { pw_lambdas(c, start, e - start) }
+        start = e
+    }
+}
+
+fn pw_dev(c: *Ctx, off: usize, len: usize) -> f64 {
+    if len == 0usize { ret 0.0f64 }
+    var dl = 0.0f64
+    var dw = 0.0f64
+    var start = off
+    let cend = off + len
+    while start < cend {
+        let e = pw_end(c, start, cend)
+        let m = e - start
+        let dmax = pw_maxmeasure(c, start, m)
+        if dmax > 0.0f64 {
+            rk_setscores(c, start, m)
+            rk_rank(c, m)
+            dl += c.sp.w[start] * pw_measure(c, start, m) / dmax
+            dw += c.sp.w[start]
+        }
+        start = e
+    }
+    ret 1.0f64 - dl / dw
+}
+
+fn pw_bagimp(c: *Ctx, dstep: f64) -> f64 {
+    let nt = c.sp.ntrain
+    if nt == 0usize { ret 0.0f64 }
+    var dl = 0.0f64
+    var dw = 0.0f64
+    var start = 0usize
+    while start < nt {
+        let e = pw_end(c, start, nt)
+        let m = e - start
+        if c.inbag[start] == 0u8 {
+            let dmax = pw_maxmeasure(c, start, m)
+            if dmax > 0.0f64 {
+                rk_setscores(c, start, m)
+                rk_rank(c, m)
+                let old = pw_measure(c, start, m)
+                var i = 0usize
+                while i < m {
+                    c.rscore[i] += c.fadj[start + i] * dstep
+                    i += 1usize
+                }
+                let wi = c.sp.w[start]
+                rk_rank(c, m)
+                let nw = pw_measure(c, start, m)
+                dl += wi * (nw - old) / dmax
+                dw += wi
+            }
+        }
+        start = e
+    }
+    ret dl / dw
+}
+
+fn pw_fitconst(c: *Ctx) {
+    let nt = c.sp.ntrain
+    var k = 0usize
+    while k < c.nterm {
+        c.num[k] = 0.0f64
+        c.den[k] = 0.0f64
+        k += 1usize
+    }
+    var i = 0usize
+    while i < nt {
+        if c.inbag[i] != 0u8 {
+            c.num[c.assign[i]] += c.sp.w[i] * c.z[i]
+            c.den[c.assign[i]] += c.sp.w[i] * c.hess[i]
+        }
+        i += 1usize
+    }
+    k = 0usize
+    while k < c.nterm {
+        if c.den[k] <= 0.0f64 {
+            c.nd_pred[c.term[k]] = 0.0f64
+        } else {
+            c.nd_pred[c.term[k]] = c.num[k] / c.den[k]
+        }
+        k += 1usize
+    }
+}
+
+// iterate's group sampling: whole groups drawn into the bag, a group at a time, until the bagged share of the groups is reached
+fn pw_sample(c: *Ctx, rg: *rng.Rng) {
+    let nt = c.sp.ntrain
+    var last = 0.0f64 - 1.0f64
+    var chosen = false
+    var nbag = 0usize
+    var nseen = 0usize
+    var tot = usize(c.sp.bag * f64(c.sp.ngroups))
+    if tot == 0usize { tot = 1usize }
+    var i = 0usize
+    while i < nt {
+        let g = c.sp.misc[i]
+        if g != last {
+            if nbag >= tot { break }
+            chosen = rng.unif(rg) * f64(c.sp.ngroups - nseen) < f64(tot - nbag)
+            if chosen { nbag += 1usize }
+            last = g
+            nseen += 1usize
+        }
+        if chosen {
+            c.inbag[i] = 1u8
+        } else {
+            c.inbag[i] = 0u8
+        }
+        i += 1usize
+    }
+    while i < nt {
+        c.inbag[i] = 0u8
+        i += 1usize
+    }
+}
+
+// exp and log correctly rounded to the last bit (R's come from the C runtime, which is within a hair of that; Neper's own differ in the last bit for one argument in ten, enough to
+// reorder exactly tied splits). Double-double arithmetic: the argument reduced by ln 2 in three pieces, the Taylor series summed to 106 bits, the result rounded once.
+
+fn two_sum(a: f64, b: f64) -> (f64, f64) {
+    let s = a + b
+    let bb = s - a
+    let e = (a - (s - bb)) + (b - bb)
+    ret (s, e)
+}
+
+fn split_hi(a: f64) -> f64 {
+    let t = 134217729.0f64 * a
+    ret t - (t - a)
+}
+
+fn two_prod(a: f64, b: f64) -> (f64, f64) {
+    let p = a * b
+    let ah = split_hi(a)
+    let al = a - ah
+    let bh = split_hi(b)
+    let bl = b - bh
+    let e = ((ah * bh - p) + ah * bl + al * bh) + al * bl
+    ret (p, e)
+}
+
+fn dd_mul(ah: f64, al: f64, bh: f64, bl: f64) -> (f64, f64) {
+    let (p, e0) = two_prod(ah, bh)
+    let e = e0 + (ah * bl + al * bh)
+    let (s, t) = two_sum(p, e)
+    ret (s, t)
+}
+
+fn dd_div_d(ah: f64, al: f64, d: f64) -> (f64, f64) {
+    let q1 = ah / d
+    let (p, pe) = two_prod(q1, d)
+    let r = ((ah - p) - pe) + al
+    let q2 = r / d
+    let (s, t) = two_sum(q1, q2)
+    ret (s, t)
+}
+
+// exp of x (|x| below 709) as a double-double times 2^k, written into hi, lo and k
+fn exp_dd(x: f64, k: *i64, hi: *f64, lo: *f64) {
+    let kf = math.floor[f64](x * 1.4426950408889634f64 + 0.5f64)
+    let (r1a, r2a) = two_sum(x, 0.0f64 - kf * 0.6931471803691238f64)
+    let (pp, pe) = two_prod(kf, 1.9082149292705877e-10f64)
+    let (r1, e2) = two_sum(r1a, 0.0f64 - pp)
+    let r2 = (r2a + e2) - pe - kf * 1.1612227229362532e-26f64
+    let (rh, rl) = two_sum(r1, r2)
+    var th = 1.0f64
+    var tl = 0.0f64
+    var n = 24i64
+    while n >= 1i64 {
+        let (mh, ml) = dd_mul(th, tl, rh, rl)
+        let (dh, dl) = dd_div_d(mh, ml, f64(n))
+        let (sh, sl) = two_sum(dh, 1.0f64)
+        let (uh, ul) = two_sum(sh, dl + sl)
+        th = uh
+        tl = ul
+        n -= 1i64
+    }
+    *k = i64(kf)
+    *hi = th
+    *lo = tl
+}
+
+fn cr_exp(x: f64) -> f64 {
+    if x != x { ret x }
+    if x > 709.0f64 || x < 0.0f64 - 708.0f64 { ret math.exp[f64](x) }
+    var k = 0i64
+    var hi = 0.0f64
+    var lo = 0.0f64
+    exp_dd(x, &k, &hi, &lo)
+    ret (hi + lo) * math.power_of_two(k)
+}
+
+fn cr_log(x: f64) -> f64 {
+    if !(x > 1.0e-290f64) || x > 1.0e290f64 { ret math.log[f64](x) }
+    let y0 = math.log[f64](x)
+    var k = 0i64
+    var hi = 0.0f64
+    var lo = 0.0f64
+    exp_dd(y0, &k, &hi, &lo)
+    let sc = math.power_of_two(k)
+    let e0h = hi * sc
+    let e0l = lo * sc
+    let t = ((x - e0h) - e0l) / e0h
+    ret y0 + t
 }
