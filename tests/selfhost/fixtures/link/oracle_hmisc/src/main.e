@@ -99,6 +99,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if x[5usize] == 0.0f64 { ret n1 }
         ret n2
     }
+    if str.eq(c.name, "ssb") {
+        // (alpha, beta, pit, pic, rho)
+        ret hm.samplesize_bin(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize])
+    }
+    if str.eq(c.name, "bal") {
+        // (p1, p2, n, alpha, which 0..3)
+        var o4: [4]f64 = zero
+        hm.ballocation(x[0usize], x[1usize], x[2usize], x[3usize], o4[0usize..4usize])
+        ret o4[usize(x[4usize])]
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])

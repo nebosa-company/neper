@@ -926,3 +926,33 @@ fn bsamsize(p1: f64, p2: f64, fraction: f64, alpha: f64, power: f64) -> (f64, f6
     let n1 = t * t / ratio / ((p1 - p2) * (p1 - p2))
     ret (n1, ratio * n1)
 }
+
+// samplesize.bin(alpha, beta, pit, pic, rho): the arcsine-transformed sample size of Fleiss, rounded up the way Hmisc does (round(n + 0.5))
+fn samplesize_bin(alpha: f64, beta: f64, pit: f64, pic: f64, rho: f64) -> f64 {
+    let n0 = (qn(1.0f64 - alpha) + qn(beta)) / (math.asin[f64](math.sqrt[f64](pit)) - math.asin[f64](math.sqrt[f64](pic)))
+    let n = n0 * n0 / (4.0f64 * rho * (1.0f64 - rho))
+    ret math.round[f64](n + 0.5f64)
+}
+
+// ballocation(p1, p2, n, alpha): out = (min variance of the difference, of the ratio, of the log odds, the grid fraction of maximum power over 1000 points from 0.001 to 0.999 nearest one half)
+fn ballocation(p1: f64, p2: f64, n: f64, alpha: f64, out: []f64) {
+    let q1 = 1.0f64 - p1
+    let q2 = 1.0f64 - p2
+    let fd = 1.0f64 / (1.0f64 + math.sqrt[f64](p2 * q2 / (p1 * q1)))
+    out[0usize] = fd
+    out[1usize] = 1.0f64 / (1.0f64 + math.sqrt[f64](p1 * q2 / p2 / q1))
+    out[2usize] = 1.0f64 - fd
+    var best = -1.0f64
+    var bf = 0.0f64
+    var i = 0usize
+    while i < 1000usize {
+        let f = 0.001f64 + f64(i) * (0.999f64 - 0.001f64) / 999.0f64
+        let pw = bpower(p1, p2, n * f, n * (1.0f64 - f), alpha)
+        if pw > best || (pw == best && math.abs[f64](f - 0.5f64) < math.abs[f64](bf - 0.5f64)) {
+            best = pw
+            bf = f
+        }
+        i += 1usize
+    }
+    out[3usize] = bf
+}

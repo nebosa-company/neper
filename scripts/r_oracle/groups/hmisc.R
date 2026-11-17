@@ -87,4 +87,8 @@ for (rep in 1:20) { ng <- sample(3:6, 1); n <- sample(ng * 4:ng * 12, 1); g <- c
 for (rep in 1:40) { p1 <- runif(1, 0.05, 0.6); p2 <- min(0.95, p1 + runif(1, 0.05, 0.3)); n1 <- sample(30:300, 1); n2 <- sample(30:300, 1); al <- sample(c(0.01, 0.05, 0.1), 1); fr <- runif(1, 0.3, 0.7); pw <- sample(c(0.8, 0.9), 1)
   cases[[length(cases) + 1]] <- case("bpw", c(p1, p2, n1, n2, al), unname(bpower(p1, p2, n1 = n1, n2 = n2, alpha = al)), rel = 1e-10, abs = 1e-12)
   b <- bsamsize(p1, p2, fr, al, pw); for (w in 0:1) cases[[length(cases) + 1]] <- case("bss", c(p1, p2, fr, al, pw, w), unname(b[w + 1]), rel = 1e-10, abs = 1e-12) }
+# samplesize.bin "ssb" (alpha, beta, pit, pic, rho) and ballocation "bal" (p1, p2, n, alpha, which 0..3)
+for (rep in 1:30) { pic <- runif(1, 0.05, 0.5); pit <- pic + runif(1, 0.1, 0.4); al <- sample(c(0.025, 0.05), 1); be <- sample(c(0.8, 0.9), 1); rho <- runif(1, 0.3, 0.7); n <- sample(50:400, 1)
+  cases[[length(cases) + 1]] <- case("ssb", c(al, be, pit, pic, rho), samplesize.bin(al, be, pit, pic, rho), rel = 0, abs = 0.5)
+  b <- ballocation(pic, pit, n, al); for (w in 0:3) cases[[length(cases) + 1]] <- case("bal", c(pic, pit, n, al, w), unname(b[w + 1]), rel = 1e-10, abs = 1e-12) }
 emit("hmisc", "Hmisc", list(cases))

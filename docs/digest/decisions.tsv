@@ -3834,4 +3834,5 @@ D6971	728	Hmisc: redun with linear terms
 D6972	816	glmnet: the random folds of cv.glmnet
 D6973	605	Hmisc spearman2 for numeric predictors
 D6974	355	Hmisc spearman2 for a factor predictor
-D6975	413	Hmisc bpower and bsamsize
+D6975	415	Hmisc bpower and bsamsize
+D6976	371	Hmisc samplesize.bin and ballocation

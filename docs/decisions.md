@@ -48373,3 +48373,8 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6975 — Hmisc bpower and bsamsize
 
 `bpower(p1, p2, n1, n2, alpha)` (two-sided power of a two-proportion comparison) and `bsamsize(p1, p2, fraction, alpha, power)` (the two group sizes), the closed forms of `Hmisc::bpower` and `Hmisc::bsamsize`. The odds-ratio and percent-reduction ways of giving p2 are a one-line caller conversion and are not here. Equal to R on 40 settings (oracle_hmisc). Linux pending.
+
+
+## D6976 — Hmisc samplesize.bin and ballocation
+
+`samplesize_bin(alpha, beta, pit, pic, rho)` (arcsine sample size, `round(n + 0.5)`) and `ballocation(p1, p2, n, alpha)` (three minimum-variance fractions plus the maximum-power fraction over the 1000-point grid, ties to the one nearest one half, as Hmisc does). Equal to R on 30 settings (oracle_hmisc). Linux pending.
