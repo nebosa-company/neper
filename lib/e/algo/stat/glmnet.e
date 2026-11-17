@@ -7,11 +7,12 @@
 //
 // Box constraints lower.limits / upper.limits (original-scale coefficients, empty for none) clamp each coordinate update, which is exact for a one-variable convex problem. Observation weights (normalised to sum 1, as glmnet does) enter the means, the standardisation and the loss; an empty slice means equal weights.
 //
-// Also here, each as the minimiser run to a tight tolerance (glmnet stops at its thresh of 1e-7, so its own coefficients sit a few 1e-5 to 3e-4 from these): the binomial and poisson families (weights, offsets, bounds), the multinomial family (ungrouped and grouped; weights, offsets, bounds),
-// the Cox family (Breslow ties; weights, offsets, bounds), mgaussian, the automatic lambda sequence and its length for every family, `exclude`, cv.glmnet for every family (with the lambda sequence given, or with the default one where each fold finds its own and is read at the full fit's lambdas by
-// interpolation), relax = TRUE, and the predict types.
+// Also here, each as the minimiser run to a tight tolerance (glmnet stops at its thresh of 1e-7, so its own coefficients sit a few 1e-4 from these): the binomial and poisson families (weights, offsets, bounds), the multinomial family (ungrouped and grouped; weights, offsets, bounds),
+// the Cox family (Breslow and Efron ties, strata, start-stop responses, weights, offsets, bounds), mgaussian (weights, bounds), the automatic lambda sequence and its length for every family, `exclude`, relax = TRUE for every family, cv.glmnet for every family (weights, offsets, relax,
+// the lambda sequence given or the default one where each fold finds its own and is read at the full fit's lambdas by interpolation), and the predict types.
 //
-// Not here: Efron ties and strata or start-stop responses for Cox, relax for the multinomial and mgaussian families, cv.glmnet with relax = TRUE, observation weights and offsets inside cv.glmnet, bounds for mgaussian.
+// Not reproduced: the relaxed multinomial fit on data where glmnet's own unpenalised answer has not settled on the lasso limit (it is flat along one added vector per variable), the length of glmnet's grouped multinomial path with weights (its own algorithm stalls at the smallest lambdas),
+// the paths' length to better than one lambda at glmnet's default thresh, and the C-index and misclassification measures at the near-null first lambdas of a default-lambda cross-validation.
 
 use e.algo.rand.r as rng
 use e.math
@@ -408,387 +409,9 @@ fn poisson(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, off: 
     ret glm_path(a, 1usize, x, y, wt, off, n, p, alpha, standardize, vf, lambdas, coef)
 }
 
-// the coefficients of one cv.glmnet fold fit at the lambdas given (fam 2 gaussian, 0 binomial, 1 poisson; coef as `gaussian` fills it). With auto false the fold is fitted at those lambdas, as cv.glmnet does when the caller supplies a sequence. With auto true, as cv.glmnet does by default, each fold finds its own automatic
-// sequence from its own training rows and the coefficients at the shared lambdas are read off by glmnet's linear interpolation (predict with s = lambda)
-fn fold_coefs(a: *mem.Arena, fam: usize, xt: []const f64, yt: []const f64, m: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, auto: bool, coef: []f64) -> err {
-    let none: []const f64 = zero
-    if !auto {
-        if fam == 2usize { ret gaussian(a, xt, yt, none, none, none, m, p, alpha, standardize, vf, lambdas, coef) }
-        ret glm_path(a, fam, xt, yt, none, none, m, p, alpha, standardize, vf, lambdas, coef)
-    }
-    let (lam, e1) = mem.alloc[f64](a, 100usize)
-    let (cf, e2) = mem.alloc[f64](a, 100usize * (p + 1usize))
-    let (ico, e3) = mem.alloc[f64](a, p + 1usize)
-    if e1 != ok || e2 != ok || e3 != ok { ret e1 }
-    var len = 0usize
-    if fam == 2usize {
-        let le = lambda_path(a, xt, yt, m, p, alpha, standardize, vf, 100usize, lam)
-        if le != ok { ret le }
-        let ge = gaussian(a, xt, yt, none, none, none, m, p, alpha, standardize, vf, lam, cf)
-        if ge != ok { ret ge }
-        len = path_len(a, xt, yt, m, p, alpha, standardize, vf, 100usize)
-    } else {
-        let le = glm_lambda_path(a, fam, xt, yt, none, none, m, p, alpha, standardize, vf, 100usize, lam)
-        if le != ok { ret le }
-        let ge = glm_path(a, fam, xt, yt, none, none, m, p, alpha, standardize, vf, lam, cf)
-        if ge != ok { ret ge }
-        len = glm_path_len(a, fam, xt, yt, none, none, m, p, alpha, standardize, vf, 100usize)
-    }
-    var k = 0usize
-    while k < lambdas.len {
-        coef_interp(lam[0usize..len], cf[0usize..len * (p + 1usize)], p, lambdas[k], ico)
-        var j = 0usize
-        while j <= p {
-            coef[k * (p + 1usize) + j] = ico[j]
-            j += 1usize
-        }
-        k += 1usize
-    }
-    ret ok
-}
 
-// cv.glmnet for the gaussian family with user fold ids (0 .. nfolds - 1) over the given lambda sequence: each fold is refitted on the other observations, cvm[k] is the mean squared prediction error over all observations
-// and cvsd[k] = sqrt(sum_f n_f (cv_f - cvm)^2 / n / (nfolds - 1)) with cv_f the fold's mean squared error
-fn cv_gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, cvm: []f64, cvsd: []f64) -> err {
-    let nl = lambdas.len
-    let (xt, e1) = mem.alloc[f64](a, n * p)
-    let (yt, e2) = mem.alloc[f64](a, n)
-    let (coef, e3) = mem.alloc[f64](a, nl * (p + 1usize))
-    let (cvf, e4) = mem.alloc[f64](a, nl * nfolds)
-    let (nfv, e5) = mem.alloc[f64](a, nfolds)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
-    var f = 0usize
-    while f < nfolds {
-        var m = 0usize
-        var i = 0usize
-        while i < n {
-            if foldid[i] != f {
-                var j = 0usize
-                while j < p {
-                    xt[j * n + m] = x[j * n + i]
-                    j += 1usize
-                }
-                yt[m] = y[i]
-                m += 1usize
-            }
-            i += 1usize
-        }
-        // column-major with leading dimension m: repack
-        var j = 0usize
-        while j < p {
-            var q = 0usize
-            while q < m {
-                xt[j * m + q] = xt[j * n + q]
-                q += 1usize
-            }
-            j += 1usize
-        }
-        let mark = mem.mark(a)
-        let ge = fold_coefs(a, 2usize, xt[0usize..m * p], yt[0usize..m], m, p, alpha, standardize, vf, lambdas, auto, coef)
-        if ge != ok { ret ge }
-        var cnt = 0.0f64
-        var k = 0usize
-        while k < nl {
-            cvf[k * nfolds + f] = 0.0f64
-            k += 1usize
-        }
-        i = 0usize
-        while i < n {
-            if foldid[i] == f {
-                cnt += 1.0f64
-                k = 0usize
-                while k < nl {
-                    var pr = coef[k * (p + 1usize)]
-                    j = 0usize
-                    while j < p {
-                        pr += x[j * n + i] * coef[k * (p + 1usize) + 1usize + j]
-                        j += 1usize
-                    }
-                    cvf[k * nfolds + f] += (y[i] - pr) * (y[i] - pr)
-                    k += 1usize
-                }
-            }
-            i += 1usize
-        }
-        nfv[f] = cnt
-        k = 0usize
-        while k < nl {
-            cvf[k * nfolds + f] = cvf[k * nfolds + f] / cnt
-            k += 1usize
-        }
-        mem.reset(a, mark)
-        f += 1usize
-    }
-    var k = 0usize
-    while k < nl {
-        var mn = 0.0f64
-        f = 0usize
-        while f < nfolds {
-            mn += nfv[f] * cvf[k * nfolds + f]
-            f += 1usize
-        }
-        mn = mn / f64(n)
-        var vr = 0.0f64
-        f = 0usize
-        while f < nfolds {
-            vr += nfv[f] * (cvf[k * nfolds + f] - mn) * (cvf[k * nfolds + f] - mn)
-            f += 1usize
-        }
-        cvm[k] = mn
-        cvsd[k] = math.sqrt[f64](vr / f64(n) / f64(nfolds - 1usize))
-        k += 1usize
-    }
-    ret ok
-}
 
-// cv.glmnet for the binomial family (y in {0, 1}) with user fold ids; measure 0 deviance, 1 misclassification, 2 mse, 3 mae (the last two counted over both outcomes, so twice the plain error as cv.glmnet reports them). The deviance loss: the fitted probabilities clipped to [1e-5, 1 - 1e-5], the per-observation deviance 2 (-y log p - (1 - y) log(1 - p)),
-// averaged within each fold and then over folds by size, cvsd as in `cv_gaussian`
-fn cv_binomial(a: *mem.Arena, measure: usize, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, cvm: []f64, cvsd: []f64) -> err {
-    let nl = lambdas.len
-    let (xt, e1) = mem.alloc[f64](a, n * p)
-    let (yt, e2) = mem.alloc[f64](a, n)
-    let (coef, e3) = mem.alloc[f64](a, nl * (p + 1usize))
-    let (cvf, e4) = mem.alloc[f64](a, nl * nfolds)
-    let (nfv, e5) = mem.alloc[f64](a, nfolds)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
-    var f = 0usize
-    while f < nfolds {
-        var m = 0usize
-        var i = 0usize
-        while i < n {
-            if foldid[i] != f {
-                var j = 0usize
-                while j < p {
-                    xt[j * n + m] = x[j * n + i]
-                    j += 1usize
-                }
-                yt[m] = y[i]
-                m += 1usize
-            }
-            i += 1usize
-        }
-        // column-major with leading dimension m: repack
-        var j = 0usize
-        while j < p {
-            var q = 0usize
-            while q < m {
-                xt[j * m + q] = xt[j * n + q]
-                q += 1usize
-            }
-            j += 1usize
-        }
-        let mark = mem.mark(a)
-        let ge = fold_coefs(a, 0usize, xt[0usize..m * p], yt[0usize..m], m, p, alpha, standardize, vf, lambdas, auto, coef)
-        if ge != ok { ret ge }
-        var cnt = 0.0f64
-        var k = 0usize
-        while k < nl {
-            cvf[k * nfolds + f] = 0.0f64
-            k += 1usize
-        }
-        i = 0usize
-        while i < n {
-            if foldid[i] == f {
-                cnt += 1.0f64
-                k = 0usize
-                while k < nl {
-                    var pr = coef[k * (p + 1usize)]
-                    j = 0usize
-                    while j < p {
-                        pr += x[j * n + i] * coef[k * (p + 1usize) + 1usize + j]
-                        j += 1usize
-                    }
-                    var pp = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - pr))
-                    if pp < 1.0e-5f64 { pp = 1.0e-5f64 }
-                    if pp > 1.0f64 - 1.0e-5f64 { pp = 1.0f64 - 1.0e-5f64 }
-                    if measure == 0usize { cvf[k * nfolds + f] += 2.0f64 * (0.0f64 - y[i] * math.log[f64](pp) - (1.0f64 - y[i]) * math.log[f64](1.0f64 - pp)) }
-                    if measure == 1usize {
-                        if y[i] == 0.0f64 && pp > 0.5f64 { cvf[k * nfolds + f] += 1.0f64 }
-                        if y[i] == 1.0f64 && pp <= 0.5f64 { cvf[k * nfolds + f] += 1.0f64 }
-                    }
-                    if measure == 2usize { cvf[k * nfolds + f] += 2.0f64 * (y[i] - pp) * (y[i] - pp) }
-                    if measure == 3usize { cvf[k * nfolds + f] += 2.0f64 * math.abs[f64](y[i] - pp) }
-                    k += 1usize
-                }
-            }
-            i += 1usize
-        }
-        if measure == 4usize {
-            // the area under the ROC curve of the fold's fitted probabilities (ties counting half), stored times the fold size so the division below returns it
-            k = 0usize
-            while k < nl {
-                var wins = 0.0f64
-                var n1 = 0.0f64
-                var n0 = 0.0f64
-                var i1 = 0usize
-                while i1 < n {
-                    if foldid[i1] == f && y[i1] == 1.0f64 {
-                        n1 += 1.0f64
-                        var p1 = coef[k * (p + 1usize)]
-                        j = 0usize
-                        while j < p {
-                            p1 += x[j * n + i1] * coef[k * (p + 1usize) + 1usize + j]
-                            j += 1usize
-                        }
-                        var i0 = 0usize
-                        while i0 < n {
-                            if foldid[i0] == f && y[i0] == 0.0f64 {
-                                var p0 = coef[k * (p + 1usize)]
-                                j = 0usize
-                                while j < p {
-                                    p0 += x[j * n + i0] * coef[k * (p + 1usize) + 1usize + j]
-                                    j += 1usize
-                                }
-                                var q1 = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - p1))
-                                var q0 = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - p0))
-                                if q1 < 1.0e-5f64 { q1 = 1.0e-5f64 }
-                                if q1 > 1.0f64 - 1.0e-5f64 { q1 = 1.0f64 - 1.0e-5f64 }
-                                if q0 < 1.0e-5f64 { q0 = 1.0e-5f64 }
-                                if q0 > 1.0f64 - 1.0e-5f64 { q0 = 1.0f64 - 1.0e-5f64 }
-                                if q1 > q0 { wins += 1.0f64 }
-                                if q1 == q0 { wins += 0.5f64 }
-                            }
-                            i0 += 1usize
-                        }
-                    } else if foldid[i1] == f {
-                        n0 += 1.0f64
-                    }
-                    i1 += 1usize
-                }
-                cvf[k * nfolds + f] = wins / (n1 * n0) * cnt
-                k += 1usize
-            }
-        }
-        nfv[f] = cnt
-        k = 0usize
-        while k < nl {
-            cvf[k * nfolds + f] = cvf[k * nfolds + f] / cnt
-            k += 1usize
-        }
-        mem.reset(a, mark)
-        f += 1usize
-    }
-    var k = 0usize
-    while k < nl {
-        var mn = 0.0f64
-        f = 0usize
-        while f < nfolds {
-            mn += nfv[f] * cvf[k * nfolds + f]
-            f += 1usize
-        }
-        mn = mn / f64(n)
-        var vr = 0.0f64
-        f = 0usize
-        while f < nfolds {
-            vr += nfv[f] * (cvf[k * nfolds + f] - mn) * (cvf[k * nfolds + f] - mn)
-            f += 1usize
-        }
-        cvm[k] = mn
-        cvsd[k] = math.sqrt[f64](vr / f64(n) / f64(nfolds - 1usize))
-        k += 1usize
-    }
-    ret ok
-}
 
-// cv.glmnet for the poisson family with user fold ids; measure 0 deviance 2 (y log y - y - (y eta - exp(eta))), 2 mse and 3 mae on the response scale exp(eta)
-fn cv_poisson(a: *mem.Arena, measure: usize, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, cvm: []f64, cvsd: []f64) -> err {
-    let nl = lambdas.len
-    let (xt, e1) = mem.alloc[f64](a, n * p)
-    let (yt, e2) = mem.alloc[f64](a, n)
-    let (coef, e3) = mem.alloc[f64](a, nl * (p + 1usize))
-    let (cvf, e4) = mem.alloc[f64](a, nl * nfolds)
-    let (nfv, e5) = mem.alloc[f64](a, nfolds)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
-    var f = 0usize
-    while f < nfolds {
-        var m = 0usize
-        var i = 0usize
-        while i < n {
-            if foldid[i] != f {
-                var j = 0usize
-                while j < p {
-                    xt[j * n + m] = x[j * n + i]
-                    j += 1usize
-                }
-                yt[m] = y[i]
-                m += 1usize
-            }
-            i += 1usize
-        }
-        // column-major with leading dimension m: repack
-        var j = 0usize
-        while j < p {
-            var q = 0usize
-            while q < m {
-                xt[j * m + q] = xt[j * n + q]
-                q += 1usize
-            }
-            j += 1usize
-        }
-        let mark = mem.mark(a)
-        let ge = fold_coefs(a, 1usize, xt[0usize..m * p], yt[0usize..m], m, p, alpha, standardize, vf, lambdas, auto, coef)
-        if ge != ok { ret ge }
-        var cnt = 0.0f64
-        var k = 0usize
-        while k < nl {
-            cvf[k * nfolds + f] = 0.0f64
-            k += 1usize
-        }
-        i = 0usize
-        while i < n {
-            if foldid[i] == f {
-                cnt += 1.0f64
-                k = 0usize
-                while k < nl {
-                    var pr = coef[k * (p + 1usize)]
-                    j = 0usize
-                    while j < p {
-                        pr += x[j * n + i] * coef[k * (p + 1usize) + 1usize + j]
-                        j += 1usize
-                    }
-                    let mu = math.exp[f64](pr)
-                    if measure == 0usize {
-                        var devy = 0.0f64
-                        if y[i] > 0.0f64 { devy = y[i] * math.log[f64](y[i]) - y[i] }
-                        cvf[k * nfolds + f] += 2.0f64 * (devy - (y[i] * pr - mu))
-                    }
-                    if measure == 2usize { cvf[k * nfolds + f] += (y[i] - mu) * (y[i] - mu) }
-                    if measure == 3usize { cvf[k * nfolds + f] += math.abs[f64](y[i] - mu) }
-                    k += 1usize
-                }
-            }
-            i += 1usize
-        }
-        nfv[f] = cnt
-        k = 0usize
-        while k < nl {
-            cvf[k * nfolds + f] = cvf[k * nfolds + f] / cnt
-            k += 1usize
-        }
-        mem.reset(a, mark)
-        f += 1usize
-    }
-    var k = 0usize
-    while k < nl {
-        var mn = 0.0f64
-        f = 0usize
-        while f < nfolds {
-            mn += nfv[f] * cvf[k * nfolds + f]
-            f += 1usize
-        }
-        mn = mn / f64(n)
-        var vr = 0.0f64
-        f = 0usize
-        while f < nfolds {
-            vr += nfv[f] * (cvf[k * nfolds + f] - mn) * (cvf[k * nfolds + f] - mn)
-            f += 1usize
-        }
-        cvm[k] = mn
-        cvsd[k] = math.sqrt[f64](vr / f64(n) / f64(nfolds - 1usize))
-        k += 1usize
-    }
-    ret ok
-}
 
 // lambda.min (the largest lambda whose cvm equals the smallest) and lambda.1se (the largest lambda whose cvm is within one cvsd of that smallest) of cv.glmnet; out = (lambda.min, lambda.1se)
 fn cv_select(lambdas: []const f64, cvm: []const f64, cvsd: []const f64, out: []f64) {
@@ -869,7 +492,13 @@ fn path_len(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, a
 // the mgaussian family: m responses (y is n by m column-major) sharing one penalty, the group penalty lambda vf_j ((1 - alpha) / 2 ||b_j||^2 + alpha ||b_j||) over each variable's row of coefficients; the responses are not rescaled,
 // so the ridge part is lambda (1 - alpha) unscaled. coef receives, for lambda k and response r, the intercept at (k * m + r) * (p + 1) and the p slopes after it, on the original scale
 fn mgaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, m: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
-    let nf = f64(n)
+    let none: []const f64 = zero
+    ret mgaussian_b(a, x, y, none, none, none, n, p, m, alpha, standardize, vf, lambdas, coef)
+}
+
+// the mgaussian family with observation weights wt (normalised to sum 1) and box constraints lo / up on every coefficient (original scale, empty for none), as glmnet's lower.limits and upper.limits: for each variable the group problem is solved with the coordinates that hit a bound held there and the
+// norm of the others found by bisection (the free part is z / (c + lambda_2 + lambda_1 / norm))
+fn mgaussian_b(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, m: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
     let (xs, e1) = mem.alloc[f64](a, n * p)
     let (sc, e2) = mem.alloc[f64](a, p)
     let (mx, e3) = mem.alloc[f64](a, p)
@@ -878,17 +507,32 @@ fn mgaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     let (r, e6) = mem.alloc[f64](a, n * m)
     let (ybar, e7) = mem.alloc[f64](a, m)
     let (z, e8) = mem.alloc[f64](a, m)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret e1 }
-    var q = 0usize
-    while q < m {
-        var s = 0.0f64
-        var i = 0usize
+    let (q, e9) = mem.alloc[f64](a, n)
+    let (nb, e10) = mem.alloc[f64](a, m)
+    let (fixed, e11) = mem.alloc[usize](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret e1 }
+    var qs = 0.0f64
+    var i = 0usize
+    while i < n {
+        if wt.len == n { q[i] = wt[i] } else { q[i] = 1.0f64 }
+        qs += q[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        q[i] = q[i] / qs
+        i += 1usize
+    }
+    var c = 0usize
+    while c < m {
+        var sm = 0.0f64
+        i = 0usize
         while i < n {
-            s += y[q * n + i]
+            sm += q[i] * y[c * n + i]
             i += 1usize
         }
-        ybar[q] = s / nf
-        q += 1usize
+        ybar[c] = sm
+        c += 1usize
     }
     var vs = 0.0f64
     var j = 0usize
@@ -899,20 +543,21 @@ fn mgaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
     j = 0usize
     while j < p {
         var mm = 0.0f64
-        var i = 0usize
-        while i < n {
-            mm += x[j * n + i]
-            i += 1usize
-        }
-        mm = mm / nf
-        var v = 0.0f64
         i = 0usize
         while i < n {
-            v += (x[j * n + i] - mm) * (x[j * n + i] - mm)
+            mm += q[i] * x[j * n + i]
             i += 1usize
         }
         var s = 1.0f64
-        if standardize { s = math.sqrt[f64](v / nf) }
+        if standardize {
+            var v = 0.0f64
+            i = 0usize
+            while i < n {
+                v += q[i] * (x[j * n + i] - mm) * (x[j * n + i] - mm)
+                i += 1usize
+            }
+            s = math.sqrt[f64](v)
+        }
         sc[j] = s
         mx[j] = mm
         i = 0usize
@@ -921,30 +566,30 @@ fn mgaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
             i += 1usize
         }
         pf[j] = vf[j] * f64(p) / vs
-        q = 0usize
-        while q < m {
-            b[q * p + j] = 0.0f64
-            q += 1usize
+        c = 0usize
+        while c < m {
+            b[c * p + j] = 0.0f64
+            c += 1usize
         }
         j += 1usize
     }
     var k = 0usize
     while k < lambdas.len {
         let lam = lambdas[k]
-        q = 0usize
-        while q < m {
-            var i = 0usize
+        c = 0usize
+        while c < m {
+            i = 0usize
             while i < n {
                 var f = 0.0f64
                 j = 0usize
                 while j < p {
-                    f += xs[j * n + i] * b[q * p + j]
+                    f += xs[j * n + i] * b[c * p + j]
                     j += 1usize
                 }
-                r[q * n + i] = y[q * n + i] - ybar[q] - f
+                r[c * n + i] = y[c * n + i] - ybar[c] - f
                 i += 1usize
             }
-            q += 1usize
+            c += 1usize
         }
         var sweep = 0usize
         while sweep < 100000usize {
@@ -952,59 +597,122 @@ fn mgaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
             j = 0usize
             while j < p {
                 var cj = 0.0f64
-                var i = 0usize
+                i = 0usize
                 while i < n {
-                    cj += xs[j * n + i] * xs[j * n + i]
+                    cj += q[i] * xs[j * n + i] * xs[j * n + i]
                     i += 1usize
                 }
-                cj = cj / nf
-                var zn = 0.0f64
-                q = 0usize
-                while q < m {
+                c = 0usize
+                while c < m {
                     var xr = 0.0f64
                     i = 0usize
                     while i < n {
-                        xr += xs[j * n + i] * r[q * n + i]
+                        xr += q[i] * xs[j * n + i] * r[c * n + i]
                         i += 1usize
                     }
-                    z[q] = xr / nf + cj * b[q * p + j]
-                    zn += z[q] * z[q]
-                    q += 1usize
+                    z[c] = xr + cj * b[c * p + j]
+                    c += 1usize
+                }
+                let l1 = lam * alpha * pf[j]
+                let l2 = lam * (1.0f64 - alpha) * pf[j]
+                // the unconstrained group update, then the bounds
+                var zn = 0.0f64
+                c = 0usize
+                while c < m {
+                    zn += z[c] * z[c]
+                    fixed[c] = 0usize
+                    c += 1usize
                 }
                 zn = math.sqrt[f64](zn)
                 var shrink = 0.0f64
-                if zn > lam * alpha * pf[j] { shrink = 1.0f64 - lam * alpha * pf[j] / zn }
-                q = 0usize
-                while q < m {
-                    let nb = shrink * z[q] / (cj + lam * (1.0f64 - alpha) * pf[j])
-                    let d = nb - b[q * p + j]
+                if zn > l1 { shrink = 1.0f64 - l1 / zn }
+                c = 0usize
+                while c < m {
+                    nb[c] = shrink * z[c] / (cj + l2)
+                    c += 1usize
+                }
+                if lo.len == p {
+                    var again = true
+                    while again {
+                        again = false
+                        var any = false
+                        c = 0usize
+                        while c < m {
+                            if fixed[c] == 0usize {
+                                if nb[c] < lo[j] * sc[j] {
+                                    nb[c] = lo[j] * sc[j]
+                                    fixed[c] = 1usize
+                                    any = true
+                                } else if nb[c] > up[j] * sc[j] {
+                                    nb[c] = up[j] * sc[j]
+                                    fixed[c] = 1usize
+                                    any = true
+                                }
+                            }
+                            c += 1usize
+                        }
+                        if any {
+                            // the free coordinates against the norm of the whole vector
+                            var cn = 0.0f64
+                            var zf = 0.0f64
+                            c = 0usize
+                            while c < m {
+                                if fixed[c] == 1usize { cn += nb[c] * nb[c] } else { zf += z[c] * z[c] }
+                                c += 1usize
+                            }
+                            var lw = 0.0f64
+                            var hg = math.sqrt[f64](cn + zf) / (cj + l2) + 1.0f64
+                            var it = 0usize
+                            while it < 200usize {
+                                let u = 0.5f64 * (lw + hg)
+                                var den = cj + l2
+                                if u > 0.0f64 { den += l1 / u }
+                                let gv = u * u - cn - zf / (den * den)
+                                if gv > 0.0f64 { hg = u } else { lw = u }
+                                it += 1usize
+                            }
+                            let un = 0.5f64 * (lw + hg)
+                            var dn = cj + l2
+                            if un > 0.0f64 { dn += l1 / un }
+                            c = 0usize
+                            while c < m {
+                                if fixed[c] == 0usize { nb[c] = z[c] / dn }
+                                c += 1usize
+                            }
+                            again = true
+                        }
+                    }
+                }
+                c = 0usize
+                while c < m {
+                    let d = nb[c] - b[c * p + j]
                     if d != 0.0f64 {
                         i = 0usize
                         while i < n {
-                            r[q * n + i] -= d * xs[j * n + i]
+                            r[c * n + i] -= d * xs[j * n + i]
                             i += 1usize
                         }
-                        b[q * p + j] = nb
+                        b[c * p + j] = nb[c]
                         if math.abs[f64](d) * math.sqrt[f64](cj) > dmax { dmax = math.abs[f64](d) * math.sqrt[f64](cj) }
                     }
-                    q += 1usize
+                    c += 1usize
                 }
                 j += 1usize
             }
             if dmax < 1.0e-14f64 { break }
             sweep += 1usize
         }
-        q = 0usize
-        while q < m {
-            var b0 = ybar[q]
+        c = 0usize
+        while c < m {
+            var b0 = ybar[c]
             j = 0usize
             while j < p {
-                coef[(k * m + q) * (p + 1usize) + 1usize + j] = b[q * p + j] / sc[j]
-                b0 -= b[q * p + j] / sc[j] * mx[j]
+                coef[(k * m + c) * (p + 1usize) + 1usize + j] = b[c * p + j] / sc[j]
+                b0 -= b[c * p + j] / sc[j] * mx[j]
                 j += 1usize
             }
-            coef[(k * m + q) * (p + 1usize)] = b0
-            q += 1usize
+            coef[(k * m + c) * (p + 1usize)] = b0
+            c += 1usize
         }
         k += 1usize
     }
@@ -1125,6 +833,131 @@ fn cox_quant(time: []const f64, dq: []const f64, ord: []const usize, e: []const 
 // The Cox elastic-net path at the lambdas given: the objective is minus the weighted partial log-likelihood (weights normalised to sum 1) plus lambda sum vf_j ((1 - alpha) / 2 b_j^2 + alpha |b_j|) on columns centred and (when standardize) scaled to unit weighted variance, the penalty factors rescaled to sum to p; coef receives p slopes (original scale) per lambda
 // and dev the fraction of the null partial-likelihood deviance explained (glmnet's dev.ratio). status is 1 for an event; wt and off may be empty; lo and up (bounds on the original-scale coefficients) may be empty. Each lambda is solved by outer reweighting (gradient and diagonal Hessian of the partial likelihood) and inner coordinate descent, run until nothing moves
 fn cox(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64, dev: []f64) -> err {
+    let none: []const f64 = zero
+    ret cox_ext(a, x, time, none, none, false, status, wt, off, lo, up, n, p, alpha, standardize, vf, lambdas, coef, dev)
+}
+
+// the same quantities as `cox_quant` when ties are broken by Efron's rule (efron), the responses are counting-process intervals (start empty or the entry times: a row is at risk at an event time T when start < T <= time), or the risk sets are per stratum (strata empty or one label per row);
+// O(n times the number of event times). Every group of events tied in (stratum, time) adds, for Breslow, d_k / S to the gradient scale of every row at risk (S the weighted risk-set sum of e), and for Efron the d_k terms 1 / (S - (l / d) E), with E the sum of e over the tied events
+fn cox_quant_g(time: []const f64, start: []const f64, strata: []const f64, dq: []const f64, e: []const f64, efron: bool, w: []f64, wr: []f64) -> f64 {
+    let n = time.len
+    var i = 0usize
+    while i < n {
+        w[i] = 0.0f64
+        wr[i] = dq[i]
+        i += 1usize
+    }
+    var lg = 0.0f64
+    var g = 0usize
+    while g < n {
+        var first = dq[g] > 0.0f64
+        var j = 0usize
+        while j < g && first {
+            if dq[j] > 0.0f64 && time[j] == time[g] && (strata.len == 0usize || strata[j] == strata[g]) { first = false }
+            j += 1usize
+        }
+        if first {
+            let tt = time[g]
+            var d = 0.0f64
+            var dw = 0.0f64
+            var et = 0.0f64
+            var sr = 0.0f64
+            j = 0usize
+            while j < n {
+                let sameS = strata.len == 0usize || strata[j] == strata[g]
+                if sameS && dq[j] > 0.0f64 && time[j] == tt {
+                    d += 1.0f64
+                    dw += dq[j]
+                    et += e[j]
+                }
+                if sameS && time[j] >= tt && (start.len == 0usize || start[j] < tt) { sr += e[j] }
+                j += 1usize
+            }
+            var l = 0usize
+            var nl = 1usize
+            if efron { nl = usize(d) }
+            while l < nl {
+                var dl = sr
+                var c = dw
+                var fr = 0.0f64
+                if efron {
+                    fr = f64(l) / d
+                    dl = sr - fr * et
+                    c = dw / d
+                }
+                lg += c * math.log[f64](dl)
+                j = 0usize
+                while j < n {
+                    let sameS = strata.len == 0usize || strata[j] == strata[g]
+                    if sameS && time[j] >= tt && (start.len == 0usize || start[j] < tt) {
+                        var av = 1.0f64
+                        if efron && dq[j] > 0.0f64 && time[j] == tt { av = 1.0f64 - fr }
+                        let ea = e[j] * av
+                        wr[j] -= c * ea / dl
+                        w[j] += c * (ea / dl - ea * ea / (dl * dl))
+                    }
+                    j += 1usize
+                }
+                l += 1usize
+            }
+        }
+        g += 1usize
+    }
+    ret lg
+}
+
+// the sum over (stratum, time) groups of events of d_k log d_k (Efron: the mean weight times log(d!)), the saturated term of the Cox deviance
+fn cox_dklog_g(time: []const f64, strata: []const f64, dq: []const f64, efron: bool) -> f64 {
+    let n = time.len
+    var tot = 0.0f64
+    var g = 0usize
+    while g < n {
+        var first = dq[g] > 0.0f64
+        var j = 0usize
+        while j < g && first {
+            if dq[j] > 0.0f64 && time[j] == time[g] && (strata.len == 0usize || strata[j] == strata[g]) { first = false }
+            j += 1usize
+        }
+        if first {
+            var dw = 0.0f64
+            var dc = 0.0f64
+            j = 0usize
+            while j < n {
+                if dq[j] > 0.0f64 && time[j] == time[g] && (strata.len == 0usize || strata[j] == strata[g]) {
+                    dw += dq[j]
+                    dc += 1.0f64
+                }
+                j += 1usize
+            }
+            if efron {
+                // Efron's saturated term: the average weight times log(d!)
+                var lf = 0.0f64
+                var l = 2usize
+                while l <= usize(dc) {
+                    lf += math.log[f64](f64(l))
+                    l += 1usize
+                }
+                tot += dw / dc * lf
+            } else {
+                tot += dw * math.log[f64](dw)
+            }
+        }
+        g += 1usize
+    }
+    ret tot
+}
+
+fn cox_qa(time: []const f64, start: []const f64, strata: []const f64, dq: []const f64, ord: []const usize, e: []const f64, s: []f64, efron: bool, w: []f64, wr: []f64) -> f64 {
+    if start.len == 0usize && strata.len == 0usize && !efron { ret cox_quant(time, dq, ord, e, s, w, wr) }
+    ret cox_quant_g(time, start, strata, dq, e, efron, w, wr)
+}
+
+fn cox_dk_a(time: []const f64, strata: []const f64, dq: []const f64, ord: []const usize, efron: bool) -> f64 {
+    if strata.len == 0usize && !efron { ret cox_dklog(time, dq, ord) }
+    ret cox_dklog_g(time, strata, dq, efron)
+}
+
+fn cox_ext(a: *mem.Arena, x: []const f64, time: []const f64, start: []const f64, strata: []const f64, efron: bool, status: []const f64, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64, dev: []f64) -> err {
     let (xs, e1) = mem.alloc[f64](a, n * p)
     let (sc, e2) = mem.alloc[f64](a, p)
     let (pf, e3) = mem.alloc[f64](a, p)
@@ -1197,7 +1030,7 @@ fn cox(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt
         ee[i] = q[i] * math.exp[f64](ff[i])
         i += 1usize
     }
-    let r0 = 0.0f64 - cox_quant(time, dq, ord, ee, ss, w, wr)
+    let r0 = 0.0f64 - cox_qa(time, start, strata, dq, ord, ee, ss, efron, w, wr)
     var d0 = 0.0f64
     i = 0usize
     while i < n {
@@ -1205,7 +1038,7 @@ fn cox(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt
         i += 1usize
     }
     let risk0 = d0 + r0
-    let rr = 0.0f64 - (cox_dklog(time, dq, ord) + risk0)
+    let rr = 0.0f64 - (cox_dk_a(time, strata, dq, ord, efron) + risk0)
     var k = 0usize
     while k < lambdas.len {
         let lam = lambdas[k]
@@ -1216,7 +1049,7 @@ fn cox(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt
                 ee[i] = q[i] * math.exp[f64](ff[i])
                 i += 1usize
             }
-            let lg = cox_quant(time, dq, ord, ee, ss, w, wr)
+            let lg = cox_qa(time, start, strata, dq, ord, ee, ss, efron, w, wr)
             j = 0usize
             while j < p {
                 var vj = 0.0f64
@@ -1276,7 +1109,7 @@ fn cox(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt
             ee[i] = q[i] * math.exp[f64](ff[i])
             i += 1usize
         }
-        let lgk = cox_quant(time, dq, ord, ee, ss, w, wr)
+        let lgk = cox_qa(time, start, strata, dq, ord, ee, ss, efron, w, wr)
         var dk2 = 0.0f64
         i = 0usize
         while i < n {
@@ -1296,6 +1129,11 @@ fn cox(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt
 
 // glmnet's automatic lambda sequence for the Cox family (nlambda values from lambda_max down by the ratio 1e-4, or 1e-2 when n < p): lambda_max = max_j |gradient_j| / (vf_j max(alpha, 0.001)) at the null model on the standardised columns (penalty factors rescaled to sum to p; a zero factor is skipped)
 fn cox_lambda_path(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt: []const f64, off: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, nlambda: usize, out: []f64) -> err {
+    let none: []const f64 = zero
+    ret cox_lambda_path_ext(a, x, time, none, none, false, status, wt, off, n, p, alpha, standardize, vf, nlambda, out)
+}
+
+fn cox_lambda_path_ext(a: *mem.Arena, x: []const f64, time: []const f64, start: []const f64, strata: []const f64, efron: bool, status: []const f64, wt: []const f64, off: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, nlambda: usize, out: []f64) -> err {
     let (q, e1) = mem.alloc[f64](a, n)
     let (dq, e2) = mem.alloc[f64](a, n)
     let (ee, e3) = mem.alloc[f64](a, n)
@@ -1327,7 +1165,7 @@ fn cox_lambda_path(a: *mem.Arena, x: []const f64, time: []const f64, status: []c
         ee[i] = q[i] * math.exp[f64](fi)
         i += 1usize
     }
-    let lg0 = cox_quant(time, dq, ord, ee, ss, w, wr)
+    let lg0 = cox_qa(time, start, strata, dq, ord, ee, ss, efron, w, wr)
     if lg0 != lg0 { ret e1 }
     var vs = 0.0f64
     var j = 0usize
@@ -1374,12 +1212,17 @@ fn cox_lambda_path(a: *mem.Arena, x: []const f64, time: []const f64, status: []c
 
 // how many of the nlambda automatic lambdas glmnet reports for the Cox family: from the fifth on, the path stops once the deviance ratio gains less than a thousandth of itself over the last five lambdas, or passes 0.99
 fn cox_path_len(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, nlambda: usize) -> usize {
+    let none: []const f64 = zero
+    ret cox_path_len_ext(a, x, time, none, none, false, status, wt, off, lo, up, n, p, alpha, standardize, vf, nlambda)
+}
+
+fn cox_path_len_ext(a: *mem.Arena, x: []const f64, time: []const f64, start: []const f64, strata: []const f64, efron: bool, status: []const f64, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, nlambda: usize) -> usize {
     let (lam, e1) = mem.alloc[f64](a, nlambda)
     let (coef, e2) = mem.alloc[f64](a, nlambda * p)
     let (dev, e3) = mem.alloc[f64](a, nlambda)
     if e1 != ok || e2 != ok || e3 != ok { ret 0usize }
-    if cox_lambda_path(a, x, time, status, wt, off, n, p, alpha, standardize, vf, nlambda, lam) != ok { ret 0usize }
-    if cox(a, x, time, status, wt, off, lo, up, n, p, alpha, standardize, vf, lam, coef, dev) != ok { ret 0usize }
+    if cox_lambda_path_ext(a, x, time, start, strata, efron, status, wt, off, n, p, alpha, standardize, vf, nlambda, lam) != ok { ret 0usize }
+    if cox_ext(a, x, time, start, strata, efron, status, wt, off, lo, up, n, p, alpha, standardize, vf, lam, coef, dev) != ok { ret 0usize }
     var k = 4usize
     while k < nlambda {
         if (dev[k] - dev[k - 4usize]) / dev[k] < 1.0e-3f64 { ret k + 1usize }
@@ -1407,6 +1250,54 @@ fn mn_prob(eta: []const f64, n: usize, nc: usize, k: usize, out: []f64) {
         }
         out[i] = math.exp[f64](eta[k * n + i] - mx) / s
         i += 1usize
+    }
+}
+
+// solves the small dense system a x = b (a is n by n row-major, overwritten; the answer replaces b) by Gaussian elimination with partial pivoting
+fn solve_small(a: []f64, b: []f64, n: usize) {
+    var col = 0usize
+    while col < n {
+        var piv = col
+        var r = col + 1usize
+        while r < n {
+            if math.abs[f64](a[r * n + col]) > math.abs[f64](a[piv * n + col]) { piv = r }
+            r += 1usize
+        }
+        if piv != col {
+            var c = 0usize
+            while c < n {
+                let t = a[col * n + c]
+                a[col * n + c] = a[piv * n + c]
+                a[piv * n + c] = t
+                c += 1usize
+            }
+            let tb = b[col]
+            b[col] = b[piv]
+            b[piv] = tb
+        }
+        r = col + 1usize
+        while r < n {
+            let fct = a[r * n + col] / a[col * n + col]
+            var c = col
+            while c < n {
+                a[r * n + c] -= fct * a[col * n + c]
+                c += 1usize
+            }
+            b[r] -= fct * b[col]
+            r += 1usize
+        }
+        col += 1usize
+    }
+    var rr = n
+    while rr > 0usize {
+        rr -= 1usize
+        var t = b[rr]
+        var c = rr + 1usize
+        while c < n {
+            t -= a[rr * n + c] * b[c]
+            c += 1usize
+        }
+        b[rr] = t / a[rr * n + rr]
     }
 }
 
@@ -1457,11 +1348,11 @@ fn mn_dev(eta: []const f64, lab: []const usize, q: []const f64, n: usize, nc: us
 // each observation (0 .. nc - 1). Ungrouped: class by class, a reweighted least-squares quadratic (weights p (1 - p)) solved by coordinate descent, repeated until nothing moves; grouped: coordinate descent over the variables on the bound 1/2 of the Hessian, which cannot overshoot. coef receives, for lambda k and class c, the intercept at (k nc + c) (p + 1) and the p slopes after it, on the original
 // scale; dev receives glmnet's dev.ratio per lambda
 fn multinomial(a: *mem.Arena, x: []const f64, lab: []const usize, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, nc: usize, alpha: f64, standardize: bool, grouped: bool, vf: []const f64, lambdas: []const f64, coef: []f64, dev: []f64) -> err {
-    ret multinomial_tol(a, x, lab, wt, off, lo, up, n, p, nc, alpha, standardize, grouped, vf, lambdas, 1.0e-13f64, coef, dev)
+    ret multinomial_tol(a, x, lab, wt, off, lo, up, n, p, nc, alpha, standardize, grouped, vf, lambdas, 1.0e-13f64, true, coef, dev)
 }
 
-// as `multinomial`, run until no coefficient moves by more than tol in a pass (glmnet's own thresh leaves errors near 1e-7, so a cross-validation that is compared with it needs no more than 1e-9)
-fn multinomial_tol(a: *mem.Arena, x: []const f64, lab: []const usize, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, nc: usize, alpha: f64, standardize: bool, grouped: bool, vf: []const f64, lambdas: []const f64, tol: f64, coef: []f64, dev: []f64) -> err {
+// as `multinomial` (centre false leaves out the re-centring of each variable's coefficients over the classes), run until no coefficient moves by more than tol in a pass (glmnet's own thresh leaves errors near 1e-7, so a cross-validation that is compared with it needs no more than 1e-9)
+fn multinomial_tol(a: *mem.Arena, x: []const f64, lab: []const usize, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, nc: usize, alpha: f64, standardize: bool, grouped: bool, vf: []const f64, lambdas: []const f64, tol: f64, centre: bool, coef: []f64, dev: []f64) -> err {
     let (xs, e1) = mem.alloc[f64](a, n * p)
     let (sc, e2) = mem.alloc[f64](a, p)
     let (mx, e3) = mem.alloc[f64](a, p)
@@ -1476,7 +1367,11 @@ fn multinomial_tol(a: *mem.Arena, x: []const f64, lab: []const usize, wt: []cons
     let (z, e12) = mem.alloc[f64](a, nc)
     let (bo, e13) = mem.alloc[f64](a, nc)
     let (pm, e14) = mem.alloc[f64](a, n * nc)
-    if e14 != ok { ret e14 }
+    let (hm, e15) = mem.alloc[f64](a, nc * nc)
+    let (sa, e16) = mem.alloc[f64](a, nc * nc)
+    let (gv, e17) = mem.alloc[f64](a, nc)
+    let (bn, e18) = mem.alloc[f64](a, nc)
+    if e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok { ret e14 }
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok { ret e1 }
     var qs = 0.0f64
     var i = 0usize
@@ -1629,7 +1524,7 @@ fn multinomial_tol(a: *mem.Arena, x: []const f64, lab: []const usize, wt: []cons
                     c += 1usize
                 }
                 // the loss does not change when one variable's coefficient moves by the same amount in every class, so re-centre each variable on the shift that minimises its penalty (a bisection on the monotone derivative); this removes the slow flat direction
-                if lo.len != p {
+                if lo.len != p && centre {
                     j = 0usize
                     while j < p {
                         if pf[j] > 0.0f64 {
@@ -1676,27 +1571,48 @@ fn multinomial_tol(a: *mem.Arena, x: []const f64, lab: []const usize, wt: []cons
                     }
                 }
             } else {
-                // grouped: one pass over the intercepts and the variables, each against the bound 1/2 of the Hessian; the probabilities of every class are formed once per update
-                var cq = 0.0f64
-                i = 0usize
-                while i < n {
-                    cq += q[i]
-                    i += 1usize
-                }
+                // grouped: one pass over the intercepts (a Newton step on the centred intercepts) and the variables; for each variable the group's coefficients move by a proximal Newton step on the exact K by K block of the Hessian, solved by inner proximal-gradient iterations
                 mn_probs(eta, n, nc, pm)
                 c = 0usize
-                while c < nc {
-                    var g0 = 0.0f64
-                    i = 0usize
-                    while i < n {
-                        var yy = 0.0f64
-                        if lab[i] == c { yy = 1.0f64 }
-                        g0 += q[i] * (yy - pm[c * n + i])
-                        i += 1usize
-                    }
-                    bo[c] = g0 / (0.5f64 * cq)
+                while c < nc * nc {
+                    hm[c] = 0.0f64
                     c += 1usize
                 }
+                c = 0usize
+                while c < nc {
+                    gv[c] = 0.0f64
+                    c += 1usize
+                }
+                i = 0usize
+                while i < n {
+                    c = 0usize
+                    while c < nc {
+                        var yy = 0.0f64
+                        if lab[i] == c { yy = 1.0f64 }
+                        gv[c] += q[i] * (yy - pm[c * n + i])
+                        var c2 = 0usize
+                        while c2 < nc {
+                            var dg = 0.0f64
+                            if c == c2 { dg = pm[c * n + i] }
+                            hm[c * nc + c2] += q[i] * (dg - pm[c * n + i] * pm[c2 * n + i]) + 1.0f64 / f64(n) / f64(nc) * 0.0f64
+                            c2 += 1usize
+                        }
+                        c += 1usize
+                    }
+                    i += 1usize
+                }
+                // (H + 11') d = g gives the step with sum d = 0, because H 1 = 0 and g sums to zero
+                c = 0usize
+                while c < nc {
+                    var c2 = 0usize
+                    while c2 < nc {
+                        sa[c * nc + c2] = hm[c * nc + c2] + 1.0f64
+                        c2 += 1usize
+                    }
+                    bo[c] = gv[c]
+                    c += 1usize
+                }
+                solve_small(sa, bo, nc)
                 c = 0usize
                 while c < nc {
                     b0[c] += bo[c]
@@ -1710,44 +1626,114 @@ fn multinomial_tol(a: *mem.Arena, x: []const f64, lab: []const usize, wt: []cons
                 }
                 j = 0usize
                 while j < p {
-                    var hj = 0.0f64
+                    mn_probs(eta, n, nc, pm)
+                    c = 0usize
+                    while c < nc * nc {
+                        hm[c] = 0.0f64
+                        c += 1usize
+                    }
+                    c = 0usize
+                    while c < nc {
+                        gv[c] = 0.0f64
+                        c += 1usize
+                    }
                     i = 0usize
                     while i < n {
-                        hj += 0.5f64 * q[i] * xs[j * n + i] * xs[j * n + i]
-                        i += 1usize
-                    }
-                    mn_probs(eta, n, nc, pm)
-                    var zn = 0.0f64
-                    c = 0usize
-                    while c < nc {
-                        var gj = 0.0f64
-                        i = 0usize
-                        while i < n {
+                        let xi = xs[j * n + i]
+                        c = 0usize
+                        while c < nc {
                             var yy = 0.0f64
                             if lab[i] == c { yy = 1.0f64 }
-                            gj += q[i] * xs[j * n + i] * (yy - pm[c * n + i])
-                            i += 1usize
+                            gv[c] += q[i] * xi * (yy - pm[c * n + i])
+                            var c2 = 0usize
+                            while c2 < nc {
+                                var dg = 0.0f64
+                                if c == c2 { dg = pm[c * n + i] }
+                                hm[c * nc + c2] += q[i] * xi * xi * (dg - pm[c * n + i] * pm[c2 * n + i])
+                                c2 += 1usize
+                            }
+                            c += 1usize
                         }
-                        z[c] = hj * b[c * p + j] + gj
-                        zn += z[c] * z[c]
-                        c += 1usize
+                        i += 1usize
                     }
-                    zn = math.sqrt[f64](zn)
-                    var shrink = 0.0f64
-                    if zn > pf[j] * lam * alpha { shrink = 1.0f64 - pf[j] * lam * alpha / zn }
+                    // the largest eigenvalue of the block by power iteration
                     c = 0usize
                     while c < nc {
-                        bo[c] = shrink * z[c] / (hj + pf[j] * lam * (1.0f64 - alpha)) - b[c * p + j]
+                        z[c] = f64(c) - 0.5f64 * f64(nc - 1usize) + 0.1f64 * f64((c * 3usize) % 2usize)
                         c += 1usize
+                    }
+                    var lh = 1.0e-12f64
+                    var it = 0usize
+                    while it < 40usize {
+                        var nrm = 0.0f64
+                        c = 0usize
+                        while c < nc {
+                            var t = 0.0f64
+                            var c2 = 0usize
+                            while c2 < nc {
+                                t += hm[c * nc + c2] * z[c2]
+                                c2 += 1usize
+                            }
+                            bo[c] = t
+                            nrm += t * t
+                            c += 1usize
+                        }
+                        nrm = math.sqrt[f64](nrm)
+                        if nrm < 1.0e-300f64 { break }
+                        c = 0usize
+                        while c < nc {
+                            z[c] = bo[c] / nrm
+                            c += 1usize
+                        }
+                        lh = nrm
+                        it += 1usize
+                    }
+                    lh = lh * 1.05f64 + 1.0e-12f64
+                    let l1 = lam * alpha * pf[j]
+                    let l2 = lam * (1.0f64 - alpha) * pf[j]
+                    c = 0usize
+                    while c < nc {
+                        bn[c] = b[c * p + j]
+                        c += 1usize
+                    }
+                    var inner = 0usize
+                    while inner < 500usize {
+                        var vn = 0.0f64
+                        c = 0usize
+                        while c < nc {
+                            var t = 0.0f64 - gv[c]
+                            var c2 = 0usize
+                            while c2 < nc {
+                                t += hm[c * nc + c2] * (bn[c2] - b[c2 * p + j])
+                                c2 += 1usize
+                            }
+                            bo[c] = (lh * bn[c] - t) / (lh + l2)
+                            vn += bo[c] * bo[c]
+                            c += 1usize
+                        }
+                        vn = math.sqrt[f64](vn)
+                        var sh = 0.0f64
+                        if vn > l1 / (lh + l2) { sh = 1.0f64 - l1 / (lh + l2) / vn }
+                        var dmv = 0.0f64
+                        c = 0usize
+                        while c < nc {
+                            let nv = sh * bo[c]
+                            if math.abs[f64](nv - bn[c]) > dmv { dmv = math.abs[f64](nv - bn[c]) }
+                            bn[c] = nv
+                            c += 1usize
+                        }
+                        if dmv < 1.0e-15f64 { break }
+                        inner += 1usize
                     }
                     c = 0usize
                     while c < nc {
-                        if bo[c] != 0.0f64 {
-                            b[c * p + j] += bo[c]
-                            if math.abs[f64](bo[c]) > change { change = math.abs[f64](bo[c]) }
+                        let d = bn[c] - b[c * p + j]
+                        if d != 0.0f64 {
+                            b[c * p + j] = bn[c]
+                            if math.abs[f64](d) > change { change = math.abs[f64](d) }
                             i = 0usize
                             while i < n {
-                                eta[c * n + i] += bo[c] * xs[j * n + i]
+                                eta[c * n + i] += d * xs[j * n + i]
                                 i += 1usize
                             }
                         }
@@ -1770,8 +1756,10 @@ fn multinomial_tol(a: *mem.Arena, x: []const f64, lab: []const usize, wt: []cons
                 var a0 = b0[c]
                 j = 0usize
                 while j < p {
-                    coef[((k - 1usize) * nc + c) * (p + 1usize) + 1usize + j] = b[c * p + j] / sc[j]
-                    a0 -= b[c * p + j] / sc[j] * mx[j]
+                    var bv = b[c * p + j]
+                    if math.abs[f64](bv) < 1.0e-12f64 { bv = 0.0f64 }
+                    coef[((k - 1usize) * nc + c) * (p + 1usize) + 1usize + j] = bv / sc[j]
+                    a0 -= bv / sc[j] * mx[j]
                     j += 1usize
                 }
                 bo[c] = a0
@@ -2056,7 +2044,9 @@ fn multinomial_path_len(a: *mem.Arena, x: []const f64, lab: []const usize, wt: [
     let (dev, e3) = mem.alloc[f64](a, nlambda)
     if e1 != ok || e2 != ok || e3 != ok { ret 0usize }
     if multinomial_lambda_path(a, x, lab, wt, off, n, p, nc, alpha, standardize, grouped, vf, nlambda, lam) != ok { ret 0usize }
-    if multinomial_tol(a, x, lab, wt, off, lo, up, n, p, nc, alpha, standardize, grouped, vf, lam, 1.0e-9f64, coef, dev) != ok { ret 0usize }
+    var tl = 1.0e-9f64
+    if grouped { tl = 1.0e-12f64 }
+    if multinomial_tol(a, x, lab, wt, off, lo, up, n, p, nc, alpha, standardize, grouped, vf, lam, tl, true, coef, dev) != ok { ret 0usize }
     var k = 4usize
     while k < nlambda {
         if dev[k] - dev[k - 1usize] < 1.0e-5f64 { ret k + 1usize }
@@ -2163,153 +2153,7 @@ fn cv_select_max(lambdas: []const f64, cvm: []const f64, cvsd: []const f64, out:
     out[1usize] = l1
 }
 
-// cv.glmnet for the multinomial family (classes lab 0 .. nc - 1) with user fold ids; measure 0 deviance (probabilities clipped to [1e-5, 1 - 1e-5]), 1 misclassification, 2 mse (summed over the classes), 3 mae (summed over the classes). auto as in `fold_coefs`
-fn cv_multinomial(a: *mem.Arena, measure: usize, x: []const f64, lab: []const usize, n: usize, p: usize, nc: usize, alpha: f64, standardize: bool, grouped: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, cvm: []f64, cvsd: []f64) -> err {
-    let nl = lambdas.len
-    let row = nc * (p + 1usize)
-    let (xt, e1) = mem.alloc[f64](a, n * p)
-    let (lt, e2) = mem.alloc[usize](a, n)
-    let (coef, e3) = mem.alloc[f64](a, nl * row)
-    let (cvf, e4) = mem.alloc[f64](a, nl * nfolds)
-    let (nfv, e5) = mem.alloc[f64](a, nfolds)
-    let (pe, e6) = mem.alloc[f64](a, nc)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret e1 }
-    let none: []const f64 = zero
-    var f = 0usize
-    while f < nfolds {
-        var m = 0usize
-        var i = 0usize
-        while i < n {
-            if foldid[i] != f {
-                var j = 0usize
-                while j < p {
-                    xt[j * n + m] = x[j * n + i]
-                    j += 1usize
-                }
-                lt[m] = lab[i]
-                m += 1usize
-            }
-            i += 1usize
-        }
-        var j = 0usize
-        while j < p {
-            var q = 0usize
-            while q < m {
-                xt[j * m + q] = xt[j * n + q]
-                q += 1usize
-            }
-            j += 1usize
-        }
-        let mark = mem.mark(a)
-        if !auto {
-            let ge = multinomial(a, xt[0usize..m * p], lt[0usize..m], none, none, none, none, m, p, nc, alpha, standardize, grouped, vf, lambdas, coef, none_dev(a))
-            if ge != ok { ret ge }
-        } else {
-            let (lam, e7) = mem.alloc[f64](a, 100usize)
-            let (cf, e8) = mem.alloc[f64](a, 100usize * row)
-            let (dv, e9) = mem.alloc[f64](a, 100usize)
-            let (ico, e10) = mem.alloc[f64](a, row)
-            if e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret e7 }
-            let le = multinomial_lambda_path(a, xt[0usize..m * p], lt[0usize..m], none, none, m, p, nc, alpha, standardize, grouped, vf, 100usize, lam)
-            if le != ok { ret le }
-            let ge = multinomial_tol(a, xt[0usize..m * p], lt[0usize..m], none, none, none, none, m, p, nc, alpha, standardize, grouped, vf, lam, 1.0e-9f64, cf, dv)
-            if ge != ok { ret ge }
-            var len = 100usize
-            var kk = 4usize
-            while kk < 100usize {
-                if dv[kk] - dv[kk - 1usize] < 1.0e-5f64 || dv[kk] > 0.999f64 {
-                    len = kk + 1usize
-                    break
-                }
-                kk += 1usize
-            }
-            kk = 0usize
-            while kk < nl {
-                coef_interp(lam[0usize..len], cf[0usize..len * row], row - 1usize, lambdas[kk], ico)
-                var q = 0usize
-                while q < row {
-                    coef[kk * row + q] = ico[q]
-                    q += 1usize
-                }
-                kk += 1usize
-            }
-        }
-        var cnt = 0.0f64
-        var k = 0usize
-        while k < nl {
-            cvf[k * nfolds + f] = 0.0f64
-            k += 1usize
-        }
-        i = 0usize
-        while i < n {
-            if foldid[i] == f {
-                cnt += 1.0f64
-                k = 0usize
-                while k < nl {
-                    var mxe = 0.0f64 - 1.0e300f64
-                    var c = 0usize
-                    while c < nc {
-                        var eta = coef[k * row + c * (p + 1usize)]
-                        j = 0usize
-                        while j < p {
-                            eta += x[j * n + i] * coef[k * row + c * (p + 1usize) + 1usize + j]
-                            j += 1usize
-                        }
-                        pe[c] = eta
-                        if eta > mxe { mxe = eta }
-                        c += 1usize
-                    }
-                    var sm = 0.0f64
-                    c = 0usize
-                    while c < nc {
-                        pe[c] = math.exp[f64](pe[c] - mxe)
-                        sm += pe[c]
-                        c += 1usize
-                    }
-                    var best = 0usize
-                    c = 0usize
-                    while c < nc {
-                        pe[c] = pe[c] / sm
-                        if pe[c] > pe[best] { best = c }
-                        c += 1usize
-                    }
-                    c = 0usize
-                    while c < nc {
-                        var yy = 0.0f64
-                        if lab[i] == c { yy = 1.0f64 }
-                        if measure == 0usize && yy > 0.0f64 {
-                            var pc = pe[c]
-                            if pc < 1.0e-5f64 { pc = 1.0e-5f64 }
-                            if pc > 1.0f64 - 1.0e-5f64 { pc = 1.0f64 - 1.0e-5f64 }
-                            cvf[k * nfolds + f] += 0.0f64 - 2.0f64 * math.log[f64](pc)
-                        }
-                        if measure == 2usize { cvf[k * nfolds + f] += (yy - pe[c]) * (yy - pe[c]) }
-                        if measure == 3usize { cvf[k * nfolds + f] += math.abs[f64](yy - pe[c]) }
-                        c += 1usize
-                    }
-                    if measure == 1usize && best != lab[i] { cvf[k * nfolds + f] += 1.0f64 }
-                    k += 1usize
-                }
-            }
-            i += 1usize
-        }
-        nfv[f] = cnt
-        k = 0usize
-        while k < nl {
-            cvf[k * nfolds + f] = cvf[k * nfolds + f] / cnt
-            k += 1usize
-        }
-        mem.reset(a, mark)
-        f += 1usize
-    }
-    cv_finish(cvf, nfv, nl, nfolds, cvm, cvsd)
-    ret ok
-}
 
-fn none_dev(a: *mem.Arena) -> []f64 {
-    let nd: []f64 = zero
-    ret nd
-}
 
 // glmnet's coxnet.deviance for the rows (weights w, the linear predictor eta, Breslow ties): twice the negative partial log-likelihood minus twice the sum over event times of d_k log d_k (d_k the weighted number of events tied there)
 fn cox_deviance(a: *mem.Arena, time: []const f64, status: []const f64, w: []const f64, eta: []const f64) -> f64 {
@@ -2355,177 +2199,6 @@ fn cox_cindex(time: []const f64, status: []const f64, pred: []const f64) -> f64 
     ret conc / tot
 }
 
-// cv.glmnet for the Cox family with user fold ids; measure 0 the partial-likelihood deviance (each fold: the deviance of the full data minus that of the other folds, at the fold's coefficients, divided by the fold's weight, which is cv.glmnet's grouped form), 1 the C-index. wt may be empty (the C-index ignores it). auto as in `fold_coefs`
-fn cv_cox(a: *mem.Arena, measure: usize, x: []const f64, time: []const f64, status: []const f64, wt: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, cvm: []f64, cvsd: []f64) -> err {
-    let nl = lambdas.len
-    let (xt, e1) = mem.alloc[f64](a, n * p)
-    let (tt, e2) = mem.alloc[f64](a, n)
-    let (st, e3) = mem.alloc[f64](a, n)
-    let (wtt, e4) = mem.alloc[f64](a, n)
-    let (coef, e5) = mem.alloc[f64](a, nl * (p + 1usize))
-    let (cvf, e6) = mem.alloc[f64](a, nl * nfolds)
-    let (nfv, e7) = mem.alloc[f64](a, nfolds)
-    let (eta, e8) = mem.alloc[f64](a, n)
-    let (wall, e9) = mem.alloc[f64](a, n)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret e1 }
-    var i = 0usize
-    while i < n {
-        if wt.len == n { wall[i] = wt[i] } else { wall[i] = 1.0f64 }
-        i += 1usize
-    }
-    let none: []const f64 = zero
-    var f = 0usize
-    while f < nfolds {
-        var m = 0usize
-        i = 0usize
-        while i < n {
-            if foldid[i] != f {
-                var j = 0usize
-                while j < p {
-                    xt[j * n + m] = x[j * n + i]
-                    j += 1usize
-                }
-                tt[m] = time[i]
-                st[m] = status[i]
-                wtt[m] = wall[i]
-                m += 1usize
-            }
-            i += 1usize
-        }
-        var j = 0usize
-        while j < p {
-            var q = 0usize
-            while q < m {
-                xt[j * m + q] = xt[j * n + q]
-                q += 1usize
-            }
-            j += 1usize
-        }
-        let mark = mem.mark(a)
-        let dvn: []f64 = zero
-        if !auto {
-            let (cf0, e10) = mem.alloc[f64](a, nl * p)
-            if e10 != ok { ret e10 }
-            let ge = cox(a, xt[0usize..m * p], tt[0usize..m], st[0usize..m], wtt[0usize..m], none, none, none, m, p, alpha, standardize, vf, lambdas, cf0, dvn)
-            if ge != ok { ret ge }
-            var k0 = 0usize
-            while k0 < nl {
-                coef[k0 * (p + 1usize)] = 0.0f64
-                j = 0usize
-                while j < p {
-                    coef[k0 * (p + 1usize) + 1usize + j] = cf0[k0 * p + j]
-                    j += 1usize
-                }
-                k0 += 1usize
-            }
-        } else {
-            let (lam, e10) = mem.alloc[f64](a, 100usize)
-            let (cf1, e11) = mem.alloc[f64](a, 100usize * p)
-            let (cf, e12) = mem.alloc[f64](a, 100usize * (p + 1usize))
-            let (ico, e13) = mem.alloc[f64](a, p + 1usize)
-            if e10 != ok || e11 != ok || e12 != ok || e13 != ok { ret e10 }
-            let le = cox_lambda_path(a, xt[0usize..m * p], tt[0usize..m], st[0usize..m], wtt[0usize..m], none, m, p, alpha, standardize, vf, 100usize, lam)
-            if le != ok { ret le }
-            let ge = cox(a, xt[0usize..m * p], tt[0usize..m], st[0usize..m], wtt[0usize..m], none, none, none, m, p, alpha, standardize, vf, lam, cf1, dvn)
-            if ge != ok { ret ge }
-            let len = cox_path_len(a, xt[0usize..m * p], tt[0usize..m], st[0usize..m], wtt[0usize..m], none, none, none, m, p, alpha, standardize, vf, 100usize)
-            var k1 = 0usize
-            while k1 < len {
-                cf[k1 * (p + 1usize)] = 0.0f64
-                j = 0usize
-                while j < p {
-                    cf[k1 * (p + 1usize) + 1usize + j] = cf1[k1 * p + j]
-                    j += 1usize
-                }
-                k1 += 1usize
-            }
-            k1 = 0usize
-            while k1 < nl {
-                coef_interp(lam[0usize..len], cf[0usize..len * (p + 1usize)], p, lambdas[k1], ico)
-                j = 0usize
-                while j <= p {
-                    coef[k1 * (p + 1usize) + j] = ico[j]
-                    j += 1usize
-                }
-                k1 += 1usize
-            }
-        }
-        var wf = 0.0f64
-        var cnt = 0usize
-        i = 0usize
-        while i < n {
-            if foldid[i] == f {
-                wf += wall[i]
-                cnt += 1usize
-            }
-            i += 1usize
-        }
-        nfv[f] = wf
-        let (ft, e14) = mem.alloc[f64](a, cnt)
-        let (fs, e15) = mem.alloc[f64](a, cnt)
-        let (fw, e16) = mem.alloc[f64](a, cnt)
-        let (fe, e17) = mem.alloc[f64](a, cnt)
-        if e14 != ok || e15 != ok || e16 != ok || e17 != ok { ret e14 }
-        var q2 = 0usize
-        i = 0usize
-        while i < n {
-            if foldid[i] == f {
-                ft[q2] = time[i]
-                fs[q2] = status[i]
-                fw[q2] = wall[i]
-                q2 += 1usize
-            }
-            i += 1usize
-        }
-        var k = 0usize
-        while k < nl {
-            i = 0usize
-            while i < n {
-                var lp = 0.0f64
-                j = 0usize
-                while j < p {
-                    lp += x[j * n + i] * coef[k * (p + 1usize) + 1usize + j]
-                    j += 1usize
-                }
-                eta[i] = lp
-                i += 1usize
-            }
-            if measure == 0usize {
-                let dfull = cox_deviance(a, time, status, wall, eta)
-                var q3 = 0usize
-                i = 0usize
-                while i < n {
-                    if foldid[i] != f {
-                        tt[q3] = time[i]
-                        st[q3] = status[i]
-                        wtt[q3] = wall[i]
-                        xt[q3] = eta[i]
-                        q3 += 1usize
-                    }
-                    i += 1usize
-                }
-                let dtrain = cox_deviance(a, tt[0usize..q3], st[0usize..q3], wtt[0usize..q3], xt[0usize..q3])
-                cvf[k * nfolds + f] = (dfull - dtrain) / wf
-            } else {
-                q2 = 0usize
-                i = 0usize
-                while i < n {
-                    if foldid[i] == f {
-                        fe[q2] = eta[i]
-                        q2 += 1usize
-                    }
-                    i += 1usize
-                }
-                cvf[k * nfolds + f] = cox_cindex(ft, fs, fe)
-            }
-            k += 1usize
-        }
-        mem.reset(a, mark)
-        f += 1usize
-    }
-    cv_finish(cvf, nfv, nl, nfolds, cvm, cvsd)
-    ret ok
-}
 
 // glmnet gives an excluded variable the penalty factor 1 and then rescales all p factors to sum to p, whereas the fit on the kept variables rescales over the kept ones only; the two agree once every lambda of the original problem is multiplied by this factor (a fit on the kept columns at lambda c is the fit glmnet reports at lambda), and the automatic sequence of the kept fit divided by it is glmnet's
 fn exclude_scale(vf: []const f64, p: usize, excl: []const f64, nk: usize) -> f64 {
@@ -2611,7 +2284,17 @@ fn relax_path(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, st: []c
                     j += 1usize
                 }
                 var fe = ok
-                if fam == 2usize { fe = gaussian(a, xk[0usize..n * ex], y, wt, none, none, n, ex, 1.0f64, false, vk[0usize..ex], zl, sm) }
+                if fam == 2usize {
+                    let (ye, e7) = mem.alloc[f64](a, n)
+                    if e7 != ok { ret e7 }
+                    var ii = 0usize
+                    while ii < n {
+                        ye[ii] = y[ii]
+                        if off.len == n { ye[ii] = y[ii] - off[ii] }
+                        ii += 1usize
+                    }
+                    fe = gaussian(a, xk[0usize..n * ex], ye, wt, none, none, n, ex, 1.0f64, false, vk[0usize..ex], zl, sm)
+                }
                 if fam == 0usize || fam == 1usize { fe = glm_path_dev(a, fam, xk[0usize..n * ex], y, wt, off, none, none, n, ex, 1.0f64, false, vk[0usize..ex], zl, sm, nodv) }
                 if fam == 3usize {
                     fe = cox(a, xk[0usize..n * ex], y, st, wt, off, none, none, n, ex, 1.0f64, false, vk[0usize..ex], zl, sm[1usize..ex + 1usize], nodv)
@@ -2755,4 +2438,860 @@ fn lambda_seq(lmax: f64, ratio: f64, nlambda: usize, out: []f64) {
         out[k] = lmax * math.pow[f64](ratio, f64(k) / f64(nlambda - 1usize))
         k += 1usize
     }
+}
+
+// glmnet's automatic lambda sequence for the gaussian family with observation weights (and, through y, an offset: pass y - offset): `lambda_path` with the weights normalised to sum 1 in the means, the standardisation and the gradient
+fn lambda_path_w(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, nlambda: usize, out: []f64) -> err {
+    let (q, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    var qs = 0.0f64
+    var i = 0usize
+    while i < n {
+        if wt.len == n { q[i] = wt[i] } else { q[i] = 1.0f64 }
+        qs += q[i]
+        i += 1usize
+    }
+    var yb = 0.0f64
+    i = 0usize
+    while i < n {
+        q[i] = q[i] / qs
+        yb += q[i] * y[i]
+        i += 1usize
+    }
+    var vs = 0.0f64
+    var j = 0usize
+    while j < p {
+        vs += vf[j]
+        j += 1usize
+    }
+    var lmax = 0.0f64
+    j = 0usize
+    while j < p {
+        var m = 0.0f64
+        i = 0usize
+        while i < n {
+            m += q[i] * x[j * n + i]
+            i += 1usize
+        }
+        var vv = 0.0f64
+        var gj = 0.0f64
+        i = 0usize
+        while i < n {
+            vv += q[i] * (x[j * n + i] - m) * (x[j * n + i] - m)
+            gj += q[i] * (x[j * n + i] - m) * (y[i] - yb)
+            i += 1usize
+        }
+        if standardize { gj = gj / math.sqrt[f64](vv) }
+        let vj = vf[j] * f64(p) / vs
+        if vj > 0.0f64 {
+            var al = alpha
+            if al < 0.001f64 { al = 0.001f64 }
+            let c = math.abs[f64](gj) / (al * vj)
+            if c > lmax { lmax = c }
+        }
+        j += 1usize
+    }
+    var ratio = 1.0e-4f64
+    if n < p { ratio = 1.0e-2f64 }
+    lambda_seq(lmax, ratio, nlambda, out)
+    ret ok
+}
+
+// the number of automatic lambdas of the weighted gaussian family (y again already net of any offset): the stopping rule of `path_len` with weighted sums of squares
+fn path_len_w(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, nlambda: usize) -> usize {
+    let (lam, e1) = mem.alloc[f64](a, nlambda)
+    let (coef, e2) = mem.alloc[f64](a, nlambda * (p + 1usize))
+    if e1 != ok || e2 != ok { ret 0usize }
+    if lambda_path_w(a, x, y, wt, n, p, alpha, standardize, vf, nlambda, lam) != ok { ret 0usize }
+    let none: []const f64 = zero
+    if gaussian(a, x, y, wt, none, none, n, p, alpha, standardize, vf, lam, coef) != ok { ret 0usize }
+    var qs = 0.0f64
+    var i = 0usize
+    while i < n {
+        if wt.len == n { qs += wt[i] } else { qs += 1.0f64 }
+        i += 1usize
+    }
+    var yb = 0.0f64
+    i = 0usize
+    while i < n {
+        var qi = 1.0f64
+        if wt.len == n { qi = wt[i] }
+        yb += qi / qs * y[i]
+        i += 1usize
+    }
+    var sst = 0.0f64
+    i = 0usize
+    while i < n {
+        var qi = 1.0f64
+        if wt.len == n { qi = wt[i] }
+        sst += qi / qs * (y[i] - yb) * (y[i] - yb)
+        i += 1usize
+    }
+    var prev = 0.0f64
+    var k = 0usize
+    while k < nlambda {
+        var sse = 0.0f64
+        i = 0usize
+        while i < n {
+            var f = coef[k * (p + 1usize)]
+            var j = 0usize
+            while j < p {
+                f += x[j * n + i] * coef[k * (p + 1usize) + 1usize + j]
+                j += 1usize
+            }
+            var qi = 1.0f64
+            if wt.len == n { qi = wt[i] }
+            sse += qi / qs * (y[i] - f) * (y[i] - f)
+            i += 1usize
+        }
+        let rsq = 1.0f64 - sse / sst
+        if k + 1usize >= 5usize {
+            if rsq - prev < 1.0e-5f64 * rsq { ret k + 1usize }
+            if rsq > 0.999f64 { ret k + 1usize }
+        }
+        prev = rsq
+        k += 1usize
+    }
+    ret nlambda
+}
+
+// the coefficient rows (intercept first; a Cox fit gets a zero intercept) of the family at the lambdas given; fam 2 gaussian (an offset is taken off y), 0 binomial, 1 poisson, 3 Cox (y the time, st the status)
+fn path_rows(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, st: []const f64, wt: []const f64, off: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lams: []const f64, rows: []f64) -> err {
+    let none: []const f64 = zero
+    let nodv: []f64 = zero
+    if fam == 2usize {
+        let (ye, e1) = mem.alloc[f64](a, n)
+        if e1 != ok { ret e1 }
+        var i = 0usize
+        while i < n {
+            ye[i] = y[i]
+            if off.len == n { ye[i] = y[i] - off[i] }
+            i += 1usize
+        }
+        ret gaussian(a, x, ye, wt, none, none, n, p, alpha, standardize, vf, lams, rows)
+    }
+    if fam == 3usize {
+        let (cx, e1) = mem.alloc[f64](a, lams.len * p)
+        if e1 != ok { ret e1 }
+        let ce = cox(a, x, y, st, wt, off, none, none, n, p, alpha, standardize, vf, lams, cx, nodv)
+        if ce != ok { ret ce }
+        var k = 0usize
+        while k < lams.len {
+            rows[k * (p + 1usize)] = 0.0f64
+            var j = 0usize
+            while j < p {
+                rows[k * (p + 1usize) + 1usize + j] = cx[k * p + j]
+                j += 1usize
+            }
+            k += 1usize
+        }
+        ret ok
+    }
+    ret glm_path_dev(a, fam, x, y, wt, off, none, none, n, p, alpha, standardize, vf, lams, rows, nodv)
+}
+
+// the lasso rows cl (and, when relax, the relaxed rows cr) of one cross-validation fold's fit at the lambdas given. With auto false the fold is fitted at those lambdas; with auto true (cv.glmnet's default) the fold finds its own automatic sequence from its training rows
+// and the rows at the shared lambdas are read off by glmnet's linear interpolation; the relaxed rows are interpolated the same way
+fn fold_rows(a: *mem.Arena, fam: usize, xt: []const f64, yt: []const f64, stt: []const f64, wtt: []const f64, offt: []const f64, m: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, auto: bool, relax: bool, cl: []f64, cr: []f64) -> err {
+    let nl = lambdas.len
+    let row = p + 1usize
+    if !auto {
+        let pe = path_rows(a, fam, xt, yt, stt, wtt, offt, m, p, alpha, standardize, vf, lambdas, cl)
+        if pe != ok { ret pe }
+        if relax { ret relax_path(a, fam, xt, yt, stt, wtt, offt, m, p, cl, nl, cr) }
+        ret ok
+    }
+    let (lam, e1) = mem.alloc[f64](a, 100usize)
+    let (r1, e2) = mem.alloc[f64](a, 100usize * row)
+    let (r2, e3) = mem.alloc[f64](a, 100usize * row)
+    let (ico, e4) = mem.alloc[f64](a, row)
+    let (ye, e5) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
+    let none: []const f64 = zero
+    var len = 100usize
+    var i = 0usize
+    while i < m {
+        ye[i] = yt[i]
+        if fam == 2usize && offt.len == m { ye[i] = yt[i] - offt[i] }
+        i += 1usize
+    }
+    if fam == 2usize {
+        let le = lambda_path_w(a, xt, ye, wtt, m, p, alpha, standardize, vf, 100usize, lam)
+        if le != ok { ret le }
+        len = path_len_w(a, xt, ye, wtt, m, p, alpha, standardize, vf, 100usize)
+    }
+    if fam == 0usize || fam == 1usize {
+        let le = glm_lambda_path(a, fam, xt, yt, wtt, offt, m, p, alpha, standardize, vf, 100usize, lam)
+        if le != ok { ret le }
+        len = glm_path_len(a, fam, xt, yt, wtt, offt, m, p, alpha, standardize, vf, 100usize)
+    }
+    if fam == 3usize {
+        let le = cox_lambda_path(a, xt, yt, stt, wtt, offt, m, p, alpha, standardize, vf, 100usize, lam)
+        if le != ok { ret le }
+        len = cox_path_len(a, xt, yt, stt, wtt, offt, none, none, m, p, alpha, standardize, vf, 100usize)
+    }
+    let pe = path_rows(a, fam, xt, yt, stt, wtt, offt, m, p, alpha, standardize, vf, lam, r1)
+    if pe != ok { ret pe }
+    if relax {
+        let re = relax_path(a, fam, xt, yt, stt, wtt, offt, m, p, r1[0usize..len * row], len, r2)
+        if re != ok { ret re }
+    }
+    var k = 0usize
+    while k < nl {
+        coef_interp(lam[0usize..len], r1[0usize..len * row], p, lambdas[k], ico)
+        var j = 0usize
+        while j <= p {
+            cl[k * row + j] = ico[j]
+            j += 1usize
+        }
+        if relax {
+            coef_interp(lam[0usize..len], r2[0usize..len * row], p, lambdas[k], ico)
+            j = 0usize
+            while j <= p {
+                cr[k * row + j] = ico[j]
+                j += 1usize
+            }
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+// the area under the ROC curve of the observations idx (a mask foldid == f) with weights: pairs (a positive i, a negative j) weigh w_i w_j, ties count one half, as survival::concordance with the weights glmnet gives it
+fn weighted_auc(y: []const f64, pr: []const f64, w: []const f64, foldid: []const usize, f: usize) -> f64 {
+    var num = 0.0f64
+    var den = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        if foldid[i] == f && y[i] == 1.0f64 {
+            var j = 0usize
+            while j < y.len {
+                if foldid[j] == f && y[j] == 0.0f64 {
+                    den += w[i] * w[j]
+                    if pr[i] > pr[j] { num += w[i] * w[j] }
+                    if pr[i] == pr[j] { num += 0.5f64 * w[i] * w[j] }
+                }
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    ret num / den
+}
+
+// Harrell's concordance with case weights as survival::concordance takes them: pairs weigh w_i w_j
+fn cox_cindex_w(time: []const f64, status: []const f64, pred: []const f64, w: []const f64) -> f64 {
+    let n = time.len
+    var conc = 0.0f64
+    var tot = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            if status[i] > 0.0f64 && (time[i] < time[j] || (time[i] == time[j] && status[j] == 0.0f64)) {
+                tot += w[i] * w[j]
+                if pred[i] > pred[j] { conc += w[i] * w[j] }
+                if pred[i] == pred[j] { conc += 0.5f64 * w[i] * w[j] }
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret conc / tot
+}
+
+// cv.glmnet for the gaussian (fam 2), binomial (0), poisson (1) and Cox (3) families, with user fold ids (0 .. nfolds - 1), observation weights wt and offsets off (either may be empty), and cv.glmnet's relax = TRUE (relax true: the measures are
+// computed for each of the gammas, whose relaxed rows are gamma times the lasso rows plus 1 - gamma times the relaxed rows; without relax pass the single gamma 1). Measures: 0 deviance (the mean squared error for the gaussian), 1 misclassification, 2 mse, 3 mae, 4 auc (binomial), 5 the C-index (Cox; with measure 0 the Cox deviance is the grouped
+// full-minus-training form). cvm and cvsd receive gammas.len * lambdas.len values, gamma-major. auto as in `fold_rows`
+fn cv_engine(a: *mem.Arena, fam: usize, measure: usize, x: []const f64, y: []const f64, st: []const f64, wt: []const f64, off: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, relax: bool, gammas: []const f64, cvm: []f64, cvsd: []f64) -> err {
+    let nl = lambdas.len
+    let row = p + 1usize
+    let ng = gammas.len
+    let (xt, e1) = mem.alloc[f64](a, n * p)
+    let (yt, e2) = mem.alloc[f64](a, n)
+    let (stt, e3) = mem.alloc[f64](a, n)
+    let (wtt, e4) = mem.alloc[f64](a, n)
+    let (ott, e5) = mem.alloc[f64](a, n)
+    let (cl, e6) = mem.alloc[f64](a, nl * row)
+    let (cr, e7) = mem.alloc[f64](a, nl * row)
+    let (bl, e8) = mem.alloc[f64](a, nl * row)
+    let (cvf, e9) = mem.alloc[f64](a, ng * nl * nfolds)
+    let (nfv, e10) = mem.alloc[f64](a, nfolds)
+    let (wall, e11) = mem.alloc[f64](a, n)
+    let (eta, e12) = mem.alloc[f64](a, n)
+    let (tt2, e13) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok { ret e1 }
+    var i = 0usize
+    while i < n {
+        wall[i] = 1.0f64
+        if wt.len == n { wall[i] = wt[i] }
+        i += 1usize
+    }
+    var f = 0usize
+    while f < nfolds {
+        var m = 0usize
+        i = 0usize
+        while i < n {
+            if foldid[i] != f {
+                var j = 0usize
+                while j < p {
+                    xt[j * n + m] = x[j * n + i]
+                    j += 1usize
+                }
+                yt[m] = y[i]
+                if st.len == n { stt[m] = st[i] }
+                wtt[m] = wall[i]
+                if off.len == n { ott[m] = off[i] }
+                m += 1usize
+            }
+            i += 1usize
+        }
+        var j = 0usize
+        while j < p {
+            var q = 0usize
+            while q < m {
+                xt[j * m + q] = xt[j * n + q]
+                q += 1usize
+            }
+            j += 1usize
+        }
+        let mark = mem.mark(a)
+        let none: []const f64 = zero
+        var stz = none
+        if st.len == n { stz = stt[0usize..m] }
+        var otz = none
+        if off.len == n { otz = ott[0usize..m] }
+        let fe = fold_rows(a, fam, xt[0usize..m * p], yt[0usize..m], stz, wtt[0usize..m], otz, m, p, alpha, standardize, vf, lambdas, auto, relax, cl, cr)
+        if fe != ok { ret fe }
+        var wf = 0.0f64
+        i = 0usize
+        while i < n {
+            if foldid[i] == f { wf += wall[i] }
+            i += 1usize
+        }
+        nfv[f] = wf
+        var g = 0usize
+        while g < ng {
+            var k = 0usize
+            while k < nl {
+                // the rows blended for gamma g
+                var gm = gammas[g]
+                if gm < 1.0e-5f64 { gm = 1.0e-5f64 }
+                var q = 0usize
+                while q < row {
+                    if relax && gammas[g] < 1.0f64 { bl[q] = gm * cl[k * row + q] + (1.0f64 - gm) * cr[k * row + q] } else { bl[q] = cl[k * row + q] }
+                    q += 1usize
+                }
+                i = 0usize
+                while i < n {
+                    var lp = bl[0usize]
+                    j = 0usize
+                    while j < p {
+                        lp += x[j * n + i] * bl[1usize + j]
+                        j += 1usize
+                    }
+                    if off.len == n { lp += off[i] }
+                    eta[i] = lp
+                    i += 1usize
+                }
+                var acc = 0.0f64
+                if fam == 3usize {
+                    if measure == 0usize {
+                        let dfull = cox_deviance(a, y, st, wall, eta)
+                        var q3 = 0usize
+                        i = 0usize
+                        while i < n {
+                            if foldid[i] != f {
+                                tt2[q3] = eta[i]
+                                q3 += 1usize
+                            }
+                            i += 1usize
+                        }
+                        let dtrain = cox_deviance(a, yt[0usize..q3], stt[0usize..q3], wtt[0usize..q3], tt2[0usize..q3])
+                        acc = (dfull - dtrain) / wf
+                    } else {
+                        var cnt = 0usize
+                        i = 0usize
+                        while i < n {
+                            if foldid[i] == f { cnt += 1usize }
+                            i += 1usize
+                        }
+                        let (ft, e14) = mem.alloc[f64](a, cnt)
+                        let (fs, e15) = mem.alloc[f64](a, cnt)
+                        let (fp, e16) = mem.alloc[f64](a, cnt)
+                        let (fw, e17) = mem.alloc[f64](a, cnt)
+                        if e14 != ok || e15 != ok || e16 != ok || e17 != ok { ret e14 }
+                        var q2 = 0usize
+                        i = 0usize
+                        while i < n {
+                            if foldid[i] == f {
+                                ft[q2] = y[i]
+                                fs[q2] = st[i]
+                                fp[q2] = eta[i]
+                                fw[q2] = wall[i]
+                                q2 += 1usize
+                            }
+                            i += 1usize
+                        }
+                        acc = cox_cindex_w(ft, fs, fp, fw)
+                    }
+                } else if fam == 0usize && measure == 4usize {
+                    i = 0usize
+                    while i < n {
+                        var pp = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[i]))
+                        if pp < 1.0e-5f64 { pp = 1.0e-5f64 }
+                        if pp > 1.0f64 - 1.0e-5f64 { pp = 1.0f64 - 1.0e-5f64 }
+                        tt2[i] = pp
+                        i += 1usize
+                    }
+                    acc = weighted_auc(y, tt2, wall, foldid, f)
+                } else {
+                    i = 0usize
+                    while i < n {
+                        if foldid[i] == f {
+                            var v = 0.0f64
+                            if fam == 2usize {
+                                let r = y[i] - eta[i]
+                                if measure == 3usize { v = math.abs[f64](r) } else { v = r * r }
+                            }
+                            if fam == 0usize {
+                                var pp = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[i]))
+                                if measure == 1usize {
+                                    if y[i] == 0.0f64 && pp > 0.5f64 { v = 1.0f64 }
+                                    if y[i] == 1.0f64 && pp <= 0.5f64 { v = 1.0f64 }
+                                }
+                                if measure == 2usize { v = 2.0f64 * (y[i] - pp) * (y[i] - pp) }
+                                if measure == 3usize { v = 2.0f64 * math.abs[f64](y[i] - pp) }
+                                if measure == 0usize {
+                                    if pp < 1.0e-5f64 { pp = 1.0e-5f64 }
+                                    if pp > 1.0f64 - 1.0e-5f64 { pp = 1.0f64 - 1.0e-5f64 }
+                                    v = 2.0f64 * (0.0f64 - y[i] * math.log[f64](pp) - (1.0f64 - y[i]) * math.log[f64](1.0f64 - pp))
+                                }
+                            }
+                            if fam == 1usize {
+                                let mu = math.exp[f64](eta[i])
+                                if measure == 0usize {
+                                    var devy = 0.0f64
+                                    if y[i] > 0.0f64 { devy = y[i] * math.log[f64](y[i]) - y[i] }
+                                    v = 2.0f64 * (devy - (y[i] * eta[i] - mu))
+                                }
+                                if measure == 2usize { v = (y[i] - mu) * (y[i] - mu) }
+                                if measure == 3usize { v = math.abs[f64](y[i] - mu) }
+                            }
+                            acc += wall[i] * v
+                        }
+                        i += 1usize
+                    }
+                    acc = acc / wf
+                }
+                cvf[(g * nl + k) * nfolds + f] = acc
+                k += 1usize
+            }
+            g += 1usize
+        }
+        mem.reset(a, mark)
+        f += 1usize
+    }
+    var g = 0usize
+    while g < ng {
+        cv_finish(cvf[g * nl * nfolds..(g + 1usize) * nl * nfolds], nfv, nl, nfolds, cvm[g * nl..(g + 1usize) * nl], cvsd[g * nl..(g + 1usize) * nl])
+        g += 1usize
+    }
+    ret ok
+}
+
+// the old per-family entry points, now one call of `cv_engine` with no weights, offsets or relax
+fn cv_gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, cvm: []f64, cvsd: []f64) -> err {
+    let none: []const f64 = zero
+    let (g1, e1) = mem.alloc[f64](a, 1usize)
+    if e1 != ok { ret e1 }
+    g1[0usize] = 1.0f64
+    ret cv_engine(a, 2usize, 0usize, x, y, none, none, none, n, p, alpha, standardize, vf, lambdas, foldid, nfolds, auto, false, g1, cvm, cvsd)
+}
+
+fn cv_binomial(a: *mem.Arena, measure: usize, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, cvm: []f64, cvsd: []f64) -> err {
+    let none: []const f64 = zero
+    let (g1, e1) = mem.alloc[f64](a, 1usize)
+    if e1 != ok { ret e1 }
+    g1[0usize] = 1.0f64
+    ret cv_engine(a, 0usize, measure, x, y, none, none, none, n, p, alpha, standardize, vf, lambdas, foldid, nfolds, auto, false, g1, cvm, cvsd)
+}
+
+fn cv_poisson(a: *mem.Arena, measure: usize, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, cvm: []f64, cvsd: []f64) -> err {
+    let none: []const f64 = zero
+    let (g1, e1) = mem.alloc[f64](a, 1usize)
+    if e1 != ok { ret e1 }
+    g1[0usize] = 1.0f64
+    ret cv_engine(a, 1usize, measure, x, y, none, none, none, n, p, alpha, standardize, vf, lambdas, foldid, nfolds, auto, false, g1, cvm, cvsd)
+}
+
+// the variables with a nonzero coefficient in any class at lambda k of a multi-class path (rows of nc blocks of the intercept and p slopes); the kept indices go to kept and the count is returned
+fn active_set(coef: []const f64, k: usize, p: usize, nc: usize, kept: []usize) -> usize {
+    let row = nc * (p + 1usize)
+    var ex = 0usize
+    var j = 0usize
+    while j < p {
+        var any = false
+        var c = 0usize
+        while c < nc {
+            if coef[k * row + c * (p + 1usize) + 1usize + j] != 0.0f64 { any = true }
+            c += 1usize
+        }
+        if any {
+            kept[ex] = j
+            ex += 1usize
+        }
+        j += 1usize
+    }
+    ret ex
+}
+
+// relax = TRUE for the multinomial (fam 4, lab the classes) and mgaussian (fam 5, ym the n by nc responses) families: each distinct active set (a variable counts when any class has it) is refitted without a penalty on those variables; coef and rcoef hold nl rows of nc blocks (intercept, p slopes)
+// as `multinomial` and `mgaussian` fill them. The unpenalised multinomial fit is flat along adding one vector to every class's coefficients of a variable; glmnet's lambda 0 answer is the limit of the lasso, which puts the median class at zero, so it is fitted at a lambda of 1e-12 (an odd number of classes makes that unique)
+fn relax_multi(a: *mem.Arena, fam: usize, x: []const f64, lab: []const usize, ym: []const f64, wt: []const f64, off: []const f64, n: usize, p: usize, nc: usize, coef: []const f64, nl: usize, rcoef: []f64) -> err {
+    let row = nc * (p + 1usize)
+    let (xk, e1) = mem.alloc[f64](a, n * p)
+    let (vk, e2) = mem.alloc[f64](a, p)
+    let (kept, e3) = mem.alloc[usize](a, p)
+    let (sm, e4) = mem.alloc[f64](a, row)
+    let (zl, e5) = mem.alloc[f64](a, 1usize)
+    let (first, e6) = mem.alloc[usize](a, nl)
+    let (dv, e7) = mem.alloc[f64](a, 1usize)
+    let (kp2, e8) = mem.alloc[usize](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret e1 }
+    let none: []const f64 = zero
+    var k = 0usize
+    while k < nl {
+        first[k] = k
+        let nz = active_set(coef, k, p, nc, kept)
+        var q = 0usize
+        while q < k {
+            let nq = active_set(coef, q, p, nc, kp2)
+            var same = nq == nz
+            var t = 0usize
+            while t < nz && same {
+                if kept[t] != kp2[t] { same = false }
+                t += 1usize
+            }
+            if same {
+                first[k] = first[q]
+                break
+            }
+            q += 1usize
+        }
+        var c = 0usize
+        while c < row {
+            rcoef[k * row + c] = coef[k * row + c]
+            c += 1usize
+        }
+        if nz > 0usize && nz + 3usize <= n {
+            if first[k] < k {
+                c = 0usize
+                while c < row {
+                    rcoef[k * row + c] = rcoef[first[k] * row + c]
+                    c += 1usize
+                }
+            } else {
+                var t = 0usize
+                while t < nz {
+                    var i = 0usize
+                    while i < n {
+                        xk[t * n + i] = x[kept[t] * n + i]
+                        i += 1usize
+                    }
+                    vk[t] = 1.0f64
+                    t += 1usize
+                }
+                var fe = ok
+                zl[0usize] = 0.0f64
+                if fam == 5usize { fe = mgaussian(a, xk[0usize..n * nz], ym, n, nz, nc, 1.0f64, false, vk[0usize..nz], zl, sm) }
+                if fam == 4usize {
+                    zl[0usize] = 1.0e-12f64
+                    let nodv: []f64 = zero
+                    fe = multinomial_tol(a, xk[0usize..n * nz], lab, wt, off, none, none, n, nz, nc, 1.0f64, false, false, vk[0usize..nz], zl, 1.0e-13f64, true, sm, nodv)
+                }
+                if fe != ok { ret fe }
+                c = 0usize
+                while c < nc {
+                    rcoef[k * row + c * (p + 1usize)] = sm[c * (nz + 1usize)]
+                    var j = 0usize
+                    while j < p {
+                        rcoef[k * row + c * (p + 1usize) + 1usize + j] = 0.0f64
+                        j += 1usize
+                    }
+                    t = 0usize
+                    while t < nz {
+                        rcoef[k * row + c * (p + 1usize) + 1usize + kept[t]] = sm[c * (nz + 1usize) + 1usize + t]
+                        t += 1usize
+                    }
+                    c += 1usize
+                }
+            }
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+// the lasso rows cl (and, when relax, the relaxed rows cr) of one multinomial cross-validation fold at the lambdas given, direct or (auto) from the fold's own automatic sequence by interpolation; rows of nc blocks of the intercept and p slopes
+fn mn_fold_rows(a: *mem.Arena, xt: []const f64, lt: []const usize, wtt: []const f64, offt: []const f64, m: usize, p: usize, nc: usize, alpha: f64, standardize: bool, grouped: bool, vf: []const f64, lambdas: []const f64, auto: bool, relax: bool, cl: []f64, cr: []f64) -> err {
+    let nl = lambdas.len
+    let row = nc * (p + 1usize)
+    let none: []const f64 = zero
+    let nodv: []f64 = zero
+    let nonu: []const usize = zero
+    if !auto {
+        let ge = multinomial(a, xt, lt, wtt, offt, none, none, m, p, nc, alpha, standardize, grouped, vf, lambdas, cl, nodv)
+        if ge != ok { ret ge }
+        if relax { ret relax_multi(a, 4usize, xt, lt, none, wtt, offt, m, p, nc, cl, nl, cr) }
+        ret ok
+    }
+    let (lam, e7) = mem.alloc[f64](a, 100usize)
+    let (cf, e8) = mem.alloc[f64](a, 100usize * row)
+    let (rc, e9) = mem.alloc[f64](a, 100usize * row)
+    let (dv, e10) = mem.alloc[f64](a, 100usize)
+    let (ico, e11) = mem.alloc[f64](a, row)
+    if e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret e7 }
+    let le = multinomial_lambda_path(a, xt, lt, wtt, offt, m, p, nc, alpha, standardize, grouped, vf, 100usize, lam)
+    if le != ok { ret le }
+    let ge = multinomial_tol(a, xt, lt, wtt, offt, none, none, m, p, nc, alpha, standardize, grouped, vf, lam, 1.0e-9f64, true, cf, dv)
+    if ge != ok { ret ge }
+    var len = 100usize
+    var kk = 4usize
+    while kk < 100usize {
+        if dv[kk] - dv[kk - 1usize] < 1.0e-5f64 || dv[kk] > 0.999f64 {
+            len = kk + 1usize
+            break
+        }
+        kk += 1usize
+    }
+    if relax {
+        let re = relax_multi(a, 4usize, xt, lt, none, wtt, offt, m, p, nc, cf[0usize..len * row], len, rc)
+        if re != ok { ret re }
+    }
+    kk = 0usize
+    while kk < nl {
+        coef_interp(lam[0usize..len], cf[0usize..len * row], row - 1usize, lambdas[kk], ico)
+        var q = 0usize
+        while q < row {
+            cl[kk * row + q] = ico[q]
+            q += 1usize
+        }
+        if relax {
+            coef_interp(lam[0usize..len], rc[0usize..len * row], row - 1usize, lambdas[kk], ico)
+            q = 0usize
+            while q < row {
+                cr[kk * row + q] = ico[q]
+                q += 1usize
+            }
+        }
+        kk += 1usize
+    }
+    ret ok
+}
+
+// cv.glmnet for the multinomial family (classes lab 0 .. nc - 1) with user fold ids, observation weights wt and offsets off (n by nc, class-major; either may be empty) and relax: as `cv_engine`, with measure 0 deviance (probabilities clipped to [1e-5, 1 - 1e-5]), 1 misclassification, 2 mse and 3 mae (summed over the classes)
+fn cv_multinomial(a: *mem.Arena, measure: usize, x: []const f64, lab: []const usize, wt: []const f64, off: []const f64, n: usize, p: usize, nc: usize, alpha: f64, standardize: bool, grouped: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, relax: bool, gammas: []const f64, cvm: []f64, cvsd: []f64) -> err {
+    let nl = lambdas.len
+    let row = nc * (p + 1usize)
+    let ng = gammas.len
+    let (xt, e1) = mem.alloc[f64](a, n * p)
+    let (lt, e2) = mem.alloc[usize](a, n)
+    let (wtt, e3) = mem.alloc[f64](a, n)
+    let (ott, e4) = mem.alloc[f64](a, n * nc)
+    let (cl, e5) = mem.alloc[f64](a, nl * row)
+    let (cr, e6) = mem.alloc[f64](a, nl * row)
+    let (bl, e7) = mem.alloc[f64](a, nl * row)
+    let (cvf, e8) = mem.alloc[f64](a, ng * nl * nfolds)
+    let (nfv, e9) = mem.alloc[f64](a, nfolds)
+    let (pe, e10) = mem.alloc[f64](a, nc)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret e1 }
+    let none: []const f64 = zero
+    var f = 0usize
+    while f < nfolds {
+        var m = 0usize
+        var i = 0usize
+        while i < n {
+            if foldid[i] != f {
+                var j = 0usize
+                while j < p {
+                    xt[j * n + m] = x[j * n + i]
+                    j += 1usize
+                }
+                lt[m] = lab[i]
+                wtt[m] = 1.0f64
+                if wt.len == n { wtt[m] = wt[i] }
+                m += 1usize
+            }
+            i += 1usize
+        }
+        var j = 0usize
+        while j < p {
+            var q = 0usize
+            while q < m {
+                xt[j * m + q] = xt[j * n + q]
+                q += 1usize
+            }
+            j += 1usize
+        }
+        var hasoff = false
+        if off.len == n * nc { hasoff = true }
+        if hasoff {
+            var c = 0usize
+            while c < nc {
+                var mq = 0usize
+                i = 0usize
+                while i < n {
+                    if foldid[i] != f {
+                        ott[c * m + mq] = off[c * n + i]
+                        mq += 1usize
+                    }
+                    i += 1usize
+                }
+                c += 1usize
+            }
+        }
+        var wz = none
+        if wt.len == n { wz = wtt[0usize..m] }
+        var oz = none
+        if hasoff { oz = ott[0usize..m * nc] }
+        let mark = mem.mark(a)
+        let fe = mn_fold_rows(a, xt[0usize..m * p], lt[0usize..m], wz, oz, m, p, nc, alpha, standardize, grouped, vf, lambdas, auto, relax, cl, cr)
+        if fe != ok { ret fe }
+        var wf = 0.0f64
+        i = 0usize
+        while i < n {
+            if foldid[i] == f {
+                if wt.len == n { wf += wt[i] } else { wf += 1.0f64 }
+            }
+            i += 1usize
+        }
+        nfv[f] = wf
+        var g = 0usize
+        while g < ng {
+            var gm = gammas[g]
+            if gm < 1.0e-5f64 { gm = 1.0e-5f64 }
+            var k = 0usize
+            while k < nl {
+                var q = 0usize
+                while q < row {
+                    if relax && gammas[g] < 1.0f64 { bl[q] = gm * cl[k * row + q] + (1.0f64 - gm) * cr[k * row + q] } else { bl[q] = cl[k * row + q] }
+                    q += 1usize
+                }
+                var acc = 0.0f64
+                i = 0usize
+                while i < n {
+                    if foldid[i] == f {
+                        var mxe = 0.0f64 - 1.0e300f64
+                        var c = 0usize
+                        while c < nc {
+                            var eta = bl[c * (p + 1usize)]
+                            j = 0usize
+                            while j < p {
+                                eta += x[j * n + i] * bl[c * (p + 1usize) + 1usize + j]
+                                j += 1usize
+                            }
+                            if hasoff { eta += off[c * n + i] }
+                            pe[c] = eta
+                            if eta > mxe { mxe = eta }
+                            c += 1usize
+                        }
+                        var sm = 0.0f64
+                        c = 0usize
+                        while c < nc {
+                            pe[c] = math.exp[f64](pe[c] - mxe)
+                            sm += pe[c]
+                            c += 1usize
+                        }
+                        var best = 0usize
+                        c = 0usize
+                        while c < nc {
+                            pe[c] = pe[c] / sm
+                            if pe[c] > pe[best] { best = c }
+                            c += 1usize
+                        }
+                        var v = 0.0f64
+                        c = 0usize
+                        while c < nc {
+                            var yy = 0.0f64
+                            if lab[i] == c { yy = 1.0f64 }
+                            if measure == 0usize && yy > 0.0f64 {
+                                var pc = pe[c]
+                                if pc < 1.0e-5f64 { pc = 1.0e-5f64 }
+                                if pc > 1.0f64 - 1.0e-5f64 { pc = 1.0f64 - 1.0e-5f64 }
+                                v += 0.0f64 - 2.0f64 * math.log[f64](pc)
+                            }
+                            if measure == 2usize { v += (yy - pe[c]) * (yy - pe[c]) }
+                            if measure == 3usize { v += math.abs[f64](yy - pe[c]) }
+                            c += 1usize
+                        }
+                        if measure == 1usize && best != lab[i] { v = 1.0f64 }
+                        var wi = 1.0f64
+                        if wt.len == n { wi = wt[i] }
+                        acc += wi * v
+                    }
+                    i += 1usize
+                }
+                cvf[(g * nl + k) * nfolds + f] = acc / wf
+                k += 1usize
+            }
+            g += 1usize
+        }
+        mem.reset(a, mark)
+        f += 1usize
+    }
+    var g = 0usize
+    while g < ng {
+        cv_finish(cvf[g * nl * nfolds..(g + 1usize) * nl * nfolds], nfv, nl, nfolds, cvm[g * nl..(g + 1usize) * nl], cvsd[g * nl..(g + 1usize) * nl])
+        g += 1usize
+    }
+    ret ok
+}
+
+// cv.glmnet for the Cox family: the old entry point (measure 0 deviance, 1 C-index), now a call of `cv_engine`
+fn cv_cox(a: *mem.Arena, measure: usize, x: []const f64, time: []const f64, status: []const f64, wt: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, auto: bool, cvm: []f64, cvsd: []f64) -> err {
+    let none: []const f64 = zero
+    let (g1, e1) = mem.alloc[f64](a, 1usize)
+    if e1 != ok { ret e1 }
+    g1[0usize] = 1.0f64
+    var ms = 0usize
+    if measure == 1usize { ms = 5usize }
+    ret cv_engine(a, 3usize, ms, x, time, status, wt, none, n, p, alpha, standardize, vf, lambdas, foldid, nfolds, auto, false, g1, cvm, cvsd)
+}
+
+// cv.glmnet(relax = TRUE)'s choice of lambda.min and gamma.min: over every gamma and lambda the smallest cvm (the largest for the C-index and auc: pass maximize), the largest lambda among those tied, and among gammas tied at that lambda the largest; cvm is gamma-major as `cv_engine` fills it. out = (lambda.min, gamma.min)
+fn cv_select_relax(lambdas: []const f64, gammas: []const f64, cvm: []const f64, maximize: bool, out: []f64) {
+    let nl = lambdas.len
+    var best = cvm[0usize]
+    var q = 1usize
+    while q < cvm.len {
+        if maximize {
+            if cvm[q] > best { best = cvm[q] }
+        } else {
+            if cvm[q] < best { best = cvm[q] }
+        }
+        q += 1usize
+    }
+    var lmin = 0.0f64 - 1.0e300f64
+    q = 0usize
+    while q < cvm.len {
+        var hit = cvm[q] <= best
+        if maximize { hit = cvm[q] >= best }
+        if hit && lambdas[q % nl] > lmin { lmin = lambdas[q % nl] }
+        q += 1usize
+    }
+    var gmin = 0.0f64
+    var found = false
+    q = 0usize
+    while q < cvm.len {
+        var hit = cvm[q] <= best
+        if maximize { hit = cvm[q] >= best }
+        if hit && lambdas[q % nl] == lmin && (!found || gammas[q / nl] > gmin) {
+            gmin = gammas[q / nl]
+            found = true
+        }
+        q += 1usize
+    }
+    out[0usize] = lmin
+    out[1usize] = gmin
 }
