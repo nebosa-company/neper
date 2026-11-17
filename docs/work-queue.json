@@ -367,17 +367,6 @@
       "evidence": "Partial (D6454 hnorm, sm.density 1-d and 2-d, sm.regression local constant and linear equal sm on Windows; oracle_sm; Linux pending). D6874: hcv (one variable, density and regression) equals sm. Open: h.select, bands, sm.ancova, sm.survival, sm.options, binning above 100 observations. Was: Open (CRAN rank 954). Small to mid. Acceptance, equal to sm: sm.density in one and two dimensions with the bandwidths hnorm, hcv and h.select, sm.regression with its bands, sm.ancova, sm.survival, sm.options."
     },
     {
-      "id": "L299",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 665,
-      "title": "coda, posterior and loo: MCMC diagnostics and PSIS-LOO",
-      "score": 0.55,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6592): e.algo.stat.codapkg has acf, the Yule-Walker ar(aic = TRUE) of spectrum0.ar and effectiveSize for one chain, equal to coda on 120 values on Windows (oracle_coda; Linux pending). D6593: geweke.diag z, gelman.diag (univariate psrf and its upper bound, autoburnin) and HPDinterval equal coda on 100 more values. D6594: posterior rhat, ess_bulk, ess_tail, ess_mean, ess_quantile, mcse_mean and rank normalisation (e.algo.stat.posteriorpkg) equal posterior on 120 values. D6595: waic and loo (PSIS with the generalized Pareto tail fit, r_eff = 1: elpd, p, Pareto k) equal loo on 125 values (e.algo.stat.loopkg). D6596: loo_compare (elpd_diff, se_diff of two models) equals loo on 30 values. D6597: raftery.diag equals coda on 20 values. Open (heidel.diag, the multivariate psrf, cramer.test, the other posterior summaries, loo_model_weights, E_loo, ggdist 175). Mid. e.math.mcmc has the samplers and no diagnostics. Acceptance, equal to R: posterior rhat, rhat_basic, ess_bulk, ess_tail, ess_quantile, mcse_mean, mcse_quantile, rank_normalize, summarise_draws; coda gelman.diag (with multivariate psrf), geweke.diag, heidel.diag, raftery.diag, autocorr, effectiveSize, HPDinterval, cramer.test; loo psis (generalized Pareto tail fit), loo, waic, loo_compare, loo_model_weights (stacking, pseudo-BMA), E_loo; ggdist hdi, qi, mode_hdi."
-    },
-    {
       "id": "L306",
       "category": "library",
       "group": "CRAN parity",
