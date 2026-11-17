@@ -362,6 +362,39 @@ fn var_new(a: *mem.Arena, y: []const f64, t0: usize, k: usize, p: usize, det: us
     ret (v, e)
 }
 
+// a copy of the model that can be re-fitted under another mask without touching the original
+fn var_copy(a: *mem.Arena, v: *const Var) -> Var {
+    var w: Var = zero
+    w.k = v.k
+    w.p = v.p
+    w.nz = v.nz
+    w.obs = v.obs
+    w.t0 = v.t0
+    w.det = v.det
+    w.season = v.season
+    w.nexo = v.nexo
+    w.y = v.y
+    w.exo = v.exo
+    w.z = v.z
+    w.yend = v.yend
+    w.restricted = v.restricted
+    w.mask = zeros(a, v.k * v.nz)
+    w.coef = zeros(a, v.k * v.nz)
+    w.resid = zeros(a, v.obs * v.k)
+    var i = 0usize
+    while i < v.k * v.nz {
+        w.mask[i] = v.mask[i]
+        w.coef[i] = v.coef[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < v.obs * v.k {
+        w.resid[i] = v.resid[i]
+        i += 1usize
+    }
+    ret w
+}
+
 // the residual cross products crossprod(resid) / divisor (k by k)
 fn resid_cov(a: *mem.Arena, resid: []const f64, obs: usize, k: usize, divisor: f64) -> []f64 {
     let s = mcross(a, resid, resid, obs, k, k)
@@ -838,6 +871,109 @@ fn var_predict(a: *mem.Arena, v: *const Var, h: usize, ci: f64, exo_future: []co
 }
 
 fn nm_qnorm(p: f64) -> f64 { ret dist.qnorm(p, 0.0f64, 1.0f64, true, false) }
+
+// |t| of the coefficients of equation i fitted on the columns `cols` (nsel of them): out[j] for cols[j]
+fn eq_abs_t(a: *mem.Arena, v: *const Var, i: usize, cols: []const usize, nsel: usize, out: []f64) -> err {
+    let yy = zeros(a, v.obs)
+    var t = 0usize
+    while t < v.obs {
+        yy[t] = v.yend[t * v.k + i]
+        t += 1usize
+    }
+    let cf = zeros(a, v.nz)
+    let rs = zeros(a, v.obs)
+    let e = ols_cols(a, v.z, v.obs, v.nz, cols, nsel, yy, cf, rs)
+    if e != ok { ret e }
+    let inv = zeros(a, nsel * nsel)
+    let e2 = xtx_inverse_cols(a, v.z, v.obs, v.nz, cols, nsel, inv)
+    if e2 != ok { ret e2 }
+    var rss = 0.0f64
+    t = 0usize
+    while t < v.obs {
+        rss += rs[t] * rs[t]
+        t += 1usize
+    }
+    let s2 = rss / f64(v.obs - nsel)
+    var j = 0usize
+    while j < nsel {
+        out[j] = math.abs[f64](cf[cols[j]] / math.sqrt[f64](s2 * inv[j * nsel + j]))
+        j += 1usize
+    }
+    ret ok
+}
+
+error NoRegressors
+
+// restrict(x, method = "ser", thresh): drop, equation by equation, the regressor with the smallest |t| until every |t| reaches thresh
+fn var_restrict_ser(a: *mem.Arena, v: *Var, thresh: f64) -> err {
+    let nz = v.nz
+    let cols = zeros_usize(a, nz)
+    let tv = zeros(a, nz)
+    var i = 0usize
+    while i < v.k {
+        var nsel = nz
+        var c = 0usize
+        while c < nz {
+            cols[c] = c
+            c += 1usize
+        }
+        var e = eq_abs_t(a, v, i, cols, nsel, tv)
+        if e != ok { ret e }
+        var go = true
+        while go {
+            var mn = tv[0usize]
+            var at = 0usize
+            var j = 1usize
+            while j < nsel {
+                if tv[j] < mn {
+                    mn = tv[j]
+                    at = j
+                }
+                j += 1usize
+            }
+            if mn >= thresh {
+                go = false
+            } else {
+                if nsel > 1usize {
+                    j = at
+                    while j + 1usize < nsel {
+                        cols[j] = cols[j + 1usize]
+                        j += 1usize
+                    }
+                    nsel -= 1usize
+                    e = eq_abs_t(a, v, i, cols, nsel, tv)
+                    if e != ok { ret e }
+                } else {
+                    ret NoRegressors
+                }
+            }
+        }
+        c = 0usize
+        while c < nz {
+            v.mask[i * nz + c] = 0.0f64
+            c += 1usize
+        }
+        c = 0usize
+        while c < nsel {
+            v.mask[i * nz + cols[c]] = 1.0f64
+            c += 1usize
+        }
+        i += 1usize
+    }
+    v.restricted = true
+    ret var_fit_eqs(a, v)
+}
+
+// restrict(x, method = "manual", resmat): resmat is k by nz with 1 for a free coefficient
+fn var_restrict_manual(a: *mem.Arena, v: *Var, resmat: []const f64) -> err {
+    var q = 0usize
+    while q < v.k * v.nz {
+        v.mask[q] = resmat[q]
+        q += 1usize
+    }
+    v.restricted = true
+    ret var_fit_eqs(a, v)
+}
 
 // summary(x)$covres: cov(resid) (centred) times (obs - 1) / (obs - nz)
 fn var_covres(a: *mem.Arena, v: *const Var) -> []f64 {
