@@ -80,4 +80,7 @@ for (rep in 1:12) {
 # spearman2 "sp2": (n, p, which 0 rho2 1 F 2 adjusted, x[n], y[n])
 for (rep in 1:20) { n <- sample(8:80, 1); x <- if (rep %% 2) rnorm(n) else round(rnorm(n), 1); y <- round(x^2 + rnorm(n), 1 + rep %% 2); pp <- 1 + rep %% 2
   r <- spearman2(x, y, p = pp); for (w in 0:2) cases[[length(cases) + 1]] <- case("sp2", c(n, pp, w, x, y), unname(r[c(1, 2, 7)[w + 1]]), rel = 1e-8, abs = 1e-10) }
+# spearman2 factor "sp2f": (n, ng, which, g[n] 0-based, y[n])
+for (rep in 1:20) { ng <- sample(3:6, 1); n <- sample(ng * 4:ng * 12, 1); g <- c(0:(ng - 1), sample(0:(ng - 1), n - ng, TRUE)); y <- round(rnorm(n) + g * 0.3, 1 + rep %% 2)
+  r <- spearman2(factor(g), y); for (w in 0:2) cases[[length(cases) + 1]] <- case("sp2f", c(n, ng, w, g, y), unname(r[c(1, 2, 7)[w + 1]]), rel = 1e-8, abs = 1e-10) }
 emit("hmisc", "Hmisc", list(cases))

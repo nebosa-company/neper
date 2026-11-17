@@ -48363,3 +48363,8 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6973 — Hmisc spearman2 for numeric predictors
 
 `e.algo.stat.hmisc.spearman2(x, y, p)` for a numeric x with p of 1 (squared rank correlation) or 2 (R^2 of the y ranks on the x ranks and their squares), with the F statistic and adjusted rho2 `1 - (1 - rho2)(n - 1)/(n - p - 1)`. Equal to `Hmisc::spearman2` on 20 settings (oracle_hmisc). The factor-predictor form and the p-value are not here. Also tried and dropped: gbm bagging (`bag.fraction` below 1) by selection sampling with one uniform per row, which gave fits 0.2 to 3% off R, so the sampling order of gbm is not reproduced. Linux pending.
+
+
+## D6974 — Hmisc spearman2 for a factor predictor
+
+`spearman2_factor(g, ng, y)`: p = levels - 1 and rho2 the between-group share of the y rank variance, with F and adjusted rho2 as in D6973. Equal to `Hmisc::spearman2` on a factor of 3 to 6 levels on 20 settings (oracle_hmisc). The minlev level combining and the p-value are not here. Linux pending.

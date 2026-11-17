@@ -862,3 +862,46 @@ fn spearman2(a: *mem.Arena, x: []const f64, y: []const f64, p: usize, out: []f64
     out[2usize] = 1.0f64 - (1.0f64 - r2) * (f64(n) - 1.0f64) / df2
     ret ok
 }
+
+// spearman2 for a factor x with ng > 2 levels (g holds the 0-based level of each row, every level used): p = ng - 1 and rho2 the between-group share of the y rank variance; out = (rho2, F, adjusted rho2)
+fn spearman2_factor(a: *mem.Arena, g: []const usize, ng: usize, y: []const f64, out: []f64) -> err {
+    let n = y.len
+    let (ry, e1) = mem.alloc[f64](a, n)
+    let (sm, e2) = mem.alloc[f64](a, ng)
+    let (ct, e3) = mem.alloc[f64](a, ng)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var i = 0usize
+    var ym = 0.0f64
+    while i < n {
+        ry[i] = rank_avg(y, i)
+        ym += ry[i]
+        sm[g[i]] = 0.0f64
+        ct[g[i]] = 0.0f64
+        i += 1usize
+    }
+    ym = ym / f64(n)
+    i = 0usize
+    var tss = 0.0f64
+    while i < n {
+        sm[g[i]] += ry[i]
+        ct[g[i]] += 1.0f64
+        tss += (ry[i] - ym) * (ry[i] - ym)
+        i += 1usize
+    }
+    var ssb = 0.0f64
+    var k = 0usize
+    while k < ng {
+        if ct[k] > 0.0f64 {
+            let m = sm[k] / ct[k]
+            ssb += ct[k] * (m - ym) * (m - ym)
+        }
+        k += 1usize
+    }
+    let p = f64(ng) - 1.0f64
+    let df2 = f64(n) - p - 1.0f64
+    let r2 = ssb / tss
+    out[0usize] = r2
+    out[1usize] = r2 / p / ((1.0f64 - r2) / df2)
+    out[2usize] = 1.0f64 - (1.0f64 - r2) * (f64(n) - 1.0f64) / df2
+    ret ok
+}

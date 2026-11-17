@@ -75,6 +75,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if hm.spearman2(a, x[3usize..3usize + n], x[3usize + n..3usize + n + n], usize(x[1usize]), o3[0usize..3usize]) != ok { ret nan }
         ret o3[usize(x[2usize])]
     }
+    if str.eq(c.name, "sp2f") {
+        // (n, ng, which, g[n] 0-based, y[n])
+        let n = usize(x[0usize])
+        let (gg, ge) = mem.alloc[usize](a, n)
+        if ge != ok { ret nan }
+        var i = 0usize
+        while i < n {
+            gg[i] = usize(x[3usize + i])
+            i += 1usize
+        }
+        var o3: [3]f64 = zero
+        if hm.spearman2_factor(a, gg, usize(x[1usize]), x[3usize + n..3usize + n + n], o3[0usize..3usize]) != ok { ret nan }
+        ret o3[usize(x[2usize])]
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])

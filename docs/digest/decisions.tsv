@@ -3832,4 +3832,5 @@ D6969	961	lmerTest: the joint contest F test
 D6970	876	fda: fRegress with a scalar response
 D6971	728	Hmisc: redun with linear terms
 D6972	816	glmnet: the random folds of cv.glmnet
-D6973	603	Hmisc spearman2 for numeric predictors
+D6973	605	Hmisc spearman2 for numeric predictors
+D6974	353	Hmisc spearman2 for a factor predictor
