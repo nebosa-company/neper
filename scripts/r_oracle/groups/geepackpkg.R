@@ -78,7 +78,7 @@ for (ci in seq_along(gx_configs)) {
 set.seed(20262302)
 gw_configs <- list(c(0, 0, 1, 2), c(0, 0, 2, 1), c(0, 0, 0, 0), c(1, 1, 1, 1), c(1, 2, 2, 2), c(1, 1, 3, 0), c(2, 4, 1, 2), c(2, 4, 0, 1), c(2, 4, 2, 2), c(3, 4, 1, 2), c(3, 5, 2, 1), c(0, 0, 4, 2))
 for (ci in seq_along(gw_configs)) {
-  cf <- gw_configs[[ci]]; fam <- cf[1]; lnk <- cf[2]; cs <- cf[3]; vt <- cf[4]; message("gw ", ci)
+  cf <- gw_configs[[ci]]; fam <- cf[1]; lnk <- cf[2]; cs <- cf[3]; vt <- cf[4]
   g <- NULL
   for (tries in 1:6) {
     k <- sample(26:40, 1); sz <- sample(2:5, k, replace = TRUE); N <- sum(sz); id <- rep(1:k, sz); maxm <- max(sz)

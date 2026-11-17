@@ -1,7 +1,10 @@
 // R geepack: geeglm for a Gaussian response with the identity link and equal-size clusters, with the independence or the exchangeable working correlation
 // (Liang-Zeger moment estimates of the scale and the correlation) and the robust sandwich covariance.
 //
-// Not here: other families and links, unequal clusters, the AR(1), unstructured and fixed correlations, jackknife and bootstrap variances, geese and the Wald tests.
+// gee_fit is the general engine (geese/geeglm: any cluster sizes, gaussian, binomial, poisson and Gamma with their links, independence, exchangeable, AR(1), unstructured and fixed
+// working correlations, robust, naive, one-step (also approximate) and fully iterated jackknife covariances); gee_qic and gee_wald_seq are QIC and anova.geeglm; ordgee_fit is ordgee with independence.
+//
+// Not here: the covariances of the scale and correlation parameters (vgamma, valpha), ordgee with exchangeable or unstructured odds ratios, a scale model (zsca), weights, offsets, bootstrap.
 
 use e.algo.stat.carlmtest as ols
 use e.math
