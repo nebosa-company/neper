@@ -1,9 +1,12 @@
-// e.algo.stat.clusterpkg (pam, clara, daisy, silhouette) against cluster 2.1.8.2. tests/oracle/clusterpkg.json comes from
-// `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R clusterpkg`; the argument layout of each case is at the top of
-// scripts/r_oracle/groups/clusterpkg.R. Every answer is one number, mostly a position-weighted checksum of a result vector.
+// e.algo.stat.clusterpkg (pam, clara, daisy, silhouette) and e.algo.stat.clustertree (agnes, diana, mona) against cluster 2.1.8.2. tests/oracle/clusterpkg.json
+// and clustertree.json come from `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R clusterpkg clustertree`; the argument layout of each case is at the top
+// of scripts/r_oracle/groups/clusterpkg.R and clustertree.R. Every answer is one number, mostly a position-weighted checksum of a result vector.
 
 use e.algo.rand.r as rng
 use e.algo.stat.clusterpkg as cp
+use e.algo.stat.clustertree as ct
+use e.algo.stat.hclust as hc
+use e.math
 use e.io
 use e.mem
 use e.os
@@ -148,7 +151,199 @@ fn clara_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret 0.0f64
 }
 
+fn sum_i(v: []const i64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        s += f64(v[i]) * f64(i + 1usize)
+        i += 1usize
+    }
+    ret s
+}
+
+// agnes (method 1..7) and diana (method 0): args (n, p, metric, stand, method, npar, par..., kcut, x column-major)
+fn twins_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let metric = usize(x[2usize])
+    let stand = x[3usize] != 0.0f64
+    let method = usize(x[4usize])
+    let np = usize(x[5usize])
+    let kcut = usize(x[6usize + np])
+    let data = take_matrix(a, x, 7usize + np, n * p)
+    if stand { cp.stand_data(data, n, p) }
+    let (jtmd, e1) = mem.alloc[i64](a, p)
+    if e1 != ok { os.exit(5) }
+    let (valmd, e2) = mem.alloc[f64](a, p)
+    if e2 != ok { os.exit(5) }
+    let _ = cp.na_prepare(data, n, p, jtmd, valmd)
+    let (dys, e3) = mem.alloc[f64](a, n * (n - 1usize) / 2usize + 1usize)
+    if e3 != ok { os.exit(5) }
+    if cp.dysta(data, n, p, dys, metric, jtmd, valmd) != 0usize { os.exit(6) }
+    var fit: ct.TwinsFit = zero
+    if str.starts_with(c.name, "agnes_") {
+        let (alpha, e4) = mem.alloc[f64](a, 4usize)
+        if e4 != ok { os.exit(5) }
+        if !ct.par_method(method, x[6usize..6usize + np], np, alpha) { os.exit(6) }
+        let (f1, e5) = ct.agnes(a, dys, n, method, alpha)
+        if e5 != ok { ret 0.0f64 / 0.0f64 }
+        fit = f1
+    } else {
+        let (f2, e6) = ct.diana(a, dys, n)
+        if e6 != ok { ret 0.0f64 / 0.0f64 }
+        fit = f2
+    }
+    let w = c.name
+    if str.ends_with(w, "_height") { ret sum_f(fit.height) }
+    if str.ends_with(w, "_order") { ret sum_u(fit.order) }
+    if str.ends_with(w, "_merge") {
+        var s = 0.0f64
+        var i = 0usize
+        while i < n - 1usize {
+            s += f64(fit.merge_a[i]) * f64(i + 1usize) + f64(fit.merge_b[i]) * f64(n - 1usize + i + 1usize)
+            i += 1usize
+        }
+        ret s
+    }
+    if str.ends_with(w, "_coef") { ret fit.coef }
+    if str.ends_with(w, "_coefhclust") {
+        let (ch, e0) = ct.coef_hclust(a, &fit)
+        if e0 != ok { os.exit(5) }
+        ret ch
+    }
+    if str.ends_with(w, "_coefhier") {
+        let (cf, e7) = ct.coef_hier(a, fit.height)
+        if e7 != ok { os.exit(5) }
+        ret cf
+    }
+    if str.ends_with(w, "_cutree") {
+        let (tree, e8) = ct.to_tree(a, &fit)
+        if e8 != ok { os.exit(5) }
+        let (lab, e9) = mem.alloc[usize](a, n)
+        if e9 != ok { os.exit(5) }
+        if hc.cutree(a, &tree, n, kcut, lab) != ok { os.exit(5) }
+        ret sum_u(lab)
+    }
+    os.exit(9)
+    ret 0.0f64
+}
+
+// mona: args (n, p, x column-major with 0, 1, NA = 2)
+fn mona_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let (m, e1) = mem.alloc[i64](a, n * p)
+    if e1 != ok { os.exit(5) }
+    var i = 0usize
+    while i < n * p {
+        m[i] = i64(x[2usize + i])
+        i += 1usize
+    }
+    let (fit, e2) = ct.mona(a, m, n, p)
+    if e2 != ok { os.exit(5) }
+    if fit.jerr != 0usize { os.exit(6) }
+    let w = c.name
+    if str.eq(w, "mona_order") { ret sum_u(fit.order) }
+    if str.eq(w, "mona_variable") { ret sum_u(fit.variable) }
+    if str.eq(w, "mona_step") { ret sum_u(fit.step) }
+    if str.eq(w, "mona_data") { ret sum_i(fit.data) }
+    os.exit(9)
+    ret 0.0f64
+}
+
+// daisy: args (n, p, metric, stand, types(p), weights(p), x column-major codes, NA = -999999)
+fn daisy_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let metric = usize(x[2usize])
+    let stand = x[3usize] != 0.0f64
+    let (types, e1) = mem.alloc[usize](a, p)
+    if e1 != ok { os.exit(5) }
+    var i = 0usize
+    while i < p {
+        types[i] = usize(x[4usize + i])
+        i += 1usize
+    }
+    let data = take_matrix(a, x, 4usize + 2usize * p, n * p)
+    let (d, e2) = mem.alloc[f64](a, n * n)
+    if e2 != ok { os.exit(5) }
+    if cp.daisy(a, data, n, p, types, x[4usize + p..4usize + 2usize * p], metric, stand, d) != ok { os.exit(6) }
+    var s = 0.0f64
+    var pos = 1usize
+    var col = 0usize
+    while col < n {
+        var row = col + 1usize
+        while row < n {
+            s += d[row * n + col] * f64(pos)
+            pos += 1usize
+            row += 1usize
+        }
+        col += 1usize
+    }
+    ret s
+}
+
+// silhouette: args (n, k, ismat, cluster(n), x(n by 2 column-major))
+fn sil_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let k = usize(x[1usize])
+    let ismat = x[2usize] != 0.0f64
+    let (cl, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { os.exit(5) }
+    var i = 0usize
+    while i < n {
+        cl[i] = usize(x[3usize + i])
+        i += 1usize
+    }
+    let off = 3usize + n
+    let (d, e2) = mem.alloc[f64](a, n * n)
+    if e2 != ok { os.exit(5) }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            let dx = x[off + i] - x[off + j]
+            let dy = x[off + n + i] - x[off + n + j]
+            d[i * n + j] = math.sqrt[f64](dx * dx + dy * dy)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var dv = d
+    if !ismat {
+        let (v, e3) = mem.alloc[f64](a, n * (n - 1usize) / 2usize)
+        if e3 != ok { os.exit(5) }
+        var at = 0usize
+        var col = 0usize
+        while col < n {
+            var row = col + 1usize
+            while row < n {
+                v[at] = d[row * n + col]
+                at += 1usize
+                row += 1usize
+            }
+            col += 1usize
+        }
+        dv = v
+    }
+    let (si, e4) = mem.alloc[f64](a, n)
+    if e4 != ok { os.exit(5) }
+    let (nb, e5) = mem.alloc[usize](a, n)
+    if e5 != ok { os.exit(5) }
+    if cp.sildist(a, dv, n, cl, k, ismat, si, nb) != ok { os.exit(6) }
+    if str.eq(c.name, "sil_width") { ret sum_f(si) }
+    ret sum_u(nb)
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.starts_with(c.name, "agnes_") || str.starts_with(c.name, "diana_") { ret twins_case(a, c) }
+    if str.starts_with(c.name, "mona_") { ret mona_case(a, c) }
+    if str.starts_with(c.name, "daisy_") { ret daisy_case(a, c) }
+    if str.starts_with(c.name, "sil_") { ret sil_case(a, c) }
     if str.starts_with(c.name, "pam_") { ret pam_case(a, c) }
     if str.starts_with(c.name, "clara_") { ret clara_case(a, c) }
     os.exit(4)
@@ -174,8 +369,8 @@ fn report(a: *mem.Arena, c: *const oracle.Case, got: f64) {
     let _ = io.print("\n")
 }
 
-fn main(a: *mem.Arena, args: []str) -> err {
-    let (golden, load_error) = oracle.load(a, "tests/oracle/clusterpkg.json")
+fn run(a: *mem.Arena, path: str) -> usize {
+    let (golden, load_error) = oracle.load(a, path)
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
@@ -191,6 +386,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         mem.reset(a, start)
         at += 1usize
     }
+    ret failures
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    var failures = run(a, "tests/oracle/clusterpkg.json")
+    failures += run(a, "tests/oracle/clustertree.json")
     if failures > 0usize { os.exit(1) }
     ret ok
 }

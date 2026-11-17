@@ -1385,32 +1385,41 @@ fn cldaisy(nn: usize, jpp: usize, x: []const f64, valmd: []const f64, weights: [
 fn daisy(a: *mem.Arena, x: []f64, n: usize, p: usize, types: []const usize, weights: []const f64, metric: usize, stand: bool, out: []f64) -> err {
     let (vt, e1) = zu(a, p)
     if e1 != ok { ret e1 }
-    let (col, e0) = zf(a, n)
+    // the T columns are coded together, x[, T] <- unclass(as.ordered(x[, T])): one factor over the values of all of them
+    let (pool, e0) = zf(a, n * p)
     if e0 != ok { ret e0 }
+    var npool = 0usize
     var j = 0usize
+    while j < p {
+        if types[j] == 6usize {
+            var i = 0usize
+            while i < n {
+                pool[npool] = x[i + j * n]
+                npool += 1usize
+                i += 1usize
+            }
+        }
+        j += 1usize
+    }
+    j = 0usize
     var all_i = true
     while j < p {
         vt[j] = types[j]
         if vt[j] == 6usize {
             var i = 0usize
             while i < n {
-                col[i] = x[i + j * n]
-                i += 1usize
-            }
-            i = 0usize
-            while i < n {
-                let v = col[i]
+                let v = x[i + j * n]
                 if v == v {
                     // the rank among the distinct values: count each smaller value once
                     var below = 0usize
                     var i2 = 0usize
-                    while i2 < n {
-                        let w = col[i2]
+                    while i2 < npool {
+                        let w = pool[i2]
                         if w == w && w < v {
                             var seen = false
                             var i3 = 0usize
                             while i3 < i2 {
-                                if col[i3] == w { seen = true }
+                                if pool[i3] == w { seen = true }
                                 i3 += 1usize
                             }
                             if !seen { below += 1usize }
