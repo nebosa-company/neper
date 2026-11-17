@@ -521,3 +521,60 @@ fn mclust_run(a: *mem.Arena, x: []const f64, n: usize, p: usize, gmin: usize, gm
     }
     ret ok
 }
+
+// predict.Mclust / estep / dens for newdata x (n by p) under the parameters pro (g), mu (p by g) and sigma (g stacked p by p):
+// res holds the log densities cdens (n by g), the memberships z (n by g), the 1-based classification (n), the log likelihood of estep (1) and the mixture density dens (n)
+fn predict_run(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, pro: []const f64, mu: []const f64, sigma: []const f64, res: []f64) -> err {
+    let lc = res[0usize..n * g]
+    let ce = log_cdens(a, x, n, p, g, mu, sigma, lc)
+    if ce != ok { ret ce }
+    var ps = 0.0f64
+    var k = 0usize
+    while k < g {
+        ps += pro[k]
+        k += 1usize
+    }
+    let off_z = n * g
+    let off_cl = 2usize * n * g
+    let off_ll = off_cl + n
+    let off_d = off_ll + 1usize
+    var hood = 0.0f64
+    var i = 0usize
+    while i < n {
+        var mx = 0.0f64 - 1.0e308f64
+        k = 0usize
+        while k < g {
+            let v = math.log[f64](pro[k] / ps) + lc[k * n + i]
+            if v > mx { mx = v }
+            k += 1usize
+        }
+        var s = 0.0f64
+        k = 0usize
+        while k < g {
+            s += math.exp[f64](math.log[f64](pro[k] / ps) + lc[k * n + i] - mx)
+            k += 1usize
+        }
+        let lse = mx + math.log[f64](s)
+        var best = 0usize
+        k = 0usize
+        while k < g {
+            let zz = math.exp[f64](math.log[f64](pro[k] / ps) + lc[k * n + i] - lse)
+            res[off_z + k * n + i] = zz
+            if zz > res[off_z + best * n + i] { best = k }
+            k += 1usize
+        }
+        res[off_cl + i] = f64(best + 1usize)
+        hood += lse
+        // dens() uses the proportions as given
+        var dsum = 0.0f64
+        k = 0usize
+        while k < g {
+            dsum += pro[k] * math.exp[f64](lc[k * n + i])
+            k += 1usize
+        }
+        res[off_d + i] = dsum
+        i += 1usize
+    }
+    res[off_ll] = hood
+    ret ok
+}
