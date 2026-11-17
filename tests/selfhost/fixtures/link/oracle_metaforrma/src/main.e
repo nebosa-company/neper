@@ -18,8 +18,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var ws = ws0
     let (out, oe) = mem.alloc[f64](a, mr.OUTLEN)
     if oe != ok { os.exit(5) }
+    let (tmp, te) = mem.alloc[f64](a, mr.OUTLEN)
+    if te != ok { os.exit(6) }
     var failures = 0usize
     var data = 0usize
+    var lastfail = 0usize
     var at = 0usize
     while at < golden.cases.len {
         let start = mem.mark(a)
@@ -31,12 +34,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
             got = out[idx]
         } else {
             data += 1usize
-            let _ = run.run(a, &ws, c.name, c.args, out)
+            let _ = run.run(a, &ws, c.name, c.args, out, tmp)
             got = out[0usize]
         }
         if !oracle.agrees(got, c) {
             failures += 1usize
-            if failures <= 12usize {
+            if failures <= 400usize && data != lastfail {
+                lastfail = data
                 let (initial, be) = str.builder(a, 160usize)
                 if be == ok {
                     var b = initial

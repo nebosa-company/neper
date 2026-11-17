@@ -14,7 +14,7 @@ use e.algo.stat.pwr as pw
 
 const KMAX: usize = 128usize
 const PMAX: usize = 8usize
-const OUTLEN: usize = 160usize
+const OUTLEN: usize = 1300usize
 
 const O_TAU2: usize = 0usize
 const O_SETAU2: usize = 1usize

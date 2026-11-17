@@ -29,6 +29,14 @@ fn fit(ws: *mr.Ws, y: []const f64, v: []const f64, x: []const f64, k: usize, p: 
     let pf = f64(p)
     let method = c.method
     let fixed = c.tau2fix == c.tau2fix && method != 0usize
+    if k == 1usize {
+        var t1 = 0.0f64
+        if fixed { t1 = c.tau2fix }
+        var c1 = *c
+        c1.test = 0usize
+        finish(ws, y, v, x, k, p, &c1, t1, mr.nan(), out)
+        ret
+    }
     var ybar = 0.0f64
     var i = 0usize
     while i < k {
@@ -397,7 +405,7 @@ fn finish(ws: *mr.Ws, y: []const f64, v: []const f64, x: []const f64, k: usize, 
         }
     }
     let alpha = 1.0f64 - c.level
-    var crit = 0.0f64
+    var crit = mr.nan()
     a = 0usize
     while a < p {
         out[mr.O_SE + a] = math.sqrt[f64](out[mr.O_VB + a * p + a])
