@@ -138,6 +138,18 @@ if (want_("gbp")) { set.seed(20261302)
       cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 1, length(f0$lambda), 0, 0.5); cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 0, ck(f0$lambda), 1e-9, 1e-12) }
   } }
 
+if (want_("gcox")) { set.seed(20261303)
+  for (v in 1:12) {
+    .v <- v
+    d <- mk("cox", 60, 4, ties = v %in% c(5, 6, 7, 8), strata = v %in% c(7, 10), start = v %in% c(8, 11)); p <- d$p
+    o <- defopt(d, alpha = c(1, 0.5, 0.2)[(v %% 3) + 1], std = v != 4)
+    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3) o$off <- round(rnorm(d$n, 0, 0.4), 2); if (v == 4) { o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }
+    if (v == 9) o$excl <- c(2, 4); if (v %in% c(5, 6, 7, 8)) o$efron <- TRUE; if (v == 6) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 1) o$vf <- round(runif(p, 0.3, 2), 2)
+    addfit(d, o, rel = 1e-6, abs = 1e-6, thresh7 = TRUE, nm = "gfit")
+    if (v != 9) { f0 <- suppressWarnings(do.call(glmnet, gargs(d, o)))
+      cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 1, length(f0$lambda), 0, 0.5); cases[[length(cases) + 1]] <- mkcase("glam", d, o, numeric(0), 0, ck(f0$lambda), 1e-9, 1e-12) }
+  } }
+
 # ---- fit: mgaussian ---------------------------------------------------------------------------------------------------------------------------------------------------------
 if (want_("mgauss")) { set.seed(20261203)
   for (v in 1:6) {

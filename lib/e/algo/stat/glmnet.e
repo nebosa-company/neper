@@ -906,7 +906,7 @@ fn cox_quant_g(time: []const f64, start: []const f64, strata: []const f64, dq: [
     ret lg
 }
 
-// the sum over (stratum, time) groups of events of d_k log d_k (Efron: the mean weight times log(d!)), the saturated term of the Cox deviance
+// the saturated term of the Cox deviance, minus coxdev's saturated log-likelihood: the sum over (stratum, time) groups of events of W log W (Efron: W log W - W log d + (W / d) log d!, with W the weight of the d tied events)
 fn cox_dklog_g(time: []const f64, strata: []const f64, dq: []const f64, efron: bool) -> f64 {
     let n = time.len
     var tot = 0.0f64
@@ -937,7 +937,7 @@ fn cox_dklog_g(time: []const f64, strata: []const f64, dq: []const f64, efron: b
                     lf += math.log[f64](f64(l))
                     l += 1usize
                 }
-                tot += dw / dc * lf
+                tot += dw * math.log[f64](dw) - dw * math.log[f64](dc) + dw / dc * lf
             } else {
                 tot += dw * math.log[f64](dw)
             }
@@ -4920,6 +4920,320 @@ fn glm_binpois(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, wt: []
             }
         }
         if small { break }
+        m += 1usize
+    }
+    if auto && lmu >= 3usize { alm[0usize] = math.exp[f64](2.0f64 * math.log[f64](alm[1usize]) - math.log[f64](alm[2usize])) }
+    ret lmu
+}
+
+// glmnet's own Cox path, ported from glmnetpp (see glm_multinomial for the conventions): the columns are only scaled, not centred (no intercept); the working weights and residuals come from the partial-likelihood gradient and diagonal Hessian (a residual is the score where the
+// weight exceeds 1e-10 and zero elsewhere); the inner passes stop at thresh times the null deviance, and the outer reweighting stops when |sum((score - score_old)(eta - eta_old))| is at most thresh, after which the strong rule is checked. The stopping rule is a relative gain of the
+// deviance ratio below 1e-3 over the last five lambdas. coef holds nlambda rows of p slopes (original scale); returns the number of lambdas fitted
+fn glm_cox(a: *mem.Arena, x: []const f64, time: []const f64, start: []const f64, strata: []const f64, efron: bool, status: []const f64, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, nlambda: usize, thresh: f64, coef: []f64, dev: []f64, alm: []f64) -> usize {
+    let (xs, e1) = mem.alloc[f64](a, n * p)
+    let (sc, e2) = mem.alloc[f64](a, p)
+    let (pf, e3) = mem.alloc[f64](a, p)
+    let (b, e4) = mem.alloc[f64](a, p)
+    let (bs, e5) = mem.alloc[f64](a, p)
+    let (q, e6) = mem.alloc[f64](a, n)
+    let (dq, e7) = mem.alloc[f64](a, n)
+    let (ee, e8) = mem.alloc[f64](a, n)
+    let (ff, e9) = mem.alloc[f64](a, n)
+    let (fp, e10) = mem.alloc[f64](a, n)
+    let (w, e11) = mem.alloc[f64](a, n)
+    let (r, e12) = mem.alloc[f64](a, n)
+    let (score, e13) = mem.alloc[f64](a, n)
+    let (sp, e14) = mem.alloc[f64](a, n)
+    let (ss, e15) = mem.alloc[f64](a, n)
+    let (ord, e16) = mem.alloc[usize](a, n)
+    let (xv, e17) = mem.alloc[f64](a, p)
+    let (ga, e18) = mem.alloc[f64](a, p)
+    let (strong, e19) = mem.alloc[usize](a, p)
+    let (act, e20) = mem.alloc[usize](a, p)
+    let (ia, e21) = mem.alloc[usize](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok || e20 != ok || e21 != ok { ret 0usize }
+    var qsum = 0.0f64
+    var i = 0usize
+    while i < n {
+        if wt.len == n { q[i] = wt[i] } else { q[i] = 1.0f64 }
+        if q[i] < 0.0f64 { q[i] = 0.0f64 }
+        qsum += q[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        q[i] = q[i] / qsum
+        dq[i] = q[i] * status[i]
+        i += 1usize
+    }
+    cox_ord(time, ord)
+    var vs = 0.0f64
+    var j = 0usize
+    while j < p {
+        vs += vf[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var s = 1.0f64
+        if standardize {
+            var m1 = 0.0f64
+            var m2 = 0.0f64
+            i = 0usize
+            while i < n {
+                m1 += q[i] * x[j * n + i]
+                m2 += q[i] * x[j * n + i] * x[j * n + i]
+                i += 1usize
+            }
+            s = math.sqrt[f64](m2 - m1 * m1)
+        }
+        sc[j] = s
+        i = 0usize
+        while i < n {
+            xs[j * n + i] = x[j * n + i] / s
+            i += 1usize
+        }
+        pf[j] = vf[j] * f64(p) / vs
+        strong[j] = 0usize
+        act[j] = 0usize
+        b[j] = 0.0f64
+        bs[j] = 0.0f64
+        j += 1usize
+    }
+    i = 0usize
+    while i < n {
+        ff[i] = 0.0f64
+        if off.len == n { ff[i] = off[i] }
+        i += 1usize
+    }
+    let sat = cox_dk_a(time, strata, dq, ord, efron)
+    // the null state
+    i = 0usize
+    while i < n {
+        ee[i] = q[i] * math.exp[f64](ff[i])
+        i += 1usize
+    }
+    var lg = cox_qa(time, start, strata, dq, ord, ee, ss, efron, w, score)
+    var d0 = 0.0f64
+    i = 0usize
+    while i < n {
+        d0 += dq[i] * ff[i]
+        i += 1usize
+    }
+    var dnow = 2.0f64 * (lg - d0) - 2.0f64 * sat
+    let dev0 = dnow
+    i = 0usize
+    while i < n {
+        r[i] = 0.0f64
+        if math.abs[f64](w[i]) > 1.0e-10f64 { r[i] = score[i] }
+        fp[i] = ff[i]
+        sp[i] = score[i]
+        i += 1usize
+    }
+    let thr = thresh * dev0
+    let irls_thr = thresh
+    var irls_change = 1.0e300f64
+    j = 0usize
+    while j < p {
+        var gj = 0.0f64
+        i = 0usize
+        while i < n {
+            gj += xs[j * n + i] * score[i]
+            i += 1usize
+        }
+        ga[j] = math.abs[f64](gj)
+        j += 1usize
+    }
+    var nin = 0usize
+    var nlp = 0usize
+    var alf = 1.0f64
+    var nl = lambdas.len
+    var auto = false
+    if nl == 0usize {
+        auto = true
+        nl = nlambda
+        var flmin = 1.0e-4f64
+        if n < p { flmin = 1.0e-2f64 }
+        alf = math.pow[f64](flmin, 1.0f64 / (f64(nl) - 1.0f64))
+    }
+    var lmda = 0.0f64
+    var lmu = 0usize
+    var m = 0usize
+    while m < nl {
+        var alm0 = lmda
+        var al = alm0
+        if !auto { al = lambdas[m] } else if m > 1usize { al = al * alf } else if m == 0usize { al = 9.9e35f64 } else {
+            alm0 = 0.0f64
+            j = 0usize
+            while j < p {
+                if pf[j] > 0.0f64 && ga[j] / pf[j] > alm0 { alm0 = ga[j] / pf[j] }
+                j += 1usize
+            }
+            var bt = alpha
+            if bt < 1.0e-3f64 { bt = 1.0e-3f64 }
+            alm0 = alm0 / bt
+            al = alm0 * alf
+        }
+        lmda = al
+        let dem = al * (1.0f64 - alpha)
+        let ab = al * alpha
+        let tlam = alpha * (2.0f64 * al - alm0)
+        j = 0usize
+        while j < p {
+            if strong[j] == 0usize && ga[j] > tlam * pf[j] { strong[j] = 1usize }
+            j += 1usize
+        }
+        var maxit_hit = false
+        var rounds = 0usize
+        while rounds < 5000usize {
+            rounds += 1usize
+            // setup_wls
+            j = 0usize
+            while j < p {
+                bs[j] = b[j]
+                if strong[j] == 1usize {
+                    var s2 = 0.0f64
+                    i = 0usize
+                    while i < n {
+                        s2 += w[i] * xs[j * n + i] * xs[j * n + i]
+                        i += 1usize
+                    }
+                    xv[j] = s2
+                }
+                j += 1usize
+            }
+            var wdone = false
+            while !wdone {
+                var phase = 0usize
+                while true {
+                    nlp += 1usize
+                    var dlx = 0.0f64
+                    var jj = 0usize
+                    var cnt = p
+                    if phase == 1usize { cnt = nin }
+                    while jj < cnt {
+                        var k = jj
+                        if phase == 1usize { k = ia[jj] }
+                        if phase == 1usize || strong[k] == 1usize {
+                            var gk = 0.0f64
+                            i = 0usize
+                            while i < n {
+                                gk += r[i] * xs[k * n + i]
+                                i += 1usize
+                            }
+                            let old = b[k]
+                            let u = gk + old * xv[k]
+                            let vv = math.abs[f64](u) - pf[k] * ab
+                            var nb = 0.0f64
+                            if vv > 0.0f64 {
+                                var sg = vv
+                                if u < 0.0f64 { sg = 0.0f64 - vv }
+                                nb = sg / (xv[k] + pf[k] * dem)
+                                if lo.len == p {
+                                    if nb > up[k] * sc[k] { nb = up[k] * sc[k] }
+                                    if nb < lo[k] * sc[k] { nb = lo[k] * sc[k] }
+                                }
+                            }
+                            if nb != old {
+                                if act[k] == 0usize {
+                                    act[k] = 1usize
+                                    ia[nin] = k
+                                    nin += 1usize
+                                }
+                                let d = nb - old
+                                b[k] = nb
+                                if xv[k] * d * d > dlx { dlx = xv[k] * d * d }
+                                i = 0usize
+                                while i < n {
+                                    r[i] -= d * w[i] * xs[k * n + i]
+                                    i += 1usize
+                                }
+                            }
+                        }
+                        jj += 1usize
+                    }
+                    if dlx < thr {
+                        if phase == 0usize { wdone = true }
+                        break
+                    }
+                    if nlp > 100000usize {
+                        maxit_hit = true
+                        wdone = true
+                        break
+                    }
+                    phase = 1usize
+                }
+            }
+            if maxit_hit { break }
+            // update_irls
+            i = 0usize
+            while i < n {
+                fp[i] = ff[i]
+                sp[i] = score[i]
+                var fi = 0.0f64
+                if off.len == n { fi = off[i] }
+                var t = 0usize
+                while t < nin {
+                    let k = ia[t]
+                    fi += b[k] * xs[k * n + i]
+                    t += 1usize
+                }
+                ff[i] = fi
+                ee[i] = q[i] * math.exp[f64](fi)
+                i += 1usize
+            }
+            lg = cox_qa(time, start, strata, dq, ord, ee, ss, efron, w, score)
+            d0 = 0.0f64
+            irls_change = 0.0f64
+            i = 0usize
+            while i < n {
+                d0 += dq[i] * ff[i]
+                irls_change += (score[i] - sp[i]) * (ff[i] - fp[i])
+                r[i] = 0.0f64
+                if math.abs[f64](w[i]) > 1.0e-10f64 { r[i] = score[i] }
+                i += 1usize
+            }
+            irls_change = math.abs[f64](irls_change)
+            dnow = 2.0f64 * (lg - d0) - 2.0f64 * sat
+            if irls_change <= irls_thr {
+                j = 0usize
+                while j < p {
+                    if strong[j] == 0usize {
+                        var gj = 0.0f64
+                        i = 0usize
+                        while i < n {
+                            gj += xs[j * n + i] * score[i]
+                            i += 1usize
+                        }
+                        ga[j] = math.abs[f64](gj)
+                    }
+                    j += 1usize
+                }
+                var upd = false
+                j = 0usize
+                while j < p {
+                    if strong[j] == 0usize && ga[j] > ab * pf[j] {
+                        strong[j] = 1usize
+                        upd = true
+                    }
+                    j += 1usize
+                }
+                if !upd { break }
+            }
+        }
+        dev[m] = 1.0f64 - dnow / dev0
+        alm[m] = al
+        j = 0usize
+        while j < p {
+            coef[m * p + j] = b[j] / sc[j]
+            j += 1usize
+        }
+        lmu = m + 1usize
+        if maxit_hit { break }
+        if lmu >= 5usize && auto {
+            let prev = dev[m - 4usize]
+            if (dev[m] - prev) / dev[m] < 1.0e-3f64 || dev[m] > 0.999f64 { break }
+        }
         m += 1usize
     }
     if auto && lmu >= 3usize { alm[0usize] = math.exp[f64](2.0f64 * math.log[f64](alm[1usize]) - math.log[f64](alm[2usize])) }
