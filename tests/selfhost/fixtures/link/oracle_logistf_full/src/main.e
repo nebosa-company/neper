@@ -45,7 +45,8 @@ fn parse(a: *mem.Arena, args: []const f64) -> (Prob, err) {
     let has_w = flag(args[24usize])
     let has_o = flag(args[25usize])
     let ne = usize(args[26usize])
-    var at = 27usize
+    o.c.collapse = flag(args[27usize])
+    var at = 28usize
     let (plconf, e1) = mem.alloc[usize](a, npl + 1usize)
     if e1 != ok { ret (zero, e1) }
     var i = 0usize
@@ -219,7 +220,7 @@ fn compare(a: *mem.Arena, name: str, at: usize, got: []const f64, want: []const 
     while i < got.len {
         if !close(got[i], want[i]) {
             bad += 1usize
-            if bad <= 12usize {
+            if bad <= 3usize {
                 let (initial, be) = str.builder(a, 96usize)
                 if be == ok {
                     var b = initial

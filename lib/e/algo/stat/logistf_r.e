@@ -4,10 +4,10 @@
 //
 // A design matrix x is n by k, column-major (as R holds it), the intercept column included when the model has one. y is 0/1. weight and
 // offset are n long, or empty for the defaults (ones, zeros). A term is a column here; the selection functions work on subsets of the
-// columns of one full design matrix, indexed from 0. The collapse of identical rows (logistf.control(collapse)) is not replayed: the
-// weighted fit of the collapsed rows and the fit of the rows agree to rounding, and nothing it changes is observable.
+// columns of one full design matrix, indexed from 0. logistf.control(collapse) is replayed (fit_fit): a design of at most 10 distinct values is fitted as
+// its distinct rows with their counts as weights, which changes the iterate the 1e-5 stopping rule lands on.
 //
-// Not here: the multiple-imputation pooling of CLIP.confint and CLIP.profile (they need the imputed data sets and uniroot).
+// Not here: the legacy fitters logistf.fit.old and logistpl.old (the legacy = TRUE paths of logistf.pdf, CLIP.confint and CLIP.profile) and plot.logistf.profile.
 
 use e.math
 use e.math.nmath as nm
@@ -65,13 +65,13 @@ fn sqrt_f(v: f64) -> f64 { ret math.sqrt[f64](v) }
 
 // the controls of logistf.control, logistpl.control and logistf.mod.control (tau)
 type Ctl = struct {
-    maxit: usize, maxstep: f64, maxhs: usize, lconv: f64, gconv: f64, xconv: f64, irls: bool, tau: f64,
+    maxit: usize, maxstep: f64, maxhs: usize, lconv: f64, gconv: f64, xconv: f64, irls: bool, collapse: bool, tau: f64,
     plmaxit: usize, plmaxstep: f64, plmaxhs: usize, pllconv: f64, plxconv: f64
 }
 
 fn ctl_default() -> Ctl {
     ret Ctl {
-        maxit: 25usize, maxstep: 5.0f64, maxhs: 0usize, lconv: 1.0e-5f64, gconv: 1.0e-5f64, xconv: 1.0e-5f64, irls: false, tau: 0.5f64,
+        maxit: 25usize, maxstep: 5.0f64, maxhs: 0usize, lconv: 1.0e-5f64, gconv: 1.0e-5f64, xconv: 1.0e-5f64, irls: false, collapse: true, tau: 0.5f64,
         plmaxit: 100usize, plmaxstep: 5.0f64, plmaxhs: 0usize, pllconv: 1.0e-5f64, plxconv: 1.0e-5f64
     }
 }
@@ -677,13 +677,139 @@ fn fit_irls(b: *Bump, x: []const f64, y: []const f64, n: usize, k: usize, weight
 }
 
 // logistf.fit: dispatches on the control's fit; the result lands in the arrays given
-fn fit_fit(b: *Bump, x: []const f64, y: []const f64, n: usize, k: usize, weight: []const f64, offset: []const f64, beta: []f64, colfit: []const usize, firth: bool, c: Ctl, var_out: []f64, ustar: []f64, pi: []f64, hdiag: []f64) -> (Core, err) {
+fn fit_dispatch(b: *Bump, x: []const f64, y: []const f64, n: usize, k: usize, weight: []const f64, offset: []const f64, beta: []f64, colfit: []const usize, firth: bool, c: Ctl, var_out: []f64, ustar: []f64, pi: []f64, hdiag: []f64) -> (Core, err) {
     if c.irls {
         let (r1, e1) = fit_irls(b, x, y, n, k, weight, offset, beta, colfit, firth, c, var_out, pi, hdiag)
         ret (r1, e1)
     }
     let (r2, e2) = fit_nr(b, x, y, n, k, weight, offset, beta, colfit, firth, c, var_out, ustar, pi, hdiag)
     ret (r2, e2)
+}
+
+// logistf.fit: with collapse on and unit weights, a design whose x columns and y hold at most 10 distinct values is fitted as its distinct rows
+// (x, y, offset) weighted by their counts, and pi and the hat diagonal are put back per row. The weighted path is not the unweighted one (the
+// package's first score drops the weight on pi), so the 1e-5 convergence stops at a different iterate
+fn fit_fit(b: *Bump, x: []const f64, y: []const f64, n: usize, k: usize, weight: []const f64, offset: []const f64, beta: []f64, colfit: []const usize, firth: bool, c: Ctl, var_out: []f64, ustar: []f64, pi: []f64, hdiag: []f64) -> (Core, err) {
+    var collapse = c.collapse
+    var i = 0usize
+    while i < n && collapse {
+        if weight[i] != 1.0f64 { collapse = false }
+        i += 1usize
+    }
+    if collapse {
+        // the distinct values of x and y together
+        let mark0 = b.at
+        let vals = take(b, 12usize)
+        var nv = 0usize
+        var j = 0usize
+        while j <= k && collapse {
+            i = 0usize
+            while i < n && collapse {
+                var v = y[i]
+                if j < k { v = x[i + j * n] }
+                var seen = false
+                var q = 0usize
+                while q < nv {
+                    if vals[q] == v { seen = true }
+                    q += 1usize
+                }
+                if !seen {
+                    if nv >= 10usize {
+                        collapse = false
+                    } else {
+                        vals[nv] = v
+                        nv += 1usize
+                    }
+                }
+                i += 1usize
+            }
+            j += 1usize
+        }
+        b.at = mark0
+    }
+    if !collapse {
+        let (r0, e0) = fit_dispatch(b, x, y, n, k, weight, offset, beta, colfit, firth, c, var_out, ustar, pi, hdiag)
+        ret (r0, e0)
+    }
+    let mark = b.at
+    let imark = b.iat
+    let grp = take_u(b, n)
+    var ng = 0usize
+    i = 0usize
+    while i < n {
+        var found = false
+        var g = 0usize
+        while g < ng && !found {
+            var same = y[i] == y[grp[g]] && offset[i] == offset[grp[g]]
+            var j = 0usize
+            while j < k && same {
+                if x[i + j * n] != x[grp[g] + j * n] { same = false }
+                j += 1usize
+            }
+            if same { found = true } else { g += 1usize }
+        }
+        if !found {
+            grp[ng] = i
+            g = ng
+            ng += 1usize
+        }
+        i += 1usize
+    }
+    // grp[g] is the first row of group g; idx[i] the group of row i
+    let idx = take_u(b, n)
+    i = 0usize
+    while i < n {
+        var g = 0usize
+        var found = false
+        while g < ng && !found {
+            var same = y[i] == y[grp[g]] && offset[i] == offset[grp[g]]
+            var j = 0usize
+            while j < k && same {
+                if x[i + j * n] != x[grp[g] + j * n] { same = false }
+                j += 1usize
+            }
+            if same { found = true } else { g += 1usize }
+        }
+        idx[i] = g
+        i += 1usize
+    }
+    let xc = take(b, ng * k)
+    let yc = take(b, ng)
+    let oc = take(b, ng)
+    let wc = take(b, ng)
+    let pic = take(b, ng)
+    let hc = take(b, ng)
+    var g2 = 0usize
+    while g2 < ng {
+        yc[g2] = y[grp[g2]]
+        oc[g2] = offset[grp[g2]]
+        var j = 0usize
+        while j < k {
+            xc[g2 + j * ng] = x[grp[g2] + j * n]
+            j += 1usize
+        }
+        g2 += 1usize
+    }
+    i = 0usize
+    while i < n {
+        wc[idx[i]] += 1.0f64
+        i += 1usize
+    }
+    let (r1, e1) = fit_dispatch(b, xc, yc, ng, k, wc, oc, beta, colfit, firth, c, var_out, ustar, pic, hc)
+    if e1 != ok {
+        b.at = mark
+        b.iat = imark
+        ret (zero, e1)
+    }
+    i = 0usize
+    while i < n {
+        pi[i] = pic[idx[i]]
+        hdiag[i] = hc[idx[i]] / wc[idx[i]]
+        i += 1usize
+    }
+    b.at = mark
+    b.iat = imark
+    ret (r1, ok)
 }
 
 type Pl = struct { beta: f64, loglik: f64, iter: usize, warn: bool, c0: f64, c1: f64 }
@@ -910,7 +1036,7 @@ fn offset_or_zeros(a: *mem.Arena, w: []const f64, n: usize) -> ([]f64, err) {
 }
 
 fn bump_for(a: *mem.Arena, n: usize, k: usize) -> (Bump, err) {
-    let (b, e) = bump_new(a, 80usize * (n * k + n + k * k + 64usize) + 8192usize, 8usize * k + 256usize)
+    let (b, e) = bump_new(a, 80usize * (n * k + n + k * k + 64usize) + 8192usize, 2usize * n + 8usize * k + 256usize)
     ret (b, e)
 }
 
@@ -1032,7 +1158,6 @@ fn logistf(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, we
         let (plist, h1) = mem.alloc[usize](a, k)
         if h1 != ok { ret (zero, h1) }
         var np = 0usize
-        var restart = 0usize
         var single_intercept = false
         if k == 1usize && o.has_int { single_intercept = true }
         i = 0usize
@@ -1144,7 +1269,6 @@ fn logistf(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, we
             prob[ci] = pchisq_up(2.0f64 * (core.loglik - ci_core.loglik), 1.0f64)
             q += 1usize
         }
-        restart = 0usize
     }
     if o.flic {
         let (fl, e13) = flic_in_logistf(a, x, n, k, y, r)
@@ -1671,9 +1795,6 @@ fn lf_test(a: *mem.Arena, x: []const f64, n: usize, k: usize, y: []const f64, we
 // of test (full-design columns; facs is nv by K, the variables of each) whose name survives, in order
 fn survive(facs: []const f64, nv: usize, test: []const usize, out: []usize) -> usize {
     let none = usize(1000000usize)
-    var rank_v = test
-    var seen: usize = 0usize
-    // the rank of a variable is where it first appears; kept in a scratch that fits nv entries
     var m = 0usize
     var t = 0usize
     while t < test.len {

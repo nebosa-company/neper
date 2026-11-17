@@ -5,7 +5,7 @@
 # numbers that differ (the case want is 0 mismatches). Header (0-based):
 #   0 n, 1 k, 2 m (answer length), 3 mask (which parts of the answer), 4 firth, 5 pl, 6 intercept, 7 flic, 8 maxit, 9 maxstep, 10 maxhs,
 #   11 lconv, 12 gconv, 13 xconv, 14 irls, 15 tau, 16 plmaxit, 17 plmaxstep, 18 plmaxhs, 19 pllconv, 20 plxconv, 21 alpha,
-#   22 nplconf, 23 nterms, 24 hasW, 25 hasO, 26 ne
+#   22 nplconf, 23 nterms, 24 hasW, 25 hasO, 26 ne, 27 collapse
 # then plconf (nplconf, 1-based), terms.fit (nterms, 1-based), y (n), x (n*k column-major), w (n), offset (n), extra (ne), answer (m).
 # Answer parts by mask bit: 0 coef, 1 var, 2 prob ci.lower ci.upper, 3 loglik full null, 4 iter full null, 5 df n, 6 linear.predictors,
 # 7 predict, 8 hat.diag, 9 pl.iter (k by 3 by rows), 10 pl.conv (rows of 4)
@@ -14,13 +14,16 @@ cases <- list()
 nn <- function(v) as.numeric(v)
 
 popt <- function(firth = TRUE, pl = TRUE, int = 1, flic = 0, control = logistf.control(), plcontrol = logistpl.control(), tau = 0.5, alpha = 0.05) {
+  r <- popt0(firth, pl, int, flic, control, plcontrol, tau, alpha); attr(r, "collapse") <- control$collapse; r
+}
+popt0 <- function(firth = TRUE, pl = TRUE, int = 1, flic = 0, control = logistf.control(), plcontrol = logistpl.control(), tau = 0.5, alpha = 0.05) {
   c(NA, NA, NA, NA, firth, pl, int, flic, control$maxit, control$maxstep, control$maxhs, control$lconv, control$gconv, control$xconv,
     as.numeric(control$fit == "IRLS"), tau, plcontrol$maxit, plcontrol$maxstep, plcontrol$maxhs, plcontrol$lconv, plcontrol$xconv, alpha)
 }
 
 pack <- function(kind, n, k, mask, o, y, x, w = NULL, off = NULL, plconf = NULL, terms = NULL, extra = numeric(), expected) {
   o[1:4] <- c(n, k, length(expected), mask)
-  hdr <- c(o, length(plconf), length(terms), !is.null(w), !is.null(off), length(extra))
+  coll <- attr(o, "collapse"); hdr <- c(o, length(plconf), length(terms), !is.null(w), !is.null(off), length(extra), if (is.null(coll)) 1 else coll)
   expected <- nn(expected)
   cases[[length(cases) + 1]] <<- case(kind, c(hdr, plconf, terms, y, as.vector(x), w, off, extra, expected), 0, rel = 0, abs = 0)
 }
@@ -403,5 +406,21 @@ for (rep in 1:7) {
     head <- c(0, 0, 0, 0, 0, 0, 0, 0, 1, if (is.null(fr)) min(lo) else fr, if (is.null(to)) max(up) else to, steps)
     clip_pack("clip_profile", datas, fits, poss[1], head, c(r$beta, r$cdf, r$profile), 3)
   }
+}
+# ---- binary covariates only: logistf collapses identical rows (collapse = TRUE), which the port does not replay
+makebin <- function(n, k) {
+  X <- matrix(rbinom(n * k, 1, 0.45), n, k)
+  eta <- -0.3 + X %*% c(1.2, -0.9, 0.6)[seq_len(k)]
+  d <- data.frame(y = rbinom(n, 1, plogis(eta)), X); names(d) <- c("y", paste0("x", seq_len(k)))
+  d$w <- 1; d$o <- round(rnorm(n, 0, 0.3), 2)
+  d
+}
+for (rep in 1:5) {
+  k <- c(2, 3, 1, 3, 2)[rep]; d <- makebin(c(80, 120, 50, 60, 70)[rep], k)
+  fit_case(d, k)
+  fit_case(d, k, offset = TRUE)
+  if (rep > 3) fit_case(d, k, flic = TRUE)
+  if (rep == 5) fit_case(d, k, kind = "flic")
+  if (rep %% 2 == 1) fit_case(d, k, control = logistf.control(collapse = FALSE))
 }
 emit("logistf_full", "logistf", list(cases))
