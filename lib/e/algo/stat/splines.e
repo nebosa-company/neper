@@ -138,6 +138,62 @@ fn nat_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi:
 }
 
 fn nat_in(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, intercept: bool, deriv: usize, x: f64, out: []f64) -> usize {
+    if knots.len < 2usize {
+        // zero or one internal knot: the package's explicit null-space columns (each standardised to sum to one)
+        let kk0 = knots.len + 4usize
+        let (hb, eh) = mem.alloc[f64](a, kk0)
+        let (hc, ec) = mem.alloc[f64](a, 3usize * kk0)
+        if eh != ok || ec != ok { ret 0usize }
+        let gb0 = row(t, tmp, knots, lo, hi, 3usize, true, 0u8, deriv, x, hb)
+        var q = 0usize
+        while q < 3usize * kk0 {
+            hc[q] = 0.0f64
+            q += 1usize
+        }
+        var ncol = 2usize
+        if knots.len == 0usize {
+            hc[0usize * 4usize + 0usize] = 3.0f64
+            hc[0usize * 4usize + 1usize] = 2.0f64
+            hc[0usize * 4usize + 2usize] = 1.0f64
+            hc[1usize * 4usize + 1usize] = 1.0f64
+            hc[1usize * 4usize + 2usize] = 2.0f64
+            hc[1usize * 4usize + 3usize] = 3.0f64
+        } else {
+            ncol = 3usize
+            let w1 = knots[0usize] - lo
+            let w2 = hi - knots[0usize]
+            let w3 = w1 + w2
+            hc[0usize * 5usize + 0usize] = 1.0f64 + w1 / w3
+            hc[0usize * 5usize + 1usize] = 1.0f64
+            hc[1usize * 5usize + 1usize] = 1.0f64 / (1.0f64 + w3 / w1)
+            hc[1usize * 5usize + 2usize] = 1.0f64
+            hc[1usize * 5usize + 3usize] = 1.0f64 / (1.0f64 + w3 / w2)
+            hc[2usize * 5usize + 3usize] = 1.0f64
+            hc[2usize * 5usize + 4usize] = 1.0f64 + w2 / w3
+        }
+        var o0 = 0usize
+        var cj = 0usize
+        while cj < ncol {
+            var sm = 0.0f64
+            var r = 0usize
+            while r < kk0 {
+                sm += hc[cj * kk0 + r]
+                r += 1usize
+            }
+            var v = 0.0f64
+            r = 0usize
+            while r < kk0 {
+                v += hc[cj * kk0 + r] / sm * hb[r]
+                r += 1usize
+            }
+            if cj > 0usize || intercept {
+                out[o0] = v
+                o0 += 1usize
+            }
+            cj += 1usize
+        }
+        ret o0
+    }
     let kk = knots.len + 4usize
     let (c0, e0) = mem.alloc[f64](a, kk)
     let (c1, e1) = mem.alloc[f64](a, kk)
@@ -554,4 +610,74 @@ fn df_knots(xs: []f64, lo: f64, hi: f64, df: usize, degree: usize, intercept: bo
         q += 1usize
     }
     ret nik
+}
+
+// R's quantile of type 7 of the n sorted values in xs
+fn quantile7(xs: []const f64, n: usize, p: f64) -> f64 {
+    let h = f64(n - 1usize) * p
+    let fl = math.floor[f64](h)
+    let k = usize(fl)
+    if k + 1usize < n && h > fl { ret xs[k] + (h - fl) * (xs[k + 1usize] - xs[k]) }
+    ret xs[k]
+}
+
+// the integral from the lower boundary to x of the periodic B-spline (kp = 0) or M-spline (kp = 1) basis: 4-point Gauss-Legendre on each knot interval, exact for the piecewise polynomials; `tp` is the extended-knot scratch of periodic_row, out gets one value per column
+fn periodic_int_row(a: *mem.Arena, tp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize, intercept: bool, kp: u8, x: f64, out: []f64) -> usize {
+    let w = knots.len + degree + 2usize
+    let (acc, e1) = mem.alloc[f64](a, w)
+    let (rv, e2) = mem.alloc[f64](a, w)
+    if e1 != ok || e2 != ok { ret 0usize }
+    var c = 0usize
+    while c < w {
+        acc[c] = 0.0f64
+        c += 1usize
+    }
+    var a0 = lo
+    var seg = 0usize
+    let cnt = knots.len + 1usize
+    while seg <= knots.len && a0 < x {
+        var b0 = hi
+        if seg < knots.len { b0 = knots[seg] }
+        if b0 > x { b0 = x }
+        if b0 > a0 {
+            var q = 0usize
+            while q < 4usize {
+                var nd = 0.0f64
+                var wt = 0.0f64
+                if q == 0usize {
+                    nd = 0.0f64 - 0.8611363115940526f64
+                    wt = 0.3478548451374538f64
+                } else if q == 1usize {
+                    nd = 0.0f64 - 0.3399810435848563f64
+                    wt = 0.6521451548625461f64
+                } else if q == 2usize {
+                    nd = 0.3399810435848563f64
+                    wt = 0.6521451548625461f64
+                } else {
+                    nd = 0.8611363115940526f64
+                    wt = 0.3478548451374538f64
+                }
+                let u = 0.5f64 * ((b0 - a0) * nd + b0 + a0)
+                let m = periodic_row(tp, knots, lo, hi, degree, true, kp, 0usize, u, rv)
+                c = 0usize
+                while c < m {
+                    acc[c] += wt * rv[c] * (b0 - a0) / 2.0f64
+                    c += 1usize
+                }
+                q += 1usize
+            }
+        }
+        a0 = b0
+        seg += 1usize
+    }
+    var o = 0usize
+    c = 0usize
+    while c < cnt {
+        if c > 0usize || intercept {
+            out[o] = acc[c]
+            o += 1usize
+        }
+        c += 1usize
+    }
+    ret o
 }

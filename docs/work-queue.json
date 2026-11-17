@@ -4,17 +4,6 @@
   "policy": "The first item is the only capability eligible for the next serial feature session. NeperOS stage 1 is complete (C103 closed in D2142); NeperOS stage 2 (C104, the AVF/crosvm guest, D2143) is queued first by the user's NeperOS priority (D2119/D2125) but is BLOCKED on a test environment -- crosvm or a Pixel, neither on this machine -- so it cannot advance here; until that is provisioned the next workable items are the NeperOS phone-shell milestone (C105-C114, D2148), which runs on QEMU, then the chart and visualization work (L069 on), to be finished before non-chart work, preserving relative order. Every item declares its model and thinking level. Keep a partial item in place; move it to work-done.jsonl only when its score reaches 1.",
   "items": [
     {
-      "id": "L445",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 584,
-      "title": "splines2: spline bases",
-      "score": 0.85,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6069): e.algo.stat.splines has bSpline with derivatives, mSpline and iSpline, equal to splines2 on 400 summaries on Windows (oracle_splines2); Linux pending. D6589: naturalSpline (cubic, at least two internal knots, with and without the intercept; the package's null-space basis, which is not splines::ns's) equals splines2 on 40 summaries. D6590: cSpline (scaled and unscaled; the integral of the I-spline by exact Gauss-Legendre on each knot interval) equals splines2 on 120 summaries. D6591: the derivatives of the M-splines (orders 1, 2) and I-splines (orders 1, 2) equal splines2 on 240 summaries (they were already in the code). D6595: the first and second derivatives of M-splines and the first two derivatives of I-splines (an I-spline derivative is an M-spline of one lower derivative order) equal splines2 on 240 summaries. D6596: periodic bSpline and mSpline (degree up to nk + 1) equal splines2 on 120 summaries. D6704: ibs (the integral of the B-splines, degree 1 to 4, with and without intercept and internal knots) equals splines2 on 60 summaries. D6705: bernsteinPoly values and first two derivatives (degree 2 to 6, with and without the intercept) equal splines2 on 180 summaries. D6706: nsk values (cubic, 2 to 4 internal knots, with and without the intercept) equal splines2 on 58 summaries. D6743: knots from df (quantile type 7) and x beyond the boundary knots (the boundary polynomial continued) for bSpline, mSpline and iSpline equal splines2 on 320 summaries. D6744: periodic iSpline and cSpline (the ordinary bases), mSpline integrals, and the first two derivatives of naturalSpline and nsk equal splines2 on 640 summaries. D6745: bernsteinPoly integrals and third derivatives of bSpline, mSpline and iSpline equal splines2 on 200 summaries. D6746: extrapolation of naturalSpline, nsk, cSpline and ibs beyond the boundary equals splines2 on 400 summaries. Open: nsk trim, naturalSpline with fewer than two knots, periodic extrapolation and integrals, predict and update. Original: Open (CRAN rank 782). Small. Acceptance, equal to splines2: bSpline, mSpline, iSpline, cSpline, naturalSpline and periodic bases with knots, degree, derivatives, integrals, boundary conditions and the predict and update behaviour."
-    },
-    {
       "id": "L470",
       "category": "library",
       "group": "CRAN parity",

@@ -15,9 +15,33 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nk0 = usize(z[1usize])
     let degree = usize(z[2usize])
     let icp = z[3usize] != 0.0f64
-    let lo = z[4usize]
-    let hi = z[5usize]
     let kraw = usize(z[6usize])
+    var lo = z[4usize]
+    var hi = z[5usize]
+    if kraw >= 200usize {
+        // trim in the lower boundary slot: the boundary knots are the trim and 1 - trim quantiles of x
+        let (qs, eq) = mem.alloc[f64](a, n)
+        if eq != ok { ret 0.0f64 / 0.0f64 }
+        var qi = 0usize
+        while qi < n {
+            qs[qi] = z[7usize + qi]
+            qi += 1usize
+        }
+        qi = 1usize
+        while qi < n {
+            let tq = qs[qi]
+            var qj = qi
+            while qj > 0usize && qs[qj - 1usize] > tq {
+                qs[qj] = qs[qj - 1usize]
+                qj -= 1usize
+            }
+            qs[qj] = tq
+            qi += 1usize
+        }
+        let trim = z[4usize]
+        lo = sp.quantile7(qs, n, trim)
+        hi = sp.quantile7(qs, n, 1.0f64 - trim)
+    }
     let kind = kraw % 100usize
     let xs = z[7usize..7usize + n]
     let (kbuf, ek) = mem.alloc[f64](a, nk0 + n + 4usize)
@@ -30,7 +54,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             xsort[q0] = xs[q0]
             q0 += 1usize
         }
-        nk = sp.df_knots(xsort, lo, hi, nk0, degree, icp, kbuf)
+        var dfdeg = degree
+        if kind == 5usize || kind == 18usize { dfdeg = 1usize }
+        nk = sp.df_knots(xsort, lo, hi, nk0, dfdeg, icp, kbuf)
     } else {
         var q1 = 0usize
         while q1 < nk0 {
@@ -87,6 +113,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             var kp = 0u8
             if kind == 13usize { kp = 1u8 }
             m = sp.periodic_row(tp, knots, lo, hi, degree, icp, kp, 0usize, xs[i], out)
+        } else if kind == 50usize || kind == 51usize {
+            let (tp2, ep2) = mem.alloc[f64](a, nk + 2usize * degree + 4usize)
+            if ep2 != ok { ret 0.0f64 / 0.0f64 }
+            var kp2 = 0u8
+            if kind == 51usize { kp2 = 1u8 }
+            m = sp.periodic_int_row(a, tp2, knots, lo, hi, degree, icp, kp2, xs[i], out)
         } else if kind == 18usize || kind == 32usize || kind == 33usize {
             let (tk, ek1) = mem.alloc[f64](a, nk + 12usize)
             let (tmpk, ek2) = mem.alloc[f64](a, 2usize * (nk + 4usize) + 8usize)

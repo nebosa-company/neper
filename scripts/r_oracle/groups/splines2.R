@@ -158,4 +158,40 @@ for (rep in 1:40) {
     v <- as.vector(t(m)); a <- c(n, nk, dg, icp, lo, hi, kind, x, kn); cases[[length(cases) + 1]] <- case("sum", a, sum(v), rel = 1e-9, abs = 1e-9); cases[[length(cases) + 1]] <- case("w", a, sum(seq_along(v) * v), rel = 1e-9, abs = 1e-9)
   }
 }
+# nsk and naturalSpline with df and trim (kind 200 + 18 / 200 + 5, the trim in the lower boundary slot)
+for (rep in 1:40) {
+  n <- sample(12:40, 1); x <- sort(round(runif(n, 0, 10), 4)); icp <- rbinom(1, 1, 0.5); tr <- c(0, 0.05, 0.1, 0.2)[sample(4, 1)]; df <- sample(3:7, 1) + icp
+  for (kind in c(18, 5)) {
+    m <- tryCatch(suppressWarnings(unclass(if (kind == 18) nsk(x, df = df, intercept = icp == 1, trim = tr) else naturalSpline(x, df = df, intercept = icp == 1))), error = function(e) NULL); if (is.null(m)) next
+    if (kind == 5 && tr > 0) next
+    v <- as.vector(t(m)); a <- c(n, df, 3, icp, tr, 0, 200 + kind, x); cases[[length(cases) + 1]] <- case("sum", a, sum(v), rel = 1e-9, abs = 1e-9); cases[[length(cases) + 1]] <- case("w", a, sum(seq_along(v) * v), rel = 1e-9, abs = 1e-9)
+  }
+}
+# naturalSpline with no or one internal knot (kind 5), values and, through nsk, cardinal bases are not needed
+for (rep in 1:40) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); nk <- sample(0:1, 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- if (nk > 0) round(runif(1, lo + 0.2 * (hi - lo), hi - 0.2 * (hi - lo)), 3) else numeric(0)
+  for (d in 0:2) {
+    m <- tryCatch(suppressWarnings(unclass(naturalSpline(x, knots = kn, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = d))), error = function(e) NULL); if (is.null(m)) next
+    v <- as.vector(t(m)); a <- c(n, nk, 3, icp, lo, hi, c(5, 30, 31)[d + 1], x, kn); cases[[length(cases) + 1]] <- case("sum", a, sum(v), rel = 1e-9, abs = 1e-9); cases[[length(cases) + 1]] <- case("w", a, sum(seq_along(v) * v), rel = 1e-9, abs = 1e-9)
+  }
+}
+# nsk with no or one internal knot (kind 18, derivatives 32, 33)
+for (rep in 1:30) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); nk <- sample(0:1, 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- if (nk > 0) round(runif(1, lo + 0.2 * (hi - lo), hi - 0.2 * (hi - lo)), 3) else numeric(0)
+  for (d in 0:2) {
+    m <- tryCatch(suppressWarnings(unclass(nsk(x, knots = kn, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = d))), error = function(e) NULL); if (is.null(m)) next
+    v <- as.vector(t(m)); a <- c(n, nk, 3, icp, lo, hi, c(18, 32, 33)[d + 1], x, kn); cases[[length(cases) + 1]] <- case("sum", a, sum(v), rel = 1e-9, abs = 1e-8); cases[[length(cases) + 1]] <- case("w", a, sum(seq_along(v) * v), rel = 1e-9, abs = 1e-8)
+  }
+}
+# periodic integrals: bSpline (kind 50) and mSpline (51) with periodic = TRUE, integral = TRUE
+for (rep in 1:30) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); nk <- sample(1:4, 1); degree <- sample(1:min(4, nk + 1), 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)); if (anyDuplicated(kn)) next
+  for (kind in 50:51) {
+    m <- tryCatch(suppressWarnings(unclass(if (kind == 50) bSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), periodic = TRUE, integral = TRUE) else mSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), periodic = TRUE, integral = TRUE))), error = function(e) NULL); if (is.null(m)) next
+    v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, kind, x, kn); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
+  }
+}
 emit("splines2", "splines2", list(cases))
