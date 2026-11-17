@@ -2,6 +2,7 @@
 //
 // Not here: the Fourier and other bases, smooth.basis and the roughness penalty, fd objects and the functional-data analyses.
 
+use e.algo.linalg.decomp as dc
 use e.algo.stat.bayesmpkg as bz
 use e.algo.stat.splines as sp
 use e.math
@@ -293,5 +294,252 @@ fn smooth_basis_stats(a: *mem.Arena, norder: usize, breaks: []const f64, argvals
     out[0usize] = df
     out[1usize] = sse
     out[2usize] = (sse / nf) / ((nf - df) / nf) / ((nf - df) / nf)
+    ret ok
+}
+
+
+// fda numerical inprod(basis, basis) for a B-spline basis with simple knots: Romberg integration (NR qromb with fda tolerances, JMAX 15, JMIN 5, EPS 1e-4) of every product over the whole range at once, the convergence
+// test taken over the whole matrix; out is nbasis by nbasis column-major. It differs from the exact Gram matrix at the 1e-5 level, which is what pca.fd and the other inprod users see
+fn inprod_romberg(a: *mem.Arena, norder: usize, breaks: []const f64, out: []f64) -> err {
+    let nb = breaks.len + norder - 2usize
+    let nn = nb * nb
+    let jmaxp = 16usize
+    let (sm, e1) = mem.alloc[f64](a, jmaxp * nn)
+    let (v, e2) = mem.alloc[f64](a, nb + norder)
+    let (cs, e3) = mem.alloc[f64](a, 5usize * nn)
+    let (ds, e4) = mem.alloc[f64](a, 5usize * nn)
+    let (y, e5) = mem.alloc[f64](a, nn)
+    let (dy, e6) = mem.alloc[f64](a, nn)
+    let (h, e7) = mem.alloc[f64](a, jmaxp)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret mem.Full }
+    let lo = breaks[0usize]
+    let hi = breaks[breaks.len - 1usize]
+    let width = hi - lo
+    var k = 0usize
+    while k < jmaxp {
+        h[k] = 1.0f64
+        k += 1usize
+    }
+    h[1usize] = 0.25f64
+    k = 0usize
+    while k < nn {
+        sm[k] = 0.0f64
+        k += 1usize
+    }
+    var side = 0usize
+    while side < 2usize {
+        var xe = lo
+        if side == 1usize { xe = hi }
+        let e = eval_bspline(a, norder, breaks, xe, 0usize, v)
+        if e != ok { ret e }
+        var i = 0usize
+        while i < nb {
+            var j = 0usize
+            while j < nb {
+                sm[j * nb + i] += width * v[i] * v[j] / 2.0f64
+                j += 1usize
+            }
+            i += 1usize
+        }
+        side += 1usize
+    }
+    var tnm = 0.5f64
+    var iter = 2usize
+    var done = false
+    while iter <= 15usize && !done {
+        tnm = tnm * 2.0f64
+        let del = width / tnm
+        var npts = tnm
+        if iter == 2usize { npts = 1.0f64 }
+        k = 0usize
+        while k < nn {
+            sm[(iter - 1usize) * nn + k] = 0.0f64
+            k += 1usize
+        }
+        var q = 0usize
+        while f64(q) < npts {
+            var xp = 0.5f64 * (lo + hi)
+            if iter > 2usize { xp = lo + del / 2.0f64 + f64(q) * del }
+            let e = eval_bspline(a, norder, breaks, xp, 0usize, v)
+            if e != ok { ret e }
+            var i = 0usize
+            while i < nb {
+                var j = 0usize
+                while j < nb {
+                    sm[(iter - 1usize) * nn + j * nb + i] += width * v[i] * v[j] / tnm
+                    j += 1usize
+                }
+                i += 1usize
+            }
+            q += 1usize
+        }
+        k = 0usize
+        while k < nn {
+            sm[(iter - 1usize) * nn + k] = (sm[(iter - 2usize) * nn + k] + sm[(iter - 1usize) * nn + k]) / 2.0f64
+            k += 1usize
+        }
+        if iter >= 5usize {
+            var r = 0usize
+            while r < 5usize {
+                k = 0usize
+                while k < nn {
+                    cs[r * nn + k] = sm[(iter - 5usize + r) * nn + k]
+                    ds[r * nn + k] = cs[r * nn + k]
+                    k += 1usize
+                }
+                r += 1usize
+            }
+            k = 0usize
+            while k < nn {
+                y[k] = cs[4usize * nn + k]
+                k += 1usize
+            }
+            var ns = 4usize
+            var mm = 1usize
+            while mm <= 4usize {
+                var ii = 0usize
+                while ii < 5usize - mm {
+                    let ho = h[iter - 5usize + ii]
+                    let hp = h[iter - 5usize + ii + mm]
+                    k = 0usize
+                    while k < nn {
+                        let w = (cs[(ii + 1usize) * nn + k] - ds[ii * nn + k]) / (ho - hp)
+                        ds[ii * nn + k] = hp * w
+                        cs[ii * nn + k] = ho * w
+                        k += 1usize
+                    }
+                    ii += 1usize
+                }
+                if 2usize * ns < 5usize - mm {
+                    k = 0usize
+                    while k < nn {
+                        dy[k] = cs[ns * nn + k]
+                        k += 1usize
+                    }
+                } else {
+                    k = 0usize
+                    while k < nn {
+                        dy[k] = ds[(ns - 1usize) * nn + k]
+                        k += 1usize
+                    }
+                    ns -= 1usize
+                }
+                k = 0usize
+                while k < nn {
+                    y[k] += dy[k]
+                    k += 1usize
+                }
+                mm += 1usize
+            }
+            var errval = 0.0f64
+            var ssq = 0.0f64
+            k = 0usize
+            while k < nn {
+                if math.abs[f64](dy[k]) > errval { errval = math.abs[f64](dy[k]) }
+                if math.abs[f64](y[k]) > ssq { ssq = math.abs[f64](y[k]) }
+                out[k] = y[k]
+                k += 1usize
+            }
+            var crit = errval
+            if ssq > 0.0f64 { crit = errval / ssq }
+            if crit < 0.0001f64 && iter >= 5usize { done = true }
+        }
+        if !done {
+            if iter < 15usize {
+                k = 0usize
+                while k < nn {
+                    sm[iter * nn + k] = sm[(iter - 1usize) * nn + k]
+                    k += 1usize
+                }
+            }
+            h[iter] = 0.25f64 * h[iter - 1usize]
+            iter += 1usize
+        }
+    }
+    ret ok
+}
+
+// pca.fd with no smoothing, the harmonics in the basis of the data: the eigenvalues in values (nbasis entries, descending, zero past min(nbasis, nrep)) and the proportions of variance in varprop. gram is the exact basis Gram matrix
+// (penalty_matrix with m = 0, whose Cholesky factor M fda uses), jmat the inprod matrix (inprod_romberg); the eigenvalues are the squared singular values of M^-T J C / sqrt(nrep) with C the centred coefficients (nbasis by nrep, column-major)
+fn pca_fd_values(a: *mem.Arena, gram: []const f64, jmat: []const f64, coefs: []const f64, nb: usize, nrep: usize, values: []f64, varprop: []f64) -> err {
+    let (u, e1) = mem.alloc[f64](a, nb * nb)
+    let (iu, e1b) = mem.alloc[f64](a, nb * nb)
+    let (kk, e1c) = mem.alloc[f64](a, nb * nb)
+    let (mc, e2) = mem.alloc[f64](a, nb * nrep)
+    let (cm, e3) = mem.alloc[f64](a, nb)
+    if e1 != ok || e1b != ok || e1c != ok || e2 != ok || e3 != ok { ret mem.Full }
+    if !bz.chol_upper(gram, nb, u) { ret mem.Full }
+    bz.inv_upper(u, nb, iu)
+    var i = 0usize
+    while i < nb {
+        var j = 0usize
+        while j < nb {
+            var s = 0.0f64
+            var q = 0usize
+            while q <= i {
+                s += iu[i * nb + q] * jmat[j * nb + q]
+                q += 1usize
+            }
+            kk[j * nb + i] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var j = 0usize
+    while j < nb {
+        var s = 0.0f64
+        var t = 0usize
+        while t < nrep {
+            s += coefs[t * nb + j]
+            t += 1usize
+        }
+        cm[j] = s / f64(nrep)
+        j += 1usize
+    }
+    i = 0usize
+    while i < nb {
+        var t = 0usize
+        while t < nrep {
+            var s = 0.0f64
+            j = 0usize
+            while j < nb {
+                s += kk[j * nb + i] * (coefs[t * nb + j] - cm[j])
+                j += 1usize
+            }
+            mc[t * nb + i] = s / math.sqrt[f64](f64(nrep))
+            t += 1usize
+        }
+        i += 1usize
+    }
+    let (mt, e5) = mem.alloc[f64](a, nb * nrep)
+    if e5 != ok { ret mem.Full }
+    i = 0usize
+    while i < nb {
+        var t = 0usize
+        while t < nrep {
+            mt[i * nrep + t] = mc[t * nb + i]
+            t += 1usize
+        }
+        i += 1usize
+    }
+    let (sv, e4) = dc.jacobi_svd(a, mt, nrep, nb)
+    if e4 != ok { ret e4 }
+    i = 0usize
+    while i < nb {
+        values[i] = 0.0f64
+        i += 1usize
+    }
+    var tot = 0.0f64
+    i = 0usize
+    while i < sv.d.len && i < nb {
+        values[i] = sv.d[i] * sv.d[i]
+        tot += values[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < nb {
+        varprop[i] = values[i] / tot
+        i += 1usize
+    }
     ret ok
 }

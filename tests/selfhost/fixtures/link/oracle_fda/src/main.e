@@ -19,6 +19,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     let norder = usize(z[0usize])
     let nb = usize(z[1usize])
+    if c.name[0usize] == 113u8 {
+        // q (pca.fd): (norder, nb, nrep, index, which (0 value, 1 varprop), breaks[nb], coefs[nbasis nrep])
+        let nbas = nb + norder - 2usize
+        let nrep = usize(z[2usize])
+        let (gm, ge) = mem.alloc[f64](a, nbas * nbas)
+        let (vo, ve) = mem.alloc[f64](a, nbas)
+        let (po, pe) = mem.alloc[f64](a, nbas)
+        if ge != ok || ve != ok || pe != ok { ret nan }
+        if fa.penalty_matrix(a, norder, z[5usize..5usize + nb], 0usize, gm) != ok { ret nan }
+        let (jm, je) = mem.alloc[f64](a, nbas * nbas)
+        if je != ok { ret nan }
+        if fa.inprod_romberg(a, norder, z[5usize..5usize + nb], jm) != ok { ret nan }
+        if fa.pca_fd_values(a, gm, jm, z[5usize + nb..5usize + nb + nbas * nrep], nbas, nrep, vo, po) != ok { ret nan }
+        if z[4usize] == 0.0f64 { ret vo[usize(z[3usize])] }
+        ret po[usize(z[3usize])]
+    }
     if c.name[0usize] == 103u8 {
         // g: (norder, nb, m, lambda, which (0 df, 1 sse, 2 gcv, 3 + q coefficient q), hasw, nd, breaks[nb], argvals[nd], y[nd], w[nd])
         let nbas = nb + norder - 2usize
