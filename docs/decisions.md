@@ -48660,3 +48660,8 @@ DRDID rewritten around one `did` entry point for the panel and repeated cross-se
 ## D7106 — geosphere: Karney geodesic, areaPolygon, perimeter, centroid; L401 closed
 
 A port of the GeographicLib C++ inside geosphere 1.6-8 (series order 6): the inverse and direct problems and the polygon area accumulator behind distGeo, bearing, finalBearing, destPoint, midPoint and areaPolygon, with remainder, remquo, cbrt and hypot written for Neper (about an ulp from libm). R perimeter(matrix) in 1.6-8 returns the sum of absolute coordinates; that value is matched as it stands. Equal to R on 3006 cases, so L401 moves to docs/work-done.jsonl. Linux pending.
+
+
+## D7107 — gbm engine, loess, OOB gbm.perf, offsets, factors; L414 closed
+
+The gbm 2.x C++ engine ported line for line (gbmfit.e, gbmr.e) with every loss, the bagging draws through R unif_rand, cross-validation, gbm.more, relative.influence, interact.gbm, permutation.test.gbm, categorical splits and offsets, plus a port of R loess for one predictor (loessfit.e) for gbm.perf OOB. Because gbm picks between equal splits by the last bit of exp and log, correctly rounded cr_exp and cr_log are used (zero differences against R on 3000 and 4000 arguments). Equal to R at 1e-9 on about 7900 cases; every item of the L414 acceptance has an oracle case, so L414 moves to docs/work-done.jsonl. Linux pending.
