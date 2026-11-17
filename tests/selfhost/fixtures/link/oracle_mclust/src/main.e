@@ -51,7 +51,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             zz[q] = z[5usize + n * p + q]
             q += 1usize
         }
-        let ll = mc.me_em(a, mc2, z[5usize..5usize + n * p], zz, n, p, g, pro, mu, sg, inf)
+        let ll = mc.me_em(a, mc2 % 10usize, mc2 >= 10usize, z[5usize..5usize + n * p], zz, n, p, g, pro, mu, sg, inf)
         if id == 0usize { ret ll }
         if id == 1usize { ret inf[0usize] }
         var s = 0.0f64

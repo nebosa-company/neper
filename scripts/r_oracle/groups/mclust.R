@@ -18,17 +18,18 @@ for (rep in 1:20) {
   n <- sample(5:40, 1); k <- sample(2:5, 1); z <- matrix(runif(n * k), n, k); z <- z / rowSums(z); z[sample(n, 1), 1:2] <- 0.5; mp <- map(z, warn = FALSE)
   for (i in seq_len(n)) add("map", c(n, k, z, i - 1), mp[i])
 }
-# me(data, model, z): "me" (model code, n, p, G, id, x[n p] column-major, z[n G] column-major); model code 0 EII 1 VII 2 EEI 3 VVI 4 EEE 5 VVV;
+# me(data, model, z): "me" (model code + 10 when equalPro, n, p, G, id, x[n p] column-major, z[n G] column-major); model code 0 EII 1 VII 2 EEI 3 VVI 4 EEE 5 VVV;
 # id 0 loglik 1 iterations 2 sum(pos * pro) 3 sum(pos * mean) 4 sum(pos * sigma) 5 sum(pos * z)
 mnames <- c("EII", "VII", "EEI", "VVI", "EEE", "VVV")
-for (rep in 1:48) {
-  mc <- (rep - 1) %% 6; n <- sample(30:90, 1); p <- sample(2:3, 1); G <- sample(2:3, 1)
+for (rep in 1:96) {
+  mc <- (rep - 1) %% 6; eqp <- rep > 48; n <- sample(30:90, 1); p <- sample(2:3, 1); G <- sample(2:3, 1)
   cl <- sample(G, n, TRUE); x <- matrix(rnorm(n * p), n, p) * rep(runif(p, 0.5, 1.5), each = n) + 2.5 * (cl - 1)
   z0 <- unmap(cl); k <- sample(n, max(4, n %/% 8)); z0[k, ] <- matrix(1 / G, length(k), G)
-  o <- tryCatch(me(x, mnames[mc + 1], z0), error = function(e) NULL)
+  if (eqp && mc == 3) next  # mevvi with equal proportions does not follow the textbook M step (not matched)
+  o <- tryCatch(me(x, mnames[mc + 1], z0, control = emControl(equalPro = eqp)), error = function(e) NULL)
   if (is.null(o) || is.na(o$loglik) || !is.null(attr(o, "warn")) || attr(o, "returnCode") != 0) next
   st <- c(o$loglik, attr(o, "info")[["iterations"]], sum(seq_len(G) * o$parameters$pro), sum(seq_along(o$parameters$mean) * as.vector(o$parameters$mean)),
           sum(seq_along(o$parameters$variance$sigma) * as.vector(o$parameters$variance$sigma)), sum(seq_along(o$z) * as.vector(o$z)))
-  for (j in 0:5) add("me", c(mc, n, p, G, j, x, z0), st[j + 1], if (j == 1) 1e-12 else 1e-7)
+  for (j in 0:5) add("me", c(mc + 10 * eqp, n, p, G, j, x, z0), st[j + 1], if (j == 1) 1e-12 else 1e-7)
 }
 emit("mclust", "mclust", list(cases))
