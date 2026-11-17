@@ -5,6 +5,8 @@
 // Not here: the bootstrap intervals, scheirerRayHare, the pairwise median test and the nominal symmetry and independence helpers.
 
 use e.math
+use e.math.nmath as nm
+use e.algo.linalg.decomp as decomp
 use e.mem
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
@@ -244,4 +246,109 @@ fn cohen_w(t: []const f64, r: usize, c: usize) -> f64 {
         i += 1usize
     }
     ret signif(math.sqrt[f64](s), 4i64)
+}
+
+// the dummy-coded design of the intercept, first factor, second factor and their interaction (n rows, column-major), treatment contrasts; returns the column count
+fn srh_design(x: []f64, g1: []const usize, l1: usize, g2: []const usize, l2: usize, n: usize) -> usize {
+    var col = 0usize
+    var i = 0usize
+    while i < n {
+        x[i] = 1.0f64
+        i += 1usize
+    }
+    col = 1usize
+    var a = 1usize
+    while a < l1 {
+        i = 0usize
+        while i < n {
+            if g1[i] == a { x[col * n + i] = 1.0f64 } else { x[col * n + i] = 0.0f64 }
+            i += 1usize
+        }
+        col += 1usize
+        a += 1usize
+    }
+    var b = 1usize
+    while b < l2 {
+        i = 0usize
+        while i < n {
+            if g2[i] == b { x[col * n + i] = 1.0f64 } else { x[col * n + i] = 0.0f64 }
+            i += 1usize
+        }
+        col += 1usize
+        b += 1usize
+    }
+    a = 1usize
+    while a < l1 {
+        b = 1usize
+        while b < l2 {
+            i = 0usize
+            while i < n {
+                if g1[i] == a && g2[i] == b { x[col * n + i] = 1.0f64 } else { x[col * n + i] = 0.0f64 }
+                i += 1usize
+            }
+            col += 1usize
+            b += 1usize
+        }
+        a += 1usize
+    }
+    ret col
+}
+
+// scheirerRayHare(y ~ x1 + x2, type = 2): out[0..3] the tie-adjusted H of x1, x2 and x1:x2, out[3..6] their chi-square p values; g1, g2 are factor codes 0 .. l - 1
+fn scheirer_ray_hare(a: *mem.Arena, y: []const f64, g1: []const usize, l1: usize, g2: []const usize, l2: usize, out: []f64) -> err {
+    let n = y.len
+    let (r, re) = ranks(a, y)
+    if re != ok { ret re }
+    let (xm, e1) = mem.alloc[f64](a, n * (l1 * l2 + 1usize))
+    if e1 != ok { ret e1 }
+    let p = srh_design(xm, g1, l1, g2, l2, n)
+    let (f1, fe1) = decomp.lm_fit(a, xm[0usize..n * p], n, p, r, 1.0e-7f64)
+    if fe1 != ok { ret fe1 }
+    let ss12 = sumsq_range(f1.effects, 1usize + (l1 - 1usize) + (l2 - 1usize), p)
+    let ss2 = sumsq_range(f1.effects, 1usize + (l1 - 1usize), 1usize + (l1 - 1usize) + (l2 - 1usize))
+    // the other order: x2 first, then x1 (the interaction column set is the same space)
+    let p2 = srh_design(xm, g2, l2, g1, l1, n)
+    let (f2, fe2) = decomp.lm_fit(a, xm[0usize..n * p2], n, p2, r, 1.0e-7f64)
+    if fe2 != ok { ret fe2 }
+    let ss1 = sumsq_range(f2.effects, 1usize + (l2 - 1usize), 1usize + (l2 - 1usize) + (l1 - 1usize))
+    // the tie correction
+    var tsum = 0.0f64
+    var i = 0usize
+    while i < n {
+        var cnt = 0.0f64
+        var first = true
+        var j = 0usize
+        while j < n {
+            if r[j] == r[i] {
+                cnt += 1.0f64
+                if j < i { first = false }
+            }
+            j += 1usize
+        }
+        if first { tsum += cnt * cnt * cnt - cnt }
+        i += 1usize
+    }
+    let nn = f64(n)
+    let d = 1.0f64 - tsum / (nn * nn * nn - nn)
+    let ms = nn * (nn + 1.0f64) / 12.0f64
+    let h1 = ss1 / ms / d
+    let h2 = ss2 / ms / d
+    let h12 = ss12 / ms / d
+    out[0usize] = h1
+    out[1usize] = h2
+    out[2usize] = h12
+    out[3usize] = 1.0f64 - nm.pchisq(h1, f64(l1 - 1usize), true, false)
+    out[4usize] = 1.0f64 - nm.pchisq(h2, f64(l2 - 1usize), true, false)
+    out[5usize] = 1.0f64 - nm.pchisq(h12, f64((l1 - 1usize) * (l2 - 1usize)), true, false)
+    ret ok
+}
+
+fn sumsq_range(v: []const f64, lo: usize, hi: usize) -> f64 {
+    var s = 0.0f64
+    var i = lo
+    while i < hi {
+        s += v[i] * v[i]
+        i += 1usize
+    }
+    ret s
 }

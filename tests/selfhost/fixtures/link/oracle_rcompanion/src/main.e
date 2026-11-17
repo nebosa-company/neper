@@ -11,6 +11,23 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let nm = c.name
+    if str.eq(nm, "srh") {
+        let n = usize(x[0usize])
+        let l1 = usize(x[1usize])
+        let l2 = usize(x[2usize])
+        let (g1, e1) = mem.alloc[usize](a, n)
+        let (g2, e2) = mem.alloc[usize](a, n)
+        let (o, e3) = mem.alloc[f64](a, 6usize)
+        if e1 != ok || e2 != ok || e3 != ok { os.exit(5) }
+        var i = 0usize
+        while i < n {
+            g1[i] = usize(x[3usize + i])
+            g2[i] = usize(x[3usize + n + i])
+            i += 1usize
+        }
+        if rc.scheirer_ray_hare(a, x[3usize + 2usize * n..3usize + 3usize * n], g1, l1, g2, l2, o) != ok { ret 0.0f64 / 0.0f64 }
+        ret o[usize(x[3usize + 3usize * n])]
+    }
     if str.eq(nm, "epsilon") || str.eq(nm, "freeman") {
         let n = usize(x[0usize])
         let k = usize(x[1usize])

@@ -3709,4 +3709,5 @@ D6846	656	lmom: the distribution functions
 D6847	1064	Hmisc: weighted quantiles, ranks and tables, and the restricted cubic spline basis
 D6848	661	Hmisc: hdquantile and rcorr for a pair
 D6849	674	Hmisc: the cut points of cut2
-D6850	1127	Hmisc: approxExtrap and the concordance index of rcorr.cens
+D6850	1128	Hmisc: approxExtrap and the concordance index of rcorr.cens
+D6851	917	rcompanion: scheirerRayHare
