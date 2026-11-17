@@ -48640,3 +48640,8 @@ Merged from a worktree: `rpartfit.e` (rpart tree growth incl. the complexity und
 ## D7102 — mice engine, pooling and fixtures; L346 closed
 
 The mice univariate methods and the chained-equations loop run through one engine (`micefull`) over the shared numerics of `micepkg`, with the rpart and nnet/polr ports of D7101 behind cart, polyreg and polr; Rubin pooling over lm fits (Rubin and Reiter, Barnard-Rubin df, pool.r.squared, pool.scalar) equals pool() at 1e-9 (oracle_micepool). Every item of the L346 acceptance (imputed values under set.seed for pmm, norm, norm.nob, norm.boot, logreg, polyreg, polr, cart and passive imputation, with the visit sequence and Rubin pooling) has an oracle case, so L346 moves to docs/work-done.jsonl. nnet 7.3-20 and rpart 4.1.27 sources were downloaded with the user approval. Linux pending.
+
+
+## D7103 — cluster: pam, clara, fanny, agnes, diana, mona, daisy, silhouette, clusGap; L335 closed
+
+Ports of the cluster 2.1.8.2 C and Fortran sources (downloaded from the CRAN Archive with the user approval): pam BUILD and SWAP in all pamonce variants, clara with its own and R generators, fanny, agnes and diana through the twins code, mona, daisy for every variable type with Gower, silhouette and clusGap with maxSE. Floating values equal R at 1e-9, integers exactly (seven fixtures). Every item of the L335 acceptance has an oracle case, so L335 moves to docs/work-done.jsonl. The older pamcluster module and its fixture are superseded by clusterpam but kept. Linux pending.

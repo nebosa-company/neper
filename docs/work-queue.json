@@ -444,17 +444,6 @@
       "evidence": "Partial (D6612). e.algo.stat.spectrapkg svds (RSpectra, irlba) and eigs_sym (LM, LA, SA, SM; RSpectra lists the selected values decreasing) equal R on Windows to 1e-6 through full Jacobi decompositions, vectors up to sign (oracle_spectra, 90 values; Linux pending). Open: shift-invert, general and complex eigs, sparse and operator inputs, restarts, svdr. Was: Open (CRAN ranks 207, 289). Mid. Acceptance, equal to R within the per-function tolerance: eigs_sym and eigs for the largest, smallest and shift-invert eigenpairs (Lanczos and Arnoldi, symmetric and general, real and complex), svds, irlba with restarts and augmentation, svdr, on dense and sparse inputs."
     },
     {
-      "id": "L335",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 685,
-      "title": "cluster: pam, clara, fanny, agnes, diana, mona, daisy",
-      "score": 0.45,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6176, D6177 agnes heights and ac, D6178 daisy gower numeric and nominal, D6179 silhouette, D6180 diana heights and dc). pam objectives, and the medoid set and partition on 19 of 20 random datasets, equal cluster::pam on Windows (oracle_pamcluster; Linux pending; one dataset reaches a different local optimum, see the decision). Open: clara, fanny, agnes, diana, mona, daisy, silhouette, pam swap order. Was: Open (CRAN rank 229). Mid. e.ml.cluster has kmedoids, agglomerative and silhouette_samples. Acceptance, equal to cluster: daisy for mixed types with Gower, pam (build and swap, medoids and clustering), clara with its seeded samples, fanny, agnes for every method, diana, mona, silhouette, clusGap, coef.hclust."
-    },
-    {
       "id": "L336",
       "category": "library",
       "group": "CRAN parity",
