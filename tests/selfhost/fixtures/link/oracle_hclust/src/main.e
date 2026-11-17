@@ -202,7 +202,15 @@ fn dend_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if e1 != ok { os.exit(8) }
             d2s = ds
         }
-        let (b, f, e2) = de.untangle_step_rotate_1side(a, &d1, &d2s, l, x[4usize] == 1.0f64, ks0, hp0, by_order)
+        let nk = usize(x[7usize])
+        let (kq, ekq) = mem.alloc[usize](a, nk + 1usize)
+        if ekq != ok { os.exit(5) }
+        var q = 0usize
+        while q < nk {
+            kq[q] = usize(x[8usize + 6usize * n + q])
+            q += 1usize
+        }
+        let (b, f, e2) = de.untangle_step_rotate_1side(a, &d1, &d2s, l, x[4usize] == 1.0f64, kq[0usize..nk], hp0, by_order)
         if e2 != ok { os.exit(11) }
         if str.eq(kind, "d_u1a") { ret wsum(a, &b) }
         if str.eq(kind, "d_u1b") { ret wsum(a, &f) }

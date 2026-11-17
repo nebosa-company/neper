@@ -43,7 +43,7 @@ for (rep in 1:10) {
 }
 #   d_* cases: dendrogram objects and dendextend untangling. args: (m1, m2, n, p1, p2, p3, p4, p5, X1 (n by 2), X2 (n by 2), perm1 (n), perm2 (n))
 #   d1 = as.dendrogram(hclust(dist(X1), m1)), d2 likewise from X2, m2; p3 = 1 when the observations carry names (character labels), 0 for numeric labels;
-#   perm1 and perm2 scramble the leaf values (order.dendrogram<-) or are the permutations given to rotate. Answers are sums of value * position.
+#   (d_u1* append p5 values k_seq after perm2); perm1 and perm2 scramble the leaf values (order.dendrogram<-) or are the permutations given to rotate. Answers are sums of value * position.
 dendextend::dendextend_options("warn", FALSE)
 dw <- function(x) sum(x * seq_along(x))
 dpre <- function(d) if (is.leaf(d)) list(d) else c(list(d), dpre(d[[1]]), dpre(d[[2]]))
@@ -63,7 +63,7 @@ set.seed(20270111)
 dblock <- function(n, m1, m2, X1, X2, lab) {
   perm1 <- sample(n); perm2 <- sample(n)
   d1 <- mkdend(X1, m1, lab); d2 <- mkdend(X2, m2, lab)
-  hd <- function(p1 = 0, p2 = 0, p4 = 0, p5 = 0) c(m1, m2, n, p1, p2, lab, p4, p5, as.vector(t(X1)), as.vector(t(X2)), perm1, perm2)
+  hd <- function(p1 = 0, p2 = 0, p4 = 0, p5 = 0, ks = NULL) c(m1, m2, n, p1, p2, lab, p4, p5, as.vector(t(X1)), as.vector(t(X2)), perm1, perm2, ks)
   addd <- function(fn, a, want) add(fn, a, want)
   addd("d_ord", hd(), dw(order.dendrogram(d1)))
   nd <- dnodes(d1); addd("d_h", hd(), nd$h); addd("d_k", hd(), nd$k); addd("d_mid", hd(), nd$mid)
@@ -84,8 +84,9 @@ dblock <- function(n, m1, m2, X1, X2, lab) {
   for (j in 1:2) {
     L <- c(1, 1.5, 2)[sample(3, 1)]; dir <- sample(0:1, 1); mo <- sample(0:1, 1)
     d2s <- if (mo == 1) scr(d2, perm2) else d2
-    r <- untangle(d1, d2s, method = "step1side", L = L, direction = c("forward", "backward")[dir + 1], leaves_matching_method = c("labels", "order")[mo + 1])
-    a <- hd(L, dir, mo)
+    nk <- sample(0:3, 1); ks <- if (nk > 0) sample(2:n, nk) else NULL
+    r <- untangle(d1, d2s, method = "step1side", L = L, direction = c("forward", "backward")[dir + 1], leaves_matching_method = c("labels", "order")[mo + 1], k_seq = ks)
+    a <- hd(L, dir, mo, nk, ks)
     addd("d_u1a", a, dw(order.dendrogram(r[[1]]))); addd("d_u1b", a, dw(order.dendrogram(r[[2]])))
     addd("d_u1e", a, dendextend::entanglement(r[[1]], r[[2]], L = L, leaves_matching_method = c("labels", "order")[mo + 1]))
   }
