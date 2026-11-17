@@ -467,6 +467,115 @@ fn vec2_serial_pt(a: *mem.Arena, x: *const Vec2, lags: usize, out: []f64) {
     out[4usize] = ck.p_chisq(out[1usize], out[2usize])
 }
 
+// ysampled of .bootirfvec2var and .bootsvec: the first p rows of y, then B [det row, lasty] + the resampled residual (booted is 1-based)
+fn boot_series2(x0: *const Vec2, resorig: []const f64, booted: []const i64, ys: []f64) {
+    let k = x0.k
+    let p = x0.p
+    var i = 0usize
+    while i < p * k {
+        ys[i] = x0.v.y[i]
+        i += 1usize
+    }
+    var jj = 0usize
+    while jj < x0.obs {
+        let t = p + jj
+        var q = 0usize
+        while q < k {
+            var s = 0.0f64
+            var c = 0usize
+            while c < x0.nd {
+                s += x0.det[q * x0.nd + c] * x0.detz[jj * x0.nd + c]
+                c += 1usize
+            }
+            var l = 0usize
+            while l < p {
+                var mm = 0usize
+                while mm < k {
+                    s += x0.a[l * k * k + q * k + mm] * ys[(t - 1usize - l) * k + mm]
+                    mm += 1usize
+                }
+                l += 1usize
+            }
+            ys[t * k + q] = s + resorig[(usize(booted[jj]) - 1usize) * k + q]
+            q += 1usize
+        }
+        jj += 1usize
+    }
+}
+
+// SVEC(boot = TRUE, runs): the bootstrap standard errors of SR and LR (.bootsvec): the series are resampled from the vec2var model, ca.jo is re-run, its
+// cointegration vectors are replaced by the original ones, and SVEC is re-estimated from rnorm starts; srse and lrse are k by k
+fn svec_boot_se(a: *mem.Arena, m: *const Vecm, r: usize, lr: []const f64, sr: []const f64, orig: *const SvecFit, max_iter: usize, conv: f64, maxls: f64, runs: usize, rg: *rng.Rng, srse: []f64, lrse: []f64) -> err {
+    let (x0, xe) = vec2var(a, m, r)
+    if xe != ok { ret xe }
+    let k = x0.k
+    let k2 = k * k
+    let obs = x0.obs
+    let resorig = vr.zeros(a, obs * k)
+    var j = 0usize
+    while j < k {
+        var mu = 0.0f64
+        var t = 0usize
+        while t < obs {
+            mu += x0.v.resid[t * k + j]
+            t += 1usize
+        }
+        mu = mu / f64(obs)
+        t = 0usize
+        while t < obs {
+            resorig[t * k + j] = x0.v.resid[t * k + j] - mu
+            t += 1usize
+        }
+        j += 1usize
+    }
+    let ssq_sr = vr.zeros(a, k2)
+    let ssq_lr = vr.zeros(a, k2)
+    var run = 0usize
+    while run < runs {
+        let mk = mem.mark(a)
+        let (booted, se) = rng.sample_int(a, rg, i64(obs), i64(obs), true)
+        if se != ok { ret se }
+        let ys = vr.zeros(a, x0.n0 * k)
+        boot_series2(&x0, resorig, booted, ys)
+        let (mb, me) = vecm_new(a, ys, x0.n0, k, m.lag, m.ecdet, m.spec, m.season)
+        if me != ok { ret me }
+        // vecm@V <- the original first r cointegration vectors
+        var q = 0usize
+        while q < m.pk {
+            var c = 0usize
+            while c < r {
+                mb.v[q * m.pk + c] = m.v[q * m.pk + c]
+                c += 1usize
+            }
+            q += 1usize
+        }
+        var sv: SvecFit = zero
+        let fe = svec_fit(a, &mb, r, lr, sr, vr.zeros(a, 0usize), max_iter, conv, maxls, rg, &sv)
+        if fe != ok { ret fe }
+        q = 0usize
+        while q < k2 {
+            // R's c(SR) is column-major; the sums are per element so the layout only has to be consistent
+            let d1 = sv.sr_raw[q] - orig.sr_raw[q]
+            let d2 = sv.lr_raw[q] - orig.lr_raw[q]
+            ssq_sr[q] += d1 * d1
+            ssq_lr[q] += d2 * d2
+            q += 1usize
+        }
+        mem.reset(a, mk)
+        // the accumulators live below the mark, so the sums above survive the reset
+        run += 1usize
+    }
+    var q = 0usize
+    while q < k2 {
+        srse[q] = math.sqrt[f64](ssq_sr[q] / f64(runs))
+        lrse[q] = math.sqrt[f64](ssq_lr[q] / f64(runs))
+        if math.abs[f64](srse[q]) < 1.0e-9f64 { srse[q] = 0.0f64 }
+        if math.abs[f64](lrse[q]) < 1.0e-9f64 { lrse[q] = 0.0f64 }
+        q += 1usize
+    }
+    ret ok
+}
+
 // the bootstrap bands of irf(vec2var, boot = TRUE) or irf(svec, boot = TRUE) (svec: lr and sr hold the restriction matrices, with NaN for a free element)
 fn vec2_irf_boot(a: *mem.Arena, m: *const Vecm, r: usize, svec: bool, lr: []const f64, sr: []const f64, h: usize, ortho: bool, cumulative: bool, runs: usize, ci: f64, seed: i64, lower: []f64, upper: []f64) -> err {
     let (x0, xe) = vec2var(a, m, r)
@@ -500,38 +609,8 @@ fn vec2_irf_boot(a: *mem.Arena, m: *const Vecm, r: usize, svec: bool, lr: []cons
         let mk = mem.mark(a)
         let (booted, se) = rng.sample_int(a, &rg, i64(obs), i64(obs), true)
         if se != ok { ret se }
-        // ysampled: the first p rows of y, then B [det row, lasty] + the resampled residual; det comes before the lags in B
         let ys = vr.zeros(a, x0.n0 * k)
-        var i = 0usize
-        while i < p * k {
-            ys[i] = x0.v.y[i]
-            i += 1usize
-        }
-        var jj = 0usize
-        while jj < obs {
-            let t = p + jj
-            var q = 0usize
-            while q < k {
-                var s = 0.0f64
-                var c = 0usize
-                while c < x0.nd {
-                    s += x0.det[q * x0.nd + c] * x0.detz[jj * x0.nd + c]
-                    c += 1usize
-                }
-                var l = 0usize
-                while l < p {
-                    var mm = 0usize
-                    while mm < k {
-                        s += x0.a[l * k * k + q * k + mm] * ys[(t - 1usize - l) * k + mm]
-                        mm += 1usize
-                    }
-                    l += 1usize
-                }
-                ys[t * k + q] = s + resorig[(usize(booted[jj]) - 1usize) * k + q]
-                q += 1usize
-            }
-            jj += 1usize
-        }
+        boot_series2(&x0, resorig, booted, ys)
         let (mb, me) = vecm_new(a, ys, x0.n0, k, m.lag, m.ecdet, m.spec, m.season)
         if me != ok { ret me }
         let (xb, xe2) = vec2var(a, &mb, r)
@@ -621,7 +700,7 @@ fn qr_rank(a: *mem.Arena, m: []const f64, rows: usize, cols: usize) -> usize {
     ret f.rank
 }
 
-type SvecFit = struct { sr: []f64, lr: []f64, sigma_u: []f64, nres_c1: usize, nres_b: usize, l: usize, iter: usize, has_lr: bool, lr_stat: f64, lr_df: f64, lr_p: f64 }
+type SvecFit = struct { sr_raw: []f64, lr_raw: []f64, sr: []f64, lr: []f64, sigma_u: []f64, nres_c1: usize, nres_b: usize, l: usize, iter: usize, has_lr: bool, lr_stat: f64, lr_df: f64, lr_p: f64 }
 
 // SVEC(x, LR, SR, r, start, max.iter, conv.crit, maxls, lrtest): lr and sr are k by k row-major with 0 for a restriction (anything else is free); an empty start
 // draws rnorm(l) from rg as R does
@@ -822,6 +901,8 @@ fn svec_fit(a: *mem.Arena, m: *const Vecm, r: usize, lr: []const f64, sr: []cons
     let ai = vr.minv(a, al, k)
     let ab = vr.mmul(a, ai, bl, k, k, k)
     let su = vr.mmul(a, ab, vr.mtr(a, ab, k, k), k, k, k)
+    out.sr_raw = zeros_copy(a, srf, k2)
+    out.lr_raw = zeros_copy(a, lrm, k2)
     i = 0usize
     while i < k2 {
         if math.abs[f64](lrm[i]) < 1.0e-9f64 { lrm[i] = 0.0f64 }

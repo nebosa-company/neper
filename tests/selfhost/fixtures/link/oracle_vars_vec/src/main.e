@@ -223,6 +223,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ss.struct_fevd(a, out, k, HORIZON, fv)
         ret fevd_wsum(fv, k, HORIZON)
     }
+    if str.eq(nm, "sv_srse") || str.eq(nm, "sv_lrse") {
+        let runs = usize(x[ex + 1usize])
+        let sre = vr.zeros(a, k2)
+        let lre = vr.zeros(a, k2)
+        if vv.svec_boot_se(a, &m, r, lr, sr, &sf, 100usize, 1.0e-7f64, 1.0f64, runs, &rg, sre, lre) != ok { os.exit(43) }
+        if str.eq(nm, "sv_srse") { ret wsum(sre) }
+        ret wsum(lre)
+    }
     if str.starts_with(nm, "sv_boot") {
         let runs = usize(x[ex + 1usize])
         let ci = x[ex + 2usize]

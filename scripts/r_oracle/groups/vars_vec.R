@@ -80,6 +80,12 @@ for (sv in svs) {
   fe <- fevd(s, n.ahead = H); tot <- 0; pos <- 0
   for (i in seq_len(K)) for (n in 1:H) for (j in seq_len(K)) { pos <- pos + 1; tot <- tot + fe[[i]][n, j] * pos }
   add("sv_fevd", c(a, H), tot)
+  if (k %% 2 == 0) {
+    set.seed(ss)
+    sb <- suppressWarnings(do.call(SVEC, list(x = jo, LR = LR, SR = SR, r = r, lrtest = FALSE, boot = TRUE, runs = 12)))
+    b <- c(a, H, 12, 0, 0, 0)
+    add("sv_srse", b, wsum(as.vector(t(sb$SRse)))); add("sv_lrse", b, wsum(as.vector(t(sb$LRse))))
+  }
   if (k %% 2 == 1) {
     ir <- suppressWarnings(irf(s, n.ahead = H, boot = TRUE, runs = 15, ci = 0.9, seed = 50 + k))
     b <- c(a, H, 15, 0.9, 50 + k, 0)
