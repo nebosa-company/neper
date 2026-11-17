@@ -2,7 +2,7 @@
 // centroid) from a full dissimilarity matrix, with the package's merge matrix, ordering, heights, cutree and cophenetic distances.
 // The ties and tie-breaking follow hclust.f and hcass2, so merges and orders equal R's.
 //
-// Not here: the dendextend functions (cor_bakers_gamma, entanglement, untangle, ladderize, fowlkes_mallows), as.dendrogram and members.
+// as.dendrogram, rotate and untangle are in e.algo.stat.dendextend, which builds on this module's Tree.
 
 use e.math
 use e.mem
