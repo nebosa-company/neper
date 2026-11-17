@@ -3,6 +3,7 @@
 // layout of each case is at the top of scripts/r_oracle/groups/biasedurn_mv.R.
 
 use e.algo.stat.biasedurn_mv as mv
+use e.algo.stat.biasedurn_uni as uni
 use e.io
 use e.mem
 use e.os
@@ -22,6 +23,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "num") {
         let cc = usize(z[4usize])
         ret mv.num_m(usize(z[0usize]), z[5usize..5usize + cc], z[5usize + cc..5usize + 2usize * cc], z[2usize], z[3usize], usize(z[1usize]), a)
+    }
+    if str.eq(c.name, "uni") {
+        ret uni.uni_moment(a, usize(z[0usize]), z[2usize], z[3usize], z[4usize], z[5usize], z[6usize], usize(z[1usize]))
+    }
+    if str.eq(c.name, "rng") {
+        let which = usize(z[0usize])
+        if which == 0usize { ret uni.min_hyper(z[4usize], z[5usize], z[2usize]) }
+        if which == 1usize { ret uni.max_hyper(z[4usize], z[5usize], z[2usize]) }
+        let cc = usize(z[3usize])
+        var nt = 0.0f64
+        var q = 0usize
+        while q < cc {
+            nt += z[4usize + q]
+            q += 1usize
+        }
+        let mi = z[4usize + usize(z[1usize])]
+        if which == 2usize { ret uni.min_mhyper(mi, nt, z[2usize]) }
+        ret uni.max_mhyper(mi, z[2usize])
     }
     // "nu": (kind, which, mu, n, N, odds)
     var m1 = 0.0f64

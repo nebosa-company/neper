@@ -3,7 +3,7 @@
 #   "rMF" / "rMW": (seed, nran, c, n, prec, mode, m[c], odds[c])  mode 0 the sum over variates v and colours j of x * (j + 1) * v, 1 the last variate's colour 0
 suppressMessages(library(BiasedUrn))
 cases <- list()
-set.seed(20261117)
+set.seed(as.integer(Sys.getenv("BU_SEED", "20261117")))
 wsum <- function(x) sum(x * seq_along(x))
 addu <- function(fn, seed, nran, m1, m2, n, odds, prec) {
   set.seed(seed); x <- if (fn == "rF") rFNCHypergeo(nran, m1, m2, n, odds, prec) else rWNCHypergeo(nran, m1, m2, n, odds, prec)
@@ -11,9 +11,9 @@ addu <- function(fn, seed, nran, m1, m2, n, odds, prec) {
   cases[[length(cases) + 1]] <<- case(fn, c(a, 0), wsum(x), rel = 0, abs = 0)
   cases[[length(cases) + 1]] <<- case(fn, c(a, 1), x[length(x)], rel = 0, abs = 0)
 }
-seed <- 100
+seed <- as.integer(Sys.getenv("BU_START", "100"))
 nx <- function() { seed <<- seed + 1; seed }
-for (rep in 1:3) for (fn in c("rF", "rW")) {
+for (rep in 1:as.integer(Sys.getenv("BU_REPS", "3"))) for (fn in c("rF", "rW")) {
   # small n: Fisher inversion / Wallenius urn, one at a time and as a table
   for (nran in c(1, 3, 4, 5, 9, 40)) {
     m1 <- sample(5:60, 1); m2 <- sample(5:60, 1); n <- sample(3:min(25, m1 + m2 - 1), 1); w <- sample(c(0.2, 0.5, 1.5, 2.5, 7), 1)
@@ -43,7 +43,7 @@ addm <- function(fn, seed, nran, m, n, od, prec) {
   cases[[length(cases) + 1]] <<- case(fn, c(a, 0, m, od), sum(x * rep(1:cc, nran) * rep(1:nran, each = cc)), rel = 0, abs = 0)
   cases[[length(cases) + 1]] <<- case(fn, c(a, 1, m, od), x[(nran - 1) * cc + 1], rel = 0, abs = 0)
 }
-for (rep in 1:8) for (fn in c("rMF", "rMW")) {
+for (rep in 1:as.integer(Sys.getenv("BU_MREPS", "8"))) for (fn in c("rMF", "rMW")) {
   cc <- sample(3:6, 1); m <- sample(3:30, cc, TRUE); n <- sample(2:(sum(m) - 1), 1); od <- round(runif(cc, 0.3, 4), 2)
   addm(fn, nx(), sample(1:4, 1), m, n, od, 1e-7)
   # equal weights in groups, a zero weight, a zero count, big draws (inverted Fisher; Wallenius urn running down to two colours)

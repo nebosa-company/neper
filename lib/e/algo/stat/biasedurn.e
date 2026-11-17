@@ -4,8 +4,9 @@
 // same binomial product times `int_0^1 (1 - t^(w/D))^x (1 - t^(1/D))^(n-x) dt` with
 // `D = w (m1 - x) + (m2 - n + x)`, integrated by tanh-sinh quadrature after the substitution `t = u^D`.
 //
-// Not here: the multivariate variants, random variates, the stochastic odds estimation, the `precision`
-// argument (the quadrature is fixed and accurate to about 1e-12).
+// The multivariate moments, odds and ball-count estimators are in biasedurn_mv.e, the univariate moments at a given precision in
+// biasedurn_uni.e and the random variates in biasedurn_rand.e. Not here: the `precision` argument of the mass function itself
+// (the quadrature is refined to about 1e-14, where the package stops at the precision asked, 1e-7 by default).
 
 use e.math
 use e.math.dist as dist

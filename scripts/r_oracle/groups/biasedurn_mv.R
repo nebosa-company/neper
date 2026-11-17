@@ -38,4 +38,20 @@ for (rep in 1:20) {
     add("nu", c(kind, 0, mu, n, N, od), r[1], 1e-7); add("nu", c(kind, 1, mu, n, N, od), r[2], 1e-7)
   }
 }
+#   "uni": (kind, what 0 mean 1 variance, prec, m1, m2, n, odds)   meanFNCHypergeo / varFNCHypergeo / meanWNCHypergeo / varWNCHypergeo
+#   "rng": (which 0 minHypergeo 1 maxHypergeo 2 minMHypergeo 3 maxMHypergeo, idx, n, c, m[c])  (for 0 and 1 m[c] holds m1, m2)
+for (rep in 1:16) {
+  m1 <- sample(4:120, 1); m2 <- sample(4:120, 1); n <- sample(3:min(m1 + m2 - 1, 60), 1); w <- sample(c(0.15, 0.5, 1, 1.7, 4, 12), 1)
+  # Wallenius' own probabilities carry the requested precision (a Laplace or integral expansion stopped there), so below 0.1 only its tight precisions are compared
+  for (prec in c(1, 0.1, 0.02, 1e-3, 1e-5, 1e-7, 1e-9)) for (kind in 0:1) {
+    if (kind == 1 && prec < 0.1 && prec > 1e-9) next
+    f <- if (kind == 0) list(meanFNCHypergeo, varFNCHypergeo) else list(meanWNCHypergeo, varWNCHypergeo)
+    tol <- if (kind == 1 && prec < 0.1) 1e-6 else 1e-9
+    add("uni", c(kind, 0, prec, m1, m2, n, w), f[[1]](m1, m2, n, w, prec), tol)
+    add("uni", c(kind, 1, prec, m1, m2, n, w), f[[2]](m1, m2, n, w, prec), tol)
+  }
+  add("rng", c(0, 0, n, 2, m1, m2), minHypergeo(m1, m2, n), 0); add("rng", c(1, 0, n, 2, m1, m2), maxHypergeo(m1, m2, n), 0)
+  cc <- sample(3:5, 1); m <- sample(2:12, cc, TRUE); nn <- sample(2:(sum(m) - 1), 1)
+  for (i in 1:cc) { add("rng", c(2, i - 1, nn, cc, m), minMHypergeo(m, nn)[i], 0); add("rng", c(3, i - 1, nn, cc, m), maxMHypergeo(m, nn)[i], 0) }
+}
 emit("biasedurn_mv", "BiasedUrn", list(cases))
