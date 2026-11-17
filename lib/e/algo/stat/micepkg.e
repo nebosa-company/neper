@@ -152,6 +152,8 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
             j = 0usize
             while j < p {
                 if nmis[j] > 0usize {
+                    var mj = method
+                    if method == 4usize && j > 0usize { mj = 0usize }
                     // remove.lindep: a predictor stays when its variance among the observed rows exceeds 1e-4 and its correlation with y is below 0.99
                     var nobs0 = 0usize
                     var ym = 0.0f64
@@ -280,6 +282,22 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                         }
                         jj += 1usize
                     }
+                    if mj == 4usize {
+                        let (ob, eob) = mem.alloc[f64](a, nmis[j] + 1usize)
+                        if eob != ok { ret eob }
+                        let le = logreg_draw(a, &r, x[0usize..cd * n], cd, n, data0[j * n..j * n + n], ob)
+                        if le != ok { ret le }
+                        var qb = 0usize
+                        i = 0usize
+                        while i < n {
+                            if data0[j * n + i] != data0[j * n + i] {
+                                imp[off[j] + im * nmis[j] + qb] = ob[qb]
+                                data[j * n + i] = ob[qb]
+                                qb += 1usize
+                            }
+                            i += 1usize
+                        }
+                    } else {
                     // the fit on the rows observed in y
                     var s1 = 0usize
                     while s1 < cd {
@@ -339,7 +357,7 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                     var sigma = math.sqrt[f64](rss / f64(nobs - cd - 1usize))
                     if nobs <= cd + 1usize { ret Collinear }
                     var use_beta = beta
-                    if method == 1usize || method == 3usize {
+                    if mj == 1usize || mj == 3usize {
                         var dfv = nobs - cd
                         if nobs <= cd { dfv = 1usize }
                         sigma = math.sqrt[f64](rss / rd.rchisq(&r, f64(dfv)))
@@ -385,7 +403,7 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                         }
                         use_beta = bs
                     }
-                    if method == 3usize {
+                    if mj == 3usize {
                         let nm = nmis[j]
                         let (dob, ed1) = mem.alloc[f64](a, nobs)
                         let (tmv, ed2) = mem.alloc[f64](a, nm)
@@ -437,12 +455,13 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                                 f += x[s1 * n + i] * use_beta[s1]
                                 s1 += 1usize
                             }
-                            if method != 2usize { f += rng.norm(&r) * sigma }
+                            if mj != 2usize { f += rng.norm(&r) * sigma }
                             imp[off[j] + im * nmis[j] + q] = f
                             data[j * n + i] = f
                             q += 1usize
                         }
                         i += 1usize
+                    }
                     }
                     }
                 }
@@ -533,4 +552,252 @@ fn matchindex(a: *mem.Arena, r: *rng.Rng, d: []const f64, tv: []const f64, k0: u
         i += 1usize
     }
     ret (idx, ok)
+}
+
+// mice.impute.logreg: x is n by cd column-major with the intercept in column 0 and the kept predictors after it, y the 0/1 column with NaN for the missing; the n_mis imputed 0/1 values go to out in row order. The design is augmented as mice's `augment` does (4 p rows near the data means), glm.fit's iteratively reweighted fit of the logit with weights, the coefficient draw through the lower Cholesky factor of the unscaled covariance, then uniform draws against the fitted probabilities.
+fn logreg_draw(a: *mem.Arena, r: *rng.Rng, x: []const f64, cd: usize, n: usize, y: []const f64, out: []f64) -> err {
+    let p = cd - 1usize
+    let nr = 4usize * p
+    let na = n + nr
+    let (xa, e1) = mem.alloc[f64](a, na * cd)
+    let (ya, e2) = mem.alloc[f64](a, na)
+    let (wa, e3) = mem.alloc[f64](a, na)
+    let (mean, e4) = mem.alloc[f64](a, p)
+    let (sd, e5) = mem.alloc[f64](a, p)
+    let (mn, e6) = mem.alloc[f64](a, p)
+    let (mx, e7) = mem.alloc[f64](a, p)
+    let (ro, e8) = mem.alloc[usize](a, na)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    var c = 0usize
+    while c < p {
+        var s = 0.0f64
+        var i = 0usize
+        mn[c] = x[(c + 1usize) * n]
+        mx[c] = x[(c + 1usize) * n]
+        while i < n {
+            let v = x[(c + 1usize) * n + i]
+            s += v
+            if v < mn[c] { mn[c] = v }
+            if v > mx[c] { mx[c] = v }
+            i += 1usize
+        }
+        mean[c] = s / f64(n)
+        var ss = 0.0f64
+        i = 0usize
+        while i < n {
+            let v = x[(c + 1usize) * n + i] - mean[c]
+            ss += v * v
+            i += 1usize
+        }
+        sd[c] = math.sqrt[f64](ss / f64(n - 1usize))
+        c += 1usize
+    }
+    // the rows: the data, then the augmentation
+    var i = 0usize
+    while i < n {
+        var cc = 0usize
+        while cc < cd {
+            xa[cc * na + i] = x[cc * n + i]
+            cc += 1usize
+        }
+        ya[i] = y[i]
+        wa[i] = 1.0f64
+        i += 1usize
+    }
+    let blen = 4usize + nr
+    var rr = 0usize
+    while rr < nr {
+        xa[rr + n] = 1.0f64
+        c = 0usize
+        while c < p {
+            let pos = (c * nr + rr) % blen
+            var b = 0.0f64
+            if pos == 0usize || pos == 2usize { b = 0.5f64 }
+            if pos == 1usize || pos == 3usize { b = 0.0f64 - 0.5f64 }
+            var dv = mean[c] + b * sd[c]
+            if mn[c] > dv { dv = mn[c] }
+            if mx[c] < dv { dv = mx[c] }
+            xa[(c + 1usize) * na + n + rr] = dv
+            c += 1usize
+        }
+        // e: the codes 1, 1, 2, 2 repeated, i.e. the class 0, 0, 1, 1
+        var cls = 0.0f64
+        if rr % 4usize >= 2usize { cls = 1.0f64 }
+        ya[n + rr] = cls
+        wa[n + rr] = f64(p + 1usize) / f64(nr)
+        rr += 1usize
+    }
+    // the rows used: the observed y and all augmentation rows
+    var no = 0usize
+    i = 0usize
+    while i < na {
+        if ya[i] == ya[i] {
+            ro[no] = i
+            no += 1usize
+        }
+        i += 1usize
+    }
+    let (eta, e9) = mem.alloc[f64](a, no)
+    let (xtx, e10) = mem.alloc[f64](a, cd * cd)
+    let (xtz, e11) = mem.alloc[f64](a, cd)
+    let (inv, e12) = mem.alloc[f64](a, cd * cd)
+    let (lw, e13) = mem.alloc[f64](a, cd * cd)
+    let (coef, e14) = mem.alloc[f64](a, cd)
+    let (covu, e15) = mem.alloc[f64](a, cd * cd)
+    if e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok { ret mem.Full }
+    // start: mustart = (w y + 0.5) / (w + 1)
+    var q = 0usize
+    while q < no {
+        let k = ro[q]
+        let mu0 = (wa[k] * ya[k] + 0.5f64) / (wa[k] + 1.0f64)
+        eta[q] = math.log[f64](mu0 / (1.0f64 - mu0))
+        q += 1usize
+    }
+    var devold = 0.0f64
+    q = 0usize
+    while q < no {
+        let k = ro[q]
+        let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[q]))
+        devold += bin_dev(ya[k], mu, wa[k])
+        q += 1usize
+    }
+    var iter = 0usize
+    var go = true
+    while go && iter < 25usize {
+        iter += 1usize
+        var s1 = 0usize
+        while s1 < cd {
+            xtz[s1] = 0.0f64
+            var s2 = 0usize
+            while s2 < cd {
+                xtx[s1 * cd + s2] = 0.0f64
+                s2 += 1usize
+            }
+            s1 += 1usize
+        }
+        q = 0usize
+        while q < no {
+            let k = ro[q]
+            let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[q]))
+            let me = mu * (1.0f64 - mu)
+            let wq = wa[k] * me
+            let z = eta[q] + (ya[k] - mu) / me
+            s1 = 0usize
+            while s1 < cd {
+                xtz[s1] += wq * xa[s1 * na + k] * z
+                var s2 = 0usize
+                while s2 < cd {
+                    xtx[s1 * cd + s2] += wq * xa[s1 * na + k] * xa[s2 * na + k]
+                    s2 += 1usize
+                }
+                s1 += 1usize
+            }
+            q += 1usize
+        }
+        if !spd_inverse(xtx, cd, inv, lw) { ret Collinear }
+        s1 = 0usize
+        while s1 < cd {
+            var s = 0.0f64
+            var s2 = 0usize
+            while s2 < cd {
+                s += inv[s1 * cd + s2] * xtz[s2]
+                s2 += 1usize
+            }
+            coef[s1] = s
+            covu[s1 * cd + 0usize] = inv[s1 * cd + 0usize]
+            s1 += 1usize
+        }
+        s1 = 0usize
+        while s1 < cd * cd {
+            covu[s1] = inv[s1]
+            s1 += 1usize
+        }
+        var dev = 0.0f64
+        q = 0usize
+        while q < no {
+            let k = ro[q]
+            var e = 0.0f64
+            s1 = 0usize
+            while s1 < cd {
+                e += xa[s1 * na + k] * coef[s1]
+                s1 += 1usize
+            }
+            eta[q] = e
+            let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e))
+            dev += bin_dev(ya[k], mu, wa[k])
+            q += 1usize
+        }
+        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 1.0e-8f64 {
+            go = false
+        } else {
+            devold = dev
+        }
+    }
+    // lower Cholesky factor of the unscaled covariance, normal draws, then the uniforms
+    var lv = lw
+    var s1 = 0usize
+    while s1 < cd {
+        var s2 = 0usize
+        while s2 <= s1 {
+            var s = covu[s1 * cd + s2]
+            var q2 = 0usize
+            while q2 < s2 {
+                s -= lv[s1 * cd + q2] * lv[s2 * cd + q2]
+                q2 += 1usize
+            }
+            if s1 == s2 {
+                if s <= 0.0f64 { ret Collinear }
+                lv[s1 * cd + s1] = math.sqrt[f64](s)
+            } else {
+                lv[s1 * cd + s2] = s / lv[s2 * cd + s2]
+            }
+            s2 += 1usize
+        }
+        s1 += 1usize
+    }
+    let (zz, e16) = mem.alloc[f64](a, cd)
+    let (bs, e17) = mem.alloc[f64](a, cd)
+    if e16 != ok || e17 != ok { ret mem.Full }
+    s1 = 0usize
+    while s1 < cd {
+        zz[s1] = rng.norm(r)
+        s1 += 1usize
+    }
+    s1 = 0usize
+    while s1 < cd {
+        var s = 0.0f64
+        var s2 = 0usize
+        while s2 <= s1 {
+            s += lv[s1 * cd + s2] * zz[s2]
+            s2 += 1usize
+        }
+        bs[s1] = coef[s1] + s
+        s1 += 1usize
+    }
+    var qm = 0usize
+    i = 0usize
+    while i < n {
+        if y[i] != y[i] {
+            var e = 0.0f64
+            s1 = 0usize
+            while s1 < cd {
+                e += x[s1 * n + i] * bs[s1]
+                s1 += 1usize
+            }
+            let pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e))
+            out[qm] = 0.0f64
+            if rng.unif(r) <= pr { out[qm] = 1.0f64 }
+            qm += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+fn bin_dev(y: f64, mu: f64, w: f64) -> f64 {
+    var t1 = 0.0f64
+    if y > 0.0f64 { t1 = y * math.log[f64](y / mu) }
+    var t2 = 0.0f64
+    if y < 1.0f64 { t2 = (1.0f64 - y) * math.log[f64]((1.0f64 - y) / (1.0f64 - mu)) }
+    ret 2.0f64 * w * (t1 + t2)
 }

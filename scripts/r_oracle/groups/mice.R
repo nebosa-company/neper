@@ -15,4 +15,21 @@ for (rep in 1:80) {
   xa <- ifelse(is.na(X), NaN, X)
   for (q in seq_along(flat)) cases[[length(cases) + 1]] <- case("imp", c(n, p, m, maxit, me, seed, as.vector(xa), q - 1), flat[q], rel = 1e-6, abs = 1e-8)
 }
+# logreg (method 4): binary 0/1 factor columns with incomplete cases, continuous predictors
+for (rep in 1:40) {
+  n <- sample(40:100, 1); pc <- sample(2:3, 1); m <- sample(1:3, 1); maxit <- sample(1:3, 1)
+  X <- matrix(round(rnorm(n * pc), 4), n, pc); lin <- X[, 1] - 0.5 * X[, 2] + rnorm(n, 0, 0.7); yb <- as.numeric(lin > 0)
+  df <- as.data.frame(X); df$B <- factor(yb); df <- df[, c(ncol(df), seq_len(pc))]
+  miss <- sample(n, sample(4:max(5, n %/% 6), 1)); df$B[miss] <- NA
+  if (rep %% 2 == 0) { mc <- sample(n, 5); df$V1[mc] <- NA }
+  seed <- sample(1:100000, 1)
+  meth <- c("logreg", if (rep %% 2 == 0) "norm.nob" else NULL, rep("", pc - (rep %% 2 == 0))); meth <- c("logreg", rep("", pc)); if (rep %% 2 == 0) meth[2] <- "norm.nob"
+  imp <- tryCatch(suppressWarnings(mice(df, m = m, maxit = maxit, method = meth, seed = seed, printFlag = FALSE)), error = function(e) NULL)
+  if (is.null(imp) || !is.null(imp$loggedEvents)) next
+  flat <- unlist(lapply(seq_len(ncol(df)), function(j) if (!is.null(imp$imp[[j]]) && nrow(imp$imp[[j]]) > 0) { v <- imp$imp[[j]]; as.vector(as.matrix(as.data.frame(lapply(v, function(cc) as.numeric(as.character(cc)))))) } else NULL))
+  num <- data.frame(B = yb, X); num <- num[, c("B", paste0("X", seq_len(pc)))]; num[miss, "B"] <- NA; names(num) <- names(df)
+  if (rep %% 2 == 0) num$V1[mc] <- NA
+  xa <- as.matrix(num); xa[is.na(xa)] <- NaN
+  for (q in seq_along(flat)) cases[[length(cases) + 1]] <- case("imp", c(n, ncol(df), m, maxit, 4, seed, as.vector(xa), q - 1), flat[q], rel = 1e-5, abs = 1e-7)
+}
 emit("mice", "mice", list(cases))
