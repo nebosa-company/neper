@@ -3734,4 +3734,5 @@ D6871	904	LearnBayes: rwmetrop and indepmetrop
 D6872	808	LearnBayes: rigamma, rmnorm, pdisc and pbetat
 D6873	847	LearnBayes: the mixture-prior posteriors
 D6874	922	sm: the cross-validation bandwidth hcv
-D6875	800	mclust: BIC from the hierarchical EII partitions
+D6875	801	mclust: BIC from the hierarchical EII partitions
+D6876	701	mclust: model selection

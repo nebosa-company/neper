@@ -555,3 +555,53 @@ fn me_label(m: usize) -> str {
     if m == 7usize { ret "EVV" }
     ret "EEV"
 }
+
+// Mclust(data, G = gmin:gmax, modelNames = the nine me_em models, initialization = list(hcPairs = hc(data, "EII"))): the best BIC over the grid (the first maximum scanning groups, then models),
+// out = (bic, G, model code, loglik); lab receives the 1-based classification by the largest posterior probability
+fn mclust_select(a: *mem.Arena, x: []const f64, n: usize, p: usize, gmin: usize, gmax: usize, models: []const usize, lab: []usize, out: []f64) -> err {
+    var best = 0.0f64 - 1.0e300f64
+    var bg = 0usize
+    var bm = 0usize
+    var g = gmin
+    while g <= gmax {
+        var k = 0usize
+        while k < models.len {
+            let b = bic_hc_eii(a, x, n, p, g, models[k])
+            if b == b && b > best {
+                best = b
+                bg = g
+                bm = models[k]
+            }
+            k += 1usize
+        }
+        g += 1usize
+    }
+    if bg == 0usize { ret mem.Full }
+    // refit the winner and classify
+    let (labs, e1) = mem.alloc[usize](a, n)
+    let (z, e2) = mem.alloc[f64](a, n * bg)
+    let (pro, e3) = mem.alloc[f64](a, bg)
+    let (mu, e4) = mem.alloc[f64](a, bg * p)
+    let (sg, e5) = mem.alloc[f64](a, bg * p * p)
+    let (inf, e6) = mem.alloc[f64](a, 2usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret mem.Full }
+    let he = hc_eii_groups(a, x, n, p, bg, labs)
+    if he != ok { ret he }
+    var i = 0usize
+    while i < n * bg {
+        z[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        z[labs[i] * n + i] = 1.0f64
+        i += 1usize
+    }
+    let ll = me_em(a, bm, false, x, z, n, p, bg, pro, mu, sg, inf)
+    map(z, n, bg, lab)
+    out[0usize] = best
+    out[1usize] = f64(bg)
+    out[2usize] = f64(bm)
+    out[3usize] = ll
+    ret ok
+}

@@ -44,4 +44,12 @@ for (rep in 1:12) {
   b <- suppressWarnings(mclustBIC(X, G = gs, modelNames = mm, initialization = list(hcPairs = hp), verbose = FALSE))
   for (gi in seq_along(gs)) for (mi in 1:6) if (is.finite(b[gi, mi])) add("mbic", c(n, p, gs[gi], mi - 1, X), b[gi, mi], 1e-8)
 }
+# Mclust selection over G = 2:4 and the six models from the hc(EII) pairs: "msel" (n, p, gmin, gmax, index, X): index -1 BIC, -2 G, -3 model code, -4 loglik, >= 0 classification of observation index
+for (rep in 1:12) {
+  p <- sample(2:3, 1); n <- sample(40:90, 1); cl <- sample(3, n, TRUE); X <- matrix(rnorm(n * p), n, p) + 2.5 * (cl - 1)
+  hp <- hc(X, modelName = "EII"); mm <- c("EII", "VII", "EEI", "VVI", "EEE", "VVV")
+  m <- tryCatch(suppressWarnings(Mclust(X, G = 2:4, modelNames = mm, initialization = list(hcPairs = hp), verbose = FALSE)), error = function(e) NULL); if (is.null(m)) next
+  add("msel", c(n, p, 2, 4, -1, X), m$bic, 1e-8); add("msel", c(n, p, 2, 4, -2, X), m$G, 0); add("msel", c(n, p, 2, 4, -3, X), match(m$modelName, mm) - 1, 0); add("msel", c(n, p, 2, 4, -4, X), m$loglik, 1e-8)
+  for (i in seq_len(n)) add("msel", c(n, p, 2, 4, i - 1, X), m$classification[i], 0)
+}
 emit("mclust", "mclust", list(cases))

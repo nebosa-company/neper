@@ -34,6 +34,27 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         mc.map(z[2usize..2usize + n * k], n, k, o)
         ret f64(o[usize(z[2usize + n * k])])
     }
+    if str.eq(c.name, "msel") {
+        // (n, p, gmin, gmax, index (-1 bic, -2 G, -3 model code, -4 loglik), X[n p])
+        let sn = usize(z[0usize])
+        let sp = usize(z[1usize])
+        let (labs, le) = mem.alloc[usize](a, sn)
+        let (mods, me2) = mem.alloc[usize](a, 6usize)
+        let (so, soe) = mem.alloc[f64](a, 4usize)
+        if le != ok || me2 != ok || soe != ok { ret nan }
+        var q = 0usize
+        while q < 6usize {
+            mods[q] = q
+            q += 1usize
+        }
+        if mc.mclust_select(a, z[5usize..5usize + sn * sp], sn, sp, usize(z[2usize]), usize(z[3usize]), mods, labs, so) != ok { ret nan }
+        let ix = z[4usize]
+        if ix == 0.0f64 - 1.0f64 { ret so[0usize] }
+        if ix == 0.0f64 - 2.0f64 { ret so[1usize] }
+        if ix == 0.0f64 - 3.0f64 { ret so[2usize] }
+        if ix == 0.0f64 - 4.0f64 { ret so[3usize] }
+        ret f64(labs[usize(ix)])
+    }
     if str.eq(c.name, "mbic") {
         // (n, p, g, model code, X[n p] column-major)
         let bn = usize(z[0usize])
