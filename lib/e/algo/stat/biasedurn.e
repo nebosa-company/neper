@@ -305,3 +305,71 @@ fn mv_value(a: *mem.Arena, kind: usize, m: []const f64, odds: []const f64, n: f6
     if what == 1usize { ret mean }
     ret g.s2[idx] / g.s0 - mean * mean
 }
+
+// ---- Wallenius' multivariate probability by the same tanh-sinh sum, in logs and refined until it settles (large counts) ----
+
+fn mwall_sum(x: []const f64, w: []const f64, d: f64, lc: f64, h: f64) -> f64 {
+    let pi = 3.141592653589793f64
+    let c = x.len
+    var s = 0.0f64
+    let jmax = i64(5.0f64 / h)
+    var j = 0i64 - jmax
+    while j <= jmax {
+        let t = f64(j) * h
+        let ex = math.exp[f64](t)
+        let sh = (ex - 1.0f64 / ex) / 2.0f64
+        let ch = (ex + 1.0f64 / ex) / 2.0f64
+        let a = pi / 2.0f64 * sh
+        var omu = 0.0f64
+        var lu = 0.0f64
+        if a >= 0.0f64 {
+            let e = math.exp[f64](0.0f64 - 2.0f64 * a)
+            omu = e / (1.0f64 + e)
+            lu = 0.0f64 - dist.log1p(e)
+        } else {
+            let e = math.exp[f64](2.0f64 * a)
+            omu = 1.0f64 / (1.0f64 + e)
+            lu = 2.0f64 * a - dist.log1p(e)
+        }
+        let e2 = math.exp[f64](a)
+        let cha = (e2 + 1.0f64 / e2) / 2.0f64
+        let wt = pi / 4.0f64 * ch / (cha * cha)
+        if wt > 1.0e-300f64 && omu > 0.0f64 {
+            var lv = lc + math.log[f64](d) + (d - 1.0f64) * lu
+            var i = 0usize
+            while i < c {
+                if x[i] > 0.0f64 {
+                    if w[i] == 1.0f64 { lv += x[i] * math.log[f64](omu) } else { lv += x[i] * math.log[f64](0.0f64 - dist.expm1(w[i] * lu)) }
+                }
+                i += 1usize
+            }
+            s += wt * math.exp[f64](lv)
+        }
+        j += 1i64
+    }
+    ret s * h
+}
+
+fn mwall_prob(x: []const f64, m: []const f64, w: []const f64) -> f64 {
+    let c = x.len
+    var d = 0.0f64
+    var lc = 0.0f64
+    var i = 0usize
+    while i < c {
+        d += w[i] * (m[i] - x[i])
+        lc += lchoose(m[i], x[i])
+        i += 1usize
+    }
+    var h = 1.0f64 / 32.0f64
+    var prev = mwall_sum(x, w, d, lc, h)
+    var lvl = 0usize
+    while lvl < 4usize {
+        h = h / 2.0f64
+        let cur = mwall_sum(x, w, d, lc, h)
+        let dd = math.abs[f64](cur - prev)
+        prev = cur
+        if dd <= 1.0e-14f64 * cur || cur == 0.0f64 { break }
+        lvl += 1usize
+    }
+    ret prev
+}

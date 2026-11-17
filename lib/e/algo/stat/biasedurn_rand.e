@@ -853,3 +853,507 @@ fn r_wall(rg: *rng.Rng, a: *mem.Arena, nran: usize, m1: f64, m2: f64, n: f64, od
         k += 1usize
     }
 }
+
+// ---- the multivariate samplers: rMFNCHypergeo and rMWNCHypergeo, StochasticLib3::MultiFishersNCHyp / MultiWalleniusNCHyp ----
+
+// selection sort of order[0..cnt) so the largest key comes first, the first of equals winning; keys of colours with a zero count are zero when `zero_empty`
+fn sort_desc(order: []usize, cnt: usize, key: []const f64, src: []const f64, zero_empty: bool) {
+    var i = 0usize
+    while i + 1usize < cnt {
+        let c = order[i]
+        var k = i
+        var w = key[c]
+        if zero_empty && src[c] == 0.0f64 { w = 0.0f64 }
+        var j = i + 1usize
+        while j < cnt {
+            let c2 = order[j]
+            var ok2 = true
+            if zero_empty && src[c2] == 0.0f64 { ok2 = false }
+            if key[c2] > w && ok2 {
+                w = key[c2]
+                k = j
+            }
+            j += 1usize
+        }
+        let t = order[i]
+        order[i] = order[k]
+        order[k] = t
+        i += 1usize
+    }
+}
+
+// the unsort at the end of both samplers
+fn multi_unsort(st: *Sto, dest: []f64, source: []const f64, order1: []const usize, order2: []const usize, colors: usize, osource: []f64, osample: []f64) {
+    var i = 0usize
+    while i < colors {
+        let c1 = order1[i]
+        let c2 = order2[i]
+        if source[c1] == osource[c2] {
+            dest[c1] = osample[c2]
+        } else {
+            let x = hypergeometric(st.rg, osample[c2], source[c1], osource[c2])
+            dest[c1] = x
+            osample[c2] -= x
+            osource[c2] -= source[c1]
+        }
+        i += 1usize
+    }
+}
+
+// the split of the colours into a heavy and a light group, shared by both samplers: the index b where the weights fall under their geometric mean
+fn split_point(oweights: []const f64, colors2: usize) -> usize {
+    var a = 0usize
+    var b = colors2 - 1usize
+    let w = math.sqrt[f64](oweights[0usize] * oweights[colors2 - 1usize])
+    while true {
+        let c = (a + b) / 2usize
+        if oweights[c] > w { a = c } else { b = c }
+        if !(b > a + 1usize) { break }
+    }
+    ret b
+}
+
+fn multi_fisher(st: *Sto, a: *mem.Arena, dest: []f64, source: []const f64, weights: []const f64, n0: f64, prec: f64) {
+    let total = source.len
+    var colors = total
+    var n = n0
+    var i = 0usize
+    if colors == 0usize { ret }
+    if n == 0.0f64 {
+        while i < total {
+            dest[i] = 0.0f64
+            i += 1usize
+        }
+        ret
+    }
+    let (order1, e1) = mem.alloc[usize](a, total)
+    let (order2, e2) = mem.alloc[usize](a, total)
+    let (order3, e3) = mem.alloc[usize](a, total)
+    let (osource, e4) = mem.alloc[f64](a, total)
+    let (oweights, e5) = mem.alloc[f64](a, total)
+    let (osample, e6) = mem.alloc[f64](a, total)
+    let (vr, e7) = mem.alloc[f64](a, total)
+    let (mu, e8) = mem.alloc[f64](a, total)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret }
+    var msum = 0.0f64
+    while i < total {
+        order1[i] = i
+        order3[i] = i
+        if weights[i] != 0.0f64 { msum += source[i] }
+        i += 1usize
+    }
+    sort_desc(order1, colors, weights, source, true)
+    while colors > 0usize {
+        let c = order1[colors - 1usize]
+        if weights[c] == 0.0f64 || source[c] == 0.0f64 {
+            dest[c] = 0.0f64
+            colors -= 1usize
+        } else {
+            break
+        }
+    }
+    if n >= msum {
+        i = 0usize
+        while i < colors {
+            dest[order1[i]] = source[order1[i]]
+            i += 1usize
+        }
+        ret
+    }
+    var invert = false
+    if n > math.floor[f64](msum / 2.0f64) {
+        var lo = 0usize
+        var hi = colors - 1usize
+        while lo < hi {
+            let t = order1[lo]
+            order1[lo] = order1[hi]
+            order1[hi] = t
+            lo += 1usize
+            hi -= 1usize
+        }
+        n = msum - n
+        invert = true
+    }
+    var c2 = 0usize
+    var w = 0.0f64
+    var x = 0.0f64
+    i = 0usize
+    while i < colors {
+        let c = order1[i]
+        if i == 0usize || weights[c] != w {
+            if i > 0usize { c2 += 1usize }
+            x = source[c]
+            if invert { w = 1.0f64 / weights[c] } else { w = weights[c] }
+            oweights[c2] = w
+        } else {
+            x += source[c]
+        }
+        osource[c2] = x
+        order2[i] = c2
+        osample[c2] = 0.0f64
+        i += 1usize
+    }
+    let colors2 = c2 + 1usize
+    if colors2 == 1usize { osample[0usize] = n }
+    if colors2 == 2usize {
+        osample[0usize] = fnc_draw(st.rg, n, osource[0usize], msum, oweights[0usize] / oweights[1usize])
+        osample[1usize] = n - osample[0usize]
+    }
+    if colors2 > 2usize {
+        let b0 = split_point(oweights, colors2)
+        var m1 = 0.0f64
+        var w1 = 0.0f64
+        var m2 = 0.0f64
+        var w2 = 0.0f64
+        i = 0usize
+        while i < b0 {
+            m1 += osource[i]
+            w1 += osource[i] * oweights[i]
+            i += 1usize
+        }
+        while i < colors2 {
+            m2 += osource[i]
+            w2 += osource[i] * oweights[i]
+            i += 1usize
+        }
+        w1 = w1 / m1
+        w2 = w2 / m2
+        let n1 = fnc_draw(st.rg, n, m1, m1 + m2, w1 / w2)
+        let n2 = n - n1
+        var n0c = n1
+        var lo = 0usize
+        var hi = b0
+        var k = 0usize
+        while k < 2usize {
+            i = lo
+            while i + 1usize < hi {
+                let m = osource[i]
+                let wi = oweights[i]
+                var ms = 0.0f64
+                var ws = 0.0f64
+                var j = i + 1usize
+                while j < hi {
+                    ms += osource[j]
+                    ws += osource[j] * oweights[j]
+                    j += 1usize
+                }
+                let wl = oweights[hi - 1usize]
+                var xx = 0.0f64
+                if wi == wl {
+                    xx = hypergeometric(st.rg, n0c, m, ms + m)
+                } else if ws == 0.0f64 {
+                    xx = n0c
+                } else {
+                    xx = fnc_draw(st.rg, n0c, m, ms + m, wi * ms / ws)
+                }
+                osample[i] += xx
+                n0c -= xx
+                i += 1usize
+            }
+            osample[hi - 1usize] += n0c
+            lo = hi
+            hi = colors2
+            n0c = n2
+            k += 1usize
+        }
+        // the colours with the largest variance are scanned first
+        var nu = 0.0f64
+        i = 0usize
+        while i < colors2 {
+            nu += osource[i]
+            i += 1usize
+        }
+        mv.mfnc_mean1(osource[0usize..colors2], oweights[0usize..colors2], n, mu[0usize..colors2])
+        i = 0usize
+        while i < colors2 {
+            vr[i] = mv.approx_var(mu[i], osource[i], n, nu)
+            i += 1usize
+        }
+        sort_desc(order3, colors2, vr, vr, false)
+        var ngibbs = 4usize
+        if prec < 1.0e-6f64 { ngibbs = 6usize }
+        if colors2 > 5usize { ngibbs += 1usize }
+        var g = 0usize
+        while g < ngibbs {
+            i = 0usize
+            while i < colors2 {
+                let ca = order3[i]
+                let cb = order3[(i + 1usize) % colors2]
+                let nn1 = osample[ca] + osample[cb]
+                let xg = fnc_draw(st.rg, nn1, osource[ca], osource[ca] + osource[cb], oweights[ca] / oweights[cb])
+                osample[ca] = xg
+                osample[cb] = nn1 - xg
+                i += 1usize
+            }
+            g += 1usize
+        }
+    }
+    if invert {
+        i = 0usize
+        while i < colors2 {
+            osample[i] = osource[i] - osample[i]
+            i += 1usize
+        }
+    }
+    multi_unsort(st, dest, source, order1, order2, colors, osource, osample)
+}
+
+fn multi_wall(st: *Sto, a: *mem.Arena, dest: []f64, source: []const f64, weights: []const f64, n: f64, prec: f64) {
+    let total = source.len
+    var colors = total
+    var i = 0usize
+    if colors == 0usize { ret }
+    if n == 0.0f64 {
+        while i < total {
+            dest[i] = 0.0f64
+            i += 1usize
+        }
+        ret
+    }
+    let (order1, e1) = mem.alloc[usize](a, total)
+    let (order2, e2) = mem.alloc[usize](a, total)
+    let (order3, e3) = mem.alloc[usize](a, total)
+    let (osource, e4) = mem.alloc[f64](a, total)
+    let (oweights, e5) = mem.alloc[f64](a, total)
+    let (osample, e6) = mem.alloc[f64](a, total)
+    let (urn, e7) = mem.alloc[f64](a, total)
+    let (wcum, e8) = mem.alloc[f64](a, total)
+    let (vr, e9) = mem.alloc[f64](a, total)
+    let (mu, e10) = mem.alloc[f64](a, total)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret }
+    var nt = 0.0f64
+    while i < total {
+        order1[i] = i
+        order3[i] = i
+        if weights[i] != 0.0f64 { nt += source[i] }
+        i += 1usize
+    }
+    sort_desc(order1, colors, weights, source, true)
+    while colors > 0usize {
+        let c = order1[colors - 1usize]
+        if weights[c] == 0.0f64 || source[c] == 0.0f64 {
+            dest[c] = 0.0f64
+            colors -= 1usize
+        } else {
+            break
+        }
+    }
+    if n >= nt {
+        i = 0usize
+        while i < colors {
+            dest[order1[i]] = source[order1[i]]
+            i += 1usize
+        }
+        ret
+    }
+    var c2 = 0usize
+    var w = 0.0f64
+    var x = 0.0f64
+    i = 0usize
+    while i < colors {
+        let c = order1[i]
+        if i == 0usize || weights[c] != w {
+            if i > 0usize { c2 += 1usize }
+            x = source[c]
+            w = weights[c]
+            oweights[c2] = w
+        } else {
+            x += source[c]
+        }
+        urn[c2] = x
+        osource[c2] = x
+        order2[i] = c2
+        osample[c2] = 0.0f64
+        i += 1usize
+    }
+    var colors2 = c2 + 1usize
+    if colors2 == 1usize { osample[0usize] = n }
+    if colors2 == 2usize {
+        let x2 = wnc_draw(st, a, n, osource[0usize], nt, oweights[0usize] / oweights[1usize], prec)
+        osample[0usize] = x2
+        osample[1usize] = n - x2
+    }
+    if colors2 > 2usize && n < 5000.0f64 * f64(colors2) {
+        var run = 0.0f64
+        i = 0usize
+        while i < colors2 {
+            run += urn[i] * oweights[i]
+            wcum[i] = run
+            i += 1usize
+        }
+        var j = colors2 - 1usize
+        var nn = n
+        while true {
+            let p = rng.unif(st.rg) * wcum[colors2 - 1usize]
+            i = 0usize
+            while i < j {
+                if p < wcum[i] { break }
+                i += 1usize
+            }
+            osample[i] += 1.0f64
+            urn[i] -= 1.0f64
+            nn -= 1.0f64
+            if urn[i] == 0.0f64 {
+                if i != j {
+                    let t1 = osource[i]
+                    osource[i] = osource[j]
+                    osource[j] = t1
+                    let t2 = urn[i]
+                    urn[i] = urn[j]
+                    urn[j] = t2
+                    let t3 = osample[i]
+                    osample[i] = osample[j]
+                    osample[j] = t3
+                    let t4 = oweights[i]
+                    oweights[i] = oweights[j]
+                    oweights[j] = t4
+                    var q = 0usize
+                    while q < colors {
+                        if order2[q] == i { order2[q] = j } else if order2[q] == j { order2[q] = i }
+                        q += 1usize
+                    }
+                }
+                colors2 -= 1usize
+                j = colors2 - 1usize
+                if colors2 == 2usize && nn > 50.0f64 {
+                    let xr = wnc_draw(st, a, nn, urn[0usize], urn[0usize] + urn[1usize], oweights[0usize] / oweights[1usize], prec)
+                    osample[0usize] += xr
+                    osample[1usize] += nn - xr
+                    break
+                }
+                if colors2 == 1usize {
+                    osample[0usize] += nn
+                    break
+                }
+                i = 0usize
+            }
+            var ws = 0.0f64
+            if i > 0usize { ws = wcum[i - 1usize] }
+            var q = i
+            while q < colors2 {
+                ws += urn[q] * oweights[q]
+                wcum[q] = ws
+                q += 1usize
+            }
+            if !(nn > 0.0f64) { break }
+        }
+    }
+    if colors2 > 2usize && !(n < 5000.0f64 * f64(colors2)) {
+        let b0 = split_point(oweights, colors2)
+        var m1 = 0.0f64
+        var w1 = 0.0f64
+        var m2 = 0.0f64
+        var w2 = 0.0f64
+        i = 0usize
+        while i < b0 {
+            m1 += urn[i]
+            w1 += urn[i] * oweights[i]
+            i += 1usize
+        }
+        while i < colors2 {
+            m2 += urn[i]
+            w2 += urn[i] * oweights[i]
+            i += 1usize
+        }
+        w1 = w1 / m1
+        w2 = w2 / m2
+        let n1 = wnc_draw(st, a, n, m1, m1 + m2, w1 / w2, prec)
+        let n2 = n - n1
+        var lo = 0usize
+        var hi = b0
+        var ng = n1
+        var k = 0usize
+        while k < 2usize {
+            i = lo
+            while i + 1usize < hi {
+                let m = urn[i]
+                let wi = oweights[i]
+                var ms = 0.0f64
+                var ws = 0.0f64
+                var j = i + 1usize
+                while j < hi {
+                    ms += urn[j]
+                    ws += urn[j] * oweights[j]
+                    j += 1usize
+                }
+                var xx = ng
+                if ws != 0.0f64 { xx = wnc_draw(st, a, ng, m, ms + m, wi * ms / ws, prec) }
+                osample[i] = xx
+                ng -= xx
+                i += 1usize
+            }
+            osample[hi - 1usize] = ng
+            lo = hi
+            hi = colors2
+            ng = n2
+            k += 1usize
+        }
+        mv.mwnc_mean(osource[0usize..colors2], oweights[0usize..colors2], n, nt, mu[0usize..colors2])
+        i = 0usize
+        while i < colors2 {
+            vr[i] = mv.approx_var(mu[i], osource[i], n, nt)
+            i += 1usize
+        }
+        sort_desc(order3, colors2, vr, vr, false)
+        var nh = 4usize
+        if prec < 1.0e-6f64 { nh = 6usize }
+        if colors2 > 5usize { nh += 1usize }
+        var f0 = 0.0f64 - 1.0f64
+        var h = 0usize
+        while h < nh {
+            i = 0usize
+            while i < colors2 {
+                let ca = order3[i]
+                let cb = order3[(i + 1usize) % colors2]
+                let wr = oweights[ca] / oweights[cb]
+                let n1b = osample[ca] + osample[cb]
+                let x0 = osample[ca]
+                let xn = wnc_draw(st, a, n1b, osource[ca], osource[ca] + osource[cb], wr, prec)
+                if xn != x0 {
+                    if f0 < 0.0f64 { f0 = bu.mwall_prob(osample[0usize..colors2], osource[0usize..colors2], oweights[0usize..colors2]) }
+                    var g0 = wnc_prob(x0, n1b, osource[ca], osource[ca] + osource[cb], wr)
+                    var g1 = wnc_prob(xn, n1b, osource[ca], osource[ca] + osource[cb], wr)
+                    osample[ca] = xn
+                    osample[cb] = n1b - xn
+                    let f1 = bu.mwall_prob(osample[0usize..colors2], osource[0usize..colors2], oweights[0usize..colors2])
+                    g0 = f1 * g0
+                    g1 = f0 * g1
+                    var accept = g0 >= g1
+                    if !accept { accept = g0 > g1 * rng.unif(st.rg) }
+                    if accept {
+                        f0 = 0.0f64 - 1.0f64
+                    } else {
+                        osample[ca] = x0
+                        osample[cb] = n1b - x0
+                    }
+                }
+                i += 1usize
+            }
+            h += 1usize
+        }
+    }
+    multi_unsort(st, dest, source, order1, order2, colors, osource, osample)
+}
+
+// rMFNCHypergeo / rMWNCHypergeo: nran variates of colours each, variate v in out[v * colors .. (v + 1) * colors]
+fn r_multi_fisher(rg: *rng.Rng, a: *mem.Arena, nran: usize, m: []const f64, odds: []const f64, n: f64, prec0: f64, out: []f64) {
+    let prec = sane_prec(prec0)
+    var st = Sto{ rg: rg, r: 1.0f64 }
+    let cc = m.len
+    var v = 0usize
+    while v < nran {
+        multi_fisher(&st, a, out[v * cc..(v + 1usize) * cc], m, odds, n, prec)
+        v += 1usize
+    }
+}
+
+fn r_multi_wall(rg: *rng.Rng, a: *mem.Arena, nran: usize, m: []const f64, odds: []const f64, n: f64, prec0: f64, out: []f64) {
+    let prec = sane_prec(prec0)
+    var st = Sto{ rg: rg, r: 1.0f64 }
+    let cc = m.len
+    var v = 0usize
+    while v < nran {
+        multi_wall(&st, a, out[v * cc..(v + 1usize) * cc], m, odds, n, prec)
+        v += 1usize
+    }
+}

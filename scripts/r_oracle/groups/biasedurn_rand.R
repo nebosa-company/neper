@@ -35,4 +35,27 @@ for (rep in 1:3) for (fn in c("rF", "rW")) {
   addu(fn, nx(), 3, 400, 500, 60, 1, 1e-7); addu(fn, nx(), 3, 4000, 5000, 600, 1, 1e-7); addu(fn, nx(), 3, 40, 50, 20, 0, 1e-7)
   addu(fn, nx(), 6, 100, 200, 50, 2, 1e-4)
 }
+addm <- function(fn, seed, nran, m, n, od, prec) {
+  force(nran); force(m); force(n); force(od); force(prec)
+  set.seed(seed); x <- if (fn == "rMF") rMFNCHypergeo(nran, m, n, od, prec) else rMWNCHypergeo(nran, m, n, od, prec)
+  cc <- length(m); x <- as.numeric(x)
+  a <- c(seed, nran, cc, n, prec)
+  cases[[length(cases) + 1]] <<- case(fn, c(a, 0, m, od), sum(x * rep(1:cc, nran) * rep(1:nran, each = cc)), rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <<- case(fn, c(a, 1, m, od), x[(nran - 1) * cc + 1], rel = 0, abs = 0)
+}
+for (rep in 1:8) for (fn in c("rMF", "rMW")) {
+  cc <- sample(3:6, 1); m <- sample(3:30, cc, TRUE); n <- sample(2:(sum(m) - 1), 1); od <- round(runif(cc, 0.3, 4), 2)
+  addm(fn, nx(), sample(1:4, 1), m, n, od, 1e-7)
+  # equal weights in groups, a zero weight, a zero count, big draws (inverted Fisher; Wallenius urn running down to two colours)
+  od2 <- sample(c(0.5, 1, 2), cc, TRUE); addm(fn, nx(), 2, m, n, od2, 1e-7)
+  od3 <- od; od3[1] <- 0; if (sum(m[-1]) > n) addm(fn, nx(), 2, m, n, od3, 1e-7)
+  m4 <- m; m4[cc] <- 0; if (sum(m4) > n) addm(fn, nx(), 2, m4, n, od, 1e-7)
+  mb <- sample(40:300, cc, TRUE); addm(fn, nx(), 2, mb, sample((sum(mb) %/% 2):(sum(mb) - 1), 1), od, 1e-7)
+  addm(fn, nx(), 3, mb, sample(60:150, 1), od, 1e-7)
+}
+addm("rMF", nx(), 2, c(30, 40, 20, 10, 25, 15, 35), 70, c(1, 2, 0.5, 3, 1, 1.5, 0.8), 1e-7)
+addm("rMW", nx(), 2, c(30, 40, 20, 10, 25, 15, 35), 70, c(1, 2, 0.5, 3, 1, 1.5, 0.8), 1e-7)
+addm("rMW", nx(), 1, c(30000, 20000, 15000), 16000, c(1, 2, 0.5), 1e-7)
+addm("rMW", nx(), 2, c(30000, 20000, 15000, 8000), 21000, c(1, 2, 0.5, 1.7), 1e-7)
+addm("rMF", nx(), 2, c(30000, 20000, 15000), 16000, c(1, 2, 0.5), 1e-7)
 emit("biasedurn_rand", "BiasedUrn", list(cases))
