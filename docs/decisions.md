@@ -48186,3 +48186,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6929 — fda: the Fourier basis
 
 **Decision.** `fdapkg.eval_fourier` is `create.fourier.basis(rangeval, nbasis, period)` evaluated by `eval.basis(x, basis, Lfdobj = deriv)`: the constant 1 / sqrt(period) (zero for any derivative), then sin(j w x) and cos(j w x) scaled by 1 / sqrt(period / 2), w = 2 pi / period, the derivative of order k multiplying by (j w)^k and rotating the phase by k quarter turns. Equal to fda on 20 bases (3 to 11 functions, periods 0.5 to 5, derivatives 0 to 3), four points each, every function (oracle_fda, 1792 cases in all). Linux pending.
+
+## D6930 — fda: smooth.basis weights, df, SSE and GCV
+
+**Decision.** `fdapkg.smooth_basis_stats` is `smooth.basis(argvals, y, fdPar, wtvec)`: the coefficients (Phi' W Phi + lambda R)^-1 Phi' W y, the degrees of freedom trace(Phi (Phi' W Phi + lambda R)^-1 Phi' W), the error sum of squares and the generalised cross-validation criterion (SSE / n) / ((n - df) / n)^2. fda's SSE is the unweighted sum of squared residuals even when weights are given (found against the package: weighted sums disagreed). Equal to fda on 20 bases and noisy sine data sets, half weighted, every coefficient, df, SSE and GCV (oracle_fda, 1999 cases in all). Linux pending.

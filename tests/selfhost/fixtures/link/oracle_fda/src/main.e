@@ -19,6 +19,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     let norder = usize(z[0usize])
     let nb = usize(z[1usize])
+    if c.name[0usize] == 103u8 {
+        // g: (norder, nb, m, lambda, which (0 df, 1 sse, 2 gcv, 3 + q coefficient q), hasw, nd, breaks[nb], argvals[nd], y[nd], w[nd])
+        let nbas = nb + norder - 2usize
+        let nd = usize(z[6usize])
+        let (co, ce) = mem.alloc[f64](a, nbas)
+        let (so, se) = mem.alloc[f64](a, 3usize)
+        if ce != ok || se != ok { ret nan }
+        var wv = z[7usize + nb + 2usize * nd..7usize + nb + 2usize * nd]
+        if z[5usize] != 0.0f64 { wv = z[7usize + nb + 2usize * nd..7usize + nb + 3usize * nd] }
+        if fa.smooth_basis_stats(a, norder, z[7usize..7usize + nb], z[7usize + nb..7usize + nb + nd], z[7usize + nb + nd..7usize + nb + 2usize * nd], wv, usize(z[2usize]), z[3usize], co, so) != ok { ret nan }
+        let w = usize(z[4usize])
+        if w < 3usize { ret so[w] }
+        ret co[w - 3usize]
+    }
     if c.name[0usize] == 112u8 {
         // pen: (norder, nb, m, index, breaks)
         let nbas = nb + norder - 2usize

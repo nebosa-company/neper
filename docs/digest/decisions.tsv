@@ -3788,4 +3788,5 @@ D6925	491	glmnet: binomial cross-validation by AUC
 D6926	573	glmnet: Poisson cross-validation
 D6927	775	fda: the B-spline basis
 D6928	879	fda: roughness penalty and smooth.basis
-D6929	574	fda: the Fourier basis
+D6929	575	fda: the Fourier basis
+D6930	653	fda: smooth.basis weights, df, SSE and GCV

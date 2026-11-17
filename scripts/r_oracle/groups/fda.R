@@ -22,4 +22,14 @@ for (rep in 1:20) {
   nbf <- 2 * sample(1:5, 1) + 1; per <- runif(1, 0.5, 5); fb <- create.fourier.basis(c(0, per), nbasis = nbf, period = per); nd <- sample(0:3, 1)
   for (x in runif(4, 0, per)) { v <- eval.basis(x, fb, Lfdobj = nd); for (j in seq_len(nbf)) cases[[length(cases) + 1]] <- case("f", c(nbf, per, nd, x, j - 1), v[1, j], rel = 1e-9, abs = 1e-10) }
 }
+# smooth.basis df, sse, gcv and coefficients with and without weights "g"
+for (rep in 1:20) {
+  nbr <- sample(3:7, 1); br <- sort(c(0, 1, runif(nbr - 2))); no <- sample(4:5, 1); basis <- create.bspline.basis(c(0, 1), norder = no, breaks = br); m <- 2
+  nd <- sample(25:60, 1); xs <- sort(runif(nd)); ys <- sin(2 * pi * xs) + rnorm(nd, 0, 0.2); lam <- 10^sample(-5:-1, 1); hw <- rep %% 2; ww <- if (hw) runif(nd, 0.3, 2) else rep(1, nd)
+  fdp <- fdPar(basis, Lfdobj = m, lambda = lam); sm <- smooth.basis(xs, ys, fdp, wtvec = ww); cf <- as.vector(sm$fd$coefs)
+  args <- function(w) c(no, length(br), m, lam, w, hw, nd, br, xs, ys, if (hw) ww else numeric(0))
+  cases[[length(cases) + 1]] <- case("g", args(0), sm$df, rel = 1e-7, abs = 1e-9); cases[[length(cases) + 1]] <- case("g", args(1), sm$SSE, rel = 1e-6, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("g", args(2), sm$gcv, rel = 1e-6, abs = 1e-9)
+  for (q in seq_along(cf)) cases[[length(cases) + 1]] <- case("g", args(3 + q - 1), cf[q], rel = 1e-6, abs = 1e-9)
+}
 emit("fda", "fda", list(cases))

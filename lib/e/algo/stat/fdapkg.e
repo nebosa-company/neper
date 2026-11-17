@@ -190,3 +190,108 @@ fn eval_fourier(nbasis: usize, period: f64, x: f64, deriv: usize, out: []f64) {
         i += 1usize
     }
 }
+
+// smooth.basis with weights wt (empty for unit weights): out = (df, sse, gcv) with df = trace(Phi (Phi' W Phi + lambda R)^-1 Phi' W), sse = sum (y - fit)^2 (unweighted, as fda reports it) and gcv = (sse / n) / ((n - df) / n)^2; coef receives the coefficients
+fn smooth_basis_stats(a: *mem.Arena, norder: usize, breaks: []const f64, argvals: []const f64, y: []const f64, wt: []const f64, m: usize, lambda: f64, coef: []f64, out: []f64) -> err {
+    let nb = breaks.len + norder - 2usize
+    let n = argvals.len
+    let (r, e1) = mem.alloc[f64](a, nb * nb)
+    let (lhs, e2) = mem.alloc[f64](a, nb * nb)
+    let (rhs, e3) = mem.alloc[f64](a, nb)
+    let (v, e4) = mem.alloc[f64](a, nb + norder)
+    let (u, e5) = mem.alloc[f64](a, nb * nb)
+    let (iu, e6) = mem.alloc[f64](a, nb * nb)
+    let (inv, e7) = mem.alloc[f64](a, nb * nb)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret mem.Full }
+    let e = penalty_matrix(a, norder, breaks, m, r)
+    if e != ok { ret e }
+    var q = 0usize
+    while q < nb * nb {
+        lhs[q] = lambda * r[q]
+        q += 1usize
+    }
+    q = 0usize
+    while q < nb {
+        rhs[q] = 0.0f64
+        q += 1usize
+    }
+    var t = 0usize
+    while t < n {
+        var wv = 1.0f64
+        if wt.len == n { wv = wt[t] }
+        let e2b = eval_bspline(a, norder, breaks, argvals[t], 0usize, v)
+        if e2b != ok { ret e2b }
+        var i = 0usize
+        while i < nb {
+            var j = 0usize
+            while j < nb {
+                lhs[j * nb + i] += wv * v[i] * v[j]
+                j += 1usize
+            }
+            rhs[i] += wv * v[i] * y[t]
+            i += 1usize
+        }
+        t += 1usize
+    }
+    if !bz.chol_upper(lhs, nb, u) { ret mem.Full }
+    bz.inv_upper(u, nb, iu)
+    var i = 0usize
+    while i < nb {
+        var j = 0usize
+        while j < nb {
+            var s = 0.0f64
+            var k = 0usize
+            while k < nb {
+                s += iu[k * nb + i] * iu[k * nb + j]
+                k += 1usize
+            }
+            inv[j * nb + i] = s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < nb {
+        var s = 0.0f64
+        var j = 0usize
+        while j < nb {
+            s += inv[j * nb + i] * rhs[j]
+            j += 1usize
+        }
+        coef[i] = s
+        i += 1usize
+    }
+    var df = 0.0f64
+    var sse = 0.0f64
+    t = 0usize
+    while t < n {
+        var wv = 1.0f64
+        if wt.len == n { wv = wt[t] }
+        let e2c = eval_bspline(a, norder, breaks, argvals[t], 0usize, v)
+        if e2c != ok { ret e2c }
+        var fit = 0.0f64
+        i = 0usize
+        while i < nb {
+            fit += v[i] * coef[i]
+            i += 1usize
+        }
+        var qf = 0.0f64
+        i = 0usize
+        while i < nb {
+            var j = 0usize
+            while j < nb {
+                qf += v[i] * inv[j * nb + i] * v[j]
+                j += 1usize
+            }
+            i += 1usize
+        }
+        df += wv * qf
+        sse += (y[t] - fit) * (y[t] - fit)
+        t += 1usize
+    }
+    let nf = f64(n)
+    out[0usize] = df
+    out[1usize] = sse
+    out[2usize] = (sse / nf) / ((nf - df) / nf) / ((nf - df) / nf)
+    ret ok
+}
