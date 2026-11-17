@@ -156,3 +156,37 @@ fn smooth_basis(a: *mem.Arena, norder: usize, breaks: []const f64, argvals: []co
     }
     ret ok
 }
+
+// the Fourier basis of create.fourier.basis(rangeval, nbasis, period) at x and its derivative of order deriv: the constant 1 / sqrt(period), then for j = 1 ..: sin(j w x) / sqrt(period / 2) and cos(j w x) / sqrt(period / 2), w = 2 pi / period
+fn eval_fourier(nbasis: usize, period: f64, x: f64, deriv: usize, out: []f64) {
+    let w = 6.283185307179586f64 / period
+    let cs = 1.0f64 / math.sqrt[f64](period)
+    let sc = 1.0f64 / math.sqrt[f64](period / 2.0f64)
+    var i = 0usize
+    while i < nbasis {
+        if i == 0usize {
+            out[0usize] = 0.0f64
+            if deriv == 0usize { out[0usize] = cs }
+        } else {
+            let j = f64((i + 1usize) / 2usize)
+            let jw = j * w
+            let isin = i % 2usize == 1usize
+            // d^k / dx^k of sin(jw x) and cos(jw x): the pair rotates by a quarter turn each derivative
+            var amp = sc
+            var kk = 0usize
+            while kk < deriv {
+                amp = amp * jw
+                kk += 1usize
+            }
+            let ph = f64(deriv % 4usize)
+            // sin: sin(t + k pi / 2); cos: cos(t + k pi / 2)
+            let t = jw * x
+            if isin {
+                out[i] = amp * math.sin[f64](t + ph * 1.5707963267948966f64)
+            } else {
+                out[i] = amp * math.cos[f64](t + ph * 1.5707963267948966f64)
+            }
+        }
+        i += 1usize
+    }
+}

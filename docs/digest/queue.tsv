@@ -161,7 +161,7 @@ L441	library	0	300	msm and mstate: multi-state models	Open (CRAN ranks 642, 679)
 L442	library	0	264	phangorn: phylogenetic inference	Open (CRAN rank 666).
 L466	library	0.3	2405	EnvStats: environmental statistics	D6723: e.algo.stat.envstats has rosnerTest, tolIntNormK (one-sided content, Wald-Wolfowitz, expectation) and predIntNormK (one future mean, Bonferroni), equal to EnvStats on 1852 values on Windows (or
 L495	library	0	260	mirt: item response theory	Open (CRAN rank 841).
-L496	library	0.2	745	fda: functional data analysis	Partial (D6927): e.algo.stat.fdapkg.eval_bspline, the B-spline basis of create.bspline.basis and its derivatives of eval.basis, equals fda on Windows (oracle_fda;
+L496	library	0.23	792	fda: functional data analysis	Partial (D6927): e.algo.stat.fdapkg.eval_bspline, the B-spline basis of create.bspline.basis and its derivatives of eval.basis, equals fda on Windows (oracle_fda;
 L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
 L515	library	0	241	unmarked: occupancy and abundance models	Open (CRAN rank 905).
 L353	library	0	285	mgcv: generalized additive models	Open (CRAN rank 239).

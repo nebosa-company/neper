@@ -17,4 +17,9 @@ for (rep in 1:20) {
   fdp <- fdPar(basis, Lfdobj = m, lambda = lam); sm <- smooth.basis(xs, ys, fdp); cf <- as.vector(sm$fd$coefs)
   for (q in seq_along(cf)) cases[[length(cases) + 1]] <- case("sm", c(no, length(br), m, lam, q - 1, nd, br, xs, ys), cf[q], rel = 1e-6, abs = 1e-9)
 }
+# Fourier basis "f": (nbasis, period, deriv, x, j)
+for (rep in 1:20) {
+  nbf <- 2 * sample(1:5, 1) + 1; per <- runif(1, 0.5, 5); fb <- create.fourier.basis(c(0, per), nbasis = nbf, period = per); nd <- sample(0:3, 1)
+  for (x in runif(4, 0, per)) { v <- eval.basis(x, fb, Lfdobj = nd); for (j in seq_len(nbf)) cases[[length(cases) + 1]] <- case("f", c(nbf, per, nd, x, j - 1), v[1, j], rel = 1e-9, abs = 1e-10) }
+}
 emit("fda", "fda", list(cases))

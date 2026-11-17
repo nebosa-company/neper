@@ -10,6 +10,13 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if c.name[0usize] == 102u8 {
+        // f: (nbasis, period, deriv, x, j)
+        let (fo, fe) = mem.alloc[f64](a, usize(z[0usize]))
+        if fe != ok { ret nan }
+        fa.eval_fourier(usize(z[0usize]), z[1usize], z[3usize], usize(z[2usize]), fo)
+        ret fo[usize(z[4usize])]
+    }
     let norder = usize(z[0usize])
     let nb = usize(z[1usize])
     if c.name[0usize] == 112u8 {

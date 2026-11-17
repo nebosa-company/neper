@@ -48182,3 +48182,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6928 — fda: roughness penalty and smooth.basis
 
 **Decision.** `fdapkg.penalty_matrix` is `getbasispenalty(basis, Lfdobj = m)`: the integrals of the m-th derivatives of every pair of basis functions, exact by 10-point Gauss-Legendre quadrature on each break interval (the integrand is a polynomial of degree at most 2 (order - 1 - m)). `smooth_basis` is `smooth.basis(argvals, y, fdPar(basis, Lfdobj = m, lambda))` with unit weights: the coefficients (Phi' Phi + lambda R)^-1 Phi' y through a Cholesky factor. Equal to fda on 20 random bases (3 to 8 breaks, orders 4 to 6, penalty derivative 1 or 2): four penalty elements to 1e-8 and every coefficient of a penalised fit of 25 to 60 noisy sine observations with lambda 1e-6 to 1e-1 to 1e-6 (oracle_fda, 1192 cases in all). Not here: weights, the GCV and degrees-of-freedom outputs, fd objects and deriv.fd. Linux pending.
+
+## D6929 — fda: the Fourier basis
+
+**Decision.** `fdapkg.eval_fourier` is `create.fourier.basis(rangeval, nbasis, period)` evaluated by `eval.basis(x, basis, Lfdobj = deriv)`: the constant 1 / sqrt(period) (zero for any derivative), then sin(j w x) and cos(j w x) scaled by 1 / sqrt(period / 2), w = 2 pi / period, the derivative of order k multiplying by (j w)^k and rotating the phase by k quarter turns. Equal to fda on 20 bases (3 to 11 functions, periods 0.5 to 5, derivatives 0 to 3), four points each, every function (oracle_fda, 1792 cases in all). Linux pending.

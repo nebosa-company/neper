@@ -1791,10 +1791,10 @@
       "group": "CRAN parity",
       "order": 819,
       "title": "fda: functional data analysis",
-      "score": 0.2,
+      "score": 0.23,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D6927): e.algo.stat.fdapkg.eval_bspline, the B-spline basis of create.bspline.basis and its derivatives of eval.basis, equals fda on Windows (oracle_fda; Linux pending). D6928: getbasispenalty (derivative-order roughness penalty matrix) and smooth.basis coefficients (penalised least squares with unit weights) equal fda. Open: smooth.basis with weights, GCV, Fourier and the other bases, fd objects, deriv.fd, pca.fd, fRegress, register.fd, density.fd. Was: Open (CRAN rank 838). Large. Acceptance, equal to fda: create.bspline.basis and Fourier bases, smooth.basis and smooth.fd with roughness penalties, deriv.fd, pca.fd, fRegress, register.fd, density.fd, eval.fd and the registration helpers; rainbow functional depth builds on it."
+      "evidence": "Partial (D6927): e.algo.stat.fdapkg.eval_bspline, the B-spline basis of create.bspline.basis and its derivatives of eval.basis, equals fda on Windows (oracle_fda; Linux pending). D6928: getbasispenalty (derivative-order roughness penalty matrix) and smooth.basis coefficients (penalised least squares with unit weights) equal fda. D6929: the Fourier basis and its derivatives equal fda. Open: smooth.basis with weights, GCV and the other bases, fd objects, deriv.fd, pca.fd, fRegress, register.fd, density.fd. Was: Open (CRAN rank 838). Large. Acceptance, equal to fda: create.bspline.basis and Fourier bases, smooth.basis and smooth.fd with roughness penalties, deriv.fd, pca.fd, fRegress, register.fd, density.fd, eval.fd and the registration helpers; rainbow functional depth builds on it."
     },
     {
       "id": "L497",
