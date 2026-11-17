@@ -415,3 +415,4 @@ oracle_compositions_miss
 oracle_micefit
 oracle_micefull
 oracle_micepool
+oracle_lmomfull
