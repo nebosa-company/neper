@@ -6,6 +6,7 @@
 //
 // Not here: multinom's offsets and weight decay, polr's other links, Hessians.
 
+use e.algo.stat.micepkg as mc
 use e.algo.stat.rbfgs as bf
 use e.math
 use e.mem
@@ -269,131 +270,6 @@ fn multinom_probs(wts: []const f64, xm: []const f64, m: usize, r: usize, k: usiz
     }
 }
 
-// glm.fit(x, y, weights, family = binomial()) for a 0/1 response: x is n by cd column-major with the intercept; returns the coefficients and whether the fit converged
-fn glm_binomial(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usize, cd: usize, coef: []f64) -> err {
-    let (eta, e1) = mem.alloc[f64](a, n)
-    let (xtx, e2) = mem.alloc[f64](a, cd * cd)
-    let (xtz, e3) = mem.alloc[f64](a, cd)
-    let (inv, e4) = mem.alloc[f64](a, cd * cd)
-    let (lw, e5) = mem.alloc[f64](a, cd * cd)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
-    var i = 0usize
-    var devold = 0.0f64
-    while i < n {
-        let mu = (w[i] * y[i] + 0.5f64) / (w[i] + 1.0f64)
-        eta[i] = math.log[f64](mu / (1.0f64 - mu))
-        var d0 = 0.0f64
-        if y[i] > 0.0f64 { d0 += y[i] * math.log[f64](y[i] / mu) }
-        if y[i] < 1.0f64 { d0 += (1.0f64 - y[i]) * math.log[f64]((1.0f64 - y[i]) / (1.0f64 - mu)) }
-        devold += 2.0f64 * w[i] * d0
-        i += 1usize
-    }
-    var iter = 0usize
-    var go = true
-    while go && iter < 25usize {
-        iter += 1usize
-        var s1 = 0usize
-        while s1 < cd {
-            xtz[s1] = 0.0f64
-            var s2 = 0usize
-            while s2 < cd {
-                xtx[s1 * cd + s2] = 0.0f64
-                s2 += 1usize
-            }
-            s1 += 1usize
-        }
-        i = 0usize
-        while i < n {
-            let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[i]))
-            let me = mu * (1.0f64 - mu)
-            let wq = w[i] * me * me / (mu * (1.0f64 - mu))
-            let z = eta[i] + (y[i] - mu) / me
-            s1 = 0usize
-            while s1 < cd {
-                xtz[s1] += wq * x[s1 * n + i] * z
-                var s2 = 0usize
-                while s2 < cd {
-                    xtx[s1 * cd + s2] += wq * x[s1 * n + i] * x[s2 * n + i]
-                    s2 += 1usize
-                }
-                s1 += 1usize
-            }
-            i += 1usize
-        }
-        if !spd_solve(xtx, xtz, cd, coef, inv, lw) { ret Singular }
-        var dev = 0.0f64
-        i = 0usize
-        while i < n {
-            var e = 0.0f64
-            s1 = 0usize
-            while s1 < cd {
-                e += x[s1 * n + i] * coef[s1]
-                s1 += 1usize
-            }
-            eta[i] = e
-            let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e))
-            var d1 = 0.0f64
-            if y[i] > 0.0f64 { d1 += y[i] * math.log[f64](y[i] / mu) }
-            if y[i] < 1.0f64 { d1 += (1.0f64 - y[i]) * math.log[f64]((1.0f64 - y[i]) / (1.0f64 - mu)) }
-            dev += 2.0f64 * w[i] * d1
-            i += 1usize
-        }
-        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 1.0e-8f64 {
-            go = false
-        } else {
-            devold = dev
-        }
-    }
-    ret ok
-}
-
-// solves the symmetric positive definite system a x = b (a is q by q row-major) by Cholesky; false when it is not positive definite
-fn spd_solve(a: []const f64, b: []const f64, q: usize, x: []f64, tmp: []f64, l: []f64) -> bool {
-    var i = 0usize
-    while i < q {
-        var j = 0usize
-        while j <= i {
-            var s = a[i * q + j]
-            var k = 0usize
-            while k < j {
-                s -= l[i * q + k] * l[j * q + k]
-                k += 1usize
-            }
-            if i == j {
-                if s <= 0.0f64 { ret false }
-                l[i * q + i] = math.sqrt[f64](s)
-            } else {
-                l[i * q + j] = s / l[j * q + j]
-            }
-            j += 1usize
-        }
-        i += 1usize
-    }
-    i = 0usize
-    while i < q {
-        var s = b[i]
-        var k = 0usize
-        while k < i {
-            s -= l[i * q + k] * tmp[k]
-            k += 1usize
-        }
-        tmp[i] = s / l[i * q + i]
-        i += 1usize
-    }
-    i = q
-    while i > 0usize {
-        i -= 1usize
-        var s = tmp[i]
-        var k = i + 1usize
-        while k < q {
-            s -= l[k * q + i] * x[k]
-            k += 1usize
-        }
-        x[i] = s / l[i * q + i]
-    }
-    ret true
-}
-
 type PolrCtx = struct {
     x: []const f64,
     y: []const usize,
@@ -571,8 +447,12 @@ fn polr_fit(a: *mem.Arena, x: []const f64, y: []const usize, w: []const f64, n: 
         if y[i] + 1usize > q1 { y1[i] = 1.0f64 }
         i += 1usize
     }
-    let ge = glm_binomial(a, xi, y1, w, n, pc + 1usize, coef)
+    let (cov, ecv) = mem.alloc[f64](a, (pc + 1usize) * (pc + 1usize))
+    if ecv != ok { ret mem.Full }
+    let (conv, ge) = mc.glm_logit(a, xi, y1, w, n, pc + 1usize, coef, cov)
     if ge != ok { ret ge }
+    // polr stops when glm.fit's start does not converge, and mice then falls back on multinom
+    if !conv { ret Singular }
     // start: the coefficients, then gamma_j = -intercept + spacing_j - spacing_q1, spacing_j = logit(j / (q + 1))
     var sp: [32]f64 = zero
     var j = 0usize

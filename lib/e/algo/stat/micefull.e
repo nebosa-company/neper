@@ -43,116 +43,6 @@ type Mi = struct {
     r: rng.Rng,
 }
 
-// the lower Cholesky factor of the symmetric positive definite q by q matrix c (row-major) into l; false when it is not positive definite
-fn chol_lower(c: []const f64, q: usize, l: []f64) -> bool {
-    var s1 = 0usize
-    while s1 < q {
-        var s2 = 0usize
-        while s2 <= s1 {
-            var s = c[s1 * q + s2]
-            var k = 0usize
-            while k < s2 {
-                s -= l[s1 * q + k] * l[s2 * q + k]
-                k += 1usize
-            }
-            if s1 == s2 {
-                if s <= 0.0f64 { ret false }
-                l[s1 * q + s1] = math.sqrt[f64](s)
-            } else {
-                l[s1 * q + s2] = s / l[s2 * q + s2]
-            }
-            s2 += 1usize
-        }
-        s1 += 1usize
-    }
-    ret true
-}
-
-// glm.fit(x, y, weights, quasibinomial()): x is n by cd column-major with the intercept, coef the coefficients and covu the unscaled covariance of the last iteration (row-major); the answer is whether it converged in 25 iterations
-fn glm_logit(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usize, cd: usize, coef: []f64, covu: []f64) -> (bool, err) {
-    let (eta, e1) = mem.alloc[f64](a, n)
-    let (xtx, e2) = mem.alloc[f64](a, cd * cd)
-    let (xtz, e3) = mem.alloc[f64](a, cd)
-    let (lw, e4) = mem.alloc[f64](a, cd * cd)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (false, mem.Full) }
-    var q = 0usize
-    while q < n {
-        let mu0 = (w[q] * y[q] + 0.5f64) / (w[q] + 1.0f64)
-        eta[q] = math.log[f64](mu0 / (1.0f64 - mu0))
-        q += 1usize
-    }
-    var devold = 0.0f64
-    q = 0usize
-    while q < n {
-        devold += mc.bin_dev(y[q], mc.logit_inv(eta[q]), w[q])
-        q += 1usize
-    }
-    var conv = false
-    var iter = 0usize
-    while !conv && iter < 25usize {
-        iter += 1usize
-        var s1 = 0usize
-        while s1 < cd {
-            xtz[s1] = 0.0f64
-            var s2 = 0usize
-            while s2 < cd {
-                xtx[s1 * cd + s2] = 0.0f64
-                s2 += 1usize
-            }
-            s1 += 1usize
-        }
-        q = 0usize
-        while q < n {
-            let mu = mc.logit_inv(eta[q])
-            let me = mc.logit_mu_eta(eta[q])
-            let wq = w[q] * me * me / (mu * (1.0f64 - mu))
-            let z = eta[q] + (y[q] - mu) / me
-            s1 = 0usize
-            while s1 < cd {
-                xtz[s1] += wq * x[s1 * n + q] * z
-                var s2 = 0usize
-                while s2 < cd {
-                    xtx[s1 * cd + s2] += wq * x[s1 * n + q] * x[s2 * n + q]
-                    s2 += 1usize
-                }
-                s1 += 1usize
-            }
-            q += 1usize
-        }
-        if !mc.spd_inverse(xtx, cd, covu, lw) { ret (false, Collinear) }
-        s1 = 0usize
-        while s1 < cd {
-            var s = 0.0f64
-            var s2 = 0usize
-            while s2 < cd {
-                s += covu[s1 * cd + s2] * xtz[s2]
-                s2 += 1usize
-            }
-            coef[s1] = s
-            s1 += 1usize
-        }
-        var dev = 0.0f64
-        q = 0usize
-        while q < n {
-            var e = 0.0f64
-            s1 = 0usize
-            while s1 < cd {
-                e += x[s1 * n + q] * coef[s1]
-                s1 += 1usize
-            }
-            eta[q] = e
-            dev += mc.bin_dev(y[q], mc.logit_inv(e), w[q])
-            q += 1usize
-        }
-        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 1.0e-8f64 {
-            conv = true
-        } else {
-            devold = dev
-        }
-    }
-    ret (conv, ok)
-}
-
 // ---- the design of one column's model
 
 // the design columns the predictor row of column j selects, in column order: a numeric column as it is, a factor as its treatment dummies (levels 2 ..); returns the number of columns
@@ -532,7 +422,7 @@ fn mi_norm(a: *mem.Arena, st: *Mi, mth: usize, xk: []const f64, nk: usize, y: []
         var dfv = no - cd
         if no <= cd { dfv = 1usize }
         sigma = math.sqrt[f64](rss / rd.rchisq(&st.r, f64(dfv)))
-        if !chol_lower(inv, cd, lv) { ret Collinear }
+        if !mc.chol_lower(inv, cd, lv) { ret Collinear }
         var s1 = 0usize
         while s1 < cd {
             zz[s1] = rng.norm(&st.r)
@@ -662,7 +552,7 @@ fn mi_logreg(a: *mem.Arena, st: *Mi, boot: bool, xk: []const f64, nk: usize, y: 
         if ya[t] > ymin { y01[t] = 1.0f64 }
         t += 1usize
     }
-    let (conv, ef) = glm_logit(a, xi, y01, wa, na, cd, coef, covu)
+    let (conv, ef) = mc.glm_logit(a, xi, y01, wa, na, cd, coef, covu)
     if ef != ok { ret ef }
     let _ = conv
     var c = 0usize
@@ -671,7 +561,7 @@ fn mi_logreg(a: *mem.Arena, st: *Mi, boot: bool, xk: []const f64, nk: usize, y: 
         c += 1usize
     }
     if !boot {
-        if !chol_lower(covu, cd, lv) { ret Collinear }
+        if !mc.chol_lower(covu, cd, lv) { ret Collinear }
         var zz: [32]f64 = zero
         c = 0usize
         while c < cd {
