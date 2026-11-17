@@ -265,4 +265,107 @@ for (rep in 1:8) {
   pack2("backward", d, popt(TRUE, TRUE), c(length(cols), cols, nrow(fa), as.vector(fa), steps, slstay, fp), sel_answer(r, d, ord), fw, fo)
 }
 FULL <- y ~ x1 + x2 + x3 + x4 + x1:x2
+# ---- predict, profile, logistf.pdf, logistpl, PVR.confint, summary and extractAIC numbers, a start value
+FULL <- y ~ x1 + x2 + x3
+d3fit <- function(d, kind, firth = TRUE, weights = FALSE, offset = FALSE, flic = FALSE) {
+  a <- list(formula = FULL, data = d, pl = FALSE, firth = firth, flic = flic)
+  if (weights) a$weights <- d$w
+  if (offset) a$offset <- d$o
+  if (kind == 2) return(quiet(do.call(flac, a[names(a) != "firth" & names(a) != "flic"])))
+  f <- quiet(do.call(logistf, a))
+  if (kind == 1) f <- quiet(flic(f))
+  f
+}
+pred_answer <- function(p, type, se) {
+  if (type == "link") { if (se) c(p$fit, p$se.fit) else as.numeric(p) }
+  else if (type == "response") { if (se) c(p$fit, p$lower, p$upper) else as.numeric(p) }
+  else { if (se) c(as.vector(p$fit), as.vector(p$se.fit), attr(p$fit, "constant")) else c(as.vector(p), attr(p, "constant")) }
+}
+npred <- 0
+for (rep in 1:30) {
+  n <- sample(40:70, 1); d <- make2(n); fw <- rep %% 5 == 3; fo <- rep %% 7 == 4
+  obj <- (rep - 1) %% 3
+  type <- c("link", "response", "terms")[((rep - 1) %/% 3) %% 3 + 1]
+  se <- rep %% 2 == 0; fl <- obj == 0 && rep %% 4 == 1; has_new <- rep %% 3 != 1
+  f <- d3fit(d, obj, weights = fw, offset = fo)
+  x <- model.matrix(FULL, d); k <- ncol(x)
+  m <- 6; nd <- data.frame(x1 = round(rnorm(m), 2), x2 = rbinom(m, 1, 0.4), x3 = round(rnorm(m), 2))
+  nx <- model.matrix(~ x1 + x2 + x3, nd)
+  args <- list(f, type = type, se.fit = se)
+  if (has_new) args$newdata <- nd
+  if (obj == 0) args$flic <- fl
+  ref <- NULL
+  if (type == "terms" && se) { ref <- c(x1 = 0, x2 = 0, x3 = 0); args$reference <- ref }
+  p <- tryCatch(quiet(do.call(predict, args)), error = function(e) { message("ERR ", conditionMessage(e)); NULL })
+  if (is.null(p)) next
+  assign <- attr(x, "assign")
+  refx <- if (is.null(ref)) numeric() else c(1, ref)
+  ex <- c(obj, match(type, c("link", "response", "terms")) - 1, se, fl, has_new, m, if (has_new) as.vector(nx), max(assign), assign, length(refx), refx)
+  pack("predict", n, k, 0, popt(TRUE, FALSE), d$y, x, if (fw) d$w, if (fo) d$o, NULL, NULL, ex, pred_answer(p, type, se))
+}
+# profile
+for (rep in 1:5) {
+  d <- make2(c(40, 55, 70, 50, 60)[rep]); k <- 3
+  f <- quiet(logistf(FULL, d, pl = FALSE))
+  x <- model.matrix(FULL, d); pos <- c(2, 3, 4, 2, 3)[rep]; steps <- c(30, 50, 40, 25, 100)[rep]; pitch <- c(0.05, 0.1, 0.05, 0.2, 0.05)[rep]
+  lim <- if (rep == 4) c(-1, 2) else NULL
+  alpha <- c(0.05, 0.05, 0.1, 0.05, 0.05)[rep]
+  a <- list(f, variable = colnames(x)[pos], steps = steps, pitch = pitch, alpha = alpha)
+  if (!is.null(lim)) a$limits <- lim
+  r <- tryCatch(quiet(do.call(profile, a)), error = function(e) { message("ERR ", conditionMessage(e)); NULL })
+  if (is.null(r)) next
+  nk <- length(r$beta)
+  ex <- c(pos, steps, pitch, !is.null(lim), if (is.null(lim)) c(0, 0) else lim, alpha)
+  pack("profile", nrow(d), ncol(x), 0, popt(TRUE, FALSE), d$y, x, NULL, NULL, NULL, NULL, ex, c(nk, r$beta, r$stdbeta, r$profile, r$loglik, r$signed.root, r$cdf))
+}
+# logistf.pdf and logistpl, from fitted coefficients
+for (rep in 1:8) {
+  d <- make2(c(40, 55, 70, 50, 60, 45, 52, 66)[rep]); fw <- rep %% 3 == 0; fo <- rep %% 4 == 0; firth <- rep != 5
+  f <- d3fit(d, 0, firth = firth, weights = fw, offset = fo)
+  x <- model.matrix(FULL, d); y <- d$y; k <- ncol(x); n <- nrow(d)
+  w <- if (fw) d$w else rep(1, n); o <- if (fo) d$o else rep(0, n)
+  pos <- c(2, 3, 4, 2, 3, 4, 2, 3)[rep]; b <- f$coefficients[pos] + c(0.3, -0.5, 0.8, -0.2, 0.4, -0.7, 0.1, 0.6)[rep]
+  r <- tryCatch(quiet(logistf:::logistf.pdf(x, y, pos = pos, firth = firth, weight = w, control = logistf.control(), offset = o, b = b, beta = f$coefficients, loglik = f$loglik[["full"]])), error = function(e) NULL)
+  if (!is.null(r)) pack("pdf", n, k, 0, popt(firth, FALSE), y, x, if (fw) w, if (fo) o, NULL, NULL, c(pos, b, f$coefficients, f$loglik[["full"]]), c(r$chisq, r$pdf))
+  ll0 <- f$loglik[["full"]] - qchisq(0.95, 1) / 2
+  for (side in c(-1, 1)) {
+    pc <- if (rep %% 2 == 0) logistpl.control(maxit = 12, maxhs = 3, maxstep = 1) else logistpl.control()
+    r <- tryCatch(quiet(logistf:::logistpl(x, y, init = f$coefficients, i = pos, LL.0 = ll0, firth = firth, which = side, offset = o, weight = w, plcontrol = pc, modcontrol = logistf.mod.control())), error = function(e) NULL)
+    if (is.null(r)) next
+    pack("pl", n, k, 0, popt(firth, FALSE, plcontrol = pc), y, x, if (fw) w, if (fo) o, NULL, NULL, c(pos, side, ll0, f$coefficients), c(r$beta, r$loglik, r$iter, r$conv, as.vector(r$betahist)))
+  }
+}
+# PVR.confint on several fits of one model
+for (rep in 1:4) {
+  nimp <- c(5, 8, 4, 6)[rep]; fits <- list(); skew <- rep %% 2 == 0; k <- c(3, 2, 4, 3)[rep]
+  ok <- 0
+  for (i in 1:nimp) { d <- make2(60); f <- quiet(logistf(as.formula(paste("y ~", paste0("x", seq_len(k - 1), collapse = " + "))), d)); fits[[i]] <- f }
+  cm <- t(sapply(fits, function(f) f$coefficients)); lo <- t(sapply(fits, function(f) f$ci.lower)); up <- t(sapply(fits, function(f) f$ci.upper))
+  r <- quiet(PVR.confint(fits, skewbeta = skew))
+  za <- qnorm(1 - 0.05 / 2)
+  pack("pvr", 0, k, 0, popt(TRUE, TRUE), numeric(), matrix(numeric(), 0, 0), NULL, NULL, NULL, NULL, c(nimp, k, as.vector(cm), as.vector(lo), as.vector(up), za, skew),
+       c(r$estimate, r$ci[, 1], r$ci[, 2], r$lower.var, r$upper.var))
+}
+# summary and extractAIC numbers
+for (rep in 1:5) {
+  d <- make2(c(40, 55, 70, 50, 60)[rep]); fw <- rep == 3; fo <- rep == 4
+  f <- d3fit(d, 0, weights = fw, offset = fo); fp <- quiet(logistf(FULL, d, weights = if (fw) d$w, offset = if (fo) d$o))
+  x <- model.matrix(FULL, d); k <- ncol(x)
+  cov <- fp$var; coefs <- fp$coefficients
+  chi2 <- qchisq(1 - fp$prob, 1); LL <- -2 * (fp$loglik[["null"]] - fp$loglik[["full"]])
+  wz <- tryCatch(t(coefs) %*% solve(cov) %*% coefs, error = function(e) NA)
+  kp <- c(2, log(nrow(d)), 3, 2, 2)[rep]; ai <- extractAIC(fp, k = kp)
+  pack("summary", nrow(d), k, 0, popt(TRUE, TRUE), d$y, x, if (fw) d$w, if (fo) d$o, NULL, NULL, kp,
+       c(chi2, LL, 1 - pchisq(LL, fp$df), wz, 1 - pchisq(wz, fp$df), ai))
+}
+# a start value
+d <- make2(60); x <- model.matrix(FULL, d)
+for (rep in 1:3) {
+  init <- list(c(0.1, 0.5, -0.5, 0.2), c(-1, 1, 1, 0), c(0, 0, 0, 3))[[rep]]
+  f <- tryCatch(quiet(logistf(FULL, d, init = init, control = logistf.control(maxit = c(25, 4, 40)[rep]))), error = function(e) NULL)
+  if (is.null(f)) next
+  mask <- 1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 512 + 1024
+  pack("fit_init", nrow(d), ncol(x), mask, popt(TRUE, TRUE, control = logistf.control(maxit = c(25, 4, 40)[rep])), d$y, x, NULL, NULL, NULL, NULL, init, flat(f, mask, TRUE))
+}
+FULL <- y ~ x1 + x2 + x3 + x4 + x1:x2
 emit("logistf_full", "logistf", list(cases))

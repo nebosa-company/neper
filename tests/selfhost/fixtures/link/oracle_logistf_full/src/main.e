@@ -183,6 +183,7 @@ fn flat(a: *mem.Arena, r: lf.Lf, mask: usize, pl: bool) -> ([]f64, err) {
 }
 
 fn close(got: f64, want: f64) -> bool {
+    if got == want { ret true }
     if got != got && want != want { ret true }
     if got != got || want != want { ret false }
     let d = math_abs(got - want)
@@ -375,6 +376,227 @@ fn run(a: *mem.Arena, c: *const oracle.Case, at: usize) -> usize {
         if e4 != ok { ret 1usize }
         ret compare(a, c.name, at, g[0usize..3usize * sc.len], p.want)
     }
+    if str.eq(c.name, "fit_init") {
+        var o = p.o
+        o.has_init = true
+        o.init = p.extra
+        let (r, e) = lf.logistf(a, p.x, p.y, p.n, p.k, wv, ov, o)
+        if e != ok { ret 1usize }
+        let (g, e2) = flat(a, r, p.mask, o.pl)
+        if e2 != ok { ret 1usize }
+        ret compare(a, c.name, at, g, p.want)
+    }
+    if str.eq(c.name, "predict") {
+        let ex = p.extra
+        let objk = usize(ex[0usize])
+        let typ = usize(ex[1usize])
+        let sefit = flag(ex[2usize])
+        let flicf = flag(ex[3usize])
+        let has_new = flag(ex[4usize])
+        let mm = usize(ex[5usize])
+        var q = 6usize
+        var xn = p.x
+        var rows = p.n
+        if has_new {
+            xn = ex[q..q + mm * p.k]
+            q += mm * p.k
+            rows = mm
+        }
+        let nterms = usize(ex[q])
+        let assign = ex[q + 1usize..q + 1usize + p.k]
+        q += 1usize + p.k
+        let nref = usize(ex[q])
+        let refrow = ex[q + 1usize..q + 1usize + nref]
+        var o = p.o
+        o.pl = false
+        var obj: lf.Lf = zero
+        if objk == 2usize {
+            let (r2, e2) = lf.flac(a, p.x, p.y, p.n, p.k, p.w, p.off, o)
+            if e2 != ok { ret 1usize }
+            obj = r2
+        } else {
+            o.flic = objk == 0usize && flicf
+            let (r0, e0) = lf.logistf(a, p.x, p.y, p.n, p.k, p.w, p.off, o)
+            if e0 != ok { ret 1usize }
+            obj = r0
+            if objk == 1usize {
+                let (r1, e1) = lf.flic_fit(a, p.x, p.y, p.n, p.k, p.w, p.off, p.terms[0usize..0usize], r0)
+                if e1 != ok { ret 1usize }
+                obj = r1
+            }
+        }
+        let (pred, e3) = mem.alloc[f64](a, rows * (nterms + 4usize) + 8usize)
+        let (se, e4) = mem.alloc[f64](a, rows * (nterms + 1usize) + 8usize)
+        if e3 != ok || e4 != ok { ret 1usize }
+        let (res, e5) = mem.alloc[f64](a, 6usize * rows * (nterms + 1usize) + 16usize)
+        if e5 != ok { ret 1usize }
+        var out = Out { v: res, at: 0usize }
+        let po = &out
+        var i = 0usize
+        if typ == 0usize {
+            if has_new {
+                lf.predict_link(obj.coef, xn, rows, p.k, pred)
+            } else {
+                lf.i_copy(obj.lp, pred, rows)
+            }
+            i = 0usize
+            while i < rows {
+                put(po, pred[i])
+                i += 1usize
+            }
+            if sefit {
+                lf.predict_se(obj.var_m, xn, rows, p.k, se)
+                i = 0usize
+                while i < rows {
+                    put(po, se[i])
+                    i += 1usize
+                }
+            }
+        }
+        if typ == 1usize {
+            if has_new {
+                lf.predict_response(obj.coef, xn, rows, p.k, pred)
+            } else {
+                lf.i_copy(obj.pred, pred, rows)
+            }
+            i = 0usize
+            while i < rows {
+                put(po, pred[i])
+                i += 1usize
+            }
+            if sefit {
+                lf.predict_se(obj.var_m, xn, rows, p.k, se)
+                i = 0usize
+                while i < rows {
+                    put(po, pred[i] - 1.96f64 * se[i])
+                    i += 1usize
+                }
+                i = 0usize
+                while i < rows {
+                    put(po, pred[i] + 1.96f64 * se[i])
+                    i += 1usize
+                }
+            }
+        }
+        if typ == 2usize {
+            let cst = lf.predict_terms(obj.coef, obj.var_m, p.x, p.n, xn, rows, p.k, assign_u(a, assign), nterms, refrow, pred, se)
+            i = 0usize
+            while i < rows * nterms {
+                put(po, pred[i])
+                i += 1usize
+            }
+            if sefit {
+                i = 0usize
+                while i < rows * nterms {
+                    put(po, se[i])
+                    i += 1usize
+                }
+            }
+            put(po, cst)
+        }
+        ret compare(a, c.name, at, res[0usize..out.at], p.want)
+    }
+    if str.eq(c.name, "profile") {
+        let ex = p.extra
+        let pos = usize(ex[0usize]) - 1usize
+        let steps = usize(ex[1usize])
+        let pitch = ex[2usize]
+        let have = flag(ex[3usize])
+        var o = p.o
+        o.pl = false
+        let (f, e1) = lf.logistf(a, p.x, p.y, p.n, p.k, wv, ov, o)
+        if e1 != ok { ret 1usize }
+        let (res, e2) = mem.alloc[f64](a, 6usize * (steps + 1usize) + 1usize)
+        if e2 != ok { ret 1usize }
+        let (kept, e3) = lf.profile_lf(a, p.x, p.n, p.k, p.y, wv, ov, f, pos, steps, pitch, have, ex[4usize], ex[5usize], ex[6usize], o.firth, o.c, res)
+        if e3 != ok { ret 1usize }
+        let (g, e4) = mem.alloc[f64](a, 6usize * kept + 1usize)
+        if e4 != ok { ret 1usize }
+        g[0usize] = f64(kept)
+        var part = 0usize
+        while part < 6usize {
+            var i = 0usize
+            while i < kept {
+                g[1usize + part * kept + i] = res[part * (steps + 1usize) + i]
+                i += 1usize
+            }
+            part += 1usize
+        }
+        ret compare(a, c.name, at, g[0usize..6usize * kept + 1usize], p.want)
+    }
+    if str.eq(c.name, "pdf") {
+        let ex = p.extra
+        let pos = usize(ex[0usize]) - 1usize
+        let (r, e) = lf.logistf_pdf(a, p.x, p.n, p.k, p.y, wv, ov, p.o.firth, p.o.c, pos, ex[1usize], ex[2usize..2usize + p.k], ex[2usize + p.k])
+        if e != ok { ret 1usize }
+        let (g, e2) = mem.alloc[f64](a, 2usize)
+        if e2 != ok { ret 1usize }
+        g[0usize] = r.chisq
+        g[1usize] = r.pdf
+        ret compare(a, c.name, at, g, p.want)
+    }
+    if str.eq(c.name, "pl") {
+        let ex = p.extra
+        let pos = usize(ex[0usize]) - 1usize
+        let (bm, eb) = lf.bump_for(a, p.n, p.k)
+        if eb != ok { ret 1usize }
+        var bump = bm
+        let (hist, eh) = mem.alloc[f64](a, p.o.c.plmaxit * p.k)
+        if eh != ok { ret 1usize }
+        let (r, e) = lf.logistpl(&bump, p.x, p.y, p.n, p.k, wv, ov, ex[3usize..3usize + p.k], pos, ex[2usize], p.o.firth, ex[1usize], p.o.c, hist)
+        if e != ok { ret 1usize }
+        let (g, e2) = mem.alloc[f64](a, 5usize + r.iter * p.k)
+        if e2 != ok { ret 1usize }
+        g[0usize] = r.beta
+        g[1usize] = r.loglik
+        g[2usize] = f64(r.iter)
+        g[3usize] = r.c0
+        g[4usize] = r.c1
+        var col = 0usize
+        while col < p.k {
+            var rw = 0usize
+            while rw < r.iter {
+                g[5usize + col * r.iter + rw] = hist[col * p.o.c.plmaxit + rw]
+                rw += 1usize
+            }
+            col += 1usize
+        }
+        ret compare(a, c.name, at, g, p.want)
+    }
+    if str.eq(c.name, "pvr") {
+        let ex = p.extra
+        let nimp = usize(ex[0usize])
+        let nvar = usize(ex[1usize])
+        let sz = nimp * nvar
+        let (g, e) = mem.alloc[f64](a, 5usize * nvar)
+        if e != ok { ret 1usize }
+        lf.pvr_confint(ex[2usize..2usize + sz], ex[2usize + sz..2usize + 2usize * sz], ex[2usize + 2usize * sz..2usize + 3usize * sz], nimp, nvar, ex[2usize + 3usize * sz], flag(ex[3usize + 3usize * sz]), g[0usize..nvar], g[nvar..2usize * nvar], g[2usize * nvar..3usize * nvar], g[3usize * nvar..4usize * nvar], g[4usize * nvar..5usize * nvar])
+        ret compare(a, c.name, at, g, p.want)
+    }
+    if str.eq(c.name, "summary") {
+        var o = p.o
+        let (f, e1) = lf.logistf(a, p.x, p.y, p.n, p.k, p.w, p.off, o)
+        if e1 != ok { ret 1usize }
+        let (chi, e2) = mem.alloc[f64](a, p.k)
+        if e2 != ok { ret 1usize }
+        let (sm, e3) = lf.summary_lf(a, f, p.terms[0usize..0usize], chi)
+        if e3 != ok { ret 1usize }
+        let (aic_df, aic) = lf.extract_aic(f, p.extra[0usize])
+        let (g, e4) = mem.alloc[f64](a, p.k + 6usize)
+        if e4 != ok { ret 1usize }
+        var i = 0usize
+        while i < p.k {
+            g[i] = chi[i]
+            i += 1usize
+        }
+        g[p.k] = sm.lr
+        g[p.k + 1usize] = sm.lr_p
+        g[p.k + 2usize] = sm.wald
+        g[p.k + 3usize] = sm.wald_p
+        g[p.k + 4usize] = aic_df
+        g[p.k + 5usize] = aic
+        ret compare(a, c.name, at, g, p.want)
+    }
     if str.eq(c.name, "forward") {
         let (start, p1, e1) = index_list(a, p.extra, 0usize)
         let (sc, p2, e2) = index_list(a, p.extra, p1)
@@ -447,4 +669,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if failures > 0usize { os.exit(1) }
     ret ok
+}
+
+fn assign_u(a: *mem.Arena, v: []const f64) -> []usize {
+    let (r, e) = mem.alloc[usize](a, v.len + 1usize)
+    var i = 0usize
+    while i < v.len {
+        r[i] = usize(v[i])
+        i += 1usize
+    }
+    ret r[0usize..v.len]
 }
