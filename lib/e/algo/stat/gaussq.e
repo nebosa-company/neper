@@ -7,6 +7,8 @@
 // Not here: the inverse Gaussian and Tweedie distributions of statmod, qresiduals, power.fisher.test.
 
 use e.algo.rand.r as rng
+use e.algo.rand.rdist as rd
+use e.algo.stat.test as tst
 use e.math
 use e.math.dist as mdist
 use e.math.nmath as nm
@@ -394,4 +396,31 @@ fn permp(a: *mem.Arena, x: f64, nperm: f64, n1: f64, n2: f64, total0: f64, metho
     }
     let integral = 0.5f64 / total * cs
     ret (x + 1.0f64) / (nperm + 1.0f64) - integral
+}
+
+// statmod::power.fisher.test (two-sided) after set.seed: nsim binomial counts for each group (all of the first group's, then the second's), Fisher's exact test on each 2 by 2 table, the share of p values under alpha
+fn power_fisher_test(a: *mem.Arena, p1: f64, p2: f64, n1: f64, n2: f64, alpha: f64, nsim: usize, seed: i64) -> f64 {
+    let (y1, e1) = mem.alloc[f64](a, nsim)
+    let (y2, e2) = mem.alloc[f64](a, nsim)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    var i = 0usize
+    while i < nsim {
+        y1[i] = rd.rbinom(&rg, n1, p1)
+        i += 1usize
+    }
+    i = 0usize
+    while i < nsim {
+        y2[i] = rd.rbinom(&rg, n2, p2)
+        i += 1usize
+    }
+    var hit = 0.0f64
+    i = 0usize
+    while i < nsim {
+        let r = tst.fisher_exact(u64(y1[i]), u64(n1 - y1[i]), u64(y2[i]), u64(n2 - y2[i]))
+        if r.p_value < alpha { hit += 1.0f64 }
+        i += 1usize
+    }
+    ret hit / f64(nsim)
 }

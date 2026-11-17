@@ -3661,4 +3661,5 @@ D6798	1637	pROC: the unpaired roc.test methods
 D6799	931	pracma: pinv of any rank and the other interp1 methods
 D6800	1164	R's polyroot (cpoly)
 D6801	1162	statmod: dinvgauss, pinvgauss and rinvgauss
-D6802	1005	statmod: permp
+D6802	1006	statmod: permp
+D6803	795	statmod: power.fisher.test

@@ -13,6 +13,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
     if str.eq(c.name, "permp") { ret gq.permp(a, z[0usize], z[1usize], z[2usize], z[3usize], z[4usize], usize(z[5usize]), z[6usize] > 0.5f64) }
+    if str.eq(c.name, "pft") { ret gq.power_fisher_test(a, z[0usize], z[1usize], z[2usize], z[3usize], z[4usize], usize(z[5usize]), i64(z[6usize])) }
     if str.eq(c.name, "igd") { ret gq.dinvgauss(z[0usize], z[1usize], z[2usize], false) }
     if str.eq(c.name, "igdl") { ret gq.dinvgauss(z[0usize], z[1usize], z[2usize], true) }
     if str.eq(c.name, "igp") { ret gq.pinvgauss(z[0usize], z[1usize], z[2usize], true, false) }
