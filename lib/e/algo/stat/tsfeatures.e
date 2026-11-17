@@ -9,6 +9,7 @@
 use e.math
 use e.mem
 use e.algo.stat.fracdiff_fit as fdf
+use e.algo.linalg.decomp as decomp
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
@@ -541,4 +542,49 @@ fn hurst(a: *mem.Arena, x: []const f64) -> f64 {
     let (r, fe) = fdf.fracdf(a, x, 100usize, 0usize, 0usize, 0.0001220703125f64, 0.0f64, 0.5f64, 0.0f64, 0.0f64 - 1.0f64, dummy[0usize..0usize])
     if fe != ok || r.info != 0i64 { ret nan() }
     ret r.d + 0.5f64
+}
+
+// arch_stat(x, lags = 12, demean = TRUE): the R squared of the regression of x^2 on its own lags 1 .. lags (with an intercept); NaN when the series is too short
+fn arch_stat(a: *mem.Arena, x: []const f64, lags: usize, demean: bool) -> f64 {
+    let n = x.len
+    if n <= lags + 1usize { ret nan() }
+    var m = 0.0f64
+    if demean { m = mean_of(x) }
+    let rows = n - lags
+    let cols = lags + 1usize
+    let (xm, e1) = mem.alloc[f64](a, rows * cols)
+    let (y, e2) = mem.alloc[f64](a, rows)
+    if e1 != ok || e2 != ok { ret nan() }
+    var i = 0usize
+    while i < rows {
+        // row i: the response x^2 at time i + lags, the regressors the squares at i + lags - 1 .. i
+        let t = i + lags
+        y[i] = (x[t] - m) * (x[t] - m)
+        xm[i] = 1.0f64
+        var j = 1usize
+        while j <= lags {
+            xm[j * rows + i] = (x[t - j] - m) * (x[t - j] - m)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (f, fe) = decomp.lm_fit(a, xm, rows, cols, y, 1.0e-7f64)
+    if fe != ok { ret nan() }
+    var my = 0.0f64
+    i = 0usize
+    while i < rows {
+        my += y[i]
+        i += 1usize
+    }
+    my = my / f64(rows)
+    var tss = 0.0f64
+    var rss = 0.0f64
+    i = 0usize
+    while i < rows {
+        tss += (y[i] - my) * (y[i] - my)
+        rss += f.residuals[i] * f.residuals[i]
+        i += 1usize
+    }
+    if tss == 0.0f64 { ret 1.0f64 }
+    ret 1.0f64 - rss / tss
 }

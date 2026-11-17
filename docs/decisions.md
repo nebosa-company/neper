@@ -47898,3 +47898,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6857 — tsfeatures: hurst
 
 **Decision.** `tsfeatures.hurst(x)` is `hurst(x)`: `fracdiff(x, 0, 0)$d + 0.5`, through the existing `fracdiff_fit.fracdf` (an ARFIMA(0, d, 0) fit by Brent's search of d over [0, 0.5] with the package's 100-term window and tolerance), NaN when the fit does not converge. Equal to tsfeatures on the 10 oracle series (oracle_tsfeatures). Not here: `na.contiguous` trimming of missing values, `entropy`, `stl_features`, `heterogeneity`, the Holt-Winters parameters. Linux pending.
+
+## D6858 — tsfeatures: arch_stat
+
+**Decision.** `tsfeatures.arch_stat(x, lags, demean)` is `arch_stat`: the squared demeaned series regressed (with an intercept, by `decomp.lm_fit`) on its first `lags` lagged squares, and the ordinary R squared (1 when the squares are constant, NaN when the series has at most lags + 1 points). Equal to tsfeatures on 10 oracle series at 12 lags (oracle_tsfeatures). Not here: the rest of `heterogeneity` (the AR whitening, the GARCH fit and its standardised residuals), `entropy`, `stl_features`. Linux pending.

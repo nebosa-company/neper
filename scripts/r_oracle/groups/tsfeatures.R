@@ -23,5 +23,6 @@ for (rep in 1:10) {
   add("kpss", a(0), unitroot_kpss(x0))
   add("pp", a(0), unitroot_pp(x0))
   hu <- hurst(x0)[[1]]; add("hurst", a(0), hu)
+  ar_ <- arch_stat(x0); if (is.finite(ar_)) add("arch", a(0), ar_[[1]])
 }
 emit("tsfeatures", "tsfeatures", list(cases))
