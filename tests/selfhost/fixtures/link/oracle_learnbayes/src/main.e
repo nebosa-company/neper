@@ -36,6 +36,34 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
 
+    if str.eq(k, "nps") {
+        // (seed, hasprior, m, n, a, b, mu0, tau2, which (0 mu, 1 sigma2), index, data[n])
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let m = usize(x[2usize])
+        let n = usize(x[3usize])
+        let (omu, e1) = mem.alloc[f64](a, m)
+        let (os2, e2) = mem.alloc[f64](a, m)
+        if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+        lb.normpostsim(&rr, x[10usize..10usize + n], x[1usize] != 0.0f64, x[4usize], x[5usize], x[6usize], x[7usize], m, omu, os2)
+        if x[8usize] == 0.0f64 { ret omu[usize(x[9usize])] }
+        ret os2[usize(x[9usize])]
+    }
+    if str.eq(k, "blr") {
+        // (seed, hasprior, m, n, p, c0, which (0 sigma, 1 beta), index, b0[p], y[n], X[n p])
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let m = usize(x[2usize])
+        let n = usize(x[3usize])
+        let p = usize(x[4usize])
+        let (sg, e1) = mem.alloc[f64](a, m)
+        let (bt, e2) = mem.alloc[f64](a, m * p)
+        if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+        if lb.blinreg(a, &rr, x[8usize + p..8usize + p + n], x[8usize + p + n..8usize + p + n + n * p], n, p, m, x[1usize] != 0.0f64, x[5usize], x[8usize..8usize + p], sg, bt) != ok { ret 0.0f64 / 0.0f64 }
+        if x[6usize] == 0.0f64 { ret sg[usize(x[7usize])] }
+        ret bt[usize(x[7usize])]
+    }
+
     if str.eq(k, "rej") || str.eq(k, "imp2") {
         // (seed, which, m, n, df, dmax or hidx, mean[2], var[4], x[m], nn[m], y[m]) rej: the number kept (which 0) or the sum of the kept first-coordinate values (1); imp2: est (0) or se (1)
         var rr: rng.Rng = zero

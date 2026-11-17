@@ -749,3 +749,186 @@ fn impsampling[Ctx: type](a: *mem.Arena, r: *rng.Rng, ctx: *Ctx, logf: fn(*Ctx, 
     out[1usize] = math.sqrt[f64](v) / sw
     ret ok
 }
+
+// normpostsim(data, prior, m): without a prior m draws of sigma2 = S / rchisq(n - 1) then m draws of mu | sigma2; with the prior (sigma2 ~ inverse gamma(a, b), mu ~ N(mu0, tau2)) m Gibbs steps, mu then sigma2 each. out_mu and out_s2 have length m
+fn normpostsim(r: *rng.Rng, y: []const f64, has_prior: bool, a: f64, b: f64, mu0: f64, tau2: f64, m: usize, out_mu: []f64, out_s2: []f64) {
+    let n = f64(y.len)
+    var xbar = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        xbar += y[i]
+        i += 1usize
+    }
+    xbar = xbar / n
+    var s = 0.0f64
+    i = 0usize
+    while i < y.len {
+        s += (y[i] - xbar) * (y[i] - xbar)
+        i += 1usize
+    }
+    if !has_prior {
+        i = 0usize
+        while i < m {
+            out_s2[i] = s / rd.rchisq(r, n - 1.0f64)
+            i += 1usize
+        }
+        i = 0usize
+        while i < m {
+            out_mu[i] = xbar + math.sqrt[f64](out_s2[i]) / math.sqrt[f64](n) * rng.norm(r)
+            i += 1usize
+        }
+        ret
+    }
+    var sigma2 = s / n
+    var j = 0usize
+    while j < m {
+        let prec = n / sigma2 + 1.0f64 / tau2
+        let mu1 = (xbar * n / sigma2 + mu0 / tau2) / prec
+        let v1 = 1.0f64 / prec
+        let mu = mu1 + math.sqrt[f64](v1) * rng.norm(r)
+        let a1 = a + n / 2.0f64
+        var ss = 0.0f64
+        i = 0usize
+        while i < y.len {
+            ss += (y[i] - mu) * (y[i] - mu)
+            i += 1usize
+        }
+        sigma2 = rigamma(r, a1, b + ss / 2.0f64)
+        out_s2[j] = sigma2
+        out_mu[j] = mu
+        j += 1usize
+    }
+}
+
+// blinreg(y, X, m, prior = list(c0, b0)): m draws of (sigma, beta) from the regression posterior, sigma = sqrt(1 / rgamma(m, shape, rate)) then beta = rmnorm(m, 0, V) scaled by sigma and shifted; x is n by p column-major, b0 the prior mean (ignored without a prior);
+// sigma_out has length m, beta_out is m by p column-major
+fn blinreg(a: *mem.Arena, r: *rng.Rng, y: []const f64, x: []const f64, n: usize, p: usize, m: usize, has_prior: bool, c0: f64, b0: []const f64, sigma_out: []f64, beta_out: []f64) -> err {
+    let (xtx, e1) = mem.alloc[f64](a, p * p)
+    let (u, e2) = mem.alloc[f64](a, p * p)
+    let (iu, e3) = mem.alloc[f64](a, p * p)
+    let (xtxi, e4) = mem.alloc[f64](a, p * p)
+    let (bhat, e5) = mem.alloc[f64](a, p)
+    let (bm, e6) = mem.alloc[f64](a, p)
+    let (vb, e7) = mem.alloc[f64](a, p * p)
+    let (zz, e8) = mem.alloc[f64](a, m * p)
+    let (zm, e9) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret mem.Full }
+    var j = 0usize
+    while j < p {
+        var k = 0usize
+        while k < p {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += x[j * n + i] * x[k * n + i]
+                i += 1usize
+            }
+            xtx[k * p + j] = s
+            k += 1usize
+        }
+        j += 1usize
+    }
+    if !bz.chol_upper(xtx, p, u) { ret mem.Full }
+    bz.inv_upper(u, p, iu)
+    // (X'X)^-1 = Ui Ui'
+    j = 0usize
+    while j < p {
+        var k = 0usize
+        while k < p {
+            var s = 0.0f64
+            var q = 0usize
+            while q < p {
+                s += iu[q * p + j] * iu[q * p + k]
+                q += 1usize
+            }
+            xtxi[k * p + j] = s
+            k += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var s = 0.0f64
+        var k = 0usize
+        while k < p {
+            var xy = 0.0f64
+            var i = 0usize
+            while i < n {
+                xy += x[k * n + i] * y[i]
+                i += 1usize
+            }
+            s += xtxi[k * p + j] * xy
+            k += 1usize
+        }
+        bhat[j] = s
+        j += 1usize
+    }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        var f = 0.0f64
+        j = 0usize
+        while j < p {
+            f += x[j * n + i] * bhat[j]
+            j += 1usize
+        }
+        rss += (y[i] - f) * (y[i] - f)
+        i += 1usize
+    }
+    let dfr = f64(n - p)
+    var shape = dfr / 2.0f64
+    var rate = rss / 2.0f64
+    var scale_v = 1.0f64
+    j = 0usize
+    while j < p {
+        bm[j] = bhat[j]
+        j += 1usize
+    }
+    if has_prior {
+        shape = f64(n) / 2.0f64
+        var q = 0.0f64
+        j = 0usize
+        while j < p {
+            var k = 0usize
+            while k < p {
+                q += (b0[j] - bhat[j]) * xtx[k * p + j] * (b0[k] - bhat[k])
+                k += 1usize
+            }
+            j += 1usize
+        }
+        rate = rss / 2.0f64 + q / 2.0f64 / (c0 + 1.0f64)
+        j = 0usize
+        while j < p {
+            bm[j] = c0 / (c0 + 1.0f64) * (b0[j] / c0 + bhat[j])
+            j += 1usize
+        }
+        scale_v = c0 / (c0 + 1.0f64)
+    }
+    j = 0usize
+    while j < p * p {
+        vb[j] = xtxi[j] * scale_v
+        j += 1usize
+    }
+    i = 0usize
+    while i < m {
+        sigma_out[i] = math.sqrt[f64](1.0f64 / rd.rgamma(r, shape, 1.0f64 / rate))
+        i += 1usize
+    }
+    j = 0usize
+    while j < p {
+        zm[j] = 0.0f64
+        j += 1usize
+    }
+    let e = rmnorm(a, r, m, zm, vb, zz)
+    if e != ok { ret e }
+    j = 0usize
+    while j < p {
+        i = 0usize
+        while i < m {
+            beta_out[j * m + i] = bm[j] + sigma_out[i] * zz[j * m + i]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}

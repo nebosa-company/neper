@@ -88,4 +88,16 @@ for (rep in 1:10) {
   set.seed(sd); im <- impsampling(logisticpost, tp, function(th) th[2], ns, dat)
   add("imp2", c(sd, 0, m, ns, 4, 1, mu, vv, xx, nn, yb), im$est); add("imp2", c(sd, 1, m, ns, 4, 1, mu, vv, xx, nn, yb), im$se)
 }
+# normpostsim "nps" and blinreg "blr"
+for (rep in 1:10) {
+  n <- sample(8:40, 1); yy <- rnorm(n, 2, 1.5); sd <- sample(1:100000, 1); m <- 25; hp <- rep %% 2
+  pr <- if (hp) list(sigma2 = c(runif(1, 1, 4), runif(1, 1, 4)), mu = c(rnorm(1), runif(1, 0.5, 3))) else NULL
+  set.seed(sd); ns <- normpostsim(yy, pr, m)
+  for (q in c(1, 5, 25)) { add("nps", c(sd, hp, m, n, if (hp) pr$sigma2 else c(0, 0), if (hp) pr$mu else c(0, 0), 0, q - 1, yy), ns$mu[q], 1e-9)
+    add("nps", c(sd, hp, m, n, if (hp) pr$sigma2 else c(0, 0), if (hp) pr$mu else c(0, 0), 1, q - 1, yy), ns$sigma2[q], 1e-9) }
+  p <- sample(1:3, 1); X <- cbind(1, matrix(round(rnorm(n * (p - 1)), 2), n, p - 1)); y2 <- round(X %*% rnorm(p) + rnorm(n), 3); b0 <- rnorm(p); c0 <- runif(1, 0.5, 5)
+  set.seed(sd); bl <- blinreg(as.vector(y2), X, m, if (hp) list(c0 = c0, b0 = b0) else NULL)
+  for (q in c(1, 12, 25)) { add("blr", c(sd, hp, m, n, p, c0, 0, q - 1, b0, y2, X), bl$sigma[q], 1e-8)
+    for (j in 1:p) add("blr", c(sd, hp, m, n, p, c0, 1, (j - 1) * m + q - 1, b0, y2, X), bl$beta[q, j], 1e-8) }
+}
 emit("learnbayes", "LearnBayes", list(cases))
