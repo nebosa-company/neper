@@ -1,11 +1,12 @@
 // R mclust: defaultPrior and the conjugate-prior M step and EM (msXXp / meXXp of mclust.f) for E, V, EII, VII, EEE and VVV.
 //
-// Not here: the prior versions of EEI, VEI, EVI, VVI, EEV and VEV (mclust has no prior for EVE, VEE, VVE and EVV either).
-// pscale is a scalar for E, V, EII (not used by mclust there) and VII, the p by p matrix for EEE and VVV.
+// EEI, VEI, EVI, VVI, EEV and VEV go to mclustprior2; mclust has no prior for EVE, VEE, VVE and EVV.
+// pscale is a scalar for E, V and the models up to VVI, the p by p matrix for the others.
 
 use e.math
 use e.mem
 use e.algo.stat.mclustem as em
+use e.algo.stat.mclustprior2 as p2
 
 // defaultPrior(data, G, modelName): shrinkage 0.01, mean = column means, dof and scale as mclust computes them; pscale (p * p) gets the scalar in [0] or the matrix
 fn default_prior(x: []const f64, n: usize, p: usize, g: usize, model: usize, pmu: []f64, pscale: []f64) -> f64 {
@@ -42,7 +43,7 @@ fn default_prior(x: []const f64, n: usize, p: usize, g: usize, model: usize, pmu
         ret 3.0f64
     }
     let fac = math.pow[f64](1.0f64 / gg, 2.0f64 / f64(p))
-    if model == 2usize || model == 3usize {
+    if model >= 2usize && model <= 7usize {
         var tr = 0.0f64
         j = 0usize
         while j < p {
@@ -67,6 +68,7 @@ fn default_prior(x: []const f64, n: usize, p: usize, g: usize, model: usize, pmu
 
 // the M step with the prior (shrk, pmu, pscale, pdof) from z: pro (g), mu (p by g), sigma (g stacked p by p)
 fn mstep_prior(a: *mem.Arena, model: usize, x: []const f64, z: []const f64, n: usize, p: usize, g: usize, shrk: f64, pmu: []const f64, pscale: []const f64, pdof: f64, pro: []f64, mu: []f64, sigma: []f64) -> err {
+    if p2.handles(model) { ret p2.mstep_prior2(a, model, x, z, n, p, g, shrk, pmu, pscale, pdof, pro, mu, sigma) }
     let (sumz, e1) = mem.alloc[f64](a, g)
     let (u, e2) = mem.alloc[f64](a, g * p * p)
     let (acc, e3) = mem.alloc[f64](a, p * p)
@@ -200,6 +202,7 @@ fn mstep_prior(a: *mem.Arena, model: usize, x: []const f64, z: []const f64, n: u
 
 // me(data, modelName, z, prior): EM with the prior M step; returns the log likelihood of the data (NaN on failure), info 0 the iterations
 fn me_prior(a: *mem.Arena, model: usize, x: []const f64, z: []f64, n: usize, p: usize, g: usize, shrk: f64, pmu: []const f64, pscale: []const f64, pdof: f64, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
+    if p2.handles(model) { ret p2.me_prior2(a, model, x, z, n, p, g, shrk, pmu, pscale, pdof, pro, mu, sigma, info) }
     var hold = 8.0e307f64
     var iter = 0usize
     while true {
