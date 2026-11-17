@@ -837,3 +837,104 @@ fn knn_impute(a: *mem.Arena, x: []const f64, n: usize, p: usize, k: usize, out: 
     }
     ret ok
 }
+
+// varImp(glm(family = binomial)): the absolute z value of each coefficient but the intercept, from glm.fit's iteratively reweighted least squares on the n by p column-major design x (intercept first) and the 0 / 1 response y: the start mu = (y + 0.5) / 2,
+// the working response and weights from the current linear predictor, the stop when the relative change of the deviance falls below 1e-8 (at most 25 iterations), and the covariance (X' W X)^-1 taken with the weights of the last iteration, as summary.glm reports it;
+// out[0 .. p - 2] for columns 1 .. p - 1
+fn var_imp_logit(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, out: []f64) -> err {
+    let (beta, e1) = mem.alloc[f64](a, p)
+    let (xtwx, e2) = mem.alloc[f64](a, p * p)
+    let (u, e3) = mem.alloc[f64](a, p * p)
+    let (iu, e4) = mem.alloc[f64](a, p * p)
+    let (g, e5) = mem.alloc[f64](a, p)
+    let (eta, e6) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        let mu0 = (y[i] + 0.5f64) / 2.0f64
+        eta[i] = math.log[f64](mu0 / (1.0f64 - mu0))
+        i += 1usize
+    }
+    var devold = 0.0f64
+    var it = 0usize
+    while it < 25usize {
+        var j = 0usize
+        while j < p {
+            g[j] = 0.0f64
+            var k = 0usize
+            while k < p {
+                xtwx[k * p + j] = 0.0f64
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i = 0usize
+        while i < n {
+            let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[i]))
+            let w = mu * (1.0f64 - mu)
+            let z = eta[i] + (y[i] - mu) / w
+            j = 0usize
+            while j < p {
+                g[j] += w * x[j * n + i] * z
+                var k = 0usize
+                while k < p {
+                    xtwx[k * p + j] += w * x[j * n + i] * x[k * n + i]
+                    k += 1usize
+                }
+                j += 1usize
+            }
+            i += 1usize
+        }
+        if !bz.chol_upper(xtwx, p, u) { ret mem.Full }
+        bz.inv_upper(u, p, iu)
+        j = 0usize
+        while j < p {
+            var t = 0.0f64
+            var q = j
+            while q < p {
+                var s2 = 0.0f64
+                var r = 0usize
+                while r <= q {
+                    s2 += iu[q * p + r] * g[r]
+                    r += 1usize
+                }
+                t += iu[q * p + j] * s2
+                q += 1usize
+            }
+            beta[j] = t
+            j += 1usize
+        }
+        var dev = 0.0f64
+        i = 0usize
+        while i < n {
+            var e = 0.0f64
+            j = 0usize
+            while j < p {
+                e += x[j * n + i] * beta[j]
+                j += 1usize
+            }
+            eta[i] = e
+            let mu = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - e))
+            var d = 0.0f64
+            if y[i] > 0.0f64 { d += y[i] * math.log[f64](y[i] / mu) }
+            if y[i] < 1.0f64 { d += (1.0f64 - y[i]) * math.log[f64]((1.0f64 - y[i]) / (1.0f64 - mu)) }
+            dev += 2.0f64 * d
+            i += 1usize
+        }
+        it += 1usize
+        if it > 1usize && math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 1.0e-8f64 { break }
+        devold = dev
+    }
+    var j = 1usize
+    while j < p {
+        var v = 0.0f64
+        var q = j
+        while q < p {
+            v += iu[q * p + j] * iu[q * p + j]
+            q += 1usize
+        }
+        out[j - 1usize] = math.abs[f64](beta[j] / math.sqrt[f64](v))
+        j += 1usize
+    }
+    ret ok
+}

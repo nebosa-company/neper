@@ -3822,4 +3822,5 @@ D6959	698	tweedie: rtweedie for 1 < p < 2
 D6960	952	tweedie: qtweedie and the saddlepoint density
 D6961	568	L327 closed, the tweedie package's high powers split to L518
 D6962	598	caret: the prevalence argument
-D6963	758	caret: knnImpute
+D6963	759	caret: knnImpute
+D6964	864	caret: varImp of a binomial glm
