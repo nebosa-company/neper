@@ -18,6 +18,8 @@ for (rep in 1:24) {
   if (th > 0.05) { m2 <- suppressWarnings(suppressMessages(lmerTest::lmer(f, d, REML = reml))); sm <- coef(summary(m2)); th2 <- getME(m2, "theta")[[1]]; sg2 <- sigma(m2)
     for (j in seq_len(p)) { add("lmer", c(n, p, ng, as.numeric(reml), 1000 + j - 1, as.vector(X), g, y, th2, sg2), sm[j, "df"], 1e-4)
       add("lmer", c(n, p, ng, as.numeric(reml), 2000 + j - 1, as.vector(X), g, y, th2, sg2), sm[j, "t value"], 1e-4)
-      add("lmer", c(n, p, ng, as.numeric(reml), 3000 + j - 1, as.vector(X), g, y, th2, sg2), sm[j, "Pr(>|t|)"], 1e-3) } }
+      add("lmer", c(n, p, ng, as.numeric(reml), 3000 + j - 1, as.vector(X), g, y, th2, sg2), sm[j, "Pr(>|t|)"], 1e-3) } 
+    Lc <- rnorm(p); ct <- lmerTest::contest(m2, matrix(Lc, 1), joint = FALSE, confint = FALSE)
+    for (k in 1:5) add("lmer", c(n, p, ng, as.numeric(reml), 4000 + k - 1, as.vector(X), g, y, th2, sg2, Lc), as.numeric(ct[1, c("Estimate", "Std. Error", "df", "t value", "Pr(>|t|)")][k]), c(1e-6, 1e-4, 1e-4, 1e-4, 1e-3)[k]) }
 }
 emit("lmer", "lme4", list(cases))

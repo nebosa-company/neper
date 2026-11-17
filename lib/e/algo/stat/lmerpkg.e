@@ -8,6 +8,7 @@
 use e.algo.stat.bayesmpkg as bz
 use e.algo.stat.fdrtool as fd
 use e.math
+use e.math.nmath_beta as nb
 use e.mem
 
 type Lmm = struct { n: usize, p: usize, ng: usize, reml: bool, x: []const f64, y: []const f64, g: []const usize, cnt: []f64, w: []f64, xtvx: []f64, xtvy: []f64, beta: []f64, u: []f64, uinv: []f64, tv: []f64, r2: f64, logdet: f64 }
@@ -300,5 +301,84 @@ fn lmer_satt(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n:
         df[j] = 2.0f64 * v * v / (gt * gt * a11 + 2.0f64 * gt * gs * a12 + gs * gs * a22)
         j += 1usize
     }
+    ret ok
+}
+
+// the variance of the contrast L' beta, sigma^2 L' (X' V^-1 X)^-1 L = sigma^2 |Ui' L|^2, at theta
+fn lmm_vl(c: *Lmm, theta: f64, sigma: f64, lv: []const f64) -> f64 {
+    let _ = lmm_profile(c, theta)
+    var s = 0.0f64
+    var q = 0usize
+    while q < c.p {
+        var t = 0.0f64
+        var j = 0usize
+        while j <= q {
+            t += c.uinv[q * c.p + j] * lv[j]
+            j += 1usize
+        }
+        s += t * t
+        q += 1usize
+    }
+    ret sigma * sigma * s
+}
+
+// lmerTest's contest1D for the contrast L' beta: out = (estimate, standard error, Satterthwaite df, t value, p value), at the given (theta, sigma)
+fn lmer_contest(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: usize, p: usize, ng: usize, reml: bool, theta: f64, sigma: f64, lv: []const f64, out: []f64) -> err {
+    let (cnt, e1) = mem.alloc[f64](a, ng)
+    let (w, e2) = mem.alloc[f64](a, ng)
+    let (xtvx, e3) = mem.alloc[f64](a, p * p)
+    let (xtvy, e4) = mem.alloc[f64](a, p)
+    let (u, e5) = mem.alloc[f64](a, p * p)
+    let (uinv, e6) = mem.alloc[f64](a, p * p)
+    let (tv, e7) = mem.alloc[f64](a, p)
+    let (beta, e8) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    var k = 0usize
+    while k < ng {
+        cnt[k] = 0.0f64
+        k += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        cnt[g[i]] += 1.0f64
+        i += 1usize
+    }
+    var c = Lmm{ n: n, p: p, ng: ng, reml: reml, x: x, y: y, g: g, cnt: cnt, w: w, xtvx: xtvx, xtvy: xtvy, beta: beta, u: u, uinv: uinv, tv: tv, r2: 0.0f64, logdet: 0.0f64 }
+    var ht = 0.001f64 * theta
+    if theta < 0.1f64 { ht = 0.0001f64 }
+    let hs = 0.001f64 * sigma
+    let f0 = lmm_dev2(&c, theta, sigma)
+    let ftp = lmm_dev2(&c, theta + ht, sigma)
+    let ftm = lmm_dev2(&c, theta - ht, sigma)
+    let fsp = lmm_dev2(&c, theta, sigma + hs)
+    let fsm = lmm_dev2(&c, theta, sigma - hs)
+    let fpp = lmm_dev2(&c, theta + ht, sigma + hs)
+    let fpm = lmm_dev2(&c, theta + ht, sigma - hs)
+    let fmp = lmm_dev2(&c, theta - ht, sigma + hs)
+    let fmm = lmm_dev2(&c, theta - ht, sigma - hs)
+    let h11 = (ftp - 2.0f64 * f0 + ftm) / (ht * ht)
+    let h22 = (fsp - 2.0f64 * f0 + fsm) / (hs * hs)
+    let h12 = (fpp - fpm - fmp + fmm) / (4.0f64 * ht * hs)
+    let det = h11 * h22 - h12 * h12
+    let a11 = 2.0f64 * h22 / det
+    let a22 = 2.0f64 * h11 / det
+    let a12 = 0.0f64 - 2.0f64 * h12 / det
+    let v = lmm_vl(&c, theta, sigma, lv)
+    let gt = (lmm_vl(&c, theta + ht, sigma, lv) - lmm_vl(&c, theta - ht, sigma, lv)) / (2.0f64 * ht)
+    let gs = (lmm_vl(&c, theta, sigma + hs, lv) - lmm_vl(&c, theta, sigma - hs, lv)) / (2.0f64 * hs)
+    let df = 2.0f64 * v * v / (gt * gt * a11 + 2.0f64 * gt * gs * a12 + gs * gs * a22)
+    let _ = lmm_profile(&c, theta)
+    var est = 0.0f64
+    var j = 0usize
+    while j < p {
+        est += lv[j] * c.beta[j]
+        j += 1usize
+    }
+    let se = math.sqrt[f64](v)
+    out[0usize] = est
+    out[1usize] = se
+    out[2usize] = df
+    out[3usize] = est / se
+    out[4usize] = 2.0f64 * nb.pt(0.0f64 - math.abs[f64](est / se), df, true, false)
     ret ok
 }

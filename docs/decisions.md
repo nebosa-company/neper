@@ -48142,3 +48142,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6918 — lmerTest: t statistics and p values
 
 **Decision.** `lmer_satt` also answers the fixed effects and their standard errors at the given theta (sqrt of sigma^2 (X' V^-1 X)^-1_jj), so the coefficient table of `summary(lmerTest::lmer)` is complete: the t statistic is estimate / standard error and the p value 2 pt(-|t|, df) on the Satterthwaite df. Equal to the `t value` (1e-4 relative) and `Pr(>|t|)` (1e-3) columns on the data sets of D6917 (oracle_lmer, 478 cases in all). Linux pending.
+
+## D6919 — lmerTest: contest1D
+
+**Decision.** `lmerpkg.lmer_contest` is lmerTest's `contest1D` for a contrast vector L: the estimate L' beta, the variance sigma^2 |Ui' L|^2 (Ui the inverse Cholesky factor of X' V^-1 X), the Satterthwaite degrees of freedom with the gradient of that variance in (theta, sigma) and A = 2 H^-1, then t and its two-sided p value. Equal to `contest(model, L, joint = FALSE)` on the data sets of D6917 with a random contrast each: the estimate to 1e-6, the standard error, df and t to 1e-4, the p value to 1e-3 (oracle_lmer, 540 cases in all). Not here: the joint F test over several rows (needs the multi-row Satterthwaite F), anova tables, Kenward-Roger, ranova, step, difflsmeans. Linux pending.

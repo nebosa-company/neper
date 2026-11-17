@@ -27,6 +27,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         g[i] = usize(z[5usize + n * p + i])
         i += 1usize
     }
+    if which >= 4000usize {
+        // contest1D: which = 4000 + k (k 0..4 the output), the contrast L[p] follows theta and sigma
+        let th = z[5usize + n * p + 2usize * n]
+        let sg = z[5usize + n * p + 2usize * n + 1usize]
+        let (co, ce) = mem.alloc[f64](a, 5usize)
+        if ce != ok { ret nan }
+        if lm.lmer_contest(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, reml, th, sg, z[5usize + n * p + 2usize * n + 2usize..5usize + n * p + 2usize * n + 2usize + p], co) != ok { ret nan }
+        ret co[which - 4000usize]
+    }
     if which >= 1000usize {
         // Satterthwaite df of fixed effect (which - 1000) at lme4's (theta, sigma): args after the data are theta, sigma
         let th = z[5usize + n * p + 2usize * n]
