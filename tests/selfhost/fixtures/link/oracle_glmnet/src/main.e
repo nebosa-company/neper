@@ -85,7 +85,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         let nfo = usize(x[at + n])
         var cve = ok
-        if c.name.len > 2usize && c.name[2usize] == 112u8 { cve = gl.cv_poisson(a, usize(x[at + n + 3usize]), xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, fid, nfo, cm, cs) } else if c.name.len > 2usize && c.name[2usize] == 98u8 { cve = gl.cv_binomial(a, usize(x[at + n + 3usize]), xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, fid, nfo, cm, cs) } else { cve = gl.cv_gaussian(a, xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, fid, nfo, cm, cs) }
+        if c.name.len > 2usize && c.name[2usize] == 112u8 { cve = gl.cv_poisson(a, usize(x[at + n + 3usize]), xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, fid, nfo, false, cm, cs) } else if c.name.len > 2usize && c.name[2usize] == 98u8 { cve = gl.cv_binomial(a, usize(x[at + n + 3usize]), xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, fid, nfo, false, cm, cs) } else { cve = gl.cv_gaussian(a, xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, fid, nfo, false, cm, cs) }
         if cve != ok { ret 0.0f64 / 0.0f64 }
         if x[at + n + 2usize] >= 2.0f64 {
             let (sel, se) = mem.alloc[f64](a, 2usize)
