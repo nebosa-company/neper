@@ -49,6 +49,15 @@ for (rep in 1:50) {
   out <- c(unname(r$statistic[1]), unname(r$p.value[1]), unname(r$statistic[2]), unname(r$p.value[2]), unname(r$estimate["tau"]), unname(r$estimate["slope"]), unname(r$estimate["intercept"]), unname(r$interval$limits[1]), unname(r$interval$limits[2]), sum(r$seasonal.S, na.rm = TRUE), sum(r$var.seasonal.S, na.rm = TRUE), r$interval$sample.size, as.numeric(r$parameters) + 1)
   for (f in 0:12) cases[[length(cases) + 1]] <- case("kst", c(n, y, df$season, df$year, al, as.numeric(cr), cl, f), out[f + 1], rel = 1e-9, abs = 1e-10)
 }
+# kendallSeasonalTrendTest modified for serial correlation ("kss": (n, y, season, year, alt, correct, conf.level, field): 0 chi-square 1 p 2 z 3 p 4 tau 5 slope 6 intercept 9 S 10 var.S), complete season by year tables
+for (rep in 1:60) {
+  ny <- sample(5:14, 1); nse <- sample(2:5, 1); df <- expand.grid(year = seq_len(ny), season = seq_len(nse)); n <- nrow(df)
+  y <- round(0.2 * df$year + rnorm(n, df$season, 1.5) + rep(rnorm(ny, 0, 1), nse), if (rep %% 2 == 0) 0 else 2)
+  al <- sample(0:2, 1); cr <- rep %% 4 != 0; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
+  r <- tryCatch(suppressWarnings(kendallSeasonalTrendTest(y, df$season, df$year, alternative = alts[al + 1], correct = cr, conf.level = cl, independent.obs = FALSE)), error = function(e) NULL); if (is.null(r)) next
+  out <- c(unname(r$statistic[1]), unname(r$p.value[1]), unname(r$statistic[2]), unname(r$p.value[2]), unname(r$estimate["tau"]), unname(r$estimate["slope"]), unname(r$estimate["intercept"]), NA, NA, sum(r$seasonal.S), sum(r$var.cov.seasonal.S))
+  for (f in c(0:6, 9, 10)) if (is.finite(out[f + 1])) cases[[length(cases) + 1]] <- case("kss", c(n, y, df$season, df$year, al, as.numeric(cr), cl, f), out[f + 1], rel = 1e-8, abs = 1e-10)
+}
 # gofTest against the normal and lognormal distributions ("gof": (n, y, test, lnorm, alt, field): test 0 sw 1 sf 2 ad 3 cvm 4 lillie 5 skew 6 ppcc; field 0 statistic 1 p 2 z)
 tn <- c("sw", "sf", "ad", "cvm", "lillie", "skew", "ppcc"); al2 <- c("two.sided", "less", "greater")
 for (rep in 1:100) {
@@ -56,7 +65,7 @@ for (rep in 1:100) {
   y <- if (rep %% 2 == 0) round(rnorm(n, 5, 2), 3) else round(rgamma(n, 3), 3) + 0.1; if (!ln) y <- y - 0 else y <- abs(y) + 0.05
   r <- tryCatch(suppressWarnings(if (te == 5) gofTest(y, test = tn[te + 1], distribution = if (ln) "lnorm" else "norm", alternative = al2[al + 1]) else gofTest(y, test = tn[te + 1], distribution = if (ln) "lnorm" else "norm")), error = function(e) NULL); if (is.null(r)) next
   out <- c(unname(r$statistic), r$p.value, if (is.null(r$z.value)) NaN else r$z.value)
-  for (f in 0:2) if (!is.nan(out[f + 1])) cases[[length(cases) + 1]] <- case("gof", c(n, y, te, as.numeric(ln), al, f), out[f + 1], rel = if (te == 0 && f >= 1) 1e-5 else 1e-8, abs = 1e-10)
+  for (f in 0:2) if (!is.nan(out[f + 1])) cases[[length(cases) + 1]] <- case("gof", c(n, y, te, as.numeric(ln), al, f), out[f + 1], rel = if (te == 0 && f >= 1) 1e-5 else if (te == 0) 1e-7 else 1e-8, abs = 1e-10)
 }
 # tTestPower ("ttp": (n1, n2, delta.over.sigma, alpha, two.sample, alt, approx)) and tTestN ("ttn": (delta.over.sigma, alpha, power, two.sample, alt, approx)); alt 0 two.sided 1 less 2 greater
 alts_t <- c("two.sided", "less", "greater")

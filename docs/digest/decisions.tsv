@@ -3629,4 +3629,6 @@ D6766	877	EnvStats: predIntNormTestPower for one future mean
 D6767	688	EnvStats: linearTrendTestPower and linearTrendTestN
 D6768	990	EnvStats: aovPower and aovN
 D6769	788	EnvStats: ciNparConfLevel and ciNparN
-D6770	1149	EnvStats: nonparametric tolerance and prediction interval levels and sizes
+D6770	1150	EnvStats: nonparametric tolerance and prediction interval levels and sizes
+D6771	924	EnvStats: gofTest for the exponential and gamma distributions
+D6772	1056	EnvStats: kendallSeasonalTrendTest modified for serial correlation

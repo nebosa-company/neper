@@ -1186,3 +1186,213 @@ fn gof_test_cb(a: *mem.Arena, y: []const f64, test: usize, kind: usize, out: []f
     }
     ret gof_test(a, z, test, false, 0usize, out)
 }
+
+// ---- kendallSeasonalTrendTest modified for serial correlation (independent.obs = FALSE) ----
+
+fn mid_ranks(v: []const f64, out: []f64) {
+    let n = v.len
+    var i = 0usize
+    while i < n {
+        var less = 0usize
+        var eq = 0usize
+        var j = 0usize
+        while j < n {
+            if v[j] < v[i] { less += 1usize }
+            if v[j] == v[i] { eq += 1usize }
+            j += 1usize
+        }
+        out[i] = f64(less) + (f64(eq) + 1.0f64) / 2.0f64
+        i += 1usize
+    }
+}
+
+fn sign_f(x: f64) -> f64 {
+    if x > 0.0f64 { ret 1.0f64 }
+    if x < 0.0f64 { ret 0.0f64 - 1.0f64 }
+    ret 0.0f64
+}
+
+// every season observed once in every year (the package's requirement); the rows of a season pair across seasons by their order of appearance. Same `out` layout as kendall_seasonal, with the chi-square, z, p, interval
+// and var.S replaced by the serial-correlation forms (out[10] is the total of the variance-covariance matrix of the seasonal S)
+fn kendall_seasonal_sc(a: *mem.Arena, y: []const f64, season: []const f64, year: []const f64, alt: usize, correct: bool, conf: f64, out: []f64) -> err {
+    let n = y.len
+    let e0 = kendall_seasonal(a, y, season, year, alt, correct, conf, out)
+    if e0 != ok { ret e0 }
+    let ns = usize(out[12usize])
+    let ny = n / ns
+    let (ids, e1) = mem.alloc[f64](a, ns)
+    let (rk, e2) = mem.alloc[f64](a, n)
+    let (tau, e3) = mem.alloc[f64](a, ns)
+    let (vs, e4) = mem.alloc[f64](a, ns)
+    let (cv, e5) = mem.alloc[f64](a, ns * ns)
+    let (sy, e6) = mem.alloc[f64](a, ny)
+    let (sx, e7) = mem.alloc[f64](a, ny)
+    let (ko, e8) = mem.alloc[f64](a, 10usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    var cnt = 0usize
+    var i = 0usize
+    while i < n {
+        var seen = false
+        var j = 0usize
+        while j < cnt {
+            if ids[j] == season[i] { seen = true }
+            j += 1usize
+        }
+        if !seen {
+            ids[cnt] = season[i]
+            cnt += 1usize
+        }
+        i += 1usize
+    }
+    sort_f(ids[0usize..ns])
+    var k = 0usize
+    while k < ns {
+        var m = 0usize
+        i = 0usize
+        while i < n {
+            if season[i] == ids[k] {
+                sy[m] = y[i]
+                sx[m] = year[i]
+                m += 1usize
+            }
+            i += 1usize
+        }
+        mid_ranks(sy[0usize..ny], rk[k * ny..k * ny + ny])
+        let ek = kendall_trend(a, sy[0usize..ny], sx[0usize..ny], 0usize, true, 0.95f64, ko)
+        if ek != ok { ret ek }
+        tau[k] = ko[4usize]
+        vs[k] = ko[1usize]
+        cv[k * ns + k] = ko[1usize]
+        k += 1usize
+    }
+    let nyf = f64(ny)
+    var si = 1usize
+    while si < ns {
+        var sj = 0usize
+        while sj < si {
+            var kk = 0.0f64
+            var p1 = 0usize
+            while p1 < ny {
+                var p2 = p1 + 1usize
+                while p2 < ny {
+                    kk += sign_f(rk[si * ny + p2] - rk[si * ny + p1]) * sign_f(rk[sj * ny + p2] - rk[sj * ny + p1])
+                    p2 += 1usize
+                }
+                p1 += 1usize
+            }
+            var dot = 0.0f64
+            p1 = 0usize
+            while p1 < ny {
+                dot += rk[si * ny + p1] * rk[sj * ny + p1]
+                p1 += 1usize
+            }
+            let rv = 4.0f64 * dot - nyf * (nyf + 1.0f64) * (nyf + 1.0f64)
+            let c = (kk + rv) / 3.0f64
+            cv[si * ns + sj] = c
+            cv[sj * ns + si] = c
+            sj += 1usize
+        }
+        si += 1usize
+    }
+    var vtot = 0.0f64
+    var q = 0usize
+    while q < ns * ns {
+        vtot += cv[q]
+        q += 1usize
+    }
+    // chi-square: v = C tau, W = C (M V M) C' with C = [1, -I], M = diag(2 / (n (n - 1)))
+    let g = ns - 1usize
+    let (vec, e9) = mem.alloc[f64](a, g)
+    let (wm, e10) = mem.alloc[f64](a, g * g)
+    let (mv, e11) = mem.alloc[f64](a, ns * ns)
+    if e9 != ok || e10 != ok || e11 != ok { ret mem.Full }
+    let mf = 2.0f64 / (nyf * (nyf - 1.0f64))
+    q = 0usize
+    while q < ns * ns {
+        mv[q] = mf * mf * cv[q]
+        q += 1usize
+    }
+    var r = 0usize
+    while r < g {
+        vec[r] = tau[0usize] - tau[r + 1usize]
+        var c2 = 0usize
+        while c2 < g {
+            wm[r * g + c2] = mv[0usize] - mv[0usize * ns + c2 + 1usize] - mv[(r + 1usize) * ns + 0usize] + mv[(r + 1usize) * ns + c2 + 1usize]
+            c2 += 1usize
+        }
+        r += 1usize
+    }
+    // solve W x = vec by Gaussian elimination with partial pivoting
+    var col = 0usize
+    while col < g {
+        var piv = col
+        var rr = col + 1usize
+        while rr < g {
+            if math.abs[f64](wm[rr * g + col]) > math.abs[f64](wm[piv * g + col]) { piv = rr }
+            rr += 1usize
+        }
+        if piv != col {
+            var cc = 0usize
+            while cc < g {
+                let t = wm[col * g + cc]
+                wm[col * g + cc] = wm[piv * g + cc]
+                wm[piv * g + cc] = t
+                cc += 1usize
+            }
+            let tv = vec[col]
+            vec[col] = vec[piv]
+            vec[piv] = tv
+        }
+        rr = col + 1usize
+        while rr < g {
+            let f = wm[rr * g + col] / wm[col * g + col]
+            var cc = col
+            while cc < g {
+                wm[rr * g + cc] -= f * wm[col * g + cc]
+                cc += 1usize
+            }
+            vec[rr] -= f * vec[col]
+            rr += 1usize
+        }
+        col += 1usize
+    }
+    var xs = 0.0f64
+    // chisq = v' W^-1 v: back substitute on the eliminated system for x = W^-1 v, then dot with the original v
+    let (v0, e12) = mem.alloc[f64](a, g)
+    let (xv, e13) = mem.alloc[f64](a, g)
+    if e12 != ok || e13 != ok { ret mem.Full }
+    r = 0usize
+    while r < g {
+        v0[r] = tau[0usize] - tau[r + 1usize]
+        r += 1usize
+    }
+    var bi = g
+    while bi > 0usize {
+        let rowi = bi - 1usize
+        var s = vec[rowi]
+        var cc = rowi + 1usize
+        while cc < g {
+            s -= wm[rowi * g + cc] * xv[cc]
+            cc += 1usize
+        }
+        xv[rowi] = s / wm[rowi * g + rowi]
+        bi -= 1usize
+    }
+    r = 0usize
+    while r < g {
+        xs += v0[r] * xv[r]
+        r += 1usize
+    }
+    out[0usize] = xs
+    out[1usize] = 1.0f64 - nm.pchisq(xs, f64(g), true, false)
+    let stot = out[9usize]
+    var z = stot / math.sqrt[f64](vtot)
+    if correct { z = (stot - sign_f(stot)) / math.sqrt[f64](vtot) }
+    var p = 2.0f64 * dist.pnorm(0.0f64 - math.abs[f64](z), 0.0f64, 1.0f64, true, false)
+    if alt == 1usize { p = 1.0f64 - dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
+    if alt == 2usize { p = dist.pnorm(z, 0.0f64, 1.0f64, true, false) }
+    out[2usize] = z
+    out[3usize] = p
+    out[10usize] = vtot
+    ret ok
+}
