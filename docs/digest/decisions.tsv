@@ -3615,4 +3615,5 @@ D6752	1715	mice: the chained-equations sampler for the normal linear methods
 D6753	930	mice: predictive mean matching
 D6754	1226	mice: logistic regression imputation
 D6755	497	mice: pool.scalar
-D6756	519	mice: norm.boot
+D6756	520	mice: norm.boot
+D6757	667	mice: logreg.boot

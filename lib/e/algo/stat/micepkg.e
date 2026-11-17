@@ -153,7 +153,7 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
             while j < p {
                 if nmis[j] > 0usize {
                     var mj = method
-                    if method == 4usize && j > 0usize { mj = 0usize }
+                    if (method == 4usize || method == 6usize) && j > 0usize { mj = 0usize }
                     // remove.lindep: a predictor stays when its variance among the observed rows exceeds 1e-4 and its correlation with y is below 0.99
                     var nobs0 = 0usize
                     var ym = 0.0f64
@@ -282,10 +282,10 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                         }
                         jj += 1usize
                     }
-                    if mj == 4usize {
+                    if mj == 4usize || mj == 6usize {
                         let (ob, eob) = mem.alloc[f64](a, nmis[j] + 1usize)
                         if eob != ok { ret eob }
-                        let le = logreg_draw(a, &r, x[0usize..cd * n], cd, n, data0[j * n..j * n + n], ob)
+                        let le = logreg_draw(a, &r, x[0usize..cd * n], cd, n, data0[j * n..j * n + n], ob, mj == 6usize)
                         if le != ok { ret le }
                         var qb = 0usize
                         i = 0usize
@@ -588,9 +588,10 @@ fn matchindex(a: *mem.Arena, r: *rng.Rng, d: []const f64, tv: []const f64, k0: u
 }
 
 // mice.impute.logreg: x is n by cd column-major with the intercept in column 0 and the kept predictors after it, y the 0/1 column with NaN for the missing; the n_mis imputed 0/1 values go to out in row order. The design is augmented as mice's `augment` does (4 p rows near the data means), glm.fit's iteratively reweighted fit of the logit with weights, the coefficient draw through the lower Cholesky factor of the unscaled covariance, then uniform draws against the fitted probabilities.
-fn logreg_draw(a: *mem.Arena, r: *rng.Rng, x: []const f64, cd: usize, n: usize, y: []const f64, out: []f64) -> err {
+fn logreg_draw(a: *mem.Arena, r: *rng.Rng, x: []const f64, cd: usize, n: usize, y: []const f64, out: []f64, boot: bool) -> err {
     let p = cd - 1usize
-    let nr = 4usize * p
+    var nr = 4usize * p
+    if boot { nr = 0usize }
     let na = n + nr
     let (xa, e1) = mem.alloc[f64](a, na * cd)
     let (ya, e2) = mem.alloc[f64](a, na)
@@ -636,6 +637,42 @@ fn logreg_draw(a: *mem.Arena, r: *rng.Rng, x: []const f64, cd: usize, n: usize, 
         ya[i] = y[i]
         wa[i] = 1.0f64
         i += 1usize
+    }
+    if boot {
+        var no1 = 0usize
+        i = 0usize
+        while i < n {
+            if y[i] == y[i] { no1 += 1usize }
+            i += 1usize
+        }
+        let (bi, ebi) = rng.sample_int(a, r, i64(no1), i64(no1), true)
+        if ebi != ok { ret ebi }
+        let (obi, eob2) = mem.alloc[usize](a, no1)
+        if eob2 != ok { ret eob2 }
+        var qo = 0usize
+        i = 0usize
+        while i < n {
+            if y[i] == y[i] {
+                obi[qo] = i
+                qo += 1usize
+            }
+            i += 1usize
+        }
+        qo = 0usize
+        i = 0usize
+        while i < n {
+            if y[i] == y[i] {
+                let src = obi[usize(bi[qo]) - 1usize]
+                var cc2 = 0usize
+                while cc2 < cd {
+                    xa[cc2 * na + i] = x[cc2 * n + src]
+                    cc2 += 1usize
+                }
+                ya[i] = y[src]
+                qo += 1usize
+            }
+            i += 1usize
+        }
     }
     let blen = 4usize + nr
     var rr = 0usize
@@ -769,7 +806,7 @@ fn logreg_draw(a: *mem.Arena, r: *rng.Rng, x: []const f64, cd: usize, n: usize, 
     // lower Cholesky factor of the unscaled covariance, normal draws, then the uniforms
     var lv = lw
     var s1 = 0usize
-    while s1 < cd {
+    while !boot && s1 < cd {
         var s2 = 0usize
         while s2 <= s1 {
             var s = covu[s1 * cd + s2]
@@ -793,7 +830,8 @@ fn logreg_draw(a: *mem.Arena, r: *rng.Rng, x: []const f64, cd: usize, n: usize, 
     if e16 != ok || e17 != ok { ret mem.Full }
     s1 = 0usize
     while s1 < cd {
-        zz[s1] = rng.norm(r)
+        zz[s1] = 0.0f64
+        if !boot { zz[s1] = rng.norm(r) }
         s1 += 1usize
     }
     s1 = 0usize

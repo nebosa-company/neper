@@ -47494,3 +47494,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6756 — mice: norm.boot
 
 **Decision.** `norm.boot` (method 5) is `mice.impute.norm.boot`: `sample(n1, n1, replace = TRUE)` of the observed rows (one draw of n1 positions, folded into a per-row count), the least-squares fit on the resample (counts as weights in X'X, X'y and the residual sum), sigma from the resampled residuals over n1 minus the columns minus one, then one normal draw times sigma per missing row. Equal to mice 3.19 on the 20 more data sets added (oracle_mice, 2626 cases in all). Linux pending.
+
+## D6757 — mice: logreg.boot
+
+**Decision.** `logreg.boot` (method 6, first column; other incomplete columns norm.nob) is `mice.impute.logreg.boot`: the observed rows are replaced by `sample(n1, n1, replace = TRUE)` of themselves (design rows and y together), the logit is fitted by glm.fit's iteratively reweighted steps on the resample with no augmentation rows, the fitted coefficients are used as they are (no coefficient draw), and one uniform per missing row is compared with the fitted probability. It shares `logreg_draw` with `logreg` through a `boot` flag. Equal to mice 3.19 on the 20 more data sets added (oracle_mice, 2992 cases in all). Linux pending.
