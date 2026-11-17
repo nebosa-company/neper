@@ -8,6 +8,7 @@
 use e.math
 use e.mem
 use e.algo.stat.zoo as zoo
+use e.algo.stat.stlpkg as stl
 use e.algo.rand.r as rng
 
 fn is_nan(x: f64) -> bool { ret x != x }
@@ -389,4 +390,188 @@ fn na_stine(a: *mem.Arena, x: []const f64) -> ([]f64, err) {
         i += 1usize
     }
     ret (out, ok)
+}
+
+// na_seadec(x with frequency period, algorithm): linear interpolation, then the robust stl (s.window 11) of the filled series; the seasonally adjusted series with the original gaps is imputed by the algorithm (0 interpolation, 1 locf, 2 mean) and the seasonal part added back at the gaps only
+fn na_seadec(a: *mem.Arena, x: []const f64, period: usize, algorithm: usize) -> ([]f64, err) {
+    let n = x.len
+    let (temp, e1) = na_interpolation(a, x, 0usize)
+    if e1 != ok { ret (temp, e1) }
+    let (season, e2) = mem.alloc[f64](a, n)
+    let (trend, e3) = mem.alloc[f64](a, n)
+    let (rw, e4) = mem.alloc[f64](a, n)
+    let (adj, e5) = mem.alloc[f64](a, n)
+    let (out, e6) = mem.alloc[f64](a, n)
+    if e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (out, mem.Full) }
+    let es = stl.stl(a, temp[0usize..n], period, false, 11.0f64, 0i64, 0.0f64, 1i64, 0.0f64, 1i64, 0usize, 0usize, 0usize, true, season, trend, rw)
+    if es != ok { ret (out, es) }
+    var i = 0usize
+    while i < n {
+        let remainder = temp[i] - season[i] - trend[i]
+        adj[i] = trend[i] + remainder
+        if is_nan(x[i]) { adj[i] = 0.0f64 / 0.0f64 }
+        i += 1usize
+    }
+    var filled: []f64 = zero
+    if algorithm == 0usize {
+        let (f, ef) = na_interpolation(a, adj, 0usize)
+        if ef != ok { ret (out, ef) }
+        filled = f
+    } else if algorithm == 1usize {
+        let (f, ef) = na_locf_ts(a, adj, false, 0usize)
+        if ef != ok { ret (out, ef) }
+        filled = f
+    } else {
+        let mv = na_mean_value(a, adj, 0usize)
+        let (f, ef) = mem.alloc[f64](a, n)
+        if ef != ok { ret (out, ef) }
+        i = 0usize
+        while i < n {
+            f[i] = adj[i]
+            if is_nan(adj[i]) { f[i] = mv }
+            i += 1usize
+        }
+        filled = f
+    }
+    i = 0usize
+    while i < n {
+        out[i] = x[i]
+        if is_nan(x[i]) { out[i] = filled[i] + season[i] }
+        i += 1usize
+    }
+    ret (out, ok)
+}
+
+// the base algorithms na_seadec and na_seasplit hand a series to: 0 interpolation (linear), 1 locf (na_remaining rev), 2 mean
+fn apply_base(a: *mem.Arena, x: []const f64, algorithm: usize) -> ([]f64, err) {
+    if algorithm == 0usize {
+        let (f, ef) = na_interpolation(a, x, 0usize)
+        ret (f, ef)
+    }
+    if algorithm == 1usize {
+        let (f, ef) = na_locf_ts(a, x, false, 0usize)
+        ret (f, ef)
+    }
+    let mv = na_mean_value(a, x, 0usize)
+    let (f, ef) = mem.alloc[f64](a, x.len)
+    if ef != ok { ret (f, ef) }
+    var i = 0usize
+    while i < x.len {
+        f[i] = x[i]
+        if is_nan(x[i]) { f[i] = mv }
+        i += 1usize
+    }
+    ret (f, ok)
+}
+
+// na_seasplit(x with frequency period, algorithm): the series of every cycle position is imputed on its own
+fn na_seasplit(a: *mem.Arena, x: []const f64, period: usize, algorithm: usize) -> ([]f64, err) {
+    let n = x.len
+    let (out, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret (out, e1) }
+    var i = 0usize
+    while i < n {
+        out[i] = x[i]
+        i += 1usize
+    }
+    var ph = 0usize
+    while ph < period {
+        var cnt = 0usize
+        i = ph
+        while i < n {
+            cnt += 1usize
+            i += period
+        }
+        let (sub, e2) = mem.alloc[f64](a, cnt)
+        if e2 != ok { ret (out, e2) }
+        var q = 0usize
+        i = ph
+        while i < n {
+            sub[q] = x[i]
+            q += 1usize
+            i += period
+        }
+        let (f, e3) = apply_base(a, sub, algorithm)
+        if e3 != ok { ret (out, e3) }
+        q = 0usize
+        i = ph
+        while i < n {
+            out[i] = f[q]
+            q += 1usize
+            i += period
+        }
+        ph += 1usize
+    }
+    ret (out, ok)
+}
+
+// statsNA(x): out = (length, number of NAs, number of gaps, average gap size, percentage of NAs, longest gap, most frequent gap size, most weighty gap size); ties go to the larger size as the package loops do
+fn stats_na(a: *mem.Arena, x: []const f64, out: []f64) -> err {
+    let n = x.len
+    let (vec, e1) = mem.alloc[f64](a, n + 1usize)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i <= n {
+        vec[i] = 0.0f64
+        i += 1usize
+    }
+    var nna = 0usize
+    var run = 0usize
+    i = 0usize
+    while i < n {
+        if is_nan(x[i]) {
+            nna += 1usize
+            run += 1usize
+            if i + 1usize == n { vec[run] += 1.0f64 }
+        } else {
+            if run > 0usize { vec[run] += 1.0f64 }
+            run = 0usize
+        }
+        i += 1usize
+    }
+    var mx = 0.0f64
+    var common = 0usize
+    i = 1usize
+    while i <= n {
+        if vec[i] >= mx {
+            mx = vec[i]
+            common = i
+        }
+        i += 1usize
+    }
+    var longest = 0.0f64 / 0.0f64
+    i = n
+    while i >= 1usize {
+        if vec[i] > 0.0f64 {
+            longest = f64(i)
+            break
+        }
+        i -= 1usize
+    }
+    var wmx = 0.0f64
+    var wcommon = 0usize
+    i = 1usize
+    while i <= n {
+        if vec[i] * f64(i) >= wmx {
+            wmx = vec[i] * f64(i)
+            wcommon = i
+        }
+        i += 1usize
+    }
+    var gaps = 0.0f64
+    i = 1usize
+    while i <= n {
+        gaps += vec[i]
+        i += 1usize
+    }
+    out[0usize] = f64(n)
+    out[1usize] = f64(nna)
+    out[2usize] = gaps
+    out[3usize] = 0.0f64
+    if nna > 0usize { out[3usize] = f64(nna) / gaps }
+    out[4usize] = f64(nna) / f64(n) * 100.0f64
+    out[5usize] = longest
+    out[6usize] = f64(common)
+    out[7usize] = f64(wcommon)
+    ret ok
 }

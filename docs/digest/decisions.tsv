@@ -3860,4 +3860,5 @@ D6997	437	Rmpfr string conversion
 D6998	393	Rmpfr decimal string parsing
 D6999	565	Rmpfr directed rounding of the transcendental functions
 D7000	592	Rmpfr closed: besselY, other-base parsing, zeta below 1
-D7001	477	imputeTS na_interpolation stine
+D7001	479	imputeTS na_interpolation stine
+D7002	649	imputeTS na_seadec, na_seasplit and statsNA

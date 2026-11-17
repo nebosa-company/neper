@@ -52,6 +52,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         it.apply_maxgap(s, fl, mg)
         ret fl[k]
     }
+    if str.eq(c.name, "sea") {
+        // args (algorithm, index, n, series..., period)
+        let (sr, se) = it.na_seadec(a, s, usize(x[3usize + n]), kind)
+        if se != ok { os.exit(7) }
+        ret sr[k]
+    }
+    if str.eq(c.name, "split") {
+        // args (algorithm, index, n, series..., period)
+        let (sr, se) = it.na_seasplit(a, s, usize(x[3usize + n]), kind)
+        if se != ok { os.exit(7) }
+        ret sr[k]
+    }
+    if str.eq(c.name, "stats") {
+        // args (which 0..7, 0, n, series...)
+        var so: [8]f64 = zero
+        if it.stats_na(a, s, so[0usize..8usize]) != ok { os.exit(7) }
+        ret so[kind]
+    }
     if str.eq(c.name, "rnd") {
         // args (seed, index, n, series..., lower or -999999, upper or -999999)
         var lo = x[3usize + n]

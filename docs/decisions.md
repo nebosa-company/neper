@@ -48503,3 +48503,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D7001 — imputeTS na_interpolation stine
 
 `na_stine`: stinepack stinterp over the observed points at 1..n with the scaled Stineman slopes (end slopes by the one-sided rule), the Stineman blend of the two end-point tangent offsets inside each interval, and the positions outside the observed range filled by the nearest observed value as na_locf(na_remaining = "rev") does. Equal to imputeTS na_interpolation(option = "stine") on 30 series (oracle_imputets). Linux pending.
+
+
+## D7002 — imputeTS na_seadec, na_seasplit and statsNA
+
+`na_seadec`: linear interpolation, the robust stl of D-stl (s.window 11, s.degree 0, t.degree 1) of the filled series, the base algorithm (interpolation, locf rev or mean) on the seasonally adjusted series with the original gaps, the seasonal part added back at the gaps only. `na_seasplit`: the base algorithm on each cycle position alone. `stats_na`: the package loop for the gap counts, with ties going to the larger size. Equal to imputeTS on 20 series each for the first two and 30 for the third (oracle_imputets). na_kalman needs StructTS and auto.arima and stays open. Linux pending.

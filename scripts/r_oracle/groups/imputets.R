@@ -42,4 +42,25 @@ for (rep in 1:20) {
   set.seed(sd); r <- na_random(x, lower_bound = lo, upper_bound = hi); fl <- sample(c(0, -1, 7.5), 1); r2 <- na_replace(x, fill = fl)
   for (k in seq_len(n)) { add("rnd", c(sd, k - 1, n, enc(x), if (is.null(lo)) -999999 else lo, if (is.null(hi)) -999999 else hi), r[k]); add("repl", c(0, k - 1, n, enc(x), fl), r2[k]) }
 }
+# na_seadec "sea" (algorithm 0 interpolation 1 locf 2 mean, index, n, series..., period)
+for (rep in 1:20) {
+  per <- sample(4:8, 1); n <- per * sample(4:6, 1); tt <- seq_len(n); x <- round(10 + 0.1 * tt + 2 * sin(2 * pi * tt / per) + rnorm(n, 0, 0.3), 2)
+  na <- sample(seq(2, n - 1), sample(2:5, 1)); x[na] <- NA; alg <- (rep - 1) %% 3
+  r <- suppressWarnings(na_seadec(ts(x, frequency = per), algorithm = c("interpolation", "locf", "mean")[alg + 1]))
+  for (k in seq_len(n)) add("sea", c(alg, k - 1, n, enc(x), per), as.numeric(r[k]))
+}
+# na_seasplit "split" (algorithm, index, n, series..., period): every cycle position keeps at least three observed values
+for (rep in 1:20) {
+  per <- sample(3:6, 1); n <- per * sample(5:7, 1); tt <- seq_len(n); x <- round(10 + 0.1 * tt + 2 * sin(2 * pi * tt / per) + rnorm(n, 0, 0.3), 2)
+  na <- sample(n, sample(2:5, 1)); x[na] <- NA; alg <- (rep - 1) %% 3
+  ok <- all(sapply(seq_len(per), function(i) sum(!is.na(x[seq(i, n, by = per)])) >= 3)); if (!ok) next
+  r <- suppressWarnings(na_seasplit(ts(x, frequency = per), algorithm = c("interpolation", "locf", "mean")[alg + 1]))
+  for (k in seq_len(n)) add("split", c(alg, k - 1, n, enc(x), per), as.numeric(r[k]))
+}
+# statsNA "stats" (which 0 length 1 number of NAs 2 gaps 3 average gap 4 percentage 5 longest 6 most frequent 7 most weighty, 0, n, series...)
+for (rep in 1:30) {
+  n <- sample(10:40, 1); x <- round(runif(n, 1, 10), 1); na <- sample(n, sample(2:min(12, n - 1), 1)); x[na] <- NA; if (rep %% 4 == 0) x[n] <- NA
+  st <- statsNA(x, print_only = FALSE); v <- c(st$length_series, st$number_NAs, st$number_na_gaps, st$average_size_na_gaps, as.numeric(sub("%", "", st$percentage_NAs)) , st$longest_na_gap, st$most_frequent_na_gap, st$most_weighty_na_gap)
+  for (w in 0:7) if (w != 4) add("stats", c(w, 0, n, enc(x)), v[w + 1])
+}
 emit("imputets", "imputeTS", list(cases))
