@@ -3667,4 +3667,5 @@ D6804	877	sn: rsn and rst
 D6805	692	dendextend: entanglement
 D6806	1078	dendextend: cor_bakers_gamma
 D6807	860	hclust: cutree by height, and the nearest-neighbour fix for centroid and median
-D6808	460	BiasedUrn: Wallenius odds estimate
+D6808	461	BiasedUrn: Wallenius odds estimate
+D6809	1231	isotone: the optim(BFGS) activeSet solvers

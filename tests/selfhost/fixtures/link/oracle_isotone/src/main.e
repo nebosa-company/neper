@@ -32,8 +32,15 @@ fn active(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if c.name[1usize] == 100u8 { kind = 1u8 }
     var aw = 1.0f64
     var bw = 1.0f64
-    if c.name[1usize] == 113u8 {
-        kind = 2u8
+    // the second letter picks the solver: q quantile, a asymmetric LS, e L1 with eps, h Huber, i SILF, o Lp; each carries (aw, bw) after the statistic
+    let sc = c.name[1usize]
+    if sc == 113u8 { kind = 2u8 }
+    if sc == 97u8 { kind = 3u8 }
+    if sc == 101u8 { kind = 4u8 }
+    if sc == 104u8 { kind = 5u8 }
+    if sc == 105u8 { kind = 6u8 }
+    if sc == 111u8 { kind = 7u8 }
+    if kind >= 2u8 {
         aw = z[2usize + 2usize * n + 2usize * m + 1usize]
         bw = z[2usize + 2usize * n + 2usize * m + 2usize]
     }

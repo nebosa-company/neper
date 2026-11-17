@@ -250,11 +250,11 @@ fn gpava(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, kind: u8
 }
 
 // the LS solver of activeSet for the active rows ia (indices into the m constraints, each constraint a1 >= a2 in 0-based positions p1, p2): fills y, the multipliers lbd (one per active row) and returns f
-fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, p1: []const usize, p2: []const usize, ia: []const usize, y: []f64, lbd: []f64, gy: []f64, kind: u8, aw: f64, bw: f64) -> f64 {
+fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, xo: []const f64, p1: []const usize, p2: []const usize, ia: []const usize, y: []f64, lbd: []f64, gy: []f64, kind: u8, aw: f64, bw: f64) -> f64 {
     let n = z.len
     let na = ia.len
     var i = 0usize
-    if na == 0usize {
+    if na == 0usize && kind < 3u8 {
         while i < n {
             y[i] = z[i]
             gy[i] = 0.0f64
@@ -320,7 +320,7 @@ fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, p1: []const usize, p2
         y[i] = swz[lab[i]] / sw[lab[i]]
         i += 1usize
     }
-    if kind >= 1u8 {
+    if kind >= 1u8 && kind < 3u8 {
         let (ty, e7) = mem.alloc[f64](a, n)
         if e7 != ok { ret 0.0f64 / 0.0f64 }
         let (tw, e8) = mem.alloc[f64](a, n)
@@ -348,8 +348,9 @@ fn ls_solve(a: *mem.Arena, z: []const f64, w: []const f64, p1: []const usize, p2
             root += 1usize
         }
     }
+    if kind >= 3u8 { f = fsolve(a, z, w, xo, lab, kind, aw, bw, y, gy) }
     i = 0usize
-    while i < n {
+    while i < n && kind < 3u8 {
         if kind == 1u8 {
             var sg = 0.0f64
             if y[i] > z[i] { sg = 1.0f64 } else if y[i] < z[i] { sg = 0.0f64 - 1.0f64 }
@@ -518,7 +519,7 @@ fn active_set(a: *mem.Arena, y0: []const f64, w: []const f64, p1: []const usize,
     var f = 0.0f64
     while true {
         iter += 1usize
-        f = ls_solve(a, y0, w, p1, p2, iab[0usize..nia], y, lb, gy, kind, aw, bw)
+        f = ls_solve(a, y0, w, xold, p1, p2, iab[0usize..nia], y, lb, gy, kind, aw, bw)
         i = 0usize
         var my = big
         while i < m {
@@ -803,4 +804,294 @@ fn gpava_rows(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: 
         i += 1usize
     }
     ret ok
+}
+
+// ---- activeSet solvers that run optim(method = "BFGS") on the block values (isotone fSolver): asymmetric LS (kind 3, aw bw), L1 with eps (4, eps = aw), Huber (5, eps = aw), SILF (6, eps = aw, beta = bw), Lp (7, p = aw) ----
+
+type IsoCtx = struct { kind: u8, z: []const f64, w: []const f64, blk: []const usize, aw: f64, bw: f64 }
+
+fn rpow(x: f64, y: f64) -> f64 {
+    if y == 2.0f64 { ret x * x }
+    if x == 1.0f64 || y == 0.0f64 { ret 1.0f64 }
+    ret math.pow[f64](x, y)
+}
+
+fn sgn(v: f64) -> f64 {
+    if v > 0.0f64 { ret 1.0f64 }
+    if v < 0.0f64 { ret 0.0f64 - 1.0f64 }
+    ret 0.0f64
+}
+
+// the objective term of one observation at the fitted value x
+fn iso_term(c: *const IsoCtx, i: usize, x: f64) -> f64 {
+    let d = x - c.z[i]
+    let w = c.w[i]
+    if c.kind == 3u8 {
+        var s = c.bw
+        if x < c.z[i] { s = c.aw }
+        ret w * (d * d) * s
+    }
+    if c.kind == 4u8 { ret w * math.sqrt[f64](d * d + c.aw) }
+    if c.kind == 5u8 {
+        if math.abs[f64](d) < 2.0f64 * c.aw { ret w * (d * d / (4.0f64 * c.aw)) }
+        ret w * (math.abs[f64](d) - c.aw)
+    }
+    if c.kind == 6u8 {
+        let delta = math.abs[f64](d)
+        let lo = (1.0f64 - c.bw) * c.aw
+        var g = (delta - lo) * (delta - lo) / (4.0f64 * c.bw * c.aw)
+        if delta < lo { g = 0.0f64 }
+        if delta > (1.0f64 + c.bw) * c.aw { g = delta - c.aw }
+        ret w * g
+    }
+    ret w * rpow(math.abs[f64](d), c.aw)
+}
+
+fn iso_grad(c: *const IsoCtx, i: usize, x: f64) -> f64 {
+    let d = x - c.z[i]
+    let w = c.w[i]
+    if c.kind == 3u8 {
+        var s = c.bw
+        if x < c.z[i] { s = c.aw }
+        ret 2.0f64 * w * d * s
+    }
+    if c.kind == 4u8 { ret w * d / math.sqrt[f64](d * d + c.aw) }
+    if c.kind == 5u8 {
+        if math.abs[f64](d) < 2.0f64 * c.aw { ret w * (d / (2.0f64 * c.aw)) }
+        ret w * sgn(d)
+    }
+    if c.kind == 6u8 {
+        let hi = (1.0f64 + c.bw) * c.aw
+        let lo = (1.0f64 - c.bw) * c.aw
+        var g = 0.0f64
+        if d < 0.0f64 - hi {
+            g = 0.0f64 - 1.0f64
+        } else if d > 0.0f64 - hi && d < 0.0f64 - lo {
+            g = (d + lo) / (2.0f64 * c.bw * c.aw)
+        } else if d > lo && d < hi {
+            g = (d - lo) / (2.0f64 * c.bw * c.aw)
+        } else if d > hi {
+            g = 1.0f64
+        }
+        ret w * g
+    }
+    ret c.aw * w * sgn(d) * rpow(math.abs[f64](d), c.aw - 1.0f64)
+}
+
+// sum to double the way R's long-double accumulation rounds it
+fn ksum(v: []const f64) -> f64 {
+    var total = 0.0f64
+    var comp = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        let t = total + v[i]
+        if math.abs[f64](total) >= math.abs[f64](v[i]) { comp += (total - t) + v[i] } else { comp += (v[i] - t) + total }
+        total = t
+        i += 1usize
+    }
+    ret total + comp
+}
+
+fn iso_f(c: *const IsoCtx, u: []const f64, tmp: []f64) -> f64 {
+    var i = 0usize
+    while i < c.z.len {
+        tmp[i] = iso_term(c, i, u[c.blk[i]])
+        i += 1usize
+    }
+    ret ksum(tmp[0usize..c.z.len])
+}
+
+fn iso_g(c: *const IsoCtx, u: []const f64, g: []f64) {
+    var j = 0usize
+    while j < u.len {
+        g[j] = 0.0f64
+        j += 1usize
+    }
+    var i = 0usize
+    while i < c.z.len {
+        g[c.blk[i]] += iso_grad(c, i, u[c.blk[i]])
+        i += 1usize
+    }
+}
+
+// R's vmmin (optim BFGS: maxit 100, abstol -Inf, reltol sqrt(eps)); b is the start and the answer, returns the minimum
+fn vmmin(a: *mem.Arena, c: *const IsoCtx, b: []f64, tmp: []f64) -> f64 {
+    let n = b.len
+    let (g, e1) = mem.alloc[f64](a, n)
+    let (t, e2) = mem.alloc[f64](a, n)
+    let (xv, e3) = mem.alloc[f64](a, n)
+    let (cv, e4) = mem.alloc[f64](a, n)
+    let (bm, e5) = mem.alloc[f64](a, n * n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret 0.0f64 / 0.0f64 }
+    let reltol = 1.490116119384766e-8f64
+    var f = iso_f(c, b, tmp)
+    var fmin = f
+    iso_g(c, b, g)
+    var gradcount = 1usize
+    var iter = 1usize
+    var ilast = gradcount
+    var count = 0usize
+    var go = true
+    while go {
+        var i = 0usize
+        if ilast == gradcount {
+            i = 0usize
+            while i < n {
+                var j = 0usize
+                while j < i {
+                    bm[i * n + j] = 0.0f64
+                    j += 1usize
+                }
+                bm[i * n + i] = 1.0f64
+                i += 1usize
+            }
+        }
+        i = 0usize
+        while i < n {
+            xv[i] = b[i]
+            cv[i] = g[i]
+            i += 1usize
+        }
+        var gradproj = 0.0f64
+        i = 0usize
+        while i < n {
+            var s = 0.0f64
+            var j = 0usize
+            while j <= i {
+                s -= bm[i * n + j] * g[j]
+                j += 1usize
+            }
+            j = i + 1usize
+            while j < n {
+                s -= bm[j * n + i] * g[j]
+                j += 1usize
+            }
+            t[i] = s
+            gradproj += s * g[i]
+            i += 1usize
+        }
+        if gradproj < 0.0f64 {
+            var steplength = 1.0f64
+            var accpoint = false
+            var again = true
+            while again {
+                count = 0usize
+                i = 0usize
+                while i < n {
+                    b[i] = xv[i] + steplength * t[i]
+                    if 10.0f64 + xv[i] == 10.0f64 + b[i] { count += 1usize }
+                    i += 1usize
+                }
+                if count < n {
+                    f = iso_f(c, b, tmp)
+                    accpoint = f - f == 0.0f64 && f <= fmin + gradproj * steplength * 0.0001f64
+                    if !accpoint { steplength *= 0.2f64 }
+                }
+                again = !(count == n || accpoint)
+            }
+            let enough = math.abs[f64](f - fmin) > reltol * (math.abs[f64](fmin) + reltol)
+            if !enough {
+                count = n
+                fmin = f
+            }
+            if count < n {
+                fmin = f
+                iso_g(c, b, g)
+                gradcount += 1usize
+                iter += 1usize
+                var d1 = 0.0f64
+                i = 0usize
+                while i < n {
+                    t[i] = steplength * t[i]
+                    cv[i] = g[i] - cv[i]
+                    d1 += t[i] * cv[i]
+                    i += 1usize
+                }
+                if d1 > 0.0f64 {
+                    var d2 = 0.0f64
+                    i = 0usize
+                    while i < n {
+                        var s = 0.0f64
+                        var j = 0usize
+                        while j <= i {
+                            s += bm[i * n + j] * cv[j]
+                            j += 1usize
+                        }
+                        j = i + 1usize
+                        while j < n {
+                            s += bm[j * n + i] * cv[j]
+                            j += 1usize
+                        }
+                        xv[i] = s
+                        d2 += s * cv[i]
+                        i += 1usize
+                    }
+                    d2 = 1.0f64 + d2 / d1
+                    i = 0usize
+                    while i < n {
+                        var j = 0usize
+                        while j <= i {
+                            bm[i * n + j] += (d2 * t[i] * t[j] - xv[i] * t[j] - t[i] * xv[j]) / d1
+                            j += 1usize
+                        }
+                        i += 1usize
+                    }
+                } else {
+                    ilast = gradcount
+                }
+            } else if ilast < gradcount {
+                count = 0usize
+                ilast = gradcount
+            }
+        } else {
+            count = 0usize
+            if ilast == gradcount { count = n } else { ilast = gradcount }
+        }
+        if iter >= 100usize { go = false }
+        if go {
+            if gradcount - ilast > 2usize * n { ilast = gradcount }
+            go = count != n || ilast != gradcount
+        }
+    }
+    ret fmin
+}
+
+// fSolver on the blocks lab (block root per observation): the start is the sum of the current point xo over each block, the answer expanded to every observation; fills y and gy, returns f
+fn fsolve(a: *mem.Arena, z: []const f64, w: []const f64, xo: []const f64, lab: []const usize, kind: u8, aw: f64, bw: f64, y: []f64, gy: []f64) -> f64 {
+    let n = z.len
+    let (blk, e1) = mem.alloc[usize](a, n)
+    let (ord, e2) = mem.alloc[usize](a, n)
+    let (tmp, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var nb = 0usize
+    var i = 0usize
+    while i < n {
+        if lab[i] == i {
+            ord[i] = nb
+            nb += 1usize
+        }
+        i += 1usize
+    }
+    let (u, e4) = mem.alloc[f64](a, nb)
+    if e4 != ok { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i < nb {
+        u[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        blk[i] = ord[lab[i]]
+        u[blk[i]] += xo[i]
+        i += 1usize
+    }
+    let c = IsoCtx{ kind: kind, z: z, w: w, blk: blk, aw: aw, bw: bw }
+    let fmin = vmmin(a, &c, u, tmp)
+    i = 0usize
+    while i < n {
+        y[i] = u[blk[i]]
+        gy[i] = iso_grad(&c, i, y[i])
+        i += 1usize
+    }
+    ret fmin
 }

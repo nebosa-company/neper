@@ -40,6 +40,28 @@ for (rep in 1:40) {
   a <- c(n, nrow(ed), y, w, ed[, 1], ed[, 2]); st <- c(r$fval, r$niter, sum(seq_along(r$x) * r$x), sum(seq_along(r$lambda) * r$lambda))
   for (j in 0:3) add("aq", c(a, j, aw, bw), st[j + 1])
 }
+# activeSet with the optim(BFGS) solvers on random partial orders: names aa asyLS (aw, bw), ae L1eps (eps), ah huber (eps), ai SILF (eps, beta), ao Lp (p); args as aq
+for (rep in 1:40) {
+  n <- sample(4:8, 1); y <- round(rnorm(n), 3); w <- round(runif(n, 0.5, 3), 2); perm <- sample(n); ed <- NULL
+  for (i in 1:(n - 1)) for (j in (i + 1):n) if (runif(1) < 0.3) ed <- rbind(ed, c(perm[i], perm[j]))
+  if (is.null(ed)) next
+  a <- c(n, nrow(ed), y, w, ed[, 1], ed[, 2])
+  for (sv in c("aa", "ae", "ah", "ai", "ao")) {
+    p1 <- round(runif(1, 0.3, 2), 2); p2 <- round(runif(1, 0.3, 2), 2)
+    r <- tryCatch(suppressWarnings(switch(sv,
+      aa = activeSet(ed, "asyLS", y = y, weights = w, aw = p1, bw = p2, check = FALSE),
+      ae = activeSet(ed, "L1eps", y = y, weights = w, eps = p1, check = FALSE),
+      ah = activeSet(ed, "huber", y = y, weights = w, eps = p1, check = FALSE),
+      ai = activeSet(ed, "SILF", y = y, weights = w, eps = p1, beta = min(p2, 0.9), check = FALSE),
+      ao = activeSet(ed, "Lp", y = y, weights = w, p = 1.2 + p1))), error = function(e) NULL)
+    if (is.null(r) || r$niter >= 100 || any(is.na(r$lambda)) || any(is.na(r$x))) next
+    if (sv == "ai") p2 <- min(p2, 0.9)
+    if (sv == "ao") p1 <- 1.2 + p1
+    st <- c(r$fval, r$niter, sum(seq_along(r$x) * r$x), sum(seq_along(r$lambda) * r$lambda))
+    # SILF has a flat floor of minimisers: its fitted values depend on the last bit of the line search, the value and the iteration count do not
+    for (j in (if (sv == "ai") 0:1 else 0:3)) cases[[length(cases) + 1]] <- case(sv, c(a, j, p1, p2), st[j + 1], rel = 1e-9, abs = 1e-10)
+  }
+}
 # gpava with a matrix response (rows are repeated measurements): ("rows") args (solver 0 mean 1 median 2 fractile, p, ties, n, k, x[n], y row-major [n * k], w row-major [n * k], stat)
 for (rep in 1:40) {
   n <- sample(5:25, 1); k <- sample(2:3, 1); x <- if (rep %% 2 == 0) sample(1:round(n * 0.6), n, TRUE) else sample(n); Y <- matrix(round(rnorm(n * k, 0, 1) + 0.08 * x, 3), n, k); W <- matrix(round(runif(n * k, 0.5, 3), 2), n, k)
