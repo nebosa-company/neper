@@ -48398,3 +48398,8 @@ Whitehead proportional-odds power (`popower`: power, efficiency, approximate sta
 ## D6980 — Hmisc hoeffd
 
 `hoeffd(x, y)`: Hoeffding D from mid-ranks R, S and the bivariate rank Q (strictly below in both, 1/2 for a tie in one, 1/4 for a tie in both). Equal to `Hmisc::hoeffd` D on 30 samples, half of them rounded to create ties (oracle_hmisc). The P value (asymptotic table) is not here. Linux pending.
+
+
+## D6981 — Hmisc rcspline.restate
+
+`rcspline_restate(knots, coef, norm, integral, out)`: the k + 1 coefficients of x and the truncated powers a restricted cubic spline fit expands to, with the two restricted coefficients recovered from the linearity constraints, and the integral variant (0.5 and 0.25 scaling). Equal to the coefficient vector of `Hmisc::rcspline.restate` on 30 settings (oracle_hmisc). The formatted function text and the intercept form are not here. Linux pending.

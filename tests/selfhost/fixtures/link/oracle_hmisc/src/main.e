@@ -136,6 +136,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let n = usize(x[0usize])
         ret hm.hoeffd(x[1usize..1usize + n], x[1usize + n..1usize + n + n])
     }
+    if str.eq(c.name, "rsr") {
+        // (k, norm, integral, which, knots[k], coef[k - 1])
+        let k = usize(x[0usize])
+        var o: [10]f64 = zero
+        hm.rcspline_restate(x[4usize..4usize + k], x[4usize + k..4usize + k + k - 1usize], usize(x[1usize]), x[2usize] == 1.0f64, o[0usize..10usize])
+        ret o[usize(x[3usize])]
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])

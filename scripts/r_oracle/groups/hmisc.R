@@ -104,4 +104,7 @@ for (rep in 1:30) { k <- sample(3:6, 1); pr <- runif(k); pr <- pr / sum(pr); orr
 # hoeffd "hoe" (n, x[n], y[n]), continuous and with ties
 for (rep in 1:30) { n <- sample(10:80, 1); x <- rnorm(n); y <- x * runif(1, -1, 1) + rnorm(n); if (rep %% 2 == 0) { x <- round(x, 1); y <- round(y, 1) }
   cases[[length(cases) + 1]] <- case("hoe", c(n, x, y), hoeffd(cbind(x, y))$D[1, 2], rel = 1e-9, abs = 1e-12) }
+# rcspline.restate "rsr" (k, norm, integral, which, knots[k], coef[k - 1])
+for (rep in 1:30) { k <- sample(3:6, 1); kn <- sort(round(runif(k, -3, 4), 2)); if (any(diff(kn) < 0.1)) next; cf <- round(rnorm(k - 1), 3); nm <- sample(0:2, 1); ig <- sample(0:1, 1)
+  r <- as.numeric(rcspline.restate(kn, cf, type = c("ordinary", "integral")[ig + 1], norm = nm)); for (w in seq_along(r)) cases[[length(cases) + 1]] <- case("rsr", c(k, nm, ig, w - 1, kn, cf), r[w], rel = 1e-9, abs = 1e-12) }
 emit("hmisc", "Hmisc", list(cases))

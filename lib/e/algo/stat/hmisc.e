@@ -1063,3 +1063,37 @@ fn hoeffd(x: []const f64, y: []const f64) -> f64 {
     }
     ret 30.0f64 * ((nf - 2.0f64) * (nf - 3.0f64) * d1 + d2 - 2.0f64 * (nf - 2.0f64) * d3) / (nf * (nf - 1.0f64) * (nf - 2.0f64) * (nf - 3.0f64) * (nf - 4.0f64))
 }
+
+// rcspline.restate(knots, coef, type, norm): the k + 1 coefficients of x and of the truncated powers (x - t_i)+^3 (or ^4 and x^2 for the integral) a restricted cubic spline fit expands to; coef holds the k - 1 slopes without the intercept; integral selects the integral type
+fn rcspline_restate(knots: []const f64, coef: []const f64, norm: usize, integral: bool, out: []f64) {
+    let k = knots.len
+    let p = k - 1usize
+    var kd = (knots[k - 1usize] - knots[0usize]) * (knots[k - 1usize] - knots[0usize])
+    let dk = knots[k - 1usize] - knots[k - 2usize]
+    if norm == 0usize { kd = 1.0f64 }
+    if norm == 1usize { kd = dk * dk * dk }
+    var i = 0usize
+    while i < p {
+        out[i] = coef[i]
+        if i > 0usize { out[i] = coef[i] / kd }
+        i += 1usize
+    }
+    var ck = 0.0f64
+    var ck1 = 0.0f64
+    i = 1usize
+    while i < p {
+        ck += out[i] * (knots[i - 1usize] - knots[k - 1usize])
+        ck1 += out[i] * (knots[i - 1usize] - knots[k - 2usize])
+        i += 1usize
+    }
+    out[p] = ck / (knots[k - 1usize] - knots[k - 2usize])
+    out[p + 1usize] = ck1 / (knots[k - 2usize] - knots[k - 1usize])
+    if integral {
+        out[0usize] = 0.5f64 * out[0usize]
+        i = 1usize
+        while i < p + 2usize {
+            out[i] = 0.25f64 * out[i]
+            i += 1usize
+        }
+    }
+}

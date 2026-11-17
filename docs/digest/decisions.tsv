@@ -3839,4 +3839,5 @@ D6976	373	Hmisc samplesize.bin and ballocation
 D6977	317	Hmisc cpower
 D6978	335	Hmisc ciapower
 D6979	308	Hmisc popower and posamsize
-D6980	324	Hmisc hoeffd
+D6980	326	Hmisc hoeffd
+D6981	486	Hmisc rcspline.restate
