@@ -29,15 +29,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let at = 5usize + nl + p + n + n * p
     let wl = n * usize(x[at + 2usize])
     let bl = p * usize(x[at + 3usize])
+    let ol = n * usize(x[at + 4usize])
+    let wts = x[at + 5usize..at + 5usize + wl]
+    let lo = x[at + 5usize + wl..at + 5usize + wl + bl]
+    let up = x[at + 5usize + wl + bl..at + 5usize + wl + 2usize * bl]
+    let off = x[at + 5usize + wl + 2usize * bl..at + 5usize + wl + 2usize * bl + ol]
     let (coef, ce) = mem.alloc[f64](a, nl * (p + 1usize))
     if ce != ok { ret 0.0f64 / 0.0f64 }
     var ge = ok
     if c.name[0usize] == 112u8 {
-        ge = gl.poisson(a, xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, coef)
+        ge = gl.poisson(a, xm, y, wts, off, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, coef)
     } else if c.name[0usize] == 98u8 {
-        ge = gl.binomial(a, xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, coef)
+        ge = gl.binomial(a, xm, y, wts, off, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, coef)
     } else {
-        ge = gl.gaussian(a, xm, y, x[at + 4usize..at + 4usize + wl], x[at + 4usize + wl..at + 4usize + wl + bl], x[at + 4usize + wl + bl..at + 4usize + wl + 2usize * bl], n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, coef)
+        ge = gl.gaussian(a, xm, y, wts, lo, up, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, coef)
     }
     if ge != ok { ret 0.0f64 / 0.0f64 }
     ret coef[usize(x[at]) * (p + 1usize) + usize(x[at + 1usize])]

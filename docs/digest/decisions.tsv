@@ -3743,4 +3743,5 @@ D6880	645	glmnet: observation weights
 D6881	492	glmnet: gaussian offsets
 D6882	623	glmnet: coefficient bounds
 D6883	874	glmnet: the binomial family
-D6884	545	glmnet: the poisson family
+D6884	546	glmnet: the poisson family
+D6885	669	glmnet: weights and offsets for the glm families

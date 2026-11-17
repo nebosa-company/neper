@@ -203,10 +203,9 @@ fn lambda_path(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize
     ret ok
 }
 
-// the binomial (fam 0, y in {0, 1}) and poisson (fam 1) families: the elastic-net penalised negative log-likelihood divided by n, minimised by proximal Newton (an outer reweighted least-squares step, an inner cyclic coordinate descent on the working
+// wt (observation weights, normalised to sum 1) and off (offset added to the linear predictor) may be empty; the binomial (fam 0, y in {0, 1}) and poisson (fam 1) families: the elastic-net penalised negative log-likelihood divided by n, minimised by proximal Newton (an outer reweighted least-squares step, an inner cyclic coordinate descent on the working
 // response, the intercept unpenalised), to a tight tolerance; columns standardised with divisor n, penalty factors rescaled to sum to p, coefficients answered on the original scale; layout as in `gaussian`
-fn glm_path(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
-    let nf = f64(n)
+fn glm_path(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, wt: []const f64, off: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
     let (xs, e1) = mem.alloc[f64](a, n * p)
     let (sc, e2) = mem.alloc[f64](a, p)
     let (mx, e3) = mem.alloc[f64](a, p)
@@ -215,31 +214,43 @@ fn glm_path(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, n: usize,
     let (r, e6) = mem.alloc[f64](a, n)
     let (w, e7) = mem.alloc[f64](a, n)
     let (z, e8) = mem.alloc[f64](a, n)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret e1 }
+    let (wn, e9) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret e1 }
+    var wsum0 = 0.0f64
+    var i = 0usize
+    while i < n {
+        if wt.len == n { wn[i] = wt[i] } else { wn[i] = 1.0f64 }
+        wsum0 += wn[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        wn[i] = wn[i] / wsum0
+        i += 1usize
+    }
     var vs = 0.0f64
     var j = 0usize
     while j < p {
         vs += vf[j]
         j += 1usize
     }
-    var i = 0usize
+    i = 0usize
     j = 0usize
     while j < p {
         var m = 0.0f64
         i = 0usize
         while i < n {
-            m += x[j * n + i]
+            m += wn[i] * x[j * n + i]
             i += 1usize
         }
-        m = m / nf
         var v = 0.0f64
         i = 0usize
         while i < n {
-            v += (x[j * n + i] - m) * (x[j * n + i] - m)
+            v += wn[i] * (x[j * n + i] - m) * (x[j * n + i] - m)
             i += 1usize
         }
         var s = 1.0f64
-        if standardize { s = math.sqrt[f64](v / nf) }
+        if standardize { s = math.sqrt[f64](v) }
         sc[j] = s
         mx[j] = m
         i = 0usize
@@ -254,10 +265,9 @@ fn glm_path(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, n: usize,
     var ybar = 0.0f64
     i = 0usize
     while i < n {
-        ybar += y[i]
+        ybar += wn[i] * y[i]
         i += 1usize
     }
-    ybar = ybar / nf
     var b0 = math.log[f64](ybar / (1.0f64 - ybar))
     if fam == 1usize { b0 = math.log[f64](ybar) }
     var k = 0usize
@@ -269,6 +279,7 @@ fn glm_path(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, n: usize,
             i = 0usize
             while i < n {
                 var eta = b0
+                if off.len == n { eta += off[i] }
                 j = 0usize
                 while j < p {
                     eta += xs[j * n + i] * b[j]
@@ -276,13 +287,13 @@ fn glm_path(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, n: usize,
                 }
                 if fam == 1usize {
                     let mu = math.exp[f64](eta)
-                    w[i] = mu / nf
+                    w[i] = wn[i] * mu
                     z[i] = eta + (y[i] - mu) / mu
                 } else {
                     var pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta))
                     if pr < 1.0e-9f64 { pr = 1.0e-9f64 }
                     if pr > 1.0f64 - 1.0e-9f64 { pr = 1.0f64 - 1.0e-9f64 }
-                    w[i] = pr * (1.0f64 - pr) / nf
+                    w[i] = wn[i] * pr * (1.0f64 - pr)
                     z[i] = eta + (y[i] - pr) / (pr * (1.0f64 - pr))
                 }
                 r[i] = z[i] - eta
@@ -351,11 +362,11 @@ fn glm_path(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, n: usize,
     ret ok
 }
 
-fn binomial(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
-    ret glm_path(a, 0usize, x, y, n, p, alpha, standardize, vf, lambdas, coef)
+fn binomial(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, off: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
+    ret glm_path(a, 0usize, x, y, wt, off, n, p, alpha, standardize, vf, lambdas, coef)
 }
 
 // the poisson family (log link, y a count): the same proximal Newton with weights mu / n and working response eta + (y - mu) / mu
-fn poisson(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
-    ret glm_path(a, 1usize, x, y, n, p, alpha, standardize, vf, lambdas, coef)
+fn poisson(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, off: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
+    ret glm_path(a, 1usize, x, y, wt, off, n, p, alpha, standardize, vf, lambdas, coef)
 }

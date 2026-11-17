@@ -48006,3 +48006,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6884 — glmnet: the poisson family
 
 **Decision.** `glmnet.poisson` shares the proximal Newton of the binomial path (now `glm_path` with a family code): log link, weights mu / n, working response eta + (y - mu) / mu, intercept started at log(mean y). Equal to glmnet at thresh 1e-14 on 12 count data sets over alpha, standardize and penalty factors, three lambdas each (oracle_glmnet, 1315 cases in all). Not here: the early stop, multinomial, mgaussian, cox, weights and offsets for the glm families, `cv.glmnet`, `predict`. Linux pending.
+
+## D6885 — glmnet: weights and offsets for the glm families
+
+**Decision.** `glmnet.binomial` and `glmnet.poisson` take observation weights and an offset (empty slices for none). Weights are normalised to sum 1 and enter the weighted means, the standardisation (weighted sd) and the Newton weights (w_i times the variance function); the offset is added to the linear predictor only, so the working residual is unchanged. Equal to glmnet at thresh 1e-14 on 16 data sets (8 binomial, 8 poisson) with weights and offsets, three lambdas each (oracle_glmnet, 1564 cases in all). Not here: the early stop, multinomial, mgaussian, cox, `cv.glmnet`, `predict`. Linux pending.
