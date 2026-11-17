@@ -1014,3 +1014,63 @@ fn contingency2xt_exact(a: *mem.Arena, avec: []const f64, bvec: []const f64) -> 
     c2_walk(&ctx, 0usize, m)
     ret ctx.pval
 }
+
+// ---- ad.test exact p value: every assignment of the pooled observations to the samples ----
+
+type AdxCtx = struct { x: []const f64, sizes: []const usize, version: usize, n: usize, k: usize, left: []usize, grp: []usize, xp: []f64, obs: f64, tol: f64, hit: f64, total: f64, arena: *mem.Arena }
+
+fn adx_walk(c: *AdxCtx, pos: usize) {
+    if pos == c.n {
+        // lay the observations out sample by sample
+        var off = 0usize
+        var g = 0usize
+        while g < c.k {
+            var j = 0usize
+            var q = 0usize
+            while q < c.n {
+                if c.grp[q] == g {
+                    c.xp[off + j] = c.x[q]
+                    j += 1usize
+                }
+                q += 1usize
+            }
+            off += c.sizes[g]
+            g += 1usize
+        }
+        let start = mem.mark(c.arena)
+        let st = ad_test(c.arena, c.xp, c.sizes, c.version, 0usize)
+        mem.reset(c.arena, start)
+        c.total += 1.0f64
+        if st >= c.obs - c.tol { c.hit += 1.0f64 }
+        ret
+    }
+    var g = 0usize
+    while g < c.k {
+        if c.left[g] > 0usize {
+            c.left[g] -= 1usize
+            c.grp[pos] = g
+            adx_walk(c, pos + 1usize)
+            c.left[g] += 1usize
+        }
+        g += 1usize
+    }
+}
+
+// ad.test(method = "exact") p value of the AD statistic (version 1 or 2) for the samples stored back to back in x
+fn ad_exact_p(a: *mem.Arena, x: []const f64, sizes: []const usize, version: usize, tol: f64) -> f64 {
+    let n = x.len
+    let k = sizes.len
+    let (left, e1) = mem.alloc[usize](a, k)
+    let (grp, e2) = mem.alloc[usize](a, n)
+    let (xp, e3) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var g = 0usize
+    while g < k {
+        left[g] = sizes[g]
+        g += 1usize
+    }
+    let obs = ad_test(a, x, sizes, version, 0usize)
+    var ctx = AdxCtx{ x: x, sizes: sizes, version: version, n: n, k: k, left: left, grp: grp, xp: xp, obs: obs, tol: tol, hit: 0.0f64, total: 0.0f64, arena: a }
+    adx_walk(&ctx, 0usize)
+    ret ctx.hit / ctx.total
+}

@@ -58,4 +58,13 @@ for (rep in 1:40) {
   re <- contingency2xt(A, B, method = "exact")$KW.cont
   if (length(re) == 3) add("ct", c(2, tn, A, B), re[[3]])
 }
+# ad.test exact p value (the package prints five significant digits): "ex" (version, k, sizes, samples) for combinations up to 3000
+for (rep in 1:40) {
+  k <- sample(2:3, 1); n <- sample(2:5, k, TRUE); ties <- rep %% 2 == 0
+  lst <- lapply(n, function(m) { v <- rnorm(m, runif(1, -0.5, 0.5), runif(1, 0.8, 1.5)); if (ties) round(v, 0) else round(v, 5) })
+  if (exp(lgamma(sum(n) + 1) - sum(lgamma(n + 1))) > 3000) next
+  r <- do.call(ad.test, c(lst, list(method = "exact", Nsim = 10000)))$ad
+  if (ncol(r) < 4) next
+  for (v in 1:2) cases[[length(cases) + 1]] <- case("ex", c(v, k, n, unlist(lst)), r[v, 4], rel = 2e-5, abs = 1e-6)
+}
 emit("ksamples", "kSamples", list(cases))
