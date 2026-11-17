@@ -1,5 +1,5 @@
 # BiasedUrn: Fisher's and Wallenius' noncentral hypergeometric d, p, q, mean, var (and Fisher's mode and odds).
-#   args: (kind, m1, m2, n, w, arg)  kinds 0 dF 1 pF 2 qF 3 meanF 4 varF 5 modeF 6 dW 7 pW 8 qW 9 meanW 10 varW 11 oddsF (arg = x)
+#   args: (kind, m1, m2, n, w, arg)  kinds 12 modeW, 0 dF 1 pF 2 qF 3 meanF 4 varF 5 modeF 6 dW 7 pW 8 qW 9 meanW 10 varW 11 oddsF (arg = x)
 suppressMessages(library(BiasedUrn))
 cases <- list()
 set.seed(20261116)
@@ -14,6 +14,14 @@ for (rep in 1:40) {
   addc(6, a(6, x), dWNCHypergeo(x, m1, m2, n, w, precision = 1e-12), 1e-7); addc(7, a(7, x), pWNCHypergeo(x, m1, m2, n, w, precision = 1e-12), 1e-7)
   addc(8, a(8, pr), qWNCHypergeo(pr, m1, m2, n, w, precision = 1e-12), 1e-7); addc(9, a(9, 0), meanWNCHypergeo(m1, m2, n, w, precision = 1e-12), 1e-7)
   addc(10, a(10, 0), varWNCHypergeo(m1, m2, n, w, precision = 1e-12), 1e-7)
+  addc(12, a(12, 0), modeWNCHypergeo(m1, m2, n, w), 0)
   if (x > lo && x < hi) addc(11, a(11, x), oddsFNCHypergeo(x, m1, m2, n), 1e-6)
+}
+# the multivariate mass functions ("mv": (kind 0 Fisher 1 Wallenius, what 0 d, idx, n, c, m[c], odds[c], xq[c])); the multivariate means and variances of the package are approximations (they differ from the exact sums by up to 0.04) and are not compared
+for (rep in 1:30) {
+  cc <- sample(3:4, 1); m <- sample(2:7, cc, TRUE); n <- sample(2:min(10, sum(m) - 1), 1); od <- round(runif(cc, 0.3, 4), 2)
+  xq <- as.numeric(rmultinom(1, n, m / sum(m))); while (any(xq > m)) xq <- as.numeric(rmultinom(1, n, m / sum(m)))
+  mvn <- function(kind, what, idx, want, tol) cases[[length(cases) + 1]] <<- case("mv", c(kind, what, idx, n, cc, m, od, xq), want, rel = tol, abs = tol)
+  mvn(0, 0, 0, dMFNCHypergeo(xq, m, n, od), 1e-8); mvn(1, 0, 0, dMWNCHypergeo(xq, m, n, od), 1e-6)
 }
 emit("biasedurn", "BiasedUrn", list(cases))

@@ -3649,4 +3649,5 @@ D6786	808	NMF: ls-nmf sample weights
 D6787	995	EnvStats: gofGroupTest
 D6788	909	seriation: GW
 D6789	1088	partitions: setparts
-D6790	871	partitions: the counts as the package computes them
+D6790	872	partitions: the counts as the package computes them
+D6791	1232	BiasedUrn: Wallenius mode and the multivariate mass functions

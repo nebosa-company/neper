@@ -6,10 +6,16 @@ use e.algo.stat.biasedurn as bu
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
+    if str.eq(c.name, "mv") {
+        // args (kind, what, idx, n, c, m[c], odds[c], xq[c])
+        let cc = usize(z[4usize])
+        ret bu.mv_value(a, usize(z[0usize]), z[5usize..5usize + cc], z[5usize + cc..5usize + 2usize * cc], z[3usize], z[5usize + 2usize * cc..5usize + 3usize * cc], usize(z[1usize]), usize(z[2usize]))
+    }
     let kind = usize(z[0usize])
     let m1 = z[1usize]
     let m2 = z[2usize]
@@ -28,6 +34,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     // kind within a family: 0 d, 1 p, 2 q, 3 mean, 4 var, 5 mode
     var k = kind
     if k >= 6usize { k -= 6usize }
+    if kind == 12usize { k = 5usize }
     ret bu.summarise(pmf, cnt, lo, u8(k), arg)
 }
 

@@ -175,3 +175,112 @@ fn mode_fisher(m1: f64, m2: f64, n: f64, w: f64) -> f64 {
     let cc = (m1 + 1.0f64) * (n + 1.0f64) * w
     ret math.floor[f64](2.0f64 * cc / (bb + math.sqrt[f64](bb * bb - 4.0f64 * aa * cc)))
 }
+
+// ---- the multivariate variants (dMFNCHypergeo, dMWNCHypergeo, their means and variances) by enumerating the support ----
+
+// Wallenius' probability of the colour counts x from the urn m with odds w: the product of binomials times int (1 - t^(w_i / D))^x_i dt, D = sum w_i (m_i - x_i), by the same tanh-sinh quadrature as the two-colour case
+fn mwall_term(x: []const f64, m: []const f64, w: []const f64) -> f64 {
+    let c = x.len
+    var d = 0.0f64
+    var i = 0usize
+    while i < c {
+        d += w[i] * (m[i] - x[i])
+        i += 1usize
+    }
+    let pi = 3.141592653589793f64
+    let h = 1.0f64 / 32.0f64
+    var s = 0.0f64
+    var j = 0i64 - 160i64
+    while j <= 160i64 {
+        let t = f64(j) * h
+        let ex = math.exp[f64](t)
+        let sh = (ex - 1.0f64 / ex) / 2.0f64
+        let ch = (ex + 1.0f64 / ex) / 2.0f64
+        let a = pi / 2.0f64 * sh
+        var lu = 0.0f64
+        if a >= 0.0f64 {
+            let e = math.exp[f64](0.0f64 - 2.0f64 * a)
+            lu = 0.0f64 - dist.log1p(e)
+        } else {
+            let e = math.exp[f64](2.0f64 * a)
+            lu = 2.0f64 * a - dist.log1p(e)
+        }
+        let e2 = math.exp[f64](a)
+        let cha = (e2 + 1.0f64 / e2) / 2.0f64
+        let wt = pi / 4.0f64 * ch / (cha * cha)
+        var v = d * math.exp[f64]((d - 1.0f64) * lu)
+        i = 0usize
+        while i < c {
+            if x[i] > 0.0f64 { v = v * math.pow[f64](0.0f64 - dist.expm1(w[i] * lu), x[i]) }
+            i += 1usize
+        }
+        if wt > 1.0e-300f64 && v == v { s += wt * v }
+        j += 1i64
+    }
+    var lc = 0.0f64
+    i = 0usize
+    while i < c {
+        lc += lchoose(m[i], x[i])
+        i += 1usize
+    }
+    ret s * h * math.exp[f64](lc)
+}
+
+type MvCtx = struct { c: usize, m: []const f64, odds: []const f64, n: f64, kind: usize, cur: []f64, xq: []const f64, s0: f64, s1: []f64, s2: []f64, pq: f64 }
+
+fn mv_walk(g: *MvCtx, pos: usize, rem: f64) {
+    if pos == g.c - 1usize {
+        if rem > g.m[pos] { ret }
+        g.cur[pos] = rem
+        var p = 0.0f64
+        if g.kind == 0usize {
+            var lw = 0.0f64
+            var i = 0usize
+            while i < g.c {
+                lw += lchoose(g.m[i], g.cur[i]) + g.cur[i] * math.log[f64](g.odds[i])
+                i += 1usize
+            }
+            p = math.exp[f64](lw)
+        } else {
+            p = mwall_term(g.cur, g.m, g.odds)
+        }
+        g.s0 += p
+        var same = g.xq.len == g.c
+        var i = 0usize
+        while i < g.c {
+            g.s1[i] += p * g.cur[i]
+            g.s2[i] += p * g.cur[i] * g.cur[i]
+            if same && g.xq[i] != g.cur[i] { same = false }
+            i += 1usize
+        }
+        if same { g.pq = p }
+        ret
+    }
+    var v = 0.0f64
+    while v <= g.m[pos] && v <= rem {
+        g.cur[pos] = v
+        mv_walk(g, pos + 1usize, rem - v)
+        v += 1.0f64
+    }
+}
+
+// kind 0 Fisher, 1 Wallenius; what 0 the probability of xq, 1 the mean of colour idx, 2 its variance
+fn mv_value(a: *mem.Arena, kind: usize, m: []const f64, odds: []const f64, n: f64, xq: []const f64, what: usize, idx: usize) -> f64 {
+    let c = m.len
+    let (cur, e1) = mem.alloc[f64](a, c)
+    let (s1, e2) = mem.alloc[f64](a, c)
+    let (s2, e3) = mem.alloc[f64](a, c)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < c {
+        s1[i] = 0.0f64
+        s2[i] = 0.0f64
+        i += 1usize
+    }
+    var g = MvCtx{ c: c, m: m, odds: odds, n: n, kind: kind, cur: cur, xq: xq, s0: 0.0f64, s1: s1, s2: s2, pq: 0.0f64 }
+    mv_walk(&g, 0usize, n)
+    if what == 0usize { ret g.pq / g.s0 }
+    let mean = g.s1[idx] / g.s0
+    if what == 1usize { ret mean }
+    ret g.s2[idx] / g.s0 - mean * mean
+}
