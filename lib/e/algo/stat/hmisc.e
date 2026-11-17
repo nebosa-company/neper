@@ -7,6 +7,7 @@
 // Not here: rcorr, hdquantile, cut2, rcspline.restate, describe, varclus,
 // redun and the bootstrap summaries.
 
+use e.algo.rand.r as rng
 use e.math
 use e.algo.stat.hclust as hc
 use e.math.dist as dist
@@ -663,4 +664,48 @@ fn rcorr_cens_sd(a: *mem.Arena, x: []const f64, time: []const f64, event: []cons
         i += 1usize
     }
     ret 2.0f64 * math.sqrt[f64](ss) / sm
+}
+
+// smean.cl.boot(x, conf.int, B): the bootstrap mean interval, B resamples each drawn with sample.int(n, n, TRUE) (R's rejection-sampled indices), the mean of each, and the type-7 quantiles of those means at (1 -/+ conf) / 2; out = (mean, lower, upper)
+fn smean_cl_boot(a: *mem.Arena, r: *rng.Rng, x: []const f64, conf: f64, nboot: usize, out: []f64) -> err {
+    let n = x.len
+    let (z, e1) = mem.alloc[f64](a, nboot)
+    if e1 != ok { ret e1 }
+    var xbar = 0.0f64
+    var i = 0usize
+    while i < n {
+        xbar += x[i]
+        i += 1usize
+    }
+    xbar = xbar / f64(n)
+    var b = 0usize
+    while b < nboot {
+        let mark = mem.mark(a)
+        let (s, e2) = rng.sample_int(a, r, i64(n), i64(n), true)
+        if e2 != ok { ret e2 }
+        var sum = 0.0f64
+        i = 0usize
+        while i < n {
+            sum += x[usize(s[i]) - 1usize]
+            i += 1usize
+        }
+        z[b] = sum / f64(n)
+        mem.reset(a, mark)
+        b += 1usize
+    }
+    i = 1usize
+    while i < nboot {
+        let key = z[i]
+        var j = i
+        while j > 0usize && z[j - 1usize] > key {
+            z[j] = z[j - 1usize]
+            j -= 1usize
+        }
+        z[j] = key
+        i += 1usize
+    }
+    out[0usize] = xbar
+    out[1usize] = q7(z, (1.0f64 - conf) / 2.0f64)
+    out[2usize] = q7(z, (1.0f64 + conf) / 2.0f64)
+    ret ok
 }

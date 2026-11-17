@@ -65,4 +65,7 @@ for (rep in 1:15) {
 for (rep in 1:30) { n <- sample(5:80, 1); x <- if (rep %% 2) rnorm(n) else round(rnorm(n), 1); tb <- table(x)
   cases[[length(cases) + 1]] <- case("gmd", c(n, x), GiniMd(x), rel = 1e-10, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("info", c(n, x), 1 - sum(tb^3 - tb) / (n^3 - n), rel = 1e-10, abs = 1e-12) }
+# smean.cl.boot "scb": (seed, B, conf, which 0 mean 1 lower 2 upper, n, x[n])
+for (rep in 1:10) { n <- sample(5:40, 1); x <- rnorm(n, 3, 2); sd <- sample(1:100000, 1); B <- sample(c(100, 300, 1000), 1); cf <- sample(c(0.9, 0.95), 1)
+  set.seed(sd); r <- smean.cl.boot(x, conf.int = cf, B = B); for (w in 0:2) cases[[length(cases) + 1]] <- case("scb", c(sd, B, cf, w, n, x), unname(r[w + 1]), rel = 1e-10, abs = 1e-12) }
 emit("hmisc", "Hmisc", list(cases))

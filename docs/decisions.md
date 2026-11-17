@@ -48338,3 +48338,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6967 — Hmisc: the S.D. of rcorr.cens
 
 **Decision.** `hmisc.rcorr_cens_sd` answers the S.D. that `rcorr.cens` reports, found by regressing the package's value on candidate forms until sd^2 M^2 / sum (r - D m)^2 was exactly 4 on every sample tried: for each relevant pair (an event i with a later time, or an event tied with a censored time) both members get the sign of x_j - x_i added to r and one added to m, D = sum r / sum m (Dxy) and M = sum m (the "Relevant Pairs"), so S.D. = 2 sqrt(sum (r_i - D m_i)^2) / M, with tied x values contributing zero to r but one to m. Equal to Hmisc on the censored-data samples of the oracle (oracle_hmisc, 4289 cases in all). Linux pending.
+
+## D6968 — Hmisc: smean.cl.boot
+
+**Decision.** `hmisc.smean_cl_boot` draws B bootstrap resamples with `sample.int(n, n, TRUE)` (the generator's rejection-sampled indices, already used by caret's createResample), takes the mean of each, sorts the means and answers the sample mean with the type-7 quantiles at (1 - conf) / 2 and (1 + conf) / 2. Equal to Hmisc under set.seed on 10 samples of 5 to 40 values with B of 100, 300 and 1000 and confidence 0.9 or 0.95, all three outputs (oracle_hmisc, 4319 cases in all). Linux pending.

@@ -2,6 +2,7 @@
 // from `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R hmisc`; the layout is at the top of
 // scripts/r_oracle/groups/hmisc.R.
 
+use e.algo.rand.r as rng
 use e.algo.stat.hmisc as hm
 use e.io
 use e.mem
@@ -43,6 +44,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     if str.eq(c.name, "gmd") { ret hm.gini_md(a, x[1usize..1usize + usize(x[0usize])]) }
     if str.eq(c.name, "info") { ret hm.describe_info(a, x[1usize..1usize + usize(x[0usize])]) }
+    if str.eq(c.name, "scb") {
+        // (seed, B, conf, which, n, x[n])
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let n = usize(x[4usize])
+        let (o, e) = mem.alloc[f64](a, 3usize)
+        if e != ok { ret nan }
+        if hm.smean_cl_boot(a, &rr, x[5usize..5usize + n], x[2usize], usize(x[1usize]), o) != ok { ret nan }
+        ret o[usize(x[3usize])]
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])
