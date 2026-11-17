@@ -807,17 +807,6 @@
       "evidence": "Partial (D6639). e.algo.stat.mlogitpkg.clogit (conditional logit with alternative-specific covariates, optional alternative-specific constants, Newton on the exact Hessian) equals mlogit on Windows to 1e-4: coefficients, standard errors, log-likelihood (oracle_mlogit, 60 values; Linux pending; R stops short of the optimum for large coefficients, hence the tolerance). Open: individual-specific covariates with alternative-specific coefficients, nested and mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, predictions and marginal effects. Was: Open (CRAN rank 723). Mid. Acceptance, equal to mlogit: multinomial, conditional and nested logit with alternative-specific and individual-specific variables, heteroskedastic logit, mixed logit by simulated maximum likelihood (Halton draws), panel data, hypothesis tests and predictions."
     },
     {
-      "id": "L457",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 727,
-      "title": "NMF: non-negative matrix factorization",
-      "score": 0.95,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "D6773: e.algo.stat.nmfpkg equals NMF 0.28 for nmf with brunet, lee, KL, Frobenius (stationary stop, count within 300), nsNMF, offset, ls-nmf (sample weights, recycled as R does), snmf/r, snmf/l, pe-nmf and the integer random seed nndsvd (none, average and random) and several runs (the RNGseq streams) with the consensus matrix, cophenetic correlation, dispersion, the three silhouettes, sparseness, rss and evar (iteration count, W and H, the connectivity stop) on 40 random matrices (oracle_nmf, 2634 values); Linux pending. nmfEstimateRank equals (D6782, the per-rank fit); snmf/r and snmf/l equal at the defaults (D6783). snmf settings equal (D6785, count within 10). Open: the ica seed (needs fastICA). Original: Open (CRAN rank 740). Mid. Verify e.ml.reduce first. Acceptance, equal to NMF under set.seed: nmf with brunet, lee, KL, ls-nmf, nsNMF, offset, SNMF/L and SNMF/R algorithms and seeds (random, nndsvd, ica), nmfEstimateRank with cophenetic and silhouette measures, consensus matrices."
-    },
-    {
       "id": "L458",
       "category": "library",
       "group": "CRAN parity",
@@ -1014,17 +1003,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6412). twoby2 (row risks, RR, OR, probability difference, asymptotic and Fisher p) equals Epi on Windows (oracle_epi; Linux pending). Open: conditional MLE odds ratio, Lexis tools, clogistic, ROC, rate and survival tools. Was: Open (CRAN rank 929). Mid. Pairs with epiR in L460. Acceptance, equal to Epi: Lexis objects with splitLexis, cutLexis and the time-scale handling, apc.fit with its parametrizations, ci.lin, ROC and the diagnostic summaries, Poisson rate models and the person-years tables."
-    },
-    {
-      "id": "L310",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 752,
-      "title": "glmnet: elastic-net path and families",
-      "score": 0.78,
-      "model": "opus",
-      "thinking": "xhigh",
-      "evidence": "Partly done (D6055): e.algo.stat.glmnet.gaussian equals glmnet at a user lambda sequence (alpha 0..1, standardize, penalty.factor) on Windows (oracle_glmnet); Linux pending. D6879: the automatic lambda sequence equals glmnet. D6880: observation weights equal glmnet (gaussian). D6881: a gaussian offset is the fit of y minus the offset, equal to glmnet. D6882: lower.limits and upper.limits equal glmnet (gaussian). D6883: the binomial family equals glmnet at a user lambda sequence. D6884: the poisson family equals glmnet. D6885: weights and offsets for binomial and poisson equal glmnet. D6886: cv.glmnet cvm and cvsd for gaussian with given foldid equal glmnet. D6887: lambda.min and lambda.1se equal cv.glmnet. D6889: the early stop of the gaussian path (its length) equals glmnet. D6923 to D6952: coef(fit, s) interpolation for an s off the path equals glmnet. D6972: the random fold assignment of cv.glmnet under set.seed equals glmnet. D6926: cv.glmnet for the binomial (deviance, class, mse, mae, auc) and poisson (deviance, mse, mae) families, given foldid, equals glmnet. D6899: the mgaussian family equals glmnet at a user lambda sequence. Open: the early stop of the path, multinomial, cox, bounds, cv.glmnet, relax, predict. Original: Open (CRAN rank 182). Mid to large. e.ml.linear has single-lambda lasso and elastic_net. Acceptance, coefficients equal to glmnet at its default thresh for the same lambda sequence: the lambda path (automatic lambda.max, nlambda, lambda.min.ratio), families gaussian, binomial, poisson, multinomial, mgaussian and cox, standardize, intercept, penalty.factor, bounds, weights and offsets, alpha from 0 to 1; cv.glmnet with seeded folds, lambda.min and lambda.1se; relax; predict types."
     },
     {
       "id": "L308",
