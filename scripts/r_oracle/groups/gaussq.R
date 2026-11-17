@@ -18,4 +18,15 @@ for (n in c(1, 2, 3, 5, 8, 15, 30)) {
     for (i in seq_len(n)) { add("node", c(10 + d, n, p1, p2, 0, 0, i - 1), r$nodes[i]); add("weight", c(10 + d, n, p1, p2, 0, 0, i - 1), r$weights[i]) }
   }
 }
+# the inverse Gaussian: "igd" density, "igdl" log density, "igp" cdf, "igpu" upper tail, "igpl" log cdf args (x, mean, dispersion); "igr" args (n, mean, dispersion, seed, index) after set.seed
+for (rep in 1:60) {
+  mu <- c(0.3, 1, 2.5, 8)[sample(4, 1)]; phi <- c(0.05, 0.4, 1, 3, 12)[sample(5, 1)]; x <- mu * c(0.1, 0.5, 1, 1.7, 4, 12)[sample(6, 1)]
+  add("igd", c(x, mu, phi), dinvgauss(x, mu, dispersion = phi)); add("igdl", c(x, mu, phi), dinvgauss(x, mu, dispersion = phi, log = TRUE))
+  add("igp", c(x, mu, phi), pinvgauss(x, mu, dispersion = phi)); add("igpu", c(x, mu, phi), pinvgauss(x, mu, dispersion = phi, lower.tail = FALSE)); add("igpl", c(x, mu, phi), pinvgauss(x, mu, dispersion = phi, log.p = TRUE))
+}
+for (rep in 1:12) {
+  n <- sample(5:30, 1); mu <- c(0.5, 1, 3)[sample(3, 1)]; phi <- c(0.1, 1, 6)[sample(3, 1)]; sd <- sample(1:100000, 1)
+  set.seed(sd); r <- rinvgauss(n, mu, dispersion = phi)
+  for (k in seq_len(n)) add("igr", c(n, mu, phi, sd, k - 1), r[k])
+}
 emit("gaussq", "statmod", list(cases))

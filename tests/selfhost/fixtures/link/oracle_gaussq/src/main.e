@@ -12,6 +12,19 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "igd") { ret gq.dinvgauss(z[0usize], z[1usize], z[2usize], false) }
+    if str.eq(c.name, "igdl") { ret gq.dinvgauss(z[0usize], z[1usize], z[2usize], true) }
+    if str.eq(c.name, "igp") { ret gq.pinvgauss(z[0usize], z[1usize], z[2usize], true, false) }
+    if str.eq(c.name, "igpu") { ret gq.pinvgauss(z[0usize], z[1usize], z[2usize], false, false) }
+    if str.eq(c.name, "igpl") { ret gq.pinvgauss(z[0usize], z[1usize], z[2usize], true, true) }
+    if str.eq(c.name, "igr") {
+        // args (n, mean, dispersion, seed, index)
+        let rn = usize(z[0usize])
+        let (ro, roe) = mem.alloc[f64](a, rn)
+        if roe != ok { ret nan }
+        if gq.rinvgauss(a, rn, z[1usize], z[2usize], i64(z[3usize]), ro) != ok { ret nan }
+        ret ro[usize(z[4usize])]
+    }
     let id = usize(z[0usize])
     let n = usize(z[1usize])
     let p1 = z[2usize]

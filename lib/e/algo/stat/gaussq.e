@@ -6,7 +6,9 @@
 //
 // Not here: the inverse Gaussian and Tweedie distributions of statmod, qresiduals, power.fisher.test.
 
+use e.algo.rand.r as rng
 use e.math
+use e.math.dist as mdist
 use e.math.nmath as nm
 use e.mem
 
@@ -277,4 +279,65 @@ fn gauss_quad_prob(a: *mem.Arena, n: usize, dist: u8, l: f64, u: f64, mu: f64, s
         i += 1usize
     }
     ret true
+}
+
+// ---- the inverse Gaussian distribution of statmod (regular parameters: finite positive mean and dispersion) ----
+
+// dinvgauss(x, mean, dispersion, log = FALSE)
+fn dinvgauss(x0: f64, mean: f64, disp0: f64, lg: bool) -> f64 {
+    let x = x0 / mean
+    let disp = disp0 * mean
+    let d = (0.0f64 - math.log[f64](disp) - math.log[f64](2.0f64 * 3.141592653589793f64) - 3.0f64 * math.log[f64](x) - (x - 1.0f64) * (x - 1.0f64) / disp / x) / 2.0f64 - math.log[f64](mean)
+    if lg { ret d }
+    ret math.exp[f64](d)
+}
+
+// pinvgauss(q, mean, dispersion, lower.tail, log.p): the package's log-scale formula, with its large-q upper-tail asymptote
+fn pinvgauss(q0: f64, mean: f64, disp0: f64, lower: bool, lg: bool) -> f64 {
+    let q = q0 / mean
+    let dispersion = disp0 * mean
+    let pq = math.sqrt[f64](dispersion * q)
+    let a = mdist.pnorm((q - 1.0f64) / pq, 0.0f64, 1.0f64, lower, true)
+    var b = 2.0f64 / dispersion + mdist.pnorm(0.0f64 - (q + 1.0f64) / pq, 0.0f64, 1.0f64, true, true)
+    if lower { b = math.exp[f64](b - a) } else { b = 0.0f64 - math.exp[f64](b - a) }
+    var logp = a + mdist.log1p(b)
+    if !lower && q > 1.0e6f64 && q / 2.0f64 / dispersion > 5.0e5f64 {
+        logp = 1.0f64 / dispersion - 0.5f64 * math.log[f64](3.141592653589793f64) - math.log[f64](2.0f64 * dispersion) - 1.5f64 * mdist.log1p(q / 2.0f64 / dispersion) - q / 2.0f64 / dispersion
+    }
+    if lg { ret logp }
+    ret math.exp[f64](logp)
+}
+
+// rinvgauss(n, mean, dispersion) after set.seed: n standard normals, then n uniforms (the two stages are vectorised in R, so all the normals come first)
+fn rinvgauss(a: *mem.Arena, n: usize, mean: f64, disp: f64, seed: i64, out: []f64) -> err {
+    let (ys, e) = mem.alloc[f64](a, n)
+    if e != ok { ret e }
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    var i = 0usize
+    while i < n {
+        let z = rng.norm(&rg)
+        ys[i] = z * z
+        i += 1usize
+    }
+    var anybig = false
+    i = 0usize
+    while i < n {
+        if ys[i] * disp * mean > 5.0e5f64 { anybig = true }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        let yphi = ys[i] * disp * mean
+        var x1 = 0.0f64
+        if anybig {
+            if yphi > 5.0e5f64 { x1 = 1.0f64 / yphi } else { x1 = 1.0f64 + yphi / 2.0f64 * (1.0f64 - math.sqrt[f64](1.0f64 + 4.0f64 / yphi)) }
+        } else {
+            x1 = 1.0f64 + yphi / 2.0f64 * (1.0f64 - math.sqrt[f64](1.0f64 + 4.0f64 / yphi))
+        }
+        let u = rng.unif(&rg)
+        if u < 1.0f64 / (1.0f64 + x1) { out[i] = mean * x1 } else { out[i] = mean * (1.0f64 / x1) }
+        i += 1usize
+    }
+    ret ok
 }
