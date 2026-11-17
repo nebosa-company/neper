@@ -3665,4 +3665,5 @@ D6802	1006	statmod: permp
 D6803	796	statmod: power.fisher.test
 D6804	877	sn: rsn and rst
 D6805	692	dendextend: entanglement
-D6806	1077	dendextend: cor_bakers_gamma
+D6806	1078	dendextend: cor_bakers_gamma
+D6807	859	hclust: cutree by height, and the nearest-neighbour fix for centroid and median

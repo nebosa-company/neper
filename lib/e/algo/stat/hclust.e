@@ -115,9 +115,14 @@ fn hclust(a: *mem.Arena, d: []const f64, n: usize, method: usize) -> (Tree, err)
                     nv = (membr[i2] * d1 + membr[j2] * d2 - membr[i2] * membr[j2] * d12 / (membr[i2] + membr[j2])) / (membr[i2] + membr[j2])
                 }
                 diss[ind1] = nv
-                if i2 < k && nv < dm {
-                    dm = nv
-                    jj = k
+                if i2 < k {
+                    if nv < dm {
+                        dm = nv
+                        jj = k
+                    }
+                } else if nv < disnn[k] {
+                    disnn[k] = nv
+                    nn[k] = i2
                 }
             }
             k += 1usize
@@ -541,4 +546,15 @@ fn cor_bakers_gamma(a: *mem.Arena, t1: *const Tree, t2: *const Tree, n: usize) -
     let r = spearman_vec(a, u, v)
     if r != r { ret 1.0f64 }
     ret r
+}
+
+// cutree(tree, h = h): the number of clusters is n minus the merges at or below the height h (R: `n + 1 - which.max(c(height, Inf) > h)`), the heights being non-decreasing; out receives the labels
+fn cutree_h(a: *mem.Arena, t: *const Tree, n: usize, h: f64, out: []usize) -> err {
+    var below = 0usize
+    var i = 0usize
+    while i < n - 1usize {
+        if t.height[i] <= h { below += 1usize }
+        i += 1usize
+    }
+    ret cutree(a, t, n, n - below, out)
 }

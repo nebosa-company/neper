@@ -109,6 +109,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(kind, "cuth") {
+        let (lab2, e5) = mem.alloc[usize](a, n)
+        if e5 != ok { os.exit(7) }
+        let e6 = hc.cutree_h(a, &t, n, x[3usize + 2usize * n], lab2)
+        if e6 != ok { os.exit(8) }
+        i = 0usize
+        while i < n {
+            s += f64(lab2[i]) * f64(i + 1usize)
+            i += 1usize
+        }
+        ret s
+    }
     if str.eq(kind, "cut") {
         let (lab, e3) = mem.alloc[usize](a, n)
         if e3 != ok { os.exit(7) }

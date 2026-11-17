@@ -16,6 +16,7 @@ for (rep in 1:8) for (mi in 1:8) {
   add("merge", a, sum(as.vector(t(h$merge)) * seq_len(length(h$merge))))
   add("order", a, sum(h$order * seq_along(h$order)))
   add("cut", a, sum(cutree(h, k = k) * seq_len(n)))
+  if (!is.unsorted(h$height)) { hh <- sort(h$height); hq <- (hh[-1] + hh[-length(hh)]) / 2; hc0 <- sample(hq, 1); add("cuth", c(a, hc0), sum(cutree(h, h = hc0) * seq_len(n))) }
   cp <- as.vector(cophenetic(h))
   add("coph", a, sum(cp * seq_along(cp)))
 }
