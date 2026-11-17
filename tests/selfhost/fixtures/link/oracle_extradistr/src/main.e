@@ -11,6 +11,30 @@ use e.test.oracle as oracle
 
 fn answer(a0: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "e6") {
+        // (family, kind 0 d 1 p 2 q, p1..p5, v): 0 bern 1 dunif 2 dweibull 3 slash 4 huber 5 mixnorm 6 mixpois
+        let f6 = usize(x[0usize])
+        let k6 = usize(x[1usize])
+        let v6 = x[7usize]
+        if f6 == 0usize {
+            if k6 == 1usize { ret ed.bern_p(v6, x[2usize]) }
+            ret ed.bern_q(v6, x[2usize])
+        }
+        if f6 == 1usize { ret ed.dunif_q(v6, x[2usize], x[3usize]) }
+        if f6 == 2usize { ret ed.dweib_q(v6, x[2usize], x[3usize]) }
+        if f6 == 3usize { ret ed.slash_p(v6, x[2usize], x[3usize]) }
+        if f6 == 4usize { ret ed.huber_q(v6, x[2usize], x[3usize], x[4usize]) }
+        if f6 == 5usize { ret ed.mixnorm2_p(v6, x[2usize], x[3usize], x[4usize], x[5usize], x[6usize]) }
+        ret ed.mixpois2_p(v6, x[2usize], x[3usize], x[6usize])
+    }
+    if str.eq(c.name, "ec") {
+        // (kind 0 d 1 p 2 q, k, v, prob[k])
+        let kc = usize(x[1usize])
+        let pc = x[3usize..3usize + kc]
+        if usize(x[0usize]) == 0usize { ret ed.cat_d(x[2usize], pc) }
+        if usize(x[0usize]) == 1usize { ret ed.cat_p(x[2usize], pc) }
+        ret ed.cat_q(x[2usize], pc)
+    }
     if str.eq(c.name, "rg7") {
         // (family, seed, p1, p2, p3, index)
         var rg7: rng.Rng = zero

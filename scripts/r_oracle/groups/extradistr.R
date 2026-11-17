@@ -137,6 +137,18 @@ for (rep in 1:42) { sd <- sample(1:100000, 1); fam <- (rep - 1) %% 7; a1 <- runi
   set.seed(sd); v <- switch(fam + 1, rinvgamma(5, a1, b1), rinvchisq(5, a1, b1), rlst(5, a1, m1, s1), rht(5, a1, s1), rfatigue(5, a1 / 3, b1, m1), rnsbeta(5, a1, b1, lo, hi), rbetapr(5, a1, b1, s1))
   pp <- switch(fam + 1, c(a1, b1, 0, 0), c(a1, b1, 0, 0), c(a1, m1, s1, 0), c(a1, s1, 0, 0), c(a1 / 3, b1, m1, 0), c(a1, b1, lo, hi), c(a1, b1, s1, 0))
   for (j in 1:5) cases[[length(cases) + 1]] <- case("rg6", c(fam, sd, pp, j - 1), v[j], rel = 1e-9, abs = 1e-12) }
+# "e6" (family, kind 1 p 2 q, p1..p5, v): 0 bern 1 dunif q 2 dweibull q 3 slash p 4 huber q 5 mixnorm p 6 mixpois p; "ec" (kind 0 d 1 p 2 q, k, v, prob[k]) categorical
+for (rep in 1:4) {
+  pr <- runif(1, 0.2, 0.8); lo <- sample(-3:2, 1); hi <- lo + sample(3:9, 1); q <- runif(1, 0.4, 0.9); be <- runif(1, 0.6, 2); mu <- rnorm(1); sg <- runif(1, 0.5, 2); ep <- runif(1, 0.7, 2)
+  m2 <- rnorm(1, 2); s2 <- runif(1, 0.4, 1.5); l1 <- runif(1, 0.5, 3); l2 <- runif(1, 3, 8); a1 <- runif(1, 0.2, 0.8); k <- sample(2:6, 1); pc <- runif(k); pc <- pc / sum(pc) * runif(1, 1, 3)
+  for (xx in c(-1, 0, 0.5, 1, 2)) add2("e6", c(0, 1, pr, 0, 0, 0, 0, xx), pbern(xx, pr))
+  for (pp in c(0.1, 0.3, 0.5, 0.7, 0.9, 1 - pr, 0.999)) { add2("e6", c(0, 2, pr, 0, 0, 0, 0, pp), qbern(pp, pr)); add2("e6", c(1, 2, lo, hi, 0, 0, 0, pp), qdunif(pp, lo, hi)); add2("e6", c(2, 2, q, be, 0, 0, 0, pp), qdweibull(pp, q, be))
+    add2("e6", c(4, 2, mu, sg, ep, 0, 0, pp), qhuber(pp, mu, sg, ep)); add2("ec", c(2, k, pp, pc), qcat(pp, pc)) }
+  for (pp in c(0.002, 0.02, 0.04, 0.96, 0.99)) add2("e6", c(4, 2, mu, sg, ep, 0, 0, pp), qhuber(pp, mu, sg, ep))
+  for (xx in mu + c(-3, -0.5, 0, 0.4, 2.5)) { add2("e6", c(3, 1, mu, sg, 0, 0, 0, xx), pslash(xx, mu, sg)); add2("e6", c(5, 1, mu, sg, m2, s2, a1, xx), pmixnorm(xx, c(mu, m2), c(sg, s2), c(a1, 1 - a1))) }
+  for (xx in c(-1, 0, 1, 2.5, 5, 9)) add2("e6", c(6, 1, l1, l2, 0, 0, a1, xx), pmixpois(xx, c(l1, l2), c(a1, 1 - a1)))
+  for (xx in c(0, 1, 2, k, k + 1, 1.5)) { add2("ec", c(0, k, xx, pc), dcat(xx, pc)); add2("ec", c(1, k, xx, pc), pcat(xx, pc)) }
+}
 # scalar generators over several base draws: "rg7" (family, seed, p1, p2, p3, index); 0 triang 1 dlaplace 2 zip 3 zib 4 zinb 5 wald 6 bbinom 7 bnbinom 8 gpois 9 skellam 10 slash 11 prop 12 sign 13 sgomp 14 bhatt 15 huber 16 dnorm 17 dgamma 18 nhyper
 for (rep in 1:76) { sd <- sample(1:100000, 1); fam <- (rep - 1) %% 19
   l <- runif(1, 0.5, 5); pz <- runif(1, 0.05, 0.6); n <- sample(5:20, 1); pr <- runif(1, 0.2, 0.8); a1 <- runif(1, 0.5, 3); b1 <- runif(1, 0.5, 3); mu <- rnorm(1); sg <- runif(1, 0.5, 2); ep <- runif(1, 0.7, 2)

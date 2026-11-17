@@ -942,3 +942,66 @@ fn rvec(a: *mem.Arena, r: *rng.Rng, family: usize, k: usize, par: []const f64, d
     out[0usize] = f64(c + 1usize)
     ret ok
 }
+
+// the distribution and quantile functions that were left: Bernoulli, discrete uniform and discrete Weibull quantiles, slash and the two mixtures, and the categorical
+fn bern_p(x: f64, pr: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x < 1.0f64 { ret 1.0f64 - pr }
+    ret 1.0f64
+}
+fn bern_q(p: f64, pr: f64) -> f64 {
+    if p <= 1.0f64 - pr { ret 0.0f64 }
+    ret 1.0f64
+}
+fn dunif_q(p: f64, lo: f64, hi: f64) -> f64 {
+    if p == 0.0f64 { ret lo }
+    ret lo + math.ceil[f64](p * (hi - lo + 1.0f64)) - 1.0f64
+}
+fn dweib_q(p: f64, q: f64, be: f64) -> f64 {
+    ret math.ceil[f64](math.pow[f64](math.log[f64](1.0f64 - p) / math.log[f64](q), 1.0f64 / be)) - 1.0f64
+}
+fn slash_p(x: f64, mu: f64, s: f64) -> f64 {
+    let z = (x - mu) / s
+    if z == 0.0f64 { ret 0.5f64 }
+    ret pn(z) - (dist.dnorm(0.0f64, 0.0f64, 1.0f64, false) - dist.dnorm(z, 0.0f64, 1.0f64, false)) / z
+}
+fn mixnorm2_p(x: f64, m1: f64, s1: f64, m2: f64, s2: f64, a1: f64) -> f64 {
+    ret a1 * dist.pnorm(x, m1, s1, true, false) + (1.0f64 - a1) * dist.pnorm(x, m2, s2, true, false)
+}
+fn mixpois2_p(x: f64, l1: f64, l2: f64, a1: f64) -> f64 {
+    ret a1 * nm.ppois(x, l1, true, false) + (1.0f64 - a1) * nm.ppois(x, l2, true, false)
+}
+fn cat_sum(prob: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < prob.len {
+        s += prob[i]
+        i += 1usize
+    }
+    ret s
+}
+fn cat_d(x: f64, prob: []const f64) -> f64 {
+    if x < 1.0f64 || x > f64(prob.len) || x != math.floor[f64](x) { ret 0.0f64 }
+    ret prob[usize(x) - 1usize] / cat_sum(prob)
+}
+fn cat_p(x: f64, prob: []const f64) -> f64 {
+    if x < 1.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var i = 0usize
+    while i < prob.len && f64(i + 1usize) <= x {
+        s += prob[i]
+        i += 1usize
+    }
+    ret s / cat_sum(prob)
+}
+fn cat_q(p: f64, prob: []const f64) -> f64 {
+    let tot = cat_sum(prob)
+    var s = 0.0f64
+    var i = 0usize
+    while i + 1usize < prob.len {
+        s += prob[i]
+        if s / tot >= p { ret f64(i + 1usize) }
+        i += 1usize
+    }
+    ret f64(prob.len)
+}
