@@ -541,3 +541,148 @@ fn path_len(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, a
     }
     ret nlambda
 }
+
+// the mgaussian family: m responses (y is n by m column-major) sharing one penalty, the group penalty lambda vf_j ((1 - alpha) / 2 ||b_j||^2 + alpha ||b_j||) over each variable's row of coefficients; the responses are not rescaled,
+// so the ridge part is lambda (1 - alpha) unscaled. coef receives, for lambda k and response r, the intercept at (k * m + r) * (p + 1) and the p slopes after it, on the original scale
+fn mgaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, m: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
+    let nf = f64(n)
+    let (xs, e1) = mem.alloc[f64](a, n * p)
+    let (sc, e2) = mem.alloc[f64](a, p)
+    let (mx, e3) = mem.alloc[f64](a, p)
+    let (pf, e4) = mem.alloc[f64](a, p)
+    let (b, e5) = mem.alloc[f64](a, p * m)
+    let (r, e6) = mem.alloc[f64](a, n * m)
+    let (ybar, e7) = mem.alloc[f64](a, m)
+    let (z, e8) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret e1 }
+    var q = 0usize
+    while q < m {
+        var s = 0.0f64
+        var i = 0usize
+        while i < n {
+            s += y[q * n + i]
+            i += 1usize
+        }
+        ybar[q] = s / nf
+        q += 1usize
+    }
+    var vs = 0.0f64
+    var j = 0usize
+    while j < p {
+        vs += vf[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var mm = 0.0f64
+        var i = 0usize
+        while i < n {
+            mm += x[j * n + i]
+            i += 1usize
+        }
+        mm = mm / nf
+        var v = 0.0f64
+        i = 0usize
+        while i < n {
+            v += (x[j * n + i] - mm) * (x[j * n + i] - mm)
+            i += 1usize
+        }
+        var s = 1.0f64
+        if standardize { s = math.sqrt[f64](v / nf) }
+        sc[j] = s
+        mx[j] = mm
+        i = 0usize
+        while i < n {
+            xs[j * n + i] = (x[j * n + i] - mm) / s
+            i += 1usize
+        }
+        pf[j] = vf[j] * f64(p) / vs
+        q = 0usize
+        while q < m {
+            b[q * p + j] = 0.0f64
+            q += 1usize
+        }
+        j += 1usize
+    }
+    var k = 0usize
+    while k < lambdas.len {
+        let lam = lambdas[k]
+        q = 0usize
+        while q < m {
+            var i = 0usize
+            while i < n {
+                var f = 0.0f64
+                j = 0usize
+                while j < p {
+                    f += xs[j * n + i] * b[q * p + j]
+                    j += 1usize
+                }
+                r[q * n + i] = y[q * n + i] - ybar[q] - f
+                i += 1usize
+            }
+            q += 1usize
+        }
+        var sweep = 0usize
+        while sweep < 100000usize {
+            var dmax = 0.0f64
+            j = 0usize
+            while j < p {
+                var cj = 0.0f64
+                var i = 0usize
+                while i < n {
+                    cj += xs[j * n + i] * xs[j * n + i]
+                    i += 1usize
+                }
+                cj = cj / nf
+                var zn = 0.0f64
+                q = 0usize
+                while q < m {
+                    var xr = 0.0f64
+                    i = 0usize
+                    while i < n {
+                        xr += xs[j * n + i] * r[q * n + i]
+                        i += 1usize
+                    }
+                    z[q] = xr / nf + cj * b[q * p + j]
+                    zn += z[q] * z[q]
+                    q += 1usize
+                }
+                zn = math.sqrt[f64](zn)
+                var shrink = 0.0f64
+                if zn > lam * alpha * pf[j] { shrink = 1.0f64 - lam * alpha * pf[j] / zn }
+                q = 0usize
+                while q < m {
+                    let nb = shrink * z[q] / (cj + lam * (1.0f64 - alpha) * pf[j])
+                    let d = nb - b[q * p + j]
+                    if d != 0.0f64 {
+                        i = 0usize
+                        while i < n {
+                            r[q * n + i] -= d * xs[j * n + i]
+                            i += 1usize
+                        }
+                        b[q * p + j] = nb
+                        if math.abs[f64](d) * math.sqrt[f64](cj) > dmax { dmax = math.abs[f64](d) * math.sqrt[f64](cj) }
+                    }
+                    q += 1usize
+                }
+                j += 1usize
+            }
+            if dmax < 1.0e-14f64 { break }
+            sweep += 1usize
+        }
+        q = 0usize
+        while q < m {
+            var b0 = ybar[q]
+            j = 0usize
+            while j < p {
+                coef[(k * m + q) * (p + 1usize) + 1usize + j] = b[q * p + j] / sc[j]
+                b0 -= b[q * p + j] / sc[j] * mx[j]
+                j += 1usize
+            }
+            coef[(k * m + q) * (p + 1usize)] = b0
+            q += 1usize
+        }
+        k += 1usize
+    }
+    ret ok
+}

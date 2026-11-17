@@ -25,6 +25,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if gl.lambda_path(a, x[5usize + lp + ln..5usize + lp + ln + ln * lp], x[5usize + lp..5usize + lp + ln], ln, lp, x[2usize], x[3usize] != 0.0f64, x[5usize..5usize + lp], 100usize, lo) != ok { ret 0.0f64 / 0.0f64 }
         ret lo[usize(x[4usize])]
     }
+    if c.name[0usize] == 109u8 {
+        // mg: (n, p, alpha, std, nl, lambda[nl], vf[p], m, Y[n m], X[n p], k, r, j)
+        let mn = usize(x[0usize])
+        let mp = usize(x[1usize])
+        let mnl = usize(x[4usize])
+        let mm = usize(x[5usize + mnl + mp])
+        let ys = x[6usize + mnl + mp..6usize + mnl + mp + mn * mm]
+        let xm2 = x[6usize + mnl + mp + mn * mm..6usize + mnl + mp + mn * mm + mn * mp]
+        let at2 = 6usize + mnl + mp + mn * mm + mn * mp
+        let (mc, mce) = mem.alloc[f64](a, mnl * mm * (mp + 1usize))
+        if mce != ok { ret 0.0f64 / 0.0f64 }
+        if gl.mgaussian(a, xm2, ys, mn, mp, mm, x[2usize], x[3usize] != 0.0f64, x[5usize + mnl..5usize + mnl + mp], x[5usize..5usize + mnl], mc) != ok { ret 0.0f64 / 0.0f64 }
+        ret mc[(usize(x[at2]) * mm + usize(x[at2 + 1usize])) * (mp + 1usize) + usize(x[at2 + 2usize])]
+    }
     let n = usize(x[0usize])
     let p = usize(x[1usize])
     let nl = usize(x[4usize])

@@ -102,6 +102,18 @@ for (rep in 1:40) {
   f <- suppressWarnings(glmnet(X, y, alpha = al, standardize = as.logical(std)))
   cases[[length(cases) + 1]] <- case("nlam", c(n, p, al, std, 0, vf, y, X), length(f$lambda), rel = 0, abs = 0.5)
 }
+# mgaussian "mg": (n, p, alpha, std, nl, lambda[nl], vf[p], m, Y[n m], X[n p], k, r, j)
+for (rep in 1:10) {
+  n <- sample(40:90, 1); p <- sample(3:6, 1); m <- sample(2:3, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
+  Y <- round(X[, 1:2] %*% matrix(rnorm(2 * m), 2, m) + matrix(rnorm(n * m), n, m), 3)
+  alpha <- c(1, 0.5, 0.9, 0.2)[(rep %% 4) + 1]; std <- rep %% 3 != 0; vf <- if (rep %% 4 == 0) round(runif(p, 0.3, 2), 2) else rep(1, p)
+  xs <- if (std) scale(X) * sqrt(n / (n - 1)) else scale(X, scale = FALSE)
+  lmax <- max(sqrt(rowSums(crossprod(xs, scale(Y, scale = FALSE))^2)) / vf) / n / max(alpha, 1e-3) * (sum(vf) / p)
+  lam <- exp(seq(log(lmax), log(lmax * 0.05), length.out = 6))
+  f <- suppressWarnings(glmnet(X, Y, family = "mgaussian", alpha = alpha, standardize = std, penalty.factor = vf, lambda = lam, thresh = 1e-14, standardize.response = FALSE)); cf <- coef(f)
+  for (k in c(2, 4, 6)) for (r in 1:m) for (j in 0:p) cases[[length(cases) + 1]] <-
+    case("mg", c(n, p, alpha, std, length(lam), lam, vf, m, Y, X, k - 1, r - 1, j), as.matrix(cf[[r]])[j + 1, k], rel = 1e-5, abs = 1e-6)
+}
 # the automatic lambda sequence: "lpath" (n, p, alpha, std, k, vf[p], y[n], X[n p]) the k-th lambda (0-based) of glmnet(...)$lambda
 for (rep in 1:20) {
   n <- sample(30:80, 1); p <- sample(3:8, 1); X <- matrix(rnorm(n * p), n); y <- X[, 1] * 2 + rnorm(n); al <- sample(c(0.2, 0.5, 0.7, 1), 1); std <- rep %% 2; vf <- if (rep %% 3 == 0) runif(p, 0.5, 2) else rep(1, p)
