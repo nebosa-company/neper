@@ -570,10 +570,10 @@
       "group": "CRAN parity",
       "order": 681,
       "title": "lmerTest: Satterthwaite and Kenward-Roger tests for mixed models",
-      "score": 0.35,
+      "score": 0.42,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6917): e.algo.stat.lmerpkg.lmer_satt, lmerTest's Satterthwaite degrees of freedom of every fixed effect for the one-random-intercept model (REML or ML, at lme4's theta and sigma), equals lmerTest to 1e-4 on Windows (oracle_lmer; Linux pending). D6918: the t statistics and two-sided p values of the coefficient table equal lmerTest. D6919: contest1D (a contrast L'beta: estimate, standard error, Satterthwaite df, t, p) equals lmerTest. D6946: ranova (the likelihood-ratio test of the random intercept) equals lmerTest for REML fits. Open: anova and the multi-row contest with contrasts, Kenward-Roger, ranova, step, difflsmeans, models beyond one random intercept. Was: Open (CRAN rank 262). Small to mid. Needs L274. Acceptance, equal to lmerTest: summary and anova with Satterthwaite and Kenward-Roger degrees of freedom and p-values, ranova, step, difflsmeans, contest."
+      "evidence": "Partial (D6917): e.algo.stat.lmerpkg.lmer_satt, lmerTest's Satterthwaite degrees of freedom of every fixed effect for the one-random-intercept model (REML or ML, at lme4's theta and sigma), equals lmerTest to 1e-4 on Windows (oracle_lmer; Linux pending). D6918: the t statistics and two-sided p values of the coefficient table equal lmerTest. D6919: contest1D (a contrast L'beta: estimate, standard error, Satterthwaite df, t, p) equals lmerTest. D6969: the joint F test of contest (several contrast rows, Fai-Cornelius denominator df) equals lmerTest. D6946: ranova (the likelihood-ratio test of the random intercept) equals lmerTest for REML fits. Open: anova tables for factors (the same joint test per term) with contrasts, Kenward-Roger, ranova, step, difflsmeans, models beyond one random intercept. Was: Open (CRAN rank 262). Small to mid. Needs L274. Acceptance, equal to lmerTest: summary and anova with Satterthwaite and Kenward-Roger degrees of freedom and p-values, ranova, step, difflsmeans, contest."
     },
     {
       "id": "L284",

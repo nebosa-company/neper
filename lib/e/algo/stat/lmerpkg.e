@@ -6,6 +6,7 @@
 // Not here: crossed and nested random effects, random slopes, glmer (Laplace and Gauss-Hermite), lmerTest, predict and simulate.
 
 use e.algo.stat.bayesmpkg as bz
+use e.algo.stat.ica as ica
 use e.algo.stat.fdrtool as fd
 use e.math
 use e.math.nmath as nmx
@@ -424,5 +425,73 @@ fn lmer_ranova(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, 
     out[1usize] = full
     out[2usize] = lrt
     out[3usize] = nmx.pchisq(lrt, 1.0f64, false, false)
+    ret ok
+}
+
+// lmerTest's joint contest(model, L) for the q rows of lmat (q by p, row-major): F = (1 / q) sum of the squared t statistics along the eigenvectors of L V L', the denominator degrees of freedom 2 E / (E - q) with E the sum of nu / (nu - 2) over the
+// directions whose Satterthwaite df nu exceeds 2 (Fai and Cornelius); out = (F, numerator df, denominator df, p value). The covariances of the contrasts come from the variances of their sums, each variance and df from `lmer_contest`
+fn lmer_contest_joint(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: usize, p: usize, ng: usize, reml: bool, theta: f64, sigma: f64, lmat: []const f64, q: usize, out: []f64) -> err {
+    let (co, e0) = mem.alloc[f64](a, 5usize)
+    let (vl, e1) = mem.alloc[f64](a, q * q)
+    let (tmp, e2) = mem.alloc[f64](a, p)
+    let (lm, e3) = mem.alloc[f64](a, p)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var i = 0usize
+    while i < q {
+        var j = i
+        while j < q {
+            // cov(l_i, l_j) = (var(l_i + l_j) - var(l_i) - var(l_j)) / 2
+            var k = 0usize
+            while k < p {
+                tmp[k] = lmat[i * p + k] + lmat[j * p + k]
+                k += 1usize
+            }
+            let ea = lmer_contest(a, x, y, g, n, p, ng, reml, theta, sigma, tmp, co)
+            if ea != ok { ret ea }
+            let vs = co[1usize] * co[1usize]
+            let eb = lmer_contest(a, x, y, g, n, p, ng, reml, theta, sigma, lmat[i * p..i * p + p], co)
+            if eb != ok { ret eb }
+            let vi = co[1usize] * co[1usize]
+            let ec = lmer_contest(a, x, y, g, n, p, ng, reml, theta, sigma, lmat[j * p..j * p + p], co)
+            if ec != ok { ret ec }
+            let vj = co[1usize] * co[1usize]
+            var cv = (vs - vi - vj) / 2.0f64
+            if i == j { cv = vi }
+            vl[i * q + j] = cv
+            vl[j * q + i] = cv
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (ev, vecs, ee) = ica.eigen_sym(a, vl, q)
+    if ee != ok { ret ee }
+    var fsum = 0.0f64
+    var etot = 0.0f64
+    var m = 0usize
+    while m < q {
+        var k = 0usize
+        while k < p {
+            var s = 0.0f64
+            var r = 0usize
+            while r < q {
+                s += vecs[r * q + m] * lmat[r * p + k]
+                r += 1usize
+            }
+            lm[k] = s
+            k += 1usize
+        }
+        let ec2 = lmer_contest(a, x, y, g, n, p, ng, reml, theta, sigma, lm, co)
+        if ec2 != ok { ret ec2 }
+        fsum += co[0usize] * co[0usize] / ev[m]
+        if co[2usize] > 2.0f64 { etot += co[2usize] / (co[2usize] - 2.0f64) }
+        m += 1usize
+    }
+    let qf = f64(q)
+    let f = fsum / qf
+    let dd = 2.0f64 * etot / (etot - qf)
+    out[0usize] = f
+    out[1usize] = qf
+    out[2usize] = dd
+    out[3usize] = nb.pf(f, qf, dd, false, false)
     ret ok
 }

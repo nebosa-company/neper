@@ -27,6 +27,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         g[i] = usize(z[5usize + n * p + i])
         i += 1usize
     }
+    if which >= 6000usize {
+        // joint contest: which = 6000 + k (0 F, 1 numerator df, 2 denominator df, 3 p value), theta, sigma, q, then L (q by p, row-major) follow the data
+        let th = z[5usize + n * p + 2usize * n]
+        let sg = z[5usize + n * p + 2usize * n + 1usize]
+        let q = usize(z[5usize + n * p + 2usize * n + 2usize])
+        let (jo, jee) = mem.alloc[f64](a, 4usize)
+        if jee != ok { ret nan }
+        if lm.lmer_contest_joint(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, reml, th, sg, z[5usize + n * p + 2usize * n + 3usize..5usize + n * p + 2usize * n + 3usize + q * p], q, jo) != ok { ret nan }
+        ret jo[which - 6000usize]
+    }
     if which >= 5000usize {
         // ranova: which = 5000 + k (0 reduced criterion, 1 full criterion, 2 LRT, 3 p value), theta and sigma follow the data
         let th = z[5usize + n * p + 2usize * n]

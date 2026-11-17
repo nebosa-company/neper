@@ -21,6 +21,8 @@ for (rep in 1:24) {
       add("lmer", c(n, p, ng, as.numeric(reml), 3000 + j - 1, as.vector(X), g, y, th2, sg2), sm[j, "Pr(>|t|)"], 1e-3) } 
     if (reml) { ra <- suppressWarnings(suppressMessages(ranova(m2))); a5 <- function(k) c(n, p, ng, 1, 5000 + k, as.vector(X), g, y, th2, sg2)
       add("lmer", a5(0), -2 * ra[2, "logLik"], 1e-8); add("lmer", a5(1), -2 * ra[1, "logLik"], 1e-8); add("lmer", a5(2), ra[2, "LRT"], 1e-4); add("lmer", a5(3), ra[2, "Pr(>Chisq)"], 1e-3) }
+    if (p >= 2) { qq <- 2; Lm <- matrix(rnorm(qq * p), qq, p); cj <- lmerTest::contest(m2, Lm, joint = TRUE)
+      for (k in 1:4) add("lmer", c(n, p, ng, as.numeric(reml), 6000 + k - 1, as.vector(X), g, y, th2, sg2, qq, as.vector(t(Lm))), as.numeric(cj[1, c("F value", "NumDF", "DenDF", "Pr(>F)")][k]), c(1e-4, 1e-9, 1e-3, 1e-3)[k]) }
     Lc <- rnorm(p); ct <- lmerTest::contest(m2, matrix(Lc, 1), joint = FALSE, confint = FALSE)
     for (k in 1:5) add("lmer", c(n, p, ng, as.numeric(reml), 4000 + k - 1, as.vector(X), g, y, th2, sg2, Lc), as.numeric(ct[1, c("Estimate", "Std. Error", "df", "t value", "Pr(>|t|)")][k]), c(1e-6, 1e-4, 1e-4, 1e-4, 1e-3)[k]) }
 }
