@@ -785,3 +785,100 @@ fn roc_test_boot(a: *mem.Arena, y: []const f64, x1: []const f64, x2: []const f64
     out[1usize] = 2.0f64 * dist.pnorm(0.0f64 - math.abs[f64](d), 0.0f64, 1.0f64, true, false)
     ret ok
 }
+
+// ---- Venkatraman's permutation test (roc.test method "venkatraman", paired curves) ----
+
+// rank(v, ties.method = "first"): 1-based ranks, equal values ranked by position
+fn rank_first(v: []const f64, out: []f64) {
+    let n = v.len
+    var i = 0usize
+    while i < n {
+        var r = 1.0f64
+        var j = 0usize
+        while j < n {
+            if v[j] < v[i] || (v[j] == v[i] && j < i) { r += 1.0f64 }
+            j += 1usize
+        }
+        out[i] = r
+        i += 1usize
+    }
+}
+
+// sum over x = 1..n of |(S.fn + S.fp) - (R.fn + R.fp)| for the ranks R and S of the two predictors: fn(x) the cases with rank <= x, fp(x) the controls with rank > x
+fn venkatraman_stat(y: []const f64, r: []const f64, s: []const f64) -> f64 {
+    let n = y.len
+    var tot = 0.0f64
+    var x = 1usize
+    while x <= n {
+        var rfn = 0.0f64
+        var rfp = 0.0f64
+        var sfn = 0.0f64
+        var sfp = 0.0f64
+        var i = 0usize
+        while i < n {
+            if y[i] > 0.5f64 {
+                if r[i] <= f64(x) { rfn += 1.0f64 }
+                if s[i] <= f64(x) { sfn += 1.0f64 }
+            } else {
+                if r[i] > f64(x) { rfp += 1.0f64 }
+                if s[i] > f64(x) { sfp += 1.0f64 }
+            }
+            i += 1usize
+        }
+        tot += math.abs[f64]((sfn + sfp) - (rfn + rfp))
+        x += 1usize
+    }
+    ret tot
+}
+
+// roc.test(r1, r2, method = "venkatraman", paired = TRUE, boot.n) after set.seed: E of the observed ranks, and p = mean(E_perm >= E) over boot.n permutations; each permutation adds uniform noise in (-1/2, 1/2) to
+// both rank vectors (two runif(n) calls) then swaps them at random (1 - round(runif(n))) before re-ranking; out receives E and p
+fn roc_test_venkatraman(a: *mem.Arena, y: []const f64, x1: []const f64, x2: []const f64, boot_n: usize, seed: i64, out: []f64) -> err {
+    let n = y.len
+    let (r, e1) = mem.alloc[f64](a, n)
+    let (s, e2) = mem.alloc[f64](a, n)
+    let (r2, e3) = mem.alloc[f64](a, n)
+    let (s2, e4) = mem.alloc[f64](a, n)
+    let (r3, e5) = mem.alloc[f64](a, n)
+    let (s3, e6) = mem.alloc[f64](a, n)
+    let (rr, e7) = mem.alloc[f64](a, n)
+    let (ss, e8) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    rank_first(x1, r)
+    rank_first(x2, s)
+    let e = venkatraman_stat(y, r, s)
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    var ge = 0.0f64
+    var b = 0usize
+    while b < boot_n {
+        var i = 0usize
+        while i < n {
+            r2[i] = r[i] + rng.unif(&rg) - 0.5f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            s2[i] = s[i] + rng.unif(&rg) - 0.5f64
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            // 1 - round(runif): R rounds half to even, which only matters at exactly 0.5
+            let u = rng.unif(&rg)
+            var rd = math.round[f64](u)
+            if u == 0.5f64 { rd = 0.0f64 }
+            let q = 1.0f64 - rd
+            r3[i] = r2[i] * q + (1.0f64 - q) * s[i]
+            s3[i] = s2[i] * q + (1.0f64 - q) * r[i]
+            i += 1usize
+        }
+        rank_first(r3, rr)
+        rank_first(s3, ss)
+        if venkatraman_stat(y, rr, ss) >= e { ge += 1.0f64 }
+        b += 1usize
+    }
+    out[0usize] = e
+    out[1usize] = ge / f64(boot_n)
+    ret ok
+}

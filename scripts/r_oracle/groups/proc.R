@@ -81,4 +81,14 @@ for (rep in 1:20) {
   if (is.null(rt)) next
   add("btd", a, as.numeric(rt$statistic)); add("btp", a, rt$p.value)
 }
+# roc.test by Venkatraman's permutation test, paired: ("vne" the statistic E, "vnp" the p value) args (n, y, x1, x2, boot.n, seed)
+for (rep in 1:20) {
+  n <- sample(20:50, 1); y <- rbinom(n, 1, 0.4); if (sum(y) < 4 || sum(y) > n - 4) next
+  s <- c(0.8, 1.5, 0.5, 1.1)[rep %% 4 + 1]; x1 <- round(rnorm(n) + s * y, if (rep %% 3 == 0) 1 else 4); x2 <- round(rnorm(n) + 0.5 * y + 0.3 * x1, 4)
+  r1 <- roc(y, x1, quiet = TRUE); r2 <- roc(y, x2, quiet = TRUE); bn <- 200; sd <- sample(1:100000, 1)
+  a <- c(n, y, x1, x2, bn, sd, 0)
+  set.seed(sd); rt <- tryCatch(suppressWarnings(roc.test(r1, r2, method = "venkatraman", boot.n = bn, paired = TRUE, progress = "none")), error = function(e) NULL)
+  if (is.null(rt)) next
+  add("vne", a, as.numeric(rt$statistic)); add("vnp", a, rt$p.value)
+}
 emit("proc", "pROC", list(cases))

@@ -44,6 +44,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "btd") { ret bo2[0usize] }
         ret bo2[1usize]
     }
+    if str.eq(k, "vne") || str.eq(k, "vnp") {
+        let (vo, voe) = mem.alloc[f64](a, 2usize)
+        if voe != ok { ret 0.0f64 / 0.0f64 }
+        if pr.roc_test_venkatraman(a, y, x1, x2, usize(x[3usize * n + 1usize]), i64(x[3usize * n + 2usize]), vo) != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(k, "vne") { ret vo[0usize] }
+        ret vo[1usize]
+    }
     if str.eq(k, "smi") || str.eq(k, "sms") || str.eq(k, "sma") {
         let (so, soe) = mem.alloc[f64](a, 3usize)
         if soe != ok { ret 0.0f64 / 0.0f64 }

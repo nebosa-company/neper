@@ -3655,4 +3655,5 @@ D6792	1076	ROCR: calibration error and the precision/recall break-even point
 D6793	1537	ROCR: rch and ecost, and R's chull
 D6794	904	pROC: ci.auc by bootstrap
 D6795	847	pROC: smooth(roc), binormal
-D6796	787	pROC: roc.test by bootstrap (paired, AUC)
+D6796	788	pROC: roc.test by bootstrap (paired, AUC)
+D6797	950	pROC: roc.test by Venkatraman's permutation test (paired)
