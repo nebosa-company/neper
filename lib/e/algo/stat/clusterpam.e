@@ -1878,3 +1878,63 @@ fn clara_core(a: *mem.Arena, x: []const f64, n: usize, p: usize, kk: usize, nran
     }
     ret (ClaraOut { sample: sample, imed: imed, clustering: clu, obj: obj, size: size, maxdis: maxdis, avdis: avdis, ratdis: ratdis, avsil: avsil, ttsil: ttsil, silinf: silinf, dys: dys, jstop: jstop }, ok)
 }
+
+// medoids(x, clustering): per cluster, in sorted label order, the 1-based observation pam(rows of the cluster, k = 1) picks;
+// returns the number of clusters (a cluster of one observation is an error, as in R)
+fn cluster_medoids(a: *mem.Arena, x: []const f64, n: usize, p: usize, cl: []const i64, metric: usize, out: []usize) -> (usize, err) {
+    var ncl = 0usize
+    var lo = 0i64
+    var first = true
+    var done = 0usize
+    while done < n {
+        var cur = 0i64
+        var have = false
+        var i = 0usize
+        while i < n {
+            if first || cl[i] > lo {
+                if !have || cl[i] < cur {
+                    cur = cl[i]
+                    have = true
+                }
+            }
+            i += 1usize
+        }
+        var size = 0usize
+        i = 0usize
+        while i < n {
+            if cl[i] == cur { size += 1usize }
+            i += 1usize
+        }
+        if size < 2usize { ret (0usize, BadPam) }
+        let (rows, e1) = mem.alloc[usize](a, size)
+        if e1 != ok { ret (0usize, e1) }
+        let (sub, e2) = mem.alloc[f64](a, size * p)
+        if e2 != ok { ret (0usize, e2) }
+        var m = 0usize
+        i = 0usize
+        while i < n {
+            if cl[i] == cur {
+                rows[m] = i
+                var j = 0usize
+                while j < p {
+                    sub[m * p + j] = x[i * p + j]
+                    j += 1usize
+                }
+                m += 1usize
+            }
+            i += 1usize
+        }
+        let (dys, e3) = mem.alloc[f64](a, size * (size - 1usize) / 2usize + 1usize)
+        if e3 != ok { ret (0usize, e3) }
+        if cd.dysta(sub, size, p, metric, dys) != 0usize { ret (0usize, BadPam) }
+        let empty: []const usize = zero
+        let (r, e4) = pam_core(a, dys, size, 1usize, empty, true, 0usize, true)
+        if e4 != ok { ret (0usize, e4) }
+        out[ncl] = rows[r.med[0usize] - 1usize] + 1usize
+        ncl += 1usize
+        done += size
+        lo = cur
+        first = false
+    }
+    ret (ncl, ok)
+}

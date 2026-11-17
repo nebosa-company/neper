@@ -105,6 +105,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (t, e8) = ct.twins_tree(a, r, n)
     if e8 != ok { os.exit(14) }
     if str.eq(nm, "hheight") { ret wsum_f(t.height, n - 1usize) }
+    if str.eq(nm, "hier") {
+        let (hv, e10) = mem.alloc[f64](a, n)
+        if e10 != ok { os.exit(18) }
+        hv[0usize] = 0.0f64
+        var q = 0usize
+        while q + 1usize < n {
+            hv[q + 1usize] = t.height[q]
+            q += 1usize
+        }
+        ret ct.bncoef(n, hv)
+    }
     if str.eq(nm, "hcoef") { ret ct.coef_hclust(&t, n) }
     if str.eq(nm, "cut") {
         let (lab, e9) = mem.alloc[usize](a, n)

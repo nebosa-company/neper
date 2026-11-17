@@ -31,7 +31,28 @@ fn wsum_u(v: []const usize, cnt: usize) -> f64 {
     ret s
 }
 
+// medoids(x, clustering): args (n, p, metric, labels[1..n], data)
+fn medoids_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let metric = usize(x[2usize])
+    let (cl, e1) = mem.alloc[i64](a, n)
+    if e1 != ok { os.exit(20) }
+    var i = 0usize
+    while i < n {
+        cl[i] = i64(x[3usize + i])
+        i += 1usize
+    }
+    let (out, e2) = mem.alloc[usize](a, n)
+    if e2 != ok { os.exit(21) }
+    let (ncl, e3) = cp.cluster_medoids(a, x[3usize + n..3usize + n + n * p], n, p, cl, metric, out)
+    if e3 != ok { os.exit(22) }
+    ret wsum_u(out, ncl)
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "medoids") { ret medoids_case(a, c) }
     let x = c.args
     let n = usize(x[0usize])
     let p = usize(x[1usize])

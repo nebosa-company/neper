@@ -88,4 +88,12 @@ for (rep in 1:10) {
   d <- structure(v, Size = n, class = "dist")
   onepam(d, k, sample(0:6, 1), 1, 1, 0, diss = TRUE)
 }
+# medoids(x, clustering): the pam medoid of each cluster, in sorted label order (every cluster has at least two members)
+for (rep in 1:14) {
+  n <- sample(12:40, 1); x <- gen(n, sample(1:3, 1), rep %% 2 == 0); k <- sample(2:4, 1)
+  cl <- sample(rep(c(sample(c(-3, 2, 5, 8, 9), k)), length.out = n))
+  m <- sample(1:2, 1)
+  md <- tryCatch(medoids(x, cl, metric = c("euclidean", "manhattan")[m]), error = function(e) NULL)
+  if (!is.null(md)) add("medoids", c(n, ncol(x), m, cl, as.vector(t(x))), wsum(md), 0, 0)
+}
 emit("clusterpam", "cluster", list(cases))

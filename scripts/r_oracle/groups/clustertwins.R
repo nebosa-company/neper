@@ -4,7 +4,7 @@
 #     kind 1 agnes / 2 diana; method 1..7 = average single complete ward weighted flexible gaverage; metric 1 euclidean 2 manhattan;
 #     data is x row-major (NA as -999999), or the R dist vector when diss is 1; kcut is the k of cutree(as.hclust(.), k)
 #   fn names the answer: order, m1, m2 (merge columns), height (position-weighted sums; height is the package's, unsorted),
-#     coef (ac or dc), hheight (the sorted heights as.hclust answers), hcoef (coef.hclust of as.hclust), cut (cutree labels)
+#     coef (ac or dc), hheight (the sorted heights as.hclust answers), hcoef (coef.hclust of as.hclust), hier (coefHier of as.hclust), cut (cutree labels)
 suppressMessages(library(cluster))
 cases <- list()
 add <- function(fn, args, want, rel = 1e-9, abs = 1e-12) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
@@ -30,6 +30,7 @@ onetwins <- function(x, kind, method, stand, metric, kcut, par = numeric(0), dis
   add("coef", a, if (kind == 1) r$ac else r$dc)
   h <- as.hclust(r)
   add("hheight", a, wsum(h$height))
+  add("hier", a, coefHier(h))
   add("cut", a, wsum(cutree(h, kcut)), 0, 0)
   hc <- tryCatch(coef.hclust(h), error = function(e) NULL)
   if (!is.null(hc)) add("hcoef", a, hc)

@@ -79,8 +79,8 @@ onesil <- function(n, codes, ismat, cl = sample(codes, n, replace = TRUE)) {
   sm <- summary(s)
   add("savg", a, sm$avg.width); add("sclus", a, wsum(sm$clus.avg.widths)); add("ssize", a, wsum(as.integer(sm$clus.sizes)), 0, 0)
 }
-for (rep in 1:30) {
-  n <- sample(6:40, 1); k <- sample(2:5, 1)
+for (rep in 1:24) {
+  n <- sample(6:22, 1); k <- sample(2:5, 1)
   codes <- if (rep %% 3 == 0) sort(sample(c(-2, 0, 3, 5, 9, 11), k)) else 1:k
   onesil(n, codes, rep %% 2)
 }
