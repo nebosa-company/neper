@@ -18,4 +18,29 @@ for (rep in 1:80) {
     cases[[length(cases) + 1]] <- mk(as.numeric(mm[2]), n, d, o)
   }
 }
+
+# BEA: set.seed(seed); seriate(X, "BEA"); "m" codes 5 (row order) and 6 (column order): (code, nr, nc, X row-major, order, seed)
+for (rep in 1:40) {
+  nr <- sample(3:12, 1); nc <- sample(3:12, 1); X <- matrix(round(runif(nr * nc) * 5), nr, nc)
+  seed <- sample(1:100000, 1); set.seed(seed)
+  s <- seriate(X, "BEA")
+  cases[[length(cases) + 1]] <- case("m", c(5, nr, nc, rowm(X), get_order(s, 1), seed), 1, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("m", c(6, nr, nc, rowm(X), get_order(s, 2), seed), 1, rel = 0, abs = 0)
+}
+# TSP insertion heuristics without 2-opt: (7, n, D, order, seed, method 1 nearest 2 farthest 3 cheapest 4 arbitrary)
+meths <- c("nearest_insertion", "farthest_insertion", "cheapest_insertion", "arbitrary_insertion")
+for (rep in 1:80) {
+  n <- sample(5:25, 1); x <- matrix(runif(n * 3), n, 3); d <- dist(x)
+  if (rep %% 3 == 0) d <- dist(round(x * 4))
+  mi <- (rep - 1) %% 4 + 1; seed <- sample(1:100000, 1); set.seed(seed)
+  o <- as.integer(get_order(seriate(d, "TSP", control = list(method = meths[mi]))))
+  cases[[length(cases) + 1]] <- mk(7, n, d, o, c(seed, mi))
+}
+# TSP default (arbitrary insertion + 2-opt, rep 1), informational (2-opt is compiled C): fn "t" (8, n, D, order, seed)
+for (rep in 1:80) {
+  n <- sample(5:25, 1); x <- matrix(runif(n * 3), n, 3); d <- dist(x)
+  seed <- sample(1:100000, 1); set.seed(seed)
+  o <- as.integer(get_order(seriate(d, "TSP")))
+  cases[[length(cases) + 1]] <- case("t", c(8, n, rowm(as.matrix(d)), o, seed), 1, rel = 0, abs = 0)
+}
 emit("seriation_methods", "seriation", list(cases))
