@@ -63,4 +63,12 @@ for (rep in 1:20) {
   set.seed(sd); ci <- ci.auc(r1, method = "bootstrap", boot.n = bn, boot.stratified = st)
   add("bcl", a, ci[1]); add("bcm", a, ci[2]); add("bch", a, ci[3])
 }
+# smooth(roc) binormal: ("smi" intercept, "sms" slope of the fit, "sma" AUC of the smoothed curve) args (n, y, x1, x2)
+for (rep in 1:25) {
+  n <- sample(25:80, 1); y <- rbinom(n, 1, 0.4); if (sum(y) < 4 || sum(y) > n - 4) next
+  s <- c(0.8, 1.5, 0.5, 1.1)[rep %% 4 + 1]; x1 <- round(rnorm(n) + s * y, if (rep %% 3 == 0) 1 else 4); r1 <- roc(y, x1, quiet = TRUE)
+  sm <- tryCatch(smooth(r1), error = function(e) NULL); if (is.null(sm)) next
+  a <- c(n, y, x1, x1)
+  add("smi", a, unname(coef(sm$model)[1])); add("sms", a, unname(coef(sm$model)[2])); add("sma", a, as.numeric(auc(sm)))
+}
 emit("proc", "pROC", list(cases))

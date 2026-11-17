@@ -594,3 +594,87 @@ fn ci_auc_boot(a: *mem.Arena, y: []const f64, x: []const f64, boot_n: usize, see
     out[2usize] = quantile7(aucs[0usize..nv], 1.0f64 - tail)
     ret ok
 }
+
+// ---- smooth(roc, method = "binormal") ----
+
+// the binormal fit: sp' = a + b se' (least squares over the finite normal quantiles of the curve's points, `lm(sp ~ se)`), and the AUC of the smooth, which `auc.roc` takes from the fitted coefficients (n, the grid size, is unused);
+// out receives the intercept, the slope and the AUC
+fn smooth_binormal(a: *mem.Arena, y: []const f64, x: []const f64, n: usize, out: []f64) -> err {
+    let higher = cases_higher(a, y, x)
+    let m = x.len
+    let (u, e1) = mem.alloc[f64](a, m)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < m {
+        u[i] = x[i]
+        i += 1usize
+    }
+    i = 1usize
+    while i < m {
+        let key = u[i]
+        var j = i
+        while j > 0usize && u[j - 1usize] > key {
+            u[j] = u[j - 1usize]
+            j -= 1usize
+        }
+        u[j] = key
+        i += 1usize
+    }
+    var nu = 0usize
+    i = 0usize
+    while i < m {
+        if nu == 0usize || u[i] != u[nu - 1usize] {
+            u[nu] = u[i]
+            nu += 1usize
+        }
+        i += 1usize
+    }
+    // the points of the curve: thresholds -Inf, the midpoints, Inf
+    var sx = 0.0f64
+    var sy = 0.0f64
+    var sxx = 0.0f64
+    var sxy = 0.0f64
+    var cnt = 0.0f64
+    var t = 0usize
+    while t < nu + 1usize {
+        var thr = 0.0f64
+        if t == 0usize { thr = 0.0f64 - 1.0e308f64 * 10.0f64 } else if t == nu { thr = 1.0e308f64 * 10.0f64 } else { thr = (u[t - 1usize] + u[t]) / 2.0f64 }
+        let (se, sp) = coords_at(y, x, higher, thr)
+        if se > 0.0f64 && se < 1.0f64 && sp > 0.0f64 && sp < 1.0f64 {
+            let qs = dist.qnorm(se, 0.0f64, 1.0f64, true, false)
+            let qp = dist.qnorm(sp, 0.0f64, 1.0f64, true, false)
+            sx += qs
+            sy += qp
+            sxx += qs * qs
+            sxy += qs * qp
+            cnt += 1.0f64
+        }
+        t += 1usize
+    }
+    if cnt < 2.0f64 { ret mem.Full }
+    let mx = sx / cnt
+    let my = sy / cnt
+    var sxx2 = 0.0f64
+    var sxy2 = 0.0f64
+    t = 0usize
+    while t < nu + 1usize {
+        var thr = 0.0f64
+        if t == 0usize { thr = 0.0f64 - 1.0e308f64 * 10.0f64 } else if t == nu { thr = 1.0e308f64 * 10.0f64 } else { thr = (u[t - 1usize] + u[t]) / 2.0f64 }
+        let (se, sp) = coords_at(y, x, higher, thr)
+        if se > 0.0f64 && se < 1.0f64 && sp > 0.0f64 && sp < 1.0f64 {
+            let qs = dist.qnorm(se, 0.0f64, 1.0f64, true, false) - mx
+            let qp = dist.qnorm(sp, 0.0f64, 1.0f64, true, false) - my
+            sxx2 += qs * qs
+            sxy2 += qs * qp
+        }
+        t += 1usize
+    }
+    let slope = sxy2 / sxx2
+    let icpt = my - slope * mx
+    // auc.roc of a binormal smooth is closed form, pnorm(a / sqrt(1 + b^2)), whatever the grid
+    let auc = dist.pnorm(icpt / math.sqrt[f64](1.0f64 + slope * slope), 0.0f64, 1.0f64, true, false)
+    out[0usize] = icpt
+    out[1usize] = slope
+    out[2usize] = auc
+    ret ok
+}

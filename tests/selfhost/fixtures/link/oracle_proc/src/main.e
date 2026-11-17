@@ -37,6 +37,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "bcm") { ret bo[1usize] }
         ret bo[2usize]
     }
+    if str.eq(k, "smi") || str.eq(k, "sms") || str.eq(k, "sma") {
+        let (so, soe) = mem.alloc[f64](a, 3usize)
+        if soe != ok { ret 0.0f64 / 0.0f64 }
+        if pr.smooth_binormal(a, y, x1, 512usize, so) != ok { ret 0.0f64 / 0.0f64 }
+        if str.eq(k, "smi") { ret so[0usize] }
+        if str.eq(k, "sms") { ret so[1usize] }
+        ret so[2usize]
+    }
     if str.eq(k, "ncoord") || str.eq(k, "ssens") || str.eq(k, "sspec") || str.eq(k, "sthr") {
         let (cn, ss, sp, st) = pr.roc_sums(a, y, x1)
         if str.eq(k, "ncoord") { ret cn }
