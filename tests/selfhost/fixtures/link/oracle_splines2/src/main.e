@@ -65,6 +65,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if kind == 8usize { deriv = 1usize }
     if kind == 9usize { deriv = 2usize }
     if kind == 11usize { deriv = 1usize }
+    if kind == 30usize || kind == 32usize { deriv = 1usize }
+    if kind == 31usize || kind == 33usize { deriv = 2usize }
     var s = 0.0f64
     var cnt = 0usize
     var i = 0usize
@@ -76,12 +78,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             var kp = 0u8
             if kind == 13usize { kp = 1u8 }
             m = sp.periodic_row(tp, knots, lo, hi, degree, icp, kp, 0usize, xs[i], out)
-        } else if kind == 18usize {
+        } else if kind == 18usize || kind == 32usize || kind == 33usize {
             let (tk, ek1) = mem.alloc[f64](a, nk + 12usize)
             let (tmpk, ek2) = mem.alloc[f64](a, 2usize * (nk + 4usize) + 8usize)
             let (outk, ek3) = mem.alloc[f64](a, nk + 6usize)
             if ek1 != ok || ek2 != ok || ek3 != ok { ret 0.0f64 / 0.0f64 }
-            m = sp.nsk_row(a, tk, tmpk, knots, lo, hi, icp, xs[i], outk)
+            m = sp.nsk_row(a, tk, tmpk, knots, lo, hi, icp, deriv, xs[i], outk)
             var jk = 0usize
             while jk < m {
                 out[jk] = outk[jk]
@@ -100,12 +102,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
                 out[jc] = outn2[jc]
                 jc += 1usize
             }
-        } else if kind == 5usize {
+        } else if kind == 5usize || kind == 30usize || kind == 31usize {
             let (tn, en1) = mem.alloc[f64](a, nk + 12usize)
             let (tmpn, en2) = mem.alloc[f64](a, 2usize * (nk + 4usize) + 8usize)
             let (outn, en3) = mem.alloc[f64](a, nk + 6usize)
             if en1 != ok || en2 != ok || en3 != ok { ret 0.0f64 / 0.0f64 }
-            m = sp.nat_row(a, tn, tmpn, knots, lo, hi, icp, xs[i], outn)
+            m = sp.nat_row(a, tn, tmpn, knots, lo, hi, icp, deriv, xs[i], outn)
             var jn = 0usize
             while jn < m {
                 out[jn] = outn[jn]

@@ -110,4 +110,26 @@ for (rep in 1:40) {
     v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, kind, x, kn); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
   }
 }
+# periodic = TRUE for iSpline (kind 2) and cSpline (kinds 6, 7), which the package computes as the ordinary bases, and mSpline(integral = TRUE) (kind 2)
+for (rep in 1:30) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); nk <- sample(1:3, 1); degree <- sample(1:4, 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)); if (anyDuplicated(kn)) next
+  for (kind in c(2, 6, 7, 22)) {
+    m <- tryCatch(suppressWarnings(unclass(switch(kind %% 20 - 1, iSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), periodic = TRUE), NULL, NULL, NULL, cSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), periodic = TRUE), cSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), scale = FALSE, periodic = TRUE)))), error = function(e) NULL)
+    if (kind == 22) m <- tryCatch(suppressWarnings(unclass(mSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), integral = TRUE))), error = function(e) NULL)
+    if (is.null(m)) next
+    kk <- if (kind == 22) 2 else if (kind == 6) 7 else if (kind == 7) 6 else kind
+    v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, kk, x, kn); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
+  }
+}
+# derivatives of naturalSpline (kinds 30, 31) and nsk (32, 33)
+for (rep in 1:40) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(5:20, 1); nk <- sample(2:4, 1); icp <- rbinom(1, 1, 0.5)
+  x <- sort(c(lo, hi, round(runif(n - 2, lo, hi), 4))); kn <- sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)); if (anyDuplicated(kn)) next
+  for (kind in 30:33) {
+    d <- if (kind %in% c(30, 32)) 1 else 2
+    m <- tryCatch(suppressWarnings(unclass(if (kind <= 31) naturalSpline(x, knots = kn, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = d) else nsk(x, knots = kn, intercept = icp == 1, Boundary.knots = c(lo, hi), derivs = d))), error = function(e) NULL); if (is.null(m)) next
+    v <- as.vector(t(m)); a <- c(n, nk, 3, icp, lo, hi, kind, x, kn); add("sum", a, sum(v)); add("w", a, sum(seq_along(v) * v))
+  }
+}
 emit("splines2", "splines2", list(cases))

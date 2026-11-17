@@ -105,7 +105,7 @@ fn row(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize
 }
 
 // splines2::naturalSpline row at x (cubic, at least two internal knots): the cubic B-spline row times H, whose columns are the null space of the second derivatives at the boundary knots in the form the package uses: (B1 + B2 + B3) / 3 and t B2 + (1 - t) B3 on the left, the interior B-splines, and s B[K-2] + (1 - s) B[K-1] and the mean of the last three on the right, with t, s from the boundary second derivatives; the first column drops without the intercept
-fn nat_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, intercept: bool, x: f64, out: []f64) -> usize {
+fn nat_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, intercept: bool, deriv: usize, x: f64, out: []f64) -> usize {
     let kk = knots.len + 4usize
     let (c0, e0) = mem.alloc[f64](a, kk)
     let (c1, e1) = mem.alloc[f64](a, kk)
@@ -113,7 +113,7 @@ fn nat_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi:
     if e0 != ok || e1 != ok || e2 != ok { ret 0usize }
     let g0 = row(t, tmp, knots, lo, hi, 3usize, true, 0u8, 2usize, lo, c0)
     let g1 = row(t, tmp, knots, lo, hi, 3usize, true, 0u8, 2usize, hi, c1)
-    let gb = row(t, tmp, knots, lo, hi, 3usize, true, 0u8, 0usize, x, br)
+    let gb = row(t, tmp, knots, lo, hi, 3usize, true, 0u8, deriv, x, br)
     let tl = c0[2usize] / (c0[2usize] - c0[1usize])
     let sr = c1[kk - 2usize] / (c1[kk - 2usize] - c1[kk - 3usize])
     var o = 0usize
@@ -382,7 +382,7 @@ fn bern_row(degree: usize, intercept: bool, lo: f64, hi: f64, deriv: usize, x: f
 }
 
 // splines2::nsk row at x: the natural basis (`nat_row` with the intercept) times the inverse of its values at the boundary and internal knots, so each column is the cardinal natural spline that is one at its own knot and zero at the others; the first column drops without the intercept
-fn nsk_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, intercept: bool, x: f64, out: []f64) -> usize {
+fn nsk_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, intercept: bool, deriv: usize, x: f64, out: []f64) -> usize {
     let kn = knots.len + 2usize
     let (m, e0) = mem.alloc[f64](a, kn * kn)
     let (rhs, e1) = mem.alloc[f64](a, kn)
@@ -393,7 +393,7 @@ fn nsk_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi:
     while j < kn {
         var kx = lo
         if j == kn - 1usize { kx = hi } else if j > 0usize { kx = knots[j - 1usize] }
-        let c = nat_row(a, t, tmp, knots, lo, hi, true, kx, nrow)
+        let c = nat_row(a, t, tmp, knots, lo, hi, true, 0usize, kx, nrow)
         if c != kn { ret 0usize }
         var i = 0usize
         while i < kn {
@@ -402,7 +402,7 @@ fn nsk_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi:
         }
         j += 1usize
     }
-    let c2 = nat_row(a, t, tmp, knots, lo, hi, true, x, nrow)
+    let c2 = nat_row(a, t, tmp, knots, lo, hi, true, deriv, x, nrow)
     if c2 != kn { ret 0usize }
     var i = 0usize
     while i < kn {
