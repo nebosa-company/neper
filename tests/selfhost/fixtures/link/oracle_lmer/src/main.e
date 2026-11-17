@@ -25,6 +25,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         g[i] = usize(z[5usize + n * p + i])
         i += 1usize
     }
+    if which >= 1000usize {
+        // Satterthwaite df of fixed effect (which - 1000) at lme4's (theta, sigma): args after the data are theta, sigma
+        let th = z[5usize + n * p + 2usize * n]
+        let sg = z[5usize + n * p + 2usize * n + 1usize]
+        let (dfo, de) = mem.alloc[f64](a, p)
+        if de != ok { ret nan }
+        if lm.lmer_satt(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, reml, th, sg, dfo) != ok { ret nan }
+        ret dfo[which - 1000usize]
+    }
     if lm.lmer_ri(a, z[5usize..5usize + n * p], z[5usize + n * p + n..5usize + n * p + 2usize * n], g, n, p, ng, reml, beta, re, out) != ok { ret nan }
     if which < 4usize { ret out[which] }
     if which < 4usize + p { ret beta[which - 4usize] }

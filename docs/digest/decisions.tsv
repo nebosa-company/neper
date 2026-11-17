@@ -3775,4 +3775,5 @@ D6912	690	LearnBayes: laplace at a given mode
 D6913	1036	R's Nelder-Mead and LearnBayes laplace
 D6914	1046	MASS fitdistr by BFGS, and a generic vmmin
 D6915	514	MASS fitdistr: negative binomial
-D6916	563	caret: createMultiFolds
+D6916	564	caret: createMultiFolds
+D6917	1052	lmerTest: Satterthwaite degrees of freedom

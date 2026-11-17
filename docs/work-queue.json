@@ -614,10 +614,10 @@
       "group": "CRAN parity",
       "order": 681,
       "title": "lmerTest: Satterthwaite and Kenward-Roger tests for mixed models",
-      "score": 0,
+      "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 262). Small to mid. Needs L274. Acceptance, equal to lmerTest: summary and anova with Satterthwaite and Kenward-Roger degrees of freedom and p-values, ranova, step, difflsmeans, contest."
+      "evidence": "Partial (D6917): e.algo.stat.lmerpkg.lmer_satt, lmerTest's Satterthwaite degrees of freedom of every fixed effect for the one-random-intercept model (REML or ML, at lme4's theta and sigma), equals lmerTest to 1e-4 on Windows (oracle_lmer; Linux pending). Open: the t tests and p values, anova and contest with contrasts, Kenward-Roger, ranova, step, difflsmeans, models beyond one random intercept. Was: Open (CRAN rank 262). Small to mid. Needs L274. Acceptance, equal to lmerTest: summary and anova with Satterthwaite and Kenward-Roger degrees of freedom and p-values, ranova, step, difflsmeans, contest."
     },
     {
       "id": "L284",

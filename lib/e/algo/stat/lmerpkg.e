@@ -211,3 +211,87 @@ fn lmer_ri(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: u
     }
     ret ok
 }
+
+// the deviance as a function of (theta, sigma) with the fixed effects profiled out: the REML criterion (reml) or the ML deviance
+fn lmm_dev2(c: *Lmm, theta: f64, sigma: f64) -> f64 {
+    let _ = lmm_profile(c, theta)
+    var ldx = 0.0f64
+    var j = 0usize
+    while j < c.p {
+        ldx += 2.0f64 * math.log[f64](c.u[j * c.p + j])
+        j += 1usize
+    }
+    let two_pi = 6.283185307179586f64
+    var dfn = f64(c.n)
+    if c.reml {
+        dfn = f64(c.n - c.p)
+        ret c.logdet + ldx + dfn * math.log[f64](two_pi * sigma * sigma) + c.r2 / (sigma * sigma)
+    }
+    ret c.logdet + dfn * math.log[f64](two_pi * sigma * sigma) + c.r2 / (sigma * sigma)
+}
+
+// the variance of fixed effect j, sigma^2 (X' V^-1 X)^-1_jj, at theta
+fn lmm_vj(c: *Lmm, theta: f64, sigma: f64, j: usize) -> f64 {
+    let _ = lmm_profile(c, theta)
+    var s = 0.0f64
+    var q = j
+    while q < c.p {
+        s += c.uinv[q * c.p + j] * c.uinv[q * c.p + j]
+        q += 1usize
+    }
+    ret sigma * sigma * s
+}
+
+// lmerTest's Satterthwaite degrees of freedom of each fixed effect at the given (theta, sigma): df_j = 2 v_j^2 / (g_j' A g_j) with v_j the variance of the estimate, g_j its gradient in (theta, sigma) and A = 2 H^-1 the asymptotic covariance from the Hessian H of the deviance,
+// both by central differences (theta, sigma as lme4 reports them); df receives p values
+fn lmer_satt(a: *mem.Arena, x: []const f64, y: []const f64, g: []const usize, n: usize, p: usize, ng: usize, reml: bool, theta: f64, sigma: f64, df: []f64) -> err {
+    let (cnt, e1) = mem.alloc[f64](a, ng)
+    let (w, e2) = mem.alloc[f64](a, ng)
+    let (xtvx, e3) = mem.alloc[f64](a, p * p)
+    let (xtvy, e4) = mem.alloc[f64](a, p)
+    let (u, e5) = mem.alloc[f64](a, p * p)
+    let (uinv, e6) = mem.alloc[f64](a, p * p)
+    let (tv, e7) = mem.alloc[f64](a, p)
+    let (beta, e8) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    var k = 0usize
+    while k < ng {
+        cnt[k] = 0.0f64
+        k += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        cnt[g[i]] += 1.0f64
+        i += 1usize
+    }
+    var c = Lmm{ n: n, p: p, ng: ng, reml: reml, x: x, y: y, g: g, cnt: cnt, w: w, xtvx: xtvx, xtvy: xtvy, beta: beta, u: u, uinv: uinv, tv: tv, r2: 0.0f64, logdet: 0.0f64 }
+    var ht = 0.001f64 * theta
+    if theta < 0.1f64 { ht = 0.0001f64 }
+    let hs = 0.001f64 * sigma
+    let f0 = lmm_dev2(&c, theta, sigma)
+    let ftp = lmm_dev2(&c, theta + ht, sigma)
+    let ftm = lmm_dev2(&c, theta - ht, sigma)
+    let fsp = lmm_dev2(&c, theta, sigma + hs)
+    let fsm = lmm_dev2(&c, theta, sigma - hs)
+    let fpp = lmm_dev2(&c, theta + ht, sigma + hs)
+    let fpm = lmm_dev2(&c, theta + ht, sigma - hs)
+    let fmp = lmm_dev2(&c, theta - ht, sigma + hs)
+    let fmm = lmm_dev2(&c, theta - ht, sigma - hs)
+    let h11 = (ftp - 2.0f64 * f0 + ftm) / (ht * ht)
+    let h22 = (fsp - 2.0f64 * f0 + fsm) / (hs * hs)
+    let h12 = (fpp - fpm - fmp + fmm) / (4.0f64 * ht * hs)
+    let det = h11 * h22 - h12 * h12
+    // A = 2 H^-1
+    let a11 = 2.0f64 * h22 / det
+    let a22 = 2.0f64 * h11 / det
+    let a12 = 0.0f64 - 2.0f64 * h12 / det
+    var j = 0usize
+    while j < p {
+        let v = lmm_vj(&c, theta, sigma, j)
+        let gt = (lmm_vj(&c, theta + ht, sigma, j) - lmm_vj(&c, theta - ht, sigma, j)) / (2.0f64 * ht)
+        let gs = (lmm_vj(&c, theta, sigma + hs, j) - lmm_vj(&c, theta, sigma - hs, j)) / (2.0f64 * hs)
+        df[j] = 2.0f64 * v * v / (gt * gt * a11 + 2.0f64 * gt * gs * a12 + gs * gs * a22)
+        j += 1usize
+    }
+    ret ok
+}
