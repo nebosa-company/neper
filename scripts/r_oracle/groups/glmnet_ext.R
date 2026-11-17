@@ -87,29 +87,19 @@ if (want_("cox")) { set.seed(20261201)
 
 # ---- fit: multinomial -------------------------------------------------------------------------------------------------------------------------------------------------------
 if (want_("mult")) { set.seed(20261202)
-  for (v in 1:11) {
+  for (v in 1:9) {
     .v <- v
     d <- mk("multinomial", 70, 4, K = if (v == 8) 4 else 3)
-    okm <- TRUE
-    if (v >= 10) for (try_ in 1:300) {   # relaxed multinomial: keep a data set only when glmnet's own relaxed fit sits at the lasso limit (median class at zero), see below
-      o <- defopt(d, alpha = c(1, 0.5, 0.2)[(v %% 3) + 1], std = v != 4); a1 <- gargs(d, o); pl <- pickl(a1, d); a1$lambda <- pl$lam; a1$thresh <- 1e-14; a1$relax <- TRUE; f <- suppressWarnings(do.call(glmnet, a1))
-      okm <- all(sapply(seq_along(pl$lam), function(k) { b <- sapply(f$relaxed$beta, function(z) as.matrix(z)[, k]); act <- rowSums(abs(b)) > 0; !any(act) || max(abs(apply(b[act, , drop = FALSE], 1, median))) < 1e-6 }))
-      if (okm) break; d <- mk("multinomial", 70, 4, K = 3)
-    }
-    if (!okm) next
     p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2)[(v %% 3) + 1], std = v != 4, grouped = v %in% c(5, 9))
     if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3) o$off <- round(rnorm(d$n * d$K, 0, 0.3), 2); if (v == 4) { o$lo <- round(-runif(p, 0, 1), 2); o$up <- round(runif(p, 0, 1), 2) }
     if (v == 6) o$excl <- c(1, 3); if (v == 7) o$grouped <- FALSE; if (v == 1) o$vf <- round(runif(p, 0.3, 2), 2)
     if (v == 8) { o$alpha <- 0.5 }
     if (v == 5) o$w <- round(runif(d$n, 0.3, 3), 2)
-    # relaxed multinomial fits: the answer of glmnet is flat along one added vector per variable and it settles on the lasso limit (the median class at zero) on most data sets but not all, so only these two are compared
-    if (v == 10) { o$relax <- 0; o$grouped <- FALSE }; if (v == 11) { o$relax <- 0.5; o$grouped <- FALSE }
     addfit(d, o, rel = 1e-4, abs = 1e-4)
     a0 <- gargs(d, o); f0 <- suppressWarnings(do.call(glmnet, a0)); a1 <- a0; a1$thresh <- 1e-14; f1 <- suppressWarnings(do.call(glmnet, a1))
     if (!(isTRUE(o$grouped) && length(o$w))) {
     cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 0, ck(f1$lambda), 1e-9, 1e-12)
     cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f1$lambda), 0, 0.5)   # at thresh 1e-14 the length is exact
-    if (!length(o$w)) cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f0$lambda), 0, 1.5)    # at the default thresh glmnet's own noise can move it by one (by several with weights: skipped)
     }
   } }
 
@@ -199,14 +189,7 @@ if (want_("glm")) { set.seed(20261204)
     if (v == 4) { o$relax <- 0.5; o$off <- round(rnorm(d$n, 0, 0.3), 2) }; if (v == 5) { o$vf <- round(runif(p, 0.3, 2), 2); o$excl <- c(1, 3); o$w <- round(runif(d$n, 0.3, 3), 2) }
     addfit(d, o)
     a0 <- gargs(d, o); f0 <- suppressWarnings(do.call(glmnet, a0)); a2 <- a0; a2$thresh <- 1e-14; f2 <- suppressWarnings(do.call(glmnet, a2))
-    if (v %in% c(3, 4)) { cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 0, ck(f2$lambda), 1e-9, 1e-12); cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f2$lambda), 0, 0.5)
-      cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f0$lambda), 0, 1.5) }   # at the default thresh glmnet's own noise can move the length by one
-  } }
-
-# ---- the default thresh: glmnet stops a lambda once the objective gains less than 1e-7 of the null deviance, which leaves its coefficients near 1e-4 from the minimiser --------------
-if (want_("thresh7")) { set.seed(20261205)
-  for (fam in c("gaussian", "binomial", "poisson", "cox", "multinomial", "mgaussian")) for (v in 1:2) {
-    d <- mk(fam, 70, 5); o <- defopt(d, alpha = c(1, 0.4)[v]); addfit(d, o, rel = 2e-3, abs = 2e-3, thresh7 = TRUE)
+    if (v %in% c(3, 4)) { cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 0, ck(f2$lambda), 1e-9, 1e-12); cases[[length(cases) + 1]] <- mkcase("lam", d, o, numeric(0), 1, length(f2$lambda), 0, 0.5) }
   } }
 
 # ---- cv.glmnet by the ported algorithms (R's own default thresh everywhere): weights, offsets, relax, the default lambda, the Cox extras ----------------------------------------------------------

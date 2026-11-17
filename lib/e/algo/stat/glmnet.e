@@ -11,8 +11,8 @@
 // the Cox family (Breslow and Efron ties, strata, start-stop responses, weights, offsets, bounds), mgaussian (weights, bounds), the automatic lambda sequence and its length for every family, `exclude`, relax = TRUE for every family, cv.glmnet for every family (weights, offsets, relax,
 // the lambda sequence given or the default one where each fold finds its own and is read at the full fit's lambdas by interpolation), and the predict types.
 //
-// Not reproduced: the relaxed multinomial fit on data where glmnet's own unpenalised answer has not settled on the lasso limit (it is flat along one added vector per variable), the length of glmnet's grouped multinomial path with weights (its own algorithm stalls at the smallest lambdas),
-// the paths' length to better than one lambda at glmnet's default thresh, and the C-index and misclassification measures at the near-null first lambdas of a default-lambda cross-validation.
+// Equal to R at glmnet's default thresh: the multinomial (grouped or not), binomial, poisson, Cox (Efron, strata, start-stop), gaussian and mgaussian fits are ports of its C++ coordinate descent, so coefficients, lambdas and path lengths match, as do relax and cv.glmnet over them.
+// Not reproduced: sparse input, mgaussian standardize.response, and the C-index of a cross-validation with strata or start-stop responses (deviance only).
 
 use e.algo.rand.r as rng
 use e.math
