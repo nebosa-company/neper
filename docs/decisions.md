@@ -47490,3 +47490,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6755 — mice: pool.scalar
 
 **Decision.** `pool_scalar` is `mice::pool.scalar` (Rubin 1987 with the Barnard-Rubin small-sample degrees of freedom): the pooled estimate qbar, mean within variance ubar, between variance b, total variance t = ubar + (1 + 1/m) b, relative increase r, degrees of freedom and fraction of missing information, for m estimates and variances over n observations and k parameters. Equal to mice 3.19 on 60 random draws (oracle_mice, 2254 cases in all). Linux pending.
+
+## D6756 — mice: norm.boot
+
+**Decision.** `norm.boot` (method 5) is `mice.impute.norm.boot`: `sample(n1, n1, replace = TRUE)` of the observed rows (one draw of n1 positions, folded into a per-row count), the least-squares fit on the resample (counts as weights in X'X, X'y and the residual sum), sigma from the resampled residuals over n1 minus the columns minus one, then one normal draw times sigma per missing row. Equal to mice 3.19 on the 20 more data sets added (oracle_mice, 2626 cases in all). Linux pending.

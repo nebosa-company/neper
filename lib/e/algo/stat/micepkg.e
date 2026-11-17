@@ -310,16 +310,49 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                         s1 += 1usize
                     }
                     var nobs = 0usize
+                    let (cnt, ecn) = mem.alloc[f64](a, n)
+                    if ecn != ok { ret ecn }
+                    i = 0usize
+                    while i < n {
+                        cnt[i] = 1.0f64
+                        i += 1usize
+                    }
+                    if mj == 5usize {
+                        var no1 = 0usize
+                        i = 0usize
+                        while i < n {
+                            cnt[i] = 0.0f64
+                            if data0[j * n + i] == data0[j * n + i] { no1 += 1usize }
+                            i += 1usize
+                        }
+                        let (bi, ebi) = rng.sample_int(a, &r, i64(no1), i64(no1), true)
+                        if ebi != ok { ret ebi }
+                        var qb2 = 0usize
+                        var ord = 0usize
+                        // the h-th observed row (1-based) gets one count per time it was drawn
+                        while qb2 < no1 {
+                            var rowi = 0usize
+                            ord = 0usize
+                            while rowi < n {
+                                if data0[j * n + rowi] == data0[j * n + rowi] {
+                                    ord += 1usize
+                                    if ord == usize(bi[qb2]) { cnt[rowi] += 1.0f64 }
+                                }
+                                rowi += 1usize
+                            }
+                            qb2 += 1usize
+                        }
+                    }
                     i = 0usize
                     while i < n {
                         if data0[j * n + i] == data0[j * n + i] {
-                            nobs += 1usize
+                            nobs += usize(cnt[i])
                             s1 = 0usize
                             while s1 < cd {
-                                xty[s1] += x[s1 * n + i] * data0[j * n + i]
+                                xty[s1] += cnt[i] * x[s1 * n + i] * data0[j * n + i]
                                 var s2 = 0usize
                                 while s2 < cd {
-                                    xtx[s1 * cd + s2] += x[s1 * n + i] * x[s2 * n + i]
+                                    xtx[s1 * cd + s2] += cnt[i] * x[s1 * n + i] * x[s2 * n + i]
                                     s2 += 1usize
                                 }
                                 s1 += 1usize
@@ -350,7 +383,7 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                                 s1 += 1usize
                             }
                             let rr = data0[j * n + i] - f
-                            rss += rr * rr
+                            rss += cnt[i] * rr * rr
                         }
                         i += 1usize
                     }
