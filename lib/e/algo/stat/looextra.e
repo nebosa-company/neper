@@ -19,6 +19,28 @@ fn relative_eff(a: *mem.Arena, blk: []const f64, nchain: usize, n: usize) -> f64
 
 // loo(ll, r_eff): per observation into out (nobs rows of elpd_loo, mcse_elpd_loo, p_loo, pareto k, psis n_eff); reff has one value per observation
 fn loo_full(a: *mem.Arena, ll: []const f64, s: usize, nobs: usize, reff: []const f64, out: []f64) -> err {
+    ret loo_full_m(a, ll, s, nobs, reff, 0usize, out)
+}
+
+// the importance weights of loo's is_method: 0 psis, 1 tis (truncation at sqrt(S) times the mean ratio), 2 sis (raw); lw gets the unnormalised log weights, the Pareto k is 0 for tis and sis
+fn is_weights(a: *mem.Arena, lr: []const f64, lw: []f64, r_eff: f64, method: usize) -> (f64, err) {
+    if method == 0usize {
+        let (k, e) = lp.psis_i_r(a, lr, lw, r_eff)
+        ret (k, e)
+    }
+    let sf = f64(lr.len)
+    let cut = lp.logsumexp(lr) - math.log[f64](sf) + 0.5f64 * math.log[f64](sf)
+    var i = 0usize
+    while i < lr.len {
+        lw[i] = lr[i]
+        if method == 1usize && lr[i] > cut { lw[i] = cut }
+        i += 1usize
+    }
+    ret (0.0f64, ok)
+}
+
+// loo(ll, r_eff, is_method): as loo_full for psis (method 0), tis (1) or sis (2)
+fn loo_full_m(a: *mem.Arena, ll: []const f64, s: usize, nobs: usize, reff: []const f64, method: usize, out: []f64) -> err {
     let (lw, e1) = mem.alloc[f64](a, s)
     let (lr, e2) = mem.alloc[f64](a, s)
     let (t, e3) = mem.alloc[f64](a, s)
@@ -33,7 +55,7 @@ fn loo_full(a: *mem.Arena, ll: []const f64, s: usize, nobs: usize, reff: []const
             lr[i] = 0.0f64 - ll[o * s + i]
             i += 1usize
         }
-        let (k, pe) = lp.psis_i_r(a, lr, lw, reff[o])
+        let (k, pe) = is_weights(a, lr, lw, reff[o], method)
         if pe != ok { ret pe }
         let lse = lp.logsumexp(lw)
         i = 0usize

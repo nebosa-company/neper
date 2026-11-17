@@ -407,3 +407,4 @@ oracle_posterior2
 oracle_loo2
 oracle_ggdist
 oracle_cramer
+oracle_loo4
