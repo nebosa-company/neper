@@ -337,14 +337,14 @@ fn gaussian_model(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: us
     ret model(a, 0usize, x, y, n, p, ntrees, shrinkage, depth, minobs, fitted, rec)
 }
 
-// predict.gbm (on the link scale) for a recorded model at nn new rows (nn by p, column-major): the starting value plus the step of the leaf each row reaches in every tree
-fn predict_model(rec: []const f64, ntrees: usize, depth: usize, xnew: []const f64, nn: usize, out: []f64) {
+// predict.gbm (on the link scale) for a recorded model of ntrees trees, using the first use_trees of them (predict(n.trees = ), at nn new rows (nn by p, column-major): the starting value plus the step of the leaf each row reaches in every tree
+fn predict_model(rec: []const f64, ntrees: usize, depth: usize, use_trees: usize, xnew: []const f64, nn: usize, out: []f64) {
     let blk = 4usize * depth + 2usize
     var r = 0usize
     while r < nn {
         var f = rec[ntrees * blk]
         var t = 0usize
-        while t < ntrees {
+        while t < use_trees {
             let ns = usize(rec[t * blk])
             var leaf = 0usize
             var s = 0usize

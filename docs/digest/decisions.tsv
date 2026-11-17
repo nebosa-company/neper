@@ -3809,4 +3809,5 @@ D6946	740	lmerTest: ranova
 D6947	449	mclust: dmvnorm
 D6948	706	dendextend: ladderize
 D6949	1040	gbm: predict on new data
-D6950	631	gbm: predict on new data for the other losses
+D6950	632	gbm: predict on new data for the other losses
+D6951	467	gbm: predict with fewer trees

@@ -56,6 +56,8 @@ for (rep in 1:10) {
   prt <- predict(f, df, n.trees = nt); for (i in c(1, 7, 20, n)) cases[[length(cases) + 1]] <- case("fit", c(n, p, nt, sh, d, mo, i - 1, 0, y, X), prt[i], rel = 1e-8, abs = 1e-10)
   nn <- 12; Xn <- matrix(round(rnorm(nn * p), 3), nn, p); dn <- data.frame(Xn); names(dn) <- paste0("V", 1:p); pn <- predict(f, dn, n.trees = nt)
   for (i in c(1, 5, 12)) cases[[length(cases) + 1]] <- case("dpr", c(n, p, nt, sh, d, mo, i - 1, nn, y, X, Xn), pn[i], rel = 1e-8, abs = 1e-10)
+  kk <- max(1, nt %/% 3); pk <- predict(f, dn, n.trees = kk)
+  for (i in c(2, 9)) cases[[length(cases) + 1]] <- case("dprk", c(n, p, nt, sh, d, mo, i - 1, nn, y, X, Xn, kk), pk[i], rel = 1e-8, abs = 1e-10)
 }
 # predict on new data for the other losses "dpb" bernoulli, "dpp" poisson, "dpa" adaboost, "dpl" laplace (link scale)
 set.seed(20261206)

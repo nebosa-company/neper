@@ -27,7 +27,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (po, ep) = mem.alloc[f64](a, nnew)
         if ei != ok || er != ok || ep != ok { ret nan }
         if gb.model(a, lossc, z[8usize + n..8usize + n + n * p], z[8usize..8usize + n], n, p, nt, z[3usize], dp, usize(z[5usize]), fi, rc) != ok { ret nan }
-        gb.predict_model(rc, nt, dp, z[8usize + n + n * p..8usize + n + n * p + nnew * p], nnew, po)
+        gb.predict_model(rc, nt, dp, nt, z[8usize + n + n * p..8usize + n + n * p + nnew * p], nnew, po)
+        let (po2, ep2) = mem.alloc[f64](a, nnew)
+        if ep2 != ok { ret nan }
+        // the same model read with the first third of the trees (slot 8 + n + n p + nnew p holds that count when present)
+        if c.name.len > 3usize {
+            let kk = usize(z[8usize + n + n * p + nnew * p])
+            gb.predict_model(rc, nt, dp, kk, z[8usize + n + n * p..8usize + n + n * p + nnew * p], nnew, po2)
+            ret po2[usize(z[6usize])]
+        }
         ret po[usize(z[6usize])]
     }
     if c.name[0usize] == 105u8 {

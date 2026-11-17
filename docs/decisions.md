@@ -48270,3 +48270,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6950 — gbm: predict on new data for the other losses
 
 **Decision.** `gbmpkg.model(loss, ...)` records the trees for any loss code (the recorded leaf steps already carry each loss's Newton or median update), so `predict_model` answers `predict.gbm` on the link scale for bernoulli (log odds), poisson (log mean), adaboost and laplace as it does for gaussian. Equal to gbm on 6 data sets for each of the four losses (80 to 150 rows, 2 to 3 variables, depth 1 to 3, 10 and 30 trees), three of twelve new rows each (oracle_gbm, 442 cases in all). Not here: predict with fewer trees than fitted, type = "response". Linux pending.
+
+## D6951 — gbm: predict with fewer trees
+
+**Decision.** `predict_model` takes the number of trees to use, summing the starting value and the steps of the first `use_trees` recorded trees, as `predict(n.trees = k)` does. Equal to gbm with a third of the fitted trees on the 10 gaussian data sets of D6949, two of twelve new rows each (oracle_gbm, 462 cases in all). Not here: a vector of tree counts in one call (a loop over this), type = "response". Linux pending.

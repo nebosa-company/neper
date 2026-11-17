@@ -911,10 +911,10 @@
       "group": "CRAN parity",
       "order": 718,
       "title": "gbm: gradient boosting machines",
-      "score": 0.43,
+      "score": 0.45,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6893 to D6896, D6920, D6921 relative.influence for gaussian, bernoulli and poisson, D6949, D6950 predict on new data for the gaussian, bernoulli, poisson, adaboost and laplace losses): e.algo.stat.gbmpkg.gaussian, bernoulli, poisson, adaboost and laplace, the losses without subsampling (best-first trees to interaction.depth, n.minobsinnode, shrinkage), equals the training-row fit of gbm on Windows (oracle_gbm; Linux pending). Open: the other losses (quantile, whose leaf quantile rule differs from the median's and is not found, huberized, coxph, pairwise, multinomial), one bernoulli data set that differs (a tie between equal splits, probably), bagging through the R RNG, train.fraction, weights, gbm.perf, cross-validation. Was: Open (CRAN rank 561). Mid. Verify the boosting in e.ml.tree first. Acceptance, equal to gbm under set.seed: gaussian, bernoulli, poisson, adaboost, laplace, quantile, huberized, coxph, pairwise and multinomial losses with bag.fraction through the R RNG, shrinkage, interaction.depth, cross-validation, gbm.perf, relative.influence and predict."
+      "evidence": "Partial (D6893 to D6896, D6920, D6921 relative.influence for gaussian, bernoulli and poisson, D6949 to D6951 predict on new data (any n.trees) for the gaussian, bernoulli, poisson, adaboost and laplace losses): e.algo.stat.gbmpkg.gaussian, bernoulli, poisson, adaboost and laplace, the losses without subsampling (best-first trees to interaction.depth, n.minobsinnode, shrinkage), equals the training-row fit of gbm on Windows (oracle_gbm; Linux pending). Open: the other losses (quantile, whose leaf quantile rule differs from the median's and is not found, huberized, coxph, pairwise, multinomial), one bernoulli data set that differs (a tie between equal splits, probably), bagging through the R RNG, train.fraction, weights, gbm.perf, cross-validation. Was: Open (CRAN rank 561). Mid. Verify the boosting in e.ml.tree first. Acceptance, equal to gbm under set.seed: gaussian, bernoulli, poisson, adaboost, laplace, quantile, huberized, coxph, pairwise and multinomial losses with bag.fraction through the R RNG, shrinkage, interaction.depth, cross-validation, gbm.perf, relative.influence and predict."
     },
     {
       "id": "L415",
