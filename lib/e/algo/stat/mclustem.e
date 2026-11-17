@@ -622,10 +622,11 @@ fn me_gen_v(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, 
             // EVE (9) and VVE (11): common orientation through the MM steps of Browne and McNicholas, shape per group
             k = 0usize
             while k < g {
-                let (vals, vecs, ee) = ica.eigen_sym(a, u[k * p * p..k * p * p + p * p], p)
-                if ee != ok { ret nan }
-                if min_of(vals, p) < rteps { ret nan }
-                omega[k] = vals[0usize]
+                let (wv, ew) = mem.alloc[f64](a, p)
+                if ew != ok { ret nan }
+                if gsv.dsyev_n(a, u[k * p * p..k * p * p + p * p], p, wv) != ok { ret nan }
+                if wv[0usize] < rteps { ret nan }
+                omega[k] = wv[p - 1usize]
                 k += 1usize
             }
             var trgtprev = big() / 2.0f64
