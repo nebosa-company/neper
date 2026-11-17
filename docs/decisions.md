@@ -47526,3 +47526,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6764 — EnvStats: predIntNormN
 
 **Decision.** `pi_norm_n` is `predIntNormN` for the Bonferroni method: the half width is the prediction factor times sigma (`predIntNormHalfWidth`), n = 2 when that already suffices, otherwise the root of the gap on (2, n.max) rounded up. The package's `uniroot` at tolerance 1e-7 and the port's bisection agree unless the root lies within 1e-7 of an integer. Equal to EnvStats on 62 sizes over n.mean 1 to 4, k 1 to 5 and three confidence levels (oracle_envstats, 4404 cases in all). The exact method for k above 1 waits on the exact factor. Linux pending.
+
+## D6765 — EnvStats: tolIntNormN
+
+**Decision.** `tol_int_norm_n` is `tolIntNormN` with the only method the package allows, Wald-Wolfowitz: for the expectation type it is `predIntNormN` at the coverage, for the content type the root of the gap between the requested half width and `tol_k` (kind 1) times sigma on (2, n.max), rounded up, 2 when n = 2 suffices. Equal to EnvStats on 75 sizes (oracle_envstats, 4479 cases in all). Linux pending.

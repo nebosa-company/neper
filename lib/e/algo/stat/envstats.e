@@ -891,3 +891,19 @@ fn pi_norm_n(hw: f64, n_mean: f64, k: f64, sigma: f64, conf: f64, n_max: f64) ->
     }
     ret math.ceil[f64](0.5f64 * (lo + hi))
 }
+
+// EnvStats::tolIntNormN (the Wald-Wolfowitz two-sided factor, the only method the package allows): `expectation` is predIntNormN at the coverage; content bisects the half width gap on (2, n_max) and rounds up
+fn tol_int_norm_n(hw: f64, sigma: f64, coverage: f64, conf: f64, expectation: bool, n_max: f64) -> f64 {
+    if expectation { ret pi_norm_n(hw, 1.0f64, 1.0f64, sigma, coverage, n_max) }
+    if tol_k(2.0f64, coverage, conf, 1i64) * sigma <= hw { ret 2.0f64 }
+    if tol_k(n_max, coverage, conf, 1i64) * sigma > hw { ret 0.0f64 / 0.0f64 }
+    var lo = 2.0f64
+    var hi = n_max
+    var it = 0usize
+    while it < 200usize {
+        let mid = 0.5f64 * (lo + hi)
+        if tol_k(mid, coverage, conf, 1i64) * sigma > hw { lo = mid } else { hi = mid }
+        it += 1usize
+    }
+    ret math.ceil[f64](0.5f64 * (lo + hi))
+}
