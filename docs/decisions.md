@@ -47906,3 +47906,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6859 — ismev: the closed-form helpers
 
 **Decision.** `ismev.gevq`, `gevf`, `gev_dens` (with the Gumbel limit at xi = 0), `gpdq`, `gpdf`, `gpd_dens`, `gpdq2` (the m-observation return level through the exceedance rate), `gev_rl_gradient` and `gpd_rl_gradient` (the gradients of the return levels, the xi = 0 form of the second included) are the helper functions ismev exports, in the package's parameterisations. Equal to ismev on 30 parameter draws, at machine tolerance (oracle_ismev, 493 cases in all). Not here: covariates and links, `pp.fit`, `rlarg.fit`, the profile likelihoods, the diagnostics. Linux pending.
+
+## D6860 — tm: findFreqTerms and findAssocs
+
+**Decision.** `tmpkg.find_freq_terms(m, lower, upper)` is `findFreqTerms` (the terms whose total count is within [lower, upper], in term order) and `find_assocs(m, term, corlimit)` is `findAssocs` for one term: the Pearson correlation of the term's column with every other column (zero when a column is constant), kept when at least `corlimit`, rounded to two digits, in decreasing order with equal values in term order. Equal to tm on 30 random count matrices, orders and values (oracle_tm, 234 cases in all). Not here: tokenisation, stop words, stemming, `findAssocs` for several terms at once, the other weightings. Linux pending.

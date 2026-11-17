@@ -14,6 +14,31 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nd = usize(z[0usize])
     let nt = usize(z[1usize])
     let m = z[5usize..5usize + nd * nt]
+    if str.eq(c.name, "freq") {
+        let (fi, fe) = mem.alloc[usize](a, nt)
+        if fe != ok { ret nan }
+        let fc = tm.find_freq_terms(m, nd, nt, z[2usize], z[3usize], fi)
+        var fs = 0.0f64
+        var fk = 0usize
+        while fk < fc {
+            fs += f64(fk + 1usize) * f64(fi[fk] + 1usize)
+            fk += 1usize
+        }
+        ret fs + 1000.0f64 * f64(fc)
+    }
+    if str.eq(c.name, "assoc") {
+        let (ai, ae) = mem.alloc[usize](a, nt)
+        let (av, ae2) = mem.alloc[f64](a, nt)
+        if ae != ok || ae2 != ok { ret nan }
+        let ac = tm.find_assocs(a, m, nd, nt, usize(z[2usize]), z[3usize], ai, av)
+        var as2 = 0.0f64
+        var ak = 0usize
+        while ak < ac {
+            if z[4usize] == 0.0f64 { as2 += f64(ak + 1usize) * f64(ai[ak] + 1usize) } else { as2 += f64(ak + 1usize) * av[ak] }
+            ak += 1usize
+        }
+        ret as2 + 1000.0f64 * f64(ac)
+    }
     let (out, e1) = mem.alloc[f64](a, nd * nd + nd * nt)
     if e1 != ok { ret nan }
     var r = ok

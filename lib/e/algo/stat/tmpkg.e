@@ -184,3 +184,90 @@ fn cosine(m: []const f64, nd: usize, nt: usize, out: []f64) {
         i += 1usize
     }
 }
+
+// findFreqTerms(dtm, lower, upper): the 0-based indices of the terms whose total count lies in [lower, upper]; returns the count
+fn find_freq_terms(m: []const f64, nd: usize, nt: usize, lower: f64, upper: f64, out: []usize) -> usize {
+    var cnt = 0usize
+    var j = 0usize
+    while j < nt {
+        var s = 0.0f64
+        var i = 0usize
+        while i < nd {
+            s += m[i * nt + j]
+            i += 1usize
+        }
+        if s >= lower && s <= upper {
+            out[cnt] = j
+            cnt += 1usize
+        }
+        j += 1usize
+    }
+    ret cnt
+}
+
+// findAssocs(dtm, term, corlimit): the other terms whose correlation with the term is at least corlimit, correlations rounded to two digits, in decreasing order (equal values in term order);
+// idx and val receive the 0-based term indices and the rounded correlations; returns the count
+fn find_assocs(a: *mem.Arena, m: []const f64, nd: usize, nt: usize, term: usize, corlimit: f64, idx: []usize, val: []f64) -> usize {
+    let (cs, e) = mem.alloc[f64](a, nt)
+    if e != ok { ret 0usize }
+    let nn = f64(nd)
+    var mt = 0.0f64
+    var i = 0usize
+    while i < nd {
+        mt += m[i * nt + term]
+        i += 1usize
+    }
+    mt = mt / nn
+    var st = 0.0f64
+    i = 0usize
+    while i < nd {
+        st += (m[i * nt + term] - mt) * (m[i * nt + term] - mt)
+        i += 1usize
+    }
+    var cnt = 0usize
+    var j = 0usize
+    while j < nt {
+        if j != term {
+            var mj = 0.0f64
+            i = 0usize
+            while i < nd {
+                mj += m[i * nt + j]
+                i += 1usize
+            }
+            mj = mj / nn
+            var sj = 0.0f64
+            var sxy = 0.0f64
+            i = 0usize
+            while i < nd {
+                sj += (m[i * nt + j] - mj) * (m[i * nt + j] - mj)
+                sxy += (m[i * nt + term] - mt) * (m[i * nt + j] - mj)
+                i += 1usize
+            }
+            var r = sxy / math.sqrt[f64](st * sj)
+            if r != r { r = 0.0f64 }
+            cs[j] = math.floor[f64](r * 100.0f64 + 0.5f64) / 100.0f64
+            if r >= corlimit {
+                idx[cnt] = j
+                val[cnt] = cs[j]
+                cnt += 1usize
+            }
+        }
+        j += 1usize
+    }
+    // insertion sort, decreasing, stable
+    i = 1usize
+    while i < cnt {
+        let kv = val[i]
+        let ki = idx[i]
+        var q = i
+        while q > 0usize && val[q - 1usize] < kv {
+            val[q] = val[q - 1usize]
+            idx[q] = idx[q - 1usize]
+            q -= 1usize
+        }
+        val[q] = kv
+        idx[q] = ki
+        i += 1usize
+    }
+    ret cnt
+}

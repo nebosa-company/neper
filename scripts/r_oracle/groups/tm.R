@@ -29,4 +29,13 @@ for (rep in 1:24) {
   cs <- m %*% t(m) / sqrt(outer(rowSums(m^2), rowSums(m^2)))
   add("cosine", a0, ws(cs))
 }
+# findFreqTerms "freq" (nd, nt, lower, upper, 0, m) and findAssocs "assoc" (nd, nt, term index, corlimit, 0 indices / 1 values, m): answered as sum(position * index) (or value) + 1000 * count
+for (rep in 1:30) {
+  nd <- sample(6:14, 1); nt <- sample(5:12, 1); m <- matrix(rpois(nd * nt, 1.2), nd); dimnames(m) <- list(paste0("d", seq_len(nd)), paste0("t", seq_len(nt)))
+  dtm <- as.DocumentTermMatrix(as.simple_triplet_matrix(m), weighting = weightTf); lo <- sample(2:8, 1); hi <- lo + sample(2:12, 1)
+  ft <- findFreqTerms(dtm, lo, hi); ix <- match(ft, colnames(m)); add("freq", c(nd, nt, lo, hi, 0, as.vector(t(m))), sum(seq_along(ix) * ix) + 1000 * length(ix))
+  tj <- sample(nt, 1); cl <- sample(c(0, 0.1, 0.3), 1); fa <- suppressWarnings(findAssocs(dtm, colnames(m)[tj], cl))[[1]]
+  if (length(fa)) { ia <- match(names(fa), colnames(m)); add("assoc", c(nd, nt, tj - 1, cl, 0, as.vector(t(m))), sum(seq_along(ia) * ia) + 1000 * length(ia)); add("assoc", c(nd, nt, tj - 1, cl, 1, as.vector(t(m))), sum(seq_along(fa) * unname(fa)) + 1000 * length(fa)) }
+  else { add("assoc", c(nd, nt, tj - 1, cl, 0, as.vector(t(m))), 0); add("assoc", c(nd, nt, tj - 1, cl, 1, as.vector(t(m))), 0) }
+}
 emit("tm", c("tm", "tidytext", "slam"), list(cases))
