@@ -161,4 +161,108 @@ flac_case(d, 3, tau = 0.3)
 flac_case(d, 3, control = logistf.control(maxit = 6, maxstep = 1))
 
 #@@PARTS@@
+# ---- tests, selection, predict, profile, pdf, PVR on a design with an interaction
+make2 <- function(n, kind = "plain") {
+  d <- data.frame(x1 = rnorm(n), x2 = rbinom(n, 1, 0.45), x3 = rnorm(n), x4 = rnorm(n))
+  eta <- 0.1 + 1.3 * d$x1 - 0.9 * d$x2 + (kind != "null") * 0.7 * d$x3 + 0.5 * d$x1 * d$x2
+  d$y <- rbinom(n, 1, plogis(eta))
+  d$w <- sample(c(1, 2, 3, 0.5, 1.5), n, TRUE); d$o <- round(rnorm(n, 0, 0.4), 3)
+  d
+}
+FULL <- y ~ x1 + x2 + x3 + x4 + x1:x2
+cname <- function(d) colnames(model.matrix(FULL, d))
+fm_cols <- function(d, cols) { cn <- cname(d)[cols]; nt <- cn[cn != "(Intercept)"]; as.formula(paste("y ~", if (length(nt)) paste(nt, collapse = " + ") else "1")) }
+fitm <- function(d, cols, pl = TRUE, firth = TRUE, weights = FALSE, offset = FALSE, control = logistf.control(), plcontrol = logistpl.control(), tau = 0.5, alpha = 0.05, flic = FALSE) {
+  a <- list(formula = fm_cols(d, cols), data = d, pl = pl, firth = firth, control = control, plcontrol = plcontrol, modcontrol = logistf.mod.control(tau = tau), alpha = alpha, flic = flic)
+  if (weights) a$weights <- d$w
+  if (offset) a$offset <- d$o
+  quiet(do.call(logistf, a))
+}
+place <- function(v, nm, cn) { r <- numeric(length(cn)); r[match(nm, cn)] <- v; r }
+facs_of <- function(d) {
+  cn <- cname(d); f <- attr(terms(FULL), "factors")[-1, , drop = FALSE]
+  m <- matrix(0, nrow(f), length(cn)); m[, match(colnames(f), cn)] <- f; m
+}
+pack2 <- function(kind, d, o, extra, expected, weights = FALSE, offset = FALSE) {
+  x <- model.matrix(FULL, d)
+  pack(kind, nrow(d), ncol(x), 0, o, d$y, x, if (weights) d$w, if (offset) d$o, NULL, NULL, extra, expected)
+}
+sel_answer <- function(f, d, order) {
+  cn <- cname(d); K <- length(cn); nm <- names(f$coefficients)
+  v <- matrix(0, K, K); idx <- match(nm, cn); v[idx, idx] <- as.matrix(f$var)
+  c(place(f$coefficients, nm, cn), as.vector(v), place(f$prob, nm, cn), place(f$ci.lower, nm, cn), place(f$ci.upper, nm, cn),
+    f$loglik[["full"]], f$loglik[["null"]], f$df, length(order), match(order, cn))
+}
+
+# logistftest
+for (rep in 1:7) {
+  d <- make2(c(40, 55, 45, 60, 50, 35, 70)[rep]); cols <- list(1:4, 1:5, 1:6, c(1, 2, 3), c(1, 2, 4, 6), 1:3, 1:6)[[rep]]
+  fw <- rep %in% c(3, 6); fo <- rep %in% c(4, 6); firth <- rep != 5
+  f <- fitm(d, cols, pl = FALSE, firth = firth, weights = fw, offset = fo)
+  K <- length(cols)
+  tst <- list(2:K, c(2, 3), K, 2:3, 1:K, c(3, 2), 2)[[rep]]
+  vals <- NULL; b0 <- NULL
+  if (rep == 2) vals <- c(0.4, -0.2)
+  if (rep == 7) b0 <- c(0, 0.3, 0.1, 0, 0, 0)[seq_len(K)]
+  call_args <- list(f, test = tst, firth = firth)
+  if (!is.null(vals)) call_args$values <- vals
+  if (!is.null(b0)) call_args$beta0 <- b0
+  r <- tryCatch(quiet(do.call(logistftest, call_args)), error = function(e) NULL)
+  if (is.null(r)) next
+  ex <- c(length(cols), cols, length(tst), tst, length(vals), vals, length(b0), b0)
+  pack2("test", d, popt(firth, FALSE), ex, c(r$loglik[["full"]], r$loglik[["null"]], r$df, r$prob), fw, fo)
+}
+# anova: nested models, PLR, and a formula
+for (rep in 1:6) {
+  d <- make2(c(50, 60, 45, 55, 40, 65)[rep])
+  fw <- rep == 3; fo <- rep == 4
+  big <- list(1:5, 1:6, 1:4, 1:5, 1:6, 1:5)[[rep]]; small <- list(c(1, 2, 3), c(1, 2, 3, 4), c(1, 2), c(1, 2, 3, 5), c(1, 2, 4), c(1, 3, 4))[[rep]]
+  fb <- fitm(d, big, pl = FALSE, weights = fw, offset = fo); fs <- fitm(d, small, pl = FALSE, weights = fw, offset = fo)
+  r <- tryCatch(quiet(anova(fb, fs)), error = function(e) NULL)
+  if (!is.null(r)) pack2("anova_n", d, popt(TRUE, FALSE), c(length(big), big, length(small), small, nrow(facs_of(d)), as.vector(facs_of(d))), c(r$chisq, r$df, r$pval, r$PLR1, r$PLR2), fw, fo)
+  r <- tryCatch(quiet(anova(fb, fs, method = "PLR")), error = function(e) NULL)
+  if (!is.null(r)) pack2("anova_p", d, popt(TRUE, FALSE), c(length(big), big, length(small), small), c(r$chisq, r$df, r$pval, r$PLR1, r$PLR2), fw, fo)
+  cn <- cname(d)
+  dr <- setdiff(big, small)[1]
+  r <- tryCatch(quiet(anova(fb, formula = as.formula(paste("~", cn[dr])), method = "nested")), error = function(e) NULL)
+  if (!is.null(r)) pack2("anova_f", d, popt(TRUE, FALSE), c(length(big), big, 1, dr, nrow(facs_of(d)), as.vector(facs_of(d))), c(r$chisq, r$df, r$pval, r$PLR1, r$PLR2), fw, fo)
+}
+# add1 and drop1
+for (rep in 1:4) {
+  d <- make2(c(55, 70, 45, 60)[rep]); fw <- rep == 2; fo <- rep == 3
+  cols <- list(1:3, c(1, 2, 3), c(1, 2), 1:4)[[rep]]; cn <- cname(d)
+  f <- fitm(d, cols, pl = FALSE, weights = fw, offset = fo)
+  sc <- setdiff(2:6, cols)
+  m <- quiet(add1(f, scope = cn[sc], data = d))
+  pack2("add1", d, popt(TRUE, FALSE), c(length(cols), cols, length(sc), sc), as.vector(t(m)), fw, fo)
+  m <- quiet(drop1(f, data = d))
+  pack2("drop1", d, popt(TRUE, FALSE), c(length(cols), cols, length(cols) - 1, cols[-1], 0), as.vector(t(m)), fw, fo)
+}
+# forward (R cannot select among interaction terms: data[, scope])
+FULL <- y ~ x1 + x2 + x3 + x4
+for (rep in 1:8) {
+  d <- make2(c(80, 100, 70, 90, 120, 85, 95, 110)[rep]); fw <- rep == 3; fo <- rep == 6; cn <- cname(d)
+  start <- c(1, 2)
+  f <- fitm(d, start, pl = TRUE, weights = fw, offset = fo)
+  sc <- 3:5; slentry <- c(0.05, 0.2, 0.05, 0.5, 0.1, 0.05, 0.3, 0.05)[rep]; pl <- rep %% 2 == 0; steps <- c(1000, 1000, 1000, 2, 1000, 1000, 1000, 1000)[rep]
+  lg <- capture.output(r <- tryCatch(quiet(forward(f, scope = cn[sc], data = d, steps = steps, slentry = slentry, trace = TRUE, pl = pl)), error = function(e) { message("ERR ", conditionMessage(e)); NULL }))
+  if (is.null(r)) next
+  ord <- sub("^.*added +([^ ]+) .*$", "\\1", grep("added", lg, value = TRUE))
+  pack2("forward", d, popt(TRUE, TRUE), c(length(start), start, length(sc), sc, steps, slentry, pl), sel_answer(r, d, ord), fw, fo)
+}
+# backward, with an interaction, and with the full penalty on main effects
+for (rep in 1:8) {
+  fp <- rep %in% c(7, 8)
+  FULL <- y ~ x1 + x2 + x3 + x4
+  d <- make2(c(90, 110, 80, 100, 120, 95, 105, 130)[rep], if (rep %in% c(2, 5)) "null" else "plain"); fw <- rep == 3; fo <- rep == 6
+  cols <- seq_along(cname(d))
+  f <- fitm(d, cols, pl = TRUE, weights = fw, offset = fo)
+  slstay <- c(0.05, 0.2, 0.05, 0.5, 0.1, 0.05, 0.3, 0.05)[rep]; steps <- c(1000, 1000, 1000, 2, 1000, 1000, 1000, 1000)[rep]
+  lg <- capture.output(r <- tryCatch(quiet(backward(f, data = d, steps = steps, slstay = slstay, trace = TRUE, full.penalty = fp)), error = function(e) { message("ERR ", conditionMessage(e)); NULL }))
+  if (is.null(r)) next
+  ord <- sub("^.*removed +([^ ]+) .*$", "\\1", grep("removed", lg, value = TRUE))
+  fa <- facs_of(d)
+  pack2("backward", d, popt(TRUE, TRUE), c(length(cols), cols, nrow(fa), as.vector(fa), steps, slstay, fp), sel_answer(r, d, ord), fw, fo)
+}
+FULL <- y ~ x1 + x2 + x3 + x4 + x1:x2
 emit("logistf_full", "logistf", list(cases))

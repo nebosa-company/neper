@@ -366,7 +366,7 @@ fn fit_nr(b: *Bump, x: []const f64, y: []const f64, n: usize, k: usize, weight: 
     var maxit = c.maxit
     var q = 0usize
     while q < nc {
-        selcol[q] = colfit[q] - 1usize
+        if colfit[q] > 0usize { selcol[q] = colfit[q] - 1usize }
         q += 1usize
     }
     var evaluate_only = false
@@ -526,7 +526,7 @@ fn fit_irls(b: *Bump, x: []const f64, y: []const f64, n: usize, k: usize, weight
     let selcol = take_u(b, nc)
     var q = 0usize
     while q < nc {
-        selcol[q] = colfit[q] - 1usize
+        if colfit[q] > 0usize { selcol[q] = colfit[q] - 1usize }
         q += 1usize
     }
     var maxit = c.maxit
@@ -851,14 +851,14 @@ fn logistpl(b: *Bump, x: []const f64, y: []const f64, n: usize, k: usize, weight
 type Opt = struct {
     firth: bool, pl: bool, alpha: f64, c: Ctl, has_int: bool,
     plconf: []const usize, has_plconf: bool, terms_fit: []const usize, has_terms: bool,
-    init: []const f64, has_init: bool, flic: bool
+    init: []const f64, has_init: bool, flic: bool, facs: []const f64, nv: usize
 }
 
 fn opt_default() -> Opt {
     ret Opt {
         firth: true, pl: true, alpha: 0.05f64, c: ctl_default(), has_int: true,
         plconf: zero, has_plconf: false, terms_fit: zero, has_terms: false,
-        init: zero, has_init: false, flic: false
+        init: zero, has_init: false, flic: false, facs: zero, nv: 0usize
     }
 }
 
@@ -1555,4 +1555,1007 @@ fn flac(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, k: usize, weigh
     res.pl_iter = f2.pl_iter
     res.np = f2.np
     ret (res, ok)
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// penalized likelihood ratio tests: logistftest, anova, add1, drop1
+
+error NotNested
+
+// the columns cols (0-based, of the n-row matrix x) as a matrix of their own
+fn cols_of(a: *mem.Arena, x: []const f64, n: usize, cols: []const usize) -> ([]f64, err) {
+    let (r, e) = mem.alloc[f64](a, n * cols.len + 1usize)
+    if e != ok { ret (r, e) }
+    var j = 0usize
+    while j < cols.len {
+        var i = 0usize
+        while i < n {
+            r[i + j * n] = x[i + cols[j] * n]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    ret (r[0usize..n * cols.len], ok)
+}
+
+// the model with the columns cols of the full design x: logistf with every column fitted, no plconf
+fn fit_model(a: *mem.Arena, x: []const f64, n: usize, y: []const f64, weight: []const f64, offset: []const f64, cols: []const usize, o: Opt, pl: bool) -> (Lf, err) {
+    let (xs, e) = cols_of(a, x, n, cols)
+    if e != ok { ret (zero, e) }
+    var oo = o
+    oo.pl = pl
+    oo.has_plconf = false
+    oo.has_terms = false
+    oo.has_init = false
+    oo.flic = false
+    oo.has_int = o.has_int && cols[0usize] == 0usize
+    let (r, e2) = logistf(a, xs, y, n, cols.len, weight, offset, oo)
+    ret (r, e2)
+}
+
+type Test = struct { ll_full: f64, ll_null: f64, chisq: f64, df: usize, prob: f64 }
+
+// logistftest: x is the model's design (n by k). pos are the tested columns (0-based); vals (same length) or beta0 (length k) set the
+// null values (empty: zero)
+fn lf_test(a: *mem.Arena, x: []const f64, n: usize, k: usize, y: []const f64, weight_in: []const f64, offset_in: []const f64, pos: []const usize, vals: []const f64, beta0: []const f64, firth: bool, c: Ctl) -> (Test, err) {
+    let (b, eb) = bump_for(a, n, k)
+    if eb != ok { ret (zero, eb) }
+    var bm = b
+    let bp = &bm
+    let (weight, ew) = weights_or_ones(a, weight_in, n)
+    if ew != ok { ret (zero, ew) }
+    let (offset, eo) = offset_or_zeros(a, offset_in, n)
+    if eo != ok { ret (zero, eo) }
+    let (beta, e1) = mem.alloc[f64](a, k)
+    let (vv, e2) = mem.alloc[f64](a, k * k)
+    let (us, e3) = mem.alloc[f64](a, k)
+    let (pi, e4) = mem.alloc[f64](a, n)
+    let (hd, e5) = mem.alloc[f64](a, n)
+    let (cf, e6) = mem.alloc[usize](a, k)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (zero, mem.Exhausted) }
+    var i = 0usize
+    while i < k {
+        beta[i] = 0.0f64
+        cf[i] = i + 1usize
+        i += 1usize
+    }
+    let (full, ef) = fit_fit(bp, x, y, n, k, weight, offset, beta, cf, firth, c, vv, us, pi, hd)
+    if ef != ok { ret (zero, ef) }
+    let (b0, f1) = mem.alloc[f64](a, k)
+    let (v0, f2) = mem.alloc[f64](a, k * k)
+    let (u0, f3) = mem.alloc[f64](a, k)
+    let (p0, f4) = mem.alloc[f64](a, n)
+    let (h0, f5) = mem.alloc[f64](a, n)
+    let (c0, f6) = mem.alloc[usize](a, k)
+    if f1 != ok || f2 != ok || f3 != ok || f4 != ok || f5 != ok || f6 != ok { ret (zero, mem.Exhausted) }
+    i = 0usize
+    while i < k {
+        b0[i] = 0.0f64
+        if beta0.len > 0usize { b0[i] = beta0[i] }
+        i += 1usize
+    }
+    i = 0usize
+    while i < pos.len {
+        if vals.len > 0usize { b0[pos[i]] = vals[i] }
+        i += 1usize
+    }
+    // all columns tested in their natural order: nothing is fitted
+    var all = pos.len == k
+    i = 0usize
+    while i < pos.len && all {
+        if pos[i] != i { all = false }
+        i += 1usize
+    }
+    var nc = 0usize
+    if all {
+        c0[0usize] = 0usize
+        nc = 1usize
+    } else {
+        i = 0usize
+        while i < k {
+            if !in_list(pos, i, pos.len) {
+                c0[nc] = i + 1usize
+                nc += 1usize
+            }
+            i += 1usize
+        }
+    }
+    let (nul, en) = fit_fit(bp, x, y, n, k, weight, offset, b0, c0[0usize..nc], firth, c, v0, u0, p0, h0)
+    if en != ok { ret (zero, en) }
+    let chisq = 0.0f64 - 2.0f64 * (nul.loglik - full.loglik)
+    ret (Test { ll_full: full.loglik, ll_null: nul.loglik, chisq: chisq, df: pos.len, prob: pchisq_up(chisq, f64(pos.len)) }, ok)
+}
+
+// logistftest finds the tested columns by the names model.matrix gives the test formula ~ t1 + t2 + ... - 1: a term of several variables is
+// named by the variables in order of first appearance in that formula, so x1:x2 written after x2 is "x2:x1" and matches no column. The terms
+// of test (full-design columns; facs is nv by K, the variables of each) whose name survives, in order
+fn survive(facs: []const f64, nv: usize, test: []const usize, out: []usize) -> usize {
+    let none = usize(1000000usize)
+    var rank_v = test
+    var seen: usize = 0usize
+    // the rank of a variable is where it first appears; kept in a scratch that fits nv entries
+    var m = 0usize
+    var t = 0usize
+    while t < test.len {
+        var ok_term = true
+        var prev_rank = 0usize
+        var have_prev = false
+        var r = 0usize
+        while r < nv {
+            if facs[r + test[t] * nv] > 0.0f64 {
+                // rank of r: the count of distinct variables seen before it in the formula text
+                var rank_r = none
+                var cnt = 0usize
+                var tt = 0usize
+                var found = false
+                while tt <= t && !found {
+                    var rr = 0usize
+                    while rr < nv && !found {
+                        if facs[rr + test[tt] * nv] > 0.0f64 {
+                            // first appearance of rr among terms 0..tt: counts if no earlier term has it
+                            var earlier = false
+                            var t2 = 0usize
+                            while t2 < tt {
+                                if facs[rr + test[t2] * nv] > 0.0f64 { earlier = true }
+                                t2 += 1usize
+                            }
+                            if rr == r {
+                                found = true
+                                rank_r = cnt
+                            }
+                            if !earlier { cnt += 1usize }
+                        }
+                        rr += 1usize
+                    }
+                    tt += 1usize
+                }
+                if have_prev && !(rank_r > prev_rank) { ok_term = false }
+                prev_rank = rank_r
+                have_prev = true
+            }
+            r += 1usize
+        }
+        if ok_term {
+            out[m] = test[t]
+            m += 1usize
+        }
+        t += 1usize
+    }
+    ret m
+}
+
+type Anova = struct { chisq: f64, df: usize, pval: f64, plr1: f64, plr2: f64 }
+
+fn pos_in(cols: []const usize, test: []const usize, out: []usize) -> usize {
+    var m = 0usize
+    var t = 0usize
+    while t < test.len {
+        var j = 0usize
+        var found = false
+        while j < cols.len && !found {
+            if cols[j] == test[t] {
+                out[m] = j
+                m += 1usize
+                found = true
+            }
+            j += 1usize
+        }
+        t += 1usize
+    }
+    ret m
+}
+
+// anova(object, formula = ~terms, method = "nested"): the test of the terms test (full-design column indices) in the model with the columns cols
+fn anova_formula(a: *mem.Arena, x: []const f64, n: usize, y: []const f64, weight: []const f64, offset: []const f64, cols: []const usize, test: []const usize, o: Opt) -> (Anova, err) {
+    let (xs, e) = cols_of(a, x, n, cols)
+    if e != ok { ret (zero, e) }
+    var oo = o
+    oo.pl = false
+    oo.has_plconf = false
+    oo.has_terms = false
+    oo.has_init = false
+    oo.flic = false
+    oo.has_int = o.has_int && cols[0usize] == 0usize
+    let (fit1, e1) = logistf(a, xs, y, n, cols.len, weight, offset, oo)
+    if e1 != ok { ret (zero, e1) }
+    let (pos, e2) = mem.alloc[usize](a, test.len + 1usize)
+    let (kept, e2b) = mem.alloc[usize](a, test.len + 1usize)
+    if e2 != ok || e2b != ok { ret (zero, mem.Exhausted) }
+    var tk = test
+    if o.nv > 0usize {
+        let nk = survive(o.facs, o.nv, test, kept)
+        tk = kept[0usize..nk]
+    }
+    let m = pos_in(cols, tk, pos)
+    let (t, e3) = lf_test(a, xs, n, cols.len, y, weight, offset, pos[0usize..m], zero, zero, o.firth, o.c)
+    if e3 != ok { ret (zero, e3) }
+    let plr1 = 0.0f64 - 2.0f64 * (fit1.ll_null - fit1.ll_full)
+    ret (Anova { chisq: t.chisq, df: t.df, pval: t.prob, plr1: plr1, plr2: plr1 - t.chisq }, ok)
+}
+
+// anova(fit1, fit2, method = "PLR")
+fn anova_plr(f1: Lf, f2: Lf) -> (Anova, err) {
+    if f1.df == f2.df { ret (zero, NotNested) }
+    var df = f1.df - f2.df
+    if f2.df > f1.df { df = f2.df - f1.df }
+    let plr1 = 0.0f64 - 2.0f64 * (f1.ll_null - f1.ll_full)
+    let plr2 = 0.0f64 - 2.0f64 * (f2.ll_null - f2.ll_full)
+    var chisq = plr1 - plr2
+    if chisq < 0.0f64 { chisq = 0.0f64 }
+    ret (Anova { chisq: chisq, df: df, pval: pchisq_up(chisq, f64(df)), plr1: plr1, plr2: plr2 }, ok)
+}
+
+// anova(fit1, fit2) with method "nested" for the models with the columns cols1 and cols2
+fn anova_nested(a: *mem.Arena, x: []const f64, n: usize, y: []const f64, weight: []const f64, offset: []const f64, cols1: []const usize, cols2: []const usize, o: Opt) -> (Anova, err) {
+    let (f1, e1) = fit_model(a, x, n, y, weight, offset, cols1, o, false)
+    if e1 != ok { ret (zero, e1) }
+    let (f2, e2) = fit_model(a, x, n, y, weight, offset, cols2, o, false)
+    if e2 != ok { ret (zero, e2) }
+    var big = cols1
+    var small = cols2
+    if f1.df < f2.df {
+        big = cols2
+        small = cols1
+    }
+    // object is the model with the larger df; a is its terms, b the other's
+    var ta = big
+    var tb = small
+    var all_in = true
+    var i = 0usize
+    while i < ta.len {
+        if !in_list(tb, ta[i], tb.len) { all_in = false }
+        i += 1usize
+    }
+    if all_in {
+        ta = small
+        tb = big
+    } else {
+        i = 0usize
+        while i < tb.len {
+            if !in_list(ta, tb[i], ta.len) { ret (zero, NotNested) }
+            i += 1usize
+        }
+    }
+    let (aug, e3) = mem.alloc[usize](a, ta.len + 1usize)
+    if e3 != ok { ret (zero, e3) }
+    var na = 0usize
+    i = 0usize
+    while i < ta.len {
+        if !in_list(tb, ta[i], tb.len) {
+            aug[na] = ta[i]
+            na += 1usize
+        }
+        i += 1usize
+    }
+    let (r, e4) = anova_formula(a, x, n, y, weight, offset, big, aug[0usize..na], o)
+    ret (r, e4)
+}
+
+// add1: one row (chisq, df, p) per candidate of scope, written to out (3 per candidate)
+fn add1(a: *mem.Arena, x: []const f64, n: usize, y: []const f64, weight: []const f64, offset: []const f64, cols: []const usize, scope: []const usize, o: Opt, out: []f64) -> err {
+    var s = 0usize
+    while s < scope.len {
+        let (nc, e1) = mem.alloc[usize](a, cols.len + 1usize)
+        if e1 != ok { ret e1 }
+        var i = 0usize
+        while i < cols.len {
+            nc[i] = cols[i]
+            i += 1usize
+        }
+        nc[cols.len] = scope[s]
+        let one = nc[cols.len..cols.len + 1usize]
+        let (r, e2) = anova_formula(a, x, n, y, weight, offset, nc, one, o)
+        if e2 != ok { ret e2 }
+        out[s * 3usize] = r.chisq
+        out[s * 3usize + 1usize] = f64(r.df)
+        out[s * 3usize + 2usize] = r.pval
+        s += 1usize
+    }
+    ret ok
+}
+
+// drop1: the same for each term of scope removed from the model cols; rem (may be empty) are the terms already removed under full.penalty
+fn drop1(a: *mem.Arena, x: []const f64, n: usize, y: []const f64, weight: []const f64, offset: []const f64, cols: []const usize, scope: []const usize, rem: []const usize, o: Opt, out: []f64) -> err {
+    var s = 0usize
+    while s < scope.len {
+        var r: Anova = zero
+        if rem.len > 0usize && scope.len != rem.len {
+            let (tt, e1) = mem.alloc[usize](a, rem.len + 1usize)
+            if e1 != ok { ret e1 }
+            tt[0usize] = scope[s]
+            var q = 0usize
+            while q < rem.len {
+                tt[q + 1usize] = rem[q]
+                q += 1usize
+            }
+            let (r1, e2) = anova_formula(a, x, n, y, weight, offset, cols, tt[0usize..rem.len + 1usize], o)
+            if e2 != ok { ret e2 }
+            r = r1
+        } else {
+            let (tt2, e3) = mem.alloc[usize](a, 1usize)
+            if e3 != ok { ret e3 }
+            tt2[0usize] = scope[s]
+            let (r2, e4) = anova_formula(a, x, n, y, weight, offset, cols, tt2, o)
+            if e4 != ok { ret e4 }
+            r = r2
+        }
+        out[s * 3usize] = r.chisq
+        out[s * 3usize + 1usize] = f64(r.df)
+        out[s * 3usize + 2usize] = r.pval
+        s += 1usize
+    }
+    ret ok
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// selection
+
+type Sel = struct { fit: Lf, cols: []usize, nc: usize, steps: usize, order: []usize, pl: bool }
+
+// extractAIC: (df, deviance + k df)
+fn extract_aic(f: Lf, kpen: f64) -> (f64, f64) {
+    let dev = 0.0f64 - 2.0f64 * (f.ll_null - f.ll_full)
+    ret (f64(f.df), dev + kpen * f64(f.df))
+}
+
+// forward: start is the model's columns (full-design indices, the intercept 0 first); scope the candidates. order receives the columns added
+fn forward(a: *mem.Arena, x: []const f64, n: usize, y: []const f64, weight: []const f64, offset: []const f64, start: []const usize, scope_in: []const usize, o: Opt, steps: usize, slentry: f64, pl: bool) -> (Sel, err) {
+    let (cols, e1) = mem.alloc[usize](a, start.len + scope_in.len + 1usize)
+    let (scope, e2) = mem.alloc[usize](a, scope_in.len + 1usize)
+    let (order, e3) = mem.alloc[usize](a, scope_in.len + 1usize)
+    let (mat, e4) = mem.alloc[f64](a, 3usize * scope_in.len + 3usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (zero, mem.Exhausted) }
+    var nc = start.len
+    var i = 0usize
+    while i < nc {
+        cols[i] = start[i]
+        i += 1usize
+    }
+    var ns = 0usize
+    i = 0usize
+    while i < scope_in.len {
+        if !in_list(start, scope_in[i], start.len) {
+            scope[ns] = scope_in[i]
+            ns += 1usize
+        }
+        i += 1usize
+    }
+    var istep = 0usize
+    var norder = 0usize
+    var working_pl = o.pl
+    while istep < steps && ns >= 1usize {
+        istep += 1usize
+        let e5 = add1(a, x, n, y, weight, offset, cols[0usize..nc], scope[0usize..ns], o, mat)
+        if e5 != ok { ret (zero, e5) }
+        var all_big = true
+        i = 0usize
+        while i < ns {
+            if !(mat[i * 3usize + 2usize] > slentry) { all_big = false }
+            i += 1usize
+        }
+        if all_big { break }
+        var pmin = mat[2usize]
+        i = 1usize
+        while i < ns {
+            if mat[i * 3usize + 2usize] < pmin { pmin = mat[i * 3usize + 2usize] }
+            i += 1usize
+        }
+        var best = ns
+        var bchi = 0.0f64 - infinity()
+        i = 0usize
+        while i < ns {
+            if mat[i * 3usize + 2usize] == pmin {
+                // ties go to the largest chi-square; the first of equals
+                if best == ns || mat[i * 3usize] > bchi {
+                    best = i
+                    bchi = mat[i * 3usize]
+                }
+            }
+            i += 1usize
+        }
+        let addvar = scope[best]
+        cols[nc] = addvar
+        nc += 1usize
+        order[norder] = addvar
+        norder += 1usize
+        working_pl = false
+        var q = best
+        while q + 1usize < ns {
+            scope[q] = scope[q + 1usize]
+            q += 1usize
+        }
+        ns -= 1usize
+    }
+    if pl { working_pl = true }
+    let (f, e6) = fit_model(a, x, n, y, weight, offset, cols[0usize..nc], o, working_pl)
+    if e6 != ok { ret (zero, e6) }
+    ret (Sel { fit: f, cols: cols, nc: nc, steps: istep, order: order[0usize..norder], pl: working_pl }, ok)
+}
+
+// factor.scope(drop): which of the model's terms (columns of facs, nv variables by K columns, column-major) can be dropped: those no other
+// term contains
+fn droppable(facs: []const f64, nv: usize, terms: []const usize, nt: usize, keep: []bool) {
+    var i = 0usize
+    while i < nt {
+        keep[i] = true
+        i += 1usize
+    }
+    if nt <= 1usize { ret }
+    i = 0usize
+    while i < nt {
+        var fmax = 0.0f64
+        var j = 0usize
+        while j < nt {
+            if j != i {
+                var s = 0.0f64
+                var r = 0usize
+                while r < nv {
+                    if facs[r + terms[i] * nv] > 0.0f64 && facs[r + terms[j] * nv] > 0.0f64 { s += 1.0f64 }
+                    r += 1usize
+                }
+                if s > fmax { fmax = s }
+            }
+            j += 1usize
+        }
+        var fii = 0.0f64
+        var r2 = 0usize
+        while r2 < nv {
+            if facs[r2 + terms[i] * nv] > 0.0f64 { fii += 1.0f64 }
+            r2 += 1usize
+        }
+        if !(fmax != fii) { keep[i] = false }
+        i += 1usize
+    }
+}
+
+// backward: drops the term with the largest p value while some p is not below slstay. facs (nv by K) marks which variables make up each column
+// (the intercept column is all zero). full_penalty keeps the removed terms in the penalty and refits at the end with them unfitted
+fn backward(a: *mem.Arena, x: []const f64, n: usize, K: usize, y: []const f64, weight: []const f64, offset: []const f64, start: []const usize, facs: []const f64, nv: usize, o: Opt, steps: usize, slstay: f64, full_penalty: bool) -> (Sel, err) {
+    let (cols, e1) = mem.alloc[usize](a, start.len + 1usize)
+    let (order, e2) = mem.alloc[usize](a, start.len + 1usize)
+    let (scope, e3) = mem.alloc[usize](a, start.len + 1usize)
+    let (keep, e4) = mem.alloc[bool](a, start.len + 1usize)
+    let (mat, e5) = mem.alloc[f64](a, 3usize * start.len + 3usize)
+    let (terms_cur, e6) = mem.alloc[usize](a, start.len + 1usize)
+    let (removal, e7) = mem.alloc[usize](a, start.len + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret (zero, mem.Exhausted) }
+    var nc = start.len
+    var i = 0usize
+    while i < nc {
+        cols[i] = start[i]
+        i += 1usize
+    }
+    var nrem = 0usize
+    var norder = 0usize
+    var istep = 0usize
+    var df = nc - 1usize
+    if !o.has_int { df = nc }
+    var working_pl = o.pl
+    var intercept = 0usize
+    if o.has_int { intercept = 1usize }
+    let (obj, e8) = fit_model(a, x, n, y, weight, offset, start, o, o.pl)
+    if e8 != ok { ret (zero, e8) }
+    var working = obj
+    while istep < steps && df > 1usize {
+        // the terms still in the formula
+        var nt = 0usize
+        i = intercept
+        while i < nc {
+            terms_cur[nt] = cols[i]
+            nt += 1usize
+            i += 1usize
+        }
+        if full_penalty {
+            // terms(newform.fp): the start model less the removed ones, tested in the start model
+            nt = 0usize
+            i = intercept
+            while i < start.len {
+                if !in_list(removal, start[i], nrem) {
+                    terms_cur[nt] = start[i]
+                    nt += 1usize
+                }
+                i += 1usize
+            }
+        }
+        droppable(facs, nv, terms_cur, nt, keep)
+        var ns = 0usize
+        i = 0usize
+        while i < nt {
+            if keep[i] {
+                scope[ns] = terms_cur[i]
+                ns += 1usize
+            }
+            i += 1usize
+        }
+        if full_penalty && istep != 0usize {
+            let e9 = drop1(a, x, n, y, weight, offset, start, scope[0usize..ns], removal[0usize..nrem], o, mat)
+            if e9 != ok { ret (zero, e9) }
+        } else {
+            let none = removal[0usize..0usize]
+            var base: []const usize = cols[0usize..nc]
+            if full_penalty { base = start }
+            let e10 = drop1(a, x, n, y, weight, offset, base, scope[0usize..ns], none, o, mat)
+            if e10 != ok { ret (zero, e10) }
+        }
+        istep += 1usize
+        var all_small = true
+        i = 0usize
+        while i < ns {
+            if !(mat[i * 3usize + 2usize] < slstay) { all_small = false }
+            i += 1usize
+        }
+        if all_small { break }
+        var pmax = mat[2usize]
+        var at = 0usize
+        i = 1usize
+        while i < ns {
+            if mat[i * 3usize + 2usize] > pmax {
+                pmax = mat[i * 3usize + 2usize]
+                at = i
+            }
+            i += 1usize
+        }
+        let gone = scope[at]
+        order[norder] = gone
+        norder += 1usize
+        if full_penalty {
+            removal[nrem] = gone
+            nrem += 1usize
+            df -= 1usize
+        } else {
+            // drop the column from the model
+            var q = 0usize
+            var w = 0usize
+            while q < nc {
+                if cols[q] != gone {
+                    cols[w] = cols[q]
+                    w += 1usize
+                }
+                q += 1usize
+            }
+            nc = w
+            if df == 2usize {
+                working_pl = false
+            }
+            let (nw, e11) = fit_model(a, x, n, y, weight, offset, cols[0usize..nc], o, working_pl)
+            if e11 != ok { ret (zero, e11) }
+            working = nw
+            df = working.df
+        }
+    }
+    if full_penalty && nrem > 0usize {
+        // all terms stay in the penalty, the removed ones are not fitted
+        var oo = o
+        let (tofit, e12) = mem.alloc[usize](a, start.len + 1usize)
+        if e12 != ok { ret (zero, e12) }
+        var nf = 0usize
+        i = 0usize
+        while i < start.len {
+            if !in_list(removal, start[i], nrem) {
+                tofit[nf] = i + 1usize
+                nf += 1usize
+            }
+            i += 1usize
+        }
+        let (xs, e13) = cols_of(a, x, n, start)
+        if e13 != ok { ret (zero, e13) }
+        oo.has_terms = true
+        oo.terms_fit = tofit[0usize..nf]
+        oo.has_plconf = false
+        oo.has_init = false
+        oo.flic = false
+        let (fw, e14) = logistf(a, xs, y, n, start.len, weight, offset, oo)
+        if e14 != ok { ret (zero, e14) }
+        working = fw
+        nc = start.len
+        i = 0usize
+        while i < nc {
+            cols[i] = start[i]
+            i += 1usize
+        }
+    }
+    ret (Sel { fit: working, cols: cols, nc: nc, steps: istep, order: order[0usize..norder], pl: working_pl }, ok)
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// predict
+
+// the linear predictor of the rows of xn (m by k) under coef
+fn predict_link(coef: []const f64, xn: []const f64, m: usize, k: usize, out: []f64) {
+    var i = 0usize
+    while i < m {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            s += coef[j] * xn[i + j * m]
+            j += 1usize
+        }
+        out[i] = s
+        i += 1usize
+    }
+}
+
+fn predict_response(coef: []const f64, xn: []const f64, m: usize, k: usize, out: []f64) {
+    predict_link(coef, xn, m, k, out)
+    var i = 0usize
+    while i < m {
+        out[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - out[i]))
+        i += 1usize
+    }
+}
+
+// sqrt(x' V x) for each row of xn
+fn predict_se(vm: []const f64, xn: []const f64, m: usize, k: usize, out: []f64) {
+    var i = 0usize
+    while i < m {
+        var s = 0.0f64
+        var j = 0usize
+        while j < k {
+            var t = 0.0f64
+            var l = 0usize
+            while l < k {
+                t += xn[i + l * m] * vm[l + j * k]
+                l += 1usize
+            }
+            s += t * xn[i + j * m]
+            j += 1usize
+        }
+        out[i] = sqrt_f(s)
+        i += 1usize
+    }
+}
+
+// predict(type = "terms"): assign gives the term of each column (0 the intercept); xt is the training design (nt rows) whose column means
+// are subtracted. pred is m by nterms (column-major); the second answer is the constant sum(avx * beta). With se, se_out (m by nterms) gets
+// sqrt(d' V d) for d the term's columns of xn less the reference row ref (k long)
+fn predict_terms(coef: []const f64, vm: []const f64, xt: []const f64, nt: usize, xn: []const f64, m: usize, k: usize, assign: []const usize, nterms: usize, refrow: []const f64, pred: []f64, se_out: []f64) -> f64 {
+    var cst = 0.0f64
+    var j = 0usize
+    while j < k {
+        var avx = 0.0f64
+        var i = 0usize
+        while i < nt {
+            avx += xt[i + j * nt]
+            i += 1usize
+        }
+        avx = avx / f64(nt)
+        cst += avx * coef[j]
+        j += 1usize
+    }
+    var t = 1usize
+    while t <= nterms {
+        var i = 0usize
+        while i < m {
+            var s = 0.0f64
+            j = 0usize
+            while j < k {
+                if assign[j] == t {
+                    var avx = 0.0f64
+                    var r = 0usize
+                    while r < nt {
+                        avx += xt[r + j * nt]
+                        r += 1usize
+                    }
+                    avx = avx / f64(nt)
+                    s += (xn[i + j * m] - avx) * coef[j]
+                }
+                j += 1usize
+            }
+            pred[i + (t - 1usize) * m] = s
+            if refrow.len > 0usize {
+                var q = 0.0f64
+                var l = 0usize
+                while l < k {
+                    var inner = 0.0f64
+                    var u = 0usize
+                    while u < k {
+                        if assign[u] == t { inner += vm[l + u * k] * (xn[i + u * m] - refrow[u]) }
+                        u += 1usize
+                    }
+                    if assign[l] == t { q += (xn[i + l * m] - refrow[l]) * inner }
+                    l += 1usize
+                }
+                se_out[i + (t - 1usize) * m] = sqrt_f(q)
+            }
+            i += 1usize
+        }
+        t += 1usize
+    }
+    ret cst
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// summary, logistf.pdf, profile, PVR.confint
+
+// summary.logistf: chi-square of each coefficient qchisq(1 - p, 1), the likelihood ratio statistic and p, the Wald statistic coefs' V^-1 coefs
+// (NaN when V is singular) and its p
+type Summ = struct { lr: f64, lr_p: f64, wald: f64, wald_p: f64 }
+
+fn summary_lf(a: *mem.Arena, f: Lf, terms_fit: []const usize, chi2: []f64) -> (Summ, err) {
+    let (b, eb) = bump_for(a, 1usize, f.k)
+    if eb != ok { ret (zero, eb) }
+    var bm = b
+    let bp = &bm
+    var i = 0usize
+    while i < f.k {
+        chi2[i] = nm.qchisq(1.0f64 - f.prob[i], 1.0f64, true, false)
+        i += 1usize
+    }
+    var m = f.k
+    if terms_fit.len > 0usize { m = terms_fit.len }
+    let (sel, e1) = mem.alloc[usize](a, m)
+    let (vr, e2) = mem.alloc[f64](a, m * m)
+    let (cs, e3) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok { ret (zero, mem.Exhausted) }
+    i = 0usize
+    while i < m {
+        if terms_fit.len > 0usize {
+            sel[i] = terms_fit[i] - 1usize
+        } else {
+            sel[i] = i
+        }
+        cs[i] = f.coef[sel[i]]
+        i += 1usize
+    }
+    if terms_fit.len > 0usize {
+        i = 0usize
+        while i < f.k {
+            if !in_list(sel, i, m) { chi2[i] = 0.0f64 }
+            i += 1usize
+        }
+    }
+    i = 0usize
+    while i < m {
+        var j = 0usize
+        while j < m {
+            vr[i + j * m] = f.var_m[sel[i] + sel[j] * f.k]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let lr = 0.0f64 - 2.0f64 * (f.ll_null - f.ll_full)
+    var wald = nan()
+    let ei = pd_inv(bp, vr, m)
+    if ei == ok {
+        var s = 0.0f64
+        i = 0usize
+        while i < m {
+            var t = 0.0f64
+            var j = 0usize
+            while j < m {
+                t += cs[j] * vr[j + i * m]
+                j += 1usize
+            }
+            s += t * cs[i]
+            i += 1usize
+        }
+        wald = s
+    }
+    ret (Summ { lr: lr, lr_p: pchisq_up(lr, f64(f.df)), wald: wald, wald_p: pchisq_up(wald, f64(f.df)) }, ok)
+}
+
+type Pdf = struct { b: f64, chisq: f64, pdf: f64 }
+
+// logistf.pdf: the profile penalized likelihood ratio at b for coefficient pos (0-based), from beta and the full log-likelihood
+fn logistf_pdf(a: *mem.Arena, x: []const f64, n: usize, k: usize, y: []const f64, weight: []const f64, offset: []const f64, firth: bool, c: Ctl, pos: usize, bval: f64, beta: []const f64, loglik: f64) -> (Pdf, err) {
+    let (bmp, eb) = bump_for(a, n, k)
+    if eb != ok { ret (zero, eb) }
+    var bm = bmp
+    let bp = &bm
+    let (init, e1) = mem.alloc[f64](a, k)
+    let (vv, e2) = mem.alloc[f64](a, k * k)
+    let (us, e3) = mem.alloc[f64](a, k)
+    let (pi, e4) = mem.alloc[f64](a, n)
+    let (hd, e5) = mem.alloc[f64](a, n)
+    let (cf, e6) = mem.alloc[usize](a, k)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (zero, mem.Exhausted) }
+    i_copy(beta, init, k)
+    init[pos] = bval
+    var nc = 0usize
+    var i = 0usize
+    while i < k {
+        if i != pos {
+            cf[nc] = i + 1usize
+            nc += 1usize
+        }
+        i += 1usize
+    }
+    if nc == 0usize {
+        cf[0usize] = 0usize
+        nc = 1usize
+    }
+    let (core, ef) = fit_fit(bp, x, y, n, k, weight, offset, init, cf[0usize..nc], firth, c, vv, us, pi, hd)
+    if ef != ok { ret (zero, ef) }
+    let chisq = 2.0f64 * (loglik - core.loglik)
+    var p = 1.0f64 - pchisq_up(chisq, 1.0f64) / 2.0f64
+    if bval < beta[pos] { p = 1.0f64 - p }
+    ret (Pdf { b: bval, chisq: chisq, pdf: p }, ok)
+}
+
+fn floor_f(v: f64) -> f64 { ret math.floor[f64](v) }
+fn ceil_f(v: f64) -> f64 { ret math.ceil[f64](v) }
+
+// profile.logistf: the profile of coefficient pos on a grid of steps + 1 knots; the arrays (steps + 1 each, ordered by beta) are beta, stdbeta,
+// profile, loglik, signed.root and cdf in out (6 * (steps + 1)); the answer is the number of rows kept (a numerically 0/1 fit stops the walk)
+fn profile_lf(a: *mem.Arena, x: []const f64, n: usize, k: usize, y: []const f64, weight: []const f64, offset: []const f64, f: Lf, pos: usize, steps: usize, pitch: f64, have_limits: bool, lim_lo: f64, lim_up: f64, alpha: f64, firth: bool, c: Ctl, out: []f64) -> (usize, err) {
+    let (bmp, eb) = bump_for(a, n, k)
+    if eb != ok { ret (0usize, eb) }
+    var bm = bmp
+    let bp = &bm
+    let std_pos = sqrt_f(f.var_m[pos + pos * k])
+    let ll0 = f.ll_full - nm.qchisq(1.0f64 - alpha, 1.0f64, true, false) / 2.0f64
+    var lo = lim_lo
+    var up = lim_up
+    if !have_limits {
+        let (hist, eh) = mem.alloc[f64](a, c.plmaxit * k)
+        if eh != ok { ret (0usize, eh) }
+        let (l1, e1) = logistpl(bp, x, y, n, k, weight, offset, f.coef, pos, ll0, firth, 0.0f64 - 1.0f64, c, hist)
+        if e1 != ok { ret (0usize, e1) }
+        let (u1, e2) = logistpl(bp, x, y, n, k, weight, offset, f.coef, pos, ll0, firth, 1.0f64, c, hist)
+        if e2 != ok { ret (0usize, e2) }
+        lo = l1.beta
+        up = u1.beta
+    }
+    lo = (lo - f.coef[pos]) / std_pos
+    up = (up - f.coef[pos]) / std_pos
+    lo = floor_f(lo / pitch) * pitch
+    up = ceil_f(up / pitch) * pitch
+    let nn_k = steps + 1usize
+    let (std_v, g1) = mem.alloc[f64](a, nn_k)
+    let (bet, g2) = mem.alloc[f64](a, nn_k)
+    let (ll, g3) = mem.alloc[f64](a, nn_k)
+    let (ord, g4) = mem.alloc[usize](a, nn_k)
+    if g1 != ok || g2 != ok || g3 != ok || g4 != ok { ret (0usize, mem.Exhausted) }
+    var i = 0usize
+    while i < nn_k {
+        std_v[i] = lo + f64(i) * ((up - lo) / f64(steps))
+        bet[i] = f.coef[pos] + std_pos * std_v[i]
+        ll[i] = nan()
+        ord[i] = i
+        i += 1usize
+    }
+    // the knots by distance from the estimate, stable
+    i = 1usize
+    while i < nn_k {
+        let cur = ord[i]
+        let dcur = math.abs[f64](bet[cur] - f.coef[pos])
+        var j = i
+        while j > 0usize && math.abs[f64](bet[ord[j - 1usize]] - f.coef[pos]) > dcur {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = cur
+        i += 1usize
+    }
+    let (init, h1) = mem.alloc[f64](a, k)
+    let (vv, h2) = mem.alloc[f64](a, k * k)
+    let (us, h3) = mem.alloc[f64](a, k)
+    let (pi, h4) = mem.alloc[f64](a, n)
+    let (hd, h5) = mem.alloc[f64](a, n)
+    let (cf, h6) = mem.alloc[usize](a, k)
+    if h1 != ok || h2 != ok || h3 != ok || h4 != ok || h5 != ok || h6 != ok { ret (0usize, mem.Exhausted) }
+    var nc = 0usize
+    i = 0usize
+    while i < k {
+        if i != pos {
+            cf[nc] = i + 1usize
+            nc += 1usize
+        }
+        i += 1usize
+    }
+    i_copy(f.coef, init, k)
+    var stopped = nn_k
+    var s = 0usize
+    while s < nn_k {
+        init[pos] = bet[ord[s]]
+        let (core, ef) = fit_fit(bp, x, y, n, k, weight, offset, init, cf[0usize..nc], firth, c, vv, us, pi, hd)
+        if ef != ok { ret (0usize, ef) }
+        if s > 0usize && core.warn {
+            stopped = s
+            break
+        }
+        ll[ord[s]] = core.loglik
+        s += 1usize
+    }
+    // rows with a log-likelihood, by beta
+    var kept = 0usize
+    i = 0usize
+    while i < nn_k {
+        if ll[i] == ll[i] { kept += 1usize }
+        i += 1usize
+    }
+    var mx = 0.0f64 - infinity()
+    i = 0usize
+    while i < nn_k {
+        if ll[i] == ll[i] && ll[i] > mx { mx = ll[i] }
+        i += 1usize
+    }
+    var w = 0usize
+    i = 0usize
+    while i < nn_k {
+        if ll[i] == ll[i] {
+            let sr0 = sqrt_f(2.0f64 * (0.0f64 - ll[i] + mx))
+            var sgn = 0.0f64
+            if bet[i] > f.coef[pos] {
+                sgn = 1.0f64
+            } else {
+                if bet[i] < f.coef[pos] { sgn = 0.0f64 - 1.0f64 }
+            }
+            let sr = sr0 * sgn
+            out[0usize * nn_k + w] = bet[i]
+            out[1usize * nn_k + w] = std_v[i]
+            out[2usize * nn_k + w] = 2.0f64 * (ll[i] - mx)
+            out[3usize * nn_k + w] = ll[i]
+            out[4usize * nn_k + w] = sr
+            out[5usize * nn_k + w] = dist.pnorm(sr, 0.0f64, 1.0f64, true, false)
+            w += 1usize
+        }
+        i += 1usize
+    }
+    ret (kept, ok)
+}
+
+// PVR.confint: Rubin's rules with the pseudo-variance modification. coef, lo, up are nimp by nvar (column-major); each answer is nvar long
+fn pvr_confint(coef: []const f64, lo: []const f64, up: []const f64, nimp: usize, nvar: usize, zalpha: f64, skew: bool, est: []f64, ci_lo: []f64, ci_up: []f64, var_lo: []f64, var_up: []f64) {
+    var v = 0usize
+    while v < nvar {
+        var mean = 0.0f64
+        var i = 0usize
+        while i < nimp {
+            mean += coef[i + v * nimp]
+            i += 1usize
+        }
+        mean = mean / f64(nimp)
+        var tail = 0usize
+        while tail < 2usize {
+            var num = 0.0f64
+            var cnt = 0.0f64
+            i = 0usize
+            while i < nimp {
+                let diff = coef[i + v * nimp] - mean
+                var inside = true
+                if skew {
+                    var sg = 0.0f64
+                    if diff > 0.0f64 {
+                        sg = 1.0f64
+                    } else {
+                        if diff < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+                    }
+                    var want = 1.0f64
+                    if tail == 0usize { want = 0.0f64 - 1.0f64 }
+                    inside = sg == want
+                }
+                if inside {
+                    num += diff * diff
+                    cnt += 1.0f64
+                }
+                i += 1usize
+            }
+            let pv = num / (cnt - 1.0f64)
+            var avg = 0.0f64
+            i = 0usize
+            while i < nimp {
+                var ps = 0.0f64
+                if tail == 0usize {
+                    ps = (coef[i + v * nimp] - lo[i + v * nimp]) / zalpha
+                } else {
+                    ps = 0.0f64 - (coef[i + v * nimp] - up[i + v * nimp]) / zalpha
+                }
+                avg += ps * ps
+                i += 1usize
+            }
+            avg = avg / f64(nimp)
+            let rr = avg + (1.0f64 + 1.0f64 / f64(nimp)) * pv
+            if tail == 0usize {
+                var_lo[v] = rr
+                ci_lo[v] = mean - zalpha * sqrt_f(rr)
+            } else {
+                var_up[v] = rr
+                ci_up[v] = mean + zalpha * sqrt_f(rr)
+            }
+            tail += 1usize
+        }
+        est[v] = mean
+        v += 1usize
+    }
 }

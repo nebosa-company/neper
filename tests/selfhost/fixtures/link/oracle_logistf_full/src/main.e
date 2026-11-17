@@ -241,9 +241,168 @@ fn compare(a: *mem.Arena, name: str, at: usize, got: []const f64, want: []const 
     ret bad
 }
 
+// a list of 1-based indices at extra[at..] (a count first) as 0-based, and where it ends
+fn index_list(a: *mem.Arena, extra: []const f64, at: usize) -> ([]usize, usize, err) {
+    let cnt = usize(extra[at])
+    let (r, e) = mem.alloc[usize](a, cnt + 1usize)
+    if e != ok { ret (r, at, e) }
+    var i = 0usize
+    while i < cnt {
+        r[i] = usize(extra[at + 1usize + i]) - 1usize
+        i += 1usize
+    }
+    ret (r[0usize..cnt], at + 1usize + cnt, ok)
+}
+
+fn value_list(extra: []const f64, at: usize) -> ([]const f64, usize) {
+    let cnt = usize(extra[at])
+    ret (extra[at + 1usize..at + 1usize + cnt], at + 1usize + cnt)
+}
+
+// the answer of a selection: the final model's coefficients, covariance, p values and limits placed by full-design column, the penalized
+// log-likelihoods, the degrees of freedom and the order of entry or removal (1-based)
+fn sel_flat(a: *mem.Arena, s: lf.Sel, kk: usize) -> ([]f64, err) {
+    let (buf, e) = mem.alloc[f64](a, 5usize * kk + kk * kk + 8usize + s.order.len)
+    if e != ok { ret (buf, e) }
+    var out = Out { v: buf, at: 0usize }
+    let po = &out
+    var q = 0usize
+    while q < 5usize * kk + kk * kk {
+        put(po, 0.0f64)
+        q += 1usize
+    }
+    let f = s.fit
+    var i = 0usize
+    while i < s.nc {
+        let ci = s.cols[i]
+        buf[ci] = f.coef[i]
+        buf[kk + kk * kk + ci] = f.prob[i]
+        buf[2usize * kk + kk * kk + ci] = f.ci_lo[i]
+        buf[3usize * kk + kk * kk + ci] = f.ci_up[i]
+        var j = 0usize
+        while j < s.nc {
+            buf[kk + ci + s.cols[j] * kk] = f.var_m[i + j * s.nc]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    out.at = 4usize * kk + kk * kk
+    put(po, f.ll_full)
+    put(po, f.ll_null)
+    put(po, f64(f.df))
+    put(po, f64(s.order.len))
+    i = 0usize
+    while i < s.order.len {
+        put(po, f64(s.order[i] + 1usize))
+        i += 1usize
+    }
+    ret (buf[0usize..out.at], ok)
+}
+
 fn run(a: *mem.Arena, c: *const oracle.Case, at: usize) -> usize {
     let (p, pe) = parse(a, c.args)
     if pe != ok { ret 1usize }
+    let (wv, ew) = lf.weights_or_ones(a, p.w, p.n)
+    let (ov, eo) = lf.offset_or_zeros(a, p.off, p.n)
+    if ew != ok || eo != ok { ret 1usize }
+    if str.eq(c.name, "test") {
+        let (cols, p1, e1) = index_list(a, p.extra, 0usize)
+        let (tst, p2, e2) = index_list(a, p.extra, p1)
+        let (vals, p3) = value_list(p.extra, p2)
+        let (b0, p4) = value_list(p.extra, p3)
+        if e1 != ok || e2 != ok { ret 1usize }
+        let (xs, e3) = lf.cols_of(a, p.x, p.n, cols)
+        if e3 != ok { ret 1usize }
+        let (t, e4) = lf.lf_test(a, xs, p.n, cols.len, p.y, wv, ov, tst, vals, b0, p.o.firth, p.o.c)
+        if e4 != ok { ret 1usize }
+        let (g, e5) = mem.alloc[f64](a, 4usize)
+        if e5 != ok { ret 1usize }
+        g[0usize] = t.ll_full
+        g[1usize] = t.ll_null
+        g[2usize] = f64(t.df)
+        g[3usize] = t.prob
+        ret compare(a, c.name, at, g, p.want)
+    }
+    if str.eq(c.name, "anova_n") || str.eq(c.name, "anova_p") || str.eq(c.name, "anova_f") {
+        let (cols, p1, e1) = index_list(a, p.extra, 0usize)
+        let (other, p2, e2) = index_list(a, p.extra, p1)
+        if e1 != ok || e2 != ok { ret 1usize }
+        var po = p.o
+        if str.eq(c.name, "anova_p") == false {
+            po.nv = usize(p.extra[p2])
+            po.facs = p.extra[p2 + 1usize..p2 + 1usize + po.nv * p.k]
+        }
+        var r: lf.Anova = zero
+        if str.eq(c.name, "anova_n") {
+            let (r1, e3) = lf.anova_nested(a, p.x, p.n, p.y, wv, ov, cols, other, po)
+            if e3 != ok { ret 1usize }
+            r = r1
+        }
+        if str.eq(c.name, "anova_f") {
+            let (r2, e4) = lf.anova_formula(a, p.x, p.n, p.y, wv, ov, cols, other, po)
+            if e4 != ok { ret 1usize }
+            r = r2
+        }
+        if str.eq(c.name, "anova_p") {
+            let (f1, e5) = lf.fit_model(a, p.x, p.n, p.y, wv, ov, cols, p.o, false)
+            let (f2, e6) = lf.fit_model(a, p.x, p.n, p.y, wv, ov, other, p.o, false)
+            if e5 != ok || e6 != ok { ret 1usize }
+            let (r3, e7) = lf.anova_plr(f1, f2)
+            if e7 != ok { ret 1usize }
+            r = r3
+        }
+        let (g, e8) = mem.alloc[f64](a, 5usize)
+        if e8 != ok { ret 1usize }
+        g[0usize] = r.chisq
+        g[1usize] = f64(r.df)
+        g[2usize] = r.pval
+        g[3usize] = r.plr1
+        g[4usize] = r.plr2
+        ret compare(a, c.name, at, g, p.want)
+    }
+    if str.eq(c.name, "add1") || str.eq(c.name, "drop1") {
+        let (cols, p1, e1) = index_list(a, p.extra, 0usize)
+        let (sc, p2, e2) = index_list(a, p.extra, p1)
+        if e1 != ok || e2 != ok { ret 1usize }
+        let (g, e3) = mem.alloc[f64](a, 3usize * sc.len + 1usize)
+        if e3 != ok { ret 1usize }
+        var e4 = ok
+        if str.eq(c.name, "add1") {
+            e4 = lf.add1(a, p.x, p.n, p.y, wv, ov, cols, sc, p.o, g)
+        } else {
+            e4 = lf.drop1(a, p.x, p.n, p.y, wv, ov, cols, sc, sc[0usize..0usize], p.o, g)
+        }
+        if e4 != ok { ret 1usize }
+        ret compare(a, c.name, at, g[0usize..3usize * sc.len], p.want)
+    }
+    if str.eq(c.name, "forward") {
+        let (start, p1, e1) = index_list(a, p.extra, 0usize)
+        let (sc, p2, e2) = index_list(a, p.extra, p1)
+        if e1 != ok || e2 != ok { ret 1usize }
+        let steps = usize(p.extra[p2])
+        let slentry = p.extra[p2 + 1usize]
+        let plf = flag(p.extra[p2 + 2usize])
+        let (s, e3) = lf.forward(a, p.x, p.n, p.y, wv, ov, start, sc, p.o, steps, slentry, plf)
+        if e3 != ok { ret 1usize }
+        let (g, e4) = sel_flat(a, s, p.k)
+        if e4 != ok { ret 1usize }
+        ret compare(a, c.name, at, g, p.want)
+    }
+    if str.eq(c.name, "backward") {
+        let (start, p1, e1) = index_list(a, p.extra, 0usize)
+        if e1 != ok { ret 1usize }
+        let nv = usize(p.extra[p1])
+        let facs = p.extra[p1 + 1usize..p1 + 1usize + nv * p.k]
+        let q = p1 + 1usize + nv * p.k
+        let steps = usize(p.extra[q])
+        let slstay = p.extra[q + 1usize]
+        let fp = flag(p.extra[q + 2usize])
+        let (s, e3) = lf.backward(a, p.x, p.n, p.k, p.y, wv, ov, start, facs, nv, p.o, steps, slstay, fp)
+        if e3 != ok { ret 1usize }
+        let (g, e4) = sel_flat(a, s, p.k)
+        if e4 != ok { ret 1usize }
+        ret compare(a, c.name, at, g, p.want)
+    }
     if str.eq(c.name, "fit") {
         let (r, e) = lf.logistf(a, p.x, p.y, p.n, p.k, p.w, p.off, p.o)
         if e != ok { ret 1usize }
