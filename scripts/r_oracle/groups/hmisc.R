@@ -16,4 +16,12 @@ for (rep in 1:10) {
   y <- rbinom(n, 1, 0.5); xs <- round(x + y * 0.8, 1)
   if (length(unique(y)) == 2) { s <- somers2(xs, y); add("c", c(n, xs, y), s[["C"]]); add("dxy", c(n, xs, y), s[["Dxy"]]) }
 }
+# wtd.quantile "wq" (n, k, index, x[n], w[n], probs[k]); wtd.rank "wrk" (n, index, x, w); rcspline.eval "rcs" (n, nk, norm, column-major index, x[n], knots[nk])
+for (rep in 1:30) {
+  n <- sample(6:40, 1); x <- if (rep %% 2 == 0) round(rnorm(n), 1) else rnorm(n); w <- round(runif(n, 0.5, 3), 2); pr <- sort(runif(sample(2:5, 1)))
+  q <- wtd.quantile(x, w, probs = pr); for (j in seq_along(pr)) add("wq", c(n, length(pr), j - 1, x, w, pr), q[[j]])
+  r <- wtd.rank(x, w); for (i in seq_len(n)) add("wrk", c(n, i - 1, x, w), r[i])
+  nk <- sample(3:6, 1); kn <- sort(sample(x, nk)); if (length(unique(kn)) < nk) next; nm <- sample(0:2, 1)
+  B <- rcspline.eval(x, knots = kn, norm = nm); for (j in seq_along(as.vector(B))) add("rcs", c(n, nk, nm, j - 1, x, kn), as.vector(B)[j])
+}
 emit("hmisc", "Hmisc", list(cases))
