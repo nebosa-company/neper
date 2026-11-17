@@ -47522,3 +47522,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6763 — EnvStats: exact one-sample propTestN
 
 **Decision.** `prop_n_exact` is `propTestN` with `approx = FALSE`: the first n from the minimum whose exact binomial power (`prop_exact`, the critical values of `propTestPower` split out of `prop_power`) reaches the request and whose attained level is within `tol.alpha` (a tenth of alpha) of alpha. The package finds that n through `uniroot` bounding a scan, which cannot change the first n that passes, so the port scans upward. A level above alpha makes the package's power NA, which fails the test, as here. Equal to EnvStats on 28 sizes over the three alternatives (oracle_envstats, 4342 cases in all). Linux pending.
+
+## D6764 — EnvStats: predIntNormN
+
+**Decision.** `pi_norm_n` is `predIntNormN` for the Bonferroni method: the half width is the prediction factor times sigma (`predIntNormHalfWidth`), n = 2 when that already suffices, otherwise the root of the gap on (2, n.max) rounded up. The package's `uniroot` at tolerance 1e-7 and the port's bisection agree unless the root lies within 1e-7 of an integer. Equal to EnvStats on 62 sizes over n.mean 1 to 4, k 1 to 5 and three confidence levels (oracle_envstats, 4404 cases in all). The exact method for k above 1 waits on the exact factor. Linux pending.

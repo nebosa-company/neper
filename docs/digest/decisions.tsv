@@ -3622,4 +3622,5 @@ D6759	761	mice: mean and sample methods, logit clamps
 D6760	866	EnvStats: propTestPower and propTestN
 D6761	700	EnvStats: ciBinomHalfWidth
 D6762	730	EnvStats: ciBinomN
-D6763	674	EnvStats: exact one-sample propTestN
+D6763	675	EnvStats: exact one-sample propTestN
+D6764	595	EnvStats: predIntNormN

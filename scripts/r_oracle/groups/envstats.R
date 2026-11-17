@@ -111,6 +111,13 @@ for (rep in 1:40) {
   if (is.null(r)) next
   cases[[length(cases) + 1]] <- case("ptx", c(p1, p0, a, pw, al), as.numeric(r), rel = 0, abs = 0)
 }
+# predIntNormN Bonferroni ("pin": (half.width, n.mean, k, sigma.hat, conf.level)): n
+for (rep in 1:100) {
+  nm <- sample(1:4, 1); kk <- sample(1:5, 1); sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
+  hwv <- sg * c(1.2, 1.5, 2, 3)[sample(4, 1)]
+  r <- tryCatch(suppressWarnings(predIntNormN(hwv, n.mean = nm, k = kk, sigma.hat = sg, method = "Bonferroni", conf.level = cl)), error = function(e) NA)
+  if (is.finite(r)) cases[[length(cases) + 1]] <- case("pin", c(hwv, nm, kk, sg, cl), r, rel = 0, abs = 0)
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]

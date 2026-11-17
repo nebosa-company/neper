@@ -872,3 +872,22 @@ fn prop_n_exact(p1: f64, p0: f64, alpha: f64, power: f64, alt: usize, n_min: f64
     }
     ret 0.0f64 / 0.0f64
 }
+
+// ---- predIntNormN: the sample size for a prediction interval half width (Bonferroni, two-sided) ----
+
+fn pi_norm_hw(n: f64, n_mean: f64, k: f64, sigma: f64, conf: f64) -> f64 { ret pred_k(n, n_mean, k, true, conf) * sigma }
+
+// EnvStats::predIntNormN: the root of the half width gap on (2, n_max) rounded up (2 when n = 2 is enough, NaN when n_max is not)
+fn pi_norm_n(hw: f64, n_mean: f64, k: f64, sigma: f64, conf: f64, n_max: f64) -> f64 {
+    if pi_norm_hw(2.0f64, n_mean, k, sigma, conf) <= hw { ret 2.0f64 }
+    if pi_norm_hw(n_max, n_mean, k, sigma, conf) > hw { ret 0.0f64 / 0.0f64 }
+    var lo = 2.0f64
+    var hi = n_max
+    var it = 0usize
+    while it < 200usize {
+        let mid = 0.5f64 * (lo + hi)
+        if pi_norm_hw(mid, n_mean, k, sigma, conf) > hw { lo = mid } else { hi = mid }
+        it += 1usize
+    }
+    ret math.ceil[f64](0.5f64 * (lo + hi))
+}
