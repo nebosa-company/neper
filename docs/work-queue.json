@@ -224,17 +224,6 @@
       "evidence": "Partial (D6150). na_ma (three weightings) and na_mean (five options) equal imputeTS on Windows (oracle_imputets; Linux pending). D6868: na_locf (locf, nocb and the na_remaining options) and na_interpolation (linear, spline) equal imputeTS. D6869: maxgap equals imputeTS. Open: na_kalman, na_seadec, na_seasplit, na_random, statsNA, stine. Was: Open (CRAN rank 658). Small to mid. e.algo.stat.zoo has locf, approx and spline. Acceptance, equal to imputeTS: na_interpolation (linear, spline, stine), na_kalman (StructTS and auto.arima models), na_ma (simple, linear, exponential weights), na_seadec, na_seasplit, na_locf, na_mean, na_random, na_replace, statsNA. D6993: na_random (default and given bounds, under set.seed) and na_replace equal imputeTS (oracle_imputets, 8611 cases). D7001: na_interpolation stine (stinepack stinterp with the scaled Stineman slopes, then na_locf rev) equals imputeTS (oracle_imputets, 9255 cases). Open: na_kalman, na_seadec, na_seasplit, statsNA. D7002: na_seadec (interpolation, locf and mean base algorithms over the robust stl, s.window 11), na_seasplit and statsNA (counts, gaps, longest, most frequent and most weighty gap) equal imputeTS (oracle_imputets, 10623 cases). Open: na_kalman (StructTS and auto.arima models)."
     },
     {
-      "id": "L430",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 628,
-      "title": "geepack: generalized estimating equations",
-      "score": 0.3,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6476 Gaussian geeglm with independence and exchangeable correlation, scale, alpha and sandwich covariance agree with geepack on Windows; oracle_geepackpkg; Linux pending). Open: other families and links, unequal clusters, AR1 and unstructured, jackknife and bootstrap variances, geese, Wald tests. Was: Open (CRAN rank 644). Small to mid. Verify the working correlations of e.algo.stat.mixed first. Acceptance, equal to geepack: geeglm and geese with independence, exchangeable, AR-1, unstructured and fixed correlations, robust and jackknife variance, ordgee, anova.geeglm Wald tests, QIC. D7003: geeglm_glm: the gaussian, binomial (logit) and poisson (log) families with equal clusters and independence, exchangeable or AR(1) working correlation (the AR(1) alpha as the least-squares root over all lagged products) equal geepack on 24 fits (oracle_geepackpkg, 591 cases; beta and alpha to 1e-4 relative or 2e-5 absolute, since geepack stops at 1e-5). Open: unequal clusters, unstructured and fixed correlations, other links, jackknife and bootstrap variances, geese, Wald tests, QIC."
-    },
-    {
       "id": "L448",
       "category": "library",
       "group": "CRAN parity",
