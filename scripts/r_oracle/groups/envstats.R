@@ -85,6 +85,15 @@ for (rep in 1:160) {
   cases[[length(cases) + 1]] <- case("ptn", c(p1, p0, a, pw, as.numeric(ts_), al, ra, as.numeric(cr), 0), n1v, rel = 0, abs = 0)
   if (ts_) cases[[length(cases) + 1]] <- case("ptn", c(p1, p0, a, pw, 1, al, ra, as.numeric(cr), 1), n2v, rel = 0, abs = 0)
 }
+# ciBinomHalfWidth ("cibh": (n1, x1, n2, x2, conf.level, two.sample, method (0 score 1 exact 2 adjusted Wald 3 Wald), correct))
+mnames <- c("score", "exact", "adjusted Wald", "Wald")
+for (rep in 1:200) {
+  ts_ <- rep %% 2 == 0; me <- sample(0:3, 1); if (ts_ && me == 1) me <- 0; cr <- rep %% 3 != 0
+  n1 <- sample(8:150, 1); x1 <- sample(1:(n1 - 1), 1); n2 <- if (ts_) sample(8:150, 1) else n1; x2 <- if (ts_) sample(1:(n2 - 1), 1) else 0
+  cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
+  v <- tryCatch(suppressWarnings(if (ts_) ciBinomHalfWidth(n1, x1 / n1, n2 = n2, p2.hat = x2 / n2, conf.level = cl, sample.type = "two.sample", ci.method = mnames[me + 1], correct = cr)$half.width else ciBinomHalfWidth(n1, x1 / n1, conf.level = cl, sample.type = "one.sample", ci.method = mnames[me + 1], correct = cr)$half.width), error = function(e) NA)
+  if (is.finite(v)) cases[[length(cases) + 1]] <- case("cibh", c(n1, x1, n2, x2, cl, as.numeric(ts_), me, as.numeric(cr)), v, rel = 1e-8, abs = 1e-11)
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]

@@ -760,3 +760,62 @@ fn prop_n(p1: f64, p2: f64, alpha: f64, power: f64, two_sample: bool, alt: usize
     }
     ret math.ceil[f64](nv)
 }
+
+// ---- confidence interval half widths for a binomial proportion (ciBinomHalfWidth) ----
+
+// method 0 score (prop.test's Wilson interval, with the continuity correction), 1 exact (Clopper-Pearson, one sample), 2 adjusted Wald, 3 Wald; x1/n1 the proportion, x2/n2 the second sample
+fn ci_binom_hw(n1: f64, x1: f64, n2: f64, x2: f64, conf: f64, two_sample: bool, method: usize, correct: bool) -> f64 {
+    let a = 1.0f64 - conf
+    let z = qn(1.0f64 - a / 2.0f64)
+    let p1 = x1 / n1
+    if !two_sample {
+        if method == 3usize {
+            var cf = 0.0f64
+            if correct { cf = 0.5f64 / n1 }
+            ret z * math.sqrt[f64](p1 * (1.0f64 - p1) / n1) + cf
+        }
+        var lo = 0.0f64
+        var hi = 1.0f64
+        if method == 0usize {
+            var yates = 0.0f64
+            if correct { yates = math.min[f64](0.5f64, math.abs[f64](x1 - n1 * 0.5f64)) }
+            let z22 = z * z / (2.0f64 * n1)
+            var pc = p1 + yates / n1
+            if pc < 1.0f64 { hi = (pc + z22 + z * math.sqrt[f64](pc * (1.0f64 - pc) / n1 + z22 / (2.0f64 * n1))) / (1.0f64 + 2.0f64 * z22) }
+            pc = p1 - yates / n1
+            if pc > 0.0f64 { lo = (pc + z22 - z * math.sqrt[f64](pc * (1.0f64 - pc) / n1 + z22 / (2.0f64 * n1))) / (1.0f64 + 2.0f64 * z22) }
+            lo = math.max[f64](lo, 0.0f64)
+            hi = math.min[f64](hi, 1.0f64)
+        } else if method == 1usize {
+            if x1 > 0.0f64 { lo = nb.qbeta(a / 2.0f64, x1, n1 - x1 + 1.0f64, true, false) }
+            if x1 < n1 { hi = nb.qbeta(1.0f64 - a / 2.0f64, x1 + 1.0f64, n1 - x1, true, false) }
+        } else {
+            let c2 = z * z
+            let pa = (x1 + c2 / 2.0f64) / (n1 + c2)
+            let h = z * math.sqrt[f64](pa * (1.0f64 - pa) / (n1 + c2))
+            lo = math.max[f64](0.0f64, pa - h)
+            hi = math.min[f64](1.0f64, pa + h)
+        }
+        ret (hi - lo) / 2.0f64
+    }
+    let p2 = x2 / n2
+    if method == 0usize {
+        let delta = p1 - p2
+        let nf = 1.0f64 / n1 + 1.0f64 / n2
+        var yates = 0.0f64
+        if correct { yates = math.min[f64](0.5f64, math.abs[f64](delta) / nf) }
+        let w = z * math.sqrt[f64](p1 * (1.0f64 - p1) / n1 + p2 * (1.0f64 - p2) / n2) + yates * nf
+        let lo = math.max[f64](delta - w, 0.0f64 - 1.0f64)
+        let hi = math.min[f64](delta + w, 1.0f64)
+        ret (hi - lo) / 2.0f64
+    }
+    if method == 2usize {
+        let c2 = z * z
+        let a1 = (x1 + c2 / 4.0f64) / (n1 + c2 / 2.0f64)
+        let a2 = (x2 + c2 / 4.0f64) / (n2 + c2 / 2.0f64)
+        ret z * math.sqrt[f64](a1 * (1.0f64 - a1) / (n1 + c2 / 2.0f64) + a2 * (1.0f64 - a2) / (n2 + c2 / 2.0f64))
+    }
+    var cf = 0.0f64
+    if correct { cf = 0.5f64 * (1.0f64 / n1 + 1.0f64 / n2) }
+    ret z * math.sqrt[f64](p1 * (1.0f64 - p1) / n1 + p2 * (1.0f64 - p2) / n2) + cf
+}
