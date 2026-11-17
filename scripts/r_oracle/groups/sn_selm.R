@@ -29,14 +29,13 @@ mvsel_case <- function(fam, pen, n, d, p, sd) {
   y <- round(z + 1 + (if (p == 2) outer(x1, c(0.5, -0.3, 0.2)[seq_len(d)]) else 0), 4)
   colnames(y) <- paste0("y", seq_len(d)); X <- if (p == 2) cbind(1, x1) else matrix(1, n, 1)
   frm <- if (p == 2) y ~ x1 else y ~ 1
-  if (fam == 1 && pen) return(invisible())
   fit <- tryCatch(selm(frm, family = if (fam == 0) "SN" else "ST", method = if (pen) "MPLE" else "MLE"), error = function(e) NULL)
   if (is.null(fit)) return(invisible())
   dp <- coef(fit, "DP", vector = FALSE); ll <- as.numeric(logLik(fit))
   flat <- c(as.numeric(t(as.matrix(dp$beta))), as.numeric(t(dp$Omega)), dp$alpha, if (fam == 1) dp$nu)
   if (fam == 1 && dp$nu > 30) return(invisible())
-  for (k in unique(c(1, p * d + d * d + 1))) add("mvselm", c(fam, pen, n, d, p, k - 1, as.numeric(t(y)), as.numeric(t(X))), flat[k], rel = 5e-3, abs = 2e-3)
-  add("mvselm", c(fam, pen, n, d, p, length(flat), as.numeric(t(y)), as.numeric(t(X))), ll, rel = 1e-4)
+  for (k in unique(c(1, p * d + d * d + 1))) add("mvselm", c(fam, pen, n, d, p, k - 1, as.numeric(t(y)), as.numeric(t(X))), flat[k], rel = if (fam == 1 && pen) 3e-2 else 5e-3, abs = 2e-3)
+  add("mvselm", c(fam, pen, n, d, p, length(flat), as.numeric(t(y)), as.numeric(t(X))), ll, rel = if (fam == 1 && pen) 5e-5 else 1e-4)
 }
 for (rep in 1:3) for (fam in 0:1) for (pen in 0:1) mvsel_case(fam, pen, 300, 2, c(1, 2)[rep %% 2 + 1], 8000 + rep * 10 + fam * 2 + pen)
 emit("sn_selm", "sn", list(cases))
