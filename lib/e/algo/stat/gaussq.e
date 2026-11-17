@@ -614,3 +614,22 @@ fn tweedie_pg(y: f64, p: f64, mu: f64, phi: f64, kind: usize) -> f64 {
     if kind == 1usize { s += math.exp[f64](0.0f64 - lam) }
     ret s
 }
+
+// tweedie::rtweedie for 1 < p < 2: all n Poisson counts N ~ Poisson(lambda) first, then for each the gamma draw of shape N (2 - p) / (p - 1) and scale phi (p - 1) mu^(p - 1), zero (without a draw) when N = 0
+fn rtweedie_pg(r: *rng.Rng, n: usize, p: f64, mu: f64, phi: f64, out: []f64) -> err {
+    let lam = math.pow[f64](mu, 2.0f64 - p) / (phi * (2.0f64 - p))
+    let a = (2.0f64 - p) / (p - 1.0f64)
+    let gam = phi * (p - 1.0f64) * math.pow[f64](mu, p - 1.0f64)
+    var i = 0usize
+    while i < n {
+        out[i] = rd.rpois(r, lam)
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        let k = out[i]
+        if k > 0.0f64 { out[i] = rd.rgamma(r, k * a, gam) } else { out[i] = 0.0f64 }
+        i += 1usize
+    }
+    ret ok
+}

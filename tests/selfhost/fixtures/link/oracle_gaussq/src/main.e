@@ -14,6 +14,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
     if str.eq(c.name, "twpg") { ret gq.tweedie_pg(z[1usize], z[2usize], z[3usize], z[4usize], usize(z[0usize])) }
+    if str.eq(c.name, "twr") {
+        // (seed, n, power, mu, phi, index)
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(z[0usize]))
+        let nn = usize(z[1usize])
+        let (o, oe) = mem.alloc[f64](a, nn)
+        if oe != ok { ret nan }
+        if gq.rtweedie_pg(&rr, nn, z[2usize], z[3usize], z[4usize], o) != ok { ret nan }
+        ret o[usize(z[5usize])]
+    }
     if str.eq(c.name, "twd") {
         // (which 0 dev.resids 1 variance 2 linkfun 3 linkinv 4 mu.eta, p, lambda, y, mu, wt)
         let w = usize(z[0usize])

@@ -73,4 +73,7 @@ suppressMessages(library(tweedie))
 for (rep in 1:40) { pw <- runif(1, 1.1, 1.9); mu <- runif(1, 0.5, 6); ph <- runif(1, 0.3, 3); y <- if (runif(1) < 0.15) 0 else rexp(1) * mu
   cases[[length(cases) + 1]] <- case("twpg", c(0, y, pw, mu, ph), dtweedie(y, power = pw, mu = mu, phi = ph), rel = 1e-8, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("twpg", c(1, y, pw, mu, ph), ptweedie(y, power = pw, mu = mu, phi = ph), rel = 1e-6, abs = 1e-10) }
+# rtweedie for 1 < power < 2 under set.seed: "twr" (seed, n, power, mu, phi, index)
+for (rep in 1:15) { pw <- runif(1, 1.1, 1.9); mu <- runif(1, 0.5, 6); ph <- runif(1, 0.3, 3); sd <- sample(1:100000, 1); nn <- sample(5:15, 1); set.seed(sd); rt <- rtweedie(nn, power = pw, mu = mu, phi = ph)
+  for (q in c(1, nn %/% 2, nn)) cases[[length(cases) + 1]] <- case("twr", c(sd, nn, pw, mu, ph, q - 1), rt[q], rel = 1e-10, abs = 1e-12) }
 emit("gaussq", "statmod", list(cases))
