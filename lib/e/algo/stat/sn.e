@@ -621,6 +621,312 @@ fn rmst(a: *mem.Arena, n: usize, xi: []const f64, omg: []const f64, alpha: []con
     ret ok
 }
 
+// ---- selm for a single response: maximum (penalised) likelihood by damped Newton steps ----
+
+// the penalty Q of Qpenalty(alpha) (nu = Inf) and Qpenalty(alpha, nu)
+fn qpenalty(alpha: f64, nu: f64) -> f64 {
+    var e1 = 1.0f64 / 3.0f64
+    var e2 = 0.2854166f64
+    if nu < 1.0e300f64 {
+        e1 = e1 * (nu + 2.0f64) * (nu + 3.0f64) / ((nu + 1.0f64) * (nu + 1.0f64))
+        e2 = e2 * (1.0f64 + 4.0f64 / (nu + 0.57721f64))
+    }
+    let c1 = 1.0f64 / (4.0f64 * e2)
+    let c2 = e2 / e1
+    ret c1 * math.log[f64](1.0f64 + c2 * alpha * alpha)
+}
+
+type FitCtx = struct { y: []const f64, x: []const f64, w: []const f64, n: usize, p: usize, st: bool, pen: bool }
+
+// minus the (penalised) log-likelihood at th = (beta (p), log omega, alpha [, log nu])
+fn fit_obj(c: *FitCtx, th: []const f64) -> f64 {
+    let p = c.p
+    let omega = math.exp[f64](th[p])
+    let alpha = th[p + 1usize]
+    var nu = 1.0f64 / 0.0f64
+    if c.st { nu = math.exp[f64](th[p + 2usize]) }
+    var ll = 0.0f64
+    var i = 0usize
+    while i < c.n {
+        var mu = 0.0f64
+        var j = 0usize
+        while j < p {
+            mu += c.x[i * p + j] * th[j]
+            j += 1usize
+        }
+        let z = (c.y[i] - mu) / omega
+        var l1 = 0.0f64
+        if c.st {
+            l1 = math.log[f64](2.0f64) + nb.dt(z, nu, true) - th[p] + nb.pt(alpha * z * math.sqrt[f64]((nu + 1.0f64) / (z * z + nu)), nu + 1.0f64, true, true)
+        } else {
+            l1 = math.log[f64](2.0f64) - 0.5f64 * math.log[f64](2.0f64 * pi()) - th[p] - 0.5f64 * z * z + dist.pnorm(alpha * z, 0.0f64, 1.0f64, true, true)
+        }
+        ll += c.w[i] * l1
+        i += 1usize
+    }
+    if c.pen { ll -= qpenalty(alpha, nu) }
+    ret 0.0f64 - ll
+}
+
+// the five-point central gradient of fit_obj
+fn fit_grad(c: *FitCtx, th: []f64, g: []f64) {
+    let m = th.len
+    var k = 0usize
+    while k < m {
+        let h = 1.0e-3f64 * (1.0f64 + math.abs[f64](th[k]))
+        let t0 = th[k]
+        th[k] = t0 + h
+        let f1 = fit_obj(c, th)
+        th[k] = t0 - h
+        let f2 = fit_obj(c, th)
+        th[k] = t0 + 2.0f64 * h
+        let f3 = fit_obj(c, th)
+        th[k] = t0 - 2.0f64 * h
+        let f4 = fit_obj(c, th)
+        th[k] = t0
+        g[k] = (8.0f64 * (f1 - f2) - (f3 - f4)) / (12.0f64 * h)
+        k += 1usize
+    }
+}
+
+// Gaussian elimination with partial pivoting on the m x m system a x = b (both destroyed); false when singular
+fn gauss_solve(a: []f64, b: []f64, m: usize) -> bool {
+    var c = 0usize
+    while c < m {
+        var piv = c
+        var r = c + 1usize
+        while r < m {
+            if math.abs[f64](a[r * m + c]) > math.abs[f64](a[piv * m + c]) { piv = r }
+            r += 1usize
+        }
+        if math.abs[f64](a[piv * m + c]) < 1.0e-300f64 { ret false }
+        if piv != c {
+            var k = 0usize
+            while k < m {
+                let t = a[c * m + k]
+                a[c * m + k] = a[piv * m + k]
+                a[piv * m + k] = t
+                k += 1usize
+            }
+            let tb = b[c]
+            b[c] = b[piv]
+            b[piv] = tb
+        }
+        r = c + 1usize
+        while r < m {
+            let f = a[r * m + c] / a[c * m + c]
+            var k = c
+            while k < m {
+                a[r * m + k] -= f * a[c * m + k]
+                k += 1usize
+            }
+            b[r] -= f * b[c]
+            r += 1usize
+        }
+        c += 1usize
+    }
+    var i = m
+    while i > 0usize {
+        i -= 1usize
+        var s = b[i]
+        var k = i + 1usize
+        while k < m {
+            s -= a[i * m + k] * b[k]
+            k += 1usize
+        }
+        b[i] = s / a[i * m + i]
+    }
+    ret true
+}
+
+// damped Newton minimisation of fit_obj from th (overwritten); the Hessian is a finite difference of fit_grad
+fn fit_newton(a: *mem.Arena, c: *FitCtx, th: []f64) -> err {
+    let m = th.len
+    let (g, e1) = mem.alloc[f64](a, m)
+    let (g2, e2) = mem.alloc[f64](a, m)
+    let (hm, e3) = mem.alloc[f64](a, m * m)
+    let (hs, e4) = mem.alloc[f64](a, m * m)
+    let (st, e5) = mem.alloc[f64](a, m)
+    let (tr, e6) = mem.alloc[f64](a, m)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    if e5 != ok { ret e5 }
+    if e6 != ok { ret e6 }
+    var it = 0i32
+    var f0 = fit_obj(c, th)
+    while it < 200i32 {
+        fit_grad(c, th, g)
+        var k = 0usize
+        while k < m {
+            let h = 1.0e-4f64 * (1.0f64 + math.abs[f64](th[k]))
+            let t0 = th[k]
+            th[k] = t0 + h
+            fit_grad(c, th, g2)
+            var j = 0usize
+            while j < m {
+                hm[j * m + k] = g2[j]
+                j += 1usize
+            }
+            th[k] = t0 - h
+            fit_grad(c, th, st)
+            th[k] = t0
+            j = 0usize
+            while j < m {
+                hm[j * m + k] = (hm[j * m + k] - st[j]) / (2.0f64 * h)
+                j += 1usize
+            }
+            k += 1usize
+        }
+        var ridge = 0.0f64
+        var moved = false
+        var tries = 0i32
+        while !moved && tries < 40i32 {
+            k = 0usize
+            while k < m * m {
+                hs[k] = (hm[k] + hm[(k % m) * m + k / m]) / 2.0f64
+                k += 1usize
+            }
+            k = 0usize
+            while k < m {
+                hs[k * m + k] += ridge
+                st[k] = 0.0f64 - g[k]
+                k += 1usize
+            }
+            var good = gauss_solve(hs, st, m)
+            var dec = 0.0f64
+            k = 0usize
+            while k < m {
+                dec += st[k] * g[k]
+                k += 1usize
+            }
+            if good && dec < 0.0f64 {
+                var lam = 1.0f64
+                var ls = 0i32
+                while ls < 30i32 && !moved {
+                    k = 0usize
+                    while k < m {
+                        tr[k] = th[k] + lam * st[k]
+                        k += 1usize
+                    }
+                    let f1 = fit_obj(c, tr)
+                    if f1 == f1 && f1 < f0 + 1.0e-4f64 * lam * dec {
+                        k = 0usize
+                        while k < m {
+                            th[k] = tr[k]
+                            k += 1usize
+                        }
+                        f0 = f1
+                        moved = true
+                    }
+                    lam = lam / 2.0f64
+                    ls += 1i32
+                }
+            }
+            if !moved {
+                if ridge == 0.0f64 { ridge = 1.0e-3f64 } else { ridge = ridge * 10.0f64 }
+                tries += 1i32
+            }
+        }
+        var gn = 0.0f64
+        var k2 = 0usize
+        while k2 < m {
+            gn += g[k2] * g[k2]
+            k2 += 1usize
+        }
+        if !moved || math.sqrt[f64](gn) < 1.0e-9f64 { ret ok }
+        it += 1i32
+    }
+    ret ok
+}
+
+// selm(y ~ x, family SN or ST) by method MLE or MPLE (the Qpenalty penalty), one response; x is n x p row-major with a leading column of ones.
+// out receives (beta (p), omega, alpha [, nu]); the return value is the (penalised) log-likelihood at the maximum
+fn selm_fit(a: *mem.Arena, y: []const f64, x: []const f64, w: []const f64, p: usize, st: bool, pen: bool, out: []f64) -> f64 {
+    let n = y.len
+    var c = FitCtx { y: y, x: x, w: w, n: n, p: p, st: false, pen: pen }
+    var m = p + 2usize
+    let (th, e1) = mem.alloc[f64](a, p + 3usize)
+    let (xtx, e2) = mem.alloc[f64](a, p * p)
+    let (xty, e3) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var j = 0usize
+    while j < p {
+        var k = 0usize
+        while k < p {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += w[i] * x[i * p + j] * x[i * p + k]
+                i += 1usize
+            }
+            xtx[j * p + k] = s
+            k += 1usize
+        }
+        var s2 = 0.0f64
+        var i2 = 0usize
+        while i2 < n {
+            s2 += w[i2] * x[i2 * p + j] * y[i2]
+            i2 += 1usize
+        }
+        xty[j] = s2
+        j += 1usize
+    }
+    if !gauss_solve(xtx, xty, p) { ret 0.0f64 / 0.0f64 }
+    var sw = 0.0f64
+    var s2r = 0.0f64
+    var s3r = 0.0f64
+    var i3 = 0usize
+    while i3 < n {
+        var mu = 0.0f64
+        j = 0usize
+        while j < p {
+            mu += x[i3 * p + j] * xty[j]
+            j += 1usize
+        }
+        let r = y[i3] - mu
+        sw += w[i3]
+        s2r += w[i3] * r * r
+        s3r += w[i3] * r * r * r
+        i3 += 1usize
+    }
+    let sd = math.sqrt[f64](s2r / sw)
+    var g1 = s3r / (sw * sd * sd * sd)
+    let lim = 0.9952717464311565f64 - 0.00012207031f64
+    if g1 > lim { g1 = 0.9f64 * lim }
+    if g1 < 0.0f64 - lim { g1 = 0.0f64 - 0.9f64 * lim }
+    let ex = cp2dp_sn(xty[0usize], sd, g1, 0usize)
+    th[0usize] = ex
+    j = 1usize
+    while j < p {
+        th[j] = xty[j]
+        j += 1usize
+    }
+    th[p] = math.log[f64](cp2dp_sn(xty[0usize], sd, g1, 1usize))
+    th[p + 1usize] = cp2dp_sn(xty[0usize], sd, g1, 2usize)
+    var ths = th[0usize..m]
+    let e = fit_newton(a, &c, ths)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    if st {
+        c.st = true
+        m = p + 3usize
+        th[p + 2usize] = math.log[f64](8.0f64)
+        ths = th[0usize..m]
+        let e5 = fit_newton(a, &c, ths)
+        if e5 != ok { ret 0.0f64 / 0.0f64 }
+    }
+    j = 0usize
+    while j < p {
+        out[j] = th[j]
+        j += 1usize
+    }
+    out[p] = math.exp[f64](th[p])
+    out[p + 1usize] = th[p + 1usize]
+    if st { out[p + 2usize] = math.exp[f64](th[p + 2usize]) }
+    ret 0.0f64 - fit_obj(&c, ths)
+}
+
 // qsc: the skew-Cauchy quantile
 fn qsc(p: f64, xi: f64, omega: f64, alpha: f64) -> f64 {
     if p <= 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
