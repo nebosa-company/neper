@@ -3878,4 +3878,5 @@ D7015	1143	geepack general GEE engine, jackknives, QIC, Wald tests, ordgee; L430
 D7016	937	BiasedUrn multivariate moments, estimators and random variates; L471 closed
 D7017	1086	dendextend as.dendrogram, rotation and untangle; L331 closed
 D7018	1001	imputeTS na_kalman: Kalman filter and smoother, StructTS, arima, auto.arima; L429 closed
-D7019	1233	sn: pst, qst, skew-Cauchy, multivariate functions and selm; L449 closed
+D7019	1235	sn: pst, qst, skew-Cauchy, multivariate functions and selm; L449 closed
+D7020	1054	DHARMa simulation, tests and pan.f; L411 closed
