@@ -19,7 +19,7 @@ type Input = struct {
 
 type Fitted = struct {
     sp: gb.Spec, m: gb.Model, n: usize, nclass: usize, ntrain: usize, dist: usize, trainfrac: f64,
-    fit: []f64, perm: []usize, cv_error: []f64, cv_fitted: []f64, has_cv: bool
+    fit: []f64, perm: []usize, cv_error: []f64, cv_fitted: []f64, has_cv: bool, lo: []f64, hi: []f64
 }
 
 // the response and weights of an already ordered training set, boosted: gbm.fit
@@ -252,7 +252,16 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
         let seeds = gb.af(a, folds, &bad)
         let sizes = gb.af(a, folds, &bad)
         cverr = gb.af(a, cf.ntrees, &bad)
-        cvfit = gb.af(a, ntrain, &bad)
+        var ncls = 1usize
+        if cf.dist == 9usize {
+            ncls = 0usize
+            var qi = 0usize
+            while qi < n {
+                if usize(cf.y[qi]) + 1usize > ncls { ncls = usize(cf.y[qi]) + 1usize }
+                qi += 1usize
+            }
+        }
+        cvfit = gb.af(a, ntrain * ncls, &bad)
         let ord = gb.au(a, ntrain, &bad)
         let key = gb.af(a, ntrain, &bad)
         let xs = gb.af(a, ntrain * cf.p, &bad)
@@ -260,7 +269,7 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
         let ss = gb.af(a, ntrain, &bad)
         let wsub = gb.af(a, ntrain, &bad)
         let xp = gb.af(a, ntrain * cf.p, &bad)
-        let pr = gb.af(a, ntrain, &bad)
+        let pr = gb.af(a, ntrain * ncls, &bad)
         if bad != 0usize { ret (zero_fit(), gb.NoMemory) }
         let ce = cv_groups(a, rg, cf, cf.y, ntrain, group)
         if ce != ok { ret (zero_fit(), ce) }
@@ -348,7 +357,7 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
             t += 1usize
         }
         let nbest = which_min(cverr, cf.ntrees)
-        if models[0].nclass == 1usize {
+        if true {
             k = 0usize
             while k < folds {
                 let kk = k + 1usize
@@ -371,10 +380,14 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
                     j += 1usize
                 }
                 gb.predict_link(&models[k].m, xp, cnt, nbest, pr)
-                i = 0usize
-                while i < cnt {
-                    cvfit[ord[i]] = pr[i]
-                    i += 1usize
+                var kc = 0usize
+                while kc < ncls {
+                    i = 0usize
+                    while i < cnt {
+                        cvfit[ord[i] + kc * ntrain] = pr[kc * cnt + i]
+                        i += 1usize
+                    }
+                    kc += 1usize
                 }
                 k += 1usize
             }
@@ -386,6 +399,24 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
     out.cv_error = cverr
     out.cv_fitted = cvfit
     out.has_cv = has
+    out.lo = gb.af(a, cf.p, &bad)
+    out.hi = gb.af(a, cf.p, &bad)
+    if bad != 0usize { ret (out, gb.NoMemory) }
+    var jv = 0usize
+    while jv < cf.p {
+        var first = true
+        var iv = 0usize
+        while iv < n {
+            let xv = cf.x[jv * n + iv]
+            if xv == xv {
+                if first || xv < out.lo[jv] { out.lo[jv] = xv }
+                if first || xv > out.hi[jv] { out.hi[jv] = xv }
+                first = false
+            }
+            iv += 1usize
+        }
+        jv += 1usize
+    }
     ret (out, ok)
 }
 
@@ -457,7 +488,7 @@ fn which_min(v: []const f64, m: usize) -> usize {
 
 // gbm.perf(method = "test") and (method = "cv"): the number of trees that minimises the held-out and the cross-validated error
 fn best_iter_test(f: *const Fitted) -> usize { ret which_min(f.m.valid_err, f.m.ntrees) }
-fn best_iter_cv(f: *const Fitted) -> usize { ret which_min(f.cv_error, f.m.ntrees) }
+fn best_iter_cv(f: *const Fitted) -> usize { ret which_min(f.cv_error, f.cv_error.len) }
 
 // the tree count predict() and relative.influence() take when none is given: the held-out minimum, else the cross-validated one, else every tree
 fn default_trees(f: *const Fitted) -> usize {
@@ -479,6 +510,23 @@ fn relative_influence(a: *mem.Arena, f: *const Fitted, use_trees: usize, out: []
 fn more(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, nnew: usize) -> (Fitted, err) {
     var sp2 = f.sp
     sp2.ntrees = nnew
+    if f.dist == 9usize {
+        // gbm.more finds each row's class with max.col(), which draws one uniform for every tie it meets: a one-hot row of class k ties k - 1 zeros before it reaches its one
+        var r = 0usize
+        while r < f.n {
+            var k = 0usize
+            while k < f.nclass {
+                if f.sp.y[k * f.n + r] == 1.0f64 { break }
+                k += 1usize
+            }
+            var dr = 1usize
+            while dr < k {
+                let _ = rng.unif(rg)
+                dr += 1usize
+            }
+            r += 1usize
+        }
+    }
     let (m2, e2) = gb.fit(a, &sp2, rg, f.m.f)
     if e2 != ok { ret (zero_fit(), e2) }
     var bad = 0usize
@@ -568,4 +616,52 @@ fn more(a: *mem.Arena, rg: *rng.Rng, f: *const Fitted, nnew: usize) -> (Fitted, 
     }
     out.fit = fo
     ret (out, ok)
+}
+
+// plot.gbm(i.var, n.trees, continuous.resolution = res, return.grid = TRUE)$y: every variable's range cut into res points (seq(min, max, length = res)), the variables crossed with the
+// first varying fastest, and the fit at those rows with the other variables averaged out; out holds res^nv rows by nclass
+fn plot_grid(a: *mem.Arena, f: *const Fitted, vars: []const usize, nv: usize, res: usize, use_trees: usize, out: []f64) -> err {
+    var bad = 0usize
+    var rows = 1usize
+    var q = 0usize
+    while q < nv {
+        rows = rows * res
+        q += 1usize
+    }
+    let gx = gb.af(a, rows * nv, &bad)
+    let lev = gb.af(a, res, &bad)
+    let scr = gb.af(a, 2usize * f.m.stride + 4usize, &bad)
+    if bad != 0usize { ret gb.NoMemory }
+    q = 0usize
+    while q < nv {
+        let from = f.lo[vars[q]]
+        let to = f.hi[vars[q]]
+        lev[0usize] = from
+        lev[res - 1usize] = to
+        let n1 = f64(res - 1usize)
+        let del = to - from
+        var k = 1usize
+        while k + 1usize < res {
+            if from == to {
+                lev[k] = from
+            } else {
+                lev[k] = from + f64(k) * (del / n1)
+            }
+            k += 1usize
+        }
+        var stepdiv = 1usize
+        var qq = 0usize
+        while qq < q {
+            stepdiv = stepdiv * res
+            qq += 1usize
+        }
+        var r = 0usize
+        while r < rows {
+            gx[q * rows + r] = lev[(r / stepdiv) % res]
+            r += 1usize
+        }
+        q += 1usize
+    }
+    gb.plot_values(&f.m, nv, vars, gx, rows, use_trees, out, scr)
+    ret ok
 }

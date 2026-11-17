@@ -1489,3 +1489,66 @@ fn rel_inf(m: *const Model, use_trees: usize, out: []f64, scr: []f64) {
         v += 1usize
     }
 }
+
+// gbm_plot (the partial dependence behind plot.gbm): for each of the rows of x (rows by nv, column-major, the variables named by which) the fit with the other variables averaged out
+// by the training weight of the branches at splits on them; class k of row r lands at k rows + r. scr holds 2 stride + 2 values.
+fn plot_values(m: *const Model, nv: usize, which: []const usize, x: []const f64, rows: usize, use_trees: usize, out: []f64, scr: []f64) {
+    let nc = m.nclass
+    var i = 0usize
+    while i < rows * nc {
+        out[i] = m.initf
+        i += 1usize
+    }
+    let wst = m.stride + 1usize
+    var t = 0usize
+    while t < use_trees {
+        var k = 0usize
+        while k < nc {
+            let base = (t * nc + k) * m.stride
+            var r = 0usize
+            while r < rows {
+                scr[0usize] = 0.0f64
+                scr[wst] = 1.0f64
+                var cnt = 1usize
+                while cnt > 0usize {
+                    cnt -= 1usize
+                    let nd = usize(scr[cnt])
+                    if m.tvar[base + nd] == 0i64 - 1i64 {
+                        out[k * rows + r] += scr[wst + cnt] * m.tcode[base + nd]
+                    } else {
+                        var pv = nv
+                        var q = 0usize
+                        while pv == nv && q < nv {
+                            if i64(which[q]) == m.tvar[base + nd] { pv = q }
+                            q += 1usize
+                        }
+                        if pv != nv {
+                            let xv = x[pv * rows + r]
+                            if xv != xv {
+                                scr[cnt] = f64(m.tmiss[base + nd])
+                            } else if xv < m.tcode[base + nd] {
+                                scr[cnt] = f64(m.tleft[base + nd])
+                            } else {
+                                scr[cnt] = f64(m.tright[base + nd])
+                            }
+                            cnt += 1usize
+                        } else {
+                            let lc = usize(m.tleft[base + nd])
+                            let rc = usize(m.tright[base + nd])
+                            scr[cnt] = f64(rc)
+                            let cur = scr[wst + cnt]
+                            scr[wst + cnt] = cur * m.twt[base + rc] / (m.twt[base + lc] + m.twt[base + rc])
+                            cnt += 1usize
+                            scr[cnt] = f64(lc)
+                            scr[wst + cnt] = cur - scr[wst + cnt - 1usize]
+                            cnt += 1usize
+                        }
+                    }
+                }
+                r += 1usize
+            }
+            k += 1usize
+        }
+        t += 1usize
+    }
+}

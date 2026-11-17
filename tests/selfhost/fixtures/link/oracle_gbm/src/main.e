@@ -14,7 +14,7 @@ fn r3(x: f64, d: f64) -> f64 { ret math.floor[f64](x * d + 0.5f64) / d }
 
 type Data = struct { x: []f64, y: []f64, st: []f64, w: []f64 }
 
-fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool) -> (Data, err) {
+fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool, na: bool) -> (Data, err) {
     var rg: rng.Rng = zero
     rng.seed(&rg, seed)
     var bad = 0usize
@@ -96,12 +96,19 @@ fn make(a: *mem.Arena, seed: i64, dist: usize, n: usize, p: usize, wflag: bool) 
             i += 1usize
         }
     }
+    if na {
+        i = 0usize
+        while i < n * p {
+            if rng.unif(&rg) < 0.08f64 { d.x[i] = 0.0f64 / 0.0f64 }
+            i += 1usize
+        }
+    }
     ret (d, ok)
 }
 
 fn same_config(x: []const f64, y: []const f64) -> bool {
     var i = 0usize
-    while i < 15usize {
+    while i < 17usize {
         if x[i] != y[i] { ret false }
         i += 1usize
     }
@@ -111,10 +118,10 @@ fn same_config(x: []const f64, y: []const f64) -> bool {
 // the number a case asks for, read off the fit f and the new rows dn (12 by p)
 fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, z: []const f64) -> f64 {
     let nan = 0.0f64 / 0.0f64
-    let code = usize(z[15usize])
-    let ia = usize(z[16usize])
-    let ib = usize(z[17usize])
-    let ic = usize(z[18usize])
+    let code = usize(z[17usize])
+    let ia = usize(z[18usize])
+    let ib = usize(z[19usize])
+    let ic = usize(z[20usize])
     let p = usize(z[3usize])
     let n = usize(z[2usize])
     let nn = 12usize
@@ -149,6 +156,33 @@ fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, z: []const f64) -
         if code == 8usize { gr.to_response(f.dist, f.nclass, nn, po) }
         ret po[ia + ic * nn]
     }
+    if code == 30usize || code == 31usize {
+        var vars: [3]usize = zero
+        var nv = 1usize
+        if ic < 10usize {
+            vars[0usize] = ic - 1usize
+        } else if ic < 100usize {
+            nv = 2usize
+            vars[0usize] = ic / 10usize - 1usize
+            vars[1usize] = ic % 10usize - 1usize
+        } else {
+            nv = 3usize
+            vars[0usize] = ic / 100usize - 1usize
+            vars[1usize] = (ic / 10usize) % 10usize - 1usize
+            vars[2usize] = ic % 10usize - 1usize
+        }
+        var res = 20usize
+        if nv == 2usize { res = 7usize }
+        if nv == 3usize { res = 4usize }
+        var rows = res
+        if nv == 2usize { rows = 49usize }
+        if nv == 3usize { rows = 64usize }
+        let (po, e) = mem.alloc[f64](a, rows * f.nclass)
+        if e != ok { ret nan }
+        if gr.plot_grid(a, f, vars[0usize..nv], nv, res, ib, po) != ok { ret nan }
+        if code == 31usize { gr.to_response(f.dist, f.nclass, rows, po) }
+        ret po[ia]
+    }
     if code >= 20usize && code <= 27usize {
         let at = (ib - 1usize) * f.m.stride + ia
         if code == 20usize { ret f64(f.m.tvar[at]) }
@@ -168,9 +202,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
+    var shown = 0usize
+    var last_bad = 0.0f64 - 1.0f64
     var errors = 0usize
     var at = 0usize
-    let (key, key_error) = mem.alloc[f64](a, 15usize)
+    let (key, key_error) = mem.alloc[f64](a, 17usize)
     if key_error != ok { os.exit(5) }
     let base = mem.mark(a)
     var have = false
@@ -182,7 +218,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var fresh = !have
         if have {
             var q = 0usize
-            while q < 15usize {
+            while q < 17usize {
                 if key[q] != z[q] { fresh = true }
                 q += 1usize
             }
@@ -193,7 +229,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let n = usize(z[2usize])
             let p = usize(z[3usize])
             let dist = usize(z[1usize])
-            let (dat, de) = make(a, i64(z[0usize]), dist, n, p, z[12usize] == 1.0f64)
+            let (dat, de) = make(a, i64(z[0usize]), dist, n, p, z[12usize] == 1.0f64, z[15usize] == 1.0f64)
             var mono: []f64 = zero
             var bad = 0usize
             if z[13usize] == 1.0f64 {
@@ -210,6 +246,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 dn[i] = r3(rng.norm(&rg), 1000.0f64)
                 i += 1usize
             }
+            if z[15usize] == 1.0f64 {
+                i = 0usize
+                while i < 12usize * p {
+                    if rng.unif(&rg) < 0.15f64 { dn[i] = 0.0f64 / 0.0f64 }
+                    i += 1usize
+                }
+            }
             var st: []f64 = zero
             if dist == 8usize { st = dat.st }
             var ww: []f64 = zero
@@ -218,7 +261,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let inp = gr.Input{ dist: dist, n: n, p: p, ntrees: usize(z[4usize]), shrinkage: z[5usize], depth: usize(z[6usize]), minobs: usize(z[7usize]), bag: z[8usize], trainfrac: z[9usize], par: z[11usize], maxrank: 0usize, cv: usize(z[14usize]), ncores1: true, stratify: false,
                 x: dat.x, y: dat.y, status: st, w: ww, group: grp, mono: mono }
             rng.seed(&rg, i64(z[10usize]))
-            let (f, fe) = gr.gbm(a, &rg, &inp)
+            var (f, fe) = gr.gbm(a, &rg, &inp)
+            if fe == ok && z[16usize] > 0.0f64 {
+                let (f2, fe2) = gr.more(a, &rg, &f, usize(z[16usize]))
+                f = f2
+                fe = fe2
+            }
             q_copy(key, z)
             if fe != ok {
                 errors += 1usize
@@ -240,7 +288,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let got = output(a, &fd, dn, z)
         if !oracle.agrees(got, c) {
             failures += 1usize
-            if failures <= 12usize {
+            if z[0usize] != last_bad && shown < 14usize {
+                last_bad = z[0usize]
+                shown += 1usize
                 let _ = io.print(oracle.describe(a, c, got))
                 let _ = io.print("\n")
             }
@@ -254,7 +304,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
 fn q_copy(k: []f64, z: []const f64) {
     var q = 0usize
-    while q < 15usize {
+    while q < 17usize {
         k[q] = z[q]
         q += 1usize
     }
