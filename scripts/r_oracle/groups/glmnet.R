@@ -28,6 +28,16 @@ for (rep in 1:12) {
   for (k in c(1, 4, 8)) for (j in 0:p) cases[[length(cases) + 1]] <-
     case("coef", c(n, p, alpha, std, length(lam), lam, vf, y, X, k - 1, j, 1, w), cf[j + 1, k], rel = 1e-5, abs = 1e-6)
 }
+# offsets: glmnet(offset = o) equals the fit of y - o (the caller subtracts it)
+for (rep in 1:8) {
+  n <- sample(30:70, 1); p <- sample(3:6, 1); X <- matrix(round(rnorm(n * p), 3), n, p); y <- round(X[, 1] * 2 + rnorm(n), 3); o <- round(rnorm(n), 2)
+  alpha <- c(1, 0.5, 0.2)[(rep %% 3) + 1]; ye <- y - o
+  lmax <- max(abs(crossprod(scale(X, scale = FALSE), ye - mean(ye)))) / n / max(alpha, 1e-3)
+  lam <- exp(seq(log(lmax), log(lmax * 0.01), length.out = 8))
+  f <- suppressWarnings(glmnet(X, y, offset = o, alpha = alpha, standardize = TRUE, lambda = lam, thresh = 1e-14)); cf <- as.matrix(coef(f))
+  for (k in c(2, 5, 8)) for (j in 0:p) cases[[length(cases) + 1]] <-
+    case("coef", c(n, p, alpha, 1, length(lam), lam, rep(1, p), ye, X, k - 1, j, 0), cf[j + 1, k], rel = 1e-5, abs = 1e-6)
+}
 # the automatic lambda sequence: "lpath" (n, p, alpha, std, k, vf[p], y[n], X[n p]) the k-th lambda (0-based) of glmnet(...)$lambda
 for (rep in 1:20) {
   n <- sample(30:80, 1); p <- sample(3:8, 1); X <- matrix(rnorm(n * p), n); y <- X[, 1] * 2 + rnorm(n); al <- sample(c(0.2, 0.5, 0.7, 1), 1); std <- rep %% 2; vf <- if (rep %% 3 == 0) runif(p, 0.5, 2) else rep(1, p)

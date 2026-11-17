@@ -3739,4 +3739,5 @@ D6876	702	mclust: model selection
 D6877	768	mclust: classError
 D6878	982	lme4: lmer with one random intercept
 D6879	943	glmnet: the automatic lambda sequence
-D6880	644	glmnet: observation weights
+D6880	645	glmnet: observation weights
+D6881	491	glmnet: gaussian offsets

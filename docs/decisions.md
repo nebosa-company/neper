@@ -47990,3 +47990,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6880 — glmnet: observation weights
 
 **Decision.** `glmnet.gaussian` takes observation weights (an empty slice is equal weights). As in glmnet they are normalised to sum 1 and enter the weighted means, the standardisation (weighted standard deviation, divisor 1) and the loss, so the unit-variance scaling of y, and with it the ridge part of the penalty, uses the weighted variance. Equal to glmnet on 12 weighted data sets over alpha and standardize at three lambdas of an eight-value sequence (oracle_glmnet, 613 cases in all). Not here: the early stop, the non-gaussian families, offsets, bounds, `cv.glmnet`, `predict`. Linux pending.
+
+## D6881 — glmnet: gaussian offsets
+
+**Decision.** A gaussian `offset` needs no library change: glmnet's fit with `offset = o` is the fit of `y - o`, with the intercept excluding the offset, so the caller subtracts it before `glmnet.gaussian`. Pinned by 8 data sets over alpha at three lambdas against `glmnet(offset = o)` (oracle_glmnet, 733 cases in all). Not here: offsets for the other families (where they are not a shift of y), the early stop, `cv.glmnet`, `predict`. Linux pending.
