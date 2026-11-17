@@ -29,6 +29,19 @@ fn orient_params(a: *mem.Arena, model: usize, x: []const f64, z: []const f64, n:
     }
     let mh = em.mstep_any(a, model, x, zz, n, p, g, pro, mu, sigma, inf)
     if mh != mh { ret mem.Full }
+    ret orient_from(a, model, x, z, n, p, g, mu, sigma, scale, shape, orient)
+}
+
+// the orientation and sim parameters for the covariances sigma and means mu of an M step taken from z
+fn orient_from(a: *mem.Arena, model: usize, x: []const f64, z: []const f64, n: usize, p: usize, g: usize, mu: []const f64, sigma: []const f64, scale: []f64, shape: []f64, orient: []f64) -> err {
+    let pq = p * p
+    let (r, e4) = mem.alloc[f64](a, pq)
+    let (w, e5) = mem.alloc[f64](a, p)
+    let (sv, e6) = mem.alloc[f64](a, p)
+    let (vt, e7) = mem.alloc[f64](a, pq)
+    let (ev, e8) = mem.alloc[f64](a, g * p)
+    if e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    var q = 0usize
     var k = 0usize
     while k < g {
         q = 0usize

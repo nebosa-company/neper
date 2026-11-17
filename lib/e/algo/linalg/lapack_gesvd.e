@@ -7,6 +7,7 @@ use e.mem
 use e.str
 use e.algo.linalg.lapack_base as lbase
 use e.algo.linalg.lapack_gesdd as lg
+use e.algo.linalg.lapack_syevr as lse
 
 // jobu, jobvt in {"N", "A", "O"} with at most one "O". a (n by n, column-major) is overwritten; s gets the singular values, u / vt the vectors for "A".
 // "O" puts the left (right) singular vectors into a: the columns of U (the rows of V**T). Returns dgesvd's info (0 on success).
@@ -56,6 +57,44 @@ fn dgesvd_sq(jobu: str, jobvt: str, n: i64, a: []f64, s: []f64, u: []f64, vt: []
     }
     if wntun && wntvn { ret info }
     ret info
+}
+
+// dsyev('N', 'U') of the symmetric p by p matrix x (upper triangle read): the eigenvalues, ascending, into w. dsytrd (unblocked below the crossover) then dsterf.
+// No scaling of a matrix with a tiny or huge norm.
+fn dsyev_n(a: *mem.Arena, x: []const f64, p: usize, w: []f64) -> err {
+    let n = i64(p)
+    let (aa, e1) = mem.alloc[f64](a, p * p)
+    let (e, e2) = mem.alloc[f64](a, p)
+    let (tau, e3) = mem.alloc[f64](a, p)
+    let (work, e4) = mem.alloc[f64](a, 64usize * p + 8usize * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var i = 0usize
+    while i < p * p {
+        aa[i] = x[i]
+        i += 1usize
+    }
+    var info = 0i64
+    lse.dsytrd("U", n, aa[0usize..], n, w[0usize..], e[0usize..], tau[0usize..], work[0usize..], 64i64 * n + 8i64 * n, &info)
+    if info != 0i64 { ret mem.Full }
+    lse.dsterf(n, w[0usize..], e[0usize..], &info)
+    if info != 0i64 { ret mem.Full }
+    ret ok
+}
+
+// dgesvd('A', 'A') of the p by p matrix x: s, u (p by p) and vt (p by p, rows = right singular vectors)
+fn gesvd_aa(a: *mem.Arena, x: []const f64, p: usize, s: []f64, u: []f64, vt: []f64) -> err {
+    let n = i64(p)
+    let (aa, e1) = mem.alloc[f64](a, p * p)
+    let (work, e2) = mem.alloc[f64](a, 3usize * p + 4usize * p * 64usize + 8usize * p)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < p * p {
+        aa[i] = x[i]
+        i += 1usize
+    }
+    let info = dgesvd_sq("A", "A", n, aa, s, u, vt, work)
+    if info != 0i64 { ret mem.Full }
+    ret ok
 }
 
 // the orientation of the Fortran mseevv family: dgesvd('N', 'O') of the p by p matrix x; vt (p by p, column-major) receives V**T (rows = right singular vectors) and s the singular values

@@ -445,3 +445,7 @@ oracle_lmomq
 oracle_drdid_full
 oracle_geosphere_geod
 oracle_gbmloess
+oracle_mclust17
+oracle_mclust18
+oracle_mclust19
+oracle_mclust20

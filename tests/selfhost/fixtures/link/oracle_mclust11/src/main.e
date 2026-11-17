@@ -3,6 +3,7 @@
 // Consecutive cases share the data and the grid, so the fit is computed once per group of cases.
 
 use e.algo.stat.mclustpriorfit as mf
+use e.algo.stat.mclustprioricl as ic
 use e.io
 use e.mem
 use e.os
@@ -125,7 +126,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     q += 1usize
                 }
                 let fe = mf.mclust_run_prior(a, z[6usize + nm..6usize + nm + n * p], n, p, usize(z[3usize]), usize(z[4usize]), mods, res)
+                var ie = fe
                 if fe == ok {
+                    let ngg = usize(z[4usize]) - usize(z[3usize]) + 1usize
+                    let off_icl = 6usize + ngg * nm + 2usize * n + n * usize(z[4usize]) + usize(z[4usize]) + p * usize(z[4usize]) + usize(z[4usize]) * p * p
+                    ie = ic.mclust_icl_prior(a, z[6usize + nm..6usize + nm + n * p], n, p, usize(z[3usize]), usize(z[4usize]), mods, res[6usize..6usize + ngg * nm], res[off_icl..off_icl + ngg * nm])
+                }
+                if ie == ok {
                     have = true
                     key_len = z.len
                     q = 0usize
