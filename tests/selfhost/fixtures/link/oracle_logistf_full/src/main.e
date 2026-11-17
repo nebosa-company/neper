@@ -219,7 +219,7 @@ fn compare(a: *mem.Arena, name: str, at: usize, got: []const f64, want: []const 
     while i < got.len {
         if !close(got[i], want[i]) {
             bad += 1usize
-            if bad <= 2usize {
+            if bad <= 12usize {
                 let (initial, be) = str.builder(a, 96usize)
                 if be == ok {
                     var b = initial
@@ -375,6 +375,84 @@ fn run(a: *mem.Arena, c: *const oracle.Case, at: usize) -> usize {
         }
         if e4 != ok { ret 1usize }
         ret compare(a, c.name, at, g[0usize..3usize * sc.len], p.want)
+    }
+    if str.eq(c.name, "clip_ci") || str.eq(c.name, "clip_profile") {
+        let ex = p.extra
+        let nimp = usize(ex[0usize])
+        let nsel = usize(ex[1usize])
+        let k = p.k
+        let (poss, e0) = mem.alloc[usize](a, nsel)
+        if e0 != ok { ret 1usize }
+        var i = 0usize
+        while i < nsel {
+            poss[i] = usize(ex[2usize + i]) - 1usize
+            i += 1usize
+        }
+        let head = ex[2usize + nsel..14usize + nsel]
+        var q = 14usize + nsel
+        let (ns, e1) = mem.alloc[usize](a, nimp)
+        if e1 != ok { ret 1usize }
+        var tot = 0usize
+        i = 0usize
+        while i < nimp {
+            ns[i] = usize(ex[q + i])
+            tot += ns[i]
+            i += 1usize
+        }
+        q += nimp
+        let xs = ex[q..q + tot * k]
+        q += tot * k
+        let ys = ex[q..q + tot]
+        q += tot
+        let ws = ex[q..q + tot]
+        q += tot
+        let betas = ex[q..q + nimp * k]
+        q += nimp * k
+        let lls = ex[q..q + nimp]
+        var cl = lf.Clip { xs: xs, ys: ys, ws: ws, ns: ns, nimp: nimp, k: k, betas: betas, logliks: lls, pos: poss[0usize], firth: p.o.firth, c: p.o.c }
+        if str.eq(c.name, "clip_ci") {
+            let (g, e3) = mem.alloc[f64](a, 10usize * nsel)
+            if e3 != ok { ret 1usize }
+            // estimate (nsel), ci (nsel by 2), pvalue (nsel), bound.lo (nsel by 2), bound.up (nsel by 2), iter (nsel by 2)
+            let (m_lo, e4) = mem.alloc[f64](a, 2usize * nsel)
+            let (m_up, e5) = mem.alloc[f64](a, 2usize * nsel)
+            if e4 != ok || e5 != ok { ret 1usize }
+            lf.fill_f(m_lo, 0.0f64)
+            lf.fill_f(m_up, 0.0f64)
+            var v = 0usize
+            while v < nsel {
+                cl.pos = poss[v]
+                var est = 0.0f64
+                i = 0usize
+                while i < nimp {
+                    est += betas[i * k + poss[v]]
+                    i += 1usize
+                }
+                est = est / f64(nimp)
+                let (r, e2) = lf.clip_confint(a, cl, v, nsel, m_lo, m_up, est, head[0usize], head[1usize])
+                if e2 != ok { ret 1usize }
+                g[v] = r.estimate
+                g[nsel + v] = r.ci_lo
+                g[2usize * nsel + v] = r.ci_up
+                g[3usize * nsel + v] = r.pvalue
+                g[8usize * nsel + v] = f64(r.iter0)
+                g[9usize * nsel + v] = f64(r.iter1)
+                v += 1usize
+            }
+            i = 0usize
+            while i < 2usize * nsel {
+                g[4usize * nsel + i] = m_lo[i]
+                g[6usize * nsel + i] = m_up[i]
+                i += 1usize
+            }
+            ret compare(a, c.name, at, g, p.want)
+        }
+        let steps = usize(head[11usize])
+        let (g2, e6) = mem.alloc[f64](a, 3usize * (steps + 1usize))
+        if e6 != ok { ret 1usize }
+        let e7 = lf.clip_profile(a, cl, head[9usize], head[10usize], steps, g2[0usize..steps + 1usize], g2[steps + 1usize..2usize * (steps + 1usize)], g2[2usize * (steps + 1usize)..3usize * (steps + 1usize)])
+        if e7 != ok { ret 1usize }
+        ret compare(a, c.name, at, g2, p.want)
     }
     if str.eq(c.name, "fit_init") {
         var o = p.o

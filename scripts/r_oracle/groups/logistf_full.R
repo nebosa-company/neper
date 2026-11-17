@@ -368,4 +368,40 @@ for (rep in 1:3) {
   pack("fit_init", nrow(d), ncol(x), mask, popt(TRUE, TRUE, control = logistf.control(maxit = c(25, 4, 40)[rep])), d$y, x, NULL, NULL, NULL, NULL, init, flat(f, mask, TRUE))
 }
 FULL <- y ~ x1 + x2 + x3 + x4 + x1:x2
+# ---- CLIP.confint and CLIP.profile on imputed data sets
+clip_pack <- function(kind, datas, fits, poss, extra_head, expected, k) {
+  ns <- sapply(datas, nrow)
+  xs <- unlist(lapply(datas, function(d) as.vector(model.matrix(y ~ x1 + x2, d))))
+  ys <- unlist(lapply(datas, function(d) d$y)); ws <- rep(1, sum(ns))
+  cm <- t(sapply(fits, function(f) f$coefficients)); ll <- sapply(fits, function(f) f$loglik[["full"]])
+  pack(kind, 0, k, 0, popt(TRUE, TRUE), numeric(), matrix(numeric(), 0, k), NULL, NULL, NULL, NULL,
+       c(length(datas), length(poss), poss, extra_head, ns, xs, ys, ws, as.vector(t(cm)), ll), expected)
+}
+for (rep in 1:7) {
+  nimp <- c(4, 5, 3, 4, 5, 4, 3)[rep]
+  vars <- list("x1", c("x2", "x1"), "(Intercept)", c("x1", "x2"), c("(Intercept)", "x1", "x2"), "x2", c("x2", "(Intercept)"))[[rep]]
+  poss <- match(vars, c("(Intercept)", "x1", "x2"))
+  datas <- lapply(1:nimp, function(i) { d <- make2(c(40, 45, 50)[(i %% 3) + 1]); d[, c("y", "x1", "x2")] })
+  fits <- lapply(datas, function(d) quiet(logistf(y ~ x1 + x2, data = d)))
+  lvl <- if (rep %in% c(3, 4)) 0.9 else c(0.025, 0.975)
+  a <- list(obj = fits, variable = vars, data = datas)
+  if (rep %in% c(3, 4)) a$ci.level <- 0.9
+  if (rep == 5) { a$bound.lo <- c(-3, 0); a$bound.up <- c(0, 4) }
+  r <- tryCatch(quiet(do.call(CLIP.confint, a)), error = function(e) { message("ERR ", conditionMessage(e)); NULL })
+  if (!is.null(r)) {
+    lv <- if (length(lvl) == 1) c((1 - lvl) / 2, 1 - (1 - lvl) / 2) else lvl
+    head <- c(lv, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    clip_pack("clip_ci", datas, fits, poss, head, c(r$estimate, as.vector(r$ci), r$pvalue, as.vector(r$bound.lo), as.vector(r$bound.up), as.vector(r$iter)), 3)
+  }
+  steps <- c(20, 30, 15, 25, 20, 10, 12)[rep]
+  fr <- if (rep %in% c(2, 4)) -1 else NULL; to <- if (rep %in% c(2, 4)) 2 else NULL
+  a2 <- list(obj = fits, variable = vars[1], data = datas, steps = steps)
+  if (!is.null(fr)) { a2$from <- fr; a2$to <- to }
+  r <- tryCatch(quiet(do.call(CLIP.profile, a2)), error = function(e) { message("ERR ", conditionMessage(e)); NULL })
+  if (!is.null(r)) {
+    lo <- sapply(fits, function(f) f$ci.lower[poss[1]]); up <- sapply(fits, function(f) f$ci.upper[poss[1]])
+    head <- c(0, 0, 0, 0, 0, 0, 0, 0, 1, if (is.null(fr)) min(lo) else fr, if (is.null(to)) max(up) else to, steps)
+    clip_pack("clip_profile", datas, fits, poss[1], head, c(r$beta, r$cdf, r$profile), 3)
+  }
+}
 emit("logistf_full", "logistf", list(cases))

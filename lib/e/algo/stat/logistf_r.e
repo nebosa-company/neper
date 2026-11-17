@@ -2559,3 +2559,241 @@ fn pvr_confint(coef: []const f64, lo: []const f64, up: []const f64, nimp: usize,
         v += 1usize
     }
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------------
+// CLIP.profile and CLIP.confint: the profile penalized likelihood of imputed data sets pooled by averaging the cdf of the signed root
+
+// the imputations: set i has ns[i] rows; xs holds each set's design (rows by k, column-major) one after another, ys and ws their responses
+// and weights; betas (nimp by k, row-major: set i at i * k) and logliks are the fits' coefficients and full penalized log-likelihoods
+type Clip = struct {
+    xs: []const f64, ys: []const f64, ws: []const f64, ns: []const usize, nimp: usize, k: usize, betas: []const f64, logliks: []const f64,
+    pos: usize, firth: bool, c: Ctl
+}
+
+// the mean over the imputations of the cdf logistf.pdf gives at z
+fn clip_f(a: *mem.Arena, cl: Clip, z: f64) -> (f64, err) {
+    var s = 0.0f64
+    var xo = 0usize
+    var ro = 0usize
+    var i = 0usize
+    while i < cl.nimp {
+        let n = cl.ns[i]
+        let (off, e0) = take_off(a, n)
+        if e0 != ok { ret (0.0f64, e0) }
+        let (r, e) = logistf_pdf(a, cl.xs[xo..xo + n * cl.k], n, cl.k, cl.ys[ro..ro + n], cl.ws[ro..ro + n], off, cl.firth, cl.c, cl.pos, z, cl.betas[i * cl.k..i * cl.k + cl.k], cl.logliks[i])
+        if e != ok { ret (0.0f64, e) }
+        s += r.pdf
+        xo += n * cl.k
+        ro += n
+        i += 1usize
+    }
+    ret (s / f64(cl.nimp), ok)
+}
+
+fn take_off(a: *mem.Arena, n: usize) -> ([]f64, err) {
+    let (r, e) = mem.alloc[f64](a, n)
+    if e != ok { ret (r, e) }
+    fill_f(r, 0.0f64)
+    ret (r, ok)
+}
+
+// CLIP.profile: z on steps + 1 knots from..to; cdf and the chi-square -qnorm(cdf)^2 are written (steps + 1 each); the knots to zs
+fn clip_profile(a: *mem.Arena, cl: Clip, from: f64, to: f64, steps: usize, zs: []f64, cdf: []f64, chisq: []f64) -> err {
+    let by = (to - from) / f64(steps)
+    var i = 0usize
+    while i <= steps {
+        var z = from + f64(i) * by
+        if by > 0.0f64 && z > to { z = to }
+        zs[i] = z
+        let (v, e) = clip_f(a, cl, z)
+        if e != ok { ret e }
+        cdf[i] = v
+        let q = dist.qnorm(v, 0.0f64, 1.0f64, true, false)
+        chisq[i] = 0.0f64 - q * q
+        i += 1usize
+    }
+    ret ok
+}
+
+error NoBracket
+
+// R_zeroin2 (Brent) for the function clip_f(z) - level, given the end values; the root and the iterations
+fn zeroin_clip(a: *mem.Arena, cl: Clip, level: f64, ax: f64, bx: f64, fa_in: f64, fb_in: f64, tol: f64, maxit_in: usize) -> (f64, usize, err) {
+    var aa = ax
+    var bb = bx
+    var fa = fa_in
+    var fb = fb_in
+    var cc = aa
+    var fc = fa
+    var maxit = maxit_in + 1usize
+    if fa == 0.0f64 { ret (aa, 0usize, ok) }
+    if fb == 0.0f64 { ret (bb, 0usize, ok) }
+    let eps = eps_dbl()
+    while maxit > 0usize {
+        maxit -= 1usize
+        let prev_step = bb - aa
+        if math.abs[f64](fc) < math.abs[f64](fb) {
+            aa = bb
+            bb = cc
+            cc = aa
+            fa = fb
+            fb = fc
+            fc = fa
+        }
+        let tol_act = 2.0f64 * eps * math.abs[f64](bb) + tol / 2.0f64
+        var new_step = (cc - bb) / 2.0f64
+        if math.abs[f64](new_step) <= tol_act || fb == 0.0f64 {
+            ret (bb, maxit_in - maxit, ok)
+        }
+        if math.abs[f64](prev_step) >= tol_act && math.abs[f64](fa) > math.abs[f64](fb) {
+            let cb = cc - bb
+            var p = 0.0f64
+            var q = 0.0f64
+            if aa == cc {
+                let t1 = fb / fa
+                p = cb * t1
+                q = 1.0f64 - t1
+            } else {
+                q = fa / fc
+                let t1 = fb / fc
+                let t2 = fb / fa
+                p = t2 * (cb * q * (q - t1) - (bb - aa) * (t1 - 1.0f64))
+                q = (q - 1.0f64) * (t1 - 1.0f64) * (t2 - 1.0f64)
+            }
+            if p > 0.0f64 {
+                q = 0.0f64 - q
+            } else {
+                p = 0.0f64 - p
+            }
+            if p < (0.75f64 * cb * q - math.abs[f64](tol_act * q) / 2.0f64) && p < math.abs[f64](prev_step * q / 2.0f64) { new_step = p / q }
+        }
+        if math.abs[f64](new_step) < tol_act {
+            if new_step > 0.0f64 {
+                new_step = tol_act
+            } else {
+                new_step = 0.0f64 - tol_act
+            }
+        }
+        aa = bb
+        fa = fb
+        bb += new_step
+        let (v, e) = clip_f(a, cl, bb)
+        if e != ok { ret (0.0f64, 0usize, e) }
+        fb = v - level
+        if (fb > 0.0f64 && fc > 0.0f64) || (fb < 0.0f64 && fc < 0.0f64) {
+            cc = aa
+            fc = fa
+        }
+    }
+    ret (bb, 0usize, NoBracket)
+}
+
+type ClipCi = struct { estimate: f64, ci_lo: f64, ci_up: f64, pvalue: f64, bound_lo0: f64, bound_lo1: f64, bound_up0: f64, bound_up1: f64, iter0: usize, iter1: usize }
+
+// CLIP.confint for the variable cl.pos, the i-th of nvar. The package overwrites its bound.lo and bound.up arguments with nvar by 2 matrices of
+// zeros before the first variable is processed, so the bounds the search starts from are the minimum and maximum of those whole matrices (zero
+// on the first variable, the earlier variables' final bounds after) and the fits' own limits and a given bound.lo / bound.up are never used.
+// m_lo and m_up (nvar by 2, column-major) carry that state and get this variable's row. estimate is the mean coefficient over the imputations
+fn clip_confint(a: *mem.Arena, cl: Clip, i: usize, nvar: usize, m_lo: []f64, m_up: []f64, estimate: f64, level0: f64, level1: f64) -> (ClipCi, err) {
+    var lo_lo = m_lo[0usize]
+    var lo_hi = m_lo[0usize]
+    var up_lo = m_up[0usize]
+    var up_hi = m_up[0usize]
+    var q = 1usize
+    while q < 2usize * nvar {
+        if m_lo[q] < lo_lo { lo_lo = m_lo[q] }
+        if m_lo[q] > lo_hi { lo_hi = m_lo[q] }
+        if m_up[q] < up_lo { up_lo = m_up[q] }
+        if m_up[q] > up_hi { up_hi = m_up[q] }
+        q += 1usize
+    }
+    if lo_lo == lo_hi {
+        lo_lo = lo_lo - 0.5f64
+        lo_hi = lo_hi + 0.5f64
+    }
+    if up_lo == up_hi {
+        up_lo = up_lo - 0.5f64
+        up_hi = up_hi + 0.5f64
+    }
+    var res = ClipCi { estimate: estimate, ci_lo: 0.0f64, ci_up: 0.0f64, pvalue: 0.0f64, bound_lo0: 0.0f64, bound_lo1: 0.0f64, bound_up0: 0.0f64, bound_up1: 0.0f64, iter0: 0usize, iter1: 0usize }
+    // the lower limit
+    let (v1, e1) = clip_f(a, cl, lo_lo)
+    if e1 != ok { ret (zero, e1) }
+    let (v2, e2) = clip_f(a, cl, lo_hi)
+    if e2 != ok { ret (zero, e2) }
+    var f_lower = v1 - level0
+    var f_upper = v2 - level0
+    var iter = 2usize
+    var itw = 0usize
+    while f_lower > 0.0f64 && (lo_hi - lo_lo) > 0.0f64 && itw < 5usize {
+        itw += 1usize
+        lo_lo = lo_lo - (lo_hi - lo_lo) / 2.0f64
+        let (v, e) = clip_f(a, cl, lo_lo)
+        if e != ok { ret (zero, e) }
+        f_lower = v - level0
+        iter += 1usize
+    }
+    if itw >= 5usize && f_upper < 0.0f64 { ret (zero, NoBracket) }
+    itw = 0usize
+    while f_upper < 0.0f64 && (lo_hi - lo_lo) > 0.0f64 && itw < 5usize {
+        itw += 1usize
+        lo_hi = lo_hi + (lo_hi - lo_lo) / 2.0f64
+        let (v, e) = clip_f(a, cl, lo_hi)
+        if e != ok { ret (zero, e) }
+        f_upper = v - level0
+        iter += 1usize
+    }
+    if itw >= 5usize && f_upper < 0.0f64 { ret (zero, NoBracket) }
+    if f_lower * f_upper > 0.0f64 { ret (zero, NoBracket) }
+    let (root0, it0, ez0) = zeroin_clip(a, cl, level0, lo_lo, lo_hi, f_lower, f_upper, 1.220703125e-4f64, 1000usize)
+    if ez0 != ok { ret (zero, ez0) }
+    res.ci_lo = root0
+    res.iter0 = iter + it0
+    res.bound_lo0 = lo_lo
+    res.bound_lo1 = lo_hi
+    // the upper limit
+    let (w1, e3) = clip_f(a, cl, up_lo)
+    if e3 != ok { ret (zero, e3) }
+    let (w2, e4) = clip_f(a, cl, up_hi)
+    if e4 != ok { ret (zero, e4) }
+    f_lower = w1 - level1
+    f_upper = w2 - level1
+    iter = 2usize
+    itw = 0usize
+    while f_lower > 0.0f64 && (up_hi - up_lo) > 0.0f64 && itw < 5usize {
+        itw += 1usize
+        up_lo = up_lo - (up_hi - up_lo) / 2.0f64
+        let (v, e) = clip_f(a, cl, up_lo)
+        if e != ok { ret (zero, e) }
+        f_lower = v - level1
+        iter += 1usize
+    }
+    if itw >= 5usize && f_lower > 0.0f64 { ret (zero, NoBracket) }
+    itw = 0usize
+    while f_upper < 0.0f64 && (up_hi - up_lo) > 0.0f64 && itw < 5usize {
+        itw += 1usize
+        up_hi = up_hi + (up_hi - up_lo) / 2.0f64
+        let (v, e) = clip_f(a, cl, up_hi)
+        if e != ok { ret (zero, e) }
+        f_upper = v - level1
+        iter += 1usize
+    }
+    if itw >= 5usize && f_upper < 0.0f64 { ret (zero, NoBracket) }
+    if f_lower * f_upper > 0.0f64 { ret (zero, NoBracket) }
+    let (root1, it1, ez1) = zeroin_clip(a, cl, level1, up_lo, up_hi, f_lower, f_upper, 1.220703125e-4f64, 1000usize)
+    if ez1 != ok { ret (zero, ez1) }
+    res.ci_up = root1
+    res.iter1 = iter + it1
+    res.bound_up0 = up_lo
+    res.bound_up1 = up_hi
+    let (p1, e5) = clip_f(a, cl, 0.0f64)
+    if e5 != ok { ret (zero, e5) }
+    var m = p1
+    if 1.0f64 - p1 < m { m = 1.0f64 - p1 }
+    res.pvalue = 2.0f64 * m
+    m_lo[i] = res.bound_lo0
+    m_lo[nvar + i] = res.bound_lo1
+    m_up[i] = res.bound_up0
+    m_up[nvar + i] = res.bound_up1
+    ret (res, ok)
+}
