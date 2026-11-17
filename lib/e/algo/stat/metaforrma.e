@@ -53,7 +53,7 @@ const O_VB: usize = 72usize
 type Ctl = struct { method: usize, test: usize, weighted: bool, level: f64, tau2fix: f64, intercept: bool, aw: []const f64, skipr2: bool, tau2min: f64 }
 
 type Ws = struct {
-    w: []f64, ymc: []f64, py: []f64, res: []f64, xs: []f64, pm: []f64, s: []f64, aug: []f64, b: []f64, tmp: []f64, wfe: []f64, ya: []f64, xa: []f64, sub: []f64, sub2: []f64, o2: []f64, big: []f64
+    w: []f64, ymc: []f64, py: []f64, res: []f64, xs: []f64, pm: []f64, s: []f64, aug: []f64, b: []f64, tmp: []f64, wfe: []f64, ya: []f64, xa: []f64, sub: []f64, sub2: []f64, o2: []f64, big: []f64, ar: *mem.Arena
 }
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
@@ -95,6 +95,7 @@ fn new_ws(a: *mem.Arena) -> (Ws, err) {
     let (big, e16) = mem.alloc[f64](a, 4usize * KMAX * KMAX)
     if e16 != ok { ret (z, e16) }
     z.o2 = o2
+    z.ar = a
     z.big = big
     z.w = w
     z.ymc = ymc

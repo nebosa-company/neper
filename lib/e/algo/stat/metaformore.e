@@ -56,6 +56,14 @@ fn uroot(c: *RootCtx, lo: f64, hi: f64) -> (f64, bool) {
     ret (pw.zeroin[RootCtx](c, root_f, lo, hi, mr.uniroot_tol(), 1000i64), true)
 }
 
+fn uroot_gq(c: *mf.GqCtx, lo: f64, hi: f64) -> (f64, bool) {
+    let flo = mf.genq_cb(c, lo)
+    let fhi = mf.genq_cb(c, hi)
+    if is_na(flo) || is_na(fhi) { ret (mr.nan(), false) }
+    if flo * fhi > 0.0f64 { ret (mr.nan(), false) }
+    ret (pw.zeroin[mf.GqCtx](c, mf.genq_cb, lo, hi, mr.uniroot_tol(), 1000i64), true)
+}
+
 // confint(x, type): out[X0 + 0..9] = tau2.lb, tau2.ub, I2.lb, I2.ub, H2.lb, H2.ub, tau.lb, tau.ub, lb converged, ub converged
 // type 0 qp, 1 pl, 2 ht, 3 wald, 4 wald.log, 5 wald.sqrt
 fn confint_tau2(m: *Mod, kind: usize) {
@@ -143,6 +151,56 @@ fn confint_tau2(m: *Mod, kind: usize) {
                 let (r, f) = uroot(&rc, tau2, tmax)
                 ub = r
                 ubc = f
+            }
+        }
+    }
+    if kind == 6usize {
+        // the generalized Q confidence interval of a GENQ or GENQM model
+        var gc: mf.GqCtx = zero
+        gc.ws = m.ws
+        gc.v = m.v
+        gc.k = k
+        gc.p = p
+        if mr.pbuild(m.ws, m.x, m.c.aw, k, p) {
+            gc.q = mr.pquad(m.ws, m.y, k)
+            gc.level = 0.0f64
+            gc.lower = true
+            let gmax = mf.genq_cb(&gc, tmax)
+            let gmin = mf.genq_cb(&gc, tmin)
+            let a2 = alpha / 2.0f64
+            if gmin > 1.0f64 - a2 {
+                lb = tmin
+                ub = tmin
+                lbc = true
+                ubc = true
+            } else {
+                if gmax < 1.0f64 - a2 {
+                    ub = tmax
+                    ubc = true
+                } else {
+                    gc.level = a2
+                    gc.lower = false
+                    let (r, f) = uroot_gq(&gc, tmin, tmax)
+                    ub = r
+                    ubc = f
+                }
+            }
+            if gmax < a2 {
+                lb = tmax
+                ub = tmax
+                lbc = true
+                ubc = true
+            } else {
+                if gmin > a2 {
+                    lb = tmin
+                    lbc = true
+                } else {
+                    gc.level = a2
+                    gc.lower = true
+                    let (r, f) = uroot_gq(&gc, tmin, tmax)
+                    lb = r
+                    lbc = f
+                }
             }
         }
     }

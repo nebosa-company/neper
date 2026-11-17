@@ -6,7 +6,47 @@ use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
+use e.mem
+use e.algo.stat.pwr as pw
+use e.algo.stat.compqf as cq
+use e.algo.linalg.lapack_syevr as sy
 use e.algo.stat.metaforrma as mr
+
+type GqCtx = struct { ws: *mr.Ws, v: []const f64, k: usize, p: usize, q: f64, level: f64, lower: bool }
+
+// R's .GENQ.func: the probability of Q under the eigenvalues of S P S (S = diag(sqrt(v + tau2))), minus level, or one minus it
+fn genq_cb(c: *GqCtx, t: f64) -> f64 {
+    let k = c.k
+    let a = c.ws.ar
+    let (sm, e1) = mem.alloc[f64](a, k * k)
+    let (ev, e2) = mem.alloc[f64](a, k)
+    let (zv, e3) = mem.alloc[f64](a, k * k)
+    let (lam, e4) = mem.alloc[f64](a, k - c.p)
+    let (hh, e5) = mem.alloc[i64](a, k - c.p)
+    let (dl, e6) = mem.alloc[f64](a, k - c.p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret mr.nan() }
+    var i = 0usize
+    while i < k {
+        var j = 0usize
+        while j < k {
+            sm[i * k + j] = math.sqrt[f64](c.v[i] + t) * c.ws.pm[i * k + j] * math.sqrt[f64](c.v[j] + t)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if sy.dsyevr_all(a, sm, k, ev, zv) != ok { ret mr.nan() }
+    i = 0usize
+    while i < k - c.p {
+        lam[i] = ev[k - 1usize - i]
+        hh[i] = 1i64
+        dl[i] = 0.0f64
+        i += 1usize
+    }
+    let (r, fe) = cq.farebrother(a, lam, hh, dl, c.q, 1.0f64, 100000usize, 1.0e-10f64)
+    if fe != ok { ret mr.nan() }
+    if c.lower { ret r.qq - c.level }
+    ret (1.0f64 - r.qq) - c.level
+}
 
 fn default_ctl() -> mr.Ctl {
     var c: mr.Ctl = zero
@@ -55,7 +95,7 @@ fn fit(ws: *mr.Ws, y: []const f64, v: []const f64, x: []const f64, k: usize, p: 
     var conv = true
     let tmin = c.tau2min
     var tmax = 100.0f64
-    if method == 6usize || method == 10usize { tmax = mr.tau2_max(ws, y, k) }
+    if method == 6usize || method == 10usize || method == 14usize { tmax = mr.tau2_max(ws, y, k) }
     var vy = 0.0f64
     i = 0usize
     while i < k {
@@ -120,6 +160,45 @@ fn fit(ws: *mr.Ws, y: []const f64, v: []const f64, x: []const f64, k: usize, p: 
         tau2 = (rss - trpv) / trp
         if fixed { tau2 = c.tau2fix }
         let t0 = mr.max0(tau2)
+        setau2 = math.sqrt[f64](1.0f64 / (trp * trp) * (2.0f64 * mr.psum_pvtpv(ws, v, k) + 4.0f64 * t0 * mr.psum_pvp(ws, v, k) + 2.0f64 * t0 * t0 * mr.psum2(ws, k)))
+    }
+    if method == 14usize {
+        // GENQM: the median unbiased estimator, the root of the distribution of the generalized Q statistic (Farebrother) at one half
+        if c.aw.len < k {
+            out[mr.O_CONV] = 0.0f64
+            ret
+        }
+        if !mr.pbuild(ws, x, c.aw, k, p) {
+            out[mr.O_CONV] = 0.0f64
+            ret
+        }
+        let rss = mr.pquad(ws, ws.ymc, k)
+        let trp = mr.ptrace(ws, k)
+        var gc: GqCtx = zero
+        gc.ws = ws
+        gc.v = v
+        gc.k = k
+        gc.p = p
+        gc.q = rss
+        if fixed {
+            tau2 = c.tau2fix
+        } else {
+            gc.level = 0.0f64
+            gc.lower = true
+            if genq_cb(&gc, tmin) > 0.5f64 {
+                tau2 = tmin
+            } else if genq_cb(&gc, tmax) < 0.5f64 {
+                conv = false
+            } else {
+                gc.level = 0.5f64
+                gc.lower = false
+                tau2 = pw.zeroin[GqCtx](&gc, genq_cb, tmin, tmax, mr.uniroot_tol(), 100i64)
+            }
+        }
+        // the pm matrix still holds P, whatever genq_cb left there
+        let t0 = mr.max0(tau2)
+        let trpv = mr.ptrace_v(ws, v, k)
+        let _ = trpv
         setau2 = math.sqrt[f64](1.0f64 / (trp * trp) * (2.0f64 * mr.psum_pvtpv(ws, v, k) + 4.0f64 * t0 * mr.psum_pvp(ws, v, k) + 2.0f64 * t0 * t0 * mr.psum2(ws, k)))
     }
     if method == 5usize {

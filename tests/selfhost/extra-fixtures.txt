@@ -454,3 +454,4 @@ oracle_metaforinf
 oracle_metaforsel
 oracle_escalcfull
 oracle_metaformv
+oracle_metaforgq
