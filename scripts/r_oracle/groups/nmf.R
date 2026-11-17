@@ -47,4 +47,14 @@ for (rep in 1:20) {
   v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 5, sd, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
 }
+# the nndsvd seed (the method code plus 10 for densify none, plus 20 for average), brunet and lee
+for (rep in 1:30) {
+  n <- sample(6:16, 1); p <- sample(5:10, 1); r <- sample(2:4, 1); me <- rep %% 2; dn <- 1 + (rep %/% 2) %% 2
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = if (me == 0) "brunet" else "lee", seed = list(method = "nndsvd", densify = if (dn == 1) "none" else "average"))), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  if (any(!is.finite(v))) next
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 10 * dn + me, 0, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
+}
 emit("nmf", "NMF", list(cases))

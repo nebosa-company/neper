@@ -8,29 +8,36 @@
 // Not here: the other algorithms (KL as a separate name, offset, nsNMF, ls-nmf, snmf, pe-nmf), the nndsvd and ica
 // seeds, several runs and the rank survey.
 
+use e.algo.linalg.decomp as decomp
 use e.algo.rand.r as rng
 use e.math
 use e.mem
 
 // v is n by p column-major, w n by r, h r by p; method 0 brunet (Kullback-Leibler), 1 lee (Frobenius); out[0] receives the iteration count
-fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, theta: f64, w: []f64, h: []f64, out: []f64) -> err {
+fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, theta: f64, init: usize, w: []f64, h: []f64, out: []f64) -> err {
     var r: rng.Rng = zero
     rng.seed(&r, seed)
-    var mx = v[0usize]
-    var q = 1usize
-    while q < n * p {
-        if v[q] > mx { mx = v[q] }
-        q += 1usize
-    }
-    q = 0usize
-    while q < n * rk {
-        w[q] = rng.unif(&r) * mx
-        q += 1usize
-    }
-    q = 0usize
-    while q < rk * p {
-        h[q] = rng.unif(&r) * mx
-        q += 1usize
+    var q = 0usize
+    if init == 0usize {
+        var mx = v[0usize]
+        q = 1usize
+        while q < n * p {
+            if v[q] > mx { mx = v[q] }
+            q += 1usize
+        }
+        q = 0usize
+        while q < n * rk {
+            w[q] = rng.unif(&r) * mx
+            q += 1usize
+        }
+        q = 0usize
+        while q < rk * p {
+            h[q] = rng.unif(&r) * mx
+            q += 1usize
+        }
+    } else {
+        let ne = nndsvd(a, v, n, p, rk, init, w, h)
+        if ne != ok { ret ne }
     }
     let (wh, e1) = mem.alloc[f64](a, n * p)
     let (t1, e2) = mem.alloc[f64](a, rk * p)
@@ -499,4 +506,104 @@ fn nmf_objective(v: []const f64, w: []const f64, h: []const f64, n: usize, p: us
     }
     if kind == 1usize { s = s / 2.0f64 }
     ret s
+}
+
+// the NNDSVD seed of Boutsidis and Gallopoulos as the package ports it: the first singular triplet as absolute values, each later one as the larger of its positive and negative parts,
+// values under 1e-10 set to zero; init 1 leaves the zeros, init 2 fills them with the mean of the data (the `average` densify)
+fn nndsvd(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, init: usize, w: []f64, h: []f64) -> err {
+    let (sv, e) = decomp.svd(a, v, n, p)
+    if e != ok { ret e }
+    var q = 0usize
+    while q < n * rk {
+        w[q] = 0.0f64
+        q += 1usize
+    }
+    q = 0usize
+    while q < rk * p {
+        h[q] = 0.0f64
+        q += 1usize
+    }
+    let s0 = math.sqrt[f64](sv.d[0usize])
+    var i = 0usize
+    while i < n {
+        w[i] = s0 * math.abs[f64](sv.u[i])
+        i += 1usize
+    }
+    var j = 0usize
+    while j < p {
+        h[j * rk] = s0 * math.abs[f64](sv.v[j])
+        j += 1usize
+    }
+    var k = 1usize
+    while k < rk {
+        var nup = 0.0f64
+        var nun = 0.0f64
+        var nvp = 0.0f64
+        var nvn = 0.0f64
+        i = 0usize
+        while i < n {
+            let x = sv.u[k * n + i]
+            if x >= 0.0f64 { nup += x * x } else { nun += x * x }
+            i += 1usize
+        }
+        j = 0usize
+        while j < p {
+            let x = sv.v[k * p + j]
+            if x >= 0.0f64 { nvp += x * x } else { nvn += x * x }
+            j += 1usize
+        }
+        nup = math.sqrt[f64](nup)
+        nun = math.sqrt[f64](nun)
+        nvp = math.sqrt[f64](nvp)
+        nvn = math.sqrt[f64](nvn)
+        let termp = nup * nvp
+        let termn = nun * nvn
+        var pos = termp >= termn
+        var term = termn
+        var nu = nun
+        var nv = nvn
+        if pos {
+            term = termp
+            nu = nup
+            nv = nvp
+        }
+        let sc = math.sqrt[f64](sv.d[k] * term)
+        i = 0usize
+        while i < n {
+            let x = sv.u[k * n + i]
+            var y = 0.0f64
+            if pos { if x >= 0.0f64 { y = x } } else { if x < 0.0f64 { y = 0.0f64 - x } }
+            w[k * n + i] = sc * y / nu
+            i += 1usize
+        }
+        j = 0usize
+        while j < p {
+            let x = sv.v[k * p + j]
+            var y = 0.0f64
+            if pos { if x >= 0.0f64 { y = x } } else { if x < 0.0f64 { y = 0.0f64 - x } }
+            h[j * rk + k] = sc * y / nv
+            j += 1usize
+        }
+        k += 1usize
+    }
+    q = 0usize
+    var sm = 0.0f64
+    while q < n * p {
+        sm += v[q]
+        q += 1usize
+    }
+    let avg = sm / f64(n * p)
+    q = 0usize
+    while q < n * rk {
+        if w[q] < 1.0e-10f64 { w[q] = 0.0f64 }
+        if w[q] == 0.0f64 && init == 2usize { w[q] = avg }
+        q += 1usize
+    }
+    q = 0usize
+    while q < rk * p {
+        if h[q] < 1.0e-10f64 { h[q] = 0.0f64 }
+        if h[q] == 0.0f64 && init == 2usize { h[q] = avg }
+        q += 1usize
+    }
+    ret ok
 }
