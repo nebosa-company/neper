@@ -1384,10 +1384,10 @@
       "group": "CRAN parity",
       "order": 772,
       "title": "Rmpfr: arbitrary-precision floating point",
-      "score": 0.8,
+      "score": 0.85,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D6932): e.algo.mpfr on the big integers of e.algo.bignum, correctly rounded (to nearest, ties to even) + - * / and sqrt at a chosen precision, equal to Rmpfr on Windows (oracle_mpfr: 200 operations at 53 to 300 bits, the value to a double and the remainder to a double; Linux pending). D6933 to D6939 (lgamma, gamma, erf, log 2, Catalan and zeta for real s > 1 too): exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh and pi correctly rounded equal Rmpfr. Open: atan for large arguments, erf, Bessel, the constants, the other rounding modes, special values, formatting. Was: Open (CRAN rank 567). Mid to large. e.algo.bignum has integers only. Acceptance, equal to Rmpfr (MPFR): correctly rounded +, -, *, /, sqrt, pow, exp, log, trig and hyperbolic functions, gamma, lgamma, zeta, erf, Bessel, constants (Pi, Euler, Catalan, log2) at any precision with all rounding modes, and string conversion in any base."
+      "evidence": "Partial (D6932): e.algo.mpfr on the big integers of e.algo.bignum, correctly rounded (to nearest, ties to even) + - * / and sqrt at a chosen precision, equal to Rmpfr on Windows (oracle_mpfr: 200 operations at 53 to 300 bits, the value to a double and the remainder to a double; Linux pending). D6933 to D6940 (lgamma, gamma, erf, log 2, Catalan, zeta for real s > 1 and besselJ of integer order too): exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh and pi correctly rounded equal Rmpfr. Open: atan for large arguments, erf, Bessel, the constants, the other rounding modes, special values, formatting. Was: Open (CRAN rank 567). Mid to large. e.algo.bignum has integers only. Acceptance, equal to Rmpfr (MPFR): correctly rounded +, -, *, /, sqrt, pow, exp, log, trig and hyperbolic functions, gamma, lgamma, zeta, erf, Bessel, constants (Pi, Euler, Catalan, log2) at any precision with all rounding modes, and string conversion in any base."
     },
     {
       "id": "L435",

@@ -1,6 +1,6 @@
 // Rmpfr / MPFR style binary floating point of a chosen precision on the big integers of e.algo.bignum: a value is m * 2^e with m a signed integer of at most `prec` bits, and every operation is the exact result rounded to nearest, ties to even.
 //
-// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, lgamma, gamma, erf, zeta (real s > 1), pi, log 2 and Catalan constants, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
+// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, asin, acos, asinh, acosh, atanh, lgamma, gamma, erf, zeta (real s > 1), besselJ of integer order, pi, log 2 and Catalan constants, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
 //
 // Not here: zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
 
@@ -1027,5 +1027,57 @@ fn zeta(a: *mem.Arena, s: Mp, prec: usize) -> (Mp, err) {
     if e23 != ok { ret (zero, e23) }
     let r = neg(a, q)
     let (rt_, re_) = round_to(a, r.m, r.e, prec)
+    ret (rt_, re_)
+}
+
+// besselJ(x, n) for an integer order n >= 0: sum (-1)^k (x / 2)^(2k + n) / (k! (k + n)!), with guard bits for the cancellation (about x^2 / 2 bits plus the leading zeros)
+fn bessel_j(a: *mem.Arena, x: Mp, n: usize, prec: usize) -> (Mp, err) {
+    if x.m.sign == bn.Sign.Zero {
+        if n == 0usize {
+            let (o, oe) = from_parts(a, 1i64, 0i64, prec)
+            ret (o, oe)
+        }
+        ret (x, ok)
+    }
+    let xf = to_f64(a, x)
+    let extra = usize(xf * xf * 0.75f64) + 16usize
+    let me = mag_exp(x)
+    var small = 0usize
+    if me < 0i64 { small = usize(0i64 - me) * (n + 1usize) }
+    let w = prec + 128usize + extra + small
+    let h = scale2(x, 0i64 - 1i64)
+    let (h2, e1) = mul(a, h, h, w)
+    if e1 != ok { ret (zero, e1) }
+    // the first term (x / 2)^n / n!
+    let (one, e2) = from_parts(a, 1i64, 0i64, w)
+    if e2 != ok { ret (zero, e2) }
+    var term = one
+    var i = 1usize
+    while i <= n {
+        let (hi_, e3) = mul(a, term, h, w)
+        let (d, e4) = from_parts(a, i64(i), 0i64, w)
+        if e3 != ok || e4 != ok { ret (zero, mem.Full) }
+        let (t2, e5) = div(a, hi_, d, w)
+        if e5 != ok { ret (zero, e5) }
+        term = t2
+        i += 1usize
+    }
+    var sum = term
+    var k = 1i64
+    var go = true
+    while go {
+        let (t1, e6) = mul(a, term, h2, w)
+        let (d, e7) = from_parts(a, k * (k + i64(n)), 0i64, w)
+        if e6 != ok || e7 != ok { ret (zero, mem.Full) }
+        let (t2, e8) = div(a, t1, d, w)
+        if e8 != ok { ret (zero, e8) }
+        term = neg(a, t2)
+        let (s2, e9) = add(a, sum, term, w)
+        if e9 != ok { ret (zero, e9) }
+        sum = s2
+        if term.m.sign == bn.Sign.Zero || (mag_exp(term) < mag_exp(sum) - i64(w) - 5i64 && k > 2i64) { go = false }
+        k += 1i64
+    }
+    let (rt_, re_) = round_to(a, sum.m, sum.e, prec)
     ret (rt_, re_)
 }

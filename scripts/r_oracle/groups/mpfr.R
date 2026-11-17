@@ -89,4 +89,13 @@ for (rep in 1:14) {
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
 }
+# besselJ (27) of integer order 0 .. 3 for |x| below 12 (the order in the m2 slot)
+for (rep in 1:40) {
+  prec <- sample(c(53, 80, 128), 1); m1 <- sample(1:(2^50), 1); e1 <- sample(-52:-46, 1); nn <- sample(0:3, 1); if (runif(1) < 0.5) m1 <- -m1
+  x <- mpfr(m1, prec) * 2^e1; if (abs(asNumeric(x)) > 12) next
+  z <- jn(nn, x); if (!is.finite(z) || z == 0) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(27, prec, m1, e1, nn, 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))

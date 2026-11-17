@@ -94,8 +94,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (t, e) = mp.const_catalan(a, prec)
         r = t
         er = e
-    } else {
+    } else if op == 26usize {
         let (t, e) = mp.zeta(a, x, prec)
+        r = t
+        er = e
+    } else {
+        // besselJ: the order rides in the exponent of the second operand
+        let (t, e) = mp.bessel_j(a, x, usize(z[4usize]), prec)
         r = t
         er = e
     }

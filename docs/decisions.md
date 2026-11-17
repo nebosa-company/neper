@@ -48226,3 +48226,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6939 — Rmpfr: zeta
 
 **Decision.** `mpfr.zeta` (real s > 1) is Borwein's algorithm: with n = 0.4 w + 4 terms, d_k the partial sums of the exact integers t_0 = 1, t_{i+1} = t_i 4 (n + i)(n - i) / ((2i + 1)(2i + 2)), zeta(s) = -1 / (d_n (1 - 2^(1 - s))) sum over k below n of (-1)^k (d_k - d_n) (k + 1)^(-s), the powers by exp(-s log(k + 1)). Equal to Rmpfr through the pair-of-doubles comparison on the real arguments of the oracle in (1.05, 12) at 53 and 80 bits (oracle_mpfr, 1702 cases in all, about 70 s: the fixture is now the slowest of the oracle group, so its zeta and gamma cases are kept few). Not here: arguments at or below 1, complex arguments, Bessel functions, Euler's constant. Linux pending.
+
+## D6940 — Rmpfr: besselJ
+
+**Decision.** `mpfr.bessel_j(x, n)` for an integer order n >= 0 sums (-1)^k (x / 2)^(2k + n) / (k! (k + n)!), starting from (x / 2)^n / n! and multiplying by -(x / 2)^2 / (k (k + n)), with 128 guard bits plus about 0.75 x^2 bits for the cancellation and the leading zeros of x times the order. Equal to Rmpfr's `jn(n, x)` through the pair-of-doubles comparison on 72 random cases (orders 0 to 3, |x| below 12, precisions 53 to 128) (oracle_mpfr, 1774 cases in all). Not here: the Bessel functions of the second kind, non-integer orders, the modified Bessel functions. Linux pending.

@@ -3798,4 +3798,5 @@ D6935	758	Rmpfr: tan, sinh, cosh, tanh, atan
 D6936	665	Rmpfr: the inverse functions
 D6937	829	Rmpfr: lgamma and gamma
 D6938	714	Rmpfr: erf, log 2 and Catalan's constant
-D6939	713	Rmpfr: zeta
+D6939	714	Rmpfr: zeta
+D6940	612	Rmpfr: besselJ
