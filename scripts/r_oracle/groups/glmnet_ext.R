@@ -209,37 +209,31 @@ if (want_("thresh7")) { set.seed(20261205)
     d <- mk(fam, 70, 5); o <- defopt(d, alpha = c(1, 0.4)[v]); addfit(d, o, rel = 2e-3, abs = 2e-3, thresh7 = TRUE)
   } }
 
-# ---- cv.glmnet: weights, offsets, relax, the default lambda --------------------------------------------------------------------------------------------------------------------
-# data of "cv": hdr, response, X, ..., query = (which, kfrom, nfolds, measure, auto, foldid[n] 0-based, gamma index); which 0 mean cvm, 1 mean cvsd over k = kfrom .. (the end; less the last lambda when auto), 2 lambda.min, 3 lambda.1se, 4 length, 5 gamma.min, 6 relaxed lambda.min
+# ---- cv.glmnet by the ported algorithms (R's own default thresh everywhere): weights, offsets, relax, the default lambda, the Cox extras ----------------------------------------------------------
+# "gcv" data: hdr, response, X, ..., query = (which, kfrom, nfolds, measure, auto, foldid[n] 0-based, gamma index); which 0 mean cvm, 1 mean cvsd over k = kfrom .. (the end; less the last lambda when auto), 2 lambda.min, 3 lambda.1se, 4 length, 5 gamma.min, 6 relaxed lambda.min
 addcv <- function(d, o, ms, au, relax = FALSE, nf = 4) {
   a0 <- gargs(d, o); n <- d$n; fid <- sample(rep(1:nf, length.out = n)); fam <- d$fam
-  tmn <- if (fam == "cox") c("deviance", "C")[ms + 1] else if (fam == "gaussian") c("deviance", "class", "mse", "mae")[ms + 1] else c("deviance", "class", "mse", "mae", "auc")[ms + 1]
-  if (fam == "gaussian") tmn <- c("mse", "mse", "mse", "mae")[ms + 1]
-  if (fam == "cox" && ms == 0) tmn <- "deviance"
+  tmn <- switch(fam, cox = c("deviance", "C")[ms + 1], gaussian = c("mse", "mse", "mse", "mae")[ms + 1], mgaussian = c("deviance", "mse", "mse", "mae")[ms + 1], c("deviance", "class", "mse", "mae", "auc")[ms + 1])
   cargs <- c(a0, list(foldid = fid, type.measure = tmn, relax = relax))
-  if (!au) { pl <- pickl(a0, d); cargs$lambda <- pl$lam; cargs$control <- list(thresh = 1e-14); lam <- pl$lam } else lam <- numeric(0)
-  cv <- suppressWarnings(do.call(cv.glmnet, cargs)); L <- length(cv$lambda); kfrom <- if (au) max(1, L %/% 3) else 1
-  if (au && (ms == 1 || (fam == "binomial" && ms == 4))) kfrom <- max(1, L %/% 2)
-  kend <- if (au) L - 1 else L; ks <- kfrom:kend
+  if (!au) { pl <- pickl(a0, d); cargs$lambda <- pl$lam; lam <- pl$lam } else lam <- numeric(0)
+  cv <- try(suppressWarnings(do.call(cv.glmnet, cargs)), silent = TRUE); if (inherits(cv, "try-error")) { message("cv.glmnet failed: ", fam, " ", conditionMessage(attr(cv, "condition"))); return(invisible()) }
+  L <- length(cv$lambda); kfrom <- 1; kend <- if (au) L - 1 else L; ks <- kfrom:kend
   wm <- function(v) sum(wfun(ks - 1) * v[ks]) / sum(wfun(ks - 1))
   hd <- o; hd$relax <- if (relax) 0 else NA
-  noisy <- au && (ms == 1 || (fam == "binomial" && ms == 4)); tol <- function(a, b) if (au) a else b
-  q <- function(w, k, want, rel, abs, gi = 4) cases[[length(cases) + 1]] <<- mkcase("cv", d, hd, lam, c(w, k - 1, nf, ms, au, fid - 1, gi), want, rel, abs)
+  q <- function(w, k, want, rel, abs, gi = 4) cases[[length(cases) + 1]] <<- mkcase("gcv", d, hd, lam, c(w, k - 1, nf, ms, au, fid - 1, gi), want, rel, abs)
   cm <- if (relax) cv$relaxed$statlist[["g:0.5"]]$cvm else cv$cvm; cs <- if (relax) cv$relaxed$statlist[["g:0.5"]]$cvsd else cv$cvsd
   gi <- if (relax) 2 else 4
-  if (au) q(4, 1, L, 0, 1.5)
-  # glmnet does not pass its thresh on to the refits of relax = TRUE, so a relaxed cross-validation carries its default-thresh noise
-  q(0, kfrom, wm(cm), if (noisy) 0 else if (relax) 5e-4 else tol(if (fam == "multinomial") 3e-3 else 5e-4, 1e-4), if (noisy) 0.04 else 1e-6, gi); q(1, kfrom, wm(cs), if (noisy) 0 else if (relax) 2e-2 else tol(2e-2, 1e-3), if (noisy) 0.05 else 1e-6, gi)
-  if (!au) { q(2, 1, cv$lambda.min, 1e-9, 1e-12); q(3, 1, cv$lambda.1se, 1e-9, 1e-12) }
-  if (relax && !au) { q(5, 1, cv$relaxed$gamma.min, 0, 1e-9); q(6, 1, cv$relaxed$lambda.min, 1e-9, 1e-12) }
+  if (au) q(4, 1, L, 0, 0.5)
+  q(0, kfrom, wm(cm), 1e-6, 1e-6, gi); q(1, kfrom, wm(cs), 1e-5, 1e-6, gi)
+  q(2, 1, cv$lambda.min, 1e-9, 1e-12); q(3, 1, cv$lambda.1se, 1e-9, 1e-12)
+  if (relax) { q(5, 1, cv$relaxed$gamma.min, 0, 1e-9); q(6, 1, cv$relaxed$lambda.min, 1e-9, 1e-12) }
 }
 if (want_("cv")) { set.seed(20261206)
   for (fam in c("gaussian", "binomial", "poisson", "cox")) for (v in 1:4) {
     d <- mk(fam, 60, 4); p <- d$p; o <- defopt(d, alpha = c(1, 0.5, 0.2, 0.9)[v], std = v != 3)
     ms <- if (fam == "gaussian") c(0, 2, 3, 0)[v] else if (fam == "binomial") c(0, 1, 4, 2)[v] else if (fam == "poisson") c(0, 2, 3, 0)[v] else c(0, 1, 0, 1)[v]
-    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3 && fam != "gaussian") o$off <- round(rnorm(d$n, 0, 0.3), 2); if (v == 3 && fam == "gaussian") o$off <- round(rnorm(d$n, 0, 0.3), 2)
+    if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2); if (v == 3) o$off <- round(rnorm(d$n, 0, 0.3), 2)
     if (v == 4) { o$w <- round(runif(d$n, 0.3, 3), 2); o$off <- round(rnorm(d$n, 0, 0.3), 2) }
-    if (fam == "binomial" && ms == 4) o$w <- numeric(0)
     addcv(d, o, ms, au = FALSE)
     addcv(d, o, ms, au = TRUE)
     if (v %in% c(1, 4)) addcv(d, o, if (fam == "binomial") 0 else ms, au = FALSE, relax = TRUE)
@@ -251,6 +245,15 @@ if (want_("cvm")) { set.seed(20261207)
     ms <- c(0, 1, 2, 3, 0)[v]
     addcv(d, o, ms, au = FALSE); if (v != 5) addcv(d, o, ms, au = TRUE)
     if (v == 1) addcv(d, o, 0, au = FALSE, relax = TRUE)
+  }
+  for (v in 1:3) {
+    d <- mk("mgaussian", 70, 4); o <- defopt(d, alpha = c(1, 0.5, 0.2)[v]); if (v == 2) o$w <- round(runif(d$n, 0.3, 3), 2)
+    addcv(d, o, c(0, 3, 2)[v], au = FALSE); addcv(d, o, c(0, 3, 2)[v], au = TRUE)
+  } }
+if (want_("cvx")) { set.seed(20261208)
+  for (v in 1:4) {   # Cox with Efron ties, strata and start-stop responses: the deviance measure only
+    d <- mk("cox", 70, 4, ties = v == 1, strata = v == 3, start = v == 4); o <- defopt(d, alpha = 0.5); o$efron <- v %in% c(1, 2)
+    addcv(d, o, 0, au = FALSE); addcv(d, o, 0, au = TRUE)
   } }
 
 # ---- nlambda and lambda.min.ratio (gaussian): "lseq" data = y[n], X; query = (nlambda, ratio, the number of lambdas R reports) ---------------------------------------------------

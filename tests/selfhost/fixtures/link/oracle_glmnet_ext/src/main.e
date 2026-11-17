@@ -218,7 +218,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let vf = x[8usize + nl..8usize + nl + p]
     let d0 = 8usize + nl + p
     let gf = str.eq(c.name, "gfit") || str.eq(c.name, "glam")
-    let isfit = str.eq(c.name, "fit") || str.eq(c.name, "lam") || str.eq(c.name, "cv") || gf
+    let gcv = str.eq(c.name, "gcv")
+    let isfit = str.eq(c.name, "fit") || str.eq(c.name, "lam") || str.eq(c.name, "cv") || gf || gcv
     if isfit {
         // data = (fam, relax, gamma, efron, grouped, nc, hasExcl, hasStrata, hasStart), the response (Cox: time, status, strata when hasStrata, start when hasStart; mgaussian: n by nc), exclude[p] when hasExcl
         let fam = usize(x[d0])
@@ -265,6 +266,78 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if e1 != ok { ret nan() }
             if fit_rows(a, gf, fam, relaxf, gamma, efron, grouped, nc, xm, ya, stat, strata, start, wts, off, lo, up, excl, n, p, alpha, std, lam, vf, out) != ok { ret nan() }
             ret checksum(out)
+        }
+        if gcv {
+            // gcv: cv.glmnet by the ported algorithms; query = (which, kfrom, nfolds, measure, auto, foldid[n], gamma index): which 0 the weighted mean cvm over k = kfrom .. (the end, less the last lambda when auto), 1 cvsd, 2 lambda.min, 3 lambda.1se, 4 the number of lambdas, 5 gamma.min, 6 the relaxed lambda.min
+            let which = usize(x[qo])
+            let kfrom = usize(x[qo + 1usize])
+            let nfo = usize(x[qo + 2usize])
+            let ms = usize(x[qo + 3usize])
+            let au = x[qo + 4usize] != 0.0f64
+            let (fid, e5) = mem.alloc[usize](a, n)
+            let (gm, e6) = mem.alloc[f64](a, 5usize)
+            let (lmo, e7) = mem.alloc[f64](a, 100usize)
+            let (cm, e8) = mem.alloc[f64](a, 500usize)
+            let (cs, e9) = mem.alloc[f64](a, 500usize)
+            if e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret nan() }
+            var q = 0usize
+            while q < n {
+                fid[q] = usize(x[qo + 5usize + q])
+                q += 1usize
+            }
+            var ng = 1usize
+            gm[0usize] = 1.0f64
+            if relaxf {
+                ng = 5usize
+                gm[0usize] = 0.0f64
+                gm[1usize] = 0.25f64
+                gm[2usize] = 0.5f64
+                gm[3usize] = 0.75f64
+                gm[4usize] = 1.0f64
+            }
+            let noln: []const f64 = zero
+            var lin: []const f64 = lam
+            if au { lin = noln }
+            var mcode = ms
+            if fam == 3usize && ms == 1usize { mcode = 5usize }
+            let nl2 = gl.cv_f(a, fam, mcode, xm, ya, stat, start, strata, efron, false, wts, off, n, p, nc, alpha, std, grouped, vf, lin, fid, nfo, relaxf, gm[0usize..ng], lmo, cm, cs)
+            if nl2 == 0usize { ret nan() }
+            if which == 4usize { ret f64(nl2) }
+            let lamv = lmo[0usize..nl2]
+            var lamu: []const f64 = lam
+            if au { lamu = lamv }
+            var gsel = ng - 1usize
+            if relaxf && which <= 1usize { gsel = usize(x[qo + 5usize + n]) }
+            let maxi = (fam == 3usize && ms == 1usize) || (fam == 0usize && ms == 4usize)
+            if which >= 2usize {
+                let (sel, e10) = mem.alloc[f64](a, 2usize)
+                if e10 != ok { ret nan() }
+                if relaxf && which == 5usize {
+                    gl.cv_select_relax(lamu, gm[0usize..ng], cm[0usize..ng * nl2], maxi, sel)
+                    ret sel[1usize]
+                }
+                if relaxf && which == 6usize {
+                    gl.cv_select_relax(lamu, gm[0usize..ng], cm[0usize..ng * nl2], maxi, sel)
+                    ret sel[0usize]
+                }
+                if maxi { gl.cv_select_max(lamu, cm[gsel * nl2..(gsel + 1usize) * nl2], cs[gsel * nl2..(gsel + 1usize) * nl2], sel) } else { gl.cv_select(lamu, cm[gsel * nl2..(gsel + 1usize) * nl2], cs[gsel * nl2..(gsel + 1usize) * nl2], sel) }
+                if which == 3usize { ret sel[1usize] }
+                ret sel[0usize]
+            }
+            var kend = nl2
+            if au { kend = nl2 - 1usize }
+            if kfrom >= kend { ret nan() }
+            var sw = 0.0f64
+            var sv = 0.0f64
+            var kk = kfrom
+            while kk < kend {
+                var v = cm[gsel * nl2 + kk]
+                if which == 1usize { v = cs[gsel * nl2 + kk] }
+                sw += weight(kk)
+                sv += weight(kk) * v
+                kk += 1usize
+            }
+            ret sv / sw
         }
         if str.eq(c.name, "glam") && fam == 5usize {
             let (cg, eb) = mem.alloc[f64](a, 100usize * nc * (p + 1usize))

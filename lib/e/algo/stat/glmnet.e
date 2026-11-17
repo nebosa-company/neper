@@ -6010,3 +6010,428 @@ fn relax_path_f(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, st: [
     }
     ret ok
 }
+
+// One fit of any family by glmnet's ported algorithms; rows receives, for each lambda fitted, ncs blocks of the intercept and p slopes (ncs = nc for the multinomial and mgaussian families, else 1; a Cox block has a zero intercept, the multinomial intercepts are centred over the classes as R reports them);
+// lams empty means the automatic sequence (alm then holds it, the first value extrapolated as R reports it). fam 0 binomial, 1 poisson, 2 gaussian (y net of any offset is taken here), 3 Cox, 4 multinomial (y holds the 0-based classes), 5 mgaussian. Returns the number of lambdas fitted
+fn fam_fit(a: *mem.Arena, fam: usize, x: []const f64, y: []const f64, st: []const f64, start: []const f64, strata: []const f64, efron: bool, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, nc: usize, alpha: f64, standardize: bool, grouped: bool, vf: []const f64, lams: []const f64, thr: f64, rows: []f64, alm: []f64) -> usize {
+    let (dv, e1) = mem.alloc[f64](a, 100usize)
+    if e1 != ok { ret 0usize }
+    var yv = y
+    if fam != 5usize { yv = y[0usize..n] }
+    var nfit = 0usize
+    if fam == 2usize {
+        let (ye, e2) = mem.alloc[f64](a, n)
+        if e2 != ok { ret 0usize }
+        var i = 0usize
+        while i < n {
+            ye[i] = yv[i]
+            if off.len == n { ye[i] = yv[i] - off[i] }
+            i += 1usize
+        }
+        nfit = glm_gaussian(a, x, ye, wt, lo, up, n, p, alpha, standardize, vf, lams, 100usize, thr, rows, dv, alm)
+    }
+    if fam == 0usize || fam == 1usize { nfit = glm_binpois(a, fam, x, yv, wt, off, lo, up, n, p, alpha, standardize, vf, lams, 100usize, thr, rows, dv, alm) }
+    if fam == 3usize {
+        let (cx, e3) = mem.alloc[f64](a, 100usize * p)
+        if e3 != ok { ret 0usize }
+        nfit = glm_cox(a, x, yv, start, strata, efron, st, wt, off, lo, up, n, p, alpha, standardize, vf, lams, 100usize, thr, cx, dv, alm)
+        var k = 0usize
+        while k < nfit {
+            rows[k * (p + 1usize)] = 0.0f64
+            var j = 0usize
+            while j < p {
+                rows[k * (p + 1usize) + 1usize + j] = cx[k * p + j]
+                j += 1usize
+            }
+            k += 1usize
+        }
+    }
+    if fam == 4usize {
+        let (lab, e4) = mem.alloc[usize](a, n)
+        if e4 != ok { ret 0usize }
+        var i = 0usize
+        while i < n {
+            lab[i] = usize(yv[i])
+            i += 1usize
+        }
+        nfit = glm_multinomial(a, x, lab, wt, off, lo, up, n, p, nc, alpha, standardize, grouped, vf, lams, 100usize, thr, rows, dv, alm)
+        var k = 0usize
+        while k < nfit {
+            var mi = 0.0f64
+            var c = 0usize
+            while c < nc {
+                mi += rows[(k * nc + c) * (p + 1usize)]
+                c += 1usize
+            }
+            c = 0usize
+            while c < nc {
+                rows[(k * nc + c) * (p + 1usize)] -= mi / f64(nc)
+                c += 1usize
+            }
+            k += 1usize
+        }
+    }
+    if fam == 5usize { nfit = glm_mgaussian(a, x, yv, wt, lo, up, n, p, nc, alpha, standardize, false, vf, lams, 100usize, thr, rows, dv, alm) }
+    ret nfit
+}
+
+// twice the negative Cox partial log-likelihood minus twice the saturated term for the given rows, as `cox_deviance` but with Efron ties, strata and start times
+fn cox_deviance_g(a: *mem.Arena, time: []const f64, start: []const f64, strata: []const f64, efron: bool, status: []const f64, w: []const f64, eta: []const f64) -> f64 {
+    let n = time.len
+    let (dq, e1) = mem.alloc[f64](a, n)
+    let (ee, e2) = mem.alloc[f64](a, n)
+    let (ss, e3) = mem.alloc[f64](a, n)
+    let (ww, e4) = mem.alloc[f64](a, n)
+    let (wr, e5) = mem.alloc[f64](a, n)
+    let (ord, e6) = mem.alloc[usize](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret 0.0f64 / 0.0f64 }
+    var d0 = 0.0f64
+    var i = 0usize
+    while i < n {
+        dq[i] = w[i] * status[i]
+        ee[i] = w[i] * math.exp[f64](eta[i])
+        d0 += dq[i] * eta[i]
+        i += 1usize
+    }
+    cox_ord(time, ord)
+    let lg = cox_qa(time, start, strata, dq, ord, ee, ss, efron, ww, wr)
+    ret 2.0f64 * (lg - d0) - 2.0f64 * cox_dk_a(time, strata, dq, ord, efron)
+}
+
+// cv.glmnet for every family by glmnet's ported algorithms (thr 1e-7, as R's inner fits): user fold ids (0 .. nfolds - 1), observation weights, offsets (n values; n by nc for the multinomial), relax (the gammas), and the Cox extras. lambdas empty means each fold finds its own automatic sequence and the shared
+// sequence is the full fit's (written to lamout, its length returned); otherwise the fold fits are made at those lambdas. Measures: 0 deviance (the mean squared error for the gaussian and mgaussian), 1 misclassification, 2 mse, 3 mae, 4 auc (binomial), 5 the C-index (Cox). y is the time for Cox, the 0-based classes for the multinomial and
+// the n by nc matrix for mgaussian. cvm and cvsd receive gammas.len * nlen values, gamma-major. efron_dev says whether Cox deviances are computed with Efron ties (R computes them with Breslow whatever the fit used)
+fn cv_f(a: *mem.Arena, fam: usize, measure: usize, x: []const f64, y: []const f64, st: []const f64, start: []const f64, strata: []const f64, efron: bool, efron_dev: bool, wt: []const f64, off: []const f64, n: usize, p: usize, nc: usize, alpha: f64, standardize: bool, grouped: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, relax: bool, gammas: []const f64, lamout: []f64, cvm: []f64, cvsd: []f64) -> usize {
+    var ncs = 1usize
+    if fam == 4usize || fam == 5usize { ncs = nc }
+    let row = ncs * (p + 1usize)
+    let ng = gammas.len
+    let (full, e0) = mem.alloc[f64](a, 100usize * row)
+    let (alf, e00) = mem.alloc[f64](a, 100usize)
+    if e0 != ok || e00 != ok { ret 0usize }
+    let none: []const f64 = zero
+    let auto = lambdas.len == 0usize
+    var nl = lambdas.len
+    var lamv = lambdas
+    if auto {
+        nl = fam_fit(a, fam, x, y, st, start, strata, efron, wt, off, none, none, n, p, nc, alpha, standardize, grouped, vf, none, 1.0e-7f64, full, alf)
+        var q0 = 0usize
+        while q0 < nl {
+            lamout[q0] = alf[q0]
+            q0 += 1usize
+        }
+        lamv = lamout[0usize..nl]
+    }
+    let (xt, e1) = mem.alloc[f64](a, n * p)
+    let (yt, e2) = mem.alloc[f64](a, n * ncs)
+    let (stt, e3) = mem.alloc[f64](a, n)
+    let (wtt, e4) = mem.alloc[f64](a, n)
+    let (ott, e5) = mem.alloc[f64](a, n * ncs)
+    let (cl, e6) = mem.alloc[f64](a, nl * row)
+    let (cr, e7) = mem.alloc[f64](a, nl * row)
+    let (bl, e8) = mem.alloc[f64](a, row)
+    let (cvf, e9) = mem.alloc[f64](a, ng * nl * nfolds)
+    let (nfv, e10) = mem.alloc[f64](a, nfolds)
+    let (wall, e11) = mem.alloc[f64](a, n)
+    let (eta, e12) = mem.alloc[f64](a, n * ncs)
+    let (tt2, e13) = mem.alloc[f64](a, n)
+    let (r1, e14) = mem.alloc[f64](a, 100usize * row)
+    let (r2, e15) = mem.alloc[f64](a, 100usize * row)
+    let (lam1, e16) = mem.alloc[f64](a, 100usize)
+    let (ico, e17) = mem.alloc[f64](a, row)
+    let (stt2, e18) = mem.alloc[f64](a, n)
+    let (sat2, e19) = mem.alloc[f64](a, n)
+    let (pe, e20) = mem.alloc[f64](a, ncs)
+    let (stv, e21) = mem.alloc[f64](a, n)
+    let (str2, e22) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok || e14 != ok || e15 != ok || e16 != ok || e17 != ok || e18 != ok || e19 != ok || e20 != ok || e21 != ok || e22 != ok { ret 0usize }
+    var i = 0usize
+    while i < n {
+        wall[i] = 1.0f64
+        if wt.len == n { wall[i] = wt[i] }
+        i += 1usize
+    }
+    var f = 0usize
+    while f < nfolds {
+        var m = 0usize
+        i = 0usize
+        while i < n {
+            if foldid[i] != f {
+                var j = 0usize
+                while j < p {
+                    xt[j * n + m] = x[j * n + i]
+                    j += 1usize
+                }
+                m += 1usize
+            }
+            i += 1usize
+        }
+        var j = 0usize
+        while j < p {
+            var q = 0usize
+            while q < m {
+                xt[j * m + q] = xt[j * n + q]
+                q += 1usize
+            }
+            j += 1usize
+        }
+        // the responses, offsets, weights, Cox extras of the training rows (response columns stacked with leading dimension m)
+        var c = 0usize
+        while c < ncs {
+            var mq = 0usize
+            i = 0usize
+            while i < n {
+                if foldid[i] != f {
+                    if fam == 5usize { yt[c * m + mq] = y[c * n + i] }
+                    if off.len == n * ncs { ott[c * m + mq] = off[c * n + i] }
+                    mq += 1usize
+                }
+                i += 1usize
+            }
+            c += 1usize
+        }
+        var mq = 0usize
+        i = 0usize
+        while i < n {
+            if foldid[i] != f {
+                if fam != 5usize { yt[mq] = y[i] }
+                wtt[mq] = wall[i]
+                if st.len == n { stt[mq] = st[i] }
+                if start.len == n { stt2[mq] = start[i] }
+                if strata.len == n { sat2[mq] = strata[i] }
+                mq += 1usize
+            }
+            i += 1usize
+        }
+        var wz = none
+        if wt.len == n { wz = wtt[0usize..m] }
+        var oz = none
+        if off.len == n * ncs { oz = ott[0usize..m * ncs] }
+        var sz = none
+        if st.len == n { sz = stt[0usize..m] }
+        var s2 = none
+        if start.len == n { s2 = stt2[0usize..m] }
+        var g2 = none
+        if strata.len == n { g2 = sat2[0usize..m] }
+        let mark = mem.mark(a)
+        // the fold's fit at the shared lambdas
+        if !auto {
+            let lm = fam_fit(a, fam, xt[0usize..m * p], yt[0usize..m * ncs], sz, s2, g2, efron, wz, oz, none, none, m, p, nc, alpha, standardize, grouped, vf, lamv, 1.0e-7f64, cl, lam1)
+            if lm != nl { ret 0usize }
+            if relax {
+                let re = relax_path_f(a, fam, xt[0usize..m * p], yt[0usize..m * ncs], sz, s2, g2, efron, wz, oz, none, none, m, p, nc, alpha, standardize, grouped, cl, nl, cr)
+                if re != ok { ret 0usize }
+            }
+        } else {
+            let len = fam_fit(a, fam, xt[0usize..m * p], yt[0usize..m * ncs], sz, s2, g2, efron, wz, oz, none, none, m, p, nc, alpha, standardize, grouped, vf, none, 1.0e-7f64, r1, lam1)
+            if relax {
+                let re = relax_path_f(a, fam, xt[0usize..m * p], yt[0usize..m * ncs], sz, s2, g2, efron, wz, oz, none, none, m, p, nc, alpha, standardize, grouped, r1[0usize..len * row], len, r2)
+                if re != ok { ret 0usize }
+            }
+            var k = 0usize
+            while k < nl {
+                coef_interp(lam1[0usize..len], r1[0usize..len * row], row - 1usize, lamv[k], ico)
+                var q = 0usize
+                while q < row {
+                    cl[k * row + q] = ico[q]
+                    q += 1usize
+                }
+                if relax {
+                    coef_interp(lam1[0usize..len], r2[0usize..len * row], row - 1usize, lamv[k], ico)
+                    q = 0usize
+                    while q < row {
+                        cr[k * row + q] = ico[q]
+                        q += 1usize
+                    }
+                }
+                k += 1usize
+            }
+        }
+        var wf = 0.0f64
+        i = 0usize
+        while i < n {
+            if foldid[i] == f { wf += wall[i] }
+            i += 1usize
+        }
+        nfv[f] = wf
+        var g = 0usize
+        while g < ng {
+            var gm = gammas[g]
+            if gm < 1.0e-5f64 { gm = 1.0e-5f64 }
+            var k = 0usize
+            while k < nl {
+                var q = 0usize
+                while q < row {
+                    if relax && gammas[g] < 1.0f64 { bl[q] = gm * cl[k * row + q] + (1.0f64 - gm) * cr[k * row + q] } else { bl[q] = cl[k * row + q] }
+                    q += 1usize
+                }
+                // the linear predictors of every row
+                i = 0usize
+                while i < n {
+                    c = 0usize
+                    while c < ncs {
+                        var lp = bl[c * (p + 1usize)]
+                        j = 0usize
+                        while j < p {
+                            lp += x[j * n + i] * bl[c * (p + 1usize) + 1usize + j]
+                            j += 1usize
+                        }
+                        if off.len == n * ncs { lp += off[c * n + i] }
+                        eta[c * n + i] = lp
+                        c += 1usize
+                    }
+                    i += 1usize
+                }
+                var acc = 0.0f64
+                if fam == 3usize {
+                    if measure == 0usize {
+                        // R builds the deviances from every row's predictor, with Breslow ties
+                        let dfull = cox_deviance_g(a, y[0usize..n], start, strata, efron_dev, st, wall, eta[0usize..n])
+                        var q3 = 0usize
+                        i = 0usize
+                        while i < n {
+                            if foldid[i] != f {
+                                tt2[q3] = eta[i]
+                                q3 += 1usize
+                            }
+                            i += 1usize
+                        }
+                        let dtrain = cox_deviance_g(a, yt[0usize..q3], s2, g2, efron_dev, stt[0usize..q3], wtt[0usize..q3], tt2[0usize..q3])
+                        acc = (dfull - dtrain) / wf
+                    } else {
+                        var cnt = 0usize
+                        i = 0usize
+                        while i < n {
+                            if foldid[i] == f { cnt += 1usize }
+                            i += 1usize
+                        }
+                        let (ft, e23) = mem.alloc[f64](a, cnt)
+                        let (fs, e24) = mem.alloc[f64](a, cnt)
+                        let (fp, e25) = mem.alloc[f64](a, cnt)
+                        let (fw, e26) = mem.alloc[f64](a, cnt)
+                        if e23 != ok || e24 != ok || e25 != ok || e26 != ok { ret 0usize }
+                        var q2 = 0usize
+                        i = 0usize
+                        while i < n {
+                            if foldid[i] == f {
+                                ft[q2] = y[i]
+                                fs[q2] = st[i]
+                                fp[q2] = eta[i]
+                                fw[q2] = wall[i]
+                                q2 += 1usize
+                            }
+                            i += 1usize
+                        }
+                        acc = cox_cindex_w(ft, fs, fp, fw)
+                    }
+                } else if fam == 0usize && measure == 4usize {
+                    i = 0usize
+                    while i < n {
+                        var pp = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[i]))
+                        if pp < 1.0e-5f64 { pp = 1.0e-5f64 }
+                        if pp > 1.0f64 - 1.0e-5f64 { pp = 1.0f64 - 1.0e-5f64 }
+                        tt2[i] = pp
+                        i += 1usize
+                    }
+                    acc = weighted_auc(y[0usize..n], tt2, wall, foldid, f)
+                } else {
+                    i = 0usize
+                    while i < n {
+                        if foldid[i] == f {
+                            var v = 0.0f64
+                            if fam == 2usize {
+                                let rr = y[i] - eta[i]
+                                if measure == 3usize { v = math.abs[f64](rr) } else { v = rr * rr }
+                            }
+                            if fam == 5usize {
+                                c = 0usize
+                                while c < nc {
+                                    let rr = y[c * n + i] - eta[c * n + i]
+                                    if measure == 3usize { v += math.abs[f64](rr) } else { v += rr * rr }
+                                    c += 1usize
+                                }
+                            }
+                            if fam == 0usize {
+                                var pp = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta[i]))
+                                if measure == 1usize {
+                                    if y[i] == 0.0f64 && pp > 0.5f64 { v = 1.0f64 }
+                                    if y[i] == 1.0f64 && pp <= 0.5f64 { v = 1.0f64 }
+                                }
+                                if measure == 2usize { v = 2.0f64 * (y[i] - pp) * (y[i] - pp) }
+                                if measure == 3usize { v = 2.0f64 * math.abs[f64](y[i] - pp) }
+                                if measure == 0usize {
+                                    if pp < 1.0e-5f64 { pp = 1.0e-5f64 }
+                                    if pp > 1.0f64 - 1.0e-5f64 { pp = 1.0f64 - 1.0e-5f64 }
+                                    v = 2.0f64 * (0.0f64 - y[i] * math.log[f64](pp) - (1.0f64 - y[i]) * math.log[f64](1.0f64 - pp))
+                                }
+                            }
+                            if fam == 1usize {
+                                let mu = math.exp[f64](eta[i])
+                                if measure == 0usize {
+                                    var devy = 0.0f64
+                                    if y[i] > 0.0f64 { devy = y[i] * math.log[f64](y[i]) - y[i] }
+                                    v = 2.0f64 * (devy - (y[i] * eta[i] - mu))
+                                }
+                                if measure == 2usize { v = (y[i] - mu) * (y[i] - mu) }
+                                if measure == 3usize { v = math.abs[f64](y[i] - mu) }
+                            }
+                            if fam == 4usize {
+                                var mxe = 0.0f64 - 1.0e300f64
+                                c = 0usize
+                                while c < nc {
+                                    pe[c] = eta[c * n + i]
+                                    if pe[c] > mxe { mxe = pe[c] }
+                                    c += 1usize
+                                }
+                                var sm = 0.0f64
+                                c = 0usize
+                                while c < nc {
+                                    pe[c] = math.exp[f64](pe[c] - mxe)
+                                    sm += pe[c]
+                                    c += 1usize
+                                }
+                                var best = 0usize
+                                c = 0usize
+                                while c < nc {
+                                    pe[c] = pe[c] / sm
+                                    if pe[c] > pe[best] { best = c }
+                                    c += 1usize
+                                }
+                                let lb = usize(y[i])
+                                c = 0usize
+                                while c < nc {
+                                    var yy = 0.0f64
+                                    if lb == c { yy = 1.0f64 }
+                                    if measure == 0usize && yy > 0.0f64 {
+                                        var pc = pe[c]
+                                        if pc < 1.0e-5f64 { pc = 1.0e-5f64 }
+                                        if pc > 1.0f64 - 1.0e-5f64 { pc = 1.0f64 - 1.0e-5f64 }
+                                        v += 0.0f64 - 2.0f64 * math.log[f64](pc)
+                                    }
+                                    if measure == 2usize { v += (yy - pe[c]) * (yy - pe[c]) }
+                                    if measure == 3usize { v += math.abs[f64](yy - pe[c]) }
+                                    c += 1usize
+                                }
+                                if measure == 1usize && best != lb { v = 1.0f64 }
+                            }
+                            acc += wall[i] * v
+                        }
+                        i += 1usize
+                    }
+                    acc = acc / wf
+                }
+                cvf[(g * nl + k) * nfolds + f] = acc
+                k += 1usize
+            }
+            g += 1usize
+        }
+        mem.reset(a, mark)
+        f += 1usize
+    }
+    var g = 0usize
+    while g < ng {
+        cv_finish(cvf[g * nl * nfolds..(g + 1usize) * nl * nfolds], nfv, nl, nfolds, cvm[g * nl..(g + 1usize) * nl], cvsd[g * nl..(g + 1usize) * nl])
+        g += 1usize
+    }
+    ret nl
+}
