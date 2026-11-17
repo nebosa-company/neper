@@ -94,4 +94,7 @@ for (rep in 1:30) { pic <- runif(1, 0.05, 0.5); pit <- pic + runif(1, 0.1, 0.4);
 # cpower "cpw" (tref, n, mc, r, accrual, tmin, noncomp.c, noncomp.i, alpha)
 for (rep in 1:30) { tr <- sample(3:5, 1); n <- sample(500:3000, 1); mc <- runif(1, 0.1, 0.5); r <- sample(c(15, 25, 35), 1); ac <- sample(c(0, 1.5, 2.5), 1); tm <- sample(c(1, 2, 3), 1); nc <- sample(c(0, 5), 1); ni <- sample(c(0, 10), 1); al <- sample(c(0.05, 0.01), 1)
   cases[[length(cases) + 1]] <- case("cpw", c(tr, n, mc, r, ac, tm, nc, ni, al), unname(cpower(tr, n, mc, r, ac, tm, nc, ni, al, pr = FALSE)), rel = 1e-10, abs = 1e-12) }
+# ciapower "cia" (tref, n1, n2, m1c, m2c, r1, r2, accrual, tmin, alpha)
+for (rep in 1:30) { tr <- sample(3:5, 1); n1 <- sample(500:3000, 1); n2 <- sample(500:3000, 1); m1 <- runif(1, 0.1, 0.5); m2 <- runif(1, 0.1, 0.5); r1 <- sample(c(10, 25, 40), 1); r2 <- sample(c(5, 15, 30), 1); ac <- sample(c(1.5, 2.5), 1); tm <- sample(c(1, 2, 3), 1); al <- sample(c(0.05, 0.01), 1)
+  cases[[length(cases) + 1]] <- case("cia", c(tr, n1, n2, m1, m2, r1, r2, ac, tm, al), unname(ciapower(tr, n1, n2, m1, m2, r1, r2, ac, tm, al, pr = FALSE)), rel = 1e-10, abs = 1e-12) }
 emit("hmisc", "Hmisc", list(cases))

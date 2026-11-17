@@ -48383,3 +48383,8 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6977 — Hmisc cpower
 
 `cpower(tref, n, mc, r, accrual, tmin, noncomp_c, noncomp_i, alpha)`: the Lachin-Foulkes logrank power with equal arms, including the non-compliance shrinkage of the log hazard ratio. Equal to `Hmisc::cpower` on 30 settings (oracle_hmisc). Unequal nc/ni arms are not here. Linux pending.
+
+
+## D6978 — Hmisc ciapower
+
+`ciapower(...)`: the power to detect a difference in the intervention hazard ratios of two strata (Lachin-Foulkes event probabilities, normal approximation on the log ratio of ratios), with `ev_prob` shared in shape with `cpower`. Equal to `Hmisc::ciapower` on 30 settings (oracle_hmisc). Linux pending.

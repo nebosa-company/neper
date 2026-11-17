@@ -977,3 +977,26 @@ fn cpower(tref: f64, n: f64, mc: f64, r: f64, accrual: f64, tmin: f64, ncc: f64,
     let z = 0.0f64 - qn(alpha / 2.0f64)
     ret 1.0f64 - (dist.pnorm(z - math.abs[f64](delta) / sd, 0.0f64, 1.0f64, true, false) - dist.pnorm(0.0f64 - z - math.abs[f64](delta) / sd, 0.0f64, 1.0f64, true, false))
 }
+
+fn ev_prob(lam: f64, tmin: f64, tmax: f64, accrual: f64) -> f64 {
+    ret 1.0f64 - 1.0f64 / accrual / lam * (math.exp[f64](0.0f64 - tmin * lam) - math.exp[f64](0.0f64 - tmax * lam))
+}
+
+// ciapower(tref, n1, n2, m1c, m2c, r1, r2, accrual, tmin, alpha): the power to detect a difference in the intervention hazard ratios of two strata
+fn ciapower(tref: f64, n1: f64, n2: f64, m1c: f64, m2c: f64, r1: f64, r2: f64, accrual: f64, tmin: f64, alpha: f64) -> f64 {
+    let m1i = (1.0f64 - r1 / 100.0f64) * m1c
+    let m2i = (1.0f64 - r2 / 100.0f64) * m2c
+    let l1c = 0.0f64 - math.log[f64](1.0f64 - m1c) / tref
+    let l2c = 0.0f64 - math.log[f64](1.0f64 - m2c) / tref
+    let l1i = 0.0f64 - math.log[f64](1.0f64 - m1i) / tref
+    let l2i = 0.0f64 - math.log[f64](1.0f64 - m2i) / tref
+    let tmax = tmin + accrual
+    let e1c = ev_prob(l1c, tmin, tmax, accrual) * n1 / 2.0f64
+    let e2c = ev_prob(l2c, tmin, tmax, accrual) * n2 / 2.0f64
+    let e1i = ev_prob(l1i, tmin, tmax, accrual) * n1 / 2.0f64
+    let e2i = ev_prob(l2i, tmin, tmax, accrual) * n2 / 2.0f64
+    let delta = math.log[f64]((l1i / l1c) / (l2i / l2c))
+    let sd = math.sqrt[f64](1.0f64 / e1c + 1.0f64 / e2c + 1.0f64 / e1i + 1.0f64 / e2i)
+    let z = 0.0f64 - qn(alpha / 2.0f64)
+    ret 1.0f64 - (dist.pnorm(z - math.abs[f64](delta) / sd, 0.0f64, 1.0f64, true, false) - dist.pnorm(0.0f64 - z - math.abs[f64](delta) / sd, 0.0f64, 1.0f64, true, false))
+}
