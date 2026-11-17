@@ -1351,3 +1351,70 @@ fn howardprior(p1: f64, p2: f64, alpha: f64, beta: f64, gam: f64, delta: f64, si
     let u = math.log[f64](p1 / (1.0f64 - p1) * (1.0f64 - p2) / p2) / sigma
     ret 0.0f64 - 0.5f64 * u * u + (alpha - 1.0f64) * math.log[f64](p1) + (beta - 1.0f64) * math.log[f64](1.0f64 - p1) + (gam - 1.0f64) * math.log[f64](p2) + (delta - 1.0f64) * math.log[f64](1.0f64 - p2)
 }
+
+// the second half of laplace(logpost, mode): R's optimHess at the given mode (the gradient by central differences of step 1e-3, the Hessian by central differences of that gradient, symmetrised), then var = -solve(H) and
+// int = p / 2 log(2 pi) + log(det var) / 2 + logpost(mode). The mode itself is the caller's: R finds it with Nelder-Mead and the optimiser's stopping point is not reproduced here. var_out is p by p column-major; returns int
+fn laplace_at[Ctx: type](a: *mem.Arena, ctx: *Ctx, logf: fn(*Ctx, []const f64) -> f64, mode: []const f64, var_out: []f64) -> f64 {
+    let p = mode.len
+    let eps = 0.001f64
+    let (x, e1) = mem.alloc[f64](a, p)
+    let (df1, e2) = mem.alloc[f64](a, p)
+    let (df2, e3) = mem.alloc[f64](a, p)
+    let (hs, e4) = mem.alloc[f64](a, p * p)
+    let (nh, e5) = mem.alloc[f64](a, p * p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < p {
+        x[i] = mode[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        x[i] = mode[i] + eps
+        grad_cd[Ctx](ctx, logf, x, eps, df1)
+        x[i] = mode[i] - eps
+        grad_cd[Ctx](ctx, logf, x, eps, df2)
+        x[i] = mode[i]
+        var j = 0usize
+        while j < p {
+            hs[j * p + i] = (df1[j] - df2[j]) / (2.0f64 * eps)
+            j += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < p {
+        var j = 0usize
+        while j < p {
+            nh[j * p + i] = 0.0f64 - 0.5f64 * (hs[j * p + i] + hs[i * p + j])
+            j += 1usize
+        }
+        i += 1usize
+    }
+    if inv_spd(a, nh, p, var_out) != ok { ret 0.0f64 / 0.0f64 }
+    let (u, e6) = mem.alloc[f64](a, p * p)
+    if e6 != ok { ret 0.0f64 / 0.0f64 }
+    if !bz.chol_upper(var_out, p, u) { ret 0.0f64 / 0.0f64 }
+    var logdet = 0.0f64
+    i = 0usize
+    while i < p {
+        logdet += 2.0f64 * math.log[f64](u[i * p + i])
+        i += 1usize
+    }
+    ret f64(p) / 2.0f64 * 1.8378770664093453f64 + 0.5f64 * logdet + logf(ctx, mode)
+}
+
+// the central-difference gradient of logf at x (R's fmingr with ndeps eps), restored in place
+fn grad_cd[Ctx: type](ctx: *Ctx, logf: fn(*Ctx, []const f64) -> f64, x: []f64, eps: f64, out: []f64) {
+    var i = 0usize
+    while i < x.len {
+        let x0 = x[i]
+        x[i] = x0 + eps
+        let f1 = logf(ctx, x)
+        x[i] = x0 - eps
+        let f2 = logf(ctx, x)
+        x[i] = x0
+        out[i] = (f1 - f2) / (2.0f64 * eps)
+        i += 1usize
+    }
+}

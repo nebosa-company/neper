@@ -85,6 +85,7 @@ for (rep in 1:10) {
   set.seed(sd); rs <- rejectsampling(logisticpost, tp, dmax, ns, dat)
   add("rej", c(sd, 0, m, ns, 4, dmax, mu, vv, xx, nn, yb), if (is.matrix(rs)) nrow(rs) else length(rs))
   if (is.matrix(rs) && nrow(rs) > 0) add("rej", c(sd, 1, m, ns, 4, dmax, mu, vv, xx, nn, yb), sum(rs[, 1]))
+  lp <- laplace(logisticpost, c(0, 0), dat); for (q in 1:4) add("lap", c(q - 1, m, lp$mode, xx, nn, yb), as.vector(lp$var)[q], 1e-7); add("lap", c(4, m, lp$mode, xx, nn, yb), lp$int, 1e-8)
   set.seed(sd); gb <- gibbs(logisticpost, c(0, 0), 60, c(0.5, 0.4), dat); for (q in c(1, 30, 60, 61, 90, 120)) add("gib", c(sd, q - 1, m, 60, 0.5, 0.4, 0, 0, xx, nn, yb), as.vector(gb$par)[q], 1e-10)
   add("gib", c(sd, 120, m, 60, 0.5, 0.4, 0, 0, xx, nn, yb), gb$accept[1], 1e-10); add("gib", c(sd, 121, m, 60, 0.5, 0.4, 0, 0, xx, nn, yb), gb$accept[2], 1e-10)
   set.seed(sd); sr <- sir(logisticpost, tp, 150, dat); for (q in c(1, 40, 150, 151, 190, 300)) add("sir", c(sd, q - 1, m, 150, 4, 0, mu, vv, xx, nn, yb), as.vector(sr)[q], 1e-10)

@@ -3770,4 +3770,5 @@ D6907	879	LearnBayes: normpostsim and blinreg
 D6908	771	LearnBayes: sir
 D6909	596	LearnBayes: gibbs
 D6910	656	LearnBayes: hiergibbs
-D6911	712	LearnBayes: ordergibbs, bradley.terry.post, howardprior
+D6911	713	LearnBayes: ordergibbs, bradley.terry.post, howardprior
+D6912	689	LearnBayes: laplace at a given mode

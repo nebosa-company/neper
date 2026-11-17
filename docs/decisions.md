@@ -48114,3 +48114,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6911 — LearnBayes: ordergibbs, bradley.terry.post, howardprior
 
 **Decision.** `learnbayes.ordergibbs` is the package's order-restricted sampler of its 8 by 5 example (the starting means of the package, truncated normal draws by inversion, one uniform per cell, cells visited row by row), `bradley_terry_post` the Bradley-Terry log posterior (abilities then log sigma, normal prior on the abilities) and `howardprior` the log prior of two dependent proportions. Equal to LearnBayes under set.seed on 6 random data sets for ordergibbs (15 sweeps, seven elements each) and on 15 random designs each for the other two (oracle_learnbayes, 4219 cases in all). Not here: laplace (needs R's optim). Linux pending.
+
+## D6912 — LearnBayes: laplace at a given mode
+
+**Decision.** `learnbayes.laplace_at` is the second half of `laplace`: R's `optimHess` at the mode (the gradient by central differences of step 1e-3, then central differences of that gradient, symmetrised), var = -solve(H) and int = p / 2 log(2 pi) + log det(var) / 2 + logpost(mode). The mode is the caller's, since R finds it with Nelder-Mead and the point where that search stops depends on the optimiser's path, which is not reproduced. Equal to LearnBayes at the mode R returns, on the 10 logistic posteriors of D6906: the four variance elements to 1e-7 and the integral to 1e-8 (oracle_learnbayes, 4269 cases in all). Linux pending.
