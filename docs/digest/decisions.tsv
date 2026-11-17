@@ -3872,4 +3872,5 @@ D7009	787	Hmisc rcspline.eval default knots, describe, cut2 codes
 D7010	727	Hmisc redun with splines, categories and the adjusted R2
 D7011	262	L305 closed
 D7012	782	tsfeatures entropy, stl_features, holt_parameters, heterogeneity
-D7013	181	L483 closed
+D7013	183	L483 closed
+D7014	1186	extraDistr: the remaining generators and d, p, q functions, L422 closed

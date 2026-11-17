@@ -48560,3 +48560,8 @@ Four ports done in a worktree and merged: `entropy` (Burg AR fit with AIC order,
 ## D7013 — L483 closed
 
 Every feature of the L483 acceptance list has an oracle case, so L483 moves to docs/work-done.jsonl. hw_parameters is outside the acceptance and not done.
+
+
+## D7014 — extraDistr: the remaining generators and d, p, q functions, L422 closed
+
+Done in a worktree and merged: the generators of the triangular (two uniforms), discrete Laplace (difference of two geometric draws), zero-inflated families, Wald (Michael-Schucany-Haas), beta-binomial and beta-negative-binomial, gamma-Poisson, Skellam, slash, proportion, sign, shifted Gompertz, Bhattacharjee (uniform then normal), Huber (quantile at a uniform, with a new closed-form `huber_q`), discrete normal and gamma, negative hypergeometric; the truncated normal through the package's Robert rejection samplers (constants fitted to R's behaviour by bisection, matching its boundaries to five decimals); the vector families through `rvec`; and pbern, qbern, qdunif, qdweibull, pslash, pmixnorm, pmixpois, qhuber, dcat, pcat, qcat. Every exported r function of extraDistr 1.10 now equals R on scalar arguments (oracle_extradistr, 4162 cases), so L422 moves to docs/work-done.jsonl. Not claimed: recycling of vector arguments, the log and tail flags, NaN-with-warning on invalid parameters, the Walker alias path of rcat above 200 categories, and extreme truncated-normal tails. Linux pending.
