@@ -220,6 +220,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if !pm.pinv_full(a, x[4usize..4usize + pm_r * pm_c], pm_r, pm_c, po) { os.exit(11) }
         ret po[usize(x[2usize]) * pm_r + usize(x[3usize])]
     }
+    if str.eq(k, "prre") || str.eq(k, "prim") {
+        // polyroot: args (degree + 1, root index, coefficients increasing)
+        let pn = usize(x[0usize])
+        let (rre, rr1) = mem.alloc[f64](a, pn + 1usize)
+        let (rim, rr2) = mem.alloc[f64](a, pn + 1usize)
+        if rr1 != ok || rr2 != ok { os.exit(16) }
+        let dg = pm.polyroot_c(a, x[2usize..2usize + pn], rre, rim)
+        if dg < 1i64 { ret 0.0f64 / 0.0f64 }
+        if str.eq(k, "prre") { ret rre[usize(x[1usize])] }
+        ret rim[usize(x[1usize])]
+    }
     if str.eq(k, "pinvs") {
         let pr = usize(x[0usize])
         let pc = usize(x[1usize])

@@ -1970,3 +1970,415 @@ fn pinv_svd(a: *mem.Arena, m: []const f64, rows: usize, cols: usize, out: []f64)
     }
     ret true
 }
+
+// ---- R's polyroot: the Jenkins-Traub complex polynomial zero finder (R's cpoly), ported with its state and iteration order, so the roots come out in R's order ----
+
+type Cp = struct { nn: i64, pr: []f64, pi: []f64, hr: []f64, hi: []f64, qpr: []f64, qpi: []f64, qhr: []f64, qhi: []f64, shr: []f64, shi: []f64, sr: f64, si: f64, tr: f64, ti: f64, pvr: f64, pvi: f64, relstp: f64, omp: f64 }
+
+fn cp_cdivid(ar: f64, ai: f64, br: f64, bi: f64) -> (f64, f64) {
+    if br == 0.0f64 && bi == 0.0f64 {
+        let inf = 1.0e308f64 * 10.0f64
+        ret (inf, inf)
+    }
+    if math.abs[f64](br) >= math.abs[f64](bi) {
+        let r = bi / br
+        let d = br + r * bi
+        ret ((ar + ai * r) / d, (ai - ar * r) / d)
+    }
+    let r = br / bi
+    let d = bi + r * br
+    ret ((ar * r + ai) / d, (ai * r - ar) / d)
+}
+
+fn cp_hypot(x: f64, y: f64) -> f64 { ret math.sqrt[f64](x * x + y * y) }
+
+// evaluates p at s by the Horner recurrence, the partial sums in q; returns the value
+fn cp_polyev(n: i64, s_r: f64, s_i: f64, p_r: []const f64, p_i: []const f64, q_r: []f64, q_i: []f64) -> (f64, f64) {
+    q_r[0usize] = p_r[0usize]
+    q_i[0usize] = p_i[0usize]
+    var vr = q_r[0usize]
+    var vi = q_i[0usize]
+    var i = 1i64
+    while i < n {
+        let t = vr * s_r - vi * s_i + p_r[usize(i)]
+        vi = vr * s_i + vi * s_r + p_i[usize(i)]
+        q_i[usize(i)] = vi
+        vr = t
+        q_r[usize(i)] = vr
+        i += 1i64
+    }
+    ret (vr, vi)
+}
+
+fn cp_errev(n: i64, qr: []const f64, qi: []const f64, ms: f64, mp: f64, a_re: f64, m_re: f64) -> f64 {
+    var e = cp_hypot(qr[0usize], qi[0usize]) * m_re / (a_re + m_re)
+    var i = 0i64
+    while i < n {
+        e = e * ms + cp_hypot(qr[usize(i)], qi[usize(i)])
+        i += 1i64
+    }
+    ret e * (a_re + m_re) - mp * m_re
+}
+
+fn cp_cauchy(n: i64, pot: []f64, q: []f64) -> f64 {
+    let n1 = n - 1i64
+    pot[usize(n1)] = 0.0f64 - pot[usize(n1)]
+    var x = math.exp[f64]((math.log[f64](0.0f64 - pot[usize(n1)]) - math.log[f64](pot[0usize])) / f64(n1))
+    if pot[usize(n1 - 1i64)] != 0.0f64 {
+        let xm = (0.0f64 - pot[usize(n1)]) / pot[usize(n1 - 1i64)]
+        if xm < x { x = xm }
+    }
+    var go = true
+    while go {
+        let xm = x * 0.1f64
+        var f = pot[0usize]
+        var i = 1i64
+        while i < n {
+            f = f * xm + pot[usize(i)]
+            i += 1i64
+        }
+        if f <= 0.0f64 { go = false } else { x = xm }
+    }
+    var dx = x
+    while math.abs[f64](dx / x) > 0.005f64 {
+        q[0usize] = pot[0usize]
+        var i = 1i64
+        while i < n {
+            q[usize(i)] = q[usize(i - 1i64)] * x + pot[usize(i)]
+            i += 1i64
+        }
+        let f = q[usize(n1)]
+        var delf = q[0usize]
+        i = 1i64
+        while i < n1 {
+            delf = delf * x + q[usize(i)]
+            i += 1i64
+        }
+        dx = f / delf
+        x -= dx
+    }
+    ret x
+}
+
+fn cp_scale(n: i64, pot: []const f64, epsv: f64, big: f64, small: f64, base: f64) -> f64 {
+    let high = math.sqrt[f64](big)
+    let lo = small / epsv
+    var max_ = 0.0f64
+    var min_ = big
+    var i = 0i64
+    while i < n {
+        let x = pot[usize(i)]
+        if x > max_ { max_ = x }
+        if x != 0.0f64 && x < min_ { min_ = x }
+        i += 1i64
+    }
+    if min_ < lo || max_ > high {
+        let x = lo / min_
+        var sc = 0.0f64
+        if x <= 1.0f64 {
+            sc = 1.0f64 / (math.sqrt[f64](max_) * math.sqrt[f64](min_))
+        } else {
+            sc = x
+            if big / sc > max_ { sc = 1.0f64 }
+        }
+        let ell = i64(math.log[f64](sc) / math.log[f64](base) + 0.5f64)
+        ret math.pow[f64](base, f64(ell))
+    }
+    ret 1.0f64
+}
+
+// t = -p(s) / h(s); returns whether h(s) is essentially zero
+fn cp_calct(g: *Cp) -> bool {
+    let n = g.nn - 1i64
+    let (hvr, hvi) = cp_polyev(n, g.sr, g.si, g.hr, g.hi, g.qhr, g.qhi)
+    let h_s_0 = cp_hypot(hvr, hvi) <= 2.220446049250313e-16f64 * 10.0f64 * cp_hypot(g.hr[usize(n - 1i64)], g.hi[usize(n - 1i64)])
+    if !h_s_0 {
+        let (a1, b1) = cp_cdivid(0.0f64 - g.pvr, 0.0f64 - g.pvi, hvr, hvi)
+        g.tr = a1
+        g.ti = b1
+    } else {
+        g.tr = 0.0f64
+        g.ti = 0.0f64
+    }
+    ret h_s_0
+}
+
+fn cp_nexth(g: *Cp, h_s_0: bool) {
+    let n = g.nn - 1i64
+    if !h_s_0 {
+        var j = 1i64
+        while j < n {
+            let t1 = g.qhr[usize(j - 1i64)]
+            let t2 = g.qhi[usize(j - 1i64)]
+            g.hr[usize(j)] = g.tr * t1 - g.ti * t2 + g.qpr[usize(j)]
+            g.hi[usize(j)] = g.tr * t2 + g.ti * t1 + g.qpi[usize(j)]
+            j += 1i64
+        }
+        g.hr[0usize] = g.qpr[0usize]
+        g.hi[0usize] = g.qpi[0usize]
+    } else {
+        var j = 1i64
+        while j < n {
+            g.hr[usize(j)] = g.qhr[usize(j - 1i64)]
+            g.hi[usize(j)] = g.qhi[usize(j - 1i64)]
+            j += 1i64
+        }
+        g.hr[0usize] = 0.0f64
+        g.hi[0usize] = 0.0f64
+    }
+}
+
+fn cp_noshft(g: *Cp, l1: i64) {
+    let n = g.nn - 1i64
+    let nm1 = n - 1i64
+    var i = 0i64
+    while i < n {
+        let xni = f64(g.nn - i - 1i64)
+        g.hr[usize(i)] = xni * g.pr[usize(i)] / f64(n)
+        g.hi[usize(i)] = xni * g.pi[usize(i)] / f64(n)
+        i += 1i64
+    }
+    var jj = 1i64
+    while jj <= l1 {
+        if cp_hypot(g.hr[usize(n - 1i64)], g.hi[usize(n - 1i64)]) <= 2.220446049250313e-16f64 * 10.0f64 * cp_hypot(g.pr[usize(n - 1i64)], g.pi[usize(n - 1i64)]) {
+            i = 1i64
+            while i <= nm1 {
+                let j = g.nn - i
+                g.hr[usize(j - 1i64)] = g.hr[usize(j - 2i64)]
+                g.hi[usize(j - 1i64)] = g.hi[usize(j - 2i64)]
+                i += 1i64
+            }
+            g.hr[0usize] = 0.0f64
+            g.hi[0usize] = 0.0f64
+        } else {
+            let (a1, b1) = cp_cdivid(0.0f64 - g.pr[usize(g.nn - 1i64)], 0.0f64 - g.pi[usize(g.nn - 1i64)], g.hr[usize(n - 1i64)], g.hi[usize(n - 1i64)])
+            g.tr = a1
+            g.ti = b1
+            i = 1i64
+            while i <= nm1 {
+                let j = g.nn - i
+                let t1 = g.hr[usize(j - 2i64)]
+                let t2 = g.hi[usize(j - 2i64)]
+                g.hr[usize(j - 1i64)] = g.tr * t1 - g.ti * t2 + g.pr[usize(j - 1i64)]
+                g.hi[usize(j - 1i64)] = g.tr * t2 + g.ti * t1 + g.pi[usize(j - 1i64)]
+                i += 1i64
+            }
+            g.hr[0usize] = g.pr[0usize]
+            g.hi[0usize] = g.pi[0usize]
+        }
+        jj += 1i64
+    }
+}
+
+// the third stage: l3 steps from (zr, zi); returns convergence and the iterate
+fn cp_vrshft(g: *Cp, l3: i64, zr0: f64, zi0: f64) -> (bool, f64, f64) {
+    var b = false
+    g.sr = zr0
+    g.si = zi0
+    var i = 1i64
+    while i <= l3 {
+        let (v1, v2) = cp_polyev(g.nn, g.sr, g.si, g.pr, g.pi, g.qpr, g.qpi)
+        g.pvr = v1
+        g.pvi = v2
+        let mp = cp_hypot(g.pvr, g.pvi)
+        let ms = cp_hypot(g.sr, g.si)
+        if mp <= 20.0f64 * cp_errev(g.nn, g.qpr, g.qpi, ms, mp, 2.220446049250313e-16f64, 2.0f64 * 1.4142135623730951f64 * 2.220446049250313e-16f64) {
+            ret (true, g.sr, g.si)
+        }
+        var skip_omp = false
+        if i != 1i64 {
+            if !b && mp >= g.omp && g.relstp < 0.05f64 {
+                var tp = g.relstp
+                b = true
+                if g.relstp < 2.220446049250313e-16f64 { tp = 2.220446049250313e-16f64 }
+                let r1 = math.sqrt[f64](tp)
+                let r2 = g.sr * (r1 + 1.0f64) - g.si * r1
+                g.si = g.sr * r1 + g.si * (r1 + 1.0f64)
+                g.sr = r2
+                let (w1, w2) = cp_polyev(g.nn, g.sr, g.si, g.pr, g.pi, g.qpr, g.qpi)
+                g.pvr = w1
+                g.pvi = w2
+                var j = 1i64
+                while j <= 5i64 {
+                    let hs = cp_calct(g)
+                    cp_nexth(g, hs)
+                    j += 1i64
+                }
+                g.omp = 1.7976931348623157e308f64
+                skip_omp = true
+            } else {
+                if mp * 0.1f64 > g.omp { ret (false, g.sr, g.si) }
+            }
+        }
+        if !skip_omp { g.omp = mp }
+        var h_s_0 = cp_calct(g)
+        cp_nexth(g, h_s_0)
+        h_s_0 = cp_calct(g)
+        if !h_s_0 {
+            g.relstp = cp_hypot(g.tr, g.ti) / cp_hypot(g.sr, g.si)
+            g.sr += g.tr
+            g.si += g.ti
+        }
+        i += 1i64
+    }
+    ret (false, zr0, zi0)
+}
+
+// the second stage: l2 fixed-shift steps with tests; returns convergence and the zero
+fn cp_fxshft(g: *Cp, l2: i64) -> (bool, f64, f64) {
+    let n = g.nn - 1i64
+    let (v1, v2) = cp_polyev(g.nn, g.sr, g.si, g.pr, g.pi, g.qpr, g.qpi)
+    g.pvr = v1
+    g.pvi = v2
+    var test = true
+    var pasd = false
+    var h_s_0 = cp_calct(g)
+    var zr = 0.0f64
+    var zi = 0.0f64
+    var j = 1i64
+    while j <= l2 {
+        let otr = g.tr
+        let oti = g.ti
+        cp_nexth(g, h_s_0)
+        h_s_0 = cp_calct(g)
+        zr = g.sr + g.tr
+        zi = g.si + g.ti
+        if !h_s_0 && test && j != l2 {
+            if cp_hypot(g.tr - otr, g.ti - oti) >= cp_hypot(zr, zi) * 0.5f64 {
+                pasd = false
+            } else if !pasd {
+                pasd = true
+            } else {
+                var i = 0i64
+                while i < n {
+                    g.shr[usize(i)] = g.hr[usize(i)]
+                    g.shi[usize(i)] = g.hi[usize(i)]
+                    i += 1i64
+                }
+                let svsr = g.sr
+                let svsi = g.si
+                let (ok1, z1, z2) = cp_vrshft(g, 10i64, zr, zi)
+                if ok1 { ret (true, z1, z2) }
+                test = false
+                i = 1i64
+                while i <= n {
+                    g.hr[usize(i - 1i64)] = g.shr[usize(i - 1i64)]
+                    g.hi[usize(i - 1i64)] = g.shi[usize(i - 1i64)]
+                    i += 1i64
+                }
+                g.sr = svsr
+                g.si = svsi
+                let (w1, w2) = cp_polyev(g.nn, g.sr, g.si, g.pr, g.pi, g.qpr, g.qpi)
+                g.pvr = w1
+                g.pvi = w2
+                h_s_0 = cp_calct(g)
+            }
+        }
+        j += 1i64
+    }
+    let (okf, zf1, zf2) = cp_vrshft(g, 10i64, zr, zi)
+    ret (okf, zf1, zf2)
+}
+
+// polyroot(z) for the real coefficients z (increasing powers): the complex roots in R's order into re and im (degree entries); returns the degree, or -1 when the finder fails
+fn polyroot_c(a: *mem.Arena, z: []const f64, re: []f64, im: []f64) -> i64 {
+    var degree = 0i64
+    var i = 0usize
+    while i < z.len {
+        if z[i] != 0.0f64 { degree = i64(i) }
+        i += 1usize
+    }
+    if degree < 1i64 { ret 0i64 }
+    let n = degree + 1i64
+    let (opr, e1) = mem.alloc[f64](a, usize(n))
+    let (opi, e2) = mem.alloc[f64](a, usize(n))
+    let (tmp, e3) = mem.alloc[f64](a, usize(10i64 * n))
+    if e1 != ok || e2 != ok || e3 != ok { ret 0i64 - 1i64 }
+    i = 0usize
+    while i < usize(n) {
+        opr[usize(degree) - i] = z[i]
+        opi[usize(degree) - i] = 0.0f64
+        i += 1usize
+    }
+    var nn = degree
+    let d1 = nn - 1i64
+    if opr[0usize] == 0.0f64 && opi[0usize] == 0.0f64 { ret 0i64 - 1i64 }
+    var dn = 0i64
+    while opr[usize(nn)] == 0.0f64 && opi[usize(nn)] == 0.0f64 {
+        dn = d1 - nn + 1i64
+        re[usize(dn)] = 0.0f64
+        im[usize(dn)] = 0.0f64
+        nn -= 1i64
+    }
+    nn += 1i64
+    if nn == 1i64 { ret degree }
+    let w = usize(nn)
+    var g = Cp{ nn: nn, pr: tmp[0usize..w], pi: tmp[w..2usize * w], hr: tmp[2usize * w..3usize * w], hi: tmp[3usize * w..4usize * w], qpr: tmp[4usize * w..5usize * w], qpi: tmp[5usize * w..6usize * w], qhr: tmp[6usize * w..7usize * w], qhi: tmp[7usize * w..8usize * w], shr: tmp[8usize * w..9usize * w], shi: tmp[9usize * w..10usize * w], sr: 0.0f64, si: 0.0f64, tr: 0.0f64, ti: 0.0f64, pvr: 0.0f64, pvi: 0.0f64, relstp: 0.0f64, omp: 0.0f64 }
+    i = 0usize
+    while i < w {
+        g.pr[i] = opr[i]
+        g.pi[i] = opi[i]
+        g.shr[i] = cp_hypot(g.pr[i], g.pi[i])
+        i += 1usize
+    }
+    let eta = 2.220446049250313e-16f64
+    let bnd0 = cp_scale(nn, g.shr, eta, 1.7976931348623157e308f64, 2.2250738585072014e-308f64, 2.0f64)
+    if bnd0 != 1.0f64 {
+        i = 0usize
+        while i < w {
+            g.pr[i] *= bnd0
+            g.pi[i] *= bnd0
+            i += 1usize
+        }
+    }
+    var xx = 0.7071067811865476f64
+    var yy = 0.0f64 - xx
+    let cosr = 0.0f64 - 0.06975647374412529990f64
+    let sinr = 0.99756405025982424767f64
+    while g.nn > 2i64 {
+        i = 0usize
+        while i < usize(g.nn) {
+            g.shr[i] = cp_hypot(g.pr[i], g.pi[i])
+            i += 1usize
+        }
+        let bnd = cp_cauchy(g.nn, g.shr, g.shi)
+        var found = false
+        var zr = 0.0f64
+        var zi = 0.0f64
+        var i1 = 1i64
+        while i1 <= 2i64 && !found {
+            cp_noshft(&g, 5i64)
+            var i2 = 1i64
+            while i2 <= 9i64 && !found {
+                let xxx = cosr * xx - sinr * yy
+                yy = sinr * xx + cosr * yy
+                xx = xxx
+                g.sr = bnd * xx
+                g.si = bnd * yy
+                let (cv, z1, z2) = cp_fxshft(&g, i2 * 10i64)
+                if cv {
+                    found = true
+                    zr = z1
+                    zi = z2
+                }
+                i2 += 1i64
+            }
+            i1 += 1i64
+        }
+        if !found { ret 0i64 - 1i64 }
+        dn = d1 + 2i64 - g.nn
+        re[usize(dn)] = zr
+        im[usize(dn)] = zi
+        g.nn -= 1i64
+        i = 0usize
+        while i < usize(g.nn) {
+            g.pr[i] = g.qpr[i]
+            g.pi[i] = g.qpi[i]
+            i += 1usize
+        }
+    }
+    let (fr, fi) = cp_cdivid(0.0f64 - g.pr[1usize], 0.0f64 - g.pi[1usize], g.pr[0usize], g.pi[0usize])
+    re[usize(d1)] = fr
+    im[usize(d1)] = fi
+    ret degree
+}

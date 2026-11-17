@@ -144,4 +144,10 @@ for (rep in 1:30) {
   P <- pinv(M)
   for (i in sample(n, min(3, n))) for (j in sample(m, min(3, m))) add("pinvs", c(m, n, i - 1, j - 1, as.vector(t(M))), P[i, j])
 }
+# polyroot (R's cpoly, its root order): "prre"/"prim" args (length, root index, coefficients increasing powers)
+for (rep in 1:60) {
+  dg <- sample(2:9, 1); co <- round(rnorm(dg + 1), 3); if (rep %% 5 == 0) co[sample(dg, 1)] <- 0; if (co[dg + 1] == 0) co[dg + 1] <- 1
+  rt <- tryCatch(polyroot(co), error = function(e) NULL); if (is.null(rt)) next
+  for (k in seq_along(rt)) { add("prre", c(length(co), k - 1, co), Re(rt[k]), rel = 1e-8); cases[[length(cases) + 1]] <- case("prim", c(length(co), k - 1, co), Im(rt[k]), rel = 1e-8, abs = 1e-9) }
+}
 emit("pracma", "pracma", list(cases))
