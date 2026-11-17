@@ -48018,3 +48018,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6887 — glmnet: lambda.min and lambda.1se
 
 **Decision.** `glmnet.cv_select` picks lambda.min (the largest lambda whose cvm equals the smallest cvm) and lambda.1se (the largest lambda whose cvm is at most the smallest cvm plus the cvsd at lambda.min), as `cv.glmnet` does. Equal to glmnet on the 12 cross-validation data sets of D6886, both values (oracle_glmnet, 1660 cases in all). Linux pending.
+
+## D6888 — tsfeatures: histogram_mode
+
+**Decision.** `tsfeatures.histogram_mode` is the centre of the fullest bin of `hist(x, breaks = numBins)`: breaks are `pretty(range(x), numBins)` (e.math.scale.pretty), bins right-closed with the lowest including its lower end, the breaks carrying hist's fuzz of 1e-7 times the median bin width, and the first fullest bin winning a tie. Equal to tsfeatures on 30 series of 30 to 200 values, half rounded to one decimal so ties on break points occur, with 5, 10, 15 and 20 bins (oracle_tsfeatures, 352 cases in all). Linux pending.

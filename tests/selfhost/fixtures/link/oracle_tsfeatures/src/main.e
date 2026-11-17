@@ -19,6 +19,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nm = c.name
     let (out, oe) = mem.alloc[f64](a, 8usize)
     if oe != ok { os.exit(5) }
+    if str.eq(nm, "hmode") { ret tf.histogram_mode(a, s, usize(x[2usize])) }
     if str.eq(nm, "acf") {
         let e = tf.acf_features(a, s, m, out)
         if e != ok { os.exit(6) }

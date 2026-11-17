@@ -25,4 +25,7 @@ for (rep in 1:10) {
   hu <- hurst(x0)[[1]]; add("hurst", a(0), hu)
   ar_ <- arch_stat(x0); if (is.finite(ar_)) add("arch", a(0), ar_[[1]])
 }
+# histogram_mode "hmode": (n, m, numBins, x[n], 0)
+for (rep in 1:30) { n <- sample(30:200, 1); x0 <- if (rep %% 2 == 0) round(rnorm(n), 1) else rexp(n); nb <- sample(c(5, 10, 15, 20), 1)
+  cases[[length(cases) + 1]] <- case("hmode", c(n, 1, nb, x0, 0), histogram_mode(x0, nb), rel = 1e-9, abs = 1e-11) }
 emit("tsfeatures", "tsfeatures", list(cases))

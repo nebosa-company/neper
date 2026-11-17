@@ -7,6 +7,7 @@
 // unit-root tests of urca and nonlinearity), histogram_mode, the sample entropies and the features that sample.
 
 use e.math
+use e.math.scale
 use e.mem
 use e.algo.stat.fracdiff_fit as fdf
 use e.algo.linalg.decomp as decomp
@@ -587,4 +588,48 @@ fn arch_stat(a: *mem.Arena, x: []const f64, lags: usize, demean: bool) -> f64 {
     }
     if tss == 0.0f64 { ret 1.0f64 }
     ret 1.0f64 - rss / tss
+}
+
+// histogram_mode: the centre of the fullest bin of hist(x, breaks = num_bins), whose breaks are pretty(range(x), num_bins); the bins are right-closed, the lowest one includes its lower end, the breaks carry hist's 1e-7 fuzz, and the first fullest bin wins
+fn histogram_mode(a: *mem.Arena, x: []const f64, num_bins: usize) -> f64 {
+    var lo = x[0usize]
+    var hi = x[0usize]
+    var i = 1usize
+    while i < x.len {
+        if x[i] < lo { lo = x[i] }
+        if x[i] > hi { hi = x[i] }
+        i += 1usize
+    }
+    let (br, e) = scale.pretty(a, lo, hi, i64(num_bins))
+    if e != ok { ret nan() }
+    let nb = br.len - 1usize
+    let (d, e2) = mem.alloc[f64](a, nb)
+    if e2 != ok { ret nan() }
+    i = 0usize
+    while i < nb {
+        d[i] = br[i + 1usize] - br[i]
+        i += 1usize
+    }
+    let diddle = 1.0e-7f64 * median_of(a, d)
+    var best = 0usize
+    var bestc = 0usize
+    var b = 0usize
+    while b < nb {
+        let l = br[b] + diddle
+        let u = br[b + 1usize] + diddle
+        var lf = l
+        if b == 0usize { lf = br[0usize] - diddle }
+        var c = 0usize
+        i = 0usize
+        while i < x.len {
+            if x[i] > lf && x[i] <= u { c += 1usize }
+            i += 1usize
+        }
+        if c > bestc {
+            bestc = c
+            best = b
+        }
+        b += 1usize
+    }
+    ret (br[best] + br[best + 1usize]) / 2.0f64
 }

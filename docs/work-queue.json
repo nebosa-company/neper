@@ -438,10 +438,10 @@
       "group": "CRAN parity",
       "order": 645,
       "title": "tsfeatures: time-series features",
-      "score": 0.6,
+      "score": 0.62,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6142). acf and pacf features, crossing_points, flat_spots, lumpiness, stability, max_level_shift, max_var_shift, firstmin_ac, firstzero_ac, ac_9, embed2_incircle, std1st_der, trev_num, walker_propcross, motiftwo_entro3 and zero_proportion equal tsfeatures on Windows (oracle_tsfeatures; Linux pending). D6855, D6856: unitroot_kpss and unitroot_pp equal tsfeatures. D6857, D6858: hurst and arch_stat equal tsfeatures. Open: stl_features, entropy, the AR-whitened heterogeneity and its GARCH part, holt and hw parameters, nonlinearity, histogram_mode and the sampling features. Was: Open (CRAN rank 889). Small to mid. Acceptance, equal to tsfeatures: acf_features, pacf_features, stl_features, entropy, lumpiness, stability, crossing_points, flat_spots, hurst, heterogeneity, holt_parameters, unitroot_kpss, unitroot_pp and the arch statistics."
+      "evidence": "Partial (D6142). acf and pacf features, crossing_points, flat_spots, lumpiness, stability, max_level_shift, max_var_shift, firstmin_ac, firstzero_ac, ac_9, embed2_incircle, std1st_der, trev_num, walker_propcross, motiftwo_entro3 and zero_proportion equal tsfeatures on Windows (oracle_tsfeatures; Linux pending). D6855, D6856: unitroot_kpss and unitroot_pp equal tsfeatures. D6857, D6858: hurst and arch_stat equal tsfeatures. D6888: histogram_mode equals tsfeatures. Open: stl_features, entropy, the AR-whitened heterogeneity and its GARCH part, holt and hw parameters, nonlinearity and the sampling features. Was: Open (CRAN rank 889). Small to mid. Acceptance, equal to tsfeatures: acf_features, pacf_features, stl_features, entropy, lumpiness, stability, crossing_points, flat_spots, hurst, heterogeneity, holt_parameters, unitroot_kpss, unitroot_pp and the arch statistics."
     },
     {
       "id": "L484",
