@@ -202,3 +202,144 @@ fn lambda_path(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize
     }
     ret ok
 }
+
+// the binomial family (y in {0, 1}): the elastic-net penalised negative log-likelihood divided by n, minimised by proximal Newton (an outer reweighted least-squares step, an inner cyclic coordinate descent on the working
+// response, the intercept unpenalised), to a tight tolerance; columns standardised with divisor n, penalty factors rescaled to sum to p, coefficients answered on the original scale; layout as in `gaussian`
+fn binomial(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
+    let nf = f64(n)
+    let (xs, e1) = mem.alloc[f64](a, n * p)
+    let (sc, e2) = mem.alloc[f64](a, p)
+    let (mx, e3) = mem.alloc[f64](a, p)
+    let (pf, e4) = mem.alloc[f64](a, p)
+    let (b, e5) = mem.alloc[f64](a, p)
+    let (r, e6) = mem.alloc[f64](a, n)
+    let (w, e7) = mem.alloc[f64](a, n)
+    let (z, e8) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret e1 }
+    var vs = 0.0f64
+    var j = 0usize
+    while j < p {
+        vs += vf[j]
+        j += 1usize
+    }
+    var i = 0usize
+    j = 0usize
+    while j < p {
+        var m = 0.0f64
+        i = 0usize
+        while i < n {
+            m += x[j * n + i]
+            i += 1usize
+        }
+        m = m / nf
+        var v = 0.0f64
+        i = 0usize
+        while i < n {
+            v += (x[j * n + i] - m) * (x[j * n + i] - m)
+            i += 1usize
+        }
+        var s = 1.0f64
+        if standardize { s = math.sqrt[f64](v / nf) }
+        sc[j] = s
+        mx[j] = m
+        i = 0usize
+        while i < n {
+            xs[j * n + i] = (x[j * n + i] - m) / s
+            i += 1usize
+        }
+        pf[j] = vf[j] * f64(p) / vs
+        b[j] = 0.0f64
+        j += 1usize
+    }
+    var ybar = 0.0f64
+    i = 0usize
+    while i < n {
+        ybar += y[i]
+        i += 1usize
+    }
+    ybar = ybar / nf
+    var b0 = math.log[f64](ybar / (1.0f64 - ybar))
+    var k = 0usize
+    while k < lambdas.len {
+        let lam = lambdas[k]
+        var outer = 0usize
+        while outer < 200usize {
+            var wsum = 0.0f64
+            i = 0usize
+            while i < n {
+                var eta = b0
+                j = 0usize
+                while j < p {
+                    eta += xs[j * n + i] * b[j]
+                    j += 1usize
+                }
+                var pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta))
+                if pr < 1.0e-9f64 { pr = 1.0e-9f64 }
+                if pr > 1.0f64 - 1.0e-9f64 { pr = 1.0f64 - 1.0e-9f64 }
+                w[i] = pr * (1.0f64 - pr) / nf
+                z[i] = eta + (y[i] - pr) / (pr * (1.0f64 - pr))
+                r[i] = z[i] - eta
+                wsum += w[i]
+                i += 1usize
+            }
+            var change = 0.0f64
+            var sweep = 0usize
+            while sweep < 100000usize {
+                var dmax = 0.0f64
+                var sr = 0.0f64
+                i = 0usize
+                while i < n {
+                    sr += w[i] * r[i]
+                    i += 1usize
+                }
+                let d0 = sr / wsum
+                i = 0usize
+                while i < n {
+                    r[i] -= d0
+                    i += 1usize
+                }
+                b0 += d0
+                if math.abs[f64](d0) > dmax { dmax = math.abs[f64](d0) }
+                j = 0usize
+                while j < p {
+                    var cj = 0.0f64
+                    var xr = 0.0f64
+                    i = 0usize
+                    while i < n {
+                        cj += w[i] * xs[j * n + i] * xs[j * n + i]
+                        xr += w[i] * xs[j * n + i] * r[i]
+                        i += 1usize
+                    }
+                    let zj = xr + cj * b[j]
+                    let nb = soft(zj, lam * alpha * pf[j]) / (cj + lam * (1.0f64 - alpha) * pf[j])
+                    let d = nb - b[j]
+                    if d != 0.0f64 {
+                        i = 0usize
+                        while i < n {
+                            r[i] -= d * xs[j * n + i]
+                            i += 1usize
+                        }
+                        b[j] = nb
+                        if math.abs[f64](d) > dmax { dmax = math.abs[f64](d) }
+                        if math.abs[f64](d) > change { change = math.abs[f64](d) }
+                    }
+                    j += 1usize
+                }
+                if dmax < 1.0e-15f64 { break }
+                sweep += 1usize
+            }
+            if change < 1.0e-13f64 { break }
+            outer += 1usize
+        }
+        var c0 = b0
+        j = 0usize
+        while j < p {
+            coef[k * (p + 1usize) + 1usize + j] = b[j] / sc[j]
+            c0 -= b[j] / sc[j] * mx[j]
+            j += 1usize
+        }
+        coef[k * (p + 1usize)] = c0
+        k += 1usize
+    }
+    ret ok
+}

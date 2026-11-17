@@ -3741,4 +3741,5 @@ D6878	982	lme4: lmer with one random intercept
 D6879	943	glmnet: the automatic lambda sequence
 D6880	645	glmnet: observation weights
 D6881	492	glmnet: gaussian offsets
-D6882	622	glmnet: coefficient bounds
+D6882	623	glmnet: coefficient bounds
+D6883	873	glmnet: the binomial family

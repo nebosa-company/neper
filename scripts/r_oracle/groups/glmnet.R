@@ -49,6 +49,17 @@ for (rep in 1:12) {
   for (k in c(2, 5, 8)) for (j in 0:p) cases[[length(cases) + 1]] <-
     case("coef", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, k - 1, j, 0, 1, lo, up), cf[j + 1, k], rel = 1e-5, abs = 1e-6)
 }
+# binomial "bin": the "coef" layout with y in {0, 1}; the trailing flags are ignored
+for (rep in 1:12) {
+  n <- sample(60:120, 1); p <- sample(3:6, 1); X <- matrix(round(rnorm(n * p), 3), n, p); y <- rbinom(n, 1, plogis(X[, 1] - 0.5 * X[, 2]))
+  alpha <- c(1, 0.5, 0.2, 0.9)[(rep %% 4) + 1]; std <- rep %% 3 != 0; vf <- if (rep %% 4 == 0) round(runif(p, 0.3, 2), 2) else rep(1, p)
+  xs <- if (std) scale(X) * sqrt(n / (n - 1)) else scale(X, scale = FALSE)
+  lmax <- max(abs(crossprod(xs, y - mean(y)) / vf)) / n / max(alpha, 1e-3) * (sum(vf) / p)
+  lam <- exp(seq(log(lmax), log(lmax * 0.05), length.out = 8))
+  f <- suppressWarnings(glmnet(X, y, family = "binomial", alpha = alpha, standardize = std, penalty.factor = vf, lambda = lam, thresh = 1e-14)); cf <- as.matrix(coef(f))
+  for (k in c(2, 5, 8)) for (j in 0:p) cases[[length(cases) + 1]] <-
+    case("bin", c(n, p, alpha, std, length(lam), lam, vf, y, X, k - 1, j, 0, 0), cf[j + 1, k], rel = 1e-5, abs = 1e-6)
+}
 # the automatic lambda sequence: "lpath" (n, p, alpha, std, k, vf[p], y[n], X[n p]) the k-th lambda (0-based) of glmnet(...)$lambda
 for (rep in 1:20) {
   n <- sample(30:80, 1); p <- sample(3:8, 1); X <- matrix(rnorm(n * p), n); y <- X[, 1] * 2 + rnorm(n); al <- sample(c(0.2, 0.5, 0.7, 1), 1); std <- rep %% 2; vf <- if (rep %% 3 == 0) runif(p, 0.5, 2) else rep(1, p)
