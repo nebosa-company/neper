@@ -384,3 +384,10 @@ oracle_qgraph
 oracle_hetgp
 oracle_mcmcpack
 oracle_cmdscale
+oracle_glmnet_ext
+oracle_seriation_methods
+oracle_sn_selm
+oracle_dharma2
+oracle_biasedurn_mv
+oracle_biasedurn_rand
+oracle_seriation
