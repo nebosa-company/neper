@@ -48468,3 +48468,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6994 — polynom solve
 
 `polynompkg.solve(a, c, re, im)`: zero roots counted from the leading zero coefficients, a linear remainder directly and the rest through the Jenkins-Traub finder of D6800, sorted by real then imaginary part. R takes the eigenvalues of the companion matrix, so the order within a conjugate pair is rounding noise there; the oracle compares abs(Im). Equal to polynom::solve on 30 polynomials (oracle_polynompkg). Linux pending.
+
+
+## D6995 — pracma null basis
+
+`pracma.null_basis`: pracma::null is the complete Q of qr(t(M)) past the rank, so it is computed with the LINPACK dqrdc2 port of e.algo.linalg.decomp and qr_qy on unit vectors; the basis (signs included) equals pracma, not only the projector of D6494. `orth` stays on the SVD projector because its signs come from LAPACK. Linux pending.

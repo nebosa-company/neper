@@ -2382,3 +2382,36 @@ fn polyroot_c(a: *mem.Arena, z: []const f64, re: []f64, im: []f64) -> i64 {
     im[usize(d1)] = fi
     ret degree
 }
+
+// pracma::null(M) for the rows by cols matrix m (row-major): the complete Q of qr(t(M)) with R's LINPACK conventions, columns rank .. cols - 1, written column-major (cols by k) to out; returns k (0 when M has full column rank)
+fn null_basis(a: *mem.Arena, m: []const f64, rows: usize, cols: usize, out: []f64) -> usize {
+    let (tm, e1) = mem.alloc[f64](a, rows * cols)
+    if e1 != ok { ret 0usize }
+    var i = 0usize
+    while i < rows {
+        var j = 0usize
+        while j < cols {
+            tm[i * cols + j] = m[i * cols + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (f, fe) = decomp.qr(a, tm, cols, rows, 1.0e-7f64)
+    if fe != ok { ret 0usize }
+    if f.rank == cols { ret 0usize }
+    var k = 0usize
+    var c = f.rank
+    while c < cols {
+        let col = out[k * cols..(k + 1usize) * cols]
+        var t = 0usize
+        while t < cols {
+            col[t] = 0.0f64
+            t += 1usize
+        }
+        col[c] = 1.0f64
+        decomp.qr_qy(&f, col)
+        k += 1usize
+        c += 1usize
+    }
+    ret k
+}

@@ -119,6 +119,7 @@ for (rep in 1:30) {
   L <- matrix(round(rnorm(m * r), 2), m, r); R <- matrix(round(rnorm(r * n), 2), r, n); M <- L %*% R
   nl <- null(M); N <- if (is.null(nl)) matrix(0, n, n) else nl %*% t(nl); PN <- N
   oM <- orth(M); PO <- oM %*% t(oM)
+  if (!is.null(nl)) { add("nullb", c(m, n, -1, 0, as.vector(t(M))), ncol(nl)); for (j in seq_len(ncol(nl))) for (i in seq_len(n)) add("nullb", c(m, n, i - 1, j - 1, as.vector(t(M))), nl[i, j]) } else add("nullb", c(m, n, -1, 0, as.vector(t(M))), 0)
   for (i in sample(n, min(2, n))) for (j in sample(n, min(2, n))) add("nullproj", c(m, n, i - 1, j - 1, as.vector(t(M))), PN[i, j])
   for (i in sample(m, min(2, m))) for (j in sample(m, min(2, m))) add("orthproj", c(m, n, i - 1, j - 1, as.vector(t(M))), PO[i, j])
 }
