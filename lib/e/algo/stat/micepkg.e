@@ -339,7 +339,7 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                     var sigma = math.sqrt[f64](rss / f64(nobs - cd - 1usize))
                     if nobs <= cd + 1usize { ret Collinear }
                     var use_beta = beta
-                    if method == 1usize {
+                    if method == 1usize || method == 3usize {
                         var dfv = nobs - cd
                         if nobs <= cd { dfv = 1usize }
                         sigma = math.sqrt[f64](rss / rd.rchisq(&r, f64(dfv)))
@@ -385,6 +385,48 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                         }
                         use_beta = bs
                     }
+                    if method == 3usize {
+                        let nm = nmis[j]
+                        let (dob, ed1) = mem.alloc[f64](a, nobs)
+                        let (tmv, ed2) = mem.alloc[f64](a, nm)
+                        let (yo, ed3) = mem.alloc[f64](a, nobs)
+                        if ed1 != ok || ed2 != ok || ed3 != ok { ret mem.Full }
+                        var qo = 0usize
+                        var qm = 0usize
+                        i = 0usize
+                        while i < n {
+                            var fb = 0.0f64
+                            var fu = 0.0f64
+                            s1 = 0usize
+                            while s1 < cd {
+                                fb += x[s1 * n + i] * beta[s1]
+                                fu += x[s1 * n + i] * use_beta[s1]
+                                s1 += 1usize
+                            }
+                            if data0[j * n + i] == data0[j * n + i] {
+                                dob[qo] = fb
+                                yo[qo] = data0[j * n + i]
+                                qo += 1usize
+                            } else {
+                                tmv[qm] = fu
+                                qm += 1usize
+                            }
+                            i += 1usize
+                        }
+                        let (mi, emi) = matchindex(a, &r, dob, tmv, 5usize)
+                        if emi != ok { ret emi }
+                        qm = 0usize
+                        i = 0usize
+                        while i < n {
+                            if data0[j * n + i] != data0[j * n + i] {
+                                let f = yo[mi[qm]]
+                                imp[off[j] + im * nmis[j] + qm] = f
+                                data[j * n + i] = f
+                                qm += 1usize
+                            }
+                            i += 1usize
+                        }
+                    } else {
                     var q = 0usize
                     i = 0usize
                     while i < n {
@@ -402,6 +444,7 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
                         }
                         i += 1usize
                     }
+                    }
                 }
                 j += 1usize
             }
@@ -410,4 +453,84 @@ fn mice_norm(a: *mem.Arena, data0: []const f64, n: usize, p: usize, m: usize, ma
         k += 1usize
     }
     ret ok
+}
+
+// mice's matchindex: the 0-based index in d of a donor drawn among the k nearest to each target (ties shuffled by a permutation of the donors, then a pre-drawn rank in 1..k per target)
+fn matchindex(a: *mem.Arena, r: *rng.Rng, d: []const f64, tv: []const f64, k0: usize) -> ([]usize, err) {
+    var none: []usize = zero
+    let n1 = d.len
+    let n0 = tv.len
+    let (ish, e1) = rng.sample_int(a, r, i64(n1), i64(n1), false)
+    if e1 != ok { ret (none, e1) }
+    let (srt, e2) = mem.alloc[usize](a, n1)
+    let (id, e3) = mem.alloc[usize](a, n1)
+    let (ys, e4) = mem.alloc[f64](a, n1)
+    let (idx, e5) = mem.alloc[usize](a, n0)
+    if e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (none, mem.Full) }
+    var i = 0usize
+    while i < n1 {
+        srt[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < n1 {
+        let ti = srt[i]
+        let tvv = d[usize(ish[ti]) - 1usize]
+        var j = i
+        while j > 0usize && d[usize(ish[srt[j - 1usize]]) - 1usize] > tvv {
+            srt[j] = srt[j - 1usize]
+            j -= 1usize
+        }
+        srt[j] = ti
+        i += 1usize
+    }
+    i = 0usize
+    while i < n1 {
+        id[i] = usize(ish[srt[i]]) - 1usize
+        ys[i] = d[id[i]]
+        i += 1usize
+    }
+    var k = k0
+    if k > n1 { k = n1 }
+    if k < 1usize { k = 1usize }
+    let (h, e6) = rng.sample_int(a, r, i64(k), i64(n0), true)
+    if e6 != ok { ret (none, e6) }
+    i = 0usize
+    while i < n0 {
+        let val = tv[i]
+        let hi = usize(h[i])
+        var count = 0usize
+        var lo = 0usize
+        var hi2 = n1
+        while lo < hi2 {
+            let mid = (lo + hi2) / 2usize
+            if ys[mid] < val { lo = mid + 1usize } else { hi2 = mid }
+        }
+        var rr = lo
+        var ll = i64(lo) - 1i64
+        var res = 0usize
+        while count < hi && ll >= 0i64 && rr < n1 {
+            if val - ys[usize(ll)] < ys[rr] - val {
+                res = id[usize(ll)]
+                ll -= 1i64
+            } else {
+                res = id[rr]
+                rr += 1usize
+            }
+            count += 1usize
+        }
+        while count < hi && ll >= 0i64 {
+            res = id[usize(ll)]
+            ll -= 1i64
+            count += 1usize
+        }
+        while count < hi && rr < n1 {
+            res = id[rr]
+            rr += 1usize
+            count += 1usize
+        }
+        idx[i] = res
+        i += 1usize
+    }
+    ret (idx, ok)
 }
