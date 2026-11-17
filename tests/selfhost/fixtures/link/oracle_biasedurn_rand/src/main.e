@@ -34,17 +34,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if load_error != ok { os.exit(2) }
     if golden.cases.len == 0usize { os.exit(3) }
     var failures = 0usize
-    var unsupported = 0usize
     var at = 0usize
     while at < golden.cases.len {
         let c = &golden.cases[at]
         let got = answer(a, c)
         if !oracle.agrees(got, c) {
-            if got != got {
-                unsupported += 1usize
-                at += 1usize
-                continue
-            }
             failures += 1usize
             if failures <= 30usize {
                 let _ = io.print(oracle.describe(a, c, got))
@@ -52,9 +46,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         }
         at += 1usize
-    }
-    if unsupported > 0usize {
-        let _ = io.print("some cases are NaN (unsupported)\n")
     }
     if failures > 0usize { os.exit(1) }
     ret ok

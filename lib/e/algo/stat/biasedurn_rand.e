@@ -6,16 +6,22 @@
 // (n < 30, N < 1024, odds in 1e-5 .. 1e5) or ratio of uniforms, and Wallenius' urn simulation (n < 30), table
 // (n N < 10000), chop-down from the mean (variance < 4) or ratio of uniforms; odds 1 is the hypergeometric
 // (inversion from the mode, or ratio of uniforms past N 680 / n 70). Each is reproduced with the same constants and
-// the same order of uniforms, so equal seeds give equal integers.
-//
-// Not here: Wallenius' ratio of uniforms past variance 4 for n N >= 10000 (its acceptance step draws normals through
-// a Bernoulli test on the Laplace expansion), reported as NaN.
+// the same order of uniforms, so equal seeds give equal integers. Wallenius' ratio of uniforms decides each candidate with the
+// package's Bernoulli test on the Laplace expansion, whose normals come from R's norm_rand (two uniforms each).
 
 use e.algo.rand.r as rng
 use e.algo.stat.biasedurn as bu
 use e.algo.stat.biasedurn_mv as mv
 use e.math
+use e.math.dist as dist
+use e.math.special as special
 use e.mem
+
+// per-call state of the sampler object: the generator, and the Wallenius object's expansion point r
+type Sto = struct { rg: *rng.Rng, r: f64 }
+
+// the package routes StochasticLib1::Normal through R's norm_rand(): two uniforms, no cached second value
+fn sto_normal(st: *Sto, sd: f64) -> f64 { ret rng.norm(st.rg) * sd }
 
 fn lnpk(k: f64, l: f64, m: f64, n: f64) -> f64 { ret mv.lnfac(k) + mv.lnfac(m - k) + mv.lnfac(n - k) + mv.lnfac(l + k) }
 
@@ -388,7 +394,8 @@ fn wnc_table(rg: *rng.Rng, a: *mem.Arena, n: f64, m: f64, nn: f64, odds: f64, ac
     ret 0.0f64
 }
 
-fn wnc_draw(rg: *rng.Rng, a: *mem.Arena, n: f64, m: f64, nn: f64, odds: f64, acc: f64) -> f64 {
+fn wnc_draw(st: *Sto, a: *mem.Arena, n: f64, m: f64, nn: f64, odds: f64, acc: f64) -> f64 {
+    let rg = st.rg
     if n >= nn || m >= nn || n <= 0.0f64 || m <= 0.0f64 || odds <= 0.0f64 {
         if n == 0.0f64 || m == 0.0f64 { ret 0.0f64 }
         if m == nn { ret n }
@@ -401,10 +408,218 @@ fn wnc_draw(rg: *rng.Rng, a: *mem.Arena, n: f64, m: f64, nn: f64, odds: f64, acc
     let mean = wnc_mean(n, m, nn, odds)
     let v = mv.approx_var(mean, m, n, nn)
     if v < 4.0f64 { ret wnc_inversion(rg, n, m, nn, odds, acc) }
-    ret 0.0f64 / 0.0f64
+    ret wnc_rou(st, n, m, nn, odds, acc, mean)
 }
 
 // ---- the R entry points: nran variates, a table when nran is large enough ----
+
+// ---- Wallenius ratio of uniforms (n N >= 10000, variance >= 4): the Bernoulli step of CWalleniusNCHypergeometric::BernouilliH ----
+
+fn pow2_1(q: f64) -> f64 {
+    let qq = q * 0.693147180559945309417f64
+    if math.abs[f64](qq) > 0.1f64 { ret 1.0f64 - math.exp[f64](qq) }
+    ret 0.0f64 - dist.expm1(qq)
+}
+
+fn log1mx(x: f64, x1: f64) -> f64 {
+    if math.abs[f64](x) > 0.03f64 { ret math.log[f64](x1) }
+    ret dist.log1p(0.0f64 - x)
+}
+
+fn log1pow(q: f64, x: f64) -> f64 {
+    let y = math.exp[f64](q)
+    if y > 0.1f64 { ret x * math.log[f64](1.0f64 - y) }
+    ret x * dist.log1p(0.0f64 - y)
+}
+
+// findpars: r by Newton from the object's last r, then rd, the peak width w and E; updates st.r
+type Pars = struct { rd: f64, w: f64, e: f64 }
+
+fn wnc_findpars(st: *Sto, x: f64, n: f64, m: f64, nn: f64, omega: f64) -> Pars {
+    var oo0 = omega
+    var oo1 = 1.0f64
+    if omega > 1.0f64 {
+        oo0 = 1.0f64
+        oo1 = 1.0f64 / omega
+    }
+    let xx1 = n - x
+    var dd = oo0 * (m - x) + oo1 * (nn - m - xx1)
+    let d1 = 1.0f64 / dd
+    let ee = (oo0 * m + oo1 * (nn - m)) * d1
+    var rr = st.r
+    if rr <= d1 { rr = 1.2f64 * d1 }
+    var lastr = rr
+    var j = 0i64
+    while true {
+        lastr = rr
+        let rrc = 1.0f64 / rr
+        var z = dd - rrc
+        var zd = rrc * rrc
+        var i = 0usize
+        while i < 2usize {
+            var o = oo0
+            var xi = x
+            if i == 1usize {
+                o = oo1
+                xi = xx1
+            }
+            let rt = rr * o
+            if rt < 100.0f64 {
+                let r2 = math.exp[f64](rt * 0.693147180559945309417f64)
+                let r21 = pow2_1(rt)
+                let a = o / r21
+                let b = xi * a
+                z += b
+                zd += b * a * 0.693147180559945309417f64 * r2
+            }
+            i += 1usize
+        }
+        rr -= z / zd
+        if rr <= d1 { rr = lastr * 0.125f64 + d1 * 0.875f64 }
+        j += 1i64
+        if math.abs[f64](rr - lastr) <= rr * 1.0e-6f64 { break }
+        if j >= 70i64 { break }
+    }
+    if omega > 1.0f64 {
+        dd = dd * omega
+        rr = rr * oo1
+    }
+    st.r = rr
+    let rd = rr * dd
+    let ro = rr * omega
+    var k1 = 0.0f64
+    if ro < 300.0f64 {
+        k1 = 0.0f64 - 1.0f64 / pow2_1(ro)
+        k1 = omega * omega * (k1 + k1 * k1)
+    }
+    var k2 = 0.0f64
+    if rr < 300.0f64 {
+        k2 = 0.0f64 - 1.0f64 / pow2_1(rr)
+        k2 = k2 + k2 * k2
+    }
+    let phi2d = 0.0f64 - 4.0f64 * rr * rr * (x * k1 + (n - x) * k2)
+    ret Pars{ rd: rd, w: 1.0f64 / math.sqrt[f64](0.0f64 - phi2d), e: ee }
+}
+
+// the Bernoulli trial with probability f(x) / h, the uniform rh in [0, h) supplied by the caller
+fn wnc_bernoulli(st: *Sto, x: f64, h: f64, rh: f64, n: f64, m: f64, nn: f64, omega: f64) -> bool {
+    let bico = bu.lchoose(m, x) + bu.lchoose(nn - m, n - x)
+    let ps = wnc_findpars(st, x, n, m, nn, omega)
+    let rr = st.r
+    var kk = 1.0f64
+    if ps.e > 0.0f64 {
+        let lg = math.log[f64](ps.e)
+        kk = 1.0f64 + 0.0271f64 * lg * math.sqrt[f64](lg)
+    }
+    kk = kk * ps.w
+    let rdm1 = ps.rd - 1.0f64
+    var phideri0 = 0.0f64 - 0.693147180559945309417f64 * rdm1
+    var i = 0usize
+    while i < 2usize {
+        var omi = omega
+        var xi = x
+        if i == 1usize {
+            omi = 1.0f64
+            xi = n - x
+        }
+        let romeg = rr * omi
+        var qi = 0.0f64
+        var qi1 = 1.0f64
+        if !(romeg > 40.0f64) {
+            qi1 = pow2_1(0.0f64 - romeg)
+            qi = 1.0f64 - qi1
+        }
+        phideri0 += xi * log1mx(qi, qi1)
+        i += 1usize
+    }
+    let erfk = special.erf(0.3535533905932737622f64 / kk)
+    let f0 = ps.rd * math.exp[f64](phideri0 + bico)
+    let g = f0 * 2.506628274631000454f64 * kk * erfk
+    if g <= h {
+        var ts = 0.0f64
+        while true {
+            ts = sto_normal(st, kk)
+            if !(math.abs[f64](ts) >= 0.5f64) { break }
+        }
+        ts += 0.5f64
+        var fts = 0.0f64
+        var j = 0usize
+        while j < 2usize {
+            let lg = math.log[f64](ts)
+            let rl = rr * lg
+            fts += math.exp[f64](log1pow(rl * omega, x) + log1pow(rl, n - x) + rdm1 * lg + bico)
+            ts = 1.0f64 - ts
+            j += 1usize
+        }
+        fts = fts * 0.5f64
+        let t2 = (ts - 0.5f64) / kk
+        let rgts = math.exp[f64](0.0f64 - (phideri0 + bico - 0.5f64 * t2 * t2))
+        ret rh < g * fts * rgts
+    }
+    ret rh < wnc_prob(x, n, m, nn, omega)
+}
+
+fn wnc_rou(st: *Sto, n: f64, m: f64, nn: f64, odds: f64, acc: f64, mean: f64) -> f64 {
+    let xmin = math.max[f64](0.0f64, m + n - nn)
+    let xmax = math.min[f64](n, m)
+    st.r = 1.0f64
+    var hmode = math.floor[f64](mean)
+    var f2 = 0.0f64
+    if odds < 1.0f64 {
+        if hmode < xmax { hmode += 1.0f64 }
+        var xl = xmin
+        if odds > 0.294f64 && nn <= 10000000.0f64 { xl = hmode - 1.0f64 }
+        var xi = hmode
+        while xi >= xl {
+            let f = wnc_prob(xi, n, m, nn, odds)
+            if f <= f2 { break }
+            hmode = xi
+            f2 = f
+            xi -= 1.0f64
+        }
+    } else {
+        if hmode < xmin { hmode += 1.0f64 }
+        var xu = xmax
+        if odds < 3.4f64 && nn <= 10000000.0f64 { xu = hmode + 1.0f64 }
+        var xi = hmode
+        while xi <= xu {
+            let f = wnc_prob(xi, n, m, nn, odds)
+            if f <= f2 { break }
+            hmode = xi
+            f2 = f
+            xi += 1.0f64
+        }
+    }
+    let k = f2
+    let rs = 0.3989422804014326857f64 / k
+    let variance = rs * rs
+    let a = mean + 0.5f64
+    let s123 = 0.40f64 + 0.8579f64 * math.sqrt[f64](variance + 0.5f64) + 0.4f64 * math.abs[f64](mean - hmode)
+    var s4 = 0.0f64
+    var r1 = math.min[f64](xmax - mean - s123, mean - s123 - xmin)
+    if (odds > 5.0f64 || odds < 0.2f64) && r1 >= 0.0f64 - 0.5f64 && r1 <= 8.0f64 {
+        if r1 < 1.0f64 { r1 = 1.0f64 }
+        s4 = 0.029f64 * math.pow[f64](nn, 0.23f64) / (r1 * r1)
+    }
+    let h = 2.0f64 * (s123 + s4)
+    let bound1 = math.max[f64](xmin, math.trunc[f64](mean - 4.0f64 * h))
+    let bound2 = math.min[f64](xmax, math.trunc[f64](mean + 4.0f64 * h))
+    while true {
+        let u = rng.unif(st.rg)
+        if u == 0.0f64 { continue }
+        let v = rng.unif(st.rg)
+        let x = a + h * (v - 0.5f64) / u
+        if x < 0.0f64 || x > 2.0e9f64 { continue }
+        let xi = math.trunc[f64](x)
+        if xi < bound1 || xi > bound2 { continue }
+        let s2 = h * 0.5f64 * h * 0.5f64
+        let xma2 = (xi - (a - 0.5f64)) * (xi - (a - 0.5f64))
+        var hx = 1.0f64
+        if !(s2 >= xma2) { hx = s2 / xma2 }
+        if wnc_bernoulli(st, xi, hx * k * 1.01f64, u * u * k * 1.01f64, n, m, nn, odds) { ret xi }
+    }
+    ret 0.0f64
+}
 
 fn num_sd(acc: f64) -> f64 {
     let fract = [10]f64{ 2.699796e-03f64, 4.652582e-04f64, 6.334248e-05f64, 6.795346e-06f64, 5.733031e-07f64, 3.797912e-08f64, 1.973175e-09f64, 8.032001e-11f64, 2.559625e-12f64, 6.381783e-14f64 }
@@ -565,6 +780,7 @@ fn r_fisher(rg: *rng.Rng, a: *mem.Arena, nran: usize, m1: f64, m2: f64, n: f64, 
 fn r_wall(rg: *rng.Rng, a: *mem.Arena, nran: usize, m1: f64, m2: f64, n: f64, odds: f64, prec0: f64, out: []f64) {
     let prec = sane_prec(prec0)
     let nn = m1 + m2
+    var st = Sto{ rg: rg, r: 1.0f64 }
     var k = 0usize
     if nran > 4usize {
         let blen = wnc_buflen(m1, m2, n, odds, prec)
@@ -633,7 +849,7 @@ fn r_wall(rg: *rng.Rng, a: *mem.Arena, nran: usize, m1: f64, m2: f64, n: f64, od
         }
     }
     while k < nran {
-        out[k] = wnc_draw(rg, a, n, m1, nn, odds, prec)
+        out[k] = wnc_draw(&st, a, n, m1, nn, odds, prec)
         k += 1usize
     }
 }
