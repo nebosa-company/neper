@@ -416,3 +416,4 @@ oracle_clusterpam
 oracle_clusterclara
 oracle_clustertwins
 oracle_clusterfanny
+oracle_clustermona
