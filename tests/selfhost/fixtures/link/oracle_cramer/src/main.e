@@ -1,4 +1,5 @@
-// e.algo.stat.cramerpkg against cramer; layout at the top of scripts/r_oracle/groups/cramer.R.
+// e.algo.stat.cramerpkg against cramer.test. tests/oracle/cramer.json comes from
+// `R_ORACLE_LIB=<dir with cramer first> Rscript scripts/r_oracle/generate.R cramer`; the layout is at the top of scripts/r_oracle/groups/cramer.R.
 
 use e.algo.stat.cramerpkg as cr
 use e.io
@@ -9,29 +10,39 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
-    let nm = c.name
-    let m = usize(x[0usize])
-    let n = usize(x[1usize])
-    let d = usize(x[2usize])
-    let kernel = usize(x[3usize])
-    let reps = usize(x[4usize])
-    let seed = i64(x[5usize])
-    let data = x[6usize..6usize + (m + n) * d]
-    if str.eq(nm, "cr_stat") {
-        let (s, e) = cr.stat_only(a, data, m, n, d, kernel)
-        if e != ok { os.exit(4) }
-        ret s
+    let d = usize(x[0usize])
+    let m = usize(x[1usize])
+    let n = usize(x[2usize])
+    let nn = m + n
+    let data = x[3usize..3usize + nn * d]
+    let at = 3usize + nn * d
+    let k = usize(x[at])
+    let conf = x[at + 1usize]
+    let reps = usize(x[at + 2usize])
+    let seed = i64(x[at + 3usize])
+    let (lk, e) = mem.alloc[f64](a, nn * nn)
+    if e != ok { os.exit(4) }
+    cr.lookup(data, nn, d, k, lk)
+    var out: [3]f64 = zero
+    if str.eq(c.name, "cr_stat") {
+        let (idx, e2) = mem.alloc[usize](a, nn)
+        if e2 != ok { os.exit(5) }
+        var i = 0usize
+        while i < nn {
+            idx[i] = i + 1usize
+            i += 1usize
+        }
+        ret cr.statistic(lk, nn, idx, m, n)
     }
-    if str.starts_with(nm, "cr_e") {
-        let (s, p, q, e) = cr.eigen_test(a, data, m, n, d, kernel, 0.95f64)
-        if e != ok { os.exit(5) }
-        if str.eq(nm, "cr_ep") { ret p }
-        ret q
+    if str.eq(c.name, "cr_boot_crit") || str.eq(c.name, "cr_boot_p") {
+        if cr.bootstrap(a, lk, nn, m, n, conf, reps, false, seed, out[0usize..3usize]) != ok { os.exit(6) }
+    } else if str.eq(c.name, "cr_perm_crit") || str.eq(c.name, "cr_perm_p") {
+        if cr.bootstrap(a, lk, nn, m, n, conf, reps, true, seed, out[0usize..3usize]) != ok { os.exit(7) }
+    } else {
+        if cr.eigenvalue(a, lk, nn, m, n, conf, out[0usize..3usize]) != ok { os.exit(8) }
     }
-    let (s, p, q, e) = cr.bootstrap(a, data, m, n, d, kernel, reps, seed, str.starts_with(nm, "cr_p"), 0.95f64)
-    if e != ok { os.exit(6) }
-    if str.ends_with(nm, "p") { ret p }
-    ret q
+    if str.ends_with(c.name, "_crit") { ret out[1usize] }
+    ret out[2usize]
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
