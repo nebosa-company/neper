@@ -3786,4 +3786,5 @@ D6923	831	glmnet: cv.glmnet for the binomial family
 D6924	538	glmnet: binomial cross-validation loss types
 D6925	491	glmnet: binomial cross-validation by AUC
 D6926	573	glmnet: Poisson cross-validation
-D6927	774	fda: the B-spline basis
+D6927	775	fda: the B-spline basis
+D6928	878	fda: roughness penalty and smooth.basis
