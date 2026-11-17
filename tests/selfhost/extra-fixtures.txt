@@ -443,3 +443,4 @@ oracle_gldfull
 oracle_gldfit
 oracle_lmomq
 oracle_drdid_full
+oracle_geosphere_geod
