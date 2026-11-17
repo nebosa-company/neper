@@ -74,6 +74,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         bz.create_x(z[6usize..6usize + n * p * na], z[6usize + n * p * na..6usize + n * p * na + n * nd], n, p, na, nd, usize(z[4usize]), o)
         ret o[usize(z[5usize])]
     }
+    if str.eq(c.name, "rmx") {
+        // (seed, n, G, d, index, pvec[G], mus[G d], rootis[G d d]): element index of the n by d draw, or n d + i the component of observation i
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(z[0usize]))
+        let n = usize(z[1usize])
+        let g = usize(z[2usize])
+        let d = usize(z[3usize])
+        let (o, oe) = mem.alloc[f64](a, n * d)
+        let (lb, le) = mem.alloc[usize](a, n)
+        if oe != ok || le != ok { ret 0.0f64 / 0.0f64 }
+        if bz.rmixture(a, &rr, n, z[5usize..5usize + g], z[5usize + g..5usize + g + g * d], z[5usize + g + g * d..5usize + g + g * d + g * d * d], d, o, lb) != ok { ret 0.0f64 / 0.0f64 }
+        let ix = usize(z[4usize])
+        if ix < n * d { ret o[ix] }
+        ret f64(lb[ix - n * d])
+    }
     if str.eq(c.name, "cm") {
         let k = usize(z[1usize])
         let i = usize(z[2usize])

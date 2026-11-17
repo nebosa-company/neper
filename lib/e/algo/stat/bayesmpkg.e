@@ -955,3 +955,52 @@ fn create_x(xa: []const f64, xd: []const f64, n: usize, p: usize, na: usize, nd:
         i += 1usize
     }
 }
+
+// rmixture(n, pvec, comps): the component of every observation from n uniforms (the first component whose cumulative probability exceeds the uniform), then d normals per observation, x = mu_k + z * inv(rooti_k) with rooti upper triangular;
+// mus is G by d column-major, rootis G matrices d by d stacked, out is n by d column-major and lab receives the 1-based components
+fn rmixture(a: *mem.Arena, r: *rng.Rng, n: usize, pvec: []const f64, mus: []const f64, rootis: []const f64, d: usize, out: []f64, lab: []usize) -> err {
+    let g = pvec.len
+    let (iu, e1) = mem.alloc[f64](a, g * d * d)
+    let (z, e2) = mem.alloc[f64](a, d)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var k = 0usize
+    while k < g {
+        inv_upper(rootis[k * d * d..(k + 1usize) * d * d], d, iu[k * d * d..(k + 1usize) * d * d])
+        k += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        let u = rng.unif(r)
+        var cum = 0.0f64
+        var c = 0usize
+        while c + 1usize < g {
+            cum += pvec[c]
+            if u < cum { break }
+            c += 1usize
+        }
+        lab[i] = c + 1usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < d {
+            z[j] = rng.norm(r)
+            j += 1usize
+        }
+        let c = lab[i] - 1usize
+        j = 0usize
+        while j < d {
+            var s = 0.0f64
+            var q = 0usize
+            while q <= j {
+                s += z[q] * iu[c * d * d + j * d + q]
+                q += 1usize
+            }
+            out[j * n + i] = mus[j * g + c] + s
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
