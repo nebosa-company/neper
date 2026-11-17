@@ -145,6 +145,12 @@ for (rep in 1:12) {
   f <- suppressWarnings(glmnet(X, y, alpha = alpha, standardize = std, lambda = lam, thresh = 1e-14))
   for (s in lam[c(1, 4, 7)] * c(0.9, 0.6, 0.77)) { cf <- as.vector(coef(f, s = s)); for (j in 0:p) cases[[length(cases) + 1]] <- case("i", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, s, j), cf[j + 1], rel = 1e-6, abs = 1e-8) }
 }
+# the fold assignment cv.glmnet makes under set.seed (its foldid with keep = TRUE): "r" (seed, n, nfolds, index)
+for (rep in 1:20) {
+  n <- sample(20:100, 1); nf <- sample(3:10, 1); sd <- sample(1:100000, 1); X <- matrix(rnorm(n * 2), n, 2); y <- rnorm(n)
+  set.seed(sd); cv <- suppressWarnings(cv.glmnet(X, y, nfolds = nf, keep = TRUE))
+  for (q in unique(c(1, 2, n %/% 2, n))) cases[[length(cases) + 1]] <- case("r", c(sd, n, nf, q - 1), cv$foldid[q], rel = 0, abs = 0.5)
+}
 # the automatic lambda sequence: "lpath" (n, p, alpha, std, k, vf[p], y[n], X[n p]) the k-th lambda (0-based) of glmnet(...)$lambda
 for (rep in 1:20) {
   n <- sample(30:80, 1); p <- sample(3:8, 1); X <- matrix(rnorm(n * p), n); y <- X[, 1] * 2 + rnorm(n); al <- sample(c(0.2, 0.5, 0.7, 1), 1); std <- rep %% 2; vf <- if (rep %% 3 == 0) runif(p, 0.5, 2) else rep(1, p)

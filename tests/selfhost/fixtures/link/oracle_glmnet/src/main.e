@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R glmnet`; the layout is at the top of
 // scripts/r_oracle/groups/glmnet.R.
 
+use e.algo.rand.r as rng
 use e.algo.stat.glmnet as gl
 use e.io
 use e.mem
@@ -10,6 +11,16 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if c.name[0usize] == 114u8 {
+        // r (the fold assignment cv.glmnet makes): (seed, n, nfolds, index), the fold number 1 .. nfolds of observation index
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let rn = usize(x[1usize])
+        let (fid, fe) = mem.alloc[usize](a, rn)
+        if fe != ok { ret 0.0f64 / 0.0f64 }
+        if gl.random_foldid(a, &rr, rn, usize(x[2usize]), fid) != ok { ret 0.0f64 / 0.0f64 }
+        ret f64(fid[usize(x[3usize])] + 1usize)
+    }
     if c.name[0usize] == 105u8 {
         // i (coef interpolation): (n, p, alpha, std, nl, lambda[nl], vf[p], y[n], X[n p], s, j)
         let ln = usize(x[0usize])

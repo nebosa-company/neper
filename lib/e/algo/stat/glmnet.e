@@ -9,6 +9,7 @@
 //
 // Not here: other families, offsets, bounds, cv.glmnet, relax, predict.
 
+use e.algo.rand.r as rng
 use e.math
 use e.mem
 
@@ -958,4 +959,16 @@ fn coef_interp(lambdas: []const f64, coef: []const f64, p: usize, s: f64, out: [
         out[j] = frac * coef[(r - 1usize) * (p + 1usize) + j] + (1.0f64 - frac) * coef[r * (p + 1usize) + j]
         j += 1usize
     }
+}
+
+// the fold assignment cv.glmnet makes when none is given: sample(rep(seq(nfolds), length = n)), folds numbered from 0 here; out receives n values
+fn random_foldid(a: *mem.Arena, r: *rng.Rng, n: usize, nfolds: usize, out: []usize) -> err {
+    let (s, e) = rng.sample_int(a, r, i64(n), i64(n), false)
+    if e != ok { ret e }
+    var i = 0usize
+    while i < n {
+        out[i] = (usize(s[i]) - 1usize) % nfolds
+        i += 1usize
+    }
+    ret ok
 }

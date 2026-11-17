@@ -3830,4 +3830,5 @@ D6967	686	Hmisc: the S.D. of rcorr.cens
 D6968	533	Hmisc: smean.cl.boot
 D6969	961	lmerTest: the joint contest F test
 D6970	876	fda: fRegress with a scalar response
-D6971	727	Hmisc: redun with linear terms
+D6971	728	Hmisc: redun with linear terms
+D6972	814	glmnet: the random folds of cv.glmnet
