@@ -44,4 +44,8 @@ for (rep in 1:20) {
   k <- if (useh) kde2d(xx, yy, h = h, n = c(n1, n2), lims = lm_) else kde2d(xx, yy, n = c(n1, n2), lims = lm_)
   for (idx in seq_len(n1 * n2)) add("kde2d", c(n, n1, n2, h, lm_, idx - 1, xx, yy), as.vector(k$z)[idx])
 }
+# bw.ucv "bwucv" and bw.bcv "bwbcv": (n, x[n])
+for (rep in 1:20) { n <- sample(c(30, 60, 150, 400), 1); x <- if (rep %% 2) rnorm(n) else c(rnorm(n %/% 2), rnorm(n - n %/% 2, 3, 0.7))
+  u <- suppressWarnings(bw.ucv(x)); b <- suppressWarnings(bw.bcv(x))
+  cases[[length(cases) + 1]] <- case("bwucv", c(n, x), u, rel = 1e-9, abs = 1e-12); cases[[length(cases) + 1]] <- case("bwbcv", c(n, x), b, rel = 1e-9, abs = 1e-12) }
 emit("mass", "MASS", list(cases))

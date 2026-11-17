@@ -48026,3 +48026,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6889 — glmnet: the early stop of the gaussian path
 
 **Decision.** `glmnet.path_len` fits the automatic lambda sequence and answers how many lambdas glmnet reports: from the fifth on the path stops (that lambda included) once the fraction of variance explained gains less than 1e-5 of itself over the previous lambda, or exceeds 0.999; the default dfmax of p + 1 never binds. Equal to the `length(glmnet(...)$lambda)` of 40 data sets over n, p, alpha, standardize and noise level, every one of them stopping early (59 to 76 of 100 values; oracle_glmnet, 1700 cases in all). Not here: the early stop for the other families (deviance-based), multinomial, mgaussian, cox, `predict`. Linux pending.
+
+## D6890 — bw.ucv and bw.bcv
+
+**Decision.** `e.algo.stat.bwsel.bw_cv` is stats' `bw.ucv` (kind 0) and `bw.bcv` (kind 1) for n up to 500: the pairwise distances are counted on a 1000-bin grid of width 1.01 range / 1000 with the bin index truncated toward zero as R's C code does, the criterion is summed over the bins whose scaled squared distance is below 1000, and the minimiser over [0.1 hmax, hmax] (hmax = 1.144 sd n^(-1/5)) is found by R's Brent `optimize` with tolerance 0.1 lower. It lives apart from `e.algo.stat.mass` because fdrtool, whose Brent it uses, imports mass. Equal to R on 20 samples of 30 to 400 values, unimodal and bimodal, both selectors (oracle_mass, 1765 cases in all). Not here: bw.SJ, and the binned counting R uses for n above 500. Linux pending.
