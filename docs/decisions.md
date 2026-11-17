@@ -48680,3 +48680,8 @@ A fresh port of the rpart 4.1.27 C sources (rpartfull.e; rpartfit.e and cart.e s
 ## D7110 — logistf full port; L424 closed
 
 A literal port of the logistf 1.26.1 C code (source downloaded with the user approval): the Firth iteration with the quirk that the first score drops the weight on pi, the maxhs = 0 and maxstep = -1 paths, collapse of identical rows (needed so the 1e-5 stop lands where R does), the profile likelihood fitter, FLIC and FLAC (an intercept-only glm refit, the offset entering twice, covariance weighted by fitted probabilities), the tests and selection functions, predict, profile and the CLIP confidence intervals. Equal to R on 204 cases at 1e-9, so L424 moves to docs/work-done.jsonl. Linux pending.
+
+
+## D7111 — MuMIn full port; L428 closed
+
+The MuMIn 1.48.19 criteria, dredge table, model.sel, model.avg, predictions and r.squaredGLMM, over lm and glm fits with prior weights, offsets, aliased designs and negative binomial, with the package quirks copied (partial.sd uses p = 0 in the df factor, sigma of a glm is the Pearson dispersion, quasi families have df = rank + 1, adjR2 is the Nagelkerke-type value, rows ordered by row name). The mixed-model r.squaredGLMM takes the fitted pieces from R as data because the repo has no glmer fit. Equal to R on oracles at 1e-9 (1e-7 for mixed models), so L428 moves to docs/work-done.jsonl. Linux pending.

@@ -114,17 +114,6 @@
       "evidence": "Partial (D6614). e.algo.stat.afexpkg.rm_anova (one within factor, optional between factor of equal groups, Type III) equals afex aov_ez on Windows: F and p of A, B and A:B, Greenhouse-Geisser and Huynh-Feldt epsilons and corrected p, generalized eta squared, Mauchly W and p (oracle_afex, 240 values; Linux pending). Open: several within or between factors, unequal groups, covariates, Type II, emmeans follow-ups. Was: Open (CRAN rank 607). Small to mid. Acceptance, equal to afex: aov_car and aov_ez with Type III sums of squares, within, between and mixed designs, Mauchly sphericity test, Greenhouse-Geisser and Huynh-Feldt corrections, generalized eta squared, follow-up marginal means through the emmeans item. mixed() waits for L274."
     },
     {
-      "id": "L428",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 626,
-      "title": "MuMIn: model selection and averaging",
-      "score": 0.42,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6414, D6415 conditional average and importance). AICc, Akaike weights and the full model average (estimates and Std. Error) equal MuMIn on Windows (oracle_mumin; Linux pending). D6854: QAIC and QAICc equal MuMIn. D6901, D6902: the Adjusted SE of the full and the conditional average equals MuMIn. Open: QIC, dredge, model.sel, r.squaredGLMM. Was: Open (CRAN rank 667). Small to mid. Acceptance, equal to MuMIn: AICc, QAIC, QIC, BIC, dredge over all subsets with marginality and constraints, model.sel, model.avg (full and conditional), Weights, importance, r.squaredGLMM."
-    },
-    {
       "id": "L448",
       "category": "library",
       "group": "CRAN parity",

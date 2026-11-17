@@ -9,7 +9,6 @@ L407	library	0.15	464	stabledist and GeneralizedHyperbolic: heavy-tailed distrib
 L409	library	0.2	390	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids equal arm on Windows;
 L425	library	0.4	607	ismev: extreme-value model fits	Partial (D6155).
 L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
-L428	library	0.42	581	MuMIn: model selection and averaging	Partial (D6414, D6415 conditional average and importance).
 L448	library	0.25	536	mcmc: Metropolis and tempering samplers	Partial (D6610).
 L450	library	0	289	mediation: causal mediation analysis	Open (CRAN rank 755).
 L451	library	0.3	505	betareg: beta regression	Partial (D6158).
