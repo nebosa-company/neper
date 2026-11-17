@@ -48630,3 +48630,8 @@ Done in two agent runs on one branch and merged: heidel.diag with pcramer, the m
 ## D7100 — ResourceSelection, laeken and rcompanion closed; compositions advanced
 
 An agent batch merged: rsf, rspf, simulateUsedAvail and the mep and kdepairs numbers (L499), the bootstrap variances, calibWeights, gpg and the Pareto tail estimators (L482), pairwiseMedianTest, pairwiseNominalIndependence and groupwiseMean with bootstrap intervals (L504), and the rcomp, ilr basis, zeroreplace, Gauss.test and energy normality test pieces of L477. L499, L482 and L504 cover every item of their acceptance that exists in the installed packages (kfold, atkinson, theil and a linearisation variance do not exist in ResourceSelection 0.3.6 and laeken 0.5.3) and move to docs/work-done.jsonl; L477 stays open at 0.65 (NA values, robust estimates, optimal bases and the other exports are missing). Linux pending.
+
+
+## D7101 — mice engine, rpart port, weighted multinom and polr
+
+Merged from a worktree: `rpartfit.e` (rpart tree growth incl. the complexity undo; mice cart uses minbucket 5, minsplit 15 and the default xval = 10 which takes one sample(nobs) draw), `micemodels.e` (nnet multinom with weights and MASS::polr by the R BFGS with nnet abstol), and `micefull.e` (the chained-equations engine). polyreg draws its uniforms before the fit and polr after. Equal to mice 3.19 on the oracle; pooling against R is the remaining piece of L346. Linux pending.

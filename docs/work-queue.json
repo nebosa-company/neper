@@ -526,10 +526,10 @@
       "group": "CRAN parity",
       "order": 693,
       "title": "mice: imputation parity",
-      "score": 0.55,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "D6752: e.algo.stat.micepkg equals mice 3.19 after set.seed for norm.nob, norm, norm.predict, pmm, norm.boot, logreg and logreg.boot (initial draws, the chained regressions, remove.lindep) on 1834 imputed values (oracle_mice); Linux pending. Also mean, sample, pool.scalar, a predictor matrix and a visit sequence (a permutation). Open: polyreg, polr, cart, passive imputation, partial visit sequences, Rubin pooling against R. Open (CRAN rank 293). Mid. e.algo.stat.causal has mice and mice_pool; verify equality to R first. Acceptance, imputed values equal to mice under set.seed for pmm, norm, norm.nob, norm.boot, logreg, polyreg, polr, cart and passive imputation, with the visit sequence and Rubin pooling."
+      "evidence": "D6752: e.algo.stat.micepkg equals mice 3.19 after set.seed for norm.nob, norm, norm.predict, pmm, norm.boot, logreg and logreg.boot (initial draws, the chained regressions, remove.lindep) on 1834 imputed values (oracle_mice); Linux pending. Also mean, sample, pool.scalar, a predictor matrix and a visit sequence (a permutation). Open: polyreg, polr, cart, passive imputation, partial visit sequences, Rubin pooling against R. Open (CRAN rank 293). Mid. e.algo.stat.causal has mice and mice_pool; verify equality to R first. Acceptance, imputed values equal to mice under set.seed for pmm, norm, norm.nob, norm.boot, logreg, polyreg, polr, cart and passive imputation, with the visit sequence and Rubin pooling. D7101: rpartfit (rpart 4.1.27 anova and class trees, 1e-9), micemodels (weighted nnet multinom and MASS polr through the R BFGS, 1e-7), and micefull (numeric and factor columns with polyreg, polr, cart, logreg, passive imputation, permuted and partial visit sequences and post bounds; 225 imputation cases at rel 1e-6) equal mice 3.19 (oracle_micefit, oracle_micefull). Open: Rubin pooling of lm fits against R (pool_lm exists, no oracle yet), ordered factor predictors, pmm on a factor, ampute, lda, rf and the 2l methods."
     },
     {
       "id": "L360",
