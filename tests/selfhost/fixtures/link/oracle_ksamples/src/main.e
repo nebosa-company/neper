@@ -9,6 +9,19 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if c.name[0usize] == 113u8 {
+        let kq = usize(x[2usize])
+        let (szq, eq) = mem.alloc[usize](a, kq)
+        if eq != ok { os.exit(5) }
+        var totq = 0usize
+        var iq = 0usize
+        while iq < kq {
+            szq[iq] = usize(x[3usize + iq])
+            totq += szq[iq]
+            iq += 1usize
+        }
+        ret ks.qn_test(a, x[3usize + kq..3usize + kq + totq], szq, usize(x[0usize]), usize(x[1usize]))
+    }
     if c.name[0usize] == 112u8 { ret ks.ad_pval(a, x[2usize], x[1usize], usize(x[0usize])) }
     let k = usize(x[2usize])
     let (sz, e) = mem.alloc[usize](a, k)

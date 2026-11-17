@@ -41,4 +41,13 @@ for (rep in 1:80) {
   v <- sample(1:2, 1); m <- sample(c(1:12, 15, 20, 30), 1); tx <- sample(c(runif(1, -1.8, 0), runif(1, 0, 3), runif(1, 3, 8)), 1)
   add("pv", c(v, m, tx), ad.pval(tx, m, v))
 }
+# qn.test asymptotic: "qn" (test 0 KW 1 vdW, part 0 statistic 1 p value, k, sizes, samples)
+for (rep in 1:40) {
+  k <- sample(2:5, 1); n <- sample(4:15, k, TRUE); ties <- rep %% 2 == 0
+  lst <- lapply(n, function(m) { v <- rnorm(m, runif(1, -0.5, 0.5), runif(1, 0.8, 1.5)); if (ties) round(v, 0) else round(v, 5) })
+  for (tt in 0:1) {
+    r <- do.call(qn.test, c(lst, list(test = c("KW", "vdW")[tt + 1], method = "asymptotic")))$qn
+    add("qn", c(tt, 0, k, n, unlist(lst)), r[[1]]); add("qn", c(tt, 1, k, n, unlist(lst)), r[[2]])
+  }
+}
 emit("ksamples", "kSamples", list(cases))

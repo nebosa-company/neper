@@ -6,6 +6,8 @@
 // Not here: the exact and simulated p-values, qn.test, contingency2xt and the distribution functions behind them.
 
 use e.math
+use e.math.dist as mdist
+use e.math.nmath as nm
 use e.mem
 use e.algo.stat.smspline as sm
 
@@ -861,4 +863,81 @@ fn ad_pval(a: *mem.Arena, tx: f64, m: f64, version: usize) -> f64 {
     if sm.fit(a, tm, lp, w2, 0.25f64, &f2) != ok { ret 0.0f64 / 0.0f64 }
     let l0 = sm.predict(a, &f2, tx)
     ret math.exp[f64](l0) / (1.0f64 + math.exp[f64](l0))
+}
+
+// ---- qn.test (Kruskal-Wallis and van der Waerden scores): the standardised statistic and its chi-square p value ----
+
+// the scores of every observation, tied observations averaging the scores of the positions they cover; test 0 KW (1..n), 1 vdW (qnorm(i / (n + 1)))
+fn qn_scores(a: *mem.Arena, x: []const f64, test: usize, out: []f64) -> err {
+    let n = x.len
+    let (sc, e) = mem.alloc[f64](a, n)
+    if e != ok { ret e }
+    var i = 0usize
+    while i < n {
+        if test == 0usize { sc[i] = f64(i + 1usize) } else { sc[i] = mdist.qnorm(f64(i + 1usize) / (f64(n) + 1.0f64), 0.0f64, 1.0f64, true, false) }
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        // the tied group of x[i]: positions among the sorted values
+        var below = 0usize
+        var equal = 0usize
+        var j = 0usize
+        while j < n {
+            if x[j] < x[i] { below += 1usize }
+            if x[j] == x[i] { equal += 1usize }
+            j += 1usize
+        }
+        var s = 0.0f64
+        var t = 0usize
+        while t < equal {
+            s += sc[below + t]
+            t += 1usize
+        }
+        out[i] = s / f64(equal)
+        i += 1usize
+    }
+    ret ok
+}
+
+// qn.test(..., test = "KW" or "vdW", method = "asymptotic"): the statistic (sum of S_i^2 / n_i - n mean^2) / var, and the chi-square p value on k - 1 degrees of freedom; part 0 the statistic, 1 the p value
+fn qn_test(a: *mem.Arena, x: []const f64, sizes: []const usize, test: usize, part: usize) -> f64 {
+    let n = x.len
+    let k = sizes.len
+    let (rx, e) = mem.alloc[f64](a, n)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    if qn_scores(a, x, test, rx) != ok { ret 0.0f64 / 0.0f64 }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += rx[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    var ss = 0.0f64
+    i = 0usize
+    while i < n {
+        ss += (rx[i] - mean) * (rx[i] - mean)
+        i += 1usize
+    }
+    let svar = ss / f64(n - 1usize)
+    var q = 0.0f64
+    var at = 0usize
+    var g = 0usize
+    while g < k {
+        var s = 0.0f64
+        var j = 0usize
+        while j < sizes[g] {
+            s += rx[at + j]
+            j += 1usize
+        }
+        q += s * s / f64(sizes[g])
+        at += sizes[g]
+        g += 1usize
+    }
+    // the package rounds the sum of squared sample score totals to eight decimals before standardising
+    q = math.floor[f64](q * 1.0e8f64 + 0.5f64) / 1.0e8f64
+    let stat = (q - f64(n) * mean * mean) / svar
+    if part == 0usize { ret stat }
+    ret 1.0f64 - nm.pchisq(stat, f64(k - 1usize), true, false)
 }
