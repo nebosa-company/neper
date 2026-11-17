@@ -12,6 +12,7 @@ use e.mem
 use e.algo.rand.r as rng
 use e.algo.rand.rdist as rd
 use e.algo.stat.bayesmpkg as bz
+use e.algo.stat.rnm as nm_opt
 
 fn pbetap(a: f64, b: f64, n: f64, s: f64) -> f64 {
     let lcon = nm.lgammafn(n + 1.0f64) - nm.lgammafn(s + 1.0f64) - nm.lgammafn(n - s + 1.0f64)
@@ -1417,4 +1418,10 @@ fn grad_cd[Ctx: type](ctx: *Ctx, logf: fn(*Ctx, []const f64) -> f64, x: []f64, e
         out[i] = (f1 - f2) / (2.0f64 * eps)
         i += 1usize
     }
+}
+
+// laplace(logpost, start): the mode by R's Nelder-Mead (optim with fnscale = -1, reltol sqrt(eps), at most 500 calls) from start, then `laplace_at`; mode_out receives the mode, var_out the variance; returns the log integral
+fn laplace[Ctx: type](a: *mem.Arena, ctx: *Ctx, logf: fn(*Ctx, []const f64) -> f64, start: []const f64, mode_out: []f64, var_out: []f64) -> f64 {
+    let (fv, nc, fail) = nm_opt.nmmin[Ctx](a, ctx, logf, start, 0.0f64 - 1.0e308f64, 1.4901161193847656e-08f64, 1.0f64, 0.5f64, 2.0f64, 500usize, 0.0f64 - 1.0f64, mode_out)
+    ret laplace_at[Ctx](a, ctx, logf, mode_out, var_out)
 }
