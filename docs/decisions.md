@@ -48675,3 +48675,8 @@ Faithful ports of the mclust 6.1.3 Fortran for the EM of all 14 models, hc VVV a
 ## D7109 — rpart full port; L337 closed
 
 A fresh port of the rpart 4.1.27 C sources (rpartfull.e; rpartfit.e and cart.e stay for mice): the four methods, the split search with priors and loss matrices, surrogates and usesurrogate, cross-validated cp table with R fold draws, prune, predict, importance, labels and rpart.control. The R oracle exposed that insert_split.c mis-relinks a full list of two when a new best split arrives, so with maxcompete = 1 a node keeps only one split; this is ported deliberately. Equal to R at 1e-9 on about 7400 cases, so L337 moves to docs/work-done.jsonl. Linux pending.
+
+
+## D7110 — logistf full port; L424 closed
+
+A literal port of the logistf 1.26.1 C code (source downloaded with the user approval): the Firth iteration with the quirk that the first score drops the weight on pi, the maxhs = 0 and maxstep = -1 paths, collapse of identical rows (needed so the 1e-5 stop lands where R does), the profile likelihood fitter, FLIC and FLAC (an intercept-only glm refit, the offset entering twice, covariance weighted by fitted probabilities), the tests and selection functions, predict, profile and the CLIP confidence intervals. Equal to R on 204 cases at 1e-9, so L424 moves to docs/work-done.jsonl. Linux pending.

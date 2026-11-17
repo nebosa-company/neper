@@ -92,17 +92,6 @@
       "evidence": "Partial (D6453 logit, invlogit, se.coef, binned.resids equal arm on Windows; oracle_arm; Linux pending). Open: sim, bayesglm, discrete, corrplot data, standardize. Was: Open (CRAN rank 570). Small to mid. Acceptance, equal to arm under set.seed: sim for lm, glm and merMod, bayesglm with Cauchy and t priors, se.coef, invlogit, logit, binned residuals, discrete, corrplot data, standardize."
     },
     {
-      "id": "L424",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 622,
-      "title": "logistf: Firth penalized logistic regression",
-      "score": 0.4,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6157). Firth coefficients, covariance, penalized log-likelihoods and profile LR p values agree with logistf on Windows (oracle_logistf; Linux pending). Open: profile confidence limits, FLIC, FLAC, weights, offsets, predict. Was: Open (CRAN rank 689). Small to mid. Acceptance, equal to logistf: logistf with Firth correction and FLIC and FLAC variants, profile penalized likelihood intervals and tests, forward and backward selection, predict."
-    },
-    {
       "id": "L425",
       "category": "library",
       "group": "CRAN parity",
