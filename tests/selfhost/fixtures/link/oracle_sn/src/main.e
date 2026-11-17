@@ -11,6 +11,14 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "dsc") { ret sn.dsc(x[4usize], x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "rsc") {
+        let rn = usize(x[4usize])
+        let (ro, roe) = mem.alloc[f64](a, rn)
+        if roe != ok { ret 0.0f64 / 0.0f64 }
+        if sn.rsc(a, rn, x[0usize], x[1usize], x[2usize], i64(x[5usize]), ro) != ok { ret 0.0f64 / 0.0f64 }
+        ret ro[usize(x[6usize])]
+    }
     if str.eq(k, "rsn") || str.eq(k, "rst") {
         // args (xi, omega, alpha, tau or nu, n, seed, index)
         let rn = usize(x[4usize])
@@ -111,7 +119,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     if str.eq(k, "zeta") { ret sn.zeta(usize(x[0usize]), x[1usize]) }
     if str.eq(k, "cumn") { ret sn.sn_cumulant(x[0usize], x[1usize], x[2usize], x[3usize], usize(x[4usize])) }
-    if str.eq(k, "dmsn") || str.eq(k, "dmst") || str.eq(k, "rmsn") || str.eq(k, "rmst") {
+    if str.eq(k, "dmsn") || str.eq(k, "dmst") || str.eq(k, "rmsn") || str.eq(k, "rmst") || str.eq(k, "dmsc") || str.eq(k, "rmsc") {
         let d = usize(x[0usize])
         let (xi, e1) = mem.alloc[f64](a, d)
         let (om, e2) = mem.alloc[f64](a, d * d)
@@ -132,11 +140,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         if str.eq(k, "dmsn") { ret sn.dmsn(a, pt, xi, om, al, x[1usize], false) }
         if str.eq(k, "dmst") { ret sn.dmst(a, pt, xi, om, al, x[1usize], false) }
+        if str.eq(k, "dmsc") { ret sn.dmsc(a, pt, xi, om, al, false) }
         let n = usize(x[2usize])
         let (out, e5) = mem.alloc[f64](a, n * d)
         if e5 != ok { ret 0.0f64 / 0.0f64 }
         var re = ok
-        if str.eq(k, "rmsn") { re = sn.rmsn(a, n, xi, om, al, x[1usize], i64(x[3usize]), out) } else { re = sn.rmst(a, n, xi, om, al, x[1usize], i64(x[3usize]), out) }
+        if str.eq(k, "rmsc") { re = sn.rmsc(a, n, xi, om, al, i64(x[3usize]), out) } else if str.eq(k, "rmsn") { re = sn.rmsn(a, n, xi, om, al, x[1usize], i64(x[3usize]), out) } else { re = sn.rmst(a, n, xi, om, al, x[1usize], i64(x[3usize]), out) }
         if re != ok { ret 0.0f64 / 0.0f64 }
         ret out[usize(x[4usize])]
     }
@@ -166,6 +175,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var at = 0usize
     while at < golden.cases.len {
         let c = &golden.cases[at]
+        let mk = mem.mark(a)
         let got = answer(a, c)
         if !oracle.agrees(got, c) {
             failures += 1usize
@@ -174,6 +184,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let _ = io.print("\n")
             }
         }
+        mem.reset(a, mk)
         at += 1usize
     }
     if failures > 0usize { os.exit(1) }

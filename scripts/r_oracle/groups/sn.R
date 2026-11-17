@@ -112,4 +112,11 @@ mvsel_case <- function(fam, pen, n, d, p, sd) {
   add("mvselm", c(fam, pen, n, d, p, length(flat), as.numeric(t(y)), as.numeric(t(X))), ll, rel = 1e-4)
 }
 for (rep in 1:3) for (fam in 0:1) for (pen in 0:1) mvsel_case(fam, pen, 300, 2, c(1, 2)[rep %% 2 + 1], 8000 + rep * 10 + fam * 2 + pen)
+# skew-Cauchy: dsc (xi, omega, alpha, 0, x) and rsc (xi, omega, alpha, 0, n, seed, index), plus dmsc / rmsc through the multivariate layout
+for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, -0.5, 1, 4, 9)[sample(5, 1)]
+  for (x in xi + om * c(-8, -1.5, -0.2, 0.4, 1.3, 6)) add("dsc", c(xi, om, al, 0, x), dsc(x, xi, om, al), rel = 1e-10)
+  n <- sample(4:9, 1); sd <- sample(1:100000, 1); set.seed(sd); r <- as.numeric(rsc(n, xi, om, al)); for (k in seq_len(n)) add("rsc", c(xi, om, al, 0, n, sd, k - 1), r[k], rel = 1e-9) }
+for (rep in 1:8) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); n <- sample(3:6, 1); sd <- sample(1:100000, 1)
+  add("dmsc", mvpack(d, 1, 0, 0, 0, p), dmsc(p$x, p$xi, p$Om, p$al), rel = 1e-9)
+  set.seed(sd); r <- as.numeric(t(matrix(rmsc(n, p$xi, p$Om, p$al), n, d))); for (k in seq_len(n * d)) add("rmsc", mvpack(d, 1, n, sd, k - 1, p), r[k], rel = 1e-9) }
 emit("sn", "sn", list(cases))

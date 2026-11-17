@@ -1416,6 +1416,32 @@ fn mv_cp2dp_sn(a: *mem.Arena, mean: []const f64, sig: []const f64, g1: []const f
     ret true
 }
 
+// dsc: the skew-Cauchy density
+fn dsc(x: f64, xi: f64, omega: f64, alpha: f64) -> f64 {
+    let z = (x - xi) / omega
+    ret 1.0f64 / (pi() * omega * (1.0f64 + z * z)) * (1.0f64 + alpha * z / math.sqrt[f64](1.0f64 + z * z * (1.0f64 + alpha * alpha)))
+}
+
+// rsc(n, xi, omega, alpha) after set.seed: the skew-normal sample at xi = 0 divided by |N(0,1)|, then shifted
+fn rsc(a: *mem.Arena, n: usize, xi: f64, omega: f64, alpha: f64, seed: i64, out: []f64) -> err {
+    var rg: rng.Rng = zero
+    rng.seed(&rg, seed)
+    let delta = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
+    let e = rsn_draw(a, &rg, n, 0.0f64, omega, delta, 0.0f64, out)
+    if e != ok { ret e }
+    var j = 0usize
+    while j < n {
+        out[j] = xi + out[j] / math.abs[f64](rng.norm(&rg))
+        j += 1usize
+    }
+    ret ok
+}
+
+// dmsc and rmsc are dmst and rmst at nu = 1
+fn dmsc(a: *mem.Arena, x: []const f64, xi: []const f64, omg: []const f64, alpha: []const f64, lg: bool) -> f64 { ret dmst(a, x, xi, omg, alpha, 1.0f64, lg) }
+
+fn rmsc(a: *mem.Arena, n: usize, xi: []const f64, omg: []const f64, alpha: []const f64, seed: i64, out: []f64) -> err { ret rmst(a, n, xi, omg, alpha, 1.0f64, seed, out) }
+
 // qsc: the skew-Cauchy quantile
 fn qsc(p: f64, xi: f64, omega: f64, alpha: f64) -> f64 {
     if p <= 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
