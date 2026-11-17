@@ -3890,4 +3890,5 @@ D7100	812	ResourceSelection, laeken and rcompanion closed; compositions advanced
 D7101	550	mice engine, rpart port, weighted multinom and polr
 D7102	753	mice engine, pooling and fixtures; L346 closed
 D7103	684	cluster: pam, clara, fanny, agnes, diana, mona, daisy, silhouette, clusGap; L335 closed
-D7104	721	lmom Fortran library and gld distribution functions, moments and fits; L387 closed
+D7104	723	lmom Fortran library and gld distribution functions, moments and fits; L387 closed
+D7105	610	DRDID general did entry point, bootstraps, fastglm and trust; L485 closed

@@ -48650,3 +48650,8 @@ Ports of the cluster 2.1.8.2 C and Fortran sources (downloaded from the CRAN Arc
 ## D7104 — lmom Fortran library and gld distribution functions, moments and fits; L387 closed
 
 Ports of the lmom 3.3 Fortran (downloaded from CRAN with the user approval) for fourteen distributions (lmr, qua, cdf, pel, samlmu), lmrq by quadrature, and the gld 2.6.8 distribution functions (the C root finder of dgl, rgl under set.seed), gld.moments, gld.lmoments and the Nelder-Mead based fits (starship, fit.fkml with its eight methods, fit.fkml.moments with constrOptim). Four fixtures equal R at 1e-8 to 1e-11 (1e-7 for the fits). Every item of the L387 acceptance has an oracle case, so L387 moves to docs/work-done.jsonl. lmrp, pelp, pelq, lmrd and evplot are outside the acceptance and not ported. Linux pending.
+
+
+## D7105 — DRDID general did entry point, bootstraps, fastglm and trust; L485 closed
+
+DRDID rewritten around one `did` entry point for the panel and repeated cross-section estimators, with the multiplier and weighted bootstraps in R draw order, the fastglm logistic fit reproduced step for step (fastglm 0.1.4 source downloaded with the user approval) and trust::trust for the improved estimators through the exact eigen port. Equal to R at 1e-11 on 98 cases, so L485 moves to docs/work-done.jsonl. The nlm fallback, the IPT range-repair paths and the data-frame preprocessing are not ported. Linux pending.

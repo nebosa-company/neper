@@ -279,17 +279,6 @@
       "evidence": "Partial (D6195). Gaussian NaiveBayes fit and predict equal klaR on Windows (oracle_klar; Linux pending). Open: kernel and factor predictors, rda, woe, stepclass, greedy.wilks. Was: Open (CRAN rank 846). Small to mid. Acceptance, equal to klaR: NaiveBayes with kernel densities, rda with its parameter search, sknn, stepclass with the greedy search, kmodes, woe and the partimat data."
     },
     {
-      "id": "L485",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 647,
-      "title": "DRDID: difference-in-differences",
-      "score": 0.45,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6464 reg_did_panel, D6465 drdid_panel, D6466 ipw_did_panel and std_ipw_did_panel, D6467 reg_did_rc ATT and se equal DRDID on Windows; oracle_drdid; Linux pending). Open: the other cross-section estimators, bootstrap, improved estimators. Was: Open (CRAN rank 893). Small to mid. Acceptance, equal to DRDID: drdid_panel, drdid_rc, ipwdid, ordid, reg_did_panel, std_ipw_did and the improved doubly robust estimators with their influence functions and standard errors."
-    },
-    {
       "id": "L501",
       "category": "library",
       "group": "CRAN parity",
