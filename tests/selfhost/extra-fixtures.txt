@@ -396,3 +396,8 @@ oracle_ksamples_steel
 oracle_ksamples_ci
 oracle_lapack_exact
 oracle_signaldsp
+oracle_vars_core
+oracle_vars_chk
+oracle_vars_stab
+oracle_vars_svar
+oracle_vars_vec
