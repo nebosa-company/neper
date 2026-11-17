@@ -361,17 +361,96 @@ fn kx_qnstat(rx: []const f64, ns: []const usize, out: []f64) {
     out[0usize] = kx_cround(1.0e8f64 * q) / 1.0e8f64
 }
 
+// SteelTestStat: the largest (alt 1), smallest (alt -1) or largest absolute (alt 0) standardised Wilcoxon count of the control, the first
+// sample, against each other sample; rx holds the midranks sample by sample
+fn kx_steelstat(rx: []const f64, ns: []const usize, mu: []const f64, tau: []const f64, alt: i64, out: []f64) {
+    var istart = ns[0usize]
+    var i = 1usize
+    while i < ns.len {
+        let iend = istart + ns[i]
+        var ri = 0.0f64
+        var j = istart
+        while j < iend {
+            var m = 0usize
+            while m < ns[0usize] {
+                if rx[m] <= rx[j] {
+                    if rx[m] == rx[j] { ri += 0.5f64 } else { ri += 1.0f64 }
+                }
+                m += 1usize
+            }
+            j += 1usize
+        }
+        ri = (ri - mu[i - 1usize]) / tau[i - 1usize]
+        if alt == 1i64 {
+            if i == 1usize { out[0usize] = ri } else {
+                if ri > out[0usize] { out[0usize] = ri }
+            }
+        }
+        if alt == 0i64 - 1i64 {
+            if i == 1usize { out[0usize] = ri } else {
+                if ri < out[0usize] { out[0usize] = ri }
+            }
+        }
+        if alt == 0i64 {
+            if ri < 0.0f64 { ri = 0.0f64 - ri }
+            if i == 1usize { out[0usize] = ri } else {
+                if ri > out[0usize] { out[0usize] = ri }
+            }
+        }
+        istart = iend
+        i += 1usize
+    }
+}
+
+// JTTestStat: the Jonckheere-Terpstra count over all ordered pairs of samples
+fn kx_jtstat(rx: []const f64, ns: []const usize, out: []f64) {
+    var mstart = 0usize
+    out[0usize] = 0.0f64
+    var i = 0usize
+    while i + 1usize < ns.len {
+        let mend = mstart + ns[i]
+        var nstart = mend
+        var j = i + 1usize
+        while j < ns.len {
+            let nend = nstart + ns[j]
+            var n = nstart
+            while n < nend {
+                var m = mstart
+                while m < mend {
+                    if rx[m] <= rx[n] {
+                        if rx[m] == rx[n] { out[0usize] += 0.5f64 } else { out[0usize] += 1.0f64 }
+                    }
+                    m += 1usize
+                }
+                n += 1usize
+            }
+            nstart = nend
+            j += 1usize
+        }
+        mstart = mend
+        i += 1usize
+    }
+}
+
 // ---- exactcomb: every split of the pooled observations into the samples, in Knuth's Chase order ----
 
 type ExCtx = struct {
     kind: usize, k: usize, nsum: usize, ns: []const usize, xvec: []const f64, ivec: []usize,
     dimst: usize, teststat: []const f64, pval: []f64, smat: []f64, gets: bool, ncomb: usize, count: usize,
-    xc: []f64, tc: []f64, arena: *mem.Arena, zstar: []const f64, fij: []f64, lvec: []f64
+    xc: []f64, tc: []f64, arena: *mem.Arena, zstar: []const f64, fij: []f64, lvec: []f64, alt: i64, mu: []const f64, tau: []const f64
 }
 
 fn kx_eval(c: *ExCtx, out: []f64) {
     if c.kind == 0usize {
         kx_adstat(c.xc, c.ns, c.zstar, c.fij, c.lvec, out)
+        ret
+    }
+    if c.kind == 2usize {
+        kx_steelstat(c.xc, c.ns, c.mu, c.tau, c.alt, out)
+        ret
+    }
+    if c.kind == 3usize {
+        kx_jtstat(c.xc, c.ns, out)
         ret
     }
     kx_qnstat(c.xc, c.ns, out)
@@ -401,7 +480,7 @@ fn kx_ctx(a: *mem.Arena, kind: usize, xvec: []const f64, ns: []const usize, zsta
     if e4 != ok { e = e4 }
     if e5 != ok { e = e5 }
     if e6 != ok { e = e6 }
-    let c = ExCtx{ kind: kind, k: ns.len, nsum: nsum, ns: ns, xvec: xvec, ivec: ivec, dimst: dm, teststat: tc, pval: pv, smat: tc, gets: false, ncomb: 1usize, count: 0usize, xc: xc, tc: tc, arena: a, zstar: zstar, fij: fij, lvec: lvec }
+    let c = ExCtx{ kind: kind, k: ns.len, nsum: nsum, ns: ns, xvec: xvec, ivec: ivec, dimst: dm, teststat: tc, pval: pv, smat: tc, gets: false, ncomb: 1usize, count: 0usize, xc: xc, tc: tc, arena: a, zstar: zstar, fij: fij, lvec: lvec, alt: 1i64, mu: tc, tau: tc }
     ret (c, e)
 }
 
