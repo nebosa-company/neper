@@ -7,6 +7,7 @@
 use e.math
 use e.math.dist as dist
 use e.math.nmath_beta as nb
+use e.math.nmath as nm
 use e.algo.rand.r as rng
 use e.algo.rand.rdist as rd
 use e.mem
@@ -158,4 +159,35 @@ fn rst(a: *mem.Arena, n: usize, xi: f64, omega: f64, alpha: f64, nu: f64, seed: 
         }
     }
     ret ok
+}
+
+// st.cumulants(xi, omega, alpha, nu): the k-th cumulant, k = 1 to 4, of the skew-t (nu = Inf for the skew-normal); NaN where the moment does not exist and the infinite values at nu = 3 and 4 as the package gives them
+fn st_cumulant(xi: f64, omega: f64, alpha: f64, nu: f64, k: usize) -> f64 {
+    let delta = alpha / math.sqrt[f64](1.0f64 + alpha * alpha)
+    var bn = math.sqrt[f64](2.0f64 / pi())
+    var s2 = 1.0f64
+    var s3 = 1.0f64
+    var s4 = 1.0f64
+    if nu < 1.0e300f64 {
+        bn = math.sqrt[f64](nu / pi()) * math.exp[f64](nm.lgammafn((nu - 1.0f64) / 2.0f64) - nm.lgammafn(nu / 2.0f64))
+        s2 = 1.0f64 / (1.0f64 - 2.0f64 / nu)
+        s3 = 1.0f64 / (1.0f64 - 3.0f64 / nu)
+        s4 = 1.0f64 / (1.0f64 - 4.0f64 / nu)
+    }
+    let mu = bn * delta
+    let nan = 0.0f64 / 0.0f64
+    if k == 1usize { ret xi + omega * mu }
+    if k == 2usize {
+        if nu <= 2.0f64 { ret nan }
+        ret omega * omega * (s2 - mu * mu)
+    }
+    if k == 3usize {
+        if nu < 3.0f64 + 1.0e-12f64 && nu > 3.0f64 - 1.0e-12f64 { ret math.copysign[f64](1.0f64, alpha) * (1.0f64 / 0.0f64) }
+        if nu <= 3.0f64 { ret nan }
+        ret omega * omega * omega * mu * ((3.0f64 - delta * delta) * s3 - 3.0f64 * s2 + 2.0f64 * mu * mu)
+    }
+    if nu < 4.0f64 + 1.0e-12f64 && nu > 4.0f64 - 1.0e-12f64 { ret 1.0f64 / 0.0f64 }
+    if nu <= 4.0f64 { ret nan }
+    let c2 = s2 - mu * mu
+    ret omega * omega * omega * omega * ((3.0f64 * s2 * s4 - 4.0f64 * mu * mu * (3.0f64 - delta * delta) * s3 + 6.0f64 * mu * mu * s2 - 3.0f64 * mu * mu * mu * mu) - 3.0f64 * c2 * c2)
 }

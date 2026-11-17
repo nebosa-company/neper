@@ -262,10 +262,10 @@
       "group": "CRAN parity",
       "order": 630,
       "title": "sn: skew-normal and skew-t distributions",
-      "score": 0.3,
+      "score": 0.34,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6148). dsn (with tau), psn via Owen T, qsn (tau = 0) and dst equal sn on Windows (oracle_sn; Linux pending). D6804: rsn (tau of 0 and not) and rst after set.seed equal sn on 40 samples. Open: psn bivariate engine, pst, qst, multivariate, selm. Was: Open (CRAN rank 798). Small to mid. Acceptance, equal to sn under set.seed: dsn, psn, qsn, rsn, dst, pst, qst, rst, multivariate dmsn, dmst, rmsn, rmst, the moment and cumulant functions, and selm fits by MLE and MPLE."
+      "evidence": "Partial (D6148). dsn (with tau), psn via Owen T, qsn (tau = 0) and dst equal sn on Windows (oracle_sn; Linux pending). D6804: rsn (tau of 0 and not) and rst after set.seed equal sn on 40 samples. Open: psn bivariate engine, pst, qst, multivariate, selm. Was: Open (CRAN rank 798). Small to mid. Acceptance, equal to sn under set.seed: dsn, psn, qsn, rsn, dst, pst, qst, rst, multivariate dmsn, dmst, rmsn, rmst, the moment and cumulant functions, and selm fits by MLE and MPLE. D6991: st_cumulant (the first four cumulants of the skew-t and, at nu = Inf, the skew-normal) equals sn::st.cumulants (oracle_sn, 958 cases)."
     },
     {
       "id": "L450",

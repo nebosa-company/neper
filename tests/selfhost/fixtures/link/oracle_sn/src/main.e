@@ -21,6 +21,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if re != ok { ret 0.0f64 / 0.0f64 }
         ret ro[usize(x[6usize])]
     }
+    if str.eq(k, "cum") { ret sn.st_cumulant(x[0usize], x[1usize], x[2usize], x[3usize], usize(x[4usize])) }
     let xi = x[0usize]
     let om = x[1usize]
     let al = x[2usize]

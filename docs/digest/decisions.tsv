@@ -3849,4 +3849,5 @@ D6986	389	extraDistr multivariate and bivariate densities
 D6987	463	extraDistr negative hypergeometric and Tukey lambda
 D6988	496	extraDistr proportion and Bhattacharjee
 D6989	341	extraDistr GEV and GPD generators
-D6990	645	extraDistr discrete uniform, Bernoulli, discrete Weibull and Tukey lambda generators
+D6990	647	extraDistr discrete uniform, Bernoulli, discrete Weibull and Tukey lambda generators
+D6991	421	sn skew-t cumulants

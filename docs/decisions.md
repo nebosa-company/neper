@@ -48448,3 +48448,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6990 — extraDistr discrete uniform, Bernoulli, discrete Weibull and Tukey lambda generators
 
 `rgen` families 13 to 16: one uniform each; the discrete uniform is min + ceil(u (max - min + 1)) - 1, the Bernoulli is 1 when u < prob, the discrete Weibull ceil((log u / log q)^(1/beta)) - 1, the Tukey lambda its quantile at u. Equal to extraDistr under set.seed on 30 settings of 5 draws (oracle_extradistr). Trap in the oracle script: set.seed must come after the random parameters are drawn, or the R stream is not the one the fixture seeds. The Bhattacharjee generator is not normal plus uniform in sequence and is not here. Linux pending.
+
+
+## D6991 — sn skew-t cumulants
+
+`st_cumulant(xi, omega, alpha, nu, k)` for k = 1 to 4 from the package formulas (s_k = 1/(1 - k/nu), b(nu) = sqrt(nu/pi) Gamma((nu-1)/2)/Gamma(nu/2)), the skew-normal at nu = Inf, NaN where the moment does not exist and the infinite values at nu = 3 and 4. Equal to `st.cumulants` on 20 settings (oracle_sn). The cp/dp conversions built on them, pst and qst are not here. Linux pending.

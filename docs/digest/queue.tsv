@@ -22,7 +22,7 @@ L428	library	0.42	581	MuMIn: model selection and averaging	Partial (D6414, D6415
 L429	library	0.45	660	imputeTS: time-series imputation	Partial (D6150).
 L430	library	0.12	600	geepack: generalized estimating equations	Partial (D6476 Gaussian geeglm with independence and exchangeable correlation, scale, alpha and sandwich covariance agree with geepack on Windows;
 L448	library	0.25	536	mcmc: Metropolis and tempering samplers	Partial (D6610).
-L449	library	0.3	477	sn: skew-normal and skew-t distributions	Partial (D6148).
+L449	library	0.34	619	sn: skew-normal and skew-t distributions	Partial (D6148).
 L450	library	0	289	mediation: causal mediation analysis	Open (CRAN rank 755).
 L451	library	0.3	505	betareg: beta regression	Partial (D6158).
 L452	library	0.3	447	TSA: time-series analysis toolkit	Partial (D6190, D6406 McLeod.Li.test).
