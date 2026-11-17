@@ -3736,4 +3736,5 @@ D6873	847	LearnBayes: the mixture-prior posteriors
 D6874	922	sm: the cross-validation bandwidth hcv
 D6875	801	mclust: BIC from the hierarchical EII partitions
 D6876	702	mclust: model selection
-D6877	767	mclust: classError
+D6877	768	mclust: classError
+D6878	981	lme4: lmer with one random intercept

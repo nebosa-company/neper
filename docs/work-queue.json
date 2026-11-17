@@ -603,10 +603,10 @@
       "group": "CRAN parity",
       "order": 680,
       "title": "General linear mixed models (lme4)",
-      "score": 0,
+      "score": 0.1,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Open. Needs L264, L273. e.algo.stat.mixed has random intercept and slope fits and PQL only. Acceptance: lmer with crossed and nested random effects by REML and ML, glmer with Laplace and adaptive Gauss-Hermite for binomial and poisson, bobyqa and Nelder_Mead optimisers; fixef, ranef, VarCorr, logLik, predict and simulate match lme4 on sleepstudy, Penicillin and cbpp within 1e-6."
+      "evidence": "Partial (D6878: e.algo.stat.lmerpkg has lmer with one random intercept, REML and ML, equal to lme4 on deviance, sigma, sigma_b, fixed effects and conditional modes at optimiser tolerance; oracle_lmer; Linux pending). Open: crossed and nested random effects, random slopes, glmer, predict and simulate. Was: Open. Needs L264, L273. e.algo.stat.mixed has random intercept and slope fits and PQL only. Acceptance: lmer with crossed and nested random effects by REML and ML, glmer with Laplace and adaptive Gauss-Hermite for binomial and poisson, bobyqa and Nelder_Mead optimisers; fixef, ranef, VarCorr, logLik, predict and simulate match lme4 on sleepstudy, Penicillin and cbpp within 1e-6."
     },
     {
       "id": "L342",
