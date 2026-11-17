@@ -54,6 +54,26 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(k, "ase") {
+        let (dfm, e6) = mem.alloc[f64](a, m)
+        if e6 != ok { os.exit(10) }
+        var jj = 0usize
+        while jj < p {
+            var q = 0usize
+            var at2 = 3usize
+            while q < m {
+                // residual df of model q = n - (its coefficient count), the count being the stored k minus 1; zero where the term is absent
+                dfm[q] = 0.0f64
+                if est[jj * m + q] != 0.0f64 { dfm[q] = n - (x[at2] - 1.0f64) }
+                at2 += 2usize + 2usize * p
+                q += 1usize
+            }
+            let (b3, s3, a3) = mm.average_full_adj(est[jj * m..jj * m + m], se[jj * m..jj * m + m], dfm, w)
+            s += a3 * f64(jj + 1usize)
+            jj += 1usize
+        }
+        ret s
+    }
     if str.eq(k, "cest") || str.eq(k, "cse") || str.eq(k, "imp") {
         let (pres, e5) = mem.alloc[bool](a, m)
         if e5 != ok { os.exit(9) }

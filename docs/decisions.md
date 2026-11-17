@@ -48070,3 +48070,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6900 — bayesm: createX
 
 **Decision.** `bayesmpkg.create_x` builds bayesm's `createX(p, na, nd, Xa, Xd, INT = TRUE, DIFF = FALSE, base)`: n p rows by (nd + 1)(p - 1) + na columns, column-major; the intercept and the nd demographic columns enter as Xd1 (x) Imod, where Imod is p by p - 1 with the base alternative's row zero and the others the identity, and each attribute a contributes the row-major unrolling of the a-th n by p block of Xa. Equal to bayesm on 25 random designs (3 to 5 alternatives, 3 to 8 observations, 1 to 3 attributes and demographics, every base) at every element (oracle_bayesm, 8392 cases in all). Not here: INT = FALSE, DIFF = TRUE, a missing Xa or Xd. Linux pending.
+
+## D6901 — MuMIn: Adjusted SE
+
+**Decision.** `mumin.average_full_adj` adds the "Adjusted SE" of `par.avg` to the full model average: each model's variance is multiplied by (qt(0.975, df) / qnorm(0.975))^2 with df its residual degrees of freedom (n minus its coefficient count), a model that lacks the term counting df as infinite (factor 1, estimate and standard error 0), then sqrt(sum w (se^2 z + (b - bar)^2)). Equal to the `Adjusted SE` column of `summary(model.avg)$coefmat.full` on the 12 data sets of the existing oracle, summed over the four coefficients with position weights (oracle_mumin, 156 cases in all). Not here: the adjusted SE of the conditional average (the same formula over the models that contain the term), QIC, dredge. Linux pending.

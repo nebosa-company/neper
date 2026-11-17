@@ -17,6 +17,7 @@ for (rep in 1:12) {
   a <- c(n, length(mods), length(nm), per)
   add("aicc", a, sum(ic * seq_along(ic))); add("w", a, sum(w * seq_along(w)))
   add("est", a, sum(cf[nm, 1] * seq_along(nm))); add("se", a, sum(cf[nm, 2] * seq_along(nm)))
+  add("ase", a, sum(cf[nm, 3] * seq_along(nm)))
 }
 for (rep in 1:12) {
   n <- sample(25:80, 1); d <- data.frame(y = rnorm(n), a = rnorm(n), b = rnorm(n), c = rnorm(n)); d$y <- d$y + 0.5 * d$a

@@ -21,7 +21,7 @@ L422	library	0.3	1526	extraDistr: extra probability distributions	Partial (D6144
 L424	library	0.4	453	logistf: Firth penalized logistic regression	Partial (D6157).
 L425	library	0.4	607	ismev: extreme-value model fits	Partial (D6155).
 L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).
-L428	library	0.35	510	MuMIn: model selection and averaging	Partial (D6414, D6415 conditional average and importance).
+L428	library	0.4	554	MuMIn: model selection and averaging	Partial (D6414, D6415 conditional average and importance).
 L429	library	0.45	660	imputeTS: time-series imputation	Partial (D6150).
 L430	library	0.12	600	geepack: generalized estimating equations	Partial (D6476 Gaussian geeglm with independence and exchangeable correlation, scale, alpha and sandwich covariance agree with geepack on Windows;
 L448	library	0.25	536	mcmc: Metropolis and tempering samplers	Partial (D6610).
