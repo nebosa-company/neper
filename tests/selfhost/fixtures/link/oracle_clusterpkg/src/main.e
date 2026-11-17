@@ -3,6 +3,7 @@
 // of scripts/r_oracle/groups/clusterpkg.R and clustertree.R. Every answer is one number, mostly a position-weighted checksum of a result vector.
 
 use e.algo.rand.r as rng
+use e.algo.stat.clusterfuzzy as fz
 use e.algo.stat.clusterpkg as cp
 use e.algo.stat.clustertree as ct
 use e.algo.stat.hclust as hc
@@ -339,7 +340,54 @@ fn sil_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret sum_u(nb)
 }
 
+// fanny: args (n, p, k, metric, stand, memb.exp, tol, maxit, hasini, diss, x column-major, ini column-major when hasini)
+fn fanny_case(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let k = usize(x[2usize])
+    let metric = usize(x[3usize])
+    let stand = x[4usize] != 0.0f64
+    let r = x[5usize]
+    let tol = x[6usize]
+    let maxit = usize(x[7usize])
+    let hasini = x[8usize] != 0.0f64
+    let diss = x[9usize] != 0.0f64
+    let data = take_matrix(a, x, 10usize, n * p)
+    if stand && !diss { cp.stand_data(data, n, p) }
+    let (jtmd, e1) = mem.alloc[i64](a, p)
+    if e1 != ok { os.exit(5) }
+    let (valmd, e2) = mem.alloc[f64](a, p)
+    if e2 != ok { os.exit(5) }
+    let _ = cp.na_prepare(data, n, p, jtmd, valmd)
+    var ini: []const f64 = x[10usize + n * p..]
+    var dss: []f64 = zero
+    if diss {
+        let (v, e3) = mem.alloc[f64](a, n * (n - 1usize) / 2usize + 1usize)
+        if e3 != ok { os.exit(5) }
+        if fz.dysta3(data, n, p, v, 1usize, jtmd, valmd) != 0usize { os.exit(6) }
+        dss = v
+    }
+    let (fit, e4) = fz.fanny(a, dss, diss, data, n, p, k, jtmd, valmd, metric, r, tol, maxit, ini, hasini, true)
+    if e4 != ok { os.exit(7) }
+    let w = c.name
+    if str.eq(w, "fanny_memb") { ret sum_f(fit.memb) }
+    if str.eq(w, "fanny_dunn") { ret fit.dunn }
+    if str.eq(w, "fanny_norm") { ret fit.normalized }
+    if str.eq(w, "fanny_obj") { ret fit.obj }
+    if str.eq(w, "fanny_kcrisp") { ret f64(fit.k_crisp) }
+    if str.eq(w, "fanny_clu") { ret sum_u(fit.clu) }
+    if str.eq(w, "fanny_iter") { ret f64(fit.iter) }
+    if str.eq(w, "fanny_ttsil") { ret fit.ttsil }
+    if str.eq(w, "fanny_avsil") { ret sum_f(fit.avsil) }
+    if str.eq(w, "fanny_sil") { ret sum_f(fit.silinf[2usize * n..3usize * n]) }
+    if str.eq(w, "fanny_silnb") { ret sum_f(fit.silinf[n..2usize * n]) }
+    os.exit(9)
+    ret 0.0f64
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.starts_with(c.name, "fanny_") { ret fanny_case(a, c) }
     if str.starts_with(c.name, "agnes_") || str.starts_with(c.name, "diana_") { ret twins_case(a, c) }
     if str.starts_with(c.name, "mona_") { ret mona_case(a, c) }
     if str.starts_with(c.name, "daisy_") { ret daisy_case(a, c) }
@@ -392,6 +440,7 @@ fn run(a: *mem.Arena, path: str) -> usize {
 fn main(a: *mem.Arena, args: []str) -> err {
     var failures = run(a, "tests/oracle/clusterpkg.json")
     failures += run(a, "tests/oracle/clustertree.json")
+    failures += run(a, "tests/oracle/clusterfuzzy.json")
     if failures > 0usize { os.exit(1) }
     ret ok
 }
