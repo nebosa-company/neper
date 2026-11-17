@@ -163,6 +163,20 @@ for (rep in 1:150) {
   r <- tryCatch(suppressWarnings(ciNparN(p, lcl.rank = lr, n.plus.one.minus.ucl.rank = nu, ci.type = tn[ty + 1], conf.level = cl)), error = function(e) NA)
   if (is.finite(r)) cases[[length(cases) + 1]] <- case("cnn", c(p, lr, nu, ty, cl), r, rel = 0, abs = 0)
 }
+# tolIntNparConfLevel ("tnc": (n, coverage, ltl, nu, type)), tolIntNparN ("tnn": (coverage, conf, expectation, ltl, nu, type)), predIntNparConfLevel ("pnc": (n, k, m, lpl, nu)), predIntNparN ("pnn": (k, m, lpl, nu, conf))
+for (rep in 1:150) {
+  ty <- sample(0:2, 1); lr <- sample(1:3, 1); nu <- sample(1:3, 1); if (ty == 1) nu <- 0; if (ty == 2) lr <- 0
+  n <- sample(15:150, 1); cv <- c(0.8, 0.9, 0.95)[sample(3, 1)]; cl <- c(0.8, 0.9, 0.95)[sample(3, 1)]; ex <- rep %% 3 == 0
+  v <- tryCatch(tolIntNparConfLevel(n, cv, ltl.rank = lr, n.plus.one.minus.utl.rank = nu, ti.type = tn[ty + 1]), error = function(e) NA)
+  if (is.finite(v)) cases[[length(cases) + 1]] <- case("tnc", c(n, cv, lr, nu, ty), v, rel = 1e-9, abs = 1e-12)
+  r <- tryCatch(suppressWarnings(tolIntNparN(cv, cl, cov.type = if (ex) "expectation" else "content", ltl.rank = lr, n.plus.one.minus.utl.rank = nu, ti.type = tn[ty + 1])), error = function(e) NA)
+  if (is.finite(r)) cases[[length(cases) + 1]] <- case("tnn", c(cv, cl, as.numeric(ex), lr, nu, ty), r, rel = 0, abs = 0)
+  m <- sample(1:4, 1); k <- sample(1:m, 1)
+  v <- tryCatch(predIntNparConfLevel(n, k = k, m = m, lpl.rank = lr, n.plus.one.minus.upl.rank = nu, pi.type = tn[ty + 1]), error = function(e) NA)
+  if (is.finite(v)) cases[[length(cases) + 1]] <- case("pnc", c(n, k, m, lr, nu), v, rel = 1e-9, abs = 1e-12)
+  r <- tryCatch(suppressWarnings(predIntNparN(k = k, m = m, lpl.rank = lr, n.plus.one.minus.upl.rank = nu, pi.type = tn[ty + 1], conf.level = cl)), error = function(e) NA)
+  if (is.finite(r)) cases[[length(cases) + 1]] <- case("pnn", c(k, m, lr, nu, cl, ty), r, rel = 0, abs = 0)
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]

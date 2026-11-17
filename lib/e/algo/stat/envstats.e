@@ -7,6 +7,7 @@
 // factor (Dunnett's multivariate t), the other estimation, interval and testing families of the package.
 
 use e.algo.stat.nortest as nt
+use e.algo.stat.pwr as pwr
 use e.algo.stat.test as tst
 use e.math
 use e.math.dist as dist
@@ -1040,4 +1041,75 @@ fn ci_npar_n(p: f64, lcl: f64, nu: f64, ci_type: usize, conf: f64, n_max: f64) -
         n += 1.0f64
     }
     ret 0.0f64 / 0.0f64
+}
+
+// ---- nonparametric tolerance and prediction intervals: confidence level and size ----
+
+// tolIntNparConfLevel: ti_type 0 two-sided, 1 lower, 2 upper; ltl and nu the lower rank and n + 1 - upper rank
+fn tol_npar_conf(n: f64, cover: f64, ltl: f64, nu0: f64, ti_type: usize) -> f64 {
+    var l = ltl
+    var nu = nu0
+    if ti_type == 2usize { l = 0.0f64 }
+    if ti_type == 1usize { nu = 0.0f64 }
+    let utl = n + 1.0f64 - nu
+    ret 1.0f64 - nb.pbeta(cover, utl - l, nu + l, true, false)
+}
+
+// tolIntNparN: expectation is ceiling((l + nu) / (1 - coverage) - 1); content is the smallest whole n whose level reaches conf (the package rounds up an nlminb root of the squared gap)
+fn tol_npar_n(cover: f64, conf: f64, expectation: bool, ltl: f64, nu0: f64, ti_type: usize, n_max: f64) -> f64 {
+    var l = ltl
+    var nu = nu0
+    if ti_type == 2usize { l = 0.0f64 }
+    if ti_type == 1usize { nu = 0.0f64 }
+    if expectation { ret math.ceil[f64]((l + nu) / (1.0f64 - cover) - 1.0f64) }
+    var n = 2.0f64
+    while n <= n_max {
+        if n + 1.0f64 - nu - l > 0.0f64 && tol_npar_conf(n, cover, l, nu, ti_type) >= conf { ret n }
+        n += 1.0f64
+    }
+    ret 0.0f64 / 0.0f64
+}
+
+// predIntNparConfLevel for k of m future observations
+fn pred_npar_conf(n: f64, k: f64, m: f64, lpl: f64, nu: f64) -> f64 {
+    var s = 0.0f64
+    var v = k
+    while v <= m {
+        let t = nb.lchoose_int(m - v + lpl + nu - 1.0f64, m - v) + nb.lchoose_int(v + n - lpl - nu, v) - nb.lchoose_int(n + m, m)
+        s += math.exp[f64](t)
+        v += 1.0f64
+    }
+    ret s
+}
+
+type PnCtx = struct { k: f64, m: f64, lpl: f64, nu: f64, conf: f64 }
+
+fn pn_gap(c: *PnCtx, nw: f64) -> f64 { ret pred_npar_conf(math.trunc[f64](nw), c.k, c.m, c.lpl, c.nu) - c.conf }
+
+// EnvStats::predIntNparN as the package computes it: the starting size when it already reaches conf; otherwise a closed form (one-sided, or two-sided with k = m and
+// both ranks 1) with a one-step correction, or a root of the level over (n_min, n_max) by uniroot at tolerance 1 (R_zeroin2), truncated and bumped by one when the gap at the root is not positive.
+// pi_type 0 two-sided, 1 lower, 2 upper
+fn pred_npar_n(k: f64, m: f64, lpl: f64, nu: f64, pi_type: usize, conf: f64, n_max: f64) -> f64 {
+    let n_min = math.max[f64](2.0f64, lpl + nu)
+    if pred_npar_conf(n_min, k, m, lpl, nu) >= conf { ret n_min }
+    if pred_npar_conf(n_max, k, m, lpl, nu) < conf { ret 0.0f64 / 0.0f64 }
+    var simple = k == m
+    var n = 0.0f64
+    if pi_type == 0usize {
+        let a = 1.0f64 - conf
+        let b = conf * (1.0f64 - 2.0f64 * m) - 1.0f64
+        let cc = conf * m * (1.0f64 - m)
+        n = math.trunc[f64]((0.0f64 - b + math.sqrt[f64](b * b - 4.0f64 * a * cc)) / (2.0f64 * a))
+        if (n * (n - 1.0f64)) / ((n + m) * (n + m - 1.0f64)) < conf { n += 1.0f64 }
+        if lpl > 1.0f64 || nu > 1.0f64 { simple = false }
+    } else {
+        n = math.trunc[f64]((m * conf) / (1.0f64 - conf))
+        if n / (n + m) < conf { n += 1.0f64 }
+        if (pi_type == 2usize && nu > 1.0f64) || (pi_type == 1usize && lpl > 1.0f64) { simple = false }
+    }
+    if simple { ret n }
+    var ctx = PnCtx{ k: k, m: m, lpl: lpl, nu: nu, conf: conf }
+    let root = pwr.zeroin[PnCtx](&ctx, pn_gap, n_min, n_max, 1.0f64, 1000i64)
+    if pn_gap(&ctx, root) > 0.0f64 { ret math.trunc[f64](root) }
+    ret math.trunc[f64](root) + 1.0f64
 }
