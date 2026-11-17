@@ -370,3 +370,98 @@ fn binomial(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, off:
 fn poisson(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, off: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
     ret glm_path(a, 1usize, x, y, wt, off, n, p, alpha, standardize, vf, lambdas, coef)
 }
+
+// cv.glmnet for the gaussian family with user fold ids (0 .. nfolds - 1) over the given lambda sequence: each fold is refitted on the other observations, cvm[k] is the mean squared prediction error over all observations
+// and cvsd[k] = sqrt(sum_f n_f (cv_f - cvm)^2 / n / (nfolds - 1)) with cv_f the fold's mean squared error
+fn cv_gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, foldid: []const usize, nfolds: usize, cvm: []f64, cvsd: []f64) -> err {
+    let nl = lambdas.len
+    let (xt, e1) = mem.alloc[f64](a, n * p)
+    let (yt, e2) = mem.alloc[f64](a, n)
+    let (coef, e3) = mem.alloc[f64](a, nl * (p + 1usize))
+    let (cvf, e4) = mem.alloc[f64](a, nl * nfolds)
+    let (nfv, e5) = mem.alloc[f64](a, nfolds)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret e1 }
+    var f = 0usize
+    while f < nfolds {
+        var m = 0usize
+        var i = 0usize
+        while i < n {
+            if foldid[i] != f {
+                var j = 0usize
+                while j < p {
+                    xt[j * n + m] = x[j * n + i]
+                    j += 1usize
+                }
+                yt[m] = y[i]
+                m += 1usize
+            }
+            i += 1usize
+        }
+        // column-major with leading dimension m: repack
+        var j = 0usize
+        while j < p {
+            var q = 0usize
+            while q < m {
+                xt[j * m + q] = xt[j * n + q]
+                q += 1usize
+            }
+            j += 1usize
+        }
+        let none: []const f64 = zero
+        let mark = mem.mark(a)
+        let ge = gaussian(a, xt[0usize..m * p], yt[0usize..m], none, none, none, m, p, alpha, standardize, vf, lambdas, coef)
+        if ge != ok { ret ge }
+        var cnt = 0.0f64
+        var k = 0usize
+        while k < nl {
+            cvf[k * nfolds + f] = 0.0f64
+            k += 1usize
+        }
+        i = 0usize
+        while i < n {
+            if foldid[i] == f {
+                cnt += 1.0f64
+                k = 0usize
+                while k < nl {
+                    var pr = coef[k * (p + 1usize)]
+                    j = 0usize
+                    while j < p {
+                        pr += x[j * n + i] * coef[k * (p + 1usize) + 1usize + j]
+                        j += 1usize
+                    }
+                    cvf[k * nfolds + f] += (y[i] - pr) * (y[i] - pr)
+                    k += 1usize
+                }
+            }
+            i += 1usize
+        }
+        nfv[f] = cnt
+        k = 0usize
+        while k < nl {
+            cvf[k * nfolds + f] = cvf[k * nfolds + f] / cnt
+            k += 1usize
+        }
+        mem.reset(a, mark)
+        f += 1usize
+    }
+    var k = 0usize
+    while k < nl {
+        var mn = 0.0f64
+        f = 0usize
+        while f < nfolds {
+            mn += nfv[f] * cvf[k * nfolds + f]
+            f += 1usize
+        }
+        mn = mn / f64(n)
+        var vr = 0.0f64
+        f = 0usize
+        while f < nfolds {
+            vr += nfv[f] * (cvf[k * nfolds + f] - mn) * (cvf[k * nfolds + f] - mn)
+            f += 1usize
+        }
+        cvm[k] = mn
+        cvsd[k] = math.sqrt[f64](vr / f64(n) / f64(nfolds - 1usize))
+        k += 1usize
+    }
+    ret ok
+}

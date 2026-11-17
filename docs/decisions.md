@@ -48010,3 +48010,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6885 — glmnet: weights and offsets for the glm families
 
 **Decision.** `glmnet.binomial` and `glmnet.poisson` take observation weights and an offset (empty slices for none). Weights are normalised to sum 1 and enter the weighted means, the standardisation (weighted sd) and the Newton weights (w_i times the variance function); the offset is added to the linear predictor only, so the working residual is unchanged. Equal to glmnet at thresh 1e-14 on 16 data sets (8 binomial, 8 poisson) with weights and offsets, three lambdas each (oracle_glmnet, 1564 cases in all). Not here: the early stop, multinomial, mgaussian, cox, `cv.glmnet`, `predict`. Linux pending.
+
+## D6886 — glmnet: cv.glmnet with given folds (gaussian)
+
+**Decision.** `glmnet.cv_gaussian` refits the gaussian path on each fold's complement over the given lambda sequence and answers, per lambda, `cvm` (the mean squared prediction error over all observations, the fold errors weighted by fold size) and `cvsd` (sqrt of the size-weighted variance of the fold errors about `cvm`, over n and nfolds - 1), as `cv.glmnet(foldid = ...)` does. Equal to glmnet on 12 data sets over alpha, standardize and 3 to 7 folds, three lambdas each, both outputs (oracle_glmnet, 1636 cases in all). Not here: random fold assignment (R's `sample`), other loss types, other families, lambda.min and lambda.1se selection, the early stop, multinomial, mgaussian, cox, `predict`. Linux pending.

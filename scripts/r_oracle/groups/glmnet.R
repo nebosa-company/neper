@@ -83,6 +83,16 @@ for (fam in c("binomial", "poisson")) for (rep in 1:8) {
   for (k in c(2, 4, 6)) for (j in 0:p) cases[[length(cases) + 1]] <-
     case(if (fam == "binomial") "bin" else "pois", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, k - 1, j, 1, 0, 1, w, o), cf[j + 1, k], rel = 1e-5, abs = 1e-6)
 }
+# cv.glmnet gaussian with foldid: "cv" (the coef layout up to X, then foldid[n] (0-based), nfolds, k, which: 0 cvm, 1 cvsd)
+for (rep in 1:12) {
+  n <- sample(40:90, 1); p <- sample(3:6, 1); X <- matrix(round(rnorm(n * p), 3), n, p); y <- round(X[, 1] * 2 - X[, 2] + rnorm(n), 3)
+  alpha <- c(1, 0.5, 0.2, 0.9)[(rep %% 4) + 1]; std <- rep %% 3 != 0; nf <- sample(3:7, 1); fid <- sample(rep(1:nf, length.out = n))
+  lmax <- max(abs(crossprod(scale(X, scale = FALSE), y - mean(y)))) / n / max(alpha, 1e-3)
+  lam <- exp(seq(log(lmax), log(lmax * 0.01), length.out = 8))
+  cv <- suppressWarnings(cv.glmnet(X, y, alpha = alpha, standardize = std, lambda = lam, foldid = fid, thresh = 1e-14, grouped = TRUE))
+  for (k in c(1, 4, 8)) { cases[[length(cases) + 1]] <- case("cv", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, fid - 1, nf, k - 1, 0), cv$cvm[k], rel = 1e-6, abs = 1e-8)
+    cases[[length(cases) + 1]] <- case("cv", c(n, p, alpha, std, length(lam), lam, rep(1, p), y, X, fid - 1, nf, k - 1, 1), cv$cvsd[k], rel = 1e-5, abs = 1e-8) }
+}
 # the automatic lambda sequence: "lpath" (n, p, alpha, std, k, vf[p], y[n], X[n p]) the k-th lambda (0-based) of glmnet(...)$lambda
 for (rep in 1:20) {
   n <- sample(30:80, 1); p <- sample(3:8, 1); X <- matrix(rnorm(n * p), n); y <- X[, 1] * 2 + rnorm(n); al <- sample(c(0.2, 0.5, 0.7, 1), 1); std <- rep %% 2; vf <- if (rep %% 3 == 0) runif(p, 0.5, 2) else rep(1, p)

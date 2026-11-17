@@ -27,6 +27,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let y = x[5usize + nl + p..5usize + nl + p + n]
     let xm = x[5usize + nl + p + n..5usize + nl + p + n + n * p]
     let at = 5usize + nl + p + n + n * p
+    if c.name[0usize] == 99u8 && c.name[1usize] == 118u8 {
+        // cv: foldid[n], nfolds, k, which (0 cvm, 1 cvsd) after X
+        let (fid, fe) = mem.alloc[usize](a, n)
+        let (cm, ce2) = mem.alloc[f64](a, nl)
+        let (cs, ce3) = mem.alloc[f64](a, nl)
+        if fe != ok || ce2 != ok || ce3 != ok { ret 0.0f64 / 0.0f64 }
+        var q = 0usize
+        while q < n {
+            fid[q] = usize(x[at + q])
+            q += 1usize
+        }
+        let nfo = usize(x[at + n])
+        if gl.cv_gaussian(a, xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, fid, nfo, cm, cs) != ok { ret 0.0f64 / 0.0f64 }
+        if x[at + n + 2usize] == 0.0f64 { ret cm[usize(x[at + n + 1usize])] }
+        ret cs[usize(x[at + n + 1usize])]
+    }
     let wl = n * usize(x[at + 2usize])
     let bl = p * usize(x[at + 3usize])
     let ol = n * usize(x[at + 4usize])
