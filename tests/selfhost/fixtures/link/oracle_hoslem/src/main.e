@@ -11,6 +11,15 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if c.name[0usize] == 99u8 { ret hl.caic(z[0usize], z[1usize], z[2usize], z[3usize]) }
+    if c.name[0usize] == 119u8 {
+        let wn = usize(z[0usize])
+        let wp = usize(z[1usize])
+        let (wo, we) = mem.alloc[f64](a, 8usize * wp)
+        if we != ok { ret nan }
+        if hl.wrsi(a, z[2usize..2usize + wn], z[2usize + wn..2usize + wn + wn * wp], wn, wp, wo) != ok { ret nan }
+        ret wo[usize(z[2usize + wn + wn * wp])]
+    }
     let g = usize(z[0usize])
     let n = usize(z[1usize])
     let y = z[2usize..2usize + n]

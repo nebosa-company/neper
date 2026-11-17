@@ -13,4 +13,12 @@ for (rep in 1:40) {
   add("h", c(a, 0), h$statistic[[1]]); add("h", c(a, 1), h$parameter[[1]]); add("h", c(a, 2), h$p.value)
   for (i in seq_len(G)) { add("h", c(a, 3 + i - 1), h$observed[i, 1]); add("h", c(a, 3 + G + i - 1), h$observed[i, 2]); add("h", c(a, 3 + 2 * G + i - 1), h$expected[i, 1]); add("h", c(a, 3 + 3 * G + i - 1), h$expected[i, 2]) }
 }
+# wrsi: fn "w" args (n, p, y[n], X[n * p] column-major, q) q = 8 * column + stat (WRSI, zWRSI, rWRSI, Pused, Pavail, Pw, u, a); CAIC: fn "c" args (loglik, k, n, alpha)
+for (rep in 1:30) {
+  n <- sample(30:200, 1); p <- sample(2:5, 1); X <- matrix(rpois(n * p, sample(1:6, p, TRUE)), n, p); y <- rbinom(n, 1, 0.4); if (sum(y) == 0) next
+  w <- wrsi(y, X); M <- as.matrix(w)[, c("WRSI", "zWRSI", "rWRSI", "Pused", "Pavail", "Pw", "u", "a")]
+  for (cc in 1:p) for (s in 1:8) add("w", c(n, p, y, X, 8 * (cc - 1) + s - 1), M[cc, s])
+  d <- data.frame(y = y, x1 = X[, 1], x2 = X[, 2]); m <- glm(y ~ x1 + x2, binomial, d); al <- runif(1)
+  add("c", c(as.numeric(logLik(m)), attr(logLik(m), "df"), n, al), CAIC(m, alpha = al))
+}
 emit("hoslem", "ResourceSelection", list(cases))
