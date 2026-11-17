@@ -9,6 +9,7 @@
 // seeds, several runs and the rank survey.
 
 use e.algo.linalg.decomp as decomp
+use e.algo.stat.fastica as fi
 use e.algo.rand.lecuyer as lc
 use e.algo.rand.r as rng
 use e.algo.stat.hclust as hc
@@ -48,8 +49,31 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
             q += 1usize
         }
     } else {
-        let ne = nndsvd(a, v, n, p, rk, init, seed, w, h)
-        if ne != ok { ret ne }
+        if init == 4usize {
+            // the ica seed: fastICA(x, rank, method = "C") with its w.init = rnorm(rank^2), the basis and coefficient clamped at the machine epsilon
+            let (wi, g1) = mem.alloc[f64](a, rk * rk)
+            if g1 != ok { ret mem.Full }
+            q = 0usize
+            while q < rk * rk {
+                wi[q] = rng.norm(&r)
+                q += 1usize
+            }
+            let ie = fi.fastica(a, v, n, p, rk, wi, 200usize, 1.0e-4f64, w, h)
+            if ie != ok { ret ie }
+            q = 0usize
+            while q < n * rk {
+                if w[q] < 2.220446049250313e-16f64 { w[q] = 2.220446049250313e-16f64 }
+                q += 1usize
+            }
+            q = 0usize
+            while q < rk * p {
+                if h[q] < 2.220446049250313e-16f64 { h[q] = 2.220446049250313e-16f64 }
+                q += 1usize
+            }
+        } else {
+            let ne = nndsvd(a, v, n, p, rk, init, seed, w, h)
+            if ne != ok { ret ne }
+        }
     }
     let (wh, e1) = mem.alloc[f64](a, n * p)
     let (t1, e2) = mem.alloc[f64](a, rk * p)
