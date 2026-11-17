@@ -33,4 +33,27 @@ for (rep in 1:60) {
   kk <- length(levels(yobs))
   cases[[length(cases) + 1]] <- case("rpart_class", c(n, p, nt, kk, mb, 1e-4, X, as.integer(yobs), xt), chk(as.vector(t(pr))), rel = 1e-9, abs = 1e-9)
 }
+# multinom (k = 2 and more) and polr (k >= 3) with case weights; args (n, p, nt, k, 0, 0, x, y, xt, w)
+mkc <- function(n, p, k) {
+  X <- mkx(n, p); sc <- X[, 1] + (if (p > 1) 0.7 * X[, 2] else 0) + rlogis(n)
+  as.integer(cut(sc, breaks = quantile(sc, seq(0, 1, length.out = k + 1)), include.lowest = TRUE))
+}
+for (rep in 1:90) {
+  n <- sample(30:90, 1); p <- sample(1:3, 1); nt <- 6; k <- if (rep <= 30) 2 else sample(3:4, 1)
+  X <- mkx(n, p); sc <- X[, 1] + (if (p > 1) 0.7 * X[, 2] else 0) + rlogis(n)
+  y <- as.integer(cut(sc, breaks = quantile(sc, seq(0, 1, length.out = k + 1)), include.lowest = TRUE))
+  w <- round(runif(n, 0.4, 1.6), 3); if (rep %% 2 == 0) w[sample(n, 3)] <- 1
+  xt <- mkx(nt, p); colnames(X) <- colnames(xt) <- paste0("V", 1:p)
+  d <- data.frame(y = factor(y, labels = letters[1:k]), X); dt <- data.frame(xt); wv <- w
+  if (rep <= 60) {
+    fit <- nnet::multinom(y ~ ., data = d, weights = wv, maxit = 100, trace = FALSE, MaxNWts = 1500)
+    pr <- predict(fit, dt, type = "probs"); if (is.vector(pr)) pr <- cbind(1 - pr, pr)
+    cases[[length(cases) + 1]] <- case("multinom", c(n, p, nt, k, 0, 0, X, y, xt, w), chk(as.vector(t(pr))), rel = 1e-7, abs = 1e-8)
+  }
+  if (k >= 3) {
+    fit <- suppressWarnings(MASS::polr(y ~ ., data = d, weights = wv, control = list()))
+    pr <- predict(fit, dt, type = "probs")
+    cases[[length(cases) + 1]] <- case("polr", c(n, p, nt, k, 0, 0, X, y, xt, w), chk(as.vector(t(pr))), rel = 1e-7, abs = 1e-8)
+  }
+}
 emit("micefit", c("rpart", "nnet", "MASS"), list(cases))
