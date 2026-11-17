@@ -662,3 +662,101 @@ fn ci_norm_n(hw: f64, sigma: f64, conf: f64, two_sample: bool, n_max: f64) -> f6
     }
     ret math.ceil[f64](0.5f64 * (lo + hi))
 }
+
+// ---- the power and sample size of the test of proportions (propTestPower, propTestN) ----
+
+fn pn(x: f64) -> f64 { ret dist.pnorm(x, 0.0f64, 1.0f64, true, false) }
+
+fn qn(p: f64) -> f64 { ret dist.qnorm(p, 0.0f64, 1.0f64, true, false) }
+
+// EnvStats::propTestPower, alt 0 two-sided, 1 less, 2 greater. One sample (p1 against p2 = the null p0, n1 the size): the normal approximation with the optional
+// continuity correction, or the exact binomial power (NaN when the true level exceeds alpha). Two samples: the approximation only.
+fn prop_power(n1: f64, p1: f64, n2: f64, p2: f64, alpha: f64, two_sample: bool, alt: usize, approx: bool, correct: bool) -> f64 {
+    var ta = alpha
+    if alt == 0usize { ta = alpha / 2.0f64 }
+    let q1 = 1.0f64 - p1
+    let q2 = 1.0f64 - p2
+    if two_sample {
+        let delta = p1 - p2
+        let nf = 1.0f64 / n1 + 1.0f64 / n2
+        var cf = 0.0f64
+        if correct { cf = 0.5f64 * nf }
+        if math.abs[f64](delta) < cf { cf = 0.0f64 }
+        let z = qn(1.0f64 - ta)
+        let pb = (n1 * p1 + n2 * p2) / (n1 + n2)
+        let qb = 1.0f64 - pb
+        let se = math.sqrt[f64](p1 * q1 / n1 + p2 * q2 / n2)
+        let sh = math.sqrt[f64](pb * qb * nf)
+        let lo = pn((0.0f64 - z * sh - delta - cf) / se)
+        let hi = 1.0f64 - pn((z * sh - delta + cf) / se)
+        if alt == 1usize { ret lo }
+        if alt == 2usize { ret hi }
+        ret lo + hi
+    }
+    let p0 = p2
+    let q0 = 1.0f64 - p0
+    let n = n1
+    if approx {
+        let delta = p1 - p0
+        var cf = 0.0f64
+        if correct { cf = 1.0f64 / (2.0f64 * n) }
+        if math.abs[f64](delta) < cf { cf = 0.0f64 }
+        let z = qn(1.0f64 - ta)
+        let r0 = math.sqrt[f64](p0 * q0 / (p1 * q1))
+        let se = math.sqrt[f64](p1 * q1 / n)
+        let lo = pn(0.0f64 - z * r0 - (delta + cf) / se)
+        let hi = 1.0f64 - pn(z * r0 - (delta - cf) / se)
+        if alt == 1usize { ret lo }
+        if alt == 2usize { ret hi }
+        ret lo + hi
+    }
+    var power = 0.0f64
+    var tru = 0.0f64
+    if alt == 1usize {
+        var qc = nb.qbinom(ta, n, p0, true, false)
+        if nb.pbinom(qc, n, p0, true, false) > ta { qc = math.max[f64](qc - 1.0f64, 0.0f64) }
+        power = nb.pbinom(qc, n, p1, true, false)
+        tru = nb.pbinom(qc, n, p0, true, false)
+    } else if alt == 2usize {
+        var qc = nb.qbinom(1.0f64 - ta, n, p0, true, false)
+        if 1.0f64 - nb.pbinom(qc, n, p0, true, false) > ta { qc = math.min[f64](qc + 1.0f64, n) }
+        power = 1.0f64 - nb.pbinom(qc, n, p1, true, false)
+        tru = 1.0f64 - nb.pbinom(qc, n, p0, true, false)
+    } else {
+        var ql = nb.qbinom(ta, n, p0, true, false)
+        if nb.pbinom(ql, n, p0, true, false) > ta { ql = math.max[f64](ql - 1.0f64, 0.0f64) }
+        var qu = nb.qbinom(1.0f64 - ta, n, p0, true, false)
+        if 1.0f64 - nb.pbinom(qu, n, p0, true, false) > ta { qu = math.min[f64](qu + 1.0f64, n) }
+        power = nb.pbinom(ql, n, p1, true, false) + 1.0f64 - nb.pbinom(qu, n, p1, true, false)
+        tru = nb.pbinom(ql, n, p0, true, false) + 1.0f64 - nb.pbinom(qu, n, p0, true, false)
+    }
+    if tru > alpha { ret 0.0f64 / 0.0f64 }
+    ret power
+}
+
+// EnvStats::propTestN by the normal approximation: which 0 the size of the first (or only) sample, 1 the second sample's (ratio times it), rounded up
+fn prop_n(p1: f64, p2: f64, alpha: f64, power: f64, two_sample: bool, alt: usize, ratio: f64, correct: bool, which: usize) -> f64 {
+    var ta = alpha
+    if alt == 0usize { ta = alpha / 2.0f64 }
+    var nv = 0.0f64
+    if two_sample {
+        let pb = (p1 + ratio * p2) / (ratio + 1.0f64)
+        let qb = 1.0f64 - pb
+        let delta = math.abs[f64](p1 - p2)
+        let s = qn(1.0f64 - ta) * math.sqrt[f64]((ratio + 1.0f64) * pb * qb) + qn(power) * math.sqrt[f64](ratio * p1 * (1.0f64 - p1) + p2 * (1.0f64 - p2))
+        nv = s * s / (ratio * delta * delta)
+        if correct {
+            let u = 1.0f64 + math.sqrt[f64](1.0f64 + (2.0f64 * (ratio + 1.0f64)) / (ratio * nv * delta))
+            nv = (nv / 4.0f64) * u * u
+        }
+        if which == 1usize { ret math.ceil[f64](ratio * nv) }
+        ret math.ceil[f64](nv)
+    }
+    let s = qn(power) * math.sqrt[f64](p1 * (1.0f64 - p1)) - qn(ta) * math.sqrt[f64](p2 * (1.0f64 - p2))
+    nv = s * s / ((p2 - p1) * (p2 - p1))
+    if correct {
+        let u = 1.0f64 + math.sqrt[f64](1.0f64 + 2.0f64 / (nv * math.abs[f64](p2 - p1)))
+        nv = (nv / 4.0f64) * u * u
+    }
+    ret math.ceil[f64](nv)
+}

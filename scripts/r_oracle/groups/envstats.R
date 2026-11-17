@@ -70,6 +70,21 @@ for (rep in 1:80) {
   nn <- tryCatch(tTestN(dos, alpha = a, power = pw, sample.type = if (ts_) "two.sample" else "one.sample", alternative = alts_t[al + 1], approx = ap), error = function(e) NA)
   if (is.finite(nn)) cases[[length(cases) + 1]] <- case("ttn", c(dos, a, pw, as.numeric(ts_), al, as.numeric(ap)), nn, rel = 0, abs = 0)
 }
+# propTestPower ("ptp": (n1, p1, n2, p2, alpha, two.sample, alt, approx, correct)) and propTestN ("ptn": (p1, p2, alpha, power, two.sample, alt, ratio, correct, which))
+for (rep in 1:160) {
+  ts_ <- rep %% 2 == 0; al <- sample(0:2, 1); ap <- ts_ || rep %% 5 != 1; cr <- rep %% 3 == 0
+  p0 <- round(runif(1, 0.15, 0.85), 2); p1 <- round(min(0.95, max(0.05, p0 + sample(c(-0.3, -0.15, 0.15, 0.3), 1))), 2); if (p1 == p0) p1 <- p0 + 0.1
+  n1 <- sample(10:200, 1); n2 <- if (ts_) sample(10:200, 1) else n1; a <- c(0.01, 0.05, 0.1)[sample(3, 1)]
+  v <- tryCatch(suppressWarnings(if (ts_) propTestPower(n1, p1, n2, p0, alpha = a, sample.type = "two.sample", alternative = alts_t[al + 1], correct = cr) else propTestPower(n1, p1, p0.or.p2 = p0, alpha = a, sample.type = "one.sample", alternative = alts_t[al + 1], approx = ap, correct = cr, return.exact.list = FALSE)), error = function(e) NA)
+  if (is.finite(v)) cases[[length(cases) + 1]] <- case("ptp", c(n1, p1, n2, p0, a, as.numeric(ts_), al, as.numeric(ap), as.numeric(cr)), v, rel = 1e-9, abs = 1e-11)
+  pw <- c(0.8, 0.9, 0.95)[sample(3, 1)]; ra <- if (ts_) sample(c(1, 1, 2, 3), 1) else 1
+  if ((al == 2 && p1 <= p0) || (al == 1 && p1 >= p0)) next
+  r <- tryCatch(suppressWarnings(propTestN(p1, p0, alpha = a, power = pw, sample.type = if (ts_) "two.sample" else "one.sample", alternative = alts_t[al + 1], ratio = ra, correct = cr)), error = function(e) NULL)
+  if (is.null(r)) next
+  n1v <- if (is.list(r)) r$n1 else r; n2v <- if (is.list(r)) r$n2 else r
+  cases[[length(cases) + 1]] <- case("ptn", c(p1, p0, a, pw, as.numeric(ts_), al, ra, as.numeric(cr), 0), n1v, rel = 0, abs = 0)
+  if (ts_) cases[[length(cases) + 1]] <- case("ptn", c(p1, p0, a, pw, 1, al, ra, as.numeric(cr), 1), n2v, rel = 0, abs = 0)
+}
 # ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
 for (rep in 1:80) {
   ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
