@@ -29,39 +29,6 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if re != ok { ret 0.0f64 / 0.0f64 }
         ret ro[usize(x[6usize])]
     }
-    if str.eq(k, "mvselm") {
-        let fam = x[0usize]
-        let pen = x[1usize]
-        let n = usize(x[2usize])
-        let d = usize(x[3usize])
-        let p = usize(x[4usize])
-        let which = usize(x[5usize])
-        let (yy, e1) = mem.alloc[f64](a, n * d)
-        let (xx, e2) = mem.alloc[f64](a, n * p)
-        let (ww, e3) = mem.alloc[f64](a, n)
-        let (o, e4) = mem.alloc[f64](a, p * d + d * d + d + 1usize)
-        if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 / 0.0f64 }
-        var i = 0usize
-        while i < n {
-            ww[i] = 1.0f64
-            i += 1usize
-        }
-        i = 0usize
-        while i < n * d {
-            yy[i] = x[6usize + i]
-            i += 1usize
-        }
-        i = 0usize
-        while i < n * p {
-            xx[i] = x[6usize + n * d + i]
-            i += 1usize
-        }
-        let ll = sn.selm_mv(a, yy, xx, ww, d, p, fam == 1.0f64, pen == 1.0f64, o)
-        var np = p * d + d * d + d
-        if fam == 1.0f64 { np += 1usize }
-        if which == np { ret ll }
-        ret o[which]
-    }
     if str.eq(k, "mvcp") {
         let kind = usize(x[0usize])
         let d = usize(x[1usize])
@@ -88,34 +55,6 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if e != ok { ret 0.0f64 / 0.0f64 }
         }
         ret o[usize(x[3usize])]
-    }
-    if str.eq(k, "selm") {
-        let fam = x[0usize]
-        let pen = x[1usize]
-        let n = usize(x[2usize])
-        let p = usize(x[3usize])
-        let which = usize(x[4usize])
-        let (yy, e1) = mem.alloc[f64](a, n)
-        let (xx, e2) = mem.alloc[f64](a, n * p)
-        let (ww, e3) = mem.alloc[f64](a, n)
-        let (o, e4) = mem.alloc[f64](a, p + 3usize)
-        if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret 0.0f64 / 0.0f64 }
-        var i = 0usize
-        while i < n {
-            yy[i] = x[5usize + i]
-            ww[i] = 1.0f64
-            i += 1usize
-        }
-        i = 0usize
-        while i < n * p {
-            xx[i] = x[5usize + n + i]
-            i += 1usize
-        }
-        let ll = sn.selm_fit(a, yy, xx, ww, p, fam == 1.0f64, pen == 1.0f64, o)
-        var np = p + 2usize
-        if fam == 1.0f64 { np = p + 3usize }
-        if which == np { ret ll }
-        ret o[which]
     }
     if str.eq(k, "zeta") { ret sn.zeta(usize(x[0usize]), x[1usize]) }
     if str.eq(k, "cumn") { ret sn.sn_cumulant(x[0usize], x[1usize], x[2usize], x[3usize], usize(x[4usize])) }
