@@ -43,116 +43,6 @@ type Mi = struct {
     r: rng.Rng,
 }
 
-// the lower Cholesky factor of the symmetric positive definite q by q matrix c (row-major) into l; false when it is not positive definite
-fn chol_lower(c: []const f64, q: usize, l: []f64) -> bool {
-    var s1 = 0usize
-    while s1 < q {
-        var s2 = 0usize
-        while s2 <= s1 {
-            var s = c[s1 * q + s2]
-            var k = 0usize
-            while k < s2 {
-                s -= l[s1 * q + k] * l[s2 * q + k]
-                k += 1usize
-            }
-            if s1 == s2 {
-                if s <= 0.0f64 { ret false }
-                l[s1 * q + s1] = math.sqrt[f64](s)
-            } else {
-                l[s1 * q + s2] = s / l[s2 * q + s2]
-            }
-            s2 += 1usize
-        }
-        s1 += 1usize
-    }
-    ret true
-}
-
-// glm.fit(x, y, weights, quasibinomial()): x is n by cd column-major with the intercept, coef the coefficients and covu the unscaled covariance of the last iteration (row-major); the answer is whether it converged in 25 iterations
-fn glm_logit(a: *mem.Arena, x: []const f64, y: []const f64, w: []const f64, n: usize, cd: usize, coef: []f64, covu: []f64) -> (bool, err) {
-    let (eta, e1) = mem.alloc[f64](a, n)
-    let (xtx, e2) = mem.alloc[f64](a, cd * cd)
-    let (xtz, e3) = mem.alloc[f64](a, cd)
-    let (lw, e4) = mem.alloc[f64](a, cd * cd)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (false, mem.Full) }
-    var q = 0usize
-    while q < n {
-        let mu0 = (w[q] * y[q] + 0.5f64) / (w[q] + 1.0f64)
-        eta[q] = math.log[f64](mu0 / (1.0f64 - mu0))
-        q += 1usize
-    }
-    var devold = 0.0f64
-    q = 0usize
-    while q < n {
-        devold += mc.bin_dev(y[q], mc.logit_inv(eta[q]), w[q])
-        q += 1usize
-    }
-    var conv = false
-    var iter = 0usize
-    while !conv && iter < 25usize {
-        iter += 1usize
-        var s1 = 0usize
-        while s1 < cd {
-            xtz[s1] = 0.0f64
-            var s2 = 0usize
-            while s2 < cd {
-                xtx[s1 * cd + s2] = 0.0f64
-                s2 += 1usize
-            }
-            s1 += 1usize
-        }
-        q = 0usize
-        while q < n {
-            let mu = mc.logit_inv(eta[q])
-            let me = mc.logit_mu_eta(eta[q])
-            let wq = w[q] * me * me / (mu * (1.0f64 - mu))
-            let z = eta[q] + (y[q] - mu) / me
-            s1 = 0usize
-            while s1 < cd {
-                xtz[s1] += wq * x[s1 * n + q] * z
-                var s2 = 0usize
-                while s2 < cd {
-                    xtx[s1 * cd + s2] += wq * x[s1 * n + q] * x[s2 * n + q]
-                    s2 += 1usize
-                }
-                s1 += 1usize
-            }
-            q += 1usize
-        }
-        if !mc.spd_inverse(xtx, cd, covu, lw) { ret (false, Collinear) }
-        s1 = 0usize
-        while s1 < cd {
-            var s = 0.0f64
-            var s2 = 0usize
-            while s2 < cd {
-                s += covu[s1 * cd + s2] * xtz[s2]
-                s2 += 1usize
-            }
-            coef[s1] = s
-            s1 += 1usize
-        }
-        var dev = 0.0f64
-        q = 0usize
-        while q < n {
-            var e = 0.0f64
-            s1 = 0usize
-            while s1 < cd {
-                e += x[s1 * n + q] * coef[s1]
-                s1 += 1usize
-            }
-            eta[q] = e
-            dev += mc.bin_dev(y[q], mc.logit_inv(e), w[q])
-            q += 1usize
-        }
-        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 1.0e-8f64 {
-            conv = true
-        } else {
-            devold = dev
-        }
-    }
-    ret (conv, ok)
-}
-
 // ---- the design of one column's model
 
 // the design columns the predictor row of column j selects, in column order: a numeric column as it is, a factor as its treatment dummies (levels 2 ..); returns the number of columns
@@ -532,7 +422,7 @@ fn mi_norm(a: *mem.Arena, st: *Mi, mth: usize, xk: []const f64, nk: usize, y: []
         var dfv = no - cd
         if no <= cd { dfv = 1usize }
         sigma = math.sqrt[f64](rss / rd.rchisq(&st.r, f64(dfv)))
-        if !chol_lower(inv, cd, lv) { ret Collinear }
+        if !mc.chol_lower(inv, cd, lv) { ret Collinear }
         var s1 = 0usize
         while s1 < cd {
             zz[s1] = rng.norm(&st.r)
@@ -662,7 +552,7 @@ fn mi_logreg(a: *mem.Arena, st: *Mi, boot: bool, xk: []const f64, nk: usize, y: 
         if ya[t] > ymin { y01[t] = 1.0f64 }
         t += 1usize
     }
-    let (conv, ef) = glm_logit(a, xi, y01, wa, na, cd, coef, covu)
+    let (conv, ef) = mc.glm_logit(a, xi, y01, wa, na, cd, coef, covu)
     if ef != ok { ret ef }
     let _ = conv
     var c = 0usize
@@ -671,7 +561,7 @@ fn mi_logreg(a: *mem.Arena, st: *Mi, boot: bool, xk: []const f64, nk: usize, y: 
         c += 1usize
     }
     if !boot {
-        if !chol_lower(covu, cd, lv) { ret Collinear }
+        if !mc.chol_lower(covu, cd, lv) { ret Collinear }
         var zz: [32]f64 = zero
         c = 0usize
         while c < cd {
@@ -1402,10 +1292,14 @@ fn mice_run(a: *mem.Arena, d0: []const f64, n: usize, p: usize, m: usize, maxit:
     ret (tot, ok)
 }
 
-// ---- pooling (mice::pool on lm fits): the m completed data sets (comp, n by p column-major each) are fitted by y ~ the numeric columns xcols; out[c * 13 ..] receives, for the intercept and each predictor in order: estimate, ubar, b, t, df, riv, lambda, fmi, std.error, statistic, p.value, conf.low and conf.high (Rubin's rules, Barnard-Rubin df with the complete-data df n - ncoef)
+// ---- pooling (mice::pool on lm fits): the m completed data sets (comp, n by p column-major each) are fitted by y ~ the numeric columns xcols;
+// dfcom is the complete-data degrees of freedom (NaN for each fit's residual df n - ncoef, as R's get.dfcom) and rule 0 is Rubin 1987, 1 is Reiter 2003.
+// out[c * 13 ..] receives, for the intercept and each predictor in order: estimate, ubar, b, t, df, riv, lambda, fmi (NaN under Reiter's rule),
+// std.error, statistic, p.value (summary.mipo) and conf.low and conf.high (confint); r2 receives pool.r.squared's est, lo 95, hi 95 and fmi.
 
-fn pool_lm(a: *mem.Arena, comp: []const f64, n: usize, p: usize, m: usize, ycol: usize, xcols: []const usize, out: []f64) -> err {
+fn pool_lm(a: *mem.Arena, comp: []const f64, n: usize, p: usize, m: usize, ycol: usize, xcols: []const usize, dfcom: f64, rule: usize, out: []f64, r2: []f64) -> err {
     let cd = xcols.len + 1usize
+    let nan = 0.0f64 / 0.0f64
     let (xo, e1) = mem.alloc[f64](a, n * cd)
     let (yo, e2) = mem.alloc[f64](a, n)
     let (beta, e3) = mem.alloc[f64](a, cd)
@@ -1415,10 +1309,18 @@ fn pool_lm(a: *mem.Arena, comp: []const f64, n: usize, p: usize, m: usize, ycol:
     let (q1, e7) = mem.alloc[f64](a, m)
     let (u1, e8) = mem.alloc[f64](a, m)
     let (po, e9) = mem.alloc[f64](a, 7usize)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok { ret mem.Full }
+    let (rz, e10) = mem.alloc[f64](a, m)
+    let (rv, e11) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret mem.Full }
+    var dfc = f64(n - cd)
+    if dfcom == dfcom {
+        dfc = dfcom
+        if dfc < 1.0f64 { dfc = 1.0f64 }
+    }
     var im = 0usize
     while im < m {
         var i = 0usize
+        var ym = 0.0f64
         while i < n {
             xo[i] = 1.0f64
             var c = 0usize
@@ -1427,10 +1329,18 @@ fn pool_lm(a: *mem.Arena, comp: []const f64, n: usize, p: usize, m: usize, ycol:
                 c += 1usize
             }
             yo[i] = comp[im * n * p + ycol * n + i]
+            ym += yo[i]
             i += 1usize
         }
+        ym = ym / f64(n)
         let (rss, eo) = mi_ols(a, xo, yo, n, cd, beta, inv)
         if eo != ok { ret eo }
+        var tss = 0.0f64
+        i = 0usize
+        while i < n {
+            tss += (yo[i] - ym) * (yo[i] - ym)
+            i += 1usize
+        }
         let s2 = rss / f64(n - cd)
         var c = 0usize
         while c < cd {
@@ -1438,8 +1348,12 @@ fn pool_lm(a: *mem.Arena, comp: []const f64, n: usize, p: usize, m: usize, ycol:
             var_[im * cd + c] = s2 * inv[c * cd + c]
             c += 1usize
         }
+        let rr = math.sqrt[f64](1.0f64 - rss / tss)
+        rz[im] = 0.5f64 * math.log[f64]((rr + 1.0f64) / (1.0f64 - rr))
+        rv[im] = 1.0f64 / f64(n - 3usize)
         im += 1usize
     }
+    let mf = f64(m)
     var c = 0usize
     while c < cd {
         im = 0usize
@@ -1448,29 +1362,95 @@ fn pool_lm(a: *mem.Arena, comp: []const f64, n: usize, p: usize, m: usize, ycol:
             u1[im] = var_[im * cd + c]
             im += 1usize
         }
-        mc.pool_scalar(q1, u1, f64(n), f64(cd), po)
-        // pool_scalar: qbar ubar b t df r fmi
+        mc.pool_scalar(q1, u1, dfc, 0.0f64, po)
+        // pool_scalar: qbar ubar b t df r fmi under Rubin's rule; Reiter's rule changes t, df and drops lambda and fmi
         let base = c * 13usize
+        var tt = po[3usize]
+        var dff = po[4usize]
+        var lambda = (1.0f64 + 1.0f64 / mf) * po[2usize] / po[3usize]
+        var fmi = po[6usize]
+        if rule == 1usize {
+            tt = po[1usize] + po[2usize] / mf
+            dff = (mf - 1.0f64) * (1.0f64 + po[1usize] / (po[2usize] / mf)) * (1.0f64 + po[1usize] / (po[2usize] / mf))
+            lambda = nan
+            fmi = nan
+        }
         out[base] = po[0usize]
         out[base + 1usize] = po[1usize]
         out[base + 2usize] = po[2usize]
-        out[base + 3usize] = po[3usize]
-        out[base + 4usize] = po[4usize]
+        out[base + 3usize] = tt
+        out[base + 4usize] = dff
         out[base + 5usize] = po[5usize]
-        let lambda = (1.0f64 + 1.0f64 / f64(m)) * po[2usize] / po[3usize]
         out[base + 6usize] = lambda
-        out[base + 7usize] = po[6usize]
-        let se = math.sqrt[f64](po[3usize])
+        out[base + 7usize] = fmi
+        let se = math.sqrt[f64](tt)
         out[base + 8usize] = se
         let stat = po[0usize] / se
         out[base + 9usize] = stat
-        var dfp = po[4usize]
+        var dfp = dff
         if dfp < 0.001f64 { dfp = 0.001f64 }
         out[base + 10usize] = 2.0f64 * nb.pt(math.abs[f64](stat), dfp, false, false)
-        let tq = nb.qt(0.975f64, dfp, true, false)
-        out[base + 11usize] = po[0usize] - tq * se
-        out[base + 12usize] = po[0usize] + tq * se
+        out[base + 11usize] = po[0usize] + nb.qt(0.025f64, dff, true, false) * se
+        out[base + 12usize] = po[0usize] + nb.qt(0.975f64, dff, true, false) * se
         c += 1usize
     }
+    // pool.r.squared: pool.scalar on the Fisher-transformed multiple correlations with the large-sample df
+    mc.pool_scalar(rz, rv, 1.0f64 / 0.0f64, 1.0f64, po)
+    let qb = po[0usize]
+    let ex = math.exp[f64](2.0f64 * qb)
+    r2[0usize] = (ex - 1.0f64) / (1.0f64 + ex) * ((ex - 1.0f64) / (1.0f64 + ex))
+    let el = math.exp[f64](2.0f64 * (qb - 1.96f64 * math.sqrt[f64](po[3usize])))
+    r2[1usize] = (el - 1.0f64) / (1.0f64 + el) * ((el - 1.0f64) / (1.0f64 + el))
+    let eh = math.exp[f64](2.0f64 * (qb + 1.96f64 * math.sqrt[f64](po[3usize])))
+    r2[2usize] = (eh - 1.0f64) / (1.0f64 + eh) * ((eh - 1.0f64) / (1.0f64 + eh))
+    r2[3usize] = po[6usize]
     ret ok
+}
+
+// mice_run on the flat argument layout the oracle groups use: (n, p, m, maxit, seed, data[n p], ncat[p], meth[p] (-1 none), pred[p p], nv, visit[nv], post[2 p] (lower, upper; NaN none), pas[3 p]); the answer is the number of imputed values, the position in z after the layout, and an error; imp (n p m + 4) and comp (n p m) as mice_run
+fn mice_run_flat(a: *mem.Arena, z: []const f64, imp: []f64, comp: []f64) -> (usize, usize, err) {
+    let n = usize(z[0usize])
+    let p = usize(z[1usize])
+    let m = usize(z[2usize])
+    let maxit = usize(z[3usize])
+    let seed = i64(z[4usize])
+    var at = 5usize
+    let data = z[at..at + n * p]
+    at += n * p
+    let (kind, e1) = mem.alloc[usize](a, p)
+    let (meth, e2) = mem.alloc[usize](a, p)
+    let (lo, e3) = mem.alloc[f64](a, p)
+    let (hi, e4) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (0usize, at, mem.Full) }
+    var j = 0usize
+    while j < p {
+        kind[j] = usize(z[at + j])
+        let code = z[at + p + j]
+        if code < 0.0f64 { meth[j] = 15usize } else { meth[j] = usize(code) }
+        j += 1usize
+    }
+    at += 2usize * p
+    let pred = z[at..at + p * p]
+    at += p * p
+    let nv = usize(z[at])
+    at += 1usize
+    let (visit, e5) = mem.alloc[usize](a, nv + 1usize)
+    if e5 != ok { ret (0usize, at, mem.Full) }
+    var h = 0usize
+    while h < nv {
+        visit[h] = usize(z[at + h])
+        h += 1usize
+    }
+    at += nv
+    j = 0usize
+    while j < p {
+        lo[j] = z[at + 2usize * j]
+        hi[j] = z[at + 2usize * j + 1usize]
+        j += 1usize
+    }
+    at += 2usize * p
+    let pas = z[at..at + 3usize * p]
+    at += 3usize * p
+    let (tot, me) = mice_run(a, data, n, p, m, maxit, kind, meth, pred, lo, hi, pas, visit[0usize..nv], seed, imp, comp)
+    ret (tot, at, me)
 }
