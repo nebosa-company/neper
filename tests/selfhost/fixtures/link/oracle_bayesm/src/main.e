@@ -64,6 +64,40 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if blk == 2usize { ret cc[q] }
         ret ci[q]
     }
+    if str.eq(c.name, "mreg") {
+        let n = usize(z[1usize])
+        let k = usize(z[2usize])
+        let m = usize(z[3usize])
+        let (ob, e1) = mem.alloc[f64](a, k * m)
+        let (os2, e2) = mem.alloc[f64](a, m * m)
+        if e1 != ok || e2 != ok { ret nan }
+        let at = 5usize
+        let ye = at + n * m
+        let xe = ye + n * k
+        let be = xe + k * m
+        let ae = be + k * k
+        let ve = ae + m * m
+        if bz.rmultireg(a, &r, z[at..ye], z[ye..xe], z[xe..be], z[be..ae], z[4usize], z[ae..ve], n, k, m, ob, os2) != ok { ret nan }
+        let id = usize(z[ve])
+        if id < k * m { ret ob[id] }
+        ret os2[id - k * m]
+    }
+    if str.eq(c.name, "ureg") {
+        let n = usize(z[1usize])
+        let k = usize(z[2usize])
+        let nr = usize(z[3usize])
+        let (ob, e1) = mem.alloc[f64](a, nr * k)
+        let (os2, e2) = mem.alloc[f64](a, nr)
+        if e1 != ok || e2 != ok { ret nan }
+        let at = 6usize
+        let xe = at + n + n * k
+        let be = xe + k
+        let ae = be + k * k
+        if bz.runireg(a, &r, z[at..at + n], z[at + n..xe], z[xe..be], z[be..ae], z[4usize], z[5usize], n, k, nr, ob, os2) != ok { ret nan }
+        let id = usize(z[ae])
+        if id < nr * k { ret ob[id] }
+        ret os2[id - nr * k]
+    }
     if str.eq(c.name, "breg") {
         let n = usize(z[1usize])
         let k = usize(z[2usize])

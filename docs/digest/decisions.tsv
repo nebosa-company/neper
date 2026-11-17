@@ -3676,4 +3676,5 @@ D6813	724	caret: createDataPartition
 D6814	701	caret: preProcess center, scale and range
 D6815	925	caret: multi-class confusionMatrix
 D6816	605	caret: BoxCoxTrans
-D6817	815	bayesm: densities and the first samplers
+D6817	816	bayesm: densities and the first samplers
+D6818	759	bayesm: rmultireg and runireg

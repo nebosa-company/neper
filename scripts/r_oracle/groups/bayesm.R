@@ -21,4 +21,17 @@ for (rep in 1:25) {
   nb <- sample(10:40, 1); kb2 <- sample(1:4, 1); Xb <- matrix(rnorm(nb * kb2), nb, kb2); yb <- rnorm(nb); bb <- rnorm(kb2); Ab <- rspd(kb2)
   set.seed(sd); bd <- breg(yb, Xb, bb, Ab); for (q in 1:kb2) add("breg", c(sd, nb, kb2, yb, Xb, bb, Ab, q - 1), bd[q], 1e-9)
 }
+# "mreg" (seed, n, k, m, nu, Y, X, Bbar, A, V, id) id 0..k*m-1 B column-major, then Sigma; "ureg" (seed, n, k, R, nu, ssq, y, X, betabar, A, id) id 0..R*k-1 beta (R by k column-major), then sigmasq
+for (rep in 1:12) {
+  sd <- sample(1:100000, 1); n <- sample(15:50, 1); k <- sample(1:3, 1); m <- sample(2:3, 1); nu <- m + sample(2:8, 1)
+  X <- matrix(rnorm(n * k), n, k); Y <- X %*% matrix(rnorm(k * m), k) + matrix(rnorm(n * m), n); Bbar <- matrix(rnorm(k * m), k); A <- rspd(k) * 0.1; V <- rspd(m)
+  set.seed(sd); o <- rmultireg(Y, X, Bbar, A, nu, V)
+  for (q in seq_len(k * m)) add("mreg", c(sd, n, k, m, nu, Y, X, Bbar, A, V, q - 1), as.vector(o$B)[q], 1e-8)
+  for (q in seq_len(m * m)) add("mreg", c(sd, n, k, m, nu, Y, X, Bbar, A, V, k * m + q - 1), as.vector(o$Sigma)[q], 1e-8)
+  y1 <- Y[, 1]; nr <- 4; ssq <- var(y1); nu1 <- sample(3:9, 1); bb <- rnorm(k)
+  set.seed(sd); o2 <- runireg(Data = list(y = y1, X = X), Prior = list(betabar = bb, A = A, nu = nu1, ssq = ssq), Mcmc = list(R = nr, keep = 1, nprint = 0))
+  bd <- as.vector(o2$betadraw); sg <- as.vector(o2$sigmasqdraw)
+  for (q in seq_along(bd)) add("ureg", c(sd, n, k, nr, nu1, ssq, y1, X, bb, A, q - 1), bd[q], 1e-8)
+  for (q in seq_along(sg)) add("ureg", c(sd, n, k, nr, nu1, ssq, y1, X, bb, A, nr * k + q - 1), sg[q], 1e-8)
+}
 emit("bayesm", "bayesm", list(cases))

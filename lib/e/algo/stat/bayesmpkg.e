@@ -397,3 +397,255 @@ fn breg(a: *mem.Arena, r: *rng.Rng, y: []const f64, x: []const f64, betabar: []c
     }
     ret ok
 }
+
+// the posterior pieces shared by the regression draws: with the prior stacked under the data, W = [X; chol(A)], z = [y; chol(A) betabar] (m response columns at once), IR = chol(W'W)^-1, Btilde = IR IR' W'z and the residual cross-product S
+// (X is n by k, y n by m, all column-major)
+fn stacked_fit(a: *mem.Arena, y: []const f64, x: []const f64, betabar: []const f64, am: []const f64, n: usize, k: usize, m: usize, ir: []f64, bt: []f64, s: []f64) -> err {
+    let (ra, e1) = mem.alloc[f64](a, k * k)
+    let (w, e2) = mem.alloc[f64](a, (n + k) * k)
+    let (z, e3) = mem.alloc[f64](a, (n + k) * m)
+    let (wtw, e4) = mem.alloc[f64](a, k * k)
+    let (u, e5) = mem.alloc[f64](a, k * k)
+    let (wz, e6) = mem.alloc[f64](a, k * m)
+    let (t1, e7) = mem.alloc[f64](a, k * m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret mem.Full }
+    if !chol_upper(am, k, ra) { ret mem.Full }
+    let nk = n + k
+    var c = 0usize
+    var i = 0usize
+    while c < k {
+        i = 0usize
+        while i < n {
+            w[c * nk + i] = x[c * n + i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < k {
+            w[c * nk + n + i] = ra[c * k + i]
+            i += 1usize
+        }
+        c += 1usize
+    }
+    c = 0usize
+    while c < m {
+        i = 0usize
+        while i < n {
+            z[c * nk + i] = y[c * n + i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < k {
+            var sv = 0.0f64
+            var j = 0usize
+            while j < k {
+                sv += ra[j * k + i] * betabar[c * k + j]
+                j += 1usize
+            }
+            z[c * nk + n + i] = sv
+            i += 1usize
+        }
+        c += 1usize
+    }
+    c = 0usize
+    while c < k {
+        var c2 = 0usize
+        while c2 < k {
+            var sv = 0.0f64
+            i = 0usize
+            while i < nk {
+                sv += w[c * nk + i] * w[c2 * nk + i]
+                i += 1usize
+            }
+            wtw[c2 * k + c] = sv
+            c2 += 1usize
+        }
+        var q = 0usize
+        while q < m {
+            var sv = 0.0f64
+            i = 0usize
+            while i < nk {
+                sv += w[c * nk + i] * z[q * nk + i]
+                i += 1usize
+            }
+            wz[q * k + c] = sv
+            q += 1usize
+        }
+        c += 1usize
+    }
+    if !chol_upper(wtw, k, u) { ret mem.Full }
+    inv_upper(u, k, ir)
+    c = 0usize
+    while c < m {
+        i = 0usize
+        while i < k {
+            var sv = 0.0f64
+            var j = 0usize
+            while j < k {
+                sv += ir[i * k + j] * wz[c * k + j]
+                j += 1usize
+            }
+            t1[c * k + i] = sv
+            i += 1usize
+        }
+        i = 0usize
+        while i < k {
+            var sv = 0.0f64
+            var j = 0usize
+            while j < k {
+                sv += ir[j * k + i] * t1[c * k + j]
+                j += 1usize
+            }
+            bt[c * k + i] = sv
+            i += 1usize
+        }
+        c += 1usize
+    }
+    let (ev, e8) = mem.alloc[f64](a, nk * m)
+    if e8 != ok { ret mem.Full }
+    c = 0usize
+    while c < m {
+        i = 0usize
+        while i < nk {
+            var sv = 0.0f64
+            var j = 0usize
+            while j < k {
+                sv += w[j * nk + i] * bt[c * k + j]
+                j += 1usize
+            }
+            ev[c * nk + i] = z[c * nk + i] - sv
+            i += 1usize
+        }
+        c += 1usize
+    }
+    c = 0usize
+    while c < m {
+        var c2 = 0usize
+        while c2 < m {
+            var sv = 0.0f64
+            i = 0usize
+            while i < nk {
+                sv += ev[c * nk + i] * ev[c2 * nk + i]
+                i += 1usize
+            }
+            s[c2 * m + c] = sv
+            c2 += 1usize
+        }
+        c += 1usize
+    }
+    ret ok
+}
+
+// rmultireg(Y, X, Bbar, A, nu, V): one draw of the coefficient matrix B (k by m) and the covariance Sigma (m by m) of the multivariate regression
+fn rmultireg(a: *mem.Arena, r: *rng.Rng, y: []const f64, x: []const f64, bbar: []const f64, am: []const f64, nu: f64, v: []const f64, n: usize, k: usize, m: usize, outb: []f64, outs: []f64) -> err {
+    let (ir, e1) = mem.alloc[f64](a, k * k)
+    let (bt, e2) = mem.alloc[f64](a, k * m)
+    let (s, e3) = mem.alloc[f64](a, m * m)
+    let (vs, e4) = mem.alloc[f64](a, m * m)
+    let (uvs, e5) = mem.alloc[f64](a, m * m)
+    let (ivs, e6) = mem.alloc[f64](a, m * m)
+    let (ivsm, e7) = mem.alloc[f64](a, m * m)
+    let (cw, e8) = mem.alloc[f64](a, m * m)
+    let (ci, e9) = mem.alloc[f64](a, m * m)
+    let (wm, e10) = mem.alloc[f64](a, m * m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok { ret mem.Full }
+    let fe = stacked_fit(a, y, x, bbar, am, n, k, m, ir, bt, s)
+    if fe != ok { ret fe }
+    var i = 0usize
+    while i < m * m {
+        vs[i] = v[i] + s[i]
+        i += 1usize
+    }
+    if !chol_upper(vs, m, uvs) { ret mem.Full }
+    inv_upper(uvs, m, ivs)
+    var c = 0usize
+    while c < m {
+        var rr = 0usize
+        while rr < m {
+            var sv = 0.0f64
+            var q = 0usize
+            while q < m {
+                sv += ivs[q * m + rr] * ivs[q * m + c]
+                q += 1usize
+            }
+            ivsm[c * m + rr] = sv
+            rr += 1usize
+        }
+        c += 1usize
+    }
+    let we = rwishart(a, r, nu + f64(n), ivsm, m, wm, outs, cw, ci)
+    if we != ok { ret we }
+    let (draw, e11) = mem.alloc[f64](a, k * m)
+    let (idr, e12) = mem.alloc[f64](a, k * m)
+    if e11 != ok || e12 != ok { ret mem.Full }
+    i = 0usize
+    while i < k * m {
+        draw[i] = rng.norm(r)
+        i += 1usize
+    }
+    c = 0usize
+    while c < m {
+        i = 0usize
+        while i < k {
+            var sv = 0.0f64
+            var j = 0usize
+            while j < k {
+                sv += ir[j * k + i] * draw[c * k + j]
+                j += 1usize
+            }
+            idr[c * k + i] = sv
+            i += 1usize
+        }
+        c += 1usize
+    }
+    c = 0usize
+    while c < m {
+        i = 0usize
+        while i < k {
+            var sv = 0.0f64
+            var j = 0usize
+            while j < m {
+                sv += idr[j * k + i] * ci[j * m + c]
+                j += 1usize
+            }
+            outb[c * k + i] = bt[c * k + i] + sv
+            i += 1usize
+        }
+        c += 1usize
+    }
+    ret ok
+}
+
+// runireg(Data, Prior, Mcmc) with keep = 1: nr iid draws of the coefficients (nr by k, column-major) and of sigma squared, each a chi-square then k normals
+fn runireg(a: *mem.Arena, r: *rng.Rng, y: []const f64, x: []const f64, betabar: []const f64, am: []const f64, nu: f64, ssq: f64, n: usize, k: usize, nr: usize, outb: []f64, outs: []f64) -> err {
+    let (ir, e1) = mem.alloc[f64](a, k * k)
+    let (bt, e2) = mem.alloc[f64](a, k)
+    let (s, e3) = mem.alloc[f64](a, 1usize)
+    let (nz, e4) = mem.alloc[f64](a, k)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    let fe = stacked_fit(a, y, x, betabar, am, n, k, 1usize, ir, bt, s)
+    if fe != ok { ret fe }
+    var it = 0usize
+    while it < nr {
+        let sig = (nu * ssq + s[0usize]) / rd.rchisq(r, nu + f64(n))
+        let sd = math.sqrt[f64](sig)
+        var i = 0usize
+        while i < k {
+            nz[i] = rng.norm(r)
+            i += 1usize
+        }
+        i = 0usize
+        while i < k {
+            var sv = 0.0f64
+            var j = 0usize
+            while j < k {
+                sv += ir[j * k + i] * nz[j]
+                j += 1usize
+            }
+            outb[i * nr + it] = bt[i] + sd * sv
+            i += 1usize
+        }
+        outs[it] = sig
+        it += 1usize
+    }
+    ret ok
+}
