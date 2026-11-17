@@ -85,32 +85,32 @@ for (rep in 1:40) {
 for (rep in 1:24) {
   M <- sample(2:3, 1); ks <- sample(2:3, M, TRUE); ns <- lapply(ks, function(k) sample(3:6, k, TRUE)); ties <- rep %% 3 == 0
   ds <- lapply(1:M, function(i) sets(ks[i], ns[[i]], ties))
-  ncomb <- prod(sapply(ns, nc)); m <- if (rep %% 2 == 1) 1 else 2; if (m == 2 && ncomb > 3000) m <- 1
+  ncomb <- prod(sapply(ns, nc)); m <- rep %% 3; if (m == 2 && ncomb > 3000) m <- 1
   nsim <- if (m == 2) 10000 else sample(c(120, 250), 1); seed <- sample(1:100000, 1); dist <- rep %% 3 != 0
   tail <- c(M, ks, unlist(ns), unlist(ds))
   set.seed(seed)
   r <- do.call(ad.test.combined, c(ds, list(method = meth[m + 1], Nsim = nsim, dist = dist)))
   base <- c(m, seed, nsim)
-  for (p in 0:3) { add("adc", c(base, p, 0, tail), r$ad.c[1, p + 1]); add("adc", c(base, 4 + p, 0, tail), r$ad.c[2, p + 1]) }
+  for (p in 0:(if (m == 0) 2 else 3)) { add("adc", c(base, p, 0, tail), r$ad.c[1, p + 1]); add("adc", c(base, 4 + p, 0, tail), r$ad.c[2, p + 1]) }
   add("adc", c(base, 8, 0, tail), r$sig.c); add("adc", c(base, 9, 0, tail), r$mu.c)
   if (dist) { add("adc", c(base, 11, 0, tail), length(r$null.dist1)); for (i in pickidx(length(r$null.dist1), 5)) add("adc", c(base, 10, i, tail), r$null.dist1[i]) }
   tt <- (rep - 1) %% 3
   set.seed(seed)
   q <- do.call(qn.test.combined, c(ds, list(test = c("KW", "vdW", "NS")[tt + 1], method = meth[m + 1], Nsim = nsim, dist = dist)))
   qb <- c(m, tt, seed, nsim)
-  for (p in 0:2) add("qnc", c(qb, p, 0, M, ks, unlist(ns), unlist(ds)), q$qn.c[[p + 1]])
+  for (p in 0:(if (m == 0) 1 else 2)) add("qnc", c(qb, p, 0, M, ks, unlist(ns), unlist(ds)), q$qn.c[[p + 1]])
   if (dist) { add("qnc", c(qb, 4, 0, M, ks, unlist(ns), unlist(ds)), length(q$null.dist)); for (i in pickidx(length(q$null.dist), 5)) add("qnc", c(qb, 3, i, M, ks, unlist(ns), unlist(ds)), q$null.dist[i]) }
 }
 for (rep in 1:20) {
   M <- sample(2:3, 1); tv <- sample(2:4, M, TRUE)
   dl <- lapply(tv, function(tn) list(sample(0:4, tn, TRUE), sample(1:4, tn, TRUE)))
   ncomb <- prod(sapply(dl, function(d) choose(sum(d[[1]]) + length(d[[1]]) - 1, length(d[[1]]) - 1)))
-  m <- if (rep %% 2 == 1) 1 else 2; if (m == 2 && ncomb > 4000) m <- 1
+  m <- rep %% 3; if (m == 2 && ncomb > 4000) m <- 1
   nsim <- if (m == 2) 10000 else sample(c(150, 300), 1); seed <- sample(1:100000, 1); dist <- rep %% 3 != 0
   set.seed(seed)
   r <- contingency2xt.comb(dl, method = meth[m + 1], dist = dist, Nsim = nsim)
   base <- c(m, seed, nsim); tail <- c(M, tv, unlist(dl))
-  for (p in 0:2) add("c2c", c(base, p, 0, tail), r$kw.c[[p + 1]])
+  for (p in 0:(if (m == 0) 1 else 2)) add("c2c", c(base, p, 0, tail), r$kw.c[[p + 1]])
   if (dist) {
     nd <- r$null.dist
     add("c2c", c(base, 5, 0, tail), nrow(nd))

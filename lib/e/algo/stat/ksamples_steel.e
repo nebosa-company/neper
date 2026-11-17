@@ -7,6 +7,7 @@
 
 use e.algo.rand.r as rng
 use e.algo.stat.ksamples_sim as sm
+use e.algo.stat.pwr as pw
 use e.math
 use e.math.dist as mdist
 use e.math.quadpack as qp
@@ -990,4 +991,628 @@ fn kx_qjt(a: *mem.Arena, p: f64, nn: []const usize) -> (f64, err) {
     if hit { out -= 1usize }
     if out == 0usize { ret (0.0f64 - 1.0f64 / 0.0f64, ok) }
     ret (f64(out - 1usize), ok)
+}
+
+// ---- SteelConfInt: the many-to-one Wilcoxon confidence bounds ----
+
+fn kx_inf() -> f64 { ret 1.0f64 / 0.0f64 }
+
+// the integrand of ProbWilcox: dnorm(z) times the product of pnorm(U_i f1_i - z f2_i)
+type CiCtx = struct { s: usize, f1: []const f64, f2: []const f64, u: []const f64 }
+
+fn ci_f(c: *CiCtx, z: f64) -> f64 {
+    var fac = 1.0f64
+    var i = 0usize
+    while i < c.s {
+        fac = fac * kx_pnorm(c.u[i] * c.f1[i] - z * c.f2[i])
+        i += 1usize
+    }
+    ret fac * mdist.dnorm(z, 0.0f64, 1.0f64, false)
+}
+
+// ProbWilcox(U, n1, ni): the probability that every standardised Wilcoxon count stays below its U
+fn kx_prob_wilcox(a: *mem.Arena, u: []const f64, n1: f64, ni: []const f64) -> (f64, err) {
+    let s = ni.len
+    let (f1, e1) = mem.alloc[f64](a, s)
+    let (f2, e2) = mem.alloc[f64](a, s)
+    if e1 != ok { ret (0.0f64, e1) }
+    if e2 != ok { ret (0.0f64, e2) }
+    var i = 0usize
+    while i < s {
+        f1[i] = math.sqrt[f64](1.0f64 + ni[i] / (n1 + 1.0f64))
+        f2[i] = math.sqrt[f64](ni[i] / (n1 + 1.0f64))
+        i += 1usize
+    }
+    var c = CiCtx { s: s, f1: f1, f2: f2, u: u }
+    let (r, e) = qp.qagi(a, &c, ci_f, 0.0f64, 2i64, 1.220703125e-4f64, 1.220703125e-4f64, 100usize)
+    ret (r.result, e)
+}
+
+type QmCtx = struct { a: *mem.Arena, p: f64, n1: f64, ni: []const f64, u: []f64 }
+
+// pmaxWilcox(z, ns) - p
+fn qm_f(c: *QmCtx, z: f64) -> f64 {
+    let start = mem.mark(c.a)
+    var i = 0usize
+    while i < c.u.len {
+        c.u[i] = z
+        i += 1usize
+    }
+    let (v, e) = kx_prob_wilcox(c.a, c.u, c.n1, c.ni)
+    mem.reset(c.a, start)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret v - c.p
+}
+
+// qmaxWilcox(p, ns): the root of pmaxWilcox - p by uniroot
+fn kx_qmax_wilcox(a: *mem.Arena, p: f64, sizes: []const usize) -> (f64, err) {
+    let s = sizes.len - 1usize
+    let (ni, e1) = mem.alloc[f64](a, s)
+    let (u, e2) = mem.alloc[f64](a, s)
+    if e1 != ok { ret (0.0f64, e1) }
+    if e2 != ok { ret (0.0f64, e2) }
+    var i = 0usize
+    while i < s {
+        ni[i] = f64(sizes[i + 1usize])
+        i += 1usize
+    }
+    var c = QmCtx { a: a, p: p, n1: f64(sizes[0usize]), ni: ni, u: u }
+    let q = mdist.qnorm(p, 0.0f64, 1.0f64, true, false)
+    var lo = q - 2.0f64
+    var hi = q + 2.0f64
+    while qm_f(&c, lo) > 0.0f64 { lo = lo - 1.0f64 }
+    while qm_f(&c, hi) < 0.0f64 { hi = hi + 1.0f64 }
+    ret (pw.zeroin[QmCtx](&c, qm_f, lo, hi, pw.uniroot_tol(), 1000i64), ok)
+}
+
+fn kx_sort1(v: []f64) {
+    var gap = v.len / 2usize
+    while gap > 0usize {
+        var i = gap
+        while i < v.len {
+            let tv = v[i]
+            var j = i
+            while j >= gap && v[j - gap] > tv {
+                v[j] = v[j - gap]
+                j -= gap
+            }
+            v[j] = tv
+            i += 1usize
+        }
+        gap = gap / 2usize
+    }
+}
+
+fn kx_ceil_inf(v: f64) -> f64 {
+    if v != v || v - v != 0.0f64 { ret v }
+    ret math.ceil[f64](v)
+}
+
+fn kx_floor_inf(v: f64) -> f64 {
+    if v != v || v - v != 0.0f64 { ret v }
+    ret math.floor[f64](v)
+}
+
+fn kx_round_inf(v: f64) -> f64 {
+    if v != v || v - v != 0.0f64 { ret v }
+    ret math.round[f64](v)
+}
+
+type SteelCI = struct {
+    levelp: f64, levelc: f64, ellLp: []f64, ellUp: []f64, ellLc: []f64, ellUc: []f64, lp: []f64, up: []f64, lc: []f64, uc: []f64,
+    levelXp: f64, levelXc: f64, ellLXp: []f64, ellUXp: []f64, ellLXc: []f64, ellUXc: []f64, lxp: []f64, uxp: []f64, lxc: []f64, uxc: []f64,
+    nties: usize, method: usize, nsim: usize
+}
+
+// SteelConfInt(..., conf.level, alternative = less (0), greater (1) or two.sided (2), method, Nsim): the first sample is the control
+fn kx_steel_ci(a: *mem.Arena, g: *rng.Rng, x: []const f64, sizes: []const usize, conf: f64, alt: usize, method0: usize, nsim: usize) -> (SteelCI, err) {
+    let k = sizes.len
+    let s = k - 1usize
+    let n = x.len
+    let em = sm.kx_empty(a)
+    var res = SteelCI { levelp: 0.0f64, levelc: 0.0f64, ellLp: em, ellUp: em, ellLc: em, ellUc: em, lp: em, up: em, lc: em, uc: em, levelXp: 0.0f64, levelXc: 0.0f64, ellLXp: em, ellUXp: em, ellLXc: em, ellUXc: em, lxp: em, uxp: em, lxc: em, uxc: em, nties: 0usize, method: method0, nsim: nsim }
+    var gam = conf
+    if alt == 2usize { gam = 1.0f64 - (1.0f64 - conf) / 2.0f64 }
+    let n1 = f64(sizes[0usize])
+    let (ni, e1) = mem.alloc[f64](a, s)
+    let (mu, e2) = mem.alloc[f64](a, s)
+    let (tau, e3) = mem.alloc[f64](a, s)
+    let (pu, e4) = mem.alloc[f64](a, s)
+    if e1 != ok { ret (res, e1) }
+    if e2 != ok { ret (res, e2) }
+    if e3 != ok { ret (res, e3) }
+    if e4 != ok { ret (res, e4) }
+    var i = 0usize
+    while i < s {
+        ni[i] = f64(sizes[i + 1usize])
+        mu[i] = ni[i] * n1 / 2.0f64
+        tau[i] = math.sqrt[f64](n1 * ni[i] * (n1 + ni[i] + 1.0f64) / 12.0f64)
+        i += 1usize
+    }
+    let (zs, ez) = ks_sorted(a, x)
+    if ez != ok { ret (res, ez) }
+    var zl = 0usize
+    i = 0usize
+    while i < n {
+        if i == 0usize || zs[i] != zs[i - 1usize] { zl += 1usize }
+        i += 1usize
+    }
+    let ncomb = sm.kx_ncomb(sizes)
+    let (cgam, eq) = kx_qmax_wilcox(a, gam, sizes)
+    if eq != ok { ret (res, eq) }
+    let (ellpU, f1) = mem.alloc[f64](a, s)
+    let (ellmU, f2) = mem.alloc[f64](a, s)
+    let (ellcU, f3) = mem.alloc[f64](a, s)
+    let (ellpL, f4) = mem.alloc[f64](a, s)
+    let (ellmL, f5) = mem.alloc[f64](a, s)
+    let (ellcL, f6) = mem.alloc[f64](a, s)
+    if f1 != ok || f2 != ok || f3 != ok || f4 != ok || f5 != ok || f6 != ok { ret (res, f1) }
+    var probpU = 0.0f64
+    var probmU = 0.0f64
+    var probcU = 0.0f64
+    var probpL = 0.0f64
+    var probmL = 0.0f64
+    var probcL = 0.0f64
+    if alt != 1usize {
+        i = 0usize
+        while i < s {
+            let tc = tau[i] * cgam + mu[i] + 1.0f64
+            ellpU[i] = kx_ceil_inf(tc)
+            ellmU[i] = kx_floor_inf(tc)
+            ellcU[i] = kx_round_inf(tc)
+            i += 1usize
+        }
+        var w = 0usize
+        while w < 3usize {
+            i = 0usize
+            while i < s {
+                var e = ellpU[i]
+                if w == 1usize { e = ellmU[i] }
+                if w == 2usize { e = ellcU[i] }
+                if e > n1 * ni[i] { e = kx_inf() }
+                pu[i] = (e - 1.0f64 - mu[i]) / tau[i]
+                i += 1usize
+            }
+            let (pr, ep) = kx_prob_wilcox(a, pu, n1, ni)
+            if ep != ok { ret (res, ep) }
+            if w == 0usize { probpU = pr }
+            if w == 1usize { probmU = pr }
+            if w == 2usize { probcU = pr }
+            w += 1usize
+        }
+    }
+    if alt != 0usize {
+        i = 0usize
+        while i < s {
+            let tl = n1 * ni[i] - tau[i] * cgam - mu[i]
+            ellmL[i] = kx_ceil_inf(tl)
+            ellpL[i] = kx_floor_inf(tl)
+            ellcL[i] = kx_round_inf(tl)
+            i += 1usize
+        }
+        var w = 0usize
+        while w < 3usize {
+            i = 0usize
+            while i < s {
+                var e = ellpL[i]
+                if w == 1usize { e = ellmL[i] }
+                if w == 2usize { e = ellcL[i] }
+                if e < 1.0f64 { e = 0.0f64 - kx_inf() }
+                pu[i] = (n1 * ni[i] - e - mu[i]) / tau[i]
+                i += 1usize
+            }
+            let (pr, ep) = kx_prob_wilcox(a, pu, n1, ni)
+            if ep != ok { ret (res, ep) }
+            if w == 0usize { probpL = pr }
+            if w == 1usize { probmL = pr }
+            if w == 2usize { probcL = pr }
+            w += 1usize
+        }
+    }
+    let (ellUp, g1) = mem.alloc[f64](a, s)
+    let (ellUc, g2) = mem.alloc[f64](a, s)
+    let (ellLp, g3) = mem.alloc[f64](a, s)
+    let (ellLc, g4) = mem.alloc[f64](a, s)
+    if g1 != ok || g2 != ok || g3 != ok || g4 != ok { ret (res, g1) }
+    let nan = 0.0f64 / 0.0f64
+    i = 0usize
+    while i < s {
+        ellUp[i] = nan
+        ellUc[i] = nan
+        ellLp[i] = nan
+        ellLc[i] = nan
+        i += 1usize
+    }
+    var probUp = 0.0f64
+    var probUc = 0.0f64
+    var probLp = 0.0f64
+    var probLc = 0.0f64
+    if alt != 1usize {
+        var selp = 0usize
+        probUp = probpU
+        if probcU >= gam && probcU < probUp {
+            selp = 2usize
+            probUp = probcU
+        }
+        if probmU >= gam && probmU < probUp {
+            selp = 1usize
+            probUp = probmU
+        }
+        var selc = 2usize
+        probUc = probcU
+        if kx_abs(probUc - gam) > kx_abs(probpU - gam) {
+            selc = 0usize
+            probUc = probpU
+        }
+        if kx_abs(probUc - gam) > kx_abs(probmU - gam) {
+            selc = 1usize
+            probUc = probmU
+        }
+        i = 0usize
+        while i < s {
+            if selp == 0usize { ellUp[i] = ellpU[i] }
+            if selp == 1usize { ellUp[i] = ellmU[i] }
+            if selp == 2usize { ellUp[i] = ellcU[i] }
+            if selc == 0usize { ellUc[i] = ellpU[i] }
+            if selc == 1usize { ellUc[i] = ellmU[i] }
+            if selc == 2usize { ellUc[i] = ellcU[i] }
+            i += 1usize
+        }
+    }
+    if alt != 0usize {
+        var selp = 0usize
+        probLp = probpL
+        if probcL >= gam && probcL < probLp {
+            selp = 2usize
+            probLp = probcL
+        }
+        if probmL >= gam && probmL < probLp {
+            selp = 1usize
+            probLp = probmL
+        }
+        var selc = 2usize
+        probLc = probcL
+        if kx_abs(probLc - gam) > kx_abs(probpL - gam) {
+            selc = 0usize
+            probLc = probpL
+        }
+        if kx_abs(probLc - gam) > kx_abs(probmL - gam) {
+            selc = 1usize
+            probLc = probmL
+        }
+        i = 0usize
+        while i < s {
+            if selp == 0usize { ellLp[i] = ellpL[i] }
+            if selp == 1usize { ellLp[i] = ellmL[i] }
+            if selp == 2usize { ellLp[i] = ellcL[i] }
+            if selc == 0usize { ellLc[i] = ellpL[i] }
+            if selc == 1usize { ellLc[i] = ellmL[i] }
+            if selc == 2usize { ellLc[i] = ellcL[i] }
+            i += 1usize
+        }
+    }
+    var levelp = probUp
+    var levelc = probUc
+    if alt == 1usize {
+        levelp = probLp
+        levelc = probLc
+    }
+    if alt == 2usize {
+        levelp = probUp + probLp - 1.0f64
+        levelc = probUc + probLc - 1.0f64
+    }
+    var method = method0
+    var useExact = method == 2usize
+    var nrows = 0usize
+    if method != 0usize {
+        if (f64(nsim) < ncomb && method == 2usize) || method == 1usize {
+            method = 1usize
+            useExact = false
+            nrows = nsim
+        } else {
+            nrows = usize(ncomb)
+        }
+    }
+    // the differences treatment - control, sorted, for every comparison
+    let (dm, ed) = mem.alloc[f64](a, n * n + 1usize)
+    if ed != ok { ret (res, ed) }
+    let (lp, h1) = mem.alloc[f64](a, s)
+    let (up, h2) = mem.alloc[f64](a, s)
+    let (lc, h3) = mem.alloc[f64](a, s)
+    let (uc, h4) = mem.alloc[f64](a, s)
+    let (lxp, h5) = mem.alloc[f64](a, s)
+    let (uxp, h6) = mem.alloc[f64](a, s)
+    let (lxc, h7) = mem.alloc[f64](a, s)
+    let (uxc, h8) = mem.alloc[f64](a, s)
+    if h1 != ok || h2 != ok || h3 != ok || h4 != ok || h5 != ok || h6 != ok || h7 != ok || h8 != ok { ret (res, h1) }
+    let ninf = 0.0f64 - kx_inf()
+    i = 0usize
+    while i < s {
+        lp[i] = ninf
+        up[i] = kx_inf()
+        lc[i] = ninf
+        uc[i] = kx_inf()
+        lxp[i] = ninf
+        uxp[i] = kx_inf()
+        lxc[i] = ninf
+        uxc[i] = kx_inf()
+        i += 1usize
+    }
+    let (ellLXp, k1) = mem.alloc[f64](a, s)
+    let (ellUXp, k2) = mem.alloc[f64](a, s)
+    let (ellLXc, k3) = mem.alloc[f64](a, s)
+    let (ellUXc, k4) = mem.alloc[f64](a, s)
+    if k1 != ok || k2 != ok || k3 != ok || k4 != ok { ret (res, k1) }
+    i = 0usize
+    while i < s {
+        ellLXp[i] = nan
+        ellUXp[i] = nan
+        ellLXc[i] = nan
+        ellUXc[i] = nan
+        i += 1usize
+    }
+    var probXp = 0.0f64
+    var probXc = 0.0f64
+    if method != 0usize {
+        let (rx, er) = kx_midranks(a, x)
+        if er != ok { ret (res, er) }
+        let (cx, ec) = sm.kx_ctx(a, 4usize, rx, sizes, rx[0usize..0usize])
+        if ec != ok { ret (res, ec) }
+        var c = cx
+        let (mw, em1) = mem.alloc[f64](a, nrows * s + 1usize)
+        if em1 != ok { ret (res, em1) }
+        if useExact {
+            c.ncomb = nrows
+            c.smat = mw
+            c.gets = true
+            let (ov, eo) = mem.alloc[f64](a, s + 2usize)
+            if eo != ok { ret (res, eo) }
+            i = 0usize
+            while i < s + 2usize {
+                ov[i] = 0.0f64
+                i += 1usize
+            }
+            c.teststat = ov
+            let er2 = sm.kx_run_exact(&c)
+            if er2 != ok { ret (res, er2) }
+        } else {
+            let (rc, er3) = mem.alloc[f64](a, n)
+            if er3 != ok { ret (res, er3) }
+            var is = 0usize
+            while is < nrows {
+                var q = 0usize
+                while q < n {
+                    rc[q] = rx[q]
+                    q += 1usize
+                }
+                sm.kx_rand_perm(g, rc, n, sizes[0usize])
+                sm.kx_steelvec(rc, sizes, c.tc)
+                q = 0usize
+                while q < s {
+                    mw[is + nrows * q] = c.tc[q]
+                    q += 1usize
+                }
+                is += 1usize
+            }
+        }
+        // the standardised maxima (and minima when simulated), sorted
+        var nv = nrows
+        if method == 1usize { nv = 2usize * nrows }
+        let (sv, esv) = mem.alloc[f64](a, nv + 1usize)
+        if esv != ok { ret (res, esv) }
+        var r = 0usize
+        while r < nrows {
+            var mxv = (mw[r] - mu[0usize]) / tau[0usize]
+            var mnv = mxv
+            var q = 1usize
+            while q < s {
+                let v = (mw[r + nrows * q] - mu[q]) / tau[q]
+                if v > mxv { mxv = v }
+                if v < mnv { mnv = v }
+                q += 1usize
+            }
+            sv[r] = mxv
+            if method == 1usize { sv[nrows + r] = 0.0f64 - mnv }
+            r += 1usize
+        }
+        let srt = sv[0usize..nv]
+        kx_sort1(srt)
+        // qdiscrete(srt, gam)
+        let gamN = gam * f64(nv)
+        let im = usize(math.floor[f64](gamN))
+        let ip = usize(math.ceil[f64](gamN))
+        var cm = ninf
+        let cp = srt[ip - 1usize]
+        if im > 0usize {
+            if srt[im - 1usize] < srt[ip - 1usize] {
+                cm = srt[im - 1usize]
+            } else {
+                var le = 0.0f64
+                var z = 0usize
+                while z < nv {
+                    if srt[z] <= srt[im - 1usize] { le += 1.0f64 }
+                    z += 1usize
+                }
+                if le <= gamN {
+                    cm = srt[im - 1usize]
+                } else {
+                    if srt[im - 1usize] > srt[0usize] {
+                        var best = ninf
+                        z = 0usize
+                        while z < nv {
+                            if srt[z] < srt[im - 1usize] && srt[z] > best { best = srt[z] }
+                            z += 1usize
+                        }
+                        cm = best
+                    }
+                }
+            }
+        }
+        let (ellhat, l1) = mem.alloc[f64](a, s)
+        let (elltilde, l2) = mem.alloc[f64](a, s)
+        let (ellest, l3) = mem.alloc[f64](a, s)
+        if l1 != ok || l2 != ok || l3 != ok { ret (res, l1) }
+        var cnt1 = 0.0f64
+        var cnt2 = 0.0f64
+        var cnt3 = 0.0f64
+        i = 0usize
+        while i < s {
+            ellhat[i] = kx_ceil_inf(tau[i] * cp + mu[i])
+            elltilde[i] = kx_floor_inf(tau[i] * cm + mu[i])
+            ellest[i] = kx_round_inf(tau[i] * (cm + cp) / 2.0f64 + mu[i])
+            i += 1usize
+        }
+        r = 0usize
+        while r < nrows {
+            var s1 = true
+            var s2 = true
+            var s3 = true
+            var q = 0usize
+            while q < s {
+                let w = mw[r + nrows * q]
+                if !(w <= ellhat[q]) { s1 = false }
+                if !(w <= elltilde[q]) { s2 = false }
+                if !(w <= ellest[q]) { s3 = false }
+                q += 1usize
+            }
+            if s1 { cnt1 += 1.0f64 }
+            if s2 { cnt2 += 1.0f64 }
+            if s3 { cnt3 += 1.0f64 }
+            r += 1usize
+        }
+        var pe1 = cnt1 / f64(nrows)
+        var pe2 = cnt2 / f64(nrows)
+        var pe3 = cnt3 / f64(nrows)
+        var gx = gam
+        if alt == 2usize {
+            pe1 = 1.0f64 - 2.0f64 * (1.0f64 - pe1)
+            pe2 = 1.0f64 - 2.0f64 * (1.0f64 - pe2)
+            pe3 = 1.0f64 - 2.0f64 * (1.0f64 - pe3)
+            gx = conf
+        }
+        if alt != 1usize {
+            var selp = 0usize
+            probXp = pe1
+            if pe2 >= gx && pe2 < probXp {
+                selp = 1usize
+                probXp = pe2
+            }
+            if pe3 >= gx && pe3 < probXp {
+                selp = 2usize
+                probXp = pe3
+            }
+            var selc = 0usize
+            probXc = pe1
+            if kx_abs(probXc - gx) > kx_abs(pe2 - gx) {
+                selc = 1usize
+                probXc = pe2
+            }
+            if kx_abs(probXc - gx) > kx_abs(pe3 - gx) {
+                selc = 2usize
+                probXc = pe3
+            }
+            i = 0usize
+            while i < s {
+                if selp == 0usize { ellUXp[i] = ellhat[i] + 1.0f64 }
+                if selp == 1usize { ellUXp[i] = elltilde[i] + 1.0f64 }
+                if selp == 2usize { ellUXp[i] = ellest[i] + 1.0f64 }
+                if selc == 0usize { ellUXc[i] = ellhat[i] + 1.0f64 }
+                if selc == 1usize { ellUXc[i] = elltilde[i] + 1.0f64 }
+                if selc == 2usize { ellUXc[i] = ellest[i] + 1.0f64 }
+                i += 1usize
+            }
+        }
+        if alt != 0usize {
+            var selp = 0usize
+            probXp = pe1
+            if pe2 >= gx && pe2 < probXp {
+                selp = 1usize
+                probXp = pe2
+            }
+            if pe3 >= gx && pe3 < probXp {
+                selp = 2usize
+                probXp = pe3
+            }
+            var selc = 0usize
+            probXc = pe1
+            if kx_abs(probXc - gx) > kx_abs(pe2 - gx) {
+                selc = 1usize
+                probXc = pe2
+            }
+            if kx_abs(probXc - gx) > kx_abs(pe3 - gx) {
+                selc = 2usize
+                probXc = pe3
+            }
+            i = 0usize
+            while i < s {
+                let nn1 = n1 * ni[i]
+                if selp == 0usize { ellLXp[i] = nn1 - ellhat[i] }
+                if selp == 1usize { ellLXp[i] = nn1 - elltilde[i] }
+                if selp == 2usize { ellLXp[i] = nn1 - ellest[i] }
+                if selc == 0usize { ellLXc[i] = nn1 - ellhat[i] }
+                if selc == 1usize { ellLXc[i] = nn1 - elltilde[i] }
+                if selc == 2usize { ellLXc[i] = nn1 - ellest[i] }
+                i += 1usize
+            }
+        }
+    }
+    // the bounds: the ell-th smallest difference treatment - control
+    var istart = sizes[0usize]
+    var ci = 0usize
+    while ci < s {
+        let nci = sizes[ci + 1usize]
+        var cnt = 0usize
+        var p = 0usize
+        while p < nci {
+            var q = 0usize
+            while q < sizes[0usize] {
+                dm[cnt] = x[istart + p] - x[q]
+                cnt += 1usize
+                q += 1usize
+            }
+            p += 1usize
+        }
+        let dd = dm[0usize..cnt]
+        kx_sort1(dd)
+        let nn1 = n1 * ni[ci]
+        if alt != 1usize {
+            if ellUp[ci] > nn1 { up[ci] = kx_inf() } else { up[ci] = dd[usize(ellUp[ci]) - 1usize] }
+            if ellUc[ci] > nn1 { uc[ci] = kx_inf() } else { uc[ci] = dd[usize(ellUc[ci]) - 1usize] }
+            if method != 0usize {
+                if ellUXp[ci] > nn1 { uxp[ci] = kx_inf() } else { uxp[ci] = dd[usize(ellUXp[ci]) - 1usize] }
+                if ellUXc[ci] > nn1 { uxc[ci] = kx_inf() } else { uxc[ci] = dd[usize(ellUXc[ci]) - 1usize] }
+            }
+        }
+        if alt != 0usize {
+            if ellLp[ci] < 1.0f64 { lp[ci] = ninf } else { lp[ci] = dd[usize(ellLp[ci]) - 1usize] }
+            if ellLc[ci] < 1.0f64 { lc[ci] = ninf } else { lc[ci] = dd[usize(ellLc[ci]) - 1usize] }
+            if method != 0usize {
+                if ellLXp[ci] < 1.0f64 { lxp[ci] = ninf } else { lxp[ci] = dd[usize(ellLXp[ci]) - 1usize] }
+                if ellLXc[ci] < 1.0f64 { lxc[ci] = ninf } else { lxc[ci] = dd[usize(ellLXc[ci]) - 1usize] }
+            }
+        }
+        istart += nci
+        ci += 1usize
+    }
+    ret (SteelCI { levelp: kx_round_inf2(levelp), levelc: kx_round_inf2(levelc), ellLp: ellLp, ellUp: ellUp, ellLc: ellLc, ellUc: ellUc, lp: lp, up: up, lc: lc, uc: uc, levelXp: kx_round_inf2(probXp), levelXc: kx_round_inf2(probXc), ellLXp: ellLXp, ellUXp: ellUXp, ellLXc: ellLXc, ellUXc: ellUXc, lxp: lxp, uxp: uxp, lxc: lxc, uxc: uxc, nties: n - zl, method: method, nsim: nsim }, ok)
+}
+
+fn kx_abs(v: f64) -> f64 {
+    if v < 0.0f64 { ret 0.0f64 - v }
+    ret v
+}
+
+// round(x, 6) as the package prints the achieved level
+fn kx_round_inf2(v: f64) -> f64 { ret sm.kx_round(v, 6i64) }
+
+fn ks_sorted(a: *mem.Arena, x: []const f64) -> ([]f64, err) {
+    let (s, e) = mem.alloc[f64](a, x.len)
+    if e != ok { ret (s, e) }
+    var i = 0usize
+    while i < x.len {
+        s[i] = x[i]
+        i += 1usize
+    }
+    kx_sort1(s)
+    ret (s, ok)
 }

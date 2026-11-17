@@ -29,15 +29,32 @@ fn kx_cround(v: f64) -> f64 {
     ret 0.0f64 - math.floor[f64](0.5f64 - v)
 }
 
-// R's round(x, digits) for a few digits
+// R's round(x, digits) (R >= 4.0.0, nmath/fround.c): the nearer of the two decimal candidates, a tie going to the even one
 fn kx_round(x: f64, digits: i64) -> f64 {
+    if x != x || x - x != 0.0f64 || x == 0.0f64 { ret x }
+    var ax = x
+    var sgn = 1.0f64
+    if x < 0.0f64 {
+        ax = 0.0f64 - x
+        sgn = 0.0f64 - 1.0f64
+    }
+    if f64(digits) + (math.floor[f64](math.log2[f64](ax)) + 0.5f64) * 0.301029995663981195f64 > 15.0f64 { ret x }
     var p = 1.0f64
     var i = 0i64
     while i < digits {
         p = p * 10.0f64
         i += 1i64
     }
-    ret kx_cround(x * p) / p
+    let x10 = p * ax
+    let i10 = math.floor[f64](x10)
+    let xd = i10 / p
+    let xu = math.ceil[f64](x10) / p
+    let du = xu - ax
+    let dd = ax - xd
+    var even = false
+    if i10 - 2.0f64 * math.floor[f64](i10 / 2.0f64) == 0.0f64 { even = true }
+    if dd < du || (dd == du && even) { ret sgn * xd }
+    ret sgn * xu
 }
 
 // R's signif(x, digits) (fprec): scale by a power of ten, round to even, scale back
@@ -402,6 +419,30 @@ fn kx_steelstat(rx: []const f64, ns: []const usize, mu: []const f64, tau: []cons
     }
 }
 
+// SteelTestStatVec: the Wilcoxon count of the control against each other sample
+fn kx_steelvec(rx: []const f64, ns: []const usize, out: []f64) {
+    var istart = ns[0usize]
+    var i = 1usize
+    while i < ns.len {
+        let iend = istart + ns[i]
+        var ri = 0.0f64
+        var j = istart
+        while j < iend {
+            var m = 0usize
+            while m < ns[0usize] {
+                if rx[m] <= rx[j] {
+                    if rx[m] == rx[j] { ri += 0.5f64 } else { ri += 1.0f64 }
+                }
+                m += 1usize
+            }
+            j += 1usize
+        }
+        out[i - 1usize] = ri
+        istart = iend
+        i += 1usize
+    }
+}
+
 // JTTestStat: the Jonckheere-Terpstra count over all ordered pairs of samples
 fn kx_jtstat(rx: []const f64, ns: []const usize, out: []f64) {
     var mstart = 0usize
@@ -453,6 +494,10 @@ fn kx_eval(c: *ExCtx, out: []f64) {
         kx_jtstat(c.xc, c.ns, out)
         ret
     }
+    if c.kind == 4usize {
+        kx_steelvec(c.xc, c.ns, out)
+        ret
+    }
     kx_qnstat(c.xc, c.ns, out)
 }
 
@@ -467,12 +512,13 @@ fn kx_ctx(a: *mem.Arena, kind: usize, xvec: []const f64, ns: []const usize, zsta
     let dimst = 1usize + (1usize - 1usize)
     var dm = dimst
     if kind == 0usize { dm = 2usize }
+    if kind == 4usize { dm = ns.len - 1usize }
     let (ivec, e1) = mem.alloc[usize](a, nsum)
     let (xc, e2) = mem.alloc[f64](a, nsum)
-    let (tc, e3) = mem.alloc[f64](a, 2usize)
+    let (tc, e3) = mem.alloc[f64](a, ns.len + 2usize)
     let (fij, e4) = mem.alloc[f64](a, ns.len * zstar.len + 1usize)
     let (lvec, e5) = mem.alloc[f64](a, zstar.len + 1usize)
-    let (pv, e6) = mem.alloc[f64](a, 2usize)
+    let (pv, e6) = mem.alloc[f64](a, ns.len + 2usize)
     var e = ok
     if e1 != ok { e = e1 }
     if e2 != ok { e = e2 }
