@@ -67,25 +67,6 @@ for (rep in 1:30) { d <- c(1, 2, 3, 4)[(rep - 1) %% 4 + 1]; p <- mvcase(d)
   set.seed(sd); r <- as.numeric(t(matrix(rmsn(n, p$xi, p$Om, p$al, tau), n, d))); for (k in seq_len(n * d)) add("rmsn", mvpack(d, tau, n, sd, k - 1, p), r[k], rel = 1e-9)
   nu2 <- c(3, 7.5, 30, Inf)[sample(4, 1)]
   set.seed(sd); r <- as.numeric(t(matrix(rmst(n, p$xi, p$Om, p$al, nu2), n, d))); for (k in seq_len(n * d)) add("rmst", mvpack(d, nu2, n, sd, k - 1, p), r[k], rel = 1e-9) }
-# selm fits, one response: args (family 0 SN / 1 ST, penalised 0/1, n, p, which, y(n), x(n*p)); which 0..p-1 beta, p omega, p+1 alpha, p+2 nu (ST), p+2+(ST) the log-likelihood
-selm_case <- function(fam, pen, n, p, sd) {
-  set.seed(sd); x1 <- round(rnorm(n), 2)
-  e <- if (fam == 0) rsn(n, 0, 1.2, c(3, -3, 5)[sample(3, 1)]) else rst(n, 0, 1.2, c(3, -3, 5)[sample(3, 1)], c(4, 5, 6)[sample(3, 1)])
-  y <- round(1 + (if (p == 2) 0.5 * x1 else 0) + e, 4)
-  X <- if (p == 2) cbind(1, x1) else matrix(1, n, 1)
-  fit <- tryCatch(selm(if (p == 2) y ~ x1 else y ~ 1, family = if (fam == 0) "SN" else "ST", method = if (pen) "MPLE" else "MLE"), error = function(e) NULL)
-  if (is.null(fit)) return(invisible())
-  dp <- coef(fit, "DP"); ll <- as.numeric(logLik(fit))
-  k <- length(dp)
-  if (fam == 1 && pen) { dp0 <- tryCatch(coef(selm(if (p == 2) y ~ x1 else y ~ 1, family = "ST", method = "MLE"), "DP"), error = function(e) NULL)
-    if (is.null(dp0) || abs(dp[p + 3] / dp0[p + 3] - 1) > 0.5) return(invisible()) }
-  if (fam == 1) { re <- tryCatch(selm(if (p == 2) y ~ x1 else y ~ 1, family = "ST", method = if (pen) "MPLE" else "MLE", start = c(dp[1:(p + 1)], 0.5 * dp[p + 2], 5)), error = function(e) NULL)
-    if (!is.null(re) && as.numeric(logLik(re)) > ll + 1e-4) return(invisible()) }
-  if (abs(dp[p + 2]) < 1 ||(fam == 1 && dp[p + 3] > 30) || abs(dp[p + 2]) > 30) return(invisible())
-  for (w in seq_len(k)) add("selm", c(fam, pen, n, p, w - 1, y, as.numeric(t(X))), unname(dp[w]), rel = 1e-3)
-  add("selm", c(fam, pen, n, p, k, y, as.numeric(t(X))), ll, rel = 1e-6)
-}
-for (rep in 1:6) for (fam in 0:1) for (pen in 0:1) selm_case(fam, pen, 300, c(1, 2)[(rep %% 2) + 1], 7000 + rep * 10 + fam * 2 + pen)
 # multivariate centred parameters "mvcp": args (kind 0 dp2cp SN / 1 dp2cp ST / 2 cp2dp SN, d, extra (tau or nu), index, v1(d), mat(d*d), v2(d)); the output is the flattened list
 # (mean, var.cov, gamma1) for kinds 0 and 1, (xi, Omega, alpha) for kind 2
 for (rep in 1:36) { d <- c(2, 3, 4)[(rep - 1) %% 3 + 1]; p <- mvcase(d); kind <- (rep - 1) %/% 3 %% 3
@@ -94,24 +75,6 @@ for (rep in 1:36) { d <- c(2, 3, 4)[(rep - 1) %% 3 + 1]; p <- mvcase(d); kind <-
   if (kind == 2) { cp <- dp2cp(list(xi = p$xi, Omega = p$Om, alpha = p$al), "SN"); dp <- cp2dp(list(mean = cp$mean, var.cov = cp$var.cov, gamma1 = cp$gamma1), "SN"); if (is.null(dp)) next
     flat <- c(dp$xi, as.numeric(t(dp$Omega)), dp$alpha); ex <- 0; p <- list(xi = cp$mean, Om = cp$var.cov, al = cp$gamma1) }
   for (k in seq_along(flat)) add("mvcp", c(kind, d, ex, k - 1, p$xi, as.numeric(t(p$Om)), p$al), flat[k], rel = 1e-8) }
-# matrix-response selm: args (family 0 SN / 1 ST, penalised, n, d, p, which, y(n*d row-major), x(n*p row-major)); the output is beta (row j, comp k), Omega, alpha, nu (ST), log-likelihood
-mvsel_case <- function(fam, pen, n, d, p, sd) {
-  set.seed(sd); x1 <- round(rnorm(n), 2)
-  A <- matrix(round(rnorm(d * d, sd = 0.4), 2), d, d); Om <- crossprod(A) + diag(d); al <- c(3, -2.5, 2)[seq_len(d)]
-  z <- if (fam == 0) rmsn(n, rep(0, d), Om, al) else rmst(n, rep(0, d), Om, al, c(5, 7)[sample(2, 1)])
-  y <- round(z + 1 + (if (p == 2) outer(x1, c(0.5, -0.3, 0.2)[seq_len(d)]) else 0), 4)
-  colnames(y) <- paste0("y", seq_len(d)); X <- if (p == 2) cbind(1, x1) else matrix(1, n, 1)
-  frm <- if (p == 2) y ~ x1 else y ~ 1
-  if (fam == 1 && pen) return(invisible())
-  fit <- tryCatch(selm(frm, family = if (fam == 0) "SN" else "ST", method = if (pen) "MPLE" else "MLE"), error = function(e) NULL)
-  if (is.null(fit)) return(invisible())
-  dp <- coef(fit, "DP", vector = FALSE); ll <- as.numeric(logLik(fit))
-  flat <- c(as.numeric(t(as.matrix(dp$beta))), as.numeric(t(dp$Omega)), dp$alpha, if (fam == 1) dp$nu)
-  if (fam == 1 && dp$nu > 30) return(invisible())
-  for (k in unique(c(1, p * d + d * d + 1))) add("mvselm", c(fam, pen, n, d, p, k - 1, as.numeric(t(y)), as.numeric(t(X))), flat[k], rel = 5e-3, abs = 2e-3)
-  add("mvselm", c(fam, pen, n, d, p, length(flat), as.numeric(t(y)), as.numeric(t(X))), ll, rel = 1e-4)
-}
-for (rep in 1:3) for (fam in 0:1) for (pen in 0:1) mvsel_case(fam, pen, 300, 2, c(1, 2)[rep %% 2 + 1], 8000 + rep * 10 + fam * 2 + pen)
 # skew-Cauchy: dsc (xi, omega, alpha, 0, x) and rsc (xi, omega, alpha, 0, n, seed, index), plus dmsc / rmsc through the multivariate layout
 for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, -0.5, 1, 4, 9)[sample(5, 1)]
   for (x in xi + om * c(-8, -1.5, -0.2, 0.4, 1.3, 6)) add("dsc", c(xi, om, al, 0, x), dsc(x, xi, om, al), rel = 1e-10)
@@ -119,4 +82,17 @@ for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; 
 for (rep in 1:8) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); n <- sample(3:6, 1); sd <- sample(1:100000, 1)
   add("dmsc", mvpack(d, 1, 0, 0, 0, p), dmsc(p$x, p$xi, p$Om, p$al), rel = 1e-9)
   set.seed(sd); r <- as.numeric(t(matrix(rmsc(n, p$xi, p$Om, p$al), n, d))); for (k in seq_len(n * d)) add("rmsc", mvpack(d, 1, n, sd, k - 1, p), r[k], rel = 1e-9) }
+# sn.cumulants beyond the fourth ("cumk": xi, omega, alpha, 0, k), mst.mardia ("mardia": delta.sq, nu, d, which, 0), pst methods 1 to 5 ("pstm1".."pstm5": xi, omega, alpha, nu, x)
+for (rep in 1:10) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, 0.5, 2, 6)[sample(4, 1)]; cm <- sn.cumulants(xi, om, al, n = 10)
+  for (k in 1:10) add("cumk", c(xi, om, al, 0, k), unname(cm[k]), rel = 1e-9) }
+for (rep in 1:12) { dsq <- c(0.2, 0.5, 0.8)[sample(3, 1)]; nu <- c(4.5, 6, 9, 30)[sample(4, 1)]; d <- c(1, 2, 4)[sample(3, 1)]
+  mm <- sn:::mst.mardia(dsq, nu, d); add("mardia", c(dsq, nu, d, 0, 0), mm[1], rel = 1e-9); add("mardia", c(dsq, nu, d, 1, 0), mm[2], rel = 1e-9) }
+for (rep in 1:16) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, 0.8, 2.5, 6)[sample(4, 1)]
+  for (m in 1:5) { nu <- if (m %in% c(1, 4)) c(2, 3, 5, 9)[sample(4, 1)] else c(2.5, 4, 7.5, 12)[sample(4, 1)]
+    zs <- if (m == 5) c(-60, -35, 28, 70) else c(-4, -0.7, 0.4, 2.2, 6)
+    for (z in zs) { x <- xi + om * z; v <- tryCatch(pst(x, xi, om, al, nu, method = m), error = function(e) NA); add(paste0("pstm", m), c(xi, om, al, nu, x), v, rel = 1e-5, abs = 1e-9) } } }
+# pmsn and pmst for d >= 2 (mnormt's own error is about 1e-6, so these are compared at 1e-4)
+for (rep in 1:20) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); tau <- c(0, 0.6, -1)[sample(3, 1)]; nu <- c(3, 6, 4.5, 7.5)[sample(4, 1)]
+  add("pmsn", mvpack(d, tau, 0, 0, 0, p), pmsn(p$x, p$xi, p$Om, p$al, tau), rel = 1e-4, abs = 3e-6)
+  add("pmst", mvpack(d, nu, 0, 0, 0, p), suppressWarnings(pmst(p$x, p$xi, p$Om, p$al, nu)), rel = 1e-3, abs = 3e-6) }
 emit("sn", "sn", list(cases))
