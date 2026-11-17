@@ -3887,4 +3887,5 @@ D7024	940	vars: VAR estimation, lag selection, SVAR, SVEC, vec2var, irf, fevd, t
 D7025	958	NMF ica seed through fastICA; glmnet through the package C++ algorithms; L457 and L310 closed
 D7026	799	coda, posterior, loo, cramer and ggdist; L299 closed
 D7100	812	ResourceSelection, laeken and rcompanion closed; compositions advanced
-D7101	548	mice engine, rpart port, weighted multinom and polr
+D7101	550	mice engine, rpart port, weighted multinom and polr
+D7102	751	mice engine, pooling and fixtures; L346 closed

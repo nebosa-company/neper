@@ -48635,3 +48635,8 @@ An agent batch merged: rsf, rspf, simulateUsedAvail and the mep and kdepairs num
 ## D7101 — mice engine, rpart port, weighted multinom and polr
 
 Merged from a worktree: `rpartfit.e` (rpart tree growth incl. the complexity undo; mice cart uses minbucket 5, minsplit 15 and the default xval = 10 which takes one sample(nobs) draw), `micemodels.e` (nnet multinom with weights and MASS::polr by the R BFGS with nnet abstol), and `micefull.e` (the chained-equations engine). polyreg draws its uniforms before the fit and polr after. Equal to mice 3.19 on the oracle; pooling against R is the remaining piece of L346. Linux pending.
+
+
+## D7102 — mice engine, pooling and fixtures; L346 closed
+
+The mice univariate methods and the chained-equations loop run through one engine (`micefull`) over the shared numerics of `micepkg`, with the rpart and nnet/polr ports of D7101 behind cart, polyreg and polr; Rubin pooling over lm fits (Rubin and Reiter, Barnard-Rubin df, pool.r.squared, pool.scalar) equals pool() at 1e-9 (oracle_micepool). Every item of the L346 acceptance (imputed values under set.seed for pmm, norm, norm.nob, norm.boot, logreg, polyreg, polr, cart and passive imputation, with the visit sequence and Rubin pooling) has an oracle case, so L346 moves to docs/work-done.jsonl. nnet 7.3-20 and rpart 4.1.27 sources were downloaded with the user approval. Linux pending.
