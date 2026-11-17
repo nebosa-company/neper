@@ -115,7 +115,15 @@ fn fit_rows(a: *mem.Arena, gf: bool, fam: usize, relaxf: bool, gamma: f64, efron
         }
         fe = gl.gaussian(a, xs, ye, wts, lz, uz, n, nkp, alpha, std, vs, lamc, sm)
     }
-    if fam == 0usize || fam == 1usize { fe = gl.glm_path_dev(a, fam, xs, ya[0usize..n], wts, off, lz, uz, n, nkp, alpha, std, vs, lamc, sm, nodv) }
+    if (fam == 0usize || fam == 1usize) && gf {
+        let (dvg, eg1) = mem.alloc[f64](a, nl)
+        let (alg, eg2) = mem.alloc[f64](a, nl)
+        if eg1 != ok || eg2 != ok { ret eg1 }
+        let nfit = gl.glm_binpois(a, fam, xs, ya[0usize..n], wts, off, lz, uz, n, nkp, alpha, std, vs, lamc, 100usize, 1.0e-7f64, sm, dvg, alg)
+        if nfit != nl { ret eg1 }
+    } else if fam == 0usize || fam == 1usize {
+        fe = gl.glm_path_dev(a, fam, xs, ya[0usize..n], wts, off, lz, uz, n, nkp, alpha, std, vs, lamc, sm, nodv)
+    }
     if fam == 3usize {
         fe = gl.cox_ext(a, xs, ya[0usize..n], start, strata, efron, stat, wts, off, lz, uz, n, nkp, alpha, std, vs, lamc, cx, nodv)
         k = 0usize
@@ -229,6 +237,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if e1 != ok { ret nan() }
             if fit_rows(a, gf, fam, relaxf, gamma, efron, grouped, nc, xm, ya, stat, strata, start, wts, off, lo, up, excl, n, p, alpha, std, lam, vf, out) != ok { ret nan() }
             ret checksum(out)
+        }
+        if str.eq(c.name, "glam") && (fam == 0usize || fam == 1usize) {
+            let (cg, eb) = mem.alloc[f64](a, 100usize * (p + 1usize))
+            let (dg, ec) = mem.alloc[f64](a, 100usize)
+            let (alg, ed) = mem.alloc[f64](a, 100usize)
+            if eb != ok || ec != ok || ed != ok { ret nan() }
+            let noln: []const f64 = zero
+            let nfit = gl.glm_binpois(a, fam, xm, ya[0usize..n], wts, off, lo, up, n, p, alpha, std, vf, noln, 100usize, 1.0e-7f64, cg, dg, alg)
+            if usize(x[qo]) == 1usize { ret f64(nfit) }
+            ret checksum(alg[0usize..nfit])
         }
         if str.eq(c.name, "glam") && fam == 4usize {
             // glam: glmnet's own multinomial path (the ported algorithm at the default thresh): query 0 the checksum of its lambdas, 1 their number
