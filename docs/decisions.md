@@ -48655,3 +48655,8 @@ Ports of the lmom 3.3 Fortran (downloaded from CRAN with the user approval) for 
 ## D7105 — DRDID general did entry point, bootstraps, fastglm and trust; L485 closed
 
 DRDID rewritten around one `did` entry point for the panel and repeated cross-section estimators, with the multiplier and weighted bootstraps in R draw order, the fastglm logistic fit reproduced step for step (fastglm 0.1.4 source downloaded with the user approval) and trust::trust for the improved estimators through the exact eigen port. Equal to R at 1e-11 on 98 cases, so L485 moves to docs/work-done.jsonl. The nlm fallback, the IPT range-repair paths and the data-frame preprocessing are not ported. Linux pending.
+
+
+## D7106 — geosphere: Karney geodesic, areaPolygon, perimeter, centroid; L401 closed
+
+A port of the GeographicLib C++ inside geosphere 1.6-8 (series order 6): the inverse and direct problems and the polygon area accumulator behind distGeo, bearing, finalBearing, destPoint, midPoint and areaPolygon, with remainder, remquo, cbrt and hypot written for Neper (about an ulp from libm). R perimeter(matrix) in 1.6-8 returns the sum of absolute coordinates; that value is matched as it stands. Equal to R on 3006 cases, so L401 moves to docs/work-done.jsonl. Linux pending.
