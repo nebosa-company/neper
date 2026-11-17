@@ -48665,3 +48665,8 @@ A port of the GeographicLib C++ inside geosphere 1.6-8 (series order 6): the inv
 ## D7107 — gbm engine, loess, OOB gbm.perf, offsets, factors; L414 closed
 
 The gbm 2.x C++ engine ported line for line (gbmfit.e, gbmr.e) with every loss, the bagging draws through R unif_rand, cross-validation, gbm.more, relative.influence, interact.gbm, permutation.test.gbm, categorical splits and offsets, plus a port of R loess for one predictor (loessfit.e) for gbm.perf OOB. Because gbm picks between equal splits by the last bit of exp and log, correctly rounded cr_exp and cr_log are used (zero differences against R on 3000 and 4000 arguments). Equal to R at 1e-9 on about 7900 cases; every item of the L414 acceptance has an oracle case, so L414 moves to docs/work-done.jsonl. Linux pending.
+
+
+## D7108 — mclust: all covariance models, hc, priors, noise, MclustDR, orientation; L348 closed
+
+Faithful ports of the mclust 6.1.3 Fortran for the EM of all 14 models, hc VVV and EEE, the prior M steps, the noise component, subset initialisation and hcRandomPairs, MclustDR, and the orientation matrices for sim and the bootstrap LRT through exact dgesvd and dsyev ports (EEV, VEV, EVV, VEE). A VEE EM fit now fails where R Fortran dpotrf fails. Twenty fixtures equal R. The orientation of EVE and VVE comes from a long MM iteration whose reached solution is rounding dependent, so sim and the bootstrap LRT from fitted EVE and VVE models are not claimed. Every other item of the L348 acceptance has an oracle case, so L348 moves to docs/work-done.jsonl. Linux pending.
