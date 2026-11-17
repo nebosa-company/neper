@@ -601,11 +601,14 @@ fn var_phi_all(v: *const Var, h: usize, phi: []f64) {
 }
 
 // Psi_s = Phi_s P with P the lower Cholesky factor of crossprod(resid) / (obs - nz), as Psi.varest; false when that is not positive definite
-fn var_psi_all(a: *mem.Arena, v: *const Var, h: usize, out: []f64) -> bool {
+fn var_psi_all(a: *mem.Arena, v: *const Var, h: usize, out: []f64) -> bool { ret var_psi_div(a, v, h, f64(v.obs - v.nz), out) }
+
+// Psi with the residual covariance divided by `divisor` (Psi.vec2var divides by obs)
+fn var_psi_div(a: *mem.Arena, v: *const Var, h: usize, divisor: f64, out: []f64) -> bool {
     let k = v.k
     let phi = zeros(a, (h + 1usize) * k * k)
     var_phi_all(v, h, phi)
-    let sg = resid_cov(a, v.resid, v.obs, k, f64(v.obs - v.nz))
+    let sg = resid_cov(a, v.resid, v.obs, k, divisor)
     let pc = zeros(a, k * k)
     if !v1.var_chol(sg, k, pc) { ret false }
     v1.var_oirf(phi, pc, k, h, out)
@@ -770,6 +773,12 @@ fn var_fecov(a: *mem.Arena, v: *const Var, h: usize, out: []f64) {
         }
         i += 1usize
     }
+    fecov_sigma(a, v, sg, h, out)
+}
+
+// Sigma_yh[i] = sg + sum_{j = 1 ..< i} Phi_j sg Phi_j' for i = 1 ..= h, for the Phi of the model's lag matrices
+fn fecov_sigma(a: *mem.Arena, v: *const Var, sg: []const f64, h: usize, out: []f64) {
+    let k = v.k
     let phi = zeros(a, (h + 1usize) * k * k)
     var_phi_all(v, h, phi)
     var n = 1usize
@@ -1026,6 +1035,13 @@ fn var_fevd_r(a: *mem.Arena, v: *const Var, h: usize, out: []f64) -> bool {
     if !var_psi_all(a, v, h, psi) { ret false }
     let msey = zeros(a, h * k * k)
     var_fecov(a, v, h, msey)
+    fevd_shares(psi, msey, k, h, out)
+    ret true
+}
+
+// the fevd loop of vars: out[(n - 1) k k + i k + m] = sum_{j < n} theta_j[i][m]^2 / mse_n[i][i], theta the blocks (h + 1) of responses, msey the h forecast
+// error covariances
+fn fevd_shares(psi: []const f64, msey: []const f64, k: usize, h: usize, out: []f64) {
     var n = 1usize
     while n <= h {
         var i = 0usize
@@ -1046,5 +1062,4 @@ fn var_fevd_r(a: *mem.Arena, v: *const Var, h: usize, out: []f64) -> bool {
         }
         n += 1usize
     }
-    ret true
 }
