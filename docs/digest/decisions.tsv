@@ -3854,4 +3854,5 @@ D6991	423	sn skew-t cumulants
 D6992	328	sn dp2cp
 D6993	395	imputeTS na_random and na_replace
 D6994	457	polynom solve
-D6995	369	pracma null basis
+D6995	371	pracma null basis
+D6996	560	Rmpfr directed rounding for the arithmetic

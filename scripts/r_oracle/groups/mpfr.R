@@ -101,4 +101,18 @@ for (rep in 1:40) {
 # Euler's constant (28)
 for (prec in c(53, 64, 100, 128, 200)) { z <- Const("gamma", prec); hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(28, prec, 1, 0, 1, 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0); cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0) }
+# directed rounding (100 + op 0 add 1 sub 2 mul 3 div 4 sqrt, prec, m1, e1, m2, e2, mode 0 N 1 Z 2 U 3 D 4 A, which 0 hi 1 lo)
+modes <- c("N", "Z", "U", "D", "A")
+for (rep in 1:200) {
+  op <- sample(0:4, 1); prec <- sample(c(53, 60, 80, 100, 128), 1); md <- sample(0:4, 1)
+  m1 <- sample(1:(2^50), 1); m2 <- sample(1:(2^50), 1); if (runif(1) < 0.5) m1 <- -m1; if (runif(1) < 0.5 && op != 4) m2 <- -m2
+  if (op == 4) m1 <- abs(m1)
+  e1 <- sample(-30:30, 1); e2 <- sample(-30:30, 1)
+  x <- mpfr(m1, 3000) * 2^e1; y <- mpfr(m2, 3000) * 2^e2
+  zz <- switch(op + 1, x + y, x - y, x * y, x / y, sqrt(x))
+  z <- roundMpfr(zz, prec, rnd.mode = modes[md + 1])
+  if (is.finite(z) && z != 0) { hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(100 + op, prec, m1, e1, m2, e2, md)
+    cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+    cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0) }
+}
 emit("mpfr", "Rmpfr", list(cases))

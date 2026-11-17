@@ -48473,3 +48473,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6995 — pracma null basis
 
 `pracma.null_basis`: pracma::null is the complete Q of qr(t(M)) past the rank, so it is computed with the LINPACK dqrdc2 port of e.algo.linalg.decomp and qr_qy on unit vectors; the basis (signs included) equals pracma, not only the projector of D6494. `orth` stays on the SVD projector because its signs come from LAPACK. Linux pending.
+
+
+## D6996 — Rmpfr directed rounding for the arithmetic
+
+`round_to_m(a, m, e, prec, mode)` with mode 0 nearest-even, 1 toward zero, 2 toward +inf, 3 toward -inf, 4 away from zero; `add_m`, `sub_m`, `mul_m`, `div_m` and `sqrt_m` take the mode and the old functions call them with 0. The existing sticky bit of the division and square root already marks an inexact result, so a directed mode only needs the remainder test. Equal to `roundMpfr(x op y, prec, rnd.mode)` on 200 operations (oracle_mpfr). The transcendental functions stay at nearest. Linux pending.

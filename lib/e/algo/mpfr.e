@@ -35,8 +35,8 @@ fn magnitude(a: *mem.Arena, x: bn.Int) -> bn.Int {
     ret x
 }
 
-// m * 2^e rounded to prec bits, to nearest, ties to even
-fn round_to(a: *mem.Arena, m: bn.Int, e: i64, prec: usize) -> (Mp, err) {
+// m * 2^e rounded to prec bits; mode 0 to nearest with ties to even, 1 toward zero, 2 toward +inf, 3 toward -inf, 4 away from zero
+fn round_to_m(a: *mem.Arena, m: bn.Int, e: i64, prec: usize, mode: usize) -> (Mp, err) {
     if m.sign == bn.Sign.Zero { ret (Mp{ m: m, e: 0i64 }, ok) }
     let bits = bn.int_bits(m)
     if bits <= prec { ret (Mp{ m: m, e: e }, ok) }
@@ -51,9 +51,15 @@ fn round_to(a: *mem.Arena, m: bn.Int, e: i64, prec: usize) -> (Mp, err) {
     let c = bn.int_cmp(r, half)
     var q = q0
     var up = false
-    if c > 0i32 { up = true }
-    if c == 0i32 {
-        if q0.sign != bn.Sign.Zero && (q0.limbs[0usize] & 1u32) == 1u32 { up = true }
+    if mode == 0usize {
+        if c > 0i32 { up = true }
+        if c == 0i32 {
+            if q0.sign != bn.Sign.Zero && (q0.limbs[0usize] & 1u32) == 1u32 { up = true }
+        }
+    } else if r.sign != bn.Sign.Zero {
+        if mode == 4usize { up = true }
+        if mode == 2usize && m.sign != bn.Sign.Negative { up = true }
+        if mode == 3usize && m.sign == bn.Sign.Negative { up = true }
     }
     var ee = e + i64(shift)
     if up {
@@ -75,6 +81,12 @@ fn round_to(a: *mem.Arena, m: bn.Int, e: i64, prec: usize) -> (Mp, err) {
     ret (Mp{ m: q, e: ee }, ok)
 }
 
+// m * 2^e rounded to prec bits, to nearest, ties to even
+fn round_to(a: *mem.Arena, m: bn.Int, e: i64, prec: usize) -> (Mp, err) {
+    let (rt_, re_) = round_to_m(a, m, e, prec, 0usize)
+    ret (rt_, re_)
+}
+
 fn from_parts(a: *mem.Arena, mant: i64, e: i64, prec: usize) -> (Mp, err) {
     let (m, e1) = bn.int_from_i64(a, mant)
     if e1 != ok { ret (zero, e1) }
@@ -82,13 +94,13 @@ fn from_parts(a: *mem.Arena, mant: i64, e: i64, prec: usize) -> (Mp, err) {
     ret (rt_, re_)
 }
 
-fn add(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
+fn add_m(a: *mem.Arena, x: Mp, y: Mp, prec: usize, mode: usize) -> (Mp, err) {
     if x.m.sign == bn.Sign.Zero {
-        let (rt2_, re2_) = round_to(a, y.m, y.e, prec)
+        let (rt2_, re2_) = round_to_m(a, y.m, y.e, prec, mode)
         ret (rt2_, re2_)
     }
     if y.m.sign == bn.Sign.Zero {
-        let (rt2_, re2_) = round_to(a, x.m, x.e, prec)
+        let (rt2_, re2_) = round_to_m(a, x.m, x.e, prec, mode)
         ret (rt2_, re2_)
     }
     var e = x.e
@@ -98,7 +110,12 @@ fn add(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
     if e1 != ok || e2 != ok { ret (zero, mem.Full) }
     let (s, e3) = bn.int_add(a, xs, ys)
     if e3 != ok { ret (zero, e3) }
-    let (rt_, re_) = round_to(a, s, e, prec)
+    let (rt_, re_) = round_to_m(a, s, e, prec, mode)
+    ret (rt_, re_)
+}
+
+fn add(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
+    let (rt_, re_) = add_m(a, x, y, prec, 0usize)
     ret (rt_, re_)
 }
 
@@ -109,19 +126,29 @@ fn neg(a: *mem.Arena, x: Mp) -> Mp {
     ret Mp{ m: bn.make_int(a, s, x.m.limbs), e: x.e }
 }
 
+fn sub_m(a: *mem.Arena, x: Mp, y: Mp, prec: usize, mode: usize) -> (Mp, err) {
+    let (rt_, re_) = add_m(a, x, neg(a, y), prec, mode)
+    ret (rt_, re_)
+}
+
 fn sub(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
     let (rt_, re_) = add(a, x, neg(a, y), prec)
     ret (rt_, re_)
 }
 
-fn mul(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
+fn mul_m(a: *mem.Arena, x: Mp, y: Mp, prec: usize, mode: usize) -> (Mp, err) {
     let (p, e1) = bn.int_mul(a, x.m, y.m)
     if e1 != ok { ret (zero, e1) }
-    let (rt_, re_) = round_to(a, p, x.e + y.e, prec)
+    let (rt_, re_) = round_to_m(a, p, x.e + y.e, prec, mode)
     ret (rt_, re_)
 }
 
-fn div(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
+fn mul(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
+    let (rt_, re_) = mul_m(a, x, y, prec, 0usize)
+    ret (rt_, re_)
+}
+
+fn div_m(a: *mem.Arena, x: Mp, y: Mp, prec: usize, mode: usize) -> (Mp, err) {
     if y.m.sign == bn.Sign.Zero { ret (zero, bn.DivideByZero) }
     if x.m.sign == bn.Sign.Zero { ret (x, ok) }
     let bx = bn.int_bits(x.m)
@@ -144,7 +171,12 @@ fn div(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
         qq = q3
     }
     if x.m.sign != y.m.sign { qq = bn.make_int(a, bn.Sign.Negative, qq.limbs) }
-    let (rt_, re_) = round_to(a, qq, x.e - y.e - i64(s) - 1i64, prec)
+    let (rt_, re_) = round_to_m(a, qq, x.e - y.e - i64(s) - 1i64, prec, mode)
+    ret (rt_, re_)
+}
+
+fn div(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
+    let (rt_, re_) = div_m(a, x, y, prec, 0usize)
     ret (rt_, re_)
 }
 
@@ -173,7 +205,7 @@ fn isqrt(a: *mem.Arena, n: bn.Int) -> (bn.Int, err) {
     ret (x, ok)
 }
 
-fn sqrt(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
+fn sqrt_m(a: *mem.Arena, x: Mp, prec: usize, mode: usize) -> (Mp, err) {
     if x.m.sign == bn.Sign.Zero { ret (x, ok) }
     var m = x.m
     var e = x.e
@@ -202,7 +234,12 @@ fn sqrt(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
         if e7 != ok { ret (zero, e7) }
         q = q2
     }
-    let (rt_, re_) = round_to(a, q, (e - i64(2usize * t)) / 2i64 - 1i64, prec)
+    let (rt_, re_) = round_to_m(a, q, (e - i64(2usize * t)) / 2i64 - 1i64, prec, mode)
+    ret (rt_, re_)
+}
+
+fn sqrt(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
+    let (rt_, re_) = sqrt_m(a, x, prec, 0usize)
     ret (rt_, re_)
 }
 

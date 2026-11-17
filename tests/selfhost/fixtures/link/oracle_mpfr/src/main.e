@@ -10,6 +10,42 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if usize(z[0usize]) >= 100usize {
+        // directed rounding: (100 + op 0 add 1 sub 2 mul 3 div 4 sqrt, prec, m1, e1, m2, e2, mode, which 0 hi 1 lo)
+        let dop = usize(z[0usize]) - 100usize
+        let dprec = usize(z[1usize])
+        let dmode = usize(z[6usize])
+        let (dx, d1) = mp.from_parts(a, i64(z[2usize]), i64(z[3usize]), dprec)
+        let (dy, d2) = mp.from_parts(a, i64(z[4usize]), i64(z[5usize]), dprec)
+        if d1 != ok || d2 != ok { ret nan }
+        var dr: mp.Mp = zero
+        var de = ok
+        if dop == 0usize {
+            let (t, e) = mp.add_m(a, dx, dy, dprec, dmode)
+            dr = t
+            de = e
+        } else if dop == 1usize {
+            let (t, e) = mp.sub_m(a, dx, dy, dprec, dmode)
+            dr = t
+            de = e
+        } else if dop == 2usize {
+            let (t, e) = mp.mul_m(a, dx, dy, dprec, dmode)
+            dr = t
+            de = e
+        } else if dop == 3usize {
+            let (t, e) = mp.div_m(a, dx, dy, dprec, dmode)
+            dr = t
+            de = e
+        } else {
+            let (t, e) = mp.sqrt_m(a, dx, dprec, dmode)
+            dr = t
+            de = e
+        }
+        if de != ok { ret nan }
+        let (dhi, dlo) = mp.to_pair(a, dr)
+        if usize(z[7usize]) == 0usize { ret dhi }
+        ret dlo
+    }
     let op = usize(z[0usize])
     let prec = usize(z[1usize])
     let (x, e1) = mp.from_parts(a, i64(z[2usize]), i64(z[3usize]), prec)
