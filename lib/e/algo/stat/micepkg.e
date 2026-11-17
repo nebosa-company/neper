@@ -801,3 +801,43 @@ fn bin_dev(y: f64, mu: f64, w: f64) -> f64 {
     if y < 1.0f64 { t2 = (1.0f64 - y) * math.log[f64]((1.0f64 - y) / (1.0f64 - mu)) }
     ret 2.0f64 * w * (t1 + t2)
 }
+
+// mice::pool.scalar (Rubin 1987): out receives qbar, ubar, b, t, df, r and fmi for the m estimates q with variances u, a complete-data df of n - k (n infinite when not finite)
+fn pool_scalar(q: []const f64, u: []const f64, n: f64, k: f64, out: []f64) {
+    let m = q.len
+    let mf = f64(m)
+    var qb = 0.0f64
+    var ub = 0.0f64
+    var i = 0usize
+    while i < m {
+        qb += q[i]
+        ub += u[i]
+        i += 1usize
+    }
+    qb = qb / mf
+    ub = ub / mf
+    var b = 0.0f64
+    i = 0usize
+    while i < m {
+        b += (q[i] - qb) * (q[i] - qb)
+        i += 1usize
+    }
+    b = b / (mf - 1.0f64)
+    let r = (1.0f64 + 1.0f64 / mf) * b / ub
+    let t = ub + (mf + 1.0f64) * b / mf
+    let lambda = (1.0f64 + 1.0f64 / mf) * b / t
+    let dfold = (mf - 1.0f64) / (lambda * lambda)
+    var df = dfold
+    let dfcom = n - k
+    if dfcom - dfcom == 0.0f64 {
+        let tmp = (1.0f64 - lambda) * (1.0f64 + dfcom) * dfcom
+        df = (mf - 1.0f64) * tmp / ((dfcom + 3.0f64) * (mf - 1.0f64) + lambda * lambda * tmp)
+    }
+    out[0usize] = qb
+    out[1usize] = ub
+    out[2usize] = b
+    out[3usize] = t
+    out[4usize] = df
+    out[5usize] = r
+    out[6usize] = (r + 2.0f64 / (df + 3.0f64)) / (r + 1.0f64)
+}

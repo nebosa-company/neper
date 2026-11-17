@@ -32,4 +32,10 @@ for (rep in 1:40) {
   xa <- as.matrix(num); xa[is.na(xa)] <- NaN
   for (q in seq_along(flat)) cases[[length(cases) + 1]] <- case("imp", c(n, ncol(df), m, maxit, 4, seed, as.vector(xa), q - 1), flat[q], rel = 1e-5, abs = 1e-7)
 }
+# pool.scalar ("pool": (m, n, Q[m], U[m], field): qbar ubar b t df r fmi); n = Inf is the large-sample df
+for (rep in 1:60) {
+  m <- sample(2:12, 1); qs <- round(rnorm(m, 1, 0.3), 4); us <- round(runif(m, 0.05, 0.5), 4); nn <- c(Inf, 25, 60, 200)[sample(4, 1)]
+  r <- pool.scalar(qs, us, n = nn, k = 1); vals <- c(r$qbar, r$ubar, r$b, r$t, r$df, r$r, r$fmi)
+  for (f in 0:6) cases[[length(cases) + 1]] <- case("pool", c(m, nn, qs, us, f), vals[f + 1], rel = 1e-9, abs = 1e-10)
+}
 emit("mice", "mice", list(cases))

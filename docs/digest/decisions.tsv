@@ -3613,4 +3613,5 @@ D6750	830	seriation: the HC family of seriate
 D6751	900	EnvStats: t test power and sample size, normal mean interval widths
 D6752	1715	mice: the chained-equations sampler for the normal linear methods
 D6753	930	mice: predictive mean matching
-D6754	1225	mice: logistic regression imputation
+D6754	1226	mice: logistic regression imputation
+D6755	496	mice: pool.scalar

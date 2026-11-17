@@ -6,11 +6,21 @@ use e.algo.stat.micepkg as mc
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
+
+fn oracle_is_pool(c: *const oracle.Case) -> bool { ret str.eq(c.name, "pool") }
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if oracle_is_pool(c) {
+        let pm = usize(z[0usize])
+        let (po, pe) = mem.alloc[f64](a, 7usize)
+        if pe != ok { ret nan }
+        mc.pool_scalar(z[2usize..2usize + pm], z[2usize + pm..2usize + 2usize * pm], z[1usize], 1.0f64, po)
+        ret po[usize(z[2usize + 2usize * pm])]
+    }
     let n = usize(z[0usize])
     let p = usize(z[1usize])
     let m = usize(z[2usize])
