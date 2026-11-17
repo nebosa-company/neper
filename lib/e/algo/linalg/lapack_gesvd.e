@@ -58,6 +58,22 @@ fn dgesvd_sq(jobu: str, jobvt: str, n: i64, a: []f64, s: []f64, u: []f64, vt: []
     ret info
 }
 
+// dgesvd('A', 'A') of the p by p matrix x: s, u (p by p) and vt (p by p, rows = right singular vectors)
+fn gesvd_aa(a: *mem.Arena, x: []const f64, p: usize, s: []f64, u: []f64, vt: []f64) -> err {
+    let n = i64(p)
+    let (aa, e1) = mem.alloc[f64](a, p * p)
+    let (work, e2) = mem.alloc[f64](a, 3usize * p + 4usize * p * 64usize + 8usize * p)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < p * p {
+        aa[i] = x[i]
+        i += 1usize
+    }
+    let info = dgesvd_sq("A", "A", n, aa, s, u, vt, work)
+    if info != 0i64 { ret mem.Full }
+    ret ok
+}
+
 // the orientation of the Fortran mseevv family: dgesvd('N', 'O') of the p by p matrix x; vt (p by p, column-major) receives V**T (rows = right singular vectors) and s the singular values
 fn gesvd_no(a: *mem.Arena, x: []const f64, p: usize, s: []f64, vt: []f64) -> err {
     let n = i64(p)

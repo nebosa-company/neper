@@ -8,6 +8,7 @@ use e.mem
 use e.algo.stat.ica as ica
 use e.algo.stat.mclustpkg as mp
 use e.algo.linalg.lapack_gesdd as lapack
+use e.algo.linalg.lapack_gesvd as gsv
 
 fn big() -> f64 { ret 1.0e308f64 }
 
@@ -51,7 +52,7 @@ fn polar(a: *mem.Arena, f: []const f64, p: usize, o: []f64) -> err {
     let (u, e2) = mem.alloc[f64](a, p * p)
     let (vt, e3) = mem.alloc[f64](a, p * p)
     if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
-    let e = lapack.svd_all(a, f, p, p, s, u, vt)
+    let e = gsv.gesvd_aa(a, f, p, s, u, vt)
     if e != ok { ret e }
     matmul(u, vt, p, o)
     mem.reset(a, start)
@@ -148,6 +149,33 @@ fn estep_gen(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, mu: []
     }
     mem.reset(a, start)
     ret hood
+}
+
+// the weighted scatter of the Fortran EVE, VEE and VVE (dger of sqrt(z) (x - mu)), kept bit for bit because their orientation search is sensitive to rounding
+fn scatter_dger(x: []const f64, z: []const f64, n: usize, p: usize, g: usize, mu: []const f64, u: []f64) {
+    var k = 0usize
+    while k < g {
+        var q = 0usize
+        while q < p * p {
+            u[k * p * p + q] = 0.0f64
+            q += 1usize
+        }
+        var i = 0usize
+        while i < n {
+            let sz = math.sqrt[f64](z[k * n + i])
+            var b = 0usize
+            while b < p {
+                var c = 0usize
+                while c < p {
+                    u[k * p * p + c * p + b] = u[k * p * p + c * p + b] + ((x[b * n + i] - mu[k * p + b]) * sz) * ((x[c * n + i] - mu[k * p + c]) * sz)
+                    c += 1usize
+                }
+                b += 1usize
+            }
+            i += 1usize
+        }
+        k += 1usize
+    }
 }
 
 // the means and the weighted scatter matrices u of every group from z, dividing by sumz
@@ -257,6 +285,7 @@ fn me_gen(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n:
             k += 1usize
         }
         scatter(x, z, n, p, g, sumz, mu, u)
+        if fam2 { scatter_dger(x, z, n, p, g, mu, u) }
         var inner = 0usize
         if model == 5usize {
             // VEI: scale and shape, warm started from the previous iteration
@@ -739,6 +768,13 @@ fn me_gen(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n:
             }
         }
         if inner > inmax { inmax = inner }
+        if (model == 9usize || model == 11usize) && info.len >= 4usize + p * p {
+            j = 0usize
+            while j < p * p {
+                info[4usize + j] = om[j]
+                j += 1usize
+            }
+        }
         if m_only {
             info[0usize] = 1.0f64
             ret 0.0f64
