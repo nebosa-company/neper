@@ -972,3 +972,347 @@ fn random_foldid(a: *mem.Arena, r: *rng.Rng, n: usize, nfolds: usize, out: []usi
     }
     ret ok
 }
+
+// The Cox family (coxnet, ties by Breslow): indices of the observations in ascending time order (insertion sort, stable)
+fn cox_ord(time: []const f64, ord: []usize) {
+    let n = time.len
+    var i = 0usize
+    while i < n {
+        ord[i] = i
+        i += 1usize
+    }
+    i = 1usize
+    while i < n {
+        let v = ord[i]
+        var k = i
+        while k > 0usize && time[ord[k - 1usize]] > time[v] {
+            ord[k] = ord[k - 1usize]
+            k -= 1usize
+        }
+        ord[k] = v
+        i += 1usize
+    }
+}
+
+// sum over the event times of d_k log d_k, with d_k the weighted number of events tied at the time
+fn cox_dklog(time: []const f64, dq: []const f64, ord: []const usize) -> f64 {
+    let n = time.len
+    var tot = 0.0f64
+    var st = 0usize
+    while st < n {
+        var en = st
+        var dk = 0.0f64
+        while en < n && time[ord[en]] == time[ord[st]] {
+            dk += dq[ord[en]]
+            en += 1usize
+        }
+        if dk > 0.0f64 { tot += dk * math.log[f64](dk) }
+        st = en
+    }
+    ret tot
+}
+
+// e = q exp(f); fills the working weights w (the diagonal of the Hessian) and the working residual wr (the gradient of the partial log-likelihood in f) and returns sum_k d_k log(risk-set sum of e at the k-th event time); s is scratch of n
+fn cox_quant(time: []const f64, dq: []const f64, ord: []const usize, e: []const f64, s: []f64, w: []f64, wr: []f64) -> f64 {
+    let n = time.len
+    var h = 0.0f64
+    var m = n
+    while m > 0usize {
+        m -= 1usize
+        h += e[ord[m]]
+        s[m] = h
+    }
+    var bb = 0.0f64
+    var cc = 0.0f64
+    var lg = 0.0f64
+    var st = 0usize
+    while st < n {
+        var en = st
+        var dk = 0.0f64
+        while en < n && time[ord[en]] == time[ord[st]] {
+            dk += dq[ord[en]]
+            en += 1usize
+        }
+        if dk > 0.0f64 {
+            bb += dk / s[st]
+            cc += dk / (s[st] * s[st])
+            lg += dk * math.log[f64](s[st])
+        }
+        var pos = st
+        while pos < en {
+            let oi = ord[pos]
+            w[oi] = e[oi] * (bb - e[oi] * cc)
+            wr[oi] = dq[oi] - e[oi] * bb
+            pos += 1usize
+        }
+        st = en
+    }
+    ret lg
+}
+
+// The Cox elastic-net path at the lambdas given: the objective is minus the weighted partial log-likelihood (weights normalised to sum 1) plus lambda sum vf_j ((1 - alpha) / 2 b_j^2 + alpha |b_j|) on columns centred and (when standardize) scaled to unit weighted variance, the penalty factors rescaled to sum to p; coef receives p slopes (original scale) per lambda
+// and dev the fraction of the null partial-likelihood deviance explained (glmnet's dev.ratio). status is 1 for an event; wt and off may be empty; lo and up (bounds on the original-scale coefficients) may be empty. Each lambda is solved by outer reweighting (gradient and diagonal Hessian of the partial likelihood) and inner coordinate descent, run until nothing moves
+fn cox(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64, dev: []f64) -> err {
+    let (xs, e1) = mem.alloc[f64](a, n * p)
+    let (sc, e2) = mem.alloc[f64](a, p)
+    let (pf, e3) = mem.alloc[f64](a, p)
+    let (b, e4) = mem.alloc[f64](a, p)
+    let (q, e5) = mem.alloc[f64](a, n)
+    let (dq, e6) = mem.alloc[f64](a, n)
+    let (ee, e7) = mem.alloc[f64](a, n)
+    let (ff, e8) = mem.alloc[f64](a, n)
+    let (w, e9) = mem.alloc[f64](a, n)
+    let (wr, e10) = mem.alloc[f64](a, n)
+    let (ss, e11) = mem.alloc[f64](a, n)
+    let (ord, e12) = mem.alloc[usize](a, n)
+    let (v, e13) = mem.alloc[f64](a, p)
+    let (bs, e14) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok || e13 != ok || e14 != ok { ret e1 }
+    var qs = 0.0f64
+    var i = 0usize
+    while i < n {
+        if wt.len == n { q[i] = wt[i] } else { q[i] = 1.0f64 }
+        qs += q[i]
+        i += 1usize
+    }
+    var og = 0.0f64
+    i = 0usize
+    while i < n {
+        q[i] = q[i] / qs
+        dq[i] = q[i] * status[i]
+        if off.len == n { og += q[i] * off[i] }
+        i += 1usize
+    }
+    cox_ord(time, ord)
+    var vs = 0.0f64
+    var j = 0usize
+    while j < p {
+        vs += vf[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < p {
+        var m = 0.0f64
+        i = 0usize
+        while i < n {
+            m += q[i] * x[j * n + i]
+            i += 1usize
+        }
+        var s = 1.0f64
+        if standardize {
+            var vv = 0.0f64
+            i = 0usize
+            while i < n {
+                vv += q[i] * (x[j * n + i] - m) * (x[j * n + i] - m)
+                i += 1usize
+            }
+            s = math.sqrt[f64](vv)
+        }
+        sc[j] = s
+        i = 0usize
+        while i < n {
+            xs[j * n + i] = (x[j * n + i] - m) / s
+            i += 1usize
+        }
+        pf[j] = vf[j] * f64(p) / vs
+        b[j] = 0.0f64
+        j += 1usize
+    }
+    i = 0usize
+    while i < n {
+        ff[i] = 0.0f64
+        if off.len == n { ff[i] = off[i] - og }
+        ee[i] = q[i] * math.exp[f64](ff[i])
+        i += 1usize
+    }
+    let r0 = 0.0f64 - cox_quant(time, dq, ord, ee, ss, w, wr)
+    var d0 = 0.0f64
+    i = 0usize
+    while i < n {
+        d0 += dq[i] * ff[i]
+        i += 1usize
+    }
+    let risk0 = d0 + r0
+    let rr = 0.0f64 - (cox_dklog(time, dq, ord) + risk0)
+    var k = 0usize
+    while k < lambdas.len {
+        let lam = lambdas[k]
+        var outer = 0usize
+        while outer < 500usize {
+            i = 0usize
+            while i < n {
+                ee[i] = q[i] * math.exp[f64](ff[i])
+                i += 1usize
+            }
+            let lg = cox_quant(time, dq, ord, ee, ss, w, wr)
+            j = 0usize
+            while j < p {
+                var vj = 0.0f64
+                i = 0usize
+                while i < n {
+                    vj += w[i] * xs[j * n + i] * xs[j * n + i]
+                    i += 1usize
+                }
+                v[j] = vj
+                bs[j] = b[j]
+                j += 1usize
+            }
+            var sweep = 0usize
+            while sweep < 100000usize {
+                var dli = 0.0f64
+                j = 0usize
+                while j < p {
+                    var g = 0.0f64
+                    i = 0usize
+                    while i < n {
+                        g += wr[i] * xs[j * n + i]
+                        i += 1usize
+                    }
+                    let u = b[j] * v[j] + g
+                    var at = 0.0f64
+                    if math.abs[f64](u) > pf[j] * lam * alpha { at = soft(u, pf[j] * lam * alpha) / (v[j] + pf[j] * lam * (1.0f64 - alpha)) }
+                    if lo.len == p && at < lo[j] * sc[j] { at = lo[j] * sc[j] }
+                    if up.len == p && at > up[j] * sc[j] { at = up[j] * sc[j] }
+                    let del = at - b[j]
+                    if del != 0.0f64 {
+                        b[j] = at
+                        if v[j] * del * del > dli { dli = v[j] * del * del }
+                        i = 0usize
+                        while i < n {
+                            wr[i] -= del * w[i] * xs[j * n + i]
+                            ff[i] += del * xs[j * n + i]
+                            i += 1usize
+                        }
+                    }
+                    j += 1usize
+                }
+                if dli < 1.0e-30f64 { break }
+                sweep += 1usize
+            }
+            var change = 0.0f64
+            j = 0usize
+            while j < p {
+                if math.abs[f64](b[j] - bs[j]) > change { change = math.abs[f64](b[j] - bs[j]) }
+                j += 1usize
+            }
+            if lg != lg { break }
+            if change < 1.0e-13f64 { break }
+            outer += 1usize
+        }
+        i = 0usize
+        while i < n {
+            ee[i] = q[i] * math.exp[f64](ff[i])
+            i += 1usize
+        }
+        let lgk = cox_quant(time, dq, ord, ee, ss, w, wr)
+        var dk2 = 0.0f64
+        i = 0usize
+        while i < n {
+            dk2 += dq[i] * ff[i]
+            i += 1usize
+        }
+        if dev.len > k { dev[k] = (dk2 - lgk - risk0) / rr }
+        j = 0usize
+        while j < p {
+            coef[k * p + j] = b[j] / sc[j]
+            j += 1usize
+        }
+        k += 1usize
+    }
+    ret ok
+}
+
+// glmnet's automatic lambda sequence for the Cox family (nlambda values from lambda_max down by the ratio 1e-4, or 1e-2 when n < p): lambda_max = max_j |gradient_j| / (vf_j max(alpha, 0.001)) at the null model on the standardised columns (penalty factors rescaled to sum to p; a zero factor is skipped)
+fn cox_lambda_path(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt: []const f64, off: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, nlambda: usize, out: []f64) -> err {
+    let (q, e1) = mem.alloc[f64](a, n)
+    let (dq, e2) = mem.alloc[f64](a, n)
+    let (ee, e3) = mem.alloc[f64](a, n)
+    let (w, e4) = mem.alloc[f64](a, n)
+    let (wr, e5) = mem.alloc[f64](a, n)
+    let (ss, e6) = mem.alloc[f64](a, n)
+    let (ord, e7) = mem.alloc[usize](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret e1 }
+    var qs = 0.0f64
+    var i = 0usize
+    while i < n {
+        if wt.len == n { q[i] = wt[i] } else { q[i] = 1.0f64 }
+        qs += q[i]
+        i += 1usize
+    }
+    var og = 0.0f64
+    i = 0usize
+    while i < n {
+        q[i] = q[i] / qs
+        dq[i] = q[i] * status[i]
+        if off.len == n { og += q[i] * off[i] }
+        i += 1usize
+    }
+    cox_ord(time, ord)
+    i = 0usize
+    while i < n {
+        var fi = 0.0f64
+        if off.len == n { fi = off[i] - og }
+        ee[i] = q[i] * math.exp[f64](fi)
+        i += 1usize
+    }
+    let lg0 = cox_quant(time, dq, ord, ee, ss, w, wr)
+    if lg0 != lg0 { ret e1 }
+    var vs = 0.0f64
+    var j = 0usize
+    while j < p {
+        vs += vf[j]
+        j += 1usize
+    }
+    var lmax = 0.0f64
+    j = 0usize
+    while j < p {
+        var m = 0.0f64
+        i = 0usize
+        while i < n {
+            m += q[i] * x[j * n + i]
+            i += 1usize
+        }
+        var vv = 0.0f64
+        var gj = 0.0f64
+        i = 0usize
+        while i < n {
+            vv += q[i] * (x[j * n + i] - m) * (x[j * n + i] - m)
+            gj += wr[i] * (x[j * n + i] - m)
+            i += 1usize
+        }
+        if standardize { gj = gj / math.sqrt[f64](vv) }
+        let vj = vf[j] * f64(p) / vs
+        if vj > 0.0f64 {
+            var al = alpha
+            if al < 0.001f64 { al = 0.001f64 }
+            let c = math.abs[f64](gj) / (al * vj)
+            if c > lmax { lmax = c }
+        }
+        j += 1usize
+    }
+    var ratio = 1.0e-4f64
+    if n < p { ratio = 1.0e-2f64 }
+    var k = 0usize
+    while k < nlambda {
+        out[k] = lmax * math.pow[f64](ratio, f64(k) / f64(nlambda - 1usize))
+        k += 1usize
+    }
+    ret ok
+}
+
+// how many of the nlambda automatic lambdas glmnet reports for the Cox family: from the fifth on, the path stops once the deviance ratio gains less than a thousandth of itself over the last five lambdas, or passes 0.99
+fn cox_path_len(a: *mem.Arena, x: []const f64, time: []const f64, status: []const f64, wt: []const f64, off: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, nlambda: usize) -> usize {
+    let (lam, e1) = mem.alloc[f64](a, nlambda)
+    let (coef, e2) = mem.alloc[f64](a, nlambda * p)
+    let (dev, e3) = mem.alloc[f64](a, nlambda)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0usize }
+    if cox_lambda_path(a, x, time, status, wt, off, n, p, alpha, standardize, vf, nlambda, lam) != ok { ret 0usize }
+    if cox(a, x, time, status, wt, off, lo, up, n, p, alpha, standardize, vf, lam, coef, dev) != ok { ret 0usize }
+    var k = 4usize
+    while k < nlambda {
+        if (dev[k] - dev[k - 4usize]) / dev[k] < 1.0e-3f64 { ret k + 1usize }
+        if dev[k] > 0.99f64 { ret k + 1usize }
+        k += 1usize
+    }
+    ret nlambda
+}
