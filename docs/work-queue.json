@@ -449,10 +449,10 @@
       "group": "CRAN parity",
       "order": 646,
       "title": "LearnBayes: Bayesian computation helpers",
-      "score": 0.4,
+      "score": 0.45,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6156). pbetap, discint, mnormt.onesided, normal.select, beta.select and bfexch equal LearnBayes on Windows (oracle_learnbayes; Linux pending). D6871: rwmetrop and indepmetrop equal LearnBayes under set.seed. D6872: rigamma, rmnorm, pdisc and pbetat equal LearnBayes. Open: laplace, rejectsampling, importance sampling, Gibbs helpers, the book models. Was: Open (CRAN rank 891). Small to mid. Acceptance, equal to LearnBayes under set.seed: laplace, rejectsampling, importance sampling, gibbs and metropolis helpers for the book models, bayes tests, mnormt.onesided, beta and Dirichlet posterior summaries."
+      "evidence": "Partial (D6156). pbetap, discint, mnormt.onesided, normal.select, beta.select and bfexch equal LearnBayes on Windows (oracle_learnbayes; Linux pending). D6871: rwmetrop and indepmetrop equal LearnBayes under set.seed. D6872: rigamma, rmnorm, pdisc and pbetat equal LearnBayes. D6873: the three mixture-prior posteriors equal LearnBayes. Open: laplace, rejectsampling, importance sampling, Gibbs helpers, the book models. Was: Open (CRAN rank 891). Small to mid. Acceptance, equal to LearnBayes under set.seed: laplace, rejectsampling, importance sampling, gibbs and metropolis helpers for the book models, bayes tests, mnormt.onesided, beta and Dirichlet posterior summaries."
     },
     {
       "id": "L485",

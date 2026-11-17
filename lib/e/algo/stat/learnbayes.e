@@ -382,3 +382,80 @@ fn pbetat(p0: f64, prob: f64, a: f64, b: f64, s: f64, f: f64) -> (f64, f64) {
 }
 
 fn lbeta2(a: f64, b: f64) -> f64 { ret nm.lgammafn(a) + nm.lgammafn(b) - nm.lgammafn(a + b) }
+
+// binomial.beta.mix(probs, betapar, data = (s, f)): the posterior mixture probabilities (post) and beta parameters (pa, pb) of a mixture of beta priors for a binomial proportion
+fn binomial_beta_mix(probs: []const f64, a: []const f64, b: []const f64, s: f64, f: f64, post: []f64, pa: []f64, pb: []f64) {
+    let n = probs.len
+    var tot = 0.0f64
+    var i = 0usize
+    while i < n {
+        pa[i] = a[i] + s
+        pb[i] = b[i] + f
+        let p = pa[i] / (pa[i] + pb[i])
+        let mp = math.exp[f64](nb.dbinom(s, s + f, p, true) + nb.dbeta(p, a[i], b[i], true) - nb.dbeta(p, pa[i], pb[i], true))
+        post[i] = probs[i] * mp
+        tot += post[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        post[i] = post[i] / tot
+        i += 1usize
+    }
+}
+
+// normal.normal.mix(probs, normalpar, data = (y, sigma2)): the posterior probabilities, means and variances of a mixture of normal priors for a normal mean with known variance
+fn normal_normal_mix(probs: []const f64, pm: []const f64, pv: []const f64, y: f64, s2: f64, post: []f64, mean: []f64, vr: []f64) {
+    let n = probs.len
+    var tot = 0.0f64
+    var i = 0usize
+    while i < n {
+        let prec = 1.0f64 / pv[i] + 1.0f64 / s2
+        vr[i] = 1.0f64 / prec
+        mean[i] = (y / s2 + pm[i] / pv[i]) / prec
+        let mp = dist.dnorm(y, pm[i], math.sqrt[f64](s2 + pv[i]), false)
+        post[i] = probs[i] * mp
+        tot += post[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        post[i] = post[i] / tot
+        i += 1usize
+    }
+}
+
+// poisson.gamma.mix(probs, gammapar, data = list(y, t)): the posterior probabilities and gamma parameters of a mixture of gamma priors for a Poisson rate with exposures t
+fn poisson_gamma_mix(probs: []const f64, ga: []const f64, gb: []const f64, y: []const f64, t: []const f64, post: []f64, pa: []f64, pb: []f64) {
+    let n = probs.len
+    var sy = 0.0f64
+    var st = 0.0f64
+    var j = 0usize
+    while j < y.len {
+        sy += y[j]
+        st += t[j]
+        j += 1usize
+    }
+    var tot = 0.0f64
+    var i = 0usize
+    while i < n {
+        pa[i] = ga[i] + sy
+        pb[i] = gb[i] + st
+        let l = pa[i] / pb[i]
+        var ll = 0.0f64
+        j = 0usize
+        while j < y.len {
+            ll += nm.dpois(y[j], l * t[j], true)
+            j += 1usize
+        }
+        let mp = math.exp[f64](ll + nm.dgamma(l, ga[i], 1.0f64 / gb[i], true) - nm.dgamma(l, pa[i], 1.0f64 / pb[i], true))
+        post[i] = probs[i] * mp
+        tot += post[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        post[i] = post[i] / tot
+        i += 1usize
+    }
+}

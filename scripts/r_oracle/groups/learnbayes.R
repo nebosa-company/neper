@@ -42,4 +42,14 @@ for (rep in 1:20) {
   po <- pdisc(pp, pr, c(ss, ff)); for (j in seq_len(np)) add("pdisc", c(np, ss, ff, j - 1, pp, pr), po[j], 1e-10)
   p0 <- runif(1, 0.1, 0.9); pb <- runif(1, 0.2, 0.8); ab <- runif(2, 0.5, 5); bt <- pbetat(p0, pb, ab, c(ss, ff)); add("pbetat", c(p0, pb, ab, ss, ff, 0), bt$bf, 1e-10); add("pbetat", c(p0, pb, ab, ss, ff, 1), bt$post, 1e-10)
 }
+# mixtures: "mixb" binomial.beta.mix, "mixn" normal.normal.mix, "mixp" poisson.gamma.mix: (n, which 0 probs 1 par1 2 par2, index, d1, d2, probs[n], par1[n], par2[n], [y, t for mixp])
+for (rep in 1:20) {
+  nn <- sample(2:4, 1); pr <- runif(nn); pr <- pr / sum(pr)
+  ba <- cbind(runif(nn, 0.5, 6), runif(nn, 0.5, 6)); ss <- sample(0:12, 1); ff <- sample(0:12, 1); r1 <- binomial.beta.mix(pr, ba, c(ss, ff))
+  for (j in 1:nn) { add("mixb", c(nn, 0, j - 1, ss, ff, pr, ba[, 1], ba[, 2]), r1$probs[j], 1e-10); add("mixb", c(nn, 1, j - 1, ss, ff, pr, ba[, 1], ba[, 2]), r1$betapar[j, 1], 1e-10); add("mixb", c(nn, 2, j - 1, ss, ff, pr, ba[, 1], ba[, 2]), r1$betapar[j, 2], 1e-10) }
+  np <- cbind(rnorm(nn), runif(nn, 0.5, 3)); yy <- rnorm(1); s2 <- runif(1, 0.5, 2); r2 <- normal.normal.mix(pr, np, c(yy, s2))
+  for (j in 1:nn) { add("mixn", c(nn, 0, j - 1, yy, s2, pr, np[, 1], np[, 2]), r2$probs[j], 1e-10); add("mixn", c(nn, 1, j - 1, yy, s2, pr, np[, 1], np[, 2]), r2$normalpar[j, 1], 1e-10); add("mixn", c(nn, 2, j - 1, yy, s2, pr, np[, 1], np[, 2]), r2$normalpar[j, 2], 1e-10) }
+  gp <- cbind(runif(nn, 1, 6), runif(nn, 0.5, 4)); dn <- sample(2:5, 1); y <- rpois(dn, 3); t <- runif(dn, 0.5, 2); r3 <- poisson.gamma.mix(pr, gp, list(y = y, t = t))
+  for (j in 1:nn) { add("mixp", c(nn, 0, j - 1, dn, 0, pr, gp[, 1], gp[, 2], y, t), r3$probs[j], 1e-10); add("mixp", c(nn, 1, j - 1, dn, 0, pr, gp[, 1], gp[, 2], y, t), r3$gammapar[j, 1], 1e-10); add("mixp", c(nn, 2, j - 1, dn, 0, pr, gp[, 1], gp[, 2], y, t), r3$gammapar[j, 2], 1e-10) }
+}
 emit("learnbayes", "LearnBayes", list(cases))

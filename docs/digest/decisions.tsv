@@ -3731,4 +3731,5 @@ D6868	1065	imputeTS: na_locf and na_interpolation
 D6869	587	imputeTS: the maxgap option
 D6870	801	TSA: eacf
 D6871	904	LearnBayes: rwmetrop and indepmetrop
-D6872	807	LearnBayes: rigamma, rmnorm, pdisc and pbetat
+D6872	808	LearnBayes: rigamma, rmnorm, pdisc and pbetat
+D6873	846	LearnBayes: the mixture-prior posteriors

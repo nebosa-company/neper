@@ -79,6 +79,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         lb.pdisc(x[4usize..4usize + pn], x[4usize + pn..4usize + 2usize * pn], x[1usize], x[2usize], o)
         ret o[usize(x[3usize])]
     }
+    if str.eq(k, "mixb") || str.eq(k, "mixn") || str.eq(k, "mixp") {
+        // (n, which 0 post 1 par1 2 par2, index, d1, d2, probs[n], par1[n], par2[n], [y[d1], t[d1] for mixp])
+        let mn = usize(x[0usize])
+        let (po, e1) = mem.alloc[f64](a, mn)
+        let (q1, e2) = mem.alloc[f64](a, mn)
+        let (q2, e3) = mem.alloc[f64](a, mn)
+        if e1 != ok || e2 != ok || e3 != ok { os.exit(5) }
+        let pr = x[5usize..5usize + mn]
+        let a1 = x[5usize + mn..5usize + 2usize * mn]
+        let a2 = x[5usize + 2usize * mn..5usize + 3usize * mn]
+        if str.eq(k, "mixb") { lb.binomial_beta_mix(pr, a1, a2, x[3usize], x[4usize], po, q1, q2) }
+        if str.eq(k, "mixn") { lb.normal_normal_mix(pr, a1, a2, x[3usize], x[4usize], po, q1, q2) }
+        if str.eq(k, "mixp") {
+            let dn = usize(x[3usize])
+            lb.poisson_gamma_mix(pr, a1, a2, x[5usize + 3usize * mn..5usize + 3usize * mn + dn], x[5usize + 3usize * mn + dn..5usize + 3usize * mn + 2usize * dn], po, q1, q2)
+        }
+        let w = usize(x[1usize])
+        let idx = usize(x[2usize])
+        if w == 0usize { ret po[idx] }
+        if w == 1usize { ret q1[idx] }
+        ret q2[idx]
+    }
     if str.eq(k, "pbetat") {
         let (bf, po) = lb.pbetat(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize])
         if x[6usize] < 0.5f64 { ret bf }
