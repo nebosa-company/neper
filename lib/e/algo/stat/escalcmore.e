@@ -65,7 +65,7 @@ fn escalc(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, corre
 fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, correct: bool, k: usize, ncol: usize, d: []const f64, yi: []f64, vi: []f64, scratch: []f64) {
     var i = 0usize
     // working copies of up to four count columns (the unadjusted values are the d itself)
-    if measure <= 12usize {
+    if measure <= 12usize || (measure >= 120usize && measure <= 124usize) {
         let p1u = scratch[0usize..k]
         let p2u = scratch[k..2usize * k]
         var any0 = false
@@ -123,7 +123,7 @@ fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, c
                 y = math.log[f64](p1) - math.log[f64](p2)
                 v = 1.0f64 / a - 1.0f64 / n1 + 1.0f64 / c - 1.0f64 / n2
             }
-            if measure == 1usize || measure >= 10usize {
+            if measure == 1usize || (measure >= 10usize && measure <= 12usize) {
                 y = math.log[f64](p1 / (1.0f64 - p1)) - math.log[f64](p2 / (1.0f64 - p2))
                 v = 1.0f64 / a + 1.0f64 / b + 1.0f64 / c + 1.0f64 / dd
                 if measure == 10usize || measure == 12usize {
@@ -181,6 +181,35 @@ fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, c
                 y = z1 - z2
                 v = 2.0f64 * pi_c() * p1 * (1.0f64 - p1) * math.exp[f64](z1 * z1) / n1 + 2.0f64 * pi_c() * p2 * (1.0f64 - p2) * math.exp[f64](z2 * z2) / n2
             }
+            if measure >= 120usize {
+                // the matched-pair measures: pi12 = b / n, pi21 = c / n, the marginal proportions of the pairs
+                let p12 = b / ni
+                let p21 = c / ni
+                let m1 = (a + b) / ni
+                let m2 = (a + c) / ni
+                if measure == 120usize {
+                    y = m1 - m2
+                    v = p12 * (1.0f64 - p12) / ni + 2.0f64 * p12 * p21 / ni + p21 * (1.0f64 - p21) / ni
+                }
+                if measure == 121usize {
+                    y = math.log[f64](m1) - math.log[f64](m2)
+                    v = (p12 + p21) / (ni * m1 * m2)
+                }
+                if measure == 122usize {
+                    y = math.log[f64](m1 / (1.0f64 - m1)) - math.log[f64](m2 / (1.0f64 - m2))
+                    v = (p12 * (1.0f64 - p12) + p21 * (1.0f64 - p21) + 2.0f64 * p12 * p21) / (ni * m1 * (1.0f64 - m1) * m2 * (1.0f64 - m2))
+                }
+                if measure == 123usize {
+                    y = math.log[f64](b) - math.log[f64](c)
+                    v = 1.0f64 / b + 1.0f64 / c
+                }
+                if measure == 124usize {
+                    let ei = (b + c) / 2.0f64
+                    let vv = (b + c) / 4.0f64
+                    y = (b - ei) / vv
+                    v = 1.0f64 / vv
+                }
+            }
             yi[i] = y
             vi[i] = v
             p1u[i] = p1
@@ -233,6 +262,110 @@ fn escalc_raw(measure: usize, vtype: usize, add: f64, to: usize, drop00: bool, c
                 }
                 i += 1usize
             }
+        }
+        ret
+    }
+    if measure >= 100usize && measure <= 109usize {
+        // paired means (m1i m2i sd1i sd2i ni ri): 100 MC, 101 SMCC, 103 SMCRH, 104 SMCRP, 105 SMCRPH, 106 CLESCN, 107 ROMC, 108 VRC, 109 CVRC
+        i = 0usize
+        while i < k {
+            let m1 = at(d, ncol, i, 0usize)
+            let m2 = at(d, ncol, i, 1usize)
+            let s1 = at(d, ncol, i, 2usize)
+            let s2 = at(d, ncol, i, 3usize)
+            let n = at(d, ncol, i, 4usize)
+            let r = at(d, ncol, i, 5usize)
+            let mi = n - 1.0f64
+            let sdd = math.sqrt[f64](s1 * s1 + s2 * s2 - 2.0f64 * r * s1 * s2)
+            let sdp = math.sqrt[f64]((s1 * s1 + s2 * s2) / 2.0f64)
+            var y = nan()
+            var v = nan()
+            if measure == 100usize {
+                y = m1 - m2
+                v = sdd * sdd / n
+            }
+            if measure == 101usize {
+                let cm = cmi_of(mi, correct)
+                let dv = (m1 - m2) / sdd
+                y = cm * dv
+                if vtype == 0usize { v = 1.0f64 / n + y * y / (2.0f64 * n) }
+                if vtype == 5usize { v = cm * cm * (1.0f64 / n + dv * dv / (2.0f64 * n)) }
+                if vtype == 1usize { v = 1.0f64 / n + (1.0f64 - (mi - 2.0f64) / (mi * cm * cm)) * y * y }
+                if vtype == 3usize {
+                    if mi > 2.0f64 { v = cm * cm / n * mi / (mi - 2.0f64) }
+                }
+            }
+            if measure == 103usize {
+                let cm = cmi_of(mi, correct)
+                let dv = (m1 - m2) / s1
+                y = cm * dv
+                if vtype == 5usize { v = sdd * sdd / (s1 * s1 * n) + y * y / (2.0f64 * n) } else { v = sdd * sdd / (s1 * s1 * (n - 1.0f64)) + y * y / (2.0f64 * (n - 1.0f64)) }
+            }
+            if measure == 104usize || measure == 105usize {
+                let mp = 2.0f64 * (n - 1.0f64) / (1.0f64 + r * r)
+                let cm = cmi_of(mp, correct)
+                y = cm * (m1 - m2) / sdp
+                if measure == 104usize { v = 2.0f64 * (1.0f64 - r) / n + y * y * (1.0f64 + r * r) / (4.0f64 * n) }
+                if measure == 105usize {
+                    let q = (s1 * s1 * s1 * s1 + s2 * s2 * s2 * s2 + 2.0f64 * r * r * s1 * s1 * s2 * s2)
+                    if vtype == 5usize { v = sdd * sdd / (sdp * sdp * n) + y * y * q / (8.0f64 * sdp * sdp * sdp * sdp * n) } else { v = sdd * sdd / (sdp * sdp * (n - 1.0f64)) + y * y * q / (8.0f64 * sdp * sdp * sdp * sdp * (n - 1.0f64)) }
+                }
+            }
+            if measure == 106usize {
+                let dv = (m1 - m2) / sdp
+                y = dist.pnorm(dv / math.sqrt[f64](2.0f64), 0.0f64, 1.0f64, true, false)
+                v = math.exp[f64](0.0f64 - dv * dv / 2.0f64) / (4.0f64 * pi_c()) * (sdd * sdd / (sdp * sdp * (n - 1.0f64)) + dv * dv * (s1 * s1 * s1 * s1 + s2 * s2 * s2 * s2 + 2.0f64 * r * r * s1 * s1 * s2 * s2) / (8.0f64 * sdp * sdp * sdp * sdp * (n - 1.0f64)))
+            }
+            if measure == 107usize {
+                if correct { y = math.log[f64](m1 / m2) + 0.5f64 * (s1 * s1 / (n * m1 * m1) - s2 * s2 / (n * m2 * m2)) } else { y = math.log[f64](m1 / m2) }
+                v = s1 * s1 / (n * m1 * m1) + s2 * s2 / (n * m2 * m2) - 2.0f64 * r * s1 * s2 / (m1 * m2 * n)
+                if vtype == 5usize { v = v + s1 * s1 * s1 * s1 / (2.0f64 * n * n * m1 * m1 * m1 * m1) + s2 * s2 * s2 * s2 / (2.0f64 * n * n * m2 * m2 * m2 * m2) - r * r * s1 * s1 * s2 * s2 / (n * n * m1 * m1 * m2 * m2) }
+            }
+            if measure == 108usize {
+                y = math.log[f64](s1 / s2)
+                if vtype == 5usize { v = (1.0f64 - r * r) / (n - 1.0f64) + (1.0f64 - r * r * r * r) / ((n - 1.0f64) * (n - 1.0f64)) } else { v = (1.0f64 - r * r) / (n - 1.0f64) }
+            }
+            if measure == 109usize {
+                if correct { y = math.log[f64](s1 / m1) - math.log[f64](s2 / m2) + 0.5f64 * (s2 * s2 / (n * m2 * m2) - s1 * s1 / (n * m1 * m1)) } else { y = math.log[f64](s1 / m1) - math.log[f64](s2 / m2) }
+                v = s1 * s1 / (n * m1 * m1) + s2 * s2 / (n * m2 * m2) - 2.0f64 * r * s1 * s2 / (m1 * m2 * n) + (1.0f64 - r * r) / (n - 1.0f64)
+                if vtype == 5usize { v = v - (1.0f64 - r * r) / (n - 1.0f64) + s1 * s1 * s1 * s1 / (2.0f64 * n * n * m1 * m1 * m1 * m1) + s2 * s2 * s2 * s2 / (2.0f64 * n * n * m2 * m2 * m2 * m2) - r * r * s1 * s1 * s2 * s2 / (n * n * m1 * m1 * m2 * m2) + (1.0f64 - r * r) / (n - 1.0f64) + (1.0f64 - r * r * r * r) / ((n - 1.0f64) * (n - 1.0f64)) }
+            }
+            yi[i] = y
+            vi[i] = v
+            i += 1usize
+        }
+        ret
+    }
+    if measure >= 130usize && measure <= 133usize {
+        // 130 ARAW, 131 AHW, 132 ABT (ai mi ni), 133 REH (ai bi ci)
+        i = 0usize
+        while i < k {
+            let a = at(d, ncol, i, 0usize)
+            let m = at(d, ncol, i, 1usize)
+            let n = at(d, ncol, i, 2usize)
+            if measure == 130usize {
+                yi[i] = a
+                vi[i] = 2.0f64 * m * (1.0f64 - a) * (1.0f64 - a) / ((m - 1.0f64) * (n - 2.0f64))
+            }
+            if measure == 131usize {
+                yi[i] = 1.0f64 - math.pow[f64](1.0f64 - a, 1.0f64 / 3.0f64)
+                vi[i] = 18.0f64 * m * (n - 1.0f64) * math.pow[f64](1.0f64 - a, 2.0f64 / 3.0f64) / ((m - 1.0f64) * (9.0f64 * n - 11.0f64) * (9.0f64 * n - 11.0f64))
+            }
+            if measure == 132usize {
+                yi[i] = 0.0f64 - math.log[f64](1.0f64 - a)
+                vi[i] = 2.0f64 * m / ((m - 1.0f64) * (n - 2.0f64))
+            }
+            if measure == 133usize {
+                let b = m
+                let c = n
+                let nn = a + b + c
+                let p0 = a / nn
+                let p1 = b / nn
+                let p2 = c / nn
+                yi[i] = math.log[f64](p1) - math.log[f64](2.0f64 * math.sqrt[f64](p0 * p2))
+                vi[i] = ((1.0f64 - p1) / (4.0f64 * p0 * p2) + 1.0f64 / p1) / nn
+            }
+            i += 1usize
         }
         ret
     }

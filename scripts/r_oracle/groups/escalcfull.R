@@ -64,4 +64,16 @@ for (rep in 1:2) {
   d <- list(mi = round(runif(k, 3, 20), 3), sdi = round(runif(k, 1, 5), 3), ni = sample(10:80, k, replace = TRUE))
   for (m in c("MN", "SMN", "MNLN", "SDLN", "CVLN")) for (cr in c(TRUE, FALSE)) for (vt in (if (m == "MN") c(0, 4) else 0)) run(m, c(MN = 80, SMN = 81, MNLN = 82, SDLN = 83, CVLN = 84)[[m]], vt, 0.5, 0, 0, cr, c("mi", "sdi", "ni"), d)
 }
+for (rep in 1:2) {
+  d <- tab(); d$bi[1] <- 0
+  for (m in c("MPRD", "MPRR", "MPOR", "MPORC", "MPPETO")) for (to in 0:3) run(m, c(MPRD = 120, MPRR = 121, MPOR = 122, MPORC = 123, MPPETO = 124)[[m]], 0, 0.5, to, 0, TRUE, c("ai", "bi", "ci", "di"), d)
+  ni <- sample(15:80, k, replace = TRUE)
+  d <- list(m1i = round(rnorm(k, 12, 2), 3), m2i = round(rnorm(k, 10, 2), 3), sd1i = round(runif(k, 1, 4), 3), sd2i = round(runif(k, 1, 4), 3), ni = ni, ri = round(runif(k, 0.1, 0.8), 3))
+  pm <- list(MC = c(100, 0), SMCC = c(101, 0, 5, 1, 3), SMCRH = c(103, 0, 5), SMCRP = c(104, 0), SMCRPH = c(105, 0, 5), CLESCN = c(106, 0), ROMC = c(107, 0, 5), VRC = c(108, 0, 5), CVRC = c(109, 0, 5))
+  for (m in names(pm)) for (vt in pm[[m]][-1]) for (cr in c(TRUE, FALSE)) run(m, pm[[m]][1], vt, 0.5, 0, 0, cr, c("m1i", "m2i", "sd1i", "sd2i", "ni", "ri"), d)
+  d <- list(ai = round(runif(k, 0.5, 0.95), 3), mi = sample(3:20, k, replace = TRUE), ni = sample(20:150, k, replace = TRUE))
+  for (m in c("ARAW", "AHW", "ABT")) run(m, c(ARAW = 130, AHW = 131, ABT = 132)[[m]], 0, 0.5, 0, 0, TRUE, c("ai", "mi", "ni"), d)
+  d <- list(ai = sample(5:40, k, replace = TRUE), bi = sample(5:40, k, replace = TRUE), ci = sample(5:40, k, replace = TRUE))
+  run("REH", 133, 0, 0.5, 0, 0, TRUE, c("ai", "bi", "ci"), d)
+}
 emit("escalcfull", "metafor", list(cases))
