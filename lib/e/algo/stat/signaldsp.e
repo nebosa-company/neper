@@ -606,6 +606,16 @@ fn bilinear_zpg(zr: []f64, zi: []f64, nz: usize, pre: []f64, pim: []f64, np: usi
 // butter (kind 0), cheby1 (1), cheby2 (2) and ellip (3) of order n; ty is 0 low, 1 high, 2 stop, 3 pass (w holds one cut-off for the first two, two for the others); digital false gives the analog filter; b and aa get nb and na entries (n + 1 for one cut-off, 2 n + 1 for two); rp and rs are the dB ripples that the family uses
 fn design(kind: usize, n: usize, rp: f64, rs: f64, w: []const f64, ty: usize, digital: bool, b: []f64, aa: []f64) -> err {
     if n == 0usize || n > 30usize { ret BadSpec }
+    var z0 = 0usize
+    while z0 < b.len {
+        b[z0] = 0.0f64
+        z0 += 1usize
+    }
+    z0 = 0usize
+    while z0 < aa.len {
+        aa[z0] = 0.0f64
+        z0 += 1usize
+    }
     let stop = ty == 1usize || ty == 2usize
     let two = ty >= 2usize
     var wv: [2]f64 = zero
@@ -2665,3 +2675,9 @@ fn zpg_to_arma(zr: []const f64, zi: []const f64, pre: []const f64, pim: []const 
         i += 1usize
     }
 }
+
+// filter(b, a, x): the difference equation with zero state
+fn filter(b: []const f64, aa: []const f64, x: []const f64, out: []f64) { sg.filter(b, aa, x, out) }
+
+// filtfilt(b, a, x): forward and backward filtering with the package zero padding of 2 * max(length(a), length(b)) samples
+fn filtfilt(a: *mem.Arena, b: []const f64, aa: []const f64, x: []const f64, out: []f64) -> err { ret sg.filtfilt(a, b, aa, x, out) }

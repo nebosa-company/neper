@@ -344,6 +344,21 @@ fn answer_three(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "zb") { ret wsum(b) }
         ret wsum(aa)
     }
+    if str.eq(k, "ffl") {
+        let nb = usize(x[0usize])
+        let na = usize(x[1usize])
+        let len = usize(x[2usize])
+        let o = alloc_f(a, len)
+        if sd.filtfilt(a, x[3usize..3usize + nb], x[3usize + nb..3usize + nb + na], x[3usize + nb + na..3usize + nb + na + len], o) != ok { os.exit(8) }
+        ret wsum(o)
+    }
+    if str.eq(k, "pvr") || str.eq(k, "pvi") {
+        let nb = usize(x[0usize])
+        let (vr, vi) = sd.polyval_at(x[3usize..3usize + nb], x[1usize], x[2usize])
+        if str.eq(k, "pvr") { ret vr }
+        ret vi
+    }
+    if str.eq(k, "snc") { ret sd.sinc_value(x[0usize]) }
     os.exit(9)
     ret 0.0f64
 }
@@ -351,7 +366,9 @@ fn answer_three(a: *mem.Arena, c: *const oracle.Case) -> f64 {
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
-    if str.eq(k, "db") || str.eq(k, "da") {
+    if str.eq(k, "db") || str.eq(k, "da") || str.eq(k, "sb") || str.eq(k, "sa") {
+        let digital = str.eq(k, "db") || str.eq(k, "da")
+        let want_b = str.eq(k, "db") || str.eq(k, "sb")
         let n = usize(x[2usize])
         let nw = usize(x[5usize])
         var len = n + 1usize
@@ -360,8 +377,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if e1 != ok { os.exit(5) }
         let (aa, e2) = mem.alloc[f64](a, len)
         if e2 != ok { os.exit(6) }
-        if sd.design(usize(x[0usize]), n, x[3usize], x[4usize], x[6usize..6usize + nw], usize(x[1usize]), true, b, aa) != ok { os.exit(7) }
-        if str.eq(k, "db") { ret wsum(b) }
+        if sd.design(usize(x[0usize]), n, x[3usize], x[4usize], x[6usize..6usize + nw], usize(x[1usize]), digital, b, aa) != ok { os.exit(7) }
+        if want_b { ret wsum(b) }
         ret wsum(aa)
     }
     ret answer_two(a, c)

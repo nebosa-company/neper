@@ -1,6 +1,6 @@
 # signal, part two: the general designs, windows, remez, fir1/fir2 with windows, freqz, grpdelay, impz, specgram, resample, decimate, interp, interp1, sgolay, unwrap, levinson and the order estimators.
 #   Every case is a weighted sum of a returned vector (weights by 1-based position) unless its fn says otherwise; args are documented per block.
-suppressMessages(library(signal))
+suppressMessages(library(signal)); sinc <- signal:::sinc
 cases <- list()
 add <- function(fn, args, want, rel = 1e-9, abs = 1e-10) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
 wsum <- function(v) sum(as.numeric(v) * seq_along(v))
@@ -104,7 +104,7 @@ for (rep in 1:60) {
   b <- try(remez(n, f, a, w, ft, dens), silent = TRUE)
   if (inherits(b, "try-error")) next
   nrem <- nrem + 1
-  add("rmz", c(n, which(c("bandpass", "differentiator", "hilbert") == ft), dens, length(f) / 2, f, a, w), wsum(b), rel = 1e-8, abs = 1e-9)
+  add("rmz", c(n, which(c("bandpass", "differentiator", "hilbert") == ft), dens, length(f) / 2, f, a, w), wsum(b))
 }
 cat("remez cases:", nrem, "\n")
 
@@ -160,9 +160,9 @@ for (rep in 1:50) {
 for (rep in 1:30) {
   n <- sample(c(5, 7, 9, 11, 13, 15), 1); p <- sample(1:min(4, n - 2), 1); m <- sample(0:min(2, p), 1); ts <- sample(c(1, 0.5, 2), 1)
   F <- unclass(sgolay(p, n, m, ts))
-  add("sgm", c(p, n, m, ts), wsum(t(F)), rel = 1e-8, abs = 1e-9)
+  add("sgm", c(p, n, m, ts), wsum(t(F)))
   len <- sample(30:60, 1); x <- round(rnorm(len), 3)
-  add("sfl", c(p, n, m, ts, len, x), wsum(sgolayfilt(x, p, n, m, ts)), rel = 1e-8, abs = 1e-9)
+  add("sfl", c(p, n, m, ts, len, x), wsum(sgolayfilt(x, p, n, m, ts)))
 }
 for (rep in 1:10) { len <- sample(30:60, 1); x <- round(rnorm(len), 3); add("sfd", c(len, x), wsum(sgolayfilt(x))) }
 
@@ -204,4 +204,30 @@ for (rep in 1:15) {
   ar <- as.Arma(Zpg(zero = z, pole = p, gain = g))
   add("zb", c(nz, npp, g, zr, zi, pr, pim), wsum(ar$b)); add("za", c(nz, npp, g, zr, zi, pr, pim), wsum(ar$a))
 }
+
+# analog designs (plane "s"): args as design, fn "sb"/"sa"
+set.seed(20270104)
+for (kind in 0:3) for (ty in 0:3) for (rep in 1:3) {
+  n <- sample(if (ty >= 2) 2:4 else 2:6, 1); two <- ty >= 2
+  w <- if (two) { w1 <- runif(1, 0.5, 2); c(w1, w1 + runif(1, 0.5, 3)) } else runif(1, 0.5, 4)
+  rp <- runif(1, 0.3, 3); rs <- runif(1, 25, 60)
+  f <- switch(kind + 1, butter(n, w, tys[ty + 1], "s"), cheby1(n, rp, w, tys[ty + 1], "s"), cheby2(n, rs, w, tys[ty + 1], "s"), ellip(n, rp, rs, w, tys[ty + 1], "s"))
+  add("sb", c(kind, ty, n, rp, rs, length(w), w), wsum(f$b)); add("sa", c(kind, ty, n, rp, rs, length(w), w), wsum(f$a))
+}
+# higher orders, single cut-off
+for (kind in 0:3) for (ty in 0:1) for (rep in 1:3) {
+  n <- sample(7:10, 1); w <- runif(1, 0.1, 0.8); rp <- runif(1, 0.3, 3); rs <- runif(1, 25, 60)
+  f <- switch(kind + 1, butter(n, w, tys[ty + 1]), cheby1(n, rp, w, tys[ty + 1]), cheby2(n, rs, w, tys[ty + 1]), ellip(n, rp, rs, w, tys[ty + 1]))
+  add("db", c(kind, ty, n, rp, rs, 1, w), wsum(f$b)); add("da", c(kind, ty, n, rp, rs, 1, w), wsum(f$a))
+}
+# filtfilt with any coefficients: args (nb, na, len, b..., a..., x...); sinc and polyval: args (n)/(nb, zr, zi, b...)
+for (rep in 1:25) {
+  nb <- sample(1:6, 1); na <- sample(1:4, 1); len <- sample(10:50, 1)
+  b <- round(rnorm(nb), 3); a <- c(1, round(runif(na - 1, -0.25, 0.25), 3)); x <- round(rnorm(len), 3)
+  add("ffl", c(nb, na, len, b, a, x), wsum(filtfilt(b, a, x)))
+  zr <- runif(1, -1.5, 1.5); zi <- runif(1, -1.5, 1.5); pv <- polyval(b, complex(real = zr, imaginary = zi))
+  add("pvr", c(nb, zr, zi, b), Re(pv)); add("pvi", c(nb, zr, zi, b), Im(pv))
+  v <- runif(1, -4, 4); add("snc", v, sinc(v))
+}
+add("snc", 0, 1)
 emit("signaldsp", "signal", list(cases))
