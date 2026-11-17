@@ -88,12 +88,19 @@ fn sample_prob(a: *mem.Arena, r: *rng.Rng, pro: []const f64, g: usize, n: usize,
 fn sim_model(a: *mem.Arena, model: usize, d: usize, g: usize, n: usize, seed: i64, pro: []const f64, mu: []const f64, scale: []const f64, shape: []const f64, orient: []const f64, sigma: []const f64, grp: []f64, x: []f64) -> err {
     var r: rng.Rng = zero
     rng.seed(&r, seed)
+    var none: []f64 = zero
+    ret sim_draw(a, &r, model, d, g, n, pro, mu, scale, shape, orient, sigma, none, grp, x)
+}
+
+// sim_model continuing the stream r instead of seeding a new one
+// signs, when not empty, flip the rows of the upper Cholesky factor of EEE (d signs) and VVV (g d signs) the way the Givens factor of mclust carries them
+fn sim_draw(a: *mem.Arena, r: *rng.Rng, model: usize, d: usize, g: usize, n: usize, pro: []const f64, mu: []const f64, scale: []const f64, shape: []const f64, orient: []const f64, sigma: []const f64, signs: []const f64, grp: []f64, x: []f64) -> err {
     let (cl, e1) = mem.alloc[usize](a, n)
     let (cnt, e2) = mem.alloc[usize](a, g)
     let (z, e3) = mem.alloc[f64](a, n * d)
     let (cf, e4) = mem.alloc[f64](a, d * d)
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
-    let se = sample_prob(a, &r, pro, g, n, cl)
+    let se = sample_prob(a, r, pro, g, n, cl)
     if se != ok { ret se }
     var k = 0usize
     while k < g {
@@ -165,6 +172,19 @@ fn sim_model(a: *mem.Arena, model: usize, d: usize, g: usize, n: usize, seed: i6
                 }
                 j += 1usize
             }
+            if signs.len > 0usize {
+                var so = 0usize
+                if model == 15usize { so = k * d }
+                var t = 0usize
+                while t < d {
+                    var c = t
+                    while c < d {
+                        cf[c * d + t] = cf[c * d + t] * signs[so + t]
+                        c += 1usize
+                    }
+                    t += 1usize
+                }
+            }
         } else {
             // t(orientation) * sss: cf[i][j] = sss_i * O[j][i]
             var off = 0usize
@@ -187,7 +207,7 @@ fn sim_model(a: *mem.Arena, model: usize, d: usize, g: usize, n: usize, seed: i6
         // draws matrix(rnorm(m d), m, d) in column-major order
         q = 0usize
         while q < m * d {
-            z[q] = rng.norm(&r)
+            z[q] = rng.norm(r)
             q += 1usize
         }
         var row = 0usize

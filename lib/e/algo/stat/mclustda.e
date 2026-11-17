@@ -181,7 +181,7 @@ fn mclustda_run(a: *mem.Arena, x: []const f64, n: usize, p: usize, cls: []const 
                 }
                 j += 1usize
             }
-            let rsz = 6usize + gmax * models.len + 2usize * nl + nl * gmax + gmax + p * gmax + gmax * p * p
+            let rsz = 6usize + 2usize * gmax * models.len + 2usize * nl + nl * gmax + gmax + p * gmax + gmax * p * p
             let (rl, f2) = mem.alloc[f64](a, rsz)
             if f2 != ok { ret f2 }
             let fe = mf.mclust_run(a, xl, nl, p, 1usize, gmax, models, rl)

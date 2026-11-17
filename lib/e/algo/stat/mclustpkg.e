@@ -179,14 +179,90 @@ fn chol_lower(s: []const f64, p: usize, l: []f64) -> bool {
     ret true
 }
 
+// the rotation of the reference BLAS drotg before 3.10, which the BLAS of R still uses: returns (c, s, r)
+fn rotg_classic(f: f64, g: f64) -> (f64, f64, f64) {
+    var roe = g
+    if math.abs[f64](f) > math.abs[f64](g) { roe = f }
+    let scale = math.abs[f64](f) + math.abs[f64](g)
+    if scale == 0.0f64 { ret (1.0f64, 0.0f64, 0.0f64) }
+    let fs = f / scale
+    let gs = g / scale
+    var r = scale * math.sqrt[f64](fs * fs + gs * gs)
+    if roe < 0.0f64 { r = 0.0f64 - r }
+    ret (f / r, g / r, r)
+}
+
+// the signs of the diagonal of the triangular factor mclust returns as cholsigma (VVV, model 5, g groups: sgn has g p entries) or cholSigma (EEE, model 4, pooled: p entries):
+// the factor comes out of Givens rotations of the weighted rows sqrt(z) (x - mu) in observation order, and its row signs depend on that sequence
+fn givens_signs(a: *mem.Arena, model: usize, x: []const f64, z: []const f64, n: usize, p: usize, g: usize, mu: []const f64, sgn: []f64) {
+    let start = mem.mark(a)
+    let (s, e1) = mem.alloc[f64](a, p * p)
+    let (w, e2) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok { ret }
+    var k = 0usize
+    while k < g {
+        if model == 5usize || k == 0usize {
+            var q = 0usize
+            while q < p * p {
+                s[q] = 0.0f64
+                q += 1usize
+            }
+        }
+        var i = 0usize
+        while i < n {
+            var j = 0usize
+            while j < p {
+                w[j] = math.sqrt[f64](z[k * n + i]) * (x[j * n + i] - mu[j * g + k])
+                j += 1usize
+            }
+            j = 0usize
+            while j + 1usize < p {
+                let (c, sn, r) = rotg_classic(s[j * p + j], w[j])
+                s[j * p + j] = r
+                var t = j + 1usize
+                while t < p {
+                    let xv = s[t * p + j]
+                    let yv = w[t]
+                    s[t * p + j] = c * xv + sn * yv
+                    w[t] = c * yv - sn * xv
+                    t += 1usize
+                }
+                j += 1usize
+            }
+            let (c2, s2, r2) = rotg_classic(s[(p - 1usize) * p + (p - 1usize)], w[p - 1usize])
+            s[(p - 1usize) * p + (p - 1usize)] = r2
+            i += 1usize
+        }
+        if model == 5usize {
+            var j = 0usize
+            while j < p {
+                sgn[k * p + j] = 1.0f64
+                if s[j * p + j] < 0.0f64 { sgn[k * p + j] = 0.0f64 - 1.0f64 }
+                j += 1usize
+            }
+        }
+        k += 1usize
+    }
+    if model == 4usize {
+        var j = 0usize
+        while j < p {
+            sgn[j] = 1.0f64
+            if s[j * p + j] < 0.0f64 { sgn[j] = 0.0f64 - 1.0f64 }
+            j += 1usize
+        }
+    }
+    mem.reset(a, start)
+}
+
 // EM from the memberships z (n by g, column-major) for the data x (n by p), equal proportions off; on return z, pro (g), mu (g by p, column-major) and sigma (g matrices p by p, column-major, stacked) hold the fit,
 // info[0] the iterations and info[1] the final error; returns the log likelihood
 fn me_em(a: *mem.Arena, model: usize, equal_pro: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
-    ret me_em_x(a, model, equal_pro, false, x, z, n, p, g, pro, mu, sigma, info)
+    var none: []f64 = zero
+    ret me_em_x(a, model, equal_pro, false, x, z, n, p, g, pro, mu, sigma, info, none)
 }
 
 // me_em, or with m_only just the M step of mstep(data, modelName, z): the parameters from z, no E step, returns 0
-fn me_em_x(a: *mem.Arena, model: usize, equal_pro: bool, m_only: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
+fn me_em_x(a: *mem.Arena, model: usize, equal_pro: bool, m_only: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64, sgn: []f64) -> f64 {
     let (sz, e1) = mem.alloc[f64](a, g)
     let (w, e2) = mem.alloc[f64](a, g * p * p)
     let (l, e3) = mem.alloc[f64](a, p * p)
@@ -383,6 +459,7 @@ fn me_em_x(a: *mem.Arena, model: usize, equal_pro: bool, m_only: bool, x: []cons
             }
             k += 1usize
         }
+        if sgn.len > 0usize && (model == 4usize || model == 5usize) { givens_signs(a, model, x, z, n, p, g, mu, sgn) }
         if m_only {
             info[0usize] = 1.0f64
             ret 0.0f64

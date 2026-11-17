@@ -767,6 +767,12 @@ fn me_gen(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n:
 
 // me(data, modelName, z) for any model of the package table index (E 0, V 1, EII 2, VII 3, EEI 4, VEI 5, EVI 6, VVI 7, EEE 8, EVE 9, VEE 10, VVE 11, EEV 12, VEV 13, EVV 14, VVV 15); the same outputs as me_gen
 fn me_any(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
+    var none: []f64 = zero
+    ret me_any_s(a, model, eqpro, x, z, n, p, g, pro, mu, sigma, info, none)
+}
+
+// me_any that also fills sgn (VVV: g p entries, EEE: p entries) with the row signs of the triangular factor mclust returns as cholsigma / cholSigma when sgn is not empty
+fn me_any_s(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64, sgn: []f64) -> f64 {
     let tol_in = math.sqrt[f64](2.220446049250313e-16f64)
     let imax = 2147483647usize
     if model == 5usize || model == 9usize || model == 10usize || model == 11usize || model == 13usize {
@@ -783,7 +789,7 @@ fn me_any(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n:
     if model == 12usize { code = 8usize }
     let (mg, e1) = mem.alloc[f64](a, g * p)
     if e1 != ok { ret 0.0f64 / 0.0f64 }
-    let h = mp.me_em(a, code, eqpro, x, z, n, p, g, pro, mg, sigma, info)
+    let h = mp.me_em_x(a, code, eqpro, false, x, z, n, p, g, pro, mg, sigma, info, sgn)
     var k = 0usize
     while k < g {
         var j = 0usize
@@ -798,6 +804,12 @@ fn me_any(a: *mem.Arena, model: usize, eqpro: bool, x: []const f64, z: []f64, n:
 
 // mstep(data, modelName, z) for any model index: the parameters from z with the default inner tolerance, no equal proportions
 fn mstep_any(a: *mem.Arena, model: usize, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64) -> f64 {
+    var none: []f64 = zero
+    ret mstep_any_s(a, model, x, z, n, p, g, pro, mu, sigma, info, none)
+}
+
+// mstep_any that also fills sgn like me_any_s
+fn mstep_any_s(a: *mem.Arena, model: usize, x: []const f64, z: []f64, n: usize, p: usize, g: usize, pro: []f64, mu: []f64, sigma: []f64, info: []f64, sgn: []f64) -> f64 {
     let tol_in = math.sqrt[f64](2.220446049250313e-16f64)
     let imax = 2147483647usize
     if model == 5usize || model == 9usize || model == 10usize || model == 11usize || model == 13usize {
@@ -814,7 +826,7 @@ fn mstep_any(a: *mem.Arena, model: usize, x: []const f64, z: []f64, n: usize, p:
     if model == 12usize { code = 8usize }
     let (mg, e1) = mem.alloc[f64](a, g * p)
     if e1 != ok { ret 0.0f64 / 0.0f64 }
-    let h = mp.me_em_x(a, code, false, true, x, z, n, p, g, pro, mg, sigma, info)
+    let h = mp.me_em_x(a, code, false, true, x, z, n, p, g, pro, mg, sigma, info, sgn)
     var k = 0usize
     while k < g {
         var j = 0usize

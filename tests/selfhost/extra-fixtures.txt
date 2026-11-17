@@ -406,3 +406,4 @@ oracle_mclust3
 oracle_mclust4
 oracle_mclust5
 oracle_mclust6
+oracle_mclust7

@@ -349,6 +349,12 @@ fn mclust_bic(a: *mem.Arena, x: []const f64, n: usize, p: usize, gmin: usize, gm
 // the final fit of the chosen (G, model) the way summary(mclustBIC) does it: G = 1 from mvn, otherwise me from the hierarchy partition and the extra M step when the proportions
 // differ from the column means of z. Fills z (n by g), pro, mu and sg and returns the log likelihood (NaN on failure)
 fn final_fit(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, mod: usize, pairs: []const usize, z: []f64, pro: []f64, mu: []f64, sg: []f64) -> f64 {
+    var none: []f64 = zero
+    ret final_fit_s(a, x, n, p, g, mod, pairs, z, pro, mu, sg, none)
+}
+
+// final_fit that also fills sgn (VVV: g p entries, EEE: p entries) with the row signs of the triangular factor R returns for the reported parameters, when sgn is not empty
+fn final_fit_s(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, mod: usize, pairs: []const usize, z: []f64, pro: []f64, mu: []f64, sg: []f64, sgn: []f64) -> f64 {
     let (inf, e6) = mem.alloc[f64](a, 4usize)
     if e6 != ok { ret nan() }
     var ll = 0.0f64
@@ -364,7 +370,7 @@ fn final_fit(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, mod: u
     } else {
         let se = start_z(a, x, n, p, g, pairs, z)
         if se != ok { ret nan() }
-        ll = em.me_any(a, mod, false, x, z, n, p, g, pro, mu, sg, inf)
+        ll = em.me_any_s(a, mod, false, x, z, n, p, g, pro, mu, sg, inf, sgn)
         if ll != ll { ret nan() }
         // the extra M step when the proportions differ from the column means of z
         var dsum = 0.0f64
@@ -393,7 +399,7 @@ fn final_fit(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, mod: u
                 z2[q] = z[q]
                 q += 1usize
             }
-            let _ = em.mstep_any(a, mod, x, z2, n, p, g, pro2, mu2, sg2, inf)
+            let _ = em.mstep_any_s(a, mod, x, z2, n, p, g, pro2, mu2, sg2, inf, sgn)
             q = 0usize
             while q < g {
                 pro[q] = pro2[q]
