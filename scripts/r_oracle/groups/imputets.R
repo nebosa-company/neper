@@ -3,7 +3,7 @@
 #   fn "mean" (option 0 mean, 1 median, 2 mode, 3 geometric, 4 harmonic) -> the filled value; series is positive
 suppressMessages(library(imputeTS))
 cases <- list()
-add <- function(fn, args, want) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-12)
+add <- function(fn, args, want, rel = 1e-9) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = 1e-12)
 enc <- function(x) ifelse(is.na(x), -999999, x)
 set.seed(20261205)
 for (rep in 1:30) {
@@ -62,5 +62,74 @@ for (rep in 1:30) {
   n <- sample(10:40, 1); x <- round(runif(n, 1, 10), 1); na <- sample(n, sample(2:min(12, n - 1), 1)); x[na] <- NA; if (rep %% 4 == 0) x[n] <- NA
   st <- statsNA(x, print_only = FALSE); v <- c(st$length_series, st$number_NAs, st$number_na_gaps, st$average_size_na_gaps, as.numeric(sub("%", "", st$percentage_NAs)) , st$longest_na_gap, st$most_frequent_na_gap, st$most_weighty_na_gap)
   for (w in 0:7) if (w != 4) add("stats", c(w, 0, n, enc(x)), v[w + 1])
+}
+# na_kalman with a user state-space model "kal" (smooth 1 or 0, index, n, series..., p, nit, h, T, Z, V, a, P, Pn; matrices row-major)
+encmod <- function(mod, nit) c(length(mod$a), nit, mod$h, as.vector(t(mod$T)), mod$Z, as.vector(t(mod$V)), mod$a, as.vector(t(mod$P)), as.vector(t(mod$Pn)))
+for (rep in 1:40) {
+  p <- sample(1:3, 1); n <- sample(12:30, 1)
+  Tm <- matrix(round(runif(p * p, -0.7, 0.7), 2), p, p); if (p > 1) Tm <- Tm + diag(0.3, p)
+  Lm <- matrix(round(runif(p * p, -1, 1), 2), p, p); Vm <- Lm %*% t(Lm) + diag(0.05, p)
+  P0 <- crossprod(matrix(round(runif(p * p, -1, 1), 2), p, p)) + diag(0.2, p); Pn0 <- P0 * 1.5
+  mod <- list(T = Tm, Z = round(runif(p, 0.3, 1.5), 2), h = round(runif(1, 0.1, 1), 2), V = Vm, a = round(runif(p, -1, 1), 2), P = P0, Pn = Pn0)
+  x <- round(cumsum(rnorm(n)) + 5, 2); na <- sample(n, sample(2:6, 1)); if (rep %% 4 == 0) na <- c(na, 1, n); x[na] <- NA
+  nit <- c(-1, 0, 2)[rep %% 3 + 1]
+  for (sm in c(TRUE, FALSE)) {
+    r <- tryCatch(na_kalman(x, model = mod, smooth = sm, nit = nit), error = function(e) NULL)
+    if (is.null(r)) next
+    for (k in seq_len(n)) add("kal", c(as.numeric(sm), k - 1, n, enc(x), encmod(mod, nit)), r[k])
+  }
+}
+# na_kalman with model = "StructTS" "sts" (smooth 1 or 0, index, n, series..., type 0 level 1 trend 2 BSM, frequency, maxgap or -1); a plain vector is a trend model, a ts of frequency > 1 a BSM
+for (rep in 1:45) {
+  kind <- (rep - 1) %% 3; nf <- if (kind == 2) sample(3:6, 1) else 1; n <- if (kind == 2) nf * sample(4:6, 1) else sample(15:40, 1)
+  tt <- seq_len(n); x <- round(10 + cumsum(rnorm(n, 0, 0.4)) + (if (kind == 1) 0.1 * tt else 0) + (if (kind == 2) 1.5 * sin(2 * pi * tt / nf) else 0) + rnorm(n, 0, 0.3), 2)
+  na <- sample(seq(2, n), sample(2:5, 1)); if (rep %% 7 == 0) na <- c(na, 1); x[na] <- NA
+  if (sum(!is.na(x)) < 5) next
+  mg <- c(Inf, 1, 2)[rep %% 3 + 1]
+  for (sm in c(TRUE, FALSE)) {
+    xin <- if (kind == 2) ts(x, frequency = nf) else x
+    r <- tryCatch(suppressWarnings(na_kalman(xin, model = "StructTS", smooth = sm, type = c("level", "trend", "BSM")[kind + 1], maxgap = mg)), error = function(e) NULL)
+    if (is.null(r)) next
+    r <- as.numeric(r)
+    for (k in seq_len(n)) add("sts", c(as.numeric(sm), k - 1, n, enc(x), kind, nf, if (is.finite(mg)) mg else -1), r[k], rel = 1e-6)
+  }
+}
+# StructTS shortcut: a series with two distinct values (a constant one with gaps) is linearly interpolated
+for (rep in 1:4) {
+  n <- 10 + rep; x <- rep(c(3, 7)[rep %% 2 + 1], n); x[sample(2:(n - 1), 3)] <- NA
+  r <- as.numeric(na_kalman(x, model = "StructTS"))
+  for (k in seq_len(n)) add("sts", c(1, k - 1, n, enc(x), 0, 1, -1), r[k], rel = 1e-6)
+}
+# stats::arima "arima" (p, d, q, kind 0 none 1 intercept 2 drift, method 0 CSS-ML 1 ML 2 CSS, quantity, n, series...): quantity 0 aic, 1 loglik, 2 sigma2, 10+i coef i, 30+i model a[i], 50+i diag P[i]
+for (rep in 1:60) {
+  p <- sample(0:2, 1); d <- sample(0:1, 1); q <- sample(0:2, 1); n <- sample(25:60, 1)
+  ar <- if (p) c(0.5, -0.2)[1:p] else NULL; ma <- if (q) c(0.4, 0.2)[1:q] else NULL
+  x <- round(arima.sim(list(order = c(p, 0, q), ar = ar, ma = ma), n) + 5, 3); if (d == 1) x <- round(cumsum(x - 5) + 5, 3)
+  kind <- if (d == 0) sample(0:1, 1) else sample(c(0, 2), 1)
+  method <- (rep - 1) %% 3
+  if (rep %% 2 == 0) { x[sample(2:n, 3)] <- NA; method <- 1 }
+  if (rep %% 10 == 0) x[1:2] <- NA
+  xr <- if (kind == 2) seq_along(x) else NULL
+  fit <- tryCatch(suppressWarnings(stats::arima(x, order = c(p, d, q), include.mean = (kind == 1), xreg = xr, method = c("CSS-ML", "ML", "CSS")[method + 1])), error = function(e) NULL)
+  if (is.null(fit)) next
+  if (rep %% 10 == 0) next
+  vals <- list(`0` = fit$aic, `1` = fit$loglik, `2` = fit$sigma2)
+  for (i in seq_along(fit$coef)) vals[[as.character(10 + i - 1)]] <- unname(fit$coef[i])
+  for (i in seq_along(fit$model$a)) { vals[[as.character(30 + i - 1)]] <- fit$model$a[i]; vals[[as.character(50 + i - 1)]] <- fit$model$P[i, i] }
+  for (nm in names(vals)) if (!is.na(vals[[nm]])) add("arima", c(p, d, q, kind, method, as.numeric(nm), n, enc(x)), vals[[nm]], rel = if (as.numeric(nm) <= 2) 1e-6 else 1e-4)
+}
+# na_kalman with model = "auto.arima" "aa" (smooth 1 or 0, 0, n, series...) -> the position-weighted sum of the result
+suppressMessages(library(forecast))
+for (rep in 1:40) {
+  n <- if (rep %% 20 == 0) 170 else sample(15:60, 1); kind <- rep %% 4
+  e <- arima.sim(list(ar = if (kind == 0) 0.6 else NULL, ma = if (kind == 1) 0.5 else NULL), n)
+  x <- round(switch(kind + 1, 10 + e, 10 + e, 10 + cumsum(rnorm(n, 0.2, 0.5)), 5 + 0.05 * seq_len(n) + e), 3)
+  na <- sample(seq(2, n - 1), sample(2:min(8, n %/% 5), 1)); if (rep %% 7 == 0) na <- c(na, 1, 2); if (rep %% 9 == 0) na <- c(na, n)
+  x[na] <- NA
+  for (sm in c(TRUE, FALSE)) {
+    r <- tryCatch(suppressWarnings(na_kalman(x, model = "auto.arima", smooth = sm)), error = function(e) NULL)
+    if (is.null(r)) next
+    add("aa", c(as.numeric(sm), 0, n, enc(x)), sum(r * seq_len(n)), rel = 1e-6)
+  }
 }
 emit("imputets", "imputeTS", list(cases))

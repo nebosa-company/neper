@@ -3,6 +3,8 @@
 
 use e.algo.stat.imputets as it
 use e.algo.rand.r as rng
+use e.algo.stat.kalman as kal
+use e.algo.stat.arimafit as af
 use e.io
 use e.mem
 use e.os
@@ -63,6 +65,79 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (sr, se) = it.na_seasplit(a, s, usize(x[3usize + n]), kind)
         if se != ok { os.exit(7) }
         ret sr[k]
+    }
+    if str.eq(c.name, "kal") {
+        // args (smooth, index, n, series..., p, nit, h, T, Z, V, a, P, Pn) with T, V, P, Pn row-major
+        let pp = usize(x[3usize + n])
+        var o = 4usize + n
+        let nit = i64(x[o - 0usize])
+        o += 1usize
+        let h = x[o]
+        o += 1usize
+        let (tm, e1) = mem.alloc[f64](a, pp * pp)
+        let (zv, e2) = mem.alloc[f64](a, pp)
+        let (vm, e3) = mem.alloc[f64](a, pp * pp)
+        let (av, e4) = mem.alloc[f64](a, pp)
+        let (pm, e5) = mem.alloc[f64](a, pp * pp)
+        let (pn, e6) = mem.alloc[f64](a, pp * pp)
+        if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { os.exit(5) }
+        var q = 0usize
+        while q < pp * pp {
+            tm[q] = x[o + q]
+            vm[q] = x[o + pp * pp + pp + q]
+            pm[q] = x[o + 2usize * pp * pp + 2usize * pp + q]
+            pn[q] = x[o + 3usize * pp * pp + 2usize * pp + q]
+            q += 1usize
+        }
+        q = 0usize
+        while q < pp {
+            zv[q] = x[o + pp * pp + q]
+            av[q] = x[o + 2usize * pp * pp + pp + q]
+            q += 1usize
+        }
+        let mdl = kal.SsModel{ p: pp, tm: tm, zv: zv, h: h, vm: vm, av: av, pm: pm, pn: pn }
+        let (kr, ke) = it.na_kalman_model(a, s, s, &mdl, kind == 1usize, nit, 0i64 - 1i64)
+        if ke != ok { os.exit(7) }
+        ret kr[k]
+    }
+    if str.eq(c.name, "sts") {
+        // args (smooth, index, n, series..., type, frequency, maxgap or -1)
+        let (sr, se) = it.na_kalman_structts(a, s, usize(x[3usize + n]), usize(x[4usize + n]), kind == 1usize, i64(x[5usize + n]))
+        if se != ok { os.exit(7) }
+        ret sr[k]
+    }
+    if str.eq(c.name, "arima") {
+        // args (p, d, q, kind, method, quantity, n, series...)
+        let nn = usize(x[6usize])
+        let (xs, xe) = mem.alloc[f64](a, nn)
+        if xe != ok { os.exit(5) }
+        var t0 = 0usize
+        while t0 < nn {
+            xs[t0] = x[7usize + t0]
+            if xs[t0] < 0.0f64 - 999000.0f64 { xs[t0] = 0.0f64 / 0.0f64 }
+            t0 += 1usize
+        }
+        let fit = af.arima_fit(a, xs, usize(x[0usize]), usize(x[1usize]), usize(x[2usize]), usize(x[3usize]), 0.0f64 / 0.0f64, usize(x[4usize]))
+        if !fit.good { ret 0.0f64 / 0.0f64 }
+        let qn = usize(x[5usize])
+        if qn == 0usize { ret fit.aic }
+        if qn == 1usize { ret 0.0f64 - 0.5f64 * fit.value }
+        if qn == 2usize { ret fit.sigma2 }
+        if qn >= 50usize { ret fit.model.pm[(qn - 50usize) * fit.model.p + (qn - 50usize)] }
+        if qn >= 30usize { ret fit.model.av[qn - 30usize] }
+        ret fit.coef[qn - 10usize]
+    }
+    if str.eq(c.name, "aa") {
+        // args (smooth, index, n, series...)
+        let (ar2, ae) = it.na_kalman_autoarima(a, s, 1usize, kind == 1usize, 0i64 - 1i64)
+        if ae != ok { ret 0.0f64 / 0.0f64 }
+        var wsum = 0.0f64
+        var wi = 0usize
+        while wi < n {
+            wsum += ar2[wi] * f64(wi + 1usize)
+            wi += 1usize
+        }
+        ret wsum
     }
     if str.eq(c.name, "stats") {
         // args (which 0..7, 0, n, series...)
