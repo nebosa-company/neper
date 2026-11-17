@@ -45,4 +45,9 @@ for (rep in 1:40) {
   o <- as.integer(get_order(seriate(d, method = "GW")))
   for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("gw", c(n, rowm(Dm), i - 1), o[i], rel = 0, abs = 0)
 }
+# seriate(d, "VAT"): "vt" (n, D row-major, idx), the order entry (1-based)
+for (rep in 1:40) {
+  n <- sample(5:20, 1); X <- matrix(rnorm(n * 2), n, 2); d <- dist(X); Dm <- as.matrix(d); o <- as.integer(get_order(seriate(d, "VAT")))
+  for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("vt", c(n, rowm(Dm), i - 1), o[i], rel = 0, abs = 0)
+}
 emit("seriation", "seriation", list(cases))

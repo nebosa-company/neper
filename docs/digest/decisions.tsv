@@ -3698,4 +3698,5 @@ D6835	750	caret: preProcess pca
 D6836	656	mclust: hc with the EII model
 D6837	853	ipred: sbrier at one time and kfoldcv
 D6838	732	seriation: the 2SUM and Rho criteria
-D6839	762	seriation: the MDS_stress criterion
+D6839	763	seriation: the MDS_stress criterion
+D6840	606	seriation: the VAT order

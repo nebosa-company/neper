@@ -47826,3 +47826,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6839 — seriation: the MDS_stress criterion
 
 **Decision.** `seriationcrit.mds_stress` is `criterion(d, order, "MDS_stress")` with the configuration refitted: the package's one-dimensional unfolding `uniscale` has the closed form t_i = (r_i - sum r / n) / n with r_i the sum over j of the unit-mean-square dissimilarity times sign(rank_i - rank_j) (the inverse in the source reduces to I / n - J / n^2), falling back to the ranks when t does not keep the order, and the stress is sqrt(sum (d - d_emb)^2 / sum d_emb^2) with both distance sets scaled to unit mean square. Equal to seriation on 60 random permutations, with and without the fallback (oracle_seriation). Not here: a supplied configuration (`refit = FALSE`), the seriation methods. Linux pending.
+
+## D6840 — seriation: the VAT order
+
+**Decision.** `seriationcrit.vat_order` is `seriate(d, "VAT")`: the start is the row of the first largest dissimilarity scanning the matrix column by column (the larger index of the first maximal pair), and each step appends the unvisited object with the smallest dissimilarity to the visited set, the lowest index on ties (Prim's order over the dissimilarity matrix). Equal to seriation on 40 random data sets of 5 to 20 points (oracle_seriation, every order entry). Not here: iVAT (the path-distance transform of the input), OLO, Spectral, MDS, TSP. Linux pending.

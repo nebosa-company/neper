@@ -19,6 +19,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if he != ok { ret nan }
         ret f64(tree.order[usize(z[2usize + hn * hn])])
     }
+    if str.eq(c.name, "vt") {
+        let vn = usize(z[0usize])
+        let (vo, ve) = mem.alloc[usize](a, vn)
+        if ve != ok { ret nan }
+        sc.vat_order(z[1usize..1usize + vn * vn], vn, vo)
+        ret f64(vo[usize(z[1usize + vn * vn])] + 1usize)
+    }
     if str.eq(c.name, "gw") {
         let gn = usize(z[0usize])
         let (go, ge) = mem.alloc[usize](a, gn)

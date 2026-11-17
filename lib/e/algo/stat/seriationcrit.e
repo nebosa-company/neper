@@ -549,3 +549,62 @@ fn mds_stress(a: *mem.Arena, d: []const f64, n: usize, o: []const usize) -> f64 
     }
     ret math.sqrt[f64](num / den)
 }
+
+// seriate(d, "VAT"): start from the row of the first largest entry in column-major order and repeatedly append the unvisited object with the smallest dissimilarity to any visited one (the first such column on ties); out receives the 0-based order
+fn vat_order(d: []const f64, n: usize, out: []usize) {
+    var mx = d[0usize]
+    var i = 0usize
+    while i < n * n {
+        if d[i] > mx { mx = d[i] }
+        i += 1usize
+    }
+    // the first occurrence of the maximum scanning columns first: the smallest column, then the smallest row in it
+    var start = 0usize
+    var found = false
+    var c = 0usize
+    while c < n && !found {
+        var r = 0usize
+        while r < n && !found {
+            if d[r * n + c] == mx {
+                start = r
+                found = true
+            }
+            r += 1usize
+        }
+        c += 1usize
+    }
+    var seen = 0usize
+    out[0usize] = start
+    seen = 1usize
+    var done = 0usize
+    while done + 1usize < n {
+        var best = 1.0e300f64
+        var pick = 0usize
+        var col = 0usize
+        while col < n {
+            var vis = false
+            var q = 0usize
+            while q < seen {
+                if out[q] == col { vis = true }
+                q += 1usize
+            }
+            if !vis {
+                var cm = 1.0e300f64
+                q = 0usize
+                while q < seen {
+                    let v = d[out[q] * n + col]
+                    if v < cm { cm = v }
+                    q += 1usize
+                }
+                if cm < best {
+                    best = cm
+                    pick = col
+                }
+            }
+            col += 1usize
+        }
+        out[seen] = pick
+        seen += 1usize
+        done += 1usize
+    }
+}
