@@ -113,7 +113,15 @@ fn fit_rows(a: *mem.Arena, gf: bool, fam: usize, relaxf: bool, gamma: f64, efron
             if off.len == n { ye[i] = ya[i] - off[i] }
             i += 1usize
         }
-        fe = gl.gaussian(a, xs, ye, wts, lz, uz, n, nkp, alpha, std, vs, lamc, sm)
+        if gf {
+            let (dvg, eg1) = mem.alloc[f64](a, nl)
+            let (alg, eg2) = mem.alloc[f64](a, nl)
+            if eg1 != ok || eg2 != ok { ret eg1 }
+            let nfit = gl.glm_gaussian(a, xs, ye, wts, lz, uz, n, nkp, alpha, std, vs, lamc, 100usize, 1.0e-7f64, sm, dvg, alg)
+            if nfit != nl { ret eg1 }
+        } else {
+            fe = gl.gaussian(a, xs, ye, wts, lz, uz, n, nkp, alpha, std, vs, lamc, sm)
+        }
     }
     if (fam == 0usize || fam == 1usize) && gf {
         let (dvg, eg1) = mem.alloc[f64](a, nl)
@@ -245,6 +253,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             if e1 != ok { ret nan() }
             if fit_rows(a, gf, fam, relaxf, gamma, efron, grouped, nc, xm, ya, stat, strata, start, wts, off, lo, up, excl, n, p, alpha, std, lam, vf, out) != ok { ret nan() }
             ret checksum(out)
+        }
+        if str.eq(c.name, "glam") && fam == 2usize {
+            let (ye2, ea) = mem.alloc[f64](a, n)
+            let (cg, eb) = mem.alloc[f64](a, 100usize * (p + 1usize))
+            let (dg, ec) = mem.alloc[f64](a, 100usize)
+            let (alg, ed) = mem.alloc[f64](a, 100usize)
+            if ea != ok || eb != ok || ec != ok || ed != ok { ret nan() }
+            var ii = 0usize
+            while ii < n {
+                ye2[ii] = ya[ii]
+                if off.len == n { ye2[ii] = ya[ii] - off[ii] }
+                ii += 1usize
+            }
+            let noln: []const f64 = zero
+            let nfit = gl.glm_gaussian(a, xm, ye2, wts, lo, up, n, p, alpha, std, vf, noln, 100usize, 1.0e-7f64, cg, dg, alg)
+            if usize(x[qo]) == 1usize { ret f64(nfit) }
+            ret checksum(alg[0usize..nfit])
         }
         if str.eq(c.name, "glam") && fam == 3usize {
             let (cg, eb) = mem.alloc[f64](a, 100usize * p)
