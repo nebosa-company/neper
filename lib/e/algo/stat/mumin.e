@@ -70,3 +70,11 @@ fn average_conditional(est: []const f64, se: []const f64, w: []const f64, presen
     }
     ret (bar, math.sqrt[f64](v), sw)
 }
+
+// QAIC and QAICc of a model of log likelihood ll with k estimated parameters (the dispersion c-hat counted as one more) fitted to n observations
+fn qaic(ll: f64, k: f64, n: f64, chat: f64, corrected: bool) -> f64 {
+    let df = k + 1.0f64
+    var v = 0.0f64 - 2.0f64 * ll / chat + 2.0f64 * df
+    if corrected { v = 0.0f64 - 2.0f64 * ll / chat + 2.0f64 * df * (1.0f64 + (df + 1.0f64) / (n - df - 1.0f64)) }
+    ret v
+}

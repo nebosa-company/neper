@@ -10,6 +10,7 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "qaic") { ret mm.qaic(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize] != 0.0f64) }
     let n = x[0usize]
     let m = usize(x[1usize])
     let p = usize(x[2usize])

@@ -3712,4 +3712,5 @@ D6849	674	Hmisc: the cut points of cut2
 D6850	1128	Hmisc: approxExtrap and the concordance index of rcorr.cens
 D6851	918	rcompanion: scheirerRayHare
 D6852	658	rcompanion: the global test of nominalSymmetryTest
-D6853	765	rcompanion: the pairwise tests of nominalSymmetryTest
+D6853	766	rcompanion: the pairwise tests of nominalSymmetryTest
+D6854	439	MuMIn: QAIC and QAICc

@@ -31,4 +31,9 @@ for (rep in 1:12) {
   add("cest", a, sum(cs[nm, 1] * seq_along(nm))); add("cse", a, sum(cs[nm, 2] * seq_along(nm)))
   add("imp", a, sum(as.numeric(im[nm[-1]]) * seq_along(nm[-1])))
 }
+# QAIC and QAICc of a Poisson glm: "qaic" (loglik, k, n, chat, corrected)
+for (rep in 1:30) {
+  n <- sample(15:80, 1); x <- rnorm(n); y <- rpois(n, exp(0.3 * x)); m <- glm(y ~ x, poisson); ch <- runif(1, 1, 3); ll <- logLik(m)
+  add("qaic", c(as.numeric(ll), attr(ll, "df"), n, ch, 0), QAIC(m, chat = ch)); add("qaic", c(as.numeric(ll), attr(ll, "df"), n, ch, 1), QAICc(m, chat = ch))
+}
 emit("mumin", "MuMIn", list(cases))

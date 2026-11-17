@@ -47882,3 +47882,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6853 — rcompanion: the pairwise tests of nominalSymmetryTest
 
 **Decision.** `rcompanion.nominal_symmetry_pairs(x, n)` gives `nominalSymmetryTest(x)$Pairwise.symmetry.tests` for a table larger than 2 by 2: for each pair i < j in row order the McNemar p value of the two off-diagonal cells (corrected unless they are equal, missing when both are zero) to three significant digits, then the Benjamini-Hochberg adjustment (the default `fdr`) of those rounded values over the non-missing ones, again to three digits. Equal to rcompanion on 30 tables of 3 to 5 categories (oracle_rcompanion, raw and adjusted p of every pair, 672 cases in all). Not here: `exact = TRUE`, other adjustment methods, `pairwiseNominalIndependence`, `pairwiseMedianTest`. Linux pending.
+
+## D6854 — MuMIn: QAIC and QAICc
+
+**Decision.** `mumin.qaic(ll, k, n, chat, corrected)` is `QAIC` and `QAICc`: with the dispersion estimate counted as one more parameter (df = k + 1), -2 ll / c-hat + 2 df, and for the corrected form -2 ll / c-hat + 2 df (1 + (df + 1) / (n - df - 1)). Equal to MuMIn on 30 Poisson fits (oracle_mumin). Not here: `QIC`, `dredge`, `model.sel`, `r.squaredGLMM`, the adjusted standard errors. Linux pending.
