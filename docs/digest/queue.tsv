@@ -37,7 +37,6 @@ L342	library	0.42	1013	lmerTest: Satterthwaite and Kenward-Roger tests for mixed
 L284	library	0	564	Reverse-mode autodiff, NUTS adaptation and ADVI (rstan, StanHeaders)	Open.
 L334	library	0.3	665	RSpectra and irlba: partial eigen and singular value decompositions	Partial (D6612).
 L336	library	0.25	563	nnet: single-hidden-layer networks and multinom	Partial (D6615).
-L337	library	0.4	634	rpart: CART trees	Partial (D6434, D6435 classification trees with cost-complexity pruning, 29 of 30 data sets).
 L394	library	0.05	448	ipred: bagging and error estimation	Partial (D6837: e.algo.stat.ipredpkg has sbrier at one time with numeric predictions and kfoldcv equal to ipred;
 L338	library	0.2	461	robustbase: robust regression and scale	Partial (D6192, D6408 scaleTau2, D6409 mc without ties).
 L339	library	0.16	634	bayestestR, performance and parameters: model summary indices	Partial (D6473 bayestestR hdi, eti, p_direction, rope, D6474 performance lm indices equal R on Windows;

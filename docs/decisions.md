@@ -48670,3 +48670,8 @@ The gbm 2.x C++ engine ported line for line (gbmfit.e, gbmr.e) with every loss, 
 ## D7108 — mclust: all covariance models, hc, priors, noise, MclustDR, orientation; L348 closed
 
 Faithful ports of the mclust 6.1.3 Fortran for the EM of all 14 models, hc VVV and EEE, the prior M steps, the noise component, subset initialisation and hcRandomPairs, MclustDR, and the orientation matrices for sim and the bootstrap LRT through exact dgesvd and dsyev ports (EEV, VEV, EVV, VEE). A VEE EM fit now fails where R Fortran dpotrf fails. Twenty fixtures equal R. The orientation of EVE and VVE comes from a long MM iteration whose reached solution is rounding dependent, so sim and the bootstrap LRT from fitted EVE and VVE models are not claimed. Every other item of the L348 acceptance has an oracle case, so L348 moves to docs/work-done.jsonl. Linux pending.
+
+
+## D7109 — rpart full port; L337 closed
+
+A fresh port of the rpart 4.1.27 C sources (rpartfull.e; rpartfit.e and cart.e stay for mice): the four methods, the split search with priors and loss matrices, surrogates and usesurrogate, cross-validated cp table with R fold draws, prune, predict, importance, labels and rpart.control. The R oracle exposed that insert_split.c mis-relinks a full list of two when a new best split arrives, so with maxcompete = 1 a node keeps only one split; this is ported deliberately. Equal to R at 1e-9 on about 7400 cases, so L337 moves to docs/work-done.jsonl. Linux pending.

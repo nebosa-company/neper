@@ -3894,4 +3894,5 @@ D7104	723	lmom Fortran library and gld distribution functions, moments and fits;
 D7105	612	DRDID general did entry point, bootstraps, fastglm and trust; L485 closed
 D7106	573	geosphere: Karney geodesic, areaPolygon, perimeter, centroid; L401 closed
 D7107	707	gbm engine, loess, OOB gbm.perf, offsets, factors; L414 closed
-D7108	773	mclust: all covariance models, hc, priors, noise, MclustDR, orientation; L348 closed
+D7108	775	mclust: all covariance models, hc, priors, noise, MclustDR, orientation; L348 closed
+D7109	609	rpart full port; L337 closed
