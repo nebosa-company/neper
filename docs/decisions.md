@@ -48330,3 +48330,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6965 — L328 closed, the caret remainder split to L519
 
 **Decision.** L328's acceptance list (the resampling indices, confusionMatrix with every statistic, postResample, preProcess for center, scale, range, YeoJohnson, BoxCox, pca and knnImpute, varImp for linear models) is equal to caret. What is left (numeric-response folds, whose interval order depends on the locale collation of label strings; ica through fastICA with a seeded start; varImp for tree and neural models) goes to L519 and L328 leaves the queue. Linux pending.
+
+## D6966 — L473 closed, the isotone remainder split to L520
+
+**Decision.** L473's acceptance list (gpava with weights and the ties treatments, the Lp and quantile solvers, activeSet on general partial orders, pava) is equal to isotone on the oracle. The list-response form of gpava, the Chebyshev and Poisson activeSet solvers (the Poisson one needs a starting point) and user-supplied solver functions go to L520 and L473 leaves the queue. Linux pending.

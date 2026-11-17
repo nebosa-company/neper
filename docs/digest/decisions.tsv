@@ -3824,4 +3824,5 @@ D6961	568	L327 closed, the tweedie package's high powers split to L518
 D6962	598	caret: the prevalence argument
 D6963	759	caret: knnImpute
 D6964	865	caret: varImp of a binomial glm
-D6965	536	L328 closed, the caret remainder split to L519
+D6965	537	L328 closed, the caret remainder split to L519
+D6966	458	L473 closed, the isotone remainder split to L520

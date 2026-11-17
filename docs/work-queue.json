@@ -15,17 +15,6 @@
       "evidence": "Partly done (D6071): e.algo.stat.biasedurn has Fisher and Wallenius noncentral hypergeometric d, p, q, mean and var, Fisher mode and odds, equal to BiasedUrn on 472 values on Windows (oracle_biasedurn); Linux pending. D6791: modeWNCHypergeo and the multivariate Fisher and Wallenius mass functions equal BiasedUrn (572 values in all). D6808: oddsWNCHypergeo equals the package (611 values in all). Open: the multivariate means and variances (the package approximates them), random variates under set.seed. Original: Open (CRAN rank 851). Small. Acceptance, equal to BiasedUrn: d, p, q, r and moments for Wallenius and Fisher noncentral hypergeometric, multivariate variants, odds estimation, under set.seed."
     },
     {
-      "id": "L473",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 591,
-      "title": "isotone: isotonic regression",
-      "score": 0.9,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6095): e.algo.stat.isotone.gpava for a vector response (weighted mean, median and fractile solvers; primary, secondary, tertiary ties) equals isotone on 1800 values on Windows (oracle_isotone); Linux pending. D6518: activeSet with the LS solver on general partial orders (zero start; fval, niter, x, multipliers with dqrdc2 aliasing as NA) equals isotone on 180 more values. D6519: the L1 solver (block weighted medians, sign gradient) equals isotone on 164 more values. D6520: the asymmetric quantile solver (weighted fractile with aw, bw) equals isotone on 64 more values. D6567: gpava with a matrix response (replicates per row; weighted mean, median and fractile; all three ties treatments) equals isotone on 1160 values, and the weighted median and fractile now accumulate their cumulative weights as R's long-double cumsum does. D6809: the optim(BFGS) activeSet solvers (asymmetric LS, L1eps, huber, SILF, Lp) equal isotone (3824 values in all). Open: list responses, the Chebyshev activeSet solver, the Poisson solver needs an x0. Original: Open (CRAN rank 872). Small. Acceptance, equal to isotone: gpava with weights, ties handling and the Lp, quantile and user-defined solvers, activeSet with general partial orders, pava."
-    },
-    {
       "id": "L474",
       "category": "library",
       "group": "CRAN parity",
@@ -5238,6 +5227,17 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Open. Split from L328, which met its acceptance list (D6087, D6812-D6816, D6822, D6834, D6835, D6962-D6964). Acceptance, equal to caret: createFolds and createMultiFolds for a numeric response (the quantile cuts ordered by their label strings, locale dependent), preProcess method ica (fastICA with its seeded start), varImp for glm families beyond binomial and for tree and neural models."
+    },
+    {
+      "id": "L520",
+      "category": "library",
+      "group": "CRAN parity",
+      "order": 832,
+      "title": "isotone remainder: list responses, the Chebyshev and Poisson activeSet solvers",
+      "score": 0,
+      "model": "opus",
+      "thinking": "high",
+      "evidence": "Open. Split from L473, which met its acceptance list (D6095, D6518-D6520, D6567, D6809). Acceptance, equal to isotone: gpava with a list response, the activeSet Chebyshev solver, the Poisson solver with its starting point, and user-supplied solver functions beyond the built-in kinds."
     }
   ]
 }
