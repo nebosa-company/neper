@@ -418,3 +418,4 @@ oracle_micepool
 oracle_lmomfull
 oracle_gldfull
 oracle_gldfit
+oracle_lmomq
