@@ -14,7 +14,19 @@ for (rep in 1:12) {
   f <- glmnet(X, y, alpha = alpha, standardize = std, penalty.factor = vf, lambda = lam, thresh = 1e-14)
   cf <- as.matrix(coef(f))
   for (k in c(1, 3, 6, 8)) for (j in 0:p) cases[[length(cases) + 1]] <-
-    case("coef", c(n, p, alpha, std, length(lam), lam, vf, y, X, k - 1, j), cf[j + 1, k], rel = 1e-5, abs = 1e-6)
+    case("coef", c(n, p, alpha, std, length(lam), lam, vf, y, X, k - 1, j, 0), cf[j + 1, k], rel = 1e-5, abs = 1e-6)
+}
+# observation weights: the same layout with the flag 1 and the n weights after it
+for (rep in 1:12) {
+  n <- sample(30:70, 1); p <- sample(3:6, 1); X <- matrix(round(rnorm(n * p), 3), n, p); y <- round(X[, 1] * 2 + rnorm(n), 3)
+  w <- round(runif(n, 0.2, 3), 2); alpha <- c(1, 0.5, 0.2, 0.9)[(rep %% 4) + 1]; std <- rep %% 3 != 0; vf <- rep(1, p)
+  wn <- w / sum(w); mx <- colSums(wn * X); sx <- if (std) sqrt(colSums(wn * (X - rep(mx, each = n))^2)) else rep(1, p)
+  lmax <- max(abs(colSums(wn * (X - rep(mx, each = n)) * (y - sum(wn * y))) / sx)) / max(alpha, 1e-3)
+  lam <- exp(seq(log(lmax), log(lmax * 0.01), length.out = 8))
+  f <- glmnet(X, y, weights = w, alpha = alpha, standardize = std, lambda = lam, thresh = 1e-14)
+  cf <- as.matrix(coef(f))
+  for (k in c(1, 4, 8)) for (j in 0:p) cases[[length(cases) + 1]] <-
+    case("coef", c(n, p, alpha, std, length(lam), lam, vf, y, X, k - 1, j, 1, w), cf[j + 1, k], rel = 1e-5, abs = 1e-6)
 }
 # the automatic lambda sequence: "lpath" (n, p, alpha, std, k, vf[p], y[n], X[n p]) the k-th lambda (0-based) of glmnet(...)$lambda
 for (rep in 1:20) {

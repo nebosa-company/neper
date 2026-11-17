@@ -5,7 +5,9 @@
 // inside when `standardize`, the penalty factors rescaled to sum to p, coefficients answered on the original scale
 // and the intercept from the means. Answers the exact minimiser, which glmnet reaches to its `thresh` of 1e-7.
 //
-// Not here: the lambda path generator, other families, weights, offsets, bounds, cv.glmnet, relax, predict.
+// Observation weights (normalised to sum 1, as glmnet does) enter the means, the standardisation and the loss; an empty slice means equal weights.
+//
+// Not here: other families, offsets, bounds, cv.glmnet, relax, predict.
 
 use e.math
 use e.mem
@@ -18,29 +20,40 @@ fn soft(z: f64, g: f64) -> f64 {
 
 // x is n by p column-major; lambdas are visited in order with warm starts; coef receives, for lambda k, the
 // intercept at k * (p + 1) and the p slopes after it
-fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
-    let nf = f64(n)
+fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
     let (xs, e1) = mem.alloc[f64](a, n * p)
     let (sc, e2) = mem.alloc[f64](a, p)
     let (mx, e3) = mem.alloc[f64](a, p)
     let (pf, e4) = mem.alloc[f64](a, p)
     let (b, e5) = mem.alloc[f64](a, p)
     let (r, e6) = mem.alloc[f64](a, n)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret e1 }
-    var ybar = 0.0f64
+    let (wn, e7) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret e1 }
+    var wsum = 0.0f64
     var i = 0usize
     while i < n {
-        ybar += y[i]
+        if wt.len == n { wn[i] = wt[i] } else { wn[i] = 1.0f64 }
+        wsum += wn[i]
         i += 1usize
     }
-    ybar = ybar / nf
+    i = 0usize
+    while i < n {
+        wn[i] = wn[i] / wsum
+        i += 1usize
+    }
+    var ybar = 0.0f64
+    i = 0usize
+    while i < n {
+        ybar += wn[i] * y[i]
+        i += 1usize
+    }
     var yv = 0.0f64
     i = 0usize
     while i < n {
-        yv += (y[i] - ybar) * (y[i] - ybar)
+        yv += wn[i] * (y[i] - ybar) * (y[i] - ybar)
         i += 1usize
     }
-    let ys = math.sqrt[f64](yv / nf)
+    let ys = math.sqrt[f64](yv)
     var vs = 0.0f64
     var j = 0usize
     while j < p {
@@ -52,18 +65,17 @@ fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, a
         var m = 0.0f64
         i = 0usize
         while i < n {
-            m += x[j * n + i]
+            m += wn[i] * x[j * n + i]
             i += 1usize
         }
-        m = m / nf
         var v = 0.0f64
         i = 0usize
         while i < n {
-            v += (x[j * n + i] - m) * (x[j * n + i] - m)
+            v += wn[i] * (x[j * n + i] - m) * (x[j * n + i] - m)
             i += 1usize
         }
         var s = 1.0f64
-        if standardize { s = math.sqrt[f64](v / nf) }
+        if standardize { s = math.sqrt[f64](v) }
         sc[j] = s
         mx[j] = m
         i = 0usize
@@ -98,12 +110,11 @@ fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, a
                 var xr = 0.0f64
                 i = 0usize
                 while i < n {
-                    cj += xs[j * n + i] * xs[j * n + i]
-                    xr += xs[j * n + i] * r[i]
+                    cj += wn[i] * xs[j * n + i] * xs[j * n + i]
+                    xr += wn[i] * xs[j * n + i] * r[i]
                     i += 1usize
                 }
-                cj = cj / nf
-                let z = xr / nf + cj * b[j]
+                let z = xr + cj * b[j]
                 let nb = soft(z, lam * alpha * pf[j]) / (cj + lam * (1.0f64 - alpha) * pf[j] / ys)
                 let d = nb - b[j]
                 if d != 0.0f64 {
