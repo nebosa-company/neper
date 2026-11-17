@@ -3733,4 +3733,5 @@ D6870	801	TSA: eacf
 D6871	904	LearnBayes: rwmetrop and indepmetrop
 D6872	808	LearnBayes: rigamma, rmnorm, pdisc and pbetat
 D6873	847	LearnBayes: the mixture-prior posteriors
-D6874	921	sm: the cross-validation bandwidth hcv
+D6874	922	sm: the cross-validation bandwidth hcv
+D6875	800	mclust: BIC from the hierarchical EII partitions

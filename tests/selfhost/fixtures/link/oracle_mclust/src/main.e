@@ -34,6 +34,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         mc.map(z[2usize..2usize + n * k], n, k, o)
         ret f64(o[usize(z[2usize + n * k])])
     }
+    if str.eq(c.name, "mbic") {
+        // (n, p, g, model code, X[n p] column-major)
+        let bn = usize(z[0usize])
+        let bp = usize(z[1usize])
+        ret mc.bic_hc_eii(a, z[4usize..4usize + bn * bp], bn, bp, usize(z[2usize]), usize(z[3usize]))
+    }
     if str.eq(c.name, "hc") {
         let n = usize(z[0usize])
         let p = usize(z[1usize])

@@ -37,4 +37,11 @@ for (rep in 1:25) {
   n <- sample(6:40, 1); p <- sample(2:4, 1); X <- matrix(rnorm(n * p), n, p); h <- unclass(hc(X, modelName = "EII"))[1:2, ]
   v <- as.vector(h); for (q in seq_along(v)) add("hc", c(n, p, q - 1, X), v[q], 0)
 }
+# mclustBIC from the hc(EII) partitions: "mbic" (n, p, G, model code 0 EII 1 VII 2 EEI 3 VVI 4 EEE 5 VVV, X[n p] column-major)
+for (rep in 1:12) {
+  p <- sample(2:3, 1); ng <- 3; n <- sample(40:90, 1); cl <- sample(ng, n, TRUE); X <- matrix(rnorm(n * p), n, p) + 2.5 * (cl - 1)
+  hp <- hc(X, modelName = "EII"); gs <- 2:4; mm <- c("EII", "VII", "EEI", "VVI", "EEE", "VVV")
+  b <- suppressWarnings(mclustBIC(X, G = gs, modelNames = mm, initialization = list(hcPairs = hp), verbose = FALSE))
+  for (gi in seq_along(gs)) for (mi in 1:6) if (is.finite(b[gi, mi])) add("mbic", c(n, p, gs[gi], mi - 1, X), b[gi, mi], 1e-8)
+}
 emit("mclust", "mclust", list(cases))

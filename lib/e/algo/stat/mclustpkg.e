@@ -470,3 +470,88 @@ fn hc_eii(a: *mem.Arena, x: []const f64, n: usize, p: usize, out: []usize) -> er
     }
     ret ok
 }
+
+// hclass(hc(data, "EII"), g): the group of each observation (0-based labels in order of first appearance) after the first n - g merges of the hierarchy
+fn hc_eii_groups(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, lab: []usize) -> err {
+    let (pairs, e1) = mem.alloc[usize](a, 2usize * n)
+    let (root, e2) = mem.alloc[usize](a, n)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    let he = hc_eii(a, x, n, p, pairs)
+    if he != ok { ret he }
+    var i = 0usize
+    while i < n {
+        root[i] = i
+        i += 1usize
+    }
+    var s = 0usize
+    while s + g < n {
+        let u = pairs[2usize * s] - 1usize
+        let v = pairs[2usize * s + 1usize] - 1usize
+        // the clusters are named by their smallest member: relabel every member of v's group
+        let rv = root[v]
+        let ru = root[u]
+        i = 0usize
+        while i < n {
+            if root[i] == rv { root[i] = ru }
+            i += 1usize
+        }
+        s += 1usize
+    }
+    var next = 0usize
+    i = 0usize
+    while i < n {
+        var found = false
+        var j = 0usize
+        while j < i && !found {
+            if root[j] == root[i] {
+                lab[i] = lab[j]
+                found = true
+            }
+            j += 1usize
+        }
+        if !found {
+            lab[i] = next
+            next += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// the BIC of the model fitted by EM from the hc(data, "EII") partition into g groups, as mclustBIC(initialization = list(hcPairs = hc(data, "EII"))) reports it; NaN when the fit fails
+fn bic_hc_eii(a: *mem.Arena, x: []const f64, n: usize, p: usize, g: usize, model: usize) -> f64 {
+    let (lab, e1) = mem.alloc[usize](a, n)
+    let (z, e2) = mem.alloc[f64](a, n * g)
+    let (pro, e3) = mem.alloc[f64](a, g)
+    let (mu, e4) = mem.alloc[f64](a, g * p)
+    let (sg, e5) = mem.alloc[f64](a, g * p * p)
+    let (inf, e6) = mem.alloc[f64](a, 2usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret 0.0f64 / 0.0f64 }
+    if hc_eii_groups(a, x, n, p, g, lab) != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n * g {
+        z[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        z[lab[i] * n + i] = 1.0f64
+        i += 1usize
+    }
+    let ll = me_em(a, model, false, x, z, n, p, g, pro, mu, sg, inf)
+    if ll != ll { ret ll }
+    ret bic(me_label(model), ll, f64(n), f64(p), f64(g), false, false)
+}
+
+// the model names of the me_em codes
+fn me_label(m: usize) -> str {
+    if m == 0usize { ret "EII" }
+    if m == 1usize { ret "VII" }
+    if m == 2usize { ret "EEI" }
+    if m == 3usize { ret "VVI" }
+    if m == 4usize { ret "EEE" }
+    if m == 5usize { ret "VVV" }
+    if m == 6usize { ret "EVI" }
+    if m == 7usize { ret "EVV" }
+    ret "EEV"
+}
