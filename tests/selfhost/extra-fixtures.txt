@@ -430,3 +430,16 @@ oracle_mclust13
 oracle_mclust14
 oracle_mclust15
 oracle_mclust16
+oracle_clusterpam
+oracle_clusterclara
+oracle_clustertwins
+oracle_clusterfanny
+oracle_clustermona
+oracle_clusterdaisy
+oracle_clustergap
+oracle_clusterpkg
+oracle_lmomfull
+oracle_gldfull
+oracle_gldfit
+oracle_lmomq
+oracle_drdid_full

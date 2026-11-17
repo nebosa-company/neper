@@ -48,17 +48,6 @@
       "evidence": "Partial (D6618). e.algo.stat.tmpkg on a document-term count matrix equals tm weightTfIdf (normalized or not), weightSMART (every tf, idf and normalization letter but u and b), removeSparseTerms and tidytext bind_tf_idf on Windows, plus document cosine similarity (oracle_tm, 144 values; Linux pending). D6860: findFreqTerms and findAssocs equal tm. Open: tokenisation, stemming, stop words, corpora, (D6861 adds the u and b norms) topic models. Was: Open (CRAN ranks 400, 383). Small to mid. Verify e.text.rank, e.text.index and e.text.stem first. Acceptance, equal to R: tm DocumentTermMatrix and TermDocumentMatrix with weightTf, weightTfIdf, weightBin and weightSMART, removeSparseTerms, findFreqTerms, findAssocs, stopword lists, removePunctuation; tidytext unnest_tokens for words, ngrams, sentences and regex, bind_tf_idf."
     },
     {
-      "id": "L387",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 606,
-      "title": "lmom and gld: L-moments and the generalized lambda distribution",
-      "score": 0.47,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partly done (D6098): e.algo.stat.lmom has samlmu, and lmr and qua for exp, gum, glo, gpa, nor, gev and pel for the five closed forms, equal to lmom on 651 values on Windows (oracle_lmom); Linux pending. D6903: pelpe3 (Pearson III parameters from L-moments, Hosking's rational approximation) agrees with lmom to 1e-6, not bit for bit. D6845: e.algo.stat.gldpkg has qgl and dqgl for the fkml and rs parameterisations and rgl under set.seed, equal to gld. D6846: the cdf functions of the six implemented distributions equal lmom. Open: GEV fit, Pearson III lmr and qua, lognormal, Wakeby, kappa, trimmed, pgl and dgl, the gld fits. Original: Open (CRAN ranks 480, 485). Small to mid. Acceptance, equal to R: lmom samlmu, lmr and quantile functions and parameter estimation for GLO, GEV, GPD, Pearson III, Wakeby, kappa and the rest; gld dgl, pgl, qgl, rgl under set.seed, and the FKML, moment and starship fits."
-    },
-    {
       "id": "L389",
       "category": "library",
       "group": "CRAN parity",
@@ -290,17 +279,6 @@
       "evidence": "Partial (D6195). Gaussian NaiveBayes fit and predict equal klaR on Windows (oracle_klar; Linux pending). Open: kernel and factor predictors, rda, woe, stepclass, greedy.wilks. Was: Open (CRAN rank 846). Small to mid. Acceptance, equal to klaR: NaiveBayes with kernel densities, rda with its parameter search, sknn, stepclass with the greedy search, kmodes, woe and the partimat data."
     },
     {
-      "id": "L485",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 647,
-      "title": "DRDID: difference-in-differences",
-      "score": 0.45,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6464 reg_did_panel, D6465 drdid_panel, D6466 ipw_did_panel and std_ipw_did_panel, D6467 reg_did_rc ATT and se equal DRDID on Windows; oracle_drdid; Linux pending). Open: the other cross-section estimators, bootstrap, improved estimators. Was: Open (CRAN rank 893). Small to mid. Acceptance, equal to DRDID: drdid_panel, drdid_rc, ipwdid, ordid, reg_did_panel, std_ipw_did and the improved doubly robust estimators with their influence functions and standard errors."
-    },
-    {
       "id": "L501",
       "category": "library",
       "group": "CRAN parity",
@@ -442,17 +420,6 @@
       "model": "opus",
       "thinking": "high",
       "evidence": "Partial (D6612). e.algo.stat.spectrapkg svds (RSpectra, irlba) and eigs_sym (LM, LA, SA, SM; RSpectra lists the selected values decreasing) equal R on Windows to 1e-6 through full Jacobi decompositions, vectors up to sign (oracle_spectra, 90 values; Linux pending). Open: shift-invert, general and complex eigs, sparse and operator inputs, restarts, svdr. Was: Open (CRAN ranks 207, 289). Mid. Acceptance, equal to R within the per-function tolerance: eigs_sym and eigs for the largest, smallest and shift-invert eigenpairs (Lanczos and Arnoldi, symmetric and general, real and complex), svds, irlba with restarts and augmentation, svdr, on dense and sparse inputs."
-    },
-    {
-      "id": "L335",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 685,
-      "title": "cluster: pam, clara, fanny, agnes, diana, mona, daisy",
-      "score": 0.45,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6176, D6177 agnes heights and ac, D6178 daisy gower numeric and nominal, D6179 silhouette, D6180 diana heights and dc). pam objectives, and the medoid set and partition on 19 of 20 random datasets, equal cluster::pam on Windows (oracle_pamcluster; Linux pending; one dataset reaches a different local optimum, see the decision). Open: clara, fanny, agnes, diana, mona, daisy, silhouette, pam swap order. Was: Open (CRAN rank 229). Mid. e.ml.cluster has kmedoids, agglomerative and silhouette_samples. Acceptance, equal to cluster: daisy for mixed types with Gower, pam (build and swap, medoids and clustering), clara with its seeded samples, fanny, agnes for every method, diana, mona, silhouette, clusGap, coef.hclust."
     },
     {
       "id": "L336",
