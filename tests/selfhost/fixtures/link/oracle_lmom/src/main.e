@@ -26,6 +26,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         lm.lmr(kind, z[1usize], z[2usize], z[3usize], o[0usize..4usize])
         ret o[usize(z[4usize])]
     }
+    if str.eq(c.name, "cdf") { ret lm.cdf(kind, z[4usize], z[1usize], z[2usize], z[3usize]) }
     if str.eq(c.name, "qua") { ret lm.qua(kind, z[4usize], z[1usize], z[2usize], z[3usize]) }
     lm.pel(kind, z[1usize], z[2usize], z[3usize], o[0usize..3usize])
     ret o[usize(z[4usize])]

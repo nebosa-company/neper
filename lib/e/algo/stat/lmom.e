@@ -117,6 +117,30 @@ fn qua(kind: u8, f: f64, xi: f64, alpha: f64, k: f64) -> f64 {
     ret xi + alpha * (1.0f64 - math.pow[f64](0.0f64 - math.log[f64](f), k)) / k
 }
 
+// cdf(x, dist, para): the distribution function (the GEV, GLO and GPD through the reduced variate y, a positive-part clip inside the logarithm)
+fn cdf(kind: u8, x: f64, xi: f64, alpha: f64, k: f64) -> f64 {
+    if kind == 0u8 {
+        var d = x - xi
+        if d < 0.0f64 { d = 0.0f64 }
+        ret 1.0f64 - math.exp[f64](0.0f64 - d / alpha)
+    }
+    if kind == 1u8 { ret math.exp[f64](0.0f64 - math.exp[f64](0.0f64 - (x - xi) / alpha)) }
+    if kind == 4u8 { ret dist.pnorm(x, xi, alpha, true, false) }
+    var y = (x - xi) / alpha
+    if k != 0.0f64 {
+        var inner = 1.0f64 - k * (x - xi) / alpha
+        if inner < 0.0f64 { inner = 0.0f64 }
+        y = 0.0f64 - 1.0f64 / k * math.log[f64](inner)
+    }
+    if kind == 2u8 { ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - y)) }
+    if kind == 3u8 {
+        var yp = y
+        if yp < 0.0f64 { yp = 0.0f64 }
+        ret 1.0f64 - math.exp[f64](0.0f64 - yp)
+    }
+    ret math.exp[f64](0.0f64 - math.exp[f64](0.0f64 - y))
+}
+
 // pel(dist, lmom = (l1, l2, t3)): out = (xi, alpha, k)
 fn pel(kind: u8, l1: f64, l2: f64, t3: f64, out: []f64) {
     if kind == 0u8 {

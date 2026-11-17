@@ -3704,4 +3704,5 @@ D6841	536	seriation: GW with the single, average and Ward linkages
 D6842	923	seriation: OLO
 D6843	735	extraDistr: random draws of ten families
 D6844	547	extraDistr: the Laplace generator
-D6845	725	gld: qgl, dqgl and rgl
+D6845	726	gld: qgl, dqgl and rgl
+D6846	655	lmom: the distribution functions

@@ -16,6 +16,7 @@ for (kind in 0:5) for (rep in 1:8) {
   par <- switch(kind + 1, c(xi, al), c(xi, al), c(xi, al, k), c(xi, al, k), c(xi, al), c(xi, al, k))
   lm <- get(paste0("lmr", nm[kind + 1]))(par, 4)
   for (q in 1:4) add("lmr", c(kind, xi, al, k, q - 1), lm[q])
+  for (xx in xi + al * c(-1.5, -0.3, 0.2, 0.9, 2.5, 6)) add("cdf", c(kind, xi, al, k, xx), get(paste0("cdf", nm[kind + 1]))(xx, par))
   for (f in c(0.05, 0.3, 0.5, 0.9, 0.99)) add("qua", c(kind, xi, al, k, f), get(paste0("qua", nm[kind + 1]))(f, par))
   if (kind <= 4) { pp <- get(paste0("pel", nm[kind + 1]))(lm[1:(if (kind <= 1 || kind == 4) 2 else 3)]); full <- c(pp, rep(0, 3 - length(pp)))
     for (q in 1:3) add("pel", c(kind, lm[1], lm[2], lm[3], q - 1), full[q]) }

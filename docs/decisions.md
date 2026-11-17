@@ -47850,3 +47850,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6845 — gld: qgl, dqgl and rgl
 
 **Decision.** `e.algo.stat.gldpkg` has the quantile function `qgl` of the generalised lambda distribution in the FKML parameterisation (with the logarithmic limits when lambda3 or lambda4 is zero, NaN outside [0, 1]) and in the Ramberg-Schmeiser one, the density at the quantile `dqgl` (lambda2 over the sum of the two tail terms, the RS form weighted by lambda3 and lambda4), and `rgl`, the quantile function at one uniform per value. Equal to gld on 600 values from 40 parameter sets (oracle_gld, `rgl` under set.seed). Not here: `pgl` and `dgl` (numerical inversion of the quantile function), the FM5, GPD and VSK parameterisations, the fits, the moments and L-moments. Linux pending.
+
+## D6846 — lmom: the distribution functions
+
+**Decision.** `lmom.cdf(kind, x, para)` is `cdfexp`, `cdfgum`, `cdfglo`, `cdfgpa`, `cdfnor` and `cdfgev`: the exponential and Gumbel closed forms, the normal cdf, and for the GLO, GPA and GEV the reduced variate y = -log(max(0, 1 - k (x - xi) / alpha)) / k (the plain standardised value when k is zero), then 1 / (1 + e^-y), 1 - e^-max(y, 0) and exp(-e^-y). Equal to lmom on 288 values over six distributions and both signs of k (oracle_lmom, 939 cases in all). Not here: the Pearson III, lognormal, Wakeby and kappa families, the trimmed L-moments, the fits of the GEV by maximum likelihood. Linux pending.
