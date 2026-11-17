@@ -72,6 +72,10 @@ for (ci in seq_along(gx_configs)) {
   }
   add2(5, 0, g$gamma[[1]], 1e-3, 1e-6)
   for (q in seq_along(g$alpha)) add2(6, q - 1, g$alpha[[q]], 1e-3, 3e-5)
+  # "gv" (what 0 vgamma 1 valpha 2 naive valpha, index, then the gx arguments)
+  add3 <- function(w, i, want, rl, ab) cases[[length(cases) + 1]] <<- case("gv", c(w, i, a), want, rel = rl, abs = ab)
+  add3(0, 0, g$vgamma[[1]], 3e-3, 1e-6)
+  if (cs %in% 1:3) { qn <- length(g$alpha); for (u in 1:qn) for (v in 1:qn) { add3(1, (u - 1) * qn + v - 1, g$valpha[u, v], 4e-3, 1e-6); add3(2, (u - 1) * qn + v - 1, g$valpha.naiv[u, v], 3e-3, 1e-6) } }
 }
 # "gw" (what 0 df 1 X2 2 p of the sequential Wald table, 3 Wald 4 p of a coefficient, 5 its Wald with the one-step jackknife, 6 with the fully iterated jackknife; index, fam, link, corstr, k, p, maxm, nvars, sizes, y, X, zc, assign)
 # "gq" (QIC 0 QIC 1 QICu 2 quasi 3 CIC 4 params 5 QICC, fam, link, corstr, k, p, maxm, sizes, y, X, zc)
