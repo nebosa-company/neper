@@ -442,3 +442,38 @@ fn embed2_incircle(x: []const f64, r: []const f64, boundary: f64) -> f64 {
     }
     ret k / f64(nn)
 }
+
+// unitroot_kpss(x): urca ur.kpss with type "mu" and the short lag l = trunc(4 (n / 100)^(1/4)): the sum of squared partial sums of the centred series over n^2 times the Bartlett-weighted long-run variance
+fn unitroot_kpss(x: []const f64) -> f64 {
+    let n = x.len
+    let nn = f64(n)
+    let m = mean_of(x)
+    let l = usize(math.floor[f64](4.0f64 * math.pow[f64](nn / 100.0f64, 0.25f64)))
+    var s2 = 0.0f64
+    var i = 0usize
+    while i < n {
+        s2 += (x[i] - m) * (x[i] - m)
+        i += 1usize
+    }
+    s2 = s2 / nn
+    var j = 1usize
+    while j <= l {
+        var cj = 0.0f64
+        var t = j
+        while t < n {
+            cj += (x[t] - m) * (x[t - j] - m)
+            t += 1usize
+        }
+        s2 += 2.0f64 / nn * (1.0f64 - f64(j) / (f64(l) + 1.0f64)) * cj
+        j += 1usize
+    }
+    var ps = 0.0f64
+    var tot = 0.0f64
+    i = 0usize
+    while i < n {
+        ps += x[i] - m
+        tot += ps * ps
+        i += 1usize
+    }
+    ret tot / (nn * nn * s2)
+}

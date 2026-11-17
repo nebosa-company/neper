@@ -47886,3 +47886,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6854 — MuMIn: QAIC and QAICc
 
 **Decision.** `mumin.qaic(ll, k, n, chat, corrected)` is `QAIC` and `QAICc`: with the dispersion estimate counted as one more parameter (df = k + 1), -2 ll / c-hat + 2 df, and for the corrected form -2 ll / c-hat + 2 df (1 + (df + 1) / (n - df - 1)). Equal to MuMIn on 30 Poisson fits (oracle_mumin). Not here: `QIC`, `dredge`, `model.sel`, `r.squaredGLMM`, the adjusted standard errors. Linux pending.
+
+## D6855 — tsfeatures: unitroot_kpss
+
+**Decision.** `tsfeatures.unitroot_kpss(x)` is `unitroot_kpss(x)` (urca `ur.kpss` with type "mu" and the short lag): the sum of squared partial sums of the centred series over n^2 times the long-run variance sum e^2 / n + (2 / n) sum over j up to l of (1 - j / (l + 1)) times the lag-j autocovariance sum, with l = trunc(4 (n / 100)^(1/4)). Equal to tsfeatures on the oracle series (oracle_tsfeatures). Not here: `unitroot_pp`, the `lags` and `type` arguments, `stl_features`, `entropy`, `hurst`, `heterogeneity`, the Holt-Winters parameters. Linux pending.

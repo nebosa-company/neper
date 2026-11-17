@@ -20,5 +20,6 @@ for (rep in 1:10) {
   add("walker", a(0), walker_propcross(x0)); add("motif", a(0), motiftwo_entro3(x0)); add("zeroprop", a(0), zero_proportion(round(x0)))
   add("embed1", a(0), suppressWarnings(embed2_incircle(x0, boundary = 1))); add("embed2", a(0), suppressWarnings(embed2_incircle(x0, boundary = 2)))
   add("ac9", a(0), ac_9(x0))
+  add("kpss", a(0), unitroot_kpss(x0))
 }
 emit("tsfeatures", "tsfeatures", list(cases))
