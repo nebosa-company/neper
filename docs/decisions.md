@@ -48483,3 +48483,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6997 — Rmpfr string conversion
 
 `mpfr.get_str(x, base, n, digs)`: the n significant digits of |x| rounded to nearest (ties to even) and the exponent E with |x| about 0.d1 d2 ... base^E, by one exact big-integer division per attempt after a logarithm estimate of E (adjusted when the rounded integer falls outside [base^(n-1), base^n)). Equal to `.mpfr2str` on 60 values in bases 2, 8, 10, 16 and 36 (oracle_mpfr). Linux pending.
+
+
+## D6998 — Rmpfr decimal string parsing
+
+`mpfr.from_decimal(nn, k, prec, mode)`: N * 10^k as an exact integer (k >= 0) or the exact quotient N / 10^-k through `div_m`, so every rounding mode comes out as MPFR parses it. Equal to `mpfr("N e k", prec, rnd.mode)` on 80 strings of up to 18 digits (oracle_mpfr). Sign, the decimal point and the exponent syntax are caller work. Linux pending.

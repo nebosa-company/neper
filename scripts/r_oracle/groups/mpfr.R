@@ -124,4 +124,13 @@ for (rep in 1:60) {
   cases[[length(cases) + 1]] <- case("op", c(a, -1), r$exp, rel = 0, abs = 0)
   for (i in seq_along(dv)) cases[[length(cases) + 1]] <- case("op", c(a, i - 1), dv[i], rel = 0, abs = 0)
 }
+# mpfr("N e k", prec, rnd.mode) (98, prec, N high, N low (12 digits), k, mode, which): N = high * 10^12 + low
+for (rep in 1:80) {
+  prec <- sample(c(53, 80, 128), 1); hi_ <- sample(0:999999, 1); lo_ <- sample(0:999999999999, 1); k <- sample(-40:30, 1); md <- sample(0:4, 1)
+  txt <- paste0(hi_, formatC(lo_, width = 12, flag = "0", format = "f", digits = 0), "e", k)
+  if (hi_ == 0 && lo_ == 0) next
+  z <- mpfr(txt, prec, rnd.mode = c("N", "Z", "U", "D", "A")[md + 1]); hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(98, prec, hi_, lo_, k, md)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))

@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R mpfr`; the layout is at the top of scripts/r_oracle/groups/mpfr.R.
 
 use e.algo.mpfr as mp
+use e.algo.bignum as bn
 use e.io
 use e.mem
 use e.os
@@ -10,6 +11,23 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if usize(z[0usize]) == 98usize {
+        // mpfr("N e k"): (98, prec, N high part, N low part of 12 digits, k, mode, which 0 hi 1 lo); N = high * 10^12 + low
+        let fprec = usize(z[1usize])
+        let (fh, fe1) = bn.int_from_i64(a, i64(z[2usize]))
+        let (fl, fe2) = bn.int_from_i64(a, i64(z[3usize]))
+        let (f12, fe3) = bn.int_from_i64(a, 1000000000000i64)
+        if fe1 != ok || fe2 != ok || fe3 != ok { ret nan }
+        let (fm, fe4) = bn.int_mul(a, fh, f12)
+        if fe4 != ok { ret nan }
+        let (fn_, fe5) = bn.int_add(a, fm, fl)
+        if fe5 != ok { ret nan }
+        let (fr, fe6) = mp.from_decimal(a, fn_, i64(z[4usize]), fprec, usize(z[5usize]))
+        if fe6 != ok { ret nan }
+        let (fhi, flo) = mp.to_pair(a, fr)
+        if z[6usize] == 0.0f64 { ret fhi }
+        ret flo
+    }
     if usize(z[0usize]) == 99usize {
         // mpfr_get_str: (99, prec, m, e, base, ndigits, which -1 exponent or the digit index)
         let sprec = usize(z[1usize])

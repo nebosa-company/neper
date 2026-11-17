@@ -1252,3 +1252,19 @@ fn get_str(a: *mem.Arena, x: Mp, base: usize, n: usize, digs: []u8) -> (i64, err
     }
     ret (0i64, mem.Full)
 }
+
+// mpfr("N e k") at prec bits to nearest (mode 0) or the directed modes of round_to_m: the decimal integer N (non-negative) times 10^k, k of either sign, exactly rounded
+fn from_decimal(a: *mem.Arena, nn: bn.Int, k: i64, prec: usize, mode: usize) -> (Mp, err) {
+    if k >= 0i64 {
+        let (pk, ep) = int_pow(a, 10usize, usize(k))
+        if ep != ok { ret (zero, ep) }
+        let (v, ev) = bn.int_mul(a, nn, pk)
+        if ev != ok { ret (zero, ev) }
+        let (rt_, re_) = round_to_m(a, v, 0i64, prec, mode)
+        ret (rt_, re_)
+    }
+    let (pk, ep) = int_pow(a, 10usize, usize(0i64 - k))
+    if ep != ok { ret (zero, ep) }
+    let (rt_, re_) = div_m(a, Mp{ m: nn, e: 0i64 }, Mp{ m: pk, e: 0i64 }, prec, mode)
+    ret (rt_, re_)
+}
