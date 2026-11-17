@@ -48106,3 +48106,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6909 — LearnBayes: gibbs
 
 **Decision.** `learnbayes.gibbs` is the package's Metropolis-within-Gibbs sampler: for every sweep and coordinate a candidate th1[j] = th0[j] + rnorm(1) scale[j], then one uniform compared with exp(f1 - f0), the chain and per-coordinate acceptance rates kept; the target is a function passed in. Equal to LearnBayes under set.seed on the 10 logistic posteriors of D6906, 60 sweeps from the origin, six chain elements and both acceptance rates each (oracle_learnbayes, 4070 cases in all). Not here: laplace (needs R's optim), hiergibbs, ordergibbs. Linux pending.
+
+## D6910 — LearnBayes: hiergibbs
+
+**Decision.** `learnbayes.hiergibbs` is the package's hierarchical regression Gibbs sampler for the (y, n, x1, x2) data of its example, with the fixed prior constants (b1, bvar, s = 0.02, v = 16, start variance 0.006): per sweep beta = t(chol(pvar)) z + pmean from three normals, the variance (sum of squares / 2 + s / 2) / rgamma(1, (N + v) / 2), then the N means from N normals. Equal to LearnBayes under set.seed on 8 simulated data sets of 6 to 14 groups, 20 sweeps, six beta elements, three mu elements and three variances each (oracle_learnbayes, 4166 cases in all). Not here: laplace, ordergibbs. Linux pending.

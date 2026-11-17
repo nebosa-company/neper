@@ -92,6 +92,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if ix < ns * 2usize { ret go[ix] }
         ret ga[ix - ns * 2usize]
     }
+    if str.eq(k, "hg") {
+        // (seed, m, N, which (0 beta, 1 mu, 2 var), index, y[N], n[N], x1[N], x2[N])
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let m = usize(x[1usize])
+        let nn = usize(x[2usize])
+        let (bo, e1) = mem.alloc[f64](a, m * 3usize)
+        let (mo, e2) = mem.alloc[f64](a, m * nn)
+        let (vo, e3) = mem.alloc[f64](a, m)
+        if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+        if lb.hiergibbs(a, &rr, x[5usize..5usize + nn], x[5usize + nn..5usize + 2usize * nn], x[5usize + 2usize * nn..5usize + 3usize * nn], x[5usize + 3usize * nn..5usize + 4usize * nn], m, bo, mo, vo) != ok { ret 0.0f64 / 0.0f64 }
+        let ix = usize(x[4usize])
+        if x[3usize] == 0.0f64 { ret bo[ix] }
+        if x[3usize] == 1.0f64 { ret mo[ix] }
+        ret vo[ix]
+    }
     if str.eq(k, "rej") || str.eq(k, "imp2") {
         // (seed, which, m, n, df, dmax or hidx, mean[2], var[4], x[m], nn[m], y[m]) rej: the number kept (which 0) or the sum of the kept first-coordinate values (1); imp2: est (0) or se (1)
         var rr: rng.Rng = zero

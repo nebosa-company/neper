@@ -103,4 +103,12 @@ for (rep in 1:10) {
   for (q in c(1, 12, 25)) { add("blr", c(sd, hp, m, n, p, c0, 0, q - 1, b0, y2, X), bl$sigma[q], 1e-8)
     for (j in 1:p) add("blr", c(sd, hp, m, n, p, c0, 1, (j - 1) * m + q - 1, b0, y2, X), bl$beta[q, j], 1e-8) }
 }
+# hiergibbs "hg"
+for (rep in 1:8) {
+  NN <- sample(6:14, 1); nn <- sample(200:600, NN, TRUE); x1 <- round(runif(NN, 20, 40)); x2 <- round(runif(NN, 20, 40)); yy <- round(0.55 + 0.018 * x1 + 0.033 * x2 + rnorm(NN, 0, 0.1), 3)
+  yy <- yy / 2; sd <- sample(1:100000, 1); m <- 20; set.seed(sd); hgr <- hiergibbs(cbind(yy, nn, x1, x2), m)
+  for (q in c(1, 7, 20, 21, 40, 60)) add("hg", c(sd, m, NN, 0, q - 1, yy, nn, x1, x2), as.vector(hgr$beta)[q], 1e-8)
+  for (q in c(1, 25, NN * m)) add("hg", c(sd, m, NN, 1, q - 1, yy, nn, x1, x2), as.vector(hgr$mu)[q], 1e-8)
+  for (q in c(1, 10, 20)) add("hg", c(sd, m, NN, 2, q - 1, yy, nn, x1, x2), hgr$var[q], 1e-8)
+}
 emit("learnbayes", "LearnBayes", list(cases))

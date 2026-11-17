@@ -3768,4 +3768,5 @@ D6905	753	LearnBayes: five more book log posteriors
 D6906	928	LearnBayes: rmt, dmt, rejectsampling, impsampling
 D6907	879	LearnBayes: normpostsim and blinreg
 D6908	771	LearnBayes: sir
-D6909	595	LearnBayes: gibbs
+D6909	596	LearnBayes: gibbs
+D6910	655	LearnBayes: hiergibbs

@@ -1043,3 +1043,174 @@ fn gibbs[Ctx: type](a: *mem.Arena, r: *rng.Rng, ctx: *Ctx, logf: fn(*Ctx, []cons
     }
     ret ok
 }
+
+// the inverse of a symmetric positive definite k by k matrix (column-major), through its Cholesky factor
+fn inv_spd(a: *mem.Arena, m: []const f64, k: usize, out: []f64) -> err {
+    let (u, e1) = mem.alloc[f64](a, k * k)
+    let (iu, e2) = mem.alloc[f64](a, k * k)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    if !bz.chol_upper(m, k, u) { ret mem.Full }
+    bz.inv_upper(u, k, iu)
+    var j = 0usize
+    while j < k {
+        var c = 0usize
+        while c < k {
+            var s = 0.0f64
+            var q = 0usize
+            while q < k {
+                s += iu[q * k + j] * iu[q * k + c]
+                q += 1usize
+            }
+            out[c * k + j] = s
+            c += 1usize
+        }
+        j += 1usize
+    }
+    ret ok
+}
+
+// hiergibbs(data = (y, n, x1, x2), m): the hierarchical regression of the baseball-style example, fixed prior constants as in the package; each sweep draws beta (3 normals), the variance through one rgamma and the n means (n normals).
+// beta_out is m by 3, mu_out is m by N and var_out has length m, all column-major
+fn hiergibbs(a: *mem.Arena, r: *rng.Rng, y: []const f64, n: []const f64, x1: []const f64, x2: []const f64, m: usize, beta_out: []f64, mu_out: []f64, var_out: []f64) -> err {
+    let nn = y.len
+    let p = 3usize
+    let (xm, e1) = mem.alloc[f64](a, nn * p)
+    let (s2, e2) = mem.alloc[f64](a, nn)
+    let (mu, e3) = mem.alloc[f64](a, nn)
+    let (ibvar, e4) = mem.alloc[f64](a, 9usize)
+    let (am, e5) = mem.alloc[f64](a, 9usize)
+    let (pvar, e6) = mem.alloc[f64](a, 9usize)
+    let (up, e7) = mem.alloc[f64](a, 9usize)
+    let (rhs, e8) = mem.alloc[f64](a, p)
+    let (pmean, e9) = mem.alloc[f64](a, p)
+    let (z, e10) = mem.alloc[f64](a, p)
+    let (beta, e11) = mem.alloc[f64](a, p)
+    let (bvar, e12) = mem.alloc[f64](a, 9usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok || e9 != ok || e10 != ok || e11 != ok || e12 != ok { ret mem.Full }
+    var i = 0usize
+    while i < nn {
+        xm[i] = 1.0f64
+        xm[nn + i] = x1[i]
+        xm[2usize * nn + i] = x2[i]
+        s2[i] = 0.65f64 * 0.65f64 / n[i]
+        mu[i] = y[i]
+        i += 1usize
+    }
+    let (b1, e13) = mem.alloc[f64](a, p)
+    if e13 != ok { ret mem.Full }
+    b1[0usize] = 0.55f64
+    b1[1usize] = 0.018f64
+    b1[2usize] = 0.033f64
+    bvar[0usize] = 0.00849f64
+    bvar[1usize] = 0.0f64 - 1.94e-05f64
+    bvar[2usize] = 0.0f64 - 0.000288f64
+    bvar[3usize] = 0.0f64 - 1.94e-05f64
+    bvar[4usize] = 7.34e-07f64
+    bvar[5usize] = 0.0f64 - 1.52e-06f64
+    bvar[6usize] = 0.0f64 - 0.000288f64
+    bvar[7usize] = 0.0f64 - 1.52e-06f64
+    bvar[8usize] = 1.71e-05f64
+    if inv_spd(a, bvar, p, ibvar) != ok { ret mem.Full }
+    let s = 0.02f64
+    let v = 16.0f64
+    var s2pi = 0.006f64
+    var it = 0usize
+    while it < m {
+        var j = 0usize
+        while j < p {
+            var k = 0usize
+            while k < p {
+                var xtx = 0.0f64
+                i = 0usize
+                while i < nn {
+                    xtx += xm[j * nn + i] * xm[k * nn + i]
+                    i += 1usize
+                }
+                am[k * p + j] = ibvar[k * p + j] + xtx / s2pi
+                k += 1usize
+            }
+            j += 1usize
+        }
+        if inv_spd(a, am, p, pvar) != ok { ret mem.Full }
+        j = 0usize
+        while j < p {
+            var s0 = 0.0f64
+            var k = 0usize
+            while k < p {
+                s0 += ibvar[k * p + j] * b1[k]
+                k += 1usize
+            }
+            var xm_mu = 0.0f64
+            i = 0usize
+            while i < nn {
+                xm_mu += xm[j * nn + i] * mu[i]
+                i += 1usize
+            }
+            rhs[j] = s0 + xm_mu / s2pi
+            j += 1usize
+        }
+        j = 0usize
+        while j < p {
+            var s0 = 0.0f64
+            var k = 0usize
+            while k < p {
+                s0 += pvar[k * p + j] * rhs[k]
+                k += 1usize
+            }
+            pmean[j] = s0
+            z[j] = rng.norm(r)
+            j += 1usize
+        }
+        if !bz.chol_upper(pvar, p, up) { ret mem.Full }
+        j = 0usize
+        while j < p {
+            var s0 = 0.0f64
+            var k = 0usize
+            while k <= j {
+                s0 += up[j * p + k] * z[k]
+                k += 1usize
+            }
+            beta[j] = s0 + pmean[j]
+            j += 1usize
+        }
+        var rss = 0.0f64
+        i = 0usize
+        while i < nn {
+            var f = 0.0f64
+            j = 0usize
+            while j < p {
+                f += xm[j * nn + i] * beta[j]
+                j += 1usize
+            }
+            rss += (mu[i] - f) * (mu[i] - f)
+            i += 1usize
+        }
+        s2pi = (rss / 2.0f64 + s / 2.0f64) / rd.rgamma(r, (f64(nn) + v) / 2.0f64, 1.0f64)
+        i = 0usize
+        while i < nn {
+            let postvar = 1.0f64 / (1.0f64 / s2[i] + 1.0f64 / s2pi)
+            var f = 0.0f64
+            j = 0usize
+            while j < p {
+                f += xm[j * nn + i] * beta[j]
+                j += 1usize
+            }
+            let postmean = (y[i] / s2[i] + f / s2pi) * postvar
+            mu[i] = postmean + math.sqrt[f64](postvar) * rng.norm(r)
+            i += 1usize
+        }
+        j = 0usize
+        while j < p {
+            beta_out[j * m + it] = beta[j]
+            j += 1usize
+        }
+        i = 0usize
+        while i < nn {
+            mu_out[i * m + it] = mu[i]
+            i += 1usize
+        }
+        var_out[it] = s2pi
+        it += 1usize
+    }
+    ret ok
+}
