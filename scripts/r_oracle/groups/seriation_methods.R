@@ -43,4 +43,37 @@ for (rep in 1:100) {
   o <- as.integer(get_order(seriate(d, "TSP", control = if (rp > 1) list(rep = rp) else NULL)))
   cases[[length(cases) + 1]] <- mk(8, n, d, o, c(seed, rp))
 }
+# ARSA (set.seed(seed)): (9, n, D, order, seed)
+for (rep in 1:60) {
+  n <- sample(3:20, 1); x <- matrix(runif(n * 3), n, 3); d <- dist(x)
+  if (rep %% 4 == 0) d <- dist(round(x * 4))
+  seed <- sample(1:100000, 1); set.seed(seed)
+  o <- as.integer(get_order(suppressWarnings(seriate(d, "ARSA"))))
+  cases[[length(cases) + 1]] <- mk(9, n, d, o, c(seed))
+}
+# GSA with each local search: (10, n, D, order, seed, kind 1 swap 2 insert 3 reverse 4 mixed)
+lss <- c("LS_swap", "LS_insert", "LS_reverse", "LS_mixed")
+for (rep in 1:40) {
+  n <- sample(4:12, 1); x <- matrix(runif(n * 3), n, 3); d <- dist(x)
+  kd <- (rep - 1) %% 4 + 1; seed <- sample(1:100000, 1); set.seed(seed)
+  o <- as.integer(get_order(seriate(d, "GSA", control = list(localsearch = lss[kd]))))
+  cases[[length(cases) + 1]] <- mk(10, n, d, o, c(seed, kd))
+}
+# Random, Identity, Reverse: (11, n, D, order, seed), 12, 13
+for (rep in 1:12) {
+  n <- sample(2:20, 1); x <- matrix(runif(n * 3), n, 3); d <- dist(x); seed <- sample(1:100000, 1); set.seed(seed)
+  cases[[length(cases) + 1]] <- mk(11, n, d, as.integer(get_order(seriate(d, "Random"))), c(seed))
+  cases[[length(cases) + 1]] <- mk(12, n, d, as.integer(get_order(seriate(d, "Identity"))), c(seed))
+  cases[[length(cases) + 1]] <- mk(13, n, d, as.integer(get_order(seriate(d, "Reverse"))), c(seed))
+}
+# permute: "p" (n, D, order) a weighted sum of permute(d, order) as a matrix; "q" (nr, nc, X, row order, col order) of permute(X, ser_permutation(ro, co))
+for (rep in 1:20) {
+  n <- sample(3:15, 1); x <- matrix(runif(n * 3), n, 3); d <- dist(x); o <- sample(n)
+  P <- as.matrix(permute(d, ser_permutation_vector(o))); w <- outer(1:n, 1:n, function(i, j) ((i * 7 + j * 3) %% 11) + 1)
+  cases[[length(cases) + 1]] <- case("p", c(n, rowm(as.matrix(d)), o), sum(P * w), rel = 1e-12, abs = 1e-12)
+  nr <- sample(2:9, 1); nc <- sample(2:9, 1); X <- matrix(runif(nr * nc), nr, nc); ro <- sample(nr); co <- sample(nc)
+  Q <- permute(X, ser_permutation(ser_permutation_vector(ro), ser_permutation_vector(co))); w2 <- outer(1:nr, 1:nc, function(i, j) ((i * 5 + j * 3) %% 7) + 1)
+  cases[[length(cases) + 1]] <- case("q", c(nr, nc, rowm(X), ro, co), sum(Q * w2), rel = 1e-12, abs = 1e-12)
+  v <- runif(n); cases[[length(cases) + 1]] <- case("v", c(n, v, o), sum(permute(v, ser_permutation_vector(o)) * (1:n)), rel = 1e-12, abs = 1e-12)
+}
 emit("seriation_methods", "seriation", list(cases))

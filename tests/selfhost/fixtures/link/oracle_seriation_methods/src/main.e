@@ -5,6 +5,7 @@
 
 use e.algo.rand.r as rng
 use e.algo.stat.seriationeig as se
+use e.algo.stat.seriationsa as ss
 use e.algo.stat.seriationtsp as st
 use e.io
 use e.mem
@@ -42,6 +43,62 @@ fn same(o: []const usize, z: []const f64, at: usize, n: usize) -> bool {
 fn answer(a: *mem.Arena, c: *const oracle.Case, t: *Tally) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "p") {
+        let pn = usize(z[0usize])
+        let (po, pe) = mem.alloc[usize](a, pn)
+        let (pm, pe2) = mem.alloc[f64](a, pn * pn)
+        if pe != ok || pe2 != ok { ret nan }
+        var q = 0usize
+        while q < pn {
+            po[q] = usize(z[1usize + pn * pn + q]) - 1usize
+            q += 1usize
+        }
+        ss.permute_dist(z[1usize..1usize + pn * pn], pn, po, pm)
+        var sum = 0.0f64
+        q = 0usize
+        while q < pn * pn {
+            sum += pm[q] * f64((q / pn * 7usize + q % pn * 3usize + 10usize) % 11usize + 1usize)
+            q += 1usize
+        }
+        ret sum
+    }
+    if str.eq(c.name, "q") {
+        let qr = usize(z[0usize])
+        let qc = usize(z[1usize])
+        let (ro, qe1) = mem.alloc[usize](a, qr)
+        let (co, qe2) = mem.alloc[usize](a, qc)
+        let (qm, qe3) = mem.alloc[f64](a, qr * qc)
+        if qe1 != ok || qe2 != ok || qe3 != ok { ret nan }
+        var q = 0usize
+        while q < qr {
+            ro[q] = usize(z[2usize + qr * qc + q]) - 1usize
+            q += 1usize
+        }
+        q = 0usize
+        while q < qc {
+            co[q] = usize(z[2usize + qr * qc + qr + q]) - 1usize
+            q += 1usize
+        }
+        ss.permute_matrix(z[2usize..2usize + qr * qc], qr, qc, ro, co, qm)
+        var sum = 0.0f64
+        q = 0usize
+        while q < qr * qc {
+            sum += qm[q] * f64((q / qc * 5usize + q % qc * 3usize + 8usize) % 7usize + 1usize)
+            q += 1usize
+        }
+        ret sum
+    }
+    if str.eq(c.name, "v") {
+        let vn = usize(z[0usize])
+        var sum = 0.0f64
+        var q = 0usize
+        while q < vn {
+            let src = usize(z[1usize + vn + q]) - 1usize
+            sum += z[1usize + src] * f64(q + 1usize)
+            q += 1usize
+        }
+        ret sum
+    }
     let code = usize(z[0usize])
     if code == 5usize || code == 6usize {
         let nr = usize(z[1usize])
@@ -85,6 +142,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case, t: *Tally) -> f64 {
         if r != ok { ret nan }
         let eq = same(o, z, at, n)
         if eq { ret 1.0f64 }
+        ret 0.0f64
+    }
+    if code >= 9usize && code <= 13usize {
+        var rg: rng.Rng = zero
+        rng.seed(&rg, i64(z[at + n]))
+        if code == 9usize { r = ss.arsa_order(a, &rg, d, n, 0.5f64, 0.0001f64, 0.5f64, 100.0f64, o) }
+        if code == 10usize { r = ss.gsa_order(a, &rg, d, n, usize(z[at + n + 1usize]), 0.5f64, 1.0e-7f64, 5usize, 0.01f64, o) }
+        if code == 11usize { r = ss.random_order(a, &rg, n, o) }
+        if code == 12usize { ss.identity_order(n, o) }
+        if code == 13usize { ss.reverse_order(n, o) }
+        if r != ok { ret nan }
+        if same(o, z, at, n) { ret 1.0f64 }
         ret 0.0f64
     }
     if r != ok { ret nan }
