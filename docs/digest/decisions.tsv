@@ -3715,4 +3715,5 @@ D6852	658	rcompanion: the global test of nominalSymmetryTest
 D6853	766	rcompanion: the pairwise tests of nominalSymmetryTest
 D6854	440	MuMIn: QAIC and QAICc
 D6855	599	tsfeatures: unitroot_kpss
-D6856	707	tsfeatures: unitroot_pp
+D6856	708	tsfeatures: unitroot_pp
+D6857	510	tsfeatures: hurst

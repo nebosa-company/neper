@@ -8,6 +8,7 @@
 
 use e.math
 use e.mem
+use e.algo.stat.fracdiff_fit as fdf
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
@@ -532,4 +533,12 @@ fn unitroot_pp(a: *mem.Arena, x: []const f64) -> f64 {
     let lambda = 0.5f64 * (sig - s)
     let myybar = syy / (nn * nn)
     ret nn * (alpha - 1.0f64) - lambda / myybar
+}
+
+// hurst(x): the Hurst exponent as fracdiff(x, 0, 0)$d + 0.5, the fractional differencing parameter of an ARFIMA(0, d, 0) fitted on a window of 100 coefficients (the package default)
+fn hurst(a: *mem.Arena, x: []const f64) -> f64 {
+    var dummy: [1]f64 = zero
+    let (r, fe) = fdf.fracdf(a, x, 100usize, 0usize, 0usize, 0.0001220703125f64, 0.0f64, 0.5f64, 0.0f64, 0.0f64 - 1.0f64, dummy[0usize..0usize])
+    if fe != ok || r.info != 0i64 { ret nan() }
+    ret r.d + 0.5f64
 }
