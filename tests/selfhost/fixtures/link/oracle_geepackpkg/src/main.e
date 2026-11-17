@@ -3,6 +3,7 @@
 
 use e.algo.stat.geepackpkg as gp
 use e.io
+use e.math.nmath as nm
 use e.mem
 use e.os
 use e.str
@@ -75,6 +76,82 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 failures += 1usize
                 if failures <= 12usize {
                     let _ = io.print(oracle.describe(a, c, xg))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
+        if str.eq(c.name, "gq") {
+            // (what, fam, link, corstr, k, p, maxm, sizes (k), y, x row-major, zc)
+            let qk = usize(x[4usize])
+            let qp = usize(x[5usize])
+            let qm = usize(x[6usize])
+            var qn = 0usize
+            var qc = 0usize
+            while qc < qk {
+                qn += usize(x[7usize + qc])
+                qc += 1usize
+            }
+            let qy = 7usize + qk
+            let qx = qy + qn
+            let qz = qx + qn * qp
+            let (qo, qe1) = mem.alloc[f64](a, 6usize)
+            if qe1 != ok { os.exit(5) }
+            if gp.gee_qic(a, x[qy..qx], x[qx..qz], x[7usize..qy], qk, qp, usize(x[1usize]), usize(x[2usize]), usize(x[3usize]), x[qz..qz + qm * qm], qo) != ok { os.exit(7) }
+            if !oracle.agrees(qo[usize(x[0usize])], c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, qo[usize(x[0usize])]))
+                    let _ = io.print("\n")
+                }
+            }
+            mem.reset(a, start)
+            at += 1usize
+            continue
+        }
+        if str.eq(c.name, "gw") {
+            // (what, index, fam, link, corstr, k, p, maxm, nvars, sizes (k), y, x row-major, zc, assign (p))
+            let wk = usize(x[5usize])
+            let wp = usize(x[6usize])
+            let wm = usize(x[7usize])
+            let wv = usize(x[8usize])
+            var wn = 0usize
+            var wc = 0usize
+            while wc < wk {
+                wn += usize(x[9usize + wc])
+                wc += 1usize
+            }
+            let wy = 9usize + wk
+            let wx = wy + wn
+            let wz = wx + wn * wp
+            let wa = wz + wm * wm
+            let what = usize(x[0usize])
+            let widx = usize(x[1usize])
+            var wg = 0.0f64
+            if what <= 2usize {
+                let (wo, we1) = mem.alloc[f64](a, 3usize * wv)
+                if we1 != ok { os.exit(5) }
+                if gp.gee_wald_seq(a, x[wy..wx], x[wx..wz], x[9usize..wy], wk, wp, usize(x[2usize]), usize(x[3usize]), usize(x[4usize]), x[wz..wa], x[wa..wa + wp], wv, wo) != ok { os.exit(7) }
+                wg = wo[3usize * widx + what]
+            } else {
+                let (wo, we1) = mem.alloc[f64](a, gp.gee_out_len(wp, wm, usize(x[4usize])))
+                if we1 != ok { os.exit(5) }
+                let (wphi, we2) = gp.gee_fit(a, x[wy..wx], x[wx..wz], x[9usize..wy], wk, wp, usize(x[2usize]), usize(x[3usize]), usize(x[4usize]), x[wz..wa], what == 6usize, wo)
+                if we2 != ok { os.exit(7) }
+                let wpp = wp * wp
+                let wb = wo[widx]
+                var wvv = wo[wp + widx * wp + widx]
+                if what == 5usize { wvv = wo[wp + 2usize * wpp + widx * wp + widx] }
+                if what == 6usize { wvv = wo[wp + 3usize * wpp + widx * wp + widx] }
+                wg = wb * wb / wvv
+                if what == 4usize { wg = nm.pchisq(wg, 1.0f64, false, false) }
+            }
+            if !oracle.agrees(wg, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, wg))
                     let _ = io.print("\n")
                 }
             }

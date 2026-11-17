@@ -1001,3 +1001,147 @@ fn gee_fit(a: *mem.Arena, y: []const f64, x: []const f64, sz: []const f64, k: us
     }
     ret (phi, ok)
 }
+
+fn gee_maxsize(sz: []const f64, k: usize) -> usize {
+    var m = 0usize
+    var c = 0usize
+    while c < k {
+        if usize(sz[c]) > m { m = usize(sz[c]) }
+        c += 1usize
+    }
+    ret m
+}
+
+// QIC of geepack: out = (QIC, QICu, quasi likelihood, CIC (the trace term), parameters, QICC)
+fn gee_qic(a: *mem.Arena, y: []const f64, x: []const f64, sz: []const f64, k: usize, p: usize, fam: usize, link: usize, corstr: usize, zc: []const f64, out: []f64) -> err {
+    let maxm = gee_maxsize(sz, k)
+    let pp = p * p
+    var n = 0usize
+    var c = 0usize
+    while c < k {
+        n += usize(sz[c])
+        c += 1usize
+    }
+    let (o1, e1) = mem.alloc[f64](a, gee_out_len(p, maxm, corstr))
+    let (o0, e2) = mem.alloc[f64](a, gee_out_len(p, maxm, 0usize))
+    let (ai, e3) = mem.alloc[f64](a, pp)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    let (ph1, e4) = gee_fit(a, y, x, sz, k, p, fam, link, corstr, zc, false, o1)
+    if e4 != ok { ret e4 }
+    let (ph0, e5) = gee_fit(a, y, x, sz, k, p, fam, link, 0usize, zc, false, o0)
+    if e5 != ok { ret e5 }
+    if ols.inverse(a, o0[p + pp..p + 2usize * pp], p, ai) != ok { ret mem.Full }
+    var trace = 0.0f64
+    var u = 0usize
+    while u < p {
+        var v = 0usize
+        while v < p {
+            trace += ai[u * p + v] * o1[p + v * p + u]
+            v += 1usize
+        }
+        u += 1usize
+    }
+    var quasi = 0.0f64
+    var i = 0usize
+    while i < n {
+        var eta = 0.0f64
+        u = 0usize
+        while u < p {
+            eta += x[i * p + u] * o1[u]
+            u += 1usize
+        }
+        let (mu, dmu) = gee_link(link, eta)
+        if fam == 0usize { quasi -= (y[i] - mu) * (y[i] - mu) / 2.0f64 }
+        if fam == 1usize { quasi += y[i] * math.log[f64](mu / (1.0f64 - mu)) + math.log[f64](1.0f64 - mu) }
+        if fam == 2usize { quasi += y[i] * math.log[f64](mu) - mu }
+        if fam == 3usize { quasi += 0.0f64 - y[i] / (mu - math.log[f64](mu)) }
+        i += 1usize
+    }
+    let params = f64(p)
+    let kpm = params + f64(gee_nalpha(corstr, maxm))
+    let qic = 0.0f64 - 2.0f64 * (quasi - trace)
+    out[0usize] = qic
+    out[1usize] = 0.0f64 - 2.0f64 * (quasi - params)
+    out[2usize] = quasi
+    out[3usize] = trace
+    out[4usize] = params
+    out[5usize] = qic + 2.0f64 * kpm * (kpm + 1.0f64) / (f64(k) - kpm - 1.0f64)
+    ret ok
+}
+
+// anova.geeglm: the sequential Wald table; assign gives each column of x its term (0 for the intercept), nvars the number of terms; out has 3 entries per row: df, Wald statistic, p value
+fn gee_wald_seq(a: *mem.Arena, y: []const f64, x: []const f64, sz: []const f64, k: usize, p: usize, fam: usize, link: usize, corstr: usize, zc: []const f64, assign: []const f64, nvars: usize, out: []f64) -> err {
+    let maxm = gee_maxsize(sz, k)
+    var n = 0usize
+    var c = 0usize
+    while c < k {
+        n += usize(sz[c])
+        c += 1usize
+    }
+    var nfit = nvars
+    if nfit == 0usize { nfit = 1usize }
+    var hasint = 0usize
+    if assign[0usize] == 0.0f64 { hasint = 1usize }
+    var prev = 0usize
+    var t = 0usize
+    while t < nfit {
+        // the columns of the terms up to t + 1 (all of them for the last fit)
+        var pi = 0usize
+        var u = 0usize
+        while u < p {
+            if t + 1usize == nfit || usize(assign[u]) <= t + 1usize { pi += 1usize }
+            u += 1usize
+        }
+        let mk = mem.mark(a)
+        let (xs, e1) = mem.alloc[f64](a, n * pi)
+        let (o, e2) = mem.alloc[f64](a, gee_out_len(pi, maxm, corstr))
+        if e1 != ok || e2 != ok { ret mem.Full }
+        var i = 0usize
+        while i < n {
+            var col = 0usize
+            u = 0usize
+            while u < p {
+                if t + 1usize == nfit || usize(assign[u]) <= t + 1usize {
+                    xs[i * pi + col] = x[i * p + u]
+                    col += 1usize
+                }
+                u += 1usize
+            }
+            i += 1usize
+        }
+        let (ph, e3) = gee_fit(a, y, xs, sz, k, pi, fam, link, corstr, zc, false, o)
+        if e3 != ok { ret e3 }
+        var df = pi - prev
+        if t == 0usize { df = pi - hasint }
+        let (vs, e4) = mem.alloc[f64](a, df * df)
+        let (vi, e5) = mem.alloc[f64](a, df * df)
+        if e4 != ok || e5 != ok { ret mem.Full }
+        u = 0usize
+        while u < df {
+            var v = 0usize
+            while v < df {
+                vs[u * df + v] = o[pi + (pi - df + u) * pi + pi - df + v]
+                v += 1usize
+            }
+            u += 1usize
+        }
+        if ols.inverse(a, vs, df, vi) != ok { ret mem.Full }
+        var x2 = 0.0f64
+        u = 0usize
+        while u < df {
+            var v = 0usize
+            while v < df {
+                x2 += o[pi - df + u] * vi[u * df + v] * o[pi - df + v]
+                v += 1usize
+            }
+            u += 1usize
+        }
+        out[3usize * t] = f64(df)
+        out[3usize * t + 1usize] = x2
+        out[3usize * t + 2usize] = nm.pchisq(x2, f64(df), false, false)
+        mem.reset(a, mk)
+        prev = pi
+        t += 1usize
+    }
+    ret ok
+}

@@ -73,4 +73,49 @@ for (ci in seq_along(gx_configs)) {
   add2(5, 0, g$gamma[[1]], 1e-3, 1e-6)
   for (q in seq_along(g$alpha)) add2(6, q - 1, g$alpha[[q]], 1e-3, 3e-5)
 }
+# "gw" (what 0 df 1 X2 2 p of the sequential Wald table, 3 Wald 4 p of a coefficient, 5 its Wald with the one-step jackknife, 6 with the fully iterated jackknife; index, fam, link, corstr, k, p, maxm, nvars, sizes, y, X, zc, assign)
+# "gq" (QIC 0 QIC 1 QICu 2 quasi 3 CIC 4 params 5 QICC, fam, link, corstr, k, p, maxm, sizes, y, X, zc)
+set.seed(20262302)
+gw_configs <- list(c(0, 0, 1, 2), c(0, 0, 2, 1), c(0, 0, 0, 0), c(1, 1, 1, 1), c(1, 2, 2, 2), c(1, 1, 3, 0), c(2, 4, 1, 2), c(2, 4, 0, 1), c(2, 4, 2, 2), c(3, 4, 1, 2), c(3, 5, 2, 1), c(0, 0, 4, 2))
+for (ci in seq_along(gw_configs)) {
+  cf <- gw_configs[[ci]]; fam <- cf[1]; lnk <- cf[2]; cs <- cf[3]; vt <- cf[4]; message("gw ", ci)
+  g <- NULL
+  for (tries in 1:6) {
+    k <- sample(26:40, 1); sz <- sample(2:5, k, replace = TRUE); N <- sum(sz); id <- rep(1:k, sz); maxm <- max(sz)
+    d <- data.frame(y = 0, id = id, x2 = round(runif(N, -1, 1), 3), x3 = round(runif(N, -1, 1), 3), fc = factor(sample(c("a", "b", "c"), N, replace = TRUE)))
+    f <- switch(vt + 1, y ~ x2, y ~ x2 + x3, y ~ x2 + fc + x3)
+    X <- model.matrix(f, d); p <- ncol(X); asg <- attr(X, "assign")
+    re <- rep(rnorm(k, 0, 0.4), sz)
+    fobj <- famobj(fam, lnk)
+    cf0 <- if (fam == 3 && lnk == 5) c(1.4, 0.2, 0.1, -0.1, 0.1)[seq_len(p)] else c(0.3, 0.5, -0.4, 0.3, -0.3)[seq_len(p)]
+    eta <- as.vector(X %*% cf0) + (if (fam == 3 && lnk == 5) 0.1 else 1) * re
+    mu <- fobj$linkinv(eta)
+    d$y <- switch(fam + 1, round(eta + rnorm(N), 4), rbinom(N, 1, mu), rpois(N, mu), round(rgamma(N, shape = 4, scale = mu / 4), 4))
+    zc <- outer(1:maxm, 1:maxm, function(s, t) 0.5^abs(s - t))
+    zcv <- unlist(lapply(sz, function(m) if (m > 1) unlist(lapply(1:(m - 1), function(s) zc[s, (s + 1):m])) else NULL))
+    corn <- c("independence", "exchangeable", "ar1", "unstructured", "fixed")[cs + 1]
+    zarg <- if (cs == 4) matrix(zcv, ncol = 1) else NULL
+    g <- tryCatch(geeglm(f, id = id, data = d, family = fobj, corstr = corn, zcor = zarg), error = function(e) NULL, warning = function(w) NULL)
+    if (!is.null(g) && all(is.finite(coef(g))) && g$geese$error == 0) break
+    g <- NULL
+  }
+  if (is.null(g)) next
+  ge <- geese(f, id = id, data = d, family = fobj, corstr = corn, zcor = zarg, control = geese.control(j1s = TRUE, fij = TRUE))
+  an <- if (cs == 4) NULL else anova(g); nv <- length(unique(asg[asg > 0])); y <- d$y
+  a <- c(fam, lnk, cs, k, p, maxm, nv, sz, y, as.vector(t(X)), as.vector(t(zc)), asg)
+  for (i in if (is.null(an)) integer(0) else 1:nv) {
+    cases[[length(cases) + 1]] <- case("gw", c(0, i - 1, a), an$Df[i], rel = 1e-9, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("gw", c(1, i - 1, a), an$X2[i], rel = 2e-3, abs = 3e-4)
+    cases[[length(cases) + 1]] <- case("gw", c(2, i - 1, a), an[["P(>|Chi|)"]][i], rel = 5e-3, abs = 1e-4)
+  }
+  se <- sqrt(diag(ge$vbeta)); wd <- (ge$beta / se)^2
+  for (j in 1:p) {
+    cases[[length(cases) + 1]] <- case("gw", c(3, j - 1, a), wd[j], rel = 2e-3, abs = 3e-4)
+    cases[[length(cases) + 1]] <- case("gw", c(4, j - 1, a), 1 - pchisq(wd[j], 1), rel = 5e-3, abs = 1e-4)
+    cases[[length(cases) + 1]] <- case("gw", c(5, j - 1, a), (ge$beta[j]^2 / ge$vbeta.j1s[j, j]), rel = 4e-3, abs = 3e-4)
+    if (ci %% 3 == 0) cases[[length(cases) + 1]] <- case("gw", c(6, j - 1, a), (ge$beta[j]^2 / ge$vbeta.fij[j, j]), rel = 6e-3, abs = 3e-4)
+  }
+  qq <- tryCatch(QIC(g), error = function(e) NULL)
+  if (!is.null(qq)) for (w in 0:5) cases[[length(cases) + 1]] <- case("gq", c(w, fam, lnk, cs, k, p, maxm, sz, y, as.vector(t(X)), as.vector(t(zc))), unname(qq[w + 1]), rel = 2e-3, abs = 1e-5)
+}
 emit("geepackpkg", "geepack", list(cases))
