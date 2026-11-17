@@ -3852,4 +3852,5 @@ D6989	341	extraDistr GEV and GPD generators
 D6990	647	extraDistr discrete uniform, Bernoulli, discrete Weibull and Tukey lambda generators
 D6991	423	sn skew-t cumulants
 D6992	328	sn dp2cp
-D6993	393	imputeTS na_random and na_replace
+D6993	395	imputeTS na_random and na_replace
+D6994	455	polynom solve

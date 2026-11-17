@@ -48463,3 +48463,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6993 — imputeTS na_random and na_replace
 
 `na_random(rg, x, lo, hi)`: each missing value, in order of position, is lo + (hi - lo) u with u from the seeded generator, the bounds defaulting to the observed minimum and maximum; `na_replace(x, fill)`. Equal to imputeTS on 20 series (oracle_imputets). The maxgap option is not applied to these two here (apply_maxgap exists). Linux pending.
+
+
+## D6994 — polynom solve
+
+`polynompkg.solve(a, c, re, im)`: zero roots counted from the leading zero coefficients, a linear remainder directly and the rest through the Jenkins-Traub finder of D6800, sorted by real then imaginary part. R takes the eigenvalues of the companion matrix, so the order within a conjugate pair is rounding noise there; the oracle compares abs(Im). Equal to polynom::solve on 30 polynomials (oracle_polynompkg). Linux pending.

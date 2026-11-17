@@ -3,6 +3,7 @@
 
 use e.algo.stat.polynompkg as pn
 use e.io
+use e.math
 use e.mem
 use e.os
 use e.str
@@ -42,6 +43,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if e2 != ok { os.exit(9) }
         pn.poly_orth(x[4usize..4usize + np], dg, usize(x[1usize]), o, w)
         ret o[usize(x[2usize])]
+    }
+    if str.eq(k, "solve") {
+        // (index, which 0 re 1 im 2 count, k, coefficients)
+        let n = usize(x[2usize])
+        let (re, e1) = mem.alloc[f64](a, n + 1usize)
+        let (im, e2) = mem.alloc[f64](a, n + 1usize)
+        if e1 != ok || e2 != ok { os.exit(10) }
+        let cnt = pn.solve(a, x[3usize..3usize + n], re, im)
+        if x[1usize] == 2.0f64 { ret f64(cnt) }
+        if cnt < 0i64 || usize(cnt) <= usize(x[0usize]) { ret 0.0f64 / 0.0f64 }
+        if x[1usize] == 0.0f64 { ret re[usize(x[0usize])] }
+        ret math.abs[f64](im[usize(x[0usize])])
     }
     let n = usize(x[0usize])
     ret pn.col_auc(x[1usize..1usize + n], x[1usize + n..1usize + 2usize * n])

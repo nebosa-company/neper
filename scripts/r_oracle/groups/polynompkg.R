@@ -14,4 +14,13 @@ for (rep in 1:30) {
   for (w in 0:dg) { co <- as.numeric(po[[w + 1]]); co <- c(co, rep(0, dg + 1 - length(co))); for (i in 0:dg) add("polyorth", c(dg, w, i, np, pts), co[i + 1]) }
   n <- sample(10:40, 1); yy <- sample(0:1, n, TRUE); if (length(unique(yy)) == 2) { xx <- round(rnorm(n), 2); add("auc", c(n, xx, yy), as.numeric(colAUC(xx, yy))) }
 }
+# solve "solve" (index, which 0 re 1 im 2 count, k, coefficients): real roots with a conjugate pair and optional zero roots
+for (rep in 1:30) {
+  nr <- sample(1:3, 1); rr <- round(runif(nr, -3, 3), 2); cp <- if (rep %% 2) complex(real = round(runif(1, -2, 2), 2), imaginary = round(runif(1, 0.3, 2), 2)) else NULL
+  pz <- if (rep %% 5 == 0) 0 else NULL
+  p <- polynomial(1); for (r in c(rr, pz)) p <- p * polynomial(c(-r, 1)); if (!is.null(cp)) p <- p * polynomial(c(Mod(cp)^2, -2 * Re(cp), 1))
+  cf <- as.numeric(p); sv <- solve(p); sv <- sv[order(Re(sv), Im(sv))]; k <- length(cf)
+  add("solve", c(0, 2, k, cf), length(sv))
+  for (i in seq_along(sv)) { add("solve", c(i - 1, 0, k, cf), Re(sv[i])); add("solve", c(i - 1, 1, k, cf), abs(Im(sv[i]))) }
+}
 emit("polynompkg", "polynom", list(cases))

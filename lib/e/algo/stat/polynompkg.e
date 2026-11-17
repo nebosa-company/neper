@@ -1,9 +1,11 @@
 // R polynom (coefficients ascending): predict (Horner), deriv, integral (zero constant), poly.calc (the monic polynomial with the given roots) and poly.orth (the orthonormal
 // polynomials on a set of points under the unweighted discrete inner product); and caTools colAUC for two classes.
 //
-// Not here: solve and the complex roots, the arithmetic operators on polynomial objects, lists of polynomials, and colAUC with more than two classes or the ROC plot.
+// Not here: the arithmetic operators on polynomial objects, lists of polynomials, and colAUC with more than two classes or the ROC plot.
 
 use e.math
+use e.mem
+use e.algo.stat.pracma as pr
 
 fn predict(c: []const f64, x: f64) -> f64 {
     var v = 0.0f64
@@ -138,4 +140,42 @@ fn col_auc(x: []const f64, y: []const f64) -> f64 {
     let auc = wins / (n1 * n0)
     if 1.0f64 - auc > auc { ret 1.0f64 - auc }
     ret auc
+}
+
+// solve(p): the zeros of the polynomial (ascending coefficients), sorted by real then imaginary part as R sorts a complex vector, zeros at the origin first when present; returns the count written to re and im, or -1 when the finder fails
+fn solve(a: *mem.Arena, c: []const f64, re: []f64, im: []f64) -> i64 {
+    var z = 0usize
+    while z < c.len && c[z] == 0.0f64 { z += 1usize }
+    var n = 0usize
+    while n < z {
+        re[n] = 0.0f64
+        im[n] = 0.0f64
+        n += 1usize
+    }
+    if c.len < z + 2usize { ret i64(n) }
+    let rest = c[z..c.len]
+    if rest.len == 2usize {
+        re[n] = 0.0f64 - rest[0usize] / rest[1usize]
+        im[n] = 0.0f64
+        n += 1usize
+    } else {
+        let d = pr.polyroot_c(a, rest, re[n..re.len], im[n..im.len])
+        if d < 0i64 { ret 0i64 - 1i64 }
+        n += usize(d)
+    }
+    var i = 1usize
+    while i < n {
+        let r0 = re[i]
+        let i0 = im[i]
+        var j = i
+        while j > 0usize && (re[j - 1usize] > r0 || (re[j - 1usize] == r0 && im[j - 1usize] > i0)) {
+            re[j] = re[j - 1usize]
+            im[j] = im[j - 1usize]
+            j -= 1usize
+        }
+        re[j] = r0
+        im[j] = i0
+        i += 1usize
+    }
+    ret i64(n)
 }
