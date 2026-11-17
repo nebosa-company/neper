@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R imputets`; the layout is at the top of scripts/r_oracle/groups/imputets.R.
 
 use e.algo.stat.imputets as it
+use e.algo.rand.r as rng
 use e.io
 use e.mem
 use e.os
@@ -50,6 +51,24 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         it.apply_maxgap(s, fl, mg)
         ret fl[k]
+    }
+    if str.eq(c.name, "rnd") {
+        // args (seed, index, n, series..., lower or -999999, upper or -999999)
+        var lo = x[3usize + n]
+        var hi = x[4usize + n]
+        if lo < 0.0f64 - 999000.0f64 { lo = 0.0f64 / 0.0f64 }
+        if hi < 0.0f64 - 999000.0f64 { hi = 0.0f64 / 0.0f64 }
+        var rg: rng.Rng = zero
+        rng.seed(&rg, i64(x[0usize]))
+        let (rr, re) = it.na_random(a, &rg, s, lo, hi)
+        if re != ok { os.exit(7) }
+        ret rr[k]
+    }
+    if str.eq(c.name, "repl") {
+        // args (0, index, n, series..., fill)
+        let (rr, re) = it.na_replace(a, s, x[3usize + n])
+        if re != ok { os.exit(7) }
+        ret rr[k]
     }
     if str.eq(c.name, "interp") {
         let (ir, ie) = it.na_interpolation(a, s, kind)

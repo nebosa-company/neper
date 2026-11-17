@@ -35,4 +35,11 @@ for (rep in 1:30) {
   for (op in 0:3) { r <- suppressWarnings(switch(op + 1, na_locf(x, "locf", "keep", maxgap = mg), na_locf(x, "nocb", "keep", maxgap = mg), na_interpolation(x, "linear", maxgap = mg), na_interpolation(x, "spline", maxgap = mg)))
     for (k in seq_len(n)) add("maxgap", c(op, k - 1, n, enc(x), mg), r[k]) }
 }
+# na_random "rnd" (seed, index, n, series..., lower or -999999, upper or -999999) and na_replace "repl" (0, index, n, series..., fill)
+for (rep in 1:20) {
+  n <- sample(12:30, 1); x <- round(runif(n, 1, 10), 1); na <- sample(n, sample(2:6, 1)); x[na] <- NA; sd <- sample(1:100000, 1)
+  lo <- if (rep %% 2) NULL else 0.5; hi <- if (rep %% 2) NULL else 12
+  set.seed(sd); r <- na_random(x, lower_bound = lo, upper_bound = hi); fl <- sample(c(0, -1, 7.5), 1); r2 <- na_replace(x, fill = fl)
+  for (k in seq_len(n)) { add("rnd", c(sd, k - 1, n, enc(x), if (is.null(lo)) -999999 else lo, if (is.null(hi)) -999999 else hi), r[k]); add("repl", c(0, k - 1, n, enc(x), fl), r2[k]) }
+}
 emit("imputets", "imputeTS", list(cases))

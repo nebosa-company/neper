@@ -3,11 +3,12 @@
 //
 // na_locf (option locf or nocb, na_remaining rev, keep or mean) and na_interpolation (linear, spline) wrap the zoo functions.
 //
-// Not here: na_kalman, na_seadec, na_seasplit, na_random, statsNA, the maxgap option, na_interpolation stine.
+// Not here: na_kalman, na_seadec, na_seasplit, statsNA, the maxgap option, na_interpolation stine.
 
 use e.math
 use e.mem
 use e.algo.stat.zoo as zoo
+use e.algo.rand.r as rng
 
 fn is_nan(x: f64) -> bool { ret x != x }
 
@@ -242,4 +243,46 @@ fn apply_maxgap(x: []const f64, filled: []f64, maxgap: i64) {
             i += 1usize
         }
     }
+}
+
+// na_random(x, lower_bound, upper_bound): every missing value is a uniform draw on the bounds (the minimum and maximum of the observed values when lo >= hi is passed as NaN), drawn in order of position; rg is the seeded generator
+fn na_random(a: *mem.Arena, rg: *rng.Rng, x: []const f64, lo0: f64, hi0: f64) -> ([]f64, err) {
+    let (r, e1) = mem.alloc[f64](a, x.len)
+    if e1 != ok { ret (r, e1) }
+    var lo = lo0
+    var hi = hi0
+    var i = 0usize
+    if is_nan(lo) || is_nan(hi) {
+        var mn = 1.0e300f64
+        var mx = 0.0f64 - 1.0e300f64
+        while i < x.len {
+            if !is_nan(x[i]) {
+                if x[i] < mn { mn = x[i] }
+                if x[i] > mx { mx = x[i] }
+            }
+            i += 1usize
+        }
+        if is_nan(lo) { lo = mn }
+        if is_nan(hi) { hi = mx }
+    }
+    i = 0usize
+    while i < x.len {
+        r[i] = x[i]
+        if is_nan(x[i]) { r[i] = lo + (hi - lo) * rng.unif(rg) }
+        i += 1usize
+    }
+    ret (r, ok)
+}
+
+// na_replace(x, fill)
+fn na_replace(a: *mem.Arena, x: []const f64, fill: f64) -> ([]f64, err) {
+    let (r, e1) = mem.alloc[f64](a, x.len)
+    if e1 != ok { ret (r, e1) }
+    var i = 0usize
+    while i < x.len {
+        r[i] = x[i]
+        if is_nan(x[i]) { r[i] = fill }
+        i += 1usize
+    }
+    ret (r, ok)
 }

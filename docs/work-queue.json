@@ -229,10 +229,10 @@
       "group": "CRAN parity",
       "order": 627,
       "title": "imputeTS: time-series imputation",
-      "score": 0.45,
+      "score": 0.5,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6150). na_ma (three weightings) and na_mean (five options) equal imputeTS on Windows (oracle_imputets; Linux pending). D6868: na_locf (locf, nocb and the na_remaining options) and na_interpolation (linear, spline) equal imputeTS. D6869: maxgap equals imputeTS. Open: na_kalman, na_seadec, na_seasplit, na_random, statsNA, stine. Was: Open (CRAN rank 658). Small to mid. e.algo.stat.zoo has locf, approx and spline. Acceptance, equal to imputeTS: na_interpolation (linear, spline, stine), na_kalman (StructTS and auto.arima models), na_ma (simple, linear, exponential weights), na_seadec, na_seasplit, na_locf, na_mean, na_random, na_replace, statsNA."
+      "evidence": "Partial (D6150). na_ma (three weightings) and na_mean (five options) equal imputeTS on Windows (oracle_imputets; Linux pending). D6868: na_locf (locf, nocb and the na_remaining options) and na_interpolation (linear, spline) equal imputeTS. D6869: maxgap equals imputeTS. Open: na_kalman, na_seadec, na_seasplit, na_random, statsNA, stine. Was: Open (CRAN rank 658). Small to mid. e.algo.stat.zoo has locf, approx and spline. Acceptance, equal to imputeTS: na_interpolation (linear, spline, stine), na_kalman (StructTS and auto.arima models), na_ma (simple, linear, exponential weights), na_seadec, na_seasplit, na_locf, na_mean, na_random, na_replace, statsNA. D6993: na_random (default and given bounds, under set.seed) and na_replace equal imputeTS (oracle_imputets, 8611 cases)."
     },
     {
       "id": "L430",

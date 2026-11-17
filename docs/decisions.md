@@ -48458,3 +48458,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6992 — sn dp2cp
 
 `dp2cp(xi, omega, alpha, nu, which)`: the proper centred parametrisation from the cumulants of D6991 (mean, sd, k3 / k2^1.5, k4 / k2^2). Equal to `dp2cp(..., "ST")` and `dp2cp(..., "SN")` on 20 settings (oracle_sn). The inverse `cp2dp` and the multivariate and ESN families are not here. Linux pending.
+
+
+## D6993 — imputeTS na_random and na_replace
+
+`na_random(rg, x, lo, hi)`: each missing value, in order of position, is lo + (hi - lo) u with u from the seeded generator, the bounds defaulting to the observed minimum and maximum; `na_replace(x, fill)`. Equal to imputeTS on 20 series (oracle_imputets). The maxgap option is not applied to these two here (apply_maxgap exists). Linux pending.
