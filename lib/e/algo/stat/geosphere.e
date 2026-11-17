@@ -144,3 +144,63 @@ fn dest_point_rhumb(lon1d: f64, lat1d: f64, brg: f64, dist: f64, r: f64) -> (f64
     let lon2 = fmod(lon1 + dlon + pi(), 2.0f64 * pi()) - pi()
     ret (lon2 / (pi() / 180.0f64), lat2 / (pi() / 180.0f64))
 }
+
+// destPoint(p, b, d, r = r): the spherical destination from (lon1, lat1) in degrees along bearing b degrees for distance d on a sphere of radius r
+fn dest_point_sphere(lon1d: f64, lat1d: f64, bd: f64, d: f64, r: f64) -> (f64, f64) {
+    let lon1 = rad(lon1d)
+    let lat1 = rad(lat1d)
+    let b = rad(bd)
+    let lat2 = math.asin(math.sin(lat1) * math.cos(d / r) + math.cos(lat1) * math.sin(d / r) * math.cos(b))
+    var lon2 = lon1 + math.atan2[f64](math.sin(b) * math.sin(d / r) * math.cos(lat1), math.cos(d / r) - math.sin(lat1) * math.sin(lat2))
+    lon2 = fmod(lon2 + pi(), 2.0f64 * pi()) - pi()
+    ret (lon2 * 180.0f64 / pi(), lat2 * 180.0f64 / pi())
+}
+
+// gcIntermediate(p1, p2, n): the k-th (0-based) of the n equally spaced points on the great circle between the two points (not antipodal, not equal), in degrees
+fn gc_intermediate(lon1d: f64, lat1d: f64, lon2d: f64, lat2d: f64, n: usize, k: usize) -> (f64, f64) {
+    let lon1 = rad(lon1d)
+    let lat1 = rad(lat1d)
+    let lon2 = rad(lon2d)
+    let lat2 = rad(lat2d)
+    let d = dist_cosine(lon1d, lat1d, lon2d, lat2d, 1.0f64)
+    let f = f64(k + 1usize) / (f64(n) + 1.0f64)
+    let aa = math.sin((1.0f64 - f) * d) / math.sin(d)
+    let bb = math.sin(f * d) / math.sin(d)
+    let x = aa * math.cos(lat1) * math.cos(lon1) + bb * math.cos(lat2) * math.cos(lon2)
+    let y = aa * math.cos(lat1) * math.sin(lon1) + bb * math.cos(lat2) * math.sin(lon2)
+    let z = aa * math.sin(lat1) + bb * math.sin(lat2)
+    let lat = math.atan2[f64](z, math.sqrt[f64](x * x + y * y))
+    let lon = math.atan2[f64](y, x)
+    ret (lon * 180.0f64 / pi(), lat * 180.0f64 / pi())
+}
+
+// geomean(xy, w): the weighted mean point of the longitudes and latitudes (each averaged as a circular quantity); the weights are normalised to sum one
+fn geomean(lon: []const f64, lat: []const f64, w: []const f64) -> (f64, f64) {
+    let n = lon.len
+    var sw = 0.0f64
+    var i = 0usize
+    while i < n {
+        sw += w[i]
+        i += 1usize
+    }
+    var sx = 0.0f64
+    var cx = 0.0f64
+    var sy = 0.0f64
+    var cy = 0.0f64
+    i = 0usize
+    while i < n {
+        let wi = w[i] / sw
+        let x = rad(lon[i] + 180.0f64)
+        let y = rad(lat[i])
+        sx += math.sin(x) * wi
+        cx += math.cos(x) * wi
+        sy += math.sin(y) * wi
+        cy += math.cos(y) * wi
+        i += 1usize
+    }
+    let nn = f64(n)
+    var x = math.atan2[f64](sx / nn, cx / nn)
+    x = fmod(x, 2.0f64 * pi()) - pi()
+    let y = math.atan2[f64](sy / nn, cy / nn)
+    ret (x * 180.0f64 / pi(), y * 180.0f64 / pi())
+}

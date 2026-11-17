@@ -18,4 +18,14 @@ for (i in 1:60) {
   ad <- c(p1, r, 0, b, d)
   add("dest_lon", ad, dp[1, "lon"]); add("dest_lat", ad, dp[1, "lat"])
 }
+# destPoint(r =) "dsph_*" (lon1, lat1, r, 0, bearing, distance); gcIntermediate "gci_*" (lon1, lat1, lon2, lat2, n, index); geomean "gmean_x/y" (n, lon[n], lat[n], w[n])
+for (rep in 1:30) {
+  lon1 <- runif(1, -170, 170); lat1 <- runif(1, -70, 70); lon2 <- lon1 + runif(1, -40, 40); lat2 <- lat1 + runif(1, -15, 15); r <- c(6371000, 6378137, 1)[sample(3, 1)]
+  b <- runif(1, 0, 360); dd <- runif(1, 1e3, 5e6) * (r / 6378137); dp <- destPoint(c(lon1, lat1), b, dd, r = r)
+  add("dsph_lon", c(lon1, lat1, r, 0, b, dd), dp[1, "lon"]); add("dsph_lat", c(lon1, lat1, r, 0, b, dd), dp[1, "lat"])
+  nn <- sample(2:6, 1); gi <- gcIntermediate(c(lon1, lat1), c(lon2, lat2), n = nn)
+  for (k in seq_len(nn)) { add("gci_lon", c(lon1, lat1, lon2, lat2, nn, k - 1), gi[k, 1]); add("gci_lat", c(lon1, lat1, lon2, lat2, nn, k - 1), gi[k, 2]) }
+  m <- sample(3:8, 1); lo <- runif(m, -170, 170); la <- runif(m, -70, 70); w <- runif(m, 0.2, 2); gm <- geomean(cbind(lo, la), w)
+  add("gmean_x", c(m, lo, la, w), gm[1, 1]); add("gmean_y", c(m, lo, la, w), gm[1, 2])
+}
 emit("geosphere", "geosphere", list(cases))

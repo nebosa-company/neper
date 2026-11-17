@@ -11,6 +11,12 @@ use e.test.oracle as oracle
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "gmean_x") || str.eq(k, "gmean_y") {
+        let gn = usize(x[0usize])
+        let (gx, gy) = g.geomean(x[1usize..1usize + gn], x[1usize + gn..1usize + 2usize * gn], x[1usize + 2usize * gn..1usize + 3usize * gn])
+        if str.eq(k, "gmean_x") { ret gx }
+        ret gy
+    }
     let a = x[0usize]
     let b = x[1usize]
     let cc = x[2usize]
@@ -19,6 +25,16 @@ fn answer(c: *const oracle.Case) -> f64 {
     if str.eq(k, "dest_lon") || str.eq(k, "dest_lat") {
         let (lo, la) = g.dest_point_rhumb(a, b, p5, x[5usize], cc)
         if str.eq(k, "dest_lon") { ret lo }
+        ret la
+    }
+    if str.eq(k, "dsph_lon") || str.eq(k, "dsph_lat") {
+        let (lo, la) = g.dest_point_sphere(a, b, p5, x[5usize], cc)
+        if str.eq(k, "dsph_lon") { ret lo }
+        ret la
+    }
+    if str.eq(k, "gci_lon") || str.eq(k, "gci_lat") {
+        let (lo, la) = g.gc_intermediate(a, b, cc, d, usize(p5), usize(x[5usize]))
+        if str.eq(k, "gci_lon") { ret lo }
         ret la
     }
     if str.eq(k, "haversine") { ret g.dist_haversine(a, b, cc, d, p5) }
