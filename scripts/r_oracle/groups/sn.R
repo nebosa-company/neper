@@ -2,7 +2,7 @@
 #   args: (xi, omega, alpha, tau_or_nu, v)   fn "dsn" "psn" "qsn" "dst"
 suppressMessages(library(sn))
 cases <- list()
-add <- function(fn, args, want, rel = 1e-9) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = 1e-10)
+add <- function(fn, args, want, rel = 1e-9, abs = 1e-10) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
 set.seed(20261203)
 for (rep in 1:12) {
   xi <- runif(1, -1, 1); om <- runif(1, 0.5, 2.5); al <- c(runif(1, -6, 6), runif(1, 0.1, 3), runif(1, -3, -0.1), 12)[(rep - 1) %% 4 + 1]
@@ -94,4 +94,29 @@ for (rep in 1:36) { d <- c(2, 3, 4)[(rep - 1) %% 3 + 1]; p <- mvcase(d); kind <-
   if (kind == 2) { cp <- dp2cp(list(xi = p$xi, Omega = p$Om, alpha = p$al), "SN"); dp <- cp2dp(list(mean = cp$mean, var.cov = cp$var.cov, gamma1 = cp$gamma1), "SN"); if (is.null(dp)) next
     flat <- c(dp$xi, as.numeric(t(dp$Omega)), dp$alpha); ex <- 0; p <- list(xi = cp$mean, Om = cp$var.cov, al = cp$gamma1) }
   for (k in seq_along(flat)) add("mvcp", c(kind, d, ex, k - 1, p$xi, as.numeric(t(p$Om)), p$al), flat[k], rel = 1e-8) }
+# matrix-response selm: args (family 0 SN / 1 ST, penalised, n, d, p, which, y(n*d row-major), x(n*p row-major)); the output is beta (row j, comp k), Omega, alpha, nu (ST), log-likelihood
+mvsel_case <- function(fam, pen, n, d, p, sd) {
+  set.seed(sd); x1 <- round(rnorm(n), 2)
+  A <- matrix(round(rnorm(d * d, sd = 0.4), 2), d, d); Om <- crossprod(A) + diag(d); al <- c(3, -2.5, 2)[seq_len(d)]
+  z <- if (fam == 0) rmsn(n, rep(0, d), Om, al) else rmst(n, rep(0, d), Om, al, c(5, 7)[sample(2, 1)])
+  y <- round(z + 1 + (if (p == 2) outer(x1, c(0.5, -0.3, 0.2)[seq_len(d)]) else 0), 4)
+  colnames(y) <- paste0("y", seq_len(d)); X <- if (p == 2) cbind(1, x1) else matrix(1, n, 1)
+  frm <- if (p == 2) y ~ x1 else y ~ 1
+  if (fam == 1 && pen) return(invisible())
+  fit <- tryCatch(selm(frm, family = if (fam == 0) "SN" else "ST", method = if (pen) "MPLE" else "MLE"), error = function(e) NULL)
+  if (is.null(fit)) return(invisible())
+  dp <- coef(fit, "DP", vector = FALSE); ll <- as.numeric(logLik(fit))
+  flat <- c(as.numeric(t(as.matrix(dp$beta))), as.numeric(t(dp$Omega)), dp$alpha, if (fam == 1) dp$nu)
+  if (fam == 1 && dp$nu > 30) return(invisible())
+  for (k in unique(c(1, p * d + d * d + 1))) add("mvselm", c(fam, pen, n, d, p, k - 1, as.numeric(t(y)), as.numeric(t(X))), flat[k], rel = 5e-3, abs = 2e-3)
+  add("mvselm", c(fam, pen, n, d, p, length(flat), as.numeric(t(y)), as.numeric(t(X))), ll, rel = 1e-4)
+}
+for (rep in 1:3) for (fam in 0:1) for (pen in 0:1) mvsel_case(fam, pen, 300, 2, c(1, 2)[rep %% 2 + 1], 8000 + rep * 10 + fam * 2 + pen)
+# skew-Cauchy: dsc (xi, omega, alpha, 0, x) and rsc (xi, omega, alpha, 0, n, seed, index), plus dmsc / rmsc through the multivariate layout
+for (rep in 1:20) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, -0.5, 1, 4, 9)[sample(5, 1)]
+  for (x in xi + om * c(-8, -1.5, -0.2, 0.4, 1.3, 6)) add("dsc", c(xi, om, al, 0, x), dsc(x, xi, om, al), rel = 1e-10)
+  n <- sample(4:9, 1); sd <- sample(1:100000, 1); set.seed(sd); r <- as.numeric(rsc(n, xi, om, al)); for (k in seq_len(n)) add("rsc", c(xi, om, al, 0, n, sd, k - 1), r[k], rel = 1e-9) }
+for (rep in 1:8) { d <- c(2, 3)[rep %% 2 + 1]; p <- mvcase(d); n <- sample(3:6, 1); sd <- sample(1:100000, 1)
+  add("dmsc", mvpack(d, 1, 0, 0, 0, p), dmsc(p$x, p$xi, p$Om, p$al), rel = 1e-9)
+  set.seed(sd); r <- as.numeric(t(matrix(rmsc(n, p$xi, p$Om, p$al), n, d))); for (k in seq_len(n * d)) add("rmsc", mvpack(d, 1, n, sd, k - 1, p), r[k], rel = 1e-9) }
 emit("sn", "sn", list(cases))
