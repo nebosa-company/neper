@@ -401,3 +401,7 @@ oracle_vars_chk
 oracle_vars_stab
 oracle_vars_svar
 oracle_vars_vec
+oracle_hoslem_rsf
+oracle_laeken_ext
+oracle_rcompanion_ext
+oracle_compositions_ext
