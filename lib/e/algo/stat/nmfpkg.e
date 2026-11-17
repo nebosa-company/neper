@@ -16,7 +16,7 @@ use e.math
 use e.mem
 
 // v is n by p column-major, w n by r, h r by p; method 0 brunet (Kullback-Leibler), 1 lee (Frobenius); out[0] receives the iteration count
-fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, theta: f64, init: usize, stream: i64, w: []f64, h: []f64, out: []f64) -> err {
+fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method: usize, seed: i64, maxiter: usize, theta: f64, beta: f64, init: usize, stream: i64, w: []f64, h: []f64, out: []f64) -> err {
     var r: rng.Rng = zero
     rng.seed(&r, seed)
     var ly: lc.State = zero
@@ -48,7 +48,7 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
             q += 1usize
         }
     } else {
-        let ne = nndsvd(a, v, n, p, rk, init, w, h)
+        let ne = nndsvd(a, v, n, p, rk, init, seed, w, h)
         if ne != ok { ret ne }
     }
     let (wh, e1) = mem.alloc[f64](a, n * p)
@@ -109,8 +109,10 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
     var okind = 1usize
     if method == 2usize { okind = 0usize }
     if method == 6usize { okind = 2usize }
-    if method == 2usize || method == 3usize || method == 6usize {
-        let c0 = nmf_objective(v, w, h, n, p, rk, okind, wh)
+    if method == 7usize { okind = 3usize }
+    if method == 2usize || method == 3usize || method == 6usize || method == 7usize {
+        var c0 = 0.0f64
+        if okind == 3usize { c0 = beta * csum(h) } else { c0 = nmf_objective(v, w, h, n, p, rk, okind, wh) }
         sn = 1usize
         smax = c0
         smin = c0
@@ -195,6 +197,96 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
                     i += 1usize
                 }
                 k += 1usize
+            }
+        } else if method == 7usize {
+            // pe-nmf: theta is alpha; H = H (W'V) / (W'W H + beta), W = W (V H') / (W H H' + alpha W (11' - I)), no clamp and no rescale
+            var k = 0usize
+            while k < rk {
+                var l = 0usize
+                while l < rk {
+                    var s = 0.0f64
+                    var u = 0usize
+                    while u < n {
+                        s += w[k * n + u] * w[l * n + u]
+                        u += 1usize
+                    }
+                    g[l * rk + k] = s
+                    l += 1usize
+                }
+                k += 1usize
+            }
+            var j = 0usize
+            while j < p {
+                k = 0usize
+                while k < rk {
+                    var num = 0.0f64
+                    var u = 0usize
+                    while u < n {
+                        num += w[k * n + u] * v[j * n + u]
+                        u += 1usize
+                    }
+                    var den = 0.0f64
+                    var l = 0usize
+                    while l < rk {
+                        den += g[l * rk + k] * h[j * rk + l]
+                        l += 1usize
+                    }
+                    t1[j * rk + k] = h[j * rk + k] * num / (den + beta)
+                    k += 1usize
+                }
+                j += 1usize
+            }
+            q = 0usize
+            while q < rk * p {
+                h[q] = t1[q]
+                q += 1usize
+            }
+            k = 0usize
+            while k < rk {
+                var l = 0usize
+                while l < rk {
+                    var s = 0.0f64
+                    var u = 0usize
+                    while u < p {
+                        s += h[u * rk + k] * h[u * rk + l]
+                        u += 1usize
+                    }
+                    g[l * rk + k] = s
+                    l += 1usize
+                }
+                k += 1usize
+            }
+            var i = 0usize
+            while i < n {
+                k = 0usize
+                while k < rk {
+                    var num = 0.0f64
+                    var u = 0usize
+                    while u < p {
+                        num += v[u * n + i] * h[u * rk + k]
+                        u += 1usize
+                    }
+                    var den = 0.0f64
+                    var l = 0usize
+                    while l < rk {
+                        den += w[l * n + i] * g[k * rk + l]
+                        l += 1usize
+                    }
+                    var wm = 0.0f64
+                    l = 0usize
+                    while l < rk {
+                        if l != k { wm += w[l * n + i] }
+                        l += 1usize
+                    }
+                    t2[k * n + i] = w[k * n + i] * num / (den + theta * wm)
+                    k += 1usize
+                }
+                i += 1usize
+            }
+            q = 0usize
+            while q < n * rk {
+                w[q] = t2[q]
+                q += 1usize
             }
         } else if method == 6usize {
             // ls-nmf with unit weights: the package's R-level Euclidean updates, each term clamped at 1e-9, no rescaling, H from W'(WH) and W from (WH) H' with WH refreshed in between
@@ -505,9 +597,10 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
             }
             if inc > 40usize { done = true }
         }
-        if method == 2usize || method == 3usize || method == 6usize {
+        if method == 2usize || method == 3usize || method == 6usize || method == 7usize {
             if sn != 0usize || it % 50usize == 0usize {
-                let cv = nmf_objective(v, w, h, n, p, rk, okind, wh)
+                var cv = 0.0f64
+                if okind == 3usize { cv = beta * csum(h) } else { cv = nmf_objective(v, w, h, n, p, rk, okind, wh) }
                 if cv != cv {
                     done = true
                 } else {
@@ -592,7 +685,7 @@ fn nmf_objective(v: []const f64, w: []const f64, h: []const f64, n: usize, p: us
 
 // the NNDSVD seed of Boutsidis and Gallopoulos as the package ports it: the first singular triplet as absolute values, each later one as the larger of its positive and negative parts,
 // values under 1e-10 set to zero; init 1 leaves the zeros, init 2 fills them with the mean of the data (the `average` densify)
-fn nndsvd(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, init: usize, w: []f64, h: []f64) -> err {
+fn nndsvd(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, init: usize, seed: i64, w: []f64, h: []f64) -> err {
     let (sv, e) = decomp.svd(a, v, n, p)
     if e != ok { ret e }
     var q = 0usize
@@ -675,16 +768,29 @@ fn nndsvd(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, init: us
         q += 1usize
     }
     let avg = sm / f64(n * p)
+    var rr: rng.Rng = zero
+    rng.seed(&rr, seed)
     q = 0usize
     while q < n * rk {
         if w[q] < 1.0e-10f64 { w[q] = 0.0f64 }
-        if w[q] == 0.0f64 && init == 2usize { w[q] = avg }
         q += 1usize
     }
     q = 0usize
     while q < rk * p {
         if h[q] < 1.0e-10f64 { h[q] = 0.0f64 }
+        q += 1usize
+    }
+    // densify: 2 the mean of the data, 3 uniform draws on (0, mean / 100), W's zeros first (in storage order) then H's
+    q = 0usize
+    while q < n * rk {
+        if w[q] == 0.0f64 && init == 2usize { w[q] = avg }
+        if w[q] == 0.0f64 && init == 3usize { w[q] = avg * rng.unif(&rr) / 100.0f64 }
+        q += 1usize
+    }
+    q = 0usize
+    while q < rk * p {
         if h[q] == 0.0f64 && init == 2usize { h[q] = avg }
+        if h[q] == 0.0f64 && init == 3usize { h[q] = avg * rng.unif(&rr) / 100.0f64 }
         q += 1usize
     }
     ret ok
@@ -715,7 +821,7 @@ fn nmf_runs(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method
     var k = 0usize
     while k < nrun {
         var o1: [4]f64 = zero
-        let fe = nmf_fit(a, v, n, p, rk, method, seed, maxiter, 0.5f64, 0usize, i64(k), w1, h1, o1[0usize..4usize])
+        let fe = nmf_fit(a, v, n, p, rk, method, seed, maxiter, 0.5f64, 0.0f64, 0usize, i64(k), w1, h1, o1[0usize..4usize])
         if fe != ok { ret fe }
         let rs = nmf_objective(v, w1, h1, n, p, rk, kind, wh)
         var jj = 0usize
@@ -1614,4 +1720,18 @@ fn normalise_cols(w: []f64, m: usize, k: usize) {
         }
         c += 1usize
     }
+}
+
+// a compensated sum standing in for R's long-double sum over a vector
+fn csum(x: []const f64) -> f64 {
+    var s = 0.0f64
+    var c = 0.0f64
+    var q = 0usize
+    while q < x.len {
+        let tt = s + x[q]
+        if math.abs[f64](s) >= math.abs[f64](x[q]) { c += (s - tt) + x[q] } else { c += (x[q] - tt) + s }
+        s = tt
+        q += 1usize
+    }
+    ret s + c
 }

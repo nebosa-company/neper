@@ -55,7 +55,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (h, e2) = mem.alloc[f64](a, rk * p)
     let (out, e3) = mem.alloc[f64](a, 2usize)
     if e1 != ok || e2 != ok || e3 != ok { ret nan }
-    let fe = nf.nmf_fit(a, z[6usize..6usize + n * p], n, p, rk, usize(z[3usize]) % 10usize, i64(z[4usize]), 2000usize, z[5usize], usize(z[3usize]) / 10usize, 0i64 - 1i64, w, h, out)
+    var bt = 0.0f64
+    if z.len > 7usize + n * p { bt = z[7usize + n * p] }
+    let fe = nf.nmf_fit(a, z[6usize..6usize + n * p], n, p, rk, usize(z[3usize]) % 10usize, i64(z[4usize]), 2000usize, z[5usize], bt, usize(z[3usize]) / 10usize, 0i64 - 1i64, w, h, out)
     if fe != ok { ret nan }
     let idx = usize(z[6usize + n * p])
     if idx == 0usize { ret out[0usize] }

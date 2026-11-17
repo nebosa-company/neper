@@ -112,4 +112,23 @@ for (rep in 1:20) {
   v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("snm", c(n, p, r, ver, sd, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
 }
+# pe-nmf (method 7), theta slot = alpha and a trailing beta: stationary stop on beta * sum(H) (the package's objective, by the unary plus its second line gets)
+for (rep in 1:16) {
+  n <- sample(6:14, 1); p <- sample(5:10, 1); r <- sample(2:3, 1); sd <- sample(1:100000, 1); al <- c(0.01, 0.05, 0.1)[sample(3, 1)]; be <- c(0.01, 0.05, 0.1)[sample(3, 1)]
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = "pe-nmf", seed = sd, alpha = al, beta = be)), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 7, sd, al, as.vector(x), q - 1, be), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 300 else 1e-8)
+}
+# nndsvd with the random densify (init 3): the uniforms come from the seeded generator
+for (rep in 1:16) {
+  n <- sample(6:14, 1); p <- sample(5:10, 1); r <- sample(2:4, 1); me <- rep %% 2; sd <- sample(1:100000, 1)
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = if (me == 0) "brunet" else "lee", seed = list(method = "nndsvd", densify = "random"), rng = sd)), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  if (any(!is.finite(v))) next
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, 30 + me, sd, 0.5, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 0 else 1e-8)
+}
 emit("nmf", "NMF", list(cases))
