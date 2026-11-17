@@ -11,6 +11,7 @@
 // g, a grange, observations with a zero or missing standard error, the other optimisers.
 
 use e.algo.stat.mixsqp_sqp as sq
+use e.algo.stat.squarem as sqm
 use e.math
 use e.math.dist as dist
 use e.mem
@@ -160,7 +161,7 @@ fn qval(a: *mem.Arena, v: []const f64, out: []f64) -> err {
 }
 
 // the fit; pointmass and nullbiased follow method "fdr" (true, true) or "shrink" (false, false)
-fn ash(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool, nullbiased: bool, nullweight: f64, mode: f64, mult: f64) -> (Ash, err) {
+fn ash(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool, nullbiased: bool, nullweight: f64, mode: f64, mult: f64, optm: usize) -> (Ash, err) {
     var r: Ash = zero
     let n = x.len
     r.n = n
@@ -334,7 +335,87 @@ fn ash(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool
     var c = sq.sqp_default()
     c.eps = 1.0e-6f64
     c.numiter_em = 20i64
-    if kc > 1usize {
+    if kc > 1usize && optm == 1usize {
+        // the starting proportions initpi over the k0 grid components, arranged as the mixture is
+        let (pg, ep0) = mem.alloc[f64](a, kk)
+        let (pk, ep1) = mem.alloc[f64](a, kc)
+        let (lk, ep2) = mem.alloc[f64](a, n * kc)
+        let (pr, ep3) = mem.alloc[f64](a, kc)
+        if ep0 != ok || ep1 != ok || ep2 != ok || ep3 != ok { ret (r, mem.Full) }
+        var base = 1.0f64 / f64(n)
+        var nul = (f64(n) - f64(k0) + 1.0f64) / f64(n)
+        if k0 >= n {
+            base = 1.0f64 / f64(k0)
+            nul = base
+        }
+        var sm = 0.0f64
+        j = 0usize
+        while j < k0 {
+            pg[j] = base
+            if j == 0usize { pg[j] = nul }
+            sm += pg[j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < k0 {
+            pg[j] = pg[j] / sm
+            j += 1usize
+        }
+        if half {
+            let p0 = pg[0usize]
+            var m2 = k0
+            j = 0usize
+            while j < k0 {
+                if !(pointmass && j == 0usize) {
+                    pg[m2] = pg[j]
+                    m2 += 1usize
+                }
+                j += 1usize
+            }
+            var dn = 2.0f64
+            if pointmass { dn = 2.0f64 - p0 }
+            j = 0usize
+            while j < kk {
+                pg[j] = pg[j] / dn
+                j += 1usize
+            }
+        }
+        sm = 0.0f64
+        var anyz = false
+        j = 0usize
+        while j < kk {
+            sm += pg[j]
+            if !(pg[j] > 0.0f64) { anyz = true }
+            j += 1usize
+        }
+        if anyz {
+            sm = 0.0f64
+            j = 0usize
+            while j < kk {
+                if pg[j] < 1.0e-6f64 { pg[j] = 1.0e-6f64 }
+                sm += pg[j]
+                j += 1usize
+            }
+            j = 0usize
+            while j < kk {
+                pg[j] = pg[j] / sm
+                j += 1usize
+            }
+        }
+        j = 0usize
+        while j < kc {
+            pk[j] = pg[keep[j]]
+            pr[j] = prior[keep[j]]
+            var q2 = 0usize
+            while q2 < n {
+                lk[j * n + q2] = lik[keep[j] * n + q2]
+                q2 += 1usize
+            }
+            j += 1usize
+        }
+        let ee = em_fit(a, lk, pr, pk, n, kc, xs)
+        if ee != ok { ret (r, ee) }
+    } else if kc > 1usize {
         let (_, es) = sq.mixsqp_run(a, aa, w, nr, kc, xs, c, false, lnorm[0usize..0usize], lnorm[0usize..0usize])
         if es != ok { ret (r, es) }
     } else {
@@ -484,4 +565,144 @@ fn ash(a: *mem.Arena, x: []const f64, s: []const f64, kind: i64, pointmass: bool
     r.pm = pm
     r.psd = psd
     ret (r, ok)
+}
+
+// ---- the EM fit (ashr's mixEM: SQUAREM on the EM fixed point of the penalised likelihood) ----
+
+
+type EmCtx = struct { lik: []f64, prior: []const f64, n: usize, kc: usize, tmp: []f64 }
+
+fn em_norm(v: []f64) {
+    var s = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        s += v[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < v.len {
+        v[i] = v[i] / s
+        i += 1usize
+    }
+}
+
+fn em_fix(c: *EmCtx, p: []const f64, out: []f64) {
+    let kc = c.kc
+    var j = 0usize
+    while j < kc {
+        c.tmp[j] = p[j]
+        if c.tmp[j] < 0.0f64 { c.tmp[j] = 0.0f64 }
+        out[j] = 0.0f64
+        j += 1usize
+    }
+    em_norm(c.tmp[0usize..kc])
+    var i = 0usize
+    while i < c.n {
+        var rs = 0.0f64
+        j = 0usize
+        while j < kc {
+            rs += c.tmp[j] * c.lik[j * c.n + i]
+            j += 1usize
+        }
+        j = 0usize
+        while j < kc {
+            out[j] += c.tmp[j] * c.lik[j * c.n + i] / rs
+            j += 1usize
+        }
+        i += 1usize
+    }
+    j = 0usize
+    while j < kc {
+        out[j] = out[j] + c.prior[j] - 1.0f64
+        j += 1usize
+    }
+    em_norm(out[0usize..kc])
+}
+
+fn em_obj(c: *EmCtx, p: []const f64) -> f64 {
+    let kc = c.kc
+    var j = 0usize
+    while j < kc {
+        c.tmp[j] = p[j]
+        if c.tmp[j] < 0.0f64 { c.tmp[j] = 0.0f64 }
+        j += 1usize
+    }
+    em_norm(c.tmp[0usize..kc])
+    var ll = 0.0f64
+    var i = 0usize
+    while i < c.n {
+        var rs = 0.0f64
+        j = 0usize
+        while j < kc {
+            rs += c.tmp[j] * c.lik[j * c.n + i]
+            j += 1usize
+        }
+        ll += math.log[f64](rs)
+        i += 1usize
+    }
+    j = 0usize
+    while j < kc {
+        if c.prior[j] != 1.0f64 { ll += (c.prior[j] - 1.0f64) * math.log[f64](c.tmp[j]) }
+        j += 1usize
+    }
+    ret 0.0f64 - ll
+}
+
+// the fit over the kc kept columns of lik (n by kc, column-major) with the prior and the start pi0: the package's gradient shortcut (all mass on the first component) when the prior is flat beyond the first and no component improves on it, otherwise SQUAREM with tol min(0.1 / n, 1e-7) and 5000 evaluations; xs receives the proportions
+fn em_fit(a: *mem.Arena, lik: []f64, prior: []const f64, pi0: []const f64, n: usize, kc: usize, xs: []f64) -> err {
+    var maxp = 0.0f64
+    var j = 1usize
+    while j < kc {
+        if prior[j] > maxp { maxp = prior[j] }
+        j += 1usize
+    }
+    var run = maxp > 1.0f64
+    if !run {
+        var mn = 1.0e300f64
+        j = 0usize
+        while j < kc {
+            var cs = 0.0f64
+            var i = 0usize
+            while i < n {
+                cs += lik[j * n + i] / lik[i]
+                i += 1usize
+            }
+            let g = f64(n) - cs + prior[0usize] - 1.0f64
+            if g < mn { mn = g }
+            j += 1usize
+        }
+        if mn < 0.0f64 { run = true }
+    }
+    if !run {
+        j = 0usize
+        while j < kc {
+            xs[j] = 0.0f64
+            j += 1usize
+        }
+        xs[0usize] = 1.0f64
+        ret ok
+    }
+    let (tmp, e1) = mem.alloc[f64](a, kc)
+    if e1 != ok { ret e1 }
+    var ctx = EmCtx { lik: lik, prior: prior, n: n, kc: kc, tmp: tmp }
+    var c = sqm.ctl_default()
+    c.tol = math.min[f64](0.1f64 / f64(n), 1.0e-7f64)
+    c.maxiter = 5000i64
+    let (res, es) = sqm.squarem1[EmCtx](a, &ctx, em_fix, em_obj, pi0, c)
+    if es != ok { ret es }
+    var s = 0.0f64
+    j = 0usize
+    while j < kc {
+        var v = res.par[j]
+        if v < 0.0f64 { v = 0.0f64 }
+        xs[j] = v
+        s += v
+        j += 1usize
+    }
+    j = 0usize
+    while j < kc {
+        xs[j] = xs[j] / s
+        j += 1usize
+    }
+    ret ok
 }

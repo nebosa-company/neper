@@ -23,4 +23,19 @@ for (rep in 1:30) {
     if (kind == 2) { add(12, i - 1, g$sd[i]); add(13, i - 1, 0) } else { add(12, i - 1, g$a[i]); add(13, i - 1, g$b[i]) }
   }
 }
+# the EM fit (optmethod = "mixEM", kind + 10): the same outputs
+for (rep in 1:30) {
+  n <- sample(40:200, 1); sdv <- round(runif(n, 0.3, 1.5), 3)
+  true <- ifelse(runif(n) < 0.6, 0, rnorm(n, 0, 2)); bh <- round(true + rnorm(n) * sdv, 4)
+  kind <- (rep - 1) %% 5; fdr <- rep %% 3 != 0
+  nw <- if (fdr) c(10, 5, 3)[sample(3, 1)] else 1
+  fit <- tryCatch(suppressWarnings(if (fdr) ash(bh, sdv, mixcompdist = kinds[kind + 1], method = "fdr", nullweight = nw, optmethod = "mixEM") else ash(bh, sdv, mixcompdist = kinds[kind + 1], method = "shrink", optmethod = "mixEM")), error = function(e) NULL); if (is.null(fit)) next
+  res <- fit$result; g <- fit$fitted_g; kp <- g$pi > 1e-10
+  base <- c(n, kind + 10, as.numeric(fdr), as.numeric(fdr), nw, 0, sqrt(2), bh, sdv)
+  add <- function(f, i, v) cases[[length(cases) + 1]] <<- case("ash", c(base, f, i), as.numeric(v), rel = 1e-3, abs = 1e-4)
+  add(0, 0, fit$loglik); add(1, 0, fit$logLR)
+  # with a flat prior (shrink) the EM stops at a point along a flat ridge that depends on rounding: only the likelihood is compared there
+  if (fdr) { cols <- c("NegativeProb", "PositiveProb", "lfsr", "svalue", "lfdr", "qvalue", "PosteriorMean", "PosteriorSD")
+  for (ci in seq_along(cols)) for (i in sample(n, 8)) add(1 + ci, i - 1, res[[cols[ci]]][i]) }
+}
 emit("ashr", "ashr", list(cases))

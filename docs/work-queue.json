@@ -64,10 +64,10 @@
       "group": "CRAN parity",
       "order": 595,
       "title": "ashr: adaptive shrinkage",
-      "score": 0.7,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "D6721: e.algo.stat.ashr has ash for the normal likelihood (uniform, halfuniform, +/-uniform and normal mixtures, fdr and shrink, mixSQP fit) with lfsr, lfdr, svalue, qvalue, NegativeProb, PositiveProb, PosteriorMean, PosteriorSD, loglik and logLR, equal to ashr 2.2-63 to 1e-4 on 2358 values on Windows (oracle_ashr); Linux pending. Open: get_* accessors by name, t likelihood (df), halfnormal, mode estimation, user grid or g, zero or missing se, other optimisers, tighter agreement via the truncated SVD. Original: Open (CRAN rank 977). Small. Needs L446. Acceptance, equal to ashr: ash for normal and uniform mixtures with the exact and EM fits, get_lfsr, get_lfdr, get_pm, get_psd, get_qvalue, with the prior mixture weights."
+      "evidence": "D6721: e.algo.stat.ashr has ash for the normal likelihood (uniform, halfuniform, +/-uniform and normal mixtures, fdr and shrink, mixSQP fit) with lfsr, lfdr, svalue, qvalue, NegativeProb, PositiveProb, PosteriorMean, PosteriorSD, loglik and logLR, equal to ashr 2.2-63 to 1e-4 on 2358 values on Windows (oracle_ashr); Linux pending. D6748: the EM fit (mixEM through SQUAREM, with its gradient shortcut) equals ashr on 1340 values (the log-likelihood only for the flat prior). Open: get_* accessors by name, t likelihood (df), halfnormal, mode estimation, user grid or g, zero or missing se, other optimisers, tighter agreement via the truncated SVD. Original: Open (CRAN rank 977). Small. Needs L446. Acceptance, equal to ashr: ash for normal and uniform mixtures with the exact and EM fits, get_lfsr, get_lfdr, get_pm, get_psd, get_qvalue, with the prior mixture weights."
     },
     {
       "id": "L324",

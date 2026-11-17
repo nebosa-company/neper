@@ -3606,4 +3606,5 @@ D6743	1086	splines2: knots from df and x beyond the boundary
 D6744	884	splines2: periodic iSpline and cSpline, mSpline integrals, natural and nsk derivatives
 D6745	743	splines2: Bernstein integrals and third derivatives
 D6746	931	splines2: extrapolation of naturalSpline, nsk and cSpline beyond the boundary
-D6747	1544	splines2: nsk trim, df for the natural splines, fewer than two knots and periodic integrals
+D6747	1545	splines2: nsk trim, df for the natural splines, fewer than two knots and periodic integrals
+D6748	1056	ashr: the EM fit

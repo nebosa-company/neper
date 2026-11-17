@@ -11,12 +11,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
     let n = usize(z[0usize])
-    let kind = i64(z[1usize])
+    let kind = i64(z[1usize]) % 10i64
+    let optm = usize(z[1usize]) / 10usize
     let x = z[7usize..7usize + n]
     let s = z[7usize + n..7usize + 2usize * n]
     let f = usize(z[7usize + 2usize * n])
     let i = usize(z[8usize + 2usize * n])
-    let (r, e) = ashr.ash(a, x, s, kind, z[2usize] > 0.5f64, z[3usize] > 0.5f64, z[4usize], z[5usize], z[6usize])
+    let (r, e) = ashr.ash(a, x, s, kind, z[2usize] > 0.5f64, z[3usize] > 0.5f64, z[4usize], z[5usize], z[6usize], optm)
     if e != ok { ret nan }
     if f == 0usize { ret r.loglik }
     if f == 1usize { ret r.loglr }
