@@ -3686,4 +3686,6 @@ D6823	734	mclust: parameter counts, BIC, adjustedRandIndex and map
 D6824	1098	mclust: the EM iterations from a given membership matrix
 D6825	542	mclust: equal proportions in me()
 D6826	625	mclust: the EVI model in me()
-D6827	798	mclust: the EVV and EEV models in me()
+D6827	799	mclust: the EVV and EEV models in me()
+D6828	912	smooth.spline with a given spar
+D6829	598	kSamples: ad.pval

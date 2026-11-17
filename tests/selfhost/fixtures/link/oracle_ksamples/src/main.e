@@ -9,6 +9,7 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if c.name[0usize] == 112u8 { ret ks.ad_pval(a, x[2usize], x[1usize], usize(x[0usize])) }
     let k = usize(x[2usize])
     let (sz, e) = mem.alloc[usize](a, k)
     if e != ok { os.exit(5) }

@@ -36,4 +36,9 @@ for (rep in 1:30) {
     add("ad", c(v, 0, a), ad); add("ad", c(v, 1, a), tt)
   }
 }
+# ad.pval(tx, m, version): "pv" (version, m, tx)
+for (rep in 1:80) {
+  v <- sample(1:2, 1); m <- sample(c(1:12, 15, 20, 30), 1); tx <- sample(c(runif(1, -1.8, 0), runif(1, 0, 3), runif(1, 3, 8)), 1)
+  add("pv", c(v, m, tx), ad.pval(tx, m, v))
+}
 emit("ksamples", "kSamples", list(cases))
