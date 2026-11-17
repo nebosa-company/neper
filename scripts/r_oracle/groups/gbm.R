@@ -3,7 +3,7 @@
 #   args: (data_seed, dist, n, p, ntrees, shrinkage, depth, minobs, bag, train.fraction, fit_seed, par, wflag, mono, cv, na, more, out, a, b, c)
 #   dist: 0 gaussian 1 bernoulli 2 poisson 3 adaboost 4 laplace 5 quantile(par = alpha) 6 huberized 7 tdist(par = df) 8 coxph 9 multinomial 10 pairwise conc 11 ndcg 12 map 13 mrr
 #   out:  1 fit[a] (class c) 2 train.error[a] 3 valid.error[a] 4 oobag.improve[a] 5 relative.influence var a over b trees 6 initF 7 predict(link) row a, b trees, class c
-#         8 predict(response) 9 sum(train.error) 10 sum(valid.error) 11 sum(oobag.improve) 12 cv.error[a] 13 cv.fitted[a] 14 gbm.perf (a = 1 test, 2 cv)
+#         8 predict(response) 9 sum(train.error) 10 sum(valid.error) 11 sum(oobag.improve) 12 cv.error[a] 13 cv.fitted[a] 14 gbm.perf (a = 1 test, 2 cv, 3 OOB)
 #         17 predict(f, the training data, n.trees = b) at data row a
 #         15 relative.influence var a at the default tree count 16 predict row a at the default tree count
 #         30 plot.gbm(i.var = vars of c, n.trees = b, return.grid)$y[a], 7 per variable for two, 4 for three, 20 for one; 31 the same on the response scale
@@ -75,7 +75,7 @@ gcases <- function(g, outs, rel = 1e-9, abs = 1e-12) {
       "8" = { pr <- suppressWarnings(predict(f, r$dn, n.trees = b, type = "response")); if (nc > 1) pr[a + 1, cc + 1, 1] else pr[a + 1] },
       "9" = sum(f$train.error), "10" = sum(f$valid.error), "11" = sum(f$oobag.improve),
       "12" = f$cv.error[a + 1], "13" = f$cv.fitted[a + 1],
-      "14" = as.numeric(suppressMessages(gbm.perf(f, method = if (a == 1) "test" else "cv", plot.it = FALSE))),
+      "14" = as.numeric(suppressMessages(gbm.perf(f, method = if (a == 1) "test" else if (a == 3) "OOB" else "cv", plot.it = FALSE))),
       "30" = , "31" = {
         iv <- if (cc < 10) cc else if (cc < 100) c(cc %/% 10, cc %% 10) else c(cc %/% 100, (cc %/% 10) %% 10, cc %% 10)
         res <- c(20, 7, 4)[length(iv)]
@@ -177,4 +177,13 @@ G(gcfg(251, 11, n = 150, nt = 30, mo = 3, tf = 0.75, fseed = 7, bag = 0.7, par =
 G(gcfg(161, 11, n = 150, nt = 20, mo = 3, cv = 3, bag = 0.7, fseed = 5, par = 3), c(std(20, nrow = 150, bag = 0.7), cvo(20), list(list(13, 120), list(13, 140))))
 G(gcfg(162, 10, n = 150, nt = 15, mo = 3, more = 10, bag = 0.7, fseed = 6), std(25, nrow = 150, bag = 0.7))
 G(gcfg(163, 12, n = 150, nt = 20, mo = 3, tf = 0.7, cv = 3, fseed = 8, na = 1), c(std(20, nrow = 150, tf = 0.7, bag = 0.5), cvo(20)))
+cat("OOB
+")
+oo <- list(list(14, 3), list(4, 0), list(4, 7))
+G(gcfg(301, 0, nt = 60, bag = 0.5, fseed = 2), c(std(60), oo))
+G(gcfg(302, 1, nt = 120, bag = 0.6, sh = 0.05, fseed = 3), c(std(120), oo))
+G(gcfg(303, 0, nt = 25, bag = 0.5, fseed = 4, d = 3), c(std(25), oo))
+G(gcfg(304, 8, nt = 200, bag = 0.7, sh = 0.05, fseed = 5), c(std(200), oo))
+G(gcfg(305, 11, n = 150, nt = 40, mo = 3, bag = 0.6, fseed = 6), c(std(40, nrow = 150), oo))
+G(gcfg(306, 2, nt = 300, bag = 0.5, sh = 0.03, fseed = 7), c(std(300), oo))
 emit("gbm", c("gbm", "survival"), cases)

@@ -179,6 +179,7 @@ fn output(a: *mem.Arena, f: *const gr.Fitted, dn: []const f64, dx: []const f64, 
     if code == 13usize { ret f.cv_fitted[ia] }
     if code == 14usize {
         if ia == 1usize { ret f64(gr.best_iter_test(f)) }
+        if ia == 3usize { ret f64(gr.best_iter_oob(a, f)) }
         ret f64(gr.best_iter_cv(f))
     }
     if code == 5usize || code == 15usize {

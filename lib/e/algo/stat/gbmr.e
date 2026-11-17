@@ -8,6 +8,7 @@ use e.math
 use e.mem
 use e.algo.rand.r as rng
 use e.algo.stat.gbmfit as gb
+use e.algo.stat.loessfit as lsm
 
 error BadInput
 
@@ -19,7 +20,7 @@ type Input = struct {
 
 type Fitted = struct {
     sp: gb.Spec, m: gb.Model, n: usize, nclass: usize, ntrain: usize, dist: usize, trainfrac: f64,
-    fit: []f64, perm: []usize, cv_error: []f64, cv_fitted: []f64, has_cv: bool, lo: []f64, hi: []f64
+    fit: []f64, perm: []usize, cv_error: []f64, cv_fitted: []f64, has_cv: bool, lo: []f64, hi: []f64, bag: f64
 }
 
 // the response and weights of an already ordered training set, boosted: gbm.fit
@@ -416,6 +417,7 @@ fn gbm_core(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
     out.cv_error = cverr
     out.cv_fitted = cvfit
     out.has_cv = has
+    out.bag = cf.bag
     out.lo = gb.af(a, cf.p, &bad)
     out.hi = gb.af(a, cf.p, &bad)
     if bad != 0usize { ret (out, gb.NoMemory) }
@@ -825,4 +827,35 @@ fn gbm(a: *mem.Arena, rg: *rng.Rng, cf: *const Input) -> (Fitted, err) {
         out.cv_fitted = cvo
     }
     ret (out, ok)
+}
+
+// gbm.perf(method = "OOB"): the tree count where the cumulative out-of-bag improvement, smoothed by loess(oobag.improve ~ 1:n.trees, enp.target = min(max(4, n / 10), 50)), peaks
+fn best_iter_oob(a: *mem.Arena, f: *const Fitted) -> usize {
+    let nt = f.m.ntrees
+    var bad = 0usize
+    let xs = gb.af(a, nt, &bad)
+    let fit = gb.af(a, nt, &bad)
+    if bad != 0usize { ret 0usize }
+    var i = 0usize
+    while i < nt {
+        xs[i] = f64(i + 1usize)
+        i += 1usize
+    }
+    var enp = f64(nt) / 10.0f64
+    if enp < 4.0f64 { enp = 4.0f64 }
+    if enp > 50.0f64 { enp = 50.0f64 }
+    if lsm.loess_fitted(a, xs, f.m.oobag, nt, lsm.span_for_enp(enp, 2usize), 2usize, fit) != ok { ret 0usize }
+    var best = 0usize
+    var bv = 0.0f64
+    var cum = 0.0f64
+    i = 0usize
+    while i < nt {
+        cum += fit[i]
+        if i == 0usize || cum > bv {
+            bv = cum
+            best = i + 1usize
+        }
+        i += 1usize
+    }
+    ret best
 }
