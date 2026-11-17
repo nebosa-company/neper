@@ -14,6 +14,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nan = 0.0f64 / 0.0f64
     if str.eq(c.name, "tk") { ret es.tol_k(z[0usize], z[1usize], z[2usize], i64(z[3usize])) }
     if str.eq(c.name, "pk") { ret es.pred_k(z[0usize], z[1usize], z[2usize], z[3usize] > 0.5f64, z[4usize]) }
+    if str.eq(c.name, "cihw") { ret es.ci_norm_hw(z[0usize], z[1usize], z[2usize], z[3usize], z[4usize] > 0.5f64) }
+    if str.eq(c.name, "cin") { ret es.ci_norm_n(z[0usize], z[1usize], z[2usize], z[3usize] > 0.5f64, 5000.0f64) }
+    if str.eq(c.name, "ttp") { ret es.tt_power(z[0usize], z[1usize], z[2usize], z[3usize], z[4usize] > 0.5f64, usize(z[5usize]), z[6usize] > 0.5f64) }
+    if str.eq(c.name, "ttn") { ret es.tt_n(z[0usize], z[1usize], z[2usize], z[3usize] > 0.5f64, usize(z[4usize]), z[5usize] > 0.5f64, 5000.0f64) }
     if str.eq(c.name, "gof") {
         let gn = usize(z[0usize])
         let (go, ge) = mem.alloc[f64](a, 3usize)

@@ -3609,4 +3609,5 @@ D6746	931	splines2: extrapolation of naturalSpline, nsk and cSpline beyond the b
 D6747	1545	splines2: nsk trim, df for the natural splines, fewer than two knots and periodic integrals
 D6748	1057	ashr: the EM fit
 D6749	1575	ashr: halfnormal mixtures and mode estimation
-D6750	829	seriation: the HC family of seriate
+D6750	830	seriation: the HC family of seriate
+D6751	899	EnvStats: t test power and sample size, normal mean interval widths

@@ -58,4 +58,25 @@ for (rep in 1:100) {
   out <- c(unname(r$statistic), r$p.value, if (is.null(r$z.value)) NaN else r$z.value)
   for (f in 0:2) if (!is.nan(out[f + 1])) cases[[length(cases) + 1]] <- case("gof", c(n, y, te, as.numeric(ln), al, f), out[f + 1], rel = if (te == 0 && f >= 1) 1e-5 else 1e-8, abs = 1e-10)
 }
+# tTestPower ("ttp": (n1, n2, delta.over.sigma, alpha, two.sample, alt, approx)) and tTestN ("ttn": (delta.over.sigma, alpha, power, two.sample, alt, approx)); alt 0 two.sided 1 less 2 greater
+alts_t <- c("two.sided", "less", "greater")
+for (rep in 1:80) {
+  ts_ <- rep %% 2 == 0; al <- sample(0:2, 1); ap <- rep %% 5 == 0
+  dos <- c(0.3, 0.5, 0.8, 1.2)[sample(4, 1)] * if (al == 1) -1 else sample(c(-1, 1), 1); if (al == 2) dos <- abs(dos)
+  n1 <- sample(3:60, 1); n2 <- if (ts_) sample(3:60, 1) else n1; a <- c(0.01, 0.05, 0.1)[sample(3, 1)]
+  v <- tryCatch(if (ts_) tTestPower(n1, n2, dos, a, "two.sample", alternative = alts_t[al + 1], approx = ap) else tTestPower(n1, delta.over.sigma = dos, alpha = a, sample.type = "one.sample", alternative = alts_t[al + 1], approx = ap), error = function(e) NA)
+  if (is.finite(v)) cases[[length(cases) + 1]] <- case("ttp", c(n1, n2, dos, a, as.numeric(ts_), al, as.numeric(ap)), v, rel = 1e-7, abs = 1e-9)
+  pw <- c(0.8, 0.9, 0.95)[sample(3, 1)]
+  nn <- tryCatch(tTestN(dos, alpha = a, power = pw, sample.type = if (ts_) "two.sample" else "one.sample", alternative = alts_t[al + 1], approx = ap), error = function(e) NA)
+  if (is.finite(nn)) cases[[length(cases) + 1]] <- case("ttn", c(dos, a, pw, as.numeric(ts_), al, as.numeric(ap)), nn, rel = 0, abs = 0)
+}
+# ciNormHalfWidth ("cihw": (n1, n2, sigma.hat, conf.level, two.sample)) and ciNormN ("cin": (half.width, sigma.hat, conf.level, two.sample))
+for (rep in 1:80) {
+  ts_ <- rep %% 2 == 0; n1 <- sample(3:80, 1); n2 <- if (ts_) sample(3:80, 1) else n1; sg <- c(0.5, 1, 2.5)[sample(3, 1)]; cl <- c(0.9, 0.95, 0.99)[sample(3, 1)]
+  v <- if (ts_) ciNormHalfWidth(n1, n2, sigma.hat = sg, conf.level = cl, sample.type = "two.sample") else ciNormHalfWidth(n1, sigma.hat = sg, conf.level = cl, sample.type = "one.sample")
+  cases[[length(cases) + 1]] <- case("cihw", c(n1, n2, sg, cl, as.numeric(ts_)), v, rel = 1e-9, abs = 1e-10)
+  hw <- sg * c(0.1, 0.25, 0.5, 1)[sample(4, 1)]
+  nn <- tryCatch(ciNormN(hw, sigma.hat = sg, conf.level = cl, sample.type = if (ts_) "two.sample" else "one.sample"), error = function(e) NA)
+  if (is.finite(nn)) cases[[length(cases) + 1]] <- case("cin", c(hw, sg, cl, as.numeric(ts_)), nn, rel = 0, abs = 0)
+}
 emit("envstats", "EnvStats", list(cases))

@@ -595,3 +595,70 @@ fn gof_test(a: *mem.Arena, y: []const f64, test: usize, lnorm: bool, alt: usize,
     }
     ret ok
 }
+
+// ---- the power and sample size of the t test (tTestPower, tTestN) ----
+
+// EnvStats::tTestPower: alt 0 two-sided, 1 less, 2 greater; the exact power by the non-central t (one-sided) and the non-central F (two-sided), or the central-t approximation
+fn tt_power(n1: f64, n2: f64, dos: f64, alpha: f64, two_sample: bool, alt: usize, approx: bool) -> f64 {
+    var df = n1 - 1.0f64
+    var ncp = math.sqrt[f64](n1) * dos
+    if two_sample {
+        df = n1 + n2 - 2.0f64
+        ncp = math.sqrt[f64](1.0f64 / (1.0f64 / n1 + 1.0f64 / n2)) * dos
+    }
+    if approx {
+        if alt == 1usize { ret nb.pt(nb.qt(alpha, df, true, false) - ncp, df, true, false) }
+        if alt == 2usize { ret 1.0f64 - nb.pt(nb.qt(1.0f64 - alpha, df, true, false) - ncp, df, true, false) }
+        ret nb.pt(nb.qt(alpha / 2.0f64, df, true, false) - ncp, df, true, false) + 1.0f64 - nb.pt(nb.qt(1.0f64 - alpha / 2.0f64, df, true, false) - ncp, df, true, false)
+    }
+    if alt == 1usize { ret nc.pnt(nb.qt(alpha, df, true, false), df, ncp, true, false) }
+    if alt == 2usize { ret 1.0f64 - nc.pnt(nb.qt(1.0f64 - alpha, df, true, false), df, ncp, true, false) }
+    ret 1.0f64 - nc.pnf(nb.qf(1.0f64 - alpha, 1.0f64, df, true, false), 1.0f64, df, ncp * ncp, true, false)
+}
+
+// EnvStats::tTestN: the smallest whole sample size (per group) whose power reaches `power`, searched on (2, n_max) as the package does by root finding and rounded up
+fn tt_n(dos: f64, alpha: f64, power: f64, two_sample: bool, alt: usize, approx: bool, n_max: f64) -> f64 {
+    let p2 = tt_power(2.0f64, 2.0f64, dos, alpha, two_sample, alt, approx)
+    if p2 >= power { ret 2.0f64 }
+    let pm = tt_power(n_max, n_max, dos, alpha, two_sample, alt, approx)
+    if pm < power { ret 0.0f64 / 0.0f64 }
+    var lo = 2.0f64
+    var hi = n_max
+    var it = 0usize
+    while it < 200usize {
+        let mid = 0.5f64 * (lo + hi)
+        if tt_power(mid, mid, dos, alpha, two_sample, alt, approx) < power { lo = mid } else { hi = mid }
+        it += 1usize
+    }
+    ret math.ceil[f64](0.5f64 * (lo + hi))
+}
+
+// ---- confidence interval widths for the normal mean (ciNormHalfWidth, ciNormN) ----
+
+// ciNormHalfWidth for one sample (n2 = 0) or two samples of n1 and n2
+fn ci_norm_hw(n1: f64, n2: f64, sigma: f64, conf: f64, two_sample: bool) -> f64 {
+    let p = 1.0f64 - (1.0f64 - conf) / 2.0f64
+    if two_sample { ret nb.qt(p, n1 + n2 - 2.0f64, true, false) * sigma * math.sqrt[f64](1.0f64 / n1 + 1.0f64 / n2) }
+    ret nb.qt(p, n1 - 1.0f64, true, false) * sigma / math.sqrt[f64](n1)
+}
+
+// ciNormN: the smallest whole n (per group) whose half-width is at most hw
+fn ci_norm_n(hw: f64, sigma: f64, conf: f64, two_sample: bool, n_max: f64) -> f64 {
+    var tf = 1.0f64
+    if two_sample { tf = 2.0f64 }
+    let sf = math.sqrt[f64](tf) * sigma
+    let p = 1.0f64 - (1.0f64 - conf) / 2.0f64
+    let hw2 = sf / math.sqrt[f64](2.0f64) * nb.qt(p, tf, true, false)
+    if hw2 <= hw { ret 2.0f64 }
+    let hwm = sf / math.sqrt[f64](n_max) * nb.qt(p, tf * (n_max - 1.0f64), true, false)
+    if hwm > hw { ret 0.0f64 / 0.0f64 }
+    var lo = 2.0f64
+    var hi = n_max
+    var it = 0usize
+    while it < 200usize {
+        let mid = 0.5f64 * (lo + hi)
+        if sf / math.sqrt[f64](mid) * nb.qt(p, tf * (mid - 1.0f64), true, false) > hw { lo = mid } else { hi = mid }
+        it += 1usize
+    }
+    ret math.ceil[f64](0.5f64 * (lo + hi))
+}
