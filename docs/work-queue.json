@@ -191,17 +191,6 @@
       "evidence": "Partial (D6414, D6415 conditional average and importance). AICc, Akaike weights and the full model average (estimates and Std. Error) equal MuMIn on Windows (oracle_mumin; Linux pending). D6854: QAIC and QAICc equal MuMIn. D6901, D6902: the Adjusted SE of the full and the conditional average equals MuMIn. Open: QIC, dredge, model.sel, r.squaredGLMM. Was: Open (CRAN rank 667). Small to mid. Acceptance, equal to MuMIn: AICc, QAIC, QIC, BIC, dredge over all subsets with marginality and constraints, model.sel, model.avg (full and conditional), Weights, importance, r.squaredGLMM."
     },
     {
-      "id": "L429",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 627,
-      "title": "imputeTS: time-series imputation",
-      "score": 0.7,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6150). na_ma (three weightings) and na_mean (five options) equal imputeTS on Windows (oracle_imputets; Linux pending). D6868: na_locf (locf, nocb and the na_remaining options) and na_interpolation (linear, spline) equal imputeTS. D6869: maxgap equals imputeTS. Open: na_kalman, na_seadec, na_seasplit, na_random, statsNA, stine. Was: Open (CRAN rank 658). Small to mid. e.algo.stat.zoo has locf, approx and spline. Acceptance, equal to imputeTS: na_interpolation (linear, spline, stine), na_kalman (StructTS and auto.arima models), na_ma (simple, linear, exponential weights), na_seadec, na_seasplit, na_locf, na_mean, na_random, na_replace, statsNA. D6993: na_random (default and given bounds, under set.seed) and na_replace equal imputeTS (oracle_imputets, 8611 cases). D7001: na_interpolation stine (stinepack stinterp with the scaled Stineman slopes, then na_locf rev) equals imputeTS (oracle_imputets, 9255 cases). Open: na_kalman, na_seadec, na_seasplit, statsNA. D7002: na_seadec (interpolation, locf and mean base algorithms over the robust stl, s.window 11), na_seasplit and statsNA (counts, gaps, longest, most frequent and most weighty gap) equal imputeTS (oracle_imputets, 10623 cases). Open: na_kalman (StructTS and auto.arima models)."
-    },
-    {
       "id": "L448",
       "category": "library",
       "group": "CRAN parity",
