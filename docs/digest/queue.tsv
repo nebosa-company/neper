@@ -17,7 +17,7 @@ L401	library	0.3	629	geosphere: geodesic and spherical computations	Partial (D61
 L407	library	0.15	464	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial (D6457 dghyp, dnig, dhyperb, dskewlap equal GeneralizedHyperbolic on Windows;
 L409	library	0.2	390	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids equal arm on Windows;
 L411	library	0.65	738	DHARMa: simulated residual diagnostics	Partial (D6173, D6174 KS p value, D6175 testZeroInflation and testDispersion).
-L422	library	0.3	1510	extraDistr: extra probability distributions	Partial (D6144).
+L422	library	0.3	1526	extraDistr: extra probability distributions	Partial (D6144).
 L424	library	0.4	453	logistf: Firth penalized logistic regression	Partial (D6157).
 L425	library	0.3	521	ismev: extreme-value model fits	Partial (D6155).
 L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).

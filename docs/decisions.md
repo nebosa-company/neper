@@ -47842,3 +47842,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6843 — extraDistr: random draws of ten families
 
 **Decision.** `extradistr.rgen` reproduces the generators of the Gumbel (mu - sigma log of a standard exponential), half-normal (sigma times the absolute value of a standard normal), half-Cauchy (sigma |tan(pi u)|), Frechet and power (the quantile function at one uniform u), and Lomax, Pareto, Rayleigh, Kumaraswamy and Gompertz (the quantile function at 1 - u), each consuming one draw from R's streams. Equal to extraDistr under set.seed on 30 seeded runs of five draws each (oracle_extradistr). Not here: the Laplace and triangular generators (they use more than one draw in a way not reproduced), the discrete and multivariate generators, the other families. Linux pending.
+
+## D6844 — extraDistr: the Laplace generator
+
+**Decision.** `extradistr.rgen` family 10 is `rlaplace(n, mu, sigma)`: per value one standard exponential draw followed by one uniform for the sign (mu + sigma e when it exceeds one half, mu - sigma e otherwise). Equal to extraDistr under set.seed on 3 seeded runs of five draws (oracle_extradistr, 1226 cases in all). The triangular generator is not reproduced: its draws do not follow the quantile function at one uniform for either orientation, and the pattern was not recovered. Linux pending.
