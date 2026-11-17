@@ -16,7 +16,7 @@ use e.algo.stat.pracma as pr
 
 type ArCtx = struct {
     ar: *mem.Arena, x: []const f64, xreg: []const f64, p: usize, q: usize, d: usize, narma: usize, ncx: usize,
-    nfree: usize, coefv: []f64, delta: []f64, kappa: f64, ncond: usize, trans: bool, mode: usize,
+    nfree: usize, coefv: []f64, delta: []f64, kappa: f64, ncond: usize, trans: bool, mode: usize, sp: usize, sq: usize, sd: usize, per: usize,
     parscale: []f64, full: []f64, gb: []f64, bad: bool
 }
 
@@ -103,25 +103,70 @@ fn invpartrans(p: usize, phi: []const f64, newv: []f64) {
 }
 
 // phi (p) and theta (q) from the parameter vector, the AR part transformed when trans
-fn trans_pars(par: []const f64, p: usize, q: usize, trans: bool, phi: []f64, theta: []f64) {
+fn trans_pars(par: []const f64, p: usize, q: usize, sp: usize, sq: usize, per: usize, trans: bool, phi: []f64, theta: []f64) {
+    var prm: [64]f64 = zero
+    let tot = p + q + sp + sq
     var i = 0usize
+    while i < tot {
+        prm[i] = par[i]
+        i += 1usize
+    }
     if trans {
-        partrans(p, par, phi)
-    } else {
-        while i < p {
-            phi[i] = par[i]
-            i += 1usize
+        var tmp: [64]f64 = zero
+        if p > 0usize {
+            partrans(p, par, tmp[0usize..p])
+            i = 0usize
+            while i < p {
+                prm[i] = tmp[i]
+                i += 1usize
+            }
+        }
+        if sp > 0usize {
+            partrans(sp, par[p + q..p + q + sp], tmp[0usize..sp])
+            i = 0usize
+            while i < sp {
+                prm[p + q + i] = tmp[i]
+                i += 1usize
+            }
         }
     }
     i = 0usize
-    while i < q {
-        theta[i] = par[p + i]
+    while i < phi.len {
+        phi[i] = 0.0f64
+        if i < p { phi[i] = prm[i] }
         i += 1usize
+    }
+    i = 0usize
+    while i < theta.len {
+        theta[i] = 0.0f64
+        if i < q { theta[i] = prm[p + i] }
+        i += 1usize
+    }
+    var j = 0usize
+    while j < sp {
+        phi[(j + 1usize) * per - 1usize] += prm[p + q + j]
+        i = 0usize
+        while i < p {
+            phi[(j + 1usize) * per + i] -= prm[i] * prm[p + q + j]
+            i += 1usize
+        }
+        j += 1usize
+    }
+    j = 0usize
+    while j < sq {
+        theta[(j + 1usize) * per - 1usize] += prm[p + q + sp + j]
+        i = 0usize
+        while i < q {
+            theta[(j + 1usize) * per + i] += prm[p + i] * prm[p + q + sp + j]
+            i += 1usize
+        }
+        j += 1usize
     }
 }
 
 // the stationary covariance of the ARMA state (Harvey form): P = T P T' + R R', false when the system is singular
 fn get_q0(ar: *mem.Arena, phi: []const f64, theta: []const f64, r: usize, outm: []f64) -> bool {
+    if r > 7usize { ret get_q0_doubling(ar, phi, theta, r, outm) }
     let m = r * r
     let st = mem.mark(ar)
     let am = fa(ar, m * m)
@@ -175,6 +220,123 @@ fn get_q0(ar: *mem.Arena, phi: []const f64, theta: []const f64, r: usize, outm: 
         i = 0usize
         while i < m {
             outm[i] = rhs[i]
+            i += 1usize
+        }
+    }
+    mem.reset(ar, st)
+    ret good
+}
+
+// the same covariance by the doubling iteration P <- P + A P A', A <- A A (for large state dimensions); false when it does not converge
+fn get_q0_doubling(ar: *mem.Arena, phi: []const f64, theta: []const f64, r: usize, outm: []f64) -> bool {
+    let st = mem.mark(ar)
+    let a1 = fa(ar, r * r)
+    let a2 = fa(ar, r * r)
+    let pm = fa(ar, r * r)
+    let t1 = fa(ar, r * r)
+    let rv = fa(ar, r)
+    var i = 0usize
+    while i < r * r {
+        a1[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < phi.len {
+        a1[i * r] = phi[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i + 1usize < r {
+        a1[i * r + i + 1usize] = 1.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < r {
+        rv[i] = 0.0f64
+        if i == 0usize { rv[i] = 1.0f64 }
+        if i >= 1usize && i - 1usize < theta.len { rv[i] = theta[i - 1usize] }
+        i += 1usize
+    }
+    i = 0usize
+    while i < r {
+        var j = 0usize
+        while j < r {
+            pm[i * r + j] = rv[i] * rv[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    var good = false
+    var it = 0usize
+    while it < 80usize && !good {
+        // t1 = A P, pm += t1 A'
+        i = 0usize
+        while i < r {
+            var j = 0usize
+            while j < r {
+                var sacc = 0.0f64
+                var k = 0usize
+                while k < r {
+                    sacc += a1[i * r + k] * pm[k * r + j]
+                    k += 1usize
+                }
+                t1[i * r + j] = sacc
+                j += 1usize
+            }
+            i += 1usize
+        }
+        var incmax = 0.0f64
+        var pmax = 0.0f64
+        i = 0usize
+        while i < r {
+            var j = 0usize
+            while j < r {
+                var sacc = 0.0f64
+                var k = 0usize
+                while k < r {
+                    sacc += t1[i * r + k] * a1[j * r + k]
+                    k += 1usize
+                }
+                if math.abs[f64](sacc) > incmax { incmax = math.abs[f64](sacc) }
+                a2[i * r + j] = sacc
+                j += 1usize
+            }
+            i += 1usize
+        }
+        i = 0usize
+        while i < r * r {
+            pm[i] += a2[i]
+            if math.abs[f64](pm[i]) > pmax { pmax = math.abs[f64](pm[i]) }
+            i += 1usize
+        }
+        if !(pmax - pmax == 0.0f64) { it = 80usize } else if incmax <= 1.0e-17f64 * pmax { good = true }
+        // a1 = a1 a1
+        i = 0usize
+        while i < r {
+            var j = 0usize
+            while j < r {
+                var sacc = 0.0f64
+                var k = 0usize
+                while k < r {
+                    sacc += a1[i * r + k] * a1[k * r + j]
+                    k += 1usize
+                }
+                a2[i * r + j] = sacc
+                j += 1usize
+            }
+            i += 1usize
+        }
+        i = 0usize
+        while i < r * r {
+            a1[i] = a2[i]
+            i += 1usize
+        }
+        it += 1usize
+    }
+    if good {
+        i = 0usize
+        while i < r * r {
+            outm[i] = pm[i]
             i += 1usize
         }
     }
@@ -281,7 +443,7 @@ fn make_arima(ar: *mem.Arena, phi: []const f64, theta: []const f64, delta: []con
 }
 
 // ARIMA_CSS: the conditional sum of squares per observation (NaN terms skipped); resid receives the residuals when not empty
-fn css_value(ar: *mem.Arena, y: []const f64, p: usize, q: usize, d: usize, phi: []const f64, theta: []const f64, ncond: usize, resid: []f64) -> f64 {
+fn css_value(ar: *mem.Arena, y: []const f64, p: usize, q: usize, d: usize, sd: usize, per: usize, phi: []const f64, theta: []const f64, ncond: usize, resid: []f64) -> f64 {
     let n = y.len
     let st = mem.mark(ar)
     let w = fa(ar, n)
@@ -298,6 +460,15 @@ fn css_value(ar: *mem.Arena, y: []const f64, p: usize, q: usize, d: usize, phi: 
         while l > 1usize {
             w[l - 1usize] -= w[l - 2usize]
             l -= 1usize
+        }
+        k += 1usize
+    }
+    k = 0usize
+    while k < sd {
+        var l2 = n
+        while l2 > per {
+            w[l2 - 1usize] -= w[l2 - 1usize - per]
+            l2 -= 1usize
         }
         k += 1usize
     }
@@ -559,8 +730,8 @@ fn ar_obj(c: *ArCtx, b: []const f64) -> f64 {
     }
     let n = c.x.len
     let st = mem.mark(c.ar)
-    let phi = fa(c.ar, c.p)
-    let theta = fa(c.ar, c.q)
+    let phi = fa(c.ar, c.p + c.per * c.sp)
+    let theta = fa(c.ar, c.q + c.per * c.sq)
     let x2 = fa(c.ar, n)
     i = 0usize
     while i < n {
@@ -570,11 +741,11 @@ fn ar_obj(c: *ArCtx, b: []const f64) -> f64 {
     }
     var res = 0.0f64
     if c.mode == 1usize {
-        trans_pars(full, c.p, c.q, false, phi, theta)
-        let v = css_value(c.ar, x2, c.p, c.q, c.d, phi, theta, c.ncond, zero)
+        trans_pars(full, c.p, c.q, c.sp, c.sq, c.per, false, phi, theta)
+        let v = css_value(c.ar, x2, phi.len, theta.len, c.d, c.sd, c.per, phi, theta, c.ncond, zero)
         res = 0.5f64 * math.log[f64](v)
     } else {
-        trans_pars(full, c.p, c.q, c.trans, phi, theta)
+        trans_pars(full, c.p, c.q, c.sp, c.sq, c.per, c.trans, phi, theta)
         let (mdl, good) = make_arima(c.ar, phi, theta, c.delta, c.kappa)
         if !good {
             res = 1.7976931348623157e308f64
@@ -985,10 +1156,18 @@ fn ma_invert(ar: *mem.Arena, ma: []f64) {
 // arima(x, order = c(p, d, q), include.mean, xreg = intercept (kind 1) or drift (kind 2) with the coefficient free (xfixed NaN) or fixed,
 // method 0 CSS-ML, 1 ML, 2 CSS)
 fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind: usize, xfixed: f64, method0: usize) -> ArFit {
+    let f0 = arima_fit_s(ar, x, p, d, q, 0usize, 0usize, 0usize, 1usize, kind, xfixed, method0)
+    ret f0
+}
+
+// arima with a seasonal part: (P, D, Q) = (sp, sd, sq) of period per; the coefficient layout is ar, ma, sar, sma, regressor
+fn arima_fit_s(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, sp: usize, sd: usize, sq: usize, per: usize, kind: usize, xfixed: f64, method0: usize) -> ArFit {
     var fit: ArFit = zero
     fit.good = false
     let n = x.len
-    let narma = p + q
+    let narma = p + q + sp + sq
+    let pl = p + per * sp
+    let ql = q + per * sq
     var ncx = 0usize
     if kind > 0usize { ncx = 1usize }
     let xreg = fa(ar, n)
@@ -1007,28 +1186,35 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
         i += 1usize
     }
     if method == 0usize && anyna { method = 1usize }
-    if nna <= d { ret fit }
-    let nused = nna - d
+    let dtot = d + sd * per
+    if nna <= dtot { ret fit }
+    let nused = nna - dtot
     var ncond = 0usize
-    if method != 1usize { ncond = d + p }
+    if method != 1usize { ncond = dtot + pl }
     // Delta: the differencing polynomial
-    let delta = fa(ar, d)
-    let dpoly = fa(ar, d + 2usize)
+    let delta = fa(ar, dtot)
+    let dpoly = fa(ar, dtot + 2usize)
+    i = 0usize
+    while i < dtot + 2usize {
+        dpoly[i] = 0.0f64
+        i += 1usize
+    }
     dpoly[0usize] = 1.0f64
     var dl = 1usize
     var k = 0usize
-    while k < d {
-        // multiply by (1 - B)
-        var j = dl
-        while j > 0usize {
-            if j == dl { dpoly[j] = 0.0f64 - dpoly[j - 1usize] } else { dpoly[j] = dpoly[j] - dpoly[j - 1usize] }
+    while k < d + sd {
+        var lag = 1usize
+        if k >= d { lag = per }
+        var j = dl + lag - 1usize
+        while j >= lag {
+            dpoly[j] = dpoly[j] - dpoly[j - lag]
             j -= 1usize
         }
-        dl += 1usize
+        dl += lag
         k += 1usize
     }
     i = 0usize
-    while i < d {
+    while i < dtot {
         delta[i] = 0.0f64 - dpoly[i + 1usize]
         i += 1usize
     }
@@ -1067,6 +1253,17 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
                 i += 1usize
             }
             dn -= 1usize
+            k += 1usize
+        }
+        k = 0usize
+        while k < sd {
+            i = 0usize
+            while i + per < dn {
+                dx[i] = dx[i + per] - dx[i]
+                dxr[i] = dxr[i + per] - dxr[i]
+                i += 1usize
+            }
+            dn -= per
             k += 1usize
         }
         var sxy = 0.0f64
@@ -1129,7 +1326,7 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
     if ncx == 1usize && !xfree { coefv[narma] = xfixed }
     let full = fa(ar, ntot)
     let gb = fa(ar, nfree + 1usize)
-    var c = ArCtx{ ar: ar, x: x, xreg: xreg, p: p, q: q, d: d, narma: narma, ncx: ncx, nfree: nfree, coefv: coefv, delta: delta, kappa: 1.0e6f64, ncond: ncond, trans: false, mode: 1usize, parscale: parscale, full: full, gb: gb, bad: false }
+    var c = ArCtx{ ar: ar, x: x, xreg: xreg, p: p, q: q, d: d, narma: narma, ncx: ncx, nfree: nfree, coefv: coefv, delta: delta, kappa: 1.0e6f64, ncond: ncond, trans: false, mode: 1usize, sp: sp, sq: sq, sd: sd, per: per, parscale: parscale, full: full, gb: gb, bad: false }
     let b = fa(ar, nfree + 1usize)
     let coef = fa(ar, ntot)
     let hess = fa(ar, nfree * nfree + 1usize)
@@ -1140,10 +1337,10 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
     let vcov = fa(ar, nfree * nfree + 1usize)
     var aic = ar_nan()
     var finalmodel: kal.SsModel = zero
-    let phi = fa(ar, p)
-    let theta0 = fa(ar, q)
-    var r0 = p
-    if q + 1usize > r0 { r0 = q + 1usize }
+    let phi = fa(ar, pl)
+    let theta0 = fa(ar, ql)
+    var r0 = pl
+    if ql + 1usize > r0 { r0 = ql + 1usize }
     let theta = fa(ar, r0 - 1usize)
     if method == 2usize {
         // CSS
@@ -1188,13 +1385,13 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
                 }
             }
         }
-        trans_pars(coef, p, q, false, phi, theta0)
+        trans_pars(coef, p, q, sp, sq, per, false, phi, theta0)
         i = 0usize
-        while i < q {
+        while i < ql {
             theta[i] = theta0[i]
             i += 1usize
         }
-        i = q
+        i = ql
         while i + 1usize < r0 {
             theta[i] = 0.0f64
             i += 1usize
@@ -1211,7 +1408,7 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
         if !mgood { ret fit }
         let (q1, q2, q3) = arima_like(ar, &mm, phi, theta, delta, x2)
         finalmodel = mm
-        sigma2 = css_value(ar, x2, p, q, d, phi, theta0, ncond, zero)
+        sigma2 = css_value(ar, x2, pl, ql, d, sd, per, phi, theta0, ncond, zero)
     } else {
         if method == 0usize {
             // the CSS stage
@@ -1242,6 +1439,9 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
             if p > 0usize {
                 if !ar_check(ar, init[0usize..p]) { ret fit }
             }
+            if sp > 0usize {
+                if !ar_check(ar, init[p + q..p + q + sp]) { ret fit }
+            }
             ncond = 0usize
             c.ncond = 0usize
         }
@@ -1254,12 +1454,14 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
                 i += 1usize
             }
             invpartrans(p, init, inv)
+            if sp > 0usize { invpartrans(sp, init[p + q..p + q + sp], inv[p + q..p + q + sp]) }
             i = 0usize
             while i < ntot {
                 init[i] = inv[i]
                 i += 1usize
             }
             if q > 0usize { ma_invert(ar, init[p..p + q]) }
+            if sq > 0usize { ma_invert(ar, init[p + q + sp..p + q + sp + sq]) }
         }
         c.mode = 0usize
         c.trans = trans
@@ -1288,19 +1490,18 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
         }
         if trans {
             var changed = false
-            if q > 0usize {
-                let sv = fa(ar, q)
-                i = 0usize
-                while i < q {
-                    sv[i] = coef[p + i]
-                    i += 1usize
-                }
-                ma_invert(ar, coef[p..p + q])
-                i = 0usize
-                while i < q {
-                    if sv[i] != coef[p + i] { changed = true }
-                    i += 1usize
-                }
+            let msv = fa(ar, ntot)
+            i = 0usize
+            while i < ntot {
+                msv[i] = coef[i]
+                i += 1usize
+            }
+            if q > 0usize { ma_invert(ar, coef[p..p + q]) }
+            if sq > 0usize { ma_invert(ar, coef[p + q + sp..p + q + sp + sq]) }
+            i = 0usize
+            while i < ntot {
+                if msv[i] != coef[i] { changed = true }
+                i += 1usize
             }
             if changed {
                 i = 0usize
@@ -1331,28 +1532,38 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
                     am[i * nfree + i] = 1.0f64
                     i += 1usize
                 }
-                if p > 0usize {
-                    let w1 = fa(ar, p)
-                    let w2 = fa(ar, p)
-                    let w3 = fa(ar, p)
-                    i = 0usize
-                    while i < p {
-                        w1[i] = coef[i]
-                        i += 1usize
+                var blk = 0usize
+                while blk < 2usize {
+                    var off = 0usize
+                    var len = p
+                    if blk == 1usize {
+                        off = p + q
+                        len = sp
                     }
-                    partrans(p, w1, w2)
-                    i = 0usize
-                    while i < p {
-                        w1[i] += 0.001f64
-                        partrans(p, w1, w3)
-                        var j = 0usize
-                        while j < p {
-                            am[i * nfree + j] = (w3[j] - w2[j]) / 0.001f64
-                            j += 1usize
+                    if len > 0usize {
+                        let w1 = fa(ar, len)
+                        let w2 = fa(ar, len)
+                        let w3 = fa(ar, len)
+                        i = 0usize
+                        while i < len {
+                            w1[i] = coef[off + i]
+                            i += 1usize
                         }
-                        w1[i] -= 0.001f64
-                        i += 1usize
+                        partrans(len, w1, w2)
+                        i = 0usize
+                        while i < len {
+                            w1[i] += 0.001f64
+                            partrans(len, w1, w3)
+                            var j = 0usize
+                            while j < len {
+                                am[(off + i) * nfree + off + j] = (w3[j] - w2[j]) / 0.001f64
+                                j += 1usize
+                            }
+                            w1[i] -= 0.001f64
+                            i += 1usize
+                        }
                     }
+                    blk += 1usize
                 }
                 let t1 = fa(ar, nfree * nfree)
                 i = 0usize
@@ -1396,6 +1607,15 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
                     i += 1usize
                 }
             }
+            if sp > 0usize {
+                let ud2 = fa(ar, sp)
+                partrans(sp, coef[p + q..p + q + sp], ud2)
+                i = 0usize
+                while i < sp {
+                    coef[p + q + i] = ud2[i]
+                    i += 1usize
+                }
+            }
         } else if !noopt {
             ar_hessian(&c, coef, hess)
             i = 0usize
@@ -1413,13 +1633,13 @@ fn arima_fit(ar: *mem.Arena, x: []const f64, p: usize, d: usize, q: usize, kind:
                 }
             }
         }
-        trans_pars(coef, p, q, false, phi, theta0)
+        trans_pars(coef, p, q, sp, sq, per, false, phi, theta0)
         i = 0usize
-        while i < q {
+        while i < ql {
             theta[i] = theta0[i]
             i += 1usize
         }
-        i = q
+        i = ql
         while i + 1usize < r0 {
             theta[i] = 0.0f64
             i += 1usize

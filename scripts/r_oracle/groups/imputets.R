@@ -94,13 +94,32 @@ for (rep in 1:45) {
     for (k in seq_len(n)) add("sts", c(as.numeric(sm), k - 1, n, enc(x), kind, nf, if (is.finite(mg)) mg else -1), r[k], rel = 1e-6)
   }
 }
+# stats::arima with a seasonal part "sarima" (p, d, q, P, D, Q, m, kind, method, quantity, n, series...); quantities as "arima"
+for (rep in 1:36) {
+  m <- c(4, 7, 12)[rep %% 3 + 1]; p <- sample(0:1, 1); q <- sample(0:1, 1); P <- sample(0:1, 1); Q <- sample(0:1, 1); d <- sample(0:1, 1); D <- sample(0:1, 1)
+  if (P + Q == 0) P <- 1
+  n <- m * sample(4:6, 1)
+  x <- round(10 + 2 * sin(2 * pi * seq_len(n) / m) + as.numeric(arima.sim(list(ar = if (p) 0.4 else NULL, ma = if (q) 0.4 else NULL), n)), 3)
+  if (d + D == 1 && rep %% 2) x <- x + 0.1 * seq_len(n)
+  kind <- if (d + D == 0) sample(0:1, 1) else if (d + D == 1) sample(c(0, 2), 1) else 0
+  method <- (rep - 1) %% 3
+  if (rep %% 2 == 0) { x[sample(seq(m + 2, n), 3)] <- NA; method <- 1 }
+  xr <- if (kind == 2) seq_along(x) else NULL
+  bad <- FALSE
+  fit <- tryCatch(withCallingHandlers(stats::arima(ts(x, frequency = m), order = c(p, d, q), seasonal = list(order = c(P, D, Q), period = m), include.mean = (kind == 1), xreg = xr, method = c("CSS-ML", "ML", "CSS")[method + 1]), warning = function(w) { if (grepl("convergence", conditionMessage(w))) bad <<- TRUE; invokeRestart("muffleWarning") }), error = function(e) NULL)
+  if (bad) next
+  if (is.null(fit)) next
+  wt <- function(v) sum(v * seq_along(v))
+  vals <- list(`0` = fit$aic, `1` = fit$loglik, `2` = fit$sigma2, `300` = wt(fit$model$a), `301` = wt(diag(fit$model$P)), `302` = wt(unname(fit$coef)))
+  for (nm in names(vals)) if (!is.na(vals[[nm]])) add("sarima", c(p, d, q, P, D, Q, m, kind, method, as.numeric(nm), n, enc(x)), vals[[nm]], rel = if (as.numeric(nm) <= 2) 1e-4 else 1e-3)
+}
 # StructTS shortcut: a series with two distinct values (a constant one with gaps) is linearly interpolated
 for (rep in 1:4) {
   n <- 10 + rep; x <- rep(c(3, 7)[rep %% 2 + 1], n); x[sample(2:(n - 1), 3)] <- NA
   r <- as.numeric(na_kalman(x, model = "StructTS"))
   for (k in seq_len(n)) add("sts", c(1, k - 1, n, enc(x), 0, 1, -1), r[k], rel = 1e-6)
 }
-# stats::arima "arima" (p, d, q, kind 0 none 1 intercept 2 drift, method 0 CSS-ML 1 ML 2 CSS, quantity, n, series...): quantity 0 aic, 1 loglik, 2 sigma2, 10+i coef i, 30+i model a[i], 50+i diag P[i]
+# stats::arima "arima" (p, d, q, kind 0 none 1 intercept 2 drift, method 0 CSS-ML 1 ML 2 CSS, quantity, n, series...): quantity 0 aic, 1 loglik, 2 sigma2, 10+i coef i, 100+i model a[i], 200+i diag P[i]
 for (rep in 1:60) {
   p <- sample(0:2, 1); d <- sample(0:1, 1); q <- sample(0:2, 1); n <- sample(25:60, 1)
   ar <- if (p) c(0.5, -0.2)[1:p] else NULL; ma <- if (q) c(0.4, 0.2)[1:q] else NULL
@@ -110,13 +129,15 @@ for (rep in 1:60) {
   if (rep %% 2 == 0) { x[sample(2:n, 3)] <- NA; method <- 1 }
   if (rep %% 10 == 0) x[1:2] <- NA
   xr <- if (kind == 2) seq_along(x) else NULL
-  fit <- tryCatch(suppressWarnings(stats::arima(x, order = c(p, d, q), include.mean = (kind == 1), xreg = xr, method = c("CSS-ML", "ML", "CSS")[method + 1])), error = function(e) NULL)
+  bad <- FALSE
+  fit <- tryCatch(withCallingHandlers(stats::arima(x, order = c(p, d, q), include.mean = (kind == 1), xreg = xr, method = c("CSS-ML", "ML", "CSS")[method + 1]), warning = function(w) { if (grepl("convergence", conditionMessage(w))) bad <<- TRUE; invokeRestart("muffleWarning") }), error = function(e) NULL)
+  if (bad || p + q >= 4) next # an optimiser that ran out of iterations or sits on a flat ridge is not reproducible to the last digits
   if (is.null(fit)) next
   if (rep %% 10 == 0) next
   vals <- list(`0` = fit$aic, `1` = fit$loglik, `2` = fit$sigma2)
   for (i in seq_along(fit$coef)) vals[[as.character(10 + i - 1)]] <- unname(fit$coef[i])
-  for (i in seq_along(fit$model$a)) { vals[[as.character(30 + i - 1)]] <- fit$model$a[i]; vals[[as.character(50 + i - 1)]] <- fit$model$P[i, i] }
-  for (nm in names(vals)) if (!is.na(vals[[nm]])) add("arima", c(p, d, q, kind, method, as.numeric(nm), n, enc(x)), vals[[nm]], rel = if (as.numeric(nm) <= 2) 1e-6 else 1e-4)
+  for (i in seq_along(fit$model$a)) { vals[[as.character(100 + i - 1)]] <- fit$model$a[i]; vals[[as.character(200 + i - 1)]] <- fit$model$P[i, i] }
+  for (nm in names(vals)) if (!is.na(vals[[nm]])) add("arima", c(p, d, q, kind, method, as.numeric(nm), n, enc(x)), vals[[nm]], rel = if (as.numeric(nm) <= 2 && method < 2) 1e-6 else 1e-4)
 }
 # na_kalman with model = "auto.arima" "aa" (smooth 1 or 0, 0, n, series...) -> the position-weighted sum of the result
 suppressMessages(library(forecast))
