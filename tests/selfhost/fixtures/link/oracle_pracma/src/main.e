@@ -220,6 +220,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if !pm.pinv_full(a, x[4usize..4usize + pm_r * pm_c], pm_r, pm_c, po) { os.exit(11) }
         ret po[usize(x[2usize]) * pm_r + usize(x[3usize])]
     }
+    if str.eq(k, "pinvs") {
+        let pr = usize(x[0usize])
+        let pc = usize(x[1usize])
+        let (ps, pse) = mem.alloc[f64](a, pr * pc)
+        if pse != ok { os.exit(14) }
+        if !pm.pinv_svd(a, x[4usize..4usize + pr * pc], pr, pc, ps) { os.exit(15) }
+        ret ps[usize(x[2usize]) * pr + usize(x[3usize])]
+    }
     if str.eq(k, "sval") || str.eq(k, "cond") {
         let sm = usize(x[0usize])
         let sn = usize(x[1usize])

@@ -93,7 +93,7 @@ fzb <- list(c(0, 1), c(2, 3), c(0, 2), c(0, 1), c(1, 3))
 for (rep in 1:10) { id <- (rep - 1) %% 5; b <- fzb[[id + 1]] + c(-1, 1) * runif(1, 0, 0.1) * (rep > 5); add("fzero", c(id, b, 1e-12), fzero(fzs[[id + 1]], b, tol = 1e-12)$x) }
 for (rep in 1:18) {
   n <- sample(4:12, 1); xs <- sort(runif(n, 0, 10)); ys <- cumsum(rnorm(n)); xq <- c(min(xs), max(xs), runif(4, min(xs), max(xs)))
-  for (q in xq) for (m in 0:2) add("interp1", c(m, n, xs, ys, q), interp1(xs, ys, q, method = c("linear", "nearest", "spline")[m + 1]), rel = 1e-8)
+  for (q in xq) for (m in 0:4) add("interp1", c(m, n, xs, ys, q), interp1(xs, ys, q, method = c("linear", "nearest", "spline", "constant", "cubic")[m + 1]), rel = 1e-8)
 }
 # nchoosek reference values are filled from R directly
 cases <- lapply(cases, function(cs) { if (cs$fn == "nchoosek") cs$want <- choose(cs$args[1], cs$args[2]); cs })
@@ -136,5 +136,12 @@ for (rep in 1:25) {
   p <- p * sample(c(1, 2, -3), 1); pr <- polyroots(p); a <- c(length(p), p)
   cases[[length(cases) + 1]] <- case("pr_cnt", a, nrow(pr), rel = 1e-6, abs = 1e-6); cases[[length(cases) + 1]] <- case("pr_mult", a, sum(pr$mult), rel = 1e-6, abs = 1e-6)
   cases[[length(cases) + 1]] <- case("pr_re", a, sum(pr$mult * Re(pr$root)), rel = 1e-6, abs = 1e-6); cases[[length(cases) + 1]] <- case("pr_im2", a, sum(pr$mult * Im(pr$root)^2), rel = 1e-6, abs = 1e-6)
+}
+# pinv by the singular value decomposition, matrices of any rank (a repeated column or row, or a zero one): "pinvs" args as "pinv"
+for (rep in 1:30) {
+  m <- sample(3:7, 1); n <- sample(3:7, 1); M <- matrix(round(rnorm(m * n), 3), m, n)
+  if (rep %% 3 == 0 && n > 2) M[, n] <- M[, 1] + M[, 2] else if (rep %% 3 == 1 && m > 2) M[m, ] <- M[1, ] - M[2, ] else M[, 1] <- 0
+  P <- pinv(M)
+  for (i in sample(n, min(3, n))) for (j in sample(m, min(3, m))) add("pinvs", c(m, n, i - 1, j - 1, as.vector(t(M))), P[i, j])
 }
 emit("pracma", "pracma", list(cases))

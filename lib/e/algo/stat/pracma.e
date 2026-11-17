@@ -1044,6 +1044,12 @@ fn interp1(a: *mem.Arena, x: []const f64, y: []const f64, xi: f64, method: usize
         while i + 1usize < n && xi >= (x[i] + x[i + 1usize]) / 2.0f64 { i += 1usize }
         ret y[i]
     }
+    if method == 3usize {
+        // "constant": the value of the last knot at or below xi
+        if xi == x[n - 1usize] { ret y[n - 1usize] }
+        ret y[k]
+    }
+    if method == 4usize { ret pchip(a, x, y, xi) }
     let (h, e1) = mem.alloc[f64](a, n - 1usize)
     if e1 != ok { ret 0.0f64 / 0.0f64 }
     let (dl, e2) = mem.alloc[f64](a, n - 1usize)
@@ -1922,4 +1928,45 @@ fn polyroots(a: *mem.Arena, p: []const f64, re: []f64, im: []f64, mult: []f64) -
         i += 1usize
     }
     ret cnt
+}
+
+// pinv(A) of any rank by the singular value decomposition, as pracma does: singular values at most tol * d[1] (tol = eps^(2/3)) are dropped; m is rows by cols row-major, out is cols by rows row-major
+fn pinv_svd(a: *mem.Arena, m: []const f64, rows: usize, cols: usize, out: []f64) -> bool {
+    let (cm, e1) = mem.alloc[f64](a, rows * cols)
+    if e1 != ok { ret false }
+    var i = 0usize
+    while i < rows {
+        var j = 0usize
+        while j < cols {
+            cm[j * rows + i] = m[i * cols + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (sv, e) = decomp.svd(a, cm, rows, cols)
+    if e != ok { ret false }
+    var k = rows
+    if cols < rows { k = cols }
+    let tol = math.pow[f64](2.220446049250313e-16f64, 2.0f64 / 3.0f64)
+    i = 0usize
+    while i < cols * rows {
+        out[i] = 0.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < k {
+        if sv.d[c] > tol * sv.d[0usize] {
+            var r = 0usize
+            while r < cols {
+                var q = 0usize
+                while q < rows {
+                    out[r * rows + q] += sv.v[c * cols + r] * sv.u[c * rows + q] / sv.d[c]
+                    q += 1usize
+                }
+                r += 1usize
+            }
+        }
+        c += 1usize
+    }
+    ret true
 }
