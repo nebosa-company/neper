@@ -691,10 +691,10 @@
       "group": "CRAN parity",
       "order": 688,
       "title": "ipred: bagging and error estimation",
-      "score": 0,
+      "score": 0.05,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Open (CRAN rank 439). Small to mid. Needs L337. Acceptance, equal to ipred under set.seed: bagging, errorest with cv, boot and .632+, sbrier, ipredknn, inbagg, and their out-of-bag predictions."
+      "evidence": "Partial (D6837: e.algo.stat.ipredpkg has sbrier at one time with numeric predictions and kfoldcv equal to ipred; oracle_ipred; Linux pending). Open: bagging, errorest with cv, boot and .632+, ipredknn, inbagg, out-of-bag predictions, ties in sbrier. Was: Open (CRAN rank 439). Small to mid. Needs L337. Acceptance, equal to ipred under set.seed: bagging, errorest with cv, boot and .632+, sbrier, ipredknn, inbagg, and their out-of-bag predictions."
     },
     {
       "id": "L338",
