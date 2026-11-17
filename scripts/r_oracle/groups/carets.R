@@ -59,4 +59,10 @@ for (rep in 1:25) {
   for (j in 1:7) add("cmk", c(j - 1, k, tb), ov[j], 1e-8)
   for (j in seq_along(bc)) add("cmk", c(7 + j - 1, k, tb), bc[j], 1e-8)
 }
+# BoxCoxTrans: "bc" (id, n, y[n]) id 0 lambda (-99 for NA) 1 sum(position * predicted)
+for (rep in 1:30) {
+  n <- sample(8:60, 1); y <- switch(rep %% 4 + 1, rexp(n, 1) + 0.1, exp(rnorm(n, 1, 0.7)), runif(n, 1, 5), rgamma(n, 2, 1) + 0.05); if (rep == 30) y[1] <- -1
+  bt <- BoxCoxTrans(y); lam <- if (is.na(bt$lambda)) -99 else bt$lambda; add("bc", c(0, n, y), lam, 1e-12)
+  add("bc", c(1, n, y), sum(seq_len(n) * predict(bt, y)), 1e-10)
+}
 emit("carets", "caret", list(cases))

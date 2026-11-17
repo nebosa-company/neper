@@ -96,6 +96,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ct.confusion_multi(z[2usize..2usize + k * k], k, o)
         ret o[usize(z[0usize])]
     }
+    if str.eq(c.name, "bc") {
+        let n = usize(z[1usize])
+        let ys = z[2usize..2usize + n]
+        let lam = ct.box_cox_lambda(a, ys)
+        if z[0usize] == 0.0f64 {
+            if lam != lam { ret 0.0f64 - 99.0f64 }
+            ret lam
+        }
+        var s = 0.0f64
+        var q = 0usize
+        while q < n {
+            s += f64(q + 1usize) * ct.box_cox_apply(ys[q], lam)
+            q += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "ts") {
         let (o, e) = mem.alloc[i64](a, 400usize)
         if e != ok { ret nan }

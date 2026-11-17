@@ -11,6 +11,7 @@ use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.algo.rand.r as rng
 use e.mem
+use e.algo.stat.mass as ms
 
 type Conf = struct { accuracy: f64, kappa: f64, lower: f64, upper: f64, nir: f64, pvalue: f64, mcnemar: f64, sens: f64, spec: f64, ppv: f64, npv: f64, f1: f64, prevalence: f64, detection_rate: f64, detection_prevalence: f64, balanced: f64 }
 
@@ -500,4 +501,51 @@ fn confusion_multi(x: []const f64, k: usize, out: []f64) {
         out[o + 10usize] = (sens + spec) / 2.0f64
         c += 1usize
     }
+}
+
+// BoxCoxTrans(y): the lambda of MASS::boxcox on the grid seq(-2, 2, 1/10) for y ~ 1, the first maximiser; NaN when y has a non-positive value or fewer than three distinct values
+fn box_cox_lambda(a: *mem.Arena, y: []const f64) -> f64 {
+    let n = y.len
+    var uniq = 0usize
+    var i = 0usize
+    while i < n {
+        if y[i] <= 0.0f64 { ret 0.0f64 / 0.0f64 }
+        var seen = false
+        var j = 0usize
+        while j < i {
+            if y[j] == y[i] { seen = true }
+            j += 1usize
+        }
+        if !seen { uniq += 1usize }
+        i += 1usize
+    }
+    if uniq < 3usize { ret 0.0f64 / 0.0f64 }
+    let (ones, e) = mem.alloc[f64](a, n)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i < n {
+        ones[i] = 1.0f64
+        i += 1usize
+    }
+    var best = 0.0f64 - 1.0e300f64
+    var lam = 0.0f64
+    var g = 0usize
+    while g <= 40usize {
+        let l = 0.0f64 - 2.0f64 + f64(g) * 0.1f64
+        let (ll, e2) = ms.boxcox_loglik(a, y, ones, 1usize, l)
+        if e2 == ok && ll > best {
+            best = ll
+            lam = l
+        }
+        g += 1usize
+    }
+    ret lam
+}
+
+// predict(BoxCoxTrans, x) with fudge 0.2: log inside the fudge of 0, the identity inside the fudge of 1, else (x^lambda - 1) / lambda; NaN lambda leaves x unchanged
+fn box_cox_apply(x: f64, lambda: f64) -> f64 {
+    if lambda != lambda { ret x }
+    if lambda < 0.2f64 && lambda > 0.0f64 - 0.2f64 { ret math.log[f64](x) }
+    if lambda < 1.2f64 && lambda > 0.8f64 { ret x }
+    ret (math.pow[f64](x, lambda) - 1.0f64) / lambda
 }
