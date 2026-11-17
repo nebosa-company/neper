@@ -59,7 +59,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             q += 1usize
         }
         let nfo = usize(x[at + n])
-        if gl.cv_gaussian(a, xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, fid, nfo, cm, cs) != ok { ret 0.0f64 / 0.0f64 }
+        var cve = ok
+        if c.name.len > 2usize && c.name[2usize] == 98u8 { cve = gl.cv_binomial(a, xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, fid, nfo, cm, cs) } else { cve = gl.cv_gaussian(a, xm, y, n, p, x[2usize], x[3usize] != 0.0f64, vf, lam, fid, nfo, cm, cs) }
+        if cve != ok { ret 0.0f64 / 0.0f64 }
         if x[at + n + 2usize] >= 2.0f64 {
             let (sel, se) = mem.alloc[f64](a, 2usize)
             if se != ok { ret 0.0f64 / 0.0f64 }
