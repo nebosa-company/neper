@@ -1,11 +1,12 @@
 # tsfeatures: the closed-form features of one series.
 #   args: (n, m, width, x[n], j) with m the frequency; fn "acf" (j 0..6) "pacf" (j 0..3) "mlshift" "mvshift" (j 0 value 1 index) and the single-valued
+# hetero (garch_acf, garch_r2) carries rel 1e-6: the SUMSL fit stops at reltol 1e-10 on a flat likelihood, so last-bit log/sqrt differences move the optimum by ~1e-8
 #   "cross" "flat" "lump" "stab" "firstmin" "firstzero" "std1st" "trev" "walker" "motif" "zeroprop" "embed1" "embed2" "ac9"
 suppressMessages(library(tsfeatures))
 cases <- list()
-add <- function(fn, args, want) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = 1e-9, abs = 1e-11)
+add <- function(fn, args, want, rel = 1e-9) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = 1e-11)
 set.seed(20261128)
-for (rep in 1:10) {
+for (rep in 1:20) {
   n <- c(60, 80, 120, 48, 200)[(rep - 1) %% 5 + 1]; m <- c(1, 4, 12, 1, 7)[(rep - 1) %% 5 + 1]
   x0 <- as.numeric(arima.sim(list(ar = c(0.6, -0.2)), n)) + 0.03 * seq_len(n) + (if (m > 1) sin(2 * pi * seq_len(n) / m) else 0)
   if (rep %% 3 == 0) x0 <- round(x0, 1)
@@ -22,9 +23,18 @@ for (rep in 1:10) {
   add("ac9", a(0), ac_9(x0))
   add("kpss", a(0), unitroot_kpss(x0))
   add("pp", a(0), unitroot_pp(x0))
+  add("entropy", a(0), entropy(x0)[[1]])
+  sf <- suppressWarnings(stl_features(x)); sf <- unname(c(sf[c("nperiods", "seasonal_period", "trend", "spike", "linearity", "curvature", "e_acf1", "e_acf10")], if (length(sf) > 8) sf[9:11] else c(NA, NA, NA)))
+  for (j in seq_along(sf)) add("stl", a(j - 1), sf[j])
+  hp <- suppressWarnings(holt_parameters(x0)); add("holt", a(0), hp[[1]]); add("holt", a(1), hp[[2]])
+  ht <- suppressWarnings(tsfeatures:::heterogeneity(x)); for (j in seq_along(ht)) add("hetero", a(j - 1), ht[[j]], rel = if (j %in% c(2, 4)) 1e-6 else 1e-9)
   hu <- hurst(x0)[[1]]; add("hurst", a(0), hu)
   ar_ <- arch_stat(x0); if (is.finite(ar_)) add("arch", a(0), ar_[[1]])
 }
+# stl_features with a frequency but at most two periods: the plain-vector supsmu branch
+for (nn in c(20, 24)) { x0 <- as.numeric(arima.sim(list(ar = 0.5), nn)) + 0.1 * seq_len(nn); sf <- suppressWarnings(stl_features(ts(x0, frequency = 12)))
+  sf <- unname(c(sf[c("nperiods", "seasonal_period", "trend", "spike", "linearity", "curvature", "e_acf1", "e_acf10")], NA, NA, NA))
+  for (j in seq_along(sf)) add("stl", c(nn, 12, 10, x0, j - 1), sf[j]) }
 # histogram_mode "hmode": (n, m, numBins, x[n], 0)
 for (rep in 1:30) { n <- sample(30:200, 1); x0 <- if (rep %% 2 == 0) round(rnorm(n), 1) else rexp(n); nb <- sample(c(5, 10, 15, 20), 1)
   cases[[length(cases) + 1]] <- case("hmode", c(n, 1, nb, x0, 0), histogram_mode(x0, nb), rel = 1e-9, abs = 1e-11) }

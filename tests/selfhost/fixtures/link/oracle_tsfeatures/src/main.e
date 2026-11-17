@@ -17,7 +17,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let s = x[3usize..3usize + n]
     let j = usize(x[3usize + n])
     let nm = c.name
-    let (out, oe) = mem.alloc[f64](a, 8usize)
+    let (out, oe) = mem.alloc[f64](a, 16usize)
     if oe != ok { os.exit(5) }
     if str.eq(nm, "hmode") { ret tf.histogram_mode(a, s, usize(x[2usize])) }
     if str.eq(nm, "acf") {
@@ -45,6 +45,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(nm, "trev") { ret tf.trev_num(s) }
     if str.eq(nm, "walker") { ret tf.walker_propcross(s) }
     if str.eq(nm, "motif") { ret tf.motiftwo_entro3(s) }
+    if str.eq(nm, "stl") {
+        let e = tf.stl_features(a, s, m, out)
+        if e != ok { os.exit(6) }
+        ret out[j]
+    }
+    if str.eq(nm, "holt") {
+        let (ha, hb) = tf.holt_parameters(a, s)
+        if j == 0usize { ret ha }
+        ret hb
+    }
+    if str.eq(nm, "hetero") {
+        let e = tf.heterogeneity(a, s, out)
+        if e != ok { os.exit(6) }
+        ret out[j]
+    }
+    if str.eq(nm, "entropy") { ret tf.entropy(a, s) }
     if str.eq(nm, "pp") { ret tf.unitroot_pp(a, s) }
     if str.eq(nm, "hurst") { ret tf.hurst(a, s) }
     if str.eq(nm, "arch") { ret tf.arch_stat(a, s, 12usize, true) }
