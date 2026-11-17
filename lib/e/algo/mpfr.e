@@ -1,8 +1,8 @@
 // Rmpfr / MPFR style binary floating point of a chosen precision on the big integers of e.algo.bignum: a value is m * 2^e with m a signed integer of at most `prec` bits, and every operation is the exact result rounded to nearest, ties to even.
 //
-// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, pi, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
+// Here: from a mantissa and exponent, add, sub, mul, div, sqrt, exp, log, pow, sin, cos, tan, sinh, cosh, tanh, atan, pi, negation, comparison and the conversion to a pair of doubles (the value rounded to 53 bits and the remainder rounded to 53 bits).
 //
-// Not here: tan, the inverse and hyperbolic functions, gamma, zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
+// Not here: the other inverse trigonometric and hyperbolic functions, gamma, zeta, erf, Bessel, the constants, the other rounding modes, infinities and NaN.
 
 use e.algo.bignum as bn
 use e.math
@@ -523,5 +523,112 @@ fn pow(a: *mem.Arena, x: Mp, y: Mp, prec: usize) -> (Mp, err) {
     let (t, e2) = mul(a, y, l, w)
     if e2 != ok { ret (zero, e2) }
     let (rt_, re_) = exp(a, t, prec)
+    ret (rt_, re_)
+}
+
+// sinh, cosh and tanh from exp with enough guard bits for the cancellation of sinh near 0; kind 0 sinh, 1 cosh, 2 tanh
+fn hyper(a: *mem.Arena, kind: usize, x: Mp, prec: usize) -> (Mp, err) {
+    if x.m.sign == bn.Sign.Zero {
+        if kind == 1usize {
+            let (o, oe) = from_parts(a, 1i64, 0i64, prec)
+            ret (o, oe)
+        }
+        ret (x, ok)
+    }
+    var extra = 0usize
+    let me = mag_exp(x)
+    if me < 0i64 { extra = usize(0i64 - me) }
+    let w = prec + 128usize + 2usize * extra
+    let (ep, e1) = exp(a, x, w)
+    let (em, e2) = exp(a, neg(a, x), w)
+    if e1 != ok || e2 != ok { ret (zero, e1) }
+    var num = ep
+    var den = em
+    var e3 = ok
+    if kind == 0usize {
+        let (d, ed) = sub(a, ep, em, w)
+        num = scale2(d, 0i64 - 1i64)
+        e3 = ed
+    } else if kind == 1usize {
+        let (d, ed) = add(a, ep, em, w)
+        num = scale2(d, 0i64 - 1i64)
+        e3 = ed
+    } else {
+        let (n2, en) = sub(a, ep, em, w)
+        let (d2, ed) = add(a, ep, em, w)
+        if en != ok || ed != ok { ret (zero, en) }
+        let (q, eq) = div(a, n2, d2, w)
+        num = q
+        e3 = eq
+    }
+    if e3 != ok { ret (zero, e3) }
+    let (rt_, re_) = round_to(a, num.m, num.e, prec)
+    ret (rt_, re_)
+}
+
+// tan x = sin x / cos x from the guarded sine and cosine
+fn tan(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
+    let w = prec + 64usize
+    let (s, c, e1) = sin_cos(a, x, w)
+    if e1 != ok { ret (zero, e1) }
+    let (q, e2) = div(a, s, c, w)
+    if e2 != ok { ret (zero, e2) }
+    let (rt_, re_) = round_to(a, q.m, q.e, prec)
+    ret (rt_, re_)
+}
+
+// atan x for moderate |x|: four halvings y -> y / (1 + sqrt(1 + y^2)), the series y - y^3 / 3 + .., then times 16
+fn atan(a: *mem.Arena, x: Mp, prec: usize) -> (Mp, err) {
+    if x.m.sign == bn.Sign.Zero { ret (x, ok) }
+    let w = prec + 128usize
+    var y = x
+    var q = 0usize
+    while q < 4usize {
+        let (y2, e1) = mul(a, y, y, w)
+        let (one, e2) = from_parts(a, 1i64, 0i64, w)
+        if e1 != ok || e2 != ok { ret (zero, e1) }
+        let (s1, e3) = add(a, one, y2, w)
+        if e3 != ok { ret (zero, e3) }
+        let (sq, e4) = sqrt(a, s1, w)
+        if e4 != ok { ret (zero, e4) }
+        let (den, e5) = add(a, one, sq, w)
+        if e5 != ok { ret (zero, e5) }
+        let (yn, e6) = div(a, y, den, w)
+        if e6 != ok { ret (zero, e6) }
+        y = yn
+        q += 1usize
+    }
+    let (y2, e7) = mul(a, y, y, w)
+    if e7 != ok { ret (zero, e7) }
+    var p = y
+    var sum = y
+    var k = 1i64
+    var go = true
+    while go {
+        let (p2, e8) = mul(a, p, y2, w)
+        if e8 != ok { ret (zero, e8) }
+        p = p2
+        let (d, e9) = from_parts(a, 2i64 * k + 1i64, 0i64, w)
+        if e9 != ok { ret (zero, e9) }
+        let (t, e10) = div(a, p, d, w)
+        if e10 != ok { ret (zero, e10) }
+        var s2 = sum
+        var e11 = ok
+        if k % 2i64 == 1i64 {
+            let (sa, ea) = sub(a, sum, t, w)
+            s2 = sa
+            e11 = ea
+        } else {
+            let (sa, ea) = add(a, sum, t, w)
+            s2 = sa
+            e11 = ea
+        }
+        if e11 != ok { ret (zero, e11) }
+        sum = s2
+        if mag_exp(t) < mag_exp(sum) - i64(w) - 5i64 { go = false }
+        k += 1i64
+    }
+    let r = scale2(sum, 4i64)
+    let (rt_, re_) = round_to(a, r.m, r.e, prec)
     ret (rt_, re_)
 }

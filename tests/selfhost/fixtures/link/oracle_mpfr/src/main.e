@@ -54,8 +54,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (t, e) = mp.pow(a, x, y, prec)
         r = t
         er = e
-    } else {
+    } else if op == 10usize {
         let (t, e) = mp.pi(a, prec)
+        r = t
+        er = e
+    } else if op == 11usize {
+        let (t, e) = mp.tan(a, x, prec)
+        r = t
+        er = e
+    } else if op >= 12usize && op <= 14usize {
+        let (t, e) = mp.hyper(a, op - 12usize, x, prec)
+        r = t
+        er = e
+    } else {
+        let (t, e) = mp.atan(a, x, prec)
         r = t
         er = e
     }

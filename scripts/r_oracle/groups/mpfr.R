@@ -39,4 +39,14 @@ for (rep in 1:150) {
   cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
   cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
 }
+# tan (11), sinh (12), cosh (13), tanh (14), atan (15)
+for (rep in 1:150) {
+  op <- sample(11:15, 1); prec <- sample(c(53, 80, 100, 128, 200), 1); m1 <- sample(1:(2^50), 1); e1 <- sample(-60:-49, 1)
+  if (runif(1) < 0.5) m1 <- -m1
+  x <- mpfr(m1, prec) * 2^e1; if (op %in% c(12, 13, 14) && abs(asNumeric(x)) > 20) next
+  z <- switch(op - 10, tan(x), sinh(x), cosh(x), tanh(x), atan(x)); if (!is.finite(z) || z == 0) next
+  hi <- asNumeric(z); lo <- asNumeric(z - mpfr(hi, 2000)); a <- c(op, prec, m1, e1, 1, 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))
