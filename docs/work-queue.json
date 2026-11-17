@@ -64,10 +64,10 @@
       "group": "CRAN parity",
       "order": 598,
       "title": "caret evaluation and resampling",
-      "score": 0.5,
+      "score": 0.55,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6087): e.algo.stat.carets has two-class confusionMatrix with all statistics and intervals, and postResample, equal to caret on 700 values on Windows (oracle_carets); Linux pending. D6812: createResample, createFolds (factor y), groupKFold and createTimeSlices equal caret (25 draws each). D6813: createDataPartition (factor and numeric y) equals caret. Open: multi-class tables, prevalence argument, numeric-y folds, preProcess, varImp. Original: Open (CRAN rank 235). Small to mid. train() is a wrapper and stays out. Acceptance, equal to caret under set.seed: createDataPartition, createFolds, createMultiFolds, createResample, createTimeSlices, groupKFold, confusionMatrix with every statistic and interval, sensitivity, specificity, postResample, preProcess (center, scale, range, YeoJohnson, BoxCox, pca, knnImpute), varImp for linear models."
+      "evidence": "Partly done (D6087): e.algo.stat.carets has two-class confusionMatrix with all statistics and intervals, and postResample, equal to caret on 700 values on Windows (oracle_carets); Linux pending. D6812: createResample, createFolds (factor y), groupKFold and createTimeSlices equal caret (25 draws each). D6813: createDataPartition (factor and numeric y) equals caret. Open: multi-class tables, prevalence argument, numeric-y folds, preProcess beyond center, scale and range (D6814 equals caret), varImp. Original: Open (CRAN rank 235). Small to mid. train() is a wrapper and stays out. Acceptance, equal to caret under set.seed: createDataPartition, createFolds, createMultiFolds, createResample, createTimeSlices, groupKFold, confusionMatrix with every statistic and interval, sensitivity, specificity, postResample, preProcess (center, scale, range, YeoJohnson, BoxCox, pca, knnImpute), varImp for linear models."
     },
     {
       "id": "L331",

@@ -47722,3 +47722,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6813 — caret: createDataPartition
 
 **Decision.** `carets.create_data_partition` is `createDataPartition(y, times = 1, p, groups)`: each stratum (a class in level order, or for a numeric y the bin of `cut(y, unique(quantile(y, seq(0, 1, length.out = groups))), include.lowest = TRUE)`, quantile type 7) contributes `ceiling(p n_g)` observations drawn with `sample`, and a stratum of one observation is always selected; the answer is the selection mask. Equal to caret on 25 seeded draws of a factor and 25 of a numeric y (oracle_carets). Empty bins are skipped as `dlply` skips them. Not here: `times` above 1 (a loop over the same draw), `createMultiFolds`, `preProcess`, `varImp`, multi-class tables. Linux pending.
+
+## D6814 — caret: preProcess center, scale and range
+
+**Decision.** `carets.pre_process_cs` and `pre_process_range` are `preProcess` with `method` center, scale, both, or range (`rangeBounds` lo and hi), then `predict`: center subtracts the column mean (R's `mean`, the residual-refined long-double mean), scale divides by the column `sd` (by the raw value when scale is alone, as caret does), range maps the column minimum and maximum to lo and hi. Equal to caret on 25 matrices in each of the four modes (oracle_carets, answered as a position-weighted sum of the transformed matrix). Not here: YeoJohnson, BoxCox, pca, knnImpute, ica, zero-variance and near-zero-variance removal. Linux pending.

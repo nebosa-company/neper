@@ -321,3 +321,90 @@ fn create_data_partition(a: *mem.Arena, r: *rng.Rng, y: []const f64, numeric: bo
     }
     ret ok
 }
+
+// ---- preProcess: center, scale and range, per column of the n by p column-major matrix x ----
+
+fn pp_sum(v: []const f64) -> f64 {
+    var total = 0.0f64
+    var comp = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        let t = total + v[i]
+        if math.abs[f64](total) >= math.abs[f64](v[i]) { comp += (total - t) + v[i] } else { comp += (v[i] - t) + total }
+        total = t
+        i += 1usize
+    }
+    ret total + comp
+}
+
+// R's mean(): the sum over n, refined by the mean of the residuals
+fn pp_mean(v: []const f64) -> f64 {
+    let n = f64(v.len)
+    let m = pp_sum(v) / n
+    var t = 0.0f64
+    var comp = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        let d = v[i] - m
+        let u = t + d
+        if math.abs[f64](t) >= math.abs[f64](d) { comp += (t - u) + d } else { comp += (d - u) + t }
+        t = u
+        i += 1usize
+    }
+    ret m + (t + comp) / n
+}
+
+fn pp_sd(v: []const f64) -> f64 {
+    let m = pp_mean(v)
+    var t = 0.0f64
+    var comp = 0.0f64
+    var i = 0usize
+    while i < v.len {
+        let d = (v[i] - m) * (v[i] - m)
+        let u = t + d
+        if math.abs[f64](t) >= math.abs[f64](d) { comp += (t - u) + d } else { comp += (d - u) + t }
+        t = u
+        i += 1usize
+    }
+    ret math.sqrt[f64]((t + comp) / f64(v.len - 1usize))
+}
+
+// preProcess(x, method = c("center", "scale")) then predict: center subtracts the column mean, scale divides by the column standard deviation (after centering when both)
+fn pre_process_cs(x: []const f64, n: usize, p: usize, center: bool, scale: bool, out: []f64) {
+    var c = 0usize
+    while c < p {
+        let col = x[c * n..c * n + n]
+        let m = pp_mean(col)
+        let sd = pp_sd(col)
+        var i = 0usize
+        while i < n {
+            var v = col[i]
+            if center { v = v - m }
+            if scale { v = v / sd }
+            out[c * n + i] = v
+            i += 1usize
+        }
+        c += 1usize
+    }
+}
+
+// preProcess(x, method = "range", rangeBounds = c(lo, hi))
+fn pre_process_range(x: []const f64, n: usize, p: usize, lo: f64, hi: f64, out: []f64) {
+    var c = 0usize
+    while c < p {
+        var mn = x[c * n]
+        var mx = x[c * n]
+        var i = 1usize
+        while i < n {
+            if x[c * n + i] < mn { mn = x[c * n + i] }
+            if x[c * n + i] > mx { mx = x[c * n + i] }
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            out[c * n + i] = (x[c * n + i] - mn) / (mx - mn) * (hi - lo) + lo
+            i += 1usize
+        }
+        c += 1usize
+    }
+}

@@ -42,4 +42,13 @@ for (rep in 1:25) {
   yn <- round(rnorm(n), 2); set.seed(sd); sel <- createDataPartition(yn, times = 1, p = pp, list = FALSE, groups = gg)[, 1]
   mk <- numeric(n); mk[sel] <- 1; add("dp", c(sd, pp, gg, 1, n, yn), sum(seq_len(n) * mk), 1e-12)
 }
+# preProcess: "pp" (mode, lo, hi, n, p, x column-major) mode 0 center 1 scale 2 center+scale 3 range; answered as sum(row * column * transformed value)
+for (rep in 1:25) {
+  n <- sample(6:40, 1); p <- sample(1:4, 1); X <- matrix(rnorm(n * p, rep(sample(-5:5, p), each = n), rep(runif(p, 0.5, 4), each = n)), n, p); d <- as.data.frame(X)
+  lo <- runif(1, -2, 0); hi <- runif(1, 1, 3)
+  for (mode in 0:3) {
+    pr <- preProcess(d, method = switch(mode + 1, "center", "scale", c("center", "scale"), "range"), rangeBounds = c(lo, hi)); Y <- as.matrix(predict(pr, d))
+    add("pp", c(mode, lo, hi, n, p, X), sum(outer(seq_len(n), seq_len(p), "*") * Y), 1e-10)
+  }
+}
 emit("carets", "caret", list(cases))

@@ -3672,4 +3672,5 @@ D6809	1232	isotone: the optim(BFGS) activeSet solvers
 D6810	698	ResourceSelection: wrsi and CAIC
 D6811	705	statmod: qinvgauss
 D6812	972	caret: createResample, createFolds, groupKFold, createTimeSlices
-D6813	723	caret: createDataPartition
+D6813	724	caret: createDataPartition
+D6814	700	caret: preProcess center, scale and range

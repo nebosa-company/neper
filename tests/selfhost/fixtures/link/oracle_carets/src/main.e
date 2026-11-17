@@ -73,6 +73,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret s
     }
+    if str.eq(c.name, "pp") {
+        let n = usize(z[3usize])
+        let p = usize(z[4usize])
+        let (o, e) = mem.alloc[f64](a, n * p)
+        if e != ok { ret nan }
+        let mode = usize(z[0usize])
+        let xs = z[5usize..5usize + n * p]
+        if mode == 3usize { ct.pre_process_range(xs, n, p, z[1usize], z[2usize], o) } else { ct.pre_process_cs(xs, n, p, mode != 1usize, mode >= 1usize, o) }
+        var s = 0.0f64
+        var q = 0usize
+        while q < n * p {
+            s += f64(q % n + 1usize) * f64(q / n + 1usize) * o[q]
+            q += 1usize
+        }
+        ret s
+    }
     if str.eq(c.name, "ts") {
         let (o, e) = mem.alloc[i64](a, 400usize)
         if e != ok { ret nan }
