@@ -146,7 +146,7 @@ L318	library	0.05	735	forecast: exact ARIMA, ETS, auto.arima, Box-Cox	Partly don
 L319	library	0.08	803	nlme: gls, correlation structures and variance functions	Partly done (D6064): e.algo.stat.gls has gls at a fixed AR1, compound-symmetry or exponential correlation, REML and ML, equal to nlme on 492 values on Windows (oracle_gls);
 L320	library	0.05	917	sf: simple-features geometry, predicates and spherical geometry	Partly done (D6065): the planar convex hull, polygon area, point in polygon and Delaunay triangle count in e.algo.geom equal sf on 150 cases on Windows (oracle_sf);
 L285	library	0	457	Raster core and CRS reprojection (terra)	Open;
-L348	library	0.45	972	mclust: Gaussian mixture model selection	Partial (D6823: e.algo.stat.mclustpkg has nVarParams, nMclustParams, bic, adjustedRandIndex and map equal to mclust;
+L348	library	0.5	1020	mclust: Gaussian mixture model selection	Partial (D6823: e.algo.stat.mclustpkg has nVarParams, nMclustParams, bic, adjustedRandIndex and map equal to mclust;
 L349	library	0.15	743	vegan: community ecology	Partial (D6627).
 L350	library	0.1	706	ape: phylogenetic trees	Partial (D6628).
 L351	library	0.15	680	survey: design-based inference	Partial (D6626).

@@ -52,4 +52,11 @@ for (rep in 1:12) {
   add("msel", c(n, p, 2, 4, -1, X), m$bic, 1e-8); add("msel", c(n, p, 2, 4, -2, X), m$G, 0); add("msel", c(n, p, 2, 4, -3, X), match(m$modelName, mm) - 1, 0); add("msel", c(n, p, 2, 4, -4, X), m$loglik, 1e-8)
   for (i in seq_len(n)) add("msel", c(n, p, 2, 4, i - 1, X), m$classification[i], 0)
 }
+# classError: "cerr" (n, index (-1 error rate), classification[n], class[n] as 0-based codes); only labellings whose cross table has a unique best partner in every row and column
+for (rep in 1:60) {
+  n <- sample(20:80, 1); kt <- sample(2:4, 1); tr <- sample(kt, n, TRUE); cl <- ifelse(runif(n) < 0.7, tr, sample(kt, n, TRUE)); tb <- table(cl, tr)
+  ok <- all(apply(tb, 1, function(r) sum(r == max(r)) == 1)) && all(apply(tb, 2, function(r) sum(r == max(r)) == 1)); if (!ok) next
+  ce <- classError(cl, tr); fl <- as.numeric(seq_len(n) %in% ce$misclassified)
+  add("cerr", c(n, -1, cl - 1, tr - 1), ce$errorRate, 1e-12); for (i in seq_len(n)) add("cerr", c(n, i - 1, cl - 1, tr - 1), fl[i], 0)
+}
 emit("mclust", "mclust", list(cases))

@@ -47974,3 +47974,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6876 — mclust: model selection
 
 **Decision.** `mclustpkg.mclust_select` is `Mclust(data, G, modelNames, initialization = list(hcPairs = hc(data, "EII")))`: the BIC grid of `bic_hc_eii` over the groups and models, the first maximum (scanning groups, then models in the given order) chosen, the winner refitted from its hierarchical partition, and the classification the first maximum of each row of the posterior matrix. Equal to mclust on 12 data sets: BIC, number of groups, model, log likelihood and every observation's class (oracle_mclust, 3375 cases in all). Not here: the default VVV hierarchy, the remaining covariance models, priors, noise, `densityMclust`, `classError`. Linux pending.
+
+## D6877 — mclust: classError
+
+**Decision.** `mclustpkg.class_error(cl, tr)` is `classError(classification, class)` for labellings whose cross table has a unique best partner in every row and column (the package's tie-resolving permutation search is not reproduced): each classification label maps to the true class it overlaps most, each true class to the label it overlaps most, the two error sets are counted, and the larger is returned with the error rate. Equal to mclust on the random labellings of 20 to 80 observations that meet that condition (oracle_mclust, the error rate and every misclassification flag, 6234 cases in all). Not here: ties between best partners, the default VVV hierarchy, the remaining covariance models, priors, noise. Linux pending.

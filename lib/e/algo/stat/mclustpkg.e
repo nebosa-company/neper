@@ -605,3 +605,75 @@ fn mclust_select(a: *mem.Arena, x: []const f64, n: usize, p: usize, gmin: usize,
     out[3usize] = ll
     ret ok
 }
+
+// classError(classification, class) when every class of either labelling has a unique best partner: the error rate and, in bad (0 or 1 per observation), the misclassified ones;
+// both codings are 0-based; the larger of the two one-directional error sets is kept
+fn class_error(a: *mem.Arena, cl: []const usize, tr: []const usize, bad: []usize) -> f64 {
+    let n = cl.len
+    var kc = 0usize
+    var kt = 0usize
+    var i = 0usize
+    while i < n {
+        if cl[i] + 1usize > kc { kc = cl[i] + 1usize }
+        if tr[i] + 1usize > kt { kt = tr[i] + 1usize }
+        i += 1usize
+    }
+    let (tab, e) = mem.alloc[f64](a, kc * kt)
+    let (ma, e2) = mem.alloc[usize](a, kc)
+    let (mb, e3) = mem.alloc[usize](a, kt)
+    if e != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i < kc * kt {
+        tab[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        tab[tr[i] * kc + cl[i]] += 1.0f64
+        i += 1usize
+    }
+    var c = 0usize
+    while c < kc {
+        var best = 0usize
+        var t = 1usize
+        while t < kt {
+            if tab[t * kc + c] > tab[best * kc + c] { best = t }
+            t += 1usize
+        }
+        ma[c] = best
+        c += 1usize
+    }
+    var t2 = 0usize
+    while t2 < kt {
+        var best = 0usize
+        var c2 = 1usize
+        while c2 < kc {
+            if tab[t2 * kc + c2] > tab[t2 * kc + best] { best = c2 }
+            c2 += 1usize
+        }
+        mb[t2] = best
+        t2 += 1usize
+    }
+    var one = 0usize
+    var two = 0usize
+    i = 0usize
+    while i < n {
+        if ma[cl[i]] != tr[i] { one += 1usize }
+        if mb[tr[i]] != cl[i] { two += 1usize }
+        i += 1usize
+    }
+    var cnt = 0usize
+    i = 0usize
+    while i < n {
+        var is_bad = false
+        if one > two { is_bad = ma[cl[i]] != tr[i] } else { is_bad = mb[tr[i]] != cl[i] }
+        if is_bad {
+            bad[i] = 1usize
+            cnt += 1usize
+        } else {
+            bad[i] = 0usize
+        }
+        i += 1usize
+    }
+    ret f64(cnt) / f64(n)
+}

@@ -55,6 +55,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if ix == 0.0f64 - 4.0f64 { ret so[3usize] }
         ret f64(labs[usize(ix)])
     }
+    if str.eq(c.name, "cerr") {
+        // (n, index (-1 error rate, else the 0/1 flag of the observation), classification[n], class[n]) with 0-based codes
+        let cn = usize(z[0usize])
+        let (cc, e1) = mem.alloc[usize](a, cn)
+        let (tt, e2) = mem.alloc[usize](a, cn)
+        let (bd, e3) = mem.alloc[usize](a, cn)
+        if e1 != ok || e2 != ok || e3 != ok { ret nan }
+        var q = 0usize
+        while q < cn {
+            cc[q] = usize(z[2usize + q])
+            tt[q] = usize(z[2usize + cn + q])
+            q += 1usize
+        }
+        let er = mc.class_error(a, cc, tt, bd)
+        if z[1usize] < 0.0f64 { ret er }
+        ret f64(bd[usize(z[1usize])])
+    }
     if str.eq(c.name, "mbic") {
         // (n, p, g, model code, X[n p] column-major)
         let bn = usize(z[0usize])
