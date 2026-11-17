@@ -49,6 +49,17 @@ for (mi in seq_along(models)) {
   fe <- fevd(s, n.ahead = H); tot <- 0; pos <- 0
   for (i in seq_len(K)) for (n in 1:H) for (j in seq_len(K)) { pos <- pos + 1; tot <- tot + fe[[i]][n, j] * pos }
   add("sv_fevd", c(a, H), tot)
+  # estmethod = "direct" (optim's Nelder-Mead): the mode is offset by 10; no hessian, so no standard errors
+  sd <- try(suppressWarnings(do.call(SVAR, list(x = v, estmethod = "direct", Amat = amat, Bmat = bmat))), silent = TRUE)
+  if (!inherits(sd, "try-error")) {
+    ad <- a; ad[6] <- mode + 10
+    add("sv_a", ad, wsum(as.vector(t(sd$A)))); add("sv_b", ad, wsum(as.vector(t(sd$B))))
+    add("sv_sigma", ad, wsum(as.vector(t(sd$Sigma.U)))); add("sv_iter", ad, sd$iter)
+    if (!is.null(sd$LR)) { add("sv_lr", ad, sd$LR$statistic); add("sv_lrp", ad, sd$LR$p.value) }
+    add("sv_irf0", c(ad, H, 0), irfws(irf(sd, n.ahead = H, boot = FALSE)$irf, H))
+    add("sv_fevd", c(ad, H), { fe <- fevd(sd, n.ahead = H); tot <- 0; pos <- 0
+      for (i in seq_len(K)) for (n in 1:H) for (j in seq_len(K)) { pos <- pos + 1; tot <- tot + fe[[i]][n, j] * pos }; tot })
+  }
   if (mi %% 2 == 1) {
     ir <- suppressWarnings(irf(s, n.ahead = H, boot = TRUE, runs = 30, ci = 0.9, seed = 11 + mi))
     b <- c(a, H, 30, 0.9, 11 + mi, 0)

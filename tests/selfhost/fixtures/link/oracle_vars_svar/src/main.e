@@ -85,7 +85,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let k = usize(x[2usize])
     let p = usize(x[3usize])
     let det = usize(x[4usize])
-    let mode = usize(x[5usize])
+    // a mode of 10 or more is estmethod = "direct"
+    var mode = usize(x[5usize])
+    var direct = false
+    if mode >= 10usize {
+        direct = true
+        mode -= 10usize
+    }
     let amat = x[6usize..6usize + k * k]
     let bmat = x[6usize + k * k..6usize + 2usize * k * k]
     let ex = 6usize + 2usize * k * k
@@ -96,7 +102,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if ve != ok { os.exit(31) }
     var v = v0
     var s: sv.Svar = zero
-    if sv.svar_fit(a, &v, mode, amat, bmat, none, 100usize, 1.0e-7f64, 1.0f64, &s) != ok { os.exit(32) }
+    if sv.svar_fit(a, &v, mode, amat, bmat, none, 100usize, 1.0e-7f64, 1.0f64, direct, &s) != ok { os.exit(32) }
     let nm = c.name
     if str.eq(nm, "sv_a") { ret wsum(s.a) }
     if str.eq(nm, "sv_b") { ret wsum(s.b) }
@@ -148,7 +154,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let bs = i64(x[ex + 3usize])
         let lo = vr.zeros(a, (HORIZON + 1usize) * k * k)
         let hi = vr.zeros(a, (HORIZON + 1usize) * k * k)
-        if sv.svar_irf_boot(a, &v, mode, amat, bmat, none, 100usize, 1.0e-7f64, 1.0f64, HORIZON, false, runs, ci, bs, lo, hi) != ok { os.exit(33) }
+        if sv.svar_irf_boot(a, &v, mode, amat, bmat, none, 100usize, 1.0e-7f64, 1.0f64, direct, HORIZON, false, runs, ci, bs, lo, hi) != ok { os.exit(33) }
         if str.eq(nm, "sv_bootlo") { ret irf_wsum(lo, k, HORIZON) }
         ret irf_wsum(hi, k, HORIZON)
     }
