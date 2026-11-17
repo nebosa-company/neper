@@ -33,7 +33,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             ret s
         }
         var cnt = p * p
-        if model < 4usize { cnt = 1usize }
+        if model < 8usize { cnt = 1usize }
         while q < cnt {
             s += f64(q + 1usize) * psc[q]
             q += 1usize

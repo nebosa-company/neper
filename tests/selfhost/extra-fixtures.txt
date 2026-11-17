@@ -423,6 +423,13 @@ oracle_mclust6
 oracle_mclust7
 oracle_mclust8
 oracle_mclust9
+oracle_mclust10
+oracle_mclust11
+oracle_mclust12
+oracle_mclust13
+oracle_mclust14
+oracle_mclust15
+oracle_mclust16
 oracle_clusterpam
 oracle_clusterclara
 oracle_clustertwins
