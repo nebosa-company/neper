@@ -48403,3 +48403,8 @@ Whitehead proportional-odds power (`popower`: power, efficiency, approximate sta
 ## D6981 — Hmisc rcspline.restate
 
 `rcspline_restate(knots, coef, norm, integral, out)`: the k + 1 coefficients of x and the truncated powers a restricted cubic spline fit expands to, with the two restricted coefficients recovered from the linearity constraints, and the integral variant (0.5 and 0.25 scaling). Equal to the coefficient vector of `Hmisc::rcspline.restate` on 30 settings (oracle_hmisc). The formatted function text and the intercept form are not here. Linux pending.
+
+
+## D6982 — extraDistr cumulative functions of the discrete and truncated families
+
+`zip_p`, `zib_p`, `zinb_p`, `gpois_p`, `tpois_p`, `tbinom_p`, `nsbeta_p`, `ht_p` and `sgomp_p`, built on the base cumulative functions, equal `extraDistr` p functions on 4 parameter sets each (oracle_extradistr). Slash and Skellam cumulative functions and every quantile of these families are not here. Linux pending.

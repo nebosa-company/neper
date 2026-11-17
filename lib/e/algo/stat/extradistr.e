@@ -390,3 +390,45 @@ fn rgen(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64) -> f64 {
     if family == 7usize { ret gompertz_q(1.0f64 - u, p1, p2) }
     ret p1 * math.abs[f64](math.tan[f64](pi() * u))
 }
+
+// cumulative forms of the discrete and truncated families above
+fn zip_p(x: f64, l: f64, pi0: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret pi0 + (1.0f64 - pi0) * nm.ppois(x, l, true, false)
+}
+fn zib_p(x: f64, n: f64, pr: f64, pi0: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret pi0 + (1.0f64 - pi0) * nb.pbinom(x, n, pr, true, false)
+}
+fn zinb_p(x: f64, n: f64, pr: f64, pi0: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret pi0 + (1.0f64 - pi0) * nb.pnbinom(x, n, pr, true, false)
+}
+fn gpois_p(x: f64, shape: f64, scale: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret nb.pnbinom(x, shape, 1.0f64 / (1.0f64 + scale), true, false)
+}
+fn tpois_p(x: f64, l: f64, a: f64, b: f64) -> f64 {
+    if x <= a { ret 0.0f64 }
+    if x >= b { ret 1.0f64 }
+    ret (nm.ppois(x, l, true, false) - nm.ppois(a, l, true, false)) / (nm.ppois(b, l, true, false) - nm.ppois(a, l, true, false))
+}
+fn tbinom_p(x: f64, n: f64, pr: f64, a: f64, b: f64) -> f64 {
+    if x <= a { ret 0.0f64 }
+    if x >= b { ret 1.0f64 }
+    ret (nb.pbinom(x, n, pr, true, false) - nb.pbinom(a, n, pr, true, false)) / (nb.pbinom(b, n, pr, true, false) - nb.pbinom(a, n, pr, true, false))
+}
+fn nsbeta_p(x: f64, s1: f64, s2: f64, lo: f64, hi: f64) -> f64 {
+    if x <= lo { ret 0.0f64 }
+    if x >= hi { ret 1.0f64 }
+    ret nb.pbeta((x - lo) / (hi - lo), s1, s2, true, false)
+}
+fn ht_p(x: f64, nu: f64, s: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret 2.0f64 * nb.pt(x / s, nu, true, false) - 1.0f64
+}
+fn sgomp_p(x: f64, b: f64, eta: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let e = math.exp[f64](0.0f64 - b * x)
+    ret (1.0f64 - e) * math.exp[f64](0.0f64 - eta * e)
+}

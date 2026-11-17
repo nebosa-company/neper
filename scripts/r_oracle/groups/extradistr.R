@@ -50,6 +50,18 @@ for (rep in 1:3) {
   mu <- rnorm(1); for (xx in c(mu - 3, mu - 0.2, mu, mu + 1, mu + 4)) add2("d4", c(3, mu, sg, 0, 0, xx), dslash(xx, mu, sg))
   bb <- runif(1, 0.3, 2); et <- runif(1, 0.2, 3); for (xx in c(0, 0.3, 1, 3)) add2("d4", c(4, bb, et, 0, 0, xx), dsgomp(xx, bb, et))
 }
+# cumulative forms: fn "c3" (dist, p1, p2, p3, v) 0 zip 1 zib 2 zinb 3 gpois 4 tpois; fn "c4" (dist, p1..p4, v) 0 tbinom 1 nsbeta 2 ht 3 sgomp
+for (rep in 1:4) {
+  l <- runif(1, 0.5, 5); pz <- runif(1, 0.05, 0.6); n <- sample(8:20, 1); pr <- runif(1, 0.2, 0.8); sh <- runif(1, 1, 5); sc <- runif(1, 0.3, 2); a <- sample(0:2, 1); b <- sample(8:15, 1)
+  for (xx in c(-1, 0, 1, 2, 5, 9, 14)) {
+    add2("c3", c(0, l, pz, 0, xx), pzip(xx, l, pz)); add2("c3", c(1, n, pr, pz, xx), pzib(xx, n, pr, pz)); add2("c3", c(2, n, pr, pz, xx), pzinb(xx, n, pr, pz))
+    add2("c3", c(3, sh, sc, 0, xx), pgpois(xx, sh, scale = sc)); add2("c3", c(4, l, a, b, xx), ptpois(xx, l, a, b))
+    add2("c4", c(0, n, pr, a, b, xx), ptbinom(xx, n, pr, a, b))
+  }
+  s1 <- runif(1, 0.8, 4); s2 <- runif(1, 0.8, 4); lo <- runif(1, -2, 0); hi <- lo + runif(1, 1, 4); for (xx in seq(lo - 0.5, hi + 0.5, length.out = 6)) add2("c4", c(1, s1, s2, lo, hi, xx), pnsbeta(xx, s1, s2, lo, hi))
+  nu <- runif(1, 1, 8); sg <- runif(1, 0.5, 2); for (xx in c(-1, 0.5, 2, 5)) add2("c4", c(2, nu, sg, 0, 0, xx), pht(xx, nu, sg))
+  bb <- runif(1, 0.3, 2); et <- runif(1, 0.2, 3); for (xx in c(-1, 0.3, 1, 3)) add2("c4", c(3, bb, et, 0, 0, xx), psgomp(xx, bb, et))
+}
 # random draws: "rg" (family, seed, p1, p2, p3, index) the draw at position index (0-based) of five seeded draws; family 0 gumbel 1 frechet 2 power 3 lomax 4 pareto 5 rayleigh 6 kumar 7 gompertz 8 hnorm 9 hcauchy 10 laplace
 for (rep in 1:33) {
   sd <- sample(1:100000, 1); fam <- (rep - 1) %% 11; p1 <- runif(1, 0.5, 3); p2 <- runif(1, 0.5, 3); p3 <- runif(1, -1, 1)
