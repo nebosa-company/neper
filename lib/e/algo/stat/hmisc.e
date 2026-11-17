@@ -791,3 +791,74 @@ fn redun_linear(a: *mem.Arena, x: []const f64, n: usize, p: usize, r2: f64, orde
     }
     ret removed
 }
+
+// spearman2(x, y, p) for a numeric x and p of 1 or 2: out = (rho2, F, adjusted rho2); the squared rank correlation, or the R^2 of the y ranks on the x ranks and their squares
+fn spearman2(a: *mem.Arena, x: []const f64, y: []const f64, p: usize, out: []f64) -> err {
+    let n = x.len
+    let (rx, e1) = mem.alloc[f64](a, n * 2usize)
+    let (ry, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        rx[i] = rank_avg(x, i)
+        rx[n + i] = rx[i] * rx[i]
+        ry[i] = rank_avg(y, i)
+        i += 1usize
+    }
+    var ym = 0.0f64
+    i = 0usize
+    while i < n {
+        ym += ry[i]
+        i += 1usize
+    }
+    ym = ym / f64(n)
+    var tss = 0.0f64
+    i = 0usize
+    while i < n {
+        tss += (ry[i] - ym) * (ry[i] - ym)
+        i += 1usize
+    }
+    var r2 = 0.0f64
+    if p == 1usize {
+        var xm = 0.0f64
+        i = 0usize
+        while i < n {
+            xm += rx[i]
+            i += 1usize
+        }
+        xm = xm / f64(n)
+        var sxy = 0.0f64
+        var sxx = 0.0f64
+        i = 0usize
+        while i < n {
+            sxy += (rx[i] - xm) * (ry[i] - ym)
+            sxx += (rx[i] - xm) * (rx[i] - xm)
+            i += 1usize
+        }
+        r2 = sxy * sxy / (sxx * tss)
+    } else {
+        let (dm, e3) = mem.alloc[f64](a, n * 3usize)
+        if e3 != ok { ret e3 }
+        i = 0usize
+        while i < n {
+            dm[i] = 1.0f64
+            dm[n + i] = rx[i]
+            dm[2usize * n + i] = rx[n + i]
+            i += 1usize
+        }
+        let (f, fe) = dc.lm_fit(a, dm, n, 3usize, ry, 1.0e-7f64)
+        if fe != ok { ret fe }
+        var rss = 0.0f64
+        i = 0usize
+        while i < n {
+            rss += f.residuals[i] * f.residuals[i]
+            i += 1usize
+        }
+        r2 = 1.0f64 - rss / tss
+    }
+    let df2 = f64(n) - f64(p) - 1.0f64
+    out[0usize] = r2
+    out[1usize] = r2 / f64(p) / ((1.0f64 - r2) / df2)
+    out[2usize] = 1.0f64 - (1.0f64 - r2) * (f64(n) - 1.0f64) / df2
+    ret ok
+}

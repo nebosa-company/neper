@@ -77,4 +77,7 @@ for (rep in 1:12) {
   for (k in seq_along(out)) { cases[[length(cases) + 1]] <- case("red", c(n, p, r2, k - 1, 0, X), match(out[k], names(D)) - 1, rel = 0, abs = 0.5)
     cases[[length(cases) + 1]] <- case("red", c(n, p, r2, k - 1, 1, X), unname(rq[k]), rel = 1e-8, abs = 1e-10) }
 }
+# spearman2 "sp2": (n, p, which 0 rho2 1 F 2 adjusted, x[n], y[n])
+for (rep in 1:20) { n <- sample(8:80, 1); x <- if (rep %% 2) rnorm(n) else round(rnorm(n), 1); y <- round(x^2 + rnorm(n), 1 + rep %% 2); pp <- 1 + rep %% 2
+  r <- spearman2(x, y, p = pp); for (w in 0:2) cases[[length(cases) + 1]] <- case("sp2", c(n, pp, w, x, y), unname(r[c(1, 2, 7)[w + 1]]), rel = 1e-8, abs = 1e-10) }
 emit("hmisc", "Hmisc", list(cases))

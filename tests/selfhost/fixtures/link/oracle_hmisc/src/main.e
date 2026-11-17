@@ -68,6 +68,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if x[4usize] == 0.0f64 { ret f64(od[k]) }
         ret rs[k]
     }
+    if str.eq(c.name, "sp2") {
+        // (n, p, which, x[n], y[n])
+        let n = usize(x[0usize])
+        var o3: [3]f64 = zero
+        if hm.spearman2(a, x[3usize..3usize + n], x[3usize + n..3usize + n + n], usize(x[1usize]), o3[0usize..3usize]) != ok { ret nan }
+        ret o3[usize(x[2usize])]
+    }
     if str.eq(c.name, "hdq") {
         let n = usize(x[0usize])
         ret hm.hd_quantile(a, x[2usize..2usize + n], x[1usize])

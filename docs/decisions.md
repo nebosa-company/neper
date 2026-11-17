@@ -48358,3 +48358,8 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6972 — glmnet: the random folds of cv.glmnet
 
 **Decision.** `glmnet.random_foldid` is the assignment `cv.glmnet` makes when no foldid is given, `sample(rep(seq(nfolds), length = n))`: a permutation of 1 .. n from `sample.int` (the generator's rejection sampling), the fold of position j being ((perm_j - 1) mod nfolds) + 1. Equal to the `foldid` of `cv.glmnet(keep = TRUE)` under set.seed on 20 settings of 20 to 100 observations and 3 to 10 folds, four observations each (oracle_glmnet, 2854 cases in all). A complete default-lambda `cv.glmnet` run was also tried and did not agree with the same call given its own lambda and foldid: R's two forms differ by 2e-4 to 6e-3 in cvm for a reason not found, so only the fold assignment and the explicit-lambda cross-validation (D6886) are claimed. Linux pending.
+
+
+## D6973 — Hmisc spearman2 for numeric predictors
+
+`e.algo.stat.hmisc.spearman2(x, y, p)` for a numeric x with p of 1 (squared rank correlation) or 2 (R^2 of the y ranks on the x ranks and their squares), with the F statistic and adjusted rho2 `1 - (1 - rho2)(n - 1)/(n - p - 1)`. Equal to `Hmisc::spearman2` on 20 settings (oracle_hmisc). The factor-predictor form and the p-value are not here. Also tried and dropped: gbm bagging (`bag.fraction` below 1) by selection sampling with one uniform per row, which gave fits 0.2 to 3% off R, so the sampling order of gbm is not reproduced. Linux pending.
