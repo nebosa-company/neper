@@ -20,4 +20,13 @@ for (rep in 1:40) {
   v[1] <- iters
   for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, me, sd, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else if (me == 0) 1e-6 else 1e-8, abs = if (q == 1) 0 else if (me == 0) 1e-8 else 1e-10)
 }
+# KL (method 2) and Frobenius (method 3): the same updates under the "stationary" stopping rule; the iteration count is the fit's own niter
+for (rep in 1:24) {
+  n <- sample(6:16, 1); p <- sample(5:10, 1); r <- sample(2:3, 1); me <- 2 + rep %% 2; sd <- sample(1:100000, 1)
+  x <- matrix(round(runif(n * p, 0.1, 5), 4), n, p)
+  res <- tryCatch(suppressWarnings(nmf(x, r, method = if (me == 2) "KL" else "Frobenius", seed = sd)), error = function(e) NULL)
+  if (is.null(res)) next
+  v <- c(niter(res), as.vector(basis(res)), as.vector(coef(res)))
+  for (q in seq_along(v)) cases[[length(cases) + 1]] <- case("nmf", c(n, p, r, me, sd, as.vector(x), q - 1), v[q], rel = if (q == 1) 0 else 1e-6, abs = if (q == 1) 300 else 1e-8)
+}
 emit("nmf", "NMF", list(cases))

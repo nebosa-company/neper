@@ -49,10 +49,19 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
     let eps = 2.220446049250313e-16f64
     let eps9 = 1.0e-9f64
     var inc = 0usize
+    var sn = 0usize
+    var smax = 0.0f64 - 1.0f64 / 0.0f64
+    var smin = 1.0f64 / 0.0f64
+    if method >= 2usize {
+        let c0 = nmf_objective(v, w, h, n, p, rk, method % 2usize, wh)
+        sn = 1usize
+        smax = c0
+        smin = c0
+    }
     var it = 1usize
     var done = false
     while it <= maxiter && !done {
-        if method == 0usize {
+        if method % 2usize == 0usize {
             matmul(w, h, wh, n, rk, p)
             // h[k, j] *= sum_i w[i, k] v[i, j] / wh[i, j] / colSums(w)[k]
             var k = 0usize
@@ -230,7 +239,7 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
                 k += 1usize
             }
         }
-        if it % 10usize == 0usize {
+        if method < 2usize && it % 10usize == 0usize {
             var j = 0usize
             while j < p {
                 var best = 0usize
@@ -267,6 +276,24 @@ fn nmf_fit(a: *mem.Arena, v: []const f64, n: usize, p: usize, rk: usize, method:
             }
             if inc > 40usize { done = true }
         }
+        if method >= 2usize {
+            if sn != 0usize || it % 50usize == 0usize {
+                let cv = nmf_objective(v, w, h, n, p, rk, method % 2usize, wh)
+                if cv != cv {
+                    done = true
+                } else {
+                    sn += 1usize
+                    if cv > smax { smax = cv }
+                    if cv < smin { smin = cv }
+                    if sn == 11usize {
+                        if (smax - smin) / 10.0f64 <= eps { done = true }
+                        sn = 0usize
+                        smax = 0.0f64 - 1.0f64 / 0.0f64
+                        smin = 1.0f64 / 0.0f64
+                    }
+                }
+            }
+        }
         if !done { it += 1usize }
     }
     if it > maxiter { it = maxiter }
@@ -291,4 +318,30 @@ fn matmul(a: []const f64, b: []const f64, c: []f64, n: usize, k: usize, p: usize
         }
         j += 1usize
     }
+}
+
+// the fit measure of nmf as the package's C code sums it (rows then columns, both descending): kind 0 the Kullback-Leibler divergence (a zero entry of v adds the fit), kind 1 half the squared Frobenius distance
+fn nmf_objective(v: []const f64, w: []const f64, h: []const f64, n: usize, p: usize, rk: usize, kind: usize, wh: []f64) -> f64 {
+    matmul(w, h, wh, n, rk, p)
+    var s = 0.0f64
+    var i = n
+    while i > 0usize {
+        i -= 1usize
+        var j = p
+        while j > 0usize {
+            j -= 1usize
+            let x = v[j * n + i]
+            let y = wh[j * n + i]
+            if kind == 0usize {
+                var dv = y
+                if x != 0.0f64 { dv = x * math.log[f64](x / y) - x + y }
+                s += dv
+            } else {
+                let d = x - y
+                s += d * d
+            }
+        }
+    }
+    if kind == 1usize { s = s / 2.0f64 }
+    ret s
 }

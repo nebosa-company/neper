@@ -3632,4 +3632,5 @@ D6769	788	EnvStats: ciNparConfLevel and ciNparN
 D6770	1150	EnvStats: nonparametric tolerance and prediction interval levels and sizes
 D6771	924	EnvStats: gofTest for the exponential and gamma distributions
 D6772	1057	EnvStats: kendallSeasonalTrendTest modified for serial correlation
-D6773	1467	NMF: brunet and lee
+D6773	1468	NMF: brunet and lee
+D6774	1095	NMF: KL and Frobenius with the stationary stop
