@@ -1,16 +1,24 @@
 // R seriation, the eigenvector methods: Spectral, Spectral_norm, MDS (cmdscale, k = 1) and MDS_angle (k = 2).
-// An order from an eigenvector is only as oriented as the eigenvector is, and LAPACK's dsyevr fixes the sign in its
-// own way: the matrix is reduced to a tridiagonal one by Householder reflectors (dsytd2, lower), the eigenvector of
-// the tridiagonal matrix gets a positive component at its largest entry (the twist index of dstemr), and the
-// reflectors carry it back. That is reproduced here; where two entries of the tridiagonal vector are close in size
-// LAPACK's choice depends on rounding in dlarrv, so the orientation can differ from R's on a few percent of the
-// vectors, and an order can then come out reversed. Orders are compared up to reversal by the fixture.
+// An order from an eigenvector is only as oriented as the eigenvector is, and LAPACK's dsyevr fixes the sign in its own
+// way; e.algo.linalg.lapack_syevr is that routine ported statement for statement, so the orientation is R's.
 //
 // Dissimilarities are a full symmetric n by n row-major matrix d; an order is a permutation of 0..n-1.
 
 use e.math
 use e.mem
-use e.ml.reduce as reduce
+use e.algo.linalg.lapack_syevr as lapack
+
+// R's rowSums keeps its running sum in long double (64-bit significand); a double-double running sum rounded once to double
+// stands in for it and agrees with it except in about one rounding in two thousand.
+fn ld_add(hi: *f64, lo: *f64, x: f64) {
+    let h = *hi
+    let s = h + x
+    let bb = s - h
+    let e = ((h - (s - bb)) + (x - bb)) + *lo
+    let nh = s + e
+    *hi = nh
+    *lo = e - (nh - s)
+}
 
 // R's order(): ascending, ties by index
 fn order_of(v: []const f64, n: usize, out: []usize) {
@@ -33,223 +41,38 @@ fn order_of(v: []const f64, n: usize, out: []usize) {
     }
 }
 
-fn sign_of(x: f64, y: f64) -> f64 {
-    if y < 0.0f64 { ret 0.0f64 - math.abs[f64](x) }
-    ret math.abs[f64](x)
-}
-
-// eigen(m, symmetric = TRUE) of R: values falling, vecs[k * n + i] the i-th entry of the k-th vector, signs as LAPACK's
+// eigen(m, symmetric = TRUE) of R: m is a row-major n by n matrix of which LAPACK reads the lower triangle; values come back
+// falling, vecs[k * n + i] the i-th entry of the k-th vector, signs exactly as R's dsyevr (e.algo.linalg.lapack_syevr).
 fn eigen_lapack(a: *mem.Arena, m: []const f64, n: usize, vals: []f64, vecs: []f64) -> err {
     if n == 1usize {
         vals[0usize] = m[0usize]
         vecs[0usize] = 1.0f64
         ret ok
     }
-    let (w, e1) = mem.alloc[f64](a, n * n)
-    let (vv, e2) = mem.alloc[f64](a, n * n)
-    let (tau, e3) = mem.alloc[f64](a, n)
-    let (dd, e4) = mem.alloc[f64](a, n)
-    let (ee, e5) = mem.alloc[f64](a, n)
-    let (tm, e6) = mem.alloc[f64](a, n * n)
-    let (pv, e7) = mem.alloc[f64](a, n)
-    let (qv, e8) = mem.alloc[f64](a, n)
-    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok || e8 != ok { ret mem.Full }
+    let (xc, e1) = mem.alloc[f64](a, n * n)
+    let (w, e2) = mem.alloc[f64](a, n)
+    let (z, e3) = mem.alloc[f64](a, n * n)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
     var i = 0usize
-    while i < n * n {
-        w[i] = m[i]
-        vv[i] = 0.0f64
-        i += 1usize
-    }
-    // dsytd2, uplo = L
-    i = 0usize
-    while i + 1usize < n {
-        let alpha = w[(i + 1usize) * n + i]
-        var xs = 0.0f64
-        var k = i + 2usize
-        while k < n {
-            xs += w[k * n + i] * w[k * n + i]
-            k += 1usize
-        }
-        let xnorm = math.sqrt[f64](xs)
-        var taui = 0.0f64
-        var beta = alpha
-        vv[i * n + i + 1usize] = 1.0f64
-        if xnorm != 0.0f64 {
-            beta = sign_of(math.sqrt[f64](alpha * alpha + xnorm * xnorm), alpha)
-            beta = 0.0f64 - beta
-            taui = (beta - alpha) / beta
-            k = i + 2usize
-            while k < n {
-                vv[i * n + k] = w[k * n + i] / (alpha - beta)
-                k += 1usize
-            }
-        }
-        ee[i] = beta
-        tau[i] = taui
-        if taui != 0.0f64 {
-            // p = taui * A v over the trailing block, then A -= v w' + w v'
-            var dot = 0.0f64
-            var r = i + 1usize
-            while r < n {
-                var s = 0.0f64
-                var c = i + 1usize
-                while c < n {
-                    s += w[r * n + c] * vv[i * n + c]
-                    c += 1usize
-                }
-                pv[r] = taui * s
-                dot += pv[r] * vv[i * n + r]
-                r += 1usize
-            }
-            let alw = 0.0f64 - 0.5f64 * taui * dot
-            r = i + 1usize
-            while r < n {
-                qv[r] = pv[r] + alw * vv[i * n + r]
-                r += 1usize
-            }
-            r = i + 1usize
-            while r < n {
-                var c = i + 1usize
-                while c < n {
-                    w[r * n + c] = w[r * n + c] - vv[i * n + r] * qv[c] - qv[r] * vv[i * n + c]
-                    c += 1usize
-                }
-                r += 1usize
-            }
-        }
-        dd[i] = w[i * n + i]
-        i += 1usize
-    }
-    dd[n - 1usize] = w[(n - 1usize) * n + n - 1usize]
-    i = 0usize
-    while i < n * n {
-        tm[i] = 0.0f64
-        i += 1usize
-    }
-    i = 0usize
     while i < n {
-        tm[i * n + i] = dd[i]
-        if i + 1usize < n {
-            tm[(i + 1usize) * n + i] = ee[i]
-            tm[i * n + i + 1usize] = ee[i]
+        var j = 0usize
+        while j < n {
+            xc[i + j * n] = m[i * n + j]
+            j += 1usize
         }
         i += 1usize
     }
-    if n == 2usize {
-        // dstemr, n = 2: dlaev2 of (d1, e1, d2); the vector of the smaller-magnitude root is (-sn, cs), the other (cs, sn)
-        let a1 = dd[0usize]
-        let b1 = ee[0usize]
-        let c1 = dd[1usize]
-        let sm = a1 + c1
-        let df = a1 - c1
-        let adf = math.abs[f64](df)
-        let tb = b1 + b1
-        let ab = math.abs[f64](tb)
-        var acmx = c1
-        var acmn = a1
-        if math.abs[f64](a1) > math.abs[f64](c1) {
-            acmx = a1
-            acmn = c1
-        }
-        var rt = ab * math.sqrt[f64](2.0f64)
-        if adf > ab { rt = adf * math.sqrt[f64](1.0f64 + (ab / adf) * (ab / adf)) }
-        if adf < ab { rt = ab * math.sqrt[f64](1.0f64 + (adf / ab) * (adf / ab)) }
-        var rt1 = 0.5f64 * rt
-        var rt2 = 0.0f64 - 0.5f64 * rt
-        var sgn1 = 1.0f64
-        if sm < 0.0f64 {
-            rt1 = 0.5f64 * (sm - rt)
-            sgn1 = 0.0f64 - 1.0f64
-            rt2 = (acmx / rt1) * acmn - (b1 / rt1) * b1
-        }
-        if sm > 0.0f64 {
-            rt1 = 0.5f64 * (sm + rt)
-            rt2 = (acmx / rt1) * acmn - (b1 / rt1) * b1
-        }
-        var cs = 0.0f64
-        var sgn2 = 1.0f64
-        if df >= 0.0f64 { cs = df + rt } else {
-            cs = df - rt
-            sgn2 = 0.0f64 - 1.0f64
-        }
-        let acs = math.abs[f64](cs)
-        var cs1 = 1.0f64
-        var sn1 = 0.0f64
-        if acs > ab {
-            let ct = (0.0f64 - tb) / cs
-            sn1 = 1.0f64 / math.sqrt[f64](1.0f64 + ct * ct)
-            cs1 = ct * sn1
-        } else {
-            if ab != 0.0f64 {
-                let tn = (0.0f64 - cs) / tb
-                cs1 = 1.0f64 / math.sqrt[f64](1.0f64 + tn * tn)
-                sn1 = tn * cs1
-            }
-        }
-        if sgn1 == sgn2 {
-            let tn = cs1
-            cs1 = 0.0f64 - sn1
-            sn1 = tn
-        }
-        // rt1 has cs1, sn1; rt2 has -sn1, cs1; falling order
-        if rt1 >= rt2 {
-            vals[0usize] = rt1
-            vecs[0usize] = cs1
-            vecs[1usize] = sn1
-            vals[1usize] = rt2
-            vecs[2usize] = 0.0f64 - sn1
-            vecs[3usize] = cs1
-        } else {
-            vals[0usize] = rt2
-            vecs[0usize] = 0.0f64 - sn1
-            vecs[1usize] = cs1
-            vals[1usize] = rt1
-            vecs[2usize] = cs1
-            vecs[3usize] = sn1
-        }
-        ret ok
-    }
-    let er = reduce.symmetric_eigen(tm, n, vals, vecs, 1.0e-32f64, 200u32)
+    let er = lapack.dsyevr_all(a, xc, n, w, z)
     if er != ok { ret er }
-    var kk = 0usize
-    while kk < n {
-        var r = 0usize
-        var mx = 0.0f64
+    var k = 0usize
+    while k < n {
+        vals[k] = w[n - 1usize - k]
         var q = 0usize
         while q < n {
-            if math.abs[f64](vecs[kk * n + q]) > mx {
-                mx = math.abs[f64](vecs[kk * n + q])
-                r = q
-            }
+            vecs[k * n + q] = z[(n - 1usize - k) * n + q]
             q += 1usize
         }
-        if vecs[kk * n + r] < 0.0f64 {
-            q = 0usize
-            while q < n {
-                vecs[kk * n + q] = 0.0f64 - vecs[kk * n + q]
-                q += 1usize
-            }
-        }
-        // carry back: z = H(0) H(1) ... H(n-2) z
-        var h = n - 1usize
-        while h > 0usize {
-            let ih = h - 1usize
-            if tau[ih] != 0.0f64 {
-                var dot = 0.0f64
-                q = ih + 1usize
-                while q < n {
-                    dot += vv[ih * n + q] * vecs[kk * n + q]
-                    q += 1usize
-                }
-                q = ih + 1usize
-                while q < n {
-                    vecs[kk * n + q] = vecs[kk * n + q] - tau[ih] * dot * vv[ih * n + q]
-                    q += 1usize
-                }
-            }
-            h -= 1usize
-        }
-        kk += 1usize
+        k += 1usize
     }
     ret ok
 }
@@ -262,12 +85,14 @@ fn spectral_order(a: *mem.Arena, d: []const f64, n: usize, out: []usize) -> err 
     if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
     var i = 0usize
     while i < n {
-        var rs = 0.0f64
+        var hi = 0.0f64
+        var lo = 0.0f64
         var j = 0usize
         while j < n {
-            rs += 1.0f64 / (1.0f64 + d[i * n + j])
+            ld_add(&hi, &lo, 1.0f64 / (1.0f64 + d[i * n + j]))
             j += 1usize
         }
+        let rs = hi
         j = 0usize
         while j < n {
             l[i * n + j] = 0.0f64 - 1.0f64 / (1.0f64 + d[i * n + j])
@@ -296,14 +121,15 @@ fn spectral_norm_order(a: *mem.Arena, d: []const f64, n: usize, out: []usize) ->
     if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
     var i = 0usize
     while i < n {
-        var rs = 0.0f64
+        var hi = 0.0f64
+        var lo = 0.0f64
         var j = 0usize
         while j < n {
             let wv = 1.0f64 / (1.0f64 + d[i * n + j])
-            rs += 1.0f64 / math.sqrt[f64](wv)
+            ld_add(&hi, &lo, 1.0f64 / math.sqrt[f64](wv))
             j += 1usize
         }
-        ds[i] = rs
+        ds[i] = hi
         i += 1usize
     }
     i = 0usize
