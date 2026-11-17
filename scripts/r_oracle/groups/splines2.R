@@ -148,4 +148,14 @@ for (rep in 1:40) {
     v <- as.vector(t(m)); a <- c(n, nk, degree, icp, lo, hi, kind, x, kn); cases[[length(cases) + 1]] <- case("sum", a, sum(v), rel = 1e-9, abs = 1e-8); cases[[length(cases) + 1]] <- case("w", a, sum(seq_along(v) * v), rel = 1e-9, abs = 1e-8)
   }
 }
+# x beyond the boundary knots for naturalSpline (5), cSpline (6 unscaled, 7 scaled), ibs (14), nsk (18)
+for (rep in 1:40) {
+  lo <- sample(c(0, -1, 2), 1); hi <- lo + sample(c(1, 3), 1); n <- sample(8:25, 1); degree <- sample(1:4, 1); icp <- rbinom(1, 1, 0.5); nk <- sample(2:3, 1)
+  x <- sort(round(runif(n, lo - 1, hi + 1), 4)); kn <- sort(round(runif(nk, lo + 0.05 * (hi - lo), hi - 0.05 * (hi - lo)), 3)); if (anyDuplicated(kn)) next
+  for (kind in c(5, 6, 7, 14, 18)) {
+    dg <- if (kind %in% c(5, 18)) 3 else degree
+    m <- tryCatch(suppressWarnings(unclass(switch(match(kind, c(5, 6, 7, 14, 18)), naturalSpline(x, knots = kn, intercept = icp == 1, Boundary.knots = c(lo, hi)), cSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi), scale = FALSE), cSpline(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi)), ibs(x, knots = kn, degree = degree, intercept = icp == 1, Boundary.knots = c(lo, hi)), nsk(x, knots = kn, intercept = icp == 1, Boundary.knots = c(lo, hi))))), error = function(e) NULL); if (is.null(m)) next
+    v <- as.vector(t(m)); a <- c(n, nk, dg, icp, lo, hi, kind, x, kn); cases[[length(cases) + 1]] <- case("sum", a, sum(v), rel = 1e-9, abs = 1e-9); cases[[length(cases) + 1]] <- case("w", a, sum(seq_along(v) * v), rel = 1e-9, abs = 1e-9)
+  }
+}
 emit("splines2", "splines2", list(cases))

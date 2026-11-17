@@ -106,6 +106,38 @@ fn row(t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, degree: usize
 
 // splines2::naturalSpline row at x (cubic, at least two internal knots): the cubic B-spline row times H, whose columns are the null space of the second derivatives at the boundary knots in the form the package uses: (B1 + B2 + B3) / 3 and t B2 + (1 - t) B3 on the left, the interior B-splines, and s B[K-2] + (1 - s) B[K-1] and the mean of the last three on the right, with t, s from the boundary second derivatives; the first column drops without the intercept
 fn nat_row(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, intercept: bool, deriv: usize, x: f64, out: []f64) -> usize {
+    if x < lo || x > hi {
+        // beyond the boundary knots the natural basis continues linearly along its tangent there
+        var xb = lo
+        if x > hi { xb = hi }
+        let (v0, e0) = mem.alloc[f64](a, knots.len + 6usize)
+        let (v1, e1) = mem.alloc[f64](a, knots.len + 6usize)
+        if e0 != ok || e1 != ok { ret 0usize }
+        var m = 0usize
+        if deriv == 0usize {
+            m = nat_in(a, t, tmp, knots, lo, hi, intercept, 0usize, xb, v0)
+            let m1 = nat_in(a, t, tmp, knots, lo, hi, intercept, 1usize, xb, v1)
+            var i = 0usize
+            while i < m1 {
+                out[i] = v0[i] + (x - xb) * v1[i]
+                i += 1usize
+            }
+        } else if deriv == 1usize {
+            m = nat_in(a, t, tmp, knots, lo, hi, intercept, 1usize, xb, out)
+        } else {
+            m = nat_in(a, t, tmp, knots, lo, hi, intercept, 0usize, xb, v0)
+            var i = 0usize
+            while i < m {
+                out[i] = 0.0f64
+                i += 1usize
+            }
+        }
+        ret m
+    }
+    ret nat_in(a, t, tmp, knots, lo, hi, intercept, deriv, x, out)
+}
+
+fn nat_in(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f64, intercept: bool, deriv: usize, x: f64, out: []f64) -> usize {
     let kk = knots.len + 4usize
     let (c0, e0) = mem.alloc[f64](a, kk)
     let (c1, e1) = mem.alloc[f64](a, kk)
@@ -156,11 +188,19 @@ fn crow(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f6
             c += 1usize
         }
         var a0 = lo
+        var endp = xe
+        var sgn = 1.0f64
+        if xe < lo {
+            a0 = xe
+            endp = lo
+            sgn = 0.0f64 - 1.0f64
+        }
         var seg = 0usize
-        while seg <= knots.len && a0 < xe {
+        while seg <= knots.len && a0 < endp {
             var b0 = hi
             if seg < knots.len { b0 = knots[seg] }
-            if b0 > xe { b0 = xe }
+            if seg == knots.len && endp > hi { b0 = endp }
+            if b0 > endp { b0 = endp }
             if b0 > a0 {
                 var q = 0usize
                 while q < 4usize {
@@ -183,7 +223,7 @@ fn crow(a: *mem.Arena, t: []f64, tmp: []f64, knots: []const f64, lo: f64, hi: f6
                     let m = row(t, tmp, knots, lo, hi, degree, true, 2u8, 0usize, u, rv)
                     c = 0usize
                     while c < m {
-                        acc[c] += wt * rv[c] * (b0 - a0) / 2.0f64
+                        acc[c] += sgn * wt * rv[c] * (b0 - a0) / 2.0f64
                         c += 1usize
                     }
                     q += 1usize
