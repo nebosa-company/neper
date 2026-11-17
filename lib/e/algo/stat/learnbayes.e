@@ -1453,3 +1453,138 @@ fn normpostpred(r: *rng.Rng, mu: []const f64, sigma2: []const f64, sample_size: 
         j += 1usize
     }
 }
+
+// mnormt.twosided(m0, prob, t, data = (xbar, n, h)): the Bayes factor against the point null m0 for a normal mean with the N(m0, t^2) alternative and the posterior probability of the null; answers (bf, post)
+fn mnormt_twosided(m0: f64, prob: f64, t: f64, xbar: f64, n: f64, h: f64) -> (f64, f64) {
+    let num = 0.5f64 * math.log[f64](n) - math.log[f64](h) - 0.5f64 * n / (h * h) * (xbar - m0) * (xbar - m0)
+    let v = h * h / n + t * t
+    let den = 0.0f64 - 0.5f64 * math.log[f64](v) - 0.5f64 / v * (xbar - m0) * (xbar - m0)
+    let bf = math.exp[f64](num - den)
+    ret (bf, prob * bf / (prob * bf + 1.0f64 - prob))
+}
+
+// pdiscp(p, probs, n, s): the predictive probability of s successes in n trials under a discrete prior on the success probability
+fn pdiscp(p: []const f64, probs: []const f64, n: f64, s: f64) -> f64 {
+    var pred = 0.0f64
+    var i = 0usize
+    while i < p.len {
+        pred += probs[i] * nb.dbinom(s, n, p[i], false)
+        i += 1usize
+    }
+    ret pred
+}
+
+// bfindep(y, K, m): the Bayes factor for independence in an I by J table (y column-major) by Monte Carlo over m Dirichlet draws of the margins (etaA from rgamma(m I, yr + 1) filled by row, then etaB), answering (bf, nse)
+fn bfindep(a: *mem.Arena, r: *rng.Rng, y: []const f64, ni: usize, nj: usize, kk: f64, m: usize, out: []f64) -> err {
+    let (ea, e1) = mem.alloc[f64](a, m * ni)
+    let (eb, e2) = mem.alloc[f64](a, m * nj)
+    let (yr, e3) = mem.alloc[f64](a, ni)
+    let (yc, e4) = mem.alloc[f64](a, nj)
+    let (lg, e5) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    var i = 0usize
+    while i < ni {
+        yr[i] = 0.0f64
+        i += 1usize
+    }
+    var j = 0usize
+    while j < nj {
+        yc[j] = 0.0f64
+        j += 1usize
+    }
+    i = 0usize
+    while i < ni {
+        j = 0usize
+        while j < nj {
+            yr[i] += y[j * ni + i]
+            yc[j] += y[j * ni + i]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    // rdirichlet(m, alpha): m rows of l gamma draws taken in row order, each row normalised
+    var row = 0usize
+    while row < m {
+        var s = 0.0f64
+        i = 0usize
+        while i < ni {
+            let g = rd.rgamma(r, yr[i] + 1.0f64, 1.0f64)
+            ea[i * m + row] = g
+            s += g
+            i += 1usize
+        }
+        i = 0usize
+        while i < ni {
+            ea[i * m + row] = ea[i * m + row] / s
+            i += 1usize
+        }
+        row += 1usize
+    }
+    row = 0usize
+    while row < m {
+        var s = 0.0f64
+        j = 0usize
+        while j < nj {
+            let g = rd.rgamma(r, yc[j] + 1.0f64, 1.0f64)
+            eb[j * m + row] = g
+            s += g
+            j += 1usize
+        }
+        j = 0usize
+        while j < nj {
+            eb[j * m + row] = eb[j * m + row] / s
+            j += 1usize
+        }
+        row += 1usize
+    }
+    row = 0usize
+    while row < m {
+        var l1 = 0.0f64
+        var l2 = 0.0f64
+        var s1 = 0.0f64
+        var s2 = 0.0f64
+        i = 0usize
+        while i < ni {
+            j = 0usize
+            while j < nj {
+                let ke = kk * ea[i * m + row] * eb[j * m + row]
+                let ky = ke + y[j * ni + i]
+                l1 += nm.lgammafn(ky)
+                s1 += ky
+                l2 += nm.lgammafn(ke)
+                s2 += ke
+                j += 1usize
+            }
+            i += 1usize
+        }
+        var v = (l1 - nm.lgammafn(s1)) - (l2 - nm.lgammafn(s2))
+        i = 0usize
+        while i < ni {
+            v -= yr[i] * math.log[f64](ea[i * m + row])
+            i += 1usize
+        }
+        j = 0usize
+        while j < nj {
+            v -= yc[j] * math.log[f64](eb[j * m + row])
+            j += 1usize
+        }
+        lg[row] = math.exp[f64](v)
+        row += 1usize
+    }
+    var mean = 0.0f64
+    row = 0usize
+    while row < m {
+        mean += lg[row]
+        row += 1usize
+    }
+    mean = mean / f64(m)
+    var vs = 0.0f64
+    row = 0usize
+    while row < m {
+        vs += (lg[row] - mean) * (lg[row] - mean)
+        row += 1usize
+    }
+    out[0usize] = mean
+    out[1usize] = math.sqrt[f64](vs / f64(m - 1usize)) / math.sqrt[f64](f64(m))
+    ret ok
+}

@@ -3814,4 +3814,5 @@ D6951	468	gbm: predict with fewer trees
 D6952	714	glmnet: coefficient interpolation
 D6953	822	bayesm: rmixture
 D6954	510	bayesm: rmvst
-D6955	508	LearnBayes: normpostpred
+D6955	509	LearnBayes: normpostpred
+D6956	1007	LearnBayes: the two-sided Bayes factor, pdiscp and bfindep; L484 closed

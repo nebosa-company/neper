@@ -161,6 +161,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         lb.normpostpred(&rr, x[5usize..5usize + m], x[5usize + m..5usize + 2usize * m], usize(x[2usize]), usize(x[3usize]), o)
         ret o[usize(x[4usize])]
     }
+    if str.eq(k, "mt2") {
+        // (m0, prob, t, xbar, n, h, which)
+        let (bf, po) = lb.mnormt_twosided(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize])
+        if x[6usize] == 0.0f64 { ret bf }
+        ret po
+    }
+    if str.eq(k, "pdp") {
+        // (n, s, g, p[g], probs[g])
+        let g = usize(x[2usize])
+        ret lb.pdiscp(x[3usize..3usize + g], x[3usize + g..3usize + 2usize * g], x[0usize], x[1usize])
+    }
+    if str.eq(k, "bfi") {
+        // (seed, I, J, K, m, which, y[I J] column-major)
+        var rr: rng.Rng = zero
+        rng.seed(&rr, i64(x[0usize]))
+        let ni = usize(x[1usize])
+        let nj = usize(x[2usize])
+        let (bo, be) = mem.alloc[f64](a, 2usize)
+        if be != ok { ret 0.0f64 / 0.0f64 }
+        if lb.bfindep(a, &rr, x[6usize..6usize + ni * nj], ni, nj, x[3usize], usize(x[4usize]), bo) != ok { ret 0.0f64 / 0.0f64 }
+        ret bo[usize(x[5usize])]
+    }
     if str.eq(k, "rej") || str.eq(k, "imp2") {
         // (seed, which, m, n, df, dmax or hidx, mean[2], var[4], x[m], nn[m], y[m]) rej: the number kept (which 0) or the sum of the kept first-coordinate values (1); imp2: est (0) or se (1)
         var rr: rng.Rng = zero

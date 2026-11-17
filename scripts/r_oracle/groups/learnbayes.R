@@ -91,6 +91,12 @@ for (rep in 1:10) {
   mv <- sample(3:8, 1); mus <- rnorm(mv); s2s <- runif(mv, 0.5, 3); ss <- sample(5:20, 1)
   for (kd in 0:2) { fnn <- list(min, max, mean)[[kd + 1]]; set.seed(sd); np <- normpostpred(list(mu = mus, sigma2 = s2s), ss, fnn)
     for (q in c(1, mv)) add("npp", c(sd, mv, ss, kd, q - 1, mus, s2s), np[q], 1e-10) }
+  m0 <- rnorm(1); pr0 <- runif(1, 0.2, 0.8); tt <- runif(1, 0.3, 2); xb <- m0 + rnorm(1, 0, 0.5); nn2 <- sample(5:40, 1); hh <- runif(1, 0.5, 2); mt2 <- mnormt.twosided(m0, pr0, tt, c(xb, nn2, hh))
+  add("mt2", c(m0, pr0, tt, xb, nn2, hh, 0), mt2$bf); add("mt2", c(m0, pr0, tt, xb, nn2, hh, 1), mt2$post)
+  gg <- sample(3:7, 1); pp <- sort(runif(gg)); pw <- runif(gg); pw <- pw / sum(pw); nb2 <- sample(5:20, 1); sv <- sample(0:nb2, 1)
+  add("pdp", c(nb2, sv, gg, pp, pw), pdiscp(pp, pw, nb2, sv))
+  ti <- sample(2:3, 1); tj <- sample(2:3, 1); yt <- matrix(sample(1:15, ti * tj, TRUE), ti, tj); mm3 <- 50; kk3 <- sample(c(1, 2, 5), 1)
+  set.seed(sd); bfi <- bfindep(yt, kk3, mm3); add("bfi", c(sd, ti, tj, kk3, mm3, 0, yt), bfi$bf, 1e-9); add("bfi", c(sd, ti, tj, kk3, mm3, 1, yt), bfi$nse, 1e-9)
   set.seed(sd); gb <- gibbs(logisticpost, c(0, 0), 60, c(0.5, 0.4), dat); for (q in c(1, 30, 60, 61, 90, 120)) add("gib", c(sd, q - 1, m, 60, 0.5, 0.4, 0, 0, xx, nn, yb), as.vector(gb$par)[q], 1e-10)
   add("gib", c(sd, 120, m, 60, 0.5, 0.4, 0, 0, xx, nn, yb), gb$accept[1], 1e-10); add("gib", c(sd, 121, m, 60, 0.5, 0.4, 0, 0, xx, nn, yb), gb$accept[2], 1e-10)
   set.seed(sd); sr <- sir(logisticpost, tp, 150, dat); for (q in c(1, 40, 150, 151, 190, 300)) add("sir", c(sd, q - 1, m, 150, 4, 0, mu, vv, xx, nn, yb), as.vector(sr)[q], 1e-10)
