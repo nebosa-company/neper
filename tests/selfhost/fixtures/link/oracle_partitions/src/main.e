@@ -26,6 +26,40 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         }
         ret bs
     }
+    if c.name.len == 3usize && c.name[0usize] == 122u8 {
+        // setparts: args (m, sizes...) for a block-size vector (m > 0) or (0, n) for setparts(n)
+        let (so, soe) = mem.alloc[f64](a, 400000usize)
+        if soe != ok { ret 0.0f64 / 0.0f64 }
+        var sn = 0usize
+        var scols = 0usize
+        if usize(x[0usize]) == 0usize {
+            sn = usize(x[1usize])
+            let (k, ke) = pt.setparts_n(a, sn, so)
+            if ke != ok { ret 0.0f64 / 0.0f64 }
+            scols = k
+        } else {
+            let sm = usize(x[0usize])
+            let (sz, sze) = mem.alloc[usize](a, sm)
+            if sze != ok { ret 0.0f64 / 0.0f64 }
+            var si = 0usize
+            while si < sm {
+                sz[si] = usize(x[1usize + si])
+                sn += sz[si]
+                si += 1usize
+            }
+            let (k, ke) = pt.setparts_shape(a, sz, so)
+            if ke != ok { ret 0.0f64 / 0.0f64 }
+            scols = k
+        }
+        if c.name[2usize] == 99u8 { ret f64(scols) }
+        var ss = 0.0f64
+        var sj = 0usize
+        while sj < scols * sn {
+            if c.name[2usize] == 115u8 { ss += so[sj] } else { ss += f64(sj + 1usize) * so[sj] }
+            sj += 1usize
+        }
+        ret ss
+    }
     let kind = usize(x[0usize])
     let n = usize(x[1usize])
     let m = usize(x[2usize])

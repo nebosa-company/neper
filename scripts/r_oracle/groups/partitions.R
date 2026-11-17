@@ -17,4 +17,9 @@ set.seed(11)
 for (rep in 1:60) { m <- sample(2:5, 1); f <- sample(0:4, m, TRUE); if (sum(f) == 0) next; n <- sample(1:sum(f), 1)
   M <- tryCatch(as.matrix(blockparts(f, n)), error = function(e) NULL); if (is.null(M)) next; v <- as.vector(M); a <- c(m, n, f)
   add("bpc", a, ncol(M)); add("bps", a, sum(v)); add("bpw", a, sum(seq_along(v) * v)) }
+# setparts: ("spc" columns, "sps" sum, "spw" position-weighted sum) args (m, sizes...) for a block-size vector or (0, n) for setparts(n)
+sp <- function(a, M) { M <- as.matrix(M); v <- as.vector(M); add("zpc", a, ncol(M)); add("zps", a, sum(v)); add("zpw", a, sum(seq_along(v) * v)) }
+for (n in 1:7) sp(c(0, n), setparts(n))
+set.seed(12)
+for (rep in 1:40) { m <- sample(2:4, 1); f <- sample(1:4, m, TRUE); if (sum(f) > 9) next; sp(c(m, f), setparts(f)) }
 emit("partitions", "partitions", list(cases))

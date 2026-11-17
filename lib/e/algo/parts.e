@@ -177,3 +177,174 @@ fn blockparts(a: *mem.Arena, f: []const f64, n: usize, out: []f64) -> (usize, er
     bp_walk(&g, m - 1usize, n)
     ret (g.cols, ok)
 }
+
+// ---- setparts: the set partitions of 1..n by block sizes, in the order the package's C++ search produces them ----
+
+type SGen = struct { sz: []usize, off: []usize, sh: []i64, dg: []i64, dn: usize, nb: usize, num: usize, out: []f64, cols: usize, sentinel_base: i64 }
+
+fn sg_sentinel(g: *SGen, t: usize, e: usize) -> i64 { ret g.sentinel_base - i64(g.sz[t]) + i64(e) }
+
+// the elements of block t are strictly increasing
+fn sg_ordered(g: *SGen, t: usize) -> bool {
+    var i = 1usize
+    while i < g.sz[t] {
+        if g.sh[g.off[t] + i] <= g.sh[g.off[t] + i - 1usize] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// Tuple::lt of the package: lexicographic when the sizes agree, otherwise "the other is shorter"
+fn sg_lt(g: *SGen, a: usize, b: usize) -> bool {
+    if g.sz[a] == g.sz[b] {
+        var i = 0usize
+        while i < g.sz[a] {
+            let x = g.sh[g.off[a] + i]
+            let y = g.sh[g.off[b] + i]
+            if x != y { ret x < y }
+            i += 1usize
+        }
+    }
+    ret g.sz[b] < g.sz[a]
+}
+
+fn sg_save(g: *SGen) {
+    var i = 0usize
+    while i < g.num {
+        var j = 0usize
+        while j < g.nb {
+            var k = 0usize
+            while k < g.sz[j] {
+                if g.sh[g.off[j] + k] == i64(i + 1usize) { g.out[g.cols * g.num + i] = f64(j + 1usize) }
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    g.cols += 1usize
+}
+
+fn sg_doit(g: *SGen, t: usize, e: usize) {
+    if t == g.nb {
+        sg_save(g)
+        ret
+    }
+    if !sg_ordered(g, t) { ret }
+    if g.sz[t] == e {
+        if t > 0usize {
+            if !sg_lt(g, t - 1usize, t) { ret }
+        }
+        sg_doit(g, t + 1usize, 0usize)
+        ret
+    }
+    var i = 0usize
+    while i < g.dn {
+        // digits.get(i): take element i, the last one moves into its place
+        let v = g.dg[i]
+        g.dg[i] = g.dg[g.dn - 1usize]
+        g.dn -= 1usize
+        g.sh[g.off[t] + e] = v
+        sg_doit(g, t, e + 1usize)
+        // digits.put(i, shape[t][e])
+        let back = g.sh[g.off[t] + e]
+        if i == g.dn {
+            g.dg[g.dn] = back
+            g.dn += 1usize
+        } else {
+            g.dg[g.dn] = g.dg[i]
+            g.dn += 1usize
+            g.dg[i] = back
+        }
+        g.sh[g.off[t] + e] = sg_sentinel(g, t, e)
+        i += 1usize
+    }
+}
+
+// setparts(x) for block sizes x (any order; zeros dropped and the rest sorted decreasing): out receives num columns (num = sum x) per set partition, entry i the block of i + 1; returns the number of partitions
+fn setparts_shape(a: *mem.Arena, x0: []const usize, out: []f64) -> (usize, err) {
+    var nb = 0usize
+    var num = 0usize
+    var i = 0usize
+    while i < x0.len {
+        if x0[i] > 0usize {
+            nb += 1usize
+            num += x0[i]
+        }
+        i += 1usize
+    }
+    let (sz, e1) = mem.alloc[usize](a, nb)
+    let (off, e2) = mem.alloc[usize](a, nb)
+    let (sh, e3) = mem.alloc[i64](a, num)
+    let (dg, e4) = mem.alloc[i64](a, num)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (0usize, mem.Full) }
+    var q = 0usize
+    i = 0usize
+    while i < x0.len {
+        if x0[i] > 0usize {
+            sz[q] = x0[i]
+            q += 1usize
+        }
+        i += 1usize
+    }
+    // sort decreasing
+    i = 1usize
+    while i < nb {
+        let key = sz[i]
+        var j = i
+        while j > 0usize && sz[j - 1usize] < key {
+            sz[j] = sz[j - 1usize]
+            j -= 1usize
+        }
+        sz[j] = key
+        i += 1usize
+    }
+    var o = 0usize
+    i = 0usize
+    while i < nb {
+        off[i] = o
+        o += sz[i]
+        i += 1usize
+    }
+    var g = SGen{ sz: sz, off: off, sh: sh, dg: dg, dn: num, nb: nb, num: num, out: out, cols: 0usize, sentinel_base: 2147483647i64 }
+    i = 0usize
+    while i < nb {
+        var e = 0usize
+        while e < sz[i] {
+            sh[off[i] + e] = sg_sentinel(&g, i, e)
+            e += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < num {
+        dg[i] = i64(i + 1usize)
+        i += 1usize
+    }
+    sg_doit(&g, 0usize, 0usize)
+    ret (g.cols, ok)
+}
+
+// setparts(n): the set partitions of 1..n, grouped by the integer partitions of n in the order of `parts(n)`, each group as setparts_shape gives it; out holds n rows per column
+fn setparts_n(a: *mem.Arena, n: usize, out: []f64) -> (usize, err) {
+    let (pm, e1) = mem.alloc[f64](a, n * n * 2usize + n)
+    if e1 != ok { ret (0usize, e1) }
+    let (np, pe) = parts(a, n, pm)
+    if pe != ok { ret (0usize, pe) }
+    let (sz, e2) = mem.alloc[usize](a, n)
+    if e2 != ok { ret (0usize, e2) }
+    var total = 0usize
+    var c = 0usize
+    while c < np {
+        var r = 0usize
+        while r < n {
+            sz[r] = usize(pm[c * n + r])
+            r += 1usize
+        }
+        let (k, se) = setparts_shape(a, sz, out[total * n..out.len])
+        if se != ok { ret (0usize, se) }
+        total += k
+        c += 1usize
+    }
+    ret (total, ok)
+}
