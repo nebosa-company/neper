@@ -645,3 +645,671 @@ fn design(kind: usize, n: usize, rp: f64, rs: f64, w: []const f64, ty: usize, di
     }
     ret ok
 }
+
+// the discrete Fourier transform of any length, unscaled (the inverse flips the sign of the exponent); radix 2 with exact twiddles for a power of two, the direct sum otherwise
+fn dft(a: *mem.Arena, re: []f64, im: []f64, inverse: bool) -> err {
+    let n = re.len
+    if n <= 1usize { ret ok }
+    let (tc, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret e1 }
+    let (ts, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret e2 }
+    var sgn = -1.0f64
+    if inverse { sgn = 1.0f64 }
+    var k = 0usize
+    while k < n {
+        let ang = 2.0f64 * pi_value() * f64(k) / f64(n)
+        tc[k] = math.cos[f64](ang)
+        ts[k] = sgn * math.sin[f64](ang)
+        k += 1usize
+    }
+    if (n & (n - 1usize)) == 0usize {
+        var j = 0usize
+        var i = 0usize
+        while i < n {
+            if i < j {
+                let tr = re[i]
+                let ti = im[i]
+                re[i] = re[j]
+                im[i] = im[j]
+                re[j] = tr
+                im[j] = ti
+            }
+            var m = n / 2usize
+            while m >= 1usize && j >= m {
+                j -= m
+                m = m / 2usize
+            }
+            j += m
+            i += 1usize
+        }
+        var len = 2usize
+        while len <= n {
+            let step = n / len
+            var start = 0usize
+            while start < n {
+                var h = 0usize
+                while h < len / 2usize {
+                    let p = start + h
+                    let q = p + len / 2usize
+                    let wr = tc[h * step]
+                    let wi = ts[h * step]
+                    let xr = re[q] * wr - im[q] * wi
+                    let xi = re[q] * wi + im[q] * wr
+                    re[q] = re[p] - xr
+                    im[q] = im[p] - xi
+                    re[p] = re[p] + xr
+                    im[p] = im[p] + xi
+                    h += 1usize
+                }
+                start += len
+            }
+            len = len * 2usize
+        }
+        ret ok
+    }
+    let (tmp_re, e3) = mem.alloc[f64](a, n)
+    if e3 != ok { ret e3 }
+    let (oi, e4) = mem.alloc[f64](a, n)
+    if e4 != ok { ret e4 }
+    k = 0usize
+    while k < n {
+        var sr = 0.0f64
+        var si = 0.0f64
+        var j = 0usize
+        while j < n {
+            let t = (j * k) % n
+            sr += re[j] * tc[t] - im[j] * ts[t]
+            si += re[j] * ts[t] + im[j] * tc[t]
+            j += 1usize
+        }
+        tmp_re[k] = sr
+        oi[k] = si
+        k += 1usize
+    }
+    k = 0usize
+    while k < n {
+        re[k] = tmp_re[k]
+        im[k] = oi[k]
+        k += 1usize
+    }
+    ret ok
+}
+
+// besselI(x, 0) by the power series (x >= 0)
+fn bessel_i0(x: f64) -> f64 {
+    let q = x * x / 4.0f64
+    var term = 1.0f64
+    var s = 1.0f64
+    var k = 1usize
+    while k < 500usize {
+        term = term * q / (f64(k) * f64(k))
+        s += term
+        if term < 1.0e-18f64 * s { break }
+        k += 1usize
+    }
+    ret s
+}
+
+fn sinc_value(x: f64) -> f64 {
+    if x == 0.0f64 { ret 1.0f64 }
+    ret math.sin[f64](pi_value() * x) / (pi_value() * x)
+}
+
+// window functions of n points into out (kind 0 hamming, 1 hanning, 2 blackman, 3 bartlett, 4 boxcar, 5 triang, 6 kaiser with par = beta, 7 chebwin with par = at, 8 gausswin with par = w, 9 flattopwin symmetric, 10 flattopwin periodic)
+fn window(a: *mem.Arena, kind: usize, n: usize, par: f64, out: []f64) -> err {
+    if n == 0usize { ret BadSpec }
+    let nf = f64(n)
+    var i = 0usize
+    if n == 1usize && kind <= 6usize {
+        out[0usize] = 1.0f64
+        ret ok
+    }
+    let m = nf - 1.0f64
+    if kind == 0usize {
+        while i < n {
+            out[i] = 0.54f64 - 0.46f64 * math.cos[f64](2.0f64 * pi_value() * f64(i) / m)
+            i += 1usize
+        }
+    } else if kind == 1usize {
+        while i < n {
+            out[i] = 0.5f64 - 0.5f64 * math.cos[f64](2.0f64 * pi_value() * f64(i) / m)
+            i += 1usize
+        }
+    } else if kind == 2usize {
+        while i < n {
+            let k = f64(i) / m
+            out[i] = 0.42f64 - 0.5f64 * math.cos[f64](2.0f64 * pi_value() * k) + 0.08f64 * math.cos[f64](4.0f64 * pi_value() * k)
+            i += 1usize
+        }
+    } else if kind == 3usize {
+        let mm = math.floor[f64](m / 2.0f64)
+        while i < n {
+            if f64(i) <= mm { out[i] = 2.0f64 * f64(i) / m } else { out[i] = 2.0f64 - 2.0f64 * f64(i) / m }
+            i += 1usize
+        }
+    } else if kind == 4usize {
+        while i < n {
+            out[i] = 1.0f64
+            i += 1usize
+        }
+    } else if kind == 5usize {
+        var odd = 0.0f64
+        if n % 2usize == 1usize { odd = 1.0f64 }
+        while i < n {
+            out[i] = 1.0f64 - math.abs[f64]((0.0f64 - m + 2.0f64 * f64(i)) / (nf + odd))
+            i += 1usize
+        }
+    } else if kind == 6usize {
+        while i < n {
+            let kk = 2.0f64 * par / m * math.sqrt[f64](f64(i) * (m - f64(i)))
+            out[i] = bessel_i0(kk) / bessel_i0(par)
+            i += 1usize
+        }
+    } else if kind == 8usize {
+        while i < n {
+            let t = par / nf * (0.0f64 - m + 2.0f64 * f64(i))
+            out[i] = math.exp[f64](-0.5f64 * (t * t))
+            i += 1usize
+        }
+    } else if kind == 9usize || kind == 10usize {
+        var div = m
+        if kind == 10usize { div = nf }
+        while i < n {
+            let x = 2.0f64 * pi_value() * f64(i) / div
+            out[i] = (1.0f64 - 1.93f64 * math.cos[f64](x) + 1.29f64 * math.cos[f64](2.0f64 * x) - 0.388f64 * math.cos[f64](3.0f64 * x) + 0.0322f64 * math.cos[f64](4.0f64 * x)) / 4.6402f64
+            i += 1usize
+        }
+    } else if kind == 7usize {
+        if n == 1usize {
+            out[0usize] = 1.0f64
+            ret ok
+        }
+        let gamma = math.pow[f64](10.0f64, 0.0f64 - par / 20.0f64)
+        let acosh_arg = 1.0f64 / gamma
+        let beta = cosh_value(1.0f64 / (nf - 1.0f64) * math.log[f64](acosh_arg + math.sqrt[f64](acosh_arg * acosh_arg - 1.0f64)))
+        let (pr0, e1) = mem.alloc[f64](a, n)
+        if e1 != ok { ret e1 }
+        let (pi0, e2) = mem.alloc[f64](a, n)
+        if e2 != ok { ret e2 }
+        i = 0usize
+        let order = nf - 1.0f64
+        while i < n {
+            let x = beta * math.cos[f64](pi_value() * f64(i) / nf)
+            var t = 0.0f64
+            if x <= 1.0f64 {
+                if x >= -1.0f64 {
+                    t = math.cos[f64](order * math.acos[f64](x))
+                } else {
+                    var sign_v = 1.0f64
+                    if (n - 1usize) % 2usize == 1usize { sign_v = -1.0f64 }
+                    let y = 0.0f64 - x
+                    t = sign_v * cosh_value(order * math.log[f64](y + math.sqrt[f64](y * y - 1.0f64)))
+                }
+            } else {
+                t = cosh_value(order * math.log[f64](x + math.sqrt[f64](x * x - 1.0f64)))
+            }
+            pr0[i] = t
+            pi0[i] = 0.0f64
+            i += 1usize
+        }
+        if n % 2usize == 1usize {
+            let e3 = dft(a, pr0, pi0, false)
+            if e3 != ok { ret e3 }
+            let mm = (n + 1usize) / 2usize
+            // w = c(w[M:2], w) with w = w[1:M] / w[1]
+            i = 0usize
+            while i < mm {
+                let v = pr0[i] / pr0[0usize]
+                out[mm - 1usize + i] = v
+                out[mm - 1usize - i] = v
+                i += 1usize
+            }
+        } else {
+            i = 0usize
+            while i < n {
+                let ang = pi_value() / nf * f64(i)
+                let (xr, xi) = cmul(pr0[i], 0.0f64, math.cos[f64](ang), math.sin[f64](ang))
+                pr0[i] = xr
+                pi0[i] = xi
+                i += 1usize
+            }
+            let e3 = dft(a, pr0, pi0, false)
+            if e3 != ok { ret e3 }
+            let mm = n / 2usize + 1usize
+            // w = w / w[2]; w = c(w[M:2], w[2:M])
+            i = 2usize
+            while i <= mm {
+                let v = pr0[i - 1usize] / pr0[1usize]
+                out[mm - i] = v
+                out[mm + i - 3usize] = v
+                i += 1usize
+            }
+        }
+    } else {
+        ret BadSpec
+    }
+    ret ok
+}
+
+// polyval(coef, z) for a real polynomial, highest power first, at the complex point (zr, zi)
+fn polyval_at(coef: []const f64, zr: f64, zi: f64) -> (f64, f64) {
+    var sr = 0.0f64
+    var si = 0.0f64
+    var i = 0usize
+    while i < coef.len {
+        let (xr, xi) = cmul(sr, si, zr, zi)
+        sr = xr + coef[i]
+        si = xi
+        i += 1usize
+    }
+    ret (sr, si)
+}
+
+// conv(x, y) of two real vectors: x.len + y.len - 1 entries
+fn conv(x: []const f64, y: []const f64, out: []f64) {
+    let n = x.len + y.len - 1usize
+    var k = 0usize
+    while k < n {
+        out[k] = 0.0f64
+        k += 1usize
+    }
+    var i = 0usize
+    while i < x.len {
+        var j = 0usize
+        while j < y.len {
+            out[i + j] += x[i] * y[j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+}
+
+// fftfilt(b, x): the convolution cut to the length of x, rounded when both inputs are whole numbers
+fn fftfilt(b: []const f64, x: []const f64, out: []f64) {
+    var i = 0usize
+    while i < x.len {
+        var s = 0.0f64
+        var j = 0usize
+        while j < b.len && j <= i {
+            s += b[j] * x[i - j]
+            j += 1usize
+        }
+        out[i] = s
+        i += 1usize
+    }
+    var whole = true
+    i = 0usize
+    while i < b.len {
+        if b[i] != math.round[f64](b[i]) { whole = false }
+        i += 1usize
+    }
+    i = 0usize
+    while i < x.len {
+        if x[i] != math.round[f64](x[i]) { whole = false }
+        i += 1usize
+    }
+    if whole {
+        i = 0usize
+        while i < x.len {
+            out[i] = math.round[f64](out[i])
+            i += 1usize
+        }
+    }
+}
+
+// freqz(b, a, w): the response at each w (radians per sample): hr and hi get w.len entries
+fn freqz_points(b: []const f64, aa: []const f64, w: []const f64, hr: []f64, hi: []f64) {
+    var i = 0usize
+    while i < w.len {
+        var br = 0.0f64
+        var bi = 0.0f64
+        var k = 0usize
+        while k < b.len {
+            let ang = w[i] * f64(k)
+            br += b[k] * math.cos[f64](ang)
+            bi -= b[k] * math.sin[f64](ang)
+            k += 1usize
+        }
+        var ar = 0.0f64
+        var ai = 0.0f64
+        k = 0usize
+        while k < aa.len {
+            let ang = w[i] * f64(k)
+            ar += aa[k] * math.cos[f64](ang)
+            ai -= aa[k] * math.sin[f64](ang)
+            k += 1usize
+        }
+        let (xr, xi) = cdiv(br, bi, ar, ai)
+        hr[i] = xr
+        hi[i] = xi
+        i += 1usize
+    }
+}
+
+// freqz(b, a, n, region) on the n-point grid: whole is the circle (w = 2 pi k / n), otherwise the half circle (w = pi k / n)
+fn freqz_grid(b: []const f64, aa: []const f64, n: usize, whole: bool, hr: []f64, hi: []f64) {
+    var i = 0usize
+    var denom = 2usize * n
+    if whole { denom = n }
+    while i < n {
+        var br = 0.0f64
+        var bi = 0.0f64
+        var k = 0usize
+        while k < b.len {
+            let ang = 2.0f64 * pi_value() * f64((i * k) % denom) / f64(denom)
+            br += b[k] * math.cos[f64](ang)
+            bi -= b[k] * math.sin[f64](ang)
+            k += 1usize
+        }
+        var ar = 0.0f64
+        var ai = 0.0f64
+        k = 0usize
+        while k < aa.len {
+            let ang = 2.0f64 * pi_value() * f64((i * k) % denom) / f64(denom)
+            ar += aa[k] * math.cos[f64](ang)
+            ai -= aa[k] * math.sin[f64](ang)
+            k += 1usize
+        }
+        let (xr, xi) = cdiv(br, bi, ar, ai)
+        hr[i] = xr
+        hi[i] = xi
+        i += 1usize
+    }
+}
+
+// freqs(b, a, W): the analog response polyval(b, iW) / polyval(a, iW)
+fn freqs_points(b: []const f64, aa: []const f64, w: []const f64, hr: []f64, hi: []f64) {
+    var i = 0usize
+    while i < w.len {
+        let (br, bi) = polyval_at(b, 0.0f64, w[i])
+        let (ar, ai) = polyval_at(aa, 0.0f64, w[i])
+        let (xr, xi) = cdiv(br, bi, ar, ai)
+        hr[i] = xr
+        hi[i] = xi
+        i += 1usize
+    }
+}
+
+// grpdelay(b, a, n, whole): gd gets n entries (2 n points of the circle, the first n unless whole, then n points)
+fn grpdelay(a: *mem.Arena, b: []const f64, aa: []const f64, n: usize, whole: bool, gd: []f64) -> err {
+    var nfft = n
+    if !whole { nfft = 2usize * n }
+    let oa = aa.len - 1usize
+    let ob = b.len - 1usize
+    let oc = oa + ob
+    let (c, e1) = mem.alloc[f64](a, oc + 1usize)
+    if e1 != ok { ret e1 }
+    let (ra, e2) = mem.alloc[f64](a, aa.len)
+    if e2 != ok { ret e2 }
+    var i = 0usize
+    while i < aa.len {
+        ra[i] = aa[aa.len - 1usize - i]
+        i += 1usize
+    }
+    conv(b, ra, c)
+    let (nr, e3) = mem.alloc[f64](a, nfft)
+    if e3 != ok { ret e3 }
+    let (ni, e4) = mem.alloc[f64](a, nfft)
+    if e4 != ok { ret e4 }
+    let (dr, e5) = mem.alloc[f64](a, nfft)
+    if e5 != ok { ret e5 }
+    let (di, e6) = mem.alloc[f64](a, nfft)
+    if e6 != ok { ret e6 }
+    i = 0usize
+    while i < nfft {
+        nr[i] = 0.0f64
+        ni[i] = 0.0f64
+        dr[i] = 0.0f64
+        di[i] = 0.0f64
+        if i <= oc {
+            nr[i] = c[i] * f64(i)
+            dr[i] = c[i]
+        }
+        i += 1usize
+    }
+    let e7 = dft(a, nr, ni, false)
+    if e7 != ok { ret e7 }
+    let e8 = dft(a, dr, di, false)
+    if e8 != ok { ret e8 }
+    var keep = nfft
+    if !whole { keep = n }
+    i = 0usize
+    while i < keep {
+        var xr = nr[i]
+        var xi = ni[i]
+        var yr = dr[i]
+        var yi = di[i]
+        if math.sqrt[f64](yr * yr + yi * yi) < 2.0f64 * 2.220446049250313e-16f64 {
+            xr = 0.0f64
+            xi = 0.0f64
+            yr = 1.0f64
+            yi = 0.0f64
+        }
+        let (qr, qi) = cdiv(xr, xi, yr, yi)
+        let _ = qi
+        gd[i] = qr - f64(oa)
+        i += 1usize
+    }
+    ret ok
+}
+
+// the default length impz picks when n is not given
+fn impz_length(a: *mem.Arena, b: []const f64, aa: []const f64) -> usize {
+    if aa.len <= 1usize { ret b.len }
+    let precision = 1.0e-6f64
+    let m = aa.len
+    let (cf, e0) = mem.alloc[f64](a, m)
+    if e0 != ok { ret 0usize }
+    var i = 0usize
+    while i < m {
+        cf[i] = aa[m - 1usize - i]
+        i += 1usize
+    }
+    let (rr, e1) = mem.alloc[f64](a, m)
+    let (ri, e2) = mem.alloc[f64](a, m)
+    if e1 != ok || e2 != ok { ret 0usize }
+    let deg = pk.polyroot_c(a, cf, rr, ri)
+    if deg < 1i64 { ret b.len }
+    let cnt = usize(deg)
+    var maxpole = 0.0f64
+    i = 0usize
+    while i < cnt {
+        let ab = math.sqrt[f64](rr[i] * rr[i] + ri[i] * ri[i])
+        if ab > maxpole { maxpole = ab }
+        i += 1usize
+    }
+    var n = 0.0f64
+    if maxpole > 1.0f64 + precision {
+        n = math.floor[f64](6.0f64 / math.log10[f64](maxpole))
+    } else if maxpole < 1.0f64 - precision {
+        n = math.floor[f64](-6.0f64 / math.log10[f64](maxpole))
+    } else {
+        n = 30.0f64
+        var minarg = 1.0e300f64
+        var any_periodic = false
+        i = 0usize
+        while i < cnt {
+            let ab = math.sqrt[f64](rr[i] * rr[i] + ri[i] * ri[i])
+            let arg = math.abs[f64](math.atan2[f64](ri[i], rr[i]))
+            if ab >= 1.0f64 - precision && arg > 0.0f64 {
+                any_periodic = true
+                if arg < minarg { minarg = arg }
+            }
+            i += 1usize
+        }
+        if any_periodic {
+            let np = math.ceil[f64](10.0f64 * pi_value() / minarg)
+            if np > n { n = np }
+        }
+        var maxd = 0.0f64
+        i = 0usize
+        while i < cnt {
+            let ab = math.sqrt[f64](rr[i] * rr[i] + ri[i] * ri[i])
+            if ab < 1.0f64 - precision && ab > maxd { maxd = ab }
+            i += 1usize
+        }
+        if maxd > 0.0f64 {
+            let nd = math.floor[f64](-3.0f64 / math.log10[f64](maxd))
+            if nd > n { n = nd }
+        }
+    }
+    ret usize(n) + b.len
+}
+
+// impz(b, a, n): the first n samples of the impulse response
+fn impz(b: []const f64, aa: []const f64, n: usize, out: []f64) {
+    var i = 0usize
+    while i < n {
+        var s = 0.0f64
+        var j = 0usize
+        while j < b.len && j <= i {
+            s += b[j] * (if_unit(i - j))
+            j += 1usize
+        }
+        j = 1usize
+        while j < aa.len && j <= i {
+            s -= aa[j] * out[i - j]
+            j += 1usize
+        }
+        out[i] = s / aa[0usize]
+        i += 1usize
+    }
+}
+
+fn if_unit(k: usize) -> f64 {
+    if k == 0usize { ret 1.0f64 }
+    ret 0.0f64
+}
+
+// the filter with initial state: init_x are the n_b - 1 past inputs (oldest first) and init_y the n_a - 1 past outputs (most recent first)
+fn filter_init(b: []const f64, aa: []const f64, x: []const f64, init_x: []const f64, init_y: []const f64, out: []f64) {
+    let a1 = aa[0usize]
+    var i = 0usize
+    while i < x.len {
+        var s = 0.0f64
+        var j = 0usize
+        while j < b.len {
+            var v = 0.0f64
+            if i >= j {
+                v = x[i - j]
+            } else {
+                // c(init.x, x): the past input j - i steps back
+                let back = j - i
+                if back <= init_x.len { v = init_x[init_x.len - back] }
+            }
+            s += (b[j] / a1) * v
+            j += 1usize
+        }
+        j = 1usize
+        while j < aa.len {
+            var v = 0.0f64
+            if i >= j {
+                v = out[i - j]
+            } else {
+                let back = j - i
+                if back <= init_y.len { v = init_y[back - 1usize] }
+            }
+            s += (0.0f64 - aa[j] / a1) * v
+            j += 1usize
+        }
+        out[i] = s
+        i += 1usize
+    }
+}
+
+// specgram(x, n, Fs, window, overlap): the window count, then S (the first ret_n rows of each column, real parts in sre and imaginary parts in sim, column by column), the frequencies f and the times t
+fn specgram(a: *mem.Arena, x: []const f64, n0: usize, fs: f64, win: []const f64, overlap: usize, sre: []f64, sim: []f64, f: []f64, t: []f64) -> (usize, usize, err) {
+    var n = n0
+    let ws = win.len
+    if ws > n { n = ws }
+    let step = ws - overlap
+    var count = 1usize
+    if x.len > ws { count = (x.len - ws - 1usize) / step + 1usize }
+    var retn = n / 2usize
+    if n % 2usize == 1usize { retn = (n + 1usize) / 2usize }
+    let (cr, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret (0usize, 0usize, e1) }
+    let (ci, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret (0usize, 0usize, e2) }
+    var c = 0usize
+    while c < count {
+        let off = c * step
+        var i = 0usize
+        while i < n {
+            cr[i] = 0.0f64
+            ci[i] = 0.0f64
+            if i < ws { cr[i] = x[off + i] * win[i] }
+            i += 1usize
+        }
+        let e3 = dft(a, cr, ci, false)
+        if e3 != ok { ret (0usize, 0usize, e3) }
+        i = 0usize
+        while i < retn {
+            sre[c * retn + i] = cr[i]
+            sim[c * retn + i] = ci[i]
+            i += 1usize
+        }
+        t[c] = f64(off + 1usize) / fs
+        c += 1usize
+    }
+    var i = 0usize
+    while i < retn {
+        f[i] = f64(i) * fs / f64(n)
+        i += 1usize
+    }
+    ret (count, retn, ok)
+}
+
+// unwrap(a, tol)
+fn unwrap_tol(x: []const f64, tol: f64, out: []f64) {
+    var r = 0.0f64
+    var i = 0usize
+    let t = math.abs[f64](tol)
+    while i < x.len {
+        if i > 0usize {
+            let d = x[i - 1usize] - x[i]
+            var p = 0.0f64
+            if d > t { p = 2.0f64 * pi_value() }
+            if d < 0.0f64 - t { p = 0.0f64 - 2.0f64 * pi_value() }
+            r += p
+        }
+        out[i] = x[i] + r
+        i += 1usize
+    }
+}
+
+// levinson(acf, p): a gets p + 1 entries, ref p; returns v
+fn levinson(acf: []const f64, p: usize, aa: []f64, rf: []f64) -> f64 {
+    var g = 0.0f64 - acf[1usize] / acf[0usize]
+    aa[0usize] = g
+    var v = (1.0f64 - g * g) * acf[0usize]
+    rf[0usize] = g
+    var t = 2usize
+    while t <= p {
+        var s = 0.0f64
+        var j = 1usize
+        while j <= t - 1usize {
+            s += aa[j - 1usize] * acf[t - j]
+            j += 1usize
+        }
+        g = 0.0f64 - (acf[t] + s) / v
+        // a = c(a + g * rev(a), g)
+        var tmp: [CAP]f64 = zero
+        j = 0usize
+        while j < t - 1usize {
+            tmp[j] = aa[j] + g * aa[t - 2usize - j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < t - 1usize {
+            aa[j] = tmp[j]
+            j += 1usize
+        }
+        aa[t - 1usize] = g
+        v = v * (1.0f64 - g * g)
+        rf[t - 1usize] = g
+        t += 1usize
+    }
+    ret v
+}
