@@ -1895,7 +1895,7 @@ fn match_tol(a: *mem.Arena, xo: []const f64, table: []const f64, tol_type: usize
 // regul with the matching tolerance: method 0 constant, 1 linear, 2 area, 3 spline; a regular abscissa matched to an observation takes it
 fn regul_tol(a: *mem.Arena, x: []const f64, y: []const f64, xmin: f64, n: usize, deltat: f64, method: usize, rule: usize, f: f64, window: f64, tol: f64, tol_type: usize, out: []f64) -> err {
     var e = ok
-    if method < 3usize { e = regul(x, y, xmin, n, deltat, method, rule, f, window, out) } else { e = regul_spline(a, x, y, xmin, n, deltat, rule, out) }
+    if method < 3usize { e = regul(x, y, xmin, n, deltat, method, rule, f, window, out) } else if method == 3usize { e = regul_spline(a, x, y, xmin, n, deltat, rule, out) } else { e = regul_spline_periodic(a, x, y, xmin, n, deltat, rule, out) }
     if e != ok { ret e }
     let (xo, e1) = mem.alloc[f64](a, n)
     let (pos, e2) = mem.alloc[i64](a, n)
@@ -1904,10 +1904,10 @@ fn regul_tol(a: *mem.Arena, x: []const f64, y: []const f64, xmin: f64, n: usize,
     var i = 0usize
     while i < n {
         xo[i] = f64(i) * deltat + xmin
-        if method == 3usize { xo[i] = xmin + f64(i) * by }
+        if method >= 3usize { xo[i] = xmin + f64(i) * by }
         i += 1usize
     }
-    if method == 3usize && n > 1usize { xo[n - 1usize] = f64(n - 1usize) * deltat + xmin }
+    if method >= 3usize && n > 1usize { xo[n - 1usize] = f64(n - 1usize) * deltat + xmin }
     if method == 2usize {
         // the area method shifts the abscissas to keep them positive and shifts back, which can move them by a rounding
         var xlb = xmin - window / 2.0f64 - 1.0f64
@@ -1968,4 +1968,155 @@ fn regul_screen(a: *mem.Arena, x: []const f64, weight: []const f64, xmin: f64, d
     r.matched = m
     r.exact = ex
     ret (r, ok)
+}
+
+// ---- the periodic spline of regul ----
+
+// R's periodic_spline (stats/src/splines.c): the cubic through (x, y) with y[0] = y[n - 1] and matching first and second derivatives at the ends; b, c, d (and e as workspace) are n long
+fn periodic_spline(n: usize, x: []const f64, y: []const f64, b: []f64, c: []f64, d: []f64, e: []f64) {
+    if n < 2usize || y[0usize] != y[n - 1usize] { ret }
+    if n == 2usize {
+        b[0usize] = 0.0f64
+        b[1usize] = 0.0f64
+        c[0usize] = 0.0f64
+        c[1usize] = 0.0f64
+        d[0usize] = 0.0f64
+        d[1usize] = 0.0f64
+        ret
+    }
+    if n == 3usize {
+        let bb = 0.0f64 - (y[0usize] - y[1usize]) * (x[0usize] - 2.0f64 * x[1usize] + x[2usize]) / (x[2usize] - x[1usize]) / (x[1usize] - x[0usize])
+        b[0usize] = bb
+        b[1usize] = bb
+        b[2usize] = bb
+        let c1 = 0.0f64 - 3.0f64 * (y[0usize] - y[1usize]) / (x[2usize] - x[1usize]) / (x[1usize] - x[0usize])
+        c[0usize] = c1
+        c[1usize] = 0.0f64 - c1
+        c[2usize] = c1
+        let d1 = 0.0f64 - 2.0f64 * c1 / 3.0f64 / (x[1usize] - x[0usize])
+        d[0usize] = d1
+        d[1usize] = 0.0f64 - d1 * (x[1usize] - x[0usize]) / (x[2usize] - x[1usize])
+        d[2usize] = d1
+        ret
+    }
+    let nm1 = n - 1usize
+    // 1-based helpers: element k of the C code is index k - 1
+    d[0usize] = x[1usize] - x[0usize]
+    d[nm1 - 1usize] = x[n - 1usize] - x[nm1 - 1usize]
+    b[0usize] = 2.0f64 * (d[0usize] + d[nm1 - 1usize])
+    c[0usize] = (y[1usize] - y[0usize]) / d[0usize] - (y[n - 1usize] - y[nm1 - 1usize]) / d[nm1 - 1usize]
+    var i = 2usize
+    while i < n {
+        d[i - 1usize] = x[i] - x[i - 1usize]
+        b[i - 1usize] = 2.0f64 * (d[i - 1usize] + d[i - 2usize])
+        c[i - 1usize] = (y[i] - y[i - 1usize]) / d[i - 1usize] - (y[i - 1usize] - y[i - 2usize]) / d[i - 2usize]
+        i += 1usize
+    }
+    b[0usize] = math.sqrt[f64](b[0usize])
+    e[0usize] = (x[n - 1usize] - x[nm1 - 1usize]) / b[0usize]
+    var s = 0.0f64
+    i = 1usize
+    while i + 2usize <= nm1 {
+        d[i - 1usize] = d[i - 1usize] / b[i - 1usize]
+        if i != 1usize { e[i - 1usize] = 0.0f64 - e[i - 2usize] * d[i - 2usize] / b[i - 1usize] }
+        b[i] = math.sqrt[f64](b[i] - d[i - 1usize] * d[i - 1usize])
+        s = s + e[i - 1usize] * e[i - 1usize]
+        i += 1usize
+    }
+    d[nm1 - 2usize] = (d[nm1 - 2usize] - e[nm1 - 3usize] * d[nm1 - 3usize]) / b[nm1 - 2usize]
+    b[nm1 - 1usize] = math.sqrt[f64](b[nm1 - 1usize] - d[nm1 - 2usize] * d[nm1 - 2usize] - s)
+    c[0usize] = c[0usize] / b[0usize]
+    s = 0.0f64
+    i = 2usize
+    while i + 1usize <= nm1 {
+        c[i - 1usize] = (c[i - 1usize] - d[i - 2usize] * c[i - 2usize]) / b[i - 1usize]
+        s = s + e[i - 2usize] * c[i - 2usize]
+        i += 1usize
+    }
+    c[nm1 - 1usize] = (c[nm1 - 1usize] - d[nm1 - 2usize] * c[nm1 - 2usize] - s) / b[nm1 - 1usize]
+    c[nm1 - 1usize] = c[nm1 - 1usize] / b[nm1 - 1usize]
+    c[nm1 - 2usize] = (c[nm1 - 2usize] - d[nm1 - 2usize] * c[nm1 - 1usize]) / b[nm1 - 2usize]
+    i = nm1 - 2usize
+    while i >= 1usize {
+        c[i - 1usize] = (c[i - 1usize] - d[i - 1usize] * c[i] - e[i - 1usize] * c[nm1 - 1usize]) / b[i - 1usize]
+        i -= 1usize
+    }
+    c[n - 1usize] = c[0usize]
+    i = 1usize
+    while i <= nm1 {
+        let h = x[i] - x[i - 1usize]
+        b[i - 1usize] = (y[i] - y[i - 1usize]) / h - h * (c[i] + 2.0f64 * c[i - 1usize])
+        d[i - 1usize] = (c[i] - c[i - 1usize]) / h
+        c[i - 1usize] = 3.0f64 * c[i - 1usize]
+        i += 1usize
+    }
+    b[n - 1usize] = b[0usize]
+    c[n - 1usize] = c[0usize]
+    d[n - 1usize] = d[0usize]
+}
+
+// the periodic spline at u: u wrapped into [x[0], x[n - 1]), then the cubic of its interval
+fn periodic_eval(n: usize, x: []const f64, y: []const f64, b: []const f64, c: []const f64, d: []const f64, u: f64) -> f64 {
+    let dx = x[n - 1usize] - x[0usize]
+    var v = u - x[0usize]
+    v = v - math.trunc[f64](v / dx) * dx
+    if v < 0.0f64 { v += dx }
+    v += x[0usize]
+    var i = 0usize
+    var j = n
+    while i + 1usize < j {
+        let k = (i + j) / 2usize
+        if v < x[k] { j = k } else { i = k }
+    }
+    let t = v - x[i]
+    ret y[i] + t * (b[i] + t * (c[i] + t * d[i]))
+}
+
+// regul_spline with the periodic spline (the last observation is made equal to the first, as spline() does)
+fn regul_spline_periodic(a: *mem.Arena, x: []const f64, y0: []const f64, xmin: f64, n: usize, deltat: f64, rule: usize, out: []f64) -> err {
+    let nx = x.len
+    let (y, e0) = mem.alloc[f64](a, nx)
+    let (b, e1) = mem.alloc[f64](a, nx)
+    let (c, e2) = mem.alloc[f64](a, nx)
+    let (d, e3) = mem.alloc[f64](a, nx)
+    let (ee, e4) = mem.alloc[f64](a, nx)
+    if e0 != ok || e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    var i = 0usize
+    while i < nx {
+        y[i] = y0[i]
+        b[i] = 0.0f64
+        c[i] = 0.0f64
+        d[i] = 0.0f64
+        ee[i] = 0.0f64
+        i += 1usize
+    }
+    y[nx - 1usize] = y[0usize]
+    periodic_spline(nx, x, y, b, c, d, ee)
+    var ymin = y0[0usize]
+    var ymax = y0[0usize]
+    i = 1usize
+    while i < nx {
+        if y0[i] < ymin { ymin = y0[i] }
+        if y0[i] > ymax { ymax = y0[i] }
+        i += 1usize
+    }
+    let xmax = f64(n - 1usize) * deltat + xmin
+    let by = (xmax - xmin) / f64(n - 1usize)
+    i = 0usize
+    while i < n {
+        var u = xmin + f64(i) * by
+        if i + 1usize == n { u = xmax }
+        var v = periodic_eval(nx, x, y, b, c, d, u)
+        if v < ymin { v = ymin }
+        if v > ymax { v = ymax }
+        if rule == 1usize && (u < x[0usize] || u > x[nx - 1usize]) { v = 0.0f64 / 0.0f64 }
+        var k = 0usize
+        while k < nx {
+            if x[k] == u { v = y0[k] }
+            k += 1usize
+        }
+        out[i] = v
+        i += 1usize
+    }
+    ret ok
 }

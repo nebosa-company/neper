@@ -3,6 +3,7 @@
 // scripts/r_oracle/groups/pastecs.R.
 
 use e.algo.stat.pastecs as pc
+use e.algo.stat.stlpkg as sl
 use e.io
 use e.mem
 use e.os
@@ -20,6 +21,21 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(nm, "tt_rho") { ret tt.rho }
         if str.eq(nm, "tt_s") { ret tt.s }
         ret tt.p
+    }
+    if str.eq(nm, "stl") {
+        let b = 3usize + n
+        let (so, e1) = mem.alloc[f64](a, n)
+        let (to, e2) = mem.alloc[f64](a, n)
+        let (wo, e3) = mem.alloc[f64](a, n)
+        if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+        let se = sl.stl(a, x, usize(z[b]), z[b + 1usize] > 0.5f64, z[b + 2usize], i64(z[b + 3usize]), z[b + 4usize], i64(z[b + 5usize]), z[b + 6usize], i64(z[b + 7usize]), usize(z[b + 8usize]), usize(z[b + 9usize]), usize(z[b + 10usize]), z[b + 11usize] > 0.5f64, so, to, wo)
+        if se != ok { ret 0.0f64 / 0.0f64 }
+        let w = usize(z[b + 12usize])
+        let ix = usize(z[b + 13usize])
+        if w == 0usize { ret so[ix] }
+        if w == 1usize { ret to[ix] }
+        if w == 2usize { ret wo[ix] }
+        ret x[ix] - so[ix] - to[ix]
     }
     if str.eq(nm, "cen") {
         let cp = usize(z[3usize + n])

@@ -145,4 +145,24 @@ for (rep in 1:60) {
   out <- c(unname(r$tol), r$n[1, 1], r$nbr.match[1, 1], r$nbr.exact.match[1, 1])
   for (k in 0:3) cases[[length(cases) + 1]] <- case("scr", c(16, 0, nx, x, w, xmin, dt, tl, ty, k), out[k + 1], rel = 1e-9, abs = 1e-10)
 }
+# regul with the periodic spline (fn "regtol" with method 4, tol 0)
+for (rep in 1:40) {
+  nx <- sample(6:25, 1); x <- sort(round(runif(nx, 0, 20), 2)); x <- unique(x); nx <- length(x); y <- round(rnorm(nx, 5, 2), 3); y[nx] <- y[1]
+  if (rep %% 2 == 0) y[nx] <- round(y[1] + 0.3, 3)
+  xmin <- if (rep %% 3 == 0) round(min(x) - 1, 2) else min(x); no <- sample(6:40, 1); dt <- round((max(x) - min(x)) / (no - 1) * c(1, 0.8, 1.1)[rep %% 3 + 1], 4); ru <- sample(1:2, 1)
+  r <- tryCatch(suppressWarnings(suppressMessages(regul(x, y, xmin = xmin, n = no, deltat = dt, methods = "spline", rule = ru, periodic = TRUE, tol = 0))), error = function(e) NULL); if (is.null(r)) next
+  v <- r$y[[1]]
+  for (i in seq_along(v)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("regtol", c(15, 0, nx, x, y, xmin, no, dt, 4, ru, 0, dt, 0, 1, i - 1), v[i], rel = 1e-9, abs = 1e-10)
+}
+# stl (fn "stl", args (17, 0, n, y, period, periodic, s.window, s.degree, t.window, t.degree, l.window, l.degree, s.jump, t.jump, l.jump, robust, which, idx): which 0 seasonal 1 trend 2 weights 3 remainder; zero windows and jumps are the defaults)
+for (rep in 1:50) {
+  per <- c(4, 12, 7, 6)[rep %% 4 + 1]; nc <- sample(4:9, 1); n <- per * nc; y <- round(10 + 0.1 * seq_len(n) + 3 * sin(2 * pi * seq_len(n) / per) + rnorm(n), 4)
+  periodic <- rep %% 3 == 0; sw <- if (periodic) 0 else c(7, 9, 13, 21)[sample(4, 1)]; sd <- sample(0:1, 1); tw <- c(0, 15, 25)[sample(3, 1)]; td <- sample(0:1, 1); lw <- c(0, 9)[sample(2, 1)]; ld <- td
+  sj <- c(0, 1, 2)[sample(3, 1)]; tj <- c(0, 1, 3)[sample(3, 1)]; lj <- c(0, 1)[sample(2, 1)]; rb <- rep %% 5 == 0
+  args <- list(ts(y, frequency = per), s.window = if (periodic) "periodic" else sw, s.degree = sd, t.degree = td, l.degree = ld, robust = rb)
+  if (tw > 0) args$t.window <- tw; if (lw > 0) args$l.window <- lw; if (sj > 0) args$s.jump <- sj; if (tj > 0) args$t.jump <- tj; if (lj > 0) args$l.jump <- lj
+  r <- tryCatch(do.call(stats::stl, args), error = function(e) NULL); if (is.null(r)) next
+  ts_ <- r$time.series; outs <- list(as.vector(ts_[, "seasonal"]), as.vector(ts_[, "trend"]), as.vector(r$weights), as.vector(ts_[, "remainder"]))
+  for (w in 0:3) for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("stl", c(17, 0, n, y, per, as.numeric(periodic), sw, if (periodic) 0 else sd, tw, td, lw, ld, sj, tj, lj, as.numeric(rb), w, i - 1), outs[[w + 1]][i], rel = 1e-8, abs = 1e-9)
+}
 emit("pastecs", "pastecs", list(cases))
