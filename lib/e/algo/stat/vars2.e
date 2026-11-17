@@ -984,6 +984,63 @@ fn var_restrict_manual(a: *mem.Arena, v: *Var, resmat: []const f64) -> err {
     ret var_fit_eqs(a, v)
 }
 
+// summary(x)$varresult[[i]] of a VAR fitted by var_new (not restricted): out = (sigma, R^2, adjusted R^2, F, numdf, dendf, p value of F), and for the
+// free coefficients of the equation, in order, table[4 j .. 4 j + 3] = (estimate, standard error, t value, Pr(>|t|)). The constant is the model's intercept
+// for the types const and both, as VAR sets it, so R^2 and F are centred there and uncentred for none and trend.
+fn var_summary_eq(a: *mem.Arena, v: *const Var, i: usize, out: []f64, table: []f64) -> err {
+    let cols = zeros_usize(a, v.nz)
+    let nsel = eq_cols(v, i, cols)
+    let inv = zeros(a, nsel * nsel)
+    let e = xtx_inverse_cols(a, v.z, v.obs, v.nz, cols, nsel, inv)
+    if e != ok { ret e }
+    var rss = 0.0f64
+    var t = 0usize
+    while t < v.obs {
+        rss += v.resid[t * v.k + i] * v.resid[t * v.k + i]
+        t += 1usize
+    }
+    let n = f64(v.obs)
+    let rdf = f64(v.obs - nsel)
+    let resvar = rss / rdf
+    var j = 0usize
+    while j < nsel {
+        let est = v.coef[i * v.nz + cols[j]]
+        let se = math.sqrt[f64](resvar * inv[j * nsel + j])
+        let tv = est / se
+        table[4usize * j] = est
+        table[4usize * j + 1usize] = se
+        table[4usize * j + 2usize] = tv
+        table[4usize * j + 3usize] = 2.0f64 * nb.pt(math.abs[f64](tv), rdf, false, false)
+        j += 1usize
+    }
+    let intercept = v.det == 1usize || v.det == 3usize
+    var mean = 0.0f64
+    t = 0usize
+    while t < v.obs {
+        mean += v.yend[t * v.k + i] - v.resid[t * v.k + i]
+        t += 1usize
+    }
+    mean = mean / n
+    var mss = 0.0f64
+    t = 0usize
+    while t < v.obs {
+        let f = v.yend[t * v.k + i] - v.resid[t * v.k + i]
+        if intercept { mss += (f - mean) * (f - mean) } else { mss += f * f }
+        t += 1usize
+    }
+    var dfint = 0.0f64
+    if intercept { dfint = 1.0f64 }
+    let r2 = mss / (mss + rss)
+    out[0usize] = math.sqrt[f64](resvar)
+    out[1usize] = r2
+    out[2usize] = 1.0f64 - (1.0f64 - r2) * ((n - dfint) / rdf)
+    out[4usize] = f64(nsel) - dfint
+    out[5usize] = rdf
+    out[3usize] = (mss / out[4usize]) / resvar
+    out[6usize] = nb.pf(out[3usize], out[4usize], rdf, false, false)
+    ret ok
+}
+
 // summary(x)$covres: cov(resid) (centred) times (obs - 1) / (obs - nz)
 fn var_covres(a: *mem.Arena, v: *const Var) -> []f64 {
     let k = v.k

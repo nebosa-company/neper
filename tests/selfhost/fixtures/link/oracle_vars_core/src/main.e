@@ -145,6 +145,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret wsum(sg)
     }
     if str.eq(nm, "loglik") { ret vr.var_loglik(a, &v) }
+    if str.starts_with(nm, "sm_") {
+        let eq = usize(x[8usize]) - 1usize
+        let so = vr.zeros(a, 8usize)
+        let tb = vr.zeros(a, 4usize * v.nz)
+        if vr.var_summary_eq(a, &v, eq, so, tb) != ok { os.exit(37) }
+        if str.eq(nm, "sm_sigma") { ret so[0usize] }
+        if str.eq(nm, "sm_r2") { ret so[1usize] }
+        if str.eq(nm, "sm_adj") { ret so[2usize] }
+        if str.eq(nm, "sm_f") { ret so[3usize] }
+        if str.eq(nm, "sm_fp") { ret so[6usize] }
+        var col = 0usize
+        if str.eq(nm, "sm_se") { col = 1usize }
+        if str.eq(nm, "sm_t") { col = 2usize }
+        if str.eq(nm, "sm_p") { col = 3usize }
+        var s = 0.0f64
+        var j = 0usize
+        while j < v.nz {
+            s += tb[4usize * j + col] * f64(j + 1usize)
+            j += 1usize
+        }
+        ret s
+    }
     if str.eq(nm, "roots") {
         let rt = vr.zeros(a, k * p)
         if vr.var_roots(a, &v, rt) != ok { os.exit(32) }

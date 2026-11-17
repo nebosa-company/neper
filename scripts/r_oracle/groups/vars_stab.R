@@ -25,7 +25,7 @@ mk <- function(d, p, det, season) {
 }
 tnames <- c("Rec-CUSUM", "OLS-CUSUM", "Rec-MOSUM", "OLS-MOSUM", "RE", "ME", "Score-CUSUM", "Score-MOSUM", "fluctuation")
 fnames <- c("max", "range", "maxL2", "meanL2")
-cfgs <- list(c(401, 90, 2, 1, 1, 0, 0, 0), c(402, 110, 3, 2, 1, 0, 0, 0), c(403, 100, 2, 2, 3, 0, 0, 0.02), c(404, 120, 2, 1, 0, 0, 1, 0))
+cfgs <- list(c(401, 90, 2, 1, 1, 0, 0, 0), c(402, 110, 3, 2, 1, 0, 0, 0), c(403, 100, 2, 2, 3, 0, 0, 0.02), c(404, 120, 2, 1, 0, 0, 1, 0), c(405, 110, 4, 2, 3, 4, 0, 0))
 for (cf in cfgs) {
   seed <- cf[1]; T0 <- cf[2]; K <- cf[3]; p <- cf[4]; det <- cf[5]; season <- cf[6]; nexo <- cf[7]; slope <- cf[8]
   d <- gen(seed, T0, K, nexo, slope); v <- mk(d, p, det, season)

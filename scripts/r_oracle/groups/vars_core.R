@@ -32,7 +32,7 @@ cfgs <- list(
   c(101, 80, 2, 1, 1, 0, 0, 0), c(102, 90, 3, 2, 1, 0, 0, 0), c(103, 100, 2, 2, 0, 0, 0, 0), c(104, 70, 2, 1, 2, 0, 0, 0.02),
   c(105, 85, 3, 2, 3, 0, 0, 0.02), c(106, 96, 2, 2, 1, 4, 0, 0), c(107, 120, 3, 3, 1, 12, 0, 0), c(108, 80, 2, 2, 1, 0, 1, 0),
   c(109, 90, 3, 1, 3, 0, 2, 0.01), c(110, 100, 2, 3, 0, 0, 2, 0), c(111, 88, 2, 2, 3, 4, 1, 0), c(112, 110, 3, 2, 2, 0, 1, 0.02),
-  c(113, 64, 2, 1, 1, 0, 0, 0), c(114, 75, 3, 1, 1, 0, 0, 0))
+  c(113, 64, 2, 1, 1, 0, 0, 0), c(114, 75, 3, 1, 1, 0, 0, 0), c(115, 140, 4, 2, 3, 0, 1, 0.01), c(116, 150, 5, 1, 1, 4, 0, 0), c(117, 100, 2, 5, 3, 12, 2, 0), c(118, 90, 4, 3, 0, 0, 0, 0))
 for (cf in cfgs) {
   seed <- cf[1]; T0 <- cf[2]; K <- cf[3]; p <- cf[4]; det <- cf[5]; season <- cf[6]; nexo <- cf[7]; slope <- cf[8]
   d <- gen(seed, T0, K, nexo, slope)
@@ -44,6 +44,12 @@ for (cf in cfgs) {
   add("resid", a, wsum(as.vector(t(resid(v)))))
   add("roots", a, wsum(roots(v)))
   add("loglik", a, as.numeric(logLik(v)))
+  for (e in 1:K) {
+    s <- summary(v)$varresult[[e]]; cf <- coef(s); ae <- c(a, e)
+    add("sm_est", ae, wsum(cf[, 1])); add("sm_se", ae, wsum(cf[, 2])); add("sm_t", ae, wsum(cf[, 3])); add("sm_p", ae, wsum(cf[, 4]))
+    add("sm_sigma", ae, s$sigma); add("sm_r2", ae, s$r.squared); add("sm_adj", ae, s$adj.r.squared)
+    add("sm_f", ae, s$fstatistic[1]); add("sm_fp", ae, pf(s$fstatistic[1], s$fstatistic[2], s$fstatistic[3], lower.tail = FALSE))
+  }
   lm_ <- p + 2
   vs <- VARselect(d$y, lag.max = lm_, type = types[det + 1], season = if (season > 0) season else NULL, exogen = d$exo)
   for (c in 1:4) add(c("aic", "hq", "sc", "fpe")[c], c(a, lm_), wsum(vs$criteria[c, ]))

@@ -394,3 +394,8 @@ oracle_seriation
 oracle_ksamples_sim
 oracle_ksamples_steel
 oracle_ksamples_ci
+oracle_vars_core
+oracle_vars_chk
+oracle_vars_stab
+oracle_vars_svar
+oracle_vars_vec
