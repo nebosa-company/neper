@@ -115,4 +115,13 @@ for (rep in 1:200) {
     cases[[length(cases) + 1]] <- case("op", c(a, 0), hi, rel = 0, abs = 0)
     cases[[length(cases) + 1]] <- case("op", c(a, 1), lo, rel = 1e-9, abs = 0) }
 }
+# mpfr_get_str "str" (99, prec, m, e, base, ndigits, which -1 exponent or the digit index)
+for (rep in 1:60) {
+  prec <- sample(c(53, 80, 128), 1); m1 <- sample(1:(2^50), 1); if (runif(1) < 0.4) m1 <- -m1; e1 <- sample(-120:80, 1); base <- sample(c(2, 8, 10, 16, 36), 1); nd <- sample(c(5, 12, 20, 30), 1)
+  x <- mpfr(m1, prec) * 2^e1; r <- .mpfr2str(x, digits = nd, base = base); st <- strsplit(r$str, "")[[1]]; st <- sub("-", "", r$str); ch <- strsplit(st, "")[[1]]
+  dv <- match(tolower(ch), c(0:9, letters)) - 1
+  a <- c(99, prec, m1, e1, base, nd)
+  cases[[length(cases) + 1]] <- case("op", c(a, -1), r$exp, rel = 0, abs = 0)
+  for (i in seq_along(dv)) cases[[length(cases) + 1]] <- case("op", c(a, i - 1), dv[i], rel = 0, abs = 0)
+}
 emit("mpfr", "Rmpfr", list(cases))

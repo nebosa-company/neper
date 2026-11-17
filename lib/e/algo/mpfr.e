@@ -7,6 +7,7 @@
 use e.algo.bignum as bn
 use e.math
 use e.mem
+use e.str
 
 type Mp = struct { m: bn.Int, e: i64 }
 
@@ -1164,4 +1165,90 @@ fn const_euler(a: *mem.Arena, prec: usize) -> (Mp, err) {
     if e14 != ok { ret (zero, e14) }
     let (rt_, re_) = round_to(a, r.m, r.e, prec)
     ret (rt_, re_)
+}
+
+fn int_pow(a: *mem.Arena, b: usize, k: usize) -> (bn.Int, err) {
+    let (r0, e0) = bn.int_from_i64(a, 1i64)
+    let (bb, e1) = bn.int_from_i64(a, i64(b))
+    if e0 != ok || e1 != ok { ret (zero, mem.Full) }
+    var r = r0
+    var i = 0usize
+    while i < k {
+        let (r2, e2) = bn.int_mul(a, r, bb)
+        if e2 != ok { ret (zero, e2) }
+        r = r2
+        i += 1usize
+    }
+    ret (r, ok)
+}
+
+// mpfr_get_str(x, base, n, RNDN): the n significant digits of |x| (values 0 .. base - 1, most significant first) written to digs and the exponent E with |x| about 0.d1 d2 ... * base^E; x must be non-zero
+fn get_str(a: *mem.Arena, x: Mp, base: usize, n: usize, digs: []u8) -> (i64, err) {
+    let bits = bn.int_bits(x.m)
+    let lnb = math.log[f64](f64(base))
+    var ex = i64(math.floor[f64](f64(i64(bits) + x.e) * 0.6931471805599453f64 / lnb)) + 1i64
+    var tries = 0usize
+    while tries < 6usize {
+        tries += 1usize
+        let k = i64(n) - ex
+        var num = magnitude(a, x.m)
+        var den: bn.Int = zero
+        let (one, eo) = bn.int_from_i64(a, 1i64)
+        if eo != ok { ret (0i64, eo) }
+        den = one
+        if k >= 0i64 {
+            let (pk, ep) = int_pow(a, base, usize(k))
+            if ep != ok { ret (0i64, ep) }
+            let (nn, en) = bn.int_mul(a, num, pk)
+            if en != ok { ret (0i64, en) }
+            num = nn
+        } else {
+            let (pk, ep) = int_pow(a, base, usize(0i64 - k))
+            if ep != ok { ret (0i64, ep) }
+            den = pk
+        }
+        if x.e >= 0i64 {
+            let (nn, en) = shl(a, num, usize(x.e))
+            if en != ok { ret (0i64, en) }
+            num = nn
+        } else {
+            let (dd, ed) = shl(a, den, usize(0i64 - x.e))
+            if ed != ok { ret (0i64, ed) }
+            den = dd
+        }
+        let (q0, r, ed2) = bn.int_divmod(a, num, den)
+        if ed2 != ok { ret (0i64, ed2) }
+        let (r2, er2) = shl(a, r, 1usize)
+        if er2 != ok { ret (0i64, er2) }
+        let c = bn.int_cmp(r2, den)
+        var q = q0
+        if c > 0i32 || (c == 0i32 && q0.sign != bn.Sign.Zero && (q0.limbs[0usize] & 1u32) == 1u32) {
+            let (q1, eq1) = bn.int_add(a, q0, one)
+            if eq1 != ok { ret (0i64, eq1) }
+            q = q1
+        }
+        let (hi, eh) = int_pow(a, base, n)
+        let (lo, el) = int_pow(a, base, n - 1usize)
+        if eh != ok || el != ok { ret (0i64, mem.Full) }
+        if bn.int_cmp(q, hi) >= 0i32 {
+            ex += 1i64
+        } else if bn.int_cmp(q, lo) < 0i32 {
+            ex -= 1i64
+        } else {
+            let (b0, eb) = str.builder(a, n + 8usize)
+            if eb != ok { ret (0i64, eb) }
+            var bld = b0
+            let ef = bn.int_format(q, &bld, u8(base))
+            if ef != ok { ret (0i64, ef) }
+            let s = str.done(&bld)
+            var i = 0usize
+            while i < n {
+                let ch = s[i]
+                if ch >= 97u8 { digs[i] = ch - 87u8 } else { digs[i] = ch - 48u8 }
+                i += 1usize
+            }
+            ret (ex, ok)
+        }
+    }
+    ret (0i64, mem.Full)
 }

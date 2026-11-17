@@ -48478,3 +48478,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D6996 — Rmpfr directed rounding for the arithmetic
 
 `round_to_m(a, m, e, prec, mode)` with mode 0 nearest-even, 1 toward zero, 2 toward +inf, 3 toward -inf, 4 away from zero; `add_m`, `sub_m`, `mul_m`, `div_m` and `sqrt_m` take the mode and the old functions call them with 0. The existing sticky bit of the division and square root already marks an inexact result, so a directed mode only needs the remainder test. Equal to `roundMpfr(x op y, prec, rnd.mode)` on 200 operations (oracle_mpfr). The transcendental functions stay at nearest. Linux pending.
+
+
+## D6997 — Rmpfr string conversion
+
+`mpfr.get_str(x, base, n, digs)`: the n significant digits of |x| rounded to nearest (ties to even) and the exponent E with |x| about 0.d1 d2 ... base^E, by one exact big-integer division per attempt after a logarithm estimate of E (adjusted when the rounded integer falls outside [base^(n-1), base^n)). Equal to `.mpfr2str` on 60 values in bases 2, 8, 10, 16 and 36 (oracle_mpfr). Linux pending.

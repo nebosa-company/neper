@@ -10,6 +10,18 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if usize(z[0usize]) == 99usize {
+        // mpfr_get_str: (99, prec, m, e, base, ndigits, which -1 exponent or the digit index)
+        let sprec = usize(z[1usize])
+        let (sx, se) = mp.from_parts(a, i64(z[2usize]), i64(z[3usize]), sprec)
+        let sn = usize(z[5usize])
+        let (dg, de) = mem.alloc[u8](a, sn + 1usize)
+        if se != ok || de != ok { ret nan }
+        let (sex, sge) = mp.get_str(a, sx, usize(z[4usize]), sn, dg)
+        if sge != ok { ret nan }
+        if z[6usize] < 0.0f64 { ret f64(sex) }
+        ret f64(dg[usize(z[6usize])])
+    }
     if usize(z[0usize]) >= 100usize {
         // directed rounding: (100 + op 0 add 1 sub 2 mul 3 div 4 sqrt, prec, m1, e1, m2, e2, mode, which 0 hi 1 lo)
         let dop = usize(z[0usize]) - 100usize
