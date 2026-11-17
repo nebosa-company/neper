@@ -5,7 +5,7 @@
 // inside when `standardize`, the penalty factors rescaled to sum to p, coefficients answered on the original scale
 // and the intercept from the means. Answers the exact minimiser, which glmnet reaches to its `thresh` of 1e-7.
 //
-// Observation weights (normalised to sum 1, as glmnet does) enter the means, the standardisation and the loss; an empty slice means equal weights.
+// Box constraints lower.limits / upper.limits (original-scale coefficients, empty for none) clamp each coordinate update, which is exact for a one-variable convex problem. Observation weights (normalised to sum 1, as glmnet does) enter the means, the standardisation and the loss; an empty slice means equal weights.
 //
 // Not here: other families, offsets, bounds, cv.glmnet, relax, predict.
 
@@ -20,7 +20,7 @@ fn soft(z: f64, g: f64) -> f64 {
 
 // x is n by p column-major; lambdas are visited in order with warm starts; coef receives, for lambda k, the
 // intercept at k * (p + 1) and the p slopes after it
-fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
+fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, lo: []const f64, up: []const f64, n: usize, p: usize, alpha: f64, standardize: bool, vf: []const f64, lambdas: []const f64, coef: []f64) -> err {
     let (xs, e1) = mem.alloc[f64](a, n * p)
     let (sc, e2) = mem.alloc[f64](a, p)
     let (mx, e3) = mem.alloc[f64](a, p)
@@ -116,14 +116,17 @@ fn gaussian(a: *mem.Arena, x: []const f64, y: []const f64, wt: []const f64, n: u
                 }
                 let z = xr + cj * b[j]
                 let nb = soft(z, lam * alpha * pf[j]) / (cj + lam * (1.0f64 - alpha) * pf[j] / ys)
-                let d = nb - b[j]
+                var nb2 = nb
+                if lo.len == p && nb2 < lo[j] * sc[j] { nb2 = lo[j] * sc[j] }
+                if up.len == p && nb2 > up[j] * sc[j] { nb2 = up[j] * sc[j] }
+                let d = nb2 - b[j]
                 if d != 0.0f64 {
                     i = 0usize
                     while i < n {
                         r[i] -= d * xs[j * n + i]
                         i += 1usize
                     }
-                    b[j] = nb
+                    b[j] = nb2
                     if math.abs[f64](d) * math.sqrt[f64](cj) > dmax { dmax = math.abs[f64](d) * math.sqrt[f64](cj) }
                 }
                 j += 1usize

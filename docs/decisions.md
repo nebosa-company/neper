@@ -47994,3 +47994,7 @@ D6698 correction: the first commit of the moments compared nothing, because the 
 ## D6881 — glmnet: gaussian offsets
 
 **Decision.** A gaussian `offset` needs no library change: glmnet's fit with `offset = o` is the fit of `y - o`, with the intercept excluding the offset, so the caller subtracts it before `glmnet.gaussian`. Pinned by 8 data sets over alpha at three lambdas against `glmnet(offset = o)` (oracle_glmnet, 733 cases in all). Not here: offsets for the other families (where they are not a shift of y), the early stop, `cv.glmnet`, `predict`. Linux pending.
+
+## D6882 — glmnet: coefficient bounds
+
+**Decision.** `glmnet.gaussian` takes `lower.limits` and `upper.limits` on the original-scale coefficients (empty slices for none). Each coordinate update is the unconstrained soft-threshold solution clamped to `[lo * sd_j, up * sd_j]` on the standardised scale, which is exact for a one-variable convex problem and converges to the box-constrained minimiser glmnet reaches. Equal to glmnet on 12 data sets over alpha and standardize, three lambdas each (oracle_glmnet, 937 cases in all). Not here: the early stop, the non-gaussian families, `cv.glmnet`, `predict`. Linux pending.

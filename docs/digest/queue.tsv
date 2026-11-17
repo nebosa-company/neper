@@ -109,7 +109,7 @@ L510	library	0.35	545	gmm: generalized method of moments	Partial (D6479 linear t
 L511	library	0.3	570	QCA: qualitative comparative analysis	Partial (D6482 pof inclusion, PRI, coverage, RoN, D6481 complex and parsimonious minimal models of minimize() on a crisp truth table, as prime-implicant counts, minimum size and model count, equal QCA
 L512	library	0.15	755	poLCA: latent class analysis	Partial (D6644).
 L513	library	0.15	509	Epi: epidemiology tools	Partial (D6412).
-L310	library	0.27	933	glmnet: elastic-net path and families	Partly done (D6055): e.algo.stat.glmnet.gaussian equals glmnet at a user lambda sequence (alpha 0..1, standardize, penalty.factor) on Windows (oracle_glmnet);
+L310	library	0.3	995	glmnet: elastic-net path and families	Partly done (D6055): e.algo.stat.glmnet.gaussian equals glmnet at a user lambda sequence (alpha 0..1, standardize, penalty.factor) on Windows (oracle_glmnet);
 L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);
 L304	library	0.2	782	haven: SAS, SPSS and Stata file formats	Partial (D6049).
 L315	library	0.1	744	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Partly done (D6060): e.algo.linalg.mexp has expm (Ward Pade 8) and the 1, I, F, M norms, equal to Matrix on 210 values on Windows (oracle_matrix);
