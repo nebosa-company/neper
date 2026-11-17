@@ -22,6 +22,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret ro[usize(x[6usize])]
     }
     if str.eq(k, "cum") { ret sn.st_cumulant(x[0usize], x[1usize], x[2usize], x[3usize], usize(x[4usize])) }
+    if str.eq(k, "cp2st") { ret sn.cp2dp_st(x[0usize], x[1usize], x[2usize], x[3usize], usize(x[4usize])) }
     if str.eq(k, "cp2") { ret sn.cp2dp_sn(x[0usize], x[1usize], x[2usize], usize(x[3usize])) }
     if str.eq(k, "cp") { ret sn.dp2cp(x[0usize], x[1usize], x[2usize], x[3usize], usize(x[4usize])) }
     let xi = x[0usize]

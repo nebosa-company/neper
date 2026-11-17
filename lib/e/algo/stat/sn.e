@@ -11,6 +11,7 @@ use e.math.nmath as nm
 use e.algo.rand.r as rng
 use e.algo.rand.rdist as rd
 use e.math.quadpack as quad
+use e.math.root as root
 use e.mem
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
@@ -392,4 +393,96 @@ fn qst(a: *mem.Arena, p0: f64, xi: f64, omega: f64, alpha: f64, nu: f64) -> f64 
     var sg2 = 1.0f64
     if alpha < 0.0f64 { sg2 = 0.0f64 - 1.0f64 }
     ret xi + omega * sg2 * xc
+}
+
+// ---- cp2dp for the skew-t ----
+
+type CpCtx = struct { g1: f64, g2: f64, delta: f64, nu: f64 }
+
+// b(nu) of the package: E|T| scale of the skew-t, with its large-nu expansion
+fn b_nu(nu: f64) -> f64 {
+    if nu > 10000.0f64 { ret math.sqrt[f64](2.0f64 / pi()) * (1.0f64 + 0.75f64 / nu + 0.78125f64 / (nu * nu)) }
+    ret math.sqrt[f64](nu / pi()) * math.exp[f64](nm.lgammafn((nu - 1.0f64) / 2.0f64) - nm.lgammafn(nu / 2.0f64))
+}
+
+// st.gamma1(delta, nu) and st.gamma2: skewness and excess kurtosis of the standard skew-t from delta directly
+fn st_gamma(delta: f64, nu: f64, which: usize) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let inf = 1.0f64 / 0.0f64
+    if math.abs[f64](delta) > 1.0f64 { ret nan }
+    let mu = b_nu(nu) * delta
+    let s2 = 1.0f64 / (1.0f64 - 2.0f64 / nu)
+    let s3 = 1.0f64 / (1.0f64 - 3.0f64 / nu)
+    let s4 = 1.0f64 / (1.0f64 - 4.0f64 / nu)
+    let k2 = s2 - mu * mu
+    if which == 1usize {
+        if nu < 3.0f64 { ret nan }
+        if nu == 3.0f64 {
+            if delta < 0.0f64 { ret 0.0f64 - inf }
+            ret inf
+        }
+        ret mu * ((3.0f64 - delta * delta) * s3 - 3.0f64 * s2 + 2.0f64 * mu * mu) / (k2 * math.sqrt[f64](k2))
+    }
+    if nu < 4.0f64 { ret nan }
+    if nu == 4.0f64 { ret inf }
+    ret ((3.0f64 * s2 * s4 - 4.0f64 * mu * mu * (3.0f64 - delta * delta) * s3 + 6.0f64 * mu * mu * s2 - 3.0f64 * mu * mu * mu * mu) - 3.0f64 * k2 * k2) / (k2 * k2)
+}
+
+fn cp_fn0(c: *CpCtx, ln: f64) -> f64 { ret st_gamma(1.0f64, math.exp[f64](ln), 1usize) - c.g1 }
+fn cp_fn1(c: *CpCtx, d: f64) -> f64 { ret st_gamma(d, c.nu, 1usize) - c.g1 }
+fn cp_fn2(c: *CpCtx, ln: f64) -> f64 { ret st_gamma(c.delta, math.exp[f64](ln), 2usize) - c.g2 }
+
+// cp2dp(c(mean, sd, gamma1, gamma2), "ST") proper: which 0 xi, 1 omega, 2 alpha, 3 nu; NaN where the package finds no solution
+fn cp2dp_st(mean: f64, sd: f64, g1: f64, g2: f64, which: usize) -> f64 {
+    let nan = 0.0f64 / 0.0f64
+    let inf = 1.0f64 / 0.0f64
+    let tiny = 1.4901161193847656e-8f64
+    let ag = math.abs[f64](g1)
+    var sg = 0.0f64
+    if g1 > 0.0f64 { sg = 1.0f64 }
+    if g1 < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+    var c = CpCtx { g1: ag, g2: g2, delta: 0.0f64, nu: 0.0f64 }
+    if ag <= 0.5f64 * (4.0f64 - pi()) * math.pow[f64](2.0f64 / (pi() - 2.0f64), 1.5f64) {
+        let sn2 = 2.0f64 * (pi() - 3.0f64) * math.pow[f64](2.0f64 * ag / (4.0f64 - pi()), 4.0f64 / 3.0f64)
+        let margin = g2 - sn2
+        if math.abs[f64](margin) < tiny {
+            if which == 3usize { ret inf }
+            ret cp2dp_sn(mean, sd, g1, which)
+        }
+        if margin <= 0.0f64 { ret nan }
+    } else {
+        if ag >= 4.0f64 { ret nan }
+        let r0 = root.brent(&c, cp_fn0, math.log[f64](4.0f64 + tiny), 1000.0f64, 1.0e-13f64, 500u32)
+        if !r0.converged { ret nan }
+        if g2 < st_gamma(1.0f64, math.exp[f64](r0.x), 2usize) { ret nan }
+    }
+    c.g1 = g1
+    var delta = 0.75f64 * sg
+    var nu = inf
+    var step = inf
+    var it = 0i32
+    while step > 1.0e-12f64 && it < 2000i32 {
+        c.delta = delta
+        let f21 = cp_fn2(&c, math.log[f64](4.0f64 + tiny))
+        let f22 = cp_fn2(&c, math.log[f64](1.0e9f64))
+        if f21 != f21 || f22 != f22 || f21 * f22 > 0.0f64 { ret nan }
+        let r2 = root.brent(&c, cp_fn2, math.log[f64](4.0f64 + tiny), 100.0f64, 1.0e-13f64, 500u32)
+        if !r2.converged { ret nan }
+        let nn = math.exp[f64](r2.x)
+        c.nu = nn
+        let r1 = root.brent(&c, cp_fn1, 0.0f64 - 1.0f64, 1.0f64, 1.0e-13f64, 500u32)
+        if !r1.converged { ret nan }
+        step = math.abs[f64](delta - r1.x) + math.abs[f64](math.log[f64](nu) - math.log[f64](nn))
+        delta = r1.x
+        nu = nn
+        it += 1i32
+    }
+    if step > 1.0e-12f64 { ret nan }
+    let mz = delta * b_nu(nu)
+    let omega = sd / math.sqrt[f64](nu / (nu - 2.0f64) - mz * mz)
+    if omega < 0.0f64 { ret nan }
+    if which == 1usize { ret omega }
+    if which == 0usize { ret mean - omega * mz }
+    if which == 3usize { ret nu }
+    ret delta / math.sqrt[f64](1.0f64 - delta * delta)
 }

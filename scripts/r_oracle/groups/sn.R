@@ -44,4 +44,8 @@ for (rep in 1:30) {
   nu <- c(1, 2, 3, 5, 9, 2.5, 7.5, 30.5)[(rep - 1) %% 8 + 1]
   for (pr in c(0.001, 0.05, 0.3, 0.5, 0.75, 0.95, 0.999)) add("qst", c(xi, om, al, nu, pr), qst(pr, xi, om, al, nu), rel = 1e-5)
 }
+# cp2dp "ST" "cp2st" (mean, sd, gamma1, gamma2, which 0 xi 1 omega 2 alpha 3 nu), from proper centred parameters of known dp
+for (rep in 1:40) { xi <- round(rnorm(1), 2); om <- c(0.5, 1, 2)[sample(3, 1)]; al <- c(-3, -0.5, 1, 4, 25)[sample(5, 1)]; nu <- c(4.5, 5.5, 7, 12, 40)[sample(5, 1)]
+  cp <- dp2cp(c(xi, om, al, nu), "ST"); dp <- tryCatch(cp2dp(cp, "ST"), error = function(e) NULL); if (is.null(dp)) next
+  for (w in 1:4) add("cp2st", c(cp[1], cp[2], cp[3], cp[4], w - 1), unname(dp[w]), rel = 1e-6) }
 emit("sn", "sn", list(cases))
