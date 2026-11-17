@@ -105,6 +105,11 @@ fn model_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         i += 1usize
     }
     let allmask = (1u64 << u64(nt)) - 1u64
+    let none = al(a, 0usize)
+    let sp = md.Spec { fam: fam, theta: 1.0f64, wt: none, off: none, altw: none, alto: none }
+    let (opts0, oe0) = mem.alloc[md.Opt](a, 1usize)
+    let (names0, ne0) = mem.alloc[str](a, 1usize)
+    if oe0 != ok || ne0 != ok { os.exit(26) }
     if str.eq(k, "c_cp") || str.eq(k, "c_cp_disp") || str.eq(k, "c_bic") || str.eq(k, "c_aicc") || str.eq(k, "c_qaic") || str.eq(k, "c_qaicc") || str.eq(k, "c_stdsd") || str.eq(k, "c_stdpsd") || str.eq(k, "c_r2m") || str.eq(k, "c_r2c") || str.eq(k, "c_r2n") {
         let m = md.fit_mask(a, xg, n, nt, allmask, y, fam)
         if str.eq(k, "c_cp") { ret mf.crit_cp(&m, mf.nan()) }
@@ -138,7 +143,7 @@ fn model_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret ws(v)
     }
     if str.starts_with(k, "s_") {
-        let t = md.model_sel(a, xg, n, nt, selm[0usize..nsel], y, fam, rank, chat, 0u8, extra[0usize..nex])
+        let t = md.model_sel(a, xg, n, nt, selm[0usize..nsel], y, &sp, rank, chat, 0u8, extra[0usize..nex])
         if str.eq(k, "s_order") {
             let v = al(a, t.nm)
             i = 0usize
@@ -153,7 +158,7 @@ fn model_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if str.eq(k, "s_weight") { ret ws(t.weight) }
         ret ws(t.df)
     }
-    let t = md.dredge(a, xg, n, nt, y, fam, fixed, mlo, mhi, parents[0usize..nt], rules[0usize..nr], rank, chat, beta, extra[0usize..nex])
+    let t = md.dredge(a, xg, n, nt, y, &sp, opts0[0usize..0usize], 0usize, fixed, mlo, mhi, parents[0usize..nt], rules[0usize..nr], "", names0[0usize..0usize], rank, chat, beta, extra[0usize..nex])
     if str.starts_with(k, "t_") {
         if str.eq(k, "t_id") {
             let v = al(a, t.nm)
@@ -238,7 +243,7 @@ fn model_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     let pf = al(a, n2)
     let ps = al(a, n2)
-    md.predict_models(a, &t, sel, &av, xn, n2, fam, resp, sefit, bt, true, pf, ps)
+    md.predict_models(a, &t, sel, &av, xn, n2, sp.wt[0usize..0usize], fam, resp, sefit, bt, true, pf, ps)
     if str.eq(k, "p_resp_se") || str.eq(k, "p_link_se") || str.eq(k, "p_bt_se") { ret ws(ps) }
     ret ws(pf)
 }

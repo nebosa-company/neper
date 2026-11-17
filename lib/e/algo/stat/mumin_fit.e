@@ -18,7 +18,7 @@ use e.math.nmath as nm
 use e.mem
 use e.os
 
-type Model = struct { nc: usize, n: usize, fam: u8, cols: []usize, xs: []f64, coef: []f64, se: []f64, vcov: []f64, dev: f64, dfres: f64, ll: f64, npar: f64, disp: f64, iter: usize }
+type Model = struct { nc: usize, n: usize, fam: u8, cols: []usize, xs: []f64, coef: []f64, se: []f64, vcov: []f64, dev: f64, dfres: f64, ll: f64, npar: f64, disp: f64, iter: usize, rank: usize, theta: f64, theta_fam: f64, wt: []const f64, off: []const f64 }
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
@@ -35,9 +35,12 @@ fn zalloc(a: *mem.Arena, n: usize) -> []f64 {
     ret b[0usize..n]
 }
 
+fn is_nb(fam: u8) -> bool { ret fam == 9u8 || fam == 10u8 }
+
+// 200 lm, 201 quasipoisson, 202 quasibinomial and the negative binomials (9 fixed theta, 10 glm.nb) map to the bigglm id of their link
 fn base_fam(fam: u8) -> u8 {
     if fam == 200u8 { ret 0u8 }
-    if fam == 201u8 { ret 2u8 }
+    if fam == 201u8 || fam == 9u8 || fam == 10u8 { ret 2u8 }
     if fam == 202u8 { ret 1u8 }
     ret fam
 }
@@ -46,6 +49,8 @@ fn base_fam(fam: u8) -> u8 {
 fn est_disp(fam: u8) -> bool {
     let bk = bg.base_kind(base_fam(fam))
     if fam == 201u8 || fam == 202u8 { ret true }
+    if fam == 10u8 { ret false }
+    if fam == 9u8 { ret true }
     ret bk == 0u8 || bk == 3u8 || bk == 4u8
 }
 
@@ -59,10 +64,80 @@ fn link_fun(fam: u8, mu: f64) -> f64 {
     ret math.log[f64](0.0f64 - math.log[f64](1.0f64 - mu))
 }
 
-// Householder least squares of z on the n by nc matrix xw: coefficients, (X'X)^-1 and the residual sum of squares
-fn wls(a: *mem.Arena, xw: []const f64, n: usize, nc: usize, zw: []const f64, tol: f64, coef: []f64, covu: []f64) -> f64 {
+fn f_var(fam: u8, mu: f64, th: f64) -> f64 {
+    if is_nb(fam) { ret mu + mu * mu / th }
+    ret bg.variance(base_fam(fam), mu)
+}
+
+fn f_dev(fam: u8, y: f64, mu: f64, w: f64, th: f64) -> f64 {
+    if is_nb(fam) {
+        var m = 1.0f64
+        if y > 1.0f64 { m = y }
+        ret 2.0f64 * w * (y * math.log[f64](m / mu) - (y + th) * math.log[f64]((y + th) / (mu + th)))
+    }
+    ret bg.dev_resid(base_fam(fam), y, mu, w)
+}
+
+// MASS::theta.ml: scoring from the moment start, at most limit - 1 steps, stopping when the step is under eps
+fn theta_ml(y: []const f64, mu: []const f64, wt: []const f64, limit: usize) -> f64 {
+    let n = y.len
+    var sw = 0.0f64
+    var s0 = 0.0f64
+    var i = 0usize
+    while i < n {
+        var w = 1.0f64
+        if wt.len > 0usize { w = wt[i] }
+        sw += w
+        s0 += w * (y[i] / mu[i] - 1.0f64) * (y[i] / mu[i] - 1.0f64)
+        i += 1usize
+    }
+    var t0 = sw / s0
+    var it = 0usize
+    var del = 1.0f64
+    let eps = 1.220703125e-4f64
+    var go = true
+    while go {
+        it += 1usize
+        if !(it < limit && (del > eps || del < 0.0f64 - eps)) { go = false }
+        if go {
+            if t0 < 0.0f64 { t0 = 0.0f64 - t0 }
+            var sc = 0.0f64
+            var inf = 0.0f64
+            i = 0usize
+            while i < n {
+                var w = 1.0f64
+                if wt.len > 0usize { w = wt[i] }
+                sc += w * (sta.digamma(t0 + y[i]) - sta.digamma(t0) + math.log[f64](t0) + 1.0f64 - math.log[f64](t0 + mu[i]) - (y[i] + t0) / (mu[i] + t0))
+                inf += w * (0.0f64 - sta.trigamma(t0 + y[i]) + sta.trigamma(t0) - 1.0f64 / t0 + 2.0f64 / (mu[i] + t0) - (y[i] + t0) / ((mu[i] + t0) * (mu[i] + t0)))
+                i += 1usize
+            }
+            del = sc / inf
+            t0 = t0 + del
+        }
+    }
+    if t0 < 0.0f64 { t0 = 0.0f64 }
+    ret t0
+}
+
+fn nb_loglik(y: []const f64, mu: []const f64, wt: []const f64, th: f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < y.len {
+        var w = 1.0f64
+        if wt.len > 0usize { w = wt[i] }
+        var m1 = mu[i]
+        if y[i] == 0.0f64 { m1 = mu[i] + 1.0f64 }
+        s += w * (nm.lgammafn(th + y[i]) - nm.lgammafn(th) - nm.lgammafn(y[i] + 1.0f64) + th * math.log[f64](th) + y[i] * math.log[f64](m1) - (th + y[i]) * math.log[f64](th + mu[i]))
+        i += 1usize
+    }
+    ret s
+}
+
+// Householder least squares of z on the n by nc matrix xw: coefficients and (X'X)^-1 with NaN for the aliased (pivoted out) columns; answers (rss, rank)
+fn wls(a: *mem.Arena, xw: []const f64, n: usize, nc: usize, zw: []const f64, tol: f64, coef: []f64, covu: []f64) -> (f64, usize) {
     let (f, qe) = dc.qr(a, xw, n, nc, tol)
     if qe != ok { os.exit(71) }
+    let rk = f.rank
     let qty = zalloc(a, n)
     var i = 0usize
     while i < n {
@@ -70,17 +145,17 @@ fn wls(a: *mem.Arena, xw: []const f64, n: usize, nc: usize, zw: []const f64, tol
         i += 1usize
     }
     dc.qr_qty(&f, qty)
+    let cp = zalloc(a, nc)
     let rinv = zalloc(a, nc * nc)
     var j = 0usize
-    while j < nc {
-        // column j of R^-1: back substitution of e_j
-        var r = nc
+    while j < rk {
+        var r = rk
         while r > 0usize {
             r -= 1usize
             var s = 0.0f64
             if r == j { s = 1.0f64 }
             var c = r + 1usize
-            while c < nc {
+            while c < rk {
                 s = s - f.qr[c * n + r] * rinv[j * nc + c]
                 c += 1usize
             }
@@ -88,83 +163,214 @@ fn wls(a: *mem.Arena, xw: []const f64, n: usize, nc: usize, zw: []const f64, tol
         }
         j += 1usize
     }
-    j = nc
+    j = rk
     while j > 0usize {
         j -= 1usize
         var s = qty[j]
         var c = j + 1usize
-        while c < nc {
-            s = s - f.qr[c * n + j] * coef[c]
+        while c < rk {
+            s = s - f.qr[c * n + j] * cp[c]
             c += 1usize
         }
-        coef[j] = s / f.qr[j * n + j]
+        cp[j] = s / f.qr[j * n + j]
+    }
+    i = 0usize
+    while i < nc {
+        coef[i] = nan()
+        j = 0usize
+        while j < nc {
+            covu[j * nc + i] = nan()
+            j += 1usize
+        }
+        i += 1usize
     }
     j = 0usize
-    while j < nc {
+    while j < rk {
+        coef[f.pivot[j]] = cp[j]
         var k = 0usize
-        while k < nc {
+        while k < rk {
             var s = 0.0f64
             var m = 0usize
-            while m < nc {
+            while m < rk {
                 s += rinv[m * nc + j] * rinv[m * nc + k]
                 m += 1usize
             }
-            covu[k * nc + j] = s
+            covu[f.pivot[k] * nc + f.pivot[j]] = s
             k += 1usize
         }
         j += 1usize
     }
     var rss = 0.0f64
-    i = nc
+    i = rk
     while i < n {
         rss += qty[i] * qty[i]
         i += 1usize
     }
-    ret rss
+    ret (rss, rk)
 }
 
-// the family's aic term without the 2 rank (family()$aic), unit prior weights; NaN for the quasi families
-fn fam_aic(fam: u8, y: []const f64, mu: []const f64, n: usize, dev: f64) -> f64 {
+// the family's aic term without the 2 rank (family()$aic) with prior weights wt (empty: 1); NaN for the quasi families
+fn fam_aic(fam: u8, y: []const f64, mu: []const f64, wt: []const f64, n: usize, dev: f64, th: f64) -> f64 {
     if fam == 201u8 || fam == 202u8 { ret nan() }
-    let bk = bg.base_kind(fam)
     let nn = f64(n)
     var s = 0.0f64
+    var sw = 0.0f64
     var i = 0usize
-    if bk == 0u8 { ret nn * (math.log[f64](2.0f64 * 3.141592653589793238462643383279f64 * dev / nn) + 1.0f64) + 2.0f64 }
-    if bk == 1u8 {
-        while i < n {
-            if y[i] > 0.5f64 { s += math.log[f64](mu[i]) } else { s += math.log[f64](1.0f64 - mu[i]) }
-            i += 1usize
-        }
-        ret 0.0f64 - 2.0f64 * s
-    }
-    if bk == 2u8 {
-        while i < n {
-            s += y[i] * math.log[f64](mu[i]) - mu[i] - nm.lgammafn(y[i] + 1.0f64)
-            i += 1usize
-        }
-        ret 0.0f64 - 2.0f64 * s
-    }
-    if bk == 3u8 {
-        let disp = dev / nn
-        let shape = 1.0f64 / disp
-        while i < n {
-            let sc = mu[i] * disp
-            s += (shape - 1.0f64) * math.log[f64](y[i]) - y[i] / sc - shape * math.log[f64](sc) - nm.lgammafn(shape)
-            i += 1usize
-        }
-        ret 0.0f64 - 2.0f64 * s + 2.0f64
-    }
-    let disp = dev / nn
     while i < n {
-        s += math.log[f64](y[i])
+        if wt.len > 0usize { sw += wt[i] } else { sw += 1.0f64 }
         i += 1usize
     }
-    ret nn * (math.log[f64](disp * 2.0f64 * 3.141592653589793238462643383279f64) + 1.0f64) + 3.0f64 * s + 2.0f64
+    if fam == 9u8 {
+        i = 0usize
+        while i < n {
+            var w = 1.0f64
+            if wt.len > 0usize { w = wt[i] }
+            let term = (y[i] + th) * math.log[f64](mu[i] + th) - y[i] * math.log[f64](mu[i]) + nm.lgammafn(y[i] + 1.0f64) - th * math.log[f64](th) + nm.lgammafn(th) - nm.lgammafn(th + y[i])
+            s += term * w
+            i += 1usize
+        }
+        ret 2.0f64 * s
+    }
+    let bk = bg.base_kind(fam)
+    if bk == 0u8 {
+        i = 0usize
+        while i < n {
+            if wt.len > 0usize { s += math.log[f64](wt[i]) }
+            i += 1usize
+        }
+        ret nn * (math.log[f64](2.0f64 * 3.141592653589793238462643383279f64 * dev / nn) + 1.0f64) + 2.0f64 - s
+    }
+    i = 0usize
+    while i < n {
+        var w = 1.0f64
+        if wt.len > 0usize { w = wt[i] }
+        if bk == 1u8 {
+            let xx = math.round[f64](w * y[i])
+            s += nm.lgammafn(w + 1.0f64) - nm.lgammafn(xx + 1.0f64) - nm.lgammafn(w - xx + 1.0f64) + xx * math.log[f64](mu[i]) + (w - xx) * math.log[f64](1.0f64 - mu[i])
+        }
+        if bk == 2u8 { s += w * (y[i] * math.log[f64](mu[i]) - mu[i] - nm.lgammafn(y[i] + 1.0f64)) }
+        if bk == 3u8 {
+            let disp = dev / sw
+            let shape = 1.0f64 / disp
+            let sc = mu[i] * disp
+            s += w * ((shape - 1.0f64) * math.log[f64](y[i]) - y[i] / sc - shape * math.log[f64](sc) - nm.lgammafn(shape))
+        }
+        if bk == 4u8 { s += math.log[f64](y[i]) * w }
+        i += 1usize
+    }
+    if bk == 1u8 || bk == 2u8 { ret 0.0f64 - 2.0f64 * s }
+    if bk == 3u8 { ret 0.0f64 - 2.0f64 * s + 2.0f64 }
+    let disp = dev / sw
+    ret sw * (math.log[f64](disp * 2.0f64 * 3.141592653589793238462643383279f64) + 1.0f64) + 3.0f64 * s + 2.0f64
 }
 
-// lm (fam 200) or glm of y on the columns cols of x
-fn fit_cols(a: *mem.Arena, x: []const f64, n: usize, cols: []const usize, y: []const f64, fam: u8) -> Model {
+type Irls = struct { coef: []f64, covu: []f64, dev: f64, rank: usize, iter: usize, mu: []f64, eta: []f64, w2: []f64 }
+
+// glm.fit: IRLS with the family's start values (or etastart when eta0 is not empty), prior weights wt and offset off (empty: none)
+fn irls(a: *mem.Arena, xs: []const f64, n: usize, nc: usize, y: []const f64, fam: u8, th: f64, wt: []const f64, off: []const f64, eta0: []const f64) -> Irls {
+    let bk = bg.base_kind(base_fam(fam))
+    var r: Irls = zero
+    r.coef = zalloc(a, nc)
+    r.covu = zalloc(a, nc * nc)
+    r.mu = zalloc(a, n)
+    r.eta = zalloc(a, n)
+    r.w2 = zalloc(a, n)
+    let z = zalloc(a, n)
+    let xw = zalloc(a, n * nc)
+    let cf = zalloc(a, nc)
+    var i = 0usize
+    while i < n {
+        var w = 1.0f64
+        if wt.len > 0usize { w = wt[i] }
+        if eta0.len > 0usize {
+            r.eta[i] = eta0[i]
+        } else {
+            var ms = y[i]
+            if is_nb(fam) { if y[i] == 0.0f64 { ms = y[i] + 1.0f64 / 6.0f64 } }
+            if !is_nb(fam) && bk == 1u8 { ms = (w * y[i] + 0.5f64) / (w + 1.0f64) }
+            if !is_nb(fam) && bk == 2u8 { ms = y[i] + 0.1f64 }
+            r.eta[i] = link_fun(fam, ms)
+        }
+        r.mu[i] = f_linkinv(fam, r.eta[i])
+        i += 1usize
+    }
+    var devold = 0.0f64
+    i = 0usize
+    while i < n {
+        var w = 1.0f64
+        if wt.len > 0usize { w = wt[i] }
+        devold += f_dev(fam, y[i], r.mu[i], w, th)
+        i += 1usize
+    }
+    var dev = devold
+    var it = 0usize
+    var done = false
+    while !done && it < 25usize {
+        it += 1usize
+        i = 0usize
+        while i < n {
+            var w = 1.0f64
+            if wt.len > 0usize { w = wt[i] }
+            var o = 0.0f64
+            if off.len > 0usize { o = off[i] }
+            let me = f_mu_eta(fam, r.eta[i])
+            let wv = math.sqrt[f64](w * me * me / f_var(fam, r.mu[i], th))
+            r.w2[i] = wv * wv
+            z[i] = (r.eta[i] - o + (y[i] - r.mu[i]) / me) * wv
+            var j = 0usize
+            while j < nc {
+                xw[j * n + i] = xs[j * n + i] * wv
+                j += 1usize
+            }
+            i += 1usize
+        }
+        let (rs0, rk) = wls(a, xw, n, nc, z, 1.0e-11f64, r.coef, r.covu)
+        let _ = rs0
+        r.rank = rk
+        var j = 0usize
+        while j < nc {
+            cf[j] = r.coef[j]
+            if is_nan(cf[j]) { cf[j] = 0.0f64 }
+            j += 1usize
+        }
+        dev = 0.0f64
+        i = 0usize
+        while i < n {
+            var w = 1.0f64
+            if wt.len > 0usize { w = wt[i] }
+            var s = 0.0f64
+            if off.len > 0usize { s = off[i] }
+            j = 0usize
+            while j < nc {
+                s += xs[j * n + i] * cf[j]
+                j += 1usize
+            }
+            r.eta[i] = s
+            r.mu[i] = f_linkinv(fam, s)
+            dev += f_dev(fam, y[i], r.mu[i], w, th)
+            i += 1usize
+        }
+        var df = dev - devold
+        if df < 0.0f64 { df = 0.0f64 - df }
+        var ad = dev
+        if ad < 0.0f64 { ad = 0.0f64 - ad }
+        if df / (ad + 0.1f64) < 1.0e-8f64 { done = true }
+        devold = dev
+    }
+    r.iter = it
+    r.dev = dev
+    ret r
+}
+
+fn f_linkinv(fam: u8, eta: f64) -> f64 {
+    if is_nb(fam) { ret math.exp[f64](eta) }
+    ret bg.linkinv(base_fam(fam), eta)
+}
+
+fn f_mu_eta(fam: u8, eta: f64) -> f64 { ret bg.mu_eta(base_fam(fam), eta) }
+
+// lm (fam 200) or glm of y on the columns cols of x, with prior weights wt and offset off (empty slices: none); theta is the negative binomial theta of fam 9
+fn fit_ext(a: *mem.Arena, x: []const f64, n: usize, cols: []const usize, y: []const f64, fam: u8, wt: []const f64, off: []const f64, theta: f64) -> Model {
     let nc = cols.len
     let xs = zalloc(a, n * nc)
     var j = 0usize
@@ -192,108 +398,115 @@ fn fit_cols(a: *mem.Arena, x: []const f64, n: usize, cols: []const usize, y: []c
     m.coef = zalloc(a, nc)
     m.se = zalloc(a, nc)
     m.vcov = zalloc(a, nc * nc)
+    m.wt = wt
+    m.off = off
     let covu = zalloc(a, nc * nc)
     let nn = f64(n)
-    m.dfres = nn - f64(nc)
     let pi = 3.141592653589793238462643383279f64
+    m.theta = theta
+    m.theta_fam = theta
+    var disp = 1.0f64
     if fam == 200u8 {
-        let rss = wls(a, xs, n, nc, y, 1.0e-7f64, m.coef, covu)
-        m.dev = rss
-        m.disp = rss / m.dfres
-        m.ll = 0.5f64 * (0.0f64 - nn * (math.log[f64](2.0f64 * pi) + 1.0f64 - math.log[f64](nn) + math.log[f64](rss)))
-        m.npar = f64(nc) + 1.0f64
-        j = 0usize
-        while j < nc * nc {
-            m.vcov[j] = covu[j] * m.disp
-            j += 1usize
+        let xw = zalloc(a, n * nc)
+        let zw = zalloc(a, n)
+        var slw = 0.0f64
+        var i = 0usize
+        while i < n {
+            var w = 1.0f64
+            if wt.len > 0usize { w = wt[i] }
+            var o = 0.0f64
+            if off.len > 0usize { o = off[i] }
+            let sw = math.sqrt[f64](w)
+            slw += math.log[f64](w)
+            zw[i] = (y[i] - o) * sw
+            j = 0usize
+            while j < nc {
+                xw[j * n + i] = xs[j * n + i] * sw
+                j += 1usize
+            }
+            i += 1usize
         }
+        let (rss, rk) = wls(a, xw, n, nc, zw, 1.0e-7f64, m.coef, covu)
+        m.rank = rk
+        m.dev = rss
+        m.dfres = nn - f64(rk)
+        disp = rss / m.dfres
+        m.ll = 0.5f64 * (slw - nn * (math.log[f64](2.0f64 * pi) + 1.0f64 - math.log[f64](nn) + math.log[f64](rss)))
+        m.npar = f64(rk) + 1.0f64
+    } else {
+        var f0 = fam
+        if fam == 10u8 {
+            f0 = 2u8
+            if theta > 0.0f64 { f0 = 9u8 }
+        }
+        var fit = irls(a, xs, n, nc, y, f0, theta, wt, off, zalloc(a, 0usize))
+        var th = theta
+        if fam == 10u8 {
+            let mu0 = zalloc(a, n)
+            var i = 0usize
+            while i < n {
+                mu0[i] = fit.mu[i]
+                i += 1usize
+            }
+            th = theta_ml(y, mu0, wt, 25usize)
+            var mu = mu0
+            let d1 = math.sqrt[f64](2.0f64 * math.max[f64](1.0f64, nn - f64(fit.rank)))
+            var del = 1.0f64
+            var lm = nb_loglik(y, mu, wt, th)
+            var lm0 = lm + 2.0f64 * d1
+            var iter = 0usize
+            while iter < 25usize && (math.abs[f64](lm0 - lm) / d1 + math.abs[f64](del)) > 1.0e-8f64 {
+                iter += 1usize
+                let eta = zalloc(a, n)
+                i = 0usize
+                while i < n {
+                    eta[i] = math.log[f64](mu[i])
+                    i += 1usize
+                }
+                m.theta_fam = th
+                fit = irls(a, xs, n, nc, y, 10u8, th, wt, off, eta)
+                let t0 = th
+                th = theta_ml(y, mu, wt, 25usize)
+                mu = fit.mu
+                del = t0 - th
+                lm0 = lm
+                lm = nb_loglik(y, mu, wt, th)
+            }
+            m.theta = th
+            m.ll = lm
+            m.npar = f64(fit.rank) + 1.0f64
+        }
+        m.rank = fit.rank
+        m.dev = fit.dev
+        m.dfres = nn - f64(fit.rank)
         j = 0usize
         while j < nc {
-            m.se[j] = math.sqrt[f64](m.vcov[j * nc + j])
+            m.coef[j] = fit.coef[j]
             j += 1usize
         }
-        ret m
-    }
-    let fb = base_fam(fam)
-    let bk = bg.base_kind(fb)
-    let mu = zalloc(a, n)
-    let eta = zalloc(a, n)
-    let z = zalloc(a, n)
-    let xw = zalloc(a, n * nc)
-    let wv = zalloc(a, n)
-    let wsave = zalloc(a, n)
-    var i = 0usize
-    while i < n {
-        var ms = y[i]
-        if bk == 1u8 { ms = (y[i] + 0.5f64) / 2.0f64 }
-        if bk == 2u8 { ms = y[i] + 0.1f64 }
-        eta[i] = link_fun(fb, ms)
-        mu[i] = bg.linkinv(fb, eta[i])
-        i += 1usize
-    }
-    var devold = 0.0f64
-    i = 0usize
-    while i < n {
-        devold += bg.dev_resid(fb, y[i], mu[i], 1.0f64)
-        i += 1usize
-    }
-    var dev = devold
-    var it = 0usize
-    var done = false
-    while !done && it < 25usize {
-        it += 1usize
-        i = 0usize
-        while i < n {
-            let me = bg.mu_eta(fb, eta[i])
-            z[i] = eta[i] + (y[i] - mu[i]) / me
-            wv[i] = math.sqrt[f64](me * me / bg.variance(fb, mu[i]))
-            wsave[i] = wv[i] * wv[i]
-            j = 0usize
-            while j < nc {
-                xw[j * n + i] = xs[j * n + i] * wv[i]
-                j += 1usize
-            }
-            z[i] = z[i] * wv[i]
-            i += 1usize
+        j = 0usize
+        while j < nc * nc {
+            covu[j] = fit.covu[j]
+            j += 1usize
         }
-        let _ = wls(a, xw, n, nc, z, 1.0e-11f64, m.coef, covu)
-        i = 0usize
-        while i < n {
+        if est_disp(fam) {
             var s = 0.0f64
-            j = 0usize
-            while j < nc {
-                s += xs[j * n + i] * m.coef[j]
-                j += 1usize
+            var i = 0usize
+            while i < n {
+                let r = (y[i] - fit.mu[i]) / f_mu_eta(fam, fit.eta[i])
+                s += fit.w2[i] * r * r
+                i += 1usize
             }
-            eta[i] = s
-            mu[i] = bg.linkinv(fb, s)
-            i += 1usize
+            disp = s / m.dfres
         }
-        dev = 0.0f64
-        i = 0usize
-        while i < n {
-            dev += bg.dev_resid(fb, y[i], mu[i], 1.0f64)
-            i += 1usize
+        if fam != 10u8 {
+            var p = f64(fit.rank)
+            let bk = bg.base_kind(base_fam(fam))
+            if !is_nb(fam) && (bk == 0u8 || bk == 3u8 || bk == 4u8 || fam == 201u8 || fam == 202u8) { p += 1.0f64 }
+            m.npar = p
+            m.ll = p - f64(fit.rank) - fam_aic(fam, y, fit.mu, wt, n, fit.dev, theta) / 2.0f64
+            if fam == 201u8 || fam == 202u8 { m.ll = nan() }
         }
-        var df = dev - devold
-        if df < 0.0f64 { df = 0.0f64 - df }
-        var ad = dev
-        if ad < 0.0f64 { ad = 0.0f64 - ad }
-        if df / (ad + 0.1f64) < 1.0e-8f64 { done = true }
-        devold = dev
-    }
-    m.iter = it
-    m.dev = dev
-    var disp = 1.0f64
-    if est_disp(fam) {
-        var s = 0.0f64
-        i = 0usize
-        while i < n {
-            let r = (y[i] - mu[i]) / bg.mu_eta(fb, eta[i])
-            s += wsave[i] * r * r
-            i += 1usize
-        }
-        disp = s / m.dfres
     }
     m.disp = disp
     j = 0usize
@@ -306,13 +519,13 @@ fn fit_cols(a: *mem.Arena, x: []const f64, n: usize, cols: []const usize, y: []c
         m.se[j] = math.sqrt[f64](m.vcov[j * nc + j])
         j += 1usize
     }
-    var p = f64(nc)
-    if bk == 0u8 || bk == 3u8 || bk == 4u8 || fam == 201u8 || fam == 202u8 { p += 1.0f64 }
-    m.npar = p
-    m.ll = f64(0usize) + p - f64(nc) - fam_aic(fam, y, mu, n, dev) / 2.0f64
-    if fam == 201u8 || fam == 202u8 { m.ll = nan() }
     ret m
 }
+
+fn fit_cols(a: *mem.Arena, x: []const f64, n: usize, cols: []const usize, y: []const f64, fam: u8) -> Model {
+    ret fit_ext(a, x, n, cols, y, fam, zalloc(a, 0usize), zalloc(a, 0usize), 1.0f64)
+}
+
 
 // the linear predictor of a model at the rows of newx (n2 by q, same column layout as the fitting matrix)
 fn linpred(m: *const Model, newx: []const f64, n2: usize, out: []f64) {
@@ -352,7 +565,7 @@ fn crit_cp(m: *const Model, disp: f64) -> f64 {
     var scale = disp
     if is_nan(disp) {
         let bk = bg.base_kind(base_fam(m.fam))
-        if (bk == 1u8 || bk == 2u8) && m.fam != 201u8 && m.fam != 202u8 { scale = 1.0f64 } else {
+        if (bk == 1u8 || bk == 2u8) && m.fam != 201u8 && m.fam != 202u8 && !is_nb(m.fam) { scale = 1.0f64 } else {
             if m.dfres > 0.0f64 { scale = m.dev / m.dfres } else { scale = nan() }
         }
     }
@@ -557,6 +770,13 @@ fn r2glmm(cls: u8, link: u8, var_fe: f64, var_re: f64, var_resid: f64, pmean: f6
             k = 2usize
         }
     }
+    if cls == 4u8 {
+        let vd = 1.0f64 / lambda + 1.0f64 / omega
+        pr[0usize] = vd
+        pr[1usize] = math.log[f64](1.0f64 + vd)
+        pr[2usize] = sta.trigamma(1.0f64 / vd)
+        k = 3usize
+    }
     if (cls == 2u8 || cls == 3u8) && link == 2u8 {
         pr[0usize] = omega / lambda
         pr[1usize] = math.log[f64](1.0f64 + omega / lambda)
@@ -590,7 +810,7 @@ fn r2_fit(a: *mem.Arena, x: []const f64, y: []const f64, m: *const Model, out: [
         var s = 0.0f64
         var j = 0usize
         while j < m.nc {
-            s += m.xs[j * n + i] * m.coef[j]
+            if !is_nan(m.coef[j]) { s += m.xs[j * n + i] * m.coef[j] }
             j += 1usize
         }
         fit[i] = s
@@ -606,23 +826,35 @@ fn r2_fit(a: *mem.Arena, x: []const f64, y: []const f64, m: *const Model, out: [
     if bk == 2u8 { cls = 2u8 }
     if bk == 3u8 { cls = 3u8 }
     if bk == 4u8 { ret 0usize }
+    if is_nb(m.fam) { cls = 4u8 }
+    var nbin = 1.0f64
+    if m.wt.len > 0usize {
+        var sw = 0.0f64
+        var q = 0usize
+        while q < n {
+            sw += m.wt[q]
+            q += 1usize
+        }
+        nbin = sw / f64(n)
+    }
     // intercept-only fit of the same family
     var one: [1]usize = zero
     one[0usize] = 0usize
     var pmean = 0.0f64
     var lambda = 0.0f64
     var omega = 1.0f64
-    if cls == 1u8 || cls == 2u8 {
-        let nm0 = fit_cols(a, x, n, one[0usize..1usize], y, m.fam)
+    if cls == 1u8 || cls == 2u8 || cls == 4u8 {
+        let nm0 = fit_ext(a, x, n, one[0usize..1usize], y, m.fam, m.wt, m.off, m.theta)
         if cls == 1u8 { pmean = bg.linkinv(fb, nm0.coef[0usize]) }
-        if cls == 2u8 { lambda = math.exp[f64](nm0.coef[0usize]) }
+        if cls == 2u8 || cls == 4u8 { lambda = math.exp[f64](nm0.coef[0usize]) }
         if m.fam == 201u8 { omega = sigma }
+        if cls == 4u8 { omega = m.theta_fam }
     }
     if cls == 3u8 {
         lambda = 1.0f64 / (sigma * sigma)
         omega = 1.0f64
     }
-    ret r2glmm(cls, lk, var_fe, 0.0f64, sigma * sigma, pmean, lambda, omega, 1.0f64, out)
+    ret r2glmm(cls, lk, var_fe, 0.0f64, sigma * sigma, pmean, lambda, omega, nbin, out)
 }
 
 // --- QIC and QICu (MuMIn getQIC): y, the fitted means mu (of the independence fit, or of the model itself for typeR), the robust covariance of the model, the naive covariance of the
@@ -717,4 +949,44 @@ fn stdize_cols(x: []const f64, n: usize, nc: usize, kind: []const u8, binary: u8
         }
         j += 1usize
     }
+}
+
+// --- r.squaredGLMM of a mixed model from its pieces (MuMIn r.squaredGLMM.merMod): the fixed-effect predictions fe (n), for each random term the design columns z (n by q)
+// and covariance sig (q by q); the null model's intercept fixef0 and covariances.
+
+// .varRESum for one term: sum_i z_i' Sigma z_i / n
+fn var_re_sum(z: []const f64, sig: []const f64, n: usize, q: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < q {
+            var k = 0usize
+            while k < q {
+                s += z[j * n + i] * sig[k * q + j] * z[k * n + i]
+                k += 1usize
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret s / f64(n)
+}
+
+// cls 0 gaussian (var_resid = sigma^2), 1 binomial (link ids as r2glmm, nbin the mean prior weight), 2 poisson / quasipoisson (omega 1 or sigma), 3 Gamma(log) (var_resid = sigma^2, nu = 1 / sigma^2),
+// 4 negative binomial (log; omega = theta). var_re and vt (the null model's variance sum) come from var_re_sum.
+fn r2_mixed(cls: u8, link: u8, var_fe: f64, var_re: f64, var_resid: f64, fixef0: f64, vt: f64, omega: f64, nbin: f64, out: []f64) -> usize {
+    var pmean = 0.0f64
+    var lambda = 0.0f64
+    if cls == 1u8 {
+        var fam = 1u8
+        if link == 4u8 { fam = 6u8 }
+        if link == 5u8 { fam = 7u8 }
+        let u = fixef0 * (1.0f64 + 2.0f64 * math.exp[f64](0.0f64 - 0.5f64 * vt)) / 6.0f64
+        let e2 = math.exp[f64](2.0f64 * u)
+        pmean = bg.linkinv(fam, fixef0 - 0.5f64 * vt * (e2 - 1.0f64) / (e2 + 1.0f64))
+    }
+    if cls == 2u8 || cls == 4u8 { lambda = math.exp[f64](fixef0 + 0.5f64 * vt) }
+    if cls == 3u8 { lambda = 1.0f64 / var_resid }
+    ret r2glmm(cls, link, var_fe, var_re, var_resid, pmean, lambda, omega, nbin, out)
 }

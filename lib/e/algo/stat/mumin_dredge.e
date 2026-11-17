@@ -18,10 +18,17 @@ use e.math.dist as dist
 use e.math.nmath_beta as nb
 use e.mem
 use e.os
+use e.str
 
 type Rule = struct { kind: u8, m1: u64, m2: u64 }
 
-type Table = struct { nm: usize, nt: usize, id: []usize, mask: []u64, df: []f64, ll: []f64, ic: []f64, delta: []f64, weight: []f64, nex: usize, extra: []f64, est: []f64, se: []f64, cdf: []f64, raw: []f64, vc: []f64, nobs: f64 }
+type Table = struct { nm: usize, nt: usize, id: []usize, mask: []u64, df: []f64, ll: []f64, ic: []f64, delta: []f64, weight: []f64, nex: usize, extra: []f64, est: []f64, se: []f64, cdf: []f64, raw: []f64, vc: []f64, nobs: f64, ndim: usize, vv: []usize }
+
+// the fitting configuration: family, theta of fam 9, prior weights and offset (empty: none), and the alternative weight and offset arrays varying picks from (n each, option k is array k - 1)
+type Spec = struct { fam: u8, theta: f64, wt: []const f64, off: []const f64, altw: []const f64, alto: []const f64 }
+
+// one option of a varying dimension: kind 0 sets the family, 1 theta, 2 the weights (arr = 0 none, else the alternative array), 3 the offset
+type Opt = struct { dim: usize, kind: u8, fam: u8, theta: f64, arr: usize }
 
 type Avg = struct { nm: usize, q: usize, w: []f64, coef_full: []f64, coef_cond: []f64, full: []f64, cond: []f64, sw: []f64, nmod: []f64 }
 
@@ -79,6 +86,10 @@ fn mask_cols(a: *mem.Arena, mask: u64, nt: usize) -> []usize {
 }
 
 // get.models for one mask: the refit of that model
+fn fit_spec(a: *mem.Arena, x: []const f64, n: usize, nt: usize, mask: u64, y: []const f64, sp: *const Spec) -> mf.Model {
+    ret mf.fit_ext(a, x, n, mask_cols(a, mask, nt), y, sp.fam, sp.wt, sp.off, sp.theta)
+}
+
 fn fit_mask(a: *mem.Arena, x: []const f64, n: usize, nt: usize, mask: u64, y: []const f64, fam: u8) -> mf.Model {
     ret mf.fit_cols(a, x, n, mask_cols(a, mask, nt), y, fam)
 }
@@ -95,7 +106,7 @@ fn extra_of(m: *const mf.Model, ll0: f64, kind: u8) -> f64 {
 }
 
 // the table of the given fitted models (model.sel on them, or dredge on its enumeration): sorted by the criterion; beta 0 raw coefficients, 1 std.coef, 2 partial.sd
-fn build_table(a: *mem.Arena, mods: []const mf.Model, masks: []const u64, ids: []const usize, nt: usize, y: []const f64, ll0: f64, rank: u8, chat: f64, beta: u8, extra: []const u8) -> Table {
+fn build_table(a: *mem.Arena, mods: []const mf.Model, masks: []const u64, ids: []const usize, nt: usize, y: []const f64, ll0: f64, rank: u8, chat: f64, beta: u8, extra: []const u8, ndim: usize, vcodes: []const usize) -> Table {
     let nm = mods.len
     let q = nt + 1usize
     var t: Table = zero
@@ -103,6 +114,7 @@ fn build_table(a: *mem.Arena, mods: []const mf.Model, masks: []const u64, ids: [
     t.nt = nt
     t.nex = extra.len
     t.nobs = f64(mods[0usize].n)
+    t.ndim = ndim
     let icu = mf.zalloc(a, nm)
     var i = 0usize
     while i < nm {
@@ -138,6 +150,9 @@ fn build_table(a: *mem.Arena, mods: []const mf.Model, masks: []const u64, ids: [
     t.cdf = mf.zalloc(a, nm * q)
     t.raw = mf.zalloc(a, nm * q)
     t.vc = mf.zalloc(a, nm * q * q)
+    let (vvv, vve) = mem.alloc[usize](a, nm * ndim + 1usize)
+    if vve != ok { os.exit(70) }
+    t.vv = vvv[0usize..nm * ndim]
     let nan = mf.nan()
     let be = mf.zalloc(a, q)
     let bs = mf.zalloc(a, q)
@@ -147,6 +162,11 @@ fn build_table(a: *mem.Arena, mods: []const mf.Model, masks: []const u64, ids: [
         let m = &mods[s]
         t.id[r] = ids[s]
         t.mask[r] = masks[s]
+        var vq = 0usize
+        while vq < ndim {
+            t.vv[r * ndim + vq] = vcodes[s * ndim + vq]
+            vq += 1usize
+        }
         t.df[r] = m.npar
         t.ll[r] = m.ll
         t.ic[r] = icu[s]
@@ -205,22 +225,207 @@ fn build_table(a: *mem.Arena, mods: []const mf.Model, masks: []const u64, ids: [
     ret t
 }
 
-// model.sel on models given by their masks (refit); ids are 1..m
-fn model_sel(a: *mem.Arena, x: []const f64, n: usize, nt: usize, masks: []const u64, y: []const f64, fam: u8, rank: u8, chat: f64, beta: u8, extra: []const u8) -> Table {
+// model.sel on models given by their masks (refit under spec sp); ids are 1..m
+fn model_sel(a: *mem.Arena, x: []const f64, n: usize, nt: usize, masks: []const u64, y: []const f64, sp: *const Spec, rank: u8, chat: f64, beta: u8, extra: []const u8) -> Table {
     let (ms, me) = mem.alloc[mf.Model](a, masks.len + 1usize)
     let (ids, ie) = mem.alloc[usize](a, masks.len + 1usize)
     if me != ok || ie != ok { os.exit(70) }
     var i = 0usize
     while i < masks.len {
-        ms[i] = fit_mask(a, x, n, nt, masks[i], y, fam)
+        ms[i] = fit_spec(a, x, n, nt, masks[i], y, sp)
         ids[i] = i + 1usize
         i += 1usize
     }
-    let m0 = fit_mask(a, x, n, nt, 0u64, y, fam)
-    ret build_table(a, ms[0usize..masks.len], masks, ids[0usize..masks.len], nt, y, m0.ll, rank, chat, beta, extra)
+    let m0 = fit_spec(a, x, n, nt, 0u64, y, sp)
+    ret build_table(a, ms[0usize..masks.len], masks, ids[0usize..masks.len], nt, y, m0.ll, rank, chat, beta, extra, 0usize, zero_usize(a))
 }
 
-fn dredge(a: *mem.Arena, x: []const f64, n: usize, nt: usize, y: []const f64, fam: u8, fixed: u64, mlo: usize, mhi0: usize, parents: []const u64, rules: []const Rule, rank: u8, chat: f64, beta: u8, extra: []const u8) -> Table {
+fn zero_usize(a: *mem.Arena) -> []usize {
+    let (b, e) = mem.alloc[usize](a, 1usize)
+    if e != ok { os.exit(70) }
+    ret b[0usize..0usize]
+}
+
+// --- subset expressions: ! && & || | ( ) term names (letters, digits, . _ :), TRUE FALSE, dc(a, b, ...) (presence nonincreasing), xor(a, b), sum(a, b, ...) with a comparison and a number
+
+type Parser = struct { s: str, at: usize, names: []const str, mask: u64, bad: bool }
+
+fn is_ident(c: u8) -> bool {
+    if c >= 97u8 && c <= 122u8 { ret true }
+    if c >= 65u8 && c <= 90u8 { ret true }
+    if c >= 48u8 && c <= 57u8 { ret true }
+    ret c == 46u8 || c == 95u8 || c == 58u8
+}
+
+fn skip_ws(p: *Parser) {
+    while p.at < p.s.len && p.s[p.at] == 32u8 { p.at += 1usize }
+}
+
+fn peek(p: *Parser) -> u8 {
+    skip_ws(p)
+    if p.at >= p.s.len { ret 0u8 }
+    ret p.s[p.at]
+}
+
+fn parse_or(p: *Parser) -> bool {
+    var v = parse_and(p)
+    while peek(p) == 124u8 {
+        p.at += 1usize
+        if peek(p) == 124u8 { p.at += 1usize }
+        let w = parse_and(p)
+        v = v || w
+    }
+    ret v
+}
+
+fn parse_and(p: *Parser) -> bool {
+    var v = parse_not(p)
+    while peek(p) == 38u8 {
+        p.at += 1usize
+        if peek(p) == 38u8 { p.at += 1usize }
+        let w = parse_not(p)
+        v = v && w
+    }
+    ret v
+}
+
+fn parse_not(p: *Parser) -> bool {
+    let c = peek(p)
+    if c == 33u8 {
+        p.at += 1usize
+        let v = parse_not(p)
+        ret !v
+    }
+    if c == 40u8 {
+        p.at += 1usize
+        let v = parse_or(p)
+        if peek(p) == 41u8 { p.at += 1usize } else { p.bad = true }
+        ret v
+    }
+    skip_ws(p)
+    let st = p.at
+    while p.at < p.s.len && is_ident(p.s[p.at]) { p.at += 1usize }
+    if p.at == st {
+        p.bad = true
+        ret false
+    }
+    let id = p.s[st..p.at]
+    if peek(p) == 40u8 {
+        p.at += 1usize
+        var cnt = 0usize
+        var nargs = 0usize
+        var prev = true
+        var ordered = true
+        var first = false
+        var second = false
+        var more = true
+        while more {
+            let v = parse_or(p)
+            nargs += 1usize
+            if v { cnt += 1usize }
+            if nargs > 1usize && v && !prev { ordered = false }
+            prev = v
+            if nargs == 1usize { first = v }
+            if nargs == 2usize { second = v }
+            if peek(p) == 44u8 { p.at += 1usize } else { more = false }
+        }
+        if peek(p) == 41u8 { p.at += 1usize } else { p.bad = true }
+        if str.eq(id, "dc") { ret ordered }
+        if str.eq(id, "xor") { ret first != second }
+        if str.eq(id, "sum") {
+            let c1 = peek(p)
+            var op = 0u8
+            p.at += 1usize
+            let c2 = peek(p)
+            // c1, c2: < > = !
+            if c1 == 60u8 && c2 == 61u8 { op = 1u8 }
+            if c1 == 60u8 && c2 != 61u8 { op = 2u8 }
+            if c1 == 62u8 && c2 == 61u8 { op = 3u8 }
+            if c1 == 62u8 && c2 != 61u8 { op = 4u8 }
+            if c1 == 61u8 { op = 5u8 }
+            if c1 == 33u8 { op = 6u8 }
+            if op == 1u8 || op == 3u8 || op == 5u8 || op == 6u8 { p.at += 1usize }
+            skip_ws(p)
+            var num = 0usize
+            while p.at < p.s.len && p.s[p.at] >= 48u8 && p.s[p.at] <= 57u8 {
+                num = num * 10usize + usize(p.s[p.at] - 48u8)
+                p.at += 1usize
+            }
+            if op == 1u8 { ret cnt <= num }
+            if op == 2u8 { ret cnt < num }
+            if op == 3u8 { ret cnt >= num }
+            if op == 4u8 { ret cnt > num }
+            if op == 5u8 { ret cnt == num }
+            ret cnt != num
+        }
+        p.bad = true
+        ret false
+    }
+    if str.eq(id, "TRUE") { ret true }
+    if str.eq(id, "FALSE") { ret false }
+    var t = 0usize
+    while t < p.names.len {
+        if str.eq(p.names[t], id) { ret ((p.mask >> u64(t)) & 1u64) == 1u64 }
+        t += 1usize
+    }
+    p.bad = true
+    ret false
+}
+
+fn expr_ok(expr: str, names: []const str, mask: u64) -> bool {
+    var p = Parser { s: expr, at: 0usize, names: names, mask: mask, bad: false }
+    let v = parse_or(&p)
+    if p.bad { os.exit(75) }
+    ret v
+}
+
+// variant k of the varying dimensions: the option picked in each dimension, the first dimension running fastest
+fn variant_spec(sp: *const Spec, opts: []const Opt, ndim: usize, k: usize, n: usize, codes: []usize) -> Spec {
+    var out = Spec { fam: sp.fam, theta: sp.theta, wt: sp.wt, off: sp.off, altw: sp.altw, alto: sp.alto }
+    var rest = k
+    var d = 0usize
+    while d < ndim {
+        var len = 0usize
+        var i = 0usize
+        while i < opts.len {
+            if opts[i].dim == d { len += 1usize }
+            i += 1usize
+        }
+        let pick = rest % len
+        rest = rest / len
+        codes[d] = pick + 1usize
+        var seen = 0usize
+        i = 0usize
+        while i < opts.len {
+            if opts[i].dim == d {
+                if seen == pick {
+                    let o = &opts[i]
+                    if o.kind == 0u8 { out.fam = o.fam }
+                    if o.kind == 1u8 { out.theta = o.theta }
+                    if o.kind == 2u8 {
+                        if o.arr == 0usize { out.wt = sp.altw[0usize..0usize] } else { out.wt = sp.altw[(o.arr - 1usize) * n..o.arr * n] }
+                    }
+                    if o.kind == 3u8 {
+                        if o.arr == 0usize { out.off = sp.alto[0usize..0usize] } else { out.off = sp.alto[(o.arr - 1usize) * n..o.arr * n] }
+                    }
+                }
+                seen += 1usize
+            }
+            i += 1usize
+        }
+        d += 1usize
+    }
+    ret out
+}
+
+fn dredge(a: *mem.Arena, x: []const f64, n: usize, nt: usize, y: []const f64, sp: *const Spec, opts: []const Opt, ndim: usize, fixed: u64, mlo: usize, mhi0: usize, parents: []const u64, rules: []const Rule, expr: str, names: []const str, rank: u8, chat: f64, beta: u8, extra: []const u8) -> Table {
+    // glm.nb: the submodels are refitted with init.theta = signif(theta of the global model, 10), which MuMIn takes from the global call
+    var spl = Spec { fam: sp.fam, theta: sp.theta, wt: sp.wt, off: sp.off, altw: sp.altw, alto: sp.alto }
+    if spl.fam == 10u8 && spl.theta <= 0.0f64 {
+        let gfit = fit_spec(a, x, n, nt, (1u64 << u64(nt)) - 1u64, y, sp)
+        let pw = math.exp[f64](math.log[f64](10.0f64) * (9.0f64 - math.floor[f64](math.log[f64](gfit.theta) / math.log[f64](10.0f64))))
+        spl.theta = math.round[f64](gfit.theta * pw) / pw
+    }
     var mhi = mhi0
     if mhi > nt { mhi = nt }
     let (nf, nfe) = mem.alloc[usize](a, nt + 1usize)
@@ -234,11 +439,28 @@ fn dredge(a: *mem.Arena, x: []const f64, n: usize, nt: usize, y: []const f64, fa
         }
         t += 1usize
     }
+    var nvar = 1usize
+    var d = 0usize
+    while d < ndim {
+        var len = 0usize
+        var i = 0usize
+        while i < opts.len {
+            if opts[i].dim == d { len += 1usize }
+            i += 1usize
+        }
+        nvar = nvar * len
+        d += 1usize
+    }
     let total = 1usize << nov
-    let (ms, me) = mem.alloc[mf.Model](a, total + 1usize)
-    let (mk, ke) = mem.alloc[u64](a, total + 1usize)
-    let (ids, ie) = mem.alloc[usize](a, total + 1usize)
-    if me != ok || ke != ok || ie != ok { os.exit(70) }
+    let cap = total * nvar
+    let (ms, me) = mem.alloc[mf.Model](a, cap + 1usize)
+    let (mk, ke) = mem.alloc[u64](a, cap + 1usize)
+    let (ids, ie) = mem.alloc[usize](a, cap + 1usize)
+    let (vcs, ve) = mem.alloc[usize](a, cap * ndim + 1usize)
+    if me != ok || ke != ok || ie != ok || ve != ok { os.exit(70) }
+    let codes = zero_usize(a)
+    let (cd, cde) = mem.alloc[usize](a, ndim + 1usize)
+    if cde != ok { os.exit(70) }
     var k = 0usize
     var jc = 0usize
     while jc < total {
@@ -249,8 +471,8 @@ fn dredge(a: *mem.Arena, x: []const f64, n: usize, nt: usize, y: []const f64, fa
             b += 1usize
         }
         var ok1 = true
-        let nvar = popcnt(mask)
-        if nvar > mhi || nvar < mlo { ok1 = false }
+        let nv = popcnt(mask)
+        if nv > mhi || nv < mlo { ok1 = false }
         t = 0usize
         while ok1 && t < nt {
             if ((mask >> u64(t)) & 1u64) == 1u64 && (parents[t] & mask) != parents[t] { ok1 = false }
@@ -261,17 +483,29 @@ fn dredge(a: *mem.Arena, x: []const f64, n: usize, nt: usize, y: []const f64, fa
             if !rule_ok(mask, &rules[ri]) { ok1 = false }
             ri += 1usize
         }
+        if ok1 && expr.len > 0usize { ok1 = expr_ok(expr, names, mask) }
         if ok1 {
-            ms[k] = fit_mask(a, x, n, nt, mask, y, fam)
-            mk[k] = mask
-            ids[k] = jc + 1usize
-            k += 1usize
+            var vk = 0usize
+            while vk < nvar {
+                let vs = variant_spec(&spl, opts, ndim, vk, n, cd)
+                ms[k] = fit_spec(a, x, n, nt, mask, y, &vs)
+                mk[k] = mask
+                ids[k] = jc * nvar + vk + 1usize
+                var q = 0usize
+                while q < ndim {
+                    vcs[k * ndim + q] = cd[q]
+                    q += 1usize
+                }
+                k += 1usize
+                vk += 1usize
+            }
         }
         jc += 1usize
     }
+    let _ = codes
     if k == 0usize { os.exit(74) }
-    let m0 = fit_mask(a, x, n, nt, 0u64, y, fam)
-    ret build_table(a, ms[0usize..k], mk[0usize..k], ids[0usize..k], nt, y, m0.ll, rank, chat, beta, extra)
+    let m0 = fit_spec(a, x, n, nt, 0u64, y, &spl)
+    ret build_table(a, ms[0usize..k], mk[0usize..k], ids[0usize..k], nt, y, m0.ll, rank, chat, beta, extra, ndim, vcs[0usize..k * ndim])
 }
 
 // the rows of a table with delta < cutoff (subset = delta < cutoff); answers how many
@@ -478,7 +712,7 @@ fn predict_coef(av: *const Avg, newx: []const f64, n2: usize, full: bool, out: [
 // predict.averaging through the component models: each model predicts (link scale, or the response scale when resp), with its standard error when se_fit; the predictions are averaged
 // by the weights (par.avg without df when se_fit, a weighted mean otherwise); backtransform maps an averaged link prediction through the inverse link.
 // fit and se receive n2 values each (se untouched unless se_fit).
-fn predict_models(a: *mem.Arena, t: *const Table, rows: []const usize, av: *const Avg, newx: []const f64, n2: usize, fam: u8, resp: bool, se_fit: bool, backtransform: bool, revised: bool, fit: []f64, se: []f64) {
+fn predict_models(a: *mem.Arena, t: *const Table, rows: []const usize, av: *const Avg, newx: []const f64, n2: usize, newoff: []const f64, fam: u8, resp: bool, se_fit: bool, backtransform: bool, revised: bool, fit: []f64, se: []f64) {
     let q = av.q
     let nm = t.nm
     let fb = mf.base_fam(fam)
@@ -503,6 +737,7 @@ fn predict_models(a: *mem.Arena, t: *const Table, rows: []const usize, av: *cons
                 }
                 j += 1usize
             }
+            if newoff.len > 0usize { eta += newoff[i] }
             var s = math.sqrt[f64](v)
             var f = eta
             if resp && fam != 200u8 {
