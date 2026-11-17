@@ -75,18 +75,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case, t: *Tally) -> f64 {
         rng.seed(&rg, i64(z[at + n]))
         var method = 4usize
         var opt = true
+        var reps = 1usize
+        if code == 8usize { reps = usize(z[at + n + 1usize]) }
         if code == 7usize {
             method = usize(z[at + n + 1usize])
             opt = false
         }
-        r = st.tsp_order(a, &rg, d, n, method, opt, 1usize, o)
+        r = st.tsp_order(a, &rg, d, n, method, opt, reps, o)
         if r != ok { ret nan }
         let eq = same(o, z, at, n)
-        if code == 8usize {
-            t.tsp_total += 1usize
-            if eq { t.tsp_exact += 1usize }
-            ret 1.0f64
-        }
         if eq { ret 1.0f64 }
         ret 0.0f64
     }
@@ -119,11 +116,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let _ = str.push_i64(&b, i64(tally.exact))
         let _ = str.push(&b, " of ")
         let _ = str.push_i64(&b, i64(tally.total))
-        let _ = str.push(&b, " orders with R's orientation; default TSP (2-opt not exact) ")
-        let _ = str.push_i64(&b, i64(tally.tsp_exact))
-        let _ = str.push(&b, " of ")
-        let _ = str.push_i64(&b, i64(tally.tsp_total))
-        let _ = str.push(&b, " equal\n")
+        let _ = str.push(&b, " orders with R's orientation")
+        let _ = str.push(&b, "\n")
         let _ = io.print(str.done(&b))
     }
     if failures > 0usize { os.exit(1) }

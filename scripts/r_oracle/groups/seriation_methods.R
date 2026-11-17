@@ -36,11 +36,11 @@ for (rep in 1:80) {
   o <- as.integer(get_order(seriate(d, "TSP", control = list(method = meths[mi]))))
   cases[[length(cases) + 1]] <- mk(7, n, d, o, c(seed, mi))
 }
-# TSP default (arbitrary insertion + 2-opt, rep 1), informational (2-opt is compiled C): fn "t" (8, n, D, order, seed)
-for (rep in 1:80) {
+# TSP default (arbitrary insertion + 2-opt): (8, n, D, order, seed, rep); rep > 1 restarts from sample.int seeds
+for (rep in 1:100) {
   n <- sample(5:25, 1); x <- matrix(runif(n * 3), n, 3); d <- dist(x)
-  seed <- sample(1:100000, 1); set.seed(seed)
-  o <- as.integer(get_order(seriate(d, "TSP")))
-  cases[[length(cases) + 1]] <- case("t", c(8, n, rowm(as.matrix(d)), o, seed), 1, rel = 0, abs = 0)
+  rp <- c(1, 1, 3, 10)[(rep - 1) %% 4 + 1]; seed <- sample(1:100000, 1); set.seed(seed)
+  o <- as.integer(get_order(seriate(d, "TSP", control = if (rp > 1) list(rep = rp) else NULL)))
+  cases[[length(cases) + 1]] <- mk(8, n, d, o, c(seed, rp))
 }
 emit("seriation_methods", "seriation", list(cases))

@@ -3,9 +3,10 @@
 // BEA_TSP: cheapest insertion on max(c) - c of the row and column inner products). The insertion heuristics follow
 // TSP 1.3.0's R code draw for draw (sample(), ties by sample), so under the same set.seed they give R's tour.
 //
-// Not exact: the 2-opt refinement. TSP::tsp_two_opt is compiled C (R_two_opt) that is not on disk; this is best
-// improvement over the non-wrapping edge pairs, which gave R's tour on 96 percent of 2000 random cases and a worse
-// local optimum on the rest.
+// The 2-opt refinement is TSP::tsp_two_opt, compiled C (R_two_opt) whose source is not on disk; two_opt below
+// reproduces it from its answers (2000 random continuous cases and 300 with the dummy city, all equal). On
+// dissimilarities with many exact ties the sums round differently from the C code and a tie can fall the other
+// way (about 5 percent of cases built from integer-rounded points).
 //
 // Dissimilarities are a full symmetric n by n row-major matrix; orders are 0-based.
 
@@ -205,7 +206,9 @@ fn arbitrary_tour(a: *mem.Arena, r: *rng.Rng, x: []const f64, m: usize, out: []u
     ret ok
 }
 
-// best-improvement 2-opt over the edge pairs that do not use the closing edge, reversing the inner segment
+// TSP's R_two_opt, found by comparing against the compiled routine: best improvement over every pair of edges (first
+// pair in row order on ties), the reversal of the inner segment; the pair that would drop the closing edge (the last
+// city, then the first) counts only the new edges a-c and b-first and the dropped a-b, never the old closing edge.
 fn two_opt(x: []const f64, m: usize, t: []usize) {
     if m < 4usize { ret }
     var more = true
@@ -217,10 +220,15 @@ fn two_opt(x: []const f64, m: usize, t: []usize) {
         var bi = 0usize
         var bj = 0usize
         var i = 0usize
-        while i + 3usize < m {
+        while i + 2usize < m {
             var j = i + 2usize
-            while j + 1usize < m {
-                let g = x[t[i] * m + t[i + 1usize]] + x[t[j] * m + t[j + 1usize]] - x[t[i] * m + t[j]] - x[t[i + 1usize] * m + t[j + 1usize]]
+            while j < m {
+                var g = 0.0f64
+                if j + 1usize < m {
+                    g = x[t[i] * m + t[i + 1usize]] + x[t[j] * m + t[j + 1usize]] - x[t[i] * m + t[j]] - x[t[i + 1usize] * m + t[j + 1usize]]
+                } else {
+                    g = x[t[i] * m + t[i + 1usize]] - x[t[i] * m + t[j]] - x[t[i + 1usize] * m + t[0usize]]
+                }
                 if g > best {
                     best = g
                     bi = i
