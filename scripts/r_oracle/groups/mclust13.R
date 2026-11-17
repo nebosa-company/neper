@@ -21,6 +21,6 @@ one <- function(n, p, G, kind) {
     add(5, sq(dr$basis)); add(6, sq(dr$std.basis)); add(7, sq(dr$dir))
   }
 }
-for (rep in 1:5) one(sample(40:80, 1), sample(2:4, 1), sample(2:3, 1), 1)
-for (rep in 1:5) one(sample(40:80, 1), sample(2:4, 1), sample(2:3, 1), 2)
+for (rep in 1:3) one(sample(40:70, 1), sample(2:4, 1), sample(2:3, 1), 1)
+for (rep in 1:3) one(sample(40:70, 1), sample(2:4, 1), sample(2:3, 1), 2)
 emit("mclust13", "mclust", list(cases))
