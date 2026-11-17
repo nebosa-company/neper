@@ -3862,4 +3862,5 @@ D6999	565	Rmpfr directed rounding of the transcendental functions
 D7000	592	Rmpfr closed: besselY, other-base parsing, zeta below 1
 D7001	479	imputeTS na_interpolation stine
 D7002	651	imputeTS na_seadec, na_seasplit and statsNA
-D7003	652	geepack GEE for the binomial and poisson families and AR(1)
+D7003	654	geepack GEE for the binomial and poisson families and AR(1)
+D7004	714	extraDistr truncated binomial, truncated Poisson and logarithmic series generators

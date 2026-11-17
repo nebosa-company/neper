@@ -128,4 +128,8 @@ for (rep in 1:30) { sd <- sample(1:100000, 1); fam <- 13 + (rep - 1) %% 4
   set.seed(sd); v <- switch(fam - 12, rdunif(5, lo, hi), rbern(5, pr), rdweibull(5, q, be), rtlambda(5, lam))
   pp <- switch(fam - 12, c(lo, hi, 0), c(pr, 0, 0), c(q, be, 0), c(lam, 0, 0))
   for (j in 1:5) if (is.finite(v[j])) cases[[length(cases) + 1]] <- case("rg", c(fam, sd, pp, j - 1), v[j], rel = 1e-10, abs = 1e-12) }
+# truncated binomial (0), truncated Poisson (1) and logarithmic series (2) draws: "rg4" (family, seed, p1, p2, p3, p4, index)
+for (rep in 1:30) { sd <- sample(1:100000, 1); fam <- (rep - 1) %% 3; n <- sample(8:20, 1); pr <- runif(1, 0.2, 0.8); a <- sample(0:2, 1); b <- sample(6:n, 1); l <- runif(1, 1, 5); bb <- sample(7:15, 1); th <- runif(1, 0.2, 0.9)
+  set.seed(sd); v <- switch(fam + 1, rtbinom(5, n, pr, a, b), rtpois(5, l, a, bb), rlgser(5, th)); pp <- switch(fam + 1, c(n, pr, a, b), c(l, a, bb, 0), c(th, 0, 0, 0))
+  for (j in 1:5) cases[[length(cases) + 1]] <- case("rg4", c(fam, sd, pp, j - 1), v[j], rel = 0, abs = 0) }
 emit("extradistr", "extraDistr", list(cases))

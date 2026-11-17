@@ -694,3 +694,22 @@ fn bhatt_g(z: f64) -> f64 { ret z * pn(z) + dist.dnorm(z, 0.0f64, 1.0f64, false)
 fn bhatt_p(x: f64, mu: f64, s: f64, a: f64) -> f64 {
     ret s / (2.0f64 * a) * (bhatt_g((x - mu + a) / s) - bhatt_g((x - mu - a) / s))
 }
+
+// the quantile of the logarithmic series: the smallest x >= 1 whose cumulative mass reaches p
+fn lgser_q(p: f64, th: f64) -> f64 {
+    var s = lgser_d(1.0f64, th)
+    var k = 1.0f64
+    while s < p * (1.0f64 - 1.0e-14f64) && k < 1.0e7f64 {
+        k += 1.0f64
+        s += lgser_d(k, th)
+    }
+    ret k
+}
+
+// draws of the families with four parameters or one uniform inverted through the quantile function at u: 0 truncated binomial (n, prob, a, b), 1 truncated Poisson (lambda, a, b), 2 logarithmic series (theta)
+fn rgen4(r: *rng.Rng, family: usize, p1: f64, p2: f64, p3: f64, p4: f64) -> f64 {
+    let u = rng.unif(r)
+    if family == 0usize { ret tbinom_q(u, p1, p2, p3, p4) }
+    if family == 1usize { ret tpois_q(u, p1, p2, p3) }
+    ret lgser_q(u, p1)
+}

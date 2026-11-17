@@ -11,6 +11,18 @@ use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "rg4") {
+        // (family, seed, p1, p2, p3, p4, index)
+        var rg4: rng.Rng = zero
+        rng.seed(&rg4, i64(x[1usize]))
+        var v4 = 0.0f64
+        var q4 = 0usize
+        while q4 <= usize(x[6usize]) {
+            v4 = ed.rgen4(&rg4, usize(x[0usize]), x[2usize], x[3usize], x[4usize], x[5usize])
+            q4 += 1usize
+        }
+        ret v4
+    }
     if str.eq(c.name, "rg") {
         var rg: rng.Rng = zero
         rng.seed(&rg, i64(x[1usize]))

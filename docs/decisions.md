@@ -48513,3 +48513,8 @@ Seven more families from the package, with the xi = 0 limits of the GEV and GPD 
 ## D7003 — geepack GEE for the binomial and poisson families and AR(1)
 
 `geeglm_glm`: Fisher scoring of the GEE with D_i, the family variance and R(alpha)^-1, started from the independence fit, the scale as the mean squared Pearson residual and the correlation from the Pearson residual pairs: exchangeable as the mean cross product over phi, AR(1) as the root of the least-squares score over every lagged product (the all-lag fit geepack uses, found by bisection; the lag-1 average alone is wrong). Equal to geeglm on 24 fits (oracle_geepackpkg); geepack stops at 1e-5 so the estimates are compared at 1e-4 relative or 2e-5 absolute. Linux pending.
+
+
+## D7004 — extraDistr truncated binomial, truncated Poisson and logarithmic series generators
+
+`rgen4` draws one uniform and inverts it through `tbinom_q`, `tpois_q` and the new `lgser_q` (the smallest x whose cumulative mass reaches p). Found by comparing each package generator with its own quantile function at u and 1 - u under the same seed; the continuous families beta-prime, fatigue, triangular, truncated normal, inverse gamma, inverse chi-squared, location-scale t, half-t and non-standard beta match neither, and the discrete Laplace, Maxwell, zero-inflated Poisson and shifted Gompertz generators were not reproduced. Equal to extraDistr on 30 settings of 5 draws (oracle_extradistr). Linux pending.
