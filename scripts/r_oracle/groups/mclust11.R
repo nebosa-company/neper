@@ -20,6 +20,8 @@ one <- function(n, p, gmin, gmax, kind) {
   add(args, 0, m$bic); add(args, 1, Gn); add(args, 2, match(sub(",.*", "", names(pickBIC(m$BIC, 1))), tbl) - 1); add(args, 3, m$loglik); add(args, 4, m$icl); add(args, 5, m$df)
   for (j in seq_along(mm)) { b <- B[, j]; add(args, 10 + j - 1, sum(seq_along(b) * ifelse(is.na(b), 0, b))); add(args, 40 + j - 1, sum(seq_along(b) * is.na(b)), rel = 0, abs = 0) }
   add(args, 100, sum(seq_len(n) * m$classification), rel = 0, abs = 0); add(args, 101, sum(seq_len(n) * m$uncertainty), 1e-6, 1e-9)
+  I <- unclass(mclustICL(X, G = gmin:gmax, modelNames = mm, prior = priorControl(), verbose = FALSE))[, mm, drop = FALSE]
+  for (j in seq_along(mm)) { b <- I[, j]; add(args, 200 + j - 1, sum(seq_along(b) * ifelse(is.na(b), 0, b))) }
   add(args, 102, sum(seq_along(m$z) * as.vector(m$z))); add(args, 103, sum(seq_along(m$parameters$pro) * m$parameters$pro))
   add(args, 104, sum(seq_along(m$parameters$mean) * as.vector(m$parameters$mean))); add(args, 105, sum(seq_along(sg) * as.vector(sg)))
 }
