@@ -65,4 +65,18 @@ for (i in 1:90) {
 for (lat in c(80, 85, -70, -88)) { lon <- seq(-170, 170, length.out = 8); x <- cbind(lon, lat); poly(x, wgs); poly(x[8:1, ], wgs); poly(rbind(x, x[1, ]), wgs) }
 poly(rbind(c(0, 0), c(10, 0), c(10, 10), c(0, 10), c(0, 0)), wgs); cent(rbind(c(0, 0), c(10, 0), c(10, 10), c(0, 10), c(0, 0)), wgs)
 poly(rbind(c(170, 0), c(-170, 0), c(-170, 10), c(170, 10)), wgs); cent(rbind(c(170, 0), c(-170, 0), c(-170, 10), c(170, 10)), wgs)
+# spherical helpers: "sbrg" (lon1, lat1, lon2, lat2); "anti_x" "anti_y" (lon, lat); "merc_x" "merc_y" (lon, lat, r); "merci_x" "merci_y" (x, y, r)
+# "atd" "d2gc" "d2gcs" (lon1, lat1, lon2, lat2, lon3, lat3, r); "ongc" (lon1, lat1, lon2, lat2, lon3, lat3, tol)
+for (i in 1:60) {
+  p1 <- c(runif(1, -179, 179), runif(1, -80, 80)); p2 <- c(runif(1, -179, 179), runif(1, -80, 80)); p3 <- c(runif(1, -179, 179), runif(1, -80, 80))
+  r <- c(6378137, 6371000, 1)[i %% 3 + 1]
+  add("sbrg", c(p1, p2), geosphere:::.old_bearing(p1, p2), 1e-9)
+  an <- antipode(p1); addlon("anti_x", p1, an[1, 1]); add("anti_y", p1, an[1, 2], 1e-9)
+  mm <- mercator(p1, r = r); add("merc_x", c(p1, r), mm[1, 1], 1e-6); add("merc_y", c(p1, r), mm[1, 2], 1e-6)
+  mi <- mercator(mm, inverse = TRUE, r = r); addlon("merci_x", c(mm, r), mi[1, 1]); add("merci_y", c(mm, r), mi[1, 2], 1e-9)
+  a <- c(p1, p2, p3, r)
+  add("atd", a, alongTrackDistance(p1, p2, p3, r = r)[1, 1]); add("d2gc", a, dist2gc(p1, p2, p3, r = r)); add("d2gcs", a, dist2gc(p1, p2, p3, r = r, sign = TRUE))
+  on <- gcIntermediate(p1, p2, n = 1)[1, ]
+  add("ongc", c(p1, p2, p3, 1e-4), as.numeric(onGreatCircle(p1, p2, p3)), 0); add("ongc", c(p1, p2, on, 1e-4), as.numeric(onGreatCircle(p1, p2, on)), 0)
+}
 emit("geosphere_geod", "geosphere", list(cases))

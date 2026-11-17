@@ -24,6 +24,29 @@ fn answer(c: *const oracle.Case) -> f64 {
         if str.eq(k, "cent_x") { ret cx }
         ret cy
     }
+    if str.eq(k, "sbrg") { ret g.bearing_sphere(x[0usize], x[1usize], x[2usize], x[3usize]) }
+    if str.eq(k, "anti_x") || str.eq(k, "anti_y") {
+        let (ax, ay) = g.antipode(x[0usize], x[1usize])
+        if str.eq(k, "anti_x") { ret ax }
+        ret ay
+    }
+    if str.eq(k, "merc_x") || str.eq(k, "merc_y") {
+        let (mx, my) = g.mercator(x[0usize], x[1usize], x[2usize])
+        if str.eq(k, "merc_x") { ret mx }
+        ret my
+    }
+    if str.eq(k, "merci_x") || str.eq(k, "merci_y") {
+        let (ix, iy) = g.mercator_inverse(x[0usize], x[1usize], x[2usize])
+        if str.eq(k, "merci_x") { ret ix }
+        ret iy
+    }
+    if str.eq(k, "atd") { ret g.along_track_distance(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize]) }
+    if str.eq(k, "d2gc") { ret g.dist2gc(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], false) }
+    if str.eq(k, "d2gcs") { ret g.dist2gc(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], true) }
+    if str.eq(k, "ongc") {
+        if g.on_great_circle(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize], x[6usize]) { ret 1.0f64 }
+        ret 0.0f64
+    }
     let p1 = x[0usize]
     let p2 = x[1usize]
     let p3 = x[2usize]

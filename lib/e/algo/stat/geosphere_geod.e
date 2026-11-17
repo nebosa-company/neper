@@ -1154,6 +1154,89 @@ fn centroid(lon: []const f64, lat: []const f64) -> (f64, f64) {
     ret (lond, latd)
 }
 
+
+// bearing(p1, p2, sphere = TRUE) style initial bearing on a sphere in degrees in (-180, 180]; NaN for identical points
+fn bearing_sphere(lon1: f64, lat1: f64, lon2: f64, lat2: f64) -> f64 {
+    if lon1 == lon2 && lat1 == lat2 { ret ga_nan() }
+    let tor = ga_pi() / 180.0f64
+    let dlon = lon2 * tor - lon1 * tor
+    let y = math.sin[f64](dlon) * math.cos[f64](lat2 * tor)
+    let x = math.cos[f64](lat1 * tor) * math.sin[f64](lat2 * tor) - math.sin[f64](lat1 * tor) * math.cos[f64](lat2 * tor) * math.cos[f64](dlon)
+    var azm = math.atan2[f64](y, x) / tor
+    azm = ga_fmod(azm + 360.0f64, 360.0f64)
+    if azm > 180.0f64 { azm = 0.0f64 - (360.0f64 - azm) }
+    ret azm
+}
+
+// antipode(p): (lon, lat)
+fn antipode(lon: f64, lat: f64) -> (f64, f64) {
+    ret (ga_fmod(lon + 180.0f64 + 180.0f64, 360.0f64) - 180.0f64, 0.0f64 - lat)
+}
+
+// mercator(p, r = r): (x, y)
+fn mercator(lon: f64, lat: f64, r: f64) -> (f64, f64) {
+    let tor = ga_pi() / 180.0f64
+    let la = lat * tor
+    ret (lon * tor * r, math.log[f64](math.tan[f64](la) + 1.0f64 / math.cos[f64](la)) * r)
+}
+
+// mercator(p, inverse = TRUE, r = r): (lon, lat)
+fn mercator_inverse(x: f64, y: f64, r: f64) -> (f64, f64) {
+    let tor = ga_pi() / 180.0f64
+    let la = ga_pi() / 2.0f64 - 2.0f64 * math.atan[f64](math.exp[f64](0.0f64 - y / r))
+    ret ((x / r) / tor, la / tor)
+}
+
+fn ga_cosine1(lon1: f64, lat1: f64, lon2: f64, lat2: f64) -> f64 {
+    if ga_abs(lon1 - lon2) < 1.4901161193847656e-8f64 && ga_abs(lat1 - lat2) < 1.4901161193847656e-8f64 { ret 0.0f64 }
+    let tor = ga_pi() / 180.0f64
+    ret math.acos[f64](math.sin[f64](lat1 * tor) * math.sin[f64](lat2 * tor) + math.cos[f64](lat1 * tor) * math.cos[f64](lat2 * tor) * math.cos[f64](lon1 * tor - lon2 * tor))
+}
+
+// alongTrackDistance(p1, p2, p3, r): the bearings are the ellipsoidal ones of the package defaults
+fn along_track_distance(lon1: f64, lat1: f64, lon2: f64, lat2: f64, lon3: f64, lat3: f64, r: f64) -> f64 {
+    let tor = ga_pi() / 180.0f64
+    let wa = 6378137.0f64
+    let wf = 1.0f64 / 298.257223563f64
+    let tc = bearing_geo(lon1, lat1, lon2, lat2, wa, wf) * tor
+    let tcp = bearing_geo(lon1, lat1, lon3, lat3, wa, wf) * tor
+    let dp = ga_cosine1(lon1, lat1, lon3, lat3)
+    let xtr = math.asin[f64](math.sin[f64](tcp - tc) * math.sin[f64](dp))
+    var sgn = 0.0f64
+    let cc = math.cos[f64](tc - tcp)
+    if cc > 0.0f64 { sgn = 1.0f64 }
+    if cc < 0.0f64 { sgn = 0.0f64 - 1.0f64 }
+    var angle = math.cos[f64](dp) / math.cos[f64](xtr)
+    if angle > 1.0f64 { angle = 1.0f64 }
+    if angle < 0.0f64 - 1.0f64 { angle = 0.0f64 - 1.0f64 }
+    ret ga_abs(sgn * math.acos[f64](angle) * r)
+}
+
+// dist2gc(p1, p2, p3, r, sign): cross-track distance of p3 from the great circle p1 p2
+fn dist2gc(lon1: f64, lat1: f64, lon2: f64, lat2: f64, lon3: f64, lat3: f64, r: f64, signed: bool) -> f64 {
+    let tor = ga_pi() / 180.0f64
+    let tc = bearing_geo(lon1, lat1, lon2, lat2, r, 0.0f64) * tor
+    let tcp = bearing_geo(lon1, lat1, lon3, lat3, r, 0.0f64) * tor
+    let dp = ga_cosine1(lon1, lat1, lon3, lat3)
+    let xtr = math.asin[f64](math.sin[f64](tcp - tc) * math.sin[f64](dp)) * r
+    if signed { ret xtr }
+    ret ga_abs(xtr)
+}
+
+// onGreatCircle(p1, p2, p3, tol)
+fn on_great_circle(lon1: f64, lat1: f64, lon2: f64, lat2: f64, lon3: f64, lat3: f64, tol: f64) -> bool {
+    let tor = ga_pi() / 180.0f64
+    let l1 = lon1 * tor
+    let a1 = lat1 * tor
+    let l2 = lon2 * tor
+    let a2 = lat2 * tor
+    let l3 = lon3 * tor
+    let a3 = lat3 * tor
+    if l1 == l2 && l1 == l3 { ret true }
+    let newlat = math.atan[f64]((math.sin[f64](a1) * math.cos[f64](a2) * math.sin[f64](l3 - l2) - math.sin[f64](a2) * math.cos[f64](a1) * math.sin[f64](l3 - l1)) / (math.cos[f64](a1) * math.cos[f64](a2) * math.sin[f64](l1 - l2)))
+    ret ga_abs(newlat - a3) < tol
+}
+
 fn ga_t_c1() -> [18]f64 {
     ret [18]f64{ -1.0f64, 6.0f64, -16.0f64, 32.0f64, -9.0f64, 64.0f64, -128.0f64, 2048.0f64, 9.0f64, -16.0f64, 768.0f64, 3.0f64, -5.0f64, 512.0f64, -7.0f64, 1280.0f64, -7.0f64, 2048.0f64 }
 }
