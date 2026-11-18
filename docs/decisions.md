@@ -49688,3 +49688,9 @@ New `e.algo.stat.survregpkg.survreg`: accelerated failure time models for right-
 `e.algo.stat.survfitpkg.surv_split` cuts each subject's follow-up (entering at 0) at every cut point below its time into (tstart, tstop, status) pieces, only the last keeping the event, as `survSplit(Surv(time, event) ~ ., cut = ...)` does.
 
 **Result.** `oracle_survfit` gains 20 data sets (5 to 20 subjects, one to four cuts; the row count and 6 random rows of four columns each: 500 values) and equals survSplit on Windows exactly. Linux pending. L311 stays partial: exact ties, counting-process coxph, the Efron and cluster robust variance, frailty, cox.zph, tmerge, pyears, residuals, survdiff with strata, interval and left censoring in survreg.
+
+## D7278 — survival: cox.zph
+
+`e.algo.stat.coxext.cox_zph` tests proportional hazards for a Breslow or Efron fit with distinct event times: the transformed times g (identity, rank, log, or 1 - S(t-) of the pooled Kaplan-Meier) centred on the mean over events, the score of the added x g(t) interaction (g(t) (x - xbar) summed over events), the 2p by 2p information of (x, x g) from the risk-set covariances, and u' I^-1 u per covariate (its beta block and its own interaction) and for all covariates together.
+
+**Result.** `oracle_coxph` gains 14 data sets (n 30 to 60, one to three covariates, four transforms; chi-squares and p values) and equals `cox.zph` on Windows at 1e-5. A first run compared a matrix term (one term of p columns) with per-covariate tests; the generator now builds one term per covariate. Tied event times are not ported. Linux pending. L311 stays partial: exact ties, counting-process coxph, the Efron and cluster robust variance, frailty, tmerge, pyears, residuals, survdiff with strata, interval and left censoring in survreg.

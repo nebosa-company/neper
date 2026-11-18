@@ -3,6 +3,8 @@
 // Not here: exact ties, counting-process data, cluster variances, weights, frailty; the robust variance is for Breslow ties.
 
 use e.algo.stat.quantreg as qr
+use e.algo.stat.cox as cxb
+use e.math.nmath as nmz
 use e.math
 use e.mem
 
@@ -351,6 +353,192 @@ fn coxph_s(a: *mem.Arena, time: []const f64, status: []const f64, strat: []const
         }
         se[c] = math.sqrt[f64](v)
         c += 1usize
+    }
+    ret ok
+}
+
+// cox.zph(fit, transform) for a Breslow or Efron fit with distinct event times, one stratum, every covariate its own term: the score test of the interaction x g(t) with the added coefficient (the
+// time-interaction score g(t) (x - xbar) summed over events, the 2p by 2p information of (x, x g) from the risk-set covariances), per covariate and for the global test. transform 0 identity,
+// 1 rank, 2 log, 3 km; out receives p chi-squares then the global one
+fn cox_zph(a: *mem.Arena, time: []const f64, status: []const f64, x: []const f64, n: usize, p: usize, transform: usize, out: []f64) -> err {
+    let (coef, e1) = mem.alloc[f64](a, p)
+    let (se, e2) = mem.alloc[f64](a, p)
+    let (ll, e3) = mem.alloc[f64](a, 2usize)
+    let (g, e4) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret mem.Full }
+    let fe = cxb.coxph(a, time, status, x, n, p, true, coef, se, ll)
+    if fe != ok { ret fe }
+    // the transformed times
+    var i = 0usize
+    while i < n {
+        if transform == 0usize {
+            g[i] = time[i]
+        } else if transform == 2usize {
+            g[i] = math.log[f64](time[i])
+        } else if transform == 1usize {
+            var below = 0.0f64
+            var eq = 0.0f64
+            var j = 0usize
+            while j < n {
+                if time[j] < time[i] { below += 1.0f64 }
+                if time[j] == time[i] { eq += 1.0f64 }
+                j += 1usize
+            }
+            g[i] = below + (eq + 1.0f64) / 2.0f64
+        } else {
+            // 1 - S(t-) of the Kaplan-Meier over all rows
+            var surv = 1.0f64
+            var j = 0usize
+            while j < n {
+                if status[j] != 0.0f64 && time[j] < time[i] {
+                    var nr = 0.0f64
+                    var q = 0usize
+                    while q < n {
+                        if time[q] >= time[j] { nr += 1.0f64 }
+                        q += 1usize
+                    }
+                    surv = surv * (1.0f64 - 1.0f64 / nr)
+                }
+                j += 1usize
+            }
+            g[i] = 1.0f64 - surv
+        }
+        i += 1usize
+    }
+    var gm = 0.0f64
+    var ne = 0.0f64
+    i = 0usize
+    while i < n {
+        if status[i] != 0.0f64 {
+            gm += g[i]
+            ne += 1.0f64
+        }
+        i += 1usize
+    }
+    gm = gm / ne
+    i = 0usize
+    while i < n {
+        g[i] = g[i] - gm
+        i += 1usize
+    }
+    let q2 = 2usize * p
+    let (u, e5) = mem.alloc[f64](a, q2)
+    let (im, e6) = mem.alloc[f64](a, q2 * q2)
+    let (ev, e7) = mem.alloc[f64](a, n)
+    if e5 != ok || e6 != ok || e7 != ok { ret mem.Full }
+    var k = 0usize
+    while k < q2 {
+        u[k] = 0.0f64
+        k += 1usize
+    }
+    k = 0usize
+    while k < q2 * q2 {
+        im[k] = 0.0f64
+        k += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var eta = 0.0f64
+        k = 0usize
+        while k < p {
+            eta += x[k * n + i] * coef[k]
+            k += 1usize
+        }
+        ev[i] = math.exp[f64](eta)
+        i += 1usize
+    }
+    var jt = 0usize
+    while jt < n {
+        if status[jt] != 0.0f64 {
+            var rsk = 0.0f64
+            var xb: [8]f64 = zero
+            var xxb: [64]f64 = zero
+            var q = 0usize
+            while q < n {
+                if time[q] >= time[jt] {
+                    rsk += ev[q]
+                    var a1 = 0usize
+                    while a1 < p {
+                        xb[a1] += ev[q] * x[a1 * n + q]
+                        var b1 = 0usize
+                        while b1 < p {
+                            xxb[a1 * p + b1] += ev[q] * x[a1 * n + q] * x[b1 * n + q]
+                            b1 += 1usize
+                        }
+                        a1 += 1usize
+                    }
+                }
+                q += 1usize
+            }
+            var a1 = 0usize
+            while a1 < p {
+                xb[a1] = xb[a1] / rsk
+                a1 += 1usize
+            }
+            a1 = 0usize
+            while a1 < p {
+                u[p + a1] += g[jt] * (x[a1 * n + jt] - xb[a1])
+                var b1 = 0usize
+                while b1 < p {
+                    let v = xxb[a1 * p + b1] / rsk - xb[a1] * xb[b1]
+                    im[a1 * q2 + b1] += v
+                    im[a1 * q2 + p + b1] += g[jt] * v
+                    im[(p + a1) * q2 + b1] += g[jt] * v
+                    im[(p + a1) * q2 + p + b1] += g[jt] * g[jt] * v
+                    b1 += 1usize
+                }
+                a1 += 1usize
+            }
+        }
+        jt += 1usize
+    }
+    // per-covariate test: the (p + 1) block of the betas and that covariate's interaction, u = (0, u_k); global: the full 2p system
+    var term = 0usize
+    while term <= p {
+        var m = p + 1usize
+        if term == p { m = q2 }
+        let (mat, e8) = mem.alloc[f64](a, m * m)
+        let (rhs, e9) = mem.alloc[f64](a, m)
+        if e8 != ok || e9 != ok { ret mem.Full }
+        var r = 0usize
+        while r < m {
+            var c = 0usize
+            while c < m {
+                var ir = r
+                var ic = c
+                if term < p {
+                    if r == p { ir = p + term }
+                    if c == p { ic = p + term }
+                }
+                mat[r * m + c] = im[ir * q2 + ic]
+                c += 1usize
+            }
+            var ur = 0.0f64
+            if term == p {
+                if r >= p { ur = u[r] }
+            } else if r == p {
+                ur = u[p + term]
+            }
+            rhs[r] = ur
+            r += 1usize
+        }
+        var uu = rhs[0usize]
+        let (cp, e10) = mem.alloc[f64](a, m)
+        if e10 != ok { ret mem.Full }
+        r = 0usize
+        while r < m {
+            cp[r] = rhs[r]
+            r += 1usize
+        }
+        if !qr.solve_dense(mat, rhs, m) { ret Singular }
+        var tot = 0.0f64
+        r = 0usize
+        while r < m {
+            tot += rhs[r] * cp[r]
+            r += 1usize
+        }
+        out[term] = tot
+        term += 1usize
     }
     ret ok
 }

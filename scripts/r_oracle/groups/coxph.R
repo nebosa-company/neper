@@ -29,4 +29,17 @@ for (rep in 1:14) {
     for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("coxs", c(a, q - 1), out[q], rel = 1e-6, abs = 1e-8)
   }
 }
+# cox.zph with distinct times: "zph" args (n, p, transform 0 identity / 1 rank / 2 log / 3 km, time, status, X column-major, q) q 0..p-1 the term chi-squares, p the global chi-square, p + 1.. the p values
+for (rep in 1:14) {
+  n <- sample(30:60, 1); p <- sample(1:3, 1); X <- matrix(round(rnorm(n * p), 3), n, p)
+  tm <- round(rexp(n, exp(0.4 * X[, 1])) * 5, 4) + runif(n) * 1e-3; st <- rbinom(n, 1, 0.8); if (sum(st) < 8) st[1:10] <- 1
+  dz <- as.data.frame(X); names(dz) <- paste0("v", 1:p); dz$tm <- tm; dz$st <- st
+  f <- coxph(as.formula(paste("Surv(tm, st) ~", paste0("v", 1:p, collapse = " + "))), data = dz, control = coxph.control(eps = 1e-12, iter.max = 50))
+  for (tr in 0:3) {
+    z <- cox.zph(f, transform = c("identity", "rank", "log", "km")[tr + 1])
+    out <- c(z$table[, "chisq"], z$table[, "p"])
+    ntab <- nrow(z$table)
+    for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("zph", c(n, p, tr, tm, st, X, if (q <= ntab) q - 1 else q - 1), out[q], rel = 1e-5, abs = 1e-8)
+  }
+}
 emit("coxph", "survival", list(cases))

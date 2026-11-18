@@ -5,6 +5,7 @@
 use e.algo.stat.cox as cx
 use e.algo.stat.coxext as cs
 use e.str
+use e.math.special as spx
 use e.io
 use e.mem
 use e.os
@@ -12,6 +13,20 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "zph") {
+        let zn = usize(x[0usize])
+        let zp = usize(x[1usize])
+        let (zo, zoe) = mem.alloc[f64](a, zp + 1usize)
+        if zoe != ok { ret 0.0f64 / 0.0f64 }
+        if cs.cox_zph(a, x[3usize..3usize + zn], x[3usize + zn..3usize + 2usize * zn], x[3usize + 2usize * zn..3usize + 2usize * zn + zn * zp], zn, zp, usize(x[2usize]), zo) != ok { ret 0.0f64 / 0.0f64 }
+        let zq = usize(x[3usize + 2usize * zn + zn * zp])
+        if zq <= zp { ret zo[zq] }
+        // p values: 1 - chi-square cdf with df 1 for a term, zp for the global
+        let ix = zq - zp - 1usize
+        var df = 1.0f64
+        if ix == zp { df = f64(zp) }
+        ret 1.0f64 - spx.chi_squared_cdf(zo[ix], df)
+    }
     if str.eq(c.name, "coxs") {
         let sn = usize(x[0usize])
         let sp = usize(x[1usize])

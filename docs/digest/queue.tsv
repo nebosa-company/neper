@@ -97,7 +97,7 @@ L464	library	0.84	1852	gamlss.dist: GAMLSS distribution families	Partial (D6471 
 L467	library	0.1	846	hetGP: heteroskedastic Gaussian processes	Partial (D6647).
 L494	library	0.35	987	bayesm: Bayesian econometrics	Partial (D6817: e.algo.stat.bayesmpkg has lndMvn, lndMvst, lndIWishart, lndIChisq, llmnl, condMom, rdirichlet, rtrun, rwishart and breg equal to bayesm under set.seed on 1484 values;
 L514	library	0.1	641	copula: dependence models	Partial (D6637).
-L311	library	0.1	1746	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	Partly done (D6056): e.algo.stat.cox.coxph (Breslow and Efron, one stratum) equals survival on 152 values on Windows (oracle_coxph);
+L311	library	0.1	1856	survival remainder: coxph, survfit, survreg, survdiff, cox.zph	Partly done (D6056): e.algo.stat.cox.coxph (Breslow and Efron, one stratum) equals survival on 152 values on Windows (oracle_coxph);
 L490	library	0.15	657	timereg: Aalen additive and Cox-Aalen hazard models	Partial (D6641).
 L491	library	0.15	673	riskRegression: risk prediction scoring	Partial (D6642).
 L492	library	0	236	coxme: mixed-effects Cox models	Open (CRAN rank 900).
