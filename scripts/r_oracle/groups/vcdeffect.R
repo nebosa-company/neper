@@ -24,5 +24,11 @@ for (rep in 1:30) {
   m <- aov(yy ~ g)
   ef <- suppressMessages(c(eta_squared(m)$Eta2[1], omega_squared(m)$Omega2[1], epsilon_squared(m)$Epsilon2[1]))
   for (q in 1:3) add("aov", c(G, sz, yy, q - 1), ef[q])
+  lev <- sample(c(0.9, 0.95), 1); gr <- sample(0:1, 1); alt <- if (gr == 1) "greater" else "two.sided"
+  fns <- list(eta_squared, omega_squared, epsilon_squared)
+  for (q in 1:3) {
+    r <- suppressMessages(fns[[q]](m, ci = lev, alternative = alt))
+    for (sd in 0:1) cases[[length(cases) + 1]] <- case("aovci", c(G, sz, yy, q - 1, lev, gr, sd), c(r$CI_low[1], r$CI_high[1])[sd + 1], rel = if (sd == 1) 1e-2 else 5e-5, abs = 5e-6)
+  }
 }
 emit("vcdeffect", c("vcd", "effectsize"), list(cases))

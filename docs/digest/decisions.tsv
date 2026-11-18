@@ -4095,4 +4095,5 @@ D7301	523	arules: hyper and improvement measures for many items
 D7302	643	arules: the nine D7293 measures, redundant rules and subsetting on the many-item path; L462 closed
 D7303	572	vcd: oddsratio confidence intervals and exp-scale variances
 D7304	800	effectsize: interpret rules
-D7305	655	effectsize: cohens_d and hedges_g intervals
+D7305	656	effectsize: cohens_d and hedges_g intervals
+D7306	936	effectsize: eta, omega and epsilon squared intervals

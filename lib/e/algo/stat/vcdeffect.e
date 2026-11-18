@@ -240,6 +240,56 @@ fn smd_ci(x: []const f64, y: []const f64, level: f64, out: []f64) {
     out[3usize] = out[1usize] * j
 }
 
+// effectsize's .get_ncp_F: the noncentrality parameters at which pf(f, df, dfe, ncp) is alpha / 2 and 1 - alpha / 2, sorted, bisected on `pnf`; the upper is set to 0 when f is at or below the central alpha / 2
+// quantile and the lower to 0 when at or below the central 1 - alpha / 2 quantile, as effectsize does after its optim. out[0] lower, out[1] upper.
+fn ncp_f_ci(f: f64, df: f64, dfe: f64, level: f64, out: []f64) {
+    let alpha = 1.0f64 - level
+    var r: [2]f64 = zero
+    var side = 0usize
+    while side < 2usize {
+        var goal = alpha / 2.0f64
+        if side == 1usize { goal = 1.0f64 - alpha / 2.0f64 }
+        var lo = 0.0f64
+        var hi = 1.0e5f64
+        if nc.pnf(f, df, dfe, 0.0f64, true, false) <= goal {
+            hi = 0.0f64
+        }
+        var it = 0usize
+        while it < 200usize {
+            let mid = 0.5f64 * (lo + hi)
+            if nc.pnf(f, df, dfe, mid, true, false) > goal { lo = mid } else { hi = mid }
+            it += 1usize
+        }
+        r[side] = 0.5f64 * (lo + hi)
+        side += 1usize
+    }
+    var a1 = r[0usize]
+    var a2 = r[1usize]
+    if a1 > a2 {
+        a1 = r[1usize]
+        a2 = r[0usize]
+    }
+    if nc.pnf(f, df, dfe, 0.0f64, true, false) <= alpha / 2.0f64 { a2 = 0.0f64 }
+    if nc.pnf(f, df, dfe, 0.0f64, true, false) <= 1.0f64 - alpha / 2.0f64 { a1 = 0.0f64 }
+    out[0usize] = a1
+    out[1usize] = a2
+}
+
+// the confidence interval effectsize gives eta_squared, omega_squared and epsilon_squared of a one-way fit (all three go through the partial eta squared scale of the F recomputed from the estimate es):
+// ci is the level asked, greater is the default one-sided interval (the level becomes 2 ci - 1 and the upper bound 1). out[0] lower, out[1] upper.
+fn pve_ci(es: f64, df: f64, dfe: f64, ci: f64, greater: bool, out: []f64) {
+    var lev = ci
+    if greater { lev = 2.0f64 * ci - 1.0f64 }
+    var f = (es / df) / ((1.0f64 - es) / dfe)
+    if f < 0.0f64 { f = 0.0f64 }
+    var n: [2]f64 = zero
+    ncp_f_ci(f, df, dfe, lev, n[0usize..2usize])
+    out[0usize] = n[0usize] / (n[0usize] + dfe)
+    out[1usize] = n[1usize] / (n[1usize] + dfe)
+    if out[0usize] < 0.0f64 { out[0usize] = 0.0f64 }
+    if greater { out[1usize] = 1.0f64 }
+}
+
 // rank_biserial(x, y) = cliffs_delta(x, y): (#x > y - #x < y) / (n1 n2)
 fn cliffs(x: []const f64, y: []const f64) -> f64 {
     var g = 0.0f64

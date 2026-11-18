@@ -67,6 +67,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     }
     var o: [3]f64 = zero
     ve.anova_effects(z[1usize + g..1usize + g + n], sizes, o[0usize..3usize])
+    if str.eq(nm, "aovci") {
+        // args end (..., q: effect 0 eta2 1 omega2 2 epsilon2, level, 1 greater 0 two sided, side 0 low 1 high)
+        let at = 1usize + g + n
+        var ci: [2]f64 = zero
+        ve.pve_ci(o[usize(z[at])], f64(g - 1usize), f64(n - g), z[at + 1usize], z[at + 2usize] > 0.5f64, ci[0usize..2usize])
+        ret ci[usize(z[at + 3usize])]
+    }
     ret o[usize(z[1usize + g + n])]
 }
 
