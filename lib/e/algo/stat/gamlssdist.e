@@ -1484,3 +1484,59 @@ fn dzinbf(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if x == 0.0f64 { ret tau + (1.0f64 - tau) * f }
     ret (1.0f64 - tau) * f
 }
+
+// ZIPF and ZAZIPF: the zeta function gamlss.dist uses (zetaP: twelve terms and the Euler-Maclaurin remainder with eight Bernoulli terms)
+fn zeta_aux(shape: f64, aa: f64) -> f64 {
+    var ans = 1.0f64 / ((shape - 1.0f64) * math.pow[f64](1.0f64 + aa, shape - 1.0f64)) + 0.5f64 / math.pow[f64](1.0f64 + aa, shape)
+    var term = (shape / 2.0f64) / math.pow[f64](1.0f64 + aa, shape + 1.0f64)
+    ans += term * (1.0f64 / 6.0f64)
+    var mm = 2.0f64
+    while mm <= 8.0f64 {
+        term = term * (shape + 2.0f64 * mm - 3.0f64) * (shape + 2.0f64 * mm - 2.0f64) / ((2.0f64 * mm - 1.0f64) * 2.0f64 * mm * (1.0f64 + aa) * (1.0f64 + aa))
+        var b2 = 0.0f64
+        if mm == 2.0f64 { b2 = 0.0f64 - 1.0f64 / 30.0f64 }
+        if mm == 3.0f64 { b2 = 1.0f64 / 42.0f64 }
+        if mm == 4.0f64 { b2 = 0.0f64 - 1.0f64 / 30.0f64 }
+        if mm == 5.0f64 { b2 = 5.0f64 / 66.0f64 }
+        if mm == 6.0f64 { b2 = 0.0f64 - 691.0f64 / 2730.0f64 }
+        if mm == 7.0f64 { b2 = 7.0f64 / 6.0f64 }
+        if mm == 8.0f64 { b2 = 0.0f64 - 3617.0f64 / 510.0f64 }
+        ans += term * b2
+        mm += 1.0f64
+    }
+    ret ans
+}
+
+fn zeta_p(x: f64) -> f64 {
+    var ans = 0.0f64
+    var ii = 0.0f64
+    while ii < 12.0f64 {
+        ans += 1.0f64 / math.pow[f64](1.0f64 + ii, x)
+        ii += 1.0f64
+    }
+    ret ans + zeta_aux(x, 12.0f64)
+}
+
+fn dzipf(x: f64, mu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret math.exp[f64](0.0f64 - (mu + 1.0f64) * math.log[f64](x) - math.log[f64](zeta_p(mu + 1.0f64)))
+}
+
+fn pzipf(x: f64, mu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let qf = math.floor[f64](x)
+    var ans = 0.0f64
+    var nn = 1.0f64
+    while nn <= 11.0f64 {
+        if nn <= qf { ans += 1.0f64 / math.pow[f64](nn, mu + 1.0f64) }
+        nn += 1.0f64
+    }
+    if 11.0f64 <= qf { ans = zeta_p(mu + 1.0f64) - zeta_aux(mu + 1.0f64, qf + 1.0f64) }
+    ret ans / zeta_p(mu + 1.0f64)
+}
+
+fn dzazipf(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret sigma }
+    ret (1.0f64 - sigma) * dzipf(x, mu)
+}

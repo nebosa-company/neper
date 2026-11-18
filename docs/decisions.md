@@ -49064,3 +49064,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the zero-adjusted and zero-inflated PIG (density and distribution each; ZIPIG falls back to the Poisson below sigma 1e-4), PIG2 (PIG with the inverse-Gaussian dispersion 1 / (sqrt(mu^2 + sigma^2) - mu)), the negative binomial family NBF (sigma scaled by mu^(nu - 2), Poisson below 1e-4) and the zero-inflated ZINBF densities.
 
 **Result.** `oracle_gamlss_exp` has 6531 values across 82 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7174 — gamlss.dist: ZIPF and ZAZIPF
+
+`e.algo.stat.gamlssdist` gains the Zipf distribution (density and distribution) and the zero-adjusted Zipf density, with the package's own zeta function `zetaP` (twelve explicit terms and the Euler-Maclaurin remainder with eight Bernoulli terms, so its truncation error is reproduced, not replaced by an exact zeta).
+
+**Result.** `oracle_gamlss_exp` has 6651 values across 84 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
