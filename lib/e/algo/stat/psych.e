@@ -7,6 +7,8 @@
 
 use e.algo.stat.quantreg as qr
 use e.math
+use e.math.nmath_beta as nbt
+use e.math.dist as dst
 use e.algo.stat.desctools as dt
 use e.mem
 
@@ -339,4 +341,69 @@ fn describe(a: *mem.Arena, x: []const f64, which: usize) -> f64 {
     if which == 9usize { ret dt.skew(x, 3usize) }
     if which == 10usize { ret dt.kurt(x, 3usize) }
     ret dt.sd_of(x) / math.sqrt[f64](nf)
+}
+
+// corr.test of the columns i and j of x (n by p, column-major): which 0 r, 1 t, 2 two-sided p, 3 lower and 4 upper of the Fisher-z 95% interval, 5 the Holm-adjusted p over all column pairs
+fn corr_test(a: *mem.Arena, x: []const f64, n: usize, p: usize, i: usize, j: usize, which: usize) -> f64 {
+    let (r, re) = corr(a, x, n, p)
+    if re != ok { ret 0.0f64 / 0.0f64 }
+    let rij = r[i * p + j]
+    let df = f64(n) - 2.0f64
+    let tt = rij * math.sqrt[f64](df / (1.0f64 - rij * rij))
+    let pv = 2.0f64 * nbt.pt(0.0f64 - math.abs[f64](tt), df, true, false)
+    if which == 0usize { ret rij }
+    if which == 1usize { ret tt }
+    if which == 2usize { ret pv }
+    if which <= 4usize {
+        let z = 0.5f64 * math.log[f64]((1.0f64 + rij) / (1.0f64 - rij))
+        let se = 1.0f64 / math.sqrt[f64](f64(n) - 3.0f64)
+        let q = dst.qnorm(0.975f64, 0.0f64, 1.0f64, true, false)
+        var zz = z - q * se
+        if which == 4usize { zz = z + q * se }
+        let e2 = math.exp[f64](2.0f64 * zz)
+        ret (e2 - 1.0f64) / (e2 + 1.0f64)
+    }
+    // Holm over the p(p - 1)/2 pairs: sort the p values, adjusted_k = max over m <= k of min(1, (m_total - m + 1) p_(m))
+    let pairs = p * (p - 1usize) / 2usize
+    let (ps, pe) = mem.alloc[f64](a, pairs)
+    if pe != ok { ret 0.0f64 / 0.0f64 }
+    var idx = 0usize
+    var u = 0usize
+    while u < p {
+        var v = u + 1usize
+        while v < p {
+            let rr = r[u * p + v]
+            let t2 = rr * math.sqrt[f64](df / (1.0f64 - rr * rr))
+            ps[idx] = 2.0f64 * nbt.pt(0.0f64 - math.abs[f64](t2), df, true, false)
+            idx += 1usize
+            v += 1usize
+        }
+        u += 1usize
+    }
+    // rank of my p among the pairs and the running maximum in increasing order
+    var mine = pv
+    var below = 0usize
+    var q2 = 0usize
+    while q2 < pairs {
+        if ps[q2] < mine { below += 1usize }
+        q2 += 1usize
+    }
+    // the adjusted value is the maximum over the pairs with p <= mine of (pairs - rank) * p
+    var best = 0.0f64
+    q2 = 0usize
+    while q2 < pairs {
+        if ps[q2] <= mine {
+            var rk = 0usize
+            var w = 0usize
+            while w < pairs {
+                if ps[w] < ps[q2] { rk += 1usize }
+                w += 1usize
+            }
+            var cand = f64(pairs - rk) * ps[q2]
+            if cand > 1.0f64 { cand = 1.0f64 }
+            if cand > best { best = cand }
+        }
+        q2 += 1usize
+    }
+    ret best
 }

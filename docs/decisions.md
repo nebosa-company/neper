@@ -49664,3 +49664,9 @@ The emmeans fixture builds each contrast as a coefficient vector over the factor
 `e.algo.stat.psych.describe` gives the twelve columns of `psych::describe` for one numeric vector: n, mean, sd, median, the 10% trimmed mean (R's floor(n trim) + 1 rule), the scaled MAD, min, max, range, skew and kurtosis (type 3, the DescTools forms) and se = sd / sqrt(n).
 
 **Result.** `oracle_psych` gains 25 right-skewed samples (n 10 to 80; 300 values) and equals psych on Windows at 1e-8. Linux pending. L312 stays partial: omega, fa and rotations, principal, polychoric, tetrachoric, biserial, fa.parallel, VSS, corr.test, describeBy, scoreItems.
+
+## D7274 — psych: corr.test
+
+`e.algo.stat.psych.corr_test` gives, for a pair of columns, the correlation, t = r sqrt((n - 2) / (1 - r^2)), the two-sided p on n - 2 degrees of freedom, the 95% Fisher-z interval (tanh of atanh(r) plus or minus qnorm(0.975) / sqrt(n - 3)) and the Holm-adjusted p over all column pairs (`p.adjust` order: the running maximum of (m - rank) p).
+
+**Result.** `oracle_psych` gains 15 data sets of three to five columns (n 20 to 60; every pair, six quantities: 726 values) and equals psych on Windows at 1e-8. Linux pending. L312 stays partial: omega, fa and rotations, principal, polychoric, tetrachoric, biserial, fa.parallel, VSS, describeBy, scoreItems.

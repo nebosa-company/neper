@@ -11,6 +11,11 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "ctest") {
+        let cn = usize(x[0usize])
+        let cp = usize(x[1usize])
+        ret ps.corr_test(a, x[2usize..2usize + cn * cp], cn, cp, usize(x[2usize + cn * cp]), usize(x[3usize + cn * cp]), usize(x[4usize + cn * cp]))
+    }
     if str.eq(c.name, "desc") {
         let dn = usize(x[0usize])
         ret ps.describe(a, x[1usize..1usize + dn], usize(x[1usize + dn]))
