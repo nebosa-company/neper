@@ -14,7 +14,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let e = x[3usize + n..3usize + 2usize * n]
     let (o, oe) = mem.alloc[f64](a, (n + 1usize) * 7usize)
     if oe != ok { os.exit(4) }
-    let rows = sf.km_table(a, t, e, x[0usize], usize(x[1usize]), o, n)
+    var rows = 0usize
+    if usize(x[1usize]) >= 10usize {
+        rows = sf.na_table(t, e, x[0usize], usize(x[1usize]) == 11usize, o, n)
+    } else {
+        rows = sf.km_table(a, t, e, x[0usize], usize(x[1usize]), o, n)
+    }
     let row = usize(x[3usize + 2usize * n])
     let col = usize(x[4usize + 2usize * n])
     if row >= rows { ret 0.0f64 - 1.0f64 }

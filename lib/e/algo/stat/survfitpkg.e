@@ -65,3 +65,56 @@ fn km_table(a: *mem.Arena, t: []const f64, e: []const f64, conf: f64, ctype: usi
     }
     ret done
 }
+
+// survfit(type = "fleming-harrington") (fh2 false: the Nelson-Aalen hazard d / n, surv = exp(-H), variance d / n^2) and type = "fh2" (fh2 true: the tie-adjusted hazard sum over k < d of 1 / (n - k),
+// variance sum of 1 / (n - k)^2), with the log confidence interval; same row layout as km_table
+fn na_table(t: []const f64, e: []const f64, conf: f64, fh2: bool, out: []f64, rows_max: usize) -> usize {
+    let n = t.len
+    let z = dist.qnorm(1.0f64 - (1.0f64 - conf) / 2.0f64, 0.0f64, 1.0f64, true, false)
+    var h = 0.0f64
+    var v = 0.0f64
+    var row = 0usize
+    var cur = 0.0f64 - 1.0e300f64
+    while row < rows_max {
+        var nxt = 1.0e300f64
+        var i = 0usize
+        while i < n {
+            if e[i] != 0.0f64 && t[i] > cur && t[i] < nxt { nxt = t[i] }
+            i += 1usize
+        }
+        if nxt >= 1.0e300f64 { break }
+        var nr = 0.0f64
+        var d = 0.0f64
+        i = 0usize
+        while i < n {
+            if t[i] >= nxt { nr += 1.0f64 }
+            if t[i] == nxt && e[i] != 0.0f64 { d += 1.0f64 }
+            i += 1usize
+        }
+        if fh2 {
+            var k = 0.0f64
+            while k < d {
+                h += 1.0f64 / (nr - k)
+                v += 1.0f64 / ((nr - k) * (nr - k))
+                k += 1.0f64
+            }
+        } else {
+            h += d / nr
+            v += d / (nr * nr)
+        }
+        let se = math.sqrt[f64](v)
+        let surv = math.exp[f64](0.0f64 - h)
+        var hi = math.exp[f64](math.log[f64](surv) + z * se)
+        if hi > 1.0f64 { hi = 1.0f64 }
+        out[row * 7usize] = nxt
+        out[row * 7usize + 1usize] = nr
+        out[row * 7usize + 2usize] = d
+        out[row * 7usize + 3usize] = surv
+        out[row * 7usize + 4usize] = se
+        out[row * 7usize + 5usize] = math.exp[f64](math.log[f64](surv) - z * se)
+        out[row * 7usize + 6usize] = hi
+        row += 1usize
+        cur = nxt
+    }
+    ret row
+}

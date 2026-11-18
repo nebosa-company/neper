@@ -49634,3 +49634,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 New `e.algo.stat.survfitpkg.km_table`: one row per distinct event time with n.risk, n.event, the Kaplan-Meier survival, Greenwood's standard error of the log survival (the sum of d / (n (n - d))) and the log, plain and log-log intervals at any confidence level, truncated to [0, 1].
 
 **Result.** The new fixture `oracle_survfit` (30 censored samples of 12 to 40, three interval types, three levels; table rows at random positions: 828 values) equals `survfit` and `summary.survfit` on Windows at 1e-8. Linux pending. L311 stays partial: strata and the Fleming-Harrington and Nelson-Aalen forms of survfit, left and interval censoring, the rest of coxph, survreg, cox.zph, concordance, survSplit, tmerge, pyears, residuals.
+
+## D7269 — survival: the Fleming-Harrington survfit types
+
+`e.algo.stat.survfitpkg.na_table` adds `survfit(type = "fleming-harrington")` (the Nelson-Aalen hazard d / n summed, survival exp(-H), variance d / n^2) and `type = "fh2"` (the tie-adjusted hazard, a sum of 1 / (n - k) over the d tied events, variance the sum of squares), each with the log interval.
+
+**Result.** `oracle_survfit` gains 20 samples under both types (560 values) and equals survival on Windows at 1e-8. Linux pending. L311 stays partial: strata for survfit, left and interval censoring, the rest of coxph, survreg, cox.zph, concordance, survSplit, tmerge, pyears, residuals.
