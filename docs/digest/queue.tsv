@@ -59,7 +59,7 @@ L458	library	0	227	earth: multivariate adaptive regression splines	Open (CRAN ra
 L459	library	0.8	827	energy: energy statistics	Partial (D6188).
 L460	library	0.25	621	epiR: epidemiology	Partial (D6187).
 L461	library	0.25	671	systemfit: equation systems	Partial (D6622).
-L462	library	0.25	1054	arules: association rule mining	Partial (D7296 hyperLift, hyperConfidence, fishersExactTest, RLD and stdLift sums, 120 values).
+L462	library	0.25	1121	arules: association rule mining	Partial (D7297 improvement, LIC and boost over present sub-rules).
 L465	library	0.2	536	BayesFactor: Bayes factors with JZS priors	Partial (D6189).
 L486	library	0.25	473	mixtools: mixture models by EM	Partial (D6194).
 L487	library	0.3	628	PMCMRplus: nonparametric post-hoc tests	Partial (D6407), p.adjust six methods (D6193).

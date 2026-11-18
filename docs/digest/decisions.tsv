@@ -4086,4 +4086,5 @@ D7292	839	betareg: residuals and predictions
 D7293	797	arules: interest measures
 D7294	639	arules: closed and maximal frequent itemsets
 D7295	1286	arules: the basic interest measures
-D7296	564	arules: hyper measures, RLD and stdLift
+D7296	565	arules: hyper measures, RLD and stdLift
+D7297	624	arules: improvement, LIC and boost

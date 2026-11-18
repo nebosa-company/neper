@@ -358,7 +358,7 @@ fn apriori_hyper(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, co
     cnt[0usize] = u32(trans.len)
     let need = math.ceil[f64](supp * nt - 1.0e-9f64)
     var k = 0usize
-    while k < 6usize {
+    while k < 9usize {
         out[k] = 0.0f64
         k += 1usize
     }
@@ -422,6 +422,25 @@ fn apriori_hyper(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, co
                     var sl = (lift - lam) / (ups - lam)
                     if sl != sl { sl = 1.0f64 }
                     if sl - sl == 0.0f64 { out[4usize] += sl }
+                    var bq = 0.0f64
+                    var bl = 0.0f64
+                    var sub = (l - 1usize) & l
+                    while sub > 0usize {
+                        let sr = sub | r
+                        if f64(cnt[sr]) >= need && f64(cnt[sr]) / f64(cnt[sub]) >= conf - 1.0e-12f64 {
+                            let qc = f64(cnt[sr]) / f64(cnt[sub])
+                            let ql = f64(cnt[sr]) * nt / (f64(cnt[sub]) * f64(cnt[r]))
+                            if qc > bq { bq = qc }
+                            if ql > bl { bl = ql }
+                        }
+                        sub = (sub - 1usize) & l
+                    }
+                    let im = cf - bq
+                    if im - im == 0.0f64 { out[6usize] += im }
+                    let li = lift / bl
+                    if li - li == 0.0f64 { out[7usize] += li }
+                    let bo = cf / (cf - im)
+                    if bo - bo == 0.0f64 { out[8usize] += bo }
                     out[5usize] += 1.0f64
                 }
                 l = (l - 1usize) & m

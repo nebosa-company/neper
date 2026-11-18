@@ -49826,3 +49826,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `arulespkg.apriori_hyper` sums over the rules of `apriori` hyperLift (n11 over qhyper(0.99)), hyperConfidence and fishersExactTest (phyper(n11 - 1) lower and upper tail), RLD, and stdLift with the search's support and confidence as the correction.
 
 **Result.** `oracle_arules` gains 24 sets by 5 measures (120 values) and equals arules on Windows. Linux pending. L462 stays partial: improvement, LIC and boost (rule-subset maxima), candidate pruning for many items, eclat, subsetting, sequences.
+
+## D7297 — arules: improvement, LIC and boost
+
+**Decision.** `apriori_hyper` also returns improvement (confidence minus the best confidence among the rules of the same consequent whose antecedent is a proper subset), LIC (lift over the best sub-rule lift) and boost (confidence over that best confidence). Only sub-rules that `apriori` itself kept count; with none the maximum is 0, so LIC and boost are Inf and are left out of the sums as in the oracle.
+
+**Result.** `oracle_arules` (1560 cases) equals arules on Windows. Linux pending. L462 stays partial: candidate pruning for many items, eclat, subsetting, sequences.

@@ -22,7 +22,7 @@ for (rep in 1:24) {
   add("c0", a, length(cl)); add("c1", a, if (length(cl)) sum(quality(cl)$support) else 0)
   add("c2", a, length(mx)); add("c3", a, if (length(mx)) sum(quality(mx)$support) else 0)
   if (length(ru)) {
-    hm <- c("hyperLift", "hyperConfidence", "fishersExactTest", "RLD", "stdLift")
+    hm <- c("hyperLift", "hyperConfidence", "fishersExactTest", "RLD", "stdLift", "improvement", "LIC", "boost")
     for (k in seq_along(hm)) {
       v <- as.numeric(interestMeasure(ru, hm[k], transactions = tr)); v <- v[is.finite(v)]
       add(paste0("h", k - 1), a, sum(v))

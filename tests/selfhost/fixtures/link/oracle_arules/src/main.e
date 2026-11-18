@@ -14,7 +14,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nt = usize(z[0usize])
     let ni = usize(z[1usize])
     let (tr, e1) = mem.alloc[u64](a, nt)
-    let (out, e2) = mem.alloc[f64](a, 6usize)
+    let (out, e2) = mem.alloc[f64](a, 9usize)
     if e1 != ok || e2 != ok { ret nan }
     var t = 0usize
     while t < nt {
@@ -28,10 +28,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         t += 1usize
     }
     if str.starts_with(c.name, "h") && c.name.len == 2usize {
-        let (ho, he) = mem.alloc[f64](a, 6usize)
+        let (ho, he) = mem.alloc[f64](a, 9usize)
         if he != ok { ret nan }
         if ar.apriori_hyper(a, tr, ni, z[2usize], z[3usize], usize(z[4usize]), ho) != ok { ret nan }
-        ret ho[usize(c.name[1usize]) - 48usize]
+        var hk = usize(c.name[1usize]) - 48usize
+        if hk > 4usize { hk += 1usize }
+        ret ho[hk]
     }
     if str.starts_with(c.name, "b") && c.name.len >= 2usize {
         let (bo, be) = mem.alloc[f64](a, 39usize)
