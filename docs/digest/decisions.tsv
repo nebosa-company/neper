@@ -3903,4 +3903,5 @@ D7113	1676	foreign: read.arff date attributes, sparse rows and relational attrib
 D7114	613	foreign: read.arff weekday and week directives
 D7115	1219	foreign: read.octave bool, complex, range and integer-type variables
 D7116	951	compositions: principal balances (gsi.PrinBal, the default PBhclust method)
-D7117	1030	gmp: factorize
+D7117	1031	gmp: factorize
+D7118	1024	MASS: mvrnorm under set.seed

@@ -4,14 +4,19 @@
 // (the profile log-likelihood of the Box-Cox transform for an intercept-only or given-design model) and
 // `bandwidth_nrd`.
 //
-// Not here: rlm, lqs, cov.rob, kde2d, bw.ucv, bw.bcv, bw.SJ, isoMDS, sammon, mvrnorm, stepAIC and the
-// numerically optimised fitdistr families.
+// `mvrnorm` (the Gaussian draws filled column by column, then mu + V diag(sqrt(lambda)) t(Z) from the sign-exact eigen decomposition).
+//
+// Not here: lqs, cov.rob, isoMDS, sammon, stepAIC and the numerically optimised fitdistr families.
 
 use e.algo.linalg.decomp as decomp
+use e.algo.linalg.lapack_syevr as sy
+use e.algo.rand.r as rng
 use e.algo.sort
 use e.math
 use e.math.dist as dist
 use e.mem
+
+error NotPositive
 
 fn cmp_up(ctx: *u8, x: f64, y: f64) -> i32 {
     if x < y { ret 0i32 - 1i32 }
@@ -455,6 +460,62 @@ fn kde2d(a: *mem.Arena, x: []const f64, y: []const f64, h1: f64, h2: f64, n1: us
             gj += 1usize
         }
         gi += 1usize
+    }
+    ret ok
+}
+
+// mvrnorm(n, mu, Sigma) with the generator r: sigma is p by p row-major (symmetric), out is n by p row-major. The n * p normals are drawn column by column
+// (as rnorm(p * n) fills matrix(, n)); the result is mu + Z diag(sqrt(lambda)) V' row by row, with V and lambda from eigen(Sigma, symmetric = TRUE).
+// Fails when Sigma has an eigenvalue below -1e-6 times the largest.
+fn mvrnorm(a: *mem.Arena, r: *rng.Rng, n: usize, p: usize, mu: []const f64, sigma: []const f64, out: []f64) -> err {
+    let (w, e1) = mem.alloc[f64](a, p)
+    if e1 != ok { ret e1 }
+    let (v, e2) = mem.alloc[f64](a, p * p)
+    if e2 != ok { ret e2 }
+    let (z, e3) = mem.alloc[f64](a, n * p)
+    if e3 != ok { ret e3 }
+    let e4 = sy.dsyevr_all(a, sigma, p, w, v)
+    if e4 != ok { ret e4 }
+    var top = 0.0f64
+    var k = 0usize
+    while k < p {
+        let ak = math.abs[f64](w[k])
+        if ak > top { top = ak }
+        k += 1usize
+    }
+    k = 0usize
+    while k < p {
+        if w[k] < 0.0f64 - 0.000001f64 * top { ret NotPositive }
+        k += 1usize
+    }
+    // the normals, column by column: z[i * p + j] is row i of column j
+    var j = 0usize
+    while j < p {
+        var i = 0usize
+        while i < n {
+            z[i * p + j] = rng.rnorm(r, 0.0f64, 1.0f64)
+            i += 1usize
+        }
+        j += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var row = 0usize
+        while row < p {
+            var acc = mu[row]
+            k = 0usize
+            while k < p {
+                // R's eigen lists the eigenvalues in decreasing order, LAPACK ascending: column k of R is column p - 1 - k here
+                let kk = p - 1usize - k
+                var lam = w[kk]
+                if lam < 0.0f64 { lam = 0.0f64 }
+                acc += v[kk * p + row] * math.sqrt[f64](lam) * z[i * p + k]
+                k += 1usize
+            }
+            out[i * p + row] = acc
+            row += 1usize
+        }
+        i += 1usize
     }
     ret ok
 }
