@@ -196,7 +196,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 177usize { ret gd.psep1(a, x, mu, sigma, nu, tau) }
     if which == 178usize { ret gd.pst2(a, x, mu, sigma, nu, tau) }
     if which == 179usize { ret gd.pst4(x, mu, sigma, nu, tau) }
-    ret gd.pst5(x, mu, sigma, nu, tau)
+    if which == 180usize { ret gd.pst5(x, mu, sigma, nu, tau) }
+    if which == 181usize { ret gd.psep3(x, mu, sigma, nu, tau) }
+    if which == 182usize { ret gd.qsep3(x, mu, sigma, nu, tau) }
+    if which == 183usize { ret gd.psn2(x, mu, sigma, nu) }
+    if which == 184usize { ret gd.qsn2(x, mu, sigma, nu) }
+    if which == 185usize { ret gd.psep4(x, mu, sigma, nu, tau) }
+    if which == 186usize { ret gd.qsep4(x, mu, sigma, nu, tau) }
+    ret gd.psep2(a, x, mu, sigma, nu, tau)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

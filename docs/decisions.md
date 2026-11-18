@@ -49046,3 +49046,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains pSN1, pSEP1 and pST2, which gamlss.dist computes with integrate() over (-Inf, z] of the standard density: the port runs the QUADPACK infinite-range routine already in `e.math.quadpack` (R's rdqagie) with integrate's defaults (tolerance eps^0.25 for both, 100 subdivisions); qSN1 (the package's bracket and uniroot over pSN1, via `pw.zeroin`); and the closed forms pST4 (the two-t mixture) and pST5 (a beta distribution of z / sqrt(a + b + z^2)). The numerically integrated cases are checked at 1e-6 relative, the closed ones at 1e-10.
 
 **Result.** `oracle_gamlss_exp` has 5899 values across 72 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7171 — gamlss.dist: SEP3, SN2, SEP4 distributions and quantiles, and pSEP2
+
+`e.algo.stat.gamlssdist` gains the closed-form distributions and quantiles of SEP3 (with the uniform limit above tau = 10000), SN2 (SEP3 at tau = 2) and SEP4, all through the gamma distribution and its quantile, and pSEP2 by the integrate route of D7170 (capped at 0.99999 as the package does).
+
+**Result.** `oracle_gamlss_exp` has 6109 values across 76 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

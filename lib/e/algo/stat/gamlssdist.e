@@ -1264,12 +1264,13 @@ fn qst3(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
 }
 
 // the distributions that gamlss.dist integrates numerically (integrate() over (-Inf, z], its defaults: relative and absolute tolerance eps^0.25, 100
-// subdivisions), through the QUADPACK port of R's rdqagie in e.math.quadpack; kind 0 SN1, 1 SEP1, 2 ST2
+// subdivisions), through the QUADPACK port of R's rdqagie in e.math.quadpack; kind 0 SN1, 1 SEP1, 2 ST2, 3 SEP2
 type IntCtx = struct { kind: usize, nu: f64, tau: f64 }
 
 fn int_dens(c: *IntCtx, x: f64) -> f64 {
     if c.kind == 0usize { ret dsn1(x, 0.0f64, 1.0f64, c.nu) }
     if c.kind == 1usize { ret dsep1(x, 0.0f64, 1.0f64, c.nu, c.tau) }
+    if c.kind == 3usize { ret dsep2(x, 0.0f64, 1.0f64, c.nu, c.tau) }
     ret dst2(x, 0.0f64, 1.0f64, c.nu, c.tau)
 }
 
@@ -1347,4 +1348,57 @@ fn qsn1(a: *mem.Arena, p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
         }
     }
     ret pw.zeroin[Sn1Root](&c, sn1_h1, lo, hi, pw.uniroot_tol(), 1000i64)
+}
+
+// SEP3 and SN2 (SEP3 at tau = 2) and SEP4 distributions and quantiles in closed form through the gamma distribution; pSEP2 by the integrate route
+fn psep3(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if tau > 10000.0f64 { ret (x - (mu - sigma / nu)) / (sigma * (1.0f64 / nu + nu)) }
+    let k = nu * nu
+    let sc = math.pow[f64](2.0f64, 1.0f64 / tau)
+    var c = 0.0f64
+    if x < mu {
+        let s1 = math.pow[f64](math.abs[f64](nu * (x - mu) / (sigma * sc)), tau)
+        c = 1.0f64 - nm.pgamma(s1, 1.0f64 / tau, 1.0f64, true, false)
+    } else {
+        let s2 = math.pow[f64](math.abs[f64]((x - mu) / (sigma * nu * sc)), tau)
+        c = 1.0f64 + k * nm.pgamma(s2, 1.0f64 / tau, 1.0f64, true, false)
+    }
+    ret c / (1.0f64 + k)
+}
+
+fn qsep3(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let k = nu * nu
+    let sc = math.pow[f64](2.0f64, 1.0f64 / tau)
+    if p < 1.0f64 / (1.0f64 + k) { ret mu - (sigma * sc / nu) * math.pow[f64](nm.qgamma(1.0f64 - p * (1.0f64 + k), 1.0f64 / tau, 1.0f64, true, false), 1.0f64 / tau) }
+    ret mu + (sigma * nu * sc) * math.pow[f64](nm.qgamma((0.0f64 - 1.0f64 / k) * (1.0f64 - p * (1.0f64 + k)), 1.0f64 / tau, 1.0f64, true, false), 1.0f64 / tau)
+}
+
+fn psn2(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret psep3(x, mu, sigma, nu, 2.0f64) }
+
+fn qsn2(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret qsep3(p, mu, sigma, nu, 2.0f64) }
+
+fn sep4_k(nu: f64, tau: f64) -> f64 { ret math.exp[f64](sp.lgamma(1.0f64 + 1.0f64 / tau) - sp.lgamma(1.0f64 + 1.0f64 / nu)) }
+
+fn psep4(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let k = sep4_k(nu, tau)
+    let z = (x - mu) / sigma
+    var c = 0.0f64
+    if x < mu { c = 1.0f64 - nm.pgamma(math.pow[f64](math.abs[f64](z), nu), 1.0f64 / nu, 1.0f64, true, false) } else { c = 1.0f64 + k * nm.pgamma(math.pow[f64](math.abs[f64](z), tau), 1.0f64 / tau, 1.0f64, true, false) }
+    ret c / (1.0f64 + k)
+}
+
+fn qsep4(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let k = sep4_k(nu, tau)
+    if p < 1.0f64 / (1.0f64 + k) { ret mu - sigma * math.pow[f64](nm.qgamma(1.0f64 - p * (1.0f64 + k), 1.0f64 / nu, 1.0f64, true, false), 1.0f64 / nu) }
+    ret mu + sigma * math.pow[f64](nm.qgamma((0.0f64 - 1.0f64 / k) * (1.0f64 - p * (1.0f64 + k)), 1.0f64 / tau, 1.0f64, true, false), 1.0f64 / tau)
+}
+
+fn psep2(a: *mem.Arena, x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let c = pint(a, 3usize, x, mu, sigma, nu, tau)
+    if c >= 1.0f64 { ret 0.99999f64 }
+    ret c
 }
