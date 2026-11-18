@@ -49286,3 +49286,9 @@ gamlss.dist generates many families' random numbers as the quantile function of 
 New `e.algo.stat.gamlsslink`: gamlss.dist's `make.link.gamlss` for twelve links (logit by the standard logistic, probit, cauchit, cloglog, identity, log, sqrt, 1/mu^2, mu^2 and the three log-shift links), each as the link function, the inverse link with the package's clamping (the logistic, normal and Cauchy inverses are clamped at the quantile of the machine epsilon; the log inverse is floored at epsilon) and the derivative of the inverse (`mu.eta`, floored at epsilon where the package does).
 
 **Result.** `oracle_gamlss_link` equals gamlss.dist on 180 values (twelve links, five means and five linear predictors each) at 1e-10 relative on Windows. Linux pending. L464 stays partial: the remaining families, the base-R generators and the moments; the links that need extra arguments (the `[-1,1]`, `Slog`, `inverse` and user-defined ones) are not ported.
+
+## D7211 — energy: the multivariate normality statistic
+
+`e.algo.stat.energy` gains `normal_e` (the univariate energy statistic of normality: the sorted standardised sample against the standard normal) and `mvnorm_e` (the multivariate statistic: the sample whitened by the inverse square root of its covariance through the symmetric eigen decomposition of the LAPACK port, the expectation of the distance to a standard normal through the confluent hypergeometric function 1F1 of the gsl module, and the mean pairwise distance of the whitened sample). The first run was off by the factor 2 in the pairwise-distance term, because R's `sum(dist(y))` counts each unordered pair once.
+
+**Result.** `oracle_energy_normal` equals energy on 12 samples (dimensions 1 to 4, 15 to 60 points) at 1e-8 relative on Windows. Linux pending. L459 stays partial: the permutation tests, the partial distance correlation pdcor, the Poisson test and the energy clustering remain.

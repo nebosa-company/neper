@@ -2,9 +2,13 @@
 // optionally raised to a power in (0, 2)) and the two-sample energy statistic of edist and eqdist.etest.
 //
 // Not here: the permutation tests' p values (they use R's random permutations), the unbiased and partial distance correlations,
-// the multivariate normality and Poisson tests, the energy clustering, and the independence coefficients of the other tests.
+// the Poisson tests, the energy clustering, and the independence coefficients of the other tests.
 
+use e.algo.linalg.lapack_syevr as sy
+use e.algo.stat.gslfns as gs
 use e.math
+use e.math.dist as dist
+use e.math.special as sp
 use e.mem
 
 fn dist_pow(x: []const f64, n: usize, d: usize, i: usize, j: usize, index: f64) -> f64 {
@@ -191,4 +195,156 @@ fn bcdcor(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, dx: usize, dy
     let sxx = dcov_u(ax, ax, n)
     let syy = dcov_u(ay, ay, n)
     ret (sxy / math.sqrt[f64](sxx * syy), ok)
+}
+
+// ---- the energy statistics of normality: normal.e (univariate: the sorted standardised sample) and mvnorm.e (the multivariate statistic on the whitened sample,
+// through the 1F1 expectation of the standard normal distance, as energy computes it when gsl is installed); x is n by d row-major
+fn normal_e(a: *mem.Arena, x: []const f64, n: usize) -> f64 {
+    var mu = 0.0f64
+    var i = 0usize
+    while i < n {
+        mu += x[i]
+        i += 1usize
+    }
+    mu = mu / f64(n)
+    var ss = 0.0f64
+    i = 0usize
+    while i < n {
+        ss += (x[i] - mu) * (x[i] - mu)
+        i += 1usize
+    }
+    let s = math.sqrt[f64](ss / f64(n - 1usize))
+    let (y, e) = mem.alloc[f64](a, n)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i < n {
+        y[i] = (x[i] - mu) / s
+        i += 1usize
+    }
+    // insertion sort (n is small in practice)
+    i = 1usize
+    while i < n {
+        let v = y[i]
+        var j = i
+        while j > 0usize && y[j - 1usize] > v {
+            y[j] = y[j - 1usize]
+            j -= 1usize
+        }
+        y[j] = v
+        i += 1usize
+    }
+    var s1 = 0.0f64
+    var sk = 0.0f64
+    i = 0usize
+    while i < n {
+        s1 += 2.0f64 * y[i] * dist.pnorm(y[i], 0.0f64, 1.0f64, true, false) + 2.0f64 * dist.dnorm(y[i], 0.0f64, 1.0f64, false)
+        sk += (f64(2usize * i) + 1.0f64 - f64(n)) * y[i]
+        i += 1usize
+    }
+    ret 2.0f64 * (s1 - f64(n) / math.sqrt[f64](3.141592653589793238462643383279f64) - sk / f64(n))
+}
+
+fn mvnorm_e(a: *mem.Arena, x: []const f64, n: usize, d: usize) -> f64 {
+    if d == 1usize { ret normal_e(a, x, n) }
+    let (mu, e1) = mem.alloc[f64](a, d)
+    let (cov, e2) = mem.alloc[f64](a, d * d)
+    let (w, e3) = mem.alloc[f64](a, d)
+    let (z, e4) = mem.alloc[f64](a, d * d)
+    let (y, e5) = mem.alloc[f64](a, n * d)
+    let (t, e6) = mem.alloc[f64](a, d * d)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret 0.0f64 / 0.0f64 }
+    var j = 0usize
+    while j < d {
+        var s = 0.0f64
+        var i = 0usize
+        while i < n {
+            s += x[i * d + j]
+            i += 1usize
+        }
+        mu[j] = s / f64(n)
+        j += 1usize
+    }
+    var r = 0usize
+    while r < d {
+        var c = 0usize
+        while c < d {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += (x[i * d + r] - mu[r]) * (x[i * d + c] - mu[c])
+                i += 1usize
+            }
+            cov[r * d + c] = s / f64(n - 1usize)
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let ee = sy.dsyevr_all(a, cov, d, w, z)
+    if ee != ok { ret 0.0f64 / 0.0f64 }
+    // P D P' with D = diag(1 / sqrt(lambda)); the eigenvectors are the columns of z (column-major)
+    r = 0usize
+    while r < d {
+        var c = 0usize
+        while c < d {
+            var s = 0.0f64
+            var k = 0usize
+            while k < d {
+                s += z[k * d + r] * (1.0f64 / math.sqrt[f64](w[k])) * z[k * d + c]
+                k += 1usize
+            }
+            t[r * d + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < d {
+            var s = 0.0f64
+            var k = 0usize
+            while k < d {
+                s += (x[i * d + k] - mu[k]) * t[k * d + c]
+                k += 1usize
+            }
+            y[i * d + c] = s
+            c += 1usize
+        }
+        i += 1usize
+    }
+    let dd = f64(d)
+    let cst = math.exp[f64](sp.lgamma((dd + 1.0f64) / 2.0f64) - sp.lgamma(dd / 2.0f64))
+    let mean2 = 2.0f64 * cst
+    var m1 = 0.0f64
+    i = 0usize
+    while i < n {
+        var ysq = 0.0f64
+        var c = 0usize
+        while c < d {
+            ysq += y[i * d + c] * y[i * d + c]
+            c += 1usize
+        }
+        m1 += gs.hyperg_1f1(0.0f64 - 0.5f64, dd / 2.0f64, 0.0f64 - ysq / 2.0f64)
+        i += 1usize
+    }
+    let mean1 = math.sqrt[f64](2.0f64) * cst * m1 / f64(n)
+    var sd = 0.0f64
+    i = 0usize
+    while i < n {
+        var k = 0usize
+        while k < i {
+            var s = 0.0f64
+            var c = 0usize
+            while c < d {
+                let df = y[i * d + c] - y[k * d + c]
+                s += df * df
+                c += 1usize
+            }
+            sd += math.sqrt[f64](s)
+            k += 1usize
+        }
+        i += 1usize
+    }
+    let mean3 = 2.0f64 * sd / (f64(n) * f64(n))
+    ret f64(n) * (2.0f64 * mean1 - mean2 - mean3)
 }

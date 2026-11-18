@@ -485,3 +485,4 @@ oracle_quadpack
 oracle_stabledist
 oracle_flexmix_gauss
 oracle_gamlss_link
+oracle_energy_normal
