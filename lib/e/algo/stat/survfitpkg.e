@@ -250,3 +250,33 @@ fn survdiff_k(a: *mem.Arena, t: []const f64, e: []const f64, grp: []const usize,
     out[1usize] = f64(m)
     ret ok
 }
+
+// survival::concordance(Surv(t, e) ~ x) pair counts for distinct event times (a pair is usable when the earlier time is an event): out receives (concordant, discordant, tied.x, C), a pair
+// concordant when the larger x has the longer survival; C = (concordant + tied.x / 2) / (concordant + discordant + tied.x)
+fn concordance_counts(t: []const f64, e: []const f64, x: []const f64, out: []f64) {
+    var conc = 0.0f64
+    var disc = 0.0f64
+    var tiedx = 0.0f64
+    let n = t.len
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            if i != j && e[i] != 0.0f64 && t[i] < t[j] {
+                if x[i] < x[j] {
+                    conc += 1.0f64
+                } else if x[i] > x[j] {
+                    disc += 1.0f64
+                } else {
+                    tiedx += 1.0f64
+                }
+            }
+            j += 1usize
+        }
+        i += 1usize
+    }
+    out[0usize] = conc
+    out[1usize] = disc
+    out[2usize] = tiedx
+    out[3usize] = (conc + tiedx / 2.0f64) / (conc + disc + tiedx)
+}

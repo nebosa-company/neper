@@ -6,9 +6,17 @@ use e.io
 use e.mem
 use e.os
 use e.test.oracle as oracle
+use e.str
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "conc") {
+        let cn = usize(x[0usize])
+        let (co, ce) = mem.alloc[f64](a, 4usize)
+        if ce != ok { os.exit(5) }
+        sf.concordance_counts(x[1usize..1usize + cn], x[1usize + cn..1usize + 2usize * cn], x[1usize + 2usize * cn..1usize + 3usize * cn], co)
+        ret co[usize(x[1usize + 3usize * cn])]
+    }
     let n = usize(x[2usize])
     let t = x[3usize..3usize + n]
     let e = x[3usize + n..3usize + 2usize * n]

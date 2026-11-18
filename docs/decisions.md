@@ -49646,3 +49646,9 @@ New `e.algo.stat.survfitpkg.km_table`: one row per distinct event time with n.ri
 `e.algo.stat.survfitpkg.survdiff_k` is `survdiff` for any number of groups: at every event time the weight S(t-)^rho from the pooled Kaplan-Meier times the observed less expected events of each group, the hypergeometric covariance weight^2 d (n - d) / (n^2 (n - 1)) times n_g (n - n_g) on the diagonal and -n_g n_h off it, and the chi-square u' V^-1 u over the first k - 1 groups by Gauss-Jordan.
 
 **Result.** `oracle_survdiff` gains 30 data sets of three or four groups (rho 0 and 1; 30 values) and equals survival on Windows at 1e-7. Linux pending. L311 stays partial: survdiff with strata, the rest of coxph, survreg, cox.zph, concordance, survSplit, tmerge, pyears, residuals.
+
+## D7271 — survival: concordance counts
+
+`e.algo.stat.survfitpkg.concordance_counts` counts, over the pairs whose earlier time is an event, the concordant (larger x, longer survival), discordant and x-tied pairs of `concordance(Surv(t, e) ~ x)` and the index C = (concordant + tied.x / 2) / (concordant + discordant + tied.x), for distinct event times.
+
+**Result.** `oracle_survfit` gains 25 samples (n 15 to 50, ties in x from the rounding; 100 values) and equals `concordance` on Windows at 1e-10. The variance, weighted forms and tied event times are not ported. Linux pending. L311 stays partial: concordance variance, the rest of coxph, survreg, cox.zph, survSplit, tmerge, pyears, residuals.

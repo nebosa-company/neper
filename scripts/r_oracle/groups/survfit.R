@@ -31,4 +31,12 @@ for (rep in 1:20) {
     }
   }
 }
+# concordance(Surv ~ x): "conc" args (n, time..., event..., x..., index) index 0 concordant, 1 discordant, 2 tied.x, 3 C
+for (rep in 1:25) {
+  n <- sample(15:50, 1); t <- sample(seq(0.5, 60, by = 0.25), n); e <- rbinom(n, 1, 0.7); if (sum(e) < 4) next
+  x <- round(rnorm(n) + 0.4 * log(t), 1)
+  cc <- concordance(Surv(t, e) ~ x)
+  v <- c(cc$count[["concordant"]], cc$count[["discordant"]], cc$count[["tied.x"]], cc$concordance)
+  for (j in 0:3) cases[[length(cases) + 1]] <- case("conc", c(n, t, e, x, j), v[j + 1], rel = 1e-10, abs = 1e-12)
+}
 emit("survfit", "survival", list(cases))
