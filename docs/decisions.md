@@ -49082,3 +49082,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the Sichel probability function (the compound Poisson of a generalised inverse Gaussian, written with the modified Bessel function K of real order from `e.algo.stat.gslfns`, instead of the package's C recursion) and the generalised inverse Gaussian density. The distribution of GIG and the quantile are not ported: pGIG integrates over a finite interval (QUADPACK qags in R), and only the infinite-range routine is ported here.
 
 **Result.** `oracle_gamlss_exp` has 6863 values across 89 families and equals gamlss.dist on Windows at 1e-8 relative. Linux pending. L464 stays partial.
+
+## D7177 — e.math.quadpack: qags, and the GIG distribution and quantile
+
+`e.math.quadpack` gains `qk21` (the 21-point Gauss-Kronrod rule) and `qags`, R's integrate() on a finite range (rdqagse): the same adaptive bisection and Wynn epsilon extrapolation as the infinite-range `qagi` already there, started on (lo, hi) with the extrapolation threshold |hi - lo| * 0.375 and 42 evaluations per interval. It lets the packages whose integrate() calls are over finite ranges reproduce R's tolerance-limited values rather than only converge to the same integral. `e.algo.stat.gamlssdist` uses it for pGIG (integral of the standard density from 0.001 to q / mu) and qGIG (the package's bracket and zeroin, with the interval from the smallest double when the root lies below mu).
+
+**Result.** `oracle_gamlss_exp` has 6923 values across 90 families and equals gamlss.dist on Windows, pGIG at 1e-6 and qGIG at 1e-5 relative. Linux pending. L464 stays partial. qags has no fixture of its own beyond those 60 values.

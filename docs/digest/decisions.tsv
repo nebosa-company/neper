@@ -3962,4 +3962,5 @@ D7172	602	gamlss.dist: PIG
 D7173	557	gamlss.dist: ZAPIG, ZIPIG, PIG2, NBF and ZINBF
 D7174	499	gamlss.dist: ZIPF and ZAZIPF
 D7175	546	gamlss.dist: GT, NET and LQNO
-D7176	666	gamlss.dist: SICHEL and GIG densities
+D7176	667	gamlss.dist: SICHEL and GIG densities
+D7177	1007	e.math.quadpack: qags, and the GIG distribution and quantile

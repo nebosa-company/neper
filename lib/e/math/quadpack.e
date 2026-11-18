@@ -525,3 +525,346 @@ fn qagi[Ctx: type](a: *mem.Arena, ctx: *Ctx, f: fn(*Ctx, f64) -> f64, bound: f64
     out.ier = ier
     ret (out, ok)
 }
+
+fn wg21(j: usize) -> f64 {
+    if j == 0usize { ret 0.066671344308688137593568809893332f64 }
+    if j == 1usize { ret 0.149451349150580593145776339657697f64 }
+    if j == 2usize { ret 0.219086362515982043995534934228163f64 }
+    if j == 3usize { ret 0.26926671930999635509122692156947f64 }
+    ret 0.295524224714752870173892994651338f64
+}
+
+fn xgk21(j: usize) -> f64 {
+    if j == 0usize { ret 0.995657163025808080735527280689003f64 }
+    if j == 1usize { ret 0.973906528517171720077964012084452f64 }
+    if j == 2usize { ret 0.930157491355708226001207180059508f64 }
+    if j == 3usize { ret 0.865063366688984510732096688423493f64 }
+    if j == 4usize { ret 0.780817726586416897063717578345042f64 }
+    if j == 5usize { ret 0.679409568299024406234327365114874f64 }
+    if j == 6usize { ret 0.562757134668604683339000099272694f64 }
+    if j == 7usize { ret 0.433395394129247190799265943165784f64 }
+    if j == 8usize { ret 0.294392862701460198131126603103866f64 }
+    if j == 9usize { ret 0.14887433898163121088482600112972f64 }
+    ret 0.0f64
+}
+
+fn wgk21(j: usize) -> f64 {
+    if j == 0usize { ret 0.011694638867371874278064396062192f64 }
+    if j == 1usize { ret 0.03255816230796472747881897245939f64 }
+    if j == 2usize { ret 0.05475589657435199603138130024458f64 }
+    if j == 3usize { ret 0.07503967481091995276704314091619f64 }
+    if j == 4usize { ret 0.093125454583697605535065465083366f64 }
+    if j == 5usize { ret 0.109387158802297641899210590325805f64 }
+    if j == 6usize { ret 0.123491976262065851077958109831074f64 }
+    if j == 7usize { ret 0.134709217311473325928054001771707f64 }
+    if j == 8usize { ret 0.142775938577060080797094273138717f64 }
+    if j == 9usize { ret 0.147739104901338491374841515972068f64 }
+    ret 0.149445554002916905664936468389821f64
+}
+
+// QUADPACK dqk21 as R's rdqk21: the 21-point Gauss-Kronrod rule over (a, b)
+fn qk21[Ctx: type](ctx: *Ctx, f: fn(*Ctx, f64) -> f64, a: f64, b: f64) -> Kron {
+    let centr = (a + b) * 0.5f64
+    let hlgth = (b - a) * 0.5f64
+    let dhlgth = ab(hlgth)
+    var resg = 0.0f64
+    let fc = f(ctx, centr)
+    var resk = wgk21(10usize) * fc
+    var resabs = ab(resk)
+    var j = 0usize
+    while j < 5usize {
+        let jtw = 2usize * j + 1usize
+        let absc = hlgth * xgk21(jtw)
+        let v1 = f(ctx, centr - absc)
+        let v2 = f(ctx, centr + absc)
+        let fsum = v1 + v2
+        resg += wg21(j) * fsum
+        resk += wgk21(jtw) * fsum
+        resabs += wgk21(jtw) * (ab(v1) + ab(v2))
+        j += 1usize
+    }
+    j = 0usize
+    while j < 5usize {
+        let jtwm1 = 2usize * j
+        let absc = hlgth * xgk21(jtwm1)
+        let v1 = f(ctx, centr - absc)
+        let v2 = f(ctx, centr + absc)
+        let fsum = v1 + v2
+        resk += wgk21(jtwm1) * fsum
+        resabs += wgk21(jtwm1) * (ab(v1) + ab(v2))
+        j += 1usize
+    }
+    let reskh = resk * 0.5f64
+    var resasc = wgk21(10usize) * ab(fc - reskh)
+    j = 0usize
+    while j < 10usize {
+        let absc = hlgth * xgk21(j)
+        let v1 = f(ctx, centr - absc)
+        let v2 = f(ctx, centr + absc)
+        resasc += wgk21(j) * (ab(v1 - reskh) + ab(v2 - reskh))
+        j += 1usize
+    }
+    let result = resk * hlgth
+    resasc = resasc * dhlgth
+    resabs = resabs * dhlgth
+    var abserr = ab((resk - resg) * hlgth)
+    if resasc != 0.0f64 && abserr != 0.0f64 {
+        abserr = resasc * mn(1.0f64, math.pow[f64](abserr * 200.0f64 / resasc, 1.5f64))
+    }
+    if resabs > dbl_min() / (epmach() * 50.0f64) {
+        abserr = mx(epmach() * 50.0f64 * resabs, abserr)
+    }
+    var kr: Kron = zero
+    kr = Kron { result: result, abserr: abserr, resabs: resabs, resasc: resasc }
+    ret kr
+}
+
+// R's integrate() on a finite range (rdqagse): adaptive bisection with Wynn's epsilon extrapolation; the same extrapolation code as qagi
+fn qags[Ctx: type](a: *mem.Arena, ctx: *Ctx, f: fn(*Ctx, f64) -> f64, lo: f64, hi: f64, epsabs: f64, epsrel: f64, limit: usize) -> (Qagi, err) {
+    var out = Qagi { result: 0.0f64, abserr: 0.0f64, neval: 0i64, ier: 0i64, last: 0usize }
+    let eps = epmach()
+    if epsabs <= 0.0f64 && epsrel < mx(eps * 50.0f64, 5.0e-29f64) {
+        out.ier = 6i64
+        ret (out, ok)
+    }
+    let (alist, e1) = mem.alloc[f64](a, limit + 2usize)
+    let (blist, e2) = mem.alloc[f64](a, limit + 2usize)
+    let (rlist, e3) = mem.alloc[f64](a, limit + 2usize)
+    let (elist, e4) = mem.alloc[f64](a, limit + 2usize)
+    let (iord, e5) = mem.alloc[usize](a, limit + 2usize)
+    let (rlist2, e6) = mem.alloc[f64](a, 56usize)
+    let (res3la, e7) = mem.alloc[f64](a, 4usize)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok || e7 != ok { ret (out, e1) }
+    var i = 0usize
+    while i < limit + 2usize {
+        alist[i] = 0.0f64
+        blist[i] = 0.0f64
+        rlist[i] = 0.0f64
+        elist[i] = 0.0f64
+        iord[i] = 0usize
+        i += 1usize
+    }
+    i = 0usize
+    while i < 56usize {
+        rlist2[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < 4usize {
+        res3la[i] = 0.0f64
+        i += 1usize
+    }
+    alist[1usize] = lo
+    blist[1usize] = hi
+    let k0 = qk21(ctx, f, lo, hi)
+    var result = k0.result
+    var abserr = k0.abserr
+    let defabs = k0.resabs
+    let resabs0 = k0.resasc
+    var ier = 0i64
+    var last = 1usize
+    rlist[1usize] = result
+    elist[1usize] = abserr
+    iord[1usize] = 1usize
+    let dres = ab(result)
+    var errbnd = mx(epsabs, epsrel * dres)
+    if abserr <= eps * 100.0f64 * defabs && abserr > errbnd { ier = 2i64 }
+    if limit == 1usize { ier = 1i64 }
+    var phase = 0i64
+    if ier != 0i64 || (abserr <= errbnd && abserr != resabs0) || abserr == 0.0f64 { phase = 130 }
+    var area = result
+    var errsum = abserr
+    let oflow = dbl_max()
+    let uflow = dbl_min()
+    var small = 0.0f64
+    var erlarg = 0.0f64
+    var ertest = 0.0f64
+    var correc = 0.0f64
+    var ierro = 0i64
+    var ksgn = 0i64 - 1i64
+    var es = Eps { n: 2usize, nres: 0usize, result: 0.0f64, abserr: 0.0f64 }
+    var sr = Srt { maxerr: 1usize, ermax: abserr, nrmax: 1usize }
+    if phase == 0i64 {
+        rlist2[1usize] = result
+        abserr = oflow
+        var noext = false
+        var extrap = false
+        var ktmin = 0i64
+        var iroff1 = 0i64
+        var iroff2 = 0i64
+        var iroff3 = 0i64
+        if dres >= (1.0f64 - eps * 50.0f64) * defabs { ksgn = 1i64 }
+        last = 2usize
+        var run = true
+        while run && last <= limit {
+            var once = true
+            while once {
+                once = false
+                let a1 = alist[sr.maxerr]
+                let b1 = (alist[sr.maxerr] + blist[sr.maxerr]) * 0.5f64
+                let a2 = b1
+                let b2 = blist[sr.maxerr]
+                let erlast = sr.ermax
+                let q1 = qk21(ctx, f, a1, b1)
+                let q2 = qk21(ctx, f, a2, b2)
+                let area1 = q1.result
+                let error1 = q1.abserr
+                let defab1 = q1.resasc
+                let area2 = q2.result
+                let error2 = q2.abserr
+                let defab2 = q2.resasc
+                let area12 = area1 + area2
+                let erro12 = error1 + error2
+                errsum = errsum + erro12 - sr.ermax
+                area = area + area12 - rlist[sr.maxerr]
+                if !(defab1 == error1 || defab2 == error2) {
+                    if ab(rlist[sr.maxerr] - area12) <= ab(area12) * 1.0e-5f64 && erro12 >= sr.ermax * 0.99f64 {
+                        if extrap { iroff2 += 1i64 } else { iroff1 += 1i64 }
+                    }
+                    if last > 10usize && erro12 > sr.ermax { iroff3 += 1i64 }
+                }
+                rlist[sr.maxerr] = area1
+                rlist[last] = area2
+                errbnd = mx(epsabs, epsrel * ab(area))
+                if iroff1 + iroff2 >= 10i64 || iroff3 >= 20i64 { ier = 2i64 }
+                if iroff2 >= 5i64 { ierro = 3i64 }
+                if last == limit { ier = 1i64 }
+                if mx(ab(a1), ab(b2)) <= (eps * 100.0f64 + 1.0f64) * (ab(a2) + uflow * 1000.0f64) { ier = 4i64 }
+                if error2 <= error1 {
+                    alist[last] = a2
+                    blist[sr.maxerr] = b1
+                    blist[last] = b2
+                    elist[sr.maxerr] = error1
+                    elist[last] = error2
+                } else {
+                    alist[sr.maxerr] = a2
+                    alist[last] = a1
+                    blist[last] = b1
+                    rlist[sr.maxerr] = area2
+                    rlist[last] = area1
+                    elist[sr.maxerr] = error2
+                    elist[last] = error1
+                }
+                qpsrt(limit, last, &sr, elist, iord)
+                if errsum <= errbnd {
+                    phase = 115i64
+                    run = false
+                    break
+                }
+                if ier != 0i64 {
+                    run = false
+                    break
+                }
+                if last == 2usize {
+                    small = ab(hi - lo) * 0.375f64
+                    erlarg = errsum
+                    ertest = errbnd
+                    rlist2[2usize] = area
+                    break
+                }
+                if noext { break }
+                erlarg -= erlast
+                if ab(b1 - a1) > small { erlarg += erro12 }
+                if !extrap {
+                    if ab(blist[sr.maxerr] - alist[sr.maxerr]) > small { break }
+                    extrap = true
+                    sr.nrmax = 2usize
+                }
+                var skip = false
+                if ierro != 3i64 && erlarg > ertest {
+                    let id = sr.nrmax
+                    var jupbnd = last
+                    if last > limit / 2usize + 2usize { jupbnd = limit + 3usize - last }
+                    var k = id
+                    while k <= jupbnd && !skip {
+                        sr.maxerr = iord[sr.nrmax]
+                        sr.ermax = elist[sr.maxerr]
+                        if ab(blist[sr.maxerr] - alist[sr.maxerr]) > small {
+                            skip = true
+                        } else {
+                            sr.nrmax += 1usize
+                            k += 1usize
+                        }
+                    }
+                }
+                if skip { break }
+                es.n += 1usize
+                rlist2[es.n] = area
+                qelg(&es, rlist2, res3la)
+                let reseps = es.result
+                let abseps = es.abserr
+                ktmin += 1i64
+                if ktmin > 5i64 && abserr < errsum * 0.001f64 { ier = 5i64 }
+                var stop = false
+                if abseps < abserr {
+                    ktmin = 0i64
+                    abserr = abseps
+                    result = reseps
+                    correc = erlarg
+                    ertest = mx(epsabs, epsrel * ab(reseps))
+                    if abserr <= ertest {
+                        run = false
+                        stop = true
+                    }
+                }
+                if !stop {
+                    if es.n == 1usize { noext = true }
+                    if ier == 5i64 {
+                        run = false
+                    } else {
+                        sr.maxerr = iord[1usize]
+                        sr.ermax = elist[sr.maxerr]
+                        sr.nrmax = 1usize
+                        extrap = false
+                        small = small * 0.5f64
+                        erlarg = errsum
+                    }
+                }
+            }
+            if run { last += 1usize }
+        }
+        if phase == 0i64 {
+            var t = 110i64
+            if abserr == oflow {
+                t = 115i64
+            } else if ier + ierro != 0i64 {
+                if ierro == 3i64 { abserr += correc }
+                if ier == 0i64 { ier = 3i64 }
+                if result == 0.0f64 || area == 0.0f64 {
+                    if abserr > errsum {
+                        t = 115i64
+                    } else if area == 0.0f64 {
+                        t = 130i64
+                    }
+                } else if abserr / ab(result) > errsum / ab(area) {
+                    t = 115i64
+                }
+            }
+            if t == 110i64 {
+                if ksgn == 0i64 - 1i64 && mx(ab(result), ab(area)) <= defabs * 0.01f64 {
+                    t = 130i64
+                } else {
+                    if 0.01f64 > result / area || result / area > 100.0f64 || errsum > ab(area) { ier = 6i64 }
+                    t = 130i64
+                }
+            }
+            phase = t
+        }
+        if phase == 115i64 {
+            result = 0.0f64
+            var k = 1usize
+            while k <= last {
+                result += rlist[k]
+                k += 1usize
+            }
+            abserr = errsum
+        }
+    }
+    out.result = result
+    out.abserr = abserr
+    out.last = last
+    out.neval = i64(last) * 42i64 - 21i64
+    if ier > 2i64 { ier -= 1i64 }
+    out.ier = ier
+    ret (out, ok)
+}

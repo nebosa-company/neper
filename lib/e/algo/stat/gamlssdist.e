@@ -1641,3 +1641,50 @@ fn dgig(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     let c = gs.bessel_knu(nu + 1.0f64, s2) / gs.bessel_knu(nu, s2)
     ret math.exp[f64](nu * math.log[f64](c) - nu * math.log[f64](mu) + (nu - 1.0f64) * math.log[f64](x) - math.log[f64](2.0f64) - math.log[f64](gs.bessel_knu(nu, s2)) - s2 / 2.0f64 * (c * x / mu + mu / (c * x)))
 }
+
+// pGIG integrates the standard GIG density over (0.001, q / mu) with integrate() defaults (QUADPACK qags, tolerance eps^0.25); qGIG is the package's bracket and zeroin
+type GigCtx = struct { sigma: f64, nu: f64 }
+
+fn gig_dens(c: *GigCtx, x: f64) -> f64 { ret dgig(x, 1.0f64, c.sigma, c.nu) }
+
+fn pgig(a: *mem.Arena, x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    var c: GigCtx = zero
+    c.sigma = sigma
+    c.nu = nu
+    let tol = pw.uniroot_tol()
+    let (r, e) = qp.qags[GigCtx](a, &c, gig_dens, 0.001f64, x / mu, tol, tol, 100usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result
+}
+
+type GigRoot = struct { a: *mem.Arena, mu: f64, sigma: f64, nu: f64, p: f64 }
+
+fn gig_h(c: *GigRoot, q: f64) -> f64 { ret pgig(c.a, q, c.mu, c.sigma, c.nu) }
+
+fn gig_h1(c: *GigRoot, q: f64) -> f64 { ret pgig(c.a, q, c.mu, c.sigma, c.nu) - c.p }
+
+fn qgig(a: *mem.Arena, p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p <= 0.0f64 { ret 0.0f64 }
+    if p >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var c: GigRoot = zero
+    c.a = a
+    c.mu = mu
+    c.sigma = sigma
+    c.nu = nu
+    c.p = p
+    var lo = 0.0f64
+    var hi = 0.0f64
+    if gig_h(&c, mu) < p {
+        lo = mu
+        hi = mu + sigma
+        var j = 2.0f64
+        while gig_h(&c, hi) < p {
+            hi = mu + j * sigma
+            j += 1.0f64
+        }
+    } else {
+        lo = 2.2250738585072014e-308f64
+        hi = mu
+    }
+    ret pw.zeroin[GigRoot](&c, gig_h1, lo, hi, pw.uniroot_tol(), 1000i64)
+}
