@@ -466,17 +466,6 @@
       "evidence": "Partial (D6432, D6433 gamma and Weibull fits). Closed-form norm, lnorm and exp fits with loglik, AIC, BIC, KS, CvM and AD equal fitdistrplus on Windows (oracle_fitdist; Linux pending). Open: iterative fits, other methods, standard errors, bootstrap, censoring, discrete. Was: Open (CRAN rank 334). Mid. Needs L306 and the e.math.dist families. Acceptance, equal to fitdistrplus: fitdist by mle, mme, qme and mge, fitdistcens, gofstat, bootdist and bootdistcens under set.seed, descdist, denscomp data, quantile and confint."
     },
     {
-      "id": "L363",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 697,
-      "title": "DescTools: descriptive statistics and tests",
-      "score": 0.49,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6429, D6430 table association measures, D6431 kappa, lambda, tau, OR, Q, D6446 BinomCI x11, D6447 Winsorize, HodgesLehmann, MedianCI, Trim, D6448 Cochran-Armitage, MH odds ratio, Breslow-Day, D6449 PoissonCI, MultinomCI x4, D6450 ICC, D6451 KappaM Fleiss and Conger). Skew, Kurt (three methods), Gini, MeanAD, Gmean, Hmean, Entropy and CoefVar equal DescTools on Windows (oracle_desctools; Linux pending). D7215 to D7219: CCC, CronbachAlpha, CohenD (estimates and interval), MeanCI (classic and trimmed), VarCI (classic and Bonett), MeanSE and Herfindahl equal DescTools (oracle_desctools_agree, 615 values). D7243, D7244: Gini with weights and the bootstrap bca, percentile and basic intervals equal DescTools (90 values). D7119: Mode and Outlier (boxplot and hampel) equal DescTools (oracle_desctools_outlier, 126 cases). Open: the rest of the package. Was: Open (CRAN rank 320). Mid. Acceptance, equal to DescTools for the numeric functions: Gini and its intervals, BinomCI (all 15 methods), MultinomCI, PoissonCI, MedianCI, CohenKappa, KappaM, ICC, Winsorize, Trim, CochranArmitageTest, BreslowDayTest, MantelHaenszelTest, cramers V and the association measures, effect sizes, MAD, Mode, Outlier, HodgesLehmann."
-    },
-    {
       "id": "L365",
       "category": "library",
       "group": "CRAN parity",

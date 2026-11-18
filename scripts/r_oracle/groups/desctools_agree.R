@@ -51,4 +51,19 @@ for (rep in 1:10) {
     for (j in 0:2) cases[[length(cases) + 1]] <- case("a", c(12, n, sd0, R, 0.95, as.numeric(ub), x, w, j, match(ty, c("bca", "perc", "basic")) - 1), as.numeric(r[j + 1]), rel = 1e-8, abs = 1e-10)
   }
 }
+# BinomCI methods 11 to 15 (witting, pratt, midp, lik, blaker): "b2" args (12 + ..., method code 11..15, x, n, conf, part) -- code placed as args[1]
+for (rep in 1:25) {
+  n <- sample(c(10:40, 80), 1); x <- sample(c(2:(n - 2), 1, n - 1), 1); cl <- sample(c(0.9, 0.95, 0.99), 1)
+  ms2 <- c("witting", "pratt", "midp", "lik", "blaker")
+  for (m in 1:5) {
+    r <- tryCatch(suppressWarnings(BinomCI(x, n, conf.level = cl, method = ms2[m])), error = function(e) NULL)
+    if (is.null(r) || any(is.na(r))) next
+    for (j in 0:2) cases[[length(cases) + 1]] <- case("a", c(13, 10 + m, x, n, cl, j), r[1, j + 1], rel = 1e-7, abs = 1e-9)
+  }
+}
+# MAD: "a" (14, n, constant, low, high, x..., j ignored 0)
+for (rep in 1:30) {
+  n <- sample(5:40, 1); x <- round(rnorm(n, 2, 3), 3); ct <- sample(c(1.4826, 1, 1.2), 1); lw <- sample(c(0, 1), 1); hg <- if (lw == 1) 0 else sample(c(0, 1), 1)
+  cases[[length(cases) + 1]] <- case("a", c(14, n, ct, lw, hg, x), MAD(x, constant = ct, low = lw == 1, high = hg == 1), rel = 1e-12, abs = 1e-14)
+}
 emit("desctools_agree", "DescTools", list(cases))

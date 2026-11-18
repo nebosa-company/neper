@@ -16,6 +16,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let n = usize(z[1usize])
         ret dt.cohen_d1(z[2usize..2usize + n])
     }
+    if z[0usize] == 14.0f64 {
+        let mn = usize(z[1usize])
+        ret dt.mad_dt(a, z[5usize..5usize + mn], z[2usize], z[3usize] == 1.0f64, z[4usize] == 1.0f64)
+    }
+    if z[0usize] == 13.0f64 {
+        ret dt.binom_ci2(z[2usize], z[3usize], z[4usize], usize(z[1usize]), usize(z[5usize]), 123i64)
+    }
     if z[0usize] == 12.0f64 {
         let n = usize(z[1usize])
         var rng: rg.Rng = zero

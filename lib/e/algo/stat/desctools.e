@@ -1521,3 +1521,162 @@ fn gini_bca(a: *mem.Arena, r: *rg.Rng, x: []const f64, w: []const f64, unbiased:
     }
     ret ok
 }
+
+// BinomCI methods 11 witting, 12 pratt, 13 midp, 14 lik, 15 blaker (part 0 estimate, 1 lower, 2 upper); witting draws x + runif(1) after set.seed(rand)
+type BiCtx = struct { x: f64, n: f64, p: f64, conf: f64, mu: f64, bound: f64, mode: usize }
+
+fn pbinom_abscont(q: f64, size: f64, prob: f64) -> f64 {
+    let v = math.trunc[f64](q)
+    ret nb.pbinom(v - 1.0f64, size, prob, true, false) + (q - v) * nb.dbinom(v, size, prob, false)
+}
+
+fn bi_h(c: *BiCtx, t: f64) -> f64 {
+    if c.mode == 0usize { ret pbinom_abscont(c.x, c.n, t) - c.p }
+    if c.mode == 1usize { ret 0.5f64 * nb.dbinom(c.x, c.n, t, false) + nb.pbinom(c.x, c.n, t, false, false) - (1.0f64 - c.conf) / 2.0f64 }
+    if c.mode == 2usize { ret 0.5f64 * nb.dbinom(c.x, c.n, t, false) + nb.pbinom(c.x - 1.0f64, c.n, t, true, false) - (1.0f64 - c.conf) / 2.0f64 }
+    // BinDev: signed root deviance of y = t against mu, less the bound
+    let tol = 0.000000014901161193847656f64
+    var lly = 0.0f64
+    if t != 0.0f64 && t != 1.0f64 { lly = nb.dbinom(c.x, c.n, t, true) }
+    var llm = 0.0f64
+    if c.mu != 0.0f64 && c.mu != 1.0f64 { llm = nb.dbinom(c.x, c.n, c.mu, true) }
+    var res = 0.0f64
+    if math.abs[f64](t - c.mu) >= tol {
+        var sg = 1.0f64
+        if t < c.mu { sg = 0.0f64 - 1.0f64 }
+        res = sg * math.sqrt[f64](0.0f64 - 2.0f64 * (lly - llm))
+    }
+    ret res - c.bound
+}
+
+fn bi_accept(x: f64, n: f64, pp: f64) -> f64 {
+    let p1 = 1.0f64 - nb.pbinom(x - 1.0f64, n, pp, true, false)
+    let p2 = nb.pbinom(x, n, pp, true, false)
+    let a1 = p1 + nb.pbinom(nb.qbinom(p1, n, pp, true, false) - 1.0f64, n, pp, true, false)
+    let a2 = p2 + 1.0f64 - nb.pbinom(nb.qbinom(1.0f64 - p2, n, pp, true, false), n, pp, true, false)
+    if a1 < a2 { ret a1 }
+    ret a2
+}
+
+fn binom_ci2(x: f64, n: f64, conf: f64, method: usize, part: usize, rand: i64) -> f64 {
+    let alpha = 1.0f64 - conf
+    let ph = x / n
+    var lo = 0.0f64
+    var hi = 1.0f64
+    var c = BiCtx{ x: x, n: n, p: 0.0f64, conf: conf, mu: ph, bound: 0.0f64, mode: 0usize }
+    if method == 11usize {
+        var r: rg.Rng = zero
+        rg.seed(&r, rand)
+        c.x = x + rg.unif(&r)
+        c.p = 1.0f64 - alpha
+        c.mode = 0usize
+        lo = pw.zeroin[BiCtx](&c, bi_h, 0.0f64, 1.0f64, pw.uniroot_tol(), 1000i64)
+        c.p = alpha
+        hi = pw.zeroin[BiCtx](&c, bi_h, 0.0f64, 1.0f64, pw.uniroot_tol(), 1000i64)
+    } else if method == 12usize {
+        if x == 0.0f64 {
+            lo = 0.0f64
+            hi = 1.0f64 - math.pow[f64](alpha, 1.0f64 / n)
+        } else if x == 1.0f64 {
+            lo = 1.0f64 - math.pow[f64](1.0f64 - alpha / 2.0f64, 1.0f64 / n)
+            hi = 1.0f64 - math.pow[f64](alpha / 2.0f64, 1.0f64 / n)
+        } else if x == n - 1.0f64 {
+            lo = math.pow[f64](alpha / 2.0f64, 1.0f64 / n)
+            hi = math.pow[f64](1.0f64 - alpha / 2.0f64, 1.0f64 / n)
+        } else if x == n {
+            lo = math.pow[f64](alpha, 1.0f64 / n)
+            hi = 1.0f64
+        } else {
+            let z = dist.qnorm(1.0f64 - alpha / 2.0f64, 0.0f64, 1.0f64, true, false)
+            var aa = ((x + 1.0f64) / (n - x)) * ((x + 1.0f64) / (n - x))
+            var bb = 81.0f64 * (x + 1.0f64) * (n - x) - 9.0f64 * n - 8.0f64
+            var cc = (0.0f64 - 3.0f64) * z * math.sqrt[f64](9.0f64 * (x + 1.0f64) * (n - x) * (9.0f64 * n + 5.0f64 - z * z) + n + 1.0f64)
+            var dd = 81.0f64 * (x + 1.0f64) * (x + 1.0f64) - 9.0f64 * (x + 1.0f64) * (2.0f64 + z * z) + 1.0f64
+            var ee = 1.0f64 + aa * math.pow[f64]((bb + cc) / dd, 3.0f64)
+            hi = 1.0f64 / ee
+            aa = (x / (n - x - 1.0f64)) * (x / (n - x - 1.0f64))
+            bb = 81.0f64 * x * (n - x - 1.0f64) - 9.0f64 * n - 8.0f64
+            cc = 3.0f64 * z * math.sqrt[f64](9.0f64 * x * (n - x - 1.0f64) * (9.0f64 * n + 5.0f64 - z * z) + n + 1.0f64)
+            dd = 81.0f64 * x * x - 9.0f64 * x * (2.0f64 + z * z) + 1.0f64
+            ee = 1.0f64 + aa * math.pow[f64]((bb + cc) / dd, 3.0f64)
+            lo = 1.0f64 / ee
+        }
+    } else if method == 13usize {
+        c.mode = 1usize
+        if x != 0.0f64 { lo = pw.zeroin[BiCtx](&c, bi_h, 0.0f64, ph, pw.uniroot_tol(), 1000i64) }
+        c.mode = 2usize
+        if x != n { hi = pw.zeroin[BiCtx](&c, bi_h, ph, 1.0f64, pw.uniroot_tol(), 1000i64) }
+    } else if method == 14usize {
+        let z = dist.qnorm(1.0f64 - alpha * 0.5f64, 0.0f64, 1.0f64, true, false)
+        let tol = 0.000000014901161193847656f64
+        c.mode = 3usize
+        if x != 0.0f64 && tol < ph {
+            c.bound = 0.0f64 - z
+            c.mu = ph
+            let s0 = bi_h(&c, tol)
+            if s0 <= 0.0f64 {
+                var up = ph
+                if ph < tol || ph == 1.0f64 { up = 1.0f64 - tol }
+                lo = pw.zeroin[BiCtx](&c, bi_h, tol, up, pw.uniroot_tol(), 1000i64)
+            } else {
+                lo = 0.0f64 / 0.0f64
+            }
+        }
+        if x != n && ph < 1.0f64 - tol {
+            c.mu = ph
+            if ph > 1.0f64 - tol { c.mu = tol }
+            c.bound = z
+            let s1 = bi_h(&c, 1.0f64 - tol)
+            if s1 < 0.0f64 {
+                // the package's second lower-limit recomputation (its result becomes the value of the branch)
+                c.bound = 0.0f64 - z
+                c.mu = ph
+                if bi_h(&c, tol) <= 0.0f64 { hi = pw.zeroin[BiCtx](&c, bi_h, tol, ph, pw.uniroot_tol(), 1000i64) } else { hi = 0.0f64 / 0.0f64 }
+            } else {
+                c.bound = z
+                c.mu = ph
+                var lw = ph
+                if ph > 1.0f64 - tol { lw = tol }
+                hi = pw.zeroin[BiCtx](&c, bi_h, lw, 1.0f64 - tol, pw.uniroot_tol(), 1000i64)
+            }
+        }
+    } else {
+        let tolb = 0.00001f64
+        if x != 0.0f64 {
+            lo = nb.qbeta((1.0f64 - conf) / 2.0f64, x, n - x + 1.0f64, true, false)
+            while bi_accept(x, n, lo + tolb) < 1.0f64 - conf { lo = lo + tolb }
+        }
+        if x != n {
+            hi = nb.qbeta(1.0f64 - (1.0f64 - conf) / 2.0f64, x + 1.0f64, n - x, true, false)
+            while bi_accept(x, n, hi - tolb) < 1.0f64 - conf { hi = hi - tolb }
+        }
+    }
+    if part == 0usize { ret ph }
+    if part == 1usize { ret max_f(0.0f64, lo) }
+    ret min_f(1.0f64, hi)
+}
+
+// MAD(x, constant, low, high) without weights: constant times the median of |x - median(x)| (the low or high median of the deviations for an even count when asked)
+fn mad_dt(a: *mem.Arena, x: []const f64, constant: f64, low: bool, high: bool) -> f64 {
+    let (t, e1) = sorted_copy(a, x)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    let n = t.len
+    var centre = t[n / 2usize]
+    if n % 2usize == 0usize { centre = (t[n / 2usize - 1usize] + t[n / 2usize]) / 2.0f64 }
+    let (d, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        d[i] = math.abs[f64](x[i] - centre)
+        i += 1usize
+    }
+    let (ds, e3) = sorted_copy(a, d)
+    if e3 != ok { ret 0.0f64 / 0.0f64 }
+    if (low || high) && n % 2usize == 0usize {
+        var n2 = n / 2usize
+        if high { n2 += 1usize }
+        ret constant * ds[n2 - 1usize]
+    }
+    if n % 2usize == 1usize { ret constant * ds[n / 2usize] }
+    ret constant * (ds[n / 2usize - 1usize] + ds[n / 2usize]) / 2.0f64
+}

@@ -49610,3 +49610,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.aod` gains `binom_glm_link` (glm.fit's binomial IRLS with the logit or cloglog link: mustart (n y + 0.5) / (n + 1), working weights from mu.eta, deviance convergence 1e-8), `betabin_l` and `quasibin_l` with the link code. The package's `betabin` and `negbin` accept only a factor for the phi formula (a numeric term fails inside `contrasts<-`), so that variant is not a gap.
 
 **Result.** `oracle_aod` gains 12 data sets under the cloglog link (betabin coefficients, phi and log-likelihood at 1e-5 to 1e-6, quasibin coefficients and phi at 1e-7: 84 values) and equals aod on Windows. Linux pending. L480 is complete on Windows for every function in its acceptance list: betabin and negbin with their standard errors and phi by group, quasibin and quasipois, wald.test and anova, iccbin A, B and C, donner, splitbin; drs is not ported.
+
+## D7265 — DescTools: the last BinomCI methods and MAD
+
+`e.algo.stat.desctools` gains `binom_ci2` (BinomCI's witting, pratt, midp, lik and blaker: Witting's randomised x + runif(1) under set.seed(123) with R's uniroot on the absolutely continuous binomial cdf, Pratt's closed forms, the mid-p limits and the likelihood-ratio deviance limits by R's uniroot, Blaker's acceptability steps of 1e-5) and `mad_dt` (MAD without weights, with the low and high medians).
+
+**Result.** `oracle_desctools_agree` gains 125 interval values (25 cases, five methods) and 30 MAD values and equals DescTools on Windows at 1e-7 to 1e-12. With these every function in L363's acceptance list is covered and the item is closed (Linux pending).
