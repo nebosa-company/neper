@@ -4028,4 +4028,5 @@ D7238	646	aod: betabin and negbin standard errors
 D7239	617	energy: eqdist.etest with more than two samples
 D7240	697	energy: disco
 D7241	883	energy: the Poisson E-test
-D7242	695	energy: disco.between
+D7242	696	energy: disco.between
+D7243	956	DescTools: weighted Gini and its bootstrap bca interval

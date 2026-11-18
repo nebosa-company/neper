@@ -49478,3 +49478,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.energy` gains `disco_between` (method `discoB`: the between-sample statistic with the same permutation scheme as `disco`, p = (1 + count(t > t0)) / (R + 1)). The method `discoF` is the default F-ratio path already ported in D7240, and the package does not implement several factors in `disco.between`.
 
 **Result.** `oracle_energy_normal` gains 8 data sets (statistic and p value, 16 values) and equals energy on Windows. Linux pending. L459 stays partial: several factors in `disco`, the Poisson M-test, energy clustering (energy.hclust, kgroups) and the independence and multivariate-independence tests (indep.test, mvI.test, mutualIndep.test).
+
+## D7243 — DescTools: weighted Gini and its bootstrap bca interval
+
+`e.algo.stat.desctools` gains `gini_w` (the package's i.gini with weights, stable order by x, unbiased correction 1 / (1 - sum w^2)) and `gini_bca`: boot's ordinary bootstrap (`sample.int(n, n R, TRUE)` read as an R by n array under the seed), the bias constant from the share of replicates below the estimate, the acceleration from the regression empirical influence values of `boot:::empinf` (the replicates regressed on the resample frequencies over n of observations 2 to n, centred), and `norm.inter`'s interpolation of the order statistics on the normal scale.
+
+**Result.** `oracle_desctools_agree` gains 10 data sets (8 to 25 weighted observations, 300 or 500 replicates, biased and unbiased; estimate and both limits, 30 values) and equals DescTools on Windows at 1e-8. Linux pending. L363 stays partial: the remaining acceptance functions and the other interval types of Gini.

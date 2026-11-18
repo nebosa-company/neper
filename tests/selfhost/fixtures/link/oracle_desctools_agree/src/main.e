@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R desctools_agree`; the layout is at the top of scripts/r_oracle/groups/desctools_agree.R.
 
 use e.algo.stat.desctools as dt
+use e.algo.rand.r as rg
 use e.io
 use e.mem
 use e.os
@@ -14,6 +15,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if z[0usize] == 8.0f64 {
         let n = usize(z[1usize])
         ret dt.cohen_d1(z[2usize..2usize + n])
+    }
+    if z[0usize] == 12.0f64 {
+        let n = usize(z[1usize])
+        var rng: rg.Rng = zero
+        rg.seed(&rng, i64(z[2usize]))
+        if dt.gini_bca(a, &rng, z[6usize..6usize + n], z[6usize + n..6usize + 2usize * n], z[5usize] == 1.0f64, z[4usize], usize(z[3usize]), o) != ok { os.exit(9) }
+        ret o[usize(z[6usize + 2usize * n])]
     }
     if z[0usize] == 10.0f64 {
         let n = usize(z[1usize])

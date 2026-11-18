@@ -12,6 +12,8 @@ use e.algo.stat.pwr as pw
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
+use e.algo.rand.r as rg
+use e.algo.stat.olsfit as ols
 
 error TooMany
 
@@ -1350,4 +1352,170 @@ fn cohen_d_ci(d: f64, mode: usize, n: f64, nx: f64, ny: f64, alpha: f64, out: []
     out[0usize] = d
     out[1usize] = dn * cv
     out[2usize] = up * cv
+}
+
+// Gini(x, weights, unbiased) (the package's i.gini): weights normalised, x in increasing order, 2 / mean * sum w (x - mean) (F - mean F), over 1 - sum w^2 when unbiased
+fn gini_w(a: *mem.Arena, x: []const f64, w: []const f64, unbiased: bool) -> f64 {
+    let n = x.len
+    let (ord, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        ord[i] = i
+        i += 1usize
+    }
+    // stable insertion sort of the indices by x
+    i = 1usize
+    while i < n {
+        let v = ord[i]
+        var j = i
+        while j > 0usize && x[ord[j - 1usize]] > x[v] {
+            ord[j] = ord[j - 1usize]
+            j -= 1usize
+        }
+        ord[j] = v
+        i += 1usize
+    }
+    var sw = 0.0f64
+    i = 0usize
+    while i < n {
+        sw += w[i]
+        i += 1usize
+    }
+    var cum = 0.0f64
+    var wm = 0.0f64
+    var fm = 0.0f64
+    var sq = 0.0f64
+    let (fh, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i < n {
+        let wi = w[ord[i]] / sw
+        fh[i] = wi / 2.0f64 + cum
+        cum += wi
+        wm += wi * x[ord[i]]
+        fm += wi * fh[i]
+        sq += wi * wi
+        i += 1usize
+    }
+    var tot = 0.0f64
+    i = 0usize
+    while i < n {
+        let wi = w[ord[i]] / sw
+        tot += wi * (x[ord[i]] - wm) * (fh[i] - fm)
+        i += 1usize
+    }
+    var res = 2.0f64 / wm * tot
+    if unbiased { res = res * 1.0f64 / (1.0f64 - sq) }
+    ret res
+}
+
+// boot:::norm.inter on the sorted sample t at the probability alpha: the order statistic, interpolated on the normal scale
+fn norm_inter(t: []const f64, alpha: f64) -> f64 {
+    let r = f64(t.len)
+    let rk = (r + 1.0f64) * alpha
+    let k = math.trunc[f64](rk)
+    if k == rk && k > 0.0f64 && k < r { ret t[usize(k) - 1usize] }
+    if k == 0.0f64 { ret t[0usize] }
+    if k >= r { ret t[t.len - 1usize] }
+    let t1 = dist.qnorm(alpha, 0.0f64, 1.0f64, true, false)
+    let t2 = dist.qnorm(k / (r + 1.0f64), 0.0f64, 1.0f64, true, false)
+    let t3 = dist.qnorm((k + 1.0f64) / (r + 1.0f64), 0.0f64, 1.0f64, true, false)
+    let tk = t[usize(k) - 1usize]
+    let tk1 = t[usize(k)]
+    ret tk + (t1 - t2) / (t3 - t2) * (tk1 - tk)
+}
+
+// Gini(x, weights, unbiased, conf.level, R, type = "bca"): out receives (gini, lwr, upr); the bootstrap is boot's ordinary one (sample.int(n, n R, TRUE) as an R by n array) and the bca
+// adjustment uses the regression empirical influence values of boot:::empinf
+fn gini_bca(a: *mem.Arena, r: *rg.Rng, x: []const f64, w: []const f64, unbiased: bool, conf: f64, reps: usize, out: []f64) -> err {
+    let n = x.len
+    let t0 = gini_w(a, x, w, unbiased)
+    out[0usize] = t0
+    let (idx, e1) = rg.sample_int(a, r, i64(n), i64(n * reps), true)
+    if e1 != ok { ret e1 }
+    let (t, e2) = mem.alloc[f64](a, reps)
+    let (xb, e3) = mem.alloc[f64](a, n)
+    let (wb, e4) = mem.alloc[f64](a, n)
+    let (design, e5) = mem.alloc[f64](a, reps * n)
+    if e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret mem.Full }
+    var below = 0usize
+    var rep = 0usize
+    while rep < reps {
+        var c = 0usize
+        while c < n {
+            let ii = usize(idx[rep + reps * c] - 1i64)
+            xb[c] = x[ii]
+            wb[c] = w[ii]
+            c += 1usize
+        }
+        t[rep] = gini_w(a, xb, wb, unbiased)
+        if t[rep] < t0 { below += 1usize }
+        rep += 1usize
+    }
+    // regression of t on the resample frequencies / n of observations 2..n, with an intercept
+    let (cnt, e6) = mem.alloc[f64](a, reps * n)
+    if e6 != ok { ret mem.Full }
+    var q = 0usize
+    while q < reps * n {
+        cnt[q] = 0.0f64
+        q += 1usize
+    }
+    rep = 0usize
+    while rep < reps {
+        var c = 0usize
+        while c < n {
+            let ii = usize(idx[rep + reps * c] - 1i64)
+            cnt[ii * reps + rep] += 1.0f64
+            c += 1usize
+        }
+        rep += 1usize
+    }
+    rep = 0usize
+    while rep < reps {
+        design[rep] = 1.0f64
+        var j = 1usize
+        while j < n {
+            design[j * reps + rep] = cnt[j * reps + rep] / f64(n)
+            j += 1usize
+        }
+        rep += 1usize
+    }
+    let (f, fe) = ols.fit_tol(a, design, reps, n, t, 0.00000000001f64)
+    if fe != ok { ret fe }
+    let (l, e7) = mem.alloc[f64](a, n)
+    if e7 != ok { ret mem.Full }
+    var lm = 0.0f64
+    l[0usize] = 0.0f64
+    var j = 1usize
+    while j < n {
+        l[j] = f.coef[j]
+        lm += l[j]
+        j += 1usize
+    }
+    lm = lm / f64(n)
+    var s2 = 0.0f64
+    var s3 = 0.0f64
+    j = 0usize
+    while j < n {
+        let v = l[j] - lm
+        s2 += v * v
+        s3 += v * v * v
+        j += 1usize
+    }
+    let acc = s3 / (6.0f64 * math.pow[f64](s2, 1.5f64))
+    let w0 = dist.qnorm(f64(below) / f64(reps), 0.0f64, 1.0f64, true, false)
+    // sorted copy of t
+    let (ts, e8) = sorted_copy(a, t)
+    if e8 != ok { ret e8 }
+    var side = 0usize
+    while side < 2usize {
+        var al = (1.0f64 - conf) / 2.0f64
+        if side == 1usize { al = (1.0f64 + conf) / 2.0f64 }
+        let za = dist.qnorm(al, 0.0f64, 1.0f64, true, false)
+        let adj = dist.pnorm(w0 + (w0 + za) / (1.0f64 - acc * (w0 + za)), 0.0f64, 1.0f64, true, false)
+        out[1usize + side] = norm_inter(ts, adj)
+        side += 1usize
+    }
+    ret ok
 }
