@@ -49922,3 +49922,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.wrs2` gains `yuenbt` (the percentile-t bootstrap of Yuen's test on the centred samples, with and without the symmetric side) and `pb2gen` (the percentile bootstrap of a difference of estimators: mom, median or mean), drawing from R's generator through `e.algo.rand.r` (`sample_int`, with R's rejection sampling) so that a seeded run reproduces R's resamples. The resample matrix is filled column-major as R's `matrix(sample(...), nrow = nboot)` does, and the bootstrap rank cut-offs follow R (`round` half to even for pb2gen). New helpers `mad_of`, `mom_of`, `round_even`, `boot_matrix`.
 
 **Result.** `oracle_wrs2_boot` equals WRS2 under set.seed on 126 values (6 two-sample draws, nboot 199 to 399) on Windows, to 1e-8. Linux pending. L503 stays partial: ancova and mcp2atm remain.
+
+## D7313 — WRS2: mcp2atm contrast tests
+
+`e.algo.stat.wrs2` gains `mcp2atm`: the lincon1 tests of the A, B and AB effects of a J by K design (every pairwise contrast of the levels of A, of B, and the products of an A pair with a B pair, the B pair varying fastest, as `con2way` orders them): the trimmed-mean contrast, its standard error from the Winsorised variances, the Welch degrees of freedom and the two-sided p value. The studentised-maximum-modulus confidence limits (smmcrit) need its critical-value table and are not ported.
+
+**Result.** `oracle_wrs2_mcp2atm` equals WRS2 on 64 values (contrast estimate and p value for 2 by 3, 3 by 2, 3 by 3 and 2 by 2 designs) on Windows. Linux pending. L503 stays partial: ancova and the mcp2atm confidence limits remain.

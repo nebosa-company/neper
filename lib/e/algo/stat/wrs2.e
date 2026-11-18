@@ -976,3 +976,117 @@ fn est_of(a: *mem.Arena, x: []const f64, est: usize) -> f64 {
     if est == 1usize { ret median_of(a, x) }
     ret mean_of(x)
 }
+
+// ---- mcp2atm: lincon1's tests of the A, B and AB contrasts of a J by K design (all pairwise level contrasts, the AB ones the products of an A pair and a B pair,
+// the B pair varying fastest). The cells are in R's order (cell (j, k) is group j K + k, 0-based). The test, the standard error, the degrees of freedom and the
+// two-sided p value of each contrast; the studentised-maximum-modulus intervals (smmcrit) are not ported.
+
+// the number of contrasts of the effect (0 A, 1 B, 2 AB)
+fn mcp_count(jn: usize, kn: usize, which: usize) -> usize {
+    let pa = jn * (jn - 1usize) / 2usize
+    let pb = kn * (kn - 1usize) / 2usize
+    if which == 0usize { ret pa }
+    if which == 1usize { ret pb }
+    ret pa * pb
+}
+
+// the contrast coefficient of cell (j, k) in contrast c of the effect
+fn mcp_coef(jn: usize, kn: usize, which: usize, c: usize, j: usize, k: usize) -> f64 {
+    var ca = c
+    var cb = 0usize
+    if which == 1usize {
+        cb = c
+    }
+    if which == 2usize {
+        let pb = kn * (kn - 1usize) / 2usize
+        ca = c / pb
+        cb = c % pb
+    }
+    var av = 1.0f64
+    var bv = 1.0f64
+    if which != 1usize {
+        // the ca-th pair (j1 < j2) of A levels
+        var n = 0usize
+        var j1 = 0usize
+        var f = 0.0f64
+        while j1 < jn {
+            var j2 = j1 + 1usize
+            while j2 < jn {
+                if n == ca {
+                    if j == j1 { f = 1.0f64 }
+                    if j == j2 { f = 0.0f64 - 1.0f64 }
+                }
+                n += 1usize
+                j2 += 1usize
+            }
+            j1 += 1usize
+        }
+        av = f
+    }
+    if which != 0usize {
+        var n = 0usize
+        var k1 = 0usize
+        var f = 0.0f64
+        while k1 < kn {
+            var k2 = k1 + 1usize
+            while k2 < kn {
+                if n == cb {
+                    if k == k1 { f = 1.0f64 }
+                    if k == k2 { f = 0.0f64 - 1.0f64 }
+                }
+                n += 1usize
+                k2 += 1usize
+            }
+            k1 += 1usize
+        }
+        bv = f
+    }
+    ret av * bv
+}
+
+fn mcp2atm(a: *mem.Arena, data: []const f64, sizes: []const usize, jn: usize, kn: usize, tr: f64, which: usize) -> ([]Pair, err) {
+    let nc = mcp_count(jn, kn, which)
+    let p = jn * kn
+    let (out, e) = mem.alloc[Pair](a, nc)
+    if e != ok { ret (out, e) }
+    let (w, e1) = mem.alloc[f64](a, p)
+    let (h, e2) = mem.alloc[f64](a, p)
+    let (xb, e3) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok { ret (out, Malformed) }
+    var off = 0usize
+    var g = 0usize
+    while g < p {
+        let x = data[off..off + sizes[g]]
+        let n = f64(sizes[g])
+        h[g] = n - 2.0f64 * math.floor[f64](tr * n)
+        w[g] = ((n - 1.0f64) * winvar(a, x, tr)) / (h[g] * (h[g] - 1.0f64))
+        xb[g] = tmean(a, x, tr)
+        off += sizes[g]
+        g += 1usize
+    }
+    var c = 0usize
+    while c < nc {
+        var psi = 0.0f64
+        var s2 = 0.0f64
+        var s4 = 0.0f64
+        var j = 0usize
+        while j < jn {
+            var k = 0usize
+            while k < kn {
+                let cf = mcp_coef(jn, kn, which, c, j, k)
+                let gi = j * kn + k
+                psi += cf * xb[gi]
+                s2 += cf * cf * w[gi]
+                s4 += cf * cf * cf * cf * w[gi] * w[gi] / (h[gi] - 1.0f64)
+                k += 1usize
+            }
+            j += 1usize
+        }
+        let se = math.sqrt[f64](s2)
+        let test = psi / se
+        let df = s2 * s2 / s4
+        out[c] = Pair { psihat: psi, test: test, se: se, df: df, p: 2.0f64 * (1.0f64 - nb.pt(math.abs[f64](test), df, true, false)), padj: 0.0f64 }
+        c += 1usize
+    }
+    ret (out, ok)
+}
