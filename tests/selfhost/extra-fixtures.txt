@@ -489,3 +489,4 @@ oracle_energy_normal
 oracle_desctools_agree
 oracle_survdiff
 oracle_survfit
+oracle_survreg
