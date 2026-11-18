@@ -48782,3 +48782,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.sampling` has `up_brewer`: the units with pik in (eps, 1 - eps) are drawn one step at a time, each step's probabilities p_j = (1 - s_j) pik_j ((n - a) - pik_j) / ((n - a) - pik_j (n - i + 1)) normalised and cumulated, and the first unit whose cumulative probability exceeds one runif(1) draw is selected (the last one when none is). The other units keep their pik, as in R. The number of steps is floor(sum(pik)); the sum is compensated because R accumulates it in extended precision, and a plain sum of 4 that comes out as 3.9999999999999996 dropped a step in the first run.
 
 **Result.** `oracle_sampling_brewer` equals sampling::UPbrewer under set.seed on 20 samples (sizes 6 to 16, random inclusion probabilities from inclusionprobabilities) in the sample size and the sum of the selected indices, on Windows; `oracle_sampling` still passes. Linux pending. L508 stays partial: UPmidzuno, UPmaxentropy, the strata and cluster designs, calibration and the joint inclusion probabilities are open.
+
+## D7127 — sampling: UPmidzuno
+
+`e.algo.stat.sampling` has `up_midzuno`, which is sampling's definition: 1 - UPtille(1 - pik), the Tille elimination sample of the complements (the existing `up_tille`), complemented.
+
+**Result.** `oracle_sampling_midzuno` equals sampling::UPmidzuno under set.seed on 20 samples (the same generator as D7126) in the sample size and the sum of the selected indices, on Windows. Linux pending. L508 stays partial: UPmaxentropy, the strata and cluster designs, calibration and the joint inclusion probabilities are open.

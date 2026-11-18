@@ -308,3 +308,23 @@ fn up_brewer(a: *mem.Arena, g: *rr.Rng, pik: []const f64, eps: f64, s: []f64) ->
     }
     ret ok
 }
+
+// UPmidzuno(pik, eps) = 1 - UPtille(1 - pik, eps): the sample of the complements drawn by Tille's design, then complemented
+fn up_midzuno(a: *mem.Arena, g: *rr.Rng, pik: []const f64, s: []f64) -> err {
+    let (q, e1) = mem.alloc[f64](a, pik.len)
+    let (sq, e2) = mem.alloc[f64](a, pik.len)
+    if e1 != ok || e2 != ok { ret Malformed }
+    var i = 0usize
+    while i < pik.len {
+        q[i] = 1.0f64 - pik[i]
+        i += 1usize
+    }
+    let e3 = up_tille(a, g, q, sq)
+    if e3 != ok { ret e3 }
+    i = 0usize
+    while i < pik.len {
+        s[i] = 1.0f64 - sq[i]
+        i += 1usize
+    }
+    ret ok
+}

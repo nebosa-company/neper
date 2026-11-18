@@ -804,7 +804,7 @@
       "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6191). inclusionprobabilities, UPsystematic, UPpoisson, srswor, UPrandomsystematic, UPtille draws and the Horvitz-Thompson estimator equal sampling on Windows (oracle_sampling; Linux pending). D7126: UPbrewer equal to sampling under set.seed (oracle_sampling_brewer, 20 samples). Open: UPmidzuno, UPmaxentropy, strata and clusters, calibration, joint inclusion probabilities, variance estimators. Was: Open (CRAN rank 980). Mid. Needs the R RNG streams. Acceptance, equal to sampling value for value under set.seed: srswor, srswr, UPsystematic, UPtille, UPmidzuno, UPbrewer, UPmaxentropy, balancedsampling and fastflightcube, strata, cluster, calib, inclusionprobabilities, rake."
+      "evidence": "Partial (D6191). inclusionprobabilities, UPsystematic, UPpoisson, srswor, UPrandomsystematic, UPtille draws and the Horvitz-Thompson estimator equal sampling on Windows (oracle_sampling; Linux pending). D7126: UPbrewer equal to sampling under set.seed (oracle_sampling_brewer, 20 samples). D7127: UPmidzuno equal to sampling (oracle_sampling_midzuno, 20 samples). Open: UPmaxentropy, strata and clusters, calibration, joint inclusion probabilities, variance estimators. Was: Open (CRAN rank 980). Mid. Needs the R RNG streams. Acceptance, equal to sampling value for value under set.seed: srswor, srswr, UPsystematic, UPtille, UPmidzuno, UPbrewer, UPmaxentropy, balancedsampling and fastflightcube, strata, cluster, calib, inclusionprobabilities, rake."
     },
     {
       "id": "L509",
