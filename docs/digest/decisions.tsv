@@ -4033,4 +4033,5 @@ D7243	957	DescTools: weighted Gini and its bootstrap bca interval
 D7244	583	DescTools: the percentile and basic Gini intervals
 D7245	836	gamlss.dist: SST, PE2, NOF and ZAIG
 D7246	719	gamlss.dist: IG, ZAIG, GB1 and SIMPLEX quantiles
-D7247	727	bayestestR: rope with a credible interval and equivalence_test
+D7247	728	bayestestR: rope with a credible interval and equivalence_test
+D7248	817	performance: check_heteroscedasticity and check_collinearity

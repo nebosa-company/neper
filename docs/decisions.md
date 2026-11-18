@@ -49508,3 +49508,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.bayestestr` gains `rope_ci` (the share of the sample inside the ETI or HDI that lies in, above and below the ROPE, with the interval limits) and `equivalence_decision` (Rejected when the percentage is 0, Accepted when 1 for ci below 1; below 0.025 and above 0.975 for ci = 1, else Undecided).
 
 **Result.** `oracle_bayestestr` gains 30 samples (ci 0.5, 0.8, 0.95 and 1, both interval methods; 180 values) and equals bayestestR on Windows. Linux pending. HDI at ci = 1 is not defined by the port (the window is the whole sample). L339 stays partial: map_estimate, bayesfactor_savagedickey, si, performance's remaining indices, parameters.
+
+## D7248 — performance: check_heteroscedasticity and check_collinearity
+
+`e.algo.stat.performancepkg` gains `heteroscedasticity_p` (the Breusch-Pagan p value the package computes for an lm: the regression sum of squares of r^2 / (RSS / n) on the fitted values, halved, against a chi-square on one degree of freedom) and `vif` (1 / (1 - R^2) of a predictor regressed on the others and an intercept, the diagonal of the inverse correlation matrix).
+
+**Result.** `oracle_performancepkg` gains 25 heteroscedastic regressions (the p value) and the VIF of every predictor in them (104 values) and equals performance on Windows at 1e-8. Linux pending. L339 stays partial: check_normality, check_outliers, the Nakagawa, Tjur and Cox-Snell R2, icc, model_performance, map_estimate, bayesfactor_savagedickey, si, parameters.

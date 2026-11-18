@@ -4,6 +4,7 @@
 
 use e.algo.stat.carlmtest as ols
 use e.math
+use e.math.nmath as nm
 use e.mem
 
 // the index `which` of the lm of y on x (n by p, intercept column included): 0 r2, 1 r2_adjusted, 2 rmse, 3 mae, 4 mse, 5 sigma, 6 loglik, 7 aic, 8 aicc, 9 bic
@@ -42,4 +43,78 @@ fn lm_index(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, w
     if which == 7usize { ret aic }
     if which == 8usize { ret aic + 2.0f64 * kf * (kf + 1.0f64) / (nf - kf - 1.0f64) }
     ret 0.0f64 - 2.0f64 * ll + math.log[f64](nf) * kf
+}
+
+// check_heteroscedasticity (Breusch-Pagan on an lm): the p value, the chi-square being the regression sum of squares of r^2 / (RSS / n) on the fitted values, over 2, on one degree of freedom
+fn heteroscedasticity_p(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> f64 {
+    let (f, e) = ols.ols(a, x, y, n, p)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let nf = f64(n)
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f.resid[i] * f.resid[i]
+        i += 1usize
+    }
+    let s2 = rss / nf
+    var mf = 0.0f64
+    var mu = 0.0f64
+    i = 0usize
+    while i < n {
+        mf += y[i] - f.resid[i]
+        mu += f.resid[i] * f.resid[i] / s2
+        i += 1usize
+    }
+    mf = mf / nf
+    mu = mu / nf
+    var sxy = 0.0f64
+    var sxx = 0.0f64
+    i = 0usize
+    while i < n {
+        let d = (y[i] - f.resid[i]) - mf
+        sxy += d * (f.resid[i] * f.resid[i] / s2 - mu)
+        sxx += d * d
+        i += 1usize
+    }
+    ret nm.pchisq(sxy * sxy / sxx / 2.0f64, 1.0f64, false, false)
+}
+
+// check_collinearity: the variance inflation factor of predictor j (x is n by q row-major, no intercept), 1 / (1 - R^2) of x_j on the other predictors and an intercept
+fn vif(a: *mem.Arena, x: []const f64, n: usize, q: usize, j: usize) -> f64 {
+    let (d, e1) = mem.alloc[f64](a, n * q)
+    let (yj, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        d[i * q] = 1.0f64
+        var c = 0usize
+        var w = 1usize
+        while c < q {
+            if c != j {
+                d[i * q + w] = x[i * q + c]
+                w += 1usize
+            }
+            c += 1usize
+        }
+        yj[i] = x[i * q + j]
+        i += 1usize
+    }
+    let (f, e) = ols.ols(a, d, yj, n, q)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var rss = 0.0f64
+    var m = 0.0f64
+    i = 0usize
+    while i < n {
+        rss += f.resid[i] * f.resid[i]
+        m += yj[i]
+        i += 1usize
+    }
+    m = m / f64(n)
+    var tss = 0.0f64
+    i = 0usize
+    while i < n {
+        tss += (yj[i] - m) * (yj[i] - m)
+        i += 1usize
+    }
+    ret tss / rss
 }

@@ -10,4 +10,16 @@ for (rep in 1:25) {
   v <- c(r2(m)$R2, r2(m)$R2_adjusted, performance_rmse(m), mean(abs(resid(m))), performance_mse(m), sigma(m), as.numeric(logLik(m)), performance_aic(m), performance_aicc(m), BIC(m))
   for (w in 0:9) add("lm", c(w, n, p, y, as.vector(t(X))), as.numeric(v[w + 1]))
 }
+# check_heteroscedasticity ("het": n, p, y, x row-major with the intercept) and check_collinearity ("vif": n, q, j, x row-major without it)
+for (rep in 1:25) {
+  n <- sample(30:120, 1); p <- sample(3:5, 1); X <- cbind(1, matrix(round(rnorm(n * (p - 1)), 4), n, p - 1))
+  X[, 3] <- round(X[, 2] * runif(1, 0.3, 1.2) + rnorm(n, 0, 0.6), 4)
+  y <- round(as.vector(X %*% runif(p, -1, 1)) + rnorm(n) * (1 + 0.5 * abs(X[, 2])), 4)
+  m <- lm(y ~ X[, -1, drop = FALSE])
+  cases[[length(cases) + 1]] <- case("het", c(n, p, y, as.vector(t(X))), as.numeric(check_heteroscedasticity(m)), rel = 1e-8, abs = 1e-12)
+  q <- p - 1; xx <- X[, -1, drop = FALSE]; dfm <- as.data.frame(xx); names(dfm) <- paste0("v", 1:q)
+  yy <- y; mm <- lm(as.formula(paste("yy ~", paste(names(dfm), collapse = " + "))), data = cbind(dfm, yy = yy))
+  cc <- suppressMessages(check_collinearity(mm))
+  for (j in 1:q) cases[[length(cases) + 1]] <- case("vif", c(n, q, j - 1, as.vector(t(xx))), as.numeric(cc$VIF[j]), rel = 1e-8, abs = 1e-12)
+}
 emit("performancepkg", "performance", list(cases))
