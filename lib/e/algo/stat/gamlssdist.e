@@ -176,3 +176,10 @@ fn ppareto1(x: f64, mu: f64) -> f64 {
 }
 
 fn qpareto1(p: f64, mu: f64) -> f64 { ret math.pow[f64](1.0f64 - p, 0.0f64 - 1.0f64 / mu) - 1.0f64 }
+
+// the normal family NO of gamlss.dist (mean mu, sd sigma): dnorm, pnorm and qnorm of the base distribution
+fn dno(x: f64, mu: f64, sigma: f64) -> f64 { ret dist.dnorm(x, mu, sigma, false) }
+
+fn pno(x: f64, mu: f64, sigma: f64) -> f64 { ret dist.pnorm(x, mu, sigma, true, false) }
+
+fn qno(p: f64, mu: f64, sigma: f64) -> f64 { ret dist.qnorm(p, mu, sigma, true, false) }

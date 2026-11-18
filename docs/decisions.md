@@ -48848,3 +48848,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.gamlssdist` has PARETO1 with shape mu: density mu (1 + x)^(-mu - 1) for x > 0, distribution 1 - (1 + x)^(-mu) and quantile (1 - p)^(-1 / mu) - 1.
 
 **Result.** `oracle_gamlss_exp` now covers EXP, RG, PARETO2 and PARETO1 (360 values) and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7138 — gamlss.dist: the NO (normal) family
+
+`e.algo.stat.gamlssdist` has NO with mean mu and sd sigma: the density, distribution and quantile of the base normal (`e.math.dist`).
+
+**Result.** `oracle_gamlss_exp` now covers EXP, RG, PARETO2, PARETO1 and NO (450 values) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: many families remain, plus random numbers, moments and the links.
