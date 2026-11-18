@@ -337,3 +337,55 @@ fn qbe(p: f64, mu: f64, sigma: f64) -> f64 {
     let a = mu * (1.0f64 - sigma * sigma) / (sigma * sigma)
     ret nb.qbeta(p, a, a * (1.0f64 - mu) / mu, true, false)
 }
+
+// LNO: log-normal after the Box-Cox transform with fixed power nu
+fn lno_z(x: f64, nu: f64) -> f64 {
+    if nu != 0.0f64 { ret (math.pow[f64](x, nu) - 1.0f64) / nu }
+    ret math.log[f64](x)
+}
+
+fn dlno(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let z = lno_z(x, nu)
+    ret math.exp[f64](0.0f64 - 0.5f64 * math.log[f64](2.0f64 * pi()) - math.log[f64](sigma) - 0.5f64 * (z - mu) * (z - mu) / (sigma * sigma) + (nu - 1.0f64) * math.log[f64](x))
+}
+
+fn plno(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret dist.pnorm(lno_z(x, nu), mu, sigma, true, false)
+}
+
+fn qlno(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    let z = mu + sigma * dist.qnorm(p, 0.0f64, 1.0f64, true, false)
+    if nu != 0.0f64 { ret math.pow[f64](nu * z + 1.0f64, 1.0f64 / nu) }
+    ret math.exp[f64](z)
+}
+
+// GG: generalised gamma of gamlss.dist (a gamma of (x / mu)^nu; the log-normal in the limit nu -> 0)
+fn dgg(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    if math.abs[f64](nu) > 0.000001f64 {
+        let z = math.pow[f64](x / mu, nu)
+        ret dga(z, 1.0f64, sigma * math.abs[f64](nu)) * math.abs[f64](nu) * z / x
+    }
+    let l = math.log[f64](x) - math.log[f64](mu)
+    ret math.exp[f64](0.0f64 - math.log[f64](x) - 0.5f64 * math.log[f64](2.0f64 * pi()) - math.log[f64](sigma) - l * l / (2.0f64 * sigma * sigma))
+}
+
+fn pgg(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if math.abs[f64](nu) > 0.000001f64 {
+        let z = math.pow[f64](x / mu, nu)
+        let s = sigma * math.abs[f64](nu)
+        ret nm.pgamma(z, 1.0f64 / (s * s), s * s, nu > 0.0f64, false)
+    }
+    ret pno(math.log[f64](x), math.log[f64](mu), sigma)
+}
+
+fn qgg(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if math.abs[f64](nu) > 0.000001f64 {
+        var pp = p
+        if nu < 0.0f64 { pp = 1.0f64 - p }
+        ret mu * math.pow[f64](qga(pp, 1.0f64, sigma * math.abs[f64](nu)), 1.0f64 / nu)
+    }
+    ret math.exp[f64](qno(p, math.log[f64](mu), sigma))
+}

@@ -48902,3 +48902,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.gamlssdist` gains dbe, pbe and qbe: the beta with mean mu and scale sigma (shapes a = mu (1 - sigma^2) / sigma^2 and b = a (1 - mu) / mu) over `nmath_beta`, with the package's edge handling (0 below zero and at or above one, the quantile snapped to 0 or 1 within 1e-10).
 
 **Result.** `oracle_gamlss_exp` has 1320 values across 15 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7147 — gamlss.dist: the LNO and GG families
+
+`e.algo.stat.gamlssdist` gains LNO (log-normal after a Box-Cox transform with fixed power nu: dlno, plno, qlno) and GG (generalised gamma: dgg, pgg, qgg; a gamma of (x / mu)^nu with scale sigma |nu|, the distribution taken on the upper tail for nu < 0 and the log-normal in the limit |nu| <= 1e-6). R requires mu > 0 for LNO, so the oracle draws it positive.
+
+**Result.** `oracle_gamlss_exp` has 1491 values across 17 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial. A first run of this fixture passed against a stale golden because the generator had failed; always check the generator's case count before trusting a pass.
