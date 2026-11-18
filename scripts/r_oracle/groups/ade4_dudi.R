@@ -42,4 +42,22 @@ one2(4, x1, fc, 2); one2(5, x1, fc, 2)
 fc6 <- c(0, 1, 0, 1, 0, 1, 2, 2, 2, 0, 1)
 x6 <- matrix(rnorm(11 * 6), 11, 6)
 one2(4, x6, fc6, 2); one2(5, x6, fc6, 3)
+# coinertia of two scaled PCAs: args (6, n, px, nf, what, idx, X table, Y table ncol py = args via nf slot is not free, so py rides first after the table): the layout is
+# (6, n, px, nf, what, idx, py, X row-major, Y row-major); what 0 eig, 1 c1, 2 l1, 3 lX, 4 lY, 5 rank, 6 RV
+oneci <- function(x, y, nf) {
+  n <- nrow(x); px <- ncol(x); py <- ncol(y)
+  dx <- dudi.pca(as.data.frame(x), scannf = FALSE, nf = 3); dy <- dudi.pca(as.data.frame(y), scannf = FALSE, nf = 3)
+  r <- coinertia(dx, dy, scannf = FALSE, nf = nf)
+  flat <- c(py, as.vector(t(x)), as.vector(t(y)))
+  hdr <- function(what, idx) c(6, n, px, nf, what, idx, flat)
+  for (k in seq_along(r$eig)) cases[[length(cases) + 1]] <<- case("d", hdr(0, k - 1), r$eig[k], rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <<- case("d", hdr(5, 0), r$rank, rel = 0, abs = 0)
+  cases[[length(cases) + 1]] <<- case("d", hdr(6, 0), r$RV, rel = 1e-8, abs = 1e-12)
+  mats <- list(as.matrix(r$c1), as.matrix(r$l1), as.matrix(r$lX), as.matrix(r$lY))
+  for (w in 1:4) { m <- mats[[w]]; v <- as.vector(t(m)); for (k in seq_along(v)) cases[[length(cases) + 1]] <<- case("d", hdr(w, k - 1), v[k], rel = 1e-7, abs = 1e-10) }
+}
+xa <- matrix(rnorm(12 * 4), 12, 4); ya <- matrix(rnorm(12 * 3), 12, 3) + 0.5 * xa[, 1:3]
+oneci(xa, ya, 2)
+xb <- matrix(rnorm(10 * 3), 10, 3); yb <- matrix(rnorm(10 * 5), 10, 5) + xb[, c(1, 2, 3, 1, 2)]
+oneci(xb, yb, 3)
 emit("ade4_dudi", "ade4", list(cases))

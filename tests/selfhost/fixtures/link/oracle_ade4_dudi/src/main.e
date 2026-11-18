@@ -15,6 +15,29 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nf = usize(z[3usize])
     let what = usize(z[4usize])
     let idx = usize(z[5usize])
+    if kind == 6usize {
+        let py = usize(z[6usize])
+        let xt = z[7usize..7usize + n * p]
+        let yt = z[7usize + n * p..7usize + n * p + n * py]
+        let (t1, f1) = mem.alloc[f64](a, n * p)
+        let (l1, f2) = mem.alloc[f64](a, n)
+        let (c1, f3) = mem.alloc[f64](a, p)
+        let (t2, f4) = mem.alloc[f64](a, n * py)
+        let (l2, f5) = mem.alloc[f64](a, n)
+        let (c2, f6) = mem.alloc[f64](a, py)
+        if f1 != ok || f2 != ok || f3 != ok || f4 != ok || f5 != ok || f6 != ok { os.exit(7) }
+        ad.pca_prep(a, xt, n, p, true, true, t1, l1, c1)
+        ad.pca_prep(a, yt, n, py, true, true, t2, l2, c2)
+        let (ci, ce) = ad.coinertia(a, t1, t2, n, p, py, l1, c1, c2, nf)
+        if ce != ok { os.exit(8) }
+        if what == 0usize { ret ci.d.eig[idx] }
+        if what == 1usize { ret ci.d.c1[idx] }
+        if what == 2usize { ret ci.d.l1[idx] }
+        if what == 3usize { ret ci.lx[idx] }
+        if what == 4usize { ret ci.ly[idx] }
+        if what == 5usize { ret f64(ci.d.rank) }
+        ret ci.rv
+    }
     let x = z[6usize..6usize + n * p]
     var d: ad.Dudi = zero
     var e = ok

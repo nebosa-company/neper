@@ -3936,4 +3936,5 @@ D7146	471	gamlss.dist: the BE (beta) family
 D7147	705	gamlss.dist: the LNO and GG families
 D7148	904	ade4: as.dudi, dudi.pca and dudi.coa
 D7149	530	ade4: dudi.acm
-D7150	775	ade4: between-class and within-class analyses
+D7150	776	ade4: between-class and within-class analyses
+D7151	588	ade4: coinertia

@@ -48926,3 +48926,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.ade4` gains `bca` (the analysis of the class means weighted by the class weights, with the between-over-total inertia ratio) and `wca` (the table minus its class means), plus `pca_prep` (the table dudi.pca hands to as.dudi) and `class_means`. R's `sum()` accumulates in long double, so the centring, the scale and the class means use Neumaier compensated sums; with plain double sums the second within-class axis came out with the opposite sign, because LAPACK's eigenvector sign follows a twisted-factorisation choice that an ulp can flip.
 
 **Result.** `oracle_ade4_dudi` has 724 values (a bca and a wca on a 9 by 4 and an 11 by 6 table) and equals ade4 on Windows. Linux pending. L381 stays partial.
+
+## D7151 — ade4: coinertia
+
+`e.algo.stat.ade4` gains `coinertia` for two tables sharing row weights: the analysis of t(Y) diag(lw) X with column weights cwx and row weights cwy, the row scores of both tables and the RV coefficient. Only the branch with at least one table having no more columns than rows is ported (the other branch takes a non-symmetric eigen decomposition and is refused with an error).
+
+**Result.** `oracle_ade4_dudi` has 880 values (two coinertias, 12 by 4 against 12 by 3 and 10 by 3 against 10 by 5) and equals ade4 on Windows. Linux pending. L381 stays partial.

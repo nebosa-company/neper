@@ -415,3 +415,79 @@ fn dudi_acm(a: *mem.Arena, codes: []const f64, n: usize, nv: usize, nf: usize) -
     let (d, ed) = as_dudi(a, t, n, total, lw, cw, nf, 0.0000001f64)
     ret (d, ed)
 }
+
+type Coin = struct { d: Dudi, lx: []f64, ly: []f64, rv: f64 }
+
+// coinertia (the branch with at least one table having no more columns than rows): the analysis of t(Ytab) diag(lw) Xtab with column weights cwx
+// and row weights cwy; lx and ly are the row scores of the two tables; rv is the RV coefficient. The tables share the n row weights lw.
+fn coinertia(a: *mem.Arena, xt: []const f64, yt: []const f64, n: usize, px: usize, py: usize, lw: []const f64, cwx: []const f64, cwy: []const f64, nf0: usize) -> (Coin, err) {
+    var out: Coin = zero
+    if n < px && n < py { ret (out, Malformed) }
+    let (dx, e1) = as_dudi(a, xt, n, px, lw, cwx, 2usize, 0.0000001f64)
+    let (dy, e2) = as_dudi(a, yt, n, py, lw, cwy, 2usize, 0.0000001f64)
+    if e1 != ok || e2 != ok { ret (out, Malformed) }
+    let (tc, e3) = mem.alloc[f64](a, py * px)
+    if e3 != ok { ret (out, Malformed) }
+    var r = 0usize
+    while r < py {
+        var c = 0usize
+        while c < px {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += yt[i * py + r] * (xt[i * px + c] * lw[i])
+                i += 1usize
+            }
+            tc[r * px + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    var nf = nf0
+    if nf > dx.rank { nf = dx.rank }
+    if nf > dy.rank { nf = dy.rank }
+    let (d, e4) = as_dudi(a, tc, py, px, cwy, cwx, nf, 0.0000001f64)
+    if e4 != ok { ret (out, e4) }
+    out.d = d
+    let (lx, e5) = mem.alloc[f64](a, n * d.nf)
+    let (ly, e6) = mem.alloc[f64](a, n * d.nf)
+    if e5 != ok || e6 != ok { ret (out, Malformed) }
+    var k = 0usize
+    while k < d.nf {
+        var i = 0usize
+        while i < n {
+            var sx = 0.0f64
+            var j = 0usize
+            while j < px {
+                sx += xt[i * px + j] * (d.c1[j * d.nf + k] * cwx[j])
+                j += 1usize
+            }
+            var sv = 0.0f64
+            j = 0usize
+            while j < py {
+                sv += yt[i * py + j] * (d.l1[j * d.nf + k] * cwy[j])
+                j += 1usize
+            }
+            lx[i * d.nf + k] = sx
+            ly[i * d.nf + k] = sv
+            i += 1usize
+        }
+        k += 1usize
+    }
+    out.lx = lx
+    out.ly = ly
+    var sxx = 0.0f64
+    var q = 0usize
+    while q < dx.rank {
+        sxx += dx.eig[q] * dx.eig[q]
+        q += 1usize
+    }
+    var syy = 0.0f64
+    q = 0usize
+    while q < dy.rank {
+        syy += dy.eig[q] * dy.eig[q]
+        q += 1usize
+    }
+    out.rv = eig_sum(&d) / math.sqrt[f64](sxx) / math.sqrt[f64](syy)
+    ret (out, ok)
+}
