@@ -1,5 +1,5 @@
 # gamlss.dist EXP (dEXP, pEXP, qEXP with mu) and RG (dRG, pRG, qRG with mu and sigma). Args: (fn, mu, sigma, x, which): fn 0 density, 1
-# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 (x is p for fn 2, 5 and 8). sigma is unused by EXP.
+# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 (x is p for fn 2, 5, 8 and 11). sigma is unused by EXP.
 suppressMessages(library(gamlss.dist))
 cases <- list()
 add <- function(fn, args, want, rel = 1e-10, abs = 1e-14) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
@@ -17,5 +17,8 @@ for (rep in 1:30) {
   add("ex", c(6, pm, ps, px, 0), dPARETO2(px, mu = pm, sigma = ps))
   add("ex", c(7, pm, ps, px, 0), pPARETO2(px, mu = pm, sigma = ps))
   add("ex", c(8, pm, ps, p, 0), qPARETO2(p, mu = pm, sigma = ps))
+  add("ex", c(9, pm, 1, px / pm, 0), dPARETO1(px / pm, mu = pm))
+  add("ex", c(10, pm, 1, px / pm, 0), pPARETO1(px / pm, mu = pm))
+  add("ex", c(11, pm, 1, p, 0), qPARETO1(p, mu = pm))
 }
 emit("gamlss_exp", "gamlss.dist", list(cases))

@@ -163,3 +163,16 @@ fn ppareto2(x: f64, mu: f64, sigma: f64) -> f64 {
 }
 
 fn qpareto2(p: f64, mu: f64, sigma: f64) -> f64 { ret mu * (math.pow[f64](1.0f64 - p, 0.0f64 - sigma) - 1.0f64) }
+
+// the Pareto type I PARETO1 of gamlss.dist (shape mu): density mu (1 + x)^(-mu - 1) for x > 0, distribution 1 - (1 + x)^(-mu), quantile (1 - p)^(-1 / mu) - 1
+fn dpareto1(x: f64, mu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret math.exp[f64](math.log[f64](mu) - (mu + 1.0f64) * math.log[f64](1.0f64 + x))
+}
+
+fn ppareto1(x: f64, mu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret 1.0f64 - math.pow[f64](1.0f64 + x, 0.0f64 - mu)
+}
+
+fn qpareto1(p: f64, mu: f64) -> f64 { ret math.pow[f64](1.0f64 - p, 0.0f64 - 1.0f64 / mu) - 1.0f64 }

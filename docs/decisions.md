@@ -48842,3 +48842,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.gamlssdist` has PARETO2 with scale mu and shape sigma: density exp(-log sigma + log(mu) / sigma - (1 / sigma + 1) log(x + mu)) for x > 0, distribution 1 - (mu / (mu + x))^(1 / sigma) and quantile mu ((1 - p)^(-sigma) - 1).
 
 **Result.** `oracle_gamlss_exp` now covers EXP, RG and PARETO2 (270 values, 30 draws each of d, p and q per family) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: most of the roughly ninety families, random numbers, moments and the links remain.
+
+## D7137 — gamlss.dist: the PARETO1 family
+
+`e.algo.stat.gamlssdist` has PARETO1 with shape mu: density mu (1 + x)^(-mu - 1) for x > 0, distribution 1 - (1 + x)^(-mu) and quantile (1 - p)^(-1 / mu) - 1.
+
+**Result.** `oracle_gamlss_exp` now covers EXP, RG, PARETO2 and PARETO1 (360 values) and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
