@@ -4105,4 +4105,5 @@ D7311	1118	ismev: covariates for rlarg.fit and pp.fit; L425 closed
 D7312	835	WRS2: yuenbt and pb2gen
 D7313	772	WRS2: mcp2atm contrast tests
 D7314	1014	WRS2: ancova
-D7315	1177	WRS2: smmcrit confidence limits; L503 closed
+D7315	1178	WRS2: smmcrit confidence limits; L503 closed
+D7316	973	agricolae: SNK.test and duncan.test comparisons
