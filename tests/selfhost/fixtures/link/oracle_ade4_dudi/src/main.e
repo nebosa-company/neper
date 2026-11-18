@@ -15,6 +15,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nf = usize(z[3usize])
     let what = usize(z[4usize])
     let idx = usize(z[5usize])
+    if kind == 7usize {
+        let py = usize(z[6usize])
+        let sc = z[7usize] > 0.5f64
+        let xt = z[8usize..8usize + n * p]
+        let yt = z[8usize + n * p..8usize + n * p + n * py]
+        let (pr, pe) = ad.procuste(a, xt, yt, n, p, py, sc, nf, 0.0000001f64)
+        if pe != ok { os.exit(9) }
+        if what == 0usize { ret pr.d[idx] }
+        if what == 1usize { ret pr.lx[idx] }
+        if what == 2usize { ret pr.ly[idx] }
+        if what == 3usize { ret pr.sx[idx] }
+        if what == 4usize { ret pr.sy[idx] }
+        ret f64(pr.rank)
+    }
     if kind == 6usize {
         let py = usize(z[6usize])
         let xt = z[7usize..7usize + n * p]

@@ -1,6 +1,7 @@
 // The duality diagrams of the R package ade4: as.dudi (the generalised principal-axes analysis of a table with row and column weights) and the
 // analyses built on it, dudi.pca and dudi.coa. The eigenvectors are LAPACK's (e.algo.linalg.lapack_syevr), so their signs are the ones R's eigen returns.
 
+use e.algo.linalg.lapack_gesdd as gs
 use e.algo.linalg.lapack_syevr as sy
 use e.math
 use e.mem
@@ -489,5 +490,148 @@ fn coinertia(a: *mem.Arena, xt: []const f64, yt: []const f64, n: usize, px: usiz
         q += 1usize
     }
     out.rv = eig_sum(&d) / math.sqrt[f64](sxx) / math.sqrt[f64](syy)
+    ret (out, ok)
+}
+
+type Procuste = struct { rank: usize, nf: usize, d: []f64, lx: []f64, ly: []f64, sx: []f64, sy: []f64 }
+
+// the n by p table centred (and, when scale, divided by the square root of the sum of its squares), compensated sums as R's sum()
+fn proc_centre(x: []const f64, n: usize, p: usize, scale: bool, out: []f64) {
+    var j = 0usize
+    while j < p {
+        var m1 = 0.0f64
+        var m2 = 0.0f64
+        var i = 0usize
+        while i < n {
+            let (u1, u2) = nstep(m1, m2, x[i * p + j])
+            m1 = u1
+            m2 = u2
+            i += 1usize
+        }
+        let mu = (m1 + m2) / f64(n)
+        i = 0usize
+        while i < n {
+            out[i * p + j] = x[i * p + j] - mu
+            i += 1usize
+        }
+        j += 1usize
+    }
+    if scale {
+        var t1 = 0.0f64
+        var t2 = 0.0f64
+        j = 0usize
+        while j < p {
+            var c1 = 0.0f64
+            var c2 = 0.0f64
+            var i = 0usize
+            while i < n {
+                let (u1, u2) = nstep(c1, c2, out[i * p + j] * out[i * p + j])
+                c1 = u1
+                c2 = u2
+                i += 1usize
+            }
+            let (w1, w2) = nstep(t1, t2, c1 + c2)
+            t1 = w1
+            t2 = w2
+            j += 1usize
+        }
+        let nm = math.sqrt[f64](t1 + t2)
+        var i = 0usize
+        while i < n * p {
+            out[i] = out[i] / nm
+            i += 1usize
+        }
+    }
+}
+
+// procuste: the Procrustes analysis of two tables with the same rows: the singular value decomposition of t(X) Y; lx (px by nf) and ly (py by nf) are the
+// loadings, sx and sy (n by nf) the scores
+fn procuste(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, px: usize, py: usize, scale: bool, nf0: usize, tol: f64) -> (Procuste, err) {
+    var out: Procuste = zero
+    let (xc, e1) = mem.alloc[f64](a, n * px)
+    let (yc, e2) = mem.alloc[f64](a, n * py)
+    if e1 != ok || e2 != ok { ret (out, Malformed) }
+    proc_centre(x, n, px, scale, xc)
+    proc_centre(y, n, py, scale, yc)
+    var k = px
+    if py < px { k = py }
+    let (ps, e3) = mem.alloc[f64](a, px * py)
+    let (sv, e4) = mem.alloc[f64](a, k)
+    let (uu, e5) = mem.alloc[f64](a, px * k)
+    let (vt, e6) = mem.alloc[f64](a, k * py)
+    if e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret (out, Malformed) }
+    var r = 0usize
+    while r < px {
+        var c = 0usize
+        while c < py {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += xc[i * px + r] * yc[i * py + c]
+                i += 1usize
+            }
+            ps[c * px + r] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let e7 = gs.svd_all(a, ps, px, py, sv, uu, vt)
+    if e7 != ok { ret (out, e7) }
+    var rank = 0usize
+    var q = 0usize
+    while q < k {
+        if sv[q] / sv[0usize] > tol { rank += 1usize }
+        q += 1usize
+    }
+    var nf = nf0
+    if nf > rank { nf = rank }
+    out.rank = rank
+    out.nf = nf
+    out.d = sv
+    let (lx, e8) = mem.alloc[f64](a, px * nf)
+    let (ly, e9) = mem.alloc[f64](a, py * nf)
+    let (sx, e10) = mem.alloc[f64](a, n * nf)
+    let (sy2, e11) = mem.alloc[f64](a, n * nf)
+    if e8 != ok || e9 != ok || e10 != ok || e11 != ok { ret (out, Malformed) }
+    q = 0usize
+    while q < nf {
+        r = 0usize
+        while r < px {
+            lx[r * nf + q] = uu[q * px + r]
+            r += 1usize
+        }
+        r = 0usize
+        while r < py {
+            ly[r * nf + q] = vt[r * k + q]
+            r += 1usize
+        }
+        q += 1usize
+    }
+    var i = 0usize
+    while i < n {
+        q = 0usize
+        while q < nf {
+            var s1 = 0.0f64
+            var j = 0usize
+            while j < px {
+                s1 += xc[i * px + j] * lx[j * nf + q]
+                j += 1usize
+            }
+            var s2 = 0.0f64
+            j = 0usize
+            while j < py {
+                s2 += yc[i * py + j] * ly[j * nf + q]
+                j += 1usize
+            }
+            sx[i * nf + q] = s1
+            sy2[i * nf + q] = s2
+            q += 1usize
+        }
+        i += 1usize
+    }
+    out.lx = lx
+    out.ly = ly
+    out.sx = sx
+    out.sy = sy2
     ret (out, ok)
 }

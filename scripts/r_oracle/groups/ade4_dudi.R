@@ -60,4 +60,19 @@ xa <- matrix(rnorm(12 * 4), 12, 4); ya <- matrix(rnorm(12 * 3), 12, 3) + 0.5 * x
 oneci(xa, ya, 2)
 xb <- matrix(rnorm(10 * 3), 10, 3); yb <- matrix(rnorm(10 * 5), 10, 5) + xb[, c(1, 2, 3, 1, 2)]
 oneci(xb, yb, 3)
+# procuste: (7, n, px, nf, what, idx, py, scale, X row-major, Y row-major); what 0 d[idx], 1 loadX, 2 loadY, 3 scorX, 4 scorY, 5 rank
+onepr <- function(x, y, nf, sc) {
+  n <- nrow(x); px <- ncol(x); py <- ncol(y)
+  r <- procuste(as.data.frame(x), as.data.frame(y), scale = sc, nf = nf)
+  flat <- c(py, as.numeric(sc), as.vector(t(x)), as.vector(t(y)))
+  hdr <- function(what, idx) c(7, n, px, nf, what, idx, flat)
+  for (k in seq_along(r$d)) cases[[length(cases) + 1]] <<- case("d", hdr(0, k - 1), r$d[k], rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <<- case("d", hdr(5, 0), r$rank, rel = 0, abs = 0)
+  mats <- list(as.matrix(r$loadX), as.matrix(r$loadY), as.matrix(r$scorX), as.matrix(r$scorY))
+  for (w in 1:4) { m <- mats[[w]]; v <- as.vector(t(m)); for (k in seq_along(v)) cases[[length(cases) + 1]] <<- case("d", hdr(w, k - 1), v[k], rel = 1e-7, abs = 1e-10) }
+}
+xp <- matrix(rnorm(15 * 3), 15, 3); yp <- matrix(rnorm(15 * 3), 15, 3) + xp
+onepr(xp, yp, 4, TRUE); onepr(xp, yp, 2, FALSE)
+xq <- matrix(rnorm(12 * 4), 12, 4); yq <- matrix(rnorm(12 * 2), 12, 2) + xq[, 1:2]
+onepr(xq, yq, 4, TRUE)
 emit("ade4_dudi", "ade4", list(cases))

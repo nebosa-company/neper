@@ -48932,3 +48932,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.ade4` gains `coinertia` for two tables sharing row weights: the analysis of t(Y) diag(lw) X with column weights cwx and row weights cwy, the row scores of both tables and the RV coefficient. Only the branch with at least one table having no more columns than rows is ported (the other branch takes a non-symmetric eigen decomposition and is refused with an error).
 
 **Result.** `oracle_ade4_dudi` has 880 values (two coinertias, 12 by 4 against 12 by 3 and 10 by 3 against 10 by 5) and equals ade4 on Windows. Linux pending. L381 stays partial.
+
+## D7152 — ade4: procuste
+
+`e.algo.stat.ade4` gains `procuste`: both tables centred (and, by default, divided by the square root of the sum of their squares, with compensated sums as R's `sum()`), the singular value decomposition of t(X) Y through the dgesdd port (`svd_all`), the loadings, the scores and the rank. The singular vector signs are LAPACK's, as R's `svd`.
+
+**Result.** `oracle_ade4_dudi` has 1131 values (scaled and unscaled, 15 by 3 against 15 by 3 and 12 by 4 against 12 by 2) and equals ade4 on Windows. Linux pending. L381 stays partial (the square-case rotations rotX and rotY and procuste's randomisation test are not ported).
