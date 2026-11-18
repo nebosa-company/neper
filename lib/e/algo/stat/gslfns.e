@@ -8,9 +8,9 @@ use e.math.special as sp
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
 
-// K_nu(x), x > 0: the trapezoid rule on integral_0^inf exp(-x cosh t) cosh(nu t) dt, whose terms fall off doubly exponentially
+// K_nu(x), x > 0: the trapezoid rule (step 0.1, whose error falls like exp(-pi^2 / h)) on integral_0^inf exp(-x cosh t) cosh(nu t) dt, whose terms fall off doubly exponentially
 fn bessel_knu(nu: f64, x: f64) -> f64 {
-    let h = 0.02f64
+    let h = 0.1f64
     var s = 0.5f64 * math.exp[f64](0.0f64 - x)
     var k = 1usize
     while k < 4000usize {

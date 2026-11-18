@@ -49136,3 +49136,9 @@ New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alp
 `e.algo.stat.ghyp` gains `qghyp` with R's default method: the density range from `ghypCalcRange` (uniroot of the density minus 1e-5 on each side of the mode, using the variance of D7184 for the bracket steps), `pghyp` at 501 equally spaced points, the fmm spline of `e.algo.stat.splinepkg`, and uniroot on spline minus p. Probabilities outside the spline's range would take R's integrate method and return NaN here. Each call builds the spline, about 500 distribution evaluations, so it is slow (a minute for four quantiles).
 
 **Result.** `oracle_ghyp` has 874 values (4 quantiles added at 1e-5 relative) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: rghyp, higher moments, fits and the stable branches remain.
+
+## D7186 — e.algo.stat.gslfns: the Bessel K trapezoid step from 0.02 to 0.1
+
+`bessel_knu` evaluated the trapezoid rule with step 0.02; the integrand is analytic in a strip of half-width pi / 2, so the rule's error falls like exp(-pi^2 / h) and a step of 0.1 is already beyond double precision while costing a fifth as much. Every integrate-based function that sits on it (pghyp, qghyp, the Sichel and GIG families) got about five times faster: oracle_ghyp went from over a minute for four quantiles to 8 seconds for the 885 values, and now carries 15 qghyp quantiles in 20 seconds.
+
+**Result.** `oracle_gslfns`, `oracle_gamlss_exp` and `oracle_ghyp` (885 values, 15 quantiles at 1e-5) pass unchanged on Windows. Linux pending.

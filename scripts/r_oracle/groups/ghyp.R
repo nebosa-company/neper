@@ -28,9 +28,9 @@ for (rep in 1:30) {
   cases[[length(cases) + 1]] <- case("ghypMean", c(mu, delta, alpha, beta, lam, 0), ghypMean(param = c(mu, delta, alpha, beta, lam)), rel = 1e-9, abs = 1e-13)
   cases[[length(cases) + 1]] <- case("ghypVar", c(mu, delta, alpha, beta, lam, 0), ghypVar(param = c(mu, delta, alpha, beta, lam)), rel = 1e-9, abs = 1e-13)
 }
-for (rep in 1:2) {
+for (rep in 1:5) {
   mu <- runif(1, -2, 2); delta <- runif(1, 0.3, 3); alpha <- runif(1, 0.8, 4); beta <- runif(1, -0.8, 0.8) * alpha; lam <- runif(1, -2, 2)
-  for (pp in c(0.2, 0.7)) {
+  for (pp in c(0.1, 0.5, 0.9)) {
     qv <- tryCatch(qghyp(pp, param = c(mu, delta, alpha, beta, lam)), error = function(e) NA_real_)
     if (is.finite(qv)) cases[[length(cases) + 1]] <- case("qghyp", c(pp, mu, delta, alpha, beta, lam), qv, rel = 1e-5, abs = 1e-7)
   }
