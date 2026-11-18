@@ -21,6 +21,31 @@ fn wald_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret w.p
 }
 
+fn qpois_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[1usize])
+    let p = usize(x[2usize])
+    let (o, e) = mem.alloc[f64](a, p + 1usize)
+    if e != ok { os.exit(7) }
+    let xm = x[4usize..4usize + n * p]
+    let y = x[4usize + n * p..4usize + n * p + n]
+    if ad.quasipois(a, xm, n, p, y, x[0usize] == 1.0f64, x[3usize], 0.001f64, o) != ok { os.exit(8) }
+    ret o[usize(x[4usize + n * p + n])]
+}
+
+fn qbin_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[1usize])
+    let p = usize(x[2usize])
+    let (o, e) = mem.alloc[f64](a, p + 1usize)
+    if e != ok { os.exit(9) }
+    let xm = x[4usize..4usize + n * p]
+    let sc = x[4usize + n * p..4usize + n * p + n]
+    let sz = x[4usize + n * p + n..4usize + n * p + 2usize * n]
+    if ad.quasibin(a, xm, n, p, sc, sz, x[0usize] == 1.0f64, x[3usize], 0.001f64, o) != ok { os.exit(10) }
+    ret o[usize(x[4usize + n * p + 2usize * n])]
+}
+
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = usize(x[3usize])
@@ -45,7 +70,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while at < golden.cases.len {
         let c = &golden.cases[at]
         var got = 0.0f64
-        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else { got = answer(c) }
+        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else if str.eq(c.name, "qpois") { got = qpois_answer(a, c) } else if str.eq(c.name, "qbin") { got = qbin_answer(a, c) } else { got = answer(c) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

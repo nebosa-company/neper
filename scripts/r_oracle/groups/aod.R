@@ -25,4 +25,30 @@ for (rep in 1:25) {
   w <- wald.test(b = b, Sigma = S, L = L)$result$chi2
   add("wald", c(0, q, p, b, as.vector(t(S)), as.vector(t(L))), w[["chi2"]]); add("wald", c(1, q, p, b, as.vector(t(S)), as.vector(t(L))), w[["P"]])
 }
+# quasipois (mode 0 phi estimated / 1 phi given, n, p, phi, x column-major n by p, y, index): coefficient index, or phi at index p
+for (rep in 1:20) {
+  n <- sample(25:60, 1); xv <- round(rnorm(n), 3); z <- round(runif(n), 3); mu <- exp(0.6 + 0.4 * xv + 0.5 * z)
+  y <- rnbinom(n, mu = mu, size = 4); d <- data.frame(y = y, xv = xv, z = z)
+  X <- cbind(1, xv, z)
+  for (mode in 0:1) {
+    ph <- if (mode == 1) runif(1, 0.05, 0.6) else NA
+    fit <- suppressWarnings(if (mode == 1) quasipois(y ~ xv + z, data = d, phi = ph) else quasipois(y ~ xv + z, data = d))
+    cf <- coef(fit@fm); pv <- fit@phi
+    for (j in 1:3) add("qpois", c(mode, n, 3, if (mode == 1) ph else 0, as.vector(X), y, j - 1), cf[[j]])
+    add("qpois", c(mode, n, 3, if (mode == 1) ph else 0, as.vector(X), y, 3), pv)
+  }
+}
+# quasibin, logit link (mode 0 phi estimated / 1 phi given, n, p, phi, x column-major, successes, sizes, index)
+for (rep in 1:20) {
+  n <- sample(12:40, 1); xv <- round(rnorm(n), 3); sz <- sample(5:30, n, TRUE)
+  pr <- plogis(-0.3 + 0.7 * xv); pr2 <- rbeta(n, 3 * pr + 0.2, 3 * (1 - pr) + 0.2); sc <- rbinom(n, sz, pr2)
+  d <- data.frame(sc = sc, fl = sz - sc, xv = xv); X <- cbind(1, xv)
+  for (mode in 0:1) {
+    ph <- if (mode == 1) runif(1, 0.02, 0.3) else NA
+    fit <- suppressWarnings(if (mode == 1) quasibin(cbind(sc, fl) ~ xv, data = d, phi = ph) else quasibin(cbind(sc, fl) ~ xv, data = d))
+    cf <- coef(fit@fm)
+    for (j in 1:2) add("qbin", c(mode, n, 2, if (mode == 1) ph else 0, as.vector(X), sc, sz, j - 1), cf[[j]])
+    add("qbin", c(mode, n, 2, if (mode == 1) ph else 0, as.vector(X), sc, sz, 2), fit@phi)
+  }
+}
 emit("aod", "aod", list(cases))

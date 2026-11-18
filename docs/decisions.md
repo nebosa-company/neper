@@ -49430,3 +49430,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gamlssdist` gains BCPE d, p and q (the power-exponential cdf through the incomplete gamma, truncation at 1 / (sigma |nu|), the three nu cases of the quantile), GB1 d and p (through the beta cdf of x^tau / (nu + (1 - nu) x^tau)) and the SIMPLEX density.
 
 **Result.** `oracle_gamlss_exp` gains 6 cases per draw (176 values added across the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: GB1 q, SIMPLEX p and q, BCPEo, SST, ST1, ST3C, PE2, DEL, DBI, DBURR12, ZAIG, ZASICHEL, LOGSHASH, NOF, MN3 to MN5 and the beta-binomial inflated families, moments and random numbers.
+
+## D7235 — aod: quasipois and quasibin
+
+`e.algo.stat.aod` gains `quasipois` and `quasibin` (logit link): the package's moment iteration for phi (weights 1 / (1 + phi mu) and 1 / (1 + (n - 1) phi), Pearson chi-square minus the residual degrees of freedom against the tolerance) or, for quasipois with phi given, the weight iteration to a log-likelihood change below 1e-6, each step a weighted glm refit by flexmix's IRLS.
+
+**Result.** `oracle_aod` gains 280 values over 40 simulated overdispersed data sets and equals aod on Windows (1e-9). It exposed that the binomial IRLS start used the prior-weighted size where R's `binomial()$initialize` uses the size alone (mustart = (n y + 0.5) / (n + 1)); fixed in `binom_glm`, and `oracle_flexmix_gauss` still passes. Linux pending. L480 stays partial: betabin, negbin, anova, iccbin A and B, splitbin and the cloglog link.

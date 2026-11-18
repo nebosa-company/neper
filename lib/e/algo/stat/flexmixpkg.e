@@ -545,7 +545,7 @@ fn binom_glm(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f6
             eta[i] = t
             mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
         } else {
-            mu[i] = (wt[i] * yp[i] + 0.5f64) / (wt[i] + 1.0f64)
+            mu[i] = (size[i] * yp[i] + 0.5f64) / (size[i] + 1.0f64)
             eta[i] = math.log[f64](mu[i] / (1.0f64 - mu[i]))
         }
         i += 1usize

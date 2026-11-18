@@ -4,6 +4,8 @@
 // Not here: the bootstrap row of varbin, iccbin methods A and B (mixed-model based), betabin, negbin, quasibin, quasipois, anova, splitbin.
 
 use e.algo.stat.desctools as dt
+use e.algo.stat.flexmixpkg as fx
+use e.math.special as sp
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
@@ -257,4 +259,180 @@ fn wald_test(a: *mem.Arena, b: []const f64, sigma: []const f64, lm: []const f64,
     out.x2 = x2
     out.p = nm.pchisq(x2, f64(q), false, false)
     ret (out, ok)
+}
+
+fn qp_fitted(x: []const f64, n: usize, p: usize, beta: []const f64, mu: []f64) {
+    var i = 0usize
+    while i < n {
+        var t = 0.0f64
+        var c = 0usize
+        while c < p {
+            t += x[c * n + i] * beta[c]
+            c += 1usize
+        }
+        mu[i] = math.exp[f64](t)
+        i += 1usize
+    }
+}
+
+fn qp_loglik(y: []const f64, mu: []const f64, w: []const f64, n: usize) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < n {
+        s += w[i] * (y[i] * math.log[f64](mu[i]) - mu[i] - sp.lgamma(y[i] + 1.0f64))
+        i += 1usize
+    }
+    ret s
+}
+
+// quasipois(y ~ x, phi, tol): x is n by p column-major; has_phi false estimates phi by the package's moment iteration, true holds it and iterates the weights to a log-likelihood change below 1e-6;
+// out receives the p coefficients and then phi
+fn quasipois(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, has_phi: bool, phi0: f64, tol: f64, out: []f64) -> err {
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (mu, e2) = mem.alloc[f64](a, n)
+    let (b0, e3) = mem.alloc[f64](a, p)
+    let (b1, e4) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret fx.Malformed }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    var phi = phi0
+    var e = fx.pois_glm(a, x, n, p, y, w, b0, false)
+    if e != ok { ret e }
+    if !has_phi {
+        phi = 0.0001f64
+        var more = true
+        while more {
+            qp_fitted(x, n, p, b0, mu)
+            var x2 = 0.0f64
+            i = 0usize
+            while i < n {
+                x2 += w[i] * (y[i] - mu[i]) * (y[i] - mu[i]) / mu[i]
+                i += 1usize
+            }
+            let dfr = f64(n - p)
+            if x2 - dfr <= tol {
+                more = false
+            } else {
+                phi = phi * x2 / dfr
+                i = 0usize
+                while i < n {
+                    w[i] = 1.0f64 / (1.0f64 + phi * mu[i])
+                    i += 1usize
+                }
+                e = fx.pois_glm(a, x, n, p, y, w, b0, false)
+                if e != ok { ret e }
+            }
+        }
+    } else {
+        var delta = 1.0f64
+        var guard = 0usize
+        while delta > 0.000001f64 && guard < 200usize {
+            guard += 1usize
+            qp_fitted(x, n, p, b0, mu)
+            let ll0 = qp_loglik(y, mu, w, n)
+            i = 0usize
+            while i < n {
+                w[i] = 1.0f64 / (1.0f64 + phi * mu[i])
+                i += 1usize
+            }
+            e = fx.pois_glm(a, x, n, p, y, w, b1, false)
+            if e != ok { ret e }
+            qp_fitted(x, n, p, b1, mu)
+            delta = qp_loglik(y, mu, w, n) - ll0
+            var c = 0usize
+            while c < p {
+                b0[c] = b1[c]
+                c += 1usize
+            }
+        }
+    }
+    qp_fitted(x, n, p, b0, mu)
+    i = 0usize
+    while i < n {
+        w[i] = 1.0f64 / (1.0f64 + phi * mu[i])
+        i += 1usize
+    }
+    e = fx.pois_glm(a, x, n, p, y, w, b1, false)
+    if e != ok { ret e }
+    var c = 0usize
+    while c < p {
+        out[c] = b1[c]
+        c += 1usize
+    }
+    out[p] = phi
+    ret ok
+}
+
+fn qb_fitted(x: []const f64, n: usize, p: usize, beta: []const f64, mu: []f64) {
+    var i = 0usize
+    while i < n {
+        var t = 0.0f64
+        var c = 0usize
+        while c < p {
+            t += x[c * n + i] * beta[c]
+            c += 1usize
+        }
+        mu[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
+        i += 1usize
+    }
+}
+
+// quasibin(cbind(succ, size - succ) ~ x, link = "logit", phi = NULL, tol): weights 1 / (1 + (size - 1) phi); phi is estimated by the moment iteration when has_phi is false; out receives the p coefficients and phi
+fn quasibin(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f64, size: []const f64, has_phi: bool, phi0: f64, tol: f64, out: []f64) -> err {
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (mu, e2) = mem.alloc[f64](a, n)
+    let (b0, e3) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok { ret fx.Malformed }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    var phi = phi0
+    var e = fx.binom_glm(a, x, n, p, succ, size, w, b0, false)
+    if e != ok { ret e }
+    if !has_phi {
+        phi = 0.0001f64
+        var more = true
+        while more {
+            qb_fitted(x, n, p, b0, mu)
+            var x2 = 0.0f64
+            i = 0usize
+            while i < n {
+                let d = succ[i] / size[i] - mu[i]
+                x2 += w[i] * size[i] * d * d / (mu[i] * (1.0f64 - mu[i]))
+                i += 1usize
+            }
+            let dfr = f64(n - p)
+            if x2 - dfr <= tol {
+                more = false
+            } else {
+                phi = phi * x2 / dfr
+                i = 0usize
+                while i < n {
+                    w[i] = 1.0f64 / (1.0f64 + (size[i] - 1.0f64) * phi)
+                    i += 1usize
+                }
+                e = fx.binom_glm(a, x, n, p, succ, size, w, b0, false)
+                if e != ok { ret e }
+            }
+        }
+    }
+    i = 0usize
+    while i < n {
+        w[i] = 1.0f64 / (1.0f64 + (size[i] - 1.0f64) * phi)
+        i += 1usize
+    }
+    e = fx.binom_glm(a, x, n, p, succ, size, w, b0, false)
+    if e != ok { ret e }
+    var c = 0usize
+    while c < p {
+        out[c] = b0[c]
+        c += 1usize
+    }
+    out[p] = phi
+    ret ok
 }
