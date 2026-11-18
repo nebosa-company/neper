@@ -28,6 +28,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
             ret o[jj]
         }
         if kn == 5usize { ret dt.mean_se(xs) }
+        if kn == 7usize {
+            let te = dt.mean_ci_trim(a, xs, ex, cf, o)
+            if te != ok { os.exit(8) }
+            ret o[jj]
+        }
         let (cn, g1) = mem.alloc[f64](a, n)
         if g1 != ok { os.exit(7) }
         var q = 0usize

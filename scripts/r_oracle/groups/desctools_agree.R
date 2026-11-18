@@ -24,4 +24,10 @@ for (rep in 1:15) {
   sh <- abs(x) + 0.1; cnt <- sample(1:4, n, TRUE); mp <- sample(c(1, 2, 3), 1)
   cases[[length(cases) + 1]] <- case("b", c(6, n, sh, mp, 0, 0, cnt), Herfindahl(sh, cnt, mp), rel = 1e-10, abs = 1e-13)
 }
+# MeanCI with trim: args (7, n, x, trim, conf, j)
+for (rep in 1:15) {
+  n <- sample(12:60, 1); x <- rexp(n, 0.5) + rnorm(n); tr <- sample(c(0.05, 0.1, 0.2), 1)
+  r <- MeanCI(x, trim = tr, conf.level = 0.95)
+  for (j in 0:2) cases[[length(cases) + 1]] <- case("b", c(7, n, x, tr, 0.95, j), as.numeric(r[j + 1]), rel = 1e-9, abs = 1e-12)
+}
 emit("desctools_agree", "DescTools", list(cases))

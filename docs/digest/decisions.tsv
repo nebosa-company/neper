@@ -4002,4 +4002,5 @@ D7212	630	energy: the partial distance correlation
 D7213	1122	energy: dcov.test and its permutation stream
 D7214	872	energy: dcor.test and eqdist.etest
 D7215	682	DescTools: CCC and CronbachAlpha
-D7216	734	DescTools: MeanCI, VarCI, MeanSE and Herfindahl
+D7216	735	DescTools: MeanCI, VarCI, MeanSE and Herfindahl
+D7217	685	DescTools: the trimmed MeanCI

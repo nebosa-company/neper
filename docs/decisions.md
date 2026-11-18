@@ -49322,3 +49322,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.desctools` gains `mean_ci` (the classic interval: the t interval with the sample standard deviation, or the normal one when a standard deviation is given; the trimmed and bootstrap forms are not ported), `var_ci` (the classic chi-square interval and Bonett's, which uses the trimmed mean at trim 1 / (2 sqrt(n - 4)) in the fourth moment), `mean_se` and `herfindahl` (the concentration index of the count-expanded shares).
 
 **Result.** `oracle_desctools_agree` has 435 values (210 added over 15 samples, 1e-9 or better) and equals DescTools on Windows. Linux pending. L363 stays partial: the trimmed and bootstrap intervals and the rest of the package remain.
+
+## D7217 — DescTools: the trimmed MeanCI
+
+`e.algo.stat.desctools` gains `mean_ci_trim`: the trimmed mean (R's `mean(x, trim)`, the order statistics lo to n + 1 - lo with lo = floor(n trim) + 1), the winsorised variance (values beyond the trn-th and (n - trn + 1)-th order statistics replaced by them, trn = floor(trim n) + 1) and the t interval on n - 2 (trn - 1) - 1 degrees of freedom with the standard error sqrt(var) / ((1 - 2 trim) sqrt(n)).
+
+**Result.** `oracle_desctools_agree` has 480 values (45 added over 15 samples with trims 0.05, 0.1 and 0.2, 1e-9) and equals DescTools on Windows. Linux pending. L363 stays partial: the bootstrap intervals and the rest of the package.

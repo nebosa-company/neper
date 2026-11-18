@@ -1243,3 +1243,44 @@ fn herfindahl(x: []const f64, cnt: []const f64, parameter: f64) -> f64 {
     }
     ret math.pow[f64](s, 1.0f64 / parameter)
 }
+
+// MeanCI with trim > 0 (classic method): the trimmed mean, the winsorised variance (the values below the trn-th and above the (n - trn + 1)-th order statistic, trn =
+// floor(trim n) + 1, replaced by them) over n - 2 (trn - 1) - 1 degrees of freedom, and the t interval; out receives (mean, lower, upper)
+fn mean_ci_trim(a: *mem.Arena, x: []const f64, trim: f64, conf: f64, out: []f64) -> err {
+    let n = x.len
+    let (s, e) = sorted_copy(a, x)
+    if e != ok { ret e }
+    let trn = usize(math.floor[f64](trim * f64(n))) + 1usize
+    var hi_idx = n - trn + 1usize
+    if hi_idx < 1usize { hi_idx = 1usize }
+    let minval = s[trn - 1usize]
+    let maxval = s[hi_idx - 1usize]
+    let (w, e2) = mem.alloc[f64](a, n)
+    if e2 != ok { ret e2 }
+    var i = 0usize
+    while i < n {
+        var v = x[i]
+        if v < minval { v = minval }
+        if v > maxval { v = maxval }
+        w[i] = v
+        i += 1usize
+    }
+    let wv = var_of(w)
+    let df = f64(n) - 2.0f64 * f64(trn - 1usize) - 1.0f64
+    let se = math.sqrt[f64](wv) / ((1.0f64 - 2.0f64 * trim) * math.sqrt[f64](f64(n)))
+    // R's mean(x, trim): the mean of the order statistics lo..hi, lo = floor(n trim) + 1
+    let lo = usize(math.floor[f64](f64(n) * trim)) + 1usize
+    let hi = n + 1usize - lo
+    var m = 0.0f64
+    i = lo
+    while i <= hi {
+        m += s[i - 1usize]
+        i += 1usize
+    }
+    m = m / f64(hi - lo + 1usize)
+    let q = nb.qt(1.0f64 - (1.0f64 - conf) / 2.0f64, df, true, false)
+    out[0usize] = m
+    out[1usize] = m - q * se
+    out[2usize] = m + q * se
+    ret ok
+}
