@@ -1891,3 +1891,69 @@ fn qbcpe(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if nu != 0.0f64 { ret mu * math.pow[f64](nu * sigma * za + 1.0f64, 1.0f64 / nu) }
     ret mu * math.exp[f64](sigma * za)
 }
+
+// SST (skew t with the first two moments standardised, through ST3), PE2 (power exponential with scale sigma), NOF (normal with variance sigma^2 |mu|^nu) and ZAIG (zero-adjusted inverse Gaussian) d, p, q
+fn sst_mu(mu: f64, sigma: f64, nu: f64, tau: f64) -> (f64, f64) {
+    let m1 = (2.0f64 * math.sqrt[f64](tau) * (nu * nu - 1.0f64)) / ((tau - 1.0f64) * math.exp[f64](lbeta_(0.5f64, tau / 2.0f64)) * nu)
+    let m2 = (tau * (nu * nu * nu + 1.0f64 / (nu * nu * nu))) / ((tau - 2.0f64) * (nu + 1.0f64 / nu))
+    let s1 = math.sqrt[f64](m2 - m1 * m1)
+    ret (mu - sigma * m1 / s1, sigma / s1)
+}
+
+fn dsst(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let (m, sg) = sst_mu(mu, sigma, nu, tau)
+    ret dst3(x, m, sg, nu, tau)
+}
+
+fn psst(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let (m, sg) = sst_mu(mu, sigma, nu, tau)
+    ret pst3(x, m, sg, nu, tau)
+}
+
+fn qsst(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let (m, sg) = sst_mu(mu, sigma, nu, tau)
+    ret qst3(p, m, sg, nu, tau)
+}
+
+fn dpe2(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    let z = (x - mu) / sigma
+    ret math.exp[f64](0.0f64 - math.log[f64](sigma) + math.log[f64](nu) - math.log[f64](2.0f64) - math.pow[f64](math.abs[f64](z), nu) - sp.lgamma(1.0f64 / nu))
+}
+
+fn ppe2(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if nu > 10000.0f64 { ret (q - (mu - sigma)) / (2.0f64 * sigma) }
+    let z = (q - mu) / sigma
+    var sg = 1.0f64
+    if z < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+    if z == 0.0f64 { sg = 0.0f64 }
+    ret 0.5f64 * (1.0f64 + nm.pgamma(math.pow[f64](math.abs[f64](z), nu), 1.0f64 / nu, 1.0f64, true, false) * sg)
+}
+
+fn qpe2(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    if p == 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var sg = 1.0f64
+    if p < 0.5f64 { sg = 0.0f64 - 1.0f64 }
+    if p == 0.5f64 { sg = 0.0f64 }
+    let sh = nm.qgamma((2.0f64 * p - 1.0f64) * sg, 1.0f64 / nu, 1.0f64, true, false)
+    ret mu + sigma * sg * math.pow[f64](sh, 1.0f64 / nu)
+}
+
+fn dnof(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret dist.dnorm(x, mu, sigma * math.pow[f64](math.abs[f64](mu), nu / 2.0f64), false) }
+
+fn dzaig(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret nu }
+    ret math.exp[f64](math.log[f64](1.0f64 - nu) - 0.5f64 * math.log[f64](2.0f64 * pi()) - math.log[f64](sigma) - 1.5f64 * math.log[f64](x) - (x - mu) * (x - mu) / (2.0f64 * sigma * sigma * mu * mu * x))
+}
+
+fn pzaig(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q == 0.0f64 { ret nu }
+    let c1 = dist.pnorm(((q / mu) - 1.0f64) / (sigma * math.sqrt[f64](q)), 0.0f64, 1.0f64, true, false)
+    let c2 = math.exp[f64](2.0f64 / (mu * sigma * sigma)) * dist.pnorm((0.0f64 - ((q / mu) + 1.0f64)) / (sigma * math.sqrt[f64](q)), 0.0f64, 1.0f64, true, false)
+    ret nu + (1.0f64 - nu) * (c1 + c2)
+}

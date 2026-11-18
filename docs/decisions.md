@@ -49490,3 +49490,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `gini_bca` takes the interval type: 0 bca, 1 percentile (the order statistics at (1 -+ conf) / 2 by `norm.inter`) and 2 basic (2 t0 minus the opposite order statistics). Boot's "norm" type returns three columns, so DescTools' fixed positions 4 and 5 give NA for it and there is nothing to match.
 
 **Result.** `oracle_desctools_agree` has the three types on the same 10 weighted data sets (90 Gini values) and equals DescTools on Windows at 1e-8. Linux pending. L363 stays partial: the remaining acceptance functions.
+
+## D7245 — gamlss.dist: SST, PE2, NOF and ZAIG
+
+`e.algo.stat.gamlssdist` gains SST d, p, q (the skew t standardised to mean mu and standard deviation sigma through ST3 with the moment constants m1, m2), PE2 d, p, q (power exponential with the scale sigma itself, the uniform limit above nu = 10000), the NOF density (normal with standard deviation sigma |mu|^(nu / 2)) and ZAIG d, p (the inverse Gaussian with a mass nu at zero; the package's numerical-integration fallback for a NaN cdf is not reached).
+
+**Result.** `oracle_gamlss_exp` gains 9 cases per draw (268 values over the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: ZAIG q (needs qIG), SIMPLEX p and q, GB1 q, BCPEo, ST1, ST3C, DEL, DBI, DBURR12, ZASICHEL, LOGSHASH, MN3 to MN5, the beta-binomial inflated families, moments, random numbers.

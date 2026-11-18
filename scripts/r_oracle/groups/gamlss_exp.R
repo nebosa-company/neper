@@ -299,6 +299,19 @@ for (rep in 1:30) {
   add("ex", c(238, cp_m, cp_s, cp_x, cp_n, cp_t), dBCPE(cp_x, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
   add("ex", c(239, cp_m, cp_s, cp_x, cp_n, cp_t), pBCPE(cp_x, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
   add("ex", c(240, cp_m, cp_s, bi_p, cp_n, cp_t), qBCPE(bi_p, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
+  # SST 241-243 (mu, sigma, x or p, nu, tau > 2), PE2 244-246 (nu in the 5th slot), NOF 247, ZAIG 248-249 (nu a mass)
+  st_t <- runif(1, 3, 15); st_n <- runif(1, 0.5, 2); st_x <- rnorm(1, cp_m, 2)
+  add("ex", c(241, cp_m, cp_s + 0.3, st_x, st_n, st_t), dSST(st_x, mu = cp_m, sigma = cp_s + 0.3, nu = st_n, tau = st_t), rel = 1e-8, abs = 1e-12)
+  add("ex", c(242, cp_m, cp_s + 0.3, st_x, st_n, st_t), pSST(st_x, mu = cp_m, sigma = cp_s + 0.3, nu = st_n, tau = st_t), rel = 1e-6, abs = 1e-9)
+  add("ex", c(243, cp_m, cp_s + 0.3, bi_p, st_n, st_t), qSST(bi_p, mu = cp_m, sigma = cp_s + 0.3, nu = st_n, tau = st_t), rel = 1e-5, abs = 1e-8)
+  pe_n <- runif(1, 0.8, 4)
+  add("ex", c(244, cp_m, cp_s + 0.3, st_x, pe_n), dPE2(st_x, mu = cp_m, sigma = cp_s + 0.3, nu = pe_n))
+  add("ex", c(245, cp_m, cp_s + 0.3, st_x, pe_n), pPE2(st_x, mu = cp_m, sigma = cp_s + 0.3, nu = pe_n))
+  add("ex", c(246, cp_m, cp_s + 0.3, bi_p, pe_n), qPE2(bi_p, mu = cp_m, sigma = cp_s + 0.3, nu = pe_n))
+  add("ex", c(247, cp_m, cp_s, st_x, pe_n / 2), dNOF(st_x, mu = cp_m, sigma = cp_s, nu = pe_n / 2))
+  ig_x <- sample(c(runif(1, 0.1, 6), 0), 1)
+  add("ex", c(248, cp_m, cp_s + 0.3, ig_x, bi_n), dZAIG(ig_x, mu = cp_m, sigma = cp_s + 0.3, nu = bi_n))
+  add("ex", c(249, cp_m, cp_s + 0.3, ig_x, bi_n), pZAIG(ig_x, mu = cp_m, sigma = cp_s + 0.3, nu = bi_n))
 }
 # random numbers by the quantile function on runif: args (seed, i, which, mu, sigma, nu) under "rq": which 0 rGA, 1 rNBI, 2 rGU, 3 rBE, 4 rPARETO2, 5 rTF, 6 rBCCG; draw i (0-based) of 8
 for (rep in 1:6) {
