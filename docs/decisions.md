@@ -49244,3 +49244,9 @@ New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input),
 `e.algo.stat.flexmixpkg` gains `gamma_mix`: FLXMRglm's Gamma family with the inverse link. The M step is R's `glm.fit` (`gamma_glm`: mustart = y at the first pass, the previous coefficients afterwards, working weights sqrt(w) mu, the Gamma deviance, the 1e-8 deviance test), the component's shape is sum(w) / deviance as flexmix computes it, and the E step uses the Gamma log density with scale mu / shape. The parameter count includes the shape.
 
 **Result.** `oracle_flexmix_gauss` has 2260 values (388 added: two Gamma mixtures, log-likelihood, iterations, priors, coefficients, shapes, AIC, BIC, ICL and clusters, at 1e-4 relative because the IRLS path differs by rounding) and equals flexmix on Windows. Linux pending. L413 stays partial: FLXMRglmfix, concomitant variables, CEM and SEM, and the steps for the non-Gaussian families. R's step-halving for a non-positive Gamma mean is not ported.
+
+## D7204 — flexmix: the classification EM (CEM)
+
+`e.algo.stat.flexmixpkg` gains `gaussian_cem` (the EM driver's family code plus 10): flexmix's `classify = "CEM"` turns the posterior into the indicator of its first maximum at the start of every iteration (R's `.FLXgetOK`), so the priors and the M step see a hard assignment, while the E step and the convergence test are unchanged. The final prior is the column means of the soft posteriors of the last E step, as in the weighted fit. Ties in the maximum are resolved to the first column here and at random in R, and do not occur on continuous data.
+
+**Result.** `oracle_flexmix_gauss` has 2556 values (296 added: two CEM fits, two and three components, log-likelihood, iterations, priors, coefficients, sigmas and clusters) and equals flexmix on Windows. Linux pending. L413 stays partial: FLXMRglmfix, concomitant-variable models, SEM and the steps for the non-Gaussian families.

@@ -3989,4 +3989,5 @@ D7199	954	flexmix: the Poisson family
 D7200	769	flexmix: stepFlexmix
 D7201	763	flexmix: AIC, BIC and ICL
 D7202	897	flexmix: the binomial family
-D7203	939	flexmix: the Gamma family
+D7203	940	flexmix: the Gamma family
+D7204	935	flexmix: the classification EM (CEM)

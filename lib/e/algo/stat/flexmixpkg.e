@@ -33,7 +33,14 @@ fn lse(v: []const f64, off: usize, k: usize) -> f64 {
 }
 
 // x is n by p column-major (the intercept a column of ones), y the response, cluster the start (1-based codes with k = the largest)
-fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, cluster: []const f64, minprior: f64, tol: f64, iter_max: usize, fam: usize, sz: []const f64) -> (Fm, err) {
+fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, cluster: []const f64, minprior: f64, tol: f64, iter_max: usize, famcode: usize, sz: []const f64) -> (Fm, err) {
+    // famcode 0 Gaussian, 1 Poisson, 2 binomial, 3 Gamma; plus 10 for the classification EM (CEM: each observation goes wholly to its most probable component)
+    var cem = false
+    var fam = famcode
+    if famcode >= 10usize {
+        cem = true
+        fam = famcode - 10usize
+    }
     var out: Fm = zero
     var k = 0usize
     var i = 0usize
@@ -73,6 +80,24 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
     var converged = false
     var iter = 1usize
     while iter <= iter_max {
+        if cem {
+            // .FLXgetOK for classify = "CEM": the posterior becomes the indicator of its first maximum
+            var ci = 0usize
+            while ci < n {
+                var bj = 0usize
+                var cj = 1usize
+                while cj < k {
+                    if post[ci * k0 + cj] > post[ci * k0 + bj] { bj = cj }
+                    cj += 1usize
+                }
+                cj = 0usize
+                while cj < k {
+                    if cj == bj { post[ci * k0 + cj] = 1.0f64 } else { post[ci * k0 + cj] = 0.0f64 }
+                    cj += 1usize
+                }
+                ci += 1usize
+            }
+        }
         // prior = column means; drop the components below minprior
         var keep = 0usize
         var j = 0usize
@@ -691,6 +716,33 @@ fn gamma_mix(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, 
         i += 1usize
     }
     let (f, fe) = gauss_em(a, xc, n, p, y, cl, minprior, tol, iter_max, 3usize, y)
+    if fe != ok { ret (f, fe) }
+    var g = f
+    i = 0usize
+    while i < n {
+        g.cluster[i] = f.cluster[i] - 1usize
+        i += 1usize
+    }
+    ret (g, ok)
+}
+
+
+// the same Gaussian fit with control(classify = "CEM")
+fn gaussian_cem(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, k: usize, init: []const f64, iter_max: usize, minprior: f64, tol: f64) -> (Fm, err) {
+    let (xc, e1) = mem.alloc[f64](a, n * p)
+    let (cl, e2) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok { ret (zero, Malformed) }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            xc[c * n + i] = x[i * p + c]
+            c += 1usize
+        }
+        cl[i] = init[i] + 1.0f64
+        i += 1usize
+    }
+    let (f, fe) = gauss_em(a, xc, n, p, y, cl, minprior, tol, iter_max, 10usize, y)
     if fe != ok { ret (f, fe) }
     var g = f
     i = 0usize
