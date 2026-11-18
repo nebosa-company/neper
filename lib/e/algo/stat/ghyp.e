@@ -7,6 +7,7 @@ use e.algo.stat.gslfns as gs
 use e.math
 use e.math.quadpack as qp
 use e.algo.stat.pwr as pw
+use e.algo.stat.rnm as rn
 use e.algo.rand.r as rg
 use e.algo.stat.splinepkg as sl
 use e.mem
@@ -466,4 +467,52 @@ fn pgig(a: *mem.Arena, q: f64, chi: f64, psi: f64, lambda: f64) -> f64 {
     let omega = math.sqrt[f64](chi * psi)
     let cst = math.exp[f64]((lambda / 2.0f64) * math.log[f64](psi / chi) - math.log[f64](2.0f64) - log_bessel_k(lambda, omega))
     ret 1.0f64 - cst * math.pow[f64](q, lambda) * incomplete_bessel_k(a, psi * q / 2.0f64, chi / (2.0f64 * q), 0.0f64 - lambda)
+}
+
+// ---- nigFit with a user-specified start (startValues = "US") and method "Nelder-Mead": R's optim (e.algo.stat.rnm.nmmin, abstol -Inf, reltol 1.49e-8, maxit 1000)
+// on (mu, log delta, pi, log zeta) of the negative log-likelihood, with hyperbChangePars between (alpha, beta) and (pi, zeta)
+type NigObj = struct { x: []const f64 }
+
+fn nig_nll(c: *NigObj, par: []const f64) -> f64 {
+    let mu = par[0usize]
+    let delta = math.exp[f64](par[1usize])
+    let pi_ = par[2usize]
+    let zeta = math.exp[f64](par[3usize])
+    let alpha = zeta * math.sqrt[f64](1.0f64 + pi_ * pi_) / delta
+    let beta = zeta * pi_ / delta
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.x.len {
+        s += math.log[f64](dghyp(c.x[i], mu, delta, alpha, beta, 0.0f64 - 0.5f64))
+        i += 1usize
+    }
+    ret 0.0f64 - s
+}
+
+// start and the answer as (mu, delta, alpha, beta); the result is (the maximised log-likelihood, the function count, the optim convergence code)
+fn nig_fit(a: *mem.Arena, x: []const f64, start: []const f64, out: []f64) -> (f64, usize, usize) {
+    let mu = start[0usize]
+    let delta = start[1usize]
+    let alpha = start[2usize]
+    let beta = start[3usize]
+    let g = math.sqrt[f64](alpha * alpha - beta * beta)
+    let zeta = delta * g
+    let pi_ = beta / g
+    let (par0, e1) = mem.alloc[f64](a, 4usize)
+    let (best, e2) = mem.alloc[f64](a, 4usize)
+    if e1 != ok || e2 != ok { ret (0.0f64 / 0.0f64, 0usize, 99usize) }
+    par0[0usize] = mu
+    par0[1usize] = math.log[f64](delta)
+    par0[2usize] = pi_
+    par0[3usize] = math.log[f64](zeta)
+    var c: NigObj = zero
+    c.x = x
+    let (fmin, cnt, fail) = rn.nmmin[NigObj](a, &c, nig_nll, par0, 0.0f64 - 1.0f64 / 0.0f64, 0.0000000149011611938f64, 1.0f64, 0.5f64, 2.0f64, 1000usize, 1.0f64, best)
+    let d2 = math.exp[f64](best[1usize])
+    let z2 = math.exp[f64](best[3usize])
+    out[0usize] = best[0usize]
+    out[1usize] = d2
+    out[2usize] = z2 * math.sqrt[f64](1.0f64 + best[2usize] * best[2usize]) / d2
+    out[3usize] = z2 * best[2usize] / d2
+    ret (0.0f64 - fmin, cnt, fail)
 }

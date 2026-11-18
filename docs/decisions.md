@@ -49262,3 +49262,9 @@ New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input),
 `e.algo.stat.ghyp` gains `ghyp_kurt` (the fourth central moment over the squared variance, less 3) and `pgig` through `incomplete_bessel_k`, the integral from 1 to infinity of t^(-nu - 1) exp(-x t - y / t), which the package computes with a Fortran series at tolerance eps^0.85; here it is the infinite-range QUADPACK routine at relative tolerance 1e-13, which agrees with the package to better than 1e-7. A first version with the exponent nu - 1 gave a different integral altogether; the package's argument is -lambda for t^(lambda - 1). qgig is not ported: its default spline table uses the incomplete Bessel function at a tolerance of eps^0.25, which only the package's own Fortran series reproduces.
 
 **Result.** `oracle_ghyp` has 1649 values (15 kurtoses, 45 pgig added) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: qgig and the fits (hyperbFit, nigFit, gigFit, hyperblm) remain.
+
+## D7207 — GeneralizedHyperbolic: nigFit with a given start (Nelder-Mead)
+
+`e.algo.stat.ghyp` gains `nig_fit`: the package's `nigFit(x, paramStart, startValues = "US", method = "Nelder-Mead")` on R's Nelder-Mead port (`e.algo.stat.rnm.nmmin`, reltol 1.49e-8, 1000 evaluations): the (alpha, beta) start is mapped to (mu, delta, pi, zeta) by hyperbChangePars, the negative log-likelihood is minimised over (mu, log delta, pi, log zeta), and the optimum is mapped back. The function-evaluation count equals R's, so the simplex path is the same.
+
+**Result.** `oracle_ghyp` has 1679 values (30 added: five fits to simulated NIG samples, the four parameters at 1e-5, the maximised log-likelihood at 1e-7 and the counts exactly) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: nigFit's other start values and methods, hyperbFit, gigFit, hyperblm, the standard errors and qgig remain.

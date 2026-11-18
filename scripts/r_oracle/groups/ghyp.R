@@ -73,4 +73,16 @@ for (rep in 1:15) {
   chi <- runif(1, 0.3, 3); psi <- runif(1, 0.3, 3); lg <- runif(1, -2, 2)
   for (x in c(0.3, 1, 2.5)) cases[[length(cases) + 1]] <- case("pgig", c(x, chi, psi, lg, 0, 0, 0), pgig(x, chi, psi, lg), rel = 1e-7, abs = 1e-10)
 }
+# nigFit with a user start and Nelder-Mead: args (n, what, mu0, delta0, alpha0, beta0, 0, data...) under "nigFit"; what 0..3 the fitted mu, delta, alpha, beta, 4 the maximised
+# log-likelihood, 5 the function count
+for (rep in 1:5) {
+  n <- sample(150:300, 1); mu <- rnorm(1); delta <- runif(1, 0.5, 2); alpha <- runif(1, 1, 3); beta <- runif(1, -0.6, 0.6) * alpha
+  x <- rnig(n, mu, delta, alpha, beta)
+  st <- c(mean(x), sd(x), 1.5, 0.1)
+  fit <- tryCatch(nigFit(x, paramStart = st, startValues = "US", method = "Nelder-Mead"), error = function(e) NULL)
+  if (is.null(fit)) next
+  for (w in 0:3) cases[[length(cases) + 1]] <- case("nigFit", c(n, w, st, 0, x), as.numeric(fit$param[w + 1]), rel = 1e-5, abs = 1e-7)
+  cases[[length(cases) + 1]] <- case("nigFit", c(n, 4, st, 0, x), as.numeric(fit$maxLik), rel = 1e-7, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("nigFit", c(n, 5, st, 0, x), as.numeric(fit$iter), rel = 0, abs = 0)
+}
 emit("ghyp", "GeneralizedHyperbolic", list(cases))

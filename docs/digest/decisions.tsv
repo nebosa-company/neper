@@ -3992,4 +3992,5 @@ D7202	897	flexmix: the binomial family
 D7203	940	flexmix: the Gamma family
 D7204	936	flexmix: the classification EM (CEM)
 D7205	706	GeneralizedHyperbolic: the moments of any order and the skewness
-D7206	979	GeneralizedHyperbolic: the kurtosis and pgig
+D7206	980	GeneralizedHyperbolic: the kurtosis and pgig
+D7207	911	GeneralizedHyperbolic: nigFit with a given start (Nelder-Mead)
