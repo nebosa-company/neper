@@ -28,4 +28,19 @@ for (rep in 1:15) {
   mxf <- res[which((res[, 1] + res[, 2]) == max(res[, 1] + res[, 2]))[1], 5]
   cases[[length(cases) + 1]] <- case("roc", c(n, test, stat, 2, 0, 0), mxf, rel = 1e-9, abs = 1e-12)
 }
+# ROC from a formula (the glm's fitted probabilities as the test): "rocf" args (n, p, y, X row-major with the intercept, kind, k, col), kind 0 table entry, 1 AUC, 2 maximising cutpoint
+for (rep in 1:15) {
+  n <- sample(40:120, 1); p <- sample(2:4, 1); X <- cbind(1, matrix(round(rnorm(n * (p - 1)), 4), n, p - 1))
+  y <- rbinom(n, 1, plogis(as.vector(X %*% runif(p, -1, 1)))); if (length(unique(y)) < 2) next
+  dfx <- as.data.frame(X[, -1, drop = FALSE]); names(dfx) <- paste0("v", seq_len(p - 1)); dfx$y <- y
+  fo <- as.formula(paste("y ~", paste(names(dfx)[-p], collapse = " + ")))
+  r <- suppressWarnings(ROC(form = fo, data = dfx, plot = "none")); res <- r$res; nr <- nrow(res)
+  for (k in sample(0:(nr - 1), 5)) for (col in 0:3) {
+    v <- res[k + 1, col + 1]; if (is.nan(v) || is.infinite(v)) next
+    cases[[length(cases) + 1]] <- case("rocf", c(n, p, y, as.vector(t(X)), 0, k, col), v, rel = 1e-7, abs = 1e-10)
+  }
+  cases[[length(cases) + 1]] <- case("rocf", c(n, p, y, as.vector(t(X)), 1, 0, 0), r$AUC, rel = 1e-7, abs = 1e-10)
+  mxf <- res[which((res[, 1] + res[, 2]) == max(res[, 1] + res[, 2]))[1], 5]
+  cases[[length(cases) + 1]] <- case("rocf", c(n, p, y, as.vector(t(X)), 2, 0, 0), mxf, rel = 1e-7, abs = 1e-10)
+}
 emit("epi", "Epi", list(cases))

@@ -49544,3 +49544,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.epi` gains `roc_value` (the package's cutpoint table: row 0 at -Inf and one row per distinct test value, from the cumulative counts at or below the cutpoint, with its sensitivity, specificity, pvp and pvn), `roc_auc` (the trapezoid area over those rows) and `roc_max_cut` (the first cutpoint maximising sensitivity plus specificity).
 
 **Result.** `oracle_epi` gains 15 test and outcome sets (n 20 to 60: table entries at 5 rows each, the area and the cutpoint, 397 values) and equals Epi on Windows at 1e-9. Linux pending. L513 stays partial: the formula interface (a glm's fitted values as the test), the conditional MLE odds ratio, Lexis tools, clogistic, rate and survival tools.
+
+## D7254 — Epi: ROC from a logistic formula
+
+The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.performancepkg.logit_fitted` (flexmix's binomial IRLS) as the test, which is what `ROC(form = ...)` does with a glm's fitted values.
+
+**Result.** `oracle_epi` gains 15 logistic regressions (n 40 to 120, 330 values: table entries, the area and the cutpoint) and equals Epi on Windows at 1e-7. Linux pending. L513 stays partial: the conditional MLE odds ratio, Lexis tools, clogistic, rate and survival tools.

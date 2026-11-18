@@ -3,14 +3,27 @@
 
 use e.algo.stat.epi as ei
 use e.algo.stat.epir as ep
-use e.io
+use e.algo.stat.performancepkg as pf
 use e.mem
+use e.io
 use e.os
 use e.str
 use e.test.oracle as oracle
 
-fn answer(c: *const oracle.Case) -> f64 {
+fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "rocf") {
+        let fnn = usize(x[0usize])
+        let fpp = usize(x[1usize])
+        let (fit, fe) = mem.alloc[f64](ar, fnn)
+        if fe != ok { os.exit(4) }
+        if pf.logit_fitted(ar, x[2usize + fnn..2usize + fnn + fnn * fpp], x[2usize..2usize + fnn], fnn, fpp, fit) != ok { os.exit(5) }
+        let ys = x[2usize..2usize + fnn]
+        let fk = usize(x[2usize + fnn + fnn * fpp])
+        if fk == 1usize { ret ei.roc_auc(fit, ys) }
+        if fk == 2usize { ret ei.roc_max_cut(fit, ys) }
+        ret ei.roc_value(fit, ys, usize(x[3usize + fnn + fnn * fpp]), usize(x[4usize + fnn + fnn * fpp]))
+    }
     if str.eq(c.name, "roc") {
         let rn = usize(x[0usize])
         let rt = x[1usize..1usize + rn]
@@ -69,7 +82,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var at = 0usize
     while at < golden.cases.len {
         let c = &golden.cases[at]
-        let got = answer(c)
+        let got = answer(a, c)
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
