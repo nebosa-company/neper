@@ -48714,3 +48714,9 @@ The strptime subset in `e.fmt.arff` (D7113) now reads %w and %U as foreign's rea
 Still not here: cells, structs, lists, string arrays and N-d arrays, which read.octave reads and this reader does not (a "string array" is treated as an unknown type, which is a divergence).
 
 **Result.** `oracle_octave` equals foreign on 105 cases on Windows; Linux pending. L332 stays partial: the remaining read.octave types are above, and read.dbf memo fields, write.dbf, read.mtp and read.systat need the foreign source.
+
+## D7116 — compositions: principal balances (gsi.PrinBal, the default PBhclust method)
+
+`e.algo.stat.compositions_ext` now has `prin_bal_base`: the variation matrix of the n by D data (compositions::variation), the ward.D hclust of it (`e.algo.stat.hclust`, method 1), its merge matrix turned into a signary by `merge_signary`, and the ilr base of that signary (`signary_base`). `merge_signary` is the merge-to-signary step that `balanced_base` used inline, so both now share it. The other gsi.PrinBal methods (PBangprox, PBmaxvar) and balance formulas are not here.
+
+**Result.** `oracle_compositions_prin` equals gsi.PrinBal on 27 cases (nine random gamma data sets of 3 to 5 parts, the base compared by sum, weighted sum and sum of squares) on Windows; `oracle_compositions_ext` still passes after the refactor. Linux pending. L477 stays partial: robust MCD estimates, optimal balances, balanceBase from a formula and the other exports are open.

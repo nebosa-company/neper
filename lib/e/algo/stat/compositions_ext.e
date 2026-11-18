@@ -10,6 +10,7 @@
 use e.algo.linalg.lapack_syevr as sy
 use e.algo.rand.r as rng
 use e.algo.stat.compositions as cm
+use e.algo.stat.hclust as hc
 use e.algo.stat.hoslem_rsf as hr
 use e.math
 use e.math.dist as dist
@@ -268,9 +269,8 @@ fn ilr_base(a: *mem.Arena, x: []const f64, n: usize, d: usize, v: []const f64, n
 fn balanced_base(a: *mem.Arena, d: usize, v: []f64) -> err {
     let nr = d - 1usize
     let (m, e1) = mem.alloc[f64](a, 2usize * nr)
-    let (sv, e2) = mem.alloc[f64](a, nr * d)
     let (w, e3) = mem.alloc[f64](a, d * nr)
-    if e1 != ok || e2 != ok || e3 != ok { ret e1 }
+    if e1 != ok || e3 != ok { ret e1 }
     // the vector c(-(1:D), floor(D / 2):1, (floor(D / 2) + 1):(D - 2)) with R's : (counting down when the start is above the end), recycled or cut to 2 (D - 1) values
     let (vec, e4) = mem.alloc[f64](a, 4usize * d + 8usize)
     if e4 != ok { ret e4 }
@@ -324,7 +324,18 @@ fn balanced_base(a: *mem.Arena, d: usize, v: []f64) -> err {
         m[i] = vec[i % k]
         i += 1usize
     }
-    i = 0usize
+    let me = merge_signary(a, m, d, nr, w)
+    if me != ok { ret me }
+    signary_base(w, d, nr, v)
+    ret ok
+}
+
+// gsi.merge2signary(M) for the merge matrix M (nr by 2, row-major, R's convention: a negative entry is a leaf -k, a positive k the cluster of row k):
+// the D by nr signary w (row-major), the transpose of R's V
+fn merge_signary(a: *mem.Arena, m: []const f64, d: usize, nr: usize, w: []f64) -> err {
+    let (sv, e) = mem.alloc[f64](a, nr * d)
+    if e != ok { ret e }
+    var i = 0usize
     while i < nr * d {
         sv[i] = 0.0f64
         i += 1usize
@@ -349,7 +360,6 @@ fn balanced_base(a: *mem.Arena, d: usize, v: []f64) -> err {
         }
         i += 1usize
     }
-    // the signary is t(V): D by D - 1
     i = 0usize
     while i < d {
         var j = 0usize
@@ -359,6 +369,31 @@ fn balanced_base(a: *mem.Arena, d: usize, v: []f64) -> err {
         }
         i += 1usize
     }
+    ret ok
+}
+
+// gsi.PrinBal with its default method "PBhclust": the Ward (ward.D) hclust of the variation matrix of the n by D data, its merges as a signary,
+// then the ilr base of that signary (D by D - 1, row-major)
+fn prin_bal_base(a: *mem.Arena, x: []const f64, n: usize, d: usize, v: []f64) -> err {
+    let nr = d - 1usize
+    let (vr, e1) = mem.alloc[f64](a, d * d)
+    if e1 != ok { ret e1 }
+    let (m, e2) = mem.alloc[f64](a, 2usize * nr)
+    if e2 != ok { ret e2 }
+    let (w, e3) = mem.alloc[f64](a, d * nr)
+    if e3 != ok { ret e3 }
+    let ce = cm.variation(a, x, n, d, vr)
+    if ce != ok { ret ce }
+    let (tree, he) = hc.hclust(a, vr, d, 1usize)
+    if he != ok { ret he }
+    var i = 0usize
+    while i < nr {
+        m[i * 2usize] = f64(tree.merge_a[i])
+        m[i * 2usize + 1usize] = f64(tree.merge_b[i])
+        i += 1usize
+    }
+    let me = merge_signary(a, m, d, nr, w)
+    if me != ok { ret me }
     signary_base(w, d, nr, v)
     ret ok
 }

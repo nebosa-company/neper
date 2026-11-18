@@ -3901,4 +3901,5 @@ D7111	654	MuMIn full port; L428 closed
 D7112	939	metafor, escalc, fsn, rma.mv and a port of nlminb; L364 closed
 D7113	1676	foreign: read.arff date attributes, sparse rows and relational attributes
 D7114	613	foreign: read.arff weekday and week directives
-D7115	1218	foreign: read.octave bool, complex, range and integer-type variables
+D7115	1219	foreign: read.octave bool, complex, range and integer-type variables
+D7116	950	compositions: principal balances (gsi.PrinBal, the default PBhclust method)
