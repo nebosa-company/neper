@@ -49172,3 +49172,9 @@ For lambda = 1 `rghyp` uses the package's `rgig1`, which is `rgig` with m = 1 (t
 `dstable` gains the two corner cases of the package: `dstable.smallA` (the closed form log(alpha) + log1p(beta) - (1 + log(2 x + pi alpha beta)) for alpha below 1e-17, the threshold stabledist calls `.alpha.small.dstable`, after the reflection for x < zeta) and the Pareto-tail density `alpha (1 + beta) C(alpha) |x|^(-1 - alpha)` that replaces the integral when it underflows to exactly zero. An earlier reading of the threshold as 0.02 sent alpha between 1e-17 and 0.02 to the wrong closed form and was 1e-4 off R; the general integral is the right path down to alpha near 0.005, which the oracle now covers.
 
 **Result.** `oracle_stabledist` has 822 values (60 added: alpha from 0.005 to 0.02 and the far tails where the Pareto fallback fires) and equals stabledist on Windows at 1e-7 relative. Linux pending. L407 stays partial: log densities, qstable's upper tail and alpha = 1, the other parametrisations and the GeneralizedHyperbolic higher moments and fits remain.
+
+## D7192 — stabledist: the parametrisations pm = 1 and pm = 2
+
+`e.algo.stat.stabledistpkg` gains `dstable_pm` and `pstable_pm`: pm = 1 shifts the location by beta gamma om(gamma, alpha) (om = tan(pi alpha / 2), 2 log(gamma) / pi at alpha = 1, zero at the other integers) and pm = 2 puts the mode at delta, using `stable_mode` (a Brent maximiser of the S0 density over (-0.7, 0) sign(beta) at tolerance eps^0.25, ported as R's optimize) and rescaling gamma by alpha^(-1 / alpha).
+
+**Result.** `oracle_stabledist` has 922 values (100 added: 25 parameter sets, density and distribution in both parametrisations, 1e-6 relative) and equals stabledist on Windows. Linux pending. L407 stays partial: log densities, qstable's upper tail and alpha = 1, and the GeneralizedHyperbolic higher moments and fits remain.

@@ -2,7 +2,7 @@
 // beta = 0 the Cauchy): Nolan's integral representation split at the mode of the integrand and at the points where it falls below 1e-4, each piece integrated with
 // integrate() (e.math.quadpack.qags) at tolerance 64 eps and 1000 subdivisions, as stabledist:::.fct1 does.
 //
-// Not here: the other parametrisations,
+// Not here: the other options listed below,
 // log densities, pstable, qstable and rstable.
 
 use e.math
@@ -538,4 +538,132 @@ fn fct2_p(a: *mem.Arena, x: f64, beta: f64, tol: f64, give_i: bool) -> f64 {
     let (q2, e2) = qp.qags[F2ctx](a, &c, g2exp, 0.0f64 - 1.0f64, up, tol, tol, 1000usize)
     if e2 != ok { ret 0.0f64 / 0.0f64 }
     ret q2.result / 2.0f64
+}
+
+// ---- the parametrisations pm = 1 and pm = 2: pm 1 shifts delta by beta gamma times om(gamma, alpha); pm 2 puts the mode at delta (stableMode: R's optimize of the
+// S0 density over (-0.7, 0) sign(beta), tolerance eps^0.25) and rescales gamma by alpha^(-1 / alpha)
+fn om(gamma: f64, alpha: f64) -> f64 {
+    if alpha != math.floor[f64](alpha + 0.5f64) { ret math.tan[f64](pi2() * alpha) }
+    if alpha == 1.0f64 { ret (2.0f64 / pi()) * math.log[f64](gamma) }
+    ret 0.0f64
+}
+
+type Mctx = struct { a: *mem.Arena, alpha: f64, beta: f64 }
+
+fn mode_f(c: *Mctx, x: f64) -> f64 { ret 0.0f64 - dstable(c.a, x, c.alpha, c.beta, 1.0f64, 0.0f64) }
+
+fn fmin_ctx(c: *Mctx, ax: f64, bx: f64, tol: f64) -> f64 {
+    let cc = (3.0f64 - math.sqrt[f64](5.0f64)) * 0.5f64
+    let eps0 = math.sqrt[f64](eps())
+    var a = ax
+    var b = bx
+    var v = a + cc * (b - a)
+    var w = v
+    var x = v
+    var d = 0.0f64
+    var e = 0.0f64
+    var fx = mode_f(c, x)
+    var fv = fx
+    var fw = fx
+    let tol3 = tol / 3.0f64
+    var guard = 0usize
+    while guard < 1000usize {
+        guard += 1usize
+        let xm = (a + b) * 0.5f64
+        let tol1 = eps0 * math.abs[f64](x) + tol3
+        let t2 = tol1 * 2.0f64
+        if math.abs[f64](x - xm) <= t2 - (b - a) * 0.5f64 { break }
+        var p = 0.0f64
+        var q = 0.0f64
+        var r = 0.0f64
+        if math.abs[f64](e) > tol1 {
+            r = (x - w) * (fx - fv)
+            q = (x - v) * (fx - fw)
+            p = (x - v) * q - (x - w) * r
+            q = (q - r) * 2.0f64
+            if q > 0.0f64 { p = 0.0f64 - p } else { q = 0.0f64 - q }
+            r = e
+            e = d
+        }
+        var u = 0.0f64
+        if math.abs[f64](p) >= math.abs[f64](q * 0.5f64 * r) || p <= q * (a - x) || p >= q * (b - x) {
+            if x < xm { e = b - x } else { e = a - x }
+            d = cc * e
+        } else {
+            d = p / q
+            u = x + d
+            if u - a < t2 || b - u < t2 {
+                d = tol1
+                if x >= xm { d = 0.0f64 - d }
+            }
+        }
+        if math.abs[f64](d) >= tol1 {
+            u = x + d
+        } else if d > 0.0f64 {
+            u = x + tol1
+        } else {
+            u = x - tol1
+        }
+        let fu = mode_f(c, u)
+        if fu <= fx {
+            if u < x { b = x } else { a = x }
+            v = w
+            w = x
+            x = u
+            fv = fw
+            fw = fx
+            fx = fu
+        } else {
+            if u < x { a = u } else { b = u }
+            if fu <= fw || w == x {
+                v = w
+                fv = fw
+                w = u
+                fw = fu
+            } else if fu <= fv || v == x || v == w {
+                v = u
+                fv = fu
+            }
+        }
+    }
+    ret x
+}
+
+fn stable_mode(a: *mem.Arena, alpha: f64, beta0: f64) -> f64 {
+    if alpha * beta0 == 0.0f64 { ret 0.0f64 }
+    var beta = beta0
+    if beta > 1.0f64 - 1.0e-11f64 { beta = 1.0f64 - 1.0e-11f64 }
+    var c: Mctx = zero
+    c.a = a
+    c.alpha = alpha
+    c.beta = beta
+    var s = 1.0f64
+    if beta < 0.0f64 { s = 0.0f64 - 1.0f64 }
+    var lo = 0.0f64 - 0.7f64 * s
+    var hi = 0.0f64
+    if s < 0.0f64 {
+        lo = 0.0f64
+        hi = 0.7f64
+    }
+    ret fmin_ctx(&c, lo, hi, pw.uniroot_tol())
+}
+
+// (gamma, delta) of the S0 parametrisation equivalent to the given pm
+fn pm_to_s0(a: *mem.Arena, alpha: f64, beta: f64, gamma: f64, delta: f64, pm: usize) -> (f64, f64) {
+    if pm == 1usize { ret (gamma, delta + beta * gamma * om(gamma, alpha)) }
+    if pm == 2usize {
+        let g2 = math.pow[f64](alpha, 0.0f64 - 1.0f64 / alpha) * gamma
+        ret (g2, delta - math.pow[f64](alpha, 0.0f64 - 1.0f64 / alpha) * gamma * stable_mode(a, alpha, beta))
+    }
+    ret (gamma, delta)
+}
+
+fn dstable_pm(a: *mem.Arena, x: f64, alpha: f64, beta: f64, gamma: f64, delta: f64, pm: usize) -> f64 {
+    let (g, d) = pm_to_s0(a, alpha, beta, gamma, delta, pm)
+    ret dstable(a, x, alpha, beta, g, d)
+}
+
+fn pstable_pm(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f64, pm: usize, lower: bool, log_p: bool) -> f64 {
+    let (g, d) = pm_to_s0(a, alpha, beta, gamma, delta, pm)
+    ret pstable_ext(a, q, alpha, beta, g, d, 64.0f64 * eps(), 1000usize, lower, log_p)
 }

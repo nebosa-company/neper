@@ -3977,4 +3977,5 @@ D7187	764	GeneralizedHyperbolic: rghyp and rgig
 D7188	645	GeneralizedHyperbolic: rgig1 (lambda = 1)
 D7189	930	stabledist: alpha = 1 with beta != 0
 D7190	917	stabledist: pstable with lower.tail and log.p
-D7191	1050	stabledist: the small-alpha branch and the Pareto-tail fallback
+D7191	1051	stabledist: the small-alpha branch and the Pareto-tail fallback
+D7192	808	stabledist: the parametrisations pm = 1 and pm = 2

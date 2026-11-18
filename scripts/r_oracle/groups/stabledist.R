@@ -72,4 +72,17 @@ for (rep in 1:20) {
     if (is.finite(d) && d > 0) cases[[length(cases) + 1]] <- case("d", c(al, be, ga, de, x), d, rel = 1e-7, abs = 1e-18)
   }
 }
+# pm = 1 and pm = 2: args (alpha, beta, gamma, delta, x, pm) under "dpm" and "ppm"
+for (rep in 1:25) {
+  al <- c(runif(1, 0.4, 0.98), runif(1, 1.02, 1.95))[sample(1:2, 1)]
+  be <- c(0, runif(1, -0.95, 0.95))[sample(1:2, 1)]
+  ga <- runif(1, 0.4, 2.5); de <- rnorm(1)
+  for (pm in 1:2) {
+    x <- de + ga * rnorm(1, 0, 1.5)
+    d <- tryCatch(dstable(x, al, be, ga, de, pm = pm), error = function(e) NA_real_)
+    if (is.finite(d) && d > 1e-12) cases[[length(cases) + 1]] <- case("dpm", c(al, be, ga, de, x, pm), d, rel = 1e-6, abs = 1e-12)
+    pv <- tryCatch(suppressWarnings(pstable(x, al, be, ga, de, pm = pm, silent = TRUE)), error = function(e) NA_real_)
+    if (is.finite(pv)) cases[[length(cases) + 1]] <- case("ppm", c(al, be, ga, de, x, pm), pv, rel = 1e-6, abs = 1e-10)
+  }
+}
 emit("stabledist", "stabledist", list(cases))
