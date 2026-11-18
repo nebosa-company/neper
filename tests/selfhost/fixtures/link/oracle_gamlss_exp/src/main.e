@@ -299,6 +299,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 265usize { ret gd.ddburr12(x, mu, sigma, nu) }
     if which == 266usize { ret gd.pdburr12(x, mu, sigma, nu) }
     if which == 267usize { ret gd.qdburr12(x, mu, sigma, nu) }
+    if which == 268usize { ret gd.dzabb(x, mu, sigma, nu, tau) }
+    if which == 269usize { ret gd.pzabb(x, mu, sigma, nu, tau) }
+    if which == 270usize { ret gd.dzibb(x, mu, sigma, nu, tau) }
+    if which == 271usize { ret gd.pzibb(x, mu, sigma, nu, tau) }
     ret 0.0f64 - 1.0f64
 }
 

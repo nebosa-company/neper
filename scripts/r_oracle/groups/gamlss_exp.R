@@ -336,6 +336,12 @@ for (rep in 1:30) {
   add("ex", c(265, db_m, db_s, db_k, db_n), dDBURR12(db_k, mu = db_m, sigma = db_s, nu = db_n))
   add("ex", c(266, db_m, db_s, db_k, db_n), pDBURR12(db_k, mu = db_m, sigma = db_s, nu = db_n))
   add("ex", c(267, db_m, db_s, bi_p, db_n), qDBURR12(bi_p, mu = db_m, sigma = db_s, nu = db_n))
+  # ZABB 268-269, ZIBB 270-271 (mu in (0, 1), sigma, x, nu a mass, tau = bd)
+  zb_bd <- sample(5:25, 1); zb_k <- sample(0:zb_bd, 1); zb_m <- runif(1, 0.2, 0.8); zb_s <- runif(1, 0.1, 1.5); zb_n <- runif(1, 0.05, 0.5)
+  add("ex", c(268, zb_m, zb_s, zb_k, zb_n, zb_bd), dZABB(zb_k, mu = zb_m, sigma = zb_s, nu = zb_n, bd = zb_bd), rel = 1e-8, abs = 1e-12)
+  add("ex", c(269, zb_m, zb_s, zb_k, zb_n, zb_bd), pZABB(zb_k, mu = zb_m, sigma = zb_s, nu = zb_n, bd = zb_bd), rel = 1e-8, abs = 1e-12)
+  add("ex", c(270, zb_m, zb_s, zb_k, zb_n, zb_bd), dZIBB(zb_k, mu = zb_m, sigma = zb_s, nu = zb_n, bd = zb_bd), rel = 1e-8, abs = 1e-12)
+  add("ex", c(271, zb_m, zb_s, zb_k, zb_n, zb_bd), pZIBB(zb_k, mu = zb_m, sigma = zb_s, nu = zb_n, bd = zb_bd), rel = 1e-8, abs = 1e-12)
 }
 # random numbers by the quantile function on runif: args (seed, i, which, mu, sigma, nu) under "rq": which 0 rGA, 1 rNBI, 2 rGU, 3 rBE, 4 rPARETO2, 5 rTF, 6 rBCCG; draw i (0-based) of 8
 for (rep in 1:6) {

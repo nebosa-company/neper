@@ -49574,3 +49574,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.gamlssdist` gains the one-parameter PARETO d, p, q (support x > 1) and the discretised Burr XII DBURR12 d, p, q (the difference of two survival functions at x and x + 1, the quantile truncated as the package does).
 
 **Result.** `oracle_gamlss_exp` gains 6 cases per draw (180 values over the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: ST3C (compiled in the package), DEL, DBI, ZASICHEL, MN3 to MN5, the beta-binomial inflated families, moments, random numbers.
+
+## D7259 — gamlss.dist: ZABB and ZIBB
+
+`e.algo.stat.gamlssdist` gains the zero-adjusted and zero-inflated beta binomial d and p over the existing BB density and distribution (bd trials; ZABB renormalises the non-zero part by 1 - P(0), ZIBB adds the mass nu to the zero cell).
+
+**Result.** `oracle_gamlss_exp` gains 4 cases per draw (118 values over the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: ST3C (compiled in the package), DEL, DBI, ZASICHEL, ZABNB, ZIBNB, MN3 to MN5, quantiles of the discrete families, moments, random numbers.

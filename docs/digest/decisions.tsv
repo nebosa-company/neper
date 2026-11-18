@@ -4044,4 +4044,5 @@ D7254	529	Epi: ROC from a logistic formula
 D7255	907	Epi: the conditional MLE odds ratio and its exact interval
 D7256	786	Epi: clogistic on matched sets
 D7257	652	gamlss.dist: LOGSHASH, BCPEo and ST1
-D7258	553	gamlss.dist: PARETO and DBURR12
+D7258	554	gamlss.dist: PARETO and DBURR12
+D7259	570	gamlss.dist: ZABB and ZIBB

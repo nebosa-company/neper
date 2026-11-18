@@ -2105,3 +2105,34 @@ fn qdburr12(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
     ret math.trunc[f64](mu * math.pow[f64](math.exp[f64](0.0f64 - math.log[f64](1.0f64 - p) / nu) - 1.0f64, 1.0f64 / sigma) - 1.0f64)
 }
+
+// ZABB and ZIBB: the zero-adjusted and zero-inflated beta binomial (bd trials, mass nu at zero), d and p
+fn dzabb(x: f64, mu: f64, sigma: f64, nu: f64, bd: f64) -> f64 {
+    if x < 0.0f64 || x > bd { ret 0.0f64 }
+    if x == 0.0f64 { ret nu }
+    ret (1.0f64 - nu) * dbb(x, mu, sigma, bd) / (1.0f64 - dbb(0.0f64, mu, sigma, bd))
+}
+
+fn pzabb(q: f64, mu: f64, sigma: f64, nu: f64, bd: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q > bd { ret 1.0f64 }
+    let c1 = pbb(q, mu, sigma, bd)
+    let c2 = pbb(0.0f64, mu, sigma, bd)
+    var r = nu + (1.0f64 - nu) * (c1 - c2) / (1.0f64 - c2)
+    if r > 1.0f64 { r = 1.0f64 }
+    ret r
+}
+
+fn dzibb(x: f64, mu: f64, sigma: f64, nu: f64, bd: f64) -> f64 {
+    if x < 0.0f64 || x > bd { ret 0.0f64 }
+    if x == 0.0f64 { ret nu + (1.0f64 - nu) * dbb(0.0f64, mu, sigma, bd) }
+    ret (1.0f64 - nu) * dbb(x, mu, sigma, bd)
+}
+
+fn pzibb(q: f64, mu: f64, sigma: f64, nu: f64, bd: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q > bd { ret 1.0f64 }
+    var r = nu + (1.0f64 - nu) * pbb(q, mu, sigma, bd)
+    if r > 1.0f64 { r = 1.0f64 }
+    ret r
+}
