@@ -1178,3 +1178,85 @@ fn pst3(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     if x < mu { c = 2.0f64 * nb.pt(nu * (x - mu) / sigma, tau, true, false) } else { c = 1.0f64 + 2.0f64 * nu * nu * (nb.pt((x - mu) / (sigma * nu), tau, true, false) - 0.5f64) }
     ret c / (1.0f64 + nu * nu)
 }
+
+// skew t and skew power exponential densities (ST2, ST4, ST5, SEP1, SEP2, SEP4), SN1, and the ST3 quantile
+fn dst2(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    var lam = 1.0f64
+    if tau < 1000000.0f64 { lam = (tau + 1.0f64) / (tau + z * z) }
+    let w = nu * math.sqrt[f64](lam) * z
+    if tau < 1000000.0f64 { ret math.exp[f64](nb.pt(w, tau + 1.0f64, true, true) + nb.dt(z, tau, true) + math.log[f64](2.0f64) - math.log[f64](sigma)) }
+    ret math.exp[f64](dist.pnorm(w, 0.0f64, 1.0f64, true, true) + dist.dnorm(z, 0.0f64, 1.0f64, true) + math.log[f64](2.0f64) - math.log[f64](sigma))
+}
+
+fn dst4(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    var lk1 = sp.lgamma(0.5f64) + sp.lgamma(nu / 2.0f64) - sp.lgamma((nu + 1.0f64) / 2.0f64) + 0.5f64 * math.log[f64](nu)
+    if nu >= 1000000.0f64 { lk1 = 0.5f64 * math.log[f64](2.0f64 * pi()) }
+    var lk2 = sp.lgamma(0.5f64) + sp.lgamma(tau / 2.0f64) - sp.lgamma((tau + 1.0f64) / 2.0f64) + 0.5f64 * math.log[f64](tau)
+    if tau >= 1000000.0f64 { lk2 = 0.5f64 * math.log[f64](2.0f64 * pi()) }
+    let k = math.exp[f64](lk2 - lk1)
+    let t = (x - mu) / sigma
+    let lb = dist.dnorm(t, 0.0f64, 1.0f64, true)
+    var l1 = nb.dt(t, nu, true)
+    if tau >= 1000000.0f64 { l1 = lb }
+    var l2 = nb.dt(t, tau, true)
+    if tau >= 1000000.0f64 { l2 = lb }
+    var ll = 0.0f64
+    if x < mu { ll = l1 } else { ll = l2 + (lk2 - lk1) }
+    ret math.exp[f64](ll + math.log[f64](2.0f64 / (1.0f64 + k)) - math.log[f64](sigma))
+}
+
+fn dst5(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    let ve = 2.0f64 / tau
+    let lam = 2.0f64 * nu / (tau * math.sqrt[f64](2.0f64 * tau + nu * nu))
+    let aa = (ve + lam) / 2.0f64
+    let bb = (ve - lam) / 2.0f64
+    let r = math.sqrt[f64](aa + bb + z * z)
+    ret math.exp[f64]((aa + 0.5f64) * math.log[f64](1.0f64 + z / r) + (bb + 0.5f64) * math.log[f64](1.0f64 - z / r) - (aa + bb - 1.0f64) * math.log[f64](2.0f64) - 0.5f64 * math.log[f64](aa + bb) - lbeta_(aa, bb) - math.log[f64](sigma))
+}
+
+fn dsep1(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    let w = nu * z
+    let sz = math.pow[f64](math.abs[f64](z), tau) / tau
+    let s = math.pow[f64](math.abs[f64](w), tau) / tau
+    let lpdf = (1.0f64 - 1.0f64 / tau) * math.log[f64](tau) - sz - sp.lgamma(1.0f64 / tau) - math.log[f64](2.0f64)
+    var sg = 0.0f64
+    if w > 0.0f64 { sg = 1.0f64 }
+    if w < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+    var lcdf = 0.0f64
+    if s == 0.0f64 {
+        lcdf = math.log[f64](0.5f64 + w * math.exp[f64]((1.0f64 - 1.0f64 / tau) * math.log[f64](tau) - sp.lgamma(1.0f64 / tau) - math.log[f64](2.0f64)))
+    } else {
+        lcdf = math.log[f64](0.5f64 * (1.0f64 + nm.pgamma(s, 1.0f64 / tau, 1.0f64, true, false) * sg))
+    }
+    ret math.exp[f64](lpdf + lcdf + math.log[f64](2.0f64) - math.log[f64](sigma))
+}
+
+fn dsn1(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret dsep1(x, mu, sigma, nu, 2.0f64) }
+
+fn dsep2(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    var sg = 0.0f64
+    if z > 0.0f64 { sg = 1.0f64 }
+    if z < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+    let w = sg * math.pow[f64](math.abs[f64](z), tau / 2.0f64) * nu * math.sqrt[f64](2.0f64 / tau)
+    ret math.exp[f64](math.log[f64](dist.pnorm(w, 0.0f64, 1.0f64, true, false)) - math.pow[f64](math.abs[f64](z), tau) / tau - math.log[f64](sigma) - sp.lgamma(1.0f64 / tau) - (1.0f64 / tau - 1.0f64) * math.log[f64](tau))
+}
+
+fn dsep4(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let k1 = math.exp[f64](sp.lgamma(1.0f64 + 1.0f64 / nu))
+    let k2 = math.exp[f64](sp.lgamma(1.0f64 + 1.0f64 / tau))
+    let z = (x - mu) / sigma
+    var ll = 0.0f64
+    if x < mu { ll = 0.0f64 - math.pow[f64](math.abs[f64](z), nu) } else { ll = 0.0f64 - math.pow[f64](math.abs[f64](z), tau) }
+    ret math.exp[f64](ll - math.log[f64](k1 + k2) - math.log[f64](sigma))
+}
+
+fn qst3(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    if p < 1.0f64 / (1.0f64 + nu * nu) { ret mu + (sigma / nu) * nb.qt(p * (1.0f64 + nu * nu) / 2.0f64, tau, true, false) }
+    ret mu + (sigma * nu) * nb.qt((p * (1.0f64 + nu * nu) - 1.0f64) / (2.0f64 * nu * nu) + 0.5f64, tau, true, false)
+}

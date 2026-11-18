@@ -49034,3 +49034,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the beta binomial BB and the beta negative binomial BNB (density and distribution by summation, BB falling back to the binomial below sigma 1e-4 and flooring sigma at 1e-10, as the package does), the SEP3 and SN2 densities (SN2 is SEP3 at tau = 2) and the skew t of type 3, ST3 (density with the normal limit above tau = 1e6, and the distribution).
 
 **Result.** `oracle_gamlss_exp` has 5481 values across 59 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7169 — gamlss.dist: the skew t and skew power exponential densities, SN1 and the ST3 quantile
+
+`e.algo.stat.gamlssdist` gains the densities of ST2, ST4, ST5, SEP1, SEP2, SEP4 and SN1 (SN1 is SEP1 at tau = 2) and the ST3 quantile. dST4 tests tau (not nu) for the normal limit of its lower tail when nu is scalar, which the port reproduces. The distributions of these families integrate numerically in the package and are not ported.
+
+**Result.** `oracle_gamlss_exp` has 5719 values across 66 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
