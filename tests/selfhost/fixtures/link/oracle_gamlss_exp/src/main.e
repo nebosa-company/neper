@@ -31,7 +31,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 14usize { ret gd.qno(x, mu, sigma) }
     if which == 15usize { ret gd.dpo(x, mu) }
     if which == 16usize { ret gd.ppo(x, mu) }
-    ret gd.qpo(x, mu)
+    if which == 17usize { ret gd.qpo(x, mu) }
+    if which == 18usize { ret gd.dga(x, mu, sigma) }
+    if which == 19usize { ret gd.pga(x, mu, sigma) }
+    if which == 20usize { ret gd.qga(x, mu, sigma) }
+    if which == 21usize { ret gd.dwei(x, mu, sigma) }
+    if which == 22usize { ret gd.pwei(x, mu, sigma) }
+    if which == 23usize { ret gd.qwei(x, mu, sigma) }
+    if which == 24usize { ret gd.dlogno(x, mu, sigma) }
+    if which == 25usize { ret gd.plogno(x, mu, sigma) }
+    ret gd.qlogno(x, mu, sigma)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

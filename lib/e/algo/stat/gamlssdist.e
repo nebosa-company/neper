@@ -213,3 +213,27 @@ fn dpo(x: f64, mu: f64) -> f64 { ret nm.dpois(x, mu, false) }
 fn ppo(x: f64, mu: f64) -> f64 { ret nm.ppois(x, mu, true, false) }
 
 fn qpo(p: f64, mu: f64) -> f64 { ret nm.qpois(p, mu, true, false) }
+
+// GA: gamma with mean mu and coefficient of variation sigma (shape 1 / sigma^2, scale mu sigma^2)
+fn pga(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret nm.pgamma(x, 1.0f64 / (sigma * sigma), mu * sigma * sigma, true, false)
+}
+
+fn qga(p: f64, mu: f64, sigma: f64) -> f64 { ret nm.qgamma(p, 1.0f64 / (sigma * sigma), mu * sigma * sigma, true, false) }
+
+// WEI: Weibull with scale mu and shape sigma
+fn pwei(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret 1.0f64 - math.exp[f64](0.0f64 - math.pow[f64](x / mu, sigma))
+}
+
+fn qwei(p: f64, mu: f64, sigma: f64) -> f64 { ret mu * math.pow[f64](0.0f64 - math.log[f64](1.0f64 - p), 1.0f64 / sigma) }
+
+// LOGNO: log-normal with log-mean mu and log-sd sigma
+fn plogno(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret dist.pnorm(math.log[f64](x), mu, sigma, true, false)
+}
+
+fn qlogno(p: f64, mu: f64, sigma: f64) -> f64 { ret math.exp[f64](dist.qnorm(p, mu, sigma, true, false)) }
