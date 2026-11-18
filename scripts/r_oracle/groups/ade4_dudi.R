@@ -75,4 +75,42 @@ xp <- matrix(rnorm(15 * 3), 15, 3); yp <- matrix(rnorm(15 * 3), 15, 3) + xp
 onepr(xp, yp, 4, TRUE); onepr(xp, yp, 2, FALSE)
 xq <- matrix(rnorm(12 * 4), 12, 4); yq <- matrix(rnorm(12 * 2), 12, 2) + xq[, 1:2]
 onepr(xq, yq, 4, TRUE)
+# dudi.fca: (8, n, p, nf, what, idx, nb, rw (n), table row-major); what 0 eig, 1 c1, 2 li, 3 co, 4 l1, 5 rank
+onefca <- function(blocks, n, nf) {
+  p <- sum(blocks)
+  tab <- matrix(0, n, p); k <- 0
+  for (b in blocks) { m <- matrix(runif(n * b), n, b); tab[, k + seq_len(b)] <- m / rowSums(m); k <- k + b }
+  rw <- runif(n); rw <- rw / sum(rw)
+  df <- as.data.frame(tab)
+  names(blocks) <- paste0("v", seq_along(blocks))
+  attr(df, "col.blocks") <- blocks; attr(df, "row.w") <- rw; attr(df, "col.num") <- factor(rep(seq_along(blocks), blocks))
+  r <- dudi.fca(df, scannf = FALSE, nf = nf)
+  flat <- c(length(blocks), rw, as.vector(t(tab)))
+  hdr <- function(what, idx) c(8, n, p, nf, what, idx, flat)
+  for (k in seq_along(r$eig)) cases[[length(cases) + 1]] <<- case("d", hdr(0, k - 1), r$eig[k], rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <<- case("d", hdr(5, 0), r$rank, rel = 0, abs = 0)
+  mats <- list(as.matrix(r$c1), as.matrix(r$li), as.matrix(r$co), as.matrix(r$l1))
+  for (w in 1:4) { m <- mats[[w]]; v <- as.vector(t(m)); for (k in seq_along(v)) cases[[length(cases) + 1]] <<- case("d", hdr(w, k - 1), v[k], rel = 1e-7, abs = 1e-10) }
+}
+onefca(c(3, 2, 3), 14, 3)
+onefca(c(2, 4), 10, 2)
+# rlq: (9, n, pr, nf, what, idx, nl, pq, R row-major, L row-major (equal row totals), Q row-major); what 0 eig, 1 c1, 2 l1, 3 lR, 4 lQ, 5 rank
+onerlq <- function(n, pr, nl, pq, nf) {
+  R <- matrix(rnorm(n * pr), n, pr)
+  L <- t(sapply(seq_len(n), function(i) as.vector(rmultinom(1, 30, runif(nl) + 0.2))))
+  L <- L[, order(colSums(L), decreasing = TRUE)]
+  Q <- matrix(rnorm(nl * pq), nl, pq)
+  dR <- dudi.pca(as.data.frame(R), scannf = FALSE)
+  dL <- dudi.coa(as.data.frame(L), scannf = FALSE)
+  dQ <- dudi.pca(as.data.frame(Q), row.w = dL$cw, scannf = FALSE)
+  r <- rlq(dR, dL, dQ, scannf = FALSE, nf = nf)
+  flat <- c(nl, pq, as.vector(t(R)), as.vector(t(L)), as.vector(t(Q)))
+  hdr <- function(what, idx) c(9, n, pr, nf, what, idx, flat)
+  for (k in seq_along(r$eig)) cases[[length(cases) + 1]] <<- case("d", hdr(0, k - 1), r$eig[k], rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <<- case("d", hdr(5, 0), r$rank, rel = 0, abs = 0)
+  mats <- list(as.matrix(r$c1), as.matrix(r$l1), as.matrix(r$lR), as.matrix(r$lQ))
+  for (w in 1:4) { m <- mats[[w]]; v <- as.vector(t(m)); for (k in seq_along(v)) cases[[length(cases) + 1]] <<- case("d", hdr(w, k - 1), v[k], rel = 1e-7, abs = 1e-10) }
+}
+onerlq(12, 3, 5, 2, 2)
+onerlq(15, 4, 6, 3, 2)
 emit("ade4_dudi", "ade4", list(cases))

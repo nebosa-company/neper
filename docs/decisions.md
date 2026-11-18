@@ -48968,3 +48968,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the power exponential PE (`dpe_full`, `ppe` with the uniform limit above nu = 10000, `qpe`; `dpe` already names the older density helper), the exponential generalised beta of the second kind EGB2 and the original-parametrisation Pareto PARETO2o, each with density, distribution and quantile.
 
 **Result.** `oracle_gamlss_exp` has 3893 values across 39 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7158 — ade4: dudi.fca and rlq
+
+`e.algo.stat.ade4` gains `dudi_fca` (the fuzzy correspondence analysis: columns divided by their weighted sums minus one, column weights over the number of blocks) and `rlq` (the RLQ analysis of an R table, a correspondence analysis L and a Q table, the analysis of t(R) diag(lw) L diag(cw) Q, with the row scores of Q and R), plus the preparation helpers `coa_prep` and `pca_prep_w` (a PCA with given row weights, as dudi.pca(Q, row.w = L$cw)).
+
+**Result.** `oracle_ade4_dudi` has 1445 values (two fuzzy analyses of 14 by 8 and 10 by 6 tables, two RLQ analyses) and equals ade4 on Windows. Linux pending. L381 stays partial: dudi.mix, the rotations of procuste, coinertia with both tables wider than tall and the acm correlation ratios remain.

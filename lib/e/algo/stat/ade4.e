@@ -153,6 +153,12 @@ fn pca_prep(a: *mem.Arena, x: []const f64, n: usize, p: usize, center: bool, sca
         lw[i] = 1.0f64 / f64(n)
         i += 1usize
     }
+    pca_prep_w(a, x, n, p, center, scale, t, lw, cw)
+}
+
+// the same with the row weights lw given (they should sum to one)
+fn pca_prep_w(a: *mem.Arena, x: []const f64, n: usize, p: usize, center: bool, scale: bool, t: []f64, lw: []const f64, cw: []f64) {
+    var i = 0usize
     var j = 0usize
     while j < p {
         cw[j] = 1.0f64
@@ -305,14 +311,22 @@ fn dudi_coa(a: *mem.Arena, x: []const f64, n: usize, p: usize, nf: usize) -> (Du
     let (lw, e2) = mem.alloc[f64](a, n)
     let (cw, e3) = mem.alloc[f64](a, p)
     if e1 != ok || e2 != ok || e3 != ok { ret (zero, Malformed) }
+    let ep = coa_prep(a, x, n, p, t, lw, cw)
+    if ep != ok { ret (zero, ep) }
+    let (d, ed) = as_dudi(a, t, n, p, lw, cw, nf, 0.0000001f64)
+    ret (d, ed)
+}
+
+// the table, row weights and column weights dudi.coa hands to as.dudi
+fn coa_prep(a: *mem.Arena, x: []const f64, n: usize, p: usize, t: []f64, lw: []f64, cw: []f64) -> err {
     var tot = 0.0f64
     var i = 0usize
     while i < n * p {
-        if x[i] < 0.0f64 { ret (zero, Malformed) }
+        if x[i] < 0.0f64 { ret Malformed }
         tot += x[i]
         i += 1usize
     }
-    if tot == 0.0f64 { ret (zero, Malformed) }
+    if tot == 0.0f64 { ret Malformed }
     i = 0usize
     while i < n {
         var s = 0.0f64
@@ -345,8 +359,120 @@ fn dudi_coa(a: *mem.Arena, x: []const f64, n: usize, p: usize, nf: usize) -> (Du
         }
         i += 1usize
     }
-    let (d, ed) = as_dudi(a, t, n, p, lw, cw, nf, 0.0000001f64)
+    ret ok
+}
+
+// dudi.fca: the fuzzy correspondence analysis of a table of fuzzy coded variables (nb blocks) with row weights rw: the columns divided by their weighted sums
+// minus one, column weights those sums over nb
+fn dudi_fca(a: *mem.Arena, x: []const f64, n: usize, p: usize, rw: []const f64, nb: usize, nf: usize) -> (Dudi, err) {
+    let (t, e1) = mem.alloc[f64](a, n * p)
+    let (cw, e2) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok { ret (zero, Malformed) }
+    var j = 0usize
+    while j < p {
+        var c1 = 0.0f64
+        var c2 = 0.0f64
+        var i = 0usize
+        while i < n {
+            let (u1, u2) = nstep(c1, c2, x[i * p + j] * rw[i])
+            c1 = u1
+            c2 = u2
+            i += 1usize
+        }
+        cw[j] = c1 + c2
+        i = 0usize
+        while i < n {
+            t[i * p + j] = x[i * p + j] / cw[j] - 1.0f64
+            i += 1usize
+        }
+        cw[j] = cw[j] / f64(nb)
+        j += 1usize
+    }
+    let (d, ed) = as_dudi(a, t, n, p, rw, cw, nf, 0.0000001f64)
     ret (d, ed)
+}
+
+type Rlq = struct { d: Dudi, lq: []f64, lr: []f64 }
+
+// rlq: the RLQ analysis of the tables R (n by pr: tab, row weights lw, column weights cwr), L (a correspondence analysis of n by nl: tab, lw, cw) and Q
+// (nl by pq: tab, column weights cwq); the analysis of t(Rtab) diag(L.lw) Ltab diag(L.cw) Qtab. lq and lr are the row scores of Q (nl by nf) and R (n by nf).
+fn rlq(a: *mem.Arena, rt: []const f64, cwr: []const f64, n: usize, pr: usize, lt: []const f64, lw: []const f64, lcw: []const f64, nl: usize, qt: []const f64, cwq: []const f64, pq: usize, nf0: usize) -> (Rlq, err) {
+    var out: Rlq = zero
+    let (tc, e1) = mem.alloc[f64](a, pr * pq)
+    let (m1, e2) = mem.alloc[f64](a, pr * nl)
+    if e1 != ok || e2 != ok { ret (out, Malformed) }
+    // m1 = t(R) diag(lw) L  (pr by nl)
+    var r = 0usize
+    while r < pr {
+        var c = 0usize
+        while c < nl {
+            var s = 0.0f64
+            var i = 0usize
+            while i < n {
+                s += rt[i * pr + r] * lw[i] * lt[i * nl + c]
+                i += 1usize
+            }
+            m1[r * nl + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    r = 0usize
+    while r < pr {
+        var c = 0usize
+        while c < pq {
+            var s = 0.0f64
+            var l = 0usize
+            while l < nl {
+                s += m1[r * nl + l] * lcw[l] * qt[l * pq + c]
+                l += 1usize
+            }
+            tc[r * pq + c] = s
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let (dr, e3) = as_dudi(a, rt, n, pr, lw, cwr, 2usize, 0.0000001f64)
+    let (dq, e4) = as_dudi(a, qt, nl, pq, lcw, cwq, 2usize, 0.0000001f64)
+    if e3 != ok || e4 != ok { ret (out, Malformed) }
+    var nf = nf0
+    if nf > dr.nf { nf = dr.nf }
+    if nf > dq.nf { nf = dq.nf }
+    let (d, e5) = as_dudi(a, tc, pr, pq, cwr, cwq, nf, 0.0000001f64)
+    if e5 != ok { ret (out, e5) }
+    out.d = d
+    let (lq, e6) = mem.alloc[f64](a, nl * d.nf)
+    let (lr, e7) = mem.alloc[f64](a, n * d.nf)
+    if e6 != ok || e7 != ok { ret (out, Malformed) }
+    var k = 0usize
+    while k < d.nf {
+        var i = 0usize
+        while i < nl {
+            var s = 0.0f64
+            var j = 0usize
+            while j < pq {
+                s += qt[i * pq + j] * (d.c1[j * d.nf + k] * cwq[j])
+                j += 1usize
+            }
+            lq[i * d.nf + k] = s
+            i += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var s = 0.0f64
+            var j = 0usize
+            while j < pr {
+                s += rt[i * pr + j] * (d.l1[j * d.nf + k] * cwr[j])
+                j += 1usize
+            }
+            lr[i * d.nf + k] = s
+            i += 1usize
+        }
+        k += 1usize
+    }
+    out.lq = lq
+    out.lr = lr
+    ret (out, ok)
 }
 
 // dudi.acm: the multiple correspondence analysis of nv factors (codes: n by nv row-major, 0-based level codes, every level of every factor present).

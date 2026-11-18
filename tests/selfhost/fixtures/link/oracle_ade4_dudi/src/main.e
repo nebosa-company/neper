@@ -15,6 +15,47 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let nf = usize(z[3usize])
     let what = usize(z[4usize])
     let idx = usize(z[5usize])
+    if kind == 8usize {
+        let nb = usize(z[6usize])
+        let rw = z[7usize..7usize + n]
+        let xt = z[7usize + n..7usize + n + n * p]
+        let (fd, fe) = ad.dudi_fca(a, xt, n, p, rw, nb, nf)
+        if fe != ok { os.exit(10) }
+        if what == 0usize { ret fd.eig[idx] }
+        if what == 1usize { ret fd.c1[idx] }
+        if what == 2usize { ret fd.li[idx] }
+        if what == 3usize { ret fd.co[idx] }
+        if what == 4usize { ret fd.l1[idx] }
+        ret f64(fd.rank)
+    }
+    if kind == 9usize {
+        let nl = usize(z[6usize])
+        let pq = usize(z[7usize])
+        let rdat = z[8usize..8usize + n * p]
+        let ldat = z[8usize + n * p..8usize + n * p + n * nl]
+        let qdat = z[8usize + n * p + n * nl..8usize + n * p + n * nl + nl * pq]
+        let (rt, g1) = mem.alloc[f64](a, n * p)
+        let (rlw, g2) = mem.alloc[f64](a, n)
+        let (rcw, g3) = mem.alloc[f64](a, p)
+        let (lt, g4) = mem.alloc[f64](a, n * nl)
+        let (llw, g5) = mem.alloc[f64](a, n)
+        let (lcw, g6) = mem.alloc[f64](a, nl)
+        let (qt, g7) = mem.alloc[f64](a, nl * pq)
+        let (qcw, g8) = mem.alloc[f64](a, pq)
+        if g1 != ok || g2 != ok || g3 != ok || g4 != ok || g5 != ok || g6 != ok || g7 != ok || g8 != ok { os.exit(11) }
+        ad.pca_prep(a, rdat, n, p, true, true, rt, rlw, rcw)
+        let ce = ad.coa_prep(a, ldat, n, nl, lt, llw, lcw)
+        if ce != ok { os.exit(12) }
+        ad.pca_prep_w(a, qdat, nl, pq, true, true, qt, lcw, qcw)
+        let (rq, re) = ad.rlq(a, rt, rcw, n, p, lt, llw, lcw, nl, qt, qcw, pq, nf)
+        if re != ok { os.exit(13) }
+        if what == 0usize { ret rq.d.eig[idx] }
+        if what == 1usize { ret rq.d.c1[idx] }
+        if what == 2usize { ret rq.d.l1[idx] }
+        if what == 3usize { ret rq.lr[idx] }
+        if what == 4usize { ret rq.lq[idx] }
+        ret f64(rq.d.rank)
+    }
     if kind == 7usize {
         let py = usize(z[6usize])
         let sc = z[7usize] > 0.5f64
