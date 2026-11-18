@@ -49730,3 +49730,9 @@ The emmeans fixture refits `lm(y ~ A * x)` through `e.algo.stat.emmeans.fit` (de
 `e.algo.stat.polcapkg.fit_stats` adds, at the estimated probabilities and class sizes, the parameter count R (sum K_j - J) + R - 1, AIC, the likelihood-ratio Gsq = 2 sum O ln(O / E) and Pearson Chisq = sum (O - E)^2 / E + (N - sum E) over the observed response patterns (E = N sum_r P_r prod_j probs), the residual degrees of freedom min(prod K - 1, N - 1) - npar, and the modal posterior class of each row (the fixture sums class number over rows).
 
 **Result.** `oracle_polca` gains six statistics on each of 20 fits (120 values) and equals poLCA on Windows at 1e-4. Linux pending. L512 stays partial: random restarts and best-of-nrep selection, latent class regression with covariates, standard errors, missing responses, poLCA.entropy and relatives.
+
+## D7285 — mcmc: initseq and olbm
+
+`e.algo.stat.mcmcpkg.initseq` is Geyer's initial sequence estimators for a scalar chain: the pair sums Gamma_k = gamma_2k + gamma_2k+1 of the centred chain up to the first negative one (which is kept as zero, as the package returns it), the running minimum (dec), the greatest convex minorant (con, the lower convex hull of the points interpolated at the integers) and the variances -gamma0 + 2 sum Gamma for each; `olbm` is the overlapping batch means estimate of the variance of the sample mean (the batch-mean deviations squared, times the batch length over the number of batches and the chain length).
+
+**Result.** `oracle_mcmc` gains 25 AR(1) chains of 60 to 300 draws (gamma0, the three variances, the sequence length and the three sequence sums, and two batch lengths of olbm each: 250 values) and equals mcmc on Windows at 1e-9. Chains whose pair sums never turn negative and the matrix-valued forms are not ported. Linux pending. L448 stays partial: user densities, outfun, morph, temper.

@@ -12,6 +12,31 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let nan = 0.0f64 / 0.0f64
+    if str.eq(c.name, "iseq") {
+        let cn = usize(z[0usize])
+        let (io2, ie) = mem.alloc[f64](a, 5usize + 3usize * cn)
+        if ie != ok { ret nan }
+        if mc.initseq(a, z[1usize..1usize + cn], io2) != ok { ret nan }
+        let j = usize(z[1usize + cn])
+        let m = usize(io2[1usize])
+        var jmap = 0usize
+        if j == 1usize { jmap = 2usize }
+        if j == 2usize { jmap = 3usize }
+        if j == 3usize { jmap = 4usize }
+        if j <= 3usize { ret io2[jmap] }
+        if j == 4usize { ret f64(m) }
+        var sm = 0.0f64
+        var t = 0usize
+        while t < m {
+            sm += io2[5usize + (j - 5usize) * m + t]
+            t += 1usize
+        }
+        ret sm
+    }
+    if str.eq(c.name, "olbm") {
+        let cn = usize(z[0usize])
+        ret mc.olbm(z[2usize..2usize + cn], usize(z[1usize]))
+    }
     let seed = i64(z[0usize])
     let id = usize(z[1usize])
     let d = usize(z[2usize])
