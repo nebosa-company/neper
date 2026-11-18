@@ -43,4 +43,11 @@ for (rep in 1:15) {
   mxf <- res[which((res[, 1] + res[, 2]) == max(res[, 1] + res[, 2]))[1], 5]
   cases[[length(cases) + 1]] <- case("rocf", c(n, p, y, as.vector(t(X)), 2, 0, 0), mxf, rel = 1e-7, abs = 1e-10)
 }
+# fisher.test's conditional MLE odds ratio and exact interval: "fci" args (a, b, c, d, conf, j) with j 0 estimate, 1 lower, 2 upper
+for (rep in 1:30) {
+  a <- sample(1:40, 1); b <- sample(2:60, 1); cc <- sample(1:40, 1); d <- sample(2:60, 1); cf <- sample(c(0.9, 0.95, 0.99), 1)
+  ft <- fisher.test(matrix(c(a, cc, b, d), 2), conf.level = cf)
+  v <- c(ft$estimate, ft$conf.int)
+  for (j in 0:2) cases[[length(cases) + 1]] <- case("fci", c(a, b, cc, d, cf, j), v[j + 1], rel = 1e-9, abs = 1e-12)
+}
 emit("epi", "Epi", list(cases))

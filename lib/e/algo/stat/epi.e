@@ -7,6 +7,9 @@
 
 
 use e.algo.stat.test as tst
+use e.algo.stat.pwr as pw
+use e.math.special as sp
+use e.mem
 use e.math
 use e.math.nmath as nm
 
@@ -142,4 +145,134 @@ fn roc_max_cut(test: []const f64, stat: []const f64) -> f64 {
         k += 1usize
     }
     ret roc_cut(test, bk)
+}
+
+// fisher.test's conditional maximum-likelihood odds ratio and exact interval for [[a, b], [c, d]]: the noncentral hypergeometric of the first cell, R's uniroot (the same
+// Brent iterates, tolerance eps^(1/4)) for the estimate and for each limit
+type FtCtx = struct { support: []f64, logdc: []f64, dens: []f64, lo: usize, hi: usize, x: usize, goal: f64, mode: usize, inv: bool }
+
+fn ft_dens(c: *FtCtx, ncp: f64) {
+    var mx = 0.0f64 - 1.0f64 / 0.0f64
+    var i = 0usize
+    while i < c.support.len {
+        c.dens[i] = c.logdc[i] + math.log[f64](ncp) * c.support[i]
+        if c.dens[i] > mx { mx = c.dens[i] }
+        i += 1usize
+    }
+    var tot = 0.0f64
+    i = 0usize
+    while i < c.support.len {
+        c.dens[i] = math.exp[f64](c.dens[i] - mx)
+        tot += c.dens[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < c.support.len {
+        c.dens[i] = c.dens[i] / tot
+        i += 1usize
+    }
+}
+
+fn ft_mean(c: *FtCtx, ncp: f64) -> f64 {
+    if ncp == 0.0f64 { ret f64(c.lo) }
+    ft_dens(c, ncp)
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.support.len {
+        s += c.support[i] * c.dens[i]
+        i += 1usize
+    }
+    ret s
+}
+
+fn ft_tail(c: *FtCtx, ncp: f64, upper: bool) -> f64 {
+    if ncp == 0.0f64 {
+        if upper {
+            if c.x <= c.lo { ret 1.0f64 }
+            ret 0.0f64
+        }
+        if c.x >= c.lo { ret 1.0f64 }
+        ret 0.0f64
+    }
+    ft_dens(c, ncp)
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.support.len {
+        let v = c.lo + i
+        if upper {
+            if v >= c.x { s += c.dens[i] }
+        } else {
+            if v <= c.x { s += c.dens[i] }
+        }
+        i += 1usize
+    }
+    ret s
+}
+
+fn ft_h(c: *FtCtx, t: f64) -> f64 {
+    var ncp = t
+    if c.inv { ncp = 1.0f64 / t }
+    if c.mode == 0usize { ret ft_mean(c, ncp) - c.goal }
+    if c.mode == 1usize { ret ft_tail(c, ncp, false) - c.goal }
+    ret ft_tail(c, ncp, true) - c.goal
+}
+
+fn ft_solve(c: *FtCtx, mode: usize, goal: f64, inv: bool) -> f64 {
+    c.mode = mode
+    c.goal = goal
+    c.inv = inv
+    var lo = 0.0f64
+    if inv { lo = 2.220446049250313e-16f64 }
+    let r = pw.zeroin[FtCtx](c, ft_h, lo, 1.0f64, pw.uniroot_tol(), 1000i64)
+    if inv { ret 1.0f64 / r }
+    ret r
+}
+
+// out receives (estimate, lower, upper) at the confidence level conf
+fn fisher_ci(a: *mem.Arena, ta: f64, tb: f64, tc: f64, td: f64, conf: f64, out: []f64) -> err {
+    let m = ta + tc
+    let n = tb + td
+    let k = ta + tb
+    var lo = 0.0f64
+    if k > n { lo = k - n }
+    var hi = k
+    if m < hi { hi = m }
+    let cnt = usize(hi - lo) + 1usize
+    let (sup, e1) = mem.alloc[f64](a, cnt)
+    let (ld, e2) = mem.alloc[f64](a, cnt)
+    let (dn, e3) = mem.alloc[f64](a, cnt)
+    if e1 != ok || e2 != ok || e3 != ok { ret mem.Full }
+    var i = 0usize
+    while i < cnt {
+        let xv = lo + f64(i)
+        sup[i] = xv
+        ld[i] = sp.lgamma(m + 1.0f64) - sp.lgamma(xv + 1.0f64) - sp.lgamma(m - xv + 1.0f64) + sp.lgamma(n + 1.0f64) - sp.lgamma(k - xv + 1.0f64) - sp.lgamma(n - k + xv + 1.0f64) - (sp.lgamma(m + n + 1.0f64) - sp.lgamma(k + 1.0f64) - sp.lgamma(m + n - k + 1.0f64))
+        i += 1usize
+    }
+    var c = FtCtx{ support: sup, logdc: ld, dens: dn, lo: usize(lo), hi: usize(hi), x: usize(ta), goal: 0.0f64, mode: 0usize, inv: false }
+    let alpha = (1.0f64 - conf) / 2.0f64
+    // estimate
+    if usize(ta) == c.lo {
+        out[0usize] = 0.0f64
+    } else if usize(ta) == c.hi {
+        out[0usize] = 1.0f64 / 0.0f64
+    } else {
+        let mu = ft_mean(&c, 1.0f64)
+        if mu > ta { out[0usize] = ft_solve(&c, 0usize, ta, false) } else if mu < ta { out[0usize] = ft_solve(&c, 0usize, ta, true) } else { out[0usize] = 1.0f64 }
+    }
+    // lower limit: upper tail
+    if usize(ta) == c.lo {
+        out[1usize] = 0.0f64
+    } else {
+        let pu = ft_tail(&c, 1.0f64, true)
+        if pu > alpha { out[1usize] = ft_solve(&c, 2usize, alpha, false) } else if pu < alpha { out[1usize] = ft_solve(&c, 2usize, alpha, true) } else { out[1usize] = 1.0f64 }
+    }
+    // upper limit: lower tail
+    if usize(ta) == c.hi {
+        out[2usize] = 1.0f64 / 0.0f64
+    } else {
+        let pl = ft_tail(&c, 1.0f64, false)
+        if pl < alpha { out[2usize] = ft_solve(&c, 1usize, alpha, false) } else if pl > alpha { out[2usize] = ft_solve(&c, 1usize, alpha, true) } else { out[2usize] = 1.0f64 }
+    }
+    ret ok
 }

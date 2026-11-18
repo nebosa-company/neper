@@ -12,6 +12,12 @@ use e.test.oracle as oracle
 
 fn answer(ar: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "fci") {
+        let (fo, fe) = mem.alloc[f64](ar, 3usize)
+        if fe != ok { os.exit(6) }
+        if ei.fisher_ci(ar, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], fo) != ok { os.exit(7) }
+        ret fo[usize(x[5usize])]
+    }
     if str.eq(c.name, "rocf") {
         let fnn = usize(x[0usize])
         let fpp = usize(x[1usize])
