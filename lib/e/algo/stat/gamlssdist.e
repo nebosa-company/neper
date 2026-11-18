@@ -1112,3 +1112,69 @@ fn dshasho2(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
 fn pshasho2(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret pno(sinh_of(tau * asinh_of((x - mu) / (sigma * tau)) - nu), 0.0f64, 1.0f64) }
 
 fn qshasho2(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret mu + (tau * sigma) * sinh_of((1.0f64 / tau) * asinh_of(qno(p, 0.0f64, 1.0f64)) + nu / tau) }
+
+// BB (beta binomial, bd trials) and BNB (beta negative binomial), distribution by summation; SEP3 and SN2 densities; ST3 density and distribution
+fn dbb(x: f64, mu: f64, sigma0: f64, bd: f64) -> f64 {
+    if x < 0.0f64 || x > bd { ret 0.0f64 }
+    var sigma = sigma0
+    if sigma < 0.0000000001f64 { sigma = 0.0000000001f64 }
+    if sigma < 0.0001f64 { ret dbi(x, mu, bd) }
+    let s1 = 1.0f64 / sigma
+    ret math.exp[f64](sp.lgamma(bd + 1.0f64) - sp.lgamma(x + 1.0f64) - sp.lgamma(bd - x + 1.0f64) + sp.lgamma(s1) + sp.lgamma(x + mu * s1) + sp.lgamma(bd + (1.0f64 - mu) / sigma - x) - sp.lgamma(mu * s1) - sp.lgamma((1.0f64 - mu) / sigma) - sp.lgamma(bd + s1))
+}
+
+fn pbb(x: f64, mu: f64, sigma: f64, bd: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x >= bd { ret 1.0f64 }
+    if sigma < 0.0001f64 { ret nb.pbinom(x, bd, mu, true, false) }
+    var s = 0.0f64
+    var j = 0.0f64
+    while j <= x {
+        s += dbb(j, mu, sigma, bd)
+        j += 1.0f64
+    }
+    ret s
+}
+
+fn dbnb(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    let m = 1.0f64 / sigma + 1.0f64
+    let n = (mu * nu) / sigma
+    let k = 1.0f64 / nu
+    ret math.exp[f64](lbeta_(x + n, m + k) - lbeta_(n, m) - sp.lgamma(x + 1.0f64) - sp.lgamma(k) + sp.lgamma(x + k))
+}
+
+fn pbnb(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var j = 0.0f64
+    while j <= x {
+        s += dbnb(j, mu, sigma, nu)
+        j += 1.0f64
+    }
+    ret s
+}
+
+fn dsep3(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    var ll = 0.0f64
+    if x < mu { ll = 0.0f64 - 0.5f64 * math.pow[f64](nu * math.abs[f64](z), tau) } else { ll = 0.0f64 - 0.5f64 * math.pow[f64](math.abs[f64](z) / nu, tau) }
+    ll = ll - math.log[f64](sigma) + math.log[f64](nu) - math.log[f64](1.0f64 + nu * nu) - (1.0f64 / tau) * math.log[f64](2.0f64) - sp.lgamma(1.0f64 + 1.0f64 / tau)
+    ret math.exp[f64](ll)
+}
+
+fn dsn2(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret dsep3(x, mu, sigma, nu, 2.0f64) }
+
+fn dst3(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    var t = 0.0f64
+    if x < mu { t = nu * (x - mu) / sigma } else { t = (x - mu) / (sigma * nu) }
+    var base = 0.0f64
+    if tau < 1000000.0f64 { base = nb.dt(t, tau, true) } else { base = dist.dnorm(t, 0.0f64, 1.0f64, true) }
+    ret math.exp[f64](base + math.log[f64](2.0f64 * nu / (1.0f64 + nu * nu)) - math.log[f64](sigma))
+}
+
+fn pst3(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    var c = 0.0f64
+    if x < mu { c = 2.0f64 * nb.pt(nu * (x - mu) / sigma, tau, true, false) } else { c = 1.0f64 + 2.0f64 * nu * nu * (nb.pt((x - mu) / (sigma * nu), tau, true, false) - 0.5f64) }
+    ret c / (1.0f64 + nu * nu)
+}

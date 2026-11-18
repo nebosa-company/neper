@@ -49028,3 +49028,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the Box-Cox t distribution function and quantile (`pbct`, `qbct`, shared by BCTo, whose distribution and quantile are the same code in the package), the BCTo density (with the normal limit above tau = 1e6), the BCCGo functions (identical to the BCCG ones already here, so the oracle checks the existing density, distribution and quantile under the original names) and SHASHo2 (density, distribution, quantile).
 
 **Result.** `oracle_gamlss_exp` has 5242 values across 54 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7168 — gamlss.dist: BB, BNB, SEP3, SN2 and ST3
+
+`e.algo.stat.gamlssdist` gains the beta binomial BB and the beta negative binomial BNB (density and distribution by summation, BB falling back to the binomial below sigma 1e-4 and flooring sigma at 1e-10, as the package does), the SEP3 and SN2 densities (SN2 is SEP3 at tau = 2) and the skew t of type 3, ST3 (density with the normal limit above tau = 1e6, and the distribution).
+
+**Result.** `oracle_gamlss_exp` has 5481 values across 59 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

@@ -174,7 +174,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 155usize { ret gd.qbccg(x, mu, sigma, nu) }
     if which == 156usize { ret gd.dshasho2(x, mu, sigma, nu, tau) }
     if which == 157usize { ret gd.pshasho2(x, mu, sigma, nu, tau) }
-    ret gd.qshasho2(x, mu, sigma, nu, tau)
+    if which == 158usize { ret gd.qshasho2(x, mu, sigma, nu, tau) }
+    if which == 159usize { ret gd.dbb(x, mu, sigma, tau) }
+    if which == 160usize { ret gd.pbb(x, mu, sigma, tau) }
+    if which == 161usize { ret gd.dbnb(x, mu, sigma, nu) }
+    if which == 162usize { ret gd.pbnb(x, mu, sigma, nu) }
+    if which == 163usize { ret gd.dsep3(x, mu, sigma, nu, tau) }
+    if which == 164usize { ret gd.dsn2(x, mu, sigma, nu) }
+    if which == 165usize { ret gd.dst3(x, mu, sigma, nu, tau) }
+    ret gd.pst3(x, mu, sigma, nu, tau)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
