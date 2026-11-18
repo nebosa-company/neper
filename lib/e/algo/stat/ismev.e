@@ -12,10 +12,93 @@ use e.mem
 // kind 3 is gev.fit with location covariates: dm is the n by q design (row-major), the first q parameters are its coefficients
 type Data = struct { x: []const f64, kind: usize, u: f64, dm: []const f64, q: usize }
 
+// (mu, sigma, xi) of row i from the three designs in dm (n by qm, n by qs, n by qx, row-major) and the links packed in lk (bit 0 mu, bit 1 sigma, bit 2 xi: exp)
+fn cov_params(dm: []const f64, rows: usize, qm: usize, qs: usize, qx: usize, lk: usize, i: usize, a: []const f64) -> (f64, f64, f64) {
+    var mu = 0.0f64
+    var sc = 0.0f64
+    var xi = 0.0f64
+    var j = 0usize
+    while j < qm {
+        mu += dm[i * qm + j] * a[j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < qs {
+        sc += dm[rows * qm + i * qs + j] * a[qm + j]
+        j += 1usize
+    }
+    j = 0usize
+    while j < qx {
+        xi += dm[rows * (qm + qs) + i * qx + j] * a[qm + qs + j]
+        j += 1usize
+    }
+    if lk % 2usize == 1usize { mu = math.exp[f64](mu) }
+    if (lk / 2usize) % 2usize == 1usize { sc = math.exp[f64](sc) }
+    if (lk / 4usize) % 2usize == 1usize { xi = math.exp[f64](xi) }
+    ret (mu, sc, xi)
+}
+
 fn nll(d: *Data, a: []const f64) -> f64 {
     let n = d.x.len
     var s = 0.0f64
     var i = 0usize
+    if d.kind == 7usize {
+        // rlarg.fit with covariates: x is rows by r (row-major), the last element of dm is r
+        let r = usize(d.dm[d.dm.len - 1usize])
+        let rows = n / r
+        let qm = d.q % 64usize
+        let qs = (d.q / 64usize) % 64usize
+        let qx = (d.q / 4096usize) % 64usize
+        let lk = d.q / 262144usize
+        var tot = 0.0f64
+        while i < rows {
+            let (mu, sc, xi) = cov_params(d.dm, rows, qm, qs, qx, lk, i, a)
+            if sc <= 0.0f64 { ret 1.0e6f64 }
+            var mn = d.x[i * r]
+            var rowsum = 0.0f64
+            var j = 0usize
+            while j < r {
+                let v = d.x[i * r + j]
+                let y = 1.0f64 + xi * (v - mu) / sc
+                if y <= 0.0f64 { ret 1.0e6f64 }
+                rowsum += (1.0f64 / xi + 1.0f64) * math.log[f64](y) + math.log[f64](sc)
+                if v < mn { mn = v }
+                j += 1usize
+            }
+            tot += math.pow[f64](1.0f64 + xi * (mn - mu) / sc, 0.0f64 - 1.0f64 / xi) + rowsum
+            i += 1usize
+        }
+        ret tot
+    }
+    if d.kind == 8usize {
+        // pp.fit with covariates and a constant threshold u; the last element of dm is npy
+        let npy = d.dm[d.dm.len - 1usize]
+        let qm = d.q % 64usize
+        let qs = (d.q / 64usize) % 64usize
+        let qx = (d.q / 4096usize) % 64usize
+        let lk = d.q / 262144usize
+        var l1 = 0.0f64
+        var l2 = 0.0f64
+        var l3 = 0.0f64
+        var bad = false
+        while i < n {
+            let (mu, sc, xi) = cov_params(d.dm, n, qm, qs, qx, lk, i, a)
+            let exc = d.x[i] > d.u
+            if exc && sc <= 0.0f64 { ret 1.0e6f64 }
+            let w = 1.0f64 + (xi * (d.u - mu)) / sc
+            if exc && w < 0.0f64 { bad = true }
+            let y = 1.0f64 + xi * ((d.x[i] - mu) / sc)
+            if y <= 0.0f64 { ret 1.0e6f64 }
+            if exc {
+                l1 += math.log[f64](sc)
+                l2 += math.log[f64](y) * (1.0f64 / xi + 1.0f64)
+            }
+            l3 += math.pow[f64](w, 0.0f64 - 1.0f64 / xi)
+            i += 1usize
+        }
+        if bad { ret 1.0e6f64 }
+        ret l1 + l2 + f64(n) / npy * (l3 / f64(n))
+    }
     if d.kind == 6usize {
         // gev.fit with covariates on the location, the scale and the shape: dm holds the three designs one after another (n by qm, n by qs, n by qx, row-major);
         // q packs qm + 64 qs + 4096 qx + 262144 (mulink + 2 siglink + 4 shlink), a link being 0 identity or 1 exp
@@ -687,5 +770,98 @@ fn fit_cov(a: *mem.Arena, x: []const f64, dm: []const f64, qm: usize, qs: usize,
     if e4 != ok { ret (zero, e4) }
     let (se, e5) = std_errors(a, h, p)
     if e5 != ok { ret (zero, e5) }
+    ret (Fit { par: par, se: se, nllh: nllh }, ok)
+}
+
+// rlarg.fit with covariates (designs as in fit_cov; x is rows by r row-major): ismev's start from the first column
+fn fit_rlarg_cov(a: *mem.Arena, x: []const f64, rows: usize, r: usize, dm: []const f64, qm: usize, qs: usize, qx: usize, mulink: usize, siglink: usize, shlink: usize) -> (Fit, err) {
+    let p = qm + qs + qx
+    let (c1, e0) = mem.alloc[f64](a, rows)
+    let (dmx, e00) = mem.alloc[f64](a, dm.len + 1usize)
+    if e0 != ok || e00 != ok { ret (zero, e0) }
+    var i = 0usize
+    while i < rows {
+        c1[i] = x[i * r]
+        i += 1usize
+    }
+    i = 0usize
+    while i < dm.len {
+        dmx[i] = dm[i]
+        i += 1usize
+    }
+    dmx[dm.len] = f64(r)
+    let (m, v) = mean_var(c1)
+    let in2 = math.sqrt[f64](6.0f64 * v) / 3.141592653589793f64
+    let (par, e1) = mem.alloc[f64](a, p)
+    if e1 != ok { ret (zero, e1) }
+    var j = 0usize
+    while j < p {
+        par[j] = 0.0f64
+        j += 1usize
+    }
+    par[0usize] = m - 0.57722f64 * in2
+    par[qm] = in2
+    par[qm + qs] = 0.1f64
+    var d = Data { x: x, kind: 7usize, u: 0.0f64, dm: dmx, q: qm + 64usize * qs + 4096usize * qx + 262144usize * (mulink + 2usize * siglink + 4usize * shlink) }
+    let (nllh, e3) = minimise(a, &d, par)
+    if e3 != ok { ret (zero, e3) }
+    let (h, e4) = hessian(a, &d, par)
+    if e4 != ok { ret (zero, e4) }
+    let (se, e5) = std_errors(a, h, p)
+    if e5 != ok { ret (zero, e5) }
+    ret (Fit { par: par, se: se, nllh: nllh }, ok)
+}
+
+// pp.fit with covariates and a constant threshold u (designs as in fit_cov): ismev's start from the exceedances as in fit_pp
+fn fit_pp_cov(a: *mem.Arena, x: []const f64, u: f64, npy: usize, dm: []const f64, qm: usize, qs: usize, qx: usize, mulink: usize, siglink: usize, shlink: usize) -> (Fit, err) {
+    let p = qm + qs + qx
+    var nex = 0usize
+    var i = 0usize
+    while i < x.len {
+        if x[i] > u { nex += 1usize }
+        i += 1usize
+    }
+    let (ex, e0) = mem.alloc[f64](a, nex)
+    let (dmx, e00) = mem.alloc[f64](a, dm.len + 1usize)
+    if e0 != ok || e00 != ok { ret (zero, e0) }
+    nex = 0usize
+    i = 0usize
+    while i < x.len {
+        if x[i] > u {
+            ex[nex] = x[i]
+            nex += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < dm.len {
+        dmx[i] = dm[i]
+        i += 1usize
+    }
+    dmx[dm.len] = f64(npy)
+    let lrate = f64(nex) / f64(x.len)
+    let (m, v) = mean_var(ex)
+    var in2 = math.sqrt[f64](6.0f64 * v) / 3.141592653589793f64
+    let in3 = 0.00000001f64
+    in2 = math.exp[f64](math.log[f64](in2) + in3 * math.log[f64](lrate))
+    let in1 = u - (in2 / in3) * (math.pow[f64](lrate, 0.0f64 - in3) - 1.0f64)
+    let (par, e1) = mem.alloc[f64](a, p)
+    if e1 != ok { ret (zero, e1) }
+    var j = 0usize
+    while j < p {
+        par[j] = 0.0f64
+        j += 1usize
+    }
+    par[0usize] = in1
+    par[qm] = in2
+    par[qm + qs] = 0.1f64
+    var d = Data { x: x, kind: 8usize, u: u, dm: dmx, q: qm + 64usize * qs + 4096usize * qx + 262144usize * (mulink + 2usize * siglink + 4usize * shlink) }
+    let (nllh, e3) = minimise(a, &d, par)
+    if e3 != ok { ret (zero, e3) }
+    let (h, e4) = hessian(a, &d, par)
+    if e4 != ok { ret (zero, e4) }
+    let (se, e5) = std_errors(a, h, p)
+    if e5 != ok { ret (zero, e5) }
+    let _ = m
     ret (Fit { par: par, se: se, nllh: nllh }, ok)
 }

@@ -49910,3 +49910,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `betareg.lrtest` gives the statistic 2 (ll1 - ll0), the degrees of freedom (the parameter counts differ by the dropped mean columns) and the chi-square upper tail of `lmtest::lrtest` for two nested fits.
 
 **Result.** `oracle_betareg` equals betareg and lmtest on Windows for dropping the last mean column (statistic to 5e-4, p-value to 5e-3 relative, the optimiser's tolerance). Linux pending. L451 stays partial: variable dispersion, bias correction, sweighted2.
+
+## D7311 — ismev: covariates for rlarg.fit and pp.fit; L425 closed
+
+`e.algo.stat.ismev` gains `fit_rlarg_cov` and `fit_pp_cov`: rlarg.fit and pp.fit with a design (intercept plus covariate columns) on each of the location, scale and shape and identity or exp links, over a shared `cov_params` that evaluates (mu, sigma, xi) of a row from the three designs. ismev's pp.lik takes the exceedance indicator through `sc^uInd` and `(1 + xi (u - mu) / sigma)^uInd`, so the scale and threshold conditions apply to the exceedance rows only; the port does the same. R's Nelder-Mead stalls near its start on the pp covariate fits (standard errors near 2e-6), so the oracle restarts pp.fit from its own solution until the likelihood is stable and compares against that.
+
+**Result.** `oracle_ismev_rlarg` has 185 cases (rlarg.fit with and without covariates, pp.fit with and without covariates, gev.prof and gpd.prof, and gev.fit covariates are in `oracle_ismev_rlarg` too) and equals ismev within optimiser tolerance on Windows. Linux pending. Every function of L425's acceptance list now has an oracle, so the item is closed.

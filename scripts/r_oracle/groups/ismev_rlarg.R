@@ -79,4 +79,46 @@ onecov(80, NULL, 1, NULL)
 onecov(80, 1, 1, NULL)
 onecov(100, NULL, NULL, 1)
 onecov(90, 1, 2, NULL, 0, 1, 0)
+# rlarg.fit and pp.fit with covariates: "cr" args (n, r, qm, qs, qx, mulink, siglink, shlink, which, designs..., x row-major), "cp" args (n, npy, threshold, qm, qs, qx, mulink, siglink, shlink, which, designs..., x);
+# which 0.. a parameter, 100.. its standard error, 999 the negative log-likelihood
+lks <- c(identity, exp)
+desg <- function(yd, ix) cbind(1, yd[, ix, drop = FALSE])
+onecr <- function(n, r, mul, sigl, shl, mulink = 0, siglink = 0, shlink = 0) {
+  t <- seq(-1, 1, length = n); yd <- cbind(t, cos(2 * t))
+  m <- t(vapply(seq_len(n), function(i) { e <- cumsum(rexp(r)); 12 + 2 * t[i] + 1.5 * (e^(-0.1) - 1) / 0.1 }, numeric(r)))
+  f <- tryCatch(rlarg.fit(m, r = r, ydat = yd, mul = mul, sigl = sigl, shl = shl, mulink = lks[[mulink + 1]], siglink = lks[[siglink + 1]], shlink = lks[[shlink + 1]], show = FALSE), error = function(e) NULL)
+  if (is.null(f) || f$conv != 0) return(invisible(NULL))
+  dd <- c(as.vector(t(desg(yd, mul))), as.vector(t(desg(yd, sigl))), as.vector(t(desg(yd, shl))))
+  qm <- length(mul) + 1; qs <- length(sigl) + 1; qx <- length(shl) + 1
+  addc <- function(which, want, rel) cases[[length(cases) + 1]] <<- case("cr", c(n, r, qm, qs, qx, mulink, siglink, shlink, which, dd, as.vector(t(m))), want, rel = rel, abs = 1e-3)
+  for (k in seq_along(f$mle)) { addc(k - 1, f$mle[k], 5e-2); addc(100 + k - 1, f$se[k], 1.5e-1) }
+  addc(999, f$nllh, 1e-6)
+}
+onecp <- function(n, npy, mul, sigl, shl, mulink = 0, siglink = 0, shlink = 0) {
+  t <- seq(-1, 1, length = n); yd <- cbind(t, cos(2 * t))
+  x <- 10 + rexp(n) * 2 + 0.5 * t
+  th <- as.numeric(quantile(x, 0.9))
+  qm <- length(mul) + 1; qs <- length(sigl) + 1; qx <- length(shl) + 1
+  fitpp <- function(mi = NULL, si = NULL, hi = NULL) tryCatch(pp.fit(x, th, npy = npy, ydat = yd, mul = mul, sigl = sigl, shl = shl, mulink = lks[[mulink + 1]], siglink = lks[[siglink + 1]], shlink = lks[[shlink + 1]], muinit = mi, siginit = si, shinit = hi, show = FALSE), error = function(e) NULL)
+  f <- fitpp()
+  if (is.null(f)) return(invisible(NULL))
+  # R's Nelder-Mead stalls on these fits: restart from its own solution until the likelihood is stable
+  for (it in 1:30) {
+    g <- fitpp(f$mle[seq_len(qm)], f$mle[qm + seq_len(qs)], f$mle[qm + qs + seq_len(qx)])
+    if (is.null(g)) break
+    done <- abs(g$nllh - f$nllh) < 1e-9 * (1 + abs(f$nllh)); f <- g
+    if (done) break
+  }
+  if (f$conv != 0) return(invisible(NULL))
+  dd <- c(as.vector(t(desg(yd, mul))), as.vector(t(desg(yd, sigl))), as.vector(t(desg(yd, shl))))
+  addc <- function(which, want, rel) cases[[length(cases) + 1]] <<- case("cp", c(n, npy, th, qm, qs, qx, mulink, siglink, shlink, which, dd, x), want, rel = rel, abs = 1e-3)
+  for (k in seq_along(f$mle)) { addc(k - 1, f$mle[k], 8e-2); addc(100 + k - 1, f$se[k], 2e-1) }
+  addc(999, f$nllh, 1e-6)
+}
+set.seed(20261705)
+onecr(60, 3, 1, NULL, NULL)
+onecr(60, 2, NULL, 1, NULL)
+onecr(70, 3, 1, 2, NULL)
+onecp(400, 100, 1, NULL, NULL)
+onecp(400, 100, NULL, 1, NULL)
 emit("ismev_rlarg", "ismev", list(cases))

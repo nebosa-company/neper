@@ -10,6 +10,33 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "cr") {
+        let n = usize(x[0usize])
+        let r = usize(x[1usize])
+        let qm = usize(x[2usize])
+        let qs = usize(x[3usize])
+        let qx = usize(x[4usize])
+        let nd = n * (qm + qs + qx)
+        let (g, ge) = im.fit_rlarg_cov(a, x[9usize + nd..9usize + nd + n * r], n, r, x[9usize..9usize + nd], qm, qs, qx, usize(x[5usize]), usize(x[6usize]), usize(x[7usize]))
+        if ge != ok { os.exit(10) }
+        let w = usize(x[8usize])
+        if w == 999usize { ret g.nllh }
+        if w >= 100usize { ret g.se[w - 100usize] }
+        ret g.par[w]
+    }
+    if str.eq(c.name, "cp") {
+        let n = usize(x[0usize])
+        let qm = usize(x[3usize])
+        let qs = usize(x[4usize])
+        let qx = usize(x[5usize])
+        let nd = n * (qm + qs + qx)
+        let (g, ge) = im.fit_pp_cov(a, x[10usize + nd..10usize + nd + n], x[2usize], usize(x[1usize]), x[10usize..10usize + nd], qm, qs, qx, usize(x[6usize]), usize(x[7usize]), usize(x[8usize]))
+        if ge != ok { os.exit(11) }
+        let w = usize(x[9usize])
+        if w == 999usize { ret g.nllh }
+        if w >= 100usize { ret g.se[w - 100usize] }
+        ret g.par[w]
+    }
     if str.eq(c.name, "cv") {
         let n = usize(x[0usize])
         let qm = usize(x[1usize])
