@@ -1,11 +1,14 @@
 // R aod: varbin (the binomial, ratio, arithmetic and jackknife estimates of a proportion over clusters, with their variances and normal limits) and iccbin
 // method "C" (the one-way ANOVA intra-cluster correlation of binary data).
 //
-// Not here: the bootstrap row of varbin, iccbin methods A and B (mixed-model based), betabin, negbin, quasibin, quasipois, wald.test, anova, splitbin.
+// Not here: the bootstrap row of varbin, iccbin methods A and B (mixed-model based), betabin, negbin, quasibin, quasipois, anova, splitbin.
 
 use e.algo.stat.desctools as dt
 use e.math
 use e.math.dist as dist
+use e.math.nmath as nm
+use e.mem
+use e.algo.stat.wrs2 as wr
 
 // varbin(n, y)$tab: part 0 the estimate, 1 its variance, 2 the lower and 3 the upper limit of row `row`
 // (0 binomial, 1 ratio, 2 arithmetic, 3 jackknife) at level 1 - alpha
@@ -189,4 +192,69 @@ fn donner(n: []const f64, y: []const f64, grp: []const f64, ng: usize) -> Donner
     out.rho = rho
     out.x2 = x2
     ret out
+}
+
+type Wald = struct { x2: f64, p: f64 }
+
+// aod::wald.test for the linear hypothesis L b = 0: b (p), sigma the covariance of b (p by p row-major), L (q by p row-major);
+// the statistic t(Lb) (L sigma t(L))^-1 (Lb) and its chi-square p value on q degrees of freedom
+fn wald_test(a: *mem.Arena, b: []const f64, sigma: []const f64, lm: []const f64, q: usize, p: usize) -> (Wald, err) {
+    var out: Wald = zero
+    let (lb, e1) = mem.alloc[f64](a, q)
+    let (ls, e2) = mem.alloc[f64](a, q * p)
+    let (m, e3) = mem.alloc[f64](a, q * q)
+    let (mi, e4) = mem.alloc[f64](a, q * q)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok { ret (out, mem.Full) }
+    var r = 0usize
+    while r < q {
+        var s = 0.0f64
+        var c = 0usize
+        while c < p {
+            s += lm[r * p + c] * b[c]
+            c += 1usize
+        }
+        lb[r] = s
+        c = 0usize
+        while c < p {
+            var t = 0.0f64
+            var k = 0usize
+            while k < p {
+                t += lm[r * p + k] * sigma[k * p + c]
+                k += 1usize
+            }
+            ls[r * p + c] = t
+            c += 1usize
+        }
+        r += 1usize
+    }
+    r = 0usize
+    while r < q {
+        var c = 0usize
+        while c < q {
+            var t = 0.0f64
+            var k = 0usize
+            while k < p {
+                t += ls[r * p + k] * lm[c * p + k]
+                k += 1usize
+            }
+            m[r * q + c] = t
+            c += 1usize
+        }
+        r += 1usize
+    }
+    let ei = wr.invert_small(a, m, q, mi)
+    if ei != ok { ret (out, ei) }
+    var x2 = 0.0f64
+    r = 0usize
+    while r < q {
+        var c = 0usize
+        while c < q {
+            x2 += lb[r] * mi[r * q + c] * lb[c]
+            c += 1usize
+        }
+        r += 1usize
+    }
+    out.x2 = x2
+    out.p = nm.pchisq(x2, f64(q), false, false)
+    ret (out, ok)
 }

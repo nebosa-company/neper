@@ -8,6 +8,19 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
+fn wald_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let q = usize(x[1usize])
+    let p = usize(x[2usize])
+    let b = x[3usize..3usize + p]
+    let sg = x[3usize + p..3usize + p + p * p]
+    let lm = x[3usize + p + p * p..3usize + p + p * p + q * p]
+    let (w, e) = ad.wald_test(a, b, sg, lm, q, p)
+    if e != ok { os.exit(6) }
+    if x[0usize] == 0.0f64 { ret w.x2 }
+    ret w.p
+}
+
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = usize(x[3usize])
@@ -31,7 +44,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var at = 0usize
     while at < golden.cases.len {
         let c = &golden.cases[at]
-        let got = answer(c)
+        var got = 0.0f64
+        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else { got = answer(c) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

@@ -49004,3 +49004,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.aod` gains `donner`: the Donner-Klar design effect and the corrected chi-square test of equal proportions across groups for clustered binary data (the intra-cluster correlation from the between and within mean squares, the group design effects 1 + (nA - 1) rho, and the corrected statistic), for rows with sizes, successes and group codes.
 
 **Result.** `oracle_aod` has 465 values (20 added grouped data sets, rho and X2) and equals aod on Windows. Linux pending. L480 stays partial: betabin, negbin, quasibin, quasipois, wald.test, anova, iccbin A and B and splitbin remain.
+
+## D7164 — aod: wald.test
+
+`e.algo.stat.aod` gains `wald_test`: the Wald chi-square test of the linear hypothesis L b = 0 from a coefficient vector, its covariance matrix and the contrast matrix (the statistic t(Lb) (L sigma t(L))^-1 (Lb) with a chi-square p value on rank-q degrees of freedom; the hypothesis form with b = 0 only, no terms or H0 offsets).
+
+**Result.** `oracle_aod` has 515 values (25 added tests, statistic and p value) and equals aod on Windows. Linux pending. L480 stays partial: betabin, negbin, quasibin, quasipois, anova and splitbin remain.

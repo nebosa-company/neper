@@ -1,4 +1,4 @@
-# aod: varbin's non-bootstrap rows, iccbin method C and donner. drs args: (0 rho / 1 X2, 0, 0, k, n..., y..., group codes 0-based..., G) under the name "donner".
+# aod: varbin's non-bootstrap rows, iccbin method C and donner. drs args: (0 rho / 1 X2, 0, 0, k, n..., y..., group codes 0-based..., G) under the name "donner". wald.test: (0 chi2 / 1 P, q, p, b..., sigma row-major..., L row-major...) under the name "wald".
 #   args: "varbin" (row 0 binomial, 1 ratio, 2 arithmetic, 3 jackknife; part 0 p, 1 varp, 2 lower, 3 upper; alpha; k; n...; y...); "iccbin" (0, 0, 0, k, n..., y...)
 suppressMessages(library(aod))
 cases <- list()
@@ -17,5 +17,12 @@ for (rep in 1:20) {
   d <- data.frame(r = y / n, g = factor(grp), w = n)
   dr <- donner(r ~ g, weights = w, data = d)
   add("donner", c(0, 0, 0, k, n, y, grp, G), dr@rho); add("donner", c(1, 0, 0, k, n, y, grp, G), dr@X2)
+}
+for (rep in 1:25) {
+  p <- sample(2:6, 1); q <- sample(1:min(p, 3), 1)
+  b <- rnorm(p, 0, 2); A <- matrix(rnorm(p * p), p, p); S <- crossprod(A) / p + diag(p) * 0.3
+  L <- matrix(rnorm(q * p), q, p)
+  w <- wald.test(b = b, Sigma = S, L = L)$result$chi2
+  add("wald", c(0, q, p, b, as.vector(t(S)), as.vector(t(L))), w[["chi2"]]); add("wald", c(1, q, p, b, as.vector(t(S)), as.vector(t(L))), w[["P"]])
 }
 emit("aod", "aod", list(cases))
