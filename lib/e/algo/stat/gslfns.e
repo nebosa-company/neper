@@ -5,6 +5,9 @@
 
 use e.math
 use e.math.special as sp
+use e.math.dist as dist
+use e.math.quadpack as qp
+use e.mem
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
 
@@ -469,3 +472,73 @@ fn psi(x0: f64) -> f64 {
     let ser = i2 * (1.0f64 / 12.0f64 - i2 * (1.0f64 / 120.0f64 - i2 * (1.0f64 / 252.0f64 - i2 * (1.0f64 / 240.0f64 - i2 * (1.0f64 / 132.0f64 - i2 * 691.0f64 / 32760.0f64)))))
     ret s + math.log[f64](x) - 0.5f64 / x - ser
 }
+
+// ---- Debye, transport, Fermi-Dirac and synchrotron functions by adaptive quadrature (e.math.quadpack, tolerance 1e-13), for x > 0 (the Debye and transport
+// functions) and any real x (Fermi-Dirac)
+type Qd = struct { kind: usize, n: f64, x: f64 }
+
+fn qd_fn(c: *Qd, t: f64) -> f64 {
+    if c.kind == 0usize {
+        // Debye: t^n / (e^t - 1)
+        if t == 0.0f64 {
+            if c.n == 1.0f64 { ret 1.0f64 }
+            ret 0.0f64
+        }
+        ret math.pow[f64](t, c.n) / dist.expm1(t)
+    }
+    if c.kind == 1usize {
+        // transport: t^n e^t / (e^t - 1)^2
+        if t == 0.0f64 {
+            if c.n == 2.0f64 { ret 1.0f64 }
+            ret 0.0f64
+        }
+        let em = dist.expm1(t)
+        ret math.pow[f64](t, c.n) * math.exp[f64](t) / (em * em)
+    }
+    if c.kind == 2usize {
+        // Fermi-Dirac of order n > -1: t^n / (e^(t - x) + 1)
+        if t == 0.0f64 && c.n < 0.0f64 { ret 0.0f64 }
+        ret math.pow[f64](t, c.n) / (math.exp[f64](t - c.x) + 1.0f64)
+    }
+    if c.kind == 3usize {
+        // Fermi-Dirac of order -1/2 after t = u^2: 2 / (e^(u^2 - x) + 1)
+        ret 2.0f64 / (math.exp[f64](t * t - c.x) + 1.0f64)
+    }
+    // synchrotron_1: K(5/3, t)
+    ret bessel_knu(5.0f64 / 3.0f64, t)
+}
+
+fn qd_finite(a: *mem.Arena, kind: usize, n: f64, x: f64, hi: f64) -> f64 {
+    var c: Qd = zero
+    c.kind = kind
+    c.n = n
+    c.x = x
+    let (r, e) = qp.qags[Qd](a, &c, qd_fn, 0.0f64, hi, 0.0f64, 0.0000000000001f64, 200usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result
+}
+
+fn qd_infinite(a: *mem.Arena, kind: usize, n: f64, x: f64, lo: f64) -> f64 {
+    var c: Qd = zero
+    c.kind = kind
+    c.n = n
+    c.x = x
+    let (r, e) = qp.qagi[Qd](a, &c, qd_fn, lo, 1i64, 0.0f64, 0.0000000000001f64, 200usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result
+}
+
+fn debye(a: *mem.Arena, n: usize, x: f64) -> f64 { ret f64(n) / math.pow[f64](x, f64(n)) * qd_finite(a, 0usize, f64(n), 0.0f64, x) }
+
+fn transport(a: *mem.Arena, n: usize, x: f64) -> f64 { ret qd_finite(a, 1usize, f64(n), 0.0f64, x) }
+
+// fermi_dirac_j(x) = F_j(x) = 1 / Gamma(j + 1) integral_0^Inf t^j / (e^(t - x) + 1) dt, for the orders gsl exposes (-1, -1/2, 1/2, 1, 3/2, 2)
+fn fermi_dirac(a: *mem.Arena, j: f64, x: f64) -> f64 {
+    if j == 0.0f64 - 1.0f64 { ret math.exp[f64](x) / (1.0f64 + math.exp[f64](x)) }
+    if j == 0.0f64 - 0.5f64 { ret qd_infinite(a, 3usize, 0.0f64, x, 0.0f64) / math.exp[f64](sp.lgamma(0.5f64)) }
+    ret qd_infinite(a, 2usize, j, x, 0.0f64) / math.exp[f64](sp.lgamma(j + 1.0f64))
+}
+
+fn synchrotron_1(a: *mem.Arena, x: f64) -> f64 { ret x * qd_infinite(a, 4usize, 0.0f64, 0.0f64, x) }
+
+fn synchrotron_2(x: f64) -> f64 { ret x * bessel_knu(2.0f64 / 3.0f64, x) }

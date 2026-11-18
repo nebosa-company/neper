@@ -26,4 +26,14 @@ for (rep in 1:30) {
   l <- sample(0:12, 1); m <- sample(0:l, 1); y <- runif(1, -0.99, 0.99); add("pl", c(l, y), legendre_Pl(l, y)); add("plm", c(l, m, y), legendre_Plm(l, m, y))
   f <- runif(1, -10, 20); add("fd0", c(f, 0), fermi_dirac_0(f)); d <- runif(1, -8, 1); add("dilog", c(d, 0), dilog(d)); p <- runif(1, 0.05, 30); add("psi", c(p, 0), psi(p))
 }
+# Debye, transport, Fermi-Dirac and synchrotron functions (args: (n or order, x)); the quadrature-based ones at 1e-9
+for (rep in 1:20) {
+  x <- runif(1, 0.1, 12)
+  add("debye", c(1, x), debye_1(x)); add("debye", c(2, x), debye_2(x)); add("debye", c(3, x), debye_3(x)); add("debye", c(4, x), debye_4(x))
+  for (n in 2:5) add("transport", c(n, x), get(paste0("transport_", n))(x))
+  xf <- runif(1, -4, 8)
+  add("fd", c(-1, xf), fermi_dirac_m1(xf)); add("fd", c(-0.5, xf), fermi_dirac_mhalf(xf)); add("fd", c(0.5, xf), fermi_dirac_half(xf))
+  add("fd", c(1, xf), fermi_dirac_1(xf)); add("fd", c(1.5, xf), fermi_dirac_3half(xf)); add("fd", c(2, xf), fermi_dirac_2(xf))
+  xs <- runif(1, 0.05, 8); add("sync", c(1, xs), synchrotron_1(xs)); add("sync", c(2, xs), synchrotron_2(xs))
+}
 emit("gslfns", "gsl", list(cases))

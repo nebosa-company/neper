@@ -8,9 +8,16 @@ use e.os
 use e.str
 use e.test.oracle as oracle
 
-fn answer(c: *const oracle.Case) -> f64 {
+fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
+    if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
+    if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }
+    if str.eq(k, "sync") {
+        if x[0usize] == 1.0f64 { ret gs.synchrotron_1(a, x[1usize]) }
+        ret gs.synchrotron_2(x[1usize])
+    }
     if str.eq(k, "knu") { ret gs.bessel_knu(x[0usize], x[1usize]) }
     if str.eq(k, "inu") { ret gs.bessel_inu(x[0usize], x[1usize]) }
     if str.eq(k, "jn") { ret gs.bessel_jn(i64(x[0usize]), x[1usize]) }
@@ -47,8 +54,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var failures = 0usize
     var at = 0usize
     while at < golden.cases.len {
+        let start = mem.mark(a)
         let c = &golden.cases[at]
-        let got = answer(c)
+        let got = answer(a, c)
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
@@ -56,6 +64,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let _ = io.print("\n")
             }
         }
+        mem.reset(a, start)
         at += 1usize
     }
     if failures > 0usize { os.exit(1) }

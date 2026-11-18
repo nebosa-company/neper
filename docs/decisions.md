@@ -49340,3 +49340,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.desctools` gains `cohen_d_ci`: the interval of `CohenD`, found as the package does by solving pt(t, df = nmax - 2, ncp) = alpha / 2 and 1 - alpha / 2 for the non-central parameter with uniroot on (min(-5, -10 |t|), max(5, 10 |t|)) (`e.math.nchisq.pnt` and the shared Brent zeroin) and converting back to d. Two quirks of the package are kept: the one-sample call takes nmax as n / 2 + 1 and t as d sqrt(n) / 2, and the two-sample call passes the sample sizes swapped (n2 = nx, n1 = ny).
 
 **Result.** `oracle_desctools_agree` has 615 values (60 added over ten one- and two-sample data sets, 1e-5) and equals DescTools on Windows. Linux pending. L363 stays partial.
+
+## D7220 — gsl: Debye, transport, Fermi-Dirac and synchrotron functions
+
+`e.algo.stat.gslfns` gains `debye` (orders 1 to 4), `transport` (orders 2 to 5), `fermi_dirac` (orders -1, -1/2, 1/2, 1, 3/2 and 2, the half-order -1/2 after the substitution t = u^2 that removes the endpoint singularity) and the synchrotron functions (the first as x times the tail integral of K(5/3) by the infinite-range routine, the second as x K(2/3)), all by the adaptive quadrature of `e.math.quadpack` at tolerance 1e-13 rather than gsl's Chebyshev series.
+
+**Result.** `oracle_gslfns` has 1230 values (the earlier families unchanged; the new ones over 20 arguments each at 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: the remaining families (Coulomb, the incomplete gamma and beta families, the trigonometric and statistical helpers) and the error estimates.
