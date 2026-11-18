@@ -83,6 +83,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if wh == 2usize { ret f64(fp.k) }
         if wh == 3usize { ret fp.prior[ix] }
         if wh == 4usize { ret fp.coef[ix] }
+        if wh == 7usize { ret fx.aic(&fp) }
+        if wh == 8usize { ret fx.bic(&fp, nn) }
+        if wh == 9usize { ret fx.icl(&fp, nn) }
         ret f64(fp.cluster[ix] + 1usize)
     }
     let z = c.args
@@ -109,6 +112,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if what == 3usize { ret f.prior[idx] }
     if what == 4usize { ret f.coef[idx] }
     if what == 5usize { ret f.sigma[idx] }
+    if what == 7usize { ret fx.aic(&f) }
+    if what == 8usize { ret fx.bic(&f, n) }
+    if what == 9usize { ret fx.icl(&f, n) }
     ret f64(f.cluster[idx] + 1usize)
 }
 

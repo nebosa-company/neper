@@ -12,7 +12,7 @@ use e.mem
 error Malformed
 
 // coef is k by p (component-major), sigma has k entries, post is n by k row-major (the scaled posteriors), cluster the 1-based max.col of post
-type Fm = struct { k: usize, iter: usize, converged: bool, llh: f64, prior: []f64, coef: []f64, sigma: []f64, post: []f64, cluster: []usize }
+type Fm = struct { k: usize, iter: usize, converged: bool, llh: f64, prior: []f64, coef: []f64, sigma: []f64, post: []f64, cluster: []usize, clog: f64, df: f64 }
 
 // log(sum(exp(v))) of the k values at v[off..off + k], stable
 fn lse(v: []const f64, off: usize, k: usize) -> f64 {
@@ -265,6 +265,17 @@ fn gauss_em(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, c
     out.coef = coef
     out.sigma = sigma
     out.post = post
+    // the classification log-likelihood (the log unscaled posteriors of the assigned components) and the parameter count, for BIC and ICL
+    var clg = 0.0f64
+    i = 0usize
+    while i < n {
+        clg += lp[i * k0 + (cl[i] - 1usize)]
+        i += 1usize
+    }
+    out.clog = clg
+    var dfc = f64(p)
+    if fam == 0usize { dfc = f64(p + 1usize) }
+    out.df = f64(k - 1usize) + f64(k) * dfc
     out.cluster = cl
     ret (out, ok)
 }
@@ -442,3 +453,11 @@ fn step_gaussian(a: *mem.Arena, r: *rg.Rng, x: []const f64, y: []const f64, n: u
     if !got { ret (best, Malformed) }
     ret (best, ok)
 }
+
+
+// BIC, AIC and ICL as flexmix defines them: -2 logLik + df log n, -2 logLik + 2 df, and -2 clogLik + df log n
+fn bic(f: *const Fm, n: usize) -> f64 { ret 0.0f64 - 2.0f64 * f.llh + f.df * math.log[f64](f64(n)) }
+
+fn aic(f: *const Fm) -> f64 { ret 0.0f64 - 2.0f64 * f.llh + 2.0f64 * f.df }
+
+fn icl(f: *const Fm, n: usize) -> f64 { ret 0.0f64 - 2.0f64 * f.clog + f.df * math.log[f64](f64(n)) }

@@ -16,6 +16,7 @@ one <- function(n, k, beta, sg, pr, flipfrac = 0.2) {
   hdr <- function(what, idx) c(n, 2, k, what, idx, flat)
   add <- function(what, idx, v, rel = 1e-5, abs = 1e-8) cases[[length(cases) + 1]] <<- case("f", hdr(what, idx), v, rel = rel, abs = abs)
   add(0, 0, as.numeric(logLik(fit)))
+  add(7, 0, AIC(fit)); add(8, 0, BIC(fit)); add(9, 0, ICL(fit))
   add(1, 0, fit@iter, 0, 0)
   add(2, 0, kk, 0, 0)
   for (j in seq_len(kk)) add(3, j - 1, fit@prior[j])
@@ -61,6 +62,7 @@ onepois <- function(n, k, beta, pr, flipfrac = 0.15) {
   hdr <- function(what, idx) c(n, 2, k, what, idx, flat)
   addf <- function(what, idx, v, rel = 1e-5, abs = 1e-8) cases[[length(cases) + 1]] <<- case("fp", hdr(what, idx), v, rel = rel, abs = abs)
   addf(0, 0, as.numeric(logLik(fit))); addf(1, 0, fit@iter, 0, 0); addf(2, 0, kk, 0, 0)
+  addf(7, 0, AIC(fit)); addf(8, 0, BIC(fit)); addf(9, 0, ICL(fit))
   for (j in seq_len(kk)) addf(3, j - 1, fit@prior[j])
   for (j in seq_len(kk)) { addf(4, (j - 1) * 2, prm[1, j]); addf(4, (j - 1) * 2 + 1, prm[2, j]) }
   cl <- fit@cluster
