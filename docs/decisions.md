@@ -48998,3 +48998,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the Waring distribution (density and distribution by summation), the zero-adjusted logarithmic ZALG (density and distribution) and the generalised Poisson density GPO. Two package quirks are reproduced: dZALG returns the unscaled logarithmic density for x > 0 (it is not multiplied by 1 - sigma, so it does not sum to one with the zero mass), and dGPO replaces the generalised Poisson by the Poisson whenever sigma exceeds 1e-6.
 
 **Result.** `oracle_gamlss_exp` has 4557 values across 47 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7163 — aod: donner
+
+`e.algo.stat.aod` gains `donner`: the Donner-Klar design effect and the corrected chi-square test of equal proportions across groups for clustered binary data (the intra-cluster correlation from the between and within mean squares, the group design effects 1 + (nA - 1) rho, and the corrected statistic), for rows with sizes, successes and group codes.
+
+**Result.** `oracle_aod` has 465 values (20 added grouped data sets, rho and X2) and equals aod on Windows. Linux pending. L480 stays partial: betabin, negbin, quasibin, quasipois, wald.test, anova, iccbin A and B and splitbin remain.

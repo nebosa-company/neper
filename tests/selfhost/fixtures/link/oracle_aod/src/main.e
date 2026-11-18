@@ -14,6 +14,12 @@ fn answer(c: *const oracle.Case) -> f64 {
     let n = x[4usize..4usize + k]
     let y = x[4usize + k..4usize + 2usize * k]
     if str.eq(c.name, "iccbin") { ret ad.iccbin_c(n, y) }
+    if str.eq(c.name, "donner") {
+        let grp = x[4usize + 2usize * k..4usize + 3usize * k]
+        let r = ad.donner(n, y, grp, usize(x[4usize + 3usize * k]))
+        if x[0usize] == 0.0f64 { ret r.rho }
+        ret r.x2
+    }
     ret ad.varbin(n, y, x[2usize], usize(x[0usize]), usize(x[1usize]))
 }
 

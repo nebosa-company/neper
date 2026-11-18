@@ -1,7 +1,7 @@
 // R aod: varbin (the binomial, ratio, arithmetic and jackknife estimates of a proportion over clusters, with their variances and normal limits) and iccbin
 // method "C" (the one-way ANOVA intra-cluster correlation of binary data).
 //
-// Not here: the bootstrap row of varbin, iccbin methods A and B (mixed-model based), betabin, negbin, quasibin, quasipois, wald.test, anova, donner, splitbin, drs.
+// Not here: the bootstrap row of varbin, iccbin methods A and B (mixed-model based), betabin, negbin, quasibin, quasipois, wald.test, anova, splitbin.
 
 use e.algo.stat.desctools as dt
 use e.math
@@ -107,4 +107,86 @@ fn iccbin_c(n: []const f64, y: []const f64) -> f64 {
     let mse = sse / (ntot - f64(k))
     let na = (ntot - sn2 / ntot) / (f64(k) - 1.0f64)
     ret (msa - mse) / (msa + (na - 1.0f64) * mse)
+}
+
+type Donner = struct { rho: f64, x2: f64 }
+
+// aod::donner (the design effect of cluster samples and the corrected chi-square test of equal proportions across groups) for rows with sizes n, successes y and
+// 0-based group codes grp (ng groups, every group present)
+fn donner(n: []const f64, y: []const f64, grp: []const f64, ng: usize) -> Donner {
+    var out: Donner = zero
+    let rows = n.len
+    var nn = 0.0f64
+    var ntot_all = 0.0f64
+    var ytot_all = 0.0f64
+    var nA_all = 0.0f64
+    var msc = 0.0f64
+    var g = 0usize
+    while g < ng {
+        var cnt = 0.0f64
+        var nt = 0.0f64
+        var yt = 0.0f64
+        var n2 = 0.0f64
+        var i = 0usize
+        while i < rows {
+            if usize(grp[i]) == g {
+                cnt += 1.0f64
+                nt += n[i]
+                yt += y[i]
+                n2 += n[i] * n[i]
+            }
+            i += 1usize
+        }
+        let pg = yt / nt
+        i = 0usize
+        while i < rows {
+            if usize(grp[i]) == g {
+                let d = y[i] / n[i] - pg
+                msc += n[i] * d * d
+            }
+            i += 1usize
+        }
+        nn += cnt
+        ntot_all += nt
+        ytot_all += yt
+        nA_all += n2 / nt
+        g += 1usize
+    }
+    let ngf = f64(ng)
+    let dfc = nn - ngf
+    let dfe = ntot_all - nn
+    msc = msc / dfc
+    var mse = 0.0f64
+    var i = 0usize
+    while i < rows {
+        let pr = y[i] / n[i]
+        mse += n[i] * pr * (1.0f64 - pr)
+        i += 1usize
+    }
+    mse = mse / dfe
+    let kk = (ntot_all - nA_all) / dfc
+    let rho = (msc - mse) / (msc + (kk - 1.0f64) * mse)
+    let p = ytot_all / ntot_all
+    var x2 = 0.0f64
+    g = 0usize
+    while g < ng {
+        var nt = 0.0f64
+        var yt = 0.0f64
+        var n2 = 0.0f64
+        i = 0usize
+        while i < rows {
+            if usize(grp[i]) == g {
+                nt += n[i]
+                yt += y[i]
+                n2 += n[i] * n[i]
+            }
+            i += 1usize
+        }
+        let c = 1.0f64 + (n2 / nt - 1.0f64) * rho
+        x2 += (yt - nt * p) * (yt - nt * p) / (c * nt * p * (1.0f64 - p))
+        g += 1usize
+    }
+    out.rho = rho
+    out.x2 = x2
+    ret out
 }
