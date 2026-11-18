@@ -3950,4 +3950,5 @@ D7160	661	ade4: dudi.mix
 D7161	613	ade4: procuste rotations and the dudi.acm correlation ratios
 D7162	647	gamlss.dist: WARING, ZALG and GPO
 D7163	616	aod: donner
-D7164	567	aod: wald.test
+D7164	568	aod: wald.test
+D7165	686	gamlss.dist: the exGAUS quantile

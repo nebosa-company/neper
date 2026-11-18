@@ -9,6 +9,7 @@ use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.math.special as sp
+use e.algo.stat.pwr as pw
 
 fn pi() -> f64 { ret 3.141592653589793238462643383279f64 }
 
@@ -940,4 +941,42 @@ fn dgpo(x: f64, mu: f64, sigma: f64) -> f64 {
     if x < 0.0f64 { ret 0.0f64 }
     if sigma > 0.000001f64 { ret nm.dpois(x, mu, false) }
     ret math.exp[f64](x * math.log[f64](mu / (1.0f64 + sigma * mu)) + (x - 1.0f64) * math.log[f64](1.0f64 + sigma * x) + (0.0f64 - mu * (1.0f64 + sigma * x)) / (1.0f64 + sigma * mu) - sp.lgamma(x + 1.0f64))
+}
+
+// qexGAUS: gamlss.dist finds the quantile with uniroot (Brent's zeroin at tolerance eps^0.25) on a bracket grown in steps of sigma from mu; the same
+// zeroin (e.algo.stat.pwr) on the same bracket gives the same root
+type ExgausRoot = struct { mu: f64, sigma: f64, nu: f64, p: f64 }
+
+fn exgaus_h(c: *ExgausRoot, q: f64) -> f64 { ret pexgaus(q, c.mu, c.sigma, c.nu) }
+
+fn exgaus_h1(c: *ExgausRoot, q: f64) -> f64 { ret pexgaus(q, c.mu, c.sigma, c.nu) - c.p }
+
+fn qexgaus(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p <= 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var c: ExgausRoot = zero
+    c.mu = mu
+    c.sigma = sigma
+    c.nu = nu
+    c.p = p
+    var lo = 0.0f64
+    var hi = 0.0f64
+    if exgaus_h(&c, mu) < p {
+        lo = mu
+        hi = mu + sigma
+        var j = 2.0f64
+        while exgaus_h(&c, hi) < p {
+            hi = mu + j * sigma
+            j += 1.0f64
+        }
+    } else {
+        lo = mu - sigma
+        hi = mu
+        var j = 2.0f64
+        while exgaus_h(&c, lo) > p {
+            lo = mu - j * sigma
+            j += 1.0f64
+        }
+    }
+    ret pw.zeroin[ExgausRoot](&c, exgaus_h1, lo, hi, pw.uniroot_tol(), 1000i64)
 }

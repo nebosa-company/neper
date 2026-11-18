@@ -151,7 +151,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 132usize { ret gd.pwaring(x, mu, sigma) }
     if which == 133usize { ret gd.dzalg(x, mu, sigma) }
     if which == 134usize { ret gd.pzalg(x, mu, sigma) }
-    ret gd.dgpo(x, mu, sigma)
+    if which == 135usize { ret gd.dgpo(x, mu, sigma) }
+    ret gd.qexgaus(x, mu, sigma, nu)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

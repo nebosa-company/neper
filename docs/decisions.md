@@ -49010,3 +49010,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.aod` gains `wald_test`: the Wald chi-square test of the linear hypothesis L b = 0 from a coefficient vector, its covariance matrix and the contrast matrix (the statistic t(Lb) (L sigma t(L))^-1 (Lb) with a chi-square p value on rank-q degrees of freedom; the hypothesis form with b = 0 only, no terms or H0 offsets).
 
 **Result.** `oracle_aod` has 515 values (25 added tests, statistic and p value) and equals aod on Windows. Linux pending. L480 stays partial: betabin, negbin, quasibin, quasipois, anova and splitbin remain.
+
+## D7165 — gamlss.dist: the exGAUS quantile
+
+`e.algo.stat.gamlssdist` gains `qexgaus`: gamlss.dist finds the exponentially modified Gaussian quantile by uniroot on a bracket that starts at mu and grows in steps of sigma, so the port runs the same Brent zeroin (`e.algo.stat.pwr.zeroin`, tolerance eps^0.25, at most 1000 steps) on the same bracket, and the roots equal R's to the iteration, not just to the tolerance.
+
+**Result.** `oracle_gamlss_exp` has 4578 values and equals gamlss.dist on Windows, the 21 new quantiles at 1e-9 relative. Linux pending. L464 stays partial; the same recipe (the package's own bracket and uniroot) applies to the other numerically inverted quantiles.
