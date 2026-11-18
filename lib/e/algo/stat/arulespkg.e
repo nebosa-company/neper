@@ -4,6 +4,7 @@
 
 use e.math
 use e.mem
+use e.math.nmath_beta as nbh
 
 // out: [number of frequent itemsets (size 1 .. maxlen), sum of their supports, number of rules (size 2 .. maxlen), sum of rule supports, sum of confidences, sum of lifts]
 fn apriori(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, conf: f64, maxlen: usize, out: []f64) -> err {
@@ -333,5 +334,100 @@ fn apriori_basic(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, co
         m += 1usize
     }
     if zmax > 0.0f64 { out[10usize] = zlev / zmax }
+    ret ok
+}
+
+// the hypergeometric and range measures on the rules of `apriori` (sums over the finite values): out[0] hyperLift (n11 over qhyper(0.99)), 1 hyperConfidence (phyper(n11 - 1) lower), 2 fishersExactTest
+// (phyper(n11 - 1) upper), 3 RLD, 4 stdLift with the support and confidence thresholds of the search as arules' info() supplies them; out[5] the number of rules
+fn apriori_hyper(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, conf: f64, maxlen: usize, out: []f64) -> err {
+    let nt = f64(trans.len)
+    let total = 1usize << nitems
+    let (cnt, e1) = mem.alloc[u32](a, total)
+    if e1 != ok { ret e1 }
+    var m = 1usize
+    while m < total {
+        var c = 0u32
+        var t = 0usize
+        while t < trans.len {
+            if (trans[t] & u64(m)) == u64(m) { c += 1u32 }
+            t += 1usize
+        }
+        cnt[m] = c
+        m += 1usize
+    }
+    cnt[0usize] = u32(trans.len)
+    let need = math.ceil[f64](supp * nt - 1.0e-9f64)
+    var k = 0usize
+    while k < 6usize {
+        out[k] = 0.0f64
+        k += 1usize
+    }
+    m = 1usize
+    while m < total {
+        var sz = 0usize
+        var q = m
+        while q > 0usize {
+            sz += q & 1usize
+            q = q >> 1usize
+        }
+        if sz <= maxlen && sz >= 2usize && f64(cnt[m]) >= need {
+            var l = (m - 1usize) & m
+            while l > 0usize {
+                let r = m ^ l
+                if (r & (r - 1usize)) != 0usize {
+                    l = (l - 1usize) & m
+                    continue
+                }
+                let cf = f64(cnt[m]) / f64(cnt[l])
+                if cf >= conf - 1.0e-12f64 {
+                    let n11 = f64(cnt[m])
+                    let n1x = f64(cnt[l])
+                    let nx1 = f64(cnt[r])
+                    let n10 = n1x - n11
+                    let n01 = nx1 - n11
+                    let n00 = nt - n11 - n10 - n01
+                    let qh = nbh.qhyper(0.99f64, nx1, nt - nx1, n1x, true, false)
+                    let hl = n11 / qh
+                    if hl - hl == 0.0f64 { out[0usize] += hl }
+                    let hc = nbh.phyper(n11 - 1.0f64, nx1, nt - nx1, n1x, true, false)
+                    if hc - hc == 0.0f64 { out[1usize] += hc }
+                    let fe = nbh.phyper(n11 - 1.0f64, nx1, nt - nx1, n1x, false, false)
+                    if fe - fe == 0.0f64 { out[2usize] += fe }
+                    let dd = (n11 * n00 - n10 * n01) / nt
+                    var rld = 0.0f64
+                    if dd > 0.0f64 {
+                        if n01 < n10 { rld = dd / (dd + n01) } else { rld = dd / (dd + n10) }
+                    } else if n11 < n00 {
+                        rld = dd / (dd - n11)
+                    } else {
+                        rld = dd / (dd - n00)
+                    }
+                    if rld - rld == 0.0f64 { out[3usize] += rld }
+                    let sa = n1x / nt
+                    let sb = nx1 / nt
+                    var lam = 0.0f64
+                    let l0 = sa + sb - 1.0f64
+                    if l0 > 1.0f64 / nt { lam = l0 / (sa * sb) } else { lam = (1.0f64 / nt) / (sa * sb) }
+                    let s = supp
+                    let cc = conf
+                    let c1 = 4.0f64 * s / ((1.0f64 + s) * (1.0f64 + s))
+                    let c2 = s / (sa * sb)
+                    let c3 = cc / sb
+                    if c1 > lam { lam = c1 }
+                    if c2 > lam { lam = c2 }
+                    if c3 > lam { lam = c3 }
+                    var ups = 1.0f64 / sb
+                    if sa > sb { ups = 1.0f64 / sa }
+                    let lift = (n11 / nt) / (sa * sb)
+                    var sl = (lift - lam) / (ups - lam)
+                    if sl != sl { sl = 1.0f64 }
+                    if sl - sl == 0.0f64 { out[4usize] += sl }
+                    out[5usize] += 1.0f64
+                }
+                l = (l - 1usize) & m
+            }
+        }
+        m += 1usize
+    }
     ret ok
 }
