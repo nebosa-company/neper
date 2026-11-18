@@ -49742,3 +49742,9 @@ The emmeans fixture refits `lm(y ~ A * x)` through `e.algo.stat.emmeans.fit` (de
 The generators of NO, LO, EXP and LOGNO are R's own (`rnorm`, `rlogis`, `rexp` with rate 1/mu, `rlnorm`), PO is `rpois`, and PE, JSU, SHASH, PARETO, GEOM and BI draw `runif(n)` and apply their quantile function; the fixture reproduces the i-th draw under the seed from `e.algo.rand.r`, `e.algo.rand.rdist` and the existing quantile functions.
 
 **Result.** `oracle_gamlss_exp` gains 6 seeds by 11 families by 8 draws (528 values) and equals gamlss.dist on Windows at 1e-8. No library change was needed. Linux pending. L464 stays partial: ST3C (compiled in the package), DEL, DBI, ZASICHEL, MN3 to MN5, the discrete quantiles, moments, random numbers of the remaining families.
+
+## D7287 — gmp: bigq arithmetic
+
+The gmp fixture runs `e.algo.bignum`'s rational type (`rat_make` to lowest terms with a positive denominator, `rat_add`, `rat_sub`, `rat_mul`, `rat_div`) on pairs of big integers of 5 to 25 digits and compares the numerator's absolute value and the denominator, each by its residue modulo 1e9 and its digit count, with `numerator` and `denominator` of gmp's `as.bigq` results.
+
+**Result.** 15 quadruples under four operations (240 values) equal gmp on Windows exactly. No library change was needed. Linux pending. L379 stays partial: as.character in bases other than 10 (no oracle case yet), the vectorised forms.

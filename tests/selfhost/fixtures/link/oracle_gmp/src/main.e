@@ -27,7 +27,53 @@ fn build(a: *mem.Arena, x: []const f64, at: usize, count: usize) -> bn.Int {
     ret v
 }
 
+fn answer_q(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let op = usize(x[0usize])
+    let n1 = usize(x[1usize])
+    let n2 = usize(x[2usize])
+    let n3 = usize(x[3usize])
+    let n4 = usize(x[4usize])
+    let va = build(a, x, 5usize, n1)
+    let vb = build(a, x, 5usize + n1, n2)
+    let vc = build(a, x, 5usize + n1 + n2, n3)
+    let vd = build(a, x, 5usize + n1 + n2 + n3, n4)
+    let (p, pe) = bn.rat_make(a, va, vb)
+    let (q, qe) = bn.rat_make(a, vc, vd)
+    if pe != ok || qe != ok { os.exit(50) }
+    var r: bn.Rat = zero
+    if op == 0usize {
+        let (t, e) = bn.rat_add(a, p, q)
+        if e != ok { os.exit(51) }
+        r = t
+    } else if op == 1usize {
+        let (t, e) = bn.rat_sub(a, p, q)
+        if e != ok { os.exit(52) }
+        r = t
+    } else if op == 2usize {
+        let (t, e) = bn.rat_mul(a, p, q)
+        if e != ok { os.exit(53) }
+        r = t
+    } else {
+        let (t, e) = bn.rat_div(a, p, q)
+        if e != ok { os.exit(54) }
+        r = t
+    }
+    var v = r.num
+    if str.starts_with(c.name, "qden") { v = r.den }
+    if v.sign == .Negative { v.sign = .Positive }
+    if str.ends_with(c.name, "_mod") {
+        let (m9, e) = g.mod_1e9(a, v)
+        if e != ok { os.exit(55) }
+        ret f64(m9)
+    }
+    let (nd, e2) = g.size_in_base(a, v, 10u8)
+    if e2 != ok { os.exit(56) }
+    ret f64(nd)
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.starts_with(c.name, "qnum") || str.starts_with(c.name, "qden") { ret answer_q(a, c) }
     let x = c.args
     let op = usize(x[0usize])
     let na = usize(x[1usize])

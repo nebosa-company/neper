@@ -4072,4 +4072,5 @@ D7282	640	survival: pyears by a factor
 D7283	865	mlogit: the multinomial logit
 D7284	811	poLCA: fit statistics and class assignment
 D7285	1036	mcmc: initseq and olbm
-D7286	723	gamlss.dist: more random numbers
+D7286	724	gamlss.dist: more random numbers
+D7287	649	gmp: bigq arithmetic

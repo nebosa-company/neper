@@ -34,7 +34,7 @@
       "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6161, D7117). bigz add, multiply, quotient, remainder, gcd, lcm, powm, inverse, isprime, nextprime, chooseZ, fibnum, lucnum, factorialZ and factorize (D7117: perfect powers, ECM, Pollard rho) equal gmp on Windows (oracle_gmp, 41 factorize cases; Linux pending). Open: bigq, as.character in bases other than 10 (no oracle case yet), vectorised forms. Was: Open (CRAN rank 301). Small to mid. Acceptance, equal to gmp: bigz and bigq arithmetic, gcd, lcm, powm, inverse, isprime, nextprime, factorize, binomial, fibnum, lucnum, sizeinbase, as.character in any base."
+      "evidence": "Partial (D6161, D7117, D7287 bigq add, subtract, multiply and divide). bigz add, multiply, quotient, remainder, gcd, lcm, powm, inverse, isprime, nextprime, chooseZ, fibnum, lucnum, factorialZ and factorize (D7117: perfect powers, ECM, Pollard rho) equal gmp on Windows (oracle_gmp, 41 factorize cases; Linux pending). Open: as.character in bases other than 10 (no oracle case yet), vectorised forms. Was: Open (CRAN rank 301). Small to mid. Acceptance, equal to gmp: bigz and bigq arithmetic, gcd, lcm, powm, inverse, isprime, nextprime, factorize, binomial, fibnum, lucnum, sizeinbase, as.character in any base."
     },
     {
       "id": "L380",

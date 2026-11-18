@@ -41,4 +41,19 @@ facase(as.bigz(2)^40, 0, 40)
 facase(as.bigz(600851475143), 0, length(factorize(as.bigz(600851475143))))
 facase(as.bigz(600851475143), 4, 6857)
 for (n in c(5, 20, 60, 120)) emitcase(c(13, 1, 1, 1, n, 0, 0, 0), factorialZ(n))
+# bigq arithmetic on a/b and c/d: "qnum_mod" "qnum_nd" "qden_mod" "qden_nd" args (op 0 add / 1 sub / 2 mul / 3 div, n1, n2, n3, n4, chunks of a, b, c, d); the numerator's absolute value is used for the residue and the digit count
+for (rep in 1:15) {
+  a <- rnd(sample(5:25, 1)); b <- rnd(sample(5:25, 1)); cc <- rnd(sample(5:25, 1)); d <- rnd(sample(5:25, 1))
+  x <- as.bigq(a, b); y <- as.bigq(cc, d)
+  ch <- list(chunks(a), chunks(b), chunks(cc), chunks(d))
+  res <- list(x + y, x - y, x * y, x / y)
+  for (op in 0:3) {
+    r <- res[[op + 1]]; nu <- abs(numerator(r)); de <- denominator(r)
+    args <- c(op, sapply(ch, length), unlist(ch))
+    cases[[length(cases) + 1]] <- case("qnum_mod", args, as.numeric(nu %% 1e9), rel = 1e-12, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("qnum_nd", args, nchar(as.character(nu)), rel = 1e-12, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("qden_mod", args, as.numeric(de %% 1e9), rel = 1e-12, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("qden_nd", args, nchar(as.character(de)), rel = 1e-12, abs = 1e-9)
+  }
+}
 emit("gmp", "gmp", list(cases))
