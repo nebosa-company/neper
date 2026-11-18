@@ -329,3 +329,27 @@ fn loddsratio(a: *mem.Arena, x: []const f64, r: usize, c: usize, s: usize, coef:
     }
     ret ok
 }
+
+// vcd::goodfit(x, type = "poisson") by maximum likelihood on a one-way table of counts freq[c] for c = 0 .. K - 1: lambda = the weighted mean of the
+// counts, the fitted counts N dpois(c, lambda), and the degrees of freedom (the number of non-empty counts) - 2. Returns lambda and the degrees of
+// freedom; the fitted counts go to fit; the chi-square of summary(goodfit) is sum (obs - fit)^2 / fit over the fitted counts, computed by the caller.
+fn goodfit_poisson(freq: []const f64, fit: []f64) -> (f64, f64, err) {
+    let k = freq.len
+    var nsum = 0.0f64
+    var wsum = 0.0f64
+    var nonzero = 0.0f64
+    var c = 0usize
+    while c < k {
+        nsum += freq[c]
+        wsum += f64(c) * freq[c]
+        if freq[c] > 0.0f64 { nonzero += 1.0f64 }
+        c += 1usize
+    }
+    let lambda = wsum / nsum
+    c = 0usize
+    while c < k {
+        fit[c] = nsum * nm.dpois(f64(c), lambda, false)
+        c += 1usize
+    }
+    ret (lambda, nonzero - 2.0f64, ok)
+}

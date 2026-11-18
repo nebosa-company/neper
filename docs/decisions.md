@@ -48812,3 +48812,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.tsa` has `cpgram`: the series centred and cosine-tapered at fraction p (stats' spec.taper weights), the periodogram |F_k|^2 / n at k = 0 .. n / 2 by direct DFT with the zero frequency set to zero, the even-length grid cut to an odd count, the cumulative proportions, and the critical value 1.358 / (sqrt(m) + 0.12 + 0.11 / sqrt(m)) with m the count minus one. stats::cpgram only plots, so the oracle reproduces its body in R and checks the values the plot is drawn from.
 
 **Result.** `oracle_tsa_cpgram` equals those values on 48 cases (12 series of 40 to 120 points, an AR(1) with a sinusoid, taper 0.1) on Windows; the critical value and the cumulative sums agree. Linux pending. L452 stays partial: armasubsets, arimax, the BIC table and the tsdiag statistics are open.
+
+## D7132 — vcd: goodfit for the Poisson distribution by maximum likelihood
+
+`e.algo.stat.vcdeffect` has `goodfit_poisson`: lambda is the weighted mean of the counts, the fitted counts are N dpois(c, lambda) over the counts 0 .. K - 1 (zeros included, as goodfit does), and the degrees of freedom are the number of non-empty counts minus 2. The chi-square of summary(goodfit), sum (obs - fit)^2 / fit, is computed by the caller.
+
+**Result.** `oracle_vcd_goodfit` equals vcd::goodfit on 64 values (16 Poisson samples of 40 to 300 points: lambda, the sum of the fitted counts, the degrees of freedom and the chi-square) on Windows. Linux pending. L389 stays partial. The binomial and negative binomial types, the minimum chi-square method and the intervals are open. `CMHtest` named in the L389 acceptance is not in the installed vcd (it is in vcdExtra), so it cannot be checked against R here.

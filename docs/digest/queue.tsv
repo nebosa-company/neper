@@ -3,7 +3,7 @@ L332	library	0.55	774	foreign: dBase, ARFF, Octave, Minitab and Systat	Partial (
 L358	library	0.2	452	dbscan remainder: HDBSCAN, LOF and neighbourhood graphs	Partial (D6455 kNNdist and lof, D6456 sNN shared and frNN equal dbscan on Windows;
 L379	library	0.6	572	gmp: arbitrary-precision numbers	Partial (D6161, D7117).
 L380	library	0.35	828	tm and tidytext: text mining	Partial (D6618).
-L389	library	0.4	955	vcd and effectsize: categorical association and effect sizes	Partly done (D6101): e.algo.stat.vcdeffect has assocstats, Kappa with weights and errors, cohens_d, hedges_g, glass_delta, rank_biserial, cliffs_delta and one-way eta, omega, epsilon squared, equal to
+L389	library	0.4	1161	vcd and effectsize: categorical association and effect sizes	Partly done (D6101): e.algo.stat.vcdeffect has assocstats, Kappa with weights and errors, cohens_d, hedges_g, glass_delta, rank_biserial, cliffs_delta and one-way eta, omega, epsilon squared, equal to
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
 L407	library	0.15	464	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial (D6457 dghyp, dnig, dhyperb, dskewlap equal GeneralizedHyperbolic on Windows;
 L409	library	0.2	390	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids equal arm on Windows;
