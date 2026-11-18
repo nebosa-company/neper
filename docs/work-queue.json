@@ -180,17 +180,6 @@
       "evidence": "Partial (D6165). cluster.stats validity indexes (no noise cluster) equal fpc on Windows (oracle_fpc; Linux pending). D7124: discrcoord equal to fpc up to the sign of its axes (oracle_fpc_discr, 96 sign-invariant values; the axis signs are open, see D7124). Open: noise clusters, clusterboot, nselectboot, mergenormals, dbscan, cluster.varstats, ncoord. Was: Open (CRAN rank 803). Small to mid. Acceptance, equal to fpc under set.seed: cluster.stats with every validity index, calinhara, clusterboot, nselectboot, mergenormals, dbscan, cluster.varstats, plotcluster data (discrcoord, ncoord)."
     },
     {
-      "id": "L477",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 639,
-      "title": "compositions: compositional data analysis",
-      "score": 0.7,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D6140). clo, clr, alr, ilr and inverses, Aitchison norm and distance, perturbation, powering, mean, clr variance and the variation matrix equal compositions on Windows (oracle_compositions; Linux pending). Open: balances, zeros and missing values, the normality tests in the simplex. Was: Open (CRAN rank 860). Small to mid. Acceptance, equal to compositions: acomp and rcomp objects, clr, ilr, alr and their inverses, the Aitchison distance and norm, perturbation and powering, mean, variance and balances, tests of normality in the simplex. D7100: rcomp cdt, norm, minus, mean, var, dist, idt; ilr bases from a signary matrix and the balanced ilrBase; zeroreplace with given limits; Gauss.test; acompNormalGOF.test (energy test) equal compositions (oracle_compositions_ext). D7116: the principal balance base (gsi.PrinBal, PBhclust: ward hclust of the variation matrix, merges as a signary) equal to compositions (oracle_compositions_prin, 27 cases). Missing parts (NA) in acomp data are done (compositions_miss). Open: robust MCD estimates, optimal balances (PBangprox, PBmaxvar), balanceBase from a formula, the other exports."
-    },
-    {
       "id": "L478",
       "category": "library",
       "group": "CRAN parity",
