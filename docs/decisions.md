@@ -48706,3 +48706,11 @@ Probed in R and pinned: a missing month or day is taken from today's date, and %
 The strptime subset in `e.fmt.arff` (D7113) now reads %w and %U as foreign's read.arff does: %w is one digit in 0..6 and %U two digits in 0..53, both consumed and ignored for the date, so "2011-03-04 10" reads as the 4th of March (the trailing 0 is trailing text). Any other directive still makes the value missing. Probed in R 4.6.1 with strptime; the oracle adds a 'yyyy-MM-dd D' column (%w) and a 'yyyy-MM-dd ww' column (%U) to foreign_arff9.
 
 **Result.** `oracle_foreign` equals foreign on 138 cases on Windows; Linux pending. L332 stays partial.
+
+## D7115 — foreign: read.octave bool, complex, range and integer-type variables
+
+`e.fmt.octave` now reads what read.octave reads for these types: "bool" (a 0 or 1 value) and "bool matrix"; "complex scalar" and "complex matrix" (rows of "(re,im)" tokens, the real parts in sum and the imaginary parts in a new isum field); and "range" (its "# base, limit, increment" comment line, then the three numbers, with the elements of seq.int(base, limit, increment) and the tolerance 1e-10). An integer type is unknown to read.octave, which returns NULL for it; the reader now records such a variable with no elements where it used to fail. Probed in R 4.6.1 with read.octave on hand-written files; the oracle (octave_7 fixed, octave_8 and octave_9 random) compares counts, sums and imaginary sums.
+
+Still not here: cells, structs, lists, string arrays and N-d arrays, which read.octave reads and this reader does not (a "string array" is treated as an unknown type, which is a divergence).
+
+**Result.** `oracle_octave` equals foreign on 105 cases on Windows; Linux pending. L332 stays partial: the remaining read.octave types are above, and read.dbf memo fields, write.dbf, read.mtp and read.systat need the foreign source.

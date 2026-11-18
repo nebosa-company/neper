@@ -19,7 +19,41 @@ for (i in 1:6) {
   add("nvars", c(i, 0), length(d))
   for (j in seq_along(d)) {
     v <- d[[j]]
-    add("count", c(i, j - 1), if (is.character(v)) 1 else length(v)); add("sum", c(i, j - 1), if (is.character(v)) sum(utf8ToInt(v)) else sum(as.numeric(v)))
+    add("count", c(i, j - 1), if (is.character(v)) 1 else length(v)); add("sum", c(i, j - 1), if (is.character(v)) sum(utf8ToInt(v)) else sum(as.numeric(v))); add("isum", c(i, j - 1), 0)
+  }
+}
+# bool, complex, range and integer-type variables (7 and 8 are fixed, 9 random); "isum" is the sum of the imaginary parts, 0 for a real value
+# An integer type is unknown to read.octave, which gives NULL for it: count 0 and sum 0.
+writeLines(c("# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>",
+             "# name: flag", "# type: bool", "1",
+             "# name: flags", "# type: bool matrix", "# rows: 2", "# columns: 3", " 1 0 1", " 0 0 1",
+             "# name: z", "# type: complex scalar", "(1.5,-2)",
+             "# name: zm", "# type: complex matrix", "# rows: 2", "# columns: 2", " (1,2) (3,-4)", " (5,6) (7,8)",
+             "# name: rg", "# type: range", "# base, limit, increment", "1 10 3",
+             "# name: nn", "# type: int32 scalar", "5"),
+           file.path(root, "tests/oracle/data/octave_7.txt"))
+for (i in 8:9) {
+  nb <- sample(1:5, 1); nl <- nb + sample(4:30, 1); ni <- sample(1:4, 1)
+  r <- sample(2:4, 1); cc <- sample(2:4, 1)
+  re <- matrix(sample(-9:9, r * cc, replace = TRUE), r, cc); im <- matrix(sample(-9:9, r * cc, replace = TRUE), r, cc)
+  cells <- sapply(seq_len(r * cc), function(k) sprintf("(%d,%d)", re[k], im[k]))
+  rows <- sapply(seq_len(r), function(k) paste0(" ", paste(cells[((k - 1) * cc + 1):(k * cc)], collapse = " ")))
+  bm <- matrix(sample(0:1, 6, replace = TRUE), 2, 3)
+  lines <- c("# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>",
+             "# name: rg", "# type: range", "# base, limit, increment", sprintf("%d %d %d", nb, nl, ni),
+             "# name: zm", "# type: complex matrix", sprintf("# rows: %d", r), sprintf("# columns: %d", cc), rows,
+             "# name: bm", "# type: bool matrix", "# rows: 2", "# columns: 3", apply(bm, 1, function(row) paste0(" ", paste(row, collapse = " "))),
+             "# name: nn", "# type: int32 matrix", "# rows: 1", "# columns: 2", " 4 7")
+  writeLines(lines, file.path(root, sprintf("tests/oracle/data/octave_%d.txt", i)))
+}
+for (i in 7:9) {
+  d <- read.octave(file.path(root, sprintf("tests/oracle/data/octave_%d.txt", i)))
+  add("nvars", c(i, 0), length(d))
+  for (j in seq_along(d)) {
+    v <- d[[j]]
+    add("count", c(i, j - 1), if (is.character(v)) 1 else length(v))
+    add("sum", c(i, j - 1), if (is.character(v)) sum(utf8ToInt(v)) else sum(as.numeric(suppressWarnings(v))))
+    add("isum", c(i, j - 1), if (is.complex(v)) sum(Im(v)) else 0)
   }
 }
 emit("octave", "foreign", list(cases))

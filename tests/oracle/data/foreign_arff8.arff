@@ -1,0 +1,6 @@
+@relation rel
+@attribute r relational
+@attribute x numeric
+@end r
+@data
+1

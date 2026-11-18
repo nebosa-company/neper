@@ -1,0 +1,24 @@
+# Created by Octave 8.4.0, Mon Nov 16 10:00:00 2026 UTC <test@host>
+# name: rg
+# type: range
+# base, limit, increment
+1 6 1
+# name: zm
+# type: complex matrix
+# rows: 4
+# columns: 4
+ (-9,9) (-5,-9) (-2,4) (-5,-1)
+ (8,-2) (2,-4) (9,-7) (2,4)
+ (4,2) (-4,-6) (4,0) (9,6)
+ (0,-7) (1,-5) (-6,7) (0,-3)
+# name: bm
+# type: bool matrix
+# rows: 2
+# columns: 3
+ 1 1 1
+ 0 1 0
+# name: nn
+# type: int32 matrix
+# rows: 1
+# columns: 2
+ 4 7

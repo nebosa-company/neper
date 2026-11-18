@@ -27,6 +27,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "nvars") { ret f64(m.nvars) }
     let v = m.vars[col]
     if str.eq(c.name, "count") { ret f64(v.count) }
+    if str.eq(c.name, "isum") { ret v.isum }
     ret v.sum
 }
 
