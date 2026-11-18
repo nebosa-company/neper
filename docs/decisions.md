@@ -49622,3 +49622,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.graph.metrics` gains `triad_census` (the 16 Davis-Leinhardt classes of a directed graph in igraph's order, classified from the dyad counts and the in and out degrees inside each triple), `mutual_count`, `bridges` (an edge whose removal adds a component), `edge_connectivity` and `vertex_connectivity` (breadth-first augmenting-path maximum flow, vertex splitting for the latter, n - 1 for a complete graph), `similarity_invlog` (common neighbours weighted by 1 / ln of their degree), `motifs3` (open triads and triangles of an undirected graph) and `dominator_idom` (Cooper, Harvey and Kennedy's iterative immediate dominators; the root and unreachable vertices answer -1 as the R package returns them).
 
 **Result.** `oracle_igraph` has 1612 values (30 directed graphs for the census and mutual arcs, 30 undirected for bridges, connectivity, similarity and motifs, 30 rooted digraphs for the dominator tree) and equals igraph on Windows. Linux pending. L316 stays partial: walktrap, fast_greedy, infomap, optimal, gomory_hu_tree, cohesive_blocks, directed motifs, weighted forms.
+
+## D7267 — survival: survdiff for two groups
+
+`e.algo.stat.survival.fleming_harrington` with gamma = 0 is `survdiff`'s G-rho test (the pooled Kaplan-Meier survival to the power rho as the weight, the hypergeometric variance), so the new fixture `oracle_survdiff` checks its chi-square and p value against `survival::survdiff(rho = ...)`.
+
+**Result.** 40 two-group data sets with censoring (10 to 40 per group, rho 0, 0.5, 1 and 2: 80 values) equal survival on Windows at 1e-8; no new library code was needed. Linux pending. L311 stays partial: the K-sample survdiff, strata, the rest of coxph, survfit, survreg, cox.zph, concordance, survSplit, tmerge, pyears, residuals.
