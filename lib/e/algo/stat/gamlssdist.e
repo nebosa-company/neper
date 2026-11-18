@@ -788,3 +788,120 @@ fn ppareto2o(x: f64, mu: f64, sigma: f64) -> f64 {
 }
 
 fn qpareto2o(p: f64, mu: f64, sigma: f64) -> f64 { ret mu * (math.pow[f64](1.0f64 - p, 0.0f64 - 1.0f64 / sigma) - 1.0f64) }
+
+// LG: logarithmic series; YULE: Yule distribution (cdf by summation, quantile by search as the package does)
+fn dlg(x: f64, mu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret math.exp[f64](x * math.log[f64](mu) - math.log[f64](x) - math.log[f64](0.0f64 - math.log[f64](1.0f64 - mu)))
+}
+
+fn plg(x: f64, mu: f64) -> f64 {
+    if x < 1.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var j = 1.0f64
+    while j <= x {
+        s += dlg(j, mu)
+        j += 1.0f64
+    }
+    ret s
+}
+
+fn qlg(p: f64, mu: f64, max_value: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p + 0.000000001f64 >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var cum = 0.0f64
+    var j = 1.0f64
+    var q = 1.0f64
+    while j <= max_value {
+        cum += dlg(j, mu)
+        q = j
+        if p <= cum { break }
+        j += 1.0f64
+    }
+    ret q
+}
+
+fn lbeta_(a: f64, b: f64) -> f64 { ret sp.lgamma(a) + sp.lgamma(b) - sp.lgamma(a + b) }
+
+fn dyule(x: f64, mu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    let la = (mu + 1.0f64) / mu
+    ret math.exp[f64](lbeta_(la + 1.0f64, x + 1.0f64) - lbeta_(la, 1.0f64))
+}
+
+fn pyule(x: f64, mu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var j = 0.0f64
+    while j <= x {
+        s += dyule(j, mu)
+        j += 1.0f64
+    }
+    ret s
+}
+
+fn qyule(p: f64, mu: f64, max_value: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p + 0.000000001f64 >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var cum = 0.0f64
+    var j = 0.0f64
+    var q = 0.0f64
+    while j <= max_value {
+        cum += dyule(j, mu)
+        q = j
+        if p <= cum { break }
+        j += 1.0f64
+    }
+    ret q
+}
+
+// PARETO1o
+fn dpareto1o(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= mu { ret 0.0f64 }
+    ret math.exp[f64](math.log[f64](sigma) + sigma * math.log[f64](mu) - (sigma + 1.0f64) * math.log[f64](x))
+}
+
+fn ppareto1o(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= mu { ret 0.0f64 }
+    ret 1.0f64 - math.pow[f64](mu / x, sigma)
+}
+
+fn qpareto1o(p: f64, mu: f64, sigma: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    ret mu * math.pow[f64](1.0f64 - p, 0.0f64 - 1.0f64 / sigma)
+}
+
+// NBII: negative binomial of type II (variance mu + sigma mu); gamlss.dist's pNBII applies ppois whenever sigma exceeds 1e-4, and so does this
+fn dnbii(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if sigma <= 0.0001f64 { ret nm.dpois(x, mu, false) }
+    ret nb.dnbinom_mu(x, mu / sigma, mu, false)
+}
+
+fn pnbii(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if sigma > 0.0001f64 { ret nm.ppois(x, mu, true, false) }
+    ret nb.pnbinom_mu(x, mu / sigma, mu, true, false)
+}
+
+fn qnbii(p: f64, mu: f64, sigma: f64) -> f64 { ret nb.qnbinom_mu(p, mu / sigma, mu, true, false) }
+
+// LOGITNO: logit-normal
+fn dlogitno(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 || x >= 1.0f64 { ret 0.0f64 }
+    let z = math.log[f64](x / (1.0f64 - x))
+    ret math.exp[f64](dist.dnorm(z, math.log[f64](mu / (1.0f64 - mu)), sigma, true) - math.log[f64](x) - math.log[f64](1.0f64 - x))
+}
+
+fn plogitno(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x >= 1.0f64 { ret 1.0f64 }
+    ret dist.pnorm(math.log[f64](x / (1.0f64 - x)), math.log[f64](mu / (1.0f64 - mu)), sigma, true, false)
+}
+
+fn qlogitno(p: f64, mu: f64, sigma: f64) -> f64 {
+    if p < 0.0000000001f64 { ret 0.0f64 }
+    if 1.0f64 - p < 0.0000000001f64 { ret 1.0f64 }
+    let qz = dist.qnorm(p, math.log[f64](mu / (1.0f64 - mu)), sigma, true, false)
+    ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - qz))
+}

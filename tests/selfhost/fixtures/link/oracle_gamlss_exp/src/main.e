@@ -131,7 +131,22 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 112usize { ret gd.qegb2(x, mu, sigma, nu, tau) }
     if which == 113usize { ret gd.dpareto2o(x, mu, sigma) }
     if which == 114usize { ret gd.ppareto2o(x, mu, sigma) }
-    ret gd.qpareto2o(x, mu, sigma)
+    if which == 115usize { ret gd.qpareto2o(x, mu, sigma) }
+    if which == 116usize { ret gd.dlg(x, mu) }
+    if which == 117usize { ret gd.plg(x, mu) }
+    if which == 118usize { ret gd.qlg(x, mu, tau) }
+    if which == 119usize { ret gd.dyule(x, mu) }
+    if which == 120usize { ret gd.pyule(x, mu) }
+    if which == 121usize { ret gd.qyule(x, mu, tau) }
+    if which == 122usize { ret gd.dpareto1o(x, mu, sigma) }
+    if which == 123usize { ret gd.ppareto1o(x, mu, sigma) }
+    if which == 124usize { ret gd.qpareto1o(x, mu, sigma) }
+    if which == 125usize { ret gd.dnbii(x, mu, sigma) }
+    if which == 126usize { ret gd.pnbii(x, mu, sigma) }
+    if which == 127usize { ret gd.qnbii(x, mu, sigma) }
+    if which == 128usize { ret gd.dlogitno(x, mu, sigma) }
+    if which == 129usize { ret gd.plogitno(x, mu, sigma) }
+    ret gd.qlogitno(x, mu, sigma)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

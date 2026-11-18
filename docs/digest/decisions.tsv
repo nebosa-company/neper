@@ -3944,4 +3944,5 @@ D7154	571	gamlss.dist: GEOM, GEOMo, WEI2, WEI3, LOGNO2, BEo and TF2
 D7155	568	gamlss.dist: ZIBI, ZABI, ZAP and ZIP2
 D7156	645	gamlss.dist: ZANBI, ZINBI and ZAGA
 D7157	511	gamlss.dist: PE, EGB2 and PARETO2o
-D7158	782	ade4: dudi.fca and rlq
+D7158	783	ade4: dudi.fca and rlq
+D7159	629	gamlss.dist: LG, YULE, PARETO1o, NBII and LOGITNO

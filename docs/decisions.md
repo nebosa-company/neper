@@ -48974,3 +48974,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.ade4` gains `dudi_fca` (the fuzzy correspondence analysis: columns divided by their weighted sums minus one, column weights over the number of blocks) and `rlq` (the RLQ analysis of an R table, a correspondence analysis L and a Q table, the analysis of t(R) diag(lw) L diag(cw) Q, with the row scores of Q and R), plus the preparation helpers `coa_prep` and `pca_prep_w` (a PCA with given row weights, as dudi.pca(Q, row.w = L$cw)).
 
 **Result.** `oracle_ade4_dudi` has 1445 values (two fuzzy analyses of 14 by 8 and 10 by 6 tables, two RLQ analyses) and equals ade4 on Windows. Linux pending. L381 stays partial: dudi.mix, the rotations of procuste, coinertia with both tables wider than tall and the acm correlation ratios remain.
+
+## D7159 — gamlss.dist: LG, YULE, PARETO1o, NBII and LOGITNO
+
+`e.algo.stat.gamlssdist` gains the logarithmic series LG and the Yule distribution (density, distribution by summation and the quantile by the package's linear search up to max.value), PARETO1o, the negative binomial of type II NBII and the logit-normal LOGITNO. gamlss.dist's pNBII applies the Poisson distribution whenever sigma exceeds 1e-4 (the condition is the wrong way round in the package), and the port reproduces it.
+
+**Result.** `oracle_gamlss_exp` has 4342 values across 44 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
