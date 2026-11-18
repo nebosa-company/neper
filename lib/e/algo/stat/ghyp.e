@@ -5,15 +5,34 @@
 
 use e.algo.stat.gslfns as gs
 use e.math
+use e.math.quadpack as qp
+use e.mem
 
-// dghyp(x, param = c(mu, delta, alpha, beta, lambda)) in the (alpha, beta) parametrization
+// log K_nu(x): the log of the trapezoid value, and for x beyond 100 (where K underflows well before the density does) the asymptotic series
+// sqrt(pi / (2 x)) exp(-x) (1 + sum_k prod_{j <= k} (4 nu^2 - (2 j - 1)^2) / (j 8 x))
+fn log_bessel_k(nu: f64, x: f64) -> f64 {
+    if x <= 100.0f64 { ret math.log[f64](gs.bessel_knu(nu, x)) }
+    var term = 1.0f64
+    var sum = 1.0f64
+    var j = 1.0f64
+    while j < 40.0f64 {
+        let f = 2.0f64 * j - 1.0f64
+        term = term * (4.0f64 * nu * nu - f * f) / (j * 8.0f64 * x)
+        sum += term
+        if math.abs[f64](term) < 1.0e-17f64 * math.abs[f64](sum) { break }
+        j += 1.0f64
+    }
+    ret 0.5f64 * math.log[f64](3.141592653589793238462643383279f64 / (2.0f64 * x)) - x + math.log[f64](sum)
+}
+
+// dghyp(x, param = c(mu, delta, alpha, beta, lambda)) in the (alpha, beta) parametrization, evaluated on the log scale so the tails do not underflow
 fn dghyp(x: f64, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64 {
     let gamma = math.sqrt[f64](alpha * alpha - beta * beta)
     let d = x - mu
     let r = math.sqrt[f64](delta * delta + d * d)
-    let top = math.pow[f64](gamma / delta, lambda) * gs.bessel_knu(lambda - 0.5f64, alpha * r) * math.exp[f64](beta * d)
-    let bot = math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64) * gs.bessel_knu(lambda, delta * gamma) * math.pow[f64](r / alpha, 0.5f64 - lambda)
-    ret top / bot
+    let top = lambda * math.log[f64](gamma / delta) + log_bessel_k(lambda - 0.5f64, alpha * r) + beta * d
+    let bot = 0.5f64 * math.log[f64](2.0f64 * 3.141592653589793238462643383279f64) + log_bessel_k(lambda, delta * gamma) + (0.5f64 - lambda) * math.log[f64](r / alpha)
+    ret math.exp[f64](top - bot)
 }
 
 fn dnig(x: f64, mu: f64, delta: f64, alpha: f64, beta: f64) -> f64 { ret dghyp(x, mu, delta, alpha, beta, 0.0f64 - 0.5f64) }
@@ -25,3 +44,129 @@ fn dskewlap(x: f64, mu: f64, alpha: f64, beta: f64) -> f64 {
     if x <= mu { ret math.exp[f64]((x - mu) / alpha) / ab }
     ret math.exp[f64]((mu - x) / beta) / ab
 }
+
+// ---- pghyp: R's ghypMode (a Brent maximiser of the log density over a bracket that grows by delta until the density falls below its value at mu) and pghyp
+// (integrate() of the density from -Inf up to q when q is at or below the mode, from q to Inf above it, tolerance eps^0.25, 100 subdivisions; the upper tail is 1 - that)
+
+type Gh = struct { mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64 }
+
+fn gh_log(c: *Gh, x: f64) -> f64 { ret math.log[f64](dghyp(x, c.mu, c.delta, c.alpha, c.beta, c.lambda)) }
+
+fn gh_dens(c: *Gh, x: f64) -> f64 { ret dghyp(x, c.mu, c.delta, c.alpha, c.beta, c.lambda) }
+
+// R's Brent_fmin maximising the log density of c over [ax, bx] (optimize(maximum = TRUE): the negated function is minimised), tolerance eps^0.25
+fn gh_fmin_max(c: *Gh, ax: f64, bx: f64) -> f64 {
+    let tol = math.pow[f64](2.220446049250313e-16f64, 0.25f64)
+    let cc = (3.0f64 - math.sqrt[f64](5.0f64)) * 0.5f64
+    let eps = math.sqrt[f64](2.220446049250313e-16f64)
+    var a = ax
+    var b = bx
+    var v = a + cc * (b - a)
+    var w = v
+    var x = v
+    var d = 0.0f64
+    var e = 0.0f64
+    var fx = 0.0f64 - gh_log(c, x)
+    var fv = fx
+    var fw = fx
+    let tol3 = tol / 3.0f64
+    var guard = 0usize
+    while guard < 1000usize {
+        guard += 1usize
+        let xm = (a + b) * 0.5f64
+        let tol1 = eps * math.abs[f64](x) + tol3
+        let t2 = tol1 * 2.0f64
+        if math.abs[f64](x - xm) <= t2 - (b - a) * 0.5f64 { break }
+        var p = 0.0f64
+        var q = 0.0f64
+        var r = 0.0f64
+        if math.abs[f64](e) > tol1 {
+            r = (x - w) * (fx - fv)
+            q = (x - v) * (fx - fw)
+            p = (x - v) * q - (x - w) * r
+            q = (q - r) * 2.0f64
+            if q > 0.0f64 { p = 0.0f64 - p } else { q = 0.0f64 - q }
+            r = e
+            e = d
+        }
+        var u = 0.0f64
+        if math.abs[f64](p) >= math.abs[f64](q * 0.5f64 * r) || p <= q * (a - x) || p >= q * (b - x) {
+            if x < xm { e = b - x } else { e = a - x }
+            d = cc * e
+        } else {
+            d = p / q
+            u = x + d
+            if u - a < t2 || b - u < t2 {
+                d = tol1
+                if x >= xm { d = 0.0f64 - d }
+            }
+        }
+        if math.abs[f64](d) >= tol1 {
+            u = x + d
+        } else if d > 0.0f64 {
+            u = x + tol1
+        } else {
+            u = x - tol1
+        }
+        let fu = 0.0f64 - gh_log(c, u)
+        if fu <= fx {
+            if u < x { b = x } else { a = x }
+            v = w
+            w = x
+            x = u
+            fv = fw
+            fw = fx
+            fx = fu
+        } else {
+            if u < x { a = u } else { b = u }
+            if fu <= fw || w == x {
+                v = w
+                fv = fw
+                w = u
+                fw = fu
+            } else if fu <= fv || v == x || v == w {
+                v = u
+                fv = fu
+            }
+        }
+    }
+    ret x
+}
+
+fn ghyp_mode(mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64 {
+    var c: Gh = zero
+    c.mu = mu
+    c.delta = delta
+    c.alpha = alpha
+    c.beta = beta
+    c.lambda = lambda
+    let at_mu = gh_dens(&c, mu)
+    var hi = mu + delta
+    while gh_dens(&c, hi) > at_mu { hi = hi + delta }
+    var lo = mu - delta
+    while gh_dens(&c, lo) > at_mu { lo = lo - delta }
+    ret gh_fmin_max(&c, lo, hi)
+}
+
+fn pghyp(a: *mem.Arena, q: f64, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64 {
+    var c: Gh = zero
+    c.mu = mu
+    c.delta = delta
+    c.alpha = alpha
+    c.beta = beta
+    c.lambda = lambda
+    let mode = ghyp_mode(mu, delta, alpha, beta, lambda)
+    let tol = math.pow[f64](2.220446049250313e-16f64, 0.25f64)
+    if q <= mode {
+        let (r, e) = qp.qagi[Gh](a, &c, gh_dens, q, 0i64 - 1i64, tol, tol, 100usize)
+        if e != ok { ret 0.0f64 / 0.0f64 }
+        ret r.result
+    }
+    let (r2, e2) = qp.qagi[Gh](a, &c, gh_dens, q, 1i64, tol, tol, 100usize)
+    if e2 != ok { ret 0.0f64 / 0.0f64 }
+    ret 1.0f64 - r2.result
+}
+
+fn pnig(a: *mem.Arena, q: f64, mu: f64, delta: f64, alpha: f64, beta: f64) -> f64 { ret pghyp(a, q, mu, delta, alpha, beta, 0.0f64 - 0.5f64) }
+
+fn phyperb(a: *mem.Arena, q: f64, mu: f64, delta: f64, alpha: f64, beta: f64) -> f64 { ret pghyp(a, q, mu, delta, alpha, beta, 1.0f64) }

@@ -3968,4 +3968,5 @@ D7178	684	oracle_quadpack: the value, error estimate and subdivisions of qags an
 D7179	948	stabledist: dstable in the S0 parametrisation
 D7180	874	stabledist: pstable in the S0 parametrisation
 D7181	959	stabledist: qstable
-D7182	609	stabledist: rstable
+D7182	610	stabledist: rstable
+D7183	1020	GeneralizedHyperbolic: pghyp, pnig and phyperb

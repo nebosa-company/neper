@@ -1,4 +1,5 @@
 # ghyp: GeneralizedHyperbolic densities.
+#   pghyp ("pghyp": q, mu, delta, alpha, beta, lambda), pnig and phyperb (q, mu, delta, alpha, beta, 0) are the integrate-based distributions, checked at 1e-6.
 #   args: "dghyp" (x, mu, delta, alpha, beta, lambda); "dnig" and "dhyperb" (x, mu, delta, alpha, beta, 0); "dskewlap" (x, mu, alpha, beta, 0, 0)
 suppressMessages(library(GeneralizedHyperbolic))
 cases <- list()
@@ -13,5 +14,13 @@ for (rep in 1:30) {
   }
   a <- runif(1, 0.3, 2); b <- runif(1, 0.3, 2)
   for (x in mu + c(-2, -0.1, 0.3, 1.5)) add("dskewlap", c(x, mu, a, b, 0, 0), dskewlap(x, mu, a, b))
+}
+for (rep in 1:20) {
+  mu <- runif(1, -2, 2); delta <- runif(1, 0.3, 3); alpha <- runif(1, 0.8, 4); beta <- runif(1, -0.8, 0.8) * alpha; lam <- runif(1, -2, 2)
+  for (x in mu + c(-3, -0.7, 0.4, 2.5) * delta) {
+    cases[[length(cases) + 1]] <- case("pghyp", c(x, mu, delta, alpha, beta, lam), pghyp(x, param = c(mu, delta, alpha, beta, lam)), rel = 1e-6, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("pnig", c(x, mu, delta, alpha, beta, 0), pnig(x, mu, delta, alpha, beta), rel = 1e-6, abs = 1e-9)
+    cases[[length(cases) + 1]] <- case("phyperb", c(x, mu, delta, alpha, beta, 0), phyperb(x, mu, delta, alpha, beta), rel = 1e-6, abs = 1e-9)
+  }
 }
 emit("ghyp", "GeneralizedHyperbolic", list(cases))

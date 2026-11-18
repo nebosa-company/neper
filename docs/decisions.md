@@ -49118,3 +49118,9 @@ New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alp
 `e.algo.stat.stabledistpkg` gains `rstable`: the Chambers-Mallows-Stuck draws from R's uniform stream in the package's order (the n angles first, then the n exponentials, then the Cauchy variates when alpha = 1 and beta = 0), so a stream seeded as `set.seed` gives R's values.
 
 **Result.** `oracle_stabledist` has 482 values (72 draws from 12 seeded streams added, equal at 1e-9 relative) and equals stabledist on Windows. Linux pending. L407 stays partial: alpha = 1 with beta != 0, the other parametrisations, the upper tail and the GeneralizedHyperbolic functions remain.
+
+## D7183 — GeneralizedHyperbolic: pghyp, pnig and phyperb
+
+`e.algo.stat.ghyp` gains `pghyp` (and the NIG and hyperbolic specials): R's `ghypMode` (Brent's maximiser of the log density over a bracket that grows by delta, a generic port of R's `optimize` over the density) and `integrate()` of the density from -Inf up to q at or below the mode and from q to Inf above it (the QUADPACK infinite-range routine, tolerance eps^0.25, 100 subdivisions), the upper tail being one minus the integral. The first run returned NaN for far-tail points: the density multiplied an underflowed Bessel value by an overflowed exponential, so `dghyp` is now evaluated on the log scale with an asymptotic series for log K beyond argument 100.
+
+**Result.** `oracle_ghyp` has 810 values (the earlier 750 density values still equal at 1e-9, 60 new distribution values at 1e-6) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: qghyp, rghyp, the moments and fits, and the stable branches listed in D7182 remain.
