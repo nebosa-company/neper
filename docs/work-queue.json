@@ -152,10 +152,10 @@
       "group": "CRAN parity",
       "order": 633,
       "title": "TSA: time-series analysis toolkit",
-      "score": 0.3,
+      "score": 0.35,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6190, D6406 McLeod.Li.test). periodogram equals TSA on Windows (oracle_tsa; Linux pending). D6870: eacf equals TSA. Open: armasubsets, detectAO and detectIO, arimax, cumulative periodogram, BIC table, tsdiag. Was: Open (CRAN rank 735). Small to mid. Acceptance, equal to TSA: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax with intervention terms, periodogram, cumulative periodogram data, eacf, BIC table, tsdiag statistics."
+      "evidence": "Partial (D6190, D6406 McLeod.Li.test). periodogram equals TSA on Windows (oracle_tsa; Linux pending). D6870: eacf equals TSA. D7129: detectAO on the fitted pieces equal to TSA (oracle_tsa_detectao, 36 values). Open: armasubsets, detectIO, arimax, cumulative periodogram, BIC table, tsdiag. Was: Open (CRAN rank 735). Small to mid. Acceptance, equal to TSA: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax with intervention terms, periodogram, cumulative periodogram data, eacf, BIC table, tsdiag statistics."
     },
     {
       "id": "L453",

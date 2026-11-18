@@ -3914,4 +3914,5 @@ D7124	1479	fpc: discrcoord (discriminant coordinates)
 D7125	908	energy: bcdcor, the bias-corrected distance correlation
 D7126	1083	sampling: UPbrewer, Brewer's sequential fixed-size design
 D7127	553	sampling: UPmidzuno
-D7128	1042	clue: Rand agreement and the Euclidean dissimilarity of partitions
+D7128	1043	clue: Rand agreement and the Euclidean dissimilarity of partitions
+D7129	1158	TSA: detectAO, the additive outliers of an ARMA fit

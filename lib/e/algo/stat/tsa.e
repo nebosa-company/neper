@@ -2,12 +2,16 @@
 // length N that has only the factors 2, 3 and 5 (stats::nextn, as spec.pgram does), and the value at the frequency j / N, j = 1 .. floor(N / 2),
 // is 2 |F_j|^2 / n for the original length n, halved at the Nyquist frequency 1/2.
 //
-// Not here: armasubsets, McLeod.Li.test, detectAO and detectIO, arimax, the cumulative periodogram, eacf and the diagnostics.
+// detectAO on the fitted pieces (residuals, phi, theta, sigma2). Not here: armasubsets, detectIO, arimax, the cumulative periodogram, the BIC table and
+// the diagnostics; the fit itself is not here (the coefficients and residuals are inputs).
 
 use e.math
 use e.math.nmath as nm
+use e.math.dist as dist
 use e.algo.linalg.decomp as decomp
 use e.mem
+
+error Malformed
 
 // the smallest N >= n whose prime factors are only 2, 3 and 5
 fn nextn(n: usize) -> usize {
@@ -222,4 +226,81 @@ fn eacf(a: *mem.Arena, z0: []const f64, armax: usize, mamax: usize, out: []f64) 
         it += 1usize
     }
     ret ok
+}
+
+// ---- detectAO (TSA): the additive outliers of an ARMA fit from its residuals and coefficients. piwt holds the first n MA(inf) weights of the model
+// ARMAtoMA(ar = -theta, ma = -phi) (phi and theta as TSA's object$mod$phi and object$mod$theta), omega_m is the convolution of piwt with the
+// reversed residuals (zero before the start), rho2_m = 1 / sum_{k < m} piwt_k^2, lambda_m = omega_m rho2_m / sigma / sqrt(rho2_m), and the
+// outliers are the values of rev(lambda) with |lambda| above qnorm(1 - alpha / (2 n)). sigma is sqrt(pi / 2) mean |resid| when robust, else sqrt(sigma2).
+// ind_out gets the 1-based positions in rev(lambda) and lam_out their values; the count is returned.
+fn detect_ao(a: *mem.Arena, resid: []const f64, n: usize, phi: []const f64, theta: []const f64, sigma2: f64, robust: bool, alpha: f64,
+             ind_out: []usize, lam_out: []f64) -> (usize, err) {
+    let (ar, e1) = mem.alloc[f64](a, theta.len)
+    let (ma, e2) = mem.alloc[f64](a, phi.len)
+    let (psi, e3) = mem.alloc[f64](a, n)
+    let (rho2, e4) = mem.alloc[f64](a, n)
+    let (lam, e5) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret (0usize, Malformed) }
+    var i = 0usize
+    while i < theta.len {
+        ar[i] = 0.0f64 - theta[i]
+        i += 1usize
+    }
+    i = 0usize
+    while i < phi.len {
+        ma[i] = 0.0f64 - phi[i]
+        i += 1usize
+    }
+    // psi_0 = 1, psi_j = ma_j + sum_{i <= min(j, p)} ar_i psi_{j - i} (ma_j = 0 past q)
+    psi[0usize] = 1.0f64
+    var j = 1usize
+    while j < n {
+        var v = 0.0f64
+        if j <= ma.len { v = ma[j - 1usize] }
+        var k = 1usize
+        while k <= j && k <= ar.len {
+            v += ar[k - 1usize] * psi[j - k]
+            k += 1usize
+        }
+        psi[j] = v
+        j += 1usize
+    }
+    var cs = 0.0f64
+    var sabs = 0.0f64
+    i = 0usize
+    while i < n {
+        cs += psi[i] * psi[i]
+        rho2[i] = 1.0f64 / cs
+        sabs += math.abs[f64](resid[i])
+        i += 1usize
+    }
+    var sigma = math.sqrt[f64](sigma2)
+    if robust { sigma = math.sqrt[f64](3.141592653589793f64 / 2.0f64) * sabs / f64(n) }
+    // omega_m for m = 1..n: sum_{k < n} psi_k g(n - 1 + m - k) with g(s) = resid[2n - 1 - s] for s >= n, else 0
+    var m = 1usize
+    while m <= n {
+        var om = 0.0f64
+        var k = 0usize
+        while k < n {
+            let s = n - 1usize + m - k
+            if s >= n { om += psi[k] * resid[2usize * n - 1usize - s] }
+            k += 1usize
+        }
+        lam[m - 1usize] = om * rho2[m - 1usize] / sigma / math.sqrt[f64](rho2[m - 1usize])
+        m += 1usize
+    }
+    let cutoff = dist.qnorm(1.0f64 - alpha / 2.0f64 / f64(n), 0.0f64, 1.0f64, true, false)
+    var count = 0usize
+    var p = 0usize
+    while p < n {
+        let v = lam[n - 1usize - p]
+        if math.abs[f64](v) > cutoff {
+            if count >= ind_out.len { ret (count, Malformed) }
+            ind_out[count] = p + 1usize
+            lam_out[count] = v
+            count += 1usize
+        }
+        p += 1usize
+    }
+    ret (count, ok)
 }
