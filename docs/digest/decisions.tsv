@@ -3966,4 +3966,5 @@ D7176	667	gamlss.dist: SICHEL and GIG densities
 D7177	1008	e.math.quadpack: qags, and the GIG distribution and quantile
 D7178	684	oracle_quadpack: the value, error estimate and subdivisions of qags and qagi against R's integrate()
 D7179	948	stabledist: dstable in the S0 parametrisation
-D7180	873	stabledist: pstable in the S0 parametrisation
+D7180	874	stabledist: pstable in the S0 parametrisation
+D7181	958	stabledist: qstable

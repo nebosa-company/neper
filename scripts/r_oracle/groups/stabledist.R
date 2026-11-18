@@ -20,4 +20,13 @@ for (rep in 1:60) {
     if (is.finite(pv)) cases[[length(cases) + 1]] <- case("p", c(al, be, ga, de, x), pv, rel = 1e-8, abs = 1e-12)
   }
 }
+for (rep in 1:25) {
+  al <- c(runif(1, 0.5, 0.98), runif(1, 1.05, 1.95))[sample(1:2, 1)]
+  be <- c(0, runif(1, -0.9, 0.9))[sample(1:2, 1)]
+  ga <- runif(1, 0.4, 2.5); de <- rnorm(1)
+  for (pp in runif(2, 0.05, 0.95)) {
+    qv <- tryCatch(suppressWarnings(qstable(pp, al, be, ga, de)), error = function(e) NA_real_)
+    if (is.finite(qv)) cases[[length(cases) + 1]] <- case("q", c(al, be, ga, de, pp), qv, rel = 1e-3, abs = 1e-4)
+  }
+}
 emit("stabledist", "stabledist", list(cases))

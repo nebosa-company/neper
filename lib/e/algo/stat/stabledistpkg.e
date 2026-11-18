@@ -214,7 +214,7 @@ fn inf_step(c: *Fctx, th: f64) -> f64 {
     ret 1.0f64
 }
 
-fn fct1_cdf(a: *mem.Arena, x: f64, zeta: f64, alpha: f64, theta00: f64, give_i: bool, tol: f64) -> f64 {
+fn fct1_cdf(a: *mem.Arena, x: f64, zeta: f64, alpha: f64, theta00: f64, give_i: bool, tol: f64, sub: usize) -> f64 {
     var theta0 = theta00
     let xmz = math.abs[f64](x - zeta)
     if x < zeta { theta0 = 0.0f64 - theta0 }
@@ -236,7 +236,7 @@ fn fct1_cdf(a: *mem.Arena, x: f64, zeta: f64, alpha: f64, theta00: f64, give_i: 
         if inf_step(&c, lth) * inf_step(&c, uth) > 0.0f64 { ret 0.0f64 / 0.0f64 }
         uth = pw.zeroin[Fctx](&c, inf_step, lth, uth, 0.00000001f64, 1000i64)
     }
-    let (r, e) = qp.qags[Fctx](a, &c, expmg, lth, uth, tol, tol, 1000usize)
+    let (r, e) = qp.qags[Fctx](a, &c, expmg, lth, uth, tol, tol, sub)
     if e != ok { ret 0.0f64 / 0.0f64 }
     if give_i { ret r.result / pi() }
     var c1 = 1.0f64
@@ -245,7 +245,9 @@ fn fct1_cdf(a: *mem.Arena, x: f64, zeta: f64, alpha: f64, theta00: f64, give_i: 
 }
 
 // pstable(q, alpha, beta, gamma, delta, pm = 0, lower.tail = TRUE) for alpha != 1 (and the normal and Cauchy cases)
-fn pstable(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f64) -> f64 {
+fn pstable(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f64) -> f64 { ret pstable_tol(a, q, alpha, beta, gamma, delta, 64.0f64 * eps(), 1000usize) }
+
+fn pstable_tol(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f64, tol: f64, sub: usize) -> f64 {
     let x = (q - delta) / gamma
     if alpha == 2.0f64 { ret dist.pnorm(x, 0.0f64, math.sqrt[f64](2.0f64), true, false) }
     if alpha == 1.0f64 && beta == 0.0f64 { ret 0.5f64 + math.atan[f64](x) / pi() }
@@ -260,8 +262,83 @@ fn pstable(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f64)
     }
     if math.abs[f64](x - zeta) < 2.0f64 * eps() { ret 0.5f64 - th0 / pi() }
     let use_lower = x > zeta
-    let f1 = fct1_cdf(a, x, zeta, alpha, th0, false, 64.0f64 * eps())
+    let f1 = fct1_cdf(a, x, zeta, alpha, th0, false, tol, sub)
     if use_lower { ret f1 }
     // the upper-tail value of the standardised variable: lower.tail = TRUE with z < zeta takes 1 - F
     ret 1.0f64 - f1
+}
+
+
+// qstable(p, alpha, beta, gamma, delta, pm = 0) on the lower tail: stabledist brackets the root with normal and Cauchy quantiles (and the tail bounds p / (1 - p)),
+// then runs uniroot (Brent's zeroin, tolerance eps^0.25) on pstable at integration tolerance 1e-7 and 200 subdivisions; the bracket is assumed to contain the sign change
+// (R's extendInt would widen it otherwise, and this returns NaN)
+type Qctx = struct { a: *mem.Arena, alpha: f64, beta: f64, p: f64 }
+
+fn qroot_fn(c: *Qctx, x: f64) -> f64 { ret pstable_tol(c.a, x, c.alpha, c.beta, 1.0f64, 0.0f64, 0.0000001f64, 200usize) - c.p }
+
+fn qstable(a: *mem.Arena, p: f64, alpha: f64, beta: f64, gamma: f64, delta: f64) -> f64 {
+    var res = 0.0f64
+    if alpha == 2.0f64 {
+        res = dist.qnorm(p, 0.0f64, math.sqrt[f64](2.0f64), true, false)
+    } else if alpha == 1.0f64 && beta == 0.0f64 {
+        res = math.tan[f64](pi() * (p - 0.5f64))
+    } else {
+        let left = p < 0.5f64
+        let qn = dist.qnorm(p, 0.0f64, math.sqrt[f64](2.0f64), true, false)
+        let qc = math.tan[f64](pi() * (p - 0.5f64))
+        var xmin = 0.0f64
+        var xmax = 0.0f64
+        if beta < 0.0f64 {
+            xmin = 0.0f64 - (1.0f64 - p) / p
+            if left { xmax = qn } else { xmax = qc }
+        } else if beta > 0.0f64 {
+            if left { xmin = qc } else { xmin = qn }
+            xmax = p / (1.0f64 - p)
+        } else {
+            if left { xmin = qc } else { xmin = qn }
+            if left { xmax = qn } else { xmax = qc }
+        }
+        if xmin >= xmax {
+            var fdx = 0.0f64
+            if xmin == xmax {
+                var m = math.abs[f64](xmin)
+                if m < 0.0000001f64 { m = 0.0000001f64 }
+                fdx = 0.01f64 * m
+            } else {
+                fdx = 1.01f64 * (xmin - xmax)
+            }
+            xmin = xmin - fdx
+            xmax = xmax + fdx
+        }
+        var c: Qctx = zero
+        c.a = a
+        c.alpha = alpha
+        c.beta = beta
+        c.p = p
+        // uniroot(extendInt = "upX"): widen the end points in steps that double while f(lower) > 0 or f(upper) < 0
+        var flo = qroot_fn(&c, xmin)
+        var fup = qroot_fn(&c, xmax)
+        var d1 = 0.01f64 * math.abs[f64](xmin)
+        if d1 < 0.000001f64 { d1 = 0.000001f64 }
+        var d2 = 0.01f64 * math.abs[f64](xmax)
+        if d2 < 0.000001f64 { d2 = 0.000001f64 }
+        var it = 0usize
+        while flo > 0.0f64 {
+            xmin = xmin - d1
+            flo = qroot_fn(&c, xmin)
+            it += 1usize
+            if it > 1000usize { ret 0.0f64 / 0.0f64 }
+            d1 = 2.0f64 * d1
+        }
+        it = 0usize
+        while fup < 0.0f64 {
+            xmax = xmax + d2
+            fup = qroot_fn(&c, xmax)
+            it += 1usize
+            if it > 1000usize { ret 0.0f64 / 0.0f64 }
+            d2 = 2.0f64 * d2
+        }
+        res = pw.zeroin[Qctx](&c, qroot_fn, xmin, xmax, pw.uniroot_tol(), 1000i64)
+    }
+    ret res * gamma + delta
 }

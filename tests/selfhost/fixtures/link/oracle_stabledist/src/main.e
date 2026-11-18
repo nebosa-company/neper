@@ -19,7 +19,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let z = c.args
         var got = 0.0f64
-        if str.eq(c.name, "p") { got = sd.pstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) } else { got = sd.dstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) }
+        if str.eq(c.name, "q") { got = sd.qstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) } else if str.eq(c.name, "p") { got = sd.pstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) } else { got = sd.dstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

@@ -49106,3 +49106,9 @@ New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alp
 `e.algo.stat.stabledistpkg` gains `pstable` (lower tail, alpha != 1 and the normal and Cauchy cases): stabledist's `.FCT1`, the integral of exp(-g(theta)) over (-theta0 + 1e-6, pi/2 - 1e-6) with `qags` at tolerance 64 eps, the constants c1 and c3, the 1 - F branch below zeta, the finite-support shortcuts for |beta| = 1 with alpha < 1, and the extra uniroot (tolerance 1e-8 on a step function) that moves an end point where g is infinite. The infinite-g branch fired on every symmetric alpha > 1 case, which is how the first run found it.
 
 **Result.** `oracle_stabledist` has 360 values (180 densities, 180 distribution values) and equals stabledist on Windows at 1e-8 relative. Linux pending. L407 stays partial: alpha = 1 with beta != 0, qstable, rstable, the other parametrisations and the upper tail remain.
+
+## D7181 — stabledist: qstable
+
+`e.algo.stat.stabledistpkg` gains `qstable` (lower tail, S0): stabledist's bracket (the normal and Cauchy quantiles and the tail bounds p / (1 - p) by the sign of beta, widened when the ends meet), `uniroot` with `extendInt = "upX"` (the end points widen in doubling steps while f(lower) > 0 or f(upper) < 0, a rule ported from R's uniroot), and Brent's zeroin at tolerance eps^0.25 on pstable at integration tolerance 1e-7 and 200 subdivisions, so the quantile follows R's iteration rather than only its tolerance. The first run returned NaN for every bracket that did not already straddle the root, which is the case the extension handles.
+
+**Result.** `oracle_stabledist` has 410 values (50 quantiles added, checked at 1e-3 relative as the root tolerance allows) and equals stabledist on Windows. Linux pending. L407 stays partial: alpha = 1 with beta != 0, rstable, the other parametrisations and the upper tail remain.
