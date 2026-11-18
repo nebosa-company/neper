@@ -14,4 +14,18 @@ for (rep in 1:25) {
   for (i in 1:3) add(11 + i, base, me[nrow(me), i])
   add(15, base, r$p.value[1]); add(16, base, r$p.value[2])
 }
+# ROC (test, stat): "roc" args (n, test..., stat..., kind, k, col) with kind 0 table entry (k row from 0, col 0 sens 1 spec 2 pvp 3 pvn 4 cut), 1 AUC, 2 the maximising cutpoint
+for (rep in 1:15) {
+  n <- sample(20:60, 1); stat <- rbinom(n, 1, 0.4); if (length(unique(stat)) < 2) next
+  test <- round(rnorm(n, stat * 0.9, 1), 1)
+  r <- suppressWarnings(ROC(test = test, stat = stat, plot = "none"))
+  res <- r$res; nr <- nrow(res)
+  for (k in sample(0:(nr - 1), min(5, nr))) for (col in 0:4) {
+    v <- res[k + 1, col + 1]; if (is.nan(v) || is.infinite(v)) next
+    cases[[length(cases) + 1]] <- case("roc", c(n, test, stat, 0, k, col), v, rel = 1e-9, abs = 1e-12)
+  }
+  cases[[length(cases) + 1]] <- case("roc", c(n, test, stat, 1, 0, 0), r$AUC, rel = 1e-9, abs = 1e-12)
+  mxf <- res[which((res[, 1] + res[, 2]) == max(res[, 1] + res[, 2]))[1], 5]
+  cases[[length(cases) + 1]] <- case("roc", c(n, test, stat, 2, 0, 0), mxf, rel = 1e-9, abs = 1e-12)
+}
 emit("epi", "Epi", list(cases))

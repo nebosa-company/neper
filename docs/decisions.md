@@ -49538,3 +49538,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.performancepkg` gains `hosmer` (the fitted probabilities of a logistic regression cut at their n_bins type-7 quantiles into (lo, hi] groups, the lowest closed; chi-square of observed against expected successes and failures, p value on n_bins - 2 degrees of freedom) and `logit_fit_measure` (r2_efron: 1 - sum (y - p)^2 / sum (y - ybar)^2; performance_logloss: minus the mean log-likelihood).
 
 **Result.** `oracle_performancepkg` gains 25 logistic regressions (5, 8 and 10 bins; chi-square, p value, Efron and log loss: 100 values) and equals performance on Windows at 1e-8. Linux pending. L339 stays partial: the other outlier methods, the Nakagawa R2, icc, model_performance, map_estimate, bayesfactor_savagedickey, si, parameters.
+
+## D7253 — Epi: ROC for a given test
+
+`e.algo.stat.epi` gains `roc_value` (the package's cutpoint table: row 0 at -Inf and one row per distinct test value, from the cumulative counts at or below the cutpoint, with its sensitivity, specificity, pvp and pvn), `roc_auc` (the trapezoid area over those rows) and `roc_max_cut` (the first cutpoint maximising sensitivity plus specificity).
+
+**Result.** `oracle_epi` gains 15 test and outcome sets (n 20 to 60: table entries at 5 rows each, the area and the cutpoint, 397 values) and equals Epi on Windows at 1e-9. Linux pending. L513 stays partial: the formula interface (a glm's fitted values as the test), the conditional MLE odds ratio, Lexis tools, clogistic, rate and survival tools.

@@ -859,7 +859,7 @@
       "score": 0.15,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6412). twoby2 (row risks, RR, OR, probability difference, asymptotic and Fisher p) equals Epi on Windows (oracle_epi; Linux pending). Open: conditional MLE odds ratio, Lexis tools, clogistic, ROC, rate and survival tools. Was: Open (CRAN rank 929). Mid. Pairs with epiR in L460. Acceptance, equal to Epi: Lexis objects with splitLexis, cutLexis and the time-scale handling, apc.fit with its parametrizations, ci.lin, ROC and the diagnostic summaries, Poisson rate models and the person-years tables."
+      "evidence": "Partial (D6412, D7253). twoby2 (row risks, RR, OR, probability difference, asymptotic and Fisher p) and ROC (the cutpoint table, area under the curve and the maximising cutpoint for a given test) equal Epi on Windows (oracle_epi; Linux pending). Open: conditional MLE odds ratio, Lexis tools, clogistic, ROC from a formula, rate and survival tools. Was: Open (CRAN rank 929). Mid. Pairs with epiR in L460. Acceptance, equal to Epi: Lexis objects with splitLexis, cutLexis and the time-scale handling, apc.fit with its parametrizations, ci.lin, ROC and the diagnostic summaries, Poisson rate models and the person-years tables."
     },
     {
       "id": "L308",

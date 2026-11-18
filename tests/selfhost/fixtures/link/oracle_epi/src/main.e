@@ -6,10 +6,20 @@ use e.algo.stat.epir as ep
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "roc") {
+        let rn = usize(x[0usize])
+        let rt = x[1usize..1usize + rn]
+        let rs = x[1usize + rn..1usize + 2usize * rn]
+        let kind = usize(x[1usize + 2usize * rn])
+        if kind == 1usize { ret ei.roc_auc(rt, rs) }
+        if kind == 2usize { ret ei.roc_max_cut(rt, rs) }
+        ret ei.roc_value(rt, rs, usize(x[2usize + 2usize * rn]), usize(x[3usize + 2usize * rn]))
+    }
     let a = x[0usize]
     let b = x[1usize]
     let cc = x[2usize]
