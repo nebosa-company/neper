@@ -1135,3 +1135,65 @@ fn lngamma_complex(zr: f64, zi: f64, out: []f64, tmp: []f64) {
     out[0usize] = re - sr
     out[1usize] = wrap_pi(im - si_)
 }
+
+// complex_dilog(r, theta): Li2(r e^(i theta)) into out = (re, im); |z| > 1 by the inversion formula, Re z > 1/2 by the reflection formula
+// Li2(z) = -Li2(1 - z) + pi^2 / 6 - ln z ln(1 - z), and the Bernoulli series in u = -ln(1 - z) otherwise
+fn cx_dilog(zr: f64, zi: f64, out: []f64, t1: []f64, t2: []f64) {
+    let pi_ = 3.141592653589793238462643383279f64
+    let m2 = zr * zr + zi * zi
+    if m2 > 1.0f64 {
+        // Li2(z) = -Li2(1 / z) - pi^2 / 6 - ln^2(-z) / 2
+        cx_div(1.0f64, 0.0f64, zr, zi, t1)
+        cx_dilog(t1[0usize], t1[1usize], out, t1, t2)
+        let ar = out[0usize]
+        let ai = out[1usize]
+        complex_log(0.0f64 - zr, 0.0f64 - zi, t1)
+        cx_mul(t1[0usize], t1[1usize], t1[0usize], t1[1usize], t2)
+        out[0usize] = 0.0f64 - ar - pi_ * pi_ / 6.0f64 - 0.5f64 * t2[0usize]
+        out[1usize] = 0.0f64 - ai - 0.5f64 * t2[1usize]
+        ret
+    }
+    if zr > 0.5f64 {
+        cx_dilog(1.0f64 - zr, 0.0f64 - zi, out, t1, t2)
+        let ar = out[0usize]
+        let ai = out[1usize]
+        complex_log(zr, zi, t1)
+        let lzr = t1[0usize]
+        let lzi = t1[1usize]
+        complex_log(1.0f64 - zr, 0.0f64 - zi, t1)
+        cx_mul(lzr, lzi, t1[0usize], t1[1usize], t2)
+        out[0usize] = 0.0f64 - ar + pi_ * pi_ / 6.0f64 - t2[0usize]
+        out[1usize] = 0.0f64 - ai - t2[1usize]
+        ret
+    }
+    complex_log(1.0f64 - zr, 0.0f64 - zi, t1)
+    let ur = 0.0f64 - t1[0usize]
+    let ui = 0.0f64 - t1[1usize]
+    // u - u^2 / 4 + sum_k B_2k u^(2k + 1) / (2k + 1)!
+    cx_mul(ur, ui, ur, ui, t2)
+    let u2r = t2[0usize]
+    let u2i = t2[1usize]
+    var re = ur - 0.25f64 * u2r
+    var im = ui - 0.25f64 * u2i
+    var pr = ur
+    var pm = ui
+    var fct = 1.0f64
+    var k = 1usize
+    while k <= 10usize {
+        // u^(2k + 1) = u^(2k - 1) * u^2
+        cx_mul(pr, pm, u2r, u2i, t1)
+        pr = t1[0usize]
+        pm = t1[1usize]
+        fct = fct * f64(2usize * k) * f64(2usize * k + 1usize)
+        var sgn = 1.0f64
+        if k % 2usize == 0usize { sgn = 0.0f64 - 1.0f64 }
+        let coef = sgn * bern(k) / fct
+        re += coef * pr
+        im += coef * pm
+        k += 1usize
+    }
+    out[0usize] = re
+    out[1usize] = im
+}
+
+fn complex_dilog(r: f64, th: f64, out: []f64, t1: []f64, t2: []f64) { cx_dilog(r * math.cos[f64](th), r * math.sin[f64](th), out, t1, t2) }

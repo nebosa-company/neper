@@ -118,6 +118,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         gs.lngamma_complex(x[1usize], x[2usize], go, gt)
         ret go[usize(x[0usize])]
     }
+    if str.eq(k, "k4") {
+        let (do_, g7) = mem.alloc[f64](a, 2usize)
+        let (d1, g8) = mem.alloc[f64](a, 2usize)
+        let (d2, g9) = mem.alloc[f64](a, 2usize)
+        if g7 != ok || g8 != ok || g9 != ok { os.exit(4) }
+        gs.complex_dilog(x[1usize], x[2usize], do_, d1, d2)
+        ret do_[usize(x[0usize])]
+    }
     if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }

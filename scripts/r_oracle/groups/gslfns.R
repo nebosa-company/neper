@@ -126,4 +126,11 @@ for (rep in 1:25) {
   cases[[length(cases) + 1]] <- case("k3", c(0, Re(z), Im(z)), Re(lg), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("k3", c(1, Re(z), Im(z)), Im(lg), rel = 1e-9, abs = 1e-12)
 }
+# complex dilogarithm under "k4" (part, r, theta): moduli on both sides of 1, angles away from the positive real axis
+for (rep in 1:30) {
+  r <- runif(1, 0.05, 3); th <- runif(1, 0.3, 2 * pi - 0.3)
+  v <- complex_dilog(r, th)
+  cases[[length(cases) + 1]] <- case("k4", c(0, r, th), Re(v), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("k4", c(1, r, th), Im(v), rel = 1e-9, abs = 1e-12)
+}
 emit("gslfns", "gsl", list(cases))
