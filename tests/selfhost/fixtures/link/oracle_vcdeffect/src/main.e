@@ -35,6 +35,15 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if ve.kappa(a, z[2usize..2usize + k * k], k, u8(z[1usize]), out) != ok { ret nan }
         ret out[usize(z[2usize + k * k])]
     }
+    if str.eq(nm, "smdci") {
+        let n1 = usize(z[0usize])
+        let n2 = usize(z[1usize])
+        let x = z[2usize..2usize + n1]
+        let y = z[2usize + n1..2usize + n1 + n2]
+        var o: [4]f64 = zero
+        ve.smd_ci(x, y, z[2usize + n1 + n2], o[0usize..4usize])
+        ret o[usize(z[3usize + n1 + n2])]
+    }
     if str.eq(nm, "smd") {
         let n1 = usize(z[0usize])
         let n2 = usize(z[1usize])

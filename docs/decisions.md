@@ -49874,3 +49874,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `vcdeffect.interpret_index` returns the label index of effectsize's `interpret_cohens_d` (cohen1988, sawilowsky2009, gignac2016, lovakov2021), `interpret_r` (funder2019, gignac2016, cohen1988, lovakov2021), `interpret_rank_biserial`, `interpret_eta_squared` (field2013, cohen1992; also omega and epsilon) and `interpret_oddsratio`: how many thresholds |x| reaches, a value on a threshold taking the higher label. The gignac2016 d rule works on r, so d becomes d / sqrt(d^2 + 4) first.
 
 **Result.** `oracle_vcd_interpret` (630 cases, thresholds and +-1e-9 around them included) equals effectsize on Windows. Linux pending. L389 stays partial: reference categories, the mantelhaen helpers, intervals of the effect sizes (noncentral inversions).
+
+## D7305 — effectsize: cohens_d and hedges_g intervals
+
+**Decision.** `vcdeffect.ncp_t_ci` inverts the noncentral t by bisection on `pnt`; `smd_ci` scales the noncentrality interval by sqrt(1/n1 + 1/n2) for d and by the Hedges correction for g, as `cohens_d(x, y, ci = level)` does.
+
+**Result.** `oracle_vcdeffect` gains 120 values that equal effectsize on Windows to 2e-5 relative: effectsize searches with `optim` (abstol 1e-9), so its own answer is only that exact. Linux pending. L389 stays partial: reference categories, the mantelhaen helpers, intervals of the eta-squared family (noncentral F) and of glass_delta, rank_biserial and cliffs_delta.

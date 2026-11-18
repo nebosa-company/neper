@@ -15,6 +15,7 @@ use e.math.nmath_beta as nmb
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
+use e.math.nchisq as nc
 use e.math.dist as dist
 
 type Assoc = struct { lr: f64, pearson: f64, df: f64, p_lr: f64, p_pearson: f64, phi: f64, contingency: f64, cramer: f64 }
@@ -198,6 +199,45 @@ fn smd(x: []const f64, y: []const f64, out: []f64) {
     out[0usize] = d
     out[1usize] = d * hedges_j(n1 + n2 - 2.0f64)
     out[2usize] = (m1 - m2) / math.sqrt[f64](v2) * hedges_j(n2 - 1.0f64)
+}
+
+// effectsize's confidence interval of a noncentral t statistic: the noncentrality parameters at which pt(t, df, ncp) is 1 - alpha / 2 and alpha / 2, by bisection (effectsize finds them with optim, so the two agree to its tolerance, not to the last digit). out[0] lower, out[1] upper.
+fn ncp_t_ci(t: f64, df: f64, level: f64, out: []f64) {
+    let alpha = 1.0f64 - level
+    var side = 0usize
+    while side < 2usize {
+        var goal = 1.0f64 - alpha / 2.0f64
+        if side == 1usize { goal = alpha / 2.0f64 }
+        var lo = t - 60.0f64
+        var hi = t + 60.0f64
+        var it = 0usize
+        while it < 200usize {
+            let mid = 0.5f64 * (lo + hi)
+            let p = nc.pnt(t, df, mid, true, false)
+            if p > goal { lo = mid } else { hi = mid }
+            it += 1usize
+        }
+        out[side] = 0.5f64 * (lo + hi)
+        side += 1usize
+    }
+}
+
+// cohens_d(x, y, ci = level) and hedges_g(x, y, ci = level) pooled: out[0], out[1] the d interval, out[2], out[3] the g interval (the d interval times the Hedges correction).
+fn smd_ci(x: []const f64, y: []const f64, level: f64, out: []f64) {
+    let n1 = f64(x.len)
+    let n2 = f64(y.len)
+    let (m1, v1) = mean_var(x)
+    let (m2, v2) = mean_var(y)
+    let sp = math.sqrt[f64](((n1 - 1.0f64) * v1 + (n2 - 1.0f64) * v2) / (n1 + n2 - 2.0f64))
+    let d = (m1 - m2) / sp
+    let k = math.sqrt[f64](1.0f64 / n1 + 1.0f64 / n2)
+    var nci: [2]f64 = zero
+    ncp_t_ci(d / k, n1 + n2 - 2.0f64, level, nci[0usize..2usize])
+    let j = hedges_j(n1 + n2 - 2.0f64)
+    out[0usize] = nci[0usize] * k
+    out[1usize] = nci[1usize] * k
+    out[2usize] = out[0usize] * j
+    out[3usize] = out[1usize] * j
 }
 
 // rank_biserial(x, y) = cliffs_delta(x, y): (#x > y - #x < y) / (n1 n2)
