@@ -41,6 +41,31 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if code == 3usize { ret gs.gammastar(x[1usize]) }
         ret gs.hypot(x[1usize], x[2usize])
     }
+    if str.eq(k, "h3") {
+        let code = usize(x[0usize])
+        if code == 0usize { ret gs.si(a, x[1usize]) }
+        if code == 1usize { ret gs.ci(a, x[1usize]) }
+        if code == 2usize { ret gs.shi(a, x[1usize]) }
+        if code == 3usize { ret gs.chi(a, x[1usize]) }
+        if code == 4usize { ret gs.atanint(a, x[1usize]) }
+        if code == 5usize { ret gs.expint_3(a, x[1usize]) }
+        if code == 6usize { ret gs.expint_en(a, usize(x[1usize]), x[2usize]) }
+        if code == 7usize { ret gs.eta(x[1usize]) }
+        if code == 8usize { ret gs.zetam1(x[1usize]) }
+        if code == 9usize { ret gs.laguerre_n(usize(x[1usize]), x[2usize], x[3usize]) }
+        if code == 10usize { ret gs.gegenpoly_n(usize(x[1usize]), x[2usize], x[3usize]) }
+        if code == 11usize { ret gs.legendre_q0(x[1usize]) }
+        if code == 12usize { ret gs.legendre_ql(usize(x[1usize]), x[2usize]) }
+        if code == 13usize { ret gs.log_1plusx(x[1usize]) }
+        if code == 14usize { ret gs.log_1plusx_mx(x[1usize]) }
+        if code == 15usize { ret gs.ellint_rc(x[1usize], x[2usize]) }
+        let (jo, g1) = mem.alloc[f64](a, 3usize)
+        let (jm, g2) = mem.alloc[f64](a, 32usize)
+        let (jn, g3) = mem.alloc[f64](a, 32usize)
+        if g1 != ok || g2 != ok || g3 != ok { os.exit(4) }
+        gs.elljac(x[1usize], x[2usize], jo, jm, jn)
+        ret jo[code - 16usize]
+    }
     if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }

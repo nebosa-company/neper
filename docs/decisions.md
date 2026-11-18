@@ -49358,3 +49358,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gslfns` gains `psi_1` and `psi_n` (the polygamma functions as (-1)^(n+1) n! times the Hurwitz zeta of n + 1, on the existing `hzeta`), `gammainv`, `gammastar` (Gamma(x) over its Stirling leading term) and `hypot`, for positive arguments.
 
 **Result.** `oracle_gslfns` has 1710 values (100 added, 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: negative arguments of the gamma family, the Coulomb and Jacobian elliptic functions and the error estimates.
+
+## D7223 — gsl: the sine and cosine integrals, generalised exponential integrals, eta, polynomials, Legendre Q, RC and the Jacobian elliptic functions
+
+`e.algo.stat.gslfns` gains Si, Ci, Shi, Chi, atanint and expint_3 (adaptive quadrature of integrands made regular at 0, the logarithmic parts added back), `expint_en` (the tail integral from 1 by the infinite-range routine), `eta` and `zetam1` (from the Hurwitz zeta), `laguerre_n` and `gegenpoly_n` (three-term recurrences), `legendre_q0` and `legendre_ql` (the recurrence from Q0), `log_1plusx` and `log_1plusx_mx`, Carlson's `ellint_rc` and `elljac` (sn, cn and dn by the descending Landen scale, with the arithmetic-geometric stopping tolerance tightened to 1e-15 for double precision).
+
+**Result.** `oracle_gslfns` has 1995 values (285 added over 15 arguments each, 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: Coulomb functions, ellint_RJ, ellint_P and ellint_D, the Bessel Y family, the complex functions and the error estimates.

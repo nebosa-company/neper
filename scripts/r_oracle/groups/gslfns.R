@@ -55,4 +55,14 @@ for (rep in 1:20) {
   cases[[length(cases) + 1]] <- case("h2", c(3, x, 0), gammastar(x), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("h2", c(4, x, y), hypot(x, y), rel = 1e-12, abs = 1e-14)
 }
+# integrals, polynomials and elliptic functions under "h3": 0 Si, 1 Ci, 2 Shi, 3 Chi, 4 atanint, 5 expint_3, 6 expint_En (n, x), 7 eta, 8 zetam1, 9 laguerre_n (n, a, x),
+# 10 gegenpoly_n, 11 legendre_Q0, 12 legendre_Ql (l, x), 13 log_1plusx, 14 log_1plusx_mx, 15 ellint_RC, 16 sn, 17 cn, 18 dn (u, m)
+for (rep in 1:15) {
+  x <- runif(1, 0.1, 9); n <- sample(1:6, 1); u <- runif(1, -3, 3); m <- runif(1, 0.01, 0.99); q <- runif(1, -0.9, 0.9); y <- runif(1, 0.2, 5); s <- runif(1, 1.5, 8)
+  add("h3", c(0, x), Si(x)); add("h3", c(1, x), Ci(x)); add("h3", c(2, x), Shi(x)); add("h3", c(3, x), Chi(x)); add("h3", c(4, x), atanint(x)); add("h3", c(5, x), expint_3(x))
+  add("h3", c(6, n, x), expint_En(n, x)); add("h3", c(7, s), eta(s)); add("h3", c(8, s), zetam1(s))
+  add("h3", c(9, n, y, x), laguerre_n(n, y, x)); add("h3", c(10, n, y, q), gegenpoly_n(n, y, q)); add("h3", c(11, q), legendre_Q0(q)); add("h3", c(12, n, q), legendre_Ql(n, q))
+  add("h3", c(13, q), log_1plusx(q)); add("h3", c(14, q), log_1plusx_mx(q)); add("h3", c(15, x, y), ellint_RC(x, y))
+  jj <- elljac(u, m); add("h3", c(16, u, m), jj$sn); add("h3", c(17, u, m), jj$cn); add("h3", c(18, u, m), jj$dn)
+}
 emit("gslfns", "gsl", list(cases))

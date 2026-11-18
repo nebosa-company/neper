@@ -615,3 +615,175 @@ fn gammainv(x: f64) -> f64 { ret math.exp[f64](0.0f64 - sp.lgamma(x)) }
 fn gammastar(x: f64) -> f64 { ret math.exp[f64](sp.lgamma(x) - (x - 0.5f64) * math.log[f64](x) + x - 0.5f64 * math.log[f64](2.0f64 * 3.141592653589793238462643383279f64)) }
 
 fn hypot(x: f64, y: f64) -> f64 { ret math.sqrt[f64](x * x + y * y) }
+
+// ---- trigonometric and hyperbolic integrals, generalised exponential integrals, the Dirichlet eta function, orthogonal polynomials, Legendre Q, small logs, Carlson's
+// RC and the Jacobian elliptic functions; the integrals by adaptive quadrature at tolerance 1e-13
+type Ig = struct { kind: usize, n: f64, x: f64 }
+
+fn ig_fn(c: *Ig, t: f64) -> f64 {
+    if c.kind == 0usize {
+        if t == 0.0f64 { ret 1.0f64 }
+        ret math.sin[f64](t) / t
+    }
+    if c.kind == 1usize {
+        if t == 0.0f64 { ret 0.0f64 }
+        ret (math.cos[f64](t) - 1.0f64) / t
+    }
+    if c.kind == 2usize {
+        if t == 0.0f64 { ret 1.0f64 }
+        ret (math.exp[f64](t) - math.exp[f64](0.0f64 - t)) / (2.0f64 * t)
+    }
+    if c.kind == 3usize {
+        if t == 0.0f64 { ret 0.0f64 }
+        ret (math.exp[f64](t) + math.exp[f64](0.0f64 - t) - 2.0f64) / (2.0f64 * t)
+    }
+    if c.kind == 4usize {
+        if t == 0.0f64 { ret 1.0f64 }
+        ret math.atan[f64](t) / t
+    }
+    if c.kind == 5usize { ret math.exp[f64](0.0f64 - t * t * t) }
+    ret math.exp[f64](0.0f64 - c.x * t - c.n * math.log[f64](t))
+}
+
+fn ig_finite(a: *mem.Arena, kind: usize, hi: f64) -> f64 {
+    var c: Ig = zero
+    c.kind = kind
+    let (r, e) = qp.qags[Ig](a, &c, ig_fn, 0.0f64, hi, 0.0f64, 0.0000000000001f64, 200usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result
+}
+
+fn si(a: *mem.Arena, x: f64) -> f64 { ret ig_finite(a, 0usize, x) }
+
+fn ci(a: *mem.Arena, x: f64) -> f64 { ret euler_gamma() + math.log[f64](x) + ig_finite(a, 1usize, x) }
+
+fn shi(a: *mem.Arena, x: f64) -> f64 { ret ig_finite(a, 2usize, x) }
+
+fn chi(a: *mem.Arena, x: f64) -> f64 { ret euler_gamma() + math.log[f64](x) + ig_finite(a, 3usize, x) }
+
+fn atanint(a: *mem.Arena, x: f64) -> f64 { ret ig_finite(a, 4usize, x) }
+
+fn expint_3(a: *mem.Arena, x: f64) -> f64 { ret ig_finite(a, 5usize, x) }
+
+fn expint_en(a: *mem.Arena, n: usize, x: f64) -> f64 {
+    var c: Ig = zero
+    c.kind = 6usize
+    c.n = f64(n)
+    c.x = x
+    let (r, e) = qp.qagi[Ig](a, &c, ig_fn, 1.0f64, 1i64, 0.0f64, 0.0000000000001f64, 200usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result
+}
+
+fn zetam1(s: f64) -> f64 { ret hzeta(s, 1.0f64) - 1.0f64 }
+
+fn eta(s: f64) -> f64 { ret (1.0f64 - math.pow[f64](2.0f64, 1.0f64 - s)) * hzeta(s, 1.0f64) }
+
+fn laguerre_n(n: usize, al: f64, x: f64) -> f64 {
+    if n == 0usize { ret 1.0f64 }
+    var p0 = 1.0f64
+    var p1 = 1.0f64 + al - x
+    var k = 2usize
+    while k <= n {
+        let kf = f64(k)
+        let p2 = ((2.0f64 * kf - 1.0f64 + al - x) * p1 - (kf - 1.0f64 + al) * p0) / kf
+        p0 = p1
+        p1 = p2
+        k += 1usize
+    }
+    ret p1
+}
+
+fn gegenpoly_n(n: usize, lam: f64, x: f64) -> f64 {
+    if n == 0usize { ret 1.0f64 }
+    var p0 = 1.0f64
+    var p1 = 2.0f64 * lam * x
+    var k = 2usize
+    while k <= n {
+        let kf = f64(k)
+        let p2 = (2.0f64 * (kf + lam - 1.0f64) * x * p1 - (kf + 2.0f64 * lam - 2.0f64) * p0) / kf
+        p0 = p1
+        p1 = p2
+        k += 1usize
+    }
+    ret p1
+}
+
+fn legendre_q0(x: f64) -> f64 { ret 0.5f64 * math.log[f64](math.abs[f64]((1.0f64 + x) / (1.0f64 - x))) }
+
+fn legendre_ql(l: usize, x: f64) -> f64 {
+    let q0 = legendre_q0(x)
+    if l == 0usize { ret q0 }
+    var qa = q0
+    var qb = x * q0 - 1.0f64
+    var k = 1usize
+    while k < l {
+        let kf = f64(k)
+        let qc = ((2.0f64 * kf + 1.0f64) * x * qb - kf * qa) / (kf + 1.0f64)
+        qa = qb
+        qb = qc
+        k += 1usize
+    }
+    ret qb
+}
+
+fn log_1plusx(x: f64) -> f64 { ret dist.log1p(x) }
+
+fn log_1plusx_mx(x: f64) -> f64 { ret dist.log1p(x) - x }
+
+fn ellint_rc(x: f64, y: f64) -> f64 {
+    if x < y { ret math.atan[f64](math.sqrt[f64]((y - x) / x)) / math.sqrt[f64](y - x) }
+    if x > y { ret math.log[f64]((math.sqrt[f64](x) + math.sqrt[f64](x - y)) / math.sqrt[f64](y)) / math.sqrt[f64](x - y) }
+    ret 1.0f64 / math.sqrt[f64](x)
+}
+
+// elljac(u, m): the Jacobian elliptic functions sn, cn, dn of argument u and parameter m = k^2 in [0, 1] by the descending Landen (arithmetic-geometric mean) scale
+fn elljac(u0: f64, m: f64, out: []f64, em: []f64, en: []f64) {
+    var emc = 1.0f64 - m
+    var u = u0
+    if emc == 0.0f64 {
+        let cn = 1.0f64 / ((math.exp[f64](u) + math.exp[f64](0.0f64 - u)) / 2.0f64)
+        out[0usize] = (math.exp[f64](u) - math.exp[f64](0.0f64 - u)) / (math.exp[f64](u) + math.exp[f64](0.0f64 - u))
+        out[1usize] = cn
+        out[2usize] = cn
+        ret
+    }
+    var a = 1.0f64
+    var dn = 1.0f64
+    var c = 0.0f64
+    var l = 0usize
+    var i = 1usize
+    while i <= 30usize {
+        l = i
+        em[i] = a
+        emc = math.sqrt[f64](emc)
+        en[i] = emc
+        c = 0.5f64 * (a + emc)
+        if math.abs[f64](a - emc) <= 1.0e-15f64 * a { break }
+        emc = emc * a
+        a = c
+        i += 1usize
+    }
+    u = u * c
+    var sn = math.sin[f64](u)
+    var cn = math.cos[f64](u)
+    if sn != 0.0f64 {
+        a = cn / sn
+        c = c * a
+        var ii = l
+        while ii >= 1usize {
+            let b = em[ii]
+            a = a * c
+            c = c * dn
+            dn = (en[ii] + a) / (b + a)
+            a = c / b
+            ii -= 1usize
+        }
+        a = 1.0f64 / math.sqrt[f64](c * c + 1.0f64)
+        if sn >= 0.0f64 { sn = a } else { sn = 0.0f64 - a }
+        cn = c * sn
+    }
+    out[0usize] = sn
+    out[1usize] = cn
+    out[2usize] = dn
+}
