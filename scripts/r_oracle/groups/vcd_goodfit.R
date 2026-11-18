@@ -15,4 +15,16 @@ for (rep in 1:16) {
   add("gf", c(base, 2), g$df)
   add("gf", c(base, 3), sum((freq - fit)^2 / fit))
 }
+# binomial: counts 0 .. size with size = 8 (the first K entries are the counts; 'size' is passed as the last-but-one argument, before which)
+for (rep in 1:12) {
+  size <- 8; pr <- runif(1, 0.2, 0.8); n <- sample(40:200, 1)
+  x <- rbinom(n, size, pr)
+  g <- goodfit(x, type = "binomial", method = "ML", par = list(size = size))
+  freq <- as.numeric(g$observed); K <- length(freq); fit <- as.numeric(g$fitted)
+  base <- c(K, freq)
+  add("gb", c(size, base, 0), as.numeric(g$par$prob))
+  add("gb", c(size, base, 1), sum(fit))
+  add("gb", c(size, base, 2), g$df)
+  add("gb", c(size, base, 3), sum((freq - fit)^2 / fit))
+}
 emit("vcd_goodfit", "vcd", list(cases))

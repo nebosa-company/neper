@@ -9,6 +9,7 @@
 
 use e.math
 use e.math.nmath as nm
+use e.math.nmath_beta as nb
 use e.mem
 
 type Assoc = struct { lr: f64, pearson: f64, df: f64, p_lr: f64, p_pearson: f64, phi: f64, contingency: f64, cramer: f64 }
@@ -352,4 +353,27 @@ fn goodfit_poisson(freq: []const f64, fit: []f64) -> (f64, f64, err) {
         c += 1usize
     }
     ret (lambda, nonzero - 2.0f64, ok)
+}
+
+// vcd::goodfit(type = "binomial", method = "ML", par = list(size)) on the counts freq[c], c = 0 .. K - 1 with K - 1 <= size: prob = the weighted mean
+// of c / size, the fitted counts N dpois-style dbinom(c, size, prob), and the degrees of freedom (non-empty counts) - 2.
+fn goodfit_binomial(freq: []const f64, size: f64, fit: []f64) -> (f64, f64, err) {
+    let k = freq.len
+    var nsum = 0.0f64
+    var wsum = 0.0f64
+    var nonzero = 0.0f64
+    var c = 0usize
+    while c < k {
+        nsum += freq[c]
+        wsum += (f64(c) / size) * freq[c]
+        if freq[c] > 0.0f64 { nonzero += 1.0f64 }
+        c += 1usize
+    }
+    let prob = wsum / nsum
+    c = 0usize
+    while c < k {
+        fit[c] = nsum * nb.dbinom(f64(c), size, prob, false)
+        c += 1usize
+    }
+    ret (prob, nonzero - 2.0f64, ok)
 }

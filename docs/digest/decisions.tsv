@@ -3918,4 +3918,5 @@ D7128	1043	clue: Rand agreement and the Euclidean dissimilarity of partitions
 D7129	1159	TSA: detectAO, the additive outliers of an ARMA fit
 D7130	638	TSA: detectIO, the innovational outliers
 D7131	833	TSA: the cumulative periodogram
-D7132	894	vcd: goodfit for the Poisson distribution by maximum likelihood
+D7132	895	vcd: goodfit for the Poisson distribution by maximum likelihood
+D7133	626	vcd: goodfit for the binomial distribution by maximum likelihood

@@ -10,12 +10,31 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
-    let k = usize(z[0usize])
-    let freq = z[1usize..1usize + k]
     let which = usize(z[z.len - 1usize])
+    var k = usize(z[0usize])
+    var base = 1usize
+    if str.eq(c.name, "gb") {
+        // binomial rows: size first, then the count of entries and the entries
+        k = usize(z[1usize])
+        base = 2usize
+    }
+    let freq = z[base..base + k]
     let (fit, e1) = mem.alloc[f64](a, k)
     if e1 != ok { os.exit(10) }
-    let (lambda, df, e2) = ve.goodfit_poisson(freq, fit)
+    var lambda = 0.0f64
+    var df = 0.0f64
+    var e2 = ok
+    if str.eq(c.name, "gb") {
+        let (pr, dfb, eb) = ve.goodfit_binomial(freq, z[0usize], fit)
+        lambda = pr
+        df = dfb
+        e2 = eb
+    } else {
+        let (lp, dfp, ep) = ve.goodfit_poisson(freq, fit)
+        lambda = lp
+        df = dfp
+        e2 = ep
+    }
     if e2 != ok { os.exit(11) }
     if which == 0usize { ret lambda }
     if which == 2usize { ret df }

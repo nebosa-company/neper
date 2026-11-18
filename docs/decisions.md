@@ -48818,3 +48818,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.vcdeffect` has `goodfit_poisson`: lambda is the weighted mean of the counts, the fitted counts are N dpois(c, lambda) over the counts 0 .. K - 1 (zeros included, as goodfit does), and the degrees of freedom are the number of non-empty counts minus 2. The chi-square of summary(goodfit), sum (obs - fit)^2 / fit, is computed by the caller.
 
 **Result.** `oracle_vcd_goodfit` equals vcd::goodfit on 64 values (16 Poisson samples of 40 to 300 points: lambda, the sum of the fitted counts, the degrees of freedom and the chi-square) on Windows. Linux pending. L389 stays partial. The binomial and negative binomial types, the minimum chi-square method and the intervals are open. `CMHtest` named in the L389 acceptance is not in the installed vcd (it is in vcdExtra), so it cannot be checked against R here.
+
+## D7133 — vcd: goodfit for the binomial distribution by maximum likelihood
+
+`e.algo.stat.vcdeffect` has `goodfit_binomial` with the size given: prob is the weighted mean of c / size over the counts 0 .. size, the fitted counts N dbinom(c, size, prob), and the degrees of freedom the non-empty counts minus 2. The oracle covers size 8 with eight to nine count entries.
+
+**Result.** `oracle_vcd_goodfit`, now with 48 binomial rows beside the 64 Poisson ones (112 values), equals vcd::goodfit on Windows. Linux pending. L389 stays partial: the negative binomial type, the minimum chi-square method and the intervals are open.
