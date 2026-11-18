@@ -71,3 +71,47 @@ fn rope_share(x: []const f64, lo: f64, hi: f64) -> f64 {
     }
     ret c / f64(x.len)
 }
+
+// rope(x, range, ci, ci_method, complement = TRUE): out receives (ROPE percentage, superiority, inferiority, CI low, CI high) of the sample inside the ci interval (method 0 ETI, 1 HDI);
+// equivalence_test's decision is 0 Rejected, 1 Accepted, 2 Undecided on that percentage
+fn rope_ci(a: *mem.Arena, x: []const f64, lo: f64, hi: f64, ci: f64, method: usize, out: []f64) {
+    var cl = 0.0f64
+    var ch = 0.0f64
+    if method == 0usize {
+        cl = eti(a, x, ci, 0usize)
+        ch = eti(a, x, ci, 1usize)
+    } else {
+        cl = hdi(a, x, ci, 0usize)
+        ch = hdi(a, x, ci, 1usize)
+    }
+    var cnt = 0usize
+    var inside = 0usize
+    var sup = 0usize
+    var inf = 0usize
+    var i = 0usize
+    while i < x.len {
+        if x[i] >= cl && x[i] <= ch {
+            cnt += 1usize
+            if x[i] >= lo && x[i] <= hi { inside += 1usize }
+            if x[i] > hi { sup += 1usize }
+            if x[i] < lo { inf += 1usize }
+        }
+        i += 1usize
+    }
+    out[0usize] = f64(inside) / f64(cnt)
+    out[1usize] = f64(sup) / f64(cnt)
+    out[2usize] = f64(inf) / f64(cnt)
+    out[3usize] = cl
+    out[4usize] = ch
+}
+
+fn equivalence_decision(pct: f64, ci: f64) -> usize {
+    if ci < 1.0f64 {
+        if pct == 0.0f64 { ret 0usize }
+        if pct == 1.0f64 { ret 1usize }
+        ret 2usize
+    }
+    if pct < 0.025f64 { ret 0usize }
+    if pct > 0.975f64 { ret 1usize }
+    ret 2usize
+}

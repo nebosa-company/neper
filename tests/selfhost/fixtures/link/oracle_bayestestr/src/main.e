@@ -10,6 +10,14 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "ropeci") || str.eq(c.name, "equiv") {
+        let m = usize(x[4usize])
+        let (o, e) = mem.alloc[f64](a, 5usize)
+        if e != ok { os.exit(4) }
+        bt.rope_ci(a, x[5usize..5usize + m], x[2usize], x[3usize], x[0usize], usize(x[1usize]), o)
+        if str.eq(c.name, "equiv") { ret f64(bt.equivalence_decision(o[0usize], x[0usize])) }
+        ret o[usize(x[5usize + m])]
+    }
     let n = usize(x[2usize])
     let s = x[3usize..3usize + n]
     if str.eq(c.name, "hdi") { ret bt.hdi(a, s, x[0usize], usize(x[1usize])) }

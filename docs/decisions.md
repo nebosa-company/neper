@@ -49502,3 +49502,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gamlssdist` gains `qig` and `qzaig` (the package's bracket from mu stepping by sigma, then R's Brent zeroin on pIG at the uniroot tolerance, the same iterates as the package), `qgb1` (through qbeta), `psimplex` (QUADPACK qags of the density over (0, q) at rel.tol = abs.tol = eps^(1/4)) and `qsimplex` (zeroin on (0.001, 0.999) of pSIMPLEX minus p).
 
 **Result.** `oracle_gamlss_exp` gains 5 cases per draw (150 values over the loop) and equals gamlss.dist on Windows at 1e-9. Linux pending. L464 stays partial: BCPEo, ST1, ST3C, DEL, DBI, DBURR12, ZASICHEL, LOGSHASH, MN3 to MN5, the beta-binomial inflated families, moments, random numbers.
+
+## D7247 — bayestestR: rope with a credible interval and equivalence_test
+
+`e.algo.stat.bayestestr` gains `rope_ci` (the share of the sample inside the ETI or HDI that lies in, above and below the ROPE, with the interval limits) and `equivalence_decision` (Rejected when the percentage is 0, Accepted when 1 for ci below 1; below 0.025 and above 0.975 for ci = 1, else Undecided).
+
+**Result.** `oracle_bayestestr` gains 30 samples (ci 0.5, 0.8, 0.95 and 1, both interval methods; 180 values) and equals bayestestR on Windows. Linux pending. HDI at ci = 1 is not defined by the port (the window is the whole sample). L339 stays partial: map_estimate, bayesfactor_savagedickey, si, performance's remaining indices, parameters.
