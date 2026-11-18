@@ -479,3 +479,4 @@ oracle_tsa_detectao
 oracle_tsa_cpgram
 oracle_vcd_goodfit
 oracle_gamlss_exp
+oracle_gamlss_exgaus

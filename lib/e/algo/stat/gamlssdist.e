@@ -183,3 +183,25 @@ fn dno(x: f64, mu: f64, sigma: f64) -> f64 { ret dist.dnorm(x, mu, sigma, false)
 fn pno(x: f64, mu: f64, sigma: f64) -> f64 { ret dist.pnorm(x, mu, sigma, true, false) }
 
 fn qno(p: f64, mu: f64, sigma: f64) -> f64 { ret dist.qnorm(p, mu, sigma, true, false) }
+
+// the exponentially modified Gaussian exGAUS of gamlss.dist (mu, sigma, nu): with z = x - mu - sigma^2 / nu, the density
+// exp(-log nu - (z + sigma^2 / (2 nu)) / nu) Phi(z / sigma) when nu > 0.05 sigma, else the normal density; the distribution
+// Phi((x - mu) / sigma) - Phi(z / sigma) exp(((mu + sigma^2 / nu)^2 - mu^2 - 2 x sigma^2 / nu) / (2 sigma^2)) in that case, else the normal distribution
+fn dexgaus(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if nu > 0.05f64 * sigma {
+        let z = x - mu - sigma * sigma / nu
+        let logfy = 0.0f64 - math.log[f64](nu) - (z + sigma * sigma / (2.0f64 * nu)) / nu + math.log[f64](dist.pnorm(z / sigma, 0.0f64, 1.0f64, true, false))
+        ret math.exp[f64](logfy)
+    }
+    ret dist.dnorm(x, mu, sigma, false)
+}
+
+fn pexgaus(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if nu > 0.05f64 * sigma {
+        let z = x - mu - sigma * sigma / nu
+        let s2 = sigma * sigma
+        let expo = ((mu + s2 / nu) * (mu + s2 / nu) - mu * mu - 2.0f64 * x * s2 / nu) / (2.0f64 * s2)
+        ret dist.pnorm((x - mu) / sigma, 0.0f64, 1.0f64, true, false) - dist.pnorm(z / sigma, 0.0f64, 1.0f64, true, false) * math.exp[f64](expo)
+    }
+    ret dist.pnorm(x, mu, sigma, true, false)
+}

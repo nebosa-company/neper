@@ -48854,3 +48854,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.gamlssdist` has NO with mean mu and sd sigma: the density, distribution and quantile of the base normal (`e.math.dist`).
 
 **Result.** `oracle_gamlss_exp` now covers EXP, RG, PARETO2, PARETO1 and NO (450 values) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: many families remain, plus random numbers, moments and the links.
+
+## D7139 — gamlss.dist: the exGAUS family (density and distribution)
+
+`e.algo.stat.gamlssdist` has the exponentially modified Gaussian with mu, sigma and nu: the density and the distribution, each in gamlss.dist's two regimes (the exponential-normal form when nu > 0.05 sigma, the plain normal otherwise). The quantile is not here: gamlss.dist finds it numerically.
+
+**Result.** `oracle_gamlss_exgaus` equals dexGAUS and pexGAUS on 60 values (30 draws, a third of them in the normal regime) on Windows. Linux pending. L464 stays partial: the quantile of exGAUS and the rest of the families remain.
