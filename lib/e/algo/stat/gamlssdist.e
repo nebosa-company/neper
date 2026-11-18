@@ -237,3 +237,24 @@ fn plogno(x: f64, mu: f64, sigma: f64) -> f64 {
 }
 
 fn qlogno(p: f64, mu: f64, sigma: f64) -> f64 { ret math.exp[f64](dist.qnorm(p, mu, sigma, true, false)) }
+
+// IG: inverse Gaussian with mean mu and sigma^2 mu^3 variance
+fn pig(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let r = x / mu
+    let s = sigma * math.sqrt[f64](x)
+    let l2 = 2.0f64 / (mu * sigma * sigma) + dist.pnorm((0.0f64 - r - 1.0f64) / s, 0.0f64, 1.0f64, true, true)
+    ret dist.pnorm((r - 1.0f64) / s, 0.0f64, 1.0f64, true, false) + math.exp[f64](l2)
+}
+
+// ZIP: zero-inflated Poisson, zero mass sigma
+fn pzip(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret sigma + (1.0f64 - sigma) * nm.ppois(x, mu, true, false)
+}
+
+fn qzip(p: f64, mu: f64, sigma: f64) -> f64 {
+    var pn = (p - sigma) / (1.0f64 - sigma)
+    if pn < 0.0f64 { pn = 0.0f64 }
+    ret nm.qpois(pn, mu, true, false)
+}

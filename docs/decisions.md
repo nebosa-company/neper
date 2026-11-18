@@ -48872,3 +48872,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.gamlssdist` gains pga/qga (gamma by mean and coefficient of variation, over `nm.pgamma`/`nm.qgamma`), pwei/qwei (Weibull in closed form) and plogno/qlogno (log-normal over the normal functions). The densities were already there.
 
 **Result.** `oracle_gamlss_exp` covers GA, WEI and LOGNO in d, p and q (810 values in all) and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7142 — gamlss.dist: IG distribution and ZIP distribution and quantile
+
+`e.algo.stat.gamlssdist` gains pig (the package's form: the standard errors use sigma sqrt(x), not sigma sqrt(x / mu), and the second term is added on the log scale), pzip and qzip (the quantile of the zero-inflated mixture as the base Poisson quantile at (p - sigma) / (1 - sigma), floored at zero).
+
+**Result.** `oracle_gamlss_exp` now has 900 values across 10 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

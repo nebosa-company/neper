@@ -3927,4 +3927,5 @@ D7137	362	gamlss.dist: the PARETO1 family
 D7138	411	gamlss.dist: the NO (normal) family
 D7139	601	gamlss.dist: the exGAUS family (density and distribution)
 D7140	400	gamlss.dist: the PO (Poisson) family
-D7141	475	gamlss.dist: GA, WEI and LOGNO distribution and quantile
+D7141	476	gamlss.dist: GA, WEI and LOGNO distribution and quantile
+D7142	519	gamlss.dist: IG distribution and ZIP distribution and quantile
