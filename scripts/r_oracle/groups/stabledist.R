@@ -61,4 +61,15 @@ for (rep in 1:40) {
     if (is.finite(pv)) cases[[length(cases) + 1]] <- case("pe", c(al, be, ga, de, x, as.numeric(lw), as.numeric(lg)), pv, rel = 1e-7, abs = 1e-11)
   }
 }
+# the small-alpha branch and the far tail (Pareto fallback): densities
+for (rep in 1:20) {
+  al <- c(runif(1, 0.005, 0.0199), runif(1, 0.5, 1.9))[sample(1:2, 1)]
+  be <- c(0, runif(1, -0.9, 0.9))[sample(1:2, 1)]
+  ga <- runif(1, 0.4, 2.5); de <- rnorm(1)
+  xs <- if (al < 0.02) de + ga * c(0.5, -2, 30) else de + ga * c(300, -500, 4000)
+  for (x in xs) {
+    d <- dstable(x, al, be, ga, de)
+    if (is.finite(d) && d > 0) cases[[length(cases) + 1]] <- case("d", c(al, be, ga, de, x), d, rel = 1e-7, abs = 1e-18)
+  }
+}
 emit("stabledist", "stabledist", list(cases))

@@ -2,7 +2,7 @@
 // beta = 0 the Cauchy): Nolan's integral representation split at the mode of the integrand and at the points where it falls below 1e-4, each piece integrated with
 // integrate() (e.math.quadpack.qags) at tolerance 64 eps and 1000 subdivisions, as stabledist:::.fct1 does.
 //
-// Not here: alpha below 0.02 (dstable.smallA), the Pareto-tail fallback when the integral underflows to zero, the other parametrisations,
+// Not here: the other parametrisations,
 // log densities, pstable, qstable and rstable.
 
 use e.math
@@ -58,7 +58,7 @@ fn integ(a: *mem.Arena, c: *Gctx, lo: f64, hi: f64, tol: f64) -> f64 {
 }
 
 // stabledist:::.fct1 for one x (S0, alpha != 1), returning the density of the standardised variable; NaN when R would stop
-fn fct1(a: *mem.Arena, x0: f64, zeta: f64, alpha: f64, theta00: f64, tol: f64, zeta_tol: f64) -> f64 {
+fn fct1(a: *mem.Arena, x0: f64, zeta: f64, alpha: f64, beta0: f64, theta00: f64, tol: f64, zeta_tol: f64) -> f64 {
     var x = x0
     var theta0 = theta00
     let xmz = math.abs[f64](x - zeta)
@@ -66,7 +66,16 @@ fn fct1(a: *mem.Arena, x0: f64, zeta: f64, alpha: f64, theta00: f64, tol: f64, z
     var amax = math.abs[f64](x)
     if math.abs[f64](zeta) > amax { amax = math.abs[f64](zeta) }
     if xmz <= zeta_tol * (zeta_tol + amax) { ret fzeta }
-    if x < zeta { theta0 = 0.0f64 - theta0 }
+    let small = alpha < 1.0e-17f64
+    var beta = beta0
+    if x < zeta {
+        theta0 = 0.0f64 - theta0
+        if small {
+            beta = 0.0f64 - beta
+            x = 0.0f64 - x
+        }
+    }
+    if small { ret math.exp[f64](math.log[f64](alpha) + log1p_(beta) - (1.0f64 + math.log[f64](2.0f64 * x + pi() * alpha * beta))) }
     let a1 = alpha - 1.0f64
     let at0 = alpha * theta0
     var c: Gctx = zero
@@ -177,6 +186,26 @@ fn fct1(a: *mem.Arena, x0: f64, zeta: f64, alpha: f64, theta00: f64, tol: f64, z
 
 fn lgamma_(x: f64) -> f64 { ret sp.lgamma(x) }
 
+fn log1p_(x: f64) -> f64 { ret math.log[f64](1.0f64 + x) }
+
+// the tail constant C(alpha) = Gamma(alpha) sin(alpha pi / 2) / pi of stabledist:::C.stable.tail and the Pareto tail density dPareto it gives, the fallback when the
+// integral underflows to zero
+fn c_stable_tail(alpha: f64) -> f64 {
+    if alpha == 0.0f64 { ret 0.5f64 }
+    if alpha == 2.0f64 { ret 0.0f64 }
+    ret math.exp[f64](lgamma_(alpha)) / pi() * math.sin[f64](alpha * pi2())
+}
+
+fn pareto_tail(x0: f64, alpha: f64, beta0: f64) -> f64 {
+    var x = x0
+    var beta = beta0
+    if x < 0.0f64 {
+        x = 0.0f64 - x
+        beta = 0.0f64 - beta
+    }
+    ret alpha * (1.0f64 + beta) * c_stable_tail(alpha) * math.pow[f64](x, 0.0f64 - (1.0f64 + alpha))
+}
+
 // dstable(x, alpha, beta, gamma, delta, pm = 0) for alpha in [0.02, 2) \ {1}, alpha = 2 and alpha = 1 with beta = 0
 fn dstable(a: *mem.Arena, x0: f64, alpha: f64, beta: f64, gamma: f64, delta: f64) -> f64 {
     let x = (x0 - delta) / gamma
@@ -198,7 +227,9 @@ fn dstable(a: *mem.Arena, x0: f64, alpha: f64, beta: f64, gamma: f64, delta: f64
     } else if 1.0f64 - math.abs[f64](beta) < 0.01f64 || alpha < 0.01f64 {
         zt = 2.0e-15f64
     }
-    ret fct1(a, x, zeta, alpha, th0, 64.0f64 * eps(), zt) / gamma
+    let d0 = fct1(a, x, zeta, alpha, beta, th0, 64.0f64 * eps(), zt)
+    if d0 == 0.0f64 { ret pareto_tail(x, alpha, beta) / gamma }
+    ret d0 / gamma
 }
 
 // stabledist:::.FCT1: the integral behind pstable (alpha != 1), integrand exp(-g(theta)) over (-theta0 + 1e-6, pi/2 - 1e-6); with giveI the integral over pi, else
