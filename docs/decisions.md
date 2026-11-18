@@ -49526,3 +49526,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.performancepkg` gains `normality_p`: the Shapiro-Wilk p value (`e.algo.stat.test.shapiro_wilk`, Royston's AS R94) of the standardised residuals r / (sigma sqrt(1 - h)) of an lm, the package's check for fewer than 5000 observations.
 
 **Result.** `oracle_performancepkg` gains 25 regressions with normal and skewed errors (n 20 to 200) and equals performance on Windows at 1e-8. Linux pending. L339 stays partial: check_outliers, the Nakagawa R2, icc, model_performance, map_estimate, bayesfactor_savagedickey, si, parameters.
+
+## D7251 — performance: the check_outliers distances
+
+`e.algo.stat.performancepkg` gains `zscore_distance` (the largest absolute z-score over the columns, robust with the median and 1.4826 times the median absolute deviation or classic with the mean and standard deviation), `mahalanobis_distance` (against the sample mean and covariance by a Gauss-Jordan inverse) and `cook_distance` (of an lm, (e / (1 - h))^2 h / (s^2 p)): the distances `check_outliers` compares with its thresholds (qnorm(1 - 0.001 / 2), qchisq(1 - 0.001, q), qf(0.5, p, n - p)).
+
+**Result.** `oracle_performancepkg` gains 20 data sets with planted outliers (the zscore twice, mahalanobis and cook at 4 rows each: 320 values) and equals performance and stats on Windows at 1e-8 to 1e-9. The flags and the other methods (mcd, ics, optics, iqr, pareto) are not ported. Linux pending. L339 stays partial: those outlier methods, the Nakagawa R2, icc, model_performance, map_estimate, bayesfactor_savagedickey, si, parameters.

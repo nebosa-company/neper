@@ -5,6 +5,7 @@
 use e.algo.stat.carlmtest as ols
 use e.math
 use e.math.nmath as nm
+use e.algo.stat.desctools as dt
 use e.algo.stat.test as tst
 use e.algo.stat.flexmixpkg as fx
 use e.mem
@@ -202,4 +203,161 @@ fn normality_p(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize
     let (r, se) = tst.shapiro_wilk(z, sc)
     if se != ok { ret 0.0f64 / 0.0f64 }
     ret r.p_value
+}
+
+fn median_of(a: *mem.Arena, v: []const f64) -> f64 {
+    let (t, e) = dt.sorted_copy(a, v)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let n = t.len
+    if n % 2usize == 1usize { ret t[n / 2usize] }
+    ret (t[n / 2usize - 1usize] + t[n / 2usize]) / 2.0f64
+}
+
+// check_outliers method "zscore": the distance of row i is the largest over the q columns (x is n by q row-major) of |x - centre| / scale, with the median and the scaled MAD
+// (1.4826) when robust and the mean and standard deviation otherwise
+fn zscore_distance(a: *mem.Arena, x: []const f64, n: usize, q: usize, robust: bool, row: usize) -> f64 {
+    var best = 0.0f64
+    var c = 0usize
+    while c < q {
+        let (col, e1) = mem.alloc[f64](a, n)
+        let (dev, e2) = mem.alloc[f64](a, n)
+        if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+        var i = 0usize
+        while i < n {
+            col[i] = x[i * q + c]
+            i += 1usize
+        }
+        var centre = 0.0f64
+        var scale = 0.0f64
+        if robust {
+            centre = median_of(a, col)
+            i = 0usize
+            while i < n {
+                dev[i] = math.abs[f64](col[i] - centre)
+                i += 1usize
+            }
+            scale = 1.4826f64 * median_of(a, dev)
+        } else {
+            var sm = 0.0f64
+            i = 0usize
+            while i < n {
+                sm += col[i]
+                i += 1usize
+            }
+            centre = sm / f64(n)
+            var ss = 0.0f64
+            i = 0usize
+            while i < n {
+                ss += (col[i] - centre) * (col[i] - centre)
+                i += 1usize
+            }
+            scale = math.sqrt[f64](ss / f64(n - 1usize))
+        }
+        let d = math.abs[f64](col[row] - centre) / scale
+        if d > best { best = d }
+        c += 1usize
+    }
+    ret best
+}
+
+// stats::mahalanobis(x, colMeans(x), cov(x)) of row `row` (Gauss-Jordan inverse of the q by q covariance matrix)
+fn mahalanobis_distance(a: *mem.Arena, x: []const f64, n: usize, q: usize, row: usize) -> f64 {
+    let (mu, e1) = mem.alloc[f64](a, q)
+    let (m, e2) = mem.alloc[f64](a, q * 2usize * q)
+    let (dv, e3) = mem.alloc[f64](a, q)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var c = 0usize
+    while c < q {
+        var sm = 0.0f64
+        var i = 0usize
+        while i < n {
+            sm += x[i * q + c]
+            i += 1usize
+        }
+        mu[c] = sm / f64(n)
+        c += 1usize
+    }
+    c = 0usize
+    while c < q {
+        var c2 = 0usize
+        while c2 < q {
+            var sm = 0.0f64
+            var i = 0usize
+            while i < n {
+                sm += (x[i * q + c] - mu[c]) * (x[i * q + c2] - mu[c2])
+                i += 1usize
+            }
+            m[c * 2usize * q + c2] = sm / f64(n - 1usize)
+            m[c * 2usize * q + q + c2] = 0.0f64
+            c2 += 1usize
+        }
+        m[c * 2usize * q + q + c] = 1.0f64
+        c += 1usize
+    }
+    var col = 0usize
+    while col < q {
+        var piv = col
+        var r = col + 1usize
+        while r < q {
+            if math.abs[f64](m[r * 2usize * q + col]) > math.abs[f64](m[piv * 2usize * q + col]) { piv = r }
+            r += 1usize
+        }
+        var k = 0usize
+        while k < 2usize * q {
+            let t = m[col * 2usize * q + k]
+            m[col * 2usize * q + k] = m[piv * 2usize * q + k]
+            m[piv * 2usize * q + k] = t
+            k += 1usize
+        }
+        let d = m[col * 2usize * q + col]
+        k = 0usize
+        while k < 2usize * q {
+            m[col * 2usize * q + k] = m[col * 2usize * q + k] / d
+            k += 1usize
+        }
+        r = 0usize
+        while r < q {
+            if r != col {
+                let f = m[r * 2usize * q + col]
+                k = 0usize
+                while k < 2usize * q {
+                    m[r * 2usize * q + k] = m[r * 2usize * q + k] - f * m[col * 2usize * q + k]
+                    k += 1usize
+                }
+            }
+            r += 1usize
+        }
+        col += 1usize
+    }
+    c = 0usize
+    while c < q {
+        dv[c] = x[row * q + c] - mu[c]
+        c += 1usize
+    }
+    var tot = 0.0f64
+    c = 0usize
+    while c < q {
+        var c2 = 0usize
+        while c2 < q {
+            tot += dv[c] * m[c * 2usize * q + q + c2] * dv[c2]
+            c2 += 1usize
+        }
+        c += 1usize
+    }
+    ret tot
+}
+
+// stats::cooks.distance of observation `row` of the lm of y on x (n by p row-major, intercept included): (e / (1 - h))^2 h / (s^2 p)
+fn cook_distance(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, row: usize) -> f64 {
+    let (f, e) = ols.ols(a, x, y, n, p)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f.resid[i] * f.resid[i]
+        i += 1usize
+    }
+    let s2 = rss / f64(n - p)
+    let r = f.resid[row] / (1.0f64 - f.hat[row])
+    ret r * r * f.hat[row] / (s2 * f64(p))
 }

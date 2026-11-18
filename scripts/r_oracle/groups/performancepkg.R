@@ -40,4 +40,20 @@ for (rep in 1:25) {
   m <- lm(as.formula(paste("y ~", paste(names(dfx)[-p], collapse = " + "))), data = dfx)
   cases[[length(cases) + 1]] <- case("norm", c(n, p, y, as.vector(t(X))), as.numeric(suppressMessages(check_normality(m))), rel = 1e-8, abs = 1e-12)
 }
+# check_outliers distances: "zs" (robust 0/1, n, q, X row-major, row), "mah" (0, n, q, X, row), "cook" (n, p, y, X with intercept, row)
+for (rep in 1:20) {
+  n <- sample(15:80, 1); q <- sample(2:4, 1); Xm <- matrix(round(rnorm(n * q), 4), n, q); Xm[sample(n, 2), 1] <- Xm[sample(n, 2), 1] + 6
+  df <- as.data.frame(Xm)
+  zr <- performance:::.check_outliers_zscore(df, robust = TRUE)$data_zscore_robust$Distance_Zscore_robust
+  zc <- performance:::.check_outliers_zscore(df, robust = FALSE)$data_zscore$Distance_Zscore
+  md <- mahalanobis(Xm, colMeans(Xm), cov(Xm))
+  for (i in sample(n, 4)) {
+    cases[[length(cases) + 1]] <- case("zs", c(1, n, q, as.vector(t(Xm)), i - 1), zr[i], rel = 1e-9, abs = 1e-12)
+    cases[[length(cases) + 1]] <- case("zs", c(0, n, q, as.vector(t(Xm)), i - 1), zc[i], rel = 1e-9, abs = 1e-12)
+    cases[[length(cases) + 1]] <- case("mah", c(0, n, q, as.vector(t(Xm)), i - 1), md[i], rel = 1e-8, abs = 1e-12)
+  }
+  p <- q; X <- cbind(1, Xm[, -1, drop = FALSE]); y <- round(as.vector(X %*% runif(p, -1, 1)) + rnorm(n), 4)
+  cd <- cooks.distance(lm(y ~ X - 1))
+  for (i in sample(n, 4)) cases[[length(cases) + 1]] <- case("cook", c(n, p, y, as.vector(t(X)), i - 1), cd[i], rel = 1e-8, abs = 1e-12)
+}
 emit("performancepkg", "performance", list(cases))

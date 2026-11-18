@@ -31,6 +31,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let nn = usize(x[0usize])
             let np = usize(x[1usize])
             got = pf.normality_p(a, x[2usize + nn..2usize + nn + nn * np], x[2usize..2usize + nn], nn, np)
+        } else if str.eq(c.name, "zs") || str.eq(c.name, "mah") {
+            let on = usize(x[1usize])
+            let oq = usize(x[2usize])
+            let orow = usize(x[3usize + on * oq])
+            if str.eq(c.name, "zs") { got = pf.zscore_distance(a, x[3usize..3usize + on * oq], on, oq, x[0usize] == 1.0f64, orow) } else { got = pf.mahalanobis_distance(a, x[3usize..3usize + on * oq], on, oq, orow) }
+        } else if str.eq(c.name, "cook") {
+            let cn = usize(x[0usize])
+            let cp = usize(x[1usize])
+            got = pf.cook_distance(a, x[2usize + cn..2usize + cn + cn * cp], x[2usize..2usize + cn], cn, cp, usize(x[2usize + cn + cn * cp]))
         } else if str.eq(c.name, "vif") {
             let vn = usize(x[0usize])
             let vq = usize(x[1usize])
