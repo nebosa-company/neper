@@ -146,7 +146,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 127usize { ret gd.qnbii(x, mu, sigma) }
     if which == 128usize { ret gd.dlogitno(x, mu, sigma) }
     if which == 129usize { ret gd.plogitno(x, mu, sigma) }
-    ret gd.qlogitno(x, mu, sigma)
+    if which == 130usize { ret gd.qlogitno(x, mu, sigma) }
+    if which == 131usize { ret gd.dwaring(x, mu, sigma) }
+    if which == 132usize { ret gd.pwaring(x, mu, sigma) }
+    if which == 133usize { ret gd.dzalg(x, mu, sigma) }
+    if which == 134usize { ret gd.pzalg(x, mu, sigma) }
+    ret gd.dgpo(x, mu, sigma)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

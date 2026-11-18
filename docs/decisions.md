@@ -48992,3 +48992,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.ade4` gains the rotated tables of `procuste` (X u t(v) and Y v t(u), kept by ade4 only when the axes count equals both column counts) and `acm_cr`, the correlation ratios dudi.acm reports for each factor and axis (the weighted between-level sum of squares of the row scores, compensated sums).
 
 **Result.** `oracle_ade4_dudi` has 1815 values and equals ade4 on Windows. Linux pending. L381 stays partial: the ordered-factor and add.square polynomial coding of dudi.mix and coinertia with both tables wider than tall remain.
+
+## D7162 — gamlss.dist: WARING, ZALG and GPO
+
+`e.algo.stat.gamlssdist` gains the Waring distribution (density and distribution by summation), the zero-adjusted logarithmic ZALG (density and distribution) and the generalised Poisson density GPO. Two package quirks are reproduced: dZALG returns the unscaled logarithmic density for x > 0 (it is not multiplied by 1 - sigma, so it does not sum to one with the zero mass), and dGPO replaces the generalised Poisson by the Poisson whenever sigma exceeds 1e-6.
+
+**Result.** `oracle_gamlss_exp` has 4557 values across 47 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

@@ -905,3 +905,39 @@ fn qlogitno(p: f64, mu: f64, sigma: f64) -> f64 {
     let qz = dist.qnorm(p, math.log[f64](mu / (1.0f64 - mu)), sigma, true, false)
     ret 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - qz))
 }
+
+// WARING (cdf by summation), ZALG (zero-adjusted logarithmic) and GPO (the package's dGPO replaces the generalised Poisson by the Poisson whenever sigma exceeds 1e-6)
+fn dwaring(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret math.exp[f64](lbeta_(x + mu / sigma, 1.0f64 / sigma + 2.0f64) - lbeta_(mu / sigma, 1.0f64 / sigma + 1.0f64))
+}
+
+fn pwaring(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    var s = 0.0f64
+    var j = 0.0f64
+    while j <= x {
+        s += dwaring(j, mu, sigma)
+        j += 1.0f64
+    }
+    ret s
+}
+
+// gamlss.dist's dZALG is the logarithmic density itself for x > 0 (it is not scaled by 1 - sigma)
+fn dzalg(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret sigma }
+    ret dlg(x, mu)
+}
+
+fn pzalg(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x < 1.0f64 { ret sigma }
+    ret sigma + (1.0f64 - sigma) * plg(x, mu)
+}
+
+fn dgpo(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if sigma > 0.000001f64 { ret nm.dpois(x, mu, false) }
+    ret math.exp[f64](x * math.log[f64](mu / (1.0f64 + sigma * mu)) + (x - 1.0f64) * math.log[f64](1.0f64 + sigma * x) + (0.0f64 - mu * (1.0f64 + sigma * x)) / (1.0f64 + sigma * mu) - sp.lgamma(x + 1.0f64))
+}
