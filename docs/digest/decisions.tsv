@@ -4022,4 +4022,5 @@ D7232	564	GeneralizedHyperbolic: ddghyp and ghypChangePars
 D7233	778	gamlss.dist: the beta families with point masses
 D7234	659	gamlss.dist: BCPE, GB1 and SIMPLEX
 D7235	870	aod: quasipois and quasibin
-D7236	692	aod: betabin
+D7236	693	aod: betabin
+D7237	621	aod: negbin and splitbin

@@ -488,3 +488,74 @@ fn betabin(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, si
     out[p + 1usize] = 0.0f64 - fmin
     ret (fail, ok)
 }
+
+// negbin(y ~ x, ~ 1): log link, one phi (k = 1 / phi); the Poisson glm coefficients and phi = 0.1 start R's Nelder-Mead; out receives the p coefficients, phi and the maximised log-likelihood
+type NbCtx = struct { x: []const f64, n: usize, p: usize, y: []const f64 }
+
+fn nb_nll(c: *NbCtx, par: []const f64) -> f64 {
+    let phi = par[c.p]
+    let k = 1.0f64 / phi
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.n {
+        var t = 0.0f64
+        var j = 0usize
+        while j < c.p {
+            t += c.x[j * c.n + i] * par[j]
+            j += 1usize
+        }
+        let mu = math.exp[f64](t)
+        if phi == 0.0f64 {
+            s += c.y[i] * math.log[f64](mu) - mu - sp.lgamma(c.y[i] + 1.0f64)
+        } else {
+            s += sp.lgamma(c.y[i] + k) - sp.lgamma(c.y[i] + 1.0f64) - sp.lgamma(k) + k * math.log[f64](k / (k + mu)) + c.y[i] * math.log[f64](mu / (k + mu))
+        }
+        i += 1usize
+    }
+    if s != s || s > 1.0e300f64 || s < 0.0f64 - 1.0e300f64 { ret 1.0e20f64 }
+    ret 0.0f64 - s
+}
+
+fn negbin(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, out: []f64) -> (usize, err) {
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (b0, e2) = mem.alloc[f64](a, p + 1usize)
+    let (best, e3) = mem.alloc[f64](a, p + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret (1usize, fx.Malformed) }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    let e = fx.pois_glm(a, x, n, p, y, w, b0, false)
+    if e != ok { ret (1usize, e) }
+    b0[p] = 0.1f64
+    var c = NbCtx{ x: x, n: n, p: p, y: y }
+    let (fmin, cnt, fail) = rn.nmmin[NbCtx](a, &c, nb_nll, b0, 0.0f64 - 1.0f64 / 0.0f64, 0.0000000149011611938f64, 1.0f64, 0.5f64, 2.0f64, 2000usize, 1.0f64, best)
+    var k = 0usize
+    while k <= p {
+        out[k] = best[k]
+        k += 1usize
+    }
+    out[p + 1usize] = 0.0f64 - fmin
+    ret (fail, ok)
+}
+
+// splitbin(cbind(y, n - y) ~ 1): the Bernoulli expansion's row i of the table is a block of n_i - y_i zeros then y_i ones; out receives the responses in order (sum of n values)
+fn splitbin(n: []const f64, y: []const f64, out: []f64) -> usize {
+    var at = 0usize
+    var i = 0usize
+    while i < n.len {
+        let ni = usize(math.round[f64](n[i]))
+        let yi = usize(math.round[f64](y[i]))
+        var k = 0usize
+        while k < ni {
+            if ni > 0usize {
+                if k < ni - yi { out[at] = 0.0f64 } else { out[at] = 1.0f64 }
+                at += 1usize
+            }
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret at
+}

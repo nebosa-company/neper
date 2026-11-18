@@ -19,7 +19,7 @@ L468	library	0.4	591	fpc: cluster validity and flexible clustering procedures	Pa
 L477	library	0.7	1139	compositions: compositional data analysis	Partial (D6140).
 L478	library	0.4	519	dagitty: causal graph reasoning	Partial (D6159).
 L479	library	0.25	481	hdrcde: highest density regions	Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows;
-L480	library	0.35	569	aod: overdispersed binomial and count data	Partial (D7163 donner, D7164 wald.test, D7235 quasipois and quasibin (logit;
+L480	library	0.6	653	aod: overdispersed binomial and count data	Partial (D7163 donner, D7164 wald.test, D7235 quasipois and quasibin (logit;
 L481	library	0.2	383	klaR: classification helpers	Partial (D6195).
 L501	library	0.2	585	randtoolbox and qrng: quasi-random generators	Partial (D6160).
 L503	library	0.45	577	WRS2: robust tests and ANOVA	Partial (D6137).

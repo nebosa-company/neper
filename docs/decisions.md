@@ -49442,3 +49442,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.aod` gains `betabin` for the logit link with one phi: the beta-binomial log-likelihood in (coefficients, phi), maximised by `e.algo.stat.rnm.nmmin` (R's optim Nelder-Mead, reltol 1.49e-8, maxit 2000) from the binomial glm coefficients and phi = 0.1, the package's own start.
 
 **Result.** `oracle_aod` gains 60 values (coefficients, phi and the maximised log-likelihood of 15 simulated overdispersed data sets) and equals aod on Windows at 1e-6, the accuracy a simplex stops at. Linux pending. Standard errors (optimHess) are not ported. L480 stays partial: betabin with phi by a covariate and the cloglog link, negbin, anova, iccbin A and B, splitbin.
+
+## D7237 — aod: negbin and splitbin
+
+`e.algo.stat.aod` gains `negbin` (the negative binomial with k = 1 / phi, log link, one phi, Nelder-Mead from the Poisson glm coefficients and phi = 0.1 as in D7236) and `splitbin` (the Bernoulli expansion of binomial rows: n - y zeros then y ones per row, rows with n = 0 dropped).
+
+**Result.** `oracle_aod` gains 15 negbin fits (60 values at 1e-6) and 10 splitbin tables (length and every response) and equals aod on Windows. Linux pending. L480 stays partial: phi by a covariate, the fit standard errors, anova, iccbin A and B (they need the package's glmer), the cloglog links.

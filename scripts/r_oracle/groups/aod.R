@@ -61,4 +61,20 @@ for (rep in 1:15) {
   for (j in 1:3) cases[[length(cases) + 1]] <- case("bbin", c(n, 2, as.vector(X), sc, sz, j - 1), pa[[j]], rel = 1e-6, abs = 1e-8)
   cases[[length(cases) + 1]] <- case("bbin", c(n, 2, as.vector(X), sc, sz, 3), ll, rel = 1e-6, abs = 1e-8)
 }
+# negbin, log link, phi constant (n, p, x column-major, counts, index): coefficient index, phi at p, the log-likelihood at p + 1; 1e-6 as for betabin
+for (rep in 1:15) {
+  n <- sample(20:50, 1); xv <- round(rnorm(n), 3); mu <- exp(1 + 0.4 * xv)
+  y <- rnbinom(n, mu = mu, size = 3); d <- data.frame(y = y, xv = xv); X <- cbind(1, xv)
+  fit <- suppressWarnings(negbin(y ~ xv, ~ 1, data = d))
+  pa <- fit@param; ll <- fit@logL
+  for (j in 1:3) cases[[length(cases) + 1]] <- case("nbin", c(n, 2, as.vector(X), y, j - 1), pa[[j]], rel = 1e-6, abs = 1e-8)
+  cases[[length(cases) + 1]] <- case("nbin", c(n, 2, as.vector(X), y, 3), ll, rel = 1e-6, abs = 1e-8)
+}
+# splitbin (k, n..., y..., index): the index-th response of the Bernoulli expansion, and the table length at index -1
+for (rep in 1:10) {
+  k <- sample(3:8, 1); nn <- sample(1:7, k, TRUE); yy <- rbinom(k, nn, 0.5); df <- data.frame(n = nn, y = yy)
+  tb <- splitbin(cbind(y, n - y) ~ 1, df)$tab
+  cases[[length(cases) + 1]] <- case("splitbin", c(k, nn, yy, -1), nrow(tb))
+  for (r in seq_len(nrow(tb))) cases[[length(cases) + 1]] <- case("splitbin", c(k, nn, yy, r - 1), tb$y[r])
+}
 emit("aod", "aod", list(cases))

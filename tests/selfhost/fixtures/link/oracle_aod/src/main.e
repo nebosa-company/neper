@@ -60,6 +60,33 @@ fn bbin_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret o[usize(x[2usize + n * p + 2usize * n])]
 }
 
+fn nbin_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let (o, e) = mem.alloc[f64](a, p + 2usize)
+    if e != ok { os.exit(13) }
+    let (code, be) = ad.negbin(a, x[2usize..2usize + n * p], n, p, x[2usize + n * p..2usize + n * p + n], o)
+    if be != ok || code != 0usize { os.exit(14) }
+    ret o[usize(x[2usize + n * p + n])]
+}
+
+fn split_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let k = usize(x[0usize])
+    var tot = 0usize
+    var i = 0usize
+    while i < k {
+        tot += usize(x[1usize + i])
+        i += 1usize
+    }
+    let (o, e) = mem.alloc[f64](a, tot + 1usize)
+    if e != ok { os.exit(15) }
+    let m = ad.splitbin(x[1usize..1usize + k], x[1usize + k..1usize + 2usize * k], o)
+    if x[1usize + 2usize * k] < 0.0f64 { ret f64(m) }
+    ret o[usize(x[1usize + 2usize * k])]
+}
+
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = usize(x[3usize])
@@ -84,7 +111,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while at < golden.cases.len {
         let c = &golden.cases[at]
         var got = 0.0f64
-        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else if str.eq(c.name, "qpois") { got = qpois_answer(a, c) } else if str.eq(c.name, "qbin") { got = qbin_answer(a, c) } else if str.eq(c.name, "bbin") { got = bbin_answer(a, c) } else { got = answer(c) }
+        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else if str.eq(c.name, "qpois") { got = qpois_answer(a, c) } else if str.eq(c.name, "qbin") { got = qbin_answer(a, c) } else if str.eq(c.name, "bbin") { got = bbin_answer(a, c) } else if str.eq(c.name, "nbin") { got = nbin_answer(a, c) } else if str.eq(c.name, "splitbin") { got = split_answer(a, c) } else { got = answer(c) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
