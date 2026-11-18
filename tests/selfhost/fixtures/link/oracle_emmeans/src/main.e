@@ -28,6 +28,66 @@ fn grid_row(row: []f64, a: usize, b: usize, i: usize, xbar: f64) {
     row[p - 1usize] = xbar
 }
 
+// the coefficients over the a levels of contrast `idx` of family `ty` (0 trt.vs.ctrl, 1 revpairwise in emmeans' order, 2 consec, 3 eff, 4 poly)
+fn contrast_coef(ty: usize, idx: usize, a: usize, w: []f64) {
+    var k = 0usize
+    while k < a {
+        w[k] = 0.0f64
+        k += 1usize
+    }
+    if ty == 0usize {
+        w[idx] = 1.0f64
+        w[0usize] = 0.0f64 - 1.0f64
+    } else if ty == 1usize {
+        // emmeans' revpairwise order: (2 - 1), (3 - 1), (3 - 2), (4 - 1), ...
+        var r = 0usize
+        var jj = 1usize
+        while jj < a {
+            var ii = 0usize
+            while ii < jj {
+                r += 1usize
+                if r == idx {
+                    w[jj] = 1.0f64
+                    w[ii] = 0.0f64 - 1.0f64
+                }
+                ii += 1usize
+            }
+            jj += 1usize
+        }
+    } else if ty == 2usize {
+        w[idx] = 1.0f64
+        w[idx - 1usize] = 0.0f64 - 1.0f64
+    } else if ty == 3usize {
+        k = 0usize
+        while k < a {
+            w[k] = 0.0f64 - 1.0f64 / f64(a)
+            k += 1usize
+        }
+        w[idx] = w[idx] + 1.0f64
+    } else {
+        if a == 3usize {
+            if idx == 1usize { w[0usize] = 0.0f64 - 1.0f64
+                w[2usize] = 1.0f64 }
+            if idx == 2usize { w[0usize] = 1.0f64
+                w[1usize] = 0.0f64 - 2.0f64
+                w[2usize] = 1.0f64 }
+        } else {
+            if idx == 1usize { w[0usize] = 0.0f64 - 3.0f64
+                w[1usize] = 0.0f64 - 1.0f64
+                w[2usize] = 1.0f64
+                w[3usize] = 3.0f64 }
+            if idx == 2usize { w[0usize] = 1.0f64
+                w[1usize] = 0.0f64 - 1.0f64
+                w[2usize] = 0.0f64 - 1.0f64
+                w[3usize] = 1.0f64 }
+            if idx == 3usize { w[0usize] = 0.0f64 - 1.0f64
+                w[1usize] = 3.0f64
+                w[2usize] = 0.0f64 - 3.0f64
+                w[3usize] = 1.0f64 }
+        }
+    }
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let n = usize(z[0usize])
@@ -66,6 +126,28 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     xbar = xbar / f64(n)
     let (m, fe) = em.fit(a, d, y, n, p)
     if fe != ok { ret 0.0f64 / 0.0f64 }
+    if str.eq(c.name, "ctr_est") || str.eq(c.name, "ctr_se") {
+        let (wv, we) = mem.alloc[f64](a, na)
+        if we != ok { ret 0.0f64 / 0.0f64 }
+        contrast_coef(li, lj, na, wv)
+        var kk = 0usize
+        while kk < p {
+            rd[kk] = 0.0f64
+            kk += 1usize
+        }
+        var lv = 0usize
+        while lv < na {
+            grid_row(r1, na, nb, lv, xbar)
+            kk = 0usize
+            while kk < p {
+                rd[kk] += wv[lv] * r1[kk]
+                kk += 1usize
+            }
+            lv += 1usize
+        }
+        if str.eq(c.name, "ctr_est") { ret em.estimate(&m, rd) }
+        ret math.sqrt[f64](em.variance(&m, rd))
+    }
     grid_row(r1, na, nb, li, xbar)
     if str.eq(c.name, "emm") { ret em.estimate(&m, r1) }
     if str.eq(c.name, "se") { ret math.sqrt[f64](em.variance(&m, r1)) }

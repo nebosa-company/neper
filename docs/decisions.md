@@ -49652,3 +49652,9 @@ New `e.algo.stat.survfitpkg.km_table`: one row per distinct event time with n.ri
 `e.algo.stat.survfitpkg.concordance_counts` counts, over the pairs whose earlier time is an event, the concordant (larger x, longer survival), discordant and x-tied pairs of `concordance(Surv(t, e) ~ x)` and the index C = (concordant + tied.x / 2) / (concordant + discordant + tied.x), for distinct event times.
 
 **Result.** `oracle_survfit` gains 25 samples (n 15 to 50, ties in x from the rounding; 100 values) and equals `concordance` on Windows at 1e-10. The variance, weighted forms and tied event times are not ported. Linux pending. L311 stays partial: concordance variance, the rest of coxph, survreg, cox.zph, survSplit, tmerge, pyears, residuals.
+
+## D7272 — emmeans: the other contrast families
+
+The emmeans fixture builds each contrast as a coefficient vector over the factor's levels and applies it to the reference-grid rows with the existing `estimate` and `variance`: trt.vs.ctrl (each level less the first), revpairwise (emmeans' order (2 - 1), (3 - 1), (3 - 2), (4 - 1), ...), consec (each level less the previous), eff (each level less the mean of all) and poly (the integer orthogonal-polynomial coefficients for three and four levels).
+
+**Result.** 8 models (3 or 4 levels, a second factor and a covariate held at their means) give 424 estimates and standard errors that equal emmeans on Windows at 1e-6. The first run exposed two ordering conventions (consec runs level i + 1 minus level i; revpairwise orders its pairs by the larger level first). Linux pending. L313 stays partial: the model-frame grid, glm and mixed models, scheffe and mvt, joint_tests, emtrends, eff_size, regrid.

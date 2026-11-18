@@ -21,4 +21,18 @@ for (rep in 1:8) {
     add("p_tukey", ar, pt$p.value[r]); add("p_holm", ar, ph$p.value[r]); add("p_bonf", ar, pb$p.value[r])
   }
 }
+# contrast families (adjust = "none"): "ctr_est" and "ctr_se" with args (base..., type, idx): type 0 trt.vs.ctrl (level idx vs level 0, idx from 1), 1 revpairwise (pair idx in emmeans' order), 2 consec (idx from 1), 3 eff (level idx, from 0), 4 poly (degree idx from 1)
+for (rep in 1:8) {
+  a <- sample(3:4, 1); b <- sample(2:3, 1); n <- sample(40:70, 1)
+  A <- c(0:(a - 1), sample(0:(a - 1), n - a, TRUE)); B <- c(sample(0:(b - 1), a, TRUE), sample(0:(b - 1), n - a, TRUE)); B[1:b] <- 0:(b - 1)
+  x <- round(rnorm(n), 3); y <- round(2 + A * 0.7 + B * 0.4 + x + rnorm(n), 3)
+  d <- data.frame(y = y, A = factor(A), B = factor(B), x = x)
+  m <- lm(y ~ A + B + x, d); e <- emmeans(m, "A"); base <- c(n, a, b, y, A, B, x)
+  mk <- function(meth, type) { sm <- summary(contrast(e, meth, adjust = "none")); for (r in seq_len(nrow(sm))) {
+    cases[[length(cases) + 1]] <<- case("ctr_est", c(base, type, r), sm$estimate[r], rel = 1e-6, abs = 1e-9)
+    cases[[length(cases) + 1]] <<- case("ctr_se", c(base, type, r), sm$SE[r], rel = 1e-6, abs = 1e-9) } }
+  mk("trt.vs.ctrl", 0); mk("revpairwise", 1); mk("consec", 2)
+  sm <- summary(contrast(e, "eff", adjust = "none")); for (r in 1:nrow(sm)) { cases[[length(cases) + 1]] <- case("ctr_est", c(base, 3, r - 1), sm$estimate[r], rel = 1e-6, abs = 1e-9); cases[[length(cases) + 1]] <- case("ctr_se", c(base, 3, r - 1), sm$SE[r], rel = 1e-6, abs = 1e-9) }
+  sm <- summary(contrast(e, "poly", adjust = "none")); for (r in 1:nrow(sm)) { cases[[length(cases) + 1]] <- case("ctr_est", c(base, 4, r), sm$estimate[r], rel = 1e-6, abs = 1e-9); cases[[length(cases) + 1]] <- case("ctr_se", c(base, 4, r), sm$SE[r], rel = 1e-6, abs = 1e-9) }
+}
 emit("emmeans", "emmeans", list(cases))
