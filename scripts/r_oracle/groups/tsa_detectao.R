@@ -1,4 +1,4 @@
-# TSA::detectAO on an ARMA(1, 1) fit. Args: (n, robust, resid[n], phi, theta, sigma2, which): which 0 the number of outliers, 1 the sum of their
+# TSA::detectAO (fn "ao") and TSA::detectIO (fn "io") on an ARMA(1, 1) fit. Args: (n, robust, resid[n], phi, theta, sigma2, which): which 0 the number of outliers, 1 the sum of their
 # positions in rev(lambda) (1 based), 2 the sum of their lambda values. The fitted pieces are passed in; the fit is arima(x, c(1, 0, 1)).
 suppressMessages(library(TSA))
 cases <- list()
@@ -15,5 +15,7 @@ for (rep in 1:12) {
   add("ao", c(base, 0), length(d$ind))
   add("ao", c(base, 1), sum(d$ind))
   add("ao", c(base, 2), sum(d$lambda2))
+  io <- detectIO(fit, robust = robust == 1)
+  add("io", c(base, 0), length(io$ind)); add("io", c(base, 1), sum(io$ind)); add("io", c(base, 2), sum(io$lambda1))
 }
 emit("tsa_detectao", "TSA", list(cases))

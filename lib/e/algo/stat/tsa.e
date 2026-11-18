@@ -304,3 +304,32 @@ fn detect_ao(a: *mem.Arena, resid: []const f64, n: usize, phi: []const f64, thet
     }
     ret (count, ok)
 }
+
+// detectIO (TSA): the innovational outliers, the residuals over sigma (sqrt(pi / 2) mean |resid| when robust, else sqrt(sigma2)) beyond
+// qnorm(1 - alpha / (2 n)) in absolute value; positions are 1-based in the series order.
+fn detect_io(resid: []const f64, n: usize, sigma2: f64, robust: bool, alpha: f64, ind_out: []usize, lam_out: []f64) -> (usize, err) {
+    var sigma = math.sqrt[f64](sigma2)
+    if robust {
+        var sabs = 0.0f64
+        var i = 0usize
+        while i < n {
+            sabs += math.abs[f64](resid[i])
+            i += 1usize
+        }
+        sigma = math.sqrt[f64](3.141592653589793f64 / 2.0f64) * sabs / f64(n)
+    }
+    let cutoff = dist.qnorm(1.0f64 - alpha / 2.0f64 / f64(n), 0.0f64, 1.0f64, true, false)
+    var count = 0usize
+    var p = 0usize
+    while p < n {
+        let v = resid[p] / sigma
+        if math.abs[f64](v) > cutoff {
+            if count >= ind_out.len { ret (count, Malformed) }
+            ind_out[count] = p + 1usize
+            lam_out[count] = v
+            count += 1usize
+        }
+        p += 1usize
+    }
+    ret (count, ok)
+}

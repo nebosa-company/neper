@@ -48800,3 +48800,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.tsa` has `detect_ao`: TSA's detectAO on the fitted pieces. The MA(infinity) weights of ARMAtoMA(ar = -theta, ma = -phi) (TSA's sign convention on the arima object's phi and theta), the convolution of those weights with the reversed residuals, the running sums rho2 = 1 / sum of the squared weights, the statistic lambda = omega rho2 / sigma / sqrt(rho2), reversed, and the values beyond the normal quantile qnorm(1 - alpha / (2 n)). sigma is sqrt(pi / 2) mean |resid| when robust, and sqrt(sigma2) otherwise. The arima fit is not reproduced: the residuals, coefficients and sigma2 are inputs (the same convention as the other fitted-piece oracles).
 
 **Result.** `oracle_tsa_detectao` equals TSA::detectAO on 36 values (12 ARMA(1, 1) series of 80 to 150 points with two added outliers, robust and classical sigma; every case detects two outliers, so the positions and the statistics are compared) on Windows; `oracle_tsa` still passes. Linux pending. L452 stays partial: detectIO, armasubsets, arimax, the cumulative periodogram, the BIC table and the tsdiag statistics are open.
+
+## D7130 — TSA: detectIO, the innovational outliers
+
+`e.algo.stat.tsa` has `detect_io`: the residuals over sigma (sqrt(pi / 2) mean |resid| when robust, sqrt(sigma2) otherwise), flagged where their absolute value exceeds qnorm(1 - alpha / (2 n)), in series order.
+
+**Result.** `oracle_tsa_detectao`, now with the io cases beside the ao cases (72 values in all, the same twelve fitted series), equals TSA::detectIO on the count, the positions and the statistics on Windows; the ao cases are unchanged. Linux pending. L452 stays partial: armasubsets, arimax, the cumulative periodogram, the BIC table and the tsdiag statistics are open.

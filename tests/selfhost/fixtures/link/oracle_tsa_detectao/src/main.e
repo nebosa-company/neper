@@ -20,8 +20,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (ind, e1) = mem.alloc[usize](a, n)
     let (lam, e2) = mem.alloc[f64](a, n)
     if e1 != ok || e2 != ok { os.exit(10) }
-    let (count, e3) = ts.detect_ao(a, resid, n, phi, theta, sigma2, robust, 0.05f64, ind, lam)
-    if e3 != ok { os.exit(11) }
+    var count = 0usize
+    if str.eq(c.name, "io") {
+        let (cnt, e4) = ts.detect_io(resid, n, sigma2, robust, 0.05f64, ind, lam)
+        if e4 != ok { os.exit(12) }
+        count = cnt
+    } else {
+        let (cnt, e3) = ts.detect_ao(a, resid, n, phi, theta, sigma2, robust, 0.05f64, ind, lam)
+        if e3 != ok { os.exit(11) }
+        count = cnt
+    }
     var s = 0.0f64
     var i = 0usize
     while i < count {
