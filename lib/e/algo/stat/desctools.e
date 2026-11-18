@@ -1284,3 +1284,32 @@ fn mean_ci_trim(a: *mem.Arena, x: []const f64, trim: f64, conf: f64, out: []f64)
     out[2usize] = m + q * se
     ret ok
 }
+
+// CohenD(x) (one sample: mean / sd) and CohenD(x, y, pooled, correct) (two samples; the pooled or total standard deviation, optionally the small-sample correction
+// 1 - 3 / (4 (nx + ny) - 9)); the confidence interval (a non-central t search) is not ported
+fn cohen_d1(x: []const f64) -> f64 { ret mean_of(x) / sd_of(x) }
+
+fn cohen_d2(a: *mem.Arena, x: []const f64, y: []const f64, pooled: bool, correct: bool) -> f64 {
+    let nx = f64(x.len)
+    let ny = f64(y.len)
+    var d = mean_of(x) - mean_of(y)
+    if pooled {
+        d = d / math.sqrt[f64](((nx - 1.0f64) * var_of(x) + (ny - 1.0f64) * var_of(y)) / (nx + ny - 2.0f64))
+    } else {
+        let (c, e) = mem.alloc[f64](a, x.len + y.len)
+        if e != ok { ret 0.0f64 / 0.0f64 }
+        var i = 0usize
+        while i < x.len {
+            c[i] = x[i]
+            i += 1usize
+        }
+        i = 0usize
+        while i < y.len {
+            c[x.len + i] = y[i]
+            i += 1usize
+        }
+        d = d / sd_of(c)
+    }
+    if correct { d = d * (1.0f64 - 3.0f64 / (4.0f64 * (nx + ny) - 9.0f64)) }
+    ret d
+}

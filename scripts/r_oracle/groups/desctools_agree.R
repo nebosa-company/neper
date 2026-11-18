@@ -30,4 +30,10 @@ for (rep in 1:15) {
   r <- MeanCI(x, trim = tr, conf.level = 0.95)
   for (j in 0:2) cases[[length(cases) + 1]] <- case("b", c(7, n, x, tr, 0.95, j), as.numeric(r[j + 1]), rel = 1e-9, abs = 1e-12)
 }
+# CohenD: one sample (8, n, x), two samples (9, nx, ny, flags, x, y) with flags 0..3 = pooled + 2 * correct
+for (rep in 1:15) {
+  nx <- sample(8:40, 1); ny <- sample(8:40, 1); x <- rnorm(nx, 1); y <- rnorm(ny, 0.5, 1.4)
+  cases[[length(cases) + 1]] <- case("b", c(8, nx, x, 0, 0, 0), as.numeric(CohenD(x)), rel = 1e-10, abs = 1e-12)
+  for (fl in 0:3) cases[[length(cases) + 1]] <- case("b", c(9, nx, ny, fl, x, y), as.numeric(CohenD(x, y, pooled = (fl %% 2) == 1, correct = fl >= 2)), rel = 1e-10, abs = 1e-12)
+}
 emit("desctools_agree", "DescTools", list(cases))

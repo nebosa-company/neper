@@ -11,6 +11,16 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let (o, e) = mem.alloc[f64](a, 6usize)
     if e != ok { os.exit(4) }
+    if z[0usize] == 8.0f64 {
+        let n = usize(z[1usize])
+        ret dt.cohen_d1(z[2usize..2usize + n])
+    }
+    if z[0usize] == 9.0f64 {
+        let nx = usize(z[1usize])
+        let ny = usize(z[2usize])
+        let fl = usize(z[3usize])
+        ret dt.cohen_d2(a, z[4usize..4usize + nx], z[4usize + nx..4usize + nx + ny], fl % 2usize == 1usize, fl >= 2usize)
+    }
     if z[0usize] >= 2.0f64 {
         let kn = usize(z[0usize])
         let n = usize(z[1usize])

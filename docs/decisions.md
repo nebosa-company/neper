@@ -49328,3 +49328,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.desctools` gains `mean_ci_trim`: the trimmed mean (R's `mean(x, trim)`, the order statistics lo to n + 1 - lo with lo = floor(n trim) + 1), the winsorised variance (values beyond the trn-th and (n - trn + 1)-th order statistics replaced by them, trn = floor(trim n) + 1) and the t interval on n - 2 (trn - 1) - 1 degrees of freedom with the standard error sqrt(var) / ((1 - 2 trim) sqrt(n)).
 
 **Result.** `oracle_desctools_agree` has 480 values (45 added over 15 samples with trims 0.05, 0.1 and 0.2, 1e-9) and equals DescTools on Windows. Linux pending. L363 stays partial: the bootstrap intervals and the rest of the package.
+
+## D7218 — DescTools: CohenD
+
+`e.algo.stat.desctools` gains `cohen_d1` (mean over standard deviation) and `cohen_d2` (the standardised mean difference with the pooled or the total-sample standard deviation and the optional small-sample correction). The confidence interval, which the package finds with a non-central t search, is not ported.
+
+**Result.** `oracle_desctools_agree` has 555 values (75 added: 15 sample pairs, one-sample and the four two-sample variants, 1e-10) and equals DescTools on Windows. Linux pending. L363 stays partial.
