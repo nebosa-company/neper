@@ -17,5 +17,7 @@ for (rep in 1:20) {
   a <- c(n, J, R, ncat, unlist(lapply(st, function(m) as.vector(t(m)))), as.vector(t(as.matrix(d))))
   pr <- unlist(lapply(f$probs, function(m) as.vector(t(m))))
   add("ll", a, f$llik); add("prior", a, sum(f$P * seq_along(f$P))); add("probs", a, sum(pr * seq_along(pr))); add("bic", a, f$bic)
+  add("npar", a, f$npar); add("aic", a, f$aic); add("gsq", a, f$Gsq); add("chisq", a, f$Chisq); add("rdf", a, f$resid.df)
+  add("pred", a, sum(f$predclass * 1))
 }
 emit("polca", "poLCA", list(cases))

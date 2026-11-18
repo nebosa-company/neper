@@ -4069,4 +4069,5 @@ D7279	727	survival: martingale and deviance residuals
 D7280	725	emmeans: emtrends
 D7281	789	performance: Poisson overdispersion and zero-inflation checks
 D7282	640	survival: pyears by a factor
-D7283	864	mlogit: the multinomial logit
+D7283	865	mlogit: the multinomial logit
+D7284	810	poLCA: fit statistics and class assignment

@@ -97,3 +97,106 @@ fn em(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize
     }
     ret ll
 }
+
+// poLCA's fit statistics at the estimated probs (R by sum(ncat), row-major) and prior: which 0 npar, 1 AIC, 2 Gsq, 3 Chisq, 4 residual degrees of freedom, 5 the class counts of the modal posterior
+// class weighted by class number (sum k n_k), data n by nj row-major with 0-based categories
+fn fit_stats(a: *mem.Arena, data: []const f64, n: usize, nj: usize, ncat: []const usize, nr: usize, probs: []const f64, prior: []const f64, ll: f64, which: usize) -> f64 {
+    var tc = 0usize
+    var j = 0usize
+    while j < nj {
+        tc += ncat[j]
+        j += 1usize
+    }
+    let npar = f64(nr * (tc - nj) + (nr - 1usize))
+    if which == 0usize { ret npar }
+    if which == 1usize { ret 0.0f64 - 2.0f64 * ll + 2.0f64 * npar }
+    var cells = 1.0f64
+    j = 0usize
+    while j < nj {
+        cells = cells * f64(ncat[j])
+        j += 1usize
+    }
+    if which == 4usize {
+        var cap = cells - 1.0f64
+        if f64(n) - 1.0f64 < cap { cap = f64(n) - 1.0f64 }
+        ret cap - npar
+    }
+    let (offs, e1) = mem.alloc[usize](a, nj)
+    if e1 != ok { ret 0.0f64 / 0.0f64 }
+    var acc = 0usize
+    j = 0usize
+    while j < nj {
+        offs[j] = acc
+        acc += ncat[j]
+        j += 1usize
+    }
+    if which == 5usize {
+        var tot = 0.0f64
+        var i = 0usize
+        while i < n {
+            var best = 0usize
+            var bv = 0.0f64 - 1.0f64
+            var r = 0usize
+            while r < nr {
+                var v = prior[r]
+                j = 0usize
+                while j < nj {
+                    v = v * probs[r * tc + offs[j] + usize(data[i * nj + j])]
+                    j += 1usize
+                }
+                if v > bv {
+                    bv = v
+                    best = r
+                }
+                r += 1usize
+            }
+            tot += f64(best + 1usize)
+            i += 1usize
+        }
+        ret tot
+    }
+    // patterns: for each row, count the rows equal to it and use the first occurrence only
+    var gsq = 0.0f64
+    var chisq = 0.0f64
+    var sumexp = 0.0f64
+    var i = 0usize
+    while i < n {
+        var first = true
+        var cnt = 0.0f64
+        var q = 0usize
+        while q < n {
+            var same = true
+            j = 0usize
+            while j < nj {
+                if data[q * nj + j] != data[i * nj + j] { same = false }
+                j += 1usize
+            }
+            if same {
+                cnt += 1.0f64
+                if q < i { first = false }
+            }
+            q += 1usize
+        }
+        if first {
+            var ex = 0.0f64
+            var r = 0usize
+            while r < nr {
+                var v = prior[r]
+                j = 0usize
+                while j < nj {
+                    v = v * probs[r * tc + offs[j] + usize(data[i * nj + j])]
+                    j += 1usize
+                }
+                ex += v
+                r += 1usize
+            }
+            ex = ex * f64(n)
+            sumexp += ex
+            gsq += cnt * math.log[f64](cnt / ex)
+            chisq += (cnt - ex) * (cnt - ex) / ex
+        }
+        i += 1usize
+    }
+    if which == 2usize { ret 2.0f64 * gsq }
+    ret chisq + (f64(n) - sumexp)
+}

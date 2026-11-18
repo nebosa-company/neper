@@ -49724,3 +49724,9 @@ The emmeans fixture refits `lm(y ~ A * x)` through `e.algo.stat.emmeans.fit` (de
 `mlogit(choice ~ 0 | z)` is the conditional logit of `e.algo.stat.mlogitpkg.clogit` with alternative-specific constants and, for each alternative j >= 2, the individual's covariates entered as columns that are non-zero only for that alternative (so each alternative gets its own coefficient), which the fixture builds from the raw individual covariates.
 
 **Result.** `oracle_mlogit` gains 15 data sets (80 to 200 choosers, three or four alternatives, one or two covariates; coefficients and standard errors by position-weighted sums and the log-likelihood: 45 values) and equals mlogit on Windows at 1e-4 (the optimiser's own tolerance). No library change was needed. Linux pending. L456 stays partial: nested and mixed logit, probit, rank-ordered data, heteroskedastic and GEV models, predictions and marginal effects.
+
+## D7284 — poLCA: fit statistics and class assignment
+
+`e.algo.stat.polcapkg.fit_stats` adds, at the estimated probabilities and class sizes, the parameter count R (sum K_j - J) + R - 1, AIC, the likelihood-ratio Gsq = 2 sum O ln(O / E) and Pearson Chisq = sum (O - E)^2 / E + (N - sum E) over the observed response patterns (E = N sum_r P_r prod_j probs), the residual degrees of freedom min(prod K - 1, N - 1) - npar, and the modal posterior class of each row (the fixture sums class number over rows).
+
+**Result.** `oracle_polca` gains six statistics on each of 20 fits (120 values) and equals poLCA on Windows at 1e-4. Linux pending. L512 stays partial: random restarts and best-of-nrep selection, latent class regression with covariates, standard errors, missing responses, poLCA.entropy and relatives.
