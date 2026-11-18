@@ -49850,3 +49850,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `arulespkg.apriori_big_basic` gives each rule of the many-item path (D7299) its 2 by 2 counts from the itemset hash and sums the 38 `basic_measure` values; zhang again divides by one maximum over all rules.
 
 **Result.** `oracle_arules` (2460 cases, 760 new) equals arules on Windows. Linux pending. L462 stays partial: the hyper, improvement and 9 other measures on the many-item path, subsetting, sequences.
+
+## D7301 — arules: hyper and improvement measures for many items
+
+**Decision.** `arulespkg.apriori_big_hyper` runs the `apriori_hyper` formulas on the many-item path, reading every count from the itemset hash (`look`, 0 for an absent itemset) and the sub-rule maxima from the hash too.
+
+**Result.** `oracle_arules` (2620 cases, 160 new) equals arules on Windows. Linux pending. L462 stays partial: the 9 remaining arules measures (cosine, leverage and the other D7293 ones) on the many-item path, subsetting, sequences.

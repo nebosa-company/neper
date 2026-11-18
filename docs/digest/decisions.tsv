@@ -4090,4 +4090,5 @@ D7296	565	arules: hyper measures, RLD and stdLift
 D7297	625	arules: improvement, LIC and boost
 D7298	520	arules: eclat
 D7299	735	arules: apriori rules for many items
-D7300	484	arules: basic interest measures for many items
+D7300	485	arules: basic interest measures for many items
+D7301	522	arules: hyper and improvement measures for many items

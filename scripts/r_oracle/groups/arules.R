@@ -43,6 +43,7 @@ for (rep in 1:24) {
     }
   }
 }
+hmn <- c("hyperLift", "hyperConfidence", "fishersExactTest", "RLD", "stdLift", "improvement", "LIC", "boost")
 bmn <- c("precision", "recall", "fScore", "accuracy", "balancedAccuracy", "conviction", "gini", "rulePowerFactor", "relativeRisk", "netconf", "zhang", "collectiveStrength", "importance", "imbalance", "kappa", "lambda", "mutualInformation", "maxconfidence", "jMeasure", "laplace", "certainty", "ralambondrainy", "sebag", "counterexample", "confirmedConfidence", "causalSupport", "causalConfidence", "leastContradiction", "centeredConfidence", "varyingLiaison", "yuleQ", "yuleY", "lerman", "implicationIndex", "doc", "chiSquared", "rhsSupport", "count")
 for (rep in 1:20) {
   nt <- sample(40:150, 1); ni <- sample(14:40, 1); pr <- runif(ni, 0.1, 0.6)
@@ -60,6 +61,10 @@ for (rep in 1:20) {
   if (length(ru)) for (k in seq_along(bmn)) {
     v <- as.numeric(interestMeasure(ru, bmn[k], transactions = tr)); v <- v[is.finite(v)]
     add(paste0("k", k - 1), a2, sum(v))
+  }
+  if (length(ru)) for (k in seq_along(hmn)) {
+    v <- as.numeric(interestMeasure(ru, hmn[k], transactions = tr)); v <- v[is.finite(v)]
+    add(paste0("j", k - 1), a2, sum(v))
   }
   add("g0", a2, length(fi2)); add("g1", a2, length(ru)); add("g2", a2, sum(q$support)); add("g3", a2, sum(q$confidence)); add("g4", a2, sum(q$lift))
 }

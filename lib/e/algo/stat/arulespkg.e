@@ -770,3 +770,138 @@ fn apriori_big_basic(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64
     if zmax > 0.0f64 { out[10usize] = zlev / zmax }
     ret ok
 }
+
+fn look(keys: []u64, vals: []u32, size: usize, key: u64) -> u32 {
+    var h = usize(key % 1000000007u64) & (size - 1usize)
+    while keys[h] != 0u64 {
+        if keys[h] == key { ret vals[h] }
+        h = (h + 1usize) & (size - 1usize)
+    }
+    ret 0u32
+}
+
+// the sums of `apriori_hyper` (same out layout, 9 values) for the many-item path of `apriori_big`
+fn apriori_big_hyper(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, conf: f64, maxlen: usize, out: []f64) -> err {
+    let nt = f64(trans.len)
+    let (cn, ec) = mem.alloc[f64](a, 1usize)
+    if ec != ok { ret ec }
+    let (m0, e0) = mem.alloc[u64](a, 1usize)
+    let (c0, e00) = mem.alloc[u32](a, 1usize)
+    if e0 != ok { ret e0 }
+    if e00 != ok { ret e00 }
+    var r1 = eclat_collect(a, trans, nitems, supp, maxlen, m0[0usize..0usize], c0[0usize..0usize], cn)
+    if r1 != ok { ret r1 }
+    let total = usize(cn[0usize])
+    let (masks, e1) = mem.alloc[u64](a, total + 1usize)
+    let (counts, e2) = mem.alloc[u32](a, total + 1usize)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    r1 = eclat_collect(a, trans, nitems, supp, maxlen, masks, counts, cn)
+    if r1 != ok { ret r1 }
+    var size = 16usize
+    while size < 2usize * total { size = size * 2usize }
+    let (keys, e3) = mem.alloc[u64](a, size)
+    let (vals, e4) = mem.alloc[u32](a, size)
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    var z = 0usize
+    while z < size {
+        keys[z] = 0u64
+        z += 1usize
+    }
+    var i = 0usize
+    while i < total {
+        var h = hash_slot(masks[i], size)
+        while keys[h] != 0u64 { h = (h + 1usize) & (size - 1usize) }
+        keys[h] = masks[i]
+        vals[h] = counts[i]
+        i += 1usize
+    }
+    let need = math.ceil[f64](supp * nt - 1.0e-9f64)
+    var k = 0usize
+    while k < 9usize {
+        out[k] = 0.0f64
+        k += 1usize
+    }
+    i = 0usize
+    while i < total {
+        let m = masks[i]
+        if (m & (m - 1u64)) != 0u64 {
+            var jj = 0usize
+            while jj < nitems {
+                let r = 1u64 << u64(jj)
+                if (m & r) != 0u64 {
+                    let l = m ^ r
+                    let cf = f64(look(keys, vals, size, m)) / f64(look(keys, vals, size, l))
+                    if cf >= conf - 1.0e-12f64 {
+                            let n11 = f64(look(keys, vals, size, m))
+                            let n1x = f64(look(keys, vals, size, l))
+                            let nx1 = f64(look(keys, vals, size, r))
+                            let n10 = n1x - n11
+                            let n01 = nx1 - n11
+                            let n00 = nt - n11 - n10 - n01
+                            let qh = nbh.qhyper(0.99f64, nx1, nt - nx1, n1x, true, false)
+                            let hl = n11 / qh
+                            if hl - hl == 0.0f64 { out[0usize] += hl }
+                            let hc = nbh.phyper(n11 - 1.0f64, nx1, nt - nx1, n1x, true, false)
+                            if hc - hc == 0.0f64 { out[1usize] += hc }
+                            let fe = nbh.phyper(n11 - 1.0f64, nx1, nt - nx1, n1x, false, false)
+                            if fe - fe == 0.0f64 { out[2usize] += fe }
+                            let dd = (n11 * n00 - n10 * n01) / nt
+                            var rld = 0.0f64
+                            if dd > 0.0f64 {
+                                if n01 < n10 { rld = dd / (dd + n01) } else { rld = dd / (dd + n10) }
+                            } else if n11 < n00 {
+                                rld = dd / (dd - n11)
+                            } else {
+                                rld = dd / (dd - n00)
+                            }
+                            if rld - rld == 0.0f64 { out[3usize] += rld }
+                            let sa = n1x / nt
+                            let sb = nx1 / nt
+                            var lam = 0.0f64
+                            let l0 = sa + sb - 1.0f64
+                            if l0 > 1.0f64 / nt { lam = l0 / (sa * sb) } else { lam = (1.0f64 / nt) / (sa * sb) }
+                            let s = supp
+                            let cc = conf
+                            let c1 = 4.0f64 * s / ((1.0f64 + s) * (1.0f64 + s))
+                            let c2 = s / (sa * sb)
+                            let c3 = cc / sb
+                            if c1 > lam { lam = c1 }
+                            if c2 > lam { lam = c2 }
+                            if c3 > lam { lam = c3 }
+                            var ups = 1.0f64 / sb
+                            if sa > sb { ups = 1.0f64 / sa }
+                            let lift = (n11 / nt) / (sa * sb)
+                            var sl = (lift - lam) / (ups - lam)
+                            if sl != sl { sl = 1.0f64 }
+                            if sl - sl == 0.0f64 { out[4usize] += sl }
+                            var bq = 0.0f64
+                            var bl = 0.0f64
+                            var sub = (l - 1u64) & l
+                            while sub > 0u64 {
+                                let sr = sub | r
+                                if f64(look(keys, vals, size, sr)) >= need && f64(look(keys, vals, size, sr)) / f64(look(keys, vals, size, sub)) >= conf - 1.0e-12f64 {
+                                    let qc = f64(look(keys, vals, size, sr)) / f64(look(keys, vals, size, sub))
+                                    let ql = f64(look(keys, vals, size, sr)) * nt / (f64(look(keys, vals, size, sub)) * f64(look(keys, vals, size, r)))
+                                    if qc > bq { bq = qc }
+                                    if ql > bl { bl = ql }
+                                }
+                                sub = (sub - 1u64) & l
+                            }
+                            let im = cf - bq
+                            if im - im == 0.0f64 { out[6usize] += im }
+                            let li = lift / bl
+                            if li - li == 0.0f64 { out[7usize] += li }
+                            let bo = cf / (cf - im)
+                            if bo - bo == 0.0f64 { out[8usize] += bo }
+                            out[5usize] += 1.0f64
+                    }
+                }
+                jj += 1usize
+            }
+        }
+        i += 1usize
+    }
+    ret ok
+}
