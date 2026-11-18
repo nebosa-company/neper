@@ -69,7 +69,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (st, pv, te) = en.eqdist_ketest(a, &rng3, z[4usize + kk..4usize + kk + tot * d], szs, d, usize(z[1usize]))
             if te != ok { os.exit(8) }
             if str.eq(c.name, "keqtest_stat") { got = st } else { got = pv }
-        } else if str.eq(c.name, "disco_b") || str.eq(c.name, "disco_w") || str.eq(c.name, "disco_f") || str.eq(c.name, "disco_p") {
+        } else if str.eq(c.name, "disco_b") || str.eq(c.name, "disco_w") || str.eq(c.name, "disco_f") || str.eq(c.name, "disco_p") || str.eq(c.name, "discob_stat") || str.eq(c.name, "discob_p") {
             let kk = usize(z[2usize])
             let nn = usize(z[3usize])
             let d = usize(z[4usize])
@@ -95,11 +95,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             var rng4: rg.Rng = zero
             rg.seed(&rng4, i64(z[0usize]))
-            if en.disco(a, &rng4, dm, nn, gp, kk, usize(z[1usize]), res) != ok { os.exit(8) }
+            if str.eq(c.name, "discob_stat") || str.eq(c.name, "discob_p") {
+                if en.disco_between(a, &rng4, dm, nn, gp, kk, usize(z[1usize]), res) != ok { os.exit(8) }
+                if str.eq(c.name, "discob_stat") { got = res[0usize] } else { got = res[1usize] }
+            } else {
+                if en.disco(a, &rng4, dm, nn, gp, kk, usize(z[1usize]), res) != ok { os.exit(8) }
             if str.eq(c.name, "disco_b") { got = res[0usize] }
             if str.eq(c.name, "disco_w") { got = res[1usize] }
             if str.eq(c.name, "disco_f") { got = res[2usize] }
             if str.eq(c.name, "disco_p") { got = res[3usize] }
+            }
         } else if str.eq(c.name, "poiss_stat") || str.eq(c.name, "poiss_p") {
             let nn = usize(z[2usize])
             var rng5: rg.Rng = zero

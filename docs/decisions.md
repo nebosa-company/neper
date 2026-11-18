@@ -49472,3 +49472,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.energy` gains `poisson_e` (the energy statistic for the Poisson family, with ppois and the exponentially scaled Bessel I terms from `e.algo.stat.gslfns`) and `poisson_etest` (the parametric bootstrap p value 1 - mean(t < t0) over R samples of rpois(n, lambda) from `e.algo.rand.rdist`).
 
 **Result.** `oracle_energy_normal` gains 10 count samples (Poisson and negative binomial, 99 or 199 replicates; statistic and p value) and equals energy on Windows. The first run differed in one p value because a bootstrap statistic equal to t0 in R fell one rounding below it here: the sums now follow R's long-double order (compensated sums, the sample sorted before sum(K y), mean() with its refinement pass). Linux pending. L459 stays partial: discoB and discoF, several factors, the M-test of the Poisson family and energy clustering.
+
+## D7242 — energy: disco.between
+
+`e.algo.stat.energy` gains `disco_between` (method `discoB`: the between-sample statistic with the same permutation scheme as `disco`, p = (1 + count(t > t0)) / (R + 1)). The method `discoF` is the default F-ratio path already ported in D7240, and the package does not implement several factors in `disco.between`.
+
+**Result.** `oracle_energy_normal` gains 8 data sets (statistic and p value, 16 values) and equals energy on Windows. Linux pending. L459 stays partial: several factors in `disco`, the Poisson M-test, energy clustering (energy.hclust, kgroups) and the independence and multivariate-independence tests (indep.test, mvI.test, mutualIndep.test).

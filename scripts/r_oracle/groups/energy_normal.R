@@ -66,4 +66,13 @@ for (rep in 1:10) {
   cases[[length(cases) + 1]] <- case("poiss_stat", a, as.numeric(pt$statistic), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("poiss_p", a, as.numeric(pt$p.value), rel = 1e-12, abs = 1e-12)
 }
+# disco.between (method discoB), args as disco under "discob_stat" and "discob_p"
+for (rep in 1:8) {
+  k <- sample(2:4, 1); n <- sample(12:30, 1); d <- sample(1:3, 1); sd0 <- sample(1:100000, 1); R <- sample(c(99, 199), 1); ix <- sample(c(1, 0.5, 1.5), 1)
+  g <- c(0:(k - 1), sample(0:(k - 1), n - k, TRUE)); x <- matrix(rnorm(n * d, g * 0.4), n, d)
+  set.seed(sd0); dd <- disco(x, factors = factor(g), index = ix, R = R, method = "discoB")
+  a <- c(sd0, R, k, n, d, ix, g, as.vector(t(x)))
+  cases[[length(cases) + 1]] <- case("discob_stat", a, as.numeric(dd$statistic), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("discob_p", a, as.numeric(dd$p.value), rel = 1e-12, abs = 1e-12)
+}
 emit("energy_normal", "energy", list(cases))

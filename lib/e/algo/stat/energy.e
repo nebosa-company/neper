@@ -734,3 +734,38 @@ fn poisson_etest(a: *mem.Arena, r: *rg.Rng, x: []const f64, reps: usize) -> (f64
     }
     ret (t0, 1.0f64 - f64(below) / f64(reps), ok)
 }
+
+// disco.between(x, factors, index, R) (method "discoB"): the between-sample statistic alone with its permutation p value, out receives (between, p value)
+fn disco_between(a: *mem.Arena, r: *rg.Rng, dst: []const f64, n: usize, grp: []const usize, k: usize, reps: usize, out: []f64) -> err {
+    let (id, e1) = mem.alloc[usize](a, n)
+    let (tmp, e2) = mem.alloc[f64](a, 3usize)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    var i = 0usize
+    while i < n {
+        id[i] = i
+        i += 1usize
+    }
+    disco_parts(dst, n, grp, id, k, tmp)
+    let b0 = tmp[0usize]
+    out[0usize] = b0
+    out[1usize] = 0.0f64 / 0.0f64
+    if reps == 0usize { ret ok }
+    var cnt = 0usize
+    var rep = 0usize
+    while rep < reps {
+        let (pm, pe) = rg.sample_int(a, r, i64(n), i64(n), false)
+        if pe != ok { ret pe }
+        let (pu, e3) = mem.alloc[usize](a, n)
+        if e3 != ok { ret e3 }
+        i = 0usize
+        while i < n {
+            pu[i] = usize(pm[i] - 1i64)
+            i += 1usize
+        }
+        disco_parts(dst, n, grp, pu, k, tmp)
+        if tmp[0usize] > b0 { cnt += 1usize }
+        rep += 1usize
+    }
+    out[1usize] = f64(cnt + 1usize) / f64(reps + 1usize)
+    ret ok
+}
