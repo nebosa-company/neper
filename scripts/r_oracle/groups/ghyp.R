@@ -96,4 +96,15 @@ for (rep in 1:5) {
   cases[[length(cases) + 1]] <- case("hyperbFit", c(n, 4, st, 0, x), as.numeric(fit$maxLik), rel = 1e-7, abs = 1e-9)
   cases[[length(cases) + 1]] <- case("hyperbFit", c(n, 5, st, 0, x), as.numeric(fit$iter), rel = 0, abs = 0)
 }
+# "ddghyp" (x, mu, delta, alpha, beta, lambda); "chpars" (from, to, delta, p3, p4, index) over the five parametrizations
+for (rep in 1:30) {
+  mu <- round(rnorm(1), 2); delta <- runif(1, 0.5, 2); alpha <- runif(1, 1.2, 3); beta <- runif(1, -0.9, 0.9); lam <- sample(c(-1.5, -0.5, 0.5, 1, 2), 1); x <- rnorm(1, mu, 1.5)
+  add("ddghyp", c(x, mu, delta, alpha, beta, lam), ddghyp(x, param = c(mu, delta, alpha, beta, lam)))
+}
+for (from in 1:5) for (to in 1:5) for (rep in 1:4) {
+  delta <- runif(1, 0.5, 2); alpha <- runif(1, 1.2, 3); beta <- runif(1, -0.9, 0.9); pr <- c(0, delta, alpha, beta, 1)
+  q <- if (from == 1) pr else ghypChangePars(1, from, pr)
+  r <- ghypChangePars(from, to, q)
+  for (j in 1:2) add("chpars", c(from, to, delta, q[3], q[4], j - 1), r[2 + j])
+}
 emit("ghyp", "GeneralizedHyperbolic", list(cases))

@@ -49412,3 +49412,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.arm` gains `rescale(x, n, mode, out)`, the numeric core of `standardize`: a two-valued input by `binary.inputs` ("center", "0/1", "-0.5,0.5", "full"), any other input as (x - mean) / (2 sd).
 
 **Result.** `oracle_arm` gains 24 vectors of numeric and binary inputs under every mode and equals arm on Windows (1e-9). Linux pending. L409 stays partial: sim, bayesglm, discrete, corrplot data and the model refit of standardize.
+
+## D7232 — GeneralizedHyperbolic: ddghyp and ghypChangePars
+
+`e.algo.stat.ghyp` gains `ddghyp` (the density's derivative, from the two Bessel K orders lambda -+ 1/2) and `ghyp_change_pars` (any of the five parametrizations to any other, routed through (alpha, beta)).
+
+**Result.** `oracle_ghyp` has 1939 values (30 derivative points and 100 conversions over all 25 from-to pairs added) and equals the package on Windows (1e-9). Linux pending. VG functions belong to the VarianceGamma package, which is not installed, and stay open with qgig and the other fits.

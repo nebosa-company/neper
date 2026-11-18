@@ -528,3 +528,56 @@ fn ghyp_fit_us(a: *mem.Arena, x: []const f64, start: []const f64, lambda: f64, o
     out[3usize] = z2 * best[2usize] / d2
     ret (0.0f64 - fmin, cnt, fail)
 }
+
+// ddghyp: the derivative of the density in x
+fn ddghyp(x: f64, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64 {
+    let d = x - mu
+    let t1 = math.sqrt[f64](delta * delta + d * d)
+    let t2 = math.sqrt[f64](alpha * alpha - beta * beta)
+    let t3 = gs.bessel_knu(lambda - 0.5f64, alpha * t1)
+    let t4 = gs.bessel_knu(lambda + 0.5f64, alpha * t1)
+    let num = (t3 * (beta * delta * delta + (2.0f64 * lambda - 1.0f64) * d + beta * d * d) - t4 * alpha * t1 * d) * math.exp[f64](beta * d) * math.pow[f64](t1, lambda - 2.5f64) * math.pow[f64](t2, lambda)
+    ret num / (math.sqrt[f64](2.0f64 * 3.141592653589793238462643383279f64) * math.pow[f64](alpha, lambda - 0.5f64) * math.pow[f64](delta, lambda) * gs.bessel_knu(lambda, delta * t2))
+}
+
+// ghypChangePars(from, to, param): the third and fourth parameters (1 alpha beta, 2 rho zeta, 3 xi chi, 4 alphaBar betaBar, 5 pi zeta) written into out[0..2]
+fn ghyp_change_pars(from: usize, to: usize, delta: f64, p3: f64, p4: f64, out: []f64) {
+    var alpha = p3
+    var beta = p4
+    if from == 2usize {
+        alpha = p4 / (delta * math.sqrt[f64](1.0f64 - p3 * p3))
+        beta = p3 * alpha
+    }
+    if from == 3usize {
+        alpha = (1.0f64 - p3 * p3) / (delta * p3 * math.sqrt[f64](p3 * p3 - p4 * p4))
+        beta = alpha * p4 / p3
+    }
+    if from == 4usize {
+        alpha = p3 / delta
+        beta = p4 / delta
+    }
+    if from == 5usize {
+        alpha = p4 * math.sqrt[f64](1.0f64 + p3 * p3) / delta
+        beta = p3 * p4 / delta
+    }
+    let zeta = delta * math.sqrt[f64](alpha * alpha - beta * beta)
+    out[0usize] = alpha
+    out[1usize] = beta
+    if to == 2usize {
+        out[0usize] = beta / alpha
+        out[1usize] = zeta
+    }
+    if to == 3usize {
+        let xi = 1.0f64 / math.sqrt[f64](1.0f64 + zeta)
+        out[0usize] = xi
+        out[1usize] = beta / (alpha * math.sqrt[f64](1.0f64 + zeta))
+    }
+    if to == 4usize {
+        out[0usize] = delta * alpha
+        out[1usize] = delta * beta
+    }
+    if to == 5usize {
+        out[0usize] = beta / math.sqrt[f64](alpha * alpha - beta * beta)
+        out[1usize] = zeta
+    }
+}

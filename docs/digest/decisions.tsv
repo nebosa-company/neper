@@ -4017,4 +4017,5 @@ D7227	754	gsl: the 3j, 6j and 9j coupling coefficients
 D7228	732	gsl: the conical functions of order plus and minus 1/2 and the elementary complex functions
 D7229	790	gsl: the complex log-gamma function
 D7230	620	gsl: the complex dilogarithm
-D7231	464	arm: rescale
+D7231	465	arm: rescale
+D7232	563	GeneralizedHyperbolic: ddghyp and ghypChangePars

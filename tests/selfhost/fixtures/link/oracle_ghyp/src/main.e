@@ -69,6 +69,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "pghyp") { ret gh.pghyp(a, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize]) }
     if str.eq(k, "pnig") { ret gh.pnig(a, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
     if str.eq(k, "phyperb") { ret gh.phyperb(a, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
+    if str.eq(k, "ddghyp") { ret gh.ddghyp(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize]) }
+    if str.eq(k, "chpars") {
+        let (o, e) = mem.alloc[f64](a, 2usize)
+        if e != ok { os.exit(9) }
+        gh.ghyp_change_pars(usize(x[0usize]), usize(x[1usize]), x[2usize], x[3usize], x[4usize], o)
+        ret o[usize(x[5usize])]
+    }
     if str.eq(k, "dghyp") { ret gh.dghyp(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize]) }
     if str.eq(k, "dnig") { ret gh.dnig(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
     if str.eq(k, "dhyperb") { ret gh.dhyperb(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
