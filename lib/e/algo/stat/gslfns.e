@@ -5,6 +5,8 @@
 
 use e.math
 use e.math.special as sp
+use e.math.nmath as nmg
+use e.math.nmath_beta as nbt
 use e.math.dist as dist
 use e.math.quadpack as qp
 use e.mem
@@ -106,30 +108,30 @@ fn hzeta(s: f64, q: f64) -> f64 {
     let c5 = 0.0f64 - 691.0f64 / 1307674368000.0f64
     let c6 = 1.0f64 / 74724249600.0f64
     let c7 = 0.0f64 - 3617.0f64 / 10670622842880000.0f64
-    var poch = s
+    var pochv = s
     var pw = math.pow[f64](a, 0.0f64 - s - 1.0f64)
-    sum += c0 * poch * pw
-    poch = poch * (s + 1.0f64) * (s + 2.0f64)
+    sum += c0 * pochv * pw
+    pochv = pochv * (s + 1.0f64) * (s + 2.0f64)
     pw = pw / (a * a)
-    sum += c1 * poch * pw
-    poch = poch * (s + 3.0f64) * (s + 4.0f64)
+    sum += c1 * pochv * pw
+    pochv = pochv * (s + 3.0f64) * (s + 4.0f64)
     pw = pw / (a * a)
-    sum += c2 * poch * pw
-    poch = poch * (s + 5.0f64) * (s + 6.0f64)
+    sum += c2 * pochv * pw
+    pochv = pochv * (s + 5.0f64) * (s + 6.0f64)
     pw = pw / (a * a)
-    sum += c3 * poch * pw
-    poch = poch * (s + 7.0f64) * (s + 8.0f64)
+    sum += c3 * pochv * pw
+    pochv = pochv * (s + 7.0f64) * (s + 8.0f64)
     pw = pw / (a * a)
-    sum += c4 * poch * pw
-    poch = poch * (s + 9.0f64) * (s + 10.0f64)
+    sum += c4 * pochv * pw
+    pochv = pochv * (s + 9.0f64) * (s + 10.0f64)
     pw = pw / (a * a)
-    sum += c5 * poch * pw
-    poch = poch * (s + 11.0f64) * (s + 12.0f64)
+    sum += c5 * pochv * pw
+    pochv = pochv * (s + 11.0f64) * (s + 12.0f64)
     pw = pw / (a * a)
-    sum += c6 * poch * pw
-    poch = poch * (s + 13.0f64) * (s + 14.0f64)
+    sum += c6 * pochv * pw
+    pochv = pochv * (s + 13.0f64) * (s + 14.0f64)
     pw = pw / (a * a)
-    sum += c7 * poch * pw
+    sum += c7 * pochv * pw
     ret sum
 }
 
@@ -542,3 +544,59 @@ fn fermi_dirac(a: *mem.Arena, j: f64, x: f64) -> f64 {
 fn synchrotron_1(a: *mem.Arena, x: f64) -> f64 { ret x * qd_infinite(a, 4usize, 0.0f64, 0.0f64, x) }
 
 fn synchrotron_2(x: f64) -> f64 { ret x * bessel_knu(2.0f64 / 3.0f64, x) }
+
+// ---- gamma-family helpers of gsl: the incomplete gamma functions (gamma_inc the unnormalised upper one), the regularised incomplete beta, the Pochhammer symbol and
+// its log and relative forms, the error functions, sinc, the factorial families, lnbeta and the hyperbolic logs
+fn gamma_inc_q(a: f64, x: f64) -> f64 { ret nmg.pgamma(x, a, 1.0f64, false, false) }
+
+fn gamma_inc_p(a: f64, x: f64) -> f64 { ret nmg.pgamma(x, a, 1.0f64, true, false) }
+
+fn gamma_inc(a: f64, x: f64) -> f64 { ret math.exp[f64](sp.lgamma(a)) * nmg.pgamma(x, a, 1.0f64, false, false) }
+
+fn beta_inc(a: f64, b: f64, x: f64) -> f64 { ret nbt.pbeta(x, a, b, true, false) }
+
+fn poch(a: f64, x: f64) -> f64 { ret math.exp[f64](sp.lgamma(a + x) - sp.lgamma(a)) }
+
+fn lnpoch(a: f64, x: f64) -> f64 { ret sp.lgamma(a + x) - sp.lgamma(a) }
+
+// pochrel(a, x) = ((a)_x - 1) / x
+fn pochrel(a: f64, x: f64) -> f64 { ret (poch(a, x) - 1.0f64) / x }
+
+fn erf(x: f64) -> f64 { ret 2.0f64 * dist.pnorm(x * math.sqrt[f64](2.0f64), 0.0f64, 1.0f64, true, false) - 1.0f64 }
+
+fn erfc(x: f64) -> f64 { ret 2.0f64 * dist.pnorm(0.0f64 - x * math.sqrt[f64](2.0f64), 0.0f64, 1.0f64, true, false) }
+
+fn log_erfc(x: f64) -> f64 { ret math.log[f64](2.0f64) + dist.pnorm(0.0f64 - x * math.sqrt[f64](2.0f64), 0.0f64, 1.0f64, true, true) }
+
+fn sinc(x: f64) -> f64 {
+    if x == 0.0f64 { ret 1.0f64 }
+    ret math.sin[f64](3.141592653589793238462643383279f64 * x) / (3.141592653589793238462643383279f64 * x)
+}
+
+fn lnchoose(n: f64, m: f64) -> f64 { ret sp.lgamma(n + 1.0f64) - sp.lgamma(m + 1.0f64) - sp.lgamma(n - m + 1.0f64) }
+
+// gsl_sf_choose; the R package's lnchoose wrapper returns this value (the binomial coefficient), not its log
+fn choose_(n: f64, m: f64) -> f64 { ret math.floor[f64](math.exp[f64](lnchoose(n, m)) + 0.5f64) }
+
+fn lnbeta(a: f64, b: f64) -> f64 { ret sp.lgamma(a) + sp.lgamma(b) - sp.lgamma(a + b) }
+
+fn lnfact(n: f64) -> f64 { ret sp.lgamma(n + 1.0f64) }
+
+// doublefact(n) = n!! and lndoublefact(n): n (n - 2) (n - 4) ... down to 1 or 2
+fn lndoublefact(n: usize) -> f64 {
+    var s = 0.0f64
+    var k = n
+    while k > 1usize {
+        s += math.log[f64](f64(k))
+        k -= 2usize
+    }
+    ret s
+}
+
+fn doublefact(n: usize) -> f64 { ret math.exp[f64](lndoublefact(n)) }
+
+fn lnsinh(x: f64) -> f64 { ret x + math.log[f64](1.0f64 - math.exp[f64](0.0f64 - 2.0f64 * x)) - math.log[f64](2.0f64) }
+
+fn lncosh(x: f64) -> f64 { ret x + math.log[f64](1.0f64 + math.exp[f64](0.0f64 - 2.0f64 * x)) - math.log[f64](2.0f64) }
+
+fn taylorcoeff(n: usize, x: f64) -> f64 { ret math.exp[f64](f64(n) * math.log[f64](x) - sp.lgamma(f64(n) + 1.0f64)) }

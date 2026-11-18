@@ -11,6 +11,28 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "h") {
+        let code = usize(x[0usize])
+        if code == 0usize { ret gs.gamma_inc(x[1usize], x[2usize]) }
+        if code == 1usize { ret gs.gamma_inc_p(x[1usize], x[2usize]) }
+        if code == 2usize { ret gs.gamma_inc_q(x[1usize], x[2usize]) }
+        if code == 3usize { ret gs.beta_inc(x[1usize], x[2usize], x[3usize]) }
+        if code == 4usize { ret gs.poch(x[1usize], x[2usize]) }
+        if code == 5usize { ret gs.lnpoch(x[1usize], x[2usize]) }
+        if code == 6usize { ret gs.pochrel(x[1usize], x[2usize]) }
+        if code == 7usize { ret gs.erf(x[1usize]) }
+        if code == 8usize { ret gs.erfc(x[1usize]) }
+        if code == 9usize { ret gs.log_erfc(x[1usize]) }
+        if code == 10usize { ret gs.sinc(x[1usize]) }
+        if code == 11usize { ret gs.choose_(x[1usize], x[2usize]) }
+        if code == 12usize { ret gs.lnbeta(x[1usize], x[2usize]) }
+        if code == 13usize { ret gs.lnfact(x[1usize]) }
+        if code == 14usize { ret gs.doublefact(usize(x[1usize])) }
+        if code == 15usize { ret gs.lndoublefact(usize(x[1usize])) }
+        if code == 16usize { ret gs.lnsinh(x[1usize]) }
+        if code == 17usize { ret gs.lncosh(x[1usize]) }
+        ret gs.taylorcoeff(usize(x[1usize]), x[2usize])
+    }
     if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }

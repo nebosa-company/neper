@@ -4006,4 +4006,5 @@ D7216	735	DescTools: MeanCI, VarCI, MeanSE and Herfindahl
 D7217	686	DescTools: the trimmed MeanCI
 D7218	546	DescTools: CohenD
 D7219	734	DescTools: the CohenD confidence interval
-D7220	866	gsl: Debye, transport, Fermi-Dirac and synchrotron functions
+D7220	867	gsl: Debye, transport, Fermi-Dirac and synchrotron functions
+D7221	1001	gsl: the incomplete gamma and beta functions, Pochhammer, error functions and the factorial family

@@ -49346,3 +49346,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gslfns` gains `debye` (orders 1 to 4), `transport` (orders 2 to 5), `fermi_dirac` (orders -1, -1/2, 1/2, 1, 3/2 and 2, the half-order -1/2 after the substitution t = u^2 that removes the endpoint singularity) and the synchrotron functions (the first as x times the tail integral of K(5/3) by the infinite-range routine, the second as x K(2/3)), all by the adaptive quadrature of `e.math.quadpack` at tolerance 1e-13 rather than gsl's Chebyshev series.
 
 **Result.** `oracle_gslfns` has 1230 values (the earlier families unchanged; the new ones over 20 arguments each at 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: the remaining families (Coulomb, the incomplete gamma and beta families, the trigonometric and statistical helpers) and the error estimates.
+
+## D7221 — gsl: the incomplete gamma and beta functions, Pochhammer, error functions and the factorial family
+
+`e.algo.stat.gslfns` gains `gamma_inc` (the unnormalised upper function), `gamma_inc_p`, `gamma_inc_q`, `beta_inc` (regularised), `poch`, `lnpoch`, `pochrel`, `erf`, `erfc`, `log_erfc` (through the normal distribution function and its log), `sinc`, `lnbeta`, `lnfact`, `doublefact`, `lndoublefact`, `lnsinh`, `lncosh`, `taylorcoeff` and the binomial coefficient. One quirk: the R package's `lnchoose` wrapper returns the binomial coefficient and not its log, so the oracle holds R's value as `choose` (the function is `choose_`). A local variable named poch in `hzeta` had to be renamed when the Pochhammer function took the name.
+
+**Result.** `oracle_gslfns` has 1610 values (380 added over 20 arguments each) and equals gsl on Windows at 1e-9. Linux pending. L417 stays partial: Coulomb functions, the digamma family beyond psi, the Jacobian elliptic functions and the error estimates.

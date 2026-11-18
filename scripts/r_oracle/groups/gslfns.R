@@ -36,4 +36,14 @@ for (rep in 1:20) {
   add("fd", c(1, xf), fermi_dirac_1(xf)); add("fd", c(1.5, xf), fermi_dirac_3half(xf)); add("fd", c(2, xf), fermi_dirac_2(xf))
   xs <- runif(1, 0.05, 8); add("sync", c(1, xs), synchrotron_1(xs)); add("sync", c(2, xs), synchrotron_2(xs))
 }
+# gamma-family helpers: args (a, b, x) under "h" with the function carried in a leading code: 0 gamma_inc, 1 gamma_inc_P, 2 gamma_inc_Q, 3 beta_inc, 4 poch, 5 lnpoch, 6 pochrel,
+# 7 erf, 8 erfc, 9 log_erfc, 10 sinc, 11 lnchoose, 12 lnbeta, 13 lnfact, 14 doublefact, 15 lndoublefact, 16 lnsinh, 17 lncosh, 18 taylorcoeff
+for (rep in 1:20) {
+  a <- runif(1, 0.3, 6); b <- runif(1, 0.3, 6); x <- runif(1, 0.05, 8); u <- runif(1, 0.01, 0.99); n <- sample(2:25, 1)
+  add("h", c(0, a, x), gamma_inc(a, x)); add("h", c(1, a, x), gamma_inc_P(a, x)); add("h", c(2, a, x), gamma_inc_Q(a, x))
+  add("h", c(3, a, b, u), beta_inc(a, b, u)); add("h", c(4, a, b), poch(a, b)); add("h", c(5, a, b), lnpoch(a, b)); add("h", c(6, a, b), pochrel(a, b))
+  xe <- runif(1, -3, 5); add("h", c(7, xe), erf(xe)); add("h", c(8, xe), erfc(xe)); add("h", c(9, x), log_erfc(x)); add("h", c(10, xe), sinc(xe))
+  add("h", c(11, n + 10, n), lnchoose(n + 10, n)); add("h", c(12, a, b), lnbeta(a, b)); add("h", c(13, n), lnfact(n)); add("h", c(14, n), doublefact(n)); add("h", c(15, n), lndoublefact(n))
+  add("h", c(16, x), lnsinh(x)); add("h", c(17, x), lncosh(x)); add("h", c(18, n, x), taylorcoeff(n, x))
+}
 emit("gslfns", "gsl", list(cases))
