@@ -18,4 +18,12 @@ for (rep in 1:25) {
   for (b in seq_len(nrow(bn))) for (cc in 1:6) add("binned", c(nclass, n, x, y, cc - 1, b - 1), bn[b, cc])
   add("binned_rows", c(nclass, n, x, y, 0, 0), nrow(bn))
 }
+# "rescale" (mode, n, x, index): numeric and two-valued inputs under each binary.inputs mode
+modes <- c("center", "0/1", "-0.5,0.5", "full")
+for (rep in 1:24) {
+  n <- sample(5:30, 1); x <- if (rep %% 2 == 0) round(rnorm(n, 3, 2), 3) else sample(c(0, 1), n, TRUE)
+  if (length(unique(x)) < 2) x[1:2] <- c(0, 1)
+  m <- sample(1:4, 1); r <- rescale(x, modes[m])
+  for (j in 1:n) add("rescale", c(m - 1, n, x, j - 1), r[j])
+}
 emit("arm", "arm", list(cases))

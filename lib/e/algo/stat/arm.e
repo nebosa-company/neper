@@ -1,6 +1,6 @@
 // R arm: logit and invlogit, se.coef of a linear model, and binned.resids (the binned-residual table behind binnedplot).
 //
-// Not here: sim, bayesglm, discrete, corrplot data and standardize.
+// rescale (the numeric core of standardize) is here. Not here: sim, bayesglm, discrete, corrplot data and the model refit of standardize.
 
 use e.algo.stat.carlmtest as ols
 use e.algo.stat.desctools as dt
@@ -124,4 +124,39 @@ fn binned_resids(a: *mem.Arena, x: []const f64, y: []const f64, nclass0: usize, 
         b += 1usize
     }
     ret bins
+}
+
+// rescale(x, binary.inputs): a two-valued x by mode (0 "center", 1 "0/1", 2 "-0.5,0.5", 3 "full"), anything else (x - mean) / (2 sd); n values in, n out
+fn rescale(x: []const f64, n: usize, mode: usize, out: []f64) {
+    var lo = x[0usize]
+    var hi = x[0usize]
+    var sum = 0.0f64
+    var i = 0usize
+    while i < n {
+        if x[i] < lo { lo = x[i] }
+        if x[i] > hi { hi = x[i] }
+        sum += x[i]
+        i += 1usize
+    }
+    let mean = sum / f64(n)
+    var ss = 0.0f64
+    var two = true
+    i = 0usize
+    while i < n {
+        ss += (x[i] - mean) * (x[i] - mean)
+        if x[i] != lo && x[i] != hi { two = false }
+        i += 1usize
+    }
+    let sd = math.sqrt[f64](ss / f64(n - 1usize))
+    i = 0usize
+    while i < n {
+        var v = (x[i] - mean) / (2.0f64 * sd)
+        if two && hi != lo {
+            if mode == 0usize { v = x[i] - mean }
+            if mode == 1usize { v = (x[i] - lo) / (hi - lo) }
+            if mode == 2usize { v = x[i] - 0.5f64 }
+        }
+        out[i] = v
+        i += 1usize
+    }
 }

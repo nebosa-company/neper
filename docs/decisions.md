@@ -49406,3 +49406,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gslfns` gains `complex_dilog(r, theta)`: the inversion formula Li2(z) = -Li2(1/z) - pi^2/6 - ln^2(-z)/2 for |z| above 1, the reflection formula Li2(z) = -Li2(1-z) + pi^2/6 - ln z ln(1-z) for a real part above 1/2, and the Bernoulli series in u = -ln(1-z) with ten terms otherwise.
 
 **Result.** `oracle_gslfns` has 2675 values (60 added over radii 0.05 to 3 and angles 0.3 to 2 pi - 0.3, 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb functions, the conical functions of orders 0 and 1 and the hyperbolic-space Legendre functions.
+
+## D7231 — arm: rescale
+
+`e.algo.stat.arm` gains `rescale(x, n, mode, out)`, the numeric core of `standardize`: a two-valued input by `binary.inputs` ("center", "0/1", "-0.5,0.5", "full"), any other input as (x - mean) / (2 sd).
+
+**Result.** `oracle_arm` gains 24 vectors of numeric and binary inputs under every mode and equals arm on Windows (1e-9). Linux pending. L409 stays partial: sim, bayesglm, discrete, corrplot data and the model refit of standardize.

@@ -13,6 +13,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let k = c.name
     if str.eq(k, "logit") { ret arm.logit(x[0usize]) }
     if str.eq(k, "invlogit") { ret arm.invlogit(x[0usize]) }
+    if str.eq(k, "rescale") {
+        let n = usize(x[1usize])
+        let (o, e) = mem.alloc[f64](a, n)
+        if e != ok { os.exit(8) }
+        arm.rescale(x[2usize..2usize + n], n, usize(x[0usize]), o)
+        ret o[usize(x[2usize + n])]
+    }
     if str.eq(k, "se") {
         let n = usize(x[0usize])
         let p = usize(x[1usize])
