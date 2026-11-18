@@ -42,7 +42,7 @@ L343	library	0.1	546	deSolve: solver parity	Partial (D6416).
 L360	library	0.2	763	nleqslv, rootSolve, maxLik, bbmle: equation systems and likelihood maximisation	Partial (D6485 uniroot and uniroot.all with R's iterates, D6484 gradient and hessian, forward and centred, D6483 roots of five fixed systems by damped Newton with a Levenberg-Marquardt fallback agree 
 L361	library	0.2	646	segmented and strucchange: breakpoints and structural change	Partial (D6613).
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
-L363	library	0.44	1025	DescTools: descriptive statistics and tests	Partial (D6429, D6430 table association measures, D6431 kappa, lambda, tau, OR, Q, D6446 BinomCI x11, D6447 Winsorize, HodgesLehmann, MedianCI, Trim, D6448 Cochran-Armitage, MH odds ratio, Breslow-Day
+L363	library	0.46	1063	DescTools: descriptive statistics and tests	Partial (D6429, D6430 table association measures, D6431 kappa, lambda, tau, OR, Q, D6446 BinomCI x11, D6447 Winsorize, HodgesLehmann, MedianCI, Trim, D6448 Cochran-Armitage, MH odds ratio, Breslow-Day
 L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
 L367	library	0.35	724	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;

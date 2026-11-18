@@ -1162,3 +1162,84 @@ fn cronbach_alpha(a: *mem.Arena, x: []const f64, n: usize, nc: usize, conf: f64,
     }
     ret ok
 }
+
+// ---- MeanCI (classic, untrimmed: the t interval, or the normal one when the standard deviation is given), VarCI (classic chi-square and Bonett), MeanSE and Herfindahl
+// mean_ci writes (mean, lower, upper); sd < 0 means the sample standard deviation
+fn mean_ci(x: []const f64, sd: f64, conf: f64, out: []f64) {
+    let n = f64(x.len)
+    let m = mean_of(x)
+    var a = 0.0f64
+    if sd < 0.0f64 {
+        a = nb.qt((1.0f64 - conf) / 2.0f64, n - 1.0f64, true, false) * sd_of(x) / math.sqrt[f64](n)
+    } else {
+        a = dist.qnorm((1.0f64 - conf) / 2.0f64, 0.0f64, 1.0f64, true, false) * sd / math.sqrt[f64](n)
+    }
+    out[0usize] = m
+    out[1usize] = m + a
+    out[2usize] = m - a
+}
+
+fn var_of(x: []const f64) -> f64 {
+    let s = sd_of(x)
+    ret s * s
+}
+
+// var_ci(x, conf, bonett, out): (variance, lower, upper)
+fn var_ci(a: *mem.Arena, x: []const f64, conf: f64, bonett: bool, out: []f64) -> err {
+    let n = f64(x.len)
+    let v = var_of(x)
+    out[0usize] = v
+    if !bonett {
+        let df = n - 1.0f64
+        out[1usize] = df * v / nm.qchisq((1.0f64 - conf) / 2.0f64, df, false, false)
+        out[2usize] = df * v / nm.qchisq((1.0f64 - conf) / 2.0f64, df, true, false)
+        ret ok
+    }
+    let z = dist.qnorm(1.0f64 - (1.0f64 - conf) / 2.0f64, 0.0f64, 1.0f64, true, false)
+    let cc = n / (n - z)
+    let (s, e) = sorted_copy(a, x)
+    if e != ok { ret e }
+    let trim = 1.0f64 / (2.0f64 * math.sqrt[f64](n - 4.0f64))
+    let lo = usize(math.floor[f64](n * trim)) + 1usize
+    let hi = x.len + 1usize - lo
+    var mtr = 0.0f64
+    var i = lo
+    while i <= hi {
+        mtr += s[i - 1usize]
+        i += 1usize
+    }
+    mtr = mtr / f64(hi - lo + 1usize)
+    let m = mean_of(x)
+    var s4 = 0.0f64
+    var s2 = 0.0f64
+    i = 0usize
+    while i < x.len {
+        s4 += math.pow[f64](x[i] - mtr, 4.0f64)
+        s2 += (x[i] - m) * (x[i] - m)
+        i += 1usize
+    }
+    let gam4 = n * s4 / (s2 * s2)
+    let se = cc * math.sqrt[f64]((gam4 - (n - 3.0f64) / n) / (n - 1.0f64))
+    out[1usize] = math.exp[f64](math.log[f64](cc * v) - z * se)
+    out[2usize] = math.exp[f64](math.log[f64](cc * v) + z * se)
+    ret ok
+}
+
+fn mean_se(x: []const f64) -> f64 { ret sd_of(x) / math.sqrt[f64](f64(x.len)) }
+
+// Herfindahl(x, n, parameter): the shares of the expanded sample raised to parameter + 1, summed, to the power 1 / parameter
+fn herfindahl(x: []const f64, cnt: []const f64, parameter: f64) -> f64 {
+    var tot = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        tot += x[i] * cnt[i]
+        i += 1usize
+    }
+    var s = 0.0f64
+    i = 0usize
+    while i < x.len {
+        s += cnt[i] * math.pow[f64](x[i] / tot, parameter + 1.0f64)
+        i += 1usize
+    }
+    ret math.pow[f64](s, 1.0f64 / parameter)
+}

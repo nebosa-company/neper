@@ -11,6 +11,32 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let z = c.args
     let (o, e) = mem.alloc[f64](a, 6usize)
     if e != ok { os.exit(4) }
+    if z[0usize] >= 2.0f64 {
+        let kn = usize(z[0usize])
+        let n = usize(z[1usize])
+        let xs = z[2usize..2usize + n]
+        let ex = z[2usize + n]
+        let cf = z[3usize + n]
+        let jj = usize(z[4usize + n])
+        if kn == 2usize {
+            dt.mean_ci(xs, ex, cf, o)
+            ret o[jj]
+        }
+        if kn == 3usize || kn == 4usize {
+            let ve = dt.var_ci(a, xs, cf, kn == 4usize, o)
+            if ve != ok { os.exit(6) }
+            ret o[jj]
+        }
+        if kn == 5usize { ret dt.mean_se(xs) }
+        let (cn, g1) = mem.alloc[f64](a, n)
+        if g1 != ok { os.exit(7) }
+        var q = 0usize
+        while q < n {
+            cn[q] = z[5usize + n + q]
+            q += 1usize
+        }
+        ret dt.herfindahl(xs, cn, ex)
+    }
     if z[0usize] == 0.0f64 {
         let n = usize(z[3usize])
         dt.ccc(z[4usize..4usize + n], z[4usize + n..4usize + 2usize * n], z[2usize], usize(z[1usize]), o)

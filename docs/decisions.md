@@ -49316,3 +49316,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.desctools` gains `ccc` (Lin's concordance correlation coefficient with the package's z-transform and asymptotic limits, the scale and location shifts and the bias-correction factor C.b) and `cronbach_alpha` (the coefficient from the item variances and the variance of the row sums, with the F-based interval whose N the package takes as the total number of cells, a quirk reproduced).
 
 **Result.** `oracle_desctools_agree` equals DescTools on 225 values (15 data sets, CCC in both interval types and CronbachAlpha with its limits) at 1e-8 or better on Windows. Linux pending. L363 stays partial: the rest of the package.
+
+## D7216 — DescTools: MeanCI, VarCI, MeanSE and Herfindahl
+
+`e.algo.stat.desctools` gains `mean_ci` (the classic interval: the t interval with the sample standard deviation, or the normal one when a standard deviation is given; the trimmed and bootstrap forms are not ported), `var_ci` (the classic chi-square interval and Bonett's, which uses the trimmed mean at trim 1 / (2 sqrt(n - 4)) in the fourth moment), `mean_se` and `herfindahl` (the concentration index of the count-expanded shares).
+
+**Result.** `oracle_desctools_agree` has 435 values (210 added over 15 samples, 1e-9 or better) and equals DescTools on Windows. Linux pending. L363 stays partial: the trimmed and bootstrap intervals and the rest of the package remain.
