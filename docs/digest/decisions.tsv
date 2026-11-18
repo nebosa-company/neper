@@ -4062,4 +4062,5 @@ D7272	952	emmeans: the other contrast families
 D7273	585	psych: describe
 D7274	686	psych: corr.test
 D7275	1010	survival: coxph with strata, an offset and the robust variance
-D7276	1069	survival: survreg
+D7276	1070	survival: survreg
+D7277	685	survival: survSplit

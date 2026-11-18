@@ -10,6 +10,16 @@ use e.str
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "ssplit") {
+        let sn = usize(x[0usize])
+        let sc = usize(x[1usize])
+        let (so, se2) = mem.alloc[f64](a, (sn * (sc + 1usize) + 1usize) * 4usize)
+        if se2 != ok { os.exit(6) }
+        let rows = sf.surv_split(x[2usize..2usize + sn], x[2usize + sn..2usize + 2usize * sn], x[2usize + 2usize * sn..2usize + 2usize * sn + sc], so, sn * (sc + 1usize))
+        let rw = x[2usize + 2usize * sn + sc]
+        if rw < 0.0f64 { ret f64(rows) }
+        ret so[usize(rw) * 4usize + usize(x[3usize + 2usize * sn + sc])]
+    }
     if str.eq(c.name, "conc") {
         let cn = usize(x[0usize])
         let (co, ce) = mem.alloc[f64](a, 4usize)

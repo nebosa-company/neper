@@ -280,3 +280,34 @@ fn concordance_counts(t: []const f64, e: []const f64, x: []const f64, out: []f64
     out[2usize] = tiedx
     out[3usize] = (conc + tiedx / 2.0f64) / (conc + disc + tiedx)
 }
+
+// survSplit(Surv(time, event) ~ ., cut = cuts) for subjects entering at 0: each subject's follow-up is cut at every cut point below its time into pieces (tstart, tstop, status), only the last
+// piece keeping the event; the rows are produced subject by subject (cuts ascending) into out (rows by 4: subject, tstart, tstop, status) and the number of rows is returned
+fn surv_split(time: []const f64, event: []const f64, cuts: []const f64, out: []f64, rows_max: usize) -> usize {
+    var row = 0usize
+    var i = 0usize
+    while i < time.len {
+        var start = 0.0f64
+        var k = 0usize
+        while k < cuts.len {
+            if cuts[k] > start && cuts[k] < time[i] && row < rows_max {
+                out[row * 4usize] = f64(i)
+                out[row * 4usize + 1usize] = start
+                out[row * 4usize + 2usize] = cuts[k]
+                out[row * 4usize + 3usize] = 0.0f64
+                row += 1usize
+                start = cuts[k]
+            }
+            k += 1usize
+        }
+        if row < rows_max {
+            out[row * 4usize] = f64(i)
+            out[row * 4usize + 1usize] = start
+            out[row * 4usize + 2usize] = time[i]
+            out[row * 4usize + 3usize] = event[i]
+            row += 1usize
+        }
+        i += 1usize
+    }
+    ret row
+}

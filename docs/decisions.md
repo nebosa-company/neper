@@ -49682,3 +49682,9 @@ New `e.algo.stat.coxext.coxph_s`: the partial likelihood summed over strata (ris
 New `e.algo.stat.survregpkg.survreg`: accelerated failure time models for right-censored data by maximum likelihood on the log-time scale (weibull, exponential with the scale fixed at 1, lognormal, loglogistic) or the time scale (gaussian, logistic, extreme): the log density of the standardised residual less log sigma (and log t on the log scale) for events, the log survival for censored times; Nelder-Mead restarts for a start, Newton's method on central-difference derivatives to 1e-10, and the standard errors of (beta, log sigma) from the inverse numerical information.
 
 **Result.** The new fixture `oracle_survreg` (up to 30 simulated data sets of 40 to 90 observations over the six distributions; coefficients, scale, log-likelihood and standard errors: 205 values) equals survreg on Windows at 1e-5. Linux pending. L311 stays partial: exact ties, counting-process data, the Efron and cluster robust variance, frailty, cox.zph, survSplit, tmerge, pyears, residuals, survdiff with strata, interval and left censoring in survreg.
+
+## D7277 — survival: survSplit
+
+`e.algo.stat.survfitpkg.surv_split` cuts each subject's follow-up (entering at 0) at every cut point below its time into (tstart, tstop, status) pieces, only the last keeping the event, as `survSplit(Surv(time, event) ~ ., cut = ...)` does.
+
+**Result.** `oracle_survfit` gains 20 data sets (5 to 20 subjects, one to four cuts; the row count and 6 random rows of four columns each: 500 values) and equals survSplit on Windows exactly. Linux pending. L311 stays partial: exact ties, counting-process coxph, the Efron and cluster robust variance, frailty, cox.zph, tmerge, pyears, residuals, survdiff with strata, interval and left censoring in survreg.
