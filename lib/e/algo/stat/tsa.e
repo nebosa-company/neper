@@ -333,3 +333,67 @@ fn detect_io(resid: []const f64, n: usize, sigma2: f64, robust: bool, alpha: f64
     }
     ret (count, ok)
 }
+
+// cpgram (TSA, from stats::cpgram): the series centred and cosine-tapered at fraction p (spec.taper), the periodogram |F_k|^2 / n at k = 0 .. n / 2
+// with the zero frequency set to zero, the even-length grid cut to an odd count, and the cumulative proportions cum_k = sum_{j <= k} y_j / sum y.
+// Returns the number of frequencies and the Kolmogorov-type critical value 1.358 / (sqrt(m) + 0.12 + 0.11 / sqrt(m)) with m = count - 1.
+fn cpgram(a: *mem.Arena, series: []const f64, p: f64, cum: []f64) -> (usize, f64, err) {
+    let n = series.len
+    let (x, e1) = mem.alloc[f64](a, n)
+    if e1 != ok { ret (0usize, 0.0f64, e1) }
+    var mean = 0.0f64
+    var i = 0usize
+    while i < n {
+        mean += series[i]
+        i += 1usize
+    }
+    mean = mean / f64(n)
+    i = 0usize
+    while i < n {
+        x[i] = series[i] - mean
+        i += 1usize
+    }
+    let m = usize(math.floor[f64](f64(n) * p))
+    var t = 0usize
+    while t < m {
+        let w = 0.5f64 * (1.0f64 - math.cos[f64](3.141592653589793f64 * (2.0f64 * f64(t + 1usize) - 1.0f64) / (2.0f64 * f64(m))))
+        x[t] = x[t] * w
+        x[n - 1usize - t] = x[n - 1usize - t] * w
+        t += 1usize
+    }
+    var len = n / 2usize + 1usize
+    let (y, e2) = mem.alloc[f64](a, len)
+    if e2 != ok || cum.len < len { ret (0usize, 0.0f64, Malformed) }
+    var k = 0usize
+    while k < len {
+        var re = 0.0f64
+        var im = 0.0f64
+        i = 0usize
+        while i < n {
+            let ang = 2.0f64 * 3.141592653589793238462643383279f64 * f64(k) * f64(i) / f64(n)
+            re += x[i] * math.cos[f64](ang)
+            im -= x[i] * math.sin[f64](ang)
+            i += 1usize
+        }
+        y[k] = (re * re + im * im) / f64(n)
+        k += 1usize
+    }
+    y[0usize] = 0.0f64
+    if len % 2usize == 0usize { len = len - 1usize }
+    var total = 0.0f64
+    k = 0usize
+    while k < len {
+        total += y[k]
+        k += 1usize
+    }
+    var run = 0.0f64
+    k = 0usize
+    while k < len {
+        run += y[k]
+        cum[k] = run / total
+        k += 1usize
+    }
+    let mm = f64(len - 1usize)
+    let crit = 1.358f64 / (math.sqrt[f64](mm) + 0.12f64 + 0.11f64 / math.sqrt[f64](mm))
+    ret (len, crit, ok)
+}

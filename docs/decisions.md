@@ -48806,3 +48806,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.tsa` has `detect_io`: the residuals over sigma (sqrt(pi / 2) mean |resid| when robust, sqrt(sigma2) otherwise), flagged where their absolute value exceeds qnorm(1 - alpha / (2 n)), in series order.
 
 **Result.** `oracle_tsa_detectao`, now with the io cases beside the ao cases (72 values in all, the same twelve fitted series), equals TSA::detectIO on the count, the positions and the statistics on Windows; the ao cases are unchanged. Linux pending. L452 stays partial: armasubsets, arimax, the cumulative periodogram, the BIC table and the tsdiag statistics are open.
+
+## D7131 — TSA: the cumulative periodogram
+
+`e.algo.stat.tsa` has `cpgram`: the series centred and cosine-tapered at fraction p (stats' spec.taper weights), the periodogram |F_k|^2 / n at k = 0 .. n / 2 by direct DFT with the zero frequency set to zero, the even-length grid cut to an odd count, the cumulative proportions, and the critical value 1.358 / (sqrt(m) + 0.12 + 0.11 / sqrt(m)) with m the count minus one. stats::cpgram only plots, so the oracle reproduces its body in R and checks the values the plot is drawn from.
+
+**Result.** `oracle_tsa_cpgram` equals those values on 48 cases (12 series of 40 to 120 points, an AR(1) with a sinusoid, taper 0.1) on Windows; the critical value and the cumulative sums agree. Linux pending. L452 stays partial: armasubsets, arimax, the BIC table and the tsdiag statistics are open.

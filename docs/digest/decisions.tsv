@@ -3916,4 +3916,5 @@ D7126	1083	sampling: UPbrewer, Brewer's sequential fixed-size design
 D7127	553	sampling: UPmidzuno
 D7128	1043	clue: Rand agreement and the Euclidean dissimilarity of partitions
 D7129	1159	TSA: detectAO, the additive outliers of an ARMA fit
-D7130	637	TSA: detectIO, the innovational outliers
+D7130	638	TSA: detectIO, the innovational outliers
+D7131	832	TSA: the cumulative periodogram
