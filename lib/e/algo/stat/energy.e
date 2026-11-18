@@ -10,6 +10,8 @@ use e.algo.stat.gslfns as gs
 use e.math
 use e.math.dist as dist
 use e.math.special as sp
+use e.algo.rand.rdist as rd
+use e.math.nmath as nm
 use e.mem
 
 fn dist_pow(x: []const f64, n: usize, d: usize, i: usize, j: usize, index: f64) -> f64 {
@@ -628,4 +630,107 @@ fn disco(a: *mem.Arena, r: *rg.Rng, dst: []const f64, n: usize, grp: []const usi
     }
     out[3usize] = f64(cnt + 1usize) / f64(reps + 1usize)
     ret ok
+}
+
+// Neumaier step: R's sum() and mean() accumulate in long double, which a compensated sum reproduces
+fn pe_step(s: f64, c: f64, v: f64) -> (f64, f64) {
+    let t = s + v
+    var cc = c
+    if math.abs[f64](s) >= math.abs[f64](v) { cc += (s - t) + v } else { cc += (v - t) + s }
+    ret (t, cc)
+}
+
+// poisson.e: the energy goodness-of-fit statistic of non-negative integer counts for the Poisson family (lambda estimated by the mean); the sums are taken in R's order
+fn poisson_e(x: []const f64) -> f64 {
+    let n = f64(x.len)
+    var s1 = 0.0f64
+    var c1 = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        let (a1, a2) = pe_step(s1, c1, x[i])
+        s1 = a1
+        c1 = a2
+        i += 1usize
+    }
+    let lambda = (s1 + c1) / n
+    var m1 = 0.0f64
+    var m2 = 0.0f64
+    i = 0usize
+    while i < x.len {
+        let px = nm.ppois(x[i], lambda, true, false)
+        var px1 = 0.0f64
+        if x[i] >= 1.0f64 { px1 = nm.ppois(x[i] - 1.0f64, lambda, true, false) }
+        let (b1, b2) = pe_step(m1, m2, 2.0f64 * x[i] * px - 2.0f64 * lambda * px1 + lambda - x[i])
+        m1 = b1
+        m2 = b2
+        i += 1usize
+    }
+    let mv0 = (m1 + m2) / n
+    // mean() refines once: s + sum(x - s) / n
+    var r1 = 0.0f64
+    var r2 = 0.0f64
+    i = 0usize
+    while i < x.len {
+        let px = nm.ppois(x[i], lambda, true, false)
+        var px1 = 0.0f64
+        if x[i] >= 1.0f64 { px1 = nm.ppois(x[i] - 1.0f64, lambda, true, false) }
+        let (b1, b2) = pe_step(r1, r2, (2.0f64 * x[i] * px - 2.0f64 * lambda * px1 + lambda - x[i]) - mv0)
+        r1 = b1
+        r2 = b2
+        i += 1usize
+    }
+    let mv = mv0 + (r1 + r2) / n
+    let aa = 2.0f64 * lambda
+    let exx = aa * math.exp[f64](0.0f64 - aa) * (gs.bessel_inu(0.0f64, aa) + gs.bessel_inu(1.0f64, aa))
+    // sum(K * y) over the sorted sample, K = seq(1 - n, n - 1, 2): the sample in rank order, ties by index
+    var k1 = 0.0f64
+    var k2 = 0.0f64
+    var want = 0usize
+    while want < x.len {
+        var j = 0usize
+        while j < x.len {
+            var rank = 0usize
+            var q = 0usize
+            while q < x.len {
+                if x[q] < x[j] || (x[q] == x[j] && q < j) { rank += 1usize }
+                q += 1usize
+            }
+            if rank == want {
+                let (d1, d2) = pe_step(k1, k2, (2.0f64 * f64(want) + 1.0f64 - n) * x[j])
+                k1 = d1
+                k2 = d2
+            }
+            j += 1usize
+        }
+        want += 1usize
+    }
+    let meanxx = 2.0f64 * (k1 + k2) / (n * n)
+    ret n * (2.0f64 * mv - exx - meanxx)
+}
+
+// poisson.etest(x, R) with test "E": the statistic and the parametric-bootstrap p value 1 - mean(t < t0) over R samples of rpois(n, lambda) drawn in order
+fn poisson_etest(a: *mem.Arena, r: *rg.Rng, x: []const f64, reps: usize) -> (f64, f64, err) {
+    let t0 = poisson_e(x)
+    if reps == 0usize { ret (t0, 0.0f64 / 0.0f64, ok) }
+    var lambda = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        lambda += x[i]
+        i += 1usize
+    }
+    lambda = lambda / f64(x.len)
+    let (b, e1) = mem.alloc[f64](a, x.len)
+    if e1 != ok { ret (t0, 0.0f64, e1) }
+    var below = 0usize
+    var rep = 0usize
+    while rep < reps {
+        i = 0usize
+        while i < x.len {
+            b[i] = rd.rpois(r, lambda)
+            i += 1usize
+        }
+        if poisson_e(b) < t0 { below += 1usize }
+        rep += 1usize
+    }
+    ret (t0, 1.0f64 - f64(below) / f64(reps), ok)
 }

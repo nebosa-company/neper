@@ -100,6 +100,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if str.eq(c.name, "disco_w") { got = res[1usize] }
             if str.eq(c.name, "disco_f") { got = res[2usize] }
             if str.eq(c.name, "disco_p") { got = res[3usize] }
+        } else if str.eq(c.name, "poiss_stat") || str.eq(c.name, "poiss_p") {
+            let nn = usize(z[2usize])
+            var rng5: rg.Rng = zero
+            rg.seed(&rng5, i64(z[0usize]))
+            let (st, pv, te) = en.poisson_etest(a, &rng5, z[3usize..3usize + nn], usize(z[1usize]))
+            if te != ok { os.exit(8) }
+            if str.eq(c.name, "poiss_stat") { got = st } else { got = pv }
         } else if str.eq(c.name, "pdcor") {
             let dx = usize(z[1usize])
             let dy = usize(z[2usize])

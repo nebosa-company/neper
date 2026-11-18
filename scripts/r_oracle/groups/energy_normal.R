@@ -56,4 +56,14 @@ for (rep in 1:8) {
   cases[[length(cases) + 1]] <- case("disco_f", a, as.numeric(dd$statistic), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("disco_p", a, as.numeric(dd$p.value), rel = 1e-12, abs = 1e-12)
 }
+# poisson.etest, test "E": args (seed, reps, n, x...) under "poiss_stat" and "poiss_p"
+for (rep in 1:10) {
+  n <- sample(10:40, 1); lam <- runif(1, 0.5, 5); sd0 <- sample(1:100000, 1); R <- sample(c(99, 199), 1)
+  x <- if (rep %% 2 == 0) rpois(n, lam) else rnbinom(n, mu = lam, size = 2)
+  x <- as.integer(x)
+  set.seed(sd0); pt <- poisson.tests(x, R = R, test = "E")
+  a <- c(sd0, R, n, x)
+  cases[[length(cases) + 1]] <- case("poiss_stat", a, as.numeric(pt$statistic), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("poiss_p", a, as.numeric(pt$p.value), rel = 1e-12, abs = 1e-12)
+}
 emit("energy_normal", "energy", list(cases))

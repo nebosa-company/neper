@@ -680,10 +680,10 @@
       "group": "CRAN parity",
       "order": 729,
       "title": "energy: energy statistics",
-      "score": 0.62,
+      "score": 0.8,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6188). dcov, dcor (with index) and the two-sample energy statistic equal energy on Windows (oracle_energy; Linux pending). D7211 to D7214: normal.e, mvnorm.e, pdcor and the dcov.test, dcor.test and eqdist.etest (two and more samples, D7239), disco with its permutation test (D7240) permutation tests (statistic and p value under set.seed) equal to energy (oracle_energy_normal, 12 samples). D7125: bcdcor (unbiased distance correlation) equal to energy (oracle_energy_bcdcor, 18 samples). Open: Poisson test, energy clustering. Was: Open (CRAN rank 795). Mid. Acceptance, equal to energy under set.seed: dcov, dcor, bcdcor, dcov.test and dcor.test (permutation), edist, eqdist.etest, disco and disco.between, mvnorm.etest, normal.test, poisson.mtest, kgroups, pdcor."
+      "evidence": "Partial (D6188). dcov, dcor (with index) and the two-sample energy statistic equal energy on Windows (oracle_energy; Linux pending). D7211 to D7214: normal.e, mvnorm.e, pdcor and the dcov.test, dcor.test and eqdist.etest (two and more samples, D7239), disco with its permutation test (D7240), the Poisson E-test (D7241) permutation tests (statistic and p value under set.seed) equal to energy (oracle_energy_normal, 12 samples). D7125: bcdcor (unbiased distance correlation) equal to energy (oracle_energy_bcdcor, 18 samples). Open: Poisson test, energy clustering. Was: Open (CRAN rank 795). Mid. Acceptance, equal to energy under set.seed: dcov, dcor, bcdcor, dcov.test and dcor.test (permutation), edist, eqdist.etest, disco and disco.between, mvnorm.etest, normal.test, poisson.mtest, kgroups, pdcor."
     },
     {
       "id": "L460",

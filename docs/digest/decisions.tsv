@@ -4026,4 +4026,5 @@ D7236	693	aod: betabin
 D7237	622	aod: negbin and splitbin
 D7238	646	aod: betabin and negbin standard errors
 D7239	617	energy: eqdist.etest with more than two samples
-D7240	696	energy: disco
+D7240	697	energy: disco
+D7241	882	energy: the Poisson E-test
