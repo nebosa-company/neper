@@ -55,7 +55,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 37usize { ret gd.qbccg(x, mu, sigma, nu) }
     if which == 38usize { ret gd.dgp(x, mu, sigma) }
     if which == 39usize { ret gd.pgp(x, mu, sigma) }
-    ret gd.qgp(x, mu, sigma)
+    if which == 40usize { ret gd.qgp(x, mu, sigma) }
+    if which == 41usize { ret gd.dbe(x, mu, sigma) }
+    if which == 42usize { ret gd.pbe(x, mu, sigma) }
+    ret gd.qbe(x, mu, sigma)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

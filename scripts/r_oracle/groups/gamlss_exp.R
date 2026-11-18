@@ -1,5 +1,5 @@
 # gamlss.dist EXP (dEXP, pEXP, qEXP with mu) and RG (dRG, pRG, qRG with mu and sigma). Args: (fn, mu, sigma, x, nu): fn 0 density, 1
-# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 and NO for fn 12..14 and PO for fn 15..17 and GA for fn 18..20 and WEI for fn 21..23 and LOGNO for fn 24..26 and IG for fn 27 (distribution) and ZIP for fn 28 (distribution) and 29 (quantile) and NBI for fn 30 (density), 31 (distribution) and 32 (quantile) (x is p for fn 2, 5, 8, 11, 14 and 17). sigma is unused by EXP; nu (the fifth argument) is the degrees of freedom of TF for fn 33 (density), 34 (distribution) and 35 (quantile), and the power of BCCG for fn 36 (distribution) and 37 (quantile); GP is fn 38 (density), 39 (distribution) and 40 (quantile).
+# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 and NO for fn 12..14 and PO for fn 15..17 and GA for fn 18..20 and WEI for fn 21..23 and LOGNO for fn 24..26 and IG for fn 27 (distribution) and ZIP for fn 28 (distribution) and 29 (quantile) and NBI for fn 30 (density), 31 (distribution) and 32 (quantile) (x is p for fn 2, 5, 8, 11, 14 and 17). sigma is unused by EXP; nu (the fifth argument) is the degrees of freedom of TF for fn 33 (density), 34 (distribution) and 35 (quantile), and the power of BCCG for fn 36 (distribution) and 37 (quantile); GP is fn 38 (density), 39 (distribution) and 40 (quantile); BE is fn 41, 42 and 43.
 suppressMessages(library(gamlss.dist))
 cases <- list()
 add <- function(fn, args, want, rel = 1e-10, abs = 1e-14) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
@@ -60,5 +60,9 @@ for (rep in 1:30) {
   add("ex", c(38, gm, gps, gx, 0), dGP(gx, mu = gm, sigma = gps))
   add("ex", c(39, gm, gps, gx, 0), pGP(gx, mu = gm, sigma = gps))
   add("ex", c(40, gm, gps, p, 0), qGP(p, mu = gm, sigma = gps))
+  bm <- runif(1, 0.1, 0.9); bs <- runif(1, 0.1, 0.8); bx <- rbeta(1, bm * (1 - bs^2) / bs^2, (1 - bm) * (1 - bs^2) / bs^2)
+  add("ex", c(41, bm, bs, bx, 0), dBE(bx, mu = bm, sigma = bs))
+  add("ex", c(42, bm, bs, bx, 0), pBE(bx, mu = bm, sigma = bs))
+  add("ex", c(43, bm, bs, p, 0), qBE(p, mu = bm, sigma = bs))
 }
 emit("gamlss_exp", "gamlss.dist", list(cases))

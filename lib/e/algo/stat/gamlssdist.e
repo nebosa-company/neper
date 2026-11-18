@@ -316,3 +316,24 @@ fn qgp(p: f64, mu: f64, sigma: f64) -> f64 {
     if p == 0.0f64 { ret 0.0f64 }
     ret mu * (1.0f64 / sigma) * nb.qf(p, 2.0f64, 2.0f64 * sigma, true, false)
 }
+
+// BE: beta with mean mu and sigma the scale (shapes a = mu (1 - sigma^2) / sigma^2 and b = a (1 - mu) / mu)
+fn dbe(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 || x >= 1.0f64 { ret 0.0f64 }
+    let a = mu * (1.0f64 - sigma * sigma) / (sigma * sigma)
+    ret nb.dbeta(x, a, a * (1.0f64 - mu) / mu, false)
+}
+
+fn pbe(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x >= 1.0f64 { ret 1.0f64 }
+    let a = mu * (1.0f64 - sigma * sigma) / (sigma * sigma)
+    ret nb.pbeta(x, a, a * (1.0f64 - mu) / mu, true, false)
+}
+
+fn qbe(p: f64, mu: f64, sigma: f64) -> f64 {
+    if p < 0.0000000001f64 { ret 0.0f64 }
+    if 1.0f64 - p < 0.0000000001f64 { ret 1.0f64 }
+    let a = mu * (1.0f64 - sigma * sigma) / (sigma * sigma)
+    ret nb.qbeta(p, a, a * (1.0f64 - mu) / mu, true, false)
+}
