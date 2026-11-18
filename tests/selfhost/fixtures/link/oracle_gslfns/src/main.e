@@ -73,6 +73,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if code == 2usize { ret gs.ellint_d(x[1usize], x[2usize]) }
         ret gs.bessel_yn(a, usize(x[1usize]), x[2usize])
     }
+    if str.eq(k, "h5") { ret gs.bessel_ynu(x[0usize], x[1usize]) }
     if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }

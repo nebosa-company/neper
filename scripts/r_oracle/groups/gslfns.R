@@ -73,4 +73,8 @@ for (rep in 1:15) {
   cases[[length(cases) + 1]] <- case("h4", c(2, ph, k), ellint_D(ph, k), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("h4", c(3, n, x), bessel_Yn(n, x), rel = 1e-9, abs = 1e-12)
 }
+for (rep in 1:20) {
+  nu <- runif(1, 0.1, 4.9); if (abs(nu - round(nu)) < 0.05) nu <- nu + 0.2; x <- runif(1, 0.4, 12)
+  cases[[length(cases) + 1]] <- case("h5", c(nu, x), bessel_Ynu(nu, x), rel = 1e-8, abs = 1e-11)
+}
 emit("gslfns", "gsl", list(cases))

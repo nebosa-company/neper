@@ -49370,3 +49370,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gslfns` gains Carlson's `ellint_rj` (the duplication algorithm with the fifth-order correction series, stopping at a relative spread of 0.0015, which truncates below 1e-16), `ellint_p` (the incomplete third-kind integral as sin(phi) RF less n / 3 sin^3(phi) RJ), `ellint_d` (sin^3(phi) RD / 3) and `bessel_yn` (Y of integer order by the Schlaefli integral representation, the finite part by `qags` and the tail by `qagi`). The first Y version overflowed in the tail integrand (e^(n t) times a vanishing factor); writing the two exponentials as single exponentials of n t - x sinh t fixed it.
 
 **Result.** `oracle_gslfns` has 2055 values (60 added over 15 arguments each, 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb functions, Y of real order, the complex functions and the error estimates.
+
+## D7225 — gsl: Bessel Y of non-integer order
+
+`e.algo.stat.gslfns` gains `bessel_ynu`: Y_nu as (J_nu cos(nu pi) - J_(-nu)) / sin(nu pi) for non-integer nu, with J_(-nu) from its power series started at Gamma(nu) sin(nu pi) / pi in place of 1 / Gamma(1 - nu) so that the sign for nu above 1 is carried by the sine. The series loses precision beyond x of about 15, as `bessel_jnu` does.
+
+**Result.** `oracle_gslfns` has 2075 values (20 added over orders 0.1 to 4.9 and x to 12, 1e-8) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb and complex functions and the error estimates.

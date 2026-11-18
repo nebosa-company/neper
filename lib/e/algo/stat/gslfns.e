@@ -879,3 +879,20 @@ fn bessel_yn(a: *mem.Arena, n: usize, x: f64) -> f64 {
     if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
     ret (r1.result - r2.result) / 3.141592653589793238462643383279f64
 }
+
+// Y_nu(x) for non-integer nu > 0 and x up to about 15: (J_nu cos(nu pi) - J_(-nu)) / sin(nu pi), J_(-nu) by its power series started from
+// 1 / Gamma(1 - nu) = Gamma(nu) sin(nu pi) / pi, which carries the sign for nu above 1
+fn bessel_ynu(nu: f64, x: f64) -> f64 {
+    let pi_ = 3.141592653589793238462643383279f64
+    let hx = x / 2.0f64
+    var t = math.exp[f64](0.0f64 - nu * math.log[f64](hx) + sp.lgamma(nu)) * math.sin[f64](pi_ * nu) / pi_
+    var s = t
+    var k = 0usize
+    while k < 200usize {
+        t = 0.0f64 - t * hx * hx / (f64(k + 1usize) * (f64(k + 1usize) - nu))
+        s += t
+        if math.abs[f64](t) < 1.0e-18f64 * math.abs[f64](s) { break }
+        k += 1usize
+    }
+    ret (bessel_jnu(nu, x) * math.cos[f64](pi_ * nu) - s) / math.sin[f64](pi_ * nu)
+}
