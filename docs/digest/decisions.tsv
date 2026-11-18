@@ -3899,4 +3899,5 @@ D7109	611	rpart full port; L337 closed
 D7110	648	logistf full port; L424 closed
 D7111	654	MuMIn full port; L428 closed
 D7112	939	metafor, escalc, fsn, rma.mv and a port of nlminb; L364 closed
-D7113	1675	foreign: read.arff date attributes, sparse rows and relational attributes
+D7113	1676	foreign: read.arff date attributes, sparse rows and relational attributes
+D7114	612	foreign: read.arff weekday and week directives

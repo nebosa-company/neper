@@ -6,7 +6,9 @@
 // strptime does it (trailing input ignored, numbers up to their width, days checked against the month). A value that does not parse is NaN.
 // A sparse row ('{' first) and a relational attribute are errors, as read.arff reports them.
 //
-// Ceiling: the %-directives Y y m d H M S j are parsed; any other (%w, %U, ...) makes the value NaN, where R parses it. Weights are not here.
+// The directives Y y m d H M S j set the time; w and U are read and ignored, as R does. Any other directive makes the value NaN.
+// Ceiling: R fills a month or day that the format lacks from today's date; this reader leaves it at January 1st (1970), so such a value differs.
+// Weights are not here.
 
 use e.mem
 use e.str
@@ -224,6 +226,11 @@ fn directive(dc: u8, s: str, at: usize) -> (i64, usize, bool) {
         maxd = 3usize
         lo = 1i64
         hi = 366i64
+    } else if dc == 119u8 {
+        maxd = 1usize
+        hi = 6i64
+    } else if dc == 85u8 {
+        hi = 53i64
     } else {
         ret (0i64, at, false)
     }

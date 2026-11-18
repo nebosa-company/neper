@@ -48700,3 +48700,9 @@ This corrects D6417, which said date columns are read as missing. That holds onl
 Probed in R and pinned: a missing month or day is taken from today's date, and %w is read without being used, so a 'yyyy-DDD' column depends on the day the oracle runs. The reader does not model that and reads such a value as missing; the oracle leaves that column out. Other %-directives (%w, %U, ...) are also missing.
 
 **Result.** `oracle_foreign` equals foreign on 134 cases on Windows, including the date columns (seconds and missing counts, with TZ=UTC), the sparse and relational refusals and a dense control file; Linux pending. L332 stays partial: read.dbf memo fields, write.dbf, read.mtp and read.systat are compiled C in foreign and need the foreign source.
+
+## D7114 — foreign: read.arff weekday and week directives
+
+The strptime subset in `e.fmt.arff` (D7113) now reads %w and %U as foreign's read.arff does: %w is one digit in 0..6 and %U two digits in 0..53, both consumed and ignored for the date, so "2011-03-04 10" reads as the 4th of March (the trailing 0 is trailing text). Any other directive still makes the value missing. Probed in R 4.6.1 with strptime; the oracle adds a 'yyyy-MM-dd D' column (%w) and a 'yyyy-MM-dd ww' column (%U) to foreign_arff9.
+
+**Result.** `oracle_foreign` equals foreign on 138 cases on Windows; Linux pending. L332 stays partial.

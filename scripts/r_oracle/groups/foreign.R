@@ -33,7 +33,7 @@ for (i in 1:6) {
   }
 }
 # ARFF date attributes: read.arff parses them with strptime in the local zone, so the zone is UTC here, and each is compared as seconds since 1970 (sum and missing count).
-# The day column is yyyy-MM-dd: R's strptime fills a month or day the format lacks from today and reads %w without using it, so a yyyy-DDD column depends on the date the oracle runs and is left out (a ceiling of the reader). Files 7 and 8 are a sparse file and a relational one, which read.arff refuses ("aerr" is 1 when read.arff errors, 0 when it reads); file 1 is dense and reads.
+# R's strptime fills a month or day the format lacks from today, so a yyyy-DDD column depends on the date the oracle runs and is left out (a ceiling of the reader). The weekday ('D', %w) and week ('ww', %U) columns are read and ignored by both. Files 7 and 8 are a sparse file and a relational one, which read.arff refuses ("aerr" is 1 when read.arff errors, 0 when it reads); file 1 is dense and reads.
 Sys.setenv(TZ = "UTC")
 writeLines(c("@relation dates",
              "@attribute stamp date",
@@ -41,13 +41,15 @@ writeLines(c("@relation dates",
              "@attribute short date 'dd/MM/yyyy HH:mm'",
              "@attribute day date 'yyyy-MM-dd'",
              "@attribute v numeric",
+             "@attribute weekday date 'yyyy-MM-dd D'",
+             "@attribute week date 'yyyy-MM-dd ww'",
              "@data",
-             "2011-03-04 10:20:30,2011-03-04 10:20:30,04/03/2011 10:20,2011-03-04,1",
-             "2011-03-04,1969-12-31 23:59:59,31/12/1969 23:59,1999-01-01,2",
-             "2024-02-29 00:00:00,2024-02-29 00:00:00,29/02/2024 00:00,2024-02-29,3",
-             "2011-02-30 10:20:30,2011-03-04 25:00:00,30/02/2011 10:20,2000-12-31,4",
-             "?,?,?,?,5",
-             "2011-03-04 23:59:60,2024-02-29 12:00:00,01/01/2000 00:00,2001-07-15,6"),
+             "2011-03-04 10:20:30,2011-03-04 10:20:30,04/03/2011 10:20,2011-03-04,1,2011-03-04 5,2011-03-04 3",
+             "2011-03-04,1969-12-31 23:59:59,31/12/1969 23:59,1999-01-01,2,2011-03-04 1,2011-03-04 53",
+             "2024-02-29 00:00:00,2024-02-29 00:00:00,29/02/2024 00:00,2024-02-29,3,2011-03-04 7,2011-03-04 54",
+             "2011-02-30 10:20:30,2011-03-04 25:00:00,30/02/2011 10:20,2000-12-31,4,?,?",
+             "?,?,?,?,5,2011-03-04 10,?",
+             "2011-03-04 23:59:60,2024-02-29 12:00:00,01/01/2000 00:00,2001-07-15,6,?,2011-03-04 10"),
            file.path(root, "tests/oracle/data/foreign_arff9.arff"))
 writeLines(c("@relation sparse", "@attribute a numeric", "@attribute b numeric", "@data", "{0 3}", "{1 4}"),
            file.path(root, "tests/oracle/data/foreign_arff7.arff"))
