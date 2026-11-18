@@ -11,6 +11,10 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "desc") {
+        let dn = usize(x[0usize])
+        ret ps.describe(a, x[1usize..1usize + dn], usize(x[1usize + dn]))
+    }
     if str.eq(c.name, "kappa") {
         let k = usize(x[0usize])
         ret ps.kappa(x[1usize..1usize + k * k], k)

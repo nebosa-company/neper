@@ -4058,4 +4058,5 @@ D7268	771	survival: survfit for one sample
 D7269	652	survival: the Fleming-Harrington survfit types
 D7270	728	survival: survdiff for k groups
 D7271	701	survival: concordance counts
-D7272	951	emmeans: the other contrast families
+D7272	952	emmeans: the other contrast families
+D7273	584	psych: describe

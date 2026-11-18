@@ -26,4 +26,11 @@ for (rep in 1:8) {
   k <- sample(2:4, 1); tb <- matrix(rpois(k * k, 6) + diag(k) * 10, k, k)
   add("kappa", c(k, t(tb)), cohen.kappa(tb)$kappa)
 }
+# describe of one column ("desc": n, x..., which): n mean sd median trimmed mad min max range skew kurtosis se
+for (rep in 1:25) {
+  n <- sample(10:80, 1); x <- round(rexp(n, 0.2) + rnorm(n), 3)
+  ds <- describe(x)
+  v <- c(ds$n, ds$mean, ds$sd, ds$median, ds$trimmed, ds$mad, ds$min, ds$max, ds$range, ds$skew, ds$kurtosis, ds$se)
+  for (w in 0:11) cases[[length(cases) + 1]] <- case("desc", c(n, x, w), as.numeric(v[w + 1]), rel = 1e-8, abs = 1e-10)
+}
 emit("psych", "psych", list(cases))

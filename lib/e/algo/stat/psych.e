@@ -7,6 +7,7 @@
 
 use e.algo.stat.quantreg as qr
 use e.math
+use e.algo.stat.desctools as dt
 use e.mem
 
 // column-major n by p
@@ -307,3 +308,35 @@ fn mardia(a: *mem.Arena, x: []const f64, n: usize, p: usize) -> (f64, f64, err) 
 }
 
 error Singular
+
+// describe(x) of one numeric column: which 0 n, 1 mean, 2 sd, 3 median, 4 trimmed (10%), 5 mad, 6 min, 7 max, 8 range, 9 skew (type 3), 10 kurtosis (type 3), 11 se
+fn describe(a: *mem.Arena, x: []const f64, which: usize) -> f64 {
+    let n = x.len
+    let (t, e) = dt.sorted_copy(a, x)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    let nf = f64(n)
+    if which == 0usize { ret nf }
+    if which == 1usize { ret dt.mean_of(x) }
+    if which == 2usize { ret dt.sd_of(x) }
+    var med = t[n / 2usize]
+    if n % 2usize == 0usize { med = (t[n / 2usize - 1usize] + t[n / 2usize]) / 2.0f64 }
+    if which == 3usize { ret med }
+    if which == 4usize {
+        let lo = usize(math.floor[f64](nf * 0.1f64)) + 1usize
+        let hi = n + 1usize - lo
+        var sm = 0.0f64
+        var i = lo
+        while i <= hi {
+            sm += t[i - 1usize]
+            i += 1usize
+        }
+        ret sm / f64(hi - lo + 1usize)
+    }
+    if which == 5usize { ret dt.mad_dt(a, x, 1.4826f64, false, false) }
+    if which == 6usize { ret t[0usize] }
+    if which == 7usize { ret t[n - 1usize] }
+    if which == 8usize { ret t[n - 1usize] - t[0usize] }
+    if which == 9usize { ret dt.skew(x, 3usize) }
+    if which == 10usize { ret dt.kurt(x, 3usize) }
+    ret dt.sd_of(x) / math.sqrt[f64](nf)
+}

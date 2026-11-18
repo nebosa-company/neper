@@ -49658,3 +49658,9 @@ New `e.algo.stat.survfitpkg.km_table`: one row per distinct event time with n.ri
 The emmeans fixture builds each contrast as a coefficient vector over the factor's levels and applies it to the reference-grid rows with the existing `estimate` and `variance`: trt.vs.ctrl (each level less the first), revpairwise (emmeans' order (2 - 1), (3 - 1), (3 - 2), (4 - 1), ...), consec (each level less the previous), eff (each level less the mean of all) and poly (the integer orthogonal-polynomial coefficients for three and four levels).
 
 **Result.** 8 models (3 or 4 levels, a second factor and a covariate held at their means) give 424 estimates and standard errors that equal emmeans on Windows at 1e-6. The first run exposed two ordering conventions (consec runs level i + 1 minus level i; revpairwise orders its pairs by the larger level first). Linux pending. L313 stays partial: the model-frame grid, glm and mixed models, scheffe and mvt, joint_tests, emtrends, eff_size, regrid.
+
+## D7273 — psych: describe
+
+`e.algo.stat.psych.describe` gives the twelve columns of `psych::describe` for one numeric vector: n, mean, sd, median, the 10% trimmed mean (R's floor(n trim) + 1 rule), the scaled MAD, min, max, range, skew and kurtosis (type 3, the DescTools forms) and se = sd / sqrt(n).
+
+**Result.** `oracle_psych` gains 25 right-skewed samples (n 10 to 80; 300 values) and equals psych on Windows at 1e-8. Linux pending. L312 stays partial: omega, fa and rotations, principal, polychoric, tetrachoric, biserial, fa.parallel, VSS, corr.test, describeBy, scoreItems.
