@@ -1,13 +1,17 @@
 // R DescTools: Skew and Kurt (methods 1, 2 and 3, the moment, sample-adjusted and Minitab-style forms), Gini (unbiased or not), MeanAD about the mean, Gmean,
 // Hmean, Entropy (Shannon, base 2, of the values as frequencies) and CoefVar.
 //
-// Not here: the rest of the package (Winsorize, Mode, the association measures, tests and confidence intervals).
+// Mode (the values with the largest count) and Outlier (boxplot and hampel rules) are at the end.
+//
+// Not here: the rest of the package (the association measures, tests and confidence intervals).
 
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
+
+error TooMany
 
 fn mean_of(x: []const f64) -> f64 {
     var s = 0.0f64
@@ -941,4 +945,113 @@ fn kappa_m(x: []const f64, ns: usize, nr: usize, nl: usize, conf: f64, method: u
     let z = dist.qnorm((1.0f64 - conf) / 2.0f64, 0.0f64, 1.0f64, true, false)
     if part == 1usize { ret value + z * math.sqrt[f64](var_k) }
     ret value - z * math.sqrt[f64](var_k)
+}
+
+// DescTools Mode(x) for finite x: the values with the largest count, sorted ascending, written to out; the result is how many there are, with
+// the frequency; (0, 0) when x has fewer than two values or every count is one (R gives NA there)
+fn mode_of(a: *mem.Arena, x: []const f64, out: []f64) -> (usize, f64, err) {
+    let n = x.len
+    if n <= 1usize { ret (0usize, 0.0f64, ok) }
+    let (cnt, e) = mem.alloc[usize](a, n)
+    if e != ok { ret (0usize, 0.0f64, e) }
+    var maxc = 0usize
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        var j = 0usize
+        while j < n {
+            if x[j] == x[i] { c += 1usize }
+            j += 1usize
+        }
+        cnt[i] = c
+        if c > maxc { maxc = c }
+        i += 1usize
+    }
+    if maxc <= 1usize { ret (0usize, 0.0f64, ok) }
+    var k = 0usize
+    i = 0usize
+    while i < n {
+        if cnt[i] == maxc {
+            var seen = false
+            var q = 0usize
+            while q < k {
+                if out[q] == x[i] { seen = true }
+                q += 1usize
+            }
+            if !seen {
+                if k >= out.len { ret (0usize, 0.0f64, TooMany) }
+                out[k] = x[i]
+                k += 1usize
+            }
+        }
+        i += 1usize
+    }
+    var p = 1usize
+    while p < k {
+        var q = p
+        while q > 0usize && out[q - 1usize] > out[q] {
+            let t = out[q]
+            out[q] = out[q - 1usize]
+            out[q - 1usize] = t
+            q -= 1usize
+        }
+        p += 1usize
+    }
+    ret (k, f64(maxc), ok)
+}
+
+// DescTools Outlier(x, method = "boxplot"): the values below the first quartile minus 1.5 IQR or above the third quartile plus 1.5 IQR (quantile
+// type 7). Returns how many and their sum.
+fn outlier_box(a: *mem.Arena, x: []const f64) -> (usize, f64, err) {
+    let (s, e) = sorted_copy(a, x)
+    if e != ok { ret (0usize, 0.0f64, e) }
+    if s.len == 0usize { ret (0usize, 0.0f64, ok) }
+    let q1 = quant7(s, 0.25f64)
+    let q3 = quant7(s, 0.75f64)
+    let iqr = q3 - q1
+    let lo = q1 - 1.5f64 * iqr
+    let hi = q3 + 1.5f64 * iqr
+    var cnt = 0usize
+    var sum = 0.0f64
+    var i = 0usize
+    while i < x.len {
+        if x[i] < lo || x[i] > hi {
+            cnt += 1usize
+            sum += x[i]
+        }
+        i += 1usize
+    }
+    ret (cnt, sum, ok)
+}
+
+// DescTools Outlier(x, method = "hampel"): the values outside the open interval median +/- 3 mad, with mad = 1.4826 * median(|x - median|).
+// Returns how many and their sum.
+fn outlier_hampel(a: *mem.Arena, x: []const f64) -> (usize, f64, err) {
+    let (s, e) = sorted_copy(a, x)
+    if e != ok { ret (0usize, 0.0f64, e) }
+    if s.len == 0usize { ret (0usize, 0.0f64, ok) }
+    let med = median_sorted(s)
+    let (dev, e2) = mem.alloc[f64](a, x.len)
+    if e2 != ok { ret (0usize, 0.0f64, e2) }
+    var i = 0usize
+    while i < x.len {
+        dev[i] = math.abs[f64](x[i] - med)
+        i += 1usize
+    }
+    let (ds, e3) = sorted_copy(a, dev)
+    if e3 != ok { ret (0usize, 0.0f64, e3) }
+    let mad = 1.4826f64 * median_sorted(ds)
+    let lo = med - 3.0f64 * mad
+    let hi = med + 3.0f64 * mad
+    var cnt = 0usize
+    var sum = 0.0f64
+    i = 0usize
+    while i < x.len {
+        if x[i] <= lo || x[i] >= hi {
+            cnt += 1usize
+            sum += x[i]
+        }
+        i += 1usize
+    }
+    ret (cnt, sum, ok)
 }
