@@ -466,3 +466,4 @@ oracle_metaformv2
 oracle_compositions_prin
 oracle_mass_mvrnorm
 oracle_desctools_outlier
+oracle_ismev_cov

@@ -9,12 +9,35 @@ use e.math
 use e.math.opt as opt
 use e.mem
 
-type Data = struct { x: []const f64, kind: usize, u: f64 }
+// kind 3 is gev.fit with location covariates: dm is the n by q design (row-major), the first q parameters are its coefficients
+type Data = struct { x: []const f64, kind: usize, u: f64, dm: []const f64, q: usize }
 
 fn nll(d: *Data, a: []const f64) -> f64 {
     let n = d.x.len
     var s = 0.0f64
     var i = 0usize
+    if d.kind == 3usize {
+        let q = d.q
+        let sc = a[q]
+        let xi = a[q + 1usize]
+        if sc <= 0.0f64 { ret 1.0e6f64 }
+        var t1 = 0.0f64
+        var t2 = 0.0f64
+        while i < n {
+            var mu = 0.0f64
+            var j = 0usize
+            while j < q {
+                mu += d.dm[i * q + j] * a[j]
+                j += 1usize
+            }
+            let y = 1.0f64 + xi * (d.x[i] - mu) / sc
+            if y <= 0.0f64 { ret 1.0e6f64 }
+            t1 += math.pow[f64](y, 0.0f64 - 1.0f64 / xi)
+            t2 += math.log[f64](y)
+            i += 1usize
+        }
+        ret f64(n) * math.log[f64](sc) + t1 + t2 * (1.0f64 / xi + 1.0f64)
+    }
     if d.kind == 0usize {
         let mu = a[0usize]
         let sc = a[1usize]
@@ -193,7 +216,7 @@ type Fit = struct { par: []f64, se: []f64, nllh: f64 }
 
 // kind 0 gev.fit, 1 gpd.fit (the exceedances of u), 2 gum.fit
 fn fit(a: *mem.Arena, x: []const f64, kind: usize, u: f64) -> (Fit, err) {
-    var d = Data { x: x, kind: kind, u: u }
+    var d = Data { x: x, kind: kind, u: u, dm: x[0usize..0usize], q: 0usize }
     var xs = x
     if kind == 1usize {
         var cnt = 0usize
@@ -237,24 +260,58 @@ fn fit(a: *mem.Arena, x: []const f64, kind: usize, u: f64) -> (Fit, err) {
         par[0usize] = in1
         par[1usize] = in2
     }
+    let (nllh, e3) = minimise(a, &d, par)
+    if e3 != ok { ret (zero, e3) }
+    let (h, e4) = hessian(a, &d, par)
+    if e4 != ok { ret (zero, e4) }
+    let (se, e5) = std_errors(a, h, p)
+    if e5 != ok { ret (zero, e5) }
+    ret (Fit { par: par, se: se, nllh: nllh }, ok)
+}
+
+// Nelder-Mead from par, restarted until the value stops moving; par holds the minimiser on return, the value is returned
+fn minimise(a: *mem.Arena, d: *Data, par: []f64) -> (f64, err) {
+    let p = par.len
     let (scr, e2) = mem.alloc[f64](a, (p + 1usize) * (p + 1usize) + 4usize * p)
-    if e2 != ok { ret (zero, e2) }
+    if e2 != ok { ret (0.0f64, e2) }
     var round = 0usize
     var last = 1.0e30f64
     var res = opt.Result { value: 0.0f64, iterations: 0u32, converged: false }
     while round < 40usize {
-        let (r, e3) = opt.nelder_mead[Data](&d, nll, par, 0.1f64 * (1.0f64 + math.abs[f64](par[0usize])), 1.0e-15f64, 20000u32, scr)
-        if e3 != ok { ret (zero, e3) }
+        let (r, e3) = opt.nelder_mead[Data](d, nll, par, 0.1f64 * (1.0f64 + math.abs[f64](par[0usize])), 1.0e-15f64, 20000u32, scr)
+        if e3 != ok { ret (0.0f64, e3) }
         res = r
         if math.abs[f64](last - r.value) < 1.0e-14f64 * (1.0f64 + math.abs[f64](r.value)) && round > 2usize { break }
         last = r.value
         round += 1usize
     }
+    ret (res.value, ok)
+}
+
+// gev.fit(x, ydat = z, mul = 1): the location is b0 + b1 z (the design of the n by q matrix dm, row-major), with the scale and the shape;
+// the start is the stationary moment fit with the slope coefficients at zero. Standard errors as in fit.
+fn fit_mul(a: *mem.Arena, x: []const f64, dm: []const f64, q: usize) -> (Fit, err) {
+    var d = Data { x: x, kind: 3usize, u: 0.0f64, dm: dm, q: q }
+    let p = q + 2usize
+    let (m, v) = mean_var(x)
+    let in2 = math.sqrt[f64](6.0f64 * v) / 3.141592653589793f64
+    let (par, e1) = mem.alloc[f64](a, p)
+    if e1 != ok { ret (zero, e1) }
+    var j = 0usize
+    while j < p {
+        par[j] = 0.0f64
+        j += 1usize
+    }
+    par[0usize] = m - 0.57722f64 * in2
+    par[q] = in2
+    par[q + 1usize] = 0.1f64
+    let (nllh, e3) = minimise(a, &d, par)
+    if e3 != ok { ret (zero, e3) }
     let (h, e4) = hessian(a, &d, par)
     if e4 != ok { ret (zero, e4) }
     let (se, e5) = std_errors(a, h, p)
     if e5 != ok { ret (zero, e5) }
-    ret (Fit { par: par, se: se, nllh: res.value }, ok)
+    ret (Fit { par: par, se: se, nllh: nllh }, ok)
 }
 
 // ---- the closed-form helpers ismev exports: the GEV quantile, distribution function and density, the GPD quantile, distribution function and density, the return-level gradients ----
