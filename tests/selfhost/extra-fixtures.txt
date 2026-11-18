@@ -478,3 +478,4 @@ oracle_clue_partition
 oracle_tsa_detectao
 oracle_tsa_cpgram
 oracle_vcd_goodfit
+oracle_gamlss_exp

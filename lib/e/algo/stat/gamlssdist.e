@@ -123,3 +123,16 @@ fn dbct(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     ll = ll + ft - math.log[f64](nb.pt(1.0f64 / (sigma * math.abs[f64](nu)), tau, true, false))
     ret math.exp[f64](ll)
 }
+
+// the exponential family EXP of gamlss.dist with mean mu: density (1 / mu) exp(-x / mu) for x > 0, distribution 1 - exp(-x / mu), quantile -mu log(1 - p)
+fn dexp_mu(x: f64, mu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret math.exp[f64](0.0f64 - x / mu) / mu
+}
+
+fn pexp_mu(x: f64, mu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret 1.0f64 - math.exp[f64](0.0f64 - x / mu)
+}
+
+fn qexp_mu(p: f64, mu: f64) -> f64 { ret 0.0f64 - mu * math.log[f64](1.0f64 - p) }

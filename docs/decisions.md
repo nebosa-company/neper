@@ -48824,3 +48824,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.vcdeffect` has `goodfit_binomial` with the size given: prob is the weighted mean of c / size over the counts 0 .. size, the fitted counts N dbinom(c, size, prob), and the degrees of freedom the non-empty counts minus 2. The oracle covers size 8 with eight to nine count entries.
 
 **Result.** `oracle_vcd_goodfit`, now with 48 binomial rows beside the 64 Poisson ones (112 values), equals vcd::goodfit on Windows. Linux pending. L389 stays partial: the negative binomial type, the minimum chi-square method and the intervals are open.
+
+## D7134 — gamlss.dist: the EXP family
+
+`e.algo.stat.gamlssdist` has the exponential family EXP with mean mu: density (1 / mu) exp(-x / mu) for x > 0 (zero below and at zero), distribution 1 - exp(-x / mu) and quantile -mu log(1 - p).
+
+**Result.** `oracle_gamlss_exp` equals dEXP, pEXP and qEXP on 90 values (30 draws of mu, x and p) on Windows; the earlier families in `oracle_gamlssdist` are untouched. Linux pending. L464 stays partial: about ninety families remain, plus random numbers, moments and the links.

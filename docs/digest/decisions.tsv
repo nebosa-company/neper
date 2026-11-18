@@ -3919,4 +3919,5 @@ D7129	1159	TSA: detectAO, the additive outliers of an ARMA fit
 D7130	638	TSA: detectIO, the innovational outliers
 D7131	833	TSA: the cumulative periodogram
 D7132	895	vcd: goodfit for the Poisson distribution by maximum likelihood
-D7133	626	vcd: goodfit for the binomial distribution by maximum likelihood
+D7133	627	vcd: goodfit for the binomial distribution by maximum likelihood
+D7134	516	gamlss.dist: the EXP family
