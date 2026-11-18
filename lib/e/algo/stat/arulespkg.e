@@ -685,3 +685,88 @@ fn apriori_big(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, conf
     out[5usize] = slift
     ret ok
 }
+
+fn apriori_big_basic(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, conf: f64, maxlen: usize, out: []f64) -> err {
+    let nt = f64(trans.len)
+    let (cn, ec) = mem.alloc[f64](a, 1usize)
+    if ec != ok { ret ec }
+    let (m0, e0) = mem.alloc[u64](a, 1usize)
+    let (c0, e00) = mem.alloc[u32](a, 1usize)
+    if e0 != ok { ret e0 }
+    if e00 != ok { ret e00 }
+    var r1 = eclat_collect(a, trans, nitems, supp, maxlen, m0[0usize..0usize], c0[0usize..0usize], cn)
+    if r1 != ok { ret r1 }
+    let total = usize(cn[0usize])
+    let (masks, e1) = mem.alloc[u64](a, total + 1usize)
+    let (counts, e2) = mem.alloc[u32](a, total + 1usize)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    r1 = eclat_collect(a, trans, nitems, supp, maxlen, masks, counts, cn)
+    if r1 != ok { ret r1 }
+    var size = 16usize
+    while size < 2usize * total { size = size * 2usize }
+    let (keys, e3) = mem.alloc[u64](a, size)
+    let (vals, e4) = mem.alloc[u32](a, size)
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    var z = 0usize
+    while z < size {
+        keys[z] = 0u64
+        z += 1usize
+    }
+    var i = 0usize
+    while i < total {
+        var h = hash_slot(masks[i], size)
+        while keys[h] != 0u64 { h = (h + 1usize) & (size - 1usize) }
+        keys[h] = masks[i]
+        vals[h] = counts[i]
+        i += 1usize
+    }
+    var zmax = 0.0f64
+    var zlev = 0.0f64
+    var w0 = 0usize
+    while w0 < 39usize {
+        out[w0] = 0.0f64
+        w0 += 1usize
+    }
+    i = 0usize
+    while i < total {
+        let m = masks[i]
+        if (m & (m - 1u64)) != 0u64 {
+            var j = 0usize
+            while j < nitems {
+                let bit = 1u64 << u64(j)
+                if (m & bit) != 0u64 {
+                    let l = m ^ bit
+                    var h = hash_slot(l, size)
+                    while keys[h] != l { h = (h + 1usize) & (size - 1usize) }
+                    var hr = hash_slot(bit, size)
+                    while keys[hr] != bit { hr = (hr + 1usize) & (size - 1usize) }
+                    let cf = f64(counts[i]) / f64(vals[h])
+                    if cf >= conf - 1.0e-12f64 {
+                        let n11 = f64(counts[i])
+                        let n10 = f64(vals[h]) - n11
+                        let n01 = f64(vals[hr]) - n11
+                        let n00 = nt - n11 - n10 - n01
+                        var wb = 0usize
+                        while wb < 38usize {
+                            let v = basic_measure(n11, n10, n01, n00, wb)
+                            if wb != 10usize && v - v == 0.0f64 { out[wb] += v }
+                            wb += 1usize
+                        }
+                        let t1 = n11 / nt * (1.0f64 - (n11 + n10) / nt)
+                        let t2 = (n11 + n10) / nt * ((n11 + n01) / nt - n11 / nt)
+                        if t1 > zmax { zmax = t1 }
+                        if t2 > zmax { zmax = t2 }
+                        zlev += n11 / nt - ((n11 + n10) * (n11 + n01) / (nt * nt))
+                        out[38usize] += 1.0f64
+                    }
+                }
+                j += 1usize
+            }
+        }
+        i += 1usize
+    }
+    if zmax > 0.0f64 { out[10usize] = zlev / zmax }
+    ret ok
+}

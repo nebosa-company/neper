@@ -43,6 +43,7 @@ for (rep in 1:24) {
     }
   }
 }
+bmn <- c("precision", "recall", "fScore", "accuracy", "balancedAccuracy", "conviction", "gini", "rulePowerFactor", "relativeRisk", "netconf", "zhang", "collectiveStrength", "importance", "imbalance", "kappa", "lambda", "mutualInformation", "maxconfidence", "jMeasure", "laplace", "certainty", "ralambondrainy", "sebag", "counterexample", "confirmedConfidence", "causalSupport", "causalConfidence", "leastContradiction", "centeredConfidence", "varyingLiaison", "yuleQ", "yuleY", "lerman", "implicationIndex", "doc", "chiSquared", "rhsSupport", "count")
 for (rep in 1:20) {
   nt <- sample(40:150, 1); ni <- sample(14:40, 1); pr <- runif(ni, 0.1, 0.6)
   m <- sapply(pr, function(p) as.numeric(runif(nt) < p))
@@ -56,6 +57,10 @@ for (rep in 1:20) {
   fi2 <- apriori(tr, parameter = list(supp = supp, target = "frequent itemsets", minlen = 1, maxlen = max(ml, 2)), control = list(verbose = FALSE))
   a2 <- c(nt, ni, supp, conf, max(ml, 2), as.vector(t(m)))
   q <- if (length(ru)) quality(ru) else data.frame(support = 0, confidence = 0, lift = 0)
+  if (length(ru)) for (k in seq_along(bmn)) {
+    v <- as.numeric(interestMeasure(ru, bmn[k], transactions = tr)); v <- v[is.finite(v)]
+    add(paste0("k", k - 1), a2, sum(v))
+  }
   add("g0", a2, length(fi2)); add("g1", a2, length(ru)); add("g2", a2, sum(q$support)); add("g3", a2, sum(q$confidence)); add("g4", a2, sum(q$lift))
 }
 emit("arules", "arules", list(cases))
