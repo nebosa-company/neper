@@ -49886,3 +49886,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `vcdeffect.ncp_f_ci` inverts the noncentral F by bisection on `pnf` with effectsize's clipping rules, and `pve_ci` turns the noncentrality bounds into the interval on the partial eta squared scale, as `.F_to_pve` does for all three estimates (the F is recomputed from each estimate, so omega and epsilon intervals differ from eta's). Both the one-sided default (level becomes 2 ci - 1, upper bound 1) and the two-sided interval.
 
 **Result.** `oracle_vcdeffect` (844 cases, 182 new) equals effectsize on Windows: lower bounds to 5e-5, upper bounds to 1e-2 relative, because effectsize finds the noncentrality with `optim` and its large-noncentrality answers are loose (one differed from the exact inversion by 3e-3). Linux pending. L389 stays partial: reference categories, the mantelhaen helpers, intervals of glass_delta, rank_biserial and cliffs_delta.
+
+## D7307 — effectsize: glass_delta and rank_biserial intervals
+
+**Decision.** `smd_ci` also returns the adjusted Glass delta interval (noncentral t on n2 - 1 df, noncentrality scaled by sqrt(1/n2 + v1/(n1 v2)), times the Hedges correction) and `rbs_ci` the two-sample rank-biserial interval, tanh(atanh(r) +- z sqrt((n1 + n2 + 1)/(3 n1 n2))).
+
+**Result.** `oracle_vcdeffect` (964 cases, 120 new) equals effectsize on Windows (Glass delta to 2e-5, rank-biserial to 1e-8). Linux pending. L389 stays partial: reference categories, the mantelhaen helpers, the cliffs_delta interval.

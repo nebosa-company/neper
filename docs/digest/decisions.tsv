@@ -4096,4 +4096,5 @@ D7302	643	arules: the nine D7293 measures, redundant rules and subsetting on the
 D7303	572	vcd: oddsratio confidence intervals and exp-scale variances
 D7304	800	effectsize: interpret rules
 D7305	656	effectsize: cohens_d and hedges_g intervals
-D7306	936	effectsize: eta, omega and epsilon squared intervals
+D7306	937	effectsize: eta, omega and epsilon squared intervals
+D7307	581	effectsize: glass_delta and rank_biserial intervals

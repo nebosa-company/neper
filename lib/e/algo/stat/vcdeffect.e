@@ -15,6 +15,7 @@ use e.math.nmath_beta as nmb
 use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
+use e.math.scale as scale
 use e.math.nchisq as nc
 use e.math.dist as dist
 
@@ -222,7 +223,7 @@ fn ncp_t_ci(t: f64, df: f64, level: f64, out: []f64) {
     }
 }
 
-// cohens_d(x, y, ci = level) and hedges_g(x, y, ci = level) pooled: out[0], out[1] the d interval, out[2], out[3] the g interval (the d interval times the Hedges correction).
+// cohens_d(x, y, ci = level) and hedges_g(x, y, ci = level) pooled: out[0], out[1] the d interval, out[2], out[3] the g interval (the d interval times the Hedges correction), out[4], out[5] the adjusted Glass delta interval.
 fn smd_ci(x: []const f64, y: []const f64, level: f64, out: []f64) {
     let n1 = f64(x.len)
     let n2 = f64(y.len)
@@ -238,6 +239,13 @@ fn smd_ci(x: []const f64, y: []const f64, level: f64, out: []f64) {
     out[1usize] = nci[1usize] * k
     out[2usize] = out[0usize] * j
     out[3usize] = out[1usize] * j
+    // glass_delta(x, y, ci = level) adjusted: the sd of y, df n2 - 1, noncentrality scaled by sqrt(1 / n2 + v1 / (n1 v2))
+    let hn = 1.0f64 / n2 + v1 / (n1 * v2)
+    let tg = (m1 - m2) / (math.sqrt[f64](v2) * math.sqrt[f64](hn))
+    ncp_t_ci(tg, n2 - 1.0f64, level, nci[0usize..2usize])
+    let jg = hedges_j(n2 - 1.0f64)
+    out[4usize] = nci[0usize] * math.sqrt[f64](hn) * jg
+    out[5usize] = nci[1usize] * math.sqrt[f64](hn) * jg
 }
 
 // effectsize's .get_ncp_F: the noncentrality parameters at which pf(f, df, dfe, ncp) is alpha / 2 and 1 - alpha / 2, sorted, bisected on `pnf`; the upper is set to 0 when f is at or below the central alpha / 2
@@ -288,6 +296,18 @@ fn pve_ci(es: f64, df: f64, dfe: f64, ci: f64, greater: bool, out: []f64) {
     out[1usize] = n[1usize] / (n[1usize] + dfe)
     if out[0usize] < 0.0f64 { out[0usize] = 0.0f64 }
     if greater { out[1usize] = 1.0f64 }
+}
+
+// rank_biserial(x, y, ci = level) for two independent samples: tanh(atanh(r) +- z sqrt((n1 + n2 + 1) / (3 n1 n2))). out[0] lower, out[1] upper.
+fn rbs_ci(x: []const f64, y: []const f64, level: f64, out: []f64) {
+    let r = cliffs(x, y)
+    let n1 = f64(x.len)
+    let n2 = f64(y.len)
+    let z = dist.qnorm(1.0f64 - (1.0f64 - level) / 2.0f64, 0.0f64, 1.0f64, true, false)
+    let se = math.sqrt[f64]((n1 + n2 + 1.0f64) / (3.0f64 * n1 * n2))
+    let f = 0.5f64 * math.log[f64]((1.0f64 + r) / (1.0f64 - r))
+    out[0usize] = scale.tanh(f - z * se)
+    out[1usize] = scale.tanh(f + z * se)
 }
 
 // rank_biserial(x, y) = cliffs_delta(x, y): (#x > y - #x < y) / (n1 n2)
