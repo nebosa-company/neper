@@ -7,6 +7,7 @@ use e.math.nmath as nm
 use e.math.dist as dst
 use e.algo.stat.quantreg as qrb
 use e.algo.stat.gslfns as gsl
+use e.math.nmath_beta as nbb
 use e.math.opt as opt
 use e.mem
 
@@ -273,4 +274,38 @@ fn fit_se(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, lin
         c += 1usize
     }
     ret true
+}
+
+// residuals(f, type) and predict(f, type) of observation i at the fitted (beta, phi): kind 0 response y - mu, 1 pearson, 2 deviance, 3 weighted, 4 sweighted, 5 quantile, 6 predict response (mu),
+// 7 predict link (eta), 8 predict precision (phi), 9 predict variance mu (1 - mu) / (1 + phi)
+fn fit_value(x: []const f64, y: []const f64, p: usize, link: usize, f: *const Fit, i: usize, kind: usize) -> f64 {
+    var t = 0.0f64
+    var j = 0usize
+    while j < p {
+        t += x[i * p + j] * f.par[j]
+        j += 1usize
+    }
+    let mu = linkinv(t, link)
+    let phi = f.phi
+    let yi = y[i]
+    if kind == 0usize { ret yi - mu }
+    if kind == 6usize { ret mu }
+    if kind == 7usize { ret t }
+    if kind == 8usize { ret phi }
+    let vr = mu * (1.0f64 - mu) / (1.0f64 + phi)
+    if kind == 9usize { ret vr }
+    if kind == 1usize { ret (yi - mu) / math.sqrt[f64](vr) }
+    if kind == 2usize {
+        let l1 = nm.lgammafn(phi) - nm.lgammafn(yi * phi) - nm.lgammafn((1.0f64 - yi) * phi) + (yi * phi - 1.0f64) * math.log[f64](yi) + ((1.0f64 - yi) * phi - 1.0f64) * math.log[f64](1.0f64 - yi)
+        let l2 = nm.lgammafn(phi) - nm.lgammafn(mu * phi) - nm.lgammafn((1.0f64 - mu) * phi) + (mu * phi - 1.0f64) * math.log[f64](yi) + ((1.0f64 - mu) * phi - 1.0f64) * math.log[f64](1.0f64 - yi)
+        var sg = 1.0f64
+        if yi - mu < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+        ret sg * math.sqrt[f64](2.0f64 * math.abs[f64](l1 - l2))
+    }
+    if kind == 5usize { ret dst.qnorm(nbb.pbeta(yi, mu * phi, (1.0f64 - mu) * phi, true, false), 0.0f64, 1.0f64, true, false) }
+    let ystar = math.log[f64](yi / (1.0f64 - yi))
+    let mustar = gsl.psi(mu * phi) - gsl.psi((1.0f64 - mu) * phi)
+    let v = gsl.psi_n(1usize, mu * phi) + gsl.psi_n(1usize, (1.0f64 - mu) * phi)
+    if kind == 3usize { ret (ystar - mustar) / math.sqrt[f64](phi * v) }
+    ret (ystar - mustar) / math.sqrt[f64](v)
 }

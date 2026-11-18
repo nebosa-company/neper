@@ -43,6 +43,34 @@ fn fitl_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret se[which - 40usize]
 }
 
+// the fit of consecutive cases on the same data is reused
+fn same_bres(a: []const f64, b: []const f64) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if i != 3usize && i != 4usize && a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+type BCache = struct { fit: br.Fit, prev: []const f64, set: bool }
+
+fn bres_answer(a: *mem.Arena, c: *const oracle.Case, bc: *BCache) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let link = usize(x[2usize])
+    if !bc.set || !same_bres(bc.prev, x) {
+        let (f, e) = br.fit_link(a, x[5usize + n..5usize + n + n * p], x[5usize..5usize + n], n, p, link)
+        if e != ok { os.exit(9) }
+        bc.fit = f
+        bc.prev = x
+        bc.set = true
+    }
+    ret br.fit_value(x[5usize + n..5usize + n + n * p], x[5usize..5usize + n], p, link, &bc.fit, usize(x[4usize]), usize(x[3usize]))
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let (golden, load_error) = oracle.load(a, "tests/oracle/betareg.json")
     if load_error != ok { os.exit(2) }
@@ -50,11 +78,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var failures = 0usize
     var at = 0usize
     var have = false
+    var bcache: BCache = zero
     var cur: br.Fit = zero
     var prev: []const f64 = golden.cases[0usize].args
     while at < golden.cases.len {
         let c = &golden.cases[at]
         let x = c.args
+        if str.eq(c.name, "bres") {
+            let got3 = bres_answer(a, c, &bcache)
+            if !oracle.agrees(got3, c) {
+                failures += 1usize
+                if failures <= 12usize {
+                    let _ = io.print(oracle.describe(a, c, got3))
+                    let _ = io.print("\n")
+                }
+            }
+            at += 1usize
+            continue
+        }
         if str.eq(c.name, "fitl") {
             let got2 = fitl_answer(a, c)
             if !oracle.agrees(got2, c) {

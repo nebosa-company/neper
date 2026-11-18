@@ -49796,3 +49796,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.ismev` gains `fit_cov`: gev.fit with a design (intercept plus covariate columns) on each of the location, the scale and the shape and an identity or exp link on each, ismev's gev.lik (1e6 for a non-positive scale or a non-positive 1 + xi (x - mu) / sigma), its start (the moment fit for the three intercepts, not passed through the links; 0.1 for the shape intercept; zero slopes), Nelder-Mead and the numerical Hessian standard errors. The three designs travel in one array and the widths and links are packed into the data struct's `q`.
 
 **Result.** `oracle_ismev_rlarg` has 138 cases (adding scale-only, location and scale, shape-only and a location, scale and exp-linked-scale fit) and equals ismev within optimiser tolerance on Windows. Linux pending. L425 stays partial: covariates for pp.fit and rlarg.fit remain.
+
+## D7292 — betareg: residuals and predictions
+
+`e.algo.stat.betareg.fit_value` answers `residuals(f, type)` for response, pearson (the response residual over sqrt(mu (1 - mu) / (1 + phi))), deviance (the sign of the response residual times sqrt(2 |ll(y) - ll(mu)|)), weighted, sweighted (the standardised logit residual with the digamma mean and trigamma variance) and quantile (qnorm of the beta cdf), and `predict(f, type)` for response, link, precision and variance, at the fitted coefficients and precision.
+
+**Result.** `oracle_betareg` gains 10 data sets over the three links (4 observations by 10 quantities: 400 values at 5e-3, the fit's own tolerance) and equals betareg on Windows. Linux pending. L451 stays partial: variable dispersion, bias correction and reduction, sweighted2 residuals (they need the hat values), lrtest.
