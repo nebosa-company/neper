@@ -53,10 +53,10 @@
       "group": "CRAN parity",
       "order": 607,
       "title": "vcd and effectsize: categorical association and effect sizes",
-      "score": 0.35,
+      "score": 0.4,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partly done (D6101): e.algo.stat.vcdeffect has assocstats, Kappa with weights and errors, cohens_d, hedges_g, glass_delta, rank_biserial, cliffs_delta and one-way eta, omega, epsilon squared, equal to vcd and effectsize on 542 values on Windows (oracle_vcdeffect); Linux pending. Open: intervals, interpret, goodfit, oddsratio, CMHtest, woolf_test, mantelhaen helpers. Original: Open (CRAN ranks 473, 457). Small to mid. Builds on the rstatix module. Acceptance, equal to R: vcd assocstats (phi, contingency, Cramer), goodfit, Kappa with weights and intervals, oddsratio, CMHtest, woolf_test, mantelhaen helpers; effectsize cohens_d, hedges_g, glass_delta, eta_squared, omega_squared, epsilon_squared, cramers_v, phi, rank_biserial, cliffs_delta, with their intervals and interpret rules."
+      "evidence": "Partly done (D6101): e.algo.stat.vcdeffect has assocstats, Kappa with weights and errors, cohens_d, hedges_g, glass_delta, rank_biserial, cliffs_delta and one-way eta, omega, epsilon squared, equal to vcd and effectsize on 542 values on Windows (oracle_vcdeffect); Linux pending. D7121: woolf_test equal to vcd (oracle_vcd_woolf, 40 cases). Open: intervals, interpret, goodfit, oddsratio, CMHtest, mantelhaen helpers. Original: Open (CRAN ranks 473, 457). Small to mid. Builds on the rstatix module. Acceptance, equal to R: vcd assocstats (phi, contingency, Cramer), goodfit, Kappa with weights and intervals, oddsratio, CMHtest, woolf_test, mantelhaen helpers; effectsize cohens_d, hedges_g, glass_delta, eta_squared, omega_squared, epsilon_squared, cramers_v, phi, rank_biserial, cliffs_delta, with their intervals and interpret rules."
     },
     {
       "id": "L390",

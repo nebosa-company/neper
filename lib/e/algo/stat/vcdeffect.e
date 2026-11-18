@@ -250,3 +250,47 @@ fn anova_effects(y: []const f64, sizes: []const usize, out: []f64) {
     if out[1usize] < 0.0f64 { out[1usize] = 0.0f64 }
     if out[2usize] < 0.0f64 { out[2usize] = 0.0f64 }
 }
+
+// vcd::woolf_test on a 2 by 2 by k table x (column-major: cell (i, j, s) at s * 4 + j * 2 + i): the log odds ratios o_s, their inverse-variance
+// weights w_s = 1 / sum(1 / cell), the weighted mean e, and the statistic sum w (o - e)^2 on k - 1 degrees of freedom. Any zero cell adds 1/2 to
+// every cell first. Returns the statistic and its upper tail p value.
+fn woolf(a: *mem.Arena, x: []const f64, k: usize) -> (f64, f64, err) {
+    let (t, e) = mem.alloc[f64](a, 4usize * k)
+    if e != ok { ret (0.0f64, 0.0f64, e) }
+    var zero_cell = false
+    var i = 0usize
+    while i < 4usize * k {
+        if x[i] == 0.0f64 { zero_cell = true }
+        i += 1usize
+    }
+    i = 0usize
+    while i < 4usize * k {
+        t[i] = x[i]
+        if zero_cell { t[i] += 0.5f64 }
+        i += 1usize
+    }
+    let (o, e2) = mem.alloc[f64](a, k)
+    if e2 != ok { ret (0.0f64, 0.0f64, e2) }
+    let (w, e3) = mem.alloc[f64](a, k)
+    if e3 != ok { ret (0.0f64, 0.0f64, e3) }
+    var sw = 0.0f64
+    var swo = 0.0f64
+    var s = 0usize
+    while s < k {
+        let c = s * 4usize
+        o[s] = math.log[f64](t[c] * t[c + 3usize] / (t[c + 2usize] * t[c + 1usize]))
+        w[s] = 1.0f64 / (1.0f64 / t[c] + 1.0f64 / t[c + 1usize] + 1.0f64 / t[c + 2usize] + 1.0f64 / t[c + 3usize])
+        sw += w[s]
+        swo += w[s] * o[s]
+        s += 1usize
+    }
+    let em = swo / sw
+    var stat = 0.0f64
+    s = 0usize
+    while s < k {
+        let d = o[s] - em
+        stat += w[s] * d * d
+        s += 1usize
+    }
+    ret (stat, nm.pchisq(stat, f64(k - 1usize), false, false), ok)
+}

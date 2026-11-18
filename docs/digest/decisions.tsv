@@ -3906,4 +3906,5 @@ D7116	951	compositions: principal balances (gsi.PrinBal, the default PBhclust me
 D7117	1031	gmp: factorize
 D7118	1025	MASS: mvrnorm under set.seed
 D7119	1038	DescTools: Mode, Outlier (boxplot and hampel)
-D7120	1267	ismev: gev.fit with a location covariate
+D7120	1268	ismev: gev.fit with a location covariate
+D7121	705	vcd: woolf_test
