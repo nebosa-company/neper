@@ -215,7 +215,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 196usize { ret gd.dzinbf(x, mu, sigma, nu, tau) }
     if which == 197usize { ret gd.dzipf(x, mu) }
     if which == 198usize { ret gd.pzipf(x, mu) }
-    ret gd.dzazipf(x, mu, sigma)
+    if which == 199usize { ret gd.dzazipf(x, mu, sigma) }
+    if which == 200usize { ret gd.dgt(x, mu, sigma, nu, tau) }
+    if which == 201usize { ret gd.pgt(a, x, mu, sigma, nu, tau) }
+    if which == 202usize { ret gd.qgt(a, x, mu, sigma, nu, tau) }
+    if which == 203usize { ret gd.dnet(x, mu, sigma, nu, tau) }
+    ret gd.dlqno(x, mu, sigma)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

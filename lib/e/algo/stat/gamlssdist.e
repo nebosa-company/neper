@@ -1540,3 +1540,87 @@ fn dzazipf(x: f64, mu: f64, sigma: f64) -> f64 {
     if x == 0.0f64 { ret sigma }
     ret (1.0f64 - sigma) * dzipf(x, mu)
 }
+
+// GT (generalised t), NET (normal exponential t) and LQNO densities; pGT integrates over (-Inf, z] at relative and absolute tolerance eps^0.4 and qGT is the
+// package's bracket with uniroot at tol eps^0.4
+fn dgt(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    let zt = math.pow[f64](math.abs[f64](z), tau)
+    if nu < 1000000.0f64 {
+        ret math.exp[f64](math.log[f64](tau) - math.log[f64](2.0f64 * sigma) - (1.0f64 / tau) * math.log[f64](nu) - sp.lgamma(1.0f64 / tau) - sp.lgamma(nu) + sp.lgamma(nu + 1.0f64 / tau) - (nu + 1.0f64 / tau) * math.log[f64](1.0f64 + zt / nu))
+    }
+    ret math.exp[f64](math.log[f64](tau) - math.log[f64](2.0f64 * sigma) - sp.lgamma(1.0f64 / tau) - zt)
+}
+
+type GtCtx = struct { nu: f64, tau: f64 }
+
+fn gt_dens(c: *GtCtx, x: f64) -> f64 { ret dgt(x, 0.0f64, 1.0f64, c.nu, c.tau) }
+
+fn eps04() -> f64 { ret math.pow[f64](2.220446049250313e-16f64, 0.4f64) }
+
+fn pgt(a: *mem.Arena, x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    var c: GtCtx = zero
+    c.nu = nu
+    c.tau = tau
+    let end = (x - mu) / sigma
+    let (r, e) = qp.qagi[GtCtx](a, &c, gt_dens, end, 0i64 - 1i64, eps04(), eps04(), 100usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    if end > 0.0f64 && r.result < 0.001f64 { ret 1.0f64 }
+    ret r.result
+}
+
+type GtRoot = struct { a: *mem.Arena, mu: f64, sigma: f64, nu: f64, tau: f64, p: f64 }
+
+fn gt_h(c: *GtRoot, q: f64) -> f64 { ret pgt(c.a, q, c.mu, c.sigma, c.nu, c.tau) }
+
+fn gt_h1(c: *GtRoot, q: f64) -> f64 { ret pgt(c.a, q, c.mu, c.sigma, c.nu, c.tau) - c.p }
+
+fn qgt(a: *mem.Arena, p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p <= 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var c: GtRoot = zero
+    c.a = a
+    c.mu = mu
+    c.sigma = sigma
+    c.nu = nu
+    c.tau = tau
+    c.p = p
+    var lo = 0.0f64
+    var hi = 0.0f64
+    if gt_h(&c, mu) < p {
+        lo = mu
+        hi = mu + sigma
+        var j = 2.0f64
+        while gt_h(&c, hi) < p {
+            hi = mu + j * sigma
+            j += 1.0f64
+        }
+    } else {
+        lo = mu - sigma
+        hi = mu
+        var j = 2.0f64
+        while gt_h(&c, lo) > p {
+            lo = mu - j * sigma
+            j += 1.0f64
+        }
+    }
+    ret pw.zeroin[GtRoot](&c, gt_h1, lo, hi, eps04(), 1000i64)
+}
+
+fn dnet(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let k1 = nu
+    let k2 = tau
+    let c1 = (1.0f64 - 2.0f64 * dist.pnorm(0.0f64 - k1, 0.0f64, 1.0f64, true, false)) * math.sqrt[f64](2.0f64 * pi())
+    let c2 = (2.0f64 / k1) * math.exp[f64](0.0f64 - (k1 * k1) / 2.0f64)
+    let c3 = 2.0f64 * math.exp[f64](0.0f64 - k1 * k2 + (k1 * k1) / 2.0f64) / ((k1 * k2 - 1.0f64) * k1)
+    let ct = 1.0f64 / (c1 + c2 + c3)
+    let tc = (x - mu) / sigma
+    var d = 0.0f64
+    let at = math.abs[f64](tc)
+    if at <= k1 { d = 0.0f64 - (tc * tc) / 2.0f64 }
+    if at > k1 && at <= k2 { d = 0.0f64 - k1 * at + (k1 * k1) / 2.0f64 }
+    if at > k2 && x != 0.0f64 { d = 0.0f64 - k1 * k2 * math.log[f64](at / k2) - k1 * k2 + (k1 * k1) / 2.0f64 }
+    ret math.exp[f64](math.log[f64](ct) - math.log[f64](sigma) + d)
+}
+
+fn dlqno(x: f64, mu: f64, sigma: f64) -> f64 { ret dist.dnorm(x, mu, math.sqrt[f64](mu * (1.0f64 + sigma * mu)), false) }

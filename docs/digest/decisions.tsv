@@ -3960,4 +3960,5 @@ D7170	794	gamlss.dist: the numerically integrated distributions, pST4, pST5 and 
 D7171	516	gamlss.dist: SEP3, SN2, SEP4 distributions and quantiles, and pSEP2
 D7172	602	gamlss.dist: PIG
 D7173	557	gamlss.dist: ZAPIG, ZIPIG, PIG2, NBF and ZINBF
-D7174	498	gamlss.dist: ZIPF and ZAZIPF
+D7174	499	gamlss.dist: ZIPF and ZAZIPF
+D7175	545	gamlss.dist: GT, NET and LQNO

@@ -49070,3 +49070,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the Zipf distribution (density and distribution) and the zero-adjusted Zipf density, with the package's own zeta function `zetaP` (twelve explicit terms and the Euler-Maclaurin remainder with eight Bernoulli terms, so its truncation error is reproduced, not replaced by an exact zeta).
 
 **Result.** `oracle_gamlss_exp` has 6651 values across 84 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7175 — gamlss.dist: GT, NET and LQNO
+
+`e.algo.stat.gamlssdist` gains the generalised t GT (density; the distribution by the QUADPACK infinite-range integrate at tolerance eps^0.4 with the package's reset to 1 for a tiny upper-half mass; the quantile by the package's bracket and zeroin at tol eps^0.4), the normal exponential t NET density and the LQNO density.
+
+**Result.** `oracle_gamlss_exp` has 6799 values across 87 families and equals gamlss.dist on Windows (GT p and q at 1e-5 and 1e-4 relative). Linux pending. L464 stays partial.
