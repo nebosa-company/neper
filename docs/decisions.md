@@ -49628,3 +49628,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.survival.fleming_harrington` with gamma = 0 is `survdiff`'s G-rho test (the pooled Kaplan-Meier survival to the power rho as the weight, the hypergeometric variance), so the new fixture `oracle_survdiff` checks its chi-square and p value against `survival::survdiff(rho = ...)`.
 
 **Result.** 40 two-group data sets with censoring (10 to 40 per group, rho 0, 0.5, 1 and 2: 80 values) equal survival on Windows at 1e-8; no new library code was needed. Linux pending. L311 stays partial: the K-sample survdiff, strata, the rest of coxph, survfit, survreg, cox.zph, concordance, survSplit, tmerge, pyears, residuals.
+
+## D7268 — survival: survfit for one sample
+
+New `e.algo.stat.survfitpkg.km_table`: one row per distinct event time with n.risk, n.event, the Kaplan-Meier survival, Greenwood's standard error of the log survival (the sum of d / (n (n - d))) and the log, plain and log-log intervals at any confidence level, truncated to [0, 1].
+
+**Result.** The new fixture `oracle_survfit` (30 censored samples of 12 to 40, three interval types, three levels; table rows at random positions: 828 values) equals `survfit` and `summary.survfit` on Windows at 1e-8. Linux pending. L311 stays partial: strata and the Fleming-Harrington and Nelson-Aalen forms of survfit, left and interval censoring, the rest of coxph, survreg, cox.zph, concordance, survSplit, tmerge, pyears, residuals.

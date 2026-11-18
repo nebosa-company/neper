@@ -488,3 +488,4 @@ oracle_gamlss_link
 oracle_energy_normal
 oracle_desctools_agree
 oracle_survdiff
+oracle_survfit
