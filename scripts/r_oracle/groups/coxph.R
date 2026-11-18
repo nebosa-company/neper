@@ -42,4 +42,17 @@ for (rep in 1:14) {
     for (q in seq_along(out)) cases[[length(cases) + 1]] <- case("zph", c(n, p, tr, tm, st, X, if (q <= ntab) q - 1 else q - 1), out[q], rel = 1e-5, abs = 1e-8)
   }
 }
+# residuals of a Breslow fit with strata and an offset: "cres" args (n, p, kind 0 martingale / 1 deviance, time, status, strata, offset, X column-major, row)
+for (rep in 1:14) {
+  n <- sample(30:60, 1); p <- sample(1:2, 1); X <- matrix(round(rnorm(n * p), 2), n, p)
+  tm <- ceiling(rexp(n, exp(0.5 * X[, 1])) * 5) + round(runif(n), 3); st <- rbinom(n, 1, 0.75); if (sum(st) < 6) st[1:8] <- 1
+  sg <- sample(0:1, n, TRUE); off <- round(rnorm(n, 0, 0.3), 2)
+  dz <- as.data.frame(X); names(dz) <- paste0("v", 1:p); dz$tm <- tm; dz$st <- st; dz$sg <- sg; dz$off <- off
+  f <- coxph(as.formula(paste("Surv(tm, st) ~", paste0("v", 1:p, collapse = " + "), "+ strata(sg) + offset(off)")), data = dz, ties = "breslow", control = coxph.control(eps = 1e-12, iter.max = 50))
+  mr <- residuals(f, type = "martingale"); dr <- residuals(f, type = "deviance")
+  for (r in sample(n, 6)) {
+    cases[[length(cases) + 1]] <- case("cres", c(n, p, 0, tm, st, sg, off, X, r - 1), mr[r], rel = 1e-6, abs = 1e-8)
+    cases[[length(cases) + 1]] <- case("cres", c(n, p, 1, tm, st, sg, off, X, r - 1), dr[r], rel = 1e-6, abs = 1e-8)
+  }
+}
 emit("coxph", "survival", list(cases))

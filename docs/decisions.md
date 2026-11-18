@@ -49694,3 +49694,9 @@ New `e.algo.stat.survregpkg.survreg`: accelerated failure time models for right-
 `e.algo.stat.coxext.cox_zph` tests proportional hazards for a Breslow or Efron fit with distinct event times: the transformed times g (identity, rank, log, or 1 - S(t-) of the pooled Kaplan-Meier) centred on the mean over events, the score of the added x g(t) interaction (g(t) (x - xbar) summed over events), the 2p by 2p information of (x, x g) from the risk-set covariances, and u' I^-1 u per covariate (its beta block and its own interaction) and for all covariates together.
 
 **Result.** `oracle_coxph` gains 14 data sets (n 30 to 60, one to three covariates, four transforms; chi-squares and p values) and equals `cox.zph` on Windows at 1e-5. A first run compared a matrix term (one term of p columns) with per-covariate tests; the generator now builds one term per covariate. Tied event times are not ported. Linux pending. L311 stays partial: exact ties, counting-process coxph, the Efron and cluster robust variance, frailty, tmerge, pyears, residuals, survdiff with strata, interval and left censoring in survreg.
+
+## D7279 — survival: martingale and deviance residuals
+
+`e.algo.stat.coxext.cox_resid` gives the martingale residual delta_i - e_i H0(t_i) of a Breslow fit (H0 the cumulative Breslow baseline hazard of the row's stratum at its time, the offset inside e_i) and the deviance residual sign(m) sqrt(-2 (m + delta log(delta - m))).
+
+**Result.** `oracle_coxph` gains 14 data sets with two strata and an offset (6 rows each, both types: 168 values) and equals `residuals.coxph` on Windows at 1e-6. Linux pending. L311 stays partial: exact ties, counting-process coxph, the Efron and cluster robust variance, frailty, tmerge, pyears, the Schoenfeld and score residuals, survdiff with strata, interval and left censoring in survreg.

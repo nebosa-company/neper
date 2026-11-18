@@ -542,3 +542,45 @@ fn cox_zph(a: *mem.Arena, time: []const f64, status: []const f64, x: []const f64
     }
     ret ok
 }
+
+// residuals(coxph, type) for a Breslow fit with strata and an offset: the martingale residual delta_i - e_i H0(t_i) (H0 the Breslow cumulative baseline hazard of the stratum at the row's time) and the
+// deviance residual sign(m) sqrt(-2 (m + delta log(delta - m))); kind 0 martingale, 1 deviance; row i of the fit
+fn cox_resid(a: *mem.Arena, time: []const f64, status: []const f64, strat: []const usize, off: []const f64, x: []const f64, n: usize, p: usize, kind: usize, row: usize) -> f64 {
+    let (coef, e1) = mem.alloc[f64](a, p)
+    let (se, e2) = mem.alloc[f64](a, p)
+    let (ll, e3) = mem.alloc[f64](a, 2usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    if coxph_s(a, time, status, strat, off, x, n, p, false, false, coef, se, ll) != ok { ret 0.0f64 / 0.0f64 }
+    var h = 0.0f64
+    var j = 0usize
+    while j < n {
+        if status[j] != 0.0f64 && strat[j] == strat[row] && time[j] <= time[row] {
+            // the first row at this event time counts it once
+            var first = true
+            var q = 0usize
+            while q < j {
+                if status[q] != 0.0f64 && strat[q] == strat[j] && time[q] == time[j] { first = false }
+                q += 1usize
+            }
+            if first {
+                var rsk = 0.0f64
+                var d = 0.0f64
+                q = 0usize
+                while q < n {
+                    if strat[q] == strat[j] && time[q] >= time[j] { rsk += math.exp[f64](off[q] + dotx(x, n, p, coef, q)) }
+                    if strat[q] == strat[j] && time[q] == time[j] && status[q] != 0.0f64 { d += 1.0f64 }
+                    q += 1usize
+                }
+                h += d / rsk
+            }
+        }
+        j += 1usize
+    }
+    let m = status[row] - math.exp[f64](off[row] + dotx(x, n, p, coef, row)) * h
+    if kind == 0usize { ret m }
+    var inner = 0.0f64 - 2.0f64 * m
+    if status[row] != 0.0f64 { inner = 0.0f64 - 2.0f64 * (m + math.log[f64](status[row] - m)) }
+    var sg = 1.0f64
+    if m < 0.0f64 { sg = 0.0f64 - 1.0f64 }
+    ret sg * math.sqrt[f64](inner)
+}

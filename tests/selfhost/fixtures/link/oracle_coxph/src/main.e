@@ -13,6 +13,18 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "cres") {
+        let rn = usize(x[0usize])
+        let rp = usize(x[1usize])
+        let (sg3, ge3) = mem.alloc[usize](a, rn)
+        if ge3 != ok { ret 0.0f64 / 0.0f64 }
+        var q3 = 0usize
+        while q3 < rn {
+            sg3[q3] = usize(x[3usize + 2usize * rn + q3])
+            q3 += 1usize
+        }
+        ret cs.cox_resid(a, x[3usize..3usize + rn], x[3usize + rn..3usize + 2usize * rn], sg3, x[3usize + 3usize * rn..3usize + 4usize * rn], x[3usize + 4usize * rn..3usize + 4usize * rn + rn * rp], rn, rp, usize(x[2usize]), usize(x[3usize + 4usize * rn + rn * rp]))
+    }
     if str.eq(c.name, "zph") {
         let zn = usize(x[0usize])
         let zp = usize(x[1usize])
