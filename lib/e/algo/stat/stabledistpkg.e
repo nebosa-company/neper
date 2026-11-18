@@ -776,3 +776,13 @@ fn qstable_ext(a: *mem.Arena, p: f64, alpha: f64, beta: f64, gamma: f64, delta: 
 
 // the log density
 fn dstable_log(a: *mem.Arena, x: f64, alpha: f64, beta: f64, gamma: f64, delta: f64) -> f64 { ret math.log[f64](dstable(a, x, alpha, beta, gamma, delta)) }
+
+fn qstable_pm(a: *mem.Arena, p: f64, alpha: f64, beta: f64, gamma: f64, delta: f64, pm: usize) -> f64 {
+    let (g, d) = pm_to_s0(a, alpha, beta, gamma, delta, pm)
+    ret qstable_ext(a, p, alpha, beta, g, d, true, false)
+}
+
+fn rstable_pm(a: *mem.Arena, r: *rg.Rng, n: usize, alpha: f64, beta: f64, gamma: f64, delta: f64, pm: usize, out: []f64, theta: []f64, w: []f64) {
+    let (g, d) = pm_to_s0(a, alpha, beta, gamma, delta, pm)
+    rstable(r, n, alpha, beta, g, d, out, theta, w)
+}

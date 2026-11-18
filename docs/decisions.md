@@ -49184,3 +49184,9 @@ For lambda = 1 `rghyp` uses the package's `rgig1`, which is `rgig` with m = 1 (t
 `e.algo.stat.stabledistpkg` gains `qstable_ext`: the bracket and root function of D7181 generalised to both tails and the log scale (p0 and its complement from R.DT.qIv and R.DT.CIv, the root function pstable at the requested tail and scale minus p, and uniroot's extendInt "upX" for the lower tail and "downX" for the upper, which widen from opposite signs), and it works at alpha = 1 through the skewed branch of D7189. `dstable_log` is the log of the density.
 
 **Result.** `oracle_stabledist` has 1072 values (150 added: quantiles in all four tail and log combinations at alpha below, above and at 1, 1e-3 relative; 30 log densities at 1e-7) and equals stabledist on Windows. Linux pending. stabledist's four functions are now covered in the three parametrisations except qstable and rstable outside S0 (the quantile and the random numbers take the same shift as D7192 but have no oracle values there).
+
+## D7194 — stabledist: oracle values for qstable and rstable in pm = 1 and pm = 2
+
+`qstable_pm` and `rstable_pm` apply the parametrisation shift of D7192 before the S0 quantile and the random generator. They had no oracle values; `oracle_stabledist` now carries 24 quantiles at 1e-3 and 96 seeded draws at 1e-7 in both parametrisations.
+
+**Result.** `oracle_stabledist` has 1192 values and equals stabledist on Windows, closing the gap D7193 listed: dstable, pstable, qstable and rstable are covered in every parametrisation, both tails and the log scale. Linux pending. L407 stays partial on the GeneralizedHyperbolic side only.

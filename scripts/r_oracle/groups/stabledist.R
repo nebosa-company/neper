@@ -101,4 +101,18 @@ for (rep in 1:30) {
   dl <- dstable(x, al, be, ga, de, log = TRUE)
   if (is.finite(dl)) cases[[length(cases) + 1]] <- case("dl", c(al, be, ga, de, x), dl, rel = 1e-7, abs = 1e-10)
 }
+# qstable and rstable in pm = 1 and 2: "qpm" (alpha, beta, gamma, delta, p, pm) at 1e-3; "rpm" (alpha, beta, gamma, delta, seed, n, i, pm)
+for (rep in 1:12) {
+  al <- c(runif(1, 0.5, 0.98), runif(1, 1.05, 1.95))[sample(1:2, 1)]
+  be <- c(0, runif(1, -0.9, 0.9))[sample(1:2, 1)]
+  ga <- runif(1, 0.4, 2.5); de <- rnorm(1)
+  for (pm in 1:2) {
+    pp <- runif(1, 0.05, 0.95)
+    qv <- tryCatch(suppressWarnings(qstable(pp, al, be, ga, de, pm = pm)), error = function(e) NA_real_)
+    if (is.finite(qv)) cases[[length(cases) + 1]] <- case("qpm", c(al, be, ga, de, pp, pm), qv, rel = 1e-3, abs = 1e-4)
+    sd0 <- sample(1:100000, 1); n <- 4
+    set.seed(sd0); v <- tryCatch(rstable(n, al, be, ga, de, pm = pm), error = function(e) rep(NA_real_, n))
+    for (i in seq_len(n)) if (is.finite(v[i])) cases[[length(cases) + 1]] <- case("rpm", c(al, be, ga, de, sd0, n, i - 1, pm), v[i], rel = 1e-7, abs = 1e-10)
+  }
+}
 emit("stabledist", "stabledist", list(cases))

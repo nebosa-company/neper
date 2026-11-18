@@ -3979,4 +3979,5 @@ D7189	930	stabledist: alpha = 1 with beta != 0
 D7190	917	stabledist: pstable with lower.tail and log.p
 D7191	1051	stabledist: the small-alpha branch and the Pareto-tail fallback
 D7192	809	stabledist: the parametrisations pm = 1 and pm = 2
-D7193	998	stabledist: qstable with lower.tail and log.p, alpha = 1, and the log density
+D7193	999	stabledist: qstable with lower.tail and log.p, alpha = 1, and the log density
+D7194	632	stabledist: oracle values for qstable and rstable in pm = 1 and pm = 2

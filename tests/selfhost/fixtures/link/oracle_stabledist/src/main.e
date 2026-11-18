@@ -20,7 +20,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let z = c.args
         var got = 0.0f64
-        if str.eq(c.name, "qe") {
+        if str.eq(c.name, "qpm") {
+            got = sd.qstable_pm(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize], usize(z[5usize]))
+        } else if str.eq(c.name, "rpm") {
+            let nn = usize(z[5usize])
+            let (out, g1) = mem.alloc[f64](a, nn)
+            let (th, g2) = mem.alloc[f64](a, nn)
+            let (ww, g3) = mem.alloc[f64](a, nn)
+            if g1 != ok || g2 != ok || g3 != ok { os.exit(7) }
+            var rng: rg.Rng = zero
+            rg.seed(&rng, i64(z[4usize]))
+            sd.rstable_pm(a, &rng, nn, z[0usize], z[1usize], z[2usize], z[3usize], usize(z[7usize]), out, th, ww)
+            got = out[usize(z[6usize])]
+        } else if str.eq(c.name, "qe") {
             got = sd.qstable_ext(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize], z[5usize] > 0.5f64, z[6usize] > 0.5f64)
         } else if str.eq(c.name, "dl") {
             got = sd.dstable_log(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize])
