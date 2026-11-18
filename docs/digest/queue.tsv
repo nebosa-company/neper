@@ -130,7 +130,7 @@ L497	library	0	210	gamlss: GAMLSS model fitting	Open (CRAN rank 836).
 L515	library	0	241	unmarked: occupancy and abundance models	Open (CRAN rank 905).
 L353	library	0	285	mgcv: generalized additive models	Open (CRAN rank 239).
 L354	library	0	286	lavaan: structural equation models	Open (CRAN rank 275).
-L381	library	0.13	300	ade4: multivariate analysis of ecological data	Partial (D7148, D7149 as.dudi, dudi.pca, dudi.coa and dudi.acm equal to ade4 including axis signs on Windows;
+L381	library	0.17	283	ade4: multivariate analysis of ecological data	Partial (D7148 to D7150 as.dudi, dudi.pca, dudi.coa, dudi.acm, bca and wca equal to ade4 including axis signs on Windows;
 L382	library	0	298	VGAM: vector generalized linear and additive models	Open (CRAN rank 382).
 L383	library	0	315	glmmTMB: generalized linear mixed models by Laplace approximation	Open (CRAN rank 342).
 L384	library	0	415	spatstat: point pattern analysis	Open (CRAN ranks 304, 314, 316, 323).

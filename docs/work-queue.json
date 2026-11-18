@@ -1450,10 +1450,10 @@
       "group": "CRAN parity",
       "order": 824,
       "title": "ade4: multivariate analysis of ecological data",
-      "score": 0.13,
+      "score": 0.17,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D7148, D7149 as.dudi, dudi.pca, dudi.coa and dudi.acm equal to ade4 including axis signs on Windows; oracle_ade4_dudi; Linux pending). Open: acm cr, dudi.mix, dudi.fca, between and within analyses, coinertia, procuste, rlq, fuzzy analyses. Very large upstream; overlaps FactoMineR and vegan."
+      "evidence": "Partial (D7148 to D7150 as.dudi, dudi.pca, dudi.coa, dudi.acm, bca and wca equal to ade4 including axis signs on Windows; oracle_ade4_dudi; Linux pending). Open: acm cr, dudi.mix, dudi.fca, coinertia, procuste, rlq, fuzzy analyses. Very large upstream; overlaps FactoMineR and vegan."
     },
     {
       "id": "L382",

@@ -48920,3 +48920,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.ade4` gains `dudi_acm`: the disjunctive table of the factors divided by the category frequencies minus one, column weights frequency over the number of factors, through `as_dudi`. Every level of every factor must be present (an absent level is an error, as ade4's).
 
 **Result.** `oracle_ade4_dudi` has 484 values and equals ade4 (the multiple correspondence analysis of three factors added) on Windows. Linux pending. L381 stays partial (the acm `cr` correlation ratios are not ported).
+
+## D7150 — ade4: between-class and within-class analyses
+
+`e.algo.stat.ade4` gains `bca` (the analysis of the class means weighted by the class weights, with the between-over-total inertia ratio) and `wca` (the table minus its class means), plus `pca_prep` (the table dudi.pca hands to as.dudi) and `class_means`. R's `sum()` accumulates in long double, so the centring, the scale and the class means use Neumaier compensated sums; with plain double sums the second within-class axis came out with the opposite sign, because LAPACK's eigenvector sign follows a twisted-factorisation choice that an ulp can flip.
+
+**Result.** `oracle_ade4_dudi` has 724 values (a bca and a wca on a 9 by 4 and an 11 by 6 table) and equals ade4 on Windows. Linux pending. L381 stays partial.

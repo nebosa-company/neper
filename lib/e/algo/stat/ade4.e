@@ -137,12 +137,16 @@ fn as_dudi(a: *mem.Arena, tab: []const f64, n: usize, p: usize, lw: []const f64,
     ret (out, ok)
 }
 
-// dudi.pca: row weights 1 / n, column weights 1; centre and scale (the population standard deviation, a norm below 1e-8 is taken as 1) as asked
-fn dudi_pca(a: *mem.Arena, x: []const f64, n: usize, p: usize, center: bool, scale: bool, nf: usize) -> (Dudi, err) {
-    let (t, e1) = mem.alloc[f64](a, n * p)
-    let (lw, e2) = mem.alloc[f64](a, n)
-    let (cw, e3) = mem.alloc[f64](a, p)
-    if e1 != ok || e2 != ok || e3 != ok { ret (zero, Malformed) }
+// Neumaier step: R's sum() accumulates in long double, which a compensated sum reproduces (the sum rounded once)
+fn nstep(s: f64, c: f64, v: f64) -> (f64, f64) {
+    let t = s + v
+    var cc = c
+    if math.abs[f64](s) >= math.abs[f64](v) { cc += (s - t) + v } else { cc += (v - t) + s }
+    ret (t, cc)
+}
+
+// the table, row weights and column weights dudi.pca hands to as.dudi (centre and scale: the population standard deviation, a norm below 1e-8 is taken as 1)
+fn pca_prep(a: *mem.Arena, x: []const f64, n: usize, p: usize, center: bool, scale: bool, t: []f64, lw: []f64, cw: []f64) {
     var i = 0usize
     while i < n {
         lw[i] = 1.0f64 / f64(n)
@@ -152,22 +156,40 @@ fn dudi_pca(a: *mem.Arena, x: []const f64, n: usize, p: usize, center: bool, sca
     while j < p {
         cw[j] = 1.0f64
         var mu = 0.0f64
+        var sw = 0.0f64
+        var swc = 0.0f64
+        i = 0usize
+        while i < n {
+            let (a1, a2) = nstep(sw, swc, lw[i])
+            sw = a1
+            swc = a2
+            i += 1usize
+        }
+        sw = sw + swc
         if center {
+            var m1 = 0.0f64
+            var m2 = 0.0f64
             i = 0usize
             while i < n {
-                mu += x[i * p + j] * lw[i]
+                let (b1, b2) = nstep(m1, m2, x[i * p + j] * lw[i])
+                m1 = b1
+                m2 = b2
                 i += 1usize
             }
+            mu = (m1 + m2) / sw
         }
-        var ss = 0.0f64
+        var s1 = 0.0f64
+        var s2 = 0.0f64
         i = 0usize
         while i < n {
             t[i * p + j] = x[i * p + j] - mu
-            ss += t[i * p + j] * t[i * p + j] * lw[i]
+            let (c1v, c2v) = nstep(s1, s2, t[i * p + j] * t[i * p + j] * lw[i])
+            s1 = c1v
+            s2 = c2v
             i += 1usize
         }
         if scale {
-            var nm = math.sqrt[f64](ss)
+            var nm = math.sqrt[f64]((s1 + s2) / sw)
             if nm < 0.00000001f64 { nm = 1.0f64 }
             i = 0usize
             while i < n {
@@ -177,8 +199,103 @@ fn dudi_pca(a: *mem.Arena, x: []const f64, n: usize, p: usize, center: bool, sca
         }
         j += 1usize
     }
+}
+
+// dudi.pca: row weights 1 / n, column weights 1
+fn dudi_pca(a: *mem.Arena, x: []const f64, n: usize, p: usize, center: bool, scale: bool, nf: usize) -> (Dudi, err) {
+    let (t, e1) = mem.alloc[f64](a, n * p)
+    let (lw, e2) = mem.alloc[f64](a, n)
+    let (cw, e3) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok { ret (zero, Malformed) }
+    pca_prep(a, x, n, p, center, scale, t, lw, cw)
     let (d, ed) = as_dudi(a, t, n, p, lw, cw, nf, 0.0000001f64)
     ret (d, ed)
+}
+
+// the class means of the table (nl by p), with the class weights (the sum of lw over the class) in cla; fac holds 0-based class codes
+fn class_means(a: *mem.Arena, tab: []const f64, n: usize, p: usize, lw: []const f64, fac: []const f64, nl: usize, cla: []f64, mean: []f64) {
+    var l = 0usize
+    while l < nl {
+        var c1 = 0.0f64
+        var c2 = 0.0f64
+        let (cs, e0) = mem.alloc[f64](a, p * 2usize)
+        if e0 != ok { ret }
+        var j = 0usize
+        while j < p * 2usize {
+            cs[j] = 0.0f64
+            j += 1usize
+        }
+        var i = 0usize
+        while i < n {
+            if usize(fac[i]) == l {
+                let (u1, u2) = nstep(c1, c2, lw[i])
+                c1 = u1
+                c2 = u2
+                j = 0usize
+                while j < p {
+                    let (v1, v2) = nstep(cs[j * 2usize], cs[j * 2usize + 1usize], tab[i * p + j] * lw[i])
+                    cs[j * 2usize] = v1
+                    cs[j * 2usize + 1usize] = v2
+                    j += 1usize
+                }
+            }
+            i += 1usize
+        }
+        cla[l] = c1 + c2
+        j = 0usize
+        while j < p {
+            mean[l * p + j] = (cs[j * 2usize] + cs[j * 2usize + 1usize]) / cla[l]
+            j += 1usize
+        }
+        l += 1usize
+    }
+}
+
+fn eig_sum(d: *const Dudi) -> f64 {
+    var s = 0.0f64
+    var k = 0usize
+    while k < d.rank {
+        s += d.eig[k]
+        k += 1usize
+    }
+    ret s
+}
+
+// bca.dudi: the between-class analysis of the dudi (tab, lw, cw) with the class codes fac (0-based, nl classes): the analysis of the class means weighted by
+// the class weights; ratio is the between inertia over the total
+fn bca(a: *mem.Arena, tab: []const f64, n: usize, p: usize, lw: []const f64, cw: []const f64, fac: []const f64, nl: usize, nf: usize) -> (Dudi, f64, err) {
+    let (cla, e1) = mem.alloc[f64](a, nl)
+    let (mean, e2) = mem.alloc[f64](a, nl * p)
+    if e1 != ok || e2 != ok { ret (zero, 0.0f64, Malformed) }
+    class_means(a, tab, n, p, lw, fac, nl, cla, mean)
+    let (whole, e3) = as_dudi(a, tab, n, p, lw, cw, nf, 0.0000001f64)
+    if e3 != ok { ret (zero, 0.0f64, e3) }
+    let (d, e4) = as_dudi(a, mean, nl, p, cla, cw, nf, 0.0000001f64)
+    if e4 != ok { ret (zero, 0.0f64, e4) }
+    ret (d, eig_sum(&d) / eig_sum(&whole), ok)
+}
+
+// wca.dudi: the within-class analysis, the table minus its class means
+fn wca(a: *mem.Arena, tab: []const f64, n: usize, p: usize, lw: []const f64, cw: []const f64, fac: []const f64, nl: usize, nf: usize) -> (Dudi, f64, err) {
+    let (cla, e1) = mem.alloc[f64](a, nl)
+    let (mean, e2) = mem.alloc[f64](a, nl * p)
+    let (wit, e5) = mem.alloc[f64](a, n * p)
+    if e1 != ok || e2 != ok || e5 != ok { ret (zero, 0.0f64, Malformed) }
+    class_means(a, tab, n, p, lw, fac, nl, cla, mean)
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < p {
+            wit[i * p + j] = tab[i * p + j] - mean[usize(fac[i]) * p + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    let (whole, e3) = as_dudi(a, tab, n, p, lw, cw, nf, 0.0000001f64)
+    if e3 != ok { ret (zero, 0.0f64, e3) }
+    let (d, e4) = as_dudi(a, wit, n, p, lw, cw, nf, 0.0000001f64)
+    if e4 != ok { ret (zero, 0.0f64, e4) }
+    ret (d, eig_sum(&d) / eig_sum(&whole), ok)
 }
 
 // dudi.coa: the correspondence analysis of a table of non-negative counts

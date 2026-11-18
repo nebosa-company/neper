@@ -18,7 +18,32 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = z[6usize..6usize + n * p]
     var d: ad.Dudi = zero
     var e = ok
-    if kind == 0usize {
+    var ratio = 0.0f64
+    if kind >= 4usize {
+        let fac = z[6usize + n * p..6usize + n * p + n]
+        let (t, e1) = mem.alloc[f64](a, n * p)
+        let (lw, e2) = mem.alloc[f64](a, n)
+        let (cw, e3) = mem.alloc[f64](a, p)
+        if e1 != ok || e2 != ok || e3 != ok { os.exit(6) }
+        ad.pca_prep(a, x, n, p, true, true, t, lw, cw)
+        var nl = 0usize
+        var i = 0usize
+        while i < n {
+            if usize(fac[i]) + 1usize > nl { nl = usize(fac[i]) + 1usize }
+            i += 1usize
+        }
+        if kind == 4usize {
+            let (r, rt, er) = ad.bca(a, t, n, p, lw, cw, fac, nl, nf)
+            d = r
+            ratio = rt
+            e = er
+        } else {
+            let (r, rt, er) = ad.wca(a, t, n, p, lw, cw, fac, nl, nf)
+            d = r
+            ratio = rt
+            e = er
+        }
+    } else if kind == 0usize {
         let (r, er) = ad.dudi_pca(a, x, n, p, true, true, nf)
         d = r
         e = er
@@ -36,6 +61,7 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         e = er
     }
     if e != ok { os.exit(5) }
+    if what == 6usize { ret ratio }
     if what == 0usize { ret d.eig[idx] }
     if what == 1usize { ret d.c1[idx] }
     if what == 2usize { ret d.li[idx] }
