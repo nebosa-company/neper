@@ -481,3 +481,5 @@ oracle_vcd_goodfit
 oracle_gamlss_exp
 oracle_gamlss_exgaus
 oracle_ade4_dudi
+oracle_flexmix_gauss
+oracle_quadpack

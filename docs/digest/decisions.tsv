@@ -3963,4 +3963,5 @@ D7173	557	gamlss.dist: ZAPIG, ZIPIG, PIG2, NBF and ZINBF
 D7174	499	gamlss.dist: ZIPF and ZAZIPF
 D7175	546	gamlss.dist: GT, NET and LQNO
 D7176	667	gamlss.dist: SICHEL and GIG densities
-D7177	1007	e.math.quadpack: qags, and the GIG distribution and quantile
+D7177	1008	e.math.quadpack: qags, and the GIG distribution and quantile
+D7178	683	oracle_quadpack: the value, error estimate and subdivisions of qags and qagi against R's integrate()
