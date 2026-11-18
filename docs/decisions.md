@@ -49814,3 +49814,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.arulespkg.closed_maximal` counts, over all frequent itemsets of any size, those with no proper superset of the same support (closed) and those with no frequent proper superset (maximal), with the sum of their supports.
 
 **Result.** `oracle_arules` gains 24 transaction sets by four quantities (96 values; `target = "closed frequent itemsets"` and `"maximally frequent itemsets"`) and equals arules on Windows at 1e-9. Linux pending. L462 stays partial: the candidate-pruning search for many items, eclat, the remaining interest measures, rule subsetting, sequences.
+
+## D7295 — arules: the basic interest measures
+
+`e.algo.stat.arulespkg.basic_measure` evaluates arules' `.basicRuleMeasure` formulas from a rule's 2 by 2 counts (n11, n10, n01, n00) and `apriori_basic` sums each over the rules and over the finite values: precision, recall, fScore, accuracy, balancedAccuracy, conviction, gini, rulePowerFactor, relativeRisk, netconf, zhang, collectiveStrength, importance, imbalance, kappa, lambda, mutualInformation, maxconfidence, jMeasure, laplace, certainty, ralambondrainy, sebag, counterexample, confirmedConfidence, causalSupport, causalConfidence, leastContradiction, centeredConfidence, varyingLiaison, yuleQ, yuleY, lerman, implicationIndex, doc, chiSquared, rhsSupport and count. R's zhang uses `max(a, b)` over the whole vectors, so one number divides every rule's leverage; the port takes that maximum over all rules (the first version took it per rule and missed by up to 3x).
+
+**Result.** `oracle_arules` gains 24 transaction sets by 38 measures (912 values) and equals arules on Windows at 1e-9. Linux pending. L462 stays partial: the hyper and improvement measures (hyperLift, hyperConfidence, fishersExactTest, improvement, LIC, RLD, stdLift, boost), the candidate-pruning search for many items, eclat, rule subsetting, sequences.

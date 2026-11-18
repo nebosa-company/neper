@@ -22,6 +22,13 @@ for (rep in 1:24) {
   add("c0", a, length(cl)); add("c1", a, if (length(cl)) sum(quality(cl)$support) else 0)
   add("c2", a, length(mx)); add("c3", a, if (length(mx)) sum(quality(mx)$support) else 0)
   if (length(ru)) {
+    bm <- c("precision", "recall", "fScore", "accuracy", "balancedAccuracy", "conviction", "gini", "rulePowerFactor", "relativeRisk", "netconf", "zhang", "collectiveStrength", "importance", "imbalance", "kappa", "lambda", "mutualInformation", "maxconfidence", "jMeasure", "laplace", "certainty", "ralambondrainy", "sebag", "counterexample", "confirmedConfidence", "causalSupport", "causalConfidence", "leastContradiction", "centeredConfidence", "varyingLiaison", "yuleQ", "yuleY", "lerman", "implicationIndex", "doc", "chiSquared", "rhsSupport", "count")
+    for (k in seq_along(bm)) {
+      v <- as.numeric(interestMeasure(ru, bm[k], transactions = tr)); v <- v[is.finite(v)]
+      add(paste0("b", k - 1), a, sum(v))
+    }
+  }
+  if (length(ru)) {
     ms <- c("leverage", "coverage", "cosine", "jaccard", "kulczynski", "phi", "addedValue", "conviction", "oddsRatio")
     for (k in seq_along(ms)) {
       v <- as.numeric(interestMeasure(ru, ms[k], transactions = tr)); v <- v[is.finite(v)]

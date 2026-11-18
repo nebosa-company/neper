@@ -195,3 +195,143 @@ fn closed_maximal(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, o
     }
     ret ok
 }
+
+// the basic interest measures of arules from the counts of the 2 by 2 table of a rule (n11 both, n10 antecedent only, n01 consequent only, n00 neither); index into the list below
+fn mx(a: f64, b: f64) -> f64 {
+    if a > b { ret a }
+    ret b
+}
+
+fn basic_measure(n11: f64, n10: f64, n01: f64, n00: f64, which: usize) -> f64 {
+    let n = n11 + n10 + n01 + n00
+    let n1x = n11 + n10
+    let nx1 = n11 + n01
+    let n0x = n - n1x
+    let nx0 = n - nx1
+    if which == 0usize { ret n11 / n1x }
+    if which == 1usize { ret n11 / nx1 }
+    if which == 2usize { ret 2.0f64 * n11 / (n1x + nx1) }
+    if which == 3usize { ret (n11 + n00) / n }
+    if which == 4usize { ret ((n11 / nx1) + (n00 / nx0)) / 2.0f64 }
+    if which == 5usize { ret n1x * nx0 / (n * n10) }
+    if which == 6usize { ret n1x / n * ((n11 / n1x) * (n11 / n1x) + (n10 / n1x) * (n10 / n1x)) - (nx1 / n) * (nx1 / n) + n0x / n * ((n01 / n0x) * (n01 / n0x) + (n00 / n0x) * (n00 / n0x)) - (nx0 / n) * (nx0 / n) }
+    if which == 7usize { ret n11 * n11 / n1x / n }
+    if which == 8usize { ret (n11 / n1x) / (n01 / n0x) }
+    let lev = n11 / n - (n1x * nx1 / (n * n))
+    if which == 9usize { ret lev / (n1x / n * (1.0f64 - n1x / n)) }
+    if which == 10usize { ret lev / mx(n11 / n * (1.0f64 - n1x / n), n1x / n * (nx1 / n - n11 / n)) }
+    if which == 11usize { ret (n11 + n00) / ((n1x * nx1 + n0x * nx0) / n) * ((n1x * nx0 + n0x * nx1) / n) / (n10 + n01) }
+    if which == 12usize { ret math.log[f64](((n11 + 1.0f64) * (n0x + 2.0f64)) / ((n01 + 1.0f64) * (n1x + 2.0f64))) / math.log[f64](10.0f64) }
+    if which == 13usize { ret math.abs[f64](n1x - nx1) / (n1x + nx1 - n11) }
+    if which == 14usize { ret (n * n11 + n * n00 - n1x * nx1 - n0x * nx0) / (n * n - n1x * nx1 - n0x * nx0) }
+    if which == 15usize {
+        let mxx = mx(nx1, nx0)
+        ret (mx(n11, n10) + mx(n01, n00) - mxx) / (n - mxx)
+    }
+    if which == 16usize {
+        let h1 = 0.0f64 - 1.0f64 * (n0x / n * math.log[f64](n0x / n) + n1x / n * math.log[f64](n1x / n))
+        let h2 = 0.0f64 - 1.0f64 * (nx0 / n * math.log[f64](nx0 / n) + nx1 / n * math.log[f64](nx1 / n))
+        var den = h1
+        if h2 < h1 { den = h2 }
+        ret (n00 / n * math.log[f64](n * n00 / (n0x * nx0)) + n01 / n * math.log[f64](n * n01 / (n0x * nx1)) + n10 / n * math.log[f64](n * n10 / (n1x * nx0)) + n11 / n * math.log[f64](n * n11 / (n1x * nx1))) / den
+    }
+    if which == 17usize { ret mx(n11 / n1x, n11 / nx1) }
+    if which == 18usize { ret n11 / n * math.log[f64](n * n11 / (n1x * nx1)) + n10 / n * math.log[f64](n * n10 / (n1x * nx0)) }
+    if which == 19usize { ret (n11 + 1.0f64) / (n1x + 2.0f64) }
+    if which == 20usize { ret (n11 / n1x - nx1 / n) / (1.0f64 - nx1 / n) }
+    if which == 21usize { ret n10 / n }
+    if which == 22usize { ret (n1x - n10) / n10 }
+    if which == 23usize { ret (n11 - n10) / n11 }
+    if which == 24usize { ret (n11 - n10) / n1x }
+    if which == 25usize { ret (n11 + n00) / n }
+    if which == 26usize { ret (n11 / n1x + n00 / nx0) / 2.0f64 }
+    if which == 27usize { ret (n11 - n10) / nx1 }
+    if which == 28usize { ret nx0 / n - n10 / n1x }
+    if which == 29usize { ret (n1x - n10) / (n1x * nx1 / n) - 1.0f64 }
+    if which == 30usize {
+        let orr = n11 * n00 / (n10 * n01)
+        ret (orr - 1.0f64) / (orr + 1.0f64)
+    }
+    if which == 31usize {
+        let orr = n11 * n00 / (n10 * n01)
+        ret (math.sqrt[f64](orr) - 1.0f64) / (math.sqrt[f64](orr) + 1.0f64)
+    }
+    if which == 32usize { ret (n11 - n1x * nx1 / n) / math.sqrt[f64](n1x * nx1 / n) }
+    if which == 33usize { ret (n10 - n1x * nx0 / n) / math.sqrt[f64](n1x * nx0 / n) }
+    if which == 34usize { ret (n11 / n1x) - (n01 / n0x) }
+    if which == 35usize { ret n * (n11 * n00 - n10 * n01) * (n11 * n00 - n10 * n01) / (n1x * n0x * nx1 * nx0) }
+    if which == 36usize { ret nx1 / n }
+    ret n11
+}
+
+// the sums over the rules found as in `apriori` of each basic measure's finite values: out[w] for w in 0 .. 37 (the list order of `basic_measure`), out[38] the number of rules
+fn apriori_basic(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, conf: f64, maxlen: usize, out: []f64) -> err {
+    let nt = f64(trans.len)
+    let total = 1usize << nitems
+    let (cnt, e1) = mem.alloc[u32](a, total)
+    if e1 != ok { ret e1 }
+    var m = 1usize
+    while m < total {
+        var c = 0u32
+        var t = 0usize
+        while t < trans.len {
+            if (trans[t] & u64(m)) == u64(m) { c += 1u32 }
+            t += 1usize
+        }
+        cnt[m] = c
+        m += 1usize
+    }
+    cnt[0usize] = u32(trans.len)
+    let need = math.ceil[f64](supp * nt - 1.0e-9f64)
+    var k = 0usize
+    while k < 39usize {
+        out[k] = 0.0f64
+        k += 1usize
+    }
+    var zmax = 0.0f64 - 1.0e300f64
+    var zlev = 0.0f64
+    m = 1usize
+    while m < total {
+        var sz = 0usize
+        var q = m
+        while q > 0usize {
+            sz += q & 1usize
+            q = q >> 1usize
+        }
+        if sz <= maxlen && sz >= 2usize && f64(cnt[m]) >= need {
+            var l = (m - 1usize) & m
+            while l > 0usize {
+                let r = m ^ l
+                if (r & (r - 1usize)) != 0usize {
+                    l = (l - 1usize) & m
+                    continue
+                }
+                let cf = f64(cnt[m]) / f64(cnt[l])
+                if cf >= conf - 1.0e-12f64 {
+                    let n11 = f64(cnt[m])
+                    let n10 = f64(cnt[l]) - n11
+                    let n01 = f64(cnt[r]) - n11
+                    let n00 = nt - n11 - n10 - n01
+                    var w = 0usize
+                    while w < 38usize {
+                        let v = basic_measure(n11, n10, n01, n00, w)
+                        if w != 10usize && v - v == 0.0f64 { out[w] += v }
+                        w += 1usize
+                    }
+                    // zhang: arules takes max() over the whole vector of rules, not pairwise, so the denominator is one number for every rule
+                    let nz = n11 + n10 + n01 + n00
+                    let t1 = n11 / nz * (1.0f64 - (n11 + n10) / nz)
+                    let t2 = (n11 + n10) / nz * ((n11 + n01) / nz - n11 / nz)
+                    if t1 > zmax { zmax = t1 }
+                    if t2 > zmax { zmax = t2 }
+                    zlev += n11 / nz - ((n11 + n10) * (n11 + n01) / (nz * nz))
+                    out[38usize] += 1.0f64
+                }
+                l = (l - 1usize) & m
+            }
+        }
+        m += 1usize
+    }
+    if zmax > 0.0f64 { out[10usize] = zlev / zmax }
+    ret ok
+}
