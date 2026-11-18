@@ -4101,4 +4101,5 @@ D7307	582	effectsize: glass_delta and rank_biserial intervals
 D7308	446	effectsize: cliffs_delta interval; L389 closed
 D7309	556	betareg: loglog and cauchit mean links
 D7310	509	betareg: lrtest
-D7311	1117	ismev: covariates for rlarg.fit and pp.fit; L425 closed
+D7311	1118	ismev: covariates for rlarg.fit and pp.fit; L425 closed
+D7312	834	WRS2: yuenbt and pb2gen

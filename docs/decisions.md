@@ -49916,3 +49916,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.ismev` gains `fit_rlarg_cov` and `fit_pp_cov`: rlarg.fit and pp.fit with a design (intercept plus covariate columns) on each of the location, scale and shape and identity or exp links, over a shared `cov_params` that evaluates (mu, sigma, xi) of a row from the three designs. ismev's pp.lik takes the exceedance indicator through `sc^uInd` and `(1 + xi (u - mu) / sigma)^uInd`, so the scale and threshold conditions apply to the exceedance rows only; the port does the same. R's Nelder-Mead stalls near its start on the pp covariate fits (standard errors near 2e-6), so the oracle restarts pp.fit from its own solution until the likelihood is stable and compares against that.
 
 **Result.** `oracle_ismev_rlarg` has 185 cases (rlarg.fit with and without covariates, pp.fit with and without covariates, gev.prof and gpd.prof, and gev.fit covariates are in `oracle_ismev_rlarg` too) and equals ismev within optimiser tolerance on Windows. Linux pending. Every function of L425's acceptance list now has an oracle, so the item is closed.
+
+## D7312 — WRS2: yuenbt and pb2gen
+
+`e.algo.stat.wrs2` gains `yuenbt` (the percentile-t bootstrap of Yuen's test on the centred samples, with and without the symmetric side) and `pb2gen` (the percentile bootstrap of a difference of estimators: mom, median or mean), drawing from R's generator through `e.algo.rand.r` (`sample_int`, with R's rejection sampling) so that a seeded run reproduces R's resamples. The resample matrix is filled column-major as R's `matrix(sample(...), nrow = nboot)` does, and the bootstrap rank cut-offs follow R (`round` half to even for pb2gen). New helpers `mad_of`, `mom_of`, `round_even`, `boot_matrix`.
+
+**Result.** `oracle_wrs2_boot` equals WRS2 under set.seed on 126 values (6 two-sample draws, nboot 199 to 399) on Windows, to 1e-8. Linux pending. L503 stays partial: ancova and mcp2atm remain.

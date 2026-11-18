@@ -7,6 +7,7 @@
 // Not here: everything that bootstraps or simulates (yuenbt, pb2gen, the unequal-n effect sizes, med1way's critical value), the
 // studentised-maximum critical values of lincon, t2way and the rest of the package.
 
+use e.algo.rand.r as rr
 use e.math
 use e.math.dist as dist
 use e.math.nmath as nm
@@ -801,4 +802,177 @@ fn t2way(a: *mem.Arena, data: []const f64, sizes: []const usize, jn: usize, kn: 
     out.qab = qs_ab
     out.pab = pab
     ret (out, ok)
+}
+
+// ---- the bootstrap functions of WRS2, drawing from R's generator (the caller seeds rng as set.seed does) ----
+
+type Boot = struct { test: f64, lo: f64, hi: f64, p: f64, diff: f64 }
+
+fn mad_of(a: *mem.Arena, x: []const f64) -> f64 {
+    let m = median_of(a, x)
+    let (dev, e) = mem.alloc[f64](a, x.len)
+    if e != ok { ret nan() }
+    var i = 0usize
+    while i < x.len {
+        dev[i] = math.abs[f64](x[i] - m)
+        i += 1usize
+    }
+    ret 1.4826f64 * median_of(a, dev)
+}
+
+// WRS2::mom: the mean after dropping the points more than 2.24 mad from the median
+fn mom_of(a: *mem.Arena, x: []const f64) -> f64 {
+    let m = median_of(a, x)
+    let d = 2.24f64 * mad_of(a, x)
+    var s = 0.0f64
+    var c = 0usize
+    var i = 0usize
+    while i < x.len {
+        if !(x[i] > m + d) && !(x[i] < m - d) {
+            s += x[i]
+            c += 1usize
+        }
+        i += 1usize
+    }
+    ret s / f64(c)
+}
+
+// R's round (half to even)
+fn round_even(v: f64) -> f64 {
+    let f = math.floor[f64](v)
+    let d = v - f
+    if d < 0.5f64 { ret f }
+    if d > 0.5f64 { ret f + 1.0f64 }
+    if (f / 2.0f64) == math.floor[f64](f / 2.0f64) { ret f }
+    ret f + 1.0f64
+}
+
+// nboot by n matrix of resampled values of x (R: matrix(sample(x, size = n * nboot, replace = TRUE), nrow = nboot)); row i is column-major element i, i + nboot, ...
+fn boot_matrix(a: *mem.Arena, rng: *rr.Rng, x: []const f64, nboot: usize) -> ([]f64, err) {
+    let n = x.len
+    let (idx, e) = rr.sample_int(a, rng, i64(n), i64(n * nboot), true)
+    if e != ok {
+        var none: []f64 = zero
+        ret (none, e)
+    }
+    let (out, e2) = mem.alloc[f64](a, n * nboot)
+    if e2 != ok { ret (out, e2) }
+    var k = 0usize
+    while k < n * nboot {
+        let row = k % nboot
+        let col = k / nboot
+        out[row * n + col] = x[usize(idx[k]) - 1usize]
+        k += 1usize
+    }
+    ret (out, ok)
+}
+
+// yuenbt(y ~ g, tr, nboot, side): the percentile-t bootstrap of Yuen's test on the centred samples
+fn yuenbt(a: *mem.Arena, rng: *rr.Rng, x: []const f64, y: []const f64, tr: f64, nboot: usize, side: bool) -> (Boot, err) {
+    var out: Boot = zero
+    let nx = x.len
+    let ny = y.len
+    let mx = tmean(a, x, tr)
+    let my = tmean(a, y, tr)
+    let (xc, e1) = mem.alloc[f64](a, nx)
+    let (yc, e2) = mem.alloc[f64](a, ny)
+    if e1 != ok || e2 != ok { ret (out, Malformed) }
+    var i = 0usize
+    while i < nx {
+        xc[i] = x[i] - mx
+        i += 1usize
+    }
+    i = 0usize
+    while i < ny {
+        yc[i] = y[i] - my
+        i += 1usize
+    }
+    let tx = trimse(a, x, tr)
+    let ty = trimse(a, y, tr)
+    let test = (mx - my) / math.sqrt[f64](tx * tx + ty * ty)
+    let (dx, e3) = boot_matrix(a, rng, xc, nboot)
+    if e3 != ok { ret (out, e3) }
+    let (dy, e4) = boot_matrix(a, rng, yc, nboot)
+    if e4 != ok { ret (out, e4) }
+    let (tv, e5) = mem.alloc[f64](a, nboot)
+    if e5 != ok { ret (out, e5) }
+    i = 0usize
+    while i < nboot {
+        let rx = dx[i * nx..i * nx + nx]
+        let ry = dy[i * ny..i * ny + ny]
+        let top = tmean(a, rx, tr) - tmean(a, ry, tr)
+        let bx = trimse(a, rx, tr)
+        let by = trimse(a, ry, tr)
+        var t = top / math.sqrt[f64](bx * bx + by * by)
+        if side { t = math.abs[f64](t) }
+        tv[i] = t
+        i += 1usize
+    }
+    let ts = sorted(a, tv)
+    let alpha = 0.05f64
+    let icrit = usize(math.floor[f64]((1.0f64 - alpha) * f64(nboot) + 0.5f64))
+    let ibot = usize(math.floor[f64](alpha * f64(nboot) / 2.0f64 + 0.5f64))
+    let itop = usize(math.floor[f64]((1.0f64 - alpha / 2.0f64) * f64(nboot) + 0.5f64))
+    let se = math.sqrt[f64](tx * tx + ty * ty)
+    out.test = test
+    out.diff = mx - my
+    out.lo = mx - my - ts[itop - 1usize] * se
+    out.hi = mx - my - ts[ibot - 1usize] * se
+    out.p = nan()
+    if side {
+        out.lo = mx - my - ts[icrit - 1usize] * se
+        out.hi = mx - my + ts[icrit - 1usize] * se
+        var c = 0usize
+        i = 0usize
+        while i < nboot {
+            if math.abs[f64](test) <= math.abs[f64](tv[i]) { c += 1usize }
+            i += 1usize
+        }
+        out.p = f64(c) / f64(nboot)
+    }
+    ret (out, ok)
+}
+
+// pb2gen(y ~ g, est, nboot): est 0 mom, 1 median, 2 mean; the percentile bootstrap of the difference of the estimators
+fn pb2gen(a: *mem.Arena, rng: *rr.Rng, x: []const f64, y: []const f64, est: usize, nboot: usize) -> (Boot, err) {
+    var out: Boot = zero
+    let nx = x.len
+    let ny = y.len
+    let (dx, e3) = boot_matrix(a, rng, x, nboot)
+    if e3 != ok { ret (out, e3) }
+    let (dy, e4) = boot_matrix(a, rng, y, nboot)
+    if e4 != ok { ret (out, e4) }
+    let (bv, e5) = mem.alloc[f64](a, nboot)
+    if e5 != ok { ret (out, e5) }
+    var i = 0usize
+    while i < nboot {
+        bv[i] = est_of(a, dx[i * nx..i * nx + nx], est) - est_of(a, dy[i * ny..i * ny + ny], est)
+        i += 1usize
+    }
+    let bs = sorted(a, bv)
+    let alpha = 0.05f64
+    let low = usize(round_even(alpha / 2.0f64 * f64(nboot))) + 1usize
+    let up = nboot - low
+    var neg = 0usize
+    var zer = 0usize
+    i = 0usize
+    while i < nboot {
+        if bs[i] < 0.0f64 { neg += 1usize }
+        if bs[i] == 0.0f64 { zer += 1usize }
+        i += 1usize
+    }
+    let temp = f64(neg) / f64(nboot) + f64(zer) / (2.0f64 * f64(nboot))
+    var m = temp
+    if 1.0f64 - temp < m { m = 1.0f64 - temp }
+    out.test = est_of(a, x, est) - est_of(a, y, est)
+    out.lo = bs[low - 1usize]
+    out.hi = bs[up - 1usize]
+    out.p = 2.0f64 * m
+    ret (out, ok)
+}
+
+fn est_of(a: *mem.Arena, x: []const f64, est: usize) -> f64 {
+    if est == 0usize { ret mom_of(a, x) }
+    if est == 1usize { ret median_of(a, x) }
+    ret mean_of(x)
 }
