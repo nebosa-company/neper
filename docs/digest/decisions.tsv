@@ -4083,4 +4083,5 @@ D7293	822	ismev: pp.fit
 D7294	977	ismev: the profile likelihoods of gev.prof and gpd.prof
 D7295	924	ismev: gev.fit with covariates on the location, scale and shape, and links
 D7292	839	betareg: residuals and predictions
-D7293	796	arules: interest measures
+D7293	797	arules: interest measures
+D7294	638	arules: closed and maximal frequent itemsets

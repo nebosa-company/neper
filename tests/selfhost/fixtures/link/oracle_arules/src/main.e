@@ -27,6 +27,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         tr[t] = m
         t += 1usize
     }
+    if str.starts_with(c.name, "c") && !str.eq(c.name, "") && c.name.len == 2usize {
+        let (co, ce) = mem.alloc[f64](a, 4usize)
+        if ce != ok { ret nan }
+        if ar.closed_maximal(a, tr, ni, z[2usize], co) != ok { ret nan }
+        ret co[usize(c.name[1usize]) - 48usize]
+    }
     if str.starts_with(c.name, "m") && !str.eq(c.name, "nrule") {
         let (mo, me) = mem.alloc[f64](a, 10usize)
         if me != ok { ret nan }

@@ -143,3 +143,55 @@ fn apriori_measures(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64,
     }
     ret ok
 }
+
+// the closed (no proper superset with the same support) and maximal (no frequent proper superset) frequent itemsets of any size: out[0] closed count, 1 sum of closed supports, 2 maximal count, 3 sum of
+// maximal supports
+fn closed_maximal(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, out: []f64) -> err {
+    let nt = f64(trans.len)
+    let total = 1usize << nitems
+    let (cnt, e1) = mem.alloc[u32](a, total)
+    if e1 != ok { ret e1 }
+    var m = 1usize
+    while m < total {
+        var c = 0u32
+        var t = 0usize
+        while t < trans.len {
+            if (trans[t] & u64(m)) == u64(m) { c += 1u32 }
+            t += 1usize
+        }
+        cnt[m] = c
+        m += 1usize
+    }
+    let need = math.ceil[f64](supp * nt - 1.0e-9f64)
+    var k = 0usize
+    while k < 4usize {
+        out[k] = 0.0f64
+        k += 1usize
+    }
+    m = 1usize
+    while m < total {
+        if f64(cnt[m]) >= need {
+            var closed = true
+            var maximal = true
+            var j = 0usize
+            while j < nitems {
+                if (m & (1usize << j)) == 0usize {
+                    let sup = m | (1usize << j)
+                    if cnt[sup] == cnt[m] { closed = false }
+                    if f64(cnt[sup]) >= need { maximal = false }
+                }
+                j += 1usize
+            }
+            if closed {
+                out[0usize] += 1.0f64
+                out[1usize] += f64(cnt[m]) / nt
+            }
+            if maximal {
+                out[2usize] += 1.0f64
+                out[3usize] += f64(cnt[m]) / nt
+            }
+        }
+        m += 1usize
+    }
+    ret ok
+}

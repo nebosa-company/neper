@@ -49808,3 +49808,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.arulespkg.apriori_measures` runs the same rule search as `apriori` and sums, over the rules and over the finite values, nine of `interestMeasure`'s measures from the antecedent, consequent and joint supports: leverage (sXY - sX sY), coverage (sX), cosine, jaccard, kulczynski, phi, addedValue (confidence - sY), conviction ((1 - sY) / (1 - confidence), infinite for a certain rule and so skipped) and oddsRatio from the four cell proportions.
 
 **Result.** `oracle_arules` gains 24 transaction sets by nine measures (216 values) and equals arules on Windows at 1e-9. Linux pending. L462 stays partial: the candidate-pruning search for many items, eclat, closed and maximal itemsets, the remaining interest measures, rule subsetting, sequences.
+
+## D7294 — arules: closed and maximal frequent itemsets
+
+`e.algo.stat.arulespkg.closed_maximal` counts, over all frequent itemsets of any size, those with no proper superset of the same support (closed) and those with no frequent proper superset (maximal), with the sum of their supports.
+
+**Result.** `oracle_arules` gains 24 transaction sets by four quantities (96 values; `target = "closed frequent itemsets"` and `"maximally frequent itemsets"`) and equals arules on Windows at 1e-9. Linux pending. L462 stays partial: the candidate-pruning search for many items, eclat, the remaining interest measures, rule subsetting, sequences.

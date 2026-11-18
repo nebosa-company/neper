@@ -17,6 +17,10 @@ for (rep in 1:24) {
   add("nrule", a, length(ru))
   q <- if (length(ru)) quality(ru) else data.frame(support = 0, confidence = 0, lift = 0)
   add("srule", a, sum(q$support)); add("sconf", a, sum(q$confidence)); add("slift", a, sum(q$lift))
+  cl <- apriori(tr, parameter = list(supp = supp, target = "closed frequent itemsets", minlen = 1, maxlen = ni), control = list(verbose = FALSE))
+  mx <- apriori(tr, parameter = list(supp = supp, target = "maximally frequent itemsets", minlen = 1, maxlen = ni), control = list(verbose = FALSE))
+  add("c0", a, length(cl)); add("c1", a, if (length(cl)) sum(quality(cl)$support) else 0)
+  add("c2", a, length(mx)); add("c3", a, if (length(mx)) sum(quality(mx)$support) else 0)
   if (length(ru)) {
     ms <- c("leverage", "coverage", "cosine", "jaccard", "kulczynski", "phi", "addedValue", "conviction", "oddsRatio")
     for (k in seq_along(ms)) {
