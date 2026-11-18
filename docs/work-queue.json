@@ -1068,7 +1068,7 @@
       "score": 0.16,
       "model": "opus",
       "thinking": "xhigh",
-      "evidence": "Partial (D6471 GU, LO, GA, IG, BCCG, PE, D6472 WEI, LOGNO, NBI, ZIP, JSU, SHASH, BCT densities, LO p and q, GU q equal gamlss.dist on Windows; oracle_gamlssdist; Linux pending). D7134: the EXP family (d, p, q) equal to gamlss.dist (oracle_gamlss_exp, 90 values). Open: the other families, r, moments, links. Was: Open (CRAN rank 788). Mid to large. Overlaps extraDistr (L422). Acceptance, equal to gamlss.dist under set.seed: d, p, q, r, moments and link functions for the roughly 100 continuous, discrete and mixed families (BCT, BCPE, NBI, ZIP, GA, JSU, SHASH, ...)."
+      "evidence": "Partial (D6471 GU, LO, GA, IG, BCCG, PE, D6472 WEI, LOGNO, NBI, ZIP, JSU, SHASH, BCT densities, LO p and q, GU q equal gamlss.dist on Windows; oracle_gamlssdist; Linux pending). D7134, D7135: the EXP and RG families (d, p, q) equal to gamlss.dist (oracle_gamlss_exp, 180 values). Open: the other families, r, moments, links. Was: Open (CRAN rank 788). Mid to large. Overlaps extraDistr (L422). Acceptance, equal to gamlss.dist under set.seed: d, p, q, r, moments and link functions for the roughly 100 continuous, discrete and mixed families (BCT, BCPE, NBI, ZIP, GA, JSU, SHASH, ...)."
     },
     {
       "id": "L467",

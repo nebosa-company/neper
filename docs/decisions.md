@@ -48830,3 +48830,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.gamlssdist` has the exponential family EXP with mean mu: density (1 / mu) exp(-x / mu) for x > 0 (zero below and at zero), distribution 1 - exp(-x / mu) and quantile -mu log(1 - p).
 
 **Result.** `oracle_gamlss_exp` equals dEXP, pEXP and qEXP on 90 values (30 draws of mu, x and p) on Windows; the earlier families in `oracle_gamlssdist` are untouched. Linux pending. L464 stays partial: about ninety families remain, plus random numbers, moments and the links.
+
+## D7135 — gamlss.dist: the RG (reverse Gumbel) family
+
+`e.algo.stat.gamlssdist` has RG with location mu and scale sigma: density exp(-z - exp(-z)) / sigma with z = (x - mu) / sigma, distribution exp(-exp(-z)) and quantile mu - sigma log(-log p).
+
+**Result.** `oracle_gamlss_exp` now covers EXP and RG together (180 values: 30 draws each of d, p and q for both families) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: about ninety families remain, plus random numbers, moments and the links.

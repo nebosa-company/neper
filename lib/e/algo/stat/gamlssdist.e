@@ -136,3 +136,16 @@ fn pexp_mu(x: f64, mu: f64) -> f64 {
 }
 
 fn qexp_mu(p: f64, mu: f64) -> f64 { ret 0.0f64 - mu * math.log[f64](1.0f64 - p) }
+
+// the reverse Gumbel RG of gamlss.dist: density exp(-z - exp(-z)) / sigma with z = (x - mu) / sigma, distribution exp(-exp(-z)), quantile mu - sigma log(-log p)
+fn drg(x: f64, mu: f64, sigma: f64) -> f64 {
+    let z = (x - mu) / sigma
+    ret math.exp[f64](0.0f64 - z - math.exp[f64](0.0f64 - z)) / sigma
+}
+
+fn prg(x: f64, mu: f64, sigma: f64) -> f64 {
+    let z = (x - mu) / sigma
+    ret math.exp[f64](0.0f64 - math.exp[f64](0.0f64 - z))
+}
+
+fn qrg(p: f64, mu: f64, sigma: f64) -> f64 { ret mu - sigma * math.log[f64](0.0f64 - math.log[f64](p)) }
