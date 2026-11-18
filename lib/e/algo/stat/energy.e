@@ -560,3 +560,72 @@ fn eqdist_ketest(a: *mem.Arena, r: *rg.Rng, x: []const f64, sizes: []const usize
     }
     ret (stat, f64(1usize + k) / f64(1usize + reps), ok)
 }
+
+// disco(x, factors = g, index, R) for one factor: dst is the n by n row-major distance matrix already raised to the index, grp the 0-based level of each row (k levels);
+// out receives (between, within, statistic, p value), the p value by boot's permutation of the factor (R draws of sample.int(n) under the generator) and strict exceedance, NaN when R is 0
+fn disco_parts(dst: []const f64, n: usize, grp: []const usize, perm: []const usize, k: usize, out: []f64) {
+    var total = 0.0f64
+    var i = 0usize
+    while i < n * n {
+        total += dst[i]
+        i += 1usize
+    }
+    total = total / (2.0f64 * f64(n))
+    var w = 0.0f64
+    var l = 0usize
+    while l < k {
+        var cnt = 0usize
+        var g = 0.0f64
+        i = 0usize
+        while i < n {
+            if grp[perm[i]] == l {
+                cnt += 1usize
+                var j = 0usize
+                while j < n {
+                    if grp[perm[j]] == l { g += dst[i * n + j] }
+                    j += 1usize
+                }
+            }
+            i += 1usize
+        }
+        w += g / (2.0f64 * f64(cnt))
+        l += 1usize
+    }
+    out[0usize] = total - w
+    out[1usize] = w
+    out[2usize] = ((total - w) / f64(k - 1usize)) / (w / f64(n - k))
+}
+
+fn disco(a: *mem.Arena, r: *rg.Rng, dst: []const f64, n: usize, grp: []const usize, k: usize, reps: usize, out: []f64) -> err {
+    let (id, e1) = mem.alloc[usize](a, n)
+    if e1 != ok { ret e1 }
+    var i = 0usize
+    while i < n {
+        id[i] = i
+        i += 1usize
+    }
+    disco_parts(dst, n, grp, id, k, out)
+    let t0 = out[2usize]
+    out[3usize] = 0.0f64 / 0.0f64
+    if reps == 0usize { ret ok }
+    var cnt = 0usize
+    let (tmp, e2) = mem.alloc[f64](a, 3usize)
+    if e2 != ok { ret e2 }
+    var rep = 0usize
+    while rep < reps {
+        let (pm, pe) = rg.sample_int(a, r, i64(n), i64(n), false)
+        if pe != ok { ret pe }
+        let (pu, e3) = mem.alloc[usize](a, n)
+        if e3 != ok { ret e3 }
+        i = 0usize
+        while i < n {
+            pu[i] = usize(pm[i] - 1i64)
+            i += 1usize
+        }
+        disco_parts(dst, n, grp, pu, k, tmp)
+        if tmp[2usize] > t0 { cnt += 1usize }
+        rep += 1usize
+    }
+    out[3usize] = f64(cnt + 1usize) / f64(reps + 1usize)
+    ret ok
+}

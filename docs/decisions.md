@@ -49460,3 +49460,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.energy` gains `ksample_stat` (the sum of the two-sample E-statistics over all sample pairs) and `eqdist_ketest` (the original-method permutation test for any number of samples, using R's cumulative shuffle of the index vector under the same seed).
 
 **Result.** `oracle_energy_normal` gains 8 three- and four-sample tests (statistic and p value under set.seed, 99 or 199 replicates, one to three dimensions) and equals energy on Windows. Linux pending. L459 stays partial: disco and its permutation test, the Poisson test, energy clustering.
+
+## D7240 — energy: disco
+
+`e.algo.stat.energy` gains `disco` for one factor: the between and within sums of squares of the distance-components analysis from the distance matrix raised to the index, the F-ratio statistic, and the permutation p value by boot's permutation scheme (one `sample.int(n)` per replicate under the seed, strict exceedance, (count + 1) / (R + 1)).
+
+**Result.** `oracle_energy_normal` gains 8 data sets (two to four groups, indices 0.5, 1 and 1.5, 99 or 199 replicates: between, within, statistic and p value, 32 values) and equals energy on Windows. Linux pending. L459 stays partial: the discoB and discoF methods, several factors, the Poisson test, energy clustering.

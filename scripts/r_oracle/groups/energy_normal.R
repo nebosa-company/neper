@@ -45,4 +45,15 @@ for (rep in 1:8) {
   cases[[length(cases) + 1]] <- case("keqtest_stat", a, as.numeric(tt$statistic), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("keqtest_p", a, as.numeric(tt$p.value), rel = 1e-12, abs = 1e-12)
 }
+# disco, one factor: args (seed, reps, k, n, d, index, group codes 0-based..., x row-major) under "disco_b", "disco_w", "disco_f" and "disco_p"
+for (rep in 1:8) {
+  k <- sample(2:4, 1); n <- sample(12:30, 1); d <- sample(1:3, 1); sd0 <- sample(1:100000, 1); R <- sample(c(99, 199), 1); ix <- sample(c(1, 0.5, 1.5), 1)
+  g <- c(0:(k - 1), sample(0:(k - 1), n - k, TRUE)); x <- matrix(rnorm(n * d, g * 0.4), n, d)
+  set.seed(sd0); dd <- disco(x, factors = factor(g), index = ix, R = R)
+  a <- c(sd0, R, k, n, d, ix, g, as.vector(t(x)))
+  cases[[length(cases) + 1]] <- case("disco_b", a, as.numeric(dd$between), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("disco_w", a, as.numeric(dd$within), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("disco_f", a, as.numeric(dd$statistic), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("disco_p", a, as.numeric(dd$p.value), rel = 1e-12, abs = 1e-12)
+}
 emit("energy_normal", "energy", list(cases))

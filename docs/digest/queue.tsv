@@ -60,7 +60,7 @@ L436	library	0.1	756	MatchIt: matching for causal inference	Partial (D6638).
 L437	library	0.25	565	gstat: geostatistics	Partial (D6468 vgm Sph, Exp, Gau, Lin, the empirical variogram and ordinary, D6470 universal and simple kriging equal gstat on Windows;
 L456	library	0.15	856	mlogit: discrete-choice models	Partial (D6639).
 L458	library	0	227	earth: multivariate adaptive regression splines	Open (CRAN rank 780).
-L459	library	0.62	742	energy: energy statistics	Partial (D6188).
+L459	library	0.62	776	energy: energy statistics	Partial (D6188).
 L460	library	0.25	621	epiR: epidemiology	Partial (D6187).
 L461	library	0.25	671	systemfit: equation systems	Partial (D6622).
 L462	library	0.25	665	arules: association rule mining	Partial (D6621).

@@ -69,6 +69,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (st, pv, te) = en.eqdist_ketest(a, &rng3, z[4usize + kk..4usize + kk + tot * d], szs, d, usize(z[1usize]))
             if te != ok { os.exit(8) }
             if str.eq(c.name, "keqtest_stat") { got = st } else { got = pv }
+        } else if str.eq(c.name, "disco_b") || str.eq(c.name, "disco_w") || str.eq(c.name, "disco_f") || str.eq(c.name, "disco_p") {
+            let kk = usize(z[2usize])
+            let nn = usize(z[3usize])
+            let d = usize(z[4usize])
+            let ix = z[5usize]
+            let (gp, ge) = mem.alloc[usize](a, nn)
+            let (dm, de) = mem.alloc[f64](a, nn * nn)
+            let (res, re) = mem.alloc[f64](a, 4usize)
+            if ge != ok || de != ok || re != ok { os.exit(8) }
+            var q = 0usize
+            while q < nn {
+                gp[q] = usize(z[6usize + q])
+                q += 1usize
+            }
+            let xs = z[6usize + nn..6usize + nn + nn * d]
+            q = 0usize
+            while q < nn {
+                var q2 = 0usize
+                while q2 < nn {
+                    dm[q * nn + q2] = en.dist_pow(xs, nn, d, q, q2, ix)
+                    q2 += 1usize
+                }
+                q += 1usize
+            }
+            var rng4: rg.Rng = zero
+            rg.seed(&rng4, i64(z[0usize]))
+            if en.disco(a, &rng4, dm, nn, gp, kk, usize(z[1usize]), res) != ok { os.exit(8) }
+            if str.eq(c.name, "disco_b") { got = res[0usize] }
+            if str.eq(c.name, "disco_w") { got = res[1usize] }
+            if str.eq(c.name, "disco_f") { got = res[2usize] }
+            if str.eq(c.name, "disco_p") { got = res[3usize] }
         } else if str.eq(c.name, "pdcor") {
             let dx = usize(z[1usize])
             let dy = usize(z[2usize])
