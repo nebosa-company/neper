@@ -1,12 +1,14 @@
 // R sampling: first-order inclusion probabilities (inclusionprobabilities), the fixed-size and Poisson designs UPsystematic,
 // UPrandomsystematic, UPpoisson, UPtille and srswor drawn from R's generator under set.seed, and the Horvitz-Thompson estimator.
 //
-// Not here: the other UP designs (Brewer, Midzuno, maxentropy, pivotal, cube), stratified and cluster sampling, calibration and the
-// joint inclusion probabilities.
+// UPbrewer (Brewer's sequential design). Not here: the other UP designs (Midzuno, maxentropy, pivotal, cube), stratified and cluster sampling,
+// calibration and the joint inclusion probabilities.
 
 use e.algo.rand.r as rr
 use e.math
 use e.mem
+
+error Malformed
 
 // inclusionprobabilities(a, n) into pik: n a / sum(a), with values at or above 1 set to 1 and the rest rescaled until none exceeds it
 fn inclusion(a: []const f64, n: f64, pik: []f64) {
@@ -222,4 +224,87 @@ fn ht_estimator(y: []const f64, pik: []const f64) -> f64 {
         i += 1usize
     }
     ret s
+}
+
+// UPbrewer(pik, eps): Brewer's sequential fixed-size design. The units with pik in (eps, 1 - eps) are drawn one at a time: for step i, the
+// selection probabilities p_j = (1 - s_j) pik_j ((n - a) - pik_j) / ((n - a) - pik_j (n - i + 1)), with a = sum pik_j s_j, normalised and cumulated,
+// and the first unit whose cumulative probability exceeds one uniform draw is selected (the last one when none does). The other units keep their pik.
+fn up_brewer(a: *mem.Arena, g: *rr.Rng, pik: []const f64, eps: f64, s: []f64) -> err {
+    let nall = pik.len
+    let (list, e1) = mem.alloc[usize](a, nall)
+    if e1 != ok { ret e1 }
+    var nb = 0usize
+    var i = 0usize
+    while i < nall {
+        s[i] = pik[i]
+        if pik[i] > eps && pik[i] < 1.0f64 - eps {
+            list[nb] = i
+            nb += 1usize
+        }
+        i += 1usize
+    }
+    if nb < 1usize { ret Malformed }
+    let (pb, e2) = mem.alloc[f64](a, nb)
+    let (sb, e3) = mem.alloc[f64](a, nb)
+    let (p, e4) = mem.alloc[f64](a, nb)
+    if e2 != ok || e3 != ok || e4 != ok { ret Malformed }
+    // the sum is compensated (Neumaier): R accumulates it in extended precision, and a plain sum that falls just short of an integer would drop a step
+    var sum_pb = 0.0f64
+    var comp = 0.0f64
+    i = 0usize
+    while i < nb {
+        pb[i] = pik[list[i]]
+        sb[i] = 0.0f64
+        let t = sum_pb + pb[i]
+        if math.abs[f64](sum_pb) >= math.abs[f64](pb[i]) { comp += (sum_pb - t) + pb[i] } else { comp += (pb[i] - t) + sum_pb }
+        sum_pb = t
+        i += 1usize
+    }
+    sum_pb += comp
+    // R's 1:n with n = sum(pikb) runs from 1 to floor(n)
+    let steps = usize(math.floor[f64](sum_pb))
+    var step = 1usize
+    while step <= steps {
+        var aa = 0.0f64
+        var j = 0usize
+        while j < nb {
+            aa += pb[j] * sb[j]
+            j += 1usize
+        }
+        let rem = sum_pb - aa
+        let fi = f64(step)
+        var tot = 0.0f64
+        j = 0usize
+        while j < nb {
+            p[j] = (1.0f64 - sb[j]) * pb[j] * (rem - pb[j]) / (rem - pb[j] * (sum_pb - fi + 1.0f64))
+            tot += p[j]
+            j += 1usize
+        }
+        j = 0usize
+        while j < nb {
+            p[j] = p[j] / tot
+            j += 1usize
+        }
+        let u = rr.runif(g, 0.0f64, 1.0f64)
+        var cum = 0.0f64
+        var pick = nb - 1usize
+        j = 0usize
+        var found = false
+        while j < nb {
+            cum += p[j]
+            if !found && u < cum {
+                pick = j
+                found = true
+            }
+            j += 1usize
+        }
+        sb[pick] = 1.0f64
+        step += 1usize
+    }
+    i = 0usize
+    while i < nb {
+        s[list[i]] = sb[i]
+        i += 1usize
+    }
+    ret ok
 }

@@ -71,7 +71,7 @@ L488	library	0.2	475	drc: dose-response models	Partial (D6411).
 L489	library	0.15	799	osqp and clarabel: quadratic and conic solvers	Partial (D6643).
 L493	library	0	218	topicmodels: LDA and CTM	Open (CRAN rank 897).
 L507	library	0.2	514	gsDesign: group sequential designs	Partial (D6405).
-L508	library	0.3	599	sampling: survey sampling designs	Partial (D6191).
+L508	library	0.4	689	sampling: survey sampling designs	Partial (D6191).
 L509	library	0	229	Cubist: rule-based regression models	Open (CRAN rank 924).
 L510	library	0.35	545	gmm: generalized method of moments	Partial (D6479 linear two-step gmm with iid, MDS and D6480 HAC weighting with five kernels at fixed bandwidth, covariance and J agree with gmm on Windows;
 L511	library	0.3	570	QCA: qualitative comparative analysis	Partial (D6482 pof inclusion, PRI, coverage, RoN, D6481 complex and parsimonious minimal models of minimize() on a crisp truth table, as prime-implicant counts, minimum size and model count, equal QCA
