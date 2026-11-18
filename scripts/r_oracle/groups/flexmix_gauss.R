@@ -69,4 +69,27 @@ onepois <- function(n, k, beta, pr, flipfrac = 0.15) {
 onepois(150, 2, rbind(c(1, 1.5), c(2.5, -1.2)), c(0.5, 0.5))
 onepois(200, 2, rbind(c(0.5, 1), c(2, 0.8)), c(0.4, 0.6))
 onepois(240, 3, rbind(c(0.3, 1.2), c(1.8, -1), c(3, 0.3)), c(0.3, 0.3, 0.4))
+# stepFlexmix: set.seed(seed); stepFlexmix(y ~ x1, k = 2:3, nrep = 3); args (n, 2, k, what, idx, seed, x row-major, y) under "st"; what 0 the best logLik, 1 logLiks[idx], 3 prior[idx], 4 coef[idx]
+onestep <- function(n, beta, sg, pr, seed) {
+  k <- length(pr)
+  set.seed(seed)
+  z <- sample(seq_len(k), n, TRUE, pr)
+  x1 <- runif(n, -2, 2)
+  y <- vapply(seq_len(n), function(i) beta[z[i], 1] + beta[z[i], 2] * x1[i] + rnorm(1, 0, sg[z[i]]), 0)
+  set.seed(seed + 7)
+  st <- stepFlexmix(y ~ x1, k = 2:3, nrep = 3, verbose = FALSE)
+  flat <- c(seed + 7, as.vector(rbind(1, x1)), y)
+  for (kk in c(2, 3)) {
+    fit <- st@models[[as.character(kk)]]
+    prm <- parameters(fit); ll <- st@logLiks[as.character(kk), ]
+    hdr <- function(what, idx) c(n, 2, kk, what, idx, flat)
+    adds <- function(what, idx, v) cases[[length(cases) + 1]] <<- case("st", hdr(what, idx), v, rel = 1e-5, abs = 1e-8)
+    adds(0, 0, as.numeric(logLik(fit)))
+    for (m in seq_along(ll)) if (is.finite(ll[m])) adds(1, m - 1, ll[m])
+    for (j in seq_len(fit@k)) adds(3, j - 1, fit@prior[j])
+    for (j in seq_len(fit@k)) { adds(4, (j - 1) * 2, prm[1, j]); adds(4, (j - 1) * 2 + 1, prm[2, j]) }
+  }
+}
+onestep(120, rbind(c(0, 2), c(3, -1.5)), c(0.5, 0.7), c(0.5, 0.5), 5)
+onestep(150, rbind(c(1, 1), c(-1, 2)), c(0.4, 0.4), c(0.5, 0.5), 6)
 emit("flexmix_gauss", "flexmix", list(cases))

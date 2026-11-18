@@ -3985,4 +3985,5 @@ D7195	815	GeneralizedHyperbolic: the skew-Laplace distribution, quantile and ran
 D7196	564	GeneralizedHyperbolic: GIG mode, raw moments and variance
 D7197	1210	flexmix: the Gaussian regression mixture by EM from a given start
 D7198	697	flexmix: the random start under set.seed
-D7199	953	flexmix: the Poisson family
+D7199	954	flexmix: the Poisson family
+D7200	768	flexmix: stepFlexmix

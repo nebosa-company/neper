@@ -33,6 +33,33 @@ fn answer_seeded(a: *mem.Arena, c: *const oracle.Case) -> f64 {
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(c.name, "fs") { ret answer_seeded(a, c) }
+    if str.eq(c.name, "st") {
+        let zz = c.args
+        let nn = usize(zz[0usize])
+        let pp = usize(zz[1usize])
+        let kk = usize(zz[2usize])
+        let wh = usize(zz[3usize])
+        let ix = usize(zz[4usize])
+        let xs = zz[6usize..6usize + nn * pp]
+        let ys = zz[6usize + nn * pp..6usize + nn * pp + nn]
+        var rng: rg.Rng = zero
+        rg.seed(&rng, i64(zz[5usize]))
+        let (ll, g1) = mem.alloc[f64](a, 3usize)
+        if g1 != ok { os.exit(4) }
+        // k = 2 runs first from the stream, then k = 3, as stepFlexmix(k = 2:3) does
+        var kc = 2usize
+        var fb: fx.Fm = zero
+        while kc <= kk {
+            let (fbk, eb) = fx.step_gaussian(a, &rng, xs, ys, nn, pp, kc, 3usize, 200usize, 0.05f64, 0.000001f64, ll)
+            if eb != ok { os.exit(5) }
+            fb = fbk
+            kc += 1usize
+        }
+        if wh == 0usize { ret fb.llh }
+        if wh == 1usize { ret ll[ix] }
+        if wh == 3usize { ret fb.prior[ix] }
+        ret fb.coef[ix]
+    }
     if str.eq(c.name, "fp") {
         let zz = c.args
         let nn = usize(zz[0usize])

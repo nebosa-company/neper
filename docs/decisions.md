@@ -49220,3 +49220,9 @@ New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input),
 `e.algo.stat.flexmixpkg` gains `poisson`: the same EM with FLXMRglm's Poisson family, whose M step is R's `glm.fit` ported as `pois_glm` (IRLS on the log link, the first pass from the mean y + 0.1 and later passes from the component's previous coefficients, as flexmix passes `start = component$coef`; the deviance convergence test at 1e-8, 25 iterations at most) and whose E step uses the Poisson log density. The removal of components below minprior now carries the coefficient rows along, which the Gaussian fit did not need because it recomputes them.
 
 **Result.** `oracle_flexmix_gauss` has 1424 values (620 added: three Poisson mixtures with two and three components, log-likelihood, iterations, priors, coefficients and clusters) and equals flexmix on Windows. Linux pending. L413 stays partial: stepFlexmix, the binomial and Gamma families, FLXMRglmfix, concomitant variables, CEM and SEM, BIC and ICL.
+
+## D7200 — flexmix: stepFlexmix
+
+`e.algo.stat.flexmixpkg` gains `step_gaussian`: for one k, nrep random-start fits drawn one after another from the same stream, the best by log-likelihood (the first of equals) and the nrep log-likelihoods, the loop of stepFlexmix's `bestFlexmix`. Running it for k = 2 and then k = 3 on one stream reproduces `stepFlexmix(k = 2:3)`, whose outer loop is over k.
+
+**Result.** `oracle_flexmix_gauss` has 1470 values (46 added: two seeded steps over k = 2:3 with nrep = 3, the best log-likelihoods, the per-start log-likelihoods, priors and coefficients) and equals flexmix on Windows. Linux pending. L413 stays partial: the binomial and Gamma families, FLXMRglmfix, concomitant variables, CEM and SEM, BIC and ICL and the Poisson step.

@@ -417,3 +417,28 @@ fn poisson(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, k:
     }
     ret (g, ok)
 }
+
+// stepFlexmix(y ~ x, k = k, nrep = nrep) for one k: nrep random-start fits from the same stream, the best by log-likelihood (the first of equals, as a strict > keeps it)
+// with the nrep log-likelihoods (NaN where a fit failed); x is n by p row-major
+fn step_gaussian(a: *mem.Arena, r: *rg.Rng, x: []const f64, y: []const f64, n: usize, p: usize, k: usize, nrep: usize, iter_max: usize, minprior: f64, tol: f64, logliks: []f64) -> (Fm, err) {
+    var best: Fm = zero
+    var best_ll = 0.0f64 - 1.0f64 / 0.0f64
+    var got = false
+    var m = 0usize
+    while m < nrep {
+        let (f, fe) = gaussian_random(a, r, x, y, n, p, k, iter_max, minprior, tol)
+        if fe != ok {
+            logliks[m] = 0.0f64 / 0.0f64
+        } else {
+            logliks[m] = f.llh
+            if f.llh > best_ll {
+                best_ll = f.llh
+                best = f
+                got = true
+            }
+        }
+        m += 1usize
+    }
+    if !got { ret (best, Malformed) }
+    ret (best, ok)
+}
