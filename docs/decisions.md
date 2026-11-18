@@ -48756,3 +48756,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.vcdeffect` has `loddsratio`: for an r by c by s table (column-major), each stratum's log odds ratios over adjacent row and column pairs, log x(i,j) - log x(i+1,j) - log x(i,j+1) + log x(i+1,j+1), with their variances (the sum of 1 / x over the four cells), ordered stratum-major and then column by column as vcd's contrast matrix orders them. Any zero cell adds one half to every cell.
 
 **Result.** `oracle_vcd_oddsratio` equals vcd::oddsratio on 80 values (coefficients and variances, sums over index, for 2 by 2 to 3 by 3 tables with two or three strata, some with a zero cell) on Windows; Linux pending. Not here: reference categories, the log = FALSE form and the other contrast layouts of loddsratio. L389 stays partial.
+
+## D7123 — WRS2: t2way, the robust two-way ANOVA
+
+`e.algo.stat.wrs2` has `t2way`: the trimmed cell means, the squared standard errors from the winsorised variances (the number of values in the trimmed middle as the divisor), Johansen's test of each contrast set (the A, B and AB contrasts of the J by K cells) with its critical value, and the p value as WRS2 searches it, the first alpha in steps of 1/1000 at which the statistic exceeds the critical value. The inverse of the contrast covariance is a Gauss-Jordan inverse with partial pivoting (LAPACK's solve differs only in rounding). The cells are in WRS2's order, the second factor fastest.
+
+**Result.** `oracle_wrs2_t2way` equals WRS2::t2way on 48 values (the three statistics and their p values for 2 by 2 and 2 by 3 and 3 by 2 and 3 by 3 designs with random cell sizes and shifted means) on Windows; `oracle_wrs2` still passes. Linux pending. L503 stays partial: the bootstrap and simulated functions (yuenbt, pb2gen), mcp2atm and ancova are open.

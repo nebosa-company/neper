@@ -9,8 +9,11 @@
 
 use e.math
 use e.math.dist as dist
+use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.mem
+
+error Malformed
 
 fn nan() -> f64 { ret 0.0f64 / 0.0f64 }
 
@@ -509,5 +512,293 @@ fn lincon(a: *mem.Arena, data: []const f64, sizes: []const usize, tr: f64) -> ([
         out[i].padj = best
         i += 1usize
     }
+    ret (out, ok)
+}
+
+// ---- t2way: the robust two-way ANOVA of WRS2 (trimmed means, winsorised variances of the cell means, Johansen's critical value and the search over
+// alpha in steps of 1/1000). The cells are in R's order: cell (j, k) is group (j - 1) * K + k, the second factor fastest.
+
+type T2way = struct { qa: f64, pa: f64, qb: f64, pb: f64, qab: f64, pab: f64 }
+
+// the inverse of the n by n row-major matrix m (Gauss-Jordan with partial pivoting); out is n by n row-major
+fn invert_small(a: *mem.Arena, m: []const f64, n: usize, out: []f64) -> err {
+    let (w, e) = mem.alloc[f64](a, n * 2usize * n)
+    if e != ok { ret e }
+    var i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            w[i * 2usize * n + j] = m[i * n + j]
+            w[i * 2usize * n + n + j] = 0.0f64
+            j += 1usize
+        }
+        w[i * 2usize * n + n + i] = 1.0f64
+        i += 1usize
+    }
+    var col = 0usize
+    while col < n {
+        var piv = col
+        var r = col + 1usize
+        while r < n {
+            if math.abs[f64](w[r * 2usize * n + col]) > math.abs[f64](w[piv * 2usize * n + col]) { piv = r }
+            r += 1usize
+        }
+        if w[piv * 2usize * n + col] == 0.0f64 { ret Malformed }
+        if piv != col {
+            var k = 0usize
+            while k < 2usize * n {
+                let t = w[col * 2usize * n + k]
+                w[col * 2usize * n + k] = w[piv * 2usize * n + k]
+                w[piv * 2usize * n + k] = t
+                k += 1usize
+            }
+        }
+        let d = w[col * 2usize * n + col]
+        var k = 0usize
+        while k < 2usize * n {
+            w[col * 2usize * n + k] = w[col * 2usize * n + k] / d
+            k += 1usize
+        }
+        r = 0usize
+        while r < n {
+            if r != col {
+                let f = w[r * 2usize * n + col]
+                k = 0usize
+                while k < 2usize * n {
+                    w[r * 2usize * n + k] = w[r * 2usize * n + k] - f * w[col * 2usize * n + k]
+                    k += 1usize
+                }
+            }
+            r += 1usize
+        }
+        col += 1usize
+    }
+    i = 0usize
+    while i < n {
+        var j = 0usize
+        while j < n {
+            out[i * n + j] = w[i * 2usize * n + n + j]
+            j += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// WRS2::johan: the statistic of the contrasts cmat (q by p, row-major) on the cell means vmean with squared standard errors vsq and sizes h,
+// and its critical value at alpha; returns (statistic, critical value)
+fn johan(a: *mem.Arena, cmat: []const f64, q: usize, p: usize, vmean: []const f64, vsq: []const f64, h: []const f64, alpha: f64) -> (f64, f64, err) {
+    // test = C diag(vsq) C'  (q by q)
+    let (test, e1) = mem.alloc[f64](a, q * q)
+    if e1 != ok { ret (0.0f64, 0.0f64, e1) }
+    var r = 0usize
+    while r < q {
+        var s = 0usize
+        while s < q {
+            var acc = 0.0f64
+            var k = 0usize
+            while k < p {
+                acc += cmat[r * p + k] * vsq[k] * cmat[s * p + k]
+                k += 1usize
+            }
+            test[r * q + s] = acc
+            s += 1usize
+        }
+        r += 1usize
+    }
+    let (invc, e2) = mem.alloc[f64](a, q * q)
+    if e2 != ok { ret (0.0f64, 0.0f64, e2) }
+    let e3 = invert_small(a, test, q, invc)
+    if e3 != ok { ret (0.0f64, 0.0f64, e3) }
+    // u = C vmean, stat = u' invc u
+    let (u, e4) = mem.alloc[f64](a, q)
+    if e4 != ok { ret (0.0f64, 0.0f64, e4) }
+    r = 0usize
+    while r < q {
+        var acc = 0.0f64
+        var k = 0usize
+        while k < p {
+            acc += cmat[r * p + k] * vmean[k]
+            k += 1usize
+        }
+        u[r] = acc
+        r += 1usize
+    }
+    var stat = 0.0f64
+    r = 0usize
+    while r < q {
+        var s = 0usize
+        while s < q {
+            stat += u[r] * invc[r * q + s] * u[s]
+            s += 1usize
+        }
+        r += 1usize
+    }
+    // M = C' invc C; R_ii = vsq_i M_ii; A = sum_i R_ii^2 / (h_i - 1)
+    var aa = 0.0f64
+    var i = 0usize
+    while i < p {
+        var m = 0.0f64
+        r = 0usize
+        while r < q {
+            var s = 0usize
+            while s < q {
+                m += cmat[r * p + i] * invc[r * q + s] * cmat[s * p + i]
+                s += 1usize
+            }
+            r += 1usize
+        }
+        let rii = vsq[i] * m
+        aa += rii * rii / (h[i] - 1.0f64)
+        i += 1usize
+    }
+    let df = f64(q)
+    var crit = nm.qchisq(1.0f64 - alpha, df, true, false)
+    crit = crit + (crit / (2.0f64 * df)) * aa * (1.0f64 + 3.0f64 * crit / (df + 2.0f64))
+    ret (stat, crit, ok)
+}
+
+// the statistic of the contrasts (it does not depend on alpha)
+fn johan_stat(a: *mem.Arena, cmat: []const f64, q: usize, p: usize, vmean: []const f64, vsq: []const f64, h: []const f64) -> (f64, err) {
+    let (s, _, e) = johan(a, cmat, q, p, vmean, vsq, h, 0.5f64)
+    ret (s, e)
+}
+
+// the p value as WRS2 searches it: the first alpha in steps of 1/1000 at which the statistic exceeds the critical value (irem / 1000), 0.999 when none does
+fn johan_p(a: *mem.Arena, cmat: []const f64, q: usize, p: usize, vmean: []const f64, vsq: []const f64, h: []const f64, stat: f64) -> (f64, err) {
+    var irem = 999usize
+    var i = 1usize
+    while i <= 999usize {
+        let (_, crit, e) = johan(a, cmat, q, p, vmean, vsq, h, f64(i) / 1000.0f64)
+        if e != ok { ret (0.0f64, e) }
+        irem = i
+        if stat > crit { break }
+        i += 1usize
+    }
+    ret (f64(irem) / 1000.0f64, ok)
+}
+
+// the A, B and AB contrasts of J by K cells (q rows each, row-major over the p = J K cells)
+fn t2_contrasts(a: *mem.Arena, jn: usize, kn: usize, which: usize, out: []f64) -> err {
+    let p = jn * kn
+    var ri = 0usize
+    var j = 0usize
+    var k = 0usize
+    if which == 0usize {
+        // A: cj (J - 1 by J) kron ik (1 by K ones)
+        while j + 1usize < jn {
+            k = 0usize
+            while k < kn {
+                out[j * p + j * kn + k] = 1.0f64
+                out[j * p + (j + 1usize) * kn + k] = 0.0f64 - 1.0f64
+                k += 1usize
+            }
+            j += 1usize
+        }
+        ret ok
+    }
+    if which == 1usize {
+        // B: ij (1 by J ones) kron ck (K - 1 by K)
+        var i = 0usize
+        while i + 1usize < kn {
+            var jj = 0usize
+            while jj < jn {
+                out[i * p + jj * kn + i] = 1.0f64
+                out[i * p + jj * kn + i + 1usize] = 0.0f64 - 1.0f64
+                jj += 1usize
+            }
+            i += 1usize
+        }
+        ret ok
+    }
+    // AB: cj kron ck, row ri * (K - 1) + rk
+    ri = 0usize
+    while ri + 1usize < jn {
+        var rk = 0usize
+        while rk + 1usize < kn {
+            let row = ri * (kn - 1usize) + rk
+            var jc = ri
+            while jc <= ri + 1usize {
+                var kc = rk
+                while kc <= rk + 1usize {
+                    var sj = 1.0f64
+                    if jc != ri { sj = 0.0f64 - 1.0f64 }
+                    var sk = 1.0f64
+                    if kc != rk { sk = 0.0f64 - 1.0f64 }
+                    out[row * p + jc * kn + kc] = sj * sk
+                    kc += 1usize
+                }
+                jc += 1usize
+            }
+            rk += 1usize
+        }
+        ri += 1usize
+    }
+    ret ok
+}
+
+// t2way(data, sizes, J, K, tr): the statistics and p values for the A, B and AB contrasts, given the cells in R's order
+fn t2way(a: *mem.Arena, data: []const f64, sizes: []const usize, jn: usize, kn: usize, tr: f64) -> (T2way, err) {
+    let p = jn * kn
+    var out: T2way = zero
+    let (tmeans, e1) = mem.alloc[f64](a, p)
+    let (hh, e2) = mem.alloc[f64](a, p)
+    let (vsq, e3) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok { ret (out, Malformed) }
+    var off = 0usize
+    var g = 0usize
+    while g < p {
+        let n = sizes[g]
+        let x = data[off..off + n]
+        tmeans[g] = tmean(a, x, tr)
+        hh[g] = f64(n) - 2.0f64 * math.floor[f64](tr * f64(n))
+        vsq[g] = (f64(n) - 1.0f64) * winvar(a, x, tr) / (hh[g] * (hh[g] - 1.0f64))
+        off += n
+        g += 1usize
+    }
+    let qa = jn - 1usize
+    let qb = kn - 1usize
+    let qab = (jn - 1usize) * (kn - 1usize)
+    let (ca, e4) = mem.alloc[f64](a, qa * p)
+    let (cb, e5) = mem.alloc[f64](a, qb * p)
+    let (cab, e6) = mem.alloc[f64](a, qab * p)
+    if e4 != ok || e5 != ok || e6 != ok { ret (out, Malformed) }
+    var z = 0usize
+    while z < qa * p {
+        ca[z] = 0.0f64
+        z += 1usize
+    }
+    z = 0usize
+    while z < qb * p {
+        cb[z] = 0.0f64
+        z += 1usize
+    }
+    z = 0usize
+    while z < qab * p {
+        cab[z] = 0.0f64
+        z += 1usize
+    }
+    let e7 = t2_contrasts(a, jn, kn, 0usize, ca)
+    let e8 = t2_contrasts(a, jn, kn, 1usize, cb)
+    let e9 = t2_contrasts(a, jn, kn, 2usize, cab)
+    if e7 != ok || e8 != ok || e9 != ok { ret (out, Malformed) }
+    let (qs_a, ea) = johan_stat(a, ca, qa, p, tmeans, vsq, hh)
+    if ea != ok { ret (out, ea) }
+    let (pa, pea) = johan_p(a, ca, qa, p, tmeans, vsq, hh, qs_a)
+    if pea != ok { ret (out, pea) }
+    let (qs_b, eb) = johan_stat(a, cb, qb, p, tmeans, vsq, hh)
+    if eb != ok { ret (out, eb) }
+    let (pb, peb) = johan_p(a, cb, qb, p, tmeans, vsq, hh, qs_b)
+    if peb != ok { ret (out, peb) }
+    let (qs_ab, eab) = johan_stat(a, cab, qab, p, tmeans, vsq, hh)
+    if eab != ok { ret (out, eab) }
+    let (pab, peab) = johan_p(a, cab, qab, p, tmeans, vsq, hh, qs_ab)
+    if peab != ok { ret (out, peab) }
+    out.qa = qs_a
+    out.pa = pa
+    out.qb = qs_b
+    out.pb = pb
+    out.qab = qs_ab
+    out.pab = pab
     ret (out, ok)
 }
