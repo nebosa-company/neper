@@ -77,4 +77,14 @@ for (rep in 1:20) {
   nu <- runif(1, 0.1, 4.9); if (abs(nu - round(nu)) < 0.05) nu <- nu + 0.2; x <- runif(1, 0.4, 12)
   cases[[length(cases) + 1]] <- case("h5", c(nu, x), bessel_Ynu(nu, x), rel = 1e-8, abs = 1e-11)
 }
+# low-order polynomials and helpers under "h6": 0 laguerre_k (k in arg 2, a, x), 1 gegenpoly_k, 2 legendre_Pk (k, x), 3 sphPlm (l, m, x), 4 hyperg_U, 5 hyperg_2F0, 6 zeta_int,
+# 7 eta_int, 8 psi_int, 9 psi_1_int, 10 fermi_dirac_inc_0, 11 fermi_dirac_int, 12 hydrogenicR_1
+for (rep in 1:15) {
+  a <- runif(1, 0.2, 3); x <- runif(1, 0.1, 3); q <- runif(1, -0.9, 0.9); k <- sample(1:3, 1); n <- sample(2:8, 1); b <- runif(1, 0.3, 4); l <- sample(0:5, 1); m <- sample(0:l, 1)
+  fn_l <- c(laguerre_1, laguerre_2, laguerre_3)[[k]]; fn_g <- c(gegenpoly_1, gegenpoly_2, gegenpoly_3)[[k]]; fn_p <- c(legendre_P1, legendre_P2, legendre_P3)[[k]]
+  add("h6", c(0, k, a, x), fn_l(a, x)); add("h6", c(1, k, a, q), fn_g(a, q)); add("h6", c(2, k, q), fn_p(q)); add("h6", c(3, l, m, q), legendre_sphPlm(l, m, q))
+  add("h6", c(4, a, b, x), hyperg_U(a, b, x)); add("h6", c(5, a, b, -x), hyperg_2F0(a, b, -x)); add("h6", c(6, n), zeta_int(n)); add("h6", c(7, n), eta_int(n))
+  add("h6", c(8, n), psi_int(n)); add("h6", c(9, n), psi_1_int(n)); add("h6", c(10, a, b), fermi_dirac_inc_0(a, b)); add("h6", c(11, k, x), fermi_dirac_int(k, x))
+  add("h6", c(12, a, x), hydrogenicR_1(a, x))
+}
 emit("gslfns", "gsl", list(cases))

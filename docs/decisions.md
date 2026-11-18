@@ -49376,3 +49376,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gslfns` gains `bessel_ynu`: Y_nu as (J_nu cos(nu pi) - J_(-nu)) / sin(nu pi) for non-integer nu, with J_(-nu) from its power series started at Gamma(nu) sin(nu pi) / pi in place of 1 / Gamma(1 - nu) so that the sign for nu above 1 is carried by the sine. The series loses precision beyond x of about 15, as `bessel_jnu` does.
 
 **Result.** `oracle_gslfns` has 2075 values (20 added over orders 0.1 to 4.9 and x to 12, 1e-8) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb and complex functions and the error estimates.
+
+## D7226 — gsl: low-order polynomials, Tricomi's U, 2F0 and the integer-argument helpers
+
+`e.algo.stat.gslfns` gains `hyperg_u` (Tricomi's confluent function by its Laplace integral on the infinite-range routine) and `hyperg_2f0` (for negative x through U), `legendre_p1` to `legendre_p3`, `legendre_sphplm`, `hydrogenic_r1`, `fermi_dirac_inc_0`; the one-argument forms of the R package (`laguerre_1` to `laguerre_3`, `gegenpoly_1` to `gegenpoly_3`, `zeta_int`, `eta_int`, `psi_int`, `psi_1_int`, `fermi_dirac_int`, `hyperg_U_int`) are the general functions already present.
+
+**Result.** `oracle_gslfns` has 2270 values (195 added over 15 arguments each, 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb functions, the complex functions, the conical and hyperbolic-space Legendre functions, the coupling coefficients and the error estimates.

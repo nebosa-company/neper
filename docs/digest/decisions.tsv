@@ -4011,4 +4011,5 @@ D7221	1002	gsl: the incomplete gamma and beta functions, Pochhammer, error funct
 D7222	547	gsl: the polygamma functions and gamma helpers
 D7223	1015	gsl: the sine and cosine integrals, generalised exponential integrals, eta, polynomials, Legendre Q, RC and the Jacobian elliptic functions
 D7224	916	gsl: ellint_RJ, ellint_P, ellint_D and the Bessel Y functions
-D7225	606	gsl: Bessel Y of non-integer order
+D7225	607	gsl: Bessel Y of non-integer order
+D7226	875	gsl: low-order polynomials, Tricomi's U, 2F0 and the integer-argument helpers

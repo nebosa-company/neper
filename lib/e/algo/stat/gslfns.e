@@ -896,3 +896,39 @@ fn bessel_ynu(nu: f64, x: f64) -> f64 {
     }
     ret (bessel_jnu(nu, x) * math.cos[f64](pi_ * nu) - s) / math.sin[f64](pi_ * nu)
 }
+
+// ---- low-order orthogonal polynomials, Tricomi's U and 2F0 by the Laplace integral, and the integer-argument zeta, eta, psi and Fermi-Dirac helpers
+type Uc = struct { a: f64, b: f64, x: f64 }
+
+fn uc_fn(c: *Uc, t: f64) -> f64 { ret math.exp[f64](0.0f64 - c.x * t + (c.a - 1.0f64) * math.log[f64](t) + (c.b - c.a - 1.0f64) * math.log[f64](1.0f64 + t)) }
+
+// hyperg_U(a, b, x) = 1 / Gamma(a) integral_0^Inf e^(-x t) t^(a - 1) (1 + t)^(b - a - 1) dt (a > 0, x > 0)
+fn hyperg_u(a: *mem.Arena, aa: f64, b: f64, x: f64) -> f64 {
+    var c: Uc = zero
+    c.a = aa
+    c.b = b
+    c.x = x
+    let (r, e) = qp.qagi[Uc](a, &c, uc_fn, 0.0f64, 1i64, 0.0f64, 0.0000000000001f64, 200usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result / math.exp[f64](sp.lgamma(aa))
+}
+
+// hyperg_2F0(a, b, x) for x < 0: (-1 / x)^a U(a, 1 + a - b, -1 / x)
+fn hyperg_2f0(a: *mem.Arena, aa: f64, b: f64, x: f64) -> f64 { ret math.pow[f64](0.0f64 - 1.0f64 / x, aa) * hyperg_u(a, aa, 1.0f64 + aa - b, 0.0f64 - 1.0f64 / x) }
+
+fn legendre_p1(x: f64) -> f64 { ret x }
+
+fn legendre_p2(x: f64) -> f64 { ret 0.5f64 * (3.0f64 * x * x - 1.0f64) }
+
+fn legendre_p3(x: f64) -> f64 { ret 0.5f64 * x * (5.0f64 * x * x - 3.0f64) }
+
+fn hydrogenic_r1(z: f64, r: f64) -> f64 { ret 2.0f64 * z * math.sqrt[f64](z) * math.exp[f64](0.0f64 - z * r) }
+
+fn fermi_dirac_inc_0(x: f64, b: f64) -> f64 { ret dist.log1p(math.exp[f64](x - b)) }
+
+// legendre_sphPlm(l, m, x) = sqrt((2 l + 1) / (4 pi) (l - m)! / (l + m)!) P_l^m(x)
+fn legendre_sphplm(l: usize, m: usize, x: f64) -> f64 {
+    let pi_ = 3.141592653589793238462643383279f64
+    let nrm = math.exp[f64](0.5f64 * (math.log[f64]((2.0f64 * f64(l) + 1.0f64) / (4.0f64 * pi_)) + sp.lgamma(f64(l - m) + 1.0f64) - sp.lgamma(f64(l + m) + 1.0f64)))
+    ret nrm * legendre_plm(l, m, x)
+}

@@ -74,6 +74,26 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         ret gs.bessel_yn(a, usize(x[1usize]), x[2usize])
     }
     if str.eq(k, "h5") { ret gs.bessel_ynu(x[0usize], x[1usize]) }
+    if str.eq(k, "h6") {
+        let code = usize(x[0usize])
+        if code == 0usize { ret gs.laguerre_n(usize(x[1usize]), x[2usize], x[3usize]) }
+        if code == 1usize { ret gs.gegenpoly_n(usize(x[1usize]), x[2usize], x[3usize]) }
+        if code == 2usize {
+            if x[1usize] == 1.0f64 { ret gs.legendre_p1(x[2usize]) }
+            if x[1usize] == 2.0f64 { ret gs.legendre_p2(x[2usize]) }
+            ret gs.legendre_p3(x[2usize])
+        }
+        if code == 3usize { ret gs.legendre_sphplm(usize(x[1usize]), usize(x[2usize]), x[3usize]) }
+        if code == 4usize { ret gs.hyperg_u(a, x[1usize], x[2usize], x[3usize]) }
+        if code == 5usize { ret gs.hyperg_2f0(a, x[1usize], x[2usize], x[3usize]) }
+        if code == 6usize { ret gs.hzeta(x[1usize], 1.0f64) }
+        if code == 7usize { ret gs.eta(x[1usize]) }
+        if code == 8usize { ret gs.psi(x[1usize]) }
+        if code == 9usize { ret gs.psi_1(x[1usize]) }
+        if code == 10usize { ret gs.fermi_dirac_inc_0(x[1usize], x[2usize]) }
+        if code == 11usize { ret gs.fermi_dirac(a, x[1usize], x[2usize]) }
+        ret gs.hydrogenic_r1(x[1usize], x[2usize])
+    }
     if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }
