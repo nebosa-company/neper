@@ -44,7 +44,7 @@ L361	library	0.2	646	segmented and strucchange: breakpoints and structural chang
 L362	library	0.25	523	fitdistrplus: fitting and comparing distributions	Partial (D6432, D6433 gamma and Weibull fits).
 L363	library	0.4	907	DescTools: descriptive statistics and tests	Partial (D6429, D6430 table association measures, D6431 kappa, lambda, tau, OR, Q, D6446 BinomCI x11, D6447 Winsorize, HodgesLehmann, MedianCI, Trim, D6448 Cochran-Armitage, MH odds ratio, Breslow-Day
 L365	library	0.15	417	ks: multivariate kernel density estimation	Partial (D6462 hns, Hns and kde at points with a given H equal ks on Windows;
-L367	library	0.3	582	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
+L367	library	0.35	724	lpSolve, lpSolveAPI and clue: linear programming and cluster ensembles	Partial (D6427, D6428 assignment problem).
 L370	library	0.1	421	fields and interp: spatial smoothing and interpolation	Partial (D6469 fields Matern and Exp.cov equal fields on Windows;
 L376	library	0	240	gam: backfitting generalized additive models	Open (CRAN rank 388).
 L378	library	0	318	uwot and Rtsne: embeddings equal to R	Open (CRAN ranks 311, 315).

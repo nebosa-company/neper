@@ -474,3 +474,4 @@ oracle_fpc_discr
 oracle_energy_bcdcor
 oracle_sampling_brewer
 oracle_sampling_midzuno
+oracle_clue_partition

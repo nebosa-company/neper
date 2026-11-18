@@ -48788,3 +48788,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.sampling` has `up_midzuno`, which is sampling's definition: 1 - UPtille(1 - pik), the Tille elimination sample of the complements (the existing `up_tille`), complemented.
 
 **Result.** `oracle_sampling_midzuno` equals sampling::UPmidzuno under set.seed on 20 samples (the same generator as D7126) in the sample size and the sum of the selected indices, on Windows. Linux pending. L508 stays partial: UPmaxentropy, the strata and cluster designs, calibration and the joint inclusion probabilities are open.
+
+## D7128 — clue: Rand agreement and the Euclidean dissimilarity of partitions
+
+`e.algo.stat.clue` has `rand_agreement` (clue's Rand agreement, 1 + (sum n_ij^2 - (sum a_i^2 + sum b_j^2) / 2) / choose(n, 2) on the contingency table) and `euclid_partition`: the membership matrices of two hard partitions with k classes, the classes of the second matched to the first by the maximal cross-product assignment (`e.algo.graph.match`'s Hungarian solver on the negated counts), and the square root of the summed squared differences. The matched distance depends only on the optimal assignment value, so ties between assignments do not change it.
+
+**Result.** `oracle_clue_partition` equals clue::cl_agreement (Rand) and clue::cl_dissimilarity (euclidean) on 48 values (24 pairs of partitions of 8 to 40 objects with 2 to 4 classes each) on Windows. Linux pending. L367 stays partial: the hierarchy measures, the other methods, cl_consensus and cl_membership, and lpSolve's equality rows, integer variables, transportation and sensitivity are open.
