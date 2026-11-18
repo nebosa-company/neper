@@ -3995,4 +3995,5 @@ D7205	706	GeneralizedHyperbolic: the moments of any order and the skewness
 D7206	980	GeneralizedHyperbolic: the kurtosis and pgig
 D7207	912	GeneralizedHyperbolic: nigFit with a given start (Nelder-Mead)
 D7208	760	GeneralizedHyperbolic: hyperbFit with a given start (Nelder-Mead)
-D7209	956	gamlss.dist: random numbers by the quantile function
+D7209	957	gamlss.dist: random numbers by the quantile function
+D7210	907	gamlss.dist: the link functions

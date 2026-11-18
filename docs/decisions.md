@@ -49280,3 +49280,9 @@ The Nelder-Mead fit of D7207 is the same for the hyperbolic distribution (lambda
 gamlss.dist generates many families' random numbers as the quantile function of `runif(n)` (all n uniforms first, then the vectorised quantile): rGA, rNBI (as an integer), rGU, rBE (the beta by its mean and scale), rPARETO2, rTF and rBCCG. With the quantiles already equal to R, the draws need only R's uniform stream, which `e.algo.rand.r` provides; the oracle checks the pipeline from the seed. The other generators (rNO, rEXP, rPO, rWEI, rLO, rLOGNO) use base R's own rnorm, rexp, rpois, rweibull, rlogis and rlnorm and are not covered here.
 
 **Result.** `oracle_gamlss_exp` has 7259 values (336 added: eight draws from each of six seeded streams for seven families, 1e-9 relative) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: the remaining families (DEL, DBI, Sichel distribution functions and more), the base-R generators, the moments and the link functions.
+
+## D7210 — gamlss.dist: the link functions
+
+New `e.algo.stat.gamlsslink`: gamlss.dist's `make.link.gamlss` for twelve links (logit by the standard logistic, probit, cauchit, cloglog, identity, log, sqrt, 1/mu^2, mu^2 and the three log-shift links), each as the link function, the inverse link with the package's clamping (the logistic, normal and Cauchy inverses are clamped at the quantile of the machine epsilon; the log inverse is floored at epsilon) and the derivative of the inverse (`mu.eta`, floored at epsilon where the package does).
+
+**Result.** `oracle_gamlss_link` equals gamlss.dist on 180 values (twelve links, five means and five linear predictors each) at 1e-10 relative on Windows. Linux pending. L464 stays partial: the remaining families, the base-R generators and the moments; the links that need extra arguments (the `[-1,1]`, `Slog`, `inverse` and user-defined ones) are not ported.

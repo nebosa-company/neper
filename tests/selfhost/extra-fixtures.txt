@@ -484,3 +484,4 @@ oracle_ade4_dudi
 oracle_quadpack
 oracle_stabledist
 oracle_flexmix_gauss
+oracle_gamlss_link
