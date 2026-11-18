@@ -273,4 +273,17 @@ for (rep in 1:30) {
   add("ex", c(207, gm, gs, gx, sin_), pGIG(gx, mu = gm, sigma = gs, nu = sin_), rel = 1e-6, abs = 1e-9)
   add("ex", c(208, gm, gs, p, sin_), qGIG(p, mu = gm, sigma = gs, nu = sin_), rel = 1e-5, abs = 1e-8)
 }
+# random numbers by the quantile function on runif: args (seed, i, which, mu, sigma, nu) under "rq": which 0 rGA, 1 rNBI, 2 rGU, 3 rBE, 4 rPARETO2, 5 rTF, 6 rBCCG; draw i (0-based) of 8
+for (rep in 1:6) {
+  sd0 <- sample(1:100000, 1); n <- 8
+  m <- runif(1, 0.5, 4); sg <- runif(1, 0.3, 1.2); nu1 <- runif(1, 3, 20); bm <- runif(1, 0.2, 0.8); bs <- runif(1, 0.2, 0.7)
+  draws <- list(function() rGA(n, mu = m, sigma = sg), function() rNBI(n, mu = m, sigma = sg), function() rGU(n, mu = m - 2, sigma = sg),
+                function() rBE(n, mu = bm, sigma = bs), function() rPARETO2(n, mu = m, sigma = sg), function() rTF(n, mu = m - 2, sigma = sg, nu = nu1),
+                function() rBCCG(n, mu = m, sigma = sg, nu = nu1 / 20))
+  args <- list(c(m, sg, 0), c(m, sg, 0), c(m - 2, sg, 0), c(bm, bs, 0), c(m, sg, 0), c(m - 2, sg, nu1), c(m, sg, nu1 / 20))
+  for (w in 0:6) {
+    set.seed(sd0); v <- draws[[w + 1]]()
+    for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("rq", c(sd0, i - 1, w, args[[w + 1]]), as.numeric(v[i]), rel = 1e-9, abs = 1e-12)
+  }
+}
 emit("gamlss_exp", "gamlss.dist", list(cases))

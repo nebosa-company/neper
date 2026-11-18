@@ -49274,3 +49274,9 @@ New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input),
 The Nelder-Mead fit of D7207 is the same for the hyperbolic distribution (lambda = 1) in the package, so `hyperb_fit` and `nig_fit` share `ghyp_fit_us` with the lambda in the objective: the (mu, log delta, pi, log zeta) parametrisation, R's `nmmin` at reltol 1.49e-8 and 1000 evaluations, and the map back to (alpha, beta).
 
 **Result.** `oracle_ghyp` has 1709 values (30 added: five fits to simulated hyperbolic samples, parameters at 1e-5, the maximised log-likelihood at 1e-7, the function counts exactly) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: the other start values and methods, gigFit, hyperblm, the standard errors and qgig remain.
+
+## D7209 — gamlss.dist: random numbers by the quantile function
+
+gamlss.dist generates many families' random numbers as the quantile function of `runif(n)` (all n uniforms first, then the vectorised quantile): rGA, rNBI (as an integer), rGU, rBE (the beta by its mean and scale), rPARETO2, rTF and rBCCG. With the quantiles already equal to R, the draws need only R's uniform stream, which `e.algo.rand.r` provides; the oracle checks the pipeline from the seed. The other generators (rNO, rEXP, rPO, rWEI, rLO, rLOGNO) use base R's own rnorm, rexp, rpois, rweibull, rlogis and rlnorm and are not covered here.
+
+**Result.** `oracle_gamlss_exp` has 7259 values (336 added: eight draws from each of six seeded streams for seven families, 1e-9 relative) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: the remaining families (DEL, DBI, Sichel distribution functions and more), the base-R generators, the moments and the link functions.

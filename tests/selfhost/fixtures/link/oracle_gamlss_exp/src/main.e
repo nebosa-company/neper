@@ -1,14 +1,40 @@
 // e.algo.stat.gamlssdist's EXP and RG functions against gamlss.dist (dEXP, pEXP, qEXP, dRG, pRG, qRG, dPARETO2, pPARETO2, qPARETO2, dPARETO1, pPARETO1, qPARETO1, dNO, pNO, qNO, dPO, pPO, qPO). tests/oracle/gamlss_exp.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R gamlss_exp`; the layout of every case is at the top of scripts/r_oracle/groups/gamlss_exp.R.
 
+use e.algo.rand.r as rg
 use e.algo.stat.gamlssdist as gd
+use e.math
 use e.io
 use e.mem
 use e.os
 use e.str
 use e.test.oracle as oracle
 
+fn answer_rq(c: *const oracle.Case) -> f64 {
+    let z = c.args
+    var rng: rg.Rng = zero
+    rg.seed(&rng, i64(z[0usize]))
+    var u = 0.0f64
+    var i = 0usize
+    while i <= usize(z[1usize]) {
+        u = rg.unif(&rng)
+        i += 1usize
+    }
+    let w = usize(z[2usize])
+    let m = z[3usize]
+    let sg = z[4usize]
+    let nu = z[5usize]
+    if w == 0usize { ret gd.qga(u, m, sg) }
+    if w == 1usize { ret math.floor[f64](gd.qnbi(u, m, sg)) }
+    if w == 2usize { ret gd.qgu(u, m, sg) }
+    if w == 3usize { ret gd.qbe(u, m, sg) }
+    if w == 4usize { ret gd.qpareto2(u, m, sg) }
+    if w == 5usize { ret gd.qtf(u, m, sg, nu) }
+    ret gd.qbccg(u, m, sg, nu)
+}
+
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    if str.eq(c.name, "rq") { ret answer_rq(c) }
     let z = c.args
     let which = usize(z[0usize])
     let mu = z[1usize]
