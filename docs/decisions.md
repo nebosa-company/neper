@@ -48878,3 +48878,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 `e.algo.stat.gamlssdist` gains pig (the package's form: the standard errors use sigma sqrt(x), not sigma sqrt(x / mu), and the second term is added on the log scale), pzip and qzip (the quantile of the zero-inflated mixture as the base Poisson quantile at (p - sigma) / (1 - sigma), floored at zero).
 
 **Result.** `oracle_gamlss_exp` now has 900 values across 10 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7143 — gamlss.dist: NBI distribution and quantile
+
+`e.algo.stat.gamlssdist` gains pnbi and qnbi: the negative binomial with mean mu and size 1 / sigma, over `nmath_beta.pnbinom_mu` and `qnbinom_mu`.
+
+**Result.** `oracle_gamlss_exp` has 990 values across 11 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

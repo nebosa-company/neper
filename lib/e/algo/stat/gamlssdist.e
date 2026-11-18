@@ -258,3 +258,11 @@ fn qzip(p: f64, mu: f64, sigma: f64) -> f64 {
     if pn < 0.0f64 { pn = 0.0f64 }
     ret nm.qpois(pn, mu, true, false)
 }
+
+// NBI: negative binomial with mean mu and size 1 / sigma
+fn pnbi(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    ret nb.pnbinom_mu(x, 1.0f64 / sigma, mu, true, false)
+}
+
+fn qnbi(p: f64, mu: f64, sigma: f64) -> f64 { ret nb.qnbinom_mu(p, 1.0f64 / sigma, mu, true, false) }

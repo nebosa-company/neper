@@ -43,7 +43,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 26usize { ret gd.qlogno(x, mu, sigma) }
     if which == 27usize { ret gd.pig(x, mu, sigma) }
     if which == 28usize { ret gd.pzip(x, mu, sigma) }
-    ret gd.qzip(x, mu, sigma)
+    if which == 29usize { ret gd.qzip(x, mu, sigma) }
+    if which == 30usize { ret gd.dnbi(x, mu, sigma) }
+    if which == 31usize { ret gd.pnbi(x, mu, sigma) }
+    ret gd.qnbi(x, mu, sigma)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
