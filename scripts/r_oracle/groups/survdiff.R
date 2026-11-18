@@ -12,4 +12,12 @@ for (rep in 1:40) {
   cases[[length(cases) + 1]] <- case("sd_chisq", a, as.numeric(r$chisq), rel = 1e-8, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("sd_p", a, as.numeric(pchisq(r$chisq, 1, lower.tail = FALSE)), rel = 1e-8, abs = 1e-12)
 }
+# K groups: "sdk" args (rho, k, n, time..., event..., group 0-based...), the chi-square
+for (rep in 1:30) {
+  k <- sample(3:4, 1); sz <- sample(8:25, k, TRUE); n <- sum(sz); rho <- sample(c(0, 1), 1)
+  g <- rep(0:(k - 1), sz); t <- round(rexp(n, 0.1 * (1 + 0.3 * g)), 2) + 0.01; e <- rbinom(n, 1, 0.75); if (sum(e) < 6) next
+  d <- data.frame(t = t, e = e, g = g)
+  r <- survdiff(Surv(t, e) ~ g, data = d, rho = rho)
+  cases[[length(cases) + 1]] <- case("sd_k", c(rho, k, n, t, e, g), as.numeric(r$chisq), rel = 1e-7, abs = 1e-10)
+}
 emit("survdiff", "survival", list(cases))

@@ -4055,4 +4055,5 @@ D7265	725	DescTools: the last BinomCI methods and MAD
 D7266	1191	igraph: triad census, mutual arcs, bridges, connectivity, motifs and the dominator tree
 D7267	675	survival: survdiff for two groups
 D7268	771	survival: survfit for one sample
-D7269	651	survival: the Fleming-Harrington survfit types
+D7269	652	survival: the Fleming-Harrington survfit types
+D7270	727	survival: survdiff for k groups

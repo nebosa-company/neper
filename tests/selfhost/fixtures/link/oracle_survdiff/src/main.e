@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R survdiff`; the layout is at the top of scripts/r_oracle/groups/survdiff.R.
 
 use e.algo.stat.survival as sv
+use e.algo.stat.survfitpkg as sf
 use e.io
 use e.mem
 use e.os
@@ -10,6 +11,20 @@ use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "sd_k") {
+        let kk = usize(x[1usize])
+        let nn = usize(x[2usize])
+        let (gp, ge) = mem.alloc[usize](a, nn)
+        let (ou, oe2) = mem.alloc[f64](a, 2usize)
+        if ge != ok || oe2 != ok { os.exit(6) }
+        var q = 0usize
+        while q < nn {
+            gp[q] = usize(x[3usize + 2usize * nn + q])
+            q += 1usize
+        }
+        if sf.survdiff_k(a, x[3usize..3usize + nn], x[3usize + nn..3usize + 2usize * nn], gp, kk, x[0usize], ou) != ok { os.exit(7) }
+        ret ou[0usize]
+    }
     let na = usize(x[1usize])
     let nb = usize(x[2usize])
     let ta = x[3usize..3usize + na]

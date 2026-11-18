@@ -49640,3 +49640,9 @@ New `e.algo.stat.survfitpkg.km_table`: one row per distinct event time with n.ri
 `e.algo.stat.survfitpkg.na_table` adds `survfit(type = "fleming-harrington")` (the Nelson-Aalen hazard d / n summed, survival exp(-H), variance d / n^2) and `type = "fh2"` (the tie-adjusted hazard, a sum of 1 / (n - k) over the d tied events, variance the sum of squares), each with the log interval.
 
 **Result.** `oracle_survfit` gains 20 samples under both types (560 values) and equals survival on Windows at 1e-8. Linux pending. L311 stays partial: strata for survfit, left and interval censoring, the rest of coxph, survreg, cox.zph, concordance, survSplit, tmerge, pyears, residuals.
+
+## D7270 — survival: survdiff for k groups
+
+`e.algo.stat.survfitpkg.survdiff_k` is `survdiff` for any number of groups: at every event time the weight S(t-)^rho from the pooled Kaplan-Meier times the observed less expected events of each group, the hypergeometric covariance weight^2 d (n - d) / (n^2 (n - 1)) times n_g (n - n_g) on the diagonal and -n_g n_h off it, and the chi-square u' V^-1 u over the first k - 1 groups by Gauss-Jordan.
+
+**Result.** `oracle_survdiff` gains 30 data sets of three or four groups (rho 0 and 1; 30 values) and equals survival on Windows at 1e-7. Linux pending. L311 stays partial: survdiff with strata, the rest of coxph, survreg, cox.zph, concordance, survSplit, tmerge, pyears, residuals.
