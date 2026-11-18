@@ -152,7 +152,17 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 133usize { ret gd.dzalg(x, mu, sigma) }
     if which == 134usize { ret gd.pzalg(x, mu, sigma) }
     if which == 135usize { ret gd.dgpo(x, mu, sigma) }
-    ret gd.qexgaus(x, mu, sigma, nu)
+    if which == 136usize { ret gd.qexgaus(x, mu, sigma, nu) }
+    if which == 137usize { ret gd.pjsu(x, mu, sigma, nu, tau) }
+    if which == 138usize { ret gd.qjsu(x, mu, sigma, nu, tau) }
+    if which == 139usize { ret gd.djsuo(x, mu, sigma, nu, tau) }
+    if which == 140usize { ret gd.pjsuo(x, mu, sigma, nu, tau) }
+    if which == 141usize { ret gd.qjsuo(x, mu, sigma, nu, tau) }
+    if which == 142usize { ret gd.dshasho(x, mu, sigma, nu, tau) }
+    if which == 143usize { ret gd.pshasho(x, mu, sigma, nu, tau) }
+    if which == 144usize { ret gd.qshasho(x, mu, sigma, nu, tau) }
+    if which == 145usize { ret gd.pshash(x, mu, sigma, nu, tau) }
+    ret gd.qshash(x, mu, sigma, nu, tau)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

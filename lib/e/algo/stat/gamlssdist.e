@@ -980,3 +980,89 @@ fn qexgaus(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     }
     ret pw.zeroin[ExgausRoot](&c, exgaus_h1, lo, hi, pw.uniroot_tol(), 1000i64)
 }
+
+// JSU distribution and quantile, JSUo (original parametrisation), SHASHo and SHASH: the closed forms of gamlss.dist, and the SHASH quantile through the package's bracket and uniroot
+fn jsu_consts(mu: f64, sigma: f64, nu: f64, tau: f64) -> (f64, f64) {
+    let rtau = 1.0f64 / tau
+    var w = 1.0f64
+    if rtau >= 1.0e-7f64 { w = math.exp[f64](rtau * rtau) }
+    let omega = 0.0f64 - nu * rtau
+    let c = math.pow[f64](0.5f64 * (w - 1.0f64) * (w * cosh_of(2.0f64 * omega) + 1.0f64), 0.0f64 - 0.5f64)
+    ret (c, mu + c * sigma * math.sqrt[f64](w) * sinh_of(omega))
+}
+
+fn pjsu(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let (c, loc) = jsu_consts(mu, sigma, nu, tau)
+    let z = (x - loc) / (c * sigma)
+    ret pno(0.0f64 - nu + asinh_of(z) * tau, 0.0f64, 1.0f64)
+}
+
+fn qjsu(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let (c, loc) = jsu_consts(mu, sigma, nu, tau)
+    let r = qno(p, 0.0f64, 1.0f64)
+    ret loc + c * sigma * sinh_of((r + nu) / tau)
+}
+
+fn djsuo(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    let r = nu + tau * asinh_of(z)
+    ret math.exp[f64](0.0f64 - math.log[f64](sigma) + math.log[f64](tau) - 0.5f64 * math.log[f64](z * z + 1.0f64) - 0.5f64 * math.log[f64](2.0f64 * pi()) - 0.5f64 * r * r)
+}
+
+fn pjsuo(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret pno(nu + tau * asinh_of((x - mu) / sigma), 0.0f64, 1.0f64) }
+
+fn qjsuo(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret mu + sigma * sinh_of((qno(p, 0.0f64, 1.0f64) - nu) / tau) }
+
+fn dshasho(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    let a = tau * asinh_of(z) - nu
+    let c = cosh_of(a)
+    let r = sinh_of(a)
+    ret math.exp[f64](0.0f64 - math.log[f64](sigma) + math.log[f64](tau) - math.log[f64](2.0f64 * pi()) / 2.0f64 - math.log[f64](1.0f64 + z * z) / 2.0f64 + math.log[f64](c) - r * r / 2.0f64)
+}
+
+fn pshasho(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret pno(sinh_of(tau * asinh_of((x - mu) / sigma) - nu), 0.0f64, 1.0f64) }
+
+fn qshasho(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret mu + sigma * sinh_of((1.0f64 / tau) * asinh_of(qno(p, 0.0f64, 1.0f64)) + nu / tau) }
+
+fn pshash(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let a = asinh_of((x - mu) / sigma)
+    ret pno(0.5f64 * (math.exp[f64](tau * a) - math.exp[f64](0.0f64 - nu * a)), 0.0f64, 1.0f64)
+}
+
+type ShashRoot = struct { mu: f64, sigma: f64, nu: f64, tau: f64, p: f64 }
+
+fn shash_h(c: *ShashRoot, q: f64) -> f64 { ret pshash(q, c.mu, c.sigma, c.nu, c.tau) }
+
+fn shash_h1(c: *ShashRoot, q: f64) -> f64 { ret pshash(q, c.mu, c.sigma, c.nu, c.tau) - c.p }
+
+fn qshash(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p <= 0.0f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if p >= 1.0f64 { ret 1.0f64 / 0.0f64 }
+    var c: ShashRoot = zero
+    c.mu = mu
+    c.sigma = sigma
+    c.nu = nu
+    c.tau = tau
+    c.p = p
+    var lo = 0.0f64
+    var hi = 0.0f64
+    if shash_h(&c, mu) < p {
+        lo = mu
+        hi = mu + sigma
+        var j = 2.0f64
+        while shash_h(&c, hi) < p {
+            hi = mu + j * sigma
+            j += 1.0f64
+        }
+    } else {
+        lo = mu - sigma
+        hi = mu
+        var j = 2.0f64
+        while shash_h(&c, lo) > p {
+            lo = mu - j * sigma
+            j += 1.0f64
+        }
+    }
+    ret pw.zeroin[ShashRoot](&c, shash_h1, lo, hi, pw.uniroot_tol(), 1000i64)
+}

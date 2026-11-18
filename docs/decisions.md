@@ -49016,3 +49016,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains `qexgaus`: gamlss.dist finds the exponentially modified Gaussian quantile by uniroot on a bracket that starts at mu and grows in steps of sigma, so the port runs the same Brent zeroin (`e.algo.stat.pwr.zeroin`, tolerance eps^0.25, at most 1000 steps) on the same bracket, and the roots equal R's to the iteration, not just to the tolerance.
 
 **Result.** `oracle_gamlss_exp` has 4578 values and equals gamlss.dist on Windows, the 21 new quantiles at 1e-9 relative. Linux pending. L464 stays partial; the same recipe (the package's own bracket and uniroot) applies to the other numerically inverted quantiles.
+
+## D7166 — gamlss.dist: JSU, JSUo, SHASHo and SHASH distribution functions and quantiles
+
+`e.algo.stat.gamlssdist` gains the Johnson SU distribution and quantile (JSU), the original-parametrisation JSUo (density, distribution, quantile), SHASHo (density, distribution, quantile) and SHASH (distribution and the quantile, which gamlss.dist finds by uniroot on its mu-and-sigma bracket, so the port reuses `pw.zeroin` on the same bracket as for exGAUS).
+
+**Result.** `oracle_gamlss_exp` has 4879 values across 50 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
