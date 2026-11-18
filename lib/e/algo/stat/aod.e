@@ -691,3 +691,119 @@ fn negbin_se(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, 
     if optimhess[NbCtx](a, &c, nb_nll, par, h) != ok { ret false }
     ret inv_se(a, h, np, se)
 }
+
+// betabin and negbin with phi by a group factor (random = ~ group): one phi per level, grp[i] the 0-based level of row i, ng levels; the start phi = 0.1 for each; out receives the p coefficients,
+// the ng phis and the maximised log-likelihood
+type BbgCtx = struct { x: []const f64, n: usize, p: usize, y: []const f64, size: []const f64, grp: []const usize }
+
+fn bbg_nll(c: *BbgCtx, par: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.n {
+        let phi = par[c.p + c.grp[i]]
+        var t = 0.0f64
+        var k = 0usize
+        while k < c.p {
+            t += c.x[k * c.n + i] * par[k]
+            k += 1usize
+        }
+        let pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
+        let u = pr * (1.0f64 - phi) / phi
+        let v = (1.0f64 - pr) * (1.0f64 - phi) / phi
+        s += sp.lgamma(c.size[i] + 1.0f64) - sp.lgamma(c.y[i] + 1.0f64) - sp.lgamma(c.size[i] - c.y[i] + 1.0f64) + lbeta_(u + c.y[i], v + c.size[i] - c.y[i]) - lbeta_(u, v)
+        i += 1usize
+    }
+    if s != s || s > 1.0e300f64 || s < 0.0f64 - 1.0e300f64 { ret 1.0e20f64 }
+    ret 0.0f64 - s
+}
+
+fn betabin_g(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, size: []const f64, grp: []const usize, ng: usize, out: []f64) -> (usize, err) {
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (b0, e2) = mem.alloc[f64](a, p + ng)
+    let (best, e3) = mem.alloc[f64](a, p + ng)
+    if e1 != ok || e2 != ok || e3 != ok { ret (1usize, fx.Malformed) }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    let e = fx.binom_glm(a, x, n, p, y, size, w, b0, false)
+    if e != ok { ret (1usize, e) }
+    var g = 0usize
+    while g < ng {
+        b0[p + g] = 0.1f64
+        g += 1usize
+    }
+    var c = BbgCtx{ x: x, n: n, p: p, y: y, size: size, grp: grp }
+    let (fmin, cnt, fail) = rn.nmmin[BbgCtx](a, &c, bbg_nll, b0, 0.0f64 - 1.0f64 / 0.0f64, 0.0000000149011611938f64, 1.0f64, 0.5f64, 2.0f64, 2000usize, 1.0f64, best)
+    var k = 0usize
+    while k < p + ng {
+        out[k] = best[k]
+        k += 1usize
+    }
+    out[p + ng] = 0.0f64 - fmin
+    ret (fail, ok)
+}
+
+type NbgCtx = struct { x: []const f64, n: usize, p: usize, y: []const f64, grp: []const usize }
+
+fn nbg_nll(c: *NbgCtx, par: []const f64) -> f64 {
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.n {
+        let phi = par[c.p + c.grp[i]]
+        let k = 1.0f64 / phi
+        var t = 0.0f64
+        var j = 0usize
+        while j < c.p {
+            t += c.x[j * c.n + i] * par[j]
+            j += 1usize
+        }
+        let mu = math.exp[f64](t)
+        if phi == 0.0f64 {
+            s += c.y[i] * math.log[f64](mu) - mu - sp.lgamma(c.y[i] + 1.0f64)
+        } else {
+            s += sp.lgamma(c.y[i] + k) - sp.lgamma(c.y[i] + 1.0f64) - sp.lgamma(k) + k * math.log[f64](k / (k + mu)) + c.y[i] * math.log[f64](mu / (k + mu))
+        }
+        i += 1usize
+    }
+    if s != s || s > 1.0e300f64 || s < 0.0f64 - 1.0e300f64 { ret 1.0e20f64 }
+    ret 0.0f64 - s
+}
+
+fn negbin_g(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, grp: []const usize, ng: usize, out: []f64) -> (usize, err) {
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (b0, e2) = mem.alloc[f64](a, p + ng)
+    let (best, e3) = mem.alloc[f64](a, p + ng)
+    if e1 != ok || e2 != ok || e3 != ok { ret (1usize, fx.Malformed) }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    let e = fx.pois_glm(a, x, n, p, y, w, b0, false)
+    if e != ok { ret (1usize, e) }
+    var g = 0usize
+    while g < ng {
+        b0[p + g] = 0.1f64
+        g += 1usize
+    }
+    var c = NbgCtx{ x: x, n: n, p: p, y: y, grp: grp }
+    let (fmin, cnt, fail) = rn.nmmin[NbgCtx](a, &c, nbg_nll, b0, 0.0f64 - 1.0f64 / 0.0f64, 0.0000000149011611938f64, 1.0f64, 0.5f64, 2.0f64, 2000usize, 1.0f64, best)
+    var k = 0usize
+    while k < p + ng {
+        out[k] = best[k]
+        k += 1usize
+    }
+    out[p + ng] = 0.0f64 - fmin
+    ret (fail, ok)
+}
+
+// anova of two nested fits: the deviance difference 2 (ll2 - ll1), its degrees of freedom (the difference of the parameter counts) and the upper chi-square p value; out = (statistic, df, p)
+fn lr_anova(ll1: f64, k1: usize, ll2: f64, k2: usize, out: []f64) {
+    let st = 2.0f64 * (ll2 - ll1)
+    let df = f64(k2) - f64(k1)
+    out[0usize] = st
+    out[1usize] = df
+    out[2usize] = nm.pchisq(st, df, false, false)
+}

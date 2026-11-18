@@ -232,7 +232,7 @@
       "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D7163 donner, D7164 wald.test, D7235 quasipois and quasibin (logit; phi estimated and given), D7236 betabin (logit, constant phi), D7237 negbin (log link, constant phi) and splitbin, D7238 the betabin and negbin standard errors by optimHess and D6463 varbin non-bootstrap rows and iccbin method C equal aod on Windows; oracle_aod; Linux pending). Open: betabin and negbin with phi by covariate (and cloglog for betabin), anova, iccbin A and B, the cloglog link of quasibin. Was: Open (CRAN rank 822). Small to mid. Acceptance, equal to aod: betabin and negbin with their standard errors and covariance, quasibin and quasipois, wald.test and anova, iccbin, donner, splitbin, drs."
+      "evidence": "Partial (D7163 donner, D7164 wald.test, D7235 quasipois and quasibin (logit; phi estimated and given), D7236 betabin (logit, constant phi), D7237 negbin (log link, constant phi) and splitbin, D7238 the betabin and negbin standard errors by optimHess, D7262 phi by a group factor for both and the likelihood-ratio anova and D6463 varbin non-bootstrap rows and iccbin method C equal aod on Windows; oracle_aod; Linux pending). Open: phi by a numeric covariate, the cloglog links, iccbin A and B. Was: Open (CRAN rank 822). Small to mid. Acceptance, equal to aod: betabin and negbin with their standard errors and covariance, quasibin and quasipois, wald.test and anova, iccbin, donner, splitbin, drs."
     },
     {
       "id": "L481",

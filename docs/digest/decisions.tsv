@@ -4047,4 +4047,5 @@ D7257	652	gamlss.dist: LOGSHASH, BCPEo and ST1
 D7258	554	gamlss.dist: PARETO and DBURR12
 D7259	571	gamlss.dist: ZABB and ZIBB
 D7260	631	gamlss.dist: ZABNB and ZIBNB
-D7261	680	arm: standardize of a linear model
+D7261	681	arm: standardize of a linear model
+D7262	723	aod: phi by a group factor and the likelihood-ratio anova

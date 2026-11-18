@@ -49592,3 +49592,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.arm` gains `standardize_lm`: the lm refitted on the predictors rescaled by `rescale` (numeric columns centred and divided by two standard deviations, two-valued columns centred), the coefficients with the intercept first.
 
 **Result.** `oracle_arm` gains 15 models with continuous and binary predictors (2 to 4 columns, 62 coefficients) and equals `arm::standardize` on Windows at 1e-8. The generator needs the data frame and formula in the global environment because `standardize` re-evaluates the call. Linux pending. L409 stays partial: sim, bayesglm, discrete, corrplot data, standardize for glm and factor inputs.
+
+## D7262 — aod: phi by a group factor and the likelihood-ratio anova
+
+`e.algo.stat.aod` gains `betabin_g` and `negbin_g` (random = ~ group: one phi per level of a factor, the same Nelder-Mead from the glm start and phi = 0.1 per level) and `lr_anova` (the deviance difference 2 (ll2 - ll1), the parameter-count difference and the upper chi-square p value for nested fits).
+
+**Result.** `oracle_aod` gains 10 data sets (2 or 3 levels; coefficients, phis and log-likelihoods of both families at 1e-5 to 1e-6, and the anova statistic and p value at 1e-9: 128 values) and equals aod on Windows. Linux pending. L480 stays partial: phi by a numeric covariate, the cloglog links, iccbin A and B (they need the package's glmer).

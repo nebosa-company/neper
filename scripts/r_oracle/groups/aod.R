@@ -81,4 +81,22 @@ for (rep in 1:10) {
   cases[[length(cases) + 1]] <- case("splitbin", c(k, nn, yy, -1), nrow(tb))
   for (r in seq_len(nrow(tb))) cases[[length(cases) + 1]] <- case("splitbin", c(k, nn, yy, r - 1), tb$y[r])
 }
+# betabin and negbin with phi by a two- or three-level group ("bbing", "nbing": n, p, ng, grp, ..., index into coefficients, phis, log-likelihood), and the anova of nested fits ("anova": ll1, k1, ll2, k2, j)
+for (rep in 1:10) {
+  n <- sample(30:60, 1); xv <- round(rnorm(n), 3); sz <- sample(8:30, n, TRUE); ng <- sample(2:3, 1); gr <- c(0:(ng - 1), sample(0:(ng - 1), n - ng, TRUE))
+  pr <- plogis(-0.3 + 0.6 * xv); pr2 <- rbeta(n, 3 * pr + 0.5, 3 * (1 - pr) + 0.5); sc <- rbinom(n, sz, pr2)
+  d <- data.frame(sc = sc, fl = sz - sc, xv = xv, g = factor(gr)); X <- cbind(1, xv)
+  fit <- suppressWarnings(betabin(cbind(sc, fl) ~ xv, ~ g, data = d)); pa <- fit@param; ll <- fit@logL
+  for (j in seq_along(pa)) cases[[length(cases) + 1]] <- case("bbing", c(n, 2, ng, gr, as.vector(X), sc, sz, j - 1), pa[[j]], rel = 1e-5, abs = 1e-7)
+  cases[[length(cases) + 1]] <- case("bbing", c(n, 2, ng, gr, as.vector(X), sc, sz, length(pa)), ll, rel = 1e-6, abs = 1e-8)
+  fit0 <- suppressWarnings(betabin(cbind(sc, fl) ~ xv, ~ 1, data = d))
+  an <- suppressWarnings(anova(fit0, fit)); lrt <- 2 * (fit@logL - fit0@logL); dfd <- length(fit@param) - length(fit0@param)
+  cases[[length(cases) + 1]] <- case("anova", c(fit0@logL, length(fit0@param), fit@logL, length(fit@param), 0), lrt, rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("anova", c(fit0@logL, length(fit0@param), fit@logL, length(fit@param), 2), pchisq(lrt, dfd, lower.tail = FALSE), rel = 1e-9, abs = 1e-12)
+  yc <- rnbinom(n, mu = exp(1 + 0.3 * xv), size = 3)
+  dn <- data.frame(y = yc, xv = xv, g = factor(gr))
+  fn_ <- suppressWarnings(negbin(y ~ xv, ~ g, data = dn)); pn <- fn_@param
+  for (j in seq_along(pn)) cases[[length(cases) + 1]] <- case("nbing", c(n, 2, ng, gr, as.vector(X), yc, j - 1), pn[[j]], rel = 1e-5, abs = 1e-7)
+  cases[[length(cases) + 1]] <- case("nbing", c(n, 2, ng, gr, as.vector(X), yc, length(pn)), fn_@logL, rel = 1e-6, abs = 1e-8)
+}
 emit("aod", "aod", list(cases))
