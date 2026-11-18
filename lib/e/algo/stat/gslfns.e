@@ -932,3 +932,84 @@ fn legendre_sphplm(l: usize, m: usize, x: f64) -> f64 {
     let nrm = math.exp[f64](0.5f64 * (math.log[f64]((2.0f64 * f64(l) + 1.0f64) / (4.0f64 * pi_)) + sp.lgamma(f64(l - m) + 1.0f64) - sp.lgamma(f64(l + m) + 1.0f64)))
     ret nrm * legendre_plm(l, m, x)
 }
+
+// ---- the Wigner 3j, 6j and 9j coupling coefficients (arguments are twice the angular momenta, as gsl takes them), by Racah's sums
+fn lfact(n: i64) -> f64 { ret sp.lgamma(f64(n) + 1.0f64) }
+
+// log of the triangle coefficient Delta(a, b, c) for twice-angular-momenta (the arguments of the factorials are integers when the triangle is admissible)
+fn ltriangle(a: i64, b: i64, c: i64) -> f64 { ret lfact((a + b - c) / 2i64) + lfact((a - b + c) / 2i64) + lfact((0i64 - a + b + c) / 2i64) - lfact((a + b + c) / 2i64 + 1i64) }
+
+fn triangle_ok(a: i64, b: i64, c: i64) -> bool {
+    if (a + b + c) % 2i64 != 0i64 { ret false }
+    if a + b < c || a + c < b || b + c < a { ret false }
+    ret true
+}
+
+fn coupling_3j(ja: i64, jb: i64, jc: i64, ma: i64, mb: i64, mc: i64) -> f64 {
+    if !triangle_ok(ja, jb, jc) { ret 0.0f64 }
+    if ma + mb + mc != 0i64 { ret 0.0f64 }
+    if (ja + ma) % 2i64 != 0i64 || (jb + mb) % 2i64 != 0i64 || (jc + mc) % 2i64 != 0i64 { ret 0.0f64 }
+    if ma > ja || ma < 0i64 - ja || mb > jb || mb < 0i64 - jb || mc > jc || mc < 0i64 - jc { ret 0.0f64 }
+    let lpre = 0.5f64 * (ltriangle(ja, jb, jc) + lfact((ja + ma) / 2i64) + lfact((ja - ma) / 2i64) + lfact((jb + mb) / 2i64) + lfact((jb - mb) / 2i64) + lfact((jc + mc) / 2i64) + lfact((jc - mc) / 2i64))
+    var s = 0.0f64
+    var k = 0i64
+    while k <= 200i64 {
+        let t1 = (ja + jb - jc) / 2i64 - k
+        let t2 = (ja - ma) / 2i64 - k
+        let t3 = (jb + mb) / 2i64 - k
+        let t4 = (jc - jb + ma) / 2i64 + k
+        let t5 = (jc - ja - mb) / 2i64 + k
+        if t1 >= 0i64 && t2 >= 0i64 && t3 >= 0i64 && t4 >= 0i64 && t5 >= 0i64 {
+            var sg = 1.0f64
+            if k % 2i64 != 0i64 { sg = 0.0f64 - 1.0f64 }
+            s += sg * math.exp[f64](lpre - lfact(k) - lfact(t1) - lfact(t2) - lfact(t3) - lfact(t4) - lfact(t5))
+        }
+        k += 1i64
+    }
+    var ph = (ja - jb - mc) / 2i64
+    if ph < 0i64 { ph = 0i64 - ph }
+    var sg0 = 1.0f64
+    if ph % 2i64 != 0i64 { sg0 = 0.0f64 - 1.0f64 }
+    ret sg0 * s
+}
+
+fn coupling_6j(j1: i64, j2: i64, j3: i64, j4: i64, j5: i64, j6: i64) -> f64 {
+    if !triangle_ok(j1, j2, j3) || !triangle_ok(j1, j5, j6) || !triangle_ok(j4, j2, j6) || !triangle_ok(j4, j5, j3) { ret 0.0f64 }
+    let lpre = 0.5f64 * (ltriangle(j1, j2, j3) + ltriangle(j1, j5, j6) + ltriangle(j4, j2, j6) + ltriangle(j4, j5, j3))
+    let a1 = (j1 + j2 + j3) / 2i64
+    let a2 = (j1 + j5 + j6) / 2i64
+    let a3 = (j4 + j2 + j6) / 2i64
+    let a4 = (j4 + j5 + j3) / 2i64
+    let b1 = (j1 + j2 + j4 + j5) / 2i64
+    let b2 = (j2 + j3 + j5 + j6) / 2i64
+    let b3 = (j3 + j1 + j6 + j4) / 2i64
+    var s = 0.0f64
+    var t = 0i64
+    while t <= 400i64 {
+        if t - a1 >= 0i64 && t - a2 >= 0i64 && t - a3 >= 0i64 && t - a4 >= 0i64 && b1 - t >= 0i64 && b2 - t >= 0i64 && b3 - t >= 0i64 {
+            var sg = 1.0f64
+            if t % 2i64 != 0i64 { sg = 0.0f64 - 1.0f64 }
+            s += sg * math.exp[f64](lfact(t + 1i64) - lfact(t - a1) - lfact(t - a2) - lfact(t - a3) - lfact(t - a4) - lfact(b1 - t) - lfact(b2 - t) - lfact(b3 - t))
+        }
+        t += 1i64
+    }
+    ret math.exp[f64](lpre) * s
+}
+
+fn coupling_9j(j1: i64, j2: i64, j3: i64, j4: i64, j5: i64, j6: i64, j7: i64, j8: i64, j9: i64) -> f64 {
+    // sum over x (twice its value) of (-1)^(2x) (2x + 1) {j1 j4 j7; j8 j9 x} {j2 j5 j8; j4 x j6} {j3 j6 j9; x j1 j2}
+    var s = 0.0f64
+    var tx = 0i64
+    while tx <= 200i64 {
+        let a = coupling_6j(j1, j4, j7, j8, j9, tx)
+        if a != 0.0f64 {
+            let b = coupling_6j(j2, j5, j8, j4, tx, j6)
+            let c = coupling_6j(j3, j6, j9, tx, j1, j2)
+            var sg = 1.0f64
+            if tx % 2i64 != 0i64 { sg = 0.0f64 - 1.0f64 }
+            s += sg * (f64(tx) + 1.0f64) * a * b * c
+        }
+        tx += 1i64
+    }
+    ret s
+}

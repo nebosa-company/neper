@@ -49382,3 +49382,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gslfns` gains `hyperg_u` (Tricomi's confluent function by its Laplace integral on the infinite-range routine) and `hyperg_2f0` (for negative x through U), `legendre_p1` to `legendre_p3`, `legendre_sphplm`, `hydrogenic_r1`, `fermi_dirac_inc_0`; the one-argument forms of the R package (`laguerre_1` to `laguerre_3`, `gegenpoly_1` to `gegenpoly_3`, `zeta_int`, `eta_int`, `psi_int`, `psi_1_int`, `fermi_dirac_int`, `hyperg_U_int`) are the general functions already present.
 
 **Result.** `oracle_gslfns` has 2270 values (195 added over 15 arguments each, 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb functions, the complex functions, the conical and hyperbolic-space Legendre functions, the coupling coefficients and the error estimates.
+
+## D7227 — gsl: the 3j, 6j and 9j coupling coefficients
+
+`e.algo.stat.gslfns` gains `coupling_3j`, `coupling_6j` and `coupling_9j` for the arguments given as twice the angular momenta, as gsl takes them: Racah's sums over the admissible summation index with the triangle coefficients and the factorials on the log scale (zero outside the selection rules), and the 9j as the sum over twice the intermediate momentum of (-1)^(2x) (2x + 1) times three 6j symbols.
+
+**Result.** `oracle_gslfns` has 2365 values (95 added: 40 random 3j symbols, 40 6j and 15 9j, all admissible, 1e-9 and 1e-8) and equals gsl on Windows. Linux pending. L417 stays partial: the Coulomb functions, the complex functions and the conical and hyperbolic-space Legendre functions.

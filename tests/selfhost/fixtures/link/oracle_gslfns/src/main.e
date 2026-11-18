@@ -94,6 +94,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if code == 11usize { ret gs.fermi_dirac(a, x[1usize], x[2usize]) }
         ret gs.hydrogenic_r1(x[1usize], x[2usize])
     }
+    if str.eq(k, "c3") { ret gs.coupling_3j(i64(x[0usize]), i64(x[1usize]), i64(x[2usize]), i64(x[3usize]), i64(x[4usize]), i64(x[5usize])) }
+    if str.eq(k, "c6") { ret gs.coupling_6j(i64(x[0usize]), i64(x[1usize]), i64(x[2usize]), i64(x[3usize]), i64(x[4usize]), i64(x[5usize])) }
+    if str.eq(k, "c9") { ret gs.coupling_9j(i64(x[0usize]), i64(x[1usize]), i64(x[2usize]), i64(x[3usize]), i64(x[4usize]), i64(x[5usize]), i64(x[6usize]), i64(x[7usize]), i64(x[8usize])) }
     if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }

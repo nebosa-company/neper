@@ -87,4 +87,27 @@ for (rep in 1:15) {
   add("h6", c(8, n), psi_int(n)); add("h6", c(9, n), psi_1_int(n)); add("h6", c(10, a, b), fermi_dirac_inc_0(a, b)); add("h6", c(11, k, x), fermi_dirac_int(k, x))
   add("h6", c(12, a, x), hydrogenicR_1(a, x))
 }
+# coupling coefficients (twice the angular momenta): 3j under "c3" (6 args), 6j under "c6" (6 args), 9j under "c9" (9 args)
+set.seed(20262601)
+n3 <- 0
+while (n3 < 40) {
+  j <- sample(0:8, 3, TRUE); if (sum(j) %% 2 != 0 || j[1] + j[2] < j[3] || j[1] + j[3] < j[2] || j[2] + j[3] < j[1]) next
+  m1 <- sample(seq(-j[1], j[1], by = 2), 1); m2 <- sample(seq(-j[2], j[2], by = 2), 1); m3 <- -m1 - m2
+  if (abs(m3) > j[3] || (j[3] + m3) %% 2 != 0) next
+  cases[[length(cases) + 1]] <- case("c3", c(j, m1, m2, m3), coupling_3j(j[1], j[2], j[3], m1, m2, m3), rel = 1e-9, abs = 1e-12); n3 <- n3 + 1
+}
+n6 <- 0
+while (n6 < 40) {
+  j <- sample(0:6, 6, TRUE)
+  ok <- function(a, b, c) (a + b + c) %% 2 == 0 && a + b >= c && a + c >= b && b + c >= a
+  if (!(ok(j[1], j[2], j[3]) && ok(j[1], j[5], j[6]) && ok(j[4], j[2], j[6]) && ok(j[4], j[5], j[3]))) next
+  cases[[length(cases) + 1]] <- case("c6", j, coupling_6j(j[1], j[2], j[3], j[4], j[5], j[6]), rel = 1e-9, abs = 1e-12); n6 <- n6 + 1
+}
+n9 <- 0
+while (n9 < 15) {
+  j <- sample(0:4, 9, TRUE)
+  ok <- function(a, b, c) (a + b + c) %% 2 == 0 && a + b >= c && a + c >= b && b + c >= a
+  if (!(ok(j[1], j[2], j[3]) && ok(j[4], j[5], j[6]) && ok(j[7], j[8], j[9]) && ok(j[1], j[4], j[7]) && ok(j[2], j[5], j[8]) && ok(j[3], j[6], j[9]))) next
+  cases[[length(cases) + 1]] <- case("c9", j, coupling_9j(j[1], j[2], j[3], j[4], j[5], j[6], j[7], j[8], j[9]), rel = 1e-8, abs = 1e-11); n9 <- n9 + 1
+}
 emit("gslfns", "gsl", list(cases))
