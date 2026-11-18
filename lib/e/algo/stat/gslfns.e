@@ -600,3 +600,18 @@ fn lnsinh(x: f64) -> f64 { ret x + math.log[f64](1.0f64 - math.exp[f64](0.0f64 -
 fn lncosh(x: f64) -> f64 { ret x + math.log[f64](1.0f64 + math.exp[f64](0.0f64 - 2.0f64 * x)) - math.log[f64](2.0f64) }
 
 fn taylorcoeff(n: usize, x: f64) -> f64 { ret math.exp[f64](f64(n) * math.log[f64](x) - sp.lgamma(f64(n) + 1.0f64)) }
+
+// ---- the polygamma functions through the Hurwitz zeta function, and a few gamma-related helpers (positive arguments)
+fn psi_n(n: usize, x: f64) -> f64 {
+    var sgn = 1.0f64
+    if n % 2usize == 0usize { sgn = 0.0f64 - 1.0f64 }
+    ret sgn * math.exp[f64](sp.lgamma(f64(n) + 1.0f64)) * hzeta(f64(n) + 1.0f64, x)
+}
+
+fn psi_1(x: f64) -> f64 { ret hzeta(2.0f64, x) }
+
+fn gammainv(x: f64) -> f64 { ret math.exp[f64](0.0f64 - sp.lgamma(x)) }
+
+fn gammastar(x: f64) -> f64 { ret math.exp[f64](sp.lgamma(x) - (x - 0.5f64) * math.log[f64](x) + x - 0.5f64 * math.log[f64](2.0f64 * 3.141592653589793238462643383279f64)) }
+
+fn hypot(x: f64, y: f64) -> f64 { ret math.sqrt[f64](x * x + y * y) }

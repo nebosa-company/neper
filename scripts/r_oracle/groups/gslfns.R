@@ -46,4 +46,13 @@ for (rep in 1:20) {
   add("h", c(11, n + 10, n), lnchoose(n + 10, n)); add("h", c(12, a, b), lnbeta(a, b)); add("h", c(13, n), lnfact(n)); add("h", c(14, n), doublefact(n)); add("h", c(15, n), lndoublefact(n))
   add("h", c(16, x), lnsinh(x)); add("h", c(17, x), lncosh(x)); add("h", c(18, n, x), taylorcoeff(n, x))
 }
+# polygamma and helpers under "h2": 0 psi_1, 1 psi_n, 2 gammainv, 3 gammastar, 4 hypot (args (code, a, b))
+for (rep in 1:20) {
+  x <- runif(1, 0.3, 9); n <- sample(1:5, 1); y <- runif(1, 0.3, 9)
+  cases[[length(cases) + 1]] <- case("h2", c(0, x, 0), psi_1(x), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("h2", c(1, n, x), psi_n(n, x), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("h2", c(2, x, 0), gammainv(x), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("h2", c(3, x, 0), gammastar(x), rel = 1e-9, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("h2", c(4, x, y), hypot(x, y), rel = 1e-12, abs = 1e-14)
+}
 emit("gslfns", "gsl", list(cases))

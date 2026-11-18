@@ -33,6 +33,14 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if code == 17usize { ret gs.lncosh(x[1usize]) }
         ret gs.taylorcoeff(usize(x[1usize]), x[2usize])
     }
+    if str.eq(k, "h2") {
+        let code = usize(x[0usize])
+        if code == 0usize { ret gs.psi_1(x[1usize]) }
+        if code == 1usize { ret gs.psi_n(usize(x[1usize]), x[2usize]) }
+        if code == 2usize { ret gs.gammainv(x[1usize]) }
+        if code == 3usize { ret gs.gammastar(x[1usize]) }
+        ret gs.hypot(x[1usize], x[2usize])
+    }
     if str.eq(k, "debye") { ret gs.debye(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "transport") { ret gs.transport(a, usize(x[0usize]), x[1usize]) }
     if str.eq(k, "fd") { ret gs.fermi_dirac(a, x[0usize], x[1usize]) }

@@ -4007,4 +4007,5 @@ D7217	686	DescTools: the trimmed MeanCI
 D7218	546	DescTools: CohenD
 D7219	734	DescTools: the CohenD confidence interval
 D7220	867	gsl: Debye, transport, Fermi-Dirac and synchrotron functions
-D7221	1001	gsl: the incomplete gamma and beta functions, Pochhammer, error functions and the factorial family
+D7221	1002	gsl: the incomplete gamma and beta functions, Pochhammer, error functions and the factorial family
+D7222	546	gsl: the polygamma functions and gamma helpers

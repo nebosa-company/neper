@@ -49352,3 +49352,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gslfns` gains `gamma_inc` (the unnormalised upper function), `gamma_inc_p`, `gamma_inc_q`, `beta_inc` (regularised), `poch`, `lnpoch`, `pochrel`, `erf`, `erfc`, `log_erfc` (through the normal distribution function and its log), `sinc`, `lnbeta`, `lnfact`, `doublefact`, `lndoublefact`, `lnsinh`, `lncosh`, `taylorcoeff` and the binomial coefficient. One quirk: the R package's `lnchoose` wrapper returns the binomial coefficient and not its log, so the oracle holds R's value as `choose` (the function is `choose_`). A local variable named poch in `hzeta` had to be renamed when the Pochhammer function took the name.
 
 **Result.** `oracle_gslfns` has 1610 values (380 added over 20 arguments each) and equals gsl on Windows at 1e-9. Linux pending. L417 stays partial: Coulomb functions, the digamma family beyond psi, the Jacobian elliptic functions and the error estimates.
+
+## D7222 — gsl: the polygamma functions and gamma helpers
+
+`e.algo.stat.gslfns` gains `psi_1` and `psi_n` (the polygamma functions as (-1)^(n+1) n! times the Hurwitz zeta of n + 1, on the existing `hzeta`), `gammainv`, `gammastar` (Gamma(x) over its Stirling leading term) and `hypot`, for positive arguments.
+
+**Result.** `oracle_gslfns` has 1710 values (100 added, 1e-9) and equals gsl on Windows. Linux pending. L417 stays partial: negative arguments of the gamma family, the Coulomb and Jacobian elliptic functions and the error estimates.
