@@ -49160,3 +49160,9 @@ For lambda = 1 `rghyp` uses the package's `rgig1`, which is `rgig` with m = 1 (t
 `e.algo.stat.stabledistpkg` gains the alpha = 1 skewed branches: `fct2_d` (stabledist's `.fct2`: the density as an integral over u in (-1, 1), split at the root of g - 1, with the package's `tanpi2` and `cospi2` that return exact infinities and zeros at integers) and `fct2_p` (`.FCT2`: the distribution as half the integral of exp(-g), or the negated integral of expm1(-g) for the beta < 0 reflection, with the extra uniroot that trims the upper end where g is infinite). `dstable` and `pstable` route to them.
 
 **Result.** `oracle_stabledist` has 602 values (120 added for alpha = 1, beta in both signs, densities and distribution values) and equals stabledist on Windows at 1e-8 relative. Linux pending. L407 stays partial: the small-alpha branch, the other parametrisations, the upper tail, qstable at alpha = 1 and the GeneralizedHyperbolic higher moments and fits remain.
+
+## D7190 — stabledist: pstable with lower.tail and log.p
+
+`e.algo.stat.stabledistpkg` gains `pstable_ext`, stabledist's pstable with both options: the tail on which the integral is taken follows the package (the integral of the lower or upper side by the sign of x - zeta and the tail requested, `giveI` when the upper side is wanted for alpha > 1, and the beta < 0 reflection with `useL` for alpha = 1), and `retValue` gives the value, its complement, or the log of either. `pstable_tol` (the lower tail used by qstable) delegates to it.
+
+**Result.** `oracle_stabledist` has 762 values (160 added: 40 parameter sets in all four lower.tail and log.p combinations, alpha below, above and at 1) and equals stabledist on Windows at 1e-7 relative. Linux pending. L407 stays partial: qstable's upper tail, the small-alpha branch, the other parametrisations and the GeneralizedHyperbolic higher moments and fits remain.

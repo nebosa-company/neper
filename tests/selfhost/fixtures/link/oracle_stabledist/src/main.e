@@ -20,7 +20,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let z = c.args
         var got = 0.0f64
-        if str.eq(c.name, "r") {
+        if str.eq(c.name, "pe") {
+            got = sd.pstable_ext(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize], 64.0f64 * 2.220446049250313e-16f64, 1000usize, z[5usize] > 0.5f64, z[6usize] > 0.5f64)
+        } else if str.eq(c.name, "r") {
             let nn = usize(z[5usize])
             let (out, g1) = mem.alloc[f64](a, nn)
             let (th, g2) = mem.alloc[f64](a, nn)

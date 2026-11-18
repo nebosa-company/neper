@@ -252,31 +252,68 @@ fn fct1_cdf(a: *mem.Arena, x: f64, zeta: f64, alpha: f64, theta00: f64, give_i: 
 // pstable(q, alpha, beta, gamma, delta, pm = 0, lower.tail = TRUE) for alpha != 1 (and the normal and Cauchy cases)
 fn pstable(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f64) -> f64 { ret pstable_tol(a, q, alpha, beta, gamma, delta, 64.0f64 * eps(), 1000usize) }
 
-fn pstable_tol(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f64, tol: f64, sub: usize) -> f64 {
-    let x = (q - delta) / gamma
-    if alpha == 2.0f64 { ret dist.pnorm(x, 0.0f64, math.sqrt[f64](2.0f64), true, false) }
-    if alpha == 1.0f64 && beta == 0.0f64 { ret 0.5f64 + math.atan[f64](x) / pi() }
-    if alpha == 1.0f64 {
-        if beta >= 0.0f64 { ret fct2_p(a, x, beta, tol, false) }
-        ret fct2_p(a, 0.0f64 - x, 0.0f64 - beta, tol, true)
+fn pstable_tol(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f64, tol: f64, sub: usize) -> f64 { ret pstable_ext(a, q, alpha, beta, gamma, delta, tol, sub, true, false) }
+
+// the value returned for a distribution value f on the lower (use_lower) or upper side, on the probability or log scale: R's retValue
+fn ret_value(f: f64, use_lower: bool, log_p: bool) -> f64 {
+    if use_lower {
+        if log_p { ret math.log[f64](f) }
+        ret f
     }
+    if log_p { ret math.log[f64](1.0f64 - f) }
+    ret 1.0f64 - f
+}
+
+// pstable with lower.tail and log.p (S0): stabledist's pstable, including the choice of the tail on which the integral is taken, which decides the precision of the far tails
+fn pstable_ext(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f64, tol: f64, sub: usize, lower: bool, log_p: bool) -> f64 {
+    let x0 = (q - delta) / gamma
+    if alpha == 2.0f64 { ret dist.pnorm(x0, 0.0f64, math.sqrt[f64](2.0f64), lower, log_p) }
+    if alpha == 1.0f64 && beta == 0.0f64 {
+        let pc = 0.5f64 + math.atan[f64](x0) / pi()
+        ret ret_value(pc, lower, log_p)
+    }
+    if alpha == 1.0f64 {
+        var x = x0
+        var b = beta
+        var use_l = lower
+        if beta < 0.0f64 {
+            b = 0.0f64 - beta
+            x = 0.0f64 - x0
+            use_l = !lower
+        }
+        var give_i = false
+        if !use_l && !log_p {
+            give_i = true
+            use_l = true
+        }
+        let v = fct2_p(a, x, b, tol, give_i)
+        ret ret_value(v, use_l, log_p)
+    }
+    let x = x0
     let tanpa2 = math.tan[f64](pi2() * alpha)
     let zeta = 0.0f64 - beta * tanpa2
     var th0 = math.atan[f64](0.0f64 - zeta) / alpha
     if th0 < 0.0f64 - pi2() { th0 = 0.0f64 - pi2() }
     if th0 > pi2() { th0 = pi2() }
     if math.abs[f64](beta) == 1.0f64 && alpha < 1.0f64 {
-        if beta == 1.0f64 && x <= zeta { ret 0.0f64 }
-        if beta == 0.0f64 - 1.0f64 && x >= zeta { ret 1.0f64 }
+        if beta == 1.0f64 && x <= zeta { ret ret_value(0.0f64, lower, log_p) }
+        if beta == 0.0f64 - 1.0f64 && x >= zeta { ret ret_value(1.0f64, lower, log_p) }
     }
-    if math.abs[f64](x - zeta) < 2.0f64 * eps() { ret 0.5f64 - th0 / pi() }
-    let use_lower = x > zeta
-    let f1 = fct1_cdf(a, x, zeta, alpha, th0, false, tol, sub)
-    if use_lower { ret f1 }
-    // the upper-tail value of the standardised variable: lower.tail = TRUE with z < zeta takes 1 - F
-    ret 1.0f64 - f1
+    if math.abs[f64](x - zeta) < 2.0f64 * eps() {
+        var r = 0.5f64 + th0 / pi()
+        if lower { r = 0.5f64 - th0 / pi() }
+        if log_p { ret math.log[f64](r) }
+        ret r
+    }
+    let use_lower = (x > zeta && lower) || (x < zeta && !lower)
+    let give_i = !use_lower && alpha > 1.0f64
+    let f1 = fct1_cdf(a, x, zeta, alpha, th0, give_i, tol, sub)
+    if give_i {
+        if log_p { ret math.log[f64](f1) }
+        ret f1
+    }
+    ret ret_value(f1, use_lower, log_p)
 }
-
 
 // qstable(p, alpha, beta, gamma, delta, pm = 0) on the lower tail: stabledist brackets the root with normal and Cauchy quantiles (and the tail bounds p / (1 - p)),
 // then runs uniroot (Brent's zeroin, tolerance eps^0.25) on pstable at integration tolerance 1e-7 and 200 subdivisions; the bracket is assumed to contain the sign change

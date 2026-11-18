@@ -49,4 +49,16 @@ for (rep in 1:20) {
     if (is.finite(pv)) cases[[length(cases) + 1]] <- case("p", c(1, be, ga, de, x), pv, rel = 1e-8, abs = 1e-12)
   }
 }
+# pstable with lower.tail and log.p: args (alpha, beta, gamma, delta, x, lower, logp) under the name "pe"
+for (rep in 1:40) {
+  al <- c(runif(1, 0.3, 0.98), runif(1, 1.02, 1.99), 1)[sample(1:3, 1)]
+  be <- c(0, runif(1, -1, 1), runif(1, -0.999, 0.999))[sample(1:3, 1)]
+  if (al == 1 && be == 0) be <- 0.5
+  ga <- runif(1, 0.4, 2.5); de <- rnorm(1)
+  x <- de + ga * rnorm(1, 0, 2.5)
+  for (lw in c(TRUE, FALSE)) for (lg in c(FALSE, TRUE)) {
+    pv <- suppressWarnings(pstable(x, al, be, ga, de, lower.tail = lw, log.p = lg, silent = TRUE))
+    if (is.finite(pv)) cases[[length(cases) + 1]] <- case("pe", c(al, be, ga, de, x, as.numeric(lw), as.numeric(lg)), pv, rel = 1e-7, abs = 1e-11)
+  }
+}
 emit("stabledist", "stabledist", list(cases))
