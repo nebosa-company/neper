@@ -4091,4 +4091,5 @@ D7297	625	arules: improvement, LIC and boost
 D7298	520	arules: eclat
 D7299	735	arules: apriori rules for many items
 D7300	485	arules: basic interest measures for many items
-D7301	522	arules: hyper and improvement measures for many items
+D7301	523	arules: hyper and improvement measures for many items
+D7302	642	arules: the nine D7293 measures, redundant rules and subsetting on the many-item path; L462 closed

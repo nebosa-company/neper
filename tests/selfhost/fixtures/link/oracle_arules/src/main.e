@@ -27,11 +27,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         tr[t] = m
         t += 1usize
     }
-    if str.starts_with(c.name, "j") && c.name.len == 2usize {
-        let (jo, je) = mem.alloc[f64](a, 9usize)
+    if str.starts_with(c.name, "q") && c.name.len == 2usize {
+        let (qo, qe) = mem.alloc[f64](a, 10usize)
+        if qe != ok { ret nan }
+        if ar.apriori_big_measures(a, tr, ni, z[2usize], z[3usize], usize(z[4usize]), qo) != ok { ret nan }
+        ret qo[usize(c.name[1usize]) - 48usize]
+    }
+    if str.starts_with(c.name, "j") && c.name.len >= 2usize {
+        let (jo, je) = mem.alloc[f64](a, 12usize)
         if je != ok { ret nan }
         if ar.apriori_big_hyper(a, tr, ni, z[2usize], z[3usize], usize(z[4usize]), jo) != ok { ret nan }
         var jk = usize(c.name[1usize]) - 48usize
+        if c.name.len == 3usize { jk = jk * 10usize + usize(c.name[2usize]) - 48usize }
         if jk > 4usize { jk += 1usize }
         ret jo[jk]
     }

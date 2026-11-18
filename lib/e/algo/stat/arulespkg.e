@@ -819,7 +819,7 @@ fn apriori_big_hyper(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64
     }
     let need = math.ceil[f64](supp * nt - 1.0e-9f64)
     var k = 0usize
-    while k < 9usize {
+    while k < 12usize {
         out[k] = 0.0f64
         k += 1usize
     }
@@ -896,6 +896,93 @@ fn apriori_big_hyper(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64
                             let bo = cf / (cf - im)
                             if bo - bo == 0.0f64 { out[8usize] += bo }
                             out[5usize] += 1.0f64
+                            if im <= 0.0f64 { out[9usize] += 1.0f64 }
+                            if (l & 1u64) != 0u64 { out[10usize] += 1.0f64 }
+                            if jj == 0usize { out[11usize] += 1.0f64 }
+                    }
+                }
+                jj += 1usize
+            }
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// the sums of `apriori_measures` (10 values) for the many-item path of `apriori_big`
+fn apriori_big_measures(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, conf: f64, maxlen: usize, out: []f64) -> err {
+    let nt = f64(trans.len)
+    let (cn, ec) = mem.alloc[f64](a, 1usize)
+    if ec != ok { ret ec }
+    let (m0, e0) = mem.alloc[u64](a, 1usize)
+    let (c0, e00) = mem.alloc[u32](a, 1usize)
+    if e0 != ok { ret e0 }
+    if e00 != ok { ret e00 }
+    var r1 = eclat_collect(a, trans, nitems, supp, maxlen, m0[0usize..0usize], c0[0usize..0usize], cn)
+    if r1 != ok { ret r1 }
+    let total = usize(cn[0usize])
+    let (masks, e1) = mem.alloc[u64](a, total + 1usize)
+    let (counts, e2) = mem.alloc[u32](a, total + 1usize)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    r1 = eclat_collect(a, trans, nitems, supp, maxlen, masks, counts, cn)
+    if r1 != ok { ret r1 }
+    var size = 16usize
+    while size < 2usize * total { size = size * 2usize }
+    let (keys, e3) = mem.alloc[u64](a, size)
+    let (vals, e4) = mem.alloc[u32](a, size)
+    if e3 != ok { ret e3 }
+    if e4 != ok { ret e4 }
+    var z = 0usize
+    while z < size {
+        keys[z] = 0u64
+        z += 1usize
+    }
+    var i = 0usize
+    while i < total {
+        var h = hash_slot(masks[i], size)
+        while keys[h] != 0u64 { h = (h + 1usize) & (size - 1usize) }
+        keys[h] = masks[i]
+        vals[h] = counts[i]
+        i += 1usize
+    }
+    let need = math.ceil[f64](supp * nt - 1.0e-9f64)
+    var k = 0usize
+    while k < 10usize {
+        out[k] = 0.0f64
+        k += 1usize
+    }
+    i = 0usize
+    while i < total {
+        let m = masks[i]
+        if (m & (m - 1u64)) != 0u64 {
+            var jj = 0usize
+            while jj < nitems {
+                let r = 1u64 << u64(jj)
+                if (m & r) != 0u64 {
+                    let l = m ^ r
+                    let cf = f64(look(keys, vals, size, m)) / f64(look(keys, vals, size, l))
+                    if cf >= conf - 1.0e-12f64 {
+                        let sx = f64(look(keys, vals, size, l)) / nt
+                        let sy = f64(look(keys, vals, size, r)) / nt
+                        let sxy = f64(look(keys, vals, size, m)) / nt
+                        out[0usize] += sxy - sx * sy
+                        out[1usize] += sx
+                        out[2usize] += sxy / math.sqrt[f64](sx * sy)
+                        out[3usize] += sxy / (sx + sy - sxy)
+                        out[4usize] += 0.5f64 * (sxy / sx + sxy / sy)
+                        let ph = (sxy - sx * sy) / math.sqrt[f64](sx * sy * (1.0f64 - sx) * (1.0f64 - sy))
+                        if ph == ph && ph - ph == 0.0f64 { out[5usize] += ph }
+                        out[6usize] += cf - sy
+                        let cv = (1.0f64 - sy) / (1.0f64 - cf)
+                        if cv - cv == 0.0f64 { out[7usize] += cv }
+                        let n11 = sxy
+                        let n10 = sx - sxy
+                        let n01 = sy - sxy
+                        let n00 = 1.0f64 - sx - sy + sxy
+                        let orr = (n11 * n00) / (n10 * n01)
+                        if orr - orr == 0.0f64 { out[8usize] += orr }
+                        out[9usize] += 1.0f64
                     }
                 }
                 jj += 1usize

@@ -49856,3 +49856,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `arulespkg.apriori_big_hyper` runs the `apriori_hyper` formulas on the many-item path, reading every count from the itemset hash (`look`, 0 for an absent itemset) and the sub-rule maxima from the hash too.
 
 **Result.** `oracle_arules` (2620 cases, 160 new) equals arules on Windows. Linux pending. L462 stays partial: the 9 remaining arules measures (cosine, leverage and the other D7293 ones) on the many-item path, subsetting, sequences.
+
+## D7302 — arules: the nine D7293 measures, redundant rules and subsetting on the many-item path; L462 closed
+
+**Decision.** `apriori_big_measures` carries leverage, coverage, cosine, jaccard, kulczynski, phi, addedValue, conviction and oddsRatio to the many-item path; `apriori_big_hyper` also counts redundant rules (improvement <= 0, as `is.redundant`) and the rules with item 0 in the antecedent or as the consequent (`subset`).
+
+**Result.** `oracle_arules` (2860 cases) equals arules on Windows. Linux pending. L462 is closed: FP-growth yields the itemsets of apriori and eclat, and sequences are the separate arulesSequences package.
