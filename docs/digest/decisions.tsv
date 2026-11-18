@@ -4023,4 +4023,5 @@ D7233	778	gamlss.dist: the beta families with point masses
 D7234	659	gamlss.dist: BCPE, GB1 and SIMPLEX
 D7235	870	aod: quasipois and quasibin
 D7236	693	aod: betabin
-D7237	621	aod: negbin and splitbin
+D7237	622	aod: negbin and splitbin
+D7238	645	aod: betabin and negbin standard errors

@@ -49448,3 +49448,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.aod` gains `negbin` (the negative binomial with k = 1 / phi, log link, one phi, Nelder-Mead from the Poisson glm coefficients and phi = 0.1 as in D7236) and `splitbin` (the Bernoulli expansion of binomial rows: n - y zeros then y ones per row, rows with n = 0 dropped).
 
 **Result.** `oracle_aod` gains 15 negbin fits (60 values at 1e-6) and 10 splitbin tables (length and every response) and equals aod on Windows. Linux pending. L480 stays partial: phi by a covariate, the fit standard errors, anova, iccbin A and B (they need the package's glmer), the cloglog links.
+
+## D7238 — aod: betabin and negbin standard errors
+
+`e.algo.stat.aod` gains `betabin_se` and `negbin_se`: R's optimHess (central differences of central-difference gradients, step 1e-3, symmetrised) of the negative log-likelihood at the Nelder-Mead optimum, inverted by Gauss-Jordan, square roots of the diagonal.
+
+**Result.** `oracle_aod` gains 90 standard errors (three per fit over the 30 betabin and negbin fits) and equals aod on Windows at 1e-4, the accuracy a numerical Hessian at a simplex optimum carries. Linux pending. L480 stays partial: phi by a covariate, anova, iccbin A and B (they need the package's glmer), the cloglog links.

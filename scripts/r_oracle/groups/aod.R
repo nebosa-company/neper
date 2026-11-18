@@ -60,6 +60,8 @@ for (rep in 1:15) {
   pa <- fit@param; ll <- fit@logL
   for (j in 1:3) cases[[length(cases) + 1]] <- case("bbin", c(n, 2, as.vector(X), sc, sz, j - 1), pa[[j]], rel = 1e-6, abs = 1e-8)
   cases[[length(cases) + 1]] <- case("bbin", c(n, 2, as.vector(X), sc, sz, 3), ll, rel = 1e-6, abs = 1e-8)
+  sev <- sqrt(diag(fit@varparam))
+  for (j in 1:3) cases[[length(cases) + 1]] <- case("bbin", c(n, 2, as.vector(X), sc, sz, 3 + j), sev[[j]], rel = 1e-4, abs = 1e-6)
 }
 # negbin, log link, phi constant (n, p, x column-major, counts, index): coefficient index, phi at p, the log-likelihood at p + 1; 1e-6 as for betabin
 for (rep in 1:15) {
@@ -69,6 +71,8 @@ for (rep in 1:15) {
   pa <- fit@param; ll <- fit@logL
   for (j in 1:3) cases[[length(cases) + 1]] <- case("nbin", c(n, 2, as.vector(X), y, j - 1), pa[[j]], rel = 1e-6, abs = 1e-8)
   cases[[length(cases) + 1]] <- case("nbin", c(n, 2, as.vector(X), y, 3), ll, rel = 1e-6, abs = 1e-8)
+  sev <- sqrt(diag(fit@varparam))
+  for (j in 1:3) cases[[length(cases) + 1]] <- case("nbin", c(n, 2, as.vector(X), y, 3 + j), sev[[j]], rel = 1e-4, abs = 1e-6)
 }
 # splitbin (k, n..., y..., index): the index-th response of the Bernoulli expansion, and the table length at index -1
 for (rep in 1:10) {

@@ -559,3 +559,135 @@ fn splitbin(n: []const f64, y: []const f64, out: []f64) -> usize {
     }
     ret at
 }
+
+// R's optimHess: central differences of central-difference gradients with step 1e-3, symmetrised; h is np by np row-major
+fn opt_grad[Ctx: type](c: *Ctx, f: fn(*Ctx, []const f64) -> f64, x: []f64, g: []f64) {
+    let np = x.len
+    var j = 0usize
+    while j < np {
+        let keep = x[j]
+        x[j] = keep + 0.001f64
+        let v1 = f(c, x)
+        x[j] = keep - 0.001f64
+        let v2 = f(c, x)
+        x[j] = keep
+        g[j] = (v1 - v2) / 0.002f64
+        j += 1usize
+    }
+}
+
+fn optimhess[Ctx: type](a: *mem.Arena, c: *Ctx, f: fn(*Ctx, []const f64) -> f64, par: []const f64, h: []f64) -> err {
+    let np = par.len
+    let (x, e1) = mem.alloc[f64](a, np)
+    let (g1, e2) = mem.alloc[f64](a, np)
+    let (g2, e3) = mem.alloc[f64](a, np)
+    if e1 != ok || e2 != ok || e3 != ok { ret fx.Malformed }
+    var i = 0usize
+    while i < np {
+        var k = 0usize
+        while k < np {
+            x[k] = par[k]
+            k += 1usize
+        }
+        x[i] = par[i] + 0.001f64
+        opt_grad[Ctx](c, f, x, g1)
+        x[i] = par[i] - 0.001f64
+        opt_grad[Ctx](c, f, x, g2)
+        k = 0usize
+        while k < np {
+            h[i * np + k] = (g1[k] - g2[k]) / 0.002f64
+            k += 1usize
+        }
+        i += 1usize
+    }
+    i = 0usize
+    while i < np {
+        var k = 0usize
+        while k < i {
+            let m = 0.5f64 * (h[i * np + k] + h[k * np + i])
+            h[i * np + k] = m
+            h[k * np + i] = m
+            k += 1usize
+        }
+        i += 1usize
+    }
+    ret ok
+}
+
+// the square roots of the diagonal of the inverse of the np by np matrix h (Gauss-Jordan), into se; false when singular
+fn inv_se(a: *mem.Arena, h: []const f64, np: usize, se: []f64) -> bool {
+    let (m, e1) = mem.alloc[f64](a, np * 2usize * np)
+    if e1 != ok { ret false }
+    var i = 0usize
+    while i < np {
+        var k = 0usize
+        while k < np {
+            m[i * 2usize * np + k] = h[i * np + k]
+            m[i * 2usize * np + np + k] = 0.0f64
+            k += 1usize
+        }
+        m[i * 2usize * np + np + i] = 1.0f64
+        i += 1usize
+    }
+    var col = 0usize
+    while col < np {
+        var piv = col
+        var r = col + 1usize
+        while r < np {
+            if math.abs[f64](m[r * 2usize * np + col]) > math.abs[f64](m[piv * 2usize * np + col]) { piv = r }
+            r += 1usize
+        }
+        if math.abs[f64](m[piv * 2usize * np + col]) < 1.0e-300f64 { ret false }
+        var k = 0usize
+        while k < 2usize * np {
+            let t = m[col * 2usize * np + k]
+            m[col * 2usize * np + k] = m[piv * 2usize * np + k]
+            m[piv * 2usize * np + k] = t
+            k += 1usize
+        }
+        let d = m[col * 2usize * np + col]
+        k = 0usize
+        while k < 2usize * np {
+            m[col * 2usize * np + k] = m[col * 2usize * np + k] / d
+            k += 1usize
+        }
+        r = 0usize
+        while r < np {
+            if r != col {
+                let f = m[r * 2usize * np + col]
+                k = 0usize
+                while k < 2usize * np {
+                    m[r * 2usize * np + k] = m[r * 2usize * np + k] - f * m[col * 2usize * np + k]
+                    k += 1usize
+                }
+            }
+            r += 1usize
+        }
+        col += 1usize
+    }
+    i = 0usize
+    while i < np {
+        se[i] = math.sqrt[f64](m[i * 2usize * np + np + i])
+        i += 1usize
+    }
+    ret true
+}
+
+// betabin_se and negbin_se: the standard errors of (coefficients, phi) at the fitted parameters par (p + 1 values), into se
+fn betabin_se(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, size: []const f64, par: []const f64, se: []f64) -> bool {
+    var c = BbCtx{ x: x, n: n, p: p, y: y, size: size }
+    let np = p + 1usize
+    let (h, e) = mem.alloc[f64](a, np * np)
+    if e != ok { ret false }
+    if optimhess[BbCtx](a, &c, bb_nll, par, h) != ok { ret false }
+    ret inv_se(a, h, np, se)
+}
+
+fn negbin_se(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, par: []const f64, se: []f64) -> bool {
+    var c = NbCtx{ x: x, n: n, p: p, y: y }
+    let np = p + 1usize
+    let (h, e) = mem.alloc[f64](a, np * np)
+    if e != ok { ret false }
+    if optimhess[NbCtx](a, &c, nb_nll, par, h) != ok { ret false }
+    ret inv_se(a, h, np, se)
+}

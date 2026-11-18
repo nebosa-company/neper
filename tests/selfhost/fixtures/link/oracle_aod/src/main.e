@@ -57,7 +57,14 @@ fn bbin_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let sz = x[2usize + n * p + n..2usize + n * p + 2usize * n]
     let (code, be) = ad.betabin(a, xm, n, p, sc, sz, o)
     if be != ok || code != 0usize { os.exit(12) }
-    ret o[usize(x[2usize + n * p + 2usize * n])]
+    let ix = usize(x[2usize + n * p + 2usize * n])
+    if ix >= 4usize {
+        let (se, e2) = mem.alloc[f64](a, p + 1usize)
+        if e2 != ok { os.exit(16) }
+        if !ad.betabin_se(a, xm, n, p, sc, sz, o[0usize..p + 1usize], se) { os.exit(17) }
+        ret se[ix - 4usize]
+    }
+    ret o[ix]
 }
 
 fn nbin_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
@@ -68,7 +75,14 @@ fn nbin_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if e != ok { os.exit(13) }
     let (code, be) = ad.negbin(a, x[2usize..2usize + n * p], n, p, x[2usize + n * p..2usize + n * p + n], o)
     if be != ok || code != 0usize { os.exit(14) }
-    ret o[usize(x[2usize + n * p + n])]
+    let ix = usize(x[2usize + n * p + n])
+    if ix >= 4usize {
+        let (se, e2) = mem.alloc[f64](a, p + 1usize)
+        if e2 != ok { os.exit(18) }
+        if !ad.negbin_se(a, x[2usize..2usize + n * p], n, p, x[2usize + n * p..2usize + n * p + n], o[0usize..p + 1usize], se) { os.exit(19) }
+        ret se[ix - 4usize]
+    }
+    ret o[ix]
 }
 
 fn split_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
