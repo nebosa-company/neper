@@ -49832,3 +49832,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `apriori_hyper` also returns improvement (confidence minus the best confidence among the rules of the same consequent whose antecedent is a proper subset), LIC (lift over the best sub-rule lift) and boost (confidence over that best confidence). Only sub-rules that `apriori` itself kept count; with none the maximum is 0, so LIC and boost are Inf and are left out of the sums as in the oracle.
 
 **Result.** `oracle_arules` (1560 cases) equals arules on Windows. Linux pending. L462 stays partial: candidate pruning for many items, eclat, subsetting, sequences.
+
+## D7298 — arules: eclat
+
+**Decision.** `arulespkg.eclat` finds the frequent itemsets of 1 to maxlen (at most 8) items by depth-first intersection of item transaction-id bit sets, so the item count is limited by the 64-bit transaction mask, not by the 2^items counting table of `apriori`.
+
+**Result.** `oracle_arules` (1600 cases, 40 new on 14 to 40 items) equals arules `eclat` on Windows. Linux pending. L462 stays partial: candidate pruning in `apriori` for many items (rules and measures), subsetting, sequences.

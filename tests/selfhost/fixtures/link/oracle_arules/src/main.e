@@ -27,6 +27,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         tr[t] = m
         t += 1usize
     }
+    if str.starts_with(c.name, "e") && c.name.len == 2usize {
+        let (eo, ee) = mem.alloc[f64](a, 2usize)
+        if ee != ok { ret nan }
+        if ar.eclat(a, tr, ni, z[2usize], usize(z[4usize]), eo) != ok { ret nan }
+        ret eo[usize(c.name[1usize]) - 48usize]
+    }
     if str.starts_with(c.name, "h") && c.name.len == 2usize {
         let (ho, he) = mem.alloc[f64](a, 9usize)
         if he != ok { ret nan }

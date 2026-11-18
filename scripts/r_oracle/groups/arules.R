@@ -43,4 +43,13 @@ for (rep in 1:24) {
     }
   }
 }
+for (rep in 1:20) {
+  nt <- sample(40:150, 1); ni <- sample(14:40, 1); pr <- runif(ni, 0.1, 0.6)
+  m <- sapply(pr, function(p) as.numeric(runif(nt) < p))
+  supp <- runif(1, 0.03, 0.15); ml <- sample(1:5, 1)
+  tr <- as(m == 1, "transactions")
+  fi <- eclat(tr, parameter = list(supp = supp, minlen = 1, maxlen = ml), control = list(verbose = FALSE))
+  a <- c(nt, ni, supp, 0.5, ml, as.vector(t(m)))
+  add("e0", a, length(fi)); add("e1", a, if (length(fi)) sum(quality(fi)$support) else 0)
+}
 emit("arules", "arules", list(cases))

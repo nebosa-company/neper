@@ -450,3 +450,82 @@ fn apriori_hyper(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, co
     }
     ret ok
 }
+
+fn popcount64(x: u64) -> u32 {
+    var v = x
+    var c = 0u32
+    while v != 0u64 {
+        v = v & (v - 1u64)
+        c += 1u32
+    }
+    ret c
+}
+
+// R arules::eclat for the frequent itemsets of 1 .. maxlen items (maxlen <= 8): depth-first search over item transaction-id bit sets, no limit on the number of items short of 64. out[0] the number of itemsets, out[1] the sum of their supports.
+fn eclat(a: *mem.Arena, trans: []const u64, nitems: usize, supp: f64, maxlen: usize, out: []f64) -> err {
+    let nt = f64(trans.len)
+    let w = (trans.len + 63usize) / 64usize
+    let (itm, e1) = mem.alloc[u64](a, nitems * w)
+    let (tid, e2) = mem.alloc[u64](a, 9usize * w)
+    let (idx, e3) = mem.alloc[usize](a, 9usize)
+    if e1 != ok { ret e1 }
+    if e2 != ok { ret e2 }
+    if e3 != ok { ret e3 }
+    var k = 0usize
+    while k < nitems * w {
+        itm[k] = 0u64
+        k += 1usize
+    }
+    var t = 0usize
+    while t < trans.len {
+        var j = 0usize
+        while j < nitems {
+            if ((trans[t] >> u64(j)) & 1u64) != 0u64 { itm[j * w + t / 64usize] = itm[j * w + t / 64usize] | (1u64 << u64(t % 64usize)) }
+            j += 1usize
+        }
+        t += 1usize
+    }
+    var x = 0usize
+    while x < w {
+        tid[x] = 0u64
+        x += 1usize
+    }
+    t = 0usize
+    while t < trans.len {
+        tid[t / 64usize] = tid[t / 64usize] | (1u64 << u64(t % 64usize))
+        t += 1usize
+    }
+    let need = math.ceil[f64](supp * nt - 1.0e-9f64)
+    var n = 0.0f64
+    var s = 0.0f64
+    var d = 0usize
+    idx[0usize] = 0usize
+    while true {
+        if idx[d] >= nitems {
+            if d == 0usize { break }
+            d -= 1usize
+            continue
+        }
+        let j = idx[d]
+        idx[d] = j + 1usize
+        var c = 0u32
+        var q = 0usize
+        while q < w {
+            let v = tid[d * w + q] & itm[j * w + q]
+            tid[(d + 1usize) * w + q] = v
+            c += popcount64(v)
+            q += 1usize
+        }
+        if f64(c) >= need {
+            n += 1.0f64
+            s += f64(c) / nt
+            if d + 1usize < maxlen {
+                d += 1usize
+                idx[d] = j + 1usize
+            }
+        }
+    }
+    out[0usize] = n
+    out[1usize] = s
+    ret ok
+}
