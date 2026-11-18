@@ -195,3 +195,73 @@ fn dstable(a: *mem.Arena, x0: f64, alpha: f64, beta: f64, gamma: f64, delta: f64
     }
     ret fct1(a, x, zeta, alpha, th0, 64.0f64 * eps(), zt) / gamma
 }
+
+// stabledist:::.FCT1: the integral behind pstable (alpha != 1), integrand exp(-g(theta)) over (-theta0 + 1e-6, pi/2 - 1e-6); with giveI the integral over pi, else
+// the distribution value c1 + c3 times the integral. The corner cases where g is infinite at an end point (an extra uniroot in R) return NaN here.
+type Fctx = struct { alpha: f64, a1: f64, cat0: f64, at0: f64, xmz: f64 }
+
+fn gf(c: *Fctx, th: f64) -> f64 {
+    if math.abs[f64](pi2() - sgn(c.a1) * th) < 64.0f64 * eps() { ret 0.0f64 }
+    let att = c.at0 + c.alpha * th
+    ret math.pow[f64](c.cat0 * math.cos[f64](th) * math.pow[f64](c.xmz / math.sin[f64](att), c.alpha), 1.0f64 / c.a1) * math.cos[f64](att - th)
+}
+
+fn expmg(c: *Fctx, th: f64) -> f64 { ret math.exp[f64](0.0f64 - gf(c, th)) }
+
+// the step function whose sign change locates where g stops being infinite
+fn inf_step(c: *Fctx, th: f64) -> f64 {
+    if gf(c, th) == 1.0f64 / 0.0f64 { ret 0.0f64 - 1.0f64 }
+    ret 1.0f64
+}
+
+fn fct1_cdf(a: *mem.Arena, x: f64, zeta: f64, alpha: f64, theta00: f64, give_i: bool, tol: f64) -> f64 {
+    var theta0 = theta00
+    let xmz = math.abs[f64](x - zeta)
+    if x < zeta { theta0 = 0.0f64 - theta0 }
+    var c: Fctx = zero
+    c.alpha = alpha
+    c.a1 = alpha - 1.0f64
+    c.at0 = alpha * theta0
+    c.cat0 = math.cos[f64](c.at0)
+    c.xmz = xmz
+    let lt = 0.0f64 - theta0
+    var lth = lt + 0.000001f64 * math.abs[f64](lt)
+    var uth = pi2() - 0.000001f64 * math.abs[f64](pi2())
+    let inf = 1.0f64 / 0.0f64
+    if alpha > 1.0f64 && gf(&c, lth) == inf {
+        if inf_step(&c, lth) * inf_step(&c, pi2()) > 0.0f64 { ret 0.0f64 / 0.0f64 }
+        lth = pw.zeroin[Fctx](&c, inf_step, lth, pi2(), 0.00000001f64, 1000i64)
+    }
+    if alpha < 1.0f64 && gf(&c, uth) == inf {
+        if inf_step(&c, lth) * inf_step(&c, uth) > 0.0f64 { ret 0.0f64 / 0.0f64 }
+        uth = pw.zeroin[Fctx](&c, inf_step, lth, uth, 0.00000001f64, 1000i64)
+    }
+    let (r, e) = qp.qags[Fctx](a, &c, expmg, lth, uth, tol, tol, 1000usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    if give_i { ret r.result / pi() }
+    var c1 = 1.0f64
+    if alpha < 1.0f64 { c1 = 0.5f64 - theta0 / pi() }
+    ret c1 + sgn(1.0f64 - alpha) / pi() * r.result
+}
+
+// pstable(q, alpha, beta, gamma, delta, pm = 0, lower.tail = TRUE) for alpha != 1 (and the normal and Cauchy cases)
+fn pstable(a: *mem.Arena, q: f64, alpha: f64, beta: f64, gamma: f64, delta: f64) -> f64 {
+    let x = (q - delta) / gamma
+    if alpha == 2.0f64 { ret dist.pnorm(x, 0.0f64, math.sqrt[f64](2.0f64), true, false) }
+    if alpha == 1.0f64 && beta == 0.0f64 { ret 0.5f64 + math.atan[f64](x) / pi() }
+    let tanpa2 = math.tan[f64](pi2() * alpha)
+    let zeta = 0.0f64 - beta * tanpa2
+    var th0 = math.atan[f64](0.0f64 - zeta) / alpha
+    if th0 < 0.0f64 - pi2() { th0 = 0.0f64 - pi2() }
+    if th0 > pi2() { th0 = pi2() }
+    if math.abs[f64](beta) == 1.0f64 && alpha < 1.0f64 {
+        if beta == 1.0f64 && x <= zeta { ret 0.0f64 }
+        if beta == 0.0f64 - 1.0f64 && x >= zeta { ret 1.0f64 }
+    }
+    if math.abs[f64](x - zeta) < 2.0f64 * eps() { ret 0.5f64 - th0 / pi() }
+    let use_lower = x > zeta
+    let f1 = fct1_cdf(a, x, zeta, alpha, th0, false, 64.0f64 * eps())
+    if use_lower { ret f1 }
+    // the upper-tail value of the standardised variable: lower.tail = TRUE with z < zeta takes 1 - F
+    ret 1.0f64 - f1
+}

@@ -49100,3 +49100,9 @@ A fixture of its own for `e.math.quadpack`: nine integrands (a Gaussian, x log x
 New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alpha in [0.02, 2) except 1 (alpha = 2 the normal, alpha = 1 with beta = 0 the Cauchy), a port of stabledist's `.fct1`: Nolan's integral in theta split at the mode of the integrand (found by uniroot on g - 1 and log g, as the package does) and where it drops below 1e-4, each piece integrated with `qags` at tolerance 64 eps and 1000 subdivisions. It is the first user of the finite-range integrator of D7177 for a whole density.
 
 **Result.** `oracle_stabledist` equals stabledist on 180 densities (alpha from 0.3 to 1.99, symmetric and skewed, scaled and shifted) at 1e-8 relative on Windows. Linux pending. Not ported: alpha below 0.02, alpha = 1 with beta != 0, the Pareto-tail fallback when the integral underflows, the other parametrisations, log densities, pstable, qstable, rstable. L407 stays partial.
+
+## D7180 — stabledist: pstable in the S0 parametrisation
+
+`e.algo.stat.stabledistpkg` gains `pstable` (lower tail, alpha != 1 and the normal and Cauchy cases): stabledist's `.FCT1`, the integral of exp(-g(theta)) over (-theta0 + 1e-6, pi/2 - 1e-6) with `qags` at tolerance 64 eps, the constants c1 and c3, the 1 - F branch below zeta, the finite-support shortcuts for |beta| = 1 with alpha < 1, and the extra uniroot (tolerance 1e-8 on a step function) that moves an end point where g is infinite. The infinite-g branch fired on every symmetric alpha > 1 case, which is how the first run found it.
+
+**Result.** `oracle_stabledist` has 360 values (180 densities, 180 distribution values) and equals stabledist on Windows at 1e-8 relative. Linux pending. L407 stays partial: alpha = 1 with beta != 0, qstable, rstable, the other parametrisations and the upper tail remain.

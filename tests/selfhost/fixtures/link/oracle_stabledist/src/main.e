@@ -5,6 +5,7 @@ use e.algo.stat.stabledistpkg as sd
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -17,7 +18,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let start = mem.mark(a)
         let c = &golden.cases[at]
         let z = c.args
-        let got = sd.dstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize])
+        var got = 0.0f64
+        if str.eq(c.name, "p") { got = sd.pstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) } else { got = sd.dstable(a, z[4usize], z[0usize], z[1usize], z[2usize], z[3usize]) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
