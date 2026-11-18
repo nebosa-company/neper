@@ -23,4 +23,9 @@ for (rep in 1:20) {
     cases[[length(cases) + 1]] <- case("phyperb", c(x, mu, delta, alpha, beta, 0), phyperb(x, mu, delta, alpha, beta), rel = 1e-6, abs = 1e-9)
   }
 }
+for (rep in 1:30) {
+  mu <- runif(1, -2, 2); delta <- runif(1, 0.3, 3); alpha <- runif(1, 0.8, 4); beta <- runif(1, -0.8, 0.8) * alpha; lam <- runif(1, -2, 3)
+  cases[[length(cases) + 1]] <- case("ghypMean", c(mu, delta, alpha, beta, lam, 0), ghypMean(param = c(mu, delta, alpha, beta, lam)), rel = 1e-9, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("ghypVar", c(mu, delta, alpha, beta, lam, 0), ghypVar(param = c(mu, delta, alpha, beta, lam)), rel = 1e-9, abs = 1e-13)
+}
 emit("ghyp", "GeneralizedHyperbolic", list(cases))

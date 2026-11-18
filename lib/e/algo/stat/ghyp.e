@@ -170,3 +170,21 @@ fn pghyp(a: *mem.Arena, q: f64, mu: f64, delta: f64, alpha: f64, beta: f64, lamb
 fn pnig(a: *mem.Arena, q: f64, mu: f64, delta: f64, alpha: f64, beta: f64) -> f64 { ret pghyp(a, q, mu, delta, alpha, beta, 0.0f64 - 0.5f64) }
 
 fn phyperb(a: *mem.Arena, q: f64, mu: f64, delta: f64, alpha: f64, beta: f64) -> f64 { ret pghyp(a, q, mu, delta, alpha, beta, 1.0f64) }
+
+// ghypMean and ghypVar (the moments of the generalised hyperbolic distribution): with z = delta gamma and R(k) = K(lambda + k, z) / K(lambda, z),
+// mean = mu + delta beta R(1) / gamma and variance = delta^2 (R(1) / z + (beta / gamma)^2 (R(2) - R(1)^2))
+fn ghyp_mean(mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64 {
+    let gamma = math.sqrt[f64](alpha * alpha - beta * beta)
+    let z = delta * gamma
+    ret mu + delta * beta * (gs.bessel_knu(lambda + 1.0f64, z) / gs.bessel_knu(lambda, z)) / gamma
+}
+
+fn ghyp_var(delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64 {
+    let gamma = math.sqrt[f64](alpha * alpha - beta * beta)
+    let z = delta * gamma
+    let k0 = gs.bessel_knu(lambda, z)
+    let r1 = gs.bessel_knu(lambda + 1.0f64, z) / k0
+    let r2 = gs.bessel_knu(lambda + 2.0f64, z) / k0
+    let bg = beta / gamma
+    ret delta * delta * (r1 / z + bg * bg * (r2 - r1 * r1))
+}

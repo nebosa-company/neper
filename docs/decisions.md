@@ -49124,3 +49124,9 @@ New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alp
 `e.algo.stat.ghyp` gains `pghyp` (and the NIG and hyperbolic specials): R's `ghypMode` (Brent's maximiser of the log density over a bracket that grows by delta, a generic port of R's `optimize` over the density) and `integrate()` of the density from -Inf up to q at or below the mode and from q to Inf above it (the QUADPACK infinite-range routine, tolerance eps^0.25, 100 subdivisions), the upper tail being one minus the integral. The first run returned NaN for far-tail points: the density multiplied an underflowed Bessel value by an overflowed exponential, so `dghyp` is now evaluated on the log scale with an asymptotic series for log K beyond argument 100.
 
 **Result.** `oracle_ghyp` has 810 values (the earlier 750 density values still equal at 1e-9, 60 new distribution values at 1e-6) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: qghyp, rghyp, the moments and fits, and the stable branches listed in D7182 remain.
+
+## D7184 — GeneralizedHyperbolic: the mean and variance
+
+`e.algo.stat.ghyp` gains `ghyp_mean` and `ghyp_var`, the closed forms through the Bessel ratios K(lambda + k, delta gamma) / K(lambda, delta gamma) that `ghypMean` uses and that `ghypVar` (the second central moment of `ghypMom`) reduces to. qghyp is not ported: its default method builds a spline over 501 points of pghyp, so equality with R would need R's `splinefun` as well as its range finder.
+
+**Result.** `oracle_ghyp` has 870 values (60 moments added at 1e-9) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial.
