@@ -49616,3 +49616,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.desctools` gains `binom_ci2` (BinomCI's witting, pratt, midp, lik and blaker: Witting's randomised x + runif(1) under set.seed(123) with R's uniroot on the absolutely continuous binomial cdf, Pratt's closed forms, the mid-p limits and the likelihood-ratio deviance limits by R's uniroot, Blaker's acceptability steps of 1e-5) and `mad_dt` (MAD without weights, with the low and high medians).
 
 **Result.** `oracle_desctools_agree` gains 125 interval values (25 cases, five methods) and 30 MAD values and equals DescTools on Windows at 1e-7 to 1e-12. With these every function in L363's acceptance list is covered and the item is closed (Linux pending).
+
+## D7266 — igraph: triad census, mutual arcs, bridges, connectivity, motifs and the dominator tree
+
+`e.algo.graph.metrics` gains `triad_census` (the 16 Davis-Leinhardt classes of a directed graph in igraph's order, classified from the dyad counts and the in and out degrees inside each triple), `mutual_count`, `bridges` (an edge whose removal adds a component), `edge_connectivity` and `vertex_connectivity` (breadth-first augmenting-path maximum flow, vertex splitting for the latter, n - 1 for a complete graph), `similarity_invlog` (common neighbours weighted by 1 / ln of their degree), `motifs3` (open triads and triangles of an undirected graph) and `dominator_idom` (Cooper, Harvey and Kennedy's iterative immediate dominators; the root and unreachable vertices answer -1 as the R package returns them).
+
+**Result.** `oracle_igraph` has 1612 values (30 directed graphs for the census and mutual arcs, 30 undirected for bridges, connectivity, similarity and motifs, 30 rooted digraphs for the dominator tree) and equals igraph on Windows. Linux pending. L316 stays partial: walktrap, fast_greedy, infomap, optimal, gomory_hu_tree, cohesive_blocks, directed motifs, weighted forms.

@@ -4051,4 +4051,5 @@ D7261	681	arm: standardize of a linear model
 D7262	724	aod: phi by a group factor and the likelihood-ratio anova
 D7263	876	aod: iccbin methods A and B
 D7264	885	aod: the cloglog links
-D7265	724	DescTools: the last BinomCI methods and MAD
+D7265	725	DescTools: the last BinomCI methods and MAD
+D7266	1190	igraph: triad census, mutual arcs, bridges, connectivity, motifs and the dominator tree

@@ -78,7 +78,7 @@ L513	library	0.15	704	Epi: epidemiology tools	Partial (D6412, D7253, D7254, D725
 L308	library	0.1	759	minqa and nloptr: derivative-free optimizers	Partly done (D6053): e.algo.stat.dfree.minimize_box (restarted Nelder-Mead in a box) reaches the nloptr BOBYQA optimum on 39 values and coordinates on Windows (oracle_dfree);
 L304	library	0.2	782	haven: SAS, SPSS and Stata file formats	Partial (D6049).
 L315	library	0.1	744	Matrix remainder: expm, condition numbers, sparse LU and QR, ordering	Partly done (D6060): e.algo.linalg.mexp has expm (Ward Pade 8) and the 1, I, F, M norms, equal to Matrix on 210 values on Windows (oracle_matrix);
-L316	library	0.1	976	igraph: deterministic structure and community detection	Partly done (D6061): e.algo.graph.metrics has transitivity (global, local, average), coreness, degree assortativity, jaccard and dice similarity, eccentricity, radius and diameter, equal to igraph on 
+L316	library	0.1	1096	igraph: deterministic structure and community detection	Partly done (D6061, D7266: triad_census, which_mutual, bridges, edge_connectivity, vertex_connectivity, similarity invlogweighted, motifs of size 3 and dominator_tree equal igraph, 1612 values): e.alg
 L344	library	0	359	randomForest: Breiman forests equal to R	Open (CRAN rank 255;
 L345	library	0.15	809	FactoMineR and factoextra: multivariate exploration	Partial (D6633).
 L347	library	0.15	752	locfit: local regression and likelihood	Partial (D6635).

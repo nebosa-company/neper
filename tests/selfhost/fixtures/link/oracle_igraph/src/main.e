@@ -15,6 +15,33 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let n = usize(x[0usize])
     let adj = x[1usize..1usize + n * n]
     let nm = c.name
+    if str.eq(nm, "mot") { ret gm.motifs3(adj, n, usize(x[1usize + n * n])) }
+    if str.eq(nm, "dom") {
+        let (idom, de) = mem.alloc[f64](a, n)
+        if de != ok { os.exit(9) }
+        gm.dominator_idom(a, adj, n, usize(x[1usize + n * n]), idom)
+        ret idom[usize(x[2usize + n * n])]
+    }
+    if str.eq(nm, "tri") { ret gm.triad_census(adj, n, usize(x[1usize + n * n])) }
+    if str.eq(nm, "mutual") { ret gm.mutual_count(adj, n) }
+    if str.eq(nm, "bridges_n") { ret gm.bridges(a, adj, n, false) }
+    if str.eq(nm, "bridges_w") { ret gm.bridges(a, adj, n, true) }
+    if str.eq(nm, "econn") { ret gm.edge_connectivity(a, adj, n) }
+    if str.eq(nm, "vconn") { ret gm.vertex_connectivity(a, adj, n) }
+    if str.eq(nm, "invlog_sum") || str.eq(nm, "invlog_w") {
+        var t1 = 0.0f64
+        var ii = 0usize
+        while ii < n {
+            var jj = ii + 1usize
+            while jj < n {
+                let v = gm.similarity_invlog(adj, n, ii, jj)
+                if str.eq(nm, "invlog_sum") { t1 += v } else { t1 += f64(ii * n + jj + 1usize) * v }
+                jj += 1usize
+            }
+            ii += 1usize
+        }
+        ret t1
+    }
     if str.eq(nm, "trans_g") { ret gm.transitivity_global(adj, n) }
     if str.eq(nm, "trans_avg") { ret gm.transitivity_average(adj, n) }
     let (core, e1) = mem.alloc[f64](a, n)
