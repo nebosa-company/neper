@@ -318,6 +318,15 @@ for (rep in 1:30) {
   add("ex", c(252, bi_m, bi_sg, bi_p, g1_n, g1_t), qGB1(bi_p, mu = bi_m, sigma = bi_sg, nu = g1_n, tau = g1_t))
   add("ex", c(253, bi_m, bi_sg, g1_x), pSIMPLEX(g1_x, mu = bi_m, sigma = bi_sg), rel = 1e-9, abs = 1e-12)
   add("ex", c(254, bi_m, bi_sg, bi_p), qSIMPLEX(bi_p, mu = bi_m, sigma = bi_sg), rel = 1e-9, abs = 1e-12)
+  # LOGSHASH 255-257, BCPEo 258-260, ST1 261
+  ls_x <- runif(1, 0.2, 5); ls_n <- runif(1, 0.5, 2); ls_t <- runif(1, 0.5, 2)
+  add("ex", c(255, 0.3, 0.8, ls_x, ls_n, ls_t), dLOGSHASH(ls_x, mu = 0.3, sigma = 0.8, nu = ls_n, tau = ls_t), rel = 1e-8, abs = 1e-12)
+  add("ex", c(256, 0.3, 0.8, ls_x, ls_n, ls_t), pLOGSHASH(ls_x, mu = 0.3, sigma = 0.8, nu = ls_n, tau = ls_t), rel = 1e-8, abs = 1e-12)
+  add("ex", c(257, 0.3, 0.8, bi_p, ls_n, ls_t), qLOGSHASH(bi_p, mu = 0.3, sigma = 0.8, nu = ls_n, tau = ls_t), rel = 1e-6, abs = 1e-9)
+  add("ex", c(258, cp_m, cp_s, cp_x, cp_n, cp_t), dBCPEo(cp_x, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
+  add("ex", c(259, cp_m, cp_s, cp_x, cp_n, cp_t), pBCPEo(cp_x, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
+  add("ex", c(260, cp_m, cp_s, bi_p, cp_n, cp_t), qBCPEo(bi_p, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
+  add("ex", c(261, cp_m, cp_s, st_x, cp_n, st_t), dST1(st_x, mu = cp_m, sigma = cp_s, nu = cp_n, tau = st_t), rel = 1e-8, abs = 1e-12)
 }
 # random numbers by the quantile function on runif: args (seed, i, which, mu, sigma, nu) under "rq": which 0 rGA, 1 rNBI, 2 rGU, 3 rBE, 4 rPARETO2, 5 rTF, 6 rBCCG; draw i (0-based) of 8
 for (rep in 1:6) {

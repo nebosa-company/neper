@@ -49562,3 +49562,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `clogistic` on sets of J subjects with one case each is the conditional logit `e.algo.stat.mlogitpkg.clogit` already ports (the likelihood is the same: each set contributes exp(x_case b) over the sum of exp(x_j b)), so the Epi fixture runs it with the case first in every set.
 
 **Result.** `oracle_epi` gains 12 matched-set data sets (40 to 120 sets of 2 to 5 subjects, one to three covariates; 50 coefficients and standard errors) and equals Epi's clogistic on Windows at 1e-5 (the Newton iteration stops short of the optimum, as in the mlogit fixture). A first run passed the covariates column-major where the port reads them row-major; fixed in the generator. Linux pending. L513 stays partial: the Lexis tools, rate and survival tools.
+
+## D7257 — gamlss.dist: LOGSHASH, BCPEo and ST1
+
+`e.algo.stat.gamlssdist` gains LOGSHASH d, p, q (SHASH on the log scale with the Jacobian 1 / x, exp of the SHASH quantile), BCPEo d, p, q (the package's BCPEo functions have BCPE's formulas, so they call them) and the ST1 density (Azzalini's skew t from the t cdf and density, the normal pair at tau >= 1e6).
+
+**Result.** `oracle_gamlss_exp` gains 7 cases per draw (210 values over the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: ST3C (compiled C in the package), DEL, DBI, DBURR12, ZASICHEL, MN3 to MN5, the beta-binomial inflated families, moments, random numbers.

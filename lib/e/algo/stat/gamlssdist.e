@@ -2033,3 +2033,37 @@ fn qsimplex(a: *mem.Arena, p: f64, mu: f64, sigma: f64) -> f64 {
     c.p = p
     ret pw.zeroin[SimpRoot](&c, simp_h1, 0.001f64, 0.999f64, pw.uniroot_tol(), 1000i64)
 }
+
+// LOGSHASH (the log of a SHASH), BCPEo (the package's BCPEo is BCPE's formula) and ST1 (skew t of Azzalini, through the t and normal densities)
+fn dlogshash(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    ret math.exp[f64](math.log[f64](dshash(math.log[f64](x), mu, sigma, nu, tau)) - math.log[f64](x))
+}
+
+fn plogshash(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if q <= 0.0f64 { ret 0.0f64 }
+    if q == 1.0f64 / 0.0f64 { ret 1.0f64 }
+    ret pshash(math.log[f64](q), mu, sigma, nu, tau)
+}
+
+fn qlogshash(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    ret math.exp[f64](qshash(p, mu, sigma, nu, tau))
+}
+
+fn dbcpeo(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret dbcpe(x, mu, sigma, nu, tau) }
+
+fn pbcpeo(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret pbcpe(q, mu, sigma, nu, tau) }
+
+fn qbcpeo(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret qbcpe(p, mu, sigma, nu, tau) }
+
+fn dst1(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / sigma
+    let w = nu * z
+    if tau < 1000000.0f64 {
+        ret math.exp[f64](nb.pt(w, tau, true, true) + nb.dt(z, tau, true) + math.log[f64](2.0f64) - math.log[f64](sigma))
+    }
+    ret math.exp[f64](dist.pnorm(w, 0.0f64, 1.0f64, true, true) + dist.dnorm(z, 0.0f64, 1.0f64, true) + math.log[f64](2.0f64) - math.log[f64](sigma))
+}

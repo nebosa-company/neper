@@ -286,6 +286,13 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 252usize { ret gd.qgb1(x, mu, sigma, nu, tau) }
     if which == 253usize { ret gd.psimplex(a, x, mu, sigma) }
     if which == 254usize { ret gd.qsimplex(a, x, mu, sigma) }
+    if which == 255usize { ret gd.dlogshash(x, mu, sigma, nu, tau) }
+    if which == 256usize { ret gd.plogshash(x, mu, sigma, nu, tau) }
+    if which == 257usize { ret gd.qlogshash(x, mu, sigma, nu, tau) }
+    if which == 258usize { ret gd.dbcpeo(x, mu, sigma, nu, tau) }
+    if which == 259usize { ret gd.pbcpeo(x, mu, sigma, nu, tau) }
+    if which == 260usize { ret gd.qbcpeo(x, mu, sigma, nu, tau) }
+    if which == 261usize { ret gd.dst1(x, mu, sigma, nu, tau) }
     ret 0.0f64 - 1.0f64
 }
 
