@@ -3970,4 +3970,5 @@ D7180	874	stabledist: pstable in the S0 parametrisation
 D7181	959	stabledist: qstable
 D7182	610	stabledist: rstable
 D7183	1021	GeneralizedHyperbolic: pghyp, pnig and phyperb
-D7184	606	GeneralizedHyperbolic: the mean and variance
+D7184	607	GeneralizedHyperbolic: the mean and variance
+D7185	816	GeneralizedHyperbolic: qghyp (the default spline method)

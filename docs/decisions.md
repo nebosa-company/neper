@@ -49130,3 +49130,9 @@ New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alp
 `e.algo.stat.ghyp` gains `ghyp_mean` and `ghyp_var`, the closed forms through the Bessel ratios K(lambda + k, delta gamma) / K(lambda, delta gamma) that `ghypMean` uses and that `ghypVar` (the second central moment of `ghypMom`) reduces to. qghyp is not ported: its default method builds a spline over 501 points of pghyp, so equality with R would need R's `splinefun` as well as its range finder.
 
 **Result.** `oracle_ghyp` has 870 values (60 moments added at 1e-9) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial.
+
+## D7185 — GeneralizedHyperbolic: qghyp (the default spline method)
+
+`e.algo.stat.ghyp` gains `qghyp` with R's default method: the density range from `ghypCalcRange` (uniroot of the density minus 1e-5 on each side of the mode, using the variance of D7184 for the bracket steps), `pghyp` at 501 equally spaced points, the fmm spline of `e.algo.stat.splinepkg`, and uniroot on spline minus p. Probabilities outside the spline's range would take R's integrate method and return NaN here. Each call builds the spline, about 500 distribution evaluations, so it is slow (a minute for four quantiles).
+
+**Result.** `oracle_ghyp` has 874 values (4 quantiles added at 1e-5 relative) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: rghyp, higher moments, fits and the stable branches remain.

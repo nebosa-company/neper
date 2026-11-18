@@ -6,6 +6,8 @@
 use e.algo.stat.gslfns as gs
 use e.math
 use e.math.quadpack as qp
+use e.algo.stat.pwr as pw
+use e.algo.stat.splinepkg as sl
 use e.mem
 
 // log K_nu(x): the log of the trapezoid value, and for x beyond 100 (where K underflows well before the density does) the asymptotic series
@@ -187,4 +189,64 @@ fn ghyp_var(delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64 {
     let r2 = gs.bessel_knu(lambda + 2.0f64, z) / k0
     let bg = beta / gamma
     ret delta * delta * (r1 / z + bg * bg * (r2 - r1 * r1))
+}
+
+// ---- qghyp with R's default method "spline": pghyp on 501 equally spaced points of the density range (ghypCalcRange at density tolerance 1e-5, found with
+// uniroot), an fmm spline (e.algo.stat.splinepkg) through them, and uniroot on the spline minus p over the range, tolerance eps^0.25. Probabilities outside the
+// spline's range would use the integrate method in R and return NaN here.
+type GhRoot = struct { g: Gh, level: f64, sp_x: []f64, sp_y: []f64, sp_b: []f64, sp_c: []f64, sp_d: []f64, n: usize, p: f64, mode: usize }
+
+fn gh_dens_minus(c: *GhRoot, x: f64) -> f64 { ret dghyp(x, c.g.mu, c.g.delta, c.g.alpha, c.g.beta, c.g.lambda) - c.level }
+
+fn gh_spline_minus(c: *GhRoot, x: f64) -> f64 { ret sl.spline_eval(c.n, c.sp_x, c.sp_y, c.sp_b, c.sp_c, c.sp_d, x) - c.p }
+
+fn ghyp_range(mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64, tol: f64) -> (f64, f64) {
+    let mode = ghyp_mode(mu, delta, alpha, beta, lambda)
+    let sd = math.sqrt[f64](ghyp_var(delta, alpha, beta, lambda))
+    var c: GhRoot = zero
+    c.g.mu = mu
+    c.g.delta = delta
+    c.g.alpha = alpha
+    c.g.beta = beta
+    c.g.lambda = lambda
+    c.level = tol
+    var hi = mode + sd
+    while dghyp(hi, mu, delta, alpha, beta, lambda) > tol { hi = hi + sd }
+    var lo = mode - sd
+    while dghyp(lo, mu, delta, alpha, beta, lambda) > tol { lo = lo - sd }
+    let tl = math.pow[f64](2.220446049250313e-16f64, 0.25f64)
+    let up = pw.zeroin[GhRoot](&c, gh_dens_minus, mode, hi, tl, 1000i64)
+    let dn = pw.zeroin[GhRoot](&c, gh_dens_minus, lo, mode, tl, 1000i64)
+    ret (dn, up)
+}
+
+fn qghyp(a: *mem.Arena, p: f64, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64 {
+    let (xl, xu) = ghyp_range(mu, delta, alpha, beta, lambda, 0.00001f64)
+    let p_lo = pghyp(a, xl, mu, delta, alpha, beta, lambda)
+    let p_hi = pghyp(a, xu, mu, delta, alpha, beta, lambda)
+    if !(p > p_lo && p < p_hi) { ret 0.0f64 / 0.0f64 }
+    let n = 501usize
+    let (xs, e1) = mem.alloc[f64](a, n)
+    let (ys, e2) = mem.alloc[f64](a, n)
+    let (bb, e3) = mem.alloc[f64](a, n)
+    let (cc, e4) = mem.alloc[f64](a, n)
+    let (dd, e5) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        xs[i] = xl + (xu - xl) * f64(i) / f64(n - 1usize)
+        ys[i] = pghyp(a, xs[i], mu, delta, alpha, beta, lambda)
+        i += 1usize
+    }
+    xs[n - 1usize] = xu
+    sl.fmm_spline(n, xs, ys, bb, cc, dd)
+    var c: GhRoot = zero
+    c.n = n
+    c.sp_x = xs
+    c.sp_y = ys
+    c.sp_b = bb
+    c.sp_c = cc
+    c.sp_d = dd
+    c.p = p
+    ret pw.zeroin[GhRoot](&c, gh_spline_minus, xl, xu, math.pow[f64](2.220446049250313e-16f64, 0.25f64), 1000i64)
 }

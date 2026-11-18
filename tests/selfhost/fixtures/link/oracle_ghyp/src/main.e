@@ -11,6 +11,7 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "qghyp") { ret gh.qghyp(a, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize]) }
     if str.eq(k, "ghypMean") { ret gh.ghyp_mean(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
     if str.eq(k, "ghypVar") { ret gh.ghyp_var(x[1usize], x[2usize], x[3usize], x[4usize]) }
     if str.eq(k, "pghyp") { ret gh.pghyp(a, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize]) }
