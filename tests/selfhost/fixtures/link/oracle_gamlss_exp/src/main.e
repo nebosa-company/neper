@@ -293,6 +293,12 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 259usize { ret gd.pbcpeo(x, mu, sigma, nu, tau) }
     if which == 260usize { ret gd.qbcpeo(x, mu, sigma, nu, tau) }
     if which == 261usize { ret gd.dst1(x, mu, sigma, nu, tau) }
+    if which == 262usize { ret gd.dpareto(x, mu) }
+    if which == 263usize { ret gd.ppareto(x, mu) }
+    if which == 264usize { ret gd.qpareto(x, mu) }
+    if which == 265usize { ret gd.ddburr12(x, mu, sigma, nu) }
+    if which == 266usize { ret gd.pdburr12(x, mu, sigma, nu) }
+    if which == 267usize { ret gd.qdburr12(x, mu, sigma, nu) }
     ret 0.0f64 - 1.0f64
 }
 

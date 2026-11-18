@@ -2067,3 +2067,41 @@ fn dst1(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     }
     ret math.exp[f64](dist.pnorm(w, 0.0f64, 1.0f64, true, true) + dist.dnorm(z, 0.0f64, 1.0f64, true) + math.log[f64](2.0f64) - math.log[f64](sigma))
 }
+
+// PARETO (one parameter, support x > 1) and DBURR12 (the discretised Burr XII, survival (1 + (x / mu)^sigma)^(-nu))
+fn dpareto(x: f64, mu: f64) -> f64 {
+    if x <= 1.0f64 { ret 0.0f64 }
+    ret math.exp[f64](math.log[f64](mu) - (mu + 1.0f64) * math.log[f64](x))
+}
+
+fn ppareto(q: f64, mu: f64) -> f64 {
+    if q <= 1.0f64 { ret 0.0f64 }
+    ret 1.0f64 - math.pow[f64](q, 0.0f64 - mu)
+}
+
+fn qpareto(p: f64, mu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    ret 1.0f64 / math.pow[f64](1.0f64 - p, 1.0f64 / mu)
+}
+
+fn burr_sur(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 { ret math.pow[f64](1.0f64 + math.pow[f64](x / mu, sigma), 0.0f64 - nu) }
+
+fn ddburr12(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 || x == 1.0f64 / 0.0f64 { ret 0.0f64 }
+    ret burr_sur(x, mu, sigma, nu) - burr_sur(x + 1.0f64, mu, sigma, nu)
+}
+
+fn pdburr12(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q == 1.0f64 / 0.0f64 { ret 1.0f64 }
+    ret 1.0f64 - math.pow[f64](1.0f64 + math.pow[f64]((q + 1.0f64) / mu, sigma), 0.0f64 - nu)
+}
+
+fn qdburr12(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    ret math.trunc[f64](mu * math.pow[f64](math.exp[f64](0.0f64 - math.log[f64](1.0f64 - p) / nu) - 1.0f64, 1.0f64 / sigma) - 1.0f64)
+}

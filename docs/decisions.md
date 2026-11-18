@@ -49568,3 +49568,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.gamlssdist` gains LOGSHASH d, p, q (SHASH on the log scale with the Jacobian 1 / x, exp of the SHASH quantile), BCPEo d, p, q (the package's BCPEo functions have BCPE's formulas, so they call them) and the ST1 density (Azzalini's skew t from the t cdf and density, the normal pair at tau >= 1e6).
 
 **Result.** `oracle_gamlss_exp` gains 7 cases per draw (210 values over the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: ST3C (compiled C in the package), DEL, DBI, DBURR12, ZASICHEL, MN3 to MN5, the beta-binomial inflated families, moments, random numbers.
+
+## D7258 — gamlss.dist: PARETO and DBURR12
+
+`e.algo.stat.gamlssdist` gains the one-parameter PARETO d, p, q (support x > 1) and the discretised Burr XII DBURR12 d, p, q (the difference of two survival functions at x and x + 1, the quantile truncated as the package does).
+
+**Result.** `oracle_gamlss_exp` gains 6 cases per draw (180 values over the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: ST3C (compiled in the package), DEL, DBI, ZASICHEL, MN3 to MN5, the beta-binomial inflated families, moments, random numbers.

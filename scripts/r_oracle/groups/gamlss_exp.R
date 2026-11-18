@@ -327,6 +327,15 @@ for (rep in 1:30) {
   add("ex", c(259, cp_m, cp_s, cp_x, cp_n, cp_t), pBCPEo(cp_x, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
   add("ex", c(260, cp_m, cp_s, bi_p, cp_n, cp_t), qBCPEo(bi_p, mu = cp_m, sigma = cp_s, nu = cp_n, tau = cp_t))
   add("ex", c(261, cp_m, cp_s, st_x, cp_n, st_t), dST1(st_x, mu = cp_m, sigma = cp_s, nu = cp_n, tau = st_t), rel = 1e-8, abs = 1e-12)
+  # PARETO 262-264 (x, mu), DBURR12 265-267
+  pa_m <- runif(1, 0.5, 4); pa_x <- 1 + rexp(1); db_k <- sample(0:15, 1)
+  add("ex", c(262, pa_m, 1, pa_x), dPARETO(pa_x, mu = pa_m))
+  add("ex", c(263, pa_m, 1, pa_x), pPARETO(pa_x, mu = pa_m))
+  add("ex", c(264, pa_m, 1, bi_p), qPARETO(bi_p, mu = pa_m))
+  db_m <- runif(1, 1, 8); db_s <- runif(1, 0.8, 3); db_n <- runif(1, 0.5, 3)
+  add("ex", c(265, db_m, db_s, db_k, db_n), dDBURR12(db_k, mu = db_m, sigma = db_s, nu = db_n))
+  add("ex", c(266, db_m, db_s, db_k, db_n), pDBURR12(db_k, mu = db_m, sigma = db_s, nu = db_n))
+  add("ex", c(267, db_m, db_s, bi_p, db_n), qDBURR12(bi_p, mu = db_m, sigma = db_s, nu = db_n))
 }
 # random numbers by the quantile function on runif: args (seed, i, which, mu, sigma, nu) under "rq": which 0 rGA, 1 rNBI, 2 rGU, 3 rBE, 4 rPARETO2, 5 rTF, 6 rBCCG; draw i (0-based) of 8
 for (rep in 1:6) {
