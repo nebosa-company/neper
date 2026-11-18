@@ -6,6 +6,7 @@
 
 use e.math
 use e.math.dist as dist
+use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.math.special as sp
 
@@ -205,3 +206,10 @@ fn pexgaus(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     }
     ret dist.pnorm(x, mu, sigma, true, false)
 }
+
+// the Poisson family PO of gamlss.dist (mean mu): dpois, ppois and qpois of the base distribution
+fn dpo(x: f64, mu: f64) -> f64 { ret nm.dpois(x, mu, false) }
+
+fn ppo(x: f64, mu: f64) -> f64 { ret nm.ppois(x, mu, true, false) }
+
+fn qpo(p: f64, mu: f64) -> f64 { ret nm.qpois(p, mu, true, false) }

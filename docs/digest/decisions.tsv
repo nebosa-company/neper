@@ -3925,4 +3925,5 @@ D7135	518	gamlss.dist: the RG (reverse Gumbel) family
 D7136	553	gamlss.dist: the PARETO2 family
 D7137	362	gamlss.dist: the PARETO1 family
 D7138	411	gamlss.dist: the NO (normal) family
-D7139	600	gamlss.dist: the exGAUS family (density and distribution)
+D7139	601	gamlss.dist: the exGAUS family (density and distribution)
+D7140	399	gamlss.dist: the PO (Poisson) family

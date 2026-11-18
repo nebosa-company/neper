@@ -1,4 +1,4 @@
-// e.algo.stat.gamlssdist's EXP and RG functions against gamlss.dist (dEXP, pEXP, qEXP, dRG, pRG, qRG, dPARETO2, pPARETO2, qPARETO2, dPARETO1, pPARETO1, qPARETO1, dNO, pNO, qNO). tests/oracle/gamlss_exp.json comes from
+// e.algo.stat.gamlssdist's EXP and RG functions against gamlss.dist (dEXP, pEXP, qEXP, dRG, pRG, qRG, dPARETO2, pPARETO2, qPARETO2, dPARETO1, pPARETO1, qPARETO1, dNO, pNO, qNO, dPO, pPO, qPO). tests/oracle/gamlss_exp.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R gamlss_exp`; the layout of every case is at the top of scripts/r_oracle/groups/gamlss_exp.R.
 
 use e.algo.stat.gamlssdist as gd
@@ -28,7 +28,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 11usize { ret gd.qpareto1(x, mu) }
     if which == 12usize { ret gd.dno(x, mu, sigma) }
     if which == 13usize { ret gd.pno(x, mu, sigma) }
-    ret gd.qno(x, mu, sigma)
+    if which == 14usize { ret gd.qno(x, mu, sigma) }
+    if which == 15usize { ret gd.dpo(x, mu) }
+    if which == 16usize { ret gd.ppo(x, mu) }
+    ret gd.qpo(x, mu)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

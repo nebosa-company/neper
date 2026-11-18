@@ -1,5 +1,5 @@
 # gamlss.dist EXP (dEXP, pEXP, qEXP with mu) and RG (dRG, pRG, qRG with mu and sigma). Args: (fn, mu, sigma, x, which): fn 0 density, 1
-# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 and NO for fn 12..14 (x is p for fn 2, 5, 8, 11 and 14). sigma is unused by EXP.
+# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 and NO for fn 12..14 and PO for fn 15..17 (x is p for fn 2, 5, 8, 11, 14 and 17). sigma is unused by EXP.
 suppressMessages(library(gamlss.dist))
 cases <- list()
 add <- function(fn, args, want, rel = 1e-10, abs = 1e-14) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
@@ -24,5 +24,9 @@ for (rep in 1:30) {
   add("ex", c(12, nm, ns, nx, 0), dNO(nx, mu = nm, sigma = ns))
   add("ex", c(13, nm, ns, nx, 0), pNO(nx, mu = nm, sigma = ns))
   add("ex", c(14, nm, ns, p, 0), qNO(p, mu = nm, sigma = ns))
+  pl <- runif(1, 0.5, 12); pk <- rpois(1, pl)
+  add("ex", c(15, pl, 1, pk, 0), dPO(pk, mu = pl))
+  add("ex", c(16, pl, 1, pk, 0), pPO(pk, mu = pl))
+  add("ex", c(17, pl, 1, p, 0), qPO(p, mu = pl))
 }
 emit("gamlss_exp", "gamlss.dist", list(cases))
