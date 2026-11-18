@@ -49436,3 +49436,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.aod` gains `quasipois` and `quasibin` (logit link): the package's moment iteration for phi (weights 1 / (1 + phi mu) and 1 / (1 + (n - 1) phi), Pearson chi-square minus the residual degrees of freedom against the tolerance) or, for quasipois with phi given, the weight iteration to a log-likelihood change below 1e-6, each step a weighted glm refit by flexmix's IRLS.
 
 **Result.** `oracle_aod` gains 280 values over 40 simulated overdispersed data sets and equals aod on Windows (1e-9). It exposed that the binomial IRLS start used the prior-weighted size where R's `binomial()$initialize` uses the size alone (mustart = (n y + 0.5) / (n + 1)); fixed in `binom_glm`, and `oracle_flexmix_gauss` still passes. Linux pending. L480 stays partial: betabin, negbin, anova, iccbin A and B, splitbin and the cloglog link.
+
+## D7236 — aod: betabin
+
+`e.algo.stat.aod` gains `betabin` for the logit link with one phi: the beta-binomial log-likelihood in (coefficients, phi), maximised by `e.algo.stat.rnm.nmmin` (R's optim Nelder-Mead, reltol 1.49e-8, maxit 2000) from the binomial glm coefficients and phi = 0.1, the package's own start.
+
+**Result.** `oracle_aod` gains 60 values (coefficients, phi and the maximised log-likelihood of 15 simulated overdispersed data sets) and equals aod on Windows at 1e-6, the accuracy a simplex stops at. Linux pending. Standard errors (optimHess) are not ported. L480 stays partial: betabin with phi by a covariate and the cloglog link, negbin, anova, iccbin A and B, splitbin.

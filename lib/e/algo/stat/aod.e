@@ -11,6 +11,7 @@ use e.math.dist as dist
 use e.math.nmath as nm
 use e.mem
 use e.algo.stat.wrs2 as wr
+use e.algo.stat.rnm as rn
 
 // varbin(n, y)$tab: part 0 the estimate, 1 its variance, 2 the lower and 3 the upper limit of row `row`
 // (0 binomial, 1 ratio, 2 arithmetic, 3 jackknife) at level 1 - alpha
@@ -435,4 +436,55 @@ fn quasibin(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f64
     }
     out[p] = phi
     ret ok
+}
+
+// betabin(cbind(y, n - y) ~ x, ~ 1): logit link, one phi; R's optim Nelder-Mead (reltol 1.49e-8, maxit 2000) from the binomial glm coefficients and phi = 0.1
+type BbCtx = struct { x: []const f64, n: usize, p: usize, y: []const f64, size: []const f64 }
+
+fn lbeta_(u: f64, v: f64) -> f64 { ret sp.lgamma(u) + sp.lgamma(v) - sp.lgamma(u + v) }
+
+fn bb_nll(c: *BbCtx, par: []const f64) -> f64 {
+    let phi = par[c.p]
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.n {
+        var t = 0.0f64
+        var k = 0usize
+        while k < c.p {
+            t += c.x[k * c.n + i] * par[k]
+            k += 1usize
+        }
+        let pr = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - t))
+        let u = pr * (1.0f64 - phi) / phi
+        let v = (1.0f64 - pr) * (1.0f64 - phi) / phi
+        s += sp.lgamma(c.size[i] + 1.0f64) - sp.lgamma(c.y[i] + 1.0f64) - sp.lgamma(c.size[i] - c.y[i] + 1.0f64) + lbeta_(u + c.y[i], v + c.size[i] - c.y[i]) - lbeta_(u, v)
+        i += 1usize
+    }
+    if s != s || s > 1.0e300f64 || s < 0.0f64 - 1.0e300f64 { ret 1.0e20f64 }
+    ret 0.0f64 - s
+}
+
+// out receives the p coefficients, phi, and the maximised log-likelihood; the result is the optim convergence code
+fn betabin(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, size: []const f64, out: []f64) -> (usize, err) {
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (b0, e2) = mem.alloc[f64](a, p + 1usize)
+    let (best, e3) = mem.alloc[f64](a, p + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret (1usize, fx.Malformed) }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    let e = fx.binom_glm(a, x, n, p, y, size, w, b0, false)
+    if e != ok { ret (1usize, e) }
+    b0[p] = 0.1f64
+    var c = BbCtx{ x: x, n: n, p: p, y: y, size: size }
+    let (fmin, cnt, fail) = rn.nmmin[BbCtx](a, &c, bb_nll, b0, 0.0f64 - 1.0f64 / 0.0f64, 0.0000000149011611938f64, 1.0f64, 0.5f64, 2.0f64, 2000usize, 1.0f64, best)
+    var k = 0usize
+    while k <= p {
+        out[k] = best[k]
+        k += 1usize
+    }
+    out[p + 1usize] = 0.0f64 - fmin
+    ret (fail, ok)
 }

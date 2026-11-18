@@ -51,4 +51,14 @@ for (rep in 1:20) {
     add("qbin", c(mode, n, 2, if (mode == 1) ph else 0, as.vector(X), sc, sz, 2), fit@phi)
   }
 }
+# betabin, logit link, phi constant (n, p, x column-major, successes, sizes, index): coefficient index, phi at p, the log-likelihood at p + 1; 1e-6 as the simplex stops at 1.5e-8 of the function value
+for (rep in 1:15) {
+  n <- sample(15:40, 1); xv <- round(rnorm(n), 3); sz <- sample(6:30, n, TRUE)
+  pr <- plogis(-0.3 + 0.7 * xv); pr2 <- rbeta(n, 3 * pr + 0.5, 3 * (1 - pr) + 0.5); sc <- rbinom(n, sz, pr2)
+  d <- data.frame(sc = sc, fl = sz - sc, xv = xv); X <- cbind(1, xv)
+  fit <- suppressWarnings(betabin(cbind(sc, fl) ~ xv, ~ 1, data = d))
+  pa <- fit@param; ll <- fit@logL
+  for (j in 1:3) cases[[length(cases) + 1]] <- case("bbin", c(n, 2, as.vector(X), sc, sz, j - 1), pa[[j]], rel = 1e-6, abs = 1e-8)
+  cases[[length(cases) + 1]] <- case("bbin", c(n, 2, as.vector(X), sc, sz, 3), ll, rel = 1e-6, abs = 1e-8)
+}
 emit("aod", "aod", list(cases))

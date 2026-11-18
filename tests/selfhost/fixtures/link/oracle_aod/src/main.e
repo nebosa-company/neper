@@ -46,6 +46,20 @@ fn qbin_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret o[usize(x[4usize + n * p + 2usize * n])]
 }
 
+fn bbin_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let (o, e) = mem.alloc[f64](a, p + 2usize)
+    if e != ok { os.exit(11) }
+    let xm = x[2usize..2usize + n * p]
+    let sc = x[2usize + n * p..2usize + n * p + n]
+    let sz = x[2usize + n * p + n..2usize + n * p + 2usize * n]
+    let (code, be) = ad.betabin(a, xm, n, p, sc, sz, o)
+    if be != ok || code != 0usize { os.exit(12) }
+    ret o[usize(x[2usize + n * p + 2usize * n])]
+}
+
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = usize(x[3usize])
@@ -70,7 +84,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while at < golden.cases.len {
         let c = &golden.cases[at]
         var got = 0.0f64
-        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else if str.eq(c.name, "qpois") { got = qpois_answer(a, c) } else if str.eq(c.name, "qbin") { got = qbin_answer(a, c) } else { got = answer(c) }
+        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else if str.eq(c.name, "qpois") { got = qpois_answer(a, c) } else if str.eq(c.name, "qbin") { got = qbin_answer(a, c) } else if str.eq(c.name, "bbin") { got = bbin_answer(a, c) } else { got = answer(c) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {
