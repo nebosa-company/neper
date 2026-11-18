@@ -469,6 +469,7 @@ oracle_desctools_outlier
 oracle_ismev_cov
 oracle_vcd_woolf
 oracle_vcd_oddsratio
+oracle_vcd_interpret
 oracle_wrs2_t2way
 oracle_fpc_discr
 oracle_energy_bcdcor

@@ -354,6 +354,97 @@ fn loddsratio_ci(coef: []const f64, vdiag: []const f64, level: f64, logscale: bo
     }
 }
 
+// effectsize::interpret_* label index: the number of thresholds of the rule that |x| reaches (findInterval with right = FALSE, so a value on a threshold takes the higher label). rule: 0 .. 3 interpret_cohens_d with
+// cohen1988, sawilowsky2009, gignac2016 (its thresholds are on r, so d is first turned into d / sqrt(d^2 + 4)), lovakov2021; 4 .. 7 interpret_r with funder2019, gignac2016, cohen1988, lovakov2021 (interpret_rank_biserial is rule 4); 8, 9 interpret_eta_squared (and omega and
+// epsilon) with field2013, cohen1992; 10 interpret_oddsratio (log(OR) sqrt(3) / pi on the cohen1988 d rule).
+fn interpret_rule_values(rule: usize, th: []f64) -> usize {
+    if rule == 0usize {
+        th[0usize] = 0.2f64
+        th[1usize] = 0.5f64
+        th[2usize] = 0.8f64
+        ret 3usize
+    }
+    if rule == 1usize {
+        th[0usize] = 0.1f64
+        th[1usize] = 0.2f64
+        th[2usize] = 0.5f64
+        th[3usize] = 0.8f64
+        th[4usize] = 1.2f64
+        th[5usize] = 2.0f64
+        ret 6usize
+    }
+    if rule == 2usize {
+        th[0usize] = 0.1f64
+        th[1usize] = 0.2f64
+        th[2usize] = 0.3f64
+        ret 3usize
+    }
+    if rule == 3usize {
+        th[0usize] = 0.15f64
+        th[1usize] = 0.36f64
+        th[2usize] = 0.65f64
+        ret 3usize
+    }
+    if rule == 4usize {
+        th[0usize] = 0.05f64
+        th[1usize] = 0.1f64
+        th[2usize] = 0.2f64
+        th[3usize] = 0.3f64
+        th[4usize] = 0.4f64
+        ret 5usize
+    }
+    if rule == 5usize {
+        th[0usize] = 0.1f64
+        th[1usize] = 0.2f64
+        th[2usize] = 0.3f64
+        ret 3usize
+    }
+    if rule == 6usize {
+        th[0usize] = 0.1f64
+        th[1usize] = 0.3f64
+        th[2usize] = 0.5f64
+        ret 3usize
+    }
+    if rule == 7usize {
+        th[0usize] = 0.12f64
+        th[1usize] = 0.24f64
+        th[2usize] = 0.41f64
+        ret 3usize
+    }
+    if rule == 8usize {
+        th[0usize] = 0.01f64
+        th[1usize] = 0.06f64
+        th[2usize] = 0.14f64
+        ret 3usize
+    }
+    if rule == 9usize {
+        th[0usize] = 0.02f64
+        th[1usize] = 0.13f64
+        th[2usize] = 0.26f64
+        ret 3usize
+    }
+    ret 0usize
+}
+
+fn interpret_index(rule: usize, x: f64) -> usize {
+    var th: [6]f64 = zero
+    var v = math.abs[f64](x)
+    var rl = rule
+    if rule == 10usize {
+        v = math.abs[f64](math.log[f64](x)) * math.sqrt[f64](3.0f64) / 3.141592653589793f64
+        rl = 0usize
+    }
+    if rule == 2usize { v = v / math.sqrt[f64](v * v + 4.0f64) }
+    let n = interpret_rule_values(rl, th[0usize..6usize])
+    var k = 0usize
+    var idx = 0usize
+    while k < n {
+        if v >= th[k] { idx += 1usize }
+        k += 1usize
+    }
+    ret idx
+}
+
 // vcd::goodfit(x, type = "poisson") by maximum likelihood on a one-way table of counts freq[c] for c = 0 .. K - 1: lambda = the weighted mean of the
 // counts, the fitted counts N dpois(c, lambda), and the degrees of freedom (the number of non-empty counts) - 2. Returns lambda and the degrees of
 // freedom; the fitted counts go to fit; the chi-square of summary(goodfit) is sum (obs - fit)^2 / fit over the fitted counts, computed by the caller.

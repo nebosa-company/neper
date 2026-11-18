@@ -49868,3 +49868,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 **Decision.** `vcdeffect.loddsratio_ci` gives the Wald intervals of `confint(oddsratio(x, log = ...), level)` (log scale, or exponentiated) and the variances of `vcov(oddsratio(x, log = FALSE))`, v times exp(coef) squared.
 
 **Result.** `oracle_vcd_oddsratio` (180 cases, 100 new) equals vcd on Windows. Linux pending. R's `confint` on an unnamed `loddsratio` returns no rows, so the oracle names the coefficients first. L389 stays partial: reference categories, interpret, the mantelhaen helpers.
+
+## D7304 — effectsize: interpret rules
+
+**Decision.** `vcdeffect.interpret_index` returns the label index of effectsize's `interpret_cohens_d` (cohen1988, sawilowsky2009, gignac2016, lovakov2021), `interpret_r` (funder2019, gignac2016, cohen1988, lovakov2021), `interpret_rank_biserial`, `interpret_eta_squared` (field2013, cohen1992; also omega and epsilon) and `interpret_oddsratio`: how many thresholds |x| reaches, a value on a threshold taking the higher label. The gignac2016 d rule works on r, so d becomes d / sqrt(d^2 + 4) first.
+
+**Result.** `oracle_vcd_interpret` (630 cases, thresholds and +-1e-9 around them included) equals effectsize on Windows. Linux pending. L389 stays partial: reference categories, the mantelhaen helpers, intervals of the effect sizes (noncentral inversions).
