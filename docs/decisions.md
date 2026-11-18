@@ -49580,3 +49580,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.gamlssdist` gains the zero-adjusted and zero-inflated beta binomial d and p over the existing BB density and distribution (bd trials; ZABB renormalises the non-zero part by 1 - P(0), ZIBB adds the mass nu to the zero cell).
 
 **Result.** `oracle_gamlss_exp` gains 4 cases per draw (118 values over the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: ST3C (compiled in the package), DEL, DBI, ZASICHEL, ZABNB, ZIBNB, MN3 to MN5, quantiles of the discrete families, moments, random numbers.
+
+## D7260 — gamlss.dist: ZABNB and ZIBNB
+
+`e.algo.stat.gamlssdist` gains the zero-adjusted and zero-inflated beta negative binomial d and p over dBNB and pBNB (mass tau at zero). The package's `pZABNB` never assigns its adjusted cdf above q = 0 and answers 0 there (the installed version, checked at q = 3), so the port answers the same and says so in a comment.
+
+**Result.** `oracle_gamlss_exp` gains 4 cases per draw (120 values over the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: ST3C (compiled in the package), DEL, DBI, ZASICHEL, MN3 to MN5, the discrete quantiles, moments, random numbers.

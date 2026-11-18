@@ -2136,3 +2136,30 @@ fn pzibb(q: f64, mu: f64, sigma: f64, nu: f64, bd: f64) -> f64 {
     if r > 1.0f64 { r = 1.0f64 }
     ret r
 }
+
+// ZABNB and ZIBNB: the zero-adjusted and zero-inflated beta negative binomial (mass tau at zero), d and p over dBNB and pBNB
+fn dzabnb(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x < 0.0f64 || x == 1.0f64 / 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret tau }
+    ret (1.0f64 - tau) * dbnb(x, mu, sigma, nu) / (1.0f64 - dbnb(0.0f64, mu, sigma, nu))
+}
+
+fn pzabnb(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q == 1.0f64 / 0.0f64 { ret 1.0f64 }
+    // the package's pZABNB leaves the cdf at zero above q = 0 (its cdf3 is never assigned), and the port answers the same
+    if q == 0.0f64 { ret tau }
+    ret 0.0f64
+}
+
+fn dzibnb(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x < 0.0f64 || x == 1.0f64 / 0.0f64 { ret 0.0f64 }
+    if x == 0.0f64 { ret tau + (1.0f64 - tau) * dbnb(0.0f64, mu, sigma, nu) }
+    ret (1.0f64 - tau) * dbnb(x, mu, sigma, nu)
+}
+
+fn pzibnb(q: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if q < 0.0f64 { ret 0.0f64 }
+    if q == 1.0f64 / 0.0f64 { ret 1.0f64 }
+    ret tau + (1.0f64 - tau) * pbnb(q, mu, sigma, nu)
+}

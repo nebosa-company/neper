@@ -303,6 +303,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 269usize { ret gd.pzabb(x, mu, sigma, nu, tau) }
     if which == 270usize { ret gd.dzibb(x, mu, sigma, nu, tau) }
     if which == 271usize { ret gd.pzibb(x, mu, sigma, nu, tau) }
+    if which == 272usize { ret gd.dzabnb(x, mu, sigma, nu, tau) }
+    if which == 273usize { ret gd.pzabnb(x, mu, sigma, nu, tau) }
+    if which == 274usize { ret gd.dzibnb(x, mu, sigma, nu, tau) }
+    if which == 275usize { ret gd.pzibnb(x, mu, sigma, nu, tau) }
     ret 0.0f64 - 1.0f64
 }
 
