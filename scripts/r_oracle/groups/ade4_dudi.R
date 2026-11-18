@@ -113,4 +113,21 @@ onerlq <- function(n, pr, nl, pq, nf) {
 }
 onerlq(12, 3, 5, 2, 2)
 onerlq(15, 4, 6, 3, 2)
+# dudi.mix: (10, n, nv, nf, what, idx, kinds (nv, 0 quantitative, 1 factor), table row-major with 0-based factor codes); what 0 eig, 1 c1, 2 li, 3 co, 4 l1, 5 rank
+onemix <- function(n, kinds, nlev, nf) {
+  cols <- list(); flat <- matrix(0, n, length(kinds))
+  df <- data.frame(row.names = seq_len(n))
+  for (j in seq_along(kinds)) {
+    if (kinds[j] == 0) { v <- rnorm(n); flat[, j] <- v; df[[paste0("q", j)]] <- v }
+    else { f <- sample(0:(nlev[j] - 1), n, TRUE); f[seq_len(nlev[j])] <- 0:(nlev[j] - 1); flat[, j] <- f; df[[paste0("f", j)]] <- factor(f) }
+  }
+  r <- dudi.mix(df, scannf = FALSE, nf = nf)
+  hdr <- function(what, idx) c(10, n, length(kinds), nf, what, idx, kinds, as.vector(t(flat)))
+  for (k in seq_along(r$eig)) cases[[length(cases) + 1]] <<- case("d", hdr(0, k - 1), r$eig[k], rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <<- case("d", hdr(5, 0), r$rank, rel = 0, abs = 0)
+  mats <- list(as.matrix(r$c1), as.matrix(r$li), as.matrix(r$co), as.matrix(r$l1))
+  for (w in 1:4) { m <- mats[[w]]; v <- as.vector(t(m)); for (k in seq_along(v)) cases[[length(cases) + 1]] <<- case("d", hdr(w, k - 1), v[k], rel = 1e-7, abs = 1e-10) }
+}
+onemix(20, c(0, 1, 0, 1), c(0, 3, 0, 4), 3)
+onemix(15, c(1, 0, 1), c(2, 0, 3), 2)
 emit("ade4_dudi", "ade4", list(cases))

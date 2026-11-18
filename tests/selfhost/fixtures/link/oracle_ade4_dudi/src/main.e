@@ -56,6 +56,18 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if what == 4usize { ret rq.lq[idx] }
         ret f64(rq.d.rank)
     }
+    if kind == 10usize {
+        let kinds = z[6usize..6usize + p]
+        let xt = z[6usize + p..6usize + p + n * p]
+        let (md, me) = ad.dudi_mix(a, xt, kinds, n, p, nf)
+        if me != ok { os.exit(14) }
+        if what == 0usize { ret md.eig[idx] }
+        if what == 1usize { ret md.c1[idx] }
+        if what == 2usize { ret md.li[idx] }
+        if what == 3usize { ret md.co[idx] }
+        if what == 4usize { ret md.l1[idx] }
+        ret f64(md.rank)
+    }
     if kind == 7usize {
         let py = usize(z[6usize])
         let sc = z[7usize] > 0.5f64

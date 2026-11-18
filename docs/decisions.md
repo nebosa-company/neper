@@ -48980,3 +48980,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the logarithmic series LG and the Yule distribution (density, distribution by summation and the quantile by the package's linear search up to max.value), PARETO1o, the negative binomial of type II NBII and the logit-normal LOGITNO. gamlss.dist's pNBII applies the Poisson distribution whenever sigma exceeds 1e-4 (the condition is the wrong way round in the package), and the port reproduces it.
 
 **Result.** `oracle_gamlss_exp` has 4342 values across 44 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7160 — ade4: dudi.mix
+
+`e.algo.stat.ade4` gains `dudi_mix` for quantitative and unordered factor variables (the quantitative ones standardised with the population standard deviation, the factors as disjunctive columns divided by their frequencies minus one with the frequencies as column weights). The ordered-factor and add.square polynomial coding (stats::poly) is not ported.
+
+**Result.** `oracle_ade4_dudi` has 1716 values (two mixed tables, 20 by 4 and 15 by 3) and equals ade4 on Windows. Linux pending. L381 stays partial: the polynomial coding, procuste rotations, coinertia with both tables wider than tall and the cr correlation ratios remain.

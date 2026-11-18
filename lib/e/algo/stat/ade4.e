@@ -761,3 +761,105 @@ fn procuste(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, px: usize, 
     out.sy = sy2
     ret (out, ok)
 }
+
+// dudi.mix on quantitative (kind 0) and unordered factor (kind 1, 0-based codes, every level present) variables: the quantitative ones standardised
+// with the population standard deviation, the factors as dudi.acm's disjunctive columns divided by their weights minus one; row weights 1 / n and column
+// weights 1 for a quantitative variable and the level frequency for a factor level.
+fn dudi_mix(a: *mem.Arena, x: []const f64, kinds: []const f64, n: usize, nv: usize, nf: usize) -> (Dudi, err) {
+    var total = 0usize
+    var v = 0usize
+    while v < nv {
+        if kinds[v] == 0.0f64 {
+            total += 1usize
+        } else {
+            var mx = 0usize
+            var i = 0usize
+            while i < n {
+                if usize(x[i * nv + v]) > mx { mx = usize(x[i * nv + v]) }
+                i += 1usize
+            }
+            total += mx + 1usize
+        }
+        v += 1usize
+    }
+    let (t, e1) = mem.alloc[f64](a, n * total)
+    let (lw, e2) = mem.alloc[f64](a, n)
+    let (cw, e3) = mem.alloc[f64](a, total)
+    if e1 != ok || e2 != ok || e3 != ok { ret (zero, Malformed) }
+    var i = 0usize
+    while i < n {
+        lw[i] = 1.0f64 / f64(n)
+        i += 1usize
+    }
+    var col = 0usize
+    v = 0usize
+    while v < nv {
+        if kinds[v] == 0.0f64 {
+            var m1 = 0.0f64
+            var m2 = 0.0f64
+            i = 0usize
+            while i < n {
+                let (u1, u2) = nstep(m1, m2, x[i * nv + v])
+                m1 = u1
+                m2 = u2
+                i += 1usize
+            }
+            let moy = (m1 + m2) / f64(n)
+            var s1 = 0.0f64
+            var s2 = 0.0f64
+            i = 0usize
+            while i < n {
+                let d = x[i * nv + v] - moy
+                t[i * total + col] = d
+                let (w1, w2) = nstep(s1, s2, d * d)
+                s1 = w1
+                s2 = w2
+                i += 1usize
+            }
+            let et = math.sqrt[f64]((s1 + s2) / f64(n))
+            i = 0usize
+            while i < n {
+                t[i * total + col] = t[i * total + col] / et
+                i += 1usize
+            }
+            cw[col] = 1.0f64
+            col += 1usize
+        } else {
+            var nl = 0usize
+            i = 0usize
+            while i < n {
+                if usize(x[i * nv + v]) + 1usize > nl { nl = usize(x[i * nv + v]) + 1usize }
+                i += 1usize
+            }
+            var l = 0usize
+            while l < nl {
+                var c1 = 0.0f64
+                var c2 = 0.0f64
+                i = 0usize
+                while i < n {
+                    var ind = 0.0f64
+                    if usize(x[i * nv + v]) == l { ind = 1.0f64 }
+                    let (u1, u2) = nstep(c1, c2, ind * lw[i])
+                    c1 = u1
+                    c2 = u2
+                    i += 1usize
+                }
+                let cl = c1 + c2
+                if cl == 0.0f64 { ret (zero, Malformed) }
+                i = 0usize
+                while i < n {
+                    var ind = 0.0f64
+                    if usize(x[i * nv + v]) == l { ind = 1.0f64 }
+                    t[i * total + col] = ind / cl - 1.0f64
+                    i += 1usize
+                }
+                cw[col] = cl
+                col += 1usize
+                l += 1usize
+            }
+        }
+        v += 1usize
+    }
+    let (d, ed) = as_dudi(a, t, n, total, lw, cw, nf, 0.0000001f64)
+    ret (d, ed)
+}
