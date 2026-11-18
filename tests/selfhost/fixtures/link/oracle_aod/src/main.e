@@ -148,6 +148,25 @@ fn icc2_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret ad.iccbin_b(a, &rng, nn, yy, usize(x[2usize]))
 }
 
+fn cll_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let n = usize(x[0usize])
+    let p = usize(x[1usize])
+    let (o, oe) = mem.alloc[f64](a, p + 2usize)
+    if oe != ok { os.exit(31) }
+    let xm = x[2usize..2usize + n * p]
+    let sc = x[2usize + n * p..2usize + n * p + n]
+    let sz = x[2usize + n * p + n..2usize + n * p + 2usize * n]
+    let ix = usize(x[2usize + n * p + 2usize * n])
+    if str.eq(c.name, "bbcll") {
+        let (code, be) = ad.betabin_l(a, xm, n, p, sc, sz, 1usize, o)
+        if be != ok || code != 0usize { os.exit(32) }
+        ret o[ix]
+    }
+    if ad.quasibin_l(a, xm, n, p, sc, sz, 1usize, 0.001f64, o) != ok { os.exit(33) }
+    ret o[ix]
+}
+
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = usize(x[3usize])
@@ -172,7 +191,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while at < golden.cases.len {
         let c = &golden.cases[at]
         var got = 0.0f64
-        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else if str.eq(c.name, "qpois") { got = qpois_answer(a, c) } else if str.eq(c.name, "qbin") { got = qbin_answer(a, c) } else if str.eq(c.name, "bbin") { got = bbin_answer(a, c) } else if str.eq(c.name, "bbing") || str.eq(c.name, "nbing") { got = grp_answer(a, c) } else if str.eq(c.name, "anova") { got = anova_answer(a, c) } else if str.eq(c.name, "icc2") { got = icc2_answer(a, c) } else if str.eq(c.name, "nbin") { got = nbin_answer(a, c) } else if str.eq(c.name, "splitbin") { got = split_answer(a, c) } else { got = answer(c) }
+        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else if str.eq(c.name, "qpois") { got = qpois_answer(a, c) } else if str.eq(c.name, "qbin") { got = qbin_answer(a, c) } else if str.eq(c.name, "bbin") { got = bbin_answer(a, c) } else if str.eq(c.name, "bbing") || str.eq(c.name, "nbing") { got = grp_answer(a, c) } else if str.eq(c.name, "anova") { got = anova_answer(a, c) } else if str.eq(c.name, "icc2") { got = icc2_answer(a, c) } else if str.eq(c.name, "bbcll") || str.eq(c.name, "qbcll") { got = cll_answer(a, c) } else if str.eq(c.name, "nbin") { got = nbin_answer(a, c) } else if str.eq(c.name, "splitbin") { got = split_answer(a, c) } else { got = answer(c) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

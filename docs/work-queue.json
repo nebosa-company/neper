@@ -224,17 +224,6 @@
       "evidence": "Partial (D6478 hdr on a sample with a given bandwidth, D6477 stats::density with the Gaussian kernel and bw.nrd0, the base hdrcde sits on, equal R on Windows; oracle_rdensity; Linux pending). Open: hdrbw, Box-Cox, hdr.den, cde, hdr.cde and the mode estimates. Was: Open (CRAN rank 837). Small to mid. Acceptance, equal to hdrcde: hdr and hdr.den for densities and samples, cde with the normal-reference and cross-validated bandwidths, hdr.cde, modal regions and the mode estimates."
     },
     {
-      "id": "L480",
-      "category": "library",
-      "group": "CRAN parity",
-      "order": 642,
-      "title": "aod: overdispersed binomial and count data",
-      "score": 0.6,
-      "model": "opus",
-      "thinking": "high",
-      "evidence": "Partial (D7163 donner, D7164 wald.test, D7235 quasipois and quasibin (logit; phi estimated and given), D7236 betabin (logit, constant phi), D7237 negbin (log link, constant phi) and splitbin, D7238 the betabin and negbin standard errors by optimHess, D7262 phi by a group factor for both and the likelihood-ratio anova, D7263 iccbin methods A and B and D6463 varbin non-bootstrap rows and iccbin method C equal aod on Windows; oracle_aod; Linux pending). Open: phi by a numeric covariate, the cloglog links. Was: Open (CRAN rank 822). Small to mid. Acceptance, equal to aod: betabin and negbin with their standard errors and covariance, quasibin and quasipois, wald.test and anova, iccbin, donner, splitbin, drs."
-    },
-    {
       "id": "L481",
       "category": "library",
       "group": "CRAN parity",

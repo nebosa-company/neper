@@ -109,4 +109,16 @@ for (rep in 1:12) {
   cases[[length(cases) + 1]] <- case("icc2", c(0, sd0, M, k, n, y), ra, rel = 2e-3, abs = 1e-4)
   cases[[length(cases) + 1]] <- case("icc2", c(1, sd0, M, k, n, y), rb, rel = 2e-3, abs = 1e-4)
 }
+# the cloglog link: "bbcll" (betabin; n, p, x, sc, sz, index: coefficients, phi, log-likelihood), "qbcll" (quasibin, phi estimated; n, p, x, sc, sz, index: coefficients, phi)
+for (rep in 1:12) {
+  n <- sample(20:50, 1); xv <- round(rnorm(n), 3); sz <- sample(8:30, n, TRUE); X <- cbind(1, xv)
+  pr <- 1 - exp(-exp(-0.8 + 0.5 * xv)); pr2 <- rbeta(n, 3 * pr + 0.5, 3 * (1 - pr) + 0.5); sc <- rbinom(n, sz, pr2)
+  d <- data.frame(sc = sc, fl = sz - sc, xv = xv)
+  fit <- suppressWarnings(betabin(cbind(sc, fl) ~ xv, ~ 1, data = d, link = "cloglog")); pa <- fit@param
+  for (j in seq_along(pa)) cases[[length(cases) + 1]] <- case("bbcll", c(n, 2, as.vector(X), sc, sz, j - 1), pa[[j]], rel = 1e-5, abs = 1e-7)
+  cases[[length(cases) + 1]] <- case("bbcll", c(n, 2, as.vector(X), sc, sz, length(pa)), fit@logL, rel = 1e-6, abs = 1e-8)
+  qf <- suppressWarnings(quasibin(cbind(sc, fl) ~ xv, data = d, link = "cloglog")); cq <- coef(qf@fm)
+  for (j in 1:2) cases[[length(cases) + 1]] <- case("qbcll", c(n, 2, as.vector(X), sc, sz, j - 1), cq[[j]], rel = 1e-7, abs = 1e-9)
+  cases[[length(cases) + 1]] <- case("qbcll", c(n, 2, as.vector(X), sc, sz, 2), qf@phi, rel = 1e-7, abs = 1e-9)
+}
 emit("aod", "aod", list(cases))

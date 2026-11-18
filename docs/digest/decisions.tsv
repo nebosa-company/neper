@@ -4049,4 +4049,5 @@ D7259	571	gamlss.dist: ZABB and ZIBB
 D7260	631	gamlss.dist: ZABNB and ZIBNB
 D7261	681	arm: standardize of a linear model
 D7262	724	aod: phi by a group factor and the likelihood-ratio anova
-D7263	875	aod: iccbin methods A and B
+D7263	876	aod: iccbin methods A and B
+D7264	884	aod: the cloglog links

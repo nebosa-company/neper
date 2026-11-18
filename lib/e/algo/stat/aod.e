@@ -13,6 +13,7 @@ use e.mem
 use e.algo.stat.wrs2 as wr
 use e.algo.stat.rnm as rn
 use e.algo.rand.r as rg
+use e.algo.stat.olsfit as ols
 
 // varbin(n, y)$tab: part 0 the estimate, 1 its variance, 2 the lower and 3 the upper limit of row `row`
 // (0 binomial, 1 ratio, 2 arithmetic, 3 jackknife) at level 1 - alpha
@@ -909,4 +910,216 @@ fn iccbin_b(a: *mem.Arena, r: *rg.Rng, n: []const f64, y: []const f64, m: usize)
     }
     let nu2 = ss / f64(m - 1usize)
     ret nu2 / (nu1 + nu2)
+}
+
+// the cloglog link for betabin and quasibin: a binomial IRLS with a link code (0 logit, 1 cloglog) in glm.fit's order (mustart (n y + 0.5) / (n + 1), deviance convergence 1e-8, at most 25 iterations)
+fn lk_inv(eta: f64, link: usize) -> f64 {
+    var m = 0.0f64
+    if link == 0usize {
+        m = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta))
+    } else {
+        m = 1.0f64 - math.exp[f64](0.0f64 - math.exp[f64](eta))
+    }
+    let eps = 2.220446049250313e-16f64
+    if link == 1usize {
+        if m > 1.0f64 - eps { m = 1.0f64 - eps }
+        if m < eps { m = eps }
+    }
+    ret m
+}
+
+fn lk_mu_eta(eta: f64, link: usize) -> f64 {
+    if link == 0usize {
+        let m = math.exp[f64](0.0f64 - math.abs[f64](eta))
+        ret m / ((1.0f64 + m) * (1.0f64 + m))
+    }
+    var d = math.exp[f64](eta) * math.exp[f64](0.0f64 - math.exp[f64](eta))
+    if d < 2.220446049250313e-16f64 { d = 2.220446049250313e-16f64 }
+    ret d
+}
+
+fn lk_link(m: f64, link: usize) -> f64 {
+    if link == 0usize { ret math.log[f64](m / (1.0f64 - m)) }
+    ret math.log[f64](0.0f64 - math.log[f64](1.0f64 - m))
+}
+
+fn lk_dev(yp: []const f64, mu: []const f64, wt: []const f64, n: usize) -> f64 {
+    var s2 = 0.0f64
+    var i = 0usize
+    while i < n {
+        var t1 = 0.0f64
+        if yp[i] > 0.0f64 { t1 = yp[i] * math.log[f64](yp[i] / mu[i]) }
+        var t2 = 0.0f64
+        if yp[i] < 1.0f64 { t2 = (1.0f64 - yp[i]) * math.log[f64]((1.0f64 - yp[i]) / (1.0f64 - mu[i])) }
+        s2 += 2.0f64 * wt[i] * (t1 + t2)
+        i += 1usize
+    }
+    ret s2
+}
+
+// x is n by p column-major, succ and size per row, w the prior weights; beta receives the p coefficients
+fn binom_glm_link(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f64, size: []const f64, w: []const f64, link: usize, beta: []f64) -> err {
+    let (eta, e1) = mem.alloc[f64](a, n)
+    let (mu, e2) = mem.alloc[f64](a, n)
+    let (z, e3) = mem.alloc[f64](a, n)
+    let (xw, e4) = mem.alloc[f64](a, n * p)
+    let (yp, e5) = mem.alloc[f64](a, n)
+    let (wt, e6) = mem.alloc[f64](a, n)
+    if e1 != ok || e2 != ok || e3 != ok || e4 != ok || e5 != ok || e6 != ok { ret fx.Malformed }
+    var i = 0usize
+    while i < n {
+        yp[i] = succ[i] / size[i]
+        wt[i] = w[i] * size[i]
+        mu[i] = (size[i] * yp[i] + 0.5f64) / (size[i] + 1.0f64)
+        eta[i] = lk_link(mu[i], link)
+        i += 1usize
+    }
+    var devold = lk_dev(yp, mu, wt, n)
+    var iter = 0usize
+    while iter < 25usize {
+        iter += 1usize
+        i = 0usize
+        while i < n {
+            let me = lk_mu_eta(eta[i], link)
+            let vv = mu[i] * (1.0f64 - mu[i])
+            let sq = math.sqrt[f64](wt[i] * me * me / vv)
+            z[i] = (eta[i] + (yp[i] - mu[i]) / me) * sq
+            var c = 0usize
+            while c < p {
+                xw[c * n + i] = x[c * n + i] * sq
+                c += 1usize
+            }
+            i += 1usize
+        }
+        let (f, fe) = ols.fit_tol(a, xw, n, p, z, 0.00000000001f64)
+        if fe != ok { ret fe }
+        var c = 0usize
+        while c < p {
+            beta[c] = f.coef[c]
+            c += 1usize
+        }
+        i = 0usize
+        while i < n {
+            var t = 0.0f64
+            c = 0usize
+            while c < p {
+                t += x[c * n + i] * beta[c]
+                c += 1usize
+            }
+            eta[i] = t
+            mu[i] = lk_inv(t, link)
+            i += 1usize
+        }
+        let dev = lk_dev(yp, mu, wt, n)
+        if math.abs[f64](dev - devold) / (math.abs[f64](dev) + 0.1f64) < 0.00000001f64 { break }
+        devold = dev
+    }
+    ret ok
+}
+
+type BblCtx = struct { x: []const f64, n: usize, p: usize, y: []const f64, size: []const f64, link: usize }
+
+fn bbl_nll(c: *BblCtx, par: []const f64) -> f64 {
+    let phi = par[c.p]
+    var s = 0.0f64
+    var i = 0usize
+    while i < c.n {
+        var t = 0.0f64
+        var k = 0usize
+        while k < c.p {
+            t += c.x[k * c.n + i] * par[k]
+            k += 1usize
+        }
+        let pr = lk_inv(t, c.link)
+        let u = pr * (1.0f64 - phi) / phi
+        let v = (1.0f64 - pr) * (1.0f64 - phi) / phi
+        s += sp.lgamma(c.size[i] + 1.0f64) - sp.lgamma(c.y[i] + 1.0f64) - sp.lgamma(c.size[i] - c.y[i] + 1.0f64) + lbeta_(u + c.y[i], v + c.size[i] - c.y[i]) - lbeta_(u, v)
+        i += 1usize
+    }
+    if s != s || s > 1.0e300f64 || s < 0.0f64 - 1.0e300f64 { ret 1.0e20f64 }
+    ret 0.0f64 - s
+}
+
+fn betabin_l(a: *mem.Arena, x: []const f64, n: usize, p: usize, y: []const f64, size: []const f64, link: usize, out: []f64) -> (usize, err) {
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (b0, e2) = mem.alloc[f64](a, p + 1usize)
+    let (best, e3) = mem.alloc[f64](a, p + 1usize)
+    if e1 != ok || e2 != ok || e3 != ok { ret (1usize, fx.Malformed) }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    let e = binom_glm_link(a, x, n, p, y, size, w, link, b0)
+    if e != ok { ret (1usize, e) }
+    b0[p] = 0.1f64
+    var c = BblCtx{ x: x, n: n, p: p, y: y, size: size, link: link }
+    let (fmin, cnt, fail) = rn.nmmin[BblCtx](a, &c, bbl_nll, b0, 0.0f64 - 1.0f64 / 0.0f64, 0.0000000149011611938f64, 1.0f64, 0.5f64, 2.0f64, 2000usize, 1.0f64, best)
+    var k = 0usize
+    while k <= p {
+        out[k] = best[k]
+        k += 1usize
+    }
+    out[p + 1usize] = 0.0f64 - fmin
+    ret (fail, ok)
+}
+
+// quasibin with the logit (0) or cloglog (1) link: out receives the p coefficients and phi
+fn quasibin_l(a: *mem.Arena, x: []const f64, n: usize, p: usize, succ: []const f64, size: []const f64, link: usize, tol: f64, out: []f64) -> err {
+    let (w, e1) = mem.alloc[f64](a, n)
+    let (mu, e2) = mem.alloc[f64](a, n)
+    let (b0, e3) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok { ret fx.Malformed }
+    var i = 0usize
+    while i < n {
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    var e = binom_glm_link(a, x, n, p, succ, size, w, link, b0)
+    if e != ok { ret e }
+    var phi = 0.0001f64
+    var more = true
+    while more {
+        i = 0usize
+        var x2 = 0.0f64
+        while i < n {
+            var t = 0.0f64
+            var c = 0usize
+            while c < p {
+                t += x[c * n + i] * b0[c]
+                c += 1usize
+            }
+            let m = lk_inv(t, link)
+            let d = succ[i] / size[i] - m
+            x2 += w[i] * size[i] * d * d / (m * (1.0f64 - m))
+            i += 1usize
+        }
+        let dfr = f64(n - p)
+        if x2 - dfr <= tol {
+            more = false
+        } else {
+            phi = phi * x2 / dfr
+            i = 0usize
+            while i < n {
+                w[i] = 1.0f64 / (1.0f64 + (size[i] - 1.0f64) * phi)
+                i += 1usize
+            }
+            e = binom_glm_link(a, x, n, p, succ, size, w, link, b0)
+            if e != ok { ret e }
+        }
+    }
+    i = 0usize
+    while i < n {
+        w[i] = 1.0f64 / (1.0f64 + (size[i] - 1.0f64) * phi)
+        i += 1usize
+    }
+    e = binom_glm_link(a, x, n, p, succ, size, w, link, b0)
+    if e != ok { ret e }
+    var c2 = 0usize
+    while c2 < p {
+        out[c2] = b0[c2]
+        c2 += 1usize
+    }
+    out[p] = phi
+    ret ok
 }

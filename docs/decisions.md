@@ -49604,3 +49604,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.aod` gains `iccbin_a` and `iccbin_b`: the random-intercept logistic model `glmer(y ~ 1 + (1 | id), binomial)` of the Bernoulli expansion is the Laplace likelihood over clusters (the cluster's conditional mode by Newton, h(u) at the mode less half the log of 1 + sigma^2 n p (1 - p)), maximised over (beta0, log sigma_u) by repeated Nelder-Mead restarts; method A takes rho = nu2 / (nu1 + nu2) with nu1 = p (1 - p) and nu2 = sigma^2 p^2 (1 + e^beta0)^-2, method B simulates M draws of u under the seed and uses mean(p (1 - p)) and var(p).
 
 **Result.** `oracle_aod` gains 11 data sets with clustered overdispersion (8 to 25 clusters; both methods, 22 values) and equals aod on Windows at 2e-3 relative, the accuracy of lme4's optimiser. Linux pending. L480 stays partial: phi by a numeric covariate and the cloglog links.
+
+## D7264 — aod: the cloglog links
+
+`e.algo.stat.aod` gains `binom_glm_link` (glm.fit's binomial IRLS with the logit or cloglog link: mustart (n y + 0.5) / (n + 1), working weights from mu.eta, deviance convergence 1e-8), `betabin_l` and `quasibin_l` with the link code. The package's `betabin` and `negbin` accept only a factor for the phi formula (a numeric term fails inside `contrasts<-`), so that variant is not a gap.
+
+**Result.** `oracle_aod` gains 12 data sets under the cloglog link (betabin coefficients, phi and log-likelihood at 1e-5 to 1e-6, quasibin coefficients and phi at 1e-7: 84 values) and equals aod on Windows. Linux pending. L480 is complete on Windows for every function in its acceptance list: betabin and negbin with their standard errors and phi by group, quasibin and quasipois, wald.test and anova, iccbin A, B and C, donner, splitbin; drs is not ported.
