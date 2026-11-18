@@ -75,10 +75,10 @@
       "group": "CRAN parity",
       "order": 610,
       "title": "stabledist and GeneralizedHyperbolic: heavy-tailed distribution families",
-      "score": 0.56,
+      "score": 0.6,
       "model": "opus",
       "thinking": "high",
-      "evidence": "Partial (D6457, D7183, D7184 (mean, variance), D7185 (qghyp, spline method) dghyp, dnig, dhyperb, dskewlap and the distributions pghyp, pnig, phyperb equal GeneralizedHyperbolic on Windows; oracle_ghyp. D7179 to D7182 stabledist dstable, pstable, qstable (lower tail) and rstable for S0, alpha in [0.02, 2) without alpha = 1 with beta != 0, equal on 180 densities and 180 distribution values; oracle_stabledist; Linux pending). Open: alpha = 1 with beta != 0, the upper tail, the other parametrisations, the Pareto tail and small-alpha branches; GeneralizedHyperbolic r functions, higher moments, fits. Acceptance, equal to R: stabledist dstable, pstable, qstable, rstable in every parameterization; GeneralizedHyperbolic dghyp, pghyp, qghyp, rghyp, the hyperbolic, NIG, VG and skew-Laplace specials and their moments and fits."
+      "evidence": "Partial (D6457, D7183, D7184 (mean, variance), D7185 (qghyp, spline method), D7187 (rghyp and rgig for lambda != 1) dghyp, dnig, dhyperb, dskewlap and the distributions pghyp, pnig, phyperb equal GeneralizedHyperbolic on Windows; oracle_ghyp. D7179 to D7182 stabledist dstable, pstable, qstable (lower tail) and rstable for S0, alpha in [0.02, 2) without alpha = 1 with beta != 0, equal on 180 densities and 180 distribution values; oracle_stabledist; Linux pending). Open: alpha = 1 with beta != 0, the upper tail, the other parametrisations, the Pareto tail and small-alpha branches; GeneralizedHyperbolic rgig1 (lambda = 1), higher moments, fits. Acceptance, equal to R: stabledist dstable, pstable, qstable, rstable in every parameterization; GeneralizedHyperbolic dghyp, pghyp, qghyp, rghyp, the hyperbolic, NIG, VG and skew-Laplace specials and their moments and fits."
     },
     {
       "id": "L409",

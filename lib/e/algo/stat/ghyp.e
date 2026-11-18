@@ -7,6 +7,7 @@ use e.algo.stat.gslfns as gs
 use e.math
 use e.math.quadpack as qp
 use e.algo.stat.pwr as pw
+use e.algo.rand.r as rg
 use e.algo.stat.splinepkg as sl
 use e.mem
 
@@ -249,4 +250,58 @@ fn qghyp(a: *mem.Arena, p: f64, mu: f64, delta: f64, alpha: f64, beta: f64, lamb
     c.sp_d = dd
     c.p = p
     ret pw.zeroin[GhRoot](&c, gh_spline_minus, xl, xu, math.pow[f64](2.220446049250313e-16f64, 0.25f64), 1000i64)
+}
+
+// ---- rgig (lambda != 1) and rghyp (lambda != 1; rnig is lambda = -1/2): the ratio-of-uniforms generator of GeneralizedHyperbolic, on R's uniform stream, with the three
+// uniroot calls (tolerances as in the package) that locate the bounding rectangle
+type GigG = struct { beta: f64, m: f64, lambda: f64 }
+
+fn gig_g(c: *GigG, y: f64) -> f64 {
+    ret 0.5f64 * c.beta * y * y * y - y * y * (0.5f64 * c.beta * c.m + c.lambda + 1.0f64) + y * ((c.lambda - 1.0f64) * c.m - 0.5f64 * c.beta) + 0.5f64 * c.beta * c.m
+}
+
+fn rgig(r: *rg.Rng, n: usize, chi: f64, psi: f64, lambda: f64, out: []f64) {
+    let alpha = math.sqrt[f64](psi / chi)
+    let beta = math.sqrt[f64](psi * chi)
+    let m = (lambda - 1.0f64 + math.sqrt[f64]((lambda - 1.0f64) * (lambda - 1.0f64) + beta * beta)) / beta
+    var c: GigG = zero
+    c.beta = beta
+    c.m = m
+    c.lambda = lambda
+    var upper = m
+    while gig_g(&c, upper) <= 0.0f64 { upper = 2.0f64 * upper }
+    let eps = 2.220446049250313e-16f64
+    var tl = math.pow[f64](eps, 0.25f64)
+    let alt = eps + gig_g(&c, 0.0f64) / 10.0f64
+    if alt < tl { tl = alt }
+    let ym = pw.zeroin[GigG](&c, gig_g, 0.0f64, m, tl, 1000i64)
+    let yp = pw.zeroin[GigG](&c, gig_g, m, upper, pw.uniroot_tol(), 1000i64)
+    let a = (yp - m) * math.pow[f64](yp / m, 0.5f64 * (lambda - 1.0f64)) * math.exp[f64](0.0f64 - 0.25f64 * beta * (yp + 1.0f64 / yp - m - 1.0f64 / m))
+    let b = (ym - m) * math.pow[f64](ym / m, 0.5f64 * (lambda - 1.0f64)) * math.exp[f64](0.0f64 - 0.25f64 * beta * (ym + 1.0f64 / ym - m - 1.0f64 / m))
+    let cc = 0.0f64 - 0.25f64 * beta * (m + 1.0f64 / m) + 0.5f64 * (lambda - 1.0f64) * math.log[f64](m)
+    var i = 0usize
+    while i < n {
+        var need = true
+        var yv = 0.0f64
+        while need {
+            let r1 = rg.unif(r)
+            let r2 = rg.unif(r)
+            yv = m + a * r2 / r1 + b * (1.0f64 - r2) / r1
+            if yv > 0.0f64 {
+                if 0.0f64 - math.log[f64](r1) >= 0.0f64 - 0.5f64 * (lambda - 1.0f64) * math.log[f64](yv) + 0.25f64 * beta * (yv + 1.0f64 / yv) + cc { need = false }
+            }
+        }
+        out[i] = yv / alpha
+        i += 1usize
+    }
+}
+
+fn rghyp(r: *rg.Rng, n: usize, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64, out: []f64, x: []f64) {
+    rgig(r, n, delta * delta, alpha * alpha - beta * beta, lambda, x)
+    var i = 0usize
+    while i < n {
+        let sg = math.sqrt[f64](x[i])
+        out[i] = mu + beta * sg * sg + sg * rg.rnorm(r, 0.0f64, 1.0f64)
+        i += 1usize
+    }
 }

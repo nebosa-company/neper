@@ -1,6 +1,7 @@
 // e.algo.stat.ghyp against GeneralizedHyperbolic. tests/oracle/ghyp.json comes from
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R ghyp`; the layout is at the top of scripts/r_oracle/groups/ghyp.R.
 
+use e.algo.rand.r as rg
 use e.algo.stat.ghyp as gh
 use e.io
 use e.mem
@@ -11,6 +12,16 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "rghyp") {
+        let nn = usize(x[1usize])
+        let (o, g1) = mem.alloc[f64](a, nn)
+        let (xx, g2) = mem.alloc[f64](a, nn)
+        if g1 != ok || g2 != ok { os.exit(7) }
+        var rng: rg.Rng = zero
+        rg.seed(&rng, i64(x[0usize]))
+        gh.rghyp(&rng, nn, x[3usize], x[4usize], x[5usize], x[6usize], x[7usize], o, xx)
+        ret o[usize(x[2usize])]
+    }
     if str.eq(k, "qghyp") { ret gh.qghyp(a, x[0usize], x[1usize], x[2usize], x[3usize], x[4usize], x[5usize]) }
     if str.eq(k, "ghypMean") { ret gh.ghyp_mean(x[0usize], x[1usize], x[2usize], x[3usize], x[4usize]) }
     if str.eq(k, "ghypVar") { ret gh.ghyp_var(x[1usize], x[2usize], x[3usize], x[4usize]) }

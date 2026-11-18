@@ -49142,3 +49142,9 @@ New `e.algo.stat.stabledistpkg`: `dstable(x, alpha, beta, gamma, delta)` for alp
 `bessel_knu` evaluated the trapezoid rule with step 0.02; the integrand is analytic in a strip of half-width pi / 2, so the rule's error falls like exp(-pi^2 / h) and a step of 0.1 is already beyond double precision while costing a fifth as much. Every integrate-based function that sits on it (pghyp, qghyp, the Sichel and GIG families) got about five times faster: oracle_ghyp went from over a minute for four quantiles to 8 seconds for the 885 values, and now carries 15 qghyp quantiles in 20 seconds.
 
 **Result.** `oracle_gslfns`, `oracle_gamlss_exp` and `oracle_ghyp` (885 values, 15 quantiles at 1e-5) pass unchanged on Windows. Linux pending.
+
+## D7187 — GeneralizedHyperbolic: rghyp and rgig
+
+`e.algo.stat.ghyp` gains `rgig` (the package's ratio-of-uniforms generator for lambda != 1: the cubic g located by three uniroot calls with the package's tolerances, then pairs of uniforms until the acceptance test passes) and `rghyp` (the mixture: n variance draws from rgig first, then n normals, Y = mu + beta X + sqrt(X) Z), so a stream seeded as `set.seed` gives R's values. `rnig` is lambda = -1/2. The lambda = 1 generator (rgig1) is not ported.
+
+**Result.** `oracle_ghyp` has 933 values (48 seeded draws from 8 streams added, equal at 1e-9 relative) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: rgig1 (lambda = 1), higher moments, fits and the stable branches remain.
