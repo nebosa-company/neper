@@ -3938,4 +3938,5 @@ D7148	904	ade4: as.dudi, dudi.pca and dudi.coa
 D7149	530	ade4: dudi.acm
 D7150	776	ade4: between-class and within-class analyses
 D7151	589	ade4: coinertia
-D7152	649	ade4: procuste
+D7152	650	ade4: procuste
+D7153	858	gamlss.dist: GB2, BI, IGAMMA, RGE and NO2

@@ -48938,3 +48938,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.ade4` gains `procuste`: both tables centred (and, by default, divided by the square root of the sum of their squares, with compensated sums as R's `sum()`), the singular value decomposition of t(X) Y through the dgesdd port (`svd_all`), the loadings, the scores and the rank. The singular vector signs are LAPACK's, as R's `svd`.
 
 **Result.** `oracle_ade4_dudi` has 1131 values (scaled and unscaled, 15 by 3 against 15 by 3 and 12 by 4 against 12 by 2) and equals ade4 on Windows. Linux pending. L381 stays partial (the square-case rotations rotX and rotY and procuste's randomisation test are not ported).
+
+## D7153 — gamlss.dist: GB2, BI, IGAMMA, RGE and NO2
+
+`e.algo.stat.gamlssdist` gains GB2 (generalised beta of the second kind, through the F distribution; the distribution and quantile flip for a negative sigma), BI (binomial with bd trials), IGAMMA (inverse gamma; its quantile is the package's reflected gamma quantile), RGE (reverse generalised extreme value with the Gumbel limit below |nu| 0.001) and NO2 (normal with variance sigma), each with density, distribution and quantile. gamlss.dist's qNO2 assigns its quantile twice and the second assignment, which uses sigma as the standard deviation, wins; the port reproduces that. The oracle now carries a sixth argument tau (the second GB2 shape, the BI trials).
+
+**Result.** `oracle_gamlss_exp` has 1938 values across 22 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

@@ -1,8 +1,8 @@
-# gamlss.dist EXP (dEXP, pEXP, qEXP with mu) and RG (dRG, pRG, qRG with mu and sigma). Args: (fn, mu, sigma, x, nu): fn 0 density, 1
-# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 and NO for fn 12..14 and PO for fn 15..17 and GA for fn 18..20 and WEI for fn 21..23 and LOGNO for fn 24..26 and IG for fn 27 (distribution) and ZIP for fn 28 (distribution) and 29 (quantile) and NBI for fn 30 (density), 31 (distribution) and 32 (quantile) (x is p for fn 2, 5, 8, 11, 14 and 17). sigma is unused by EXP; nu (the fifth argument) is the degrees of freedom of TF for fn 33 (density), 34 (distribution) and 35 (quantile), and the power of BCCG for fn 36 (distribution) and 37 (quantile); GP is fn 38 (density), 39 (distribution) and 40 (quantile); BE is fn 41, 42 and 43; LNO (nu the power) is fn 44, 45, 46 and GG (nu the power) fn 47, 48, 49.
+# gamlss.dist EXP (dEXP, pEXP, qEXP with mu) and RG (dRG, pRG, qRG with mu and sigma). Args: (fn, mu, sigma, x, nu, tau): fn 0 density, 1
+# distribution, 2 quantile (x is p for 2); the family is EXP for fn 0..2, RG for fn 3..5 and PARETO2 for fn 6..8 and PARETO1 for fn 9..11 and NO for fn 12..14 and PO for fn 15..17 and GA for fn 18..20 and WEI for fn 21..23 and LOGNO for fn 24..26 and IG for fn 27 (distribution) and ZIP for fn 28 (distribution) and 29 (quantile) and NBI for fn 30 (density), 31 (distribution) and 32 (quantile) (x is p for fn 2, 5, 8, 11, 14 and 17). sigma is unused by EXP; nu (the fifth argument) is the degrees of freedom of TF for fn 33 (density), 34 (distribution) and 35 (quantile), and the power of BCCG for fn 36 (distribution) and 37 (quantile); GP is fn 38 (density), 39 (distribution) and 40 (quantile); BE is fn 41, 42 and 43; tau (the sixth argument, 0 when unused) is the second shape of GB2 (fn 50, 51, 52, with nu the first) and the number of trials of BI (fn 53, 54, 55); IGAMMA is fn 56, 57, 58, RGE (nu the shape) fn 59, 60, 61, NO2 (variance sigma) fn 62, 63, 64; LNO (nu the power) is fn 44, 45, 46 and GG (nu the power) fn 47, 48, 49.
 suppressMessages(library(gamlss.dist))
 cases <- list()
-add <- function(fn, args, want, rel = 1e-10, abs = 1e-14) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, args, want, rel = rel, abs = abs)
+add <- function(fn, args, want, rel = 1e-10, abs = 1e-14) if (is.finite(want)) cases[[length(cases) + 1]] <<- case(fn, c(args, if (length(args) < 6) 0), want, rel = rel, abs = abs)
 set.seed(20261244)
 for (rep in 1:30) {
   mu <- runif(1, 0.2, 8); x <- runif(1, 0, 6 * mu); p <- runif(1, 0.001, 0.999)
@@ -72,5 +72,24 @@ for (rep in 1:30) {
   add("ex", c(47, gm, gs, gx, gn), dGG(gx, mu = gm, sigma = gs, nu = gn))
   add("ex", c(48, gm, gs, gx, gn), pGG(gx, mu = gm, sigma = gs, nu = gn))
   add("ex", c(49, gm, gs, p, gn), qGG(p, mu = gm, sigma = gs, nu = gn))
+  b2s <- c(-1, 1)[rbinom(1, 1, 0.5) + 1] * runif(1, 0.4, 2.5); b2n <- runif(1, 0.5, 5); b2t <- runif(1, 0.5, 5)
+  add("ex", c(50, gm, b2s, gx, b2n, b2t), dGB2(gx, mu = gm, sigma = b2s, nu = b2n, tau = b2t))
+  add("ex", c(51, gm, b2s, gx, b2n, b2t), pGB2(gx, mu = gm, sigma = b2s, nu = b2n, tau = b2t))
+  add("ex", c(52, gm, b2s, p, b2n, b2t), qGB2(p, mu = gm, sigma = b2s, nu = b2n, tau = b2t))
+  bdn <- sample(3:30, 1); bpr <- runif(1, 0.05, 0.95); bk <- rbinom(1, bdn, bpr)
+  add("ex", c(53, bpr, 1, bk, 0, bdn), dBI(bk, bd = bdn, mu = bpr))
+  add("ex", c(54, bpr, 1, bk, 0, bdn), pBI(bk, bd = bdn, mu = bpr))
+  add("ex", c(55, bpr, 1, p, 0, bdn), qBI(p, bd = bdn, mu = bpr))
+  igs <- runif(1, 0.2, 1.2)
+  add("ex", c(56, gm, igs, gx, 0, 0), dIGAMMA(gx, mu = gm, sigma = igs))
+  add("ex", c(57, gm, igs, gx, 0, 0), pIGAMMA(gx, mu = gm, sigma = igs))
+  add("ex", c(58, gm, igs, p, 0, 0), qIGAMMA(p, mu = gm, sigma = igs))
+  rn <- if (runif(1) < 0.2) runif(1, 1e-5, 9e-4) else runif(1, 0.05, 1.5); rx <- nm + ns * runif(1, -0.6, 2) * min(1, 1 / rn)
+  add("ex", c(59, nm, ns, rx, rn, 0), dRGE(rx, mu = nm, sigma = ns, nu = rn))
+  add("ex", c(60, nm, ns, rx, rn, 0), pRGE(rx, mu = nm, sigma = ns, nu = rn))
+  add("ex", c(61, nm, ns, p, rn, 0), qRGE(p, mu = nm, sigma = ns, nu = rn))
+  add("ex", c(62, nm, ns, nx, 0, 0), dNO2(nx, mu = nm, sigma = ns))
+  add("ex", c(63, nm, ns, nx, 0, 0), pNO2(nx, mu = nm, sigma = ns))
+  add("ex", c(64, nm, ns, p, 0, 0), qNO2(p, mu = nm, sigma = ns))
 }
 emit("gamlss_exp", "gamlss.dist", list(cases))

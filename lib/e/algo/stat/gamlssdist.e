@@ -389,3 +389,95 @@ fn qgg(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     }
     ret math.exp[f64](qno(p, math.log[f64](mu), sigma))
 }
+
+// GB2: generalised beta of the second kind (mu, sigma, nu, tau), through the F distribution
+fn dgb2(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let z = math.pow[f64](x / mu, sigma)
+    ret math.exp[f64](nu * math.log[f64](z) + math.log[f64](math.abs[f64](sigma)) - math.log[f64](x) - sp.lgamma(nu) - sp.lgamma(tau) + sp.lgamma(nu + tau) - (nu + tau) * math.log[f64](1.0f64 + z))
+}
+
+fn pgb2(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = math.pow[f64](x / mu, sigma)
+    let p = nb.pf((tau / nu) * z, 2.0f64 * nu, 2.0f64 * tau, true, false)
+    if sigma < 0.0f64 { ret 1.0f64 - p }
+    ret p
+}
+
+fn qgb2(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    var pp = p
+    if sigma < 0.0f64 { pp = 1.0f64 - p }
+    if pp == 0.0f64 { ret 0.0f64 }
+    let w = nb.qf(pp, 2.0f64 * nu, 2.0f64 * tau, true, false)
+    ret mu * math.pow[f64]((nu / tau) * w, 1.0f64 / sigma)
+}
+
+// IGAMMA: inverse gamma
+fn digamma_(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let al = 1.0f64 / (sigma * sigma)
+    ret math.exp[f64](al * math.log[f64](mu) + al * math.log[f64](al + 1.0f64) - sp.lgamma(al) - (al + 1.0f64) * math.log[f64](x) - (mu * (al + 1.0f64)) / x)
+}
+
+fn pigamma(x: f64, mu: f64, sigma: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let al = 1.0f64 / (sigma * sigma)
+    ret math.exp[f64](nm.pgamma((mu * (al + 1.0f64)) / x, al, 1.0f64, false, true))
+}
+
+fn qigamma(p: f64, mu: f64, sigma: f64) -> f64 {
+    let pp = 1.0f64 - p
+    if pp == 0.0f64 { ret 0.0f64 }
+    let z = qga(pp, 1.0f64, sigma)
+    ret mu * (1.0f64 + sigma * sigma) * math.pow[f64](z, 0.0f64 - 1.0f64)
+}
+
+// RGE: reverse generalised extreme value (the Gumbel limit below |nu| 0.001)
+fn drge(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if math.abs[f64](nu) < 0.001f64 { ret math.exp[f64](0.0f64 - math.log[f64](sigma) + (x - mu) / sigma - math.exp[f64]((x - mu) / sigma)) }
+    let y = nu * (x - mu) / sigma
+    var lg = 0.0f64
+    if 1.0f64 + y > 0.0f64 { lg = math.log[f64](1.0f64 + y) }
+    ret math.exp[f64](0.0f64 - math.log[f64](sigma) + (1.0f64 / nu - 1.0f64) * lg - math.pow[f64](1.0f64 + y, 1.0f64 / nu))
+}
+
+fn prge(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if math.abs[f64](nu) < 0.001f64 { ret 1.0f64 - math.exp[f64](0.0f64 - math.exp[f64]((x - mu) / sigma)) }
+    let y = nu * (x - mu) / sigma
+    ret 1.0f64 - math.exp[f64](0.0f64 - math.pow[f64](1.0f64 + y, 1.0f64 / nu))
+}
+
+fn qrge(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if math.abs[f64](nu) < 0.001f64 { ret mu + sigma * math.log[f64](0.0f64 - math.log[f64](1.0f64 - p)) }
+    ret mu + (sigma / nu) * (math.pow[f64](0.0f64 - math.log[f64](1.0f64 - p), nu) - 1.0f64)
+}
+
+// NO2: the normal with variance sigma (gamlss.dist's qNO2 overwrites its own quantile with sd = sigma, and so does this)
+fn dno2(x: f64, mu: f64, sigma: f64) -> f64 { ret dist.dnorm(x, mu, math.sqrt[f64](sigma), false) }
+
+fn pno2(x: f64, mu: f64, sigma: f64) -> f64 { ret dist.pnorm(x, mu, math.sqrt[f64](sigma), true, false) }
+
+fn qno2(p: f64, mu: f64, sigma: f64) -> f64 {
+    if p < 0.0000000001f64 { ret 0.0f64 - 1.0f64 / 0.0f64 }
+    if 1.0f64 - p < 0.0000000001f64 { ret 1.0f64 / 0.0f64 }
+    ret dist.qnorm(p, mu, sigma, true, false)
+}
+
+// BI: binomial with probability mu and bd trials
+fn dbi(x: f64, mu: f64, bd: f64) -> f64 {
+    if x < 0.0f64 || x > bd { ret 0.0f64 }
+    ret nb.dbinom(x, bd, mu, false)
+}
+
+fn pbi(x: f64, mu: f64, bd: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    if x > bd { ret 1.0f64 }
+    ret nb.pbinom(x, bd, mu, true, false)
+}
+
+fn qbi(p: f64, mu: f64, bd: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret bd }
+    ret nb.qbinom(p, bd, mu, true, false)
+}

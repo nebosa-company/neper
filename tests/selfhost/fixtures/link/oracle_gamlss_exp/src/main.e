@@ -64,7 +64,23 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 46usize { ret gd.qlno(x, mu, sigma, nu) }
     if which == 47usize { ret gd.dgg(x, mu, sigma, nu) }
     if which == 48usize { ret gd.pgg(x, mu, sigma, nu) }
-    ret gd.qgg(x, mu, sigma, nu)
+    if which == 49usize { ret gd.qgg(x, mu, sigma, nu) }
+    let tau = z[5usize]
+    if which == 50usize { ret gd.dgb2(x, mu, sigma, nu, tau) }
+    if which == 51usize { ret gd.pgb2(x, mu, sigma, nu, tau) }
+    if which == 52usize { ret gd.qgb2(x, mu, sigma, nu, tau) }
+    if which == 53usize { ret gd.dbi(x, mu, tau) }
+    if which == 54usize { ret gd.pbi(x, mu, tau) }
+    if which == 55usize { ret gd.qbi(x, mu, tau) }
+    if which == 56usize { ret gd.digamma_(x, mu, sigma) }
+    if which == 57usize { ret gd.pigamma(x, mu, sigma) }
+    if which == 58usize { ret gd.qigamma(x, mu, sigma) }
+    if which == 59usize { ret gd.drge(x, mu, sigma, nu) }
+    if which == 60usize { ret gd.prge(x, mu, sigma, nu) }
+    if which == 61usize { ret gd.qrge(x, mu, sigma, nu) }
+    if which == 62usize { ret gd.dno2(x, mu, sigma) }
+    if which == 63usize { ret gd.pno2(x, mu, sigma) }
+    ret gd.qno2(x, mu, sigma)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
