@@ -1957,3 +1957,79 @@ fn pzaig(q: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
     let c2 = math.exp[f64](2.0f64 / (mu * sigma * sigma)) * dist.pnorm((0.0f64 - ((q / mu) + 1.0f64)) / (sigma * math.sqrt[f64](q)), 0.0f64, 1.0f64, true, false)
     ret nu + (1.0f64 - nu) * (c1 + c2)
 }
+
+// qIG and qZAIG (the package's bracket and uniroot on pIG), qGB1 (through qbeta), pSIMPLEX (integrate of the density over (0, q)) and qSIMPLEX (uniroot on (0.001, 0.999))
+type IgRoot = struct { mu: f64, sigma: f64, p: f64 }
+
+fn ig_h1(c: *IgRoot, q: f64) -> f64 { ret pig(q, c.mu, c.sigma) - c.p }
+
+fn qig(p: f64, mu: f64, sigma: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    var c: IgRoot = zero
+    c.mu = mu
+    c.sigma = sigma
+    c.p = p
+    var lo = 0.0f64
+    var hi = 0.0f64
+    if pig(mu, mu, sigma) < p {
+        lo = mu
+        hi = mu + sigma
+        var j = 2.0f64
+        while pig(hi, mu, sigma) < p {
+            hi = mu + j * sigma
+            j += 1.0f64
+        }
+    } else {
+        lo = 2.2250738585072014e-308f64
+        hi = mu
+    }
+    ret pw.zeroin[IgRoot](&c, ig_h1, lo, hi, pw.uniroot_tol(), 1000i64)
+}
+
+fn qzaig(p: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if p > nu { ret qig((p - nu) / (1.0f64 - nu), mu, sigma) }
+    ret 0.0f64
+}
+
+fn qgb1(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 }
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    let (aa, bb) = gb1_ab(mu, sigma)
+    let z = nb.qbeta(p, aa, bb, true, false)
+    ret math.pow[f64](nu / (1.0f64 / z - (1.0f64 - nu)), 1.0f64 / tau)
+}
+
+type SimpCtx = struct { mu: f64, sigma: f64 }
+
+fn simp_pdf(c: *SimpCtx, x: f64) -> f64 { ret 1.0f64 / math.sqrt[f64](2.0f64 * pi() * c.sigma * c.sigma * math.pow[f64](x * (1.0f64 - x), 3.0f64)) * math.exp[f64](0.0f64 - 0.5f64 / (c.sigma * c.sigma) * (x - c.mu) * (x - c.mu) / (x * (1.0f64 - x) * c.mu * c.mu * (1.0f64 - c.mu) * (1.0f64 - c.mu))) }
+
+fn psimplex(a: *mem.Arena, q: f64, mu: f64, sigma: f64) -> f64 {
+    if q <= 0.0f64 { ret 0.0f64 }
+    if q >= 1.0f64 { ret 1.0f64 }
+    var c: SimpCtx = zero
+    c.mu = mu
+    c.sigma = sigma
+    let tol = pw.uniroot_tol()
+    let (r, e) = qp.qags[SimpCtx](a, &c, simp_pdf, 0.0f64, q, tol, tol, 100usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    ret r.result
+}
+
+type SimpRoot = struct { a: *mem.Arena, mu: f64, sigma: f64, p: f64 }
+
+fn simp_h1(c: *SimpRoot, x: f64) -> f64 { ret psimplex(c.a, x, c.mu, c.sigma) - c.p }
+
+fn qsimplex(a: *mem.Arena, p: f64, mu: f64, sigma: f64) -> f64 {
+    if p < 0.0f64 || p > 1.0f64 { ret 0.0f64 / 0.0f64 }
+    if p < 1.0e-10f64 { ret 0.0f64 }
+    if 1.0f64 - p < 1.0e-10f64 { ret 1.0f64 }
+    var c: SimpRoot = zero
+    c.a = a
+    c.mu = mu
+    c.sigma = sigma
+    c.p = p
+    ret pw.zeroin[SimpRoot](&c, simp_h1, 0.001f64, 0.999f64, pw.uniroot_tol(), 1000i64)
+}

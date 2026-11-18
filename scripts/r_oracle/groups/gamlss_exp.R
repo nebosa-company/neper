@@ -312,6 +312,12 @@ for (rep in 1:30) {
   ig_x <- sample(c(runif(1, 0.1, 6), 0), 1)
   add("ex", c(248, cp_m, cp_s + 0.3, ig_x, bi_n), dZAIG(ig_x, mu = cp_m, sigma = cp_s + 0.3, nu = bi_n))
   add("ex", c(249, cp_m, cp_s + 0.3, ig_x, bi_n), pZAIG(ig_x, mu = cp_m, sigma = cp_s + 0.3, nu = bi_n))
+  # qIG 250, qZAIG 251, qGB1 252 (x slot is p), pSIMPLEX 253, qSIMPLEX 254
+  add("ex", c(250, cp_m, cp_s + 0.3, bi_p), qIG(bi_p, mu = cp_m, sigma = cp_s + 0.3), rel = 1e-9, abs = 1e-12)
+  add("ex", c(251, cp_m, cp_s + 0.3, bi_p, bi_n), qZAIG(bi_p, mu = cp_m, sigma = cp_s + 0.3, nu = bi_n), rel = 1e-9, abs = 1e-12)
+  add("ex", c(252, bi_m, bi_sg, bi_p, g1_n, g1_t), qGB1(bi_p, mu = bi_m, sigma = bi_sg, nu = g1_n, tau = g1_t))
+  add("ex", c(253, bi_m, bi_sg, g1_x), pSIMPLEX(g1_x, mu = bi_m, sigma = bi_sg), rel = 1e-9, abs = 1e-12)
+  add("ex", c(254, bi_m, bi_sg, bi_p), qSIMPLEX(bi_p, mu = bi_m, sigma = bi_sg), rel = 1e-9, abs = 1e-12)
 }
 # random numbers by the quantile function on runif: args (seed, i, which, mu, sigma, nu) under "rq": which 0 rGA, 1 rNBI, 2 rGU, 3 rBE, 4 rPARETO2, 5 rTF, 6 rBCCG; draw i (0-based) of 8
 for (rep in 1:6) {

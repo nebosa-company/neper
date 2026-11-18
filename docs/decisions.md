@@ -49496,3 +49496,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.gamlssdist` gains SST d, p, q (the skew t standardised to mean mu and standard deviation sigma through ST3 with the moment constants m1, m2), PE2 d, p, q (power exponential with the scale sigma itself, the uniform limit above nu = 10000), the NOF density (normal with standard deviation sigma |mu|^(nu / 2)) and ZAIG d, p (the inverse Gaussian with a mass nu at zero; the package's numerical-integration fallback for a NaN cdf is not reached).
 
 **Result.** `oracle_gamlss_exp` gains 9 cases per draw (268 values over the loop) and equals gamlss.dist on Windows. Linux pending. L464 stays partial: ZAIG q (needs qIG), SIMPLEX p and q, GB1 q, BCPEo, ST1, ST3C, DEL, DBI, DBURR12, ZASICHEL, LOGSHASH, MN3 to MN5, the beta-binomial inflated families, moments, random numbers.
+
+## D7246 — gamlss.dist: IG, ZAIG, GB1 and SIMPLEX quantiles
+
+`e.algo.stat.gamlssdist` gains `qig` and `qzaig` (the package's bracket from mu stepping by sigma, then R's Brent zeroin on pIG at the uniroot tolerance, the same iterates as the package), `qgb1` (through qbeta), `psimplex` (QUADPACK qags of the density over (0, q) at rel.tol = abs.tol = eps^(1/4)) and `qsimplex` (zeroin on (0.001, 0.999) of pSIMPLEX minus p).
+
+**Result.** `oracle_gamlss_exp` gains 5 cases per draw (150 values over the loop) and equals gamlss.dist on Windows at 1e-9. Linux pending. L464 stays partial: BCPEo, ST1, ST3C, DEL, DBI, DBURR12, ZASICHEL, LOGSHASH, MN3 to MN5, the beta-binomial inflated families, moments, random numbers.

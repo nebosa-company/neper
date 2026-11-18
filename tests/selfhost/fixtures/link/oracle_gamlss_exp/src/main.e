@@ -281,6 +281,11 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 247usize { ret gd.dnof(x, mu, sigma, nu) }
     if which == 248usize { ret gd.dzaig(x, mu, sigma, nu) }
     if which == 249usize { ret gd.pzaig(x, mu, sigma, nu) }
+    if which == 250usize { ret gd.qig(x, mu, sigma) }
+    if which == 251usize { ret gd.qzaig(x, mu, sigma, nu) }
+    if which == 252usize { ret gd.qgb1(x, mu, sigma, nu, tau) }
+    if which == 253usize { ret gd.psimplex(a, x, mu, sigma) }
+    if which == 254usize { ret gd.qsimplex(a, x, mu, sigma) }
     ret 0.0f64 - 1.0f64
 }
 
