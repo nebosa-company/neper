@@ -1,4 +1,4 @@
-# ismev rlarg.fit without covariates (Nelder-Mead MLE and the optim Hessian standard errors). args: (rows, r, which, matrix row-major...);
+# ismev rlarg.fit and pp.fit without covariates (Nelder-Mead MLE and the optim Hessian standard errors). args: (rows, r, which, matrix row-major...);
 # which 0..2 a parameter, 10..12 its standard error, 99 the negative log-likelihood. Agreement is to the optimiser tolerance of R.
 suppressMessages(library(ismev))
 cases <- list()
@@ -16,5 +16,16 @@ for (rep in 1:6) {
   flat <- as.vector(t(m))
   for (k in 1:3) { add(c(rows, r, k - 1, flat), f$mle[k], 2e-2); add(c(rows, r, 10 + k - 1, flat), f$se[k], 5e-2) }
   add(c(rows, r, 99, flat), f$nllh, 1e-6)
+}
+# pp.fit with a constant threshold: case "pp", args (n, npy, threshold, which, x...)
+for (rep in 1:5) {
+  n <- sample(300:700, 1); npy <- c(365, 100, 50)[rep %% 3 + 1]
+  x <- rexp(n) * 2 + (rep %% 2) * 0.4 * rexp(n)^2 + 10
+  th <- as.numeric(quantile(x, 0.9))
+  f <- tryCatch(pp.fit(x, th, npy = npy, show = FALSE), error = function(e) NULL)
+  if (is.null(f) || f$conv != 0) next
+  addp <- function(which, want, rel) cases[[length(cases) + 1]] <<- case("pp", c(n, npy, th, which, x), want, rel = rel, abs = 1e-3)
+  for (k in 1:3) { addp(k - 1, f$mle[k], 3e-2); addp(10 + k - 1, f$se[k], 8e-2) }
+  addp(99, f$nllh, 1e-6)
 }
 emit("ismev_rlarg", "ismev", list(cases))

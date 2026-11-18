@@ -49778,3 +49778,9 @@ Checked L477's acceptance list (acomp and rcomp objects, clr, ilr, alr and inver
 `e.algo.stat.ismev` gains `fit_rlarg`: the stationary r-largest order statistics model (the rows by r matrix of the r largest values per block), its negative log-likelihood as ismev's rlarg.lik (a penalty of 1e6 for a non-positive scale or a non-positive 1 + xi (x - mu) / sigma), the moment start from the first column, Nelder-Mead and the numerical Hessian standard errors.
 
 **Result.** `oracle_ismev_rlarg` equals ismev's rlarg.fit within optimiser tolerance (parameters 2e-2, standard errors 5e-2, negative log-likelihood 1e-6; 42 cases, r = 2, 3 and 4) on Windows. Linux pending. L425 stays partial: scale and shape covariates and links, pp.fit, rlarg covariates and the profile likelihoods remain.
+
+## D7293 — ismev: pp.fit
+
+`e.algo.stat.ismev` gains `fit_pp`: the point-process model of the exceedances of a constant threshold with npy observations per year (mu, sigma, xi), the likelihood of ismev's pp.lik (1e6 penalties for a non-positive scale, a negative threshold term when there are exceedances, or a non-positive 1 + xi (x - mu) / sigma anywhere in the data), ismev's start (the exceedance moments moved to the rate scale with shape 1e-8, then shape 0.1), Nelder-Mead and the numerical Hessian standard errors.
+
+**Result.** `oracle_ismev_rlarg` now has 77 cases (rlarg.fit and pp.fit with three npy values) and equals ismev within optimiser tolerance on Windows. Linux pending. L425 stays partial: scale and shape covariates and links, covariates for pp.fit and rlarg.fit, and the profile likelihoods remain.

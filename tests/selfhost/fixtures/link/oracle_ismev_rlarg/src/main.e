@@ -5,10 +5,20 @@ use e.algo.stat.ismev as im
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
+    if str.eq(c.name, "pp") {
+        let n = usize(x[0usize])
+        let (g, ge) = im.fit_pp(a, x[4usize..4usize + n], x[2usize], usize(x[1usize]))
+        if ge != ok { os.exit(6) }
+        let w = usize(x[3usize])
+        if w == 99usize { ret g.nllh }
+        if w >= 10usize { ret g.se[w - 10usize] }
+        ret g.par[w]
+    }
     let rows = usize(x[0usize])
     let r = usize(x[1usize])
     let which = usize(x[2usize])

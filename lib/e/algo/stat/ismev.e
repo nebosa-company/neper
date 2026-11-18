@@ -16,6 +16,33 @@ fn nll(d: *Data, a: []const f64) -> f64 {
     let n = d.x.len
     var s = 0.0f64
     var i = 0usize
+    if d.kind == 5usize {
+        // pp.fit with a constant threshold u and npy observations per year (in q): mu, sigma, xi
+        let mu = a[0usize]
+        let sc = a[1usize]
+        let xi = a[2usize]
+        if sc <= 0.0f64 { ret 1.0e6f64 }
+        let w = 1.0f64 + xi * (d.u - mu) / sc
+        var nexc = 0usize
+        while i < n {
+            if d.x[i] > d.u { nexc += 1usize }
+            i += 1usize
+        }
+        if nexc > 0usize && w < 0.0f64 { ret 1.0e6f64 }
+        var l1 = 0.0f64
+        var l2 = 0.0f64
+        i = 0usize
+        while i < n {
+            let y = 1.0f64 + xi * ((d.x[i] - mu) / sc)
+            if y <= 0.0f64 { ret 1.0e6f64 }
+            if d.x[i] > d.u {
+                l1 += math.log[f64](sc)
+                l2 += math.log[f64](y) * (1.0f64 / xi + 1.0f64)
+            }
+            i += 1usize
+        }
+        ret l1 + l2 + f64(n) / f64(d.q) * math.pow[f64](w, 0.0f64 - 1.0f64 / xi)
+    }
     if d.kind == 4usize {
         // rlarg.fit: the r largest order statistics of each of n rows (row-major in x, r in q)
         let r = d.q
@@ -418,5 +445,47 @@ fn fit_rlarg(a: *mem.Arena, x: []const f64, rows: usize, r: usize) -> (Fit, err)
     if e4 != ok { ret (zero, e4) }
     let (se, e5) = std_errors(a, h, 3usize)
     if e5 != ok { ret (zero, e5) }
+    ret (Fit { par: par, se: se, nllh: nllh }, ok)
+}
+
+// pp.fit(x, threshold, npy) with a constant threshold and no covariates: the point-process model of the exceedances of u, npy observations per year.
+// The start is ismev's (the moment fit of the exceedances moved to the rate scale, shape 1e-8 in the location start, then 0.1).
+fn fit_pp(a: *mem.Arena, x: []const f64, u: f64, npy: usize) -> (Fit, err) {
+    var nex = 0usize
+    var i = 0usize
+    while i < x.len {
+        if x[i] > u { nex += 1usize }
+        i += 1usize
+    }
+    let (ex, e0) = mem.alloc[f64](a, nex)
+    if e0 != ok { ret (zero, e0) }
+    nex = 0usize
+    i = 0usize
+    while i < x.len {
+        if x[i] > u {
+            ex[nex] = x[i]
+            nex += 1usize
+        }
+        i += 1usize
+    }
+    let lrate = f64(nex) / f64(x.len)
+    let (m, v) = mean_var(ex)
+    var in2 = math.sqrt[f64](6.0f64 * v) / 3.141592653589793f64
+    let in3 = 0.00000001f64
+    in2 = math.exp[f64](math.log[f64](in2) + in3 * math.log[f64](lrate))
+    let in1 = u - (in2 / in3) * (math.pow[f64](lrate, 0.0f64 - in3) - 1.0f64)
+    let (par, e1) = mem.alloc[f64](a, 3usize)
+    if e1 != ok { ret (zero, e1) }
+    par[0usize] = in1
+    par[1usize] = in2
+    par[2usize] = 0.1f64
+    var d = Data { x: x, kind: 5usize, u: u, dm: x[0usize..0usize], q: npy }
+    let (nllh, e3) = minimise(a, &d, par)
+    if e3 != ok { ret (zero, e3) }
+    let (h, e4) = hessian(a, &d, par)
+    if e4 != ok { ret (zero, e4) }
+    let (se, e5) = std_errors(a, h, 3usize)
+    if e5 != ok { ret (zero, e5) }
+    let _ = m
     ret (Fit { par: par, se: se, nllh: nllh }, ok)
 }

@@ -4078,4 +4078,5 @@ D7288	650	gmp: bases and sizeinbase; L379 closed
 D7289	636	compositions: L477 closed
 D7290	1081	vcd: goodfit by minimum chi-square and the negative binomial
 D7291	1084	betareg: probit and cloglog links and the standard errors
-D7292	735	ismev: rlarg.fit
+D7292	736	ismev: rlarg.fit
+D7293	821	ismev: pp.fit
