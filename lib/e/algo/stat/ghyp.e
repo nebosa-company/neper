@@ -361,3 +361,17 @@ fn gig_mean(chi: f64, psi: f64, lambda: f64) -> f64 {
     let eta = math.sqrt[f64](chi / psi)
     ret eta * gs.bessel_knu(lambda + 1.0f64, omega) / gs.bessel_knu(lambda, omega)
 }
+
+// GIG mode, raw moments (the "normal" case: eta^k K(lambda + k, omega) / K(lambda, omega)) and variance (the second raw moment less the squared mean)
+fn gig_mode(chi: f64, psi: f64, lambda: f64) -> f64 { ret (lambda - 1.0f64 + math.sqrt[f64]((lambda - 1.0f64) * (lambda - 1.0f64) + chi * psi)) / psi }
+
+fn gig_raw_mom(order: f64, chi: f64, psi: f64, lambda: f64) -> f64 {
+    let omega = math.sqrt[f64](chi * psi)
+    let eta = math.sqrt[f64](chi / psi)
+    ret math.pow[f64](eta, order) * gs.bessel_knu(lambda + order, omega) / gs.bessel_knu(lambda, omega)
+}
+
+fn gig_var(chi: f64, psi: f64, lambda: f64) -> f64 {
+    let m1 = gig_raw_mom(1.0f64, chi, psi, lambda)
+    ret gig_raw_mom(2.0f64, chi, psi, lambda) - m1 * m1
+}

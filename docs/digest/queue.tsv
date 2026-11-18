@@ -5,7 +5,7 @@ L379	library	0.6	572	gmp: arbitrary-precision numbers	Partial (D6161, D7117).
 L380	library	0.35	828	tm and tidytext: text mining	Partial (D6618).
 L389	library	0.4	1168	vcd and effectsize: categorical association and effect sizes	Partly done (D6101): e.algo.stat.vcdeffect has assocstats, Kappa with weights and errors, cohens_d, hedges_g, glass_delta, rank_biserial, cliffs_delta and one-way eta, omega, epsilon squared, equal to
 L390	library	0.25	506	R.matlab: MATLAB MAT files	Partial (D6419).
-L407	library	0.84	1112	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial.
+L407	library	0.86	1151	stabledist and GeneralizedHyperbolic: heavy-tailed distribution families	Partial.
 L409	library	0.2	390	arm: applied regression helpers	Partial (D6453 logit, invlogit, se.coef, binned.resids equal arm on Windows;
 L425	library	0.45	767	ismev: extreme-value model fits	Partial (D6155).
 L427	library	0.3	740	afex: repeated-measures and mixed ANOVA	Partial (D6614).

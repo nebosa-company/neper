@@ -49196,3 +49196,9 @@ For lambda = 1 `rghyp` uses the package's `rgig1`, which is `rgig` with m = 1 (t
 `e.algo.stat.ghyp` gains `pskewlap` and `qskewlap` (closed forms), `rskewlap` (n standard exponentials, then the signs by R's `sample(c(-1, 1), n, replace = TRUE, prob = ...)`, whose algorithm for two outcomes is the sorted-probabilities cumulative search and is ported here instead of adding probability sampling to the stream module), `dgig` (on the log scale, as the package's large-omega branch) and `gig_mean`.
 
 **Result.** `oracle_ghyp` has 1289 values (320 added) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: pgig, qgig and the GIG moments, the higher moments of the generalised hyperbolic, and the fits (hyperbFit, nigFit, gigFit, hyperblm) remain.
+
+## D7196 — GeneralizedHyperbolic: GIG mode, raw moments and variance
+
+`e.algo.stat.ghyp` gains `gig_mode`, `gig_raw_mom` (eta^k K(lambda + k, omega) / K(lambda, omega), the package's normal case) and `gig_var` (the second raw moment less the squared mean). pgig is not ported: it sums the package's `incompleteBesselK` series.
+
+**Result.** `oracle_ghyp` has 1349 values (60 added) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: pgig and qgig, the higher moments of the generalised hyperbolic (momRecursion) and the fits remain.

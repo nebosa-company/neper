@@ -51,6 +51,9 @@ for (rep in 1:20) {
   for (i in seq_len(n)) cases[[length(cases) + 1]] <- case("rskewlap", c(sd0, n, i - 1, mu, al, be), v[i], rel = 1e-10, abs = 1e-12)
   chi <- runif(1, 0.3, 3); psi <- runif(1, 0.3, 3); lam <- runif(1, -2, 2)
   for (x in c(0.2, 1, 3)) cases[[length(cases) + 1]] <- case("dgig", c(x, chi, psi, lam, 0, 0), dgig(x, chi, psi, lam), rel = 1e-8, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("gigMode", c(chi, psi, lam, 0, 0, 0), gigMode(chi, psi, lam), rel = 1e-10, abs = 1e-13)
+  cases[[length(cases) + 1]] <- case("gigVar", c(chi, psi, lam, 0, 0, 0), gigVar(chi, psi, lam), rel = 1e-8, abs = 1e-12)
+  cases[[length(cases) + 1]] <- case("gigRaw3", c(chi, psi, lam, 0, 0, 0), gigRawMom(3, chi, psi, lam), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("gigMean", c(chi, psi, lam, 0, 0, 0), gigMean(chi, psi, lam), rel = 1e-9, abs = 1e-13)
 }
 emit("ghyp", "GeneralizedHyperbolic", list(cases))

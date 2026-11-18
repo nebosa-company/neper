@@ -15,6 +15,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if str.eq(k, "pskewlap") { ret gh.pskewlap(x[0usize], x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "qskewlap") { ret gh.qskewlap(x[0usize], x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "dgig") { ret gh.dgig(x[0usize], x[1usize], x[2usize], x[3usize]) }
+    if str.eq(k, "gigMode") { ret gh.gig_mode(x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "gigVar") { ret gh.gig_var(x[0usize], x[1usize], x[2usize]) }
+    if str.eq(k, "gigRaw3") { ret gh.gig_raw_mom(3.0f64, x[0usize], x[1usize], x[2usize]) }
     if str.eq(k, "gigMean") { ret gh.gig_mean(x[0usize], x[1usize], x[2usize]) }
     if str.eq(k, "rskewlap") {
         let nn = usize(x[1usize])
