@@ -49706,3 +49706,9 @@ New `e.algo.stat.survregpkg.survreg`: accelerated failure time models for right-
 The emmeans fixture refits `lm(y ~ A * x)` through `e.algo.stat.emmeans.fit` (design: intercept, A dummies, x, the dummies times x) and gives the slope within a level as the x coefficient plus that level's interaction (the reference level carries none), the pairwise differences as first minus second level, with the standard errors from `variance` of the coefficient vector.
 
 **Result.** 10 models with three or four levels (slopes, pairwise differences, estimates and standard errors: 152 values) equal `emtrends` and `pairs(adjust = "none")` on Windows at 1e-8. Linux pending. L313 stays partial: the model-frame grid, glm and mixed models, scheffe and mvt, joint_tests, eff_size, regrid.
+
+## D7281 — performance: Poisson overdispersion and zero-inflation checks
+
+`e.algo.stat.performancepkg.poisson_checks` fits the Poisson regression (flexmix's IRLS) and answers `check_overdispersion` (Pearson chi-square, its ratio to n - p and the upper-tail p value) and `check_zeroinflation` (the observed zeros, the rounded sum of exp(-mu) as the predicted zeros, and predicted over observed, the package's orientation).
+
+**Result.** `oracle_performancepkg` gains 25 overdispersed count regressions (150 values) and equals performance on Windows at 1e-7 (a first run had the ratio inverted and the predicted zeros unrounded). Linux pending. L339 stays partial: the other outlier methods, the Nakagawa R2, icc, model_performance, map_estimate, bayesfactor_savagedickey, si, parameters.

@@ -40,6 +40,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let cn = usize(x[0usize])
             let cp = usize(x[1usize])
             got = pf.cook_distance(a, x[2usize + cn..2usize + cn + cn * cp], x[2usize..2usize + cn], cn, cp, usize(x[2usize + cn + cn * cp]))
+        } else if str.eq(c.name, "pchk") {
+            let pn = usize(x[1usize])
+            let pp = usize(x[2usize])
+            got = pf.poisson_checks(a, x[3usize + pn..3usize + pn + pn * pp], x[3usize..3usize + pn], pn, pp, usize(x[0usize]))
         } else if str.eq(c.name, "hl") {
             let hb = usize(x[0usize])
             let hn = usize(x[1usize])

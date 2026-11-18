@@ -473,3 +473,49 @@ fn logit_fit_measure(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p:
     if which == 0usize { ret 1.0f64 - num / den }
     ret 0.0f64 - ll / f64(n)
 }
+
+// check_overdispersion and check_zeroinflation of a Poisson regression of counts y on x (n by p row-major, intercept included): which 0 dispersion ratio, 1 Pearson chi-square, 2 its p value (upper tail
+// on n - p degrees of freedom), 3 observed zeros, 4 predicted zeros (the rounded sum of exp(-mu)), 5 predicted over observed
+fn poisson_checks(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, which: usize) -> f64 {
+    let (xc, e1) = mem.alloc[f64](a, n * p)
+    let (w, e2) = mem.alloc[f64](a, n)
+    let (b, e3) = mem.alloc[f64](a, p)
+    if e1 != ok || e2 != ok || e3 != ok { ret 0.0f64 / 0.0f64 }
+    var i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < p {
+            xc[c * n + i] = x[i * p + c]
+            c += 1usize
+        }
+        w[i] = 1.0f64
+        i += 1usize
+    }
+    if fx.pois_glm(a, xc, n, p, y, w, b, false) != ok { ret 0.0f64 / 0.0f64 }
+    var chisq = 0.0f64
+    var obs0 = 0.0f64
+    var pred0 = 0.0f64
+    i = 0usize
+    while i < n {
+        var t = 0.0f64
+        var c = 0usize
+        while c < p {
+            t += xc[c * n + i] * b[c]
+            c += 1usize
+        }
+        let mu = math.exp[f64](t)
+        chisq += (y[i] - mu) * (y[i] - mu) / mu
+        if y[i] == 0.0f64 { obs0 += 1.0f64 }
+        pred0 += math.exp[f64](0.0f64 - mu)
+        i += 1usize
+    }
+    let dfr = f64(n - p)
+    if which == 0usize { ret chisq / dfr }
+    if which == 1usize { ret chisq }
+    if which == 2usize { ret nm.pchisq(chisq, dfr, false, false) }
+    if which == 3usize { ret obs0 }
+    // the package rounds the predicted count of zeros and reports predicted over observed
+    let pr0 = math.round[f64](pred0)
+    if which == 4usize { ret pr0 }
+    ret pr0 / obs0
+}

@@ -68,4 +68,14 @@ for (rep in 1:25) {
   cases[[length(cases) + 1]] <- case("lm2", c(0, n, p, y, as.vector(t(X))), as.numeric(r2_efron(m)), rel = 1e-8, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("lm2", c(1, n, p, y, as.vector(t(X))), as.numeric(performance_logloss(m)), rel = 1e-8, abs = 1e-12)
 }
+# Poisson checks ("pchk": which 0 dispersion ratio, 1 chi-square, 2 p, 3 observed zeros, 4 predicted zeros, 5 ratio; n, p, y, X row-major with the intercept)
+for (rep in 1:25) {
+  n <- sample(40:120, 1); p <- sample(2:3, 1); Xm <- matrix(round(rnorm(n * (p - 1)), 3), n, p - 1); X <- cbind(1, Xm)
+  y <- rnbinom(n, mu = exp(0.5 + 0.3 * Xm[, 1]), size = 2)
+  dfx <- as.data.frame(Xm); names(dfx) <- paste0("v", seq_len(p - 1)); dfx$y <- y
+  m <- glm(as.formula(paste("y ~", paste(names(dfx)[-p], collapse = " + "))), data = dfx, family = poisson)
+  od <- suppressMessages(check_overdispersion(m)); zi <- suppressMessages(check_zeroinflation(m))
+  v <- c(od$dispersion_ratio, od$chisq_statistic, od$p_value, zi$observed.zeros, zi$predicted.zeros, zi$ratio)
+  for (w in 0:5) cases[[length(cases) + 1]] <- case("pchk", c(w, n, p, y, as.vector(t(X))), as.numeric(v[w + 1]), rel = 1e-7, abs = 1e-10)
+}
 emit("performancepkg", "performance", list(cases))
