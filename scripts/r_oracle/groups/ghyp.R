@@ -56,4 +56,14 @@ for (rep in 1:20) {
   cases[[length(cases) + 1]] <- case("gigRaw3", c(chi, psi, lam, 0, 0, 0), gigRawMom(3, chi, psi, lam), rel = 1e-9, abs = 1e-12)
   cases[[length(cases) + 1]] <- case("gigMean", c(chi, psi, lam, 0, 0, 0), gigMean(chi, psi, lam), rel = 1e-9, abs = 1e-13)
 }
+# ghypMom: args (order, kind 0 raw / 1 central / 2 mu, mu, delta, alpha, beta, lambda) under "ghypMom"; ghypSkew under "ghypSkew"
+for (rep in 1:15) {
+  mu <- rnorm(1); delta <- runif(1, 0.3, 3); alpha <- runif(1, 0.8, 4); beta <- runif(1, -0.8, 0.8) * alpha; lam <- runif(1, -2, 3)
+  for (ord in 1:5) for (kd in 0:2) {
+    mt <- c("raw", "central", "mu")[kd + 1]
+    v <- tryCatch(ghypMom(ord, param = c(mu, delta, alpha, beta, lam), momType = mt), error = function(e) NA_real_)
+    if (is.finite(v)) cases[[length(cases) + 1]] <- case("ghypMom", c(ord, kd, mu, delta, alpha, beta, lam), v, rel = 1e-7, abs = 1e-10)
+  }
+  cases[[length(cases) + 1]] <- case("ghypSkew", c(0, 0, mu, delta, alpha, beta, lam), ghypSkew(param = c(mu, delta, alpha, beta, lam)), rel = 1e-6, abs = 1e-9)
+}
 emit("ghyp", "GeneralizedHyperbolic", list(cases))

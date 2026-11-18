@@ -12,6 +12,8 @@ use e.test.oracle as oracle
 fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = c.name
+    if str.eq(k, "ghypMom") { ret gh.ghyp_mom(a, usize(x[0usize]), x[2usize], x[3usize], x[4usize], x[5usize], x[6usize], usize(x[1usize])) }
+    if str.eq(k, "ghypSkew") { ret gh.ghyp_skew(a, x[2usize], x[3usize], x[4usize], x[5usize], x[6usize]) }
     if str.eq(k, "pskewlap") { ret gh.pskewlap(x[0usize], x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "qskewlap") { ret gh.qskewlap(x[0usize], x[1usize], x[2usize], x[3usize]) }
     if str.eq(k, "dgig") { ret gh.dgig(x[0usize], x[1usize], x[2usize], x[3usize]) }

@@ -3990,4 +3990,5 @@ D7200	769	flexmix: stepFlexmix
 D7201	763	flexmix: AIC, BIC and ICL
 D7202	897	flexmix: the binomial family
 D7203	940	flexmix: the Gamma family
-D7204	935	flexmix: the classification EM (CEM)
+D7204	936	flexmix: the classification EM (CEM)
+D7205	705	GeneralizedHyperbolic: the moments of any order and the skewness

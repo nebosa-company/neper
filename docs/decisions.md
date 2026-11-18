@@ -49250,3 +49250,9 @@ New `e.algo.stat.flexmixpkg`: `gaussian` (and `gauss_em` on column-major input),
 `e.algo.stat.flexmixpkg` gains `gaussian_cem` (the EM driver's family code plus 10): flexmix's `classify = "CEM"` turns the posterior into the indicator of its first maximum at the start of every iteration (R's `.FLXgetOK`), so the priors and the M step see a hard assignment, while the E step and the convergence test are unchanged. The final prior is the column means of the soft posteriors of the last E step, as in the weighted fit. Ties in the maximum are resolved to the first column here and at random in R, and do not occur on continuous data.
 
 **Result.** `oracle_flexmix_gauss` has 2556 values (296 added: two CEM fits, two and three components, log-likelihood, iterations, priors, coefficients, sigmas and clusters) and equals flexmix on Windows. Linux pending. L413 stays partial: FLXMRglmfix, concomitant-variable models, SEM and the steps for the non-Gaussian families.
+
+## D7205 — GeneralizedHyperbolic: the moments of any order and the skewness
+
+`e.algo.stat.ghyp` gains `ghyp_mom` (the raw, central and about-mu moments of any order: the package's `momRecursion` table, the Bessel ratios K(lambda + l, zeta) / K(lambda, zeta), and the binomial expansion of `momChangeAbout`) and `ghyp_skew` (the third central moment over the variance to the 3/2). The mean and variance of D7184 are its orders 1 and 2.
+
+**Result.** `oracle_ghyp` has 1589 values (225 moments of orders 1 to 5 in the three kinds, 15 skewnesses added, 1e-7 and 1e-6 relative) and equals GeneralizedHyperbolic on Windows. Linux pending. L407 stays partial: pgig and qgig, the kurtosis, and the fits remain.

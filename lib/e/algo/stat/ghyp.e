@@ -375,3 +375,67 @@ fn gig_var(chi: f64, psi: f64, lambda: f64) -> f64 {
     let m1 = gig_raw_mom(1.0f64, chi, psi, lambda)
     ret gig_raw_mom(2.0f64, chi, psi, lambda) - m1 * m1
 }
+
+// ---- ghypMom: the moments of the generalised hyperbolic distribution about mu (the package's momRecursion table and Bessel ratios), converted to raw (about 0) or
+// central moments by the binomial expansion of momChangeAbout; kind 0 raw, 1 central, 2 about mu
+fn ghyp_mom(a: *mem.Arena, order: usize, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64, kind: usize) -> f64 {
+    if order == 0usize { ret 1.0f64 }
+    let gamma = math.sqrt[f64](alpha * alpha - beta * beta)
+    let zeta = delta * gamma
+    let nn = order + 1usize
+    let (tab, e1) = mem.alloc[f64](a, nn * nn)
+    let (mm, e2) = mem.alloc[f64](a, nn)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    // the recursion table a[d][l] (1-based, row d, column l), zero elsewhere
+    var i = 0usize
+    while i < nn * nn {
+        tab[i] = 0.0f64
+        i += 1usize
+    }
+    tab[1usize * nn + 1usize] = 1.0f64
+    if order > 1usize { tab[2usize * nn + 1usize] = 1.0f64 }
+    var d = 2usize
+    while d <= order {
+        var l = 2usize
+        while l <= d {
+            tab[d * nn + l] = tab[(d - 1usize) * nn + (l - 1usize)] + tab[(d - 1usize) * nn + l] * (2.0f64 * f64(l) + 1.0f64 - f64(d))
+            l += 1usize
+        }
+        d += 1usize
+    }
+    let k0 = gs.bessel_knu(lambda, zeta)
+    // mm[i] = the i-th moment about mu
+    mm[0usize] = 1.0f64
+    var o = 1usize
+    while o <= order {
+        var s = 0.0f64
+        var l = (o + 1usize) / 2usize
+        while l <= o {
+            let m = 2usize * l - o
+            let coeff = tab[o * nn + l]
+            let ratio = gs.bessel_knu(lambda + f64(l), zeta) / k0
+            s += coeff * math.pow[f64](delta, 2.0f64 * f64(l)) * math.pow[f64](beta, f64(m)) * ratio / math.pow[f64](zeta, f64(l))
+            l += 1usize
+        }
+        mm[o] = s
+        o += 1usize
+    }
+    if kind == 2usize { ret mm[order] }
+    var about = 0.0f64
+    if kind == 1usize { about = ghyp_mean(mu, delta, alpha, beta, lambda) }
+    // E[(X - about)^n] = sum_j C(n, j) (mu - about)^(n - j) E[(X - mu)^j]
+    var tot = 0.0f64
+    var c = 1.0f64
+    var j = 0usize
+    while j <= order {
+        tot += c * math.pow[f64](mu - about, f64(order - j)) * mm[j]
+        c = c * f64(order - j) / f64(j + 1usize)
+        j += 1usize
+    }
+    ret tot
+}
+
+fn ghyp_skew(a: *mem.Arena, mu: f64, delta: f64, alpha: f64, beta: f64, lambda: f64) -> f64 {
+    let v = ghyp_mom(a, 2usize, mu, delta, alpha, beta, lambda, 1usize)
+    ret ghyp_mom(a, 3usize, mu, delta, alpha, beta, lambda, 1usize) / math.pow[f64](v, 1.5f64)
+}
