@@ -3934,4 +3934,5 @@ D7144	419	gamlss.dist: the TF (Student t) family
 D7145	505	gamlss.dist: BCCG distribution and quantile, GP family
 D7146	471	gamlss.dist: the BE (beta) family
 D7147	705	gamlss.dist: the LNO and GG families
-D7148	903	ade4: as.dudi, dudi.pca and dudi.coa
+D7148	904	ade4: as.dudi, dudi.pca and dudi.coa
+D7149	529	ade4: dudi.acm

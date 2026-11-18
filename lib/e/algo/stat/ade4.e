@@ -230,3 +230,71 @@ fn dudi_coa(a: *mem.Arena, x: []const f64, n: usize, p: usize, nf: usize) -> (Du
     let (d, ed) = as_dudi(a, t, n, p, lw, cw, nf, 0.0000001f64)
     ret (d, ed)
 }
+
+// dudi.acm: the multiple correspondence analysis of nv factors (codes: n by nv row-major, 0-based level codes, every level of every factor present).
+// The table is the disjunctive one, divided by the column weights minus 1; the column weights are the category frequencies over nv.
+fn dudi_acm(a: *mem.Arena, codes: []const f64, n: usize, nv: usize, nf: usize) -> (Dudi, err) {
+    var total = 0usize
+    let (off, e0) = mem.alloc[usize](a, nv + 1usize)
+    if e0 != ok { ret (zero, Malformed) }
+    var v = 0usize
+    while v < nv {
+        var mx = 0usize
+        var i = 0usize
+        while i < n {
+            let c = usize(codes[i * nv + v])
+            if c > mx { mx = c }
+            i += 1usize
+        }
+        off[v] = total
+        total += mx + 1usize
+        v += 1usize
+    }
+    let (t, e1) = mem.alloc[f64](a, n * total)
+    let (lw, e2) = mem.alloc[f64](a, n)
+    let (cw, e3) = mem.alloc[f64](a, total)
+    if e1 != ok || e2 != ok || e3 != ok { ret (zero, Malformed) }
+    var i = 0usize
+    while i < n * total {
+        t[i] = 0.0f64
+        i += 1usize
+    }
+    i = 0usize
+    while i < n {
+        lw[i] = 1.0f64 / f64(n)
+        v = 0usize
+        while v < nv {
+            t[i * total + off[v] + usize(codes[i * nv + v])] = 1.0f64
+            v += 1usize
+        }
+        i += 1usize
+    }
+    var j = 0usize
+    while j < total {
+        var s = 0.0f64
+        i = 0usize
+        while i < n {
+            s += t[i * total + j] * lw[i]
+            i += 1usize
+        }
+        if s == 0.0f64 { ret (zero, Malformed) }
+        cw[j] = s
+        j += 1usize
+    }
+    i = 0usize
+    while i < n {
+        j = 0usize
+        while j < total {
+            t[i * total + j] = t[i * total + j] / cw[j] - 1.0f64
+            j += 1usize
+        }
+        i += 1usize
+    }
+    j = 0usize
+    while j < total {
+        cw[j] = cw[j] / f64(nv)
+        j += 1usize
+    }
+    let (d, ed) = as_dudi(a, t, n, total, lw, cw, nf, 0.0000001f64)
+    ret (d, ed)
+}

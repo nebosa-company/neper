@@ -1,4 +1,4 @@
-# ade4 dudi.pca and dudi.coa. Args: (kind, n, p, nf, what, idx, table row-major...): kind 0 dudi.pca (scaled), 1 dudi.pca (centred only), 2 dudi.coa;
+# ade4 dudi.pca and dudi.coa. Args: (kind, n, p, nf, what, idx, table row-major...): kind 0 dudi.pca (scaled), 1 dudi.pca (centred only), 2 dudi.coa, 3 dudi.acm (n by p is then rows by factors, 0-based level codes);
 # what 0 is eig[idx], 1 c1, 2 li, 3 co, 4 l1 (row-major, nf columns), 5 the rank (idx unused).
 suppressMessages(library(ade4))
 cases <- list()
@@ -6,7 +6,8 @@ set.seed(20261501)
 one <- function(kind, x, nf) {
   n <- nrow(x); p <- ncol(x)
   d <- as.data.frame(x)
-  r <- switch(kind + 1, dudi.pca(d, scannf = FALSE, nf = nf), dudi.pca(d, scale = FALSE, scannf = FALSE, nf = nf), dudi.coa(d, scannf = FALSE, nf = nf))
+  if (kind == 3) d <- as.data.frame(lapply(d, factor))
+  r <- switch(kind + 1, dudi.pca(d, scannf = FALSE, nf = nf), dudi.pca(d, scale = FALSE, scannf = FALSE, nf = nf), dudi.coa(d, scannf = FALSE, nf = nf), dudi.acm(d, scannf = FALSE, nf = nf))
   flat <- as.vector(t(x))
   hdr <- function(what, idx) c(kind, n, p, nf, what, idx, flat)
   for (k in seq_along(r$eig)) cases[[length(cases) + 1]] <<- case("d", hdr(0, k - 1), r$eig[k], rel = 1e-8, abs = 1e-12)
@@ -22,4 +23,6 @@ x3 <- matrix(rpois(6 * 5, 8) + 1, 6, 5)
 one(2, x3, 3)
 x4 <- matrix(rpois(4 * 6, 5) + 1, 4, 6)
 one(2, x4, 2)
+x5 <- cbind(sample(0:2, 20, TRUE), sample(0:3, 20, TRUE), sample(0:1, 20, TRUE)); x5[1:3, 1] <- 0:2; x5[1:4, 2] <- 0:3; x5[1:2, 3] <- 0:1
+one(3, x5, 3)
 emit("ade4_dudi", "ade4", list(cases))

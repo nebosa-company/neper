@@ -48914,3 +48914,9 @@ Still not here: cells, structs, lists, string arrays and N-d arrays, which read.
 New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with row and column weights, both the direct and the transposed branch when there are fewer rows than columns), `dudi_pca` (centred, scaled or not; population standard deviation) and `dudi_coa`. The eigenvectors come from the LAPACK dsyevr port and are reversed to R's decreasing order, so axis signs equal R's.
 
 **Result.** `oracle_ade4_dudi` equals ade4 on 303 values (eigenvalues, rank, c1, li, co and l1 for a scaled PCA, a centred PCA, a PCA with fewer rows than columns and two correspondence analyses, one of them transposed) on Windows. Linux pending. L381 stays partial: dudi.acm, dudi.mix, dudi.fca, between and within analyses, coinertia, procuste, rlq and the fuzzy analyses remain; the item itself asks whether the overlap with FactoMineR and vegan still matters.
+
+## D7149 — ade4: dudi.acm
+
+`e.algo.stat.ade4` gains `dudi_acm`: the disjunctive table of the factors divided by the category frequencies minus one, column weights frequency over the number of factors, through `as_dudi`. Every level of every factor must be present (an absent level is an error, as ade4's).
+
+**Result.** `oracle_ade4_dudi` has 484 values and equals ade4 (the multiple correspondence analysis of three factors added) on Windows. Linux pending. L381 stays partial (the acm `cr` correlation ratios are not ported).

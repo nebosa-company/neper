@@ -26,6 +26,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (r, er) = ad.dudi_pca(a, x, n, p, true, false, nf)
         d = r
         e = er
+    } else if kind == 3usize {
+        let (r, er) = ad.dudi_acm(a, x, n, p, nf)
+        d = r
+        e = er
     } else {
         let (r, er) = ad.dudi_coa(a, x, n, p, nf)
         d = r
