@@ -3952,4 +3952,5 @@ D7162	647	gamlss.dist: WARING, ZALG and GPO
 D7163	616	aod: donner
 D7164	568	aod: wald.test
 D7165	687	gamlss.dist: the exGAUS quantile
-D7166	592	gamlss.dist: JSU, JSUo, SHASHo and SHASH distribution functions and quantiles
+D7166	593	gamlss.dist: JSU, JSUo, SHASHo and SHASH distribution functions and quantiles
+D7167	662	gamlss.dist: BCT distribution and quantile, BCTo, BCCGo and SHASHo2

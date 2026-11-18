@@ -49022,3 +49022,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the Johnson SU distribution and quantile (JSU), the original-parametrisation JSUo (density, distribution, quantile), SHASHo (density, distribution, quantile) and SHASH (distribution and the quantile, which gamlss.dist finds by uniroot on its mu-and-sigma bracket, so the port reuses `pw.zeroin` on the same bracket as for exGAUS).
 
 **Result.** `oracle_gamlss_exp` has 4879 values across 50 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.
+
+## D7167 — gamlss.dist: BCT distribution and quantile, BCTo, BCCGo and SHASHo2
+
+`e.algo.stat.gamlssdist` gains the Box-Cox t distribution function and quantile (`pbct`, `qbct`, shared by BCTo, whose distribution and quantile are the same code in the package), the BCTo density (with the normal limit above tau = 1e6), the BCCGo functions (identical to the BCCG ones already here, so the oracle checks the existing density, distribution and quantile under the original names) and SHASHo2 (density, distribution, quantile).
+
+**Result.** `oracle_gamlss_exp` has 5242 values across 54 families and equals gamlss.dist on Windows. Linux pending. L464 stays partial.

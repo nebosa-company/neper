@@ -162,7 +162,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 143usize { ret gd.pshasho(x, mu, sigma, nu, tau) }
     if which == 144usize { ret gd.qshasho(x, mu, sigma, nu, tau) }
     if which == 145usize { ret gd.pshash(x, mu, sigma, nu, tau) }
-    ret gd.qshash(x, mu, sigma, nu, tau)
+    if which == 146usize { ret gd.qshash(x, mu, sigma, nu, tau) }
+    if which == 147usize { ret gd.dbct(x, mu, sigma, nu, tau) }
+    if which == 148usize { ret gd.pbct(x, mu, sigma, nu, tau) }
+    if which == 149usize { ret gd.qbct(x, mu, sigma, nu, tau) }
+    if which == 150usize { ret gd.dbcto(x, mu, sigma, nu, tau) }
+    if which == 151usize { ret gd.pbct(x, mu, sigma, nu, tau) }
+    if which == 152usize { ret gd.qbct(x, mu, sigma, nu, tau) }
+    if which == 153usize { ret gd.dbccg(x, mu, sigma, nu) }
+    if which == 154usize { ret gd.pbccg(x, mu, sigma, nu) }
+    if which == 155usize { ret gd.qbccg(x, mu, sigma, nu) }
+    if which == 156usize { ret gd.dshasho2(x, mu, sigma, nu, tau) }
+    if which == 157usize { ret gd.pshasho2(x, mu, sigma, nu, tau) }
+    ret gd.qshasho2(x, mu, sigma, nu, tau)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

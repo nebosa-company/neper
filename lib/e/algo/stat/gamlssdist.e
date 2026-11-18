@@ -1066,3 +1066,49 @@ fn qshash(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
     }
     ret pw.zeroin[ShashRoot](&c, shash_h1, lo, hi, pw.uniroot_tol(), 1000i64)
 }
+
+// BCT distribution and quantile (also BCTo, whose distribution and quantile are the same), BCTo density, BCCGo (the BCCG functions under the original names) and SHASHo2
+fn pbct(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    var z = 0.0f64
+    if nu != 0.0f64 { z = (math.pow[f64](x / mu, nu) - 1.0f64) / (nu * sigma) } else { z = math.log[f64](x / mu) / sigma }
+    let f1 = nb.pt(z, tau, true, false)
+    var f2 = 0.0f64
+    if nu > 0.0f64 { f2 = nb.pt(0.0f64 - 1.0f64 / (sigma * math.abs[f64](nu)), tau, true, false) }
+    let f3 = nb.pt(1.0f64 / (sigma * math.abs[f64](nu)), tau, true, false)
+    ret (f1 - f2) / f3
+}
+
+fn qbct(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if p == 0.0f64 { ret 0.0f64 }
+    if p == 1.0f64 { ret 1.0f64 / 0.0f64 }
+    let zp = nb.pt(1.0f64 / (sigma * math.abs[f64](nu)), tau, true, false)
+    var z = 0.0f64
+    if nu <= 0.0f64 { z = nb.qt(p * zp, tau, true, false) } else { z = nb.qt(1.0f64 - (1.0f64 - p) * zp, tau, true, false) }
+    if nu != 0.0f64 { ret mu * math.pow[f64](nu * sigma * z + 1.0f64, 1.0f64 / nu) }
+    ret mu * math.exp[f64](sigma * z)
+}
+
+fn dbcto(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    if tau > 1000000.0f64 { ret dbccg(x, mu, sigma, nu) }
+    var z = 0.0f64
+    if nu != 0.0f64 { z = (math.pow[f64](x / mu, nu) - 1.0f64) / (nu * sigma) } else { z = math.log[f64](x / mu) / sigma }
+    var ll = (nu - 1.0f64) * math.log[f64](x) - nu * math.log[f64](mu) - math.log[f64](sigma)
+    var ft = sp.lgamma((tau + 1.0f64) / 2.0f64) - sp.lgamma(tau / 2.0f64) - 0.5f64 * math.log[f64](tau) - sp.lgamma(0.5f64)
+    ft = ft - ((tau + 1.0f64) / 2.0f64) * math.log[f64](1.0f64 + z * z / tau)
+    ll = ll + ft - math.log[f64](nb.pt(1.0f64 / (sigma * math.abs[f64](nu)), tau, true, false))
+    ret math.exp[f64](ll)
+}
+
+fn dshasho2(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
+    let z = (x - mu) / (sigma * tau)
+    let a = tau * asinh_of(z) - nu
+    let c = cosh_of(a)
+    let r = sinh_of(a)
+    ret math.exp[f64](0.0f64 - math.log[f64](sigma) - 0.5f64 * math.log[f64](2.0f64 * pi()) - 0.5f64 * math.log[f64](1.0f64 + z * z) + math.log[f64](c) - 0.5f64 * r * r)
+}
+
+fn pshasho2(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret pno(sinh_of(tau * asinh_of((x - mu) / (sigma * tau)) - nu), 0.0f64, 1.0f64) }
+
+fn qshasho2(p: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 { ret mu + (tau * sigma) * sinh_of((1.0f64 / tau) * asinh_of(qno(p, 0.0f64, 1.0f64)) + nu / tau) }
