@@ -220,7 +220,9 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     if which == 201usize { ret gd.pgt(a, x, mu, sigma, nu, tau) }
     if which == 202usize { ret gd.qgt(a, x, mu, sigma, nu, tau) }
     if which == 203usize { ret gd.dnet(x, mu, sigma, nu, tau) }
-    ret gd.dlqno(x, mu, sigma)
+    if which == 204usize { ret gd.dlqno(x, mu, sigma) }
+    if which == 205usize { ret gd.dsichel(x, mu, sigma, nu) }
+    ret gd.dgig(x, mu, sigma, nu)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

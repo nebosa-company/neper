@@ -49076,3 +49076,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.gamlssdist` gains the generalised t GT (density; the distribution by the QUADPACK infinite-range integrate at tolerance eps^0.4 with the package's reset to 1 for a tiny upper-half mass; the quantile by the package's bracket and zeroin at tol eps^0.4), the normal exponential t NET density and the LQNO density.
 
 **Result.** `oracle_gamlss_exp` has 6799 values across 87 families and equals gamlss.dist on Windows (GT p and q at 1e-5 and 1e-4 relative). Linux pending. L464 stays partial.
+
+## D7176 — gamlss.dist: SICHEL and GIG densities
+
+`e.algo.stat.gamlssdist` gains the Sichel probability function (the compound Poisson of a generalised inverse Gaussian, written with the modified Bessel function K of real order from `e.algo.stat.gslfns`, instead of the package's C recursion) and the generalised inverse Gaussian density. The distribution of GIG and the quantile are not ported: pGIG integrates over a finite interval (QUADPACK qags in R), and only the infinite-range routine is ported here.
+
+**Result.** `oracle_gamlss_exp` has 6863 values across 89 families and equals gamlss.dist on Windows at 1e-8 relative. Linux pending. L464 stays partial.

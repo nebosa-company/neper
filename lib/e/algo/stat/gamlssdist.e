@@ -10,6 +10,7 @@ use e.math.nmath as nm
 use e.math.nmath_beta as nb
 use e.math.special as sp
 use e.algo.stat.pwr as pw
+use e.algo.stat.gslfns as gs
 use e.math.quadpack as qp
 use e.mem
 
@@ -1624,3 +1625,19 @@ fn dnet(x: f64, mu: f64, sigma: f64, nu: f64, tau: f64) -> f64 {
 }
 
 fn dlqno(x: f64, mu: f64, sigma: f64) -> f64 { ret dist.dnorm(x, mu, math.sqrt[f64](mu * (1.0f64 + sigma * mu)), false) }
+
+// SICHEL (the probability function through the modified Bessel function K of real order, e.algo.stat.gslfns.bessel_knu) and the GIG density
+fn dsichel(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x < 0.0f64 { ret 0.0f64 }
+    let s1 = 1.0f64 / sigma
+    let c = gs.bessel_knu(nu + 1.0f64, s1) / gs.bessel_knu(nu, s1)
+    let al = math.sqrt[f64](1.0f64 + 2.0f64 * sigma * (mu / c)) / sigma
+    ret math.exp[f64](0.0f64 - sp.lgamma(x + 1.0f64) - (x + nu) * math.log[f64](sigma * al) + x * math.log[f64](mu / c) + math.log[f64](gs.bessel_knu(x + nu, al)) - math.log[f64](gs.bessel_knu(nu, s1)))
+}
+
+fn dgig(x: f64, mu: f64, sigma: f64, nu: f64) -> f64 {
+    if x <= 0.0f64 { ret 0.0f64 }
+    let s2 = 1.0f64 / (sigma * sigma)
+    let c = gs.bessel_knu(nu + 1.0f64, s2) / gs.bessel_knu(nu, s2)
+    ret math.exp[f64](nu * math.log[f64](c) - nu * math.log[f64](mu) + (nu - 1.0f64) * math.log[f64](x) - math.log[f64](2.0f64) - math.log[f64](gs.bessel_knu(nu, s2)) - s2 / 2.0f64 * (c * x / mu + mu / (c * x)))
+}
