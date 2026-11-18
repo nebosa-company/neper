@@ -49,6 +49,10 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     let (text, re) = fs.read_file(a, path_of(a, "arff", idx, ".arff"), 1048576usize)
     if re != ok { os.exit(8) }
     let (t, pe) = arff.parse(a, text)
+    if str.eq(k, "aerr") {
+        if pe != ok { ret 1.0f64 }
+        ret 0.0f64
+    }
     if pe != ok { os.exit(9) }
     if str.eq(k, "dim") {
         if col == 0usize { ret f64(t.nrows) }

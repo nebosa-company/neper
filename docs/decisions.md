@@ -48690,3 +48690,13 @@ The MuMIn 1.48.19 criteria, dredge table, model.sel, model.avg, predictions and 
 ## D7112 — metafor, escalc, fsn, rma.mv and a port of nlminb; L364 closed
 
 rma.uni with every estimator and test, confint, predict, the diagnostics, the small-study tests, trimfill, fsn, profile and permutest, escalc for the package measures, and rma.mv with its covariance structures. R default optimizer nlminb (the PORT library: drmnf, drmng and ds7grd, from the R repository sources, downloaded with the user approval) is ported as e.algo.stat.nlminb with iterations, evaluation counts and convergence codes identical to R on 45 runs, and rma.mv uses it by default. On weakly identified rma.mv fits (flat likelihood) the estimates agree with R to 1e-7 rather than 1e-9 because R factorisation rounds differently and the flat optimum amplifies it to about 1e-8; the evaluation counts are equal, so the iterates are the same. The remaining acceptance items all have oracle cases, so L364 moves to docs/work-done.jsonl. Linux pending.
+
+## D7113 — foreign: read.arff date attributes, sparse rows and relational attributes
+
+`e.fmt.arff` now follows read.arff for three more things. A date attribute's format is the one foreign derives from the Weka format (ISO_8601_to_POSIX_datetime_format, the chain of first-occurrence substitutions, so 'dd/MM/yyyy HH:mm' becomes "%d/%m/%Y %H:%M") and the default "%Y-%m-%d %H:%M:%S" when none is given. The field is parsed as strptime does it for the directives Y y m d H M S j: trailing text ignored, numbers up to their width, blanks in the format matching any run of blanks, days checked against the month, seconds to 61. A date value is seconds since 1970-01-01 UTC, and a value that does not parse is missing. A sparse data row ('{' first) and a relational attribute are errors, as read.arff reports them.
+
+This corrects D6417, which said date columns are read as missing. That holds only for the default format, where a date without a time is missing; an attribute with its own format is parsed.
+
+Probed in R and pinned: a missing month or day is taken from today's date, and %w is read without being used, so a 'yyyy-DDD' column depends on the day the oracle runs. The reader does not model that and reads such a value as missing; the oracle leaves that column out. Other %-directives (%w, %U, ...) are also missing.
+
+**Result.** `oracle_foreign` equals foreign on 134 cases on Windows, including the date columns (seconds and missing counts, with TZ=UTC), the sparse and relational refusals and a dense control file; Linux pending. L332 stays partial: read.dbf memo fields, write.dbf, read.mtp and read.systat are compiled C in foreign and need the foreign source.
