@@ -99,4 +99,14 @@ for (rep in 1:10) {
   for (j in seq_along(pn)) cases[[length(cases) + 1]] <- case("nbing", c(n, 2, ng, gr, as.vector(X), yc, j - 1), pn[[j]], rel = 1e-5, abs = 1e-7)
   cases[[length(cases) + 1]] <- case("nbing", c(n, 2, ng, gr, as.vector(X), yc, length(pn)), fn_@logL, rel = 1e-6, abs = 1e-8)
 }
+# iccbin methods A and B (glmer nAGQ = 1): "icc2" args (method 0 A / 1 B, seed, M, k, n..., y...); 1e-3 as lme4's optimiser stops at 1e-5 on the deviance
+for (rep in 1:12) {
+  k <- sample(8:25, 1); n <- sample(6:25, k, TRUE); cl <- rbeta(k, 2, 3); y <- rbinom(k, n, cl); df <- data.frame(n = n, y = y)
+  sd0 <- sample(1:100000, 1); M <- 1000
+  ra <- tryCatch(suppressWarnings(suppressMessages(iccbin(n, y, df, method = "A")@rho)), error = function(e) NA)
+  set.seed(sd0); rb <- tryCatch(suppressWarnings(suppressMessages(iccbin(n, y, df, method = "B", M = M)@rho)), error = function(e) NA)
+  if (is.na(ra) || ra < 0.02) next
+  cases[[length(cases) + 1]] <- case("icc2", c(0, sd0, M, k, n, y), ra, rel = 2e-3, abs = 1e-4)
+  cases[[length(cases) + 1]] <- case("icc2", c(1, sd0, M, k, n, y), rb, rel = 2e-3, abs = 1e-4)
+}
 emit("aod", "aod", list(cases))

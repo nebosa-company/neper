@@ -2,6 +2,7 @@
 // `R_ORACLE_LIB=<dir> Rscript scripts/r_oracle/generate.R aod`; the layout is at the top of scripts/r_oracle/groups/aod.R.
 
 use e.algo.stat.aod as ad
+use e.algo.rand.r as rgr
 use e.io
 use e.mem
 use e.os
@@ -136,6 +137,17 @@ fn anova_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
     ret o[usize(x[4usize])]
 }
 
+fn icc2_answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
+    let x = c.args
+    let k = usize(x[3usize])
+    let nn = x[4usize..4usize + k]
+    let yy = x[4usize + k..4usize + 2usize * k]
+    if x[0usize] == 0.0f64 { ret ad.iccbin_a(a, nn, yy) }
+    var rng: rgr.Rng = zero
+    rgr.seed(&rng, i64(x[1usize]))
+    ret ad.iccbin_b(a, &rng, nn, yy, usize(x[2usize]))
+}
+
 fn answer(c: *const oracle.Case) -> f64 {
     let x = c.args
     let k = usize(x[3usize])
@@ -160,7 +172,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     while at < golden.cases.len {
         let c = &golden.cases[at]
         var got = 0.0f64
-        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else if str.eq(c.name, "qpois") { got = qpois_answer(a, c) } else if str.eq(c.name, "qbin") { got = qbin_answer(a, c) } else if str.eq(c.name, "bbin") { got = bbin_answer(a, c) } else if str.eq(c.name, "bbing") || str.eq(c.name, "nbing") { got = grp_answer(a, c) } else if str.eq(c.name, "anova") { got = anova_answer(a, c) } else if str.eq(c.name, "nbin") { got = nbin_answer(a, c) } else if str.eq(c.name, "splitbin") { got = split_answer(a, c) } else { got = answer(c) }
+        if str.eq(c.name, "wald") { got = wald_answer(a, c) } else if str.eq(c.name, "qpois") { got = qpois_answer(a, c) } else if str.eq(c.name, "qbin") { got = qbin_answer(a, c) } else if str.eq(c.name, "bbin") { got = bbin_answer(a, c) } else if str.eq(c.name, "bbing") || str.eq(c.name, "nbing") { got = grp_answer(a, c) } else if str.eq(c.name, "anova") { got = anova_answer(a, c) } else if str.eq(c.name, "icc2") { got = icc2_answer(a, c) } else if str.eq(c.name, "nbin") { got = nbin_answer(a, c) } else if str.eq(c.name, "splitbin") { got = split_answer(a, c) } else { got = answer(c) }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

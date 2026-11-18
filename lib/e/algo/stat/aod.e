@@ -12,6 +12,7 @@ use e.math.nmath as nm
 use e.mem
 use e.algo.stat.wrs2 as wr
 use e.algo.stat.rnm as rn
+use e.algo.rand.r as rg
 
 // varbin(n, y)$tab: part 0 the estimate, 1 its variance, 2 the lower and 3 the upper limit of row `row`
 // (0 binomial, 1 ratio, 2 arithmetic, 3 jackknife) at level 1 - alpha
@@ -806,4 +807,106 @@ fn lr_anova(ll1: f64, k1: usize, ll2: f64, k2: usize, out: []f64) {
     out[0usize] = st
     out[1usize] = df
     out[2usize] = nm.pchisq(st, df, false, false)
+}
+
+// iccbin methods A and B: the intraclass correlation from the random-intercept logistic model y ~ 1 + (1 | cluster) of lme4::glmer (nAGQ = 1, the Laplace approximation) fitted to the Bernoulli
+// expansion of (n, y); the model is maximised over (beta0, log sigma_u) by Nelder-Mead on the Laplace log-likelihood
+type LapCtx = struct { n: []const f64, y: []const f64 }
+
+fn lap_nll(c: *LapCtx, par: []const f64) -> f64 {
+    let b = par[0usize]
+    let sg2 = math.exp[f64](2.0f64 * par[1usize])
+    var tot = 0.0f64
+    var i = 0usize
+    while i < c.n.len {
+        // the conditional mode u of the cluster's random effect by Newton's method
+        var u = 0.0f64
+        var it = 0usize
+        while it < 60usize {
+            let pi_ = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - (b + u)))
+            let g = c.y[i] - c.n[i] * pi_ - u / sg2
+            let h = 0.0f64 - c.n[i] * pi_ * (1.0f64 - pi_) - 1.0f64 / sg2
+            let st = g / h
+            u = u - st
+            if math.abs[f64](st) < 1.0e-13f64 { break }
+            it += 1usize
+        }
+        let eta = b + u
+        let pi_ = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - eta))
+        tot += c.y[i] * eta - c.n[i] * math.log[f64](1.0f64 + math.exp[f64](eta)) - u * u / (2.0f64 * sg2) - 0.5f64 * math.log[f64](1.0f64 + sg2 * c.n[i] * pi_ * (1.0f64 - pi_))
+        i += 1usize
+    }
+    ret 0.0f64 - tot
+}
+
+// out receives (beta0, sigma_u^2)
+fn glmer_intercept(a: *mem.Arena, n: []const f64, y: []const f64, out: []f64) -> err {
+    var sn = 0.0f64
+    var sy = 0.0f64
+    var i = 0usize
+    while i < n.len {
+        sn += n[i]
+        sy += y[i]
+        i += 1usize
+    }
+    let pb = sy / sn
+    let (st, e1) = mem.alloc[f64](a, 2usize)
+    let (best, e2) = mem.alloc[f64](a, 2usize)
+    if e1 != ok || e2 != ok { ret mem.Full }
+    st[0usize] = math.log[f64](pb / (1.0f64 - pb))
+    st[1usize] = math.log[f64](0.5f64)
+    var c = LapCtx{ n: n, y: y }
+    var round = 0usize
+    while round < 4usize {
+        let (fmin, cnt, fail) = rn.nmmin[LapCtx](a, &c, lap_nll, st, 0.0f64 - 1.0f64 / 0.0f64, 1.0e-15f64, 1.0f64, 0.5f64, 2.0f64, 5000usize, 1.0f64, best)
+        st[0usize] = best[0usize]
+        st[1usize] = best[1usize]
+        round += 1usize
+    }
+    out[0usize] = best[0usize]
+    out[1usize] = math.exp[f64](2.0f64 * best[1usize])
+    ret ok
+}
+
+fn iccbin_a(a: *mem.Arena, n: []const f64, y: []const f64) -> f64 {
+    let (o, e) = mem.alloc[f64](a, 2usize)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    if glmer_intercept(a, n, y, o) != ok { ret 0.0f64 / 0.0f64 }
+    let p = math.exp[f64](o[0usize]) / (1.0f64 + math.exp[f64](o[0usize]))
+    let nu1 = p * (1.0f64 - p)
+    let nu2 = o[1usize] * p * p * math.pow[f64](1.0f64 + math.exp[f64](o[0usize]), -2.0f64)
+    ret nu2 / (nu1 + nu2)
+}
+
+// method B: m draws of u ~ N(0, sigma_u^2) under the generator, p = expit(beta0 + u), nu1 = mean(p (1 - p)), nu2 = var(p)
+fn iccbin_b(a: *mem.Arena, r: *rg.Rng, n: []const f64, y: []const f64, m: usize) -> f64 {
+    let (o, e) = mem.alloc[f64](a, 2usize)
+    let (pp, e2) = mem.alloc[f64](a, m)
+    if e != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    if glmer_intercept(a, n, y, o) != ok { ret 0.0f64 / 0.0f64 }
+    let sd = math.sqrt[f64](o[1usize])
+    var i = 0usize
+    while i < m {
+        let u = rg.rnorm(r, 0.0f64, sd)
+        pp[i] = 1.0f64 / (1.0f64 + math.exp[f64](0.0f64 - (o[0usize] + u)))
+        i += 1usize
+    }
+    var s1 = 0.0f64
+    var sm = 0.0f64
+    i = 0usize
+    while i < m {
+        s1 += pp[i] * (1.0f64 - pp[i])
+        sm += pp[i]
+        i += 1usize
+    }
+    let nu1 = s1 / f64(m)
+    let mean = sm / f64(m)
+    var ss = 0.0f64
+    i = 0usize
+    while i < m {
+        ss += (pp[i] - mean) * (pp[i] - mean)
+        i += 1usize
+    }
+    let nu2 = ss / f64(m - 1usize)
+    ret nu2 / (nu1 + nu2)
 }

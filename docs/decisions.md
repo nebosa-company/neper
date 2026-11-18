@@ -49598,3 +49598,9 @@ The ROC functions of D7253 take the fitted probabilities of `e.algo.stat.perform
 `e.algo.stat.aod` gains `betabin_g` and `negbin_g` (random = ~ group: one phi per level of a factor, the same Nelder-Mead from the glm start and phi = 0.1 per level) and `lr_anova` (the deviance difference 2 (ll2 - ll1), the parameter-count difference and the upper chi-square p value for nested fits).
 
 **Result.** `oracle_aod` gains 10 data sets (2 or 3 levels; coefficients, phis and log-likelihoods of both families at 1e-5 to 1e-6, and the anova statistic and p value at 1e-9: 128 values) and equals aod on Windows. Linux pending. L480 stays partial: phi by a numeric covariate, the cloglog links, iccbin A and B (they need the package's glmer).
+
+## D7263 — aod: iccbin methods A and B
+
+`e.algo.stat.aod` gains `iccbin_a` and `iccbin_b`: the random-intercept logistic model `glmer(y ~ 1 + (1 | id), binomial)` of the Bernoulli expansion is the Laplace likelihood over clusters (the cluster's conditional mode by Newton, h(u) at the mode less half the log of 1 + sigma^2 n p (1 - p)), maximised over (beta0, log sigma_u) by repeated Nelder-Mead restarts; method A takes rho = nu2 / (nu1 + nu2) with nu1 = p (1 - p) and nu2 = sigma^2 p^2 (1 + e^beta0)^-2, method B simulates M draws of u under the seed and uses mean(p (1 - p)) and var(p).
+
+**Result.** `oracle_aod` gains 11 data sets with clustered overdispersion (8 to 25 clusters; both methods, 22 values) and equals aod on Windows at 2e-3 relative, the accuracy of lme4's optimiser. Linux pending. L480 stays partial: phi by a numeric covariate and the cloglog links.
