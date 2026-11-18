@@ -5,6 +5,7 @@ use e.algo.stat.energy as en
 use e.io
 use e.mem
 use e.os
+use e.str
 use e.test.oracle as oracle
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -18,8 +19,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let c = &golden.cases[at]
         let z = c.args
         let n = usize(z[0usize])
-        let d = usize(z[1usize])
-        let got = en.mvnorm_e(a, z[2usize..2usize + n * d], n, d)
+        var got = 0.0f64
+        if str.eq(c.name, "pdcor") {
+            let dx = usize(z[1usize])
+            let dy = usize(z[2usize])
+            let dz = usize(z[3usize])
+            let (pv, pe) = en.pdcor(a, z[4usize..4usize + n * dx], z[4usize + n * dx..4usize + n * dx + n * dy], z[4usize + n * dx + n * dy..4usize + n * dx + n * dy + n * dz], n, dx, dy, dz)
+            if pe != ok { os.exit(9) }
+            got = pv
+        } else {
+            let d = usize(z[1usize])
+            got = en.mvnorm_e(a, z[2usize..2usize + n * d], n, d)
+        }
         if !oracle.agrees(got, c) {
             failures += 1usize
             if failures <= 12usize {

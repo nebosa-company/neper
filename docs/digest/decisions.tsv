@@ -3997,4 +3997,5 @@ D7207	912	GeneralizedHyperbolic: nigFit with a given start (Nelder-Mead)
 D7208	760	GeneralizedHyperbolic: hyperbFit with a given start (Nelder-Mead)
 D7209	957	gamlss.dist: random numbers by the quantile function
 D7210	908	gamlss.dist: the link functions
-D7211	961	energy: the multivariate normality statistic
+D7211	962	energy: the multivariate normality statistic
+D7212	629	energy: the partial distance correlation

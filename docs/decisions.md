@@ -49292,3 +49292,9 @@ New `e.algo.stat.gamlsslink`: gamlss.dist's `make.link.gamlss` for twelve links 
 `e.algo.stat.energy` gains `normal_e` (the univariate energy statistic of normality: the sorted standardised sample against the standard normal) and `mvnorm_e` (the multivariate statistic: the sample whitened by the inverse square root of its covariance through the symmetric eigen decomposition of the LAPACK port, the expectation of the distance to a standard normal through the confluent hypergeometric function 1F1 of the gsl module, and the mean pairwise distance of the whitened sample). The first run was off by the factor 2 in the pairwise-distance term, because R's `sum(dist(y))` counts each unordered pair once.
 
 **Result.** `oracle_energy_normal` equals energy on 12 samples (dimensions 1 to 4, 15 to 60 points) at 1e-8 relative on Windows. Linux pending. L459 stays partial: the permutation tests, the partial distance correlation pdcor, the Poisson test and the energy clustering remain.
+
+## D7212 — energy: the partial distance correlation
+
+`e.algo.stat.energy` gains `pdcor`: the cosine, over the entries of the matrices, of the U-centred distance matrices of x and y after each has been projected off the U-centred matrix of z (the coefficient being the ratio of inner products), which is what the package's C++ `partial_dcor` returns.
+
+**Result.** `oracle_energy_normal` has 22 values (10 partial correlations added, with 1 to 3 dimensions in each argument, 1e-8 relative) and equals energy on Windows. Linux pending. L459 stays partial: the permutation tests, the Poisson test and the energy clustering remain.

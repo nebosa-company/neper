@@ -348,3 +348,39 @@ fn mvnorm_e(a: *mem.Arena, x: []const f64, n: usize, d: usize) -> f64 {
     let mean3 = 2.0f64 * sd / (f64(n) * f64(n))
     ret f64(n) * (2.0f64 * mean1 - mean2 - mean3)
 }
+
+// energy::pdcor(x, y, z): the partial distance correlation, the cosine of the U-centred matrices of x and y after projecting out the U-centred matrix of z
+fn pdcor(a: *mem.Arena, x: []const f64, y: []const f64, z: []const f64, n: usize, dx: usize, dy: usize, dz: usize) -> (f64, err) {
+    let (cx, e1) = ucentred(a, x, n, dx)
+    if e1 != ok { ret (0.0f64, e1) }
+    let (cy, e2) = ucentred(a, y, n, dy)
+    if e2 != ok { ret (0.0f64, e2) }
+    let (cz, e3) = ucentred(a, z, n, dz)
+    if e3 != ok { ret (0.0f64, e3) }
+    let nn = n * n
+    var xz = 0.0f64
+    var yz = 0.0f64
+    var zz = 0.0f64
+    var i = 0usize
+    while i < nn {
+        xz += cx[i] * cz[i]
+        yz += cy[i] * cz[i]
+        zz += cz[i] * cz[i]
+        i += 1usize
+    }
+    let bx = xz / zz
+    let by = yz / zz
+    var pxy = 0.0f64
+    var pxx = 0.0f64
+    var pyy = 0.0f64
+    i = 0usize
+    while i < nn {
+        let ux = cx[i] - bx * cz[i]
+        let uy = cy[i] - by * cz[i]
+        pxy += ux * uy
+        pxx += ux * ux
+        pyy += uy * uy
+        i += 1usize
+    }
+    ret (pxy / math.sqrt[f64](pxx * pyy), ok)
+}
