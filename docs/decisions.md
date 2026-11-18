@@ -49712,3 +49712,9 @@ The emmeans fixture refits `lm(y ~ A * x)` through `e.algo.stat.emmeans.fit` (de
 `e.algo.stat.performancepkg.poisson_checks` fits the Poisson regression (flexmix's IRLS) and answers `check_overdispersion` (Pearson chi-square, its ratio to n - p and the upper-tail p value) and `check_zeroinflation` (the observed zeros, the rounded sum of exp(-mu) as the predicted zeros, and predicted over observed, the package's orientation).
 
 **Result.** `oracle_performancepkg` gains 25 overdispersed count regressions (150 values) and equals performance on Windows at 1e-7 (a first run had the ratio inverted and the predicted zeros unrounded). Linux pending. L339 stays partial: the other outlier methods, the Nakagawa R2, icc, model_performance, map_estimate, bayesfactor_savagedickey, si, parameters.
+
+## D7282 — survival: pyears by a factor
+
+`e.algo.stat.survfitpkg.pyears_table` gives, per group, the person-years (time over the scale), the number of subjects and the events of `pyears(Surv(time, status) ~ g, scale = ...)`.
+
+**Result.** 15 data sets of two to four groups (scale 1 and 365.25; 129 values) equal `pyears` on Windows exactly. Age-banded and rate-table forms are not ported. Linux pending. L311 stays partial: exact ties, counting-process coxph, the Efron and cluster robust variance, frailty, tmerge, the Schoenfeld and score residuals, survdiff with strata, interval and left censoring in survreg, pyears with age bands.

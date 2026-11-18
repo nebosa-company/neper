@@ -311,3 +311,19 @@ fn surv_split(time: []const f64, event: []const f64, cuts: []const f64, out: []f
     }
     ret row
 }
+
+// pyears(Surv(time, status) ~ g, scale): the person-years (time / scale), the number of subjects and the events of group g (0-based, k groups); out is k by 3
+fn pyears_table(time: []const f64, status: []const f64, grp: []const usize, k: usize, scale: f64, out: []f64) {
+    var g = 0usize
+    while g < k * 3usize {
+        out[g] = 0.0f64
+        g += 1usize
+    }
+    var i = 0usize
+    while i < time.len {
+        out[grp[i] * 3usize] += time[i] / scale
+        out[grp[i] * 3usize + 1usize] += 1.0f64
+        out[grp[i] * 3usize + 2usize] += status[i]
+        i += 1usize
+    }
+}

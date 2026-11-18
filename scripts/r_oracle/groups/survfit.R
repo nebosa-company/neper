@@ -51,4 +51,12 @@ for (rep in 1:20) {
     for (col in 0:3) cases[[length(cases) + 1]] <- case("ssplit", c(n, length(cuts), tm, ev, cuts, r - 1, col), v[col + 1], rel = 1e-12, abs = 1e-12)
   }
 }
+# pyears by a factor: "pyr" args (k, n, scale, time..., status..., group 0-based..., g, col) col 0 pyears, 1 n, 2 event
+for (rep in 1:15) {
+  k <- sample(2:4, 1); n <- sample(20:60, 1); sc <- sample(c(1, 365.25), 1); gr <- c(0:(k - 1), sample(0:(k - 1), n - k, TRUE))
+  tm <- round(rexp(n, 0.002) + 1, 1); st <- rbinom(n, 1, 0.7); d <- data.frame(tm = tm, st = st, g = factor(gr))
+  py <- pyears(Surv(tm, st) ~ g, data = d, scale = sc)
+  for (g in 0:(k - 1)) { v <- c(py$pyears[g + 1], py$n[g + 1], py$event[g + 1])
+    for (col in 0:2) cases[[length(cases) + 1]] <- case("pyr", c(k, n, sc, tm, st, gr, g, col), as.numeric(v[col + 1]), rel = 1e-12, abs = 1e-12) }
+}
 emit("survfit", "survival", list(cases))

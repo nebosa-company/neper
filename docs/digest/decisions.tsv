@@ -4067,4 +4067,5 @@ D7277	686	survival: survSplit
 D7278	1057	survival: cox.zph
 D7279	727	survival: martingale and deviance residuals
 D7280	725	emmeans: emtrends
-D7281	788	performance: Poisson overdispersion and zero-inflation checks
+D7281	789	performance: Poisson overdispersion and zero-inflation checks
+D7282	639	survival: pyears by a factor

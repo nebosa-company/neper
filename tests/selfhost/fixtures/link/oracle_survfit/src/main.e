@@ -20,6 +20,20 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if rw < 0.0f64 { ret f64(rows) }
         ret so[usize(rw) * 4usize + usize(x[3usize + 2usize * sn + sc])]
     }
+    if str.eq(c.name, "pyr") {
+        let pk = usize(x[0usize])
+        let pn = usize(x[1usize])
+        let (po, pe) = mem.alloc[f64](a, pk * 3usize)
+        let (pg, pge) = mem.alloc[usize](a, pn)
+        if pe != ok || pge != ok { os.exit(7) }
+        var q4 = 0usize
+        while q4 < pn {
+            pg[q4] = usize(x[3usize + 2usize * pn + q4])
+            q4 += 1usize
+        }
+        sf.pyears_table(x[3usize..3usize + pn], x[3usize + pn..3usize + 2usize * pn], pg, pk, x[2usize], po)
+        ret po[usize(x[3usize + 3usize * pn]) * 3usize + usize(x[4usize + 3usize * pn])]
+    }
     if str.eq(c.name, "conc") {
         let cn = usize(x[0usize])
         let (co, ce) = mem.alloc[f64](a, 4usize)
