@@ -31,4 +31,13 @@ for (rep in 1:25) {
   v <- c(r2_tjur(m)[[1]], r2_coxsnell(m)[[1]], r2_nagelkerke(m)[[1]], r2_mcfadden(m)$R2[[1]], r2_mcfadden(m)$R2_adjusted[[1]])
   for (w in 0:4) cases[[length(cases) + 1]] <- case("lr2", c(w, n, p, y, as.vector(t(X))), as.numeric(v[w + 1]), rel = 1e-8, abs = 1e-12)
 }
+# check_normality of an lm ("norm": n, p, y, x row-major with the intercept): the Shapiro-Wilk p value of rstandard
+for (rep in 1:25) {
+  n <- sample(20:200, 1); p <- sample(2:4, 1); X <- cbind(1, matrix(round(rnorm(n * (p - 1)), 4), n, p - 1))
+  e <- if (rep %% 2 == 0) rnorm(n) else rexp(n) - 1
+  y <- round(as.vector(X %*% runif(p, -1, 1)) + e, 4)
+  dfx <- as.data.frame(X[, -1, drop = FALSE]); names(dfx) <- paste0("v", seq_len(p - 1)); dfx$y <- y
+  m <- lm(as.formula(paste("y ~", paste(names(dfx)[-p], collapse = " + "))), data = dfx)
+  cases[[length(cases) + 1]] <- case("norm", c(n, p, y, as.vector(t(X))), as.numeric(suppressMessages(check_normality(m))), rel = 1e-8, abs = 1e-12)
+}
 emit("performancepkg", "performance", list(cases))

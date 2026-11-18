@@ -5,6 +5,7 @@
 use e.algo.stat.carlmtest as ols
 use e.math
 use e.math.nmath as nm
+use e.algo.stat.test as tst
 use e.algo.stat.flexmixpkg as fx
 use e.mem
 
@@ -177,4 +178,28 @@ fn logit_r2(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize, w
     if which == 2usize { ret cs / (1.0f64 - math.exp[f64](0.0f64 - nulldev / nf)) }
     if which == 3usize { ret 1.0f64 - ll / ll0 }
     ret 1.0f64 - (ll - f64(p)) / ll0
+}
+
+// check_normality of an lm: the Shapiro-Wilk p value of rstandard(m) (below 5000 observations; the package switches to a Kolmogorov-Smirnov test from 5000)
+fn normality_p(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, p: usize) -> f64 {
+    let (f, e) = ols.ols(a, x, y, n, p)
+    if e != ok { ret 0.0f64 / 0.0f64 }
+    var rss = 0.0f64
+    var i = 0usize
+    while i < n {
+        rss += f.resid[i] * f.resid[i]
+        i += 1usize
+    }
+    let sg = math.sqrt[f64](rss / f64(n - p))
+    let (z, e1) = mem.alloc[f64](a, n)
+    let (sc, e2) = mem.alloc[f64](a, n / 2usize + 1usize)
+    if e1 != ok || e2 != ok { ret 0.0f64 / 0.0f64 }
+    i = 0usize
+    while i < n {
+        z[i] = f.resid[i] / (sg * math.sqrt[f64](1.0f64 - f.hat[i]))
+        i += 1usize
+    }
+    let (r, se) = tst.shapiro_wilk(z, sc)
+    if se != ok { ret 0.0f64 / 0.0f64 }
+    ret r.p_value
 }

@@ -27,6 +27,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let ln = usize(x[1usize])
             let lp = usize(x[2usize])
             got = pf.logit_r2(a, x[3usize + ln..3usize + ln + ln * lp], x[3usize..3usize + ln], ln, lp, usize(x[0usize]))
+        } else if str.eq(c.name, "norm") {
+            let nn = usize(x[0usize])
+            let np = usize(x[1usize])
+            got = pf.normality_p(a, x[2usize + nn..2usize + nn + nn * np], x[2usize..2usize + nn], nn, np)
         } else if str.eq(c.name, "vif") {
             let vn = usize(x[0usize])
             let vq = usize(x[1usize])

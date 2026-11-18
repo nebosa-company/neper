@@ -4035,4 +4035,5 @@ D7245	836	gamlss.dist: SST, PE2, NOF and ZAIG
 D7246	719	gamlss.dist: IG, ZAIG, GB1 and SIMPLEX quantiles
 D7247	728	bayestestR: rope with a credible interval and equivalence_test
 D7248	818	performance: check_heteroscedasticity and check_collinearity
-D7249	804	performance: the logistic pseudo R-squared measures
+D7249	805	performance: the logistic pseudo R-squared measures
+D7250	581	performance: check_normality

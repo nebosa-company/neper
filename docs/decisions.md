@@ -49520,3 +49520,9 @@ The shuffle found for dcov.test (D7213) serves the other permutation tests of th
 `e.algo.stat.performancepkg` gains `logit_r2` over flexmix's binomial IRLS: Tjur (mean fitted probability of the ones minus that of the zeros), Cox-Snell (1 - exp((deviance - null deviance) / n)), Nagelkerke (Cox-Snell over its maximum), McFadden (1 - ll / ll0) and its adjusted form (ll less the number of coefficients).
 
 **Result.** `oracle_performancepkg` gains 25 logistic regressions (125 values) and equals performance on Windows at 1e-8. The first generator run failed on a matrix term in the formula and left a stale golden that passed; the case count was checked. Linux pending. L339 stays partial: check_normality, check_outliers, the Nakagawa R2, icc, model_performance, map_estimate, bayesfactor_savagedickey, si, parameters.
+
+## D7250 — performance: check_normality
+
+`e.algo.stat.performancepkg` gains `normality_p`: the Shapiro-Wilk p value (`e.algo.stat.test.shapiro_wilk`, Royston's AS R94) of the standardised residuals r / (sigma sqrt(1 - h)) of an lm, the package's check for fewer than 5000 observations.
+
+**Result.** `oracle_performancepkg` gains 25 regressions with normal and skewed errors (n 20 to 200) and equals performance on Windows at 1e-8. Linux pending. L339 stays partial: check_outliers, the Nakagawa R2, icc, model_performance, map_estimate, bayesfactor_savagedickey, si, parameters.
