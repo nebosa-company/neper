@@ -619,7 +619,8 @@ fn coinertia(a: *mem.Arena, xt: []const f64, yt: []const f64, n: usize, px: usiz
     ret (out, ok)
 }
 
-type Procuste = struct { rank: usize, nf: usize, d: []f64, lx: []f64, ly: []f64, sx: []f64, sy: []f64 }
+// rx (n by py) and ry (n by px) are the rotated tables X u t(v) and Y v t(u) (R keeps them only when nf equals both column counts)
+type Procuste = struct { rank: usize, nf: usize, d: []f64, lx: []f64, ly: []f64, sx: []f64, sy: []f64, rx: []f64, ry: []f64 }
 
 // the n by p table centred (and, when scale, divided by the square root of the sum of its squares), compensated sums as R's sum()
 fn proc_centre(x: []const f64, n: usize, p: usize, scale: bool, out: []f64) {
@@ -759,7 +760,83 @@ fn procuste(a: *mem.Arena, x: []const f64, y: []const f64, n: usize, px: usize, 
     out.ly = ly
     out.sx = sx
     out.sy = sy2
+    let (rx, e12) = mem.alloc[f64](a, n * py)
+    let (ry, e13) = mem.alloc[f64](a, n * px)
+    if e12 != ok || e13 != ok { ret (out, Malformed) }
+    i = 0usize
+    while i < n {
+        var c = 0usize
+        while c < py {
+            var t1 = 0.0f64
+            q = 0usize
+            while q < nf {
+                t1 += sx[i * nf + q] * ly[c * nf + q]
+                q += 1usize
+            }
+            rx[i * py + c] = t1
+            c += 1usize
+        }
+        c = 0usize
+        while c < px {
+            var t2 = 0.0f64
+            q = 0usize
+            while q < nf {
+                t2 += sy2[i * nf + q] * lx[c * nf + q]
+                q += 1usize
+            }
+            ry[i * px + c] = t2
+            c += 1usize
+        }
+        i += 1usize
+    }
+    out.rx = rx
+    out.ry = ry
     ret (out, ok)
+}
+
+// the correlation ratios of dudi.acm: for factor v (codes as dudi_acm) and axis k, the weighted between-level sum of squares of the row scores l1 (n by nf,
+// row weights lw); out is nv by nf row-major
+fn acm_cr(a: *mem.Arena, codes: []const f64, n: usize, nv: usize, lw: []const f64, l1: []const f64, nf: usize, out: []f64) -> err {
+    var v = 0usize
+    while v < nv {
+        var nl = 0usize
+        var i = 0usize
+        while i < n {
+            if usize(codes[i * nv + v]) + 1usize > nl { nl = usize(codes[i * nv + v]) + 1usize }
+            i += 1usize
+        }
+        var k = 0usize
+        while k < nf {
+            var tot = 0.0f64
+            var l = 0usize
+            while l < nl {
+                var p1 = 0.0f64
+                var p2 = 0.0f64
+                var z1 = 0.0f64
+                var z2 = 0.0f64
+                i = 0usize
+                while i < n {
+                    if usize(codes[i * nv + v]) == l {
+                        let (u1, u2) = nstep(p1, p2, lw[i])
+                        p1 = u1
+                        p2 = u2
+                        let (w1, w2) = nstep(z1, z2, l1[i * nf + k] * lw[i])
+                        z1 = w1
+                        z2 = w2
+                    }
+                    i += 1usize
+                }
+                let poi = p1 + p2
+                let z = (z1 + z2) / poi
+                tot += poi * z * z
+                l += 1usize
+            }
+            out[v * nf + k] = tot
+            k += 1usize
+        }
+        v += 1usize
+    }
+    ret ok
 }
 
 // dudi.mix on quantitative (kind 0) and unordered factor (kind 1, 0-based codes, every level present) variables: the quantitative ones standardised

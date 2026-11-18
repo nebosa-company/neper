@@ -48986,3 +48986,9 @@ New `e.algo.stat.ade4`: `as_dudi` (the generalised principal-axes analysis with 
 `e.algo.stat.ade4` gains `dudi_mix` for quantitative and unordered factor variables (the quantitative ones standardised with the population standard deviation, the factors as disjunctive columns divided by their frequencies minus one with the frequencies as column weights). The ordered-factor and add.square polynomial coding (stats::poly) is not ported.
 
 **Result.** `oracle_ade4_dudi` has 1716 values (two mixed tables, 20 by 4 and 15 by 3) and equals ade4 on Windows. Linux pending. L381 stays partial: the polynomial coding, procuste rotations, coinertia with both tables wider than tall and the cr correlation ratios remain.
+
+## D7161 — ade4: procuste rotations and the dudi.acm correlation ratios
+
+`e.algo.stat.ade4` gains the rotated tables of `procuste` (X u t(v) and Y v t(u), kept by ade4 only when the axes count equals both column counts) and `acm_cr`, the correlation ratios dudi.acm reports for each factor and axis (the weighted between-level sum of squares of the row scores, compensated sums).
+
+**Result.** `oracle_ade4_dudi` has 1815 values and equals ade4 on Windows. Linux pending. L381 stays partial: the ordered-factor and add.square polynomial coding of dudi.mix and coinertia with both tables wider than tall remain.

@@ -80,6 +80,8 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         if what == 2usize { ret pr.ly[idx] }
         if what == 3usize { ret pr.sx[idx] }
         if what == 4usize { ret pr.sy[idx] }
+        if what == 6usize { ret pr.rx[idx] }
+        if what == 7usize { ret pr.ry[idx] }
         ret f64(pr.rank)
     }
     if kind == 6usize {
@@ -145,6 +147,19 @@ fn answer(a: *mem.Arena, c: *const oracle.Case) -> f64 {
         let (r, er) = ad.dudi_acm(a, x, n, p, nf)
         d = r
         e = er
+        if what == 6usize {
+            let (lw, g1) = mem.alloc[f64](a, n)
+            let (cr, g2) = mem.alloc[f64](a, p * r.nf)
+            if g1 != ok || g2 != ok { os.exit(15) }
+            var q = 0usize
+            while q < n {
+                lw[q] = 1.0f64 / f64(n)
+                q += 1usize
+            }
+            let ge = ad.acm_cr(a, x, n, p, lw, r.l1, r.nf, cr)
+            if ge != ok { os.exit(16) }
+            ret cr[idx]
+        }
     } else {
         let (r, er) = ad.dudi_coa(a, x, n, p, nf)
         d = r

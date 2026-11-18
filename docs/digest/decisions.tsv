@@ -3946,4 +3946,5 @@ D7156	645	gamlss.dist: ZANBI, ZINBI and ZAGA
 D7157	511	gamlss.dist: PE, EGB2 and PARETO2o
 D7158	783	ade4: dudi.fca and rlq
 D7159	630	gamlss.dist: LG, YULE, PARETO1o, NBII and LOGITNO
-D7160	660	ade4: dudi.mix
+D7160	661	ade4: dudi.mix
+D7161	612	ade4: procuste rotations and the dudi.acm correlation ratios

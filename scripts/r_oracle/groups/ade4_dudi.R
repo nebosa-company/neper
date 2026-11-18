@@ -25,6 +25,8 @@ x4 <- matrix(rpois(4 * 6, 5) + 1, 4, 6)
 one(2, x4, 2)
 x5 <- cbind(sample(0:2, 20, TRUE), sample(0:3, 20, TRUE), sample(0:1, 20, TRUE)); x5[1:3, 1] <- 0:2; x5[1:4, 2] <- 0:3; x5[1:2, 3] <- 0:1
 one(3, x5, 3)
+{ f5 <- as.data.frame(lapply(as.data.frame(x5), factor)); ra <- dudi.acm(f5, scannf = FALSE, nf = 3); v <- as.vector(t(as.matrix(ra$cr)))
+  for (k in seq_along(v)) cases[[length(cases) + 1]] <- case("d", c(3, nrow(x5), ncol(x5), 3, 6, k - 1, as.vector(t(x5))), v[k], rel = 1e-8, abs = 1e-12) }
 one2 <- function(kind, x, fac, nf) {
   n <- nrow(x); p <- ncol(x); f <- factor(fac)
   base <- dudi.pca(as.data.frame(x), scannf = FALSE, nf = 3)
@@ -70,6 +72,7 @@ onepr <- function(x, y, nf, sc) {
   cases[[length(cases) + 1]] <<- case("d", hdr(5, 0), r$rank, rel = 0, abs = 0)
   mats <- list(as.matrix(r$loadX), as.matrix(r$loadY), as.matrix(r$scorX), as.matrix(r$scorY))
   for (w in 1:4) { m <- mats[[w]]; v <- as.vector(t(m)); for (k in seq_along(v)) cases[[length(cases) + 1]] <<- case("d", hdr(w, k - 1), v[k], rel = 1e-7, abs = 1e-10) }
+  if (!is.null(r$rotX)) for (w in 6:7) { m <- as.matrix(if (w == 6) r$rotX else r$rotY); v <- as.vector(t(m)); for (k in seq_along(v)) cases[[length(cases) + 1]] <<- case("d", hdr(w, k - 1), v[k], rel = 1e-7, abs = 1e-10) }
 }
 xp <- matrix(rnorm(15 * 3), 15, 3); yp <- matrix(rnorm(15 * 3), 15, 3) + xp
 onepr(xp, yp, 4, TRUE); onepr(xp, yp, 2, FALSE)
